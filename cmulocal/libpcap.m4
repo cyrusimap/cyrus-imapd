@@ -104,7 +104,7 @@ AC_ARG_WITH(pcap-include,
 	  PCAP_INC_DIR=$ac_cv_pcap_where_inc
 	  PCAP_LIB_DIR=$ac_cv_pcap_where_lib
 	  PCAP_INC_FLAGS="-I${PCAP_INC_DIR}"
-	  PCAP_LIB_FLAGS="-L${PCAP_LIB_DIR} -lpcap -ldes"
+	  PCAP_LIB_FLAGS="-L${PCAP_LIB_DIR} -lpcap"
 	  if test "X$RPATH" = "X"; then
 		RPATH=""
 	  fi
