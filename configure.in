@@ -16,9 +16,14 @@ AC_ARG_WITH(news-group,[  --with-news-group=GROUPID use GROUPID as news group id
 	news_group="$withval",news_group="news")
 AC_SUBST(news_group)
 AC_PROG_CC
-AC_PROG_INSTALL
 AC_PROG_RANLIB
 AC_PROG_MAKE_SET
+
+dnl AC_PROG_INSTALL
+dnl use install-sh -- we need install to work with multiple files.
+INSTALL="$srcdir/install-sh -c"
+AC_SUBST(INSTALL)
+
 AC_AIX
 AC_ISC_POSIX
 AC_PROG_AWK
@@ -205,8 +210,9 @@ case "$with_tcl" in
 		AC_MSG_ERROR(Could not find Tcl libraries.  You must either install Tcl or configure with --disable-cyradm)
 	    fi;;
 	""|yes) AC_CHECK_LIB(tcl,main,LIBS="${LIBS} -ltcl -lm",
-	    [AC_MSG_WARN([Unable to find Tcl, will not compile cyradm])
-	     TCL_SUBDIRS=""],-lm) ;;
+	    [if test "$TCL_SUBDIRS" != ""; then
+		AC_MSG_ERROR(Could not find Tcl libraries.  You must either install Tcl or configure with --disable-cyradm)
+	     fi],-lm) ;;
 	*)  CPPFLAGS="${CPPFLAGS} -I${with_tcl}/include"
 	    LIBS="${LIBS} ${with_tcl}/lib/libtcl.a -lm" ;;
 esac
