@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.17 2004/11/23 17:40:15 shadow Exp $ */
+/* $Id: global.c,v 1.18 2005/02/16 20:37:58 shadow Exp $ */
 
 #include <config.h>
 
@@ -89,9 +89,7 @@ struct cyrusdb_backend *config_annotation_db;
 struct cyrusdb_backend *config_seenstate_db;
 struct cyrusdb_backend *config_duplicate_db;
 struct cyrusdb_backend *config_tlscache_db;
-#ifdef WITH_PTS
 struct cyrusdb_backend *config_ptscache_db;
-#endif
 
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
@@ -179,10 +177,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 	    cyrusdb_fromname(config_getstring(IMAPOPT_DUPLICATE_DB));
 	config_tlscache_db =
 	    cyrusdb_fromname(config_getstring(IMAPOPT_TLSCACHE_DB));
-#ifdef WITH_PTS
 	config_ptscache_db =
 	    cyrusdb_fromname(config_getstring(IMAPOPT_PTSCACHE_DB));
-#endif
 
 	/* configure libcyrus as needed */
 	libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
@@ -206,6 +202,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 				  config_getenum(IMAPOPT_VIRTDOMAINS));
 	libcyrus_config_setint(CYRUSOPT_BERKELEY_CACHESIZE,
 			       config_getint(IMAPOPT_BERKELEY_CACHESIZE));
+	libcyrus_config_setstring(CYRUSOPT_AUTH_MECH,
+				  config_getstring(IMAPOPT_AUTH_MECH));
 	libcyrus_config_setint(CYRUSOPT_BERKELEY_LOCKS_MAX,
 			       config_getint(IMAPOPT_BERKELEY_LOCKS_MAX));
 	libcyrus_config_setint(CYRUSOPT_BERKELEY_TXNS_MAX,

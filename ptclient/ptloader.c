@@ -64,17 +64,61 @@
 #include "lock.h"
 #include "retry.h"
 #include "xmalloc.h"
+#include "ptloader.h"
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.39 2004/12/17 16:32:26 ken3 Exp $";
+      "$Id: ptloader.c,v 1.40 2005/02/16 20:38:04 shadow Exp $";
 
-extern const char *ptsmodule_name;
-extern void ptsmodule_init(void);
+struct pts_module *pts_modules[] = {
+#ifdef HAVE_LDAP
+    &pts_ldap,
+#endif
+#ifdef HAVE_AFSKRB
+    &pts_afskrb,
+#endif
+    NULL };
+
 extern void setproctitle_init(int argc, char **argv, char **envp);
-extern struct auth_state *ptsmodule_make_authstate(const char *identifier,
-						   size_t size,
-						   const char **reply,
-						   int *dsize);
+
+static struct pts_module *pts_fromname()
+{
+    int i;
+    const char *name = config_getstring(IMAPOPT_PTS_MODULE);
+    static struct pts_module *pts = NULL;
+
+    if (pts)
+        return pts;
+
+    for (i = 0; pts_modules[i]; i++) {
+	if (!strcmp(pts_modules[i]->name, name)) {
+	    pts = pts_modules[i]; break;
+	}
+    }
+    if (!pts) {
+	char errbuf[1024];
+	snprintf(errbuf, sizeof(errbuf),
+		 "PTS module %s not supported", name);
+	fatal(errbuf, EC_CONFIG);
+    }
+
+    return pts;
+}
+
+void ptsmodule_init(void)
+{
+    struct pts_module *pts = pts_fromname();
+
+    pts->init();
+}
+
+struct auth_state *ptsmodule_make_authstate(const char *identifier,
+					    size_t size,
+					    const char **reply, int *dsize)
+{
+    struct pts_module *pts = pts_fromname();
+
+    return pts->make_authstate(identifier, size, reply, dsize);
+}
 
 /* config.c info (libimap) */
 const int config_need_data = 0;
@@ -99,8 +143,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     signal(SIGPIPE, SIG_IGN);
 
     syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.39 2004/12/17 16:32:26 ken3 Exp $ (%s)",
-	   ptsmodule_name);
+	   "starting: $Id: ptloader.c,v 1.40 2005/02/16 20:38:04 shadow Exp $");
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {

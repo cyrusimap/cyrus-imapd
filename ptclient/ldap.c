@@ -41,9 +41,13 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ldap.c,v 1.7 2004/06/24 19:28:39 rjs3 Exp $";
+      "$Id: ldap.c,v 1.8 2005/02/16 20:38:04 shadow Exp $";
 
 #include <config.h>
+#include "ptloader.h"
+#include "exitcodes.h"
+
+#ifdef HAVE_LDAP
 
 #include <string.h>
 #include <stdio.h>
@@ -68,7 +72,6 @@ static char rcsid[] __attribute__((unused)) =
 
 /* libcyrus */
 #include "auth_pts.h"
-#include "exitcodes.h"
 #include "strhash.h"
 #include "xmalloc.h"
 
@@ -425,9 +428,8 @@ static int ptsmodule_connect(void)
 }
 
 /* API */
-const char *ptsmodule_name = "ldap";
 
-void ptsmodule_init(void) 
+static void myinit(void) 
 {
     const char *p = NULL;
 
@@ -586,7 +588,7 @@ static int ptsmodule_tokenize_domains(
 {
 	char *s, *s1;
 	char *lasts;
-	int nt, i;
+	int nt, i, rc;
 
 	*result = NULL;
 
@@ -611,8 +613,12 @@ static int ptsmodule_tokenize_domains(
 	while(s1) {
 		if (i == 0) {
 			*result = strdup(s1);
+			if (*result != NULL)
+				rc = ptsmodule_escape(s1, strlen(s1), result);
+			else
+				rc = PTSM_NOMEM;
 			free(s);
-			return (*result == NULL ? PTSM_NOMEM : PTSM_OK);
+			return rc;
 		}
 		s1 = (char *)strtok_r(NULL, ".", &lasts);
 		i--;
@@ -783,14 +789,13 @@ static int ptsmodule_get_dn(
     LDAPControl c;
     LDAPControl *ctrl[2];
     char *authzid;
-#else
+#endif
     char *base = NULL, *filter = NULL;
     char *attrs[] = {NULL};
     LDAPMessage *res;
     LDAPMessage *entry;
     char *attr, **vals;
     BerElement *ber;
-#endif
 
     *ret = NULL;
 
@@ -799,64 +804,68 @@ static int ptsmodule_get_dn(
 
 #if LDAP_VENDOR_VERSION >= 20125
 
-    authzid = xmalloc(size + sizeof("u:"));
-    if (authzid == NULL)
-        return PTSM_NOMEM;
+    if (ptsm->sasl) {
 
-    strcpy(authzid, "u:");
-    strcpy(authzid+2, canon_id);
-    c.ldctl_oid = LDAP_CONTROL_PROXY_AUTHZ;
-    c.ldctl_value.bv_val = authzid;
-    c.ldctl_value.bv_len = size + 2;
-    c.ldctl_iscritical = 1;
+        authzid = xmalloc(size + sizeof("u:"));
+        if (authzid == NULL)
+            return PTSM_NOMEM;
 
-    ctrl[0] = &c;
-    ctrl[1] = NULL;
-    rc = ldap_whoami_s(ptsm->ld, &dn, ctrl, NULL);
-    free(authzid);
-    if ( rc != LDAP_SUCCESS || !dn ) {
-        if (rc == LDAP_SERVER_DOWN) {
-            ldap_unbind(ptsm->ld);
-            ptsm->ld = NULL;
-            return PTSM_RETRY;
+        strcpy(authzid, "u:");
+        strcpy(authzid+2, canon_id);
+        c.ldctl_oid = LDAP_CONTROL_PROXY_AUTHZ;
+        c.ldctl_value.bv_val = authzid;
+        c.ldctl_value.bv_len = size + 2;
+        c.ldctl_iscritical = 1;
+
+        ctrl[0] = &c;
+        ctrl[1] = NULL;
+        rc = ldap_whoami_s(ptsm->ld, &dn, ctrl, NULL);
+        free(authzid);
+        if ( rc != LDAP_SUCCESS || !dn ) {
+            if (rc == LDAP_SERVER_DOWN) {
+                ldap_unbind(ptsm->ld);
+                ptsm->ld = NULL;
+                return PTSM_RETRY;
+            }
+            return PTSM_FAIL;
         }
-        return PTSM_FAIL;
-    }
 
-    if ( dn->bv_val &&
-        !strncmp(dn->bv_val, "dn:", 3) )
-        *ret = strdup(dn->bv_val+3);
-    ber_bvfree(dn);
+        if ( dn->bv_val &&
+            !strncmp(dn->bv_val, "dn:", 3) )
+            *ret = strdup(dn->bv_val+3);
+        ber_bvfree(dn);
 
-#else
-
-    rc = ptsmodule_expand_tokens(ptsm->filter, canon_id, NULL, &filter);
-    if (rc != PTSM_OK)
-        return rc;
-
-    rc = ptsmodule_expand_tokens(ptsm->base, canon_id, NULL, &base);
-    if (rc != PTSM_OK)
-        return rc;
-
-    rc = ldap_search_st(ptsm->ld, base, ptsm->scope, filter, attrs, 0, &(ptsm->timeout), &res);
-    free(filter);
-    free(base);
-    if (rc != LDAP_SUCCESS) {
-        if (rc == LDAP_SERVER_DOWN) {
-            ldap_unbind(ptsm->ld);
-            ptsm->ld = NULL;
-            return PTSM_RETRY;
-        }
-        return PTSM_FAIL;
-    }
-
-    if ( (entry = ldap_first_entry(ptsm->ld, res)) != NULL )
-        *ret = ldap_get_dn(ptsm->ld, entry);
-
-    ldap_msgfree(res);
-    res = NULL;
+    } else
 
 #endif
+
+    {
+        rc = ptsmodule_expand_tokens(ptsm->filter, canon_id, NULL, &filter);
+        if (rc != PTSM_OK)
+            return rc;
+
+        rc = ptsmodule_expand_tokens(ptsm->base, canon_id, NULL, &base);
+        if (rc != PTSM_OK)
+            return rc;
+
+        rc = ldap_search_st(ptsm->ld, base, ptsm->scope, filter, attrs, 0, &(ptsm->timeout), &res);
+        free(filter);
+        free(base);
+        if (rc != LDAP_SUCCESS) {
+            if (rc == LDAP_SERVER_DOWN) {
+                ldap_unbind(ptsm->ld);
+                ptsm->ld = NULL;
+                return PTSM_RETRY;
+            }
+            return PTSM_FAIL;
+        }
+
+        if ( (entry = ldap_first_entry(ptsm->ld, res)) != NULL )
+            *ret = ldap_get_dn(ptsm->ld, entry);
+
+        ldap_msgfree(res);
+        res = NULL;
+    }
 
     return (*ret ? PTSM_OK : PTSM_FAIL);
 }
@@ -925,7 +934,8 @@ static int ptsmodule_make_authstate_attribute(
             (*newstate)->ngroups = numvals;
 
             for (i = 0; vals[i] != NULL; i++) {
-                strlcpy((*newstate)->groups[i].id, vals[i], 
+                strcpy((*newstate)->groups[i].id, "group:");
+                strlcat((*newstate)->groups[i].id, vals[i], 
                     sizeof((*newstate)->groups[i].id));
                 (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
             }
@@ -1053,7 +1063,8 @@ static int ptsmodule_make_authstate_filter(
             if (vals == NULL)
                 continue;
 
-            strlcpy((*newstate)->groups[i].id, vals[0], 
+            strcpy((*newstate)->groups[i].id, "group:");
+            strlcat((*newstate)->groups[i].id, vals[0], 
                 sizeof((*newstate)->groups[i].id));
             (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
 
@@ -1167,7 +1178,7 @@ done:;
     return rc;
 }
 
-struct auth_state *ptsmodule_make_authstate(
+static struct auth_state *myauthstate(
     const char *identifier,
     size_t size,
     const char **reply, 
@@ -1205,3 +1216,29 @@ retry:;
 
     return newstate;
 }
+
+#else /* HAVE_LDAP */
+
+static void myinit(void)
+{
+	fatal("PTS module (ldap) not compiled in", EC_CONFIG);
+}
+
+static struct auth_state *myauthstate(
+    const char *identifier __attribute__((unused)),
+    size_t size __attribute__((unused)),
+    const char **reply __attribute__((unused)), 
+    int *dsize __attribute__((unused))) 
+{
+	fatal("PTS module (ldap) not compiled in", EC_CONFIG);
+}
+
+#endif /* HAVE_LDAP */
+
+struct pts_module pts_ldap = 
+{
+    "ldap",		/* name */
+
+    &myinit,
+    &myauthstate,
+};

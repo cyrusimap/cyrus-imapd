@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.18 2004/06/21 15:31:13 rjs3 Exp $
+ * $Id: version.c,v 1.19 2005/02/16 20:37:58 shadow Exp $
  */
 
 #include <config.h>
@@ -159,14 +159,16 @@ void id_response(struct protstream *pout)
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; UCD-SNMP %s", VersionInfo);
 #endif
+#ifdef HAVE_NETSNMP
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; NET-SNMP");
+#endif
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; mmap = %s", map_method_desc);
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; lock = %s", lock_method_desc);
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; nonblock = %s", nonblock_method_desc);
-    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-	     "; auth = %s", auth_method_desc);
 #ifdef HAVE_KRB
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     " (%s)", krb4_version);

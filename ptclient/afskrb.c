@@ -41,9 +41,13 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.10 2005/01/19 07:35:45 shadow Exp $";
+      "$Id: afskrb.c,v 1.11 2005/02/16 20:38:04 shadow Exp $";
 
 #include <config.h>
+#include "ptloader.h"
+#include "exitcodes.h"
+
+#ifdef HAVE_AFSKRB
 
 #include <string.h>
 #include <stdio.h>
@@ -64,7 +68,6 @@ static char rcsid[] __attribute__((unused)) =
 #endif
 
 #include "auth_pts.h"
-#include "exitcodes.h"
 #include "libconfig.h"
 #include "strhash.h"
 #include "xmalloc.h"
@@ -421,9 +424,8 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
 #endif /* AFSPTS_USE_KRB5 */
 
 /* API */
-const char *ptsmodule_name = "afskrb";
 
-void ptsmodule_init(void) 
+static void myinit(void) 
 {
     int r = pr_Initialize (1L, AFSCONF_CLIENTNAME, config_getstring(IMAPOPT_AFSPTS_MYCELL));
     if (r) {
@@ -436,7 +438,7 @@ void ptsmodule_init(void)
     return;
 }
 
-struct auth_state *ptsmodule_make_authstate(const char *identifier,
+static struct auth_state *myauthstate(const char *identifier,
 					    size_t size,
 					    const char **reply, int *dsize) 
 {
@@ -508,3 +510,29 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
 
     return newstate;
 }
+
+#else /* HAVE_AFSKRB */
+
+static void myinit(void)
+{
+	fatal("PTS module (afskrb) not compiled in", EC_CONFIG);
+}
+
+static struct auth_state *myauthstate(
+    const char *identifier __attribute__((unused)),
+    size_t size __attribute__((unused)),
+    const char **reply __attribute__((unused)), 
+    int *dsize __attribute__((unused))) 
+{
+	fatal("PTS module (afskrb) not compiled in", EC_CONFIG);
+}
+
+#endif /* HAVE_AFSKRB */
+
+struct pts_module pts_afskrb = 
+{
+    "afskrb",		/* name */
+
+    &myinit,
+    &myauthstate,
+};
