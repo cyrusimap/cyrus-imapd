@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.10 1999/10/04 18:23:06 leg Exp $
+ * $Id: script.c,v 1.11 1999/10/27 21:20:20 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -530,7 +530,7 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 		/* send the response */
 		ret = s->interp.vacation->send_response(a->u.vac.addr, 
 							a->u.vac.subj,
-			          a->u.vac.msg, a->u.vac.mime, a->u.vac.days,
+			          a->u.vac.msg, a->u.vac.mime,
 			          s->interp.interp_context, s->script_context, 
 			          message_context);
 	    } else if (ret == SIEVE_DONE) {
