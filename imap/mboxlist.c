@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.162 2002/01/29 20:01:32 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.163 2002/02/06 10:06:39 leg Exp $
  */
 
 #include <config.h>
@@ -1336,7 +1336,7 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
     }
 
     /* 7. Change mupdate entry  */
-    if (!r) {
+    if (!r && mupdate_server) {
         mupdate_handle *mupdate_h;
 	/* commit the update to MUPDATE */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
