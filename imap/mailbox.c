@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.131 2002/05/24 13:32:33 ken3 Exp $
+ $Id: mailbox.c,v 1.132 2002/05/25 19:40:41 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2557,6 +2557,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
     }
     if (r) goto fail;
 
+    mailbox_close(&oldmailbox);
     if (mailboxp) {
 	*mailboxp = newmailbox;
     } else {
