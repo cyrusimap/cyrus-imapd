@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.20 2000/10/18 21:00:59 leg Exp $
+ * $Id: target-acap.c,v 1.21 2000/11/07 19:36:56 leg Exp $
  */
 
 #include <config.h>
@@ -395,6 +395,8 @@ int synchronize_mboxlist(void)
     skiplist_free(mailboxes);
 
     syslog(LOG_NOTICE, "done synchronizing mailbox database: %d entries", num);
+
+    return 0;
 }
 
 void fatal(const char *s, int code)
