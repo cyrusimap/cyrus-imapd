@@ -76,6 +76,8 @@ struct imclient {
     int fd;
     char *servername;
 
+    int flags;
+
     /* Data to be output to server */
     char outbuf[IMCLIENT_BUFSIZE];
     char *outptr;
@@ -220,6 +222,22 @@ struct imclient *imclient;
     }
     free((char *)imclient->callback);
     free((char *)imclient);
+}
+
+void 
+imclient_setflags(imclient, flags)
+struct imclient *imclient;
+int flags;
+{
+    imclient->flags |= flags;
+}
+
+void
+imclient_clearflags(imclient, flags)
+struct imclient *imclient;
+int flags;
+{
+    imclient->flags &= ~flags;
 }
 
 char *
@@ -460,13 +478,19 @@ char *str;
     }
     else {
 	/* Literal */
-	imclient->readytag = imclient->gensym;
-	sprintf(buf, "{%u}\r\n", len);
-	imclient_write(imclient, buf, strlen(buf));
-	while (imclient->readytag) {
-	    imclient_processoneevent(imclient);
+	if (imclient->flags & IMCLIENT_CONN_NOWAITLITERAL) {
+	    sprintf(buf, "{%u+}\r\n", len);
+	    imclient_write(imclient, buf, strlen(buf));
 	}
-	if (!imclient->readytxt) return;
+	else {
+	    imclient->readytag = imclient->gensym;
+	    sprintf(buf, "{%u}\r\n", len);
+	    imclient_write(imclient, buf, strlen(buf));
+	    while (imclient->readytag) {
+		imclient_processoneevent(imclient);
+	    }
+	    if (!imclient->readytxt) return;
+	}
 	imclient_write(imclient, str, len);
     }
 }
