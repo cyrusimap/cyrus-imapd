@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.109 2000/06/05 13:16:42 ken3 Exp $
+ * $Id: index.c,v 1.110 2000/06/06 00:54:39 leg Exp $
  */
 #include <config.h>
 
@@ -1021,15 +1021,14 @@ int usinguid;
  * Performs a SORT command
  */
 void
-index_sort(mailbox, sortcrit, searchargs, usinguid)
-struct mailbox *mailbox;
-signed char *sortcrit;
-struct searchargs *searchargs;
-int usinguid;
+index_sort(struct mailbox *mailbox,
+	   signed char *sortcrit,
+	   struct searchargs *searchargs,
+	   int usinguid)
 {
     unsigned *msgno_list;
-    struct msgdata *msgdata, *cur;
-    int i, n;
+    struct msgdata *msgdata = NULL, *cur;
+    int n;
 
     /* Search for messages based on the given criteria */
     n = _index_search(&msgno_list, mailbox, searchargs);
@@ -1037,30 +1036,29 @@ int usinguid;
     if (n) {
 	/* Create/load the msgdata array */
 	msgdata = index_msgdata_load(msgno_list, n, sortcrit);
-
 	free(msgno_list);
+    }
 
+    prot_printf(imapd_out, "* SORT");
+
+    if (msgdata) {
 	/* Sort the messages based on the given criteria */
 	msgdata = lsort(msgdata,
 			(void * (*)(void*)) index_sort_getnext,
 			(void (*)(void*,void*)) index_sort_setnext,
 			(int (*)(void*,void*,void*)) index_sort_compare,
 			sortcrit);
-    }
-
-    prot_printf(imapd_out, "* SORT");
-
-    /* Output the sorted messages */ 
-    cur = msgdata;
-    while (cur) {
-	prot_printf(imapd_out, " %u",
-		    usinguid ? UID(cur->msgno) : cur->msgno);
-	cur = cur->next;
+	/* Output the sorted messages */ 
+	cur = msgdata;
+	while (cur) {
+	    prot_printf(imapd_out, " %u",
+			usinguid ? UID(cur->msgno) : cur->msgno);
+	    cur = cur->next;
+	}
+	index_sort_free(msgdata);
     }
 
     prot_printf(imapd_out, "\r\n");
-
-    index_sort_free(msgdata);
 }
 
 /*
@@ -3019,7 +3017,7 @@ static unsigned hash(char *string)
 			      sizeof(struct msgdata))
 
 #define GETADDR(header)							\
-    parseaddr_list(header+4, &addr);					\
+    parseaddr_list((header)+4, &addr);					\
     cur->header = xstrdup(addr && addr->mailbox ? addr->mailbox : "");	\
     parseaddr_free(addr);						\
     addr=NULL
@@ -3028,7 +3026,6 @@ static struct msgdata *index_msgdata_load(unsigned *msgno_list, int n,
 					  signed char *sortcrit)
 {
     struct msgdata *md, *cur;
-    unsigned sortcrit_mask = 0;
     const char *cacheitem, *env, *from, *to, *cc, *subj;
     struct address *addr;
     int i, j;
@@ -3092,7 +3089,7 @@ static struct msgdata *index_msgdata_load(unsigned *msgno_list, int n,
 /* Extract base subject from subject header */
 static char *index_extract_subject(const char *subj)
 {
-    char *s, *base, *ret, *blob;
+    char *s, *base, *ret = NULL;
 #ifdef ENABLE_REGEX
     regmatch_t pmatch[1];
 
@@ -3134,10 +3131,9 @@ static char *index_extract_subject(const char *subj)
 	    free(blob);
 	    free(ret);
 	}
-
-	/* otherwise, trim leader */
-	else
+	else { /* otherwise, trim leader */
 	    base = s+pmatch[0].rm_eo;
+	}
     }
 
     ret = xstrdup(base);
@@ -3168,35 +3164,45 @@ static void index_sort_setnext(struct msgdata *node, struct msgdata *next)
 /*
  * Comparison function for sorting message lists.
  */
-#define NUMCMP(x, y)	((x < y) ? -1 : (x > y) ? 1 : 0)
+static int numcmp(int x, int y)
+{
+    return ((x < y) ? -1 : (x > y) ? 1 : 0);
+}
 
 static int index_sort_compare(struct msgdata *md1, struct msgdata *md2,
 			      signed char *sortcrit)
 {
-    int reverse, ret, i = 0;
+    int reverse, ret = 0, i = 0;
+    int label;
 
     do {
 	/* determine sort order from sign of criterion */
-	reverse = (sortcrit[i] < 0);
+	if (sortcrit[i] < 0) {
+	    label = -sortcrit[i];
+	    reverse = 1;
+	} else {
+	    label = sortcrit[i];
+	    reverse = 0;
+	}
 
-	switch (abs(sortcrit[i])) {
+	switch (sortcrit[i]) {
 	case SORT_SEQUENCE:
-	    ret = NUMCMP(md1->msgno, md2->msgno);
+	    ret = numcmp(md1->msgno, md2->msgno);
 	    break;
 	case SORT_ARRIVAL:
-	    ret = NUMCMP(md1->arrival, md2->arrival);
+	    ret = numcmp(md1->arrival, md2->arrival);
 	    break;
 	case SORT_CC:
 	    ret = strcmp(md1->cc, md2->cc);
 	    break;
 	case SORT_DATE:
-	    ret = NUMCMP(md1->date, md2->date);
+	    ret = numcmp(md1->date, md2->date);
 	    break;
 	case SORT_FROM:
 	    ret = strcmp(md1->from, md2->from);
 	    break;
 	case SORT_SIZE:
-	    ret = NUMCMP(md1->size, md2->size);
+	    ret = numcmp(md1->size, md2->size);
 	    break;
 	case SORT_SUBJECT:
 	    ret = strcmp(md1->xsubj, md2->xsubj);
@@ -3216,7 +3222,6 @@ static int index_sort_compare(struct msgdata *md1, struct msgdata *md2,
 static void index_msgdata_free(struct msgdata *md)
 {
 #define FREE(x)	if (x) free(x)
-
     FREE(md->cc);
     FREE(md->from);
     FREE(md->to);
@@ -3275,8 +3280,6 @@ static struct thread *index_thread_orderedsubj(unsigned *msgno_list, int nmsg)
 {
     struct msgdata *msgdata;
     signed char sortcrit[] = { SORT_SUBJECT, SORT_DATE, SORT_SEQUENCE };
-    int i, n = 0;
-    const char *cacheitem;
     unsigned psubj;
     struct thread *threads, *tmp, *cur, *parent;
 
@@ -3292,17 +3295,21 @@ static struct thread *index_thread_orderedsubj(unsigned *msgno_list, int nmsg)
 
     /* build threads under a dummy head */
     tmp = cur = NEWTHREAD;
+    parent = NULL;
     psubj = msgdata->xsubj_hash + 1;	/* guarantee psubj != first subj */
     while (msgdata) {
 	/* if current subj != previous subj, then create a new thread */
 	if (msgdata->xsubj_hash != psubj) {
-	    parent = cur = cur->next = NEWTHREAD;
+	    cur->next = NEWTHREAD; /* create a new entry */
+	    parent = cur = cur->next; /* now work with the new entry */
 	    cur->msgdata = msgdata;
 	}
 
 	/* otherwise, add message to current thread */
 	else {
-	    parent = parent->child = NEWTHREAD;
+	    parent->child = NEWTHREAD;
+	    parent = parent->child; /* this'll be the parent 
+				       next time around */
 	    parent->msgdata = msgdata;
 	}
 
@@ -3438,7 +3445,7 @@ int sort_thread_enabled()
 	ret = regcomp(&ptrailer, TRAILER, REG_ICASE | REG_EXTENDED);
 	ret |= regcomp(&pleader, LEADER, REG_ICASE | REG_EXTENDED);
 	if (ret |= regcomp(&pblob, BLOB, REG_EXTENDED))
-	    fatal("SORT/THREAD regexes failed to compile", EC_TEMPFAIL);
+	    fatal("SORT/THREAD regexes failed to compile", EC_SOFTWARE);
 	else
 	    isenabled++;
     }
