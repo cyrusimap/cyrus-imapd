@@ -1,0 +1,22 @@
+<html>
+
+<body>
+<ul>
+<li>appending: it's important that the index records for individual
+messages make it to disk before the index header indicating that
+they're there. so something like:
+<ol>
+<li>sync messages to disk (or depend on <tt>link()</tt> being atomic)
+<li>create new index records, flush to disk
+<li>create new header if necessary (adding new user flag), flush to disk
+<li>flush cache file
+<li>update index header, flush to disk
+</ol>
+</li>
+
+
+
+</ul>
+
+</body>
+</html>
