@@ -689,7 +689,7 @@ char **argv;
 	else if (!strcasecmp(rights, "all")) rights = "lrswipcda";
 
 	imclient_send(conn->imclient, callback_finish, (void *)conn,
-		      "SETACL MAILBOX %s %s %s", mailbox, argv[0], rights);
+		      "SETACL %s %s %s", mailbox, argv[0], rights);
 	argv += 2;
     }
 
@@ -718,20 +718,20 @@ struct imclient_reply *reply;
 
     s = reply->text;
     
-    c = imparse_word(&s, &val);
-    if (c != ' ' || strcasecmp(val, acldata->option) != 0) return;
-
     c = imparse_astring(&s, &val);
-    if (c != ' ' || strcasecmp(val, acldata->object) != 0) return;
+    if (strcasecmp(val, acldata->object) != 0) return;
+    if (c != '\0' && c != ' ') return;
 
-    c = imparse_astring(&s, &identifier);
-    if (c != ' ' || strcasecmp(val, acldata->object) != 0) return;
+    while (c == ' ') {
+	c = imparse_astring(&s, &identifier);
+	if (c != ' ') return;
 
-    c = imparse_astring(&s, &rights);
-    if (c != '\0' || strcasecmp(val, acldata->object) != 0) return;
+	c = imparse_astring(&s, &rights);
+	if (c != '\0' && c != ' ') return;
 
-    Tcl_DStringAppendElement(&acldata->data, identifier);
-    Tcl_DStringAppendElement(&acldata->data, rights);
+	Tcl_DStringAppendElement(&acldata->data, identifier);
+	Tcl_DStringAppendElement(&acldata->data, rights);
+    }
 }    
 
 /*
@@ -761,7 +761,7 @@ char **argv;
 			 "ACL", 0, callback_acl, (void *)&acldata,
 			 (char *)0);
     imclient_send(conn->imclient, callback_finish, (void *)conn,
-		  "GETACL MAILBOX %s", argv[2]);
+		  "GETACL %s", argv[2]);
 
     while (!conn->cmd_done) {
 	imclient_processoneevent(conn->imclient);
