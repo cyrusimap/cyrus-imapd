@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.54 1999/12/30 22:15:50 leg Exp $
+ $Id: append.c,v 1.55 1999/12/30 22:25:57 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -369,6 +369,7 @@ int append_removestage(struct stagemsg *stage)
 
     if (stage == NULL) return 0;
 
+    i = 0;
     while (stage->parts[i][0] != '\0') {
 	/* unlink the staging file */
 	if (unlink(stage->parts[i]) != 0) {
