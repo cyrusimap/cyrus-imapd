@@ -1,6 +1,6 @@
 /* mpool.c memory pool management
  *
- * $Id: mpool.c,v 1.7.4.3 2002/11/26 19:46:25 ken3 Exp $
+ * $Id: mpool.c,v 1.7.4.4 2002/12/03 15:03:14 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -69,8 +69,8 @@ struct mpool
 struct mpool_blob
 {
     size_t size;
-    void *base; /* Base of allocated section */
-    void *ptr; /* End of allocated section */
+    unsigned char *base; /* Base of allocated section */
+    unsigned char *ptr; /* End of allocated section */
     struct mpool_blob *next; /* Next Pool */
 };
 
@@ -102,9 +102,9 @@ void free_mpool(struct mpool *pool)
 {
     struct mpool_blob *p, *p_next;
 
-    if(!pool) return;
-    if(!pool->blob) {
-	fatal("memory pool without a blob",EC_TEMPFAIL);
+    if (!pool) return;
+    if (!pool->blob) {
+	fatal("memory pool without a blob", EC_TEMPFAIL);
 	return;
     }
     
@@ -126,7 +126,7 @@ void free_mpool(struct mpool *pool)
 
 /* round up to the next multiple of 16 bytes if necessary */
 /* 0xFF...FFF0 = ~0 ^ 0xF */
-#define ROUNDUP(num) (((num) + 15) & (~0x0 ^ 0xF))
+#define ROUNDUP(num) (((num) + 15) & (~((unsigned long) 0x0) ^ 0xF))
 
 /* Allocate from a pool */
 void *mpool_malloc(struct mpool *pool, size_t size) 
@@ -151,8 +151,8 @@ void *mpool_malloc(struct mpool *pool, size_t size)
     
     remain = p->size - ((char *)p->ptr - (char *)p->base);
 
-    if(remain < size ||
-       (unsigned int)p->ptr > (p->size + (unsigned int)p->base)) {
+    if (remain < size ||
+        (char *) p->ptr > (p->size + (char *) p->base)) {
       	/* Need a new pool */
 	struct mpool_blob *new_pool;
        	size_t new_pool_size = 2 * ((size > p->size) ? size : p->size);
@@ -163,7 +163,10 @@ void *mpool_malloc(struct mpool *pool, size_t size)
     }
 
     ret = p->ptr;
-    p->ptr = (void *)ROUNDUP((unsigned int)p->ptr + size);
+
+    /* make sure that the next thing we allocate is align on
+       a ROUNDUP boundary */
+    p->ptr = p->base + ROUNDUP(p->ptr - p->base + size);
 
     return ret;
 }
