@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.129 2002/05/23 19:52:10 rjs3 Exp $
+ $Id: mailbox.c,v 1.130 2002/05/23 20:24:18 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1124,7 +1124,6 @@ int mailbox_write_header(struct mailbox *mailbox)
 	r = retry_writev(newheader_fd, iov, niov);
     }
     
- write_error:
     if (r == -1 || fsync(newheader_fd) ||
 	lock_blocking(newheader_fd) == -1 ||
 	rename(newfnamebuf, fnamebuf) == -1) {
@@ -1321,14 +1320,13 @@ int mailbox_append_index(struct mailbox *mailbox,
 /*
  * Write out the quota 'quota'
  */
-int
-mailbox_write_quota(quota)
-struct quota *quota;
+int mailbox_write_quota(struct quota *quota)
 {
     int r;
+    int len;
+    char buf[1024];
     char quota_path[MAX_MAILBOX_PATH];
     char new_quota_path[MAX_MAILBOX_PATH];
-    FILE *newfile;
     int newfd;
 
     assert(quota->lock_count != 0);
@@ -1339,27 +1337,27 @@ struct quota *quota;
     strcpy(new_quota_path, quota_path);
     strcat(new_quota_path, ".NEW");
 
-    newfile = fopen(new_quota_path, "w+");
-    if (!newfile) {
+    newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_WRONLY, 0666);
+    if (newfd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating quota file %s: %m", new_quota_path);
 	return IMAP_IOERROR;
     }
-    newfd = dup(fileno(newfile));
+
     r = lock_blocking(newfd);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: locking quota file %s: %m",
 	       new_quota_path);
-	fclose(newfile);
 	close(newfd);
 	return IMAP_IOERROR;
     }
 
-    fprintf(newfile, "%lu\n%d\n", quota->used, quota->limit);
-    fflush(newfile);
-    if (ferror(newfile) || fsync(fileno(newfile))) {
+    len = snprintf(buf, sizeof(buf) - 1,
+		   "%lu\n%d\n", quota->used, quota->limit);
+    r = write(newfd, buf, len);
+    
+    if (r == -1 || fsync(newfd)) {
 	syslog(LOG_ERR, "IOERROR: writing quota file %s: %m",
 	       new_quota_path);
-	fclose(newfile);
 	close(newfd);
 	return IMAP_IOERROR;
     }
@@ -1367,11 +1365,9 @@ struct quota *quota;
     if (rename(new_quota_path, quota_path)) {
 	syslog(LOG_ERR, "IOERROR: renaming quota file %s: %m",
 	       quota_path);
-	fclose(newfile);
 	close(newfd);
 	return IMAP_IOERROR;
     }
-    fclose(newfile);
 
     if (quota->fd != -1) {
 	close(quota->fd);
@@ -1380,8 +1376,6 @@ struct quota *quota;
 
     quota->fd = newfd;
 
-    /* xxx how do we know that we have a lock on the new quota file ? */
-    
     return 0;
 }
 
