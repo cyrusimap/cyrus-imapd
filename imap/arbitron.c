@@ -125,18 +125,20 @@ int maycreate;
 }
 
 int
-reportproc(rock, userid)
+reportproc(rock, line)
 void *rock;
-char *userid;
+const char *line;
 {
     struct arbitronargs *arbitronargs = (struct arbitronargs *)rock;
+    const char *tab = strchr(line, '\t');
+    int useridlen = tab - line;
 
     /* Don't report users reading their own private mailboxes */
     if (!strncasecmp(arbitronargs->name, "user.", 5) &&
-	!strchr(userid, '.') &&
-	!strncasecmp(arbitronargs->name+5, userid, strlen(userid)) &&
-	(arbitronargs->name[5+strlen(userid)] == '.' ||
-	 arbitronargs->name[5+strlen(userid)] == '\0')) {
+	!memchr(line, '.', useridlen) &&
+	!strncasecmp(arbitronargs->name+5, line, useridlen) &&
+	(arbitronargs->name[5+useridlen] == '.' ||
+	 arbitronargs->name[5+useridlen] == '\0')) {
 	return 0;
     }
 
@@ -161,8 +163,8 @@ char *name;
     arbitronargs.name = name;
     arbitronargs.read_count = 0;
 
-    r = seen_arbitron(&mailbox, report_time, prune_time,
-		      reportproc, (void *)&arbitronargs);
+    r = seen_reconstruct(&mailbox, report_time, prune_time,
+			 reportproc, (void *)&arbitronargs);
     mailbox_close(&mailbox);
 
     if (!r) {

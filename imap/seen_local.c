@@ -116,7 +116,6 @@ struct seen **seendbptr;
  * 'lastuidptr', and 'seenuidsptr'.  A malloc'ed string is placed in
  * the latter and the caller is responsible for freeing it.
  */
-#define BUFGROW 512
 int seen_lockread(seendb, lastreadptr, lastuidptr, lastchangeptr, seenuidsptr)
 struct seen *seendb;
 time_t *lastreadptr;
@@ -148,9 +147,8 @@ char **seenuidsptr;
 	if (seendb->ino != sbuf.st_ino) {
 	    map_free(&seendb->base, &seendb->size);
 	}
-	map_refresh(seendb->fd, 0, &seendb->base, &seendb->size,
+	map_refresh(seendb->fd, 1, &seendb->base, &seendb->size,
 		    sbuf.st_size, fnamebuf, 0);
-
     }
     
     /* Find record for user */
@@ -244,6 +242,7 @@ char *seenuids;
     int n;
     struct iovec iov[10];
     int num_iov;
+    struct stat sbuf;
     static const char padbuf[/* 100 */] = {
 	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
 	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
@@ -448,184 +447,319 @@ struct mailbox *newmailbox;
 }
 
 /*
- * Reconstruct the seen database for 'mailbox'
- * We just make sure the file exists.
+ * List of entries in reconstructed seen database
  */
-int seen_reconstruct(mailbox)
+#define NEWIOV_GROW 3 /* 1000 */
+struct iovec *newiov;
+char *freenew;
+int newiov_num = 0;
+int newiov_alloc = 0;
+int newiov_dirty;		/* set to 1 if something either
+				 * malloced or not in sort order
+				 */
+
+/*
+ * Insert a seen record 'line' with length 'len'
+ * into the being-reconstructed seen database.
+ * 'freeit' is nonzero if 'line' should be freed after use.
+ */
+void
+newiov_insert(line, len, freeit)
+const char *line;
+unsigned len;
+int freeit;
+{
+    int low=0;
+    int high=newiov_num-1;
+    int mid, cmp, i;
+
+    if (newiov_num == newiov_alloc) {
+	newiov_alloc += NEWIOV_GROW;
+	newiov = (struct iovec *)xrealloc((char *)newiov,
+					newiov_alloc * sizeof (struct iovec));
+	freenew = (char *)xrealloc(freenew, newiov_alloc);
+    }
+
+    /* special-case -- appending to end */
+    if (newiov_num == 0 ||
+	bsearch_compare(line, newiov[newiov_num-1].iov_base) > 0) {
+	newiov[newiov_num].iov_base = (char *)line;
+	newiov[newiov_num].iov_len = len;
+	freenew[newiov_num] = freeit;
+	newiov_num++;
+	if (freeit) newiov_dirty = 1;
+	return;
+    }
+    
+    newiov_dirty = 1;
+
+    /* Binary-search for location */
+    while (low <= high) {
+	mid = (high - low)/2 + low;
+	cmp = bsearch_compare(line, newiov[mid].iov_base);
+
+	if (cmp == 0) return;
+
+	if (cmp < 0) {
+	    high = mid - 1;
+	}
+	else {
+	    low = mid + 1;
+	}
+    }
+    
+    /* Open a slot for the new entry and insert entry into the list */
+    for (i = newiov_num-1; i > high; i--) {
+	newiov[i+1].iov_base = newiov[i].iov_base;
+	newiov[i+1].iov_len = newiov[i].iov_len;
+	freenew[i+1] = freenew[i];
+    }
+    newiov_num++;
+    newiov[low].iov_base = (char *)line;
+    newiov[low].iov_len = len;
+    freenew[low] = freeit;
+}
+
+#define FIXING() \
+	if (!dst) { \
+	    fixedline = xmalloc(endline - line + 2 + PADSIZE); \
+	    strncpy(fixedline, line, p - line); \
+	    dst = fixedline + (p - line); \
+        }
+
+/*
+ * Reconstruct the seen database for 'mailbox'.  Optionally does usage
+ * counting and old entry pruning for the seen database of 'mailbox'.
+ * Users who have opened the mailbox since 'report_time' are reported,
+ * users who have not opened the mailbox since 'prune_time' have their
+ * entries removed from the seen database.  Users are reported by
+ * calling 'report_proc' with 'report_rock' and a pointer to the line
+ * in the database.
+ */
+int seen_reconstruct(mailbox, report_time, prune_time, report_proc, report_rock)
 struct mailbox *mailbox;
+time_t report_time;
+time_t prune_time;
+int (*report_proc)();
+void *report_rock;
 {
     char fnamebuf[MAX_MAILBOX_PATH];
+    char newfnamebuf[MAX_MAILBOX_PATH];
     int fd;
+    struct stat sbuf;
+    const char *lockfailaction;
+    const char *base = 0;
+    unsigned long size = 0;
+    const char *line, *endline;
+    unsigned long left;
+    const char *tab, *p, *space;
+    time_t lastread;
+    unsigned lastuidread;
+    time_t lastchange;
+    int r, i, n;
+    unsigned lastuid, thisuid;
+    unsigned uidtoobig = mailbox->last_uid;
+    time_t now, nowplus1day;
+    int lastsep;
+    char *fixedline, *dst;
+    int writefd;
     
+    time(&now);
+    nowplus1day = now + 24*60*60;
+
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_SEEN);
 
     fd = open(fnamebuf, O_RDWR, 0666);
-    if (fd != -1) {
-	close(fd);
-	return 0;
+    if (fd == -1) {
+	return seen_create(mailbox);
     }
 
-    return seen_create(mailbox);
-}
-
-/*
- * Do usage counting and old entry pruning for the seen database
- * of 'mailbox'.  Users who have opened the mailbox since
- * 'report_time' are reported, users who have not opened the
- * mailbox since 'prune_time' have their entries removed from
- * the seen database.  Users are reported by calling 'proc' with
- * 'rock' and the userid.
- */
-int seen_arbitron(mailbox, report_time, prune_time, proc, rock)
-struct mailbox *mailbox;
-time_t report_time;
-time_t prune_time;
-int (*proc)();
-void *rock;
-{
-    int r;
-    char fnamebuf[MAX_MAILBOX_PATH];
-    char newfnamebuf[MAX_MAILBOX_PATH];
-    struct stat sbuf;
-    const char *lockfailaction;
-    FILE *seenfile;
-    FILE *writefile = 0;
-    unsigned n, left, skiplen;
-    char buf[1024];
-    char *p, *end_userid;
-    time_t lastread;
-    int c;
-
-    strcpy(fnamebuf, mailbox->path);
-    strcat(fnamebuf, FNAME_SEEN);
-
-    seenfile = fopen(fnamebuf, "r+");
-    if (!seenfile) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
-	return IMAP_IOERROR;
-    }
-    
-    /* Lock the database */
-    r = lock_reopen(fileno(seenfile), fnamebuf, &sbuf, &lockfailaction);
+    r = lock_reopen(fd, fnamebuf, &sbuf, &lockfailaction);
     if (r == -1) {
 	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, fnamebuf);
-	fclose(seenfile);
 	return IMAP_IOERROR;
     }
 
-    while (fgets(buf, sizeof(buf), seenfile)) {
-	/* Skip over username we know is there */
-	p = strchr(buf, '\t');
-	if (!p) {
-	    /* remove bogus record */
-	    goto removeline;
-	}
-	end_userid = p;
-	p++;
+    map_refresh(fd, 1, &base, &size, sbuf.st_size, fnamebuf, 0);
 
-	/* Parse the last selected time */
+    endline = base;
+    while (endline = memchr(line=endline, '\n', size - (endline - base))) {
+	endline++;
+
+	/* Parse/check username */
+	p = tab = memchr(line, '\t', endline - line);
+	if (!tab /* XXX || badusername */) {
+	    /* Cause line to be deleted */
+	    newiov_dirty = 1;
+	    continue;
+	}
+
+	/* Parse last-read timestamp */
+	p++;
 	lastread = 0;
-	while (isdigit(*p)) {
+	while (p < endline && isdigit(*p)) {
 	    lastread = lastread * 10 + *p++ - '0';
 	}
+	if (p >= endline || *p++ != ' ') {
+	    /* Cause line to be deleted */
+	    newiov_dirty = 1;
+	    continue;
+	}
+	if (lastread > nowplus1day) lastread = now;
 
 	/* Report user if read recently enough */
-	if (lastread > report_time) {
-	    *end_userid = '\0';
-	    (*proc)(rock, buf);
-	    *end_userid = '\t';
+	if (report_proc && lastread > report_time) {
+	    (*report_proc)(report_rock, line);
 	}
 
 	/* Remove record if it's too old */
 	if (lastread < prune_time) {
-	  removeline:
-	    if (!writefile) {
-		/*
-		 * This is the first record we have to prune from
-		 * the file.  Open 'writefile' and copy what we have
-		 * read so far into it.
-		 */
-		strcpy(newfnamebuf, fnamebuf);
-		strcat(newfnamebuf, ".NEW");
-
-		writefile = fopen(newfnamebuf, "w+");
-		if (!writefile) {
-		    syslog(LOG_ERR, "IOERROR: creating %s: %m", newfnamebuf);
-		    fclose(seenfile);
-		    return IMAP_IOERROR;
-		}
-		
-		skiplen = strlen(buf);
-		left = ftell(seenfile) - skiplen;
-
-		rewind(seenfile);
-		while (left) {
-		    n = fread(buf, 1, left < sizeof(buf) ? left : sizeof(buf),
-			      seenfile);
-		    if (n == 0) {
-			syslog(LOG_ERR, "IOERROR: reading %s: end of file",
-			       fnamebuf);
-			fclose(writefile);
-			unlink(newfnamebuf);
-			fclose(seenfile);
-			return IMAP_IOERROR;
-		    }
-		    fwrite(buf, 1, n, writefile);
-		    left -= n;
-		}
-		n = fread(buf, 1, skiplen, seenfile);
-		if (n != skiplen) {
-		    syslog(LOG_ERR, "IOERROR: reading %s: end of file",
-			   fnamebuf);
-		    fclose(writefile);
-		    unlink(newfnamebuf);
-		    fclose(seenfile);
-		    return IMAP_IOERROR;
-		}
-	    }
-
-	    /* Skip over and ignore the rest of the record */
-	    if (buf[strlen(buf)-1] != '\n') {
-		do {
-		    c = getc(seenfile);
-		} while (c != EOF && c != '\n');
-	    }
-    
+	    /* Cause line to be deleted */
+	    newiov_dirty = 1;
 	    continue;
 	}
+
 	
-	/*
-	 * If copying file, copy the current record
-	 * In any case, skip over rest of the record.
-	 */
-	if (writefile) fputs(buf, writefile);
-	if (buf[strlen(buf)-1] != '\n') {
-	    do {
-		c = getc(seenfile);
-		if (writefile && c != EOF) {
-		    putc(c, writefile);
-		}
-	    } while (c != EOF && c != '\n');
+	/* Parse last-read uid */
+	lastuidread = 0;
+	while (p < endline && isdigit(*p)) {
+	    lastuidread = lastuidread * 10 + *p++ - '0';
+	}
+	if (p >= endline || *p++ != ' ' || lastuidread > uidtoobig) {
+	    /* Cause line to be deleted */
+	    newiov_dirty = 1;
+	    continue;
+	}
+
+	/* Scan for end of uids or last-change timestamp */
+	lastchange = 0;
+	fixedline = dst = 0;
+	space = memchr(p, ' ', endline - p);
+
+	if (space && space+1 < endline &&
+	    space[0] == ' ' && isdigit(space[1])) {
+	    /* Have a last-change timestamp */
+	    while (p < space && isdigit(*p)) {
+		lastchange = lastchange * 10 + *p++ - '0';
+	    }
+	    if (p != space) {
+		/* Cause line to be deleted */
+		newiov_dirty = 1;
+		continue;
+	    }
+	    if (lastchange > nowplus1day) {
+		lastchange = now;
+	    }
+
+	    p++;		/* Skip over space */
+	    space = memchr(p, ' ', endline - p);
+	    if (!space) space = endline - 1; /* The newline */
+	}
+	else {
+	    FIXING();
+	    *dst++ = '0';	/* Add a last-change timestamp of 0 */
+	    *dst++ = ' ';
+	}
+	    
+	/* Scan/scavenge uid list. */
+	lastuid = 0;
+	lastsep = ',';
+
+	while (p < space) {
+	    thisuid = 0;
+	    while (p < space && isdigit(*p)) {
+		if (dst) *dst++ = *p;
+		thisuid = thisuid * 10 + *p++ - '0';
+	    }
+
+	    if (thisuid <= lastuid || thisuid > uidtoobig) {
+		/* Remove this UID and trailing separator */
+		FIXING();
+		while (isdigit(dst[-1])) dst--;
+		if (dst[-1] == ':') dst[-1] = ',';
+	    }
+	    else if (lastsep == ':' && *p == ':') {
+		/* Change colon to comma */
+		FIXING();
+		*dst++ = lastsep = ',';
+	    }
+	    else if (*p == ':' || *p == ',') {
+		lastsep = *p;
+		if (dst) *dst++ = lastsep;
+	    }
+	    else break;
+
+	    p++;
+	}
+
+	if (p[-1] == ':' || p[-1] == ',') {
+	    FIXING();
+	}
+	if (dst && (dst[-1] == ':' || dst[-1] == ',')) {
+	    dst[-1] = ' ';
+	}
+
+	while (p < endline) {
+	    if (*p != ' ') {
+		FIXING();
+	    }
+	    if (dst) *dst++ = ' ';
+	    p++;
+	}
+	if (dst) {
+	    *dst++ = '\n';
+	    newiov_insert(fixedline, dst - fixedline, 1);
+	}
+	else {
+	    newiov_insert(line, endline - line, 0);
 	}
     }
 
-    /* If copying file, rename it into place */
-    if (writefile) {
+    r = 0;
+
+    if (newiov_dirty) {
+	strcpy(newfnamebuf, fnamebuf);
+	strcat(newfnamebuf, ".NEW");
+
+	writefd = open(newfnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
+	if (writefd == -1) {
+	    syslog(LOG_ERR, "IOERROR: creating %s: %m", newfnamebuf);
+	    r = IMAP_IOERROR;
+	    goto cleanup;
+	}
+
+	/* Simplify the iov by coalescing ajacent lines */
+	for (i = 0; i < newiov_num - 1; i++) {
+	    if (newiov[i].iov_base + newiov[i].iov_len == newiov[i+1].iov_base &&
+		!freenew[i] && !freenew[i]) {
+		newiov[i+1].iov_base = newiov[i].iov_base;
+		newiov[i+1].iov_len += newiov[i].iov_len;
+		newiov[i].iov_len = 0;
+	    }
+	}
+
+	n = retry_writev(writefd, newiov, newiov_num);
+
 	/* Flush and swap in the new file */
-	fflush(writefile);
-	if (ferror(writefile) || fsync(fileno(writefile)) ||
+	if (n == -1 || fsync(writefd) ||
+	    fstat(writefd, &sbuf) == -1 ||
 	    rename(newfnamebuf, fnamebuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: writing %s: %m", newfnamebuf);
-	    fclose(writefile);
 	    unlink(newfnamebuf);
-	    fclose(seenfile);
-	    return IMAP_IOERROR;
+	    r = IMAP_IOERROR;
 	}
-	fclose(writefile);
+	close(writefd);
+
+    cleanup:
+	for (i = 0; i < newiov_num; i++) {
+	    if (freenew[i]) free(newiov[i].iov_base);
+	}
     }
 
-    fclose(seenfile);
-    return 0;
+    map_free(&base, &size);
+    close(fd);
+	
+    return r;
 }
 
