@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.1.2.1 2003/02/06 22:41:00 rjs3 Exp $ */
+/* $Id: libconfig.c,v 1.1.2.2 2003/02/07 01:39:51 ken3 Exp $ */
 
 #include <config.h>
 
@@ -54,6 +54,7 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 
+#include "acl.h"
 #include "hash.h"
 #include "libconfig.h"
 #include "imapopts.h"

@@ -1,5 +1,5 @@
 /* libconfig.h -- Header for imapd.conf processing
- * $Id: libconfig.h,v 1.1.2.1 2003/02/06 22:41:00 rjs3 Exp $
+ * $Id: libconfig.h,v 1.1.2.2 2003/02/07 01:39:51 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,6 +48,7 @@
 
 /* these will assert() if they're called on the wrong type of
    option (imapopts.c) */
+extern void config_read(const char *alt_config);
 extern const char *config_getstring(enum imapopt opt);
 extern int config_getint(enum imapopt opt);
 extern int config_getswitch(enum imapopt opt);
