@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.134 2000/07/19 01:00:00 leg Exp $
+ * $Id: mboxlist.c,v 1.135 2000/08/06 20:36:20 leg Exp $
  */
 
 #include <config.h>
@@ -724,6 +724,7 @@ int mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	if (checkacl &&
 	    (!(acl_myrights(auth_state, acl) & ACL_CREATE))) {
 	    r = IMAP_PERMISSION_DENIED;
+	    DB->abort(mbdb, tid);
 	    goto done;
 	}
 	
@@ -1134,6 +1135,7 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
     /* Make change to ACL */
     newacl = xstrdup(acl);
     if (rights) {
+	mode = ACL_MODE_SET;
 	if (*rights == '+') {
 	    rights++;
 	    mode = ACL_MODE_ADD;
@@ -1161,7 +1163,7 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
     }
 
     /* ok, make the change */
-    mboxent = mboxlist_makeentry(mbtype, partition, acl);
+    mboxent = mboxlist_makeentry(mbtype, partition, newacl);
 
     r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), &tid);
     switch (r) {
