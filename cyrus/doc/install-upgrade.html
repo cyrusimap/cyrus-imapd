@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28.4.2 2002/08/28 18:42:35 rjs3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28.4.3 2002/09/27 19:06:04 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -10,11 +10,63 @@
 
 <h3>Upgrading from 2.1.x or earlier</h3>
 <ul>
+<li>The default database formats for the mailbox list and the seen state
+databases has been changed from Berkeley DB to Skiplist.  There are two
+ways of dealing with this if you have been using the defaults.
+
+<ol>
+<li>Specify <tt>--with-mboxlist-db=berkeley</tt> and
+<tt>--with-seen-db=flat</tt> to <tt>configure</tt>.  This will just continue
+to use the previous defaults</li>
+
+<li>Use the <tt>cvt_cyrusdb</tt> program to directly convert the databases.
+This should be done with the server down, and with the binaries from the new
+Cyrus distribution.  Change any paths that do not match your configuration.<br>
+For the mailbox list, the command looks like:
+<pre>
+/usr/cyrus/bin/cvt_cyrusdb /var/imap/mailboxes.db berkeley /var/imap/mailboxes.db.new skiplist
+mv /var/imap/mailboxes.db.new /var/imap/mailboxes.db
+</pre>
+Note that the use of full paths to the database files is important.  You
+should also backup your old mailboxes database before moving the new one
+in.<br>
+For the seen state databases, the command to get them all in one fell swoop
+looks like:
+<pre>
+find /var/imap/user -name \*.seen -exec /usr/cyrus/bin/cvt_cyrusdb \{\} flat \{\}.new skiplist \; -exec mv \{\}.new \{\} \;
+</pre>
+The slashes are important for shell escaping.  Again, you should back up
+the contents of your /var/imap/user directory before executing this command.<br>
+Note that these commands may take some time to complete, especially if your
+databases are large.
+</li></ol>
+
+Before making the decision to change database formats, you should
+note that we believe that skiplist offers performance advantages for these
+two databases over flat and Berkeley DB (<i>especially</i> for the mailbox
+list).</li>
+
 <li>User moves via RENAME and XFER are now controlled by the
 <tt>allowusermoves</tt> option, which defaults to off.</li>
-<li>Clients that use old-style ACL commands that include the &quot;MAILBOX&quot;
-directive will no longer function.  We do not know of any clients
-that have this problem currently.</li>
+
+<li> Configuration subsystem changes:
+<ul>
+ <li>The tls_[service]_* configuration options have been removed.  Now
+ use [servicename]_tls_*, where servicename is the service identifier from
+ cyrus.conf for that particular process.</li>
+
+ <li>The <tt>admins</tt> and <tt>lmtp_admins</tt> configuration
+ options no longer union, per-service options completely override
+ the default value when they are specified.</li>
+
+ <li><tt>lmtp_allowplaintext</tt> is no longer a defined parameter and must
+ be specified using the service name of your lmtp process if you
+ require a specific value.</li>
+</ul></li>
+
+<li>Clients that use old-style ACL commands that include the
+&quot;MAILBOX&quot; directive will no longer function.
+We do not know of any clients that have this problem currently.</li>
 
 </ul>
 
@@ -239,7 +291,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2002/08/28 18:42:35 $
+last modified: $Date: 2002/09/27 19:06:04 $
 </BODY></HTML>
 
 

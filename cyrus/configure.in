@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.10 2002/09/23 20:31:24 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.11 2002/09/27 19:06:01 rjs3 Exp $
 dnl
 
 
@@ -186,14 +186,14 @@ CYRUS_SET_BACKEND_BINARY("duplicate db", CONFIG_DB_DUPLICATE, $DB)
 
 AC_ARG_WITH(mboxlist-db,
 	[  --with-mboxlist-db=DB   use DB (flat, berkeley, skiplist) as a backend
-                          for the mailbox list (Default: berkeley) ],
-	DB="$withval", DB="berkeley")
+                          for the mailbox list (Default: skiplist) ],
+	DB="$withval", DB="skiplist")
 CYRUS_SET_BACKEND("mboxlist", CONFIG_DB_MBOX, $DB)
 
 AC_ARG_WITH(seen-db,
 	[  --with-seen-db=DB       use DB (flat, berkeley, skiplist) as a backend
-                          for the seen state (Default: flat) ],
-	DB="$withval", DB="flat")
+                          for the seen state (Default: skiplist) ],
+	DB="$withval", DB="skiplist")
 CYRUS_SET_BACKEND("seen state", CONFIG_DB_SEEN, $DB)
 
 AC_ARG_WITH(subs-db,

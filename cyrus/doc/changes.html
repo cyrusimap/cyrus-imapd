@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.43.2.6 2002/09/20 17:47:42 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.43.2.7 2002/09/27 19:06:04 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -37,6 +37,9 @@ the rename.  See ??? for details.</li>
 <li> The <tt>db3</tt> and <tt>db3-nosync</tt> database backends have
 been renamed to <tt>berkeley</tt> and <tt>berkeley-nosync</tt>
 respectively (to avoid confusion over whether or not db4 is supported).</li>
+
+<li> The default mailbox list and seen state database formats have changed
+to skiplist from Berkeley and Flat, respectively. </li>
 
 </ul>
 
@@ -1716,7 +1719,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/09/20 17:47:42 $ <br />
+last modified: $Date: 2002/09/27 19:06:04 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

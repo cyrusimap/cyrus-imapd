@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.85.4.1 2002/07/25 17:21:36 ken3 Exp $
+# $Id: SMakefile,v 1.85.4.2 2002/09/27 19:06:01 rjs3 Exp $
 #
 
 if test ! -x configure; then
@@ -106,7 +106,8 @@ esac
 DEBUG=""
 WITHAUTH="--with-auth=krb_pts"
 SSL_CONFIG="--with-openssl=/usr/local/lib"
-DB_CONFIG="--with-mboxlist-db=skiplist --with-seen-db=skiplist"
+DB_CONFIG=""
+#DB_CONFIG="--with-mboxlist-db=skiplist --with-seen-db=skiplist"
 
 # the following is for staticly linking SASL only
 SASL_CONFIG="--with-staticsasl=/usr/local --with-gssapi=/usr/local"
