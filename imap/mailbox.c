@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.101 2000/07/11 17:54:58 leg Exp $
+ $Id: mailbox.c,v 1.102 2000/10/12 19:15:08 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -129,6 +129,7 @@ int mailbox_initialize(void)
 {
     int s;
     int fdflags;
+    struct stat sbuf;
 
     /* if not configured to do acap do nothing */
     if (config_getstring("acap_server", NULL)==NULL) return 0;
@@ -142,6 +143,12 @@ int mailbox_initialize(void)
     strcat(acappush_remote.sun_path, FNAME_ACAPPUSH_SOCK);
     acappush_remote_len = sizeof(acappush_remote.sun_family) +
 	strlen(acappush_remote.sun_path) + 1;
+
+    /* check that the socket exists */
+    if (stat(acappush_remote.sun_path, &sbuf) < 0) {
+	close(s);
+	return 0;
+    }
 
     /* put us in non-blocking mode */
     fdflags = fcntl(s, F_GETFD, 0);
@@ -1777,8 +1784,6 @@ void *deciderock;
 		       (struct sockaddr *) &acappush_remote, 
 		       acappush_remote_len) == -1) {
 		syslog(LOG_ERR, "Error sending to acappush: %m");
-		/* goto fail;
-		   don't fail if we just can't contact acappush */
 	    }
 	}
     }
