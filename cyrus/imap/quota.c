@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.45 2003/02/13 20:15:30 rjs3 Exp $ */
+/* $Id: quota.c,v 1.46 2003/04/22 17:39:41 rjs3 Exp $ */
 
 
 #include <config.h>
@@ -194,7 +194,7 @@ int compare_quota(const void *a, const void *b)
 int buildquotalist(char **roots, int nroots)
 {
     int r;
-    char quota_path[MAX_MAILBOX_PATH];
+    char quota_path[MAX_MAILBOX_PATH+1];
     int i;
     DIR *dirp;
     DIR *topp;
@@ -491,7 +491,7 @@ void
 reportquota(void)
 {
     int i;
-    char buf[MAX_MAILBOX_PATH];
+    char buf[MAX_MAILBOX_PATH+1];
 
     printf("   Quota  %% Used    Used Root\n");
 
