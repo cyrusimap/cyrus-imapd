@@ -60,6 +60,7 @@
 #include "mboxlist.h"
 #include "util.h"
 #include "imap_err.h"
+#include "mupdate_err.h"
 
 extern int errno;
 
