@@ -62,6 +62,7 @@ glob *glob_init_suppress(str, flags, suppress)
     newglob = flags & GLOB_HIERARCHY;
     if (suppress) slen = strlen(suppress);
     g = (glob *) fs_get(sizeof (glob) + slen + strlen(str) + 1);
+    strcpy(g->inbox, inbox);
     if (g != NULL) {
 	g->sep_char = '.';
 	dst = g->str;
@@ -119,15 +120,16 @@ glob *glob_init_suppress(str, flags, suppress)
 	g->flags = flags;
 
 	/* pre-match "INBOX" to the pattern case insensitively and save state
+	 * also keep track of the matching case for "INBOX"
 	 * NOTE: this only works because "INBOX" has no repeated substrings
 	 */
 	if (flags & GLOB_INBOXCASE) {
 	    str = g->str;
-	    dst = inbox;
+	    dst = g->inbox;
 	    g->gstar = g->ghier = NULL;
 	    do {
 		while (*dst && TOLOWER(*str) == TOLOWER(*dst)) {
-		    ++str, ++dst;
+		    *dst++ = *str++;
 		}
 		if (*str == '*') g->gstar = ++str, g->ghier = NULL;
 		else if (*str == '%') g->ghier = ++str;
@@ -367,7 +369,7 @@ main(argc, argv)
     long min;
 
     if (g) {
-	printf("%d/%s\n", g->flags, g->str);
+	printf("%d/%s/%s\n", g->flags, g->inbox, g->str);
 	while (fgets(text, sizeof (text), stdin) != NULL) {
 	    len = strlen(text) - 1;
 	    text[len] = '\0';
