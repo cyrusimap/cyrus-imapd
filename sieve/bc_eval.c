@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.12 2003/06/24 00:31:01 jsmith2 Exp $
+ * $Id: bc_eval.c,v 1.1.4.13 2003/06/27 23:10:58 jsmith2 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -469,23 +469,25 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	
 	    /*header exists, now to test it*/
 	    /*search through all the headers that match*/
-	    if (match == B_COUNT) {
-		count++;
-	    } else {
-		for (y=0; val[y]!=NULL && !res; y++) {
+	    
+	    for (y=0; val[y]!=NULL && !res; y++) {
+		
+		if (match == B_COUNT) {
+		    count++;
+		} else {
 #if VERBOSE
 		    printf("about to parse %s\n", val[y]);
 #endif
-
+		    
 		    if (parse_address(val[y], &data, &marker)!=SIEVE_OK) 
 			return 0;
-
+		    
 		    while (!res &&
 			   (addr = get_address(addrpart, &data, &marker, 0))) {
 #if VERBOSE
 			printf("working addr %s\n", (addr ? addr : "[nil]"));
 #endif
-
+			
 			/*search through all the data*/ 
 			currd=datai+2;
 			for (z=0; z<numdata && !res; z++)
@@ -517,8 +519,9 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 		    } /* For each address */
 
 		    free_address(&data, &marker);
-		} /* For each message header */
-	    }
+		}
+	    }/* For each message header */
+	    
 #if VERBOSE
 	    printf("end of loop, res is %d, x is %d (%d)\n", res, x, numheaders);
 #endif	    
@@ -593,19 +596,21 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	for(x=0; x<numheaders && !res; x++)
 	{
 	    const char *this_header;
-
+	    
 	    currh = unwrap_string(bc, currh, &this_header, NULL);
 	   
 	    if(interp->getheader(m, this_header, &val) != SIEVE_OK) {
 		continue; /*this header does not exist, search the next*/ 
 	    }
-
+	    printf ("val %s %s %s\n", val[0], val[1], val[2]);
+	    
 	    /* search through all the headers that match */
-	    if  (match == B_COUNT) {
-		count++;
-	    } else {
-		for (y=0; val[y]!=NULL && !res; y++)
-		{	
+	    
+	    for (y=0; val[y]!=NULL && !res; y++)
+	    {
+		if  (match == B_COUNT) {
+		    count++;
+		} else {
 		    /*search through all the data*/ 
 		    currd=datai+2;
 		    for (z=0; z<numdata && !res; z++)
@@ -634,7 +639,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 		}
 	    }
 	}
-
+	
 	if  (match == B_COUNT )
 	{
 	    sprintf(scount, "%u", count);
@@ -643,9 +648,9 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	    for (z=0; z<numdata && !res; z++)
 	    { 	
 		const char *data_val;
-		
+			
 		currd = unwrap_string(bc, currd, &data_val, NULL);
-		
+		printf("%d, %s \n", count, data_val);
 		res |= comp(scount, data_val, comprock);
 	    }
 	      
