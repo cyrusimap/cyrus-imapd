@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.48 2002/01/25 19:26:07 leg Exp $
+ * $Id: lmtpengine.c,v 1.49 2002/01/29 20:11:37 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -81,6 +81,7 @@
 #include "iptostring.h"
 #include "exitcodes.h"
 #include "imap_err.h"
+#include "mupdate_err.h"
 #include "xmalloc.h"
 #include "version.h"
 
@@ -171,6 +172,9 @@ static void send_lmtp_error(struct protstream *pout, int r)
 	break;
 
     case IMAP_SERVER_UNAVAILABLE:
+    case MUPDATE_NOCONN:
+    case MUPDATE_NOAUTH:
+    case MUPDATE_TIMEOUT:
 	prot_printf(pout, "451 4.4.0 Remote server unavailable\r\n");
 	break;
 
@@ -235,6 +239,8 @@ static void send_lmtp_error(struct protstream *pout, int r)
 	prot_printf(pout, "501 5.5.4 Syntax error in parameters\r\n");
 	break;
 
+    case MUPDATE_PROTOCOL_ERROR:
+    case MUPDATE_BADPARAM:
     default:
 	/* Some error we're not expecting. */
 	prot_printf(pout, "554 5.0.0 Unexpected internal error\r\n");
@@ -261,6 +267,8 @@ int msg_new(message_data_t **m)
 
     ret->authuser = NULL;
     ret->authstate = NULL;
+
+    ret->rock = NULL;
 
     for (i = 0; i < HEADERCACHESIZE; i++)
 	ret->cache[i] = NULL;
@@ -392,6 +400,16 @@ void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r)
 {
     assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
     m->rcpt[rcpt_num]->status = r;
+}
+
+void *msg_getrock(message_data_t *m)
+{
+    return m->rock;
+}
+
+void msg_setrock(message_data_t *m, void *rock)
+{
+    m->rock = rock;
 }
 
 /* return a malloc'd string representing the authorized user.
