@@ -2092,3 +2092,22 @@ int maycreate;
     return 0;
 }
 
+#ifdef ENABLE_EXPERIMENT
+#ifdef ENABLE_MBOXLIST_FREE
+/*
+ * Experimental code to free mailboxes file when not in use.
+ * Possibly more efficient in some cases.
+ */
+void
+mboxlist_close()
+{
+     if (*list_base && *list_size) {
+	  map_free(&list_base, &list_size);
+     }
+     if (listfd != -1) {
+	  close(listfd);
+	  listfd = -1;
+     }
+}
+#endif /* ENABLE_MBOXLIST_FREE */
+#endif /* ENABLE_EXPERIMENT */
