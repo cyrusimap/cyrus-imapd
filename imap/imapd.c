@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.374 2002/04/01 19:59:01 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.375 2002/04/01 21:29:41 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -5668,8 +5668,14 @@ void cmd_undump(char *tag, char *name)
     if (r == IMAP_MAILBOX_MOVED) return;
 
     if(!r) {
-	r = undump_mailbox(mailboxname, path, acl, imapd_in, imapd_out,
+	/* save this stuff from additional mlookups */
+	char *safe_path = xstrdup(path);
+	char *safe_acl = xstrdup(acl);
+	r = undump_mailbox(mailboxname, safe_path, safe_acl,
+			   imapd_in, imapd_out,
 			   imapd_authstate);
+	free(safe_path);
+	free(safe_acl);
     }
 
     if (r) {
