@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.25 2001/01/16 01:03:11 leg Exp $
+ * $Id: actions.c,v 1.26 2001/08/12 18:22:14 ken3 Exp $
  * 
  */
 /*
@@ -62,6 +62,7 @@
 #include <string.h>
 
 #include "prot.h"
+#include "util.h"
 #include "imapconf.h"
 #include "xmalloc.h"
 #include "sieve_interface.h"
@@ -102,8 +103,7 @@ int actions_setuser(char *userid)
 
   sieve_dir=(char *) xmalloc(1024);
   
-  hash = (char) tolower((int) *userid);
-  if (!islower((int) hash)) { hash = 'q'; }
+  hash = (char) dir_hash_c(userid);
     
   snprintf(sieve_dir, 1023, "%s/%c/%s", foo, hash,userid);
 
