@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.28 2001/09/20 15:23:38 ken3 Exp $ */
+/* $Id: tls.c,v 1.29 2001/11/13 17:34:27 leg Exp $ */
 
 #include <config.h>
 
@@ -472,15 +472,11 @@ static void remove_session(unsigned char *id, int idlen)
  * cleanly.
  */
 static void remove_session_cb(SSL_CTX *ctx, SSL_SESSION *sess)
- {
-    char dbname[1024];
-    struct db *sessdb;
-    int ret;
-
+{
     assert(sess);
 
     remove_session(sess->session_id, sess->session_id_length);
- }
+}
 
 /*
  * The get_session_cb() is only called on SSL/TLS servers with the
@@ -499,7 +495,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *
 
     assert(id);
 
-    if (!sess_dbopen) NULL;
+    if (!sess_dbopen) return NULL;
 
     do {
 	ret = DB->fetch(sessdb, id, idlen, &data, &len, NULL);
