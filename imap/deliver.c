@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <com_err.h>
 #ifdef NEWDB
 #include <db.h>
@@ -50,11 +51,13 @@ extern int errno;
 char *mailboxname = 0;
 char *authuser = 0;
 char *id = 0;
+int dupelim = 0;
 char **flag = 0;
 int nflags = 0;
-
-FILE *f;
 struct protstream *prot_f;
+unsigned size;
+
+struct protstream *savemsg();
 
 main(argc, argv)
 int argc;
@@ -64,20 +67,25 @@ char **argv;
     int exitval = 0, code;
     int n;
     char buf[4096];
+    char *msgid;
+    char *return_path = 0;
 
     config_init("deliver");
 
-    while ((opt = getopt(argc, argv, "df:r:m:a:i:F:I:")) != EOF) {
+    while ((opt = getopt(argc, argv, "df:r:m:a:iF:I:")) != EOF) {
 	switch(opt) {
 	case 'd':
+	    /* Ignore -- /bin/mail compatibility flags */
+	    break;
+
 	case 'r':
 	case 'f':
-	    /* Ignore -- /bin/mail compatibility flags */
+	    return_path = optarg;
 	    break;
 
 	case 'm':
 	    if (mailboxname) {
-		fprintf(stderr, "deliver: multiple -m options");
+		fprintf(stderr, "deliver: multiple -m options\n");
 		usage();
 	    }
 	    mailboxname = optarg;
@@ -85,7 +93,7 @@ char **argv;
 
 	case 'a':
 	    if (authuser) {
-		fprintf(stderr, "deliver: multiple -a options");
+		fprintf(stderr, "deliver: multiple -a options\n");
 		usage();
 	    }
 	    authuser = optarg;
@@ -99,11 +107,7 @@ char **argv;
 	    break;
 
 	case 'i':
-	    if (id) {
-		fprintf(stderr, "deliver: multiple -i options");
-		usage();
-	    }
-	    if (*optarg) id = optarg;
+	    dupelim = 1;
 	    break;
 
 	case 'I':
@@ -119,20 +123,8 @@ char **argv;
 	if (authuser) auth_setid(authuser);
     }
 
-    /* Copy to temp file */
-    f = tmpfile();
-    if (!f) {
-	exit(EX_TEMPFAIL);
-    }
-    while (n = fread(buf, 1, sizeof(buf), stdin)) {
-	fwrite(buf, 1, n, f);
-    }
-    fflush(f);
-    if (ferror(f)) {
-	perror("deliver: copying message");
-	exit(EX_TEMPFAIL);
-    }
-    prot_f = prot_new(fileno(f), 0);
+    /* Copy message to temp file */
+    prot_f = savemsg(return_path, dupelim ? &id : (char *)0, &size);
 
     if (optind == argc) {
 	/* Deliver to global mailbox */
@@ -149,10 +141,119 @@ char **argv;
 usage()
 {
     fprintf(stderr, 
-"usage: deliver [-m mailbox] [-a auth] [-i msg-id] [-F flag]... [user]...\n");
+"usage: deliver [-m mailbox] [-a auth] [-i] [-F flag]... [user]...\n");
     fprintf(stderr, "       deliver -I age\n");
     exit(EX_USAGE);
 }
+
+struct protstream *
+savemsg(return_path, idptr, sizeptr)
+char *return_path;
+char **idptr;
+unsigned *sizeptr;
+{
+    FILE *f;
+    char *hostname = 0;
+    int scanheader = 1;
+    int sawidhdr = 0, sawresentidhdr = 0;
+    int n;
+    char buf[4096], *p;
+    struct stat sbuf;
+
+    if (!idptr) scanheader = 0;
+
+    /* Copy to temp file */
+    f = tmpfile();
+    if (!f) {
+	exit(EX_TEMPFAIL);
+    }
+
+    if (return_path) {
+	/* Remove any angle brackets around return path */
+	if (*return_path == '<') {
+	    return_path = strsave(return_path+1);
+	    if (return_path[strlen(return_path)-1] == '>') {
+		return_path[strlen(return_path)-1] == '\0';
+	    }
+	}
+
+	/* Append our hostname if there's no domain in address */
+	if (!strchr(return_path, '@')) {
+	    gethostname(buf, sizeof(buf)-1);
+	    hostname = buf;
+	}
+
+	fprintf(f, "Return-Path: <%s%s%s>\r\n",
+		return_path,
+		hostname ? "@" : "",
+		hostname ? hostname : "");
+    }
+
+    while (fgets(buf, sizeof(buf)-1, stdin)) {
+	p = buf + strlen(buf) - 1;
+	if (*p == '\n') {
+	    if (p == buf || p[-1] != '\r') {
+		p[0] = '\r';
+		p[1] = '\n';
+		p[2] = '\0';
+	    }
+	}
+	else if (*p == '\r') {
+	    /*
+	     * We were unlucky enough to get a CR just before we ran
+	     * out of buffer--put it back.
+	     */
+	    ungetc('\r', stdin);
+	    *p = '\0';
+	}
+	fputs(buf, f);
+
+	/* Look for message-id or resent-message-id headers */
+	if (scanheader) {
+	    p = 0;
+	    if (*buf == '\r') scanheader = 0;
+	    else if (sawidhdr || sawresentidhdr) {
+		if (*buf == ' ' || *buf == '\t') p = buf+1;
+		else sawidhdr = sawresentidhdr = 0;
+	    }
+	    else if (!*idptr && !strncasecmp(buf, "message-id:", 11)) {
+		sawidhdr = 1;
+		p = buf + 11;
+	    }
+	    else if (!strncasecmp(buf, "resent-message-id:", 18)) {
+		sawresentidhdr = 1;
+		p = buf + 18;
+	    }
+
+	    if (p) {
+		clean822space(p);
+		if (*p) {
+		    *idptr = strsave(p);
+		    /*
+		     * If we got a resent-message-id header,
+		     * we're done looking at headers.
+		     */
+		    if (sawresentidhdr) scanheader = 0;
+		    sawresentidhdr = sawidhdr = 0;
+		}
+	    }
+	}
+
+    }
+    fflush(f);
+    if (ferror(f)) {
+	perror("deliver: copying message");
+	exit(EX_TEMPFAIL);
+    }
+    if (fstat(fileno(f), &sbuf) == -1) {
+	perror("deliver: stating message");
+	exit(EX_TEMPFAIL);
+    }
+    *sizeptr = sbuf.st_size;
+	
+    return prot_new(fileno(f), 0);
+}
+
 
 deliver(user)
 char *user;
@@ -175,7 +276,7 @@ char *user;
 	    strcat(namebuf, user);
 	    strcat(namebuf, ".");
 	    strcat(namebuf, mailboxname);
-	    if (id && checkdelivered(id, namebuf)) return 0;
+	    if (dupelim && id && checkdelivered(id, namebuf)) return 0;
 	    r = append_setup(&mailbox, namebuf, MAILBOX_FORMAT_NORMAL,
 			     ACL_POST, 0);
 	}
@@ -183,13 +284,13 @@ char *user;
 	    strcpy(namebuf, "user.");
 	    strcat(namebuf, user);
 	    
-	    if (id && checkdelivered(id, namebuf)) return 0;
+	    if (dupelim && id && checkdelivered(id, namebuf)) return 0;
 	    r = append_setup(&mailbox, namebuf, MAILBOX_FORMAT_NORMAL,
 			     0, 0);
 	}
     }
     else if (mailboxname) {
-	if (id && checkdelivered(id, mailboxname)) return 0;
+	if (dupelim && id && checkdelivered(id, mailboxname)) return 0;
 	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
 			 ACL_POST, 0);
     }
@@ -200,7 +301,7 @@ char *user;
 
     if (!r) {
 	prot_rewind(prot_f);
-	r = append_fromstream(&mailbox, prot_f, 0, time(0), flag, nflags,
+	r = append_fromstream(&mailbox, prot_f, size, time(0), flag, nflags,
 			      authuser);
 	mailbox_close(&mailbox);
     }
@@ -210,7 +311,7 @@ char *user;
 		r, (r == IMAP_IOERROR) ? error_message(errno) : NULL);
     }
 
-    if (!r && id) markdelivered(id, user ? namebuf : mailboxname);
+    if (!r && dupelim && id) markdelivered(id, user ? namebuf : mailboxname);
 
     return convert_code(r);
 }
@@ -267,6 +368,49 @@ char *f;
     return 1;
 }
 
+/*
+ * Destructively remove any whitespace and 822 comments
+ * from string pointed to by 'buf'.  Does not handle continuation header
+ * lines.
+ */
+clean822space(buf)
+char *buf;
+{
+    char *from=buf, *to=buf;
+    int c;
+    int commentlevel = 0;
+
+    while (c = *from++) {
+	switch (c) {
+	case '\r':
+	case '\n':
+	case '\0':
+	    *to = '\0';
+	    return;
+
+	case ' ':
+	case '\t':
+	    continue;
+
+	case '(':
+	    commentlevel++;
+	    break;
+
+	case ')':
+	    if (commentlevel) commentlevel--;
+	    break;
+
+	case '\\':
+	    if (commentlevel && *from) from++;
+	    /* FALL THROUGH */
+
+	default:
+	    if (!commentlevel) *to++ = c;
+	    break;
+	}
+    }
+}
+
 #ifdef NEWDB
 static DB	*DeliveredDBptr;
 #else
@@ -290,6 +434,7 @@ char *id, *to;
 	if (!DeliveredDBptr) {
 	    fprintf(stderr, "deliver: can't open %s: %s", buf,
 		    error_message(errno));
+	    
 	}
     }
 
@@ -329,13 +474,35 @@ char *id, *to;
 markdelivered(id, to)
 char *id, *to;
 {
-#ifdef NEWDB
     char buf[MAX_MAILBOX_PATH];
+    int lockfd;
     char datebuf[40];
+#ifdef NEWDB
     DBT date, delivery;
+#else /* NEWDB */
+    datum date, delivery;
+#endif
 
     if (!DeliveredDBptr) return;
 
+    sprintf(buf, "%s/delivered.lock", config_dir);
+    lockfd = open(buf, O_RDWR|O_CREAT, 0666);
+    if (lockfd == -1) {
+	fprintf(stderr,
+		"deliver: can't open delivered.lock file: %s\n",
+		error_message(errno));
+	return;
+    }
+
+    if (lock_blocking(lockfd)) {
+	fprintf(stderr,
+		"deliver: can't lock delivered.lock file: %s\n",
+		error_message(errno));
+	close(lockfd);
+	return;
+    }
+
+#ifdef NEWDB
     sprintf(buf, "%s%c%s", id, '\0', to);
     delivery.data = buf;
     delivery.size = strlen(id) + strlen(to) + 1;
@@ -344,20 +511,8 @@ char *id, *to;
     date.data = datebuf;
     date.size = strlen(datebuf);
 
-    if (lock_blocking(DeliveredDBptr->dont_know)) {
-	fprintf(stderr, "deliver: can't lock DBM file: %s",
-		error_message(errno));
-	return;
-    }
     (void) DeliveredDBptr->put(DeliveredDBptr, delivery, date, R_OVERWRITE);
-    (void) lock_unlock(DeliveredDBptr->dont_know);
 #else /* NEWDB */
-    char buf[MAX_MAILBOX_PATH];
-    char datebuf[40];
-    datum date, delivery;
-
-    if (!DeliveredDBptr) return;
-
     sprintf(buf, "%s%c%s", id, '\0', to);
     delivery.dptr = buf;
     delivery.dsize = strlen(id) + strlen(to) + 1;
@@ -366,26 +521,25 @@ char *id, *to;
     date.dptr = datebuf;
     date.dsize = strlen(datebuf);
 
-    if (lock_blocking(DeliveredDBptr->dbm_pagf)) {
-	fprintf(stderr, "deliver: can't lock DBM file: %s",
-		error_message(errno));
-	return;
-    }
     (void) dbm_store(DeliveredDBptr, delivery, date, DBM_REPLACE);
-    (void) lock_unlock(DeliveredDBptr->dbm_pagf);
 #endif /* NEWDB */
+
+    close(lockfd);
 }
 
 prunedelivered(age)
 int age;
 {
+    char buf[MAX_MAILBOX_PATH];
+    int lockfd;
+    int rcode = 0;
 #ifdef NEWDB
 not written
 #else /* NEWDB */
-    int rcode = 0;
     char datebuf[40];
     int len;
     datum date, delivery;
+#endif
 
     if (age < 1) {
 	fatal("must specify positive number of days", EX_USAGE);
@@ -398,12 +552,26 @@ not written
 	return 1;
     }
 
-    if (lock_blocking(DeliveredDBptr->dbm_pagf)) {
-	fprintf(stderr, "delivered: can't lock DBM file: %s",
+    sprintf(buf, "%s/delivered.lock", config_dir);
+    lockfd = open(buf, O_RDWR|O_CREAT, 0666);
+    if (lockfd == -1) {
+	fprintf(stderr,
+		"deliver: can't open delivered.lock file: %s\n",
 		error_message(errno));
-	return 1;
+	return;
     }
 
+    if (lock_blocking(lockfd)) {
+	fprintf(stderr,
+		"deliver: can't lock delivered.lock file: %s\n",
+		error_message(errno));
+	close(lockfd);
+	return;
+    }
+
+#ifdef NEWDB
+not written
+#else /* NEWDB */
     sprintf(datebuf, "%d", time(0) - age*60*60*24);
     len = strlen(datebuf);
 
@@ -420,6 +588,8 @@ not written
     }
     dbm_close(DeliveredDBptr);
 
-    return rcode;
 #endif /* NEWDB */
+    close(lockfd);
+
+    return rcode;
  }
