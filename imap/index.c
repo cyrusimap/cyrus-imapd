@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.138 2000/09/16 03:09:07 ken3 Exp $
+ * $Id: index.c,v 1.139 2000/09/20 16:48:39 ken3 Exp $
  */
 #include <config.h>
 
@@ -1042,16 +1042,17 @@ index_sort(struct mailbox *mailbox,
 {
     unsigned *msgno_list;
     MsgData *msgdata = NULL, *freeme = NULL;
-    int n;
+    int nmsg;
+    clock_t start = clock();
 
     /* Search for messages based on the given criteria */
-    n = _index_search(&msgno_list, mailbox, searchargs);
+    nmsg = _index_search(&msgno_list, mailbox, searchargs);
 
     prot_printf(imapd_out, "* SORT");
 
-    if (n) {
+    if (nmsg) {
 	/* Create/load the msgdata array */
-	freeme = msgdata = index_msgdata_load(msgno_list, n, sortcrit);
+	freeme = msgdata = index_msgdata_load(msgno_list, nmsg, sortcrit);
 	free(msgno_list);
 
 	/* Sort the messages based on the given criteria */
@@ -1077,6 +1078,24 @@ index_sort(struct mailbox *mailbox,
     }
 
     prot_printf(imapd_out, "\r\n");
+
+    /* debug */
+#if 0
+    {
+	char *key_names[] = { "SEQUENCE", "ARRIVAL", "CC", "DATE", "FROM",
+			      "SIZE", "SUBJECT", "TO", "ANNOTATION" };
+	char buf[1024] = "";
+
+	while (sortcrit->key) {
+	    if (sortcrit->key & SORT_REVERSE) strcat(buf, "REVERSE ");
+	    strcat(buf, key_names[sortcrit->key & SORT_KEY_MASK]);
+	    if ((++sortcrit)->key) strcat(buf, " ");
+	}
+
+	syslog(LOG_DEBUG, "SORT (%s) processing time: %d msg in %f sec",
+	       buf, nmsg, (clock() - start) / (double) CLOCKS_PER_SEC);
+    }
+#endif
 }
 
 /*
@@ -1087,6 +1106,7 @@ void index_thread(struct mailbox *mailbox, int algorithm,
 {
     unsigned *msgno_list;
     int nmsg;
+    clock_t start = clock();
 
     /* Search for messages based on the given criteria */
     nmsg = _index_search(&msgno_list, mailbox, searchargs);
@@ -1101,6 +1121,13 @@ void index_thread(struct mailbox *mailbox, int algorithm,
     /* print an empty untagged response */
     else
 	index_thread_print(NULL, usinguid);
+
+    /* debug */
+#if 0
+    syslog(LOG_DEBUG, "THREAD %s processing time: %d msg in %f sec",
+	   thread_algs[algorithm].alg_name, nmsg,
+	   (clock() - start) / (double) CLOCKS_PER_SEC);
+#endif
 }
 
 /*
