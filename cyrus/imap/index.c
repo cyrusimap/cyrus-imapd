@@ -1069,8 +1069,8 @@ int size;
 		*p = '\0';
 		break;
 	    }
-	    left -= strlen(buf);
-	    p = buf + strlen(buf);
+	    left -= strlen(p);
+	    p = p + strlen(p);
 	    if (p[-1] == '\n') {
 		p[-1] = '\r';
 		*p++ = '\n';
