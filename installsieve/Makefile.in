@@ -38,7 +38,7 @@ MAKEDEPEND = @MAKEDEPEND@
 
 IMAP_LIBS = @IMAP_LIBS@
 LIBS = 
-DEPLIBS=../acap/libacap.a ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS= ../lib/libcyrus.a @DEPLIBS@
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -49,7 +49,7 @@ all: installsieve
 install:
 	$(INSTALL) -s -m 755 installsieve $(DESTDIR)$(exec_prefix)/bin
 
-OBJS=installscript.o lex.o mystring.o request.o acapsieve.o
+OBJS=installscript.o lex.o mystring.o request.o 
 
 installsieve: $(OBJS) $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o installsieve $(OBJS) $(DEPLIBS) $(IMAP_LIBS)
