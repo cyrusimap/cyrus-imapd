@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.29 2003/05/10 13:54:03 ken3 Exp $
+ * $Id: index.c,v 1.180.4.30 2003/05/10 18:56:26 ken3 Exp $
  */
 #include <config.h>
 
@@ -376,7 +376,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     if (newexists != imapd_exists) {
 	/* Re-size flagreport and seenflag arrays if necessary */
 	if (newexists > flagalloced) {
-	     /* Double what we need in hopes we won't have to realloc again */
+	    /* Double what we need in hopes we won't have to realloc again */
 	    flagalloced = newexists * 2;
 	    flagreport = (time_t *)
 	      xrealloc((char *)flagreport, (flagalloced+1) * sizeof(time_t));
@@ -793,11 +793,11 @@ int nflags;
     }
 
     /* Check to see if we have to add new user flags */
-    for (userflag=0; userflag < MAX_USER_FLAGS; userflag++)
+    for (userflag=0; userflag < VECTOR_SIZE(newflag); userflag++)
       newflag[userflag] = 0;
     for (i=0; i < nflags; i++) {
 	emptyflag = -1;
-	for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+	for (userflag = 0; userflag < VECTOR_SIZE(mailbox->flagname); userflag++) {
 	    if (mailbox->flagname[userflag]) {
 		if (!strcasecmp(flag[i], mailbox->flagname[userflag]))
 		  break;
@@ -824,11 +824,11 @@ int nflags;
 	 * New flags might have been assigned since we last looked
 	 * Do the assignment again.
 	 */
-	for (userflag=0; userflag < MAX_USER_FLAGS; userflag++)
+	for (userflag=0; userflag < VECTOR_SIZE(newflag); userflag++)
 	  newflag[userflag] = 0;
 	for (i=0; i < nflags; i++) {
 	    emptyflag = -1;
-	    for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+	    for (userflag = 0; userflag < VECTOR_SIZE(newflag); userflag++) {
 		if (mailbox->flagname[userflag]) {
 		    if (!strcasecmp(flag[i], mailbox->flagname[userflag]))
 		      break;
@@ -843,7 +843,7 @@ int nflags;
 		    mailbox->myrights = myrights;
 
 		    /* Undo the new assignments */
-		    for (userflag=0; userflag < MAX_USER_FLAGS; userflag++) {
+		    for (userflag=0; userflag < VECTOR_SIZE(newflag); userflag++) {
 			if (newflag[userflag] && mailbox->flagname[userflag]) {
 			    free(mailbox->flagname[userflag]);
 			    mailbox->flagname[userflag] = 0;
@@ -872,7 +872,7 @@ int nflags;
 
     /* Now we know all user flags are in the mailbox header, find the bits */
     for (i=0; i < nflags; i++) {
-	for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+	for (userflag = 0; userflag < VECTOR_SIZE(mailbox->flagname); userflag++) {
 	    if (mailbox->flagname[userflag]) {
 		if (!strcasecmp(flag[i], mailbox->flagname[userflag]))
 		  break;
@@ -2078,7 +2078,7 @@ static void index_listflags(struct mailbox *mailbox)
     char sepchar = '(';
 
     prot_printf(imapd_out, "* FLAGS (\\Answered \\Flagged \\Draft \\Deleted \\Seen");
-    for (i = 0; i < MAX_USER_FLAGS; i++) {
+    for (i = 0; i < VECTOR_SIZE(mailbox->flagname); i++) {
 	if (mailbox->flagname[i]) {
 	    prot_printf(imapd_out, " %s", mailbox->flagname[i]);
 	}
@@ -2099,7 +2099,7 @@ static void index_listflags(struct mailbox *mailbox)
 	    sepchar = ' ';
 	}
 	if (mailbox->myrights & ACL_WRITE) {
-	    for (i = 0; i < MAX_USER_FLAGS; i++) {
+	    for (i = 0; i < VECTOR_SIZE(mailbox->flagname); i++) {
 		if (mailbox->flagname[i]) {
 		    prot_printf(imapd_out, " %s", mailbox->flagname[i]);
 		}
@@ -2128,7 +2128,7 @@ static void index_fetchflags(struct mailbox *mailbox,
     unsigned flag;
     bit32 flagmask = 0;
 
-    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+    for (flag = 0; flag < VECTOR_SIZE(mailbox->flagname); flag++) {
 	if ((flag & 31) == 0) {
 	    flagmask = user_flags[flag/32];
 	}
@@ -2165,7 +2165,7 @@ static void index_fetchflags(struct mailbox *mailbox,
 	prot_printf(imapd_out, "%c\\Seen", sepchar);
 	sepchar = ' ';
     }
-    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+    for (flag = 0; flag < VECTOR_SIZE(mailbox->flagname); flag++) {
 	if ((flag & 31) == 0) {
 	    flagmask = user_flags[flag/32];
 	}
