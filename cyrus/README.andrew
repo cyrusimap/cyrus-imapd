@@ -1,10 +1,17 @@
+#!/bin/sh
+smake init all
+
+echo run \"smake -d install\" as admin (suid binaries on AFS)
+
+exit 0
+
 You need to run autoconf before building.  "configure" is no longer in the
 repository because it's built from "configure.in", and it's really annoying
 to keep checking it in only to realize that you don't understand the changes
 because they're all autoconf spew.
 
 to build configure:
-   aclocal -I cmulocal ; autoconf
+   sh SMakefile
 
 to build:
    smake init all 
