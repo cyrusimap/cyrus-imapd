@@ -414,7 +414,18 @@ char *name;
 	for (thischar = 0; thischar < 256; thischar++) {
 	    printf("   {");
 	    if ((code = table[curstate].ch[thischar].code) != -1) {
-		if (code <= 0x7FF) {
+		if (code <= 0x7f) {
+		    if (isprint(code) && code != '\\' && code != '\"' &&
+			code != '\'') {
+			printf(" '%c', %s,   0,   0,", code,
+			       table[curstate].endaction);
+		    }
+		    else {
+			printf(" %3d, %s,   0,   0,", code,
+			       table[curstate].endaction);
+		    }
+		}
+		else if (code <= 0x7FF) {
 		    printf(" %3d, %3d, %s,   0,", 0xc0 + (code>>6),
 			   0x80+(code&0x3f), table[curstate].endaction);
 		}
