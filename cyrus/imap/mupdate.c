@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.41 2002/02/02 21:23:21 leg Exp $
+ * $Id: mupdate.c,v 1.42 2002/02/03 14:58:06 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1121,11 +1121,24 @@ void cmd_startupdate(struct conn *C, const char *tag)
 }
 
 /* 
- * we've registered this connection for streaming, so we wait for updates.
- * this will return after 'poll_interval' seconds if no updates.
- * regardless, after sending out a batch of updates, this returns to the
- * caller.
- */
+ * we've registered this connection for streaming, and every X seconds
+ * this will be invoked.  note that we always send out updates as soon
+ * as we get a noop: that resets this counter back */
+struct prot_waitevent *sendupdates_evt(struct protstream *s, 
+				       struct prot_waitevent *ev,
+				       void *rock)
+{
+    struct conn *C = (struct conn *) rock;
+
+    
+
+    /* reschedule event for 15 seconds */
+
+}
+
+/* this will return after 'poll_interval' seconds if
+ * no updates.  regardless, after sending out a batch of updates, this
+ * returns to the caller.  */
 void sendupdates(struct conn *C)
 {
     struct pending *p, *q;
@@ -1378,7 +1391,6 @@ int mupdate_synchronize(mupdate_handle *handle)
     struct mbent_queue remote_boxes;
     struct mbent *l,*r;
     char pattern[] = { '*', '\0' };
-    void *txn = NULL;
 
     if(!handle || !handle->saslcompleted) return 1;
 
@@ -1398,7 +1410,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     remote_boxes.tail = &(remote_boxes.head);
 
     /* If there is a fatal error, die, other errors ignore */
-    if(mupdate_scarf(handle, cmd_resync, &remote_boxes, 1) > 0) {
+    if (mupdate_scarf(handle, cmd_resync, &remote_boxes, 1, NULL) != 0) {
 	struct mbent *p=remote_boxes.head, *p_next=NULL;
 	while(p) {
 	    p_next = p->next;
@@ -1434,7 +1446,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 		mboxlist_insertremote(r->mailbox, 
 				     (r->t == SET_RESERVE ?
 				        MBTYPE_RESERVE : 0),
-				      r->server, r->acl, &txn);
+				      r->server, r->acl, NULL);
 	    }
 	    /* Okay, dump these two */
 	    local_boxes.head = l->next;
@@ -1443,7 +1455,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    free(r);
 	} else if (ret < 0) {
 	    /* Local without corresponding remote, delete it */
-	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, &txn);
+	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0);
 	    local_boxes.head = l->next;
 	    free(l);
 	} else /* (ret > 0) */ {
@@ -1451,7 +1463,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    mboxlist_insertremote(r->mailbox, 
 				  (r->t == SET_RESERVE ?
 				   MBTYPE_RESERVE : 0),
-				  r->server, r->acl, &txn);
+				  r->server, r->acl, NULL);
 	    remote_boxes.head = r->next;
 	    free(r);
 	}
@@ -1460,7 +1472,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     if(l && !r) {
 	/* we have more deletes to do */
 	while(l) {
-	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, &txn);
+	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0);
 	    local_boxes.head = l->next;
 	    free(l);
 	    l = local_boxes.head;
@@ -1471,7 +1483,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    mboxlist_insertremote(r->mailbox, 
 				  (r->t == SET_RESERVE ?
 				   MBTYPE_RESERVE : 0),
-				  r->server, r->acl, &txn);
+				  r->server, r->acl, NULL);
 	    remote_boxes.head = r->next;
 	    free(r);
 	    r = remote_boxes.head;

@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.12 2002/02/01 19:41:38 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.13 2002/02/03 14:57:29 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -162,8 +162,10 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 	} else if(gotdata != 0) {
 	    if (FD_ISSET(handle->sock, &rset)) {
 		/* If there is a fatal error, die, other errors ignore */
-		if(mupdate_scarf(handle, cmd_change, NULL, waiting_for_noop))
+		if (mupdate_scarf(handle, cmd_change, NULL, 
+				  waiting_for_noop, NULL) != 0) {
 		    break;
+		}
 	    } 
 	    
 	    /* If we were waiting on a noop, we no longer are.
