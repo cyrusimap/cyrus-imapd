@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.81 2000/04/06 15:10:22 leg Exp $ -->
+<!-- $Id: install.html,v 1.82 2000/04/10 00:30:22 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -143,6 +143,7 @@ don't need it but it may make your life easier.
 
 <li> <b>OpenSSL</b>, version 0.9.4 or higher.  Required for STARTTLS
 support and eventually for IMAP wrapped in SSL (the imaps port).
+Available from <a href="http://www.openssl.org/">http://www.openssl.org/</a>.
 
 <LI> If you use AFS PTS support for groups, Cyrus still depends on
 Kerberos and AFS.  If you successfully compiled SASL with your
@@ -167,8 +168,7 @@ http://www.net.cmu.edu/groups/netdev/agentx/</a>.
 
 <li> For the Cyrus Murder, the IMAP aggregator, an ACAP server is
 required.  You can get an ACAP server from the <a
-href="http://asg.web.cmu.edu/asg/">Cyrus project</a>, and pthreads is
-required for proxy-side support.
+href="http://asg.web.cmu.edu/asg/">Cyrus project</a>.
 </ul>
 
 <H2>Compiling the IMAP Server</H2>
@@ -886,9 +886,13 @@ following information is displayed:
    setquota, sq             set quota limits
 </pre>
 
-<b>Note:</b>If you run "<tt>cyradm</tt>" on a system not using
+<b>Note:</b>It's not necessary to run "<tt>cyradm</tt>" on the same
+system as the IMAP server.
+
+<p><b>Note:</b>If you run "<tt>cyradm</tt>" on a system not using
 Kerberos for authentication, you will be prompted for your user name
-and password before you can issue any "<tt>cyradm</tt>" commands.
+and password before you can issue any "<tt>cyradm</tt>" commands.  Use
+the "<tt>-u</tt>" option to specify a particular user.
 
 <p>The mailbox naming convention requires that the primary mailbox (inbox)
 for anyone must be named "<tt>user.<var>&lt;userid&gt;</var></tt>".
@@ -928,9 +932,11 @@ explicitly before she can delete a mailbox:
    deletemailbox <var>&lt;mail_box&gt;</var>
 </kbd></pre>
 
-Once you have created mailboxes, your IMAP server installation
-is done.  You must then configure a mail interface, such as Pine,
-to work with the IMAP server.
+Once you have created mailboxes, your IMAP server installation is
+done.  You must then configure a mail interface, such as <a
+href="http://www.washington.edu/pine/">Pine</a> or <a
+href="http://www.cyrusoft.com/mulberry/">Mulberry</a>, to work with the
+IMAP server.
 
 <h2>Kerberos</h2><a name="kerberos"/>
 
@@ -1035,9 +1041,7 @@ supported natively by the Cyrus IMAP server.</p>
 
 <p>Both TLS and SSL require a server key and a certificate.
 Optionally, in addition to establishing a secure connection, TLS can
-authenticate the client.  Unfortunately, there's no standard on how to
-convert the client's authenticate DN (distinguished name) to a SASL
-authentication name.</p>
+authenticate the client.  </p>
 
 <h3>Configuring Cyrus with OpenSSL</h3>
 
@@ -1087,6 +1091,14 @@ tls_key_file: /var/imap/server.pem
 </kbd></pre>
 
 </ol>
+
+<h3>Client-side certificates</h3>
+
+<p>write me!</p>
+
+<p>Unfortunately, there's no standard on how to
+convert the client's authenticate DN (distinguished name) to a SASL
+authentication name.</p>
 
 <h2>Sieve</h2>
 
@@ -1177,6 +1189,25 @@ in the sieve script. The message should be rejected.
 
 </ol>
 
+<h2>SNMP Monitoring</h2>
+
+<p>finish this section.  Cyrus uses an auxillary process called
+"<tt>tugowar</tt>", so named because there's a push-pull model.
+Various components of the Cyrus mail system push data to
+<tt>tugowar</tt>, and <tt>tugowar</tt> listens for SNMP queries
+(remote clients pull the data from <tt>tugowar</tt>).</p>
+
+<h3>Configuring tugowar</h3>
+
+<h3>Testing the tugowar daemon</h3>
+
+<h3>SNMP data exported</h3>
+
+<h2>The Cyrus Murder: an aggregation of IMAP servers</h2>
+
+<p>see <a
+href="http://asg.web.cmu.edu/cyrus/ag.html">http://asg.web.cmu.edu/cyrus/ag.html</a>.</p>
+
 <h2>Performance Notes</h2>
 
 If your configuration directory is not <tt>/var/imap</tt>, adjust
@@ -1205,26 +1236,15 @@ also disables Sieve support.
 <p>We run with it enabled and it doesn't significantly impact our
 performance.
 
-<p><li><tt><b>/var/imap/mailboxes</b></tt> - Updating this file can be
-fairly expensive, especially if it gets large.  Things get even worse
-if your operating system doesn't have a good <tt>mmap()</tt>
-implementation. Other than trying to put <tt>/var/imap</tt> on its own
-disk, there really isn't a good short term solution to this.
-
-<p>(at this moment in time) We have 118416 entries in our mailboxes
-file (4.4MB). It resides on a Seagate 7200rpm Fast/Wide disk off of a
-Sun QLGC Fast-Wide sbus card. We haven't experienced any significant
-problem as a result of this though there have been other reports.
-
 <p><li><tt><b>/var/spool/mqueue</b></tt> - Sendmail can be pretty
 harsh on the spool partition. Having this on a separate disk is
 usually a good idea.  Consider using LMTP and delivering from a
-seperate machine.
+separate machine.
 
 </ul>
 
 <P><HR><P>
 <!-- hhmts start -->
-Last modified: 17-Feb-2000
+Last modified: 09-Mar-2000
 <!-- hhmts end -->
 </BODY></HTML>
