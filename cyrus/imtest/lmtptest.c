@@ -1,6 +1,6 @@
 /* lmtptest.c -- lmtp/smtp test client
  * Tim Martin (SASL implementation)
- * $Id: lmtptest.c,v 1.1 2002/04/18 19:28:06 ken3 Exp $
+ * $Id: lmtptest.c,v 1.2 2002/05/21 20:15:24 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -93,7 +93,7 @@ int sock; /* socket descriptor */
 
 int verbose=0;
 int dosmtp=0;
-int dochallenge=1;
+int dochallenge=0;
 
 struct protstream *pout, *pin;
 
@@ -1112,8 +1112,8 @@ void usage(void)
   printf("  -t file  : Enable TLS. file has the TLS public and private keys\n"
 	 "             (specify \"\" to not use TLS for authentication)\n");
 #endif /* HAVE_SSL */
-  printf("  -c       : disable challenge prompt callbacks\n"
-	 "             (enter secret pass-phrase instead of one-time password)\n");
+  printf("  -c       : enable challenge prompt callbacks\n"
+	 "             (enter one-time password instead of secret pass-phrase)\n");
 
   exit(1);
 }
@@ -1135,7 +1135,7 @@ int main(int argc, char **argv)
   int errflg = 0;
 
   char *tls_keyfile="";
-  char *port = "lmtp";
+  char *port = "";
   struct servent *serv;
   int servport;
   int dotls=0;
@@ -1153,10 +1153,9 @@ int main(int argc, char **argv)
     switch (c) {
     case 's':
 	dosmtp=1;
-	port = "smtp";
 	break;
     case 'c':
-	dochallenge=0;
+	dochallenge=1;
 	break;
     case 'v':
 	verbose=1;
@@ -1201,6 +1200,14 @@ int main(int argc, char **argv)
 
   if (errflg) {
       usage();
+  }
+
+  if (!*port) {
+      if (dosmtp) {
+	  port="smtp";
+      } else {
+	  port="lmtp";
+      }
   }
 
   /* last arg is server name */
