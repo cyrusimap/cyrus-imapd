@@ -30,6 +30,8 @@
 #include "mailbox.h"
 #include "imapd.h"
 
+static login_setadmin();
+
 /*
  * Unix passwd-authenticated login
  */
