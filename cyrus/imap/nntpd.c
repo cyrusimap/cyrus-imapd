@@ -47,7 +47,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.26 2002/10/21 17:59:10 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.27 2002/10/21 18:07:54 ken3 Exp $
  */
 #include <config.h>
 
@@ -1201,7 +1201,7 @@ void cmd_sasl(char *mech, char *resp)
     r = saslserver(nntp_saslconn, mech, resp, "351 ", nntp_in, nntp_out,
 		   &sasl_result, &success_data);
 
-    if (r != IMAP_SASL_OK) {
+    if (r) {
 	const char *errorstring = NULL;
 
 	switch (r) {

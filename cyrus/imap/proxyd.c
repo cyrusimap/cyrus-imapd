@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.30 2002/10/18 20:02:24 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.31 2002/10/21 18:07:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2215,7 +2215,7 @@ void cmd_authenticate(char *tag, char *authtype)
     r = saslserver(proxyd_saslconn, authtype, NULL, "+ ",
 		   proxyd_in, proxyd_out, &sasl_result, NULL);
 
-    if (r != IMAP_SASL_OK) {
+    if (r) {
 	const char *errorstring = NULL;
 
 	switch (r) {

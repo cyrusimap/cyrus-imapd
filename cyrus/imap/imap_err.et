@@ -24,7 +24,7 @@
 #  (412) 268-4387, fax: (412) 268-7395
 #  tech-transfer@andrew.cmu.edu
 # 
-# $Id: imap_err.et,v 1.45.4.2 2002/10/18 20:02:21 ken3 Exp $
+# $Id: imap_err.et,v 1.45.4.3 2002/10/21 18:07:51 ken3 Exp $
 error_table imap
 
 ec IMAP_INTERNAL,
@@ -148,9 +148,6 @@ ec IMAP_UNSUPPORTED_QUOTA,
    "Unsupported quota resource"
 
 # Following used only for SASL operations
-
-ec IMAP_SASL_OK,
-   "Authenticated"
 
 ec IMAP_SASL_FAIL,
    "Authentication failed"

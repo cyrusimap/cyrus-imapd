@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.14 2002/10/18 20:02:23 ken3 Exp $
+ * $Id: mupdate.c,v 1.60.4.15 2002/10/21 18:07:53 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1084,7 +1084,7 @@ void cmd_authenticate(struct conn *C,
     r = saslserver(C->saslconn, mech, clientstart, "", C->pin, C->pout,
 		   &sasl_result, NULL);
 
-    if (r != IMAP_SASL_OK) {
+    if (r) {
 	const char *errorstring = NULL;
 
 	switch (r) {
