@@ -887,7 +887,7 @@ int octet_count;
 	    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 2 * 4 + 4;
 	    while (--skip) {
 		if (CACHE_ITEM_BIT32(cacheitem) > 0) {
-		    skip += CACHE_ITEM_BIT32(cacheitem);
+		    skip += CACHE_ITEM_BIT32(cacheitem)-1;
 		    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 2 * 4;
 		}
 		cacheitem += 4;
