@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.166 2002/02/12 20:27:21 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.167 2002/02/12 20:35:52 rjs3 Exp $
  */
 
 #include <config.h>
@@ -1648,25 +1648,29 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 
 	cbrock.find_namespace = NAMESPACE_INBOX;
 	/* iterate through prefixes matching usermboxname */
-	DB->foreach(mbdb,
-		    usermboxname, usermboxnamelen,
-		    &find_p, &find_cb, &cbrock,
-		    NULL);
+	r = DB->foreach(mbdb,
+			usermboxname, usermboxnamelen,
+			&find_p, &find_cb, &cbrock,
+			NULL);
     }
 
-    cbrock.find_namespace = NAMESPACE_USER;
-    cbrock.inboxoffset = 0;
-    if (usermboxnamelen) {
-	usermboxname[--usermboxnamelen] = '\0';
-	cbrock.usermboxname = usermboxname;
-	cbrock.usermboxnamelen = usermboxnamelen;
+    if(!r) {
+	cbrock.find_namespace = NAMESPACE_USER;
+	cbrock.inboxoffset = 0;
+	if (usermboxnamelen) {
+	    usermboxname[--usermboxnamelen] = '\0';
+	    cbrock.usermboxname = usermboxname;
+	    cbrock.usermboxnamelen = usermboxnamelen;
+	}
+	/* search for all remaining mailboxes.
+	   just bother looking at the ones that have the same pattern
+	   prefix. */
+	r = DB->foreach(mbdb,
+			pattern, prefixlen,
+			&find_p, &find_cb, &cbrock,
+			NULL);
     }
-    /* search for all remaining mailboxes.
-       just bother looking at the ones that have the same pattern prefix. */
-    r = DB->foreach(mbdb,
-		    pattern, prefixlen,
-		    &find_p, &find_cb, &cbrock,
-		    NULL);
+    
 
   done:
     glob_free(&cbrock.g);
