@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.49 2002/12/18 21:04:16 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.50 2002/12/19 01:01:59 ken3 Exp $
  */
 
 /*
@@ -104,7 +104,6 @@ extern int opterr;
 int imapd_exists;
 struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
-static int nntp_logfd = -1;
 char *imapd_userid = NULL;
 void printastring(const char *s)
 {
@@ -131,6 +130,7 @@ int nntp_haveaddr = 0;
 char nntp_clienthost[250] = "[local]";
 struct protstream *nntp_out = NULL;
 struct protstream *nntp_in = NULL;
+static int nntp_logfd = -1;
 unsigned nntp_exists = 0;
 unsigned nntp_current = 0;
 unsigned did_extensions = 0;
