@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.14 2002/01/28 22:07:14 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.15 2002/01/29 17:57:02 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -109,9 +109,11 @@ static int mupdate_authenticate(mupdate_handle *h,
     char buf[4096];
 
     /* Why do this again? */
-    if(h->saslcompleted) return 1;
+    if (h->saslcompleted) {
+	return 1;
+    }
 
-    secprops = make_secprops(0,256);
+    secprops = make_secprops(0, 256);
     if(!secprops) return 1;
     
     saslresult=sasl_setprop(h->saslconn, SASL_SEC_PROPS, secprops);
@@ -249,7 +251,7 @@ int mupdate_connect(const char *server, const char *port,
     /* open connection to 'server' */
     if(!server) {
 	server = config_getstring("mupdate_server", NULL);
-	if(server == NULL) {
+	if (server == NULL) {
 	    fatal("couldn't get mupdate server name", EC_UNAVAILABLE);
 	}
     }
@@ -258,10 +260,16 @@ int mupdate_connect(const char *server, const char *port,
     }
     
     hp = gethostbyname(server);
-    if(!hp) return -2;
+    if (!hp) {
+	syslog(LOG_ERR, "mupdate-client: gethostbyname %s failed: %m", server);
+	return MUPDATE_NOCONN;
+    }
     
     s = socket(AF_INET, SOCK_STREAM, 0);
-    if(s == -1) return errno;
+    if (s == -1) {
+	syslog(LOG_ERR, "mupdate-client: socket(): %m");
+	return MUPDATE_NOCONN;
+    }
     
     addr.sin_family = AF_INET;
     memcpy(&addr.sin_addr, hp->h_addr, sizeof(addr.sin_addr));
@@ -270,7 +278,10 @@ int mupdate_connect(const char *server, const char *port,
 	addr.sin_port = htons(atoi(port));
     } else if (port) {
 	sp = getservbyname(port, "tcp");
-	if (!sp) return -2;
+	if (!sp) {
+	    syslog(LOG_ERR, "mupdate-client: getservbyname(tcp, %s): %m",
+		   port);
+	}
 	addr.sin_port = sp->s_port;
     } else if((sp = getservbyname("mupdate", "tcp")) != NULL) {
 	addr.sin_port = sp->s_port;
@@ -283,7 +294,8 @@ int mupdate_connect(const char *server, const char *port,
     h->sock = s;
 
     if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
-	return errno;
+	syslog(LOG_ERR, "mupdate-client: connect(%s): %m", server);
+	return MUPDATE_NOCONN;
     }
 
     if(!cbs) {
@@ -301,42 +313,52 @@ int mupdate_connect(const char *server, const char *port,
 				 &(h->saslconn));
 
     /* create protstream */
-    h->pin=prot_new(h->sock, 0);
-    h->pout=prot_new(h->sock, 1);
+    h->pin = prot_new(h->sock, 0);
+    h->pout = prot_new(h->sock, 1);
 
     prot_setflushonread(h->pin, h->pout);
     prot_settimeout(h->pin, 30*60);
 
     /* Read the banner */
     if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
-	syslog(LOG_ERR,"connection to master dropped");
-	return -3;
+	goto noconn;
     }
 
     if(strncmp(buf, "* OK MUPDATE", 12)) {
-	syslog(LOG_ERR,"invalid banner from remote mupdate server");
-	return -4;
+	syslog(LOG_ERR, 
+	       "mupdate-client: invalid banner from remote server: %s", buf);
+	/* xxx free memory? close connection? */
+	return MUPDATE_PROTOCOL_ERROR;
     }
 
     /* Read the mechlist */
-    if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
-	syslog(LOG_ERR,"connection to master dropped");
-	return -5;
+    if (!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
+	goto noconn;
     }
 
     if(strncmp(buf, "* AUTH", 6)) {
-	syslog(LOG_ERR,"remote server did not send AUTH banner");
-	return -6;
+	syslog(LOG_ERR, 
+	       "mupdate-client: remote server did not send AUTH banner: %s",
+	       buf);
+	/* xxx free memory? close connection? */
+	return MUPDATE_PROTOCOL_ERROR;
     }
 
     mechlist = buf + 6;
     
-    if(mupdate_authenticate(h, mechlist)) {
-	syslog(LOG_ERR, "authentication to remote mupdate failed");
-	return -7;
+    if (mupdate_authenticate(h, mechlist)) {
+	syslog(LOG_ERR, "authentication to remote mupdate server failed");
+	return MUPDATE_NOAUTH;
     }
 
-    return 0; /* SUCCESS */
+    /* SUCCESS */
+    return 0;
+
+ noconn:
+    syslog(LOG_ERR, "mupdate-client: connection to server closed: %s",
+	   prot_error(h->pin));
+    /* xxx free memory? close connection? */
+    return MUPDATE_NOCONN;
 }
 
 void mupdate_disconnect(mupdate_handle **h) 
@@ -513,10 +535,11 @@ int mupdate_find(mupdate_handle *handle, const char *mailbox,
 
     ret = mupdate_scarf(handle, mupdate_find_cb, handle, 1);
 
-    if(!ret)
+    if (!ret) {
 	*target = &(handle->mailboxdata_buf);
-    else
+    } else {
 	*target = NULL;
+    }
     
     return ret;
 }
