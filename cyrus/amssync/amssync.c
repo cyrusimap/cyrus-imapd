@@ -38,7 +38,9 @@
 #include <errno.h>
 
 #include <sys/ioctl.h>
+#ifndef _IOW
 #include <sys/ioccom.h>
+#endif
 #include <afs/vice.h>
 
 #include <netinet/in.h>
@@ -47,6 +49,9 @@
 #include <afs/param.h>
 #include <afs/prs_fs.h>
 #include <afs/venus.h>
+
+/* AFS Kludge */
+#define V 'V'
 
 #define MAXSIZE 2048
 
