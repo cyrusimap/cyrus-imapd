@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.89 1998/10/29 20:16:32 tjs Exp $
+ * $Id: mboxlist.c,v 1.90 1999/03/22 02:35:53 tjs Exp $
  */
 
 #include <stdio.h>
@@ -55,38 +55,6 @@ extern int errno;
 #include "sysexits.h"
 #include "imap_err.h"
 #include "xmalloc.h"
-
-/* #define DEBUG /* XXX */
-#ifdef DEBUG
-/* globcheck
-   Called with some of glob_tests's arguments; if it gets called too many
-   times (as indicated by a variable passed in), it bails out, killing
-   imapd by calling fatal.  (glob_test has a bug where it doesn't update
-   minmatch, causing problems.)
- */
-#define NGLOBLIMIT 30000
-void globcheck(globpat, target, tlen, n, line)
-char* globpat;
-char* target;
-int tlen;
-int n;
-char* line;
-{
-    char buf[512];
-    if (!n) {
-	strncpy(buf, target, n);
-	if (tlen > 511) {
-	    tlen = 511;
-	}
-	buf[tlen] = '\0';
-	syslog(LOG_ERR,
-	       "Too many globs in one loop, globbing <%s> against <%s> at line %d",
-	       buf, globpat, line);
-	fatal("too many globs in one loop", EX_SOFTWARE);
-    }
-}
-
-#endif /* DEBUG */
 
 acl_canonproc_t mboxlist_ensureOwnerRights;
 
@@ -135,10 +103,7 @@ mboxlist_checkconfig()
  * is placed in the char * pointed to by it.  If 'acl' is non-nil, a pointer
  * to the mailbox ACL is placed in the char * pointed to by it.
  */
-mboxlist_lookup(name, pathp, aclp)
-char *name;
-char **pathp;
-char **aclp;
+int mboxlist_lookup(char* name, char** pathp, char** aclp)
 {
     unsigned long offset, len, partitionlen, acllen;
     char optionbuf[MAX_MAILBOX_NAME+1];
@@ -1072,9 +1037,6 @@ void* rock;
     int rights;
     int r;
     char *inboxcase;
-#ifdef DEBUG
-    int nglobtests = NGLOBLIMIT;
-#endif /* DEBUG */
 
     mboxlist_reopen();
     list_doingfind++;
@@ -1163,9 +1125,6 @@ void* rock;
 	    if (strncmp(list_base + offset,
 			    usermboxname, usermboxnamelen) != 0) break;
 	    minmatch = 0;
-#ifdef DEBUG
-	    nglobtests = NGLOBLIMIT;
-#endif /* DEBUG */
 	    while (minmatch >= 0) {
 		memcpy(namebuf, name, namelen);
 		namebuf[namelen] = '\0';
@@ -1210,13 +1169,7 @@ void* rock;
 		
 	if (strncmp(list_base + offset, pattern, prefixlen)) break;
 	minmatch = 0;
-#ifdef DEBUG
-	nglobtests = NGLOBLIMIT;
-#endif /* DEBUG */
 	while (minmatch >= 0) {
-#ifdef DEBUG
-	    globcheck(pattern, name, namelen, nglobtests--, __LINE__);
-#endif /* DEBUG */
 	    matchlen = glob_test(g, name, namelen, &minmatch);
 
 	    if (matchlen == -1 ||
@@ -1301,9 +1254,6 @@ int (*proc)();
     long matchlen, minmatch;
     char *acl;
     char *inboxcase;
-#ifdef DEBUG
-    int nglobtests = NGLOBLIMIT;
-#endif /* DEBUG */
 
     if (r = mboxlist_opensubs(userid, 0, &subsfd, &subs_base, &subs_size,
 			      &subsfname, (char **) 0)) {
@@ -1413,10 +1363,6 @@ int (*proc)();
 		    namematchbuf[inboxoffset+4] = inboxcase[4];
 		}
 
-#ifdef DEBUG
-		globcheck(pattern, name, namelen, nglobtests--, __LINE__);
-#endif /* DEBUG */
-		
 		matchlen = glob_test(g, namematchbuf+inboxoffset,
 				     namelen-inboxoffset, &minmatch);
 		if (matchlen == -1) break;
@@ -1462,13 +1408,7 @@ int (*proc)();
 
 	if (strncmp(name, pattern, prefixlen)) break;
 	minmatch = 0;
-#ifdef DEBUG
-	nglobtests = NGLOBLIMIT;
-#endif
 	while (minmatch >= 0) {
-#ifdef DEBUG
-	    globcheck(pattern, name, namelen, nglobtests--, __LINE__);
-#endif
 	    matchlen = glob_test(g, name, namelen, &minmatch);
 	    if (matchlen == -1 ||
 		(userid && namelen >= usermboxnamelen &&
@@ -1994,7 +1934,7 @@ unsigned long size;
  * use when updating the mailbox list.
  */
 static void
-mboxlist_reopen()
+mboxlist_reopen(void)
 {
     struct stat sbuf;
 
@@ -2198,15 +2138,15 @@ int maycreate;
    files in memory, increasingly inaccurate, that would simply be thrown
    out at some future time.  */
 void
-mboxlist_close()
+mboxlist_close(void)
 {
-  if (list_size && list_base && *list_base) {
-    map_free(&list_base, &list_size);
-  }
-  if (listfd != -1) {
-    close(listfd);
-    listfd = -1;
-  }
+    if (list_size && list_base && *list_base) {
+	map_free(&list_base, &list_size);
+    }
+    if (listfd != -1) {
+	close(listfd);
+	listfd = -1;
+    }
 }
 
 /* Safe rename, for file being renamed to a file that might get locked

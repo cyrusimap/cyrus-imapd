@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.129 1999/03/01 20:09:12 tjs Exp $
+dnl $Id: configure.in,v 1.130 1999/03/22 02:35:51 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -679,7 +679,7 @@ AC_CHECK_FUNC(gethostbyname,,
 ### this started out as
 ### AC_CHECK_LIB(/usr/lib/libintl.a, dgettext,
 ### EXTRA_LIBS="${EXTRA_LIBS} /usr/lib/libintl.a")
-### but has been hacked so the first argument is valid
+### but has been hacked so the first argument can be a full library name.
 
 
 echo $ac_n "checking for dgettext in /usr/lib/libintl.a""... $ac_c" 1>&6

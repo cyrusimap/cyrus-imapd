@@ -1,5 +1,5 @@
 /* imparse.c -- IMxP client-side parsing routines
- $Id: imparse.c,v 1.7 1999/03/02 20:57:54 tjs Exp $
+ $Id: imparse.c,v 1.8 1999/03/22 02:35:56 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -148,8 +148,7 @@ const char *s;
 /*
  * Return nonzero if 's' matches the grammar for a sequence
  */
-int imparse_issequence(s)
-const unsigned char *s;
+int imparse_issequence(const char* s)
 {
     int c;
     int len = 0;

@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.42 1999/03/02 02:04:34 tjs Exp $
+ * $Id: pop3d.c,v 1.43 1999/03/22 02:35:55 tjs Exp $
  */
 
 #include <stdio.h>
@@ -651,7 +651,7 @@ cmd_capa()
     prot_printf(popd_out, "LOGIN-DELAY %d\r\n", minpoll);
     prot_printf(popd_out, "TOP\r\n");
     prot_printf(popd_out, "UIDL\r\n");
-    prot_printf(popd_out, "PIPELINE\r\n");
+    prot_printf(popd_out, "PIPELINING\r\n");
     prot_printf(popd_out, "USER\r\n");
     
     prot_printf(popd_out,

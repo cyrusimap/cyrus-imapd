@@ -1,6 +1,6 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server Release Information</TITLE>
-    <!-- $Id: readme.html,v 1.18 1998/10/29 20:02:32 tjs Exp $ -->
+    <!-- $Id: readme.html,v 1.19 1999/03/22 02:35:52 tjs Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server Release Information</H1>
       
@@ -39,8 +39,10 @@
 	    bootstrap itself from the basic HP C) must be built on the target
 	    system.
 	  <P> The author further notes that the memory mapping support in HP-UX
-	    is lacking, as of 9.0.5.  It is recommended that large-scale sites
-	    consider using some other platform for IMAP servers.
+	    is lacking on 9.0 versions of HP-UX and 10.20 as well; it appears
+	    this is related to the hardware's use of inverse page tables. It
+	    is recommended that large-scale sites consider using some other
+	    platform for IMAP servers.
 	    
       </ul>
 
