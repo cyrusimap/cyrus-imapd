@@ -3,18 +3,10 @@ dnl Derrick Brashear
 dnl from KTH krb and Arla
 
 AC_DEFUN(CMU_PCAP_INC_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
-saved_CPPFLAGS=$CPPFLAGS
-if test "$ac_cv_prog_gcc" = "yes" ; then
-  CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I/usr/include"
-else
-  CPPFLAGS="$saved_CPPFLAGS -I$1"
+ac_cv_found_pcap_inc=no
+if test -f "$1/pcap.h" ; then
+  ac_cv_found_pcap_inc=yes
 fi
-AC_TRY_COMPILE([#include <pcap.h>],
-[struct pcap_file_header foo;],
-ac_cv_found_pcap_inc=yes,
-ac_cv_found_pcap_inc=no)
-CPPFLAGS=$saved_CPPFLAGS
 ])
 
 AC_DEFUN(CMU_PCAP_INC_WHERE, [

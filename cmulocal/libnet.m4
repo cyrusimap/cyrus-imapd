@@ -3,18 +3,10 @@ dnl Derrick Brashear
 dnl from KTH krb and Arla
 
 AC_DEFUN(CMU_LIBNET_INC_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
-saved_CPPFLAGS=$CPPFLAGS
-if test "$ac_cv_prog_gcc" = "yes" ; then
-  CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I/usr/include"
-else
-  CPPFLAGS="$saved_CPPFLAGS -I$1"
+ac_cv_found_libnet_inc=no
+if test -f "$1/libnet.h" ; then
+  ac_cv_found_libnet_inc=yes
 fi
-AC_TRY_COMPILE([#include <libnet.h>],
-[struct link_int foo;],
-ac_cv_found_libnet_inc=yes,
-ac_cv_found_libnet_inc=no)
-CPPFLAGS=$saved_CPPFLAGS
 ])
 
 AC_DEFUN(CMU_LIBNET_INC_WHERE, [
