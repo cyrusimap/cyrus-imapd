@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.94 2002/04/02 00:03:56 leg Exp $
+ * $Id: lmtpd.c,v 1.95 2002/04/11 18:36:56 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -143,9 +143,10 @@ static char *generate_notify(message_data_t *m);
 void shut_down(int code);
 
 static FILE *spoolfile(message_data_t *msgdata);
+static void removespool(message_data_t *msgdata);
 
-struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down, &spoolfile,
-			    0, 1, 0 };
+struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
+			    &spoolfile, &removespool, 0, 1, 0 };
 
 static void logdupelem();
 static void usage();
@@ -1518,4 +1519,11 @@ FILE *spoolfile(message_data_t *msgdata)
 
     /* spool to /tmp (no single-instance store) */
     return tmpfile();
+}
+
+void removespool(message_data_t *msgdata)
+{
+    struct stagemsg *stage = (struct stagemsg *) msg_getrock(msgdata);
+
+    append_removestage(stage);
 }
