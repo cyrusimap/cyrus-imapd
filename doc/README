@@ -36,7 +36,7 @@
         is lacking, as of 9.0.5. It is recommended that large-scale sites
         consider using some other platform for IMAP servers. 
 
-    Send problems/questions/suggestions to "cyrus-bugs@andrew.cmu.edu". 
+    Send problems/questions/suggestions to cyrus-bugs@andrew.cmu.edu. 
 
     The "info-cyrus@andrew.cmu.edu" mailing list exists for the discussion
     of this server and other Cyrus software. Send mail to
@@ -70,4 +70,7 @@
     and subscribe to mailboxes. Deleting the mailbox "user.bovik" has the
     special-case side-effect of deleting all mailboxes starting with
     "user.bovik." and of deleting the subscriptions for "bovik." 
+
+    If you want to install the server, be sure to read the install
+    instructions along with the server overview. 
 
