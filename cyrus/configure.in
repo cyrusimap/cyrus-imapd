@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.147 1999/11/11 21:36:11 tmartin Exp $
+dnl $Id: configure.in,v 1.148 1999/12/23 18:45:00 leg Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -821,13 +821,21 @@ AC_ARG_WITH(with-openssl,[  --with-openssl=PATH      use OpenSSL from PATH],
 case "$with_openssl" in
 	no) with_openssl="no";;
 	""|yes) 
+	  dnl if openssl has been compiled with the rsaref2 libraries,
+	  dnl we need to include the rsaref libraries in the crypto check
+                LIB_RSAREF=""
+	        AC_CHECK_LIB(rsaref, RSAPublicEncrypt,
+		       LIB_RSAREF="-lRSAglue -lrsaref"; cmu_have_rsaref=yes,
+		       cmu_have_rsaref=no)
+
 		with_openssl="yes"
-		AC_CHECK_LIB(crypto,BIO_accept,LIBS=" -lcrypto ${LIBS}",
-		with_openssl="no",)
+		AC_CHECK_LIB(crypto,BIO_accept,
+                                    LIBS="-lcrypto $LIB_RSAREF ${LIBS}",
+		                    with_openssl="no", $LIB_RSAREF)
 		AC_CHECK_LIB(ssl,SSL_CTX_new,LIBS=" -lssl ${LIBS}",
-		with_openssl="no","-lcrypto")
+		             with_openssl="no","-lcrypto $LIB_RSAREF")
 		
-				;;
+		;;
 	*)  CPPFLAGS="${CPPFLAGS} -I${with_openssl}/include"
 	    LIBS="${LIBS} -lssl -lcrypto";;
 esac
