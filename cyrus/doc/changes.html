@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.37 2002/05/31 14:38:45 wcw Exp $ -->
+<!-- $Id: changes.html,v 1.38 2002/05/31 18:35:36 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -14,14 +14,17 @@
 <ul>
 <li> Sieve is no longer dependent on duplicate delivery suppression
 (it still uses the duplicate delivery database however). </li>
-
-
+<li> <tt>imtest</tt> now includes all the functionality previously
+kept in lmtptest, smtptest, and mupdatetest.  imtest will notice if it
+is invoked with one of these names and do the right thing.  The -P
+flag can be used to force a particular protocol.  As part of this, the
+default install location for mupdatetest has changed to be the same
+as the other test utilities</li>
 <li>snmpgen generates stubbed out code so we don't waste resources on
 something that just doesn't work. At some point in time, we'll make it
 work again as it would be useful to gather aggregate statistics on
 what commands are being used so we can better tune the server.  This
-change closes bug #1191. New bug 1267 opened to re-enable the feature.
-
+change closes bug #1191. New bug 1267 opened to re-enable the feature.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.3</h2>
@@ -1595,7 +1598,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/05/31 14:38:45 $ <br />
+last modified: $Date: 2002/05/31 18:35:36 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
