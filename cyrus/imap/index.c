@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.125 2000/06/19 17:45:36 ken3 Exp $
+ * $Id: index.c,v 1.126 2000/06/20 17:26:52 ken3 Exp $
  */
 #include <config.h>
 
@@ -3278,13 +3278,18 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers)
 {
     char *msgid, *refstr, *ref, *in_reply_to;
     int len, refsize = REFGROWSIZE;
+    char buf[100];
 
     /* get msgid */
     msgid = find_msgid(envtokens[ENV_MSGID], &len);
+    /* if we have one, make a copy of it */
     if (msgid)
 	msgdata->msgid = xstrndup(msgid, len);
-    else
-	msgdata->msgid = xstrdup("");
+    /* otherwise, create one */
+    else {
+	sprintf(buf, "<Empty-ID: %lu>", msgdata->msgno);
+	msgdata->msgid = xstrdup(buf);
+    }
 
     /* grab the References header */
     if ((refstr = stristr(headers, "references:"))) {
@@ -3711,11 +3716,23 @@ void jwz_link_messages(MsgData *msgdata, Thread **newnode,
 	 * if we already have a container, use it
 	 */
 	if ((cur = (Thread *) hash_lookup(msgdata->msgid, id_table))) {
-	    cur->msgdata = msgdata;
+	    /* If this container is not empty, then we have a duplicate
+	     * Message-ID.  Make this one unique so that we don't stomp
+	     * on the old one.
+	     */
+	    if (cur->msgdata) {
+		msgdata->msgid =
+		    (char *) xrealloc(msgdata->msgid, strlen(msgdata->msgid)+5);
+		strcat(msgdata->msgid, "-dup");
+		/* clear cur so that we create a new container */
+		cur = NULL;
+	    }
+	    else
+		cur->msgdata = msgdata;
 	}
 
 	/* otherwise, make and index a new container */
-	else {
+	if (!cur) {
 	    cur = *newnode;
 	    cur->msgdata = msgdata;
 	    hash_insert(msgdata->msgid, cur, id_table);
