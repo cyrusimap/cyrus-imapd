@@ -397,6 +397,9 @@ const char *cacheid;
         memset(key.data, 0, key.size);
         memcpy(key.data, cacheid, 16);
         key.size = 20;
+	/* the session key is colliding too much; overlay the userid */
+	memcpy(key.data, identifier, 
+		 ((strlen(identifier) > 16) ? 16 : strlen(identifier)));
     }
     else {
         key.size = PR_MAXNAMELEN + 4;
