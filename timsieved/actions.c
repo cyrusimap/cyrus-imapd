@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.15 2000/04/07 02:45:57 leg Exp $
+ * $Id: actions.c,v 1.16 2000/04/07 02:56:06 leg Exp $
  * 
  */
 /***********************************************************
@@ -91,7 +91,7 @@ int actions_setuser(char *userid)
   if (result != 0) {
       result = mkdir(sieve_dir, 0755);
       if (!result) result = chdir(sieve_dir);
-      if (!result) {
+      if (result) {
 	  syslog(LOG_ERR, "mkdir %s: %m", sieve_dir);
 	  return TIMSIEVE_FAIL;
       }
