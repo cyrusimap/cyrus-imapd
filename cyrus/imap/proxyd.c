@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.4 2002/07/25 17:21:44 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.5 2002/07/27 04:27:03 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1156,12 +1156,6 @@ int service_init(int argc, char **argv, char **envp)
     /* load the SASL plugins */
     if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
 	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
-	       sasl_errstring(r, NULL, NULL));
-	return EC_SOFTWARE;
-    }
-
-    if ((r = sasl_client_init(NULL)) != SASL_OK) {
-	syslog(LOG_ERR, "SASL failed initializing: sasl_client_init(): %s", 
 	       sasl_errstring(r, NULL, NULL));
 	return EC_SOFTWARE;
     }
@@ -2283,7 +2277,7 @@ void cmd_login(char *tag, char *user)
     }
     
 
-    proxyd_authstate = auth_newstate(canon_user, (char *)0);
+    proxyd_authstate = auth_newstate(proxyd_userid, (char *)0);
 
     val = config_getstring(IMAPOPT_ADMINS);
     while (*val) {
@@ -2310,6 +2304,11 @@ void cmd_login(char *tag, char *user)
 	syslog(LOG_ERR, error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
+
+    /* Translate any separators in userid */
+    mboxname_hiersep_tointernal(&proxyd_namespace, proxyd_userid,
+				config_virtdomains ?
+				strcspn(proxyd_userid, "@") : 0);
 
     freebuf(&passwdbuf);
     return;
@@ -2450,6 +2449,11 @@ void cmd_authenticate(char *tag, char *authtype)
 	syslog(LOG_ERR, error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
+
+    /* Translate any separators in userid */
+    mboxname_hiersep_tointernal(&proxyd_namespace, proxyd_userid,
+				config_virtdomains ?
+				strcspn(proxyd_userid, "@") : 0);
 
     return;
 }
@@ -2934,7 +2938,7 @@ void cmd_append(char *tag, char *name)
 	r = mlookup(mailboxname, &newserver, NULL, NULL);
     }
     if (!r && supports_referrals) { 
-	proxyd_refer(tag, newserver, mailboxname);
+	proxyd_refer(tag, newserver, name);
 	/* Eat the argument */
 	eatline(proxyd_in, prot_getc(proxyd_in));
 	return;
@@ -2991,7 +2995,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 
     if (!r) r = mlookup(mailboxname, &newserver, NULL, NULL);
     if (!r && supports_referrals) { 
-	proxyd_refer(tag, newserver, mailboxname);
+	proxyd_refer(tag, newserver, name);
 	return;
     }
 
@@ -3694,7 +3698,7 @@ void cmd_delete(char *tag, char *name)
 
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r && supports_referrals) { 
-	proxyd_refer(tag, server, mailboxname);
+	proxyd_refer(tag, server, name);
 	referral_kick = 1;
 	return;
     }
@@ -3752,7 +3756,7 @@ void cmd_reconstruct(char *tag, char *name)
 	r = mlookup(mailboxname, &server, NULL, NULL);
 
     if(!r) {
-	proxyd_refer(tag, server, mailboxname);
+	proxyd_refer(tag, server, name);
     } else {
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
     }
@@ -3892,9 +3896,6 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 	if (*p == '%') *p = '?';
     }
 
-    /* Translate any separators in pattern */
-    mboxname_hiersep_tointernal(&proxyd_namespace, pattern, 0);
-
     if (!strcasecmp(namespace, "mailboxes")) {
 	if (!backend_inbox) {
 	    backend_inbox = proxyd_findinboxserver();
@@ -3909,6 +3910,9 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 	    /* noop */
 	}
     } else if (!strcasecmp(namespace, "all.mailboxes")) {
+	/* Translate any separators in pattern */
+	mboxname_hiersep_tointernal(&proxyd_namespace, pattern, 0);
+
 	(*proxyd_namespace.mboxlist_findall)(&proxyd_namespace, pattern,
 					     proxyd_userisadmin, proxyd_userid,
 					     proxyd_authstate, mailboxdata,
@@ -4388,7 +4392,7 @@ void cmd_getquota(char *tag, char *name)
 
     if (!r) {
 	/* Do the referral */
-	proxyd_refer(tag, server_rock, mailboxname);
+	proxyd_refer(tag, server_rock, name);
 	free(server_rock);
     } else {
 	if(server_rock) free(server_rock);
@@ -4502,7 +4506,7 @@ void cmd_setquota(char *tag, char *quotaroot)
 
     if (!r) {
 	/* Do the referral */
-	proxyd_refer(tag, server_rock, mailboxname);
+	proxyd_refer(tag, server_rock, quotaroot);
 	free(server_rock);
     } else {
 	if(server_rock) free(server_rock);
@@ -4636,7 +4640,7 @@ void cmd_status(char *tag, char *name)
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r && supports_referrals
 	&& config_getswitch(IMAPOPT_PROXYD_ALLOW_STATUS_REFERRAL)) { 
-	proxyd_refer(tag, server, mailboxname);
+	proxyd_refer(tag, server, name);
 	/* Eat the argument */
 	eatline(proxyd_in, prot_getc(proxyd_in));
 	return;
@@ -4715,7 +4719,7 @@ static int namespacedata(name, matchlen, maycreate, rock)
     if (!(strncmp(name, "INBOX.", 6))) {
 	/* The user has a "personal" namespace. */
 	sawone[NAMESPACE_INBOX] = 1;
-    } else if (!(strncmp(name, "user.", 5))) {
+    } else if (!(strncmp(name, "user.", 5)) || strstr(name, "!user.")) {
 	/* The user can see the "other users" namespace. */
 	sawone[NAMESPACE_USER] = 1;
     } else {
