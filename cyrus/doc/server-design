@@ -46,6 +46,9 @@ The Cyrus IMAP server supports the following protocol extensions:
 	ACL
 	partitions on CREATE
 	DUMP/RESTORE		[unimplemented, to be defined]
+	NAMESPACE
+	LITERAL+
+	UIDPLUS
 
 The EXPUNGE operation is allowed at any time, even when other server
 processes are reading the mailbox.  If some other process performs an
