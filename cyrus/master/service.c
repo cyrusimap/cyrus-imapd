@@ -39,10 +39,11 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.19 2001/03/10 05:55:03 leg Exp $ */
+/* $Id: service.c,v 1.20 2001/03/14 18:22:15 ken3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #ifdef HAVE_UNISTD_H
