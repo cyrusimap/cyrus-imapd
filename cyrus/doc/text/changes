@@ -1,5 +1,15 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server since 2.0.13
+
+      * fixed a silly bug with reusing SSL connections 
+      * lmtpd can now service multiple clients in sequence, hopefully
+        improving performance 
+      * changed how Berkeley db databases are opened, hopefully lessening
+        the chance of deadlock and improving performance 
+      * fixed a couple of memory leaks 
+      * lessened the chance of a race condition during index_check() 
+
 Changes to the Cyrus IMAP Server since 2.0.12
 
       * refactored code so less duplication 

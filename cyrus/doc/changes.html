@@ -1,9 +1,24 @@
-<!-- $Id: changes.html,v 1.13 2001/04/26 22:37:44 leg Exp $ -->
+<!-- $Id: changes.html,v 1.14 2001/05/30 17:05:01 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+<h2>Changes to the Cyrus IMAP Server since 2.0.13</h2>
+<ul>
+<li> fixed a silly bug with reusing SSL connections
+
+<li> <tt>lmtpd</tt> can now service multiple clients in sequence,
+hopefully improving performance
+
+<li> changed how Berkeley db databases are opened, hopefully lessening
+the chance of deadlock and improving performance
+
+<li> fixed a couple of memory leaks
+
+<li> lessened the chance of a race condition during <tt>index_check()</tt>
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.12</h2>
 <ul>
@@ -1228,7 +1243,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2001/04/26 22:37:44 $
+last modified: $Date: 2001/05/30 17:05:01 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>

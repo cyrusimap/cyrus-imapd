@@ -1,9 +1,9 @@
 Performance Notes
 
     Performance issues for you to consider. If you never expect to have
-    more than 100 users, chances are any hardware you have will be fine. If
-    you plan on having thousands or more users, please be sure to review
-    this section. 
+    more than 100 simultaneous users, chances are any hardware you have
+    will be fine. If you plan on having thousands or more users, please be
+    sure to review this section. 
 
     If your configuration directory is not /var/imap, adjust accordingly. 
 
@@ -43,4 +43,10 @@ Performance Notes
         allocating more swap space than you need. So, look in /usr/lib/sasl
         and if you don't plan on using those mechanisms, don't leave them
         there. 
+
+      * You may want to increase the listen queue value when starting up
+        the master process. For example, you may want to do this if you see
+        the Listen queue drop counter increasing quickly. For example,
+        under Solaris, look at the variable tcpListenDrop (from netstat -sP
+        tcp). 
 
