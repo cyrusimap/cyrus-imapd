@@ -1,7 +1,7 @@
 dnl look for the ucdsnmp libraries
-dnl $Id: ucdsnmp.m4,v 1.5 2002/08/21 15:03:19 rjs3 Exp $
+dnl $Id: ucdsnmp.m4,v 1.6 2003/10/08 20:35:26 rjs3 Exp $
 
-AC_DEFUN(CMU_UCDSNMP, [
+AC_DEFUN([CMU_UCDSNMP], [
   AC_REQUIRE([CMU_SOCKETS])
   AC_ARG_WITH(ucdsnmp, 
               [  --with-ucdsnmp=DIR      use ucd snmp (rooted in DIR) [yes] ],

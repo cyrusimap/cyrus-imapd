@@ -1,7 +1,7 @@
-dnl $Id: find-func.m4,v 1.1 2001/04/04 17:58:30 shadow Exp $
+dnl $Id: find-func.m4,v 1.2 2003/10/08 20:35:24 rjs3 Exp $
 dnl
 dnl AC_FIND_FUNC(func, libraries, includes, arguments)
-AC_DEFUN(AC_FIND_FUNC, [
+AC_DEFUN([AC_FIND_FUNC], [
 AC_FIND_FUNC_NO_LIBS([$1], [$2], [$3], [$4])
 if test -n "$LIB_$1"; then
 	LIBS="$LIB_$1 $LIBS"

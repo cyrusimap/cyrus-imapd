@@ -3,7 +3,7 @@ dnl USE AT YOUR OWN PERIL!
 dnl I MEAN IT!
 dnl
 dnl tcl.m4: an autoconf Tcl locator
-dnl $Id: tcl.m4,v 1.3 2002/05/25 19:57:42 leg Exp $
+dnl $Id: tcl.m4,v 1.4 2003/10/08 20:35:25 rjs3 Exp $
 dnl
 dnl This is rob's Tcl macro, fixed by tjs.  It may need occasional tweaking,
 dnl but until the next impediment to compilation, it's fill-in-the-blank,
@@ -23,7 +23,7 @@ dnl TCL_LIBS, TCL_CPPFLAGS, and TCL_DEFS and SUBSTs them.
 dnl If successful, these have stuff in them.  If not, they're empty.
 dnl If not successful, with_tcl has the value "no".
 
-AC_DEFUN(CMU_TCL, [
+AC_DEFUN([CMU_TCL], [
 # --- BEGIN CMU_TCL ---
 dnl To link against Tcl, configure does several things to make my life
 dnl "easier".

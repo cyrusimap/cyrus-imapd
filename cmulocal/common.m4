@@ -1,6 +1,6 @@
-dnl $Id: common.m4,v 1.10 2002/08/15 00:11:10 cg2v Exp $
+dnl $Id: common.m4,v 1.11 2003/10/08 20:35:24 rjs3 Exp $
 
-AC_DEFUN(CMU_TEST_LIBPATH, [
+AC_DEFUN([CMU_TEST_LIBPATH], [
 changequote(<<, >>)
 define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_lib, <<- *>>, <<__p>>))
 changequote([, ])
@@ -11,7 +11,7 @@ if test "$CMU_AC_CV_FOUND" = "yes"; then
 fi
 ])
 
-AC_DEFUN(CMU_TEST_INCPATH, [
+AC_DEFUN([CMU_TEST_INCPATH], [
 changequote(<<, >>)
 define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_inc, [ *], [_p]))
 changequote([, ])
@@ -23,7 +23,7 @@ fi
 ])
 
 dnl CMU_CHECK_HEADER_NOCACHE(HEADER-FILE, [ACTION-IF-FOUND [, ACTION-IF-NOT-FOUND]])
-AC_DEFUN(CMU_CHECK_HEADER_NOCACHE,
+AC_DEFUN([CMU_CHECK_HEADER_NOCACHE],
 [dnl Do the transliteration at runtime so arg 1 can be a shell variable.
 ac_safe=`echo "$1" | sed 'y%./+-%__p_%'`
 AC_MSG_CHECKING([for $1])

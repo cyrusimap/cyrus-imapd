@@ -1,15 +1,15 @@
 dnl telnet.m4--telnet special macros
 dnl Derrick Brashear
-dnl $Id: telnet.m4,v 1.11 2002/05/25 19:57:42 leg Exp $
+dnl $Id: telnet.m4,v 1.12 2003/10/08 20:35:25 rjs3 Exp $
 
-AC_DEFUN(CMU_TELNET_WHICH_TERM, [
+AC_DEFUN([CMU_TELNET_WHICH_TERM], [
 AC_CHECK_LIB(termlib, setupterm, [
 AC_DEFINE(HAVE_SETUPTERM) 
 AC_CHECK_LIB(c, setupterm, TCLIB="/usr/ccs/lib/libtermlib.a",TCLIB="-ltermlib","/usr/ccs/lib/libtermlib.a")
 ],  TCLIB="-ltermcap")
 ])
 
-AC_DEFUN(CMU_TELNET_CC_T, 
+AC_DEFUN([CMU_TELNET_CC_T], 
 [
 AC_MSG_CHECKING(for cc_t definition)
 AC_CACHE_VAL(cmu_cv_cc_t_definition, [
@@ -33,13 +33,13 @@ fi
 AC_MSG_RESULT($cmu_cv_cc_t_definition)
 ])
 
-AC_DEFUN(CMU_STREAMS, [
+AC_DEFUN([CMU_STREAMS], [
 if test "$ac_cv_header_sys_stropts_h" = "yes" -o "$ac_cv_header_stropts_h" = "yes"; then 
 	AC_DEFINE(HAVE_STREAMS)dnl
 fi
 ])
 
-AC_DEFUN(CMU_TERMIO_MODEL, [
+AC_DEFUN([CMU_TERMIO_MODEL], [
 if test "$ac_cv_header_sys_termio_h" = "yes" -o "$ac_cv_header_sys_termios_h" = "yes"; then 
 	AC_DEFINE(USE_TERMIO)dnl
 	if test "$ac_cv_header_sys_termios_h" = "no"; then
@@ -48,7 +48,7 @@ if test "$ac_cv_header_sys_termio_h" = "yes" -o "$ac_cv_header_sys_termios_h" = 
 fi
 ])
 
-AC_DEFUN(CMU_TELNET_DES_STRING_TO_KEY_PROTO, [
+AC_DEFUN([CMU_TELNET_DES_STRING_TO_KEY_PROTO], [
 AC_MSG_CHECKING(for des_string_to_key prototype)
 AC_CACHE_VAL(cmu_cv_des_string_to_key_proto, [
 AC_TRY_COMPILE(
@@ -65,7 +65,7 @@ fi
 AC_MSG_RESULT($cmu_cv_des_string_to_key_proto)
 ])
 
-AC_DEFUN(CMU_TELNET_DES_KEY_SCHED_PROTO, [
+AC_DEFUN([CMU_TELNET_DES_KEY_SCHED_PROTO], [
 AC_MSG_CHECKING(for des_key_sched prototype)
 AC_CACHE_VAL(cmu_cv_des_key_sched_proto, [
 AC_TRY_COMPILE(
@@ -83,7 +83,7 @@ fi
 AC_MSG_RESULT($cmu_cv_des_key_sched_proto)
 ])
 
-AC_DEFUN(CMU_TELNET_DES_SET_RANDOM_GENERATOR_SEED_PROTO, [
+AC_DEFUN([CMU_TELNET_DES_SET_RANDOM_GENERATOR_SEED_PROTO], [
 AC_MSG_CHECKING(for des_set_random_generator_seed prototype)
 AC_CACHE_VAL(cmu_cv_des_set_random_generator_seed_proto, [
 AC_TRY_COMPILE(
@@ -101,7 +101,7 @@ fi
 AC_MSG_RESULT($cmu_cv_des_set_random_generator_seed_proto)
 ])
 
-AC_DEFUN(CMU_TELNET_DES_NEW_RANDOM_KEY_PROTO, [
+AC_DEFUN([CMU_TELNET_DES_NEW_RANDOM_KEY_PROTO], [
 AC_MSG_CHECKING(for des_new_random_key prototype)
 AC_CACHE_VAL(cmu_cv_des_new_random_key_proto, [
 AC_TRY_COMPILE(
@@ -119,7 +119,7 @@ fi
 AC_MSG_RESULT($cmu_cv_des_new_random_key_proto)
 ])
 
-AC_DEFUN(CMU_TELNET_DES_ECB_ENCRYPT_PROTO, [
+AC_DEFUN([CMU_TELNET_DES_ECB_ENCRYPT_PROTO], [
 AC_MSG_CHECKING(for des_ecb_encrypt prototype)
 AC_CACHE_VAL(cmu_cv_des_ecb_encrypt_proto, [
 AC_TRY_COMPILE(
@@ -137,7 +137,7 @@ fi
 AC_MSG_RESULT($cmu_cv_des_ecb_encrypt_proto)
 ])
 
-AC_DEFUN(CMU_TELNET_NEWDES, [
+AC_DEFUN([CMU_TELNET_NEWDES], [
 AC_REQUIRE([CMU_KRB4])
 AC_REQUIRE([CMU_KRB5])
 AC_MSG_CHECKING(for des_new_random_key prototype)
@@ -155,7 +155,7 @@ fi
 AC_MSG_RESULT($ac_cv_func_des_new_random_key)
 ])
 
-AC_DEFUN(CMU_TELNET_OLDNEWDES, [
+AC_DEFUN([CMU_TELNET_OLDNEWDES], [
 AC_REQUIRE([CMU_KRB4])
 AC_REQUIRE([CMU_KRB5])
 	 saved_LIBS=$LIBS
@@ -169,7 +169,7 @@ AC_REQUIRE([CMU_KRB5])
 	 LIBS=$saved_LIBS
 	 ])
 
-AC_DEFUN(CMU_TELNET_GETTYTAB, [
+AC_DEFUN([CMU_TELNET_GETTYTAB], [
 	 if test -f "/etc/gettytab"; then
 		AC_CHECK_FUNCS(getent getstr)
 	        if test "X$ac_cv_func_getent" != "Xyes"; then
@@ -183,7 +183,7 @@ AC_DEFUN(CMU_TELNET_GETTYTAB, [
 	 fi
 	 ])
 
-AC_DEFUN(CMU_TELNET_ISSUE, [
+AC_DEFUN([CMU_TELNET_ISSUE], [
 	 if test -f "/etc/issue.net"; then
 		AC_DEFINE(ISSUE_FILE, "/etc/issue.net")
 	 else
@@ -193,7 +193,7 @@ AC_DEFUN(CMU_TELNET_ISSUE, [
 	 fi
 	 ])
 
-AC_DEFUN(CMU_TELNET_PTYDIR, [
+AC_DEFUN([CMU_TELNET_PTYDIR], [
 
 	 if test -d /dev/pts -o -d /dev/pty; then
 	  	case "${host}" in

@@ -2,10 +2,10 @@ dnl damnit, i don't want to figure out if I need to build an integral com_err
 dnl library with the collection, I just want to know where it's installed,
 dnl so don't bitch, Rob...
 dnl Derrick Brashear
-dnl $Id: com_err_link.m4,v 1.6 2002/12/21 18:44:24 cg2v Exp $
+dnl $Id: com_err_link.m4,v 1.7 2003/10/08 20:35:24 rjs3 Exp $
 
 
-AC_DEFUN(CMU_COMERR_INC_WHERE1, [
+AC_DEFUN([CMU_COMERR_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <com_err.h>],
@@ -15,7 +15,7 @@ ac_cv_found_com_err_inc=no)
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
-AC_DEFUN(CMU_COMERR_INC_WHERE, [
+AC_DEFUN([CMU_COMERR_INC_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for com_err headers in $i)
       CMU_COMERR_INC_WHERE1($i)
@@ -34,7 +34,7 @@ AC_DEFUN(CMU_COMERR_INC_WHERE, [
 # Test for lib files
 #
 
-AC_DEFUN(CMU_COMERR_LIB_WHERE1, [
+AC_DEFUN([CMU_COMERR_LIB_WHERE1], [
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lcom_err"
 AC_TRY_LINK(,
@@ -44,7 +44,7 @@ ac_cv_found_com_err_lib=no)
 LIBS=$saved_LIBS
 ])
 
-AC_DEFUN(CMU_COMERR_LIB_WHERE, [
+AC_DEFUN([CMU_COMERR_LIB_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for com_err libraries in $i)
       CMU_COMERR_LIB_WHERE1($i)
@@ -59,7 +59,7 @@ AC_DEFUN(CMU_COMERR_LIB_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_USE_COMERR, [
+AC_DEFUN([CMU_USE_COMERR], [
 AC_ARG_WITH(comerr,
 	[  --with-comerr=PREFIX      Compile with com_err support],
 	[if test "X$with_comerr" = "X"; then

@@ -1,13 +1,13 @@
 dnl libtoolhack.m4--hack to make libtool behave better
 dnl Rob Earhart
-dnl $Id: libtoolhack.m4,v 1.3 2002/05/25 19:57:42 leg Exp $
+dnl $Id: libtoolhack.m4,v 1.4 2003/10/08 20:35:25 rjs3 Exp $
 
 dnl Libtool tries to compile an empty file to see whether it can build
 dnl shared libraries, and treats *any* warning as a problem.
 dnl Solaris's and HP's cc complains about the empty file.  So we hack
 dnl the CFLAGS to make cc not complain.
 
-AC_DEFUN(CMU_PROG_LIBTOOL, [
+AC_DEFUN([CMU_PROG_LIBTOOL], [
 AC_REQUIRE([AC_PROG_CC])
 if test "$ac_cv_prog_gcc" = no; then
   case "$host_os" in
@@ -22,7 +22,7 @@ if test "$ac_cv_prog_gcc" = no; then
   esac
 fi
 
-AM_PROG_LIBTOOL
+AC_PROG_LIBTOOL
 
 if test "$ac_cv_prog_gcc" = no; then
   case "$host_os" in

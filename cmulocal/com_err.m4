@@ -1,8 +1,8 @@
 dnl com_err.m4--com_err detection macro
 dnl Rob Earhart
-dnl $Id: com_err.m4,v 1.5 2002/05/25 19:57:41 leg Exp $
+dnl $Id: com_err.m4,v 1.6 2003/10/08 20:35:24 rjs3 Exp $
 
-AC_DEFUN(CMU_COMERR, [
+AC_DEFUN([CMU_COMERR], [
 	 cmu_need_compile_et=no
 	 AC_CHECK_PROGS(COMPILE_ET, compile_et, no)
 	 if test "$COMPILE_ET" = no; then

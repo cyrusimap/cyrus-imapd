@@ -1,6 +1,6 @@
-dnl $Id: arx.m4,v 1.4 2002/12/21 18:44:24 cg2v Exp $
+dnl $Id: arx.m4,v 1.5 2003/10/08 20:35:24 rjs3 Exp $
 
-AC_DEFUN(CMU_ARX_INC_WHERE1, [
+AC_DEFUN([CMU_ARX_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <arx.h>],
@@ -10,7 +10,7 @@ ac_cv_found_arx_inc=no)
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
-AC_DEFUN(CMU_ARX_INC_WHERE, [
+AC_DEFUN([CMU_ARX_INC_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for arx headers in $i)
       CMU_ARX_INC_WHERE1($i)
@@ -29,7 +29,7 @@ AC_DEFUN(CMU_ARX_INC_WHERE, [
 # Test for lib files
 #
 
-AC_DEFUN(CMU_ARX_LIB_WHERE1, [
+AC_DEFUN([CMU_ARX_LIB_WHERE1], [
 AC_REQUIRE([CMU_AFS])
 AC_REQUIRE([CMU_KRB4])
 saved_LIBS=$LIBS
@@ -41,7 +41,7 @@ ac_cv_found_arx_lib=no)
 LIBS=$saved_LIBS
 ])
 
-AC_DEFUN(CMU_ARX_LIB_WHERE, [
+AC_DEFUN([CMU_ARX_LIB_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for arx libraries in $i)
       CMU_ARX_LIB_WHERE1($i)
@@ -56,7 +56,7 @@ AC_DEFUN(CMU_ARX_LIB_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_USE_ARX, [
+AC_DEFUN([CMU_USE_ARX], [
 AC_ARG_WITH(arx,
 	[  --with-arx=PREFIX      Compile with arx support],
 	[if test "X$with_arx" = "X"; then

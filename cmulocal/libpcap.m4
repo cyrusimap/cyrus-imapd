@@ -1,16 +1,16 @@
 dnl libpcap.m4--PCAP libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: libpcap.m4,v 1.7 2002/12/21 18:44:24 cg2v Exp $
+dnl $Id: libpcap.m4,v 1.8 2003/10/08 20:35:25 rjs3 Exp $
 
-AC_DEFUN(CMU_PCAP_INC_WHERE1, [
+AC_DEFUN([CMU_PCAP_INC_WHERE1], [
 ac_cv_found_pcap_inc=no
 if test -f "$1/pcap.h" ; then
   ac_cv_found_pcap_inc=yes
 fi
 ])
 
-AC_DEFUN(CMU_PCAP_INC_WHERE, [
+AC_DEFUN([CMU_PCAP_INC_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for pcap header in $i)
       CMU_PCAP_INC_WHERE1($i)
@@ -24,7 +24,7 @@ AC_DEFUN(CMU_PCAP_INC_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_PCAP_LIB_WHERE1, [
+AC_DEFUN([CMU_PCAP_LIB_WHERE1], [
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lpcap"
 AC_TRY_LINK(,
@@ -34,7 +34,7 @@ ac_cv_found_pcap_lib=no)
 LIBS=$saved_LIBS
 ])
 
-AC_DEFUN(CMU_PCAP_LIB_WHERE, [
+AC_DEFUN([CMU_PCAP_LIB_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for pcap library in $i)
       CMU_PCAP_LIB_WHERE1($i)
@@ -49,7 +49,7 @@ AC_DEFUN(CMU_PCAP_LIB_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_PCAP, [
+AC_DEFUN([CMU_PCAP], [
 AC_ARG_WITH(pcap,
 	[  --with-pcap=PREFIX      Compile with PCAP support],
 	[if test "X$with_pcap" = "X"; then
