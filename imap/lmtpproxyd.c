@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.51 2003/03/27 17:43:13 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.52 2003/03/28 21:48:38 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -331,10 +331,10 @@ static struct lmtp_conn *getconn(const char *server)
 	p = xmalloc(sizeof(struct connlist));
 	p->host = xstrdup(server);
 
-	strcpy(optstr, server);
+	strlcpy(optstr, server, sizeof(optstr));
 	cp = strchr(optstr, '.');
 	if (cp) *cp = '\0';
-	strcat(optstr, "_password");
+	strlcat(optstr, "_password", sizeof(optstr));
 	pass = config_getstring(optstr, NULL);
 
 	cb = mysasl_callbacks(config_getstring("lmtpproxy_username", ""),
@@ -391,9 +391,11 @@ static int adddest(struct mydata *mydata,
     new_rcpt->rcpt_num = mydata->cur_rcpt;
     
     /* find what server we're sending this to */
-    if (!strncmp(mailbox, BB, sl) && mailbox[sl] == '+') {
+    if (sl < strlen(mailbox) && 
+	!strncmp(mailbox, BB, sl) && 
+	mailbox[sl] == '+') {
 	/* special shared folder address */
-	strcpy(buf, mailbox + sl + 1);
+	strlcpy(buf, mailbox + sl + 1, sizeof(buf));
 	mboxname_hiersep_tointernal(&lmtpd_namespace, buf);
 	r = mupdate_find(mhandle, buf, &mailboxdata);
     } else {
@@ -706,12 +708,13 @@ static int verify_user(const char *user,
 	if (plus) l = plus - user;
 	else l = strlen(user);
 
-	if (l >= MAX_MAILBOX_NAME) {
-	    /* too long a name */
+	if (l >= MAX_MAILBOX_NAME - 5) {
+	    /* too long a name (including user. prefix) */
 	    r = IMAP_MAILBOX_NONEXISTENT;
 	} else {
-	    /* just copy before the plus */
+	    /* strcpy is safe here since we know buf is large enough */
 	    strcpy(buf, "user.");
+	    /* just copy before the plus -- strlcpy not applicable */
 	    strncat(buf, user, l);
 	    buf[l + 5] = '\0';
 	}

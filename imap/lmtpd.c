@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.110 2003/03/10 19:00:20 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.111 2003/03/28 21:48:06 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -305,12 +305,12 @@ void service_abort(int error)
 #ifdef USE_SIEVE
 static char *make_sieve_db(const char *user)
 {
-    static char buf[MAX_MAILBOX_PATH];
+    static char buf[MAX_MAILBOX_PATH+1];
 
     buf[0] = '.';
     buf[1] = '\0';
-    strcat(buf, user);
-    strcat(buf, ".sieve.");
+    strlcat(buf, user, sizeof(buf));
+    strlcat(buf, ".sieve.", sizeof(buf));
 
     return buf;
 }
@@ -702,12 +702,13 @@ int sieve_keep(void *ac,
     mydata_t *mydata = (mydata_t *) mc;
     message_data_t *md = mydata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
-    char namebuf[MAX_MAILBOX_PATH];
+    char namebuf[MAX_MAILBOX_PATH+1];
     int ret = 1;
 
     if (sd->mailboxname) {
-	strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_INBOX]);
-	strcat(namebuf, sd->mailboxname);
+	strlcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_INBOX],
+		sizeof(namebuf));
+	strlcat(namebuf, sd->mailboxname, sizeof(namebuf));
 
 	ret = deliver_mailbox(md->data, mydata->stage, md->size,
 			      kc->imapflags->flag, kc->imapflags->nflags,
@@ -720,7 +721,7 @@ int sieve_keep(void *ac,
 	if (!sd->authstate)
 	    return SIEVE_FAIL;
 
-	strcpy(namebuf, "INBOX");
+	strlcpy(namebuf, "INBOX", sizeof(namebuf));
 
 	ret = deliver_mailbox(md->data, mydata->stage, md->size,
 			      kc->imapflags->flag, kc->imapflags->nflags,
@@ -1034,7 +1035,7 @@ static FILE *sieve_find_script(const char *user)
 	snprintf(buf, sizeof(buf), "%s/%s", pent->pw_dir, ".sieve");
     } else { /* look in sieve_dir */
 	char hash;
-	char bufuser[MAX_MAILBOX_NAME];
+	char bufuser[MAX_MAILBOX_NAME+1];
 	
 	strlcpy(bufuser, user, sizeof(bufuser));
 	
@@ -1091,7 +1092,7 @@ int deliver_mailbox(struct protstream *msg,
 {
     int r;
     struct appendstate as;
-    char namebuf[MAX_MAILBOX_PATH];
+    char namebuf[MAX_MAILBOX_PATH+1];
     time_t now = time(NULL);
 
     /* Translate any separators in user */
@@ -1147,7 +1148,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 {
     int n, nrcpts;
     mydata_t mydata;
-    char namebuf[MAX_MAILBOX_PATH];
+    char namebuf[MAX_MAILBOX_PATH+1];
     
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
@@ -1172,8 +1173,9 @@ int deliver(message_data_t *msgdata, char *authuser,
 	if (plus) *plus++ = '\0';
 	/* case 1: shared mailbox request */
 	if (plus && !strcmp(rcpt, BB)) {
-	    strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_SHARED]);
-	    strcat(namebuf, plus);
+	    strlcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_SHARED],
+		    sizeof(namebuf));
+	    strlcat(namebuf, plus, sizeof(namebuf));
 	    r = deliver_mailbox(msgdata->data, 
 				mydata.stage,
 				msgdata->size, 
@@ -1235,8 +1237,9 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    if (r && plus &&
 		strlen(rcpt) + strlen(plus) + 30 <= MAX_MAILBOX_PATH) {
 		/* normal delivery to + mailbox */
-		strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_INBOX]);
-		strcat(namebuf, plus);
+		strlcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_INBOX],
+			sizeof(namebuf));
+		strlcat(namebuf, plus, sizeof(namebuf));
 		
 		r = deliver_mailbox(msgdata->data, 
 				    mydata.stage, 
@@ -1249,7 +1252,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 
 	    if (r) {
 		/* normal delivery to INBOX */
-		strcpy(namebuf, "INBOX");
+		strlcpy(namebuf, "INBOX", sizeof(namebuf));
 		
 		/* ignore ACL's trying to deliver to INBOX */
 		r = deliver_mailbox(msgdata->data, 
@@ -1341,7 +1344,7 @@ void shut_down(int code)
 static int verify_user(const char *user, long quotacheck,
 		       struct auth_state *authstate)
 {
-    char buf[MAX_MAILBOX_NAME];
+    char buf[MAX_MAILBOX_NAME+1];
     char *plus;
     int r;
     int sl = strlen(BB);
@@ -1349,7 +1352,7 @@ static int verify_user(const char *user, long quotacheck,
     /* check to see if mailbox exists and we can append to it */
     if (!strncmp(user, BB, sl) && user[sl] == '+') {
 	/* special shared folder address */
-	strcpy(buf, user + sl + 1);
+	strlcpy(buf, user + sl + 1, sizeof(buf));
 	/* Translate any separators in user */
 	mboxname_hiersep_tointernal(&lmtpd_namespace, buf);
 	/* - must have posting privileges on shared folders
@@ -1361,8 +1364,8 @@ static int verify_user(const char *user, long quotacheck,
 	if (strlen(user) > sizeof(buf)-10) {
 	    r = IMAP_MAILBOX_NONEXISTENT;
 	} else {
-	    strcpy(buf, "user.");
-	    strcat(buf, user);
+	    strlcpy(buf, "user.", sizeof(buf));
+	    strlcat(buf, user, sizeof(buf));
 	    plus = strchr(buf, '+');
 	    if (plus) *plus = '\0';
 	    /* Translate any separators in user */
@@ -1396,14 +1399,16 @@ char *generate_notify(message_data_t *m)
 
 	    for (j = 0; body[j] != NULL; j++) {
 		/* put the header */
-		while (pos + strlen(h) + 5 > len) {
+		/* need: length + ": " + '\0'*/
+		while (pos + strlen(h) + 3 > len) {
 		    ret = xrealloc(ret, len += 1024);
 		}
 		pos += sprintf(ret + pos, "%s: ", h);
 		
 		/* put the header body.
 		   xxx it would be nice to linewrap.*/
-		while (pos + strlen(body[j]) + 3 > len) {
+		/* need: length + '\n' + '\0' */
+		while (pos + strlen(body[j]) + 2 > len) {
 		    ret = xrealloc(ret, len += 1024);
 		}
 		pos += sprintf(ret + pos, "%s\n", body[j]);
@@ -1422,7 +1427,7 @@ FILE *spoolfile(message_data_t *msgdata)
     if ((msg_getnumrcpt(msgdata) == 1) || singleinstance) {
 	int r = 0;
 	char *rcpt, *plus, *user = NULL;
-	char namebuf[MAX_MAILBOX_PATH], mailboxname[MAX_MAILBOX_PATH];
+	char namebuf[MAX_MAILBOX_PATH+1], mailboxname[MAX_MAILBOX_PATH+1];
 	time_t now = time(NULL);
 
 	/* build the mailboxname from the recipient address */
@@ -1432,8 +1437,9 @@ FILE *spoolfile(message_data_t *msgdata)
 
 	/* case 1: shared mailbox request */
 	if (plus && !strcmp(rcpt, BB)) {
-	    strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_SHARED]);
-	    strcat(namebuf, plus);
+	    strlcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_SHARED],
+		    sizeof(namebuf));
+	    strlcat(namebuf, plus, sizeof(namebuf));
 	}
 
 	/* case 2: ordinary user */
@@ -1442,7 +1448,7 @@ FILE *spoolfile(message_data_t *msgdata)
 	    user = rcpt;
 
 	    /* assume delivery to INBOX for now */
-	    strcpy(namebuf, "INBOX");
+	    strlcpy(namebuf, "INBOX", sizeof(namebuf));
 	}
 
 	/* case 3: unable to handle rcpt */
