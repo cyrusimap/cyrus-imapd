@@ -826,6 +826,21 @@ int r;
     case IMAP_MAILBOX_NOTSUPPORTED:
 	return "553 5.2.0 Mailbox has an invalid format";
 
+    case IMAP_MESSAGE_CONTAINSNULL:
+	return "554 5.6.0 Message contains bare newlines";
+	
+    case IMAP_MESSAGE_CONTAINSNL:
+	return "554 5.6.0 Message contains bare newlines";
+
+    case IMAP_MESSAGE_CONTAINS8BIT:
+	return "554 5.6.0 Message contains non-ASCII characters in headers";
+
+    case IMAP_MESSAGE_BADHEADER:
+	return "554 5.6.0 Message contains invalid header";
+
+    case IMAP_MESSAGE_NOBLANKLINE:
+	return "554 5.6.0 Message has no header/body separator";
+
     case IMAP_MAILBOX_NONEXISTENT:
 	/* XXX Might have been moved to other server */
 	return "550 5.1.1 User unknown";
