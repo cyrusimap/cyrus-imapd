@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.15 2003/02/13 20:15:26 rjs3 Exp $
+ * $Id: lmtpengine.h,v 1.16 2003/08/12 15:22:57 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -42,13 +42,6 @@
 
 #ifndef LMTPENGINE_H
 #define LMTPENGINE_H
-
-/* configuration parameters */
-#define DEFAULT_SENDMAIL ("/usr/lib/sendmail")
-#define DEFAULT_POSTMASTER ("postmaster")
-
-#define SENDMAIL (config_getstring("sendmail", DEFAULT_SENDMAIL))
-#define POSTMASTER (config_getstring("postmaster", DEFAULT_POSTMASTER))
 
 /***************** server-side LMTP *******************/
 

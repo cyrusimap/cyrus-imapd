@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_mailto.c,v 1.5 2003/02/13 20:15:48 rjs3 Exp $
+ * $Id: notify_mailto.c,v 1.6 2003/08/12 15:22:58 rjs3 Exp $
  */
 
 #include <config.h>
@@ -57,13 +57,6 @@
 #include "imapconf.h"
 #include "rfc822date.h"
 #include <sieve_interface.h>
-
-#define DEFAULT_SENDMAIL ("/usr/lib/sendmail")
-#define DEFAULT_POSTMASTER ("postmaster")
-
-#define SENDMAIL (config_getstring("sendmail", DEFAULT_SENDMAIL))
-#define POSTMASTER (config_getstring("postmaster", DEFAULT_POSTMASTER))
-
 
 static int global_outgoing_count = 0;
 
