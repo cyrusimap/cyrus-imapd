@@ -1,5 +1,5 @@
 /* auth_krb_pts.h -- Kerberos authorization with AFS PTServer groups
-	$Id: auth_krb_pts.h,v 1.15 1999/10/29 23:34:58 leg Exp $
+	$Id: auth_krb_pts.h,v 1.16 2000/01/25 06:53:06 leg Exp $
 	
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -44,9 +44,10 @@
 #include <sys/param.h>
 #endif
 #ifdef HAVE_DB_185_H
-#include <db_185.h>
+#  define DB_LIBRARY_COMPATIBILITY_API
+#  include <db_185.h>
 #else
-#include <db.h>
+#  include <db.h>
 #endif
 #include <syslog.h>
 #include <ctype.h>
