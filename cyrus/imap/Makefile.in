@@ -82,13 +82,17 @@ depend:
 # DO NOT DELETE THIS LINE -- make depend uses it
 
 
-acl_afs.o:	xmalloc.h
-append.o:	imap_err.h mailbox.h message.h
+acl_afs.o:	auth.h xmalloc.h
+append.o:	assert.h imap_err.h mailbox.h message.h xmalloc.h
+config.o:	config.h xmalloc.h
 deliver.o:	imap_err.h mailbox.h
-mailbox.o:	imap_err.h mailbox.h xmalloc.h
-message.o:	mailbox.h parseadd.h xmalloc.h
+imapd.o:	auth.h imap_err.h mailbox.h imapd.h xmalloc.h
+index.o:	imap_err.h mailbox.h imapd.h message.h xmalloc.h
+login_krb.o:	config.h imapd.h kerberos.h
+mailbox.o:	assert.h imap_err.h mailbox.h xmalloc.h
+mboxlist.o:	config.h imap_err.h xmalloc.h
+message.o:	imap_err.h mailbox.h parseadd.h xmalloc.h
 parseutl.o:	parseadd.h
-parsey.o:	parseadd.h
 testmkdir.o:	mailbox.h
 
 # DEPENDENCIES MUST END AT END OF FILE
