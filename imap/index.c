@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.88 1999/07/31 21:49:33 leg Exp $
+ * $Id: index.c,v 1.89 1999/08/17 05:59:27 leg Exp $
  */
 #include <stdio.h>
 #include <string.h>
@@ -301,6 +301,7 @@ int checkseen;
     if (oldexists == -1 && keepingseen) {
 	r = seen_open(mailbox, imapd_userid, &seendb);
 	if (!r) {
+	    free(seenuids);
 	    r = seen_lockread(seendb, &last_read, &recentuid,
 			      &seen_last_change, &seenuids);
 	    if (r) seen_close(seendb);

@@ -94,11 +94,10 @@ accounts should not receive mail.  That is, if user "jbRo" is a user reading
 mail, he should not also be in the admins line.  Some problems may occur
 otherwise, most notably  the ability of administrators to create top-level
 mailboxes visible to users, but not writable by users.
-.IP "\fBimspservers:\fR <none>" 5
-The list of the host names of the mail domain's IMSP servers.
-Separate each host name with a space.  The Kerberos identities of
-these servers may login as any user in order to perform commands by
-proxy.
+.IP "\fBproxyservers:\fR <none>" 5
+A list of users and groups that are allowed to proxy for other users,
+seperated by spaces.  Any user listed in this will be allowed to login
+for any other user: use with caution.
 .IP "\fBdefaultacl:\fR anyone lrs" 5
 The Access Control List (ACL) placed on a newly-created (non-user) 
 mailbox that does not have a parent mailbox.
