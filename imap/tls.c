@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.26 2001/09/19 20:02:10 ken3 Exp $ */
+/* $Id: tls.c,v 1.27 2001/09/19 21:08:36 ken3 Exp $ */
 
 #include <config.h>
 
@@ -129,6 +129,9 @@
 
 #define DB (&cyrusdb_db3_nosync) /* sessions are binary -> MUST use DB3 */
 #define FNAME_SESSIONS "/tls_sessions.db"
+
+static struct db *sessdb = NULL;
+static int sess_dbopen = 0;
 
 /* We must keep some of the info available */
 static const char hexcodes[] = "0123456789ABCDEF";
@@ -385,11 +388,11 @@ static int new_session_cb(SSL *ssl, SSL_SESSION *sess)
     int len;
     unsigned char *data = NULL, *asn;
     time_t expire;
-    char dbname[1024];
-    struct db *sessdb;
     int ret = -1;
 
     assert(sess);
+
+    if (!sess_dbopen) return 0;
 
     /* find the size of the ASN1 representation of the session */
     len = i2d_SSL_SESSION(sess, NULL);
@@ -411,25 +414,13 @@ static int new_session_cb(SSL *ssl, SSL_SESSION *sess)
     expire = SSL_SESSION_get_time(sess) + SSL_SESSION_get_timeout(sess);
     memcpy(data, &expire, sizeof(time_t));
 
-    /* create the name of the db file */
-    strcpy(dbname, config_dir);
-    strcat(dbname, FNAME_SESSIONS);
-
     if (data && len) {
 	/* store the session in our database */
-	ret = DB->open(dbname, &sessdb);
-	if (ret != CYRUSDB_OK) {
-	    syslog(LOG_ERR, "DBERROR: opening %s: %s",
-		   dbname, cyrusdb_strerror(ret));
-	}
-	else {
-	    do {
-		ret = DB->store(sessdb, sess->session_id,
-				sess->session_id_length,
-				data, len + sizeof(time_t), NULL);
-	    } while (ret == CYRUSDB_AGAIN);
-	    DB->close(sessdb);
-	}
+	do {
+	    ret = DB->store(sessdb, sess->session_id,
+			    sess->session_id_length,
+			    data, len + sizeof(time_t), NULL);
+	} while (ret == CYRUSDB_AGAIN);
     }
 
     if (data) free(data);
@@ -453,28 +444,15 @@ static int new_session_cb(SSL *ssl, SSL_SESSION *sess)
  */
 static void remove_session(unsigned char *id, int idlen)
 {
-    char dbname[1024];
-    struct db *sessdb;
     int ret;
 
     assert(id);
 
-    /* create the name of the db file */
-    strcpy(dbname, config_dir);
-    strcat(dbname, FNAME_SESSIONS);
+    if (!sess_dbopen) return;
 
-    /* delete the session from our database */
-    ret = DB->open(dbname, &sessdb);
-    if (ret != CYRUSDB_OK) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s",
-	       dbname, cyrusdb_strerror(ret));
-    }
-    else {
-	do {
-	    ret = DB->delete(sessdb, id, idlen, NULL);
-	} while (ret == CYRUSDB_AGAIN);
-	DB->close(sessdb);
-    }
+    do {
+	ret = DB->delete(sessdb, id, idlen, NULL);
+    } while (ret == CYRUSDB_AGAIN);
 
     /* log this transaction */
     if (var_imapd_tls_loglevel > 0) {
@@ -512,8 +490,6 @@ static void remove_session_cb(SSL_CTX *ctx, SSL_SESSION *sess)
  */
 static SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
 {
-    char dbname[1024];
-    struct db *sessdb = NULL;
     int ret;
     const char *data = NULL;
     unsigned char *asn;
@@ -523,40 +499,29 @@ static SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *
 
     assert(id);
 
-    /* create the name of the db file */
-    strcpy(dbname, config_dir);
-    strcat(dbname, FNAME_SESSIONS);
+    if (!sess_dbopen) NULL;
 
-    /* fetch the session from our database */
-    ret = DB->open(dbname, &sessdb);
-    if (ret != CYRUSDB_OK) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s",
-	       dbname, cyrusdb_strerror(ret));
-    }
-    else {
-	do {
-	    ret = DB->fetch(sessdb, id, idlen, &data, &len, NULL);
-	} while (ret == CYRUSDB_AGAIN);
+    do {
+	ret = DB->fetch(sessdb, id, idlen, &data, &len, NULL);
+    } while (ret == CYRUSDB_AGAIN);
 
-	if (data) {
-	    assert(len >= sizeof(time_t));
+    if (data) {
+	assert(len >= sizeof(time_t));
 
-	    /* grab the expire time */
-	    memcpy(&expire, data, sizeof(time_t));
+	/* grab the expire time */
+	memcpy(&expire, data, sizeof(time_t));
 
-	    /* check if the session has expired */
-	    if (expire < now) {
-		remove_session(id, idlen);
-	    }
-	    else {
-		/* transform the ASN1 representation of the session
-		   into an SSL_SESSION object */
-		asn = (unsigned char*) data + sizeof(time_t);
-		sess = d2i_SSL_SESSION(NULL, &asn, len - sizeof(time_t));
-		if (!sess) syslog(LOG_ERR, "d2i_SSL_SESSION failed: %m");
-	    }
+	/* check if the session has expired */
+	if (expire < now) {
+	    remove_session(id, idlen);
 	}
-	DB->close(sessdb);
+	else {
+	    /* transform the ASN1 representation of the session
+	       into an SSL_SESSION object */
+	    asn = (unsigned char*) data + sizeof(time_t);
+	    sess = d2i_SSL_SESSION(NULL, &asn, len - sizeof(time_t));
+	    if (!sess) syslog(LOG_ERR, "d2i_SSL_SESSION failed: %m");
+	}
     }
 
     /* log this transaction */
@@ -658,6 +623,7 @@ int     tls_init_serverengine(const char *ident,
     if (timeout) {
 	char *session_id_context = "cyrus"; /* anything will do */
 	char dbdir[1024];
+	int r;
 
 	/* Set the context for session reuse */
 	SSL_CTX_set_session_id_context(ctx, (void*) &session_id_context,
@@ -674,7 +640,24 @@ int     tls_init_serverengine(const char *ident,
 	/* Initialize DB environment */
 	strcpy(dbdir, config_dir);
 	strcat(dbdir, FNAME_DBDIR);
-	DB->init(dbdir, 0);
+	r = DB->init(dbdir, 0);
+
+	if (r != 0)
+	    syslog(LOG_ERR, "DBERROR: init %s: %s", buf,
+		   cyrusdb_strerror(r));
+	else {
+	    /* create the name of the db file */
+	    strcpy(dbdir, config_dir);
+	    strcat(dbdir, FNAME_SESSIONS);
+
+	    r = DB->open(dbdir, &sessdb);
+	    if (r != 0) {
+		syslog(LOG_ERR, "DBERROR: opening %s: %s",
+		       dbdir, cyrusdb_strerror(ret));
+	    }
+	    else
+		sess_dbopen = 1;
+	}
     }
 
     CAfile = (char *) config_getstring("tls_ca_file", NULL);
@@ -941,7 +924,20 @@ int tls_reset_servertls(SSL **conn)
 
 int tls_shutdown_serverengine(void)
 {
+    int r;
+
     if (tls_serverengine) {
+	/* close DB */
+	if (sess_dbopen) {
+	    r = DB->close(sessdb);
+	    if (r) {
+		syslog(LOG_ERR, "DBERROR: error closing deliverdb: %s",
+		       cyrusdb_strerror(r));
+	    }
+	    sessdb = NULL;
+	    sess_dbopen = 0;
+	}
+
 	/* close DB environment */
 	DB->done();
     }
@@ -1001,7 +997,6 @@ static int find_cb(void *rock, const char *id, int idlen,
 int tls_prune_sessions(void)
 {
     char dbdir[1024];
-    struct db *sessdb = NULL;
     int ret;
 
     /* initialize DB environment */
@@ -1023,6 +1018,7 @@ int tls_prune_sessions(void)
 	/* check each session in our database */
 	DB->foreach(sessdb, "", 0, &find_p, &find_cb, sessdb, NULL);
 	DB->close(sessdb);
+	sessdb = NULL;
     }
 
     DB->done();
