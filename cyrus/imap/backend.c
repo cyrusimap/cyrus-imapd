@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.28 2004/06/04 14:20:00 rjs3 Exp $ */
+/* $Id: backend.c,v 1.29 2004/06/04 14:22:27 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -383,7 +383,7 @@ void backend_disconnect(struct backend *s, struct protocol_t *prot)
 {
     char buf[1024];
 
-    if (!s) return;
+    if (!s || s->sock == -1) return;
     
     if (!prot_error(s->in)) {
 	if (prot && prot->logout_cmd.cmd) {
