@@ -1,4 +1,4 @@
-/* map_mmap.c -- memory-mapping routines.
+/* map_shared.c -- memory-mapping routines.
  *
  *	(C) Copyright 1994 by Carnegie Mellon University
  *
