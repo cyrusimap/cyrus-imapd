@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.110 1999/10/28 03:05:37 leg Exp $
+ * $Id: deliver.c,v 1.111 1999/10/28 04:40:05 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.110 1999/10/28 03:05:37 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.111 1999/10/28 04:40:05 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -333,12 +333,12 @@ char **argv;
 	(deliver_opts_t *) xmalloc(sizeof(deliver_opts_t));
     message_data_t *msgdata;
 
-    config_init("deliver");
-
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
+
+    config_init("deliver");
 
 #ifdef USE_SIEVE
     sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
@@ -2240,6 +2240,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 		
 		if (checkdelivered(msgdata->id, strlen(msgdata->id),
 				   sdb, strlen(sdb))) {
+		    logdupelem(msgdata->id, sdb);
 		    /* done it before ! */
 		    return 0;
 		}
@@ -2577,6 +2578,7 @@ int idlen, tolen;
     time_t mark;
 
     (void)memset(&info, 0, sizeof(info));
+    (void)memset(&date, 0, sizeof(date));
     (void)memset(&delivery, 0, sizeof(delivery));
 
     (void)strcpy(fname, _get_db_name(to));
