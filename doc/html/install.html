@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.77 2000/02/19 04:41:49 leg Exp $ -->
+<!-- $Id: install.html,v 1.78 2000/02/24 03:35:57 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -71,8 +71,7 @@ converting. Doing this in single user mode is probably the safest.
 <ul>
 <li> Upgrading from the Cyrus IMAP server version 1.5 or earlier:
 libsasl is now required.  Configuring SASL to work may be a chore,
-especially if you use shadow passwords.  If you use shadow passwords,
-you must allow the cyrus user read access to /etc/shadow.
+especially if you use shadow passwords.
 
 <li> An ANSI C compiler is now required.  gcc should work fine and can
 be acquired from <a href="http://www.gnu.org/software/gcc/gcc.html">
@@ -513,11 +512,12 @@ can read "<tt>/etc/sasldb</tt>":
 </kbd></pre>
 
 <p>If you want to authenticate users from "<tt>/etc/shadow</tt>",
-things are considerably more complicated, since the "<tt>cyrus</tt>"
-cannot read the shadow password file.  It is suggested that you
-configure libsasl with <tt>pwcheck</tt> support, and set
+things are considerably more complicated, since the cyrus user cannot
+read the shadow password file.  It is suggested that you configure
+libsasl with <tt>pwcheck</tt> support, and set
 "<tt>sasl_pwcheck_method: pwcheck</tt>".  The SASL library will then
-make calls to an external utility running as root to authenticate users.
+make calls to an external utility running as root to authenticate
+users.
 
 <p>If you're using Kerberos authentication, see <a
 href="#kerberos">the section on configuring Kerberos below</a>.
@@ -618,7 +618,33 @@ aren't already there.
    sieve     2000/tcp
    lmtp      2003/tcp
    fud       4201/udp
+   imaps     993/tcp
+   pop3s     995/tcp
 </pre>
+</ol>
+
+<h3>Configuring the Master Process</h3>
+
+<ol>
+<li> Choose a configuration from the <tt>master</tt> directory:
+
+   <dl compact>
+   <dt><tt>small.conf</tt><dd>bare-bones server supporting IMAP and POP
+   <dt><tt>normal.conf</tt><dd>server supporting IMAP, POP, the SSL
+   wrapped versions, and the Sieve script management protocol
+   <dt><tt>prefork.conf</tt><dd>The same configuration as above, but
+   with some preforked processes for faster processing.
+   <dt><tt>cmu.conf</tt><dd>Our configuration
+   </dl>
+
+<p>To use <tt>normal.conf</tt>, do:
+<pre>
+<kbd>   cp master/normal.conf /etc/master.conf
+</kbd></pre>
+
+<p>Optionally, you can edit <tt>/etc/master.conf</tt> to disable or
+enabling certain services, or to tune the number of preforked copies.
+Be sure not to remove the entries that are labelled required.
 
 <p><li>Arrange to start "<tt>/usr/cyrus/bin/master</tt>" as root when
 the system starts.  It will bind some ports and then give up it's root
@@ -628,6 +654,10 @@ process by hand:
 <pre>
 <kbd>   /usr/cyrus/bin/master &
 </kbd></pre>
+
+<p><li>Monitor the progress of the master process by examining the
+<tt>imapd.log</tt> file.  It should never exit by itself, but if you
+can shut down the mail system by sending it a signal with <tt>kill</tt>.
 </ol>
 
 <h3>Configuring the Mail Transfer Agent</h3>
@@ -653,10 +683,6 @@ changes.
  <P> <LI> Edit <TT>/etc/group</TT> and add user "<TT>daemon</TT>" to
 the "<TT>mail</TT>" group.  This will permit sendmail to run the
 "<TT>deliver</TT>" program to deliver mail to the IMAP server.
-
-<p><li> Add a <TT>cron</TT> job to periodically prune the database of
-deliveries by running "<TT>/usr/cyrus/bin/ctl_deliver -E 3</TT>" daily as
-the cyrus user.
 
 </ol>
 
