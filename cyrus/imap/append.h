@@ -4,6 +4,7 @@
 struct copymsg {
     unsigned long uid;
     time_t internaldate;
+    time_t sentdate;
     unsigned long size;
     unsigned long header_size;
     char *cache_begin;

@@ -299,6 +299,7 @@ char *userid;
 	    message_index[msg].cache_offset = ftell(mailbox->cache);
 	    fwrite(copymsg[msg].cache_begin, 1, copymsg[msg].cache_len,
 		   mailbox->cache);
+	    message_index[msg].sentdate = copymsg[msg].sentdate;
 	    message_index[msg].size = copymsg[msg].size;
 	    message_index[msg].header_size = copymsg[msg].header_size;
 	    message_index[msg].content_offset = copymsg[msg].header_size;

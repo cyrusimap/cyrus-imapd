@@ -289,16 +289,17 @@ struct index_record *record;
     n = fread(buf, 1, INDEX_RECORD_SIZE, mailbox->index);
     if (n != INDEX_RECORD_SIZE) return IMAP_IOERROR;
 
-    record->uid = htonl(*((bit32 *)buf));
-    record->internaldate = htonl(*((bit32 *)(buf+4)));
-    record->size = htonl(*((bit32 *)(buf+8)));
-    record->header_size = htonl(*((bit32 *)(buf+12)));
-    record->content_offset = htonl(*((bit32 *)(buf+16)));
-    record->cache_offset = htonl(*((bit32 *)(buf+20)));
-    record->last_updated = htonl(*((bit32 *)(buf+24)));
-    record->system_flags = htonl(*((bit32 *)(buf+28)));
+    record->uid = htonl(*((bit32 *)(buf+OFFSET_UID)));
+    record->internaldate = htonl(*((bit32 *)(buf+OFFSET_INTERNALDATE)));
+    record->sentdate = htonl(*((bit32 *)(buf+OFFSET_SENTDATE)));
+    record->size = htonl(*((bit32 *)(buf+OFFSET_SIZE)));
+    record->header_size = htonl(*((bit32 *)(buf+OFFSET_HEADER_SIZE)));
+    record->content_offset = htonl(*((bit32 *)(buf+OFFSET_CONTENT_OFFSET)));
+    record->cache_offset = htonl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
+    record->last_updated = htonl(*((bit32 *)(buf+OFFSET_LAST_UPDATED)));
+    record->system_flags = htonl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
-	record->user_flags[n] = htonl(*((bit32 *)(buf+32+4*n)));
+	record->user_flags[n] = htonl(*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)));
     }
     return 0;
 }
@@ -629,16 +630,17 @@ struct index_record *record;
     int n;
     char buf[INDEX_RECORD_SIZE];
 
-    *((bit32 *)buf) = htonl(record->uid);
-    *((bit32 *)(buf+4)) = htonl(record->internaldate);
-    *((bit32 *)(buf+8)) = htonl(record->size);
-    *((bit32 *)(buf+12)) = htonl(record->header_size);
-    *((bit32 *)(buf+16)) = htonl(record->content_offset);
-    *((bit32 *)(buf+20)) = htonl(record->cache_offset);
-    *((bit32 *)(buf+24)) = htonl(record->last_updated);
-    *((bit32 *)(buf+28)) = htonl(record->system_flags);
+    *((bit32 *)(buf+OFFSET_UID)) = htonl(record->uid);
+    *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record->internaldate);
+    *((bit32 *)(buf+OFFSET_SENTDATE)) = htonl(record->sentdate);
+    *((bit32 *)(buf+OFFSET_SIZE)) = htonl(record->size);
+    *((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(record->header_size);
+    *((bit32 *)(buf+OFFSET_CONTENT_OFFSET)) = htonl(record->content_offset);
+    *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(record->cache_offset);
+    *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(record->last_updated);
+    *((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)) = htonl(record->system_flags);
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
-	*((bit32 *)(buf+32+4*n)) = htonl(record->user_flags[n]);
+	*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)) = htonl(record->user_flags[n]);
     }
 
     n = fseek(mailbox->index,
@@ -682,15 +684,16 @@ int num;
 
     for (i = 0; i < num; i++) {
 	p = buf + i*mailbox->record_size;
-	*((bit32 *)p) = htonl(record[i].uid);
-	*((bit32 *)(p+4)) = htonl(record[i].internaldate);
-	*((bit32 *)(p+8)) = htonl(record[i].size);
-	*((bit32 *)(p+12)) = htonl(record[i].header_size);
-	*((bit32 *)(p+16)) = htonl(record[i].content_offset);
-	*((bit32 *)(p+20)) = htonl(record[i].cache_offset);
-	*((bit32 *)(p+24)) = htonl(record[i].last_updated);
-	*((bit32 *)(p+28)) = htonl(record[i].system_flags);
-	p += 32;
+	*((bit32 *)(p+OFFSET_UID)) = htonl(record[i].uid);
+	*((bit32 *)(p+OFFSET_INTERNALDATE)) = htonl(record[i].internaldate);
+	*((bit32 *)(p+OFFSET_SENTDATE)) = htonl(record[i].sentdate);
+	*((bit32 *)(p+OFFSET_SIZE)) = htonl(record[i].size);
+	*((bit32 *)(p+OFFSET_HEADER_SIZE)) = htonl(record[i].header_size);
+	*((bit32 *)(p+OFFSET_CONTENT_OFFSET)) = htonl(record[i].content_offset);
+	*((bit32 *)(p+OFFSET_CACHE_OFFSET)) = htonl(record[i].cache_offset);
+	*((bit32 *)(p+OFFSET_LAST_UPDATED)) = htonl(record[i].last_updated);
+	*((bit32 *)(p+OFFSET_SYSTEM_FLAGS)) = htonl(record[i].system_flags);
+	p += OFFSET_USER_FLAGS;
 	for (j = 0; j < MAX_USER_FLAGS/32; j++, p += 4) {
 	    *((bit32 *)p) = htonl(record[i].user_flags[j]);
 	}
@@ -815,15 +818,15 @@ char *deciderock;
     for (msgno = 1; msgno <= mailbox->exists; msgno++) {
 	n = fread(buf, 1, mailbox->record_size, mailbox->index);
 	if (decideproc ? decideproc(deciderock, buf) :
-	    (ntohl(*((bit32 *)(buf+28))) & FLAG_DELETED)) {
+	    (ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS))) & FLAG_DELETED)) {
 
 	    /* Remember UID and size */
-	    deleted[numdeleted++] = ntohl(*((bit32 *)buf));
-	    quotadeleted += ntohl(*((bit32 *)(buf+8)));
+	    deleted[numdeleted++] = ntohl(*((bit32 *)(buf+OFFSET_UID)));
+	    quotadeleted += ntohl(*((bit32 *)(buf+OFFSET_SIZE)));
 
 	    /* Copy over cache file data */
 	    if (!lastmsgdeleted) {
-		cache_offset = ntohl(*((bit32 *)(buf+20)));
+		cache_offset = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
 		left =  cache_offset - cachestart;
 		fseek(mailbox->cache, cachestart, 0);
 		while (left) {
@@ -839,7 +842,7 @@ char *deciderock;
 	    }
 	}
 	else {
-	    cache_offset = ntohl(*((bit32 *)(buf+20)));
+	    cache_offset = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
 
 	    /* Set up for copying cache file data */
 	    if (lastmsgdeleted) {
@@ -849,7 +852,7 @@ char *deciderock;
 	    }
 
 	    /* Fix up cache file offset */
-	    *((bit32 *)(buf+20)) = htonl(cache_offset - cachediff);
+	    *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(cache_offset - cachediff);
 
 	    fwrite(buf, 1, mailbox->record_size, newindex);
 	}

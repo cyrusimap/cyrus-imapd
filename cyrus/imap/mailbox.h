@@ -21,9 +21,6 @@ typedef unsigned bit32;
 
 #define QUOTA_UNITS (1024)
 
-#define INDEX_HEADER_SIZE (9*4)
-#define INDEX_RECORD_SIZE (8*4+MAX_USER_FLAGS/4)
-
 struct mailbox {
     FILE *header;
     FILE *index;
@@ -68,6 +65,7 @@ struct mailbox {
 struct index_record {
     unsigned long uid;
     time_t internaldate;
+    time_t sentdate;
     unsigned long size;
     unsigned long header_size;
     unsigned long content_offset;
@@ -76,6 +74,21 @@ struct index_record {
     bit32 system_flags;
     bit32 user_flags[MAX_USER_FLAGS/32];
 };
+
+/* Offsets of index_record fields in index file */
+#define OFFSET_UID 0
+#define OFFSET_INTERNALDATE 4
+#define OFFSET_SENTDATE 8
+#define OFFSET_SIZE 12
+#define OFFSET_HEADER_SIZE 16
+#define OFFSET_CONTENT_OFFSET 20
+#define OFFSET_CACHE_OFFSET 24
+#define OFFSET_LAST_UPDATED 28
+#define OFFSET_SYSTEM_FLAGS 32
+#define OFFSET_USER_FLAGS 36
+
+#define INDEX_HEADER_SIZE (9*4)
+#define INDEX_RECORD_SIZE (OFFSET_USER_FLAGS+MAX_USER_FLAGS/4)
 
 #define FLAG_ANSWERED (1<<0)
 #define FLAG_FLAGGED (1<<1)
