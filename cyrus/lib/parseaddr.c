@@ -34,6 +34,8 @@
 #include "parseaddr.h"
 #include "xmalloc.h"
 
+static char parseaddr_unspecified_domain[] = "unspecified-domain";
+
 static void parseaddr_append();
 static int parseaddr_phrase();
 static int parseaddr_domain();
@@ -167,7 +169,7 @@ char **freemep;
     newaddr->mailbox = mailbox;
 
     if (domain && !*domain) {
-	domain = "unspecified-domain";
+	domain = parseaddr_unspecified_domain;
     }
     newaddr->domain = domain;
 
