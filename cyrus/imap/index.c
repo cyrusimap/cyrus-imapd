@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.137 2000/09/08 14:16:10 ken3 Exp $
+ * $Id: index.c,v 1.138 2000/09/16 03:09:07 ken3 Exp $
  */
 #include <config.h>
 
@@ -3903,10 +3903,8 @@ void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 	else
 	    subj = cur->child->msgdata->xsubj;
 
-#if 0 /* part of JWZ but NOT part of current REFERENCES draft */
 	/* if subject is empty, skip it */
 	if (!strlen(subj)) continue;
-#endif
 
 	/* lookup this subject in the table */
 	old = (Thread *) hash_lookup(subj, &subj_table);
@@ -3937,10 +3935,8 @@ void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 	else
 	    subj = cur->child->msgdata->xsubj;
 
-#if 0 /* part of JWZ but NOT part of current REFERENCES draft */
 	/* if subject is empty, skip it */
 	if (!strlen(subj)) continue;
-#endif
 
 	/* lookup this subject in the table */
 	old = (Thread *) hash_lookup(subj, &subj_table);
