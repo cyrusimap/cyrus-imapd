@@ -22,8 +22,18 @@
  *
  */
 #include <sys/types.h>
+#include <limits.h>
 
-typedef unsigned bit32;
+#if ULONG_MAX == 4294967295
+typedef unsigned long bit32;
+#else
+#if USHRT_MAX == 4294967295
+typedef unsigned short bit32;
+#else
+dont know what to use for bit32
+#endif
+#endif
+
 
 #define MAX_MAILBOX_NAME 490
 #define MAX_MAILBOX_PATH 4096
