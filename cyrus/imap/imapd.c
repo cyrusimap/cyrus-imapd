@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.300 2001/03/07 19:48:46 leg Exp $ */
+/* $Id: imapd.c,v 1.301 2001/03/10 05:54:27 leg Exp $ */
 
 #include <config.h>
 
@@ -86,6 +86,8 @@
 
 #include "pushstats.h"		/* SNMP interface */
 
+extern void seen_done(void);
+
 #ifdef HAVE_SSL
 #include "tls.h"
 #endif /* HAVE_SSL */
@@ -99,9 +101,9 @@ static char shutdownfilename[1024];
 
 /* per-user/session state */
 struct protstream *imapd_out, *imapd_in;
-static int imapd_haveaddr = 0;
 static char imapd_clienthost[250] = "[local]";
 static time_t imapd_logtime;
+static int imapd_logfd = -1;
 char *imapd_userid;
 struct auth_state *imapd_authstate = 0;
 static int imapd_userisadmin;
@@ -343,6 +345,47 @@ static const struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
+static void imapd_reset(void)
+{
+    proc_cleanup();
+
+    if (imapd_mailbox) {
+	index_closemailbox(imapd_mailbox);
+	mailbox_close(imapd_mailbox);
+	imapd_mailbox = 0;
+    }
+
+    if (imapd_in) prot_free(imapd_in);
+    if (imapd_out) prot_free(imapd_out);
+    close(0);
+    close(1);
+    close(2);
+
+    strcpy(imapd_clienthost, "[local]");
+    imapd_logtime = 0;
+    if (imapd_logfd != -1) {
+	close(imapd_logfd);
+	imapd_logfd = -1;
+    }
+    imapd_userid = NULL;
+    if (imapd_authstate) {
+	auth_freestate(imapd_authstate);
+	imapd_authstate = NULL;
+    }
+    imapd_userisadmin = 0;
+    if (imapd_saslconn) {
+	sasl_dispose(&imapd_saslconn);
+	imapd_saslconn = NULL;
+    }
+    imapd_starttls_done = 0;
+    if (tls_conn) {
+	tls_free(&tls_conn);
+	tls_conn = NULL;
+    }
+
+    imapd_exists = -1;
+}
+
 /*
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
@@ -382,6 +425,8 @@ int service_init(int argc, char **argv, char **envp)
     }
 #endif
 
+    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
     mboxlist_open(NULL);
@@ -410,6 +455,7 @@ int service_main(int argc, char **argv, char **envp)
     sasl_security_properties_t *secprops = NULL;
     sasl_external_properties_t extprops;
     struct sockaddr_in imapd_localaddr, imapd_remoteaddr;
+    int imapd_haveaddr = 0;
 
     signals_poll();
 
@@ -497,8 +543,14 @@ int service_main(int argc, char **argv, char **envp)
 
     cmdloop();
 
-    /* never reaches! */
-    return 1;
+    /* LOGOUT executed */
+    prot_flush(imapd_out);
+    snmp_increment(ACTIVE_CONNECTIONS, -1);
+
+    /* cleanup */
+    imapd_reset();
+
+    return 0;
 }
 
 /* called if 'service_init()' was called but not 'service_main()' */
@@ -600,8 +652,6 @@ cmdloop()
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
     char *p;
     const char *err;
-
-    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
 
     prot_printf(imapd_out,
 		"* OK %s Cyrus IMAP4 %s server ready\r\n", config_servername,
@@ -941,7 +991,7 @@ cmdloop()
 			    error_message(IMAP_BYE_LOGOUT));
 		prot_printf(imapd_out, "%s OK %s\r\n", tag.s, 
 			    error_message(IMAP_OK_COMPLETED));
-		shut_down(0);
+		return;
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "List")) {
@@ -1440,8 +1490,9 @@ char *passwd;
 	    (unsigned long) getpid());
     logfile = fopen(buf, "w");
     if (logfile) {
-	prot_setlog(imapd_in, fileno(logfile));
-	prot_setlog(imapd_out, fileno(logfile));
+	imapd_logfd = fileno(logfile);
+	prot_setlog(imapd_in, imapd_logfd);
+	prot_setlog(imapd_out, imapd_logfd);
 	if (config_getswitch("logtimestamps", 0)) {
 	    prot_setlogtime(imapd_in, &imapd_logtime);
 	    prot_setlogtime(imapd_out, &imapd_logtime);
@@ -1597,8 +1648,9 @@ cmd_authenticate(char *tag,char *authtype)
 	    (unsigned long) getpid());
     logfile = fopen(buf, "w");
     if (logfile) {
-	prot_setlog(imapd_in, fileno(logfile));
-	prot_setlog(imapd_out, fileno(logfile));
+	imapd_logfd = fileno(logfile);
+	prot_setlog(imapd_in, imapd_logfd);
+	prot_setlog(imapd_out, imapd_logfd);
 	if (config_getswitch("logtimestamps", 0)) {
 	    prot_setlogtime(imapd_in, &imapd_logtime);
 	    prot_setlogtime(imapd_out, &imapd_logtime);
