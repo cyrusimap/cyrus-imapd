@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.29 2004/04/20 21:37:19 ken3 Exp $
+ * $Id: sieve.y,v 1.30 2004/04/22 14:44:33 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -124,6 +124,7 @@ static int verify_utf8(char *s);
 
 int yyerror(char *msg);
 extern int yylex(void);
+extern void yyrestart(FILE *f);
 
 #define YYERROR_VERBOSE /* i want better error messages! */
 %}
@@ -546,10 +547,9 @@ tests: test                      { $$ = new_testlist($1, NULL); }
 commandlist_t *sieve_parse(sieve_script_t *script, FILE *f)
 {
     commandlist_t *t;
-    extern FILE *yyin;
 
-    yyin = f;
     parse_script = script;
+    yyrestart(f);
     if (yyparse()) {
 	t = NULL;
     } else {
