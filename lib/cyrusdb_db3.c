@@ -153,7 +153,7 @@ static int init(const char *dbdir, int myflags)
     }
 
     dbenv->set_errcall(dbenv, db_err);
-    sprintf(errpfx, "db%d", DB_VERSION_MAJOR);
+    snprintf(errpfx, sizeof(errpfx), "db%d", DB_VERSION_MAJOR);
     dbenv->set_errpfx(dbenv, errpfx);
 
 #if 0
