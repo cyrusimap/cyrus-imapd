@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.42 2003/11/21 18:24:31 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.43 2003/11/25 18:53:26 rjs3 Exp $
 
 AC_DEFUN([SASL_GSSAPI_CHK],[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -37,15 +37,21 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
         ;;
     esac
 
-
     cmu_saved_CPPFLAGS=$CPPFLAGS
 
     if test -d ${gssapi}; then
        CPPFLAGS="$CPPFLAGS -I$gssapi/include"
+# We want to keep -I in our CPPFLAGS, but only if we succeed
+       cmu_saved_CPPFLAGS=$CPPFLAGS
+### I am not sure how useful is this (and whether this is required at all
+### especially when we have to provide two -L flags for new CyberSafe
        LDFLAGS="$LDFLAGS -L$gssapi/lib"
 
        if test "$gss_impl" = "auto" -o "$gss_impl" = "cybersafe"; then
          CPPFLAGS="$CPPFLAGS -D$platform"
+         if test -d "${gssapi}/appsec-sdk/include"; then
+           CPPFLAGS="$CPPFLAGS -I${gssapi}/appsec-sdk/include"
+         fi
        fi
     fi
     AC_CHECK_HEADER(gssapi.h, AC_DEFINE(HAVE_GSSAPI_H,,[Define if you have the gssapi.h header file]), [
@@ -65,11 +71,6 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
   dnl The choice is reflected in GSSAPIBASE_LIBS
 
   AC_CHECK_LIB(resolv,res_search)
-  if test -d ${gssapi}; then 
-     CPPFLAGS="$CPPFLAGS -I$gssapi/include"
-     LDFLAGS="$LDFLAGS -L$gssapi/lib"
-  fi
-
   if test -d ${gssapi}; then
      gssapi_dir="${gssapi}/lib"
      GSSAPIBASE_LIBS="-L$gssapi_dir"
@@ -84,7 +85,6 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
   # If this fails, check a full link against the MIT libraries.
   # If this fails, check a full link against the CyberSafe libraries.
   # If this fails, check a full link against the Solaris 8 and up libgss.
-
 
   if test "$gss_impl" = "auto" -o "$gss_impl" = "heimdal"; then
     gss_failed=0
@@ -106,14 +106,34 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
   if test "$gss_impl" = "auto" -o "$gss_impl" = "cybersafe"; then
 
     cmu_saved_CPPFLAGS=$CPPFLAGS
+    cmu_saved_GSSAPIBASE_LIBS=$GSSAPIBASE_LIBS
+# FIX ME - Note that the libraries are in .../lib/64 for 64bit kernels
+    if test -d "${gssapi}/appsec-rt/lib"; then
+      GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -L${gssapi}/appsec-rt/lib"
+    fi
     CPPFLAGS="$CPPFLAGS -D$platform"
-    gss_failed=0
-
-    AC_CHECK_LIB(gss,gss_unwrap,gss_impl="cybersafe",CPPFLAGS=$cmu_saved_CPPFLAGS;gss_failed=1,$GSSAPIBASE_LIBS -lgss -lcstbk5)
-    if test "$gss_impl" != "auto" -a "$gss_failed" = "1"; then
-      gss_impl="failed"
+    if test -d "${gssapi}/appsec-sdk/include"; then
+      CPPFLAGS="$CPPFLAGS -I${gssapi}/appsec-sdk/include"
     fi
 
+    gss_failed=0
+
+# Check for CyberSafe with two libraries first, than fall back to a single 
+# library (older CyberSafe)
+
+    unset ac_cv_lib_gss_csf_gss_get_X500_name
+    AC_CHECK_LIB(gss,csf_gss_get_X500_name,gss_impl="cybersafe03",[
+      unset ac_cv_lib_gss_csf_gss_get_X500_name;AC_CHECK_LIB(gss,csf_gss_get_X500_name,gss_impl="cybersafe",gss_failed=1,$GSSAPIBASE_LIBS -lgss)],$GSSAPIBASE_LIBS -lgss -lcstbk5)
+
+    if test "$gss_failed" = "1"; then
+# Restore variables
+      GSSAPIBASE_LIBS=$cmu_saved_GSSAPIBASE_LIBS
+      CPPFLAGS=$cmu_saved_CPPFLAGS
+
+      if test "$gss_impl" != "auto"; then
+        gss_impl="failed"
+      fi
+    fi
   fi
 
   if test "$gss_impl" = "auto" -o "$gss_impl" = "seam"; then
@@ -130,8 +150,14 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
   elif test "$gss_impl" = "heimdal"; then
     GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgssapi -lkrb5 -lasn1 -lroken ${LIB_CRYPT} ${LIB_DES} -lcom_err"
     GSSAPIBASE_STATIC_LIBS="$GSSAPIBASE_STATIC_LIBS $gssapi_dir/libgssapi.a $gssapi_dir/libkrb5.a $gssapi_dir/libasn1.a $gssapi_dir/libroken.a $gssapi_dir/libcom_err.a ${LIB_CRYPT}"
+  elif test "$gss_impl" = "cybersafe03"; then
+# Version of CyberSafe with two libraries
+    CPPFLAGS="$CPPFLAGS -D$platform -I${gssapi}/appsec-sdk/include"
+    GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgss -lcstbk5"
+    # there is no static libgss for CyberSafe
+    GSSAPIBASE_STATIC_LIBS=none
   elif test "$gss_impl" = "cybersafe"; then
-    CPPFLAGS="$CPPFLAGS -D$platform"
+    CPPFLAGS="$CPPFLAGS -D$platform -I${gssapi}/appsec-sdk/include"
     GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgss"
     # there is no static libgss for CyberSafe
     GSSAPIBASE_STATIC_LIBS=none
@@ -156,7 +182,7 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
 # Cybersafe defines both GSS_C_NT_HOSTBASED_SERVICE and GSS_C_NT_USER_NAME in gssapi\rfckrb5.h
 #
  if test "$gssapi" != "no"; then
-  if test "$gss_impl" = "cybersafe"; then
+  if test "$gss_impl" = "cybersafe" -o "$gss_impl" = "cybersafe03"; then
    AC_EGREP_CPP(hostbased_service_gss_nt_yes,
     [#include <gssapi/gssapi.h>
      #ifdef GSS_C_NT_HOSTBASED_SERVICE
@@ -168,11 +194,12 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
    AC_EGREP_HEADER(GSS_C_NT_HOSTBASED_SERVICE, gssapi.h,
      AC_DEFINE(HAVE_GSS_C_NT_HOSTBASED_SERVICE,,[Define if your GSSAPI implimentation defines GSS_C_NT_HOSTBASED_SERVICE]))
   elif test "$ac_cv_header_gssapi_gssapi_h"; then
+
    AC_EGREP_HEADER(GSS_C_NT_HOSTBASED_SERVICE, gssapi/gssapi.h,
      AC_DEFINE(HAVE_GSS_C_NT_HOSTBASED_SERVICE,,[Define if your GSSAPI implimentation defines GSS_C_NT_HOSTBASED_SERVICE]))
   fi
 
-  if test "$gss_impl" = "cybersafe"; then
+  if test "$gss_impl" = "cybersafe" -o "$gss_impl" = "cybersafe03"; then
    AC_EGREP_CPP(user_name_yes_gss_nt,
     [#include <gssapi/gssapi.h>
      #ifdef GSS_C_NT_USER_NAME
