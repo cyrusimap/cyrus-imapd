@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.36 2001/11/13 17:33:46 leg Exp $
+ * $Id: lmtpengine.c,v 1.37 2001/11/13 19:59:39 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -113,6 +113,11 @@ struct clientdata {
     char tls_info[250];
 
     sasl_conn_t *conn;
+
+#ifdef HAVE_SSL
+    SSL *tls_conn;
+#endif /* HAVE_SSL */
+    int starttls_done;
 };
 
 /* a simple hash function for sasl mechanisms */
@@ -1055,16 +1060,15 @@ void lmtpmode(struct lmtp_func *func,
 	DIDAUTH = 1
     } authenticated = NOAUTH;	
 
-#ifdef HAVE_SSL
-    static SSL *tls_conn = NULL;
-#endif /* HAVE_SSL */
-    int starttls_done = 0;
-
+    /* setup the clientdata structure */
     cd.pin = pin;
     cd.pout = pout;
+    cd.fd = fd;
     cd.clienthost[0] = '\0';
     cd.lhlo_param[0] = '\0';
     cd.tls_info[0] = '\0';
+    cd.tls_conn = NULL;
+    cd.starttls_done = 0;
 
     max_msgsize = config_getint("maxmessagesize", INT_MAX);
 
@@ -1275,7 +1279,7 @@ void lmtpmode(struct lmtp_func *func,
 				  VARIABLE_LISTEND);
 	      syslog(LOG_NOTICE, "login: %s %s %s%s %s",
 		     cd.clienthost, user, mech,
-		     starttls_done ? "+TLS" : "", "User logged in");
+		     cd.starttls_done ? "+TLS" : "", "User logged in");
 
 	      authenticated += 2;
 	      prot_printf(pout, "235 Authenticated!\r\n");
@@ -1564,7 +1568,7 @@ void lmtpmode(struct lmtp_func *func,
 		   about whether ssf is signed */
 		layerp = (int *) &(external.ssf);
 
-		if (starttls_done == 1) {
+		if (cd.starttls_done == 1) {
 		    prot_printf(pout, "454 4.3.3 %s\r\n", 
 				"Already successfully executed STARTTLS");
 		    continue;
@@ -1575,11 +1579,11 @@ void lmtpmode(struct lmtp_func *func,
 		    continue;
 		}
 
-		r=tls_init_serverengine("lmtp",
-					5,   /* depth to verify */
-					1,   /* can client auth? */
-					0,   /* require client to auth? */
-					1);   /* TLS only? */
+		r = tls_init_serverengine("lmtp",
+					  5,   /* depth to verify */
+					  1,   /* can client auth? */
+					  0,   /* require client to auth? */
+					  1);   /* TLS only? */
 
 		if (r == -1) {
 
@@ -1593,16 +1597,17 @@ void lmtpmode(struct lmtp_func *func,
 		/* must flush our buffers before starting tls */
 		prot_flush(pout);
   
-		r=tls_start_servertls(0, /* read */
-				      1, /* write */
-				      layerp,
-				      &(external.auth_id),
-				      &tls_conn);
+		r = tls_start_servertls(0, /* read */
+					1, /* write */
+					layerp,
+					&(external.auth_id),
+					&(cd.tls_conn));
 
 		/* if error */
-		if (r==-1) {
+		if (r == -1) {
 		    prot_printf(pout, "454 4.3.3 STARTTLS failed\r\n");
-		    syslog(LOG_NOTICE, "[lmtpd] STARTTLS failed: %s", clienthost);
+		    syslog(LOG_NOTICE, "[lmtpd] STARTTLS failed: %s", 
+			   clienthost);
 		    continue;
 		}
 
@@ -1614,13 +1619,13 @@ void lmtpmode(struct lmtp_func *func,
 		}
 
 		/* tell the prot layer about our new layers */
-		prot_settls(pin, tls_conn);
-		prot_settls(pout, tls_conn);
+		prot_settls(pin, cd.tls_conn);
+		prot_settls(pout, cd.tls_conn);
 
 		/* grab TLS info for Received: header */
-		tls_get_info(tls_conn, cd.tls_info, sizeof(cd.tls_info));
+		tls_get_info(cd.tls_conn, cd.tls_info, sizeof(cd.tls_info));
 
-		starttls_done = 1;
+		cd.starttls_done = 1;
 
 		continue;
 	    }
@@ -1652,11 +1657,11 @@ void lmtpmode(struct lmtp_func *func,
     if (cd.conn) sasl_dispose(&cd.conn);
     if (extprops) free(extprops);
 
-    starttls_done = 0;
+    cd.starttls_done = 0;
 #ifdef HAVE_SSL
-    if (tls_conn) {
-	tls_reset_servertls(&tls_conn);
-	tls_conn = NULL;
+    if (cd.tls_conn) {
+	tls_reset_servertls(&cd.tls_conn);
+	cd.tls_conn = NULL;
     }
 #endif
 }
