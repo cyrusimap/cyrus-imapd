@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to sieve and proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.4 2000/07/06 13:59:37 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.5 2000/07/10 20:03:41 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.4 2000/07/06 13:59:37 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.5 2000/07/10 20:03:41 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -473,7 +473,7 @@ int send_rejection(const char *origid,
 		   struct protstream *file)
 {
     FILE *sm;
-    const char *smbuf[3];
+    const char *smbuf[6];
     char buf[8192], *namebuf;
     int i, sm_stat;
     time_t t;
@@ -483,8 +483,11 @@ int send_rejection(const char *origid,
     pid_t sm_pid, p;
 
     smbuf[0] = "sendmail";
-    smbuf[1] = rejto;
-    smbuf[2] = NULL;
+    smbuf[1] = "-f";
+    smbuf[2] = "<>";
+    smbuf[3] = "--";
+    smbuf[4] = rejto;
+    smbuf[5] = NULL;
     sm_pid = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
 	return -1;
@@ -573,7 +576,7 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
 	smbuf[2] = return_path;
     } else {
 	smbuf[1] = "-f";
-	smbuf[2] = POSTMASTER;
+	smbuf[2] = "<>";
     }
     smbuf[3] = "--";
     smbuf[4] = forwardto;
@@ -777,11 +780,12 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     time_t t;
     pid_t sm_pid, p;
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
+    message_data_t *m = (message_data_t *) mc;
     script_data_t *sdata = (script_data_t *) sc;
 
     smbuf[0] = "sendmail";
     smbuf[1] = "-f";
-    smbuf[2] = POSTMASTER;
+    smbuf[2] = "<>";
     smbuf[3] = "--";
     smbuf[4] = src->addr;
     smbuf[5] = NULL;
@@ -822,6 +826,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	    break;
 	}
     fprintf(sm, "Subject: %s\r\n", src->subj);
+    fprintf(sm, "In-Reply-To: %s\r\n", m->id);
     fprintf(sm, "Auto-Submitted: auto-generated (vacation)\r\n");
     if (src->mime) {
 	fprintf(sm, "MIME-Version: 1.0\r\n");
