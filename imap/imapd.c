@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.181 1999/10/13 21:02:06 tmartin Exp $ */
+/* $Id: imapd.c,v 1.182 1999/10/13 21:08:58 tmartin Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -391,8 +391,6 @@ char **envp;
 
     setproctitle_init(argc, argv, envp);
     config_init("imapd");
-
-    mboxlist_open();
 
     signal(SIGPIPE, SIG_IGN);
 
@@ -1551,7 +1549,7 @@ char *name;
 		mboxlist_createmailboxcheck(mailboxname, 0, 0,
 					    imapd_userisadmin,
 					    imapd_userid, imapd_authstate,
-					    (char **)0, (char **)0, NULL) == 0)
+					    (char **)0, (char **)0) == 0)
 	       ? "[TRYCREATE] " : "", error_message(r));
 	goto freeflags;
     }
@@ -2417,7 +2415,7 @@ int usinguid;
 		     mboxlist_createmailboxcheck(mailboxname, 0, 0,
 						 imapd_userisadmin,
 						 imapd_userid, imapd_authstate,
-						 (char **)0, (char **)0, NULL) == 0)
+						 (char **)0, (char **)0) == 0)
 		    ? "[TRYCREATE] " : "", error_message(r));
     }
     else {
