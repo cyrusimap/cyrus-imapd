@@ -626,11 +626,11 @@ int main(int argc, char **argv)
 
   if (result!=IMTEST_OK)
   {
-    printf("Authentication failed\n");
+    printf("Authentication failed.\n");
     exit(1);
   }
 
-  printf("Authentication suceeded!\n");
+  printf("Authentication succeeded.\n");
 
   if (viewfile!=NULL)
   {
