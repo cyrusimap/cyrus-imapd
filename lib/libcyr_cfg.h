@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.h,v 1.8 2005/02/16 20:38:01 shadow Exp $
+ * $Id: libcyr_cfg.h,v 1.9 2005/03/23 19:44:59 shadow Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -106,8 +106,8 @@ enum cyrus_opt {
 
 union cyrus_config_value {
     const char *s; /* string */
-    int i; /* int */
-    int b; /* switch */
+    long i; /* int */
+    long b; /* switch */
 };
 
 struct cyrusopt_s {

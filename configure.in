@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.293 2005/03/07 04:52:42 shadow Exp $
+dnl $Id: configure.in,v 1.294 2005/03/23 19:44:48 shadow Exp $
 dnl
 
 
@@ -102,6 +102,8 @@ AC_C_INLINE
 
 CMU_C___ATTRIBUTE__
 CMU_C_FPIC
+
+AC_CHECK_SIZEOF(long)
 
 dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
@@ -1012,7 +1014,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.293 2005/03/07 04:52:42 shadow Exp $ */
+/* $Id: configure.in,v 1.294 2005/03/23 19:44:48 shadow Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
