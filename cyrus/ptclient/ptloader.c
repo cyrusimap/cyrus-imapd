@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.25.4.3 2002/11/14 19:36:28 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.25.4.4 2002/11/14 20:15:50 rjs3 Exp $";
 
 #include <config.h>
 
@@ -62,8 +62,6 @@ static char rcsid[] __attribute__((unused)) =
 #include <rx/rxkad.h>
 #include <afs/auth.h>
 #include <com_err.h>
-
-//#include <db.h>
 
 #include "cyrusdb.h"
 #include "exitcodes.h"
@@ -95,7 +93,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     char fnamebuf[1024];
     extern char *optarg;
 
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.25.4.3 2002/11/14 19:36:28 rjs3 Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.25.4.4 2002/11/14 20:15:50 rjs3 Exp $");
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {
@@ -278,4 +276,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25.4.3 2002/11/14 19:36:28 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25.4.4 2002/11/14 20:15:50 rjs3 Exp $ */
