@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.15 2002/02/22 20:56:20 ken3 Exp $
+ * $Id: sieve.y,v 1.16 2002/02/22 21:33:45 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -103,11 +103,11 @@ static void free_ntags(struct ntags *n);
 static struct dtags *new_dtags(void);
 static void free_dtags(struct dtags *d);
 
+static int verify_stringlist(stringlist_t *sl, int (*verify)(char *));
 static int verify_mailbox(char *s);
 static int verify_address(char *s);
-static int verify_addresses(stringlist_t *sl);
-static int verify_headers(stringlist_t *sl);
-static int verify_flags(stringlist_t *sl);
+static int verify_header(char *s);
+static int verify_flag(char *s);
 #ifdef ENABLE_REGEX
 static regex_t *verify_regex(char *s, int cflags);
 static patternlist_t *verify_regexs(stringlist_t *sl, char *comp);
@@ -222,7 +222,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     yyerror("imapflags not required");
                                     YYERROR;
                                    }
-                                  if (!verify_flags($2)) {
+                                  if (!verify_stringlist($2, verify_flag)) {
                                     YYERROR; /* vf should call yyerror() */
                                   }
                                   $$ = new_command(SETFLAG);
@@ -231,7 +231,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     yyerror("imapflags not required");
                                     YYERROR;
                                     }
-                                  if (!verify_flags($2)) {
+                                  if (!verify_stringlist($2, verify_flag)) {
                                     YYERROR; /* vf should call yyerror() */
                                   }
                                   $$ = new_command(ADDFLAG);
@@ -240,7 +240,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     yyerror("imapflags not required");
                                     YYERROR;
                                     }
-                                  if (!verify_flags($2)) {
+                                  if (!verify_stringlist($2, verify_flag)) {
                                     YYERROR; /* vf should call yyerror() */
                                   }
                                   $$ = new_command(REMOVEFLAG);
@@ -325,7 +325,8 @@ vtags: /* empty */		 { $$ = new_vtags(); }
 	| vtags ADDRESSES stringlist { if ($$->addresses != NULL) { 
 					yyerror("duplicate :addresses"); 
 					YYERROR;
-				       } else if (!verify_addresses($3)) {
+				       } else if (!verify_stringlist($3,
+							verify_address)) {
 					  YYERROR;
 				       } else {
 					 $$->addresses = $3; } }
@@ -360,7 +361,7 @@ test: ANYOF testlist		 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 	| STRUE			 { $$ = new_test(STRUE); }
 	| HEADER htags stringlist stringlist
 				 { patternlist_t *pl;
-                                   if (!verify_headers($3)) {
+                                   if (!verify_stringlist($3, verify_header)) {
                                      YYERROR; /* vh should call yyerror() */
                                    }
 
@@ -378,7 +379,7 @@ test: ANYOF testlist		 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 				   if ($$ == NULL) { YYERROR; } }
 	| addrorenv aetags stringlist stringlist
 				 { patternlist_t *pl;
-                                   if (!verify_headers($3)) {
+                                   if (!verify_stringlist($3, verify_header)) {
                                      YYERROR; /* vh should call yyerror() */
                                    }
 
@@ -736,6 +737,12 @@ static void free_dtags(struct dtags *d)
     free(d);
 }
 
+static int verify_stringlist(stringlist_t *sl, int (*verify)(char *))
+{
+    for (; sl != NULL && verify(sl->s); sl = sl->next) ;
+    return (sl == NULL);
+}
+
 char *addrptr;		/* pointer to address string for address lexer */
 char addrerr[500];	/* buffer for address parser error messages */
 
@@ -751,12 +758,6 @@ static int verify_address(char *s)
 	return 0;
     }
     return 1;
-}
-
-static int verify_addresses(stringlist_t *sl)
-{
-    for (; sl != NULL && verify_address(sl->s); sl = sl->next) ;
-    return (sl == NULL);
 }
 
 static int verify_mailbox(char *s __attribute__((unused)))
@@ -781,12 +782,6 @@ static int verify_header(char *hdr)
     return 1;
 }
  
-static int verify_headers(stringlist_t *sl)
-{
-    for (; sl != NULL && verify_header(sl->s); sl = sl->next) ;
-    return (sl == NULL);
-}
-
 static int verify_flag(char *f)
 {
     char errbuf[100];
@@ -810,13 +805,6 @@ static int verify_flag(char *f)
     return 1;
 }
  
-static int verify_flags(stringlist_t *sl)
-{
-    for (; sl != NULL && verify_flag(sl->s); sl = sl->next) ;
-    return (sl == NULL);
-}
-
-
 #ifdef ENABLE_REGEX
 static regex_t *verify_regex(char *s, int cflags)
 {
