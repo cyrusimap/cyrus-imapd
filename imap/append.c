@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.67 2000/04/06 15:14:29 leg Exp $
+ * $Id: append.c,v 1.68 2000/04/11 03:35:02 leg Exp $
  *
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -149,7 +149,7 @@ int append_commit(struct appendstate *as, int *uidvalidity, int *start,
 {
     int r = 0;
     
-    if (as->s == APPEND_DONE) return;
+    if (as->s == APPEND_DONE) return 0;
     as->s = APPEND_DONE;
 
     if (start) *start = as->m.last_uid + 1;
@@ -226,7 +226,7 @@ int append_abort(struct appendstate *as)
     int r = 0;
     int uid;
 
-    if (as->s == APPEND_DONE) return;
+    if (as->s == APPEND_DONE) return 0;
     as->s = APPEND_DONE;
 
     /* unlink message files that were created */
@@ -611,7 +611,6 @@ int append_copy(struct mailbox *mailbox,
     FILE *destfile;
     int r, n;
     int flag, userflag, emptyflag;
-    int seenbegin;
     
     assert(append_mailbox->format == MAILBOX_FORMAT_NORMAL);
 
