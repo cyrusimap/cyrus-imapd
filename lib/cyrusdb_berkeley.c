@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.4 2003/12/15 16:04:34 ken3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.5 2004/02/26 18:03:07 ken3 Exp $ */
 
 #include <config.h>
 
@@ -53,6 +53,7 @@
 
 #include "cyrusdb.h"
 #include "exitcodes.h"
+#include "libcyr_cfg.h"
 #include "xmalloc.h"
 
 extern void fatal(const char *, int);
@@ -72,6 +73,8 @@ extern void fatal(const char *, int);
  */
 
 #define CONFIG_DEADLOCK_DETECTION DB_LOCK_YOUNGEST
+#define MIN_CACHESIZE 20	/* 20KB per Sleepycat docs */
+#define MAX_CACHESIZE 4194303	/* UINT32_MAX / 1024 */
 
 /* --- cut here --- */
 
@@ -113,6 +116,7 @@ static int init(const char *dbdir, int myflags)
     int maj, min, patch;
     char *vstr;
     static char errpfx[10]; /* needs to be static; bdb doesn't copy */
+    u_int32_t cachesize;
 
     if (dbinit++) return 0;
 
@@ -162,15 +166,24 @@ static int init(const char *dbdir, int myflags)
     snprintf(errpfx, sizeof(errpfx), "db%d", DB_VERSION_MAJOR);
     dbenv->set_errpfx(dbenv, errpfx);
 
-#if 0
-    /* XXX should make this value runtime configurable */
-    if ((r = dbenv->set_cachesize(dbenv, 0, 64 * 1024, 0)) != 0) {
+    cachesize = libcyrus_config_getint(CYRUSOPT_BERKELEY_CACHESIZE);
+    /* do bounds checking */
+    if (cachesize < MIN_CACHESIZE) {
+	cachesize = MIN_CACHESIZE;
+	syslog(LOG_ERR, "DBERROR: cachesize too small, changed to %uKB",
+	       MIN_CACHESIZE);
+    }
+    if (cachesize > MAX_CACHESIZE) {
+	cachesize = MAX_CACHESIZE;
+	syslog(LOG_ERR, "DBERROR: cachesize too large, changed to %uKB",
+	       MAX_CACHESIZE);
+    }
+    if ((r = dbenv->set_cachesize(dbenv, 0, cachesize * 1024, 0)) != 0) {
 	dbenv->err(dbenv, r, "set_cachesize");
 	dbenv->close(dbenv, 0);
 	syslog(LOG_ERR, "DBERROR: set_cachesize(): %s", db_strerror(r));
 	return CYRUSDB_IOERROR;
     }
-#endif
 
     /* what directory are we in? */
  retry:

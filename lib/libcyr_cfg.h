@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.h,v 1.5 2004/02/24 23:11:37 rjs3 Exp $
+ * $Id: libcyr_cfg.h,v 1.6 2004/02/26 18:03:07 ken3 Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -91,6 +91,8 @@ enum cyrus_opt {
     CYRUSOPT_PTLOADER_SOCK,
     /* Virtual Domains (OFF) */
     CYRUSOPT_VIRTDOMAINS,
+    /* BDB cache size (512KB) */
+    CYRUSOPT_BERKELEY_CACHESIZE,
 
     CYRUSOPT_LAST
     
