@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.76 2001/10/02 21:08:11 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.77 2001/11/19 21:32:44 leg Exp $ */
 
 #undef PROXY_IDLE
 
@@ -465,7 +465,7 @@ static int pipe_command(struct backend *s, int optimistic_literal)
 		    /* but for now we cheat */
 		    prot_write(proxyd_out, buf, strlen(buf));
 		    if (buf[0] != '+' && buf[1] != ' ') {
-			char *p = strchr(buf, ' ');
+			/* char *p = strchr(buf, ' '); */
 			/* strncpy(s->last_result, p + 1, LAST_RESULT_LEN);*/
 
 			/* stop sending command now */
@@ -1898,7 +1898,7 @@ void cmd_login(char *tag, char *user, char *passwd)
     char buf[MAX_MAILBOX_PATH];
     char *p;
     int plaintextloginpause;
-    int result, r;
+    int r;
 
     canon_user = auth_canonifyid(user);
 
@@ -1936,13 +1936,13 @@ void cmd_login(char *tag, char *user, char *passwd)
 	    return;
 	}
     }
-    else if ((result=sasl_checkpass(proxyd_saslconn,
-				    canon_user,
-				    strlen(canon_user),
-				    passwd,
-				    strlen(passwd),
-				    (const char **) &reply))!=SASL_OK) {
-	const char *errorstring = sasl_errstring(result, NULL, NULL);
+    else if ((r = sasl_checkpass(proxyd_saslconn,
+				 canon_user,
+				 strlen(canon_user),
+				 passwd,
+				 strlen(passwd),
+				 (const char **) &reply))!=SASL_OK) {
+	const char *errorstring = sasl_errstring(r, NULL, NULL);
 	if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   proxyd_clienthost, canon_user, reply);
@@ -1996,8 +1996,8 @@ void cmd_login(char *tag, char *user, char *passwd)
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&proxyd_namespace, proxyd_userisadmin)) != 0) {
-	syslog(LOG_ERR, error_message(result));
-	fatal(error_message(result), EC_CONFIG);
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
     }
 
     return;
@@ -2350,11 +2350,11 @@ void id_freeparamlist(struct idparamlist *l)
  */
 void cmd_idle(char *tag)
 {
+#ifdef PROXY_IDLE
     static int idle_period = -1;
     int c;
     static struct buf arg;
 
-#ifdef PROXY_IDLE
     /* get polling period */
     if (idle_period == -1) {
       idle_period = config_getint("imapidlepoll", 60);
@@ -2438,7 +2438,6 @@ char idle_nomailbox(char *tag, int idle_period, struct buf *arg)
 struct prot_waitevent *idle_getresp(struct protstream *s,
 				    struct prot_waitevent *ev, void *rock)
 {
-    int idle_period = *((int *) rock);
     char buf[2048];
 
     prot_NONBLOCK(backend_current->in);
@@ -2502,7 +2501,6 @@ char idle_passthrough(char *tag, int idle_period, struct buf *arg)
 static struct prot_waitevent *idle_poll(struct protstream *s,
 				 struct prot_waitevent *ev, void *rock)
 {
-    int idle_period = *((int *) rock);
     char mytag[128];
 	
     proxyd_gentag(mytag);

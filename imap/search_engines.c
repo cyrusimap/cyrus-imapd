@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: search_engines.c,v 1.2 2001/09/30 12:59:03 ken3 Exp $
+ * $Id: search_engines.c,v 1.3 2001/11/19 21:32:45 leg Exp $
  */
 
 #include <config.h>
@@ -48,6 +48,10 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <syslog.h>
+#include <string.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 
 #include "imapd.h"
 #include "xmalloc.h"

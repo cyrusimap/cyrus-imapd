@@ -42,6 +42,7 @@
 #include <config.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
@@ -71,10 +72,10 @@
 
 #include <db.h>
 
+#include "xmalloc.h"
 #include "imap_err.h"
 #include "imapconf.h"
 #include "exitcodes.h"
-#include "xmalloc.h"
 #include "util.h"
 #include "cyrusdb.h"
 
@@ -234,7 +235,6 @@ static int prune_cb(void *rock, const char *id, int idlen,
 
 int duplicate_prune(int days)
 {
-    int r;
     struct prunerock prock;
 
     if (days < 0) fatal("must specify positive number of days", EC_USAGE);
@@ -304,7 +304,7 @@ static int dump_cb(void *rock,
 	freeme = NULL;
     }
 
-    fprintf(drock->f, "id: %-40s\tto: %-20s\tat: %d\n", id, to, mark);
+    fprintf(drock->f, "id: %-40s\tto: %-20s\tat: %ld\n", id, to, (long) mark);
 
     if (freeme) free(freeme);
 

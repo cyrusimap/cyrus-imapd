@@ -38,7 +38,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_poll.c,v 1.4 2001/10/02 21:08:10 ken3 Exp $ */
+/* $Id: idle_poll.c,v 1.5 2001/11/19 21:32:44 leg Exp $ */
+
+#include <config.h>
 
 #include <syslog.h>
 #include <time.h>

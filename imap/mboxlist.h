@@ -41,7 +41,7 @@
  *
 
  * 
- * $Id: mboxlist.h,v 1.15 2001/08/16 20:52:07 ken3 Exp $
+ * $Id: mboxlist.h,v 1.16 2001/11/19 21:32:44 leg Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -54,8 +54,13 @@
 #include "mboxname.h"
 
 /* --- cut here --- */
+#ifndef CONFIG_DB_SUBS
 #define CONFIG_DB_SUBS (&cyrusdb_flat)
+#endif
+
+#ifndef CONFIG_DB_MBOX
 #define CONFIG_DB_MBOX (&cyrusdb_db3)
+#endif
 /* -- cut here -- */
 extern struct db *mbdb;
 
