@@ -40,7 +40,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.1.4.1 2002/07/10 20:45:05 rjs3 Exp $
+.\" $Id: imapoptions,v 1.1.4.2 2002/07/11 15:39:52 rjs3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -167,7 +167,7 @@ are listed with ``<none>''.
 /* Force a particuar list of SASL mechanisms to be used when authenticating
    to the backend server hostname (where hostname is the short hostname of
    the server in question). If it is not specified it will query the server
-   for available mechanisms and pick one to use. - Cyrus Murder
+   for available mechanisms and pick one to use. - Cyrus Murder */
 
 # { "hostname_password", NULL, STRING }
 /* The password to use for authentication to the backend server hostname
@@ -268,8 +268,6 @@ are listed with ``<none>''.
    partition named in the \fBdefaultpartition\fR option, is required.
    For example, if the value of the \fBdefaultpartion\fR option is
    \fBdefault\fR, then the \fBpartition-default\fR field is required. */
-
-# { "partition-news", NULL, STRING }
 
 { "plaintextloginpause", 0, INT }
 /* Number of seconds to pause after a successful plaintext login.  For
