@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.18.2.2 2004/02/12 05:32:35 ken3 Exp $
+ * $Id: lmtpengine.h,v 1.18.2.3 2004/02/19 17:53:42 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -133,6 +133,8 @@ struct lmtp_txn {
     const char *auth;
     int isdotstuffed;		/* 1 if 'data' is a dotstuffed stream
                                    (including end-of-file \r\n.\r\n) */
+    int tempfail_unknown_mailbox; /* 1 if '550 5.1.1 unknown mailbox'
+				   * should be masked as a temporary failure */
     struct protstream *data;
     int rcpt_num;
     struct lmtp_rcpt {

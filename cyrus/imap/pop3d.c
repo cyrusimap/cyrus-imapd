@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.7 2004/02/19 01:42:45 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.8 2004/02/19 17:53:42 ken3 Exp $
  */
 #include <config.h>
 
@@ -341,6 +341,7 @@ int service_main(int argc __attribute__((unused)),
     socklen_t salen;
     char hbuf[NI_MAXHOST];
     char localip[60], remoteip[60];
+    int niflags;
     int timeout;
     sasl_security_properties_t *secprops=NULL;
 
@@ -360,11 +361,15 @@ int service_main(int argc __attribute__((unused)),
 	} else {
 	    popd_clienthost[0] = '\0';
 	}
-	getnameinfo((struct sockaddr *)&popd_remoteaddr, salen, hbuf,
-		    sizeof(hbuf), NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
-	strlcat(popd_clienthost, "[", sizeof(popd_clienthost));
-	strlcat(popd_clienthost, hbuf, sizeof(popd_clienthost));
-	strlcat(popd_clienthost, "]", sizeof(popd_clienthost));
+
+	niflags = NI_NUMERICHOST |
+		(popd_remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
+	if (getnameinfo((struct sockaddr *)&popd_remoteaddr, salen, hbuf,
+			sizeof(hbuf), NULL, 0, niflags) == 0) {
+	    strlcat(popd_clienthost, "[", sizeof(popd_clienthost));
+	    strlcat(popd_clienthost, hbuf, sizeof(popd_clienthost));
+	    strlcat(popd_clienthost, "]", sizeof(popd_clienthost));
+	}
 	salen = sizeof(popd_localaddr);
 	if (getsockname(0, (struct sockaddr *)&popd_localaddr, &salen) == 0) {
 	    popd_haveaddr = 1;

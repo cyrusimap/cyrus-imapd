@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.93.2.8 2004/02/19 16:59:19 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.93.2.9 2004/02/19 17:53:41 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1825,7 +1825,15 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
 	} else if (TEMPFAIL(code)) {
 	    txn->rcpt[j].result = RCPT_TEMPFAIL;
 	} else if (PERMFAIL(code)) {
-	    txn->rcpt[j].result = RCPT_PERMFAIL;
+	    if(txn->tempfail_unknown_mailbox &&
+	       txn->rcpt[j].r == IMAP_MAILBOX_NONEXISTENT) {
+		/* If there is a nonexistant error, we have been told
+		 * to mask it (e.g. proxy got out-of-date mupdate data) */
+		txn->rcpt[j].result = RCPT_TEMPFAIL;
+		txn->rcpt[j].r = IMAP_AGAIN;
+	    } else {
+		txn->rcpt[j].result = RCPT_PERMFAIL;
+	    }
 	} else {
 	    /* yikes?!? */
 	    code = 400;
