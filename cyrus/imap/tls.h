@@ -62,8 +62,8 @@ int tls_init_serverengine(int verifydepth, /* depth to verify */
 int tls_start_servertls(int readfd, int writefd, 
 			int *layerbits, char **authid, SSL **ret);
 
-#endif /* CYRUSTLS_H */
+int tls_free(SSL **conn);
 
-
+#endif /* TLS_H */
 
 #endif /* HAVE_SSL */

@@ -627,4 +627,11 @@ int tls_start_servertls(int readfd, int writefd,
     return r;
 }
 
+int tls_free(SSL **conn)
+{
+    if (*conn) {
+	SSL_free(*conn);
+    }
+}
+
 #endif /* HAVE_SSL */
