@@ -170,7 +170,7 @@ void cyr_connect(void)
     }
 
     /* We know we're talking to a Cyrus IMAP server */
-    imclient_setflags(imclient, IMCLIENT_CONN_NOWAITLITERAL);
+    imclient_setflags(imclient, IMCLIENT_CONN_NONSYNCLITERAL);
 } /* cyr_connect */
 
 /* IMAP command completion callback */
