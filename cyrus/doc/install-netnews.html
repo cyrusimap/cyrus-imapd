@@ -1,4 +1,4 @@
-<!-- $Id: install-netnews.html,v 1.1.2.1 2003/03/01 20:09:50 ken3 Exp $ -->
+<!-- $Id: install-netnews.html,v 1.1.2.2 2003/03/01 22:58:12 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus and Netnews
@@ -24,16 +24,115 @@ your Cyrus IMAP server.  If you have not already done so, please refer
 to the rest of the documentation.  This document also assumes that you
 are familiar with Usenet and shared IMAP mailboxes.
 
-<p>There is a <A HREF=netnews.png>diagram</A> that shows the interactions of
+<p>There is a <a href=netnews.png>diagram</a> that shows the interactions of
 the various components of the NNTP support in Cyrus which may be
 helpful in understanding the "big picture".<p>
 
+<h2>Installation</h2>
+You will need to build Cyrus IMAPd with the <tt>--enable-nntp</tt> configure
+option.  This builds nntpd and the associated utilities.
+
+<h3>Requirements</h3>
+Obviously you must have a newsfeed from your ISP or Usenet provider.
+
 <h2>Configuration</h2>
+The first thing that must be done is to decide where your newsgroup
+mailboxes will reside, either at the toplevel of your hierarchy (eg,
+<tt>comp.mail.imap</tt>) or rooted elsewhere (eg,
+<tt>netnews.comp.mail.imap</tt>).  If your newsgroup mailboxes are not
+at the toplevel of your hierarchy, then you must specify the parent
+with the <tt>newsprefix</tt> in <tt>imapd.conf</tt>.  Using the
+example above, <tt>newsprefix</tt> would be set to <tt>netnews</tt>.
 
-<h3>Receiving Usenet</h3>
+<p>You must create a mailbox for each newsgroup that you would like to
+receive/export before the newsgroups can be used.  If some groups are
+private, be sure to set the ACLs accordingly.  The <tt>tools/???</tt>
+script can be used to help facilitate mass creation of newsgroup
+mailboxes.
 
-<h3>Posting articles</h3>
+<h3>Receiving articles</h3>
+In order to receive usenet articles, you must make sure that the Cyrus
+<tt>nntpd</tt> service is enabled in <tt>cyrus.conf</tt>.  The
+<tt>master/conf/normal.conf</tt> and <tt>master/conf/prefork.conf</tt>
+sample configs both include entries for <tt>nntpd</tt> (disabled by
+default).
+
+<p>Whenever <tt>nntpd</tt> receives an article, it automatically adds a
+To: header with email addresses corresponding to the newsgroups
+that the article is destined for (eg, post+comp.mail.imap).  The
+presence of this header makes it easier for email clients to
+post/reply to the newsgroup.  The "pseudo" user that is used when
+constructing the email address can be specified with the
+<tt>newspostuser</tt> option in <tt>imapd.conf</tt> (default = "post").
+
+<h4>Push (traditional) feeds</h4>
+If your usenet peer will be pushing articles to you, no further
+configuration is necessary, beyond letting your peer access your Cyrus
+server on port 119 (nntp).
+
+<h4>Pull (suck) feeds</h4>
+If you prefer to pull articles from your peer (and your provider
+allows it), then you can use the <tt>fetchnews</tt> utility which will
+use the NNTP NEWNEWS command to retrieve articles from your peer and
+feed them to your Cyrus server. You will probably want to configure
+<tt>fetchnews</tt> as an EVENT in <tt>cyrus.conf</tt> to be called
+periodically (eg, once an hour, every 15 minutes, etc).
+
+<h4>imapfeed</h4>
+Alternatively, if you already have an INN v2.3 server in-house you can
+use the included <tt>imapfeed</tt> utility (written by the authors of
+Cyrus) to feed articles to your Cyrus server via LMTP.  Consult the
+INN documentation for further details.
+
+<h4>Control Messages</h4>
+TODO: Discuss ACLs and PGP verification.
+
+<h3>Reading/Posting articles</h3>
+In order to have articles posted by your local users propagate to the
+outside world, you must specify the name of your usenet peer with the
+<tt>newspeer</tt> option in <tt>imapd.conf</tt>.  This is the host
+that <tt>nntpd</tt> contacts to feed outgoing articles.
+
+<h4>News clients</h4>
+
+If anonymous logins are disabled (default) in <tt>imapd.conf</tt>,
+then your news clients will have to be configured to login with a
+username and password, otherwise they will not be allowed to post.
+Furthermore, if plaintext logins are disabled in <tt>imapd.conf</tt>,
+then you might have to configure your news clients to use SSL/TLS and
+enable the <tt>nntps</tt> service in <tt>cyrus.conf</tt>.
+
+<p>If you want to allow your news clients to use the NNTP NEWNEWS
+command, you will have to enable the <tt>allownewnews</tt> option in
+<tt>imapd.conf</tt>.
+
+<h4>Email clients</h4>
+If you are exporting Usenet via IMAP, then your users will reply to
+and post articles via SMTP.  In order for these messages to be fed
+into your server (and subsequently to the outside world) you need to
+use an email to news gateway, such as <a
+href=http://www.ossp.org/pkg/tool/lmtp2nntp/>lmtp2nntp</a>.  You need
+to configure your MTA (Sendmail, Postfix, etc) so that
+<tt>lmtp2nntp</tt> is used as the local mailer whenever it receives a
+news article.  A simple rule for doing this in Sendmail is shown
+below:
+
+<pre>
+<kdb># mail addressed to post+ goes to lmtp2nntp@localhost
+LOCAL_RULE_0
+Rpost + $+ < @ $=w . >		$#lmtp2nntp $@ localhost $: $1
+</kbd></pre>
+
+<p>For other configurations, consult the <tt>lmtp2nntp</tt> and
+documentation and your MTA documentation.
+
+<p><b>NOTE:</b> If anonymous logins are disabled (default) in
+<tt>imapd.conf</tt>, then you should configure <tt>lmtp2nntp</tt> to
+use its "feed" operation mode.
+
+<h3>Expiring articles</h3>
+To expire usenet articles on a regular basis, you should use the <tt>expirenews</tt> utility.  This utility both expunges articles from their mailboxes and prunes message-ids from <tt>netnews.db</tt>.  The <tt>master/conf/normal.conf</tt> and <tt>master/conf/prefork.conf</tt> sample configs both include EVENT entries for <tt>expirenews</tt> (disabled by default).
 
 <P><HR>
-last modified: $Date: 2003/03/01 20:09:50 $
+last modified: $Date: 2003/03/01 22:58:12 $
 </BODY></HTML>
