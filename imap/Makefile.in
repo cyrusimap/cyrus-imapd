@@ -72,6 +72,7 @@ all: $(PROGS) $(SUIDPROGS)
 install:
 	$(INSTALL) -s -m 755 $(PROGS) $(DESTDIR)$(cyrus_prefix)/bin
 	$(INSTALL) -s -m 4750 $(SUIDPROGS) $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -m 755 feedcyrus $(DESTDIR)$(cyrus_prefix)/bin
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
