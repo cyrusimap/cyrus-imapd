@@ -1,0 +1,47 @@
+<HTML><HEAD>
+<TITLE>Changes to the Cyrus IMAP Server</TITLE>
+</HEAD><BODY>
+<H1>                Changes to the Cyrus IMAP Server</H1>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.0beta</h2>
+<p>
+<ul> 
+<li>Improved <a href="install.html">installation</a> document.
+<li>New "<a href="cyradm.1.html"><tt>cyradm</tt></a>" administrative client.
+<li>Changed the syslog facility from "<a href="install.html#syslog"><tt>local4</tt></a>" to "<tt>local6</tt>".
+<li>Removed the <tt>renounce setuid</tt> check in "<a href="install.html#deliver"><tt>deliver</tt>"</a>.  The "<tt>deliver</tt>" program
+  must now be <b>non</b>-executable by <tt>other</tt>.
+<li>Fixed a typo in the parsing of <tt>SEARCH DELETED</tt>.
+  (This bug constantly got tripped by newer C-clients.)
+<li>Redesigned the implementation of <tt>SEARCH CHARSET</tt>.<br>
+  Sites that wish to search for non-ASCII characters
+  in the headers of existing mailboxes must run <tt>reconstruct</tt>
+  on all their mailboxes after upgrading to this version.
+<li>Added AUTH and KPOP support to the POP3 server.
+<li>Added search support for the ISO-2022-JP character set.
+<li>Replaced the search engine with a partial Boyer-Moore algorithm.
+<li>Special-case optimized searching US-ASCII text.
+<li>Fixed a bug which caused the message parser to spin-loop on a
+  particular degenerate invalid-MIME case.
+<li>Fixed a performance bug in the message parser.
+<li>Tracked last-minute changes to the IMAP4 protocol.
+<li>Fixed a bug in <tt>UNSUBSCRIBE</tt> which caused too many subscriptions to
+  be removed.
+<li>Added a bunch more "<a href="install.html#configure"><tt>configure</tt></a>" options.
+<li>Ported to HPUX.
+<li>Fixed a bug in the <tt>LIST/LSUB \Noselect</tt> code.
+<li>Fixed bug in the globbing code which caused the "<tt>*%</tt>" pattern to work
+  incorrectly.
+<li>Client-side Kerberos support is now conditionalized on
+  <tt>HAVE_ACTE_KRB</tt>, which is set by configure.
+<li>Fixed some invalid buffer-alignment assumptions in the Kerberos code.
+<li>Made the lexers compatible with flex.  Configure now looks for and
+  prefers to use <tt>flex</tt> and <tt>bison</tt>/<tt>byacc</tt>.
+<li>Made the IMAP server check for the existence of the mailboxes file
+  upon startup, in order to give a more informative error message for
+  this common configuration error.
+<li>Fixed other minor bugs.
+</ul>
+<P><HR><P>
+<A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
+</BODY></HTML>
