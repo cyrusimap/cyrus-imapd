@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.2 2000/06/04 22:47:32 leg Exp $
+ * $Id: lmtpengine.h,v 1.3 2000/06/16 02:37:15 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -77,7 +77,7 @@ int msg_getnumrcpt(message_data_t *m);
 /* return delivery destination of recipient 'rcpt_num' */
 const char *msg_getrcpt(message_data_t *m, int rcpt_num);
 
-/* return entire receipient of 'rcpt_num' */
+/* return entire recipient of 'rcpt_num' */
 const char *msg_getrcptall(message_data_t *m, int rcpt_num);
 
 /* set a recipient status; 'r' should be an IMAP error code that will be
@@ -106,20 +106,21 @@ void lmtpmode(struct lmtp_func *func,
 struct lmtp_conn;
 
 struct lmtp_txn {
-    char *from;
-    char *auth;
+    const char *from;
+    const char *auth;
     int isdotstuffed;		/* 1 if 'data' is a dotstuffed stream
                                    (including end-of-file \r\n.\r\n) */
     struct protstream *data;
     int rcpt_num;
     struct lmtp_rcpt {
 	char *addr;
-	enum {			/* this should be more detailed, 
-				   or the 3 digit (+) code */
+	enum {
 	    RCPT_GOOD,
 	    RCPT_TEMPFAIL,
 	    RCPT_PERMFAIL
 	} result;
+	int r;			/* if non-zero, 
+				   a more descriptive error code */
     } rcpt[1];
 };
 
@@ -136,6 +137,9 @@ int lmtp_connect(const char *host,
    something about the protocol/connection state) 'rcpt[n].result' is
    guaranteed to be filled in. */
 int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn);
+
+/* send a NOOP to the conn to verify it's still ok */
+int lmtp_verify_conn(struct lmtp_conn *conn);
 
 /* disconnect from lmtp server */
 int lmtp_disconnect(struct lmtp_conn *conn);
