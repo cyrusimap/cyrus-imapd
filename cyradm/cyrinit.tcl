@@ -71,6 +71,9 @@ set tcl_prompt1 {
 
 # createmailbox command
 #
+set cyr_help(createmailbox) "createmailbox, cm\tcreate a mailbox"
+set cyr_alias(cm) createmailbox
+set cyr_usage(createmailbox) {MAILBOX [PARTITION]}
 set body {
     global cyr_conn
     global cyr_mailbox
@@ -88,6 +91,9 @@ proc cm {mailbox {partition {}}} $body
 
 # deletemailbox command
 #
+set cyr_help(deletemailbox) "deletemailbox, dm\tdelete a mailbox"
+set cyr_alias(dm) deletemailbox
+set cyr_usage(deletemailbox) {MAILBOX [HOSTNAME]}
 set body {
     global cyr_conn
     global cyr_mailbox
@@ -105,6 +111,9 @@ proc dm {mailbox {hostname {}}} $body
 
 # renamemailbox command
 #
+set cyr_help(renamemailbox) "renamemailbox, renm\trename a mailbox"
+set cyr_alias(renm) renamemailbox
+set cyr_usage(renamemailbox) {MAILBOX NEWMAILBOX [PARTITION]}
 set body {
     global cyr_conn
     global cyr_mailbox
@@ -122,6 +131,9 @@ proc renm {mailbox newmailbox {partition {}}} $body
 
 # listmailbox command
 #
+set cyr_help(listmailbox) "listmailbox, lm\t\tlist mailboxes"
+set cyr_alias(lm) listmailbox
+set cyr_usage(listmailbox) {[-s[ubscribed]] PATTERN [REFERENCE]}
 set body {
     global cyr_conn
     set i 0
@@ -194,6 +206,9 @@ proc lm {args} $body
 
 # setaclmailbox command
 #
+set cyr_help(setaclmailbox) "setaclmailbox, sam\tset an ACL on a mailbox"
+set cyr_alias(sam) setaclmailbox
+set cyr_usage(setaclmailbox) {MAILBOX IDENTIFIER RIGHTS [IDENTIFIER RIGHTS]...}
 set body {
     global cyr_conn
     global cyr_mailbox
@@ -217,6 +232,9 @@ proc sam {args} $body
 
 # deleteaclmailbox command
 #
+set cyr_help(deleteaclmailbox) "deleteaclmailbox, dam\tdelete an ACL on a mailbox"
+set cyr_alias(dam) deleteaclmailbox
+set cyr_usage(deleteaclmailbox) {MAILBOX IDENTIFIER [IDENTIFIER]...}
 set body {
     global cyr_conn
     global cyr_mailbox
@@ -239,6 +257,9 @@ proc dam {args} $body
 
 # listaclmailbox command
 #
+set cyr_help(listaclmailbox) "listaclmailbox, lam\tlist the ACL on a mailbox"
+set cyr_alias(lam) listaclmailbox
+set cyr_usage(listaclmailbox) {MAILBOX}
 set body {
     global cyr_conn
     global cyr_mailbox
@@ -259,6 +280,9 @@ proc lam {mailbox} $body
     
 # setquota command
 #
+set cyr_help(setquota) "setquota, sq\t\tset quota limits"
+set cyr_alias(sq) setquota
+set cyr_usage(setquota) {ROOT [none|NUMBER|[RESOURCE NUMBER]...]}
 set body {
     global cyr_conn
     global cyr_mailbox
@@ -288,6 +312,9 @@ proc sq {args} $body
     
 # listquota command
 #
+set cyr_help(listquota) "listquota, lq\t\tlist quota on root"
+set cyr_alias(lq) listquota
+set cyr_usage(listquota) {ROOT}
 set body {
     global cyr_conn
     global cyr_mailbox
@@ -312,6 +339,10 @@ proc lq {root} $body
 
 # listquotaroot command
 #
+set cyr_help(listquotaroot) "listquotaroot, lqr, lqm\tlist quota roots on mailbox"
+set cyr_alias(lqr) listquotaroot
+set cyr_alias(lqm) listquotaroot
+set cyr_usage(listquotaroot) {MAILBOX}
 set body {
     global cyr_conn
     global cyr_mailbox
@@ -338,5 +369,35 @@ set body {
 proc listquotaroot {mailbox} $body
 proc lqr {mailbox} $body
 proc lqm {mailbox} $body
+
+set cyr_help(quit) "quit\t\t\texit program"
+set cyr_usage(quit) {}
+proc quit {} {exit}
+
+set cyr_help(help) "help\t\t\tget help on commands"
+set cyr_usage(help) {[COMMAND]...}
+proc help {args} {
+    global cyr_help
+    global cyr_alias
+    global cyr_usage
+    if {[llength $args] == 0} {
+	foreach cmd [lsort [array names cyr_help]] {
+	    append result $cyr_help($cmd)
+	    append result "\n"
+	}
+    } else {
+	foreach cmd $args {
+	    if {[catch {set fullcmd $cyr_alias($cmd)}]} {
+		set fullcmd $cmd
+	    }
+
+	    if {[catch {append result "$cyr_help($fullcmd)\nusage: $cmd $cyr_usage($fullcmd)\n" }]} {
+		append result "Unknown command '$cmd'\n"
+	    }
+	}
+    }
+    return $result
+}
+
 
 unset body
