@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.22 2000/12/18 04:53:43 leg Exp $
+ * $Id: actions.c,v 1.23 2001/01/10 06:34:39 leg Exp $
  * 
  */
 /*
@@ -350,36 +350,37 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data)
 
 static int deleteactive(struct protstream *conn)
 {
+    if (unlink("default") != 0) {
+	prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
+	return TIMSIEVE_FAIL;
+    }
 
-  if (unlink("default") != 0) {
-      prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
-      return TIMSIEVE_FAIL;
-  }
-
-  return TIMSIEVE_OK;
+    return TIMSIEVE_OK;
 }
 
 
 /* is this the active script? */
 static int isactive(char *name)
 {
-  char filename[1024];
-  struct stat filestats;  /* returned by stat */
-  int result;  
+    char filename[1024];
+    char activelink[1024];
+	struct stat filestats;  /* returned by stat */
+    int result;  
 
-  snprintf(filename, 1023, "%s.script", name);
+    snprintf(filename, 1023, "%s.script", name);
+    memset(activelink, 0, sizeof(activelink));
+    if ((readlink("default", activelink, sizeof(activelink)-1) < 0) && 
+	(errno != ENOENT)) 
+    {
+	syslog(LOG_ERR, "readlink(default): %m");
+	return FALSE;
+    }
 
-  result=stat(filename,&filestats);
-  if (result != 0) {
-      syslog(LOG_ERR, "stat failed with %m");
-      return FALSE;
-  }
-
-  if (filestats.st_nlink>1) {
-    return TRUE;
-  }
-
-  return FALSE;
+    if (!strcmp(filename, activelink)) {
+	return TRUE;
+    } else {
+	return FALSE;
+    }
 }
 
 /* delete a sieve script */
@@ -415,143 +416,125 @@ int deletescript(struct protstream *conn, mystring_t *name)
 /* list the scripts user has available */
 int listscripts(struct protstream *conn)
 {
-  DIR *dp;
-  struct dirent *dir;
-  int length;
+    DIR *dp;
+    struct dirent *dir;
+    int length;
 
-  /* open the directory */
-  dp=opendir(".");
+    /* open the directory */
+    dp=opendir(".");
   
-  if (dp==NULL)
-  {
-    prot_printf(conn,"NO \"Error opening directory\"\r\n");
-    return TIMSIEVE_FAIL;
-  }
-
-  while ((dir=readdir(dp)) != NULL) /* while there are files here */
-  {
-    length=strlen(dir->d_name);
-    if (length >= strlen(".script")) /* if ends in .script */
+    if (dp==NULL)
     {
-      if (strcmp(dir->d_name + (length - 7), ".script")==0)
-      {
-	char *namewo=(char *) xmalloc(length-6);
+	prot_printf(conn,"NO \"Error opening directory\"\r\n");
+	return TIMSIEVE_FAIL;
+    }
+
+    while ((dir=readdir(dp)) != NULL) /* while there are files here */
+    {
+	length=strlen(dir->d_name);
+	if (length >= strlen(".script")) /* if ends in .script */
+	{
+	    if (strcmp(dir->d_name + (length - 7), ".script")==0)
+	    {
+		char *namewo=(char *) xmalloc(length-6);
 	  
-	memcpy(namewo, dir->d_name, length-7);
-	namewo[length-7]='\0';
+		memcpy(namewo, dir->d_name, length-7);
+		namewo[length-7]='\0';
 	
-	if (isactive(namewo)==TRUE)
-	  prot_printf(conn,"\"%s\" ACTIVE\r\n", namewo);
-	else
-	  prot_printf(conn,"\"%s\"\r\n", namewo);
+		if (isactive(namewo)==TRUE)
+		    prot_printf(conn,"\"%s\" ACTIVE\r\n", namewo);
+		else
+		    prot_printf(conn,"\"%s\"\r\n", namewo);
 
-	free(namewo);
-      }
-    }    
-  }
+		free(namewo);
+	    }
+	}    
+    }
 
-  prot_printf(conn,"OK\r\n");
+    prot_printf(conn,"OK\r\n");
   
-  return TIMSIEVE_OK;
+    return TIMSIEVE_OK;
 }
 
 /* does the script 'str' exist
    return TRUE | FALSE */
 static int exists(char *str)
 {
-  char filename[1024];
-  struct stat filestats;  /* returned by stat */
-  int result;
+    char filename[1024];
+    struct stat filestats;  /* returned by stat */
+    int result;
 
-  snprintf(filename, 1023, "%s.script", str);
+    snprintf(filename, 1023, "%s.script", str);
 
-  result = stat(filename,&filestats);  
+    result = stat(filename,&filestats);  
 
-  if (result != 0) {
-    return FALSE;
-  }
+    if (result != 0) {
+	return FALSE;
+    }
 
-  return TRUE;
+    return TRUE;
 }
 
 /* set the sieve script 'name' to be the active script */
 
 int setactive(struct protstream *conn, mystring_t *name)
 {
-  int result;
-  char filename[1024];
-  struct stat a, b;
+    int result;
+    char filename[1024];
+    struct stat a, b;
 
-  /* if string name is empty, disable active script */
-  if (!strlen(string_DATAPTR(name))) {
-    if (deleteactive(conn) != TIMSIEVE_OK)
-      return TIMSIEVE_FAIL;
+    /* if string name is empty, disable active script */
+    if (!strlen(string_DATAPTR(name))) {
+	if (deleteactive(conn) != TIMSIEVE_OK)
+	    return TIMSIEVE_FAIL;
+
+	prot_printf(conn,"OK\r\n");
+	return TIMSIEVE_OK;
+    }
+
+    result = scriptname_valid(name);
+    if (result!=TIMSIEVE_OK)
+    {
+	prot_printf(conn,"NO \"Invalid script name\"\r\n");
+	return result;
+    }
+
+    if (exists(string_DATAPTR(name))==FALSE)
+    {
+	prot_printf(conn,"NO \"Script does not exist\"\r\n");
+	return TIMSIEVE_NOEXIST;
+    }
+
+    /* if script already is the active one just say ok */
+    if (isactive(string_DATAPTR(name))==TRUE) {
+	prot_printf(conn,"OK\r\n");
+	return TIMSIEVE_OK;  
+    }
+
+    /* get the name of the active sieve script */
+    snprintf(filename, sizeof filename, "%s.script", string_DATAPTR(name));
+
+    /* ok we want to do this atomically so let's
+       - make <activesieve>.NEW as a hard link
+       - rename it to <activesieve>
+    */
+    result = symlink(filename, "default.NEW");
+    if (result) {
+	syslog(LOG_ERR, "symlink(%s, default.NEW): %m", filename);
+	prot_printf(conn, "NO \"Can't make link\"\r\n");    
+	return TIMSIEVE_FAIL;
+    }
+
+    result = rename("default.NEW", "default");
+    if (result) {
+	unlink("default.NEW");
+	syslog(LOG_ERR, "rename(default.NEW, default): %m");
+	prot_printf(conn,"NO \"Error renaming\"\r\n");
+	return TIMSIEVE_FAIL;
+    }
 
     prot_printf(conn,"OK\r\n");
     return TIMSIEVE_OK;
-  }
-
-  result = scriptname_valid(name);
-  if (result!=TIMSIEVE_OK)
-  {
-      prot_printf(conn,"NO \"Invalid script name\"\r\n");
-      return result;
-  }
-
-  if (exists(string_DATAPTR(name))==FALSE)
-  {
-    prot_printf(conn,"NO \"Script does not exist\"\r\n");
-    return TIMSIEVE_NOEXIST;
-  }
-
-  /* if script already is the active one just say ok */
-  if (isactive(string_DATAPTR(name))==TRUE) {
-      prot_printf(conn,"OK\r\n");
-      return TIMSIEVE_OK;  
-  }
-
-  /* get the name of the active sieve script */
-  snprintf(filename, sizeof filename, "%s.script", string_DATAPTR(name));
-
-  /* ok we want to do this atomically so let's
-     - make <activesieve>.NEW as a hard link
-     - rename it to <activesieve>
-  */
-  result = link(filename, "default.NEW");
-  if (result) {
-      syslog(LOG_ERR, "Error creating link default.NEW: %m");
-      prot_printf(conn, "NO \"Can't make link\"\r\n");    
-      return TIMSIEVE_FAIL;
-  }
-
-  /* check that default != default.NEW */
-  a.st_ino = -1;
-  b.st_ino = -2;
-  result = stat("default", &a);
-  if (result && errno == ENOENT) {
-      a.st_ino = -1;
-      result = 0;
-  }
-  if (!result) {
-      result = stat("default.NEW", &b);
-  }
-  if (a.st_ino == b.st_ino) {
-      /* don't rename */
-      unlink("default.NEW");
-      prot_printf(conn, "OK \"already was active\"\r\n");
-      return TIMSIEVE_OK;
-  }
-
-  if (!result) result = rename("default.NEW", "default");
-  if (result) {
-      unlink("default.NEW");
-      syslog(LOG_ERR, "error renaming default.NEW to default: %m");
-      prot_printf(conn,"NO \"Error renaming\"\r\n");
-      return TIMSIEVE_FAIL;
-  }
-
-  prot_printf(conn,"OK\r\n");
-  return TIMSIEVE_OK;
 }
 
 int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long num)
