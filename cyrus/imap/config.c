@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.26 2000/02/15 22:21:18 leg Exp $
+ $Id: config.c,v 1.27 2000/02/17 03:04:29 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -46,6 +46,7 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "util.h"
+#include "imap_err.h"
 
 extern int errno;
 

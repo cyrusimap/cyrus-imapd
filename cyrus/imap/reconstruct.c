@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.47 2000/02/15 22:21:25 leg Exp $ */
+/* $Id: reconstruct.c,v 1.48 2000/02/17 03:04:30 leg Exp $ */
 
 #include <config.h>
 
@@ -77,6 +77,7 @@
 #include "seen.h"
 #include "retry.h"
 #include "convert_code.h"
+#include "util.h"
 
 extern int errno;
 extern int optind;

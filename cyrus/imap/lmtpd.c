@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.1 2000/02/15 22:21:23 leg Exp $
+ * $Id: lmtpd.c,v 1.2 2000/02/17 03:04:29 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.1 2000/02/15 22:21:23 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.2 2000/02/17 03:04:29 leg Exp $";*/
 
 #include <config.h>
 
@@ -162,8 +162,7 @@ int isvalidflag(char *f);
 int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    char **flag, int nflags,
 	    char *user, char *mailboxname);
-
-
+void shut_down(int code);
 
 int dupelim = 0;
 int singleinstance = 1;
@@ -340,6 +339,14 @@ int service_init(int argc, char **argv, char **envp)
     config_changeident("lmtpd");
     if (geteuid() == 0) return 1;
     
+    /* so we can do mboxlist operations */
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers();
+    signal(SIGPIPE, SIG_IGN);
+
 #ifdef USE_SIEVE
     sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
     if (!sieve_usehomedir) {
@@ -1527,7 +1534,6 @@ void lmtpmode(deliver_opts_t *delopts)
 
     fstat(0, &sbuf);
 
-
     salen = sizeof(deliver_remoteaddr);
     r = getpeername(0, (struct sockaddr *)&deliver_remoteaddr, &salen);
     switch (r) {
@@ -1560,16 +1566,14 @@ void lmtpmode(deliver_opts_t *delopts)
 	break;
     }
 
-    /* so we can do mboxlist operations */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     prot_printf(deliver_out,"220 %s LMTP Cyrus %s ready\r\n", myhostname,
 		CYRUS_VERSION);
     for (;;) {
+      signals_poll();
+
       if (!prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
 	  msg_free(msg);
-	  exit(0);
+	  shut_down(0);
       }
       p = buf + strlen(buf) - 1;
       if (p >= buf && *p == '\n') *p-- = '\0';
@@ -1646,7 +1650,7 @@ void lmtpmode(deliver_opts_t *delopts)
 		     /* read a line */
 		     if (!prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
 			 msg_free(msg);
-			 exit(0);
+			 shut_down(0);
 		     }
 		     p = buf + strlen(buf) - 1;
 		     if (p >= buf && *p == '\n') *p-- = '\0';
@@ -1762,7 +1766,7 @@ void lmtpmode(deliver_opts_t *delopts)
 		prot_printf(deliver_out,"221 2.0.0 bye\r\n");
 		prot_flush(deliver_out);
 		msg_free(msg);
-		exit(0);
+		shut_down(0);
 	    }
 	    goto syntaxerr;
 	    
@@ -2067,7 +2071,7 @@ savemsg(message_data_t *m)
     }
 
     /* Got a premature EOF -- toss message and exit */
-    exit(0);
+    shut_down(0);
 
   lmtpdot:
 
@@ -2408,6 +2412,18 @@ char
 void fatal(const char* s, int code)
 {
     prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
+    prot_flush(deliver_out);
+    exit(code);
+}
+
+/*
+ * Cleanly shut down and exit
+ */
+void shut_down(int code) __attribute__((noreturn));
+void shut_down(int code)
+{
+    mboxlist_close();
+    mboxlist_done();
     prot_flush(deliver_out);
     exit(code);
 }
