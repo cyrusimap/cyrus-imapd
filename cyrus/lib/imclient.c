@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.58 2001/07/27 23:30:37 leg Exp $
+ $Id: imclient.c,v 1.59 2001/09/19 18:53:32 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1641,6 +1641,19 @@ static void apps_ssl_info_callback(SSL * s, int where, int ret)
 }
 
 
+/*
+ * Seed the random number generator.
+ */
+static int tls_rand_init(void)
+{
+#ifdef EGD_SOCKET
+    return (RAND_egd(EGD_SOCKET));
+#else
+    /* otherwise let OpenSSL do it internally */
+    return 0;
+#endif
+}
+
 char *var_tls_CAfile="";
 char *var_tls_CApath="";
  /*
@@ -1662,6 +1675,10 @@ static int tls_init_clientengine(struct imclient *imclient,
 
     SSL_load_error_strings();
     SSLeay_add_ssl_algorithms();
+    if (tls_rand_init() == -1) {
+	printf("[ TLS engine: cannot seed PRNG ]\n");
+	return -1;
+    }
 
     imclient->tls_ctx = SSL_CTX_new(TLSv1_client_method());
     if (imclient->tls_ctx == NULL) {
