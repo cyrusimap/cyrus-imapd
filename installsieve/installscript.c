@@ -540,7 +540,8 @@ void usage(void)
 int main(int argc, char **argv)
 {
   char c;
-  int dolist=0;
+  int dolist = 0;
+  int deflist = 1;
 
   char *portstr = "sieve";
   int port;
@@ -565,18 +566,22 @@ int main(int argc, char **argv)
     {
     case 'a':
       setactive=optarg;
+      deflist = 0;
       break;
     case 'd':
       deletescript=optarg;
+      deflist = 0;
       break;
     case 'i':
       installfile=optarg;
+      deflist = 0;
       break;
     case 'l':
       dolist=1;
       break;
     case 'v':
       viewfile=optarg;
+      deflist = 0;
       break;
     case 'p':
       portstr=optarg;
@@ -586,6 +591,7 @@ int main(int argc, char **argv)
       break;
     case 'g':
       getscriptname=optarg;
+      deflist = 0;
       break;
     case 'u':
       authname = optarg;
@@ -610,11 +616,13 @@ int main(int argc, char **argv)
       port = ntohs(serv->s_port);
   }
   
-  if (init_net(servername, port) != IMTEST_OK)
-    imtest_fatal("Network initializion");
+  if (init_net(servername, port) != IMTEST_OK) {
+      imtest_fatal("Network initialization");
+  }
   
-  if (init_sasl(servername, port, ssf) != IMTEST_OK)
-    imtest_fatal("SASL initialization");
+  if (init_sasl(servername, port, ssf) != IMTEST_OK) {
+      imtest_fatal("SASL initialization");
+  }
    
   /* set up the prot layer */
   pin = prot_new(sock, 0);
@@ -632,14 +640,14 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  /* printf("Authentication succeeded.\n");*/
+  if (deflist) {
+      printf("Authentication succeeded.\n");
+  }
 
   if (viewfile!=NULL)
   {
     getscript(pout,pin, viewfile,0);
   }
-
-
 
   if (installfile!=NULL)
   {
@@ -661,9 +669,8 @@ int main(int argc, char **argv)
     getscript(pout,pin, getscriptname,1);
   }
 
-  if (dolist==1)
-  {
-    showlist(pout,pin);
+  if (dolist || deflist) {
+      showlist(pout,pin);
   }
 
   return 0;
