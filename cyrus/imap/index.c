@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.141 2000/09/30 01:42:43 ken3 Exp $
+ * $Id: index.c,v 1.142 2000/10/12 19:38:55 leg Exp $
  */
 #include <config.h>
 
@@ -1080,8 +1080,7 @@ index_sort(struct mailbox *mailbox,
     prot_printf(imapd_out, "\r\n");
 
     /* debug */
-#if 0
-    {
+    if (CONFIG_TIMING_VERBOSE) {
 	char *key_names[] = { "SEQUENCE", "ARRIVAL", "CC", "DATE", "FROM",
 			      "SIZE", "SUBJECT", "TO", "ANNOTATION" };
 	char buf[1024] = "";
@@ -1095,7 +1094,6 @@ index_sort(struct mailbox *mailbox,
 	syslog(LOG_DEBUG, "SORT (%s) processing time: %d msg in %f sec",
 	       buf, nmsg, (clock() - start) / (double) CLOCKS_PER_SEC);
     }
-#endif
 }
 
 /*
@@ -1122,12 +1120,12 @@ void index_thread(struct mailbox *mailbox, int algorithm,
     else
 	index_thread_print(NULL, usinguid);
 
-    /* debug */
-#if 0
-    syslog(LOG_DEBUG, "THREAD %s processing time: %d msg in %f sec",
-	   thread_algs[algorithm].alg_name, nmsg,
-	   (clock() - start) / (double) CLOCKS_PER_SEC);
-#endif
+    if (CONFIG_TIMING_VERBOSE) {
+	/* debug */
+	syslog(LOG_DEBUG, "THREAD %s processing time: %d msg in %f sec",
+	       thread_algs[algorithm].alg_name, nmsg,
+	       (clock() - start) / (double) CLOCKS_PER_SEC);
+    }
 }
 
 /*
@@ -2960,7 +2958,8 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 				   struct sortcrit *sortcrit)
 {
     MsgData *md, *cur;
-    const char *cacheitem, *env, *headers, *from, *to, *cc, *subj;
+    const char *cacheitem = NULL, *env = NULL, 
+	*headers = NULL, *from = NULL, *to = NULL, *cc = NULL, *subj = NULL;
     int i, j;
     char *tmpenv;
     char *envtokens[NUMENVTOKENS];
