@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat_build.c,v 1.4 2003/01/09 20:22:25 rjs3 Exp $
+ * $Id: squat_build.c,v 1.5 2003/01/11 18:45:14 rjs3 Exp $
  */
 
 /*
@@ -379,10 +379,10 @@ cleanup_out_buffer:
 cleanup_doc_ID_list:
   free(index->doc_ID_list);
 
-cleanup_tmp_path:
+/*cleanup_tmp_path:*/
   free(index->tmp_path);
 
-cleanup_index:
+/*cleanup_index:*/
   free(index);  
   return NULL;
 }

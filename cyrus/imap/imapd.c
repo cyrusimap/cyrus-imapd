@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.421 2003/01/09 21:32:45 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.422 2003/01/11 18:45:14 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -152,7 +152,7 @@ void cmd_append(char *tag, char *name);
 void cmd_select(char *tag, char *cmd, char *name);
 void cmd_close(char *tag);
 void cmd_fetch(char *tag, char *sequence, int usinguid);
-void cmd_partial(const char *tag, const char *msgno, const char *data,
+void cmd_partial(const char *tag, const char *msgno, char *data,
 		 const char *start, const char *count);
 void cmd_store(char *tag, char *sequence, char *operation, int usinguid);
 void cmd_search(char *tag, int usinguid);
@@ -2995,9 +2995,10 @@ int usinguid;
  * Perform a PARTIAL command
  */
 void
-cmd_partial(const char *tag, const char *msgno, const char *data,
+cmd_partial(const char *tag, const char *msgno, char *data,
 	    const char *start, const char *count)
 {
+    const char *pc;
     char *p;
     struct fetchargs fetchargs;
     char *section;
@@ -3006,10 +3007,10 @@ cmd_partial(const char *tag, const char *msgno, const char *data,
 
     memset(&fetchargs, 0, sizeof(struct fetchargs));
 
-    for (p = msgno; *p; p++) {
-	if (!isdigit((int) *p)) break;
+    for (pc = msgno; *pc; pc++) {
+	if (!isdigit((int) *pc)) break;
     }
-    if (*p || !*msgno) {
+    if (*pc || !*msgno) {
 	prot_printf(imapd_out, "%s BAD Invalid message number\r\n", tag);
 	return;
     }
@@ -3057,31 +3058,32 @@ cmd_partial(const char *tag, const char *msgno, const char *data,
 	return;
     }
 
-    for (p = start; *p; p++) {
-	if (!isdigit((int) *p)) break;
+    for (pc = start; *pc; pc++) {
+	if (!isdigit((int) *pc)) break;
 	prev = fetchargs.start_octet;
-	fetchargs.start_octet = fetchargs.start_octet*10 + *p - '0';
+	fetchargs.start_octet = fetchargs.start_octet*10 + *pc - '0';
 	if(fetchargs.start_octet < prev) {
 	    fetchargs.start_octet = 0;
 	    break;
 	}
     }
-    if (*p || !fetchargs.start_octet) {
+    if (*pc || !fetchargs.start_octet) {
 	prot_printf(imapd_out, "%s BAD Invalid starting octet\r\n", tag);
 	freestrlist(fetchargs.bodysections);
 	return;
     }
     
-    for (p = count; *p; p++) {
-	if (!isdigit((int) *p)) break;
+    prev = fetchargs.octet_count;
+    for (pc = count; *pc; pc++) {
+	if (!isdigit((int) *pc)) break;
 	prev = fetchargs.octet_count;
-	fetchargs.octet_count = fetchargs.octet_count*10 + *p - '0';
+	fetchargs.octet_count = fetchargs.octet_count*10 + *pc - '0';
 	if(fetchargs.octet_count < prev) {
 	    prev = -1;
 	    break;
 	}
     }
-    if (*p || !*count || prev == -1) {
+    if (*pc || !*count || prev == -1) {
 	prot_printf(imapd_out, "%s BAD Invalid octet count\r\n", tag);
 	freestrlist(fetchargs.bodysections);
 	return;
