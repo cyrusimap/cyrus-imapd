@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: ctl_mboxlist.8,v 1.6 2002/05/25 19:57:47 leg Exp $
+.\" $Id: ctl_mboxlist.8,v 1.7 2002/06/24 16:28:32 rjs3 Exp $
 .SH NAME
 ctl_mboxlist \- perform operations on the mailbox list database
 .SH SYNOPSIS
@@ -49,6 +49,12 @@ ctl_mboxlist \- perform operations on the mailbox list database
 .I config-file
 ]
 .B \-d
+[
+.B \-x
+]
+[
+\fB\-p \fIpartition\fR
+]
 [
 \fB\-f \fIfilename\fR
 ]
@@ -93,12 +99,19 @@ The
 option is used to determine the default location of the mailbox list database.
 .SH OPTIONS
 .TP
-.BI \-C " config-file"
+.BI \-C\  "config-file"
 Read configuration options from \fIconfig-file\fR.
 .TP
 .B \-d
 Dump the contents of the database to standard output in a portable
 flat-text format.
+.TP
+.B \-x
+When performing a dump, remove the mailboxes dumped from the mailbox list
+(mostly useful when specified with -p)
+.TP
+.BI \-p\  "partition"
+When performing a dump, dump only thise mailboxes that live on \fIpartition\fR
 .TP
 .B \-u
 Load the contents of the database from standard input.  The input MUST
