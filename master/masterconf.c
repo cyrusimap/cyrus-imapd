@@ -1,7 +1,7 @@
-/* config.c -- Configuration routines
- $Id: config.c,v 1.1 2000/02/15 22:21:53 leg Exp $
+/* masterconfig.c -- Configuration routines for master process
+ $Id: masterconf.c,v 1.1 2000/02/18 06:42:05 leg Exp $
  
- # Copyright 1998 Carnegie Mellon University
+ # Copyright 2000 Carnegie Mellon University
  # 
  # No warranties, either expressed or implied, are made regarding the
  # operation, use, or results of the software.
@@ -42,11 +42,11 @@
 # include <unistd.h>
 #endif
 
-#include "config.h"
+#include "masterconf.h"
 
 extern int errno;
 
-#define CONFIG_FILENAME "/etc/imapd.conf"
+#define CONFIG_FILENAME "/etc/cyrus.conf"
 
 struct configlist {
     char *key;
@@ -56,86 +56,19 @@ struct configlist {
 static struct configlist *configlist;
 static int nconfiglist;
 
-const char *config_dir;
-const char *config_defpartition;
-const char *config_newsspool;
-
-const char *config_servername;
-
-int config_hashimapspool;
-
-static void config_read(void);
+static void masterconf_read(void);
 extern void fatal(const char *buf, int code);
 
-int config_init(const char *ident)
+int masterconf_init(const char *ident)
 {
-    char buf[100];
-    char *p;
-    const char *val;
-    int umaskval = 0;
-
-    /* initialize_imap_error_table(); */
-
     openlog(ident, LOG_PID, LOG_LOCAL6);
 
-    config_read();
+    masterconf_read();
 
-    /* Look up configdirectory config option */
-    config_dir = config_getstring("configdirectory", (char *)0);
-    if (!config_dir) {
-	fatal("configdirectory option not specified in configuration file",
-	      EX_CONFIG);
-    }
-
-    /* Look up default partition */
-    config_defpartition = config_getstring("defaultpartition", "default");
-    for (p = (char *)config_defpartition; *p; p++) {
-	if (!isalnum((int) *p))
-	  fatal("defaultpartition option contains non-alphanumeric character",
-		EX_CONFIG);
-	if (isupper((int) *p)) *p = tolower((int) *p);
-    }
-    if (!config_partitiondir(config_defpartition)) {
-	sprintf(buf, "partition-%s option not specified in configuration file",
-		config_defpartition);
-	fatal(buf, EX_CONFIG);
-    }
-
-    /* Look up umask */
-    val = config_getstring("umask", "077");
-    while (*val) {
-	if (*val >= '0' && *val <= '7') umaskval = umaskval*8 + *val - '0';
-	val++;
-    }
-    umask(umaskval);
-
-    /* Look up news spool */
-    config_newsspool = config_getstring("newsspool", 0);
-
-    /* look up mailbox hashing */
-    config_hashimapspool = config_getswitch("hashimapspool", 0);
-
-    /* look up the hostname we should present to the user */
-    config_servername = config_getstring("servername", 0);
-    if (!config_servername) {
-	config_servername = malloc(sizeof(char) * 256);
-	if (config_servername != NULL) 
-	    gethostname((char *) config_servername, 256);
-    }
-    if (!config_servername) config_servername = "unknown";
     return 0;
 }
 
-int config_changeident(const char *ident)
-{
-    closelog();
-    openlog(ident, LOG_PID, LOG_LOCAL6);
-    return 0;
-}
-
-const char *config_getstring(key, def)
-const char *key;
-const char *def;
+const char *masterconf_getstring(const char *key, const char *def)
 {
     int opt;
 
@@ -147,22 +80,18 @@ const char *def;
     return def;
 }
 
-int config_getint(key, def)
-const char *key;
-int def;
+int masterconf_getint(const char *key, int def)
 {
-    const char *val = config_getstring(key, (char *)0);
+    const char *val = masterconf_getstring(key, (char *)0);
 
     if (!val) return def;
     if (!isdigit((int) *val) && (*val != '-' || !isdigit((int) val[1]))) return def;
     return atoi(val);
 }
 
-int config_getswitch(key, def)
-const char *key;
-int def;
+int masterconf_getswitch(const char *key, int def)
 {
-    const char *val = config_getstring(key, (char *)0);
+    const char *val = masterconf_getstring(key, (char *)0);
 
     if (!val) return def;
 
@@ -177,21 +106,9 @@ int def;
     return def;
 }
 
-const char *config_partitiondir(partition)
-const char *partition;
-{
-    char buf[80];
-
-    if (strlen(partition) > 70) return 0;
-    strcpy(buf, "partition-");
-    strcat(buf, partition);
-
-    return config_getstring(buf, (char *)0);
-}
-
 #define CONFIGLISTGROWSIZE 10 /* 100 */
 static void
-config_read()
+masterconf_read()
 {
     FILE *infile;
     int lineno = 0;
@@ -249,24 +166,4 @@ config_read()
     }
  abort:
     fclose(infile);
-}
-
-/*
- * Call proc (expected to be todo_append in reconstruct.c) with
- * information on each configured partition
- */
-void config_scanpartition( void (*proc)() )
-{
-    int opt;
-    char *s, *t;
-
-    for (opt = 0; opt < nconfiglist; opt++) {
-	if (!strncmp(configlist[opt].key, "partition-", 10)) {
-	    s = strdup(configlist[opt].value);
-	    if (!s) continue;
-	    t = strdup("");
-	    if (!t) continue;
-	    (*proc)(t, s, configlist[opt].key+10);
-	}
-    }
 }

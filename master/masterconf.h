@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: config.h,v 1.1 2000/02/15 22:21:53 leg Exp $
+ $Id: masterconf.h,v 1.1 2000/02/18 06:42:05 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -27,25 +27,12 @@
  *
  */
 
-#ifndef INCLUDED_CONFIG_H
-#define INCLUDED_CONFIG_H
+#ifndef INCLUDED_MASTERCONF_H
+#define INCLUDED_MASTERCONF_H
 
-extern int config_init(const char *ident);
-extern const char *config_getstring(const char *key, const char *def);
-extern int config_getint(const char *key, int def);
-extern int config_getswitch(const char *key, int def);
-extern const char *config_partitiondir(const char *partition);
-extern int config_changeident(const char *ident);
+extern int masterconf_init(const char *ident);
+extern const char *masterconf_getstring(const char *key, const char *def);
+extern int masterconf_getint(const char *key, int def);
+extern int masterconf_getswitch(const char *key, int def);
 
-/* Values of mandatory options */
-extern const char *config_dir;
-extern const char *config_defpartition;
-extern const char *config_newsspool;
-
-extern const char *config_servername;
-
-extern int config_hashimapspool;
-
-void config_scanpartition( void (*proc)() );
-
-#endif /* INCLUDED_CONFIG_H */
+#endif /* INCLUDED_MASTERCONF_H */
