@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.31 2002/05/06 17:18:51 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.32 2002/05/23 21:12:39 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -166,7 +166,7 @@ int mboxlist_changesub(const char *name, const char *userid,
 char *mboxlist_hash_usersubs(const char *userid);
 
 /* set or create quota root */
-int mboxlist_setquota(const char *root, int newquota);
+int mboxlist_setquota(const char *root, int newquota, int force);
 int mboxlist_unsetquota(const char *root);
 
 /* returns a malloc() string that is the representation in the mailboxes 

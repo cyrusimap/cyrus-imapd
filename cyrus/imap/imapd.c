@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.389 2002/05/20 19:13:50 ken3 Exp $ */
+/* $Id: imapd.c,v 1.390 2002/05/23 21:12:37 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -3580,7 +3580,7 @@ cmd_create(char *tag, char *name, char *partition, int localonly)
 				       imapd_authstate, 0, 0);
 	    
 	    if (!r && autocreatequota > 0) {
-		(void) mboxlist_setquota(mailboxname, autocreatequota);
+		(void) mboxlist_setquota(mailboxname, autocreatequota, 0);
 	    }
 	}
     }
@@ -4481,6 +4481,7 @@ char *quotaroot;
     int newquota = -1;
     int badresource = 0;
     int c;
+    int force = 0;
     static struct buf arg;
     char *p;
     int r;
@@ -4516,11 +4517,17 @@ char *quotaroot;
     if (badresource) r = IMAP_UNSUPPORTED_QUOTA;
     else if (!imapd_userisadmin) r = IMAP_PERMISSION_DENIED;
     else {
+	/* are we forcing the creation of a quotaroot by having a leading +? */
+	if(quotaroot[0] == '+') {
+	    force = 1;
+	    quotaroot++;
+	}
+	
 	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, quotaroot,
 						   imapd_userid, mailboxname);
 
 	if (!r) {
-	    r = mboxlist_setquota(mailboxname, newquota);
+	    r = mboxlist_setquota(mailboxname, newquota, force);
 	}
     }
 

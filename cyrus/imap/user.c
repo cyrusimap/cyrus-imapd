@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.9 2002/03/29 21:52:15 rjs3 Exp $
+ * $Id: user.c,v 1.10 2002/05/23 21:12:39 rjs3 Exp $
  */
 
 #include <config.h>
@@ -270,7 +270,7 @@ int user_copyquota(char *oldname, char *newname)
     quota.fd = open(buf, O_RDWR, 0);
     if (quota.fd > 0) {
 	r = mailbox_read_quota(&quota);
-	if (!r) mboxlist_setquota(newname, quota.limit);
+	if (!r) mboxlist_setquota(newname, quota.limit, 0);
     }
 }
 #endif
