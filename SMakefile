@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.25 1998/06/09 05:44:34 tjs Exp $
+# $Id: SMakefile,v 1.26 1998/06/10 22:04:44 tjs Exp $
 #
 
 MAKE=gmake
@@ -11,14 +11,18 @@ MAKE=gmake
 AMSSYNC=--enable-amssync
 WITHAUTH="--with-auth=krb_pts"
 
-CC=cc
+if "${CC-unset}" = "unset"; then
+  CC=cc
+fi
+
+CFLAGS="${CFLAGS} -g"
 
 VER=`smake -D | sed 's;^.*\/;;'`
 LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 
 # Ryan's aggressive optimizations
 case `uname` in
-   Linux) CFLAGS="${CFLAGS} -g  -O3"
+   Linux) CFLAGS="${CFLAGS} -O3"
 	AMSSYNC=""
 	;;
   IRIX) CFLAGS="${CFLAGS} -O2"
@@ -28,15 +32,15 @@ case `uname` in
 	;;
   HP-UX)  
 	CC=gcc # cheat -- hp cc is miserable
-	CFLAGS="${CFLAGS} -g -O2"
+	CFLAGS="${CFLAGS} -O2"
 	;;
   SunOS)   
     # -xs: generate debugging information that gdb likes
         CFLAGS="${CFLAGS} -xO4 -xdepend -xs"
         ;;
   ULTRIX)  
-	CC=gcc
-	CFLAGS="${CFLAGS} -g -O"
+	CC=gcc # cheat -- Ultrix cc is aged
+	CFLAGS="${CFLAGS} -O"
 	WITHAUTH=""
 	AMSSYNC=""
 	;;
