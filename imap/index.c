@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.84 1999/03/02 06:34:30 tjs Exp $
+ * $Id: index.c,v 1.85 1999/03/03 21:06:47 tjs Exp $
  */
 #include <stdio.h>
 #include <string.h>
@@ -1262,6 +1262,7 @@ index_forsequence(struct mailbox* mailbox,
 		start = i;
 	    }
 	    if (start > 0 && start <= imapd_exists) {
+		if (fetchedsomething) *fetchedsomething = 1;
 		r = (*proc)(mailbox, start, rock);
 		if (r && !result) result = r;
 	    }
