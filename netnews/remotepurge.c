@@ -243,7 +243,6 @@ callback_finish(struct imclient *imclient,
 		void *rock,
 		struct imclient_reply *reply)
 {
-
     if (!strcmp(reply->keyword, "OK")) {
 	cmd_done = IMAP_OK;
     } else if (!strcmp(reply->keyword, "NO")) {
@@ -328,7 +327,7 @@ callback_search(struct imclient *imclient,
    
 }
 
-static void send_delete(char *uidlist)
+static int send_delete(char *uidlist)
 {
     imclient_send(imclient_conn, callback_finish, imclient_conn,
 		  "UID STORE %a +FLAGS.SILENT (\\Deleted)", uidlist);
@@ -336,9 +335,12 @@ static void send_delete(char *uidlist)
     while (cmd_done == NOTFINISHED) {
 	imclient_processoneevent(imclient_conn);
     }
-    if (cmd_done != IMAP_OK) {
-	fatal("marking message deleted", EC_TEMPFAIL);
+    if (cmd_done == IMAP_OK) return 0;
+    else if (cmd_done == IMAP_NO) {
+	syslog(LOG_ERR, "%s can't mark messages deleted: %s", cmd_resp ? cmd_resp : "");
+	return -1;
     }
+    else fatal("marking message deleted", EC_TEMPFAIL);
 }
 
 void mark_all_deleted(uid_list_t *list, mbox_stats_t *stats)
@@ -349,6 +351,7 @@ void mark_all_deleted(uid_list_t *list, mbox_stats_t *stats)
     unsigned long run_start;
     int first_time;
     unsigned long *A = list->list;
+    int r;
     
     if (list->size == 0) return;
 
@@ -357,7 +360,8 @@ void mark_all_deleted(uid_list_t *list, mbox_stats_t *stats)
 
     pos = 0; first_time = 1;
     run_start = A[i++];
-    for (; i < list->size; i++) {
+    r = 0;
+    for (; i < list->size && r == 0; i++) {
 	if (A[i] == A[i-1] + 1)
 	    continue; /* continue this run */
 	if (first_time) {
@@ -373,26 +377,28 @@ void mark_all_deleted(uid_list_t *list, mbox_stats_t *stats)
 	    pos += sprintf(buf + pos, "%lu", A[i-1]);
 	}
 	if (pos > 500) {
-	    send_delete(buf);
+	    r = send_delete(buf);
 	    pos = 0; first_time = 1;
 	}
 	run_start = A[i];
     }
 
-    /* handle the last entry */
-    if (!first_time) {
-	buf[pos++] = ',';
+    if (!r) {
+	/* handle the last entry */
+	if (!first_time) {
+	    buf[pos++] = ',';
+	}
+	if (run_start != A[i-1]) {
+	    sprintf(buf + pos, "%lu:%lu", run_start, A[i-1]);
+	} else {
+	    sprintf(buf + pos, "%lu", A[i-1]);
+	}
+	
+	/* send out the last one */
+	send_delete(buf);
+	
+	stats->deleted += list->size;
     }
-    if (run_start != A[i-1]) {
-	sprintf(buf + pos, "%lu:%lu", run_start, A[i-1]);
-    } else {
-	sprintf(buf + pos, "%lu", A[i-1]);
-    }
-
-    /* send out the last one */
-    send_delete(buf);
-
-    stats->deleted += list->size;
 }
 
 static char *month_string(int mon)
@@ -454,7 +460,7 @@ int purge_me(char *name, time_t when)
 
     stats.total = current_mbox_exists;
 
-    spew(1, "%s %d messages exists", name, current_mbox_exists);
+    spew(2, "%s exists %d", name, current_mbox_exists);
 
     /* make out list of uids */
     uidlist.size = 0;		/* reset to 0 */
@@ -473,7 +479,7 @@ int purge_me(char *name, time_t when)
 		 1900+my_tm->tm_year);
     }	
 
-    spew(2, "%s searching for messages %s", name, search_string);
+    spew(3, "%s searching for messages %s", name, search_string);
 
     imclient_addcallback(imclient_conn,
 			 "SEARCH", 0, callback_search,
@@ -499,7 +505,6 @@ int purge_me(char *name, time_t when)
 		  "CLOSE");
 
     cmd_done = NOTFINISHED;
-
     while (cmd_done == NOTFINISHED) {
 	imclient_processoneevent(imclient_conn);
     }
@@ -508,7 +513,7 @@ int purge_me(char *name, time_t when)
 	fatal("unable to CLOSE mailbox", EC_TEMPFAIL);
     }
 
-    spew(0, "%s deleted %d messages", name, uidlist.size);
+    spew(0, "%s exists %d deleted %d", name, current_mbox_exists, uidlist.size);
 
     return 0;
 }
