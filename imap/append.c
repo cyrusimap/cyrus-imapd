@@ -163,8 +163,18 @@ char *userid;
     }
     if (!r) r = message_parse(destfile, mailbox, &message_index);
     fclose(destfile);
+    if (!r) {
+	/* Flush out the cache file data */
+	fflush(message->cache);
+	if (ferror(message->cache) || fsync(fileno(message->cache))) {
+	    syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
+		   mailbox->name);
+	    r = IMAP_IOERROR;
+	}
+    }
     if (r) {
 	unlink(fname);
+	ftruncate(fileno(mailbox->cache), last_cacheoffset);
 	return r;
     }
 
@@ -389,6 +399,15 @@ char *userid;
 	}
     }
 
+    /* Flush out the cache file data */
+    fflush(message->cache);
+    if (ferror(message->cache) || fsync(fileno(message->cache))) {
+	syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
+	       mailbox->name);
+	r = IMAP_IOERROR;
+	goto fail;
+    }
+
     /* Write out the header if we created a new user flag */
     if (writeheader) {
 	r = mailbox_write_header(mailbox);
@@ -530,6 +549,15 @@ unsigned long feeduid;
     if (msg == 0) {
 	free(message_index);
 	return 0;
+    }
+
+    /* Flush out the cache file data */
+    fflush(message->cache);
+    if (ferror(message->cache) || fsync(fileno(message->cache))) {
+	syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
+	       mailbox->name);
+	r = IMAP_IOERROR;
+	goto fail;
     }
 
     /* Write out index file entries */
