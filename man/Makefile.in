@@ -60,15 +60,15 @@ all:
 install:
 	for file in $(MAN1); \
 	do \
-		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/man/man1 || exit 1 \
+		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/man/man1 || exit 1; \
 	done
 	for file in $(MAN5); \
 	do \
-		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/man/man5 || exit 1 \
+		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/man/man5 || exit 1; \
 	done
 	for file in $(MAN8); \
 	do \
-		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/man/man8 || exit 1 \
+		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/man/man8 || exit 1; \
 	done
 
 .c.o:
