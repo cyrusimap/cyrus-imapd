@@ -1,7 +1,7 @@
 /* prot.h -- stdio-like module that handles buffering, SASL, and TLS
  *           details for I/O over sockets
  *
- * $Id: prot.h,v 1.40 2003/10/22 18:50:12 rjs3 Exp $
+ * $Id: prot.h,v 1.40.2.1 2004/03/01 14:30:21 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -127,6 +127,7 @@ struct prot_waitevent {
 /* Not for use by applications directly, but needed by the macros. */
 int prot_flush_internal(struct protstream *s, int force);
 
+#define PROT_EOF_STRING "end of file reached"
 #define PROTGROUP_SIZE_DEFAULT 32
 struct protgroup; /* Opaque protgroup structure */
 
