@@ -42,7 +42,7 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.26 2003/12/01 19:19:45 rjs3 Exp $
+ * $Id: glob.c,v 1.27 2003/12/01 19:21:05 rjs3 Exp $
  */
 
 #include <config.h>
@@ -213,6 +213,7 @@ int glob_test (g, ptr, len, min)
     const char *ghier, *phier;	/* pointers for '%' patterns */
     const char *start;		/* start of input string */
     int newglob;
+    int firsttime = 1;
 
     /* check for remaining partial matches */
     if (min && *min < 0) return (-1);
