@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.6 2000/05/24 05:08:42 leg Exp $ */
+/* $Id: service.c,v 1.7 2000/06/03 01:08:10 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -169,10 +169,14 @@ int main(int argc, char **argv, char **envp)
 	    if (fd < 0) {
 		switch (errno) {
 		case ENETDOWN:
+#ifdef EPROTO
 		case EPROTO:
+#endif
 		case ENOPROTOOPT:
 		case EHOSTDOWN:
+#ifdef ENONET
 		case ENONET:
+#endif
 		case EHOSTUNREACH:
 		case EOPNOTSUPP:
 		case ENETUNREACH:
