@@ -52,7 +52,6 @@ char *identifier;
     char realm[REALM_SZ];
 
     if (strcmp(identifier, "anyone") == 0) return 1;
-    if (strcmp(identifier, "anybody") == 0) return 1;
 
     if (strcmp(identifier, auth_userid) == 0) return 3;
 
