@@ -35,12 +35,12 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
-LIBS = @LIBS@ 
+CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@
+LIBS = @LIBS@ @COM_ERR_LIBS@
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@
+LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@
 
 SHELL = /bin/sh
 
@@ -77,53 +77,48 @@ install:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 collectnews: collectnews.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o collectnews collectnews.o libimap.a \
-		$(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o collectnews collectnews.o libimap.a $(DEPLIBS) \
+	 $(LIBS)
 
 syncnews: syncnews.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o syncnews syncnews.o libimap.a \
-		$(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o syncnews  syncnews.o libimap.a $(DEPLIBS) \
+	 $(LIBS)
 
 deliver: deliver.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o deliver deliver.o libimap.a \
-		$(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o deliver deliver.o libimap.a $(DEPLIBS) $(LIBS)
 
 deliver.pure: deliver.o libimap.a $(DEPLIBS)
 	$(PURIFY) -windows=no -logfile=/tmp/deliver.log.%p \
-	$(CC) $(LDFLAGS) -o deliver deliver.o libimap.a \
-		$(DEPLIBS) $(LIBS)
+	 $(CC) $(LDFLAGS) -o deliver \
+	 deliver.o libimap.a $(DEPLIBS) $(LIBS)
 
 dump_deliver: dump_deliver.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ dump_deliver.o libimap.a \
-		$(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o \
+	 $@ dump_deliver.o libimap.a $(DEPLIBS) $(LIBS)
 
 imapd: $(IMAPDOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o imapd $(IMAPDOBJS) libimap.a \
-		$(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o imapd \
+	 $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
 pop3d: pop3d.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o pop3d pop3d.o libimap.a \
-		$(DEPLIBS) $(LIBS) 
+	$(CC) $(LDFLAGS) -o pop3d pop3d.o libimap.a $(DEPLIBS) $(LIBS)
 
 arbitron: arbitron.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o arbitron arbitron.o libimap.a \
-		$(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o arbitron arbitron.o libimap.a $(DEPLIBS) $(LIBS)
 
 reconstruct: reconstruct.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o reconstruct reconstruct.o libimap.a \
-		$(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o \
+	 reconstruct reconstruct.o libimap.a $(DEPLIBS) $(LIBS)
 
 quota: quota.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o quota quota.o libimap.a \
-		$(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o quota quota.o libimap.a $(DEPLIBS) $(LIBS)
 
 updateimsp: updateimsp.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o updateimsp updateimsp.o libimap.a \
-		$(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o \
+	 updateimsp updateimsp.o libimap.a $(DEPLIBS) $(LIBS)
 
 krbck: krbck.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o krbck krbck.o libimap.a \
-		$(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o krbck krbck.o $(DEPLIBS) $(LIBS)
 
 libimap.a: $(LOBJS)
 	rm -f libimap.a

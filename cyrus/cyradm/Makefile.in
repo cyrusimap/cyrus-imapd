@@ -21,12 +21,12 @@ INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
 DEFS = @DEFS@
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ @TCLCPPFLAGS@
-LIBS =  @TCLLIBS@ @LIBS@
+CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ @TCL_CPPFLAGS@
+LIBS =  @TCL_LIBS@ @LIBS@ @TCL_LIBS@ @LIBS@
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@ 
 
 CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@
+LDFLAGS =  @TCL_LDFLAGS@ @LDFLAGS@
 
 SHELL = /bin/sh
 

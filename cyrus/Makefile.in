@@ -28,6 +28,11 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
+COMPILE_ET = @COMPILE_ET@
+COM_ERR_LIBS = @COM_ERR_LIBS@
+COM_ERR_LDFLAGS = @COM_ERR_LDFLAGS@
+COM_ERR_CPPFLAGS = @COM_ERR_CPPFLAGS@
+
 all:: checkdepend
 	@for d in  $(SUBDIRS); \
 	do \

@@ -91,7 +91,6 @@ static int mboxlist_safe_rename();
 
 static struct quota *mboxlist_newquota;
 static int mboxlist_changequota();
-static int safe_rename();
 
 #define FNAME_MBOXLIST "/mailboxes"
 #define FNAME_USERDIR "/user/"
@@ -446,7 +445,7 @@ struct auth_state *auth_state;
 	close(newlistfd);
 	return r;
     }
-    if (safe_rename(newlistfname, listfname, newlistfd) == -1) {
+    if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
 	close(newlistfd);
 	mboxlist_unlock();
@@ -2176,7 +2175,7 @@ int maycreate;
 void
 mboxlist_close()
 {
-     if (*list_base && *list_size) {
+     if (*list_base && list_size) {
 	  map_free(&list_base, &list_size);
      }
      if (listfd != -1) {
