@@ -1,4 +1,4 @@
-$Id: drac_auth.patch,v 1.6 2001/05/31 20:17:29 ken3 Exp $
+$Id: drac_auth.patch,v 1.7 2001/06/01 19:26:16 ken3 Exp $
 
 Patch to add support for Dynamic Relay Authorization Control
 
@@ -64,8 +64,13 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 
 
 
-*** acconfig.h.orig	Wed Mar 28 11:11:49 2001
---- acconfig.h	Thu May 31 16:06:28 2001
+Index: acconfig.h
+===================================================================
+RCS file: /afs/andrew/system/cvs/src/cyrus/acconfig.h,v
+retrieving revision 1.17
+diff -c -r1.17 acconfig.h
+*** acconfig.h	2001/03/28 16:11:49	1.17
+--- acconfig.h	2001/06/01 19:14:46
 ***************
 *** 81,86 ****
 --- 81,89 ----
@@ -78,8 +83,13 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   /* do we have OpenSSL? */
   #undef HAVE_SSL
   
-*** configure.in.orig	Thu May 17 13:33:29 2001
---- configure.in	Thu May 31 16:06:29 2001
+Index: configure.in
+===================================================================
+RCS file: /afs/andrew/system/cvs/src/cyrus/configure.in,v
+retrieving revision 1.197
+diff -c -r1.197 configure.in
+*** configure.in	2001/05/17 17:33:29	1.197
+--- configure.in	2001/06/01 19:14:46
 ***************
 *** 730,735 ****
 --- 730,750 ----
@@ -104,28 +114,35 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   CMU_SOCKETS
   CMU_LIBWRAP
   CMU_UCDSNMP
-*** imap/imapd.c.orig	Mon May 21 14:27:10 2001
---- imap/imapd.c	Thu May 31 16:06:29 2001
+Index: imap/imapd.c
+===================================================================
+RCS file: /afs/andrew/system/cvs/src/cyrus/imap/imapd.c,v
+retrieving revision 1.307
+diff -c -r1.307 imapd.c
+*** imap/imapd.c	2001/05/21 18:27:10	1.307
+--- imap/imapd.c	2001/06/01 19:14:50
 ***************
 *** 117,122 ****
---- 117,126 ----
+--- 117,127 ----
   static SSL *tls_conn = NULL;
   #endif /* HAVE_SSL */
   
 + #ifdef DRAC_AUTH
 + static int drac_interval; /* dracd "ping" interval; 0 = disabled */
++ static unsigned long drac_clientip;
 + #endif /* DRAC_AUTH */
 + 
   /* current sub-user state */
   static struct mailbox mboxstruct;
   static struct mailbox *imapd_mailbox;
 ***************
-*** 539,544 ****
---- 543,563 ----
-         TLS negotiation immediately */
-      if (imaps == 1) cmd_starttls(NULL, 1);
+*** 436,441 ****
+--- 441,462 ----
+      /* setup for sending IMAP IDLE notifications */
+      idle_enabled();
   
 + #ifdef DRAC_AUTH
++     /* setup for sending DRAC "pings" */
 +     drac_interval = config_getint("dracinterval", 5);
 +     if (drac_interval < 0) drac_interval = 0;
 + 
@@ -140,12 +157,27 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 +     }
 + #endif /* DRAC_AUTH */
 + 
-      snmp_increment(TOTAL_CONNECTIONS, 1);
-      snmp_increment(ACTIVE_CONNECTIONS, 1);
+      /* create connection to the SNMP listener, if available. */
+      snmp_connect(); /* ignore return code */
+      snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
+***************
+*** 508,513 ****
+--- 529,540 ----
+  	if (getsockname(0, (struct sockaddr *)&imapd_localaddr, &salen) == 0) {
+  	    imapd_haveaddr = 1;
+  	}
++ 
++ #ifdef DRAC_AUTH
++ 	drac_clientip = imapd_remoteaddr.sin_addr.s_addr;
++     } else {
++ 	drac_clientip = 0;
++ #endif /* DRAC_AUTH */
+      }
   
+      /* create the SASL connection */
 ***************
 *** 620,625 ****
---- 639,649 ----
+--- 647,657 ----
       prot_flush(imapd_out);
       /* one less active connection */
       snmp_increment(ACTIVE_CONNECTIONS, -1);
@@ -158,13 +190,13 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   }
   
 ***************
-*** 640,645 ****
---- 664,691 ----
+*** 640,646 ****
+--- 672,700 ----
   
   }
   
 + #ifdef DRAC_AUTH
-+ /*
+  /*
 +  * Ping dracd every 'drac_interval' minutes
 +  * to let it know that we are still connected
 +  */
@@ -173,7 +205,7 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 + {
 +     char *err;
 + 
-+     if (dracsend(imapd_remoteaddr.sin_addr.s_addr, &err) != 0) {
++     if (dracsend(drac_clientip, &err) != 0) {
 + 	/* disable DRAC */
 + 	prot_removewaitevent(s, ev);
 + 	syslog(LOG_NOTICE, "dracsend: %s (DISABLED)", err);
@@ -185,61 +217,88 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 + }
 + #endif /* DRAC_AUTH */
 + 
-  /*
++ /*
    * Top-level command loop parsing
    */
+  void
 ***************
-*** 1485,1490 ****
---- 1531,1541 ----
-  
-      if (!reply) reply = "User logged in";
-  
+*** 653,658 ****
+--- 707,715 ----
+      static struct buf tag, cmd, arg1, arg2, arg3, arg4;
+      char *p;
+      const char *err;
 + #ifdef DRAC_AUTH
-+     if (drac_interval)
-+ 	prot_addwaitevent(imapd_in, 0 /* ping now */, drac_ping, NULL);
-+ #endif /* DRAC_AUTH */
-+ 
-      /* Create telemetry log */
-      imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
-  
-***************
-*** 1628,1633 ****
---- 1679,1689 ----
-  
-      prot_setsasl(imapd_in,  imapd_saslconn);
-      prot_setsasl(imapd_out, imapd_saslconn);
-+ 
-+ #ifdef DRAC_AUTH
-+     if (drac_interval)
-+ 	prot_addwaitevent(imapd_in, 0 /* ping now */, drac_ping, NULL);
++     struct prot_waitevent *drac_event;
 + #endif /* DRAC_AUTH */
   
-      /* Create telemetry log */
-      imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
-*** imap/pop3d.c.orig	Wed May 30 19:12:01 2001
---- imap/pop3d.c	Thu May 31 16:06:29 2001
+      prot_printf(imapd_out,
+  		"* OK %s Cyrus IMAP4 %s server ready\r\n", config_servername,
 ***************
-*** 100,106 ****
+*** 727,732 ****
+--- 784,795 ----
+  		cmd_authenticate(tag.s, arg1.s);
   
-  extern int errno;
+  		snmp_increment(AUTHENTICATE_COUNT, 1);
++ 
++ #ifdef DRAC_AUTH
++ 		if (imapd_userid && drac_interval && drac_clientip)
++ 		    drac_event = prot_addwaitevent(imapd_in, 0 /* ping now */,
++ 						   drac_ping, NULL);
++ #endif /* DRAC_AUTH */
+  	    }
+  	    else if (!imapd_userid) goto nologin;
+  	    else if (!strcmp(cmd.s, "Append")) {
+***************
+*** 981,986 ****
+--- 1044,1055 ----
+  		cmd_login(tag.s, arg1.s, arg2.s);
   
-! 
-  
-  #ifdef HAVE_SSL
-  static SSL *tls_conn;
+  		snmp_increment(LOGIN_COUNT, 1);
++ 
++ #ifdef DRAC_AUTH
++ 		if (imapd_userid && drac_interval && drac_clientip)
++ 		    drac_event = prot_addwaitevent(imapd_in, 0 /* ping now */,
++ 						   drac_ping, NULL);
++ #endif /* DRAC_AUTH */
+  	    }
+  	    else if (!strcmp(cmd.s, "Logout")) {
+  		if (c == '\r') c = prot_getc(imapd_in);
+***************
+*** 992,997 ****
+--- 1061,1071 ----
+  			    error_message(IMAP_BYE_LOGOUT));
+  		prot_printf(imapd_out, "%s OK %s\r\n", tag.s, 
+  			    error_message(IMAP_OK_COMPLETED));
++ 
++ #ifdef DRAC_AUTH
++ 		prot_removewaitevent(imapd_in, drac_event);
++ #endif /* DRAC_AUTH */
++ 
+  		return;
+  	    }
+  	    else if (!imapd_userid) goto nologin;
+Index: imap/pop3d.c
+===================================================================
+RCS file: /afs/andrew/system/cvs/src/cyrus/imap/pop3d.c,v
+retrieving revision 1.94
+diff -c -r1.94 pop3d.c
+*** imap/pop3d.c	2001/06/01 02:59:02	1.94
+--- imap/pop3d.c	2001/06/01 19:14:50
+***************
+*** 100,105 ****
 --- 100,108 ----
   
   extern int errno;
   
-! #ifdef DRAC_AUTH
-! static int drac_enabled;
-! #endif /* DRAC_AUTH */
++ #ifdef DRAC_AUTH
++ static int drac_enabled;
++ #endif /* DRAC_AUTH */
+  
   
   #ifdef HAVE_SSL
-  static SSL *tls_conn;
 ***************
 *** 284,289 ****
---- 286,295 ----
+--- 287,296 ----
          TLS negotiation immediatly */
       if (pop3s == 1) cmd_starttls(1);
   
@@ -251,8 +310,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   		apop_enabled() ? popd_apop_chal : config_servername,
   		CYRUS_VERSION);
 ***************
-*** 1231,1236 ****
---- 1237,1255 ----
+*** 1233,1238 ****
+--- 1240,1258 ----
       }
       popd_mailbox = &mboxstruct;
       proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
@@ -272,8 +331,13 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   
       /* Create telemetry log */
       telemetry_log(popd_userid, popd_in, popd_out);
-*** man/imapd.conf.5.orig	Wed Mar  7 10:52:59 2001
---- man/imapd.conf.5	Thu May 31 16:06:29 2001
+Index: man/imapd.conf.5
+===================================================================
+RCS file: /afs/andrew/system/cvs/src/cyrus/man/imapd.conf.5,v
+retrieving revision 1.41
+diff -c -r1.41 imapd.conf.5
+*** man/imapd.conf.5	2001/03/07 15:52:59	1.41
+--- man/imapd.conf.5	2001/06/01 19:14:51
 ***************
 *** 224,230 ****
   Unix domain socket that lmtpd listens on.
