@@ -38,7 +38,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
 
-int capabilities(struct protstream *conn);
+int capabilities(struct protstream *conn, sasl_conn_t *saslconn);
 
 /*
  * Get a sieve scripe with name "name" and output it's contents
@@ -67,6 +67,13 @@ int deletescript(struct protstream *conn, mystring_t *name);
  */
 
 int verifyscriptname(mystring_t *name);
+
+/*
+ * Is there space for this script?
+ *
+ */
+
+int cmd_havespace(struct protstream *sieved_out, mystring_t *sieve_name, unsigned long num);
 
 /*
  * List all the scripts for the user. place a '*' next to the active one

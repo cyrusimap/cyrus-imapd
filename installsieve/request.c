@@ -265,28 +265,36 @@ int showlist(struct protstream *pout, struct protstream *pin)
     {
       char *str=string_DATAPTR(state.str);
 
-      /* see if it has a '*' as the last character (i.e. is active script ) */
-      if (str[state.str->len -1]=='*')
+      if (yylex(&state, pin)==' ')
       {
-	str[(state.str->len)-1]='\0';
-	printf("  %s  <- Active Sieve Script\n",string_DATAPTR(state.str));
+	  if (yylex(&state, pin)!=TOKEN_ACTIVE)
+	      printf("Expected ACTIVE\n");
+	  if (yylex(&state, pin)!=EOL)
+	      printf("Expected EOL\n");
+
+	  printf("  %s  <- Active Sieve Script\n",string_DATAPTR(state.str));	  
       } else {
-	printf("  %s\n",string_DATAPTR(state.str));
-      }
+	  /* assume it's a EOL */
+	  printf("  %s\n",string_DATAPTR(state.str));	  
+	  
+      }      
 
     } else {
 
-      if (yylex(&state, pin)!=' ')
+	/* xxx check for error
+	   if (yylex(&state, pin)!=' ')
 	printf("expected sp\n");
 
       if (yylex(&state, pin)!=STRING)
-	printf("expected string\n");
+      printf("expected string\n");*/
+
+      if (yylex(&state, pin)!=EOL)
+	  printf("expected eol\n");
 
       end=1;
     }
 
-    if (yylex(&state, pin)!=EOL)
-      printf("expected eol\n");
+
     
   } while (end==0);
 

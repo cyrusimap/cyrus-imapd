@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.4 2000/02/03 06:51:12 tmartin Exp $
+ * $Id: parser.c,v 1.5 2000/02/03 20:14:24 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -59,9 +59,10 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   mystring_t *initial_challenge = NULL;
   mystring_t *sieve_name = NULL;
   mystring_t *sieve_data = NULL;
+  unsigned long num;
 
   /* get one token from the lexer */
-  token = timlex(NULL, sieved_in);
+  token = timlex(NULL, NULL, sieved_in);
 
   if ((authenticated == 0) && (token > 255) && (token!=AUTHENTICATE) && (token!=LOGOUT))
   {
@@ -75,19 +76,19 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   switch (token)
   {
   case AUTHENTICATE:
-    if (timlex(NULL, sieved_in)!=SPACE)
+    if (timlex(NULL, NULL, sieved_in)!=SPACE)
     {
       error_msg = "SPACE must occur after AUTHENTICATE";
       goto error;
     }
 
-    if (timlex(&mechanism_name, sieved_in)!=STRING)
+    if (timlex(&mechanism_name, NULL, sieved_in)!=STRING)
     {
       error_msg = "Did not specify mechanism name";
       goto error;
     }
 
-    token = timlex(NULL, sieved_in);
+    token = timlex(NULL, NULL, sieved_in);
 
     if (token != EOL)
     {
@@ -98,13 +99,13 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	goto error;
       }
 
-      if (timlex(&initial_challenge, sieved_in)!=STRING)
+      if (timlex(&initial_challenge, NULL, sieved_in)!=STRING)
       {
 	error_msg = "Expected string";
 	goto error;
       }
 
-      token = timlex(NULL, sieved_in);      
+      token = timlex(NULL, NULL, sieved_in);      
     }
 
     if (token != EOL)
@@ -125,40 +126,42 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       break;
 
   case HAVESPACE:
-      if (timlex(NULL, sieved_in)!=SPACE)
+      if (timlex(NULL, NULL, sieved_in)!=SPACE)
       {
 	  error_msg = "SPACE must occur after PUTSCRIPT";
 	  goto error;
       }
       
-      if (timlex(&sieve_name, sieved_in)!=STRING)
+      if (timlex(&sieve_name, NULL, sieved_in)!=STRING)
       {
 	  error_msg = "Did not specify script name";
 	  goto error;
       }
       
-      if (timlex(NULL, sieved_in)!=SPACE)
+      if (timlex(NULL, NULL, sieved_in)!=SPACE)
       {
 	  error_msg = "Expected SPACE";
 	  goto error;
       }
       
-      if (timlex(NULL, sieved_in)!=EOL)
+      if (timlex(NULL, &num, sieved_in)!=NUMBER)
       {
-	  error_msg = "Garbage after logout command";
+	  error_msg = "Expected Number";
 	  goto error;
       }
 
-      if (timlex(NULL, sieved_in)!=EOL)
+      if (timlex(NULL, NULL, sieved_in)!=EOL)
       {
-	  error_msg = "Garbage after logout command";
+	  error_msg = "Expected EOL";
 	  goto error;
       }
-      /* abcd */
+
+      cmd_havespace(sieved_out, sieve_name, num);
+
       break;
 
   case LOGOUT:
-    if (timlex(NULL, sieved_in)!=EOL)
+    if (timlex(NULL, NULL, sieved_in)!=EOL)
     {
       error_msg = "Garbage after logout command";
       goto error;
@@ -170,19 +173,19 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     break;
 
   case GETSCRIPT:
-    if (timlex(NULL, sieved_in)!=SPACE)
+    if (timlex(NULL, NULL, sieved_in)!=SPACE)
     {
       error_msg = "SPACE must occur after GETSCRIPT";
       goto error;
     }
 
-    if (timlex(&sieve_name, sieved_in)!=STRING)
+    if (timlex(&sieve_name, NULL, sieved_in)!=STRING)
     {
       error_msg = "Did not specify script name";
       goto error;
     }
 
-    if (timlex(NULL, sieved_in)!=EOL)
+    if (timlex(NULL, NULL, sieved_in)!=EOL)
     {
       error_msg = "Expected EOL";
       goto error;
@@ -194,31 +197,31 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
 
   case PUTSCRIPT:
-    if (timlex(NULL, sieved_in)!=SPACE)
+    if (timlex(NULL, NULL, sieved_in)!=SPACE)
     {
       error_msg = "SPACE must occur after PUTSCRIPT";
       goto error;
     }
 
-    if (timlex(&sieve_name, sieved_in)!=STRING)
+    if (timlex(&sieve_name, NULL, sieved_in)!=STRING)
     {
       error_msg = "Did not specify script name";
       goto error;
     }
 
-    if (timlex(NULL, sieved_in)!=SPACE)
+    if (timlex(NULL, NULL, sieved_in)!=SPACE)
     {
       error_msg = "Expected SPACE";
       goto error;
     }
 
-    if (timlex(&sieve_data, sieved_in)!=STRING)
+    if (timlex(&sieve_data, NULL, sieved_in)!=STRING)
     {
       error_msg = "Did not specify script data";
       goto error;
     }
 
-    if (timlex(NULL, sieved_in)!=EOL)
+    if (timlex(NULL, NULL, sieved_in)!=EOL)
     {
       error_msg = "Expected EOL";
       goto error;
@@ -229,19 +232,19 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     break;
 
   case SETACTIVE:
-    if (timlex(NULL, sieved_in)!=SPACE)
+    if (timlex(NULL, NULL, sieved_in)!=SPACE)
     {
       error_msg = "SPACE must occur after SETACTIVE";
       goto error;
     }
 
-    if (timlex(&sieve_name, sieved_in)!=STRING)
+    if (timlex(&sieve_name, NULL, sieved_in)!=STRING)
     {
       error_msg = "Did not specify script name";
       goto error;
     }
 
-    if (timlex(NULL, sieved_in)!=EOL)
+    if (timlex(NULL, NULL, sieved_in)!=EOL)
     {
       error_msg = "Expected EOL";
       goto error;
@@ -252,19 +255,19 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     break;
 
   case DELETESCRIPT:
-    if (timlex(NULL, sieved_in)!=SPACE)
+    if (timlex(NULL, NULL, sieved_in)!=SPACE)
     {
       error_msg = "SPACE must occur after DELETESCRIPT";
       goto error;
     }
 
-    if (timlex(&sieve_name, sieved_in)!=STRING)
+    if (timlex(&sieve_name, NULL, sieved_in)!=STRING)
     {
       error_msg = "Did not specify script name";
       goto error;
     }
 
-    if (timlex(NULL, sieved_in)!=EOL)
+    if (timlex(NULL, NULL, sieved_in)!=EOL)
     {
       error_msg = "Expected EOL";
       goto error;
@@ -276,7 +279,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
   case LISTSCRIPTS:
 
-    if (timlex(NULL, sieved_in)!=EOL)
+    if (timlex(NULL, NULL, sieved_in)!=EOL)
     {
       error_msg = "Expected EOL";
       goto error;
@@ -387,7 +390,7 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
     prot_write(sieved_out,inbase64,inbase64len);
     prot_printf(sieved_out,"\r\n");
 
-    token1 = timlex(&str, sieved_in);
+    token1 = timlex(&str, NULL, sieved_in);
 
     if (token1==STRING)
     {
@@ -405,11 +408,11 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
       }      
       
     } else {
-      *errmsg="Expected STRING";
+      *errmsg="Expected STRING-xxx1";
       return FALSE;
     }
 
-    token2 = timlex(&blahstr, sieved_in);
+    token2 = timlex(&blahstr, NULL, sieved_in);
 
     /* we want to see a STRING followed by EOL */
     if ((token1==STRING) && (token2==EOL))

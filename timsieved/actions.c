@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.11 2000/02/03 06:51:11 tmartin Exp $
+ * $Id: actions.c,v 1.12 2000/02/03 20:14:23 tmartin Exp $
  * 
  */
 /***********************************************************
@@ -48,7 +48,6 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "codes.h"
 #include "actions.h"
 #include "scripttest.h"
-
 
 
 /* after a user has authentication, our current directory is their Sieve 
@@ -117,7 +116,7 @@ int scriptname_valid(mystring_t *name)
 
   ptr=string_DATAPTR(name);
 
-  for (int lup=0;lup<name->len;lup++)
+  for (lup=0;lup<name->len;lup++)
   {
       if ((ptr[lup]=='/') || (ptr[lup]=='\0'))
 	  return TIMSIEVE_FAIL;
@@ -129,6 +128,7 @@ int scriptname_valid(mystring_t *name)
 int capabilities(struct protstream *conn, sasl_conn_t *saslconn)
 {
     char *sasllist;
+    int mechcount;
 
     /* implementation */
     prot_printf(conn, "\"IMPLEMENTATION\" \"" SIEVED_IDENT " " SIEVED_VERSION "\"\r\n");
@@ -139,15 +139,15 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn)
 		    &sasllist,
 		    NULL, &mechcount) == SASL_OK && mechcount > 0)
     {
-      prot_printf(sieved_out,"%s",sasllist);
+      prot_printf(conn,"%s",sasllist);
     }
     
     /* Sieve capabilities */
-    prot_printf(sieved_out,"\"SIEVE\" \"%s\"\r\n",sieve_extensions());
+    prot_printf(conn,"\"SIEVE\" \"%s\"\r\n",sieve_listextensions());
 
     /* TODO: STARTTLS */
 
-    prot_printf("OK\r\n");
+    prot_printf(conn,"OK\r\n");
 
     return TIMSIEVE_OK;
 }
@@ -209,7 +209,7 @@ int getscript(struct protstream *conn, mystring_t *name)
 
   prot_printf(conn,"\r\n");
   
-  prot_printf(conn, "OK \"Success\"\r\n");
+  prot_printf(conn, "OK\r\n");
 
   return TIMSIEVE_OK;
 }
@@ -243,6 +243,11 @@ static int countscripts(char *name)
     }
     
     return number;
+}
+
+static int allowedmorescripts(int num)
+{
+
 }
 
 /* save name as a sieve script */
@@ -320,7 +325,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data)
   snprintf(p2, 1023, "%s.script", string_DATAPTR(name));
   rename(path, p2);
 
-  prot_printf(conn, "OK \"Success\"\r\n");
+  prot_printf(conn, "OK\r\n");
 
   return TIMSIEVE_OK;
 }
@@ -346,14 +351,7 @@ static int isactive(char *name)
   struct stat filestats;  /* returned by stat */
   int result;  
 
-  result = scriptname_valid(name);
-  if (result!=TIMSIEVE_OK)
-  {
-      prot_printf(conn,"NO \"Invalid script name\"\r\n");
-      return result;
-  }
-
-  snprintf(filename, 1023, "%s.script", name);
+  snprintf(filename, 1023, "%s.script", string_DATAPTR(name));
 
   result=stat(filename,&filestats);
   if (result != 0) {
@@ -393,7 +391,7 @@ int deletescript(struct protstream *conn, mystring_t *name)
       return TIMSIEVE_FAIL;
   }
 
-  prot_printf(conn,"OK \"Success\"\r\n");
+  prot_printf(conn,"OK\r\n");
   return TIMSIEVE_OK;
 }
 
@@ -426,7 +424,7 @@ int listscripts(struct protstream *conn)
 	namewo[length-7]='\0';
 	
 	if (isactive(namewo)==TRUE)
-	  prot_printf(conn,"\"%s*\"\r\n", namewo);
+	  prot_printf(conn,"\"%s\" ACTIVE\r\n", namewo);
 	else
 	  prot_printf(conn,"\"%s\"\r\n", namewo);
 
@@ -435,7 +433,7 @@ int listscripts(struct protstream *conn)
     }    
   }
 
-  prot_printf(conn,"OK \"Success\"\r\n");
+  prot_printf(conn,"OK\r\n");
   
   return TIMSIEVE_OK;
 }
@@ -501,6 +499,47 @@ int setactive(struct protstream *conn, mystring_t *name)
       return TIMSIEVE_FAIL;
   }
 
-  prot_printf(conn,"OK \"Worked\"\r\n");
+  prot_printf(conn,"OK\r\n");
   return TIMSIEVE_OK;
+}
+
+int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long num)
+{
+    int result;
+    int maxscripts;
+    unsigned long maxscriptsize;
+
+    result = scriptname_valid(sieve_name);
+    if (result!=TIMSIEVE_OK)
+    {
+	prot_printf(conn,"NO \"Invalid script name\"\r\n");
+	return result;
+    }
+
+    /* see if the size of the script is too big */
+    maxscriptsize = config_getint("sieve_maxscriptsize", 32);
+    maxscriptsize *= 1024;
+
+    if (num > maxscriptsize)
+    {
+	prot_printf(conn,
+		    "NO \"Script size is too large. Max script size is %d bytes\"\r\n",
+		    maxscriptsize);
+	return TIMSIEVE_FAIL;
+    }
+
+    /* see if this would put the user over quota */
+    maxscripts = config_getint("sieve_maxscripts",5);
+
+    if (countscripts(string_DATAPTR(sieve_name))+1 > maxscripts)
+    {
+	prot_printf(conn,
+		    "NO \"You are only allowed %d scripts on this server\"\r\n",
+		    maxscripts);
+	return TIMSIEVE_FAIL;
+    }
+
+
+    prot_printf(conn,"OK\r\n");
+    return TIMSIEVE_OK;
 }
