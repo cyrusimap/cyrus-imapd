@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.18 2004/02/04 01:42:38 ken3 Exp $ */
+/* $Id: backend.c,v 1.19 2004/02/04 18:05:30 ken3 Exp $ */
 
 #include <config.h>
 
@@ -89,7 +89,7 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 	prot_flush(pout);
     }
 
-    do { /* look for the end of the capabilities */
+    do {
 	if (prot_fgets(str, sizeof(str), pin) == NULL) {
 	    return NULL;
 	}
@@ -107,6 +107,7 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 		}
 	    }
 	}
+	/* look for the end of the capabilities */
     } while (strncasecmp(str, prot->capa_cmd.resp, strlen(prot->capa_cmd.resp)));
     
     return ret;
@@ -155,7 +156,8 @@ static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
 }
 
 static int backend_authenticate(struct backend *s, struct protocol_t *prot,
-				const char *userid, const char **status)
+				char **mechlist, const char *userid,
+				const char **status)
 {
     int r;
     sasl_security_properties_t *secprops = NULL;
@@ -163,7 +165,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     char remoteip[60], localip[60];
     socklen_t addrsize;
     sasl_callback_t *cb;
-    char buf[2048], optstr[128], *p, *mechlist;
+    char buf[2048], optstr[128], *p;
     const char *mech_conf, *pass;
     int have_starttls = 1;
 
@@ -206,47 +208,36 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	return r;
     }
 
-    if (prot->capa_cmd.cmd) {
-	/* read the initial greeting */
-	if (!prot_fgets(buf, sizeof(buf), s->in)) {
-	    syslog(LOG_ERR,
-		   "backend_authenticate(): couldn't read initial greeting: %s",
-		   s->in->error ? s->in->error : "(null)");
-	    return SASL_FAIL;
-	}
-    }
-
     /* Get SASL mechanism list.  We can force a particular
        mechanism using a <shorthost>_mechs option */
-
     strcpy(buf, s->hostname);
     p = strchr(buf, '.');
     if (p) *p = '\0';
     strcat(buf, "_mechs");
     mech_conf = config_getoverflowstring(buf, NULL);
-    
+
     do {
-	/* If we don't have a mech_conf, ask the server what it can do */
-	mechlist = ask_capability(s->out, s->in, prot, &s->capability);
+	/* If we have a mech_conf, use it */
 	if (mech_conf) {
-	    free(mechlist);
-	    mechlist = xstrdup(mech_conf);
+	    free(*mechlist);
+	    *mechlist = xstrdup(mech_conf);
 	}
 
-	if (mechlist) {
+	if (*mechlist) {
 	    /* we now do the actual SASL exchange */
-	    saslclient(s->saslconn, &prot->sasl_cmd, mechlist,
+	    saslclient(s->saslconn, &prot->sasl_cmd, *mechlist,
 		       s->in, s->out, &r, status);
 
 	    /* garbage collect */
-	    free(mechlist);
-	    mechlist = NULL;
+	    free(*mechlist);
+	    *mechlist = NULL;
 	}
-	else
-	    r = SASL_NOMECH;
+	else r = SASL_NOMECH;
 
+	/* If we don't have a usable mech, do TLS and try again */
     } while (r == SASL_NOMECH && CAPA(s, CAPA_STARTTLS) &&
-	     do_starttls(s, &prot->tls_cmd) != -1);
+	     do_starttls(s, &prot->tls_cmd) != -1 &&
+	     (*mechlist = ask_capability(s->out, s->in, prot, &s->capability)));
 
     /* xxx unclear that this is correct */
     free_callbacks(cb);
@@ -269,6 +260,8 @@ struct backend *backend_connect(struct backend *ret, const char *server,
     int r;
     int err;
     struct addrinfo hints, *res0 = NULL, *res;
+    struct sockaddr_un sunsock;
+    char buf[2048], *mechlist = NULL;
 
     if (!ret) {
 	ret = xmalloc(sizeof(struct backend));
@@ -277,16 +270,39 @@ struct backend *backend_connect(struct backend *ret, const char *server,
 	ret->timeout = NULL;
     }
 
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = PF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    err = getaddrinfo(server, prot->service, &hints, &res0);
-    if (err) {
-	syslog(LOG_ERR, "getaddrinfo(%s) failed: %s",
-	       server, gai_strerror(err));
-	free(ret);
-	return NULL;
+    if (server[0] == '/') { /* unix socket */
+	res0 = (struct addrinfo *) xmalloc(sizeof(struct addrinfo));
+	memset(res0, 0, sizeof(struct addrinfo));
+	res0->ai_family = PF_UNIX;
+	res0->ai_socktype = SOCK_STREAM;
+
+ 	res0->ai_addr = (struct sockaddr *) &sunsock;
+ 	res0->ai_addrlen = sizeof(sunsock.sun_family) + strlen(server) + 1;
+#ifdef SIN6_LEN
+ 	res0->ai_addrlen += sizeof(sunsock.sun_len);
+ 	sunsock.sun_len = res0->ai_addrlen;
+#endif
+	sunsock.sun_family = AF_UNIX;
+	strcpy(sunsock.sun_path, server);
+
+	/* XXX set that we are preauthed */
+
+	/* change hostname to 'config_servername' */
+	strlcpy(ret->hostname, config_servername, sizeof(ret->hostname));
     }
+    else { /* inet socket */
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = PF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	err = getaddrinfo(server, prot->service, &hints, &res0);
+	if (err) {
+	    syslog(LOG_ERR, "getaddrinfo(%s) failed: %s",
+		   server, gai_strerror(err));
+	    free(ret);
+	    return NULL;
+	}
+    }
+
     for (res = res0; res; res = res->ai_next) {
 	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	if (sock < 0)
@@ -311,14 +327,34 @@ struct backend *backend_connect(struct backend *ret, const char *server,
     ret->sock = sock;
     prot_setflushonread(ret->in, ret->out);
     
-    /* now need to authenticate to backend server */
-    if ((r = backend_authenticate(ret, prot, userid, auth_status))) {
-	syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
-	       sasl_errstring(r, NULL, NULL));
-	free(ret);
-        close(sock);
-	return NULL;
+    if (prot->capa_cmd.cmd) {
+	/* read the initial greeting */
+	if (!prot_fgets(buf, sizeof(buf), ret->in)) {
+	    syslog(LOG_ERR,
+		   "backend_connect(): couldn't read initial greeting: %s",
+		   ret->in->error ? ret->in->error : "(null)");
+	    free(ret);
+	    close(sock);
+	    return NULL;
+	}
     }
+
+    /* get the capabilities */
+    mechlist = ask_capability(ret->out, ret->in, prot, &ret->capability);
+
+    /* now need to authenticate to backend server,
+       unless we're doing LMTP on a UNIX socket (deliver) */
+    if ((server[0] != '/') || strcmp(prot->sasl_service, "lmtp")) {
+	if ((r = backend_authenticate(ret, prot, &mechlist, userid, auth_status))) {
+	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
+		   sasl_errstring(r, NULL, NULL));
+	    free(ret);
+	    close(sock);
+	    ret = NULL;
+	}
+    }
+
+    if (mechlist) free(mechlist);
     
     return ret;
 }
