@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.9 2000/03/02 21:21:28 leg Exp $ */
+/* $Id: proxyd.c,v 1.10 2000/03/06 08:03:17 leg Exp $ */
 
 #include <config.h>
 
@@ -1742,8 +1742,8 @@ char *passwd;
     if (!reply) reply = "User logged in";
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, proxyd_userid,
-	    getpid());
+    sprintf(buf, "%s%s%s/%ul", config_dir, FNAME_LOGDIR, proxyd_userid,
+	    (unsigned long) getpid());
     logfile = fopen(buf, "w");
     if (logfile) {
 	prot_setlog(proxyd_in, fileno(logfile));
@@ -1871,8 +1871,8 @@ char *authtype;
     prot_setsasl(proxyd_out, proxyd_saslconn);
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, proxyd_userid,
-	    getpid());
+    sprintf(buf, "%s%s%s/%ul", config_dir, FNAME_LOGDIR, proxyd_userid,
+	    (unsigned long) getpid());
     logfile = fopen(buf, "w");
     if (logfile) {
 	prot_setlog(proxyd_in, fileno(logfile));
@@ -2533,7 +2533,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, rights;
     char *canon_identifier;
-    int canonidlen;
+    int canonidlen = 0;
     char *acl;
     char *rightsdesc;
 
@@ -2590,7 +2590,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
 void cmd_myrights(char *tag, char *name, int oldform)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
-    int r, rights;
+    int r, rights = 0;
     char *acl;
     char str[ACL_MAXSTR];
 
