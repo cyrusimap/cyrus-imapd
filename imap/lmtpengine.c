@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.33 2001/08/31 18:42:48 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.34 2001/09/02 14:53:59 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -56,6 +56,7 @@
 #include <com_err.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <limits.h>
 #include <sys/wait.h>
 #include <netdb.h>
 #include <sys/socket.h>
