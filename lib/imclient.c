@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.25 1998/05/15 21:51:36 neplokh Exp $
+ $Id: imclient.c,v 1.26 1999/04/08 21:00:48 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -45,7 +45,7 @@
 #endif
 
 #include "sasl.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "xmalloc.h"
 #include "imparse.h"
 #include "imclient.h"
@@ -468,7 +468,7 @@ va_dcl
 
 	default:
 	    fatal("internal error: invalid format specifier in imclient_send",
-		  EX_SOFTWARE);
+		  EC_SOFTWARE);
 	}
 	fmt = percent + 1;
     }

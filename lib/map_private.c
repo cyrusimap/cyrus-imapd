@@ -1,5 +1,5 @@
 /* map_private.c -- memory-mapping routines using MAP_PRIVATE.
- $Id: map_private.c,v 1.10 1998/05/15 21:52:07 neplokh Exp $
+ $Id: map_private.c,v 1.11 1999/04/08 21:00:48 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -29,7 +29,7 @@
 #include <syslog.h>
 
 #include "map.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 
 /*
  * Create/refresh mapping of file
@@ -53,7 +53,7 @@ const char *mboxname;
 	    syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
 		   mboxname ? " for " : "", mboxname ? mboxname : "");
 	    sprintf(buf, "failed to fstat %s file", name);
-	    fatal(buf, EX_IOERR);
+	    fatal(buf, EC_IOERR);
 	}
 	newlen = sbuf.st_size;
     }
@@ -84,7 +84,7 @@ const char *mboxname;
 	syslog(LOG_ERR, "IOERROR: mapping %s file%s%s: %m", name,
 	       mboxname ? " for " : "", mboxname ? mboxname : "");
 	sprintf(buf, "failed to mmap %s file", name);
-	fatal(buf, EX_IOERR);
+	fatal(buf, EC_IOERR);
     }
     *len = newlen;
 }

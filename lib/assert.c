@@ -1,5 +1,5 @@
 /* assert.c -- handle assertion failures
- $Id: assert.c,v 1.9 1998/05/15 21:50:33 neplokh Exp $
+ $Id: assert.c,v 1.10 1999/04/08 21:00:47 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -24,7 +24,7 @@
  */
 #include <stdio.h>
 
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "assert.h"
 
 int assertionfailed(file, line, expr)
@@ -36,5 +36,5 @@ const char *expr;
 
     sprintf(buf, "Internal error: assertion failed: %s: %d%s%s",
 	    file, line, expr ? ": " : "", expr ? expr : "");
-    fatal(buf, EX_SOFTWARE);
+    fatal(buf, EC_SOFTWARE);
 }
