@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.63 2002/01/16 22:08:24 rjs3 Exp $
+ * $Id: imclient.c,v 1.64 2002/01/16 23:29:28 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1144,10 +1144,6 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   ret->maxbufsize=1024;
   ret->min_ssf=min;
   ret->max_ssf=max;
-
-  ret->security_flags=0;
-  ret->property_names=NULL;
-  ret->property_values=NULL;
 
   return ret;
 }
