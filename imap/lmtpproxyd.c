@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.56 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.57 2003/12/10 16:07:03 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -418,12 +418,13 @@ static int adddest(struct mydata *mydata,
 	r = mupdate_find(mhandle, buf, &mailboxdata);
     }
 
-    if (r == MUPDATE_NOCONN) {
-	/* yuck; our error handling for now will be to exit;
-	   this txn will be retried later */
-	fatal("mupdate server not responding", EC_TEMPFAIL);
-    } else if (r == MUPDATE_MAILBOX_UNKNOWN) {
+    if (r == MUPDATE_MAILBOX_UNKNOWN) {
 	r = IMAP_MAILBOX_NONEXISTENT;
+    } else if (r) {
+	/* xxx -- yuck: our error handling for now will be to exit;
+	   this txn will be retried later -- to do otherwise means
+	   that we may have to restart this transaction from scratch */
+	fatal("error communicating with MUPDATE server", EC_TEMPFAIL);
     }
 
     if (r) {

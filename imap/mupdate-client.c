@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.38 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.39 2003/12/10 16:07:03 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -623,13 +623,22 @@ int mupdate_scarf(mupdate_handle *handle,
 	
 	switch(handle->cmd.s[0]) {
 	case 'B':
-	    if(!strncmp(handle->cmd.s, "BAD", 6)) {
+	    if(!strncmp(handle->cmd.s, "BAD", 3)) {
 		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
 		CHECKNEWLINE(handle, ch);
 
-		syslog(LOG_DEBUG, "mupdate BAD response: %s", handle->arg1.s);
+		syslog(LOG_ERR, "mupdate BAD response: %s", handle->arg1.s);
 		if (wait_for_ok && response) {
 		    *response = MUPDATE_BAD;
+		}
+		goto done;
+	    } else if (!strncmp(handle->cmd.s, "BYE", 3)) {
+		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
+		CHECKNEWLINE(handle, ch);
+		
+		syslog(LOG_ERR, "mupdate BYE response: %s", handle->arg1.s);
+		if(wait_for_ok && response) {
+		    *response = MUPDATE_BYE;
 		}
 		goto done;
 	    }
@@ -689,7 +698,7 @@ int mupdate_scarf(mupdate_handle *handle,
 	    }
 	    goto badcmd;
 	case 'N':
-	    if(!strncmp(handle->cmd.s, "NO", 6)) {
+	    if(!strncmp(handle->cmd.s, "NO", 2)) {
 		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
 		CHECKNEWLINE(handle, ch);
 

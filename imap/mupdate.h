@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.15 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: mupdate.h,v 1.16 2003/12/10 16:07:03 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -124,7 +124,8 @@ void mupdate_signal_db_synced(void);
 enum mupdate_cmd_response {
     MUPDATE_OK = 0,
     MUPDATE_NO = -1,
-    MUPDATE_BAD = -2
+    MUPDATE_BAD = -2,
+    MUPDATE_BYE = -3
 };
 
 /* Scarf up the incoming data and perform the requested operations */
