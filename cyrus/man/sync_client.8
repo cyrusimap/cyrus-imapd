@@ -1,7 +1,47 @@
 .\" -*- nroff -*-
-.TH SYNC_CLIENT HERMES 8
+.TH SYNC_CLIENT 8 "Project Cyrus" CMU
+.\" 
+.\" Copyright (c) 2005 Carnegie Mellon University.  All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\"
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer. 
+.\"
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in
+.\"    the documentation and/or other materials provided with the
+.\"    distribution.
+.\"
+.\" 3. The name "Carnegie Mellon University" must not be used to
+.\"    endorse or promote products derived from this software without
+.\"    prior written permission. For permission or any other legal
+.\"    details, please contact  
+.\"      Office of Technology Transfer
+.\"      Carnegie Mellon University
+.\"      5000 Forbes Avenue
+.\"      Pittsburgh, PA  15213-3890
+.\"      (412) 268-4387, fax: (412) 268-7395
+.\"      tech-transfer@andrew.cmu.edu
+.\"
+.\" 4. Redistributions of any form whatsoever must retain the following
+.\"    acknowledgment:
+.\"    "This product includes software developed by Computing Services
+.\"     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+.\"
+.\" CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+.\" THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+.\" AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+.\" FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+.\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+.\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\" 
+.\" $Id: sync_client.8,v 1.1.2.3 2005/03/13 01:24:13 ken3 Exp $
 .SH NAME
-sync_client \- One half of the synchronisation (replication) engine
+sync_client \- client side of the synchronization (replication) engine
 .SH SYNOPSIS
 .B sync_client
 [
@@ -15,12 +55,13 @@ sync_client \- One half of the synchronisation (replication) engine
 .I config-file
 ]
 [
-.B \-f
-.I input-file
-]
-[
 .B \-S
 .I servername
+]
+.br
+            [
+.B \-f
+.I input-file
 ]
 [
 .B \-F
@@ -30,7 +71,8 @@ sync_client \- One half of the synchronisation (replication) engine
 .B \-w
 .I wait_interval
 ]
-[
+.br
+            [
 .B \-t
 .I timeout
 ]
@@ -47,30 +89,33 @@ sync_client \- One half of the synchronisation (replication) engine
 [
 .B \-m
 ]
-[
+.br
+            [
 .B \-s
 ]
 .IR objects ...
 
-
 .SH DESCRIPTION
 .I Sync_client
-is one half of the the replication system.
-.PP
-Given a connection to the replicate system created by the
-.B replicate(8)
-program, it generates an appropriaet sequence of transactions to bring
-the target (replica) system in line with the client system.
-
+is the client side of the replication system.  It runs on the client
+(master) system and connects to the target (replica) system and
+generates an appropriate sequence of transactions to synchronize the
+replica system with the master system.
 .SH OPTIONS
 .TP
 .BI \-v
 Verbose mode.
+.TP
 .BI \-l
 Verbose logging mode.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-S " servername"
+Tells
+.B sync_client
+which server to communicate with.
 .TP
 .BI \-f " input-file"
 In mailbox or user replication mode: provides list of users or mailboxes
@@ -87,11 +132,6 @@ Overrides
 .I sync_shutdown_file
 option in
 .I imapd.conf
-.TP
-.BI \-S " servername"
-Tells
-.B sync_client
-which server to communicate with.
 .TP
 .BI \-w " interval"
 Wait this long before starting. Typically used so that we can attach a
@@ -112,7 +152,7 @@ group. Default: 3 seconds.
 .BI \-r
 Rolling (repeat) replication mode. Pick up a list of actions recorded by
 the
-.B lmtpd(8), imapd(8), popd(8), and nntpd(8)
+.B lmtpd(8), imapd(8), popd(8) and nntpd(8)
 daemons from the file specified in
 .I sync_log_file.
 Repeat until
@@ -137,6 +177,6 @@ Principally used for debugging purposes: not exposed to
 .B /etc/imapd.conf
 .SH SEE ALSO
 .PP
-\fBreplicate(8)\fR, \fBsync_server(8)\fR
+\fBsync_server(8)\fR
 .SH AUTHORS
-David Carter (dpc22@cam.ac.uk)
+David Carter (dpc22@cam.ac.uk), Ken Murchison (ken@oceana.com)
