@@ -1,6 +1,20 @@
                    Changes to the Cyrus IMAP Server
 
-Changes to the cyrus IMAP Server since 2.0.11
+Changes to the Cyrus IMAP Server since 2.0.12
+
+      * refactored code so less duplication 
+      * added alternate config file for partial virtual domain support 
+      * pop3d can now disable USER/PASS commands. 
+      * STARTTLS now accepts a SSLv23 hello but doesn't allow SSLv23 to be
+        negotiated. 
+      * imtest no longer buffers to aid use as an automated layer. 
+      * master now supports maximum number of service processes via the
+        "maxchild" modifier. 
+      * fixed a bug in the Sieve string lexer. 
+      * one imapd process can now service multiple clients in sequence,
+        eliminating a large number of forks. 
+
+Changes to the Cyrus IMAP Server since 2.0.11
 
       * portability fixes involving setrlimit() 
       * fixed compiler warnings 
@@ -8,7 +22,7 @@ Changes to the cyrus IMAP Server since 2.0.11
         imaps port is unaffected by this change. 
       * timsieved no longer returns garbage strings. 
 
-Changes to the cyrus IMAP Server since 2.0.9
+Changes to the Cyrus IMAP Server since 2.0.9
 
       * some small memory savings 
       * the "fud" daemon once again works correctly 
@@ -31,13 +45,13 @@ Changes to the cyrus IMAP Server since 2.0.9
       * master can now reread /etc/cyrus.conf on SIGHUP. 
       * timsieved now uses symlinks instead of hard links. 
 
-Changes to the cyrus IMAP Server since 2.0.8
+Changes to the Cyrus IMAP Server since 2.0.8
 
       * remembered to update this file 
       * bug in Cyrus::IMAP perl module affecting cyradm's setquota fixed 
       * portability fix with socklen_t 
 
-Changes to the cyrus IMAP Server since 2.0.7
+Changes to the Cyrus IMAP Server since 2.0.7
 
       * preliminary implementation of the IDLE extension (Ken Murchison,
         ken@oceana.com). 
@@ -52,7 +66,7 @@ Changes to the cyrus IMAP Server since 2.0.7
       * fixes to perl code, especially the Sieve interface. added an IMSP
         interface to the perl code, but it still needs work. 
 
-Changes to the cyrus IMAP Server since 2.0.6
+Changes to the Cyrus IMAP Server since 2.0.6
 
       * some number of random static variables eliminated, to save on
         memory footprint 
@@ -74,7 +88,7 @@ Changes to the cyrus IMAP Server since 2.0.6
       * small fixes in timsieved. 
       * added a "make dist" target so i won't dread releases as much. 
 
-Changes to the cyrus IMAP Server since 2.0.5
+Changes to the Cyrus IMAP Server since 2.0.5
 
       * APPEND now honors the \Seen flag. 
       * mailboxes file can once again be a flat text file. (compile-time
@@ -99,7 +113,7 @@ Changes to the cyrus IMAP Server since 2.0.5
       * As usual, owe lots of thanks to Ken Murchison for his hard work and
         awesome implementations. 
 
-Changes to the cyrus IMAP Server SINCE 2.0.4
+Changes to the Cyrus IMAP Server SINCE 2.0.4
 
       * Now should work with Berkeley DB 3.1, but does not auto-upgrade 3.0
         databases (and, in fact, I haven't written any upgrade software
@@ -111,7 +125,7 @@ Changes to the cyrus IMAP Server SINCE 2.0.4
       * Some non-gcc compile fixes with structure initialization. 
       * Some non gcc compile fixes with structure initialization. 
 
-Changes to the cyrus IMAP Server SINCE 2.0.3
+Changes to the Cyrus IMAP Server SINCE 2.0.3
 
       * fixed mbpath and ipurge. Thanks to Alain Turbide for the bug
         report. 
