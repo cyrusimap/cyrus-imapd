@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.13 2003/02/13 20:15:32 rjs3 Exp $
+ * $Id: user.c,v 1.14 2003/04/23 18:07:48 rjs3 Exp $
  */
 
 #include <config.h>
@@ -79,6 +79,7 @@
 #include "mailbox.h"
 #include "util.h"
 #include "seen.h"
+#include "xmalloc.h"
 
 static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 {
@@ -217,7 +218,8 @@ static int user_renamesub(char *name, int matchlen, int maycreate, void* rock)
     mboxlist_changesub(name, ident[1], NULL, 0, 1);
 
     /* subscribe to new folder */
-    sprintf(newname, "user.%s.%s", ident[1], name+6+strlen(ident[0]));
+    snprintf(newname, sizeof(newname),
+	     "user.%s.%s", ident[1], name+6+strlen(ident[0]));
     mboxlist_changesub(newname, ident[1], NULL, 1, 1);
 
     return 0;
@@ -227,7 +229,7 @@ int user_rename(char *oldmailboxname, char *newmailboxname,
 		char *userid, struct auth_state *authstate)
 {
     char *ident[] = { oldmailboxname+5, newmailboxname+5 };
-    char pat[MAX_MAILBOX_NAME];
+    char pat[MAX_MAILBOX_NAME+1];
     char *oldfname, *newfname;
     int r = 0;
 
@@ -242,7 +244,7 @@ int user_rename(char *oldmailboxname, char *newmailboxname,
     r = mailbox_copyfile(oldfname, newfname);
     if (!r) {
 	unlink(oldfname);
-	sprintf(pat, "%s.*", oldmailboxname);
+	snprintf(pat, sizeof(pat), "%s.*", oldmailboxname);
 	/* we're using internal names here */
 	mboxlist_findsub(NULL, pat, 1, ident[1], authstate, user_renamesub,
 			 ident, 1);
@@ -277,13 +279,15 @@ int user_copyquota(char *oldname, char *newname)
 int user_deletequotas(const char *user)
 {
     char c, qpath[MAX_MAILBOX_NAME], *tail;
+    size_t qp_len;
     DIR *dirp;
     struct dirent *f;
 
     /* this violates the quota abstraction layer; oh well */
     c = dir_hash_c(user);
     snprintf(qpath, sizeof(qpath), "%s%s%c/", config_dir, FNAME_QUOTADIR, c);
-    tail = qpath + strlen(qpath);
+    qp_len = strlen(qpath);
+    tail = qpath + qp_len;
 
     dirp = opendir(qpath);
     if (dirp) {
@@ -293,7 +297,7 @@ int user_deletequotas(const char *user)
 		(f->d_name[5+strlen(user)] == '\0'||
 		 f->d_name[5+strlen(user)] == '.')) {
 
-		strcpy(tail, f->d_name);
+		strlcpy(tail, f->d_name, sizeof(qpath) - qp_len);
 		unlink(qpath);
 	    }
 	}
