@@ -75,6 +75,7 @@
 #include "imapconf.h"
 #include "exitcodes.h"
 #include "xmalloc.h"
+#include "util.h"
 
 #include "duplicate.h"
 
@@ -176,10 +177,7 @@ static char *get_db_name (char *mbox, char *buf)
     } else {
 	idx++;                   /* skip past '.' */
     }
-    c = (char) tolower((int) *idx);
-    if (!islower((int) c)) {
-	c = 'q';
-    }
+    c = (char) dir_hash_c(idx);
 
     snprintf(buf, 1024, "%s/deliverdb/deliver-%c.db", config_dir, c);
 
@@ -326,7 +324,7 @@ int duplicate_prune(int days)
     DBC *cursor = NULL;
     DBT delivery, date;
     time_t mark, expmark;
-    char c[2];
+    int c;
 
     if (days < 0) fatal("must specify positive number of days", EC_USAGE);
 
@@ -336,12 +334,15 @@ int duplicate_prune(int days)
     expmark = time(NULL) - (days * 60 * 60 * 24);
     syslog(LOG_NOTICE, "duplicate_prune: pruning back %d days", days);
     
-    c[1] = '\0';
-    for (c[0] = 'a'; c[0] <= 'z'; c[0]++) {
+#ifdef USE_DIR_FULL
+    for (c = DIR_A; c < DIR_A + DIR_P; c++) {
+#else
+    for (c = 'a'; c <= 'z'; c++) {
+#endif
 	char fname[1024];
 	int count = 0, deletions = 0;
 
-	get_db_name(c, fname);
+	sprintf(fname, "%s/deliverdb/deliver-%c.db", config_dir, c);
 	r = db_create(&d, duplicate_dbenv, 0);
 	if (r != 0) {
 	    syslog(LOG_ERR, "duplicate_prune: db_create: %s", db_strerror(r));

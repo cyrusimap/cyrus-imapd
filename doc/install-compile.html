@@ -1,4 +1,4 @@
-<!-- $Id: install-compile.html,v 1.7 2001/08/10 14:46:27 rjs3 Exp $ -->
+<!-- $Id: install-compile.html,v 1.8 2001/08/12 18:22:11 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Compiling the IMAP Server
@@ -133,6 +133,10 @@ mailbox to check for the changes.
 </dl>
 By default, uses "<TT>poll</TT>".<P>
 
+<dt><tt>--enable-fulldirhash</tt>
+<dd>Enables the improved directory hashing scheme which hashes the
+entire username instead of using just the first letter.<p>
+
 <dt><tt>--with-sasl=PATH</tt> 
 <dd>Specifies the path to the directories containing the library
 (<tt>.../lib</tt>) and include (<tt>.../include</tt>)
@@ -265,5 +269,5 @@ If you want, you can override the "<tt>make</tt>" variables
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2001/08/10 14:46:27 $
+last modified: $Date: 2001/08/12 18:22:11 $
 </BODY></HTML>

@@ -1,0 +1,503 @@
+#!/bin/sh
+# 
+# Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer. 
+#
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in
+#    the documentation and/or other materials provided with the
+#    distribution.
+#
+# 3. The name "Carnegie Mellon University" must not be used to
+#    endorse or promote products derived from this software without
+#    prior written permission. For permission or any other legal
+#    details, please contact  
+#      Office of Technology Transfer
+#      Carnegie Mellon University
+#      5000 Forbes Avenue
+#      Pittsburgh, PA  15213-3890
+#      (412) 268-4387, fax: (412) 268-7395
+#      tech-transfer@andrew.cmu.edu
+#
+# 4. Redistributions of any form whatsoever must retain the following
+#    acknowledgment:
+#    "This product includes software developed by Computing Services
+#     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+#
+# CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+# THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+# AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+# FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+# AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+# OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
+#!perl -w
+# script to upgrade from simple hashing scheme to full hashing scheme
+# make sure you run it as the cyrus user
+#
+# Written by Gary Mills <mills@cc.UManitoba.CA>
+#
+# $Id: rehash,v 1.1 2001/08/12 18:22:14 ken3 Exp $
+
+if ($] !~ /^5\..*/) {
+  # uh-oh. this isn't perl 5.
+  foreach (split(/:/, $ENV{PATH})) { # try to find "perl5".
+    exec("$_/perl5", "-x", "-S", $0, @ARGV) if (-x "$_/perl5");
+  }
+  # we failed. bail.
+  die "Your perl is too old; I need perl 5.\n";
+}
+
+# load the real script. this is isolated in an 'eval' so perl4 won't
+# choke on the perl5-isms.
+eval join("\n", <DATA>);
+if ($@) { die "$@"; }
+
+__END__
+require 5;
+
+$| = 1;
+
+die "must not run as root" if ($< == 0);
+
+if ("-i" eq $ARGV[0]) {
+    $interactive = 1;
+    shift @ARGV;
+}
+if ("-f" eq $ARGV[0]) {
+    $force = 1;
+    shift @ARGV;
+}
+if ("-h" eq $ARGV[0] || @ARGV < 1) {
+    print "usage: rehash [-i] [-f] none|basic|full [imapd.conf]\n";
+    print "       -i interactive\n";
+    print "       -f keep going on errors\n";
+    exit;
+}
+$tonone = 1 if ("none" eq $ARGV[0]);
+$tobasic = 1 if ("basic" eq $ARGV[0]);
+$tofull = 1 if ("full" eq $ARGV[0]);
+unless ($tonone || $tobasic || $tofull) {
+    print "rehash: one of none/basic/full required\n";
+    exit;
+}
+shift @ARGV;
+
+@bdirs = ("a".."z");
+@fdirs = ("A".."W");
+$dirs = [@bdirs,@fdirs] if $tonone;
+if ($tobasic) {
+    $dirs = \@bdirs;
+    $old = \@fdirs;
+}
+if ($tofull) {
+    $dirs = \@fdirs;
+    $old = \@bdirs;
+}
+sub ouch {
+    my $msg = shift;
+
+    if ($force) {
+	print "fatal error: $msg\n";
+    } else {
+	print "error: $msg\n";
+	exit 1;
+    }
+}
+
+sub dir_hash_c {
+    my $name = shift;
+    my ($h, $n);
+
+    if ($tofull) {
+	$n = 0;
+	foreach my $b (split(/ */, $name)) {
+	    $n = (($n << 3) ^ ($n >> 5)) ^ ord($b);
+	}
+	$h = chr(ord('A') + ($n % 23));
+	return $h;
+    }
+    elsif ($tobasic) {
+	$h = lc(substr($name, 0, 1));
+	if (!($h =~ /[a-z]/)) { $h = 'q'; }
+	return $h;
+    }
+}
+
+$imapdconf = shift || "/etc/imapd.conf";
+
+$yn = "y";
+$sievedir = "/usr/sieve";
+$nosievedir = 0;
+$hashispool = 0;
+
+open CONF, $imapdconf or die "can't open $imapdconf";
+while (<CONF>) {
+    if (/^configdirectory:\s*(.*)$/) {
+	$conf = $1;
+    }
+    if (/^sieveuserhomedir:\s+(1|t|yes|on)/) {
+	$nosievedir = 1;
+	print "you are storing sieve scripts in user's home directories.\n";
+    }
+    if (/^sievedir:\s+(.*)$/) {
+	$sievedir = $1;
+	print "you are using $sievedir as your sieve directory.\n";
+    }
+    if (/^partition-.*:\s*(.*)$/) {
+	if (grep /$1/, @parts) {
+	    next;
+	}
+	push @parts, $1;
+    }
+    if (/^hashimapspool:\s*(1|t|yes|on)/) {
+	$hashispool = 1;
+	print "i will also hash partitions.\n";
+    }
+}
+close CONF;
+
+if (! $conf) { $conf = "/var/imap"; }
+
+if ($interactive) {
+    print "upgrade $conf? ";
+    $yn = <STDIN>;
+}
+if ($yn =~ /^y/) {
+    unless (-d $conf) {
+	print "creating $conf...\n";
+	mkdir $conf, 0755;
+    }
+    print "converting configuration directory $conf...";
+    chdir $conf or die "couldn't change to $conf";
+    
+    foreach $i ("user", "proc", "db", "socket", "log", "msg", "deliverdb",
+		"deliverdb/db", "quota") {
+	unless (-d $i) {
+	    print "creating $i...\n";
+	    mkdir $i, 0755;
+	}
+    }
+    # *** deliverdb subdirectory; holds duplicate supression databases
+    print "deliverdb ";
+    chdir "deliverdb" or die "couldn't change to deliverdb subdir";
+    if ($tonone) {
+	foreach $i (@{$dirs}) {
+	    if (-f "deliver-$i.db") {
+		unlink "deliver-$i.db";
+	    }
+	}
+    }
+    else {
+	foreach $i (@{$old}) {
+	    if (-f "deliver-$i.db") {
+		unlink "deliver-$i.db";
+	    }
+	}
+    }
+    chdir "..";
+    
+    # *** user subdirectory; holds subscription files
+    print "user ";
+    chdir "user" or die "couldn't change to user subdir";
+    foreach $i (@{$dirs}) { 
+	if ($tonone) {
+	    if (opendir SUB, $i) {
+		while ($s = readdir SUB) {
+		    if ($s =~ /^\./s) { next; }
+		    rename("$i/$s", "$s") or die "couldn't move $s back!";
+		}
+		closedir SUB;
+		rmdir "$i" or die "couldn't remove $i";
+	    }
+	}
+	else {
+	    unless (-d $i) {
+		mkdir ("$i", 0755) or ouch "couldn't create $i";
+	    }
+	}
+    }
+    unless ($tonone) {
+	foreach $i (@{$old}) {
+	    if (opendir SUB, $i) {
+		while ($s = readdir SUB) {
+		    if ($s =~ /^\./s) { next; }
+		    # hash on name before '.sub' suffix
+		    if ($s =~ /^(.+)\./) {
+			$h = dir_hash_c($1);
+			rename("$i/$s", "$h/$s") or ouch "couldn't move $s back!";
+		    }
+		}
+		closedir SUB;
+		rmdir "$i" or die "couldn't remove $i";
+	    }
+	}
+	opendir (USER, ".");
+	while ($f = readdir USER) {
+	    if ($f =~ /^\./s) { next; }
+	    # hash on name before '.sub' suffix
+	    if ($f =~ /^(.+)\./) {
+		print "$f\n";
+		$h = dir_hash_c($1);
+		rename ($f, "$h/$f") or ouch "couldn't move $f into $h";
+	    }
+	}
+	closedir USER;
+    }
+    chdir "..";
+    
+    # *** quota subdirectory; holds quota files for each quotaroot
+    print "quota ";
+    chdir "quota" or die "couldn't change to quota subdir";
+    
+    # first, create directories we know can't conflict with existing files
+    foreach $i (@{$dirs}) { 
+	if ($tonone) {
+	    if (-d $i) {
+		rename ($i, ".$i") or die "couldn't rename $i to .$i";
+		opendir SUB, ".$i";
+		while ($s = readdir SUB) {
+		    if ($s =~ /^\./s) { next; }
+		    rename(".$i/$s", $s) or die "couldn't move $s back!";
+		}
+		closedir SUB;
+		rmdir ".$i" or die "couldn't remove .$i";
+	    }
+	}
+	else {
+	    if (-d $i) {
+		rename ($i, ".$i") or die "couldn't rename $i to .$i";
+	    }
+	    else {
+		mkdir (".$i", 0755);
+	    }
+	}
+    }
+
+    # now for each file, move it into the appropriate directory
+    unless ($tonone) {
+	foreach $i (@{$old}) {
+	    if (opendir SUB, $i) {
+		while ($s = readdir SUB) {
+		    # hash on name after 'user.'
+		    if ($s =~ /^.+\.(.+)$/) {
+			$h = dir_hash_c($1);
+			rename("$i/$s", ".$h/$s")
+			    or ouch "couldn't move $s back!";
+		    }
+		}
+		closedir SUB;
+		rmdir "$i" or die "couldn't remove $i";
+	    }
+	}
+	opendir QUOTA, ".";
+	while ($mbox = readdir QUOTA) {
+	    if ($mbox =~ /^\./s) { next; }
+	
+	    # hash on name after 'user.'
+	    if ($mbox =~ /^.*\.(.*)$/) {
+		$h = dir_hash_c($1);
+		rename($mbox, ".$h/$mbox") 
+		    or ouch "couldn't move $mbox into $h";
+		next;
+	    }
+	
+	    # we should try to hash the entire file
+	    $h = dir_hash_c($mbox);
+	    rename($mbox, ".$h/$mbox") 
+		or ouch "couldn't move $mbox into $h";
+	    next;
+	
+	}
+	closedir QUOTA;
+    
+	# now move each temporary directory to the right place
+	foreach $i (@{$dirs}) { 
+	    rename (".$i", $i) or ouch "couldn't rename $i into place";
+	}
+    }
+
+    print "done\n";
+}
+
+# create the sieve stuff
+unless ($nosievedir) {
+    print "converting $sievedir...\n";
+
+    mkdir $sievedir, 0755;
+    if (chdir $sievedir) {
+	foreach $i (@{$dirs}) {
+	    unless ($tonone) {
+		if (-d $i) {
+		    rename ($i, ".$i") or die "couldn't rename $i to .$i";
+		}
+		else {
+		    mkdir (".$i", 0755);
+		}
+	    }
+	    else {
+		rmdir "$i";
+	    }
+	}
+	unless ($tonone) {
+	    foreach $i (@{$old}) {
+		if (opendir SUB, $i) {
+		    while ($s = readdir SUB) {
+			unless ($s =~ /^\./) {
+			    $h = dir_hash_c($s);
+			    rename("$i/$s", "$h/$s")
+				or ouch "couldn't move $s back!";
+			}
+		    }
+		    closedir SUB;
+		    rmdir "$i" or die "couldn't remove $i";
+		}
+	    }
+	}
+    }
+}
+
+# *** now for each data partition
+while ($part = shift @parts) {
+    if ($interactive) {
+	print "upgrade $part? ";
+	$yn = <STDIN>;
+    }
+    if ($yn =~ /^y/) {
+	unless (-d $part) {
+	    print "creating $part...\n";
+	    mkdir $part, 0755;
+	}
+	print "converting data partition $part...";
+	chdir $part or die "couldn't chdir to $part";
+
+        if ($hashispool) {
+	    foreach $i (@{$dirs}) { 
+		if ($tonone) {
+		    if (-d $i) {
+			rename ($i, ".$i") or die "couldn't rename $i to .$i";
+			print "$i ";
+
+			opendir SUB, ".$i";
+			while ($s = readdir SUB) {
+			    if ($s =~ /^\./s) { next; }
+			    mkdir $s, 0755; # ignore errors as it might already exist
+			    
+			    opendir MV, ".$i/$s";
+			    while ($t = readdir MV) {
+				if ($t =~ /^\./s) { next; }
+				rename (".$i/$s/$t", "$s/$t")
+				    or die "couldn't rename .$i/$s/$t to $s/$t";
+			    }
+			    closedir MV;
+			}
+			closedir SUB;
+			rmdir ".$i";
+		    }
+		    print "done\n";
+		}
+		else {
+		    mkdir (".$i", 0755) or ouch "couldn't create .$i";
+		}
+	    }
+	    
+	    unless ($tonone) {
+		foreach $i (@{$old}) {
+		    if (opendir SUB, $i) {
+			while ($dir = readdir SUB) {
+			    if ($dir =~ /^\./s) { next; }
+			    # process $dir
+			    print "$i/$dir ";
+			    opendir DIR, "$i/$dir";
+			    $ismbox = 0;
+			    while ($sub = readdir DIR) {
+				if ($sub =~ /^\./s) { next; }
+				# if there's a dot in this, we're a mbox and 
+				# this isn't a child
+				if ($sub =~ /(.*)\.(.*)/) { $ismbox = 1; next; }
+		    
+				print "/$sub ";
+				$h = dir_hash_c($sub);
+				mkdir (".$h/$dir", 0755); # might already be there
+				rename("$i/$dir/$sub", ".$h/$dir/$sub") or
+				    ouch "couldn't move $dir/$sub into $h";
+			    }
+			    closedir DIR;
+			    # if $ismbox is set, then $dir is a mailbox of it's own right
+			    if ($ismbox) {
+				$h = dir_hash_c($dir);
+				mkdir (".$h/$dir", 0755); # might already be there
+				opendir DIR, "$i/$dir";
+				while ($sub = readdir DIR) {
+				    if ($sub =~ /^\./s) { next; }
+				    print "/$sub ";
+				    rename("$i/$dir/$sub", ".$h/$dir/$sub") or 
+					ouch "couldn't move $dir into $h";
+				}
+				closedir DIR;
+			    }
+	    
+			    rmdir "$i/$dir" or print "\ncouldn't remove '$dir'??\n";
+			}
+			closedir SUB;
+			rmdir "$i" or die "couldn't remove $i";
+		    }
+		}
+		opendir PART, ".";
+		while ($dir = readdir PART) {
+		    if ($dir =~ /^\./s) { next; }
+		    if ($dir eq "lost+found") { next; }
+		
+		    # process $dir
+		    print "$dir ";
+		    opendir DIR, $dir;
+		    $ismbox = 0;
+		    while ($sub = readdir DIR) {
+			if ($sub =~ /^\./s) { next; }
+			# if there's a dot in this, we're a mbox and 
+			# this isn't a child
+			if ($sub =~ /(.*)\.(.*)/) { $ismbox = 1; next; }
+		    
+			$h = dir_hash_c($sub);
+			mkdir (".$h/$dir", 0755); # might already be there
+			rename("$dir/$sub", ".$h/$dir/$sub") or
+			    ouch "couldn't move $dir/$sub into $h";
+		    }
+		    closedir DIR;
+		    # if $ismbox is set, then $dir is a mailbox of it's own right
+		    if ($ismbox) {
+			$h = dir_hash_c($dir);
+			mkdir (".$h/$dir", 0755); # might already be there
+			opendir DIR, $dir;
+			while ($sub = readdir DIR) {
+			    if ($sub =~ /^\./s) { next; }
+			    rename("$dir/$sub", ".$h/$dir/$sub") or 
+				ouch "couldn't move $dir into $h";
+			}
+			closedir DIR;
+		    }
+	    
+		    rmdir $dir or print "\ncouldn't remove '$dir'??\n";
+		}
+		closedir PART;
+		
+		foreach $i (@{$dirs}) { 
+		    rename (".$i", $i) or ouch "couldn't rename .$i to $i";
+		}
+	    }
+
+	    chdir $part or die "couldn't chdir to $part";
+	    mkdir "stage.", 0755;
+	}
+    
+	    print "done\n";
+    }
+}

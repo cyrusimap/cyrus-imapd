@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.64 2001/08/03 21:18:06 ken3 Exp $
+ * $Id: lmtpd.c,v 1.65 2001/08/12 18:22:12 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.64 2001/08/03 21:18:06 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.65 2001/08/12 18:22:12 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -1068,8 +1068,7 @@ static FILE *sieve_find_script(const char *user)
     } else { /* look in sieve_dir */
 	char hash;
 
-	hash = (char) tolower((int) *user);
-	if (!islower((int) hash)) { hash = 'q'; }
+	hash = (char) dir_hash_c(user);
 
 	snprintf(buf, sizeof(buf), "%s/%c/%s/default", sieve_dir, hash, user);
     }

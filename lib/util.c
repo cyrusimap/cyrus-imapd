@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: util.c,v 1.16 2001/03/03 20:33:59 leg Exp $
+/* $Id: util.c,v 1.17 2001/08/12 18:22:13 ken3 Exp $
  */
 
 #include <config.h>
@@ -228,4 +228,30 @@ keyvalue *kv_bsearch(const char* key, keyvalue* kv, int nelem,
 	}
 
     return (cmp ? NULL : kv + mid);
+}
+
+/* Examine the name of a file, and return a single character
+ *  (as an int) that can be used as the name of a hash
+ *  directory.  Caller is responsible for skipping any prefix
+ *  of the name.
+ */
+int dir_hash_c(char *name)
+{
+    int c;
+#ifdef USE_DIR_FULL
+    unsigned char *pt;
+    unsigned int n;
+
+    n = 0;
+    pt = (unsigned char *)name;
+    while (*pt) {
+	n = ((n << DIR_X) ^ (n >> DIR_Y)) ^ *pt;
+	++pt;
+    }
+    c = DIR_A + (n % DIR_P);
+#else
+    c = tolower(*name);
+    if (!isascii(c) || !islower(c)) c = 'q';
+#endif
+    return c;
 }

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.149 2001/08/03 21:18:07 ken3 Exp $
+ * $Id: mboxlist.c,v 1.150 2001/08/12 18:22:13 ken3 Exp $
  */
 
 #include <config.h>
@@ -1961,10 +1961,7 @@ char *mboxlist_hash_usersubs(const char *userid)
 			  strlen(userid) + sizeof(FNAME_SUBSSUFFIX) + 10);
     char c;
 
-    c = (char) tolower((int) *userid);
-    if (!islower((int) c)) {
-	c = 'q';
-    }
+    c = (char) dir_hash_c(userid);
     sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
 	    FNAME_SUBSSUFFIX);
 
