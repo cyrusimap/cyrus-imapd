@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.426 2003/03/27 17:43:09 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.427 2003/04/15 18:44:41 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -123,7 +123,7 @@ static SSL *tls_conn = NULL;
 /* current sub-user state */
 static struct mailbox mboxstruct;
 static struct mailbox *imapd_mailbox;
-int imapd_exists;
+int imapd_exists = -1;
 
 /* current namespace */
 static struct namespace imapd_namespace;
