@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.h,v 1.2 2001/02/22 16:09:17 ken3 Exp $ */
+/* $Id: idled.h,v 1.3 2001/03/14 18:26:35 ken3 Exp $ */
 
 #ifndef IDLED_H
 #define IDLED_H
@@ -56,7 +56,7 @@ typedef struct idle_data_s {
     char mboxname[MAX_MAILBOX_NAME+1];
 } idle_data_t;
 
-#define IDLEDATA_BASE_SIZE	8
+#define IDLEDATA_BASE_SIZE	(2 * sizeof(unsigned long))
 
 typedef enum {
     IDLE_INIT,

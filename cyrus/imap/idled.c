@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.7 2001/02/22 19:27:17 ken3 Exp $ */
+/* $Id: idled.c,v 1.8 2001/03/14 18:26:35 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -389,7 +389,13 @@ int main(int argc, char **argv)
 	    n = recvfrom(s, (void*) &idledata, sizeof(idle_data_t), 0,
 			 (struct sockaddr *) &from, &fromlen);
 
-	    if (n > 0) process_msg(&idledata);
+	    if (n > 0) {
+		if (n <= IDLEDATA_BASE_SIZE ||
+		    idledata.mboxname[n - 1 - IDLEDATA_BASE_SIZE] != '\0')
+		    syslog(LOG_ERR, "Invalid message received, size=%d\n", n);
+		else 
+		    process_msg(&idledata);
+	    }
 	} else {
 	    /* log some sort of error */	    
 	}
