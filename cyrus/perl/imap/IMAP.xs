@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: IMAP.xs,v 1.15 2002/05/25 19:57:49 leg Exp $ */
+/* $Id: IMAP.xs,v 1.15.4.1 2002/08/19 16:46:43 ken3 Exp $ */
 
 /*
  * Perl interface to the Cyrus imclient routines.  This enables the
@@ -194,6 +194,7 @@ static int get_password(sasl_conn_t *conn, void *context, int id,
   if(!text->password) {
 	char *ptr;
 	printf("Password: ");
+	fflush(stdout);
 	ptr = getpass("");
 	text->password = safemalloc(sizeof(sasl_secret_t) + strlen(ptr));
 	text->password->len = strlen(ptr);
