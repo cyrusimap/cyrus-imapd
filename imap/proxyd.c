@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.48 2000/12/04 14:51:50 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.49 2000/12/05 21:35:40 ken3 Exp $ */
 
 #include <config.h>
 
@@ -199,6 +199,7 @@ void cmd_status(char *tag, char *name);
 void cmd_getuids(char *tag, char *startuid);
 void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
+void cmd_idle(char* tag);
 
 void cmd_starttls(char *tag, int imaps);
 int starttls_enabled(void);
@@ -713,19 +714,30 @@ void proxyd_downserver(struct backend *s)
 }
 
 #ifdef NEW_BACKEND_TIMEOUT
-struct prot_waitevent *backend_timeout(struct protstream *s, void *rock)
+struct prot_waitevent dummy_event;
+
+struct prot_waitevent *backend_timeout(struct protstream *s,
+				       struct prot_waitevent *ev, void *rock)
 {
     struct backend *be = (struct backend *) rock;
 
     if (be != backend_current) {
 	/* server is not our current server, and idle too long */
+
+	/* because we're going to remove the current event, we must build
+	   a dummy event pointing to the next event so we can continue
+	   processing the rest of the events registered on this stream */
+	dummy_event->mark = time(NULL) + 60*60*24;  /* 24 hours */
+	dummy_event->next = ev->next;
+
+	/* down the backend server */
 	proxyd_downserver(be);
-	return NULL;
+	return &dummy_event;
     }
     else {
 	/* it will timeout in IDLE_TIMEOUT seconds from now */
-	be->timeout->mark = time(NULL) + IDLE_TIMEOUT;
-	return be->timeout;
+	ev->mark = time(NULL) + IDLE_TIMEOUT;
+	return ev;
     }
 }
 #endif
@@ -2188,6 +2200,117 @@ void cmd_noop(char *tag, char *cmd)
 		    error_message(IMAP_OK_COMPLETED));
     }
 }
+
+/*
+ * Perform an IDLE command
+ */
+#ifdef HAVE_PTHREAD
+#include <pthread.h>
+
+/* Get continuation data */
+void idle_continuation(char *tag)
+{
+/* NOTE: we may need to rewrite this to be cancellation-safe */
+    int c;
+    static struct buf arg;
+
+    c = getword(&arg);
+    if (c != EOF &&
+	!(!strcasecmp(arg.s, "Done") &&
+	  (c = (c == '\r') ? prot_getc(imapd_in) : c) == '\n')) {
+	/* invalid continuation, spit out a message */
+	prot_printf(backend_current->out, 
+		    "* BAD Invalid Idle continuation\r\n");
+	eatline(c);
+    }
+    
+    /* either the client timed out, or gave us a continuation.
+       in either case we're done, so terminate the IDLE */
+    prot_printf(backend_current->out, "DONE\r\n");
+}
+
+void cmd_idle(char *tag)
+{
+    int c;
+    static struct buf arg;
+    pthread_t cont_thread;
+    void *res;
+
+    assert(backend_current != NULL);
+
+    prot_printf(backend_current->out, "%s IDLE\r\n", tag);
+
+    pthread_create(&cont_thread, NULL,
+		   (void *) idle_continuation, (void *) tag);
+
+    pipe_including_tag(backend_current, tag);
+
+    /* if the backend timeout out on us (can it??),
+       we need to cancel the thread listening to the client */
+    pthread_cancel(cont_thread);
+}
+#else
+#define IDLECONT_POLL 1
+
+/* Get continuation data */
+struct prot_waitevent *idle_continuation(struct protstream *s,
+					 struct prot_waitevent *ev, void *rock)
+{
+    int c;
+    /* 'cont' contains the chars that we still need to receive
+     * to complete a valid continuation.  we increment the pointer
+     * each time we receive one of these chars. */
+    char *cont = (char *) *(char **) rock;
+
+    prot_NONBLOCK(proxyd_in);
+    do {
+	c = prot_getc(proxyd_in);
+    } while ((c != EOF) && (TOUPPER(c) == *cont) && *++cont);
+    prot_BLOCK(proxyd_in);
+
+    if (c == EOF && errno == EAGAIN) {
+	/* out of input, so keep polling */
+	*(char **) rock = cont;
+	ev->mark = time(NULL) + IDLECONT_POLL;
+    }
+    else {
+	if (c != EOF && *cont) {
+	    /* invalid continuation, spit out a message */
+	    prot_printf(backend_current->out, 
+			"* BAD Invalid Idle continuation\r\n");
+	    eatline(c);
+	}
+
+	/* either the client timed out, or gave us a continuation.
+	   in either case we're done, so terminate the IDLE */
+	prot_printf(backend_current->out, "DONE\r\n");
+	ev->mark = time(NULL) + 60*60*24;  /* 24 hours */
+    }
+
+    return ev;
+}
+
+void cmd_idle(char *tag)
+{
+    struct prot_waitevent *idle_event;
+    char done[] = "DONE\r\n";
+
+    assert(backend_current != NULL);
+
+    prot_printf(backend_current->out, "%s IDLE\r\n", tag);
+
+    /* Setup a function to try and grab continuation data
+       every IDLECONT_POLL seconds */
+    idle_event = prot_addwaitevent(backend_current->in,
+				   time(NULL) + IDLECONT_POLL,
+				   idle_continuation, (void *) &done);
+
+    pipe_including_tag(backend_current, tag);
+
+    /* Remove the continuation data function */
+    prot_removewaitevent(backend_current->in, idle_event);
+}
+#endif /* HAVE_PTHREAD */
 
 /*
  * Perform a CAPABILITY command
@@ -3724,7 +3847,7 @@ void
 cmd_netscape(tag)
     char *tag;
 {
-    char *url;
+    const char *url;
     /* so tempting, and yet ... */
     /* url = "http://random.yahoo.com/ryl/"; */
     url = config_getstring("netscapeurl",
