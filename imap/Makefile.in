@@ -1,15 +1,19 @@
 ACL=acl_afs.o
 AUTH=auth_krb.o
+AUTHLIBS=/usr/local/lib/libkrb.a
 
 LOBJS= append.o mailbox.o message.o xmalloc.o \
-	parsel.o parsey.o parseadd.o parseutl.o\
+	parsel.o parsey.o parseadd.o parseutl.o \
+	imap_err.o assert.o \
 	$(ACL) $(AUTH)
+
+COMPILE_ET=compile_et
 
 CFLAGS= $(OPT) $(INCLUDES) $(DEFINES)
 
 OPT=-g
-INCLUDES= -I../lib -I/usr/local/include
-LIBS=../lib/libcyrus.a /usr/local/lib/libkrb.a
+INCLUDES= -I../lib -I/usr/local/include -I/usr/local/include/afs
+LIBS=../lib/libcyrus.a /usr/local/lib/libcom_err.a $(AUTHLIBS)
 
 deliver: deliver.o libimap.a
 	$(CC) $(CFLAGS) -o deliver deliver.o libimap.a $(LIBS)
@@ -40,6 +44,10 @@ parsey.c parsey.h: parsey.y
 	mv y.tab.c parsey.c
 	mv y.tab.h parsey.h
 
+imap_err.h imap_err.o: imap_err.et
+	$(COMPILE_ET) imap_err.et
+	$(CC) $(CFLAGS) -c imap_err.c
+
 clean:
 	rm -f *.o *.a parsey.c parsey.h parsel.c deliver
 	rm -f testmkdir
@@ -66,12 +74,12 @@ depend:
 
 
 acl_afs.o:	xmalloc.h
-append.o:	mailbox.h message.h
-deliver.o:	mailbox.h
-mailbox.o:	mailbox.h xmalloc.h
-message.o:	mailbox.h parseadd.h
-parsel.o:	parsey.h
+append.o:	imap_err.h mailbox.h message.h
+deliver.o:	imap_err.h mailbox.h
+mailbox.o:	imap_err.h mailbox.h xmalloc.h
+message.o:	mailbox.h parseadd.h xmalloc.h
 parseutl.o:	parseadd.h
+parsey.o:	parseadd.h
 testmkdir.o:	mailbox.h
 
 # DEPENDENCIES MUST END AT END OF FILE
