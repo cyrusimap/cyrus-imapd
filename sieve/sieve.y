@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.19.4.4 2003/02/27 18:39:44 ken3 Exp $
+ * $Id: sieve.y,v 1.19.4.5 2003/03/24 18:52:49 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -180,7 +180,8 @@ require: REQUIRE stringlist ';'	{ if (!check_reqs($2)) {
                                   } }
 	;
 
-commands: command		{ $$ = $1; }
+commands: /* empty */		{ $$ = NULL; }
+	| command		{ $$ = $1; }
 	| command commands	{ $1->next = $2; $$ = $1; }
 	;
 
@@ -366,10 +367,9 @@ strings: STRING			 { $$ = new_sl($1, NULL); }
 	;
 
 block: '{' commands '}'		 { $$ = $2; }
-	| '{' '}'		 { $$ = NULL; }
 	;
 
-test:     ANYOF testlist		 { $$ = new_test(ANYOF); $$->u.tl = $2; }
+test:     ANYOF testlist	 { $$ = new_test(ANYOF); $$->u.tl = $2; }
         | ALLOF testlist	 { $$ = new_test(ALLOF); $$->u.tl = $2; }
         | EXISTS stringlist      { $$ = new_test(EXISTS); $$->u.sl = $2; }
         | SFALSE		 { $$ = new_test(SFALSE); }
