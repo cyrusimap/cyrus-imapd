@@ -589,7 +589,7 @@ char *userid;
 	}
 
 	/* Lie about error if privacy demands */
-	return (isadmin || (access & ACL_SEEN)) ?
+	return (isadmin || (access & ACL_LOOKUP)) ?
 	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
     }
 
@@ -748,7 +748,7 @@ char *userid;
 	access = acl_myrights(acl);
 	if (!(access & ACL_DELETE)) {
 	    fclose(listfile);
-	    return (access & ACL_LOOKUP) ?
+	    return (isadmin || (access & ACL_LOOKUP)) ?
 	      IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	}
     }
