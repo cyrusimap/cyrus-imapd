@@ -450,8 +450,9 @@ int oldexists;
 		if (!seenflag[msgno]) break;
 	    }
 	    if (msgno == imapd_exists + 1) {
-		drop_seen(mailbox->name, imapd_userid, mailbox->last_uid,
-			  last_change);
+		toimsp(mailbox->name, mailbox->uidvalidity,
+		       "SEENsnn", imapd_userid, mailbox->last_uid,
+		       last_change, 0);
 	    }
 	}
 	return;
@@ -598,10 +599,12 @@ int oldexists;
     }
 
     if (newallseen) {
-	drop_seen(mailbox->name, imapd_userid, mailbox->last_uid, last_change);
+	toimsp(mailbox->name, mailbox->uidvalidity, "SEENsnn", imapd_userid,
+	       mailbox->last_uid, last_change, 0);
     }
     else if (allseen == mailbox->last_uid) {
-	drop_seen(mailbox->name, imapd_userid, 0, last_change);
+	toimsp(mailbox->name, mailbox->uidvalidity, "SEENsnn", imapd_userid,
+	       0, last_change, 0);
     }
     
     free(newseenuids);

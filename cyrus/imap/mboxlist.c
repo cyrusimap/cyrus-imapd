@@ -327,6 +327,7 @@ char *userid;
     int newlistfd;
     struct iovec iov[10];
     int n;
+    struct mailbox newmailbox;
 
     /* Open and lock mailbox list file */
     r = mboxlist_openlock();
@@ -406,7 +407,7 @@ char *userid;
     for (p = buf2 + strlen(root); *p; p++) {
 	if (*p == '.') *p = '/';
     }
-    r = mailbox_create(name, buf2, acl, format, (struct mailbox *)0);
+    r = mailbox_create(name, buf2, acl, format, &newmailbox);
     free(acl);
     if (r) return r;
     if (rename(newlistfname, listfname) == -1) {
@@ -416,6 +417,11 @@ char *userid;
     }
 
     mboxlist_unlock();
+
+    toimsp(name, newmailbox.uidvalidity,
+	   "ACLsn", newmailbox.acl, newmailbox.uidvalidity, 0);
+    mailbox_close(&newmailbox);
+
     return 0;
 }
 	
@@ -441,6 +447,7 @@ int checkacl;
     struct iovec iov[10];
     int n;
     struct mailbox mailbox;
+    bit32 uidvalidity, timestamp;
 
     /* Check for request to delete a user */
     if (!strncmp(name, "user.", 5) && !strchr(name+5, '.')) {
@@ -562,6 +569,7 @@ int checkacl;
     
     /* Remove the mailbox and move new mailbox list file into place */
     r = mailbox_open_header(name, &mailbox);
+    uidvalidity = mailbox.uidvalidity;
     if (!r) r = mailbox_delete(&mailbox);
     if (r) {
 	mboxlist_unlock();
@@ -575,6 +583,8 @@ int checkacl;
     }
 
     mboxlist_unlock();
+
+    toimsp(name, uidvalidity, "RENsn", "", 0, 0);
 
     return 0;
 }
@@ -596,6 +606,7 @@ char *userid;
     char *p;
     unsigned long oldoffset, oldlen;
     unsigned long newoffset, newlen;
+    bit32 olduidvalidity, newuidvalidity;
     char *acl;
     char buf2[MAX_MAILBOX_PATH];
     char *root;
@@ -759,6 +770,9 @@ char *userid;
     }
 
     mboxlist_unlock();
+
+    toimsp(oldname, olduidvalidity, "RENsn", newname, newuidvalidity, 0);
+
     return 0;
 }
 
@@ -787,6 +801,7 @@ char *userid;
     int newlistfd;
     struct iovec iov[10];
     int n;
+    bit32 uidvalidity, timestamp;
 
     /* Open and lock mailbox list file */
     r = mboxlist_openlock();
@@ -896,9 +911,14 @@ char *userid;
     free(mailbox.acl);
     mailbox.acl = strsave(newacl);
     (void) mailbox_write_header(&mailbox);
+    timestamp = time(0);
+    uidvalidity = mailbox.uidvalidity;
     mailbox_close(&mailbox);
 
     mboxlist_unlock();
+
+    toimsp(name, uidvalidity, "ACLsn", newacl, timestamp, 0);
+
     close(newlistfd);
     free(newacl);
     return 0;
@@ -1575,7 +1595,10 @@ int *seen;
 	    if (deletethis) {
 		/* Remove the mailbox.  Don't care about errors */
 		r = mailbox_open_header(namebuf, &mailbox);
-		if (!r) r = mailbox_delete(&mailbox);
+		if (!r) {
+		    toimsp(namebuf, mailbox.uidvalidity, "RENsn", "", 0, 0);
+		    r = mailbox_delete(&mailbox);
+		}
 		printf("deleted %s\n", namebuf);
 	    }
 	}
