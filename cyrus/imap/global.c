@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.3 2003/12/15 20:00:39 ken3 Exp $ */
+/* $Id: global.c,v 1.4 2003/12/15 22:42:37 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -90,26 +90,6 @@ struct cyrusdb_backend *config_tlscache_db;
 #ifdef WITH_PTS
 struct cyrusdb_backend *config_ptscache_db;
 #endif
-
-static struct cyrusdb_backend *config_getcyrusdb(enum imapopt opt)
-{
-    int i;
-    struct cyrusdb_backend *db = NULL;
-    const char *name = config_getstring(opt);
-
-    for (i = 0; cyrusdb_backends[i]; i++) {
-	if (!strcmp(cyrusdb_backends[i]->name, name)) {
-	    db = cyrusdb_backends[i]; break;
-	}
-    }
-    if (!db) {
-	char errbuf[1024];
-	sprintf(errbuf, "cyrusdb backend %s not supported", name);
-	fatal(errbuf, EC_CONFIG);
-    }
-
-    return db;
-}
 
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
@@ -180,14 +160,21 @@ int cyrus_init(const char *alt_config, const char *ident)
 	cyrus_acl_strtomask(config_getstring(IMAPOPT_IMPLICIT_OWNER_RIGHTS));
 
     /* lookup the database backends */
-    config_mboxlist_db = config_getcyrusdb(IMAPOPT_MBOXLIST_DB);
-    config_subscription_db = config_getcyrusdb(IMAPOPT_SUBSCRIPTION_DB);
-    config_annotation_db = config_getcyrusdb(IMAPOPT_ANNOTATION_DB);
-    config_seenstate_db = config_getcyrusdb(IMAPOPT_SEENSTATE_DB);
-    config_duplicate_db = config_getcyrusdb(IMAPOPT_DUPLICATE_DB);
-    config_tlscache_db = config_getcyrusdb(IMAPOPT_TLSCACHE_DB);
+    config_mboxlist_db =
+	cyrusdb_fromname(config_getstring(IMAPOPT_MBOXLIST_DB));
+    config_subscription_db =
+	cyrusdb_fromname(config_getstring(IMAPOPT_SUBSCRIPTION_DB));
+    config_annotation_db =
+	cyrusdb_fromname(config_getstring(IMAPOPT_ANNOTATION_DB));
+    config_seenstate_db =
+	cyrusdb_fromname(config_getstring(IMAPOPT_SEENSTATE_DB));
+    config_duplicate_db =
+	cyrusdb_fromname(config_getstring(IMAPOPT_DUPLICATE_DB));
+    config_tlscache_db =
+	cyrusdb_fromname(config_getstring(IMAPOPT_TLSCACHE_DB));
 #ifdef WITH_PTS
-    config_ptscache_db = config_getcyrusdb(IMAPOPT_PTSCACHE_DB);
+    config_ptscache_db =
+	cyrusdb_fromname(config_getstring(IMAPOPT_PTSCACHE_DB));
 #endif
 
     /* configure libcyrus as needed */
@@ -204,6 +191,8 @@ int cyrus_init(const char *alt_config, const char *ident)
 			   config_getint(IMAPOPT_PTSCACHE_TIMEOUT));
     libcyrus_config_setswitch(CYRUSOPT_FULLDIRHASH,
 			      config_getswitch(IMAPOPT_FULLDIRHASH));
+    libcyrus_config_setstring(CYRUSOPT_PTSCACHE_DB,
+			      config_getstring(IMAPOPT_PTSCACHE_DB));
 
     /* Not until all configuration parameters are set! */
     libcyrus_init();
