@@ -293,6 +293,7 @@ struct boundary *boundaries;
 {
     struct boundary newboundaries;
     static struct body zerobody;
+    int sawboundary;
 
     *body = zerobody;
     newboundaries.id = 0;
@@ -305,19 +306,26 @@ struct boundary *boundaries;
 	message_ibuf_init(&body->cacheheaders);
     }
 
-    message_parse_headers(infile, format, body,
-			  defaultContentType, boundaries);
+    sawboundary = message_parse_headers(infile, format, body,
+					defaultContentType, boundaries);
 
     /* Recurse according to type */
     if (strcmp(body->type, "MULTIPART") == 0) {
-	message_parse_multipart(infile, format, body, boundaries);
+	if (!sawboundary)
+	  message_parse_multipart(infile, format, body, boundaries);
     }
     else if (strcmp(body->type, "MESSAGE") == 0 &&
 	strcmp(body->subtype, "RFC822") == 0) {
 	body->subpart = (struct body *)xmalloc(sizeof(struct body));
 
-	message_parse_body(infile, format, body->subpart,
-			   defaultContentType, boundaries);
+	if (sawboundary) {
+	    *body->subpart = zerobody;
+	    message_parse_type(defaultContentType, body->subpart);
+	}
+	else {
+	    message_parse_body(infile, format, body->subpart,
+			       defaultContentType, boundaries);
+	}
 
 	/* Calculate our size/lines information */
 	body->content_size = body->subpart->header_size +
@@ -330,7 +338,8 @@ struct boundary *boundaries;
 	body->boundary_lines = body->subpart->boundary_lines;
     }
     else {
-	message_parse_content(infile, format, body, boundaries);
+	if (!sawboundary)
+	  message_parse_content(infile, format, body, boundaries);
     }
 
     /* Free up boundary storage if necessary */
@@ -341,7 +350,7 @@ struct boundary *boundaries;
  * Parse the headers of a body-part
  */
 #define HEADGROWSIZE 1000
-static
+static int
 message_parse_headers(infile, format, body, defaultContentType, boundaries)
 FILE *infile;
 int format;
@@ -353,6 +362,7 @@ struct boundary *boundaries;
     static char *headers;
     int left, len;
     char *next;
+    int sawboundary = 0;
 
     body->header_offset = ftell(infile);
 
@@ -383,6 +393,7 @@ struct boundary *boundaries;
 	    else {
 		*next = '\0';
 	    }
+	    sawboundary = 1;
 	    break;
 	}
 
@@ -544,6 +555,7 @@ struct boundary *boundaries;
     if (!body->type) {
 	message_parse_type(defaultContentType, body);
     }
+    return sawboundary;
 }
 
 /*
