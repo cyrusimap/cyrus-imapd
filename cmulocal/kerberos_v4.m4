@@ -1,7 +1,7 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.21 2002/05/25 19:57:42 leg Exp $
+dnl $Id: kerberos_v4.m4,v 1.22 2002/07/22 20:19:12 shadow Exp $
 
 AC_DEFUN(CMU_KRB_SENDAUTH_PROTO, [
 AC_MSG_CHECKING(for krb_sendauth prototype)
@@ -146,6 +146,7 @@ AC_DEFUN(CMU_KRB_LIB_WHERE, [
 
 AC_DEFUN(CMU_KRB4, [
 AC_REQUIRE([CMU_SOCKETS])
+AC_REQUIRE([CMU_LIBSSL])
 AC_ARG_WITH(krb4,
 	[  --with-krb4=PREFIX      Compile with Kerberos 4 support],
 	[if test "X$with_krb4" = "X"; then
@@ -185,6 +186,32 @@ AC_ARG_WITH(krb4-include,
 	  fi
 	fi
 
+          AC_MSG_CHECKING([if libdes is needed])
+          AC_TRY_LINK([],[des_quad_cksum();],AFS_DES_LIB="",AFS_DES_LIB="maybe")
+          if test "X$KRB_DES_LIB" != "X"; then
+              LIBS="$cmu_save_LIBS -ldes"
+              AC_TRY_LINK([], [des_quad_cksum();],KRB_DES_LIB="yes")
+              if test "X$KRB_DES_LIB" = "Xyes"; then
+                  AC_MSG_RESULT([yes])
+                  KRB_LIBDES="-ldes"
+                  KRB_LIBDESA="${KRB_LIB_DIR}/libdes.a"
+              else
+                  LIBS="$cmu_save_LIBS $LIBSSL_LIB_FLAGS"
+                  AC_TRY_LINK([],
+                  [des_quad_cksum();],KRB_DES_LIB="libcrypto")
+                  if test "X$KRB_DES_LIB" = "Xlibcrypto"; then
+                      AC_MSG_RESULT([libcrypto])
+                      KRB_LIBDES="$LIBSSL_LIB_FLAGS"
+                      KRB_LIBDESA="$LIBSSL_LIB_FLAGS"
+                  else
+                      AC_MSG_RESULT([unknown])
+                      AC_MSG_ERROR([Could not use -ldes])
+                  fi 
+              fi 
+          else
+             AC_MSG_RESULT([no])
+          fi
+
 	AC_MSG_CHECKING(whether to include kerberos 4)
 	if test "X$ac_cv_krb_where_lib" = "X" -a "X$ac_cv_krb_where_inc" = "X"; then
 	  ac_cv_found_krb=no
@@ -195,7 +222,7 @@ AC_ARG_WITH(krb4-include,
 	  KRB_INC_DIR=$ac_cv_krb_where_inc
 	  KRB_LIB_DIR=$ac_cv_krb_where_lib
 	  KRB_INC_FLAGS="-I${KRB_INC_DIR}"
-	  KRB_LIB_FLAGS="-L${KRB_LIB_DIR} -lkrb -ldes"
+	  KRB_LIB_FLAGS="-L${KRB_LIB_DIR} -lkrb ${KRB_LIBDES}"
 	  cmu_save_LIBS="$LIBS"
 	  LIBS="${LIBS} ${KRB_LIB_FLAGS}"
 	  AC_CHECK_LIB(resolv, dns_lookup, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lresolv",,"${KRB_LIB_FLAGS}")
