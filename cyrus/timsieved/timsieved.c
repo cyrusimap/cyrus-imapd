@@ -229,6 +229,7 @@ int service_main(int argc, char **argv, char **envp)
     socklen_t salen;
     struct hostent *hp;
     int timeout;
+    int secflags = 0;
     sasl_security_properties_t *secprops = NULL;
 
     /* set up the prot streams */
@@ -284,7 +285,11 @@ int service_main(int argc, char **argv, char **envp)
 
     /* will always return something valid */
     /* should be configurable! */
-    secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
+    secflags = SASL_SEC_NOANONYMOUS;
+    if (!config_getswitch("allowplaintext", 1)) {
+	secflags |= SASL_SEC_NOPLAINTEXT;
+    }
+    secprops = mysasl_secprops(secflags);
     sasl_setprop(sieved_saslconn, SASL_SEC_PROPS, secprops);
     
     sasl_setprop(sieved_saslconn, SASL_IP_REMOTE, &sieved_remoteaddr);  
