@@ -12,6 +12,8 @@ idled
 imap_err.c
 imap_err.h
 imapd
+imapopts.c
+imapopts.h
 ipurge
 lmtpd
 lmtpproxyd
