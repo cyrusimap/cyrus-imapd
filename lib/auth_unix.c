@@ -41,10 +41,11 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.30 2002/02/19 18:50:14 ken3 Exp $
+ * $Id: auth_unix.c,v 1.31 2002/04/15 14:42:27 rjs3 Exp $
  */
 
 #include <config.h>
+#include <stdlib.h>
 #include <pwd.h>
 #include <grp.h>
 #include <ctype.h>
