@@ -95,12 +95,14 @@ char **argv;
     mailbox_reconstructmode();
 
     for (i = optind; i < argc; i++) {
-	do_reconstruct(argv[i], 0, 0);
-
 	if (rflag) {
 	    strcpy(buf, argv[i]);
 	    strcat(buf, ".*");
+	    mboxlist_findall(argv[i], 1, 0, do_reconstruct);
 	    mboxlist_findall(buf, 1, 0, do_reconstruct);
+	}
+	else {
+	    do_reconstruct(argv[i], 0, 0);
 	}
     }
 
@@ -373,7 +375,8 @@ char *name;
     /* Write out new index file header */
     rewind(newindex);
     if (mailbox.last_uid < uid[uid_num-1]) {
-	mailbox.last_uid = uid[uid_num-1] + 100;
+	mailbox.last_uid = uid[uid_num-1] +
+	    ((format == MAILBOX_FORMAT_NETNEWS) ? 0 : 100);
     }
     if (mailbox.last_appenddate == 0 || mailbox.last_appenddate > time(0)) {
 	mailbox.last_appenddate = time(0);
