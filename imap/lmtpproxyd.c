@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.37 2002/02/27 04:34:39 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.38 2002/03/20 23:03:06 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -141,10 +141,12 @@ static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
 static int verify_user(const char *user, long quotacheck,
 		       struct auth_state *authstate);
+FILE *proxy_spoolfile(message_data_t *msgdata);
 void shut_down(int code);
 static void usage();
 
-struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down, 0, 0, 0 };
+struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
+			    &proxy_spoolfile, 0, 0, 0 };
 
 /* globals */
 static int quotaoverride = 0;		/* should i override quota? */
@@ -216,7 +218,7 @@ int service_init(int argc, char **argv, char **envp)
 {
     int r;
 
-    config_changeident("lmtpd");
+    config_changeident("lmtpproxyd");
     if (geteuid() == 0) return 1;
     
     signals_set_shutdown(&shut_down);
@@ -454,6 +456,8 @@ static int adddest(struct mydata *mydata,
 	/* yuck; our error handling for now will be to exit;
 	   this txn will be retried later */
 	fatal("mupdate server not responding", EC_TEMPFAIL);
+    } else if (r == MUPDATE_MAILBOX_UNKNOWN) {
+	r = IMAP_MAILBOX_NONEXISTENT;
     }
 
     if (r) {
@@ -773,3 +777,10 @@ static int verify_user(const char *user,
 
     return r;
 }
+
+/* we're a proxy, we don't care about single instance store */
+FILE *proxy_spoolfile(message_data_t *msgdata __attribute__((unused))) 
+{
+    return tmpfile();
+}
+    

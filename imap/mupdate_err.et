@@ -1,5 +1,5 @@
 # mupdate_err.et -- Error codes for the mupdate API
-# $Id: mupdate_err.et,v 1.4 2002/03/12 18:55:35 rjs3 Exp $
+# $Id: mupdate_err.et,v 1.5 2002/03/20 23:03:06 rjs3 Exp $
 #
 # Copyright 2001 Carnegie Mellon University
 # 
@@ -47,5 +47,8 @@ ec MUPDATE_BADPARAM,
 
 ec MUPDATE_PROTOCOL_ERROR,
    "Remote mupdate server sent bad protocol"
+
+ec MUPDATE_MAILBOX_UNKNOWN,
+   "Mailbox not in mupdate database"
 
 end

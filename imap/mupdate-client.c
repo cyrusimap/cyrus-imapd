@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.29 2002/03/14 18:32:47 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.30 2002/03/20 23:03:06 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -579,10 +579,17 @@ int mupdate_find(mupdate_handle *handle, const char *mailbox,
 
     ret = mupdate_scarf(handle, mupdate_find_cb, handle, 1, &response);
 
-    if (!ret && response == MUPDATE_OK) {
+    /* note that the response is still OK even if there was no data returned,
+     * so we have to make sure we actually filled in the data too */
+    if (!ret && response == MUPDATE_OK && handle->mailboxdata_buf.mailbox) {
 	*target = &(handle->mailboxdata_buf);
 	return 0;
+    } else if(!ret && response == MUPDATE_OK) {
+	/* it looked okay, but we didn't get a mailbox */
+	*target = NULL;
+	return MUPDATE_MAILBOX_UNKNOWN;
     } else {
+	/* Something Bad happened */
 	*target = NULL;
 	return ret ? ret : MUPDATE_FAIL;
     }
