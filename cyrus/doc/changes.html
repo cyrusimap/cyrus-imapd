@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.43.2.9 2002/11/14 19:36:16 rjs3 Exp $ -->
+<!-- $Id: changes.html,v 1.43.2.10 2002/12/11 17:10:16 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -44,6 +44,26 @@ to skiplist from Berkeley and Flat, respectively. </li>
 <li> ptloader is now a regular cyrus service.  This has several implications,
 see <a href=install-upgrade.html>install-upgrade.html</a> for more details.</li>
 
+<li> NNTP support.  Usenet news can now be fed to and read from Cyrus
+directly via NNTP, without the need for a local news server.  See ???
+for details.</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.11</h2>
+<ul>
+<li>Master now has a daemon mode and pidfile support (-d and -p options)</li>
+<li>Berkeley DB Configuration methods have changed.  Hopefully they're
+more generic now.  You can still use --with-dbdir, or you can use
+--with-bdb-libdir and --with-bdb-incdir</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.10</h2>
+<ul>
+<li>Fixed some potential buffer overflows in the sieve code, as well
+as a pre-login buffer overflow in the IMAP parsing code.</li>
+<li>ipurge can now skip flagged messages</li>
+<li>Fix a problem with the flat backend and tracking new files</li>
+<li>Fix a problem with the memory pool routines on 64-bit machines</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.9</h2>
@@ -1723,7 +1743,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/11/14 19:36:16 $ <br />
+last modified: $Date: 2002/12/11 17:10:16 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
