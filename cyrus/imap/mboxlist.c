@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.13 2004/06/24 15:16:27 ken3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.14 2004/07/13 02:24:40 ken3 Exp $
  */
 
 #include <config.h>
@@ -919,10 +919,12 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
        user.<x> with no dots after it */
     if ((p = mboxname_isusermailbox(name, 1))) {
 	/* Can't DELETE INBOX (your own inbox) */
-	int len = config_virtdomains ? strcspn(userid, "@") : strlen(userid);
-	if (userid && (len == strlen(p)) && !strncmp(p, userid, len)) {
-	    r = IMAP_MAILBOX_NOTSUPPORTED;
-	    goto done;
+	if (userid) {
+	    int len = config_virtdomains ? strcspn(userid, "@") : strlen(userid);
+	    if ((len == strlen(p)) && !strncmp(p, userid, len)) {
+		r = IMAP_MAILBOX_NOTSUPPORTED;
+		goto done;
+	    }
 	}
 
 	/* Only admins may delete user */
