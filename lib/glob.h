@@ -37,6 +37,7 @@ typedef struct glob {
     char *suppress;		/* suppress string pointer */
     char *gstar, *ghier, *gptr;	/* INBOX prefix comparison state */
     char sep_char;		/* separator character */
+    char inbox[6];		/* INBOX in the correct case */
     char str[3];		/* glob string & suppress string */
 } glob;
 
@@ -70,5 +71,6 @@ int glob_test( /* glob *g, char *str, long len, long *min */ );
 
 /* macros */
 #define glob_init(str, flags) glob_init_suppress((str), (flags), NULL)
+#define glob_inboxcase(g) ((g)->inbox)
 #define GLOB_TEST(g, str) glob_test((g), (str), 0, NULL)
 #define GLOB_SET_SEPARATOR(g, c) ((g)->sep_char = (c))
