@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.15 2000/05/23 20:52:32 robeson Exp $
+ * $Id: target-acap.c,v 1.16 2000/05/23 21:30:47 leg Exp $
  */
 
 #include <config.h>
@@ -130,7 +130,7 @@ void connect_acap(const char *server)
     user = config_getstring("acap_username", NULL);
     if (user == NULL) {
 	syslog(LOG_ERR, "unable to find option acap_username");
-	fatal("couldn't connect to acap server", EC_NOHOST);
+	fatal("couldn't connect to acap server", EC_UNAVAILABLE);
     }
 
     cb = mysasl_callbacks(user,
@@ -148,7 +148,7 @@ void connect_acap(const char *server)
     if (r != SASL_OK) {
 	syslog(LOG_ERR, "sasl_client_init() failed: %s",
 	       sasl_errstring(r, NULL, NULL));
-	fatal("couldn't connect to acap server", EC_NOHOST);
+	fatal("couldn't connect to acap server", EC_UNAVAILABLE);
     }
 
     snprintf(acapurl, sizeof(acapurl), "acap://%s@%s/", user, server);
@@ -156,7 +156,7 @@ void connect_acap(const char *server)
     if (r != ACAP_OK) {
 	syslog(LOG_ERR, "couldn't connect to ACAP server: %s",
 	       error_message(r));
-	fatal("couldn't connect to acap server", EC_NOHOST);
+	fatal("couldn't connect to acap server", EC_UNAVAILABLE);
     }
 }
 
@@ -348,14 +348,14 @@ void synchronize_mboxlist(void)
     if (r != ACAP_OK) {
 	syslog(LOG_ERR, "acap_search_dataset() failed: %s\n", 
 	       error_message(r));
-	fatal("can't download list of datasets\n", EC_NOHOST);
+	fatal("can't download list of datasets\n", EC_UNAVAILABLE);
     }
 	
     r = acap_process_on_command(acap_conn, cmd, NULL);
     if (r != ACAP_OK) {
 	syslog(LOG_ERR, "acap_process_on_command() failed: %s\n", 
 	       error_message(r));
-	fatal("can't download list of datasets\n", EC_NOHOST);
+	fatal("can't download list of datasets\n", EC_UNAVAILABLE);
     }
 
     /* anything left over has been deleted */
@@ -396,7 +396,7 @@ void listen_for_kicks()
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
 	syslog(LOG_ERR, "socket: %m");
-	return;
+	fatal("socket failed", EC_OSERR);
     }
 
     strcpy(fnamebuf, config_dir);
@@ -413,12 +413,12 @@ void listen_for_kicks()
     chmod(fnamebuf, 0777); /* for DUX */
     if (r == -1) {
 	syslog(LOG_ERR, "bind: %s: %m", fnamebuf);
-	exit(1);
+	fatal("bind failed", EC_OSERR);
     }
     r = listen(s, 10);
     if (r == -1) {
 	syslog(LOG_ERR, "listen: %m");
-	exit(1);
+	fatal("listen failed", EC_OSERR);
     }
 
     /* get ready for select() */
@@ -435,7 +435,7 @@ void listen_for_kicks()
 	r = acap_process_outstanding(acap_conn);
 	if (r != ACAP_OK) syslog(LOG_ERR, "acap_process_outstanding(): %s",
 				 error_message(r));
-	if (r == ACAP_NO_CONNECTION) return;
+	if (r == ACAP_NO_CONNECTION) break;
 
 	/* check for the next input */
 	rset = read_set;
@@ -445,8 +445,7 @@ void listen_for_kicks()
 	if (n == -1) {
 	    /* uh oh */
 	    syslog(LOG_ERR, "select(): %m");
-	    close(s);
-	    return;
+	    break;
 	}
 
 	/* if (FD_ISSET(acap_conn, &rfds)) 
@@ -483,11 +482,13 @@ void listen_for_kicks()
 	    close(c);
 	}
     }
+
+    close(s);
 }
 
 void handler(int sig)
 {
-    fatal("received signal", 1);
+    fatal("received signal", EC_TEMPFAIL);
 }
 
 int main(int argc, char *argv[], char *envp[])
