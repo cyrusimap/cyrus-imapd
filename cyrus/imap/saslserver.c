@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslserver.c,v 1.7 2004/07/15 22:42:45 rjs3 Exp $ */
+/* $Id: saslserver.c,v 1.8 2004/07/16 12:25:14 ken3 Exp $ */
 
 #include <config.h>
 
@@ -139,9 +139,9 @@ int saslserver(sasl_conn_t *conn, const char *mech,
 	r = sasl_encode64(serverout, serveroutlen,
 			  base64, BASE64_BUF_SIZE, NULL);
 	if (r == SASL_OK)
-	    *success_data = xstrdup(base64);
+	    *success_data = (char *) xstrdup(base64);
     }
 
-    if(sasl_result) *sasl_result = r;
+    if (sasl_result) *sasl_result = r;
     return (r == SASL_OK ? 0 : IMAP_SASL_FAIL);
 }
