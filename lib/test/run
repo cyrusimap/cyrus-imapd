@@ -26,7 +26,7 @@ sub runone {
     $tname = $t if (!defined $tname);
     mkdir $tname, 0755;
     chdir $tname;
-    $res = mysys("gcc $d -g -o $t ../$t.c -lcyrus");
+    $res = mysys("gcc $d -g -o $t ../$t.c -L../.. -lcyrus");
     if (!$res) {
 	$res = mysys("./$t $p < ../$t.INPUT > $t.TEMP");
 	$res = mysys("cmp -s $t.TEMP ../$t.OUTPUT");
@@ -40,4 +40,5 @@ sub runone {
 }
 
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat");
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist", "cyrusdb_skiplist");
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_db3 -ldb", "cyrusdb_db3");
