@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.5.4.6 2002/12/20 18:32:08 rjs3 Exp $
+ * $Id: squatter.c,v 1.5.4.7 2003/01/03 01:06:01 ken3 Exp $
  */
 
 /*
@@ -122,8 +122,11 @@ typedef struct {
   time_t end_time;      /* When did it end? */
 } SquatStats;
 
+const int SKIP_FUZZ = 60;
+
 static int verbose = 0;
 static int mailbox_count = 0;
+static int skip_unmodified = 0;
 static SquatStats total_stats;
 
 static void start_stats(SquatStats* stats) {
@@ -147,7 +150,7 @@ static void print_stats(FILE* out, SquatStats* stats) {
 static int usage(const char *name)
 {
     fprintf(stderr,
-	    "usage: %s [-C <alt_config>] [-r] [-v] mailbox...\n", name);
+	    "usage: %s [-C <alt_config>] [-r] [-s] [-v] mailbox...\n", name);
  
     exit(EC_USAGE);
 }
@@ -286,6 +289,7 @@ static int index_me(char *name, int matchlen, int maycreate, void *rock) {
     int fd;
     SquatOptions options;
     struct stat index_file_info;
+    struct stat tmp_file_info;
     char uid_validity_buf[30];
  
     data.mailbox_stats = &stats;
@@ -312,16 +316,36 @@ static int index_me(char *name, int matchlen, int maycreate, void *rock) {
         return 1;
     }
 
+    snprintf(index_file_name, sizeof(index_file_name),
+             "%s%s", m.path, FNAME_SQUAT_INDEX);
+    snprintf(tmp_file_name, sizeof(tmp_file_name),
+             "%s%s", m.path, FNAME_INDEX);
+
+    /* process only changed mailboxes if skip option delected. */
+    if (skip_unmodified &&
+        !stat(tmp_file_name, &tmp_file_info) &&
+        !stat(index_file_name, &index_file_info)) {
+        if (SKIP_FUZZ + tmp_file_info.st_mtime <
+            index_file_info.st_mtime) {
+            syslog(LOG_DEBUG, "skipping mailbox %s", name);
+            if (verbose > 0) {
+                printf("Skipping mailbox %s\n", name);
+            }
+            mailbox_close(&m);
+            return 0;
+        }
+    }
+
+    snprintf(tmp_file_name, sizeof(tmp_file_name),
+             "%s%s.tmp", m.path, FNAME_SQUAT_INDEX);
+
     syslog(LOG_INFO, "indexing mailbox %s... ", name);
     if (verbose > 0) {
       printf("Indexing mailbox %s... ", name);
     }
 
-    snprintf(index_file_name, sizeof(index_file_name),
-             "%s%s", m.path, FNAME_SQUAT_INDEX);
-    snprintf(tmp_file_name, sizeof(tmp_file_name),
-             "%s%s.tmp", m.path, FNAME_SQUAT_INDEX);
-    if ((fd = open(tmp_file_name, O_CREAT | O_TRUNC | O_WRONLY, S_IREAD | S_IWRITE))
+    if ((fd = open(tmp_file_name,
+		   O_CREAT | O_TRUNC | O_WRONLY, S_IREAD | S_IWRITE))
         < 0) {
       fatal_syserror("Unable to create temporary index file");
     }
@@ -400,7 +424,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:rv")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:rsv")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
           alt_config = optarg;
@@ -413,6 +437,10 @@ int main(int argc, char **argv)
 	case 'r': /* recurse */
 	  rflag = 1;
 	  break;
+
+	case 's': /* skip unmodifed */
+	  skip_unmodified = 1;
+          break;
 
 	default:
 	    usage("squatter");
