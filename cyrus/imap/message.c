@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.88.16.8 2003/04/17 19:45:10 ken3 Exp $
+ * $Id: message.c,v 1.88.16.9 2003/04/17 22:53:15 ken3 Exp $
  */
 
 #include <config.h>
@@ -303,7 +303,7 @@ unsigned size;
 	   Unfortunately, we still need to look for the end of the string. */
 	for(p = (unsigned char*) buf; *p; p++);
 	
-	sawnl = (p > buf) && (p[-1] == '\n');
+	sawnl = (p > (unsigned char *)buf) && (p[-1] == '\n');
     }
 }
 
