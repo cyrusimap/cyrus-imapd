@@ -28,7 +28,7 @@ INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
 DEFS = @DEFS@
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et -I$(TCLINCLUDE) @CPPFLAGS@ 
+CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
 LIBS = ../lib/libcyrus.a @LIBS@ 
 NODEP_LIBS = @NODEP_LIBS@ 
 
