@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.147.2.4 2001/06/25 19:48:11 ken3 Exp $
+ * $Id: mboxlist.c,v 1.147.2.4.2.1 2001/07/04 01:37:00 ken3 Exp $
  */
 
 #include <config.h>
@@ -423,8 +423,13 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
 	     * Users by default have all access to their personal mailbox(es),
 	     * Nobody else starts with any access to same.
 	     */
-	    cyrus_acl_set(&acl, name+5, ACL_MODE_SET, ACL_ALL,
+	    identifier = xstrdup(name+5);
+	    if (config_getswitch("altsep", 0)) {
+		if (p = strchr(identifier, DOTCHAR)) *p = '.';
+	    }
+	    cyrus_acl_set(&acl, identifier, ACL_MODE_SET, ACL_ALL,
 		    (cyrus_acl_canonproc_t *)0, (void *)0);
+	    free(identifier);
 	} else {
 	    defaultacl = identifier = 
 		xstrdup(config_getstring("defaultacl", "anyone lrs"));

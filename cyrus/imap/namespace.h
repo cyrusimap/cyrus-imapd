@@ -1,5 +1,5 @@
 /* namespace.h -- Namespace manipulation routines
- * $Id: namespace.h,v 1.1.2.3.2.1 2001/07/01 23:02:11 ken3 Exp $
+ * $Id: namespace.h,v 1.1.2.3.2.2 2001/07/04 01:37:01 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -45,6 +45,8 @@
 #define INCLUDED_NAMESPACE_H
 
 #define MAX_NAMESPACE_PREFIX 40
+
+#define DOTCHAR '^'
 
 enum { NAMESPACE_INBOX, NAMESPACE_USER, NAMESPACE_SHARED };
 

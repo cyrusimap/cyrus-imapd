@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- $Id: mboxname.c,v 1.20.4.2.2.1 2001/07/01 23:02:11 ken3 Exp $
+ $Id: mboxname.c,v 1.20.4.2.2.2 2001/07/04 01:37:01 ken3 Exp $
 
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -121,7 +121,7 @@ int mboxname_tointernal(const char *name, struct namespace *namespace,
 	strcpy(result, "user.");
 	strcat(result, userid);
 	strcat(result, name+5);
-	hier_sep_tointernal(result+5, namespace);
+	hier_sep_tointernal(result+5+strlen(userid), namespace);
 	return 0;
     }
 
@@ -209,7 +209,7 @@ int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
     }
     strcat(result, ".");
     strcat(result, name);
-    hier_sep_tointernal(result+5, namespace);
+    hier_sep_tointernal(result+6+strlen(userid), namespace);
     return 0;
 }
 
@@ -341,6 +341,9 @@ int mboxname_policycheck(char *name)
     int sawutf7 = 0;
     unsigned c1, c2, c3, c4, c5, c6, c7, c8;
     int ucs4;
+    int isaltsep;
+
+    isaltsep = config_getswitch("altsep", 0);
 
     if (strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
@@ -419,7 +422,9 @@ int mboxname_policycheck(char *name)
 	    name++;		/* Skip over terminating '-' */
 	}
 	else {
-	    if (!strchr(GOODCHARS, *name++)) return IMAP_MAILBOX_BADNAME;
+	    if (!strchr(GOODCHARS, *name) && !(isaltsep && *name == DOTCHAR))
+		return IMAP_MAILBOX_BADNAME;
+	    name++;
 	    sawutf7 = 0;
 	}
     }

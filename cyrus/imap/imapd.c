@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.304.2.8.2.1 2001/07/01 23:02:10 ken3 Exp $ */
+/* $Id: imapd.c,v 1.304.2.8.2.2 2001/07/04 01:37:00 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1500,6 +1500,9 @@ char *passwd;
 	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
     }
 
+    /* Translate userid */
+    hier_sep_tointernal(imapd_userid, &imapd_namespace);
+
     return;
 }
 
@@ -1648,6 +1651,9 @@ cmd_authenticate(char *tag,char *authtype)
 	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
 	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
     }
+
+    /* Translate userid */
+    hier_sep_tointernal(imapd_userid, &imapd_namespace);
 
     return;
 }
