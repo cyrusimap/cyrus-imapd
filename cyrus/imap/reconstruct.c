@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.13 2004/12/22 20:22:01 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.14 2004/12/30 21:05:35 ken3 Exp $ */
 
 #include <config.h>
 
@@ -858,9 +858,9 @@ int reconstruct(char *name, struct discovered *found)
     mailbox_close(&mailbox);
 
     if (found) {
-	if (mailbox.mpath &&
+	if (mympath &&
 	    (config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_HEADER) &&
-	    chdir(mailbox.mpath) == -1) {
+	    chdir(mympath) == -1) {
 	    return IMAP_IOERROR;
 	}
 
