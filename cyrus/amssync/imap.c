@@ -277,8 +277,6 @@ void processexists(struct imclient *conn, bboard *bbd, struct
                  imclient_reply *inmsg)
 {
     bbd->alloced=inmsg->msgno;
-    bbd->inuse=-1;
-    bbd->msgs=(message *)xmalloc((bbd->alloced+1) * sizeof (message));
 }
 
 /*
@@ -437,7 +435,7 @@ int getimap( struct imclient *imclient, char *bbd,bboard *imapbbd)
     int waitforcomplete,i;
 
     strcpy(imapbbd->name, bbd);
-    imapbbd->alloced=0;
+    imapbbd->alloced=-1;
     imapbbd->inuse=-2;
     imclient_addcallback(imclient,
 			 "EXISTS", CALLBACK_NUMBERED , processexists, imapbbd,
@@ -450,17 +448,27 @@ int getimap( struct imclient *imclient, char *bbd,bboard *imapbbd)
 	imclient_processoneevent(imclient);
     }
 
-    if (imapbbd->inuse == -2) {
-      fprintf(stderr,"Select of %s did not elicit EXISTS response\n",bbd);
-      fprintf(stderr," does bboard exist?\n", EX_PROTOCOL);
-      return 1;      
+    if (waitforcomplete != 1) {
+	fprintf(stderr,"Select of %s failed\n",bbd);
+	return 1;
     }
 
-    waitforcomplete=0;
-    imclient_send(imclient, markdone, &waitforcomplete,
-		  "FETCH 1:%d (internaldate uid)", imapbbd->alloced);
-    while (!waitforcomplete) {
-	imclient_processoneevent(imclient);
+    if (imapbbd->alloced == -1) {
+	fprintf(stderr,"Select of %s did not elicit EXISTS response,",bbd);
+	fprintf(stderr," does bboard exist?\n");
+	return 1;      
+    }
+
+    imapbbd->inuse=-1;
+    imapbbd->msgs=(message *)xmalloc((imapbbd->alloced+1) * sizeof (message));
+
+    if (imapbbd->alloced > 0) {
+	waitforcomplete=0;
+	imclient_send(imclient, markdone, &waitforcomplete,
+		      "FETCH 1:%d (internaldate uid)", imapbbd->alloced);
+	while (!waitforcomplete) {
+	    imclient_processoneevent(imclient);
+	}
     }
 
     imclient_addcallback(imclient,
@@ -515,7 +523,7 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
                *msg)  
 {
     FILE *msgf, *tmpf;
-    char *allmsg, *withcrnl, buf[1025], amsfile[MAXPATHLEN], *descbuf, *tmpfil;
+    char *allmsg, *withcrnl, buf[1025], amsfile[MAXPATHLEN], *descbuf;
     char *startline, *p, *q, *r; 
     int withcrnllen, withcrnlsize;
     int len, rc, gmtnegative, scribeval, done, unscribe;
@@ -530,7 +538,6 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
     
     tmpf=NULL;
     scribeval=0;
-    tmpfil=NULL;
     len=0; 
     if (verbose) fprintf(logfile,"Add\n");
 
@@ -558,10 +565,11 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
     /* Read header lines , and try to find any Content-Type headers */
     while (!done) {
 	if (fgets(&buf[0], 1024, msgf) == 0) {
-
-	    perror(amsfile);
-	    fclose(msgf);
-	    fatal(EX_OSERR, "Couldn't read message\n");
+	    /* No body, add separator */
+	    len=strlen(allmsg);
+	    allmsg[len++] = '\n';
+	    allmsg[len] = '\0';
+	    break;
         }
 	/* If a BE2 message, pass the version number into UnScribeInit */
 	if (!strncmp(buf, "Content-Type: X-BE2", 19)) {
@@ -590,23 +598,21 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
 	/* Since unscribe sends it's output to a FILE *, create a temp
 	 * file, and write the headers to it.
 	 */
-	tmpfil=tmpnam(NULL);
-	close(creat(tmpfil,0700));
-	if ((tmpf=fopen(tmpfil,"r+")) == NULL) {
-	    perror(tmpfil);
-	    fatal(EX_OSERR,"Couldn't create temp file\n");
+	tmpf=tmpfile();
+	if (tmpf == NULL) {
+	    fprintf(stderr, "Can't open temporary file\n");
+	    return 1;
 	}
 	rc=fwrite(allmsg, 1, len, tmpf);
 	if (rc == -1) {
-	    perror(tmpfil);
 	    fclose(tmpf);
-	    unlink(tmpfil);
 	    fclose(msgf);
-	    fatal(EX_OSERR, "Couldn't write headers to temp file\n");
+	    fprintf(stderr, "Couldn't write headers to temp file\n");
+	    return 1;
 	}
 	if (rc < len) {
-	    fprintf(stderr, "Short write of headers to temp file %s\n",
-		    tmpfil);
+	    fprintf(stderr, "Short write of headers to temp file\n");
+	    return 1;
 	}
 	/* Read the formatted body into the buffer. It will fit. */
 	rc=fread(allmsg,1, statbuf.st_size - len+1, msgf);
@@ -614,38 +620,30 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
 	    perror(amsfile);
 	    fclose(msgf);
 	    fclose(tmpf);
-	    unlink(tmpfil);
-	    fatal(EX_NOINPUT, "Couldn't read message\n");
+	    fprintf(stderr, "Couldn't read message\n");
+	    return 1;
 	}      
 	if (rc < statbuf.st_size - len) {
 	    fprintf(stderr, "Short read (%d/%ld) of message %s\n",rc ,
-		    statbuf.st_size - len, amsfile); 
+		    statbuf.st_size - len, amsfile);
+	    return 1;
 	}
 	fclose(msgf);
 	/* Call UnScribe and UnScribeFlush */
 	rc=UnScribe(scribeval, &scribestate, allmsg, rc, tmpf);
 	if (rc == -1) {
-	    perror(tmpfil);
 	    fclose(tmpf);
-	    unlink(tmpfil);
-	    fatal(EX_OSERR, "Unable to write UnScribed message\n");
+	    fprintf(stderr, "Unable to write UnScribed message\n");
+	    return 1;
 	}      
 	if (rc < 0) {
 	    fclose(tmpf);
-	    unlink(tmpfil);
 	    fprintf(stderr,"UnScribe failed!\n");
             return 1;            
 	}
 	rc=UnScribeFlush(scribeval, &scribestate, tmpf);
-	if (rc == -1) {
-	    perror(tmpfil);
-	    fclose(tmpf);
-	    unlink(tmpfil);
-	    fatal(EX_OSERR, "Unable to flush UnScribed message\n");
-	}      
 	if (rc < 0) {
 	    fclose(tmpf);
-	    unlink(tmpfil);
             fprintf(stderr, "UnScribeFlush failed!\n");
             return 1;           
 	}
@@ -653,41 +651,38 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
 	rewind(tmpf);
 	free(allmsg);
 	if (fstat(fileno(tmpf), &statbuf) == -1) {
-	    perror(tmpfil);
 	    fclose(tmpf);
-	    unlink(tmpfil);
-	    fatal(EX_OSERR, "Couldn't stat temp file\n");
+	    fprintf(stderr, "Couldn't stat temp file\n");
+	    return 1;
 	}
 	allmsg=xmalloc(statbuf.st_size+1);
 	memset(allmsg, 0, statbuf.st_size+1);
     
 	rc=fread(allmsg,1, statbuf.st_size, tmpf);
 	if (rc == -1) {
-	    perror(tmpfil);
 	    fclose(tmpf);
-	    unlink(tmpfil);
-	    fatal(EX_OSERR, "Couldn't read temp file\n");
+	    fprintf(stderr, "Couldn't read temp file\n");
+	    return 1;
 	}      
 	if (rc < statbuf.st_size) {
 	    fprintf(stderr, "Short read (%d/%d) of temp file\n",rc ,
 		    (int) statbuf.st_size); 
 	}
 	fclose(tmpf);
-	unlink(tmpfil);
     }
     else {
 	/* Not BE2, just read the whole thing in. */
 	rewind(msgf);
 	rc=fread(allmsg,1, statbuf.st_size, msgf);
 	if (rc == -1) {
-	    perror(tmpfil);
 	    fclose(tmpf);
-	    unlink(tmpfil);
-	    fatal(EX_OSERR, "Couldn't read message file\n");
+	    fprintf(stderr, "Couldn't read message file\n");
+	    return 1;
 	}      
 	if (rc < statbuf.st_size) {
 	    fprintf(stderr, "Short read (%d/%d) of message file\n",rc ,
-		    (int) statbuf.st_size); 
+		    (int) statbuf.st_size);
+	    return 1;
 	}
 	fclose(msgf);
     }
