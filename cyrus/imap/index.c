@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.166 2001/09/12 15:54:15 ken3 Exp $
+ * $Id: index.c,v 1.167 2001/09/14 01:23:33 ken3 Exp $
  */
 #include <config.h>
 
@@ -2739,7 +2739,7 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 	    
 	for (l = searchargs->from; l; l = l->next) {
-	    if ((cachelen == 3 && !strcmp(cacheitem+4, "NIL")) ||
+	    if (cachelen == 0 ||
 		!charset_searchstring(l->s, l->p, cacheitem+4, cachelen))
 		return 0;
 	}
@@ -2748,7 +2748,7 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->to; l; l = l->next) {
-	    if ((cachelen == 3 && !strcmp(cacheitem+4, "NIL")) ||
+	    if (cachelen == 0 ||
 		!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
 		return 0;
 	}
@@ -2757,7 +2757,7 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->cc; l; l = l->next) {
-	    if ((cachelen == 3 && !strcmp(cacheitem+4, "NIL")) ||
+	    if (cachelen == 0 ||
 		!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
 		return 0;
 	}
@@ -2766,7 +2766,7 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->bcc; l; l = l->next) {
-	    if ((cachelen == 3 && !strcmp(cacheitem+4, "NIL")) ||
+	    if (cachelen == 0 ||
 		!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
 		return 0;
 	}
