@@ -47,7 +47,8 @@ my $SASL_LIB = $ENV{SASL_LIB} || "-lsasl";
 WriteMakefile(
     'NAME'	=> 'Cyrus::SIEVE::managesieve',
     'VERSION_FROM' => 'managesieve.pm', # finds $VERSION
-    'LIBS'	=> ["-L../lib/ -lisieve $SASL_LIB -L../../../lib/ -lcyrus -lssl -lcrypto"], 
+    'MYEXTLIB'  => '../../../lib/libcyrus.a',
+    'LIBS'	=> ["-L../lib/ -lisieve $SASL_LIB -lssl -lcrypto"], 
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../lib/ -I../../../lib/ $SASL_INC",
 );
