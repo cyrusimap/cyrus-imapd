@@ -80,6 +80,8 @@
 #include "mystring.h"
 
 #include "auth.h"
+#include "acl.h"
+#include "mboxlist.h"
 
 
 sasl_conn_t *sieved_saslconn; /* the sasl connection context */
@@ -128,6 +130,43 @@ void fatal(const char *s, int code)
     exit(EC_TEMPFAIL);
 }
 
+/*
+ * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
+ * right to the principal 'auth_identity'. Returns 1 if so, 0 if not.
+ * The difference between this routine and the one in imapd.c is that
+ * we need to take care to open and close the mailboxes db.
+ */
+static int acl_ok(const char *user, 
+                  const char *auth_identity,
+                  struct auth_state *authstate)
+{
+    char *acl;
+    char inboxname[1024];
+    int r;
+
+    if (strchr(user, '.') || strlen(user)+6 >= sizeof(inboxname)) return 0;
+
+    strcpy(inboxname, "user.");
+    strcat(inboxname, user);
+
+    /* open mailboxes */
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+
+    if (!authstate ||
+        mboxlist_lookup(inboxname, (char **)0, &acl, NULL)) {
+        r = 0;  /* Failed so assume no proxy access */
+    }
+    else {
+        r = (cyrus_acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
+    }
+
+    /* close mailboxes */
+    mboxlist_close();
+    mboxlist_done();
+
+    return r;
+}
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
@@ -166,19 +205,23 @@ static int mysasl_authproc(sasl_conn_t *conn,
     /* ok, is auth_identity an admin? */
     sieved_userisadmin = authisa(sieved_authstate, "sieve", "admins");
 
-    /* we want to authenticate as a different user; we'll allow this
-       if we're an admin or if we're a proxy server */
     if (strcmp(auth_identity, requested_user)) {
-	if (sieved_userisadmin
-	    || authisa(sieved_authstate, "sieve", "proxyservers")) {
-	    /* proxy ok! */
+        /* we want to authenticate as a different user; we'll allow this
+           if we're an admin or if we've allowed ACL proxy logins */
+        int use_acl = config_getswitch("loginuseacl", 0);
+
+        if (sieved_userisadmin ||
+            (use_acl && acl_ok(requested_user, auth_identity, sieved_authstate)) ||
+            authisa(sieved_authstate, "sieve", "proxyservers")) {
+            /* proxy ok! */
 
 	    sieved_userisadmin = 0; /* no longer admin */
 	    auth_freestate(sieved_authstate);
 	    
 	    sieved_authstate = auth_newstate(requested_user, NULL);
 	} else {
-	    sasl_seterror(conn, 0, "user is not allowed to proxy");
+          sasl_seterror(conn, 0, "user %s is not allowed to proxy",
+                          auth_identity);
 	    
 	    auth_freestate(sieved_authstate);
 	    

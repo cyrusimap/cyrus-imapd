@@ -1,5 +1,5 @@
 # Makefile.in - timsieved makefile
-# $Id: Makefile.in,v 1.17 2001/10/14 13:58:17 ken3 Exp $
+# $Id: Makefile.in,v 1.18 2002/01/15 21:09:33 ken3 Exp $
 # @configure_input@
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
@@ -52,7 +52,7 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I. -I.. -I../sieve/ -I$(srcdir) -I$(srcdir)/../sieve -I$(srcdir)/../imap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I.. -I../sieve/ -I$(srcdir) -I$(srcdir)/../sieve -I$(srcdir)/../imap -I$(srcdir)/../acap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
 
@@ -70,7 +70,7 @@ IMAP_LIBS = @IMAP_LIBS@
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
 LIB_WRAP = @LIB_WRAP@
 LIBS = $(IMAP_COM_ERR_LIBS)
-DEPLIBS=../sieve/libsieve.a ../imap/libimap.a ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS=../sieve/libsieve.a ../imap/libimap.a ../acap/libacap.a ../lib/libcyrus.a @DEPLIBS@
 
 PURIFY=/usr/local/bin/purify
 PUREOPT=-best-effort
