@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_generate.c,v 1.1.4.1 2003/02/27 18:13:52 rjs3 Exp $
+ * $Id: bc_generate.c,v 1.1.4.2 2003/02/27 20:52:50 jsmith2 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -680,7 +680,10 @@ int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s)
     if(!retval) return -1;
     if(!s) return -1;
     c = s->cmds;
-    if(!c) return -1;
+    /* if c is NULL, it is handled in bc_action_generate and a script
+       with only BC_NULL is returned
+    */
+
     
     *retval = xmalloc(sizeof(bytecode_info_t));
     if(!(*retval)) return -1;
