@@ -1,7 +1,7 @@
 -*- text -*-
 
 		       Cyrus IMAP server design
-			    June 23, 1994
+			    June 28, 1994
 
 * Introduction
 
@@ -546,7 +546,7 @@ Implementation order is as follows:
 
   + collectnews, rmnews
 
-  + quota
+  + QUOTA protocol extension
 
   + quota-usage reporter & consistency checker
 
@@ -554,11 +554,9 @@ Implementation order is as follows:
 
   + reconstruct
 
-  + arbitron
-
-  + remove "XXX" comments
-
   + Beta release
+
+  + arbitron
 
   + admin tools -- create/delete user, manipulate ACL, quota
 
