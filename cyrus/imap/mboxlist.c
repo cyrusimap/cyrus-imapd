@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.218 2003/09/01 22:05:30 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.219 2003/09/11 16:52:45 rjs3 Exp $
  */
 
 #include <config.h>
@@ -312,6 +312,7 @@ int mboxlist_update(char *name, int flags, const char *part, const char *acl,
     mboxent = mboxlist_makeentry(flags, part, acl);
     r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), &tid);
     free(mboxent);
+    mboxent = NULL;
 
     if(!r && !localonly && config_mupdate_server) {
         mupdate_handle *mupdate_h = NULL;
@@ -1109,6 +1110,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 		      mboxent, strlen(mboxent), &tid);
 
 	free(mboxent);
+	mboxent = NULL;
     }
         
     /* 3b. unlock mboxlist (before calling out to mupdate) */
