@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.40 2003/08/14 16:20:36 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.41 2003/10/22 18:03:04 rjs3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -51,6 +51,7 @@
 #include <string.h>
 #include <limits.h>
 #include <assert.h>
+#include <errno.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -58,14 +59,15 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <time.h>
 #include <netinet/in.h>
 
 #include "cyrusdb.h"
-#include "xmalloc.h"
-#include "map.h"
+#include "libcyr_cfg.h"
 #include "lock.h"
+#include "map.h"
 #include "retry.h"
+#include "util.h"
+#include "xmalloc.h"
 
 #define PROB (0.5)
 
@@ -165,7 +167,9 @@ struct txn {
 };
 
 static time_t global_recovery = 0;
-static int do_fsync = 2;
+
+/* Perform an FSYNC/FDATASYNC if we are *not* operating in UNSAFE mode */
+#define DO_FSYNC (!libcyrus_config_getswitch(CYRUSOPT_SKIPLIST_UNSAFE))
 
 enum {
     be_paranoid = 0,
@@ -247,10 +251,6 @@ static int myinit(const char *dbdir, int myflags)
 
     srand(time(NULL) * getpid());
 
-    if (getenv("CYRUS_SKIPLIST_UNSAFE")) {
-	do_fsync = 0;
-    }
-    
     return 0;
 }
 
@@ -634,7 +634,9 @@ static int myopen(const char *fname, int flags, struct db **ret)
     db->fname = xstrdup(fname);
 
     db->fd = open(fname, O_RDWR, 0644);
-    if (db->fd == -1 && (flags & CYRUSDB_CREATE)) {
+    if (db->fd == -1 && errno == ENOENT && (flags & CYRUSDB_CREATE)) {
+	if (cyrus_mkdir(fname, 0755) == -1) return CYRUSDB_IOERROR;
+
 	db->fd = open(fname, O_RDWR | O_CREAT, 0644);
 	new = 1;
     }
@@ -701,7 +703,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
 	}
 	
 	/* sync the db */
-	if (!r && do_fsync && (fsync(db->fd) < 0)) {
+	if (!r && DO_FSYNC && (fsync(db->fd) < 0)) {
 	    syslog(LOG_ERR, "DBERROR: fsync(%s): %m", db->fname);
 	    r = CYRUSDB_IOERROR;
 	}
@@ -1286,7 +1288,7 @@ int mycommit(struct db *db, struct txn *tid)
     }
 
     /* fsync if we're not using O_SYNC writes */
-    if (!use_osync && do_fsync && (fdatasync(db->fd) < 0)) {
+    if (!use_osync && DO_FSYNC && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", db->fname);
 	r = CYRUSDB_IOERROR;
         goto done;
@@ -1303,7 +1305,7 @@ int mycommit(struct db *db, struct txn *tid)
     retry_write(tid->syncfd, (char *) &commitrectype, 4);
 
     /* fsync if we're not using O_SYNC writes */
-    if (!use_osync && do_fsync && (fdatasync(db->fd) < 0)) {
+    if (!use_osync && DO_FSYNC && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", db->fname);
 	r = CYRUSDB_IOERROR;
         goto done;
@@ -1589,7 +1591,7 @@ static int mycheckpoint(struct db *db, int locked)
     r = write_header(db);
 
     /* sync new file */
-    if (!r && do_fsync && (fdatasync(db->fd) < 0)) {
+    if (!r && DO_FSYNC && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR, "DBERROR: skiplist checkpoint: fdatasync(%s): %m", fname);
 	r = CYRUSDB_IOERROR;
     }
@@ -1607,7 +1609,7 @@ static int mycheckpoint(struct db *db, int locked)
     }
 
     /* force the new file name to disk */
-    if (!r && do_fsync && (fsync(db->fd) < 0)) {
+    if (!r && DO_FSYNC && (fsync(db->fd) < 0)) {
 	syslog(LOG_ERR, "DBERROR: skiplist checkpoint: fsync(%s): %m", fname);
 	r = CYRUSDB_IOERROR;
     }
@@ -2069,7 +2071,7 @@ static int recovery(struct db *db)
     }
 
     /* fsync the recovered database */
-    if (!r && do_fsync && (fdatasync(db->fd) < 0)) {
+    if (!r && DO_FSYNC && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR, 
 	       "DBERROR: skiplist recovery %s: fdatasync: %m", db->fname); 
 	r = CYRUSDB_IOERROR;
@@ -2082,7 +2084,7 @@ static int recovery(struct db *db)
     }
 
     /* fsync the new header */
-    if (!r && do_fsync && (fdatasync(db->fd) < 0)) {
+    if (!r && DO_FSYNC && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR,
 	       "DBERROR: skiplist recovery %s: fdatasync: %m", db->fname); 
 	r = CYRUSDB_IOERROR;

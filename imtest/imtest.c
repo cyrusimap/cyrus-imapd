@@ -1,7 +1,7 @@
-/* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
+/* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.91 2003/06/10 04:11:05 rjs3 Exp $
+ * $Id: imtest.c,v 1.92 2003/10/22 18:03:01 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -55,7 +55,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
+#ifdef HAVE_STDARG_H
+#include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
 
+#include <limits.h>
 #include <unistd.h>
 
 #include <netinet/in.h>
@@ -72,6 +78,7 @@
 #include <pwd.h>
 
 #include "prot.h"
+#include "hash.h"
 #include "imparse.h"
 #include "iptostring.h"
 #include "xmalloc.h"
@@ -121,6 +128,11 @@ static char *output_socket = NULL;
 static int output_socket_opened = 0;
 static ino_t output_socket_ino = 0;
 
+#define CONFIGHASHSIZE 30 /* relatively small */
+
+static struct hash_table confighash;
+int mysasl_config(void*, const char*, const char*, const char**, unsigned*);
+
 extern int _sasl_debug;
 extern char *optarg;
 
@@ -149,9 +161,13 @@ static sasl_callback_t callbacks[] = {
     }, {
 	SASL_CB_PASS, NULL, NULL    
     }, {
+	SASL_CB_GETOPT, &mysasl_config, NULL    
+    }, {
 	SASL_CB_LIST_END, NULL, NULL
     }
 };
+
+struct protocol_t;
 
 struct banner_t {
     int is_capa;	/* banner is capability response */
@@ -165,7 +181,7 @@ struct capa_cmd_t {
     char *resp;		/* end of capability response */
     char *tls;		/* [OPTIONAL] TLS capability string */
     char *auth;		/* [OPTIONAL] AUTH capability string */
-    char *(*parse_mechlist)(char *str);
+    char *(*parse_mechlist)(char *str, struct protocol_t *prot);
 			/* [OPTIONAL] parse capability string,
 			   returns space-separated list of mechs */
 };
@@ -174,20 +190,21 @@ struct tls_cmd_t {
     char *cmd;		/* tls command string */
     char *ok;		/* start tls prompt */
     char *fail;		/* failure response */
+    int auto_capa;      /* capa response given automatically after TLS */
 };
 
 struct sasl_cmd_t {
     char *cmd;		/* auth command string */
+    int maxlen;		/* maximum command line length,
+			   (0 = initial response unsupported by protocol) */
     int quote;		/* quote arguments (literal for base64 data) */
-    char *empty_init;	/* string to send as empty initial-response,
-			   (NULL = initial response unsupported by protocol) */
-    char *(*parse_success)(char *str);
-			/* [OPTIONAL] parse response for success data */
     char *ok;		/* success response string */
     char *fail;		/* failure response string */
     char *cont;		/* continue response string
 			   (NULL = send/receive literals) */
     char *cancel;	/* cancel auth string */
+    char *(*parse_success)(char *str);
+			/* [OPTIONAL] parse response for success data */
 };
 
 struct logout_cmd_t {
@@ -225,8 +242,8 @@ struct protocol_t {
 };
 
 
-void imtest_fatal(const char *msg) __attribute__((noreturn));
-void imtest_fatal(const char *msg)
+void imtest_fatal(const char *msg, ...) __attribute__((noreturn));
+void imtest_fatal(const char *msg, ...)
 {
     struct stat sbuf;
     if (output_socket && output_socket_opened &&
@@ -235,7 +252,12 @@ void imtest_fatal(const char *msg)
 	unlink(output_socket);
     }
     if (msg != NULL) {
-	printf("failure: %s\n",msg);
+	va_list ap;
+	va_start(ap, msg);
+	fprintf(stderr, "failure: ");
+	vfprintf(stderr, msg, ap);
+	fprintf(stderr, "\n");
+	va_end(ap);
     }
     exit(1);
 }
@@ -244,6 +266,37 @@ void imtest_fatal(const char *msg)
 void fatal(const char *msg, int code)
 {
     imtest_fatal(msg);
+}
+
+int mysasl_config(void *context __attribute__((unused)), 
+		  const char *plugin_name,
+		  const char *option,
+		  const char **result,
+		  unsigned *len)
+{
+    *result = NULL;
+
+    if (plugin_name) {
+	/* first try it with the plugin name */
+	char opt[1024];
+
+	strlcpy(opt, plugin_name, sizeof(opt));
+	strlcat(opt, "_", sizeof(opt));
+	strlcat(opt, option, sizeof(opt));
+	*result = hash_lookup(opt, &confighash);
+    }
+
+    if (*result == NULL) {
+	/* try without the plugin name */
+	*result = hash_lookup(option, &confighash);
+    }
+
+    if (*result != NULL) {
+	if (len) { *len = strlen(*result); }
+	return SASL_OK;
+    }
+   
+    return SASL_FAIL;
 }
 
 #ifdef HAVE_SSL
@@ -750,23 +803,21 @@ static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf,
     sasl_security_properties_t *secprops=NULL;
     socklen_t addrsize;
     char localip[60], remoteip[60];
-    struct sockaddr_in saddr_l;
-    struct sockaddr_in saddr_r;
+    struct sockaddr_storage saddr_l;
+    struct sockaddr_storage saddr_r;
     
-    addrsize=sizeof(struct sockaddr_in);
+    addrsize=sizeof(struct sockaddr_storage);
     if (getpeername(sock,(struct sockaddr *)&saddr_r,&addrsize)!=0)
 	return IMTEST_FAIL;
     
-    addrsize=sizeof(struct sockaddr_in);
+    addrsize=sizeof(struct sockaddr_storage);
     if (getsockname(sock,(struct sockaddr *)&saddr_l,&addrsize)!=0)
 	return IMTEST_FAIL;
     
-    if(iptostring((struct sockaddr *)&saddr_l, sizeof(struct sockaddr_in),
-		  localip, 60))
+    if(iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60))
 	return IMTEST_FAIL;
     
-    if(iptostring((struct sockaddr *)&saddr_r, sizeof(struct sockaddr_in),
-		  remoteip, 60))
+    if(iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60))
 	return IMTEST_FAIL;
     
     
@@ -960,175 +1011,150 @@ static char *waitfor(char *tag, char *tag2, int echo)
 
 int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 {
-    sasl_interact_t *client_interact=NULL;
-    int saslresult=SASL_INTERACT;
-    const char *out;
-    unsigned int outlen;
+    sasl_interact_t *client_interact = NULL;
+    int saslresult;
+    const char *out = NULL;
+    unsigned int outlen = 0;
     char *in;
     int inlen;
     const char *mechusing;
     char inbase64[4096];
     int inbase64len;
+    char cmdbuf[40];
+    int sendliteral = sasl_cmd->quote;
+    imt_stat status;
     
-    imt_stat status = STAT_CONT;
+    if (!sasl_cmd || !sasl_cmd->cmd) return IMTEST_FAIL;
     
-    /* call sasl client start */
-    while (saslresult==SASL_INTERACT) {
-	if (sasl_cmd->empty_init) {
-	    /* we support initial client response */
-	    saslresult = sasl_client_start(conn, mechlist,
-					   &client_interact,
-					   &out, &outlen,
-					   &mechusing);
-	} else {
-	    saslresult = sasl_client_start(conn, mechlist,
-					   &client_interact,
-					   NULL, NULL,
-					   &mechusing);
-	    out = NULL;
-	    outlen = 0;
-	}
-	    
-	if (saslresult==SASL_INTERACT)
+    do { /* start authentication */
+	saslresult = sasl_client_start(conn, mechlist, &client_interact,
+				       /* do we support initial response? */
+				       sasl_cmd->maxlen ? &out : NULL,
+				       &outlen, &mechusing);
+
+	if (saslresult == SASL_INTERACT)
 	    fillin_interactions(client_interact); /* fill in prompts */      
-	}
+    } while (saslresult == SASL_INTERACT);
     
-    if ((saslresult != SASL_OK) && 
-	(saslresult != SASL_CONTINUE)) {
+    if ((saslresult != SASL_OK) && (saslresult != SASL_CONTINUE)) {
 	return saslresult;
     }
-    
-    if (sasl_cmd->quote) {
-	printf("C: %s \"%s\"", sasl_cmd->cmd, mechusing);
-	prot_printf(pout, "%s \"%s\"", sasl_cmd->cmd, mechusing);
-    }
-    else {
-	printf("C: %s %s", sasl_cmd->cmd, mechusing);
-	prot_printf(pout, "%s %s", sasl_cmd->cmd, mechusing);
-    }
 
-    if (!out) {
-	/* no initial client response */
-	printf("\r\n");
-	prot_printf(pout, "\r\n");
-    }
-    else if (!outlen) {
-	/* empty initial client response */
-	printf(" %s\r\n", sasl_cmd->empty_init);
-	prot_printf(pout," %s\r\n", sasl_cmd->empty_init);
+    /* build the auth command */
+    if (sasl_cmd->quote) {
+	sprintf(cmdbuf, "%s \"%s\"", sasl_cmd->cmd, mechusing);
     }
     else {
-	/* initial client response - convert to base64 */
-	saslresult = sasl_encode64(out, outlen,
-				   inbase64, 2048, (unsigned *) &inbase64len);
-	if (saslresult != SASL_OK) return saslresult;
-	
-	if (sasl_cmd->quote) {
-	    /* send a literal */
-	    printf(" {%d+}\r\n%s\r\n", inbase64len, inbase64);
-	    prot_printf(pout, " {%d+}\r\n", inbase64len);
-	    prot_flush(pout);
+	sprintf(cmdbuf, "%s %s", sasl_cmd->cmd, mechusing);
+    }
+    printf("C: %s", cmdbuf);
+    prot_printf(pout, "%s", cmdbuf);
+
+    if (out) { /* initial response */
+	if (!outlen) { /* empty initial response */
+	    printf(" =");
+	    prot_printf(pout, " =");
+
+	    out = NULL;
 	}
-	else {
-	    printf(" %s\r\n", inbase64);
+	else if (!sendliteral &&
+		 ((strlen(cmdbuf) + outlen + 3) > sasl_cmd->maxlen)) {
+	    /* initial response is too long for auth command,
+	       so wait for a server challenge before sending it */
+	    goto noinitresp;
+	}
+	else { /* full response -- encoded below */
+	    printf(" ");
 	    prot_printf(pout, " ");
 	}
-
-	prot_write(pout, inbase64, inbase64len);
-	prot_printf(pout, "\r\n");
     }
-    prot_flush(pout);
 
-    status = getauthline(sasl_cmd, &in, &inlen);
-    
-    while (status==STAT_CONT) {
-	saslresult=SASL_INTERACT;
-	while (saslresult==SASL_INTERACT) {
-	    saslresult=sasl_client_step(conn,
-					in,
-					inlen,
-					&client_interact,
-					&out,
-					&outlen);
-	    
-	    if (saslresult==SASL_INTERACT)
-		fillin_interactions(client_interact); /* fill in prompts */
+    do {
+	if (out) { /* response */
+	    /* convert to base64 */
+	    saslresult = sasl_encode64(out, outlen, inbase64, 2048,
+				       (unsigned *) &inbase64len);
+	    if (saslresult != SASL_OK) return saslresult;
+
+	    /* send to server */
+	    if (sendliteral) {
+		printf("{%d+}\r\n", inbase64len);
+		prot_printf(pout, "{%d+}\r\n", inbase64len);
+		prot_flush(pout);
+	    }
+	    printf("%s", inbase64);
+	    prot_write(pout, inbase64, inbase64len);
+
+	    out = NULL;
 	}
-	
-	/* check if sasl suceeded */
-	if (saslresult != SASL_OK && saslresult != SASL_CONTINUE) {
+      noinitresp:
+	printf("\r\n");
+	prot_printf(pout, "\r\n");
+	prot_flush(pout);
+
+	/* get challenge/reply from the server */
+	status = getauthline(sasl_cmd, &in, &inlen);
+
+	if ((status == STAT_CONT || (status == STAT_OK && in)) &&
+	    (inlen || !out)) { /* no delayed initial response */
+	    do { /* do the next step */
+		saslresult = sasl_client_step(conn, in, inlen,
+					      &client_interact,
+					      &out, &outlen);
+	    
+		if (saslresult == SASL_INTERACT)
+		    fillin_interactions(client_interact); /* fill in prompts */
+	    } while (saslresult == SASL_INTERACT);
+
+	    if (in) free(in);
+	}
+
+	if ((saslresult != SASL_OK) && (saslresult != SASL_CONTINUE)) {
 	    /* cancel the exchange */
 	    printf("C: %s\r\n", sasl_cmd->cancel);
-	    prot_printf(pout,"%s\r\n", sasl_cmd->cancel);
+	    prot_printf(pout, "%s\r\n", sasl_cmd->cancel);
 	    prot_flush(pout);
-	    
+
 	    return saslresult;
 	}
-	
-	/* convert to base64 */
-	saslresult = sasl_encode64(out, outlen,
-				   inbase64, 2048, (unsigned *) &inbase64len);
-	if (saslresult != SASL_OK) return saslresult;
-	
-	free(in);
-	
-	/* send to server */
-	if (!sasl_cmd->cont) {
-	    /* send a literal */
-	    printf("C: {%d+}\r\n%s\n", inbase64len, inbase64);
-	    prot_printf(pout, "{%d+}\r\n", inbase64len);
-	    prot_flush(pout);
-	}
-	else {
-	    printf("C: %s\n", inbase64);
-	}
 
-	prot_write(pout, inbase64, inbase64len);
-	prot_printf(pout,"\r\n");
-	prot_flush(pout);
-   
-	/* get reply */
-	status = getauthline(sasl_cmd, &in, &inlen);
-    }
+	if (out) printf("C: ");
+	sendliteral = !sasl_cmd->cont;
 
-    if (status == STAT_OK) {
-	if (in) {
-	    saslresult=sasl_client_step(conn,
-					in,
-					inlen,
-					&client_interact,
-					&out,
-					&outlen);
-	    if (saslresult != SASL_OK) return saslresult;
-	}
-	return IMTEST_OK;
-    } else {
-	return IMTEST_FAIL;
-    }
+    } while (status == STAT_CONT);
+	
+    return (status == STAT_OK) ? IMTEST_OK : IMTEST_FAIL;
 }
 
 /* initialize the network */
-static int init_net(char *serverFQDN, int port)
+static int init_net(char *serverFQDN, char *port)
 {
-    struct sockaddr_in addr;
-    struct hostent *hp;
-    
-    if ((hp = gethostbyname(serverFQDN)) == NULL) {
-	perror("gethostbyname");
+    struct addrinfo hints, *res0 = NULL, *res;
+    int err;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_CANONNAME;
+    if ((err = getaddrinfo(serverFQDN, port, &hints, &res0)) != 0) {
+	fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(err));
 	return IMTEST_FAIL;
     }
-    strncpy(serverFQDN, hp->h_name, 1023);
-    
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-	perror("socket");
-	return IMTEST_FAIL;	
+
+    if (res0->ai_canonname)
+	strncpy(serverFQDN, res0->ai_canonname, 1023);
+    for (res = res0; res; res = res->ai_next) {
+	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	if (sock < 0)
+	    continue;
+	if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
+	    break;
+	close(sock);
+	sock = -1;
     }
     
-    addr.sin_family = AF_INET;
-    memcpy(&addr.sin_addr, hp->h_addr, hp->h_length);
-    addr.sin_port = htons(port);
-    
-    if (connect(sock, (struct sockaddr *) &addr, sizeof (addr)) < 0) {
+    freeaddrinfo(res0);
+    if(sock < 0) {
 	perror("connect");
 	return IMTEST_FAIL;
     }
@@ -1407,7 +1433,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
     return;
 }
 
-static char *ask_capability(struct capa_cmd_t *capa_cmd,
+static char *ask_capability(struct protocol_t *prot,
 			    int *supports_starttls, int automatic)
 {
     char str[1024];
@@ -1417,11 +1443,11 @@ static char *ask_capability(struct capa_cmd_t *capa_cmd,
 
     if (!automatic) {
 	/* no capability command */
-	if (!capa_cmd->cmd) return NULL;
+	if (!prot->capa_cmd.cmd) return NULL;
 	
 	/* request capabilities of server */
-	printf("C: %s\r\n", capa_cmd->cmd);
-	prot_printf(pout, "%s\r\n", capa_cmd->cmd);
+	printf("C: %s\r\n", prot->capa_cmd.cmd);
+	prot_printf(pout, "%s\r\n", prot->capa_cmd.cmd);
 	prot_flush(pout);
     }
 
@@ -1432,20 +1458,20 @@ static char *ask_capability(struct capa_cmd_t *capa_cmd,
 	printf("S: %s", str);
 
 	/* check for starttls */
-	if (capa_cmd->tls &&
-	    strstr(str, capa_cmd->tls) != NULL) {
+	if (prot->capa_cmd.tls &&
+	    strstr(str, prot->capa_cmd.tls) != NULL) {
 	    *supports_starttls = 1;
 	}
 	
 	/* check for auth */
-	if (capa_cmd->auth &&
-	    (tmp = strstr(str, capa_cmd->auth)) != NULL) {
-	    if (capa_cmd->parse_mechlist)
-		ret = capa_cmd->parse_mechlist(str);
+	if (prot->capa_cmd.auth &&
+	    (tmp = strstr(str, prot->capa_cmd.auth)) != NULL) {
+	    if (prot->capa_cmd.parse_mechlist)
+		ret = prot->capa_cmd.parse_mechlist(str, prot);
 	    else
-		ret = strdup(tmp+strlen(capa_cmd->auth));
+		ret = strdup(tmp+strlen(prot->capa_cmd.auth));
 	}
-    } while (strncasecmp(str, capa_cmd->resp, strlen(capa_cmd->resp)));
+    } while (strncasecmp(str, prot->capa_cmd.resp, strlen(prot->capa_cmd.resp)));
     
     return ret;
 }
@@ -1533,7 +1559,7 @@ static int generic_pipe(char *buf, int len, void *rock)
  *
  */
 
-static char *imap_parse_mechlist(char *str)
+static char *imap_parse_mechlist(char *str, struct protocol_t *prot)
 {
     char *tmp;
     int num = 0;
@@ -1542,6 +1568,11 @@ static char *imap_parse_mechlist(char *str)
     if (ret == NULL) return NULL;
     
     strcpy(ret, "");
+    
+    if (strstr(str, "SASL-IR")) {
+	/* server supports initial response in AUTHENTICATE command */
+	prot->sasl_cmd.maxlen = INT_MAX;
+    }
     
     while ((tmp = strstr(str,"AUTH=")) != NULL) {
 	char *end = tmp+5;
@@ -1938,6 +1969,85 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *rock,
     return result;
 }
 
+/********************************** NNTP *************************************/
+
+static int auth_nntp(void)
+{
+    char str[1024];
+    /* we need username and password to do AUTHINFO USER/PASS */
+    char *username;
+    unsigned int userlen;
+    char *pass;
+    unsigned int passlen;
+    
+    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
+    
+    printf("C: AUTHINFO USER %s\r\n", username);
+    prot_printf(pout,"AUTHINFO USER %s\r\n", username);
+    prot_flush(pout);
+    
+    if (prot_fgets(str, 1024, pin) == NULL) {
+	imtest_fatal("prot layer failure");
+    }
+    
+    printf("S: %s", str);
+    
+    if (!strncmp(str, "381", 3)) {
+	interaction(SASL_CB_PASS, NULL, "Please enter your password",
+		    &pass, &passlen);
+
+	printf("C: AUTHINFO PASS <omitted>\r\n");
+	prot_printf(pout,"AUTHINFO PASS %s\r\n",pass);
+	prot_flush(pout);
+    
+	if (prot_fgets(str, 1024, pin) == NULL) {
+	    imtest_fatal("prot layer failure");
+	}
+    
+	printf("S: %s", str);
+    }
+    
+    if (!strncmp(str, "281", 3)) {
+	return IMTEST_OK;
+    } else {
+	return IMTEST_FAIL;
+    }
+}
+
+static int nntp_do_auth(struct sasl_cmd_t *sasl_cmd,
+			void *rock __attribute__((unused)),
+			char *mech, char *mechlist)
+{
+    int result = IMTEST_OK;
+
+    if (mech) {
+	if (!strcasecmp(mech, "user")) {
+	    result = auth_nntp();
+	} else {
+	    result = auth_sasl(sasl_cmd, mech);
+	}
+    } else {
+	if (mechlist) {
+	    result = auth_sasl(sasl_cmd, mechlist);
+	} else {
+	    result = auth_nntp();
+	}
+    }
+
+    return result;
+}
+
+static char *nntp_parse_success(char *str)
+{
+    char *success = NULL;
+
+    if (!strncmp(str, "282 ", 4)) {
+	success = str+4;
+    }
+
+    return success;
+}
+
 /******************************** LMTP/SMTP **********************************/
 
 static int xmtp_do_auth(struct sasl_cmd_t *sasl_cmd,
@@ -2054,13 +2164,15 @@ void usage(char *prog, char *prot)
     printf("  -m mech  : SASL mechanism to use\n");
     if (!strcasecmp(prot, "imap"))
 	printf("             (\"login\" for IMAP LOGIN)\n");
-    if (!strcasecmp(prot, "pop3"))
+    else if (!strcasecmp(prot, "pop3"))
 	printf("             (\"user\" for USER/PASS, \"apop\" for APOP)\n");
+    else if (!strcasecmp(prot, "nntp"))
+	printf("             (\"user\" for AUTHINFO USER/PASS\n");
     printf("  -f file  : pipe file into connection after authentication\n");
     printf("  -r realm : realm\n");
 #ifdef HAVE_SSL
     if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "pop3") ||
-	!strcasecmp(prot, "smtp"))
+	!strcasecmp(prot, "nntp") || !strcasecmp(prot, "smtp"))
 	printf("  -s       : Enable %s over SSL (%ss)\n", prot, prot);
     if (strcasecmp(prot, "mupdate"))
 	printf("  -t file  : Enable TLS. file has the TLS public and private keys\n"
@@ -2081,46 +2193,53 @@ static struct protocol_t protocols[] = {
     { "imap", "imaps", "imap",
       { 0, "* OK", NULL },
       { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parse_mechlist },
-      { "S01 STARTTLS", "S01 OK", "S01 NO" },
-      { "A01 AUTHENTICATE", 0, NULL, NULL, "A01 OK", "A01 NO", "+ ", "*" },
+      { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
+      { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL },
       &imap_do_auth, { "Q01 LOGOUT", "Q01 " },
       &imap_init_conn, &generic_pipe, &imap_reset
     },
     { "pop3", "pop3s", "pop",
       { 0, "+OK ", &pop3_parse_banner },
       { "CAPA", ".", "STLS", "SASL ", NULL },
-      { "STLS", "+OK", "-ERR" },
-      { "AUTH", 0, "=", NULL, "+OK", "-ERR", "+ ", "*" },
+      { "STLS", "+OK", "-ERR", 0 },
+      { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL },
       &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL
+    },
+    { "nntp", "nntps", "news",
+      { 0, "20", NULL },
+      { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
+      { "STARTTLS", "382", "580", 0 },
+      { "AUTHINFO SASL", 512, 0, "28", "5", "383 ", "*", &nntp_parse_success },
+      &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp",
       { 0, "220 ", NULL },
       { "LHLO example.com", "250 ", "STARTTLS", "AUTH ", NULL },
-      { "STARTTLS", "220", "454" },
-      { "AUTH", 0, "=", NULL, "235", "5", "334 ", "*" },
+      { "STARTTLS", "220", "454", 0 },
+      { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
       &xmtp_do_auth, { "QUIT", "221" },
       &xmtp_init_conn, &generic_pipe, &xmtp_reset
     },
     { "smtp", "smtps", "smtp",
       { 0, "220 ", NULL },
       { "EHLO example.com", "250 ", "STARTTLS", "AUTH ", NULL },
-      { "STARTTLS", "220", "454" },
-      { "AUTH", 0, "=", NULL, "235", "5", "334 ", "*" },
+      { "STARTTLS", "220", "454", 0 },
+      { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
       &xmtp_do_auth, { "QUIT", "221" },
       &xmtp_init_conn, &generic_pipe, &xmtp_reset
     },
     { "mupdate", NULL, "mupdate",
       { 1, "* OK", NULL },
-      { NULL , "* OK", NULL, "* AUTH ", NULL },
-      { NULL },
-      { "A01 AUTHENTICATE", 1, "=", NULL, "A01 OK", "A01 NO", "", "*" },
+      { NULL , "* OK", "* STARTTLS", "* AUTH ", NULL },
+      { "S01 STARTTLS", "S01 OK", "S01 NO", 1 },
+      { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL },
       NULL, { "Q01 LOGOUT", "Q01 " }, NULL, NULL, NULL
     },
     { "sieve", NULL, SIEVE_SERVICE_NAME,
       { 1, "OK", NULL },
       { "CAPABILITY", "OK", "\"STARTTLS\"", "\"SASL\" ", NULL },
-      { "STARTTLS", "OK", "NO" },
-      { "AUTHENTICATE", 1, "=", &sieve_parse_success, "OK", "NO", NULL, "*" },
+      { "STARTTLS", "OK", "NO", 0 },
+      { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parse_success },
       NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
     },
     { NULL }
@@ -2145,8 +2264,6 @@ int main(int argc, char **argv)
     char *prog;
     char *tls_keyfile="";
     char *port = "", *prot = "";
-    struct servent *serv;
-    int servport;
     int run_stress_test=0;
     int dotls=0, dossl=0;
     int server_supports_tls;
@@ -2154,11 +2271,16 @@ int main(int argc, char **argv)
     const char *pidfile = NULL;
     void *rock = NULL;
     int reauth = 1;
-    int dochallenge = 0;
+    int dochallenge = 0, noinitresp = 0;
+    char *val;
     
     struct stringlist *cur, *cur_next;
     
-    /* do not buffer */
+    if (!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
+	imtest_fatal("could not construct config hash table");
+    }
+
+   /* do not buffer */
     setbuf(stdin, NULL);
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
@@ -2166,7 +2288,7 @@ int main(int argc, char **argv)
     prog = strrchr(argv[0], '/') ? strrchr(argv[0], '/')+1 : argv[0];
 
     /* look at all the extra args */
-    while ((c = getopt(argc, argv, "P:sczvk:l:p:u:a:m:f:r:t:n:I:x:X:w:?")) != EOF)
+    while ((c = getopt(argc, argv, "P:scizvk:l:p:u:a:m:f:r:t:n:I:x:X:w:o:?h")) != EOF)
 	switch (c) {
 	case 'P':
 	    prot = optarg;
@@ -2180,6 +2302,9 @@ int main(int argc, char **argv)
 	    break;
 	case 'c':
 	    dochallenge=1;
+	    break;
+	case 'i':
+	    noinitresp=1;
 	    break;
 	case 'z':
 	    run_stress_test=1;
@@ -2254,21 +2379,32 @@ int main(int argc, char **argv)
 	    }
 	    
 	    break;
+
+	case 'o':
+	    /* parse the opt=val string.  if no value is given, assume '1' */
+	    if (val = strchr(optarg, '='))
+		*val++ = '\0';
+	    else
+		val = "1";
+
+	    /* insert the opt/val pair into the hash table */
+	    hash_insert(optarg, xstrdup(val), &confighash);
+	    break;
+
+	case 'h':
 	case '?':
 	default:
 	    errflg = 1;
 	    break;
 	}
-    
-    if (optind != argc - 1) {
-	errflg = 1;
-    }
-    
+
     if (!*prot) {
 	if (!strcasecmp(prog, "imtest"))
 	    prot = "imap";
 	else if (!strcasecmp(prog, "pop3test"))
 	    prot = "pop3";
+	else if (!strcasecmp(prog, "nntptest"))
+	    prot = "nntp";
 	else if (!strcasecmp(prog, "lmtptest"))
 	    prot = "lmtp";
 	else if (!strcasecmp(prog, "smtptest"))
@@ -2305,16 +2441,13 @@ int main(int argc, char **argv)
     }
     
     /* last arg is server name */
-    strncpy(servername, argv[optind], 1023);
-    
-    /* map port -> num */
-    serv = getservbyname(port, "tcp");
-    if (serv == NULL) {
-	servport = atoi(port);
-    } else {
-	servport = ntohs(serv->s_port);
+    if (optind < argc)
+	strncpy(servername, argv[optind], 1023);
+    else {
+	fprintf(stderr, "WARNING: no hostname supplied, assuming localhost\n\n");
+	strncpy(servername, "localhost", 1023);
     }
-
+    
     if(pidfile) {
 	FILE *pf;
 	pf = fopen(pidfile, "w");  
@@ -2347,8 +2480,9 @@ int main(int argc, char **argv)
 	    sasl_dispose(&conn);
 	}
 
-	if (init_net(servername, servport) != IMTEST_OK) {
-	    imtest_fatal("Network initialization");
+	if (init_net(servername, port) != IMTEST_OK) {
+	    imtest_fatal("Network initialization - can not connect to %s:%s",
+			 servername, port);
 	}
     
 	if (init_sasl(protocol->service, servername, minssf, maxssf,
@@ -2368,8 +2502,7 @@ int main(int argc, char **argv)
 #endif /* HAVE_SSL */
 
 	if (protocol->banner.is_capa) {
-	    mechlist = ask_capability(&protocol->capa_cmd,
-				      &server_supports_tls, 1);
+	    mechlist = ask_capability(protocol, &server_supports_tls, 1);
 	}
 	else {
 	    do { /* look for the banner response */
@@ -2384,8 +2517,7 @@ int main(int argc, char **argv)
 	    } while (strncasecmp(str, protocol->banner.resp,
 				 strlen(protocol->banner.resp)));
 	
-	    mechlist = ask_capability(&protocol->capa_cmd,
-				      &server_supports_tls, 0);
+	    mechlist = ask_capability(protocol, &server_supports_tls, 0);
 	}
 	
 #ifdef HAVE_SSL
@@ -2408,14 +2540,19 @@ int main(int argc, char **argv)
 		    printf("Asking for capabilities again "
 			   "since they might have changed\n");
 		if (mechlist) free(mechlist);
-		mechlist = ask_capability(&protocol->capa_cmd,
-					  &server_supports_tls, 0);
+		mechlist = ask_capability(protocol, &server_supports_tls,
+					  protocol->tls_cmd.auto_capa);
 	    }
 	    
 	} else if ((dotls==1) && (server_supports_tls!=1)) {
 	    imtest_fatal("STARTTLS not supported by the server!\n");
 	}
 #endif /* HAVE_SSL */
+
+	if (noinitresp) {
+	    /* don't use an initial response, even if its supported */
+	    protocol->sasl_cmd.maxlen = 0;
+	}
 
 	if (protocol->do_auth)
 	    result = protocol->do_auth(&protocol->sasl_cmd, rock,
@@ -2467,6 +2604,8 @@ int main(int argc, char **argv)
 	free(cur->str);
 	free(cur);
     }
+
+    free_hash_table(&confighash, free);
     
     exit(0);
 }

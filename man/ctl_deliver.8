@@ -39,17 +39,10 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: ctl_deliver.8,v 1.7 2003/08/09 23:43:14 rjs3 Exp $
+.\" $Id: ctl_deliver.8,v 1.8 2003/10/22 18:03:08 rjs3 Exp $
 .SH NAME
 ctl_deliver \- perform operations on the duplicate delivery database
 .SH SYNOPSIS
-.B ctl_deliver
-[
-.B \-C
-.I config-file
-]
-.BI \-E " days"
-.br
 .B ctl_deliver
 [
 .B \-C
@@ -72,9 +65,6 @@ file unless specified otherwise by \fB-C\fR.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
-.TP
-\fB\-E \fIdays\fR
-Prune the database of entries older than \fIdays\fR.
 .TP
 .B \-d
 Dump the contents of the database to standard output in a portable

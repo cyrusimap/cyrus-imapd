@@ -1,0 +1,10 @@
+# $Id: Makefile.dist,v 1.2 2003/10/22 18:03:03 rjs3 Exp $
+# it would be nice to figure out how to make "Makefile" do an
+# 'include' of this file.
+
+BUILT_SOURCES = imapopts.c imapopts.h
+
+dist: $(BUILT_SOURCES)
+
+imapopts.c imapopts.h: imapoptions ../tools/config2header
+	../tools/config2header imapopts.c imapopts.h < imapoptions

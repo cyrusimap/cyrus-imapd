@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: isieve.c,v 1.25 2003/02/13 20:15:53 rjs3 Exp $ */
+/* $Id: isieve.c,v 1.26 2003/10/22 18:03:19 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -76,6 +76,9 @@ struct iseive_s {
     sasl_conn_t *conn;
     sasl_callback_t *callbacks;
 
+    char *refer_authinfo;
+    sasl_callback_t *refer_callbacks;
+
     int version;
 
     struct protstream *pin;
@@ -91,6 +94,10 @@ static void sieve_dispose(isieve_t *obj)
     if(!obj) return;
     sasl_dispose(&obj->conn);
     free(obj->serverFQDN);
+
+    if (obj->refer_authinfo) free(obj->refer_authinfo);
+    if (obj->refer_callbacks) free(obj->refer_callbacks);
+
     prot_free(obj->pin);
     prot_free(obj->pout);
 }
@@ -104,25 +111,32 @@ void sieve_free_net(isieve_t *obj)
 /* initialize the network */
 int init_net(char *serverFQDN, int port, isieve_t **obj)
 {
-  struct sockaddr_in addr;
-  struct hostent *hp;
+  struct addrinfo hints, *res0, *res;
+  int err;
+  char portstr[6];
   int sock;
-
-  if ((hp = gethostbyname(serverFQDN)) == NULL) {
-    perror("gethostbyname");
-    return -1;
+    
+  snprintf(portstr, sizeof(portstr), "%d", port);
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = PF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  if ((err = getaddrinfo(serverFQDN, portstr, &hints, &res0)) != 0) {
+      fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(err)); 
+      return -1;
+  }
+    
+  for (res = res0; res; res = res->ai_next) {
+      sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+      if (sock < 0)
+	  continue;
+      if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
+	  break;
+      close(sock);
+      sock = -1;
   }
 
-  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    perror("socket");
-    return -1;
-  }
-
-  addr.sin_family = AF_INET;
-  memcpy(&addr.sin_addr, hp->h_addr, hp->h_length);
-  addr.sin_port = htons(port);
-
-  if (connect(sock, (struct sockaddr *) &addr, sizeof (addr)) < 0) {
+  freeaddrinfo(res0);
+  if (sock < 0) {
     perror("connect");
     return -1;
   }
@@ -170,8 +184,8 @@ int init_sasl(isieve_t *obj,
   static int sasl_started = 0;
   int saslresult = SASL_OK;
   sasl_security_properties_t *secprops=NULL;
-  socklen_t addrsize=sizeof(struct sockaddr_in);
-  struct sockaddr_in saddr_l, saddr_r;
+  socklen_t addrsize=sizeof(struct sockaddr_storage);
+  struct sockaddr_storage saddr_l, saddr_r;
   char localip[60], remoteip[60];
 
   /* attempt to start sasl */
@@ -186,23 +200,21 @@ int init_sasl(isieve_t *obj,
 
   if (saslresult!=SASL_OK) return -1;
 
-  addrsize=sizeof(struct sockaddr_in);
+  addrsize=sizeof(struct sockaddr_storage);
   if (getpeername(obj->sock,(struct sockaddr *)&saddr_r,&addrsize)!=0)
       return -1;
   
-  addrsize=sizeof(struct sockaddr_in);
+  addrsize=sizeof(struct sockaddr_storage);
   if (getsockname(obj->sock,(struct sockaddr *)&saddr_l,&addrsize)!=0)
       return -1;
 
   /* set the port manually since getsockname is stupid and doesn't */
-  saddr_l.sin_port = htons(obj->port);
+  ((struct sockaddr_in *)&saddr_l)->sin_port = htons(obj->port);
 
-  if (iptostring((struct sockaddr *)&saddr_r,
-		 sizeof(struct sockaddr_in), remoteip, 60))
+  if (iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60))
       return -1;
 
-  if (iptostring((struct sockaddr *)&saddr_l,
-		 sizeof(struct sockaddr_in), localip, 60))
+  if (iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60))
       return -1;
 
   if(obj->conn) sasl_dispose(&obj->conn);
@@ -457,6 +469,30 @@ int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
   }
 }
 
+static int refer_simple_cb(void *context, int id, const char **result,
+			    unsigned int *len)
+{
+    if (!result) {
+	return SASL_BADPARAM;
+    }
+
+    switch (id) {
+    case SASL_CB_USER:
+	*result = (char *) context;
+	break;
+    case SASL_CB_AUTHNAME:
+	*result = (char *) context;
+	break;
+    default:
+	return SASL_BADPARAM;
+    }
+    if (len) {
+	*len = *result ? strlen(*result) : 0;
+    }
+
+    return SASL_OK;
+}
+
 int do_referral(isieve_t *obj, char *refer_to) 
 {
     int ret;
@@ -466,21 +502,84 @@ int do_referral(isieve_t *obj, char *refer_to)
     int port;
     char *errstr;
     const char *mtried;
-        
-    /* xxx we're not supporting port numbers here */
+    const char *scheme = "sieve://";
+    char *host, *p;
+    sasl_callback_t *callbacks;
 
-    serv = getservbyname("sieve", "tcp");
-    if (serv == NULL) {
-	port = 2000;
-    } else {
-	port = ntohs(serv->s_port);
+    /* check scheme */
+    if (strncasecmp(refer_to, scheme, strlen(scheme)))
+	return STAT_NO;
+
+    /* get host */
+    if ((host = strrchr(refer_to, '@'))) {
+	char *authid, *userid;
+	int n;
+
+	*host++ = '\0';
+
+	/* get authid - make a copy so it persists for the callbacks */
+	authid = obj->refer_authinfo = xstrdup(refer_to + strlen(scheme));
+
+	/* get userid */
+	if ((userid = strrchr(authid, ';')))
+	    *userid++ = '\0';
+
+	/* count the callbacks */
+	for (n = 0; obj->callbacks[n++].id != SASL_CB_LIST_END;);
+
+	/* copy the callbacks, substituting some of our own */
+	callbacks = obj->refer_callbacks = xmalloc(n*sizeof(sasl_callback_t));
+
+	while (--n >= 0) {
+	    callbacks[n].id = obj->callbacks[n].id;
+
+	    switch (callbacks[n].id) {
+	    case SASL_CB_USER:
+		callbacks[n].proc = &refer_simple_cb;
+		callbacks[n].context = userid ? userid : authid;
+		break;
+	    case SASL_CB_AUTHNAME:
+		callbacks[n].proc = &refer_simple_cb;
+		callbacks[n].context = authid;
+		break;
+	    default:
+		callbacks[n].proc = obj->callbacks[n].proc;
+		callbacks[n].context = obj->callbacks[n].context;
+		break;
+	    }
+	}
+    }
+    else {
+	host = refer_to + strlen(scheme);
+	callbacks = obj->callbacks;
     }
 
-    ret = init_net(refer_to, port, &obj_new);
+    /* get port */
+    p = host;
+    if (*host == '[') {
+	if ((p = strrchr(host + 1, ']')) != NULL) {
+	    *p++ = '\0';
+	    host++;			/* skip first bracket */
+        } else
+	    p = host;
+    }
+    if ((p = strchr(p, ':'))) {
+	*p++ = '\0';
+	port = atoi(p);
+    } else {
+	serv = getservbyname("sieve", "tcp");
+	if (serv == NULL) {
+	    port = 2000;
+	} else {
+	    port = ntohs(serv->s_port);
+	}
+    }
+
+    ret = init_net(host, port, &obj_new);
     if(ret) return STAT_NO;
 
     /* Start up SASL */
-    ret = init_sasl(obj_new, 128, obj->callbacks);
+    ret = init_sasl(obj_new, 128, callbacks);
     if(ret) return STAT_NO;
 
     /* Authenticate */

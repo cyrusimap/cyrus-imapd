@@ -40,8 +40,11 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.90 2002/10/16 13:33:24 ken3 Exp $
+# $Id: SMakefile,v 1.91 2003/10/22 18:02:40 rjs3 Exp $
 #
+
+NEW_AUTOTOOLS=yes
+export NEW_AUTOTOOLS
 
 if test ! -x configure; then
 # -nt deeply upsets normal sh.
@@ -104,15 +107,19 @@ esac
 
 # settings; we have to disable these on some platforms
 DEBUG=""
-WITHAUTH="--with-auth=krb_pts"
+WITHAUTH="--with-auth=pts --enable-krb5afspts"
 SSL_CONFIG="--with-openssl=/usr/local/lib"
-DB_CONFIG="--with-mboxlist-db=skiplist --with-seen-db=skiplist"
+
+# the defaults are good enough for us
+DB_CONFIG="" 
 
 # the following is for staticly linking SASL only
 SASL_CONFIG="--with-staticsasl=/usr/local --with-gssapi=/usr/local"
 KRB_CONFIG="--enable-statickrb --with-krb=/usr/local"
+FEATURE_CONFIG="--enable-murder --enable-annotatemore --enable-cmulocal"
+EXT_PACKAGE_CONFIG="--with-inn=/usr/news --with-ucdsnmp=/usr/local"
 
-MFCOMMAND="./configure $WITHAUTH $KRB_CONFIG $DB_CONFIG --with-inn=/usr/news --enable-experiment --enable-cmulocal --with-cyrus-group=staff --with-ucdsnmp=/usr/local --enable-murder --enable-annotatemore $SASL_CONFIG $DEBUG"
+MFCOMMAND="./configure $WITHAUTH $KRB_CONFIG $DB_CONFIG --enable-experiment --with-cyrus-group=staff $FEATURE_CONFIG $EXT_PACKAGE_CONFIG $SASL_CONFIG $DEBUG"
 
 export CFLAGS CC VER LNCOMMAND LOCALDEFS LDFLAGS
 export LIBS

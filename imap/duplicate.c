@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.33 2003/08/14 16:20:32 rjs3 Exp $ */
+/* $Id: duplicate.c,v 1.34 2003/10/22 18:02:57 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -49,7 +49,6 @@
 #include <syslog.h>
 #include <assert.h>
 #include <ctype.h>
-#include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
@@ -76,7 +75,7 @@
 
 #include "xmalloc.h"
 #include "imap_err.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "util.h"
 #include "cyrusdb.h"
@@ -88,18 +87,11 @@
 static struct db *dupdb = NULL;
 static int duplicate_dbopen = 0;
 
-
+/* must be called after cyrus_init */
 int duplicate_init(char *fname, int myflags)
 {
     char buf[1024];
     int r = 0;
-    int flags = 0;
-
-    /* create the name of the db file */
-    strcpy(buf, config_dir);
-    strcat(buf, FNAME_DBDIR);
-    if (myflags & DUPLICATE_RECOVER) flags |= CYRUSDB_RECOVER;
-    r = DB->init(buf, flags);
 
     if (r != 0)
 	syslog(LOG_ERR, "DBERROR: init %s: %s", buf,
@@ -152,7 +144,8 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
     } while (r == CYRUSDB_AGAIN);
 
     if (data) {
-	assert(len == sizeof(time_t));
+	assert((len == sizeof(time_t)) ||
+	       (len == sizeof(time_t) + sizeof(unsigned long)));
 
 	/* found the record */
 	memcpy(&mark, data, sizeof(time_t));
@@ -169,9 +162,25 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
     return mark;
 }
 
-void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
+void duplicate_log(char *msgid, char *name, char *action)
 {
-    char buf[1024];
+    if (strlen(msgid) < 80) {
+	char pretty[160];
+
+	beautify_copy(pretty, msgid);
+	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s (%s)",
+	       name, msgid, action);
+    }
+    else {
+	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s (%s)",
+	       name, action);
+    }	
+}
+
+void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark,
+		    unsigned long uid)
+{
+    char buf[1024], data[100];
     int r;
 
     if (!duplicate_dbopen) return;
@@ -182,22 +191,82 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
     memcpy(buf + idlen + 1, to, tolen);
     buf[idlen + tolen + 1] = '\0';
 
+    memcpy(data, &mark, sizeof(mark));
+    memcpy(data + sizeof(mark), &uid, sizeof(uid));
+
     do {
 	r = DB->store(dupdb, buf,
 		      idlen + tolen + 2, /* +2 b/c 1 for the center null;
 					    +1 for the terminating null */
-		      (char *) &mark, sizeof(mark), NULL);
+		      data, sizeof(mark)+sizeof(uid), NULL);
     } while (r == CYRUSDB_AGAIN);
 
-    syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %ld",
-	   buf, buf+idlen+1, mark);
+    syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %ld %lu",
+	   buf, buf+idlen+1, mark, uid);
 
     return;
 }
 
+struct findrock {
+    int (*proc)();
+    void *rock;
+};
+
+static int find_p(void *rock __attribute__((unused)),
+		  const char *id,
+		  int idlen __attribute__((unused)),
+		  const char *data __attribute__((unused)),
+		  int datalen __attribute__((unused)))
+{
+    const char *rcpt;
+
+    /* grab the rcpt and make sure its a mailbox */
+    rcpt = id + strlen(id) + 1;
+    return (rcpt[0] != '.');
+}
+
+static int find_cb(void *rock, const char *id,
+		   int idlen __attribute__((unused)),
+		   const char *data, int datalen)
+{
+    struct findrock *frock = (struct findrock *) rock;
+    const char *rcpt;
+    time_t mark;
+    unsigned long uid = 0;
+    int r;
+
+    /* grab the rcpt */
+    rcpt = id + strlen(id) + 1;
+
+    /* grab the mark and uid */
+    memcpy(&mark, data, sizeof(time_t));
+    if (datalen > sizeof(mark))
+	memcpy(&uid, data + sizeof(mark), sizeof(unsigned long));
+
+    r = (*frock->proc)(id, rcpt, mark, uid, frock->rock);
+
+    return r;
+}
+
+int duplicate_find(char *msgid, int (*proc)(), void *rock)
+{
+    struct findrock frock;
+
+    if (!msgid) msgid = "";
+
+    frock.proc = proc;
+    frock.rock = rock;
+
+    /* check each entry in our database */
+    DB->foreach(dupdb, msgid, strlen(msgid), &find_p, &find_cb, &frock, NULL);
+
+    return 0;
+}
+
 struct prunerock {
     struct db *db;
-    time_t expmark;
+    time_t expmark; /* default expmark, if not overridden by table entry */
+    struct hash_table *expire_table;
     int count;
     int deletions;
 };
@@ -206,15 +275,22 @@ static int prune_p(void *rock, const char *id, int idlen,
 		  const char *data, int datalen)
 {
     struct prunerock *prock = (struct prunerock *) rock;
-    time_t mark;
+    const char *rcpt;
+    time_t mark, *expmark = NULL;
 
     prock->count++;
+
+    /* grab the rcpt, make sure its a mailbox and lookup its expire time */
+    rcpt = id + strlen(id) + 1;
+    if (prock->expire_table && rcpt[0] && rcpt[0] != '.') {
+	expmark = (time_t *) hash_lookup(rcpt, prock->expire_table);
+    }
 
     /* grab the mark */
     memcpy(&mark, data, sizeof(time_t));
 
     /* check if we should prune this entry */
-    return (mark < prock->expmark);
+    return (mark < (expmark ? *expmark : prock->expmark));
 }
 
 static int prune_cb(void *rock, const char *id, int idlen,
@@ -233,7 +309,7 @@ static int prune_cb(void *rock, const char *id, int idlen,
     return 0;
 }
 
-int duplicate_prune(int days)
+int duplicate_prune(int days, struct hash_table *expire_table)
 {
     struct prunerock prock;
 
@@ -241,6 +317,7 @@ int duplicate_prune(int days)
 
     prock.count = prock.deletions = 0;
     prock.expmark = time(NULL) - (days * 60 * 60 * 24);
+    prock.expire_table = expire_table;
     syslog(LOG_NOTICE, "duplicate_prune: pruning back %d days", days);
 
     /* check each entry in our database */
@@ -279,10 +356,14 @@ static int dump_cb(void *rock,
     time_t mark;
     char *id, *to, *freeme;
     int idlen, i;
+    unsigned long uid = 0;
 
-    assert(datalen == sizeof(time_t));
+    assert((datalen == sizeof(time_t)) ||
+	   (datalen == sizeof(time_t) + sizeof(unsigned long)));
 
     memcpy(&mark, data, sizeof(time_t));
+    if (datalen > sizeof(mark))
+	memcpy(&uid, data + sizeof(mark), sizeof(unsigned long));
     to = (char*) key + strlen(key) + 1;
     id = (char *) key;
     idlen = strlen(id);
@@ -304,7 +385,8 @@ static int dump_cb(void *rock,
 	freeme = NULL;
     }
 
-    fprintf(drock->f, "id: %-40s\tto: %-20s\tat: %ld\n", id, to, (long) mark);
+    fprintf(drock->f, "id: %-40s\tto: %-20s\tat: %ld\tuid: %lu\n",
+	    id, to, (long) mark, uid);
 
     if (freeme) free(freeme);
 
@@ -326,7 +408,7 @@ int duplicate_dump(FILE *f)
 
 int duplicate_done(void)
 {
-    int r;
+    int r = 0;
 
     if (duplicate_dbopen) {
 	r = DB->close(dupdb);
@@ -336,7 +418,6 @@ int duplicate_done(void)
 	}
 	duplicate_dbopen = 0;
     }
-    r = DB->done();
 
     return r;
 }

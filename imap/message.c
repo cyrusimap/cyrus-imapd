@@ -1,6 +1,5 @@
 /* message.c -- Message manipulation/parsing
  * 
- * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.95 2003/07/01 14:39:54 ken3 Exp $
+ * $Id: message.c,v 1.96 2003/10/22 18:02:58 rjs3 Exp $
  */
 
 #include <config.h>
@@ -53,7 +52,6 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
-#include <time.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/uio.h>
@@ -71,7 +69,7 @@
 #include "charset.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "imapconf.h"
+#include "global.h"
 #include "retry.h"
 
 /* Message being parsed */
@@ -214,7 +212,7 @@ static void message_free_body P((struct body *body));
  * Copy a message of 'size' bytes from 'from' to 'to',
  * ensuring minimal RFC-822 compliance.
  *
- * Caller must have initialized config_* routines (with config_init) to read
+ * Caller must have initialized config_* routines (with cyrus_init) to read
  * imapd.conf before calling.
  */
 int
@@ -228,7 +226,7 @@ unsigned size;
     int r = 0;
     int n;
     int sawcr = 0, sawnl;
-    int reject8bit = config_getswitch("reject8bit", 0);
+    int reject8bit = config_getswitch(IMAPOPT_REJECT8BIT);
     int inheader = 1, blankline = 1;
 
     while (size) {
@@ -367,8 +365,12 @@ struct index_record *message_index;
     message_index->size = body.header_size + body.content_size;
     message_index->header_size = body.header_size;
     message_index->content_offset = body.content_offset;
+    message_index->content_lines = body.content_lines;
 
     message_index->cache_offset = lseek(mailbox->cache_fd, 0, SEEK_CUR);
+
+    message_index->cache_version = MAILBOX_CACHE_MINOR_VERSION;
+
     n = message_write_cache(mailbox->cache_fd, &body);
     message_free_body(&body);
 
@@ -522,6 +524,14 @@ struct boundary *boundaries;
     for (next = headers; *next; next++) {
 	if (*next == '\n') {
 	    body->header_lines++;
+
+	    /* Check for headers in generic cache */
+	    if (body->cacheheaders.start &&
+		(next[1] != ' ') && (next[1] != '\t') &&
+		mailbox_cached_header_inline(next+1) != BIT32_MAX) {
+		    message_parse_header(next+1, &body->cacheheaders);
+	    }
+
 	    switch (next[1]) {
 	    case 'b':
 	    case 'B':
@@ -593,10 +603,6 @@ struct boundary *boundaries;
 		if (!strncasecmp(next+2, "rom:", 4)) {
 		    message_parse_address(next+6, &body->from);
 		}
-		else if (body->cacheheaders.start &&
-			 !strncasecmp(next+2, "ollowup-to:", 11)) {
-		    message_parse_header(next+1, &body->cacheheaders);
-		}
 		break;
 
 	    case 'i':
@@ -613,34 +619,10 @@ struct boundary *boundaries;
 		}
 		break;
 
-	    case 'n':
-	    case 'N':
-		if (body->cacheheaders.start &&
-		    !strncasecmp(next+2, "ewsgroups:", 10)) {
-		    message_parse_header(next+1, &body->cacheheaders);
-		}
-		break;
-		
-	    case 'p':
-	    case 'P':
-		if (body->cacheheaders.start &&
-		    !strncasecmp(next+2, "riority:", 8)) {
-		    message_parse_header(next+1, &body->cacheheaders);
-		}
-		break;
-
 	    case 'r':
 	    case 'R':
 		if (!strncasecmp(next+2, "eply-to:", 8)) {
 		    message_parse_address(next+10, &body->reply_to);
-		}
-		else if (body->cacheheaders.start &&
-			 !strncasecmp(next+2, "eferences:", 10)) {
-		    message_parse_header(next+1, &body->cacheheaders);
-		}
-		else if (body->cacheheaders.start &&
-			 !strncasecmp(next+2, "esent-from:", 11)) {
-		    message_parse_header(next+1, &body->cacheheaders);
 		}
 
 		break;
@@ -661,8 +643,8 @@ struct boundary *boundaries;
 		    message_parse_address(next+4, &body->to);
 		}
 		break;
-	    }
-	}
+	    } /* switch(next[1]) */
+	} /* if (*next == '\n') */
     }
 
     /* If didn't find Content-Type: header, use the passed-in default type */
@@ -1700,7 +1682,7 @@ char **boundaries;
 int *boundaryct;
 {
     int i, len;
-    int rfc2046_strict = config_getswitch("rfc2046_strict", 0);
+    int rfc2046_strict = config_getswitch(IMAPOPT_RFC2046_STRICT);
 
     if (s[0] != '-' || s[1] != '-') return(0);
     s+=2;
@@ -1770,7 +1752,7 @@ struct body *body;
     message_write_searchaddr(&bcc, body->bcc);
 
     message_ibuf_init(&subject);
-    t = charset_decode1522(body->subject, NULL, 0);
+    t = charset_decode_mimeheader(body->subject, NULL, 0);
     message_write_nstring(&subject, t);
     free(t);
 
@@ -2325,7 +2307,7 @@ struct address *addrlist;
 	    if (addrlist->mailbox) {
 		if (prevaddr) PUTIBUF(ibuf, ',');
 		
-		tmp = charset_decode1522(addrlist->mailbox, NULL, 0);
+		tmp = charset_decode_mimeheader(addrlist->mailbox, NULL, 0);
 		message_write_text(ibuf, tmp);
 		free(tmp);
 		tmp = NULL;
@@ -2343,7 +2325,7 @@ struct address *addrlist;
 	    if (prevaddr) PUTIBUF(ibuf, ',');
 
 	    if (addrlist->name) {
-		tmp = charset_decode1522(addrlist->name, NULL, 0);
+		tmp = charset_decode_mimeheader(addrlist->name, NULL, 0);
 		message_write_text(ibuf, tmp);
 		free(tmp); tmp = NULL;
 		PUTIBUF(ibuf, ' ');

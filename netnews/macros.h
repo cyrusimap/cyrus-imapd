@@ -1,6 +1,6 @@
-/*  $Revision: 1.5 $
- *  $Id: macros.h,v 1.5 2003/02/13 20:15:46 rjs3 Exp $
-**
+/*  $Revision: 1.6 $
+ *  $Id: macros.h,v 1.6 2003/10/22 18:03:11 rjs3 Exp $
+ *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

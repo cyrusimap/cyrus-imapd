@@ -1,6 +1,6 @@
 /* map_nommap.c -- dummy memory-mapping routines.
- $Id: map_nommap.c,v 1.21 2003/02/13 20:15:41 rjs3 Exp $
- 
+ * $Id: map_nommap.c,v 1.22 2003/10/22 18:03:05 rjs3 Exp $
+ * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

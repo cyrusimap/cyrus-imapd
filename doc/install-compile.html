@@ -1,4 +1,4 @@
-<!-- $Id: install-compile.html,v 1.14 2003/07/23 03:09:45 rjs3 Exp $ -->
+<!-- $Id: install-compile.html,v 1.15 2003/10/22 18:02:53 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Compiling the IMAP Server
@@ -111,23 +111,23 @@ default, configure uses "<TT>cyrus</TT>". <P>
 
 <dt><tt>--with-duplicate-db=DB</tt>
 <dd>Specifies which database backend to use for the duplicate delivery
-database.  By default, configure uses "<TT>db3_nosync</TT>"<P>
+database.  By default, configure uses "<TT>berkeley_nosync</TT>".<P>
 
 <dt><tt>--with-mboxlist-db=DB</tt>
 <dd>Specifies which database backend to use for the mailbox list.  By
-default, configure uses "<TT>db3</TT>"<P>
+default, configure uses "<TT>berkeley</TT>".<P>
 
 <dt><tt>--with-seen-db=DB</tt>
 <dd>Specifies which database backend to use for the seen state.  By
-default, configure uses "<TT>flat</TT>"<P>
+default, configure uses "<TT>flat</TT>".<P>
 
 <dt><tt>--with-subs-db=DB</tt>
 <dd>Specifies which database backend to use for the subscriptions
-list.  By default, configure uses "<TT>flat</TT>"<P>
+list.  By default, configure uses "<TT>flat</TT>".<P>
 
 <dt><tt>--with-tls-db=DB</tt>
 <dd>Specifies which database backend to use for the TLS cache.  By
-default, configure uses "<TT>db3_nosync</TT>"<P>
+default, configure uses "<TT>berkeley_nosync</TT>".<P>
 
 <dt><tt>--with-idle=METHOD</tt>
 <dd>Specifies the IMAP IDLE method to use.
@@ -192,10 +192,6 @@ daemons.  By default, configure uses "<TT>/var</TT>". <P>
 <dt><tt>--enable-annotatemore</tt>
 <dd>Enables support for ANNOTATEMORE extension (mailbox/server
 annotations).<p>
-
-<dt><tt>--enable-fulldirhash</tt>
-<dd>Enables the improved directory hashing scheme which hashes the
-entire username instead of using just the first letter.<p>
 
 <dt><tt>--enable-listext</tt>
 <dd>Enables support for LISTEXT extension.<p>
@@ -297,5 +293,5 @@ If you want, you can override the "<tt>make</tt>" variables
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2003/07/23 03:09:45 $
+last modified: $Date: 2003/10/22 18:02:53 $
 </BODY></HTML>

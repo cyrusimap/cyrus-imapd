@@ -4,42 +4,12 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.33 2003/10/16 16:45:09 rjs3 Exp $ -->
+<!-- $Id: faq.html,v 1.34 2003/10/22 18:02:52 rjs3 Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
 
 <ul>
-<li><b>What is the difference between authentication and authorization?</b>
-
-<p>Say you have an exclusive ticket to get into a private party.  You go to
-the party, hand over the ticket, and you get in.  The ticket authorized
-you to get in (though had you lost the ticket, anyone who found it would
-also have been authorized to get into the party).</p>
-
-<p>Ok, now, next week, you get another ticket to get into another private
-party, but the ticket is only good to let you into the party.  You go to
-the party and show the ticket, and the person at the door says "prove to
-me you're the person whose name is on this party ticket".  Your proof is
-authentication, the ticket is authorization.</p>
-
-<p>The authentication in the above example depends upon some authority
-trusted by the person at the door.  For example, you may have shown a
-passport or a drivers license.  The person at the door would have to trust
-that the passport or license was real and accurate (though even if it
-were, you might coincidentally have the same name as the name on the
-ticket, but be a different person, hence we have not 100% authenticated
-you if only your name was on the ticket; e.g. a picture on the ticket
-would have been better).</p>
-
-<p>When you log in to your email with a user name and password, you are
-providing your authentication.  Think of your name/password as an identification
-of who you are - it is identifying that it is _you_ who is
-using the name/password.  Now, what you are allowed to do once you are
-authenticated to the server is governed by your authorization.  For example
-bob may only be authorized to see his INBOX, while the 'cyrus' user can
-list all the mailboxes on the server, and change their ACLs.</p>
-
 <li><b>Using PAM</b> Under Linux when using PAM and shadow
 passwords, /etc/shadow needs to be readable by the Cyrus user.</li>
 
@@ -58,9 +28,10 @@ archives for more information.</li>
 
 <li><b>Using AFS/Coda</b> We don't recommend it. It's even less likely
 to work than NFS. If you want to do it, it may possibly work but you
-may also lose your email or have corrupted <tt>cyrus.*</tt> files. CMU's previous e-mail system, AMS, leveraged AFS extensively for
-storage (and transit) purposes. For various reasons it didn't scale
-particularly well and led to CMU's interest in IMAP.
+may also lose your email or have corrupted <tt>cyrus.*</tt>
+files. CMU's previous e-mail system, AMS, leveraged AFS extensively
+for storage (and transit) purposes. For various reasons it didn't
+scale particularly well and led to CMU's interest in IMAP.
 
 <p>
 Cyrus was designed to use a local filesystem with Unix semantics and a
@@ -68,14 +39,17 @@ working mmap()/write() combination. AFS doesn't provide these
 semantics so won't work correctly.</p>
 </li>
 
-<li><b>Virtual hosting</b> - This will be supported starting in Cyrus 2.2.</li>
+<li><b>Virtual hosting</b> - See <a
+href="install-virtdomains.html">virtual domains configuration</a>.</li>
 
 <li><b>dots in userids</b> - you can have a '.' in your username
 IF, AND ONLY IF, you use the <a
 href="altnamespace.html#unixhiersep">UNIX hierarchy
 convention</a>.</li>
 
-<li><b>renaming users</b> - nope, not supported.</li>
+<li><b>renaming users</b> - Supported, but try to make sure that the
+user is not, and can not login when doing the rename.  Otherwise
+user-meta may get corrupted and/or out of sync.</li>
 
 <li><b>plus addressing</b> - Plus addressing allows direct delivery
 to a particular mailbox (other than an INBOX).  This is done in two ways.
@@ -297,7 +271,7 @@ only the mechanisms that you require.</p>
 </dl>
 
 <hr />
-last modified: $Date: 2003/10/16 16:45:09 $ <br />
+last modified: $Date: 2003/10/22 18:02:52 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.167 2003/04/17 16:46:48 rjs3 Exp $ */
+/* $Id: deliver.c,v 1.168 2003/10/22 18:02:57 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -67,13 +67,16 @@
 #include <arpa/inet.h>
 #include <sys/un.h>
 
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "xmalloc.h"
 #include "lmtpengine.h"
 #include "prot.h"
 #include "version.h"
+
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 extern int optind;
 extern char *optarg;
@@ -94,8 +97,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 		       char **users, int numusers, char *mailbox);
 static int init_net(const char *sockaddr);
 
-static void
-usage()
+static void usage()
 {
     fprintf(stderr, 
 	    "421-4.3.0 usage: deliver [-C <alt_config> ] [-m mailbox]"
@@ -106,8 +108,14 @@ usage()
 
 void fatal(const char* s, int code)
 {
+    static int recurse_code = 0;
+    
+    if(recurse_code) exit(code);
+    else recurse_code = 0;
+    
     prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
     prot_flush(deliver_out);
+    cyrus_done();
     exit(code);
 }
 
@@ -183,6 +191,7 @@ void pipe_through(int lmtp_in, int lmtp_out, int local_in, int local_out)
 
 int main(int argc, char **argv)
 {
+    int r;
     int opt;
     int lmtpflag = 0;
     int ignorequota = 0;
@@ -215,6 +224,7 @@ int main(int argc, char **argv)
 	    if (mailboxname) {
 		fprintf(stderr, "deliver: multiple -m options\n");
 		usage();
+		/* NOTREACHED */
 	    }
 	    if (*optarg) mailboxname = optarg;
 	    break;
@@ -223,6 +233,7 @@ int main(int argc, char **argv)
 	    if (authuser) {
 		fprintf(stderr, "deliver: multiple -a options\n");
 		usage();
+		/* NOTREACHED */
 	    }
 	    authuser = optarg;
 	    break;
@@ -251,6 +262,7 @@ int main(int argc, char **argv)
 
 	default:
 	    usage();
+	    /* NOTREACHED */
 	}
     }
 
@@ -259,9 +271,9 @@ int main(int argc, char **argv)
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
 
-    config_init(alt_config, "deliver");
+    cyrus_init(alt_config, "deliver");
 
-    sockaddr = config_getstring("lmtpsocket", NULL);
+    sockaddr = config_getstring(IMAPOPT_LMTPSOCKET);
     if (!sockaddr) {	
 	strlcpy(buf, config_dir, sizeof(buf));
 	strlcat(buf, "/socket/lmtp", sizeof(buf));
@@ -281,8 +293,12 @@ int main(int argc, char **argv)
     }
 
     /* deliver to users or global mailbox */
-    return deliver_msg(return_path,authuser, ignorequota,
-		       argv+optind, argc - optind, mailboxname);
+    r = deliver_msg(return_path,authuser, ignorequota,
+		    argv+optind, argc - optind, mailboxname);
+
+    cyrus_done();
+
+    return r;
 }
 
 void just_exit(const char *msg)
@@ -343,8 +359,8 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     if (mailbox) ml = strlen(mailbox);
     if (numusers == 0) {
 	/* just deliver to mailbox 'mailbox' */
-	const char *BB = config_getstring("postuser", "");
-	txn->rcpt[0].addr = (char *) xmalloc(ml + strlen(BB) + 2); /* leaks! */
+	const char *BB = config_getstring(IMAPOPT_POSTUSER);
+	txn->rcpt[0].addr = (char *) xmalloc(ml + strlen(BB) + 2); /* xxx leaks! */
 	sprintf(txn->rcpt[0].addr, "%s+%s", BB, mailbox);
 	txn->rcpt[0].ignorequota = ignorequota;
     } else {

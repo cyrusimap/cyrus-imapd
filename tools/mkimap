@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: mkimap,v 1.13 2001/09/27 16:02:34 ken3 Exp $
+# $Id: mkimap,v 1.14 2003/10/22 18:03:47 rjs3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -60,9 +60,6 @@ __END__
 require 5;
 
 $imapdconf = shift || "/etc/imapd.conf";
-$sievedir = "/usr/sieve";
-$nosievedir = 0;
-$hashispool = 0;
 
 open CONF, $imapdconf or die "can't open $imapdconf";
 print "reading configure file...\n";
@@ -74,14 +71,6 @@ while (<CONF>) {
 	$conf = $1;
 	print "i will configure directory $conf.\n";
     }
-    if (/^sieveusehomedir:\s+(1|t|yes|on)/) {
-	$nosievedir = 1;
-	print "you are storing sieve scripts in user's home directories.\n";
-    }
-    if (/^sievedir:\s+(.*)$/) {
-	$sievedir = $1;
-	print "you are using $sievedir as your sieve directory.\n";
-    }
     if (/^partition-.*:\s+(.*)$/) {
 	if (grep /$1/, @parts) {
 	    next;
@@ -89,53 +78,28 @@ while (<CONF>) {
 	print "i saw partition $1.\n";
 	push @parts, $1;
     }
-    if (/^hashimapspool:\s+(1|t|yes|on)/) {
-	$hashispool = 1;
-	print "i will also hash partitions.\n";
-    }
 }
 print "done\n";
 close CONF;
 
 $d = $conf;
 
-print "creating $d...\n";
-mkdir $d, 0755;
+print "configuring $d...\n";
 
 chdir $d or die "couldn't change to $d";
-#open FOO, ">mailboxes"; close FOO;
-
-mkdir "user", 0755;
-foreach $i ("a".."z") { mkdir "user/$i", 0755; }
-
-mkdir "quota", 0755;
-foreach $i ("a".."z") { mkdir "quota/$i", 0755; }
 
 mkdir "proc", 0755;
 mkdir "db", 0755;
 mkdir "socket", 0755;
 mkdir "log", 0755;
 mkdir "msg", 0755;
+mkdir "ptclient", 0755;
 
-# create the sieve stuff
-if (!$nosievedir) {
-    print "creating $sievedir...\n";
-
-    mkdir $sievedir, 0755;
-    if (chdir $sievedir) {
-	foreach $i ("a".."z") { mkdir "$i", 0755; }
-    }
-}
-
-$flag = 0;
 while ($part = shift @parts) {
-    $flag = 1;
-
     print "creating $part...\n";
     mkdir $part, 0755;
     chdir $part or die "couldn't change to partition $part";
     mkdir "stage.", 0755;
-    if ($hashispool) { foreach $i ("a".."z") { mkdir $i, 0755; } }
 }
 
 print "done\n";

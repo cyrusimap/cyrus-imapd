@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.10 2003/02/13 20:15:28 rjs3 Exp $
+ * $Id: mboxname.h,v 1.11 2003/10/22 18:02:58 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,6 +44,8 @@
 #ifndef INCLUDED_MBOXNAME_H
 #define INCLUDED_MBOXNAME_H
 
+#include "auth.h"
+
 #define MAX_NAMESPACE_PREFIX 40
 
 /* placeholder character for '.' in mailboxnames */
@@ -56,9 +58,10 @@ enum { NAMESPACE_INBOX = 0,
 
 /* structure holding server namespace info */
 struct namespace {
-    int isalt;  /* are we using he alternate namespace? */
-    char prefix[3][MAX_NAMESPACE_PREFIX+1];
     char hier_sep;
+    int isalt;  /* are we using the alternate namespace? */
+    int isadmin; /* current user is an admin */
+    char prefix[3][MAX_NAMESPACE_PREFIX+1];
     /* Convert the external mailbox 'name' to an internal name. */
     int (*mboxname_tointernal)(struct namespace *namespace, const char *name,
 			       const char *userid, char *result);
@@ -76,24 +79,34 @@ struct namespace {
 };
 
 /* Create namespace based on config options. */
-int mboxname_init_namespace(struct namespace *namespace, int force_std);
+int mboxname_init_namespace(struct namespace *namespace, int isadmin);
 
 /*
  * Translate separator charactors in a mailboxname from its external
  * representation to its internal representation '.'.
  * If using the unixhierarchysep '/', all '.'s get translated to DOTCHAR.
+ * length is the length of the string to translate (0 = strlen(name)).
  */
-char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name);
+char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name,
+				  int length);
 
 /*
  * Translate separator charactors in a mailboxname from its internal
  * representation '.' to its external representation.
  * If using the unixhierarchysep '/', all DOTCHAR get translated to '.'.
+ * length is the length of the string to translate (0 = strlen(name)).
  */
-char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name);
+char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name,
+                                  int length);
 
 /* Return nonzero if 'userid' owns the (internal) mailbox 'name'. */
 int mboxname_userownsmailbox(const char *userid, const char *name);
+
+/*
+ * If (internal) mailbox 'name' is a user's mailbox (optionally INBOX),
+ * returns a pointer to the userid, otherwise returns NULL.
+ */
+char *mboxname_isusermailbox(const char *name, int isinbox);
 
 /*
  * Return nonzero if (internal) mailbox 'name' consists of legal characters.

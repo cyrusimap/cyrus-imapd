@@ -1,10 +1,11 @@
 /* +++Date last modified: 05-Jul-1997 */
-/* $Id: hash.h,v 1.7 2003/08/06 19:14:17 rjs3 Exp $ */
+/* $Id: hash.h,v 1.8 2003/10/22 18:03:04 rjs3 Exp $ */
 
 #ifndef HASH__H
 #define HASH__H
 
 #include <stddef.h>           /* For size_t     */
+#include "strhash.h"
 #include "mpool.h"
 
 /*
@@ -34,13 +35,6 @@ typedef struct hash_table {
     bucket **table;
     struct mpool *pool;
 } hash_table;
-
-/*
-** Hashes a string to produce an unsigned short, which should be
-** sufficient for most purposes.
-*/
-
-unsigned hash(const char *string);
 
 /*
 ** This is used to construct the table.  If it doesn't succeed, it sets

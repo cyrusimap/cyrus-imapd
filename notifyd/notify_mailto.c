@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_mailto.c,v 1.6 2003/08/12 15:22:58 rjs3 Exp $
+ * $Id: notify_mailto.c,v 1.7 2003/10/22 18:03:13 rjs3 Exp $
  */
 
 #include <config.h>
@@ -54,7 +54,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "imapconf.h"
+#include "global.h"
+#include "libconfig.h"
 #include "rfc822date.h"
 #include <sieve_interface.h>
 
@@ -94,7 +95,7 @@ char* notify_mailto(const char *class __attribute__((unused)),
 	close(fds[1]);
 	/* make the pipe be stdin */
 	dup2(fds[0], 0);
-	execv(SENDMAIL, (char **) smbuf);
+	execv(config_getstring(IMAPOPT_SENDMAIL), (char **) smbuf);
 
 	/* if we're here we suck */
 	return strdup("NO mailto couldn't exec");
@@ -116,7 +117,7 @@ char* notify_mailto(const char *class __attribute__((unused)),
     fprintf(sm, "Date: %s\r\n", datestr);
     
     fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
-    fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", POSTMASTER);
+    fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", config_getstring(IMAPOPT_POSTMASTER));
     fprintf(sm, "To: <%s>\r\n", options[0]);
     fprintf(sm, "Subject: [SIEVE] New mail notification\r\n");
     fprintf(sm, "\r\n");

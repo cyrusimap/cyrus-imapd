@@ -40,7 +40,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: sieveshell.pl,v 1.19 2002/12/02 19:45:11 rjs3 Exp $
+# $Id: sieveshell.pl,v 1.20 2003/10/22 18:03:21 rjs3 Exp $
 #
 
 use Cyrus::SIEVE::managesieve;
@@ -290,7 +290,7 @@ sieveshell - remotely manipulate sieve scripts
 =head1 SYNOPSIS
 
 sieveshell [B<--user>=I<user>] [B<--authname>=I<authname>] 
-[B<--realm>=I<realm>] [B<--exec>=I<script>] I<server>
+[B<--realm>=I<realm>] [B<--exec>=I<script>] I<server>[B<:>I<port>]
 
 sieveshell B<--help>
 

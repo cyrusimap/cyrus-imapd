@@ -1,5 +1,5 @@
 /* telemetry.c -- common server telemetry
- * $Id: telemetry.c,v 1.6 2003/07/22 19:17:20 rjs3 Exp $
+ * $Id: telemetry.c,v 1.7 2003/10/22 18:02:59 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -46,15 +46,14 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <time.h>
-#include <sys/time.h>
 #include <string.h>
 
 #include "prot.h"
-#include "imapconf.h"
+#include "global.h"
 
 /* create telemetry log; return fd of log */
 int telemetry_log(const char *userid, struct protstream *pin, 

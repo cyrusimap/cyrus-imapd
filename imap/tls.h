@@ -43,13 +43,13 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: tls.h,v 1.16 2003/02/13 20:15:31 rjs3 Exp $ */
+/* $Id: tls.h,v 1.17 2003/10/22 18:02:59 rjs3 Exp $ */
 
 #ifndef INCLUDED_TLS_H
 #define INCLUDED_TLS_H
 
 /* is tls enabled? */
-int tls_enabled(const char *ident);
+int tls_enabled(void);
 
 /* name of the SSL/TLS sessions database */
 #define FNAME_TLSSESSIONS "/tls_sessions.db"
@@ -64,9 +64,17 @@ int tls_init_serverengine(const char *ident,
 			  int askcert,     /* 1 = client auth */
 			  int tlsonly);
 
+int tls_init_clientengine(int verifydepth,
+			  char *var_tls_cert_file,
+			  char *var_tls_key_file);
+
 /* start tls negotiation */
 int tls_start_servertls(int readfd, int writefd, 
 			int *layerbits, char **authid, SSL **ret);
+
+int tls_start_clienttls(int readfd, int writefd,
+			int *layerbits, char **authid, SSL **ret,
+			SSL_SESSION **sess);
 
 /* reset tls */
 int tls_reset_servertls(SSL **conn);

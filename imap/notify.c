@@ -1,5 +1,5 @@
 /* notify.c -- Module to notify of new mail
- * $Id: notify.c,v 1.11 2003/04/17 22:42:06 ken3 Exp $ 
+ * $Id: notify.c,v 1.12 2003/10/22 18:02:58 rjs3 Exp $ 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -56,7 +56,7 @@
 # include <unistd.h>
 #endif
 
-#include "imapconf.h"
+#include "global.h"
 #include "notify.h"
 #include "xmalloc.h"
 
@@ -80,7 +80,7 @@ static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
 void notify(const char *method,
 	    const char *class, const char *priority,
 	    const char *user, const char *mailbox,
-	    int nopt, char **options,
+	    int nopt, const char **options,
 	    const char *message)
 {
     const char *notify_sock;
@@ -92,13 +92,13 @@ void notify(const char *method,
 
     soc = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (soc == -1) {
-	syslog(LOG_ERR, "unable to open notify socket(): %m");
+	syslog(LOG_ERR, "unable to create notify socket(): %m");
 	return;
     }
 
     memset((char *)&sun_data, 0, sizeof(sun_data));
     sun_data.sun_family = AF_UNIX;
-    notify_sock = config_getstring("notifysocket", NULL);
+    notify_sock = config_getstring(IMAPOPT_NOTIFYSOCKET);
     if (notify_sock) {	
 	strlcpy(sun_data.sun_path, notify_sock, sizeof(sun_data.sun_path));
     }

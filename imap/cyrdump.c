@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.12 2003/04/23 16:36:22 rjs3 Exp $
+/* $Id: cyrdump.c,v 1.13 2003/10/22 18:02:57 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -50,12 +50,11 @@
 #include <syslog.h>
 #include <com_err.h>
 #include <string.h>
-#include <time.h>
 
 /* cyrus includes */
 #include "assert.h"
 #include "exitcodes.h"
-#include "imapconf.h"
+#include "global.h"
 #include "imapd.h"
 #include "imap_err.h"
 #include "imapurl.h"
@@ -64,6 +63,9 @@
 #include "sysexits.h"
 #include "xmalloc.h"
 
+
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 int verbose = 0;
 
@@ -97,9 +99,7 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
     struct incremental_record irec;
 
-    if (geteuid() == 0) {
-	usage(argv[0]);
-    }
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
     while ((option = getopt(argc, argv, "v")) != EOF) {
 	switch (option) {
@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
 	usage(argv[0]);
     }
 
-    config_init(alt_config, "dump");
+    cyrus_init(alt_config, "dump");
     mboxlist_init(0);
     mboxlist_open(NULL);
 
@@ -135,7 +135,9 @@ int main(int argc, char *argv[])
     for (i = optind; i < argc; i++) {
 	strlcpy(buf, argv[i], sizeof(buf));
 	/* Translate any separators in mailboxname */
-	mboxname_hiersep_tointernal(&dump_namespace, buf);
+	mboxname_hiersep_tointernal(&dump_namespace, buf,
+				    config_virtdomains ?
+				    strcspn(buf, "@") : 0);
 	(*dump_namespace.mboxlist_findall)(&dump_namespace, buf, 1, 0, 0,
 					   dump_me, &irec);
     }
@@ -143,6 +145,8 @@ int main(int argc, char *argv[])
     mboxlist_close();
     mboxlist_done();
 
+    cyrus_done();
+    
     return 0;
 }
 
@@ -153,12 +157,6 @@ int usage(const char *name)
     exit(EC_USAGE);
 }
 
-void fatal(const char *s, int code) 
-{
-    fprintf(stderr, "fatal error: %s\n", s);
-    exit(code);
-}
-
 static void generate_boundary(char *boundary, size_t size)
 {
     assert(size >= 100);
@@ -167,7 +165,8 @@ static void generate_boundary(char *boundary, size_t size)
 	     (long) getpid(), (long) time(NULL), (long) rand());
 }
 
-static int dump_me(char *name, int matchlen, int maycreate, void *rock)
+static int dump_me(char *name, int matchlen __attribute__((unused)),
+		   int maycreate __attribute__((unused)), void *rock)
 {
     int r;
     struct mailbox m;
@@ -346,7 +345,7 @@ static void print_seq(const char *tag, const char *attrib,
 
 #endif
 
-void printastring(const char *s)
+void printastring(const char *s __attribute__((unused)))
 {
-    fatal("not implemented", EC_SOFTWARE);
+    fatal("printastring not implemented in cyrdump", EC_SOFTWARE);
 }

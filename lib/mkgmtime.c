@@ -1,5 +1,5 @@
 /* mkgmtime.c - make time corresponding to a GMT timeval struct
- $Id: mkgmtime.c,v 1.8 2003/04/07 16:52:45 rjs3 Exp $
+ $Id: mkgmtime.c,v 1.9 2003/10/22 18:03:05 rjs3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -86,7 +86,7 @@
 **	would still be very reasonable).
 */
 
-#include <time.h>
+#include <config.h>
 
 #ifndef WRONG
 #define WRONG	(-1)

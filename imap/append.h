@@ -1,6 +1,6 @@
 /* append.h -- Description of messages to be copied 
- $Id: append.h,v 1.22 2003/04/15 15:33:56 rjs3 Exp $ 
-
+ * $Id: append.h,v 1.23 2003/10/22 18:02:56 rjs3 Exp $ 
+ *
  * Copyright (c) 1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,6 +45,7 @@
 #ifndef INCLUDED_APPEND_H
 #define INCLUDED_APPEND_H
 
+#include "mailbox.h"
 #include "prot.h"
 
 struct copymsg {
@@ -53,6 +54,8 @@ struct copymsg {
     time_t sentdate;
     unsigned long size;
     unsigned long header_size;
+    unsigned long content_lines;
+    unsigned long cache_version;
     const char *cache_begin;
     int cache_len;		/* 0 if need to copy & parse message */
     int seen;

@@ -1,5 +1,6 @@
 /* notify.h -- abstract interface for notifications
-  $Id: notify.h,v 1.5 2003/02/13 20:15:29 rjs3 Exp $
+ *
+ * $Id: notify.h,v 1.6 2003/10/22 18:02:58 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,7 +47,7 @@
 void notify(const char *method,
 	    const char *class, const char *priority,
 	    const char *user, const char *mailbox,
-	    int nopt, char **options,
+	    int nopt, const char **options,
 	    const char *message);
 
 #endif /* NOTIFY_H */

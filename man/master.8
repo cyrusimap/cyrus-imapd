@@ -39,11 +39,19 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: master.8,v 1.8 2002/12/10 15:49:10 rjs3 Exp $
+.\" $Id: master.8,v 1.9 2003/10/22 18:03:08 rjs3 Exp $
 .SH NAME
 master \- master Cyrus process
 .SH SYNOPSIS
 .B master
+[
+.B \-C
+.I alternate imapd.conf
+]
+[
+.B \-M
+.I alternate cyrus.conf
+]
 [
 .B \-l
 .I listen queue
@@ -52,7 +60,13 @@ master \- master Cyrus process
 .B \-p
 .I pidfile
 ]
+[
+.B \-j
+.I janitor period
+]
+[
 .B \-d
+]
 [
 .B \-D
 ]
@@ -69,10 +83,24 @@ It kills itself and all child processes
 when it receives a SIGTERM.
 .SH OPTIONS
 .TP
+.BI \-C " alternate imapd.conf"
+Specifies an alternate imapd.conf for use by master (note that this will
+not affect any sub-processes spawned by master, you should specify those
+specifically in the respective entries in cyrus.conf).
+.TP
+.BI \-M " alternate cyrus.conf"
+Specifies an alternate cyrus.conf for use by master.
+.TP
 .BI \-l " listen queue backlog"
 Increase the listen queue backlog. By default, the listen queue is set
 to 32.   On systems with a high connection rate, it may be desirable
 to increase this value. refer to \fBlisten(2)\fR for details.
+.TP
+.BI \-j " janitor full-sweeps per second"
+Sets the amount of times per second the janitor should sweep the entire
+child table.  Leave it at the default of 1 unless you have a really high
+fork rate (and you have not increased the child hash table size when you
+compiled Cyrus from its default of 10000 entries).
 .TP
 .BI \-p " pidfile"
 Use

@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: IMAP.pm,v 1.17 2002/09/19 17:21:04 rjs3 Exp $
+# $Id: IMAP.pm,v 1.18 2003/10/22 18:03:16 rjs3 Exp $
 
 package Cyrus::IMAP;
 
@@ -85,6 +85,10 @@ sub send {
     if ($2 eq 'a') {
       # atom
       $res .= scalar shift(@rest);
+    }
+    elsif ($2 eq 'q') {
+      # qstring
+      $res .= $self->_qstringize(shift(@rest));
     }
     elsif ($2 eq 's') {
       # astring
@@ -141,6 +145,24 @@ sub _cc {
       }
     }
     $res;
+  }
+}
+
+sub _qstringize {
+  my ($self, $str) = @_;
+  my $res;
+  my $cc = _cc($str);
+
+  if ($cc) {
+      # would be needed except imclient devolves to a LITERAL in this case.
+      #$str =~ s/([\\\"])/\\$1/g;
+      '"' . $str . '"';
+  }
+  else {
+      # right now we assume LITERAL+ on the part of the server, since
+      # we have no better way of dealing with literals.
+      # sorry!
+      "{" . length($str) . "+}\r\n" . $str;
   }
 }
 

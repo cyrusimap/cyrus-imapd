@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.53 2003/02/13 20:15:25 rjs3 Exp $
+ * $Id: imapd.h,v 1.54 2003/10/22 18:02:57 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,9 +44,10 @@
 #ifndef INCLUDED_IMAPD_H
 #define INCLUDED_IMAPD_H
 
-#include "prot.h"
+#include "annotate.h"
 #include "charset.h"
 #include "mailbox.h"
+#include "prot.h"
 
 /* Userid client has logged in as */
 extern char *imapd_userid;
@@ -66,13 +67,6 @@ extern int imapd_exists;
 /* Name of client host */
 extern char imapd_clienthost[];
 
-/* List of strings, for fetch and search argument blocks */
-struct strlist {
-    char *s;			/* String */
-    comp_pat *p;		/* Compiled pattern, for search */
-    struct strlist *next;
-};
-
 /* List of HEADER.FIELDS[.NOT] fetch specifications */
 struct fieldlist {
     char *section;		/* First part of BODY[x] value */
@@ -84,12 +78,17 @@ struct fieldlist {
 /* Items that may be fetched */
 struct fetchargs {
     int fetchitems;		/* Bitmask */
+    struct strlist *binsections; /* BINARY[x]<x> values */
+    struct strlist *sizesections; /* BINARY.SIZE[x] values */
     struct strlist *bodysections; /* BODY[x]<x> values */
     struct fieldlist *fsections;  /* BODY[xHEADER.FIELDSx]<x> values */
     struct strlist *headers;	/* RFC822.HEADER.LINES */
     struct strlist *headers_not; /* RFC822.HEADER.LINES.NOT */
-    int start_octet;		/* start_octet for partial fetch, or 0 */
-    int octet_count;		/* octet_count for partial fetch */
+    int start_octet;		/* start_octet for partial fetch */
+    int octet_count;		/* octet_count for partial fetch, or 0 */
+
+    bit32 cache_atleast;          /* to do headers we need atleast this
+				   * cache version */
 };
 
 /* Bitmasks for fetchitems */
@@ -105,7 +104,7 @@ enum {
     FETCH_TEXT =                (1<<8),
     FETCH_RFC822 =              (1<<9),
     FETCH_SETSEEN =             (1<<10),
-    FETCH_UNCACHEDHEADER =      (1<<11)
+/*     FETCH_UNCACHEDHEADER =      (1<<11) -- obsolete */
 };
 
 enum {
@@ -151,7 +150,7 @@ enum {
     SEARCH_RECENT_UNSET	=       (1<<1),
     SEARCH_SEEN_SET =           (1<<2),
     SEARCH_SEEN_UNSET =	        (1<<3),
-    SEARCH_UNCACHEDHEADER =	(1<<4)
+/*    SEARCH_UNCACHEDHEADER =	(1<<4) -- obsolete */
 };
 
 /* Things that may be searched for */
@@ -176,6 +175,8 @@ struct searchargs {
     struct strlist *text;
     struct strlist *header_name, *header;
     struct searchsub *sublist;
+
+    bit32 cache_atleast;
 };
 
 /* Sort criterion */
@@ -225,15 +226,7 @@ enum {
     LIST_REMOTE =		(1<<4)
 };
 
-/* List of attrib-value pairs */
-struct attvaluelist {
-    char *attrib;
-    char *value;
-    struct attvaluelist *next;
-};
-
 extern struct protstream *imapd_out, *imapd_in;
-
 
 extern void index_closemailbox(struct mailbox *mailbox);
 extern void index_newmailbox(struct mailbox *mailbox, int examine_mode);
@@ -243,9 +236,9 @@ extern void index_check(struct mailbox *mailbox, int usinguid,
 extern void index_checkseen(struct mailbox *mailbox, int quiet,
 			       int usinguid, int oldexists);
 
-extern void index_fetch(struct mailbox *mailbox, const char *sequence,
-			int usinguid, struct fetchargs *fetchargs,
-			int* fetchedsomething);
+extern int index_fetch(struct mailbox *mailbox, const char *sequence,
+		       int usinguid, struct fetchargs *fetchargs,
+		       int* fetchedsomething);
 extern int index_store(struct mailbox *mailbox, char *sequence,
 			  int usinguid, struct storeargs *storeargs,
 			  char **flag, int nflags);

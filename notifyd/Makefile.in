@@ -1,5 +1,5 @@
 # Makefile.in - notifyd makefile
-# $Id: Makefile.in,v 1.5 2002/09/13 16:04:16 rjs3 Exp $
+# $Id: Makefile.in,v 1.6 2003/10/22 18:03:13 rjs3 Exp $
 # @configure_input@
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
@@ -52,7 +52,7 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I. -I.. -I../sieve/ -I$(srcdir) -I$(srcdir)/../sieve -I$(srcdir)/../imap -I$(srcdir)/../acap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I.. -I../sieve/ -I$(srcdir) -I$(srcdir)/../sieve -I$(srcdir)/../imap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
 
@@ -66,9 +66,11 @@ NOTIFYD_LIBS = @NOTIFYD_LIBS@
 
 SERVICE=../master/service.o
 
+IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@
+IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
 LIB_WRAP = @LIB_WRAP@
-LIBS = @ZEPHYR_LIBS@ @IMAP_LIBS@ @LIBS@ @IMAP_COM_ERR_LIBS@
-DEPLIBS=../imap/libimap.a ../lib/libcyrus.a @DEPLIBS@
+LIBS = @ZEPHYR_LIBS@ @LIBS@ $(IMAP_COM_ERR_LIBS)
+DEPLIBS=../imap/mutex_fake.o ../imap/libimap.a ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
 
 PURIFY=/usr/local/bin/purify
 PUREOPT=-best-effort
@@ -82,16 +84,16 @@ OBJS= notifyd.o notify_null.o notify_log.o notify_mailto.o notify_zephyr.o
 
 notifytest: notifytest.o
 	$(CC) $(LDFLAGS) -o notifytest \
-	 notifytest.o $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+	 notifytest.o $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
 
 notifyd: $(OBJS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o notifyd \
-	 $(SERVICE) $(OBJS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+	 $(SERVICE) $(OBJS) $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
 
 notifyd.pure: $(OBJS) $(SERVICE)
 	$(PURIFY) $(PUREOPT) \
 	$(CC) $(LDFLAGS) -o notifyd.pure \
-	 $(SERVICE) $(OBJS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+	 $(SERVICE) $(OBJS) $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
 
 clean:
 	rm -f notifyd notifytest *.o *.a *~ Makefile.bak makedepend.log

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.15 2003/04/01 19:13:52 rjs3 Exp $ */
+/* $Id: idled.c,v 1.16 2003/10/22 18:02:57 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -48,11 +48,9 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <syslog.h>
-#include <sys/time.h>
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <time.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -60,11 +58,14 @@
 #include <fcntl.h>
 
 #include "idled.h"
-#include "imapconf.h"
+#include "global.h"
 #include "mboxlist.h"
 #include "xmalloc.h"
 #include "hash.h"
 #include "exitcodes.h"
+
+/* global state */
+const int config_need_data = 0;
 
 extern int optind;
 extern char *optarg;
@@ -88,6 +89,9 @@ void fatal(const char *msg, int err)
     if (debugmode) fprintf(stderr, "dying with %s %d\n",msg,err);
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
+
+    cyrus_done();
+    
     exit(err);
 }
 
@@ -277,18 +281,14 @@ int main(int argc, char **argv)
 	}
     }
 
-    if (debugmode) {
-	openlog("idled", LOG_PID, LOG_LOCAL6);
-    }
-
-    config_init(alt_config, "idled");
+    cyrus_init(alt_config, "idled");
 
     /* get name of shutdown file */
     snprintf(shutdownfilename, sizeof(shutdownfilename), "%s/msg/shutdown",
 	     config_dir);
 
     /* Set inactivity timer (convert from minutes to seconds) */
-    idle_timeout = config_getint("timeout", 30);
+    idle_timeout = config_getint(IMAPOPT_TIMEOUT);
     if (idle_timeout < 30) idle_timeout = 30;
     idle_timeout *= 60;
 
@@ -307,12 +307,13 @@ int main(int argc, char **argv)
     /* create socket we are going to use for listening */
     if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
 	perror("socket");
+	cyrus_done();
 	exit(1);
     }
 
     /* bind it to a local file */
     local.sun_family = AF_UNIX;
-    idle_sock = config_getstring("idlesocket", NULL);
+    idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
     if (idle_sock) {	
 	strlcpy(local.sun_path, idle_sock, sizeof(local.sun_path));
     }
@@ -327,6 +328,7 @@ int main(int argc, char **argv)
 
     if (bind(s, (struct sockaddr *)&local, len) == -1) {
 	perror("bind");
+	cyrus_done();
 	exit(1);
     }
     umask(oldumask); /* for Linux */
@@ -339,10 +341,12 @@ int main(int argc, char **argv)
 	
 	if (pid == -1) {
 	    perror("fork");
+	    cyrus_done();
 	    exit(1);
 	}
 	
 	if (pid != 0) { /* parent */
+	    cyrus_done();
 	    exit(0);
 	}
     }
@@ -399,6 +403,8 @@ int main(int argc, char **argv)
 	}
 
     }
+
+    cyrus_done();
 
     /* never gets here */      
     exit(1);

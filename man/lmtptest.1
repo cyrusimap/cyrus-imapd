@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.TH LMTPTEST 1
+.TH LMTPTEST 1 "Project Cyrus" CMU
 .\" 
 .\" Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
 .\"
@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: lmtptest.1,v 1.4 2002/05/25 19:57:48 leg Exp $
+.\" $Id: lmtptest.1,v 1.5 2003/10/22 18:03:08 rjs3 Exp $
 .SH NAME
 lmtptest \- interactive LMTP test program
 .SH SYNOPSIS
@@ -91,6 +91,10 @@ lmtptest \- interactive LMTP test program
 ]
 .br
          [
+.B \-o
+\fIoption\fB=\fIvalue\fR
+]
+[
 .B \-v
 ]
 \fIhostname\fR
@@ -152,6 +156,9 @@ attempt to do SSL/TLS session reuse and/or fast reauth
 Enable challenge prompt callbacks.  This will cause the OTP mechanism
 to ask for the the one-time password instead of the secret pass-phrase
 (library generates the correct response).
+.TP
+\fB-o \fIoption\fB=\fIvalue\fR
+Set the SASL \fIoption\fR to \fIvalue\fR.
 .TP
 .B -v
 Verbose. Print out more information than usual.

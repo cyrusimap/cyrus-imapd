@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.12 2003/02/13 20:15:48 rjs3 Exp $
+ * $Id: notifyd.c,v 1.13 2003/10/22 18:03:13 rjs3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -63,10 +63,15 @@
 #include <string.h>
 
 #include "notifyd.h"
-#include "imapconf.h"
-#include "xmalloc.h"
-#include "exitcodes.h"
 
+#include "exitcodes.h"
+#include "global.h"
+#include "libconfig.h"
+#include "xmalloc.h"
+
+
+/* global state */
+const int config_need_data = 0;
 
 static int soc = 0; /* master has handed us the port as stdin */
 
@@ -77,6 +82,8 @@ static notifymethod_t *default_method;	/* default method daemon is using */
 void shut_down(int code) __attribute__ ((noreturn));
 void shut_down(int code)
 {
+    cyrus_done();
+
     /* done */
     exit(code);
 }
@@ -210,7 +217,6 @@ int service_init(int argc, char **argv, char **envp)
     int opt;
     char *method = "null";
 
-    config_changeident("notifyd");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     while ((opt = getopt(argc, argv, "m:")) != EOF) {
@@ -237,6 +243,7 @@ int service_init(int argc, char **argv, char **envp)
     return 0;
 }
 
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     shut_down(error);

@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.75 2003/03/31 20:15:05 rjs3 Exp $
+ * $Id: mailbox.h,v 1.76 2003/10/22 18:02:58 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -43,6 +43,7 @@
 #define INCLUDED_MAILBOX_H
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <limits.h>
 
 #include "auth.h"
@@ -71,7 +72,8 @@ typedef unsigned short bit32;
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
 
-#define MAILBOX_MINOR_VERSION	4
+#define MAILBOX_MINOR_VERSION	6
+#define MAILBOX_CACHE_MINOR_VERSION 1
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
@@ -147,9 +149,10 @@ struct mailbox {
     int dirty;
 
     int pop3_new_uidl;
+    unsigned long leaked_cache_records;
 
     /* future expansion -- won't need expand the header */
-    unsigned long spares[4];
+    unsigned long spares[3];
 
     struct quota quota;
 };
@@ -165,6 +168,8 @@ struct index_record {
     time_t last_updated;
     bit32 system_flags;
     bit32 user_flags[MAX_USER_FLAGS/32];
+    unsigned long content_lines;
+    unsigned long cache_version;
 };
 
 /* Offsets of index header fields */
@@ -176,17 +181,17 @@ struct index_record {
 #define OFFSET_EXISTS 20
 #define OFFSET_LAST_APPENDDATE 24
 #define OFFSET_LAST_UID 28
-#define OFFSET_QUOTA_MAILBOX_USED 32
-#define OFFSET_POP3_LAST_LOGIN 36
-#define OFFSET_UIDVALIDITY 40
-#define OFFSET_DELETED 44	/* added for ACAP */
-#define OFFSET_ANSWERED 48
-#define OFFSET_FLAGGED 52
-#define OFFSET_POP3_NEW_UIDL 56	/* added for Outlook stupidity */
-#define OFFSET_SPARE0 60
-#define OFFSET_SPARE1 64
-#define OFFSET_SPARE2 68
-#define OFFSET_SPARE3 72
+#define OFFSET_QUOTA_RESERVED_FIELD 32  /* Reserved for 64bit quotas */
+#define OFFSET_QUOTA_MAILBOX_USED 36
+#define OFFSET_POP3_LAST_LOGIN 40
+#define OFFSET_UIDVALIDITY 44
+#define OFFSET_DELETED 48      /* added for ACAP */
+#define OFFSET_ANSWERED 52
+#define OFFSET_FLAGGED 56
+#define OFFSET_POP3_NEW_UIDL 60	/* added for Outlook stupidity */
+#define OFFSET_LEAKED_CACHE 64 /* Number of leaked records in cache file */
+#define OFFSET_SPARE1 68
+#define OFFSET_SPARE2 72
 
 /* Offsets of index_record fields in index file */
 #define OFFSET_UID 0
@@ -199,17 +204,31 @@ struct index_record {
 #define OFFSET_LAST_UPDATED 28
 #define OFFSET_SYSTEM_FLAGS 32
 #define OFFSET_USER_FLAGS 36
+#define OFFSET_CONTENT_LINES (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8) /* added for nntpd */
+#define OFFSET_CACHE_VERSION OFFSET_CONTENT_LINES+sizeof(bit32)
 
-#define INDEX_HEADER_SIZE (OFFSET_SPARE3+4)
-#define INDEX_RECORD_SIZE (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8)
+#define INDEX_HEADER_SIZE (OFFSET_SPARE2+sizeof(bit32))
+#define INDEX_RECORD_SIZE (OFFSET_CACHE_VERSION+sizeof(bit32))
+
+/* Number of fields in an individual message's cache record */
+#define NUM_CACHE_FIELDS 10
 
 #define FLAG_ANSWERED (1<<0)
 #define FLAG_FLAGGED (1<<1)
 #define FLAG_DELETED (1<<2)
 #define FLAG_DRAFT (1<<3)
 
-extern char *mailbox_cache_header_name[];
-extern int mailbox_num_cache_header;
+struct mailbox_header_cache {
+    const char *name; /* Name of header */
+    bit32 min_cache_version; /* Cache version it appeared in */
+};
+
+#define MAX_CACHED_HEADER_SIZE 32 /* Max size of a cached header name */
+extern const struct mailbox_header_cache mailbox_cache_headers[];
+extern const int MAILBOX_NUM_CACHE_HEADERS;
+
+int mailbox_cached_header(const char *s);
+int mailbox_cached_header_inline(const char *text);
 
 typedef int mailbox_decideproc_t(struct mailbox *mailbox, 
 				 void *rock, char *indexbuf);
@@ -237,6 +256,12 @@ extern void mailbox_unmap_message(struct mailbox *mailbox,
 				  const char **basep, unsigned long *lenp);
 
 extern void mailbox_reconstructmode(void);
+
+extern int mailbox_stat(const char *mbpath,
+			struct stat *header,
+			struct stat *index,
+			struct stat *cache);
+
 extern int mailbox_open_header(const char *name, struct auth_state *auth_state,
 			       struct mailbox *mailbox);
 extern int mailbox_open_header_path(const char *name, const char *path,
@@ -275,6 +300,7 @@ extern void mailbox_unlock_quota(struct quota *quota);
 
 extern int mailbox_write_header(struct mailbox *mailbox);
 extern int mailbox_write_index_header(struct mailbox *mailbox);
+extern void mailbox_index_record_to_buf(struct index_record *record, char *buf);
 extern int mailbox_write_index_record(struct mailbox *mailbox,
 				      unsigned msgno,
 				      struct index_record *record, int sync);

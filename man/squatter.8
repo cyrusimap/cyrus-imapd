@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: squatter.8,v 1.4 2003/08/09 23:43:15 rjs3 Exp $
+.\" $Id: squatter.8,v 1.5 2003/10/22 18:03:08 rjs3 Exp $
 .SH NAME
 squatter \- create SQUAT indexes for mailboxes
 .SH SYNOPSIS
@@ -55,13 +55,16 @@ squatter \- create SQUAT indexes for mailboxes
 .B \-s
 ]
 [
+.B \-a
+]
+[
 .B \-v
 ]
 .IR mailbox ...
 .SH DESCRIPTION
 .I Squatter
 creates a new SQUAT index for one or more IMAP mailboxes.  The SQUAT
-index a unified index of all of the header and body text of each
+index is a unified index of all of the header and body text of each
 message a given mailbox.  This index is used to significantly reduce
 IMAP SEARCH times on a mailbox.
 .PP
@@ -100,6 +103,20 @@ mailbox prefixes given as arguments.
 .B \-s
 Skip mailboxes whose index file is older than their current squat file
 (within a small time delta).
+.TP
+.B \-a
+Only create indexes for mailboxes which have the shared
+\fI/vendor/cmu/cyrus-imapd/squat\fR annotation set to "true".
+.br
+.sp
+The value of the \fB/vendor/cmu/cyrus-imapd/squat\fR annotation is
+inherited by all children of the given mailbox, so an entire mailbox
+tree can be indexed (or not indexed) by setting a single annotation on
+the root of that tree with a value of "true" (or "false").  If a
+mailbox does not have a \fB/vendor/cmu/cyrus-imapd/squat\fR annotation
+set on it (or does not inherit one), then the mailbox is not indexed.
+In other words, the implicit value of
+\fB/vendor/cmu/cyrus-imapd/squat\fR is "false".
 .TP
 .B \-v
 Increase the verbosity of progress/status messages.
