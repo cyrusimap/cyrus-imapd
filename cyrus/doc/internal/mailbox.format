@@ -186,9 +186,72 @@ Body Response -
   Raw IMAP response for an (old style) request for the body.
 
 Binary Bodystructure -
-  Offsets into the message file to pull out various body parts.
-  (xxx this needs more description of the actual format used.
-   message_write_section in message.c)
+  Offsets into the message file to pull out various body parts.  Because
+  of the nature of MIME parts, this is somewhat recursive.
+
+  This looks like the following (starting the octet following the cache
+  field size).  All of the fields are bit32s.
+
+  [
+   [Number of message parts+1 for the rfc822 header if present]
+   [
+    [Offset in the message file of the header of this part]
+    [Size (octets) of the header of this part]
+    [Offset in the message file of the content of this part]
+    [Size (octets) of the content of this part]
+    [Encoding Type of this part]
+   ]
+      (repeat for each part as well as once for the headers)
+   [zero *or* number of sub-parts in the case of a multipart.
+    if nonzero, this is a recursion into the top structure]
+      (repeat for each part)
+  ] 
+
+  Note if this is not a message/rfc822, than the values for the sizes
+  of the part 0 are -1 (to indicate that it doesn't exist).  Sub-parts are
+  not possible for a part 0, so they aren't included when finding recursive
+  entries.
+
+  The offset and size info for both the mime header and content part are
+  useful in order to do fast indexing on the appropriate parts of the
+  message file when a client does a FETCH request for BODY[HEADER],
+  or BODY[2.MIME].
+
+  Note that the top level RFC822 headers are a treated as a
+  separate part from their body text ("0" or "HEADER").
+
+  In the case of a multipart/alternative, the content size & offset
+  refers to the size of the entire mime part.
+
+  A very simple message (with a single text/plain part) would therefore
+  look like:
+
+  [[2][rfc822 header][text/plain body part info][0]]
+
+  A simple multipart/alternative message might look like:
+
+  [[3][rfc822 header][text/plain message part info]
+      [second message part info][0][0]]
+
+  A message with an attachment that has two subparts:
+
+  [[3][rfc822 header info][rfc822 first body part info][attachment info][0][
+	[3][NIL header info][sub part 1 info][sub part 2 info][0][0]]]
+
+  A message with an attached message/rfc822 message with the following
+  total structure:
+
+    message/rfc822
+      0 headers; content-type: multipart/mixed
+      1 text/plain
+      2 message/rfc822
+        0 headers; content-type: multipart/alternative
+        1 text/plain
+        2 text/html
+
+  [[3][rfc822 header part 0][text/plain part 1][overall attachment info][0][
+       [3][rfc822 header part 2.0][text/plain part 2.1][text/html part 2.2]
+          [0][0]]]
 
 Cache Header -
   Any cached header fields.  These are in the same format they would
