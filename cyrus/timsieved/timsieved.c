@@ -328,7 +328,8 @@ int service_main(int argc, char **argv, char **envp)
 
     /* other params should be filled in */
     if (sasl_server_new(SIEVE_SERVICE_NAME, config_servername, NULL,
-			NULL, NULL, NULL, 0, &sieved_saslconn) != SASL_OK)
+			NULL, NULL, NULL, SASL_SUCCESS_DATA,
+			&sieved_saslconn) != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()", -1); 
 
     if(iptostring((struct sockaddr *)&sieved_remoteaddr,

@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.14 2002/02/05 19:51:59 rjs3 Exp $
+ * $Id: parser.c,v 1.15 2002/02/14 16:22:28 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -475,7 +475,7 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
     unsigned int inbase64len;
 
     /* convert to base64 */
-    inbase64 = malloc( serveroutlen*2+1);
+    inbase64 = xmalloc(serveroutlen*2+1);
     sasl_encode64(serverout, serveroutlen,
 		  inbase64, serveroutlen*2+1, &inbase64len);
 
@@ -576,7 +576,21 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
   }
 
   /* Yay! authenticated */
-  prot_printf(sieved_out, "OK\r\n");
+  if(serverout) {
+      char *inbase64;
+      unsigned int inbase64len;
+
+      /* convert to base64 */
+      inbase64 = xmalloc(serveroutlen*2+1);
+      sasl_encode64(serverout, serveroutlen,
+		    inbase64, serveroutlen*2+1, &inbase64len);
+
+      prot_printf(sieved_out, "OK (SASL \"%s\")\r\n", inbase64);
+      free(inbase64);
+  } else {
+      prot_printf(sieved_out, "OK\r\n");
+  }
+  
   syslog(LOG_NOTICE, "login: %s %s %s%s %s", sieved_clienthost, username,
 	 mech, starttls_done ? "+TLS" : "", "User logged in");
 
