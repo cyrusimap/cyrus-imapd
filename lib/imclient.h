@@ -1,6 +1,6 @@
 /* imclient.h -- Streaming IMxP client library
  *
- *	(C) Copyright 1994 by Carnegie Mellon University
+ *	(C) Copyright 1994-1996 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -76,4 +76,4 @@ extern int imclient_authenticate P((struct imclient *imclient,
 				    struct acte_client **availmech,
 				    const char *user, int protallowed));
 
-#endif INCLUDED_IMCLIENT_H
+#endif /* INCLUDED_IMCLIENT_H */
