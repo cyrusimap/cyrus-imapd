@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.7 2000/08/11 17:10:36 leg Exp $
+# $Id: Makefile.in,v 1.8 2000/11/07 19:37:47 leg Exp $
 #
 # @configure_input@
 # 
@@ -61,6 +61,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
+CC = @CC@
 PLMAKE = imap/Makefile
 
 all:: checkdepend $(PLMAKE)
@@ -72,7 +73,7 @@ all:: checkdepend $(PLMAKE)
 
 imap/Makefile: imap/Makefile.PL
 	(cd imap; \
-	 SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" \
+	 SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
 	   $(PERL) Makefile.PL PREFIX=$(prefix))
 
 install::
