@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.19 2002/05/14 16:51:50 ken3 Exp $
+ * $Id: sieve.y,v 1.19.4.1 2002/12/03 15:00:16 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -810,7 +810,7 @@ static int verify_address(char *s)
     addrptr = s;
     addrerr[0] = '\0';	/* paranoia */
     if (addrparse()) {
-	sprintf(errbuf, "address '%s': %s", s, addrerr);
+	snprintf(errbuf, sizeof(errbuf), "address '%s': %s", s, addrerr);
 	yyerror(errbuf);
 	return 0;
     }
@@ -835,7 +835,7 @@ static int verify_header(char *hdr)
 	   ;  controls, SP, and
 	   ;  ":". */
 	if (!((*h >= 33 && *h <= 57) || (*h >= 59 && *h <= 126))) {
-	    sprintf(errbuf, "header '%s': not a valid header", hdr);
+	    snprintf(errbuf, sizeof(errbuf), "header '%s': not a valid header", hdr);
 	    yyerror(errbuf);
 	    return 0;
 	}
@@ -853,14 +853,14 @@ static int verify_flag(char *f)
 	if (strcmp(f, "\\seen") && strcmp(f, "\\answered") &&
 	    strcmp(f, "\\flagged") && strcmp(f, "\\draft") &&
 	    strcmp(f, "\\deleted")) {
-	    sprintf(errbuf, "flag '%s': not a system flag", f);
+	    snprintf(errbuf, sizeof(errbuf), "flag '%s': not a system flag", f);
 	    yyerror(errbuf);
 	    return 0;
 	}
 	return 1;
     }
     if (!imparse_isatom(f)) {
-	sprintf(errbuf, "flag '%s': not a valid keyword", f);
+	snprintf(errbuf, sizeof(errbuf), "flag '%s': not a valid keyword", f);
 	yyerror(errbuf);
 	return 0;
     }
