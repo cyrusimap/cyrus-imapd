@@ -1213,7 +1213,8 @@ char *deciderock;
     }
 
     if (numdeleted) {
-	drop_last(mailbox->name, mailbox->last_uid, newexists);
+	toimsp(mailbox->name, mailbox->uidvalidity,
+	       "UIDNnn", mailbox->last_uid, newexists, 0);
     }
 
     mailbox_unlock_pop(mailbox);
@@ -1455,11 +1456,14 @@ char *index;
     return 1;
 }
 
-mailbox_rename(oldname, newname, newpath, isinbox)
+mailbox_rename(oldname, newname, newpath, isinbox, olduidvalidityp,
+	       newuidvalidityp)
 char *oldname;
 char *newname;
 char *newpath;
 int isinbox;
+bit32 *olduidvalidityp;
+bit32 *newuidvalidityp;
 {
     int r, r2;
     struct mailbox oldmailbox, newmailbox;
@@ -1488,6 +1492,9 @@ int isinbox;
 	mailbox_close(&oldmailbox);
 	return r;
     }
+
+    *olduidvalidityp = oldmailbox.uidvalidity;
+    *newuidvalidityp = newmailbox.uidvalidity;
 
     /* Copy flag names */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {

@@ -450,7 +450,8 @@ char *name;
 	return IMAP_IOERROR;
     }
     
-    drop_last(mailbox.name, mailbox.last_uid, new_exists);
+    toimsp(mailbox.name, mailbox.uidvalidity,
+	   "UIDNnn", mailbox.last_uid, new_exists, 0);
 
     fclose(newindex);
     r = seen_reconstruct(&mailbox);

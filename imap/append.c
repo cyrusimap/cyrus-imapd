@@ -284,7 +284,8 @@ char *userid;
 	append_addseen(mailbox, userid, message_index.uid, message_index.uid);
     }
     
-    drop_last(mailbox->name, message_index.uid, mailbox->exists);
+    toimsp(mailbox->name, mailbox->uidvalidity,
+	   "UIDNnn", message_index.uid, mailbox->exists, 0);
 
     return 0;
 }
@@ -487,8 +488,8 @@ char *userid;
 		       message_index[nummsg-1].uid);
     }
 
-    drop_last(mailbox->name, message_index[nummsg-1].uid,
-	      append_mailbox->exists);
+    toimsp(mailbox->name, mailbox->uidvalidity,
+	   "UIDNnn", message_index[nummsg-1].uid, append_mailbox->exists, 0);
 
     free(message_index);
     return 0;
@@ -618,7 +619,8 @@ unsigned long feeduid;
     
     free(message_index);
 
-    drop_last(mailbox->name, uid-1, mailbox->exists);
+    toimsp(mailbox->name, mailbox->uidvalidity,
+	   "UIDNnn", uid-1, mailbox->exists, 0);
 
     return 0;
 
