@@ -592,11 +592,11 @@ int smtpmode;
 		else sawidhdr = sawresentidhdr = 0;
 	    }
 
-	    if (!*idptr && !strncasecmp(buf, "message-id:", 11)) {
+	    if (idptr && !*idptr && !strncasecmp(buf, "message-id:", 11)) {
 		sawidhdr = 1;
 		p = buf + 11;
 	    }
-	    else if (!strncasecmp(buf, "resent-message-id:", 18)) {
+	    else if (idptr && !strncasecmp(buf, "resent-message-id:", 18)) {
 		sawresentidhdr = 1;
 		p = buf + 18;
 	    }
