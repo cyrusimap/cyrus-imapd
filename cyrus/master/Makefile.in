@@ -1,0 +1,63 @@
+# Makefile for the Cyrus controlling process
+# $Id: Makefile.in,v 1.1 2000/02/15 22:21:52 leg Exp $
+# 
+# @configure_input@
+#
+# Copyright 2000 Carnegie Mellon University
+# 
+# (insert permissive license here)
+#
+
+srcdir = @srcdir@
+VPATH = @srcdir@
+
+CC = @CC@
+INSTALL = @INSTALL@
+RANLIB = @RANLIB@
+
+CYRUS_USER=@cyrus_user@
+CYRUS_GROUP=@cyrus_group@
+
+DEFS = @DEFS@ @LOCALDEFS@
+CPPFLAGS = -I. -I.. -I$(srcdir) @CPPFLAGS@
+DEPLIBS = @DEPLIBS@
+
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@ @CFLAGS@
+
+SHELL = /bin/sh
+MAKEDEPEND = @MAKEDEPEND@
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+cyrus_prefix = @cyrus_prefix@
+
+LOBJS=service.o
+
+PROGS=master
+
+all: $(PROGS) $(LOBJS)
+
+install:
+	$(srcdir)/../install-sh -d ${DESTDIR}$(cyrus_prefix)/bin
+	for file in $(PROGS); \
+	do \
+		$(INSTALL) -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 755 $$file $(DESTDIR)$(cyrus_prefix)/bin || exit 1; \
+	done
+
+.c.o:
+	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
+	$<
+
+master: master.o config.o
+	$(CC) $(LDFLAGS) -o master master.o config.o $(LIBS) $(DEPLIBS)
+
+clean:
+	rm -f *.o *.a Makefile.bak $(PROGS)
+
+distclean: clean
+
+depend:
+	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.
