@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.1.2.1 2002/12/16 16:15:03 ken3 Exp $ */
+/* $Id: protocol.c,v 1.1.2.2 2002/12/19 17:52:12 ken3 Exp $ */
 
 #include <string.h>
 
@@ -77,6 +77,18 @@ static char *imap_parsemechlist(char *str)
     return ret;
 }
 
+static char *nntp_parsesuccess(char *str, const char **status)
+{
+    char *success = NULL;
+
+    if (!strncmp(str, "251 ", 4)) {
+	success = str+4;
+    }
+
+    if (status) *status = NULL;
+    return success;
+}
+
 struct protocol_t protocol[] = {
     { "imap", "imap",
       { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parsemechlist },
@@ -91,7 +103,7 @@ struct protocol_t protocol[] = {
     { "nntp", "nntp",
       { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
       { "STARTTLS", "382", "580" },
-      { "AUTHINFO SASL", 0, "", "25", "452", "351 ", "*", NULL },
+      { "AUTHINFO SASL", 0, "", "25", "452", "351 ", "*", &nntp_parsesuccess },
       { "QUIT", "205" } },
     { "lmtp", "lmtp",
       { "LHLO murder", "250 ", "STARTTLS", "AUTH ", NULL },
