@@ -490,7 +490,7 @@ Implementation order is as follows:
 
   + MIME&hdr fetch, full-fledged deliver
 
-  + create/rename/delete
+  + create
 
   + subscribe/unsubscribe/find/acl
 
@@ -498,7 +498,9 @@ Implementation order is as follows:
 
   + expunge
 
-  + copy/uid-copy, etc.  Alpha release
+  + copy/uid-copy
+
+  + rename/delete, etc.  Alpha release
 
 - Everything else
 
