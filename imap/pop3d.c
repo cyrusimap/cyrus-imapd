@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.139 2003/06/24 15:33:57 ken3 Exp $
+ * $Id: pop3d.c,v 1.140 2003/06/25 03:34:01 ken3 Exp $
  */
 #include <config.h>
 
@@ -1122,7 +1122,7 @@ cmd_capa()
 	prot_write(popd_out, mechlist, strlen(mechlist));
     }
 
-    if (tls_enabled("pop3") && !popd_starttls_done) {
+    if (tls_enabled("pop3") && !popd_starttls_done && !popd_mailbox) {
 	prot_printf(popd_out, "STLS\r\n");
     }
     if (expire < 0) {

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.161 2003/06/24 15:33:58 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.162 2003/06/25 03:34:02 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -2776,10 +2776,11 @@ void cmd_capability(char *tag)
     prot_printf(proxyd_out, " IDLE");
 #endif
 
-    if (tls_enabled("imap") && !proxyd_starttls_done) {
+    if (tls_enabled("imap") && !proxyd_starttls_done && !proxyd_authstate) {
 	prot_printf(proxyd_out, " STARTTLS");
     }
-    if (!proxyd_starttls_done && !config_getswitch("allowplaintext", 1)) {
+    if (proxyd_authstate ||
+	(!proxyd_starttls_done && !config_getswitch("allowplaintext", 1))) {
 	prot_printf(proxyd_out, " LOGINDISABLED");	
     }
 
