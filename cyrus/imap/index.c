@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.8 2002/08/30 14:33:34 ken3 Exp $
+ * $Id: index.c,v 1.180.4.9 2002/10/09 18:43:44 ken3 Exp $
  */
 #include <config.h>
 
@@ -3760,7 +3760,7 @@ static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
 				  { SORT_SEQUENCE, 0, {{NULL, NULL}} }};
     unsigned psubj_hash = 0;
     char *psubj;
-    Thread *head, *newnode, *cur, *parent;
+    Thread *head, *newnode, *cur, *parent, *last;
 
     /* Create/load the msgdata array */
     freeme = msgdata = index_msgdata_load(msgno_list, nmsg, sortcrit);
@@ -3785,25 +3785,32 @@ static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
     parent = head;	/* parent is the head node */
     psubj = NULL;	/* no previous subject */
     cur = NULL;		/* no current thread */
+    last = NULL;	/* no last child */
 
     while (msgdata) {
+	newnode->msgdata = msgdata;
+
 	/* if no previous subj, or
 	   current subj = prev subj (subjs have same hash, and
 	   the strings are equal), then add message to current thread */
 	if (!psubj ||
 	    (msgdata->xsubj_hash == psubj_hash &&
 	     !strcmp(msgdata->xsubj, psubj))) {
-	    parent->child = newnode;	/* create a new child */
-	    parent->child->msgdata = msgdata;
-	    if (!cur)
-		cur = parent->child;	/* first thread */
-	    parent = parent->child;	/* this'll be the parent 
-					   next time around */
+	    /* if no children, create first child */
+	    if (!parent->child) {
+		last = parent->child = newnode;
+		if (!cur)		/* first thread */
+		    parent = cur = parent->child;
+	    }
+	    /* otherwise, add to siblings */
+	    else {
+		last->next = newnode;
+		last = last->next;
+	    }
 	}
 	/* otherwise, create a new thread */
 	else {
 	    cur->next = newnode;	/* create and start a new thread */
-	    cur->next->msgdata = msgdata;
 	    parent = cur = cur->next;	/* now work with the new thread */
 	}
 
