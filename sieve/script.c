@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.47 2002/02/19 18:09:46 ken3 Exp $
+ * $Id: script.c,v 1.48 2002/02/25 02:52:08 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -148,10 +148,12 @@ char **stringlist_to_chararray(stringlist_t **list)
     char **ret;
     int lup;
 
-    while (tmp!=NULL)
-    {
+    assert(list != NULL);
+
+    tmp = *list;
+    while (tmp != NULL) {
 	size++;
-	tmp=tmp->next;
+	tmp = tmp->next;
     }
 
     ret = malloc( sizeof(char *) * (size+1));
@@ -748,7 +750,8 @@ static int send_notify_callback(sieve_script_t *s, void *message_context,
     sieve_notify_context_t nc;
 
     nc.method = notify->method;
-    nc.options = stringlist_to_chararray(notify->options);
+    nc.options = notify->options ? 
+	stringlist_to_chararray(notify->options) : NULL;
     nc.priority = notify->priority;
 
     fillin_headers(&(s->interp), notify->message, message_context, 
