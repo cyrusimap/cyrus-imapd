@@ -1,0 +1,77 @@
+<!-- $Id: install-upgrade.html,v 1.1 2000/04/10 18:49:27 wcw Exp $ -->
+<HTML>
+<HEAD>
+<TITLE>Upgrading From Previous Versions
+</title>
+</head>
+<h1>Upgrading From Previous Versions
+</h1>
+
+<body>
+<h3>Upgrading from 1.6</h3>
+<ul>
+<li> Upgrading from the Cyrus IMAP server version 1.6.13 or earlier:
+if you use Sieve, you should run the "<tt>tools/upgradesieve</tt>"
+script, as the format of the "<tt>/usr/sieve</tt>" directory has
+changed slightly.
+
+timsieved, included in this release, will handle maintenance of Sieve
+scripts.
+
+<li> Upgrading from the Cyrus IMAP server version 1.6.10 or earlier:
+if you export news via the IMAP server, you'll have to change your
+"<tt>newsfeeds</tt>" file to contain
+<pre>collectnews!:*:Tf,WR:collectnews</pre>  The format of the
+input to collectnews has changed.
+
+Duplicate delivery suppression is now required for Sieve.
+
+<li> Upgrading from the Cyrus IMAP server version 1.6.1 or earlier
+(including 1.5.x!): the quota and user directories are now hashed by
+the first character of the username.  This is to reduce the number of
+entries in any given directory. It doesn't do a great job (and in some
+cases it will do a really poor job) but as a quick hack it shouldn't
+make things worse.  Optionally, the data partitions can also be hashed
+by enabling the "hashimapspool" option.
+
+<p>You must hash your directories using the "<tt>dohash</tt>" script
+in the tools subdirectory.  (If you want to hash your mail spool, be
+sure to set "hashimapspool" before running "<tt>dohash</tt>".)  This
+must be run as the Cyrus user. Be sure to stop mail service while
+converting. Doing this in single user mode is probably the safest.
+
+</ul>
+
+<h3>Upgrading from 1.5</h3>
+<ul>
+<li> Upgrading from the Cyrus IMAP server version 1.5 or earlier:
+libsasl is now required.  Configuring SASL to work may be a chore,
+especially if you use shadow passwords.
+
+<li> An ANSI C compiler is now required.  gcc should work fine and can
+be acquired from <a href="http://www.gnu.org/software/gcc/gcc.html">
+http://www.gnu.org/software/gcc/gcc.html</a>.
+
+<li> Make sure to read the upgrading instructions under 1.6 above.
+
+<li> Upgrading from 1.5.14 or earlier requires deleting the delivered
+database.  Remove the file delivered.db in the configdirectory and make a
+directory called "deliverdb" in the configdirectory.  This may cause some
+duplicates to get through.
+
+<li> Upgrading from 1.5.14 or earlier requires removing the PTS cache
+database (if the AFS PTS group support is used, which is not the
+default).  The PTS cache is in /var/ptclient/ptscache.db, and you
+should remove it. This is because the format for the PTS cache for
+IMSP has changed.  If you use AFS ACLs, IMSPd, and IMAPd on the same
+machine, make sure you have version 1.5a5 of the IMSP server for this
+version of the IMAP server.  (If you don't have IMSP, or AFS, don't
+worry about it.)
+
+</ul>
+
+<P><HR><P>
+last modified: $Date: 2000/04/10 18:49:27 $
+</BODY></HTML>
+
+

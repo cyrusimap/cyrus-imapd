@@ -1,0 +1,111 @@
+<!-- $Id: install-sieve.html,v 1.1 2000/04/10 18:49:27 wcw Exp $ -->
+<HTML>
+<HEAD>
+<TITLE>Installing Sieve
+</title>
+</head>
+<h1>Installing Sieve
+</h1>
+<body>
+
+<p>This section assumes that you compiled Cyrus with sieve support. If
+you specified <tt>--disable-sieve</tt> when running
+<tt>./configure</tt>, you did NOT compile the server with sieve
+support. 
+
+<p>A <a href="http://www.cyrusoft.com/sieve">brief introduction</a> to
+Sieve at is available from <a href="http://www.cyrusoft.com/">Cyrusoft
+International</a>.
+
+<h3>Managing Sieve Scripts</h3>
+
+Since Cyrus is based around the concept of a sealed-server, the normal
+way for users to manipulate Sieve scripts is through the
+"<tt>installsieve</tt>" utility.
+
+<p>If, for some reason, you do have user home directories on the
+server, you can use the "<tt>sieveusehomedir</tt>" option and have the
+sieve script stored in the home directory of the user as
+"<tt>~/.sieve</tt>".
+
+<h3>Testing the sieve server</h3>
+<ol>
+
+<p>
+<li>The Sieve server, "<tt>timsieved</tt>", is used for transporting
+user Sieve scripts to the sealed IMAP server.  It is incompatible with
+the "<tt>sieveusehomedir</tt>" option.  It is named after the
+principal author, Tim Martin, who desperately wanted something named
+after him in the Cyrus distribution.
+
+<p>
+<li>From your normal account, telnet to the sieve port on the
+server you're setting up:
+
+<pre>
+<kbd>   telnet foobar sieve
+</kbd></pre>
+
+If your server is running, you'll get a message similar to the following one:
+
+<pre>
+   Trying 128.2.10.192...
+   Connected to foobar.andrew.cmu.edu.
+   Escape character is '^]'.
+   "CMU Experimental Sieved version 0.99" "SASL={GSSAPI, ANONYMOUS, PLAIN, KERBEROS_V4}"
+</pre>
+
+<p>
+Any message other than one similar to the one above means there is a
+problem. Make sure all of authentication methods you wish to support
+are listed. This list should be identical to the one listed by
+"<tt>imapd</tt>" earlier. Next terminate the connection, by typing
+    "<kbd>logout</kbd>".
+
+<p>
+<li>Next test authenticating to the sieve server. To do this run the
+"<tt>installsieve</tt>" utility. You must specify the server. You may
+have to specify the port if you run this utility from a different
+machine without the "sieve" entry in "<tt>/etc/services</tt>". To
+specify the port use the "<tt>-p [port]</tt>" switch.
+
+<pre>
+  "<kbd>installsieve foobar</kbd>"
+</pre>
+
+This should produce the message "<tt>Authentication failed</tt>" with
+a description of the failure if there was a problem.
+
+<p><li>Next you should attempt to place a sieve script on the
+server. To do this create a file named "<tt>myscript.script</tt>" with
+the following lines. Replace "<tt>foo@bar.org</tt>" with an email
+address you can send mail from, but that is not the one you are
+working on now.
+
+<pre>
+  require ["reject","fileinto"];
+
+  if address :is :all "From" "foo@bar.org"
+  {
+    reject "testing";
+  }
+</pre>
+
+To place this script on the server run the following command
+
+"<kbd>installsieve -i myscript.script foobar</kbd>"
+
+This should place your script on the server and make it the active script.
+
+<p>
+<li>Test that the sieve script is actually run from deliver. Send
+a message to the address you're working on from the address mentioned
+in the sieve script. The message should be rejected.
+
+</ol>
+
+<P><HR>
+last modified: $Date: 2000/04/10 18:49:27 $
+</BODY></HTML>
+
+

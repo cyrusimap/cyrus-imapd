@@ -1,0 +1,260 @@
+<!-- $Id: install-compile.html,v 1.1 2000/04/10 18:49:26 wcw Exp $ -->
+<HTML>
+<HEAD>
+<TITLE>Compiling the IMAP Server
+</title>
+</head>
+<h1>Compiling the IMAP Server
+</h1>
+<body>
+
+Once you have unpacked the files by extracting the tar archive,
+"<TT>cd</TT>" to the "<tt>cyrus-imapd-<i>NNNN</i></tt>" directory
+where <i>NNNN</i> is the version number.  The configuration files and
+various subdirectories are stored there.  In the directory that the
+<TT>configure</TT> file is in, type "<kbd>./configure</kbd>" to
+configure the software.
+
+<P>The "<TT>configure</TT>" shell script attempts to guess correct
+values for various system-dependent variables used during compilation.
+It uses those values to create a "<TT>Makefile</TT>" in each directory
+of the package.  Finally, it creates a shell script
+"<TT>config.status</TT>" that you can run in the future to recreate
+the current configuration, a file "<TT>config.cache</TT>" that saves
+the results of its tests to speed up reconfiguring, and a file
+"<TT>config.log</TT>" containing compiler output (useful mainly for
+debugging "<TT>configure</TT>").
+
+<P>Running "<tt>configure</tt>" takes awhile.  While running, it
+prints some messages telling which features it is checking for.
+
+<P>You can compile the package in a different directory from the one
+containing the source code.  Doing so allows you to compile it on more
+than one kind of computer at the same time.  To do this, you must use
+a version of "<TT>make</TT>" that supports the "<tt>VPATH</tt>"
+variable, such as GNU "<TT>make</TT>".  "<TT>cd</TT>" to the directory
+where you want the object files and executables to go and run the
+"<tt>configure</tt>" script.  "<tt>configure</tt>" automatically
+checks for the source code in the directory that "<tt>configure</tt>"
+is in and in "<tt>..</tt>".
+
+<P>By default, "<TT>make install</TT>" will install files (other than
+server-specific programs) in "<TT>/usr/local/bin</TT>",
+"<TT>/usr/local/man</TT>", etc.  You can specify an installation
+prefix other than "<TT>/usr/local</TT>" by giving "<TT>configure</TT>"
+the option "<TT>--prefix=PATH</TT>".
+
+<P>You can specify separate installation prefixes for
+architecture-specific files and architecture-independent files.  If
+you give "<TT>configure</TT>" the option
+"<TT>--exec-prefix=PATH</TT>", the package will use <TT>PATH</TT> as
+the prefix for installing programs and libraries.  Documentation and
+other data files will still use the regular prefix.
+
+<P>By default, "<TT>make install</TT>" will install the
+server-specific programs in "<TT>/usr/cyrus/bin</TT>".  You can
+specify a server-specific installation prefix other than
+"<TT>/usr/cyrus</TT>" by giving "<TT>configure</TT>" the option
+"<TT>--with-cyrus-prefix=PATH</TT>".
+
+<p>Here are a list of switches that can be used with "<A
+NAME="configure"><tt>configure</tt></A>".
+
+<dl>
+<dt><tt>--help</tt>
+<dd>Print a summary of the options to "<tt>configure</tt>", and exit. <P>
+
+<dt><tt>--with-cyrus-user=USER</tt>
+<dd>Specifies the userid that the Cyrus IMAP server will run as.  By
+default, configure uses "<TT>cyrus</TT>". <P>
+
+<dt><tt>--with-cyrus-group=USER</tt>
+<dd>Specifies the group used for installing setguid programs.  By default,
+configure uses "<TT>mail</TT>". <P>
+
+<dt><tt>--with-statedir=PATH</tt> 
+<dd>Specifies the directory used for communicating with various
+daemons.  By default, configure uses "<TT>/var</TT>". <P>
+
+<dt><tt>--with-sasldir=PATH</tt> 
+<dd>Specifies the path to the directories containing the library
+(<tt>.../lib</tt>) and include (<tt>.../include</tt>)
+files for libsasl. <P>
+
+<dt><tt>--with-auth=METHOD</tt>
+<dd>Specifies the authorization (group membership) module to use.
+Currently implemented authorization modules are:
+
+<dl compact> 
+<DT><tt>unix</tt>
+<DD>Unix <tt>/etc/passwd</tt> and <tt>/etc/group</tt> file
+
+<DT><tt>krb</tt>
+<DD>Kerberos principals (requires Kerberos libraries).  Optionally,
+specify where to find Kerberos v4 with "<tt>--with-krb=DIR</tt>"
+<B>IMPORTANT:</B> The Kerberos v4 support requires the DES library.
+Some vendor distributions of Kerberos, including the one with Solaris,
+do not have this support and cannot be used.
+
+<DT><tt>krb_pts</tt>
+<DD>Kerberos principals with AFS PTserver groups (requires Kerberos
+and AFS libraries).  Optionally, specify where the AFS libraries are
+found with "<tt>--with-afs=PATH</tt>".  Also requires krb support as above.
+
+</dl>
+
+Any method of authenticating with SASL can be used with any
+authorization module.
+
+<P>
+
+<dt><tt>--with-notify=METHOD</tt>
+<dt><tt>--without-notify</tt>
+<dd>Specifies the new mail notification method to use.
+Currently implemented notification methods are:
+
+<dl compact> 
+
+<DT><tt>zephyr</tt>
+<DD>New mail notification through Zephyr.  Specify the location of
+the zephyr installation with "<tt>--with-zephyr=PATH</tt>".
+
+<DT><tt>no</tt>
+<DD>No new mail notification.
+
+</dl>
+
+By default, uses "<TT>zephyr</TT>" if the Zephyr libraries are available, 
+otherwise "<TT>no</TT>".<P>
+
+<dt><tt>--with-openssl=PATH</tt>
+<dd>Specifies where to find the OpenSSL library.<P>
+
+<dt><tt>--with-inn=PATH</tt>
+<dd>Specifies the location of INN's <TT>NEWSLIB</TT> directory.  By
+default, looks for INN in a few common places.  It is only necessary
+for "<tt>configure</tt>" to find INN if you are going to export newsgroups
+using IMAP. <P>
+
+<dt><tt>--with-tcl=PATH</tt>
+<dt><tt>--without-tcl</tt>
+<dd>Specifies the path to the Tcl (version 7.5 or 7.6) library and header file (optional).
+By default, looks in "<tt>/usr/local</tt>" and then in the compiler's
+default link path.  The Tcl library is necessary to compile
+"<tt>cyradm</tt>", the administrative client.  If compiling without Tcl, it 
+is necessary to give configure the "<TT>--disable-cyradm</TT>" switch. <P>
+
+<dt><tt>--with-lock=METHOD</tt>
+<dd>Specifies the locking method to use.  Currently implemented locking
+methods are:
+
+<DL compact>
+
+<DT><TT>flock</TT>
+<DD><TT>flock()</TT> locking
+<DT><TT>fcntl</TT>
+<DD><TT>fcntl()</TT> locking
+</DL>
+
+By default, uses "<tt>flock</tt>" if the "<tt>flock()</tt>"
+function exists, "<tt>fcntl</tt>" otherwise. <P>
+
+<dt><tt>--disable-sieve</tt>
+<dd>By default, Sieve support is enabled.  Use
+<tt>--disable-sieve</tt> to disable compiling the Sieve library and to
+disable all Sieve support.<p>
+
+<dt><tt>--disable-cyradm</tt>
+<dd>Do not compile the <TT>cyradm</TT> administrative client.<P>
+
+<dt><tt>--disable-server</tt>
+<dd>Do not compile the IMAP server programs.<p>
+
+<dt><tt>--enable-amssync</tt>
+<dd>Include AMS (Andrew Message System) to IMAP bboard synchronization
+support.  Requires the AMS libraries. <P>
+</dl>
+
+"<tt>configure</tt>" ignores any other arguments that you give it.
+
+<P>Some systems require unusual options for compilation or linking
+that the "<TT>configure</TT>" script does not know about.  You can
+give "<TT>configure</TT>" initial values for variables by setting them
+in the environment.  Using a Bourne-compatible shell, you can do that
+on the command line like this:
+
+<pre>
+   CC=c89 CFLAGS=-O2 LIBS=-lposix ./configure
+</pre>
+
+Or on systems that have the "<TT>env</TT>" program, you can do it like this:
+
+<pre>
+   env CPPFLAGS=-I/usr/local/include LDFLAGS=-s ./configure
+</pre>
+
+The "<tt>make</tt>" variables that you might want to override with
+environment variables when running "<tt>configure</tt>" are:
+
+<DL compact>
+<DT><TT>CC</TT>
+<DD>C compiler program.<br>
+Default is "<tt>cc</tt>", or "<tt>gcc</tt>" if "<tt>gcc</tt>" is in
+your <tt>PATH</tt>.<br> (For "<tt>CC</tt>", any value given in the
+environment <strong>overrides</strong> the value that
+"<tt>configure</tt>" would choose.)
+
+<DT><TT>CFLAGS</TT>
+<DD>Debugging and optimization options for the C compiler.<br>
+
+<DT><TT>CPPFLAGS</TT>
+<DD>Header file search directory ("<tt>-IDIR</tt>") and any other
+miscellaneous options for the C preprocessor and compiler.  If it is
+not set in the environment when "<tt>configure</tt>" runs, the default value is
+empty.<br>
+
+<DT><TT>LDFLAGS</TT>
+<DD>Stripping ("<TT>-s</TT>") and any other miscellaneous options for the
+linker.  If it is not set in the environment when "<tt>configure</tt>" runs,
+the default value is empty. 
+
+<DT><TT>DEFS</TT>
+<DD>Configuration options, in the form "<tt>-Dfoo -Dbar ...</tt>"<br>
+
+<DT><TT>LIBS</TT>
+<DD>Libraries to link with, in the form "<tt>-lfoo -lbar ...</tt>"<br>
+(For "<tt>DEFS</tt>" and "<tt>LIBS</tt>", any value given in the
+environment is <strong>added</strong> to the value that
+"<tt>configure</tt>" chooses.)
+</DL>
+
+If you need to do unusual things to compile the package, we encourage
+you to figure out how "<tt>configure</tt>" could check whether to do
+them. After doing so, please send us a patch! Instructions for doing
+so can be found on the <a href="feedback.html">feedback</a> page. 
+
+<p>The file "<tt>configure.in</tt>" is used as a template to create
+"<tt>configure</tt>" by a program called "<tt>autoconf</tt>".  You
+will only need it if you want to regenerate "<tt>configure</tt>" using
+a newer version of "<tt>autoconf</tt>".
+
+<p>Once you have successfully run "<tt>configure</tt>", execute the
+following commands:
+
+<pre>
+<kbd>   make depend
+   make all CFLAGS=-O
+</kbd></pre>
+
+If you want, you can override the "<tt>make</tt>" variables
+<tt>CFLAGS</tt> and <tt>LDFLAGS</tt> by entering the following:
+
+<pre>
+<kbd>   make all CFLAGS=-O2 LDFLAGS=-s
+</kbd></pre>
+
+<P><HR>
+last modified: $Date: 2000/04/10 18:49:26 $
+</BODY></HTML>
+
+

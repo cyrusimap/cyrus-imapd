@@ -1,0 +1,90 @@
+<!-- $Id: install-admin-mb.html,v 1.1 2000/04/10 18:49:26 wcw Exp $ -->
+<HTML>
+<HEAD>
+<TITLE>Administering Mailboxes
+</title>
+</head>
+<h1>Administering Mailboxes</a>
+</h1>
+<body>
+
+The "<tt>cyradm</tt>" command (see the <tt>cyradm</tt>(8) man page for
+complete documentation) manages the creation of, deletion of, ACLs on,
+and quotas on mailboxes.  To get an overview of the command, type
+"<kbd>cyradm <var>&lt;host&gt;</var></kbd>".  Once "<tt>cyradm</tt>" has started,
+the user prompt is replaced with the name of the host followed by a
+"<tt>&gt;</tt>".  Type "<kbd>help</kbd>" at the new prompt.  The
+following information is displayed:
+
+<pre>
+   createmailbox, cm        create a mailbox
+   deleteaclmailbox, dam    delete an ACL on a mailbox
+   deletemailbox, dm        delete a mailbox
+   help                     get help on commands
+   listaclmailbox, lam      list the ACL on a mailbox
+   listmailbox, lm          list mailboxes
+   listquota, lq            list quota on root
+   listquotaroot, lqr, lqm  list quota roots on mailbox
+   quit                     exit program
+   renamemailbox, renm      rename a mailbox
+   setaclmailbox, sam       set an ACL on a mailbox
+   setquota, sq             set quota limits
+</pre>
+
+<b>Note:</b>It's not necessary to run "<tt>cyradm</tt>" on the same
+system as the IMAP server.
+
+<p><b>Note:</b>If you run "<tt>cyradm</tt>" on a system not using
+Kerberos for authentication, you will be prompted for your user name
+and password before you can issue any "<tt>cyradm</tt>" commands.  Use
+the "<tt>-u</tt>" option to specify a particular user.
+
+<p>The mailbox naming convention requires that the primary mailbox (inbox)
+for anyone must be named "<tt>user.<var>&lt;userid&gt;</var></tt>".
+To create a mailbox, type:
+
+<pre>
+<kbd>   createmailbox user.<var>&lt;userid&gt;</var>
+</kbd></pre>
+
+For example, to create a mailbox for the userid "<tt>smith</tt>", type:
+
+<pre>
+<kbd>   createmailbox user.smith
+</kbd></pre>
+
+To limit "<tt>smith</tt>" to 10,000 kilobytes of mail, type:
+
+<pre>
+<kbd>   setquota user.smith 10000
+</kbd></pre>
+
+Once the inbox is created, users can create their own additional mailboxes 
+from a mail program.  If Smith created a work mailbox and a play mailbox, 
+the full names of the mailboxes would be:
+
+<pre>
+   user.smith.work
+   user.smith.play
+</pre>
+
+<p>Access rights are discussed in detail in the <tt>cyradm</tt>(1) man pages.
+Note that the administrator must grant herself delete access
+explicitly before she can delete a mailbox:
+
+<pre>
+<kbd>   setaclmailbox <var>&lt;mail_box&gt;</var> <var>&lt;admin_userid&gt;</var> d
+   deletemailbox <var>&lt;mail_box&gt;</var>
+</kbd></pre>
+
+Once you have created mailboxes, your IMAP server installation is
+done.  You must then configure a mail interface, such as <a
+href="http://www.washington.edu/pine/">Pine</a> or <a
+href="http://www.cyrusoft.com/mulberry/">Mulberry</a>, to work with the
+IMAP server.
+
+<P><HR>
+last modified: $Date: 2000/04/10 18:49:26 $
+</BODY></HTML>
+
+
