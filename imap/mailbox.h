@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.78 2003/10/27 21:53:51 rjs3 Exp $
+ * $Id: mailbox.h,v 1.79 2004/01/09 01:36:15 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -152,7 +152,7 @@ struct mailbox {
     unsigned long leaked_cache_records;
 
     /* future expansion -- won't need expand the header */
-    unsigned long spares[3];
+    unsigned long spares[2];
 
     struct quota quota;
 };
