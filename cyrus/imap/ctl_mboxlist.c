@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: ctl_mboxlist.c,v 1.7 2000/05/15 17:29:40 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.8 2000/05/15 18:02:14 leg Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -170,7 +170,7 @@ void do_dump(enum mboxop op)
 
 void do_undump(void)
 {
-    int r;
+    int r = 0;
     char buf[16384];
     DBT key, data;
     int line = 0;
@@ -203,11 +203,11 @@ void do_undump(void)
 	acl = p;
 
 	if (strlen(name) >= MAX_MAILBOX_NAME) {
-	    fprintf(stderr, "line %d: mailbox name too long\n");
+	    fprintf(stderr, "line %d: mailbox name too long\n", line);
 	    continue;
 	}
 	if (strlen(partition) >= MAX_PARTITION_LEN) {
-	    fprintf(stderr, "line %d: partition name too long\n");
+	    fprintf(stderr, "line %d: partition name too long\n", line);
 	    continue;
 	}
 	
