@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.165 1999/03/02 01:16:40 tjs Exp $ */
+/* $Id: imapd.c,v 1.166 1999/03/02 06:33:39 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -1501,6 +1501,7 @@ int usinguid;
     struct fetchargs fetchargs;
     struct strlist *newfields = 0;
     char *p, *section;
+    int fetchedsomething;
 
     fetchargs = zerofetchargs;
 
@@ -1830,10 +1831,16 @@ int usinguid;
     }
 
     fetchargs.fetchitems = fetchitems;
-    index_fetch(imapd_mailbox, sequence, usinguid, &fetchargs);
+    index_fetch(imapd_mailbox, sequence, usinguid, &fetchargs,
+		&fetchedsomething);
 
-    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		error_message(IMAP_OK_COMPLETED));
+    if (fetchedsomething) {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    } else {
+	prot_printf(imapd_out, "%s BAD Invalid sequence in %s\r\n",
+		    tag, cmd);
+    }
 
  freeargs:
     freestrlist(newfields);
@@ -1857,6 +1864,7 @@ char *count;
     char *p;
     struct fetchargs fetchargs;
     char *section;
+    int fetchedsomething;
 
     fetchargs = zerofetchargs;
 
@@ -1931,12 +1939,19 @@ char *count;
 	return;
     }
 
-    index_fetch(imapd_mailbox, msgno, 0, &fetchargs);
+    index_fetch(imapd_mailbox, msgno, 0, &fetchargs, &fetchedsomething);
 
     index_check(imapd_mailbox, 0, 0);
 
-    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		error_message(IMAP_OK_COMPLETED));
+    if (fetchedsomething) {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    } else {
+	prot_printf(imapd_out,
+		    "%s BAD Invalid sequence in PARTIAL command\r\n",
+		    tag);
+    }
+
     freestrlist(fetchargs.bodysections);
 }
 
@@ -3428,7 +3443,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    charset_convert(arg.s, *charset, str, 0);
+	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3441,7 +3456,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    charset_convert(arg.s, *charset, str, 0);
+	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3458,7 +3473,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    charset_convert(arg.s, *charset, str, 0);
+	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3495,7 +3510,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    charset_convert(arg.s, *charset, str, 0);
+	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3524,7 +3539,7 @@ int parsecharset;
 	    appendstrlist(&searchargs->header_name, arg.s);
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    charset_convert(arg.s, *charset, str, 0);
+	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3689,7 +3704,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    charset_convert(arg.s, *charset, str, 0);
+	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3706,7 +3721,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    charset_convert(arg.s, *charset, str, 0);
+	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3719,7 +3734,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    charset_convert(arg.s, *charset, str, 0);
+	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);

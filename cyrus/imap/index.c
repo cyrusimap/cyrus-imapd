@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.83 1999/03/02 01:17:42 tjs Exp $
+ * $Id: index.c,v 1.84 1999/03/02 06:34:30 tjs Exp $
  */
 #include <stdio.h>
 #include <string.h>
@@ -114,9 +114,10 @@ struct mapfile {
 typedef int index_sequenceproc_t P((struct mailbox *mailbox, unsigned msgno,
 				    void *rock));
 
-static int index_forsequence P((struct mailbox *mailbox, char *sequence,
-				int usinguid,
-				index_sequenceproc_t *proc, void *rock));
+static int index_forsequence(struct mailbox *mailbox, char *sequence,
+			     int usinguid,
+			     index_sequenceproc_t *proc, void *rock,
+			     int* fetchedsomething);
 static int index_insequence P((int num, char *sequence, int usinguid));
 
 static void index_fetchmsg P((const char *msg_base, unsigned long msg_size,
@@ -663,16 +664,20 @@ int oldexists;
 
 /*
  * Perform a FETCH-related command on a sequence.
+ * Fetchedsomething argument is 0 if nothing was fetched, 1 if something was
+ * fetched.  (A fetch command that fetches nothing is not a valid fetch
+ * command.)
  */
 void
-index_fetch(mailbox, sequence, usinguid, fetchargs)
-struct mailbox *mailbox;
-char *sequence;
-int usinguid;
-struct fetchargs *fetchargs;
+index_fetch(struct mailbox* mailbox,
+	    char* sequence,
+	    int usinguid,
+	    struct fetchargs* fetchargs,
+	    int* fetchedsomething)
 {
+    *fetchedsomething = 0;
     index_forsequence(mailbox, sequence, usinguid,
-		      index_fetchreply, (char *)fetchargs);
+		      index_fetchreply, (char *)fetchargs, fetchedsomething);
 }
 
 /*
@@ -700,7 +705,7 @@ int nflags;
 	storeargs->usinguid = usinguid;
 
 	index_forsequence(mailbox, sequence, usinguid,
-			  index_storeseen, (char *)storeargs);
+			  index_storeseen, (char *)storeargs, NULL);
 	return 0;
     }
 
@@ -814,7 +819,7 @@ int nflags;
     if (r) return r;
 
     r = index_forsequence(mailbox, sequence, usinguid,
-			  index_storeflag, (char *)storeargs);
+			  index_storeflag, (char *)storeargs, NULL);
 
     mailbox_unlock_index(mailbox);
 
@@ -877,7 +882,7 @@ char **copyuidp;
 
     copyargs.nummsg = 0;
     index_forsequence(mailbox, sequence, usinguid, index_copysetup,
-		      (char *)&copyargs);
+		      (char *)&copyargs, NULL);
 
     if (copyargs.nummsg == 0) {
 	*copyuidp = 0;
@@ -1197,12 +1202,12 @@ char *indexbuf;
  * returns the first such returned value.  Otherwise, returns zero.
  */
 static int
-index_forsequence(mailbox, sequence, usinguid, proc, rock)
-struct mailbox *mailbox;
-char *sequence;
-int usinguid;
-index_sequenceproc_t *proc;
-void *rock;
+index_forsequence(struct mailbox* mailbox,
+		  char* sequence,
+		  int usinguid,
+		  index_sequenceproc_t proc,
+		  void* rock,
+		  int* fetchedsomething)
 {
     int i, start = 0, end;
     int r, result = 0;
@@ -1243,6 +1248,7 @@ void *rock;
 	    if (start < 1) start = 1;
 	    if (end > imapd_exists) end = imapd_exists;
 	    for (i = start; i <= end; i++) {
+		if (fetchedsomething) *fetchedsomething = 1;
 		r = (*proc)(mailbox, i, rock);
 		if (r && !result) result = r;
 	    }
@@ -2544,7 +2550,7 @@ const char *cacheitem;
 		    p = index_readheader(msgfile->base, msgfile->size,
 					 format, CACHE_ITEM_BIT32(cacheitem),
 					 len);
-		    p = charset_decode1522(p, q, 0);
+		    q = charset_decode1522(p, NULL, 0);
 		    if (charset_searchstring(substr, pat, q, strlen(q))) {
 			free(q);
 			return 1;
@@ -2595,7 +2601,7 @@ int size;
 
     p = index_readheader(msgfile->base, msgfile->size, format, 0, size);
     index_pruneheader(p, &header, 0);
-    charset_decode1522(p, q, 0);
+    q = charset_decode1522(p, NULL, 0);
     r = charset_searchstring(substr, pat, q, strlen(q));
     free(q);
     return r;
@@ -2611,7 +2617,7 @@ char *name;
 char *substr;
 comp_pat *pat;
 {
-    char *p;
+    char *p, *q;
     static struct strlist header;
     static char *buf;
     static int bufsize;
@@ -2640,9 +2646,9 @@ comp_pat *pat;
     index_pruneheader(buf, &header, 0);
     if (!*buf) return 0;	/* Header not present, fail */
     if (!*substr) return 1;	/* Only checking existence, succeed */
-    p = charset_decode1522(buf, p, 0);
-    r = charset_searchstring(substr, pat, p, strlen(p));
-    free(p);
+    p = charset_decode1522(buf, NULL, 0);
+    r = charset_searchstring(substr, pat, q, strlen(q));
+    free(q);
     return r;
 }
 
