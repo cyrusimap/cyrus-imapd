@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.h,v 1.22 2003/02/13 20:15:39 rjs3 Exp $ */
+/* $Id: cyrusdb.h,v 1.23 2003/08/14 16:20:36 rjs3 Exp $ */
 
 #ifndef INCLUDED_CYRUSDB_H
 #define INCLUDED_CYRUSDB_H
@@ -63,6 +63,10 @@ enum cyrusdb_initflags {
 
 enum cyrusdb_dbflags {
     CYRUSDB_NOSYNC = 0x01	/* durability not a concern */
+};
+
+enum cyrusdb_openflags {
+    CYRUSDB_CREATE = 0x01       /* Create the database if not existant */
 };
 
 typedef int foreach_p(void *rock,
@@ -93,7 +97,7 @@ struct cyrusdb_backend {
     int (*archive)(const char **fnames, const char *dirname);
 
     /* open the specified database in the global environment */
-    int (*open)(const char *fname, struct db **ret);
+    int (*open)(const char *fname, int flags, struct db **ret);
 
     /* close the specified database */
     int (*close)(struct db *db);

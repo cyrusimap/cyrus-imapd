@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.32 2003/02/13 20:15:24 rjs3 Exp $ */
+/* $Id: duplicate.c,v 1.33 2003/08/14 16:20:32 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -115,7 +115,7 @@ int duplicate_init(char *fname, int myflags)
 	    strcat(fname, FNAME_DELIVERDB);
 	}
 
-	r = DB->open(fname, &dupdb);
+	r = DB->open(fname, CYRUSDB_CREATE, &dupdb);
 	if (r != 0)
 	    syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 		   cyrusdb_strerror(r));

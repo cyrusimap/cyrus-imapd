@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.28 2003/06/10 23:15:52 rjs3 Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.29 2003/08/14 16:20:36 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -183,16 +183,21 @@ static int myarchive(const char **fnames, const char *dirname)
     return 0;
 }
 
-static int myopen(const char *fname, struct db **ret)
+static int myopen(const char *fname, int flags, struct db **ret)
 {
     struct db *db = (struct db *) xzmalloc(sizeof(struct db));
     struct stat sbuf;
 
     assert(fname && ret);
 
-    db->fd = open(fname, O_RDWR | O_CREAT, 0666);
+    db->fd = open(fname, O_RDWR, 0666);
+    if(db->fd == -1 && (flags & CYRUSDB_CREATE)) {
+	db->fd = open(fname, O_RDWR | O_CREAT, 0666);
+    }
+    
     if (db->fd == -1) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", fname);
+	int level = (flags & CYRUSDB_CREATE) ? LOG_ERR : LOG_DEBUG;
+	syslog(level, "IOERROR: opening %s: %m", fname);
 	free_db(db);
 	return CYRUSDB_IOERROR;
     }

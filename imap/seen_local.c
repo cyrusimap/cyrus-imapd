@@ -1,5 +1,5 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
- $Id: seen_local.c,v 1.38 2003/04/08 18:31:18 rjs3 Exp $
+ $Id: seen_local.c,v 1.39 2003/08/14 16:20:33 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -86,7 +86,9 @@ struct seen {
  * Returns pointer to abstract database type in buffer pointed to
  * by 'seendbptr'.
  */
-int seen_open(struct mailbox *mailbox, const char *user, struct seen **seendbptr)
+int seen_open(struct mailbox *mailbox, const char *user,
+	      int flags __attribute__((unused)),
+	      struct seen **seendbptr)
 {
     struct seen *seendb;
     char fnamebuf[MAX_MAILBOX_PATH+1];

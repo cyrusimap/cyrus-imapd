@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.39 2003/04/09 20:28:17 rjs3 Exp $
+   $Id: seen_db.c,v 1.40 2003/08/14 16:20:33 rjs3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -116,7 +116,8 @@ char *seen_getpath(const char *userid)
 }
 
 int seen_open(struct mailbox *mailbox, 
-	      const char *user, 
+	      const char *user,
+	      int flags,
 	      struct seen **seendbptr)
 {
     struct seen *seendb;
@@ -157,9 +158,11 @@ int seen_open(struct mailbox *mailbox,
 
     /* open the seendb corresponding to user */
     fname = seen_getpath(user);
-    r = DB->open(fname, &seendb->db);
+    r = DB->open(fname, (flags & SEEN_CREATE) ? CYRUSDB_CREATE : 0,
+		 &seendb->db);
     if (r != 0) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, 
+	int level = (flags & SEEN_CREATE) ? LOG_ERR : LOG_DEBUG;
+	syslog(level, "DBERROR: opening %s: %s", fname, 
 	       cyrusdb_strerror(r));
 	r = IMAP_IOERROR;
 	free(seendb);
@@ -624,10 +627,11 @@ int seen_merge(const char *tmpfile, const char *tgtfile)
     struct db *tmp = NULL, *tgt = NULL;
     struct seen_merge_rock rock;
 
-    r = DB->open(tmpfile, &tmp);
+    /* xxx does this need to be CYRUSDB_CREATE? */
+    r = DB->open(tmpfile, CYRUSDB_CREATE, &tmp);
     if(r) goto done;
 	    
-    r = DB->open(tgtfile, &tgt);
+    r = DB->open(tgtfile, CYRUSDB_CREATE, &tgt);
     if(r) goto done;
 
     rock.db = tgt;

@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.39 2003/08/08 18:42:41 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.40 2003/08/14 16:20:36 rjs3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -624,7 +624,7 @@ static int unlock(struct db *db)
     return 0;
 }
 
-static int myopen(const char *fname, struct db **ret)
+static int myopen(const char *fname, int flags, struct db **ret)
 {
     struct db *db = (struct db *) xzmalloc(sizeof(struct db));
     int r;
@@ -634,12 +634,14 @@ static int myopen(const char *fname, struct db **ret)
     db->fname = xstrdup(fname);
 
     db->fd = open(fname, O_RDWR, 0644);
-    if (db->fd == -1) {
+    if (db->fd == -1 && (flags & CYRUSDB_CREATE)) {
 	db->fd = open(fname, O_RDWR | O_CREAT, 0644);
 	new = 1;
     }
+
     if (db->fd == -1) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", fname);
+	int level = (flags & CYRUSDB_CREATE) ? LOG_ERR : LOG_DEBUG;
+	syslog(level, "IOERROR: opening %s: %m", fname);
 	dispose_db(db);
 	return CYRUSDB_IOERROR;
     }

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.196 2003/07/21 19:22:31 rjs3 Exp $
+ * $Id: index.c,v 1.197 2003/08/14 16:20:32 rjs3 Exp $
  */
 #include <config.h>
 
@@ -342,7 +342,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 
     /* If opening mailbox, get \Recent info */
     if (oldexists == -1 && keepingseen) {
-	r = seen_open(mailbox, imapd_userid, &seendb);
+	r = seen_open(mailbox, imapd_userid, SEEN_CREATE, &seendb);
 	if (!r) {
 	    free(seenuids);
 	    r = seen_lockread(seendb, &last_read, &recentuid,
@@ -1236,7 +1236,7 @@ int statusitems;
     if (mailbox->exists != 0 &&
 	(statusitems &
 	 (STATUS_RECENT | STATUS_UNSEEN))) {
-	r = seen_open(mailbox, imapd_userid, &status_seendb);
+	r = seen_open(mailbox, imapd_userid, SEEN_CREATE, &status_seendb);
 	if (r) return r;
 
 	r = seen_lockread(status_seendb, &last_read, &last_uid,

@@ -1,5 +1,5 @@
 /* seen_bigdb.c -- implementation of seen database using one big cyrusdb
-   $Id: seen_bigdb.c,v 1.6 2003/04/08 18:27:21 rjs3 Exp $
+   $Id: seen_bigdb.c,v 1.7 2003/08/14 16:20:33 rjs3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -105,7 +105,7 @@ static void seen_init(void)
     strcpy(fname, config_dir);
     strcat(fname, FNAME_SEENDB);
 
-    r = DB->open(fname, &bigdb);
+    r = DB->open(fname, CYRUSDB_CREATE, &bigdb);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(r));
@@ -117,7 +117,8 @@ static void seen_init(void)
 
 /* get a database handle corresponding to (mailbox, user) pair */
 int seen_open(struct mailbox *mailbox, 
-	      const char *user, 
+	      const char *user,
+	      int flags __attribute__((unused)),
 	      struct seen **seendbptr)
 {
     struct seen *ret;
