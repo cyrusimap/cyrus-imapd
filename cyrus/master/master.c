@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.11 2003/01/11 04:03:21 ken3 Exp $ */
+/* $Id: master.c,v 1.67.4.12 2003/02/06 22:43:25 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -141,7 +141,7 @@ static char *mystrdup(const char *s)
     return strdup(s);
 }
 
-void fatal(char *msg, int code)
+void fatal(const char *msg, int code)
 {
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
