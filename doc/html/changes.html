@@ -8,11 +8,15 @@
 
 <ul>
 
-<LI> Implemented the <TT>IMAP4rev1</TT>" protocol commands.  Changes
+<LI> Implemented the "<TT>IMAP4rev1</TT>" protocol commands.  Changes
 the minor version number of the cyrus mailbox database format to 1.
 <B>IMPORTANT:</B> it is necessary to run the command "<TT>reconstruct
 -r</TT>" as the cyrus user after upgrading the Cyrus IMAP software
 from version 1.4 or earlier.
+
+<LI> If the file "<TT>msg/shutdown</TT>" exits in
+the configuration directory, the IMAP server will issue the first line
+in the file in an untagged BYE message and shut down.
 
 <LI> Permit SPACE in mailbox names.
 
@@ -87,6 +91,9 @@ mmap() appears to crap out on that boundary condition.
 
 <LI> Bug fix: used append instead of lappend in cyradmin, preventing
 use of any port other than IMAP.
+
+<LI> When the client is streaming its commands, the IMAP server attempts
+to stream its tagged responses.
 
 <LI> Modify zephyr support to compile without Kerberos support.
 
