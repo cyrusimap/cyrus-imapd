@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.231 2000/04/25 02:38:37 leg Exp $ */
+/* $Id: imapd.c,v 1.232 2000/04/27 18:50:04 leg Exp $ */
 
 #include <config.h>
 
@@ -1779,11 +1779,11 @@ cmd_append(char *tag, char *name)
 		    ? "[TRYCREATE] " : "", error_message(r));
     } else {
 	/* is this a space seperated list or sequence list? */
-	prot_printf(imapd_out, "%s OK [APPENDUID %lu", tag, uidvalidity);
+	prot_printf(imapd_out, "%s OK [APPENDUID %u", tag, uidvalidity);
 	if (num == 1) {
-	    prot_printf(imapd_out, " %lu", firstuid);
+	    prot_printf(imapd_out, " %u", firstuid);
 	} else {
-	    prot_printf(imapd_out, " %lu:%lu", firstuid, firstuid + num - 1);
+	    prot_printf(imapd_out, " %u:%u", firstuid, firstuid + num - 1);
 	}
 	prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
     }
