@@ -54,3 +54,10 @@ runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist",
        "cyrusdbtxn_skiplist", "cyrusdbtxn");
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_db3 -ldb", 
        "cyrusdbtxn_db3", "cyrusdbtxn");
+
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat", 
+       "cyrusdblong_flat", "cyrusdblong");
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist", 
+       "cyrusdblong_skiplist", "cyrusdblong");
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_db3 -ldb", 
+       "cyrusdblong_db3", "cyrusdblong");
