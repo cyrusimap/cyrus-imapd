@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.27 2002/03/26 17:48:33 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.28 2002/03/29 00:03:57 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -100,10 +100,12 @@ int mboxlist_createmailboxcheck(char *name, int mbtype, char *partition,
 				char **newacl, char **newpartition);
 
 /* create mailbox */
+/* localonly creates the local mailbox without touching mupdate */
+/* forceuser allows the creation of user.x.<name> without a user.x */
 int mboxlist_createmailbox(char *name, int mbtype, char *partition, 
 			   int isadmin, char *userid, 
 			   struct auth_state *auth_state,
-			   int localonly);
+			   int localonly, int forceuser);
 
 /* Delete a mailbox. */
 /* setting local_only disables any communication with the mupdate server

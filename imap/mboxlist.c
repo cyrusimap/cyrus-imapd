@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.177 2002/03/26 17:48:31 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.178 2002/03/29 00:03:55 rjs3 Exp $
  */
 
 #include <config.h>
@@ -320,12 +320,13 @@ int mboxlist_update(char *name, int flags, const char *part, const char *acl)
 /*
  * Check/set up for mailbox creation
  */
-int
+static int
 mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition, 
 			      int isadmin, char *userid, 
 			      struct auth_state *auth_state, 
 			      char **newacl, char **newpartition,
-			      int RMW, int localonly, struct txn **tid)
+			      int RMW, int localonly, int force_user_create,
+			      struct txn **tid)
 {
     int r;
     char *p;
@@ -348,6 +349,7 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
 
     /* you must be a real admin to create a local-only mailbox */
     if(!isadmin && localonly) return IMAP_PERMISSION_DENIED;
+    if(!isadmin && force_user_create) return IMAP_PERMISSION_DENIED;
 
     /* User has admin rights over their own mailbox namespace */
     if (mboxname_userownsmailbox(userid, name)) {
@@ -431,7 +433,7 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
 	
 	acl = xstrdup("");
 	if (!strncmp(name, "user.", 5)) {
-	    if (strchr(name+5, '.')) {
+	    if (!force_user_create && strchr(name+5, '.')) {
 		/* Disallow creating user.X.* when no user.X */
 		free(acl);
 		return IMAP_PERMISSION_DENIED;
@@ -505,7 +507,7 @@ mboxlist_createmailboxcheck(char *name, int mbtype, char *partition,
 {
     return mboxlist_mycreatemailboxcheck(name, mbtype, partition, isadmin,
 					 userid, auth_state, newacl, 
-					 newpartition, 0, 0, NULL);
+					 newpartition, 0, 0, 0, NULL);
 }
 
 /*
@@ -525,7 +527,7 @@ mboxlist_createmailboxcheck(char *name, int mbtype, char *partition,
 int mboxlist_createmailbox(char *name, int mbtype, char *partition, 
 			   int isadmin, char *userid, 
 			   struct auth_state *auth_state,
-			   int localonly)
+			   int localonly, int forceuser)
 {
     int r;
     char *acl = NULL;
@@ -548,7 +550,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     r = mboxlist_mycreatemailboxcheck(name, mbtype, partition, isadmin, 
 				      userid, auth_state, 
 				      &acl, &newpartition, 1, localonly,
-				      &tid);
+				      forceuser, &tid);
     switch (r) {
     case 0:
 	break;
@@ -1017,7 +1019,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
 	r = mboxlist_mycreatemailboxcheck(newname, 0, partition, isadmin, 
 					  userid, auth_state, NULL, 
-					  &newpartition, 1, 0, &tid);
+					  &newpartition, 1, 0, 0, &tid);
 	switch (r) {
 	case 0:
 	    break;
