@@ -82,7 +82,6 @@
 #include "duplicate.h"
 
 #define DB (CONFIG_DB_DUPLICATE)
-#define FNAME_DELIVERDB "/deliver.db"
 
 static struct db *dupdb = NULL;
 static int duplicate_dbopen = 0;

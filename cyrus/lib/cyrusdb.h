@@ -85,8 +85,9 @@ struct cyrusdb_backend {
     /* checkpoints this database environment */
     int (*sync)(void);
 
-    /* archives this database environment into the specified directory */
-    int (*archive)(const char *dirname);
+    /* archives this database environment, and specified databases
+     * into the specified directory */
+    int (*archive)(const char **fnames, const char *dirname);
 
     /* open the specified database in the global environment */
     int (*open)(const char *fname, struct db **ret);
@@ -158,5 +159,7 @@ extern struct cyrusdb_backend cyrusdb_db3;
 extern struct cyrusdb_backend cyrusdb_db3_nosync;
 extern struct cyrusdb_backend cyrusdb_flat;
 extern struct cyrusdb_backend cyrusdb_skiplist;
+
+extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
 
 #endif /* INCLUDED_CYRUSDB_H */

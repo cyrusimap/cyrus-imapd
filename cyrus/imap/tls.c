@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.32 2002/01/25 19:26:55 leg Exp $ */
+/* $Id: tls.c,v 1.33 2002/02/24 04:42:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -128,7 +128,6 @@
 #include "cyrusdb.h"
 
 #define DB (CONFIG_DB_TLS) /* sessions are binary -> MUST use DB3 */
-#define FNAME_SESSIONS "/tls_sessions.db"
 
 static struct db *sessdb = NULL;
 static int sess_dbopen = 0;
@@ -644,7 +643,7 @@ int     tls_init_serverengine(const char *ident,
 	else {
 	    /* create the name of the db file */
 	    strcpy(dbdir, config_dir);
-	    strcat(dbdir, FNAME_SESSIONS);
+	    strcat(dbdir, FNAME_TLSSESSIONS);
 
 	    r = DB->open(dbdir, &sessdb);
 	    if (r != 0) {
@@ -1015,7 +1014,7 @@ int tls_prune_sessions(void)
 
    /* create the name of the db file */
     strcpy(dbdir, config_dir);
-    strcat(dbdir, FNAME_SESSIONS);
+    strcat(dbdir, FNAME_TLSSESSIONS);
 
     ret = DB->open(dbdir, &sessdb);
     if (ret != CYRUSDB_OK) {

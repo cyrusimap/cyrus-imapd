@@ -46,6 +46,9 @@
 #define CONFIG_DB_DUPLICATE (&cyrusdb_db3_nosync)
 #define DUPLICATE_RECOVER 0x01
 
+/* name of the duplicate delivery database */
+#define FNAME_DELIVERDB "/deliver.db"
+
 int duplicate_init(char*, int);
 
 time_t duplicate_check(char *id, int idlen, char *to, int tolen);
