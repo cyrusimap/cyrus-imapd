@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.60 2001/03/05 22:27:15 leg Exp $
+ $Id: mailbox.h,v 1.61 2001/03/14 22:38:40 leg Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -77,7 +77,6 @@ typedef unsigned short bit32;
 #define FNAME_INDEX "/cyrus.index"
 #define FNAME_CACHE "/cyrus.cache"
 #define FNAME_QUOTADIR "/quota/"
-#define FNAME_LOGDIR "/log/"
 
 #define MAILBOX_FNAME_LEN 256
 
