@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.29 2002/08/21 20:43:47 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.30 2002/08/22 19:16:47 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3588,7 +3588,8 @@ void cmd_rename(const char *tag,
 	recursive_rename = 0;
     }
     /* check if we're an admin renaming a user */
-    else if (mboxname_isusermailbox(oldmailboxname, 1) &&
+    else if (config_getswitch(IMAPOPT_ALLOWUSERMOVES) &&
+	     mboxname_isusermailbox(oldmailboxname, 1) &&
 	     mboxname_isusermailbox(newmailboxname, 1) &&
 	     imapd_userisadmin) {
 	rename_user = 1;
@@ -6222,6 +6223,9 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    !strncmp(mbox+5, imapd_userid, strlen(mbox+5))) {
 	    /* don't move your own inbox, that could be troublesome */
 	    r = IMAP_MAILBOX_NOTSUPPORTED;
+	} else if (!config_getswitch(IMAPOPT_ALLOWUSERMOVES)) {
+	    /* not configured to allow user moves */
+	    r = IMAP_MAILBOX_NOTSUPPORTED;
 	} else {
 	    moving_user = 1;
 	}
@@ -6243,7 +6247,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     if(!r && !moving_user) {
 	r = do_xfer_single(toserver, topart, name, mailboxname, mbflags,
 			   path, part, acl, 0, NULL, NULL);
-    } else {
+    } else if (!r) {
 	struct backend *be = NULL;
 	
 	/* we need to reserve the users inbox - connect to mupdate */

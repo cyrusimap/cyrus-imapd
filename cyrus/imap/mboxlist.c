@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.17 2002/08/21 20:43:48 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.18 2002/08/22 19:16:49 ken3 Exp $
  */
 
 #include <config.h>
@@ -999,7 +999,8 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	      goto done;
 	    }
 	    isusermbox = 1;
-	} else if (mboxname_isusermailbox(newname, 1)) {
+	} else if (config_getswitch(IMAPOPT_ALLOWUSERMOVES) &&
+		   mboxname_isusermailbox(newname, 1)) {
 	    /* Special case of renaming a user */
 	    access = cyrus_acl_myrights(auth_state, oldacl);
 	    if (!(access & deleteright) && !isadmin) {
@@ -1030,7 +1031,8 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     /* Check ability to create new mailbox */
     if (!partitionmove) {
 	if (mboxname_isusermailbox(newname, 1)) {
-	    if (mboxname_isusermailbox(oldname, 1)) {
+	    if (config_getswitch(IMAPOPT_ALLOWUSERMOVES) &&
+		mboxname_isusermailbox(oldname, 1)) {
 		if (!isadmin) {
 		    /* Only admins can rename users (INBOX to INBOX) */
 		    r = IMAP_MAILBOX_NOTSUPPORTED;

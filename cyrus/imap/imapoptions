@@ -40,7 +40,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.1.4.5 2002/08/02 17:18:20 rjs3 Exp $
+.\" $Id: imapoptions,v 1.1.4.6 2002/08/22 19:16:48 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -106,6 +106,10 @@ are listed with ``<none>''.
 
 { "allowplaintext", 1, SWITCH }
 /* Allow passwords to pass in the clear. */
+   
+{ "allowusermoves", 0, SWITCH }
+/* Allow moving user accounts (with associated meta-data) via RENAME
+   or XFER. */
    
 { "altnamespace", 0, SWITCH }
 /* Use the alternate IMAP namespace, where personal folders reside at the
