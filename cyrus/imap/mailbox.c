@@ -3,7 +3,6 @@
  */
 
 #include <stdio.h>
-#include <assert.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -12,6 +11,8 @@
 #include <sys/file.h>
 
 #include <acl.h>
+#include "assert.h"
+#include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 
@@ -34,7 +35,7 @@ struct mailbox *mailbox;
     mailbox->header = fopen(fnamebuf, "r+");
     
     if (!mailbox->header) {
-	return 1;		/* XXX can't open mailbox */
+	return IMAP_IOERROR;
     }
 
     mailbox->path = strsave(path);
@@ -71,14 +72,14 @@ struct mailbox *mailbox;
 	mailbox->cache = fopen(fnamebuf, "r+");
     
 	if (!mailbox->index || !mailbox->cache) {
-	    return 1;		/* XXX can't open */
+	    return IMAP_IOERROR;
 	}
 
 	if (fread((char *)&index_gen, sizeof(index_gen), 1,
 		  mailbox->index) != 1 ||
 	    fread((char *)&cache_gen, sizeof(cache_gen), 1,
 		  mailbox->cache) != 1) {
-	    return 1;		/* XXX bad format */
+	    return IMAP_MAILBOX_BADFORMAT;
 	}
 	
 	if (index_gen != cache_gen) {
@@ -90,7 +91,7 @@ struct mailbox *mailbox;
 
     if (index_gen != cache_gen) {
 	mailbox->index = mailbox->cache = NULL;
-	return 1;		/* XXX bad format/out of synch */
+	return IMAP_MAILBOX_BADFORMAT;
     }
     mailbox->generation_no = index_gen;
 
@@ -140,7 +141,7 @@ struct mailbox *mailbox;
     n = fread(buf, 1, strlen(MAILBOX_HEADER_MAGIC), mailbox->header);
     buf[n] = '\0';
     if (n != strlen(MAILBOX_HEADER_MAGIC) || strcmp(buf, MAILBOX_HEADER_MAGIC)) {
-	return 1;		/* XXX bad magic no */
+	return IMAP_MAILBOX_BADFORMAT;
     }
 
     fstat(fileno(mailbox->header), &sbuf);
@@ -148,7 +149,7 @@ struct mailbox *mailbox;
 
     /* Read quota file pathname */
     if (!fgets(buf, sizeof(buf), mailbox->header)) {
-	return 1;		/* XXX bad format */
+	return IMAP_MAILBOX_BADFORMAT;
     }
     buf[strlen(buf)-1] = '\0';
     if (mailbox->quota_path) {
@@ -163,7 +164,7 @@ struct mailbox *mailbox;
 
     /* Read names of user flags */
     if (!fgets(buf, sizeof(buf), mailbox->header)) {
-	return 1;		/* XXX bad format */
+	return IMAP_MAILBOX_BADFORMAT;
     }
     buf[strlen(buf)-1] = '\0';
     name = buf;
@@ -219,7 +220,7 @@ struct mailbox *mailbox;
     rewind(mailbox->index);
     n = fread(buf, sizeof(bit32), 7, mailbox->index);
     if (n != 7) {
-	return 1;		/* XXX short file */
+	return IMAP_MAILBOX_BADFORMAT;
     }
 
     mailbox->format = ntohl(*((bit32 *)(buf+4)));
@@ -244,16 +245,16 @@ struct mailbox *mailbox;
 
     if (!mailbox->quota) {
 	mailbox->quota = fopen(mailbox->quota_path, "r+");
-	if (!mailbox->quota) return 1; /* XXX no quota file */
+	if (!mailbox->quota) return IMAP_IOERROR;
     }
     
     rewind(mailbox->quota);
     if (!fgets(buf, sizeof(buf), mailbox->quota)) {
-	return 1;		/* XXX bad format */
+	return IMAP_MAILBOX_BADFORMAT;
     }
     mailbox->quota_used = atol(buf);
     if (!fgets(buf, sizeof(buf), mailbox->quota)) {
-	return 1;		/* XXX bad format */
+	return IMAP_MAILBOX_BADFORMAT;
     }
     mailbox->quota_limit = atoi(buf);
 
@@ -284,14 +285,14 @@ struct mailbox *mailbox;
 	if (r == -1) {
 	    if (errno == EINTR) continue;
 	    mailbox->header_lock_count--;
-	    return 1;		/* XXX os error */
+	    return IMAP_IOERROR;
 	}
 
 	fstat(fileno(mailbox->header), &sbuffd);
 	r = stat(fnamebuf, &sbuffile);
 	if (r == -1) {
 	    mailbox_unlock_header(mailbox);
-	    return 1;		/* XXX os error */
+	    return IMAP_IOERROR;
 	}
 
 	if (sbuffd.st_ino == sbuffile.st_ino) break;
@@ -299,7 +300,7 @@ struct mailbox *mailbox;
 	fclose(mailbox->header);
 	mailbox->header = fopen(fnamebuf, "r+");
 	if (!mailbox->header) {
-	    return 1;		/* XXX where it go? */
+	    return IMAP_IOERROR;
 	}
     }
 
@@ -308,7 +309,7 @@ struct mailbox *mailbox;
 	r = mailbox_read_header(mailbox);
 	if (r) {
 	    mailbox_unlock_header(mailbox);
-	    return r;		/* XXX read screwup */
+	    return r;
 	}
     }
 
@@ -338,14 +339,14 @@ struct mailbox *mailbox;
 	if (r == -1) {
 	    if (errno == EINTR) continue;
 	    mailbox->index_lock_count--;
-	    return 1;		/* XXX os error */
+	    return IMAP_IOERROR;
 	}
 
 	fstat(fileno(mailbox->index), &sbuffd);
 	r = stat(fnamebuf, &sbuffile);
 	if (r == -1) {
 	    mailbox_unlock_index(mailbox);
-	    return 1;		/* XXX os error */
+	    return IMAP_IOERROR;
 	}
 
 	if (sbuffd.st_ino == sbuffile.st_ino) break;
@@ -353,7 +354,7 @@ struct mailbox *mailbox;
 	fclose(mailbox->index);
 	fclose(mailbox->cache);
 	if (r = mailbox_open_index(mailbox)) {
-	    return 1;		/* XXX where it go? */
+	    return r;
 	}
     }
 
@@ -362,7 +363,7 @@ struct mailbox *mailbox;
 	r = mailbox_read_index_header(mailbox);
 	if (r) {
 	    mailbox_unlock_index(mailbox);
-	    return r;		/* XXX read screwup */
+	    return r;
 	}
     }
 
@@ -384,7 +385,7 @@ struct mailbox *mailbox;
 
     if (!mailbox->quota) {
 	mailbox->quota = fopen(mailbox->quota_path, "r+");
-	if (!mailbox->quota) return 1; /* XXX no quota file */
+	if (!mailbox->quota) return IMAP_MAILBOX_BADFORMAT;
     }
 
     for (;;) {
@@ -392,13 +393,13 @@ struct mailbox *mailbox;
 	if (r == -1) {
 	    if (errno == EINTR) continue;
 	    mailbox->quota_lock_count--;
-	    return 1;		/* XXX os error */
+	    return IMAP_IOERROR;
 	}
 	fstat(fileno(mailbox->quota), &sbuffd);
 	r = stat(mailbox->quota_path, &sbuffile);
 	if (r == -1) {
 	    mailbox_unlock_quota(mailbox);
-	    return 1;		/* XXX os error */
+	    return IMAP_IOERROR;
 	}
 
 	if (sbuffd.st_ino == sbuffile.st_ino) break;
@@ -406,7 +407,7 @@ struct mailbox *mailbox;
 	fclose(mailbox->quota);
 	mailbox->quota = fopen(mailbox->quota_path, "r+");
 	if (!mailbox->quota) {
-	    return 1;		/* XXX where it go? */
+	    return IMAP_IOERROR;
 	}
     }
     return mailbox_read_quota(mailbox);
@@ -477,11 +478,11 @@ struct mailbox *mailbox;
 
     n = fwrite(buf, sizeof(bit32), 7, mailbox->index);
     if (n != 7) {
-	return 1;		/* XXX write error */
+	return IMAP_IOERROR;
     }
     fflush(mailbox->index);
     if (ferror(mailbox->index) || fsync(fileno(mailbox->index))) {
-	return 1;		/* XXX write error */
+	return IMAP_IOERROR;
     }
     return 0;
 }
@@ -501,7 +502,7 @@ int num;
     assert(mailbox->index_lock_count != 0);
 
     if (mailbox->record_size < (7 + (MAX_USER_FLAGS/32)) * 4) {
-	return 1;		/* XXX bad format--too small */
+	return IMAP_MAILBOX_BADFORMAT;
     }
 
     len = num * mailbox->record_size;
@@ -527,7 +528,7 @@ int num;
     fwrite(buf, len, 1, mailbox->index);
     if (ferror(mailbox->index) || fsync(fileno(mailbox->index))) {
 	ftruncate(fileno(mailbox->index), last_offset);
-	return 1;		/* XXX os error */
+	return IMAP_IOERROR;
     }
 
     free(buf);
@@ -551,21 +552,21 @@ struct mailbox *mailbox;
 
     newfile = fopen(buf, "w+");
     if (!newfile) {
-	return 1;		/* XXX can't create */
+	return IMAP_IOERROR;
     }
     r = flock(fileno(newfile), LOCK_EX);
     if (r) {
-	return 1;		/* XXX os error */
+	return IMAP_IOERROR;
     }
 
     fprintf(newfile, "%lu\n%d\n", mailbox->quota_used, mailbox->quota_limit);
     fflush(newfile);
     if (ferror(newfile) || fsync(fileno(newfile))) {
-	return 1;		/* XXX os error */
+	return IMAP_IOERROR;
     }
 
     if (rename(buf, mailbox->quota_path)) {
-	return 1;		/* XXX os error */
+	return IMAP_IOERROR;
     }
     fclose(mailbox->quota);
     mailbox->quota = newfile;
