@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.22 1999/06/29 08:36:16 tmartin Exp $
+ * $Id: imtest.c,v 1.23 1999/06/29 18:02:49 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -34,6 +34,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#include <unistd.h>
 
 #include <netinet/in.h>
 #include <netdb.h>
@@ -139,8 +141,8 @@ static int init_sasl(char *serverFQDN, int port, int ssf)
   if (saslresult!=SASL_OK) return IMTEST_FAIL;
 
   /* create a security structure and give it to sasl */
-  secprops=make_secprops(0,ssf);
-  if (secprops!=NULL)
+  secprops = make_secprops(0, ssf);
+  if (secprops != NULL)
   {
     sasl_setprop(conn, SASL_SEC_PROPS, secprops);
     free(secprops);
