@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.52 2002/02/18 21:35:17 rjs3 Exp $
+ * $Id: mupdate.c,v 1.53 2002/03/06 20:50:11 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -531,6 +531,18 @@ void cmdloop(struct conn *c)
 
 	case 'D':
 	    if (!c->userid) goto nologin;
+	    else if (!strcmp(cmd.s, "Deactivate")) {
+		if (ch != ' ') goto missingargs;
+		ch = getstring(c->pin, c->pout, &arg1);
+		if (ch != ' ') goto missingargs;
+		ch = getstring(c->pin, c->pout, &arg2);
+		CHECKNEWLINE(c, ch);
+
+		if (c->streaming) goto notwhenstreaming;
+		if (!masterp) goto masteronly;
+		
+		cmd_set(c, tag.s, arg1.s, arg2.s, NULL, SET_DEACTIVATE);
+	    }
 	    else if (!strcmp(cmd.s, "Delete")) {
 		if (ch != ' ') goto missingargs;
 		ch = getstring(c->pin, c->pout, &arg1);
@@ -785,16 +797,6 @@ void database_init()
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
 
-static const char *translate(enum settype t)
-{
-    switch (t) {
-    case SET_ACTIVE: return "ACTIVE";
-    case SET_RESERVE: return "RESERVE";
-    case SET_DELETE: return "DELETE";
-    default: abort();
-    }
-}
-
 /* log change to database. database must be locked. */
 void database_log(const struct mbent *mb)
 {
@@ -811,6 +813,11 @@ void database_log(const struct mbent *mb)
     case SET_DELETE:
 	mboxlist_deletemailbox(mb->mailbox, 1, "", NULL, 0);
 	break;
+
+    case SET_DEACTIVATE:
+	/* SET_DEACTIVATE is not a real value that an actual
+	   mailbox can have! */
+	abort();
     }
 }
 
@@ -972,6 +979,15 @@ void cmd_set(struct conn *C,
 	prot_printf(C->pout, "%s NO \"mailbox already exists\"\r\n", tag);
 	goto done;
     }
+
+    if ((!m || m->t != SET_ACTIVE) && t == SET_DEACTIVATE) {
+	/* failed; mailbox not currently active */
+	prot_printf(C->pout, "%s NO \"mailbox not currently active\"\r\n",
+		    tag);
+	goto done;
+    } else if (t == SET_DEACTIVATE) {
+	t = SET_RESERVE;
+    }
     
     if (t == SET_DELETE) {
 	if (!m) {
@@ -1102,8 +1118,11 @@ static int sendupdate(char *name, int matchlen, int maycreate, void *rock)
 			strlen(m->mailbox), m->mailbox,
 			strlen(m->server), m->server);
 	    break;
+
 	case SET_DELETE:
 	    /* deleted item in the list !?! */
+	case SET_DEACTIVATE:
+	    /* SET_DEACTIVATE is not a real value! */
 	    abort();
 	}
     }
