@@ -26,6 +26,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <errno.h>
+#include <sys/types.h>
 #include <netinet/in.h>
 #include <com_err.h>
 
