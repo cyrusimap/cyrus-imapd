@@ -93,6 +93,15 @@ Set FILE to "<tt>/dev/null</tt>" to disable caching, for debugging
 <dd>Print the version of Autoconf used to generate the "<tt>configure</tt>"
 script, and exit. <P>
 
+<dt><tt>--with-cyrus-user=USER</tt>
+<dd>Specifies the userid used for installing setuid programs.  By default,
+configure uses "<TT>cyrus</TT>". <P>
+
+<dt><tt>--with-news-group=GROUP</tt> 
+<dd>Specifies the group used for
+installing the program "<TT>rmnews</TT>".  By default, configure uses
+"<TT>news</TT>". <P>
+
 <dt><tt>--with-login=METHOD</tt>
 <dd>Specifies the login authentication module to use.  Currently
 implemented authentication modules are:
@@ -196,11 +205,11 @@ function exists, "<tt>fcntl</tt>" otherwise. <P>
 <dd>Disables all network privacy support.  Use this if you do not have
 the appropriate routines in the authentication libraries (for example,
 <TT>krb_rd_priv()</TT> and <TT>krb_mk_priv()</TT> for Kerberos v4) or
-are compiling binaries subject to export control restrictions.
+are compiling binaries subject to export control restrictions. <P>
 
 <dt><tt>--enable-amssync</tt>
 <dd>Include AMS (Andrew Message System) to IMAP bboard synchronization
-support.  Requires the AMS libraries.
+support.  Requires the AMS libraries. <P>
 
 <dt><tt>--enable-cmulocal</tt>
 <dd>Include Carnegie Mellon's internal support features.
@@ -288,19 +297,19 @@ If you want, you can override the "<tt>make</tt>" variables
 This section describes the shell scripts to run and the configuration 
 files to modify once "<tt>configure</tt>" and "<tt>make</tt>" have run.
 
-<ol>
-<li>Create a user and group for the Cyrus subsystem.  The
-examples in this document assume a user of "<tt>cyrus</tt>" and
-a group of "<tt>mail</tt>", though any user and group name can be used.
+<ol> <li>Create a user and group for the Cyrus subsystem.  The
+examples in this document assume a user of "<tt>cyrus</tt>" and a
+group of "<tt>mail</tt>", though any user and group name can be used.
+If a user other than "<tt>cyrus</tt>" is to be used, it must have been
+previously specified in the "<TT>--with-cyrus-user=</TT>" option to
+"<TT>configure</TT>".
  <P>
 
-<li>Log in as the cyrus user and install the cyrus software.
+<li>After you've logged in as "<TT>root</TT>", install the cyrus software.
 
 <pre>
 <kbd>   make install
 </kbd></pre>
-
-<li> Log in as root to perform the rest of the configuration steps. <P>
 
 <li>The Cyrus IMAP server uses the 4.3BSD syslog that separates
 messages into both levels and categories.  Invoke "<kbd>man

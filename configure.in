@@ -3,6 +3,12 @@ AC_INIT(imap/imapd.c)
 AC_ARG_WITH(cyrus-prefix,[  --with-cyrus-prefix=DIR use DIR as cyrus install directory],
 	cyrus_prefix="$withval",cyrus_prefix="/usr/cyrus")
 AC_SUBST(cyrus_prefix)
+AC_ARG_WITH(cyrus-user,[  --with-cyrus-user=USERID  use USERID cyrus userid],
+	cyrus_user="$withval",cyrus_user="cyrus")
+AC_SUBST(cyrus_user)
+AC_ARG_WITH(news-group,[  --with-news-group=GROUPID use GROUPID as news group id],
+	news_group="$withval",news_group="news")
+AC_SUBST(news_group)
 AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_RANLIB
