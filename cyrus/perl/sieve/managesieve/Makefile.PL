@@ -48,6 +48,6 @@ WriteMakefile(
     'NAME'	=> 'Cyrus::SIEVE::managesieve',
     'VERSION_FROM' => 'managesieve.pm', # finds $VERSION
     'LIBS'	=> ["-L../lib/ -lisieve $SASL_LIB -L../../../lib/ -lcyrus -lssl -lcrypto"], 
-    'DEFINE'	=> '',     # e.g., '-DHAVE_SOMETHING' 
+    'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../lib/ -I../../../lib/ $SASL_INC",
 );
