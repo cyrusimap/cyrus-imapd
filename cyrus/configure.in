@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.30 2003/01/08 16:39:26 rjs3 Exp $
+dnl $Id: configure.in,v 1.232.4.31 2003/01/08 22:18:12 rjs3 Exp $
 dnl
 
 
@@ -184,7 +184,7 @@ AC_DEFUN(CYRUS_SET_BACKEND_BINARY, [
 
 AC_ARG_WITH(duplicate-db,
 	[  --with-duplicate-db=DB  use DB (berkeley, skiplist) as a backend
-                          for the duplicate delivery db (Default: berkeley_nosync) ],
+                          for the duplicate delivery db                                                   (Default: berkeley_nosync) ],
 	DB="$withval", DB="berkeley_nosync")
 CYRUS_SET_BACKEND_BINARY("duplicate db", CONFIG_DB_DUPLICATE, $DB)
 
@@ -201,7 +201,7 @@ AC_ARG_WITH(seen-db,
 CYRUS_SET_BACKEND("seen state", CONFIG_DB_SEEN, $DB)
 
 AC_ARG_WITH(pts-db,
-	[  --with-pts-db=DB       use DB (berkeley, skiplist) as a backend
+	[  --with-pts-db=DB        use DB (berkeley, skiplist) as a backend
                           for the pts cache (Default: berkeley) ],
 	DB="$withval", DB="berkeley") 
 CYRUS_SET_BACKEND_BINARY("pts", CONFIG_DB_PTS, $DB)
@@ -472,7 +472,7 @@ AC_MSG_RESULT($WITH_AUTH)
 
 dnl currently not terribly useful ;)
 AC_ARG_WITH(pts,[  --with-pts=MODULE       use PTS module MODULE
-                         MODULE is 'afskrb' (default) or 'ldap' (experimental)],
+                          MODULE is 'afskrb' (default) or 'ldap' (experimental)],
 	    WITH_PTS="$withval", WITH_PTS="afskrb")
 AC_SUBST(WITH_PTS)
 
@@ -719,7 +719,7 @@ fi
 dnl
 dnl Set pidfile location
 dnl
-AC_ARG_WITH(pidfile,[  --with-pidfile[=PATH]     pidfile in PATH (/var/run/cyrus-master.pid)],
+AC_ARG_WITH(pidfile,[  --with-pidfile[=PATH]   pidfile in PATH (/var/run/cyrus-master.pid)],
 	[MASTERPIDFILE="$withval"],
 	[MASTERPIDFILE="/var/run/cyrus-master.pid"])
 MASTERPIDFILE="\"$MASTERPIDFILE\""
@@ -843,6 +843,15 @@ if test $cyrus_cv_lib_syslog = no; then
 	CPPFLAGS="$CPPFLAGS -I\$(srcdir)/../syslog"
 fi
 AC_MSG_RESULT($cyrus_cv_lib_syslog)
+
+AC_MSG_CHECKING(which syslog facility to use)
+SYSLOG_FACILITY=LOG_LOCAL6
+AC_ARG_WITH(syslogfacility,[  --with-syslogfacility=FACILITY set the syslog facility to use (default LOCAL6)],
+               [ if test "$withval" != "yes" -a "$withval" != "no" ; then
+                       SYSLOG_FACILITY=LOG_$withval
+               fi; ])
+AC_DEFINE_UNQUOTED(SYSLOG_FACILITY, $SYSLOG_FACILITY)
+AC_MSG_RESULT($SYSLOG_FACILITY)
 
 dnl Have to check getdtabalesize after adding ossup, as some ossups define it
 AC_REPLACE_FUNCS(getdtablesize)

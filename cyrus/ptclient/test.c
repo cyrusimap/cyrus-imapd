@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: test.c,v 1.3 2002/05/25 19:57:52 leg Exp $ */
+/* $Id: test.c,v 1.3.4.1 2003/01/08 22:18:22 rjs3 Exp $ */
 
 #include <stdio.h>
 #include <sys/syslog.h>
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
     cacheid=cache;
   } else
     cacheid=NULL;
-  openlog("pttest", LOG_PID,LOG_LOCAL6);  
+  openlog("pttest", LOG_PID, SYSLOG_FACILITY);  
   
   if (!auth_setid(argv[1],cacheid))
     printf ("Auth_memberof(%s,%s) is %d\n", argv[1], argv[2],

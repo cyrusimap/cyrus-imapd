@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.10.4.7 2002/12/20 18:32:00 rjs3 Exp $ */
+/* $Id: idled.c,v 1.10.4.8 2003/01/08 22:18:15 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -282,7 +282,7 @@ int main(int argc, char **argv)
     }
 
     if (debugmode) {
-	openlog("idled", LOG_PID, LOG_LOCAL6);
+	openlog("idled", LOG_PID, SYSLOG_FACILITY);
     }
 
     config_init(alt_config, "idled");

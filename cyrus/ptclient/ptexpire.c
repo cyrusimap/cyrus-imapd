@@ -67,7 +67,7 @@
 #include "imapconf.h"
 #include "lock.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.10.16.5 2002/12/13 17:10:37 rjs3 Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.10.16.6 2003/01/08 22:18:22 rjs3 Exp $";
 
 /* global */
 time_t timenow;
@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     
-    openlog("ptexpire", LOG_PID, LOG_LOCAL7);
+    openlog("ptexpire", LOG_PID, SYSLOG_FACILITY);
 
     while ((opt = getopt(argc, argv, "C:E:")) != EOF) {
 	switch (opt) {

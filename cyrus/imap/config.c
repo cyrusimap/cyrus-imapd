@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.23 2002/12/11 20:40:24 rjs3 Exp $ */
+/* $Id: config.c,v 1.55.4.24 2003/01/08 22:18:15 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -125,7 +125,7 @@ int config_init(const char *alt_config, const char *ident)
 
     config_ident = ident;
     
-    openlog(config_ident, LOG_PID, LOG_LOCAL6);
+    openlog(config_ident, LOG_PID, SYSLOG_FACILITY);
 
     if(!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
 	fatal("could not construct configuration hash table", EC_CONFIG);
