@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.33 2002/06/03 18:22:34 rjs3 Exp $ */
+/* $Id: service.c,v 1.34 2002/06/03 18:46:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -138,6 +138,7 @@ static int libwrap_ask(struct request_info *r, int fd)
 #endif
 
 extern void config_init(const char *, const char *);
+extern const char *config_getstring(const char *key, const char *def);
 extern const char *config_dir;
 
 static int getlockfd(char *service)
