@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.18 2001/02/23 23:41:37 leg Exp $ */
+/* $Id: service.c,v 1.19 2001/03/10 05:55:03 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -195,6 +195,22 @@ int main(int argc, char **argv, char **envp)
 	fd = -1;
 	while (fd < 0) { /* loop until we succeed */
 	    /* we should probably do a select() here and time out */
+	    if (use_count > 0) {
+		fd_set rfds;
+		struct timeval tv;
+		int r;
+
+		FD_ZERO(&rfds);
+		FD_SET(LISTEN_FD, &rfds);
+		tv.tv_sec = REUSE_TIMEOUT;
+		tv.tv_usec = 0;
+		r = select(LISTEN_FD + 1, &rfds, NULL, NULL, &tv);
+		if (!FD_ISSET(LISTEN_FD, &rfds)) {
+		    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+		    service_abort();
+		    exit(0);
+		}
+	    }
 
 	    fd = accept(LISTEN_FD, NULL, NULL);
 	    if (fd < 0) {
@@ -233,23 +249,23 @@ int main(int argc, char **argv, char **envp)
 	syslog(LOG_DEBUG, "accepted connection");
 	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 
-	if (dup2(fd, 0) < 0) {
+	if (fd != 0 && dup2(fd, 0) < 0) {
 	    syslog(LOG_ERR, "can't duplicate accepted socket: %m");
 	    service_abort();
 	    exit(EX_OSERR);
 	}
-	if (dup2(fd, 1) < 0) {
+	if (fd != 1 && dup2(fd, 1) < 0) {
 	    syslog(LOG_ERR, "can't duplicate accepted socket: %m");
 	    service_abort();
 	    exit(EX_OSERR);
 	}
-	if (dup2(fd, 2) < 0) {
+	if (fd != 2 && dup2(fd, 2) < 0) {
 	    syslog(LOG_ERR, "can't duplicate accepted socket: %m");
 	    service_abort();
 	    exit(EX_OSERR);
 	}
 
-	close(fd);
+	if (fd > 2) close(fd);
 	
 	use_count++;
 	service_main(argc, argv, envp);
