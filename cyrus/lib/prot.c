@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.41 1999/08/16 01:57:05 leg Exp $
+ * $Id: prot.c,v 1.42 1999/09/30 07:32:26 leg Exp $
  */
 
 #include <stdio.h>
@@ -33,6 +33,9 @@
 #include <stdarg.h>
 #else
 #include <varargs.h>
+#endif
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
 #endif
 #include <sys/types.h>
 #include <sys/time.h>
@@ -236,9 +239,7 @@ prot_fill(s)
 struct protstream *s;
 {
     int n;
-    unsigned inputlen = 0;
     char *ptr;
-    const char *err;
     int left;
     int r;
     struct timeval timeout;
@@ -343,7 +344,7 @@ struct protstream *s;
 
 		if (s->log_timeptr) {
 		    time(&newtime);
-		    sprintf(timebuf, "<%d<", newtime - *s->log_timeptr);
+		    sprintf(timebuf, "<%ld<", newtime - *s->log_timeptr);
 		    write(s->logfd, timebuf, strlen(timebuf));
 		    *s->log_timeptr = newtime;
 		}
@@ -393,7 +394,7 @@ struct protstream *s;
 
 	if (s->log_timeptr) {
 	    time(&newtime);
-	    sprintf(timebuf, ">%d>", newtime - *s->log_timeptr);
+	    sprintf(timebuf, ">%ld>", newtime - *s->log_timeptr);
 	    write(s->logfd, timebuf, strlen(timebuf));
 	}
 
@@ -417,7 +418,6 @@ struct protstream *s;
       /* Encode the data */  /* xxx handle left */
       unsigned int outlen;
       int result;
-      int lup;
 
       result=sasl_encode(s->conn, ptr, left, &foo, &outlen);
       if (result!=SASL_OK)
@@ -509,7 +509,7 @@ va_dcl
     fmt = va_arg(pvar, char *);
 #endif
 
-    while (percent = strchr(fmt, '%')) {
+    while ((percent = strchr(fmt, '%')) != 0) {
 	prot_write(s, fmt, percent-fmt);
 	switch (*++percent) {
 	case '%':
