@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.287 2004/06/22 17:05:50 rjs3 Exp $
+dnl $Id: configure.in,v 1.288 2004/07/05 18:18:02 rjs3 Exp $
 dnl
 
 
@@ -539,8 +539,17 @@ if test "$WITH_AUTH" = "pts"; then
 	    fi	
 
 	    LDAP_LIBS=""
+
+           save_CPPFLAGS=$CPPFLAGS
+           save_LDFLAGS=$LDFLAGS
+           CPPFLAGS=$LDAP_CPPFLAGS
+           LDFLAGS=$LDAP_LDFLAGS
+
 	    AC_CHECK_LIB(ldap, ldap_initialize, [
                          LDAP_LIBS="-lldap -llber" ],,-llber)
+
+           CPPFLAGS=$save_CPPFLAGS
+           LDFLAGS=$save_LDFLAGS
 	else
 	    AC_ERROR(unknown with-pts value)
 	fi
@@ -1013,7 +1022,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.287 2004/06/22 17:05:50 rjs3 Exp $ */
+/* $Id: configure.in,v 1.288 2004/07/05 18:18:02 rjs3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
