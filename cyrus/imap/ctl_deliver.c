@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.5 2000/05/23 20:52:14 robeson Exp $
+ $Id: ctl_deliver.c,v 1.6 2000/05/24 05:01:17 leg Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  */
 
 static char _rcsid[] __attribute__ ((unused)) = 
-        "$Id: ctl_deliver.c,v 1.5 2000/05/23 20:52:14 robeson Exp $";
+        "$Id: ctl_deliver.c,v 1.6 2000/05/24 05:01:17 leg Exp $";
 
 #include <config.h>
 
@@ -105,14 +105,29 @@ dump_deliver(fname)
 	count++;
 	(void)memcpy(&mark, data.data, sizeof(time_t));
 	to = ((char *)key.data + (strlen(key.data) + 1));
-	printf("id: %-40s\tto: %-20s\tat: %d\n", (char *) key.data, to, (int) mark);
+	printf("id: %-40s\tto: %-20s\tat: %d\n", 
+	       (char *) key.data, to, (int) mark);
 	r = c->c_get(c, &key, &data, DB_NEXT);
     }
     if (r != DB_NOTFOUND) {
 	fprintf(stderr, "error detected looking up entry: %s\n", strerror(r));
     }
-    
     printf("got %d entries\n", count);
+
+    switch (r = c->c_close(c)) {
+    case 0:
+	break;
+    default:
+	fprintf(stderr, "error closing cursor: %s\n", strerror(r));
+	break;
+    }
+    switch (r = db->close(db, 0)) {
+    case 0:
+	break;
+    default:
+	fprintf(stderr, "error closing database: %s\n", strerror(r));
+	break;
+    }
 
     return 0;
 }
@@ -214,4 +229,4 @@ main(argc, argv)
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.5 2000/05/23 20:52:14 robeson Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.6 2000/05/24 05:01:17 leg Exp $ */
