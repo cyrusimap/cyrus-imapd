@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.97 2003/07/11 19:08:03 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.98 2003/07/12 13:52:56 ken3 Exp $
  */
 
 /*
@@ -84,6 +84,7 @@
 #include "duplicate.h"
 #include "exitcodes.h"
 #include "global.h"
+#include "hash.h"
 #include "imap_err.h"
 #include "index.h"
 #include "iptostring.h"
@@ -2064,16 +2065,21 @@ static void cmd_help(void)
     prot_printf(nntp_out, ".\r\n");
 }
 
+struct list_rock {
+    int (*proc)();
+    struct wildmat *wild;
+    struct hash_table server_table;
+};
+
 /*
- * mboxlist_findall() callback function to LIST ACTIVE
+ * mboxlist_findall() callback function to LIST
  */
-int active_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
-	      void *rock)
+int list_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
+	    void *rock)
 {
     static char lastname[MAX_MAILBOX_NAME+1];
-    struct wildmat *wild = (struct wildmat *) rock;
-    int r, postable;
-    struct backend *be;
+    struct list_rock *lrock = (struct list_rock *) rock;
+    struct wildmat *wild;
 
     /* We have to reset the initial state.
      * Handle it as a dirty hack.
@@ -2096,10 +2102,51 @@ int active_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
     lastname[matchlen] = '\0';
 
     /* see if the mailbox matches one of our wildmats */
+    wild = lrock->wild;
     while (wild->pat && wildmat(name, wild->pat) != 1) wild++;
 
     /* if we don't have a match, or its a negative match, skip it */
     if (!wild->pat || wild->not) return 0;
+
+    return lrock->proc(name, lrock);
+}
+
+struct enum_rock {
+    const char *cmd;
+    char *wild;
+};
+
+/*
+ * hash_enumerate() callback function to LIST (proxy)
+ */
+void list_proxy(char *server, void *data, void *rock)
+{
+    struct enum_rock *erock = (struct enum_rock *) rock;
+    struct backend *be;
+    int r;
+    char *result;
+
+    be = proxyd_findserver(server);
+    if (!be) return;
+
+    prot_printf(be->out, "LIST %s %s\r\n", erock->cmd, erock->wild);
+
+    r = read_response(be, 0, &result);
+    if (!r && !strncmp(result, "215 ", 4)) {
+	while (!(r = read_response(be, 0, &result)) && result[0] != '.') {
+	    prot_printf(nntp_out, "%s", result);
+	}
+    }
+}
+
+/*
+ * perform LIST ACTIVE (backend) or create a server hash table (proxy)
+ */
+int do_active(char *name, void *rock)
+{
+    struct list_rock *lrock = (struct list_rock *) rock;
+    int r, postable;
+    struct backend *be;
 
     /* open the group */
     r = open_group(name, 1, &be, &postable);
@@ -2107,17 +2154,9 @@ int active_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
 	/* can't open group, skip it */
     }
     else if (be) {
-	char *result;
-
-	prot_printf(be->out, "GROUP %s\r\n", name+strlen(newsprefix));
-
-	r = read_response(be, 0, &result);
-	if (!r && !strncmp(result, "211 ", 4)) {
-	    unsigned count, first, last;
-
-	    sscanf(result, "211 %u %u %u %s", &count, &first, &last, name);
-	    prot_printf(nntp_out, "%s %u %u %c\r\n",
-			name, last, first, postable & ACL_POST ? 'y' : 'n');
+	if (!hash_lookup(be->hostname, &lrock->server_table)) {
+	    /* add this server to our table */
+	    hash_insert(be->hostname, (void *)0xDEADBEEF, &lrock->server_table);
 	}
     }
     else {
@@ -2130,6 +2169,35 @@ int active_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
 
 	mailbox_close(nntp_group);
 	nntp_group = 0;
+    }
+
+    return 0;
+}
+
+/*
+ * perform LIST NEWSGROUPS (backend) or create a server hash table (proxy)
+ */
+int do_newsgroups(char *name, void *rock)
+{
+    struct list_rock *lrock = (struct list_rock *) rock;
+    char *acl, *server;
+    int r;
+
+    r = mlookup(name, &server, &acl, NULL);
+
+    if (r || !acl || !(cyrus_acl_myrights(nntp_authstate, acl) && ACL_READ))
+	return 0;
+
+    if (server[0] == '/') {
+	/* local group */
+	return CYRUSDB_DONE;
+    }
+    else {
+	/* remote group */
+	if (!hash_lookup(server, &lrock->server_table)) {
+	    /* add this server to our table */
+	    hash_insert(server, (void *)0xDEADBEEF, &lrock->server_table);
+	}
     }
 
     return 0;
@@ -2175,30 +2243,44 @@ static void cmd_list(char *arg1, char *arg2)
 
     if (!strcmp(arg1, "active")) {
 	char pattern[MAX_MAILBOX_NAME+1];
-	struct wildmat *wild;
+	struct list_rock lrock = { &do_active };
+	struct enum_rock erock = { "ACTIVE" };
 
 	if (!arg2) arg2 = "*";
 
+	/* make a copy before we munge it */
+	erock.wild = xstrdup(arg2);
+
 	/* split the list of wildmats */
-	wild = split_wildmats(arg2);
+	lrock.wild = split_wildmats(arg2);
+
+	/* xxx better way to determine a size for this table? */
+	construct_hash_table(&lrock.server_table, 10, 1);
 
 	prot_printf(nntp_out, "215 list of newsgroups follows:\r\n");
 
 	strcpy(pattern, newsprefix);
 	strcat(pattern, "*");
-	active_cb(NULL, 0, 0, NULL);
+	list_cb(NULL, 0, 0, NULL);
 	mboxlist_findall(NULL, pattern, 0, nntp_userid, nntp_authstate,
-			 active_cb, wild);
+			 list_cb, &lrock);
+
+	/* proxy to the backends */
+	hash_enumerate(&lrock.server_table, list_proxy, &erock);
 
 	prot_printf(nntp_out, ".\r\n");
+
+	/* free the hash table */
+	free_hash_table(&lrock.server_table, NULL);
+
+	/* free the wildmats */
+	free_wildmats(lrock.wild);
+	free(erock.wild);
 
 	if (nntp_group) {
 	    mailbox_close(nntp_group);
 	    nntp_group = 0;
 	}
-
-	/* free the wildmats */
-	free_wildmats(wild);
     }
     else if (!strcmp(arg1, "extensions")) {
 	unsigned mechcount = 0;
@@ -2256,24 +2338,44 @@ static void cmd_list(char *arg1, char *arg2)
     }
     else if (!strcmp(arg1, "newsgroups")) {
 	char pattern[MAX_MAILBOX_NAME+1];
-	struct wildmat *wild;
+	struct list_rock lrock = { &do_newsgroups };
+	struct enum_rock erock = { "NEWSGROUPS" };
 
 	if (!arg2) arg2 = "*";
 
+	/* make a copy before we munge it */
+	erock.wild = xstrdup(arg2);
+
 	/* split the list of wildmats */
-	wild = split_wildmats(arg2);
+	lrock.wild = split_wildmats(arg2);
+
+	/* xxx better way to determine a size for this table? */
+	construct_hash_table(&lrock.server_table, 10, 1);
 
 	prot_printf(nntp_out, "215 list of newsgroups follows:\r\n");
 
 	strcpy(pattern, newsprefix);
 	strcat(pattern, "*");
+	list_cb(NULL, 0, 0, NULL);
+	mboxlist_findall(NULL, pattern, 0, nntp_userid, nntp_authstate,
+			 list_cb, &lrock);
+
+	/* proxy to the backends */
+	hash_enumerate(&lrock.server_table, list_proxy, &erock);
+
+	strcpy(pattern, newsprefix);
+	strcat(pattern, "*");
 	annotatemore_findall(pattern, "/comment",
-			     newsgroups_cb, wild, NULL);
+			     newsgroups_cb, lrock.wild, NULL);
 
 	prot_printf(nntp_out, ".\r\n");
 
+	/* free the hash table */
+	free_hash_table(&lrock.server_table, NULL);
+
 	/* free the wildmats */
-	free_wildmats(wild);
+	free_wildmats(lrock.wild);
+	free(erock.wild);
     }
     else if (!strcmp(arg1, "overview.fmt")) {
 	if (arg2) {
