@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.58 2002/02/13 21:02:54 rjs3 Exp $ */
+/* $Id: master.c,v 1.59 2002/02/18 20:05:00 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -92,8 +92,6 @@
 
 #include "master.h"
 #include "service.h"
-
-#define SERVICE_PATH (CYRUS_PATH "/bin")
 
 enum {
     become_cyrus_early = 1,
