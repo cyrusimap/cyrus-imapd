@@ -1,49 +1,59 @@
+$Id: COPYRIGHT,v 1.2.2.1 2000/10/12 21:08:26 wcw Exp $
 
-The Cyrus imapd is distributed under the following copyright:
+ALL versions of the  Cyrus IMAP server are now covered by the following copyright: 
 
- * Copyright 1999 Carnegie Mellon University
- * 
- * No warranties, either expressed or implied, are made regarding the
- * operation, use, or results of the software.
+ * Copyright (c) 1994-2000 Carnegie Mellon University.  All rights reserved.
  *
- * Permission to use, copy, modify and distribute this software and its
- * documentation is hereby granted for non-commercial purposes only
- * provided that this copyright notice appears in all copies and in
- * supporting documentation.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
  *
- * Permission is also granted to Internet Service Providers and others
- * entities to use the software for internal purposes.
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer. 
  *
- * The distribution, modification or sale of a product which uses or is
- * based on the software, in whole or in part, for commercial purposes or
- * benefits requires specific, additional permission from:
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
  *
- *  Office of Technology Transfer
- *  Carnegie Mellon University
- *  5000 Forbes Avenue
- *  Pittsburgh, PA  15213-3890
- *  (412) 268-4387, fax: (412) 268-7395
- *  tech-transfer@andrew.cmu.edu
+ * 3. The name "Carnegie Mellon University" must not be used to
+ *    endorse or promote products derived from this software without
+ *    prior written permission. For permission or any legal
+ *    details, please contact  
+ *	Office of Technology Transfer
+ *	Carnegie Mellon University
+ *	5000 Forbes Avenue
+ *	Pittsburgh, PA  15213-3890
+ *	(412) 268-4387, fax: (412) 268-7395
+ *	tech-transfer@andrew.cmu.edu
+ *
+ * 4. Redistributions of any form whatsoever must retain the following
+ *    acknowledgment:
+ *    "This product includes software developed by Computing Services
+ *     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+ *
+ * CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+ * THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+ * FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+ * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+ * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-Some files, such as those in the lib subdirectory, are under a different
-copyright:
+If you find this software useful and valuable in your work, we would
+welcome any support you can offer toward continuing this work.
+ 
+We gratefully accept contributions, whether intellectual or monetary.
+Intellectual contributions in the form of code or constructive
+collaboration can be directed to cyrus-bugs+@andrew.cmu.edu (even if
+it is not a bug).
 
- *        Copyright 1999 by Carnegie Mellon University
- *
- *                      All Rights Reserved
- *
- * Permission to use, copy, modify, and distribute this software and its
- * documentation for any purpose and without fee is hereby granted,
- * provided that the above copyright notice appear in all copies and that
- * both that copyright notice and this permission notice appear in
- * supporting documentation, and that the name of CMU not be
- * used in advertising or publicity pertaining to distribution of the
- * software without specific, written prior permission.
- *
- * CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
- * ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
- * CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
- * ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
- * WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
- * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
- * SOFTWARE.
+If you wish to provide financial support to the Cyrus Project, send a
+check payable to "Carnegie Mellon University" to
+ 
+       Project Cyrus
+       Computing Services
+       Carnegie Mellon University
+       5000 Forbes Ave
+       Pittsburgh, PA 15213
+       USA
