@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- $Id: mboxname.c,v 1.20.4.2.2.2 2001/07/04 01:37:01 ken3 Exp $
+ $Id: mboxname.c,v 1.20.4.2.2.3 2001/07/04 13:59:29 ken3 Exp $
 
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -341,9 +341,9 @@ int mboxname_policycheck(char *name)
     int sawutf7 = 0;
     unsigned c1, c2, c3, c4, c5, c6, c7, c8;
     int ucs4;
-    int isaltsep;
+    int unixsep;
 
-    isaltsep = config_getswitch("altsep", 0);
+    unixsep = config_getswitch("unixhierarchysep", 0);
 
     if (strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
@@ -422,7 +422,7 @@ int mboxname_policycheck(char *name)
 	    name++;		/* Skip over terminating '-' */
 	}
 	else {
-	    if (!strchr(GOODCHARS, *name) && !(isaltsep && *name == DOTCHAR))
+	    if (!strchr(GOODCHARS, *name) && !(unixsep && *name == DOTCHAR))
 		return IMAP_MAILBOX_BADNAME;
 	    name++;
 	    sawutf7 = 0;

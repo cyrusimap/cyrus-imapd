@@ -1,5 +1,5 @@
 /* namespace.c -- Namespace manipulation routines
- * $Id: namespace.c,v 1.1.2.4.2.2 2001/07/04 01:37:01 ken3 Exp $
+ * $Id: namespace.c,v 1.1.2.4.2.3 2001/07/04 13:59:30 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -56,7 +56,7 @@ int namespace_init(struct namespace *namespace, int force_std)
 {
     const char *prefix;
 
-    namespace->hier_sep = config_getswitch("altsep", 0) ? '/' : '.';
+    namespace->hier_sep = config_getswitch("unixhierarchysep", 0) ? '/' : '.';
     namespace->isalt = !force_std && config_getswitch("altnamespace", 0);
 
     if (namespace->isalt) {
