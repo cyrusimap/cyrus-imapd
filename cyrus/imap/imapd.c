@@ -678,6 +678,16 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_getstate(tag.s);
 	    }
+	    else if (!strcmp(cmd.s, "Xcheckstate")) {
+		if (!imapd_mailbox) goto nomailbox;
+		if (c != ' ') goto missingargs;
+		c = getword(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getword(&arg2);
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_checkstate(tag.s, arg1.s, arg2.s);
+	    }
 	    else goto badcmd;
 	    break;
 #endif /* ENABLE_EXPERIMENT */
@@ -2143,6 +2153,10 @@ char *pattern;
 			 lsubdata);
 	lsubdata((char *)0, 0, 0);
     }
+    else if (!pattern[0]) {
+	/* Special case: query top-level hierarchy separator */
+	prot_printf(imapd_out, "* LIST (\\Noselect) \".\" \"\"\r\n");
+    }
     else {
 	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
 			 listdata);
@@ -2652,6 +2666,43 @@ char *tag;
     index_getstate(imapd_mailbox);
 
     prot_printf(imapd_out, "%s OK Getstate completed\r\n", tag);
+}
+
+/*
+ * Perform a XCHECKSTATE command
+ */
+cmd_checkstate(tag, state1, state2)
+char *tag;
+char *state1;
+char *state2;
+{
+    int r;
+    unsigned indexdate = 0, seendate = 0;
+    char *p;
+
+    for (p = state1; *p; p++) {
+	if (!isdigit(*p)) break;
+	indexdate = indexdate * 10 + *p - '0';
+    }
+    if (*p) {
+	prot_printf(imapd_out, "%s BAD Invalid number\r\n", tag);
+	return;
+    }
+
+    for (p = state2; *p; p++) {
+	if (!isdigit(*p)) break;
+	seendate = seendate * 10 + *p - '0';
+    }
+    if (*p) {
+	prot_printf(imapd_out, "%s BAD Invalid number\r\n", tag);
+	return;
+    }
+
+    index_check(imapd_mailbox, 0, 1);
+
+    index_checkstate(imapd_mailbox, indexdate, seendate);
+
+    prot_printf(imapd_out, "%s OK Checkstate completed\r\n", tag);
 }
 
 /*
