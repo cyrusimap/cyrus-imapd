@@ -70,7 +70,7 @@ exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
 LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o \
-	config.o imap_err.o proc.o toimsp.o setproctitle.o \
+	config.o imap_err.o proc.o toimsp.o setproctitle.o convert_code.o \
 	$(SEEN) $(NOTIFY) $(LOGIN)
 
 IMAPDOBJS= imapd.o index.o
@@ -169,7 +169,8 @@ imap_err.h imap_err.c: imap_err.et
 	$(COMPILE_ET) $(srcdir)/imap_err.et
 
 clean:
-	rm -f *.o *.a Makefile.bak imap_err.c imap_err.h $(PROGS)
+	rm -f *.o *.a Makefile.bak imap_err.c imap_err.h makedepend.log \
+	$(PROGS)
 
 distclean: clean
 	rm -f Makefile
