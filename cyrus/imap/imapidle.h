@@ -38,6 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* $Id: imapidle.h,v 1.2 2000/11/30 16:26:31 ken3 Exp $ */
 
 #ifndef IMAPIDLE_H
 #define IMAPIDLE_H
