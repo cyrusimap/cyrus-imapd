@@ -1,5 +1,5 @@
 /* assert.c -- handle assertion failures
- $Id: assert.c,v 1.10 1999/04/08 21:00:47 tjs Exp $
+ $Id: assert.c,v 1.11 1999/09/30 07:30:06 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -24,6 +24,7 @@
  */
 #include <stdio.h>
 
+#include "xmalloc.h"
 #include "exitcodes.h"
 #include "assert.h"
 

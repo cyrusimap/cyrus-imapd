@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.28 1999/03/01 20:26:55 tjs Exp $
+ $Id: auth_krb_pts.c,v 1.29 1999/09/30 07:30:18 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -24,6 +24,8 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -40,6 +42,7 @@
 
 #include "auth_krb_pts.h"
 #include "auth.h"
+#include "lock.h"
 #include "retry.h"
 #include "xmalloc.h"
 
@@ -234,7 +237,7 @@ const char *identifier;
     }
     
     aname[0] = inst[0] = realm[0] = '\0';
-    if (kname_parse(aname, inst, realm, identifier) != 0) {
+    if (kname_parse(aname, inst, realm, (char *) identifier) != 0) {
         return 0;
     }
     
@@ -304,15 +307,14 @@ const char *cacheid;
     struct auth_state *newstate;
     DBT key, dataheader,datalist;
     char keydata[PTS_DB_KEYSIZE];
-    int fd,rc,xpid;
     char fnamebuf[1024];
     DB *ptdb;
     HASHINFO info;
     ptluser us;
-    int forktries = 0;
     int s;
     struct sockaddr_un srvaddr;
     int r;
+    int fd, rc;
     struct iovec iov[10];
     static char response[1024];
     int start, n;
@@ -323,7 +325,8 @@ const char *cacheid;
     newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
     (void)memset(newstate, 0, sizeof(struct auth_state));
 
-    kname_parse(newstate->aname, newstate->inst, newstate->realm, identifier);
+    kname_parse(newstate->aname, newstate->inst, newstate->realm, 
+		(char *) identifier);
     (void)strcpy(newstate->userid, identifier);
 
     if (strcmp(identifier, "anyone") == 0) return newstate;
