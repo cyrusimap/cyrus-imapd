@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.122 1998/09/29 21:15:57 tjs Exp $
+dnl $Id: configure.in,v 1.123 1998/09/29 21:30:48 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -369,7 +369,9 @@ AC_ARG_WITH(login,[  --with-login=METHOD     use login module METHOD
 AC_SUBST(WITH_LOGIN)
 
 case "$WITH_LOGIN" in
-  unix|unix_*) AC_CHECK_LIB(crypt, crypt);;
+  unix|unix_*)
+    ANDREW_CRYPT
+    ;;
   krb|krb_*)
     login_progs=krbck
     AC_MSG_CHECKING(if Kerberos looks sane)
@@ -682,7 +684,10 @@ case "$with_krb" in
   no) true;;
   *)
     dnl Kerberos wants this so we might as well check on it first
-    AC_CHECK_FUNC(res_search,,AC_CHECK_LIB(resolv,res_search))
+    ANDREW_RESOLV
+
+    dnl gotta do this: crypt is used by sasl_krb_server.c
+    ANDREW_CRYPT
 
     AC_CHECK_LIB(des,des_ecb_encrypt, LIBS="${LIBS} -ldes",
  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.]))
