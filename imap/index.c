@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.146 2000/11/19 05:23:13 ken3 Exp $
+ * $Id: index.c,v 1.147 2000/11/28 16:33:28 ken3 Exp $
  */
 #include <config.h>
 
@@ -3121,6 +3121,10 @@ static void parse_cached_envelope(char *env, char *tokens[])
 		c++;
 	    }
 	    *(c-1) = '\0';		/* end of list - trim close paren */
+	    break;
+	default:
+	    /* yikes! unparsed junk, just skip it */
+	    c++;
 	    break;
 	}
     }
