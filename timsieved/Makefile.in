@@ -1,5 +1,5 @@
 # Makefile.in - timsieved makefile
-# $Id: Makefile.in,v 1.22 2004/03/11 15:11:55 ken3 Exp $
+# $Id: Makefile.in,v 1.23 2004/03/11 15:27:21 ken3 Exp $
 # @configure_input@
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
@@ -103,7 +103,7 @@ depend:
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
 
 .c.o:
-	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) \
+	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
 	$<
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
