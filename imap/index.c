@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.108 2000/06/04 22:50:42 leg Exp $
+ * $Id: index.c,v 1.109 2000/06/05 13:16:42 ken3 Exp $
  */
 #include <config.h>
 
@@ -2983,6 +2983,14 @@ void *rock;
  * sufficient for most purposes.
  *
  * public domain code by Jerry Coffin, with improvements by HenkJan Wolthuis.
+ *
+ * Questions:
+ *
+ * Does this function provide a unique hash for all strings?  If not, either
+ * find one that does, or just use strcmp().
+ *
+ * Can we find a function that provides uniqueness and maintains alphabetical
+ * (ascii) ordering between strings ( hash(abc) < hash(abd) < hash(abe) )?
  */
 
 static unsigned hash(char *string)
@@ -3379,11 +3387,13 @@ static void index_thread_free(struct thread *threads)
 		tmp = child;
 		child = child->child;
 		index_msgdata_free(tmp->msgdata);
+		free(tmp);
 	    }
 	}
 	tmp = threads;
 	threads = threads->next;
 	index_msgdata_free(tmp->msgdata);
+	free(tmp);
     }
 }
 
