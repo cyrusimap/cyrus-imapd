@@ -45,6 +45,7 @@ struct tag {
 
 struct tag cmds[] = {
     { "!--",	FLAG_NOPUSH,	0,		0, },
+    { "link",   FLAG_NOPUSH,	0,		0, },
     { "html",	0,		0,		0, },
     { "head",	0,		MODE_IGNORETXT,	0, },
     { "title",	0,		MODE_IGNORETXT,	0, },
@@ -67,6 +68,7 @@ struct tag cmds[] = {
     { "var",	0,		0,		0, },
     { "dfn",	0,		0,		0, },
     { "cite",	0,		0,		0, },
+    { "blockquote", FLAG_PARAGRAPH, 0,          4, },
     { "b",	0,		0,		0, },
     { "i",	0,		0,		0, },
     { "u",	0,		0,		0, },
