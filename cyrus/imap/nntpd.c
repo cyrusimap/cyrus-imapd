@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.7 2003/12/22 18:42:39 ken3 Exp $
+ * $Id: nntpd.c,v 1.8 2003/12/23 17:24:36 ken3 Exp $
  */
 
 /*
@@ -1810,19 +1810,39 @@ static int open_group(char *name, int has_prefix,
 /*
  * duplicate_find() callback function to build Xref content
  */
+struct xref_rock {
+    char *buf;
+    size_t size;
+};
+
 static int xref_cb(const char *msgid __attribute__((unused)),
 		   const char *mailbox,
 		   time_t mark __attribute__((unused)),
-		   unsigned long uid,
-		   void *rock __attribute__((unused)))
+		   unsigned long uid, void *rock)
 {
+    struct xref_rock *xrock = (struct xref_rock *) rock;
+    size_t len = strlen(xrock->buf);
+
     /* make sure its a message in a mailbox that we're serving via NNTP */
     if (*mailbox && !strncmp(mailbox, newsprefix, strlen(newsprefix)) &&
 	strncmp(mailbox, "user.", 5)) {
-	prot_printf(nntp_out, " %s:%lu", mailbox + strlen(newsprefix), uid);
+	snprintf(xrock->buf + len, xrock->size - len,
+		 " %s:%lu", mailbox + strlen(newsprefix), uid);
     }
 
     return 0;
+}
+
+/*
+ * Build an Xref header.  We have to do this on the fly because there is
+ * no way to store it in the article at delivery time.
+ */
+static void build_xref(char *msgid, char *buf, size_t size, int body_only)
+{
+    struct xref_rock xrock = { buf, size };
+
+    snprintf(buf, size, "%s%s", body_only ? "" : "Xref: ", config_servername);
+    duplicate_find(msgid, &xref_cb, &xrock);
 }
 
 static void cmd_article(int part, char *msgid, unsigned long uid)
@@ -1865,9 +1885,10 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 		body = 1;
 		if (output) {
 		    /* add the Xref header */
-		    prot_printf(nntp_out, "Xref: %s", config_servername);
-		    duplicate_find(msgid, &xref_cb, NULL);
-		    prot_printf(nntp_out, "\r\n");
+		    char xref[8192];
+
+		    build_xref(msgid, xref, sizeof(xref), 0);
+		    prot_printf(nntp_out, "%s\r\n", xref);
 		}
 		if (part == ARTICLE_HEAD) {
 		    /* we're done */
@@ -2129,35 +2150,42 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
     for (; uid <= last; uid++) {
 	char *body;
 	int msgno = index_finduid(uid);
+	int by_msgid = (msgid != NULL);
 
 	if (!msgno || index_getuid(msgno) != uid) continue;
 
 	/* see if we're looking for metadata */
 	if (hdr[0] == ':') {
-	    if (!strcasecmp(":size", hdr))
-		prot_printf(nntp_out, "%lu %lu\r\n", msgid ? 0 : uid,
-			    index_getsize(nntp_group, msgno));
+	    if (!strcasecmp(":size", hdr)) {
+		char xref[8192];
+		unsigned long size = index_getsize(nntp_group, msgno);
+
+		if (!by_msgid) msgid = index_get_msgid(nntp_group, msgno);
+		build_xref(msgid, xref, sizeof(xref), 0);
+		if (!by_msgid) free(msgid);
+
+		prot_printf(nntp_out, "%lu %lu\r\n", by_msgid ? 0 : uid,
+			    size + strlen(xref) + 2); /* +2 for \r\n */
+	    }
 	    else if (!strcasecmp(":lines", hdr))
-		prot_printf(nntp_out, "%lu %lu\r\n", msgid ? 0 : uid,
+		prot_printf(nntp_out, "%lu %lu\r\n", by_msgid ? 0 : uid,
 			    index_getlines(nntp_group, msgno));
 	    else
-		prot_printf(nntp_out, "%lu \r\n", msgid ? 0 : uid);
+		prot_printf(nntp_out, "%lu \r\n", by_msgid ? 0 : uid);
 	}
 	else if (!strcmp(hdr, "xref") && !pat /* [X]HDR only */) {
-	    int by_msgid = (msgid != NULL);
+	    char xref[8192];
 
 	    if (!by_msgid) msgid = index_get_msgid(nntp_group, msgno);
-
-	    prot_printf(nntp_out, "%s", config_servername);
-	    duplicate_find(msgid, &xref_cb, NULL);
-	    prot_printf(nntp_out, "\r\n");
-
+	    build_xref(msgid, xref, sizeof(xref), 1);
 	    if (!by_msgid) free(msgid);
+
+	    prot_printf(nntp_out, "%lu %s\r\n", by_msgid ? 0 : uid, xref);
 	}
 	else if ((body = index_getheader(nntp_group, msgno, hdr)) &&
 		 (!pat ||			/* [X]HDR */
 		  wildmat(body, pat))) {	/* XPAT with match */
-		prot_printf(nntp_out, "%lu %s\r\n", msgid ? 0 : uid, body);
+		prot_printf(nntp_out, "%lu %s\r\n", by_msgid ? 0 : uid, body);
 	}
     }
 
@@ -2686,23 +2714,22 @@ static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
 	if (!msgno || index_getuid(msgno) != uid) continue;
 
 	if ((over = index_overview(nntp_group, msgno))) {
+	    char xref[8192];
+
+	    build_xref(over->msgid, xref, sizeof(xref), 0);
+
 	    if (!found++)
 		prot_printf(nntp_out, "224 Overview information follows:\r\n");
 
-	    /* mandatory fields */
-	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t%lu\t",
+	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t%lu\t%s\r\n",
 			msgid ? 0 : over->uid,
 			over->subj ? over->subj : "",
 			over->from ? over->from : "",
 			over->date ? over->date : "",
 			over->msgid ? over->msgid : "",
 			over->ref ? over->ref : "",
-			over->bytes, over->lines);
-
-	    /* add the Xref header */
-	    prot_printf(nntp_out, "Xref: %s", config_servername);
-	    duplicate_find(over->msgid, &xref_cb, NULL);
-	    prot_printf(nntp_out, "\r\n");
+			over->bytes + strlen(xref) + 2, /* +2 for \r\n */
+			over->lines, xref);
 	}
     }
 
