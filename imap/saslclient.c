@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslclient.c,v 1.8 2001/11/27 02:25:00 ken3 Exp $ */
+/* $Id: saslclient.c,v 1.9 2001/12/10 16:15:19 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -94,9 +94,6 @@ static int mysasl_getsecret_cb(sasl_conn_t *conn,
 			       int id,
 			       sasl_secret_t **result)
 {
-    const char *pass;
-    size_t len;
-
     if (!conn || !result || id != SASL_CB_PASS) {
 	return SASL_BADPARAM;
     }
