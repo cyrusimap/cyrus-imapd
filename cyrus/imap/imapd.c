@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.290 2001/01/05 03:22:18 wcw Exp $ */
+/* $Id: imapd.c,v 1.291 2001/01/05 03:23:29 leg Exp $ */
 
 #include <config.h>
 
@@ -550,8 +550,6 @@ int fd;
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
-    extern void seen_done(void);
-
     proc_cleanup();
     if (imapd_mailbox) {
 	index_closemailbox(imapd_mailbox);
