@@ -42,7 +42,7 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.25.2.4 2003/12/02 15:12:57 ken3 Exp $
+ * $Id: glob.c,v 1.25.2.5 2003/12/05 22:11:25 rjs3 Exp $
  */
 
 #include <config.h>
@@ -264,13 +264,22 @@ int glob_test (g, ptr, len, min)
 		   && (*gptr == *ptr || (!newglob && *gptr == '?'))) {
 		++ptr, ++gptr;
 	    }
-	    if (*gptr == '\0' && ptr == pend) break;
-	    if (*gptr == '*') {
+
+	    if (*gptr == '\0' && ptr == pend) {
+		/* End of pattern and end of string -- match! */
+		break;
+	    } else if (*gptr == '\0' &&
+		     min && *min < ptr - start && ptr != pend &&
+		     *ptr == g->sep_char) {
+		/* The pattern ended on a hierarchy separator
+		 * return a partial match */
+		*min = ptr - start + 1;
+		return ptr - start;
+	    } else if (*gptr == '*') {
 		ghier = NULL;
 		gstar = ++gptr;
 		pstar = ptr;
-	    }
-	    if (*gptr == '%') {
+	    } else if (*gptr == '%') {
 		ghier = ++gptr;
 		phier = ptr;
 	    }
@@ -305,6 +314,7 @@ int glob_test (g, ptr, len, min)
 		}
 	    }
 	    if (gstar && !ghier) {
+		/* was the * at the end of the pattern? */
 		if (!*gstar) {
 		    ptr = pend;
 		    break;
