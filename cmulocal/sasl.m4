@@ -62,16 +62,6 @@ AC_ARG_WITH(sasl,
 	[if test "X$with_sasl" = "X"; then
 		with_sasl=yes
 	fi])
-AC_ARG_WITH(sasl-lib,
-	[  --with-sasl-lib=dir     use sasl libraries in dir],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-sasl-lib])
-	fi])
-AC_ARG_WITH(sasl-include,
-	[  --with-sasl-include=dir use sasl headers in dir],
-	[if test "$withval" = "yes" -o "$withval" = "no"; then
-		AC_MSG_ERROR([No argument for --with-sasl-include])
-	fi])
 
 	if test "X$with_sasl" != "X"; then
 	  if test "$with_sasl" != "yes" -a "$with_sasl" != no; then
@@ -85,14 +75,14 @@ AC_ARG_WITH(sasl-include,
 	    ac_cv_sasl_where_lib=$with_sasl_lib
 	  fi
 	  if test "X$ac_cv_sasl_where_lib" = "X"; then
-	    CMU_SASL_LIB_WHERE(/usr/sasl/lib /usr/local/lib /usr/lib)
+	    CMU_SASL_LIB_WHERE(/usr/local/lib /usr/lib)
 	  fi
 
 	  if test "X$with_sasl_include" != "X"; then
 	    ac_cv_sasl_where_inc=$with_sasl_include
 	  fi
 	  if test "X$ac_cv_sasl_where_inc" = "X"; then
-	    CMU_SASL_INC_WHERE(/usr/sasl/include /usr/include/sasl /usr/local/include /usr/include)
+	    CMU_SASL_INC_WHERE(/usr/local/include /usr/include)
 	  fi
 	fi
 
