@@ -79,6 +79,7 @@ int c;
     char request[1024];
     int start, n;
     char *reply;
+    extern char *pwcheck();
     
     start = 0;
     while (start < sizeof(request) - 1) {
