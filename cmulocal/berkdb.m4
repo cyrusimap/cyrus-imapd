@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.12.4.3 2004/03/24 19:52:56 ken3 Exp $
+dnl $Id: berkdb.m4,v 1.12.4.4 2004/09/10 13:57:10 ken3 Exp $
 
 AC_DEFUN([CMU_DB_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -253,7 +253,7 @@ AC_DEFUN([CYRUS_BERKELEY_DB_CHK],
 	dnl Note that FreeBSD puts it in a wierd place
         dnl (but they should use with-bdb-incdir)
         AC_CHECK_HEADER(db.h,
-                        CYRUS_BERKELEY_DB_CHK_LIB(),
+                        [CYRUS_BERKELEY_DB_CHK_LIB()],
                         dblib="no")
 
 	CPPFLAGS=$cmu_save_CPPFLAGS
