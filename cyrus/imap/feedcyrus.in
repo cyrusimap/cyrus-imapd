@@ -5,6 +5,8 @@
 ##  =()<. @<_PATH_SHELLVARS>@>()=
 . @INNSHELLVARS@
 
+CYRUS_DIR=@cyrus_prefix@/bin
+
 PROGNAME=`basename $0`
 LOCK=${LOCKS}/LOCK.${PROGNAME}
 LOG=${MOST_LOGS}/${PROGNAME}.log
@@ -57,7 +59,7 @@ for PROG in collectnews rmnews; do
 	    fi
 	    if [ -s ${BATCHFILE} ] ; then
 		echo "${PROGNAME}: [${PPID}:$$] begin ${PROG} `date`"
-		${PROG} < ${BATCH}/${BATCHFILE} && rm -f ${BATCHFILE} 
+		${CYRUS_DIR}/${PROG} < ${BATCH}/${BATCHFILE} && rm -f ${BATCHFILE} 
 		echo "${PROGNAME}: [${PPID}:$$] end ${PROG} `date`"
 	    else
 		rm -f ${BATCHFILE}

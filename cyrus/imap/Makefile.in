@@ -52,16 +52,26 @@ SHELL = /bin/sh
 
 COMPILE_ET=../et/compile_et
 
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+cyrus_prefix = @cyrus_prefix@
+
 LOBJS= append.o mailbox.o mboxlist.o message.o parseaddr.o \
 	config.o imap_err.o proc.o drop.o setproctitle.o \
 	$(SEEN) $(NOTIFY) $(LOGIN)
 
 IMAPDOBJS= imapd.o index.o
 
-PROGS = collectnews rmnews syncnews \
-	deliver imapd pop3d arbitron reconstruct quota updateimsp
+PROGS = collectnews syncnews imapd pop3d \
+	arbitron reconstruct quota updateimsp
+SUIDPROGS = deliver rmnews
 
-all: $(PROGS)
+
+all: $(PROGS) $(SUIDPROGS)
+
+install:
+	$(INSTALL) -s -m 755 $(PROGS) $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -s -m 4750 $(SUIDPROGS) $(DESTDIR)$(cyrus_prefix)/bin
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
