@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.188 2002/11/12 16:42:26 leg Exp $
+ * $Id: index.c,v 1.189 2003/01/11 18:45:14 rjs3 Exp $
  */
 #include <config.h>
 
@@ -113,7 +113,7 @@ static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 typedef int index_sequenceproc_t(struct mailbox *mailbox, unsigned msgno,
 				 void *rock);
 
-static int index_forsequence(struct mailbox *mailbox, char *sequence,
+static int index_forsequence(struct mailbox *mailbox, const char *sequence,
 			     int usinguid,
 			     index_sequenceproc_t *proc, void *rock,
 			     int* fetchedsomething);
@@ -746,7 +746,7 @@ int oldexists;
  */
 void
 index_fetch(struct mailbox* mailbox,
-	    char* sequence,
+	    const char* sequence,
 	    int usinguid,
 	    struct fetchargs* fetchargs,
 	    int* fetchedsomething)
@@ -1468,7 +1468,7 @@ int index_expungeuidlist(struct mailbox *mailbox, void *rock,
  */
 static int
 index_forsequence(struct mailbox* mailbox,
-		  char* sequence,
+		  const char* sequence,
 		  int usinguid,
 		  index_sequenceproc_t proc,
 		  void* rock,
