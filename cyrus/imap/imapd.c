@@ -1951,7 +1951,6 @@ char *s;
 
     *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
     (*tail)->s = strsave(s);
-    (*tail)->glob = 0;
     (*tail)->next = 0;
 }
 
