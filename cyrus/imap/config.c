@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.13 2002/08/19 01:57:20 ken3 Exp $ */
+/* $Id: config.c,v 1.55.4.14 2002/08/19 19:05:53 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -99,8 +99,6 @@ int config_init(const char *alt_config, const char *ident)
     char *p;
     const char *val;
     int umaskval = 0;
-
-    syslog(LOG_ERR, "xyzzy");
 
     initialize_imap_error_table();
     initialize_mupd_error_table();
