@@ -71,6 +71,7 @@ char **argv;
 {
     int opt, i;
     int rflag = 0;
+    int mflag = 0;
     char buf[MAX_MAILBOX_PATH];
 
     config_init("reconstruct");
@@ -79,15 +80,24 @@ char **argv;
     assert(INDEX_HEADER_SIZE == (OFFSET_UIDVALIDITY+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8));
 
-    while ((opt = getopt(argc, argv, "r")) != EOF) {
+    while ((opt = getopt(argc, argv, "rm")) != EOF) {
 	switch (opt) {
 	case 'r':
 	    rflag = 1;
 	    break;
 
+	case 'm':
+	    mflag = 1;
+	    break;
+
 	default:
 	    usage();
 	}
+    }
+
+    if (mflag) {
+	if (rflag || optind != argc) usage();
+	do_mboxlist();
     }
 
     mailbox_reconstructmode();
@@ -110,6 +120,7 @@ char **argv;
 usage()
 {
     fprintf(stderr, "usage: reconstruct [-r] mailbox...\n");
+    fprintf(stderr, "       reconstruct -m\n");
     exit(EX_USAGE);
 }    
 
@@ -430,6 +441,12 @@ char *name;
     r = seen_reconstruct(&mailbox);
     mailbox_close(&mailbox);
     return r;
+}
+
+do_mboxlist()
+{
+    /*   XXX;*/
+
 }
 
 int convert_code(r)
