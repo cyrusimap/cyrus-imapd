@@ -361,6 +361,69 @@ char **argv;
     return conn->cmd_result;
 }
 
+/***********************
+ * Parse a mech list of the form: ... AUTH=foo AUTH=bar ...
+ *
+ * Return: string with mechs seperated by spaces
+ *
+ ***********************/
+
+static char *parsemechlist(char *str)
+{
+  char *tmp;
+  int num=0;
+  char *ret=malloc(strlen(str)+1);
+  if (ret==NULL) return NULL;
+
+  strcpy(ret,"");
+
+  while ((tmp=strstr(str,"AUTH="))!=NULL)
+  {
+    char *end=tmp+5;
+    tmp+=5;
+
+    while(((*end)!=' ') && ((*end)!='\0'))
+      end++;
+
+    (*end)='\0';
+
+    /* add entry to list */
+    if (num>0)
+      strcat(ret," ");
+    strcat(ret, tmp);
+    num++;
+
+    /* reset the string */
+    str=end+1;
+
+  }
+
+  return ret;
+}
+
+typedef struct mechlist_s {
+  char *mechs;
+} mechlist_t;
+
+/*
+ * IMAP command completion callback
+ */
+static void
+callback_capability(imclient, rock, reply)
+struct imclient *imclient;
+void *rock;
+struct imclient_reply *reply;
+{
+    struct admconn *conn = (struct admconn *)rock;
+    char *s;
+    mechlist_t *mechs=(mechlist_t *)rock;
+    conn->cmd_done++;
+    
+    s = reply->text;
+ 
+    mechs->mechs = parsemechlist(s);
+}
+
 /*
  * Perform the authenticate subcommand
  */
@@ -377,6 +440,8 @@ char **argv;
     int r;
     int minssf=0;     /* default to allow any security layer */
     int maxssf=10000;
+    mechlist_t *mechlist=(mechlist_t *) malloc(sizeof(mechlist_t));
+
     
     /* skip over command & subcommand */
     argv += 2;
@@ -428,9 +493,18 @@ char **argv;
 	return TCL_ERROR;
     }
 
-    /*    r = imclient_authenticate(conn->imclient, login_sasl_client, "imap",
-	  user, prot);*/
-    r = imclient_authenticate(conn->imclient, "KERBEROS_V4", "imap",
+    imclient_addcallback(conn->imclient, "CAPABILITY", 0,
+			 callback_capability, (void *) mechlist, 
+			 (char *) 0);
+
+    imclient_send(conn->imclient, callback_finish, (void *) conn,
+		  "CAPABILITY");
+
+    while (!conn->cmd_done) {
+	imclient_processoneevent(conn->imclient);
+    }
+
+    r = imclient_authenticate(conn->imclient, mechlist->mechs, "imap",
 			      user, minssf, maxssf);
     
     if (r == 1 && (minssf==0) && pwcommand) {
