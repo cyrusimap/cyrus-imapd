@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslserver.c,v 1.8 2004/07/16 12:25:14 ken3 Exp $ */
+/* $Id: saslserver.c,v 1.9 2004/08/04 13:03:17 ken3 Exp $ */
 
 #include <config.h>
 
@@ -49,6 +49,7 @@
 
 #include "prot.h"
 #include "imap_err.h"
+#include "xmalloc.h"
 
 #define BASE64_BUF_SIZE 21848	/* per RFC 2222bis: ((16K / 3) + 1) * 4  */
 

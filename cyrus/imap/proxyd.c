@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.186 2004/06/08 19:54:15 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.187 2004/08/04 13:03:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1095,7 +1095,7 @@ static int proxyd_proxy_policy(sasl_conn_t *conn,
 	requested_user = userbuf;
 
 	/* See if we're using the magic plus */
-	if (p = strchr(userbuf, '+')) {
+	if ((p = strchr(userbuf, '+'))) {
 	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
 
 	    /* strip the magic plus from the authzid */

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.15 2004/06/07 20:12:53 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.16 2004/08/04 13:03:12 ken3 Exp $
  */
 
 #include <config.h>
@@ -158,7 +158,7 @@ static int chkmbox(char *name,
     fprintf(stderr, " -> %d records\n", exists);
 
     if(real_len < (exists * record_size + start_offset)) {
-	fprintf(stderr, " -> Oversized Exists Value\n", exists);
+	fprintf(stderr, " -> Oversized Exists Value %d\n", exists);
 	printf("%s\n",path);
 	fflush(stdout);
     } else {

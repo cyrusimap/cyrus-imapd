@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.160 2004/06/29 16:22:31 ken3 Exp $
+ * $Id: pop3d.c,v 1.161 2004/08/04 13:03:16 ken3 Exp $
  */
 #include <config.h>
 
@@ -1336,7 +1336,7 @@ void cmd_auth(char *arg)
 int openinbox(void)
 {
     char userid[MAX_MAILBOX_NAME+1], inboxname[MAX_MAILBOX_PATH+1];
-    int type, myrights;
+    int type, myrights = 0;
     char *server = NULL, *acl;
     int r, log_level = LOG_ERR;
     const char *statusline = NULL;
