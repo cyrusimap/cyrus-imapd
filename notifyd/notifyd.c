@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.2 2002/03/01 20:24:27 ken3 Exp $
+ * $Id: notifyd.c,v 1.3 2002/03/12 18:10:52 ken3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -88,6 +88,7 @@ static void notifyd_reset(void)
 }
 
 /* Cleanly shut down and exit */
+void shut_down(int code) __attribute__ ((noreturn));
 void shut_down(int code)
 {
     /* cleanup */

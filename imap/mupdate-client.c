@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.26 2002/02/28 16:39:04 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.27 2002/03/12 18:10:49 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -655,8 +655,7 @@ int mupdate_scarf(mupdate_handle *handle,
 
 	if(ch != ' ') {
 	    /* We always have a command */
-	    syslog(LOG_ERR, "Protocol error from master: no tag",
-		   handle->tag.s, ch);
+	    syslog(LOG_ERR, "Protocol error from master: no tag");
 	    r = MUPDATE_PROTOCOL_ERROR;
 	    goto done;
 	}

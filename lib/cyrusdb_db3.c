@@ -105,7 +105,7 @@ static int init(const char *dbdir, int myflags)
     int r, do_retry = 1;
     int flags = 0;
     int maj, min, patch;
-    char *vstr;
+    char *vstr, errpfx[10];
 
     if (dbinit++) return 0;
 
@@ -152,7 +152,8 @@ static int init(const char *dbdir, int myflags)
     }
 
     dbenv->set_errcall(dbenv, db_err);
-    dbenv->set_errpfx(dbenv, "db3");
+    sprintf(errpfx, "db%d", DB_VERSION_MAJOR);
+    dbenv->set_errpfx(dbenv, errpfx);
 
 #if 0
     /* XXX should make this value runtime configurable */

@@ -1,6 +1,6 @@
 /*
  * Mar  8, 2000 by Hajimu UMEMOTO <ume@mahoroba.org>
- * $Id: getaddrinfo.c,v 1.2 2001/11/27 02:25:02 ken3 Exp $
+ * $Id: getaddrinfo.c,v 1.3 2002/03/12 18:10:51 ken3 Exp $
  *
  * This module is besed on ssh-1.2.27-IPv6-1.5 written by
  * KIKUCHI Takahiro <kick@kyoto.wide.ad.jp>
@@ -64,6 +64,8 @@
 #include <arpa/inet.h>
 #endif
 #include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
 
 static struct addrinfo *
 malloc_ai(int port, u_long addr, int socktype, int proto)

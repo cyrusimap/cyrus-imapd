@@ -1,4 +1,4 @@
-/* notify_no.c -- NULL notification method
+/* notify_null.c -- NULL notification method
  * Ken Murchison
  */
 /*
@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_null.c,v 1.2 2002/03/01 20:32:38 ken3 Exp $
+ * $Id: notify_null.c,v 1.3 2002/03/12 18:10:52 ken3 Exp $
  */
 
 #include "notify_null.h"
