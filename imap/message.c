@@ -837,7 +837,7 @@ struct param **paramp;
 	message_parse_rfc822space(&hdr);
 
 	/* Ignore parameter if not at end of header or parameter delimiter */
-	if (hdr && *hdr != ';') return;
+	if (hdr && *hdr++ != ';') return;
 		  
 	/* Save attribute/value pair */
 	*paramp = param = (struct param *)xmalloc(sizeof(struct param));
