@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.217 2003/08/14 16:20:32 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.218 2003/09/01 22:05:30 rjs3 Exp $
  */
 
 #include <config.h>
@@ -623,6 +623,8 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	root = config_getstring(buf, (char *)0);
 	if (!root) {
 	    r = IMAP_PARTITION_UNKNOWN;
+	    syslog(LOG_ERR, "Could not find partition-%s in config file during create",
+		   newpartition);
 	    goto done;
 	}
 	if (strlen(root)+strlen(name)+20 > MAX_MAILBOX_PATH) {
