@@ -46,8 +46,7 @@ all:: checkdepend
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" all "in" `pwd`;	\
-			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all;	\
-			echo "### Done with" `pwd`);		\
+			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all) || exit 1; \
 	done
 
 install::
@@ -61,8 +60,7 @@ install::
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" install "in" `pwd`;	\
-			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) install ;	\
-			echo "### Done with" `pwd`);		\
+			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) install) || exit 1; \
 	done
 
 clean::
@@ -86,8 +84,7 @@ depend::
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" depend "in" `pwd`;	\
-			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) depend ;	\
-			echo "### Done with" `pwd`);		\
+			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) depend) || exit 1; \
 	done
 
 Makefile: Makefile.in config.status
