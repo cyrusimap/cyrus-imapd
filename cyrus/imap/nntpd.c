@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.47 2002/12/17 16:35:08 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.48 2002/12/18 18:13:46 ken3 Exp $
  */
 
 /*
@@ -936,7 +936,12 @@ static void cmdloop(void)
 	    break;
 
 	case 'S':
-	    if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
+	    if (!strcmp(cmd.s, "Starttls")) {
+		if (!tls_enabled()) {
+		    /* we don't support starttls */
+		    goto badcmd;
+		}
+
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
@@ -1570,7 +1575,7 @@ static void cmd_help()
     prot_printf(nntp_out, "\tPOST\r\n");
     prot_printf(nntp_out, "\tQUIT\r\n");
     prot_printf(nntp_out, "\tSLAVE\r\n");
-    prot_printf(nntp_out, "\tSTARTTLS\r\n");
+    if (tls_enabled()) prot_printf(nntp_out, "\tSTARTTLS\r\n");
     prot_printf(nntp_out, "\tSTAT\r\n");
     prot_printf(nntp_out, "\tTAKETHIS\r\n");
     prot_printf(nntp_out, ".\r\n");
@@ -1685,7 +1690,7 @@ void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, "HDR\r\n");
 	prot_printf(nntp_out, "LISTGROUP\r\n");
 	prot_printf(nntp_out, "OVER\r\n");
-	prot_printf(nntp_out, "STARTTLS\r\n");
+	if (tls_enabled()) prot_printf(nntp_out, "STARTTLS\r\n");
 	prot_printf(nntp_out, ".\r\n");
 
 	did_extensions = 1;
