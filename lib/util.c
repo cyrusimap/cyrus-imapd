@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: util.c,v 1.15 2000/05/23 20:56:19 robeson Exp $
+/* $Id: util.c,v 1.16 2001/03/03 20:33:59 leg Exp $
  */
 
 #include <config.h>
@@ -49,9 +49,7 @@
 #include <ctype.h>
 #include <string.h>
 #include "util.h"
-
-/* from OS: */
-extern char *malloc(), *realloc();
+#include "xmalloc.h"
 
 #define BEAUTYBUFSIZE 4096
 
@@ -193,11 +191,11 @@ char *beautify_string(const char* src)
     if (beautysize < len) {
 	if (!beautysize) {
 	    beautysize = len > BEAUTYBUFSIZE ? len : BEAUTYBUFSIZE;
-	    beautybuf = malloc(beautysize);
+	    beautybuf = xmalloc(beautysize);
 	} else {
 	    beautysize *= 2;
 	    if (len > beautysize) beautysize = len;
-	    beautybuf = realloc(beautybuf, beautysize);
+	    beautybuf = xrealloc(beautybuf, beautysize);
 	}
 	if (!beautybuf) {
 	    beautysize = 0;
