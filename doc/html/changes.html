@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.26 1998/02/11 07:08:06 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.27 1998/02/23 21:29:08 tjs Exp $ -->
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
@@ -7,6 +7,9 @@
 <h2>Changes to the Cyrus IMAP Server Since Version 1.5.2</h2>
 
 <ul>
+
+<li> Makedepend still runs, and still generates warnings, but these are
+	  squirrled away in makedepend.log.
 
 <li> On mailbox delete, the server will no longer try and unlink ".." and
 	  "." as we got a report that it confuses one Unix file system.
@@ -469,7 +472,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Wed Feb 11 00:30:54 1998
+last modified by tjs at Wed Feb 11 02:19:11 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
