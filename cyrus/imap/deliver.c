@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.123.2.6 2000/06/23 19:25:34 ken3 Exp $
+ * $Id: deliver.c,v 1.123.2.7 2000/06/24 13:37:23 ken3 Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.123.2.6 2000/06/23 19:25:34 ken3 Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.123.2.7 2000/06/24 13:37:23 ken3 Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -762,7 +762,7 @@ static void fill_cache(struct protstream *fin, FILE *fout,
 }
 
 /* gets the header "head" from msg. */
-static int getheader(void *v, char *phead, char ***body)
+static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
     int cl, clinit;
@@ -787,7 +787,7 @@ static int getheader(void *v, char *phead, char ***body)
     clinit = cl = hashheader(head);
     while (m->cache[cl] != NULL) {
 	if (!strcmp(head, m->cache[cl]->name)) {
-	    *body = m->cache[cl]->contents;
+	    *body = (const char **) m->cache[cl]->contents;
 	    break;
 	}
 	cl++; /* try next hash bin */
@@ -814,19 +814,19 @@ static int getsize(void *mc, int *size)
 
 /* we use the temp field in message_data to avoid having to malloc memory
    to return, and we also can't expose our the receipients to the message */
-int getenvelope(void *mc, char *field, char ***contents)
+int getenvelope(void *mc, const char *field, const char ***contents)
 {
     message_data_t *m = (message_data_t *) mc;
 
     if (!strcasecmp(field, "from")) {
-	*contents = m->temp;
+	*contents = (const char **) m->temp;
 	m->temp[0] = m->return_path;
 	m->temp[1] = NULL;
 	return SIEVE_OK;
     } else if (!strcasecmp(field, "to")) {
 	m->temp[0] = m->rcpt[m->rcpt_num]->all;
 	m->temp[1] = NULL;
-	*contents = m->temp;
+	*contents = (const char **) m->temp;
 	return SIEVE_OK;
     } else {
 	*contents = NULL;
@@ -1058,7 +1058,7 @@ int sieve_reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *m = (message_data_t *) mc;
     char buf[8192];
-    char **body;
+    const char **body;
     char *origreceip;
     int res;
 
@@ -2006,7 +2006,7 @@ savemsg(message_data_t *m, int lmtpmode)
     char buf[8192], *p;
     int retpathclean = 0;
     struct stat sbuf;
-    char **body, **frombody, **subjbody, **tobody;
+    const char **body, **frombody, **subjbody, **tobody;
     int sl, i;
 
     /* Copy to temp file */
