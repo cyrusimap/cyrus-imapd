@@ -90,7 +90,12 @@ c) smtp server
 Repackage, Reboot, (and redepot/repackage again)
 
 - Key the machine (imap, lmtp, smtp, pop, and put them in /imap/conf/srvtab)
+- k5 keys:
+/usr/local/etc/ktutil srv2key
+chgrp cyrus /etc/krb5.keytab
+chmod g+r /etc/krb5.keytab
 - Generate an SSL key for the machine and install to /imap/conf/server.pem
+  (preferrably signed correctly)
 - run tools/mkimap (as cyrus!)
 
 ----------------------------------------------------------------------
