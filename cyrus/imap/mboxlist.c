@@ -428,12 +428,12 @@ char *userid;
     n = retry_writev(newlistfd, iov, 8);
     
     free(partition);
-    free(acl);
 
     if (n == -1 || fsync(newlistfd)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
 	mboxlist_unlock();
 	close(newlistfd);
+	free(acl);
 	return IMAP_IOERROR;
     }
     close(newlistfd);
@@ -444,7 +444,8 @@ char *userid;
 	if (isupper(*p)) *p = tolower(*p);
 	else if (*p == '.') *p = '/';
     }
-    r = mailbox_create(name, buf2, format, (struct mailbox *)0);
+    r = mailbox_create(name, buf2, acl, format, (struct mailbox *)0);
+    free(acl);
     if (r) return r;
     if (rename(newlistfname, listfname) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
@@ -794,6 +795,7 @@ char *userid;
     long access;
     int isusermbox = 0;
     char inboxname[MAX_NAME_LEN+1];
+    struct mailbox *mailbox;
     unsigned long offset, len;
     char *oldacl, *acl, *newacl;
     unsigned long oldacllen;
@@ -830,6 +832,18 @@ char *userid;
 	}
     }
 
+    /* Open & lock  mailbox header */
+    if (!r) {
+	r = maibox_open_header(name, &mailbox);
+    }
+    if (r) {
+	mboxlist_unlock();
+	return r;
+    }
+    if (!r) {
+	r = mailbox_lock_header(&mailbox);
+    }
+
     if (!r) {
 	newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
 	if (newlistfd == -1) {
@@ -839,6 +853,7 @@ char *userid;
     }
 
     if (r) {
+	mailbox_close(&mailbox);
 	mboxlist_unlock();
 	return r;
     }
@@ -848,6 +863,7 @@ char *userid;
     if (rights) {
 	if (acl_set(&newacl, identifier, acl_strtomask(rights),
 		    isusermbox ? ensureOwnerRights : 0, userid)) {
+	    mailbox_close(&mailbox);
 	    mboxlist_unlock();
 	    free(newacl);
 	    return IMAP_INVALID_IDENTIFIER;
@@ -856,6 +872,7 @@ char *userid;
     else {
 	if (acl_delete(&newacl, identifier,
 		       isusermbox ? ensureOwnerRights : 0, userid)) {
+	    mailbox_close(&mailbox);
 	    mboxlist_unlock();
 	    free(newacl);
 	    return IMAP_INVALID_IDENTIFIER;
@@ -865,6 +882,7 @@ char *userid;
     /* Copy over mailbox list, making change */
     offset = bsearch_mem(name, 0, list_base, list_size, 0, &len);
     if (!len) {
+	mailbox_close(&mailbox);
 	mboxlist_unlock();
 	close(newlistfd);
 	return IMAP_MAILBOX_NONEXISTENT;
@@ -896,6 +914,13 @@ char *userid;
 	free(newacl);
 	return IMAP_IOERROR;
     }
+
+    /* Change the redundant copy in mailbox header */
+    free(mailbox.acl);
+    mailbox.acl = strsave(newacl);
+    (void) mailbox_write_header(&mailbox);
+    mailbox_close(&mailbox);
+
     mboxlist_unlock();
     close(newlistfd);
     free(newacl);
