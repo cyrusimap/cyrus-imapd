@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.56 2000/03/08 01:44:52 leg Exp $
+# $Id: SMakefile,v 1.57 2000/04/11 22:20:31 leg Exp $
 #
 
 if test ! -x configure; then
@@ -44,22 +44,13 @@ if test "${OVERRIDE-nil}" != "t" ; then
              LDFLAGS="${LDFLAGS}"
            fi
 	   ;;
-    IRIX) CFLAGS="${CFLAGS} -O2"
-	  LDFLAGS="${LDFLAGS}"
-	  #LDFLAGS="-L/usr/local/lib -Wl,-rpath,/usr/local/lib"
-	  #export LDFLAGS
-	  ;;
-    HP-UX)
-      CC=gcc # hp cc can't handle Cyrus
-      CFLAGS="${CFLAGS} -O2"
-      ;;
     SunOS)
 #      CFLAGS="${CFLAGS} -xs -xO3 -xdepend"
 #      LDFLAGS="${LDFLAGS} -xs -xO3 -xdepend"
 
       CC="gcc"
       CFLAGS="${CFLAGS} -g -O3 -Wall"
-      LDFLAGS="${LDFLAGS}"
+      LDFLAGS="${LDFLAGS} -L/usr/local/lib -Wl,-R,/usr/local/lib"
 
 #     if test "${WASH_CYRUS_DEBUG}" = "t"; then
 #        CFLAGS="-g -xs"
@@ -69,12 +60,6 @@ if test "${OVERRIDE-nil}" != "t" ; then
       if test "${WASH_CYRUS_DEBUG}" = "t"; then
         CFLAGS="-g"
       fi
-      ;;
-    ULTRIX)
-      CC=gcc # cheat -- Ultrix cc is aged
-      CFLAGS="${CFLAGS} -g -O2"
-      WITHAUTH=""
-      AMSSYNC=""
       ;;
     *)    
       ;;
