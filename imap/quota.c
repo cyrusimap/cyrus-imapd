@@ -182,6 +182,7 @@ int nroots;
 	      xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
 	}
 	quota[quota_num] = zeroquotaentry;
+	quota[quota_num].quota.fd = -1;
 	quota[quota_num].quota.root = xstrdup(dirent->d_name);
 	
 	r = mailbox_read_quota(&quota[quota_num].quota);
@@ -239,11 +240,13 @@ int maycreate;
 	}
     }
 
+    if (partial && thisquota == -1) return 0;
+
     r = mailbox_open_header(name, 0, &mailbox);
     if (r) return r;
 
     if (thisquota == -1) {
-	if (!partial && mailbox.quota.root) {
+	if (mailbox.quota.root) {
 	    r = fixquota_fixroot(&mailbox, (char *)0);
 	    if (r) {
 		mailbox_close(&mailbox);
