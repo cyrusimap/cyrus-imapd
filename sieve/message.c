@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.17 2000/10/26 23:09:27 leg Exp $
+ * $Id: message.c,v 1.18 2000/10/31 20:36:58 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -464,8 +464,8 @@ char *get_address(address_part_t addrpart, void **data, void **marker)
 #define U_DOMAIN "unspecified-domain"
 #define U_USER "unknown-user"
 	    if (a->mailbox || a->domain) {
-		char *m = a->mailbox ? a->mailbox ? U_USER;
-		char *d = a->domain ? a->domain ? U_DOMAIN;
+		char *m = a->mailbox ? a->mailbox : U_USER;
+		char *d = a->domain ? a->domain : U_DOMAIN;
 		am->freeme = (char *) xmalloc(strlen(m) + strlen(d) + 2);
 
 		sprintf(am->freeme, "%s@%s", m, d);
