@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.42 2002/07/24 19:30:39 rjs3 Exp $ */
+/* $Id: quota.c,v 1.43 2002/11/06 20:43:24 rjs3 Exp $ */
 
 
 #include <config.h>
@@ -49,6 +49,7 @@
 #endif
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <ctype.h>
 #include <syslog.h>
@@ -84,7 +85,6 @@
 #include "mboxname.h"
 #include "convert_code.h"
 
-extern int errno;
 extern int optind;
 extern char *optarg;
 

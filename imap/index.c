@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.186 2002/10/09 18:46:13 ken3 Exp $
+ * $Id: index.c,v 1.187 2002/11/06 20:43:21 rjs3 Exp $
  */
 #include <config.h>
 
@@ -79,8 +79,6 @@
 #include "search_engines.h"
 
 #include "index.h"
-
-extern int errno;
 
 extern void printastring (const char *s);
 

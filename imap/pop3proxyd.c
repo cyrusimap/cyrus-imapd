@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.51 2002/10/21 17:17:42 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.52 2002/11/06 20:43:23 rjs3 Exp $
  */
 #include <config.h>
 
@@ -49,6 +49,7 @@
 #include <unistd.h>
 #endif
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <fcntl.h>
 #include <time.h>
@@ -97,9 +98,6 @@ static int kflag = 0;
 extern int optind;
 extern char *optarg;
 extern int opterr;
-
-extern int errno;
-
 
 
 #ifdef HAVE_SSL

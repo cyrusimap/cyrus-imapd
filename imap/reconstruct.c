@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.69 2002/07/17 17:37:19 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.70 2002/11/06 20:43:24 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -48,6 +48,7 @@
 #endif
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <fcntl.h>
 #include <ctype.h>
@@ -94,7 +95,6 @@
 #include "util.h"
 #include "acapmbox.h"
 
-extern int errno;
 extern int optind;
 extern char *optarg;
 

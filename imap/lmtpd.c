@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.101 2002/10/03 19:02:38 ken3 Exp $
+ * $Id: lmtpd.c,v 1.102 2002/11/06 20:43:22 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -155,7 +155,6 @@ static void setup_sieve();
 /* global state */
 extern int optind;
 extern char *optarg;
-extern int errno;
 static int have_dupdb = 1;	/* duplicate delivery db is initialized */
 static int dupelim = 1;		/* eliminate duplicate messages with
 				   same message-id */

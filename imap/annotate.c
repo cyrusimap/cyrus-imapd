@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.11 2002/07/24 19:30:31 rjs3 Exp $
+ * $Id: annotate.c,v 1.12 2002/11/06 20:43:20 rjs3 Exp $
  */
 
 #include <config.h>
@@ -61,8 +61,6 @@
 #include <ctype.h>
 #include <syslog.h>
 #include <com_err.h>
-
-extern int errno;
 
 #include "acl.h"
 #include "assert.h"

@@ -1,5 +1,5 @@
 /* lock_flock.c -- Lock files using flock()
- $Id: lock_flock.c,v 1.12 2001/10/02 21:08:13 ken3 Exp $
+ $Id: lock_flock.c,v 1.13 2002/11/06 20:43:26 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -53,8 +53,6 @@
 #include "lock.h"
 
 const char *lock_method_desc = "flock";
-
-extern int errno;
 
 /*
  * Block until we obtain an exclusive lock on the file descriptor 'fd',

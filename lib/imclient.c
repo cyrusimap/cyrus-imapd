@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.75 2002/08/06 16:53:50 rjs3 Exp $
+ * $Id: imclient.c,v 1.76 2002/11/06 20:43:26 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -84,8 +84,6 @@
 #include "nonblock.h"
 #include "util.h"
 #include "iptostring.h"
-
-extern int errno;
 
 /* I/O buffer size */
 #define IMCLIENT_BUFSIZE 4096
