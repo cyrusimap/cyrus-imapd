@@ -245,6 +245,7 @@ int maycreate;
 		return r;
 	    }
 	}
+	mailbox_close(&mailbox);
 	return 0;
     }
 
@@ -465,7 +466,7 @@ fatal(s, code)
 char *s;
 int code;
 {
-    fprintf(stderr, "reconstruct: %s\n", s);
+    fprintf(stderr, "quota: %s\n", s);
     exit(code);
 }
 
