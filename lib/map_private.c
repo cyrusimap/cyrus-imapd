@@ -53,6 +53,14 @@ char *mboxname;
 			 , fd, 0L);
     if (*base == (char *)-1) {
 	char buf[80];
+
+	if (onceonly) {
+	    /* Try again without using MAP_SHARED */
+	    *len = 0;
+	    map_refresh(fd, 0, base, len, newlen, name, mboxname);
+	    return;
+	}
+
 	syslog(LOG_ERR, "IOERROR: mapping %s file%s%s: %m", name,
 	       mboxname ? " for " : "", mboxname ? mboxname : "");
 	sprintf(buf, "failed to mmap %s file", name);
