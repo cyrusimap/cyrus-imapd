@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.21 2004/12/22 20:22:01 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.22 2005/01/11 19:18:44 ken3 Exp $
  *
  */
 
@@ -305,6 +305,14 @@ static mailbox_notifyproc_t *updatenotifier = NULL;
 void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc)
 {
     updatenotifier = notifyproc;
+}
+
+/*
+ * Get the updatenotifier function
+ */
+mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
+{
+    return updatenotifier;
 }
 
 /*

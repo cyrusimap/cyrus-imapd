@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.49 2004/12/17 18:15:01 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.50 2005/01/11 19:18:32 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3409,7 +3409,11 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 	goto freeargs;
     }
 
-    if (usinguid) {
+    if (config_getswitch(IMAPOPT_FLUSHSEENSTATE)) {
+	/* update \Seen state from disk */
+	index_check(imapd_mailbox, usinguid, 2 /* quiet */);
+    }
+    else if (usinguid) {
 	fetchitems |= FETCH_UID;
 	index_check(imapd_mailbox, 1, 0);
     }
@@ -3427,6 +3431,11 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     } else if (fetchedsomething || usinguid) {
 	prot_printf(imapd_out, "%s OK %s (%s sec)\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED), mytime);
+	if (config_getswitch(IMAPOPT_FLUSHSEENSTATE) &&
+	    (fetchargs.fetchitems & FETCH_SETSEEN)) {
+	    /* flush \Seen state to disk */
+	    index_check(imapd_mailbox, usinguid, 2 /* quiet */);
+	}
     } else {
 	/* normal FETCH, nothing came back */
 	prot_printf(imapd_out, "%s NO %s (%s sec)\r\n", tag,
@@ -3553,7 +3562,9 @@ void cmd_partial(const char *tag, const char *msgno, char *data,
 
     index_fetch(imapd_mailbox, msgno, 0, &fetchargs, &fetchedsomething);
 
-    index_check(imapd_mailbox, 0, 0);
+    index_check(imapd_mailbox, 0,  /* flush \Seen state to disk? */
+		config_getswitch(IMAPOPT_FLUSHSEENSTATE) &&
+		fetchedsomething && (fetchargs.fetchitems & FETCH_SETSEEN));
 
     if (fetchedsomething) {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -3694,7 +3705,12 @@ void cmd_store(char *tag, char *sequence, char *operation, int usinguid)
     r = index_store(imapd_mailbox, sequence, usinguid, &storeargs,
 		    flag, nflags);
 
-    if (usinguid) {
+    if (config_getswitch(IMAPOPT_FLUSHSEENSTATE) &&
+	(storeargs.seen || storeargs.operation == STORE_REPLACE)) {
+	/* flush \Seen state to disk */
+	index_check(imapd_mailbox, usinguid, 1);
+    }
+    else if (usinguid) {
 	index_check(imapd_mailbox, 1, 0);
     }
 

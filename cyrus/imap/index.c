@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.10 2004/08/05 16:23:41 ken3 Exp $
+ * $Id: index.c,v 1.199.2.11 2005/01/11 19:18:42 ken3 Exp $
  */
 #include <config.h>
 
@@ -249,6 +249,10 @@ void index_operatemailbox(struct mailbox *mailbox)
 
 /*
  * Check for and report updates
+ *
+ * If checkseen is 0, \Seen state will not be checkpointed
+ * If checkseen is 1, \Seen state will be checkpointed
+ * If checkseen is 2, \Seen state will be quietly checkpointed
  */
 void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 {
@@ -408,7 +412,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     }
 
     /* Check Flags */
-    if (checkseen) index_checkseen(mailbox, 0, usinguid, oldexists);
+    if (checkseen) index_checkseen(mailbox, checkseen >> 1, usinguid, oldexists);
     else if (oldexists == -1) seen_unlock(seendb);
     for (i = 1; i <= imapd_exists && seenflag[i]; i++);
     if (i == imapd_exists + 1) allseen = mailbox->last_uid;
@@ -468,6 +472,7 @@ int oldexists;
     char *saveseenuids, *save;
     int savealloced;
     unsigned start, newallseen, inrange, usecomma;
+    mailbox_notifyproc_t *updatenotifier;
 
     if (!keepingseen || !seendb) return;
     if (imapd_exists == 0) {
@@ -741,6 +746,9 @@ int oldexists;
 
     free(newseenuids);
     seenuids = saveseenuids;
+
+    updatenotifier = mailbox_get_updatenotifier();
+    if (updatenotifier) updatenotifier(mailbox);
 }
 
 

@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.26 2004/09/15 17:33:39 ken3 Exp $
+.\" $Id: imapoptions,v 1.2.2.27 2005/01/11 19:18:46 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -213,6 +213,13 @@ are listed with ``<none>''.
    amount of I/O that takes place at the time of EXPUNGE and should
    result in greater responsiveness for the client, especially when
    expunging a large number of messages. */
+
+{ "flushseenstate", 0, SWITCH }
+/* If enabled, changes to the seen state will be flushed to disk
+   immediately, otherwise changes will be cached and flushed when the
+   mailbox is closed.  This option may be used to fix the problem of
+   previously read messages being marked as unread in Microsoft
+   Outlook, at the expense of a loss of performance/scalability. */
 
 { "foolstupidclients", 0, SWITCH }
 /* If enabled, only list the personal namespace when a LIST "*" is performed.
