@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.108 2003/02/20 15:45:10 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.109 2003/02/27 21:27:16 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -850,13 +850,15 @@ int send_response(void *ac,
     fprintf(sm, "Subject: %s\r\n", src->subj);
     if (md->id) fprintf(sm, "In-Reply-To: %s\r\n", md->id);
     fprintf(sm, "Auto-Submitted: auto-replied (vacation)\r\n");
+    fprintf(sm, "MIME-Version: 1.0\r\n");
     if (src->mime) {
-	fprintf(sm, "MIME-Version: 1.0\r\n");
 	fprintf(sm, "Content-Type: multipart/mixed;"
 		"\r\n\tboundary=\"%d/%s\"\r\n", (int) p, config_servername);
 	fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
 	fprintf(sm, "--%d/%s\r\n", (int) p, config_servername);
     } else {
+	fprintf(sm, "Content-Type: text/plain; charset=utf-8\r\n");
+	fprintf(sm, "Content-Transfer-Encoding: 8bit\r\n");
 	fprintf(sm, "\r\n");
     }
 
