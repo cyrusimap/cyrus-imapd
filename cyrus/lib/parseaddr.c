@@ -1,5 +1,30 @@
+/* parseaddr.c -- RFC 822 address parser
+ *
+ *	(C) Copyright 1995 by Carnegie Mellon University
+ *
+ *                      All Rights Reserved
+ *
+ * Permission to use, copy, modify, and distribute this software and its 
+ * documentation for any purpose and without fee is hereby granted, 
+ * provided that the above copyright notice appear in all copies and that
+ * both that copyright notice and this permission notice appear in 
+ * supporting documentation, and that the name of CMU not be
+ * used in advertising or publicity pertaining to distribution of the
+ * software without specific, written prior permission.  
+ * 
+ * CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+ * ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+ * CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+ * ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+ * WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+ * SOFTWARE.
+ *
+ */
+
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 
 #include "parseaddr.h"
 #include "xmalloc.h"
@@ -11,6 +36,10 @@ static int parseaddr_phrase();
 static int parseaddr_domain();
 static int parseaddr_route();
 
+/*
+ * Parse an address list in 's', appending address structures to
+ * the list pointed to by 'addrp'.
+ */
 parseaddr_list(s, addrp)
 char *s;
 struct address **addrp;
@@ -21,7 +50,7 @@ struct address **addrp;
     char *phrase, *route, *mailbox, *domain, *comment;
 
     /* Skip down to the tail */
-    while ((*addrp)->next) {
+    while (*addrp) {
 	addrp = &(*addrp)->next;
     }
 
@@ -87,6 +116,9 @@ struct address **addrp;
     if (freeme) free(freeme);
 }
 
+/*
+ * Free the address list 'addr'
+ */
 parseaddr_free(addr)
 struct address *addr;
 {
@@ -100,6 +132,9 @@ struct address *addr;
     }
 }
 
+/*
+ * Helper function to append a new address structure to and address list.
+ */
 static void
 parseaddr_append(addrpp, name, route, mailbox, domain, freemep)
 struct address ***addrpp;
@@ -144,6 +179,8 @@ char **freemep;
     *addrpp = &newaddr->next;
 }
 
+/* Macro to skip white space and rfc822 comments */
+
 #define SKIPWHITESPACE(s) \
 { \
     int _c, _comment = 0; \
@@ -165,7 +202,10 @@ char **freemep;
     } \
 }
 
-static int parseaddr_phrase(inp, phrasep, specials)
+/*
+ * Parse an RFC 822 "phrase", stopping at 'specials'
+ */
+static int parseaddr_phrase(inp, phrasep, specials
 char **inp;
 char **phrasep;
 char *specials;
@@ -181,7 +221,8 @@ char *specials;
     for (;;) {
         c = *src++;
 	if (c == '\"') {
-	    while (c = *src++) {
+	    while (c = *src) {
+		src++;
 		if (c == '\"') break;
 		if (c == '\\') {
 		    if (!(c = *src)) break;
@@ -198,6 +239,7 @@ char *specials;
 	else if (!c || strchr(specials, c)) {
 	    if (dst > *phrasep && dst[-1] == ' ') dst--;
 	    *dst = '\0';
+	    *inp = src;
 	    return c;
 	}
 	else {
@@ -206,6 +248,9 @@ char *specials;
     }
 }
 
+/*
+ * Parse a domain.  If 'commentp' is non-nil, parses any trailing comment
+ */
 static int parseaddr_domain(inp, domainp, commentp)
 char **inp;
 char **domainp;
@@ -253,11 +298,15 @@ char **commentp;
 	else if (!isspace(c)) {
 	    if (dst > *domainp && dst[-1] == '.') dst--;
 	    *dst = '\0';
+	    *inp = src;
 	    return c;
 	}
     }
 }
 	
+/*
+ * Parse a source route (at-domain-list)
+ */
 static int parseaddr_route(inp, routep)
 char **inp;
 char **routep;
@@ -287,9 +336,9 @@ char **routep;
 	    while (dst > *routep &&
 		   (dst[-1] == '.' || dst[-1] == ',' || dst[-1] == '@')) dst--;
 	    *dst = '\0';
+	    *inp = src;
 	    return c;
 	}
     }
 }
-
 
