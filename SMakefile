@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.83 2002/03/15 22:49:59 rjs3 Exp $
+# $Id: SMakefile,v 1.84 2002/05/15 14:57:08 rjs3 Exp $
 #
 
 if test ! -x configure; then
@@ -104,7 +104,7 @@ case `uname` in
 #       CFLAGS="${CFLAGS} -g"
 
         LDFLAGS="${LDFLAGS} -L/usr/local/lib -Wl,-R,/usr/local/lib"
-	LIBS="-lkstat"
+	LIBS="-lkstat -ldoor"
 
 #     if test "${WASH_CYRUS_DEBUG}" = "t"; then
 #        CFLAGS="-g -xs"
