@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.4 2000/04/11 22:20:06 leg Exp $
+   $Id: seen_db.c,v 1.5 2000/04/12 18:24:50 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -337,6 +337,23 @@ int seen_unlock(struct seen *seendb)
     abortcurrent(seendb);
     /* we lazily close the database */
     return 0;
+}
+
+int seen_done(void)
+{
+    struct seen *seendb = lastseen;
+
+    if (seendb) {
+	abortcurrent(seendb);
+	r = seendb->db->close(seendb->db, 0);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: error closing seendb: %s",
+		   db_strerror(r));
+	    r = IMAP_IOERROR;
+	}
+    }
+
+    return r;
 }
 
 int seen_reconstruct(struct mailbox *mailbox,
