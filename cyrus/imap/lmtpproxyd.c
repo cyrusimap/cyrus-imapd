@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42.4.3 2002/08/02 15:20:56 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.4 2002/08/02 16:55:05 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -544,9 +544,11 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
 	lt->data = msgdata->data;
 	lt->rcpt_num = d->rnum;
 	rc = d->to;
-	for (rc = d->to; rc != NULL; rc = rc->next) {
+	for (rc = d->to; rc != NULL; rc = rc->next, i++) {
 	    assert(i < d->rnum);
-	    lt->rcpt[i++].addr = rc->mailbox;
+	    lt->rcpt[i].addr = rc->mailbox;
+	    lt->rcpt[i].ignorequota =
+		msg_getrcpt_ignorequota(msgdata, rc->rcpt_num);
 	}
 	assert(i == d->rnum);
 	
