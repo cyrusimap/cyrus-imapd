@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.149 2004/01/29 17:00:08 ken3 Exp $
+ * $Id: pop3d.c,v 1.150 2004/01/30 15:56:37 ken3 Exp $
  */
 #include <config.h>
 
@@ -1026,8 +1026,8 @@ static void cmd_apop(char *response)
 	return;
     }
     
-    syslog(LOG_NOTICE, "login: %s %s APOP %s",
-	   popd_clienthost, popd_userid, "User logged in");
+    syslog(LOG_NOTICE, "login: %s %s APOP%s %s", popd_clienthost,
+	   popd_userid, popd_starttls_done ? "+TLS" : "", "User logged in");
 
     openinbox();
 }
