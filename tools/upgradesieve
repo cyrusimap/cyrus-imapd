@@ -1,0 +1,71 @@
+#!/usr/bin/perl
+# script to upgrade sievedir from imapd 1.6.13
+# make sure you run it as the cyrus user
+require 5;
+
+$| = 1;
+
+if ("-f" eq $ARGV[0]) {
+    $force = 1;
+    shift @ARGV;
+}
+if ("-h" eq $ARGV[0] || $#ARGV > 0) {
+    print "usage: upgradesieve [-f] [imapd.conf]\n";
+    print "       -f keep going on errors\n";
+    exit;
+}
+
+sub ouch {
+    my $msg = shift;
+
+    if ($force) {
+	print "fatal error: $msg\n";
+    } else {
+	print "error: $msg\n";
+	exit 1;
+    }
+}
+
+$imapdconf = shift || "/etc/imapd.conf";
+
+$sievedir = "/usr/sieve";
+
+open CONF, $imapdconf or die "can't open $imapdconf";
+while (<CONF>) {
+    if (/^sievedir:\s(.*)$/) {
+	$sievedir = $1;
+	print "you are using $sievedir as your sieve directory.\n";
+    }
+}
+close CONF;
+
+print "upgrading sievedir $sievedir...";
+chdir $sievedir or die "couldn't change to $sievedir";
+foreach $i ("a".."z") {
+    print "$i ";
+    if (chdir $i) {
+	ouch "couldn't move to $i";
+	next;
+    }
+    opendir (D, ".");
+    while ($f = readdir D) {
+	if ($f =~ /^\./s) { next; }
+
+	rename($f, ".$f")
+	    or ouch "couldn't move $f to .$f";
+
+	mkdir ($f, 0755)
+	    or ouch "couldn't mkdir $f";
+
+	rename(".$f", "$f/$f.script")
+	    or ouch "couldn't move .$f to $f/$f.script";
+
+	link("$f/$f.script", "$f/default")
+	    or ouch "couldn't link $f.script to default";
+    }
+    closedir D;
+
+    chdir "..";
+}
+
+print "done\n";
