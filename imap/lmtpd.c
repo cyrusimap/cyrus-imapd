@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.117 2003/08/13 17:30:11 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.118 2003/08/13 18:39:38 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -457,56 +457,56 @@ int send_rejection(const char *origid,
     
     namebuf = make_sieve_db(mailreceip);
     duplicate_mark(buf, strlen(buf), namebuf, strlen(namebuf), t);
-    fprintf(sm, "Message-ID: %s\n", buf);
+    fprintf(sm, "Message-ID: %s\r\n", buf);
 
     rfc822date_gen(datestr, sizeof(datestr), t);
-    fprintf(sm, "Date: %s\n", datestr);
+    fprintf(sm, "Date: %s\r\n", datestr);
 
-    fprintf(sm, "X-Sieve: %s\n", SIEVE_VERSION);
-    fprintf(sm, "From: Mail Sieve Subsystem <%s>\n", POSTMASTER);
-    fprintf(sm, "To: <%s>\n", rejto);
-    fprintf(sm, "MIME-Version: 1.0\n");
+    fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
+    fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", POSTMASTER);
+    fprintf(sm, "To: <%s>\r\n", rejto);
+    fprintf(sm, "MIME-Version: 1.0\r\n");
     fprintf(sm, "Content-Type: "
 	    "multipart/report; report-type=disposition-notification;"
-	    "\n\tboundary=\"%d/%s\"\n", (int) p, config_servername);
-    fprintf(sm, "Subject: Automatically rejected mail\n");
-    fprintf(sm, "Auto-Submitted: auto-replied (rejected)\n");
-    fprintf(sm, "\nThis is a MIME-encapsulated message\n\n");
+	    "\r\n\tboundary=\"%d/%s\"\r\n", (int) p, config_servername);
+    fprintf(sm, "Subject: Automatically rejected mail\r\n");
+    fprintf(sm, "Auto-Submitted: auto-replied (rejected)\r\n");
+    fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
 
     /* this is the human readable status report */
-    fprintf(sm, "--%d/%s\n", (int) p, config_servername);
-    fprintf(sm, "Content-Type: text/plain; charset=utf-8\n");
-    fprintf(sm, "Content-Disposition: inline\n");
-    fprintf(sm, "Content-Transfer-Encoding: 8bit\n\n");
+    fprintf(sm, "--%d/%s\r\n", (int) p, config_servername);
+    fprintf(sm, "Content-Type: text/plain; charset=utf-8\r\n");
+    fprintf(sm, "Content-Disposition: inline\r\n");
+    fprintf(sm, "Content-Transfer-Encoding: 8bit\r\n\r\n");
 
-    fprintf(sm, "Your message was automatically rejected by Sieve, a mail\n"
-	    "filtering language.\n\n");
-    fprintf(sm, "The following reason was given:\n%s\n\n", reason);
+    fprintf(sm, "Your message was automatically rejected by Sieve, a mail\r\n"
+	    "filtering language.\r\n\r\n");
+    fprintf(sm, "The following reason was given:\r\n%s\r\n\r\n", reason);
 
     /* this is the MDN status report */
-    fprintf(sm, "--%d/%s\n"
-	    "Content-Type: message/disposition-notification\n\n",
+    fprintf(sm, "--%d/%s\r\n"
+	    "Content-Type: message/disposition-notification\r\n\r\n",
 	    (int) p, config_servername);
-    fprintf(sm, "Reporting-UA: %s; Cyrus %s/%s\n",
+    fprintf(sm, "Reporting-UA: %s; Cyrus %s/%s\r\n",
 	    config_servername, CYRUS_VERSION, SIEVE_VERSION);
     if (origreceip)
-	fprintf(sm, "Original-Recipient: rfc822; %s\n", origreceip);
-    fprintf(sm, "Final-Recipient: rfc822; %s\n", mailreceip);
+	fprintf(sm, "Original-Recipient: rfc822; %s\r\n", origreceip);
+    fprintf(sm, "Final-Recipient: rfc822; %s\r\n", mailreceip);
     if (origid)
-	fprintf(sm, "Original-Message-ID: %s\n", origid);
+	fprintf(sm, "Original-Message-ID: %s\r\n", origid);
     fprintf(sm, "Disposition: "
-	    "automatic-action/MDN-sent-automatically; deleted\n");
-    fprintf(sm, "\n");
+	    "automatic-action/MDN-sent-automatically; deleted\r\n");
+    fprintf(sm, "\r\n");
 
     /* this is the original message */
-    fprintf(sm, "--%d/%s\nContent-Type: message/rfc822\n\n",
+    fprintf(sm, "--%d/%s\r\nContent-Type: message/rfc822\r\n\r\n",
 	    (int) p, config_servername);
     prot_rewind(file);
     while ((i = prot_read(file, buf, sizeof(buf))) > 0) {
 	fwrite(buf, i, 1, sm);
     }
-    fprintf(sm, "\n\n");
-    fprintf(sm, "--%d/%s--\n", (int) p, config_servername);
+    fprintf(sm, "\r\n\r\n");
+    fprintf(sm, "--%d/%s--\r\n", (int) p, config_servername);
 
     fclose(sm);
     while (waitpid(sm_pid, &sm_stat, 0) < 0);
@@ -841,14 +841,14 @@ int send_response(void *ac,
     snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-%d-%d@%s>", 
 	     (int) p, (int) t, global_outgoing_count++, config_servername);
     
-    fprintf(sm, "Message-ID: %s\n", outmsgid);
+    fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
     rfc822date_gen(datestr, sizeof(datestr), t);
-    fprintf(sm, "Date: %s\n", datestr);
+    fprintf(sm, "Date: %s\r\n", datestr);
     
-    fprintf(sm, "X-Sieve: %s\n", SIEVE_VERSION);
-    fprintf(sm, "From: <%s>\n", src->fromaddr);
-    fprintf(sm, "To: <%s>\n", src->addr);
+    fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
+    fprintf(sm, "From: <%s>\r\n", src->fromaddr);
+    fprintf(sm, "To: <%s>\r\n", src->addr);
     /* check that subject is sane */
     sl = strlen(src->subj);
     for (i = 0; i < sl; i++)
@@ -856,25 +856,25 @@ int send_response(void *ac,
 	    src->subj[i] = '\0';
 	    break;
 	}
-    fprintf(sm, "Subject: %s\n", src->subj);
-    if (md->id) fprintf(sm, "In-Reply-To: %s\n", md->id);
-    fprintf(sm, "Auto-Submitted: auto-replied (vacation)\n");
-    fprintf(sm, "MIME-Version: 1.0\n");
+    fprintf(sm, "Subject: %s\r\n", src->subj);
+    if (md->id) fprintf(sm, "In-Reply-To: %s\r\n", md->id);
+    fprintf(sm, "Auto-Submitted: auto-replied (vacation)\r\n");
+    fprintf(sm, "MIME-Version: 1.0\r\n");
     if (src->mime) {
 	fprintf(sm, "Content-Type: multipart/mixed;"
-		"\n\tboundary=\"%d/%s\"\n", (int) p, config_servername);
-	fprintf(sm, "\nThis is a MIME-encapsulated message\n\n");
-	fprintf(sm, "--%d/%s\n", (int) p, config_servername);
+		"\r\n\tboundary=\"%d/%s\"\r\n", (int) p, config_servername);
+	fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
+	fprintf(sm, "--%d/%s\r\n", (int) p, config_servername);
     } else {
-	fprintf(sm, "Content-Type: text/plain; charset=utf-8\n");
-	fprintf(sm, "Content-Transfer-Encoding: 8bit\n");
-	fprintf(sm, "\n");
+	fprintf(sm, "Content-Type: text/plain; charset=utf-8\r\n");
+	fprintf(sm, "Content-Transfer-Encoding: 8bit\r\n");
+	fprintf(sm, "\r\n");
     }
 
-    fprintf(sm, "%s\n", src->msg);
+    fprintf(sm, "%s\r\n", src->msg);
 
     if (src->mime) {
-	fprintf(sm, "\n--%d/%s--\n", (int) p, config_servername);
+	fprintf(sm, "\r\n--%d/%s--\r\n", (int) p, config_servername);
     }
     fclose(sm);
     while (waitpid(sm_pid, &sm_stat, 0) < 0);
