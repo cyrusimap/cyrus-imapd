@@ -1,5 +1,5 @@
 /* imclient.h -- Streaming IMxP client library
- $Id: imclient.h,v 1.18 2000/05/23 20:56:16 robeson Exp $
+ $Id: imclient.h,v 1.19 2000/11/13 22:09:41 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -45,13 +45,7 @@
 #ifndef INCLUDED_IMCLIENT_H
 #define INCLUDED_IMCLIENT_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
+#include <sasl.h>
 
 struct imclient;
 struct sasl_client; /* to avoid having to include sasl sometimes */
@@ -70,27 +64,22 @@ struct imclient_reply {
 #define IMCLIENT_CONN_NONSYNCLITERAL 1 /* Server supports non-synchronizing literals */
 #define IMCLIENT_CONN_INITIALRESPONSE 1 /* Server supports SASL initial response */
 
-typedef void imclient_proc_t P((struct imclient *imclient, void *rock,
-				struct imclient_reply *reply));
+typedef void imclient_proc_t(struct imclient *imclient, void *rock,
+			     struct imclient_reply *reply);
 
-extern int imclient_connect P((struct imclient **imclient, const char *host,
-			       const char *port));
-extern void imclient_close P((struct imclient *imclient));
-extern void imclient_setflags P((struct imclient *imclient, int flags));
-extern void imclient_clearflags P((struct imclient *imclient, int flags));
-extern char *imclient_servername P((struct imclient *imclient));
-#ifdef __STDC__
+extern int imclient_connect(struct imclient **imclient, const char *host,
+			    const char *port, sasl_callback_t *cbs);
+extern void imclient_close(struct imclient *imclient);
+extern void imclient_setflags(struct imclient *imclient, int flags);
+extern void imclient_clearflags(struct imclient *imclient, int flags);
+extern char *imclient_servername(struct imclient *imclient);
 extern void imclient_addcallback(struct imclient *imclient, ...);
 extern void imclient_send(struct imclient *imclient,
 			  imclient_proc_t *proc, void *rock,
 			  const char *fmt, ...);
-#else
-extern void imclient_addcallback();
-extern void imclient_send();
-#endif
-extern void imclient_processoneevent P((struct imclient *imclient));
-extern void imclient_getselectinfo P((struct imclient *imclient,
-				      int *fd, int *wanttowrite));
+extern void imclient_processoneevent(struct imclient *imclient);
+extern void imclient_getselectinfo(struct imclient *imclient,
+				   int *fd, int *wanttowrite);
 
 extern int imclient_authenticate(struct imclient *imclient, 
 				 char *mechlist, 
@@ -108,6 +97,7 @@ extern int imclient_starttls(struct imclient *imclient,
 			     int *layer);
 #endif /* HAVE_SSL */
 
-
+extern void imclient_write (struct imclient *imclient,
+			    const char *s, unsigned len);
 
 #endif /* INCLUDED_IMCLIENT_H */

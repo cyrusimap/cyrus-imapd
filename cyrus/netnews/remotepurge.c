@@ -704,7 +704,7 @@ int main(int argc, char **argv)
     /* next to last arg is server name */
     strncpy(servername, argv[optind], 1023);
 
-    r = imclient_connect (&imclient_conn, servername, port);
+    r = imclient_connect (&imclient_conn, servername, port, NULL);
   
     if (r!=0) {
 	fatal("imclient_connect()", EC_TEMPFAIL);

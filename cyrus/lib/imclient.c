@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.51 2000/05/24 05:35:43 leg Exp $
+ $Id: imclient.c,v 1.52 2000/11/13 22:09:38 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -182,8 +182,8 @@ static char charclass[256] = {
 static struct imclient_cmdcallback *cmdcallback_freelist;
 
 /* Forward declarations */
-static void imclient_write P((struct imclient *imclient,
-			      const char *s, unsigned len));
+void imclient_write(struct imclient *imclient,
+		    const char *s, unsigned len);
 static int imclient_writeastring P((struct imclient *imclient,
 				     const char *str));
 static void imclient_writebase64 P((struct imclient *imclient,
@@ -212,11 +212,12 @@ static sasl_callback_t callbacks[] = {
  * to by 'imclient' with a newly allocated connection pointer. On
  * failure, returns errno if a system call failed, -1 if the hostname
  * was not found, or -2 if the service name was not found.
+ * use sasl callbacks 'cbs'
  */
-int imclient_connect(imclient, host, port)
-struct imclient **imclient;
-const char *host;
-const char *port;
+int imclient_connect(struct imclient **imclient, 
+		     const char *host, 
+		     const char *port, 
+		     sasl_callback_t *cbs)
 {
     int s;
     struct hostent *hp;
@@ -272,8 +273,12 @@ const char *port;
 
 
   /* attempt to start sasl */
-  saslresult=sasl_client_init(callbacks);
-  if (saslresult!=SASL_OK) return 1;
+    if (cbs) {
+	saslresult=sasl_client_init(cbs);	
+    } else {
+	saslresult=sasl_client_init(callbacks);	
+    }
+    if (saslresult!=SASL_OK) return 1;
 
   /* client new connection */
   saslresult=sasl_client_new("imap", /* xxx ideally this should be configurable */
@@ -602,7 +607,7 @@ const char *str;
 /*
  * Write to the connection 'imclient' the data 's', of length 'len'
  */
-static void
+void
 imclient_write(imclient, s, len)
 struct imclient *imclient;
 const char *s;
@@ -722,19 +727,19 @@ int len;
 	free(plainbuf);
     }
 
-    /* Process the new data */
+    /* Process the new data (of length 'plainlen') */
     while (parsed < imclient->replylen) {
 	/* If we're reading a literal, skip over it. */
 	if (imclient->replyliteralleft) {
-	    if (len > imclient->replyliteralleft) {
-		len -= imclient->replyliteralleft;
+	    if (plainlen > imclient->replyliteralleft) {
+		plainlen -= imclient->replyliteralleft;
 		parsed += imclient->replyliteralleft;
 		imclient->replyliteralleft = 0;
 		continue;
 	    }
 	    else {
-		parsed += len;
-		imclient->replyliteralleft -= len;
+		parsed += plainlen;
+		imclient->replyliteralleft -= plainlen;
 		return;
 	    }
 	}
@@ -763,7 +768,7 @@ int len;
 	    }
 	    /* Start parsing the next reply */
 	    imclient->replystart = endreply + 1;
-	    continue;	    
+	    continue;
 	}
 	else if (*p == '*' && p[1] == ' ') {
 	    replytag = 0;
@@ -877,7 +882,8 @@ int len;
 	    }
 	    if (!strncmp(imclient->callback[keywordindex].keyword,
 			 reply.keyword, keywordlen) &&
-		imclient->callback[keywordindex].keyword[keywordlen] == '\0')
+		imclient->callback[keywordindex].keyword[keywordlen] == '\0' 
+		&& imclient->callback[keywordindex].proc)
 	      break;
 	}
 
@@ -1181,12 +1187,13 @@ void fillin_interactions(sasl_interact_t *tlist, char *user)
  *  2 - severe failure?
  */
 
-int imclient_authenticate(struct imclient *imclient, 
-			  char *mechlist, 
-			  char *service, 
-			  char *user, 
-			  int minssf, 
-			  int maxssf)
+static int imclient_authenticate_sub(struct imclient *imclient, 
+				     char *mechlist, 
+				     char *service, 
+				     char *user,
+				     int minssf, 
+				     int maxssf,
+				     const char **mechusing)
 {
   int saslresult;
   sasl_security_properties_t *secprops=NULL;
@@ -1197,7 +1204,6 @@ int imclient_authenticate(struct imclient *imclient,
   char *out;
   unsigned int outlen;
   int inlen;
-  const char *mechusing;
   struct authresult result;
 
 
@@ -1243,7 +1249,7 @@ int imclient_authenticate(struct imclient *imclient,
     saslresult=sasl_client_start(imclient->saslconn, mechlist,
 				 NULL, &client_interact,
 				 &out, &outlen,
-				 &mechusing);
+				 mechusing);
     if (saslresult==SASL_INTERACT) {
 	fillin_interactions(client_interact, user); /* fill in prompts */
     }
@@ -1252,7 +1258,7 @@ int imclient_authenticate(struct imclient *imclient,
   if ((saslresult!=SASL_OK) && (saslresult!=SASL_CONTINUE)) return saslresult;
 
   imclient_send(imclient, authresult, (void *)&result,
-		"AUTHENTICATE %a", mechusing);
+		"AUTHENTICATE %a", *mechusing);
 
   while (1) {
     /* Wait for ready response or command completion */
@@ -1300,6 +1306,7 @@ int imclient_authenticate(struct imclient *imclient,
     if ((saslresult==SASL_OK) || (saslresult==SASL_CONTINUE)) {
 	imclient_writebase64(imclient, out, outlen);
     } else {
+	imclient_write(imclient,"*\r\n",3);
 	return saslresult;
     }
 
@@ -1314,6 +1321,57 @@ int imclient_authenticate(struct imclient *imclient,
   return (result.replytype != replytype_ok);
 }
 
+int 
+imclient_authenticate(struct imclient *imclient, 
+		      char *mechlist, 
+		      char *service, 
+		      char *user,
+		      int minssf, 
+		      int maxssf)
+{
+    int r;
+    char *mlist;
+    const char *mtried;
+
+    mlist = xstrdup(mechlist);
+
+    do {
+	char *newlist;
+	char *tmp;
+	
+	mtried = NULL;
+
+	r = imclient_authenticate_sub(imclient,
+				      mlist,
+				      service,
+				      user,
+				      minssf,
+				      maxssf,
+				      &mtried);
+
+	/* eliminate mtried (mechanism tried) from mlist */
+	if (mtried) {
+	    newlist = xmalloc(strlen(mlist)+1);
+	    
+	    tmp = strstr(mlist,mtried);
+	    *tmp = '\0';
+	    strcpy(newlist,mlist);
+	    
+	    tmp = strchr(tmp,' ');
+	    if (tmp) {		
+		tmp++;
+		strcat(newlist,tmp);
+	    }
+
+	    free(mlist);
+	    mlist = newlist;
+	}
+    } while ((r != 0) && (mtried));
+
+    free(mlist);
+
+    return r;
+}
 
 
 #define XX 127
