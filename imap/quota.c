@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.34 2000/05/23 20:52:30 robeson Exp $ */
+/* $Id: quota.c,v 1.35 2000/10/12 18:35:24 leg Exp $ */
 
 
 #include <config.h>
@@ -142,7 +142,11 @@ int main(int argc,char **argv)
 
     r = buildquotalist(argv+optind, argc-optind);
 
-    if (!r && fflag) r = fixquota(argc-optind);
+    if (!r && fflag) {
+	mboxlist_init(0);
+	r = fixquota(argc-optind);
+	mboxlist_done();
+    }
 
     if (!r) reportquota();
 
