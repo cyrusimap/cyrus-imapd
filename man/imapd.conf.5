@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapd.conf.5,v 1.72 2003/08/18 20:35:41 rjs3 Exp $
+.\" $Id: imapd.conf.5,v 1.73 2003/09/03 14:38:26 ken3 Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -111,6 +111,13 @@ Permit logins by the user "anonymous" using any password.  Also allows
 use of the SASL ANONYMOUS mechanism.
 .IP "\fBallowplaintext:\fR yes" 5
 Allow the use of cleartext passwords on the wire.
+.IP "\fBallowapop:\fR yes" 5
+Allow use of the POP3 APOP authentication command.
+.PP
+Note that this command requires that SASL is compiled with APOP
+support, that the plaintext passwords are available in a SASL auxprop
+backend (eg. sasldb), and that the system can provide enough entropy
+(eg. from /dev/urandom) to create a challenge in the banner.
 .IP "\fBquotawarn:\fR 90" 5
 The percent of quota utilization over which the server generates
 warnings.

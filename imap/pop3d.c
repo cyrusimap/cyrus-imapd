@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.141 2003/07/22 19:17:16 rjs3 Exp $
+ * $Id: pop3d.c,v 1.142 2003/09/03 14:38:25 ken3 Exp $
  */
 #include <config.h>
 
@@ -139,9 +139,8 @@ static struct proxy_context popd_proxyctx = {
 /* current namespace */
 static struct namespace popd_namespace;
 
-static void cmd_apop(char *response);
-static int apop_enabled(void);
 static char popd_apop_chal[45 + MAXHOSTNAMELEN + 1]; /* <rand.time@hostname> */
+static void cmd_apop(char *response);
 
 static void cmd_auth();
 static void cmd_capa();
@@ -389,14 +388,15 @@ int service_main(int argc, char **argv, char **envp)
     if (pop3s == 1) cmd_starttls(1);
 
     /* Create APOP challenge for banner */
-    if (!sasl_mkchal(popd_saslconn, popd_apop_chal, sizeof(popd_apop_chal), 1)) {
-	syslog(LOG_ERR, "APOP disabled: can't create challenge");
-	*popd_apop_chal = 0;
+    *popd_apop_chal = 0;
+    if (config_getswitch("allowapop", 1) &&
+	(sasl_checkapop(popd_saslconn, NULL, 0, NULL, 0) == SASL_OK) &&
+	!sasl_mkchal(popd_saslconn, popd_apop_chal, sizeof(popd_apop_chal), 1)) {
+	syslog(LOG_WARNING, "APOP disabled: can't create challenge");
     }
 
     prot_printf(popd_out, "+OK %s Cyrus POP3 %s server ready %s\r\n",
-		config_servername, CYRUS_VERSION,
-		apop_enabled() ? popd_apop_chal : "");
+		config_servername, CYRUS_VERSION, popd_apop_chal);
     cmdloop();
 
     /* QUIT executed */
@@ -624,7 +624,7 @@ static void cmdloop(void)
 		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 		else cmd_pass(arg);
 	    }
-	    else if (!strcmp(inputbuf, "apop") && apop_enabled()) {
+	    else if (!strcmp(inputbuf, "apop") && *popd_apop_chal) {
 		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 		else cmd_apop(arg);
 	    }
@@ -893,15 +893,6 @@ static void cmd_starttls(int pop3s __attribute__((unused)))
     fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
 }
 #endif /* HAVE_SSL */
-
-static int apop_enabled(void)
-{
-    /* Check if pseudo APOP mechanism is enabled (challenge == NULL) */
-    if (sasl_checkapop(popd_saslconn, NULL, 0, NULL, 0) != SASL_OK) return 0;
-    /* Check if we have a challenge string */
-    if (!*popd_apop_chal) return 0;
-    return 1;
-}
 
 static void cmd_apop(char *response)
 {
