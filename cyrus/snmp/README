@@ -1,9 +1,0 @@
-This is a development version of CySNIIP, our extensible application
-instrumentation framework.  Eventually, it'll probably be pulled out into
-it's own package.  It may also be more tightly integrated with UCD SNMP
-at some point.
-
-Currently, it's written to the AgentX API, and has been tested against the
-CMU SNMP library.
-
-25 Apr 2000
