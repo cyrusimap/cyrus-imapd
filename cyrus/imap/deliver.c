@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.123.2.5 2000/06/23 16:38:51 ken3 Exp $
+ * $Id: deliver.c,v 1.123.2.6 2000/06/23 19:25:34 ken3 Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.123.2.5 2000/06/23 16:38:51 ken3 Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.123.2.6 2000/06/23 19:25:34 ken3 Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -64,6 +64,7 @@ static char _rcsid[] = "$Id: deliver.c,v 1.123.2.5 2000/06/23 16:38:51 ken3 Exp 
 
 #include <pwd.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #endif
 
 #include <netdb.h>
@@ -869,6 +870,28 @@ int open_sendmail(char *argv[], FILE **sm)
     return p;
 }
 
+static char *sendmail_errstr(int sm_stat)
+{
+    char errstr[200];
+
+    if (WIFEXITED(sm_stat))
+	sprintf(errstr,
+		"Sendmail process terminated normally, exit status = %d.\n",
+		WEXITSTATUS(sm_stat));
+    else if (WIFSIGNALED(sm_stat))
+	sprintf(errstr,
+		"Sendmail process terminated abnormally, signal = %d (%s)%s.\n",
+		WTERMSIG(sm_stat), strsignal(WTERMSIG(sm_stat)),
+		WCOREDUMP(sm_stat) ? " -- core file generated" : "");
+    else if (WIFSTOPPED(sm_stat))
+	sprintf(errstr, "Sendmail process stopped, signal = %d (%s).\n",
+		WTERMSIG(sm_stat), strsignal(WSTOPSIG(sm_stat)));
+    else
+	return NULL;
+
+    return (xstrdup(errstr));
+}
+
 int send_rejection(char *origid,
 		   char *rejto,
 		   char *origreceip, 
@@ -879,16 +902,16 @@ int send_rejection(char *origid,
     FILE *sm;
     char *smbuf[3];
     char hostname[1024], buf[8192], *namebuf;
-    int i, sm_exit = 0;
+    int i, sm_stat;
     struct tm *tm;
     int tz;
     time_t t;
-    pid_t p;
+    pid_t sm_pid, p;
 
     smbuf[0] = "sendmail";
     smbuf[1] = rejto;
     smbuf[2] = NULL;
-    p = open_sendmail(smbuf, &sm);
+    sm_pid = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
 	return -1;
     }
@@ -957,18 +980,18 @@ int send_rejection(char *origid,
     fprintf(sm, "--%d/%s\r\n", p, hostname);
 
     fclose(sm);
-    waitpid(p, &sm_exit, 0);
+    while (waitpid(sm_pid, &sm_stat, 0) < 0);
 
-    return (sm_exit == 0 ? SIEVE_OK : SIEVE_FAIL); /* sendmail exit value */
+    return sm_stat;	/* sendmail exit value */
 }
 
 int send_forward(char *forwardto, char *return_path, struct protstream *file)
 {
     FILE *sm;
     char *smbuf[6];
-    int i, sm_exit = 0;
+    int i, sm_stat;
     char buf[1024];
-    pid_t p;
+    pid_t sm_pid;
 
     smbuf[0] = "sendmail";
     if (return_path != NULL) {
@@ -981,7 +1004,7 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
     smbuf[3] = "--";
     smbuf[4] = forwardto;
     smbuf[5] = NULL;
-    p = open_sendmail(smbuf, &sm);
+    sm_pid = open_sendmail(smbuf, &sm);
 	
     if (sm == NULL) {
 	return -1;
@@ -994,9 +1017,9 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
     }
 
     fclose(sm);
-    waitpid(p, &sm_exit, 0);
+    while (waitpid(sm_pid, &sm_stat, 0) < 0);
 
-    return (sm_exit == 0 ? SIEVE_OK : SIEVE_FAIL); /* sendmail exit value */
+    return sm_stat;	/* sendmail exit value */
 }
 
 static
@@ -1013,7 +1036,7 @@ int sieve_redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	if (res == -1)
 	    *errmsg = "Could not spawn sendmail process";
 	else
-	    *errmsg = "Sendmail error";
+	    *errmsg = sendmail_errstr(res);
 	return SIEVE_FAIL;
     }
 }
@@ -1059,7 +1082,7 @@ int sieve_reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	if (res == -1)
 	    *errmsg = "Could not spawn sendmail process";
 	else
-	    *errmsg = "Sendmail error";
+	    *errmsg = sendmail_errstr(res);
 	return SIEVE_FAIL;
     }
 }
@@ -1185,11 +1208,11 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     FILE *sm;
     char *smbuf[3];
     char hostname[1024], outmsgid[8192], *sievedb;
-    int i, sl, sm_exit = 0;
+    int i, sl, sm_stat;
     struct tm *tm;
     int tz;
     time_t t;
-    pid_t p;
+    pid_t sm_pid, p;
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
     script_data_t *sdata = (script_data_t *) sc;
@@ -1197,7 +1220,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     smbuf[0] = "sendmail";
     smbuf[1] = src->addr;
     smbuf[2] = NULL;
-    p = open_sendmail(smbuf, &sm);
+    sm_pid = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
 	*errmsg = "Could not spawn sendmail process";
 	return -1;
@@ -1251,15 +1274,15 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	fprintf(sm, "\r\n--%d/%s\r\n", p, hostname);
     }
     fclose(sm);
-    waitpid(p, &sm_exit, 0);
+    while (waitpid(sm_pid, &sm_stat, 0) < 0);
 
-    if (sm_exit == 0) { /* sendmail exit value */
+    if (sm_stat == 0) { /* sendmail exit value */
 	sievedb = make_sieve_db(sdata->username);
 
 	markdelivered(outmsgid, strlen(outmsgid), sievedb, strlen(sievedb), t);
 	return SIEVE_OK;
     } else {
-	*errmsg = "Sendmail error";
+	*errmsg = sendmail_errstr(sm_stat);
 	return SIEVE_FAIL;
     }
 }
