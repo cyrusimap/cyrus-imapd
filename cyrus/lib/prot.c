@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.16 2003/02/13 20:33:14 rjs3 Exp $
+ * $Id: prot.c,v 1.72.4.17 2003/03/31 21:48:25 rjs3 Exp $
  */
 
 #include <config.h>
@@ -114,12 +114,13 @@ int prot_free(struct protstream *s)
 {
     if (s->error) free(s->error);
     free(s->buf);
-    free((char*)s);
 
     if(s->big_buffer != PROT_NO_FD) {
 	map_free(&(s->bigbuf_base), &(s->bigbuf_siz));
 	close(s->big_buffer);
     }
+
+    free((char*)s);
 
     return 0;
 }
