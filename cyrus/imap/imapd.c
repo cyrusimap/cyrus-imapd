@@ -1015,12 +1015,7 @@ char *name;
     }
 
     if (imapd_mailbox) {
-	/*
-	 * We do a full check, to pick up any \Seen flag we might have
-	 * set on the appended message.
-	 * XXX full check isn't necessary--test removing it
-	 */
-	index_check(imapd_mailbox, 0, 1);
+	index_check(imapd_mailbox, 0, 0);
     }
 
     if (r) {
