@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.9 2002/01/30 19:57:14 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.10 2002/01/31 04:38:43 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -111,14 +111,20 @@ void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 
 	gotdata = select(highest_fd, &read_set, NULL, NULL, &tv);
 
+	/* xxx if (gotdata from master) */
 	if (gotdata > 0) {
 	    /* If there is a fatal error, die, other errors ignore */
 	    if(mupdate_scarf(handle, cmd_change, NULL, 0)) return;
 	    continue;
+
+        /* else if (gotdata from kicker || no data) */
 	} else if(gotdata == 0) {
 	    /* timed out, send a NOOP */
 	    prot_printf(handle->pout, "N%u NOOP\r\n", handle->tagn++);
 	    prot_flush(handle->pout);
+
+	    /* xxx it would be nice to move this wait into the select above;
+	       maybe make this function some sort of state machine? */
 
 	    /* wait 'pingtimeout' seconds for response */
 	    FD_ZERO(&read_set);
@@ -173,6 +179,8 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 	    fatal("invalid value for mupdate_retry_delay", EC_UNAVAILABLE);
 	}
     }
+
+    /* xxx open the kick socket here */
     
     while(1) {
 	ret = mupdate_connect(server, NULL, &h, NULL);
@@ -185,6 +193,7 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 	connection_count = -1;
 	syslog(LOG_ERR, "successful mupdate connection to %s", server);
 
+	/* xxx pass in the kick socket */
 	mupdate_listen(h, retry_delay);
 
     retry:
