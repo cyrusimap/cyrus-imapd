@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: pop3test.1,v 1.9 2003/10/22 18:50:13 rjs3 Exp $
+.\" $Id: pop3test.1,v 1.10 2004/12/16 15:49:08 ken3 Exp $
 .SH NAME
 pop3test \- interactive POP3 test program
 .SH SYNOPSIS
@@ -58,12 +58,12 @@ pop3test \- interactive POP3 test program
 ]
 .br
          [
-.B \-u
-.I user
+.B \-a
+.I userid
 ]
 [
-.B \-a
-.I user
+.B \-u
+.I userid
 ]
 [
 .B \-k
@@ -94,6 +94,9 @@ pop3test \- interactive POP3 test program
 ]
 .br
          [
+.B \-i
+]
+[
 .B \-o
 \fIoption\fB=\fIvalue\fR
 ]
@@ -128,11 +131,16 @@ the strongest authentication mechanism supported by the server is
 chosen.  Specify \fBuser\fR to use the USER/PASS commands or
 \fBapop\fR to use the APOP command instead of AUTH.
 .TP
-.BI -u " user"
-Username to use for authentication; defaults to the current user.
+.BI -a " userid"
+Userid to use for authentication; defaults to the current user.
+This is the userid whose password or credentials will be presented to
+the server for verification.
 .TP
-.BI -a " user"
-Authname to use for authentication; defaults to the current user.
+.BI -u " userid"
+Userid to use for authorization; defaults to the current user.
+This is the userid whose identity will be assumed after authentication.
+\fBNOTE:\fR This is only used with SASL mechanisms that allow proxying
+(e.g. PLAIN, DIGEST-MD5).
 .TP
 .BI -k " num"
 Minimum protection layer required.
@@ -163,6 +171,10 @@ Enable POP3 over SSL (pop3s).
 Enable challenge prompt callbacks.  This will cause the OTP mechanism
 to ask for the the one-time password instead of the secret pass-phrase
 (library generates the correct response).
+.TP
+.B -i
+Don't send an initial client response for SASL mechanisms, even if the
+protocol supports it.
 .TP
 \fB-o \fIoption\fB=\fIvalue\fR
 Set the SASL \fIoption\fR to \fIvalue\fR.
