@@ -31,26 +31,11 @@
 #include <string.h>
 #include <ctype.h>
 #include <syslog.h>
+#include <fcntl.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <com_err.h>
-
-#if HAVE_DIRENT_H
-# include <dirent.h>
-# define NAMLEN(dirent) strlen((dirent)->d_name)
-#else
-# define dirent direct
-# define NAMLEN(dirent) (dirent)->d_namlen
-# if HAVE_SYS_NDIR_H
-#  include <sys/ndir.h>
-# endif
-# if HAVE_SYS_DIR_H
-#  include <sys/dir.h>
-# endif
-# if HAVE_NDIR_H
-#  include <ndir.h>
-# endif
-#endif
 
 #include "acte.h"
 #include "imclient.h"
@@ -71,33 +56,23 @@ struct acte_client *login_acte_client[] = {
     NULL
 };
 
-#define FNAME_DROPDIR "/dropoff/"
+FILE *failedfp;
+int commands_pending;
 
-struct dropfile {
-    struct dropfile *next;
-    unsigned int uid;
-    time_t last_change;
-    unsigned int exists;
-    char fname[1];
-};
+struct imclient *connecttoimsp();
 
-struct dropfile *getdroplist();
 
 main()
 {
-    char fnamebuf[MAX_MAILBOX_PATH];
     char *val;
 
     config_init("updateimsp");
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
-    strcpy(fnamebuf, config_dir);
-    strcat(fnamebuf, FNAME_DROPDIR);
-    
-    if (chdir(fnamebuf)) {
-	syslog(LOG_ERR, "IOERROR: changing directory to dropoff directory: %m");
-	fatal("cannot change directory to dropoff directory", EX_TEMPFAIL);
+    if (chdir(config_dir)) {
+	syslog(LOG_ERR, "IOERROR: changing directory to config directory: %m");
+	fatal("cannot change directory to config directory", EX_TEMPFAIL);
     }
     
 #ifdef HAVE_ACTE_KRB
@@ -114,23 +89,21 @@ main()
 
 doupdate()
 {
-    struct dropfile *droplist;
     char *imsphost;
     char hostbuf[256];
     char *p;
+    struct imclient *imspconn;
+    int workfd, retryfd, newfd;
+    char *work_base, *retry_base;
+    unsigned long work_size = 0, *retry_size = 0;
+    struct stat work_sbuf, retry_sbuf;
+    char *failaction;
 
     imsphost = config_getstring("imspservers", 0);
     if (!imsphost) {
 	syslog(LOG_ERR, "Missing required imsphost configuration option");
 	fatal("Missing required imsphost configuration option", EX_CONFIG);
     }
-	
-    droplist = getdroplist();
-    if (!droplist) return;
-
-    sortdroplist(&droplist);
-    if (!droplist) return;
-
     while (isspace(*imsphost)) imsphost++;
     strncpy(hostbuf, imsphost, sizeof(hostbuf)-1);
     hostbuf[sizeof(hostbuf)-1] = '\0';
@@ -138,226 +111,80 @@ doupdate()
     while (*p && !isspace(*p)) p++;
     *p = '\0';
 
-    sendtoimsp(droplist, hostbuf);
-}
-
-struct dropfile *
-getdroplist()
-{
-    struct dropfile *droplist = 0, *newfile;
-    DIR *dirp;
-    struct dirent *f;
-
-    dirp = opendir(".");
-    if (!dirp) {
-	syslog(LOG_ERR, "IOERROR: reading dropoff directory: %m");
-	return 0;
-    }
-
-    while (f = readdir(dirp)) {
-	if (f->d_name[0] == '.') continue;
-	newfile = (struct dropfile *)
-	    xmalloc(sizeof(struct dropfile) + strlen(f->d_name));
-	strcpy (newfile->fname, f->d_name);
-	if (!parsefname(newfile)) {
-/*debug*/ printf("unparsable filename %s\n", newfile->fname);
-	    unlink(newfile->fname);
-	    free((char *)newfile);
-	    continue;
-	}
-	newfile->next = droplist;
-	droplist = newfile;
-    }
+    imspconn = connecttoimsp(hostbuf);
 	
-    closedir(dirp);
-    return droplist;
-}
-
-#define XX 127
-/*
- * Table for decoding base64, with ':' replacing '/'
- */
-static const char drop_index_64[256] = {
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, XX,XX,XX,XX,
-    52,53,54,55, 56,57,58,59, 60,61,63,XX, XX,XX,XX,XX,
-    XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
-    15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,XX,
-    XX,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
-    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-};
-#define CHAR64(c)  (drop_index_64[(unsigned char)(c)])
-
-int
-parsefname(newfile)
-struct dropfile *newfile;
-{
-    unsigned char decodebuf[3*4];
-    int c1, c2, c3, c4;
-    char *from;
-    unsigned char *to;
-    int len;
-    char *p;
-
-    if (newfile->fname[0] != 'S' && newfile->fname[0] != 'L') return 0;
-
-    from = newfile->fname + 1;
-    to = decodebuf;
-    len = 0;
-    for (;;) {
-	c1 = *from++;
-	if (c1 == '=') break;
-	if (CHAR64(c1) == XX) return 0;
-	
-	c2 = *from++;
-	if (CHAR64(c2) == XX) return 0;
-
-	c3 = *from++;
-	if (c3 != '=' && CHAR64(c3) == XX) return 0;
-
-	c4 = *from++;
-	if (c4 != '=' && CHAR64(c4) == XX) return 0;
-
-	if (len >= sizeof(decodebuf)) return 0;
-	to[len++] = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
-	if (c3 == '=') {
-	    break;
-	}
-	if (len >= sizeof(decodebuf)) return 0;
-	to[len++] = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
-	if (c4 == '=') {
-	    break;
-	}
-	if (len >= sizeof(decodebuf)) return 0;
-	to[len++] = (((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
+    failedfp = fopen("toimsp.failed", "w");
+    if (!failedfp) {
+	syslog(LOG_ERR, "Can't create toimsp.failed: %m");
+	return;
     }
 
-    if (len < 8) return 0;
-
-    newfile->uid = ntohl(*(bit32 *)decodebuf);
-    newfile->last_change = ntohl(*(bit32 *)(decodebuf+4));
-
-    if (newfile->fname[0] == 'S') {
-	if (len != 2*4) return 0;
-	from = strchr(from, '=');
-	if (!from) return 0;
-	from++;
-    }
-    else {
-	if (len != 3*4) return 0;
-	newfile->exists = ntohl(*(bit32 *)(decodebuf+8));
-    }
-
-    if (strchr(from, '=')) return 0;
-
-    return 1;
-}
-
-sortdroplist(listp)
-struct dropfile **listp;
-{
-    struct dropfile *mid, *tail;
-    struct dropfile *suba, *subb;
-    struct dropfile **next;
-    int cmp;
-
-    /* Split into two sublists */
-    mid = tail = *listp;
-    if (!tail) return;
-    tail = tail->next;
-    if (!tail) return;
-    while (tail) {
-	tail = tail->next;
-	if (tail) {
-	    mid = mid->next;
-	    tail = tail->next;
-	}
-    }
-    tail = mid;
-    mid = mid->next;
-    tail->next = 0;
+    (void) link("toimsp", "toimsp.work");
     
-    /* Recursively sort the sublists */
-    sortdroplist(listp);
-    sortdroplist(&mid);
+    workfd = open("toimsp.work", O_RDWR, 0666);
+    if (workfd == -1) {
+	syslog(LOG_ERR, "IOERROR: opening toimsp.work: %m", failaction);
+	return;
+    }	
+    if (lock_reopen(workfd, "toimsp.work", &work_sbuf, &failaction)) {
+	syslog(LOG_ERR, "IOERROR: %s toimsp.work: %m", failaction);
+	close(workfd);
+	return;
+    }
 
-    /* Merge the two sublists */
-    next = listp;
-    suba = *listp;
-    subb = mid;
-    for (;;) {
-	if (!suba) {
-	    *next = subb;
+    newfd = open("toimsp.new", O_RDWR|O_CREAT|O_TRUNC, 0666);
+    if (newfd == -1) {
+	syslog(LOG_ERR, "IOERROR: creating toimsp.new: %m");
+	close(workfd);
+	return;
+    }
+    close(newfd);
+
+    if (rename("toimsp.new", "toimsp") == -1) {
+	syslog(LOG_ERR, "IOERROR: renaming toimsp.new: %m");
+	close(workfd);
+	return;
+    }
+
+    lock_unlock(newfd);
+
+    retryfd = open("toimsp.retry", O_RDWR, 0666);
+    if (retryfd != -1) {
+	if (fstat(retryfd, &retry_sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: fstat on toimsp.retry: %m");
+	    close(workfd);
+	    close(retryfd);
 	    return;
 	}
-	if (!subb) {
-	    *next = suba;
-	    return;
-	}
-	cmp = (subb->fname[0] - suba->fname[0]);
-	if (!cmp) {
-	    cmp = strcmp(strchr(suba->fname, '='),
-			 strchr(subb->fname, '='));
-	}
-	if (!cmp) {
-	    if (suba->last_change < subb->last_change ||
-		(suba->last_change == subb->last_change &&
-		 suba->uid < subb->uid)) {
-		tail = suba;
-		suba = suba->next;
-	    }
-	    else {
-		tail = subb;
-		subb = subb->next;
-	    }
-/*debug*/ printf("older file %s\n", tail->fname);
-	    unlink(tail->fname);
-	    free((char *)tail);
-	    continue;
-	}
+	map_refresh(retryfd, 1, &retry_base, &retry_size,
+		    retry_sbuf.st_size, "toimsp.retry", 0);
+	processfile(imspconn, retry_base, retry_size);
+    }
 
-	if (cmp < 0) {
-	    *next = suba;
-	    next = &suba->next;
-	    suba = *next;
-	}
-	else {
-	    *next = subb;
-	    next = &subb->next;
-	    subb = *next;
-	}
+    map_refresh(workfd, 1, &work_base, &work_size, work_sbuf.st_size,
+		"toimsp.work", 0);
+    processfile(imspconn, work_base, work_size);
+
+    while (commands_pending) {
+	imclient_processoneevent(imspconn);
+    }
+    imclient_close(imspconn);
+
+    map_free(&work_base, &work_size);
+    close(workfd);
+    if (retryfd != -1) {
+	map_free(&retry_base, &retry_size);
+	close(retryfd);
+    }
+
+    fclose(failedfp);
+    if (rename("toimsp.failed", "toimsp.retry") != -1) {
+	(void) unlink("toimsp.work");
     }
 }
 
-int commands_pending;
-
-void
-callback_dropfile(imspconn, rock, reply)
-struct imclient *imspconn;
-void *rock;
-struct imclient_reply *reply;
-{
-    struct dropfile *dropfile = (struct dropfile *)rock;
-
-    commands_pending--;
-/*debug*/ printf("%5d %s %s %s\n", commands_pending, reply->keyword, reply->text, dropfile->fname);
-    if (!strcmp(reply->keyword, "OK")) {
-	unlink(dropfile->fname);
-    }
-    free((char *)dropfile);
-}
-
-sendtoimsp(droplist, hostname)
-struct dropfile *droplist;
+struct imclient *
+connecttoimsp(hostname)
 char *hostname;
 {
     static time_t cred_expire, curtime, life;
@@ -365,10 +192,6 @@ char *hostname;
     struct imclient *imspconn;
     int r;
     const char *err;
-    char mailboxname[MAX_MAILBOX_PATH];
-    char *username = 0;
-    char *p;
-    struct dropfile *tmp;
 
     curtime = time(0);
     if (cred_expire < curtime+5*60) {
@@ -403,7 +226,7 @@ char *hostname;
 	
 	syslog(LOG_WARNING, "Error connecting to IMSP server: %s", err);
 /*debug*/ printf("cannot connect to IMSP: %s\n", err);
-	goto freelist;
+	return 0;
     }
 
     r = imclient_authenticate(imspconn, login_acte_client, (char *)0,
@@ -412,60 +235,73 @@ char *hostname;
 	syslog(LOG_WARNING, "Error authenticating to IMSP server");
 /*debug*/printf("cannot authenticate to imsp\n");
 	imclient_close(imspconn);
-	goto freelist;
+	return 0;
     }
 
     commands_pending = 0;
-    while (droplist) {
-	if (strlen(droplist->fname) >= MAX_MAILBOX_PATH) {
-/*debug*/ printf("too long %s\n", droplist->fname);
-	    unlink(droplist->fname);
-	    tmp = droplist;
-	    droplist = droplist->next;
-	    free((char *)tmp);
-	    continue;
-	}
-	strcpy(mailboxname, strchr(droplist->fname, '=')+1);
-	if (p = strchr(mailboxname, '=')) {
-	    *p++ = '\0';
-	    username = p;
-	    while (*p) {
-		if (*p == 'A') *p = '/';
-		if (*p == 'B') *p = '=';
-		p++;
-	    }
-	}
-	p = mailboxname;
-	while (*p) {
-	    if (*p == 'B') *p = '=';
-	    p++;
-	}
-	
-	commands_pending++;
-	if (droplist->fname[0] == 'L') {
-	    imclient_send(imspconn, callback_dropfile, (void *)droplist,
-			  "LAST %s %u %u", mailboxname, droplist->uid,
-			  droplist->exists);
-	}
-	else {
-	    imclient_send(imspconn, callback_dropfile, (void *)droplist,
-			  "SEEN %s %s %u", mailboxname, username,
-			  droplist->uid/*, droplist->last_change*/);
-	}
-	droplist = droplist->next;
-    }
-    
-    while (commands_pending) {
-	imclient_processoneevent(imspconn);
-    }
-    imclient_close(imspconn);
-    return;
 
-  freelist:
-    while (droplist) {
-	tmp = droplist;
-	droplist = droplist->next;
-	free((char *)tmp);
+    return imspconn;
+}
+
+void
+callback_retryonfail(imspconn, rock, reply)
+struct imclient *imspconn;
+void *rock;
+struct imclient_reply *reply;
+{
+    char *cmd = (char *)rock;
+    char *cmdend;
+
+    commands_pending--;
+/*debug*/ printf("%u %s %s %s\n", commands_pending, reply->keyword, reply->text, cmd + 1);
+
+    if (strcmp(reply->keyword, "OK") != 0) {
+	cmdend = memchr(cmd+1, '\n', 1024*1024);
+	fwrite(cmd, cmdend - cmd + 1, 1, failedfp);
+    }
+}
+
+#define MAXARGS 20
+
+processfile(imspconn, base, size)
+struct imclient *imspconn;
+char *base;
+int size;
+{
+    char *endline;
+    char *p, *endp;
+    char *mailbox, *uidvalidity;
+    char *arg[MAXARGS];
+    int nargs;
+
+    while (p = memchr(base, '\n', size)) {
+	size -= p - base;
+	while (size && p[1] == '\n') {
+	    p++;
+	    size--;
+	}
+	base = p+1;
+	size--;
+
+	endline = memchr(base, '\n', size);
+	if (!endline) break;
+	if (endline - base < size && endline[1] != '\n') continue;
+
+	nargs = 0;
+	p = base;
+	while (p < endline) {
+	    arg[nargs++] = p;
+	    if (nargs == MAXARGS) continue;
+	    endp = memchr(p, '\0', endline - p);
+	    if (!endp) continue;
+	    p = endp + 1;
+	}
+
+	arg[nargs] = 0;
+
+	imclient_send(imspconn, callback_retryonfail, (void *)(base-1),
+			  "X-CYRUS-MBINFO %v", arg);
+	commands_pending++;
     }
 }
 
@@ -473,6 +309,6 @@ fatal(msg, code)
 char *msg;
 int code;
 {
-    fprintf(stderr, "%s\n", msg);
+    fprintf(stderr, "updateimsp: %s\n", msg);
     exit(code);
 }
