@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.37 2002/12/19 16:58:30 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.38 2003/01/27 22:12:48 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -153,6 +153,10 @@
 #undef CONFIG_DB_SUBS
 #undef CONFIG_DB_TLS
 
+/* IPv6 */
+#undef HAVE_GETADDRINFO
+#undef HAVE_GETNAMEINFO
+
 @BOTTOM@
 
 /* This allows us to work even when we don't have an fdatasync */
@@ -204,9 +208,12 @@ typedef int rlim_t;
 #ifndef HAVE_GETADDRINFO
 #define	getaddrinfo	sasl_getaddrinfo
 #define	freeaddrinfo	sasl_freeaddrinfo
-#define	getnameinfo	sasl_getnameinfo
 #define	gai_strerror	sasl_gai_strerror
 #include "gai.h"
+#endif
+
+#ifndef HAVE_GETNAMEINFO
+#define	getnameinfo	sasl_getnameinfo
 #endif
 
 #ifndef	NI_WITHSCOPEID
