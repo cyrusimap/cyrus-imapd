@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.190 2002/05/22 20:58:02 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.191 2002/05/23 03:09:04 leg Exp $
  */
 
 #include <config.h>
@@ -588,6 +588,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     }
 
     /* 4. Create mupdate reservation */
+    /* xxx this is network I/O being done while holding a mboxlist lock */
     if (config_mupdate_server && !localonly) {
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
@@ -852,7 +853,8 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	goto done;
     }
 
-    /* remove from mupdate - this can be wierd if the commit below fails */
+    /* remove from mupdate - this can be weird if the commit below fails */
+    /* xxx this is network I/O being done while holding a mboxlist lock */
     if (!r && !isremote && !local_only && config_mupdate_server) {
 	/* delete the mailbox in MUPDATE */
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
@@ -1270,6 +1272,10 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
  * 6. Commit transaction
  * 7. Change mupdate entry 
  *
+ * xxx i'm not happy with this function.  the "goto done" bit has made it
+ * more confusing, not less.  we should probably just nuke the gotos
+ * and it'll be more clear or make "goto done" really jump to the
+ * very end. -leg
  */
 int mboxlist_setacl(char *name, char *identifier, char *rights, 
 		    int isadmin, char *userid, 
@@ -1281,6 +1287,7 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
     int mode = ACL_MODE_SET;
     int isusermbox = 0;
     struct mailbox mailbox;
+    int mailbox_open = 0;
     char *acl, *newacl = NULL;
     char *partition, *path;
     char *mboxent = NULL;
@@ -1321,7 +1328,10 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 
 	/* open & lock mailbox header */
         r = mailbox_open_header_path(name, path, acl, NULL, &mailbox, 0);
-	if(!r) r = mailbox_lock_header(&mailbox);
+	if (!r) {
+	    mailbox_open = 1;
+	    r = mailbox_lock_header(&mailbox);
+	}
 
 	if(!r) {
 	relock_retry:
@@ -1394,19 +1404,17 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	goto done;
     }
 
-    /* Do change to mailbox file */
-    if (!(mbtype & MBTYPE_REMOTE)) {
-	if (!r) {
-	    r = mailbox_lock_header(&mailbox);
-	    if (!r) {
-		/* set it in the /var/spool part */
-		(void) mailbox_write_header(&mailbox);
-	    }
-	    mailbox_close(&mailbox);
-	}
+    /* Do change to mailbox header file; we already have 
+       it locked from above */
+    if (!r && !(mbtype & MBTYPE_REMOTE)) {
+	r = mailbox_write_header(&mailbox);
     }
 
   done:
+    if (mailbox_open) {
+	mailbox_close(&mailbox);
+    }
+
     if (mboxent) free(mboxent);
 
     if (r) {
