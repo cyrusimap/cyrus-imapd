@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.107 2000/06/04 16:10:36 ken3 Exp $
+ * $Id: index.c,v 1.108 2000/06/04 22:50:42 leg Exp $
  */
 #include <config.h>
 
@@ -139,7 +139,7 @@ static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 #define HEADER_SIZE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_HEADER_SIZE)))
 #define CONTENT_OFFSET(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CONTENT_OFFSET)))
 #define CACHE_OFFSET(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CACHE_OFFSET)))
-#define LAST_UPDATED(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_LAST_UPDATED)))
+#define LAST_UPDATED(msgno) ((time_t)ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_LAST_UPDATED))))
 #define SYSTEM_FLAGS(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_SYSTEM_FLAGS)))
 #define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_USER_FLAGS+((i)*4))))
 
@@ -443,7 +443,7 @@ int checkseen;
 
 	/* Zero out array entry for newly arrived messages */
 	for (i = oldexists+1; i <= newexists; i++) {
-	    flagreport[i] = 0;
+	    flagreport[i] = LAST_UPDATED(i);
 	    seenflag[i] = 0;
 	}
 
@@ -543,7 +543,9 @@ int oldexists;
 		oldnext = 0;
 		if (!*old) oldnext = mailbox->last_uid+1;
 		else old++;
-		while (isdigit((int) *old)) oldnext = oldnext * 10 + *old++ - '0';
+		while (isdigit((int) *old)) {
+		    oldnext = oldnext * 10 + *old++ - '0';
+		}
 		oldnext += oldseen;
 	    }
 	}
@@ -560,21 +562,26 @@ int oldexists;
 		    neweof++;
 		}
 		else new++;
-		while (isdigit((int) *new)) newnext = newnext * 10 + *new++ - '0';
+		while (isdigit((int) *new)) {
+		    newnext = newnext * 10 + *new++ - '0';
+		}
 		newnext += newseen;
 	    }
 	}
 
+	/* report flags that have changed */
 	if (oldseen != newseen) {
 	    if (seenflag[msgno] != newseen) {
 		seenflag[msgno] = newseen;
-		if (!quiet && msgno <= oldexists && flagreport[msgno]) {
+		if (!quiet && msgno <= oldexists) {
 		    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
 			user_flags[i] = USER_FLAGS(msgno, i);
 		    }
-		    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
-				     LAST_UPDATED(msgno));
-		    if (usinguid) prot_printf(imapd_out, " UID %u", UID(msgno));
+		    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), 
+				     user_flags, LAST_UPDATED(msgno));
+		    if (usinguid) {
+			prot_printf(imapd_out, " UID %u", UID(msgno));
+		    }
 		    prot_printf(imapd_out, ")\r\n");
 		}
 	    }
@@ -2588,7 +2595,7 @@ void *rock;
 	
 
 	/* If .SILENT, assume client has updated their cache */
-	if (storeargs->silent && flagreport[msgno] &&
+	if (storeargs->silent && 
 	    flagreport[msgno] == record.last_updated) {
 	    flagreport[msgno] = 
 		(record.last_updated >= storeargs->update_time) ?
