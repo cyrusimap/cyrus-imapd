@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32.4.3 2002/08/09 13:22:21 ken3 Exp $ */
+/* $Id: fud.c,v 1.32.4.4 2002/08/12 22:48:40 ken3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -127,13 +127,14 @@ int begin_handling(void)
 	    }
             for(off = 0; buf[off] != '|' && off < maxuserlen; off++);
             if(off < maxuserlen) {
-		strlcpy(username,buf,off);
+		strncpy(username,buf,off);
+		username[off] = '\0';
             } else {
 		continue;
             }
             q = buf + off + 1;
-            strlcpy(mbox,q,(r - (off + 1)  < MAX_MAILBOX_NAME) ? 
-		    r - (off + 1) : MAX_MAILBOX_NAME);
+            strlcpy(mbox,q,(r - off < MAX_MAILBOX_NAME) ? 
+		    r - off : MAX_MAILBOX_NAME);
 
             handle_request(username,mbox,sfrom);
         }
