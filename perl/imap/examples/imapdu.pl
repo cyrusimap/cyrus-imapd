@@ -102,7 +102,7 @@ $cyrus->addcallback({-trigger => 'LIST',
 		      },
 		      -rock => \@info});
 
-my ($rc, $msg) = $cyrus->send('', '', "LIST * $where*");
+my ($rc, $msg) = $cyrus->send('', '', "LIST \"\" $where*");
 $cyrus->addcallback({-trigger => 'LIST'});
 if ($rc eq 'OK') {
 } else {
