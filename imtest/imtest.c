@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.52 2000/05/23 20:52:34 robeson Exp $
+ * $Id: imtest.c,v 1.53 2000/05/29 02:56:19 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1303,7 +1303,11 @@ int main(int argc, char **argv)
 	  result = auth_sasl(mechanism);
       }
   } else {
-      result = auth_sasl(mechlist);
+      if (*mechlist) {
+	  result = auth_sasl(mechlist);
+      } else {
+	  result = auth_login();
+      }
   }
 
   if (result == IMTEST_OK) {
