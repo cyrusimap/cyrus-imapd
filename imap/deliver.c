@@ -25,9 +25,14 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.85 1998/08/05 21:25:13 tjs Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.86 1998/09/18 19:29:22 wcw Exp $";
 
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <fcntl.h>
@@ -70,7 +75,13 @@ struct protstream *savemsg();
 char *convert_lmtp();
 void clean822space();
 
-void markdelivered();
+static int checkdelivered();
+static void markdelivered();
+
+static char *_get_db_name();
+static int _lock_delivered_db();
+static void logdupelem();
+static void usage();
 
 int
 main(argc, argv)
@@ -202,6 +213,7 @@ char **argv;
     exit(exitval);
 }
 
+static void
 usage()
 {
     fprintf(stderr, 
@@ -515,7 +527,7 @@ int lmtpmode;
     int scanheader = 1;
     int sawidhdr = 0, sawresentidhdr = 0;
     int sawnotifyheader = 0;
-    char buf[4096], *p;
+    char buf[8192], *p;
     struct stat sbuf;
 
     if (!idptr && !notifyptr) scanheader = 0;
@@ -795,6 +807,7 @@ int quotaoverride;
 
 /*
  */
+static void
 logdupelem(msgid, name)
 char *msgid;
 char *name;
@@ -963,22 +976,63 @@ static DB	*DeliveredDBptr;
 static DBM	*DeliveredDBptr;
 #endif
 
+
+
+/* too many processes are contending for single locks on delivered.db 
+ * so we use this function to generate a specific delivered.db for a mailbox
+ * First pass will be to just have 26 db files based on the first letter of 
+ * the mailbox name. As distribution goes, this really blows but, hey, what do 
+ * you expect from something quick and dirty?
+ */
+static char *
+_get_db_name (mbox) 
+     char *mbox;
+{
+  static char buf[MAX_MAILBOX_PATH];
+  char *idx;
+  
+  (void)strcpy(buf, config_dir);
+  (void)strcat(buf, "/deliverdb/deliver-");
+  idx = strchr(mbox,'.');   /* skip past user. */
+  if (idx == NULL) {         /* no '.' so just use mbox */
+    idx = mbox;
+  } else {
+    idx++;                   /* skip past '.' */
+  }
+
+  (void)strncat(buf, idx, 1);
+
+  return buf;
+}
+
+
 static int
-_lock_delivered_db() {
+_lock_delivered_db(to, write_lock) 
+     char *to;
+     int write_lock;
+{
   char buf[MAX_MAILBOX_PATH];
   int lockfd;
 
-  (void)strcpy(buf, config_dir);
-  (void)strcat(buf, "/delivered.lock");
+  (void)strcpy(buf, _get_db_name(to));
+  (void)strcat(buf, ".lock");
   lockfd = open(buf, O_RDWR|O_CREAT, 0666);
   if (lockfd < 0) {
     syslog(LOG_ERR, "Unable to open lock file: %s: %m", buf);
     return -1;
   }
-  if (lock_blocking(lockfd)) {
-    syslog(LOG_ERR, "Unable to lock lock file: %s: %m", buf);
-    close(lockfd);
-    return -1;
+  if (write_lock) {
+    if (lock_blocking(lockfd)) {
+      syslog(LOG_ERR, "Unable to write lock lock file: %s: %m", buf);
+      close(lockfd);
+      return -1;
+    }
+  } else {
+    if (lock_shared(lockfd)) {
+      syslog(LOG_ERR, "Unable to read lock lock file: %s: %m", buf);
+      close(lockfd);
+      return -1;
+    }
   }
   
   return lockfd;
@@ -987,7 +1041,7 @@ _lock_delivered_db() {
 /* id: message id
    to: name of mailbox
  */
-int
+static int
 checkdelivered(id, to)
 char *id, *to;
 {
@@ -1001,15 +1055,15 @@ char *id, *to;
     (void)memset(&info, 0, sizeof(info));
     (void)memset(&delivery, 0, sizeof(delivery));
 
-    (void)strcpy(fname, config_dir);
-    (void)strcat(fname, "/delivered.db");
+    (void)strcpy(fname, _get_db_name(to));
+    (void)strcat(fname, ".db");
 
     sprintf(buf, "%s%c%s", id, '\0', to);
     delivery.data = buf;
     delivery.size = strlen(id) + strlen(to) + 2; 
           /* +2 b/c 1 for the center null; +1 for the terminating null */
 
-    if ((lockfd = _lock_delivered_db()) < 0) {
+    if ((lockfd = _lock_delivered_db(to, 0)) < 0) {
       return 0;
     }
 
@@ -1039,15 +1093,26 @@ char *id, *to;
     datum date, delivery;
     int lockfd;
 
-    
-    if ((lockfd = _lock_delivered_db()) <0)
+    /* The whole locking situation with dbm should be examined in some
+     * more detail (but since we are using db and not dbm I'm just going
+     * to leave this comment).
+     * The right thing to do (with db too) is to keep the write lock 
+     * active unless a duplicate is found. If a duplicate is found, then
+     * the lock can be released. Otherwise, the lock should probably be
+     * held until markdelivered() finishes updating the db.
+     * The performance impact of holding the lock for that length of
+     * time needs to also be examined.
+     */
+
+    if ((lockfd = _lock_delivered_db(to, 1)) <0)
       return 0;
 	
     if (!initialized) {
       initialized++;
 
-      (void)strcpy(buf, config_dir);
-      (void)strcat(buf, "/delivered.db");
+      (void)strcpy(buf, _get_db_name(to));
+      (void)strcat(buf, ".db");
+
       DeliveredDBptr = dbm_open(buf, O_RDWR|O_CREAT, 0666);
       if (!DeliveredDBptr) {
 	syslog(LOG_ERR, "checkdelivered: error opening delivered database: %s: %m",
@@ -1075,14 +1140,14 @@ char *id, *to;
 #endif /* HAVE_LIBDB */
 }
 
-void
+static void
 markdelivered(id, to)
 char *id, *to;
 {
   char buf[MAX_MAILBOX_PATH];
   char fname[MAX_MAILBOX_PATH];
   int lockfd;
-  char datebuf[40];
+  time_t mark;
 #ifdef HAVE_LIBDB
   DBT date, delivery;
   HASHINFO info;
@@ -1092,7 +1157,7 @@ char *id, *to;
 
 
   sprintf(buf, "%s%c%s", id, '\0', to);
-  sprintf(datebuf, "%lu", time(0));
+  mark = time(0);
     
 #ifdef HAVE_LIBDB
   (void)memset(&info, 0, sizeof(info));
@@ -1103,13 +1168,13 @@ char *id, *to;
   delivery.size = strlen(id) + strlen(to) + 2;
           /* +2 b/c 1 for the center null; +1 for the terminating null */
 
-  date.data = datebuf;
-  date.size = strlen(datebuf);
+  date.data = &mark;
+  date.size = sizeof(mark);
 
-  (void)strcpy(fname, config_dir);
-  (void)strcat(fname, "/delivered.db");
+  (void)strcpy(fname, _get_db_name(to));
+  (void)strcat(fname, ".db");
 
-  if ((lockfd = _lock_delivered_db()) < 0)
+  if ((lockfd = _lock_delivered_db(to, 1)) < 0)
     return;
     
   DeliveredDBptr = dbopen(fname, O_RDWR|O_CREAT, 0666, DB_HASH, &info);
@@ -1131,13 +1196,13 @@ char *id, *to;
   delivery.dptr = buf;
   delivery.dsize = strlen(id) + strlen(to) + 2;
 
-  date.dptr = datebuf;
-  date.dsize = strlen(datebuf);
+  date.dptr = &mark;
+  date.dsize = sizeof(mark);
 
   /* dbm_open is called in checkdelivered. This assumes that checkdelivered
      * gets called first */
 
-  if ((lockfd = _lock_delivered_db()) < 0)
+  if ((lockfd = _lock_delivered_db(to, 1)) < 0)
     return;
 
   if (dbm_store(DeliveredDBptr, delivery, date, DBM_REPLACE) < 0) {
@@ -1147,19 +1212,15 @@ char *id, *to;
 #endif /* HAVE_LIBDB */
 
   if (logdebug)
-    syslog(LOG_DEBUG, "deliver: delivered %s to %s at %s", id, to, datebuf);
+    syslog(LOG_DEBUG, "deliver: delivered %s to %s at %d", id, to, mark);
 }
 
-int
-prunedelivered(age)
-int age;
+static int
+_prune_actual_db(fname, mark) 
+     char *fname;
+     time_t mark;
 {
-  char buf[MAX_MAILBOX_PATH];
-  char fname[MAX_MAILBOX_PATH];
-  int lockfd;
   int rcode = 0;
-  char datebuf[40];
-  int len;
   int count = 1;
 
 #ifdef HAVE_LIBDB
@@ -1172,30 +1233,16 @@ int age;
   datum date, delivery;
 #endif
 
-  if (age < 0)
-    fatal("must specify positive number of days", EX_USAGE);
-
-  /* we allow age == 0 to nuke all current entries */
-
-  sprintf(datebuf, "%d", time(0) - age*60*60*24);
-  len = strlen(datebuf);
 
 #ifdef HAVE_LIBDB
   (void)memset(&info, 0, sizeof(info));
   (void)memset(&date, 0, sizeof(date));
   (void)memset(&delivery, 0, sizeof(delivery));
 
-  (void)strcpy(fname, config_dir);
-  (void)strcat(fname, "/delivered.db");
-    
-  if ((lockfd = _lock_delivered_db()) < 0)
-    return -1;
-
   (void)memset(&info, 0, sizeof(info));
   DeliveredDBptr = dbopen(fname, O_RDWR|O_CREAT, 0666, DB_HASH, &info);
   if (!DeliveredDBptr) {
     syslog(LOG_ERR,  "prunedelivered: error opening %s: %m");
-    close(lockfd);
     return -1;
   }
     
@@ -1203,8 +1250,7 @@ int age;
   while ((rc = DeliveredDBptr->seq(DeliveredDBptr, &delivery, &date, mode)) == 0) {
     mode = R_NEXT;
     count++;
-    if (date.size < len ||
-	(date.size == len && memcmp(date.data, datebuf, len) < 0)) {
+    if ((date.size > 0) && ((time_t)date.data < mark)) {
       if (num_deletions >= alloc_deletions) {
 	alloc_deletions += 1000;
 	deletions = (DBT *) xrealloc((char *)deletions,
@@ -1218,13 +1264,10 @@ int age;
 	/* delivery.data should be a string the form of  "<msgid>\0<to>\0" 
 	 */
 	char *ptr;
-	char *datebuf[40];
 	      
 	ptr = ((char *)delivery.data + (strlen(delivery.data) + 1)); 
-	(void)memcpy(datebuf, date.data, date.size);
-	datebuf[date.size] = '\0';
-	syslog(LOG_DEBUG, "prunedelivered: marking %s/%s at %s for deletion\n",
-	       delivery.data, ptr, datebuf);
+	syslog(LOG_DEBUG, "prunedelivered: marking %s/%s at %d for deletion\n",
+	       delivery.data, ptr, (time_t)date.data);
       }
     }
   }
@@ -1255,8 +1298,7 @@ int age;
 						delivery = dbm_nextkey(DeliveredDBptr)) {
     date = dbm_fetch(DeliveredDBptr, delivery);
     if (!date.dptr) continue;
-    if (date.dsize < len ||
-	(date.dsize == len  && memcmp(date.dptr, datebuf, len) < 0)) {
+    if ((date.dsize > 0) && ((time_t)date.dptr < mark)) {
       if (dbm_delete(DeliveredDBptr, delivery)) {
 	rcode = 1;
       }
@@ -1265,8 +1307,43 @@ int age;
   dbm_close(DeliveredDBptr);
 
 #endif /* HAVE_LIBDB */
-  close(lockfd);
 
   return rcode;
 }
 
+
+int
+prunedelivered(age)
+int age;
+{
+  char c;
+  int lockfd;
+  int rc;
+  char fname[MAX_MAILBOX_PATH];
+  time_t mark;
+
+  /* we allow age == 0 to nuke all current entries */
+  if (age < 0)
+    fatal("must specify positive number of days", EX_USAGE);
+
+  mark = time(0) - (age*60*60*24);
+  syslog(LOG_DEBUG, "prunedelivered: pruning back %d days", age);
+  for (c = 'a' ; c <= 'z'; c++) {
+    (void)strcpy(fname, _get_db_name(&c));
+    (void)strcat(fname, ".db");
+
+    if (logdebug)
+      syslog(LOG_DEBUG, "prunedelivered: pruning %s", fname);
+
+    if ((lockfd = _lock_delivered_db(&c, 1)) < 0)
+      return -1;
+    rc = _prune_actual_db(fname, mark);
+    close(lockfd);
+    if (rc < 0) {
+      syslog(LOG_ERR, "prunedelivered: error exit", age);
+      return(rc);
+    }
+  }
+  syslog(LOG_DEBUG, "prunedelivered: done");
+  return 0;
+}
