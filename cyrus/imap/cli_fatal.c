@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cli_fatal.c,v 1.2 2003/10/22 18:02:56 rjs3 Exp $
+ * $Id: cli_fatal.c,v 1.3 2003/10/24 18:24:05 rjs3 Exp $
  */
 
 #include <config.h>
@@ -48,6 +48,14 @@
 
 #include "global.h"
 #include "xmalloc.h"
+
+/* generic printstring() implementation for command line utilities */
+void printstring(const char *s __attribute__((unused)))
+{
+    /* needed to link against annotate.o */
+    fatal("printstring() executed, but its not used for utilities!",
+	  EC_SOFTWARE);
+}
 
 /* generic fatal() routine for command line utilities */
 void fatal(const char *message, int code)

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.h,v 1.6 2003/10/24 17:31:48 rjs3 Exp $
+ * $Id: annotate.h,v 1.7 2003/10/24 18:24:05 rjs3 Exp $
  */
 
 #ifndef ANNOTATE_H
@@ -137,11 +137,11 @@ int annotatemore_write_entry(const char *mboxname, const char *entry,
  * if 'olduserid' is non-NULL then the private annotations
  * for 'olduserid' are renamed to 'newuserid'
  */
-int annotatemore_rename(char *oldmboxname, char *newmboxname,
-			char *olduserid, char *newuserid);
+int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
+			const char *olduserid, const char *newuserid);
 
 /* delete the annotations for 'mboxname' */
-int annotatemore_delete(char *mboxname);
+int annotatemore_delete(const char *mboxname);
 
 /* close the database */
 void annotatemore_close(void);

@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.23 2003/10/22 18:50:29 rjs3 Exp $
+# $Id: Makefile.in,v 1.24 2003/10/24 18:24:11 rjs3 Exp $
 # 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -60,6 +60,7 @@ LIBS = $(IMAP_LIBS) @COM_ERR_LIBS@
 LIB_SASL = @LIB_SASL@
 LIB_WRAP = @LIB_WRAP@
 DEPLIBS = ../imap/libimap.a ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
+UTIL_LIBS = ../imap/mutex_fake.o ../imap/cli_fatal.o
 
 LDAP_LIBS=@LDAP_LIBS@
 LDAP_CPPFLAGS=@LDAP_CPPFLAGS@
@@ -99,23 +100,20 @@ ptloader: ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(DEPLIBS)
 ptloader.pure: ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(DEPLIBS)
 	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} ${LDAP_LDFLAGS} $(AFS_LIBS) ${LDAP_LIBS} $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
 
-ptexpire: ptexpire.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptexpire.o ../imap/mutex_fake.o $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+ptexpire: ptexpire.o $(DEPLIBS) $(UTIL_LIBS)
+	$(CC) $(LDFLAGS) -o $@ ptexpire.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
 
-ptexpire.pure: ptexpire.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptexpire.o ../imap/mutex_fake.o $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+ptexpire.pure: ptexpire.o $(DEPLIBS) $(UTIL_LIBS)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptexpire.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
 
-ptdump: ptdump.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptdump.o ../imap/mutex_fake.o $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+ptdump: ptdump.o $(DEPLIBS) $(UTIL_LIBS)
+	$(CC) $(LDFLAGS) -o $@ ptdump.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
 
-ptdump.pure: ptexpire.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptdump.o ../imap/mutex_fake.o $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+ptdump.pure: ptexpire.o $(DEPLIBS) $(UTIL_LIBS)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptdump.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
 
-ptextract: ptextract.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptextract.o $(DEPLIBS) $(LIBS)
-
-#pttest: pttest.o auth_krb_pts.o  $(DEPLIBS)
-#        $(CC) $(LDFLAGS) -o $@ pttest.o auth_krb_pts.o $(OBJS) $(DEPLIBS) $(LIBS)
+ptextract: ptextract.o $(DEPLIBS) $(UTIL_LIBS)
+	$(CC) $(LDFLAGS) -o $@ ptextract.o $(UTIL_LIBS) $(DEPLIBS) $(LIBS)
 
 clean:
 	rm -f *.o Makefile.bak $(PROGS) makedepend.log

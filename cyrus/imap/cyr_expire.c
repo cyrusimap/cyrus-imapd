@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.2 2003/10/22 18:02:57 rjs3 Exp $
+ * $Id: cyr_expire.c,v 1.3 2003/10/24 18:24:05 rjs3 Exp $
  */
 
 #include <config.h>
@@ -70,13 +70,6 @@
 
 /* global state */
 const int config_need_data = 0;
-
-void printstring(const char *s)
-{
-    /* needed to link against annotate.o */
-    fatal("printstring() executed, but its not used for cyr_expire!",
-	  EC_SOFTWARE);
-}
 
 void usage(void)
 {

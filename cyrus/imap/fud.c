@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.48 2003/10/22 18:50:07 rjs3 Exp $ */
+/* $Id: fud.c,v 1.49 2003/10/24 18:24:05 rjs3 Exp $ */
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -501,4 +501,11 @@ void fatal(const char* s, int code)
     syslog(LOG_ERR, "Fatal error: %s", s);
 
     shut_down(code);
+}
+
+void printstring(const char *s __attribute__((unused)))
+{
+    /* needed to link against annotate.o */
+    fatal("printstring() executed, but its not used for FUD!",
+	  EC_SOFTWARE);
 }

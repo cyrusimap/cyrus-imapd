@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: mupdate.c,v 1.78 2003/10/24 18:24:06 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -2105,4 +2105,11 @@ void free_mbent(struct mbent *p)
     free(p->server);
     free(p->mailbox);
     free(p);
+}
+
+void printstring(const char *s __attribute__((unused)))
+{
+    /* needed to link against annotate.o */
+    fatal("printstring() executed, but its not used for MUPDATE!",
+	  EC_SOFTWARE);
 }
