@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.158 2001/02/26 22:24:26 leg Exp $
+ * $Id: index.c,v 1.159 2001/03/05 20:00:47 leg Exp $
  */
 #include <config.h>
 
@@ -164,7 +164,7 @@ index_closemailbox(mailbox)
 struct mailbox *mailbox;
 {
     if (seendb) {
-	index_checkseen(mailbox, 1, 0, imapd_exists);
+	index_checkseen(mailbox, 1, 0, mailbox->exists);
 	seen_close(seendb);
 	seendb = 0;
     }
@@ -198,14 +198,14 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     time_t last_read;
     bit32 user_flags[MAX_USER_FLAGS/32];
 
-    oldexists = imapd_exists;
+    oldexists = mailbox->exists;
 
     /* Check for expunge */
     if (mailbox->index_len) {
 	if (stat(FNAME_INDEX+1, &sbuf) != 0) {
 	    if (errno == ENOENT) {
 		/* Mailbox has been deleted */
-		while (imapd_exists--) {
+		while (mailbox->exists--) {
 		    prot_printf(imapd_out, "* 1 EXPUNGE\r\n");
 		}
 		mailbox->exists = 0;
@@ -220,14 +220,14 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	    /* ok, the index file has been replaced -> expunge happened.
 	     figure out which messages were expunged. */
 	    struct index_record record;
-	    unsigned long *olduids;
+	    struct mailbox old_mailbox;
 
-	    /* save old uids */
-	    olduids = (unsigned long *) 
-		xmalloc((imapd_exists + 1) * sizeof(unsigned long));
-	    for (oldmsgno = 1; oldmsgno <= imapd_exists; oldmsgno++) {
-		olduids[oldmsgno] = UID(mailbox, oldmsgno);
-	    }
+	    /* need to keep the 'old_mailbox' handles around, so
+	       lose the new mailbox handles */
+	    old_mailbox = *mailbox;
+	    mailbox->index_fd = -1;
+	    mailbox->index_base = NULL;
+	    mailbox->index_len = 0;
 
 	    /* reopen the mailbox */
 	    if (mailbox_open_index(mailbox)) {
@@ -247,7 +247,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 		
 		nexpunge = 0;
 		while (oldmsgno <= imapd_exists && 
-		       olduids[oldmsgno] < record.uid) {
+		       UID(&old_mailbox, oldmsgno) < record.uid) {
 		    nexpunge++;
 		    oldmsgno++;
 		}
@@ -263,16 +263,19 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 		}
 	    }
 
+	    /* free old index file */
+	    close(old_mailbox.index_fd);
+	    map_free(&old_mailbox.index_base, &old_mailbox.index_len);
+
+#if 0
  	    /* Force re-map of index/cache files */
 	    map_free(&mailbox->index_base, &mailbox->index_len);
 	    map_free(&mailbox->cache_base, &mailbox->cache_len);
 	    mailbox->cache_size = 0;
+#endif
 
 	    /* Force a * n EXISTS message */
 	    imapd_exists = -1;
-
-	    /* free old uids */
-	    free(olduids);
 	}
 	else if (sbuf.st_mtime != mailbox->index_mtime) {
 	    mailbox_read_index_header(mailbox);
@@ -302,7 +305,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     if (oldexists == -1 && keepingseen) {
 	r = seen_open(mailbox, imapd_userid, &seendb);
 	if (!r) {
-	    free(seenuids);
+	    if (seenuids) free(seenuids);
 	    r = seen_lockread(seendb, &last_read, &recentuid,
 			      &seen_last_change, &seenuids);
 	    if (r) seen_close(seendb);
@@ -323,9 +326,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 
     /* If opening mailbox or had an EXPUNGE, find where \Recent starts */
     if (imapd_exists == -1) {
-	imapd_exists = newexists;
 	lastnotrecent = index_finduid(mailbox, recentuid);
-	imapd_exists = -1;
     }
     
     /* If EXISTS changed, report it */
@@ -508,7 +509,7 @@ int oldexists;
     /* If there's nothing to save back to the database, clean up and return */
     if (!dirty) {
 	seen_unlock(seendb);
-	free(seenuids);
+	if (seenuids) free(seenuids);
 	seenuids = newseenuids;
 	/* We might have deleted our last unseen message */
 	if (!allseen) {
@@ -657,7 +658,7 @@ int oldexists;
     /* Write the changes, clean up, and return */
     r = seen_write(seendb, last_read, last_uid, seen_last_change, saveseenuids);
     seen_unlock(seendb);
-    free(seenuids);
+    if (seenuids) free(seenuids);
     if (r) {
 	prot_printf(imapd_out, "* OK %s: %s\r\n",
 	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
@@ -1238,7 +1239,7 @@ unsigned seendate;
  */
 int index_finduid(struct mailbox *mailbox, unsigned uid)
 {
-    int low=1, high=imapd_exists, mid;
+    int low=1, high=mailbox->exists, mid;
     unsigned miduid;
 
     while (low <= high) {
