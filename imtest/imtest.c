@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.81 2002/06/04 18:53:50 rjs3 Exp $
+ * $Id: imtest.c,v 1.82 2002/07/01 20:19:36 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2041,6 +2041,7 @@ void usage(char *prog, char *prot)
     printf("  -c       : enable challenge prompt callbacks\n"
 	   "             (enter one-time password instead of secret pass-phrase)\n");
     printf("  -n       : number of auth attempts (default=1)\n");
+    printf("  -I file  : output my PID to (file) (useful with -X)\n");
     printf("  -x file  : open the named socket for the interactive portion\n");
     printf("  -X file  : same as -X, except close all file descriptors & dameonize\n");
     
@@ -2122,6 +2123,7 @@ int main(int argc, char **argv)
     int dotls=0, dossl=0;
     int server_supports_tls;
     char str[1024];
+    const char *pidfile = NULL;
     void *rock = NULL;
     int reauth = 1;
     int dochallenge = 0;
@@ -2136,7 +2138,7 @@ int main(int argc, char **argv)
     prog = strrchr(argv[0], '/') ? strrchr(argv[0], '/')+1 : argv[0];
 
     /* look at all the extra args */
-    while ((c = getopt(argc, argv, "P:sczvk:l:p:u:a:m:f:r:t:n:x:X:w:?")) != EOF)
+    while ((c = getopt(argc, argv, "P:sczvk:l:p:u:a:m:f:r:t:n:I:x:X:w:?")) != EOF)
 	switch (c) {
 	case 'P':
 	    prot = optarg;
@@ -2198,6 +2200,9 @@ int main(int argc, char **argv)
 	    reauth = atoi(optarg);
 	    if (reauth <= 0)
 		imtest_fatal("number of auth attempts must be > 0\n");
+	    break;
+	case 'I':
+	    pidfile = optarg;
 	    break;
 	case 'X':
 	case 'x':
@@ -2282,6 +2287,18 @@ int main(int argc, char **argv)
 	servport = ntohs(serv->s_port);
     }
 
+    if(pidfile) {
+	FILE *pf;
+	pf = fopen(pidfile, "w");  
+	if(!pf) {
+	    fprintf(stderr, "could not open %s for writing\n",pidfile);
+	    perror("error");
+	    exit(1);
+	}
+	fprintf(pf, "%d", getpid());
+	fclose(pf);
+    } 
+    
     /* attempt to start sasl */
     if (sasl_client_init(callbacks+(!dochallenge ? 2 : 0)) != IMTEST_OK) {
 	imtest_fatal("SASL initialization");
