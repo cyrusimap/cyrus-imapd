@@ -45,7 +45,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #
 # Written by Gary Mills <mills@cc.UManitoba.CA>
 #
-# $Id: rehash,v 1.2 2001/08/12 20:06:41 leg Exp $
+# $Id: rehash,v 1.3 2001/09/18 20:52:26 ken3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -179,32 +179,12 @@ if ($yn =~ /^y/) {
     print "converting configuration directory $conf...";
     chdir $conf or die "couldn't change to $conf";
     
-    foreach $i ("user", "proc", "db", "socket", "log", "msg", "deliverdb",
-		"deliverdb/db", "quota") {
+    foreach $i ("user", "proc", "db", "socket", "log", "msg", "quota") {
 	unless (-d $i) {
 	    print "creating $i...\n";
 	    mkdir $i, 0755;
 	}
     }
-    # *** deliverdb subdirectory; holds duplicate supression databases
-    print "deliverdb ";
-    chdir "deliverdb" or die "couldn't change to deliverdb subdir";
-    if ($tonone) {
-	foreach $i (@{$dirs}) {
-	    if (-f "deliver-$i.db") {
-		unlink "deliver-$i.db";
-	    }
-	}
-    }
-    else {
-	foreach $i (@{$old}) {
-	    if (-f "deliver-$i.db") {
-		unlink "deliver-$i.db";
-	    }
-	}
-    }
-    chdir "..";
-    
     # *** user subdirectory; holds subscription files
     print "user ";
     chdir "user" or die "couldn't change to user subdir";
