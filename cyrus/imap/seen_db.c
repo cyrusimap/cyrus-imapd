@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.3 2000/04/11 20:52:49 leg Exp $
+   $Id: seen_db.c,v 1.4 2000/04/11 22:20:06 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -143,7 +143,8 @@ int seen_open(struct mailbox *mailbox,
 
 static int seen_readit(struct seen *seendb, 
 		       time_t *lastreadptr, unsigned int *lastuidptr, 
-		       time_t *lastchangeptr, char **seenuidsptr)
+		       time_t *lastchangeptr, char **seenuidsptr,
+		       int flags)
 {
     int r;
     DBT key, data;
@@ -154,23 +155,20 @@ static int seen_readit(struct seen *seendb,
     memset(&key, 0, sizeof(key));
     memset(&data, 0, sizeof(data));
 
-    if (!seendb->tid) {
-	r = txn_begin(dbenv, NULL, &seendb->tid, DB_TXN_NOSYNC);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error beginning txn: %s", 
-		   db_strerror(r));
-	    return IMAP_IOERROR;
-	}
-    }
     key.data = (char *) seendb->uniqueid;
     key.size = strlen(seendb->uniqueid);
-    r = seendb->db->get(seendb->db, seendb->tid, &key, &data, DB_RMW);
+    r = seendb->db->get(seendb->db, seendb->tid, &key, &data, flags);
     switch (r) {
     case 0:
 	break;
     case DB_NOTFOUND:
 	*seenuidsptr = xstrdup("");
 	return 0;
+	break;
+    case DB_LOCK_DEADLOCK:
+	syslog(LOG_DEBUG, "deadlock in seen database for '%s/%s'",
+	       seendb->user, seendb->uniqueid);
+	return IMAP_AGAIN;
 	break;
     default:
 	syslog(LOG_ERR, "DBERROR: error fetching txn: %s", db_strerror(r));
@@ -192,7 +190,7 @@ int seen_read(struct seen *seendb,
 	      time_t *lastchangeptr, char **seenuidsptr)
 {
     return seen_readit(seendb, lastreadptr, lastuidptr, lastchangeptr,
-		       seenuidsptr);
+		       seenuidsptr, 0);
 }
 
 int seen_lockread(struct seen *seendb, 
@@ -204,7 +202,7 @@ int seen_lockread(struct seen *seendb,
     assert(seendb && seendb->uniqueid);
 
     if (!seendb->tid) {
-	r = txn_begin(dbenv, NULL, &seendb->tid, 0);
+	r = txn_begin(dbenv, NULL, &seendb->tid, DB_TXN_NOSYNC);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error beginning txn: %s", 
 		   db_strerror(r));
@@ -213,7 +211,7 @@ int seen_lockread(struct seen *seendb,
     }
 
     return seen_readit(seendb, lastreadptr, lastuidptr, lastchangeptr,
-		       seenuidsptr);
+		       seenuidsptr, DB_RMW);
 }
 
 int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid, 
