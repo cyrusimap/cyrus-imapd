@@ -1,6 +1,26 @@
-#!/usr/bin/perl
+#!/bin/sh
+exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
+#!perl -w
 # script to upgrade sievedir from imapd 1.6.13
 # make sure you run it as the cyrus user
+#!/usr/bin/perl
+# $Id: upgradesieve,v 1.2 1999/10/12 03:17:17 leg Exp $
+
+if ($] !~ /^5\..*/) {
+  # uh-oh. this isn't perl 5.
+  foreach (split(/:/, $ENV{PATH})) { # try to find "perl5".
+    exec("$_/perl5", "-x", "-S", $0, @ARGV) if (-x "$_/perl5");
+  }
+  # we failed. bail.
+  die "Your perl is too old; I need perl 5.\n";
+}
+
+# load the real script. this is isolated in an 'eval' so perl4 won't
+# choke on the perl5-isms.
+eval join("\n", <DATA>);
+if ($@) { die "$@"; }
+
+__END__
 require 5;
 
 $| = 1;
@@ -19,9 +39,9 @@ sub ouch {
     my $msg = shift;
 
     if ($force) {
-	print "fatal error: $msg\n";
-    } else {
 	print "error: $msg\n";
+    } else {
+	print "fatal error: $msg\n";
 	exit 1;
     }
 }
