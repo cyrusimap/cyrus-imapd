@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.31 1998/05/01 21:26:59 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.32 1998/05/01 23:13:27 tjs Exp $ -->
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
@@ -7,6 +7,10 @@
 <h2>Changes to the Cyrus IMAP Server Since Version 1.5.2</h2>
 
 <ul>
+
+<li> The mailboxes file is now closed if it isn't likely to be referenced,
+	  hopefully preventing old mailboxes files from hanging around in
+	  memory as frequently.
 
 <li> Added a patch from Eric Haberg to work around a possible deadlock
 	  condition in mboxlist.c where rename isn't atomic.
@@ -485,7 +489,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Fri May  1 16:43:44 1998
+last modified by tjs at Fri May  1 19:13:04 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page

@@ -2,6 +2,9 @@
 
 Changes to the Cyrus IMAP Server Since Version 1.5.2
 
+      * The mailboxes file is now closed if it isn't likely to be
+        referenced, hopefully preventing old mailboxes files from hanging
+        around in memory as frequently. 
       * Added a patch from Eric Haberg to work around a possible deadlock
         condition in mboxlist.c where rename isn't atomic. 
       * Updated db code to use db 2.0 where possible. 
