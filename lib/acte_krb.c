@@ -149,6 +149,7 @@ void **state;			/* On success, filled in with state ptr */
     char realm[REALM_SZ];
     char uinst[INST_SZ];
     char urealm[INST_SZ];
+    KTEXT_ST authent;
     CREDENTIALS cr;
     struct krb_state *kstate;
 
@@ -169,6 +170,10 @@ void **state;			/* On success, filled in with state ptr */
 
     strcpy(realm, krb_realmofhost(host_name->h_name));
     strcpy(instance, krb_get_phost(host_name->h_name));
+
+    /* Fetch imap.hostname service key */
+    (void) krb_mk_req(&authent, "imap", instance, realm, 0);
+    memset(&authent, 0, sizeof(authent));
 
     if (krb_get_cred("imap", instance, realm, &cr)) {
 	return ACTE_FAIL;
