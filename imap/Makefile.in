@@ -35,6 +35,17 @@ AUTHLIBS=/usr/local/lib/libkrb.a /usr/local/lib/libdes.a
 # \Seen state database.  Only one choice for now:
 SEEN=seen_local.o
 
+#
+# File mapping mechanism.  Two choices
+#
+# mmap()
+MAP=map_mmap.o
+#
+# mmap() nonexistent or nonfunctional on plain files
+# Performance will not be so good
+#MAP=map_nommap.o
+
+
 COMPILE_ET=compile_et
 COM_ERR=/usr/local/lib/libcom_err.a
 
@@ -43,7 +54,7 @@ OPT=-g
 LOBJS= append.o mailbox.o mboxlist.o message.o \
 	parsel.o parsey.o parseadd.o parseutl.o \
 	config.o imap_err.o proc.o setproctitle.o \
-	$(LOGIN) $(SEEN)
+	$(LOGIN) $(SEEN) $(MAP)
 
 IMAPDOBJS= imapd.o index.o
 
