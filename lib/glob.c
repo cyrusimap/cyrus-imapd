@@ -29,6 +29,10 @@
 #include "util.h"
 #include "glob.h"
 
+/* name of "INBOX" -- must have no repeated substrings */
+static char inbox[] = "INBOX";
+#define INBOXLEN (sizeof (inbox) - 1)
+
 /* from utilities: */
 extern void *fs_get( /* size_t */ );
 extern void fs_give( /* void ** */ );
@@ -109,19 +113,42 @@ glob *glob_init_suppress(str, flags, suppress)
 	if (flags & GLOB_ICASE) lcase(g->str);
 	g->flags = flags;
 
+	/* pre-match "INBOX" to the pattern case insensitively and save state
+	 * NOTE: this only works because "INBOX" has no repeated substrings
+	 */
+	if (flags & GLOB_INBOXCASE) {
+	    str = g->str;
+	    dst = inbox;
+	    g->gstar = g->ghier = NULL;
+	    do {
+		while (*dst && TOLOWER(*str) == TOLOWER(*dst)) {
+		    ++str, ++dst;
+		}
+		if (*str == '*') g->gstar = ++str, g->ghier = NULL;
+		else if (*str == '%') g->ghier = ++str;
+		else break;
+		while (*str && *dst && TOLOWER(*str) != TOLOWER(*dst)) ++dst;
+	    } while (*str && *dst);
+	    g->gptr = str;
+	    if (*dst) g->flags &= ~GLOB_INBOXCASE;
+	}
+
 	/* set suppress string if:
 	 *  1) the suppress string isn't a prefix of the glob pattern and
 	 *  2) the suppress string prefix matches the glob pattern
+	 *     or GLOB_INBOXCASE is set
 	 */
 	g->suppress = NULL;
 	if (suppress) {
+	    dst = g->str + strlen(g->str) + 1;
 	    strcpy(dst, suppress);
 	    str = g->str;
 	    if (strncmp(suppress, str, slen) ||
 		(str[slen] != '\0' && str[slen] != g->sep_char
 		     && str[slen] != '*' && str[slen] != '%')) {
 		while (*str && *str == *suppress) ++str, ++suppress;
-		if (*str == '*' || *str == '%' || *suppress == '\0') {
+		if ((g->flags & GLOB_INBOXCASE)
+		    || *str == '*' || *str == '%' || *suppress == '\0') {
 		    g->suppress = dst;
 		    g->slen = slen;
 		}
@@ -166,24 +193,45 @@ int glob_test(g, ptr, len, min)
     /* get length */
     if (!len) len = strlen(ptr);
 
-    /* check for suppress string */
-    if (g->suppress && !strncmp(g->suppress, ptr, g->slen) &&
-	(ptr[g->slen] == '\0' || ptr[g->slen] == g->sep_char)) {
-	if (min) *min = -1;
-	return (-1);
-    }
-	
     /* initialize globbing */
     gptr = g->str;
     start = ptr;
     pend = ptr + len;
     gstar = ghier = NULL;
     newglob = g->flags & GLOB_HIERARCHY;
+
+    /* check for INBOX prefix */
+    if ((g->flags & GLOB_INBOXCASE) && !strncmp(ptr, inbox, INBOXLEN)) {
+	pstar = phier = ptr += INBOXLEN;
+	gstar = g->gstar;
+	ghier = g->ghier;
+	gptr = g->gptr;
+    }
+
+    /* check for suppress string */
+    if (g->suppress && !strncmp(g->suppress, ptr, g->slen) &&
+	(ptr[g->slen] == '\0' || ptr[g->slen] == g->sep_char)) {
+	if (!(g->flags & GLOB_INBOXCASE)) {
+	    if (min) *min = -1;
+	    return (-1);
+	}
+	pstar = phier = ptr += g->slen;
+	gstar = g->gstar;
+	ghier = g->ghier;
+	gptr = g->gptr;
+    }
+    
+    /* main globbing loops */
     if (!(g->flags & GLOB_ICASE)) {
 	/* case sensitive version */
 
 	/* loop to manage wildcards */
 	do {
+	    /* see if we match to the next '%' or '*' wildcard */
+	    while (*gptr != '*' && *gptr != '%' && ptr != pend
+		   && (*gptr == *ptr || (!newglob && *gptr == '?'))) {
+		++ptr, ++gptr;
+	    }
 	    if (*gptr == '*') {
 		/* if nothing after '*', we're done */
 		if (!*++gptr) {
@@ -212,21 +260,22 @@ int glob_test(g, ptr, len, min)
 	    }
 	    if (ghier) {
 		/* look for a match with first char following '%' */
-		while (phier != pend && *ghier != *phier) ++phier;
+		while (phier != pend && *ghier != *phier
+		       && *phier != g->sep_char) ++phier;
 		if (phier == pend) break;
-		ptr = ++phier;
-		gptr = ghier + 1;
-	    } else if (gstar && *gstar != '%') {
+		if (*phier == g->sep_char) {
+		    ghier = NULL;
+		} else {
+		    ptr = ++phier;
+		    gptr = ghier + 1;
+		}
+	    }
+	    if (gstar && !ghier) {
 		/* look for a match with first char following '*' */
 		while (pstar != pend && *gstar != *pstar) ++pstar;
 		if (pstar == pend) break;
 		ptr = ++pstar;
 		gptr = gstar + 1;
-	    }
-	    /* see if we match to the next '%' or '*' wildcard */
-	    while (*gptr != '*' && *gptr != '%' && ptr != pend
-		   && (*gptr == *ptr || (!newglob && *gptr == '?'))) {
-		++ptr, ++gptr;
 	    }
 	    /* continue if at wildcard or we passed an asterisk */
 	} while (*gptr == '*' || *gptr == '%' ||
@@ -236,6 +285,11 @@ int glob_test(g, ptr, len, min)
 
 	/* loop to manage wildcards */
 	do {
+	    /* see if we match to the next '%' or '*' wildcard */
+	    while (*gptr != '*' && *gptr != '%' && ptr != pend
+		   && (*gptr == TOLOWER(*ptr) || (!newglob && *gptr == '?'))) {
+		++ptr, ++gptr;
+	    }
 	    if (*gptr == '*') {
 		/* if nothing after '*', we're done */
 		if (!*++gptr) {
@@ -264,21 +318,22 @@ int glob_test(g, ptr, len, min)
 	    }
 	    if (ghier) {
 		/* look for a match with first char following '%' */
-		while (phier != pend && *ghier != TOLOWER(*phier)) ++phier;
+		while (phier != pend && *ghier != TOLOWER(*phier)
+		       && *phier != g->sep_char) ++phier;
 		if (phier == pend) break;
-		ptr = ++phier;
-		gptr = ghier + 1;
-	    } else if (gstar && *gstar != '%') {
+		if (*phier == g->sep_char) {
+		    ghier = NULL;
+		} else {
+		    ptr = ++phier;
+		    gptr = ghier + 1;
+		}
+	    }
+	    if (gstar && !ghier) {
 		/* look for a match with first char following '*' */
 		while (pstar != pend && *gstar != TOLOWER(*pstar)) ++pstar;
 		if (pstar == pend) break;
 		ptr = ++pstar;
 		gptr = gstar + 1;
-	    }
-	    /* see if we match to the next '%' or '*' wildcard */
-	    while (*gptr != '*' && *gptr != '%' && ptr != pend
-		   && (*gptr == TOLOWER(*ptr) || (!newglob && *gptr == '?'))) {
-		++ptr, ++gptr;
 	    }
 	    /* continue if at wildcard or we passed an asterisk */
 	} while (*gptr == '*' || *gptr == '%' ||
@@ -302,7 +357,7 @@ main(argc, argv)
     int argc;
     char **argv;
 {
-    glob *g = glob_init_suppress(argv[1], GLOB_ICASE|GLOB_HIERARCHY,
+    glob *g = glob_init_suppress(argv[1], GLOB_INBOXCASE|GLOB_HIERARCHY,
 				 "user.nifty");
     char text[1024];
     int len;
