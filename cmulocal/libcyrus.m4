@@ -60,7 +60,7 @@ AC_DEFUN(CMU_LIBCYRUS_LIB_WHERE, [
 AC_DEFUN(CMU_LIBCYRUS, [
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_SASL])
-AC_REQUIRE([CMU_SSL])
+AC_REQUIRE([CMU_LIBSSL])
 AC_ARG_WITH(libcyrus,
 	[  --with-libcyrus=PREFIX      Compile with Libcyrus support],
 	[if test "X$with_libcyrus" = "X"; then
