@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.142 2001/01/02 05:54:42 leg Exp $
+ * $Id: mboxlist.c,v 1.143 2001/01/02 20:12:25 leg Exp $
  */
 
 #include <config.h>
@@ -1835,12 +1835,6 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
     char *p;
     int prefixlen;
 
-    /* open the subscription file that contains the mailboxes the 
-       user is subscribed to */
-    if ((r = mboxlist_opensubs(userid, &subs)) != 0) {
-	goto done;
-    }
-
     cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
     cbrock.inboxcase = glob_inboxcase(cbrock.g);
     cbrock.isadmin = 1;		/* user can always see their subs */
@@ -1848,6 +1842,12 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
     cbrock.checkmboxlist = !force;
     cbrock.proc = proc;
     cbrock.procrock = rock;
+
+    /* open the subscription file that contains the mailboxes the 
+       user is subscribed to */
+    if ((r = mboxlist_opensubs(userid, &subs)) != 0) {
+	goto done;
+    }
 
     /* Build usermboxname */
     if (userid && !strchr(userid, '.') &&
