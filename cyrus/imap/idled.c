@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.10 2002/06/18 16:40:19 rjs3 Exp $ */
+/* $Id: idled.c,v 1.10.4.1 2002/07/11 16:33:45 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -287,7 +287,7 @@ int main(int argc, char **argv)
     sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
 
     /* Set inactivity timer (convert from minutes to seconds) */
-    idle_timeout = config_getint("timeout", 30);
+    idle_timeout = config_getint(IMAPOPT_TIMEOUT);
     if (idle_timeout < 30) idle_timeout = 30;
     idle_timeout *= 60;
 
@@ -311,7 +311,7 @@ int main(int argc, char **argv)
 
     /* bind it to a local file */
     local.sun_family = AF_UNIX;
-    idle_sock = config_getstring("idlesocket", NULL);
+    idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
     if (idle_sock) {	
 	strcpy(local.sun_path, idle_sock);
     }

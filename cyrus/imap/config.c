@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.2 2002/07/10 20:45:02 rjs3 Exp $ */
+/* $Id: config.c,v 1.55.4.3 2002/07/11 16:33:45 ken3 Exp $ */
 
 #include <config.h>
 
@@ -213,7 +213,7 @@ const char *config_partitiondir(const char *partition)
 static void config_read(const char *alt_config)
 {
     FILE *infile;
-    enum opttype opt;
+    enum opttype opt = IMAPOPT_ZERO;
     int lineno = 0;
     char buf[4096], errbuf[1024];
     char *p, *q, *key, *fullkey, *srvkey, *val, *newval;

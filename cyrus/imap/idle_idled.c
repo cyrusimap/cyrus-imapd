@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.9 2002/01/18 22:58:47 rjs3 Exp $ */
+/* $Id: idle_idled.c,v 1.9.4.1 2002/07/11 16:33:45 ken3 Exp $ */
 
 #include <config.h>
 
@@ -96,7 +96,7 @@ int idle_enabled(void)
      * NOTE: if used, a period of zero disables IDLE
      */
     if (idle_period == -1) {
-      idle_period = config_getint("imapidlepoll", 60);
+	idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
       if (idle_period < 0) idle_period = 0;
     }
 
@@ -108,7 +108,7 @@ int idle_enabled(void)
     mailbox_set_updatenotifier(idle_notify);
 
     idle_remote.sun_family = AF_UNIX;
-    idle_sock = config_getstring("idlesocket", NULL);
+    idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
     if (idle_sock) {	
 	strcpy(idle_remote.sun_path, idle_sock);
     }
