@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.46 2000/11/13 00:56:21 leg Exp $ */
+/* $Id: proxyd.c,v 1.47 2000/11/14 19:24:39 ken3 Exp $ */
 
 #include <config.h>
 
@@ -102,6 +102,8 @@ struct backend {
     struct sockaddr_in addr;
     int sock;
     time_t lastused;
+    struct prot_waitevent *timeout;
+
     sasl_conn_t *saslconn;
 
     enum {
@@ -687,6 +689,28 @@ void proxyd_downserver(struct backend *s)
     prot_free(s->in);
     prot_free(s->out);
     s->lastused = 0;
+
+#ifdef NEW_BACKEND_TIMEOUT
+    /* remove the timeout */
+    prot_removewaitevent(proxyd_in, s->timeout);
+#endif
+}
+
+struct prot_waitevent *backend_timeout(struct protstream *s, void *rock)
+{
+    struct backend *be = (struct backend *) rock;
+
+    if ((be != backend_current) &&
+	(be->lastused + IDLE_TIMEOUT < be->timeout->mark)) {
+	/* server is not our current server, and idle too long */
+	proxyd_downserver(be);
+	return NULL;
+    }
+    else {
+	/* it will timeout in IDLE_TIMEOUT seconds from lastused */
+	be->timeout->mark = be->lastused + IDLE_TIMEOUT;
+	return be->timeout;
+    }
 }
 
 /* return the connection to the server */
@@ -720,7 +744,7 @@ struct backend *proxyd_findserver(char *server)
 
 	ret->lastused = 0;
     }
-	
+ 	
     if (!ret->lastused) {
 	/* need to (re)establish connection to server or create one */
 	int sock;
@@ -753,6 +777,12 @@ struct backend *proxyd_findserver(char *server)
 
 	/* find the capabilities of the server */
 	proxyd_capability(ret);
+
+#ifdef NEW_BACKEND_TIMEOUT
+	/* add the timeout */
+	ret->timeout = prot_addwaitevent(proxyd_in, time(NULL) + IDLE_TIMEOUT,
+					 backend_timeout, ret);
+#endif
     }
 
     ret->lastused = time(NULL);
@@ -1200,6 +1230,9 @@ cmdloop()
 	signals_poll();
 
 	/* Parse tag */
+#ifdef NEW_BACKEND_TIMEOUT
+	c = getword(&tag);
+#else
 	prot_NONBLOCK(proxyd_in);
 	c = getword(&tag);
 	if (c == EOF && errno == EAGAIN) {
@@ -1251,6 +1284,7 @@ cmdloop()
 	    }
 	}
 	prot_BLOCK(proxyd_in);
+#endif
 	if (c == EOF) {
 	    err = prot_error(proxyd_in);
 	    if (err) {
