@@ -353,7 +353,7 @@ static int isa(struct auth_state *authstate, const char *opt)
 	char *p;
 	
 	for (p = (char *) val; *p && !isspace((int) *p); p++);
-	strncpy(buf, val, p-val);
+	strlcpy(buf, val, p-val);
 	buf[p-val] = 0;
 
 	if (auth_memberof(authstate, buf)) {
