@@ -1,4 +1,4 @@
-<!-- $Id: install-auth.html,v 1.1 2000/05/12 20:45:01 wcw Exp $ -->
+<!-- $Id: install-auth.html,v 1.2 2000/05/13 03:39:59 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Authenticating Users
@@ -18,11 +18,13 @@ The Cyrus IMAP Server uses the Cyrus SASL library to authenticate
 <h2>Authentication Mechanisms</h2>
 
 At this writing, the underlying Cyrus SASL library supports the
-following SASL mechanisms: CRAM-MD5, DIGEST-MD5, STARTTLS, KERBEROS_V4,
-and GSSAPI.
+following SASL mechanisms: CRAM-MD5, DIGEST-MD5, KERBEROS_V4,
+and GSSAPI.  The Cyrus IMAP, POP, and LMTP servers also support
+STARTTLS using client-side certificates and the EXTERNAL
+authentication method.
 
-<p>GSSAPI has only been tested with Kerberos version 5. STARTTLS client 
-	side certificates have not really been tested.
+<p>GSSAPI is specific to Kerberos version 5. STARTTLS client 
+side certificates have not really been tested.
 
 <p>When STARTTLS is enabled, the PLAIN SASL mechanism (if installed)
 also becomes available. This is because one should not pass a clear
@@ -52,7 +54,7 @@ clear text password, your two choices are to use PAM or use
 to provide a common API which applications can use to obtain
 authentication for a user. You can think of PAM as a complementary
 layer under the SASL layer. See <a
-href="http://www.kernel.org/pub/linux/libs/pam/FAQ>
+href="http://www.kernel.org/pub/linux/libs/pam/FAQ">
 http://www.kernel.org/pub/linux/libs/pam/FAQ</a> for more information
 on PAM.  By using a PAM module, all the other applications on your
 system can take advantage of it -- for example, login, xlock, etc. 
@@ -90,9 +92,6 @@ libsasl with <tt>pwcheck</tt> support, and set
 "<tt>sasl_pwcheck_method: pwcheck</tt>".  The SASL library will then
 make calls to an external utility running as root to authenticate
 users.
-
-<p>If you are using Kerberos, see the section <a
-href="#kerberos">below</a> on configuring Kerberos.
 
 <h3>Kerberos</h3><a name="kerberos"></a>
 
@@ -180,7 +179,7 @@ current ticket's held.  Override this with the <tt>-u</tt> option.</li>
 </ol>
 
 <P><HR>
-last modified: $Date: 2000/05/12 20:45:01 $
+last modified: $Date: 2000/05/13 03:39:59 $
 </BODY></HTML>
 
 
