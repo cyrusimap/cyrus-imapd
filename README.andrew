@@ -8,7 +8,7 @@
 #
 #
 
-smake -d init mf all install
+smake -d init mf checkdepend all install
 
 exit 0
 
