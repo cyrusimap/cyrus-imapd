@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28.4.5 2002/12/13 17:10:34 rjs3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28.4.6 2003/01/08 21:08:12 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -59,8 +59,12 @@ and UNIX socket.  In cyrus.conf, ptloader should be setup to listen on
 <li>Also, ptloader has been given a much more generic interface, and you
 should now specify --with-auth=pts (instead of --with-auth=krb_pts).
 There is also a --with-pts= configure option that defaults to afskrb
-(Kerberos Canonicalization, AFS PTS Groups), which should be expanded
-to support LDAP as well.</li>
+(Kerberos Canonicalization, AFS PTS Groups).  There is also an experimental
+ldap module</li>
+
+<li>The format of sieve referrals has changed to be more consistant with
+the current managesieve draft, this may cause interoperability problems
+when using managesieve clients and servers from different cyrus versions.</li>
 
 <li> Configuration subsystem changes:
 <ul>
@@ -304,7 +308,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2002/12/13 17:10:34 $
+last modified: $Date: 2003/01/08 21:08:12 $
 </BODY></HTML>
 
 
