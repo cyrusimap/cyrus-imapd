@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.138 2000/10/12 19:02:29 leg Exp $
+ * $Id: mboxlist.c,v 1.139 2000/10/12 19:10:43 leg Exp $
  */
 
 #include <config.h>
@@ -1519,7 +1519,6 @@ int mboxlist_setquota(const char *root, int newquota)
     char pattern[MAX_MAILBOX_PATH];
     struct quota quota;
     int r;
-    unsigned long len = 0;
 
     if (!root[0] || root[0] == '.' || strchr(root, '/')
 	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
