@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpproxyd.c,v 1.1.2.5 2003/02/12 19:12:38 rjs3 Exp $
+ * $Id: nntpproxyd.c,v 1.1.2.6 2003/02/12 21:26:54 ken3 Exp $
  */
 
 /*
@@ -1226,8 +1226,8 @@ static void kick_mupdate(void)
 	return;
     }
 
-    strncpy(buf, config_dir, sizeof(buf));
-    strncat(buf, FNAME_MUPDATE_TARGET_SOCK, sizeof(buf));
+    strlcpy(buf, config_dir, sizeof(buf));
+    strlcat(buf, FNAME_MUPDATE_TARGET_SOCK, sizeof(buf));
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
     strcpy(srvaddr.sun_path, buf);
@@ -1240,7 +1240,7 @@ static void kick_mupdate(void)
 	return;
     }
 
-    r = read(s, &buf, sizeof(buf));
+    r = read(s, buf, sizeof(buf));
     if (r <= 0) {
 	syslog(LOG_ERR, "kick_mupdate: can't read from target: %m");
 	close(s);
