@@ -17,4 +17,5 @@ get duck
 get frogger
 del duck
 get duck
+list
 close
