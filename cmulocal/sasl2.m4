@@ -205,7 +205,7 @@ AC_DEFUN(CMU_SASL2_CHECKAPOP_REQUIRED, [
 
 	cmu_saved_LDFLAGS=$LDFLAGS
 
-	LDFLAGS=$LIB_SASL
+	LDFLAGS="$LIB_SASL $LDFLAGS"
 
 	AC_CHECK_LIB(sasl2, sasl_checkapop, AC_DEFINE(HAVE_APOP),
 		AC_MSG_ERROR([libsasl2 without working sasl_checkapop.  Cannot continue.]))
