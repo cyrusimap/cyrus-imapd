@@ -1,5 +1,5 @@
 /* collectnews.c -- program to add news articles to relevant header files
- $Id: collectnews.c,v 1.18 1999/08/26 21:00:30 leg Exp $
+ $Id: collectnews.c,v 1.19 1999/10/02 00:43:03 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -31,6 +31,9 @@
 #include <string.h>
 #include <syslog.h>
 #include <com_err.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 
 #include "config.h"
 #include "exitcodes.h"
@@ -45,6 +48,8 @@ struct newsgroup {
     char groupname[1];
 };
 
+void collect(char *group, unsigned long feeduid);
+
 struct newsgroup **newsgroup = 0;
 int num_newsgroup = 0;
 int size_newsgroup = 0;
@@ -54,9 +59,7 @@ const char *newsprefix;
 int newsprefixlen;
 
 
-main(argc, argv)
-int argc;
-char **argv;
+int main(int argc, char **argv)
 {
     char buf[4096], *group, *nextgroup, *uid, *p;
     int c;
@@ -140,11 +143,8 @@ char **argv;
     exit(0);
 }
 
-collect(group, feeduid)
-char *group;
-unsigned long feeduid;
+void collect(char *group, unsigned long feeduid)
 {
-    
     int r;
     struct mailbox mailbox;
     char namebuf[MAX_MAILBOX_PATH];

@@ -25,10 +25,9 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.179 1999/08/17 05:59:26 leg Exp $ */
+/* $Id: imapd.c,v 1.180 1999/10/02 00:43:03 leg Exp $ */
 
 #ifndef __GNUC__
-/* can't use attributes... */
 #define __attribute__(foo)
 #endif
 
@@ -1286,27 +1285,25 @@ char *authtype;
     /* failed authentication */
     if (sasl_result != SASL_OK)
     {
-	syslog(LOG_NOTICE, "badlogin: %s %s %i",
-	       imapd_clienthost, authtype, sasl_result);
-	
-	if (clientin.s) {
-	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
-		   imapd_clienthost, authtype, clientin.s);
-	} else {
-	    syslog(LOG_NOTICE, "badlogin: %s %s",
-		   imapd_clienthost, authtype);
-	}
-	
-	sleep(3);      
-	
 	/* convert the sasl error code to a string */
 	errorstring = sasl_errstring(sasl_result, NULL, NULL);
       
-	if (errorstring)
-	    prot_printf(imapd_out, "%s NO %s\r\n",tag,errorstring);
-	else
-	    prot_printf(imapd_out, "%s NO Error Authenticating\r\n",tag);
+	syslog(LOG_NOTICE, "badlogin: %s %s %s",
+	       imapd_clienthost, authtype, errorstring);
 	
+	if (errstr) {
+	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
+		   imapd_clienthost, authtype, errstr);
+	}
+	
+	sleep(3);
+	
+	if (errorstring) {
+	    prot_printf(imapd_out, "%s NO %s\r\n", tag, errorstring);
+	} else {
+	    prot_printf(imapd_out, "%s NO Error authenticating\r\n", tag);
+	}
+
 	return;
     }
 
@@ -1319,9 +1316,11 @@ char *authtype;
 			     (void **) &imapd_userid);
     if (sasl_result!=SASL_OK)
     {
-      prot_printf(imapd_out, "%s NO weird SASL error %d SASL_USERNAME\r\n", 
-		  tag, sasl_result);
-      return;
+	prot_printf(imapd_out, "%s NO weird SASL error %d SASL_USERNAME\r\n", 
+		    tag, sasl_result);
+	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", 
+	       sasl_result);
+	return;
     }
 
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);

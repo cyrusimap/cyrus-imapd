@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.80 1999/08/19 21:13:49 leg Exp $
+ $Id: mailbox.c,v 1.81 1999/10/02 00:43:04 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -31,6 +31,7 @@
 #include <unistd.h>
 #endif
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <syslog.h>
@@ -39,6 +40,7 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <ctype.h>
+#include <time.h>
 
 #if HAVE_DIRENT_H
 # include <dirent.h>
@@ -522,8 +524,6 @@ mailbox_read_index_header(mailbox)
 struct mailbox *mailbox;
 {
     struct stat sbuf;
-    char buf[INDEX_HEADER_SIZE];
-    int n;
 
     if (mailbox->index_fd == -1) return IMAP_MAILBOX_BADFORMAT;
 
@@ -1171,9 +1171,7 @@ int
 mailbox_delete_quota(quota)
 struct quota *quota;
 {
-    int r;
     char quota_path[MAX_MAILBOX_PATH];
-    FILE *newfile;
 
     assert(quota->lock_count != 0);
 
@@ -1222,7 +1220,6 @@ void *deciderock;
     unsigned long cache_len;
     unsigned long cache_offset;
     struct stat sbuf;
-    long left;
     char *fnametail;
 
     /* Lock files and open new index/cache files */

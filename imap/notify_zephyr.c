@@ -1,5 +1,5 @@
 /* notify_zephyr.c -- Module to notify of new mail via zephyr
- $Id: notify_zephyr.c,v 1.15 1999/07/01 20:14:53 leg Exp $
+ $Id: notify_zephyr.c,v 1.16 1999/10/02 00:43:06 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -49,21 +49,19 @@ extern int errno;
 
 /* This code is mostly stolen from zpopnotify, from the Zephyr dist. */
 
-notify_wantheader()
+int notify_wantheader()
 {
     return 1;
 }
 
-notify(user, mailbox, header)
+void notify(user, mailbox, header)
 char *user;
 char *mailbox;
 char *header;
 {
     ZNotice_t notice;
-    struct hostent *hent;
     int retval;
-    register int i;
-    char *whoami,myhost[256],mysender[BUFSIZ];
+    char myhost[256],mysender[BUFSIZ];
     char *msgbody;
     char *lines[2];
     char *mykrbhost = 0;

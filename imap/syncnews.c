@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.12 1999/04/08 21:04:28 tjs Exp $
+ * $Id: syncnews.c,v 1.13 1999/10/02 00:43:07 leg Exp $
  */
 
 #include <stdio.h>
@@ -59,9 +59,7 @@ int *group_seen;
 int group_num = 0;
 int group_alloc = 0;
 
-main(argc, argv)
-int argc;
-char **argv;
+int main(int argc, char **argv)
 {
     int opt;
 

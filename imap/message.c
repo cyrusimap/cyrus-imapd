@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.67 1999/08/12 19:27:40 leg Exp $
+ * $Id: message.c,v 1.68 1999/10/02 00:43:06 leg Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -366,7 +366,7 @@ struct index_record *message_index;
 /*
  * Parse a body-part
  */
-static 
+static int
 message_parse_body(msg, format, body, defaultContentType, boundaries)
 struct msg *msg;
 int format;
@@ -2289,7 +2289,6 @@ struct ibuf *ibuf;
 {
     char *s;
     int len;
-    int pad;
 
     /* Drop padding on end */
     message_ibuf_ensure(ibuf, 3);

@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.51 1998/05/15 21:48:00 neplokh Exp $
+ $Id: append.c,v 1.52 1999/10/02 00:43:02 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -147,8 +147,6 @@ const char *userid;
     static struct index_record zero_index;
     char fname[MAX_MAILBOX_PATH];
     FILE *destfile;
-    unsigned char *msg_base;
-    unsigned long *msg_len;
     int i, r;
     long last_cacheoffset;
     int setseen = 0, writeheader = 0;

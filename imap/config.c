@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.21 1999/08/09 21:46:07 leg Exp $
+ $Id: config.c,v 1.22 1999/10/02 00:43:03 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -27,6 +27,8 @@
  *
  */
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <ctype.h>
 #include <syslog.h>
 #include <com_err.h>
@@ -55,7 +57,7 @@ int config_hashimapspool;
 
 static void config_read P((void));
 
-config_init(ident)
+int config_init(ident)
 const char *ident;
 {
     char buf[100];
@@ -123,7 +125,7 @@ const char *def;
     return def;
 }
 
-config_getint(key, def)
+int config_getint(key, def)
 const char *key;
 int def;
 {
@@ -134,7 +136,7 @@ int def;
     return atoi(val);
 }
 
-config_getswitch(key, def)
+int config_getswitch(key, def)
 const char *key;
 int def;
 {
