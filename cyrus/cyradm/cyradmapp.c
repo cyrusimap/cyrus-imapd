@@ -51,7 +51,7 @@ Tcl_Interp *interp;
 	if (code != TCL_OK) return code;
     }
 
-    tcl_RcFileName = "~/.cyradmrc";
+    Tcl_SetVar(interp, "tcl_rcFileName", "~/.cyradmrc", TCL_GLOBAL_ONLY);
     return TCL_OK;
 }
 
