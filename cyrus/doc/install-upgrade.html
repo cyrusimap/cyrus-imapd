@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28.4.8 2003/02/27 18:10:21 rjs3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28.4.9 2003/02/27 19:06:01 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -100,6 +100,10 @@ binary.  For example:
 <pre>
 masssievec /usr/src/cyrus/sieve/sievec
 </pre>
+
+Note that this will fail for scripts that use the &quot;envelope&quot;
+extention but do not require it.  Cyrus 2.1's timsieved did not do appropriate
+checking that envelope was required before it was used.
 </li>
 
 </ul>
@@ -325,7 +329,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2003/02/27 18:10:21 $
+last modified: $Date: 2003/02/27 19:06:01 $
 </BODY></HTML>
 
 
