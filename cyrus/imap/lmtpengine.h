@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.10 2002/02/06 16:38:18 leg Exp $
+ * $Id: lmtpengine.h,v 1.11 2002/02/10 01:53:58 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -111,6 +111,7 @@ struct lmtp_func {
 		       long quotacheck, /* user must have this much quota left
 					   (-1 means don't care about quota) */
 		       struct auth_state *authstate);
+    void (*shutdown)(int code);
     char *addheaders;		/* add these headers to all messages */
     int addretpath;		/* should i add a return-path header? */
     int preauth;		/* preauth connection? */
