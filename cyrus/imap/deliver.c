@@ -221,8 +221,10 @@ int main(int argc, char **argv)
     char *return_path = NULL;
     char buf[1024];
 
+    config_init("deliver");
+
     sockaddr = config_getstring("lmtpsocket", NULL);
-    if (!sockaddr) {
+    if (!sockaddr) {	
 	strcpy(buf, config_dir);
 	strcat(buf, "/socket/lmtp");
 	sockaddr = buf;

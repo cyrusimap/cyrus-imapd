@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.12 2000/02/24 07:29:42 leg Exp $
+ * $Id: lmtpd.c,v 1.13 2000/02/24 20:11:32 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.12 2000/02/24 07:29:42 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.13 2000/02/24 20:11:32 tmartin Exp $";*/
 
 #include <config.h>
 
@@ -1591,6 +1591,7 @@ void lmtpmode(deliver_opts_t *delopts)
       switch (buf[0]) {
       case 'a':
       case 'A':
+
 	  if (!strncasecmp(buf, "auth ", 5)) {
 	      char *mech;
 	      char *in, *out;
@@ -1756,6 +1757,7 @@ void lmtpmode(deliver_opts_t *delopts)
 	    }
 
 	    if (!strncasecmp(buf, "mail ", 5)) {
+		char *tmp;
 		if (msg->return_path) {
 		    prot_printf(deliver_out, 
 				"503 5.5.1 Nested MAIL command\r\n");
@@ -1767,6 +1769,29 @@ void lmtpmode(deliver_opts_t *delopts)
 				"501 5.5.4 Syntax error in parameters\r\n");
 		    continue;
 		}
+		tmp = buf+10+strlen(msg->return_path);
+
+		if (*tmp == ' ')
+		{
+		    tmp++;
+		    if (strncasecmp(tmp, "auth=", 5) != 0)
+		    {
+			prot_printf(deliver_out, "501 5.5.4 Syntax error in parameters\r\n");  
+			continue;
+		    }
+		    if (!(delopts->authstate = auth_newstate(tmp+5,
+							     NULL)))
+		    {
+			prot_printf(deliver_out, "501 5.5.4 xxx Unknown user\r\n");	      
+			continue;			
+		    }
+		    
+		    delopts->authuser = xstrdup(tmp+5);
+		} else if (*tmp!='\0') {
+		    prot_printf(deliver_out, "501 5.5.4 Syntax error in parameters\r\n");  
+		    continue;
+		}
+
 		prot_printf(deliver_out, "250 2.1.0 ok\r\n");
 		continue;
 	    }
