@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.1 2002/02/19 22:33:44 rjs3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.2 2002/02/20 03:12:02 rjs3 Exp $
  */
 
 #include <config.h>
@@ -92,14 +92,14 @@ void fatal(const char *message, int code)
     
     fprintf(stderr, "fatal error: %s\n", message);
 
-    if(odb) DB_OLD->close(odb);
-    if(ndb) {
+    if(DB_OLD && odb) DB_OLD->close(odb);
+    if(DB_NEW && ndb) {
 	if(tid) DB_NEW->abort(ndb, tid);
 	DB_NEW->close(ndb);
     }
 	
-    DB_OLD->done();
-    DB_NEW->done();
+    if(DB_OLD) DB_OLD->done();
+    if(DB_NEW) DB_NEW->done();
 
     exit(code);
 }
