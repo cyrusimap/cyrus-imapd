@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: util.c,v 1.19.6.1 2002/07/31 17:31:29 rjs3 Exp $
+/* $Id: util.c,v 1.19.6.2 2002/08/02 16:17:33 rjs3 Exp $
  */
 
 #include <config.h>
@@ -52,6 +52,9 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 
 #include "util.h"
 #include "xmalloc.h"
