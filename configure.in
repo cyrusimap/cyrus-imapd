@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.171 2000/05/10 15:19:27 leg Exp $
+dnl $Id: configure.in,v 1.172 2000/05/13 03:40:37 leg Exp $
 dnl
 
 
@@ -383,9 +383,10 @@ fi
 fi
 
 AC_SUBST(WITH_MAP)
-AC_ARG_WITH(lock,[  --with-lock=METHOD      force use of METHOD for locking
-                          METHOD is flock or fcntl],WITH_LOCK="$withval",
-	AC_CHECK_FUNC(flock,WITH_LOCK="flock",WITH_LOCK="fcntl"))
+AC_ARG_WITH(lock,
+  [  --with-lock=METHOD      force use of METHOD for locking (flock or fcntl)],
+  WITH_LOCK="$withval",
+  AC_CHECK_FUNC(flock,WITH_LOCK="flock",WITH_LOCK="fcntl"))
 AC_SUBST(WITH_LOCK)
 
 dnl for makedepend and AFS.
@@ -740,8 +741,8 @@ AC_ARG_ENABLE(netscapehack,
 		AC_DEFINE(ENABLE_X_NETSCAPE_HACK)
 	fi)
 
-AC_CHECK_FUNC(dlopen,,AC_CHECK_LIB(dl,dlopen))
-CMU_NEEDS_SASL
+AC_CHECK_FUNC(dlopen,,AC_CHECK_LIB(dl, dlopen))
+CMU_SASL_REQUIRED
 
 CMU_AGENTX
 
