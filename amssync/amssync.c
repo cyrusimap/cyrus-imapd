@@ -58,12 +58,11 @@
 struct cbdata {
     int done;
     char *error;
+    char *text;
 };
 
 struct acldata {
-    char *option;
     char *object;
-    char *text;
 };
 
 extern struct acte_client krb_acte_client;
@@ -83,22 +82,21 @@ FILE *cfgfile, *subfile, *logfile;
 int pos, neg; /* how many positive and negative AMS ACLs in current dir */
 char *posacl[256], *negacl[256]; /* fixed list thereof, dirty hack */
 int posval[256], negval[256];
-int imap; /* how many IMAP ACL entries we have */
+int n_imap_acl = 0; /* how many IMAP ACL entries we have */
 char *imapkey[1024], *imapval[1024];
 
 void usage(void)
 {
     fprintf(stderr,"\
-Usage: syncams [-A | -a] [-c file | -s] [-d] [-h] [-m]\n\
-               [-u principal] [-v] [server [port]]\n\
+Usage: syncams [-A | -a] [-d] [-h] [-m]\n\
+               [-u principal] [-v] -c file server [port]\n\
 (old options, not all supported yet)\n\
 \t-a\tSynchronize ACL's (read-only), create any new bboards\n\
 \t-A\tSynchronize ACL's, create any new bboards\n\
-\t-c\tSpecify a config file name, otherwise use builtin default\n\
+\t-m\tSynchronize content (messages)\n\
+\t-c\tSpecify a config file name\n\
 \t-d\tPrint debugging info\n\
 \t-h\tPrint this message\n\
-\t-m\tSynchronize content (messages)\n\
-\t-s\tRead config file from stdin\n\
 \t-u\tGive principal full perms on all acls (for testing only)\n\
 \t-v\tList ams groups as they are processed\n\
 \t-n\tOnly show changes, don't commit anything\n");
@@ -165,6 +163,9 @@ void cyr_connect(void)
 	fprintf(stderr,"Couldn't authenticate to server!\n");
 	exit(1);
     }
+
+    /* We know we're talking to a Cyrus IMAP server */
+    imclient_setflags(imclient, IMCLIENT_CONN_NOWAITLITERAL);
 } /* cyr_connect */
 
 /* IMAP command completion callback */
@@ -174,11 +175,12 @@ callback_finish(struct imclient *imclient, void *rock,
 {
     struct cbdata *cb = (struct cbdata *) rock;
 
-    cb -> done++;
+    cb->done++;
     if (!strcmp(reply -> keyword,"OK")) {
 	return; /* success */
     }
-    cb -> error = strdup(reply -> keyword);
+    cb->error = strsave(reply->keyword);
+    cb->text = strsave(reply->text);
 } /* callback_finish */
 
 /* Callback for untagged ACL data */
@@ -192,17 +194,16 @@ callback_acl(struct imclient *imclient, void *rock,
 
     s = reply -> text;
     c = imparse_word(&s,&val);
-    if ((c != ' ') || strcasecmp(val,acldata -> option)) { return; }
+    if ((c != ' ') || strcasecmp(val,"MAILBOX")) { return; }
     c = imparse_astring(&s,&val);
     if ((c != ' ') || strcasecmp(val,acldata -> object)) { return; }
     c = imparse_astring(&s,&identifier);
-    if ((c != ' ') || strcasecmp(val,acldata -> object)) { return; }
+    if (c != ' ') { return; }
     c = imparse_astring(&s,&rights);
-    if ((c != '\0') || strcasecmp(val,acldata -> object)) { return; }
-    imapkey[imap] = strdup(identifier);
-    imapval[imap] = strdup(rights);
-    imap++;
-    sprintf(strchr(acldata->text, 0), "%s %s ", identifier, rights);
+    if (c != '\0') { return; }
+    imapkey[n_imap_acl] = strsave(identifier);
+    imapval[n_imap_acl] = strsave(rights);
+    n_imap_acl++;
 } /* callback_acl */
 
 /* Wait for previous IMAP command to finish */
@@ -218,7 +219,9 @@ cbwait(void)
 void
 cbclear(void)
 {
-    cb.error = (char *) NULL;
+    if (cb.error) free(cb.error);
+    if (cb.text) free(cb.text);
+    cb.error = cb.text = 0;
     cb.done = 0;
 } /* cbclear */
 
@@ -262,7 +265,7 @@ findimap(char *w)
     int i;
 
     if (!w) { return -1; }
-    for (i = 0; i < imap; i++) {
+    for (i = 0; i < n_imap_acl; i++) {
 	if (imapkey[i] && (!strcmp(imapkey[i],w))) {
 	    return i;
 	}
@@ -278,7 +281,7 @@ findimap2(char *w)
     int i;
 
     if (!w) { return -1; }
-    for (i = 0; i < imap; i++) {
+    for (i = 0; i < n_imap_acl; i++) {
 	if (imapkey[i] && (imapkey[i][0] == '-') &&
 	    (!strcmp(imapkey[i] + 1,w))) {
 	    return i;
@@ -309,8 +312,8 @@ amstoimap(int ams)
 void
 del_acl(char *bbd, char *user)
 {
-    imclient_send(imclient,callback_finish,(void *) (&cb),
-		  "DELETEACL MAILBOX %s %s",bbd,user);
+    imclient_send(imclient,(void(*)()) 0, (void *)0,
+		  "DELETEACL %s %s",bbd,user);
     /* don't even wait around... */
 } /* del_acl */
 
@@ -326,13 +329,13 @@ set_acl(char *bbd, char *user, char *acl, int neg)
 	if (!p) { exit(9); }
 	strcpy(p,"-");
 	strcat(p,user);
-	imclient_send(imclient,callback_finish,(void *) (&cb),
-		      "SETACLMAILBOX %s %s %s",bbd,p,acl);
+	imclient_send(imclient,(void(*)()) 0, (void *)0,
+		      "SETACL %s %s %s", bbd, p, acl);
 	free(p);
 	return;
     }
-    imclient_send(imclient,callback_finish,(void *) (&cb),
-		  "SETACLMAILBOX %s %s %s",bbd,user,acl);
+    imclient_send(imclient,(void(*)()) 0, (void *)0,
+		  "SETACL %s %s %s",bbd,user,acl);
 } /* set_acl */
 
 /* taken from amssynctree.pl and cyradm.c
@@ -353,37 +356,26 @@ do_acl(char *amsdir, char *bbd)
     };
 
     /* Create mailbox */
-    cbclear();
-    imclient_send(imclient,callback_finish,(void *) (&cb),"CREATE %s ams",bbd);
-    cbwait();
-    if (verbose) {
-	fprintf(logfile,"CREATE %s from %s\n",bbd,amsdir);
-    }
-    if (cb.error) {
-	fprintf(stderr,"CREATE result: %s\n",cb.error);
-	free(cb.error);
-    }
+    imclient_send(imclient, (void(*)()) 0, (void *)0,
+		  "CREATE %s ams",bbd);
     /* List ACL for mailbox */
-    acldata.option = "MAILBOX";
     acldata.object = bbd;
-    acldata.text = (char *) malloc(131072);
-    acldata.text[0] = 0;
-    imap = 0;
-    imclient_addcallback(imclient,"ACL",0,callback_acl,
-			 (void *) (&acldata),(char *) 0);
+    while (n_imap_acl > 0) {
+	--n_imap_acl;
+	free(imapkey[n_imap_acl]);
+	free(imapval[n_imap_acl]);
+    }
+    imclient_addcallback(imclient, "ACL", 0, callback_acl,
+			 (void *)(&acldata), (char *) 0);
     cbclear();
-    imclient_send(imclient,callback_finish,(void *) (&cb),
-		  "GETACL MAILBOX %s",bbd);
+    imclient_send(imclient, callback_finish, (void *)(&cb),
+		  "GETACL MAILBOX %s", bbd);
     cbwait();
     if (cb.error) {
-	fprintf(stderr,"GETACL result: %s\n",cb.error);
-	free(cb.error);
+	fprintf(stderr,"GETACL result: %s %s\n", cb.error, cb.text);
     }
     /* de-register callback */
     imclient_addcallback(imclient,"ACL",0,(void (*)()) 0,(void *) 0,(char *) 0);
-    if (verbose) {
-	fprintf(logfile,"ACL Found: *%s*\n",acldata.text);
-    }
     /*
       fprintf(stderr,"%d IMAP ACL entries:\n",imap);
       for (i = 0; i < imap; i++) {
@@ -406,7 +398,7 @@ do_acl(char *amsdir, char *bbd)
     p = strchr(p,'\n') + 1;
     for (i = 0; i < pos; i++) {
 	*(q = strchr(p,'\n')) = 0;
-	posacl[i] = strdup(p);
+	posacl[i] = strsave(p);
 	p = q + 1;
 	q = strchr(posacl[i],'\t') + 1;
 	posval[i] = atoi(q);
@@ -414,7 +406,7 @@ do_acl(char *amsdir, char *bbd)
     }
     for (i = 0; i < neg; i++) {
 	*(q = strchr(p,'\n')) = 0;
-	negacl[i] = strdup(p);
+	negacl[i] = strsave(p);
 	p = q + 1;
 	q = strchr(negacl[i],'\t') + 1;
 	negval[i] = atoi(q);
@@ -469,7 +461,7 @@ do_acl(char *amsdir, char *bbd)
 	    }
 	}
     }
-    for (i = 0; i < imap; i++) {
+    for (i = 0; i < n_imap_acl; i++) {
 	if (!(imapkey[i])) { continue; }
 	if ((findpos(imapkey[i]) == -1) &&
 	    (findneg(imapkey[i] + 1) == -1)) {
@@ -481,19 +473,18 @@ do_acl(char *amsdir, char *bbd)
 	if (!(posacl[i])) { continue; }
 	if ((posacl[i][0] == '-') || isdigit(posacl[i][0])) { continue; }
 	p = amstoimap(posval[i]);
-	if ((j = findimap(posacl[i])) == -1) { continue; }
-	if (!strcmp(p,imapval[j])) { continue; }
+	j = findimap(posacl[i]);
+	if (j >= 0 && !strcmp(p,imapval[j])) { continue; }
 	set_acl(bbd,posacl[i],p,0); /* positive */
     }
     for (i = 0; i < neg; i++) {
 	if (!(negacl[i])) { continue; }
 	if ((negacl[i][0] == '-') || isdigit(negacl[i][0])) { continue; }
 	p = amstoimap(negval[i]);
-	if ((j = findimap2(negacl[i])) == -1) { continue; }
-	if (!strcmp(p,imapval[j])) { continue; }
+	j = findimap2(negacl[i]);
+	if (j >= 0 && !strcmp(p,imapval[j])) { continue; }
 	set_acl(bbd,negacl[i],p,1); /* negative */
     }
-    free(acldata.text);
     return 0; /* success */
 } /* do_acl */
 
@@ -640,7 +631,7 @@ int main(int argc, char **argv)
 	    acl_mode = 1;
 	} else if (!strcmp(*argv,"-c")) {
 	    if (argc <= 1) { usage(); }
-	    cfgname = strdup(*++argv);
+	    cfgname = strsave(*++argv);
 	    if (!(--argc)) { break; }
 	} else if (!strcmp(*argv,"-d")) {
 	    debug = 1;
@@ -650,18 +641,16 @@ int main(int argc, char **argv)
 	    content_mode = 1;
 	} else if (!strcmp(*argv,"-n")) {
 	    noncommit = 1;
-	} else if (!strcmp(*argv,"-s")) {
-	    cfgname = "-";
 	} else if (!strcmp(*argv,"-u")) {
 	    if (argc <= 1) { usage(); }
-	    principal = strdup(*++argv);
+	    principal = strsave(*++argv);
 	    if (!(--argc)) { break; }
 	} else if (!strcmp(*argv,"-v")) {
 	    verbose = 1;
 	} else if (!server) {
-	    server = strdup(*argv);
+	    server = strsave(*argv);
 	} else if (!port) {
-	    port = strdup(*argv);
+	    port = strsave(*argv);
 	} else {
 	    usage();
 	}
@@ -671,10 +660,15 @@ int main(int argc, char **argv)
 	usage();
     }
     if (!server) {
-	server = "cyrus-dev.andrew.cmu.edu"; /* default */
+	fprintf(stderr,"server name required\n");
+	usage();
     }
     if (!port) {
 	port = "143"; /* default */
+    }
+    if (!cfgname) {
+	fprintf(stderr, "-c configfile required\n");
+	usage();
     }
     if (verbose) {
 	logfile = fopen("/tmp/Log","w");
@@ -692,11 +686,8 @@ Port: %s\n\
     }
     /* Connect to Cyrus server once, no matter what */
     cyr_connect();
+
     /* Open configuration file */
-    if (!cfgname) {
-	cfgname = "/etc/amssync.conf.local";
-    }
-    cfgfile = (FILE *) NULL;
     if (!strcmp(cfgname,"-")) {
 	cfgfile = fdopen(fileno(stdin),"r");
     } else {
@@ -704,7 +695,7 @@ Port: %s\n\
     }
     if (!cfgfile) {
 	fprintf(stderr,"Couldn't read configuration file '%s'\n",cfgname);
-    exit(1);
+	exit(1);
     }
     /* Main processing loop */
     err = cnt = 0;

@@ -31,10 +31,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <dirent.h>
 #include <sys/time.h>
 #include <string.h>
 #include <sysexits.h>
+
+#if HAVE_DIRENT_H
+# include <dirent.h>
+# define NAMLEN(dirent) strlen((dirent)->d_name)
+#else
+# define dirent direct
+# define NAMLEN(dirent) (dirent)->d_namlen
+# if HAVE_SYS_NDIR_H
+#  include <sys/ndir.h>
+# endif
+# if HAVE_SYS_DIR_H
+#  include <sys/dir.h>
+# endif
+# if HAVE_NDIR_H
+#  include <ndir.h>
+# endif
+#endif
 
 #include "acte.h"
 #include "imclient.h"
@@ -42,7 +58,7 @@
 #include "amssync.h"
 
 extern int debug,verbose;
-
+extern FILE *logfile;
 
 static unsigned char DigVals[96] = {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0,
@@ -126,7 +142,7 @@ int getams(char *dname,bboard * amsbbd)
 	}
     }
     else if (verbose) {
-	fprintf(stderr,"There are %d messages in %s\n", amsbbd->inuse+1,
+	fprintf(logfile,"There are %d messages in %s\n", amsbbd->inuse+1,
                 dname); 
     }
     amsbbd->msgs[amsbbd->inuse+1].stamp=0x7fffffff;
