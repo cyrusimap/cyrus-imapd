@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.5 2004/01/26 17:46:56 ken3 Exp $
+ * $Id: fetchnews.c,v 1.6 2004/01/28 19:20:35 ken3 Exp $
  */
 
 #include <config.h>
@@ -495,9 +495,9 @@ int main(int argc, char *argv[])
 		    }
 		}
 		/* continue with the NEXT article until we reach the last */
-	    } while (cur++ < high && !prot_printf(pout, "NEXT\r\n"));
+	    } while (++cur <= high && !prot_printf(pout, "NEXT\r\n"));
 
-	    snprintf(lastbuf, sizeof(lastbuf), "%lu", cur);
+	    snprintf(lastbuf, sizeof(lastbuf), "%lu", high);
 	    DB->store(newsrc_db, group, strlen(group),
 		      lastbuf, strlen(lastbuf)+1, &tid);
 	}
