@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.193 1999/12/29 19:05:33 leg Exp $ */
+/* $Id: imapd.c,v 1.194 2000/01/04 19:42:22 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -190,9 +190,9 @@ void mboxlist_close P((void));
 /* This creates a structure that defines the allowable
  *   security properties 
  */
-static sasl_security_properties_t *make_secprops(int min,int max)
+static sasl_security_properties_t *make_secprops(int min, int max)
 {
-  sasl_security_properties_t *ret=
+  sasl_security_properties_t *ret =
     (sasl_security_properties_t *) xmalloc(sizeof(sasl_security_properties_t));
 
   ret->maxbufsize = 4000;
@@ -406,18 +406,30 @@ int argc;
 char **argv;
 char **envp;
 {
+    int opt;
     int salen;
     struct hostent *hp;
     int timeout;
     char hostname[MAXHOSTNAMELEN+1];
     sasl_security_properties_t *secprops = NULL;
+    sasl_external_properties_t extprops;
+
+    memset(&extprops, 0, sizeof(sasl_external_properties_t));
 
     if (gethostname(hostname, MAXHOSTNAMELEN) != 0) {
 	fatal("gethostname failed\n",EC_USAGE);
     }
 
-    /* xxx look for command line options indicating external protection
-       and/or authentication */
+    while ((opt = getopt(argc, argv, "p:")) != EOF) {
+	switch (opt) {
+	case 'p': /* external protection */
+	    extprops.ssf = atoi(optarg);
+	    break;
+
+	default:
+	    break;
+	}
+    }
 
     imapd_in = prot_new(0, 0);
     imapd_out = prot_new(1, 1);
@@ -466,18 +478,15 @@ char **envp;
 	   != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
 
-    /* will always return something valid */
-    /* should be configurable! */
-    
-
-
     secprops = make_secprops(config_getint("sasl_minimum_layer", 0),
 			     config_getint("sasl_maximum_layer", 256));
 
     sasl_setprop(imapd_saslconn, SASL_SEC_PROPS, secprops);
-    
-    sasl_setprop(imapd_saslconn, SASL_IP_REMOTE, &imapd_remoteaddr);  
-    sasl_setprop(imapd_saslconn, SASL_IP_LOCAL, &imapd_localaddr);  
+    if (extprops.ssf) {
+	sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops);
+    }
+    sasl_setprop(imapd_saslconn, SASL_IP_REMOTE, &imapd_remoteaddr);
+    sasl_setprop(imapd_saslconn, SASL_IP_LOCAL, &imapd_localaddr);
 
     proc_register("imapd", imapd_clienthost, (char *)0, (char *)0);
 
@@ -3242,6 +3251,11 @@ char *quotaroot;
 #ifdef HAVE_SSL
 
 /*
+ * this implements the STARTTLS command, as described in RFC 2595.
+ * one caveat: it assumes that no external layer is currently present.
+ * if a client executes this command, information about the external
+ * layer that was passed on the command line is disgarded. this should
+ * be fixed.
  */
 void cmd_starttls(char *tag)
 {
@@ -3292,9 +3306,7 @@ void cmd_starttls(char *tag)
     }
 
     /* tell SASL about the negotiated layer */
-    result=sasl_setprop(imapd_saslconn,
-			SASL_SSF_EXTERNAL,
-			&external);
+    result = sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &external);
 
     if (result != SASL_OK) {
 	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);

@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.95 1999/12/30 21:07:24 leg Exp $ -->
+<!-- $Id: changes.html,v 1.96 2000/01/04 19:42:21 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -16,6 +16,12 @@
 
     <li> The server wasn't correctly calculating the percentage of
     quota used when deciding whether or not to issue a warning.
+
+    <li> Implemented single-instance store: deliver, when using LMTP,
+    will only store one copy of a message per partition, and hard link
+    it among multiple users.  Sites with a large number of partitions
+    could see a performance decrease.
+
     </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.19 </h2>

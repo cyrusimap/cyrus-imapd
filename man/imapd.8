@@ -27,6 +27,10 @@
 imapd \- IMAP server process
 .SH SYNOPSIS
 .B imapd
+[
+.B \-p
+.I ssf
+]
 .SH DESCRIPTION
 .I Imapd
 is an IMAP4rev1 server.
@@ -75,6 +79,14 @@ The telemetry logs will be stored in the
 directory with a filename of the
 .I imapd
 process-id.
+.SH OPTIONS
+.TP
+.BI \-p " ssf"
+Tell
+.I imapd
+that an external layer exists.  An SSF (security strength factor) of 1
+means an integrity protection layer exists.  Any higher SSF implies
+some form of privacy protection.
 .SH FILES
 .TP
 .B /etc/imapd.conf
