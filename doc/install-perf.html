@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: install-perf.html,v 1.5 2002/02/13 17:10:13 ken3 Exp $ -->
+<!-- $Id: install-perf.html,v 1.6 2002/06/14 19:43:01 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -64,6 +64,14 @@ up the master process. For example, you may want to do this if you
 see the Listen queue drop counter increasing quickly. For example,
 under Solaris, look at the variable tcpListenDrop (from <tt>netstat
 -sP tcp</tt>).</li>
+
+<li><b>Database recovery.</b> If restarting the server takes a long
+time due to the <tt>cyrusdb</tt> database recovery procedure (this is
+usually true if you have a large number of deliveries) you should look
+into shortening the interval between checkpoints, controlled by the
+<tt>cyrusdb</tt> event in <tt>/etc/cyrus.conf</tt>.  We run
+checkpoints every 5 minutes; the current suggested install interval
+is 30 minutes.</li>
 </ul>
 
 <p>In general, there's no magic bullet for performance. It depends
@@ -88,7 +96,7 @@ Solaris by Adrian Cockcroft. Go to your favorite search engine and
 look for his name.</p>
 
 <hr />
-last modified: $Date: 2002/02/13 17:10:13 $
+last modified: $Date: 2002/06/14 19:43:01 $
 </body>
 </html>
 
