@@ -7,7 +7,7 @@ typedef unsigned bit32;
 #define MAX_USER_FLAGS (16*8)
 
 
-#define MAILBOX_HEADER_MAGIC "\241\002\213\015Cyrus mailbox header\n\"The great thing about this project was that it had so many goals.\"\n\t--Jim Morris on the Andrew project\n"
+#define MAILBOX_HEADER_MAGIC "\241\002\213\015Cyrus mailbox header\n\"The best thing about this system was that it had lots of goals.\"\n\t--Jim Morris on Andrew\n"
 
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
