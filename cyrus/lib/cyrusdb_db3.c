@@ -113,12 +113,21 @@ static int init(const char *dbdir, int myflags)
 	dbenv->set_verbose(dbenv, DB_VERB_CHKPOINT, 1);
     }
     dbenv->set_lk_detect(dbenv, CONFIG_DEADLOCK_DETECTION);
+
+    /* XXX should make this value configurable */
     r = dbenv->set_lk_max(dbenv, 50000);
     if (r) {
 	syslog(LOG_ERR, "DBERROR: set_lk_max(): %s", db_strerror(r));
 	abort();
     }
-    /*    dbenv->set_lk_max(dbenv, 10000);*/
+
+    /* XXX should make this value configurable */
+    r = dbenv->set_tx_max(dbenv, 100);
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: set_tx_max(): %s", db_strerror(r));
+	abort();
+    }
+
     dbenv->set_errcall(dbenv, db_err);
     dbenv->set_errpfx(dbenv, "db3");
 
@@ -297,7 +306,7 @@ static int myfetch(struct db *mydb,
     k.data = (char *) key;
     k.size = keylen;
 
-    r = db->get(db, tid, &k, &d, 0);
+    r = db->get(db, tid, &k, &d, flags);
     switch (r) {
     case 0:
 	if (data) *data = d.data;
