@@ -21,14 +21,14 @@
  * SOFTWARE.
  */
 /*
- * $Id: xmalloc.c,v 1.16 1999/03/02 01:57:06 tjs Exp $
+ * $Id: xmalloc.c,v 1.17 1999/04/08 21:00:49 tjs Exp $
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "xmalloc.h"
 
-#include "sysexits.h"
+#include "exitcodes.h"
 
 void* xmalloc(unsigned size)
 {
@@ -37,7 +37,7 @@ void* xmalloc(unsigned size)
     if (ret = malloc(size))
       return ret;
 
-    fatal("Virtual memory exhausted", EX_TEMPFAIL);
+    fatal("Virtual memory exhausted", EC_TEMPFAIL);
     return 0; /*NOTREACHED*/
 }
 
@@ -48,7 +48,7 @@ void *xrealloc (void* ptr, unsigned size)
     /* xrealloc (NULL, size) behaves like xmalloc (size), as in ANSI C */
     if (ret = !ptr ? malloc (size) : realloc (ptr, size)) return ret;
 
-    fatal("Virtual memory exhausted", EX_TEMPFAIL);
+    fatal("Virtual memory exhausted", EC_TEMPFAIL);
     return 0; /*NOTREACHED*/
 }
 
@@ -75,7 +75,7 @@ void *fs_get(unsigned size)
     if (ret = malloc(size))
       return (void *)ret;
 
-    fatal("Virtual memory exhausted", EX_TEMPFAIL);
+    fatal("Virtual memory exhausted", EC_TEMPFAIL);
 }
 
 void fs_give(void** ptr)
