@@ -62,7 +62,7 @@ typedef struct {
 #define SEQ(db,key,data,flags) (db)->seq((db),(key),(data),(flags))
 #define DEL(db,key,flags) (db)->del((db),(key),(flags))
 #define SYNC(db,flags) (db)->sync((db),(flags))
-#define EXPIRE_TIME 7200 /* 2 hours */
+#define EXPIRE_TIME 86400 /* 24 hours */
 
 
 #endif /* INCLUDED_AUTH_KRB_PTS_H */
