@@ -23,7 +23,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.24 1998/10/29 19:58:39 tjs Exp $
+ * $Id: auth_unix.c,v 1.25 1999/01/09 08:32:59 tjs Exp $
  */
 
 #include <pwd.h>
@@ -184,6 +184,7 @@ const char *identifier;
 	    /* FALL THROUGH */
 	    
 	default:
+	    ;
 	}
 	p++;
     }
