@@ -1,0 +1,112 @@
+# Makefile for error-table routines
+#
+# @configure_input@
+# 
+#	(C) Copyright 1994 by Carnegie Mellon University
+# 
+#                      All Rights Reserved
+# 
+# Permission to use, copy, modify, and distribute this software and its 
+# documentation for any purpose and without fee is hereby granted, 
+# provided that the above copyright notice appear in all copies and that
+# both that copyright notice and this permission notice appear in 
+# supporting documentation, and that the name of CMU not be
+# used in advertising or publicity pertaining to distribution of the
+# software without specific, written prior permission.  
+# 
+# CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+# ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+# CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+# ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+# WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+# ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+# SOFTWARE.
+#
+srcdir = @srcdir@
+VPATH = @srcdir@
+
+CC = @CC@
+INSTALL = @INSTALL@
+RANLIB = @RANLIB@
+ARCHIVE = ar cr
+
+AWK = @AWK@
+SED = sed
+
+DEFS = @DEFS@
+CPPFLAGS = @CPPFLAGS@
+LIBS = @LIBS@
+
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@
+
+SHELL = /bin/sh
+
+LIBOBJS= error_message.o et_name.o init_et.o com_err.o
+# for et_lex.lex.c include in error_table.y
+LOCALINCLUDE=-I. -I$(srcdir)
+
+all: compile_et libcom_err.a
+
+.c.o:
+	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) $<
+
+# solaris make loses on com_err.c but not on init_et.c, but this helps
+com_err.o: com_err.c
+
+#
+# real entries...
+#
+
+compile_et: $(srcdir)/compile_et.sh $(srcdir)/config_script
+	$(srcdir)/config_script $(srcdir)/compile_et.sh $(AWK) $(SED) > compile_et
+	chmod 755 compile_et	
+
+et_c.awk: $(srcdir)/et_c.awk
+	$(CP) $(srcdir)/et_c.awk et_c.awk
+
+et_h.awk: $(srcdir)/et_h.awk
+	$(CP) $(srcdir)/et_h.awk et_h.awk
+
+clean:
+	$(RM) compile_et compile_et.o error_table.o 
+	$(RM) libcom_err.a
+	$(RM) $(LIBOBJS)
+
+depend:: 
+
+#install:: com_err.h 
+#	$(INSTALLFILE) $(srcdir)/com_err.h  $(DESTDIR)$(INCLDIR)/com_err.h
+#
+#install:: mit-sipb-copyright.h
+#	$(INSTALLFILE) $(srcdir)/mit-sipb-copyright.h $(DESTDIR)$(INCLDIR)/mit-sipb-copyright.h
+#
+#install:: com_err.3
+#	$(INSTALLFILE) $(srcdir)/com_err.3 $(DESTDIR)$(MANDIR)/man3/com_err.3
+#
+#install:: compile_et.1
+#	$(INSTALLFILE) $(srcdir)/compile_et.1 $(DESTDIR)$(MANDIR)/man1/compile_et.1
+
+
+## install_library_target(com_err,$(LIBOBJS),$(LINTFILES),)
+
+libcom_err.a: $(LIBOBJS)
+	$(ARCHIVE) $@ $(LIBOBJS)
+	$(RANLIB) $@
+
+#install::
+#	$(INSTALLLIB) libcom_err.a $(DESTDIR)$(LIBDIR)/libcom_err.a
+#	$(CHMOD) 644 $(DESTDIR)$(LIBDIR)/libcom_err.a
+#	$(RANLIB)    $(DESTDIR)$(LIBDIR)/libcom_err.a
+#	$(CHMOD) 444 $(DESTDIR)$(LIBDIR)/libcom_err.a
+## 
+
+libcom_err.o:	$(LIBOBJS)
+	ld -r -s -o libcom_err.o $(LIBOBJS)
+	chmod -x libcom_err.o
+
+TAGS:	et_name.c error_message.c compile_et.c error_table.c \
+		lex.yy.c init_et.c
+	etags et_name.c error_message.c compile_et.c \
+		error_table.c init_et.c
+
