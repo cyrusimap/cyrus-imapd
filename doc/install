@@ -5,8 +5,8 @@
     IMAP server stores and provides access to messages. 
 
     A list of answers to common installation problems is maintained in
-    http://asg.web.cmu.edu/cyrus/imapd/install-FAQ.html. It is somewhat out
-    of date and will eventually be updated. 
+    http://asg.web.cmu.edu/cyrus/imapd/install-FAQ.html. It is very out of
+    date and will eventually be updated. 
 
     Feedback on the software or on the document may be sent to
     "cyrus-bugs@andrew.cmu.edu". The info-cyrus@andrew.cmu.edu mailing list
@@ -195,6 +195,10 @@ Compiling the IMAP Server
     --with-statedir=PATH 
             Specifies the directory used for the ptclient state
             directories. By default, configure uses "/var". 
+
+    --with-sasldir=PATH 
+            Specifies the path to the directories containing the library
+            (.../lib) and include (.../include) files for libsasl. 
 
     --with-auth=METHOD 
             Specifies the authorization module to use. Currently
