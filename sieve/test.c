@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.21.2.1 2004/01/27 23:13:56 ken3 Exp $
+ * $Id: test.c,v 1.21.2.2 2004/06/16 14:37:04 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -44,6 +44,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <stdlib.h>
 
 #include "sieve_interface.h"
+#include "bytecode.h"
 #include "comparator.h"
 #include "tree.h"
 #include "sieve.h"
@@ -475,7 +476,7 @@ char *markflags[] = { "\\flagged" };
 sieve_imapflags_t mark = { markflags, 1 };
 
 struct testcase {
-    const char *comp; 
+    int comp; 
     int mode;
     const char *pat;
     const char *text;
@@ -483,181 +484,187 @@ struct testcase {
 };
 
 struct testcase tc[] =
-{ { "i;octet", IS, "", "", 1 },
-  { "i;octet", IS, "a", "", 0 },
-  { "i;octet", IS, "", "a", 0 },
-  { "i;octet", IS, "a", "a", 1 },
-  { "i;octet", IS, "a", "A", 0 },
+{ { B_OCTET, B_IS, "", "", 1 },
+  { B_OCTET, B_IS, "a", "", 0 },
+  { B_OCTET, B_IS, "", "a", 0 },
+  { B_OCTET, B_IS, "a", "a", 1 },
+  { B_OCTET, B_IS, "a", "A", 0 },
 
-  { "i;ascii-casemap", IS, "", "", 1 },
-  { "i;ascii-casemap", IS, "a", "", 0 },
-  { "i;ascii-casemap", IS, "", "a", 0 },
-  { "i;ascii-casemap", IS, "a", "a", 1 },
-  { "i;ascii-casemap", IS, "a", "A", 1 },
+  { B_ASCIICASEMAP, B_IS, "", "", 1 },
+  { B_ASCIICASEMAP, B_IS, "a", "", 0 },
+  { B_ASCIICASEMAP, B_IS, "", "a", 0 },
+  { B_ASCIICASEMAP, B_IS, "a", "a", 1 },
+  { B_ASCIICASEMAP, B_IS, "a", "A", 1 },
 
-  { "i;octet", CONTAINS, "", "", 1 },
-  { "i;octet", CONTAINS, "", "a", 1 },
-  { "i;octet", CONTAINS, "a", "", 0 },
-  { "i;octet", CONTAINS, "a", "a", 1 },
-  { "i;octet", CONTAINS, "a", "ab", 1 },
-  { "i;octet", CONTAINS, "a", "ba", 1 },
-  { "i;octet", CONTAINS, "a", "aba", 1 },
-  { "i;octet", CONTAINS, "a", "bab", 1 },
-  { "i;octet", CONTAINS, "a", "bb", 0 },
-  { "i;octet", CONTAINS, "a", "bbb", 0 },
+  { B_OCTET, B_CONTAINS, "", "", 1 },
+  { B_OCTET, B_CONTAINS, "", "a", 1 },
+  { B_OCTET, B_CONTAINS, "a", "", 0 },
+  { B_OCTET, B_CONTAINS, "a", "a", 1 },
+  { B_OCTET, B_CONTAINS, "a", "ab", 1 },
+  { B_OCTET, B_CONTAINS, "a", "ba", 1 },
+  { B_OCTET, B_CONTAINS, "a", "aba", 1 },
+  { B_OCTET, B_CONTAINS, "a", "bab", 1 },
+  { B_OCTET, B_CONTAINS, "a", "bb", 0 },
+  { B_OCTET, B_CONTAINS, "a", "bbb", 0 },
 
-  { "i;octet", MATCHES, "", "", 1 },
-  { "i;octet", MATCHES, "", "a", 0 },
-  { "i;octet", MATCHES, "a", "", 0 },
-  { "i;octet", MATCHES, "a", "a", 1 },
-  { "i;octet", MATCHES, "a", "ab", 0 },
-  { "i;octet", MATCHES, "a", "ba", 0 },
-  { "i;octet", MATCHES, "a", "aba", 0 },
-  { "i;octet", MATCHES, "a", "bab", 0 },
-  { "i;octet", MATCHES, "a", "bb", 0 },
-  { "i;octet", MATCHES, "a", "bbb", 0 },
+  { B_OCTET, B_MATCHES, "", "", 1 },
+  { B_OCTET, B_MATCHES, "", "a", 0 },
+  { B_OCTET, B_MATCHES, "a", "", 0 },
+  { B_OCTET, B_MATCHES, "a", "a", 1 },
+  { B_OCTET, B_MATCHES, "a", "ab", 0 },
+  { B_OCTET, B_MATCHES, "a", "ba", 0 },
+  { B_OCTET, B_MATCHES, "a", "aba", 0 },
+  { B_OCTET, B_MATCHES, "a", "bab", 0 },
+  { B_OCTET, B_MATCHES, "a", "bb", 0 },
+  { B_OCTET, B_MATCHES, "a", "bbb", 0 },
 
-  { "i;octet", MATCHES, "*", "", 1 },
-  { "i;octet", MATCHES, "*", "a", 1 },
-  { "i;octet", MATCHES, "*a*", "", 0 },
-  { "i;octet", MATCHES, "*a*", "a", 1 },
-  { "i;octet", MATCHES, "*a*", "ab", 1 },
-  { "i;octet", MATCHES, "*a*", "ba", 1 },
-  { "i;octet", MATCHES, "*a*", "aba", 1 },
-  { "i;octet", MATCHES, "*a*", "bab", 1 },
-  { "i;octet", MATCHES, "*a*", "bb", 0 },
-  { "i;octet", MATCHES, "*a*", "bbb", 0 },
+  { B_OCTET, B_MATCHES, "*", "", 1 },
+  { B_OCTET, B_MATCHES, "*", "a", 1 },
+  { B_OCTET, B_MATCHES, "*a*", "", 0 },
+  { B_OCTET, B_MATCHES, "*a*", "a", 1 },
+  { B_OCTET, B_MATCHES, "*a*", "ab", 1 },
+  { B_OCTET, B_MATCHES, "*a*", "ba", 1 },
+  { B_OCTET, B_MATCHES, "*a*", "aba", 1 },
+  { B_OCTET, B_MATCHES, "*a*", "bab", 1 },
+  { B_OCTET, B_MATCHES, "*a*", "bb", 0 },
+  { B_OCTET, B_MATCHES, "*a*", "bbb", 0 },
 
-  { "i;octet", MATCHES, "*a", "", 0 },
-  { "i;octet", MATCHES, "*a", "a", 1 },
-  { "i;octet", MATCHES, "*a", "ab", 0 },
-  { "i;octet", MATCHES, "*a", "ba", 1 },
-  { "i;octet", MATCHES, "*a", "aba", 1 },
-  { "i;octet", MATCHES, "*a", "bab", 0 },
-  { "i;octet", MATCHES, "*a", "bb", 0 },
-  { "i;octet", MATCHES, "*a", "bbb", 0 },
+  { B_OCTET, B_MATCHES, "*a", "", 0 },
+  { B_OCTET, B_MATCHES, "*a", "a", 1 },
+  { B_OCTET, B_MATCHES, "*a", "ab", 0 },
+  { B_OCTET, B_MATCHES, "*a", "ba", 1 },
+  { B_OCTET, B_MATCHES, "*a", "aba", 1 },
+  { B_OCTET, B_MATCHES, "*a", "bab", 0 },
+  { B_OCTET, B_MATCHES, "*a", "bb", 0 },
+  { B_OCTET, B_MATCHES, "*a", "bbb", 0 },
 
-  { "i;octet", MATCHES, "a*", "", 0 },
-  { "i;octet", MATCHES, "a*", "a", 1 },
-  { "i;octet", MATCHES, "a*", "ab", 1 },
-  { "i;octet", MATCHES, "a*", "ba", 0 },
-  { "i;octet", MATCHES, "a*", "aba", 1 },
-  { "i;octet", MATCHES, "a*", "bab", 0 },
-  { "i;octet", MATCHES, "a*", "bb", 0 },
-  { "i;octet", MATCHES, "a*", "bbb", 0 },
+  { B_OCTET, B_MATCHES, "a*", "", 0 },
+  { B_OCTET, B_MATCHES, "a*", "a", 1 },
+  { B_OCTET, B_MATCHES, "a*", "ab", 1 },
+  { B_OCTET, B_MATCHES, "a*", "ba", 0 },
+  { B_OCTET, B_MATCHES, "a*", "aba", 1 },
+  { B_OCTET, B_MATCHES, "a*", "bab", 0 },
+  { B_OCTET, B_MATCHES, "a*", "bb", 0 },
+  { B_OCTET, B_MATCHES, "a*", "bbb", 0 },
 
-  { "i;octet", MATCHES, "a*b", "", 0 },
-  { "i;octet", MATCHES, "a*b", "a", 0 },
-  { "i;octet", MATCHES, "a*b", "ab", 1 },
-  { "i;octet", MATCHES, "a*b", "ba", 0 },
-  { "i;octet", MATCHES, "a*b", "aba", 0 },
-  { "i;octet", MATCHES, "a*b", "bab", 0 },
-  { "i;octet", MATCHES, "a*b", "bb", 0 },
-  { "i;octet", MATCHES, "a*b", "bbb", 0 },
-  { "i;octet", MATCHES, "a*b", "abbb", 1 },
-  { "i;octet", MATCHES, "a*b", "acb", 1 },
-  { "i;octet", MATCHES, "a*b", "acbc", 0 },
+  { B_OCTET, B_MATCHES, "a*b", "", 0 },
+  { B_OCTET, B_MATCHES, "a*b", "a", 0 },
+  { B_OCTET, B_MATCHES, "a*b", "ab", 1 },
+  { B_OCTET, B_MATCHES, "a*b", "ba", 0 },
+  { B_OCTET, B_MATCHES, "a*b", "aba", 0 },
+  { B_OCTET, B_MATCHES, "a*b", "bab", 0 },
+  { B_OCTET, B_MATCHES, "a*b", "bb", 0 },
+  { B_OCTET, B_MATCHES, "a*b", "bbb", 0 },
+  { B_OCTET, B_MATCHES, "a*b", "abbb", 1 },
+  { B_OCTET, B_MATCHES, "a*b", "acb", 1 },
+  { B_OCTET, B_MATCHES, "a*b", "acbc", 0 },
 
-  { "i;octet", MATCHES, "a?b", "", 0 },
-  { "i;octet", MATCHES, "a?b", "a", 0 },
-  { "i;octet", MATCHES, "a?b", "ab", 0 },
-  { "i;octet", MATCHES, "a?b", "ba", 0 },
-  { "i;octet", MATCHES, "a?b", "aba", 0 },
-  { "i;octet", MATCHES, "a?b", "bab", 0 },
-  { "i;octet", MATCHES, "a?b", "bb", 0 },
-  { "i;octet", MATCHES, "a?b", "bbb", 0 },
-  { "i;octet", MATCHES, "a?b", "abbb", 0 },
-  { "i;octet", MATCHES, "a?b", "acb", 1 },
-  { "i;octet", MATCHES, "a?b", "acbc", 0 },
+  { B_OCTET, B_MATCHES, "a?b", "", 0 },
+  { B_OCTET, B_MATCHES, "a?b", "a", 0 },
+  { B_OCTET, B_MATCHES, "a?b", "ab", 0 },
+  { B_OCTET, B_MATCHES, "a?b", "ba", 0 },
+  { B_OCTET, B_MATCHES, "a?b", "aba", 0 },
+  { B_OCTET, B_MATCHES, "a?b", "bab", 0 },
+  { B_OCTET, B_MATCHES, "a?b", "bb", 0 },
+  { B_OCTET, B_MATCHES, "a?b", "bbb", 0 },
+  { B_OCTET, B_MATCHES, "a?b", "abbb", 0 },
+  { B_OCTET, B_MATCHES, "a?b", "acb", 1 },
+  { B_OCTET, B_MATCHES, "a?b", "acbc", 0 },
 
-  { "i;octet", MATCHES, "a*?b", "", 0 },
-  { "i;octet", MATCHES, "a*?b", "a", 0 },
-  { "i;octet", MATCHES, "a*?b", "ab", 0 },
-  { "i;octet", MATCHES, "a*?b", "ba", 0 },
-  { "i;octet", MATCHES, "a*?b", "aba", 0 },
-  { "i;octet", MATCHES, "a*?b", "bab", 0 },
-  { "i;octet", MATCHES, "a*?b", "bb", 0 },
-  { "i;octet", MATCHES, "a*?b", "bbb", 0 },
-  { "i;octet", MATCHES, "a*?b", "abbb", 1 },
-  { "i;octet", MATCHES, "a*?b", "acb", 1 },
-  { "i;octet", MATCHES, "a*?b", "acbc", 0 },
+  { B_OCTET, B_MATCHES, "a*?b", "", 0 },
+  { B_OCTET, B_MATCHES, "a*?b", "a", 0 },
+  { B_OCTET, B_MATCHES, "a*?b", "ab", 0 },
+  { B_OCTET, B_MATCHES, "a*?b", "ba", 0 },
+  { B_OCTET, B_MATCHES, "a*?b", "aba", 0 },
+  { B_OCTET, B_MATCHES, "a*?b", "bab", 0 },
+  { B_OCTET, B_MATCHES, "a*?b", "bb", 0 },
+  { B_OCTET, B_MATCHES, "a*?b", "bbb", 0 },
+  { B_OCTET, B_MATCHES, "a*?b", "abbb", 1 },
+  { B_OCTET, B_MATCHES, "a*?b", "acb", 1 },
+  { B_OCTET, B_MATCHES, "a*?b", "acbc", 0 },
 
-  { "i;octet", MATCHES, "a?*b", "", 0 },
-  { "i;octet", MATCHES, "a?*b", "a", 0 },
-  { "i;octet", MATCHES, "a?*b", "ab", 0 },
-  { "i;octet", MATCHES, "a?*b", "ba", 0 },
-  { "i;octet", MATCHES, "a?*b", "aba", 0 },
-  { "i;octet", MATCHES, "a?*b", "bab", 0 },
-  { "i;octet", MATCHES, "a?*b", "bb", 0 },
-  { "i;octet", MATCHES, "a?*b", "bbb", 0 },
-  { "i;octet", MATCHES, "a?*b", "abbb", 1 },
-  { "i;octet", MATCHES, "a?*b", "acb", 1 },
-  { "i;octet", MATCHES, "a?*b", "acbc", 0 },
+  { B_OCTET, B_MATCHES, "a?*b", "", 0 },
+  { B_OCTET, B_MATCHES, "a?*b", "a", 0 },
+  { B_OCTET, B_MATCHES, "a?*b", "ab", 0 },
+  { B_OCTET, B_MATCHES, "a?*b", "ba", 0 },
+  { B_OCTET, B_MATCHES, "a?*b", "aba", 0 },
+  { B_OCTET, B_MATCHES, "a?*b", "bab", 0 },
+  { B_OCTET, B_MATCHES, "a?*b", "bb", 0 },
+  { B_OCTET, B_MATCHES, "a?*b", "bbb", 0 },
+  { B_OCTET, B_MATCHES, "a?*b", "abbb", 1 },
+  { B_OCTET, B_MATCHES, "a?*b", "acb", 1 },
+  { B_OCTET, B_MATCHES, "a?*b", "acbc", 0 },
 
-  { "i;octet", MATCHES, "a*?*b", "", 0 },
-  { "i;octet", MATCHES, "a*?*b", "a", 0 },
-  { "i;octet", MATCHES, "a*?*b", "ab", 0 },
-  { "i;octet", MATCHES, "a*?*b", "ba", 0 },
-  { "i;octet", MATCHES, "a*?*b", "aba", 0 },
-  { "i;octet", MATCHES, "a*?*b", "bab", 0 },
-  { "i;octet", MATCHES, "a*?*b", "bb", 0 },
-  { "i;octet", MATCHES, "a*?*b", "bbb", 0 },
-  { "i;octet", MATCHES, "a*?*b", "abbb", 1 },
-  { "i;octet", MATCHES, "a*?*b", "acb", 1 },
-  { "i;octet", MATCHES, "a*?*b?", "acbc", 1 },
+  { B_OCTET, B_MATCHES, "a*?*b", "", 0 },
+  { B_OCTET, B_MATCHES, "a*?*b", "a", 0 },
+  { B_OCTET, B_MATCHES, "a*?*b", "ab", 0 },
+  { B_OCTET, B_MATCHES, "a*?*b", "ba", 0 },
+  { B_OCTET, B_MATCHES, "a*?*b", "aba", 0 },
+  { B_OCTET, B_MATCHES, "a*?*b", "bab", 0 },
+  { B_OCTET, B_MATCHES, "a*?*b", "bb", 0 },
+  { B_OCTET, B_MATCHES, "a*?*b", "bbb", 0 },
+  { B_OCTET, B_MATCHES, "a*?*b", "abbb", 1 },
+  { B_OCTET, B_MATCHES, "a*?*b", "acb", 1 },
+  { B_OCTET, B_MATCHES, "a*?*b?", "acbc", 1 },
 
-  { "i;ascii-casemap", MATCHES, "a*b", "", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "a", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "ab", 1 },
-  { "i;ascii-casemap", MATCHES, "a*b", "ba", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "aba", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "bab", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "bb", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "bbb", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "abbb", 1 },
-  { "i;ascii-casemap", MATCHES, "a*b", "acb", 1 },
-  { "i;ascii-casemap", MATCHES, "a*b", "acbc", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "a", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "ab", 1 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "ba", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "aba", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "bab", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "bb", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "bbb", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "abbb", 1 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "acb", 1 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "acbc", 0 },
 
-  { "i;ascii-casemap", MATCHES, "a*b", "", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "A", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "Ab", 1 },
-  { "i;ascii-casemap", MATCHES, "a*b", "BA", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "ABA", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "BAb", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "BB", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "BBB", 0 },
-  { "i;ascii-casemap", MATCHES, "a*b", "aBBB", 1 },
-  { "i;ascii-casemap", MATCHES, "a*b", "ACB", 1 },
-  { "i;ascii-casemap", MATCHES, "a*b", "ACBC", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "A", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "Ab", 1 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "BA", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "ABA", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "BAb", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "BB", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "BBB", 0 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "aBBB", 1 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "ACB", 1 },
+  { B_ASCIICASEMAP, B_MATCHES, "a*b", "ACBC", 0 },
 
-  { NULL, 0, NULL, NULL, 0 } };
+  { 0, 0, NULL, NULL, 0 } };
 
 static int test_comparator(void)
 {
     struct testcase *t;
     int didfail = 0;
 
-    for (t = tc; t->comp != NULL; t++) {
-	comparator_t *c = lookup_comp(t->comp, t->mode, -1, NULL);
+    for (t = tc; t->comp != 0; t++) {
+	void *comprock = NULL;
+	comparator_t *c = lookup_comp(t->comp, t->mode, -1, &comprock);
 	int res;
-	char *mode;
+	char *comp, *mode;
 
-	if (t->mode == IS) mode = "IS";
-	else if (t->mode == CONTAINS) mode = "CONTAINS";
-	else if (t->mode == MATCHES) mode = "MATCHES";
-	else if (t->mode == REGEX) mode = "REGEX";
+	if (t->comp == B_OCTET) comp = "i;octet";
+	else if (t->comp == B_ASCIICASEMAP) comp = "i;ascii-casemap";
+	else if (t->comp == B_ASCIINUMERIC) comp = "i;ascii-numeric";
+	else comp = "<unknown comp>";
+
+	if (t->mode == B_IS) mode = "IS";
+	else if (t->mode == B_CONTAINS) mode = "CONTAINS";
+	else if (t->mode == B_MATCHES) mode = "MATCHES";
+	else if (t->mode == B_REGEX) mode = "REGEX";
 	else mode = "<unknown mode>";
 	
 	if (!c) {
 	    printf("FAIL: can't find a comparator %s/%s\n", 
-		   t->comp, mode);
+		   comp, mode);
 	    didfail++;
 	    continue;
 	}
-	res = c(t->text, t->pat, NULL);
+	res = c(t->text, t->pat, comprock);
 	if (res != t->result) {
 	    printf("FAIL: %s/%s(%s, %s) = %d, not %d\n", 
-		   t->comp, mode, t->pat, t->text, res, t->result);
+		   comp, mode, t->pat, t->text, res, t->result);
 	    didfail++;
 	}
     }
