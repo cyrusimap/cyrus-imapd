@@ -1,6 +1,5 @@
 /* notify.c -- Module to notify of new mail
- $Id: notify.c,v 1.3 2002/04/07 04:58:07 ken3 Exp $
- 
+ * $Id: notify.c,v 1.4 2002/04/08 20:39:09 rjs3 Exp $ 
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,6 +46,7 @@
 
 #include <stdio.h>
 #include <errno.h>
+#include <string.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -86,7 +86,7 @@ void notify(const char *method,
 {
     const char *notify_sock;
     int soc;
-    struct sockaddr_un sun;
+    struct sockaddr_un sun_data;
     char buf[NOTIFY_MAXSIZE] = "", noptstr[20];
     int buflen = 0;
     int i, r = 0;
@@ -97,15 +97,15 @@ void notify(const char *method,
 	return;
     }
 
-    memset((char *)&sun, 0, sizeof(sun));
-    sun.sun_family = AF_UNIX;
+    memset((char *)&sun_data, 0, sizeof(sun_data));
+    sun_data.sun_family = AF_UNIX;
     notify_sock = config_getstring("notifysocket", NULL);
     if (notify_sock) {	
-	strcpy(sun.sun_path, notify_sock);
+	strcpy(sun_data.sun_path, notify_sock);
     }
     else {
-	strcpy(sun.sun_path, config_dir);
-	strcat(sun.sun_path, FNAME_NOTIFY_SOCK);
+	strcpy(sun_data.sun_path, config_dir);
+	strcat(sun_data.sun_path, FNAME_NOTIFY_SOCK);
     }
 
     /*
@@ -135,7 +135,8 @@ void notify(const char *method,
 	return;
     }
 
-    r = sendto(soc, buf, buflen, 0, (struct sockaddr *) &sun, sizeof(sun));
+    r = sendto(soc, buf, buflen, 0,
+	       (struct sockaddr *)&sun_data, sizeof(sun_data));
     if (r < buflen) {
 	syslog(LOG_ERR, "unable to sendto() notify socket: %m");
 	return;
