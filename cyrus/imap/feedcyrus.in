@@ -1,0 +1,71 @@
+#! /bin/sh
+##  $Revision: 1.1 $
+##  Send news to Cyrus IMAPD
+##  =()<. @<_PATH_SHELLVARS>@>()=
+. /usr/news/innshellvars
+
+PROGNAME=`basename $0`
+LOCK=${LOCKS}/LOCK.${PROGNAME}
+LOG=${MOST_LOGS}/${PROGNAME}.log
+
+##  Go to where the action is.
+test ! -d ${BATCH} && {
+    echo "${PROGNAME}: directory ${BATCH} not found" 1>&2
+    exit 1
+}
+cd ${BATCH}
+
+##  Set up log file.
+umask 002
+test -z "${D_FLAG}" && {
+    test ! -f ${LOG} && touch ${LOG}
+    chmod 0660 ${LOG}
+    exec >>${LOG} 2>&1
+}
+PPID=$$
+echo "${PROGNAME}: [${PPID}] start"
+
+##  Set up environment.
+export BATCH PROGNAME PPID
+
+##  Loop over all sites.
+for PROG in collectnews rmnews; do
+
+    ##  Start sending this site in the background.
+    export PROG LOCKS BATCHFILE PROGNAME PPID TMPDIR
+    sh -c '
+	BATCHFILE=${PROG}.input
+	LOCK=${LOCKS}/LOCK.${PROG}
+	trap "rm -f ${LOCK} ; exit 1" 1 2 3 15
+	shlock -p $$ -f ${LOCK} || {
+	    WHY="`cat ${LOCK}`"
+	    echo "${PROGNAME}: [${PPID}:$$] ${PROG} locked ${WHY} `date`"
+	    exit
+	}
+	if [ -f ${PROG}.work ] ; then
+	    cat ${PROG}.work >>${BATCHFILE}
+	    rm -f ${PROG}.work
+	fi
+	mv ${PROG} ${PROG}.work
+	if ctlinnd -s -t30 flush ${PROG}"!" ; then
+	    if [ -f ${BATCHFILE} ] ; then
+		cat ${PROG}.work >>${BATCHFILE}
+		rm -f ${PROG}.work
+	    else
+		mv ${PROG}.work ${BATCHFILE}
+	    fi
+	    if [ -s ${BATCHFILE} ] ; then
+		echo "${PROGNAME}: [${PPID}:$$] begin ${PROG} `date`"
+		${PROG} < ${BATCH}/${BATCHFILE} && rm -f ${BATCHFILE} 
+		echo "${PROGNAME}: [${PPID}:$$] end ${PROG} `date`"
+	    else
+		rm -f ${BATCHFILE}
+	    fi
+	fi
+	rm -f ${LOCK}
+    ' &
+    sleep 5
+done
+
+wait
+echo "${PROGNAME}: [${PPID}] stop"
