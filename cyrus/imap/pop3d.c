@@ -405,6 +405,8 @@ char *pass;
     char inboxname[MAX_MAILBOX_PATH];
     int r, msg;
     struct index_record record;
+    char buf[MAX_MAILBOX_PATH];
+    FILE *logfile;
 
     if (!popd_userid) {
 	prot_printf(popd_out, "-ERR Must give USER command\r\n");
@@ -487,6 +489,16 @@ char *pass;
     }
     popd_mailbox = &mboxstruct;
     proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
+
+    /* Create telemetry log */
+    sprintf(buf, "%s%s%s/%d", config_dir, FNAME_LOGDIR, popd_userid,
+	    getpid());
+    logfile = fopen(buf, "w");
+    if (logfile) {
+	prot_setlog(popd_in, fileno(logfile));
+	prot_setlog(popd_out, fileno(logfile));
+    }
+
     prot_printf(popd_out, "+OK Maildrop locked and ready\r\n");
 }
 
