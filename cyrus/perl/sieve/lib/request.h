@@ -60,7 +60,8 @@ int deleteascript(int version,struct protstream *pout, struct protstream *pin,
 		  char *name, char **refer_to, char **errstr);
 
 int installafile(int version,struct protstream *pout, struct protstream *pin,
-		 char *filename, char **refer_to, char **errstr);
+		 char *filename, char *destname,
+		 char **refer_to, char **errstr);
 
 int installdata(int version,struct protstream *pout, struct protstream *pin,
 		char *scriptname, char *data, int len, 

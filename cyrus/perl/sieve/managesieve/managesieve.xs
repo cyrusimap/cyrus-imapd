@@ -341,7 +341,17 @@ sieve_put_file(obj, filename)
   Sieveobj obj
   char *filename
   CODE:
-    RETVAL = isieve_put_file(obj->isieve, filename, &obj->errstr);
+    RETVAL = isieve_put_file(obj->isieve, filename, NULL, &obj->errstr);
+  OUTPUT:
+    RETVAL
+
+int
+sieve_put_file_withdest(obj, filename, destname)
+  Sieveobj obj
+  char *filename
+  char *destname
+  CODE:
+    RETVAL = isieve_put_file(obj->isieve, filename, destname, &obj->errstr);
   OUTPUT:
     RETVAL
 

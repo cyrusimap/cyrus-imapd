@@ -293,7 +293,8 @@ static char *getsievename(char *filename)
 
 
 int installafile(int version,struct protstream *pout, struct protstream *pin,
-		 char *filename, char **refer_to, char **errstrp)
+		 char *filename, char *destname,
+		 char **refer_to, char **errstrp)
 {
   FILE *stream;
   struct stat filestats;  /* returned by stat */
@@ -306,7 +307,9 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
   lexstate_t state;
   char *sievename;
 
-  sievename=getsievename(filename);
+  if(!destname) destname = filename;
+
+  sievename=getsievename(destname);
 
   result=stat(filename,&filestats);
 
