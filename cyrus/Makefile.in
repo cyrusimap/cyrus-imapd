@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.35 2000/08/21 21:38:03 leg Exp $
+# $Id: Makefile.in,v 1.36 2000/08/29 19:20:30 leg Exp $
 #
 # @configure_input@
 # 
@@ -57,12 +57,15 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-all::
+all:: checkdepend
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" all "in" `pwd`;	\
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all) || exit 1; \
 	done
+
+dist:: checkdepend
+	echo "build the lex and yacc files!"
 
 install::
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/bin
