@@ -40,7 +40,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "prot.h"
 #include "lex.h"
-
+#include "xmalloc.h"
 
 #define BLOCKSIZE 1024
 
@@ -96,9 +96,6 @@ int deleteascript(struct protstream *pout, struct protstream *pin,char *name)
 int installdata(struct protstream *pout, struct protstream *pin,
 		char *scriptname, char *data, int len)
 {
-  int size;     /* size of the file */
-  int result;
-  int cnt;
   int res;
   string_t *str;
   lexstate_t state;

@@ -37,6 +37,7 @@ typedef struct lexstate_s {
 
 } lexstate_t;
 
+int yylex(lexstate_t * lvalp, void * client);
 
 #define	TAG	258
 #define	EOL	259
@@ -58,4 +59,4 @@ typedef struct lexstate_s {
 
 
 
-#endif
+#endif /* _LEX_H_ */
