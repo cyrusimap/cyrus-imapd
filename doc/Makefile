@@ -55,6 +55,9 @@ clean:
 realclean: clean
 	rm -f $(DOCS)
 
+ci: docs
+	cvs ci -m 'updated from html source' $(DOCS)
+
 distclean: clean
 
 depend:
