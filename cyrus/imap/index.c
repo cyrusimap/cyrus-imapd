@@ -52,7 +52,7 @@ static unsigned long cache_len;
 static unsigned long cache_end;
 
 /* Attributes of memory-mapped index file */
-static time_t index_ino;
+static long index_ino;
 static unsigned long start_offset;
 static unsigned long record_size;
 
