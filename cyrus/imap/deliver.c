@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.94 1999/07/02 01:06:17 leg Exp $
+ * $Id: deliver.c,v 1.95 1999/07/02 23:49:19 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.94 1999/07/02 01:06:17 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.95 1999/07/02 23:49:19 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -1762,6 +1762,7 @@ int acloverride;
     return r;
 }
 
+#ifdef USE_SIEVE
 /* returns true if user has a sieve file in afs */
 FILE *sieve_find_script(char *user)
 {
@@ -1790,6 +1791,7 @@ FILE *sieve_find_script(char *user)
     
     return f;
 }
+#endif
 
 int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    char **flag, int nflags, char *authuser, 
