@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.100 2002/03/01 20:47:01 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.101 2002/03/02 03:28:20 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -2269,6 +2269,7 @@ void cmd_authenticate(char *tag, char *authtype)
     }
 
     prot_printf(proxyd_out, "%s OK Success (%s)\r\n", tag,ssfmsg);
+    prot_flush(proxyd_out);
 
     prot_setsasl(proxyd_in,  proxyd_saslconn);
     prot_setsasl(proxyd_out, proxyd_saslconn);
