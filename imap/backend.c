@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.10 2002/07/26 18:30:53 rjs3 Exp $ */
+/* $Id: backend.c,v 1.11 2002/07/30 17:49:16 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -74,6 +74,15 @@
 #include "imapconf.h"
 #include "xmalloc.h"
 #include "iptostring.h"
+
+/* In SASL 2.1.6 and prior, SASL_NEED_PROXY was not available, and thus 
+ * proxyds could get a mechanism such as CRAM-MD5 which wouldn't convey the
+ * authzid to the backend server, thus resulting in a proxyed connection as the
+ * proxy user, and not as the real user */
+#ifndef SASL_NEED_PROXY
+#warning This version of the SASL library offers no way to ensure that we get a mechanism that allows proxying.
+#define SASL_NEED_PROXY 0
+#endif
 
 static void get_capability(struct backend *s)
 {
@@ -255,8 +264,10 @@ static int backend_authenticate(struct backend *s, const char *userid)
 		  localip, 60) != 0)
 	return SASL_FAIL;
 
+    /* Require proxying if we have an "interesting" userid (authzid) */
     r = sasl_client_new("imap", s->hostname, localip, remoteip,
-			cb, 0, &s->saslconn);
+			cb, (userid  && *userid ? SASL_NEED_PROXY : 0),
+			&s->saslconn);
     if (r != SASL_OK) {
 	return r;
     }
