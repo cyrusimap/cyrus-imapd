@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.375 2002/04/01 21:29:41 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.376 2002/04/01 23:10:59 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -234,7 +234,6 @@ void freeattvalues(struct attvaluelist *l);
 
 static int mailboxdata(char *name, int matchlen, int maycreate, void *rock);
 static int listdata(char *name, int matchlen, int maycreate, void *rock);
-static int lsubdata(char *name, int matchlen, int maycreate, void *rock);
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
 			int listopts);
 
@@ -1321,6 +1320,26 @@ void cmdloop()
 
 		/* xxx needed? */
 		/* snmp_increment(RECONSTRUCT_COUNT, 1); */
+	    } 
+	    else if (!strcmp(cmd.s, "Rlist")) {
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg2);
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_list(tag.s, LIST_CHILDREN | LIST_REMOTE, arg1.s, arg2.s);
+
+/* 		snmp_increment(LIST_COUNT, 1); */
+	    }
+	    else if (!strcmp(cmd.s, "Rlsub")) {
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg2);
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_list(tag.s, LIST_LSUB | LIST_CHILDREN | LIST_REMOTE,
+			 arg1.s, arg2.s);
+/* 		snmp_increment(LSUB_COUNT, 1); */
 	    } else goto badcmd;
 	    break;
 	    
@@ -3978,31 +3997,24 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	/* Translate any separators in pattern */
 	mboxname_hiersep_tointernal(&imapd_namespace, pattern);
 
-	if (listopts & LIST_LSUB) {
+	if (listopts & LIST_LSUB || listopts & LIST_SUBSCRIBED) {
 	    int force = config_getswitch("allowallsubscribe", 0);
 
 	    (*imapd_namespace.mboxlist_findsub)(&imapd_namespace, pattern,
-						imapd_userisadmin, imapd_userid,
-						imapd_authstate, lsubdata,
-						&listopts, force);
-	    lsubdata((char *)0, 0, 0, &listopts);
-	}
-	else if (listopts & LIST_SUBSCRIBED) {
-	    int force = config_getswitch("allowallsubscribe", 0);
-
-	    (*imapd_namespace.mboxlist_findsub)(&imapd_namespace, pattern,
-						imapd_userisadmin, imapd_userid,
+						imapd_userisadmin,
+						imapd_userid,
 						imapd_authstate, listdata,
 						&listopts, force);
-	    listdata((char *)0, 0, 0, &listopts);
 	}
 	else {
 	    (*imapd_namespace.mboxlist_findall)(&imapd_namespace, pattern,
-						imapd_userisadmin, imapd_userid,
+						imapd_userisadmin,
+						imapd_userid,
 						imapd_authstate, listdata,
 						&listopts);
-	    listdata((char *)0, 0, 0, &listopts);
 	}
+
+	listdata((char *)0, 0, 0, &listopts);
 
 	if (buf) free(buf);
     }
@@ -6505,11 +6517,9 @@ int getlistopts(char *tag, int *listopts)
 	else if (!strcmp(arg.s, "children")) {
 	    *listopts |= LIST_CHILDREN;
 	}
-#if 0
 	else if (!strcmp(arg.s, "remote")) {
 	    *listopts |= LIST_REMOTE;
 	}
-#endif
 	else {
 	    prot_printf(imapd_out, "%s BAD Invalid List option %s\r\n",
 			tag, arg.s);
@@ -7088,16 +7098,11 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
  */
 static int listdata(char *name, int matchlen, int maycreate, void *rock)
 {
-    mstringdata("LIST", name, matchlen, maycreate, *((int*) rock));
-    return 0;
-}
+    int listopts = *((int *)rock);
+    
+    mstringdata(((listopts & LIST_LSUB) ? "LSUB" : "LIST"),
+	name, matchlen, maycreate, listopts);
 
-/*
- * Issue a LSUB untagged response
- */
-static int lsubdata(char *name, int matchlen, int maycreate, void *rock)
-{
-    mstringdata("LSUB", name, matchlen, maycreate, *((int*) rock));
     return 0;
 }
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.111 2002/03/26 00:30:14 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.112 2002/04/01 23:11:00 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -2573,10 +2573,10 @@ void cmd_capability(char *tag)
     }
     prot_printf(proxyd_out, "* CAPABILITY ");
     prot_printf(proxyd_out, CAPABILITY_STRING);
+
 #ifdef PROXY_IDLE
     prot_printf(proxyd_out, " IDLE");
 #endif
-    prot_printf(proxyd_out, " MAILBOX-REFERRALS");
 
     if (tls_enabled("imap")) {
 	prot_printf(proxyd_out, " STARTTLS");
