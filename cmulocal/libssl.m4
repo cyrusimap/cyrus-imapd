@@ -30,7 +30,7 @@ AC_DEFUN(CMU_LIBSSL_INC_WHERE, [
 AC_DEFUN(CMU_LIBSSL_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lssl -lcrypto"
+LIBS="$saved_LIBS -L$1 -lssl -lcrypto $LIB_SOCKET"
 AC_TRY_LINK(,
 [SSL_write();],
 [ac_cv_found_libssl_lib=yes],
@@ -56,7 +56,6 @@ AC_DEFUN(CMU_LIBSSL_LIB_WHERE, [
 
 AC_DEFUN(CMU_LIBSSL, [
 AC_REQUIRE([CMU_SOCKETS])
-AC_REQUIRE([CMU_SASL])
 AC_ARG_WITH(libssl,
 	[  --with-libssl=PREFIX      Compile with Libssl support],
 	[if test "X$with_libssl" = "X"; then
