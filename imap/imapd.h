@@ -131,4 +131,12 @@ struct searchargs {
     struct searchsub *sublist;
 };
 
+/* Bitmask for status queries */
+#define STATUS_MESSAGES		(1<<0)
+#define STATUS_RECENT		(1<<1)
+#define STATUS_UID_NEXT		(1<<2)
+#define STATUS_UID_VALIDITY	(1<<3)
+#define STATUS_UNSEEN		(1<<4)
+#define STATUS_UPDATE_NUMBER	(1<<5)
+
 extern struct protstream *imapd_out, *imapd_in;
