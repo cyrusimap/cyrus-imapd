@@ -33,6 +33,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "acl.h"
 #include "util.h"
@@ -47,12 +48,22 @@
 
 extern int optind;
 extern char *optarg;
+extern int opterr;
 
 extern int errno;
 
 /* The Eudora kludge */
 #define STATUS "Status: "
 #define SLEN (sizeof(STATUS)+2)
+
+#ifdef HAVE_ACTE_KRB
+#include <krb.h>
+
+/* MIT's kpop authentication kludge */
+int kflag = 0;
+char klrealm[REALM_SZ];
+AUTH_DAT kdata;
+#endif
 
 char *popd_userid = 0;
 struct mailbox *popd_mailbox = 0;
@@ -78,6 +89,7 @@ int argc;
 char **argv;
 char **envp;
 {
+    int opt;
     char hostname[MAXHOSTNAMELEN+1];
     int salen;
     struct hostent *hp;
@@ -86,6 +98,20 @@ char **envp;
 
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
+
+    opterr = 0;
+    while ((opt = getopt(argc, argv, "k")) != EOF) {
+	switch(opt) {
+#ifdef HAVE_ACTE_KRB
+	case 'k':
+	    kflag++;
+	    break;
+#endif
+
+	default:
+	    usage();
+	}
+    }
 
     setproctitle_init(argc, argv, envp);
     config_init("pop3d");
@@ -123,14 +149,25 @@ char **envp;
     if (timeout < 10) timeout = 10;
     prot_settimeout(popd_in, timeout*60);
 
+#ifdef HAVE_ACTE_KRB
+    if (kflag) kpop();
+#endif
+
     prot_printf(popd_out,"+OK %s Cyrus POP3 %s server ready\r\n",
 		hostname, CYRUS_VERSION);
+
     cmdloop();
 }
 
 usage()
 {
-    prot_printf(popd_out, "-ERR usage: pop3d\r\n");
+    prot_printf(popd_out, "-ERR usage: pop3d%s\r\n",
+#ifdef HAVE_ACTE_KRB
+		" [-k]"
+#else
+		""
+#endif
+		);
     prot_flush(popd_out);
     exit(EX_USAGE);
 }
@@ -138,7 +175,7 @@ usage()
 /*
  * Cleanly shut down and exit
  */
-shutdown(code)
+shut_down(code)
 int code;
 {
     proc_cleanup();
@@ -162,8 +199,55 @@ int code;
     recurse_code = code;
     prot_printf(popd_out, "-ERR Fatal error: %s\r\n", s);
     prot_flush(popd_out);
-    shutdown(code);
+    shut_down(code);
 }
+
+#ifdef HAVE_ACTE_KRB
+/*
+ * MIT's kludge of a kpop protocol
+ * Client does a krb_sendauth() first thing
+ */
+kpop()
+{
+    Key_schedule schedule;
+    KTEXT_ST ticket;
+    char instance[INST_SZ];  
+    char version[9];
+    int r;
+
+    if (!popd_haveaddr) {
+	fatal("Cannot get client's IP address");
+    }
+
+    strcpy(instance, "*");
+    r = krb_recvauth(0L, 0, &ticket, "pop", instance,
+		     &popd_remoteaddr, (struct sockaddr_in *) NULL,
+		     &kdata, "", schedule, version);
+    
+    if (r) {
+	prot_printf(popd_out, "-ERR Kerberos authentication failure: %s\r\n",
+		    krb_err_txt[r]);
+	syslog(LOG_NOTICE,
+	       "badlogin: %s kpop ? %s%s%s@%s %s",
+	       popd_clienthost, kdata.pname,
+	       kdata.pinst[0] ? "." : "", kdata.pinst,
+	       kdata.prealm, krb_err_txt[r]);
+	shut_down(0);
+    }
+    
+    r = krb_get_lrealm(klrealm,1);
+    if (r) {
+	prot_printf(popd_out, "-ERR Kerberos failure: %s\r\n",
+		    krb_err_txt[r]);
+	syslog(LOG_NOTICE,
+	       "badlogin: %s kpop ? %s%s%s@%s krb_get_lrealm: %s",
+	       popd_clienthost, kdata.pname,
+	       kdata.pinst[0] ? "." : "", kdata.pinst,
+	       kdata.prealm, krb_err_txt[r]);
+	shut_down(0);
+    }
+}
+#endif
 
 /*
  * Top-level command loop parsing
@@ -177,7 +261,7 @@ cmdloop()
     for (;;) {
 	prot_flush(popd_out);
 	if (!prot_fgets(inputbuf, sizeof(inputbuf), popd_in)) {
-	    shutdown(0);
+	    shut_down(0);
 	}
 
 	p = inputbuf + strlen(inputbuf);
@@ -218,7 +302,7 @@ cmdloop()
 		    }
 		}
 		printf("+OK\r\n");
-		shutdown(0);
+		shut_down(0);
 	    }
 	    else prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	}
@@ -418,6 +502,27 @@ char *pass;
 	return;
     }
 
+#ifdef HAVE_ACTE_KRB
+    if (kflag) {
+	if (strcmp(popd_userid, kdata.pname) != 0 ||
+	    kdata.pinst[0] ||
+	    strcmp(klrealm, kdata.prealm) != 0) {
+	    prot_printf(popd_out, "-ERR Invalid login\r\n");
+	    syslog(LOG_NOTICE,
+		   "badlogin: %s kpop %s %s%s%s@%s access denied",
+		   popd_clienthost, popd_userid,
+		   kdata.pname, kdata.pinst[0] ? "." : "",
+		   kdata.pinst, kdata.prealm);
+	    return;
+	}
+
+	syslog(LOG_NOTICE, "login: %s %s kpop", popd_clienthost, popd_userid);
+
+	openinbox();
+	return;
+    }
+#endif
+
     if (!strcmp(popd_userid, "anonymous")) {
 	if (config_getswitch("allowanonymouslogin", 0)) {
 	    pass = beautify_string(pass);
@@ -442,6 +547,10 @@ char *pass;
 	sleep(3);
 	prot_printf(popd_out, "-ERR Invalid login\r\n");
 	return;
+    }
+    else {
+	syslog(LOG_NOTICE, "login: %s %s plaintext %s",
+	       popd_clienthost, popd_userid, reply ? reply : "");
     }
     openinbox();
 }
@@ -470,7 +579,7 @@ char *authtype;
     
     r = login_authenticate(authtype, &mech, &authproc);
     if (!r) {
-	r = mech->start("pop3", authproc, ACTE_PROT_ANY, PROT_BUFSIZE,
+	r = mech->start("pop", authproc, ACTE_PROT_ANY, PROT_BUFSIZE,
 			popd_haveaddr ? &popd_localaddr : 0,
 			popd_haveaddr ? &popd_remoteaddr : 0,
 			&outputlen, &output, &state, &reply);
@@ -520,6 +629,9 @@ char *authtype;
     }
 
     popd_userid = strsave(canon_user);
+
+    syslog(LOG_NOTICE, "login: %s %s %s %s", popd_clienthost, canon_user,
+	   authtype, reply ? reply : "");
 
     if (openinbox() == 0 && (encodefunc || decodefunc)) {
 	prot_setfunc(popd_in, decodefunc, state, 0);
