@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.4 2004/03/11 15:23:18 ken3 Exp $
+ * $Id: lmtp_sieve.c,v 1.5 2004/03/19 14:49:17 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -262,7 +262,7 @@ static int send_forward(const char *forwardto,
 {
     FILE *sm;
     const char *smbuf[10];
-    int i, sm_stat;
+    int sm_stat;
     char buf[1024];
     pid_t sm_pid;
     int body = 0, skip;

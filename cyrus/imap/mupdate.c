@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.86 2004/03/10 04:18:55 rjs3 Exp $
+ * $Id: mupdate.c,v 1.87 2004/03/19 14:49:17 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1460,7 +1460,6 @@ void cmd_set(struct conn *C,
     char *oldserver = NULL;
     char *thisserver = NULL;
     char *tmp;
-    struct conn *upc;
 
     /* Hold any output that we need to do */
     enum {
