@@ -528,6 +528,31 @@ struct mailbox *mailbox;
 }
 
 /*
+ * Place a POP lock on 'mailbox'.
+ */
+int
+mailbox_lock_pop(mailbox)
+struct mailbox *mailbox;
+{
+    int r = -1;
+
+    while (r != 0) {
+	r = flock(fileno(mailbox->cache), LOCK_EX|LOCK_NB);
+	if (r == -1) {
+	    if (errno == EINTR) continue;
+	    if (errno == EWOULDBLOCK || errno == EAGAIN) {
+		return IMAP_MAILBOX_POPLOCKED;
+	    }
+	    syslog(LOG_ERR, "IOERROR: locking cache for %s: %m",
+		   mailbox->name);
+	    return IMAP_IOERROR;
+	}
+    }
+
+    return 0;
+}
+
+/*
  * Lock the quota file 'quota'.  Reread quota file if necessary.
  */
 int
@@ -611,6 +636,16 @@ struct mailbox *mailbox;
     if (--mailbox->index_lock_count == 0) {
 	flock(fileno(mailbox->index), LOCK_UN);
     }
+    return 0;
+}
+
+/*
+ * Release POP lock for 'mailbox'
+ */
+mailbox_unlock_pop(mailbox)
+struct mailbox *mailbox;
+{
+    flock(fileno(mailbox->cache), LOCK_UN);
     return 0;
 }
 
@@ -909,6 +944,14 @@ char *deciderock;
 	mailbox_unlock_header(mailbox);
 	return r;
     }
+
+    r = mailbox_lock_pop(mailbox);
+    if (r) {
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
+	return r;
+    }
+
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_INDEX);
     strcat(fnamebuf, ".NEW");
@@ -927,6 +970,7 @@ char *deciderock;
     if (!newindex || !newcache) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
 	fclose(newindex);
+	mailbox_unlock_pop(mailbox);
 	mailbox_unlock_index(mailbox);
 	mailbox_unlock_header(mailbox);
 	return IMAP_IOERROR;
@@ -1055,6 +1099,7 @@ char *deciderock;
     if (rename(fnamebufnew, fnamebuf)) {
 	/* XXX in serious trouble */
     }
+    mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
     fclose(newindex);
@@ -1082,6 +1127,7 @@ char *deciderock;
     free(deleted);
     fclose(newindex);
     fclose(newcache);
+    mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
     return IMAP_IOERROR;
@@ -1391,14 +1437,14 @@ int isinbox;
 
     if (r && newmailbox.quota.root) {
 	r2 = mailbox_lock_quota(&newmailbox.quota);
-	newmailbox.quota.used -= newmailbox.quota_mailbox_used;
+	newmailbox.quota.used += newmailbox.quota_mailbox_used;
 	if (!r2) {
 	    r2 = mailbox_write_quota(&newmailbox.quota);
 	    mailbox_unlock_quota(&newmailbox.quota);
 	}
 	if (r2) {
 	    syslog(LOG_ERR,
-	      "LOSTQUOTA: unable to record free of %d bytes in quota %s",
+	      "LOSTQUOTA: unable to record use of %d bytes in quota %s",
 		   newmailbox.quota_mailbox_used, newmailbox.quota.root);
 	}
     }
