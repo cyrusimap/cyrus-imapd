@@ -1,5 +1,5 @@
 /* +++Date last modified: 05-Jul-1997 */
-/* $Id: hash.c,v 1.6 2002/06/13 21:00:22 rjs3 Exp $ */
+/* $Id: hash.c,v 1.7 2002/06/17 17:29:31 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -144,7 +144,7 @@ void *hash_insert(char *key, void *data, hash_table *table)
 ** the key is not in the table.
 */
 
-void *hash_lookup(char *key, hash_table *table)
+void *hash_lookup(const char *key, hash_table *table)
 {
       unsigned val = hash(key) % table->size;
       bucket *ptr;
