@@ -12,6 +12,7 @@ install-auth
 install-compile
 install-configure
 install-murder
+install-virtdomains
 install-perf
 install-prereq
 install-sieve
