@@ -95,6 +95,12 @@ ec IMAP_PROTOCOL_ERROR,
 ec IMAP_PROTOCOL_BAD_PARAMETERS,
    "Syntax error in parameters"
 
+ec IMAP_ANNOTATION_BADENTRY,
+   "Invalid annotation entry"
+
+ec IMAP_ANNOTATION_BADATTRIB,
+   "Invalid annotation attribute"
+
 # following used only proxy/db operations
 
 ec IMAP_SERVER_UNAVAILABLE,
@@ -145,6 +151,9 @@ ec IMAP_NO_CHECKPRESERVE,
 
 ec IMAP_NO_NOSUCHMSG,
    "No matching messages"
+
+ec IMAP_NO_NOSUCHANNOTATION,
+   "No matching annotations"
 
 # Following used for internationalization of untagged BYE response
 
