@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.59 2003/05/20 15:45:51 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.60 2003/05/22 17:37:54 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -223,8 +223,8 @@ void cmd_netscape (char* tag);
 #endif
 
 #ifdef ENABLE_ANNOTATEMORE
-void cmd_getannotation(char* tag);
-void cmd_setannotation(char* tag);
+void cmd_getannotation(char* tag, char *mboxpat);
+void cmd_setannotation(char* tag, char *mboxpat);
 
 int getannotatefetchdata(char *tag,
 			 struct strlist **entries, struct strlist **attribs);
@@ -890,7 +890,7 @@ void proxyd_downserver(struct backend *s)
     s->timeout = NULL;
 }
 
-struct prot_waitevent *backend_timeout(struct protstream *s,
+struct prot_waitevent *backend_timeout(struct protstream *s __attribute__((unused)),
 				       struct prot_waitevent *ev, void *rock)
 {
     struct backend *be = (struct backend *) rock;
@@ -1662,8 +1662,12 @@ void cmdloop()
 #ifdef ENABLE_ANNOTATEMORE
 	    else if (!strcmp(cmd.s, "Getannotation")) {
 		if (c != ' ') goto missingargs;
+		c = getastring(proxyd_in, proxyd_out, &arg1);
+		if (c != ' ') goto missingargs;
 
-		cmd_getannotation(tag.s);
+		cmd_getannotation(tag.s, arg1.s);
+
+		snmp_increment(GETANNOTATION_COUNT, 1);
 	    }
 #endif
 	    else if (!strcmp(cmd.s, "Getquota")) {
@@ -1942,8 +1946,10 @@ void cmdloop()
 #ifdef ENABLE_ANNOTATEMORE
 	    else if (!strcmp(cmd.s, "Setannotation")) {
 		if (c != ' ') goto missingargs;
+		c = getastring(proxyd_in, proxyd_out, &arg1);
+		if (c != ' ') goto missingargs;
 
-		cmd_setannotation(tag.s);
+		cmd_setannotation(tag.s, arg1.s);
 	    }
 #endif
 	    else if (!strcmp(cmd.s, "Setquota")) {
@@ -2603,7 +2609,7 @@ void cmd_idle(char *tag)
 }
 
 /* Check for alerts */ 
-struct prot_waitevent *idle_getalerts(struct protstream *s,
+struct prot_waitevent *idle_getalerts(struct protstream *s __attribute__((unused)),
 				      struct prot_waitevent *ev, void *rock)
 {
     int idle_period = *((int *) rock);
@@ -2627,7 +2633,8 @@ struct prot_waitevent *idle_getalerts(struct protstream *s,
 }
 
 /* Run IDLE in the authenticated state (no mailbox) */
-char idle_nomailbox(char *tag, int idle_period, struct buf *arg)
+char idle_nomailbox(char *tag __attribute__((unused)),
+		    int idle_period, struct buf *arg)
 {
     struct prot_waitevent *idle_event;
     int c;
@@ -2732,7 +2739,8 @@ static struct prot_waitevent *idle_poll(struct protstream *s,
 }
 
 /* Simulate IDLE by polling the backend */
-char idle_simulate(char *tag, int idle_period, struct buf *arg)
+char idle_simulate(char *tag __attribute__((unused)),
+		   int idle_period, struct buf *arg)
 {
     struct prot_waitevent *idle_event;
     int c;
@@ -4154,7 +4162,8 @@ void cmd_setacl(char *tag, const char *name,
  * Callback for (get|set)quota, to ensure that all of the
  * submailboxes are on the same server.
  */
-static int quota_cb(char *name, int matchlen, int maycreate, void *rock) 
+static int quota_cb(char *name, int matchlen __attribute__((unused)),
+		    int maycreate __attribute__((unused)), void *rock) 
 {
     int r;
     char *this_server;
@@ -4516,11 +4525,8 @@ cmd_netscape(tag)
  * order to ensure the namespace response is correct on a server with
  * no shared namespace.
  */
-static int namespacedata(name, matchlen, maycreate, rock)
-    char* name;
-    int matchlen;
-    int maycreate;
-    void* rock;
+static int namespacedata(char *name, int matchlen __attribute__((unused)),
+			 int maycreate __attribute__((unused)), void *rock)
 {
     int* sawone = (int*) rock;
 
@@ -4643,9 +4649,9 @@ void printastring(const char *s)
  * Issue a MAILBOX untagged response
  */
 static int mailboxdata(char *name, 
-		       int matchlen, 
-		       int maycreate, 
-		       void* rock)
+		       int matchlen __attribute__((unused)), 
+		       int maycreate __attribute__((unused)), 
+		       void* rock __attribute__((unused)))
 {
     char mboxname[MAX_MAILBOX_PATH+1];
 
@@ -4741,7 +4747,8 @@ int maycreate;
 /*
  * Issue a LIST untagged response
  */
-static int listdata(char *name, int matchlen, int maycreate, void *rock)
+static int listdata(char *name, int matchlen, int maycreate,
+		    void *rock __attribute__((unused)))
 {
     mstringdata("LIST", name, matchlen, maycreate);
     return 0;
@@ -4985,7 +4992,7 @@ void annotate_response(struct entryattlist *l)
  *
  * The command has been parsed up to the entries
  */    
-void cmd_getannotation(char *tag)
+void cmd_getannotation(char *tag, char *mboxpat)
 {
     int c, r = 0;
     struct strlist *entries = NULL, *attribs = NULL;
@@ -4995,7 +5002,6 @@ void cmd_getannotation(char *tag)
 	eatline(proxyd_in, c);
 	return;
     }
-
 
     /* check for CRLF */
     if (c == '\r') c = prot_getc(proxyd_in);
@@ -5007,7 +5013,7 @@ void cmd_getannotation(char *tag)
 	goto freeargs;
     }
 
-    r = annotatemore_fetch(entries, attribs, &proxyd_namespace,
+    r = annotatemore_fetch(mboxpat, entries, attribs, &proxyd_namespace,
 			   proxyd_userisadmin, proxyd_userid,
 			   proxyd_authstate, proxyd_out);
 
@@ -5030,7 +5036,7 @@ void cmd_getannotation(char *tag)
  *
  * The command has been parsed up to the entry-att list
  */    
-void cmd_setannotation(char *tag)
+void cmd_setannotation(char *tag, char *mboxpat __attribute__((unused)))
 {
     int c;
     struct entryattlist *entryatts = NULL;
