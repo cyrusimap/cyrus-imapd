@@ -32,7 +32,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "mystring.h"
 
 typedef struct lexstate_s {
-  string_t *str;
+  mystring_t *str;
   int number;
 
 } lexstate_t;

@@ -54,7 +54,7 @@ int getscript(struct protstream *pout, struct protstream *pin,
 	      char *name, int save);
 
 int getscriptvalue(struct protstream *pout, struct protstream *pin,
-	      char *name, string_t **data);
+	      char *name, mystring_t **data);
 
 void parseerror(char *str);
 

@@ -267,7 +267,7 @@ int getauthline(char **line, int *linelen)
   res=yylex(&state, pin);
   if (res!=STRING)
   {
-    string_t *savestr;
+    mystring_t *savestr;
 
     /* read string then eol */
     if (yylex(&state, pin)!=' ')

@@ -35,24 +35,24 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 int string_allocate(int length,
 		    const char *buf,	/* NULL => no copy */
-		    string_t ** str)
+		    mystring_t ** str)
 {
-  *str=(string_t *) malloc(sizeof(string_t)+length+1);
+  *str=(mystring_t *) malloc(sizeof(mystring_t)+length+1);
 
   (*str)->len=length;
 
   if (buf==NULL) return SIEVE_OK;
 
   /* copy the data into the string object */
-  memcpy(((char *)(*str))+sizeof(string_t), buf, length);
-  ((char *) (*str))[sizeof(string_t)+length]='\0';
+  memcpy(((char *)(*str))+sizeof(mystring_t), buf, length);
+  ((char *) (*str))[sizeof(mystring_t)+length]='\0';
 
   return SIEVE_OK;
 }
 
 
-int string_copy(string_t *oldstr,
-		string_t **newstr)
+int string_copy(mystring_t *oldstr,
+		mystring_t **newstr)
 {
   int result;
 
@@ -65,13 +65,13 @@ int string_copy(string_t *oldstr,
 }
 
 
-void string_free(string_t **str)
+void string_free(mystring_t **str)
 {
   free(*str);
 }
 
 
-int string_compare(string_t *str1, string_t *str2)
+int string_compare(mystring_t *str1, mystring_t *str2)
 {
   char *data1;
   char *data2;
@@ -89,7 +89,7 @@ int string_compare(string_t *str1, string_t *str2)
   return SIEVE_OK;
 }
 
-int string_compare_with(string_t *str1, string_t *str2, string_t *comp)
+int string_compare_with(mystring_t *str1, mystring_t *str2, mystring_t *comp)
 {
   char *data1;
   char *data2;
@@ -126,7 +126,7 @@ int string_compare_with(string_t *str1, string_t *str2, string_t *comp)
   return 1;
 }
 
-int string_comparestr(string_t *str1, char *str2)
+int string_comparestr(mystring_t *str1, char *str2)
 {
   int str2len=strlen(str2);
   char *data1;
@@ -146,7 +146,7 @@ int string_comparestr(string_t *str1, char *str2)
 }
 /*
 eq_result_t
-string_equal_cstr(const string_t * str, const char *cstr)
+string_equal_cstr(const mystring_t * str, const char *cstr)
 {
   int        len;
 

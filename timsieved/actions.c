@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.8 1999/11/03 18:09:43 tmartin Exp $
+ * $Id: actions.c,v 1.9 1999/11/15 20:43:00 leg Exp $
  * 
  */
 /***********************************************************
@@ -39,6 +39,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <dirent.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "prot.h"
 #include "config.h"
@@ -110,7 +111,7 @@ static int validchar(char ch)
     return TIMSIEVE_FAIL;
 }
 
-int verifyscriptname(string_t *name)
+int verifyscriptname(mystring_t *name)
 {
   int lup;
   char *ptr;
@@ -127,7 +128,7 @@ int verifyscriptname(string_t *name)
   return TIMSIEVE_OK;
 }
 
-int getscript(struct protstream *conn, string_t *name)
+int getscript(struct protstream *conn, mystring_t *name)
 {
   FILE *stream;
   struct stat filestats;	/* returned by stat */
@@ -213,7 +214,7 @@ static int countscripts(char *name)
 }
 
 /* save name as a sieve script */
-int putscript(struct protstream *conn, string_t *name, string_t *data)
+int putscript(struct protstream *conn, mystring_t *name, mystring_t *data)
 {
   FILE *stream;
   char *dataptr;
@@ -321,7 +322,7 @@ static int isactive(char *name)
 }
 
 /* delete a sieve script */
-int deletescript(struct protstream *conn, string_t *name)
+int deletescript(struct protstream *conn, mystring_t *name)
 {
   int result;
   char path[1024];
@@ -407,7 +408,7 @@ static int exists(char *str)
 
 /* set the sieve script 'name' to be the active script */
 
-int setactive(struct protstream *conn, string_t *name)
+int setactive(struct protstream *conn, mystring_t *name)
 {
   int result;
   char filename[1024];

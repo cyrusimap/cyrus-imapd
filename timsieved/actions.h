@@ -38,28 +38,28 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
 
-int getscript(struct protstream *conn, string_t *name);
+int getscript(struct protstream *conn, mystring_t *name);
 
 /*
  * Put a scripts in the server with 'name' whose contents should be 'data'
  *
  */
 
-int putscript(struct protstream *conn, string_t *name, string_t *data);
+int putscript(struct protstream *conn, mystring_t *name, mystring_t *data);
 
 /*
  * Delete the script with name 'name'
  *
  */
 
-int deletescript(struct protstream *conn, string_t *name);
+int deletescript(struct protstream *conn, mystring_t *name);
 
 /*
  * ?
  *
  */
 
-int verifyscriptname(string_t *name);
+int verifyscriptname(mystring_t *name);
 
 /*
  * List all the scripts for the user. place a '*' next to the active one
@@ -74,7 +74,7 @@ int listscripts(struct protstream *conn);
  *
  */
 
-int setactive(struct protstream *conn, string_t *name);
+int setactive(struct protstream *conn, mystring_t *name);
 
 /*
  * Initialize
