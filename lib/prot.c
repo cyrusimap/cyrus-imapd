@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.45 1999/12/23 18:58:53 leg Exp $
+ * $Id: prot.c,v 1.46 2000/01/14 21:52:27 leg Exp $
  */
 
 #include <stdio.h>
@@ -388,7 +388,7 @@ struct protstream *s;
 		    *s->log_timeptr = newtime;
 		}
 
-		left = s->cnt+1;
+		left = s->cnt;
 		ptr = s->buf;
 		do {
 		    n = write(s->logfd, ptr, left);
