@@ -1,11 +1,12 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.25 2003/02/03 17:09:08 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.26 2003/02/13 16:12:25 rjs3 Exp $
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
     gssapi=$enableval,
     gssapi=yes)
+ AC_REQUIRE([SASL2_CRYPT_CHK])
 
  if test "$gssapi" != no; then
     if test -d ${gssapi}; then
@@ -210,4 +211,12 @@ AC_DEFUN(CMU_SASL2_CHECKAPOP_REQUIRED, [
 		AC_MSG_ERROR([libsasl2 without working sasl_checkapop.  Cannot continue.]))
 
 	LDFLAGS=$cmu_saved_LDFLAGS
+])
+
+AC_DEFUN(SASL2_CRYPT_CHK,[
+ AC_CHECK_FUNC(crypt, cmu_have_crypt=yes, [
+  AC_CHECK_LIB(crypt, crypt,
+	       LIB_CRYPT="-lcrypt"; cmu_have_crypt=yes,
+	       cmu_have_crypt=no)])
+ AC_SUBST(LIB_CRYPT)
 ])
