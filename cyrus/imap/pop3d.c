@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.112 2001/12/01 04:03:16 ken3 Exp $
+ * $Id: pop3d.c,v 1.113 2002/02/11 17:41:43 ken3 Exp $
  */
 #include <config.h>
 
@@ -391,8 +391,7 @@ int service_main(int argc, char **argv, char **envp)
 /* called if 'service_init()' was called but not 'service_main()' */
 void service_abort(int error)
 {
-    mboxlist_close();
-    mboxlist_done();
+    shut_down(error);
 }
 
 void usage(void)
@@ -411,10 +410,12 @@ void shut_down(int code)
     if (popd_mailbox) {
 	mailbox_close(popd_mailbox);
     }
+    mboxlist_close();
+    mboxlist_done();
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
-    prot_flush(popd_out);
+    if (popd_out) prot_flush(popd_out);
     exit(code);
 }
 

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.337 2002/01/31 19:55:21 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.338 2002/02/11 17:41:42 ken3 Exp $ */
 
 #include <config.h>
 
@@ -573,8 +573,7 @@ int service_main(int argc, char **argv, char **envp)
 /* called if 'service_init()' was called but not 'service_main()' */
 void service_abort(int error)
 {
-    mboxlist_close();
-    mboxlist_done();
+    shut_down(error);
 }
 
 /*
@@ -636,9 +635,13 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
-    prot_flush(imapd_out);
-    /* one less active connection */
-    snmp_increment(ACTIVE_CONNECTIONS, -1);
+    if (imapd_out) {
+	prot_flush(imapd_out);
+
+	/* one less active connection */
+	snmp_increment(ACTIVE_CONNECTIONS, -1);
+    }
+
     exit(code);
 }
 

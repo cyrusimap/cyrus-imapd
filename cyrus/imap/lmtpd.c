@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.83 2002/02/11 16:25:02 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.84 2002/02/11 17:41:43 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -332,12 +332,9 @@ int service_main(int argc, char **argv, char **envp)
 }
 
 /* called if 'service_init()' was called but not 'service_main()' */
-void service_abort(void)
+void service_abort(int error)
 {
-    duplicate_done();
-
-    mboxlist_close();
-    mboxlist_done();
+    shut_down(error);
 }
 
 #ifdef USE_SIEVE
@@ -1307,9 +1304,12 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
-    prot_flush(deliver_out);
+    if (deliver_out) {
+	prot_flush(deliver_out);
 
-    snmp_increment(ACTIVE_CONNECTIONS, -1);
+	/* one less active connection */
+	snmp_increment(ACTIVE_CONNECTIONS, -1);
+    }
 
     exit(code);
 }
