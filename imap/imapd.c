@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.156 1998/08/11 00:21:09 tjs Exp $ */
+/* $Id: imapd.c,v 1.157 1998/09/17 21:38:33 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -332,7 +332,8 @@ cmdloop()
     }
 
     for (;;) {
-	if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+	if (! imapd_userisadmin &&
+	    (fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
 	    shutdown_file(fd);
 	}
 
