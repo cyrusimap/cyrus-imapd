@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.11 2005/02/16 20:38:01 shadow Exp $
+ * $Id: libcyr_cfg.c,v 1.12 2005/03/23 19:44:59 shadow Exp $
  */
 
 #include <config.h>
@@ -48,6 +48,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <syslog.h>
 
 #include "libcyr_cfg.h"
 #include "cyrusdb.h"
@@ -63,15 +64,15 @@ struct cyrusopt_s cyrus_options[] = {
     { CYRUSOPT_ZERO, { NULL }, CYRUS_OPT_NOTOPT },
 
     { CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
-      CFGVAL(int, 1),
+      CFGVAL(long, 1),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_USERNAME_TOLOWER,
-      CFGVAL(int, 0),
+      CFGVAL(long, 0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_SKIPLIST_UNSAFE,
-      CFGVAL(int, 0),
+      CFGVAL(long, 0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_TEMP_PATH,
@@ -79,7 +80,7 @@ struct cyrusopt_s cyrus_options[] = {
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_PTS_CACHE_TIMEOUT,
-      CFGVAL(int, 3 * 60 * 60), /* 3 hours */
+      CFGVAL(long, 3 * 60 * 60), /* 3 hours */
       CYRUS_OPT_INT },
 
     { CYRUSOPT_CONFIG_DIR,
@@ -87,11 +88,11 @@ struct cyrusopt_s cyrus_options[] = {
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_DB_INIT_FLAGS,
-      CFGVAL(int, 0),
+      CFGVAL(long, 0),
       CYRUS_OPT_INT },
    
     { CYRUSOPT_FULLDIRHASH,
-      CFGVAL(int, 0),
+      CFGVAL(long, 0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_PTSCACHE_DB,
@@ -103,11 +104,11 @@ struct cyrusopt_s cyrus_options[] = {
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_VIRTDOMAINS,
-      CFGVAL(int, 0),
+      CFGVAL(long, 0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_BERKELEY_CACHESIZE,
-      CFGVAL(int, 512 * 1024), /* 512KB */
+      CFGVAL(long, 512 * 1024), /* 512KB */
       CYRUS_OPT_INT },
 
     { CYRUSOPT_AUTH_MECH,
@@ -115,11 +116,11 @@ struct cyrusopt_s cyrus_options[] = {
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_BERKELEY_LOCKS_MAX,
-      CFGVAL(int, 50000),
+      CFGVAL(long, 50000),
       CYRUS_OPT_INT },
 
     { CYRUSOPT_BERKELEY_TXNS_MAX,
-      CFGVAL(int, 100),
+      CFGVAL(long, 100),
       CYRUS_OPT_INT },
 
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }
@@ -139,7 +140,11 @@ int libcyrus_config_getint(enum cyrus_opt opt)
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
     assert(cyrus_options[opt].t == CYRUS_OPT_INT);
-
+#if (SIZEOF_LONG != 4)
+    if ((cyrus_options[opt].val.i > 0x7fffffff)||(cyrus_options[opt].val.i < -0x7fffffff)) {
+	syslog(LOG_ERR, "libcyrus_config_getint: option %d: %lld too large for type", cyrus_options[opt].opt, cyrus_options[opt].val.i);
+    }
+#endif    
     return cyrus_options[opt].val.i;
 }
 
@@ -148,7 +153,11 @@ int libcyrus_config_getswitch(enum cyrus_opt opt)
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
     assert(cyrus_options[opt].t == CYRUS_OPT_SWITCH);
-    
+#if (SIZEOF_LONG != 4)
+    if ((cyrus_options[opt].val.b > 0x7fffffff)||(cyrus_options[opt].val.b < -0x7fffffff)) {
+	syslog(LOG_ERR, "libcyrus_config_getswitch: option %d: %lld too large for type", cyrus_options[opt].opt, cyrus_options[opt].val.b);
+    }
+#endif    
     return cyrus_options[opt].val.b;
 }
 
