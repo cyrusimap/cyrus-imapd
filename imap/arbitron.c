@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.31 2003/10/22 18:50:07 rjs3 Exp $ */
+/* $Id: arbitron.c,v 1.32 2003/12/15 20:00:38 ken3 Exp $ */
 
 #include <config.h>
 
@@ -73,8 +73,8 @@
 /* config.c stuff */
 const int config_need_data = 0;
 
-#define DB (CONFIG_DB_SEEN)
-#define SUBDB (CONFIG_DB_SUBS)
+#define DB (config_seenstate_db)
+#define SUBDB (config_subscription_db)
 
 extern int optind;
 extern char *optarg;

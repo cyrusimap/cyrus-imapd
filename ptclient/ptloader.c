@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.33 2003/10/24 18:24:11 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.34 2003/12/15 20:00:43 ken3 Exp $";
 
 #include <config.h>
 
@@ -80,7 +80,7 @@ extern struct auth_state *ptsmodule_make_authstate(const char *identifier,
 const int config_need_data = 0;
 
 /* Globals */
-#define DB (CONFIG_DB_PTS)
+#define DB (config_ptscache_db)
 
 static char ptclient_debug = 0;
 struct db *ptsdb = NULL;
@@ -100,7 +100,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     signal(SIGPIPE, SIG_IGN);
 
     syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.33 2003/10/24 18:24:11 rjs3 Exp $ (%s)",
+	   "starting: $Id: ptloader.c,v 1.34 2003/12/15 20:00:43 ken3 Exp $ (%s)",
 	   ptsmodule_name);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {

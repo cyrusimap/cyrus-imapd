@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.18 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.19 2003/12/15 20:00:38 ken3 Exp $
  */
 
 #include <config.h>
@@ -92,15 +92,15 @@ const int config_need_data = 0;
 
 struct cyrusdb {
     const char *name;
-    struct cyrusdb_backend *env;
+    struct cyrusdb_backend **env;
     int archive;
 } dblist[] = {
-    { FNAME_MBOXLIST,		CONFIG_DB_MBOX,		1 },
-    { FNAME_ANNOTATIONS,	CONFIG_DB_ANNOTATION,	1 },
-    { FNAME_DELIVERDB,		CONFIG_DB_DUPLICATE,	0 },
-    { FNAME_TLSSESSIONS,	CONFIG_DB_TLS,		0 },
-#ifdef CONFIG_DB_PTS
-    { FNAME_PTSDB,              CONFIG_DB_PTS,          0 },
+    { FNAME_MBOXLIST,		&config_mboxlist_db,	1 },
+    { FNAME_ANNOTATIONS,	&config_annotation_db,	1 },
+    { FNAME_DELIVERDB,		&config_duplicate_db,	0 },
+    { FNAME_TLSSESSIONS,	&config_tlscache_db,	0 },
+#ifdef WITH_PTS
+    { FNAME_PTSDB,              &config_ptsache_db,      0 },
 #endif
     { NULL,			NULL,			0 }
 };
@@ -255,7 +255,7 @@ int main(int argc, char *argv[])
 	    break;
 	    
 	case CHECKPOINT:
-	    r2 = (dblist[i].env)->sync();
+	    r2 = (*(dblist[i].env))->sync();
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: sync %s: %s", dirname,
 		       cyrusdb_strerror(r2));
@@ -302,8 +302,8 @@ int main(int argc, char *argv[])
 
 	    /* do the archive */
 	    if (r2 == 0)
-		r2 = (dblist[i].env)->archive((const char**) archive_files,
-					      backup1);
+		r2 = (*(dblist[i].env))->archive((const char**) archive_files,
+						 backup1);
 
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: archive %s: %s", dirname,

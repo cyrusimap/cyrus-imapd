@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.20 2003/10/24 18:24:04 rjs3 Exp $
+ * $Id: annotate.c,v 1.21 2003/12/15 20:00:38 ken3 Exp $
  */
 
 #include <config.h>
@@ -75,7 +75,7 @@
 
 #include "annotate.h"
 
-#define DB CONFIG_DB_ANNOTATION
+#define DB config_annotation_db
 
 extern void printstring(const char *s);
 extern void appendattvalue(struct attvaluelist **l, char *attrib,

@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.4 2003/12/15 16:04:34 ken3 Exp $
+ * $Id: auth_pts.c,v 1.5 2003/12/15 20:00:42 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -212,7 +212,7 @@ int ptload(const char *identifier, struct auth_state **state)
     
     strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBFIL);
-    r = CONFIG_DB_PTS->open(fnamebuf, CYRUSDB_CREATE, &ptdb);
+    r = config_ptscache_db->open(fnamebuf, CYRUSDB_CREATE, &ptdb);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fnamebuf,
 	       cyrusdb_strerror(ret));
@@ -226,8 +226,8 @@ int ptload(const char *identifier, struct auth_state **state)
     }
       
     /* fetch the current record for the user */
-    r = CONFIG_DB_PTS->fetch(ptdb, identifier, id_len,
-                             &data, &dsize, NULL);
+    r = config_ptscache_db->fetch(ptdb, identifier, id_len,
+				  &data, &dsize, NULL);
     if (r && r != CYRUSDB_NOTFOUND) {
         syslog(LOG_ERR, "auth_newstate: error fetching record: %s",
                cyrusdb_strerror(r));
@@ -307,8 +307,8 @@ int ptload(const char *identifier, struct auth_state **state)
     }
 
     /* fetch the current record for the user */
-    r = CONFIG_DB_PTS->fetch(ptdb, identifier, id_len, 
-			     &data, &dsize, NULL);
+    r = config_ptscache_db->fetch(ptdb, identifier, id_len, 
+				  &data, &dsize, NULL);
     if (r != 0 || !data) {
 	syslog(LOG_ERR, "ptload(): error fetching record: %s"
 	       "(did ptloader add the record?)",
@@ -326,7 +326,7 @@ int ptload(const char *identifier, struct auth_state **state)
 
  done:
     /* close and unlock the database */
-    CONFIG_DB_PTS->close(ptdb);
+    config_ptscache_db->close(ptdb);
 
     return (*state) ? 0 : -1;
 }

@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.32 2003/10/22 18:50:04 rjs3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.33 2003/12/15 20:00:37 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -7,6 +7,15 @@
 <body>
 
 <h1>Upgrading From Previous Versions</h1>
+
+<h2>Upgrading from 2.2.2 or earlier</h2>
+<ul>
+<li>The Cyrus database backend configuration is now handled at runtime
+using <tt>imapd.conf</tt> options.  If you are not using the default
+backend for any of the databases, make sure that you specify the
+correct backend(s) in appropriate option(s).</li>
+
+</ul>
 
 <h2>Upgrading from 2.2.1 or earlier</h2>
 <ul>
@@ -412,7 +421,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2003/10/22 18:50:04 $
+last modified: $Date: 2003/12/15 20:00:37 $
 </BODY></HTML>
 
 

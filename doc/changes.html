@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.73 2003/12/11 22:12:26 rjs3 Exp $ -->
+<!-- $Id: changes.html,v 1.74 2003/12/15 20:00:37 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -14,7 +14,10 @@
 enviroment needs to be reset (db_recover) before
 a Berkeley DB version upgrade or you need to remove all berkeley dbs.
 Special care needs to be taken when berkley db is used for mboxlist.</li>
-
+<li>Runtime configuration of the Cyrus databases.  The cyrudb backend
+used for each database can be specified with an <tt>imapd.conf</tt>
+option.  <b>NOTE:</b> You MUST convert the database using
+<tt>cvt_cyrusdb</tt> BEFORE changing the backend in <tt>imapd.conf</tt>.
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.1</h1>
@@ -1884,7 +1887,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/12/11 22:12:26 $ <br />
+last modified: $Date: 2003/12/15 20:00:37 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
