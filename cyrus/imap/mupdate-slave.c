@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.16 2002/02/25 22:42:39 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.17 2002/10/03 18:48:44 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -273,6 +273,57 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
     }
 
     return NULL;
+}
+
+void *mupdate_placebo_kick_start(void *rock __attribute__((unused)))
+{
+    int len, gotdata = 0;
+    fd_set rset, read_set;
+    int highest_fd, kicksock, kickconn = -1;
+    int waiting_for_noop = 0;
+    
+    kicksock = open_kick_socket();
+
+    FD_ZERO(&read_set);
+    FD_SET(kicksock, &read_set);
+
+    /* Now just listen to the rest of the updates */
+    while(1) {
+	rset = read_set;
+
+	gotdata = select(kicksock+1, &rset, NULL, NULL, NULL);
+
+	if(gotdata == -1) {
+	    /* Oops? */
+	    syslog(LOG_ERR, "kick socket select failed");
+	    break;
+	} else if(gotdata != 0) {
+	    if (FD_ISSET(kicksock, &rset)) {
+		/* We got a kickme, force a NOOP */
+		struct sockaddr_un clientaddr;
+		
+		/* Only handle one kick at a time */
+		len = sizeof(clientaddr);
+		kickconn =
+		    accept(kicksock, (struct sockaddr *)&clientaddr, &len);
+		
+		if (kickconn == -1) {
+		    syslog(LOG_WARNING, "accept(): %m");
+		    break;
+		} else {
+		    if (write(kickconn, "ok", 2) < 0) {
+			syslog(LOG_WARNING, "can't write to IPC socket?");
+		    }
+		    close(kickconn);
+		    kickconn = -1;
+		}
+	    }
+	}
+    } /* Loop */
+
+    /* Don't leak the descriptor! */
+    if(kickconn >= 0) close(kickconn);
+    close(kicksock);
 }
 
 
