@@ -245,7 +245,7 @@ void sendsomequeued(acap_conn_t *acapconn, int num)
 void fatal(const char *msg, int err)
 {
     if (debugmode) fprintf(stderr, "dying with %s %d\n",msg,err);
-    syslog(LOG_CRIT, msg);
+    syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
     exit(err);
 }

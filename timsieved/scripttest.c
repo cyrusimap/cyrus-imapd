@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.14 2000/06/22 01:47:12 leg Exp $
+ * $Id: scripttest.c,v 1.15 2000/09/30 15:51:55 leg Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -87,7 +87,7 @@ int mysieve_error(int lineno, char *msg,
 
     snprintf(buf, 80, "line %d: %s\r\n", lineno, msg);
     *errstr = xrealloc(*errstr, strlen(*errstr) + strlen(buf));
-    syslog(LOG_DEBUG, buf);
+    syslog(LOG_DEBUG, "%s", buf);
     strcat(*errstr, buf);
 
     return SIEVE_OK;
