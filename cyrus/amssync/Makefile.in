@@ -71,10 +71,10 @@ amssync: $(OBJS) $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o amssync $(OBJS) $(DEPLIBS) $(LIBS)
 
 afs.ph: ${AFS}/include/afs/afs.h
-	h2ph < $< > $@
+	h2ph < $? > $@
 
 param.ph: ${AFS}/include/afs/param.h
-	h2ph < $< > $@
+	h2ph < $? > $@
 
 clean:
 	rm -f *.o Makefile.bak amssync afs.ph param.ph

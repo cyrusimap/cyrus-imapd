@@ -36,9 +36,16 @@
 #include <string.h>
 #include <sysexits.h>
 
+#include "acte.h"
+#include "imclient.h"
 #include "xmalloc.h"
 #include "amssync.h"
 
+extern struct acte_client krb_acte_client;
+struct acte_client *login_acte_client[] = {
+    &krb_acte_client,
+    NULL
+};
 int cmpmsg(const message *m1, const message *m2)
 {
     return (m1->stamp - m2->stamp);
@@ -48,35 +55,27 @@ void fatal(char *msg, int exitvalue)
 {
     fputs(msg, stderr);
     fflush(stderr);
+    printf("Aborted\n");    
     exit(exitvalue);
-}
-
-/*
- * Free a bboard struct, calling the appropriate hooks if neccesarry
- */
-int freebbd(bboard *bbd)
-{
-    if (bbd->internalfreeproc) {
-	(*bbd->internalfreeproc)(bbd->internaldata);
-    }
-    free(bbd->msgs);
-    free(bbd);
-    return 0;
 }
 
 int debug=0,verbose=0;
 
 int main(int argc, char *argv[])
 {
-    time_t timediff;
-    bboard *amsbbd,*imapbbd;
-    register message *amsmsg, *imapmsg;
-    int amsidx, imapidx,done,arg,swarg;
-    char *imapname, *server, *port;
+    char *server, *port=NULL;
+    char *imapser="cyrus.andrew.cmu.edu";
+    struct imclient * imclient;
+    int ilen,imaplen,arg,swarg;
 
+    char amsname[MAXPATHLEN+1];
+    char intstr[16];
+    
+    char imapname[MAXPATHLEN];
+        
     if (argc < 3) {
 	fprintf(stderr,
-		"Usage: amssync [-d] [-v] amsdir bbname [server [port]]\n");
+		"Usage: amssync [-d] [-v] [server [port]]\n");
 	exit(EX_USAGE);
     }
     swarg=0;
@@ -89,38 +88,70 @@ int main(int argc, char *argv[])
     }
     if (!strcasecmp(argv[arg], "-v")) {
 	verbose=1;
-	setvbuf(stdout,NULL,_IONBF,0);
 	arg++;
 	swarg++;
     }
-    amsbbd=getams(argv[arg++]);
-    imapname=argv[arg++];
-    if (argc - swarg > 3) {
+    server=imapser;
+    if (argc - swarg > 2) {
 	server=argv[arg++];
     }
 
     if (argc - swarg > 4) {
 	port=argv[arg++];
     }
-    else {
-	port=NULL;
-    }
 
-    if (argc - swarg> 3) {
-	setimapser(server,port);
+    if (imclient_connect(&imclient,server,port)) {
+	fatal("couldn't find server\n", EX_NOHOST);
     }
-  
-    imapbbd=getimap(imapname);
+    if (imclient_authenticate(imclient,login_acte_client,NULL,ACTE_PROT_ANY)) {
+	fatal("couldn't auth to server\n", EX_UNAVAILABLE);
+    }
+    while (1) {
+        if (!fgets(amsname,MAXPATHLEN+1,stdin))
+            break;
+        if (!fgets(imapname,MAXPATHLEN,stdin)) /* In order to be able to
+                                                  construct AMS name in the
+                                                  first place, bboard name
+                                                  length is < MAXPATHLEN */ 
+            fatal("Premature EOF on stdin\n",EX_SOFTWARE);
+        imapname[strlen(imapname)-1]=0;
+        amsname[strlen(amsname)-1]=0;
+        
+        bbloop(imclient,amsname,imapname);
+        do_imap_close(imclient);
+        printf("Completed %s\n", imapname);
+        fflush(stdout);        
+
+    }
+    
+    imclient_close(imclient);
+    exit(EX_OK);
+}
+
+        
+        
+
+int bbloop(struct imclient *imclient, char *amsname, char *imapname)
+{
+    time_t timediff;
+    bboard amsbbd,imapbbd;
+    register message *amsmsg, *imapmsg;
+    int amsidx, imapidx,done,arg,swarg;
+    
+    
+    
+    getams(amsname,&amsbbd);    
+    getimap(imclient,imapname,&imapbbd);
     amsidx=imapidx=0;
     done=0;
     /*
-     * lookp over sorted lists. if the timestamps are mismatched, a
+     * loop over sorted lists. if the timestamps are mismatched, a
      * message needs to be moved/removed. If "Tried <something> sentinel
      * <num>" ever appears, it means there's still a bug here.
      */
     while (!done) {
-	amsmsg=&amsbbd->msgs[amsidx];
-	imapmsg=&imapbbd->msgs[imapidx];   
+	amsmsg=&amsbbd.msgs[amsidx];
+	imapmsg=&imapbbd.msgs[imapidx];   
 	timediff=amsmsg->stamp - imapmsg->stamp;
 	if (debug) {
 	    printf("comparing %ld %ld %ld\n", timediff,
@@ -136,7 +167,7 @@ int main(int argc, char *argv[])
 	     * advance to next IMAP message
 	     */
 	    if (imapmsg->stamp != 0x7fffffff) {
-		DeleteIMAP(imapbbd, imapmsg);
+		DeleteIMAP(imclient,imapname, imapmsg);
 		if (debug)
 		    printf("Deleted %s\n", imapmsg->name);
 		imapidx++; 
@@ -148,7 +179,7 @@ int main(int argc, char *argv[])
 	     * AMS message
 	     */
 	    if (amsmsg->stamp != 0x7fffffff) {
-		UploadAMS(imapbbd, amsbbd, amsmsg);
+		UploadAMS(imclient, imapname, amsname, amsmsg);
 		if (debug) {
 		    printf("Uploaded %s\n",amsmsg->name);
 		}
@@ -158,20 +189,20 @@ int main(int argc, char *argv[])
 	    }
 	}
       
-	if (amsidx > amsbbd->inuse   && imapidx > imapbbd->inuse) {
+	if (amsidx > amsbbd.inuse   && imapidx > imapbbd.inuse) {
 	    done=1; /* reached the end of both lists, so terminate */
 	}
-	else if (amsidx > amsbbd->inuse ) {
+	else if (amsidx > amsbbd.inuse ) {
 	    /* Reached the end of the AMS list. remove all of the
 	     * remaining IMAP messages
 	     */
-	    while (imapidx <= imapbbd->inuse) {
-		if (imapbbd->msgs[imapidx].stamp != 0x7fffffff) {
-		    DeleteIMAP(imapbbd, imapbbd->msgs[imapidx]);
+	    while (imapidx <= imapbbd.inuse) {
+		if (imapbbd.msgs[imapidx].stamp != 0x7fffffff) {
+		    DeleteIMAP(imclient, imapname, imapbbd.msgs[imapidx]);
 		    if (debug) {
 			printf("comparing <NULL> <NULL> %ld\n",
-			       imapbbd->msgs[imapidx].stamp);
-			printf("Deleted %s\n",imapbbd->msgs[imapidx].name);
+			       imapbbd.msgs[imapidx].stamp);
+			printf("Deleted %s\n",imapbbd.msgs[imapidx].name);
 		    }
 		    imapidx++;
 		} else {
@@ -180,18 +211,18 @@ int main(int argc, char *argv[])
 	    }
 	    done=1;
 	}
-	else if (imapidx > imapbbd->inuse) {
+	else if (imapidx > imapbbd.inuse) {
 	    /* Reached the end of the IMAP list. Upload the
 	     * remaining AMS messages
 	     */
-	    while (amsidx <= amsbbd->inuse) {
-		if (amsbbd->msgs[amsidx].stamp != 0x7fffffff) {
+	    while (amsidx <= amsbbd.inuse) {
+		if (amsbbd.msgs[amsidx].stamp != 0x7fffffff) {
 		    if (debug) {
 			printf("comparing <NULL> %ld <NULL>\n",
-			       amsbbd->msgs[amsidx].stamp); 
-			printf("Uploaded %s\n",amsbbd->msgs[amsidx].name);
+			       amsbbd.msgs[amsidx].stamp); 
+			printf("Uploaded %s\n",amsbbd.msgs[amsidx].name);
 		    }
-		    UploadAMS(imapbbd, amsbbd, amsbbd->msgs+amsidx);
+		    UploadAMS(imclient, imapname, amsname, amsbbd.msgs+amsidx);
 		    amsidx++;
 		} else {
 		    printf("Tried uploaing sentinel %d\n",amsidx);
@@ -201,7 +232,13 @@ int main(int argc, char *argv[])
 	}
     }
     if (verbose) printf("\n");
-    freebbd(amsbbd);
-    freebbd(imapbbd);
-    exit(EX_OK);
+    free(amsbbd.msgs);
+    free(imapbbd.msgs);
+    amsbbd.alloced=0;
+    amsbbd.inuse=0;
+    imapbbd.alloced=0;
+    imapbbd.inuse=0;
+    
+    return 0;
+    
 }

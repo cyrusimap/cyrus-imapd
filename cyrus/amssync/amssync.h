@@ -33,8 +33,6 @@ typedef struct msg_struct{
 } message;
 
 typedef struct bbd_struct {
-    void (*internalfreeproc)();
-    void *internaldata;
     char name[256];
     int alloced;
     int inuse;
@@ -42,8 +40,7 @@ typedef struct bbd_struct {
 } bboard;
 
 
-bboard *getams(char *);
-char *getfilename(bboard *, message *);
-bboard *getimap(char *);
+bboard *getams(char *, bboard *);
+bboard *getimap(struct imclient *,char *, bboard *);
 int cmpmsg(const message *, const message *);
 
