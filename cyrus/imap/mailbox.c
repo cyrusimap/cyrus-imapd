@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.2 2002/07/11 16:34:12 ken3 Exp $
+ $Id: mailbox.c,v 1.134.4.3 2002/07/12 18:45:01 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2647,14 +2647,16 @@ void mailbox_hash_mbox(char *buf,
     buf += strlen(buf);
 
     if (config_virtdomains && (p = strchr(name, '!'))) {
+	*p = '\0';  /* split domain!user */
 	if (config_hashimapspool) {
 	    c = (char) dir_hash_c(name);
-	    sprintf(buf, "%s%c/%.*s", FNAME_DOMAINDIR, c, p - name, name);
+	    sprintf(buf, "%s%c/%s", FNAME_DOMAINDIR, c, name);
 	}
 	else {
-	    sprintf(buf, "%s%.*s", FNAME_DOMAINDIR, p - name, name);
+	    sprintf(buf, "%s%s", FNAME_DOMAINDIR, name);
 	}
-	name = p+1;
+	*p++ = '!';  /* reassemble domain!user */
+	name = p;
 	buf += strlen(buf);
     }
 
@@ -2684,7 +2686,19 @@ void mailbox_hash_mbox(char *buf,
 void mailbox_hash_quota(char *buf, const char *qr)
 {
     const char *idx;
-    char c;
+    char c, *p;
+
+    sprintf(buf, "%s", config_dir);
+    buf += strlen(buf);
+
+    if (config_virtdomains && (p = strchr(qr, '!'))) {
+	*p = '\0';  /* split domain!qr */
+	c = (char) dir_hash_c(qr);
+	sprintf(buf, "%s%c/%s", FNAME_DOMAINDIR, c, qr);
+	*p++ = '!';  /* reassemble domain!qr */
+	qr = p;
+	buf += strlen(buf);
+    }
 
     idx = strchr(qr, '.'); /* skip past user. */
     if (idx == NULL) {
@@ -2694,5 +2708,5 @@ void mailbox_hash_quota(char *buf, const char *qr)
     }
     c = (char) dir_hash_c(idx);
 
-    sprintf(buf, "%s%s%c/%s", config_dir, FNAME_QUOTADIR, c, qr);
+    sprintf(buf, "%s%c/%s", FNAME_QUOTADIR, c, qr);
 }
