@@ -1,6 +1,6 @@
 /* mkchartable.c -- Generate character set mapping table
  *
- * $Id: mkchartable.c,v 1.19 2000/05/23 20:56:18 robeson Exp $
+ * $Id: mkchartable.c,v 1.19.16.1 2002/10/24 19:49:05 ken3 Exp $
  *
  * Copyright (c) 1996-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -467,7 +467,9 @@ mungemappings(void)
 		printf(" END, /* Translation for %04x (offset %04x) */\n",
 		       map[n].code, last_translation);
 		map[n].trans_offset = last_translation;
-		last_translation += n_t;
+
+                /* last_translation points to the offset the next translation will start from */
+		last_translation += n_t + 1;
 	    }
 	}
     }
