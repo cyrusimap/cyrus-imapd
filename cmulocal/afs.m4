@@ -52,7 +52,7 @@ AC_ARG_WITH(AFS,
 	fi
 
 	AC_MSG_CHECKING(whether to include AFS)
-	if test "X$ac_cv_afs_where" = "Xno"; then
+	if test "X$ac_cv_afs_where" = "Xno" -o "X$ac_cv_afs_where" = "X"; then
 	  ac_cv_found_afs=no
 	  AC_MSG_RESULT(no)
 	else
