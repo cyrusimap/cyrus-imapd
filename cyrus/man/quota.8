@@ -36,7 +36,9 @@ If the
 .I \-f
 option is given, 
 .I quota
-first fixes any inconsistencies in the quota subsystem.
+first fixes any inconsistencies in the quota subsystem, such as
+mailboxes with the wrong quota root or quota roots with the wrong
+quota usage reported.
 If any optional
 .I mailbox-prefix
 arguments are given, the quota listing (and inconsistency fixing) is
