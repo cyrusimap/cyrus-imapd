@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.11 2002/01/31 17:46:48 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.12 2002/02/01 19:41:38 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -260,7 +260,6 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 	connection_count = -1;
 	syslog(LOG_ERR, "successful mupdate connection to %s", server);
 
-	/* xxx pass in the kick socket */
 	mupdate_listen(h, retry_delay);
 
     retry:
