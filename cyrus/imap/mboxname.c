@@ -110,7 +110,7 @@ char *name;
  * Apply site policy restrictions on mailbox names.
  * Restrictions are hardwired for now.
  */
-#define GOODCHARS "+,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"
+#define GOODCHARS " +,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"
 int
 mboxname_policycheck(name)
 char *name;
