@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.69 1998/11/11 18:43:11 tjs Exp $
+# $Id: Makefile.in,v 1.70 1999/02/16 02:02:05 wcw Exp $
 # 
 # @configure_input@
 #
@@ -62,7 +62,7 @@ MAKEDEPEND = @MAKEDEPEND@
 COMPILE_ET=@COMPILE_ET@
 
 PURIFY=/usr/local/bin/purify
-PUREOPT=-windows=no -logfile=/tmp/pure/%v.%p.log
+PUREOPT=-windows=no -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir
 QUANTIFY=/usr/local/bin/quantify
 QUANTOPT=-windows=no -filename-prefix=/tmp/quant/%v.%p -write-summary-file= -logfile=/tmp/quant/%v.%p.log
 
