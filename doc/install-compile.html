@@ -1,4 +1,4 @@
-<!-- $Id: install-compile.html,v 1.3 2000/05/28 19:48:59 leg Exp $ -->
+<!-- $Id: install-compile.html,v 1.4 2000/12/14 19:26:47 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Compiling the IMAP Server
@@ -113,6 +113,22 @@ the zephyr installation with "<tt>--with-zephyr=PATH</tt>".
 </dl>
 By default, uses "<TT>zephyr</TT>" if the Zephyr libraries are available, 
 otherwise "<TT>no</TT>".<P>
+
+<dt><tt>--with-idle=METHOD</tt>
+<dd>Specifies the IMAP IDLE method to use.
+Currently implemented IDLE methods are:
+<dl compact> 
+<DT><tt>idled</tt>
+<DD>Use the IDLE daemon.  The IDLE daemon listens on a UNIX socket for
+messages from lmtpd/imapd/pop3d that a mailbox has been updated.  The
+daemon then signals those (if any) imapd that are idling on the
+mailbox to check for the changes.
+<DT><tt>poll</tt>
+<DD>Periodically poll the mailbox for changes.
+<DT><tt>no</tt>
+<DD>Disable IMAP IDLE.
+</dl>
+By default, uses "<TT>idled</TT>".<P>
 
 <dt><tt>--with-sasldir=PATH</tt> 
 <dd>Specifies the path to the directories containing the library
@@ -246,5 +262,5 @@ If you want, you can override the "<tt>make</tt>" variables
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2000/05/28 19:48:59 $
+last modified: $Date: 2000/12/14 19:26:47 $
 </BODY></HTML>

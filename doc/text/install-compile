@@ -96,6 +96,20 @@ Options to configure
             By default, uses "zephyr" if the Zephyr libraries are
             available, otherwise "no".
 
+    --with-idle=METHOD 
+            Specifies the IMAP IDLE method to use. Currently implemented
+            IDLE methods are: 
+
+            idled   Use the IDLE daemon. The IDLE daemon listens on a UNIX
+                    socket for messages from lmtpd/imapd/pop3d that a
+                    mailbox has been updated. The daemon then signals those
+                    (if any) imapd that are idling on the mailbox to check
+                    for the changes. 
+            poll    Periodically poll the mailbox for changes. 
+            no      Disable IMAP IDLE. 
+
+            By default, uses "idled".
+
     --with-sasldir=PATH 
             Specifies the path to the directories containing the library
             (.../lib) and include (.../include) files for libsasl. 

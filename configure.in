@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.186 2000/11/05 22:11:27 leg Exp $
+dnl $Id: configure.in,v 1.187 2000/12/14 19:26:47 ken3 Exp $
 dnl
 
 
@@ -568,6 +568,16 @@ if test "$with_zephyr" = "no"; then
 	AC_MSG_ERROR(Unable to find Zephyr libraries)
      fi
 fi     
+
+
+
+dnl
+dnl Select a method for IMAP IDLE
+dnl
+AC_ARG_WITH(idle,[  --with-idle=METHOD      use METHOD for IMAP IDLE
+                          METHOD is [idled], poll or no],
+	WITH_IDLE="${withval}",WITH_IDLE="idled")
+AC_SUBST(WITH_IDLE)
 
 
 

@@ -1,5 +1,4 @@
-/* imapidle.c -- mailbox update notifier for IMAP IDLE
- *
+/* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,17 +38,30 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapidle.c,v 1.2 2000/11/30 16:26:30 ken3 Exp $ */
+/* $Id: idled.h,v 1.1 2000/12/14 19:26:48 ken3 Exp $ */
 
-#include "imapidle.h"
-#include "service.h"
+#ifndef IDLED_H
+#define IDLED_H
 
-void imap_idlenotify(struct mailbox *mailbox)
-{
-    imap_idledata_t idledata;
+#include "mailbox.h"
 
-    strcpy(idledata.mboxname, mailbox->name);
-    idledata.namelen = strlen(idledata.mboxname)+1;
-    notify_master(STATUS_FD, SERVICE_IMAP_IDLENOTIFY, &idledata,
-		  IDLEDATA_BASE_SIZE+idledata.namelen);
-}
+/* socket to communicate with the acappusher */
+#define FNAME_IDLE_SOCK "/socket/idle"
+
+typedef struct idle_data_s {
+    unsigned long msg;
+    unsigned long pid;
+
+    /* 1 for null. leave at end of structure for alignment */
+    char mboxname[MAX_MAILBOX_NAME+1];
+} idle_data_t;
+
+#define IDLEDATA_BASE_SIZE	8
+
+typedef enum {
+    IDLE_INIT,
+    IDLE_DONE,
+    IDLE_NOTIFY
+} idle_msg_t;
+
+#endif

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.281 2000/11/30 15:55:42 ken3 Exp $ */
+/* $Id: imapd.c,v 1.282 2000/12/14 19:26:48 ken3 Exp $ */
 
 #include <config.h>
 
@@ -82,8 +82,7 @@
 #include "append.h"
 #include "mboxlist.h"
 #include "acapmbox.h"
-#include "service.h"
-#include "imapidle.h"
+#include "idle.h"
 
 #include "pushstats.h"		/* SNMP interface */
 
@@ -110,6 +109,7 @@ int imapd_haveaddr = 0;
 char imapd_clienthost[250] = "[local]";
 struct protstream *imapd_out, *imapd_in;
 time_t imapd_logtime;
+static char shutdownfilename[1024];
 
 static struct mailbox mboxstruct;
 
@@ -346,7 +346,6 @@ int service_init(int argc, char **argv, char **envp)
     signals_set_shutdown(&shut_down);
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
-    signal(SIGUSR1, SIG_IGN);
 
     /* set the SASL allocation functions */
     sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
@@ -372,8 +371,8 @@ int service_init(int argc, char **argv, char **envp)
     mboxlist_open(NULL);
     mailbox_initialize();
 
-    /* set the mailbox update notifier for IMAP IDLE */
-    mailbox_set_updatenotifier(imap_idlenotify);
+    /* setup for sending IMAP IDLE notifications */
+    idle_enabled();
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
@@ -482,7 +481,7 @@ int service_main(int argc, char **argv, char **envp)
 }
 
 /* called if 'service_init()' was called but not 'service_main()' */
-void service_abort(void)
+void service_abort(int error)
 {
     mboxlist_close();
     mboxlist_done();
@@ -576,7 +575,6 @@ void
 cmdloop()
 {
     int fd;
-    char shutdownfilename[1024];
     char motdfilename[1024];
     char hostname[MAXHOSTNAMELEN+1];
     int c;
@@ -882,6 +880,11 @@ cmdloop()
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Idle")) {
+		if (!idle_enabled()) {
+		    /* we don't support idle */
+		    goto badcmd;
+		}
+
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_idle(tag.s);
@@ -1597,43 +1600,38 @@ char *cmd;
 /*
  * Perform an IDLE command
  */
-#define IDLE_POLL_INTERVAL 60
-
-void idle_poll(int sig)
+void idle_update(idle_flags_t flags)
 {
-    if (imapd_mailbox) {
-	index_check(imapd_mailbox, 0, 1);
-    }
-    prot_flush(imapd_out);
+    int fd;
 
-    if (sig == SIGALRM) alarm(IDLE_POLL_INTERVAL);
+    if ((flags & IDLE_MAILBOX) && imapd_mailbox)
+	index_check(imapd_mailbox, 0, 1);
+
+    if (flags & IDLE_ALERT) {
+      if (! imapd_userisadmin &&
+	  (fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+	shutdown_file(fd);
+      }
+    }
+
+    prot_flush(imapd_out);
 }
 
 void cmd_idle(char *tag)
 {
     int c;
     static struct buf arg;
-    imap_idledata_t idledata;
+
+    /* Setup for doing mailbox updates */
+    if (!idle_init(imapd_mailbox, idle_update)) {
+	prot_printf(imapd_out, 
+		    "%s NO cannot start idling\r\n", tag);
+	return;
+    }
 
     /* Tell client we are idling and waiting for end of command */
     prot_printf(imapd_out, "+ go ahead\r\n");
     prot_flush(imapd_out);
-
-    /* Tell master that we're idling */
-    idledata.pid = getpid();
-    /* if we don't have a mailbox selected, use "." as the name */
-    strcpy(idledata.mboxname, imapd_mailbox ? imapd_mailbox->name : ".");
-    idledata.namelen = strlen(idledata.mboxname)+1;
-    if (notify_master(STATUS_FD, SERVICE_IMAP_IDLE, &idledata,
-		      IDLEDATA_BASE_SIZE+idledata.namelen)) {
-	/* if we can talk to master, setup the signal handler for SIGUSR1 */
-	signal(SIGUSR1, idle_poll);
-    }
-    else {
-	/* otherwise, we'll use SIGALRM */
-	signal(SIGALRM, idle_poll);
-	alarm(IDLE_POLL_INTERVAL);
-    }
 
     /* Get continuation data */
     c = getword(&arg);
@@ -1651,12 +1649,8 @@ void cmd_idle(char *tag)
 	}
     }
 
-    /* Tell master we're done idling and remove the signal handler */
-    if (notify_master(STATUS_FD, SERVICE_IMAP_IDLEDONE, &idledata,
-		      IDLEDATA_BASE_SIZE+idledata.namelen))
-	signal(SIGUSR1, SIG_IGN);
-    else
-	signal(SIGALRM, SIG_IGN);
+    /* Do any necessary cleanup */
+    idle_done(imapd_mailbox);
 
     return;
 }
@@ -1899,6 +1893,10 @@ void cmd_capability(char *tag)
 
     /* add the thread algorithms */
     list_thread_algorithms(imapd_out);
+
+    if (idle_enabled()) {
+	prot_printf(imapd_out, " IDLE");
+    }
 
     if (starttls_enabled()) {
 	prot_printf(imapd_out, " STARTTLS");
