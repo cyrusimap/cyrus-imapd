@@ -43,20 +43,22 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifdef HAVE_SSL
-
 #ifndef TLS_H
 #define TLS_H
 
+/* is tls enabled? */
+int tls_enabled(const char *ident);
+
+#ifdef HAVE_SSL
+
+#include <openssl/ssl.h>
+
 /* init tls */
-int tls_init_serverengine(int verifydepth, /* depth to verify */
+int tls_init_serverengine(const char *ident,
+			  int verifydepth, /* depth to verify */
 			  int askcert,     /* 1 = client auth */
 			  int requirecert, /* 1 = require client auth */
-			  int tlsonly,
-			  char *var_imapd_tls_CAfile,
-			  char *var_imapd_tls_CApath,
-			  char *var_imapd_tls_cert_file,
-			  char *var_imapd_tls_key_file);
+			  int tlsonly);
 
 /* start tls negotiation */
 int tls_start_servertls(int readfd, int writefd, 
@@ -71,6 +73,6 @@ int tls_shutdown_serverengine(void);
 /* remove expired sessions from the external cache */
 int tls_prune_sessions(void);
 
-#endif /* TLS_H */
-
 #endif /* HAVE_SSL */
+
+#endif /* TLS_H */

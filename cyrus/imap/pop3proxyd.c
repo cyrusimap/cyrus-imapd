@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.24 2001/08/18 00:46:47 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.25 2001/08/22 01:34:27 ken3 Exp $
  */
 #include <config.h>
 
@@ -130,7 +130,6 @@ static void cmd_capa();
 static void cmd_pass();
 static void cmd_user();
 static void cmd_starttls(int pop3s);
-static int starttls_enabled(void);
 static void cmdloop(void);
 static void kpop(void);
 static void usage(void);
@@ -215,7 +214,7 @@ int service_main(int argc, char **argv, char **envp)
 
 	case 's': /* pop3s (do starttls right away) */
 	    pop3s = 1;
-	    if (!starttls_enabled()) {
+	    if (!tls_enabled("pop3")) {
 		syslog(LOG_ERR, "pop3s: required OpenSSL options not present");
 		fatal("pop3s: required OpenSSL options not present",
 		      EC_CONFIG);
@@ -512,7 +511,7 @@ static void cmdloop(void)
 	else if (!strcmp(inputbuf, "auth")) {
 	    cmd_auth(arg);
 	}
-	else if (!strcmp(inputbuf, "stls") && starttls_enabled()) {
+	else if (!strcmp(inputbuf, "stls") && tls_enabled("pop3")) {
 	    if (arg) {
 		prot_printf(popd_out,
 			    "-ERR STLS doesn't take any arguements\r\n");
@@ -527,15 +526,6 @@ static void cmdloop(void)
 }
 
 #ifdef HAVE_SSL
-static int starttls_enabled(void)
-{
-    if (!config_getstring("tls_pop3_cert_file",
-			 config_getstring("tls_cert_file", NULL))) return 0;
-    if (!config_getstring("tls_pop3_key_file",
-			  config_getstring("tls_key_file", NULL))) return 0;
-    return 1;
-}
-
 static void cmd_starttls(int pop3s)
 {
     char *tls_cert, *tls_key;
@@ -559,21 +549,15 @@ static void cmd_starttls(int pop3s)
     tls_key = (char *)config_getstring("tls_pop3_key_file",
 				       config_getstring("tls_key_file", ""));
 
-    result=tls_init_serverengine(5,        /* depth to verify */
+    result=tls_init_serverengine("pop3",
+				 5,        /* depth to verify */
 				 !pop3s,   /* can client auth? */
 				 0,        /* require client to auth? */
-				 !pop3s,   /* TLSv1 only? */
-				 (char *)config_getstring("tls_ca_file", ""),
-				 (char *)config_getstring("tls_ca_path", ""),
-				 tls_cert, tls_key);
+				 !pop3s);  /* TLSv1 only? */
 
     if (result == -1) {
 
-	syslog(LOG_ERR, "[pop3d] error initializing TLS: "
-	       "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
-	       (char *) config_getstring("tls_ca_file", ""),
-	       (char *) config_getstring("tls_ca_path", ""),
-	       tls_cert, tls_key);
+	syslog(LOG_ERR, "[pop3d] error initializing TLS");
 
 	if (pop3s == 0)
 	    prot_printf(popd_out, "-ERR %s\r\n", "Error initializing TLS");
@@ -622,11 +606,6 @@ static void cmd_starttls(int pop3s)
     popd_starttls_done = 1;
 }
 #else
-static int starttls_enabled(void)
-{
-    return 0;
-}
-
 static void cmd_starttls(int pop3s)
 {
     fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
@@ -844,7 +823,7 @@ cmd_capa()
 	free(mechlist);
     }
 
-    if (starttls_enabled()) {
+    if (tls_enabled("pop3")) {
 	prot_printf(popd_out, "STLS\r\n");
     }
     if (expire < 0) {
