@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.26.4.2 2001/08/17 21:04:17 leg Exp $
+ * $Id: lmtpengine.c,v 1.26.4.3 2001/08/21 17:49:50 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -849,9 +849,9 @@ static int savemsg(struct clientdata *cd,
 
     /* add a received header */
     t = time(NULL);
-    rfc822date_gen(datestr, t);
+    rfc822date_gen(datestr, sizeof(datestr), t);
     if (m->authuser) {
-	fprintf(f, "Received: from %s (%s) (user=%s)\r\n"
+	fprintf(f, "Received: from %s (%s) (author=%s)\r\n"
 		"\tby %s (Cyrus %s); %s\r\n",
 		cd->lhlo_param, cd->clienthost, m->authuser,
 		config_servername, CYRUS_VERSION, datestr);
