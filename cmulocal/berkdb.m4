@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.10 2003/03/24 17:49:59 rjs3 Exp $
+dnl $Id: berkdb.m4,v 1.11 2003/04/15 22:25:41 rjs3 Exp $
 
 AC_DEFUN(CMU_DB_INC_WHERE1, [
 saved_CPPFLAGS=$CPPFLAGS
@@ -211,7 +211,7 @@ AC_DEFUN(CYRUS_BERKELEY_DB_CHK_LIB,
 	    BDB_LIBADD=""
 	fi
 
-        for dbname in db-4.1 db4.1 db-4.0 db4.0 db-4 db4 db-3.3 db3.3 db-3.2 db3.2 db-3.1 db3.1 db-3 db3 db
+        for dbname in db-4.1 db4.1 db41 db-4.0 db4.0 db-4 db40 db4 db-3.3 db3.3 db33 db-3.2 db3.2 db32 db-3.1 db3.1 db31 db-3 db30 db3 db
           do
             AC_CHECK_LIB($dbname, db_create, BDB_LIBADD="$BDB_LIBADD -l$dbname";
               dblib="berkeley"; break, dblib="no")
