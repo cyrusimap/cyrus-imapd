@@ -388,8 +388,10 @@ char *userid;
 	if (!seenbegin && !copymsg[msg].seen) continue;
 	if (seenbegin && copymsg[msg].seen) continue;
 
-	if (!seenbegin && (mailbox->myrights & ACL_SEEN)) {
-	    seenbegin = msg+1;
+	if (!seenbegin) {
+	    if (mailbox->myrights & ACL_SEEN) {
+		seenbegin = msg+1;
+	    }
 	}
 	else {
 	    append_addseen(mailbox, userid, message_index[seenbegin-1].uid,
