@@ -103,6 +103,7 @@ char **failaction;
  * appropriate error code.
  */
 int lock_blocking(fd)
+int fd;
 {
     int r;
     struct flock fl;
@@ -125,6 +126,7 @@ int lock_blocking(fd)
  * appropriate error code.
  */
 int lock_nonblocking(fd)
+int fd;
 {
     int r;
     struct flock fl;
@@ -145,6 +147,7 @@ int lock_nonblocking(fd)
  * Release any lock on 'fd'.  Always returns success.
  */
 lock_unlock(fd)
+int fd;
 { 
     struct flock fl;
 

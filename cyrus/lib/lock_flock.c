@@ -89,6 +89,7 @@ char **failaction;
  * appropriate error code.
  */
 int lock_blocking(fd)
+int fd;
 {
     int r;
 
@@ -106,6 +107,7 @@ int lock_blocking(fd)
  * appropriate error code.
  */
 int lock_nonblocking(fd)
+int fd;
 {
     int r;
 
@@ -121,6 +123,7 @@ int lock_nonblocking(fd)
  * Release any lock on 'fd'.  Always returns success.
  */
 lock_unlock(fd)
+int fd;
 {
     flock(fd, LOCK_UN);
     return 0;
