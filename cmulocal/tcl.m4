@@ -3,7 +3,6 @@ dnl USE AT YOUR OWN PERIL!
 dnl I MEAN IT!
 dnl
 dnl tcl.m4: an autoconf Tcl locator
-dnl $Id: tcl.m4,v 1.1 1998/10/07 19:09:34 tjs Exp $
 dnl
 dnl This is rob's Tcl macro, fixed by tjs.  It may need occasional tweaking,
 dnl but until the next impediment to compilation, it's fill-in-the-blank,

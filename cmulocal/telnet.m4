@@ -1,6 +1,5 @@
 dnl telnet.m4--telnet special macros
 dnl Derrick Brashear
-dnl $Id: telnet.m4,v 1.1 1998/10/26 19:09:56 shadow Exp $
 
 AC_DEFUN(CMU_TELNET_DES_STRING_TO_KEY_PROTO, [
 AC_MSG_CHECKING(for des_string_to_key prototype)

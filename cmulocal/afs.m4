@@ -3,7 +3,6 @@ dnl Chaskiel Grundman
 dnl based on kerberos_v4.m4
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: afs.m4,v 1.3 1998/10/26 22:25:40 cg2v Exp $
 
 AC_DEFUN(CMU_AFS_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
