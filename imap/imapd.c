@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.256 2000/06/14 02:41:33 wcw Exp $ */
+/* $Id: imapd.c,v 1.257 2000/06/16 01:37:27 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1667,7 +1667,7 @@ void cmd_id(char *tag)
 	sprintf(logbuf, "client id:");
 	for (fptr = fields, vptr = values; fptr;
 	     fptr = fptr->next, vptr = vptr->next) {
-	    /* should we check for an format literals here ??? */
+	    /* should we check for and format literals here ??? */
 	    sprintf(logbuf+strlen(logbuf), " \"%s\" ", fptr->s);
 	    if (!strcmp(vptr->s, "NIL"))
 		sprintf(logbuf+strlen(logbuf), "NIL");
@@ -1691,7 +1691,7 @@ void cmd_id(char *tag)
 		" \"vendor\" \"Project Cyrus <http://asg.web.cmu.edu/cyrus>\"",
 		CYRUS_VERSION);
     /* add the os info */
-    if (!uname(&os))
+    if (uname(&os) != -1)
 	prot_printf(imapd_out,
 		    " \"os\" \"%s\""
 		    " \"os-version\" \"%s\"",
