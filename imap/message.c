@@ -673,7 +673,7 @@ struct param **paramp;
 
 /*
  * Skip over RFC-822 whitespace and comments
- *
+ */
 static message_parse_rfc822space(s)
 char **s;
 {
