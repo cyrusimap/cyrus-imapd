@@ -1,0 +1,73 @@
+Return-Path: <ken@oceana.com>
+Received: from mail3.andrew.cmu.edu ([unix socket])
+	by mail3.andrew.cmu.edu (Cyrus v2.1.1-053) with LMTP; Sun, 03 Feb 2002 10:37:49 -0500
+X-Sieve: CMU Sieve 2.0
+Received: from mx1.andrew.cmu.edu (MX1.ANDREW.CMU.EDU [128.2.10.111])
+	by mail3.andrew.cmu.edu (8.12.2.Beta3/8.12.2.Beta3) with ESMTP id g13FbmZ5001152
+	for <leg+@mail3.andrew.cmu.edu>; Sun, 3 Feb 2002 10:37:48 -0500 (EST)
+Received: from eagle.oceana.com (eagle.oceana.com [208.17.123.12])
+	by mx1.andrew.cmu.edu (8.12.2.Beta3/8.12.2.Beta3) with ESMTP id g13FblJw022603
+	for <leg+@andrew.cmu.edu>; Sun, 3 Feb 2002 10:37:47 -0500
+Received: from oceana.com (ppp4.oceana.com [192.168.10.246])
+	by eagle.oceana.com (8.12.2/8.12.2) with ESMTP id g13FbkNT024933
+	for <leg+@andrew.cmu.edu>; Sun, 3 Feb 2002 10:37:47 -0500
+Message-ID: <3C5D5966.C5318D4C@oceana.com>
+Date: Sun, 03 Feb 2002 10:38:14 -0500
+From: Ken Murchison <ken@oceana.com>
+Organization: Oceana Matrix Ltd.
+X-Mailer: Mozilla 4.79 [en] (Win98; U)
+X-Accept-Language: en,pdf
+MIME-Version: 1.0
+To: Lawrence Greenfield <leg+@andrew.cmu.edu>
+Subject: Re: prot events
+References: <200202030504.g1354Zm0002888@smtp5.andrew.cmu.edu>
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+
+
+Lawrence Greenfield wrote:
+> 
+> Can you give me some details on how the event API in the prot layer
+> works?  I'm a little unclear about the memory management, what should
+> be returned from the event callback, 
+
+Either the event pointer (if the event is still active), or NULL (if the
+event has been removed by the callback).
+
+> and how to reschedule an event.
+
+Simply set the 'mark' time in the event to the wall time you want it to
+run again.
+
+> (I'd like to make an event called every X seconds of idle time; I know
+> the API can't do exactly that but I suspect I can fake it well enough.)
+
+Look at backend_timeout() in proxyd.c and/or drac_ping() in
+contrib/drac_auth.patch, they do exactly this.
+
+The API is pretty simple:
+
+- use prot_addwaitevent() to add an event (linked list) callback onto a
+stream.  takes the stream, the 'mark' time at which to run the event
+(NOT an interval, but the future clock value), the function pointer, and
+a rock to pass to the callback as args, and returns a pointer to the
+event (to use for future removal).
+
+- use prot_removewaitevent() to remove an event.  takes the stream and a
+pointer to the event as args.
+
+- the event callback gets the stream, a pointer to the event and the
+rock as args.  To reschedule an event, simply set the 'mark' time and
+return the event pointer.  If the callback removes the event, then
+return NULL.
+
+
+If you see and flaws in this API, feel free to go ahead and change it.
+
+Ken
+-- 
+Kenneth Murchison     Oceana Matrix Ltd.
+Software Engineer     21 Princeton Place
+716-662-8973 x26      Orchard Park, NY 14127
+--PGP Public Key--    http://www.oceana.com/~ken/ksm.pgp
