@@ -867,7 +867,9 @@ sub _sc_create {
   if (!@nargv || @nargv > 2) {
     die "usage: createmailbox [--partition partition] mailbox [partition]\n";
   }
-  $part = pop(@nargv) if @nargv == 2 && !defined($part);
+  if (defined($part)) {
+      push(@nargv, $part)
+  }
   if (!$cyrref || !$$cyrref) {
     die "createmailbox: no connection to server\n";
   }
