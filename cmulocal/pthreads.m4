@@ -2,10 +2,6 @@ dnl pthreads.m4--pthreads setup macro
 dnl Rob Earhart
 
 AC_DEFUN(CMU_PTHREADS, [
-
-
-  AC_MSG_CHECKING([for pthreads])
-
    AC_REQUIRE([AC_CANONICAL_HOST])
    cmu_save_LIBS="$LIBS"
    AC_CHECK_LIB(pthread, pthread_create,LIB_PTHREAD="-lpthread",
@@ -23,6 +19,4 @@ AC_DEFUN(CMU_PTHREADS, [
  	AC_DEFINE(_SGI_REENTRANT_FUNCTIONS)
  	;;
    esac
-
-  AC_MSG_RESULT([found])
 ])
