@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.6 2002/08/01 22:09:45 rjs3 Exp $
+ * $Id: prot.c,v 1.72.4.7 2002/08/02 17:18:24 rjs3 Exp $
  */
 
 #include <config.h>
@@ -766,18 +766,7 @@ int prot_flush_internal(struct protstream *s, int force)
 	    
 	    if(s->big_buffer == PROT_NO_FD) {
 		/* open new bigbuffer */
-		const char *path = "/tmp"; /* XXX don't always use /tmp */
-		const char *filename = "cyrus_protstream_XXXXXX";
-		char path_buf[2048];
-		int fd;
-		
-		if(snprintf(path_buf, sizeof(path_buf), "%s/%s",
-			    path, filename) >= sizeof(path_buf)){
-		    fatal("temporary file pathname is too long in prot_flush",
-			  EC_TEMPFAIL);
-		}
-
-		fd = create_tempfile(path_buf);
+		int fd = create_tempfile();
 		if(fd == -1) {
 		    s->error = xstrdup(strerror(errno));
 		    ret = EOF;

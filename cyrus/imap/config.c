@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.8 2002/07/30 19:46:50 ken3 Exp $ */
+/* $Id: config.c,v 1.55.4.9 2002/08/02 17:18:20 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -57,16 +57,17 @@
 # include <unistd.h>
 #endif
 
+#include "exitcodes.h"
+#include "hash.h"
+#include "imap_err.h"
 #include "imapconf.h"
 #include "imapopts.h"
-#include "exitcodes.h"
-#include "xmalloc.h"
+#include "libcyr_cfg.h"
 #include "mboxlist.h"
-#include "util.h"
-#include "imap_err.h"
 #include "mupdate_err.h"
-#include "hash.h"
 #include "prot.h" /* for PROT_BUFSIZE */
+#include "util.h"
+#include "xmalloc.h"
 
 extern int errno;
 
@@ -152,6 +153,14 @@ int config_init(const char *alt_config, const char *ident)
     }
 
     config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
+
+    /* configure libcyrus as needed */
+    libcyrus_config_setswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
+			      config_getswitch(IMAPOPT_UNIX_GROUP_ENABLE));
+    libcyrus_config_setswitch(CYRUSOPT_SKIPLIST_UNSAFE,
+			      config_getswitch(IMAPOPT_SKIPLIST_UNSAFE));
+    libcyrus_config_setstring(CYRUSOPT_TEMP_PATH,
+			      config_getstring(IMAPOPT_TEMP_PATH));
 
     return 0;
 }

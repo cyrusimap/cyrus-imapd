@@ -1,5 +1,5 @@
 /* util.h -- general utility functions
- * $Id: util.h,v 1.13.6.1 2002/07/31 17:31:29 rjs3 Exp $
+ * $Id: util.h,v 1.13.6.2 2002/08/02 17:18:24 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -100,13 +100,9 @@ enum {
  */
 extern int dir_hash_c(const char *name);
 
-/* Given a mkstemp(3) pattern for a filename,
- * create the file and return the file descriptor.
- *
- * This routine also unlinks the file so it won't appear in the
- * directory listing (but you won't have to worry about cleaning up
- * after it)
+/* 
+ * create an [unlinked] temporary file and return the file descriptor.
  */
-extern int create_tempfile(char *pattern);
+extern int create_tempfile();
 
 #endif /* INCLUDED_UTIL_H */
