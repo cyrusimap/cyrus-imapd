@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.23 1998/06/04 23:07:20 tjs Exp $
+# $Id: SMakefile,v 1.24 1998/06/07 23:39:20 tjs Exp $
 #
 
 MAKE=gmake
@@ -44,6 +44,6 @@ case `uname` in
 esac
 
 
-LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-user=cyrus --with-cyrus-group=staff  --with-com-err=/usr/local"
+LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-group=staff"
 
 export CFLAGS CC VER LNCOMMAND LOCALDEFS
