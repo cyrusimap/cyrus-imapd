@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.306 2001/05/07 00:28:39 leg Exp $ */
+/* $Id: imapd.c,v 1.307 2001/05/21 18:27:10 leg Exp $ */
 
 #include <config.h>
 
@@ -362,7 +362,10 @@ static void imapd_reset(void)
 	close(imapd_logfd);
 	imapd_logfd = -1;
     }
-    imapd_userid = NULL;
+    if (imapd_userid != NULL) {
+	free(imapd_userid);
+	imapd_userid = NULL;
+    }
     if (imapd_authstate) {
 	auth_freestate(imapd_authstate);
 	imapd_authstate = NULL;
