@@ -6,10 +6,7 @@ AC_DEFUN(CMU_LIBCYRUS_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
-AC_TRY_COMPILE([
-#include <imclient.h>
-],
-[struct imclient_reply foo;],
+AC_CHECK_HEADER(imclient.h,
 ac_cv_found_libcyrus_inc=yes,
 ac_cv_found_libcyrus_inc=no)
 CPPFLAGS=$saved_CPPFLAGS
@@ -33,7 +30,7 @@ AC_DEFUN(CMU_LIBCYRUS_INC_WHERE, [
 AC_DEFUN(CMU_LIBCYRUS_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lcyrus ${SASL_LIB_FLAGS} ${SSL_LIB_FLAGS} ${LIB_SOCKET}"
+LIBS="$saved_LIBS -L$1 -lcyrus ${SASL_LIB_FLAGS} ${LIBSSL_LIB_FLAGS} ${LIB_SOCKET}"
 AC_TRY_LINK(,
 [imclient_authenticate();],
 [ac_cv_found_libcyrus_lib=yes],
