@@ -92,8 +92,8 @@ void imclient_xs_callback_free(struct xsccb *rock)
       if (xcb->name) safefree(xcb->name);
       safefree(xcb);
     }
-    if (rock->pcb) SvREFCNT_dec(rock->pcb);
-    if (rock->prock) SvREFCNT_dec(rock->prock);
+    /* if (rock->pcb) SvREFCNT_dec(rock->pcb); */
+    /* if (rock->prock) SvREFCNT_dec(rock->prock); */
     safefree(rock);
   }
 }
@@ -154,11 +154,12 @@ void imclient_xs_fcmdcb(struct imclient *client, struct xsccb *rock,
 {
   AV *av;
 
-  SvREFCNT_dec(SvRV(rock->prock));
+  /* SvREFCNT_dec(SvRV(rock->prock)); */
   SvRV(rock->prock) = (SV *) (av = newAV());
-  av_push(av, newSVpv(reply->keyword, 0));
-  av_push(av, newSVpv(reply->text, 0));
-  if (reply->msgno != -1) av_push(av, newSViv(reply->msgno));
+  /* sv_setsv(rock->prock, sv_2mortal(newRV_inc((SV *) (av = newAV())))); */
+  av_push(av, sv_2mortal(newSVpv(reply->keyword, 0)));
+  av_push(av, sv_2mortal(newSVpv(reply->text, 0)));
+  if (reply->msgno != -1) av_push(av, sv_2mortal(newSViv(reply->msgno)));
   /* clean up */
   if (rock->autofree) imclient_xs_callback_free(rock);
 }
@@ -245,8 +246,8 @@ CODE:
 	  while (client->cb) {
 	    nx = client->cb->next;
 	    if (client->cb->name) safefree(client->cb->name);
-	    if (client->cb->rock->pcb) SvREFCNT_dec(client->cb->rock->pcb);
-	    if (client->cb->rock->prock) SvREFCNT_dec(client->cb->rock->prock);
+	    /* if (client->cb->rock->pcb) SvREFCNT_dec(client->cb->rock->pcb); */
+	    /* if (client->cb->rock->prock) SvREFCNT_dec(client->cb->rock->prock); */
 	    safefree(client->cb->rock);
 	    client->cb = nx;
 	  }
@@ -451,21 +452,21 @@ PPCODE:
 	else
 	  pcb = 0;
 	if (!pcb)
-	  prock = newRV_inc(&sv_undef);
+	  prock = sv_2mortal(newRV_inc(&PL_sv_undef));
 	else if (finishrock)
 	  prock = finishrock;
 	else
-	  prock = &sv_undef;
+	  prock = sv_2mortal(newSVsv(&PL_sv_undef));
 	/*
 	 * build our internal rock, which is used by our internal
 	 * callback handler to invoke the Perl callback
 	 */
 	rock = (struct xsccb *) safemalloc(sizeof *rock);
         /* bump refcounts on these so they don't go away */
-	if (!pcb) pcb = &sv_undef;
-	rock->pcb = SvREFCNT_inc(pcb);
-	if (!prock) prock = &sv_undef;
-	rock->prock = SvREFCNT_inc(prock);
+	if (!pcb) pcb = sv_2mortal(newSVsv(&PL_sv_undef));
+	rock->pcb = pcb;
+	if (!prock) prock = sv_2mortal(newSVsv(&PL_sv_undef));
+	rock->prock = prock;
 	rock->client = client;
 	rock->autofree = 1;
 	/* register this callback so it can be gc'ed properly (pointless?) */
@@ -489,13 +490,13 @@ PPCODE:
 	*dp = 0;
 	/* and do it to it */
 	imclient_send(client->imclient,
-		      (pcb == &sv_undef ?
-		       imclient_xs_fcmdcb :
-		       imclient_xs_cb),
-		      rock, xstr);
+		      (SvTRUE(pcb) ?
+		       (void *) imclient_xs_cb :
+		       (void *) imclient_xs_fcmdcb),
+		      (void *) rock, xstr);
 	safefree(xstr);
 	/* if there was no Perl callback, spin on events until finished */
-	if (pcb == &sv_undef) {
+	if (!SvTRUE(pcb)) {
 	  AV *av;
 	  while (SvTYPE(SvRV(prock)) != SVt_PVAV)
 	    imclient_processoneevent(client->imclient);
@@ -521,7 +522,7 @@ PPCODE:
 	    if (av_len(av) != -1) PUSHs(av_shift(av));
 	  }
 	  /* and free it */
-	  SvREFCNT_dec(prock);
+	  /* SvREFCNT_dec(prock); */
 	}
 
 void
