@@ -4,7 +4,7 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.32 2003/10/16 15:33:31 rjs3 Exp $ -->
+<!-- $Id: faq.html,v 1.33 2003/10/16 16:45:09 rjs3 Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
@@ -33,20 +33,12 @@ you if only your name was on the ticket; e.g. a picture on the ticket
 would have been better).</p>
 
 <p>When you log in to your email with a user name and password, you are
-providing your authorization.  Think of your name/password as a ticket -
-anyone who finds the name/password combination will be authorized to use
-the email system - it is not authenticating that it is _you_ who is
-using the name/password.  We can attempt to add some authenticity to your
-login by making you look into a retina scanner to authenticate yourself
-(that could also be used to authorize your usage).
-However, what is your trust that you are actually logging into the correct
-mail server?  If the server used a public/private key authentication
-mechanism, that might help.  You trust the mechanism and you trust that
-you have the correct public key of the server (however it may have come
-into your possesion, you trust that it is real).  Now when you log in,
-you could have a certain confidence that you have logged in to the
-correct email server, when it's private key works with the public key you
-have (i.e. the server would be authenticated to you).</p></li>
+providing your authentication.  Think of your name/password as an identification
+of who you are - it is identifying that it is _you_ who is
+using the name/password.  Now, what you are allowed to do once you are
+authenticated to the server is governed by your authorization.  For example
+bob may only be authorized to see his INBOX, while the 'cyrus' user can
+list all the mailboxes on the server, and change their ACLs.</p>
 
 <li><b>Using PAM</b> Under Linux when using PAM and shadow
 passwords, /etc/shadow needs to be readable by the Cyrus user.</li>
@@ -305,7 +297,7 @@ only the mechanisms that you require.</p>
 </dl>
 
 <hr />
-last modified: $Date: 2003/10/16 15:33:31 $ <br />
+last modified: $Date: 2003/10/16 16:45:09 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
