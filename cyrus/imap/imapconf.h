@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.12 2002/11/15 21:46:56 rjs3 Exp $
+ * $Id: imapconf.h,v 1.16.4.13 2003/01/22 03:37:10 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -109,6 +109,7 @@ extern const char *config_servername;
 extern const char *config_mupdate_server;
 extern int config_hashimapspool;
 
+extern int config_implicitrights;
 extern int config_virtdomains;
 extern const char *config_defdomain;
 

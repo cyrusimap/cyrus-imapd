@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.24 2003/01/08 22:18:15 rjs3 Exp $ */
+/* $Id: config.c,v 1.55.4.25 2003/01/22 03:37:10 ken3 Exp $ */
 
 #include <config.h>
 
@@ -86,6 +86,7 @@ const char *config_defpartition;           /* /var/spool/imap */
 const char *config_servername;	           /* gethostname() */
 const char *config_mupdate_server;         /* NULL */
 int config_hashimapspool;	           /* f */
+int config_implicitrights;                 /* "lca" */
 int config_virtdomains;	                   /* f */
 const char *config_defdomain;              /* NULL */
 
@@ -171,6 +172,10 @@ int config_init(const char *alt_config, const char *ident)
 	config_servername = xmalloc(sizeof(char) * 256);
 	gethostname((char *) config_servername, 256);
     }
+
+    /* look up and canonify the implicit rights of mailbox owners */
+    config_implicitrights =
+	cyrus_acl_strtomask(config_getstring(IMAPOPT_IMPLICIT_OWNER_RIGHTS));
 
     config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
 

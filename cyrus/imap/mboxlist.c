@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.30 2003/01/21 02:38:31 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.31 2003/01/22 03:37:12 ken3 Exp $
  */
 
 #include <config.h>
@@ -1416,7 +1416,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
     }
 
     /* 2. Check Rights */
-    if (!r && !isadmin && !isusermbox) {
+    if (!r && !isadmin) {
 	access = cyrus_acl_myrights(auth_state, acl);
 	if (!(access & ACL_ADMIN)) {
 	    r = (access & ACL_LOOKUP) ?
@@ -2234,7 +2234,7 @@ int access;
 {
     char *owner = (char *)rock;
     if (strcmp(identifier, owner) != 0) return access;
-    return access|ACL_LOOKUP|ACL_ADMIN|ACL_CREATE;
+    return access|config_implicitrights;
 }
 
 /*

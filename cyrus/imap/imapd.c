@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.60 2003/01/21 20:50:09 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.61 2003/01/22 03:37:10 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4135,10 +4135,7 @@ char *identifier;
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, rights;
-    char *canon_identifier;
-    int canonidlen = 0;
     char *acl;
-    char *rightsdesc;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -4159,6 +4156,10 @@ char *identifier;
 
     if (!r) {
 	struct auth_state *authstate = auth_newstate(identifier);
+	char *canon_identifier;
+	int canonidlen = 0;
+	int implicit;
+	char rightsdesc[100], optional[33];
 
 	if (config_authisa(authstate, IMAPOPT_ADMINS))
 	    canon_identifier = identifier; /* don't canonify global admins */
@@ -4169,18 +4170,41 @@ char *identifier;
 	if (canon_identifier) canonidlen = strlen(canon_identifier);
 
 	if (!canon_identifier) {
-	    rightsdesc = "\"\"";
+	    implicit = 0;
 	}
 	else if (mboxname_userownsmailbox(canon_identifier, mailboxname)) {
 	    /* identifier's personal mailbox */
-	    rightsdesc = "lca r s w i p d 0 1 2 3 4 5 6 7 8 9";
+	    implicit = config_implicitrights;
 	}
 	else if (mboxname_isusermailbox(mailboxname, 1)) {
 	    /* anyone can post to an INBOX */
-	    rightsdesc = "p l r s w i c d a 0 1 2 3 4 5 6 7 8 9";
+	    implicit = ACL_POST;
 	}
 	else {
-	    rightsdesc = "\"\" l r s w i p c d a 0 1 2 3 4 5 6 7 8 9";
+	    implicit = 0;
+	}
+
+	/* calculate optional rights */
+	cyrus_acl_masktostr(implicit ^ (canon_identifier ? ACL_FULL : 0),
+			    optional);
+
+	/* build the rights string */
+	if (implicit) {
+	    cyrus_acl_masktostr(implicit, rightsdesc);
+	}
+	else {
+	    strcpy(rightsdesc, "\"\"");
+	}
+
+	if (*optional) {
+	    int i, n = strlen(optional);
+	    char *p = rightsdesc + strlen(rightsdesc);
+
+	    for (i = 0; i < n; i++) {
+		*p++ = ' ';
+		*p++ = optional[i];
+	    }
+	    *p = '\0';
 	}
 
 	prot_printf(imapd_out, "* LISTRIGHTS ");
@@ -4219,9 +4243,11 @@ void cmd_myrights(const char *tag, const char *name)
 	rights = cyrus_acl_myrights(imapd_authstate, acl);
 
 	/* Add in implicit rights */
-	if (imapd_userisadmin ||
-	    mboxname_userownsmailbox(imapd_userid, mailboxname)) {
+	if (imapd_userisadmin) {
 	    rights |= ACL_LOOKUP|ACL_ADMIN;
+	}
+	else if (mboxname_userownsmailbox(imapd_userid, mailboxname)) {
+	    rights |= config_implicitrights;
 	}
 
 	if (!rights) {

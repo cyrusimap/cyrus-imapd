@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.41 2002/12/24 14:16:25 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.42 2003/01/22 03:37:12 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3970,10 +3970,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, rights;
-    char *canon_identifier;
-    int canonidlen = 0;
     char *acl;
-    char *rightsdesc;
 
     r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
@@ -3993,6 +3990,10 @@ void cmd_listrights(char *tag, char *name, char *identifier)
 
     if (!r) {
 	struct auth_state *authstate = auth_newstate(identifier);
+	char *canon_identifier;
+	int canonidlen = 0;
+	int implicit;
+	char rightsdesc[100], optional[33];
 
 	if (config_authisa(authstate, IMAPOPT_ADMINS))
 	    canon_identifier = identifier; /* don't canonify global admins */
@@ -4003,24 +4004,47 @@ void cmd_listrights(char *tag, char *name, char *identifier)
 	if (canon_identifier) canonidlen = strlen(canon_identifier);
 
 	if (!canon_identifier) {
-	    rightsdesc = "\"\"";
+	    implicit = 0;
 	}
-	else if (mboxname_userownsmailbox("INBOX", mailboxname)) {
+	else if (mboxname_userownsmailbox(canon_identifier, mailboxname)) {
 	    /* identifier's personal mailbox */
-	    rightsdesc = "lca r s w i p d 0 1 2 3 4 5 6 7 8 9";
+	    implicit = config_implicitrights;
 	}
 	else if (mboxname_isusermailbox(mailboxname, 1)) {
 	    /* anyone can post to an INBOX */
-	    rightsdesc = "p l r s w i c d a 0 1 2 3 4 5 6 7 8 9";
+	    implicit = ACL_POST;
 	}
 	else {
-	    rightsdesc = "\"\" l r s w i p c d a 0 1 2 3 4 5 6 7 8 9";
+	    implicit = 0;
+	}
+
+	/* calculate optional rights */
+	cyrus_acl_masktostr(implicit ^ (canon_identifier ? ACL_FULL : 0),
+			    optional);
+
+	/* build the rights string */
+	if (implicit) {
+	    cyrus_acl_masktostr(implicit, rightsdesc);
+	}
+	else {
+	    strcpy(rightsdesc, "\"\"");
+	}
+
+	if (*optional) {
+	    int i, n = strlen(optional);
+	    char *p = rightsdesc + strlen(rightsdesc);
+
+	    for (i = 0; i < n; i++) {
+		*p++ = ' ';
+		*p++ = optional[i];
+	    }
+	    *p = '\0';
 	}
 
 	prot_printf(proxyd_out, "* LISTRIGHTS ");
 	printastring(name);
 	prot_putc(' ', proxyd_out);
-	printastring(canon_identifier);
+	printastring(identifier);
 	prot_printf(proxyd_out, " %s", rightsdesc);
 
 	prot_printf(proxyd_out, "\r\n%s OK %s\r\n", tag,
@@ -4052,9 +4076,11 @@ void cmd_myrights(const char *tag, const char *name)
 	rights = cyrus_acl_myrights(proxyd_authstate, acl);
 
 	/* Add in implicit rights */
-	if (proxyd_userisadmin ||
-	    mboxname_userownsmailbox(proxyd_userid, mailboxname)) {
+	if (proxyd_userisadmin) {
 	    rights |= ACL_LOOKUP|ACL_ADMIN;
+	}
+	else if (mboxname_userownsmailbox(proxyd_userid, mailboxname)) {
+	    rights |= config_implicitrights;
 	}
 
 	if (!rights) {
