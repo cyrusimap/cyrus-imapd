@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.366 2002/03/26 17:48:30 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.367 2002/03/26 19:24:54 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -6026,9 +6026,8 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     /* Step 6: mupdate.activate(mailbox, remote) */
     /* We do this from the local server first so that recovery is easier */
     if(!r) {
-	/* cannot set partition because if it is the default we don't know it.
-	 * we.  Of course, we're about to force a push anyway, so... */
-	snprintf(buf, sizeof(buf), "%s!", toserver);
+	/* Note the flag that we don't have a valid partiton at the moment */
+	snprintf(buf, sizeof(buf), "%s!MOVED", toserver);
 	r = mupdate_activate(mupdate_h, mailboxname, buf, acl);
     }
     
@@ -6067,8 +6066,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	rerr = 0;
 	/* xxx if the mupdate server is what failed, then this won't
 	   help any! */
-	/* Note the flag that we don't have a valid partiton at the moment */
-	snprintf(buf, sizeof(buf), "%s!MOVED", config_servername);
+	snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
 	rerr = mupdate_activate(mupdate_h, name, buf, acl);
 	if(rerr) {
 	    syslog(LOG_ERR,

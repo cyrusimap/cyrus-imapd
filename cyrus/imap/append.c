@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.87 2002/03/15 19:53:58 rjs3 Exp $
+ * $Id: append.c,v 1.88 2002/03/26 19:24:54 rjs3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -101,7 +101,7 @@ int append_check(const char *name, int format,
     r = mboxlist_detail(name, &mbflags, NULL, NULL, NULL, NULL);
 
     if (!r) {
-	if(mbflags & MBTYPE_REMOTE) return IMAP_MAILBOX_MOVED;
+	if(mbflags & MBTYPE_MOVING) return IMAP_MAILBOX_MOVED;
     } else {
 	return r;
     }

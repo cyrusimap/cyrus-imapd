@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.31 2002/03/20 23:54:43 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.32 2002/03/26 19:24:54 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -191,7 +191,7 @@ static int dump_cb(void *rockp,
 				 + strlen(part) + 1);
 	int skip_flag;
 
-	/* If it is marked MBTYPE_REMOTE, and it DOES match the entry,
+	/* If it is marked MBTYPE_MOVING, and it DOES match the entry,
 	 * we need to unmark it.  If it does not match the entry in our
 	 * list, then we assume that it successfully made the move and
 	 * we delete it from the local disk */
@@ -207,10 +207,10 @@ static int dump_cb(void *rockp,
 	if(act_head && !strcmp(name, act_head->mailbox)) {
 	    struct mb_node *tmp;
 	    
-	    /* If this mailbox is remote, we want to unmark the remoteness,
+	    /* If this mailbox was moving, we want to unmark the movingness,
 	     * since the MUPDATE server agreed that it lives here. */
 	    /* (and later also force an mupdate push) */
-	    if(mbtype & MBTYPE_REMOTE) {
+	    if(mbtype & MBTYPE_MOVING) {
 		struct mb_node *next;
 
 		if(warn_only) {
@@ -266,9 +266,9 @@ static int dump_cb(void *rockp,
 		
 		skip_flag = 1;		
 	    } else {
-		/* Check that it isn't flagged remote */
-		if(mbtype & MBTYPE_REMOTE) {
-		    /* it's flagged remote, we'll fix it later (and
+		/* Check that it isn't flagged moving */
+		if(mbtype & MBTYPE_MOVING) {
+		    /* it's flagged moving, we'll fix it later (and
 		     * push it then too) */
 		    struct mb_node *next;
 		    
@@ -391,7 +391,7 @@ void do_dump(enum mboxop op)
     CONFIG_DB_MBOX->foreach(mbdb, "", 0, &dump_p, &dump_cb, &d, NULL);
 
     if(op == M_POPULATE) {
-	/* Remove MBTYPE_REMOTE flags (unflag_head) */
+	/* Remove MBTYPE_MOVING flags (unflag_head) */
 	while(unflag_head) {
 	    struct mb_node *me = unflag_head;
 	    int type;
@@ -407,7 +407,7 @@ void do_dump(enum mboxop op)
 		exit(1);
 	    }
 	    
-	    ret = mboxlist_update(me->mailbox, type & ~MBTYPE_REMOTE,
+	    ret = mboxlist_update(me->mailbox, type & ~MBTYPE_MOVING,
 				  part, acl);
 	    if(ret) {
 		fprintf(stderr,
