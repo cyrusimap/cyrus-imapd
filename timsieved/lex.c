@@ -36,6 +36,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "codes.h"
 
+#include "mystring.h"
 
 #include "y.tab.h"
 

@@ -1,3 +1,30 @@
+/* request.c -- request to execute functions on the timsieved server
+ * Tim Martin
+ * 9/21/99
+ */
+/***********************************************************
+        Copyright 1999 by Carnegie Mellon University
+
+                      All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose and without fee is hereby granted,
+provided that the above copyright notice appear in all copies and that
+both that copyright notice and this permission notice appear in
+supporting documentation, and that the name of Carnegie Mellon
+University not be used in advertising or publicity pertaining to
+distribution of the software without specific, written prior
+permission.
+
+CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE FOR
+ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
+OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+******************************************************************/
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
@@ -19,24 +46,50 @@
 
 extern struct protstream *pout, *pin;
 
+
+void parseerror(char *str)
+{
+  printf("Parse error:\n");
+
+  printf("client expected %s\n",str);
+  printf("exiting\n");
+
+  exit(2);
+}
+
 int deleteascript(char *name)
 {
   lexstate_t state;
+  int res;
 
   prot_printf(pout,"DELETESCRIPT \"%s\"\r\n",name);
   prot_flush(pout);  
 
+  res=yylex(&state, pin);
+
+  if ((res!=TOKEN_OK) && (res!=TOKEN_NO)) {
+    parseerror("OK | NO");
+  }
+
+
   if (yylex(&state, pin)!=' ')
-    printf("expected xxxxxxx\n");
-  
-  if (yylex(&state, pin)!=' ')
-    printf("expected space\n");
+    parseerror("SPACE");
 
   if (yylex(&state, pin)!=STRING)
-    printf("expected string\n");
+    parseerror("STRING");
+
+  if (res==TOKEN_NO)
+  {
+    printf("Deletescript error: %s\n",string_DATAPTR(state.str));
+
+    if (yylex(&state, pin)!=EOL)
+      parseerror("EOL");
+
+    return -1;
+  }
 
   if (yylex(&state, pin)!=EOL)
-    printf("expected eol\n");
+      parseerror("EOL");
 
   printf("Script %s deleted successfully\n",name);
 
