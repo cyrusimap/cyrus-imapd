@@ -77,101 +77,19 @@ use IO::File;
 # implementation, or a vector-based interface to imclient_send.
 #
 sub send {
-  my ($self, $cb, $rock, $fmt, @rest) = @_;
-  my $res = '';
-  while ($fmt =~ /^([^%]*)%(.)(.*)$/s) {
-    $res .= $1;
-    if ($2 eq 'a') {
-      # atom
-      $res .= scalar shift(@rest);
-    }
-    elsif ($2 eq 's') {
-      # astring
-      $res .= $self->_stringize(shift(@rest));
-    }
-    elsif ($2 eq 'd') {
-      # decimal
-      $res .= (0 + scalar shift(@rest));
-    }
-    elsif ($2 eq 'u') {
-      # unsigned decimal; perl cares not for C lossage...
-      $res .= (0 + scalar shift(@rest));
-    }
-    elsif ($2 eq 'v') {
-      # #astring
-      my $spc = '';
-      if (ref($rest[0]) =~ /(^|=)HASH($|\()/) {
-	my %vals = %{shift(@rest)};
-	foreach (keys %vals) {
-	  $res .= $self->_stringize($_) . ' ' .
-	          $self->_stringize($vals{$_}) . $spc;
-	  $spc = ' ';
-	}
-      } else {
-	foreach (@{shift(@rest)}) {
-	  $res .= $self->_stringize($_) . $spc;
-	  $spc = ' ';
-	}
-      }
-    }
-    else {
-      # anything else (NB: we respect %B being labeled "internal only")
-      # NB: unlike the C version, we do not fail when handed an unknown escape
-      $res .= $2;
-    }
-    $fmt = $3;
+  my ($self, $cb, $rock, $fmt, $arg1, $arg2, $arg3, $arg4, 
+      $arg5, $arg6, $arg7, $arg8, @rest) = @_;
+  if (defined @rest) {
+    die "Too many format arguments (more than 8) given to send!";
   }
-  $res .= $fmt;
-  $self->_send($cb, $rock, $res);
-}
-
-sub _cc {
-  my $res = 2;
-  local($^W) = 0;
-  if (length($_[0]) >= 1024) {
-    0;
-  } else {
-    foreach (map {unpack 'C', $_} split(//, $_[0])) {
-      if ($_==0 || $_==10 || $_==13 || $_==34 || $_==92 || $_>=128) {
-	$res = 0;
-      }
-      elsif ($_<33 || $_==37 || $_==40 || $_==41 || $_==42 || $_==123) {
-	$res = 1 if $res == 2;
-      }
-    }
-    $res;
-  }
-}
-
-sub _stringize {
-  my ($self, $str) = @_;
-  my $res;
-  my $cc = _cc($str);
-  my $nz = ($str ne '');
-
-  if ($nz && $cc == 2) {
-    $str;
-  }
-  elsif ($cc) {
-    # DOH! would be needed except imclient devolves to a LITERAL in this case.
-    #$str =~ s/([\\\"])/\\$1/g;
-    '"' . $str . '"';
-  }
-  elsif ($self->flags & &CONN_NONSYNCLITERAL) {
-    '{' . length($str) . "+}\r\n$str";
-  }
-  else {
-    # ugh!  UGH!
-    # we cannot do this for now; we just use a nonsyncliteral and hope for
-    # the best.  need a vector interface to imclient_send().
-    '{' . length($str) . "+}\r\n$str";
-  }
+  $self->_send($cb, $rock, $fmt,
+	       $arg1, $arg2, $arg3, $arg4, $arg5, $arg6, $arg7, $arg8);
 }
 
 #
 # As with send, authenticate needs a wrapper.  This is primarily a workaround
 # for a SASL bug (or so I'm informed) with PLAIN authentication; however, we
-# also take the oppurtunity to add a hash-based interface.
+# also take the opportunity to add a hash-based interface.
 #
 sub authenticate {
   my ($self, $first) = @_;
@@ -229,8 +147,7 @@ sub authenticate {
       $tty->print("\013\010");
       system "stty $ostty";
     }
-    # according to send(), password will be quoted or literalized as needed
-    my ($kw, $text) = $self->send(undef, undef, 'LOGIN %a %s',
+    my ($kw, $text) = $self->send(undef, undef, 'LOGIN %s %s',
 				  $opts{-user}, $opts{-password});
     $opts{-password} = "\0" x length($opts{-password});
     if ($kw eq 'OK') {
