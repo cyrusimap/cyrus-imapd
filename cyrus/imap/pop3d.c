@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.155 2004/03/12 19:16:09 ken3 Exp $
+ * $Id: pop3d.c,v 1.156 2004/03/26 01:56:44 ken3 Exp $
  */
 #include <config.h>
 
@@ -122,7 +122,7 @@ struct msg {
     unsigned uid;
     unsigned size;
     int deleted;
-} *popd_msg;
+} *popd_msg = NULL;
 
 static int pop3s = 0;
 int popd_starttls_done = 0;
@@ -460,6 +460,10 @@ void shut_down(int code)
     /* close local mailbox */
     if (popd_mailbox) {
 	mailbox_close(popd_mailbox);
+    }
+
+    if (popd_msg) {
+	free(popd_msg);
     }
 
     /* close backend connection */
@@ -1410,8 +1414,8 @@ int openinbox(void)
 	}
 	if (!r) {
 	    popd_exists = mboxstruct.exists;
-	    popd_msg = (struct msg *) xmalloc((popd_exists+1) *
-					      sizeof(struct msg));
+	    popd_msg = (struct msg *) xrealloc(popd_msg, (popd_exists+1) *
+					       sizeof(struct msg));
 	    for (msg = 1; msg <= popd_exists; msg++) {
 		if ((r = mailbox_read_index_record(&mboxstruct, msg, &record))!=0)
 		    break;
@@ -1422,8 +1426,6 @@ int openinbox(void)
 	}
 	if (r) {
 	    mailbox_close(&mboxstruct);
-	    free(popd_msg);
-	    popd_msg = 0;
 	    popd_exists = 0;
 	    syslog(LOG_ERR, "Unable to read maildrop for %s", popd_userid);
 	    prot_printf(popd_out,
