@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.138 2002/09/30 19:33:41 rjs3 Exp $
+ $Id: mailbox.c,v 1.139 2002/12/02 17:35:07 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1016,7 +1016,9 @@ void mailbox_unlock_header(struct mailbox *mailbox)
     assert(mailbox->header_lock_count != 0);
 
     if (--mailbox->header_lock_count == 0) {
-	lock_unlock(mailbox->header_fd);
+	if (lock_unlock(mailbox->header_fd))
+	    syslog(LOG_ERR, "IOERROR: unlocking header of %s: %m", 
+		mailbox->name);
     }
 }
 
@@ -1030,7 +1032,9 @@ struct mailbox *mailbox;
     assert(mailbox->index_lock_count != 0);
 
     if (--mailbox->index_lock_count == 0) {
-	lock_unlock(mailbox->index_fd);
+	if (lock_unlock(mailbox->index_fd))
+	    syslog(LOG_ERR, "IOERROR: unlocking index of %s: %m", 
+		mailbox->name);
     }
 }
 
@@ -1044,7 +1048,9 @@ struct mailbox *mailbox;
     assert(mailbox->pop_lock_count != 0);
 
     if (--mailbox->pop_lock_count == 0) {
-	lock_unlock(mailbox->cache_fd);
+	if (lock_unlock(mailbox->cache_fd))
+	    syslog(LOG_ERR, "IOERROR: unlocking POP lock of %s: %m", 
+		mailbox->name);
     }
 }
 
@@ -1058,7 +1064,9 @@ struct quota *quota;
     assert(quota->lock_count != 0);
 
     if (--quota->lock_count == 0 && quota->root) {
-	lock_unlock(quota->fd);
+	if (lock_unlock(quota->fd))
+	    syslog(LOG_ERR, "IOERROR: unlocking quota for %s: %m", 
+		quota->root);
     }
 }
 
