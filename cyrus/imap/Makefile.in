@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.95 2000/02/15 22:21:17 leg Exp $
+# $Id: Makefile.in,v 1.96 2000/02/16 03:11:59 leg Exp $
 # 
 # @configure_input@
 #
@@ -81,16 +81,16 @@ cyrus_prefix = @cyrus_prefix@
 
 LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o \
 	config.o imap_err.o proc.o setproctitle.o convert_code.o \
-	duplicate.o saslclient.o acapmbox.o $(SEEN) $(NOTIFY)
+	duplicate.o saslclient.o acapmbox.o pushstats.o $(SEEN) $(NOTIFY)
 
-IMAPDOBJS=pushstats.o imapd.o index.o tls.o
+IMAPDOBJS=imapd.o index.o tls.o
 
 SERVICE=../master/service.o
 
 PROGS = collectnews syncnews arbitron fud reconstruct quota \
 	mbpath ipurge \
-	imapd lmtpd pop3d \
-	ctl_mboxlist ctl_deliver
+	imapd proxyd lmtpd pop3d \
+	ctl_mboxlist ctl_deliver target-acap
 
 all: $(PROGS) $(SUIDPROGS)
 
@@ -134,15 +134,16 @@ imapd: $(IMAPDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o imapd \
 	 $(SERVICE) $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
-proxyd: proxyd.o libimap.a $(DEPLIBS)
+proxyd: proxyd.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o proxyd \
-	 proxyd.o libimap.a $(DEPLIBS) $(LIBS)
+	 $(SERVICE) proxyd.o libimap.a $(DEPLIBS) $(LIBS)
 
 gun: gun.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o gun gun.o libimap.a $(DEPLIBS) $(LIBS)
 
-target: target.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o target target.o libimap.a $(DEPLIBS) $(LIBS)
+target-acap: target-acap.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o target-acap \
+	 target-acap.o libimap.a $(DEPLIBS) $(LIBS) -lpthread
 
 imapd.pure: $(IMAPDOBJS) libimap.a $(DEPLIBS)
 	$(PURIFY) $(PUREOPT) \

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.207 2000/02/15 22:21:21 leg Exp $ */
+/* $Id: imapd.c,v 1.208 2000/02/16 03:12:00 leg Exp $ */
 
 #include <config.h>
 
@@ -446,7 +446,6 @@ int service_main(int argc, char **argv, char **envp)
     sasl_security_properties_t *secprops = NULL;
     sasl_external_properties_t extprops;
 
-    config_init("imapd");
     memset(&extprops, 0, sizeof(sasl_external_properties_t));
     while ((opt = getopt(argc, argv, "p:")) != EOF) {
 	switch (opt) {
@@ -460,8 +459,6 @@ int service_main(int argc, char **argv, char **envp)
 
     imapd_in = prot_new(0, 0);
     imapd_out = prot_new(1, 1);
-
-    signal(SIGPIPE, SIG_IGN);
 
     /* Find out name of client host */
     salen = sizeof(imapd_remoteaddr);
@@ -4690,16 +4687,16 @@ const char *s;
     int len = 0;
 
     /* Look for any non-QCHAR characters */
-    for (p = s; *p; p++) {
+    for (p = s; *p && len < 1024; p++) {
 	len++;
 	if (*p & 0x80 || *p == '\r' || *p == '\n'
 	    || *p == '\"' || *p == '%' || *p == '\\') break;
     }
 
+    /* if it's too long, literal it */
     if (*p || len >= 1024) {
 	prot_printf(imapd_out, "{%u}\r\n%s", strlen(s), s);
-    }
-    else {
+    } else {
 	prot_printf(imapd_out, "\"%s\"", s);
     }
 }
@@ -4720,16 +4717,16 @@ const char *s;
     }
 
     /* Look for any non-QCHAR characters */
-    for (p = s; *p; p++) {
+    for (p = s; *p && len < 1024; p++) {
 	len++;
 	if (*p & 0x80 || *p == '\r' || *p == '\n'
 	    || *p == '\"' || *p == '%' || *p == '\\') break;
     }
 
+    /* if it's too long, literal it */
     if (*p || len >= 1024) {
 	prot_printf(imapd_out, "{%u}\r\n%s", strlen(s), s);
-    }
-    else {
+    } else {
 	prot_printf(imapd_out, "\"%s\"", s);
     }
 }

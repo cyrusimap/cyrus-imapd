@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.1 2000/02/15 22:21:18 leg Exp $
+ $Id: ctl_deliver.c,v 1.2 2000/02/16 03:12:00 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -29,8 +29,8 @@
 
 /* add a -r RECOVER flag? */
 
-static char _rcsid[] = 
-        "$Id: ctl_deliver.c,v 1.1 2000/02/15 22:21:18 leg Exp $";
+static char _rcsid[] __attribute__ ((unused)) = 
+        "$Id: ctl_deliver.c,v 1.2 2000/02/16 03:12:00 leg Exp $";
 
 #include <config.h>
 
@@ -193,4 +193,4 @@ main(argc, argv)
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.1 2000/02/15 22:21:18 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.2 2000/02/16 03:12:00 leg Exp $ */
