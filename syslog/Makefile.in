@@ -42,6 +42,8 @@ SHELL = /bin/sh
 
 all: libsyslog.a syslogd
 
+install:
+
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) $<
 
