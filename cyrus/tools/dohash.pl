@@ -1,0 +1,161 @@
+#!/usr/local/bin/perl5
+# script to upgrade from versions of imapd previous to 1.6.2
+# make sure you run it as the cyrus user
+
+$| = 1;
+
+$imapdconf = shift || "/etc/imapd.conf";
+$hashispool = 0;
+
+open CONF, $imapdconf;
+while (<CONF>) {
+    if (/^configdirectory:\s(.*)$/) {
+	$conf = $1;
+    }
+    if (/^partition-.*:\s(.*)$/) {
+	if (grep /$1/, @parts) {
+	    next;
+	}
+	push @parts, $1;
+    }
+    if (/^hashimapspool:\s(1|t|yes|on)/) {
+	$hashispool = 1;
+	print "i will also hash partitions.\n";
+    }
+}
+close CONF;
+
+$conf = shift || "/var/imap";
+
+print "upgrading configuration directory $conf...";
+chdir $conf or die "couldn't change to $conf";
+
+# *** user subdirectory; holds subscription files
+print "user ";
+chdir "user" or die "couldn't change to user subdir";
+foreach $i ("a".."z") { 
+    mkdir ("$i", 0755) or die "couldn't create $i";
+}
+# any remaining sub's go into 'q'
+opendir (USER, ".");
+while ($f = readdir USER) {
+    print;
+    if ($f =~ /(.).*\.sub/s) {
+	print;
+	$h = lc($1);
+	if (!($h =~ /[a-z]/)) { $h = 'q'; }
+	rename ($f, "$h/$f") or die "couldn't move $f into $h";
+    }
+}
+closedir USER;
+chdir "..";
+
+# *** quota subdirectory; holds quota files for each quotaroot
+print "quota ";
+chdir "quota" or die "couldn't change to quota subdir";
+
+# first, create directories we know can't conflict with existing files
+foreach $i ("a".."z") {
+    mkdir (".$i", 0755) or die "couldn't create .$i";
+}
+
+# now for each file, move it into the appropriate directory
+opendir QUOTA, ".";
+while ($mbox = readdir QUOTA) {
+    if ($mbox =~ /^\./s) { next; }
+
+    if ($mbox =~ /^.*\.(.).*$/s) {
+	# hash is $1
+	$h = lc($1);
+	if ($h =~ /[a-z]/) {
+	    rename($mbox, ".$h/$mbox") or die "couldn't move $mbox into $h";
+	} else {
+	    rename($mbox, ".q/$mbox") or die "couldn't move $mbox into q";
+	}
+	next;
+    }
+
+    # we should try to hash on the first letter
+    if ($mbox =~ /(.).*/) {
+	$h = lc($1);
+	if ($h =~ /[a-z]/) {
+	    rename($mbox, ".$h/$mbox") or die "couldn't move $mbox into $h";
+	} else {
+	    rename($mbox, ".q/$mbox") or die "couldn't move $mbox into q";
+	}
+	next;
+    }
+
+    print "weird mailbox '$mbox'?\n";
+}
+closedir QUOTA;
+
+# now move each temporary directory to the right place
+foreach $i ("a".."z") {
+    rename (".$i", $i) or die "couldn't rename $i into place";
+}
+
+print "done\n";
+
+# *** now for each data partition
+while ($hashispool && ($part = shift @parts)) {
+    print "upgrading data partition $part...";
+    chdir $part or die "couldn't chdir to $part";
+    
+    foreach $i ("a".."z") {
+	mkdir (".$i", 0755) or die "couldn't create .$i";
+    }
+
+    opendir PART, ".";
+    while ($dir = readdir PART) {
+	if ($dir =~ /^\./s) { next; }
+	if ($dir eq "lost+found") { next; }
+	
+	# process $dir
+	print "$dir ";
+	opendir DIR, $dir;
+	$ismbox = 0;
+	while ($sub = readdir DIR) {
+	    if ($sub =~ /^\./s) { next; }
+	    # if there's a dot in this, we're a mbox and this isn't a child
+	    if ($sub =~ /(.*)\.(.*)/) { $ismbox = 1; next; }
+
+	    if ($sub =~ /^(.).*$/s) {
+		$h = lc($1);
+		if (!($h =~ /[a-z]/)) {
+		    $h = 'q';
+		}
+		mkdir (".$h/$dir", 0755); # might already be there
+		rename("$dir/$sub", ".$h/$dir/$sub") or
+		    die "couldn't move $dir/$sub into $h";
+	    } else {
+		print "weird mailbox '$dir/$sub'?\n";
+	    }
+	}
+	closedir DIR;
+	# if $ismbox is set, then $dir is a mailbox of it's own right
+	if ($ismbox && $dir =~ /^(.).*/s) {
+	    $h = lc($1);
+	    if (!($h =~ /[a-z]/)) {
+		$h = 'q';
+	    }
+	    mkdir (".$h/$dir", 0755); # might already be there
+	    opendir DIR, $dir;
+	    while ($sub = readdir DIR) {
+		if ($sub =~ /^\./s) { next; }
+		rename("$dir/$sub", ".$h/$dir/$sub") or 
+		    die "couldn't move $dir into $h";
+	    }
+	    closedir DIR;
+	}
+	
+	rmdir $dir or print "\ncouldn't remove '$dir'??\n";
+    }
+    closedir PART;
+    
+    foreach $i ("a".."z") {
+	rename (".$i", $i) or die "couldn't rename .$i to $i";
+    }
+
+    print "done\n";
+}
