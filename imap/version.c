@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id
+ * $Id: version.c,v 1.2 2001/10/22 16:33:34 ken3 Exp $
  */
 
 #include <config.h>
@@ -53,6 +53,7 @@
 #endif
 
 #include "version.h"
+#include "xversion.h"
 #include "prot.h"
 #include "mboxlist.h"
 #include "lock.h"
@@ -88,10 +89,10 @@ void id_response(struct protstream *pout)
 
     prot_printf(pout, "* ID ("
 		"\"name\" \"Cyrus IMAPD\""
-		" \"version\" \"%s\""
+		" \"version\" \"%s %s\""
 		" \"vendor\" \"Project Cyrus\""
 		" \"support-url\" \"http://asg.web.cmu.edu/cyrus\"",
-		CYRUS_VERSION);
+		CYRUS_VERSION, CVSDATE);
 
     /* add the os info */
     if (uname(&os) != -1)
