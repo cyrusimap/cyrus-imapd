@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.168 2003/10/22 20:05:14 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.169 2003/11/21 15:14:15 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -2266,7 +2266,7 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
 	switch (r) {
 	case IMAP_SASL_CANCEL:
 	    prot_printf(proxyd_out,
-			"%s NO Client canceled authentication\r\n", tag);
+			"%s BAD Client canceled authentication\r\n", tag);
 	    break;
 	case IMAP_SASL_PROTERR:
 	    errorstring = prot_error(proxyd_in);
