@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.161 1998/12/07 16:21:35 tjs Exp $ */
+/* $Id: imapd.c,v 1.162 1999/03/01 20:17:47 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -2377,11 +2377,17 @@ char *pattern;
     char *buf = NULL;
     int patlen = 0;
     int reflen = 0;
+    static int ignorereference = 0;
 
     /* Ignore the reference argument?
        (the behavior in 1.5.10 & older) */
-    int ignorereference = config_getswitch("ignorereference", 0);
+    if (ignorereference == 0) {
+	ignorereference = config_getswitch("ignorereference", 0);
+    }
 
+    /* Reset state in mstringdata */
+    mstringdata(NULL, NULL, 0, 0);
+    
     if (!pattern[0] && !subscribed) {
 	/* Special case: query top-level hierarchy separator */
 	prot_printf(imapd_out, "* LIST (\\Noselect) \".\" \"\"\r\n");
@@ -2459,7 +2465,7 @@ int add;
     }
 
     if (r) {
-	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+	prot_printf(imapd_out, "%s NO %s: %s\r\n", tag,
 	       add ? "Subscribe" : "Unsubscribe", error_message(r));
     }
     else {
@@ -4372,7 +4378,7 @@ void* rock;
 /*
  * Issue a LIST or LSUB untagged response
  */
-static int mstringdata(cmd, name, matchlen, maycreate)
+static void mstringdata(cmd, name, matchlen, maycreate)
 char *cmd;
 char *name;
 int matchlen;
@@ -4384,6 +4390,14 @@ int maycreate;
     int lastnamehassub = 0;
     int c;
 
+    /* We have to reset the sawuser flag before each list command.
+     * Handle it as a dirty hack.
+     */
+    if (cmd == NULL) {
+	sawuser = 0;
+	return;
+    }
+    
     if (lastnamedelayed) {
 	if (name && strncasecmp(lastname, name, strlen(lastname)) == 0 &&
 	    name[strlen(lastname)] == '.') {
@@ -4399,12 +4413,12 @@ int maycreate;
     /* Special-case to flush any final state */
     if (!name) {
 	lastname[0] = '\0';
-	return 0;
+	return;
     }
 
     /* Suppress any output of a partial match */
     if (name[matchlen] && strncasecmp(lastname, name, matchlen) == 0) {
-	return 0;
+	return;
     }
 	
     /*
@@ -4412,7 +4426,7 @@ int maycreate;
      * other matches inbetween.  Handle it as a special case
      */
     if (matchlen == 4 && strncasecmp(name, "user", 4) == 0) {
-	if (sawuser) return 0;
+	if (sawuser) return;
 	sawuser = 1;
     }
 
@@ -4421,7 +4435,7 @@ int maycreate;
 
     if (!name[matchlen] && !maycreate) {
 	lastnamedelayed = 1;
-	return 0;
+	return;
     }
 
     c = name[matchlen];
@@ -4430,7 +4444,7 @@ int maycreate;
     printstring(name);
     prot_printf(imapd_out, "\r\n");
     if (c) name[matchlen] = c;
-    return 0;
+    return;
 }
 
 /*
@@ -4442,7 +4456,8 @@ int matchlen;
 int maycreate;
 void* rock;
 {
-    return mstringdata("LIST", name, matchlen, maycreate);
+    mstringdata("LIST", name, matchlen, maycreate);
+    return 0;
 }
 
 /*
@@ -4454,5 +4469,6 @@ int matchlen;
 int maycreate;
 void* rock;
 {
-    return mstringdata("LSUB", name, matchlen, maycreate);
+    mstringdata("LSUB", name, matchlen, maycreate);
+    return 0;
 }
