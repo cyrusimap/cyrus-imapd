@@ -223,7 +223,7 @@ int checkseen;
 	}
 	if (r) {
 	    seendb = 0;
-	    prot_printf(imapd_out, "* NO %s: %s\r\n",
+	    prot_printf(imapd_out, "* OK %s: %s\r\n",
 		   error_message(IMAP_NO_CHECKPRESERVE), error_message(r));
 	}
 	else {
@@ -320,7 +320,7 @@ int oldexists;
     /* Lock \Seen database and read current values */
     r = seen_lockread(seendb, &last_time, &last_uid, &newseenuids);
     if (r) {
-	prot_printf(imapd_out, "* NO %s: %s\r\n",
+	prot_printf(imapd_out, "* OK %s: %s\r\n",
 	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
 	return;
     }
@@ -526,7 +526,7 @@ int oldexists;
     seen_unlock(seendb);
     free(seenuids);
     if (r) {
-	prot_printf(imapd_out, "* NO %s: %s\r\n",
+	prot_printf(imapd_out, "* OK %s: %s\r\n",
 	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
 	free(saveseenuids);
 	seenuids = newseenuids;
@@ -1357,7 +1357,7 @@ char *rock;
 	fetchargs->bodysections || fetchargs->headers_not) {
 	msgfile = fopen(mailbox_message_fname(mailbox, UID(msgno)), "r");
 	if (!msgfile) {
-	    prot_printf(imapd_out, "* NO ");
+	    prot_printf(imapd_out, "* OK ");
 	    prot_printf(imapd_out, error_message(IMAP_NO_MSGGONE), msgno);
 	    prot_printf(imapd_out, "\r\n");
 	}
