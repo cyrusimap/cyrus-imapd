@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.72 2002/05/28 21:05:24 rjs3 Exp $
+ * $Id: imclient.c,v 1.73 2002/07/24 20:27:41 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -508,7 +508,7 @@ va_dcl
     }
     
     /* Write the tag */
-    sprintf(buf, "%lu ", imclient->gensym);
+    snprintf(buf, sizeof(buf), "%lu ", imclient->gensym);
     imclient_write(imclient, buf, strlen(buf));
 
     /* Process the command format */
@@ -532,13 +532,13 @@ va_dcl
 	    
 	case 'd':
 	    num = va_arg(pvar, int);
-	    sprintf(buf, "%d", num);
+	    snprintf(buf, sizeof(buf), "%d", num);
 	    imclient_write(imclient, buf, strlen(buf));
 	    break;
 
 	case 'u':
 	    unum = va_arg(pvar, unsigned);
-	    sprintf(buf, "%lu", (unsigned long)unum);
+	    snprintf(buf, sizeof(buf), "%lu", (unsigned long)unum);
 	    imclient_write(imclient, buf, strlen(buf));
 	    break;
 
@@ -606,12 +606,12 @@ static int imclient_writeastring(struct imclient *imclient, const char *str)
     else {
 	/* Literal */
 	if (imclient->flags & IMCLIENT_CONN_NONSYNCLITERAL) {
-	    sprintf(buf, "{%u+}\r\n", len);
+	    snprintf(buf, sizeof(buf), "{%u+}\r\n", len);
 	    imclient_write(imclient, buf, strlen(buf));
 	}
 	else {
 	    imclient->readytag = imclient->gensym;
-	    sprintf(buf, "{%u}\r\n", len);
+	    snprintf(buf, sizeof(buf), "{%u}\r\n", len);
 	    imclient_write(imclient, buf, strlen(buf));
 	    while (imclient->readytag) {
 		imclient_processoneevent(imclient);
