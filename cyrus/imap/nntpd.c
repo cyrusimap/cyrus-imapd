@@ -43,14 +43,13 @@
  * TODO:
  *
  * - support for control messages
- * - OVER/XOVER (will this fix problems with Netscape & Outlook?)
  * - wildmat support
  * - support for msgid in commands
  * - use nntpd-specific DB instead of deliver.db?
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.17 2002/10/11 13:34:13 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.18 2002/10/12 15:36:04 ken3 Exp $
  */
 #include <config.h>
 
@@ -96,6 +95,7 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "telemetry.h"
+#include "index.h"
 
 extern int optind;
 extern char *optarg;
@@ -113,11 +113,6 @@ void printastring(const char *s)
     fatal("not implemented", EC_SOFTWARE);
 }
 /* end stuff to make index.c link */
-
-extern void index_operatemailbox(struct mailbox *mailbox);
-extern int index_finduid(unsigned uid);
-extern int index_getuid(unsigned msgno);
-extern char *index_get_msgid(struct mailbox *mailbox, unsigned msgno);
 
 
 #ifdef HAVE_SSL
@@ -190,7 +185,7 @@ static void cmd_article();
 static void cmd_post();
 static void cmdloop(void);
 static int open_group();
-static int parsenum(char *ptr);
+static int parsenum(char *str, char **rem);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
@@ -624,6 +619,8 @@ static void cmdloop(void)
 		prot_printf(nntp_out, "223 %u %s\r\n",
 			    index_getuid(nntp_current),
 			    msgid ? msgid : "<0>");
+
+		if (msgid) free(msgid);
 	    }
 	}
 	else if (!strcmp(cmd.s, "next")) {
@@ -638,6 +635,8 @@ static void cmdloop(void)
 		prot_printf(nntp_out, "223 %u %s\r\n",
 			    index_getuid(nntp_current),
 			    msgid ? msgid : "<0>");
+
+		if (msgid) free(msgid);
 	    }
 	}
 	else if (!strcmp(cmd.s, "article") || !strcmp(cmd.s, "head") ||
@@ -648,12 +647,14 @@ static void cmdloop(void)
 	    if (c == ' ') {
 		c = getword(nntp_in, &arg1);
 		if (c == EOF) goto missingargs;
-		uid = parsenum(arg1.s);
+		uid = parsenum(arg1.s, NULL);
 	    }
 	    if (c == '\r') c = prot_getc(nntp_in);
 	    if (c != '\n') goto extraargs;
-	    if (uid == -1) goto nomsgid;
-	    else {
+	    if (uid == -1) {
+		/* search for msgid (arg1.s) */
+		goto nomsgid;
+	    } else {
 		if (!nntp_group) goto noopengroup;
 		if (uid) {
 		    idx = index_finduid(uid);
@@ -672,6 +673,45 @@ static void cmdloop(void)
 	    }
 
 	    cmd_article(uid, part);
+	}
+	else if (!strcmp(cmd.s, "over") || !strcmp(cmd.s, "xover")) {
+	    unsigned long first = 0, last, i;
+	    char *p = NULL;
+	    int idx;
+
+	    if (c == ' ') {
+		c = getword(nntp_in, &arg1);
+		if (c == EOF) goto missingargs;
+		first = parsenum(arg1.s, &p);
+		if (first == -1) goto noarticle;
+	    }
+	    if (c == '\r') c = prot_getc(nntp_in);
+	    if (c != '\n') goto extraargs;
+
+	    if (!nntp_group) goto noopengroup;
+	    if (!first)
+		last = first = index_getuid(nntp_current);
+	    else if (p && *p) {
+		if (*p != '-') goto noarticle;
+		if (*++p)
+		    last = parsenum(p, NULL);
+		else
+		    last = index_getuid(nntp_exists);
+	    }
+	    else
+		last = first;
+	    if (last == -1) goto noarticle;
+
+	    prot_printf(nntp_out, "224 Overview information follows:\r\n");
+
+	    imapd_out = nntp_out;  /* XXX hack */
+	    for (i = first; i <= last; i++) {
+		idx = index_finduid(i);
+		if (index_getuid(idx) != i) continue;
+		index_overview(nntp_group, idx);
+	    }
+
+	    prot_printf(nntp_out, ".\r\n");
 	}
 	else if (!strcmp(cmd.s, "post")) {
 	    if (c == '\r') c = prot_getc(nntp_in);
@@ -996,6 +1036,7 @@ void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, "202 Extensions supported:\r\n");
 	prot_printf(nntp_out, "AUTHINFO USER\r\n");
 	prot_printf(nntp_out, "LISTGROUP\r\n");
+	prot_printf(nntp_out, "OVER\r\n");
 	prot_printf(nntp_out, ".\r\n");
     }
     else if (!strcmp(arg1, "active")) {
@@ -1017,6 +1058,22 @@ void cmd_list(char *arg1, char *arg2)
 	    nntp_group = 0;
 	}
 
+	prot_printf(nntp_out, ".\r\n");
+    }
+    else if (!strcmp(arg1, "overview.fmt")) {
+	if (arg2) {
+	    prot_printf(nntp_out, "501 Unexpected extra argument\r\n");
+	    return;
+	}
+
+	prot_printf(nntp_out, "215 Order of overview fields follows:\r\n");
+	prot_printf(nntp_out, "Subject:\r\n");
+	prot_printf(nntp_out, "From:\r\n");
+	prot_printf(nntp_out, "Date:\r\n");
+	prot_printf(nntp_out, "Message-ID:\r\n");
+	prot_printf(nntp_out, "References:\r\n");
+	prot_printf(nntp_out, "Bytes:\r\n");
+	prot_printf(nntp_out, "Lines:\r\n");
 	prot_printf(nntp_out, ".\r\n");
     }
     else {
@@ -1088,8 +1145,10 @@ static void cmd_article(unsigned long uid, int part)
 	prot_printf(nntp_out, "502 Could not read message file\r\n");
 	return;
     }
-    prot_printf(nntp_out, "%u %lu %s\r\n", 220 + part, uid,
-		msgid ? msgid : "<0>");
+    prot_printf(nntp_out, "%u %lu %s Article retrieved\r\n",
+		220 + part, uid, msgid ? msgid : "<0>");
+
+    if (msgid) free(msgid);
 
     if (part != ARTICLE_STAT) {
 	while (fgets(buf, sizeof(buf), msgfile)) {
@@ -1125,13 +1184,18 @@ static void cmd_article(unsigned long uid, int part)
     fclose(msgfile);
 }
 
-static int parsenum(char *ptr)
+static int parsenum(char *str, char **rem)
 {
-    char *p = ptr;
+    char *p = str;
     int result = 0;
 
     while (*p && isdigit((int) *p)) {
 	result = result * 10 + *p++ - '0';
+    }
+
+    if (rem) {
+	*rem = p;
+	return (*p && p == str ? -1 : result);
     }
 
     return (*p ? -1 : result);

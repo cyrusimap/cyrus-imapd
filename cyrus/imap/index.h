@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.4.6.1 2002/08/15 17:52:27 rjs3 Exp $
+ * $Id: index.h,v 1.4.6.2 2002/10/12 15:36:04 ken3 Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -152,5 +152,11 @@ struct thread_algorithm {
     char *alg_name;
     void (*threader)(unsigned *msgno_list, int nmsg, int usinguid);
 };
+
+extern void index_operatemailbox(struct mailbox *mailbox);
+extern int index_finduid(unsigned uid);
+extern int index_getuid(unsigned msgno);
+extern char *index_get_msgid(struct mailbox *mailbox, unsigned msgno);
+extern void index_overview(struct mailbox *mailbox, unsigned msgno);
 
 #endif /* INDEX_H */

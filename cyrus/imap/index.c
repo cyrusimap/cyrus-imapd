@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.10 2002/10/11 13:34:13 ken3 Exp $
+ * $Id: index.c,v 1.180.4.11 2002/10/12 15:36:03 ken3 Exp $
  */
 #include <config.h>
 
@@ -4531,7 +4531,7 @@ char *index_get_msgid(struct mailbox *mailbox, unsigned msgno)
 {
     const char *cacheitem;
     int cachelen;
-    char *tmpenv;
+    char *env;
     char *envtokens[NUMENVTOKENS];
     char *msgid;
 
@@ -4542,13 +4542,60 @@ char *index_get_msgid(struct mailbox *mailbox, unsigned msgno)
      *
      * get a working copy; strip outer ()'s
      */
-    tmpenv = xstrndup(cacheitem + 5, cachelen - 2);
-    parse_cached_envelope(tmpenv, envtokens);
+    env = xstrndup(cacheitem + 5, cachelen - 2);
+    parse_cached_envelope(env, envtokens);
 
     msgid = envtokens[ENV_MSGID] ? xstrdup(envtokens[ENV_MSGID]) : NULL;
 
     /* free stuff */
-    free(tmpenv);
+    free(env);
 
     return msgid;
+}
+
+extern void index_overview(struct mailbox *mailbox, unsigned msgno)
+{
+    const char *cacheitem;
+    char *env, *from, *ref;
+    char *envtokens[NUMENVTOKENS];
+
+    cacheitem = cache_base + CACHE_OFFSET(msgno); /* envelope */
+    /* make a working copy of envelope; strip outer ()'s */
+    env = xstrndup(cacheitem + 5, CACHE_ITEM_LEN(cacheitem) - 2);
+
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip section */
+
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* cacheheaders */
+    /* find start of references */
+    ref = stristr(cacheitem + 4, "references:");
+
+    /* XXX fix this */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* from */
+    from = xstrndup(cacheitem + 4, CACHE_ITEM_LEN(cacheitem));
+
+    parse_cached_envelope(env, envtokens);
+
+    /* XXX fix this */
+    if (ref) {
+	ref += 11;
+	ref += strspn(ref, " \t");
+	ref = xstrndup(ref, strcspn(ref, "\r\n"));
+    }
+
+    prot_printf(imapd_out, "%u\t%s\t%s\t%s\t%s\t%s\t%u\t\t\r\n",
+		UID(msgno),
+		envtokens[ENV_SUBJECT] ? envtokens[ENV_SUBJECT] : "",
+		from ? from : "",
+		envtokens[ENV_DATE] ? envtokens[ENV_DATE] : "",
+		envtokens[ENV_MSGID] ? envtokens[ENV_MSGID] : "",
+		ref ? ref : "",
+		SIZE(msgno)
+		/* skip Lines */);
+
+    /* free stuff */
+    free(env);
+    free(from);
+    if (ref) free(ref);
 }
