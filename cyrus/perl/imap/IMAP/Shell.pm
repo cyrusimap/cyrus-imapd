@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.18.2.5 2002/10/11 13:32:02 ken3 Exp $
+# $Id: Shell.pm,v 1.18.2.6 2002/12/03 14:58:23 ken3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -399,6 +399,7 @@ sub _run {
   my $fin = shift || $fstk->[0] || *STDIN;
   my ($hfh, $line);
   $hfh = $use_rl->new('cyradm shell', $fin, $fstk->[1]);
+  $hfh->ornaments(0);
   my $rc;
   while (defined ($line = $hfh->readline((defined $$cyradm ?
 					  $$cyradm->servername :
@@ -1260,6 +1261,10 @@ sub new {
   my ($class, $dummy, $in, $out) = @_;
   autoflush $out 1;
   bless {in => $in, out => $out}, $class;
+}
+
+sub ornaments {
+  return;
 }
 
 sub readline {
