@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.55 2000/09/07 03:20:43 leg Exp $
+ * $Id: imtest.c,v 1.56 2000/10/10 14:54:28 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1167,7 +1167,7 @@ int main(int argc, char **argv)
   int *ssfp;
   int maxssf = 128;
   int minssf = 0;
-  char c;
+  int c;
   int result;
   int errflg = 0;
 
