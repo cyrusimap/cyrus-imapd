@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.6 2003/10/25 14:38:22 ken3 Exp $
+ * $Id: nntpd.c,v 1.7 2003/12/22 18:42:39 ken3 Exp $
  */
 
 /*
@@ -1807,12 +1807,29 @@ static int open_group(char *name, int has_prefix,
     return 0;
 }
 
+/*
+ * duplicate_find() callback function to build Xref content
+ */
+static int xref_cb(const char *msgid __attribute__((unused)),
+		   const char *mailbox,
+		   time_t mark __attribute__((unused)),
+		   unsigned long uid,
+		   void *rock __attribute__((unused)))
+{
+    /* make sure its a message in a mailbox that we're serving via NNTP */
+    if (*mailbox && !strncmp(mailbox, newsprefix, strlen(newsprefix)) &&
+	strncmp(mailbox, "user.", 5)) {
+	prot_printf(nntp_out, " %s:%lu", mailbox + strlen(newsprefix), uid);
+    }
+
+    return 0;
+}
+
 static void cmd_article(int part, char *msgid, unsigned long uid)
 {
-    int msgno, by_msgid;
+    int msgno, by_msgid = (msgid != NULL);
     char fname[MAX_MAILBOX_PATH+1];
     FILE *msgfile;
-    char buf[4096];
 
     msgno = index_finduid(uid);
     if (!msgno || index_getuid(msgno) != uid) {
@@ -1831,31 +1848,39 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 	return;
     }
 
-    if (!(by_msgid = msgid != NULL))
-	msgid = index_get_msgid(nntp_group, msgno);
+    if (!by_msgid) msgid = index_get_msgid(nntp_group, msgno);
 
     prot_printf(nntp_out, "%u %lu %s\r\n",
 		220 + part, by_msgid ? 0 : uid, msgid ? msgid : "<0>");
 
-    if (!by_msgid) free(msgid);
-
     if (part != ARTICLE_STAT) {
+	char buf[4096];
+	int body = 0;
+	int output = (part != ARTICLE_BODY);
+
 	while (fgets(buf, sizeof(buf), msgfile)) {
 
-	    if (part != ARTICLE_ALL && buf[0] == '\r' && buf[1] == '\n') {
+	    if (!body && buf[0] == '\r' && buf[1] == '\n') {
 		/* blank line between header and body */
+		body = 1;
+		if (output) {
+		    /* add the Xref header */
+		    prot_printf(nntp_out, "Xref: %s", config_servername);
+		    duplicate_find(msgid, &xref_cb, NULL);
+		    prot_printf(nntp_out, "\r\n");
+		}
 		if (part == ARTICLE_HEAD) {
 		    /* we're done */
 		    break;
 		}
 		else if (part == ARTICLE_BODY) {
 		    /* start outputing text */
-		    part = ARTICLE_ALL;
+		    output = 1;
 		    continue;
 		}
 	    }
 
-	    if (part != ARTICLE_BODY) {
+	    if (output) {
 		if (buf[0] == '.') prot_putc('.', nntp_out);
 		do {
 		    prot_printf(nntp_out, "%s", buf);
@@ -1869,6 +1894,8 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 
 	prot_printf(nntp_out, ".\r\n");
     }
+
+    if (!by_msgid) free(msgid);
 
     fclose(msgfile);
 }
@@ -2115,6 +2142,17 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 			    index_getlines(nntp_group, msgno));
 	    else
 		prot_printf(nntp_out, "%lu \r\n", msgid ? 0 : uid);
+	}
+	else if (!strcmp(hdr, "xref") && !pat /* [X]HDR only */) {
+	    int by_msgid = (msgid != NULL);
+
+	    if (!by_msgid) msgid = index_get_msgid(nntp_group, msgno);
+
+	    prot_printf(nntp_out, "%s", config_servername);
+	    duplicate_find(msgid, &xref_cb, NULL);
+	    prot_printf(nntp_out, "\r\n");
+
+	    if (!by_msgid) free(msgid);
 	}
 	else if ((body = index_getheader(nntp_group, msgno, hdr)) &&
 		 (!pat ||			/* [X]HDR */
@@ -2529,6 +2567,7 @@ static void cmd_list(char *arg1, char *arg2)
 	    prot_printf(nntp_out, "Bytes:\r\n");
 	    prot_printf(nntp_out, "Lines:\r\n");
 	}
+	prot_printf(nntp_out, "Xref:full\r\n");
 	prot_printf(nntp_out, ".\r\n");
     }
     else if (!strcmp(arg1, "active.times") || !strcmp(arg1, "distributions") ||
@@ -2650,7 +2689,8 @@ static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
 	    if (!found++)
 		prot_printf(nntp_out, "224 Overview information follows:\r\n");
 
-	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t%lu\r\n",
+	    /* mandatory fields */
+	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t%lu\t",
 			msgid ? 0 : over->uid,
 			over->subj ? over->subj : "",
 			over->from ? over->from : "",
@@ -2658,6 +2698,11 @@ static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
 			over->msgid ? over->msgid : "",
 			over->ref ? over->ref : "",
 			over->bytes, over->lines);
+
+	    /* add the Xref header */
+	    prot_printf(nntp_out, "Xref: %s", config_servername);
+	    duplicate_find(over->msgid, &xref_cb, NULL);
+	    prot_printf(nntp_out, "\r\n");
 	}
     }
 
