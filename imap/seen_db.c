@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.15 2000/08/08 17:30:51 leg Exp $
+   $Id: seen_db.c,v 1.16 2000/08/21 17:41:14 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -246,7 +246,7 @@ static int seen_readit(struct seen *seendb,
 		       int rw)
 {
     int r;
-    const char *data, *dstart;
+    const char *data, *dstart, *dend;
     char *p;
     int datalen;
     int version;
@@ -281,15 +281,17 @@ static int seen_readit(struct seen *seendb,
 			    lastchangeptr, seenuidsptr);
     }
 
+    /* remember that 'data' may not be null terminated ! */
     dstart = data;
+    dend = data + datalen;
 
     version = strtol(data, &p, 10); data = p;
     assert(version == SEEN_VERSION);
     *lastreadptr = strtol(data, &p, 10); data = p;
     *lastuidptr = strtol(data, &p, 10); data = p;
     *lastchangeptr = strtol(data, &p, 10); data = p;
-    while (isspace((int) *p)) p++; data = p;
-    uidlen = datalen - (data - dstart);
+    while (isspace((int) *p) && p < dend) p++; data = p;
+    uidlen = dend - data;
     *seenuidsptr = xmalloc(uidlen + 1);
     memcpy(*seenuidsptr, data, uidlen);
     (*seenuidsptr)[uidlen] = '\0';
