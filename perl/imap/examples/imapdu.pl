@@ -192,14 +192,12 @@ sub showsize {
   } elsif ($size < 1024*1024) {
     $size = $size/1024;
     printf "%9.2f KB\t", $size;
-  } elsif ($size < 1024*1024*1024) {
+  } else {
     $size = $size/ (1024 *1024);
     printf "%9.2f MB\t", $size;
-  } else {
-    print "way too large\t";
   }
 
-  printf "%5d msgs\t", $msgs;
+  printf "%6d msgs\t", $msgs;
 
   print "\t$name\n";
 }
