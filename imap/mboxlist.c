@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.224 2003/12/05 21:10:02 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.225 2003/12/05 21:30:16 rjs3 Exp $
  */
 
 #include <config.h>
@@ -1709,15 +1709,12 @@ static int find_p(void *rockp,
 	
 	matchlen = glob_test(g, namebuf+rock->inboxoffset,
 			     keylen-rock->inboxoffset, &minmatch);
-
-	/* If not a full match, skip it */
-	if(matchlen != keylen - rock->inboxoffset) return 0;
     } else {
 	matchlen = glob_test(g, key, keylen, &minmatch);
-
-	/* If not a full match, skip it */
-	if(matchlen != keylen) return 0;
     }
+
+    /* If its not a match, skip it -- partial matches are ok. */
+    if(matchlen == -1) return 0;
 
     if (rock->find_namespace != NAMESPACE_INBOX &&
 	rock->usermboxname &&
