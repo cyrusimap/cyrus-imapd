@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.67 2003/06/24 15:05:14 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.68 2003/06/24 15:59:42 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2785,14 +2785,15 @@ void cmd_capability(char *tag)
 	prot_printf(proxyd_out, " IDLE");
     }
 
-    if (tls_enabled()) {
+    if (tls_enabled() && !proxyd_starttls_done) {
 	prot_printf(proxyd_out, " STARTTLS");
     }
     if (!proxyd_starttls_done && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
 	prot_printf(proxyd_out, " LOGINDISABLED");	
     }
 
-    if (sasl_listmech(proxyd_saslconn, NULL, 
+    if (!proxyd_authstate &&
+	sasl_listmech(proxyd_saslconn, NULL, 
 		      "AUTH=", " AUTH=", "",
 		      &sasllist,
 		      NULL, &mechcount) == SASL_OK && mechcount > 0) {

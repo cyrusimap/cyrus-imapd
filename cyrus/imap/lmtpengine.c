@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.22 2003/06/19 21:18:01 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.23 2003/06/24 15:59:41 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1171,10 +1171,11 @@ void lmtpmode(struct lmtp_func *func,
 		  prot_printf(pout, "250-SIZE %d\r\n", max_msgsize);
 	      else
 		  prot_printf(pout, "250-SIZE\r\n");
-	      if (tls_enabled() && !func->preauth) {
+	      if (tls_enabled() && !cd.starttls_done && !func->preauth) {
 		  prot_printf(pout, "250-STARTTLS\r\n");
 	      }
-	      if (sasl_listmech(cd.conn, NULL, "AUTH ", " ", "", &mechs, 
+	      if (authenticated == NOAUTH &&
+		  sasl_listmech(cd.conn, NULL, "AUTH ", " ", "", &mechs, 
 				NULL, &mechcount) == SASL_OK && 
 		  mechcount > 0) {
 		  prot_printf(pout,"250-%s\r\n", mechs);

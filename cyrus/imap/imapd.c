@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.85 2003/06/24 15:05:13 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.86 2003/06/24 15:59:34 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2065,7 +2065,7 @@ void cmd_capability(char *tag)
 	prot_printf(imapd_out, " IDLE");
     }
 
-    if (tls_enabled()) {
+    if (tls_enabled() && !imapd_starttls_done) {
 	prot_printf(imapd_out, " STARTTLS");
     }
     if (!imapd_starttls_done && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
@@ -2077,7 +2077,8 @@ void cmd_capability(char *tag)
     }
 
     /* add the SASL mechs */
-    if (sasl_listmech(imapd_saslconn, NULL, 
+    if (!imapd_authstate &&
+	sasl_listmech(imapd_saslconn, NULL, 
 		      "AUTH=", " AUTH=", "",
 		      &sasllist,
 		      NULL, &mechcount) == SASL_OK && mechcount > 0) {

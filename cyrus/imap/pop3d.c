@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.32 2003/05/29 14:50:49 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.33 2003/06/24 15:59:41 ken3 Exp $
  */
 #include <config.h>
 
@@ -1169,7 +1169,8 @@ void cmd_capa()
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
 
     /* SASL special case: print SASL, then a list of supported capabilities */
-    if (sasl_listmech(popd_saslconn,
+    if (!popd_auth_done &&
+	sasl_listmech(popd_saslconn,
 		      NULL, /* should be id string */
 		      "SASL ", " ", "\r\n",
 		      &mechlist,
@@ -1177,7 +1178,7 @@ void cmd_capa()
 	prot_write(popd_out, mechlist, strlen(mechlist));
     }
 
-    if (tls_enabled()) {
+    if (tls_enabled() && !popd_starttls_done) {
 	prot_printf(popd_out, "STLS\r\n");
     }
     if (expire < 0) {
@@ -1193,8 +1194,9 @@ void cmd_capa()
     prot_printf(popd_out, "RESP-CODES\r\n");
     prot_printf(popd_out, "AUTH-RESP-CODE\r\n");
 
-    if(kflag || popd_starttls_done
-    || config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+    if (!popd_auth_done &&
+	(kflag || popd_starttls_done
+	 || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(popd_out, "USER\r\n");
     }
     
