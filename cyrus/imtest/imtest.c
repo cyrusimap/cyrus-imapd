@@ -28,9 +28,7 @@
 #include <ctype.h>
 #include <pwd.h>
 #include <sys/types.h>
-#ifndef FD_SET
-#include <unistd.h>
-#endif
+#include <sys/time.h>
 #include <sys/socket.h>
 #include <sys/file.h>
 #include <netinet/in.h>
