@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.156 2002/02/22 17:25:26 rjs3 Exp $
+# $Id: Makefile.in,v 1.157 2002/02/26 04:22:14 wcw Exp $
 # 
 # @configure_input@
 #
@@ -180,7 +180,7 @@ lmtpd: lmtpd.o $(LMTPOBJS) \
 lmtpd.pure: lmtpd.o $(LMTPOBJS) \
 	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o lmtpd.pure \
-	 $(SERVICE) lmtpd.o $(LMTPDOBJS) \
+	 $(SERVICE) lmtpd.o $(LMTPOBJS) \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 lmtpproxyd: lmtpproxyd.o $(LMTPOBJS) \
