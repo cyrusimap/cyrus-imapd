@@ -237,9 +237,7 @@ time_t parsefetchdate(char **bufx)
     c = *buf++;
 
     tm.tm_isdst = -1;
-    date = mktime(&tm);
-    ltm = localtime(&date);
-    date += gmtoff_of(ltm, date) - zone_off*60;
+    date = mkgmtime(&tm) - zone_off*60;
     bufx=&buf;
     
     return date;

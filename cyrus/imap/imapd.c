@@ -3496,6 +3496,7 @@ time_t *start, *end;
 
     tm.tm_sec = tm.tm_min = 59;
     tm.tm_hour = 23;
+    tm.tm_isdst = -1;
     *end = mktime(&tm);
 
     return c;
@@ -3685,9 +3686,7 @@ time_t *date;
     c = prot_getc(imapd_in);
 
     tm.tm_isdst = -1;
-    *date = mktime(&tm);
-    ltm = localtime(date);
-    *date += gmtoff_of(ltm, *date) - zone_off*60;
+    *date = mkgmtime(&tm) - zone_off*60;
 
     return c;
 
