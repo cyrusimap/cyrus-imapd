@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.126 2002/05/06 17:18:50 rjs3 Exp $
+ $Id: mailbox.c,v 1.127 2002/05/22 20:58:02 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2016,6 +2016,7 @@ int mailbox_create(const char *name,
     if(r) {
 	syslog(LOG_ERR, "IOERROR: %s header for new mailbox %s: %m",
 	       lockfailaction, mailbox.name);
+	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
     }
     mailbox.header_lock_count++;
@@ -2036,6 +2037,7 @@ int mailbox_create(const char *name,
     if(r) {
 	syslog(LOG_ERR, "IOERROR: %s index for new mailbox %s: %m",
 	       lockfailaction, mailbox.name);
+	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
     }
     mailbox.index_lock_count++;
@@ -2096,7 +2098,7 @@ int mailbox_create(const char *name,
 
 /*
  * Delete and close the mailbox 'mailbox'.  Closes 'mailbox' whether
- * or not the deletion was successful.
+ * or not the deletion was successful.  Requires a locked mailbox.
  */
 int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 {
@@ -2105,16 +2107,11 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
     struct dirent *f;
     char buf[MAX_MAILBOX_PATH];
     char *tail;
+    
+    /* Ensure that we are locked */
+    if(!mailbox->header_lock_count) return IMAP_INTERNAL;
 
-    /* Lock everything in sight */
-    r =  mailbox_lock_header(mailbox);
-    if (!r && mailbox->index_fd == -1) r = mailbox_open_index(mailbox);
-    if (!r) r = mailbox_lock_index(mailbox);
-    if (!r) rquota = mailbox_lock_quota(&mailbox->quota);
-    if (r) {
-	mailbox_close(mailbox);
-	return r;
-    }
+    rquota = mailbox_lock_quota(&mailbox->quota);
 
     seen_delete_mailbox(mailbox);
 
@@ -2303,6 +2300,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     return r;
 }
 
+/* Requires a locked mailbox */
 int mailbox_rename_finish(struct mailbox *oldmailbox,
 			  struct mailbox *newmailbox,
 			  int isinbox) 
