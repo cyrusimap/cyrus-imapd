@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.10.4.3 2002/10/03 18:21:06 ken3 Exp $ */
+/* $Id: idled.c,v 1.10.4.4 2002/10/09 18:32:28 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -65,6 +65,9 @@
 #include "xmalloc.h"
 #include "hash.h"
 #include "exitcodes.h"
+
+/* global state */
+const int config_need_data = 0;
 
 extern int optind;
 extern char *optarg;

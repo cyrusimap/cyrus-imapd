@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.1.2.3 2002/10/09 14:19:21 ken3 Exp $
+ * $Id: fetchnews.c,v 1.1.2.4 2002/10/09 18:32:17 ken3 Exp $
  */
 
 #include <config.h>
@@ -57,6 +57,8 @@
 #include "imapconf.h"
 #include "exitcodes.h"
 
+/* global state */
+const int config_need_data = 0;
 
 void fatal(const char *message, int code)
 {
