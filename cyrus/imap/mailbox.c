@@ -980,6 +980,35 @@ struct quota *quota;
 }
 
 /*
+ * Remove the quota root 'quota'
+ */
+int
+mailbox_delete_quota(quota)
+struct quota *quota;
+{
+    int r;
+    char quota_path[MAX_MAILBOX_PATH];
+    FILE *newfile;
+
+    assert(quota->lock_count != 0);
+
+    if (!quota->root) return 0;
+
+    sprintf(quota_path, "%s%s%s", config_dir, FNAME_QUOTADIR,
+	    quota->root);
+
+    unlink(quota_path);
+
+    if (quota->file) fclose(quota->file);
+    quota->file = 0;
+
+    free(quota->root);
+    quota->root = 0;
+
+    return 0;
+}
+
+/*
  * Perform an expunge operation on 'mailbox'.  If 'iscurrentdir' is nonzero,
  * the current directory is set to the mailbox directory.  If nonzero, the
  * function pointed to by 'decideproc' is called (with 'deciderock') to
@@ -1391,8 +1420,9 @@ struct mailbox *mailboxp;
  * Delete and close the mailbox 'mailbox'.  Closes 'mailbox' whether
  * or not the deletion was successful.
  */
-int mailbox_delete(mailbox)
+int mailbox_delete(mailbox, delete_quota_root)
 struct mailbox *mailbox;
+int delete_quota_root;
 {
     int r;
     DIR *dirp;
@@ -1412,20 +1442,25 @@ struct mailbox *mailbox;
 
     seen_delete(mailbox);
 
-    /* Free any quota being used by this mailbox */
-    if (mailbox->quota.used >= mailbox->quota_mailbox_used) {
-	mailbox->quota.used -= mailbox->quota_mailbox_used;
+    if (delete_quota_root) {
+	mailbox_delete_quota(&mailbox->quota);
     }
     else {
-	mailbox->quota.used = 0;
+	/* Free any quota being used by this mailbox */
+	if (mailbox->quota.used >= mailbox->quota_mailbox_used) {
+	    mailbox->quota.used -= mailbox->quota_mailbox_used;
+	}
+	else {
+	    mailbox->quota.used = 0;
+	}
+	r = mailbox_write_quota(&mailbox->quota);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "LOSTQUOTA: unable to record free of %u bytes in quota %s",
+		   mailbox->quota_mailbox_used, mailbox->quota.root);
+	}
+	mailbox_unlock_quota(&mailbox->quota);
     }
-    r = mailbox_write_quota(&mailbox->quota);
-    if (r) {
-	syslog(LOG_ERR,
-	       "LOSTQUOTA: unable to record free of %u bytes in quota %s",
-	       mailbox->quota_mailbox_used, mailbox->quota.root);
-    }
-    mailbox_unlock_quota(&mailbox->quota);
 
     /* remove all files in directory */
     strcpy(buf, mailbox->path);
@@ -1580,7 +1615,7 @@ bit32 *newuidvalidityp;
 	mailbox_close(&oldmailbox);
     }
     else {
-	r = mailbox_delete(&oldmailbox);
+	r = mailbox_delete(&oldmailbox, 0);
     }
 
     if (r && newmailbox.quota.root) {

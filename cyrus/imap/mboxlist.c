@@ -447,6 +447,7 @@ int checkacl;
     struct iovec iov[10];
     int n;
     struct mailbox mailbox;
+    int delete_quota_root = 0;
     bit32 uidvalidity;
 
     /* Check for request to delete a user */
@@ -547,7 +548,7 @@ int checkacl;
 	    
 	    /* Remove the sub-mailbox  */
 	    r = mailbox_open_header(submailboxname, &mailbox);
-	    if (!r) r = mailbox_delete(&mailbox);
+	    if (!r) r = mailbox_delete(&mailbox, 0);
 	}
     }
 
@@ -567,10 +568,27 @@ int checkacl;
     }
     close(newlistfd);
     
-    /* Remove the mailbox and move new mailbox list file into place */
     r = mailbox_open_header(name, &mailbox);
+
+    /*
+     * See if we have to remove mailbox's quota root
+     *
+     * NB: this doesn't catch all cases.  We don't handle removing
+     * orphaned quota roots on renaming or when inside the
+     * ``if (deleteuser)'' code above.
+     */
+    if (mailbox.quota.root &&
+	bsearch_mem(mailbox.quota.root, 1, list_base, list_size, 0, 0) == offset &&
+	(list_size <= offset + len + strlen(mailbox.quota.root) ||
+	 strncmp(list_base+offset+len, mailbox.quota.root, strlen(mailbox.quota.root)) != 0 ||
+	 (list_base[offset+len+strlen(mailbox.quota.root)] != '.' &&
+	  list_base[offset+len+strlen(mailbox.quota.root)] != '\t'))) {
+	delete_quota_root = 1;
+    }
+
+    /* Remove the mailbox and move new mailbox list file into place */
     uidvalidity = mailbox.uidvalidity;
-    if (!r) r = mailbox_delete(&mailbox);
+    if (!r) r = mailbox_delete(&mailbox, delete_quota_root);
     if (r) {
 	mboxlist_unlock();
 	return r;
@@ -1598,7 +1616,7 @@ int *seen;
 		r = mailbox_open_header(namebuf, &mailbox);
 		if (!r) {
 		    toimsp(namebuf, mailbox.uidvalidity, "RENsn", "", 0, 0);
-		    r = mailbox_delete(&mailbox);
+		    r = mailbox_delete(&mailbox, 0);
 		}
 		printf("deleted %s\n", namebuf);
 	    }
