@@ -3,7 +3,7 @@
 # this is a very expensive script and also COPIES data
 # so it is extremely slow; it can be rewritten to speed it up immensely
 # do NOT run this script while imapd's are running
-eval 'exec perl5 $0 ${1+"$@"}'
+eval 'exec perl $0 ${1+"$@"}'
     if $running_under_some_shell;
 
 require 5;
@@ -27,7 +27,7 @@ while (<CONF>) {
     }
     if (/^hashimapspool:\s(1|t|yes|on)/) {
 	$hashispool = 1;
-	print "i will also hash partitions.\n";
+	print "i will also unhash partitions.\n";
     }
 }
 close CONF;
@@ -80,10 +80,22 @@ while ($hashispool && ($part = shift @parts)) {
     # process each subdir
     foreach $i ("a".."z") {
 	print "$i ";
-	$i = "." . $i;
 
-	system ("cd $i ; tar cf - . | ( cd .. ; tar xf - )");
-	system ("rm -r $i");
+	opendir SUB, ".$i";
+	while ($s = readdir SUB) {
+	    if ($s =~ /^\./s) { next; }
+	    mkdir $s, 0755;	# ignore errors as it might already exist
+
+	    opendir MV, ".$i/$s";
+	    while ($t = readdir MV) {
+		if ($t =~ /^\./s) { next; }
+		rename (".$i/$s/$t", "$s/$t") or 
+		    die "couldn't rename .$i/$s/$t to $s/$t";
+	    }
+	    closedir MV;
+	}
+	closedir SUB;
+	rmdir ".$i";
     }
     
     print "done\n";
