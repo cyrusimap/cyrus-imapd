@@ -1,4 +1,13 @@
 #!/bin/sh
+
+#
+# This is internal documentation for Computing Services at 
+# Carnegie Mellon University. 
+#
+# Please refer to doc/readme.html for the 'real' README.
+#
+#
+
 smake init all
 
 echo run \"smake -d install\" as admin - suid binaries on AFS
