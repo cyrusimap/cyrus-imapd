@@ -341,7 +341,7 @@ int service_main(int argc, char **argv, char **envp)
 	sasl_setprop(sieved_saslconn, SASL_IPREMOTEPORT, remoteip);
 	saslprops.ipremoteport = xstrdup(remoteip);
     }
-    if(iptostring((struct sockaddr *)&sieved_remoteaddr,
+    if(iptostring((struct sockaddr *)&sieved_localaddr,
 		  sizeof(struct sockaddr_in), localip, 60) == 0) {
 	sasl_setprop(sieved_saslconn, SASL_IPLOCALPORT, localip);
 	saslprops.iplocalport = xstrdup(localip);
