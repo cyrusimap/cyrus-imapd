@@ -1,8 +1,9 @@
-$Id: AUTHORS,v 1.4 2002/05/25 19:57:52 leg Exp $
+$Id: AUTHORS,v 1.5 2004/11/02 12:37:30 ken3 Exp $
 
 Larry Greenfield <leg+sieve@andrew.cmu.edu> wrote the first pass.
 
-Alexy Melnikov <mel@taxxi.com> submitted some bug fixes and improvements.
+Alexy Melnikov <alexey.melnikov@isode.com> submitted some bug fixes and 
+improvements.
 
 Ken Murchison <ken@oceana.com> took the ball, added more extensions
 than existed in the known world, and overall improved the code mightily.
