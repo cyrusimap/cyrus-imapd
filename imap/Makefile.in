@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.115 2000/05/29 04:07:22 leg Exp $
+# $Id: Makefile.in,v 1.116 2000/06/04 22:49:47 leg Exp $
 # 
 # @configure_input@
 #
@@ -106,7 +106,7 @@ SERVICE=../master/service.o
 
 PROGS = collectnews syncnews arbitron fud reconstruct quota \
 	mbpath ipurge deliver \
-	imapd proxyd lmtpd pop3d pop3proxyd \
+	imapd proxyd lmtpd lmtpproxyd pop3d pop3proxyd \
 	ctl_mboxlist ctl_deliver target-acap acappush
 
 all: $(PROGS) $(SUIDPROGS)
@@ -142,14 +142,20 @@ syncnews: syncnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o syncnews  syncnews.o libimap.a $(DEPLIBS) \
 	 $(LIBS)
 
-deliver: deliver.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o deliver \
-	deliver.o libimap.a $(DEPLIBS) $(LIBS)
+deliver: deliver.o lmtpengine.o lmtpstats.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o deliver deliver.o lmtpengine.o lmtpstats.o \
+	libimap.a $(DEPLIBS) $(LIBS)
 
 lmtpd: lmtpstats.o lmtpd.o lmtpengine.o \
 	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o lmtpd \
 	 $(SERVICE) lmtpd.o lmtpengine.o lmtpstats.o \
+	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS)
+
+lmtpproxyd: lmtpstats.o lmtpproxyd.o lmtpengine.o \
+	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o lmtpproxyd \
+	 $(SERVICE) lmtpproxyd.o lmtpengine.o lmtpstats.o \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS)
 
 ctl_deliver: ctl_deliver.o libimap.a $(DEPLIBS)
