@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.82 2002/07/01 20:19:36 rjs3 Exp $
+ * $Id: imtest.c,v 1.83 2002/07/15 18:59:11 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -116,6 +116,8 @@ static char *realm = NULL;
 static char *cmdline_password = NULL;
 
 static char *output_socket = NULL;
+static int output_socket_opened = 0;
+static ino_t output_socket_ino = 0;
 
 extern int _sasl_debug;
 extern char *optarg;
@@ -224,7 +226,12 @@ struct protocol_t {
 
 void imtest_fatal(char *msg)
 {
-    if (output_socket) unlink(output_socket);
+    struct stat sbuf;
+    if (output_socket && output_socket_opened &&
+	stat(output_socket, &sbuf) != -1 &&
+	sbuf.st_ino == output_socket_ino) {
+	unlink(output_socket);
+    }
     if (msg != NULL) {
 	printf("failure: %s\n",msg);
     }
@@ -1179,7 +1186,8 @@ static void interactive(struct protocol_t *protocol, char *filename)
 	}
     } else if(output_socket) {
 	struct timeval tv;
-
+	struct stat sbuf;
+	
 	/* can't have this and a file for input */
 	sunsock.sun_family = AF_UNIX;
 	strcpy(sunsock.sun_path, output_socket);
@@ -1197,6 +1205,13 @@ static void interactive(struct protocol_t *protocol, char *filename)
 	if((listen(listen_sock, 5)) < 0) {
 	    imtest_fatal("could not listen to output socket");
 	}
+
+	if(stat(output_socket, &sbuf) == -1) {
+	    imtest_fatal("could not stat output socket");
+	}
+
+	output_socket_opened = 1;
+	output_socket_ino = sbuf.st_ino;
 
 	FD_ZERO(&accept_set);
 	FD_SET(listen_sock, &accept_set);
@@ -1367,10 +1382,16 @@ static void interactive(struct protocol_t *protocol, char *filename)
  cleanup:
     if(rock) free(rock);
 
-    if(output_socket) {
+    if(output_socket && output_socket_opened) {
+	struct stat sbuf;
+	
 	close(fd);
 	close(listen_sock);
-	unlink(output_socket);
+
+	if(stat(output_socket, &sbuf) != -1
+	   && sbuf.st_ino == output_socket_ino) {
+	    unlink(output_socket);
+	}
     }
     
     logout(&protocol->logout_cmd, 0);
