@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.120 1999/12/30 22:16:32 leg Exp $
+ * $Id: deliver.c,v 1.121 1999/12/30 22:29:31 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.120 1999/12/30 22:16:32 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.121 1999/12/30 22:29:31 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -470,6 +470,9 @@ char **argv;
 
 	optind++;
     }
+
+    msg_free(msgdata);
+
     exit(exitval);
 }
 
@@ -1580,7 +1583,8 @@ deliver_opts_t *delopts;
 
     for (;;) {
       if (!prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
-	exit(0);
+	  msg_free(msg);
+	  exit(0);
       }
       p = buf + strlen(buf) - 1;
       if (p >= buf && *p == '\n') *p-- = '\0';
@@ -1657,6 +1661,7 @@ deliver_opts_t *delopts;
 
 		     /* read a line */
 		     if (!prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
+			 msg_free(msg);
 			 exit(0);
 		     }
 		     p = buf + strlen(buf) - 1;
@@ -1772,6 +1777,7 @@ deliver_opts_t *delopts;
 	    if (!strcasecmp(buf, "quit")) {
 		prot_printf(deliver_out,"221 2.0.0 bye\r\n");
 		prot_flush(deliver_out);
+		msg_free(msg);
 		exit(0);
 	    }
 	    goto syntaxerr;
