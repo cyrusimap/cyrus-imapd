@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.93 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.91.2.1 2004/03/17 16:34:44 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -63,6 +63,7 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 #include <netdb.h>
 #include <sys/socket.h>
@@ -76,7 +77,7 @@
 #include "auth.h"
 #include "prot.h"
 #include "rfc822date.h"
-#include "global.h"
+#include "imapconf.h"
 #include "iptostring.h"
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -110,7 +111,7 @@ struct clientdata {
     struct protstream *pout;
     int fd;
 
-    char clienthost[NI_MAXHOST*2+1];
+    char clienthost[250];
     char lhlo_param[250];
 
     sasl_conn_t *conn;
@@ -125,8 +126,7 @@ struct clientdata {
 extern int deliver_logfd;
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
-		      const char *init_resp, const char *resp_prefix,
-		      const char *continuation,
+		      const char *init_resp, const char *continuation,
 		      struct protstream *pin, struct protstream *pout,
 		      int *sasl_result, char **success_data);
 
@@ -193,14 +193,14 @@ static void send_lmtp_error(struct protstream *pout, int r)
 "550-your message, or %s if you believe you\r\n"
 "550-received this message in error.\r\n"
 "550 5.7.1 Permission denied\r\n", 
-			config_getstring(IMAPOPT_POSTMASTER));
+			POSTMASTER);
 	} else {
 	    prot_printf(pout, "550 5.7.1 Permission denied\r\n");
 	}
 	break;
 
     case IMAP_QUOTA_EXCEEDED:
-	if(config_getswitch(IMAPOPT_LMTP_OVER_QUOTA_PERM_FAILURE)) {
+	if(config_getswitch("lmtp_overquota_perm_failure",0)) {
 	    /* Not Default - Perm Failure */
 	    prot_printf(pout, "552 5.2.2 Over quota\r\n");
 	} else {
@@ -270,6 +270,7 @@ static void send_lmtp_error(struct protstream *pout, int r)
 int msg_new(message_data_t **m)
 {
     message_data_t *ret = (message_data_t *) xmalloc(sizeof(message_data_t));
+    int i;
 
     ret->data = NULL;
     ret->f = NULL;
@@ -284,7 +285,8 @@ int msg_new(message_data_t **m)
 
     ret->rock = NULL;
 
-    ret->hdrcache = spool_new_hdrcache();
+    for (i = 0; i < HEADERCACHESIZE; i++)
+	ret->cache[i] = NULL;
 
     *m = ret;
     return 0;
@@ -321,16 +323,62 @@ void msg_free(message_data_t *m)
 	if (m->authstate) auth_freestate(m->authstate);
     }
 
-    spool_free_hdrcache(m->hdrcache);
+    for (i = 0; i < HEADERCACHESIZE; i++) {
+	if (m->cache[i]) {
+	    int j;
+
+	    free(m->cache[i]->name);
+	    for (j = 0; j < m->cache[i]->ncontents; j++) {
+		free(m->cache[i]->contents[j]);
+	    }
+
+	    free(m->cache[i]);
+	}
+    }
 
     free(m);
 }
 
+/* hash function used for header cache in struct msg */
+static int hashheader(char *header)
+{
+    int x = 0;
+    /* any CHAR except ' ', :, or a ctrl char */
+    for (; !iscntrl((int) *header) && (*header != ' ') && (*header != ':'); 
+	 header++) {
+	x *= 256;
+	x += *header;
+	x %= HEADERCACHESIZE;
+    }
+    return x;
+}
+
 const char **msg_getheader(message_data_t *m, const char *phead)
 {
+    char *head;
+    const char **ret = NULL;
+    int clinit, cl;
+
     assert(m && phead);
 
-    return spool_getheader(m->hdrcache, phead);
+    head = xstrdup(phead);
+    lcase(head);
+
+    /* check the cache */
+    clinit = cl = hashheader(head);
+    while (m->cache[cl] != NULL) {
+	if (!strcmp(head, m->cache[cl]->name)) {
+	    ret = (const char **) m->cache[cl]->contents;
+	    break;
+	}
+	cl++; /* try next hash bin */
+	cl %= HEADERCACHESIZE;
+	if (cl == clinit) break; /* gone all the way around */
+    }
+
+    free(head);
+
+    return ret;
 }
 
 int msg_getsize(message_data_t *m)
@@ -584,6 +632,331 @@ char *buf;
     }
 }
 
+/* copies the message from fin to fout, massaging accordingly: 
+   . newlines are fiddled to \r\n
+   . "." terminates 
+   . embedded NULs are rejected
+   . bare \r are removed
+*/
+static int copy_msg(struct protstream *fin, FILE *fout)
+{
+    char buf[8192], *p;
+    int r = 0;
+
+    /* -2: Might need room to add a \r\n\0 set */
+    while (prot_fgets(buf, sizeof(buf)-2, fin)) {
+	p = buf + strlen(buf) - 1;
+	if (p < buf) {
+	    /* buffer start with a \0 */
+	    r = IMAP_MESSAGE_CONTAINSNULL;
+	    continue; /* need to eat the rest of the message */
+	}
+	else if (buf[0] == '\r' && buf[1] == '\0') {
+	    /* The message contained \r\0, and fgets is confusing us. */
+	    r = IMAP_MESSAGE_CONTAINSNULL;
+	    continue; /* need to eat the rest of the message */
+	}
+	else if (p[0] == '\r') {
+	    /*
+	     * We were unlucky enough to get a CR just before we ran
+	     * out of buffer--put it back.
+	     */
+	    prot_ungetc('\r', fin);
+	    *p = '\0';
+	}
+	else if (p[0] == '\n' && (p == buf || p[-1] != '\r')) {
+	    /* found an \n without a \r */
+	    p[0] = '\r';
+	    p[1] = '\n';
+	    p[2] = '\0';
+	}
+	else if (p[0] != '\n') {
+	    /* line contained a \0 not at the end */
+	    r = IMAP_MESSAGE_CONTAINSNULL;
+	    continue;
+	}
+
+	/* Remove any lone CR characters */
+	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
+	    /* Src/Target overlap, use memmove */
+	    /* strlen(p) will result in copying the NUL byte as well */
+	    memmove(p, p+1, strlen(p));
+	}
+	
+	if (buf[0] == '.') {
+	    if (buf[1] == '\r' && buf[2] == '\n') {
+		/* End of message */
+		goto lmtpdot;
+	    }
+	    /* Remove the dot-stuffing */
+	    fputs(buf+1, fout);
+	} else {
+	    fputs(buf, fout);
+	}
+    }
+
+    /* wow, serious error---got a premature EOF. */
+    return IMAP_IOERROR;
+
+ lmtpdot:
+    return r;
+}
+
+/* take a list of headers, pull the first one out and return it in
+   name and contents.
+
+   copies fin to fout, massaging 
+
+   returns 0 on success, negative on failure */
+typedef enum {
+    NAME_START,
+    NAME,
+    COLON,
+    BODY_START,
+    BODY
+} state;
+
+enum {
+    NAMEINC = 128,
+    BODYINC = 1024
+};
+
+/* we don't have to worry about dotstuffing here, since it's illegal
+   for a header to begin with a dot!
+
+   returns 0 on success, filling in 'headname' and 'contents' with a static
+   pointer (blech).
+   on end of headers, returns 0 with NULL 'headname' and NULL 'contents'
+
+   on error, returns < 0
+*/
+static int parseheader(struct protstream *fin, FILE *fout, 
+		       char **headname, char **contents) {
+    int c;
+    static char *name = NULL, *body = NULL;
+    static int namelen = 0, bodylen = 0;
+    int off = 0;
+    state s = NAME_START;
+    int r = 0;
+    int reject8bit = config_getswitch("reject8bit", 0);
+
+    if (namelen == 0) {
+	namelen += NAMEINC;
+	name = (char *) xrealloc(name, namelen * sizeof(char));
+    }
+    if (bodylen == 0) {
+	bodylen += BODYINC;
+	body = (char *) xrealloc(body, bodylen * sizeof(char));
+    }
+
+    /* there are two ways out of this loop, both via gotos:
+       either we successfully read a header (got_header)
+       or we hit an error (ph_error) */
+    while ((c = prot_getc(fin)) != EOF) { /* examine each character */
+	switch (s) {
+	case NAME_START:
+	    if (c == '.') {
+		int peek;
+
+		peek = prot_getc(fin);
+		prot_ungetc(peek, fin);
+		
+		if (peek == '\r' || peek == '\n') {
+		    /* just reached the end of message */
+		    r = IMAP_MESSAGE_NOBLANKLINE;
+		    goto ph_error;
+		}
+	    }
+	    if (c == '\r' || c == '\n') {
+		/* just reached the end of headers */
+		r = 0;
+		goto ph_error;
+	    }
+	    /* field-name      =       1*ftext
+	       ftext           =       %d33-57 / %d59-126         
+	                               ; Any character except
+				       ;  controls, SP, and
+				       ;  ":". */
+	    if (!((c >= 33 && c <= 57) || (c >= 59 && c <= 126))) {
+		/* invalid header name */
+		r = IMAP_MESSAGE_BADHEADER;
+		goto ph_error;
+	    }
+	    name[0] = tolower(c);
+	    off = 1;
+	    s = NAME;
+	    break;
+
+	case NAME:
+	    if (c == ' ' || c == '\t' || c == ':') {
+		name[off] = '\0';
+		s = (c == ':' ? BODY_START : COLON);
+		break;
+	    }
+	    if (!((c >= 33 && c <= 57) || (c >= 59 && c <= 126))) {
+		r = IMAP_MESSAGE_BADHEADER;
+		goto ph_error;
+	    }
+	    name[off++] = tolower(c);
+	    if (off >= namelen - 3) {
+		namelen += NAMEINC;
+		name = (char *) xrealloc(name, namelen);
+	    }
+	    break;
+	
+	case COLON:
+	    if (c == ':') {
+		s = BODY_START;
+	    } else if (c != ' ' && c != '\t') {
+		/* i want to avoid confusing dot-stuffing later */
+		while (c == '.') {
+		    fputc(c, fout);
+		    c = prot_getc(fin);
+		}
+		r = IMAP_MESSAGE_BADHEADER;
+		goto ph_error;
+	    }
+	    break;
+
+	case BODY_START:
+	    if (c == ' ' || c == '\t') /* eat the whitespace */
+		break;
+	    off = 0;
+	    s = BODY;
+	    /* falls through! */
+	case BODY:
+	    /* now we want to convert all newlines into \r\n */
+	    if (c == '\r' || c == '\n') {
+		int peek;
+
+		peek = prot_getc(fin);
+		
+		fputc('\r', fout);
+		fputc('\n', fout);
+		/* we should peek ahead to see if it's folded whitespace */
+		if (c == '\r' && peek == '\n') {
+		    c = prot_getc(fin);
+		} else {
+		    c = peek; /* single newline seperator */
+		}
+		if (c != ' ' && c != '\t') {
+		    /* this is the end of the header */
+		    body[off] = '\0';
+		    prot_ungetc(c, fin);
+		    goto got_header;
+		}
+		/* ignore this whitespace, but we'll copy all the rest in */
+		break;
+	    } else {
+		if (c >= 0x80) {
+		    if (reject8bit) {
+			/* We have been configured to reject all mail of this
+			   form. */
+			r = IMAP_MESSAGE_CONTAINS8BIT;
+			goto ph_error;
+		    } else {
+			/* We have been configured to munge all mail of this
+			   form. */
+			c = 'X';
+		    }
+		}
+		/* just an ordinary character */
+		body[off++] = c;
+		if (off >= bodylen - 3) {
+		    bodylen += BODYINC;
+		    body = (char *) xrealloc(body, bodylen);
+		}
+	    }
+	}
+
+	/* copy this to the output */
+	fputc(c, fout);
+    }
+
+    /* if we fall off the end of the loop, we hit some sort of error
+       condition */
+
+ ph_error:
+    /* put the last character back; we'll copy it later */
+    prot_ungetc(c, fin);
+
+    /* and we didn't get a header */
+    if (headname != NULL) *headname = NULL;
+    if (contents != NULL) *contents = NULL;
+    return r;
+
+ got_header:
+    if (headname != NULL) *headname = xstrdup(name);
+    if (contents != NULL) *contents = xstrdup(body);
+
+    return 0;
+}
+
+static int fill_cache(struct protstream *fin, FILE *fout, message_data_t *m)
+{
+    int r = 0;
+
+    /* let's fill that header cache */
+    for (;;) {
+	char *name, *body;
+	int cl, clinit;
+
+	if ((r = parseheader(fin, fout, &name, &body)) < 0) {
+	    break;
+	}
+	if (!name) {
+	    /* reached the end of headers */
+	    break;
+	}
+
+	/* put it in the hash table */
+	clinit = cl = hashheader(name);
+	while (m->cache[cl] != NULL && strcmp(name, m->cache[cl]->name)) {
+	    cl++;		/* resolve collisions linearly */
+	    cl %= HEADERCACHESIZE;
+	    if (cl == clinit) break; /* gone all the way around, so bail */
+	}
+
+	/* found where to put it, so insert it into a list */
+	if (m->cache[cl]) {
+	    /* add this body on */
+	    m->cache[cl]->contents[m->cache[cl]->ncontents++] = body;
+
+	    /* whoops, won't have room for the null at the end! */
+	    if (!(m->cache[cl]->ncontents % 8)) {
+		/* increase the size */
+		m->cache[cl] = (header_t *)
+		    xrealloc(m->cache[cl],sizeof(header_t) +
+			     ((8 + m->cache[cl]->ncontents) * sizeof(char *)));
+	    }
+
+	    /* have no need of this */
+	    free(name);
+	} else {
+	    /* create a new entry in the hash table */
+	    m->cache[cl] = (header_t *) xmalloc(sizeof(header_t) + 
+						8 * sizeof(char*));
+	    m->cache[cl]->name = name;
+	    m->cache[cl]->contents[0] = body;
+	    m->cache[cl]->ncontents = 1;
+	}
+
+	/* we always want a NULL at the end */
+	m->cache[cl]->contents[m->cache[cl]->ncontents] = NULL;
+    }
+
+    if (r) {
+	/* got a bad header */
+
+	/* flush the remaining output */
+	copy_msg(fin, fout);
+	/* and return the error */
+	return r;
+    } else {
+	return copy_msg(fin, fout);
+    }
+}
+
 /*
  * file in the message structure 'm' from 'pin', assuming a dot-stuffed
  * stream a la lmtp.
@@ -665,8 +1038,7 @@ static int savemsg(struct clientdata *cd,
     }
 
     /* fill the cache */
-    r = spool_fill_hdrcache(cd->pin, f, m->hdrcache);
-    r |= spool_copy_msg(cd->pin, f);
+    r = fill_cache(cd->pin, f, m);
     if (r) {
 	fclose(f);
 	if (func->removespool) {
@@ -745,7 +1117,7 @@ static int process_recipient(char *addr,
     char *user;
     int r, sl;
     address_data_t *ret = (address_data_t *) xmalloc(sizeof(address_data_t));
-    int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
+    int forcedowncase = config_getswitch("lmtp_downcase_rcpt", 0);
 
     assert(addr != NULL && msg != NULL);
 
@@ -788,7 +1160,7 @@ static int process_recipient(char *addr,
 	}
 
 	/* Now finish the remainder of the localpart */
-	while ((config_virtdomains || *addr != '@') && *addr != '>') {
+	while (*addr != '@' && *addr != '>') {
 	    if (*addr == '\\') addr++;
 	    *dest++ = *addr++;
 	}
@@ -843,20 +1215,22 @@ void lmtpmode(struct lmtp_func *func,
 	      int fd)
 {
     message_data_t *msg = NULL;
+    char shutdownfilename[1024];
+    int shutdown_fd = -1;
     int max_msgsize;
     char buf[4096];
     char *p;
     int r;
     struct clientdata cd;
 
-    struct sockaddr_storage localaddr, remoteaddr;
+    struct sockaddr_in localaddr, remoteaddr;
     int havelocal = 0, haveremote = 0;
     char localip[60], remoteip[60];
     socklen_t salen;
-    char hbuf[NI_MAXHOST];
 
     sasl_ssf_t ssf;
     char *auth_id;
+    int plaintext_result;
 
     int secflags = 0;
     sasl_security_properties_t *secprops = NULL;
@@ -877,10 +1251,9 @@ void lmtpmode(struct lmtp_func *func,
 #endif
     cd.starttls_done = 0;
 
-    max_msgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
-
-    /* If max_msgsize is 0, allow any size */
-    if(!max_msgsize) max_msgsize = INT_MAX;
+    snprintf(shutdownfilename, sizeof(shutdownfilename), 
+	     "%s/msg/shutdown", config_dir);
+    max_msgsize = config_getint("maxmessagesize", INT_MAX);
 
     msg_new(&msg);
 
@@ -897,33 +1270,33 @@ void lmtpmode(struct lmtp_func *func,
     /* determine who we're talking to */
     salen = sizeof(remoteaddr);
     r = getpeername(fd, (struct sockaddr *)&remoteaddr, &salen);
-    if (!r &&
-	(remoteaddr.ss_family == AF_INET ||
-	 remoteaddr.ss_family == AF_INET6)) {
+    if (!r && remoteaddr.sin_family == AF_INET) {
 	/* connected to an internet socket */
-	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
-			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-	    strncpy(cd.clienthost, hbuf, sizeof(hbuf));
-	    strlcat(cd.clienthost, " ", sizeof(cd.clienthost));
-	    cd.clienthost[sizeof(cd.clienthost)-30] = '\0';
+	struct hostent *hp;
+	hp = gethostbyaddr((char *)&remoteaddr.sin_addr,
+			   sizeof(remoteaddr.sin_addr), AF_INET);
+	if (hp != NULL) {
+	    strlcpy(cd.clienthost, hp->h_name, sizeof(cd.clienthost) - 30);
 	} else {
-	    cd.clienthost[0] = '\0';
+	    strlcpy(cd.clienthost, inet_ntoa(remoteaddr.sin_addr), 
+		    sizeof(cd.clienthost) - 30);
 	}
-	getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
-		    NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
-	strlcat(cd.clienthost, "[", sizeof(cd.clienthost));
-	strlcat(cd.clienthost, hbuf, sizeof(cd.clienthost));
+	strlcat(cd.clienthost, " [", sizeof(cd.clienthost));
+	strlcat(cd.clienthost, inet_ntoa(remoteaddr.sin_addr), 
+		sizeof(cd.clienthost));
 	strlcat(cd.clienthost, "]", sizeof(cd.clienthost));
-	
+
 	salen = sizeof(localaddr);
 	if (!getsockname(fd, (struct sockaddr *)&localaddr, &salen)) {
 	    /* set the ip addresses here */
-	    if(iptostring((struct sockaddr *)&localaddr, salen,
+	    if(iptostring((struct sockaddr *)&localaddr,
+                          sizeof(struct sockaddr_in),
 			  localip, sizeof(localip)) == 0) {
 		havelocal = 1;
                 saslprops.iplocalport = xstrdup(localip);
             }
-            if(iptostring((struct sockaddr *)&remoteaddr, salen,
+            if(iptostring((struct sockaddr *)&remoteaddr,
+                          sizeof(struct sockaddr_in),
 			  remoteip, sizeof(remoteip)) == 0) {
 		haveremote = 1;
                 saslprops.ipremoteport = xstrdup(remoteip);
@@ -944,7 +1317,7 @@ void lmtpmode(struct lmtp_func *func,
 
     /* Setup SASL to go.  We need to do this *after* we decide if
      *  we are preauthed or not. */
-    if (sasl_server_new("lmtp", NULL, NULL, NULL,
+    if (sasl_server_new("lmtp", config_servername, NULL, NULL,
 			NULL, (func->preauth ? localauth_override_cb : NULL),
 			0, &cd.conn) != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
@@ -953,10 +1326,10 @@ void lmtpmode(struct lmtp_func *func,
     /* set my allowable security properties */
     /* ANONYMOUS is silly because we allow that anyway */
     secflags = SASL_SEC_NOANONYMOUS;
-    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+    plaintext_result = config_getswitch("allowplaintext",1);
+    if (!config_getswitch("lmtp_allowplaintext", plaintext_result)) {
 	secflags |= SASL_SEC_NOPLAINTEXT;
     }
-
     secprops = mysasl_secprops(secflags);
     sasl_setprop(cd.conn, SASL_SEC_PROPS, secprops);
 
@@ -998,7 +1371,12 @@ void lmtpmode(struct lmtp_func *func,
 
       /* Only allow LHLO/NOOP/QUIT when there is a shutdown file */
       if (!strchr("LlNnQq", buf[0]) &&
-	  shutdown_file(buf, sizeof(buf))) {
+	  (shutdown_fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+	  struct protstream *shutdown_in = prot_new(shutdown_fd, 0);
+
+	  prot_fgets(buf, sizeof(buf), shutdown_in);
+	  if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
+	  if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
 
 	  prot_printf(pout, "421 4.3.2 %s\r\n", buf);
 	  prot_flush(pout);
@@ -1038,7 +1416,7 @@ void lmtpmode(struct lmtp_func *func,
 	      }
 	      strlcpy(mech, buf + 5, sizeof(mech));
 
-	      r = saslserver(cd.conn, mech, p, "", "334 ",
+	      r = saslserver(cd.conn, mech, p, "334 ",
 			     pin, pout, &sasl_result, NULL);
 
 	      if (r) {
@@ -1064,16 +1442,13 @@ void lmtpmode(struct lmtp_func *func,
 		      }
 		      else {
 			  sleep(3);
-
-			  if (remoteaddr.ss_family == AF_INET ||
-			      remoteaddr.ss_family == AF_INET6)
-			      getnameinfo((struct sockaddr *)&remoteaddr,
-					  salen, hbuf, sizeof(hbuf), NULL, 0,
-					  NI_NUMERICHOST | NI_WITHSCOPEID);
-			  else
-			      strlcpy(hbuf, "[unix socket]", sizeof(hbuf));		  
+		  
 			  syslog(LOG_ERR, "badlogin: %s %s %s",
-				 hbuf, mech, sasl_errdetail(cd.conn));
+				 remoteaddr.sin_family == AF_INET ?
+				 inet_ntoa(remoteaddr.sin_addr) :
+				 "[unix socket]",
+				 mech,
+				 sasl_errdetail(cd.conn));
 		  
 			  snmp_increment_args(AUTHENTICATION_NO, 1,
 					      VARIABLE_AUTH, hash_simple(mech), 
@@ -1174,10 +1549,10 @@ void lmtpmode(struct lmtp_func *func,
 		  prot_printf(pout, "250-SIZE %d\r\n", max_msgsize);
 	      else
 		  prot_printf(pout, "250-SIZE\r\n");
-	      if (tls_enabled() && !cd.starttls_done && !!authenticated) {
+	      if (tls_enabled("lmtp") && !cd.starttls_done && !authenticated) {
 		  prot_printf(pout, "250-STARTTLS\r\n");
 	      }
-	      if (authenticated <= NOAUTH &&
+	      if (authenticated <= 0 &&
 		  sasl_listmech(cd.conn, NULL, "AUTH ", " ", "", &mechs, 
 				NULL, &mechcount) == SASL_OK && 
 		  mechcount > 0) {
@@ -1194,7 +1569,7 @@ void lmtpmode(struct lmtp_func *func,
       case 'm':
       case 'M':
 	    if (!authenticated) {
-		if (config_getswitch(IMAPOPT_SOFT_NOAUTH)) {
+		if (config_getswitch("soft_noauth", 1)) {
 		    prot_printf(pout, "430 Authentication required\r\n");
 		} else {
 		    prot_printf(pout, "530 Authentication required\r\n");
@@ -1230,7 +1605,7 @@ void lmtpmode(struct lmtp_func *func,
 			tmp += 5;
 			msg->authuser = parseautheq(&tmp);
 			if (msg->authuser) {
-			    msg->authstate = auth_newstate(msg->authuser);
+			    msg->authstate = auth_newstate(msg->authuser, NULL);
 			} else {
 			    /* do we want to bounce mail because of this? */
 			    /* i guess not. accept with no auth user */
@@ -1393,7 +1768,7 @@ void lmtpmode(struct lmtp_func *func,
       case 's':
       case 'S':
 #ifdef HAVE_SSL
-	    if (!strcasecmp(buf, "starttls") && tls_enabled() &&
+	    if (!strcasecmp(buf, "starttls") && tls_enabled("lmtp") &&
 		!func->preauth) { /* don't need TLS for preauth'd connect */
 		int *layerp;
 		sasl_ssf_t ssf;
@@ -1679,8 +2054,8 @@ static int do_auth(struct lmtp_conn *conn)
     int r;
     const int AUTH_ERROR = 420, AUTH_OK = 250;
     sasl_security_properties_t *secprops = NULL;
-    struct sockaddr_storage saddr_l;
-    struct sockaddr_storage saddr_r;
+    struct sockaddr_in saddr_l;
+    struct sockaddr_in saddr_r;
     socklen_t addrsize;
     char buf[2048];
     char *in;
@@ -1700,14 +2075,14 @@ static int do_auth(struct lmtp_conn *conn)
     }
 
     /* set the IP addresses */
-    addrsize=sizeof(struct sockaddr_storage);
+    addrsize=sizeof(struct sockaddr_in);
     if (getpeername(conn->sock, (struct sockaddr *)&saddr_r, &addrsize) != 0) {
 	syslog(LOG_ERR,
 	       "lmtpengine do_auth: getpeername() failed");
 	return AUTH_ERROR;
     }
     
-    addrsize=sizeof(struct sockaddr_storage);
+    addrsize=sizeof(struct sockaddr_in);
     if (getsockname(conn->sock, (struct sockaddr *)&saddr_l,&addrsize)!=0) {
 	syslog(LOG_ERR,
 	       "lmtpengine do_auth: getsockname() failed");
@@ -1715,15 +2090,17 @@ static int do_auth(struct lmtp_conn *conn)
     }
     
 
-    if (iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip,
-		   sizeof(remoteip)) != 0) {
+    if (iptostring((struct sockaddr *)&saddr_r,
+		   sizeof(struct sockaddr_in),
+		   remoteip, sizeof(remoteip)) != 0) {
 	syslog(LOG_ERR,
 	       "lmtpengine do_auth: iptostring() (remote) failed");
 	return AUTH_ERROR;
     }
     
-    if (iptostring((struct sockaddr *)&saddr_l, addrsize, localip,
-		   sizeof(localip)) != 0) {
+    if (iptostring((struct sockaddr *)&saddr_l,
+		   sizeof(struct sockaddr_in),
+		   localip, sizeof(localip)) != 0) {
 	syslog(LOG_ERR,
 	       "lmtpengine do_auth: iptostring() (local) failed");	
 	return AUTH_ERROR;
@@ -1852,48 +2229,44 @@ int lmtp_connect(const char *phost,
 	free(host);
 	host = xstrdup(config_servername);
     } else {
-	struct addrinfo hints, *res0 = NULL, *res;
-	int err;
+	struct hostent *hp;
+	struct sockaddr_in addr;
+	struct servent *service;
 	char *p;
 
-	if (*host == '[' && (p = strchr(host + 1, ']')) != NULL &&
-	    (*++p == '\0' || *p == ':')) {
-	    host++;
-	    *(p - 1) = '\0';
-	    if (*p != ':')
-		p = NULL;
-	} else {
-    	    p = strchr(host, ':');
-	}
- 
+	p = strchr(host, ':');
 	if (p) {
 	    *p++ = '\0';
 	} else {
 	    p = "lmtp";
 	}
 
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = PF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	err = getaddrinfo(host, p, &hints, &res0);
-	if (err) {
-	    syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %s",
-		   host, p, gai_strerror(err));
+	if ((hp = gethostbyname(host)) == NULL) {
+	    syslog(LOG_ERR, "gethostbyname(%s) failed", host);
 	    goto errsock;
 	}
 
-	for (res = res0; res; res = res->ai_next) {
-	    sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-	    if (sock < 0)
-		continue;
-	    if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
-		break;
-	    close(sock);
-	    sock = -1;
+	/* open inet socket */
+	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+	    syslog(LOG_ERR, "socket() failed: %m");
+	    goto errsock;
 	}
 
-	freeaddrinfo(res0);
-	if (sock < 0) {
+	addr.sin_family = AF_INET;
+	memcpy(&addr.sin_addr, hp->h_addr, hp->h_length);
+	service = getservbyname(p, "tcp");
+	if (service) {
+	    addr.sin_port = service->s_port;
+	} else {
+	    int pn = atoi(p);
+	    if (pn == 0) {
+		syslog(LOG_ERR, "couldn't find valid lmtp port");
+		goto errsock;
+	    }
+	    addr.sin_port = htons(pn);
+	}
+
+	if (connect(sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 	    syslog(LOG_ERR, "connect(%s:%s) failed: %m", host, p);
 	    goto errsock;
 	}	    
@@ -2210,7 +2583,7 @@ int lmtp_disconnect(struct lmtp_conn *conn)
 /* Reset the given sasl_conn_t to a sane state */
 static int reset_saslconn(sasl_conn_t **conn) 
 {
-    int ret, secflags;
+    int ret, secflags, plaintext_result;
     sasl_security_properties_t *secprops = NULL;
 
     sasl_dispose(conn);
@@ -2231,10 +2604,11 @@ static int reset_saslconn(sasl_conn_t **conn)
     if(ret != SASL_OK) return ret;
     
     secflags = SASL_SEC_NOANONYMOUS;
-    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+
+    plaintext_result = config_getswitch("allowplaintext", 1);
+    if (!config_getswitch("lmtp_allowplaintext", plaintext_result)) {
 	secflags |= SASL_SEC_NOPLAINTEXT;
     }
-
     secprops = mysasl_secprops(secflags);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
