@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.38 2001/11/13 20:01:52 leg Exp $
+ * $Id: lmtpengine.c,v 1.39 2001/11/13 21:52:31 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -173,7 +173,7 @@ static void send_lmtp_error(struct protstream *pout, int r)
     case IMAP_PERMISSION_DENIED:
 	if (LMTP_LONG_ERROR_MSGS) {
 	    prot_printf(pout, 
-"550-You do not have permission to post a message to this mailbox.\r\n\r\n"
+"550-You do not have permission to post a message to this mailbox.\r\n"
 "550-Please contact the owner of this mailbox in order to submit\r\n"
 "550-your message, or postmaster@andrew.cmu.edu if you believe you\r\n"
 "550-received this message in error.\r\n"
