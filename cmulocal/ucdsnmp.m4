@@ -1,5 +1,5 @@
 dnl look for the ucdsnmp libraries
-dnl $Id: ucdsnmp.m4,v 1.7 2003/10/22 18:02:47 rjs3 Exp $
+dnl $Id: ucdsnmp.m4,v 1.8 2003/10/22 18:50:02 rjs3 Exp $
 
 AC_DEFUN([CMU_UCDSNMP], [
   AC_REQUIRE([CMU_SOCKETS])

@@ -13,7 +13,7 @@
  *
  */
   
-/* $Id: htmlstrip.c,v 1.8 2003/10/22 18:02:55 rjs3 Exp $ */
+/* $Id: htmlstrip.c,v 1.9 2003/10/22 18:50:06 rjs3 Exp $ */
   
 #include <stdio.h>
 #include <string.h>

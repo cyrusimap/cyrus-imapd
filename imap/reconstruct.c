@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.80 2003/10/22 18:02:59 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.81 2003/10/22 18:50:08 rjs3 Exp $ */
 
 #include <config.h>
 

@@ -1,4 +1,4 @@
-# $Id: Makefile.dist,v 1.6 2003/10/22 18:02:56 rjs3 Exp $
+# $Id: Makefile.dist,v 1.7 2003/10/22 18:50:07 rjs3 Exp $
 # it would be nice to figure out how to make "Makefile" do an
 # 'include' of this file.
 # we'd have to make this use srcdir and only define COMPILE_ET if it wasn't

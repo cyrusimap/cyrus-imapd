@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.220 2003/10/22 18:02:58 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.221 2003/10/22 18:50:08 rjs3 Exp $
  */
 
 #include <config.h>

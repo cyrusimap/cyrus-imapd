@@ -40,7 +40,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: sieveshell.pl,v 1.20 2003/10/22 18:03:21 rjs3 Exp $
+# $Id: sieveshell.pl,v 1.21 2003/10/22 18:50:28 rjs3 Exp $
 #
 
 use Cyrus::SIEVE::managesieve;

@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.36 2003/10/22 18:03:04 rjs3 Exp $
+ * $Id: auth_unix.c,v 1.37 2003/10/22 18:50:12 rjs3 Exp $
  */
 
 #include <config.h>

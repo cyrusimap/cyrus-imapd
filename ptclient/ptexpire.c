@@ -68,7 +68,7 @@
 #include "libconfig.h"
 #include "lock.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.13 2003/10/22 18:03:22 rjs3 Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.14 2003/10/22 18:50:29 rjs3 Exp $";
 
 /* global */
 time_t timenow;

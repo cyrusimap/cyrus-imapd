@@ -1,5 +1,5 @@
 /* append.h -- Description of messages to be copied 
- * $Id: append.h,v 1.23 2003/10/22 18:02:56 rjs3 Exp $ 
+ * $Id: append.h,v 1.24 2003/10/22 18:50:07 rjs3 Exp $ 
  *
  * Copyright (c) 1998, 2000 Carnegie Mellon University.  All rights reserved.
  *

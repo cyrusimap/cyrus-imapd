@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.26 2003/10/22 18:03:24 rjs3 Exp $
+ * $Id: message.c,v 1.27 2003/10/22 18:50:30 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University

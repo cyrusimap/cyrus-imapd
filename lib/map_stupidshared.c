@@ -3,7 +3,7 @@
  * This file is like map_shared.c, but doesn't use any "SLOP", since
  * "Digital Unix" doesn't permit mapping a region past the end of a file.
  *
- * $Id: map_stupidshared.c,v 1.13 2003/10/22 18:03:05 rjs3 Exp $
+ * $Id: map_stupidshared.c,v 1.14 2003/10/22 18:50:12 rjs3 Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

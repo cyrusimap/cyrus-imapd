@@ -22,7 +22,6 @@ lmtpstats.c
 lmtpstats.h
 mbexamine
 mbpath
-mbexamine
 mupdate
 mupdate_err.c
 mupdate_err.h

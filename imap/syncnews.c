@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.23 2003/10/22 18:02:59 rjs3 Exp $
+ * $Id: syncnews.c,v 1.24 2003/10/22 18:50:08 rjs3 Exp $
  */
 #include <config.h>
 

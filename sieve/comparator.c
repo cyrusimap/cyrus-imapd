@@ -1,6 +1,6 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
- * $Id: comparator.c,v 1.14 2003/10/22 18:03:24 rjs3 Exp $
+ * $Id: comparator.c,v 1.15 2003/10/22 18:50:30 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -39,8 +39,6 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "bytecode.h"
 
 /*!!! uses B_CONTAINS not CONTAINS, etc, only works with bytecode*/
-
-extern int strcasecmp(const char *, const char *);
 
 extern int strcasecmp(const char *, const char *);
 

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.34 2003/10/22 18:02:57 rjs3 Exp $ */
+/* $Id: duplicate.c,v 1.35 2003/10/22 18:50:07 rjs3 Exp $ */
 
 #include <config.h>
 

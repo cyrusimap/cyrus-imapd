@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.15 2003/10/22 18:02:56 rjs3 Exp $ */
+/* $Id: backend.c,v 1.16 2003/10/22 18:50:07 rjs3 Exp $ */
 
 #include <config.h>
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.10 2003/10/22 18:02:56 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.11 2003/10/22 18:50:07 rjs3 Exp $
  */
 
 #include <config.h>

@@ -1,4 +1,4 @@
-$Id: README,v 1.4 2003/10/22 18:03:22 rjs3 Exp $
+$Id: README,v 1.5 2003/10/22 18:50:29 rjs3 Exp $
 
 This directory contains support programs for various protection database
 authorization modules (ptloader for AFS PTS groups, and hopefully an ldaploader

@@ -1,4 +1,4 @@
-# $Id: Makefile.dist,v 1.10 2003/10/22 18:02:52 rjs3 Exp $
+# $Id: Makefile.dist,v 1.11 2003/10/22 18:50:04 rjs3 Exp $
 dist:
 	mkdir -p man
 	for man in ../man/*.[1-9]; \

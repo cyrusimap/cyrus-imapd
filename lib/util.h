@@ -1,5 +1,5 @@
 /* util.h -- general utility functions
- * $Id: util.h,v 1.16 2003/10/22 18:03:05 rjs3 Exp $
+ * $Id: util.h,v 1.17 2003/10/22 18:50:12 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

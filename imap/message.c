@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.96 2003/10/22 18:02:58 rjs3 Exp $
+ * $Id: message.c,v 1.97 2003/10/22 18:50:08 rjs3 Exp $
  */
 
 #include <config.h>

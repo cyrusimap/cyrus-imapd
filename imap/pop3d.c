@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.143 2003/10/22 18:02:58 rjs3 Exp $
+ * $Id: pop3d.c,v 1.144 2003/10/22 18:50:08 rjs3 Exp $
  */
 #include <config.h>
 
