@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.239 2000/05/11 18:42:08 leg Exp $ */
+/* $Id: imapd.c,v 1.240 2000/05/12 19:04:44 leg Exp $ */
 
 #include <config.h>
 
@@ -1556,63 +1556,60 @@ void cmd_id(char *tag)
     /* parse parameter list */
     if (c == '(') {
 	for (;;) {
-	    /* get field name */
-	    c = getstring(&field);
-
-	    /* if field is legal length and followed by a space, continue */
-	    if (c == ' ' && strlen(field.s) <= 30) {
-		/* get field value */
-		d = getnstring(&arg);
-
-		/* if value is legal length, and is followed by a space
-		   or close paren, and we have not exceeded max num of
-		   field-value pairs, continue */
-		if ((d == ' ' || d == ')') && strlen(arg.s) <= 1024 &&
-		    ++npair <= 30) {
-		    appendstrlist(&fields, field.s);
-		    appendstrlist(&values, arg.s);
-
-		    /* if value is followed by a close paren, we're done */
-		    if (d == ')') {
-			c = prot_getc(imapd_in);
-			break;
-		    }
-		    /* otherwise, get next pair */
-		    continue;
-		}
+	    if (c == ')') {
+		/* end of string/value pairs */
+		break;
 	    }
 
-	    /* print error message, cleanup and exit */
-	    if (c == EOF)
+	    /* get field name */
+	    c = getstring(&field);
+	    if (c != ' ') {
 		prot_printf(imapd_out,
 			    "%s BAD Invalid/missing field name in Id\r\n",
 			    tag);
-	    else if (strlen(field.s) > 30)
+		break;
+	    }
+
+	    /* get field value */
+	    c = getnstring(&arg);
+	    if (c != ' ' && c != ')') {
 		prot_printf(imapd_out,
-			    "%s BAD Field \"%s\" longer than 30 octets in Id\r\n",
-			    tag, field.s);
-	    else if (c != ' ' || d == EOF)
-		prot_printf(imapd_out,
-			    "%s BAD Invalid/missing value for field \"%s\" in Id\r\n",
-			    tag, field.s);
-	    else if (strlen(arg.s) > 1024)
-		prot_printf(imapd_out,
-			    "%s BAD Value \"%s\" longer than 1024 octets in Id\r\n",
-			    tag, arg.s);
-	    else if (npair > 30)
-		prot_printf(imapd_out,
-			    "%s BAD More than 30 field-value pairs in Id\r\n",
+			    "%s BAD Invalid/missing value in Id\r\n",
 			    tag);
-	    else
+		break;
+	    }
+
+	    /* ok, we're anal, but we'll still process the ID command */
+	    if (strlen(field.s) > 30) {
+		prot_printf(imapd_out, 
+			    "* BAD field longer than 30 octets in Id\r\n");
+		continue;
+	    }
+	    if (strlen(arg.s) > 1024) {
 		prot_printf(imapd_out,
-			    "%s BAD Missing required close parenthesis in Id\r\n",
-			    tag);
-	    eatline(c);
-	    freestrlist(fields);
-	    freestrlist(values);
-	    return;
+			    "* BAD value longer than 1024 octets in Id\r\n");
+		continue;
+	    }
+	    if (++npair > 30) {
+		prot_printf(imapd_out,
+			    "* BAD too many field-value pairs in ID\r\n");
+		continue;
+	    }
+	    
+	    /* ok, we're happy enough */
+	    appendstrlist(&fields, field.s);
+	    appendstrlist(&values, arg.s);
 	}
     }
+
+    if (c != ')') {
+	/* erp! */
+	eatline(c);
+	freestrlist(fields);
+	freestrlist(values);
+	return;
+    }
+    c = prot_getc(imapd_in);
 
     /* check for CRLF */
     if (c == '\r') c = prot_getc(imapd_in);
@@ -1620,17 +1617,15 @@ void cmd_id(char *tag)
 	prot_printf(imapd_out,
 		    "%s BAD Unexpected extra arguments to Id\r\n", tag);
 	eatline(c);
-	if (npair) {
-	    freestrlist(fields);
-	    freestrlist(values);
-	}
+	freestrlist(fields);
+	freestrlist(values);
 	return;
     }
 
     /* log the client's ID string.
        eventually this should be a callback or something. */
     if (npair && !did_id) {
-	char logbuf[32768];
+	char logbuf[40000];	/* limit of 30 * (1024 + 30) */
 	struct strlist *fptr, *vptr;
 
 	sprintf(logbuf, "client id:");
