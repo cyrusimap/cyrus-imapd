@@ -44,15 +44,11 @@
 #include <config.h>
 #endif
 
+#include "imapconf.h"
 #include "xmalloc.h"
 #include "prot.h"
 
 #define BUFGROWSIZE 100
-
-struct buf {
-    char *s;
-    int alloc;
-};
 
 /*
  * Print an authentication ready response
@@ -119,7 +115,6 @@ static const char index_64[256] = {
 };
 #define CHAR64(c)  (index_64[(unsigned char)(c)])
 
-extern void eatline(int c);
 /*
  * Parse a base64_string
  */
@@ -138,7 +133,7 @@ int getbase64string(struct protstream *in, struct buf *buf)
 	if (c1 == '\r') {
 	    c1 = prot_getc(in);
 	    if (c1 != '\n') {
-		eatline(c1);
+		eatline(in, c1);
 		return -1;
 	    }
 	    return len;
@@ -146,25 +141,25 @@ int getbase64string(struct protstream *in, struct buf *buf)
 	else if (c1 == '\n') return len;
 
 	if (CHAR64(c1) == XX) {
-	    eatline(c1);
+	    eatline(in, c1);
 	    return -1;
 	}
 	
 	c2 = prot_getc(in);
 	if (CHAR64(c2) == XX) {
-	    eatline(c2);
+	    eatline(in, c2);
 	    return -1;
 	}
 
 	c3 = prot_getc(in);
 	if (c3 != '=' && CHAR64(c3) == XX) {
-	    eatline(c3);
+	    eatline(in, c3);
 	    return -1;
 	}
 
 	c4 = prot_getc(in);
 	if (c4 != '=' && CHAR64(c4) == XX) {
-	    eatline(c4);
+	    eatline(in, c4);
 	    return -1;
 	}
 
@@ -178,7 +173,7 @@ int getbase64string(struct protstream *in, struct buf *buf)
 	    c1 = prot_getc(in);
 	    if (c1 == '\r') c1 = prot_getc(in);
 	    if (c1 != '\n') {
-		eatline(c1);
+		eatline(in, c1);
 		return -1;
 	    }
 	    if (c4 != '=') return -1;
@@ -189,7 +184,7 @@ int getbase64string(struct protstream *in, struct buf *buf)
 	    c1 = prot_getc(in);
 	    if (c1 == '\r') c1 = prot_getc(in);
 	    if (c1 != '\n') {
-		eatline(c1);
+		eatline(in, c1);
 		return -1;
 	    }
 	    return len;
