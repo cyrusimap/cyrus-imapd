@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.112 2001/03/14 06:02:38 leg Exp $
+ $Id: mailbox.c,v 1.113 2001/05/01 18:39:12 wcw Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1883,7 +1883,7 @@ int mailbox_create(const char *name,
 
     while ((p = strchr(p+1, '/'))) {
 	*p = '\0';
-	if (mkdir(path, 0777) == -1 && errno != EEXIST) {
+	if (mkdir(path, 0755) == -1 && errno != EEXIST) {
 	    save_errno = errno;
 	    if (stat(path, &sbuf) == -1) {
 		errno = save_errno;
@@ -1893,7 +1893,7 @@ int mailbox_create(const char *name,
 	}
 	*p = '/';
     }
-    if (mkdir(path, 0777) == -1 && errno != EEXIST) {
+    if (mkdir(path, 0755) == -1 && errno != EEXIST) {
 	save_errno = errno;
 	if (stat(path, &sbuf) == -1) {
 	    errno = save_errno;
