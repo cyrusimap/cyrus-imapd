@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.1.2.3 2002/12/20 17:48:51 rjs3 Exp $
+ * $Id: auth_pts.c,v 1.1.2.4 2002/12/20 18:38:46 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -131,7 +131,7 @@ char *auth_canonifyid(const char *identifier,
        (!strcmp(identifier, canonuser_id) || !strcmp(identifier, retbuf))) {
 	/* It's the currently cached user, return the previous result */
 	return retbuf;
-    } else {
+    } else if(canonuser_id) {
 	/* We've got a new one, invalidate our cache */
 	free(canonuser_id);
 	auth_freestate(canonuser_cache);
@@ -175,11 +175,12 @@ struct auth_state *auth_newstate(const char *identifier)
 	if(!strcmp(identifier, "anyone") ||
            !strcmp(identifier, "anonymous") ||
 	   ptload(identifier, &output)) {
-	    /* Could not contact, fake it */
-	    output = (struct auth_state *)xzmalloc(sizeof(struct auth_state));
-
-	    strlcpy(output->userid.id, identifier, sizeof(output->userid.id));
-	    output->userid.hash = hash(identifier);
+		/* Anyone/Anonymous/ptload failure; fake it */
+		output =
+		    (struct auth_state *)xzmalloc(sizeof(struct auth_state));
+		strlcpy(output->userid.id, identifier,
+			sizeof(output->userid.id));
+		output->userid.hash = hash(identifier);
 	}
     }
 	
@@ -206,7 +207,7 @@ int ptload(const char *identifier, struct auth_state **state)
 	libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
 
     if(!state || *state) {
-	fatal("bad pointer passed to ptload()", EC_TEMPFAIL);
+	fatal("bad state pointer passed to ptload()", EC_TEMPFAIL);
     }
     
     strcpy(fnamebuf, config_dir);
@@ -234,7 +235,8 @@ int ptload(const char *identifier, struct auth_state **state)
         goto done;
     }
 
-    /* if it's expired, ask the ptloader to reload it and reread it */
+    /* if it's expired (or nonexistant),
+     * ask the ptloader to reload it and reread it */
     fetched = (struct auth_state *) data;
 
     if(fetched) {        
@@ -295,8 +297,13 @@ int ptload(const char *identifier, struct auth_state **state)
     close(s);
         
     if (start <= 1 || strncmp(response, "OK", 2)) {
-        syslog(LOG_ERR, "ptload(): bad response from ptloader server");
-        goto done;
+       if(start > 1) {
+	   syslog(LOG_ERR,
+		  "ptload(): bad response from ptloader server: %s", response);
+       } else {
+	   syslog(LOG_ERR, "ptload(): empty response from ptloader server");
+       }
+       goto done;
     }
 
     /* fetch the current record for the user */
