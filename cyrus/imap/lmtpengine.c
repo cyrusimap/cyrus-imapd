@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.19 2003/03/05 18:32:06 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.20 2003/04/10 17:55:17 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -452,7 +452,7 @@ static char *parseautheq(char **strp)
 /* return malloc'd string containing the address */
 static char *parseaddr(char *s)
 {
-    char *p;
+    char *p, *ret;
     int len;
 
     p = s;
@@ -516,22 +516,22 @@ static char *parseaddr(char *s)
     if (*p && *p != ' ') return 0;
     len = p - s;
 
-    s = xstrdup(s);
-    s[len] = '\0';
-    return s;
+    ret = xmalloc(len + 1);
+    memcpy(ret, s, len);
+    ret[len] = '\0';
+    return ret;
 }
 
 /* clean off the <> from the return path */
 void clean_retpath(char *rpath)
 {
-    int i, sl;
+    int sl;
 
     /* Remove any angle brackets around return path */
     if (*rpath == '<') {
 	sl = strlen(rpath);
-	for (i = 0; i < sl; i++) {
-	    rpath[i] = rpath[i+1];
-	}
+	/* use strlen(rpath) so we move the NUL too */
+	memmove(rpath, rpath+1, sl);
 	sl--; /* string is one shorter now */
 	if (rpath[sl-1] == '>') {
 	    rpath[sl-1] = '\0';
@@ -842,7 +842,6 @@ void lmtpmode(struct lmtp_func *func,
     int havelocal = 0, haveremote = 0;
     char localip[60], remoteip[60];
     socklen_t salen;
-    char clienthost[NI_MAXHOST*2+1];
     char hbuf[NI_MAXHOST];
 
     sasl_ssf_t ssf;
@@ -909,12 +908,12 @@ void lmtpmode(struct lmtp_func *func,
 	if (!getsockname(fd, (struct sockaddr *)&localaddr, &salen)) {
 	    /* set the ip addresses here */
 	    if(iptostring((struct sockaddr *)&localaddr, salen,
-			  localip, 60) == 0) {
+			  localip, sizeof(localip)) == 0) {
 		havelocal = 1;
                 saslprops.iplocalport = xstrdup(localip);
             }
             if(iptostring((struct sockaddr *)&remoteaddr, salen,
-			  remoteip, 60) == 0) {
+			  remoteip, sizeof(remoteip)) == 0) {
 		haveremote = 1;
                 saslprops.ipremoteport = xstrdup(remoteip);
             }
@@ -971,7 +970,7 @@ void lmtpmode(struct lmtp_func *func,
     nextcmd:
       signals_poll();
 
-      if (!prot_fgets(buf, sizeof(buf)-1, pin)) {
+      if (!prot_fgets(buf, sizeof(buf), pin)) {
 	  const char *err = prot_error(pin);
 	  
 	  if (err != NULL) {
@@ -1196,6 +1195,8 @@ void lmtpmode(struct lmtp_func *func,
 				"503 5.5.1 Nested MAIL command\r\n");
 		    continue;
 		}
+		/* +5 to get past "mail "
+		 * +10 to get past "mail from:" */
 		if (strncasecmp(buf+5, "from:", 5) != 0 ||
 		    !(msg->return_path = parseaddr(buf+10))) {
 		    prot_printf(pout, 
@@ -1316,6 +1317,8 @@ void lmtpmode(struct lmtp_func *func,
 			xrealloc(msg->rcpt, (msg->rcpt_num + RCPT_GROW + 1) * 
 				 sizeof(address_data_t *));
 		}
+		/* +5 to get past "rcpt "
+		 * +8 to get past "rcpt to:" */
 		if (strncasecmp(buf+5, "to:", 3) != 0 ||
 		    !(rcpt = parseaddr(buf+8))) {
 		    prot_printf(pout,
@@ -1423,7 +1426,7 @@ void lmtpmode(struct lmtp_func *func,
 		/* if error */
 		if (r==-1) {
 		    prot_printf(pout, "454 4.3.3 STARTTLS failed\r\n");
-		    syslog(LOG_NOTICE, "[lmtpd] STARTTLS failed: %s", clienthost);
+		    syslog(LOG_NOTICE, "[lmtpd] STARTTLS failed: %s", cd.clienthost);
 		    continue;
 		}
 
@@ -1698,13 +1701,15 @@ static int do_auth(struct lmtp_conn *conn)
     }
     
 
-    if (iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60) != 0) {
+    if (iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip,
+		   sizeof(remoteip)) != 0) {
 	syslog(LOG_ERR,
 	       "lmtpengine do_auth: iptostring() (remote) failed");
 	return AUTH_ERROR;
     }
     
-    if (iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60) != 0) {
+    if (iptostring((struct sockaddr *)&saddr_l, addrsize, localip,
+		   sizeof(localip)) != 0) {
 	syslog(LOG_ERR,
 	       "lmtpengine do_auth: iptostring() (local) failed");	
 	return AUTH_ERROR;
@@ -1819,7 +1824,7 @@ int lmtp_connect(const char *phost,
 	    goto errsock;
 	}
 	addr.sun_family = AF_UNIX;
-	strcpy(addr.sun_path, host);
+	strlcpy(addr.sun_path, host, sizeof(addr.sun_path));
 	if (connect(sock, (struct sockaddr *) &addr, 
 		    sizeof(addr.sun_family) + strlen(addr.sun_path) + 1) < 0) {
 	    syslog(LOG_ERR, "connect(%s) failed: %m", addr.sun_path);
@@ -1899,7 +1904,7 @@ int lmtp_connect(const char *phost,
     prot_printf(conn->pout, "LHLO %s\r\n", config_servername);
     /* read responses */
     for (;;) {
-	if (prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
+	if (prot_fgets(buf, sizeof(buf), conn->pin)) {
 	    code = ask_code(buf);
 	    if (code == 250) {
 		chop(buf);
@@ -1967,7 +1972,8 @@ static void pushmsg(struct protstream *in, struct protstream *out,
     char buf[8192], *p;
     int lastline_hadendline = 1;
 
-    while (prot_fgets(buf, sizeof(buf)-1, in)) {
+    /* -2: Might need room to add a \r\n\0 set */
+    while (prot_fgets(buf, sizeof(buf)-2, in)) {
 	/* dot stuff */
 	if (!isdotstuffed && (lastline_hadendline == 1) && (buf[0]=='.')) {
 	    prot_putc('.', out);
@@ -2002,7 +2008,9 @@ static void pushmsg(struct protstream *in, struct protstream *out,
 
 	/* Remove any lone CR characters */
 	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
-	    strcpy(p, p+1);
+	    /* Src/Target overlap, use memmove */
+	    /* strlen(p) will result in copying the NUL byte as well */
+	    memmove(p, p+1, strlen(p));
 	}
 
 	prot_write(out, buf, strlen(buf));

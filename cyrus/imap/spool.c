@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.1.2.4 2003/02/13 20:33:01 rjs3 Exp $
+ * $Id: spool.c,v 1.1.2.5 2003/04/10 17:55:18 ken3 Exp $
  */
 
 #include <config.h>
@@ -412,7 +412,8 @@ int spool_copy_msg(struct protstream *fin, FILE *fout, unsigned long *lines)
     int r = 0;
     unsigned long n = 0;
 
-    while (prot_fgets(buf, sizeof(buf)-1, fin)) {
+    /* -2: Might need room to add a \r\n\0 set */
+    while (prot_fgets(buf, sizeof(buf)-2, fin)) {
 	p = buf + strlen(buf) - 1;
 	if (p < buf) {
 	    /* buffer start with a \0 */
@@ -432,7 +433,7 @@ int spool_copy_msg(struct protstream *fin, FILE *fout, unsigned long *lines)
 	    prot_ungetc('\r', fin);
 	    *p = '\0';
 	}
-	else if (p[0] == '\n' && p[-1] != '\r') {
+	else if (p[0] == '\n' && (p == buf || p[-1] != '\r')) {
 	    /* found an \n without a \r */
 	    p[0] = '\r';
 	    p[1] = '\n';
@@ -446,7 +447,9 @@ int spool_copy_msg(struct protstream *fin, FILE *fout, unsigned long *lines)
 
 	/* Remove any lone CR characters */
 	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
-	    strcpy(p, p+1);
+	    /* Src/Target overlap, use memmove */
+	    /* strlen(p) will result in copying the NUL byte as well */
+	    memmove(p, p+1, strlen(p));
 	}
 	
 	if (buf[0] == '.') {

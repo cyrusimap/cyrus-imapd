@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.93.4.5 2003/03/12 16:38:13 ken3 Exp $
+ * $Id: append.c,v 1.93.4.6 2003/04/10 17:55:16 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -389,7 +389,7 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
 		      struct stagemsg **stagep)
 {
     struct stagemsg *stage;
-    char stagedir[1024], stagefile[1024];
+    char stagedir[MAX_MAILBOX_PATH+1], stagefile[MAX_MAILBOX_PATH+1];
     FILE *f;
 
     assert(mailboxname != NULL);
@@ -403,7 +403,7 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
 	     (int) getpid(), (int) internaldate);
 
     /* xxx check errors */
-    mboxlist_findstage(mailboxname, stagedir);
+    mboxlist_findstage(mailboxname, stagedir, sizeof(stagedir));
     strcpy(stagefile, stagedir);
     strcat(stagefile, stage->fname);
 
@@ -463,7 +463,7 @@ int append_fromstage(struct appendstate *as,
     zero_index(message_index);
 
     /* xxx check errors */
-    mboxlist_findstage(mailbox->name, stagefile);
+    mboxlist_findstage(mailbox->name, stagefile, sizeof(stagefile));
     strcat(stagefile, stage->fname);
     sflen = strlen(stagefile);
 
@@ -491,10 +491,10 @@ int append_fromstage(struct appendstate *as,
 	r = mailbox_copyfile(stage->parts, stagefile);
 	if (r) {
 	    /* maybe the directory doesn't exist? */
-	    char stagedir[1024];
+	    char stagedir[MAX_MAILBOX_PATH+1];
 
 	    /* xxx check errors */
-	    mboxlist_findstage(mailbox->name, stagedir);
+	    mboxlist_findstage(mailbox->name, stagedir, sizeof(stagedir));
 	    if (mkdir(stagedir, 0755) != 0) {
 		syslog(LOG_ERR, "couldn't create stage directory: %s: %m",
 		       stagedir);

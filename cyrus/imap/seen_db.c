@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
- * $Id: seen_db.c,v 1.34.4.9 2003/02/27 18:10:50 rjs3 Exp $
+ * $Id: seen_db.c,v 1.34.4.10 2003/04/10 17:55:18 ken3 Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -192,7 +192,7 @@ static int seen_readold(struct seen *seendb,
 			time_t *lastreadptr, unsigned int *lastuidptr, 
 			time_t *lastchangeptr, char **seenuidsptr)
 {
-    char fnamebuf[MAX_MAILBOX_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     int fd;
     const char *base;
@@ -205,8 +205,8 @@ static int seen_readold(struct seen *seendb,
 	       seendb->path, seendb->user);
     }
 
-    strcpy(fnamebuf, seendb->path);
-    strcat(fnamebuf, FNAME_SEEN);
+    strlcpy(fnamebuf, seendb->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_SEEN, sizeof(fnamebuf));
 
     fd = open(fnamebuf, O_RDWR, 0);
 
@@ -311,7 +311,7 @@ static int seen_readit(struct seen *seendb,
     *lastreadptr = strtol(data, &p, 10); data = p;
     *lastuidptr = strtol(data, &p, 10); data = p;
     *lastchangeptr = strtol(data, &p, 10); data = p;
-    while (isspace((int) *p) && p < dend) p++; data = p;
+    while (p < dend && isspace((int) *p)) p++; data = p;
     uidlen = dend - data;
     *seenuidsptr = xmalloc(uidlen + 1);
     memcpy(*seenuidsptr, data, uidlen);
