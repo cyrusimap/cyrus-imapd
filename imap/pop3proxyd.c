@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.9 2000/12/18 04:53:40 leg Exp $
+ * $Id: pop3proxyd.c,v 1.10 2000/12/26 21:35:41 leg Exp $
  */
 #include <config.h>
 
@@ -100,7 +100,7 @@ extern int errno;
 
 
 #ifdef HAVE_SSL
-extern SSL *tls_conn;
+static SSL *tls_conn;
 #endif /* HAVE_SSL */
 
 sasl_conn_t *popd_saslconn; /* the sasl connection context */
@@ -536,7 +536,8 @@ static void cmd_starttls(int pop3s)
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
 			       layerp,
-			       &(external.auth_id));
+			       &(external.auth_id),
+			       &tls_conn);
 
     /* if error */
     if (result==-1) {

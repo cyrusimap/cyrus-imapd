@@ -57,7 +57,7 @@ struct buf {
 /*
  * Print an authentication ready response
  */
-static char basis_64[] =
+static const char basis_64[] =
    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 void printauthready(struct protstream *out, int len, unsigned char *data)

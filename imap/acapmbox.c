@@ -150,6 +150,9 @@ acap_conn_t *acapmbox_get_acapconn(acapmbox_handle_t *AC)
 }
 
 static acapmbox_handle_t *cached_conn = NULL;
+#ifdef DELAY_SASL_CLIENT_INIT
+static int did_sasl_client_init = 0;
+#endif
 
 void acapmbox_disconnect(acapmbox_handle_t *conn)
 {
@@ -178,6 +181,16 @@ acapmbox_handle_t *acapmbox_get_handle(void)
 	/* xxx verify cached_conn is still a valid connection */
 	return cached_conn;
     }
+#ifdef DELAY_SASL_CLIENT_INIT
+    if (!did_sasl_client_init) {
+	if ((r = sasl_client_init(NULL)) != SASL_OK) {
+	    syslog(LOG_ERR, "failed initializing: sasl_client_init(): %s", 
+		   sasl_errstring(r, NULL, NULL));
+	    return EC_SOFTWARE;
+	}
+	did_sasl_client_init = 1;
+    }
+#endif
 
     cached_conn = (acapmbox_handle_t *) xmalloc(sizeof(acapmbox_handle_t));
     cached_conn->conn = NULL;
@@ -481,11 +494,11 @@ static void myacap_modtime(char *modtime, void *rock)
     printf("\tmodtime = %s\n", modtime);
 }
 
-static struct acap_search_callback myacap_search_cb = {
+static const struct acap_search_callback myacap_search_cb = {
     &myacap_entry, &myacap_modtime
 };
 
-static struct acap_requested myacap_request = {
+static const struct acap_requested myacap_request = {
     1, {{"entry" , 0x00}}
 };
 

@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.55 2000/11/30 15:55:44 ken3 Exp $
+ $Id: mailbox.h,v 1.56 2000/12/26 21:35:41 leg Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -78,6 +78,8 @@ typedef unsigned short bit32;
 #define FNAME_CACHE "/cyrus.cache"
 #define FNAME_QUOTADIR "/quota/"
 #define FNAME_LOGDIR "/log/"
+
+#define MAILBOX_FNAME_LEN 256
 
 #define QUOTA_UNITS (1024)
 
@@ -207,9 +209,12 @@ extern int mailbox_initialize(void);
 
 extern char *mailbox_message_fname(struct mailbox *mailbox,
 				   unsigned long uid);
+
+/* 'len(out) >= MAILBOX_FNAME_LEN' */
 extern void mailbox_message_get_fname(struct mailbox *mailbox,
 				      unsigned long uid,
 				      char *out);
+
 extern int mailbox_map_message(struct mailbox *mailbox,
 				  int iscurrentdir,
 				  unsigned long uid,

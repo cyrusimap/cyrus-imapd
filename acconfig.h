@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.13 2000/12/20 21:28:46 leg Exp $ */
+/* $Id: acconfig.h,v 1.14 2000/12/26 21:35:40 leg Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -114,6 +114,15 @@
 #ifndef HAVE_SOCKLEN_T
 typedef int socklen_t;
 #endif
+
+/* some potentially memory saving tradeoffs, 
+   preconfigured in memory-saving mode */
+
+/* call sasl_client_init() at the start of imapd */
+#define DELAY_SASL_CLIENT_INIT
+
+/* save the cmdlines for the ID command */
+#undef ID_SAVE_CMDLINE
 
 /* compile time options; think carefully before modifying */
 enum {

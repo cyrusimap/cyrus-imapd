@@ -82,6 +82,8 @@
 *	The last two values may be different when talking to a crippled
 *	- ahem - export controled peer (e.g. 40/128).
 *
+* xxx we need to offer a callback to do peer issuer certification.
+*     data that should be available for inspection:
 *	If the peer offered a certifcate _and_ the certificate could be
 *	verified successfully, part of the certificate data are available as:
 *	tls_peer_subject X509v3-oneline with the DN of the peer
@@ -114,37 +116,25 @@
 #include <openssl/ssl.h>
 
 /* Application-specific. */
-
+#include "assert.h"
+#include "xmalloc.h"
 #include "tls.h"
 
 /* We must keep some of the info available */
 static const char hexcodes[] = "0123456789ABCDEF";
 
-static int verify_depth;
+enum {
+    var_imapd_tls_loglevel = 0,
+    CCERT_BUFSIZ = 256
+};
+
+static int verify_depth = 5;
 static int verify_error = X509_V_OK;
-static int do_dump = 0;
+
 static SSL_CTX *ctx = NULL;
-SSL *tls_conn = NULL;
 
-#define CCERT_BUFSIZ 256
-static char peer_subject[CCERT_BUFSIZ];  /* XXX memory? */
-static char peer_issuer[CCERT_BUFSIZ];
-static char peer_CN[CCERT_BUFSIZ];
-static char issuer_CN[CCERT_BUFSIZ];
-static unsigned char md[EVP_MAX_MD_SIZE];
-static char fingerprint[EVP_MAX_MD_SIZE * 3];
-
-int     tls_serverengine = 0;
-int     tls_serveractive = 0;	/* available or not */
-char   *tls_peer_subject = NULL;
-char   *tls_peer_issuer = NULL;
-char   *tls_peer_fingerprint = NULL;
-
-int     tls_clientactive = 0;	/* available or not */
-char   *tls_peer_CN = NULL;
-char   *tls_issuer_CN = NULL;
-
-int var_imapd_tls_loglevel = 0;
+static int tls_serverengine = 0; /* server engine initialized? */
+static int do_dump = 0;		/* actively dumping protocol? */
 
 /* taken from OpenSSL apps/s_cb.c 
  * tim - this seems to just be giving logging messages
@@ -215,8 +205,6 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
     depth = X509_STORE_CTX_get_error_depth(ctx);
 
     X509_NAME_oneline(X509_get_subject_name(err_cert), buf, 256);
-    if ((tls_serveractive) && (var_imapd_tls_loglevel >= 1))
-	syslog(LOG_DEBUG, "Peer cert verify depth=%d %s", depth, buf);
     if (ok==0)
     {
       syslog(LOG_ERR, "verify error:num=%d:%s", err,
@@ -244,8 +232,6 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
 	syslog(LOG_NOTICE, "cert has expired");
 	break;
     }
-    if ((tls_serveractive) && (var_imapd_tls_loglevel >= 1))
-	syslog(LOG_DEBUG, "verify return:%d", ok);
 
     return (ok);
 }
@@ -475,15 +461,16 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
 
  /*
   * This is the actual startup routine for the connection. We expect
-  * that the buffers are flushed and the "220 Ready to start TLS" was
+  * that the buffers are flushed and the "Ready to start TLS" was
   * send to the client, so that we can immediately can start the TLS
   * handshake process.
   *
-  * layerbits and authid are filled in on sucess. authid is only
-  * filled in if the client authenticated
-  * 
+  * 'layerbits' and 'authid' are filled in on success. authid is only
+  * filled in if the client authenticated. 'ret' is the SSL connection
+  * on success.
   */
-int tls_start_servertls(int readfd, int writefd, int *layerbits, char **authid)
+int tls_start_servertls(int readfd, int writefd, 
+			int *layerbits, char **authid, SSL **ret)
 {
     int     sts;
     int     j;
@@ -495,45 +482,34 @@ int tls_start_servertls(int readfd, int writefd, int *layerbits, char **authid)
     const char *tls_cipher_name = NULL;
     int tls_cipher_usebits = 0;
     int tls_cipher_algbits = 0;
+    SSL *tls_conn;
+    int r = 0;
 
-    if (!tls_serverengine)
-    {		
-      /* should never happen */
-      syslog(LOG_ERR, "tls_engine not running");
-      return (-1);
-    }
+    assert(tls_serverengine);
+    assert(ret);
     if (var_imapd_tls_loglevel >= 1)
 	syslog(LOG_DEBUG, "setting up TLS connection");
 
-    if (tls_conn == NULL)
-    {
-	tls_conn = (SSL *) SSL_new(ctx);
-    }
-    if (tls_conn == NULL)
-    {
-	return (-1);
+    tls_conn = (SSL *) SSL_new(ctx);
+    if (tls_conn == NULL) {
+	*ret = NULL;
+	r = -1;
+	goto done;
     }
     SSL_clear(tls_conn);
-
     
     /* set the file descriptors for SSL to use */
-    if (SSL_set_rfd(tls_conn, readfd)==0)
-    {
-      return (-1);
+    if ((SSL_set_rfd(tls_conn, readfd) == 0) || 
+	(SSL_set_wfd(tls_conn, writefd) == 0)) {
+	r = -1;
+	goto done;
     }
-
-    if (SSL_set_wfd(tls_conn, writefd)==0)
-    {
-      return (-1);
-    }
-
 
     /*
      * This is the actual handshake routine. It will do all the negotiations
      * and will check the client cert etc.
      */
     SSL_set_accept_state(tls_conn);
-
 
     /*
      * We do have an SSL_set_fd() and now suddenly a BIO_ routine is called?
@@ -552,81 +528,76 @@ int tls_start_servertls(int readfd, int writefd, int *layerbits, char **authid)
 	if (session) {
 	    SSL_CTX_remove_session(ctx, session);
 	}
-	if (tls_conn)
-	    SSL_free(tls_conn);
-	tls_conn = NULL;
-	return (-1);
+	r = -1;
+	goto done;
     }
     /* Only loglevel==4 dumps everything */
     if (var_imapd_tls_loglevel < 4)
 	do_dump = 0;
 
     /*
-     * Lets see, whether a peer certificate is availabe and what is
+     * Lets see, whether a peer certificate is available and what is
      * the actual information. We want to save it for later use.
      */
     peer = SSL_get_peer_certificate(tls_conn);
     if (peer != NULL) {
-      
-      syslog(LOG_ERR,"GOT CLIENT CERTIFICATE!!!\n");
+	char fingerprint[EVP_MAX_MD_SIZE * 3];
+	char issuer_CN[CCERT_BUFSIZ];
+	char peer_issuer[CCERT_BUFSIZ];
+	char peer_CN[CCERT_BUFSIZ];
+	char peer_subject[CCERT_BUFSIZ];
+	unsigned char md[EVP_MAX_MD_SIZE];
+
+	syslog(LOG_DEBUG, "received client certificate");
 
 	X509_NAME_oneline(X509_get_subject_name(peer),
 			  peer_subject, CCERT_BUFSIZ);
-	if (var_imapd_tls_loglevel >= 2)
-	  printf("subject=%s", peer_subject);
-
-	syslog(LOG_ERR, "subject=%s", peer_subject);
-	tls_peer_subject = peer_subject;
+	syslog(LOG_DEBUG, "subject=%s", peer_subject);
 	X509_NAME_oneline(X509_get_issuer_name(peer),
 			  peer_issuer, CCERT_BUFSIZ);
 	if (var_imapd_tls_loglevel >= 2)
-	   printf("issuer=%s", peer_issuer);
-	tls_peer_issuer = peer_issuer;
+	    syslog(LOG_DEBUG, "issuer=%s", peer_issuer);
+
 	if (X509_digest(peer, EVP_md5(), md, &n)) {
 	    for (j = 0; j < (int) n; j++)
 	    {
 		fingerprint[j * 3] = hexcodes[(md[j] & 0xf0) >> 4];
 		fingerprint[(j * 3) + 1] = hexcodes[(md[j] & 0x0f)];
-		if (j + 1 != (int) n)
+		if (j + 1 != (int) n) {
 		    fingerprint[(j * 3) + 2] = '_';
-		else
+		} else {
 		    fingerprint[(j * 3) + 2] = '\0';
+		}
 	    }
 	    if (var_imapd_tls_loglevel >= 2)
-		printf("fingerprint=%s", fingerprint);
-	    syslog(LOG_ERR,"fingerprint=%s", fingerprint);
-	    tls_peer_fingerprint = fingerprint;
+		syslog(LOG_DEBUG, "fingerprint=%s", fingerprint);
 	}
 	X509_NAME_get_text_by_NID(X509_get_subject_name(peer),
 			  NID_commonName, peer_CN, CCERT_BUFSIZ);
-	tls_peer_CN = peer_CN;
 	X509_NAME_get_text_by_NID(X509_get_issuer_name(peer),
 			  NID_commonName, issuer_CN, CCERT_BUFSIZ);
 	if (var_imapd_tls_loglevel >= 3)
-	   printf("subject_CN=%s, issuer_CN=%s", peer_CN, issuer_CN);
+	    syslog(LOG_DEBUG, "subject_CN=%s, issuer_CN=%s", 
+		   peer_CN, issuer_CN);
 
-	syslog(LOG_ERR,"subject_CN=%s, issuer_CN=%s", peer_CN, issuer_CN);
+	/* xxx verify that we like the peer_issuer/issuer_CN */
 
-	tls_issuer_CN = issuer_CN;
-	/* xxx	X509_free(peer);*/
+	if (authid != NULL) {
+	    /* save the peer id for our caller */
+	    *authid = peer_CN ? xstrdup(peer_CN) : NULL;
+	}
+	X509_free(peer);
     }
     tls_protocol = SSL_get_version(tls_conn);
     cipher = SSL_get_current_cipher(tls_conn);
     tls_cipher_name = SSL_CIPHER_get_name(cipher);
-    tls_cipher_usebits = SSL_CIPHER_get_bits(cipher,
-						 &tls_cipher_algbits);
-    tls_serveractive = 1;
+    tls_cipher_usebits = SSL_CIPHER_get_bits(cipher, &tls_cipher_algbits);
 
-    if (layerbits!=NULL)
-      *layerbits = tls_cipher_usebits;
-
-    if (authid!=NULL)
-    {
-      *authid = tls_peer_CN;      
+    if (layerbits != NULL) {
+	*layerbits = tls_cipher_usebits;
     }
 
-
-    if ((*authid)!=NULL) {
+    if (authid && *authid) {
 	syslog(LOG_NOTICE, "starttls: %s with cipher %s (%d/%d bits)"
 	                   " authenticated as %s", 
 	       tls_protocol, tls_cipher_name,
@@ -639,7 +610,14 @@ int tls_start_servertls(int readfd, int writefd, int *layerbits, char **authid)
 	       tls_cipher_usebits, tls_cipher_algbits);
     }
 
-    return (0);
+ done:
+    if (r && tls_conn) {
+	/* error; clean up */
+	SSL_free(tls_conn);
+	tls_conn = NULL;
+    }
+    *ret = tls_conn;
+    return r;
 }
 
 #endif /* HAVE_SSL */

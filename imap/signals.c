@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: signals.c,v 1.6 2000/07/19 01:10:22 leg Exp $ */
+/* $Id: signals.c,v 1.7 2000/12/26 21:35:41 leg Exp $ */
 
 #include <config.h>
 
@@ -58,7 +58,7 @@ static void sighandler(int sig)
     gotsignal = sig;
 }
 
-static int catch[] = { SIGHUP, SIGINT, SIGQUIT, 0 };
+static const int catch[] = { SIGHUP, SIGINT, SIGQUIT, 0 };
 
 void signals_add_handlers(void)
 {

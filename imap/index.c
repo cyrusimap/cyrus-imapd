@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.149 2000/12/18 20:08:15 ken3 Exp $
+ * $Id: index.c,v 1.150 2000/12/26 21:35:40 leg Exp $
  */
 #include <config.h>
 
@@ -272,7 +272,7 @@ static void index_thread_print P((Thread *threads, int usinguid));
 static void index_thread_ref P((unsigned *msgno_list, int nmsg, int usinguid));
 
 /* NOTE: Make sure these are listed in CAPABILITY_STRING */
-static struct thread_algorithm thread_algs[] = {
+static const struct thread_algorithm thread_algs[] = {
     { "ORDEREDSUBJECT", index_thread_orderedsubj },
     { "REFERENCES", index_thread_ref },
     { NULL, NULL }
@@ -2251,7 +2251,7 @@ void *rock;
 	struct tm *tm = localtime(&msgdate);
 	long gmtoff = gmtoff_of(tm, msgdate);
 	int gmtnegative = 0;
-	static char *monthname[] = {
+	static const char *monthname[] = {
 	    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
 	    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 	char datebuf[30];

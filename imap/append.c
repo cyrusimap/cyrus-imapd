@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.77 2000/10/23 20:40:17 leg Exp $
+ * $Id: append.c,v 1.78 2000/12/26 21:35:40 leg Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -689,10 +689,11 @@ int append_copy(struct mailbox *mailbox,
 				  fname + strlen(fname));
 
 	if (copymsg[msg].cache_len) {
+	    char fnamebuf[MAILBOX_FNAME_LEN];
+
+	    mailbox_message_get_fname(mailbox, copymsg[msg].uid, fnamebuf);
 	    /* Link/copy message file */
-	    r = mailbox_copyfile(mailbox_message_fname(mailbox,
-						       copymsg[msg].uid),
-				  fname);
+	    r = mailbox_copyfile(fnamebuf, fname);
 	    if (r) goto fail;
 
 	    /* Write out cache info, copy other info */

@@ -49,16 +49,17 @@
 #define TLS_H
 
 /* init tls */
-int     tls_init_serverengine(int verifydepth, /* depth to verify */
-			      int askcert,     /* 1 = verify client */
-			      int requirecert, /* 1 = another client verify? */
-			      char *var_imapd_tls_CAfile,
-			      char *var_imapd_tls_CApath,
-			      char *var_imapd_tls_cert_file,
-			      char *var_imapd_tls_key_file);
+int tls_init_serverengine(int verifydepth, /* depth to verify */
+			  int askcert,     /* 1 = verify client */
+			  int requirecert, /* 1 = another client verify? */
+			  char *var_imapd_tls_CAfile,
+			  char *var_imapd_tls_CApath,
+			  char *var_imapd_tls_cert_file,
+			  char *var_imapd_tls_key_file);
 
 /* start tls negotiation */
-int tls_start_servertls(int readfd, int writefd, int *layerbits, char **authid);
+int tls_start_servertls(int readfd, int writefd, 
+			int *layerbits, char **authid, SSL **ret);
 
 #endif /* CYRUSTLS_H */
 

@@ -39,7 +39,7 @@
  *
  * derived from chris newman's code */
 
-/* $Id: imapurl.c,v 1.5 2000/11/05 22:11:28 leg Exp $ */
+/* $Id: imapurl.c,v 1.6 2000/12/26 21:35:42 leg Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -47,13 +47,13 @@
 #include <ctype.h>
 
 /* hexadecimal lookup table */
-static char hex[] = "0123456789ABCDEF";
+static const char hex[] = "0123456789ABCDEF";
 
 /* URL unsafe printable characters */
-static char urlunsafe[] = " \"#%&+:;<=>?@[\\]^`{|}";
+static const char urlunsafe[] = " \"#%&+:;<=>?@[\\]^`{|}";
 
 /* UTF7 modified base64 alphabet */
-static char base64chars[] =
+static const char base64chars[] =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
 #define UNDEFINED 64
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.59 2000/12/25 20:18:41 leg Exp $ */
+/* $Id: proxyd.c,v 1.60 2000/12/26 21:35:41 leg Exp $ */
 
 #undef PROXY_IDLE
 
@@ -145,7 +145,7 @@ extern int errno;
 #ifdef HAVE_SSL
 #include "tls.h"
 
-extern SSL *tls_conn;
+static SSL *tls_conn;
 #endif /* HAVE_SSL */
 
 sasl_conn_t *proxyd_saslconn; /* the sasl connection context to the client */
@@ -4051,7 +4051,8 @@ void cmd_starttls(char *tag, int imaps)
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
 			       layerp,
-			       &(external.auth_id));
+			       &(external.auth_id),
+			       &tls_conn);
 
     /* if error */
     if (result==-1) {
