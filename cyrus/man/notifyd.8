@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: notifyd.8,v 1.5 2002/06/03 18:22:33 rjs3 Exp $
+.\" $Id: notifyd.8,v 1.6 2002/10/03 19:02:41 ken3 Exp $
 .SH NAME
 notifyd \- Cyrus notification server
 .SH SYNOPSIS
@@ -49,6 +49,15 @@ notifyd \- Cyrus notification server
 .I config-file
 ]
 [
+.B \-U
+.I uses
+]
+[
+.B \-T
+.I timeout
+]
+.br
+        [
 .B \-D
 ]
 .SH DESCRIPTION
@@ -76,6 +85,15 @@ notifications.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-U " uses"
+The maximum number of times that the process should be used for new
+connections before shutting down.  The default is 250.
+.TP
+.BI \-T " timeout"
+The number of seconds that the process will wait for a new connection
+before shutting down.  Note that a value of 0 (zero) will disable the
+timeout.  The default is 60.
 .TP
 .BI \-D
 Run external debugger specified in debug_command.

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.48 2002/08/27 19:43:43 leg Exp $
+ * $Id: pop3proxyd.c,v 1.49 2002/10/03 19:02:39 ken3 Exp $
  */
 #include <config.h>
 
@@ -286,12 +286,8 @@ int service_main(int argc, char **argv, char **envp __attribute__((unused)))
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
 
-    while ((opt = getopt(argc, argv, "C:Dsk")) != EOF) {
+    while ((opt = getopt(argc, argv, "sk")) != EOF) {
 	switch(opt) {
-	case 'C': /* alt config file - handled by service::main() */
-	    break;
-	case 'D': /* ext. debugger - handled by service::main() */
- 	    break;
 	case 's': /* pop3s (do starttls right away) */
 	    pop3s = 1;
 	    if (!tls_enabled("pop3")) {

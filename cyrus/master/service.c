@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.37 2002/06/04 19:49:55 ken3 Exp $ */
+/* $Id: service.c,v 1.38 2002/10/03 19:02:42 ken3 Exp $ */
 
 #include <config.h>
 
@@ -250,6 +250,8 @@ int setsigalrm(void)
     return 0;
 }
 
+#define ARGV_GROW 10
+
 int main(int argc, char **argv, char **envp)
 {
     int fdflags;
@@ -259,33 +261,12 @@ int main(int argc, char **argv, char **envp)
     int opt;
     char *alt_config = NULL;
     int call_debugger = 0;
+    int max_use = MAX_USE;
+    int reuse_timeout = REUSE_TIMEOUT;
     int soctype;
     int typelen = sizeof(soctype);
-
-    opterr = 0; /* disable error reporting,
-		   since we don't know about service-specific options */
-    while ((opt = getopt(argc, argv, "C:D")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
-	case 'D':
-	    call_debugger = 1;
-	    break;
-	default:
-	    break;
-	}
-    }
-    opterr = 1; /* enable error reporting */
-    optind = 1; /* reset the option index for parsing by the service */
-
-    p = getenv("CYRUS_VERBOSE");
-    if (p) verbose = atoi(p) + 1;
-
-    if (verbose > 30) {
-	syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
-	sleep(15);
-    }
+    int newargc = 0;
+    char **newargv = (char **) malloc(ARGV_GROW * sizeof(char *));
 
     p = getenv("CYRUS_SERVICE");
     if (p == NULL) {
@@ -298,6 +279,69 @@ int main(int argc, char **argv, char **envp)
 	exit(EX_OSERR);
     }
     config_init(alt_config, service);
+
+
+    opterr = 0; /* disable error reporting,
+		   since we don't know about service-specific options */
+
+    newargv[newargc++] = argv[0];
+
+    while ((opt = getopt(argc, argv, "C:U:T:D")) != EOF) {
+	if (argv[optind-1][0] == '-' && strlen(argv[optind-1]) > 2) {
+	    /* we have merged options */
+	    syslog(LOG_ERR,
+		   "options and arguments MUST be separated by whitespace");
+	    exit(EX_USAGE);
+	}
+
+	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+	case 'U': /* maximum uses */
+	    max_use = atoi(optarg);
+	    if (max_use < 0) max_use = 0;
+	    break;
+	case 'T': /* reuse timeout */
+	    reuse_timeout = atoi(optarg);
+	    if (reuse_timeout < 0) reuse_timeout = 0;
+	    break;
+	case 'D':
+	    call_debugger = 1;
+	    break;
+	default:
+	    if (!((newargc+1) % ARGV_GROW)) { /* time to alloc more */
+		newargv = (char **) realloc(newargv, (newargc + ARGV_GROW) * 
+					    sizeof(char *));
+	    }
+	    newargv[newargc++] = argv[optind-1];
+
+	    /* option has an argument */
+	    if (optind < argc && argv[optind][0] != '-')
+		newargv[newargc++] = argv[optind++];
+
+	    break;
+	}
+    }
+    /* grab the remaining arguments */
+    for (; optind < argc; optind++) {
+	if (!(newargc % ARGV_GROW)) { /* time to alloc more */
+	    newargv = (char **) realloc(newargv, (newargc + ARGV_GROW) * 
+					sizeof(char *));
+	}
+	newargv[newargc++] = argv[optind];
+    }
+
+    opterr = 1; /* enable error reporting */
+    optind = 1; /* reset the option index for parsing by the service */
+
+    p = getenv("CYRUS_VERBOSE");
+    if (p) verbose = atoi(p) + 1;
+
+    if (verbose > 30) {
+	syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
+	sleep(15);
+    }
 
     if (call_debugger) {
 	char debugbuf[1024];
@@ -339,7 +383,7 @@ int main(int argc, char **argv, char **envp)
 	return 1;
     }
 
-    if (service_init(argc, argv, envp) != 0) {
+    if (service_init(newargc, newargv, envp) != 0) {
 	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	return 1;
     }
@@ -355,7 +399,7 @@ int main(int argc, char **argv, char **envp)
 		service_abort(EX_OSERR);
 	    }
 	    gotalrm = 0;
-	    alarm(REUSE_TIMEOUT);
+	    alarm(reuse_timeout);
 	}
 
 	/* lock */
@@ -461,10 +505,10 @@ int main(int argc, char **argv, char **envp)
 	
 	notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);
 	use_count++;
-	service_main(argc, argv, envp);
+	service_main(newargc, newargv, envp);
 	/* if we returned, we can service another client with this process */
 
-	if (use_count >= MAX_USE) {
+	if (use_count >= max_use) {
 	    break;
 	}
 
