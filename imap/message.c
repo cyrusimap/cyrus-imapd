@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.84 2000/08/18 15:02:44 ken3 Exp $
+ * $Id: message.c,v 1.85 2000/09/22 21:04:18 ken3 Exp $
  */
 
 #include <config.h>
@@ -1277,6 +1277,7 @@ unsigned flags;
 	"jan", "feb", "mar", "apr", "may", "jun",
 	"jul", "aug", "sep", "oct", "nov", "dec"
     };
+    int zone_off = 0;
 
     if (!hdr) goto baddate;
 
@@ -1345,100 +1346,112 @@ unsigned flags;
        goto baddate;
      }
 
-    tm.tm_isdst = -1;
-
     message_parse_rfc822space(&hdr);
-    if (hdr && flags & PARSE_TIME) {
+    if (hdr && (flags & PARSE_TIME)) {
 	/* Parse hour */
-	if (!hdr || !isdigit((int) *hdr)) goto baddate;
+	if (!hdr || !isdigit((int) *hdr)) goto badtime;
 	tm.tm_hour = *hdr++ - '0';
-	if (!isdigit((int) *hdr)) goto baddate;
+	if (!isdigit((int) *hdr)) goto badtime;
 	tm.tm_hour = tm.tm_hour * 10 + *hdr++ - '0';
-	if (!hdr || *hdr++ != ':') goto baddate;
+	if (!hdr || *hdr++ != ':') goto badtime;
 
 	/* Parse min */
-	if (!hdr || !isdigit((int) *hdr)) goto baddate;
+	if (!hdr || !isdigit((int) *hdr)) goto badtime;
 	tm.tm_min = *hdr++ - '0';
-	if (!isdigit((int) *hdr)) goto baddate;
+	if (!isdigit((int) *hdr)) goto badtime;
 	tm.tm_min = tm.tm_min * 10 + *hdr++ - '0';
 
 	if (*hdr == ':') {
 	    /* Parse sec */
-	    if (!++hdr || !isdigit((int) *hdr)) goto baddate;
+	    if (!++hdr || !isdigit((int) *hdr)) goto badtime;
 	    tm.tm_sec = *hdr++ - '0';
-	    if (!isdigit((int) *hdr)) goto baddate;
+	    if (!isdigit((int) *hdr)) goto badtime;
 	    tm.tm_sec = tm.tm_sec * 10 + *hdr++ - '0';
 	}
 
 	message_parse_rfc822space(&hdr);
-	if (hdr && flags & PARSE_ZONE) {
+	if (hdr && (flags & PARSE_ZONE)) {
 	    /* Parse timezone offset */
-	    time_t tim;
-	    int offset;
-
 	    if (*hdr == '+' || *hdr == '-') {
 		/* Parse numeric offset */
-		int east = 1;
+		int east = (*hdr++ == '-');
 
-		if (*hdr++ == '-')
-		    east = -1;
-		if (!hdr || !isdigit((int) *hdr)) goto baddate;
-		offset = 10 * (*hdr++ - '0');
-		if (!hdr || !isdigit((int) *hdr)) goto baddate;
-		offset = 60 * (offset + (*hdr++ - '0'));
-		if (!hdr || !isdigit((int) *hdr)) goto baddate;
-		offset = offset + 10 * (*hdr++ - '0');
-		if (!hdr || !isdigit((int) *hdr)) goto baddate;
-		offset = east * 60 * (offset + (*hdr++ - '0'));
+		if (!hdr || !isdigit((int) *hdr)) goto badzone;
+		zone_off = *hdr++ - '0';
+		if (!hdr || !isdigit((int) *hdr)) goto badzone;
+		zone_off = zone_off * 10 + *hdr++ - '0';
+		if (!hdr || !isdigit((int) *hdr)) goto badzone;
+		zone_off = zone_off * 6 + *hdr++ - '0';
+		if (!hdr || !isdigit((int) *hdr)) goto badzone;
+		zone_off = zone_off * 10 + *hdr++ - '0';
+
+		if (east) zone_off = -zone_off;
 	    }
-	    else if (isalpha((int) *hdr)) {
-		/* Parse zone */
-		int zone;
-		char zonestr[4];
-		static char *zonename[] = {
-		    "z", "a", "m", "n", "y", "ut", "gmt",
-		    "est", "edt", "cst", "cdt", "mst", "mdt", "pst", "pdt"
-		};
-		static short zoneoff[] = {
-		    0, -1, -12, 1, 12, 0, 0, -5, -4, -6, -5, -7, -6, -8, -7
-		};
+	    else if (isalpha(*hdr)) {
+		char zone[4];
 
-		zonestr[0] = *hdr++;
-		if (!isalpha((int) *hdr))
-		    zonestr[1] = '\0';
+		zone[0] = *hdr++;
+		if (!isalpha(*hdr)) {
+		    /* Parse military (single-char) zone */
+		    zone[1] = '\0';
+		    lcase(zone);
+		    if (zone[0] < 'j')
+			zone_off = (zone[0] - 'a' + 1) * 60;
+		    else if (zone[0] == 'j')
+			goto badzone;
+		    else if (zone[0] <= 'm')
+			zone_off = (zone[0] - 'a') * 60;
+		    else if (zone[0] < 'z')
+			zone_off = ('m' - zone[0]) * 60;
+		    else
+			zone_off = 0;
+		}
 		else {
-		    zonestr[1] = *hdr++;
-		    if (!isalpha((int) *hdr))
-			zonestr[2] = '\0';
+		    zone[1] = *hdr++;
+		    if (!isalpha(*hdr)) {
+			/* Parse UT (universal time) */
+			zone[2] = '\0';
+			lcase(zone);
+			if (strcmp(zone, "ut")) goto badzone;
+			zone_off = 0;
+		    }
 		    else {
-			zonestr[2] = *hdr;
-			zonestr[3] = '\0';
+			/* Parse 3-char time zone */
+			char *p;
+
+			zone[2] = *hdr;
+			zone[3] = '\0';
+			lcase(zone);
+			/* GMT (Greenwich mean time) */
+			if (!strcmp(zone, "gmt")) zone_off = 0;
+
+			/* US time zone */
+			else {
+			    p = strchr("aecmpyhb", zone[0]);
+			    if (!p || zone[2] != 't') goto badzone;
+			    zone_off = (strlen(p) - 12) * 60;
+			    if (zone[1] == 'd') zone_off += 60;
+			    else if (zone[1] != 's') goto badzone;
+			}
 		    }
 		}
-		lcase(zonestr);
-		for (zone = 0; zone < 15; zone++) {
-		    if (!strcmp(zonestr, zonename[zone])) break;
-		}
-		if (zone == 15) goto baddate;
-
-		offset = 3600 * zoneoff[zone];
 	    }
 	    else
-		goto baddate;
-
-	    tim = mktime(&tm);
-	    tim -= offset;
-	    return tim;
+ badzone:
+		zone_off = 0;
 	}
     }
     else
+ badtime:
 	tm.tm_hour = 12;
+
+    tm.tm_isdst = -1;
 
     t = mktime(&tm);
     /* Don't return -1; it's never right.  Return the current time instead.
      * That's much closer than 1969.
      */
-    if (t >= 0) return t;
+    if (t >= 0) return (t - zone_off * 60);
     
  baddate:
     return time(0);
