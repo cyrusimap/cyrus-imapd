@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.74 2003/03/19 01:29:21 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.75 2003/03/20 18:26:26 ken3 Exp $
  */
 
 /*
@@ -1295,7 +1295,7 @@ static void cmdloop(void)
 	    break;
 
 	case 'S':
-	    if (!nntp_starttls_done && !strcmp(cmd.s, "Starttls")) {
+	    if (!strcmp(cmd.s, "Starttls")) {
 		if (!tls_enabled()) {
 		    /* we don't support starttls */
 		    goto badcmd;
@@ -1690,7 +1690,7 @@ static void cmd_authinfo_user(char *user)
     char *p;
 
     if (nntp_authstate) {
-	prot_printf(nntp_out, "501 Already authenticated\r\n");
+	prot_printf(nntp_out, "502 Already authenticated\r\n");
 	return;
     }
 
@@ -1723,7 +1723,7 @@ static void cmd_authinfo_pass(char *pass)
     char *reply = 0;
 
     if (nntp_authstate) {
-	prot_printf(nntp_out, "501 Already authenticated\r\n");
+	prot_printf(nntp_out, "502 Already authenticated\r\n");
 	return;
     }
 
@@ -1784,7 +1784,7 @@ static void cmd_authinfo_sasl(char *mech, char *resp)
     const char *canon_user;
 
     if (nntp_userid) {
-	prot_printf(nntp_out, "501 Already authenticated\r\n");
+	prot_printf(nntp_out, "502 Already authenticated\r\n");
 	return;
     }
 
@@ -1797,7 +1797,7 @@ static void cmd_authinfo_sasl(char *mech, char *resp)
 	switch (r) {
 	case IMAP_SASL_CANCEL:
 	    prot_printf(nntp_out,
-			"501 Client canceled authentication\r\n");
+			"482 Client canceled authentication\r\n");
 	    break;
 	case IMAP_SASL_PROTERR:
 	    errorstring = prot_error(nntp_in);
@@ -2874,6 +2874,12 @@ static void cmd_starttls(int nntps)
     int *layerp;
     sasl_ssf_t ssf;
     char *auth_id;
+
+    if (nntp_starttls_done == 1) {
+	prot_printf(nntp_out, "502 %s\r\n", 
+		    "Already successfully executed STARTTLS");
+	return;
+    }
 
     /* SASL and openssl have different ideas about whether ssf is signed */
     layerp = (int *) &ssf;
