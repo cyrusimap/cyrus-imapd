@@ -74,7 +74,7 @@ AC_ARG_WITH(AFS,
           AFS_KTC_LIBS="-lauth -lsys -lrx -llwp -ldes -lcom_err ${AFS_LIB_DIR}/afs/util.a"
           LIBS="$cmu_save_LIBS"
           AC_CHECK_FUNC(flock)
-          LIBS="$cmu_save_LIBS ${AFS_CLIENT_LIBS}"
+          LIBS="$cmu_save_LIBS ${AFS_CLIENT_LIBS} ${LIB_SOCKET}"
           if test "X$ac_cv_func_flock" != "Xyes"; then
              AC_MSG_CHECKING([if AFS needs flock])
              AC_TRY_LINK([#include <afs/param.h>
@@ -101,7 +101,7 @@ extern int UV_SetSecurity();],
           fi
           LIBS="$cmu_save_LIBS"
           AC_CHECK_FUNC(sigvec)
-          LIBS="$cmu_save_LIBS ${AFS_CLIENT_LIBS}"
+          LIBS="$cmu_save_LIBS ${AFS_CLIENT_LIBS} ${LIB_SOCKET}"
           if test "X$ac_cv_func_sigvec" != "Xyes"; then
              AC_MSG_CHECKING([if AFS needs sigvec])
              AC_TRY_LINK([#include <afs/param.h>
@@ -138,7 +138,7 @@ extern int UV_SetSecurity();],
                 AFS_CLIENT_LIBS="$AFS_CLIENT_LIBS $AFS_BSD_LIB"
                 AFS_KTC_LIBS="$AFS_KTC_LIBS $AFS_BSD_LIB"
           fi
-          LIBS="$cmu_save_LIBS $AFS_CLIENT_LIBS"
+          LIBS="$cmu_save_LIBS $AFS_CLIENT_LIBS ${LIB_SOCKET}"
           AC_CHECK_FUNC(des_pcbc_init)
           if test "X$ac_cv_func_des_pcbc_init" != "Xyes"; then
            AC_MSG_CHECKING([if rxkad needs des_pcbc_init])
@@ -158,7 +158,7 @@ extern int UV_SetSecurity();],
             fi
           fi
           AC_MSG_CHECKING([if libaudit is needed])
-          LIBS="$cmu_save_LIBS $AFS_CLIENT_LIBS"
+          LIBS="$cmu_save_LIBS $AFS_CLIENT_LIBS ${LIB_SOCKET}"
           AC_TRY_LINK([#include <afs/param.h>
 #ifdef HAVE_AFS_STDS_H
 #include <afs/stds.h>
@@ -167,7 +167,7 @@ extern int UV_SetSecurity();],
 #include <afs/auth.h>],
           [afsconf_SuperUser();],AFS_AUDIT_LIB="",AFS_AUDIT_LIB="maybe")
           if test "X$AFS_AUDIT_LIB" != "X"; then
-          LIBS="$cmu_save_LIBS -lvolser -lvldb -lkauth -lprot -lubik -lauth -laudit -lrxkad -lrx -lsys -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a $AFS_BSD_LIB"
+          LIBS="$cmu_save_LIBS -lvolser -lvldb -lkauth -lprot -lubik -lauth -laudit -lrxkad -lrx -lsys -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a $AFS_BSD_LIB $LIB_SOCKET"
              AC_TRY_LINK([#include <afs/param.h>
 #ifdef HAVE_AFS_STDS_H
 #include <afs/stds.h>
