@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.25 2004/07/27 13:13:45 ken3 Exp $
+.\" $Id: imapoptions,v 1.2.2.26 2004/09/15 17:33:39 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -476,9 +476,9 @@ are listed with ``<none>''.
 /* The cyrusdb backend to use for the mailbox list. */
 
 { "metapartition_files", "", BITFIELD("header", "index", "cache", "expunge", "squat") }
-/* List of metadata files to be stored on a \fImetapartition\fR
-   rather than in the mailbox directory on a spool partition.
-   Separate each file with a space. */ 
+/* Space-separated list of metadata files to be stored on a
+   \fImetapartition\fR rather than in the mailbox directory on a spool
+   partition. */
 
 # Commented out - there's no such thing as "metapartition-name",
 # but we need this for the man page
@@ -777,18 +777,13 @@ are listed with ``<none>''.
 /* If using the alternate IMAP namespace, the prefix for the shared
    namespace.  The hierarchy delimiter will be automatically appended. */
 
-{ "sieve_allowbody", 0, SWITCH }
-/* Allow the Sieve "body" extension to be used in sieve scripts,
-   enforced at submission by timsieved(8).  Any previously installed
-   script that uses the extension will be unaffected and will continue
-   to execute. */
-
-{ "sieve_allowregex", 1, SWITCH }
-/* Allow the Sieve "regex" extension to be used in sieve scripts,
-   enforced at submission by timsieved(8).  Any previously installed
-   script that uses the extension will be unaffected and will continue
-   to execute.  This option has no effect if regex support is disabled
-   at compile time. */
+{ "sieve_extensions", "fileinto reject vacation imapflags notify envelope relational regex subaddress", BITFIELD("fileinto", "reject", "vacation", "imapflags", "notify", "include", "envelope", "body", "relational", "regex", "subaddress") }
+/* Space-separated list of Sieve extensions allowed to be used in
+   sieve scripts, enforced at submission by timsieved(8).  Any
+   previously installed script will be unaffected by this option and
+   will continue to execute regardless of the extensions used.  This
+   option has no effect on options that are disabled at compile time
+   (e.g. "regex"). */
 
 { "sieve_maxscriptsize", 32, INT }
 /* Maximum size (in kilobytes) any sieve script can be, enforced at

@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.22.8.3 2004/07/16 14:37:43 ken3 Exp $
+ * $Id: interp.c,v 1.22.8.4 2004/09/15 17:33:40 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -78,38 +78,51 @@ const char *sieve_listextensions(sieve_interp_t *i)
     static char extensions[4096] = "";
 
     if (!done++) {
+	unsigned long config_sieve_extensions =
+	    config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
+
 	/* add comparators */
 	strlcat(extensions, "comparator-i;ascii-numeric", sizeof(extensions));
 
 	/* add actions */
-	if (i->getinclude)
-	    strlcat(extensions, " include", sizeof(extensions));
-	if (i->fileinto)
+	if (i->fileinto &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO))
 	    strlcat(extensions, " fileinto", sizeof(extensions));
-	if (i->reject)
+	if (i->reject &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT))
 	    strlcat(extensions, " reject", sizeof(extensions));
-	if (i->vacation)
+	if (i->vacation &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION))
 	    strlcat(extensions, " vacation", sizeof(extensions));
-	if (i->markflags)
+	if (i->markflags &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAPFLAGS))
 	    strlcat(extensions, " imapflags", sizeof(extensions));
-	if (i->notify)
+	if (i->notify &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY))
 	    strlcat(extensions, " notify", sizeof(extensions));
+	if (i->getinclude &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE))
+	    strlcat(extensions, " include", sizeof(extensions));
 
 	/* add tests */
-	if (i->getenvelope)
+	if (i->getenvelope &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE))
 	    strlcat(extensions, " envelope", sizeof(extensions));
-	if (i->getbody && config_getswitch(IMAPOPT_SIEVE_ALLOWBODY))
+	if (i->getbody &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_BODY))
 	    strlcat(extensions, " body", sizeof(extensions));
 
 	/* add match-types */
-	strlcat(extensions, " relational", sizeof(extensions));
+	if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)
+	    strlcat(extensions, " relational", sizeof(extensions));
 #ifdef ENABLE_REGEX
-	if (config_getswitch(IMAPOPT_SIEVE_ALLOWREGEX))
+	if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)
 	    strlcat(extensions, " regex", sizeof(extensions));
 #endif
 
 	/* add misc extensions */
-	strlcat(extensions, " subaddress", sizeof(extensions));
+	if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)
+	    strlcat(extensions, " subaddress", sizeof(extensions));
     }
 
     return extensions;

@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.59.2.8 2004/07/16 14:37:43 ken3 Exp $
+ * $Id: script.c,v 1.59.2.9 2004/09/15 17:33:40 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -57,65 +57,85 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 /* does this interpretor support this requirement? */
 int script_require(sieve_script_t *s, char *req)
 {
+    unsigned long config_sieve_extensions =
+	config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
+
     if (!strcmp("fileinto", req)) {
-	if (s->interp.fileinto) {
+	if (s->interp.fileinto &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO)) {
 	    s->support.fileinto = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
     } else if (!strcmp("reject", req)) {
-	if (s->interp.reject) {
+	if (s->interp.reject &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT)) {
 	    s->support.reject = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
     } else if (!strcmp("envelope", req)) {
-	if (s->interp.getenvelope) {
+	if (s->interp.getenvelope &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE)) {
 	    s->support.envelope = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
     } else if (!strcmp("body", req)) {
-	if (s->interp.getbody && config_getswitch(IMAPOPT_SIEVE_ALLOWBODY)) {
+	if (s->interp.getbody &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_BODY)) {
 	    s->support.body = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
     } else if (!strcmp("vacation", req)) {
-	if (s->interp.vacation) {
+	if (s->interp.vacation &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION)) {
 	    s->support.vacation = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
     } else if (!strcmp("imapflags", req)) {
-	if (s->interp.markflags->flag) {
+	if (s->interp.markflags->flag &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAPFLAGS)) {
 	    s->support.imapflags = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
     } else if (!strcmp("notify",req)) {
-	if (s->interp.notify) {
+	if (s->interp.notify &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY)) {
 	    s->support.notify = 1;
+	    return 1;
+	} else {
+	    return 0;
+	}
+    } else if (!strcmp("include", req)) {
+	if (s->interp.getinclude &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE)) {
+	    s->support.include = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
 #ifdef ENABLE_REGEX
     } else if (!strcmp("regex", req) &&
-	       config_getswitch(IMAPOPT_SIEVE_ALLOWREGEX)) {
+	       (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)) {
 	s->support.regex = 1;
 	return 1;
 #endif
-    } else if (!strcmp("subaddress", req)) {
+    } else if (!strcmp("subaddress", req) &&
+	       (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)) {
 	s->support.subaddress = 1;
 	return 1;
-    } else if (!strcmp("relational", req)) {
+    } else if (!strcmp("relational", req) &&
+	       (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)) {
 	s->support.relational = 1;
 	return 1;
     } else if (!strcmp("comparator-i;octet", req)) {
@@ -125,13 +145,6 @@ int script_require(sieve_script_t *s, char *req)
     } else if (!strcmp("comparator-i;ascii-numeric", req)) {
 	s->support.i_ascii_numeric = 1;
 	return 1;
-    } else if (!strcmp("include", req)) {
-	if (s->interp.getinclude) {
-	    s->support.include = 1;
-	    return 1;
-	} else {
-	    return 0;
-	}
     }
     return 0;
 }

@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.24 2004/08/10 15:00:51 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.25 2004/09/15 17:33:38 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -27,28 +27,35 @@ reduces the amount of I/O that takes place at the time of EXPUNGE and
 should result in greater responsiveness for the client, especially
 when expunging a large number of messages.  The new <tt>expunge_mode</tt>
 option in <tt>imapd.conf</tt> controls whether expunges are
-"immediate" or "delayed".</li>
+"immediate" or "delayed".  <i>Development sponsored by FastMail</i>.</li>
 <li>Added support to place some/all mailbox metadata files (cyrus.*
 files) on a separate (probably high-speed) partition.  See the new
 <tt>metapartition</tt> and <tt>metapartition_files</tt> options for
-details.
+details.  <i>Development sponsored by FastMail</i>.</li>
 <li>Added support for accessing subfolders of INBOX via POP3.  See the
-new <tt>popsubfolders</tt> option for details.</li>
+new <tt>popsubfolders</tt> option for details.  <i>Development
+sponsored by FastMail</i>.</li>
 <li>Added support to <tt>lmtpd</tt> to do "fuzzy" mailbox matching
 on user+detail addresses.  See the new
-<tt>lmtp_fuzzy_mailbox_match</tt> option for details.</li>
+<tt>lmtp_fuzzy_mailbox_match</tt> option for details.  <i>Development
+sponsored by FastMail</i>.</li>
+<li>Added new <tt>sieve_extensions</tt> option to allow individual
+Sieve extensions to be enabled/disabled.</li>
 <li>The Sieve "include" extension is now supported.  This also allows
-for global sieve scripts.</li>
-<li>The Sieve "body" extension is now supported.  Set the new
-<tt>sieve_allowbody</tt> option to enable it.</li>
-<li>The $text$ variable for Sieve notify messages is now supported.</li>
-<li>The Sieve "regex" extension can now be disabled at runtime.  Unset
-the new <tt>sieve_allowregex</tt> option to disable it.</li>
+for global sieve scripts.  See the new <tt>sieve_extensions</tt>
+options to enable it.</li>
+<li>The Sieve "body" extension is now supported.  See the new
+<tt>sieve_extensions</tt> option to enable it.  <i>Development
+sponsored by FastMail</i>.</li>
+<li>The $text$ variable for Sieve notify messages is now supported.
+<i>Development sponsored by FastMail</i>.</li>
 <li>The MIME structure of a new message destined for multiple
 recipients is now only parsed once rather than once per delivery,
-resulting in better performance.</li>
+resulting in better performance.  <i>Development sponsored by
+FastMail</i>.</li>
 <li>Support 64-bit quota usage (both per mailbox and for the entire
-quotaroot), based on a patch from Jeremy Rumpf.</li>
+quotaroot), based on a patch from Jeremy Rumpf.  <i>Development
+sponsored by FastMail</i>.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.7</h1>
@@ -2015,7 +2022,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2004/08/10 15:00:51 $ <br />
+last modified: $Date: 2004/09/15 17:33:38 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
