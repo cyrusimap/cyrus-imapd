@@ -42,8 +42,6 @@
 #include "prot.h"
 #include "xmalloc.h"
 
-extern char *sys_errlist[];
-
 /* Signal handler used for read timeouts */
 static jmp_buf timeoutbuf;
 static void
@@ -161,7 +159,7 @@ int timeout;
  * error encountered on 's'.  If there is no error condition, return a
  * null pointer.
  */
-char *prot_error(s)
+const char *prot_error(s)
 struct protstream *s;
 {
     return s->error;
@@ -175,7 +173,7 @@ prot_rewind(s)
 struct protstream *s;
 {
     if (lseek(s->fd, 0L, 0) == -1) {
-	s->error = sys_errlist[errno];
+	s->error = strerror(errno);
 	return EOF;
     }
     s->cnt = s->leftcnt = 0;
@@ -222,7 +220,7 @@ struct protstream *s;
 	}
     
 	if (n <= 0) {
-	    if (n) s->error = sys_errlist[errno];
+	    if (n) s->error = strerror(errno);
 	    else s->eof = 1;
 	    return EOF;
 	}
@@ -370,7 +368,7 @@ struct protstream *s;
     do {
 	n = write(s->fd, ptr, left);
 	if (n == -1 && errno != EINTR) {
-	    s->error = sys_errlist[errno];
+	    s->error = strerror(errno);
 	    if (s->log_timeptr) time(s->log_timeptr);
 	    return EOF;
 	}
