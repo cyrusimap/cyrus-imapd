@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.53 2003/03/12 21:17:57 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.54 2003/03/26 18:00:53 ken3 Exp $ */
 
 #include <config.h>
 
@@ -80,7 +80,6 @@
 #include "charset.h"
 #include "imparse.h"
 #include "iptostring.h"
-#include "mkgmtime.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mboxname.h"
