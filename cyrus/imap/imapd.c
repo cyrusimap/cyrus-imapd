@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.234 2000/04/27 20:26:19 leg Exp $ */
+/* $Id: imapd.c,v 1.235 2000/04/27 20:31:24 leg Exp $ */
 
 #include <config.h>
 
@@ -1631,6 +1631,7 @@ cmd_append(char *tag, char *name)
 			 imapd_authstate, ACL_INSERT, size);
     }
     if (r) {
+	eatline(' ');
 	prot_printf(imapd_out, "%s NO %s%s\r\n",
 		    tag,
 		    (r == IMAP_MAILBOX_NONEXISTENT &&
@@ -1639,7 +1640,6 @@ cmd_append(char *tag, char *name)
 						 imapd_userid, imapd_authstate,
 						 (char **)0, (char **)0) == 0)
 		    ? "[TRYCREATE] " : "", error_message(r));
-	eatline(c);
 	return;
     }
 
