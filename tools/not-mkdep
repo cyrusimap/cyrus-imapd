@@ -1,9 +1,16 @@
 #!/bin/sh
+#
+# not-mkdep for those systems without it
+# $Id: not-mkdep,v 1.2 1998/09/29 03:18:04 tjs Exp $
+#
 
-echo "WARNING: MAKEDEPEND COULD NOT BE FOUND"
-echo ""
-echo "Makedepend did not run because the configure script did not find it"
-echo "when it was run."
-echo ""
-echo "You can fix this by compiling and installing the version from the"
-echo "makedepend subdirectory in the distribution."
+cat <<EOF
+
+		    WARNING: MAKEDEPEND COULD NOT BE FOUND
+
+Makedepend did not run because the configure script did not find it when it
+was run.  You can fix this by compiling and installing the version from the
+makedepend subdirectory in the distribution.
+
+You're probably seeing this warning message a lot, but that's okay.
+EOF
