@@ -54,7 +54,8 @@ COMPILE_ET=../et/compile_et
 
 LOBJS= append.o mailbox.o mboxlist.o message.o \
 	parsel.o parsey.o parseadd.o parseutl.o \
-	config.o imap_err.o proc.o setproctitle.o \
+	config.o imap_err.o proc.o drop.o \
+	setproctitle.o \
 	$(SEEN) $(MAP) $(LOGIN)
 
 IMAPDOBJS= imapd.o index.o
