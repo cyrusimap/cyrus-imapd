@@ -84,9 +84,12 @@ static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 #define CACHE_ITEM_NEXT(ptr) ((ptr)+4+((3+CACHE_ITEM_LEN(ptr))&~3))
 
 /* Forward declarations */
-static int index_fetchreply();
-static int index_storeseen();
-static int index_storeflag();
+static int index_forsequence();
+static int index_listflags();
+static int index_fetchflags(), index_fetchreply();
+static int index_storeseen(), index_storeflag();
+static int index_search_evaluate(), index_search_string();
+static int index_searchmsg(), index_searchheader();
 static int index_copysetup();
 
 struct copyargs {

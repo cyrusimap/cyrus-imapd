@@ -32,6 +32,8 @@
 #include "mailbox.h"
 #include "imapd.h"
 
+static login_setadmin();
+
 /*
  * Kerberos-authenticated login
  */
