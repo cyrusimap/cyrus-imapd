@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.28.2.10 2003/04/24 18:35:47 rjs3 Exp $
+# $Id: Admin.pm,v 1.28.2.11 2003/05/22 18:55:09 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -669,12 +669,9 @@ sub setquota {
 
 sub getinfo {
   my ($self,$box) = @_;
-  my $pat;
 
   if(!defined($box)) {
-    $pat = "/server/*";
-  } else {
-    $pat = "/mailbox/{$box}/*";
+    $box = "";
   }
 
   if(!$self->{support_annotatemore}) {
@@ -688,45 +685,48 @@ sub getinfo {
 			my %d = @_;
 			my $text = $d{-text};
 
-			if($text =~ /^\(.*\)$/) {
-			  # list of annotations (old style)
-			  $text =~ s/^\(//;
-			  
-			  while($text !~ /^\)/) {
-			    if($text =~
-			       /^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)/) {
-				 $d{-rock}{$1} = $3;
-				 $text =~ s/^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)//;
-			       } else {
-				 # hrm, error
-				 $self->{error} = "Could not parse";
-				 return undef;
-			       }
-			  }
-			} elsif ($text =~
-			       /^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)/) {
+			# There were several draft iterations of this,
+			# but since we send only the latest form command,
+			# this is the only possible response.
+
+		        if ($text =~
+			       /^\s*\"([^\"]*)\"\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)/) {
+			  # note that we require mailbox and entry to be qstrings
 			  # Single annotation, not literal,
 			  # but possibly multiple values
 			  # however, we are only asking for one value, so...
-			  $d{-rock}{$1} = $3;
+			  my $key;
+			  if($1 ne "") {
+				$key = "/mailbox/{$1}$2";
+			  } else {
+				$key = "/server$2";
+			  }
+			  $d{-rock}{$key} = $4;
 		        }  elsif ($text =~
-			       /^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\{(.*)\}\r\n/) {
+			       /^\s*\"([^\"]*)\"\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\{(.*)\}\r\n/) {
 			  my $len = $3;
-			  $text =~ s/^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\{(.*)\}\r\n//s;
+			  $text =~ s/^\s*\"([^\"]*)\"\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\{(.*)\}\r\n//s;
 			  $text = substr($text, 0, $len);
+			  # note that we require mailbox and entry to be qstrings
 			  # Single annotation (literal style),
 			  # possibly multiple values
 			  # however, we are only asking for one value, so...
+			  my $key;
+			  if($1 ne "") {
+				$key = "/mailbox/{$1}$2";
+			  } else {
+				$key = "/server$2";
+			  }
 			  $d{-rock}{$1} = $text;
-		        } else {
+			} else {
 			  next;
 			}
 		      },
 		      -rock => \%info});
 
   # send getannotation "/mailbox/name/* or /server/*"
-  my ($rc, $msg) = $self->send('', '', "GETANNOTATION %s \"value.shared\"",
-			       $pat);
+  my ($rc, $msg) = $self->send('', '', "GETANNOTATION %s \"*\" \"value.shared\"",
+			       $box);
   $self->addcallback({-trigger => 'ANNOTATION'});
   if ($rc eq 'OK') {
     $self->{error} = undef;
@@ -746,7 +746,7 @@ sub setinfoserver {
     return undef;
   }
 
-  my ($rc, $msg) = $self->send('', '', "SETANNOTATION \"/server/%s\" (\"value.shared\" %s)",
+  my ($rc, $msg) = $self->send('', '', "SETANNOTATION \"\" %s (\"value.shared\" %s)",
 			       $entry, $value);
 
   if ($rc eq 'OK') {
