@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.28 2002/01/15 20:24:48 leg Exp $ */
+/* $Id: service.c,v 1.29 2002/02/11 17:41:45 ken3 Exp $ */
 
 #include <config.h>
 
@@ -265,8 +265,7 @@ int main(int argc, char **argv, char **envp)
 		r = select(LISTEN_FD + 1, &rfds, NULL, NULL, &tv);
 		if (!FD_ISSET(LISTEN_FD, &rfds)) {
 		    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-		    service_abort();
-		    exit(0);
+		    service_abort(0);
 		}
 	    }
 
@@ -290,8 +289,7 @@ int main(int argc, char **argv, char **envp)
 		default:
 		    syslog(LOG_ERR, "accept failed: %m");
 		    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-		    service_abort();
-		    exit(EX_OSERR);
+		    service_abort(EX_OSERR);
 		}
 	    }
 
@@ -324,18 +322,15 @@ int main(int argc, char **argv, char **envp)
 
 	if (fd != 0 && dup2(fd, 0) < 0) {
 	    syslog(LOG_ERR, "can't duplicate accepted socket: %m");
-	    service_abort();
-	    exit(EX_OSERR);
+	    service_abort(EX_OSERR);
 	}
 	if (fd != 1 && dup2(fd, 1) < 0) {
 	    syslog(LOG_ERR, "can't duplicate accepted socket: %m");
-	    service_abort();
-	    exit(EX_OSERR);
+	    service_abort(EX_OSERR);
 	}
 	if (fd != 2 && dup2(fd, 2) < 0) {
 	    syslog(LOG_ERR, "can't duplicate accepted socket: %m");
-	    service_abort();
-	    exit(EX_OSERR);
+	    service_abort(EX_OSERR);
 	}
 
 	if (fd > 2) close(fd);

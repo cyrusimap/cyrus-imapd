@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.90 2002/02/08 03:30:27 leg Exp $ */
+/* $Id: proxyd.c,v 1.91 2002/02/11 17:41:44 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1271,8 +1271,7 @@ int service_main(int argc, char **argv, char **envp)
 /* called if 'service_init()' was called but not 'service_main()' */
 void service_abort(int error)
 {
-    mboxlist_close();
-    mboxlist_done();
+    shut_down(error);
 }
 
 /*
@@ -1337,7 +1336,7 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
-    prot_flush(proxyd_out);
+    if (proxyd_out) prot_flush(proxyd_out);
     exit(code);
 }
 

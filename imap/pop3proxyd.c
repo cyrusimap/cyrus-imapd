@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.29 2002/02/06 22:46:39 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.30 2002/02/11 17:41:44 ken3 Exp $
  */
 #include <config.h>
 
@@ -312,8 +312,7 @@ int service_main(int argc, char **argv, char **envp)
 /* called if 'service_init()' was called but not 'service_main()' */
 void service_abort(int error)
 {
-    mboxlist_close();
-    mboxlist_done();
+    shut_down(error);
 }
 
 void usage(void)
@@ -331,6 +330,8 @@ void usage(void)
 void shut_down(int code)
 {
     proc_cleanup();
+    mboxlist_close();
+    mboxlist_done();
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
