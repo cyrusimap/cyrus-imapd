@@ -69,6 +69,9 @@ int write;
     newstream->error = 0;
     newstream->eof = 0;
     newstream->read_timeout = 0;
+    newstream->flushonread = 0;
+    newstream->readcallback_proc = 0;
+    newstream->readcallback_rock = 0;
 
     return newstream;
 }
