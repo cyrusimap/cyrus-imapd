@@ -33,7 +33,7 @@ VPATH = @srcdir@
 CC = @CC@
 INSTALL = @INSTALL@
 RANLIB = @RANLIB@
-ARCHIVE = $(AR) cr
+ARCHIVE = ar cr
 
 AWK = @AWK@
 SED = sed

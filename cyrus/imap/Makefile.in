@@ -132,7 +132,7 @@ updateimsp: updateimsp.o libimap.a $(DEPLIBS)
 
 libimap.a: $(LOBJS)
 	rm -f libimap.a
-	$(AR) cr libimap.a $(LOBJS)
+	ar cr libimap.a $(LOBJS)
 	$(RANLIB) libimap.a
 
 imap_err.h imap_err.c: imap_err.et
