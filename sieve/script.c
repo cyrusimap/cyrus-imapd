@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.52 2002/02/27 21:05:13 ken3 Exp $
+ * $Id: script.c,v 1.53 2002/03/10 02:58:09 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -125,6 +125,7 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     /* clear all support bits */
     memset(&s->support, 0, sizeof(struct sieve_support));
 
+    s->imapflags.flag = NULL; s->imapflags.nflags = 0;
     s->err = 0;
 
     yylineno = 1;		/* reset line number */
@@ -185,12 +186,22 @@ char **stringlist_to_chararray(stringlist_t **list)
     return ret;
 }
 
+void free_imapflags(sieve_imapflags_t *imapflags)
+{
+    while (imapflags->nflags)
+	free(imapflags->flag[--imapflags->nflags]);
+    free(imapflags->flag);
+    
+    imapflags->flag = NULL;
+}
+  
 int sieve_script_free(sieve_script_t **s)
 {
     if (*s) {
 	if ((*s)->cmds) {
 	    free_tree((*s)->cmds);
 	}
+	free_imapflags(&(*s)->imapflags);
 	free(*s);
     }
 
@@ -374,6 +385,7 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
    the naivest way.  if we implement some sort of depth limit, we'll
    be ok here; otherwise we'd want to transform it a little smarter */
 static int eval(sieve_interp_t *i, commandlist_t *c, 
+		sieve_imapflags_t *imapflags,
 		void *m, action_list_t *actions, notify_list_t *notify_list,
 		const char **errmsg)
 {
@@ -384,9 +396,11 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 	switch (c->type) {
 	case IF:
 	    if (evaltest(i, c->u.i.t, m))
-		res = eval(i, c->u.i.do_then, m, actions, notify_list, errmsg);
+		res = eval(i, c->u.i.do_then, imapflags, m, actions,
+			   notify_list, errmsg);
 	    else
-		res = eval(i, c->u.i.do_else, m, actions, notify_list, errmsg);
+		res = eval(i, c->u.i.do_else, imapflags, m, actions,
+			   notify_list, errmsg);
 	    break;
 	case REJCT:
 	    res = do_reject(actions, c->u.str);
@@ -394,7 +408,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		*errmsg = "Reject can not be used with any other action";
 	    break;
 	case FILEINTO:
-	    res = do_fileinto(actions, c->u.str, &i->curflags);
+	    res = do_fileinto(actions, c->u.str, imapflags);
 	    if (res == SIEVE_RUN_ERROR)
 		*errmsg = "Fileinto can not be used with Reject";
 	    break;
@@ -404,7 +418,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		*errmsg = "Redirect can not be used with Reject";
 	    break;
 	case KEEP:
-	    res = do_keep(actions, &i->curflags);
+	    res = do_keep(actions, imapflags);
 	    if (res == SIEVE_RUN_ERROR)
 		*errmsg = "Keep can not be used with Reject";
 
@@ -864,7 +878,7 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	goto error;
     }
  
-    if (eval(&s->interp, s->cmds, message_context, actions,
+    if (eval(&s->interp, s->cmds, &s->imapflags, message_context, actions,
 	     notify_list, &errmsg) < 0)
 	return SIEVE_RUN_ERROR;
   
@@ -995,14 +1009,14 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 
  
 	case ACTION_SETFLAG:
-	    free_imapflags(&s->interp.curflags);
-	    ret = sieve_addflag(&s->interp.curflags, a->u.fla.flag);
+	    free_imapflags(&s->imapflags);
+	    ret = sieve_addflag(&s->imapflags, a->u.fla.flag);
 	    break;
 	case ACTION_ADDFLAG:
-	    ret = sieve_addflag(&s->interp.curflags, a->u.fla.flag);
+	    ret = sieve_addflag(&s->imapflags, a->u.fla.flag);
 	    break;
 	case ACTION_REMOVEFLAG:
-	    ret = sieve_removeflag(&s->interp.curflags, a->u.fla.flag);
+	    ret = sieve_removeflag(&s->imapflags, a->u.fla.flag);
 	    break;
 	case ACTION_MARK:
 	    {
@@ -1010,7 +1024,7 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 
 		ret = SIEVE_OK;
 		while (n && ret == SIEVE_OK) {
-		    ret = sieve_addflag(&s->interp.curflags,
+		    ret = sieve_addflag(&s->imapflags,
 					s->interp.markflags->flag[--n]);
 		}
 		break;
@@ -1021,7 +1035,7 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 
 		ret = SIEVE_OK;
 		while (n && ret == SIEVE_OK) {
-		    ret = sieve_removeflag(&s->interp.curflags,
+		    ret = sieve_removeflag(&s->imapflags,
 					   s->interp.markflags->flag[--n]);
 		}
 		break;
@@ -1077,7 +1091,7 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 
 	implicit_keep = 0;	/* don't try an implicit keep again */
 
-	keep_context.imapflags = &s->interp.curflags;
+	keep_context.imapflags = &s->imapflags;
  
 	lastaction = ACTION_KEEP;
 	keep_ret = s->interp.keep(&keep_context, s->interp.interp_context,

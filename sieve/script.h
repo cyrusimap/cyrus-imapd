@@ -1,6 +1,6 @@
 /* script.h -- script definition
  * Larry Greenfield
- * $Id: script.h,v 1.5 2000/02/10 00:39:14 leg Exp $
+ * $Id: script.h,v 1.6 2002/03/10 02:58:09 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -49,6 +49,9 @@ struct sieve_script {
 
     void *script_context;
     commandlist_t *cmds;
+
+    /* current imapflags state */
+    sieve_imapflags_t imapflags;
 
     int err;
 };
