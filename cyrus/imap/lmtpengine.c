@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.61 2002/02/22 19:09:11 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.62 2002/02/22 22:11:00 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -175,6 +175,7 @@ static void send_lmtp_error(struct protstream *pout, int r)
     case MUPDATE_NOCONN:
     case MUPDATE_NOAUTH:
     case MUPDATE_TIMEOUT:
+    case MUPDATE_PROTOCOL_ERROR:
 	prot_printf(pout, "451 4.4.0 Remote server unavailable\r\n");
 	break;
 
@@ -252,7 +253,6 @@ static void send_lmtp_error(struct protstream *pout, int r)
 	prot_printf(pout, "501 5.5.4 Syntax error in parameters\r\n");
 	break;
 
-    case MUPDATE_PROTOCOL_ERROR:
     case MUPDATE_BADPARAM:
     default:
 	/* Some error we're not expecting. */
