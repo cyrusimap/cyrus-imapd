@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.197 2000/01/05 00:00:11 leg Exp $ */
+/* $Id: imapd.c,v 1.198 2000/01/06 22:42:23 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -146,9 +146,7 @@ void cmd_getuids P((char *tag, char *startuid));
 void cmd_unselect P((char* tag));
 void cmd_namespace P((char* tag));
 
-#ifdef HAVE_SSL
 void cmd_starttls(char *tag);
-#endif /* HAVE_SSL */
 int starttls_enabled(void);
 
 #ifdef ENABLE_X_NETSCAPE_HACK
@@ -3327,6 +3325,12 @@ void cmd_starttls(char *tag)
 int starttls_enabled(void)
 {
     return 0;
+}
+
+void cmd_starttls(char *tag)
+{
+    fatal("cmd_starttls() executed, but starttls isn't implemented!",
+	  EC_SOFTWARE);
 }
 #endif /* HAVE_SSL */
 
