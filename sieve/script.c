@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.51 2002/02/26 20:55:54 ken3 Exp $
+ * $Id: script.c,v 1.52 2002/02/27 21:05:13 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -1075,6 +1075,8 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	sieve_keep_context_t keep_context;
 	int keep_ret;
 
+	implicit_keep = 0;	/* don't try an implicit keep again */
+
 	keep_context.imapflags = &s->interp.curflags;
  
 	lastaction = ACTION_KEEP;
@@ -1086,7 +1088,6 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 		     sizeof(actions_string)-strlen(actions_string),
 		     "Kept\n");
 	else {
-	    implicit_keep = 0;	/* don't try an implicit keep again */
 	    goto error;		/* process the implicit keep error */
 	}
     }
@@ -1094,19 +1095,24 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     /* Process notify actions */
     if (s->support.notify && notify_list) {
 	notify_list_t *n = notify_list;
+	int notify_ret = SIEVE_OK;
 
 	while (n != NULL) {
 	    if (n->isactive) {
-		ret |= send_notify_callback(s, message_context, n,
-					    actions_string, &errmsg);
+		lastaction = ACTION_NOTIFY;
+		notify_ret = send_notify_callback(s, message_context, n,
+						  actions_string, &errmsg);
+		ret |= notify_ret;
 	    }
 	    n = n->next;
 	}
 
 	if (notify_list) free_notify_list(notify_list);
-	notify_list = NULL;
+	notify_list = NULL;	/* don't try any notifications again */
 
-	/* XXX should we report notify failures? */
+	if (notify_ret != SIEVE_OK) {
+	    goto error;		/* process the notify error */
+	}
     }
  
     if (actions)
