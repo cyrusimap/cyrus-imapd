@@ -620,7 +620,7 @@ static int abort_txn(struct db *db, struct txn *tid)
 
     assert(dbinit && tid);
 
-    syslog(LOG_DEBUG, "aborting txn %d", txn_id(tid));
+    syslog(LOG_DEBUG, "aborting txn %d", txn_id(t));
     r = txn_abort(t);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: error aborting txn: %s", db_strerror(r));
