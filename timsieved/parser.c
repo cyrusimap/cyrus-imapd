@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.22 2002/10/02 13:54:18 rjs3 Exp $
+ * $Id: parser.c,v 1.23 2002/10/22 20:14:30 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -108,24 +108,6 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   while(token == EOL) 
       token = timlex(NULL, NULL, sieved_in);
 
-  /* If we have a referral host, no matter what the command is, we want
-   * to send them there */
-  /* note that referral_host is only non-NULL if we are authenticated */
-  if(referral_host && token != LOGOUT) {
-      char buf[4096];
-      char *c;
-
-      /* Truncate the hostname if necessary */
-      strcpy(buf, referral_host);
-      c = strchr(buf, '!');
-      if(c) *c = '\0';
-      
-      prot_printf(sieved_out, "BYE (REFERRAL \"%s\") \"Try Remote.\"\r\n",
-		  buf);
-      ret = TRUE;
-      goto done;
-  }
-
   if (!authenticated && (token > 255) && (token!=AUTHENTICATE) &&
       (token!=LOGOUT) && (token!=CAPABILITY) &&
       (!tls_enabled("sieve") || (token!=STARTTLS)))
@@ -195,6 +177,12 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	error_msg = "Authentication Error";
 	goto error;
     }
+
+#if 0 /* XXX - not implemented in sieveshell*/
+    /* referral_host is non-null only once we are authenticated */
+    if(referral_host)
+	goto do_referral;
+#endif
     break;
 
   case CAPABILITY:
@@ -203,6 +191,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	  error_msg = "Expected EOL";
 	  goto error;
       }
+
+      if(referral_host)
+	  goto do_referral;
 
       capabilities(sieved_out, sieved_saslconn);
       break;
@@ -238,6 +229,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	  goto error;
       }
 
+      if(referral_host)
+	  goto do_referral;
+
       cmd_havespace(sieved_out, sieve_name, num);
 
       break;
@@ -251,6 +245,8 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	  error_msg = "Garbage after logout command";
 	  goto error;
       }
+
+      /* no referral for logout */
 
       cmd_logout(sieved_out, sieved_in);
       
@@ -276,6 +272,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       error_msg = "Expected EOL";
       goto error;
     }
+
+    if(referral_host)
+	goto do_referral;
 
     getscript(sieved_out, sieve_name);
     
@@ -313,6 +312,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       goto error;
     }
 
+    if(referral_host)
+	goto do_referral;
+
     putscript(sieved_out, sieve_name, sieve_data, verify_only);
     
     break;
@@ -335,6 +337,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       error_msg = "Expected EOL";
       goto error;
     }
+
+    if(referral_host)
+	goto do_referral;
 
     setactive(sieved_out, sieve_name);
     
@@ -359,6 +364,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       goto error;
     }
 
+    if(referral_host)
+	goto do_referral;
+
     deletescript(sieved_out, sieve_name);
     
     break;
@@ -371,6 +379,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       goto error;
     }
 
+    if(referral_host)
+	goto do_referral;
+    
     listscripts(sieved_out);
     
     break;
@@ -383,12 +394,15 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       goto error;
     }
 
+    if(referral_host)
+	goto do_referral;
+
     cmd_starttls(sieved_out, sieved_in);
     
     break;
 
   default:
-    error_msg="Expected a command. Got something else";
+    error_msg="Expected a command. Got something else.";
     goto error;
     break;
 
@@ -417,6 +431,23 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   prot_flush(sieved_out);
 
   return FALSE;
+
+ do_referral:
+  {
+      char buf[4096];
+      char *c;
+
+      /* Truncate the hostname if necessary */
+      strcpy(buf, referral_host);
+      c = strchr(buf, '!');
+      if(c) *c = '\0';
+      
+      prot_printf(sieved_out, "BYE (REFERRAL \"%s\") \"Try Remote.\"\r\n",
+		  buf);
+      ret = TRUE;
+      goto done;
+  }
+
 }
 
 
