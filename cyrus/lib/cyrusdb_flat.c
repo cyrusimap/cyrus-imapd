@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.24 2002/12/26 17:52:00 leg Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.25 2002/12/26 17:59:41 leg Exp $ */
 
 #include <config.h>
 
@@ -247,7 +247,6 @@ static int starttxn_or_refetch(struct db *db, struct txn **mytid)
             /* lock_reopen() picked up a new file */
 
 	    map_free(&db->base, &db->len);
-            db->ino = sbuf.st_ino;
 	}
 	map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size,
 		    db->fname, 0);
