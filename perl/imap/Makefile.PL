@@ -55,7 +55,8 @@ WriteMakefile(
     'macro'	=> {'IMCLIENT_LIBS' => ''},	# hack
     'clean'	=> {'FILES' => 'libcyrperl.a cyradm'},
     'OBJECT'    => 'IMAP.o',
-    'LIBS'	=> ["-L../../lib -lcyrus $SASL_LIB -lssl -lcrypto"],
+    'MYEXTLIB'  => '../../lib/libcyrus.a',
+    'LIBS'	=> ["$SASL_LIB -lssl -lcrypto"],
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../../lib $SASL_INC", 
     'EXE_FILES' => [cyradm],
