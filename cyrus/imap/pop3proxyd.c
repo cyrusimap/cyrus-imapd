@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.8 2002/08/13 20:06:10 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.9 2002/08/14 01:23:38 ken3 Exp $
  */
 #include <config.h>
 
@@ -1354,11 +1354,6 @@ static int proxy_authenticate(const char *hostname, char **authline_status)
     /* Done with callbacks */
     free_callbacks(cb);
 
-    if (r == SASL_OK) {
-	prot_setsasl(backend_in, backend_saslconn);
-	prot_setsasl(backend_out, backend_saslconn);
-    }
-
     /* r == SASL_OK on success */
     return r;
 }
@@ -1416,14 +1411,19 @@ static void openproxy(void)
 
     if (proxy_authenticate(server, &statusline) != SASL_OK) {
 	syslog(LOG_ERR, "couldn't authenticate to backend server");
-	prot_printf(popd_out, "-ERR%s", statusline);
+	prot_printf(popd_out, "-ERR%s",
+		    statusline ? statusline : " Authentication to backend server failed\r\n");
 	prot_flush(popd_out);
-	free(statusline);
+	if(statusline) free(statusline);
 
 	shut_down(0); /* no process reuse */
+    } else {
+	prot_setsasl(backend_in, backend_saslconn);
+	prot_setsasl(backend_out, backend_saslconn);
     }
 
-    prot_printf(popd_out, "+OK%s", statusline);
+    prot_printf(popd_out, "+OK%s",
+		statusline ? statusline : " Mailbox locked and ready");
     prot_flush(popd_out);
 
     free(statusline);
