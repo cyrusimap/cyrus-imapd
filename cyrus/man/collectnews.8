@@ -36,13 +36,11 @@ the articles through the Cyrus IMAP server.
 is designed to be used by InterNetNews to update the IMAP database as
 the articles come in.
 .PP
-The input is processed as an INN overview stream written as a ``WO''
+The input is processed as an INN overview stream written as a ``WR''
 entry in the
 .IR newsfeeds (5)
-file.  This data consists of lines of text.  Any tab 
-and any data followed by a tab in an input line is ignored.  The
-remaining text is a list of relative article pathnames, with a single
-space between entries.
+file.  This data consists of lines of text of the format
+newsgroup/article number, seperated by commas.
 .PP
 .I Collectnews
 reads its configuration options out of the
