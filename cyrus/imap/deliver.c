@@ -133,7 +133,7 @@ char **argv;
 
     if (authuser) {
 	authuser = auth_canonifyid(authuser);
-	if (authuser) auth_setid(authuser);
+	if (authuser) auth_setid(authuser, (char *)0);
     }
 
     /* Copy message to temp file */

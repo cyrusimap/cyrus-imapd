@@ -94,10 +94,13 @@ char *identifier;
 }
 
 /*
- * Set the current user to 'identifier'
+ * Set the current user to 'identifier'.  'cacheid', if non-null,
+ * points to a 16-byte binary key to cache identifier's information
+ * with.
  */
-auth_setid(identifier)
+auth_setid(identifier, cacheid)
 char *identifier;
+char *cacheid;
 {
     struct passwd *pwd;
     struct group *grp;
