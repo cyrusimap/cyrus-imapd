@@ -1,5 +1,5 @@
 /* map.h -- memory mapping functions
- $Id: map.h,v 1.8 2000/06/28 05:46:57 leg Exp $
+ $Id: map.h,v 1.9 2002/07/09 18:41:15 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -45,6 +45,8 @@
 #define INCLUDED_MAP_H
 
 #define MAP_UNKNOWN_LEN ((unsigned long)-1)
+
+extern const char *map_method_desc;
 
 extern void map_refresh(int fd, int onceonly, const char **base,
 			unsigned long *len, unsigned long newlen,

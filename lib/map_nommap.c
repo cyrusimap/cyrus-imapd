@@ -1,5 +1,5 @@
 /* map_nommap.c -- dummy memory-mapping routines.
- $Id: map_nommap.c,v 1.18 2002/03/12 18:10:51 ken3 Exp $
+ $Id: map_nommap.c,v 1.19 2002/07/09 18:41:15 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -53,6 +53,8 @@
 #include "exitcodes.h"
 
 #define SLOP (4*1024)
+
+const char *map_method_desc = "nommap";
 
 /*
  * Create/refresh mapping of file
