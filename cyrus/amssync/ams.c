@@ -32,7 +32,7 @@
 #include <sysexits.h>
 
 #include "xmalloc.h"
-#include "bsync.h"
+#include "amssync.h"
 
 extern int debug,verbose;
 
