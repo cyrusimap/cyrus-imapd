@@ -1,6 +1,6 @@
 /* interp.h -- interpretor definition
  * Larry Greenfield
- * $Id: interp.h,v 1.6 2000/02/22 07:56:40 tmartin Exp $
+ * $Id: interp.h,v 1.7 2002/03/10 02:58:09 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -42,9 +42,6 @@ struct sieve_interp {
 
     sieve_parse_error *err;
 
-    /* current imapflags state */
-    sieve_imapflags_t curflags;
-
     /* site-specific imapflags for mark/unmark */
     sieve_imapflags_t *markflags;
 
@@ -55,6 +52,5 @@ struct sieve_interp {
 };
 
 int interp_verify(sieve_interp_t *interp);
-void free_imapflags(sieve_imapflags_t *imapflags);
 
 #endif
