@@ -2019,7 +2019,7 @@ int usinguid;
     if (r) {
 	prot_printf(imapd_out, "%s NO %s%s\r\n", tag,
 		    (r == IMAP_MAILBOX_NONEXISTENT &&
-		     mboxlist_createmailboxcheck(name, 0, imapd_userisadmin,
+		     mboxlist_createmailboxcheck(mailboxname, 0, imapd_userisadmin,
 						 imapd_userid, imapd_authstate,
 						 (char **)0, (char **)0) == 0)
 		    ? "[TRYCREATE] " : "", error_message(r));
