@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.4 2002/07/30 16:20:12 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.5 2002/07/31 17:48:50 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -596,7 +596,7 @@ mupdate_docmd_result_t docmd(struct conn *c)
 	}
 
 	if (ch != ' ') {
-	    prot_printf(c->pout, "%s BAD \"Need command\"\r\n", c->tag.s);
+	    prot_printf(c->pout, "* BAD \"Need command\"\r\n");
 	    eatline(c->pin, ch);
 	    continue;
 	}
@@ -1364,8 +1364,12 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook,
 
     syslog(LOG_DEBUG, "cmd_find(fd:%d, %s)", C->fd, mailbox);
 
+    /* Only hold the mutex around database_lookup,
+     * since the mbent stays valid even if the database changes,
+     * and we don't want to block on network I/O */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
     m = database_lookup(mailbox, NULL);
+    pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     if (m && m->t == SET_ACTIVE) {
 	prot_printf(C->pout, "%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
@@ -1385,7 +1389,6 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook,
     }
 
     free_mbent(m);
-    pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     if (dook) {
 	prot_printf(C->pout, "%s OK \"Search completed\"\r\n", tag);
@@ -1443,6 +1446,10 @@ void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
 {
     char pattern[2] = {'*','\0'};
 
+    /* List operations can result in a lot of output, let's
+     * buffer this one to disk */
+    prot_bigbuffer_start(C->pout, config_getstring(IMAPOPT_TEMP_PATH));
+
     /* indicate interest in updates */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
@@ -1458,6 +1465,8 @@ void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
     C->streaming = NULL;
 
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
+
+    prot_bigbuffer_flush(C->pout);
 }
 
 
@@ -1484,6 +1493,11 @@ void cmd_startupdate(struct conn *C, const char *tag)
     /* initialize my condition variable */
     pthread_cond_init(&C->cond, NULL);
 
+    /* The inital dump of the database can result in a lot of data,
+     * lets buffer to disk and not block on network I/O while holding
+     * mailboxes_mutex */
+    prot_bigbuffer_start(C->pout, config_getstring(IMAPOPT_TEMP_PATH));
+
     /* indicate interest in updates */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
@@ -1498,6 +1512,8 @@ void cmd_startupdate(struct conn *C, const char *tag)
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     prot_printf(C->pout, "%s OK \"streaming starts\"\r\n", tag);
+
+    prot_bigbuffer_flush(C->pout);
 
     /* schedule our first update */
     C->ev = prot_addwaitevent(C->pin, time(NULL) + update_wait, 
@@ -1910,7 +1926,7 @@ void mupdate_unready(void)
     pthread_mutex_unlock(&ready_for_connections_mutex);
 }
 
-/* Used to free malloc'd mbent's */
+/* Used to free malloc'd mbent's (not for mpool'd mbents) */
 void free_mbent(struct mbent *p) 
 {
     if(!p) return;
