@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.21 2003/01/31 17:37:22 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.22 2003/01/31 18:46:30 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -400,6 +400,11 @@ int service_init(int argc, char **argv,
 	return EC_SOFTWARE;
     }
 
+    if(workers_to_start < config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
+	syslog(LOG_CRIT, "Starting worker threads is less than minimum spare worker threads");
+	return EC_SOFTWARE;
+    }
+
     if(config_getint(IMAPOPT_MUPDATE_WORKERS_MAXSPARE) < workers_to_start) {
 	syslog(LOG_CRIT, "Maximum spare worker threads is less than starting worker threads");
 	return EC_SOFTWARE;
@@ -796,6 +801,7 @@ static void *thread_main(void *rock __attribute__((unused)))
     struct protgroup *protout = NULL;
     struct timeval now;
     struct timespec timeout;
+    int need_workers, too_many;
     int max_worker_flag;
     int do_a_command;
     int send_a_banner;    
@@ -829,6 +835,8 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    goto worker_thread_done;
 	}
 
+    retry_lock:
+
 	/* Lock Listen Mutex - If locking takes more than 60 seconds,
 	 * kill off this thread.  Ideally this is a FILO queue */
 	pthread_mutex_lock(&listener_mutex); /* LOCK */
@@ -847,15 +855,20 @@ static void *thread_main(void *rock __attribute__((unused)))
 	}
 	pthread_mutex_unlock(&listener_mutex); /* UNLOCK */
 
-	if(ret == ETIMEDOUT) {	    
-	    /* Decrement Idle Worker Count */
-	    pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
-	    idle_worker_count--;
-	    pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
-
-	    syslog(LOG_DEBUG,
-		   "Thread timed out waiting for listener_lock");
-	    goto worker_thread_done;
+	if(ret == ETIMEDOUT) {
+	    if(idle_worker_count <= config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
+		/* below number of spare workers, try to get the lock again */
+		goto retry_lock;
+	    } else {
+		/* Decrement Idle Worker Count */
+		pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
+		idle_worker_count--;
+		pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
+		
+		syslog(LOG_DEBUG,
+		       "Thread timed out waiting for listener_lock");
+		goto worker_thread_done;
+	    }
 	}
 
 	signals_poll();
@@ -895,12 +908,22 @@ static void *thread_main(void *rock __attribute__((unused)))
 	}
 
 	/* Decrement Idle Worker Count */
+	pthread_mutex_lock(&worker_count_mutex); /* LOCK */
 	pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
 	idle_worker_count--;
 
-	/* Do we need a new worker? (are we allowed to create one?) */
-	if(idle_worker_count == 0
-	   && worker_count < config_getint(IMAPOPT_MUPDATE_WORKERS_MAX)) {
+	need_workers = config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)
+	                - idle_worker_count;
+
+	if(need_workers > 0) {
+	    too_many = (need_workers + worker_count) - 
+		config_getint(IMAPOPT_MUPDATE_WORKERS_MAX);
+	    need_workers -= too_many;
+	}
+	
+	/* Do we need a new worker (or two, or three...)?
+	 * (are we allowed to create one?) */
+	while(need_workers > 0) {
 	    pthread_t t;
 	    int r = pthread_create(&t, NULL, &thread_main, NULL);
 	    if(r == 0) {
@@ -909,9 +932,12 @@ static void *thread_main(void *rock __attribute__((unused)))
 		syslog(LOG_ERR,
 		       "could not start a new worker thread (not fatal)");
 	    }
+	    /* Even if we fail to create the new thread, keep going */
+	    need_workers--;
 	}
 	pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
-
+	pthread_mutex_unlock(&worker_count_mutex); /* UNLOCK */
+	 
 	/* If we've been signaled to be unready, drop all current connections
 	 * in the idle list */
 	if(!ready_for_connections) {
