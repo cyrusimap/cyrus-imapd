@@ -136,7 +136,7 @@ dnl
 dnl Checking for Tcl first puts -lm before -lkrb on the library list.
 dnl
 TCL_SUBDIRS="cyradm"
-AC_ARG_WITH(tcl,[  --with-tcl=PATH         use tcl from PATH],
+AC_ARG_WITH(tcl,[  --with-tcl=PATH         use Tcl from PATH],
 	with_tcl="${withval}")
 if test -z "$with_tcl"; then
      if test -f /usr/local/lib/libtcl.a; then
@@ -152,6 +152,36 @@ case "$with_tcl" in
 	    LIBS="${LIBS} ${with_tcl}/lib/libtcl.a -lm" ;;
 esac
 AC_SUBST(TCL_SUBDIRS)
+dnl
+dnl Test for Zephyr
+dnl
+AC_ARG_WITH(zephyr,[  --with-zephyr=PATH      use Zephyr from PATH],
+	with_zephyr="${withval}")
+if test -z "$with_zephyr"; then
+     if test -f /usr/local/lib/libzephyr.a; then
+	with_zephyr="/usr/local"
+     fi
+fi
+case "$with_zephyr" in
+	no) true;;
+	"") AC_CHECK_LIB(zephyr,main,LIBS="${LIBS} -lzephyr",
+		with_zephyr="no",);;
+	*)  CPPFLAGS="${CPPFLAGS} -I${with_zephyr}/include"
+	    LIBS="${LIBS} ${with_zephyr}/lib/libzephyr.a";;
+esac
+AC_ARG_WITH(notify,[  --with-notify=METHOD    use mail notification METHOD
+                          METHOD is zephyr or no],WITH_NOTIFY="${withval}",
+	if test "$with_zephyr" = "no"; then
+		WITH_NOTIFY=no
+	else
+		WITH_NOTIFY=zephyr
+	fi)
+AC_SUBST(WITH_NOTIFY)
+if test "$with_zephyr" = "no"; then
+     if test "$WITH_NOTIFY" = "zephyr"; then
+	AC_MSG_ERROR(Unable to find Zephyr libraries)
+     fi
+fi     
 dnl
 dnl Test for Kerberos
 dnl
