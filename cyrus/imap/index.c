@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.116 2000/06/08 22:07:08 leg Exp $
+ * $Id: index.c,v 1.117 2000/06/09 01:04:24 ken3 Exp $
  */
 #include <config.h>
 
@@ -2958,13 +2958,8 @@ void *rock;
  *
  * public domain code by Jerry Coffin, with improvements by HenkJan Wolthuis.
  *
- * Questions:
- *
- * Does this function provide a unique hash for all strings?  If not, either
- * find one that does, or just use strcmp().
- *
- * Can we find a function that provides uniqueness and maintains alphabetical
- * (ascii) ordering between strings ( hash(abc) < hash(abd) < hash(abe) )?
+ * Can we find a function that maintains alphabetical (ascii) ordering
+ * between strings ( hash(abc) < hash(abd) < hash(abe) )?
  */
 
 static unsigned hash(char *string)
@@ -2973,7 +2968,7 @@ static unsigned hash(char *string)
     int i;
 
     while (*string) {
-	i = *(int *) string;
+	i = (int) *string;
 	ret_val ^= i;
 	ret_val <<= 1;
 	string ++;
@@ -3067,8 +3062,14 @@ char *index_extract_subject(const char *subj)
 {
     char *s, *base, *ret, *x;
 
-    /* make a working copy of subj */
-    s = xstrdup(subj);
+    if (!strcmp(subj, "NIL"))				/* "NIL"? */
+	return xstrdup("");				/* yes, return empty */
+
+    /* make a working copy of subj - remove "'s if they exist */
+    if (*subj == '"')
+	s = xstrndup(subj+1, strlen(subj) - 2);
+    else
+	s = xstrdup(subj);
 
     /* trim trailer
      *
