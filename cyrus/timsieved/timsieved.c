@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.40 2002/05/25 19:57:53 leg Exp $
+ * $Id: timsieved.c,v 1.41 2002/09/19 18:16:53 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -100,6 +100,8 @@ struct sockaddr_in sieved_remoteaddr;
 struct protstream *sieved_out;
 struct protstream *sieved_in;
 
+int sieved_logfd = -1;
+
 int sieved_haveaddr = 0;
 char sieved_clienthost[250] = "[local]";
 
@@ -121,6 +123,8 @@ void shut_down(int code)
 	prot_free(sieved_out);
     }
     if (sieved_in) prot_free(sieved_in);
+
+    if (sieved_logfd != -1) close(sieved_logfd);
     
     /* done */
     exit(code);
