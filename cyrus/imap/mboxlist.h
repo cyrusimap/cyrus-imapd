@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  * 
- * $Id: mboxlist.h,v 1.38 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.39 2004/03/17 18:07:49 ken3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -136,28 +136,28 @@ int mboxlist_setacl(const char *name, const char *identifier,
 
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(struct namespace *namespace,
-		     char *pattern, int isadmin, char *userid, 
+		     const char *pattern, int isadmin, char *userid, 
 		     struct auth_state *auth_state, int (*proc)(), void *rock);
 int mboxlist_findall_std(struct namespace *namespace,
-			 char *pattern, int isadmin, char *userid, 
+			 const char *pattern, int isadmin, char *userid, 
 			 struct auth_state *auth_state, int (*proc)(),
 			 void *rock);
-int mboxlist_findall_alt(struct namespace *namespace, char *pattern,
-			 int isadmin, char *userid, 
+int mboxlist_findall_alt(struct namespace *namespace,
+			 const char *pattern, int isadmin, char *userid, 
 			 struct auth_state *auth_state, int (*proc)(),
 			 void *rock);
 
 /* Find subscribed mailboxes that match 'pattern'. */
 int mboxlist_findsub(struct namespace *namespace,
-		     char *pattern, int isadmin, char *userid, 
+		     const char *pattern, int isadmin, char *userid, 
 		     struct auth_state *auth_state, int (*proc)(), void *rock,
 		     int force);
 int mboxlist_findsub_std(struct namespace *namespace,
-			 char *pattern, int isadmin, char *userid, 
+			 const char *pattern, int isadmin, char *userid, 
 			 struct auth_state *auth_state, int (*proc)(),
 			 void *rock, int force);
-int mboxlist_findsub_alt(struct namespace *namespace, char *pattern,
-			 int isadmin, char *userid, 
+int mboxlist_findsub_alt(struct namespace *namespace,
+			 const char *pattern, int isadmin, char *userid, 
 			 struct auth_state *auth_state, int (*proc)(),
 			 void *rock, int force);
 
