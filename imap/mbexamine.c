@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.1 2003/05/12 19:43:57 rjs3 Exp $ */
+/* $Id: mbexamine.c,v 1.2 2003/05/12 23:15:58 ken3 Exp $ */
 
 #include <config.h>
 
@@ -144,7 +144,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    config_init(alt_config, "mbexpire");
+    config_init(alt_config, "mbexamine");
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
@@ -271,7 +271,8 @@ int do_examine(char *name,
 	   mailbox.last_uid);
     printf("  Deleted: %ld  Answered: %ld  Flagged: %ld\n",
 	   mailbox.deleted, mailbox.answered, mailbox.flagged);
-    printf("  POP3 New UIDL: %d\n", mailbox.pop3_new_uidl);
+    if (mailbox.minor_version >= 4)
+	printf("  POP3 New UIDL: %d\n", mailbox.pop3_new_uidl);
     printf("  Last POP3 Login: (%ld) %s", mailbox.pop3_last_login,
 	   ctime(&mailbox.pop3_last_login));
 
