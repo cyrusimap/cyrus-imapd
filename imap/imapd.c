@@ -25,7 +25,12 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.171 1999/06/19 02:18:50 leg Exp $ */
+/* $Id: imapd.c,v 1.172 1999/06/29 18:30:20 leg Exp $ */
+
+#ifndef __GNUC__
+/* can't use attributes... */
+#define __attribute__(foo)
+#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -192,6 +197,103 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   return ret;
 }
 
+/* this is a wrapper to call the cyrus configuration from SASL */
+static int mysasl_config(void *context __attribute__((unused)), 
+			 const char *plugin_name,
+			 const char *option,
+			 const char **result,
+			 unsigned *len)
+{
+    char opt[1024];
+
+    if (strcmp(option, "srvtab")) { /* we don't transform srvtab! */
+	int sl = 5 + (plugin_name ? strlen(plugin_name) + 1 : 0);
+
+	strncpy(opt, "sasl_", 1024);
+	if (plugin_name) {
+	    strncat(opt, plugin_name, 1019);
+	    strncat(opt, "_", 1024 - sl);
+	}
+ 	strncat(opt, option, 1024 - sl - 1);
+	opt[1023] = '\0';
+    } else {
+	strncpy(opt, option, 1024);
+    }
+
+    *result = config_getstring(opt, NULL);
+    if (*result != NULL) {
+	if (len) { *len = strlen(*result); }
+	return SASL_OK;
+    }
+   
+    return SASL_FAIL;
+}
+
+/* should we allow users to proxy?  return SASL_OK if yes,
+   SASL_BADAUTH otherwise */
+static mysasl_authproc(void *context __attribute__((unusued)),
+		       const char *auth_identity,
+		       const char *requested_user,
+		       const char **user,
+		       const char **errstr)
+{
+    const char *val;
+    char *p;
+    char *canon_user;
+    char *username=NULL;
+    char buf[MAX_MAILBOX_PATH];
+
+    canon_user = auth_canonifyid(auth_identity);
+    if (!canon_user) {
+	*errstr = "bad userid authenticated";
+	return SASL_BADAUTH;
+    }
+
+    imapd_authstate = auth_newstate(canon_user, NULL);
+
+    *user = xstrdup(canon_user); 
+    *errstr = NULL;
+
+    /* ok, is auth_identity an admin? */
+    val = config_getstring("admins", "");
+    while (*val) {
+	for (p = (char *)val; *p && !isspace(*p); p++);
+	strncpy(buf, val, p - val);
+	buf[p-val] = 0;
+
+	if (auth_memberof(imapd_authstate, buf)) {
+	    imapd_userisadmin = 1;
+	    break;
+	}
+	val = p;
+	while (*val && isspace(*val)) val++;
+    }
+
+    if (strcmp(canon_user, requested_user)) {
+	/* we want to authenticate as a different user; we'll allow this
+	   if we're an admin */
+	if (!imapd_userisadmin) {
+	    *errstr = "user is not allowed to proxy";
+	    return SASL_BADAUTH;
+	}
+	
+	imapd_userisadmin = 0;	/* no longer admin */
+	free((void *) *user);
+	*user = NULL;
+	auth_freestate(imapd_authstate);
+	auth_newstate(requested_user, NULL);
+
+    }
+
+    return SASL_OK;
+}
+
+static struct sasl_callback mysasl_cb[] = {
+    { SASL_CB_GETOPT, &mysasl_config, NULL },
+    { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
+    { SASL_CB_LIST_END, NULL, NULL }
+};
+
 main(argc, argv, envp)
 int argc;
 char **argv;
@@ -200,8 +302,8 @@ char **envp;
     int salen;
     struct hostent *hp;
     int timeout;
-    char hostname[MAXHOSTNAMELEN+1]; /* XXX sasl should be MAX_something */
-    sasl_security_properties_t *secprops=NULL;
+    char hostname[MAXHOSTNAMELEN+1];
+    sasl_security_properties_t *secprops = NULL;
 
     if (gethostname(hostname, MAXHOSTNAMELEN)!=0)
       fatal("gethostname failed\n",EC_USAGE);
@@ -237,31 +339,25 @@ char **envp;
 	}
     }
 
-    /* Make a SASL connection and setup some properties for it */
+    /* set the SASL allocation functions */
+    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
+		   (sasl_calloc_t *) &calloc, 
+		   (sasl_realloc_t *) &xrealloc, 
+		   (sasl_free_t *) &free);
 
-    if (sasl_server_init(NULL,"Cyrus")!=SASL_OK)
-      fatal("SASL failed initializing: sasl_server_init()",EC_USAGE); 
-    /* XXX different error code? */
+    /* Make a SASL connection and setup some properties for it */
+    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK)
+	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL); 
 
     /* other params should be filled in */
     if (sasl_server_new("imap", hostname, NULL, NULL, 2000, &imapd_saslconn)
 	   != SASL_OK)
-	fatal("SASL failed initializing: sasl_server_new()",EC_USAGE); 
-    /* XXX different error code? */
+	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
 
     /* will always return something valid */
-    secprops=make_secprops(0,2000);        
+    secprops = make_secprops(0, 2000);
     sasl_setprop(imapd_saslconn, SASL_SEC_PROPS, secprops);
     
-    if (1) {
-	FILE *stream;
-
-	stream=fopen("/tmp/krbfoo","a");
-	fprintf(stream, "imap remote: %x\n", imapd_remoteaddr.sin_addr);
-	fprintf(stream, "imap local: %x\n", imapd_localaddr.sin_addr);
-	fclose(stream);
-    }
-
     sasl_setprop(imapd_saslconn, SASL_IP_REMOTE, &imapd_remoteaddr);  
     sasl_setprop(imapd_saslconn, SASL_IP_LOCAL, &imapd_localaddr);  
 
@@ -1020,8 +1116,6 @@ char *passwd;
     
 
     imapd_authstate = auth_newstate(canon_user, (char *)0);
-    imapd_userid = xstrdup(canon_user);
-    proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
     val = config_getstring("admins", "");
     while (*val) {
@@ -1071,16 +1165,11 @@ char *authtype;
     unsigned int serveroutlen;
     const char *errstr;
     
-    const char *errorstring=NULL;
+    const char *errorstring = NULL;
 
-    char *username=NULL;
-    char *canon_user;
-
-    const char *val;
     char buf[MAX_MAILBOX_PATH];
     char *p;
     FILE *logfile;
-    char foo[1024];    
 
     int *ssfp;
     char *ssfmsg=NULL;
@@ -1092,7 +1181,7 @@ char *authtype;
 
     /* sasl_server_start will return SASL_OK or SASL_CONTINUE on success */
 
-    while (sasl_result==SASL_CONTINUE)
+    while (sasl_result == SASL_CONTINUE)
     {
 
       /* print the message to the user */
@@ -1114,79 +1203,50 @@ char *authtype;
 
 
     /* failed authentication */
-    if (sasl_result!=SASL_OK)
+    if (sasl_result != SASL_OK)
     {
-      syslog(LOG_NOTICE, "badlogin: %s %s %i",
-	     imapd_clienthost, authtype, sasl_result);
-
-      if (clientin.s) {
-	syslog(LOG_NOTICE, "badlogin: %s %s %s",
-	       imapd_clienthost, authtype, clientin.s);
-      } else {
-	syslog(LOG_NOTICE, "badlogin: %s %s",
-	       imapd_clienthost, authtype);
-      }
-
-      /* i guess this prevents time gaining info from time of failure
-	 shouldn't it be a random time tho? */
-      sleep(3);      
-
-      /* convert the sasl error code to a string */
-      errorstring=sasl_errstring(sasl_result,NULL,NULL);
+	syslog(LOG_NOTICE, "badlogin: %s %s %i",
+	       imapd_clienthost, authtype, sasl_result);
+	
+	if (clientin.s) {
+	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
+		   imapd_clienthost, authtype, clientin.s);
+	} else {
+	    syslog(LOG_NOTICE, "badlogin: %s %s",
+		   imapd_clienthost, authtype);
+	}
+	
+	sleep(3);      
+	
+	/* convert the sasl error code to a string */
+	errorstring = sasl_errstring(sasl_result, NULL, NULL);
       
-      if (errorstring)
-	prot_printf(imapd_out, "%s NO %s\r\n",tag,errorstring);
-      else
-	prot_printf(imapd_out, "%s NO Error Authenticating\r\n",tag);
-
-      return;
+	if (errorstring)
+	    prot_printf(imapd_out, "%s NO %s\r\n",tag,errorstring);
+	else
+	    prot_printf(imapd_out, "%s NO Error Authenticating\r\n",tag);
+	
+	return;
     }
 
     /* successful authentication */
 
-    /* get the userid from SASL */
-    sasl_result=sasl_getprop(imapd_saslconn, SASL_USERNAME,(void **) &username);
+    /* get the userid from SASL --- already canonicalized from
+     * mysasl_authproc()
+     */
+    sasl_result = sasl_getprop(imapd_saslconn, SASL_USERNAME,
+			     (void **) &imapd_userid);
     if (sasl_result!=SASL_OK)
     {
-      prot_printf(imapd_out, "%s NO Error getting username from SASL\r\n",tag);
+      prot_printf(imapd_out, "%s NO weird SASL error SASL_USERNAME\r\n", tag);
       return;
     }
 
-    canon_user = auth_canonifyid(username);
-    if (!canon_user) {
-	syslog(LOG_NOTICE, "badlogin: %s %s %s bad userid",
-	       imapd_clienthost, authtype, beautify_string(username));
-	prot_printf(imapd_out, "%s NO %s\r\n", tag,
-		    error_message(IMAP_INVALID_USER));
-	return;
-    }
-
-    /* this is used for groups */
-    imapd_authstate = auth_newstate(canon_user, NULL);
-
-    imapd_userid = xstrdup(canon_user);
-
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
-    /* see if the user is an admin */
-    val = config_getstring("admins", "");
-    while (*val) {
-	for (p = (char *)val; *p && !isspace(*p); p++);
-	strncpy(buf, val, p - val);
-	buf[p-val] = 0;
-
-	if (auth_memberof(imapd_authstate, buf)) {
-	    imapd_userisadmin = 1;
-	    break;
-	}
-	val = p;
-	while (*val && isspace(*val)) val++;
-    }
-
-    syslog(LOG_NOTICE, "login: %s %s %s %s", imapd_clienthost, canon_user,
+    syslog(LOG_NOTICE, "login: %s %s %s %s", imapd_clienthost, imapd_userid,
 	   authtype, "User logged in");
 
-    
     sasl_getprop(imapd_saslconn, SASL_SSF, (void **) &ssfp);
 
     switch(*ssfp)
@@ -1200,7 +1260,6 @@ char *authtype;
 
     prot_setsasl(imapd_in,  imapd_saslconn);
     prot_setsasl(imapd_out, imapd_saslconn);
-
 
     /* Create telemetry log */
     sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, imapd_userid,
