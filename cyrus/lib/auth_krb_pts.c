@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- * $Id: auth_krb_pts.c,v 1.44.4.3 2002/09/26 18:59:45 ken3 Exp $
+ * $Id: auth_krb_pts.c,v 1.44.4.4 2002/10/07 16:18:34 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -58,10 +58,11 @@
 
 #include "auth_krb_pts.h"
 #include "auth.h"
+#include "hash.h"
+#include "libcyr_cfg.h"
 #include "lock.h"
 #include "retry.h"
 #include "xmalloc.h"
-#include "hash.h"
 
 const char *auth_method_desc = "krb_pts";
 
@@ -431,7 +432,13 @@ struct auth_state *auth_newstate(const char *identifier,
     if (!r) {
 	fetched = (struct auth_state *) data.data;
 
-	if (fetched->mark > time(0) - EXPIRE_TIME) {
+	syslog(LOG_DEBUG,
+	       "auth_newstate: fetched cache record (mark %d, current %d, limit %d)",
+	       fetched->mark, time(0),
+	       time(0) - libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT));
+	
+	if (fetched->mark >
+	    time(0) - libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT)) {
 	    /* not expired; let's return it */
 	    newstate = (struct auth_state *) xrealloc(newstate, data.size);
 	    memcpy(newstate, fetched, data.size);
@@ -448,9 +455,12 @@ struct auth_state *auth_newstate(const char *identifier,
     ptdb->close(ptdb, 0);
     close(fd);
 
+    syslog(LOG_DEBUG, "auth_newstate: pinging ptloader");
+
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
-      syslog(LOG_ERR, "auth_newstate: unable to create socket for ptloader: %m");
+      syslog(LOG_ERR,
+	     "auth_newstate: unable to create socket for ptloader: %m");
       return newstate;
     }
         

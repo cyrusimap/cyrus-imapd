@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: libcyr_cfg.h,v 1.1.2.1 2002/08/02 17:18:23 rjs3 Exp $
+/* $Id: libcyr_cfg.h,v 1.1.2.2 2002/10/07 16:18:35 rjs3 Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -75,7 +75,9 @@ enum cyrus_opt {
     /* Don't fsync() the skiplist backend (OFF) */
     CYRUSOPT_SKIPLIST_UNSAFE,
     /* Temporary Storage Directory ("/tmp") */
-    CYRUSOPT_TEMP_PATH,              
+    CYRUSOPT_TEMP_PATH,
+    /* PTS Cache Timeout */
+    CYRUSOPT_PTS_CACHE_TIMEOUT,
 
     CYRUSOPT_LAST
     

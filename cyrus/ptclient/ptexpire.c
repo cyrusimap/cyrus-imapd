@@ -61,11 +61,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "lock.h"
 #include "auth_krb_pts.h"
+#include "lock.h"
 
-
-static char rcsid[] = "$Id: ptexpire.c,v 1.10.16.1 2002/09/26 19:01:04 ken3 Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.10.16.2 2002/10/07 16:18:36 rjs3 Exp $";
 
 int main(int argc, char *argv[])
 {
@@ -73,7 +72,7 @@ int main(int argc, char *argv[])
     DB *ptdb;
     DBC *cursor;
     DBT key, data;
-    time_t expire_time = EXPIRE_TIME;
+    time_t expire_time = (3*60*60); /* 3 hour default */
     extern char *optarg;
     int opt;
     int fd;

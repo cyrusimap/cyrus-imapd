@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.17 2002/08/31 02:03:47 ken3 Exp $ */
+/* $Id: config.c,v 1.55.4.18 2002/10/07 16:18:30 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -164,6 +164,8 @@ int config_init(const char *alt_config, const char *ident)
 			      config_getswitch(IMAPOPT_SKIPLIST_UNSAFE));
     libcyrus_config_setstring(CYRUSOPT_TEMP_PATH,
 			      config_getstring(IMAPOPT_TEMP_PATH));
+    libcyrus_config_setint(CYRUSOPT_PTS_CACHE_TIMEOUT,
+			   config_getint(IMAPOPT_PTSCACHE_TIMEOUT));
 
     return 0;
 }
