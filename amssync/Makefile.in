@@ -61,8 +61,14 @@ install:
 	$(srcdir)/../install-sh -d ${DESTDIR}$(cyrus_prefix)/perllib/afs
 	$(INSTALL) -s -m 755 amssync $(DESTDIR)$(cyrus_prefix)/bin
 	$(INSTALL) -m 755 amssynctree $(DESTDIR)$(cyrus_prefix)/bin
-	$(INSTALL) -m 644 afs.ph param.ph $(MISCPH) $(DESTDIR)$(cyrus_prefix)/perllib/afs
-	$(INSTALL) -m 644 $(MISCPERL) $(DESTDIR)$(cyrus_prefix)/perllib
+	for file in afs.ph param.ph $(MISCPH); \
+	do \
+		$(INSTALL) -m 644 $$file $(DESTDIR)$(cyrus_prefix)/perllib/afs || exit 1; \
+	done
+	for file in $(MISCPERL); \
+	do \
+		$(INSTALL) -m 644 $$file $(DESTDIR)$(cyrus_prefix)/perllib || exit 1; \
+	done
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<

@@ -70,7 +70,10 @@ all: libcyrus.a
 install:
 	$(INSTALL) -m 644 libcyrus.a $(DESTDIR)$(exec_prefix)/lib
 	$(RANLIB) $(DESTDIR)$(exec_prefix)/lib/libcyrus.a
-	$(INSTALL) -m 644 $(HDRS) $(DESTDIR)$(prefix)/include/cyrus
+	for file in $(HDRS); \
+	do \
+		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/include/cyrus || exit 1; \
+	done
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) $<
