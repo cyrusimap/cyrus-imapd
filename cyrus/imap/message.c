@@ -1799,7 +1799,7 @@ struct body *body;
 		message_write_bit32(ibuf, body->subpart->subpart[part].header_offset);
 		message_write_bit32(ibuf, body->subpart->subpart[part].header_size);
 		message_write_bit32(ibuf, body->subpart->subpart[part].content_offset);
-		if (body->subpart[part].numparts == 0 &&
+		if (body->subpart->subpart[part].numparts == 0 &&
 		    strcmp(body->subpart->subpart[part].type, "MULTIPART") == 0) {
 		    /* Treat 0-part multipart as 0-length text */
 		    message_write_bit32(ibuf, 0);
