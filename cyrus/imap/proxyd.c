@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.24 2002/08/28 18:40:44 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.25 2002/08/30 14:33:35 ken3 Exp $ */
 
 #include <config.h>
 
@@ -191,7 +191,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add);
 void cmd_getacl(const char *tag, const char *name);
 void cmd_listrights(char *tag, char *name, char *identifier);
 void cmd_myrights(const char *tag, const char *name);
-void cmd_setacl(const char *tag, const char *name,
+void cmd_setacl(char *tag, const char *name,
 		const char *identifier, const char *rights);
 void cmd_getquota(char *tag, char *name);
 void cmd_getquotaroot(char *tag, char *name);
@@ -4075,7 +4075,7 @@ void cmd_myrights(const char *tag, const char *name)
 /*
  * Perform a SETACL command
  */
-void cmd_setacl(const char *tag, const char *name,
+void cmd_setacl(char *tag, const char *name,
 		const char *identifier, const char *rights)
 {
     int r, res;

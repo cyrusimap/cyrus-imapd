@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.7 2002/08/29 23:32:31 rjs3 Exp $
+ * $Id: index.c,v 1.180.4.8 2002/08/30 14:33:34 ken3 Exp $
  */
 #include <config.h>
 
@@ -64,9 +64,9 @@
 #include "assert.h"
 #include "charset.h"
 #include "exitcodes.h"
-#include "gmtoff.h"
 #include "hash.h"
 #include "imap_err.h"
+#include "imapconf.h"
 #include "imapd.h"
 #include "lsort.h"
 #include "mailbox.h"

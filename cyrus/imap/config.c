@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.15 2002/08/29 23:32:31 rjs3 Exp $ */
+/* $Id: config.c,v 1.55.4.16 2002/08/30 14:33:34 ken3 Exp $ */
 
 #include <config.h>
 
@@ -59,6 +59,7 @@
 
 #include "acl.h"
 #include "exitcodes.h"
+#include "gmtoff.h"
 #include "hash.h"
 #include "imap_err.h"
 #include "imapconf.h"
