@@ -1,5 +1,5 @@
 # cyrinit.c -- Cyrus administrative client initialization for interactive mode
-# $Id: cyrinit.tcl,v 1.15 1999/11/05 01:00:34 tmartin Exp $
+# $Id: cyrinit.tcl,v 1.16 2000/01/28 22:09:40 leg Exp $
 # Copyright 1998 Carnegie Mellon University
 # 
 # No warranties, either expressed or implied, are made regarding the

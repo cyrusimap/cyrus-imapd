@@ -1,5 +1,5 @@
 /* auth_krb.c -- Kerberos authorization
- $Id: auth_krb.c,v 1.29 1999/11/16 01:02:12 leg Exp $
+ $Id: auth_krb.c,v 1.30 2000/01/28 22:09:53 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #

@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.50 2000/01/25 06:49:23 leg Exp $
+# $Id: SMakefile,v 1.51 2000/01/28 22:09:39 leg Exp $
 #
 
 if test ! -x configure; then
@@ -18,7 +18,8 @@ MAKE=gmake
 AMSSYNC=--enable-amssync
 STATIC=""
 DEBUG=""
-WITHAUTH="--with-auth=krb_pts"
+# WITHAUTH="--with-auth=krb_pts"
+WITHAUTH=""
 
 if test "${CC-unset}" = "unset"; then
   CC=cc

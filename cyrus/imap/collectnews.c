@@ -1,5 +1,5 @@
 /* collectnews.c -- program to add news articles to relevant header files
- $Id: collectnews.c,v 1.19 1999/10/02 00:43:03 leg Exp $
+ $Id: collectnews.c,v 1.20 2000/01/28 22:09:42 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -40,6 +40,7 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
+#include "mboxlist.h"
 
 extern int errno;
 
@@ -174,7 +175,7 @@ void collect(char *group, unsigned long feeduid)
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	r = mboxlist_createmailbox(newsprefix ? namebuf : group,
-				   MAILBOX_FORMAT_NETNEWS, "news",
+				   MBTYPE_NETNEWS, "news",
 				   1, "anonymous", 0);
 
 	/* Ignore bad mailbox names */

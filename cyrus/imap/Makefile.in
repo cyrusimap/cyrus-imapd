@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.83 2000/01/13 21:56:29 wcw Exp $
+# $Id: Makefile.in,v 1.84 2000/01/28 22:09:42 leg Exp $
 # 
 # @configure_input@
 #
@@ -46,12 +46,12 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../acap @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 IMAP_LIBS = @IMAP_LIBS@
 SIEVE_LIBS = @SIEVE_LIBS@
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
 LIBS = $(IMAP_LIBS) $(IMAP_COM_ERR_LIBS)
-DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS = ../acap/libacap.a ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@ @CFLAGS@ @COM_ERR_LDFLAGS@ 
@@ -71,7 +71,7 @@ COMPILE_ET=@COMPILE_ET@
 #     the dynamic libraries that may crop up during run time.
 # 
 PURIFY=/usr/local/bin/purify
-PUREOPT=-windows=no -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir
+PUREOPT= -best-effort -windows=no -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir
 QUANTIFY=/usr/local/bin/quantify
 QUANTOPT=-windows=no -filename-prefix=/tmp/quant/%v.%p -write-summary-file= -logfile=/tmp/quant/%v.%p.log
 
@@ -81,11 +81,12 @@ cyrus_prefix = @cyrus_prefix@
 
 LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o \
 	config.o imap_err.o proc.o toimsp.o setproctitle.o convert_code.o \
+	duplicate.o \
 	$(SEEN) $(NOTIFY)
 
 IMAPDOBJS= imapd.o index.o tls.o
 
-PROGS = collectnews syncnews imapd pop3d \
+PROGS = collectnews syncnews imapd pop3d populateacap \
 	arbitron fud reconstruct quota dump_deliverdb mbpath
 SUIDPROGS = deliver
 
@@ -140,6 +141,16 @@ imapd: $(IMAPDOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o imapd \
 	 $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
+proxyd: proxyd.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o proxyd \
+	 proxyd.o libimap.a $(DEPLIBS) $(LIBS)
+
+gun: gun.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o gun gun.o libimap.a $(DEPLIBS) $(LIBS)
+
+target: target.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o target target.o libimap.a $(DEPLIBS) $(LIBS)
+
 imapd.pure: $(IMAPDOBJS) libimap.a $(DEPLIBS)
 	$(PURIFY) $(PUREOPT) \
 	  $(CC) $(LDFLAGS) -o imapd.pure \
@@ -155,6 +166,9 @@ pop3d: pop3d.o libimap.a $(DEPLIBS)
 
 arbitron: arbitron.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o arbitron arbitron.o libimap.a $(DEPLIBS) $(LIBS)
+
+populateacap: populateacap.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o populateacap populateacap.o libimap.a $(DEPLIBS) $(LIBS)
 
 fud: fud.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o fud fud.o libimap.a $(DEPLIBS) $(LIBS)

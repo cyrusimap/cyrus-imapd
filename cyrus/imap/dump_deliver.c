@@ -1,5 +1,5 @@
 /* dump_deliver.c -- Program to dump deliver db for debugging purposes
- $Id: dump_deliver.c,v 1.6 2000/01/25 06:51:58 leg Exp $
+ $Id: dump_deliver.c,v 1.7 2000/01/28 22:09:43 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -27,7 +27,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: dump_deliver.c,v 1.6 2000/01/25 06:51:58 leg Exp $";
+static char _rcsid[] = "$Id: dump_deliver.c,v 1.7 2000/01/28 22:09:43 leg Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -37,77 +37,58 @@ static char _rcsid[] = "$Id: dump_deliver.c,v 1.6 2000/01/25 06:51:58 leg Exp $"
 #include <syslog.h>
 #include <com_err.h>
 #include <errno.h>
-#ifdef HAVE_LIBDB
-#ifdef HAVE_DB_185_H
-#    define DB_LIBRARY_COMPATIBILITY_API
-#include <db_185.h>
-#else
 #include <db.h>
-#endif
-#else
-#include <ndbm.h>
-#endif
 #include "util.h"
 #include "config.h"
 #include "mailbox.h"
-
-#ifdef HAVE_LIBDB
-static DB	*DeliveredDBptr;
-#else
-static DBM	*DeliveredDBptr;
-#endif
+#include "mboxlist.h"
+#include "duplicate.h"
 
 int
 dump_deliver(fname)
      char *fname;
 {
-  char buf[MAX_MAILBOX_PATH];
-  int lockfd;
-  int rcode = 0;
-  char datebuf[40];
-  int len;
-  int count = 1;
+    DB *db;
+    DB_TXN *tid;
+    DBC *c;
+    int ret;
+    DBT key, data;
+    int count = 0, r;
+    time_t mark;
+    char *to;
 
+    memset(&key, 0, sizeof(key));
+    memset(&data, 0, sizeof(data));
 
-#ifdef HAVE_LIBDB
-  int rc, mode;
-  DBT date, delivery;
-  DBT *deletions = 0;
-  HASHINFO info;
-  int num_deletions = 0, alloc_deletions = 0;
-  char *to;
-  time_t mark;
+    ret = db_create(&db, duplicate_dbenv, 0);
+    if (ret != 0) {
+	fprintf(stderr, "Unable to open db file: %s\n", fname);
+	return -1;
+    }
+    ret = db->open(db, fname, NULL, DB_UNKNOWN, DB_RDONLY, 0664);
+    if (ret != 0) {
+	fprintf(stderr, "Unable to open db file: %s\n", fname);
+	return -1;
+    }
 
+    if ((r = db->cursor(db, tid, &c, 0)) != 0) {
+	fprintf(stderr, "DBERROR: error creating cursor: %s", strerror(r));
+	return -2;
+    }
 
-  /* Note we don't lock the db -- this may cause some problems if things
-   * change in the middle of the dump but we're going to assume that it won't
-   */
-
-  (void)memset(&info, 0, sizeof(info));
-  DeliveredDBptr = dbopen(fname, O_RDONLY, 0666, DB_HASH, &info);
-  if (!DeliveredDBptr) {
-    fprintf(stderr, "Unable to open db file: %s\n", fname);
-    return -1;
-  }
+    r = c->c_get(c, &key, &data, DB_FIRST);
+    while (r == 0) {
+	count++;
+	(void)memcpy(&mark, data.data, sizeof(time_t));
+	to = ((char *)key.data + (strlen(key.data) + 1));
+	printf("id: %-40s\tto: %-20s\tat: %d\n", key.data, to, mark);
+	r = c->c_get(c, &key, &data, DB_NEXT);
+    }
+    if (r != DB_NOTFOUND) {
+	fprintf(stderr, "error detected looking up entry: %s\n", strerror(r));
+    }
     
-  mode = R_FIRST;
-  while ((rc = DeliveredDBptr->seq(DeliveredDBptr, &delivery, &date, mode)) == 0) {
-    count++;
-    mode = R_NEXT;
-    (void)memcpy(&mark, date.data, sizeof(time_t));
-    to = ((char *)delivery.data + (strlen(delivery.data) + 1));
-    printf("id: %-40s\tto: %-20s\tat: %d\n", delivery.data, to,
-	   *(time_t *) date.data);
-  }
-  if (rc < 0) {
-    fprintf(stderr, "error detected looking up entry: %d\n");
-  }
-    
-#else /* HAVE_LIBDB */
-
-  printf("sorry, not implemented for non DB systems\n");
-
-#endif /* HAVE_LIBDB */
+    printf("got %d entries\n", count);
 }
 
 
@@ -141,6 +122,7 @@ main(argc, argv)
   
   printf("it is NOW: %d\n", time(NULL));
   
+  duplicate_init();
   if (alt_file == NULL) {
     char fname[MAX_MAILBOX_PATH];
     
@@ -152,6 +134,7 @@ main(argc, argv)
     dump_deliver(alt_file) ;
   }
 
+  duplicate_done();
 }
 
 fatal(s, code)
@@ -162,5 +145,4 @@ int code;
     exit(code);
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.6 2000/01/25 06:51:58 leg Exp $ */
-
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.7 2000/01/28 22:09:43 leg Exp $ */

@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.27 1999/10/30 23:07:59 leg Exp $
+# $Id: Makefile.in,v 1.28 2000/01/28 22:09:39 leg Exp $
 #
 # @configure_input@
 # Copyright 1998 Carnegie Mellon University
@@ -27,7 +27,7 @@
 #  tech-transfer@andrew.cmu.edu
 # 
 
-SUBDIRS = man @PRE_SUBDIRS@ lib @SERVER_SUBDIRS@ imtest @TCL_SUBDIRS@ @EXTRA_SUBDIRS@
+SUBDIRS = man @PRE_SUBDIRS@ acap lib @SERVER_SUBDIRS@ imtest @TCL_SUBDIRS@ @EXTRA_SUBDIRS@
 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -51,6 +51,7 @@ all:: checkdepend
 install::
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/bin
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/lib
+	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/acap
 	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/include/cyrus
 	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/man/man1
 	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/man/man3

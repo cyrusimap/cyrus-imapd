@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.56 2000/01/04 19:42:22 leg Exp $
+ $Id: append.c,v 1.57 2000/01/28 22:09:42 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -46,6 +46,10 @@
 #include "config.h"
 #include "prot.h"
 #include "xmalloc.h"
+#include "mboxlist.h"
+#include "acapmbox.h"
+
+extern acap_conn_t *acap_conn;
 
 struct stagemsg {
     unsigned long size;
@@ -363,7 +367,18 @@ int append_fromstage(struct mailbox *mailbox,
     if (setseen && userid && (mailbox->myrights & ACL_SEEN)) {
 	append_addseen(mailbox, userid, message_index.uid, message_index.uid);
     }
+
+    if (mboxlist_acapinit() == 0)
+    {
+	if (acap_conn != NULL)
+	    acapmbox_setproperty(acap_conn,
+				 mailbox->name,
+				 ACAPMBOX_TOTAL,
+				 mailbox->exists);
+	/* xxx what to do about errors? */
+    }
     
+
     toimsp(mailbox->name, mailbox->uidvalidity,
 	   "UIDNnn", message_index.uid, mailbox->exists, 0);
 
@@ -578,7 +593,17 @@ const char *userid;
     if (setseen && userid && (mailbox->myrights & ACL_SEEN)) {
 	append_addseen(mailbox, userid, message_index.uid, message_index.uid);
     }
-    
+
+    if (mboxlist_acapinit() == 0)
+    {
+	if (acap_conn != NULL)
+	    acapmbox_setproperty(acap_conn,
+				 mailbox->name,
+				 ACAPMBOX_TOTAL,
+				 mailbox->exists);
+	/* xxx what to do about errors? */
+    }    
+
     toimsp(mailbox->name, mailbox->uidvalidity,
 	   "UIDNnn", message_index.uid, mailbox->exists, 0);
 
@@ -817,6 +842,16 @@ const char *userid;
 		       message_index[nummsg-1].uid);
     }
 
+    if (mboxlist_acapinit() == 0)
+    {
+	if (acap_conn != NULL)
+	    acapmbox_setproperty(acap_conn,
+				 mailbox->name,
+				 ACAPMBOX_TOTAL,
+				 mailbox->exists);
+	/* xxx what to do about errors? */
+    }
+
     toimsp(mailbox->name, mailbox->uidvalidity,
 	   "UIDNnn", message_index[nummsg-1].uid, append_mailbox->exists, 0);
 
@@ -991,6 +1026,16 @@ unsigned long feeduid;
     }
     
     free(message_index);
+
+    if (mboxlist_acapinit() == 0)
+    {	
+	if (acap_conn != NULL)
+	    acapmbox_setproperty(acap_conn,
+				 mailbox->name,
+				 ACAPMBOX_TOTAL,
+				 mailbox->exists);
+	/* xxx what to do about errors? */
+    }
 
     toimsp(mailbox->name, mailbox->uidvalidity,
 	   "UIDNnn", uid-1, mailbox->exists, 0);

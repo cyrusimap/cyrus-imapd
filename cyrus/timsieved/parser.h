@@ -1,7 +1,7 @@
 /* parser.h
  * Tim Martin
  * 9/21/99
- * $Id: parser.h,v 1.1 1999/11/03 18:09:44 tmartin Exp $
+ * $Id: parser.h,v 1.2 2000/01/28 22:09:57 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University

@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.91 2000/01/04 19:42:23 leg Exp $
+ * $Id: index.c,v 1.92 2000/01/28 22:09:45 leg Exp $
  */
 #include <stdio.h>
 #include <string.h>
@@ -1373,6 +1373,7 @@ unsigned octet_count;
 	    line = msg_base + offset;
 	    p = memchr(line, '\n', msg_size - offset);
 	    if (!p) {
+		/* partial last line */
 		p = msg_base + msg_size;
 		offset--;	/* hack to keep from going off end
 				 * of mapped region on next iteration */

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  *
  */
-/* $Id: quota.c,v 1.29 1999/08/20 20:08:30 leg Exp $ */
+/* $Id: quota.c,v 1.30 2000/01/28 22:09:51 leg Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -399,7 +399,7 @@ int ispartial;
      * Lock mailbox list to prevent mailbox creation/deletion
      * during the fix
      */
-    r = mboxlist_openlock();
+    r = mboxlist_open();
     if (r) return r;
 
     redofix = 1;
@@ -410,20 +410,20 @@ int ispartial;
 
 	r = mboxlist_findall(pattern, 1, 0, 0, fixquota_mailbox, NULL);
 	if (r) {
-	    mboxlist_unlock();
+	    mboxlist_close();
 	    return r;
 	}
 
 	while (firstquota < quota_num) {
 	    r = fixquota_finish(firstquota++);
 	    if (r) {
-		mboxlist_unlock();
+		mboxlist_close();
 		return r;
 	    }
 	}
     }
     
-    mboxlist_unlock();
+    mboxlist_close();
     return 0;
 }
     

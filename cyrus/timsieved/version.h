@@ -1,6 +1,6 @@
 /* version.h: the version number
  *
- * $Id: version.h,v 1.1 1999/09/30 07:35:01 leg Exp $
+ * $Id: version.h,v 1.2 2000/01/28 22:09:57 leg Exp $
  */
 
 #define _SIEVED_VERSION "v1.0.0"

@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.2 1999/11/15 20:43:01 leg Exp $
+ * $Id: parser.c,v 1.3 2000/01/28 22:09:57 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University

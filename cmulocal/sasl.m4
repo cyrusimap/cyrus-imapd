@@ -1,6 +1,6 @@
 dnl sasl.m4--sasl detection macro
 dnl Rob Earhart
-dnl $Id: sasl.m4,v 1.5 1999/10/30 23:06:31 leg Exp $
+dnl $Id: sasl.m4,v 1.6 2000/01/28 22:09:40 leg Exp $
 
 AC_DEFUN(CMU_SASL, [
   AC_ARG_WITH(sasldir,[  --with-sasldir=PATH     PATH where the sasl library is installed], sasldir="$withval")

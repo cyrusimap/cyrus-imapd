@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.6 1999/11/10 21:09:14 leg Exp $
+ * $Id: interp.c,v 1.7 2000/01/28 22:09:55 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -46,6 +46,7 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     }
 
     i->redirect = i->discard = i->reject = i->fileinto = i->keep = NULL;
+    i->setflag = i->addflag = i->removeflag = i->mark = i->unmark = NULL;
     i->getsize = NULL;
     i->getheader = NULL;
     i->getenvelope = NULL;
@@ -97,7 +98,56 @@ int sieve_register_fileinto(sieve_interp_t *interp, sieve_callback *f)
 int sieve_register_keep(sieve_interp_t *interp, sieve_callback *f)
 {
     interp->keep = f;
+ 
+    return SIEVE_OK;
+}
+ 
+int sieve_register_setflag(sieve_interp_t *interp, sieve_callback *f)
+{
+    interp->setflag = f;
+ 
+    return SIEVE_OK;
+}
+ 
+int sieve_register_addflag(sieve_interp_t *interp, sieve_callback *f)
+{
+    interp->addflag = f;
+ 
+    return SIEVE_OK;
+}
+ 
+int sieve_register_removeflag(sieve_interp_t *interp, sieve_callback *f)
+{
+    interp->removeflag = f;
+ 
+    return SIEVE_OK;
+}
+ 
+int sieve_register_mark(sieve_interp_t *interp, sieve_callback *f)
+{
+    interp->mark = f;
+ 
+    return SIEVE_OK;
+}
+ 
+int sieve_register_unmark(sieve_interp_t *interp, sieve_callback *f)
+{
+    interp->unmark = f;
 
+    return SIEVE_OK;
+}
+
+int sieve_register_notify(sieve_interp_t *interp, sieve_notify_callback *f)
+{
+    interp->notify = f;
+ 
+    return SIEVE_OK;
+}
+
+int sieve_register_denotify(sieve_interp_t *interp, sieve_callback *f)
+{
+    interp->denotify = f;
+ 
     return SIEVE_OK;
 }
 

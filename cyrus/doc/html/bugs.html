@@ -32,8 +32,11 @@ lost.)
 <li> Deliver doesn't gracefully handle CR CR sequences in messages.
 Well, ok, it hangs.
 
-<li> Once a Sieve script is in place, a "keep" action will obey plus
-addressing, regardless of the ACLs on the mailbox.
+<li> <tt>duplicate.c</tt> could be much more efficient than repeatedly
+opening and closing databases.  (Cache last N databases used?)
+
+<li> The vacation action in Sieve shouldn't respond to messages that
+have an "Auto-Submitted" category anything but "No".
 </ul>
 
 <h3>authentication and authorization</h3>
@@ -67,9 +70,6 @@ to the authentication name, except when specifically overridden.
 <li> Implement the IMAP VIEW extension.
 
 <li> Implement the IMAP SORT and THREAD extensions.
-
-<li> The vacation action in Sieve shouldn't respond to messages that
-have an "Auto-Submitted" category anything but "No".
 </ul>
 
 <p>
