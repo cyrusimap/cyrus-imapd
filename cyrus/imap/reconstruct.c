@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.1 2004/01/27 23:13:50 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.2 2004/01/30 15:49:43 ken3 Exp $ */
 
 #include <config.h>
 
@@ -173,6 +173,7 @@ int main(int argc, char **argv)
     }
 
     cyrus_init(alt_config, "reconstruct", 0);
+    global_sasl_init(1,0,NULL);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
@@ -439,21 +440,40 @@ int reconstruct(char *name, struct discovered *found)
     struct index_record message_index, old_index;
     static struct index_record zero_index;
 
-    /* Open/lock header */
-    r = mailbox_open_header(name, 0, &mailbox);
-    if (r) {
-	return r;
+    char *mypath, *myacl;
+    int mytype;
+    char mbpath[MAX_MAILBOX_PATH+1];
+    
+    /* Start by looking up current data in mailbox list */
+    r = mboxlist_detail(name, &mytype, &mypath, NULL, &myacl, NULL);
+    if(r) return r;
+    
+    /* stat for header, if it is not there, we need to create it
+     * note that we do not want to wind up with a fully-open mailbox,
+     * so we will re-open. */
+    snprintf(mbpath, sizeof(mbpath), "%s%s", mypath, FNAME_HEADER);
+    if(stat(mbpath, &sbuf) == -1) {
+	/* Header doesn't exist, create it! */
+	r = mailbox_create(name, mypath, myacl, NULL,
+			   ((mytype & MBTYPE_NETNEWS) ?
+			    MAILBOX_FORMAT_NETNEWS :
+			    MAILBOX_FORMAT_NORMAL), NULL);
+	if(r) return r;
     }
-
+    
+    /* Now open just the header (it will hopefully be valid) */
+    r = mailbox_open_header(name, 0, &mailbox);
+    if (r) return r;
+    
     if (mailbox.header_fd != -1) {
 	(void) mailbox_lock_header(&mailbox);
     }
     mailbox.header_lock_count = 1;
-
+    
     if (chdir(mailbox.path) == -1) {
 	return IMAP_IOERROR;
     }
-
+    
     /* Fix quota root */
     hasquota = quota_findroot(quota_root, sizeof(quota_root), mailbox.name);
     if (mailbox.quota.root) free(mailbox.quota.root);

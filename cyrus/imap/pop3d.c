@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.3 2004/01/27 23:13:48 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.4 2004/01/30 15:49:43 ken3 Exp $
  */
 #include <config.h>
 
@@ -1028,8 +1028,8 @@ static void cmd_apop(char *response)
 	return;
     }
     
-    syslog(LOG_NOTICE, "login: %s %s APOP %s",
-	   popd_clienthost, popd_userid, "User logged in");
+    syslog(LOG_NOTICE, "login: %s %s APOP%s %s", popd_clienthost,
+	   popd_userid, popd_starttls_done ? "+TLS" : "", "User logged in");
 
     openinbox();
 }
@@ -1070,7 +1070,6 @@ void cmd_user(char *user)
 
 void cmd_pass(char *pass)
 {
-    char *reply = 0;
     int plaintextloginpause;
 
     if (!popd_userid) {
@@ -1130,7 +1129,7 @@ void cmd_pass(char *pass)
     else {
 	syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", popd_clienthost,
 	       popd_userid, popd_starttls_done ? "+TLS" : "", 
-	       reply ? reply : "");
+	       "User logged in");
 
 	if ((plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
 	     != 0) {
@@ -1296,8 +1295,8 @@ void cmd_auth(char *arg)
 	return;
     }
     
-    syslog(LOG_NOTICE, "login: %s %s %s %s", popd_clienthost, popd_userid,
-	   authtype, "User logged in");
+    syslog(LOG_NOTICE, "login: %s %s %s%s %s", popd_clienthost, popd_userid,
+	   authtype, popd_starttls_done ? "+TLS" : "", "User logged in");
 
     if (!openinbox()) {
 	prot_setsasl(popd_in,  popd_saslconn);

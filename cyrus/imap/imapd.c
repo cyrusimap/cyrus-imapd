@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.10 2004/01/27 23:13:40 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.11 2004/01/30 15:49:39 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1750,6 +1750,7 @@ void cmd_login(char *tag, char *user)
 	    return;
 	}
 
+	reply = "User logged in";
 	imapd_userid = xstrdup(canon_user);
 	snmp_increment_args(AUTHENTICATION_YES, 1,
 			    VARIABLE_AUTH, 0 /*hash_simple("LOGIN") */, 
@@ -1768,8 +1769,6 @@ void cmd_login(char *tag, char *user)
     imapd_authstate = auth_newstate(imapd_userid);
 
     imapd_userisadmin = global_authisa(imapd_authstate, IMAPOPT_ADMINS);
-
-    if (!reply) reply = "User logged in";
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
 

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.4 2004/01/27 23:13:48 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.5 2004/01/30 15:49:43 ken3 Exp $
  */
 
 /*
@@ -1970,8 +1970,6 @@ static void cmd_authinfo_user(char *user)
 
 static void cmd_authinfo_pass(char *pass)
 {
-    char *reply = 0;
-
     if (nntp_authstate) {
 	prot_printf(nntp_out, "502 Already authenticated\r\n");
 	return;
@@ -2001,10 +1999,9 @@ static void cmd_authinfo_pass(char *pass)
 			    strlen(nntp_userid),
 			    pass,
 			    strlen(pass))!=SASL_OK) { 
-	if (reply) {
-	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
-		   nntp_clienthost, nntp_userid, reply);
-	}
+	syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
+	       nntp_clienthost, nntp_userid, sasl_errdetail(nntp_saslconn));
+	sleep(3);
 	prot_printf(nntp_out, "502 Invalid login\r\n");
 	free(nntp_userid);
 	nntp_userid = 0;
@@ -2013,8 +2010,8 @@ static void cmd_authinfo_pass(char *pass)
     }
     else {
 	syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", nntp_clienthost,
-	       nntp_userid, nntp_starttls_done ? "+TLS" : "", 
-	       reply ? reply : "");
+	       nntp_userid, nntp_starttls_done ? "+TLS" : "",
+	       "User logged in");
 
 	prot_printf(nntp_out, "281 User logged in\r\n");
 
