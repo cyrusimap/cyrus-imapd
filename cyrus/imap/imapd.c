@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.163 1999/03/01 21:11:57 tjs Exp $ */
+/* $Id: imapd.c,v 1.164 1999/03/02 01:14:25 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -2131,7 +2131,6 @@ char *sequence;
 char *name;
 int usinguid;
 {
-    char *cmd = usinguid ? "UID Copy" : "Copy";
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
     char *copyuid;
@@ -2675,7 +2674,6 @@ char *identifier;
 char *rights;
 {
     int r;
-    char *cmd = rights ? "Setacl" : "Deleteacl";
     char mailboxname[MAX_MAILBOX_NAME+1];
 
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
@@ -3430,7 +3428,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset);
+	    charset_convert(arg.s, *charset, str, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3438,12 +3436,13 @@ int parsecharset;
 	    else {
 		appendstrlistpat(&searchargs->bcc, str);
 	    }
+	    free(str);
 	}
 	else if (!strcmp(criteria.s, "body")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset);
+	    charset_convert(arg.s, *charset, str, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3460,7 +3459,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset);
+	    charset_convert(arg.s, *charset, str, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3497,7 +3496,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset);
+	    charset_convert(arg.s, *charset, str, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3526,7 +3525,7 @@ int parsecharset;
 	    appendstrlist(&searchargs->header_name, arg.s);
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset);
+	    charset_convert(arg.s, *charset, str, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3691,7 +3690,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset);
+	    charset_convert(arg.s, *charset, str, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3708,7 +3707,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset);
+	    charset_convert(arg.s, *charset, str, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3721,7 +3720,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset);
+	    charset_convert(arg.s, *charset, str, 0);
 	    if (strchr(str, EMPTY)) {
 		/* Force failure */
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
@@ -3902,7 +3901,7 @@ int getdatetime(date)
 time_t *date;
 {
     int c;
-    struct tm tm, *ltm;
+    struct tm tm;
     int old_format = 0;
     static struct tm zerotm;
     char month[4], zone[4], *p;
@@ -4094,7 +4093,7 @@ int c;
 {
     int state = 0;
     char *statediagram = " {+}\r";
-    int size;
+    int size = -1;
 
     for (;;) {
 	if (c == '\n') return;
@@ -4216,6 +4215,7 @@ char *s;
 
 /*
  * Append 's' to the strlist 'l', compiling it as a pattern.
+ * Caller must pass in memory that is freed when the strlist is freed.
  */
 void
 appendstrlistpat(l, s)
@@ -4227,7 +4227,7 @@ char *s;
     while (*tail) tail = &(*tail)->next;
 
     *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
-    (*tail)->s = xstrdup(s);
+    (*tail)->s = s;
     (*tail)->p = charset_compilepat(s);
     (*tail)->next = 0;
 }
