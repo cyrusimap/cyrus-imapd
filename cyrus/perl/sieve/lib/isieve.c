@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: isieve.c,v 1.27 2003/10/22 18:50:25 rjs3 Exp $ */
+/* $Id: isieve.c,v 1.27.2.1 2004/06/18 14:46:55 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -64,6 +64,7 @@
 #include "request.h"
 #include "iptostring.h"
 #include "xmalloc.h"
+#include "util.h"
 
 #include <prot.h>
 
@@ -114,7 +115,7 @@ int init_net(char *serverFQDN, int port, isieve_t **obj)
   struct addrinfo hints, *res0, *res;
   int err;
   char portstr[6];
-  int sock;
+  int sock = -1;
     
   snprintf(portstr, sizeof(portstr), "%d", port);
   memset(&hints, 0, sizeof(hints));
@@ -585,7 +586,34 @@ int do_referral(isieve_t *obj, char *refer_to)
     /* Authenticate */
     mechlist = read_capability(obj_new);
 
-    ret = auth_sasl(mechlist, obj_new, &mtried, &errstr);
+    do {
+	mtried = NULL;
+	ret = auth_sasl(mechlist, obj_new, &mtried, &errstr);
+	if(ret) init_sasl(obj_new, 128, callbacks);
+
+	if(mtried) {
+	    char *newlist = (char*) xmalloc(strlen(mechlist)+1);
+	    char *mtr = (char*) xstrdup(mtried);
+	    char *tmp;
+	    
+	    ucase(mtr);
+	    tmp = strstr(mechlist,mtr);
+	    *tmp ='\0';
+	    strcpy(newlist, mechlist);
+	    tmp++;
+	    
+	    tmp = strchr(tmp,' ');
+	    if (tmp) {
+		strcat(newlist,tmp);
+	    }
+	    
+	    free(mtr);
+	    free(mechlist);
+	    mechlist = newlist;
+	}
+    } while(ret && mtried);
+
+    /* xxx leak? */
     if(ret) return STAT_NO;
 
     /* free old isieve_t */
