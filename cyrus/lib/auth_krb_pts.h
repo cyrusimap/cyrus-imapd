@@ -89,7 +89,7 @@ size_t size;
                size);
     }
     for (i=0; i*4<size; i++) {
-        memcpy(&val, data+4*i, 4);
+        memcpy(&val, ((char *)data)+4*i, 4);
         ret = ret ^ val;
     }
     return ret;
