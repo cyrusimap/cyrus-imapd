@@ -1,5 +1,5 @@
-/* notify_socket.c -- Module to send notifications to socket-based server
-   Copyright (c) 2000, Martin Smith & Steve Campion
+/* notify_unix.c -- Module to send notifications to socket-based server
+   Copyright (c) 2000, Jeremy Howard
 */
 
 
