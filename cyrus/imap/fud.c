@@ -27,7 +27,7 @@
  *
  */
 
-/* $Id: fud.c,v 1.6 1998/06/24 20:24:36 dar Exp $ */
+/* $Id: fud.c,v 1.7 1998/08/07 06:52:51 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -242,35 +242,6 @@ time_t lastarrived;
             sendto(soc,"UNKNOWN",8,0,(struct sockaddr *) &sfrom, sizeof(sfrom));       
             break;
     } 
-}
-
-int convert_code(r)
-int r;
-{
-    switch (r) {
-    case 0:
-	return 0;
-
-    case IMAP_IOERROR:
-	return EX_IOERR;
-
-    case IMAP_PERMISSION_DENIED:
-	return EX_NOPERM;
-
-    case IMAP_QUOTA_EXCEEDED:
-	return EX_TEMPFAIL;
-
-    case IMAP_MAILBOX_NOTSUPPORTED:
-	return EX_DATAERR;
-
-    case IMAP_MAILBOX_NONEXISTENT:
-	return EX_UNAVAILABLE;
-    }
-
-    /*
-     * Some error we're not expecting. 
-     */
-    return EX_SOFTWARE;
 }
 
 int

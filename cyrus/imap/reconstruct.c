@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.36 1998/06/04 20:15:50 tjs Exp $ */
+/* $Id: reconstruct.c,v 1.37 1998/08/07 06:52:04 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -872,33 +872,6 @@ do_mboxlist()
     
     exit(0);
 }
-
-int convert_code(r)
-int r;
-{
-    switch (r) {
-    case 0:
-	return 0;
-	
-    case IMAP_IOERROR:
-	return EX_IOERR;
-
-    case IMAP_PERMISSION_DENIED:
-	return EX_NOPERM;
-
-    case IMAP_QUOTA_EXCEEDED:
-	return EX_TEMPFAIL;
-
-    case IMAP_MAILBOX_NOTSUPPORTED:
-	return EX_DATAERR;
-
-    case IMAP_MAILBOX_NONEXISTENT:
-	return EX_UNAVAILABLE;
-    }
-	
-    /* Some error we're not expecting. */
-    return EX_SOFTWARE;
-}	
 
 fatal(s, code)
 char *s;

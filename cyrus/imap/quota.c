@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  *
  */
-/* $Id: quota.c,v 1.24 1998/06/07 23:21:15 tjs Exp $ */
+/* $Id: quota.c,v 1.25 1998/08/07 06:53:17 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -442,33 +442,6 @@ reportquota()
 	       quota[i].quota.root);
     }
 }
-		   
-int convert_code(r)
-int r;
-{
-    switch (r) {
-    case 0:
-	return 0;
-	
-    case IMAP_IOERROR:
-	return EX_IOERR;
-
-    case IMAP_PERMISSION_DENIED:
-	return EX_NOPERM;
-
-    case IMAP_QUOTA_EXCEEDED:
-	return EX_TEMPFAIL;
-
-    case IMAP_MAILBOX_NOTSUPPORTED:
-	return EX_DATAERR;
-
-    case IMAP_MAILBOX_NONEXISTENT:
-	return EX_UNAVAILABLE;
-    }
-	
-    /* Some error we're not expecting. */
-    return EX_SOFTWARE;
-}	
 
 fatal(s, code)
 char *s;
@@ -477,4 +450,3 @@ int code;
     fprintf(stderr, "quota: %s\n", s);
     exit(code);
 }
-

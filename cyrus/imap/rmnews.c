@@ -1,30 +1,31 @@
 /* rmnews.c -- program to expunge/remove news articles
- $Id: rmnews.c,v 1.15 1998/05/15 21:49:51 neplokh Exp $
- 
- # Copyright 1998 Carnegie Mellon University
- # 
- # No warranties, either expressed or implied, are made regarding the
- # operation, use, or results of the software.
- #
- # Permission to use, copy, modify and distribute this software and its
- # documentation is hereby granted for non-commercial purposes only
- # provided that this copyright notice appears in all copies and in
- # supporting documentation.
- #
- # Permission is also granted to Internet Service Providers and others
- # entities to use the software for internal purposes.
- #
- # The distribution, modification or sale of a product which uses or is
- # based on the software, in whole or in part, for commercial purposes or
- # benefits requires specific, additional permission from:
- #
- #  Office of Technology Transfer
- #  Carnegie Mellon University
- #  5000 Forbes Avenue
- #  Pittsburgh, PA  15213-3890
- #  (412) 268-4387, fax: (412) 268-7395
- #  tech-transfer@andrew.cmu.edu
  *
+ * Copyright 1998 Carnegie Mellon University
+ * 
+ * No warranties, either expressed or implied, are made regarding the
+ * operation, use, or results of the software.
+ *
+ * Permission to use, copy, modify and distribute this software and its
+ * documentation is hereby granted for non-commercial purposes only
+ * provided that this copyright notice appears in all copies and in
+ * supporting documentation.
+ *
+ * Permission is also granted to Internet Service Providers and others
+ * entities to use the software for internal purposes.
+ *
+ * The distribution, modification or sale of a product which uses or is
+ * based on the software, in whole or in part, for commercial purposes or
+ * benefits requires specific, additional permission from:
+ *
+ *  Office of Technology Transfer
+ *  Carnegie Mellon University
+ *  5000 Forbes Avenue
+ *  Pittsburgh, PA  15213-3890
+ *  (412) 268-4387, fax: (412) 268-7395
+ *  tech-transfer@andrew.cmu.edu
+ */
+/*
+ * $Id: rmnews.c,v 1.16 1998/08/07 06:51:41 tjs Exp $
  */
 
 #include <stdio.h>
@@ -261,33 +262,6 @@ char *b;
 {
     return (*(unsigned int *)a) - (*(unsigned int *)b);
 }
-
-int convert_code(r)
-int r;
-{
-    switch (r) {
-    case 0:
-	return 0;
-	
-    case IMAP_IOERROR:
-	return EX_IOERR;
-
-    case IMAP_PERMISSION_DENIED:
-	return EX_NOPERM;
-
-    case IMAP_QUOTA_EXCEEDED:
-	return EX_TEMPFAIL;
-
-    case IMAP_MAILBOX_NOTSUPPORTED:
-	return EX_DATAERR;
-
-    case IMAP_MAILBOX_NONEXISTENT:
-	return EX_UNAVAILABLE;
-    }
-	
-    /* Some error we're not expecting. */
-    return EX_SOFTWARE;
-}	
 
 fatal(s, code)
 char *s;
