@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.62 2002/02/22 22:11:00 leg Exp $
+ * $Id: lmtpengine.c,v 1.63 2002/02/25 17:18:06 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1167,6 +1167,16 @@ void lmtpmode(struct lmtp_func *func,
     max_msgsize = config_getint("maxmessagesize", INT_MAX);
 
     msg_new(&msg);
+
+    /* don't leak old connections */
+    if(saslprops.iplocalport) {
+	free(saslprops.iplocalport);
+	saslprops.iplocalport = NULL;
+    }
+    if(saslprops.ipremoteport) {
+	free(saslprops.ipremoteport);
+	saslprops.ipremoteport = NULL;
+    }
 
     /* determine who we're talking to */
     salen = sizeof(remoteaddr);
