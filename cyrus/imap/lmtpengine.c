@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.64 2002/02/27 04:34:39 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.65 2002/03/07 17:55:28 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -179,7 +179,7 @@ static void send_lmtp_error(struct protstream *pout, int r)
     case MUPDATE_NOAUTH:
     case MUPDATE_TIMEOUT:
     case MUPDATE_PROTOCOL_ERROR:
-	prot_printf(pout, "451 4.4.0 Remote server unavailable\r\n");
+	prot_printf(pout, "451 4.4.3 Remote server unavailable\r\n");
 	break;
 
     case IMAP_NOSPACE:
@@ -217,6 +217,10 @@ static void send_lmtp_error(struct protstream *pout, int r)
     case IMAP_MAILBOX_BADFORMAT:
     case IMAP_MAILBOX_NOTSUPPORTED:
 	prot_printf(pout, "451 4.2.0 Mailbox has an invalid format\r\n");
+	break;
+
+    case IMAP_MAILBOX_MOVED:
+	prot_printf(pout, "451 4.2.1 Mailbox Moved\r\n");
 	break;
 
     case IMAP_MESSAGE_CONTAINSNULL:
