@@ -40,13 +40,10 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "codes.h"
 
 #include "actions.h"
-
-#include "prot.h"
-
 #include "scripttest.h"
 
+#include "prot.h"
 #include "config.h"
-
 #include "xmalloc.h"
 
 char *sieve_dir = NULL;
@@ -186,8 +183,7 @@ int getscript(struct protstream *conn, string_t *name)
 
   result=stat(path,&filestats);
 
-  if (result!=0)
-  {
+  if (result!=0) {
     prot_printf(conn,"NO \"Unable to stat script\"\r\n");
     return TIMSIEVE_NOEXIST;
   }
@@ -215,11 +211,15 @@ int getscript(struct protstream *conn, string_t *name)
       amount=size-cnt;
 
     /* xxx what to do on failure? */
-    fread(buf, 1, BLOCKSIZE, stream);
+    if (fread(buf, 1, BLOCKSIZE, stream) == 0) {
+	if (ferror(stream)) {
+	    fatal("fatal error (fread)", 0);
+	}
+    }
     
     prot_write(conn, buf, amount);
 
-    cnt+=amount;
+    cnt += amount;
   }
 
   prot_printf(conn,"\r\n");
@@ -276,7 +276,18 @@ int putscript(struct protstream *conn, string_t *name, string_t *data)
   char *path;
   int maxscripts;
 
-  /* first let's make sure this is a valid script
+  /* see if this would put the user over quota */
+  maxscripts=config_getint("sieve_maxscripts",5);
+
+  if (countscripts(string_DATAPTR(name))+1 > maxscripts)
+  {
+    prot_printf(conn,
+		"NO \"You are only allowed %d scripts on this server\"\r\n",
+		maxscripts);
+    return TIMSIEVE_FAIL;
+  }
+
+  /* let's make sure this is a valid script
      (no parse errors)
   */
   result=is_script_parsable(data);
@@ -285,15 +296,6 @@ int putscript(struct protstream *conn, string_t *name, string_t *data)
   {
     prot_printf(conn,"NO \"Script is not a valid sieve script\"\r\n");
     return result;
-  }
-
-  /* see if this would put the user over quota */
-  maxscripts=config_getint("maxscripts",5);
-
-  if (countscripts(string_DATAPTR(name))+1 > maxscripts)
-  {
-    prot_printf(conn,"NO \"You are only allowed %d scripts on this server\"\r\n",maxscripts);
-    return TIMSIEVE_FAIL;
   }
 
   path=getpath(string_DATAPTR(name));

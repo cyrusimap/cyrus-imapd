@@ -31,6 +31,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <syslog.h>
 
 #include <string.h>
 #include <sasl.h>
@@ -43,20 +44,13 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define yylex timlex
 #define yyparse timparse
 
-  /*#undef __GNUC__*/
-
 #include "prot.h"
 
 #include "mystring.h"
 
-  /* because bison is stupid */
-#undef __GNUC__
-
-
 extern sasl_conn_t *sieved_saslconn; /* the sasl connection context */
-
-int authenticated=0;
-
+extern char *sieved_clienthost;
+int authenticated = 0;
 
 %}
 
@@ -148,7 +142,7 @@ authenticate: notauthed AUTHENTICATE ' ' STRING authenticate_optional_string EOL
   char *mech = string_DATAPTR($4);
 
   string_t *clientinstr=NULL;
-  char *clientin=NULL;
+  char *clientin = NULL;
   int clientinlen = 0;
 
   char *serverout=NULL;
@@ -167,7 +161,9 @@ authenticate: notauthed AUTHENTICATE ' ' STRING authenticate_optional_string EOL
 
       if (sasl_result!=SASL_OK)
       {
-	report_error(CONN, "error base63 decoding string");
+	report_error(CONN, "error base64 decoding string");
+	syslog(LOG_NOTICE, "badlogin: %s %s %s",
+	       sieved_clienthost, mech, "error base64 decoding string");
 	return FALSE;
       }
   }
@@ -198,7 +194,6 @@ authenticate: notauthed AUTHENTICATE ' ' STRING authenticate_optional_string EOL
     prot_printf(sieved_out, "{%d+}\r\n",inbase64len);
     prot_write(sieved_out,inbase64,inbase64len);
     prot_printf(sieved_out,"\r\n");
-    prot_flush(sieved_out);
 
     token1 = timlex(&state, CONN);
     str = state.str;
@@ -213,12 +208,13 @@ authenticate: notauthed AUTHENTICATE ' ' STRING authenticate_optional_string EOL
       if (sasl_result!=SASL_OK)
       {
 	report_error(CONN, "error base64 decoding string");
+	syslog(LOG_NOTICE, "badlogin: %s %s %s",
+	       sieved_clienthost, mech, "error base64 decoding string");
 	return FALSE;
       }      
       
     } else {
       prot_printf(sieved_out, "notstring %d\n",token1);
-      prot_flush(sieved_out);
     }
 
     token2 = timlex(&state, CONN);
@@ -236,6 +232,8 @@ authenticate: notauthed AUTHENTICATE ' ' STRING authenticate_optional_string EOL
 
     } else {
       report_error(CONN, "expected a STRING followed by an EOL");
+      syslog(LOG_NOTICE, "badlogin: %s %s %s",
+	     sieved_clienthost, mech, "expected string");
       return FALSE;
     }
 
@@ -245,6 +243,14 @@ authenticate: notauthed AUTHENTICATE ' ' STRING authenticate_optional_string EOL
   if (sasl_result!=SASL_OK)
   {
     report_error(CONN, sasl_errstring(sasl_result,NULL,NULL) );
+    if (errstr) {
+	syslog(LOG_NOTICE, "badlogin: %s %s %d %s",
+	       sieved_clienthost, mech, sasl_result, errstr);
+    } else {
+	syslog(LOG_NOTICE, "badlogin: %s %s %s",
+	       sieved_clienthost, mech, 
+	       sasl_errstring(sasl_result, NULL, NULL));
+    }
     return FALSE;
   }
 
@@ -253,18 +259,22 @@ authenticate: notauthed AUTHENTICATE ' ' STRING authenticate_optional_string EOL
   if (sasl_result!=SASL_OK)
   {
     report_error(CONN, "Internal SASL error");
+    syslog(LOG_ERR, "SASL: sasl_getprop SASL_USERNAME: %s",
+	   sasl_errstring(sasl_result, NULL, NULL));
     return FALSE;
   }
   
-  if (actions_setuser(username)!=TIMSIEVE_OK)
+  if (actions_setuser(username) != TIMSIEVE_OK)
   {
-    report_error(CONN, "Internal error");
+    report_error(CONN, "internal error");
+    syslog(LOG_ERR, "error in actions_setuser()");
     return FALSE;
   }
 
   /* Yay! authenticated */
   prot_printf(sieved_out, "OK \"Authenticated!\"\r\n");
-  prot_flush(sieved_out);  
+  syslog(LOG_NOTICE, "login: %s %s %s %s", sieved_clienthost, username,
+	 mech, "User logged in");
 
   authenticated=1;
 
@@ -298,23 +308,17 @@ logout: LOGOUT EOL
 noop: NOOP EOL
 {
   prot_printf(sieved_out, "OK \"Noop Complete\"\r\n");
-  prot_flush(sieved_out);
-
 }
 
 getscript: authed GETSCRIPT ' ' sievename EOL
 {
   getscript(sieved_out, $4);
-  prot_flush(sieved_out);
-
   free($4);
 }
 
 putscript: authed PUTSCRIPT ' ' sievename ' ' sievedata EOL
 {
   putscript(sieved_out, $4, $6);
-  prot_flush(sieved_out);
-
   free($4);
   free($6);
 }
@@ -322,23 +326,18 @@ putscript: authed PUTSCRIPT ' ' sievename ' ' sievedata EOL
 setactive: authed SETACTIVE ' ' sievename EOL
 {
   setactive(sieved_out, $4);
-  prot_flush(sieved_out);
-
   free($4);
 }
 
 deletescript: authed DELETESCRIPT ' ' sievename EOL
 {
   deletescript(sieved_out, $4);
-  prot_flush(sieved_out);
-
   free($4);
 }
 
 listscripts: authed LISTSCRIPTS EOL
 {
   listscripts(sieved_out);
-  prot_flush(sieved_out);
 }
 
 sievename: STRING
@@ -380,27 +379,14 @@ report_error(struct protstream *conn, const char *msg)
   YYSTYPE foo;
 
   prot_printf(sieved_out, "NO \"%s\"\r\n",msg);
-  result=prot_flush(sieved_out);
-
-  if (result!=0)
-  {
-    exit(1);
-  }
 
   lex_reset();
-
   /* wait until we get a newline */
-  do 
-  {
-    result=timlex(&foo, conn);
-
-    if (result<0)
-      exit(1);
-
-  } while (result!=EOL);
-
-
- 
+  do {
+      result = timlex(&foo, conn);
+      if (result < 0)
+	  exit(1);
+  } while (result != EOL);
 }
 
 

@@ -71,7 +71,7 @@ void cmdloop()
 
   chdir("/tmp/");
 
-  prot_printf(sieved_out,"\"CMU Experimental Sieved version %s\"", SIEVED_VERSION);
+  prot_printf(sieved_out, "\"" SIEVED_IDENT " " SIEVED_VERSION "\"");
 
   if (sasl_listmech(sieved_saslconn, NULL, 
 		    " \"SASL={", ", ", "}\"",
@@ -82,8 +82,6 @@ void cmdloop()
     }
     
   prot_printf(sieved_out,"\r\n");
-
-  prot_flush(sieved_out);
 
   /* initialize lexer */
   lex_init();
@@ -104,13 +102,11 @@ int code;
 
     if (recurse_code) {
 	/* We were called recursively. Just give up */
-      /* xxx	proc_cleanup();*/
 	exit(recurse_code);
     }
     recurse_code = code;
     prot_printf(sieved_out, "* BYE Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
-    /* xxx     shut_down(code);*/
 }
 
 /* This creates a structure that defines the allowable
@@ -278,16 +274,19 @@ char **envp;
     if (gethostname(hostname, MAXHOSTNAMELEN)!=0)
       fatal("gethostname failed\n",-5);
 
+    config_init("timsieved");
+
     /* set up the prot streams */
     sieved_in = prot_new(0, 0);
     sieved_out = prot_new(1, 1);
-
-    /* xxx    setproctitle_init(argc, argv, envp); */
-    config_init("imapd");
+    timeout = config_getint("timeout", 10);
+    if (timeout < 10) timeout = 10;
+    prot_settimeout(sieved_in, timeout * 60);
+    prot_setflushonread(sieved_in, sieved_out);
 
     signal(SIGPIPE, SIG_IGN);
 
-    /*    if (geteuid() == 0) fatal("must run as the Cyrus user", -6);*/
+    if (geteuid() == 0) fatal("must run as the Cyrus user", -6);
 
     /* Find out name of client host */
     salen = sizeof(sieved_remoteaddr);
@@ -334,15 +333,7 @@ char **envp;
     sasl_setprop(sieved_saslconn, SASL_IP_REMOTE, &sieved_remoteaddr);  
     sasl_setprop(sieved_saslconn, SASL_IP_LOCAL, &sieved_localaddr);  
 
-    /* xxx     proc_register("imapd", sieved_clienthost, (char *)0, (char *)0);*/
-
-    /* Set inactivity timer */
-    timeout = config_getint("timeout", 30);
-    if (timeout < 30) timeout = 30;
-    prot_settimeout(sieved_in, timeout*60);
-    prot_setflushonread(sieved_in, sieved_out);
-    
-    if (actions_init()!=TIMSIEVE_OK)
+    if (actions_init() != TIMSIEVE_OK)
       fatal("Error initializing actions",-1);
 
     cmdloop();

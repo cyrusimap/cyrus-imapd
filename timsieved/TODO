@@ -1,0 +1,19 @@
+q's:
+
+why does checking the sieve script put it in a temporary file?  if
+it's a correct sieve script, we're just going to end up with it in
+the user's directory---why don't we start with it there? - leg 9/29/99
+
+does authenticating leak memory?  (mechanism name parameter in yacc
+not freed?)
+	- leg 9/29/99
+
+document the sieve quotas in (- leg):
+	imapd.conf
+	sieve.html (yet to be written)
+
+what about script size? -leg
+
+countscripts is woefully inefficient
+
+putscript doesn't atomically rename scripts

@@ -57,7 +57,8 @@ all: timsieved
 install:
 	$(INSTALL) @STRIP@ -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 755 timsieved $(DESTDIR)$(cyrus_prefix)/bin
 
-OBJS=y.tab.o actions.o config.o lex.o mystring.o scripttest.o token.o timsieved.o
+OBJS=y.tab.o actions.o lex.o mystring.o config.o scripttest.o \
+	timsieved.o
 
 timsieved: y.tab.c $(OBJS)
 	$(CC) $(LDFLAGS) -o timsieved $(OBJS) $(DEPLIBS) $(IMAP_LIBS)
@@ -72,7 +73,7 @@ depend:
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
 
 y.tab.c: parse.y
-	$(YACC) $(YFLAGS) parse.y
+	$(YACC) $(YFLAGS) $<
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) \
