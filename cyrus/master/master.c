@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.85.2.8 2004/06/24 15:16:31 ken3 Exp $ */
+/* $Id: master.c,v 1.85.2.9 2004/12/08 18:07:42 ken3 Exp $ */
 
 #include <config.h>
 
@@ -121,6 +121,10 @@ static int pidfd = -1;
 
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 
+#define SERVICE_NONE -1
+#define SERVICE_MAX  INT_MAX-10
+#define SERVICENAME(x) ((x) ? x : "unknown")
+
 struct service *Services = NULL;
 int allocservices = 0;
 int nservices = 0;
@@ -152,7 +156,7 @@ struct centry {
     pid_t pid;
     enum sstate service_state;	/* SERVICE_STATE_* */
     time_t janitor_deadline;	/* cleanup deadline */
-    struct service *s;
+    int si;			/* Services[] index */
     struct centry *next;
 };
 static struct centry *ctable[child_table_size];
@@ -342,7 +346,11 @@ void service_create(struct service *s)
 
     if (s->associate > 0)
 	return;			/* service is already activated */
-    
+
+    if (!s->name)
+	fatal("Serious software bug found: service_create() called on unnamed service!",
+		EX_SOFTWARE);
+
     if (s->listen[0] == '/') { /* unix socket */
 	res0_is_local = 1;
 	res0 = (struct addrinfo *)malloc(sizeof(struct addrinfo));
@@ -494,6 +502,8 @@ void service_create(struct service *s)
 	
 	if (s == &service) {
 	    if (nservices == allocservices) {
+		if (allocservices > SERVICE_MAX - 5)
+		    fatal("out of service structures, please restart", EX_UNAVAILABLE);
 		Services = xrealloc(Services, 
 				    (allocservices+=5) * sizeof(struct service));
 		if (!Services) fatal("out of memory", EX_UNAVAILABLE);
@@ -572,7 +582,7 @@ void fcntl_unset(int fd, int flag)
     }
 }
 
-void spawn_service(struct service *s)
+void spawn_service(const int si)
 {
     /* Note that there is logic that depends on this being 2 */
     const int FORKRATE_INTERVAL = 2;
@@ -582,12 +592,18 @@ void spawn_service(struct service *s)
     char path[PATH_MAX];
     static char name_env[100], name_env2[100];
     struct centry *c;
+    struct service * const s = &Services[si];
     time_t now = time(NULL);
-    
+
+    if (!s->name) {
+	fatal("Serious software bug found: spawn_service() called on unnamed service!",
+		EX_SOFTWARE);
+    }
+
     /* update our fork rate */
     if(now - s->last_interval_start >= FORKRATE_INTERVAL) {
 	int interval;
-	
+
 	s->forkrate = (s->interval_forks/2) + (s->forkrate/2);
 	s->interval_forks = 0;
 	s->last_interval_start += FORKRATE_INTERVAL;
@@ -681,7 +697,7 @@ void spawn_service(struct service *s)
 	c = get_centry();
 	c->pid = p;
 	c->service_state = SERVICE_STATE_READY;
-	c->s = s;
+	c->si = si;
 	c->next = ctable[p % child_table_size];
 	ctable[p % child_table_size] = c;
 	break;
@@ -692,6 +708,10 @@ void spawn_service(struct service *s)
 void schedule_event(struct event *a)
 {
     struct event *ptr;
+
+    if (! a->name)
+	fatal("Serious software bug found: schedule_event() called on unnamed event!",
+		EX_SOFTWARE);
 
     if (!schedule || a->mark < schedule->mark) {
 	a->next = schedule;
@@ -771,7 +791,7 @@ void spawn_schedule(time_t now)
 		c = get_centry();
 		c->pid = p;
 		c->service_state = SERVICE_STATE_READY;
-		c->s = NULL;
+		c->si = SERVICE_NONE;
 		c->next = ctable[p % child_table_size];
 		ctable[p % child_table_size] = c;
 		
@@ -805,6 +825,7 @@ void reap_child(void)
     int status;
     pid_t pid;
     struct centry *c;
+    struct service *s;
 
     while ((pid = waitpid((pid_t) -1, &status, WNOHANG)) > 0) {
 	if (WIFEXITED(status)) {
@@ -822,6 +843,8 @@ void reap_child(void)
 	while(c && c->pid != pid) c = c->next;
 	
 	if (c && c->pid == pid) {
+	    s = ((c->si) != SERVICE_NONE) ? &Services[c->si] : NULL;
+
 	    /* paranoia */
 	    switch (c->service_state) {
 	    case SERVICE_STATE_READY:
@@ -832,23 +855,23 @@ void reap_child(void)
 	    default:
 		syslog(LOG_CRIT, 
 		       "service %s pid %d in ILLEGAL STATE: exited. Serious software bug or memory corruption detected!",
-		       ((c->s) ? c->s->name : "unknown"), pid);
+		       SERVICENAME(s->name), pid);
 		syslog(LOG_DEBUG,
 		       "service %s pid %d in ILLEGAL state: forced to valid UNKNOWN state",
-		       ((c->s) ? c->s->name : "unknown"), pid);
+		       SERVICENAME(s->name), pid);
 		c->service_state = SERVICE_STATE_UNKNOWN;
 	    }
-	    if (c->s) {
+	    if (s) {
 	        /* update counters for known services */
 		switch (c->service_state) {
 		case SERVICE_STATE_READY:
-		    c->s->nactive--;
-		    c->s->ready_workers--;
+		    s->nactive--;
+		    s->ready_workers--;
 		    if (WIFSIGNALED(status) ||
 			(WIFEXITED(status) && WEXITSTATUS(status))) {
 			syslog(LOG_WARNING, 
 			       "service %s pid %d in READY state: terminated abnormally",
-			       c->s->name, pid);
+			       SERVICENAME(s->name), pid);
 		    }
 		    break;
 		    
@@ -856,35 +879,34 @@ void reap_child(void)
 		    /* uh? either we got duplicate signals, or we are now MT */
 		    syslog(LOG_WARNING, 
 			   "service %s pid %d in DEAD state: receiving duplicate signals", 
-			   c->s->name, pid);
+			   SERVICENAME(s->name), pid);
 		    break;
 		    
 		case SERVICE_STATE_BUSY:
-		    c->s->nactive--;
+		    s->nactive--;
 		    if (WIFSIGNALED(status) ||
 			(WIFEXITED(status) && WEXITSTATUS(status))) {
 			syslog(LOG_DEBUG,
 			       "service %s pid %d in BUSY state: terminated abnormally",
-			       c->s->name, pid);
+			       SERVICENAME(s->name), pid);
 		    }
 		    break;
 		    
 		case SERVICE_STATE_UNKNOWN:
-		    c->s->nactive--;
+		    s->nactive--;
 		    syslog(LOG_WARNING,
 			   "service %s pid %d in UNKNOWN state: exited",
-			   c->s->name, pid);
-		    break;
-
-		default:
-		    /* Prevent Warning */
+			   SERVICENAME(s->name), pid);
 		    break;
 		} 
 	    } else {
-	    	/* children from spawn_schedule (events) or children that messaged us before being registered */
+	    	/* children from spawn_schedule (events) or
+		 * children that messaged us before being registered or
+		 * children of services removed by reread_conf() */
 		if (c->service_state != SERVICE_STATE_READY) {
-		    syslog(LOG_ERR,
-			   "unknown service pid %d in state %d: exited (maybe using a service as an event?)",
+		    syslog(LOG_WARNING,
+			   "unknown service pid %d in state %d: exited (maybe using a service as an event,"
+			   " or a service was removed by SIGHUP?)",
 			   pid, c->service_state);
 		}
 	    }
@@ -899,13 +921,14 @@ void reap_child(void)
 	    c->pid = pid;
 	    c->service_state = SERVICE_STATE_DEAD;
 	    c->janitor_deadline = time(NULL) + 2;
-	    c->s = NULL;
+	    c->si = SERVICE_NONE;
 	    c->next = ctable[pid % child_table_size];
 	    ctable[pid % child_table_size] = c;
 	}
-    if (verbose && c && c->s)
-	syslog(LOG_DEBUG, "service %s now has %d ready workers\n", 
-	       c->s->name, c->s->ready_workers);
+	if (verbose && c && (c->si != SERVICE_NONE))
+	    syslog(LOG_DEBUG, "service %s now has %d ready workers\n", 
+		    SERVICENAME(Services[c->si].name),
+		    Services[c->si].ready_workers);
     }
 }
 
@@ -1052,14 +1075,11 @@ void sighandler_setup(void)
     }
 }
 
-void process_msg(struct service *s, struct notify_message *msg) 
+void process_msg(const int si, struct notify_message *msg) 
 {
-    struct centry * c;
-    
-    /* s must NOT be null
-     * but we don't assert(s) since the current code 
-     * makes NULL s an impossibility anyway 
-     */
+    struct centry *c;
+    /* si must NOT point to an invalid service */
+    struct service * const s = &Services[si];;
 
     /* Search hash table with linked list for pid */
     c = ctable[msg->service_pid % child_table_size];
@@ -1068,10 +1088,10 @@ void process_msg(struct service *s, struct notify_message *msg)
     /* Did we find it? */
     if (!c || c->pid != msg->service_pid) {
 	syslog(LOG_WARNING, "service %s pid %d: while trying to process message 0x%x: not registered yet", 
-	       s->name, msg->service_pid, msg->message);
+	       SERVICENAME(s->name), msg->service_pid, msg->message);
 	/* resilience paranoia. Causes small performance loss when used */
 	c = get_centry();
-	c->s = s;
+	c->si = si;
 	c->pid = msg->service_pid;
 	c->service_state = SERVICE_STATE_UNKNOWN;
 	c->next = ctable[c->pid % child_table_size];
@@ -1079,17 +1099,18 @@ void process_msg(struct service *s, struct notify_message *msg)
     }
     
     /* paranoia */
-    if (s != c->s) {
+    if (si != c->si) {
 	syslog(LOG_ERR, 
 	       "service %s pid %d: changing from service %s due to received message",
-	       s->name, c->pid, ( (c->s) ? c->s->name : "unknown" ));
-	c->s = s;
+	       SERVICENAME(s->name), c->pid,
+	       ((c->si != SERVICE_NONE && Services[c->si].name) ? Services[c->si].name : "unknown"));
+	c->si = si;
     }
     switch (c->service_state) {
     case SERVICE_STATE_UNKNOWN:
 	syslog(LOG_WARNING, 
 	       "service %s pid %d in UNKNOWN state: processing message 0x%x",
-	       s->name, c->pid, msg->message);
+	       SERVICENAME(s->name), c->pid, msg->message);
 	break;
     case SERVICE_STATE_READY:
     case SERVICE_STATE_BUSY:
@@ -1098,10 +1119,10 @@ void process_msg(struct service *s, struct notify_message *msg)
     default:
 	syslog(LOG_CRIT,
 	       "service %s pid %d in ILLEGAL state: detected. Serious software bug or memory corruption uncloaked while processing message 0x%x from child!",
-	       s->name, c->pid, msg->message);
+	       SERVICENAME(s->name), c->pid, msg->message);
 	syslog(LOG_DEBUG,
 	       "service %s pid %d in ILLEGAL state: forced to valid UNKNOWN state",
-	       s->name, c->pid);
+	       SERVICENAME(s->name), c->pid);
 	c->service_state = SERVICE_STATE_UNKNOWN;
 	break;
     }
@@ -1114,7 +1135,7 @@ void process_msg(struct service *s, struct notify_message *msg)
 	    /* duplicate message? */
 	    syslog(LOG_WARNING,
 		   "service %s pid %d in READY state: sent available message but it is already ready",
-		   s->name, c->pid);
+		   SERVICENAME(s->name), c->pid);
 	    break;
 	    
 	case SERVICE_STATE_UNKNOWN:
@@ -1122,7 +1143,7 @@ void process_msg(struct service *s, struct notify_message *msg)
 	     * we don't increment ready_workers */
 	    syslog(LOG_DEBUG,
 		   "service %s pid %d in UNKNOWN state: now available and in READY state",
-		   s->name, c->pid);
+		   SERVICENAME(s->name), c->pid);
 	    c->service_state = SERVICE_STATE_READY;
 	    break;
 	    
@@ -1130,13 +1151,9 @@ void process_msg(struct service *s, struct notify_message *msg)
 	    if (verbose) 
 		syslog(LOG_DEBUG,
 		       "service %s pid %d in BUSY state: now available and in READY state",
-		       s->name, c->pid);
+		       SERVICENAME(s->name), c->pid);
 	    c->service_state = SERVICE_STATE_READY;
 	    s->ready_workers++;
-	    break;
-
-	default:
-	    /* Prevent Warning */
 	    break;
 	}
 	break;
@@ -1147,13 +1164,13 @@ void process_msg(struct service *s, struct notify_message *msg)
 	    /* duplicate message? */
 	    syslog(LOG_WARNING,
 		   "service %s pid %d in BUSY state: sent unavailable message but it is already busy",
-		   s->name, c->pid);
+		   SERVICENAME(s->name), c->pid);
 	    break;
 	    
 	case SERVICE_STATE_UNKNOWN:
 	    syslog(LOG_DEBUG,
 		   "service %s pid %d in UNKNOWN state: now unavailable and in BUSY state",
-		   s->name, c->pid);
+		   SERVICENAME(s->name), c->pid);
 	    c->service_state = SERVICE_STATE_BUSY;
 	    break;
 	    
@@ -1161,13 +1178,9 @@ void process_msg(struct service *s, struct notify_message *msg)
 	    if (verbose)
 		syslog(LOG_DEBUG,
 		       "service %s pid %d in READY state: now unavailable and in BUSY state",
-		       s->name, c->pid);
+		       SERVICENAME(s->name), c->pid);
 	    c->service_state = SERVICE_STATE_BUSY;
 	    s->ready_workers--;
-	    break;
-
-	default:
-	    /* Prevent Warning */
 	    break;
 	}
 	break;
@@ -1179,7 +1192,7 @@ void process_msg(struct service *s, struct notify_message *msg)
 	    if (verbose)
 		syslog(LOG_DEBUG,
 		       "service %s pid %d in BUSY state: now serving connection",
-		       s->name, c->pid);
+		       SERVICENAME(s->name), c->pid);
 	    break;
 	    
 	case SERVICE_STATE_UNKNOWN:
@@ -1187,22 +1200,18 @@ void process_msg(struct service *s, struct notify_message *msg)
 	    c->service_state = SERVICE_STATE_BUSY;
 	    syslog(LOG_DEBUG,
 		   "service %s pid %d in UNKNOWN state: now in BUSY state and serving connection",
-		   s->name, c->pid);
+		   SERVICENAME(s->name), c->pid);
 	    break;
 	    
 	case SERVICE_STATE_READY:
 	    syslog(LOG_ERR, 
 		   "service %s pid %d in READY state: reported new connection, forced to BUSY state",
-		   s->name, c->pid);
+		   SERVICENAME(s->name), c->pid);
 	    /* be resilient on face of a bogon source, so lets err to the side
 	     * of non-denial-of-service */
 	    c->service_state = SERVICE_STATE_BUSY;
 	    s->nconnections++;
 	    s->ready_workers--;
-
-	default:
-	    /* Prevent Warning */
-	    break;
 	}
 	break;
 	
@@ -1213,13 +1222,13 @@ void process_msg(struct service *s, struct notify_message *msg)
 	    if (verbose)
 		syslog(LOG_DEBUG, 
 		       "service %s pid %d in READY state: serving one more multi-threaded connection",
-		       s->name, c->pid);
+		       SERVICENAME(s->name), c->pid);
 	    break;
 	    
 	case SERVICE_STATE_BUSY:
 	    syslog(LOG_ERR, 
 		   "service %s pid %d in BUSY state: serving one more multi-threaded connection, forced to READY state",
-		   s->name, c->pid);
+		   SERVICENAME(s->name), c->pid);
 	    /* be resilient on face of a bogon source, so lets err to the side
 	     * of non-denial-of-service */
 	    c->service_state = SERVICE_STATE_READY;
@@ -1232,24 +1241,20 @@ void process_msg(struct service *s, struct notify_message *msg)
 	    c->service_state = SERVICE_STATE_READY;
 	    syslog(LOG_ERR,
 		   "service %s pid %d in UNKNOWN state: serving one more multi-threaded connection, forced to READY state",
-		   s->name, c->pid);
-	    break;
-
-	default:
-	    /* Prevent Warning */
+		   SERVICENAME(s->name), c->pid);
 	    break;
 	}
 	break;
 	
     default:
 	syslog(LOG_CRIT, "service %s pid %d: Software bug: unrecognized message 0x%x", 
-	       s->name, c->pid, msg->message);
+	       SERVICENAME(s->name), c->pid, msg->message);
 	break;
     }
 
     if (verbose)
 	syslog(LOG_DEBUG, "service %s now has %d ready workers\n", 
-	       s->name, s->ready_workers);
+	       SERVICENAME(s->name), s->ready_workers);
 }
 
 static char **tokenize(char *p)
@@ -1365,8 +1370,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 	}
 
 	Services[i].maxforkrate = maxforkrate;
-
- 	Services[nservices].maxfds = maxfds;
+ 	Services[i].maxfds = maxfds;
 
 	if (!strcmp(Services[i].proto, "tcp") ||
 	    !strcmp(Services[i].proto, "tcp4") ||
@@ -1407,6 +1411,8 @@ void add_service(const char *name, struct entry *e, void *rock)
 	 * the port parameters, so create a new service
 	 */
 	if (nservices == allocservices) {
+	    if (allocservices > SERVICE_MAX - 5)
+		fatal("out of service structures, please restart", EX_UNAVAILABLE);
 	    Services = xrealloc(Services, 
 			       (allocservices+=5) * sizeof(struct service));
 	}
@@ -1573,8 +1579,9 @@ void limit_fds(rlim_t x)
 
 void reread_conf(void)
 {
-    int i;
+    int i,j;
     struct event *ptr;
+    struct centry *c;
 
     /* disable all services -
        they will be re-enabled if they appear in config file */
@@ -1615,6 +1622,15 @@ void reread_conf(void)
 	    if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
 	    if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
 	    memset(Services[i].stat, 0, sizeof(Services[i].stat));
+
+	    /* remove service from all children */
+	    for (j = 0 ; j < child_table_size ; j++ ) {
+		c = ctable[j];
+		while (c != NULL) {
+		    if (c->si == i) c->si = SERVICE_NONE;
+		    c = c->next;
+		}
+	    }
 	}
 	else if (Services[i].exec && !Services[i].socket) {
 	    /* initialize new services */
@@ -1626,7 +1642,6 @@ void reread_conf(void)
 		       Services[i].stat[0], Services[i].stat[1]);
 	}
     }
-
 
     /* remove existing events */
     while (schedule) {
@@ -1641,6 +1656,11 @@ void reread_conf(void)
 
     /* reinit child janitor */
     init_janitor();
+
+    /* send some feedback to admin */
+    syslog(LOG_NOTICE,
+	    "Services reconfigured. %d out of %d (max %d) services structures are now in use",
+	    nservices, allocservices, SERVICE_MAX);
 }
 
 int main(int argc, char **argv)
@@ -1979,7 +1999,7 @@ int main(int argc, char **argv)
 	    if (Services[i].exec /* enabled */ &&
 		(Services[i].nactive < Services[i].max_workers) &&
 		(Services[i].ready_workers < Services[i].desired_workers)) {
-		spawn_service(&Services[i]);
+		spawn_service(i);
 	    } else if (Services[i].exec
 		       && Services[i].babysit
 		       && Services[i].nactive == 0) {
@@ -1987,7 +2007,7 @@ int main(int argc, char **argv)
 		       "lost all children for service: %s.  " \
 		       "Applying babysitter.",
 		       Services[i].name);
-		spawn_service(&Services[i]);
+		spawn_service(i);
 	    }
 	}
 
@@ -2071,7 +2091,7 @@ int main(int argc, char **argv)
 		    continue;
 		}
 		
-		process_msg(&Services[i], &msg);
+		process_msg(i, &msg);
 	    }
 
 	    if (Services[i].exec &&
@@ -2081,13 +2101,13 @@ int main(int argc, char **argv)
 		     j < Services[i].desired_workers; 
 		     j++)
 		{
-		    spawn_service(&Services[i]);
+		    spawn_service(i);
 		}
 
 		if (Services[i].ready_workers == 0 && 
 		    FD_ISSET(y, &rfds)) {
 		    /* huh, someone wants to talk to us */
-		    spawn_service(&Services[i]);
+		    spawn_service(i);
 		}
 	    }
 	}
