@@ -1,5 +1,5 @@
 /* krbck.c -- Test KERBEROS_V4 server configuration
- * $Id: krbck.c,v 1.11 2000/05/23 20:52:18 robeson Exp $
+ * $Id: krbck.c,v 1.12 2000/10/26 23:08:46 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -206,8 +206,9 @@ char **argv;
         if (!*p || *p == '#') continue;
 	
         key = p;
-        while (*p && (isalnum(*p) || *p == '-')) {
-            if (isupper(*p)) *p = tolower(*p);
+        while (*p && (isalnum((unsigned char) *p) || *p == '-')) {
+            if (isupper((unsigned char) *p)) 
+		*p = tolower((unsigned char) *p);
             p++;
         }
         if (*p != ':') {
