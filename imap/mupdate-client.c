@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.22 2002/02/05 05:23:56 leg Exp $
+ * $Id: mupdate-client.c,v 1.23 2002/02/15 20:09:32 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -244,7 +244,7 @@ int mupdate_connect(const char *server, const char *port,
     struct sockaddr_in addr;
     int s, saslresult;
     char buf[4096];
-    char *mechlist;
+    char *mechlist = NULL;
     
     if(!handle)
 	return MUPDATE_BADPARAM;
@@ -320,43 +320,38 @@ int mupdate_connect(const char *server, const char *port,
     prot_setflushonread(h->pin, h->pout);
     prot_settimeout(h->pin, 30*60);
 
-    /* Read the banner */
-    if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
-	goto noconn;
+    /* Read the mechlist & other capabilities */
+    while(1) {
+	if (!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
+	    goto noconn;
+	}
+
+	if(!strncmp(buf, "* AUTH", 6)) {
+	    mechlist = xstrdup(buf + 6);
+	} else if(!strncmp(buf, "* OK MUPDATE", 12)) {
+	    break;
+	}
     }
 
-    if(strncmp(buf, "* OK MUPDATE", 12)) {
-	syslog(LOG_ERR, 
-	       "mupdate-client: invalid banner from remote server: %s", buf);
+    if(!mechlist) {
+	syslog(LOG_ERR, "no AUTH banner from remote");
 	mupdate_disconnect(handle);
-	return MUPDATE_PROTOCOL_ERROR;
+	return MUPDATE_NOAUTH;
     }
-
-    /* Read the mechlist */
-    if (!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
-	goto noconn;
-    }
-
-    if(strncmp(buf, "* AUTH", 6)) {
-	syslog(LOG_ERR, 
-	       "mupdate-client: remote server did not send AUTH banner: %s",
-	       buf);
-	mupdate_disconnect(handle);
-	return MUPDATE_PROTOCOL_ERROR;
-    }
-
-    mechlist = buf + 6;
     
     if (mupdate_authenticate(h, mechlist)) {
 	syslog(LOG_ERR, "authentication to remote mupdate server failed");
+	free(mechlist);
 	mupdate_disconnect(handle);
 	return MUPDATE_NOAUTH;
     }
 
+    free(mechlist);
     /* SUCCESS */
     return 0;
 
  noconn:
+    if(mechlist) free(mechlist);
     syslog(LOG_ERR, "mupdate-client: connection to server closed: %s",
 	   prot_error(h->pin));
     mupdate_disconnect(handle);
