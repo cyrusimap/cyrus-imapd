@@ -1,4 +1,4 @@
-<!-- $Id: install-compile.html,v 1.8.6.2 2002/08/12 22:57:48 ken3 Exp $ -->
+<!-- $Id: install-compile.html,v 1.8.6.3 2002/08/14 20:21:04 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Compiling the IMAP Server
@@ -111,23 +111,23 @@ default, configure uses "<TT>cyrus</TT>". <P>
 
 <dt><tt>--with-duplicate-db=DB</tt>
 <dd>Specifies which database backend to use for the duplicate delivery
-database.  By default, configure uses "<TT>db3_nosync</TT>"<P>
+database.  By default, configure uses "<TT>berkeley_nosync</TT>".<P>
 
 <dt><tt>--with-mboxlist-db=DB</tt>
 <dd>Specifies which database backend to use for the mailbox list.  By
-default, configure uses "<TT>db3</TT>"<P>
+default, configure uses "<TT>berkeley</TT>".<P>
 
 <dt><tt>--with-seen-db=DB</tt>
 <dd>Specifies which database backend to use for the seen state.  By
-default, configure uses "<TT>flat</TT>"<P>
+default, configure uses "<TT>flat</TT>".<P>
 
 <dt><tt>--with-subs-db=DB</tt>
 <dd>Specifies which database backend to use for the subscriptions
-list.  By default, configure uses "<TT>flat</TT>"<P>
+list.  By default, configure uses "<TT>flat</TT>".<P>
 
 <dt><tt>--with-tls-db=DB</tt>
 <dd>Specifies which database backend to use for the TLS cache.  By
-default, configure uses "<TT>db3_nosync</TT>"<P>
+default, configure uses "<TT>berkeley_nosync</TT>".<P>
 
 <dt><tt>--with-idle=METHOD</tt>
 <dd>Specifies the IMAP IDLE method to use.
@@ -296,5 +296,5 @@ If you want, you can override the "<tt>make</tt>" variables
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2002/08/12 22:57:48 $
+last modified: $Date: 2002/08/14 20:21:04 $
 </BODY></HTML>

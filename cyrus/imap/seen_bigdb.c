@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_bigdb.c,v 1.3.4.1 2002/07/25 17:21:45 ken3 Exp $
+   $Id: seen_bigdb.c,v 1.3.4.2 2002/08/14 20:21:05 ken3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -70,8 +70,8 @@
 
 #define FNAME_SEENDB "/seenstate.db"
 
-/* choose "flat" or "db3" here --- db3 highly recommended */
-#define DB (&cyrusdb_db3)
+/* choose "flat" or "berkeley" here --- berkeley highly recommended */
+#define DB (&cyrusdb_berkeley)
 
 enum {
     MAX_KEY = MAX_MAILBOX_PATH + MAX_MAILBOX_NAME + 30,

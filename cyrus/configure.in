@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.3 2002/08/08 20:20:14 rjs3 Exp $
+dnl $Id: configure.in,v 1.232.4.4 2002/08/14 20:21:03 ken3 Exp $
 dnl
 
 
@@ -153,8 +153,8 @@ dnl function for doing each of the database backends
 dnl parameters: backend name, variable to set, withval
 AC_DEFUN(CYRUS_SET_BACKEND, [
 	AC_MSG_CHECKING([$1 database backend])
-	if test "$3" != "db3" -a \
-		"$3" != "db3_nosync" -a \
+	if test "$3" != "berkeley" -a \
+		"$3" != "berkeley_nosync" -a \
 	 	"$3" != "flat" -a \
 		"$3" != "skiplist"; then
 	   AC_ERROR([invalid $1 value])
@@ -168,8 +168,8 @@ AC_DEFUN(CYRUS_SET_BACKEND_BINARY, [
 	if test "$3" = "flat"; then
 	   AC_ERROR([this database requires a backend capable of binary data])
 	fi
-	if test "$3" != "db3" -a \
-		"$3" != "db3_nosync" -a \
+	if test "$3" != "berkeley" -a \
+		"$3" != "berkeley_nosync" -a \
 		"$3" != "skiplist"; then
 	   AC_ERROR([invalid $1 value])
 	fi
@@ -179,33 +179,33 @@ AC_DEFUN(CYRUS_SET_BACKEND_BINARY, [
 ])
 
 AC_ARG_WITH(duplicate-db,
-	[  --with-duplicate-db=DB  use DB (db3, skiplist) as a backend
-                          for the duplicate delivery db (Default: db3_nosync) ],
-	DB="$withval", DB="db3_nosync")
+	[  --with-duplicate-db=DB  use DB (berkeley, skiplist) as a backend
+                          for the duplicate delivery db (Default: berkeley_nosync) ],
+	DB="$withval", DB="berkeley_nosync")
 CYRUS_SET_BACKEND_BINARY("duplicate db", CONFIG_DB_DUPLICATE, $DB)
 
 AC_ARG_WITH(mboxlist-db,
-	[  --with-mboxlist-db=DB   use DB (flat, db3, skiplist) as a backend
-                          for the mailbox list (Default: db3) ],
-	DB="$withval", DB="db3")
+	[  --with-mboxlist-db=DB   use DB (flat, berkeley, skiplist) as a backend
+                          for the mailbox list (Default: berkeley) ],
+	DB="$withval", DB="berkeley")
 CYRUS_SET_BACKEND("mboxlist", CONFIG_DB_MBOX, $DB)
 
 AC_ARG_WITH(seen-db,
-	[  --with-seen-db=DB       use DB (flat, db3, skiplist) as a backend
+	[  --with-seen-db=DB       use DB (flat, berkeley, skiplist) as a backend
                           for the seen state (Default: flat) ],
 	DB="$withval", DB="flat")
 CYRUS_SET_BACKEND("seen state", CONFIG_DB_SEEN, $DB)
 
 AC_ARG_WITH(subs-db,
-	[  --with-subs-db=DB       use DB (flat, db3, skiplist) as a backend
+	[  --with-subs-db=DB       use DB (flat, berkeley, skiplist) as a backend
                           for the subscriptions list (Default: flat) ],
 	DB="$withval", DB="flat")
 CYRUS_SET_BACKEND("subscription", CONFIG_DB_SUBS, $DB)
 
 AC_ARG_WITH(tls-db,
-	[  --with-tls-db=DB        use DB (db3, skiplist) as a backend
-                          for the TLS cache (Default: db3_nosync) ],
-	DB="$withval", DB="db3_nosync")
+	[  --with-tls-db=DB        use DB (berkeley, skiplist) as a backend
+                          for the TLS cache (Default: berkeley_nosync) ],
+	DB="$withval", DB="berkeley_nosync")
 CYRUS_SET_BACKEND_BINARY("TLS cache", CONFIG_DB_TLS, $DB)
 
 sievedir="sieve"

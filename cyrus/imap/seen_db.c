@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.34.4.4 2002/08/13 19:50:27 ken3 Exp $
+   $Id: seen_db.c,v 1.34.4.5 2002/08/14 20:21:05 ken3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -87,7 +87,6 @@ struct seen {
 
 static struct seen *lastseen = NULL;
 
-/* choose "flat" or "db3" here */
 #define DB (CONFIG_DB_SEEN)
 
 static void abortcurrent(struct seen *s)

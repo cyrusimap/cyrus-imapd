@@ -1,4 +1,4 @@
-/*  cyrusdb_db3: berkeley db backend
+/*  cyrusdb_flat: flat file backend
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.19.4.1 2002/08/11 16:53:25 ken3 Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.19.4.2 2002/08/14 20:21:06 ken3 Exp $ */
 
 #include <config.h>
 

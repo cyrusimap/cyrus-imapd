@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.c,v 1.2 2002/02/24 04:42:17 ken3 Exp $ */
+/* $Id: cyrusdb.c,v 1.2.6.1 2002/08/14 20:21:05 ken3 Exp $ */
 
 #include <config.h>
 #include <stdlib.h>
@@ -59,8 +59,8 @@
 #include "retry.h"
 
 struct cyrusdb_backend *cyrusdb_backends[] = {
-    &cyrusdb_db3,
-    &cyrusdb_db3_nosync,
+    &cyrusdb_berkeley,
+    &cyrusdb_berkeley_nosync,
     &cyrusdb_flat,
     &cyrusdb_skiplist,
     NULL };

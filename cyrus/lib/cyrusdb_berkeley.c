@@ -1,4 +1,4 @@
-/*  cyrusdb_db3: berkeley db backend
+/*  cyrusdb_berkeley: berkeley db backends
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_db3.c,v 1.43.4.1 2002/08/11 16:53:25 ken3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.1.2.1 2002/08/14 20:21:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -905,9 +905,9 @@ static int abort_txn(struct db *db __attribute__((unused)),
     return 0;
 }
 
-struct cyrusdb_backend cyrusdb_db3 = 
+struct cyrusdb_backend cyrusdb_berkeley = 
 {
-    "db3",			/* name */
+    "berkeley",			/* name */
 
     &init,
     &done,
@@ -931,9 +931,9 @@ struct cyrusdb_backend cyrusdb_db3 =
     NULL
 };
 
-struct cyrusdb_backend cyrusdb_db3_nosync = 
+struct cyrusdb_backend cyrusdb_berkeley_nosync = 
 {
-    "db3-nosync",		/* name */
+    "berkeley-nosync",		/* name */
 
     &init,
     &done,
