@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.7 2002/07/25 17:21:40 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.8 2002/08/02 17:22:13 ken3 Exp $
  */
 
 #include <config.h>
@@ -423,7 +423,7 @@ static int fetch_cb(char *name, int matchlen,
 			   result.contenttype);
 	}
 
-	/* Base the return of the size attribute on wether or not there is
+	/* Base the return of the size attribute on whether or not there is
 	 * an attribute, not wether size is nonzero. */
 	if ((fdata->attribs & ATTRIB_SIZE_SHARED) && result.value) {
 	    appended_one = 1;

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7.6.3 2002/07/27 13:05:48 ken3 Exp $ */
+/* $Id: backend.c,v 1.7.6.4 2002/08/02 17:22:14 ken3 Exp $ */
 
 #include <config.h>
 
@@ -256,8 +256,10 @@ static int backend_authenticate(struct backend *s, const char *userid)
 		  localip, 60) != 0)
 	return SASL_FAIL;
 
+    /* Require proxying if we have an "interesting" userid (authzid) */
     r = sasl_client_new("imap", s->hostname, localip, remoteip,
-			cb, 0, &s->saslconn);
+			cb, (userid  && *userid ? SASL_NEED_PROXY : 0),
+			&s->saslconn);
     if (r != SASL_OK) {
 	return r;
     }

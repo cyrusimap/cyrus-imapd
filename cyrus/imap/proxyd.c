@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.9 2002/07/30 19:40:13 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.10 2002/08/02 17:22:14 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -3800,7 +3800,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	
 	if(strcmp(oldname, newname)) {
 	    prot_printf(s->out,
-			"%s NO Cross-server move w/rename not supported\r\n",
+			"%s NO Cross-server or cross-partition move w/rename not supported\r\n",
 			tag);
 	    return;
 	}
@@ -3812,12 +3812,25 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	    strcpy(newmailboxname,partition);
 	    newmailboxname[destpart-partition]='\0';
 	    destpart++;
-	    /* <tag> XFER <name> <dest server> <dest partition> */
-	    prot_printf(s->out,
-			"%s XFER {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n", 
-			tag, strlen(oldname), oldname,
-			strlen(newmailboxname), newmailboxname,
-			strlen(destpart), destpart);
+
+	    if(!strcmp(server, newmailboxname)) {
+		/* Same Server, different partition */
+		/* xxx this would require administrative access to the
+		 * backend, which we won't get */
+		prot_printf(proxyd_out,
+			    "%s NO Can't move across partitions via a proxy\r\n",
+			    tag);
+		return;
+	    } else {
+		/* Cross Server */
+		/* <tag> XFER <name> <dest server> <dest partition> */
+		prot_printf(s->out,
+			    "%s XFER {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n", 
+			    tag, strlen(oldname), oldname,
+			    strlen(newmailboxname), newmailboxname,
+			    strlen(destpart), destpart);
+	    }
+	    
 	} else {
 	    /* <tag> XFER <name> <dest server> */
 	    prot_printf(s->out, "%s XFER {%d+}\r\n%s {%d+}\r\n%s\r\n", 
