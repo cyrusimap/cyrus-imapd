@@ -49,8 +49,6 @@
 /* is tls enabled? */
 int tls_enabled(const char *ident);
 
-#define CONFIG_DB_TLS (&cyrusdb_db3_nosync)
-
 /* name of the SSL/TLS sessions database */
 #define FNAME_TLSSESSIONS "/tls_sessions.db"
 

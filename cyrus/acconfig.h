@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.29 2002/02/28 19:54:14 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.30 2002/02/28 20:33:19 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -135,8 +135,11 @@
 #undef HAVE_RLIM_T
 
 /* Database Backends that are configurable */
+#undef CONFIG_DB_DUPLICATE
 #undef CONFIG_DB_MBOX
+#undef CONFIG_DB_SEEN
 #undef CONFIG_DB_SUBS
+#undef CONFIG_DB_TLS
 
 @BOTTOM@
 
