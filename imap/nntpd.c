@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.25 2004/03/10 04:18:55 rjs3 Exp $
+ * $Id: nntpd.c,v 1.26 2004/03/18 21:13:02 ken3 Exp $
  */
 
 /*
@@ -1602,10 +1602,12 @@ static int parserange(char *str, unsigned long *uid, unsigned long *last,
     else if (*str == '<') {
 	/* message-id, find server and/or mailbox */
 	if (!msgid) goto badrange;
-	if (!find_msgid(str, &mboxname, uid) ||
-	    (r = open_group(mboxname, 1, ret, NULL)))
-	    goto nomsgid;
-	*msgid = str;
+	if (!find_msgid(str, &mboxname, uid)) goto nomsgid;
+	if (!nntp_group || strcmp(mboxname, nntp_group->name)) {
+	    if ((r = open_group(mboxname, 1, ret, NULL))) goto nomsgid;
+	    *msgid = str;
+	}
+	/* else, within the current group, so treat as by uid */
     }
     else if (backend_current)
 	*ret = backend_current;
