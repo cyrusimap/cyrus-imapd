@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.164 2001/05/29 19:24:01 leg Exp $
+ * $Id: index.c,v 1.165 2001/06/19 13:58:58 ken3 Exp $
  */
 #include <config.h>
 
@@ -2141,26 +2141,28 @@ static void index_listflags(struct mailbox *mailbox)
 	else cancreate++;
     }
     prot_printf(imapd_out, ")\r\n* OK [PERMANENTFLAGS ");
-    if (mailbox->myrights & ACL_WRITE) {
-	prot_printf(imapd_out, "%c\\Answered \\Flagged \\Draft", sepchar);
-	sepchar = ' ';
-    }
-    if (mailbox->myrights & ACL_DELETE) {
-	prot_printf(imapd_out, "%c\\Deleted", sepchar);
-	sepchar = ' ';
-    }
-    if (mailbox->myrights & ACL_SEEN) {
-	prot_printf(imapd_out, "%c\\Seen", sepchar);
-	sepchar = ' ';
-    }
-    if (mailbox->myrights & ACL_WRITE) {
-	for (i = 0; i < MAX_USER_FLAGS; i++) {
-	    if (mailbox->flagname[i]) {
-		prot_printf(imapd_out, " %s", mailbox->flagname[i]);
-	    }
+    if (!examining) {
+	if (mailbox->myrights & ACL_WRITE) {
+	    prot_printf(imapd_out, "%c\\Answered \\Flagged \\Draft", sepchar);
+	    sepchar = ' ';
 	}
-	if (cancreate) {
-	    prot_printf(imapd_out, " \\*");
+	if (mailbox->myrights & ACL_DELETE) {
+	    prot_printf(imapd_out, "%c\\Deleted", sepchar);
+	    sepchar = ' ';
+	}
+	if (mailbox->myrights & ACL_SEEN) {
+	    prot_printf(imapd_out, "%c\\Seen", sepchar);
+	    sepchar = ' ';
+	}
+	if (mailbox->myrights & ACL_WRITE) {
+	    for (i = 0; i < MAX_USER_FLAGS; i++) {
+		if (mailbox->flagname[i]) {
+		    prot_printf(imapd_out, " %s", mailbox->flagname[i]);
+		}
+	    }
+	    if (cancreate) {
+		prot_printf(imapd_out, " \\*");
+	    }
 	}
     }
     if (sepchar == '(') prot_printf(imapd_out, "(");
