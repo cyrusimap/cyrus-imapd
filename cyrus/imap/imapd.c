@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.285 2000/12/18 20:08:14 ken3 Exp $ */
+/* $Id: imapd.c,v 1.286 2000/12/21 20:32:04 ken3 Exp $ */
 
 #include <config.h>
 
@@ -158,10 +158,19 @@ void cmd_status(char *tag, char *name);
 void cmd_getuids(char *tag, char *startuid);
 void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
-void cmd_idle(char* tag);
-void cmd_id(char* tag);
 
+void cmd_id(char* tag);
+struct idparamlist {
+    char *field;
+    char *value;
+    struct idparamlist *next;
+};
 void id_getcmdline(int argc, char **argv);
+void id_appendparamlist(struct idparamlist **l, char *field, char *value);
+void id_freeparamlist(struct idparamlist *l);
+
+void cmd_idle(char* tag);
+void idle_update(idle_flags_t flags);
 
 void cmd_starttls(char *tag, int imaps);
 int starttls_enabled(void);
@@ -1607,64 +1616,6 @@ char *cmd;
 }
 
 /*
- * Perform an IDLE command
- */
-void idle_update(idle_flags_t flags)
-{
-    int fd;
-
-    if ((flags & IDLE_MAILBOX) && imapd_mailbox)
-	index_check(imapd_mailbox, 0, 1);
-
-    if (flags & IDLE_ALERT) {
-      if (! imapd_userisadmin &&
-	  (fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
-	shutdown_file(fd);
-      }
-    }
-
-    prot_flush(imapd_out);
-}
-
-void cmd_idle(char *tag)
-{
-    int c;
-    static struct buf arg;
-
-    /* Setup for doing mailbox updates */
-    if (!idle_init(imapd_mailbox, idle_update)) {
-	prot_printf(imapd_out, 
-		    "%s NO cannot start idling\r\n", tag);
-	return;
-    }
-
-    /* Tell client we are idling and waiting for end of command */
-    prot_printf(imapd_out, "+ go ahead\r\n");
-    prot_flush(imapd_out);
-
-    /* Get continuation data */
-    c = getword(&arg);
-    if (c != EOF) {
-	if (!strcasecmp(arg.s, "Done") &&
-	    (c = (c == '\r') ? prot_getc(imapd_in) : c) == '\n') {
-	    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-			error_message(IMAP_OK_COMPLETED));
-	}
-
-	else {
-	    prot_printf(imapd_out, 
-			"%s BAD Invalid Idle continuation\r\n", tag);
-	    eatline(c);
-	}
-    }
-
-    /* Do any necessary cleanup */
-    idle_done(imapd_mailbox);
-
-    return;
-}
-
-/*
  * Parse and perform an ID command.
  *
  * the command has been parsed up to the parameter list.
@@ -1683,16 +1634,6 @@ void cmd_idle(char *tag)
 static char id_resp_command[MAXIDVALUELEN];
 static char id_resp_arguments[MAXIDVALUELEN] = "";
 
-void id_getcmdline(int argc, char **argv)
-{
-    snprintf(id_resp_command, MAXIDVALUELEN, *argv);
-    while (--argc > 0) {
-	snprintf(id_resp_arguments + strlen(id_resp_arguments),
-		 MAXIDVALUELEN - strlen(id_resp_arguments),
-		 "%s%s", *++argv, (argc > 1) ? " " : "");
-    }
-}
-
 void cmd_id(char *tag)
 {
     static int did_id = 0;
@@ -1701,8 +1642,8 @@ void cmd_id(char *tag)
     int error = 0;
     int c = EOF, npair = 0;
     static struct buf arg, field;
-    struct strlist *fields = 0, *values = 0;
     struct utsname os;
+    struct idparamlist *params = 0;
 
     /* check if we've already had an ID in non-authenticated state */
     if (!imapd_userid && did_id) {
@@ -1783,15 +1724,13 @@ void cmd_id(char *tag)
 	    }
 	    
 	    /* ok, we're happy enough */
-	    appendstrlist(&fields, field.s);
-	    appendstrlist(&values, arg.s);
+	    id_appendparamlist(&params, field.s, arg.s);
 	}
 
 	if (error || c != ')') {
 	    /* erp! */
 	    eatline(c);
-	    freestrlist(fields);
-	    freestrlist(values);
+	    id_freeparamlist(params);
 	    failed_id++;
 	    return;
 	}
@@ -1804,8 +1743,7 @@ void cmd_id(char *tag)
 	prot_printf(imapd_out,
 		    "%s BAD Unexpected extra arguments to Id\r\n", tag);
 	eatline(c);
-	freestrlist(fields);
-	freestrlist(values);
+	id_freeparamlist(params);
 	failed_id++;
 	return;
     }
@@ -1814,19 +1752,18 @@ void cmd_id(char *tag)
        eventually this should be a callback or something. */
     if (npair && logged_id < MAXIDLOG) {
 	char logbuf[MAXIDLOGLEN + 1] = "";
-	struct strlist *fptr, *vptr;
+	struct idparamlist *pptr;
 
-	for (fptr = fields, vptr = values; fptr;
-	     fptr = fptr->next, vptr = vptr->next) {
+	for (pptr = params; pptr; pptr = pptr->next) {
 	    /* should we check for and format literals here ??? */
 	    snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
-		     " \"%s\" ", fptr->s);
-	    if (!strcmp(vptr->s, "NIL"))
+		     " \"%s\" ", pptr->field);
+	    if (!strcmp(pptr->value, "NIL"))
 		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
 			 "NIL");
 	    else
 		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
-			"\"%s\"", vptr->s);
+			"\"%s\"", pptr->value);
 	}
 
 	syslog(LOG_INFO, "client id:%s", logbuf);
@@ -1834,8 +1771,7 @@ void cmd_id(char *tag)
 	logged_id++;
     }
 
-    freestrlist(fields);
-    freestrlist(values);
+    id_freeparamlist(params);
 
     /* spit out our ID string.
        eventually this might be configurable. */
@@ -1884,6 +1820,108 @@ void cmd_id(char *tag)
 
     failed_id = 0;
     did_id = 1;
+}
+
+/*
+ * Grab the command line args for the ID response.
+ */
+void id_getcmdline(int argc, char **argv)
+{
+    snprintf(id_resp_command, MAXIDVALUELEN, *argv);
+    while (--argc > 0) {
+	snprintf(id_resp_arguments + strlen(id_resp_arguments),
+		 MAXIDVALUELEN - strlen(id_resp_arguments),
+		 "%s%s", *++argv, (argc > 1) ? " " : "");
+    }
+}
+
+/*
+ * Append the 'field'/'value' pair to the paramlist 'l'.
+ */
+void id_appendparamlist(struct idparamlist **l, char *field, char *value)
+{
+    struct idparamlist **tail = l;
+
+    while (*tail) tail = &(*tail)->next;
+
+    *tail = (struct idparamlist *)xmalloc(sizeof(struct idparamlist));
+    (*tail)->field = xstrdup(field);
+    (*tail)->value = xstrdup(value);
+    (*tail)->next = 0;
+}
+
+/*
+ * Free the idparamlist 'l'
+ */
+void id_freeparamlist(struct idparamlist *l)
+{
+    struct idparamlist *n;
+
+    while (l) {
+	n = l->next;
+	free(l->field);
+	free(l->value);
+	l = n;
+    }
+}
+
+/*
+ * Perform an IDLE command
+ */
+void cmd_idle(char *tag)
+{
+    int c;
+    static struct buf arg;
+
+    /* Setup for doing mailbox updates */
+    if (!idle_init(imapd_mailbox, idle_update)) {
+	prot_printf(imapd_out, 
+		    "%s NO cannot start idling\r\n", tag);
+	return;
+    }
+
+    /* Tell client we are idling and waiting for end of command */
+    prot_printf(imapd_out, "+ go ahead\r\n");
+    prot_flush(imapd_out);
+
+    /* Get continuation data */
+    c = getword(&arg);
+    if (c != EOF) {
+	if (!strcasecmp(arg.s, "Done") &&
+	    (c = (c == '\r') ? prot_getc(imapd_in) : c) == '\n') {
+	    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+			error_message(IMAP_OK_COMPLETED));
+	}
+
+	else {
+	    prot_printf(imapd_out, 
+			"%s BAD Invalid Idle continuation\r\n", tag);
+	    eatline(c);
+	}
+    }
+
+    /* Do any necessary cleanup */
+    idle_done(imapd_mailbox);
+
+    return;
+}
+
+/* Send unsolicited untagged responses to the client */
+void idle_update(idle_flags_t flags)
+{
+    int fd;
+
+    if ((flags & IDLE_MAILBOX) && imapd_mailbox)
+	index_check(imapd_mailbox, 0, 1);
+
+    if (flags & IDLE_ALERT) {
+      if (! imapd_userisadmin &&
+	  (fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+	shutdown_file(fd);
+      }
+    }
+
+    prot_flush(imapd_out);
 }
 
 /*
