@@ -236,7 +236,7 @@ setproctitle(fmt, va_alist)
 
 	/* print the argument string */
 	VA_START(fmt);
-	(void) vsnprintf(p, sizeof buf - (p - buf), fmt, ap);
+	(void) vsprintf(p, fmt, ap);
 	VA_END;
 
 	i = strlen(buf);
