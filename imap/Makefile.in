@@ -46,7 +46,7 @@ libimap.a: $(LOBJS)
 	$(CC) -c $(CFLAGS) $*.c
 	rm -f $*.c
 
-parsel.o: parsey.h
+parsel.o: parsel.c parsey.h
 
 parsey.c parsey.h: parsey.y
 	$(YACC) -d parsey.y
