@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.52 2000/05/23 20:56:19 robeson Exp $
+ * $Id: prot.c,v 1.53 2000/06/06 21:31:44 leg Exp $
  */
 
 #include <config.h>
@@ -286,7 +286,6 @@ int prot_fill(struct protstream *s)
     if (s->eof || s->error) return EOF;
 
     do {
-
 	/* wait until get input */
 	haveinput = 0;
 	if (s->readcallback_proc ||
