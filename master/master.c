@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.50 2001/09/04 22:31:55 leg Exp $ */
+/* $Id: master.c,v 1.51 2001/09/05 20:14:12 leg Exp $ */
 
 #include <config.h>
 
@@ -1207,18 +1207,19 @@ int main(int argc, char **argv, char **envp)
 	    }
 
 	    if (Services[i].nactive < Services[i].max_workers) {
+		/* bring us up to desired_workers */
 		for (j = Services[i].ready_workers;
 		     j < Services[i].desired_workers; 
 		     j++)
 		{
 		    spawn_service(&Services[i]);
 		}
-	    }
 
-	    if (Services[i].ready_workers == 0 && 
-		FD_ISSET(y, &rfds)) {
-		/* huh, someone wants to talk to us */
-		spawn_service(&Services[i]);
+		if (Services[i].ready_workers == 0 && 
+		    FD_ISSET(y, &rfds)) {
+		    /* huh, someone wants to talk to us */
+		    spawn_service(&Services[i]);
+		}
 	    }
 	}
     }
