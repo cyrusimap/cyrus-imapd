@@ -40,8 +40,8 @@
 #
 #
 case "x$BASH_VERSION" in
-x) exec /usr/bin/perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
-*) exec /usr/bin/perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
+x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
+*) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
 esac
 echo "$0: how did I get here?" >&2
 exit 1
