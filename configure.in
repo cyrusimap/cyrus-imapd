@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.109 1998/06/07 23:27:43 tjs Exp $
+dnl $Id: configure.in,v 1.110 1998/06/07 23:36:26 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -253,9 +253,10 @@ AC_CACHE_VAL(cyrus_sigveclib,[
       [ AC_MSG_WARN([Can't find a sigvec() -- makedepend will not build.])
 	AC_MSG_WARN([This is probably okay because most systems already have])
 	AC_MSG_WARN([makedepend.])
+	AC_MSG_WARN()
 	AC_MSG_WARN([AFS libraries may require sigvec.  If ptloader fails])
 	AC_MSG_WARN([to build, you need to find a replacement for sigvec.])
-	AC_MSG_WARN([If you don't care about AFS, then there is no problem.])
+	AC_MSG_WARN([If you don't care about AFS, then ignore this.])
 	])
     LDFLAGS="$SAVE_LDFLAGS"])
   ])
