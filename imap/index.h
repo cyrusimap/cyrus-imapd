@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.3 2002/05/20 16:17:07 rjs3 Exp $
+ * $Id: index.h,v 1.4 2002/05/21 15:10:13 ken3 Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -152,4 +152,4 @@ struct thread_algorithm {
     void (*threader)(unsigned *msgno_list, int nmsg, int usinguid);
 };
 
-#endif INDEX_H
+#endif /* INDEX_H */
