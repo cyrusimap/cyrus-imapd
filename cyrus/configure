@@ -2858,44 +2858,6 @@ else
   echo "$ac_t""no" 1>&6
 fi
 
-echo $ac_n "checking for -liberty""... $ac_c" 1>&6
-ac_lib_var=`echo iberty'_'rindex | tr './+\055' '__p_'`
-if eval "test \"`echo '$''{'ac_cv_lib_$ac_lib_var'+set}'`\" = set"; then
-  echo $ac_n "(cached) $ac_c" 1>&6
-else
-  ac_save_LIBS="$LIBS"
-LIBS="-liberty  $LIBS"
-cat > conftest.$ac_ext <<EOF
-#line 2870 "configure"
-#include "confdefs.h"
-/* Override any gcc2 internal prototype to avoid an error.  */
-/* We use char because int might match the return type of a gcc2
-    builtin and then its argument prototype would still apply.  */
-char rindex();
-
-int main() { return 0; }
-int t() {
-rindex()
-; return 0; }
-EOF
-if { (eval echo configure:2882: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; }; then
-  rm -rf conftest*
-  eval "ac_cv_lib_$ac_lib_var=yes"
-else
-  rm -rf conftest*
-  eval "ac_cv_lib_$ac_lib_var=no"
-fi
-rm -f conftest*
-LIBS="$ac_save_LIBS"
-
-fi
-if eval "test \"`echo '$ac_cv_lib_'$ac_lib_var`\" = yes"; then
-  echo "$ac_t""yes" 1>&6
-  LIBS="${LIBS} -liberty"
-else
-  echo "$ac_t""no" 1>&6
-fi
-
 echo $ac_n "checking for -ldld""... $ac_c" 1>&6
 ac_lib_var=`echo dld'_'shl_load | tr './+\055' '__p_'`
 if eval "test \"`echo '$''{'ac_cv_lib_$ac_lib_var'+set}'`\" = set"; then
@@ -2904,7 +2866,7 @@ else
   ac_save_LIBS="$LIBS"
 LIBS="-ldld  $LIBS"
 cat > conftest.$ac_ext <<EOF
-#line 2908 "configure"
+#line 2870 "configure"
 #include "confdefs.h"
 /* Override any gcc2 internal prototype to avoid an error.  */
 /* We use char because int might match the return type of a gcc2
@@ -2916,7 +2878,7 @@ int t() {
 shl_load()
 ; return 0; }
 EOF
-if { (eval echo configure:2920: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; }; then
+if { (eval echo configure:2882: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; }; then
   rm -rf conftest*
   eval "ac_cv_lib_$ac_lib_var=yes"
 else
@@ -2941,7 +2903,7 @@ else
   ac_save_LIBS="$LIBS"
 LIBS="-ldl  $LIBS"
 cat > conftest.$ac_ext <<EOF
-#line 2945 "configure"
+#line 2907 "configure"
 #include "confdefs.h"
 /* Override any gcc2 internal prototype to avoid an error.  */
 /* We use char because int might match the return type of a gcc2
@@ -2953,7 +2915,7 @@ int t() {
 dlopen()
 ; return 0; }
 EOF
-if { (eval echo configure:2957: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; }; then
+if { (eval echo configure:2919: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; }; then
   rm -rf conftest*
   eval "ac_cv_lib_$ac_lib_var=yes"
 else

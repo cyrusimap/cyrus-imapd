@@ -819,7 +819,7 @@ const char **reply;
 	/* Now try andrew string-to-key */
 	strcpy(cell, realm);
 	lcase(cell);
-	afs_string_to_key(passwd, &key, cell);
+	afs_string_to_key(passwd, key, cell);
     
 	result = krb_get_in_tkt(user, "", realm,
 				"krbtgt", realm, 1, use_key, NULL, key);
