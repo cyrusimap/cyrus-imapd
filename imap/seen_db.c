@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.30 2002/05/14 16:18:40 rjs3 Exp $
+   $Id: seen_db.c,v 1.31 2002/05/14 20:55:06 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -544,6 +544,12 @@ int seen_reconstruct(struct mailbox *mailbox,
     return 0;
 }
 
+struct seen_merge_rock 
+{
+    struct db *db;
+    struct txn *tid;
+};
+
 /* Look up the unique id in the tgt file, if it is there, compare the
  * last change times, and ensure that the tgt database uses the newer of
  * the two */
@@ -552,17 +558,20 @@ static int seen_merge_cb(void *rockp,
 			 const char *tmpdata, int tmpdatalen) 
 {
     int r;
-    struct db *tgt = (struct db *)rockp;
+    struct seen_merge_rock *rockdata = (struct seen_merge_rock *)rockp;
+    struct db *tgtdb = rockdata->db;
     const char *tgtdata;
     int tgtdatalen, dirty = 0;
 
-    if(!tgt) return IMAP_INTERNAL;
+    if(!tgtdb) return IMAP_INTERNAL;
 
-    r = DB->fetch(tgt, key, keylen, &tgtdata, &tgtdatalen, NULL);
+    r = DB->fetchlock(tgtdb, key, keylen, &tgtdata, &tgtdatalen,
+		      &(rockdata->tid));
     if(!r && tgtdata) {
 	/* compare timestamps */
 	int version, tmplast, tgtlast;
-	char *p, *tmp = tmpdata, *tgt = tgtdata;
+	char *p;
+	const char *tmp = tmpdata, *tgt = tgtdata;
 	
 	/* get version */
 	version = strtol(tgt, &p, 10); tgt = p;
@@ -591,7 +600,8 @@ static int seen_merge_cb(void *rockp,
     
     if(dirty) {
 	/* write back data from new entry */
-	return DB->store(tgt, key, keylen, tmpdata, tmpdatalen, NULL);
+	return DB->store(tgtdb, key, keylen, tmpdata, tmpdatalen,
+			 &(rockdata->tid));
     } else {
 	return 0;
     }
@@ -610,14 +620,21 @@ int seen_merge(const char *tmpfile, const char *tgtfile)
 {
     int r = 0;
     struct db *tmp = NULL, *tgt = NULL;
-    
+    struct seen_merge_rock rock;
+
     r = DB->open(tmpfile, &tmp);
     if(r) goto done;
 	    
     r = DB->open(tgtfile, &tgt);
     if(r) goto done;
 
-    r = DB->foreach(tmp, "", 0, seen_merge_p, seen_merge_cb, tgt, NULL);
+    rock.db = tgt;
+    rock.tid = NULL;
+
+    r = DB->foreach(tmp, "", 0, seen_merge_p, seen_merge_cb, &rock, NULL);
+
+    if(r) DB->abort(rock.db, rock.tid);
+    else DB->commit(rock.db, rock.tid);
 
  done:
 
