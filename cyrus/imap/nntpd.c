@@ -37,20 +37,18 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ * $Id: nntpd.c,v 1.1.2.33 2002/10/25 19:56:38 ken3 Exp $
  */
 
 /*
  * TODO:
  *
- * - HDR <msgid>
- * - support for control messages
+ * - support for control messages?
  */
 
-/*
- * $Id: nntpd.c,v 1.1.2.32 2002/10/23 19:55:07 ken3 Exp $
- */
+
 #include <config.h>
-
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -612,6 +610,7 @@ static void cmdloop(void)
 		    }
 		} else {
 		    if (!nntp_group) goto noopengroup;
+		    if (!nntp_current) goto nocurrent;
 		    if (uid) {
 			int msgno = index_finduid(uid);
 			if (index_getuid(msgno) != uid) goto noarticle;
@@ -703,6 +702,9 @@ static void cmdloop(void)
 		r = open_group(arg1.s, 0);
 		if (r) goto nogroup;
 		else {
+		    nntp_exists = nntp_group->exists;
+		    if (nntp_exists) nntp_current = 1;
+
 		    prot_printf(nntp_out, "211 %u %u %u %s\r\n",
 				nntp_exists, nntp_exists ? index_getuid(1) : 1,
 				nntp_exists ? index_getuid(nntp_exists) : 0,
@@ -715,10 +717,12 @@ static void cmdloop(void)
 	case 'H':
 	    if (!strcmp(cmd.s, "Hdr")) {
 		unsigned long last;
+		char *oldgroup;
 
 	      hdr:
 		uid = 0;
 		p = NULL;
+		oldgroup = NULL;
 
 		if (c != ' ') goto missingargs;
 		c = getword(nntp_in, &arg1);
@@ -727,25 +731,42 @@ static void cmdloop(void)
 		    c = getword(nntp_in, &arg2);
 		    if (c == EOF) goto missingargs;
 		    uid = parsenum(arg2.s, &p);
-		    if (uid == -1) goto noarticle;
 		}
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
-		/* check to see if we were given a msgid */
-		if (!nntp_group) goto noopengroup;
-		if (!uid)
-		    last = uid = index_getuid(nntp_current);
-		else if (p && *p) {
-		    if (*p != '-') goto noarticle;
-		    if (*++p)
-			last = parsenum(p, NULL);
+		if (uid == -1) {
+		    char *mailbox;
+
+		    if (netnews_lookup(arg2.s, &mailbox, &uid, NULL, NULL)) {
+			oldgroup = xstrdup(nntp_group->name);
+			r = open_group(mailbox, 1);
+			if (r) {
+			    /* switch back to previously selected group */
+			    open_group(oldgroup, 1);
+			    free(oldgroup);
+			    goto nogroup;
+			}
+
+			last = uid;
+		    } else {
+			goto nomsgid;
+		    }
+		} else {
+		    if (!nntp_group) goto noopengroup;
+		    if (!uid)
+			last = uid = index_getuid(nntp_current);
+		    else if (p && *p) {
+			if (*p != '-') goto noarticle;
+			if (*++p)
+			    last = parsenum(p, NULL);
+			else
+			    last = index_getuid(nntp_exists);
+		    }
 		    else
-			last = index_getuid(nntp_exists);
+			last = uid;
+		    if (last == -1) goto noarticle;
 		}
-		else
-		    last = uid;
-		if (last == -1) goto noarticle;
 
 		prot_printf(nntp_out, "%u Header follows:\r\n",
 			    cmd.s[0] == 'X' ? 221 : 225);
@@ -753,6 +774,12 @@ static void cmdloop(void)
 		cmd_hdr(arg1.s, uid, last);
 
 		prot_printf(nntp_out, ".\r\n");
+
+		/* switch back to previously selected group */
+		if (oldgroup) {
+		    open_group(oldgroup, 1);
+		    free(oldgroup);
+		}
 	    }
 	    else if (!strcmp(cmd.s, "Head")) {
 		mode = ARTICLE_HEAD;
@@ -817,7 +844,6 @@ static void cmdloop(void)
 		cmd_list(arg1.len ? arg1.s : NULL, arg2.len ? arg2.s : NULL);
 	    }
 	    else if (!strcmp(cmd.s, "Listgroup")) {
-		r = 0;
 		arg1.len = 0;
 
 		if (c == ' ') {
@@ -827,9 +853,14 @@ static void cmdloop(void)
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
-		if (arg1.len) r = open_group(arg1.s, 0);
-		if (r) goto nogroup;
-		else if (!nntp_group) goto noopengroup;
+		if (arg1.len) {
+		    r = open_group(arg1.s, 0);
+		    if (r) goto nogroup;
+
+		    nntp_exists = nntp_group->exists;
+		    if (nntp_exists) nntp_current = 1;
+		}
+		if (!nntp_group) goto noopengroup;
 		else {
 		    int i;
 		    prot_printf(nntp_out, "211 list of articles follows\r\n");
@@ -1055,6 +1086,10 @@ static void cmdloop(void)
 
       noopengroup:
 	prot_printf(nntp_out, "412 No newsgroup selected\r\n");
+	continue;
+
+      nocurrent:
+	prot_printf(nntp_out, "420 No current article selected\r\n");
 	continue;
 
       noarticle:
@@ -1446,9 +1481,12 @@ int do_list(char *name, int matchlen, int maycreate __attribute__((unused)),
 
     if (open_group(name, 1) == 0) {
 	prot_printf(nntp_out, "%s %u %u %c\r\n", name+strlen(newsprefix),
-		    nntp_exists ? index_getuid(1) : 1,
-		    nntp_exists ? index_getuid(nntp_exists) : 0,
+		    nntp_group->exists ? index_getuid(1) : 1,
+		    nntp_group->exists ? index_getuid(nntp_group->exists) : 0,
 		    myrights & ACL_POST ? 'y' : 'n');
+
+	mailbox_close(nntp_group);
+	nntp_group = 0;
     }
 
     return 0;
@@ -1573,10 +1611,8 @@ int open_group(char *name, int has_prefix)
 	return r;
     }
 
-    nntp_exists = mboxstruct.exists;
-    nntp_current = 1;
-    index_operatemailbox(&mboxstruct);
     nntp_group = &mboxstruct;
+    index_operatemailbox(nntp_group);
 
     syslog(LOG_DEBUG, "open: user %s opened %s",
 	   nntp_userid ? nntp_userid : "anonymous", name);

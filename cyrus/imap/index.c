@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.15 2002/10/22 19:48:11 ken3 Exp $
+ * $Id: index.c,v 1.180.4.16 2002/10/25 19:56:37 ken3 Exp $
  */
 #include <config.h>
 
@@ -4705,11 +4705,12 @@ extern char *index_getheader(struct mailbox *mailbox, unsigned msgno,
     int i;
 
     if (msg_base) {
-	mailbox_unmap_message(mailbox, UID(msgno), &msg_base, &msg_size);
+	mailbox_unmap_message(NULL, 0, &msg_base, &msg_size);
 	msg_base = 0;
 	msg_size = 0;
     }
 
+    /* see if the header is cached */
     for (i = 0; i < mailbox_num_cache_header; i++) {
 	if (!strcmp(mailbox_cache_header_name[i], hdr)) break;
     }
