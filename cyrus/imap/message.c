@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.64 1999/03/10 20:10:29 tjs Exp $
+ * $Id: message.c,v 1.65 1999/03/29 20:23:25 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -987,7 +987,8 @@ struct param **paramp;
 		    if (!*hdr) return;
 		}
 		if (*hdr == '\r') {
-		    return;
+		    if (hdr[1] == '\n' && (hdr[2] == ' ' || hdr[2] == '\t')) hdr += 2;
+ 		    else return;
 		}
 		hdr++;
 	    }
@@ -1021,6 +1022,7 @@ struct param **paramp;
 	    value++;
 	    while (*value != '\"') {
 		if (*value == '\\') value++;
+		else if (*value == '\r') value += 2;
 		*p++ = *value++;
 	    }
 	    *p = '\0';
