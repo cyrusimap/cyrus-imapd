@@ -44,6 +44,8 @@
  * For copyright info, see mit-sipb-copyright.h.
  */
 
+#include <config.h>
+
 #include <stdio.h>
 #include <string.h>
 #include "mit-sipb-copyright.h"

@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.78 2003/04/07 17:18:03 rjs3 Exp $
+ * $Id: imclient.c,v 1.79 2003/06/04 03:27:54 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -52,7 +52,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#ifdef __STDC__
+#ifdef HAVE_STDARG_H
 #include <stdarg.h>
 #else
 #include <varargs.h>

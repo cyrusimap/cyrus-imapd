@@ -60,7 +60,7 @@ static char sccsid[] = "@(#)syslog.c    8.8 (Berkeley) 8/30/95";
 # endif
 #endif
 
-#if __STDC__
+#ifdef HAVE_STDARG_H
 # include <stdarg.h>
 #else
 # include <varargs.h>
