@@ -1,5 +1,5 @@
 /* xmalloc.h -- Allocation package that calls fatal() when out of memory
- * $Id: xmalloc.h,v 1.17 2000/11/17 02:10:48 leg Exp $
+ * $Id: xmalloc.h,v 1.18 2000/12/18 04:53:42 leg Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -46,12 +46,6 @@
 
 /* for size_t */
 #include <stdio.h>
-
-#ifndef __GNUC__
-/* can't use attributes... */
-#define __attribute__(foo)
-#define __inline__
-#endif
 
 extern void *xmalloc (unsigned size);
 extern void *xzmalloc (unsigned size);

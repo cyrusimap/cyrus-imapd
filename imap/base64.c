@@ -40,6 +40,10 @@
 
 /* some random base64 code shared by imapd/proxyd, pop3d/pop3proxyd */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include "xmalloc.h"
 #include "prot.h"
 

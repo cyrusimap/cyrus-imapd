@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.39 2000/11/17 19:45:57 ken3 Exp $
+ * $Id: script.c,v 1.40 2000/12/18 04:53:43 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -24,6 +24,10 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <stdlib.h>
 #include <string.h>
@@ -316,10 +320,10 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
 	    res &= (i->getheader(m, sl->s, &headbody) == SIEVE_OK);
 	}
 	break;
-    case FALSE:
+    case SFALSE:
 	res = 0;
 	break;
-    case TRUE:
+    case STRUE:
 	res = 1;
 	break;
     case HEADER:

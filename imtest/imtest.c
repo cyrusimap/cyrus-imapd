@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.56 2000/10/10 14:54:28 leg Exp $
+ * $Id: imtest.c,v 1.57 2000/12/18 04:53:41 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -456,7 +456,7 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
     return (ret);
 }
 
-int tls_start_clienttls(int *layer, char **authid)
+int tls_start_clienttls(unsigned *layer, char **authid)
 {
     int     sts;
     int     j;
@@ -575,7 +575,7 @@ static int init_sasl(char *serverFQDN, int port, int minssf, int maxssf)
 {
   int saslresult;
   sasl_security_properties_t *secprops=NULL;
-  int addrsize=sizeof(struct sockaddr_in);
+  socklen_t addrsize=sizeof(struct sockaddr_in);
   struct sockaddr_in *saddr_l=malloc(sizeof(struct sockaddr_in));
   struct sockaddr_in *saddr_r=malloc(sizeof(struct sockaddr_in));
 

@@ -38,7 +38,11 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.1 2000/12/14 19:26:48 ken3 Exp $ */
+/* $Id: idled.c,v 1.2 2000/12/18 04:53:38 leg Exp $ */
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -241,7 +245,7 @@ int main(int argc, char **argv)
     struct sockaddr_un local;
     char str[sizeof(idle_data_t)];
     struct sockaddr_un from;
-    int fromlen;
+    socklen_t fromlen;
     mode_t oldumask;
     fd_set read_set, rset;
     int nfds;

@@ -25,6 +25,10 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <string.h> /* for strdup */
 #include "xmalloc.h"
 
@@ -66,8 +70,8 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>anyof		return ANYOF;
 <INITIAL>allof		return ALLOF;
 <INITIAL>exists		return EXISTS;
-<INITIAL>false		return FALSE;
-<INITIAL>true		return TRUE;
+<INITIAL>false		return SFALSE;
+<INITIAL>true		return STRUE;
 <INITIAL>address		return ADDRESS;
 <INITIAL>envelope        return ENVELOPE;
 <INITIAL>header		return HEADER;

@@ -1,5 +1,9 @@
 /* +++Date last modified: 05-Jul-1997 */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <string.h>
 #include <stdlib.h>
 

@@ -49,7 +49,7 @@ INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
 DEFS = @DEFS@ -Dbool=char -DHAS_BOOL
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../../../lib @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I../../.. -I$(srcdir) -I$(srcdir)/../../../lib @CPPFLAGS@ @SASLFLAGS@
 LIBS = ../../../lib/libcyrus.a @LIB_SASL@ @LIBS@
 IMAP_LIBS = @IMAP_LIBS@
 DEPLIBS = ../../../lib/libcyrus.a @DEPLIBS@

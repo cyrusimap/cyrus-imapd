@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.283 2000/12/15 20:06:15 ken3 Exp $ */
+/* $Id: imapd.c,v 1.284 2000/12/18 04:53:38 leg Exp $ */
 
 #include <config.h>
 
@@ -233,7 +233,7 @@ const char *auth_identity;
 	r = 0;  /* Failed so assume no proxy access */
     }
     else {
-	r = (acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
+	r = (cyrus_acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
     }
     if (authstate) auth_freestate(authstate);
     return r;
@@ -259,6 +259,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
     }
     canon_authuser = xstrdup(canon_authuser);
 
+    if (!requested_user) requested_user = auth_identity;
     canon_requser = auth_canonifyid(requested_user);
     if (!canon_requser) {
 	if (errstr) *errstr = "bad userid requested";
@@ -388,7 +389,7 @@ int service_main(int argc, char **argv, char **envp)
 {
     int imaps = 0;
     int opt;
-    int salen;
+    socklen_t salen;
     struct hostent *hp;
     int timeout;
     sasl_security_properties_t *secprops = NULL;
@@ -3580,7 +3581,7 @@ int oldform;
     }
 
     if (!r) {
-	access = acl_myrights(imapd_authstate, acl);
+	access = cyrus_acl_myrights(imapd_authstate, acl);
 
 	if (!(access & (ACL_READ|ACL_ADMIN)) &&
 	    !imapd_userisadmin &&
@@ -3662,7 +3663,7 @@ char *identifier;
     }
 
     if (!r) {
-	rights = acl_myrights(imapd_authstate, acl);
+	rights = cyrus_acl_myrights(imapd_authstate, acl);
 
 	if (!rights && !imapd_userisadmin &&
 	    !mboxname_userownsmailbox(imapd_userid, mailboxname)) {
@@ -3723,7 +3724,7 @@ int oldform;
     }
 
     if (!r) {
-	rights = acl_myrights(imapd_authstate, acl);
+	rights = cyrus_acl_myrights(imapd_authstate, acl);
 
 	/* Add in implicit rights */
 	if (imapd_userisadmin ||
@@ -3744,7 +3745,7 @@ int oldform;
     if (oldform) prot_printf(imapd_out, "MAILBOX ");
     printastring(name);
     prot_printf(imapd_out, " ");
-    printastring(acl_masktostr(rights, str));
+    printastring(cyrus_acl_masktostr(rights, str));
     prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 }
@@ -4984,7 +4985,7 @@ time_t *start, *end;
 int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 {
     int c;
-    static struct buf criteria, arg;
+    static struct buf criteria;
     int nsort, n;
 
     *sortcrit = NULL;

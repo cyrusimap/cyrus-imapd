@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.126 2000/12/16 18:26:30 ken3 Exp $
+# $Id: Makefile.in,v 1.127 2000/12/18 04:53:38 leg Exp $
 # 
 # @configure_input@
 #
@@ -65,7 +65,7 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I. -I.. -I../sieve -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../acap @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @ZEPHYR_CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I.. -I../sieve -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../acap -I../acap @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @ZEPHYR_CPPFLAGS@ @SASLFLAGS@
 IMAP_LIBS = @IMAP_LIBS@
 SIEVE_LIBS = @SIEVE_LIBS@
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
@@ -107,10 +107,11 @@ IMAPDOBJS=pushstats.o imapd.o index.o tls.o
 
 SERVICE=../master/service.o
 
-PROGS = imapd proxyd lmtpd pop3d pop3proxyd idled \
+PROGS = imapd lmtpd pop3d \
 	fud reconstruct quota \
 	mbpath ipurge deliver \
-	ctl_mboxlist ctl_deliver target-acap acappush
+	ctl_mboxlist ctl_deliver \
+	@IMAP_PROGS@
 
 BUILTSOURCES = imap_err.h pushstats.h lmtpstats.h
 

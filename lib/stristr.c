@@ -22,7 +22,9 @@
 #include <string.h>
 #include <ctype.h>
 
+#ifndef _AIX
 typedef unsigned int uint;
+#endif
 
 #if defined(__cplusplus) && __cplusplus
  extern "C" {

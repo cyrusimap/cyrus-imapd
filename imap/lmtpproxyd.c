@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to sieve and proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.12 2000/11/17 19:30:28 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.13 2000/12/18 04:53:39 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.12 2000/11/17 19:30:28 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.13 2000/12/18 04:53:39 leg Exp $";*/
 
 #include <config.h>
 
@@ -453,7 +453,10 @@ static char *sendmail_errstr(int sm_stat)
 	snprintf(errstr, sizeof errstr,
 		"Sendmail process terminated abnormally, signal = %d %s\n",
 		WTERMSIG(sm_stat), 
-		WCOREDUMP(sm_stat) ? " -- core file generated" : "");
+#ifdef WCOREDUMP
+		WCOREDUMP(sm_stat) ? " -- core file generated" :
+#endif
+		"");
     } else if (WIFSTOPPED(sm_stat)) {
 	snprintf(errstr, sizeof errstr,
 		 "Sendmail process stopped, signal = %d\n",

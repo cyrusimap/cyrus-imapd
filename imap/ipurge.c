@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.7 2000/06/04 22:46:36 leg Exp $
+ * $Id: ipurge.c,v 1.8 2000/12/18 04:53:39 leg Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -193,7 +193,7 @@ purge_me(char *name, int matchlen, int maycreate) {
 
   error = mailbox_open_header(name, 0, &the_box);
   if (error != 0) { /* did we find it? */
-    syslog(LOG_ERR, "Couldn't find %s, check spelling (user.????)", name);
+    syslog(LOG_ERR, "Couldn't find %s, check spelling", name);
     return error;
   }
   if (the_box.header_fd != -1) {

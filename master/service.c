@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.11 2000/12/14 19:26:51 ken3 Exp $ */
+/* $Id: service.c,v 1.12 2000/12/18 04:53:42 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -141,7 +141,7 @@ int main(int argc, char **argv, char **envp)
 				       fdflags | FD_CLOEXEC);
     if (fdflags == -1) {
 	syslog(LOG_ERR, "unable to set close on exec: %m");
-	notify_master(STATUS_FD, SERVICE_UNAVAILABLE);
+	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	return 1;
     }
     fdflags = fcntl(STATUS_FD, F_GETFD, 0);
@@ -149,12 +149,12 @@ int main(int argc, char **argv, char **envp)
 				       fdflags | FD_CLOEXEC);
     if (fdflags == -1) {
 	syslog(LOG_ERR, "unable to set close on exec: %m");
-	notify_master(STATUS_FD, SERVICE_UNAVAILABLE);
+	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	return 1;
     }
 
     if (service_init(argc, argv, envp) != 0) {
-	notify_master(STATUS_FD, SERVICE_UNAVAILABLE);
+	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	return 1;
     }
 
@@ -183,7 +183,7 @@ int main(int argc, char **argv, char **envp)
 		    break;
 		default:
 		    syslog(LOG_ERR, "accept failed: %m");
-		    notify_master(STATUS_FD, SERVICE_UNAVAILABLE);
+		    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 		    service_abort();
 		    exit(EX_OSERR);
 		}
@@ -199,7 +199,7 @@ int main(int argc, char **argv, char **envp)
 	}
 	
 	syslog(LOG_DEBUG, "accepted connection");
-	notify_master(STATUS_FD, SERVICE_UNAVAILABLE);
+	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 
 	if (dup2(fd, 0) < 0) {
 	    syslog(LOG_ERR, "can't duplicate accepted socket: %m");
@@ -224,7 +224,7 @@ int main(int argc, char **argv, char **envp)
 	/* if we returned, we can service another client with this process */
 	if (use_count >= MAX_USE) break;
 
-	notify_master(STATUS_FD, SERVICE_AVAILABLE);
+	notify_master(STATUS_FD, MASTER_SERVICE_AVAILABLE);
     }
 
     return 0;

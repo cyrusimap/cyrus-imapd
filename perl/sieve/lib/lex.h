@@ -65,7 +65,7 @@ enum {
 
     TOKEN_OK = 280,
     TOKEN_NO = 281,
-    TOKEN_ACTIVE = 282,
+    TOKEN_ACTIVE = 282
 };
 
 enum {

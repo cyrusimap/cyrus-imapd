@@ -1,5 +1,5 @@
 /* acl.c -- routines for access control lists
- $Id: acl.c,v 1.8 2000/05/23 20:52:39 robeson Exp $
+ $Id: acl.c,v 1.9 2000/12/18 04:53:41 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -49,7 +49,7 @@
 
 /* convert a string to an acl bit vector
  */
-int acl_strtomask(str)
+int cyrus_acl_strtomask(str)
 const char *str;
 {
     long result = 0;
@@ -83,7 +83,7 @@ const char *str;
 
 /* convert an acl bit vector to a string
  */
-char *acl_masktostr(acl, str)
+char *cyrus_acl_masktostr(acl, str)
 int acl;
 char *str;
 {

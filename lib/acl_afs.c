@@ -8,7 +8,7 @@
  *
  */
 /* 
- $Id: acl_afs.c,v 1.19 2000/05/23 20:52:39 robeson Exp $
+ $Id: acl_afs.c,v 1.20 2000/12/18 04:53:42 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -64,7 +64,7 @@
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
  * 'acl' must be writable, but is restored to its original condition.
  */
-int acl_myrights(auth_state, acl)
+int cyrus_acl_myrights(auth_state, acl)
 struct auth_state *auth_state;
 char *acl;
 {
@@ -92,7 +92,7 @@ char *acl;
 	    thisid++;
 	}
 	if (auth_memberof(auth_state, thisid)) {
-	    *acl_ptr |= acl_strtomask(rights);
+	    *acl_ptr |= cyrus_acl_strtomask(rights);
 	}
 
 	/* Put the delimiters back */
@@ -108,12 +108,12 @@ char *acl;
  * 'identifier' the set specified in the mask 'access'.  The pointer
  * pointed to by 'acl' must have been obtained from malloc().
  */
-int acl_set(acl, identifier, mode, access, canonproc, canonrock)
+int cyrus_acl_set(acl, identifier, mode, access, canonproc, canonrock)
 char **acl;
 const char *identifier;
 int mode;
 int access;
-acl_canonproc_t *canonproc;
+cyrus_acl_canonproc_t *canonproc;
 void *canonrock;
 {
     char *newidentifier = 0;
@@ -167,7 +167,7 @@ void *canonrock;
 	*nextid++ = '\0';
 
 	if (strcmp(identifier, thisid) == 0) {
-	    oldaccess = acl_strtomask(rights);
+	    oldaccess = cyrus_acl_strtomask(rights);
 	    break;
 	}
 	rights[-1] = '\t';
@@ -198,7 +198,7 @@ void *canonrock;
 	strncpy(newacl, *acl, (thisid - *acl));
 	strcpy(newacl + (thisid - *acl), identifier);
 	strcat(newacl, "\t");
-	(void) acl_masktostr(access, newacl + strlen(newacl));
+	(void) cyrus_acl_masktostr(access, newacl + strlen(newacl));
 	strcat(newacl, "\t");
 	strcat(newacl, nextid);
 	free(*acl);
@@ -213,8 +213,8 @@ void *canonrock;
  * Remove any entry for 'identifier' in the ACL pointed to by 'acl'.
  * The pointer pointed to by 'acl' must have been obtained from malloc().
  */
-int acl_remove(char **acl, const char *identifier, 
-	       acl_canonproc_t canonproc, void *canonrock)
+int cyrus_acl_remove(char **acl, const char *identifier, 
+	       cyrus_acl_canonproc_t canonproc, void *canonrock)
 {
-    return acl_set(acl, identifier, ACL_MODE_SET, 0, canonproc, canonrock);
+    return cyrus_acl_set(acl, identifier, ACL_MODE_SET, 0, canonproc, canonrock);
 }

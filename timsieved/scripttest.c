@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.17 2000/10/09 04:00:09 leg Exp $
+ * $Id: scripttest.c,v 1.18 2000/12/18 04:53:43 leg Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -43,6 +43,9 @@
  *
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <sieve_interface.h>
 #include <syslog.h>

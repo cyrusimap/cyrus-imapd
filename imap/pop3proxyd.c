@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.8 2000/06/09 02:44:53 leg Exp $
+ * $Id: pop3proxyd.c,v 1.9 2000/12/18 04:53:40 leg Exp $
  */
 #include <config.h>
 
@@ -185,7 +185,7 @@ int service_main(int argc, char **argv, char **envp)
 {
     int pop3s = 0;
     int opt;
-    int salen;
+    socklen_t salen;
     struct hostent *hp;
     int timeout;
     sasl_security_properties_t *secprops=NULL;
@@ -685,7 +685,7 @@ cmd_capa()
 {
     int minpoll = config_getint("popminpoll", 0) * 60;
     int expire = config_getint("popexpiretime", -1);
-    int mechcount;
+    unsigned mechcount;
     char *mechlist;
 
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
@@ -732,7 +732,7 @@ void cmd_auth(char *arg)
 {
     int sasl_result;
     static struct buf clientin;
-    int clientinlen=0;
+    unsigned clientinlen=0;
     char *authtype;
     char *serverout;
     unsigned int serveroutlen;
@@ -906,14 +906,14 @@ static int proxy_authenticate(const char *hostname)
 	(struct sockaddr_in *) malloc(sizeof(struct sockaddr_in));
     struct sockaddr_in *saddr_r = 
 	(struct sockaddr_in *) malloc(sizeof(struct sockaddr_in));
-    int addrsize = sizeof(struct sockaddr_in);
+    socklen_t addrsize = sizeof(struct sockaddr_in);
     sasl_callback_t *cb;
     char buf[2048];
     char optstr[128];
     char *in, *out, *p;
     unsigned int inlen, outlen;
     const char *mechusing;
-    int b64len;
+    unsigned b64len;
     const char *pass;
 
     strcpy(optstr, hostname);

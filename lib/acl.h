@@ -77,41 +77,41 @@
 #define ACL_MODE_ADD 1
 #define ACL_MODE_REMOVE 2
 
-typedef int acl_canonproc_t(void *rock, const char *identifier, int rights);
+typedef int cyrus_acl_canonproc_t(void *rock, const char *identifier, int rights);
 
 /* convert a string to an acl bit vector */
-extern int acl_strtomask(const char *str);
+extern int cyrus_acl_strtomask(const char *str);
 
-/*  acl_masktostr(acl, dst)
+/*  cyrus_acl_masktostr(acl, dst)
  * convert an acl bit vector to a string
  *  dst must have room for 32 characters (only 20 used currently)
  *  returns dst
  */
-extern char *acl_masktostr(int acl, char *str);
+extern char *cyrus_acl_masktostr(int acl, char *str);
 
-/*  acl_myrights(acl)
+/*  cyrus_acl_myrights(acl)
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
  * 'acl' must be writable, but is restored to its original condition.
  */
-extern int acl_myrights(struct auth_state *auth_state, char *acl);
+extern int cyrus_acl_myrights(struct auth_state *auth_state, char *acl);
 
-/*  acl_set(acl, identifier, mode, access, canonproc, canonrock) Modify the
+/*  cyrus_acl_set(acl, identifier, mode, access, canonproc, canonrock) Modify the
  * ACL pointed to by 'acl' to modify the rights granted to
  * 'identifier' as specified by 'mode' and the set specified in the
  * mask 'access'.  'mode' is one of ACL_MODE_SET, ACL_MODE_ADD, or
  * ACL_MODE_REMOVE.  The pointer pointed to by 'acl' must have been
  * obtained from malloc().  returns -1 on error, 0 on success */
 
-extern int acl_set(char **acl, const char *identifier,
+extern int cyrus_acl_set(char **acl, const char *identifier,
 		   int mode, int access,
-		   acl_canonproc_t *canonproc, void *canonrock);
+		   cyrus_acl_canonproc_t *canonproc, void *canonrock);
 
-/*  acl_remove(acl, identifier, canonproc, canonrock)
+/*  cyrus_acl_remove(acl, identifier, canonproc, canonrock)
  * Remove any entry for 'identifier' in the ACL pointed to by 'acl'.
  * The pointer pointed to by 'acl' must have been obtained from malloc().
  *  returns -1 on error, 0 on success
  */
-extern int acl_remove(char **acl, const char *identifier,
-		      acl_canonproc_t *canonproc, void *canonrock);
+extern int cyrus_acl_remove(char **acl, const char *identifier,
+		      cyrus_acl_canonproc_t *canonproc, void *canonrock);
 
 #endif /* INCLUDED_ACL_H */

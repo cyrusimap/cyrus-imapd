@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.53 2000/12/12 21:56:19 leg Exp $
+ $Id: imclient.c,v 1.54 2000/12/18 04:53:42 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -663,7 +663,7 @@ imclient_input(struct imclient *imclient, char *buf, int len)
     int keywordindex;
     struct imclient_cmdcallback **cmdcb, *cmdcbtemp;
     char *plainbuf;
-    int plainlen;
+    unsigned plainlen;
     int freeplain;
     int result;
     
@@ -1206,7 +1206,7 @@ static int imclient_authenticate_sub(struct imclient *imclient,
 {
   int saslresult;
   sasl_security_properties_t *secprops=NULL;
-  int addrsize=sizeof(struct sockaddr_in);
+  socklen_t addrsize=sizeof(struct sockaddr_in);
   struct sockaddr_in *saddr_l=malloc(sizeof(struct sockaddr_in));
   struct sockaddr_in *saddr_r=malloc(sizeof(struct sockaddr_in));
   sasl_interact_t *client_interact=NULL;
@@ -1811,7 +1811,7 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
 }
 
 int tls_start_clienttls(struct imclient *imclient,
-			int *layer, char **authid, int fd)
+			unsigned *layer, char **authid, int fd)
 {
     int     sts;
     SSL_SESSION *session;

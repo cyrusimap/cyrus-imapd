@@ -190,11 +190,8 @@ perlsieve_simple(context, id, result, len)
 }
 
 
-static void
-call_listcb(name, isactive, rock)
-char *name;
-int isactive;
-SV *    rock;
+static void *
+call_listcb(unsigned char *name, int isactive, void *rock)
 {
         dSP ;
         PUSHMARK(sp) ;
@@ -203,7 +200,8 @@ SV *    rock;
         PUTBACK ;
 
         /* call perl func */
-        perl_call_sv(rock, G_DISCARD) ;
+        perl_call_sv((SV *)rock, G_DISCARD) ;
+	return NULL;
 }
 
 

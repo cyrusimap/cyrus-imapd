@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.19 2000/11/17 19:31:35 ken3 Exp $
+ * $Id: message.c,v 1.20 2000/12/18 04:53:43 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -24,6 +24,10 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -538,8 +542,7 @@ notify_action_t *default_notify_action(void)
     
     ret->exists   = -1; /* flag as default action */
     ret->priority = "medium";
-    ret->message  = xmalloc(strlen(NEWMAIL_MSG)+1);
-    strcpy(ret->message, NEWMAIL_MSG); 
+    ret->message  = xstrdup(NEWMAIL_MSG);
     ret->headers  = NULL; /* subject, to, from */
 
     return ret;

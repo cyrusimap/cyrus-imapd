@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.79 2000/12/14 19:26:49 ken3 Exp $
+ * $Id: pop3d.c,v 1.80 2000/12/18 04:53:40 leg Exp $
  */
 #include <config.h>
 
@@ -200,7 +200,7 @@ int service_main(int argc, char **argv, char **envp)
 {
     int pop3s = 0;
     int opt;
-    int salen;
+    socklen_t salen;
     struct hostent *hp;
     int timeout;
     sasl_security_properties_t *secprops=NULL;
@@ -856,7 +856,7 @@ cmd_capa()
 {
     int minpoll = config_getint("popminpoll", 0) * 60;
     int expire = config_getint("popexpiretime", -1);
-    int mechcount;
+    unsigned mechcount;
     char *mechlist;
 
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
@@ -903,7 +903,7 @@ void cmd_auth(char *arg)
 {
     int sasl_result;
     static struct buf clientin;
-    int clientinlen=0;
+    unsigned int clientinlen=0;
     char *authtype;
     char *serverout;
     unsigned int serveroutlen;
