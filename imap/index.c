@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.202 2004/01/20 01:10:57 ken3 Exp $
+ * $Id: index.c,v 1.203 2004/02/27 17:44:52 ken3 Exp $
  */
 #include <config.h>
 
@@ -1309,7 +1309,7 @@ int statusitems;
  */
 int
 index_getuids(mailbox, lowuid)
-struct mailbox *mailbox;
+struct mailbox *mailbox __attribute__((unused));
 unsigned lowuid;
 {
     int msgno;
@@ -1606,7 +1606,7 @@ index_fetchmsg(msg_base, msg_size, format, offset, size,
 	       start_octet, octet_count)
 const char *msg_base;
 unsigned long msg_size;
-int format;
+int format __attribute__((unused));
 unsigned offset;
 unsigned size;     /* this is the correct size for a news message after
 		      having LF translated to CRLF */
@@ -1910,7 +1910,7 @@ static char *
 index_readheader(msg_base, msg_size, format, offset, size)
 const char *msg_base;
 unsigned long msg_size;
-int format;
+int format __attribute__((unused));
 unsigned offset;
 unsigned size;
 {

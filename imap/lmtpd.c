@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.131 2004/02/20 20:57:39 ken3 Exp $
+ * $Id: lmtpd.c,v 1.132 2004/02/27 17:44:53 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -267,7 +267,7 @@ usage()
  */
 int deliver_mailbox(struct protstream *msg,
 		    struct stagemsg *stage,
-		    unsigned size,
+		    unsigned size __attribute__((unused)),
 		    char **flag,
 		    int nflags,
 		    char *authuser,

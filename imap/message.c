@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.97 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: message.c,v 1.98 2004/02/27 17:44:55 ken3 Exp $
  */
 
 #include <config.h>
@@ -459,7 +459,7 @@ static int
 message_parse_headers(msg, format, body, defaultContentType,
 		      boundaries)
 struct msg *msg;
-int format;
+int format __attribute__((unused));
 struct body *body;
 char *defaultContentType;
 struct boundary *boundaries;
@@ -1604,7 +1604,7 @@ struct boundary *boundaries;
 static void
 message_parse_content(msg, format, body, boundaries)
 struct msg *msg;
-int format;
+int format __attribute__((unused));
 struct body *body;
 struct boundary *boundaries;
 {

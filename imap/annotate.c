@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.22 2003/12/17 14:34:57 ken3 Exp $
+ * $Id: annotate.c,v 1.23 2004/02/27 17:44:48 ken3 Exp $
  */
 
 #include <config.h>
@@ -787,7 +787,8 @@ struct rw_rock {
     struct fetchdata *fdata;
 };
 
-static int rw_cb(const char *mailbox, const char *entry, const char *userid,
+static int rw_cb(const char *mailbox __attribute__((unused)),
+		 const char *entry, const char *userid,
 		 struct annotation_data *attrib, void *rock)
 {
     struct rw_rock *rw_rock = (struct rw_rock *) rock;
@@ -1476,7 +1477,7 @@ static int annotation_set_todb(const char *int_mboxname,
 			       struct annotate_st_entry_list *entry,
 			       struct storedata *sdata,
 			       struct mailbox_annotation_rock *mbrock,
-			       void *rock)
+			       void *rock __attribute__((unused)))
 {
     int r = 0;
 

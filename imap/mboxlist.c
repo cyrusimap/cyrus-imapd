@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.232 2004/02/26 22:55:32 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.233 2004/02/27 17:44:53 ken3 Exp $
  */
 
 #include <config.h>
@@ -1780,7 +1780,8 @@ static int find_p(void *rockp,
 
 static int find_cb(void *rockp, 
 		   const char *key, int keylen,
-		   const char *data, int datalen)
+		   const char *data __attribute__((unused)),
+		   int datalen __attribute__((unused)))
 {
     char namebuf[MAX_MAILBOX_NAME+1];
     struct find_rock *rock = (struct find_rock *) rockp;
@@ -2249,7 +2250,6 @@ int mboxlist_findall_alt(struct namespace *namespace,
  */
 int mboxlist_setquota(const char *root, int newquota, int force)
 {
-    char quota_path[MAX_MAILBOX_PATH+1];
     char pattern[MAX_MAILBOX_PATH+1];
     struct quota quota;
     int have_mailbox = 1;
@@ -2376,10 +2376,10 @@ int mboxlist_unsetquota(const char *root)
 /*
  * Retrieve internal information, for reconstructing mailboxes file
  */
-void mboxlist_getinternalstuff(const char **listfnamep,
-			       const char **newlistfnamep, 
-			       const char **basep,
-			       unsigned long * sizep)
+void mboxlist_getinternalstuff(const char **listfnamep __attribute__((unused)),
+			       const char **newlistfnamep __attribute__((unused)), 
+			       const char **basep __attribute__((unused)),
+			       unsigned long * sizep __attribute__((unused)))
 {
     printf("yikes! don't reconstruct me!\n");
     abort();
@@ -2402,7 +2402,9 @@ int access;
 /*
  * Helper function to remove the quota root for 'name'
  */
-static int mboxlist_rmquota(const char *name, int matchlen, int maycreate,
+static int mboxlist_rmquota(const char *name,
+			    int matchlen __attribute__((unused)),
+			    int maycreate __attribute__((unused)),
 			    void *rock)
 {
     int r;
@@ -2455,7 +2457,9 @@ static int mboxlist_rmquota(const char *name, int matchlen, int maycreate,
  * Helper function to change the quota root for 'name' to that pointed
  * to by the static global struct pointer 'mboxlist_newquota'.
  */
-static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
+static int mboxlist_changequota(const char *name,
+				int matchlen __attribute__((unused)),
+				int maycreate __attribute__((unused)),
 				void *rock)
 {
     int r;
@@ -2644,8 +2648,8 @@ static void mboxlist_closesubs(struct db *sub)
  * 'proc' with the name of the mailbox.
  */
 int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
-		     char *pattern, int isadmin, char *userid, 
-		     struct auth_state *auth_state, 
+		     char *pattern, int isadmin __attribute__((unused)),
+		     char *userid, struct auth_state *auth_state, 
 		     int (*proc)(), void *rock, int force)
 {
     struct db *subs = NULL;
@@ -2790,8 +2794,8 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
 }
 
 int mboxlist_findsub_alt(struct namespace *namespace,
-			 char *pattern, int isadmin, char *userid, 
-			 struct auth_state *auth_state, 
+			 char *pattern, int isadmin __attribute__((unused)),
+			 char *userid, struct auth_state *auth_state, 
 			 int (*proc)(), void *rock, int force)
 {
     struct db *subs = NULL;

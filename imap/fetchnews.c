@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.6 2004/01/28 19:20:35 ken3 Exp $
+ * $Id: fetchnews.c,v 1.7 2004/02/27 17:44:49 ken3 Exp $
  */
 
 #include <config.h>
@@ -74,7 +74,7 @@ static struct db *newsrc_db = NULL;
 static int newsrc_dbopen = 0;
 
 /* must be called after cyrus_init */
-int newsrc_init(char *fname, int myflags)
+int newsrc_init(char *fname, int myflags __attribute__((unused)))
 {
     char buf[1024];
     int r = 0;
@@ -237,7 +237,7 @@ int main(int argc, char *argv[])
     char *authname = NULL, *password = NULL;
     int psock = -1, ssock = -1;
     struct protstream *pin, *pout, *sin, *sout;
-    char buf[4096], sbuf[4096];
+    char buf[4096];
     char sfile[1024] = "";
     int fd, i, n, offered, rejected, accepted, failed;
     time_t stamp;
