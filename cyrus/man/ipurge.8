@@ -44,6 +44,9 @@ ipurge \- delete mail from IMAP mailbox or partition based on age or size
 .SH SYNOPSIS
 .B ipurge
 [
+.B \-f
+]
+[
 .B \-C
 .I config-file
 ]
@@ -76,10 +79,18 @@ no default values, and at least one of \fB-d\fR, \fB-b\fR, \fB-k\fR or
 \fB-m\fR MUST be specified.
 .PP
 .I Ipurge
+by default only deletes mail below shared folders, which means that mails
+in mailbox(es) below INBOX.* and user.* stay untouched. Use the option
+\fB-f\fR to also delete mail in mailbox(es) below these folders.
+.PP
+.I Ipurge
 reads its configuration options out of the
 .IR imapd.conf (5)
 file unless specified otherwise by \fB-C\fR.
 .SH OPTIONS
+.TP
+.BI \-f
+Force deletion of mail in \fIall\fR mailboxes.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
