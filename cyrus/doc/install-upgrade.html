@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.3 2000/05/18 21:29:26 wcw Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.4 2000/05/23 21:28:07 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -11,13 +11,29 @@
 
 <h3>Upgrading from 1.6.22</h3>
 
+<b>Warning:</b> Cyrus imapd 2.0 will automatically convert on-disk
+file formats as the server is used.  <b>It is not possible to run 1.6
+after 2.0 has been used on a mail spool.</b>
+
 <ul>
-<li>Convert mailboxes file to Berkeley DB. This will be done
-automatically. Please be sure to have a backup of your mailboxes file
-as we do not have an uncovert option.
+<li>Convert mailboxes file to Berkeley DB:
+<pre>
+<kbd>   su cyrus
+   cd /var/imap
+   ctl_mboxlist -u < mailboxes
+   ctl_mboxlist -c
+</kbd></pre>
+
+Please keep a backup of your mailboxes file.  You can dump an
+old-style mailboxes file by using <tt>ctl_mboxlist -d</tt>.
 
 <li>cyrus.seen conversion. The cyrus.seen file will be automatically
-	  upgraded <b>when?</b>.
+upgraded as users read mail.  After some time, you might want to
+delete the cyrus.seen file in each mailbox; it is superceded by the
+user/joe.seen file.
+
+<li>cyrus.index conversion.  The cyrus.index file will be
+automatically upgraded the first time each mailbox is SELECTed.
 
 <li>Netnews conversion. The netnews programs are no longer built. If
 you are using netnews, you will need to apply the diff in the
@@ -30,7 +46,7 @@ lines need to be removed from inetd.conf and inetd.conf needs to be
 restarted.
 
 <li>sendmail configuration. You need to use a new cyrus mc file. See
-<tt>doc/cyrusv2.mc</tt> for a sample mc file. 
+<a href="cyrusv2.mc"><tt>doc/cyrusv2.mc</tt></a> for a sample mc file.
 
 </ul>
 
@@ -98,7 +114,7 @@ worry about it.)
 </ul>
 
 <P><HR><P>
-last modified: $Date: 2000/05/18 21:29:26 $
+last modified: $Date: 2000/05/23 21:28:07 $
 </BODY></HTML>
 
 
