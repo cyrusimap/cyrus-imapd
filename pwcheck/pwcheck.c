@@ -47,7 +47,9 @@ main()
     int s;
     int c;
     struct sockaddr_un srvaddr;
+    struct sockaddr_un clientaddr;
     int r;
+    int len;
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
@@ -65,9 +67,15 @@ main()
 	perror("bind: /etc/pwcheck/pwcheck");
 	exit(1);
     }
+    r = listen(s, 5);
+    if (r == -1) {
+	perror("listen");
+	exit(1);
+    }
 
     for (;;) {
-	c = accept(s, (struct sockaddr *)0, (int *)0);
+	len = sizeof(clientaddr);
+	c = accept(s, (struct sockaddr *)&clientaddr, &len);
 	if (c == -1) {
 	    perror("accept");
 	    continue;
