@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.104 2004/01/22 21:17:07 ken3 Exp $
+ * $Id: append.c,v 1.105 2004/02/27 17:44:49 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -245,7 +245,7 @@ int append_setup(struct appendstate *as, const char *name,
 /* may return non-zero, indicating that the entire append has failed
  and the mailbox is probably in an inconsistent state. */
 int append_commit(struct appendstate *as, 
-		  long quotacheck,
+		  long quotacheck __attribute__((unused)),
 		  unsigned long *uidvalidity, 
 		  unsigned long *start,
 		  unsigned long *num)

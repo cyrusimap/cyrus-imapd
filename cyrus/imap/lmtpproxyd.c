@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.62 2004/02/19 16:54:58 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.63 2004/02/27 17:44:53 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -486,7 +486,7 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
    each of the original receipients.
 */
 int deliver(message_data_t *msgdata, char *authuser,
-	    struct auth_state *authstate)
+	    struct auth_state *authstate __attribute__((unused)))
 {
     int n, nrcpts;
     mydata_t mydata;
@@ -641,7 +641,7 @@ void shut_down(int code)
 
 static int verify_user(const char *user, const char *domain, const char *mailbox,
 		       long quotacheck __attribute__((unused)),
-		       struct auth_state *authstate)
+		       struct auth_state *authstate __attribute__((unused)))
 {
     char namebuf[MAX_MAILBOX_NAME+1] = "";
     int r = 0;

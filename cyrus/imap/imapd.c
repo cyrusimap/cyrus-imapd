@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.457 2004/02/18 20:58:59 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.458 2004/02/27 17:44:49 ken3 Exp $ */
 
 #include <config.h>
 
@@ -79,6 +79,7 @@
 #include "imparse.h"
 #include "iptostring.h"
 #include "mailbox.h"
+#include "message.h"
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "mbdump.h"

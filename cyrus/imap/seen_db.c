@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
- * $Id: seen_db.c,v 1.44 2003/12/15 20:00:41 ken3 Exp $
+ * $Id: seen_db.c,v 1.45 2004/02/27 17:44:56 ken3 Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -564,11 +564,11 @@ int seen_done(void)
     return r;
 }
 
-int seen_reconstruct(struct mailbox *mailbox,
-		     time_t report_time,
-		     time_t prune_time,
-		     int (*report_proc)(),
-		     void *report_rock)
+int seen_reconstruct(struct mailbox *mailbox __attribute__((unused)),
+		     time_t report_time __attribute__((unused)),
+		     time_t prune_time __attribute__((unused)),
+		     int (*report_proc)() __attribute__((unused)),
+		     void *report_rock __attribute__((unused)))
 {
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_reconstruct()");

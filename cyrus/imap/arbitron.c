@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.33 2004/01/26 17:46:54 ken3 Exp $ */
+/* $Id: arbitron.c,v 1.34 2004/02/27 17:44:49 ken3 Exp $ */
 
 #include <config.h>
 
@@ -203,7 +203,9 @@ void usage(void)
     exit(EC_USAGE);
 }    
 
-int do_mailbox(const char *name, int matchlen, int maycreate, void *rock)
+int do_mailbox(const char *name, int matchlen __attribute__((unused)),
+	       int maycreate __attribute__((unused)),
+	       void *rock __attribute__((unused)))
 {
     int r;
     struct mailbox mbox;
@@ -303,7 +305,7 @@ static int process_user_p(void *rockp __attribute__((unused)),
 			  const char *key,
 			  int keylen,
 			  const char *data,
-			  int datalen) 
+			  int datalen __attribute__((unused))) 
 {
     int ret = 0;    
     long version, lastread;
@@ -358,7 +360,7 @@ static int process_subs_cb(void *rockp __attribute__((unused)),
     return 0;
 }
 
-static int process_subs_p(void *rockp,
+static int process_subs_p(void *rockp __attribute__((unused)),
 			  const char *key, int keylen,
 			  const char *tmpdata __attribute__((unused)),
 			  int tmpdatalen __attribute__((unused))) 
@@ -395,7 +397,7 @@ void process_subs(const char *path)
     if(tmp) SUBDB->close(tmp);
 }
 
-void make_report(char *key, void *data, void *rock) 
+void make_report(char *key, void *data, void *rock __attribute__((unused))) 
 {
     struct arb_mailbox_data *mbox = (struct arb_mailbox_data *)data;
 

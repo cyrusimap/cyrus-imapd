@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.174 2004/02/27 16:59:28 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.175 2004/02/27 17:44:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -292,7 +292,7 @@ static int pipe_until_tag(struct backend *s, char *tag, int force_notfatal)
     char eol[128];
     int sl;
     int cont = 0, last = 0, r = -1;
-    int taglen = strlen(tag);
+    size_t taglen = strlen(tag);
 
     s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
     

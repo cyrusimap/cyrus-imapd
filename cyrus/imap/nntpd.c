@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.19 2004/02/25 17:12:40 ken3 Exp $
+ * $Id: nntpd.c,v 1.20 2004/02/27 17:44:55 ken3 Exp $
  */
 
 /*
@@ -114,7 +114,7 @@ int imapd_exists;
 struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
 char *imapd_userid = NULL;
-void printastring(const char *s)
+void printastring(const char *s __attribute__((unused)))
 {
     fatal("not implemented", EC_SOFTWARE);
 }
@@ -278,7 +278,7 @@ void proxyd_downserver(struct backend *s)
     s->timeout = NULL;
 }
 
-struct prot_waitevent *backend_timeout(struct protstream *s,
+struct prot_waitevent *backend_timeout(struct protstream *s __attribute__((unused)),
 				       struct prot_waitevent *ev, void *rock)
 {
     struct backend *be = (struct backend *) rock;
@@ -617,7 +617,9 @@ int service_init(int argc __attribute__((unused)),
 /*
  * run for each accepted connection
  */
-int service_main(int argc, char **argv, char **envp)
+int service_main(int argc __attribute__((unused)),
+		 char **argv __attribute__((unused)),
+		 char **envp __attribute__((unused)))
 {
     socklen_t salen;
     char localip[60], remoteip[60];
@@ -1705,11 +1707,11 @@ static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
 
     /* convert datestr to ulong */
     d = strtoul(datestr, &p, 10);
-    if (d < 0 || *p) return -1;
+    if (d == ULONG_MAX || *p) return -1;
 
     /* convert timestr to ulong */
     t = strtoul(timestr, &p, 10);
-    if (t < 0 || *p) return -1;
+    if (t == ULONG_MAX || *p) return -1;
 
     /* populate the time struct */
     tm.tm_year = d / 10000;
@@ -2313,7 +2315,7 @@ struct enum_rock {
 /*
  * hash_enumerate() callback function to LIST (proxy)
  */
-void list_proxy(char *server, void *data, void *rock)
+void list_proxy(char *server, void *data __attribute__((unused)), void *rock)
 {
     struct enum_rock *erock = (struct enum_rock *) rock;
     struct backend *be;
@@ -2437,16 +2439,16 @@ static void cmd_list(char *arg1, char *arg2)
 
     if (!strcmp(arg1, "active")) {
 	char pattern[MAX_MAILBOX_NAME+1];
-	struct list_rock lrock = { &do_active };
-	struct enum_rock erock = { "ACTIVE" };
+	struct list_rock lrock;
+	struct enum_rock erock;
 
 	if (!arg2) arg2 = "*";
 
-	/* make a copy before we munge it */
-	erock.wild = xstrdup(arg2);
+	erock.cmd = "ACTIVE";
+	erock.wild = xstrdup(arg2); /* make a copy before we munge it */
 
-	/* split the list of wildmats */
-	lrock.wild = split_wildmats(arg2);
+	lrock.proc = do_active;
+	lrock.wild = split_wildmats(arg2); /* split the list of wildmats */
 
 	/* xxx better way to determine a size for this table? */
 	construct_hash_table(&lrock.server_table, 10, 1);
@@ -2544,16 +2546,16 @@ static void cmd_list(char *arg1, char *arg2)
     }
     else if (!strcmp(arg1, "newsgroups")) {
 	char pattern[MAX_MAILBOX_NAME+1];
-	struct list_rock lrock = { &do_newsgroups };
-	struct enum_rock erock = { "NEWSGROUPS" };
+	struct list_rock lrock;
+	struct enum_rock erock;
 
 	if (!arg2) arg2 = "*";
 
-	/* make a copy before we munge it */
-	erock.wild = xstrdup(arg2);
+	erock.cmd = "NEWSGROUPS";
+	erock.wild = xstrdup(arg2); /* make a copy before we munge it */
 
-	/* split the list of wildmats */
-	lrock.wild = split_wildmats(arg2);
+	lrock.proc = do_newsgroups;
+	lrock.wild = split_wildmats(arg2); /* split the list of wildmats */
 
 	/* xxx better way to determine a size for this table? */
 	construct_hash_table(&lrock.server_table, 10, 1);
@@ -2643,7 +2645,7 @@ static void cmd_mode(char *arg)
     prot_flush(nntp_out);
 }
 
-static void cmd_newgroups(time_t tstamp)
+static void cmd_newgroups(time_t tstamp __attribute__((unused)))
 {
     prot_printf(nntp_out, "503 Can't determine NEWGROUPS at this time\r\n");
 #if 0
@@ -2979,7 +2981,7 @@ static int savemsg(message_data_t *m, FILE *f)
 			size_t n;
 
 			/* determine which groups header to use */
-			if (body = spool_getheader(m->hdrcache, "followup-to"))
+			if ((body = spool_getheader(m->hdrcache, "followup-to")))
 			    replyto = body[0];
 			else
 			    replyto = groups[0];
@@ -3259,7 +3261,8 @@ static int mvgroup(message_data_t *msg)
 /*
  * mailbox_exchange() callback function to delete cancelled articles
  */
-static int expunge_cancelled(struct mailbox *mailbox, void *rock, char *index)
+static int expunge_cancelled(struct mailbox *mailbox __attribute__((unused)),
+			     void *rock, char *index)
 {
     int uid = ntohl(*((bit32 *)(index+OFFSET_UID)));
 
@@ -3388,7 +3391,7 @@ static void feedpeer(char *peer, message_data_t *msg)
 
     /* parse the peer */
     user = pass = host = port = wild = NULL;
-    if (wild = strrchr(peer, '/'))
+    if ((wild = strrchr(peer, '/')))
 	*wild++ = '\0';
     else if ((wild = strrchr(peer, ':')) &&
 	     strcspn(wild, "!*?,.") != strlen(wild)) {
@@ -3397,15 +3400,15 @@ static void feedpeer(char *peer, message_data_t *msg)
 	oldform = 1;
     }
     if (!oldform) {
-	if (host = strchr(peer, '@')) {
+	if ((host = strchr(peer, '@'))) {
 	    *host++ = '\0';
 	    user = peer;
-	    if (pass = strchr(user, ':')) *pass++ = '\0';
+	    if ((pass = strchr(user, ':'))) *pass++ = '\0';
 	}
 	else
 	    host = peer;
 
-	if (port = strchr(host, ':')) *port++ = '\0';
+	if ((port = strchr(host, ':'))) *port++ = '\0';
     }
 
     /* check path to see if this message came through our peer */
@@ -3805,7 +3808,7 @@ static void cmd_post(char *msgid, int mode)
 			while (isspace(*cur_peer)) cur_peer++;
 
 			/* find end of peer */
-			if (next_peer = strchr(cur_peer, ' '))
+			if ((next_peer = strchr(cur_peer, ' ')))
 			    *next_peer++ = '\0';
 
 			/* feed the article to this peer */

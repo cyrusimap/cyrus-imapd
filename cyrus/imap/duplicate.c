@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.39 2004/02/12 02:32:22 ken3 Exp $ */
+/* $Id: duplicate.c,v 1.40 2004/02/27 17:44:49 ken3 Exp $ */
 
 #include <config.h>
 
@@ -86,7 +86,7 @@ static struct db *dupdb = NULL;
 static int duplicate_dbopen = 0;
 
 /* must be called after cyrus_init */
-int duplicate_init(char *fname, int myflags)
+int duplicate_init(char *fname, int myflags __attribute__((unused)))
 {
     char buf[1024];
     int r = 0;
@@ -271,8 +271,9 @@ struct prunerock {
     int deletions;
 };
 
-static int prune_p(void *rock, const char *id, int idlen,
-		  const char *data, int datalen)
+static int prune_p(void *rock,
+		   const char *id, int idlen __attribute__((unused)),
+		   const char *data, int datalen __attribute__((unused)))
 {
     struct prunerock *prock = (struct prunerock *) rock;
     const char *rcpt;
@@ -294,7 +295,8 @@ static int prune_p(void *rock, const char *id, int idlen,
 }
 
 static int prune_cb(void *rock, const char *id, int idlen,
-		   const char *data, int datalen)
+		    const char *data __attribute__((unused)),
+		    int datalen __attribute__((unused)))
 {
     struct prunerock *prock = (struct prunerock *) rock;
     int r;
@@ -336,8 +338,10 @@ struct dumprock {
 };
 
 static int dump_p(void *rock,
-		  const char *key, int keylen,
-		  const char *data, int datalen)
+		  const char *key __attribute__((unused)),
+		  int keylen __attribute__((unused)),
+		  const char *data __attribute__((unused)),
+		  int datalen __attribute__((unused)))
 {
     struct dumprock *drock = (struct dumprock *) rock;
 
@@ -349,7 +353,7 @@ static int dump_p(void *rock,
 static const char hexcodes[] = "0123456789ABCDEF";
 
 static int dump_cb(void *rock,
-		   const char *key, int keylen,
+		   const char *key, int keylen __attribute__((unused)),
 		   const char *data, int datalen)
 {
     struct dumprock *drock = (struct dumprock *) rock;

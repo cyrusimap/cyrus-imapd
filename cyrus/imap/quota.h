@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota.h,v 1.1 2004/01/20 01:11:02 ken3 Exp $
+ * $Id: quota.h,v 1.2 2004/02/27 17:44:56 ken3 Exp $
  */
 
 #ifndef INCLUDED_QUOTA_H
@@ -63,6 +63,8 @@ struct quota {
 extern int quota_read(struct quota *quota, struct txn **tid, int wrlock);
 
 extern void quota_commit(struct txn **tid);
+
+extern void quota_abort(struct txn **tid);
 
 extern int quota_write(struct quota *quota, struct txn **tid);
 

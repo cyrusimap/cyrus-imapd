@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.3 2004/02/06 17:07:39 ken3 Exp $
+ * $Id: spool.c,v 1.4 2004/02/27 17:44:56 ken3 Exp $
  */
 
 #include <config.h>
@@ -140,7 +140,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
     state s = NAME_START;
     int r = 0;
     int reject8bit = config_getswitch(IMAPOPT_REJECT8BIT);
-    const char **skip;
+    const char **skip = NULL;
 
     if (namelen == 0) {
 	namelen += NAMEINC;
