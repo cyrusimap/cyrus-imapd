@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.h,v 1.2.2.5 2005/02/16 21:06:51 shadow Exp $
+ * $Id: libcyr_cfg.h,v 1.2.2.6 2005/02/17 18:09:44 shadow Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -119,7 +119,7 @@ struct cyrusopt_s {
 /* these will assert() if they're called on the wrong type of
    option (imapopt.c) */
 extern const char *libcyrus_config_getstring(enum cyrus_opt opt);
-extern long libcyrus_config_getlong(enum cyrus_opt opt);
+extern long libcyrus_config_getint(enum cyrus_opt opt);
 extern long libcyrus_config_getswitch(enum cyrus_opt opt);
 
 void libcyrus_config_setstring(enum cyrus_opt opt, const char *val);

@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.2.2.4 2005/02/16 21:06:50 shadow Exp $
+ * $Id: auth_pts.c,v 1.2.2.5 2005/02/17 18:09:43 shadow Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -248,7 +248,7 @@ static int ptload(const char *identifier, struct auth_state **state)
 
     if(fetched) {        
 	time_t now = time(NULL);
-	long timeout = libcyrus_config_getlong(CYRUSOPT_PTS_CACHE_TIMEOUT);
+	long timeout = libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT);
 	
 	syslog(LOG_DEBUG,
 	       "ptload(): fetched cache record " \
