@@ -42,8 +42,8 @@ all: cyradm
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
-cyradm: cyradmapp.o cyradm.o cyrinit.o $(LIBS)
-	$(CC) $(LDFLAGS) -o cyradm cyradmapp.o cyradm.o cyrinit.o \
+cyradm: cyradmapp.o cyradm.o cyrinit.o cyrmain.o $(LIBS)
+	$(CC) $(LDFLAGS) -o cyradm cyradmapp.o cyradm.o cyrinit.o cyrmain.o \
 		$(LIBS) $(NODEP_LIBS)
 
 cyrinit.c: cyrinit.tcl cyrinit.sed
