@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.105 1999/10/04 18:22:54 leg Exp $
+ * $Id: deliver.c,v 1.106 1999/10/13 16:40:34 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.105 1999/10/04 18:22:54 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.106 1999/10/13 16:40:34 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -337,6 +337,8 @@ char **argv;
 
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
+    prot_setflushonread(deliver_in, deliver_out);
+    prot_settimeout(deliver_in, 300);
 
 #ifdef USE_SIEVE
     sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
@@ -1514,16 +1516,17 @@ deliver_opts_t *delopts;
     case 0:
 	salen = sizeof(deliver_localaddr);
 	if (getsockname(0, (struct sockaddr *)&deliver_localaddr, &salen) 
-	    != 0) {
-	    printf("xxx can't get local addr\n");
+	    == 0) {
+	    /* set the ip addresses here */
+	    sasl_setprop(conn, SASL_IP_REMOTE, &deliver_remoteaddr);  
+	    sasl_setprop(conn, SASL_IP_LOCAL,  &deliver_localaddr );
+	    
+	    syslog(LOG_DEBUG, "connection from [%s]", 
+		   inet_ntoa(deliver_remoteaddr.sin_addr));
+	} else {
+	    syslog(LOG_ERR, "can't get local addr\n");
 	}
 
-	/* set the ip addresses here */
-	sasl_setprop(conn, SASL_IP_REMOTE, &deliver_remoteaddr);  
-	sasl_setprop(conn, SASL_IP_LOCAL,  &deliver_localaddr );
-
-	syslog(LOG_DEBUG, "connection from [%s]", 
-	       inet_ntoa(deliver_remoteaddr.sin_addr));
 	break;
 
     default:
