@@ -211,7 +211,7 @@ char *user;
 
     if (r) {
 	com_err(user ? user : mailboxname,
-		r, (r == EX_IOERR) ? error_message(errno) : NULL);
+		r, (r == IMAP_IOERROR) ? error_message(errno) : NULL);
     }
 
     if (!r && id) markdelivered(id, user ? namebuf : mailboxname);
