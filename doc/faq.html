@@ -4,7 +4,7 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.27 2003/07/18 15:59:57 rjs3 Exp $ -->
+<!-- $Id: faq.html,v 1.28 2003/07/26 03:49:29 rjs3 Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
@@ -47,7 +47,22 @@ convention</a>.</li>
 
 <li><b>renaming users</b> - nope, not supported.</li>
 
-<li><b>plus addressing</b></li>
+<li><b>plus addressing</b> - Plus addressing allows direct delivery
+to a particular mailbox (other than an INBOX).  This is done in two ways.
+
+<p>The first way allows delviery to a subfolder of a specific user's
+INBOX.  This is done via an address of the form: username+submailbox@domain,
+which will deliver to the user's INBOX.submailbox folder (or altnamespace
+equivilent).  This submailbox must allow the posting user the 'p' right
+(generally, this means 'anyone' must have the 'p' right), otherwise the
+message will just be filed into the user's INBOX.
+
+<p>The second way is to form an address like [postuser]+mailfolder@domain.
+This will deliver into the mailbox 'mailfolder'.  [postuser] is the string
+specified in the imapd.conf option of the same name, and may be the
+empty string.  As before, the posting user will need to have the 'p' right on
+the mailbox.
+</li>
 
 <li><b>Performance/Capacity/Scaling</b> - See <a
 href="install-perf.html">the performance guide</a>.</li>
@@ -249,7 +264,7 @@ only the mechanisms that you require.</p>
 </dl>
 
 <hr />
-last modified: $Date: 2003/07/18 15:59:57 $ <br />
+last modified: $Date: 2003/07/26 03:49:29 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
