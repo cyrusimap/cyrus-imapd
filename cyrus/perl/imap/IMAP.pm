@@ -192,7 +192,6 @@ sub authenticate {
 					  split(/ /, $a{-text})}});
     $self->send(undef, undef, 'CAPABILITY');
     $self->addcallback({-trigger => 'CAPABILITY'});
-    $opts{-mechanism} .= 'PLAIN';
   }
   $opts{-service} = "imap" if !defined($opts{-service});
   $opts{-minssf} = 0 if !defined($opts{-minssf});
