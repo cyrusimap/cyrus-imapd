@@ -61,7 +61,7 @@ char *ident;
 
     initialize_imap_error_table();
 
-    openlog(ident, LOG_PID, LOG_LOCAL7);
+    openlog(ident, LOG_PID, LOG_LOCAL6);
 
     config_read();
 
