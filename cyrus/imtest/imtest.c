@@ -297,7 +297,8 @@ main(argc, argv)
 #ifdef HAVE_ACTE_KRB
 		    ++dologin;
 		    len = sizeof (laddr);
-		    if (getsockname(sock, &laddr, &len) < 0 ||
+		    if (getsockname(sock, (struct sockaddr *)&laddr,
+				    &len) < 0 ||
 			client_start("imap", host, NULL, prot_req,
 				     sizeof (buf) - 4, &laddr,
 				     &addr, &authstate) != 0) {

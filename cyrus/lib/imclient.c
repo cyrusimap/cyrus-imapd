@@ -966,8 +966,10 @@ int protallowed;
      * protection mechanisms.
      */
     localaddrlen = remoteaddrlen = sizeof(localaddr);
-    if (getsockname(imclient->fd, &localaddr, &localaddrlen) < 0 ||
-	getpeername(imclient->fd, &remoteaddr, &remoteaddrlen) < 0) {
+    if (getsockname(imclient->fd, (struct sockaddr *)&localaddr,
+		    &localaddrlen) < 0 ||
+	getpeername(imclient->fd, (struct sockaddr *)&remoteaddr,
+		    &remoteaddrlen) < 0) {
 	gotaddr = 0;
     }
 
