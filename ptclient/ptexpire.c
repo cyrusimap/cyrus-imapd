@@ -68,7 +68,7 @@
 #include "libconfig.h"
 #include "lock.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.16 2003/12/15 20:00:43 ken3 Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.17 2004/01/26 19:26:51 rjs3 Exp $";
 
 /* global */
 time_t timenow;
@@ -135,7 +135,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    cyrus_init(alt_config, "ptexpire");
+    cyrus_init(alt_config, "ptexpire", 0);
 
     timenow = time(0);
     syslog(LOG_INFO, "Expiring entries older than %d seconds (currently %d)",
