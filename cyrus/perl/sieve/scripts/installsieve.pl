@@ -40,17 +40,18 @@
 use Cyrus::SIEVE::managesieve;
 use Getopt::Long;
 
-$ret = GetOptions("v|views:s",
-		  "l|list",
-		  "p|port:i",
-		  "i|installs:s",
-		  "a|activates:s",
-		  "d|deletes:s",
-		  "m|mechanism:s",
-		  "g|gets:s",
-                  "u|authname:s",
-		  "t|username:s",
-		  "w|password:s"
+$username = "";
+
+$ret = GetOptions("v|views:s" => \$views,
+		  "l|list" => \$list,
+		  "p|port:i" => \$port,
+		  "i|installs:s" => \$installs,
+		  "a|activates:s" => \$activates,
+		  "d|deletes:s" => \$deletes,
+		  "m|mechanism:s" => \$mech,
+		  "g|gets:s" => \$gets,
+                  "u|username:s" => \$username,
+		  "w|password:s" => \$pass
                   );
 if (!$ret || $#ARGV != 0) { 
     show_help();
@@ -58,19 +59,6 @@ if (!$ret || $#ARGV != 0) {
 }
 
 $acapserver = $ARGV[0];
-
-$username = $opt_t;
-$authname = $opt_u;
-$pass = $opt_w;
-$views = $opt_v;
-$list = $opt_l;
-$port = $opt_p;
-$installs = $opt_i;
-$activates = $opt_a;
-$deletes = $opt_d;
-$mech = $opt_m;
-$gets = $opt_g;
-
 
 sub list_cb {
 
@@ -90,14 +78,11 @@ sub prompt {
   my($type, $prompt) = @_ ;
 
   if (($type eq "username") && (defined $username)) {
-    $username;
-    return;
+      return $username;
   } elsif (($type eq "authname") && (defined $authname)) {
-    $authname;
-    return;
+      return $username;
   } elsif (($type eq "realm") && (defined $realm)) {
-    $realm;
-    return;
+      return $realm;
   }
 
   print "$prompt: ";
@@ -151,14 +136,17 @@ if (defined $activates) {
   if ($ret != 0) { print "Activate failed\n"; }
 }
 
-if (defined $gets) {
-  $ret = sieve_get($obj, $gets, $str);
+if (defined $gets || defined $views) {
+  $ret = sieve_get($obj, $gets || $views, $str);
   if ($ret != 0) { 
     print "get failed\n"; 
+  } elsif (defined $gets) {
+      open (OUTPUT,">$gets") || die "Unable to open $gets";
+      print OUTPUT $str;
+      close(OUTPUT);    
   } else {
-    open (OUTPUT,">$gets") || die "Unable to open $gets";
-    print OUTPUT $str;
-    close(OUTPUT);    
+      # view
+      print $str;
   }
 }
 
