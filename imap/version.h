@@ -1,1 +1,1 @@
-#define CYRUS_VERSION "v1.5.1"
+#define CYRUS_VERSION "v1.5.2"

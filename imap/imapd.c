@@ -1660,7 +1660,7 @@ int usinguid;
 		    appendstrlist(strlen(fetchatt.s) == 19 ?
 				  &fetchargs.headers : &fetchargs.headers_not,
 				  fieldname.s);
-		    if (strlen(fetchatt.s) == 19) {
+		    if (strlen(fetchatt.s) != 19) {
 			fetchitems |= FETCH_UNCACHEDHEADER;
 		    }
 		    if (!(fetchitems & FETCH_UNCACHEDHEADER)) {
