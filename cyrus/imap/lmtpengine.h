@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.13.4.2 2002/08/02 16:55:05 ken3 Exp $
+ * $Id: lmtpengine.h,v 1.13.4.3 2002/10/04 19:52:37 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -45,10 +45,9 @@
 
 /***************** server-side LMTP *******************/
 
-#define HEADERCACHESIZE 4009
+#include "spool.h"
 
 typedef struct message_data message_data_t;
-typedef struct Header header_t;
 typedef struct address_data address_data_t;
 
 struct message_data {
@@ -69,7 +68,7 @@ struct message_data {
 
     void *rock;
 
-    header_t *cache[HEADERCACHESIZE];
+    hdrcache_t hdrcache;
 };
 
 /* return the corresponding header */
