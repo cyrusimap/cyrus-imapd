@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: signals.c,v 1.12 2004/12/17 16:32:21 ken3 Exp $ */
+/* $Id: signals.c,v 1.13 2005/02/14 16:26:50 shadow Exp $ */
 
 #include <config.h>
 
@@ -109,4 +109,5 @@ int signals_poll(void)
 	return gotsignal;
 	break;
     }
+    return 0; /* compiler warning stupidity */
 }
