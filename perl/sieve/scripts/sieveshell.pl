@@ -1,4 +1,4 @@
-use SIEVE::Cyrus;
+use Cyrus::SIEVE::managesieve;
 use Getopt::Long;
 
 $ret = GetOptions("a|authname:s",

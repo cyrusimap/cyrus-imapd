@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.1 2000/05/03 17:30:56 tmartin Exp $
+# $Id: Makefile.in,v 1.2 2000/05/03 21:45:45 tmartin Exp $
 #
 # @configure_input@
 # Copyright 1998 Carnegie Mellon University
@@ -52,6 +52,7 @@ all:: checkdepend
 	done
 
 install::
+#xxx install scripts/*
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/bin
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/lib
 	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/include/cyrus

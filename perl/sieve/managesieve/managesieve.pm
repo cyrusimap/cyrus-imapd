@@ -1,4 +1,4 @@
-package SIEVE::managesieve;
+package Cyrus::SIEVE::managesieve;
 
 use strict;
 use Carp;
@@ -36,14 +36,14 @@ sub AUTOLOAD {
 	    goto &AutoLoader::AUTOLOAD;
 	}
 	else {
-		croak "Your vendor has not defined SIEVE::managesieve macro $constname";
+		croak "Your vendor has not defined Cyrus::SIEVE::managesieve macro $constname";
 	}
     }
     eval "sub $AUTOLOAD { $val }";
     goto &$AUTOLOAD;
 }
 
-bootstrap SIEVE::managesieve $VERSION;
+bootstrap Cyrus::SIEVE::managesieve $VERSION;
 
 # Preloaded methods go here.
 
@@ -55,16 +55,16 @@ __END__
 
 =head1 NAME
 
-SIEVE::managesieve - Perl extension for blah blah blah
+Cyrus::SIEVE::managesieve - Perl extension for blah blah blah
 
 =head1 SYNOPSIS
 
-  use SIEVE::managesieve;
+  use Cyrus::SIEVE::managesieve;
   blah blah blah
 
 =head1 DESCRIPTION
 
-Stub documentation for SIEVE::managesieve was created by h2xs. It looks like the
+Stub documentation for Cyrus::SIEVE::managesieve was created by h2xs. It looks like the
 author of the extension was negligent enough to leave the stub
 unedited.
 
