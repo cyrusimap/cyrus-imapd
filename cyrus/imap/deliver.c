@@ -620,9 +620,9 @@ int smtpmode;
 		    *idptr = strsave(p);
 		    /*
 		     * If we got a resent-message-id header,
-		     * we're done looking at headers.
+		     * we're done looking for *message-id headers.
 		     */
-		    if (sawresentidhdr) scanheader = 0;
+		    if (sawresentidhdr) idptr = 0;
 		    sawresentidhdr = sawidhdr = 0;
 		}
 	    }
@@ -742,7 +742,7 @@ char *mailboxname;
     }
 
     if (!r && user) {
-	notify(user, submailbox, notifyheader);
+	notify(user, submailbox, notifyheader ? notifyheader : "");
     }
 
     if (!r && dupelim && id) markdelivered(id, user ? namebuf : mailboxname);
