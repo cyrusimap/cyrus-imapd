@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include <string.h>
 #include "assert.h"
+#include "util.h"
 #include "charset.h"
 #include "xmalloc.h"
 
@@ -76,9 +77,11 @@ struct charset {
     const unsigned char (*table)[256][4];
 };
 
-#define PATLEN(pat) ((pat)[256])
-#define PATLASTCHAR(pat) ((pat)[257])
-#define PATSIZE 258
+#define PATASCII(pat) (pat+256)
+#define PATLEN(pat) ((pat)[512])
+#define PATLASTCHAR(pat) ((pat)[513])
+#define PATOTHERLASTCHAR(pat) ((pat)[514])
+#define PATSIZE 515
 
 /*
  * Mapping of character sets to tables
@@ -95,6 +98,7 @@ static const struct charset charset_table[] = {
     { "iso-8859-8", iso_8859_8 },
     { "iso-8859-9", iso_8859_9 },
     { "koi8-r", koi8_r },
+    { "iso-2022-jp", iso_2022_jp },
 };
 #define NUM_CHARSETS (sizeof(charset_table)/sizeof(*charset_table))
 
@@ -355,14 +359,24 @@ charset_compilepat(s)
 char *s;
 {
     comp_pat *pat;
-    int i, len;
+    int i, c, len;
 
     pat = (comp_pat *)xmalloc(PATSIZE * sizeof(comp_pat));
     PATLEN(pat) = len = strlen(s);
-    if (len) PATLASTCHAR(pat) = (unsigned char)s[len-1];
-    for (i=0; i<256; i++) pat[i] = len;
+    if (len) {
+	PATLASTCHAR(pat) = c = (unsigned char)s[len-1];
+	if (isupper(c)) PATOTHERLASTCHAR(pat) = tolower(c);
+	else if (islower(c)) PATOTHERLASTCHAR(pat) = toupper(c);
+	else PATOTHERLASTCHAR(pat) = c;
+    }
+    for (i=0; i<512; i++) pat[i] = len;
     for (i=0; i<len; i++) {
-	pat[(unsigned char)s[i]] = len-i-1;
+	c = (unsigned char)s[i];
+	PATASCII(pat)[c] = pat[c] = len-i-1;
+	if (c & 0x80) PATASCII(pat)[0x80] = 0;
+    }
+    for (i='A'; i<='Z'; i++) {
+	PATASCII(pat)[i] = PATASCII(pat)[i-'A'+'a'];
     }
     return pat;
 }
@@ -517,7 +531,68 @@ int encoding;
 	buf = xmalloc(bufsize);
     }
 
-    /* Do the search */
+    /* Optimized searching of us-ascii */
+    if (charset == 0) {
+	if (PATASCII(pat)[0x80] == 0) {
+	    /* 8-bit chars in pattern--search must fail */
+	    if (buf != smallbuf) free(buf);
+	    return 0;
+	}
+
+	n = (*rawproc)(buf, bufsize);
+	if (n < substrlen) {
+	    if (buf != smallbuf) free(buf);
+	    return 0;
+	}
+	i = substrlen - 1;
+	PATASCII(pat)[PATLASTCHAR(pat)] =
+	  PATASCII(pat)[PATOTHERLASTCHAR(pat)] = large = bufsize + i + 2;
+
+	for (;;) {
+	    /* Inner loop -- scan until last char match or end of buffer */
+	    while (i < n) {
+		i += PATASCII(pat)[(unsigned char)buf[i]];
+	    }
+
+	    /* End of buffer */
+	    if (i < large) {
+		/* Read in more stuff */
+		j = i-n;
+		strncpy(buf, buf+i-(substrlen-1), substrlen-1-j);
+		n = (*rawproc)(buf+substrlen-1-j, bufsize-substrlen+1+j);
+		i = substrlen-1;
+		if (n > 0) {
+		    n += i-j;
+		    continue;
+		}
+		if (buf != smallbuf) free(buf);
+		return 0;
+	    }
+
+	    /* Last char match--back up and do compare */
+	    i -= large + 1;
+	    j = PATLEN(pat) - 2;
+	    while (j >= 0 && TOLOWER(buf[i]) == TOLOWER(substr[j])) {
+		i--;
+		j--;
+	    }
+	    if (j < 0) {
+		/* Found match */
+		if (buf != smallbuf) free(buf);
+		return 1;
+	    }
+	    if (PATASCII(pat)[(unsigned char)buf[i]] == large ||
+		PATASCII(pat)[(unsigned char)buf[i]] < PATLEN(pat)-j) {
+		i += PATLEN(pat) - j;
+	    }
+	    else {
+		i += PATASCII(pat)[(unsigned char)buf[i]];
+	    }
+	}
+	/* NOTREACHED */
+    }
+
+    /* Do the (generalized) search */
     n = charset_readconvert(buf, bufsize);
     if (n < substrlen) {
 	if (buf != smallbuf) free(buf);
