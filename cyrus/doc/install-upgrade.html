@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.11 2000/10/26 23:07:51 leg Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.12 2000/12/07 23:11:05 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -47,6 +47,15 @@ after 2.0 has been used on a mail spool without reconstructing every
 mailbox.</b>
 
 <ul>
+<li>Create some extra directories and remove the duplicate delivery
+database:
+<pre>
+<kbd>   mkdir /var/imap/db
+   mkdir /var/imap/socket
+   chown cyrus /var/imap/db /var/imap/socket
+   rm /var/imap/deliverdb/*
+</kbd></pre>
+
 <li>Convert mailboxes file to Berkeley DB:
 <pre>
 <kbd>   su cyrus
@@ -57,6 +66,21 @@ mailbox.</b>
 
 Please keep a backup of your mailboxes file.  You can dump an
 old-style mailboxes file by using <tt>ctl_mboxlist -d</tt>.
+
+<li>remove "<tt>/etc/inetd.conf</tt>" entries. The <tt>imap</tt> and
+<tt>popd3d</tt> lines need to be removed from <tt>/etc/inetd.conf</tt>
+and inetd needs to be restarted.
+
+<li>master process configuration: You'll need to configure the master
+process Cyrus process and ensure that it starts on boot.  see <a
+href="install-configure.html#master">this section</a> of the
+configuration instructions.
+
+<li>sendmail configuration. You need to use a new cyrus mc file. See
+<a href="cyrusv2.mc"><tt>doc/cyrusv2.mc</tt></a> for a sample mc
+file. This requires Sendmail 8.10 or newer.  See <a
+href="install-configure.html#mta">this section</a> of the
+configuration document.
 
 <li>cyrus.seen conversion. The cyrus.seen file will be automatically
 upgraded as users read mail.  After some time, you might want to
@@ -71,21 +95,6 @@ you are using netnews, you will need to apply the diff in the
 <tt>netnews/</tt> directory to INN or see if INN is now distributing
 those changes.  You will also want to run <tt>remotepurge</tt> on a
 regular basis to purge old netnews posts.
-
-<li>remove inetd.conf entries. The <tt>imap</tt> and <tt>popd3d</tt>
-lines need to be removed from <tt>/etc/inetd.conf</tt> and inetd needs
-to be restarted.
-
-<li>sendmail configuration. You need to use a new cyrus mc file. See
-<a href="cyrusv2.mc"><tt>doc/cyrusv2.mc</tt></a> for a sample mc
-file. This requires Sendmail 8.10 or newer.
-
-<li>You'll probably need to create some extra directories.
-<pre>
-<kbd>   mkdir /var/imap/db
-   mkdir /var/imap/socket
-   chown cyrus /var/imap/db /var/imap/socket
-</kbd></pre>
 
 </ul>
 
@@ -153,7 +162,7 @@ worry about it.)
 </ul>
 
 <P><HR><P>
-last modified: $Date: 2000/10/26 23:07:51 $
+last modified: $Date: 2000/12/07 23:11:05 $
 </BODY></HTML>
 
 
