@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.22 1998/05/13 03:59:20 wcw Exp $
+# $Id: SMakefile,v 1.23 1998/06/04 23:07:20 tjs Exp $
 #
 
 MAKE=gmake
@@ -33,7 +33,9 @@ case `uname` in
   SunOS)   
         CFLAGS="${CFLAGS} -xO4 -xdepend"
         ;;
-  ULTRIX)  CFLAGS="${CFLAGS} -O"
+  ULTRIX)  
+	CC=gcc
+	CFLAGS="${CFLAGS} -g -O"
 	WITHAUTH=""
 	AMSSYNC=""
 	;;
