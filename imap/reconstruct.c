@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.56 2000/12/26 21:35:41 leg Exp $ */
+/* $Id: reconstruct.c,v 1.57 2001/01/09 00:19:04 leg Exp $ */
 
 #include <config.h>
 
@@ -317,13 +317,6 @@ int reconstruct(char *name, struct discovered *found)
 	}
 	valid_user_flags[flag/32] |= 1<<(flag&31);
     }
-    
-    /* Write header */
-    r = mailbox_write_header(&mailbox);
-    if (r) {
-	mailbox_close(&mailbox);
-	return r;
-    }
 
     /* Attempt to open/lock index */
     r = mailbox_open_index(&mailbox);
@@ -519,6 +512,23 @@ int reconstruct(char *name, struct discovered *found)
 	fclose(newindex);
 	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
+    }
+
+    /* validate uniqueid */
+    if (!mailbox.uniqueid) {
+	char buf[32];
+
+	/* this may change uniqueid, but if it does, nothing we can do
+           about it */
+	mailbox_make_uniqueid(mailbox.name, mailbox.uidvalidity, buf);
+	mailbox.uniqueid = xstrdup(buf);
+    }
+    
+    /* Write header */
+    r = mailbox_write_header(&mailbox);
+    if (r) {
+	mailbox_close(&mailbox);
+	return r;
     }
 
     /* Rename new index/cache file in place */
