@@ -99,6 +99,24 @@ struct copyargs {
 };
 
 /*
+ * A mailbox is about to be closed.
+ */
+index_closemailbox(mailbox)
+struct mailbox *mailbox;
+{
+    if (seendb) {
+	index_checkseen(mailbox, 1, 0, imapd_exists);
+	seen_close(seendb);
+	seendb = 0;
+    }
+    if (index_len) {
+	map_free(&index_base, &index_len);
+	map_free(&cache_base, &cache_len);
+	index_len = cache_end = 0;
+    }
+}
+
+/*
  * A new mailbox has been selected, map it into memory and do the
  * initial CHECK.
  */
@@ -107,18 +125,8 @@ struct mailbox *mailbox;
 {
     keepingseen = (mailbox->myrights & ACL_SEEN);
     recentuid = 0;
-    if (seendb) {
-	seen_close(seendb);
-	seendb = 0;
-    }
     index_listflags(mailbox);
-    if (index_len) {
-	map_free(&index_base, &index_len);
-	map_free(&cache_base, &cache_len);
-	cache_end = 0;
-    }
     imapd_exists = -1;
-
     index_check(mailbox, 0, 1);
 }
 
@@ -281,7 +289,7 @@ int checkseen;
 /*
  * Checkpoint the user's \Seen state
  */
-#define SAVEGROW 30 /* XXX 200 */
+#define SAVEGROW 200
 index_checkseen(mailbox, quiet, usinguid, oldexists)
 struct mailbox *mailbox;
 int quiet;
