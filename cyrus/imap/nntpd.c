@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.35 2004/09/08 19:45:22 shadow Exp $
+ * $Id: nntpd.c,v 1.36 2004/09/09 16:21:26 shadow Exp $
  */
 
 /*
@@ -415,7 +415,6 @@ static int pipe_to_end_of_response(struct backend *s, int force_notfatal)
 static void nntp_reset(void)
 {
     int i;
-    int nullfd = -1;
 
     proc_cleanup();
 
@@ -458,14 +457,7 @@ static void nntp_reset(void)
     }
 #endif
 
-    nullfd = open("/dev/null", O_RDONLY, 0);
-    if (nullfd < 0) {
-       fatal("open() failed", EC_TEMPFAIL);
-    }
-    cyrus_dup2_sock(nullfd, 0);
-    cyrus_dup2_sock(nullfd, 1);
-    cyrus_dup2_sock(nullfd, 2);
-    close(nullfd);
+    cyrus_reset_stdio(); 
 
     strcpy(nntp_clienthost, "[local]");
     if (nntp_logfd != -1) {

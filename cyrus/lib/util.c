@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: util.c,v 1.29 2004/09/08 19:45:32 shadow Exp $
+ * $Id: util.c,v 1.30 2004/09/09 16:22:01 shadow Exp $
  */
 
 #include <config.h>
@@ -285,11 +285,29 @@ int cyrus_close_sock(int fd)
     return close(fd);
 }
 
-int cyrus_dup2_sock(int oldfd, int newfd) 
+void cyrus_reset_stdio()
 {
-    shutdown(newfd, SHUT_RD);
-    return dup2(oldfd,newfd);
+    int devnull = open("/dev/null", O_RDWR, 0);
+    
+    if (devnull == -1) {
+        fatal("open() on /dev/null failed", EC_TEMPFAIL);
+    }
+
+    /* stdin */
+    shutdown(0, SHUT_RD);
+    dup2(devnull, 0);
+    
+    /* stdout */
+    shutdown(1, SHUT_RD);
+    dup2(devnull, 1);
+
+    /* stderr */
+    shutdown(2, SHUT_RD);
+    dup2(devnull, 2);
+
+    if (devnull > 2) close(devnull);
 }
+
 
 /* Given a mkstemp(3) pattern for a filename,
  * create the file and return the file descriptor.
