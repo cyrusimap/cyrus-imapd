@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.21 2002/08/12 22:28:14 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.22 2002/08/15 17:52:24 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -227,8 +227,6 @@ void appendsearchargs(struct searchargs *s, struct searchargs *s1,
 			 struct searchargs *s2);
 void freesearchargs(struct searchargs *s);
 static void freesortcrit(struct sortcrit *s);
-void appendattvalue(struct attvaluelist **l, char *attrib, const char *value);
-void freeattvalues(struct attvaluelist *l);
 
 static int mailboxdata(char *name, int matchlen, int maycreate, void *rock);
 static int listdata(char *name, int matchlen, int maycreate, void *rock);
@@ -2137,36 +2135,6 @@ void cmd_id(char *tag)
 
     failed_id = 0;
     did_id = 1;
-}
-
-/*
- * Append the 'attrib'/'value' pair to the attvaluelist 'l'.
- */
-void appendattvalue(struct attvaluelist **l, char *attrib, const char *value)
-{
-    struct attvaluelist **tail = l;
-
-    while (*tail) tail = &(*tail)->next;
-
-    *tail = (struct attvaluelist *)xmalloc(sizeof(struct attvaluelist));
-    (*tail)->attrib = xstrdup(attrib);
-    (*tail)->value = xstrdup(value);
-    (*tail)->next = 0;
-}
-
-/*
- * Free the attvaluelist 'l'
- */
-void freeattvalues(struct attvaluelist *l)
-{
-    struct attvaluelist *n;
-
-    while (l) {
-	n = l->next;
-	free(l->attrib);
-	free(l->value);
-	l = n;
-    }
 }
 
 /*
@@ -7003,42 +6971,6 @@ char *trail;
     (*tail)->next = 0;
 }
 
-/*
- * Append 's' to the strlist 'l'.
- */
-void
-appendstrlist(l, s)
-struct strlist **l;
-char *s;
-{
-    struct strlist **tail = l;
-
-    while (*tail) tail = &(*tail)->next;
-
-    *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
-    (*tail)->s = xstrdup(s);
-    (*tail)->p = 0;
-    (*tail)->next = 0;
-}
-
-/*
- * Append 's' to the strlist 'l', compiling it as a pattern.
- * Caller must pass in memory that is freed when the strlist is freed.
- */
-void
-appendstrlistpat(l, s)
-struct strlist **l;
-char *s;
-{
-    struct strlist **tail = l;
-
-    while (*tail) tail = &(*tail)->next;
-
-    *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
-    (*tail)->s = s;
-    (*tail)->p = charset_compilepat(s);
-    (*tail)->next = 0;
-}
 
 /*
  * Free the fieldlist 'l'
@@ -7054,24 +6986,6 @@ struct fieldlist *l;
 	free(l->section);
 	freestrlist(l->fields);
 	free(l->trail);
-	free((char *)l);
-	l = n;
-    }
-}
-
-/*
- * Free the strlist 'l'
- */
-void
-freestrlist(l)
-struct strlist *l;
-{
-    struct strlist *n;
-
-    while (l) {
-	n = l->next;
-	free(l->s);
-	if (l->p) charset_freepat(l->p);
 	free((char *)l);
 	l = n;
     }

@@ -39,14 +39,29 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.h,v 1.2.6.1 2002/08/12 21:30:06 rjs3 Exp $
+ * $Id: annotate.h,v 1.2.6.2 2002/08/15 17:52:24 rjs3 Exp $
  */
 
 #ifndef ANNOTATE_H
 #define ANNOTATE_H
 
+#include "charset.h" /* for comp_pat */
 #include "imapd.h"
 #include "mboxname.h"
+
+/* List of strings, for fetch and search argument blocks */
+struct strlist {
+    char *s;                   /* String */
+    comp_pat *p;               /* Compiled pattern, for search */
+    struct strlist *next;
+};
+
+/* List of attrib-value pairs */
+struct attvaluelist {
+    char *attrib;
+    char *value;
+    struct attvaluelist *next;
+};
 
 /* entry-attribute(s) struct */
 struct entryattlist {
@@ -55,6 +70,15 @@ struct entryattlist {
     struct entryattlist *next;
 };
 
+/* String List Management */
+void appendstrlist(struct strlist **l, char *s);
+void freestrlist(struct strlist *l);
+
+/* Attribute Management (also used by ID) */
+void appendattvalue(struct attvaluelist **l, char *attrib, const char *value);
+void freeattvalues(struct attvaluelist *l);
+
+/* Entry Management */
 void appendentryatt(struct entryattlist **l, char *entry,
 		    struct attvaluelist *attvalues);
 void freeentryatts(struct entryattlist *l);

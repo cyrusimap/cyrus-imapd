@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.51 2002/03/06 20:49:03 ken3 Exp $
+ * $Id: imapd.h,v 1.51.4.1 2002/08/15 17:52:26 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,9 +44,10 @@
 #ifndef INCLUDED_IMAPD_H
 #define INCLUDED_IMAPD_H
 
-#include "prot.h"
+#include "annotate.h"
 #include "charset.h"
 #include "mailbox.h"
+#include "prot.h"
 
 /* Userid client has logged in as */
 extern char *imapd_userid;
@@ -65,13 +66,6 @@ extern int imapd_exists;
 
 /* Name of client host */
 extern char imapd_clienthost[];
-
-/* List of strings, for fetch and search argument blocks */
-struct strlist {
-    char *s;			/* String */
-    comp_pat *p;		/* Compiled pattern, for search */
-    struct strlist *next;
-};
 
 /* List of HEADER.FIELDS[.NOT] fetch specifications */
 struct fieldlist {
@@ -225,15 +219,7 @@ enum {
     LIST_REMOTE =		(1<<4)
 };
 
-/* List of attrib-value pairs */
-struct attvaluelist {
-    char *attrib;
-    char *value;
-    struct attvaluelist *next;
-};
-
 extern struct protstream *imapd_out, *imapd_in;
-
 
 extern void index_closemailbox(struct mailbox *mailbox);
 extern void index_newmailbox(struct mailbox *mailbox, int examine_mode);

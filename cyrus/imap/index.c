@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.2 2002/08/15 16:04:28 ken3 Exp $
+ * $Id: index.c,v 1.180.4.3 2002/08/15 17:52:26 rjs3 Exp $
  */
 #include <config.h>
 
@@ -59,24 +59,25 @@
 #include <time.h>
 
 #include "acl.h"
-#include "util.h"
-#include "map.h"
+#include "annotate.h"
+#include "append.h"
 #include "assert.h"
+#include "charset.h"
 #include "exitcodes.h"
 #include "gmtoff.h"
+#include "hash.h"
 #include "imap_err.h"
-#include "mailbox.h"
 #include "imapd.h"
-#include "append.h"
-#include "charset.h"
-#include "xmalloc.h"
-#include "seen.h"
 #include "lsort.h"
+#include "mailbox.h"
+#include "map.h"
 #include "message.h"
 #include "parseaddr.h"
-#include "hash.h"
-#include "stristr.h"
 #include "search_engines.h"
+#include "seen.h"
+#include "stristr.h"
+#include "util.h"
+#include "xmalloc.h"
 
 #include "index.h"
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.15 2002/08/13 19:50:25 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.16 2002/08/15 17:52:27 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -229,11 +229,6 @@ int getannotatefetchdata(char *tag,
 int getannotatestoredata(char *tag, struct entryattlist **entryatts);
 
 void annotate_response(struct entryattlist *l);
-
-void appendstrlist(struct strlist **l, char *s);
-void freestrlist(struct strlist *l);
-void appendattvalue(struct attvaluelist **l, char *attrib, const char *value);
-void freeattvalues(struct attvaluelist *l);
 #endif /* ENABLE_ANNOTATEMORE */
 
 void printstring (const char *s);
@@ -5292,72 +5287,6 @@ void cmd_setannotation(char *tag)
   freeargs:
     if (entryatts) freeentryatts(entryatts);
     return;
-}
-
-/*
- * Append 's' to the strlist 'l'.
- */
-void
-appendstrlist(l, s)
-struct strlist **l;
-char *s;
-{
-    struct strlist **tail = l;
-
-    while (*tail) tail = &(*tail)->next;
-
-    *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
-    (*tail)->s = xstrdup(s);
-    (*tail)->p = 0;
-    (*tail)->next = 0;
-}
-
-/*
- * Free the strlist 'l'
- */
-void
-freestrlist(l)
-struct strlist *l;
-{
-    struct strlist *n;
-
-    while (l) {
-	n = l->next;
-	free(l->s);
-	if (l->p) charset_freepat(l->p);
-	free((char *)l);
-	l = n;
-    }
-}
-
-/*
- * Append the 'attrib'/'value' pair to the attvaluelist 'l'.
- */
-void appendattvalue(struct attvaluelist **l, char *attrib, const char *value)
-{
-    struct attvaluelist **tail = l;
-
-    while (*tail) tail = &(*tail)->next;
-
-    *tail = (struct attvaluelist *)xmalloc(sizeof(struct attvaluelist));
-    (*tail)->attrib = xstrdup(attrib);
-    (*tail)->value = xstrdup(value);
-    (*tail)->next = 0;
-}
-
-/*
- * Free the attvaluelist 'l'
- */
-void freeattvalues(struct attvaluelist *l)
-{
-    struct attvaluelist *n;
-
-    while (l) {
-	n = l->next;
-	free(l->attrib);
-	free(l->value);
-	l = n;
-    }
 }
 #endif /* ENABLE_ANNOTATEMORE */
 
