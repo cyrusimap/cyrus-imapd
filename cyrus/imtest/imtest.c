@@ -291,8 +291,8 @@ main(argc, argv)
 		    sprintf(buf, ". LOGIN %s %s\r\n",
 			    getpwuid(getuid())->pw_name, pass);
 		    prot_write(pout, buf, strlen(buf));
-		    bzero(buf, sizeof (buf));
-		    bzero(pass, 8);
+		    memset(buf, 0, sizeof (buf));
+		    memset(pass, 0, 8);
 		} else if (dologin == 1) {
 #ifdef HAVE_ACTE_KRB
 		    ++dologin;
