@@ -61,49 +61,50 @@ static const struct charset charset_table[] = {
 
 #define GROWSIZE 100
 
+#define XX 127
 /*
  * Table for decoding hexadecimal in quoted-printable
  */
-static const signed char index_hex[256] = {
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-     0, 1, 2, 3,  4, 5, 6, 7,  8, 9,-1,-1, -1,-1,-1,-1,
-    -1,10,11,12, 13,14,15,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,10,11,12, 13,14,15,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
+static const char index_hex[256] = {
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+     0, 1, 2, 3,  4, 5, 6, 7,  8, 9,XX,XX, XX,XX,XX,XX,
+    XX,10,11,12, 13,14,15,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,10,11,12, 13,14,15,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
 };
 #define HEXCHAR(c)  (index_hex[(unsigned char)(c)])
 
 /*
  * Table for decoding base64
  */
-static const signed char index_64[256] = {
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,62, -1,-1,-1,63,
-    52,53,54,55, 56,57,58,59, 60,61,-1,-1, -1,-1,-1,-1,
-    -1, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
-    15,16,17,18, 19,20,21,22, 23,24,25,-1, -1,-1,-1,-1,
-    -1,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
-    41,42,43,44, 45,46,47,48, 49,50,51,-1, -1,-1,-1,-1
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
+static const char index_64[256] = {
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, XX,XX,XX,63,
+    52,53,54,55, 56,57,58,59, 60,61,XX,XX, XX,XX,XX,XX,
+    XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
+    15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,XX,
+    XX,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
+    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
 };
 #define CHAR64(c)  (index_64[(unsigned char)(c)])
 
@@ -250,7 +251,7 @@ char *s;
 		    p++;
 		    i = HEXCHAR(*p);
 		    p++;
-		    if (c == -1 || i == -1) {
+		    if (c == XX || i == XX) {
 			c = '\0';
 		    }
 		    else {
@@ -278,23 +279,23 @@ char *s;
 		    retval = xrealloc(retval, alloced);
 		}
 		c1 = CHAR64(p[0]);
-		if (c1 == -1) break;
+		if (c1 == XX) break;
 		c2 = CHAR64(p[1]);
-		if (c2 == -1) break;
+		if (c2 == XX) break;
 		translation = table[(unsigned char)((c1<<2) | ((c2&0x30)>>4))];
 		while (*translation) {
 		    retval[pos++] = *translation++;
 		}
 
 		c3 = CHAR64(p[2]);
-		if (c3 == -1) break;
+		if (c3 == XX) break;
 		translation = table[(unsigned char)(((c2&0XF) << 4) | ((c3&0x3C) >> 2))];
 		while (*translation) {
 		    retval[pos++] = *translation++;
 		}
 
 		c4 = CHAR64(p[3]);
-		if (c4 == -1) break;
+		if (c4 == XX) break;
 		translation = table[(unsigned char)(((c3&0x03) <<6) | c4)];
 		while (*translation) {
 		    retval[pos++] = *translation++;
@@ -686,7 +687,7 @@ int size;
 	    c1 = HEXCHAR(c1);
 	    c2 = HEXCHAR(c2);
 	    /* Following line also takes care of soft line breaks */
-	    if (c1 == -1 && c2 == -1) continue;
+	    if (c1 == XX && c2 == XX) continue;
 	    *buf++ = (c1 << 4) + c2;
 	    retval++;
 	    size--;
@@ -747,7 +748,7 @@ int size;
 	    rawleft -= 3;
 	    c1 = HEXCHAR(c1);
 	    c2 = HEXCHAR(c2);
-	    if (c1 == -1 && c2 == -1) continue;
+	    if (c1 == XX && c2 == XX) continue;
 	    *buf++ = (c1 << 4) + c2;
 	    retval++;
 	    size--;
@@ -807,7 +808,7 @@ int size;
 		rawlen = rawleft = 0;
 		return retval;
 	    }
-	} while (rawleft && CHAR64(c1) == -1);
+	} while (rawleft && CHAR64(c1) == XX);
 	if (!rawleft) {
 	    rawbuf[--rawstart] = c1;
 	    rawleft++;
@@ -821,7 +822,7 @@ int size;
 		rawlen = rawleft = 0;
 		return retval;
 	    }
-	} while (rawleft && CHAR64(c2) == -1);
+	} while (rawleft && CHAR64(c2) == XX);
 	if (!rawleft) {
 	    rawbuf[--rawstart] = c2;
 	    rawbuf[--rawstart] = c1;
@@ -838,7 +839,7 @@ int size;
 		rawlen = rawleft = 0;
 		return retval;
 	    }
-	} while (rawleft && CHAR64(c3) == -1);
+	} while (rawleft && CHAR64(c3) == XX);
 	if (!rawleft) {
 	    rawbuf[--rawstart] = c3;
 	    rawbuf[--rawstart] = c2;
@@ -857,8 +858,8 @@ int size;
 		rawlen = rawleft = 0;
 		return retval;
 	    }
-	} while (rawleft && CHAR64(c4) == -1);
-	if (CHAR64(c4) == -1) {
+	} while (rawleft && CHAR64(c4) == XX);
+	if (CHAR64(c4) == XX) {
 	    rawbuf[--rawstart] = c3;
 	    rawbuf[--rawstart] = c2;
 	    rawbuf[--rawstart] = c1;
