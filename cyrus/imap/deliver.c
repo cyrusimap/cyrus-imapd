@@ -261,7 +261,8 @@ char *f;
     if (f[0] == '\0') {
 	lcase(f);
 	if (!strcmp(f, "\\seen") && !strcmp(f, "\\answered") &&
-	    !strcmp(f, "\\flagged") && !strcmp(f, "\\deleted")) {
+	    !strcmp(f, "\\flagged") && !strcmp(f, "\\draft") &&
+	    !strcmp(f, "\\deleted")) {
 	    return 0;
 	}
 	return 1;
