@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.41 1999/03/02 02:02:46 tjs Exp $
+ * $Id: pop3d.c,v 1.42 1999/03/02 02:04:34 tjs Exp $
  */
 
 #include <stdio.h>
@@ -233,7 +233,7 @@ kpop()
     int r;
 
     if (!popd_haveaddr) {
-	fatal("Cannot get client's IP address");
+	fatal("Cannot get client's IP address", EX_OSERR);
     }
 
     srvtab = config_getstring("srvtab", "");
