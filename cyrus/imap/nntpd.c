@@ -50,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.8 2002/09/25 16:59:17 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.9 2002/09/25 19:10:58 ken3 Exp $
  */
 #include <config.h>
 
@@ -1429,6 +1429,12 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		break;
 	    off = 0;
 	    s = BODY;
+	    if (!strcasecmp(name, "path")) {
+		/* prepend servername to Path: header */
+		sprintf(body, "%s!", config_servername);
+		off += strlen(body);
+		fputs(body, fout);
+	    }
 	    /* falls through! */
 	case BODY:
 	    /* now we want to convert all newlines into \r\n */
@@ -1621,7 +1627,6 @@ static int savemsg(message_data_t *m, FILE *f)
     }
 
     /* add Path: header (if necessary) */
-    /* XXX can we prepend to an existing Path: header? */
     if ((body = msg_getheader(m, "path")) == NULL) {
 	fprintf(f, "Path: %s!%s\r\n",
 		config_servername, nntp_userid ? nntp_userid : "anonymous");
@@ -1668,36 +1673,21 @@ static int savemsg(message_data_t *m, FILE *f)
     return 0;
 }
 
-static void logdupelem(char *msgid, char *name)
-{
-    if (strlen(msgid) < 80) {
-	char pretty[160];
-
-	beautify_copy(pretty, msgid);
-	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s",
-	       name, msgid);
-    }
-    else {
-	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s",
-	       name);
-    }	
-}
-
 static int deliver(message_data_t *msg)
 {
     int n, r;
     char *rcpt;
     struct appendstate as;
     time_t now = time(NULL);
+    unsigned long uid;
 
     for (n = 0; n < msg->rcpt_num; n++) {
 	rcpt = msg->rcpt[n];
 
-	/* XXX is this necessary? */
 	if (dupelim && msg->id && 
 	    duplicate_check(msg->id, strlen(msg->id), rcpt, strlen(rcpt))) {
 	    /* duplicate message */
-	    logdupelem(msg->id, rcpt);
+	    duplicate_log(msg->id, rcpt);
 	    continue;
 	}
 
@@ -1708,17 +1698,24 @@ static int deliver(message_data_t *msg)
 	    prot_rewind(msg->data);
 	    r = append_fromstream(&as, msg->data, msg->size, now,
 				  (const char **) NULL, 0);
-	    if (!r) append_commit(&as, NULL, NULL, NULL);
+	    if (!r) append_commit(&as, NULL, &uid, NULL);
 	    else append_abort(&as);
 	}
 
-	/* XXX is this necessary? */
-	if (!r && dupelim && msg->id) duplicate_mark(msg->id, strlen(msg->id),
-						     rcpt, strlen(rcpt),
-						     now);
+	if (!r && dupelim && msg->id)
+	    duplicate_mark(msg->id, strlen(msg->id), rcpt, strlen(rcpt), now);
 
 	if (r) return r;
     }
+
+    /* mark msgid for IHAVE/CHECK/TAKETHIS and reader commands
+     *
+     * XXX this should be replaced with netnews.db having the form:
+     *
+     * key = <msgid>   data = <mbox>:<uid>\t<lines>\t<time>\0
+     */
+    if (dupelim && msg->id)
+	duplicate_mark(msg->id, strlen(msg->id), "", 0, time(NULL));
 
     return  0;
 }
@@ -1729,7 +1726,10 @@ static void cmd_post(char *msgid, int mode)
     message_data_t *msg;
     int r = 0;
 
-    /* check if we want this article */
+    /* check if we want this article
+     *
+     * XXX this should be replaced with netnews.db (see above)
+     */
     if (dupelim && msgid && 
 	duplicate_check(msgid, strlen(msgid), "", 0)) {
 	/* duplicate message */
@@ -1765,10 +1765,6 @@ static void cmd_post(char *msgid, int mode)
 	if (!r) r = deliver(msg);
 
 	if (!r) {
-	    /* mark for IHAVE/CHECK/TAKETHIS */
-	    if (dupelim && msg->id) duplicate_mark(msg->id, strlen(msg->id),
-						   "", 0, time(NULL));
-
 	    if (mode == POST_POST) {
 		/* XXX send the article upstream */
 	    }
