@@ -19,6 +19,7 @@ struct service {
     /* stats */
     int nforks;
     int nactive;
+    int nconnections;
 };
 
 extern struct service *Services;

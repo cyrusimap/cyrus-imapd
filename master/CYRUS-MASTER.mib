@@ -105,7 +105,9 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
 			 serviceName		DisplayString (SIZE (0..255)),
 
-			 serviceId		INTEGER
+			 serviceId		INTEGER,
+
+                         serviceConnections     Counter32
 
                          } 		   
 
@@ -164,6 +166,20 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
                          DESCRIPTION  "The id of the service as configured." 
 
                          ::= { serviceEntry 4 }
+
+      -- connections since startup
+      serviceConnections  OBJECT-TYPE 
+
+                         SYNTAX     Counter32 
+
+                         ACCESS     read-only 
+
+                         STATUS     mandatory 
+
+                         DESCRIPTION  "The total number of connections for this 
+			               service since initialization." 
+
+                         ::= { serviceEntry 5 } 
 
 -- event table
 
