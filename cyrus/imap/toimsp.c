@@ -1,4 +1,4 @@
-/* drop.c -- Drop off information to be sent to IMSP server
+/* toimsp.c -- Drop off information to be sent to IMSP server
  *
  *	(C) Copyright 1994 by Carnegie Mellon University
  *
@@ -32,6 +32,7 @@
 #include <syslog.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <netinet/in.h>
 #include <com_err.h>
 
@@ -42,67 +43,90 @@
 #include "imap_err.h"
 #include "xmalloc.h"
 
-#if 0
-extern int errno;
+#define FNAME_TOIMSPFILE "/toimsp"
 
-#define FNAME_DROPDIR "/dropoff/"
+static char toimsp_nul[] = {0, 0, 0, 0};
 
-static int dodropoff = -1;
-
-static drop_to64();
-#endif
+#define MKTAG(a,b,size) htonl((a)<<24|(b)<<16|(size))
 
 /*
  * Drop off a request to send an IMSP LAST command stating the highest
  * uid for mailbox 'name' is 'uid' and has 'exists' messages.
  */
 int
-drop_last(name, uid, exists)
+toimsp_mboxinfo(name, uidvalidity, uid_next, acl, acl_time, renameto)
 char *name;
-unsigned long uid;
-unsigned long exists;
+bit32 uidvalidity;
+bit32 uid_next;
+char *acl;
+bit32 acl_time;
+char *renameto;
 {
-#if 0
-    int last_change = time(0);
-    bit32 intbuf[3];
-    char fnamebuf[MAX_MAILBOX_PATH];
-    char *p;
-    FILE *f;
-
-    if (dodropoff == -1) {
-	if (config_getstring("imspservers", 0)) {
-	    dodropoff = 1;
-	}
-	else dodropoff = 0;
-    }
-
-    if (!dodropoff) return 0;
-
-    intbuf[0] = htonl(uid);
-    intbuf[1] = htonl(last_change);
-    intbuf[2] = htonl(exists);
+    int fd;
+    struct iovec iov[15];
+    int num_iov = 0;
+    bit32 untag, actag, rntag;
     
-    sprintf(fnamebuf, "%s%sL", config_dir, FNAME_DROPDIR);
-    drop_to64(fnamebuf+strlen(fnamebuf), (unsigned char *)intbuf,
-	      sizeof(intbuf));
+    fd = toimsp_open();
+    if (fd == -1) return;
 
-    p = fnamebuf + strlen(fnamebuf);
+    /* Start with 4 nuls */
+    iov[num_iov].iov_base = toimsp_nul;
+    iov[num_iov++].iov_len = 4;
 
-    if ((p - fnamebuf) + strlen(name) >= sizeof(fnamebuf)) return 0;
-    strcpy(p, name);
-    lcase(p);
+    iov[num_iov].iov_base = name;
+    iov[num_iov].iov_len = strlen(name) + 1;
+    /* Pad to 4-octet boundary */
+    iov[num_iov+1].iov_base = toimsp_nul;
+    iov[num_iov+1].iov_len = (-iov[num_iov].iov_len) & 3;
+    num_iov += 2;
 
-    while (p = strchr(p, '=')) *p = 'B';
+    uidvalidity = htonl(uidvalidity);
+    iov[num_iov].iov_base = (char *)&uidvalidity;
+    iov[num_iov++].iov_len = 4;
 
-    f = fopen(fnamebuf, "w");
-    if (!f) {
-	if (errno == ENOENT) return 0;
-	syslog(LOG_ERR, "IOERROR: creating dropoff file %s: %m",
-	       fnamebuf);
-	return IMAP_IOERROR;
+    if (uid_next) {
+	untag = MKTAG('U', 'N', 4);
+	iov[num_iov].iov_base = (char *)&untag;
+	iov[num_iov++].iov_len = 4;
+
+	uid_next = htonl(uid_next);
+	iov[num_iov].iov_base = (char *)&uid_next;
+	iov[num_iov++].iov_len = 4;
+    }	
+
+    if (acl) {
+	iov[num_iov+1].iov_base = acl;
+	iov[num_iov+1].iov_len = strlen(acl) + 1;
+	/* Pad to 4-octet boundary */
+	iov[num_iov+2].iov_base = toimsp_nul;
+	iov[num_iov+2].iov_len = (-iov[num_iov+1].iov_len) & 3;
+	acl_time = htonl(acl_time);
+	iov[num_iov+3].iov_base = (char *)&acl_time;
+	iov[num_iov+3].iov_len = 4;
+	actag = MKTAG('A', 'C', iov[num_iov+1].iov_len +
+		      iov[num_iov+2].iov_len + 4);
+	iov[num_iov].iov_base = (char *)&actag;
+	iov[num_iov].iov_len = 4;
+	num_iov += 4;
     }
-    fclose(f);
-#endif
+
+    if (renameto) {
+	iov[num_iov+1].iov_base = renameto;
+	iov[num_iov+1].iov_len = strlen(renameto) + 1;
+	/* Pad to 4-octet boundary */
+	iov[num_iov+2].iov_base = toimsp_nul;
+	iov[num_iov+2].iov_len = (-iov[num_iov+1].iov_len) & 3;
+	rntag = MKTAG('R', 'N', iov[num_iov+1].iov_len +
+		      iov[num_iov+2].iov_len);
+	iov[num_iov].iov_base = (char *)&rntag;
+	iov[num_iov].iov_len = 4;
+	num_iov += 3;
+    }
+
+    n = retry_writev(fd, iov, num_iov);
+    fclose(fd);
+    
     return 0;
 }
       
@@ -112,99 +136,94 @@ unsigned long exists;
  * message 'uid'.
  */
 int
-drop_seen(name, userid, uid, last_change)
+toimsp_seen(name, uidvalidity, userid, uid, last_change)
 char *name;
+bit32 uidvalidity;
 char *userid;
-unsigned long uid;
-time_t last_change;
+bit32 uid;
+bit32 last_change;
 {
-#if 0
-    bit32 intbuf[2];
-    char fnamebuf[MAX_MAILBOX_PATH];
-    char *p;
-    FILE *f;
-
-    if (dodropoff == -1) {
-	if (config_getstring("imspservers", 0)) {
-	    dodropoff = 1;
-	}
-	else dodropoff = 0;
-    }
-
-    if (!dodropoff) return 0;
-
-    intbuf[0] = htonl(uid);
-    intbuf[1] = htonl(last_change);
+    int fd;
+    struct iovec iov[15];
+    int num_iov = 0;
+    bit32 sntag;
     
-    sprintf(fnamebuf, "%s%sS", config_dir, FNAME_DROPDIR);
-    drop_to64(fnamebuf+strlen(fnamebuf), (unsigned char *)intbuf,
-	      sizeof(intbuf));
+    fd = toimsp_open();
+    if (fd == -1) return;
 
-    p = fnamebuf + strlen(fnamebuf);
+    /* Start with 4 nuls */
+    iov[num_iov].iov_base = toimsp_nul;
+    iov[num_iov++].iov_len = 4;
 
-    if ((p - fnamebuf) + strlen(name) >= sizeof(fnamebuf)) return 0;
-    strcpy(p, name);
-    lcase(p);
-    while (*p) {
-	if (*p == '=') *p = 'B';
-	p++;
+    iov[num_iov].iov_base = name;
+    iov[num_iov].iov_len = strlen(name) + 1;
+    /* Pad to 4-octet boundary */
+    iov[num_iov+1].iov_base = toimsp_nul;
+    iov[num_iov+1].iov_len = (-iov[num_iov].iov_len) & 3;
+    num_iov += 2;
+
+    uidvalidity = htonl(uidvalidity);
+    iov[num_iov].iov_base = (char *)&uidvalidity;
+    iov[num_iov++].iov_len = 4;
+
+    untag = MKTAG('S', 'N', 4);
+    iov[num_iov].iov_base = (char *)&untag;
+    iov[num_iov].iov_len = 4;
+
+    iov[num_iov+1].iov_base = userid;
+    iov[num_iov+1].iov_len = strlen(userid) + 1;
+    /* Pad to 4-octet boundary */
+    iov[num_iov+2].iov_base = toimsp_nul;
+    iov[num_iov+2].iov_len = (-iov[num_iov+1].iov_len) & 3;
+    last_change = htonl(last_change);
+    iov[num_iov+3].iov_base = (char *)&last_change;
+    iov[num_iov+3].iov_len = 4;
+    sntag = MKTAG('S', 'N', iov[num_iov+1].iov_len +
+		  iov[num_iov+2].iov_len+4);
+    iov[num_iov].iov_base = (char *)&sntag;
+    iov[num_iov].iov_len = 4;
+    num_iov += 4;
+
+    if (renameto) {
+	iov[num_iov+1].iov_base = acl;
+	iov[num_iov+1].iov_len = strlen(renameto) + 1;
+	/* Pad to 4-octet boundary */
+	iov[num_iov+2].iov_base = toimsp_nul;
+	iov[num_iov+2].iov_len = (-iov[num_iov+1].iov_len) & 3;
+	iov[num_iov].iov_base = MKTAG('R', 'N', iov[num_iov+1].iov_len+
+				                iov[num_iov+2].iov_len);
+	iov[num_iov].iov_len = 4;
     }
 
-    if ((p - fnamebuf) + strlen(userid) + 1 >= sizeof(fnamebuf)) return 0;
-    *p++ = '=';
-    strcpy(p, userid);
-    lcase(p);
-    while (*p) {
-	if (*p == '/') *p = 'A';
-	if (*p == '=') *p = 'B';
-	p++;
-    }
+    /* Terminate with 4 nuls */
+    iov[num_iov].iov_base = toimsp_nul;
+    iov[num_iov++].iov_len = 4;
 
-    f = fopen(fnamebuf, "w");
-    if (!f) {
-	if (errno == ENOENT) return 0;
-	syslog(LOG_ERR, "IOERROR: creating dropoff file %s: %m",
-	       fnamebuf);
-	return IMAP_IOERROR;
-    }
-    fclose(f);
-#endif
+    n = retry_writev(fd, iov, num_iov);
+    fclose(fd);
+    
     return 0;
 }
       
-#if 0
-static char drop_basis_64[] =
-   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+:";
-
-static drop_to64(to, from, len)
-char *to;
-unsigned char *from;
-int len;
+static int toimsp_open()
 {
-    int c1, c2, c3;
+    int fd, r;
+    char fnamebuf[MAX_MAILBOX_PATH];
+    char *lockfailaction;
 
-    while (len) {
-	c1 = *from++;
-	len--;
-	*to++ = drop_basis_64[c1>>2];
-	if (len == 0) c2 = 0;
-	else c2 = *from++;
-	*to++ = drop_basis_64[((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4)];
-	if (len == 0) {
-	    break;
-	}
+    sprintf(fnamebuf, "%s%s", config_dir, FNAME_TOIMSPFILE);
+    fd = open(fnamebuf, O_WRONLY, 0666);
 
-	if (--len == 0) c3 = 0;
-	else c3 = *from++;
-        *to++ = drop_basis_64[((c2 & 0xF) << 2) | ((c3 & 0xC0) >>6)];
-	if (len == 0) {
-	    break;
-	}
-	
-	--len;
-        *to++ = drop_basis_64[c3 & 0x3F];
+    if (fd == -1) return -1;
+
+    r = lock_reopen(fd, fnamebuf, (struct stat *)0, &lockfailaction);
+    if (r == -1) {
+	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, fnamebuf);
+	return -1;
     }
-    *to++ = '=';
-    *to = '\0';
+
+    lseek(fd, 0L, SEEK_END);
+    return fd;
 }
-#endif
+	
+    
