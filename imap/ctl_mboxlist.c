@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: ctl_mboxlist.c,v 1.8 2000/05/15 18:02:14 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.9 2000/05/15 20:49:06 leg Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -120,25 +120,24 @@ void do_dump(enum mboxop op)
 
 	    /* open index file for mailbox */
 	    r = mailbox_open_header(mboxent->name,NULL,&mailbox);
-	    if (r) {
-		fprintf(stderr, "Error opening header for %s\n",mboxent->name);
-		goto error;
-	    }
-	    r = mailbox_open_index(&mailbox);
-	    if (r) {
-		fprintf(stderr, "Error opening index for %s\n",mboxent->name);
-		goto error;
+	    if (!r) {
+		r = mailbox_open_index(&mailbox);
+		if (r) {
+		    fprintf(stderr, "Error opening index for %s\n",
+			    mboxent->name);
+		    goto error;
+		}
+		
+		mboxdata.uidvalidity = mailbox.uidvalidity;
+		mboxdata.answered = mailbox.answered;
+		mboxdata.flagged = mailbox.flagged;
+		mboxdata.deleted = mailbox.deleted;
+		mboxdata.total = mailbox.exists;
+		
+		/* close index file for mailbox */
+		mailbox_close(&mailbox);
 	    }
 
-	    mboxdata.uidvalidity = mailbox.uidvalidity;
-	    mboxdata.answered = mailbox.answered;
-	    mboxdata.flagged = mailbox.flagged;
-	    mboxdata.deleted = mailbox.deleted;
-	    mboxdata.total = mailbox.exists;
-
-	    /* close index file for mailbox */
-	    mailbox_close(&mailbox);
-	    
 	    r = acapmbox_store(handle, &mboxdata, 1);
 	    if (r) {
 		fprintf(stderr, "problem storing '%s': %s\n", mboxent->name,
@@ -194,13 +193,16 @@ void do_undump(void)
 	}
 	*p++ = '\0';
 	partition = p;
-	for (p = buf; *p && *p != '\t'; p++) ;
+	for (; *p && *p != '\t'; p++) ;
 	if (!*p) {
 	    fprintf(stderr, "line %d: no acl found\n", line);
 	    continue;
 	}
 	*p++ = '\0';
 	acl = p;
+	/* chop off the newline */
+	for (; *p && *p != '\r' && *p != '\n'; p++) ;
+	*p++ = '\0';
 
 	if (strlen(name) >= MAX_MAILBOX_NAME) {
 	    fprintf(stderr, "line %d: mailbox name too long\n", line);
