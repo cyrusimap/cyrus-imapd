@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.5 2003/12/09 20:02:44 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.6 2003/12/29 18:09:54 ken3 Exp $ */
 
 #include <config.h>
 
@@ -326,15 +326,26 @@ void config_read(const char *alt_config)
 	    {
 		const struct enum_option_s *e = imapopts[opt].enum_options;
 
+		if (imapopts[opt].t == OPT_ENUM) {
+		    /* normalize on/off values */
+		    if (!strcmp(p, "1") || !strcmp(p, "yes") ||
+			!strcmp(p, "t") || !strcmp(p, "true")) {
+			p = "on";
+		    } else if (!strcmp(p, "0") || !strcmp(p, "no") ||
+			       !strcmp(p, "f") || !strcmp(p, "false")) {
+			p = "off";
+		    }
+		}
+
 		while (e->name) {
-		    if (!strcasecmp(e->name, p)) break;
+		    if (!strcmp(e->name, p)) break;
 		    e++;
 		}
 		if (e->name) {
-		    if (imapopts[opt].t == OPT_STRINGLIST)
-			imapopts[opt].val.s = e->name;
-		    else
+		    if (imapopts[opt].t == OPT_ENUM)
 			imapopts[opt].val.e = e->val;
+		    else
+			imapopts[opt].val.s = e->name;
 		} else {
 		    /* error during conversion */
 		    sprintf(errbuf, "invalid value for %s in line %d",
