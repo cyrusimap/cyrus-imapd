@@ -69,7 +69,8 @@ struct variable4 cyrusMasterMIB_variables[] = {
   { SERVICENAME         , ASN_OCTET_STR , RONLY , var_serviceTable, 3, { 2,1,3 } },
 #define   SERVICEID             8
   { SERVICEID           , ASN_INTEGER   , NOACCESS , var_serviceTable, 3, { 2,1,4 } },
-
+#define   SERVICECONNS          9
+  { SERVICECONNS        , ASN_COUNTER   , NOACCESS , var_serviceTable, 3, { 2,1,5 } },
 };
 /*    (L = length of the oidsuffix) */
 
@@ -206,6 +207,10 @@ var_serviceTable(struct variable *vp,
       
     case SERVICEID:
 	long_ret = index;
+	return (unsigned char *) &long_ret;
+
+    case SERVICECONNS:
+	long_ret = Services[index - 1].nconnections;
 	return (unsigned char *) &long_ret;
 
     default:

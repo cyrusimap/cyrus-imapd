@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.44 2001/08/10 18:05:25 ken3 Exp $ */
+/* $Id: master.c,v 1.45 2001/08/14 16:11:26 leg Exp $ */
 
 #include <config.h>
 
@@ -753,6 +753,10 @@ void process_msg(struct service *s, int msg)
     case MASTER_SERVICE_UNAVAILABLE:
 	s->ready_workers--;
 	break;
+
+    case MASTER_SERVICE_CONNECTION:
+	s->nconnections++;
+	break;
 	
     default:
 	syslog(LOG_ERR, "unrecognized message for service '%s': %x", 
@@ -874,6 +878,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 	Services[nservices].nforks = 0;
 	Services[nservices].nactive = 0;
+	Services[nservices].nconnections = 0;
 
 	if (verbose > 2)
 	    syslog(LOG_DEBUG, "add: service %s (%s, %s/%s, %d, %d)",
@@ -970,6 +975,7 @@ void reread_conf(void)
 	    Services[i].desired_workers = 0;
 	    Services[i].nforks = 0;
 	    Services[i].nactive = 0;
+	    Services[i].nconnections = 0;
 
 	    /* close all listeners */
 	    if (Services[i].socket > 0) close(Services[i].socket);

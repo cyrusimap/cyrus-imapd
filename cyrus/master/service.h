@@ -44,12 +44,13 @@
 
 enum {
     STATUS_FD = 3,
-    LISTEN_FD = 4,
+    LISTEN_FD = 4
 };
 
 enum {
     MASTER_SERVICE_AVAILABLE = 0x01,
-    MASTER_SERVICE_UNAVAILABLE = 0x02
+    MASTER_SERVICE_UNAVAILABLE = 0x02,
+    MASTER_SERVICE_CONNECTION = 0x03
 };
 
 extern int service_init(int argc, char **argv, char **envp);
@@ -58,7 +59,7 @@ extern int service_main_fd(int fd, int argc, char **argv, char **envp);
 extern int service_abort(void);
 
 enum {
-    MAX_USE = 100,
+    MAX_USE = 250,
     REUSE_TIMEOUT = 60
 };
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.24 2001/08/01 16:34:19 leg Exp $ */
+/* $Id: service.c,v 1.25 2001/08/14 16:11:26 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -281,10 +281,14 @@ int main(int argc, char **argv, char **envp)
 
 	if (fd > 2) close(fd);
 	
+	notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);
 	use_count++;
 	service_main(argc, argv, envp);
 	/* if we returned, we can service another client with this process */
-	if (use_count >= MAX_USE) break;
+
+	if (use_count >= MAX_USE) {
+	    break;
+	}
 
 	notify_master(STATUS_FD, MASTER_SERVICE_AVAILABLE);
     }

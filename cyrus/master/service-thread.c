@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.1 2001/03/20 19:57:57 leg Exp $ */
+/* $Id: service-thread.c,v 1.2 2001/08/14 16:11:26 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -233,6 +233,7 @@ int main(int argc, char **argv, char **envp)
 	syslog(LOG_DEBUG, "accepted connection");
 
 	use_count++;
+	notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);
 	if (service_main_fd(fd, argc, argv, envp) < 0) {
 	    break;
 	}
