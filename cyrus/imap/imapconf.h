@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: imapconf.h,v 1.5 2001/02/22 19:27:17 ken3 Exp $
+ $Id: imapconf.h,v 1.6 2001/03/14 06:02:11 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -98,5 +98,6 @@ int parsebase64string(char **ptr, const char *s);
 
 #define FNAME_DBDIR "/db"
 #define FNAME_USERDIR "/user/"
+#define FNAME_LOGDIR "/log/"
 
 #endif /* INCLUDED_CONFIG_H */
