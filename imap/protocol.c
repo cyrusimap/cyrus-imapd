@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.8 2004/02/26 21:57:43 ken3 Exp $ */
+/* $Id: protocol.c,v 1.9 2004/05/02 00:11:12 ken3 Exp $ */
 
 #include <config.h>
 
@@ -89,7 +89,7 @@ static char *nntp_parsesuccess(char *str, const char **status)
 {
     char *success = NULL;
 
-    if (!strncmp(str, "282 ", 4)) {
+    if (!strncmp(str, "283 ", 4)) {
 	success = str+4;
     }
 
