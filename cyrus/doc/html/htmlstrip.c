@@ -53,7 +53,7 @@ struct tag {
 };
 
 struct tag cmds[] = {
-    { "!--",	0,		0,		0, },
+    { "!--",	FLAG_NOPUSH,	0,		0, },
     { "html",	0,		0,		0, },
     { "head",	0,		MODE_IGNORETXT,	0, },
     { "title",	0,		MODE_IGNORETXT,	0, },
