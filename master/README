@@ -8,7 +8,7 @@ START {
 #  idled		cmd="idled"
 }
 
-# UNIX sockets start with a slash and are put into /var/imap/sockets
+# UNIX sockets start with a slash and are absolute paths
 SERVICES {
   # add or remove based on preferences
   imap		cmd="imapd" listen="imap" prefork=1
