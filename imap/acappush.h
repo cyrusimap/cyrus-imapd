@@ -1,14 +1,11 @@
-
-
-#ifndef ACAPPUSH_H
-#define ACAPPUSH_H
+#ifndef ACAPPUSH_H_
+#define ACAPPUSH_H_
 
 /* for bit32 definitions */
 #include "mailbox.h"
 
-
-/* file to redevue (sp) at */
-#define ACAPPUSH_PATH "/tmp/.acappush"
+/* socket to communicate with the acappusher */
+#define FNAME_ACAPPUSH_SOCK "/socket/acappush"
 
 typedef struct acapmbdata_s {
     unsigned long uidvalidity;
@@ -19,9 +16,6 @@ typedef struct acapmbdata_s {
 
     /* 1 for null. leave at end of structure for alignment */
     char name[MAX_MAILBOX_NAME+1];
-
 } acapmbdata_t;
 
-
-
-#endif /* ACAP_LISTEN_H */
+#endif /* ACAPPUSH_H_ */

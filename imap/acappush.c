@@ -15,14 +15,13 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <com_err.h>
 
-
-
+#include <acap.h>
 #include "xmalloc.h"
 #include "imapconf.h"
 #include "acapmbox.h"
 #include "acappush.h"
-#include <acap.h>
 
 /* if disconnected and can't reconnect right away how long to wait until retrying */
 #define RECONNECT_TIME (10*60)
@@ -148,7 +147,7 @@ int senditem(acap_conn_t *acapconn, acapmbdata_t *item)
     snprintf(tmpstr, sizeof(tmpstr), "%d", item->exists);
     add_attr(newentry->attrs, "mailbox.total", tmpstr);
 
-    /* create the cmd; if it's the first time through, we ACAP_STORE_INITIAL */
+    /* store data to server */
     result = acap_store_entry(acapconn,
 			      newentry,
 			      NULL,
@@ -200,7 +199,7 @@ void sendsomequeued(acap_conn_t *acapconn, int num)
 
 void fatal(const char *msg, int err)
 {
-    if (debugmode) printf("dying with %s %d\n",msg,err);
+    if (debugmode) fprintf(stderr, "dying with %s %d\n",msg,err);
     syslog(LOG_CRIT, msg);
     syslog(LOG_NOTICE, "exiting");
     exit(err);
@@ -245,7 +244,7 @@ int main(int argc, char **argv)
 	    debugmode = 1;
 	    break;
 	default:
-	    printf("Invalid arguement\n");
+	    fprintf(stderr, "invalid argument\n");
 	    exit(1);
 	    break;
 	}
@@ -271,7 +270,8 @@ int main(int argc, char **argv)
 
     /* bind it to a local file */
     local.sun_family = AF_UNIX;
-    strcpy(local.sun_path, ACAPPUSH_PATH);
+    strcpy(local.sun_path, config_dir);
+    strcat(local.sun_path, FNAME_ACAPPUSH_SOCK);
     unlink(local.sun_path);
     len = strlen(local.sun_path) + sizeof(local.sun_family);
 
@@ -294,7 +294,6 @@ int main(int argc, char **argv)
 	}
 	
 	if (pid != 0) { /* parent */
-	    
 	    exit(0);
 	}
     }
@@ -313,11 +312,13 @@ int main(int argc, char **argv)
 	    {
 	    case CONNECTED:
 		r = acap_process_outstanding(acap_conn);
-		if (r != ACAP_OK) syslog(LOG_ERR, "acap_process_outstanding(): %s",
+		if (r != ACAP_OK) syslog(LOG_ERR, 
+					 "acap_process_outstanding(): %s",
 					 error_message(r));
 		if (r == ACAP_NO_CONNECTION)
 		{
-		    if (debugmode) printf("Acap connection dropped\n");
+		    if (debugmode) 
+			fprintf(stderr, "Acap connection dropped\n");
 		    connected = DISCONNECTED;
 		    acap_conn = NULL;
 		    FD_CLR(acapsock, &read_set);
@@ -328,7 +329,8 @@ int main(int argc, char **argv)
 
 		acap_conn = connect_acap();
 		if (acap_conn != NULL) {
-		    if (debugmode) printf("Made connection to ACAP server\n");
+		    if (debugmode) 
+			fprintf(stderr, "Made connection to ACAP server\n");
 
 		    acapsock = acap_conn_get_sock(acap_conn);	    
 		    connected = CONNECTED;
@@ -337,7 +339,9 @@ int main(int argc, char **argv)
 		    if (acapsock+1 > nfds) nfds = acapsock + 1;
 		    
 		} else {
-		    if (debugmode) printf("Failed to make connection to ACAP server\n");
+		    if (debugmode) 
+			fprintf(stderr, 
+				"Failed to make connection to ACAP server\n");
 		    connected = LAST_CONNECT_FAILED;
 		    when_disconnected = time(NULL);
 		}
@@ -371,36 +375,32 @@ int main(int argc, char **argv)
 
 	/* read on unix socket */
 	if (FD_ISSET(s, &rset)) {
-
 	    fromlen = sizeof(from);
-	    
 	    memset(str,'\0',sizeof(str));
-	    
-	    n = recvfrom(s, str, sizeof(str), 0, (struct sockaddr *) &from, &fromlen);
+	    n = recvfrom(s, str, sizeof(str), 0, 
+			 (struct sockaddr *) &from, &fromlen);
 	    str[n]  = '\0';
 	    
-	    switch(connected)
+	    switch(connected) {
+	    case CONNECTED:
+		if (hashtable.total_exists > 0)
 		{
-		case CONNECTED:
-		    if (hashtable.total_exists > 0)
-		    {
+		    queueitem((acapmbdata_t *) str);
+		    sendsomequeued(acap_conn, 5);
+		} else {
+		    if (senditem(acap_conn,(acapmbdata_t *)str)!=ACAP_OK)
 			queueitem((acapmbdata_t *) str);
-			sendsomequeued(acap_conn, 5);
-		    } else {
-			if (senditem(acap_conn,(acapmbdata_t *)str)!=ACAP_OK)
-			    queueitem((acapmbdata_t *) str);
-		    }
-
-		    break;
-		default:
-		    queueitem((acapmbdata_t *)str);
-		    break;
-		    
 		}
-	    		
-	    } else {
-		/* log some sort of error */	    
+		
+		break;
+
+	    default:
+		queueitem((acapmbdata_t *)str);
+		break;
 	    }
+	} else {
+	    /* log some sort of error */	    
+	}
     }
 
     /* never gets here */      
