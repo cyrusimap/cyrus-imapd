@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.265 2000/07/19 01:53:04 ken3 Exp $ */
+/* $Id: imapd.c,v 1.266 2000/07/19 02:01:54 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1585,7 +1585,7 @@ char *cmd;
  */
 #define MAXIDFAILED	3
 #define MAXIDLOG	5
-#define MAXIDLOGLEN	(11 + MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6))
+#define MAXIDLOGLEN	(MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6))
 #define MAXIDFIELDLEN	30
 #define MAXIDVALUELEN	1024
 #define MAXIDPAIRS	30
@@ -1723,7 +1723,7 @@ void cmd_id(char *tag)
     /* log the client's ID string.
        eventually this should be a callback or something. */
     if (npair && logged_id < MAXIDLOG) {
-	char logbuf[MAXIDLOGLEN] = "client id:";
+	char logbuf[MAXIDLOGLEN + 1] = "";
 	struct strlist *fptr, *vptr;
 
 	for (fptr = fields, vptr = values; fptr;
@@ -1739,7 +1739,7 @@ void cmd_id(char *tag)
 			"\"%s\"", vptr->s);
 	}
 
-	syslog(LOG_INFO, "%s", logbuf);
+	syslog(LOG_INFO, "client id:%s", logbuf);
 
 	logged_id++;
     }
