@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.251 2003/01/02 17:27:32 rjs3 Exp $
+dnl $Id: configure.in,v 1.252 2003/01/02 17:28:27 rjs3 Exp $
 dnl
 
 
@@ -118,6 +118,9 @@ AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
+
+dnl do this before Berkeley DB detection
+CMU_SOCKETS
 
 dnl Berkeley DB Detection
 
@@ -895,7 +898,6 @@ dnl
 SNMP_SUBDIRS=""
 AC_SUBST(SNMP_SUBDIRS)
 
-CMU_SOCKETS
 CMU_LIBWRAP
 CMU_UCDSNMP
 
