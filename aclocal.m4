@@ -2,7 +2,7 @@ dnl
 dnl Additional macros for configure.in packaged up for easier theft.
 dnl tjs@andrew.cmu.edu 6-may-1998
 dnl
-dnl $Id: aclocal.m4,v 1.5 1998/09/29 03:29:03 tjs Exp $
+dnl $Id: aclocal.m4,v 1.6 1998/09/29 21:30:21 tjs Exp $
 dnl
 
 dnl It would be good if ANDREW_ADD_LIBPATH could detect if something was
@@ -43,3 +43,13 @@ AC_DEFUN(ANDREW_GUESS_RUNPATH_SWITCH, [
     ])
   LDFLAGS="${SAVE_LDFLAGS}"
   ])])
+
+dnl Find res_search, which is either in libc or libresolv, depending
+dnl on version of Solaris/SunOS Linux libc/glibc phase of the moon, etc.
+AC_DEFUN(ANDREW_RESOLV, [
+  AC_CHECK_FUNC(res_search,,AC_CHECK_LIB(resolv,res_search))
+])
+
+AC_DEFUN(ANDREW_CRYPT, [
+  AC_CHECK_FUNC(crypt,,AC_CHECK_LIB(crypt, crypt))
+])
