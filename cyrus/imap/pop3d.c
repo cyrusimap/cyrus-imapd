@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.47 1999/08/09 21:07:50 leg Exp $
+ * $Id: pop3d.c,v 1.48 1999/08/26 18:51:03 leg Exp $
  */
 
 #ifndef __GNUC__
@@ -68,7 +68,7 @@ extern int errno;
 
 extern char *login_capabilities();
 
-#ifdef HAVE_SASL_KRB
+#ifdef HAVE_KRB
 #include <krb.h>
 
 /* MIT's kpop authentication kludge */
@@ -186,7 +186,7 @@ char **envp;
     opterr = 0;
     while ((opt = getopt(argc, argv, "k")) != EOF) {
 	switch(opt) {
-#ifdef HAVE_SASL_KRB
+#ifdef HAVE_KRB
 	case 'k':
 	    kflag++;
 	    break;
@@ -254,7 +254,7 @@ char **envp;
     prot_settimeout(popd_in, timeout*60);
     prot_setflushonread(popd_in, popd_out);
 
-#ifdef HAVE_SASL_KRB
+#ifdef HAVE_KRB
     if (kflag) kpop();
 #endif
 
@@ -267,7 +267,7 @@ char **envp;
 usage()
 {
     prot_printf(popd_out, "-ERR usage: pop3d%s\r\n",
-#ifdef HAVE_SASL_KRB
+#ifdef HAVE_KRB
 		" [-k]"
 #else
 		""
@@ -306,7 +306,7 @@ void fatal(const char* s, int code)
     shut_down(code);
 }
 
-#ifdef HAVE_SASL_KRB
+#ifdef HAVE_KRB
 /*
  * MIT's kludge of a kpop protocol
  * Client does a krb_sendauth() first thing
@@ -643,7 +643,7 @@ char *pass;
 	return;
     }
 
-#ifdef HAVE_SASL_KRB
+#ifdef HAVE_KRB
     if (kflag) {
 	if (strcmp(popd_userid, kdata.pname) != 0 ||
 	    kdata.pinst[0] ||
