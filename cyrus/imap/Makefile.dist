@@ -1,4 +1,4 @@
-# $Id: Makefile.dist,v 1.5.4.1 2003/01/31 18:56:19 leg Exp $
+# $Id: Makefile.dist,v 1.5.4.2 2003/03/19 00:15:21 rjs3 Exp $
 # it would be nice to figure out how to make "Makefile" do an
 # 'include' of this file.
 # we'd have to make this use srcdir and only define COMPILE_ET if it wasn't
@@ -11,8 +11,7 @@ BUILT_SOURCES = imap_err.h imap_err.c \
 	nntp_err.h nntp_err.c \
 	mupdate_err.h mupdate_err.c \
 	lmtpstats.c lmtpstats.h \
-	pushstats.c pushstats.h \
-	imapopts.c imapopts.h
+	pushstats.c pushstats.h
 
 dist: $(BUILT_SOURCES)
 
@@ -30,6 +29,3 @@ pushstats.c pushstats.h: pushstats.snmp
 
 lmtpstats.c lmtpstats.h: lmtpstats.snmp
 	$(SNMPGEN) lmtpstats.snmp
-
-imapopts.c imapopts.h: imapoptions ../tools/config2header
-	../tools/config2header imapopts.c imapopts.h < imapoptions
