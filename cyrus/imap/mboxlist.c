@@ -1556,7 +1556,7 @@ int newquota;
     if (len) {
 	mboxlist_changequota(quota.root, 0, 0);
     }
-    mboxlist_findall(pattern, 1, 0, mboxlist_changequota);
+    mboxlist_findall(pattern, 1, 0, 0, mboxlist_changequota);
     
     r = mailbox_write_quota(&quota);
     if (quota.fd != -1) {
