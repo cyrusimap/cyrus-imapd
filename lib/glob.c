@@ -42,7 +42,7 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.25.2.3 2003/12/01 19:40:55 rjs3 Exp $
+ * $Id: glob.c,v 1.25.2.4 2003/12/02 15:12:57 ken3 Exp $
  */
 
 #include <config.h>
@@ -213,8 +213,10 @@ int glob_test (g, ptr, len, min)
     const char *ghier, *phier;	/* pointers for '%' patterns */
     const char *start;		/* start of input string */
     int newglob;
-    int firsttime = 1;
-    
+    int sepfound;		/* Set to 1 when a separator is found
+    				 * after a '%'. Otherwise 0.
+				 */
+
     /* check for remaining partial matches */
     if (min && *min < 0) return (-1);
 
@@ -249,20 +251,14 @@ int glob_test (g, ptr, len, min)
 	ghier = g->ghier;
 	gptr = g->gptr;
     }
-
+    
     /* main globbing loops */
     if (!(g->flags & GLOB_ICASE)) {
 	/* case sensitive version */
 
 	/* loop to manage wildcards */
 	do {
-	    /* reset hierarchy state */
-	    if(firsttime) {
-		firsttime = 0;
-	    } else {
-		ghier = NULL;
-	    }
-
+	    sepfound = 0;
 	    /* see if we match to the next '%' or '*' wildcard */
 	    while (*gptr != '*' && *gptr != '%' && ptr != pend
 		   && (*gptr == *ptr || (!newglob && *gptr == '?'))) {
@@ -293,7 +289,7 @@ int glob_test (g, ptr, len, min)
 		    gptr = ghier;
 		    break;
 		}
-		if (*ptr == g->sep_char && *ptr != *ghier) {
+		if (*ptr == g->sep_char) {
 		    if (!*ghier && min
 			&& *min < ptr - start && ptr != pend
 			&& *ptr == g->sep_char
@@ -301,8 +297,8 @@ int glob_test (g, ptr, len, min)
 			*min = gstar ? ptr - start + 1 : -1;
 			return (ptr - start);
 		    }
-		    gptr = ghier;
 		    ghier = NULL;
+		    sepfound = 1;
 		} else {
 		    phier = ++ptr;
 		    gptr = ghier + 1;
@@ -322,7 +318,8 @@ int glob_test (g, ptr, len, min)
 		ptr = ++pstar;
 		gptr = gstar + 1;
 	    }
-	    if (*gptr == '\0' && min && *min < ptr - start && ptr != pend && *ptr == g->sep_char) {
+	    if (*gptr == '\0' && min && *min < ptr - start && ptr != pend &&
+		*ptr == g->sep_char) {
 		/* The pattern ended on a hierarchy separator
 		 * return a partial match */
 		*min = ptr - start + 1;
@@ -331,19 +328,13 @@ int glob_test (g, ptr, len, min)
 
 	    /* continue if at wildcard or we passed an asterisk */
 	} while (*gptr == '*' || *gptr == '%' ||
-		 ((gstar || ghier) && (*gptr || ptr != pend)));
+		 ((gstar || ghier || sepfound) && (*gptr || ptr != pend)));
     } else {
 	/* case insensitive version (same as above, but with TOLOWER()) */
 
 	/* loop to manage wildcards */
 	do {
-	    /* reset hierarchy state */
-	    if(firsttime) {
-		firsttime = 0;
-	    } else {
-		ghier = NULL;
-	    }
-
+	    sepfound = 0;
 	    /* see if we match to the next '%' or '*' wildcard */
 	    while (*gptr != '*' && *gptr != '%' && ptr != pend
 		   && ((unsigned char) *gptr == TOLOWER(*ptr) || 
@@ -384,6 +375,7 @@ int glob_test (g, ptr, len, min)
 			return (ptr - start);
 		    }
 		    ghier = NULL;
+		    sepfound = 1;
 		} else {
 		    phier = ++ptr;
 		    gptr = ghier + 1;
@@ -404,7 +396,8 @@ int glob_test (g, ptr, len, min)
 		ptr = ++pstar;
 		gptr = gstar + 1;
 	    }
-	    if (*gptr == '\0' && min && *min < ptr - start && ptr != pend && *ptr == g->sep_char) {
+	    if (*gptr == '\0' && min && *min < ptr - start && ptr != pend &&
+		*ptr == g->sep_char) {
 		/* The pattern ended on a hierarchy separator
 		 * return a partial match */
 		*min = ptr - start + 1;
@@ -413,7 +406,7 @@ int glob_test (g, ptr, len, min)
 
 	    /* continue if at wildcard or we passed an asterisk */
 	} while (*gptr == '*' || *gptr == '%' ||
-		 ((gstar || ghier) && (*gptr || ptr != pend)));
+		 ((gstar || ghier || sepfound) && (*gptr || ptr != pend)));
     }
 
     if (min) *min = -1;
