@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.9 2000/04/28 22:01:26 leg Exp $
+   $Id: seen_db.c,v 1.10 2000/05/05 21:35:50 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -165,7 +165,7 @@ static int seen_readold(struct seen *seendb,
     const char *base;
     const char *buf = 0, *p;
     unsigned long len, linelen;
-    unsigned long offset;
+    unsigned long offset = 0;
 
     strcpy(fnamebuf, seendb->path);
     strcat(fnamebuf, FNAME_SEEN);
@@ -175,7 +175,7 @@ static int seen_readold(struct seen *seendb,
 	/* no old-style seen file for this database */
 	linelen = 0;
     } else if (fd == -1) {
-	syslog("error opening '%s': %m", fnamebuf);
+	syslog(LOG_ERR, "error opening '%s': %m", fnamebuf);
 	return IMAP_IOERROR;
     } else {
 	if (fstat(fd, &sbuf) == -1) {
