@@ -157,7 +157,12 @@ AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
 	${with_login_base}) true;;
 	${with_login_base}_*) true;;
 	*) AC_MSG_ERROR(Authorization module incompatibile with login module);;
-	esac],WITH_AUTH="$WITH_LOGIN")
+	esac],
+	if test -f ${srcdir}/lib/auth_${WITH_LOGIN}.c; then
+		WITH_AUTH="$WITH_LOGIN"
+	else
+		WITH_AUTH=`echo $WITH_LOGIN | sed 's/_.*$//'`
+	fi)
 AC_SUBST(WITH_AUTH)
 dnl
 dnl XXX MUST CHECK FOR TCL BEFORE KERBEROS V4 XXX
