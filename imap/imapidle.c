@@ -39,6 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* $Id: imapidle.c,v 1.2 2000/11/30 16:26:30 ken3 Exp $ */
 
 #include "imapidle.h"
 #include "service.h"
