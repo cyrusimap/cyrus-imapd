@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.13 2001/03/28 15:29:47 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.14 2001/03/29 00:44:49 ken3 Exp $
  */
 #include <config.h>
 
@@ -680,7 +680,8 @@ static void cmd_apop(char *user, char *digest)
 	syslog(LOG_NOTICE, "login: %s %s APOP %s",
 	       popd_clienthost, popd_userid, reply ? reply : "");
     }
-    openinbox();
+    openproxy();
+    popd_auth_done = 1;
 }
 #else
 static int apop_enabled(void)
