@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.54.4.7 2003/04/03 15:24:38 ken3 Exp $
+ * $Id: script.c,v 1.54.4.8 2003/05/18 13:51:13 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -799,7 +799,13 @@ int sieve_execute_bytecode(sieve_bytecode_t *bc, sieve_interp_t *interp,
     
     if (sieve_eval_bc(interp, bc->data, bc->len, message_context, 
 		      &imapflags, actions, notify_list, &errmsg) < 0)
-	return SIEVE_RUN_ERROR;  
+    {
+	ret = SIEVE_RUN_ERROR;
+	return do_sieve_error(ret, interp, script_context,
+			      message_context, &imapflags,
+			      actions, notify_list, lastaction, 0,
+			      actions_string, errmsg);
+    }
     
     return do_action_list(interp, script_context, message_context, 
 			  &imapflags, actions, notify_list, actions_string,
