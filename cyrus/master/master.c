@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.65 2002/04/04 22:25:36 ken3 Exp $ */
+/* $Id: master.c,v 1.66 2002/04/11 21:47:29 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -130,6 +130,7 @@ static struct centry *ctable[child_table_size];
 static struct centry *cfreelist;
 
 void limit_fds(rlim_t);
+void schedule_event(struct event *a);
 
 static char *mystrdup(const char *s)
 {
@@ -483,11 +484,55 @@ void fcntl_unset(int fd, int flag)
 
 void spawn_service(struct service *s)
 {
+    /* Note that there is logic that depends on this being 2 */
+    const int FORKRATE_INTERVAL = 2;
+
     pid_t p;
     int i;
     char path[1024];
     static char name_env[100];
     struct centry *c;
+    time_t now = time(NULL);
+    
+    /* update our fork rate */
+    if(now - s->last_interval_start >= FORKRATE_INTERVAL) {
+	int interval;
+	
+	s->forkrate = (s->interval_forks/2) + (s->forkrate/2);
+	s->interval_forks = 0;
+	s->last_interval_start += FORKRATE_INTERVAL;
+
+	/* if there is an even wider window, however, we need
+	 * to account for a good deal of zeros, we can do this at once */
+	interval = now - s->last_interval_start;
+
+	if(interval > 2) {
+	    int skipped_intervals = interval / FORKRATE_INTERVAL;
+	    /* avoid a > 30 bit right shift) */
+	    if(skipped_intervals > 30) s->forkrate = 0;
+	    else {
+		/* divide by 2^(skipped_intervals).
+		 * this is the logic mentioned in the comment above */
+		s->forkrate >>= skipped_intervals;
+		s->last_interval_start = now;
+	    }
+	}
+    }
+
+    /* If we've been busy lately, we will refuse to fork! */
+    /* (We schedule a wakeup call for sometime soon though to be
+     * sure that we don't wait to do the fork that is required forever! */
+    if(s->maxforkrate && s->forkrate >= s->maxforkrate) {
+	struct event *evt = (struct event *) malloc(sizeof(struct event));
+	if (!evt) fatal("out of memory", EX_UNAVAILABLE);
+	memset(evt, 0, sizeof(struct event));
+
+	evt->name = "forkrate wakeup call";
+	evt->mark = time(NULL) + FORKRATE_INTERVAL;
+	schedule_event(evt);
+
+	return;
+    }
 
     switch (p = fork()) {
     case -1:
@@ -534,6 +579,7 @@ void spawn_service(struct service *s)
 
     default:			/* parent */
 	s->ready_workers++;
+	s->interval_forks++;
 	s->nforks++;
 	s->nactive++;
 
@@ -590,45 +636,51 @@ void spawn_schedule(time_t now)
 
     /* run all events */
     while (a && a != schedule) {
-	switch (p = fork()) {
-	case -1:
-	    syslog(LOG_CRIT, "can't fork process to run event %s", a->name);
-	    break;
+	/* if a->exec is NULL, we just used the event to wake up,
+	 * so we actually don't need to exec anything at the moment */
+	if(a->exec) {
+	    switch (p = fork()) {
+	    case -1:
+		syslog(LOG_CRIT,
+		       "can't fork process to run event %s", a->name);
+		break;
 
-	case 0:
-	    if (become_cyrus() != 0) {
-		syslog(LOG_ERR, "can't change to the cyrus user");
-		exit(1);
+	    case 0:
+		if (become_cyrus() != 0) {
+		    syslog(LOG_ERR, "can't change to the cyrus user");
+		    exit(1);
+		}
+		
+		/* close all listeners */
+		for (i = 0; i < nservices; i++) {
+		    if (Services[i].socket > 0) close(Services[i].socket);
+		    if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
+		    if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
+		}
+		limit_fds(256);
+		
+		get_prog(path, a->exec);
+		syslog(LOG_DEBUG, "about to exec %s", path);
+		execv(path, a->exec);
+		syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
+		exit(EX_OSERR);
+		break;
+		
+	    default:
+		/* we don't wait for it to complete */
+		
+		/* add to child table */
+		c = get_centry();
+		c->pid = p;
+		c->s = NULL;
+		c->next = ctable[p % child_table_size];
+		ctable[p % child_table_size] = c;
+		
+		break;
 	    }
-
-	    /* close all listeners */
-	    for (i = 0; i < nservices; i++) {
-		if (Services[i].socket > 0) close(Services[i].socket);
-		if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
-		if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
-	    }
-	    limit_fds(256);
-
-	    get_prog(path, a->exec);
-	    syslog(LOG_DEBUG, "about to exec %s", path);
-	    execv(path, a->exec);
-	    syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
-	    exit(EX_OSERR);
-	    break;
-	    
-	default:
-	    /* we don't wait for it to complete */
-	    
-	    /* add to child table */
-	    c = get_centry();
-	    c->pid = p;
-	    c->s = NULL;
-	    c->next = ctable[p % child_table_size];
-	    ctable[p % child_table_size] = c;
-
-	    break;
-	}
-
+	} /* a->exec */
+	
+	/* reschedule as needed */
 	b = a->next;
 	if (a->period) {
 	    a->mark = now + a->period;
@@ -849,10 +901,15 @@ void add_service(const char *name, struct entry *e, void *rock)
     int ignore_err = (int) rock;
     char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
     int prefork = masterconf_getint(e, "prefork", 0);
+    int babysit = masterconf_getswitch(e, "babysit", 0);
+    int maxforkrate = masterconf_getint(e, "maxforkrate", 0);
     char *listen = mystrdup(masterconf_getstring(e, "listen", NULL));
     char *proto = mystrdup(masterconf_getstring(e, "proto", "tcp"));
     char *max = mystrdup(masterconf_getstring(e, "maxchild", "-1"));
     int i;
+
+    if(babysit && prefork == 0) prefork = 1;
+    if(babysit && maxforkrate == 0) maxforkrate = 10; /* reasonable safety */
 
     if (!cmd || !listen) {
 	char buf[256];
@@ -893,8 +950,11 @@ void add_service(const char *name, struct entry *e, void *rock)
 	Services[i].exec = tokenize(cmd);
 	if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
 
+	Services[i].maxforkrate = maxforkrate;
+
 	if (!strcmp(Services[i].proto, "tcp")) {
 	    Services[i].desired_workers = prefork;
+	    Services[i].babysit = babysit;
 	    Services[i].max_workers = atoi(max);
 	    if (Services[i].max_workers == -1) {
 		Services[i].max_workers = INT_MAX;
@@ -934,9 +994,11 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 	Services[nservices].ready_workers = 0;
 
+	Services[nservices].maxforkrate = maxforkrate;
 
 	if(!strcmp(Services[nservices].proto, "tcp")) {
 	    Services[nservices].desired_workers = prefork;
+	    Services[nservices].babysit = babysit;
 	    Services[nservices].max_workers = atoi(max);
 	    if (Services[nservices].max_workers == -1) {
 		Services[nservices].max_workers = INT_MAX;
@@ -949,6 +1011,10 @@ void add_service(const char *name, struct entry *e, void *rock)
 	
 	memset(Services[nservices].stat, 0, sizeof(Services[nservices].stat));
 
+	Services[nservices].last_interval_start = time(NULL);
+	Services[nservices].interval_forks = 0;
+	Services[nservices].forkrate = 0;
+	
 	Services[nservices].nforks = 0;
 	Services[nservices].nactive = 0;
 	Services[nservices].nconnections = 0;
@@ -1185,12 +1251,11 @@ int main(int argc, char **argv)
 	/* run any scheduled processes */
 	spawn_schedule(now);
 
-	tvptr = NULL;
-	if (schedule) {
-	    if (now < schedule->mark) tv.tv_sec = schedule->mark - now;
-	    else tv.tv_sec = 0;
-	    tv.tv_usec = 0;
-	    tvptr = &tv;
+	/* reap first, that way if we need to babysit we will */
+	if (gotsigchld) {
+	    /* order matters here */
+	    gotsigchld = 0;
+	    reap_child();
 	}
 	
 	/* do we have any services undermanned? */
@@ -1199,13 +1264,15 @@ int main(int argc, char **argv)
 		(Services[i].nactive < Services[i].max_workers) &&
 		(Services[i].ready_workers < Services[i].desired_workers)) {
 		spawn_service(&Services[i]);
+	    } else if (Services[i].exec
+		       && Services[i].babysit
+		       && Services[i].nactive == 0) {
+		syslog(LOG_ERR,
+		       "lost all children for service: %s.  " \
+		       "Applying babysitter.",
+		       Services[i].name);
+		spawn_service(&Services[i]);
 	    }
-	}
-
-	if (gotsigchld) {
-	    /* order matters here */
-	    gotsigchld = 0;
-	    reap_child();
 	}
 
 	if (gotsighup) {
@@ -1247,6 +1314,17 @@ int main(int argc, char **argv)
 	    }
 	}
 	maxfd++;		/* need 1 greater than maxfd */
+
+	/* how long to wait? - do now so that any scheduled wakeup
+	 * calls get accounted for*/
+	tvptr = NULL;
+	if (schedule) {
+	    if (now < schedule->mark) tv.tv_sec = schedule->mark - now;
+	    else tv.tv_sec = 0;
+	    tv.tv_usec = 0;
+	    tvptr = &tv;
+	}
+
 #ifdef HAVE_UCDSNMP
 	if (tvptr == NULL) blockp = 1;
 	snmp_select_info(&maxfd, &rfds, tvptr, &blockp);
