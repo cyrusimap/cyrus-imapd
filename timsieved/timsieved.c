@@ -185,7 +185,7 @@ static int mysasl_authproc(void *context,
     /* we want to authenticate as a different user: ok if we're an admin or
      a proxy server */
     if (strcmp(canon_authuser, canon_requser)) {
-	if (sieved_userisadmin && authisa(sieved_authstate, "sieve", 
+	if (sieved_userisadmin || authisa(sieved_authstate, "sieve", 
 					  "proxyservers")) {
 	    sieved_userisadmin = 0; /* no longer admin */
 	    auth_freestate(sieved_authstate);
