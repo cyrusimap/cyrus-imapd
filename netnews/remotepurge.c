@@ -453,7 +453,7 @@ int purge_me(char *name, time_t when)
 			 "EXISTS", CALLBACK_NUMBERED, callback_exists,
 			 (void *)0, (char *)0);
     imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
-		  "%a \"%s\"", "SELECT", name);		 
+		  "%a %s", "SELECT", name);		 
 
     cmd_done = NOTFINISHED;
 
