@@ -58,9 +58,6 @@ static int mboxlist_deletesubmailbox();
 static struct quota *mboxlist_newquota;
 static int mboxlist_changequota();
 
-static char *searchquota_quotaroot, *searchquota_ignoremailbox;
-static int mboxlist_searchquota();
-
 #define FNAME_MBOXLIST "/mailboxes"
 #define FNAME_USERDIR "/user/"
 #define FNAME_SUBSSUFFIX ".sub"
@@ -1623,32 +1620,6 @@ int newquota;
     return r;
 }
 
-#if 0
-int
-mboxlist_maybedeletequota(quotaroot, ignoremailbox)
-char *quotaroot;
-char *ignoremailbox;
-{
-    char buf[MAX_MAILBOX_PATH];
-
-    if (strcasecmp(quotaroot, ignoremailbox) != 0 &&
-	mboxlist_lookup(quotaroot, (char **)0, (char **)0) == 0) {
-	/* Mailbox with same name as quota root exists */
-	return 0;
-    }
-
-    strcpy(buf, quotaroot);
-    strcat(buf, ".*");
-    searchquota_quotaroot = quotaroot;
-    searchquota_ignoremailbox = ignoremailbox;
-
-    if (mboxlist_findall(buf, 1, 0, mboxlist_searchquota)) return 0;
-
-    sprintf(buf, "%s%s%s", config_dir, FNAME_QUOTADIR, quotaroot);
-    unlink(buf);
-    return 0;
-}
-#endif
 
 /*
  * Open and lock the subscription list for 'userid'.
@@ -1845,30 +1816,6 @@ int maycreate;
 	   name, mboxlist_newquota->root, error_message(r));
     
     return 0;
-}
-
-/*
- * Helper function to look for a mailbox (other than
- * searchquota_ignoremailbox) which has a quota root of
- * searchquota_quotaroot.
- */
-static int
-mboxlist_searchquota(name, matchlen, maycreate)
-char *name;
-int matchlen;
-int maycreate;
-{
-    struct mailbox mailbox;
-
-    if (strcasecmp(name, searchquota_quotaroot) == 0) return 0;
-
-    if (mailbox_open_header(name, &mailbox)) return 1;
-    if (!mailbox.quota.root ||
-	strcmp(mailbox.quota.root, searchquota_quotaroot) != 0) {
-	mailbox_close(&mailbox);
-	return 0;
-    }
-    return 1;
 }
 
 /*
