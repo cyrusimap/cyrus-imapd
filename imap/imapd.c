@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.401 2002/07/24 20:42:22 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.402 2002/07/25 18:23:29 ken3 Exp $ */
 
 #include <config.h>
 
@@ -6092,8 +6092,7 @@ static int do_xfer_single(char *toserver, char *topart,
     if(!r) {
 	backout_mupdate = 1;
 
-	prot_printf(be->out, "D01 UNDUMP {%d+}\r\n%s ", strlen(mailboxname),
-		    mailboxname);
+	prot_printf(be->out, "D01 UNDUMP {%d+}\r\n%s ", strlen(name), name);
 
 	r = dump_mailbox(NULL, mailboxname, path, acl, 0, be->in, be->out,
 			 imapd_authstate);
@@ -6112,12 +6111,12 @@ static int do_xfer_single(char *toserver, char *topart,
     
     /* Step 5: Set ACL on remote */
     if(!r) {
-	r = trashacl(be->in, be->out, mailboxname);
+	r = trashacl(be->in, be->out, name);
 	if(r) syslog(LOG_ERR, "Could not clear remote acl on %s",
 		     mailboxname);
     }
     if(!r) {
-	r = dumpacl(be->in, be->out, mailboxname, acl);
+	r = dumpacl(be->in, be->out, name, acl);
 	if(r) syslog(LOG_ERR, "Could not set remote acl on %s",
 		     mailboxname);
     }
@@ -6168,11 +6167,11 @@ done:
 	/* xxx if the mupdate server is what failed, then this won't
 	   help any! */
 	snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
-	rerr = mupdate_activate(mupdate_h, name, buf, acl);
+	rerr = mupdate_activate(mupdate_h, mailboxname, buf, acl);
 	if(rerr) {
 	    syslog(LOG_ERR,
 		   "Could not back out mupdate during move of %s (%s)",
-		   name, error_message(rerr));
+		   mailboxname, error_message(rerr));
 	}
     }
     if(r && backout_remotebox) {
@@ -6289,6 +6288,13 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 						   imapd_userid,
 						   mailboxname);
     }
+
+    /* NOTE: Since XFER can only be used by an admin, and we always connect
+     * to the destination backend as an admin, we take advantage of the fact
+     * that admins *always* use a consistent mailbox naming scheme.
+     * So, 'name' should be used in any command we send to a backend, and
+     * 'mailboxname' is the internal name to be used for mupdate and findall.
+     */
 
     if(!strncmp(mailboxname, "user.", 5) && !strchr(mailboxname+5, '.')) {
 	if (!strcmp(mailboxname+5, imapd_userid)) {
@@ -6413,11 +6419,11 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    /* xxx if the mupdate server is what failed, then this won't
 	       help any! */
 	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
-	    rerr = mupdate_activate(mupdate_h, name, buf, acl);
+	    rerr = mupdate_activate(mupdate_h, mailboxname, buf, acl);
 	    if(rerr) {
 		syslog(LOG_ERR,
 		       "Could not back out mupdate during move of %s (%s)",
-		       name, error_message(rerr));
+		       mailboxname, error_message(rerr));
 	    }
 	} else if(!r) {
 	    /* this was a successful user delete, and we need to delete
