@@ -42,6 +42,11 @@ dnl Bunch of setproctitle stuff
 spt_type=""
 AC_CHECK_FUNC(setproctitle,spt_type=SPT_BUILTIN)
 if test "$spt_type" = ""; then
+	dnl BSD/OS and FreeBSD put it in -lutil
+	AC_CHECK_LIB(util,setproctitle,spt_type=SPT_BUILTIN
+			LIBS="${LIBS} -lutil")
+fi
+if test "$spt_type" = ""; then
 	AC_CHECK_HEADER(sys/pstat.h,spt_type=SPT_PSTAT)
 fi
 if test "$spt_type" = ""; then
@@ -193,6 +198,9 @@ AC_ARG_WITH(login,[  --with-login=METHOD     use login module METHOD
 		WITH_LOGIN=unix
 	fi)
 AC_SUBST(WITH_LOGIN)
+case "$WITH_LOGIN" in
+	unix|unix_*) AC_CHECK_LIB(crypt, main);;
+esac
 if test "$WITH_LOGIN" = unix_pwcheck; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} pwcheck"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} pwcheck/Makefile"
