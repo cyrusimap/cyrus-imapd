@@ -624,17 +624,15 @@ int main(int argc, char **argv)
   else
     result=auth_sasl(mechlist);
 
-  if (result!=IMTEST_OK)
-  {
+  if (result!=IMTEST_OK) {
     printf("Authentication failed.\n");
     exit(1);
   }
 
-  printf("Authentication succeeded.\n");
+  /* printf("Authentication succeeded.\n");*/
 
   if (viewfile!=NULL)
   {
-    printf("viewfile=%s\n",viewfile);
     getscript(pout,pin, viewfile,0);
   }
 

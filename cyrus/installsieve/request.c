@@ -105,7 +105,6 @@ int installdata(struct protstream *pout, struct protstream *pin,
 
   prot_printf(pout, "PUTSCRIPT \"%s\" ",scriptname);
 
-
   prot_printf(pout, "{%d+}\r\n",len);
 
   prot_write(pout, data, len);
@@ -116,8 +115,8 @@ int installdata(struct protstream *pout, struct protstream *pin,
   /* now let's see what the server said */
   res=yylex(&state,pin);
 
-  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))    
-    parseerror("STRING");
+  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
+    parseerror("TOKEN");
 
   if (yylex(&state,pin)!=' ')
     parseerror("SPACE");
@@ -143,11 +142,19 @@ int installdata(struct protstream *pout, struct protstream *pin,
 
 static char *getsievename(char *filename)
 {
-  char *ret;
+  char *ret, *ptr;
 
   ret=(char *) xmalloc( strlen(filename) + 2);
 
-  strcpy(ret, filename);
+  /* just take the basename of the file */
+  ptr = strrchr(filename, '/');
+  if (ptr == NULL) {
+      ptr = filename;
+  } else {
+      ptr++;
+  }
+
+  strcpy(ret, ptr);
 
   if ( strcmp( ret + strlen(ret) - 7,".script")==0)
   {
@@ -218,8 +225,8 @@ int installafile(struct protstream *pout, struct protstream *pin,char *filename)
   /* now let's see what the server said */
   res=yylex(&state,pin);
 
-  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))    
-    parseerror("STRING");
+  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
+    parseerror("ATOM");
 
   if (yylex(&state,pin)!=' ')
     parseerror("SPACE");
@@ -332,10 +339,8 @@ int setscriptactive(struct protstream *pout, struct protstream *pin,char *name)
 
 static int viewafile(string_t *data, char *name)
 {
-  printf("-----------script (%s)-----\n",name);
-  printf("%s\r\n",string_DATAPTR(data));
-  printf("----------------------------------\n");
-  
+  printf("%s\r\n", string_DATAPTR(data));
+
   return 0;
 }
 
