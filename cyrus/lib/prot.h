@@ -1,7 +1,7 @@
 /* prot.h -- stdio-like module that handles buffering, SASL, and TLS
  *           details for I/O over sockets
  *
- * $Id: prot.h,v 1.35.4.5 2002/11/22 18:32:34 rjs3 Exp $
+ * $Id: prot.h,v 1.35.4.6 2003/02/04 19:49:28 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -157,6 +157,7 @@ extern int prot_putc(int c, struct protstream *s);
 
 #define prot_BLOCK(s) ((s)->dontblock = 0)
 #define prot_NONBLOCK(s) ((s)->dontblock = 1)
+#define prot_IS_BLOCKING(s) ((s)->dontblock == 0)
 
 /* Allocate/free the protstream structure */
 extern struct protstream *prot_new(int fd, int write);
