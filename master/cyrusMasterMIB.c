@@ -66,7 +66,7 @@ struct variable4 cyrusMasterMIB_variables[] = {
 #define   SERVICENAME           7
   { SERVICENAME         , ASN_OCTET_STR , RONLY , var_serviceTable, 3, { 2,1,3 } },
 #define   SERVICEID             8
-  { SERVICEID           , ASN_INTEGER   , RONLY , var_serviceTable, 3, { 2,1,4 } },
+  { SERVICEID           , ASN_INTEGER   , NOACCESS , var_serviceTable, 3, { 2,1,4 } },
 
 };
 /*    (L = length of the oidsuffix) */
