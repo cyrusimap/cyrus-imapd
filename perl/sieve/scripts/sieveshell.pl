@@ -40,7 +40,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: sieveshell.pl,v 1.18 2002/10/18 20:17:13 rjs3 Exp $
+# $Id: sieveshell.pl,v 1.19 2002/12/02 19:45:11 rjs3 Exp $
 #
 
 use Cyrus::SIEVE::managesieve;
@@ -177,6 +177,8 @@ if (!defined $obj) {
 }
 
 my $term = Term::ReadLine->new("sieveshell");
+
+$term->ornaments(0);
 
 while(defined($_  = $term->readline('> '))){
   
