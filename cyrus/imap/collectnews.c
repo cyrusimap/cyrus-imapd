@@ -63,6 +63,8 @@ char **argv;
 
     config_init("collectnews");
 
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
     newsprefix = config_getstring("newsprefix", 0);
     if (newsprefix) newsprefixlen = strlen(newsprefix);
     

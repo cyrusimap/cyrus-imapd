@@ -90,6 +90,8 @@ main()
 
     config_init("updateimsp");
 
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
     strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, FNAME_DROPDIR);
     

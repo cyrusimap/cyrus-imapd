@@ -93,6 +93,8 @@ char **argv;
 
     config_init("quota");
 
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
     while ((opt = getopt(argc, argv, "f")) != EOF) {
 	switch (opt) {
 	case 'f':

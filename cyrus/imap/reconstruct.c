@@ -83,6 +83,8 @@ char **argv;
 
     config_init("reconstruct");
 
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
     /* Ensure we're up-to-date on the index file format */
     assert(INDEX_HEADER_SIZE == (OFFSET_UIDVALIDITY+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8));

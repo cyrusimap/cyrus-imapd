@@ -69,6 +69,8 @@ char **argv;
 
     config_init("arbitron");
 
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
     while ((opt = getopt(argc, argv, "d:p:")) != EOF) {
 	switch (opt) {
 	case 'd':

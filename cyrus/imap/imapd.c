@@ -1,4 +1,4 @@
-/* imapd.c -- IMAP server protocol parsing
+v/* imapd.c -- IMAP server protocol parsing
  *
  *	(C) Copyright 1994 by Carnegie Mellon University
  *
@@ -103,6 +103,8 @@ char **envp;
 
     signal(SIGPIPE, SIG_IGN);
     gethostname(hostname, sizeof(hostname));
+
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
     /* Find out name of client host */
     salen = sizeof(imapd_remoteaddr);

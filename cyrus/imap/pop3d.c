@@ -104,6 +104,8 @@ char **envp;
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
 
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
     opterr = 0;
     while ((opt = getopt(argc, argv, "k")) != EOF) {
 	switch(opt) {
