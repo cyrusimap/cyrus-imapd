@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.22 1998/09/29 03:12:43 tjs Exp $
+# $Id: Makefile.in,v 1.23 1998/11/03 19:40:30 tjs Exp $
 #
 # @configure_input@
 # Copyright 1998 Carnegie Mellon University
@@ -27,7 +27,7 @@
 #  tech-transfer@andrew.cmu.edu
 # 
 
-SUBDIRS = man @PRE_SUBDIRS@ lib imap imtest @TCL_SUBDIRS@ @EXTRA_SUBDIRS@
+SUBDIRS = man @PRE_SUBDIRS@ lib @SERVER_SUBDIRS@ imtest @TCL_SUBDIRS@ @EXTRA_SUBDIRS@
 
 srcdir = @srcdir@
 VPATH = @srcdir@

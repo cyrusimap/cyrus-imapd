@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.123 1998/09/29 21:30:48 tjs Exp $
+dnl $Id: configure.in,v 1.124 1998/11/03 19:40:29 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -496,6 +496,15 @@ if test -n "$TCL_SUBDIRS"; then
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} cyradm/Makefile"
 fi
 AC_SUBST(TCL_SUBDIRS)
+
+SERVER_SUBDIRS="imap"
+AC_ARG_ENABLE(server,
+	[  --disable-server        disable compiling servers],
+	if test "$enableval" = no; then
+        	SERVER_SUBDIRS=""
+	fi)
+AC_SUBST(SERVER_SUBDIRS)
+# We always output a server makefile (just because we can)
 
 dnl To link against Tcl, configure does several things to make my life
 dnl "easier".
