@@ -72,7 +72,8 @@ struct db {
     long ino;
 
     const char *base;		/* contents of file */
-    unsigned long size;
+    unsigned long size;		/* actual size */
+    unsigned long len;		/* mapped size */
 };
 
 struct txn {
@@ -110,9 +111,10 @@ static int abort_txn(struct db *db, struct txn *tid)
 	    r = CYRUSDB_IOERROR;
 	}
 	if (!r) {
-	    map_free(&db->base, &db->size);
-	    map_refresh(db->fd, 0, &db->base, &db->size, sbuf.st_size,
+	    map_free(&db->base, &db->len);
+	    map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size,
 			db->fname, 0);
+	    db->size = sbuf.st_size;
 	}
     }
 
@@ -175,9 +177,10 @@ static int myopen(const char *fname, struct db **ret)
     db->ino = sbuf.st_ino;
 
     db->base = 0;
-    db->size = 0;
-    map_refresh(db->fd, 0, &db->base, &db->size, sbuf.st_size,
+    db->len = 0;
+    map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size,
 		fname, 0);
+    db->size = sbuf.st_size;
 
     db->fname = xstrdup(fname);
 
@@ -189,7 +192,7 @@ static int myclose(struct db *db)
 {
     assert(db);
 
-    map_free(&db->base, &db->size);
+    map_free(&db->base, &db->len);
     close(db->fd);
     free_db(db);
 
@@ -216,10 +219,11 @@ static int starttxn_or_refetch(struct db *db, struct txn **mytid)
 	*mytid = new_txn();
 
 	if (db->ino != sbuf.st_ino) {
-	    map_free(&db->base, &db->size);
+	    map_free(&db->base, &db->len);
 	}
-	map_refresh(db->fd, 0, &db->base, &db->size, sbuf.st_size,
+	map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size,
 		    db->fname, 0);
+	db->size = sbuf.st_size;
     }
 
     if (!mytid) {
@@ -247,10 +251,11 @@ static int starttxn_or_refetch(struct db *db, struct txn **mytid)
 	    }
 	    
 	    db->ino = sbuf.st_ino;
-	    map_free(&db->base, &db->size);
+	    map_free(&db->base, &db->len);
 	}
-	map_refresh(db->fd, 0, &db->base, &db->size,
+	map_refresh(db->fd, 0, &db->base, &db->len,
 		    sbuf.st_size, db->fname, 0);
+	db->size = sbuf.st_size;
     }
 
     return 0;
@@ -384,9 +389,10 @@ static int mystore(struct db *db,
 
 	if (sbuf.st_ino != db->ino) {
 	    db->ino = sbuf.st_ino;
-	    map_free(&db->base, &db->size);
-	    map_refresh(db->fd, 0, &db->base, &db->size,
+	    map_free(&db->base, &db->len);
+	    map_refresh(db->fd, 0, &db->base, &db->len,
 			sbuf.st_size, db->fname, 0);
+	    db->size = sbuf.st_size;
 	}
 
 	if (mytid) {
@@ -420,26 +426,22 @@ static int mystore(struct db *db,
     }
 
     niov = 0;
-    iov[niov].iov_base = (char *) db->base;
-    iov[niov++].iov_len = offset;
+    if (offset) {
+	WRITEV_ADD_TO_IOVEC(iov, niov, (char *) db->base, offset);
+    }
 
     if (data) {
 	/* new entry */
-	iov[niov].iov_base = (char *) key;
-	iov[niov++].iov_len = keylen;
-	
-	iov[niov].iov_base = "\t";
-	iov[niov++].iov_len = 1;
-	
-	iov[niov].iov_base = (char *) data;
-	iov[niov++].iov_len = datalen;
-	
-	iov[niov].iov_base = "\n";
-	iov[niov++].iov_len = 1;
+	WRITEV_ADD_TO_IOVEC(iov, niov, (char *) key, keylen);
+	WRITEV_ADD_TO_IOVEC(iov, niov, "\t", 1);
+	WRITEV_ADD_TO_IOVEC(iov, niov, (char *) data, datalen);
+	WRITEV_ADD_TO_IOVEC(iov, niov, "\n", 1);
     }
 
-    iov[niov].iov_base = (char *) db->base + offset + len;
-    iov[niov++].iov_len = db->size - (offset + len);
+    if (db->size - (offset + len) > 0) {
+	WRITEV_ADD_TO_IOVEC(iov, niov, (char *) db->base + offset + len,
+			    db->size - (offset + len));
+    }
 
     /* do the write */
     r = retry_writev(writefd, iov, niov);
@@ -459,9 +461,10 @@ static int mystore(struct db *db,
 	if (!(*mytid)->fnamenew) (*mytid)->fnamenew = xstrdup(fnamebuf);
 	if ((*mytid)->fd) close((*mytid)->fd);
 	(*mytid)->fd = writefd;
-	map_free(&db->base, &db->size);
-	map_refresh(writefd, 0, &db->base, &db->size, sbuf.st_size,
+	map_free(&db->base, &db->len);
+	map_refresh(writefd, 0, &db->base, &db->len, sbuf.st_size,
 		    fnamebuf, 0);
+	db->size = sbuf.st_size;
     } else {
 	/* commit immediately */
 	if (fsync(writefd) ||
@@ -483,9 +486,10 @@ static int mystore(struct db *db,
 	}
 
 	db->ino = sbuf.st_ino;
-	map_free(&db->base, &db->size);
-	map_refresh(writefd, 0, &db->base, &db->size, sbuf.st_size,
+	map_free(&db->base, &db->len);
+	map_refresh(writefd, 0, &db->base, &db->len, sbuf.st_size,
 	    db->fname, 0);
+	db->size = sbuf.st_size;
     }
 
     return r;
