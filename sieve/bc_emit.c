@@ -1,7 +1,7 @@
 /* bc_emit.c -- sieve bytecode - pass 2 of the compiler
  * Rob Siemborski
  * Jen Smith
- * $Id: bc_emit.c,v 1.1.4.1 2003/02/27 18:13:51 rjs3 Exp $
+ * $Id: bc_emit.c,v 1.1.4.2 2003/03/31 16:55:25 rjs3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -604,14 +604,16 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 		}
 		
 	    }
-	    if(write(fd,&bc->data[codep++].value,
-		     sizeof(bc->data[codep++].value)) == -1)
+	    if(write(fd,&bc->data[codep].value,
+		     sizeof(bc->data[codep].value)) == -1)
 		return -1;
+	    codep++;
 	    filelen += sizeof(int);
 
-	    if(write(fd,&bc->data[codep++].value,
-		     sizeof(bc->data[codep++].value)) == -1)
+	    if(write(fd,&bc->data[codep].value,
+		     sizeof(bc->data[codep].value)) == -1)
 		return -1;
+	    codep++;
 	    filelen += sizeof(int);
 
 	    break;
