@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.57 2002/02/20 21:03:00 leg Exp $
+ * $Id: lmtpengine.c,v 1.58 2002/02/21 17:43:08 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -201,7 +201,13 @@ static void send_lmtp_error(struct protstream *pout, int r)
 	break;
 
     case IMAP_QUOTA_EXCEEDED:
-	prot_printf(pout, "452 4.2.2 Over quota\r\n");
+	if(config_getswitch("lmtp_overquota_perm_failure",0)) {
+	    /* Not Default - Perm Failure */
+	    prot_printf(pout, "552 5.2.2 Over quota\r\n");
+	} else {
+	    /* Default - Temp Failure */
+	    prot_printf(pout, "452 4.2.2 Over quota\r\n");
+	}
 	break;
 
     case IMAP_MAILBOX_BADFORMAT:
