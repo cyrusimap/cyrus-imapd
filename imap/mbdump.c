@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.17 2002/05/23 21:12:38 rjs3 Exp $
+ * $Id: mbdump.c,v 1.18 2002/05/24 18:05:15 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,7 @@
 #include <dirent.h>
 #include <time.h>
 #include <assert.h>
+#include <com_err.h>
 
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -457,6 +458,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 {
     struct buf file, data;
     char c;
+    int quotaused = 0;
     int r = 0;
     int curfile = -1;
     const char *userid = NULL;
@@ -593,6 +595,11 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 		r = IMAP_PROTOCOL_ERROR;
 		goto done;
 	    }
+	    if(strncmp(file.s, "cyrus.", 6)) {
+		/* it doesn't match cyrus.*, so its a message file.
+		 * charge it against the quota */
+		quotaused += data.len;
+	    }
 	}	
 
 	/* if we haven't opened it, do so */
@@ -623,6 +630,31 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	if(c == ')') break;
     }
     
+    if(!r && quotaused) {
+	struct quota quota;
+	char quota_root[MAX_MAILBOX_PATH];
+	
+	if(mailbox_findquota(quota_root, mbname)) {
+	    /* update the quota file */
+	    memset(&quota, 0, sizeof(quota));
+	    quota.root = quota_root;
+	    quota.fd = -1;
+	    r = mailbox_lock_quota(&quota);
+	    if(!r) {
+		quota.used += quotaused;
+		r = mailbox_write_quota(&quota);
+		close(quota.fd);
+	    } else {
+		syslog(LOG_ERR, "could not lock quota file for %s (%s)",
+		       quota_root, error_message(r));
+	    }
+	    if(r) {
+		syslog(LOG_ERR, "failed writing quota file for %s (%s)",
+		       quota_root, error_message(r));
+	    }
+	}
+    }
+
  done:
     /* eat the rest of the line, we have atleast a \r\n coming */
     eatline(pin, c);

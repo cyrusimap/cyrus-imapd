@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.391 2002/05/24 15:38:26 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.392 2002/05/24 18:05:14 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -4515,8 +4515,11 @@ char *quotaroot;
     }
 
     if (badresource) r = IMAP_UNSUPPORTED_QUOTA;
-    else if (!imapd_userisadmin) r = IMAP_PERMISSION_DENIED;
-    else {
+    else if (!imapd_userisadmin && !imapd_userisproxyadmin) {
+	/* need to allow proxies so that mailbox moves can set initial quota
+	 * roots */
+	r = IMAP_PERMISSION_DENIED;
+    } else {
 	/* are we forcing the creation of a quotaroot by having a leading +? */
 	if(quotaroot[0] == '+') {
 	    force = 1;
@@ -6351,6 +6354,35 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 			 mailboxname);
 	    else backout_mupdate = 1;
 	}
+
+	/* If needed, set an uppermost quota root */
+	{
+	    char buf[MAX_MAILBOX_PATH];
+	    struct quota quota;
+	    
+	    quota.fd = -1;
+	    quota.root = mailboxname;
+	    mailbox_hash_quota(buf,quota.root);
+	    quota.fd = open(buf, O_RDWR, 0);
+	    if(quota.fd != -1) {	    
+		r = mailbox_read_quota(&quota);
+		close(quota.fd);
+	    
+		if(!r) {
+		    /* note use of + to force the setting of a nonexistant
+		     * quotaroot */
+		    prot_printf(be->out, "Q01 SETQUOTA {%d+}\r\n" \
+				         "+%s (STORAGE %d)\r\n",
+				strlen(name)+1, name, quota.limit);
+		    r = getresult(be->in, "Q01");
+		    if(r) syslog(LOG_ERR,
+				 "Could not move mailbox: %s, " \
+				 "failed setting initial quota root\r\n",
+				 mailboxname);
+		}
+	    }
+	}
+
 
 	/* recursively move all sub-mailboxes, using internal names */
 	if(!r) {
