@@ -19,7 +19,11 @@ CMU_COMERR
   It does *not* add -lcom_err to LIBS (this would cause later library
   checks to fail if com_err needs to be built), so Makefiles need to
   explicitly add -lcom_err (which, after all, should always exist as
-  long as the com_err compile doesn't blow up).
+  long as the com_err compile doesn't blow up).  Makefiles should do
+  this by using LIB_COMERR, which will substitute to the appropriate
+  magic to use to grab the library.  (This may involve a libtool archive;
+  you should be using libtool to link your program if you distribute
+  libraries with it that the program may link against).
 
   Note that com_err will only be compiled if the configure script
   can't find compile_et or libcom_err; if the system already has them,
@@ -43,3 +47,7 @@ CMU_PTHREADS
   support (for example, most things want _REENTRANT to be defined,
   but Solaris wants _POSIX_PTHREAD_SEMANTICS and __EXTENSIONS__, IRIX
   wants to see _SGI_REENTRANT_FUNCTIONS, etc).
+
+CMU_SASL
+  This tries to find a SASL library, and calls AC_SUBST on LIB_SASL
+  if it finds one, or tells the user to go ftp it if it doesn't exist.
