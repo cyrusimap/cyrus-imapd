@@ -32,6 +32,7 @@ main()
     int r;
     int len;
     char fnamebuf[1024];
+    mode_t oldumask;
 
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL6);
     
@@ -48,7 +49,12 @@ main()
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
     strcpy(srvaddr.sun_path, fnamebuf);
+    /* Most Unixen make sockets 777 by default
+       Not Linux, not DUX. */
+    oldumask = umask((mode_t) 0); /* for Linux */
     r = bind(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
+    umask(oldumask); /* for Linux */
+    chmod(fnamebuf, 0777); /* for DUX */
     if (r == -1) {
 	printf("bind: %s ", fnamebuf);
         perror("");
