@@ -87,7 +87,7 @@ char **envp;
 
     proc_register("imapd", imapd_clienthost, (char *)0, (char *)0);
 
-    printf("* OK %s Cyrus IMAP2bis v0.2-ALPHA server ready\r\n", hostname);
+    printf("* OK %s Cyrus IMAP4 v0.3-ALPHA server ready\r\n", hostname);
     cmdloop();
 }
 
@@ -132,7 +132,7 @@ int code;
 cmdloop()
 {
     int c;
-    int usinguid, havepartition;
+    int usinguid, havepartition, havenamespace;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
     char *p;
 
@@ -427,13 +427,21 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Subscribe")) {
 		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
-		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		havenamespace = 0;
+		c = getastring(&arg1);
+		if (c == ' ') {
+		    havenamespace = 1;
+		    c = getastring(&arg2);
+		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = getc(stdin);
 		if (c != '\n') goto extraargs;
-		cmd_changesub(tag.s, arg1.s, arg2.s, 1);
+		if (havenamespace) {
+		    cmd_changesub(tag.s, arg1.s, arg2.s, 1);
+		}
+		else {
+		    cmd_changesub(tag.s, (char *)0, arg1.s, 1);
+		}
 	    }		
 	    else if (!strcmp(cmd.s, "Setacl")) {
 		if (c != ' ') goto missingargs;
@@ -479,13 +487,21 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Unsubscribe")) {
 		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
-		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		havenamespace = 0;
+		c = getastring(&arg1);
+		if (c == ' ') {
+		    havenamespace = 1;
+		    c = getastring(&arg2);
+		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = getc(stdin);
 		if (c != '\n') goto extraargs;
-		cmd_changesub(tag.s, arg1.s, arg2.s, 0);
+		if (havenamespace) {
+		    cmd_changesub(tag.s, arg1.s, arg2.s, 0);
+		}
+		else {
+		    cmd_changesub(tag.s, (char *)0, arg1.s, 0);
+		}
 	    }		
 	    else goto badcmd;
 	    break;
@@ -1362,8 +1378,14 @@ char *partition;
 	return;
     }
 
-    r = mboxlist_createmailbox(name, MAILBOX_FORMAT_NORMAL, partition,
-			       imapd_userisadmin, imapd_userid);
+    if (name[0] && name[strlen(name)-1] == '.') {
+	printf("%s OK Create of non-terminal names is unnecessary\r\n", tag);
+	return;
+    }
+    else {
+	r = mboxlist_createmailbox(name, MAILBOX_FORMAT_NORMAL, partition,
+				   imapd_userisadmin, imapd_userid);
+    }
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
@@ -1471,8 +1493,8 @@ int add;
 {
     int r;
 
-    lcase(namespace);
-    if (!strcmp(namespace, "mailbox")) {
+    if (namespace) lcase(namespace);
+    if (!namespace || !strcmp(namespace, "mailbox")) {
 	r = mboxlist_changesub(name, imapd_userid, add);
     }
     else if (!strcmp(namespace, "bboard")) {
