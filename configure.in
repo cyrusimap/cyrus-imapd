@@ -176,6 +176,15 @@ if test "$WITH_AUTH" = krb_pts; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
 	AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix")
 fi
+
+TCL_SUBDIRS="cyradm"
+AC_ARG_ENABLE(cyradm,
+	[  --disable-cyradm        disable compling cyradm],
+	if test "$enableval" = no; then
+		TCL_SUBDIRS=""
+	fi)		
+AC_SUBST(TCL_SUBDIRS)
+
 dnl
 dnl XXX MUST CHECK FOR TCL BEFORE KERBEROS V4 XXX
 dnl This is because some genius at MIT named one of the Kerberos v4
@@ -184,7 +193,6 @@ dnl logarithm function in the standard math library, used by Tcl.
 dnl
 dnl Checking for Tcl first puts -lm before -lkrb on the library list.
 dnl
-TCL_SUBDIRS="cyradm"
 AC_ARG_WITH(tcl,[  --with-tcl=PATH         use Tcl from PATH],
 	with_tcl="${withval}")
 if test -z "$with_tcl"; then
@@ -193,14 +201,15 @@ if test -z "$with_tcl"; then
      fi
 fi
 case "$with_tcl" in
-	no) TCL_SUBDIRS="" ;;
+	no) if test "$TCL_SUBDIRS" != ""; then
+		AC_MSG_ERROR(Could not find Tcl libraries.  You must either install Tcl or configure with --disable-cyradm)
+	    fi;;
 	""|yes) AC_CHECK_LIB(tcl,main,LIBS="${LIBS} -ltcl -lm",
 	    [AC_MSG_WARN([Unable to find Tcl, will not compile cyradm])
 	     TCL_SUBDIRS=""],-lm) ;;
 	*)  CPPFLAGS="${CPPFLAGS} -I${with_tcl}/include"
 	    LIBS="${LIBS} ${with_tcl}/lib/libtcl.a -lm" ;;
 esac
-AC_SUBST(TCL_SUBDIRS)
 dnl
 dnl Test for Zephyr
 dnl
