@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.112 2002/04/01 23:11:00 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.113 2002/04/03 03:15:25 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -102,8 +102,11 @@
 #define IDLE_TIMEOUT (5 * 60)
 
 static const int ultraparanoid = 1; /* should we kick after every operation? */
-
 static unsigned int proxyd_cmdcnt;
+
+static int referral_kick = 0; /* kick after next command recieved, for
+				 referrals that are likely to change the
+				 mailbox list */
 
 /* all subscription commands go to the backend server containing the
    user's inbox */
@@ -1254,6 +1257,12 @@ void cmdloop()
 	    if (isupper((unsigned char) *p)) *p = tolower(*p);
 	}
 
+	/* if we need to force a kick, do so */
+	if(referral_kick) {
+	    kick_mupdate();
+	    referral_kick = 0;
+	}
+	
 	/* Only Authenticate/Login/Logout/Noop/Starttls 
 	   allowed when not logged in */
 	if (!proxyd_userid && !strchr("ALNCIS", cmd.s[0])) goto nologin;
@@ -3384,6 +3393,7 @@ void cmd_delete(char *tag, char *name)
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r && supports_referrals) { 
 	proxyd_refer(tag, server, mailboxname);
+	referral_kick = 1;
 	return;
     }
 
@@ -4114,6 +4124,8 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
     if (!r && proxyd_userisadmin && supports_referrals) {
 	/* They aren't an admin remotely, so let's refer them */
 	proxyd_refer(tag, server, name);
+	referral_kick = 1;
+	return;
     } else if (!r) {
 	if (rights) {
 	    prot_printf(s->out, 
