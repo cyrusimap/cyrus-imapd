@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32.4.7 2002/10/03 18:21:06 ken3 Exp $ */
+/* $Id: fud.c,v 1.32.4.8 2002/10/08 20:50:10 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -83,6 +83,10 @@ extern int optind;
 
 /* current namespace */
 static struct namespace fud_namespace;
+
+/* config.c info.  note that technically we may need partition data, but
+ * only if we're not on a frontend, so we won't flat-out require it here */
+const int config_need_data = 0;
 
 /* forward decls */
 extern void setproctitle_init(int argc, char **argv, char **envp);

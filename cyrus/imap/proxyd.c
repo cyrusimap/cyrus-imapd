@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.28 2002/10/03 18:21:09 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.29 2002/10/08 20:50:12 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -94,6 +94,9 @@
 #include "pushstats.h"
 #include "telemetry.h"
 #include "backend.h"
+
+/* config.c stuff */
+const int config_need_data = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're

@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.9.4.2 2002/08/13 19:50:23 ken3 Exp $
+/* $Id: cyrdump.c,v 1.9.4.3 2002/10/08 20:50:10 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,6 +62,9 @@
 #include "imapd.h"
 #include "exitcodes.h"
 #include "imapurl.h"
+
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 int verbose = 0;
 

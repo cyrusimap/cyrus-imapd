@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.13 2002/10/03 18:21:09 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.14 2002/10/08 20:50:12 rjs3 Exp $
  */
 #include <config.h>
 
@@ -100,7 +100,8 @@ extern int opterr;
 
 extern int errno;
 
-
+/* config.c stuff */
+const int config_need_data = 0;
 
 #ifdef HAVE_SSL
 static SSL *tls_conn;

@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.5.4.3 2002/08/13 19:50:27 ken3 Exp $
+ * $Id: squatter.c,v 1.5.4.4 2002/10/08 20:50:13 rjs3 Exp $
  */
 
 /*
@@ -95,6 +95,9 @@
 #include "map.h"
 #include "squat.h"
 #include "imapd.h"
+
+/* global state */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 extern char *optarg;
 extern int optind;

@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.6.6.1 2002/07/25 17:21:40 ken3 Exp $
+ * $Id: chk_cyrus.c,v 1.6.6.2 2002/10/08 20:50:09 rjs3 Exp $
  */
 
 #include <config.h>
@@ -71,8 +71,10 @@
 #include "imapconf.h"
 #include "map.h"
 
-/* need to use these names so the macros are happy */
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
+/* need to use these names so the macros are happy */
 static const char *index_base;
 static unsigned long index_len;
 static unsigned long start_offset;

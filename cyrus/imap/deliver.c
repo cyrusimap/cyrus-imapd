@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.164.4.2 2002/08/02 16:55:04 ken3 Exp $ */
+/* $Id: deliver.c,v 1.164.4.3 2002/10/08 20:50:10 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -74,6 +74,9 @@
 #include "lmtpengine.h"
 #include "prot.h"
 #include "version.h"
+
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 extern int optind;
 extern char *optarg;

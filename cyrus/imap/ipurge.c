@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.15.2.3 2002/08/21 20:43:48 ken3 Exp $
+ * $Id: ipurge.c,v 1.15.2.4 2002/10/08 20:50:11 rjs3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -69,6 +69,9 @@
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 /* globals for getopt routines */
 extern char *optarg;

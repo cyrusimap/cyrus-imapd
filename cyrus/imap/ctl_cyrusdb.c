@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.14 2002/05/29 16:49:14 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.14.4.1 2002/10/08 20:50:10 rjs3 Exp $
  */
 
 #include <config.h>
@@ -87,6 +87,9 @@
 #include "tls.h"
 
 #define N(a) (sizeof(a) / sizeof(a[0]))
+
+/* config.c stuff */
+const int config_need_data = 0;
 
 struct cyrusdb {
     const char *name;

@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.10.2.2 2002/10/03 18:21:12 ken3 Exp $
+ * $Id: notifyd.c,v 1.10.2.3 2002/10/08 20:50:22 rjs3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -67,6 +67,8 @@
 #include "xmalloc.h"
 #include "exitcodes.h"
 
+/* global state */
+const int config_need_data = 0;
 
 static int soc = 0; /* master has handed us the port as stdin */
 

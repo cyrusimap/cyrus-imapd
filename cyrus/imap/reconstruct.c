@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68.4.5 2002/08/23 19:52:06 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.6 2002/10/08 20:50:13 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -104,6 +104,9 @@ struct discovered {
 
 /* current namespace */
 static struct namespace recon_namespace;
+
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 /* forward declarations */
 void do_mboxlist(void);

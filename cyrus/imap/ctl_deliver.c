@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.14 2002/01/15 18:44:09 leg Exp $
+ $Id: ctl_deliver.c,v 1.14.4.1 2002/10/08 20:50:10 rjs3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,6 +62,8 @@
 #include "exitcodes.h"
 #include "duplicate.h"
 
+/* global state */
+const int config_need_data = 0;
 
 void fatal(const char *message, int code)
 {
@@ -172,4 +174,4 @@ main(argc, argv)
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.14 2002/01/15 18:44:09 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.14.4.1 2002/10/08 20:50:10 rjs3 Exp $ */

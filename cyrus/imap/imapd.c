@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.37 2002/10/03 18:21:06 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.38 2002/10/08 20:50:10 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -100,6 +100,8 @@ extern char *optarg;
 extern int errno;
 
 /* global state */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
+
 static char shutdownfilename[1024];
 static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;

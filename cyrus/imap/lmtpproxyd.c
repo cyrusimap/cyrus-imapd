@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42.4.9 2002/10/03 18:21:07 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.10 2002/10/08 20:50:11 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -82,6 +82,9 @@
 #include "mupdate-client.h"
 #include "lmtpengine.h"
 #include "lmtpstats.h"
+
+/* config.c stuff */
+const int config_need_data = 0;
 
 struct protstream *deliver_out = NULL, *deliver_in = NULL;
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.41.4.2 2002/07/25 17:21:44 ken3 Exp $ */
+/* $Id: quota.c,v 1.41.4.3 2002/10/08 20:50:13 rjs3 Exp $ */
 
 
 #include <config.h>
@@ -90,6 +90,9 @@ extern char *optarg;
 
 /* current namespace */
 static struct namespace quota_namespace;
+
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 /* forward declarations */
 void usage(void);

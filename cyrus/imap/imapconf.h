@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.8 2002/08/29 23:32:31 rjs3 Exp $
+ * $Id: imapconf.h,v 1.16.4.9 2002/10/08 20:50:10 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -164,5 +164,8 @@ extern void cyrus_ctime(time_t date, char *datebuf);
 #define FNAME_USERDIR "/user/"
 #define FNAME_DOMAINDIR "/domain/"
 #define FNAME_LOGDIR "/log/"
+
+/* config requirement flags */
+#define CONFIG_NEED_PARTITION_DATA (1<<0)
 
 #endif /* INCLUDED_IMAPCONF_H */

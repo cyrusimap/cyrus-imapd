@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.11 2002/10/03 18:21:08 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.12 2002/10/08 20:50:12 rjs3 Exp $
  */
 #include <config.h>
 
@@ -136,6 +136,9 @@ static mailbox_decideproc_t expungedeleted;
 static struct proxy_context popd_proxyctx = {
     0, 1, NULL, NULL, NULL
 };
+
+/* signal to config.c */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 /* current namespace */
 static struct namespace popd_namespace;

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.18 2002/10/07 16:18:30 rjs3 Exp $ */
+/* $Id: config.c,v 1.55.4.19 2002/10/08 20:50:09 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -92,6 +92,9 @@ const char *config_defdomain;              /* NULL */
 
 const char *config_ident;                  /* the service name */
 
+/* declared in each binary that uses config.c */
+extern const int config_need_data;
+
 static void config_read(const char *alt_config);
 
 int config_init(const char *alt_config, const char *ident)
@@ -126,7 +129,8 @@ int config_init(const char *alt_config, const char *ident)
 		EC_CONFIG);
 	if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
     }
-    if (!config_partitiondir(config_defpartition)) {
+    if ((config_need_data & CONFIG_NEED_PARTITION_DATA) &&
+	(!config_defpartition || !config_partitiondir(config_defpartition))) {
 	snprintf(buf, sizeof(buf),
 		"partition-%s option not specified in configuration file",
 		config_defpartition);

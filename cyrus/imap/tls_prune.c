@@ -40,16 +40,19 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: tls_prune.c,v 1.2 2001/11/13 17:32:28 leg Exp $ */
+/* $Id: tls_prune.c,v 1.2.6.1 2002/10/08 20:50:13 rjs3 Exp $ */
 
 #include <config.h>
 
 #include <stdio.h>
 #include <unistd.h>
 
-#include "tls.h"
-#include "imapconf.h"
 #include "exitcodes.h"
+#include "imapconf.h"
+#include "tls.h"
+
+/* global state */
+const int config_need_data = 0;
 
 void fatal(const char *message, int code)
 {

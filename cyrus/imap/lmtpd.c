@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.13 2002/10/04 17:16:47 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.14 2002/10/08 20:50:11 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -152,6 +152,8 @@ static void usage();
 static void setup_sieve();
 
 /* global state */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
+
 extern int optind;
 extern char *optarg;
 extern int errno;

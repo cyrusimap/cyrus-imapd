@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.36.2.1 2002/08/16 22:00:47 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.36.2.2 2002/10/08 20:50:10 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -62,6 +62,9 @@
 #include "xmalloc.h"
 #include "imap_err.h"
 #include "mupdate-client.h"
+
+/* config.c stuff */
+const int config_need_data = 0;
 
 extern int optind;
 extern char *optarg;

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.6.6.2 2002/08/22 14:32:16 ken3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.6.6.3 2002/10/08 20:50:10 rjs3 Exp $
  */
 
 #include <config.h>
@@ -67,16 +67,19 @@
 extern int errno;
 
 #include "acl.h"
-#include "auth.h"
-#include "glob.h"
 #include "assert.h"
-#include "imapconf.h"
+#include "auth.h"
 #include "cyrusdb.h"
-#include "util.h"
-#include "mailbox.h"
 #include "exitcodes.h"
+#include "glob.h"
 #include "imap_err.h"
+#include "imapconf.h"
+#include "mailbox.h"
+#include "util.h"
 #include "xmalloc.h"
+
+/* config.c stuff */
+const int config_need_data = 0;
 
 struct cyrusdb_backend *DB_OLD = NULL, *DB_NEW = NULL;
 

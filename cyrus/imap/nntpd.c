@@ -50,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.15 2002/10/04 19:52:37 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.16 2002/10/08 20:50:12 rjs3 Exp $
  */
 #include <config.h>
 
@@ -149,6 +149,9 @@ static struct mailbox mboxstruct;
 static struct proxy_context nntp_proxyctx = {
     0, 1, NULL, NULL, NULL
 };
+
+/* for config.c */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 /*
  * values for article parts 

@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.12 2002/10/03 19:12:31 ken3 Exp $
+ * $Id: mupdate.c,v 1.60.4.13 2002/10/08 20:50:12 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -195,6 +195,9 @@ void *mupdate_placebo_kick_start(void *rock);
 
 /* --- main() for each thread */
 static void *thread_main(void *rock);
+
+/* --- for config.c */
+const int config_need_data = 0;
 
 static struct conn *conn_new(int fd)
 {
