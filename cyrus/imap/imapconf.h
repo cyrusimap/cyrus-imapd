@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.9 2002/10/08 20:50:10 rjs3 Exp $
+ * $Id: imapconf.h,v 1.16.4.10 2002/10/18 20:02:22 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -128,11 +128,6 @@ struct proxy_context {
     int *userisadmin;
     int *userisproxyadmin;
 };
-
-/* base64 authentication functions (base64.c) */
-void printauthready(struct protstream *out, int len, unsigned char *data);
-int getbase64string(struct protstream *in, struct buf *buf);
-int parsebase64string(char **ptr, const char *s);
 
 /* imap parsing functions (imapparse.c) */
 int getword(struct protstream *in, struct buf *buf);

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.38 2002/10/08 20:50:10 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.39 2002/10/18 20:02:22 ken3 Exp $ */
 
 #include <config.h>
 
@@ -245,6 +245,11 @@ extern void setproctitle_init(int argc, char **argv, char **envp);
 extern int proc_register(const char *progname, const char *clienthost, 
 			 const char *userid, const char *mailbox);
 extern void proc_cleanup(void);
+
+extern int saslserver(sasl_conn_t *conn, const char *mech,
+		      const char *init_resp, const char *continuation,
+		      struct protstream *pin, struct protstream *pout,
+		      int *sasl_result, char **success_data);
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
@@ -1684,11 +1689,6 @@ void
 cmd_authenticate(char *tag,char *authtype)
 {
     int sasl_result;
-    static struct buf clientin;
-    int clientinlen=0;
-    
-    const char *serverout;
-    unsigned int serveroutlen;
     
     const int *ssfp;
     char *ssfmsg=NULL;
@@ -1697,59 +1697,44 @@ cmd_authenticate(char *tag,char *authtype)
 
     int r;
 
-    sasl_result = sasl_server_start(imapd_saslconn, authtype,
-				    NULL, 0,
-				    &serverout, &serveroutlen);    
+    r = saslserver(imapd_saslconn, authtype, NULL, "+ ", imapd_in, imapd_out,
+		   &sasl_result, NULL);
 
-    /* sasl_server_start will return SASL_OK or SASL_CONTINUE on success */
+    if (r != IMAP_SASL_OK) {
+	const char *errorstring = NULL;
 
-    while (sasl_result == SASL_CONTINUE)
-    {
-      char c;
-	
-      /* print the message to the user */
-      printauthready(imapd_out, serveroutlen, (unsigned char *)serverout);
+	switch (r) {
+	case IMAP_SASL_CANCEL:
+	    prot_printf(imapd_out,
+			"%s NO Client canceled authentication\r\n", tag);
+	    break;
+	case IMAP_SASL_PROTERR:
+	    errorstring = prot_error(imapd_in);
 
-      c = prot_getc(imapd_in);
-      if(c == '*') {
-	  eatline(imapd_in,c);
-	  prot_printf(imapd_out,
-		      "%s NO Client canceled authentication\r\n", tag);
-	  reset_saslconn(&imapd_saslconn);
-	  return;
-      } else {
-	  prot_ungetc(c, imapd_in);
-      }
+	    prot_printf(imapd_out,
+			"%s NO Error reading client response: %s\r\n",
+			tag, errorstring ? errorstring : "");
+	    break;
+	default: 
+	    /* failed authentication */
+	    errorstring = sasl_errstring(sasl_result, NULL, NULL);
 
-      /* get string from user */
-      clientinlen = getbase64string(imapd_in, &clientin);
-      if (clientinlen == -1) {
-	reset_saslconn(&imapd_saslconn);
-	prot_printf(imapd_out, "%s BAD Invalid base64 string\r\n", tag);
-	return;
-      }
+	    syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
+		   imapd_clienthost, authtype, sasl_errdetail(imapd_saslconn));
 
-      sasl_result = sasl_server_step(imapd_saslconn,
-				     clientin.s,
-				     clientinlen,
-				     &serverout, &serveroutlen);
-    }
+	    snmp_increment_args(AUTHENTICATION_NO, 1,
+				VARIABLE_AUTH, 0, /* hash_simple(authtype) */ 
+				VARIABLE_LISTEND);
+	    sleep(3);
 
-
-    /* failed authentication */
-    if (sasl_result != SASL_OK)
-    {
-	syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
-	       imapd_clienthost, authtype, sasl_errdetail(imapd_saslconn));
-
-	snmp_increment_args(AUTHENTICATION_NO, 1,
-			    VARIABLE_AUTH, 0, /* hash_simple(authtype) */ 
-			    VARIABLE_LISTEND);
-	sleep(3);
+	    if (errorstring) {
+		prot_printf(imapd_out, "%s NO %s\r\n", tag, errorstring);
+	    } else {
+		prot_printf(imapd_out, "%s NO Error authenticating\r\n", tag);
+	    }
+	}
 
 	reset_saslconn(&imapd_saslconn);
-	prot_printf(imapd_out, "%s NO Error authenticating\r\n", tag);
-
 	return;
     }
 
