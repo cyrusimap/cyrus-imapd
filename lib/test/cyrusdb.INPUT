@@ -14,4 +14,7 @@ get zebra
 get zebra
 get baz
 get duck
+get frogger
+del duck
+get duck
 close
