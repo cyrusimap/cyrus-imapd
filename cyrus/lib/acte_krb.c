@@ -204,9 +204,9 @@ void **state;			/* On success, filled in with state ptr */
 
     strncpy(instance, host_name->h_name, sizeof(instance)-1);
     instance[sizeof(instance)-1] = '\0';
+    strcpy(realm, krb_realmofhost(instance));
     if (p = strchr(instance, '.')) *p = '\0';
 
-    strcpy(realm, krb_realmofhost(host_name->h_name));
 
     /* Fetch imap.hostname service key */
     (void) krb_mk_req(&authent, service, instance, realm, 0);
