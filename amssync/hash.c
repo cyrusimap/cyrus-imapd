@@ -55,7 +55,6 @@ ht_table* ht_create(unsigned long (*h)(void*), unsigned long sz,
     ht_table* table = malloc(sizeof(ht_table));
 
     if (! table) {
-	debug(puts("ht_create: Can't allocate memory for table structure."));
 	return 0;
     }
 
