@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.211 2000/02/18 22:51:36 leg Exp $ */
+/* $Id: imapd.c,v 1.212 2000/02/19 04:46:03 leg Exp $ */
 
 #include <config.h>
 
@@ -187,31 +187,6 @@ extern void setproctitle_init(int argc, char **argv, char **envp);
 extern int proc_register(char *progname, char *clienthost, 
 			 char *userid, char *mailbox);
 extern void proc_cleanup(void);
-
-/* This creates a structure that defines the allowable
- *   security properties 
- */
-static sasl_security_properties_t *make_secprops(int min, int max)
-{
-  sasl_security_properties_t *ret =
-    (sasl_security_properties_t *) xmalloc(sizeof(sasl_security_properties_t));
-
-  ret->maxbufsize = 4000;
-  ret->min_ssf = min;		/* minimum allowable security strength */
-  ret->max_ssf = max;		/* maximum allowable security strength */
-
-  ret->security_flags = 0;
-
-  ret->security_flags |= SASL_SEC_NOPLAINTEXT;
-
-  if (!config_getswitch("allowanonymouslogin", 0)) {
-      ret->security_flags |= SASL_SEC_NOANONYMOUS;
-  }
-  ret->property_names = NULL;
-  ret->property_values = NULL;
-
-  return ret;
-}
 
 /*
  * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
@@ -449,11 +424,8 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
     }
 
-    secprops = make_secprops(config_getint("sasl_minimum_layer", 0),
-			     config_getint("sasl_maximum_layer", 256));
-
+    secprops = mysasl_secprops();
     sasl_setprop(imapd_saslconn, SASL_SEC_PROPS, secprops);
-    free(secprops);
     if (extprops.ssf) {
 	sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops);
     }

@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.61 2000/02/18 22:51:38 leg Exp $
+ * $Id: pop3d.c,v 1.62 2000/02/19 04:46:05 leg Exp $
  */
 
 #include <config.h>
@@ -124,31 +124,6 @@ extern int proc_register(char *progname, char *clienthost,
 			 char *userid, char *mailbox);
 extern void proc_cleanup(void);
 
-/* This creates a structure that defines the allowable
- *   security properties 
- */
-static sasl_security_properties_t *make_secprops(int min,int max)
-{
-  sasl_security_properties_t *ret =
-    (sasl_security_properties_t *) xmalloc(sizeof(sasl_security_properties_t));
-
-  ret->maxbufsize=4000;
-  ret->min_ssf=min;     /* minimum allowable security strength */
-  ret->max_ssf=max;     /* maximum allowable security strength */
-
-  ret->security_flags = 0;
-  if (!config_getswitch("allowplaintext", 1)) {
-      ret->security_flags |= SASL_SEC_NOPLAINTEXT;
-  }
-  if (!config_getswitch("allowanonymouslogin", 0)) {
-      ret->security_flags |= SASL_SEC_NOANONYMOUS;
-  }
-  ret->property_names=NULL;
-  ret->property_values=NULL;
-
-  return ret;
-}
-
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
@@ -235,10 +210,8 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
     /* will always return something valid */
-    secprops = make_secprops(config_getint("sasl_minimum_layer", 0),
-			     config_getint("sasl_maximum_layer", 256));
+    secprops = mysasl_secprops();
     sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops);
-    free(secprops);
     
     sasl_setprop(popd_saslconn, SASL_IP_REMOTE, &popd_remoteaddr);  
     sasl_setprop(popd_saslconn, SASL_IP_LOCAL, &popd_localaddr);  

@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.28 2000/02/18 22:51:34 leg Exp $
+ $Id: config.c,v 1.29 2000/02/19 04:46:03 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -297,4 +297,28 @@ int mysasl_config(void *context __attribute__((unused)),
     }
    
     return SASL_FAIL;
+}
+
+/* This creates a structure that defines the allowable
+ *   security properties 
+ */
+sasl_security_properties_t *mysasl_secprops(void)
+{
+    static sasl_security_properties_t ret;
+
+    ret.maxbufsize = 4000;
+    ret.min_ssf = config_getint("sasl_minimum_layer", 0);	
+				/* minimum allowable security strength */
+    ret.max_ssf = config_getint("sasl_maximum_layer", 256);
+				/* maximum allowable security strength */
+
+    ret.security_flags = 0;
+    ret.security_flags |= SASL_SEC_NOPLAINTEXT;
+    if (!config_getswitch("allowanonymouslogin", 0)) {
+	ret.security_flags |= SASL_SEC_NOANONYMOUS;
+    }
+    ret.property_names = NULL;
+    ret.property_values = NULL;
+
+    return &ret;
 }
