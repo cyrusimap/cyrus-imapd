@@ -38,6 +38,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#ifndef INCLUDED_CYRUSDB_H
+#define INCLUDED_CYRUSDB_H
+
 struct db;
 struct txn;
 
@@ -47,6 +50,8 @@ enum cyrusdb_ret {
     CYRUSDB_AGAIN = -2,
     CYRUSDB_EXISTS = -3
 };
+
+#define cyrusdb_strerror(c) ("cyrusdb error")
 
 enum cyrusdb_initflags {
     CYRUSDB_RECOVER = 0x01
@@ -96,3 +101,5 @@ struct cyrusdb_backend {
 
 extern struct cyrusdb_backend cyrusdb_db3;
 extern struct cyrusdb_backend cyrusdb_flat;
+
+#endif /* INCLUDED_CYRUSDB_H */
