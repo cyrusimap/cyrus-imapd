@@ -1,0 +1,4 @@
+This directory contains support programs for the krb_pts authorization
+module, which supports Kerberos authorization with AFS PTServer
+groups.
+
