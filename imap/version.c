@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.5 2002/02/16 22:00:24 ken3 Exp $
+ * $Id: version.c,v 1.6 2002/03/01 14:52:52 ken3 Exp $
  */
 
 #include <config.h>
@@ -56,7 +56,7 @@
 #include "version.h"
 #include "xversion.h"
 #include "prot.h"
-#include "mboxlist.h"
+#include "cyrusdb.h"
 #include "lock.h"
 #include "notify.h"
 #include "idle.h"
@@ -158,7 +158,15 @@ void id_response(struct protstream *pout)
 	     "; dirhash = full");
 #endif
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-	     "; mboxlist = %s", CONFIG_DB_MBOX->name);
+	     "; mboxlist.db = %s", CONFIG_DB_MBOX->name);
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; subs.db = %s", CONFIG_DB_SUBS->name);
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; seen.db = %s", CONFIG_DB_SEEN->name);
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; duplicate.db = %s", CONFIG_DB_DUPLICATE->name);
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; tls.db = %s", CONFIG_DB_TLS->name);
 
     prot_printf(pout, " \"environment\" \"%s\"", env_buf);
 }
