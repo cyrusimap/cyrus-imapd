@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.340 2002/02/13 21:34:37 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.341 2002/02/19 00:27:36 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -58,6 +58,7 @@
 #include <com_err.h>
 #include <netdb.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
@@ -153,6 +154,7 @@ void cmd_create(char *tag, char *name, char *partition);
 void cmd_delete(char *tag, char *name);
 void cmd_rename(const char *tag, char *oldname, 
 		char *newname, char *partition);
+void cmd_reconstruct(const char *tag, const char *name);
 void cmd_find(char *tag, char *namespace, char *pattern);
 void cmd_list(char *tag, int subscribed, char *reference, char *pattern);
 void cmd_changesub(char *tag, char *namespace, char *name, int add);
@@ -1160,8 +1162,16 @@ cmdloop()
 		cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0);
 
 		snmp_increment(RENAME_COUNT, 1);
-	    }
-	    else goto badcmd;
+	    } else if(!strcmp(cmd.s, "Reconstruct")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if(c == '\r') c = prot_getc(imapd_in);
+		if(c != '\n') goto extraargs;
+		cmd_reconstruct(tag.s, arg1.s);
+
+		/* xxx needed? */
+		/* snmp_increment(RECONSTRUCT_COUNT, 1); */
+	    } else goto badcmd;
 	    break;
 	    
 	case 'S':
@@ -3526,6 +3536,72 @@ void cmd_rename(const char *tag,
 }	
 
 /*
+ * Perform a RECONSTRUCT command
+ */
+void
+cmd_reconstruct(const char *tag, const char *name)
+{
+    int r = 0;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+
+    /* administrators only please */
+    if (!imapd_userisadmin) {
+	r = IMAP_PERMISSION_DENIED;
+    }
+
+    if (!r) {
+	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
+						   imapd_userid, mailboxname);
+    }
+    
+    if (!r) {
+	/* Check for mailbox in mailbox list */
+	r = mboxlist_lookup(mailboxname, NULL, NULL, NULL);
+    }
+
+    if (!r) {
+	int pid;
+	/* Reconstruct it */
+
+	pid = fork();
+	if(pid == -1) {
+	    r = IMAP_SYS_ERROR;
+	} else if(pid == 0) {
+	    char buf[4096];
+	    /* Child - exec reconstruct*/	    
+	    syslog(LOG_NOTICE, "Reconstructing '%s' for user '%s'",
+		   mailboxname, imapd_userid);
+
+	    snprintf(buf, sizeof(buf), "%s/reconstruct", SERVICE_PATH);
+
+	    fclose(stdin);
+	    fclose(stdout);
+	    fclose(stderr);
+
+	    execl(buf, buf, mailboxname, NULL);
+
+	    /* if we are here, we have a problem */
+	    exit(-1);
+	} else {
+	    int status;
+
+	    /* Parent, wait on child */
+	    if(waitpid(pid, &status, 0) < 0) r = IMAP_SYS_ERROR;
+
+	    /* Did we fail? */
+	    if(WEXITSTATUS(status) != 0) r = IMAP_SYS_ERROR;
+	}
+    }
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    } else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    }
+}	
+
+/*
  * Perform a FIND command
  */
 void
@@ -3714,7 +3790,7 @@ int oldform;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
+	r = mboxlist_lookup(mailboxname, NULL, &acl, NULL);
     }
 
     if (!r) {

@@ -29,6 +29,9 @@ error_table imap
 ec IMAP_IOERROR,
    "System I/O error"
 
+ec IMAP_SYS_ERROR,
+   "Operating System Error"
+
 ec IMAP_NOSPACE,
    "mail system storage has been exceeded"
 
