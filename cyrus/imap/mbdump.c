@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.2 2002/03/13 21:51:20 ken3 Exp $
+ * $Id: mbdump.c,v 1.3 2002/03/13 23:18:08 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -91,7 +91,7 @@ static int lock_mailbox_ctl_files(const char *mbname,
     return r;
 }
 
-int dump_mailbox(const char *tag, const char *path, const char *mbname,
+int dump_mailbox(const char *tag, const char *mbpath, const char *mbname,
 		 int uid_start,
 		 struct protstream *pin, struct protstream *pout,
 		 struct auth_state *auth_state)
@@ -114,14 +114,14 @@ int dump_mailbox(const char *tag, const char *path, const char *mbname,
 				 NULL 
                                };
 
-    mbdir = opendir(path);
+    mbdir = opendir(mbpath);
     if(!mbdir && errno == EACCES) {
 	syslog(LOG_ERR,
-	       "could not dump mailbox in %s (permission denied)", path);
+	       "could not dump mailbox in %s (permission denied)", mbpath);
 	return IMAP_PERMISSION_DENIED;
     } else if (!mbdir) {
 	syslog(LOG_ERR,
-	       "could not dump mailbox in %s (unknown error)", path);
+	       "could not dump mailbox in %s (unknown error)", mbpath);
 	return IMAP_SYS_ERROR;
     }
 
@@ -155,7 +155,7 @@ int dump_mailbox(const char *tag, const char *path, const char *mbname,
 	if(atoi(name) < uid_start) continue;
 
 	/* map file */
-	snprintf(filename,sizeof(filename),"%s/%s",path,name);
+	snprintf(filename,sizeof(filename),"%s/%s",mbpath,name);
 
 	filefd = open(filename, O_RDONLY, 0666);
 	if (filefd == -1) {
@@ -211,7 +211,7 @@ int dump_mailbox(const char *tag, const char *path, const char *mbname,
 
     for(i=0;data_files[i];i++) {
 	/* map file */
-	snprintf(filename,sizeof(filename),"%s/%s",path,data_files[i]);
+	snprintf(filename,sizeof(filename),"%s/%s",mbpath,data_files[i]);
 
 	filefd = open(filename, O_RDONLY, 0666);
 	if (filefd == -1) {
@@ -274,13 +274,15 @@ int dump_mailbox(const char *tag, const char *path, const char *mbname,
     return r;
 }
 
-int undump_mailbox(const char *path, const char *mbname,
+int undump_mailbox(const char *mbpath, const char *mbname,
 		   struct protstream *pin, struct protstream *pout,
 		   struct auth_state *auth_state)
 {
     struct buf file, data;
     char c;
     int r = 0;
+    int curfile = -1;
+    struct mailbox mb;
     
     memset(&file, 0, sizeof(struct buf));
     memset(&data, 0, sizeof(struct buf));
@@ -289,25 +291,49 @@ int undump_mailbox(const char *path, const char *mbname,
 
     /* we better be in a list now */
     if(c != '(' || data.s[0]) {
-	eatline(pout, c);
-	r = IMAP_PROTOCOL_BAD_PARAMETERS;
-	goto done;
+	freebuf(&data);
+	eatline(pin, c);
+	return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
 
+    r = lock_mailbox_ctl_files(mbname, auth_state, &mb);
+    if(r) goto done;
+
     while(1) {
+	char fnamebuf[MAX_MAILBOX_PATH + 1024];
+	
 	c = getastring(pin, pout, &file);
 	if(c != ' ') {
 	    r = IMAP_PROTOCOL_ERROR;
 	    goto done;
 	}
-	c = getastring(pin, pout, &data);
+	c = getbastring(pin, pout, &data);
 	if(c != ' ' && c != ')') {
 	    r = IMAP_PROTOCOL_ERROR;
 	    goto done;
 	}
 
-	prot_printf(pout, "got: %s\n\r", file.s);
+	if(snprintf(fnamebuf, sizeof(fnamebuf),
+		    "%s/%s", mbpath, file.s) == -1) {
+	    r = IMAP_PROTOCOL_ERROR;
+	    goto done;
+	}
 
+	curfile = open(fnamebuf, O_WRONLY|O_TRUNC|O_CREAT, 0666);
+	if(curfile == -1) {
+	    syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
+	    r = IMAP_IOERROR;
+	    goto done;
+	}
+
+	if(write(curfile,data.s,data.len) == -1) {
+	    syslog(LOG_ERR, "IOERROR: writing %s: %m", fnamebuf);
+	    r = IMAP_IOERROR;
+	    goto done;
+	}
+
+	close(curfile);
+	
 	if(c == ')') break;
     }
     
@@ -316,6 +342,8 @@ int undump_mailbox(const char *path, const char *mbname,
     eatline(pin, c);
     freebuf(&file);
     freebuf(&data);
+    if(curfile >= 0) close(curfile);
+    mailbox_close(&mb);
     
     return r;
 }
