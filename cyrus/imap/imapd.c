@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.31 2002/08/23 02:40:23 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.32 2002/08/23 19:53:24 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3541,7 +3541,8 @@ void cmd_delete(char *tag, char *name, int localonly)
 	    /* fully qualify the userid */
 	    sprintf(p, "@%.*s", domainlen-1, mailboxname);
 	}
-	user_delete(mailboxname+domainlen+5, imapd_userid, imapd_authstate, 1);
+	user_deletedata(mailboxname+domainlen+5, imapd_userid,
+			imapd_authstate, 1);
     }
 
     if (imapd_mailbox) {
@@ -3566,10 +3567,13 @@ void cmd_rename(const char *tag,
     int r = 0;
     char oldmailboxname[MAX_MAILBOX_NAME+3];
     char newmailboxname[MAX_MAILBOX_NAME+2];
+    char oldextname[MAX_MAILBOX_NAME+1];
+    char newextname[MAX_MAILBOX_NAME+1];
     int omlen, nmlen;
     char *p;
     int recursive_rename = 1;
     int rename_user = 0;
+    char olduser[128], newuser[128];
 
     /* canonicalize names */
     if (partition && !imapd_userisadmin) {
@@ -3623,6 +3627,42 @@ void cmd_rename(const char *tag,
 				   imapd_userid, imapd_authstate);
     }
 
+    /* If we're renaming a user, take care of changing quotaroot, ACL,
+       seen state, subscriptions and sieve scripts */
+    if (!r && rename_user) {
+	char *domain;
+
+	/* create canonified userids */
+
+	domain = strchr(oldmailboxname, '!');
+	strcpy(olduser, domain ? domain+6 : oldmailboxname+5);
+	if (domain)
+	    sprintf(olduser+strlen(olduser), "@%.*s",
+		    domain - oldmailboxname, oldmailboxname);
+
+	/* Translate any separators in source old userid */
+	mboxname_hiersep_tointernal(&imapd_namespace, olduser,
+				    config_virtdomains ?
+				    strcspn(olduser, "@") : 0);
+
+	domain = strchr(newmailboxname, '!');
+	strcpy(newuser, domain ? domain+6 : newmailboxname+5);
+	if (domain)
+	    sprintf(newuser+strlen(newuser), "@%.*s",
+		    domain - newmailboxname, newmailboxname);
+
+	/* Translate any separators in destination new userid */
+	mboxname_hiersep_tointernal(&imapd_namespace, newuser,
+				    config_virtdomains ?
+				    strcspn(newuser, "@") : 0);
+
+	user_copyquotaroot(oldmailboxname, newmailboxname);
+	user_renameacl(newmailboxname, olduser, newuser);
+	user_renamedata(olduser, newuser, imapd_userid, imapd_authstate);
+
+	/* XXX report status/progress of meta-data */
+    }
+
     /* rename all mailboxes matching this */
     if (!r && recursive_rename) {
 	struct tmplist *l = xmalloc(sizeof(struct tmplist));
@@ -3630,41 +3670,16 @@ void cmd_rename(const char *tag,
 	int nl = nmlen + 1;
 	int i;
 
+	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+					       oldmailboxname,
+					       imapd_userid, oldextname);
+	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+					       newmailboxname,
+					       imapd_userid, newextname);
+
 	prot_printf(imapd_out, "* OK rename %s %s\r\n",
-		    oldmailboxname, newmailboxname);
+		    oldextname, newextname);
 	prot_flush(imapd_out);
-
-	/* if we're renaming a user, take care of changing ACLs,
-	   subscriptions, seen state, sieve scripts and toplevel quota */
-	if (!r && rename_user) {
-	    char *domain;
-
-	    /* create canonified userids */
-
-	    if (!strchr(oldmailboxname, '!') && (domain = strrchr(oldname, '@'))) {
-		/* trim default domain from source */
-		*domain = '\0';
-	    }
-
-	    /* Translate any separators in source old userid */
-	    mboxname_hiersep_tointernal(&imapd_namespace, oldname+5,
-					config_virtdomains ?
-					strcspn(oldname+5, "@") : 0);
-
-	    if (!strchr(newmailboxname, '!') && (domain = strrchr(newname, '@'))) {
-		/* trim default domain from destination */
-		*domain = '\0';
-	    }
-
-	    /* Translate any separators in destination new userid */
-	    mboxname_hiersep_tointernal(&imapd_namespace, newname+5,
-					config_virtdomains ?
-					strcspn(newname+5, "@") : 0);
-
-	    user_rename(oldname+5, newname+5, imapd_userid, imapd_authstate);
-
-	    /* XXX report status/progress of meta-data */
-	}
 
 	l->alloc = 0;
 	l->num = 0;
@@ -3689,18 +3704,29 @@ void cmd_rename(const char *tag,
 	    r2 = mboxlist_renamemailbox(l->mb[i], newmailboxname,
 					partition,
 					1, imapd_userid, imapd_authstate);
+
+	    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+						   l->mb[i],
+						   imapd_userid, oldextname);
+	    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+						   newmailboxname,
+						   imapd_userid, newextname);
+
 	    if (r2) {
 		prot_printf(imapd_out, "* NO rename %s %s: %s\r\n",
-			    l->mb[i], newmailboxname, error_message(r2));
+			    oldextname, newextname, error_message(r2));
 		if (RENAME_STOP_ON_ERROR) break;
 	    } else {
+		/* If we're renaming a user, change quotaroot and ACL */
+		if (rename_user) {
+		    user_copyquotaroot(l->mb[i], newmailboxname);
+		    user_renameacl(newmailboxname, olduser, newuser);
+		}
+
 		prot_printf(imapd_out, "* OK rename %s %s\r\n",
-			    l->mb[i], newmailboxname);
+			    oldextname, newextname);
 	    }
 	    prot_flush(imapd_out);
-
- 	    /* if we're renaming a user copy quota onto new mailbox */
- 	    if (rename_user) user_copyquota(l->mb[i], newmailboxname);
 	}
 
 	free(l);
@@ -3708,7 +3734,7 @@ void cmd_rename(const char *tag,
 
     /* take care of deleting old ACLs, subscriptions, seen state and quotas */
     if (!r && rename_user)
-	user_delete(oldname+5, imapd_userid, imapd_authstate, 1);
+	user_deletedata(oldname+5, imapd_userid, imapd_authstate, 1);
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
@@ -6365,7 +6391,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	} else if(!r) {
 	    /* this was a successful user delete, and we need to delete
 	       certain user meta-data (but not seen state!) */
-	    user_delete(mailboxname+5, imapd_userid, imapd_authstate, 0);
+	    user_deletedata(mailboxname+5, imapd_userid, imapd_authstate, 0);
 	}
 	
 	if(!r && mupdate_h) {

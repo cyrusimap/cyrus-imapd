@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.10.4.6 2002/08/23 02:42:49 ken3 Exp $
+ * $Id: user.c,v 1.10.4.7 2002/08/23 19:53:26 ken3 Exp $
  */
 
 #include <config.h>
@@ -162,8 +162,8 @@ static int user_deletesieve(char *user)
     return 0;
 }
 
-int user_delete(char *user, char *userid, struct auth_state *authstate,
-		int wipe_user)
+int user_deletedata(char *user, char *userid, struct auth_state *authstate,
+		    int wipe_user)
 {
     char *fname;
     char pat[] = "*";
@@ -178,7 +178,7 @@ int user_delete(char *user, char *userid, struct auth_state *authstate,
     free(fname);
 
     /* delete quotas */
-    user_deletequotas(user);
+    user_deletequotaroots(user);
 
     /* delete ACLs - we're using the internal names here */
     if(wipe_user)
@@ -198,39 +198,6 @@ struct rename_rock {
     char *newinbox;
     int domainchange;
 };
-
-static int user_renameacl(char *name, int matchlen, int maycreate, void* rock)
-{
-    struct rename_rock *rrock = (struct rename_rock *) rock;
-    int r = 0;
-    char *acl;
-    char *rights, *nextid;
-
-    r = mboxlist_lookup(name, (char **)0, &acl, NULL);
-
-    while (!r && acl) {
-	rights = strchr(acl, '\t');
-	if (!rights) break;
-	*rights++ = '\0';
-
-	nextid = strchr(rights, '\t');
-	if (!nextid) break;
-	*nextid++ = '\0';
-
-	if (!strcmp(acl, rrock->olduser)) {
-	    /* copy ACL for old ident to new ident */
-	    r = mboxlist_setacl(name, rrock->newuser, rights, 1,
-				rrock->newuser, NULL);
-	    /* delete ACL for old ident */
-	    if (!r) mboxlist_setacl(name, rrock->olduser, (char *)0, 1,
-				    rrock->newuser, NULL);
-	}
-
-	acl = nextid;
-    }
-
-    return r;
-}
 
 static int user_renamesub(char *name, int matchlen, int maycreate, void* rock)
 {
@@ -328,8 +295,8 @@ static int user_renamesieve(char *olduser, char *newuser)
     return r;
 }
 
-int user_rename(char *olduser, char *newuser,
-		char *userid, struct auth_state *authstate)
+int user_renamedata(char *olduser, char *newuser,
+		    char *userid, struct auth_state *authstate)
 {
     struct namespace namespace;
     char oldinbox[MAX_MAILBOX_NAME+1], newinbox[MAX_MAILBOX_NAME+1];
@@ -348,11 +315,6 @@ int user_rename(char *olduser, char *newuser,
     /* get newuser's INBOX */
     if (!r) r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
 						 newuser, newinbox);
-
-    if (!r) {
-	/* set quota on INBOX */
-	user_copyquota(oldinbox, newinbox);
-    }
 
     if (!r) {
 	/* copy seen db */
@@ -376,21 +338,7 @@ int user_rename(char *olduser, char *newuser,
 	rrock.domainchange = 1;
 
     if (!r) {
-	/* change ACLs - we're using the internal names here */
-
-	/* INBOX (already renamed) */
-	r = user_renameacl(newinbox, strlen(newinbox), 0, &rrock);
-
-	/* subfolders (not renamed yet) */
-	strcpy(pat, oldinbox);
-	strcat(pat, ".*");
-	if (!r)
-	    mboxlist_findall(NULL, pat, 1, userid, authstate, user_renameacl,
-			     &rrock);
-    }
-
-    if (!r) {
-	/* copy/rename subscriptions  - we're using the internal names here */
+	/* copy/rename subscriptions - we're using the internal names here */
 	strcpy(pat, "*");
 	mboxlist_findsub(NULL, pat, 1, olduser, authstate, user_renamesub,
 			 &rrock, 1);
@@ -398,13 +346,44 @@ int user_rename(char *olduser, char *newuser,
 
     if (!r) {
 	/* move sieve scripts */
-	r = user_renamesieve(olduser, newuser);
+	user_renamesieve(olduser, newuser);
     }
     
     return r;
 }
 
-int user_copyquota(char *oldname, char *newname)
+int user_renameacl(char *name, char *olduser, char *newuser)
+{
+    int r = 0;
+    char *acl;
+    char *rights, *nextid;
+
+    r = mboxlist_lookup(name, (char **)0, &acl, NULL);
+
+    while (!r && acl) {
+	rights = strchr(acl, '\t');
+	if (!rights) break;
+	*rights++ = '\0';
+
+	nextid = strchr(rights, '\t');
+	if (!nextid) break;
+	*nextid++ = '\0';
+
+	if (!strcmp(acl, olduser)) {
+	    /* copy ACL for olduser to newuser */
+	    r = mboxlist_setacl(name, newuser, rights, 1, newuser, NULL);
+	    /* delete ACL for olduser */
+	    if (!r)
+		r = mboxlist_setacl(name, olduser, (char *)0, 1, newuser, NULL);
+	}
+
+	acl = nextid;
+    }
+
+    return r;
+}
+
+int user_copyquotaroot(char *oldname, char *newname)
 {
     int r = 0;
     struct quota quota;
@@ -423,7 +402,7 @@ int user_copyquota(char *oldname, char *newname)
     return r;
 }
 
-int user_deletequotas(const char *user)
+int user_deletequotaroots(const char *user)
 {
     struct namespace namespace;
     char inboxname[1024];

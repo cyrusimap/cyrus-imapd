@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.h,v 1.3 2002/03/29 21:52:15 rjs3 Exp $
+ * $Id: user.h,v 1.3.4.1 2002/08/23 19:53:26 ken3 Exp $
  */
 
 #ifndef INCLUDED_USER_H
@@ -48,21 +48,27 @@
 
 #include "auth.h"
 
-/* Delete meta-data (seen state, subscriptions, ACLs, quota) for 'user' */
-/*
+/* Delete meta-data (seen state, subscriptions, ACLs, quotaroots,
+ * sieve scripts) for 'user'.
+ *
  * wipe-user says to delete seen state also (remove the user from the murder)
  */
-int user_delete(char *user, char *userid, struct auth_state *authstate,
-		int wipe_user);
+int user_deletedata(char *user, char *userid, struct auth_state *authstate,
+		    int wipe_user);
 
-/* Rename/change user meta-data (seen state, subscriptions, ACLs, quota) */
-int user_rename(char *oldmailboxname, char *newmailboxname,
-		char *userid, struct auth_state *authstate);
+/* Rename/copy user meta-data (seen state, subscriptions, sieve scripts)
+ * from 'olduser' to 'newuser'.
+ */
+int user_renamedata(char *olduser, char *newuser, char *userid,
+		    struct auth_state *authstate);
 
-/* Copy a quota from mailbox 'oldname' to 'newname' */
-int user_copyquota(char *oldname, char *newname);
+/* Rename ACL for 'olduser' to 'newuser' on mailbox 'name'. */
+int user_renameacl(char *name, char *olduser, char *newuser);
 
-/* Delete all quota files for 'user' */
-int user_deletequotas(const char *user);
+/* Copy a quotaroot from mailbox 'oldname' to 'newname' */
+int user_copyquotaroot(char *oldname, char *newname);
+
+/* Delete all quotaroots for 'user' */
+int user_deletequotaroots(const char *user);
 
 #endif
