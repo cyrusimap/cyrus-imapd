@@ -1,3 +1,32 @@
+/* imtest.c -- imap test client
+ * Tim Martin (SASL implementation)
+ * $Id: imtest.c,v 1.20 1999/06/24 18:52:44 leg Exp $
+ *
+ * Copyright 1999 Carnegie Mellon University
+ * 
+ * No warranties, either expressed or implied, are made regarding the
+ * operation, use, or results of the software.
+ *
+ * Permission to use, copy, modify and distribute this software and its
+ * documentation is hereby granted for non-commercial purposes only
+ * provided that this copyright notice appears in all copies and in
+ * supporting documentation.
+ *
+ * Permission is also granted to Internet Service Providers and others
+ * entities to use the software for internal purposes.
+ *
+ * The distribution, modification or sale of a product which uses or is
+ * based on the software, in whole or in part, for commercial purposes or
+ * benefits requires specific, additional permission from:
+ *
+ *  Office of Technology Transfer
+ *  Carnegie Mellon University
+ *  5000 Forbes Avenue
+ *  Pittsburgh, PA  15213-3890
+ *  (412) 268-4387, fax: (412) 268-7395
+ *  tech-transfer@andrew.cmu.edu
+ */
+
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
@@ -21,9 +50,11 @@
 #define IMTEST_OK    0
 #define IMTEST_FAIL -1
 
-#define STAT_CONT 0
-#define STAT_NO 1
-#define STAT_OK 2
+typedef enum {
+    STAT_CONT = 0,
+    STAT_NO = 1,
+    STAT_OK = 2
+} stat;
 
 /* global vars */
 sasl_conn_t *conn;
@@ -53,7 +84,7 @@ static sasl_callback_t callbacks[] = {
 void imtest_fatal(char *msg)
 {
   if (msg!=NULL)
-    printf("failure: %s\r\n",msg);
+    printf("failure: %s\n",msg);
   exit(1);
 }
 
@@ -112,10 +143,7 @@ int init_sasl(char *serverFQDN, int port, int ssf)
   if (getpeername(sock,(struct sockaddr *)saddr_r,&addrsize)!=0)
     return IMTEST_FAIL;
 
-  /*  saddr_r->sin_port = port;  */
-
-  /*  saddr_r->sin_port=htons(saddr_r->sin_port);	*/
-  if (sasl_setprop(conn,   SASL_IP_REMOTE, saddr_r)!=SASL_OK)
+  if (sasl_setprop(conn, SASL_IP_REMOTE, saddr_r)!=SASL_OK)
     return IMTEST_FAIL;
   
   addrsize=sizeof(struct sockaddr_in);
@@ -125,8 +153,7 @@ int init_sasl(char *serverFQDN, int port, int ssf)
   /* set the port manually since getsockname is stupid and doesn't */
   saddr_l->sin_port = htons(port);
 
-  /*  saddr_l->sin_port=htons(saddr_l->sin_port);	*/
-  if (sasl_setprop(conn,   SASL_IP_LOCAL, saddr_l)!=SASL_OK)
+  if (sasl_setprop(conn, SASL_IP_LOCAL, saddr_l)!=SASL_OK)
     return IMTEST_FAIL;
 
 
@@ -137,7 +164,7 @@ int init_sasl(char *serverFQDN, int port, int ssf)
   return IMTEST_OK;
 }
 
-int getauthline(char **line, int *linelen)
+stat getauthline(char **line, int *linelen)
 {
   char buf[2048];
   int saslresult;
@@ -205,7 +232,7 @@ int auth_sasl(char *mechlist)
   char inbase64[2048];
   int inbase64len;
 
-  int status=STAT_CONT;
+  stat status=STAT_CONT;
 
   /* call sasl client start */
   while (saslresult==SASL_INTERACT)
@@ -231,9 +258,6 @@ int auth_sasl(char *mechlist)
 
   while (status==STAT_CONT)
   {
-
-    
-
     saslresult=SASL_INTERACT;
     while (saslresult==SASL_INTERACT)
     {
@@ -268,11 +292,11 @@ int auth_sasl(char *mechlist)
     status=getauthline(&in,&inlen);
   }
   
-  return IMTEST_OK;
+  return (status == STAT_OK) ? IMTEST_OK : IMTEST_FAIL;
 }
 
 /* initialize the network */
-int init_net(char *serverFQDN,int port)
+int init_net(char *serverFQDN, int port)
 {
   struct sockaddr_in addr;
   struct hostent *hp;
@@ -289,9 +313,7 @@ int init_net(char *serverFQDN,int port)
 
   addr.sin_family = AF_INET;
   memcpy(&addr.sin_addr, hp->h_addr, hp->h_length);
-  addr.sin_port = htons(143);
-
-
+  addr.sin_port = htons(port);
 
   if (connect(sock, (struct sockaddr *) &addr, sizeof (addr)) < 0) {
     perror("connect");
@@ -355,8 +377,7 @@ static char *ask_capability(void)
   } while (strstr(str,"*")==NULL);
 
   /* request capabilities of server */
-  /*  prot_write(pout, CAPABILITY, sizeof (CAPABILITY));*/
-  prot_printf(pout,"C01 CAPABILITY\n");
+  prot_printf(pout, CAPABILITY);
   prot_flush(pout);
 
 
@@ -494,7 +515,6 @@ void interactive(char *filename)
 
     while (atend==0)
     {
-      printf("getting line from file\n");
       if (fgets(buf, sizeof (buf) - 1, fp) == NULL) {
 	printf(LOGOUT);
 	prot_write(pout, LOGOUT, sizeof (LOGOUT));
@@ -562,12 +582,12 @@ void interactive(char *filename)
 void usage(void)
 {
   printf("Usage: imtest [options] hostname\n");
-  printf("  -p #    : port to use      \n");
+  printf("  -p port : port to use      \n");
   printf("  -z      : timing test      \n");
   printf("  -l #    : max protection layer (0=none;1=intergrity;etc..)\n");
   printf("  -u user : authentication name to use\n");
   printf("  -v      : verbose\n");
-  printf("  -m mech : SASL mechanism to use\n");
+  printf("  -m mech : SASL mechanism to use (\"login\" for no authentication)\n");
   printf("  -f file : pipe file into connection after authentication\n");
 
   exit(1);
@@ -585,54 +605,67 @@ int main(int argc, char **argv)
   int ssf;
   char c;
   int result;
+  int errflg = 0;
 
-  int port=143;
+  char *port = "imap";
+  struct servent *serv;
+  int servport;
   int run_stress_test=0;
   int verbose=0;
 
-  /* must at least provide hostname */
-  if (argc<2) usage();
-
-
   /* look at all the extra args */
-  while ((c = getopt(argc-1, argv, "zvl:p:u:m:f:")) != EOF)
+  while ((c = getopt(argc, argv, "zvl:p:u:m:f:")) != EOF)
     switch (c) {
-
     case 'z':
-      run_stress_test=1;
-      break;
+	run_stress_test=1;
+	break;
     case 'v':
-      verbose=1;
-      break;
+	verbose=1;
+	break;
     case 'l':
-      ssf=atoi(optarg);      
-      break;
+	ssf=atoi(optarg);      
+	break;
     case 'p':
-      port=atoi(optarg);      
-      break;
+	port = optarg;
+	break;
     case 'u':
-      authname=optarg;
-      break;
+	authname=optarg;
+	break;
     case 'm':
-      mechanism=optarg;
-      break;
+	mechanism=optarg;
+	break;
     case 'f':
-      filename=optarg;
-      break;
+	filename=optarg;
+	break;
     case '?':
-      printf("Error: Unrecognized arguement\n");
-      usage();
+    default:
+	errflg = 1;
+	break;
     }
 
+  if (optind != argc - 1) {
+      errflg = 1;
+  }
+
+  if (errflg) {
+      usage();
+  }
+
   /* last arg is server name */
-  servername=argv[argc-1];
+  servername = argv[optind];
 
+  /* map port -> num */
+  serv = getservbyname(port, "tcp");
+  if (serv == NULL) {
+      servport = atoi(port);
+  } else {
+      servport = ntohs(serv->s_port);
+  }
 
-
-  if (init_net(servername,port)!=IMTEST_OK)
+  if (init_net(servername, servport) != IMTEST_OK)
     imtest_fatal("Network initializion");
   
-  if (init_sasl(servername,port,ssf)!=IMTEST_OK)
+  if (init_sasl(servername, servport, ssf) != IMTEST_OK)
     imtest_fatal("SASL initialization");
 
 
@@ -642,26 +675,32 @@ int main(int argc, char **argv)
 
   mechlist=ask_capability();   /* get the * line also */
 
-  if (mechanism)
-    result=auth_sasl(mechanism);
-  else
-    result=auth_sasl(mechlist);
+  if (mechanism) {
+      if (!strcasecmp(mechanism, "login")) {
+	  result = IMTEST_FAIL;
+      } else {
+	  result = auth_sasl(mechanism);
+      }
+  } else {
+      result = auth_sasl(mechlist);
+  }
 
-  printf("result=%i\n",result);
+  if (result == IMTEST_OK) {
+      printf("Authenticated.\n");
+  } else {
+      printf("Authentication failed.\n");
+  }
 
   result = sasl_getprop(conn, SASL_SSF, (void **)&ssfp);
-  if (result != SASL_OK)
-    printf("error!!!\n");
-  else
-    printf("SSF: %d\n", *ssfp);
-
-  /*sasl_getprop(conn, SASL_SSF, &foo);
-    printf("ssf=%i\n",foo[0]);*/
+  if (result != SASL_OK) {
+      printf("SSF: unable to determine (SASL ERROR %d!)\n", result);
+  } else {
+      printf("SSF: %d\n", *ssfp);
+  }
 
   /* turn on layer if need be */
   prot_setsasl(pin,  conn);
   prot_setsasl(pout, conn);
-
 
   if (run_stress_test==1)
   {
