@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.38 1999/03/02 03:03:29 tjs Exp $ */
+/* $Id: reconstruct.c,v 1.39 1999/04/08 21:04:27 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -59,7 +59,7 @@
 #include "bsearch.h"
 #include "imparse.h"
 #include "config.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "message.h"
@@ -87,7 +87,7 @@ char **argv;
 
     config_init("reconstruct");
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     /* Ensure we're up-to-date on the index file format */
     assert(INDEX_HEADER_SIZE == (OFFSET_UIDVALIDITY+4));
@@ -140,7 +140,7 @@ usage()
 {
     fprintf(stderr, "usage: reconstruct [-r] mailbox...\n");
     fprintf(stderr, "       reconstruct -m\n");
-    exit(EX_USAGE);
+    exit(EC_USAGE);
 }    
 
 int compare_uid(a, b)

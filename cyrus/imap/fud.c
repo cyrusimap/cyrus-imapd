@@ -27,7 +27,7 @@
  *
  */
 
-/* $Id: fud.c,v 1.8 1999/03/02 03:03:28 tjs Exp $ */
+/* $Id: fud.c,v 1.9 1999/04/08 21:04:22 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -46,7 +46,7 @@
 
 #include "assert.h"
 #include "config.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
@@ -82,12 +82,12 @@ char **argv;
     config_init("fud");
 
     if(geteuid() == 0)
-        fatal("must run as the Cyrus user", EX_USAGE);
+        fatal("must run as the Cyrus user", EC_USAGE);
     r = init_network(port);
     signal(SIGHUP,SIG_IGN);
 
     if (r)
-        fatal("unable to configure network port", EX_OSERR);
+        fatal("unable to configure network port", EC_OSERR);
     
     begin_handling();
 

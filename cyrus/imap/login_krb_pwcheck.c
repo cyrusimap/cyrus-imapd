@@ -1,5 +1,5 @@
 /* login_krb_pwcheck.c -- Kerberos login authentication, with pwcheck fallback
- $Id: login_krb_pwcheck.c,v 1.12 1998/05/15 21:48:54 neplokh Exp $
+ $Id: login_krb_pwcheck.c,v 1.13 1999/04/08 21:04:25 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -52,7 +52,7 @@
 #include "sasl.h"
 #include "retry.h"
 #include "config.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "mailbox.h"
 #include "acl.h"
 

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  *
  */
-/* $Id: quota.c,v 1.26 1999/03/02 03:03:29 tjs Exp $ */
+/* $Id: quota.c,v 1.27 1999/04/08 21:04:27 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -55,7 +55,7 @@
 
 #include "assert.h"
 #include "config.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
@@ -93,7 +93,7 @@ char **argv;
 
     config_init("quota");
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     while ((opt = getopt(argc, argv, "f")) != EOF) {
 	switch (opt) {
@@ -123,7 +123,7 @@ char **argv;
 usage()
 {
     fprintf(stderr, "usage: quota [-f] [prefix]...\n");
-    exit(EX_USAGE);
+    exit(EC_USAGE);
 }    
 
 /*
@@ -192,7 +192,7 @@ int nroots;
 	}
 	if (r) {
 	    com_err(dirent->d_name, r,
-		    (r == EX_IOERR) ? error_message(errno) : NULL);
+		    (r == EC_IOERR) ? error_message(errno) : NULL);
 	    quota[quota_num].quota.used = 0;
 	    quota[quota_num].quota.limit = -1;
 	}

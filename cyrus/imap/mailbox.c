@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.74 1999/03/02 00:55:28 tjs Exp $
+ $Id: mailbox.c,v 1.75 1999/04/08 21:04:26 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -63,7 +63,7 @@
 #include "retry.h"
 #include "util.h"
 #include "lock.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
@@ -157,7 +157,7 @@ unsigned long *lenp;
     
     if (fstat(msgfd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", buf);
-	fatal("can't fstat message file", EX_OSFILE);
+	fatal("can't fstat message file", EC_OSFILE);
     }
     *basep = 0;
     *lenp = 0;
@@ -243,7 +243,7 @@ int suppresslog;
     if (mailbox->header_fd != -1) {
 	if (fstat(mailbox->header_fd, &sbuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: fstating %s: %m", fnamebuf);
-	    fatal("can't fstat header file", EX_OSFILE);
+	    fatal("can't fstat header file", EC_OSFILE);
 	}
 	map_refresh(mailbox->header_fd, 1, &mailbox->header_base,
 		    &mailbox->header_len, sbuf.st_size, "header", name);
@@ -954,7 +954,7 @@ struct mailbox *mailbox;
 
     if (fstat(mailbox->header_fd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: fstating %s: %m", fnamebuf);
-	fatal("can't fstat header file", EX_OSFILE);
+	fatal("can't fstat header file", EC_OSFILE);
     }
     map_refresh(mailbox->header_fd, 1, &mailbox->header_base,
 		&mailbox->header_len, sbuf.st_size, "header", mailbox->name);
@@ -1245,7 +1245,7 @@ void *deciderock;
 
     if (fstat(mailbox->cache_fd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: fstating %s: %m", fnamebuf);
-	fatal("can't fstat cache file", EX_OSFILE);
+	fatal("can't fstat cache file", EC_OSFILE);
     }
     cache_len = sbuf.st_size;
     map_refresh(mailbox->cache_fd, 0, &mailbox->cache_base,

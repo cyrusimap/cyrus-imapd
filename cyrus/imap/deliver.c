@@ -25,7 +25,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.90 1999/03/02 03:03:28 tjs Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.91 1999/04/08 21:04:22 tjs Exp $";
 
 
 #ifdef HAVE_UNISTD_H
@@ -57,7 +57,7 @@ static char _rcsid[] = "$Id: deliver.c,v 1.90 1999/03/02 03:03:28 tjs Exp $";
 #include "imparse.h"
 #include "lock.h"
 #include "config.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
@@ -106,10 +106,10 @@ char **argv;
 
     config_init("deliver");
 
-    /* Can't be EX_USAGE; sendmail thinks that EX_USAGE implies
+    /* Can't be EC_USAGE; sendmail thinks that EX_USAGE implies
      * a permenant failure.
      */
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_TEMPFAIL);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_TEMPFAIL);
 
     while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:lqD")) != EOF) {
 	switch(opt) {
@@ -206,7 +206,7 @@ char **argv;
 		    (r == IMAP_IOERROR) ? error_message(errno) : NULL);
 	}
 
-	if (r && exitval != EX_TEMPFAIL) exitval = convert_sysexit(r);
+	if (r && exitval != EC_TEMPFAIL) exitval = convert_sysexit(r);
 
 	optind++;
     }
@@ -220,7 +220,7 @@ usage()
 "421-4.3.0 usage: deliver [-m mailbox] [-a auth] [-i] [-F flag]... [user]...\r\n");
     fprintf(stderr, "421 4.3.0        deliver -E age\n");
     fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
-    exit(EX_USAGE);
+    exit(EC_USAGE);
 }
 
 char *parseaddr(s)
@@ -547,7 +547,7 @@ int lmtpmode;
 		   error_message(errno));
 	    return 0;
 	}
-	exit(EX_TEMPFAIL);
+	exit(EC_TEMPFAIL);
     }
 
     if (lmtpmode) {
@@ -682,7 +682,7 @@ int lmtpmode;
     if (ferror(f)) {
 	if (!lmtpmode) {
 	    perror("deliver: copying message");
-	    exit(EX_TEMPFAIL);
+	    exit(EC_TEMPFAIL);
 	}
 	while (lmtpmode--) {
 	    printf("451 4.3.%c cannot copy message to temporary file: %s\r\n",
@@ -699,7 +699,7 @@ int lmtpmode;
     if (fstat(fileno(f), &sbuf) == -1) {
 	if (!lmtpmode) {
 	    perror("deliver: stating message");
-	    exit(EX_TEMPFAIL);
+	    exit(EC_TEMPFAIL);
 	}
 	while (lmtpmode--) {
 	    printf("451 4.3.2 cannot stat message temporary file: %s\r\n",
@@ -831,30 +831,30 @@ convert_sysexit(r)
 	return 0;
 	
     case IMAP_IOERROR:
-	return EX_IOERR;
+	return EC_IOERR;
 
     case IMAP_PERMISSION_DENIED:
-	return EX_NOPERM;
+	return EC_NOPERM;
 
     case IMAP_MAILBOX_BADFORMAT:
     case IMAP_MAILBOX_NOTSUPPORTED:
     case IMAP_QUOTA_EXCEEDED:
-	return EX_TEMPFAIL;
+	return EC_TEMPFAIL;
 
     case IMAP_MESSAGE_CONTAINSNULL:
     case IMAP_MESSAGE_CONTAINSNL:
     case IMAP_MESSAGE_CONTAINS8BIT:
     case IMAP_MESSAGE_BADHEADER:
     case IMAP_MESSAGE_NOBLANKLINE:
-	return EX_DATAERR;
+	return EC_DATAERR;
 
     case IMAP_MAILBOX_NONEXISTENT:
 	/* XXX Might have been moved to other server */
-	return EX_NOUSER;
+	return EC_NOUSER;
     }
 	
     /* Some error we're not expecting. */
-    return EX_SOFTWARE;
+    return EC_SOFTWARE;
 }	
 
 char 
@@ -1322,7 +1322,7 @@ int age;
 
   /* we allow age == 0 to nuke all current entries */
   if (age < 0)
-    fatal("must specify positive number of days", EX_USAGE);
+    fatal("must specify positive number of days", EC_USAGE);
 
   mark = time(0) - (age*60*60*24);
   syslog(LOG_NOTICE, "prunedelivered: pruning back %d days", age);

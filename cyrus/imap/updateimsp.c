@@ -1,5 +1,5 @@
 /* updateimsp.c -- program to send mailbox updates to IMSP.
- $Id: updateimsp.c,v 1.15 1999/03/02 03:03:29 tjs Exp $
+ $Id: updateimsp.c,v 1.16 1999/04/08 21:04:28 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -39,7 +39,7 @@
 
 #include "sasl.h"
 #include "imclient.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "xmalloc.h"
 #include "map.h"
 #include "lock.h"
@@ -71,11 +71,11 @@ main()
 
     config_init("updateimsp");
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     if (chdir(config_dir)) {
 	syslog(LOG_ERR, "IOERROR: changing directory to config directory: %m");
-	fatal("cannot change directory to config directory", EX_TEMPFAIL);
+	fatal("cannot change directory to config directory", EC_TEMPFAIL);
     }
     
 #ifdef HAVE_SASL_KRB
@@ -105,7 +105,7 @@ doupdate()
     imsphost = config_getstring("imspservers", 0);
     if (!imsphost) {
 	syslog(LOG_ERR, "Missing required imsphost configuration option");
-	fatal("Missing required imsphost configuration option", EX_CONFIG);
+	fatal("Missing required imsphost configuration option", EC_CONFIG);
     }
     while (isspace(*imsphost)) imsphost++;
     strncpy(hostbuf, imsphost, sizeof(hostbuf)-1);

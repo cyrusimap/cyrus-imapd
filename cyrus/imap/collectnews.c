@@ -1,5 +1,5 @@
 /* collectnews.c -- program to add news articles to relevant header files
- $Id: collectnews.c,v 1.16 1999/03/02 02:00:52 tjs Exp $
+ $Id: collectnews.c,v 1.17 1999/04/08 21:04:22 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -33,7 +33,7 @@
 #include <com_err.h>
 
 #include "config.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
@@ -63,14 +63,14 @@ char **argv;
 
     config_init("collectnews");
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     newsprefix = config_getstring("newsprefix", 0);
     if (newsprefix) newsprefixlen = strlen(newsprefix);
     
     if (!config_getstring("partition-news", 0)) {
 	fatal("partition-news option not specified in configuration file",
-	      EX_CONFIG);
+	      EC_CONFIG);
     }
 
     while (fgets(buf, sizeof(buf), stdin)) {
@@ -248,23 +248,23 @@ int r;
 	return 0;
 	
     case IMAP_IOERROR:
-	return EX_IOERR;
+	return EC_IOERR;
 
     case IMAP_PERMISSION_DENIED:
-	return EX_NOPERM;
+	return EC_NOPERM;
 
     case IMAP_QUOTA_EXCEEDED:
-	return EX_TEMPFAIL;
+	return EC_TEMPFAIL;
 
     case IMAP_MAILBOX_NOTSUPPORTED:
-	return EX_DATAERR;
+	return EC_DATAERR;
 
     case IMAP_MAILBOX_NONEXISTENT:
-	return EX_UNAVAILABLE;
+	return EC_UNAVAILABLE;
     }
 	
     /* Some error we're not expecting. */
-    return EX_SOFTWARE;
+    return EC_SOFTWARE;
 }	
 
 void fatal(const char* s, int code)

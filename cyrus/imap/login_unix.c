@@ -1,5 +1,5 @@
 /* login_unix.c -- Unix password file login authentication
- $Id: login_unix.c,v 1.16 1998/05/15 21:48:58 neplokh Exp $
+ $Id: login_unix.c,v 1.17 1999/04/08 21:04:25 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -31,7 +31,7 @@
 
 #include "sasl.h"
 #include "config.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "mailbox.h"
 #include "imapd.h"
 

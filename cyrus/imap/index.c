@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.86 1999/03/29 20:23:58 tjs Exp $
+ * $Id: index.c,v 1.87 1999/04/08 21:04:23 tjs Exp $
  */
 #include <stdio.h>
 #include <string.h>
@@ -43,7 +43,7 @@
 #include "util.h"
 #include "map.h"
 #include "assert.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "gmtoff.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -82,17 +82,17 @@ struct seen *seendb;		/* Seen state database object */
 static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 
 /* Access macros for the memory-mapped index file data */
-#define INDEX_OFFSET(msgno) (index_base+start_offset+(((msgno)-1)*record_size))
-#define UID(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_UID)))
-#define INTERNALDATE(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_INTERNALDATE)))
-#define SENTDATE(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_SENTDATE)))
-#define SIZE(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_SIZE)))
-#define HEADER_SIZE(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_HEADER_SIZE)))
-#define CONTENT_OFFSET(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_CONTENT_OFFSET)))
-#define CACHE_OFFSET(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_CACHE_OFFSET)))
-#define LAST_UPDATED(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_LAST_UPDATED)))
-#define SYSTEM_FLAGS(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_SYSTEM_FLAGS)))
-#define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_USER_FLAGS+((i)*4))))
+#define INDEC_OFFSET(msgno) (index_base+start_offset+(((msgno)-1)*record_size))
+#define UID(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_UID)))
+#define INTERNALDATE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_INTERNALDATE)))
+#define SENTDATE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_SENTDATE)))
+#define SIZE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_SIZE)))
+#define HEADER_SIZE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_HEADER_SIZE)))
+#define CONTENT_OFFSET(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CONTENT_OFFSET)))
+#define CACHE_OFFSET(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CACHE_OFFSET)))
+#define LAST_UPDATED(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_LAST_UPDATED)))
+#define SYSTEM_FLAGS(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_SYSTEM_FLAGS)))
+#define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_USER_FLAGS+((i)*4))))
 
 /* Access assistance macros for memory-mapped cache file data */
 #define CACHE_ITEM_BIT32(ptr) (ntohl(*((bit32 *)(ptr))))
@@ -235,7 +235,7 @@ int checkseen;
 	}
 	else if (sbuf.st_ino != mailbox->index_ino) {
 	    if (mailbox_open_index(mailbox)) {
-		fatal("failed to reopen index file", EX_IOERR);
+		fatal("failed to reopen index file", EC_IOERR);
 	    }
 
 	    for (oldmsgno = msgno = 1; oldmsgno <= imapd_exists;
@@ -289,7 +289,7 @@ int checkseen;
     if (fstat(mailbox->cache_fd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: stating cache file for %s: %m",
 	       mailbox->name);
-	fatal("failed to stat cache file", EX_IOERR);
+	fatal("failed to stat cache file", EC_IOERR);
     }
     if (cache_end < sbuf.st_size) {
 	cache_end = sbuf.st_size;

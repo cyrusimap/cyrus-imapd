@@ -1,5 +1,5 @@
 /* notify_zephyr.c -- Module to notify of new mail via zephyr
- $Id: notify_zephyr.c,v 1.13 1998/05/15 21:49:33 neplokh Exp $
+ $Id: notify_zephyr.c,v 1.14 1999/04/08 21:04:27 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -38,7 +38,7 @@
 #include <zephyr/zephyr.h>
 #include <syslog.h>
 
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "xmalloc.h"
 
 #ifndef MAIL_CLASS

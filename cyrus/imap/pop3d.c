@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.43 1999/03/22 02:35:55 tjs Exp $
+ * $Id: pop3d.c,v 1.44 1999/04/08 21:04:27 tjs Exp $
  */
 
 #include <stdio.h>
@@ -48,7 +48,7 @@
 #include "sasl.h"
 #include "config.h"
 #include "prot.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "version.h"
@@ -110,7 +110,7 @@ char **envp;
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     opterr = 0;
     while ((opt = getopt(argc, argv, "k")) != EOF) {
@@ -186,7 +186,7 @@ usage()
 #endif
 		);
     prot_flush(popd_out);
-    exit(EX_USAGE);
+    exit(EC_USAGE);
 }
 
 /*
@@ -233,7 +233,7 @@ kpop()
     int r;
 
     if (!popd_haveaddr) {
-	fatal("Cannot get client's IP address", EX_OSERR);
+	fatal("Cannot get client's IP address", EC_OSERR);
     }
 
     srvtab = config_getstring("srvtab", "");

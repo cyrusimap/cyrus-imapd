@@ -1,5 +1,5 @@
 /* proc.c -- Server process registry
- $Id: proc.c,v 1.12 1999/02/16 02:00:55 wcw Exp $
+ $Id: proc.c,v 1.13 1999/04/08 21:04:27 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -30,7 +30,7 @@
 #include <syslog.h>
 
 #include "config.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "xmalloc.h"
 
 #define FNAME_PROCDIR "/proc/"
@@ -55,7 +55,7 @@ char *mailbox;
 	procfile = fopen(procfname, "w+");
 	if (!procfile) {
 	    syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
-	    fatal("can't write proc file", EX_IOERR);
+	    fatal("can't write proc file", EC_IOERR);
 	}
     }
 

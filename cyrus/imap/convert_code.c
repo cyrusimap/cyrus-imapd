@@ -1,4 +1,4 @@
-/* convert_code.c: Convert IMAP_* error to sysexits.h exit status
+/* convert_code.c: Convert IMAP_* error to exitcodes.h exit status
  * Copyright 1998 Carnegie Mellon University
  * 
  * No warranties, either expressed or implied, are made regarding the
@@ -24,7 +24,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: convert_code.c,v 1.1 1998/08/07 06:24:09 tjs Exp $ */
+/* $Id: convert_code.c,v 1.2 1999/04/08 21:04:22 tjs Exp $ */
 
 /* Same old convert_code function moved into one place instead of being
  * redundant in every file.
@@ -32,7 +32,7 @@
  */
 
 #include "imap_err.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 
 int convert_code(r)
 int r;
@@ -42,21 +42,21 @@ int r;
         return 0;
         
     case IMAP_IOERROR:
-        return EX_IOERR;
+        return EC_IOERR;
 
     case IMAP_PERMISSION_DENIED:
-        return EX_NOPERM;
+        return EC_NOPERM;
 
     case IMAP_QUOTA_EXCEEDED:
-        return EX_TEMPFAIL;
+        return EC_TEMPFAIL;
 
     case IMAP_MAILBOX_NOTSUPPORTED:
-        return EX_DATAERR;
+        return EC_DATAERR;
 
     case IMAP_MAILBOX_NONEXISTENT:
-        return EX_UNAVAILABLE;
+        return EC_UNAVAILABLE;
     }
         
     /* Some error we're not expecting. */
-    return EX_SOFTWARE;
+    return EC_SOFTWARE;
 }       

@@ -26,7 +26,7 @@
  *
  */
 
-/* $Id: arbitron.c,v 1.14 1999/03/02 03:03:28 tjs Exp $ */
+/* $Id: arbitron.c,v 1.15 1999/04/08 21:04:21 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -39,7 +39,7 @@
 
 #include "assert.h"
 #include "config.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
@@ -72,7 +72,7 @@ char **argv;
 
     strcpy(pattern, "*");
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     while ((opt = getopt(argc, argv, "d:p:")) != EOF) {
 	switch (opt) {
@@ -106,7 +106,7 @@ char **argv;
 usage()
 {
     fprintf(stderr, "usage: arbitron [-d days] [-p months] [mboxpattern]\n");
-    exit(EX_USAGE);
+    exit(EC_USAGE);
 }    
 
 int

@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.65 1999/03/29 20:23:25 tjs Exp $
+ * $Id: message.c,v 1.66 1999/04/08 21:04:27 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -44,7 +44,7 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "prot.h"
 #include "map.h"
@@ -312,7 +312,7 @@ struct index_record *message_index;
     if (fstat(fileno(infile), &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: fstat on new message in %s: %m",
 	       mailbox->name);
-	fatal("can't fstat message file", EX_OSFILE);
+	fatal("can't fstat message file", EC_OSFILE);
     }
     map_refresh(fileno(infile), 1, &msg_base, &msg_len, sbuf.st_size,
 		"new message", mailbox->name);

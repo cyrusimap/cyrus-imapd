@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.90 1999/03/22 02:35:53 tjs Exp $
+ * $Id: mboxlist.c,v 1.91 1999/04/08 21:04:26 tjs Exp $
  */
 
 #include <stdio.h>
@@ -52,7 +52,7 @@ extern int errno;
 #include "util.h"
 #include "retry.h"
 #include "mailbox.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "xmalloc.h"
 
@@ -307,7 +307,7 @@ char **newpartition;
 	    partition = (char *)config_defpartition;
 	    if (strlen(partition) > MAX_PARTITION_LEN) {
 		/* Configuration error */
-		fatal("name of default partition is too long", EX_CONFIG);
+		fatal("name of default partition is too long", EC_CONFIG);
 	    }
 	}
 	partition = xstrdup(partition);
@@ -1342,7 +1342,7 @@ int (*proc)();
 	    if (!p || !endname || endname - name > MAX_MAILBOX_NAME) {
 		syslog(LOG_ERR, "IOERROR: corrupted subscription file %s",
 		       subsfname);
-		fatal("corrupted subscription file", EX_OSFILE);
+		fatal("corrupted subscription file", EC_OSFILE);
 	    }
 
 	    len = p - name + 1;
@@ -1400,7 +1400,7 @@ int (*proc)();
 	if (!p || !endname || endname - name > MAX_MAILBOX_NAME) {
 	    syslog(LOG_ERR, "IOERROR: corrupted subscription file %s",
 		   subsfname);
-	    fatal("corrupted subscription file", EX_OSFILE);
+	    fatal("corrupted subscription file", EC_OSFILE);
 	}
 
 	len = p - name + 1;
@@ -1901,7 +1901,7 @@ const char **newfname;
     else {
 	if (fstat(subsfd, &sbuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: fstat on %s: %m", subsfname);
-	    fatal("can't fstat subscription list", EX_OSFILE);
+	    fatal("can't fstat subscription list", EC_OSFILE);
 	}
     }
 
@@ -1953,7 +1953,9 @@ mboxlist_reopen(void)
     if (listfd != -1) {
 	if (stat(listfname, &sbuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: stat on %s: %m", listfname);
-	    fatal("can't stat mailboxes file", EX_OSFILE);
+	    /* Exiting TEMPFAIL because Sendmail thinks this
+	       EC_OSFILE == permenant failure. */
+	    fatal("can't stat mailboxes file", EC_TEMPFAIL);
 	}
 	if (sbuf.st_ino == list_ino) return;
 	close(listfd);
@@ -1963,12 +1965,14 @@ mboxlist_reopen(void)
     listfd = open(listfname, O_RDWR, 0666);
     if (listfd == -1) {
 	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	fatal("can't read mailboxes file", EX_OSFILE);
+	    /* Exiting TEMPFAIL because Sendmail thinks this
+	       EC_OSFILE == permenant failure. */
+	fatal("can't read mailboxes file", EC_TEMPFAIL);
     }
 	
     if (fstat(listfd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", listfname);
-	fatal("can't fstat mailboxes file", EX_OSFILE);
+	fatal("can't fstat mailboxes file", EC_OSFILE);
     }
     list_ino = sbuf.st_ino;
 
@@ -1992,7 +1996,7 @@ char *error;
     syslog(LOG_ERR, "IOERROR: corrupted mailboxes file, line %d: %s",
 	   lineno, error);
     sprintf(buf, "corrupted mailboxes file, line %d: %s", lineno, error);
-    fatal(buf, EX_OSFILE);
+    fatal(buf, EC_OSFILE);
 }
     
 

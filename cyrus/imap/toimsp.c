@@ -1,5 +1,5 @@
 /* toimsp.c -- Drop off information to be sent to IMSP server
- $Id: toimsp.c,v 1.25 1998/05/15 21:50:05 neplokh Exp $
+ $Id: toimsp.c,v 1.26 1999/04/08 21:04:28 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -47,7 +47,7 @@
 
 #include "config.h"
 #include "mailbox.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "util.h"
 #include "lock.h"
 #include "retry.h"
@@ -129,7 +129,7 @@ va_dcl
 		break;
 
 	    default:
-		abort("Internal error: unrecognized toimsp type", EX_SOFTWARE);
+		abort("Internal error: unrecognized toimsp type", EC_SOFTWARE);
 	    }
 	}
     }
@@ -141,7 +141,7 @@ va_dcl
     iov[num_iov++].iov_len = 1;
 
     if (num_iov > VECSIZE) {
-	abort("Internal error: toimsp arg list overflow", EX_SOFTWARE);
+	abort("Internal error: toimsp arg list overflow", EC_SOFTWARE);
     }
 
     (void) retry_writev(fd, iov, num_iov);

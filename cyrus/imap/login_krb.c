@@ -1,5 +1,5 @@
 /* login_krb.c -- Kerberos login authentication
- $Id: login_krb.c,v 1.28 1998/05/15 21:48:51 neplokh Exp $
+ $Id: login_krb.c,v 1.29 1999/04/08 21:04:24 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -48,7 +48,7 @@
 
 #include "sasl.h"
 #include "config.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "mailbox.h"
 #include "acl.h"
 
@@ -76,7 +76,7 @@ const char **reply;
 
     if (!lrealm[0]) {
 	if (krb_get_lrealm(lrealm,1)) {
-	    fatal("can't find local Kerberos realm", EX_OSFILE);
+	    fatal("can't find local Kerberos realm", EC_OSFILE);
 	}
 	if (val = config_getstring("srvtab", 0)) {
 	    kerberos_set_srvtab(val);
@@ -104,7 +104,7 @@ const char **reply;
 
     if (!lrealm[0]) {
 	if (krb_get_lrealm(lrealm,1)) {
-	    fatal("can't find local Kerberos realm", EX_OSFILE);
+	    fatal("can't find local Kerberos realm", EC_OSFILE);
 	}
 	if (val = config_getstring("srvtab", 0)) {
 	    kerberos_set_srvtab(val);
