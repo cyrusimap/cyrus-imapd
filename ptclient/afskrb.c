@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.5 2004/04/27 19:53:04 rjs3 Exp $";
+      "$Id: afskrb.c,v 1.6 2004/04/28 18:04:21 rjs3 Exp $";
 
 #include <config.h>
 
@@ -94,7 +94,7 @@ int is_local_realm(const char *realm)
 {
     const char *val = localrealms;
     
-    if(!realm) return 0;
+    if(!val || !realm) return 0;
 
     while (*val) {
 	char buf[1024];
