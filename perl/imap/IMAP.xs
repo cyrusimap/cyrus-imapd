@@ -126,7 +126,9 @@ void imclient_xs_cb(struct imclient *client, struct xsccb *rock,
   XPUSHs(sv_2mortal(newSVpv(reply->text, 0)));
   if (reply->msgno != -1) {
     XPUSHs(sv_2mortal(newSVpv("-msgno", 0)));
+    printf("msg no = %d\n",reply->msgno);
     XPUSHi(reply->msgno);
+    printf("msg no = %d\n",reply->msgno);
   }
   PUTBACK;
   /* invoke Perl */
@@ -345,12 +347,17 @@ PPCODE:
 	    keyword = SvPV(*val, klen);
 	  else
 	    Perl_croak("addcallback: arg %d missing trigger", arg);
-	  if (!(((val = hv_fetch(cb, "-flags", 6, 0)) ||
-		 (val = hv_fetch(cb, "Flags", 5, 0))) &&
-		SvTYPE(*val) == SVt_IV &&
-		!((flags = SvIV(*val)) &
-		  ~(CALLBACK_NUMBERED|CALLBACK_NOLITERAL))))
-	    flags = 0;
+	  if ((((val = hv_fetch(cb, "-flags", 6, 0)) ||
+		 (val = hv_fetch(cb, "Flags", 5, 0)))))
+	  {	
+	    printf("here!!! %d\n",SvIV(*val));
+	    flags = SvIV(*val);
+          } else {
+            flags = 0;
+          }
+
+          printf("<-> flags = %d\n",flags);
+
 	  if (((val = hv_fetch(cb, "-callback", 9, 0)) ||
 	       (val = hv_fetch(cb, "Callback", 8, 0))) &&
 	      ((SvROK(*val) && SvTYPE(SvRV(*val)) == SVt_PVCV) ||
