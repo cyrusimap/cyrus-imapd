@@ -1,5 +1,5 @@
 /* map_shared.c -- memory-mapping routines.
- $Id: map_shared.c,v 1.16 2000/05/23 20:56:17 robeson Exp $
+ $Id: map_shared.c,v 1.17 2002/07/09 18:41:15 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -52,6 +52,8 @@
 #include "xmalloc.h"
 
 #define SLOP (8*1024)
+
+const char *map_method_desc = "shared";
 
 /*
  * Create/refresh mapping of file

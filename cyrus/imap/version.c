@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.7 2002/03/21 21:10:04 ken3 Exp $
+ * $Id: version.c,v 1.8 2002/07/09 18:41:15 ken3 Exp $
  */
 
 #include <config.h>
@@ -57,6 +57,7 @@
 #include "xversion.h"
 #include "prot.h"
 #include "cyrusdb.h"
+#include "map.h"
 #include "lock.h"
 #include "idle.h"
 #include "sieve_interface.h"
@@ -138,6 +139,8 @@ void id_response(struct protstream *pout)
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; UCD-SNMP %s", VersionInfo);
 #endif
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; mmap = %s", map_method_desc);
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; lock = %s", lock_method_desc);
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
