@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.109 1999/10/28 03:03:56 leg Exp $
+ * $Id: deliver.c,v 1.110 1999/10/28 03:05:37 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.109 1999/10/28 03:03:56 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.110 1999/10/28 03:05:37 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -355,7 +355,9 @@ char **argv;
     /* Can't be EC_USAGE; sendmail thinks that EX_USAGE implies
      * a permenant failure.
      */
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_TEMPFAIL);
+    if (geteuid() == 0) {
+	fatal("must run as the Cyrus user", EC_TEMPFAIL);
+    }
 
     while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:lqD")) != EOF) {
 	switch(opt) {
@@ -2421,6 +2423,7 @@ char
 void fatal(const char* s, int code)
 {
     prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
+    prot_flush(deliver_out);
     exit(code);
 }
 
