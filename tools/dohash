@@ -42,7 +42,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
 # script to upgrade from versions of imapd previous to 1.6.2
 # make sure you run it as the cyrus user
-# $Id: dohash,v 1.8 2000/05/23 20:56:53 robeson Exp $
+# $Id: dohash,v 1.9 2001/02/23 04:42:52 leg Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -96,10 +96,10 @@ $hashispool = 0;
 
 open CONF, $imapdconf or die "can't open $imapdconf";
 while (<CONF>) {
-    if (/^configdirectory:\s(.*)$/) {
+    if (/^configdirectory:\s*(.*)$/) {
 	$conf = $1;
     }
-    if (/^partition-.*:\s(.*)$/) {
+    if (/^partition-.*:\s*(.*)$/) {
 	if (grep /$1/, @parts) {
 	    next;
 	}
