@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.19 2001/09/27 16:02:34 ken3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.20 2001/10/14 13:58:16 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -16,6 +16,11 @@
 enabled the alternate namespace and/or the Unix hierarchy separator,
 run the script "<tt>tools/translatesieve</tt>".  This script will
 translate the folder names in <tt>fileinto</tt> actions.
+
+<li> Cyrus now uses the service name "sieve" instead of "imap" for the
+SASL profile of <tt>timsieved</tt>. If you use <tt>timsieved</tt> to
+manage Sieve scripts, be sure to update your password checking
+mechanism appropriately,
 
 <li> If you have enabled the improved directory hashing scheme, run
 the script "<tt>tools/rehash full</tt>".  This script will rehash your
@@ -201,7 +206,7 @@ worry about it.)
 </ul>
 
 <P><HR><P>
-last modified: $Date: 2001/09/27 16:02:34 $
+last modified: $Date: 2001/10/14 13:58:16 $
 </BODY></HTML>
 
 

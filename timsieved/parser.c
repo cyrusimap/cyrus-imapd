@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.9 2001/01/29 21:15:06 leg Exp $
+ * $Id: parser.c,v 1.10 2001/10/14 13:58:17 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -57,18 +57,27 @@
 #include <saslutil.h>
 
 #include "prot.h"
+#include "tls.h"
 #include "lex.h"
 #include "actions.h"
+#include "exitcodes.h"
 
 extern sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 extern char sieved_clienthost[250];
 int authenticated = 0;
+int verify_only = 0;
+int starttls_done = 0;
+#ifdef HAVE_SSL
+/* our tls connection, if any */
+static SSL *tls_conn = NULL;
+#endif /* HAVE_SSL */
 
 
 /* forward declarations */
 static int cmd_logout(struct protstream *sieved_out, struct protstream *sieved_in);
 static int cmd_authenticate(struct protstream *sieved_out, struct protstream *sieved_in,
 			    mystring_t *mechanism_name, mystring_t *initial_challenge, const char **errmsg);
+static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved_in);
 
 
 
@@ -86,9 +95,20 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   /* get one token from the lexer */
   token = timlex(NULL, NULL, sieved_in);
 
-  if ((authenticated == 0) && (token > 255) && (token!=AUTHENTICATE) && (token!=LOGOUT))
+  if (!authenticated && (token > 255) && (token!=AUTHENTICATE) &&
+      (token!=LOGOUT) && (token!=CAPABILITY) &&
+      (!tls_enabled("sieve") || (token!=STARTTLS)))
   {
     error_msg = "Authenticate first";
+    if (token!=EOL)
+      lex_setrecovering();
+
+    goto error;
+  }
+
+  if (verify_only && (token > 255) && (token!=PUTSCRIPT) && (token!=LOGOUT))
+  {
+    error_msg = "Script verification only";
     if (token!=EOL)
       lex_setrecovering();
 
@@ -136,7 +156,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       goto error;
     }
 
-    if (cmd_authenticate(sieved_out, sieved_in, mechanism_name, initial_challenge, &error_msg)==FALSE)
+    if (authenticated)
+	prot_printf(sieved_out, "NO \"Already authenticated\"\r\n");
+    else if (cmd_authenticate(sieved_out, sieved_in, mechanism_name, initial_challenge, &error_msg)==FALSE)
     {
 	/* free memory */
 	free(mechanism_name);
@@ -151,6 +173,12 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     break;
 
   case CAPABILITY:
+      if (timlex(NULL, NULL, sieved_in)!=EOL)
+      {
+	  error_msg = "Expected EOL";
+	  goto error;
+      }
+
       capabilities(sieved_out, sieved_saslconn);
       break;
 
@@ -256,7 +284,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       goto error;
     }
 
-    putscript(sieved_out, sieve_name, sieve_data);
+    putscript(sieved_out, sieve_name, sieve_data, verify_only);
     
     break;
 
@@ -315,6 +343,18 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     }
 
     listscripts(sieved_out);
+    
+    break;
+
+  case STARTTLS:
+
+    if (timlex(NULL, NULL, sieved_in)!=EOL)
+    {
+      error_msg = "Expected EOL";
+      goto error;
+    }
+
+    cmd_starttls(sieved_out, sieved_in);
     
     break;
 
@@ -496,17 +536,21 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
     return FALSE;
   }
 
-  if (actions_setuser(username) != TIMSIEVE_OK)
-  {
-    *errmsg = "internal error";
-    syslog(LOG_ERR, "error in actions_setuser()");
-    return FALSE;
+  verify_only = !strcmp(username, "anonymous");
+
+  if (!verify_only) {
+      if (actions_setuser(username) != TIMSIEVE_OK)
+      {
+	  *errmsg = "internal error";
+	  syslog(LOG_ERR, "error in actions_setuser()");
+	  return FALSE;
+      }
   }
 
   /* Yay! authenticated */
   prot_printf(sieved_out, "OK\r\n");
-  syslog(LOG_NOTICE, "login: %s %s %s %s", sieved_clienthost, username,
-	 mech, "User logged in");
+  syslog(LOG_NOTICE, "login: %s %s %s%s %s", sieved_clienthost, username,
+	 mech, starttls_done ? "+TLS" : "", "User logged in");
 
   authenticated = 1;
 
@@ -514,3 +558,73 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
 
   return TRUE;
 }
+
+#ifdef HAVE_SSL
+static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved_in)
+{
+    int result;
+    int *layerp;
+    sasl_external_properties_t external;
+
+    /* SASL and openssl have different ideas about whether ssf is signed */
+    layerp = (int *) &(external.ssf);
+
+    if (starttls_done == 1)
+    {
+	prot_printf(sieved_out, "NO \"TLS already active\"\r\n");
+	return TIMSIEVE_FAIL;
+    }
+
+    result=tls_init_serverengine("sieve",
+				 5,        /* depth to verify */
+				 1,        /* can client auth? */
+				 0,        /* require client to auth? */
+				 1);       /* TLS only? */
+
+    if (result == -1) {
+
+	syslog(LOG_ERR, "error initializing TLS");
+
+	prot_printf(sieved_out, "NO \"Error initializing TLS\"\r\n");
+
+	return TIMSIEVE_FAIL;
+    }
+
+    prot_printf(sieved_out, "OK \"Begin TLS negotiation now\"\r\n");
+    /* must flush our buffers before starting tls */
+    prot_flush(sieved_out);
+
+    result=tls_start_servertls(0, /* read */
+			       1, /* write */
+			       layerp,
+			       &(external.auth_id),
+			       &tls_conn);
+
+    /* if error */
+    if (result==-1) {
+	prot_printf(sieved_out, "NO \"Starttls failed\"\r\n");
+	syslog(LOG_NOTICE, "STARTTLS failed: %s", sieved_clienthost);
+	return TIMSIEVE_FAIL;
+    }
+
+    /* tell SASL about the negotiated layer */
+    result = sasl_setprop(sieved_saslconn, SASL_SSF_EXTERNAL, &external);
+
+    if (result != SASL_OK) {
+	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+    }
+
+    /* tell the prot layer about our new layers */
+    prot_settls(sieved_in, tls_conn);
+    prot_settls(sieved_out, tls_conn);
+
+    starttls_done = 1;
+
+    return capabilities(sieved_out, sieved_saslconn);
+}
+#else
+static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved_in)
+{
+    fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
+}
+#endif /* HAVE_SSL */

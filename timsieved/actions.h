@@ -69,7 +69,8 @@ int getscript(struct protstream *conn, mystring_t *name);
  *
  */
 
-int putscript(struct protstream *conn, mystring_t *name, mystring_t *data);
+int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
+	      int verify_only);
 
 /*
  * Delete the script with name 'name'

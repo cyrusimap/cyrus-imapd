@@ -1,7 +1,7 @@
 /* lex.h -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.h,v 1.9 2000/05/23 20:56:51 robeson Exp $
+ * $Id: lex.h,v 1.10 2001/10/14 13:58:17 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -80,6 +80,7 @@
 #define DELETESCRIPT 406
 #define CAPABILITY   407
 #define HAVESPACE    408
+#define STARTTLS     409
 
 
 int lex_init(void);

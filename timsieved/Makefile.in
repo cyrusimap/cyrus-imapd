@@ -1,5 +1,5 @@
 # Makefile.in - timsieved makefile
-# $Id: Makefile.in,v 1.16 2001/02/19 17:54:43 leg Exp $
+# $Id: Makefile.in,v 1.17 2001/10/14 13:58:17 ken3 Exp $
 # @configure_input@
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
@@ -80,7 +80,8 @@ all: timsieved
 install:
 	$(INSTALL) -m 755 timsieved $(DESTDIR)$(cyrus_prefix)/bin
 
-OBJS= actions.o lex.o mystring.o scripttest.o timsieved.o parser.o
+OBJS= actions.o lex.o mystring.o scripttest.o timsieved.o parser.o \
+	../imap/tls.o
 
 timsieved: $(OBJS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o timsieved \

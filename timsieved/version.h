@@ -1,6 +1,6 @@
 /* version.h: the version number
  *
- * $Id: version.h,v 1.3 2000/05/23 20:56:52 robeson Exp $
+ * $Id: version.h,v 1.4 2001/10/14 13:58:18 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,7 +41,7 @@
  *
  */
 
-#define _SIEVED_VERSION "v1.0.0"
+#define _SIEVED_VERSION "v1.1.0"
 
 #ifdef EXTRA_IDENT
 #define SIEVED_VERSION _SIEVED_VERSION "-" EXTRA_IDENT
