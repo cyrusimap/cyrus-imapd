@@ -43,13 +43,9 @@
 #include "imclient.h"
 #include "amssync.h"
 
-extern struct acte_client krb_acte_client;
 extern int debug,verbose;
 
-struct acte_client *login_acte_client[] = {
-    &krb_acte_client,
-    NULL
-};
+
 
 /* Parse an IMAP date/time specification. Stolen from cyrus/imapd/imapd.c
  * (getdatetime())
@@ -60,7 +56,7 @@ static char *monthname[] = {
 };
 
 
-time_t parsefetchdate(char *buf)
+time_t parsefetchdate(char **bufx)
 {
     int c;
     struct tm tm, *ltm;
@@ -69,8 +65,11 @@ time_t parsefetchdate(char *buf)
     char month[4], zone[4], *p;
     int zone_off;
     time_t date;
+    char *buf;
+    
 
     tm = zerotm;
+    buf=*bufx;
     
     c = *buf++;
     if (c != '\"') goto baddate;
@@ -240,7 +239,8 @@ time_t parsefetchdate(char *buf)
     date = mktime(&tm);
     ltm = localtime(&date);
     date += gmtoff_of(ltm, date) - zone_off*60;
-
+    bufx=&buf;
+    
     return date;
 
  baddate:
@@ -292,49 +292,65 @@ void processexists(struct imclient *conn, bboard *bbd, struct
 void processfetch(struct imclient *conn, bboard *bbd, struct
                  imclient_reply *inmsg)
 {
-    char *p;
-  
+    char *p,*q;
+    int parenlvl,ifound,ufound;;
+    
     if (bbd->inuse == -2) {
 	fatal("FETCH before EXISTS!\n", EX_PROTOCOL);
     }
-
-#if 0
-    /* This should never happen. So far it hasn't */
-    if (++bbd->inuse == bbd->alloced) {
-	fprintf(stderr, "imapuse == imapsz. This shouldn't have happened\n");
-	bbd->alloced *= 2;
-	bbd->msgs=(message *)xrealloc(bbd->msgs, bbd->alloced * sizeof (message));
-    }
-#else
     bbd->inuse++;
-#endif
     getonerespline(inmsg->text);
-    p=strstr(inmsg->text, "INTERNALDATE ");
-    if (p) {
-	p=&p[strlen("INTERNALDATE ")];
-	bbd->msgs[bbd->inuse].stamp=parsefetchdate(p);
-	if (bbd->msgs[bbd->inuse].stamp == -1) {
-	    printf ("Date parse of (%ld) %s failed\n", inmsg->msgno, p);
-	    printf("Full text was \n%s\n",inmsg->text);
-	}  
-    } else {
-	printf("No INTERNALDATE in %ld\n", inmsg->msgno);
-	printf("Full text was \n%s\n",inmsg->text);
+    q=inmsg->text;
+    parenlvl=0;
+    ifound=0;
+    ufound=0;
+    
+    
+    while (q && *q && (!ifound || !ufound)) {
+        if (*q=='(') parenlvl++;
+        if (parenlvl) {
+            if (*q==')') parenlvl--;
+        }
+        if (parenlvl == 1) {
+            if (*q=='I' && !strncmp(q,"INTERNALDATE ",strlen("INTERNALDATE ")))
+                {
+                    p=&q[strlen("INTERNALDATE ")];
+                    bbd->msgs[bbd->inuse].stamp=parsefetchdate(&p);
+                    if (bbd->msgs[bbd->inuse].stamp == -1) {
+                        printf ("Date parse of (%ld) %s failed\n",
+                                inmsg->msgno, p); 
+                        printf("Full text was \n%s\n",inmsg->text);
+                    }
+                    ifound=1;
+                    q=p;
+                }
+            if (*q=='U' && !strncmp(q,"UID ",strlen("UID ")))
+                {
+                    p=&q[strlen("UID ")];
+                    if (isdigit(p[0])) {
+                        sprintf(bbd->msgs[bbd->inuse].name,"%ld", atol(p));
+                    } else {
+                        printf("UID parse of (%ld) %s failed\n", inmsg->msgno,
+                               p); 
+                        printf("Full text was \n%s\n",inmsg->text);
+                    }
+                    ufound=1;
+                    q=p;
+                }
+        }
+        q++;
     }
-    p=strstr(inmsg->text, "UID ");
-    if (p) {
-	p=&p[strlen("UID ")];
-	if (isdigit(p[0])) {
-	    sprintf(bbd->msgs[bbd->inuse].name,"%ld", atol(p));
-	} else {
-	    printf("UID parse of (%ld) %s failed\n", inmsg->msgno, p);
-	    printf("Full text was \n%s\n",inmsg->text);
-	}
-    } else {
-	printf("No UID in %ld\n", inmsg->msgno);
-	printf("Full text was \n%s\n",inmsg->text);
+    if (!ifound) {
+        printf("No INTERNALDATE in %ld\n", inmsg->msgno);
+        printf("Full text was \n%s\n",inmsg->text);
+    }
+    if (!ufound)    {
+        printf("No UID in %ld\n", inmsg->msgno);
+        printf("Full text was \n%s\n",inmsg->text);
     }
 }
+
+
 
 /*
  * Command callback for something we wait for. Sets passed rock to 1
@@ -393,8 +409,7 @@ void errcheck(struct imclient *conn, char *rock, struct
 }
 
 /*
- * Free callback for an IMAP mailbox. closes the open mailbox and
- * terminates the server connection
+ * Closes any open mailbox on the imap server connection.
  */
 void do_imap_close(struct imclient *imclient)
 {
@@ -405,31 +420,8 @@ void do_imap_close(struct imclient *imclient)
     while (!waitforcomplete) {
 	imclient_processoneevent(imclient);
     }
-    imclient_close(imclient);
 }
 
-/*
- * allows main program to set imap server and port to use in
- * subsequent getimap() calls . the interface of this system (in
- * general) isn't very good
- */
-static char imapser[1024]="cyrus.andrew.cmu.edu";
-static char *imapport=NULL;
-
-int setimapser(char *server, char  *port)
-{
-    static char xport[6]="";
-
-    strcpy(imapser,server);
-    if (port) {
-	strcpy(xport,port);
-	imapport=xport;
-    }
-    else {
-	imapport=NULL;
-    }
-    return 0;
-}
 
 /*
  * Allocate and build a bboard struct for the named IMAP mailbox.
@@ -437,24 +429,13 @@ int setimapser(char *server, char  *port)
  * information and builds a sorted message list. the inuse and alloced
  * members do not take the sentinel into account.
  */
-bboard *getimap(char *bbd)
+bboard *getimap( struct imclient *imclient, char *bbd,bboard *imapbbd)
 {
     int waitforcomplete,i;
-    bboard *imapbbd;
-    struct imclient *imclient;
 
-    if (imclient_connect(&imclient,imapser,imapport)) {
-	fatal("couldn't find server\n", EX_NOHOST);
-    }
-    if (imclient_authenticate(imclient,login_acte_client,NULL,ACTE_PROT_ANY)) {
-	fatal("couldn't auth to server\n", EX_UNAVAILABLE);
-    }
-    imapbbd=(bboard *)xmalloc(sizeof(bboard));
     strcpy(imapbbd->name, bbd);
     imapbbd->alloced=0;
     imapbbd->inuse=-2;
-    imapbbd->internaldata=imclient;
-    imapbbd->internalfreeproc=do_imap_close;
     imclient_addcallback(imclient,
 			 "EXISTS", CALLBACK_NUMBERED , processexists, imapbbd,
 			 "FETCH", CALLBACK_NUMBERED, processfetch, imapbbd,
@@ -467,7 +448,8 @@ bboard *getimap(char *bbd)
     }
 
     if (imapbbd->inuse == -2) {
-	fatal("Select did not elicit EXISTS response; does bboard exist?\n", EX_PROTOCOL);
+      fprintf(stderr,"Select of %s did not elicit EXISTS response\n",bbd);
+      fatal(" does bboard exist?\n", EX_PROTOCOL);
     }
 
     waitforcomplete=0;
@@ -488,7 +470,7 @@ bboard *getimap(char *bbd)
 	       imapbbd->inuse+1, bbd, imapbbd->alloced);
     }
     else if (verbose) {
-	printf("There are %d messages in %s\n",
+	fprintf(stderr,"There are %d messages in %s\n",
 	       imapbbd->inuse+1, bbd);
     }
     if (imapbbd->inuse >= 0) {
@@ -502,17 +484,6 @@ bboard *getimap(char *bbd)
     }
     imapbbd->msgs[imapbbd->inuse+1].stamp=0x7fffffff;
     
-    return imapbbd;
-}
-
-/*
- * Extract the imclient from the bbd->internaldata member and return
- * it (This exists mostly because of typing/casting issues and
- * convenience)
- */
-struct imclient *bboard_imclient(bboard *bbd)
-{
-    return (struct imclient *)bbd->internaldata;
 }
 
 /*
@@ -520,15 +491,13 @@ struct imclient *bboard_imclient(bboard *bbd)
  * the imap server, but does not wait for a response. the passed
  * buffer is so that errcheck can print useful error messages
  */
-void DeleteIMAP(bboard *bbd, message *msg)
+void DeleteIMAP(struct imclient * imclient, char *name, message *msg)
 {
-    struct imclient *imclient;
     char *buf;
-    imclient=bboard_imclient(bbd);
-    if (verbose) printf("D");
+    if (verbose) fprintf(stderr,"D");
   
     buf=xmalloc(256);
-    sprintf(buf, "Delete %s in %s", msg->name,bbd->name);
+    sprintf(buf, "Delete %s in %s", msg->name,name);
   
     imclient_send(imclient, errcheck, buf,
 		  "uid store %a +flags.silent (\\Deleted)", msg->name);
@@ -538,11 +507,12 @@ void DeleteIMAP(bboard *bbd, message *msg)
  * Unscribe and append the AMS message to the IMAP mailbox
  */
 #define ALLOCSLOP 4096
-void UploadAMS(bboard *imapdest, bboard *amssrc, message *msg)
+void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
+               *msg)  
 {
-    char *fname;
     FILE *msgf, *tmpf;
-    char *allmsg, *withcrnl, buf[1025], *descbuf, *tmpfil, *p, *q, *r;
+    char *allmsg, *withcrnl, buf[1025],amsfile[MAXPATHLEN], *descbuf, *tmpfil,
+        *p, *q, *r; 
     int withcrnllen, withcrnlsize;
     int len, rc, gmtnegative, scribeval, done, unscribe;
     int gmtoff;
@@ -550,23 +520,27 @@ void UploadAMS(bboard *imapdest, bboard *amssrc, message *msg)
     struct stat statbuf;
     struct ScribeState *scribestate;
 
+    strcpy(amsfile,amsdir);
+    strcat(amsfile,"/");
+    strcat(amsfile,msg->name);
+    
     tmpf=NULL;
     scribeval=0;
     tmpfil=NULL;
     len=0; 
-    if (verbose) printf("A");
+    if (verbose) fprintf(stderr,"A");
 
     /* First, allocate a buffer large enough to hold the entire message */
-    fname=getfilename(amssrc, msg);
-    msgf=fopen(fname,"r");
+    
+    msgf=fopen(amsfile,"r");
     if (!msgf) {
 	fprintf(stderr, "Couldn't open message\n");
-	perror(fname);
+	perror(amsfile);
 	exit(EX_NOINPUT);
     }
     if (fstat(fileno(msgf), &statbuf) == -1) {
 	fprintf(stderr, "Couldn't stat message\n");
-	perror(fname);
+	perror(amsfile);
 	fclose(msgf);
 	exit(EX_NOINPUT); 
     }
@@ -580,7 +554,7 @@ void UploadAMS(bboard *imapdest, bboard *amssrc, message *msg)
     while (!done) {
 	if (fgets(&buf[0], 1024, msgf) == 0) {
 	    fprintf(stderr, "Couldn't read message\n");
-	    perror(fname);
+	    perror(amsfile);
 	    fclose(msgf);
 	    exit(EX_NOINPUT);
 	}
@@ -591,7 +565,7 @@ void UploadAMS(bboard *imapdest, bboard *amssrc, message *msg)
 	    if ((scribeval = UnScribeInit(&buf[20], &scribestate)) < 0) {
 		fprintf(stderr, "Unknown scribe version \"%s\"\n",
 			&buf[20]);
-		fprintf(stderr, "Not Unscribing %s\n", fname);
+		fprintf(stderr, "Not Unscribing %s\n", amsfile);
 		strcat(buf,"\n");
 	    } else {
 		strcpy(buf,"Content-Type: text/plain\n");
@@ -635,7 +609,7 @@ void UploadAMS(bboard *imapdest, bboard *amssrc, message *msg)
 	rc=fread(allmsg,1, statbuf.st_size - len+1, msgf);
 	if (rc == -1) {
 	    fprintf(stderr, "Couldn't read message\n");
-	    perror(fname);
+	    perror(amsfile);
 	    fclose(msgf);
 	    fclose(tmpf);
 	    unlink(tmpfil);
@@ -643,7 +617,7 @@ void UploadAMS(bboard *imapdest, bboard *amssrc, message *msg)
 	}      
 	if (rc < statbuf.st_size - len) {
 	    fprintf(stderr, "Short read (%d/%ld) of message %s\n",rc ,
-		    statbuf.st_size - len, fname); 
+		    statbuf.st_size - len, amsfile); 
 	}
 	fclose(msgf);
 	/* Call UnScribe and UnScribeFlush */
@@ -762,7 +736,7 @@ void UploadAMS(bboard *imapdest, bboard *amssrc, message *msg)
 		msg->stamp, msg->name);
 	free(withcrnl);
 	free(allmsg);
-	free(fname);
+	free(amsfile);
 	return;
     }
     if (gmtoff < 0) {
@@ -777,14 +751,13 @@ void UploadAMS(bboard *imapdest, bboard *amssrc, message *msg)
     
     /* informative message for errcheck */
     descbuf=xmalloc(1024);
-    sprintf(descbuf, "Append of %s%s", unscribe ? "unscribed " : "",
-	    fname);
+    sprintf(descbuf, "Append of %s%s to %s", unscribe ? "unscribed " : "",
+	    amsfile, name);
     
-    imclient_send(bboard_imclient(imapdest), errcheck, descbuf,
-		  "APPEND %s \"%a\" %s", imapdest->name, buf, withcrnl);
+    imclient_send(imclient, errcheck, descbuf,
+		  "APPEND %s \"%a\" %s", name, buf, withcrnl);
     
     free(withcrnl);
     
     free(allmsg);
-    free(fname);
 }

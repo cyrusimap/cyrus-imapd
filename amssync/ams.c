@@ -36,6 +36,8 @@
 #include <string.h>
 #include <sysexits.h>
 
+#include "acte.h"
+#include "imclient.h"
 #include "xmalloc.h"
 #include "amssync.h"
 
@@ -82,16 +84,14 @@ register char *xnum;
  * into account. This assumes that the passed parameter string will
  * not be freed/out of scope until this structure is freed
  */
-bboard *getams(char *dname)
+bboard * getams(char *dname,bboard * amsbbd)
 {
     char buf[1024];
     DIR *dirp;
     struct dirent *dirent;
-    bboard *amsbbd;
     int i;
   
 
-    amsbbd=(bboard *)xmalloc(sizeof(bboard));
     amsbbd->alloced=50;
     amsbbd->inuse=-1;
  
@@ -103,8 +103,6 @@ bboard *getams(char *dname)
 	exit(EX_NOINPUT);
     }
     amsbbd->msgs=(message *)xmalloc((amsbbd->alloced + 1) * sizeof (message));
-    amsbbd->internaldata=dname;
-    amsbbd->internalfreeproc=NULL;
     memset(buf, 0, sizeof(buf));
   
     while ((dirent=readdir(dirp))) {
@@ -128,7 +126,8 @@ bboard *getams(char *dname)
 	}
     }
     else if (verbose) {
-	printf("There are %d messages in %s\n", amsbbd->inuse+1, dname);
+	fprintf(stderr,"There are %d messages in %s\n", amsbbd->inuse+1,
+                dname); 
     }
     amsbbd->msgs[amsbbd->inuse+1].stamp=0x7fffffff;
     return amsbbd;
@@ -139,11 +138,11 @@ bboard *getams(char *dname)
  * Return the name of the file that contains the given message. User
  * should free value when done
  */
-char *getfilename(bboard *bbd, message *msg)
+/*char *getfilename(bboard *bbd, message *msg)
 {
     char *result;
     int slen;
-
+ 
     slen=strlen((char *)bbd->internaldata)+ strlen(msg->name) + 2;
     if (!slen) {
 	return NULL;
@@ -151,6 +150,6 @@ char *getfilename(bboard *bbd, message *msg)
     result=xmalloc(slen);
     sprintf(result, "%s/%s", (char *)bbd->internaldata, msg->name);
     return result;
-}
+}*/
 
   
