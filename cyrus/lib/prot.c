@@ -322,6 +322,7 @@ va_dcl
 	case 's':
 	    p = va_arg(pvar, char *);
 	    prot_write(s, p, strlen(p));
+	    break;
 
 	default:
 	    abort();
