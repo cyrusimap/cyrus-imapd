@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.96 2002/04/15 14:42:17 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.97 2002/05/15 18:41:53 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -156,7 +156,8 @@ static void setup_sieve();
 extern int optind;
 extern char *optarg;
 extern int errno;
-static int dupelim = 0;		/* eliminate duplicate messages with
+static int have_dupdb = 1;	/* duplicate delivery db is initialized */
+static int dupelim = 1;		/* eliminate duplicate messages with
 				   same message-id */
 static int singleinstance = 1;	/* attempt single instance store */
 const char *BB = "";
@@ -271,13 +272,11 @@ int service_init(int argc __attribute__((unused)),
     }
 
     dupelim = config_getswitch("duplicatesuppression", 1);
-    if (dupelim) {
-	/* initialize duplicate delivery database */
-	if (duplicate_init(NULL, 0) != 0) {
-	    syslog(LOG_ERR, 
-		   "lmtpd: unable to init duplicate delivery database\n");
-	    dupelim = 0;
-	}
+    /* initialize duplicate delivery database */
+    if (duplicate_init(NULL, 0) != 0) {
+	syslog(LOG_ERR, 
+	       "lmtpd: unable to init duplicate delivery database\n");
+	dupelim = have_dupdb = 0;
     }
 
     /* so we can do mboxlist operations */
@@ -1061,8 +1060,8 @@ static FILE *sieve_find_script(const char *user)
 	return NULL;
     }
     
-    if (!dupelim) {
-	/* duplicate delivery suppression is needed for sieve */
+    if (!have_dupdb) {
+	/* duplicate delivery database is needed for sieve */
 	return NULL;
     }
 
@@ -1236,19 +1235,6 @@ int deliver(message_data_t *msgdata, char *authuser,
 		snprintf(namebuf, sizeof(namebuf), "%s+%s", rcpt,
 			 plus ? plus : "");
 		
-		/* is this the first time we've sieved the message? */
-		if (msgdata->id) {
-		    char *sdb = make_sieve_db(namebuf);
-		    
-		    if (duplicate_check(msgdata->id, strlen(msgdata->id),
-					sdb, strlen(sdb))) {
-			logdupelem(msgdata->id, sdb);
-			/* done it before ! */
-			r = 0;
-			goto donercpt;
-		    }
-		}
-		
 		r = sieve_script_parse(sieve_interp, f, (void *) sdata, &s);
 		fclose(f);
 		if (r == SIEVE_OK) {
@@ -1307,7 +1293,6 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    }
 	}
 
-    donercpt:
 	free(rcpt);
 	msg_setrcpt_status(msgdata, n, r);
     }
