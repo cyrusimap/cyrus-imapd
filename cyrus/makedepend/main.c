@@ -33,7 +33,7 @@ in this Software without prior written authorization from the X Consortium.
 
 #include <signal.h>
 
-#if NeedVarargsPrototypes
+#ifdef HAVE_STDARG_H /* NeedVarargsPrototypes */
 #include <stdarg.h>
 #endif
 
@@ -62,9 +62,53 @@ char	*directives[] = {
 	NULL
 };
 
-#define MAKEDEPEND
-#include "imakemdep.h"	/* from config sources */
-#undef MAKEDEPEND
+struct symtab	predefs[] = {
+#ifdef apollo
+	{"apollo", "1"},
+#endif
+#ifdef ibm032
+	{"ibm032", "1"},
+#endif
+#ifdef sun
+	{"sun", "1"},
+#ifdef sparc
+	{"sparc", "1"},
+#endif
+#endif
+#ifdef solaris20
+	{"solaris20", "1"},
+#endif
+#ifdef hpux
+	{"hpux", "1"},
+#endif
+#ifdef vax
+	{"vax", "1"},
+#endif
+#ifdef VMS
+	{"VMS", "1"},
+#endif
+#ifdef ultrix
+	{"ultrix", "1"},
+#endif
+#ifdef mips
+	{"mips", "1"},
+#endif
+#ifdef __SCO__
+	{"__SCO__", "1"},
+#endif	  
+#ifdef __DGUX
+	{"__DGUX", "1"},
+#endif
+#ifdef __DGUX__
+	{"__DGUX__", "1"},
+#endif
+#ifdef __m88k__
+	{"__m88k__", "1"},
+#endif
+	{NULL, NULL}
+};
+#define OBJSUFFIX ".o"
+#define INCLUDEDIR "/usr/include"
 
 struct	inclist inclist[ MAXFILES ],
 		*inclistp = inclist,
@@ -626,7 +670,7 @@ redirect(line, makefile)
 #endif /* USGISH */
 }
 
-#if NeedVarargsPrototypes
+#ifdef HAVE_STDARG_H /* NeedVarargsPrototypes */
 fatalerr(char *msg, ...)
 #else
 /*VARARGS*/
@@ -634,11 +678,11 @@ fatalerr(msg,x1,x2,x3,x4,x5,x6,x7,x8,x9)
     char *msg;
 #endif
 {
-#if NeedVarargsPrototypes
+#ifdef HAVE_STDARG_H /* NeedVarargsPrototypes */
 	va_list args;
 #endif
 	fprintf(stderr, "%s: error:  ", ProgramName);
-#if NeedVarargsPrototypes
+#ifdef HAVE_STDARG_H /* NeedVarargsPrototypes */
 	va_start(args, msg);
 	vfprintf(stderr, msg, args);
 	va_end(args);
@@ -648,7 +692,7 @@ fatalerr(msg,x1,x2,x3,x4,x5,x6,x7,x8,x9)
 	exit (1);
 }
 
-#if NeedVarargsPrototypes
+#ifdef HAVE_STDARG_H /* NeedVarargsPrototypes */
 warning(char *msg, ...)
 #else
 /*VARARGS0*/
@@ -656,11 +700,11 @@ warning(msg,x1,x2,x3,x4,x5,x6,x7,x8,x9)
     char *msg;
 #endif
 {
-#if NeedVarargsPrototypes
+#ifdef HAVE_STDARG_H /* NeedVarargsPrototypes */
 	va_list args;
 #endif
 	fprintf(stderr, "%s: warning:  ", ProgramName);
-#if NeedVarargsPrototypes
+#ifdef HAVE_STDARG_H /* NeedVarargsPrototypes */
 	va_start(args, msg);
 	vfprintf(stderr, msg, args);
 	va_end(args);
@@ -669,7 +713,7 @@ warning(msg,x1,x2,x3,x4,x5,x6,x7,x8,x9)
 #endif
 }
 
-#if NeedVarargsPrototypes
+#ifdef HAVE_STDARG_H /* NeedVarargsPrototypes */
 warning1(char *msg, ...)
 #else
 /*VARARGS0*/
@@ -677,7 +721,7 @@ warning1(msg,x1,x2,x3,x4,x5,x6,x7,x8,x9)
     char *msg;
 #endif
 {
-#if NeedVarargsPrototypes
+#ifdef HAVE_STDARG_H /* NeedVarargsPrototypes */
 	va_list args;
 	va_start(args, msg);
 	vfprintf(stderr, msg, args);
