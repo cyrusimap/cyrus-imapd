@@ -1,4 +1,4 @@
-/* fetchnews.c -- Program to pull new articles from a peer and push to a server
+/* fetchnews.c -- Program to pull new articles from a peer and push to server
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.1.2.1 2002/10/08 16:25:11 ken3 Exp $
+ * $Id: fetchnews.c,v 1.1.2.2 2002/10/08 20:52:39 ken3 Exp $
  */
 
 #include <config.h>
@@ -53,7 +53,9 @@
 #include <signal.h>
 
 #include "prot.h"
+#include "xmalloc.h"
 #include "imapconf.h"
+#include "exitcodes.h"
 
 
 void fatal(const char *message, int code)
@@ -71,7 +73,7 @@ void shut_down(int code)
 void usage(void)
 {
     fprintf(stderr,
-	    "nntpget [-C <altconfig>] <peer> <server>\n");
+	    "fetchnews [-C <altconfig>] [-s <server>] [-w <wildmat>] [-f <tstamp file>] <peer>\n");
     exit(-1);
 }
 
@@ -107,50 +109,49 @@ int init_net(const char *host, int port,
     return sock;
 }
 
-/*
- * We use the following streaming procedure for fetching new articles:
- *
- *	Peer			Server
- *	----			------
- *	MODE READER		MODE STREAM
- *	NEWNEWS
- *	<msgid1>  ----------->  CHECK <msgid1>  (want it)
- *						    |
- *	ARTICLE <msgid1>  <-------------------------+
- *	  .
- *	  .
- *	  .
- *	<msgidN>  ----------->  CHECK <msgidN>  (don't want it)
- *	read article 1  ----->	TAKETHIS <msgid1>
- *	  .
- *	  .
- *	  .
- *	QUIT			QUIT
- */
+#define MSGID_GROW 100
 
 int main(int argc, char *argv[])
 {
     extern char *optarg;
-    int opt;
+    int opt, port = 119;
     char *alt_config = NULL;
-    const char *peer = NULL, *server = NULL;
+    const char *peer = NULL, *server = "localhost", *wildmat = "*";
     int psock = -1, ssock = -1;
     struct protstream *pin, *pout, *sin, *sout;
-    char buf[4096];
+    char buf[4096], sbuf[4096];
+    char sfile[1024] = "";
+    int fd, i, n;
     time_t stamp;
     struct tm *tm;
-    int n = 0;
-#if 0
+    char **msgid = NULL;
+
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
-#endif
+
     signals_set_shutdown(&shut_down);
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:s:p:w:f:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
+	    break;
+
+	case 's': /* server */
+	    server = optarg;
+	    break;
+
+	case 'p': /* pot on server */
+	    port = atoi(optarg);
+	    break;
+
+	case 'w': /* wildmat */
+	    wildmat = optarg;
+	    break;
+
+	case 'f': /* timestamp file */
+	    snprintf(sfile, sizeof(sfile), optarg);
 	    break;
 
 	default:
@@ -158,12 +159,11 @@ int main(int argc, char *argv[])
 	    break;
 	}
     }
-    if (argc - optind < 2) usage();
+    if (argc - optind < 1) usage();
 
     peer = argv[optind++];
-    server = argv[optind++];
 
-    config_init(alt_config, "nntpget");
+    config_init(alt_config, "fetchnews");
 
     /* connect to the peer */
     if ((psock = init_net(peer, 119, &pin, &pout)) < 0) {
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
     prot_fgets(buf, sizeof(buf), pin);
 
     /* connect to the server */
-    if ((ssock = init_net(server, 9119, &sin, &sout)) < 0) {
+    if ((ssock = init_net(server, port, &sin, &sout)) < 0) {
 	fprintf(stderr, "connection to %s failed\n", server);
 	goto quit;
     }
@@ -201,16 +201,20 @@ int main(int argc, char *argv[])
 	goto quit;
     }
 
-    /* ask for news articles */
-    /* XXX hack - ask for last 60 sec 
-     *
-     * change this to use a timestamp from a file
-     */
-    stamp = time(NULL);
-    stamp -= 60;
+    /* read the previous timestamp */
+    if (!sfile[0]) snprintf(sfile, sizeof(sfile), "%s/newsstamp", config_dir);
+
+    fd = open(sfile, O_RDONLY, 0644);
+    if (fd == -1 || read(fd, &stamp, sizeof(stamp)) < sizeof(stamp)) {
+	/* XXX do something better here */
+	stamp = time(NULL);
+    }
+    if (fd != -1) close(fd);
+
+    /* ask for new articles */
     tm = gmtime(&stamp);
     strftime(buf, sizeof(buf), "%Y%m%d %H%M%S", tm);
-    prot_printf(pout, "NEWNEWS %s %s GMT\r\n", "*", buf);
+    prot_printf(pout, "NEWNEWS %s %s GMT\r\n", wildmat, buf);
 
     if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("23", buf, 2)) {
 	syslog(LOG_ERR, "peer doesn't support NEWNEWS");
@@ -218,17 +222,24 @@ int main(int argc, char *argv[])
     }
 
     /* process the list */
+    stamp = time(NULL);
+    n = 0;
     while (prot_fgets(buf, sizeof(buf), pin)) {
-	char sbuf[4096];
-
 	if (buf[0] == '.') break;
+
 	/* see if we want this article */
 	prot_printf(sout, "CHECK %s", buf);
+	if (!prot_fgets(sbuf, sizeof(sbuf), sin)) {
+	    syslog(LOG_ERR, "CHECK terminated abnormally");
+	    goto quit;
+	}
 
-	prot_fgets(sbuf, sizeof(sbuf), sin);
 	if (!strncmp("238", sbuf, 3)) {
-	    prot_printf(pout, "ARTICLE %s", buf);
-	    n++;
+	    if (!(n % MSGID_GROW)) { /* time to alloc more */
+		msgid = (char **)
+		    xrealloc(msgid, (n + MSGID_GROW) * sizeof(char *));
+	    }
+	    msgid[n++] = xstrdup(buf);
 	}
     }
     if (buf[0] != '.') {
@@ -236,22 +247,40 @@ int main(int argc, char *argv[])
 	goto quit;
     }
 
-    /* read and push articles */
-    while (n--) {
-	prot_fgets(buf, sizeof(buf), pin);
-	prot_printf(sout, "TAKETHIS %s", strrchr(buf, '<'));
-
-	while (prot_fgets(buf, sizeof(buf), pin)) {
-	    prot_write(sout, buf, strlen(buf));
-	    if (buf[0] == '.' && buf[1] == '\r') break;
-	    /* save article */
-	}
-	prot_flush(sout);
-
-	if (buf[0] != '.') {
+    /* fetch and store articles */
+    for (i = 0; i < n; i++) {
+	/* fetch the article */
+	prot_printf(pout, "ARTICLE %s", msgid[i]);
+	if (!prot_fgets(buf, sizeof(buf), pin)) {
 	    syslog(LOG_ERR, "ARTICLE terminated abnormally");
 	    goto quit;
 	}
+	if (!strncmp("220", buf, 3)) {
+	    /* store the article */
+	    prot_printf(sout, "TAKETHIS %s", msgid[i]);
+
+	    while (prot_fgets(buf, sizeof(buf), pin)) {
+		prot_write(sout, buf, strlen(buf));
+		if (buf[0] == '.' && buf[1] != '.') break;
+	    }
+
+	    if (buf[0] != '.') {
+		syslog(LOG_ERR, "ARTICLE terminated abnormally");
+		goto quit;
+	    }
+
+	    if (!prot_fgets(buf, sizeof(buf), sin)) {
+		syslog(LOG_ERR, "TAKETHIS terminated abnormally");
+		goto quit;
+	    }
+	}
+    }
+
+    /* write the current timestamp */
+    fd = open(sfile, O_RDWR | O_CREAT, 0644);
+    if (fd != -1) {
+	write(fd, &stamp, sizeof(stamp));
+	close(fd);
     }
 
   quit:
