@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.134 2004/03/11 14:59:12 ken3 Exp $
+ * $Id: lmtpd.c,v 1.135 2004/05/19 14:52:55 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -97,7 +97,7 @@ static sieve_interp_t *sieve_interp = NULL;
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
-static int verify_user(const char *user, const char *domain, const char *mailhox,
+static int verify_user(const char *user, const char *domain, const char *mailbox,
 		       long quotacheck,
 		       struct auth_state *authstate);
 static char *generate_notify(message_data_t *m);
