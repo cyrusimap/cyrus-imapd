@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.24 2001/08/16 20:52:05 ken3 Exp $ */
+/* $Id: fud.c,v 1.25 2002/02/14 01:15:03 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -115,7 +115,9 @@ int begin_handling(void)
         char    mbox[MAX_MAILBOX_NAME+1];
         char    *q;
         int     off;
-        
+
+	openlog("fud", LOG_PID, LOG_LOCAL6);
+
         while(1) {
             /* For safety */
             memset(username,'\0',MAXLOGNAME);	
@@ -140,6 +142,8 @@ int begin_handling(void)
 
             handle_request(username,mbox,sfrom);
         }
+
+	/* never reached */
 }
 
 void shut_down(int code) __attribute__((noreturn));
@@ -148,6 +152,7 @@ void shut_down(int code)
     seen_done();
     mboxlist_close();
     mboxlist_done();
+    closelog();
     exit(code);
 }
 
@@ -199,6 +204,73 @@ int main(int argc, char **argv)
     shut_down(0);
 }
 
+static void cyrus_timeout(int signo)
+{
+  signo = 0;
+  return;
+}
+
+/* Send a proxy request to the backend, send their reply to sfrom */
+int do_proxy_request(const char *who, const char *name,
+		     const char *backend_host,
+		     struct sockaddr_in sfrom) 
+{
+    char tmpbuf[1024];
+    int x, rc;
+    int csoc = -1;
+    struct sockaddr_in cin, cout;
+    struct hostent *hp;
+    int backend_port = 4201; /* default fud udp port */
+    static struct servent *sp = NULL;
+
+    /* Open a UDP socket to the Cyrus mail server */
+    if(!sp) {
+	sp = getservbyname("fud", "udp");
+	if(sp) backend_port = sp->s_port;
+    }
+
+    hp = gethostbyname (backend_host);
+    if (!hp) {
+	send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+	rc = IMAP_SERVER_UNAVAILABLE;
+	goto done;
+    }
+
+    csoc = socket (PF_INET, SOCK_DGRAM, 0);
+    memcpy (&cin.sin_addr.s_addr, hp->h_addr, hp->h_length);
+    cin.sin_family = AF_INET;
+    cin.sin_port = backend_port;
+
+    /* Write a Cyrus query into *tmpbuf */
+    memset (tmpbuf, '\0', sizeof(tmpbuf));
+    sprintf (tmpbuf, "%s|%s", who, name);
+    x = sizeof (cin);
+
+    /* Send the query and wait for a reply */
+    sendto (csoc, tmpbuf, strlen (tmpbuf), 0, (struct sockaddr *) &cin, x);
+    memset (tmpbuf, '\0', strlen (tmpbuf));
+    signal (SIGALRM, cyrus_timeout);
+    rc = 0;
+    alarm (1);
+    rc = recvfrom (csoc, tmpbuf, sizeof(tmpbuf), 0,
+		   (struct sockaddr *) &cout, &x);
+    alarm (0);
+    if (rc < 1) {
+	rc = IMAP_SERVER_UNAVAILABLE;
+	send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+	goto done;
+    }
+
+    /* Send reply back */
+    /* rc is size */
+    sendto(soc,tmpbuf,rc,0,(struct sockaddr *) &sfrom, sizeof(sfrom));
+    rc = 0;
+
+ done:
+    if(csoc != -1) close(csoc);
+    return rc;
+}
+
 int handle_request(const char *who, const char *name,
 		   struct sockaddr_in sfrom)
 {
@@ -211,6 +283,8 @@ int handle_request(const char *who, const char *name,
     char *seenuids;
     unsigned numrecent;
     char mboxname[MAX_MAILBOX_NAME+1];
+    char *location;
+    int mbflag;
 
     numrecent = 0;
     lastread = 0;
@@ -218,6 +292,26 @@ int handle_request(const char *who, const char *name,
 
     r = (*fud_namespace.mboxname_tointernal)(&fud_namespace,name,who,mboxname);
     if (r) return r; 
+
+    r = mboxlist_detail(mboxname, &mbflag, &location, NULL, NULL, NULL);
+    if(r) {
+	send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+	return r;
+    }
+
+    syslog(LOG_ERR, "foo");
+
+    if(mbflag & MBTYPE_REMOTE) {
+	char *p = NULL;
+
+	/* xxx hide that we are storing partitions */
+	p = strchr(location, '!');
+	if(p) *p = '\0';
+	
+	/* We want to proxy this one */
+	syslog(LOG_ERR, "doing proxy");
+	return do_proxy_request(who, name, location, sfrom);
+    }
 
     /*
      * Open/lock header 
