@@ -1,6 +1,6 @@
 /* pop3test.c -- pop3 test client
  * Tim Martin (SASL implementation)
- * $Id: pop3test.c,v 1.2 2001/11/27 02:25:00 ken3 Exp $
+ * $Id: pop3test.c,v 1.3 2002/01/17 21:08:18 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1201,6 +1201,7 @@ int main(int argc, char **argv)
   char *filename=NULL;
 
   char *mechlist;
+  unsigned ext_ssf = 0;
   const int *ssfp;
   int maxssf = 128;
   int minssf = 0;
@@ -1330,7 +1331,6 @@ int main(int argc, char **argv)
 #ifdef HAVE_SSL
   if ((dotls==1) && (server_supports_tls==1))
   {
-    unsigned ssf;
     char *auth_id;
       
     prot_printf(pout,"STLS\r\n");
@@ -1343,7 +1343,7 @@ int main(int argc, char **argv)
     {
       printf("Start TLS engine failed\n");
     } else {
-      result=tls_start_clienttls(&ssf, &auth_id);
+      result=tls_start_clienttls(&ext_ssf, &auth_id);
       
       if (result!=IMTEST_OK)
 	printf("TLS negotiation failed!\n");
@@ -1354,7 +1354,7 @@ int main(int argc, char **argv)
     /* tell SASL about the negotiated layer */
     result=sasl_setprop(conn,
 			SASL_SSF_EXTERNAL,
-			&ssf);
+			&ext_ssf);
     if (result!=SASL_OK)
 	imtest_fatal("Error setting SASL property (external ssf)");
 
@@ -1416,7 +1416,7 @@ int main(int argc, char **argv)
   if (result != SASL_OK) {
       printf("SSF: unable to determine (SASL ERROR %d)\n", result);
   } else {
-      printf("Security strength factor: %d\n", *ssfp);
+      printf("Security strength factor: %d\n", ext_ssf + *ssfp);
   }
 
   /* run in interactive mode or 
