@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.123.2.3 2000/05/16 20:18:18 ken3 Exp $
+ * $Id: deliver.c,v 1.123.2.4 2000/05/24 17:54:36 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.123.2.3 2000/05/16 20:18:18 ken3 Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.123.2.4 2000/05/24 17:54:36 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -381,7 +381,7 @@ char **argv;
 
 	case 'r':
 	case 'f':
-	    msgdata->return_path = optarg;
+	    msgdata->return_path = xstrdup(optarg);
 	    break;
 
 	case 'm':
