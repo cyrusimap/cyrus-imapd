@@ -1,6 +1,6 @@
 /* mupdate-client.h -- cyrus murder database clients
  *
- * $Id: mupdate-client.h,v 1.10 2002/01/31 17:46:48 rjs3 Exp $
+ * $Id: mupdate-client.h,v 1.11 2002/02/23 00:30:09 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -102,4 +102,7 @@ typedef int (*mupdate_callback)(struct mupdate_mailboxdata *mdata,
 int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 		 const char *prefix, void *context);
 
+/* ping the mupdate server with a NOOP. */
+int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
+		 void *context);
 #endif
