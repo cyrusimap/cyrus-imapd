@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.45 2000/08/04 18:38:33 leg Exp $
+ * $Id: lmtpd.c,v 1.46 2000/08/22 14:12:10 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.45 2000/08/04 18:38:33 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.46 2000/08/22 14:12:10 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -849,7 +849,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	}
     fprintf(sm, "Subject: %s\r\n", src->subj);
     fprintf(sm, "In-Reply-To: %s\r\n", m->id);
-    fprintf(sm, "Auto-Submitted: auto-generated (vacation)\r\n");
+    fprintf(sm, "Auto-Submitted: auto-replied (vacation)\r\n");
     if (src->mime) {
 	fprintf(sm, "MIME-Version: 1.0\r\n");
 	fprintf(sm, "Content-Type: multipart/mixed;"
