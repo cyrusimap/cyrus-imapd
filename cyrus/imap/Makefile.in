@@ -40,13 +40,16 @@ LIBS = @LIBS@ @COM_ERR_LIBS@
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@
+LDFLAGS = @LDFLAGS@ @CFLAGS@ @COM_ERR_LDFLAGS@ 
 
 SHELL = /bin/sh
 
 COMPILE_ET=@COMPILE_ET@
 
 PURIFY=/usr/local/bin/purify
+PUREOPT="-windows=no -logfile=/tmp/pure/%v.%p.log.%p"
+QUANTIFY=/usr/local/bin/quantify
+QUANTOPT="-windows=no -filename-prefix=/tmp/quant/%v.%p -write-summary-file= -logfile=/tmp/quant/%v.%p.log"
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -80,6 +83,10 @@ collectnews: collectnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o collectnews collectnews.o libimap.a $(DEPLIBS) \
 	 $(LIBS)
 
+collectnews.quant: collectnews.o libimap.a $(DEPLIBS)
+	$(QUANTIFY) $(CC) $(LDFLAGS) -o collectnews.quant collectnews.o libimap.a $(DEPLIBS) \
+	 $(LIBS)
+
 syncnews: syncnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o syncnews  syncnews.o libimap.a $(DEPLIBS) \
 	 $(LIBS)
@@ -88,8 +95,13 @@ deliver: deliver.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o deliver deliver.o libimap.a $(DEPLIBS) $(LIBS)
 
 deliver.pure: deliver.o libimap.a $(DEPLIBS)
-	$(PURIFY) -windows=no -logfile=/tmp/deliver.log.%p \
-	 $(CC) $(LDFLAGS) -o deliver \
+	$(PURIFY) $(PUREOPT) \
+	 $(CC) $(LDFLAGS) -o deliver.pure \
+	 deliver.o libimap.a $(DEPLIBS) $(LIBS)
+
+deliver.quant: deliver.o libimap.a $(DEPLIBS)
+	$(QUANTIFY) $(QUANTOPT) \
+	 $(CC) $(LDFLAGS) -o deliver.quant \
 	 deliver.o libimap.a $(DEPLIBS) $(LIBS)
 
 dump_deliverdb: dump_deliver.o libimap.a $(DEPLIBS)
@@ -98,6 +110,16 @@ dump_deliverdb: dump_deliver.o libimap.a $(DEPLIBS)
 
 imapd: $(IMAPDOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o imapd \
+	 $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+imapd.pure: $(IMAPDOBJS) libimap.a $(DEPLIBS)
+	$(PURIFY) $(PUREOPT) \
+	  $(CC) $(LDFLAGS) -o imapd.pure \
+	  $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+imapd.quant: $(IMAPDOBJS) libimap.a $(DEPLIBS)
+	$(QUANTIFY) $(QUANTOPT) \
+	$(CC) $(LDFLAGS) -o imapd.quant \
 	 $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
 pop3d: pop3d.o libimap.a $(DEPLIBS)
