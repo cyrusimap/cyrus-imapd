@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.132 2004/02/27 17:44:53 ken3 Exp $
+ * $Id: lmtpd.c,v 1.133 2004/03/04 16:09:30 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -158,8 +158,9 @@ int service_init(int argc __attribute__((unused)),
     dupelim = config_getswitch(IMAPOPT_DUPLICATESUPPRESSION);
 
 #ifdef USE_SIEVE
-    mylmtp.addheaders = xmalloc(80);
-    snprintf(mylmtp.addheaders, 80, "X-Sieve: %s\r\n", SIEVE_VERSION);
+    mylmtp.addheaders = xzmalloc(2 * sizeof(struct addheader));
+    mylmtp.addheaders[0].name = "X-Sieve";
+    mylmtp.addheaders[0].body = SIEVE_VERSION;
 
     /* setup sieve support */
     sieve_interp = setup_sieve();

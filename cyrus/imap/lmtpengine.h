@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.21 2004/02/19 16:54:58 rjs3 Exp $
+ * $Id: lmtpengine.h,v 1.22 2004/03/04 16:09:32 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -98,6 +98,11 @@ void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r);
 void *msg_getrock(message_data_t *m);
 void msg_setrock(message_data_t *m, void *rock);
 
+struct addheader {
+    const char *name;
+    const char *body;
+};
+
 struct lmtp_func {
     int (*deliver)(message_data_t *m, 
 		   char *authuser, struct auth_state *authstate);
@@ -109,7 +114,7 @@ struct lmtp_func {
     FILE *(*spoolfile)(message_data_t *m);
     void (*removespool)(message_data_t *m);
     struct namespace *namespace; /* mailbox namespace that we're working in */
-    char *addheaders;		/* add these headers to all messages */
+    struct addheader *addheaders; /* add these headers to all messages */
     int addretpath;		/* should i add a return-path header? */
     int preauth;		/* preauth connection? */
 };
