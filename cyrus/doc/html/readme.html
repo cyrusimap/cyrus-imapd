@@ -47,8 +47,6 @@ system.
 is lacking, as of 9.0.5.  It is recommended that large-scale sites
 consider using some other platform for IMAP servers.
 
-<LI> Linux 1.2.13, gcc 2.7.0; unix, Kerberos
-
 </ul>
 
 <P> Older versions of this server has been successfully installed on
@@ -62,6 +60,20 @@ the following systems.  Newer versions have not been checked
 <LI> Ultrix 4.2 (Decstation), gcc &amp; cc; Kerberos
 
 </ul>
+
+<P> Problems have been reported on the following systems.
+
+<ul>
+<LI> Linux, libc 4.6.27 and 5.2.18:  Overly aggresive buffering in libc 
+causes the server not to notice newly delivered mail.  It is unknown whether
+or not this problem can cause corruption of the database or loss of mail.
+No known fix.
+
+<LI> FreeBSD 2.1: same as for Linux
+
+</ul>
+
+
 
 Send problems/questions/suggestions to
 "<TT>cyrus-bugs@andrew.cmu.edu</TT>".
