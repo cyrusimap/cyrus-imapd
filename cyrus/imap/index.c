@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.11 2002/10/12 15:36:03 ken3 Exp $
+ * $Id: index.c,v 1.180.4.12 2002/10/14 17:23:01 ken3 Exp $
  */
 #include <config.h>
 
@@ -4553,41 +4553,115 @@ char *index_get_msgid(struct mailbox *mailbox, unsigned msgno)
     return msgid;
 }
 
+#define HEADER_GROW 200
+
+static char *massage_header(const char *hdr)
+{
+    int n = 0;
+    char c, *ret = NULL;
+
+    for (; *hdr; hdr++) {
+	if (*hdr == ' ' || *hdr == '\t' || *hdr == '\r') {
+	    if (!n || *(hdr+1) == '\n') {
+		/* no leading or trailing whitespace */
+		continue;
+	    }
+	    /* replace with space */
+	    c = ' ';
+	}
+	else if (*hdr == '\n') {
+	    if (*(hdr+1) == ' ' || *(hdr+1) == '\t') {
+		/* folded header */
+		continue;
+	    }
+	    /* end of header */
+	    break;
+	}
+	else
+	    c = *hdr;
+
+	if (!(n % HEADER_GROW)) { /* time to alloc more */
+	    ret = (char *)
+		xrealloc(ret, (n + HEADER_GROW + 1) * sizeof(char));
+	}
+	ret[n++] = c;
+    }
+    ret[n] = '\0';
+
+    return ret;
+}
+
+static char *parse_nstring(char **str)
+{
+    char *cp = *str, *val;
+
+    if (*cp == '"') { /* quoted string */
+	val = ++cp; /* skip " */
+	do {
+	    cp = strchr(cp, '"');
+	} while (*(cp-1) == '\\'); /* skip escaped " */
+	*cp++ = '\0';
+    }
+    else { /* NIL */
+	val = NULL;
+	cp += 3;
+    }
+
+    *str = cp;
+    return val;
+}
+
+static void parse_env_address(char *str, struct address *addr)
+{
+    str++; /* skip ( */
+    addr->name = parse_nstring(&str);
+    str++; /* skip SP */
+    addr->route = parse_nstring(&str);
+    str++; /* skip SP */
+    addr->mailbox = parse_nstring(&str);
+    str++; /* skip SP */
+    addr->domain = parse_nstring(&str);
+}
+
 extern void index_overview(struct mailbox *mailbox, unsigned msgno)
 {
     const char *cacheitem;
-    char *env, *from, *ref;
-    char *envtokens[NUMENVTOKENS];
+    char *env, *envtokens[NUMENVTOKENS], *ref, *subj;
+    struct address from = { NULL, NULL, NULL, NULL };
 
     cacheitem = cache_base + CACHE_OFFSET(msgno); /* envelope */
+
     /* make a working copy of envelope; strip outer ()'s */
     env = xstrndup(cacheitem + 5, CACHE_ITEM_LEN(cacheitem) - 2);
+    parse_cached_envelope(env, envtokens);
 
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip section */
-
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* cacheheaders */
-    /* find start of references */
-    ref = stristr(cacheitem + 4, "references:");
 
-    /* XXX fix this */
-    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* from */
-    from = xstrndup(cacheitem + 4, CACHE_ITEM_LEN(cacheitem));
+    /* massage references */
+    if ((ref = stristr(cacheitem + 4, "references:")))
+	ref = massage_header(ref + 11);
 
-    parse_cached_envelope(env, envtokens);
+    /* massage subject */
+    if ((subj = envtokens[ENV_SUBJECT]))
+	subj = massage_header(subj);
 
-    /* XXX fix this */
-    if (ref) {
-	ref += 11;
-	ref += strspn(ref, " \t");
-	ref = xstrndup(ref, strcspn(ref, "\r\n"));
+    /* build original From: header */
+    if (envtokens[ENV_FROM]) /* paranoia */
+	parse_env_address(envtokens[ENV_FROM], &from);
+
+    prot_printf(imapd_out, "%u\t%s\t", UID(msgno), subj ? subj : "");
+
+    if (from.mailbox && from.domain) { /* paranoia */
+	if (from.name)
+	    prot_printf(imapd_out, "\"%s\" ", from.name);
+
+	prot_printf(imapd_out, "<%s@%s>", from.mailbox, from.domain);
     }
 
-    prot_printf(imapd_out, "%u\t%s\t%s\t%s\t%s\t%s\t%u\t\t\r\n",
-		UID(msgno),
-		envtokens[ENV_SUBJECT] ? envtokens[ENV_SUBJECT] : "",
-		from ? from : "",
+    prot_printf(imapd_out, "\t%s\t%s\t%s\t%u\t\t\r\n",
 		envtokens[ENV_DATE] ? envtokens[ENV_DATE] : "",
 		envtokens[ENV_MSGID] ? envtokens[ENV_MSGID] : "",
 		ref ? ref : "",
@@ -4596,6 +4670,6 @@ extern void index_overview(struct mailbox *mailbox, unsigned msgno)
 
     /* free stuff */
     free(env);
-    free(from);
     if (ref) free(ref);
+    if (subj) free(subj);
 }
