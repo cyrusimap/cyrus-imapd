@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.229 2002/04/11 18:27:31 ken3 Exp $
+dnl $Id: configure.in,v 1.230 2002/04/15 19:35:48 rjs3 Exp $
 dnl
 
 
@@ -391,7 +391,13 @@ AC_ARG_WITH(lock,
 AC_SUBST(WITH_LOCK)
 
 dnl check for fdatasync (used by cyrusdb_skiplist)
-AC_CHECK_LIB(rt, fdatasync, LIB_RT="-lrt")
+LIB_RT=""
+AC_CHECK_FUNC(fdatasync, AC_DEFINE(HAVE_FDATASYNC), [
+  AC_CHECK_LIB(rt, fdatasync, [
+	LIB_RT="-lrt"
+	AC_DEFINE(HAVE_FDATASYNC)
+  ])
+])
 
 dnl for makedepend and AFS.
 cant_find_sigvec=no

@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.33 2002/04/11 18:27:32 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.34 2002/04/15 19:35:49 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -139,6 +139,14 @@
 
 /* do we have rlim_t? */
 #undef HAVE_RLIM_T
+
+/* do we have fdatasync */
+#undef HAVE_FDATASYNC
+
+/* This allows us to work even when we don't have an fdatasync */
+#ifndef HAVE_FDATASYNC
+#define fdatasync(fd) fsync(fd)
+#endif
 
 /* Database Backends that are configurable */
 #undef CONFIG_DB_DUPLICATE
