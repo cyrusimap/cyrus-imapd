@@ -39,7 +39,7 @@
  *
  * derived from chris newman's code */
 
-/* $Id: imapurl.c,v 1.10 2003/02/13 20:15:40 rjs3 Exp $ */
+/* $Id: imapurl.c,v 1.11 2004/05/05 22:34:18 rjs3 Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -198,10 +198,11 @@ static void URLtoMailbox(char *dst, char *src)
             /* switch out of UTF-7 mode */
             if (utf7mode) {
                 if (bitstogo) {
-                *dst++ = base64chars[(bitbuf << (6 - bitstogo)) & 0x3F];
+		    *dst++ = base64chars[(bitbuf << (6 - bitstogo)) & 0x3F];
                 }
                 *dst++ = '-';
                 utf7mode = 0;
+		bitstogo = bitbuf = 0;
             }
             *dst++ = c;
             /* encode '&' as '&-' */
