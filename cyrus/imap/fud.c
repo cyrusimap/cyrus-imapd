@@ -27,7 +27,7 @@
  *
  */
 
-/* $Id: fud.c,v 1.7 1998/08/07 06:52:51 tjs Exp $ */
+/* $Id: fud.c,v 1.8 1999/03/02 03:03:28 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -244,10 +244,7 @@ time_t lastarrived;
     } 
 }
 
-int
-fatal(s, code)
-char *s;
-int code;
+void fatal(const char* s, int code)
 {
     fprintf(stderr, "fud: %s\n", s);
     exit(code);

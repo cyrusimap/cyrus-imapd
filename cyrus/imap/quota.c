@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  *
  */
-/* $Id: quota.c,v 1.25 1998/08/07 06:53:17 tjs Exp $ */
+/* $Id: quota.c,v 1.26 1999/03/02 03:03:29 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -443,9 +443,7 @@ reportquota()
     }
 }
 
-fatal(s, code)
-char *s;
-int code;
+void fatal(const char* s, int code)
 {
     fprintf(stderr, "quota: %s\n", s);
     exit(code);

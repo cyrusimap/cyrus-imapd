@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.37 1998/08/07 06:52:04 tjs Exp $ */
+/* $Id: reconstruct.c,v 1.38 1999/03/02 03:03:29 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -873,9 +873,7 @@ do_mboxlist()
     exit(0);
 }
 
-fatal(s, code)
-char *s;
-int code;
+void fatal(const char* s, int code)
 {
     fprintf(stderr, "reconstruct: %s\n", s);
     exit(code);

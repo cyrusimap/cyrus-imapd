@@ -1,30 +1,29 @@
 /* krbck.c -- Test KERBEROS_V4 server configuration
- $Id: krbck.c,v 1.8 1998/05/15 21:48:47 neplokh Exp $
+ * $Id: krbck.c,v 1.9 1999/03/02 03:03:28 tjs Exp $
  
- # Copyright 1998 Carnegie Mellon University
- # 
- # No warranties, either expressed or implied, are made regarding the
- # operation, use, or results of the software.
- #
- # Permission to use, copy, modify and distribute this software and its
- # documentation is hereby granted for non-commercial purposes only
- # provided that this copyright notice appears in all copies and in
- # supporting documentation.
- #
- # Permission is also granted to Internet Service Providers and others
- # entities to use the software for internal purposes.
- #
- # The distribution, modification or sale of a product which uses or is
- # based on the software, in whole or in part, for commercial purposes or
- # benefits requires specific, additional permission from:
- #
- #  Office of Technology Transfer
- #  Carnegie Mellon University
- #  5000 Forbes Avenue
- #  Pittsburgh, PA  15213-3890
- #  (412) 268-4387, fax: (412) 268-7395
- #  tech-transfer@andrew.cmu.edu
+ * Copyright 1998 Carnegie Mellon University
+ * 
+ * No warranties, either expressed or implied, are made regarding the
+ * operation, use, or results of the software.
  *
+ * Permission to use, copy, modify and distribute this software and its
+ * documentation is hereby granted for non-commercial purposes only
+ * provided that this copyright notice appears in all copies and in
+ * supporting documentation.
+ *
+ * Permission is also granted to Internet Service Providers and others
+ * entities to use the software for internal purposes.
+ *
+ * The distribution, modification or sale of a product which uses or is
+ * based on the software, in whole or in part, for commercial purposes or
+ * benefits requires specific, additional permission from:
+ *
+ *  Office of Technology Transfer
+ *  Carnegie Mellon University
+ *  5000 Forbes Avenue
+ *  Pittsburgh, PA  15213-3890
+ *  (412) 268-4387, fax: (412) 268-7395
+ *  tech-transfer@andrew.cmu.edu
  */
 
 #include <stdio.h>
@@ -49,18 +48,11 @@
 
 int errno;
 
-#ifdef __STDC__
-void fatal(char*, int);
 static int  evalcheck(char*, int, char*);
 static void evalerrorno(int);
 extern char* strerror (int);
-#else
-extern char* strerror( );
-#endif
 
-void fatal(string, choke)
-char* string;
-int choke;
+void fatal(const char* string, int choke)
 {
     fprintf(stderr,"\tfatal: %s", string);
     exit(choke);
