@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: ctl_mboxlist.c,v 1.5 2000/04/06 15:14:32 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.6 2000/05/12 22:18:03 leg Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -111,11 +111,8 @@ void do_dump(enum mboxop op)
 		fprintf(stderr, "can't contact ACAP server\n");
 		goto error;
 	    }
-	    mboxdata.name = mboxent->name;
-
+	    acapmbox_new(&mboxdata, NULL, mboxent->name);
 	    mboxdata.status = ACAPMBOX_COMMITTED;
-	    mboxdata.post = acapmbox_get_postaddr(mboxent->name);
-	    mboxdata.url = acapmbox_get_url(mboxent->name);
 	    mboxdata.acl = mboxent->acls;
 
 	    /* open index file for mailbox */

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.240 2000/05/12 19:04:44 leg Exp $ */
+/* $Id: imapd.c,v 1.241 2000/05/12 22:18:03 leg Exp $ */
 
 #include <config.h>
 
@@ -1629,8 +1629,8 @@ void cmd_id(char *tag)
 	struct strlist *fptr, *vptr;
 
 	sprintf(logbuf, "client id:");
-	for (i = 0, fptr = fields, vptr = values; i < npair;
-	     i++, fptr = fptr->next, vptr = vptr->next) {
+	for (fptr = fields, vptr = values; fptr;
+	     fptr = fptr->next, vptr = vptr->next) {
 	    /* should we check for an format literals here ??? */
 	    sprintf(logbuf+strlen(logbuf), " \"%s\" ", fptr->s);
 	    if (!strcmp(vptr->s, "NIL"))

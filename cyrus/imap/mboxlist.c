@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.119 2000/04/11 03:35:31 leg Exp $
+ * $Id: mboxlist.c,v 1.120 2000/05/12 22:18:04 leg Exp $
  */
 
 #include <config.h>
@@ -597,12 +597,7 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
     acaphandle = acapmbox_get_handle();
     
     /* 5. create ACAP entry and set as reserved (CRASH: ACAP inconsistant) */
-    memset(&mboxdata, 0, sizeof(acapmbox_data_t));
-    
-    mboxdata.name = name;	
-    mboxdata.post = acapmbox_get_postaddr(name);
-    mboxdata.url = acapmbox_get_url(name);
-    /* all other are initialized to zero */
+    acapmbox_new(&mboxdata, NULL, name);
     r = acapmbox_create(acaphandle, &mboxdata);
     if (r) {
 	syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n", name,
@@ -682,6 +677,8 @@ int mboxlist_insertremote(char *name, int mbtype, char *host, char *acl,
     struct mbox_entry *mboxent = (struct mbox_entry *)
 	xmalloc(sizeof(struct mbox_entry) + strlen(acl));
     int r = 0;
+
+    assert(name != NULL && host != NULL);
     
     memset(&key, 0, sizeof(key));
     key.data = name;
@@ -1066,6 +1063,7 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     int mbtype;
     char *oldpath = NULL;
     char newpath[MAX_MAILBOX_PATH];
+    char postaddr[MAX_MAILBOX_PATH], url[MAX_MAILBOX_PATH];
     struct mailbox newmailbox;
     acapmbox_data_t mboxdata;
     char buf2[MAX_PARTITION_LEN + 30];
@@ -1270,17 +1268,14 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     }
 
     /* 5. ACAP make the new entry, set as reserved */
-    memset(&mboxdata, 0, sizeof(acapmbox_data_t));
-    mboxdata.name = newname;
-    mboxdata.post = acapmbox_get_postaddr(newname);
-    mboxdata.url = acapmbox_get_url(newname);
+    acapmbox_new(&mboxdata, NULL, newname);
     r = acapmbox_create(acaphandle, &mboxdata);
     if (r != ACAP_OK) {
 	goto done;
     }
     acap_madenew = 1;
 
- done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
+  done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
     if (!r && !(newent->mbtype & MBTYPE_REMOTE)) {
 	/* Get partition's path */
 	sprintf(buf2, "partition-%s", newent->partition);
