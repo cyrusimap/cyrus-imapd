@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.35 2002/10/28 18:13:31 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.36 2002/10/28 18:49:03 ken3 Exp $
  */
 
 /*
@@ -177,24 +177,24 @@ struct {
 		   {  -1, 238, 438,  -1 },
 		   { 239,  -1,  -1, 439 } };
 
-static void cmd_help();
-static void cmd_starttls();
-static void cmd_user();
-static void cmd_pass();
-static void cmd_sasl();
-static void cmd_mode();
-static void cmd_list();
-static void cmd_article();
-static void cmd_post();
-static void cmd_hdr();
-static void cmd_over();
 static void cmdloop(void);
 static int open_group();
 static int parserange(char *str, unsigned long *uid, unsigned long *last,
 		      char **msgid);
 static time_t parse_datetime(char *datestr, char *timestr, char *gmt);
+static void cmd_article();
+static void cmd_authinfo_user();
+static void cmd_authinfo_pass();
+static void cmd_authinfo_sasl();
+static void cmd_hdr();
+static void cmd_help();
+static void cmd_list();
+static void cmd_mode();
 static int do_newnews(char *msgid, char *mailbox, unsigned long uid,
 		      unsigned long lines, time_t tstamp, void *rock);
+static void cmd_over();
+static void cmd_post();
+static void cmd_starttls();
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
@@ -620,11 +620,11 @@ static void cmdloop(void)
 		if (c != '\n') goto extraargs;
 
 		if (!strcmp(arg1.s, "user"))
-		    cmd_user(arg2.s);
+		    cmd_authinfo_user(arg2.s);
 		else if (!strcmp(arg1.s, "pass"))
-		    cmd_pass(arg2.s);
+		    cmd_authinfo_pass(arg2.s);
 		else if (!strcmp(arg1.s, "sasl"))
-		    cmd_sasl(arg2.s, arg3.len ? arg3.s : NULL);
+		    cmd_authinfo_sasl(arg2.s, arg3.len ? arg3.s : NULL);
 		else
 		    prot_printf(nntp_out, "500 Unrecognized command\r\n");
 	    }
@@ -1013,477 +1013,127 @@ static void cmdloop(void)
     }
 }
 
-static void cmd_help()
+static int parsenum(char *str, char **rem)
 {
-    prot_printf(nntp_out, "100 Supported commands:\r\n");
-    prot_printf(nntp_out, "\tARTICLE\r\n");
-    prot_printf(nntp_out, "\tAUTHINFO USER | PASS | SASL\r\n");
-    prot_printf(nntp_out, "\tBODY\r\n");
-    prot_printf(nntp_out, "\tCHECK\r\n");
-    prot_printf(nntp_out, "\tDATE\r\n");
-    prot_printf(nntp_out, "\tGROUP\r\n");
-    prot_printf(nntp_out, "\tHDR | XHDR\r\n");
-    prot_printf(nntp_out, "\tHEAD\r\n");
-    prot_printf(nntp_out, "\tHELP\r\n");
-    prot_printf(nntp_out, "\tIHAVE\r\n");
-    prot_printf(nntp_out, "\tLAST\r\n");
-    prot_printf(nntp_out, "\tLIST [ ACTIVE ]\r\n");
-    prot_printf(nntp_out, "\tLISTGROUP\r\n");
-    prot_printf(nntp_out, "\tMODE READER | STREAM\r\n");
-    if (config_getswitch(IMAPOPT_ALLOWNEWNEWS))
-	prot_printf(nntp_out, "\tNEWNEWS\r\n");
-    prot_printf(nntp_out, "\tNEXT\r\n");
-    prot_printf(nntp_out, "\tOVER | XOVER\r\n");
-    prot_printf(nntp_out, "\tPOST\r\n");
-    prot_printf(nntp_out, "\tQUIT\r\n");
-    prot_printf(nntp_out, "\tSLAVE\r\n");
-    prot_printf(nntp_out, "\tSTARTTLS\r\n");
-    prot_printf(nntp_out, "\tSTAT\r\n");
-    prot_printf(nntp_out, "\tTAKETHIS\r\n");
-    prot_printf(nntp_out, ".\r\n");
-}
+    char *p = str;
+    int result = 0;
 
-#ifdef HAVE_SSL
-static void cmd_starttls(int nntps)
-{
-    int result;
-    int *layerp;
-    sasl_ssf_t ssf;
-    char *auth_id;
-
-    /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &ssf;
-
-    if (nntp_starttls_done == 1)
-    {
-	prot_printf(nntp_out, "483 %s\r\n", 
-		    "Already successfully executed STLS");
-	return;
+    while (*p && isdigit((int) *p)) {
+	result = result * 10 + *p++ - '0';
     }
 
-    result=tls_init_serverengine("nntp",
-				 5,        /* depth to verify */
-				 !nntps,   /* can client auth? */
-				 !nntps);  /* TLS only? */
+    if (rem) {
+	*rem = p;
+	return (*p && p == str ? -1 : result);
+    }
 
-    if (result == -1) {
+    return (*p ? -1 : result);
+}
 
-	syslog(LOG_ERR, "[nntpd] error initializing TLS");
+static int parserange(char *str, unsigned long *uid, unsigned long *last,
+		      char **msgid)
+{
+    char *p = NULL;
 
-	if (nntps == 0)
-	    prot_printf(nntp_out, "580 %s\r\n", "Error initializing TLS");
+    if (!str || !*str) {
+	/* no string, use current article */
+	if (!nntp_group || !nntp_current) return -1;
+
+	*uid = index_getuid(nntp_current);
+	if (last) *last = *uid;
+    }
+    else if ((*uid = parsenum(str, &p)) == -1) {
+	/* not a number, assume msgid */
+	if (msgid) {
+	    *msgid = str;
+	    return 0;
+	}
+	else return -1;
+    }
+    else if (!nntp_group) return -1;
+    else if (p && *p) {
+	/* extra stuff, check for range */
+	if (!last || (*p != '-')) return -1;
+	if (*++p)
+	    *last = parsenum(p, NULL);
 	else
-	    fatal("tls_init() failed",EC_TEMPFAIL);
-
-	return;
+	    *last = index_getuid(nntp_exists);
+	if (*last == -1) return -1;
     }
+    else if (last)
+	*last = *uid;
 
-    if (nntps == 0)
-    {
-	prot_printf(nntp_out, "382 %s\r\n", "Begin TLS negotiation now");
-	/* must flush our buffers before starting tls */
-	prot_flush(nntp_out);
-    }
-  
-    result=tls_start_servertls(0, /* read */
-			       1, /* write */
-			       layerp,
-			       &auth_id,
-			       &tls_conn);
-
-    /* if error */
-    if (result==-1) {
-	if (nntps == 0) {
-	    prot_printf(nntp_out, "580 Starttls failed\r\n");
-	    syslog(LOG_NOTICE, "[nntpd] STARTTLS failed: %s", nntp_clienthost);
-	} else {
-	    syslog(LOG_NOTICE, "nntps failed: %s", nntp_clienthost);
-	    fatal("tls_start_servertls() failed", EC_TEMPFAIL);
-	}
-	return;
-    }
-
-    /* tell SASL about the negotiated layer */
-    result = sasl_setprop(nntp_saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (result != SASL_OK) {
-	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
-    }
-    saslprops.ssf = ssf;
-
-    result = sasl_setprop(nntp_saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    if (result != SASL_OK) {
-        fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
-    }
-    if(saslprops.authid) {
-	free(saslprops.authid);
-	saslprops.authid = NULL;
-    }
-    if(auth_id)
-	saslprops.authid = xstrdup(auth_id);
-
-    /* tell the prot layer about our new layers */
-    prot_settls(nntp_in, tls_conn);
-    prot_settls(nntp_out, tls_conn);
-
-    nntp_starttls_done = 1;
-}
-#else
-static void cmd_starttls(int nntps __attribute__((unused)))
-{
-    fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
-}
-#endif /* HAVE_SSL */
-
-
-void cmd_user(char *user)
-{
-    int fd;
-    struct protstream *shutdown_in;
-    char buf[1024];
-    char *p;
-    char shutdownfilename[1024];
-
-    /* possibly disallow USER */
-    if (!(nntp_starttls_done || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
-	prot_printf(nntp_out,
-		    "503 AUTHINFO USER command only available under a layer\r\n");
-	return;
-    }
-
-    if (nntp_userid) {
-	prot_printf(nntp_out, "381 Must give AUTHINFO PASS command\r\n");
-	return;
-    }
-
-    snprintf(shutdownfilename, sizeof(shutdownfilename),
-	     "%s/msg/shutdown", config_dir);
-    if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
-	shutdown_in = prot_new(fd, 0);
-	prot_fgets(buf, sizeof(buf), shutdown_in);
-	if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-	if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
-
-	for(p = buf; *p == '['; p++); /* can't have [ be first char */
-	prot_printf(nntp_out, "250 %s\r\n", p);
-	prot_flush(nntp_out);
-	shut_down(0);
-    }
-    else if (!(p = canonify_userid(user, NULL, NULL))) {
-	prot_printf(nntp_out, "482 Invalid user\r\n");
-	syslog(LOG_NOTICE,
-	       "badlogin: %s plaintext %s invalid user",
-	       nntp_clienthost, beautify_string(user));
-    }
-    else {
-	nntp_userid = xstrdup(p);
-	prot_printf(nntp_out, "381 Give AUTHINFO PASS command\r\n");
-    }
-}
-
-void cmd_pass(char *pass)
-{
-    char *reply = 0;
-
-    if (!nntp_userid) {
-	prot_printf(nntp_out, "480 Must give AUTHINFO USER command\r\n");
-	return;
-    }
-
-    if (!strcmp(nntp_userid, "anonymous")) {
-	if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
-	    pass = beautify_string(pass);
-	    if (strlen(pass) > 500) pass[500] = '\0';
-	    syslog(LOG_NOTICE, "login: %s anonymous %s",
-		   nntp_clienthost, pass);
-	}
-	else {
-	    syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
-		   nntp_clienthost);
-	    prot_printf(nntp_out, "482 Invalid login\r\n");
-	    return;
-	}
-    }
-    else if (sasl_checkpass(nntp_saslconn,
-			    nntp_userid,
-			    strlen(nntp_userid),
-			    pass,
-			    strlen(pass))!=SASL_OK) { 
-	if (reply) {
-	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
-		   nntp_clienthost, nntp_userid, reply);
-	}
-	prot_printf(nntp_out, "482 Invalid login\r\n");
-	free(nntp_userid);
-	nntp_userid = 0;
-
-	return;
-    }
-    else {
-	syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", nntp_clienthost,
-	       nntp_userid, nntp_starttls_done ? "+TLS" : "", 
-	       reply ? reply : "");
-
-	prot_printf(nntp_out, "281 User logged in\r\n");
-
-	nntp_authstate = auth_newstate(nntp_userid, NULL);
-
-	/* Create telemetry log */
-	nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out);
-    }
-}
-
-void cmd_sasl(char *mech, char *resp)
-{
-    int r, sasl_result;
-    char *success_data;
-    const int *ssfp;
-    char *ssfmsg = NULL;
-    const char *canon_user;
-
-    if (nntp_userid) {
-	prot_printf(nntp_out, "501 Already authenticated\r\n");
-	return;
-    }
-
-    r = saslserver(nntp_saslconn, mech, resp, "351 ", nntp_in, nntp_out,
-		   &sasl_result, &success_data);
-
-    if (r) {
-	const char *errorstring = NULL;
-
-	switch (r) {
-	case IMAP_SASL_CANCEL:
-	    prot_printf(nntp_out,
-			"501 Client canceled authentication\r\n");
-	    break;
-	case IMAP_SASL_PROTERR:
-	    errorstring = prot_error(nntp_in);
-
-	    prot_printf(nntp_out,
-			"503 Error reading client response: %s\r\n",
-			errorstring ? errorstring : "");
-	    break;
-	default: 
-	    /* failed authentication */
-	    errorstring = sasl_errstring(sasl_result, NULL, NULL);
-
-	    syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
-		   nntp_clienthost, mech, sasl_errdetail(nntp_saslconn));
-
-	    sleep(3);
-
-	    if (errorstring) {
-		prot_printf(nntp_out, "452 %s\r\n", errorstring);
-	    } else {
-		prot_printf(nntp_out, "452 Error authenticating\r\n");
-	    }
-	}
-
-	reset_saslconn(&nntp_saslconn);
-	return;
-    }
-
-    /* successful authentication */
-
-    /* get the userid from SASL --- already canonicalized from
-     * mysasl_proxy_policy()
-     */
-    sasl_result = sasl_getprop(nntp_saslconn, SASL_USERNAME,
-			       (const void **) &canon_user);
-    nntp_userid = xstrdup(canon_user);
-    if (sasl_result != SASL_OK) {
-	prot_printf(nntp_out, "452 weird SASL error %d SASL_USERNAME\r\n", 
-		    sasl_result);
-	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", 
-	       sasl_result);
-	reset_saslconn(&nntp_saslconn);
-	return;
-    }
-
-    proc_register("nntpd", nntp_clienthost, nntp_userid, (char *)0);
-
-    syslog(LOG_NOTICE, "login: %s %s %s%s %s", nntp_clienthost, nntp_userid,
-	   mech, nntp_starttls_done ? "+TLS" : "", "User logged in");
-
-    sasl_getprop(nntp_saslconn, SASL_SSF, (const void **) &ssfp);
-
-    /* really, we should be doing a sasl_getprop on SASL_SSF_EXTERNAL,
-       but the current libsasl doesn't allow that. */
-    if (nntp_starttls_done) {
-	switch(*ssfp) {
-	case 0: ssfmsg = "tls protection"; break;
-	case 1: ssfmsg = "tls plus integrity protection"; break;
-	default: ssfmsg = "tls plus privacy protection"; break;
-	}
-    } else {
-	switch(*ssfp) {
-	case 0: ssfmsg = "no protection"; break;
-	case 1: ssfmsg = "integrity protection"; break;
-	default: ssfmsg = "privacy protection"; break;
-	}
-    }
-
-    if (success_data)
-	prot_printf(nntp_out, "251 %s\r\n", success_data);
-    else
-	prot_printf(nntp_out, "250 Success (%s)\r\n", ssfmsg);
-
-    prot_setsasl(nntp_in,  nntp_saslconn);
-    prot_setsasl(nntp_out, nntp_saslconn);
-
-    /* Create telemetry log */
-    nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out);
-}
-
-void cmd_mode(char *arg)
-{
-    lcase(arg);
-
-    if (!strcmp(arg, "reader")) {
-	prot_printf(nntp_out, "200 Cyrus NNTP ready, posting allowed\r\n");
-    }
-    else if (!strcmp(arg, "stream")) {
-	prot_printf(nntp_out, "203 Streaming is OK\r\n");
-    }
-    else {
-	prot_printf(nntp_out, "500 Unrecognized MODE\r\n");
-    }
-    prot_flush(nntp_out);
-}
-
-/*
- * mboxlist_findall() callback function to LIST a newsgroup
- */
-int do_list(char *name, int matchlen, int maycreate __attribute__((unused)),
-	    void *rock)
-{
-    static char lastname[MAX_MAILBOX_NAME+1] = "";
-    struct wildmat *wild = (struct wildmat *) rock;
-    char *acl;
-    int r, myrights;
-
-    /* skip personal mailboxes */
-    if ((!strncasecmp(name, "INBOX", 5) && (!name[5] || name[5] == '.')) ||
-	!strncmp(name, "user.", 5))
-	return 0;
-
-    /* don't repeat */
-    if (matchlen == strlen(lastname) &&
-	!strncmp(name, lastname, matchlen)) return 0;
-
-    strncpy(lastname, name, matchlen);
-    lastname[matchlen] = '\0';
-
-    /* see if the mailbox matches one of our wildmats */
-    while (wild->pat && wildmat(name, wild->pat) != 1) wild++;
-
-    /* if we don't have a match, or its a negative match, skip it */
-    if (!wild->pat || wild->not) return 0;
-
-    /* look it up */
-    r = mboxlist_detail(name, NULL, NULL, NULL, &acl, NULL);
-    if (r) return 0;
-
-    if (!(acl && (myrights = cyrus_acl_myrights(nntp_authstate, acl)) &&
-	  (myrights & ACL_LOOKUP) && (myrights & ACL_READ)))
-	return 0;
-
-    if (open_group(name, 1) == 0) {
-	prot_printf(nntp_out, "%s %u %u %c\r\n", name+strlen(newsprefix),
-		    nntp_group->exists ? index_getuid(1) : 1,
-		    nntp_group->exists ? index_getuid(nntp_group->exists) : 0,
-		    myrights & ACL_POST ? 'y' : 'n');
-
-	mailbox_close(nntp_group);
-	nntp_group = 0;
-    }
+    if (msgid) *msgid = NULL;
 
     return 0;
 }
 
-void cmd_list(char *arg1, char *arg2)
+static const int numdays[] = {
+    31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+};
+
+#define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
+
+/*
+ * Parse a date/time specification per draft-ietf-nntpext-base.
+ */
+static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
 {
-    if (!arg1)
-	arg1 = "active";
-    else
-	lcase(arg1);
+    int datelen = strlen(datestr), leapday;
+    unsigned long d, t;
+    char *p;
+    struct tm tm;
 
-    if (!strcmp(arg1, "active")) {
-	char pattern[MAX_MAILBOX_NAME+1];
-	struct wildmat *wild;
+    /* check format of strings */
+    if ((datelen != 6 && datelen != 8) ||
+	strlen(timestr) != 6 || (gmt && strcasecmp(gmt, "GMT")))
+	return -1;
 
-	if (!arg2) arg2 = "*";
+    /* convert datestr to ulong */
+    d = strtoul(datestr, &p, 10);
+    if (d < 0 || *p) return -1;
 
-	/* split the list of wildmats */
-	wild = split_wildmats(arg2);
+    /* convert timestr to ulong */
+    t = strtoul(timestr, &p, 10);
+    if (t < 0 || *p) return -1;
 
-	prot_printf(nntp_out, "215 list of newsgroups follows:\r\n");
+    /* populate the time struct */
+    tm.tm_year = d / 10000;
+    d %= 10000;
+    tm.tm_mon = d / 100 - 1;
+    tm.tm_mday = d % 100;
 
-	strcpy(pattern, newsprefix);
-	strcat(pattern, "*");
-	mboxlist_findall(NULL, pattern, 0, nntp_userid, nntp_authstate,
-			 do_list, wild);
+    tm.tm_hour = t / 10000;
+    t %= 10000;
+    tm.tm_min = t / 100;
+    tm.tm_sec = t % 100;
 
-	prot_printf(nntp_out, ".\r\n");
-
-	if (nntp_group) {
-	    mailbox_close(nntp_group);
-	    nntp_group = 0;
-	}
-
-	/* free the wildmats */
-	free_wildmats(wild);
-    }
-    else if (!strcmp(arg1, "extensions")) {
-	unsigned mechcount;
-	const char *mechlist;
-
-	if (arg2) {
-	    prot_printf(nntp_out, "501 Unexpected extra argument\r\n");
-	    return;
-	}
-
-	prot_printf(nntp_out, "202 Extensions supported:\r\n");
-	prot_printf(nntp_out, "AUTHINFO USER\r\n");
-
-	/* add the SASL mechs */
-	if (sasl_listmech(nntp_saslconn, NULL,
-			  "SASL ", " ", "\r\n",
-			  &mechlist,
-			  NULL, &mechcount) == SASL_OK && mechcount > 0) {
-	    prot_write(nntp_out, mechlist, strlen(mechlist));
-	}
-
-	prot_printf(nntp_out, "HDR\r\n");
-	prot_printf(nntp_out, "LISTGROUP\r\n");
-	prot_printf(nntp_out, "OVER\r\n");
-	prot_printf(nntp_out, "STARTTLS\r\n");
-	prot_printf(nntp_out, ".\r\n");
-    }
-    else if (!strcmp(arg1, "overview.fmt")) {
-	if (arg2) {
-	    prot_printf(nntp_out, "501 Unexpected extra argument\r\n");
-	    return;
-	}
-
-	prot_printf(nntp_out, "215 Order of overview fields follows:\r\n");
-	prot_printf(nntp_out, "Subject:\r\n");
-	prot_printf(nntp_out, "From:\r\n");
-	prot_printf(nntp_out, "Date:\r\n");
-	prot_printf(nntp_out, "Message-ID:\r\n");
-	prot_printf(nntp_out, "References:\r\n");
-	prot_printf(nntp_out, "Bytes:\r\n");
-	prot_printf(nntp_out, "Lines:\r\n");
-	prot_printf(nntp_out, ".\r\n");
-    }
-    else if (!strcmp(arg1, "active.times") || !strcmp(arg1, "distributions") ||
-	     !strcmp(arg1, "distrib.pats") || !strcmp(arg1, "newsgroups")) {
-	prot_printf(nntp_out, "503 Unsupported LIST command\r\n");
-    }
+    /* massage the year to years since 1900 */
+    if (tm.tm_year > 99) tm.tm_year -= 1900;
     else {
-	prot_printf(nntp_out, "500 Unrecognized LIST command\r\n");
+	/*
+	 * guess century
+	 * if year > current year, use previous century
+	 * otherwise, use current century
+	 */
+	time_t now = time(NULL);
+	struct tm *current;
+	int century;
+
+        current = gmt ? gmtime(&now) : localtime(&now);
+        century = current->tm_year / 100;
+        if (tm.tm_year > current->tm_year % 100) century--;
+        tm.tm_year += century * 100;
     }
-    prot_flush(nntp_out);
+
+    /* sanity check the date/time (including leap day and leap second) */
+    leapday = tm.tm_mon == 1 && isleap(tm.tm_year + 1900);
+    if (tm.tm_year < 70 || tm.tm_mon < 0 || tm.tm_mon > 11 ||
+	tm.tm_mday < 1 || tm.tm_mday > (numdays[tm.tm_mon] + leapday) ||
+	tm.tm_hour > 23 || tm.tm_min > 59 || tm.tm_sec > 60)
+        return -1;
+
+    return (gmt ? mkgmtime(&tm) : mktime(&tm));
 }
 
 int open_group(char *name, int has_prefix)
@@ -1612,63 +1262,485 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
     fclose(msgfile);
 }
 
-static int parsenum(char *str, char **rem)
+void cmd_authinfo_user(char *user)
 {
-    char *p = str;
-    int result = 0;
+    int fd;
+    struct protstream *shutdown_in;
+    char buf[1024];
+    char *p;
+    char shutdownfilename[1024];
 
-    while (*p && isdigit((int) *p)) {
-	result = result * 10 + *p++ - '0';
+    /* possibly disallow USER */
+    if (!(nntp_starttls_done || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
+	prot_printf(nntp_out,
+		    "503 AUTHINFO USER command only available under a layer\r\n");
+	return;
     }
 
-    if (rem) {
-	*rem = p;
-	return (*p && p == str ? -1 : result);
+    if (nntp_userid) {
+	prot_printf(nntp_out, "381 Must give AUTHINFO PASS command\r\n");
+	return;
     }
 
-    return (*p ? -1 : result);
+    snprintf(shutdownfilename, sizeof(shutdownfilename),
+	     "%s/msg/shutdown", config_dir);
+    if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+	shutdown_in = prot_new(fd, 0);
+	prot_fgets(buf, sizeof(buf), shutdown_in);
+	if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
+	if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+
+	for(p = buf; *p == '['; p++); /* can't have [ be first char */
+	prot_printf(nntp_out, "250 %s\r\n", p);
+	prot_flush(nntp_out);
+	shut_down(0);
+    }
+    else if (!(p = canonify_userid(user, NULL, NULL))) {
+	prot_printf(nntp_out, "482 Invalid user\r\n");
+	syslog(LOG_NOTICE,
+	       "badlogin: %s plaintext %s invalid user",
+	       nntp_clienthost, beautify_string(user));
+    }
+    else {
+	nntp_userid = xstrdup(p);
+	prot_printf(nntp_out, "381 Give AUTHINFO PASS command\r\n");
+    }
 }
 
-static int parserange(char *str, unsigned long *uid, unsigned long *last,
-		      char **msgid)
+void cmd_authinfo_pass(char *pass)
 {
-    char *p = NULL;
+    char *reply = 0;
 
-    if (!str || !*str) {
-	/* no string, use current article */
-	if (!nntp_group || !nntp_current) return -1;
-
-	*uid = index_getuid(nntp_current);
-	if (last) *last = *uid;
+    if (!nntp_userid) {
+	prot_printf(nntp_out, "480 Must give AUTHINFO USER command\r\n");
+	return;
     }
-    else if ((*uid = parsenum(str, &p)) == -1) {
-	/* not a number, assume msgid */
-	if (msgid) {
-	    *msgid = str;
-	    return 0;
+
+    if (!strcmp(nntp_userid, "anonymous")) {
+	if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
+	    pass = beautify_string(pass);
+	    if (strlen(pass) > 500) pass[500] = '\0';
+	    syslog(LOG_NOTICE, "login: %s anonymous %s",
+		   nntp_clienthost, pass);
 	}
-	else return -1;
+	else {
+	    syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
+		   nntp_clienthost);
+	    prot_printf(nntp_out, "482 Invalid login\r\n");
+	    return;
+	}
     }
-    else if (!nntp_group) return -1;
-    else if (p && *p) {
-	/* extra stuff, check for range */
-	if (!last || (*p != '-')) return -1;
-	if (*++p)
-	    *last = parsenum(p, NULL);
-	else
-	    *last = index_getuid(nntp_exists);
-	if (*last == -1) return -1;
-    }
-    else if (last)
-	*last = *uid;
+    else if (sasl_checkpass(nntp_saslconn,
+			    nntp_userid,
+			    strlen(nntp_userid),
+			    pass,
+			    strlen(pass))!=SASL_OK) { 
+	if (reply) {
+	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
+		   nntp_clienthost, nntp_userid, reply);
+	}
+	prot_printf(nntp_out, "482 Invalid login\r\n");
+	free(nntp_userid);
+	nntp_userid = 0;
 
-    if (msgid) *msgid = NULL;
+	return;
+    }
+    else {
+	syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", nntp_clienthost,
+	       nntp_userid, nntp_starttls_done ? "+TLS" : "", 
+	       reply ? reply : "");
+
+	prot_printf(nntp_out, "281 User logged in\r\n");
+
+	nntp_authstate = auth_newstate(nntp_userid, NULL);
+
+	/* Create telemetry log */
+	nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out);
+    }
+}
+
+void cmd_authinfo_sasl(char *mech, char *resp)
+{
+    int r, sasl_result;
+    char *success_data;
+    const int *ssfp;
+    char *ssfmsg = NULL;
+    const char *canon_user;
+
+    if (nntp_userid) {
+	prot_printf(nntp_out, "501 Already authenticated\r\n");
+	return;
+    }
+
+    r = saslserver(nntp_saslconn, mech, resp, "351 ", nntp_in, nntp_out,
+		   &sasl_result, &success_data);
+
+    if (r) {
+	const char *errorstring = NULL;
+
+	switch (r) {
+	case IMAP_SASL_CANCEL:
+	    prot_printf(nntp_out,
+			"501 Client canceled authentication\r\n");
+	    break;
+	case IMAP_SASL_PROTERR:
+	    errorstring = prot_error(nntp_in);
+
+	    prot_printf(nntp_out,
+			"503 Error reading client response: %s\r\n",
+			errorstring ? errorstring : "");
+	    break;
+	default: 
+	    /* failed authentication */
+	    errorstring = sasl_errstring(sasl_result, NULL, NULL);
+
+	    syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
+		   nntp_clienthost, mech, sasl_errdetail(nntp_saslconn));
+
+	    sleep(3);
+
+	    if (errorstring) {
+		prot_printf(nntp_out, "452 %s\r\n", errorstring);
+	    } else {
+		prot_printf(nntp_out, "452 Error authenticating\r\n");
+	    }
+	}
+
+	reset_saslconn(&nntp_saslconn);
+	return;
+    }
+
+    /* successful authentication */
+
+    /* get the userid from SASL --- already canonicalized from
+     * mysasl_proxy_policy()
+     */
+    sasl_result = sasl_getprop(nntp_saslconn, SASL_USERNAME,
+			       (const void **) &canon_user);
+    nntp_userid = xstrdup(canon_user);
+    if (sasl_result != SASL_OK) {
+	prot_printf(nntp_out, "452 weird SASL error %d SASL_USERNAME\r\n", 
+		    sasl_result);
+	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", 
+	       sasl_result);
+	reset_saslconn(&nntp_saslconn);
+	return;
+    }
+
+    proc_register("nntpd", nntp_clienthost, nntp_userid, (char *)0);
+
+    syslog(LOG_NOTICE, "login: %s %s %s%s %s", nntp_clienthost, nntp_userid,
+	   mech, nntp_starttls_done ? "+TLS" : "", "User logged in");
+
+    sasl_getprop(nntp_saslconn, SASL_SSF, (const void **) &ssfp);
+
+    /* really, we should be doing a sasl_getprop on SASL_SSF_EXTERNAL,
+       but the current libsasl doesn't allow that. */
+    if (nntp_starttls_done) {
+	switch(*ssfp) {
+	case 0: ssfmsg = "tls protection"; break;
+	case 1: ssfmsg = "tls plus integrity protection"; break;
+	default: ssfmsg = "tls plus privacy protection"; break;
+	}
+    } else {
+	switch(*ssfp) {
+	case 0: ssfmsg = "no protection"; break;
+	case 1: ssfmsg = "integrity protection"; break;
+	default: ssfmsg = "privacy protection"; break;
+	}
+    }
+
+    if (success_data)
+	prot_printf(nntp_out, "251 %s\r\n", success_data);
+    else
+	prot_printf(nntp_out, "250 Success (%s)\r\n", ssfmsg);
+
+    prot_setsasl(nntp_in,  nntp_saslconn);
+    prot_setsasl(nntp_out, nntp_saslconn);
+
+    /* Create telemetry log */
+    nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out);
+}
+
+static void cmd_hdr(char *cmd, char *hdr, char *msgid,
+		    unsigned long uid, unsigned long last)
+{
+    int by_msgid = 0, msgno;
+    char *oldgroup = NULL, *body;
+
+    lcase(hdr);
+
+    if (msgid) {
+	char *mailbox;
+	int r;
+
+	by_msgid = 1;
+	if (netnews_lookup(msgid, &mailbox, &uid, NULL, NULL)) {
+	    if (nntp_group) oldgroup = xstrdup(nntp_group->name);
+	    r = open_group(mailbox, 1);
+	    if (r) {
+		/* switch back to previously selected group */
+		if (oldgroup) {
+		    open_group(oldgroup, 1);
+		    free(oldgroup);
+		    prot_printf(nntp_out, "411 No such newsgroup (%s)\r\n",
+				error_message(r));
+		}
+		return;
+	    }
+
+	    last = uid;
+	} else {
+	    prot_printf(nntp_out,
+			"430 No article found with that message-id\r\n");
+	    return;
+	}
+    }
+
+    prot_printf(nntp_out, "%u Header follows:\r\n", cmd[0] == 'X' ? 221 : 225);
+
+    for (; uid <= last; uid++) {
+	msgno = index_finduid(uid);
+	if (index_getuid(msgno) != uid) continue;
+
+	if ((body = index_getheader(nntp_group, msgno, hdr))) {
+	    prot_printf(nntp_out, "%lu %s\r\n", by_msgid ? 0 : uid, body);
+	}
+    }
+
+    prot_printf(nntp_out, ".\r\n");
+
+    /* switch back to previously selected group */
+    if (oldgroup) {
+	open_group(oldgroup, 1);
+	free(oldgroup);
+    }
+}
+
+static void cmd_help()
+{
+    prot_printf(nntp_out, "100 Supported commands:\r\n");
+    prot_printf(nntp_out, "\tARTICLE\r\n");
+    prot_printf(nntp_out, "\tAUTHINFO USER | PASS | SASL\r\n");
+    prot_printf(nntp_out, "\tBODY\r\n");
+    prot_printf(nntp_out, "\tCHECK\r\n");
+    prot_printf(nntp_out, "\tDATE\r\n");
+    prot_printf(nntp_out, "\tGROUP\r\n");
+    prot_printf(nntp_out, "\tHDR | XHDR\r\n");
+    prot_printf(nntp_out, "\tHEAD\r\n");
+    prot_printf(nntp_out, "\tHELP\r\n");
+    prot_printf(nntp_out, "\tIHAVE\r\n");
+    prot_printf(nntp_out, "\tLAST\r\n");
+    prot_printf(nntp_out, "\tLIST [ ACTIVE ]\r\n");
+    prot_printf(nntp_out, "\tLISTGROUP\r\n");
+    prot_printf(nntp_out, "\tMODE READER | STREAM\r\n");
+    if (config_getswitch(IMAPOPT_ALLOWNEWNEWS))
+	prot_printf(nntp_out, "\tNEWNEWS\r\n");
+    prot_printf(nntp_out, "\tNEXT\r\n");
+    prot_printf(nntp_out, "\tOVER | XOVER\r\n");
+    prot_printf(nntp_out, "\tPOST\r\n");
+    prot_printf(nntp_out, "\tQUIT\r\n");
+    prot_printf(nntp_out, "\tSLAVE\r\n");
+    prot_printf(nntp_out, "\tSTARTTLS\r\n");
+    prot_printf(nntp_out, "\tSTAT\r\n");
+    prot_printf(nntp_out, "\tTAKETHIS\r\n");
+    prot_printf(nntp_out, ".\r\n");
+}
+
+/*
+ * mboxlist_findall() callback function to LIST an ACTIVE newsgroup
+ */
+int do_active(char *name, int matchlen, int maycreate __attribute__((unused)),
+	    void *rock)
+{
+    static char lastname[MAX_MAILBOX_NAME+1] = "";
+    struct wildmat *wild = (struct wildmat *) rock;
+    char *acl;
+    int r, myrights;
+
+    /* skip personal mailboxes */
+    if ((!strncasecmp(name, "INBOX", 5) && (!name[5] || name[5] == '.')) ||
+	!strncmp(name, "user.", 5))
+	return 0;
+
+    /* don't repeat */
+    if (matchlen == strlen(lastname) &&
+	!strncmp(name, lastname, matchlen)) return 0;
+
+    strncpy(lastname, name, matchlen);
+    lastname[matchlen] = '\0';
+
+    /* see if the mailbox matches one of our wildmats */
+    while (wild->pat && wildmat(name, wild->pat) != 1) wild++;
+
+    /* if we don't have a match, or its a negative match, skip it */
+    if (!wild->pat || wild->not) return 0;
+
+    /* look it up */
+    r = mboxlist_detail(name, NULL, NULL, NULL, &acl, NULL);
+    if (r) return 0;
+
+    if (!(acl && (myrights = cyrus_acl_myrights(nntp_authstate, acl)) &&
+	  (myrights & ACL_LOOKUP) && (myrights & ACL_READ)))
+	return 0;
+
+    if (open_group(name, 1) == 0) {
+	prot_printf(nntp_out, "%s %u %u %c\r\n", name+strlen(newsprefix),
+		    nntp_group->exists ? index_getuid(1) : 1,
+		    nntp_group->exists ? index_getuid(nntp_group->exists) : 0,
+		    myrights & ACL_POST ? 'y' : 'n');
+
+	mailbox_close(nntp_group);
+	nntp_group = 0;
+    }
 
     return 0;
 }
 
-/* ----- this section defines functions on message_data_t.
-   ----- access functions and the like, etc. */
+void cmd_list(char *arg1, char *arg2)
+{
+    if (!arg1)
+	arg1 = "active";
+    else
+	lcase(arg1);
+
+    if (!strcmp(arg1, "active")) {
+	char pattern[MAX_MAILBOX_NAME+1];
+	struct wildmat *wild;
+
+	if (!arg2) arg2 = "*";
+
+	/* split the list of wildmats */
+	wild = split_wildmats(arg2);
+
+	prot_printf(nntp_out, "215 list of newsgroups follows:\r\n");
+
+	strcpy(pattern, newsprefix);
+	strcat(pattern, "*");
+	mboxlist_findall(NULL, pattern, 0, nntp_userid, nntp_authstate,
+			 do_active, wild);
+
+	prot_printf(nntp_out, ".\r\n");
+
+	if (nntp_group) {
+	    mailbox_close(nntp_group);
+	    nntp_group = 0;
+	}
+
+	/* free the wildmats */
+	free_wildmats(wild);
+    }
+    else if (!strcmp(arg1, "extensions")) {
+	unsigned mechcount;
+	const char *mechlist;
+
+	if (arg2) {
+	    prot_printf(nntp_out, "501 Unexpected extra argument\r\n");
+	    return;
+	}
+
+	prot_printf(nntp_out, "202 Extensions supported:\r\n");
+	prot_printf(nntp_out, "AUTHINFO USER\r\n");
+
+	/* add the SASL mechs */
+	if (sasl_listmech(nntp_saslconn, NULL,
+			  "SASL ", " ", "\r\n",
+			  &mechlist,
+			  NULL, &mechcount) == SASL_OK && mechcount > 0) {
+	    prot_write(nntp_out, mechlist, strlen(mechlist));
+	}
+
+	prot_printf(nntp_out, "HDR\r\n");
+	prot_printf(nntp_out, "LISTGROUP\r\n");
+	prot_printf(nntp_out, "OVER\r\n");
+	prot_printf(nntp_out, "STARTTLS\r\n");
+	prot_printf(nntp_out, ".\r\n");
+    }
+    else if (!strcmp(arg1, "overview.fmt")) {
+	if (arg2) {
+	    prot_printf(nntp_out, "501 Unexpected extra argument\r\n");
+	    return;
+	}
+
+	prot_printf(nntp_out, "215 Order of overview fields follows:\r\n");
+	prot_printf(nntp_out, "Subject:\r\n");
+	prot_printf(nntp_out, "From:\r\n");
+	prot_printf(nntp_out, "Date:\r\n");
+	prot_printf(nntp_out, "Message-ID:\r\n");
+	prot_printf(nntp_out, "References:\r\n");
+	prot_printf(nntp_out, "Bytes:\r\n");
+	prot_printf(nntp_out, "Lines:\r\n");
+	prot_printf(nntp_out, ".\r\n");
+    }
+    else if (!strcmp(arg1, "active.times") || !strcmp(arg1, "distributions") ||
+	     !strcmp(arg1, "distrib.pats") || !strcmp(arg1, "newsgroups")) {
+	prot_printf(nntp_out, "503 Unsupported LIST command\r\n");
+    }
+    else {
+	prot_printf(nntp_out, "500 Unrecognized LIST command\r\n");
+    }
+    prot_flush(nntp_out);
+}
+
+void cmd_mode(char *arg)
+{
+    lcase(arg);
+
+    if (!strcmp(arg, "reader")) {
+	prot_printf(nntp_out, "200 Cyrus NNTP ready, posting allowed\r\n");
+    }
+    else if (!strcmp(arg, "stream")) {
+	prot_printf(nntp_out, "203 Streaming is OK\r\n");
+    }
+    else {
+	prot_printf(nntp_out, "500 Unrecognized MODE\r\n");
+    }
+    prot_flush(nntp_out);
+}
+
+/*
+ * newnews_findall() callback function to list NEWNEWS
+ */
+static int do_newnews(char *msgid, char *mailbox, unsigned long uid,
+		      unsigned long lines, time_t tstamp, void *rock)
+{
+    prot_printf(nntp_out, "%s\r\n", msgid);
+
+    return 0;
+}
+
+static void cmd_over(unsigned long uid, unsigned long last)
+{
+    int msgno;
+    struct nntp_overview *over;
+
+    prot_printf(nntp_out, "224 Overview information follows:\r\n");
+
+    for (; uid <= last; uid++) {
+	msgno = index_finduid(uid);
+	if (index_getuid(msgno) != uid) continue;
+
+	if ((over = index_overview(nntp_group, msgno))) {
+	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t",
+			over->uid,
+			over->subj ? over->subj : "",
+			over->from ? over->from : "",
+			over->date ? over->date : "",
+			over->msgid ? over->msgid : "",
+			over->ref ? over->ref : "",
+			over->bytes);
+
+	    if (over->msgid &&
+		netnews_lookup(over->msgid, NULL, NULL, &over->lines, NULL))
+		prot_printf(nntp_out, "%lu", over->lines);
+
+	    prot_printf(nntp_out, "\r\n");
+	}
+    }
+
+    prot_printf(nntp_out, ".\r\n");
+}
+
 
 #define RCPT_GROW 30
 
@@ -2101,168 +2173,93 @@ static void cmd_post(char *msgid, int mode)
     prot_flush(nntp_out);
 }
 
-static void cmd_hdr(char *cmd, char *hdr, char *msgid,
-		    unsigned long uid, unsigned long last)
+#ifdef HAVE_SSL
+static void cmd_starttls(int nntps)
 {
-    int by_msgid = 0, msgno;
-    char *oldgroup = NULL, *body;
+    int result;
+    int *layerp;
+    sasl_ssf_t ssf;
+    char *auth_id;
 
-    lcase(hdr);
+    /* SASL and openssl have different ideas about whether ssf is signed */
+    layerp = (int *) &ssf;
 
-    if (msgid) {
-	char *mailbox;
-	int r;
+    if (nntp_starttls_done == 1)
+    {
+	prot_printf(nntp_out, "483 %s\r\n", 
+		    "Already successfully executed STLS");
+	return;
+    }
 
-	by_msgid = 1;
-	if (netnews_lookup(msgid, &mailbox, &uid, NULL, NULL)) {
-	    if (nntp_group) oldgroup = xstrdup(nntp_group->name);
-	    r = open_group(mailbox, 1);
-	    if (r) {
-		/* switch back to previously selected group */
-		if (oldgroup) {
-		    open_group(oldgroup, 1);
-		    free(oldgroup);
-		    prot_printf(nntp_out, "411 No such newsgroup (%s)\r\n",
-				error_message(r));
-		}
-		return;
-	    }
+    result=tls_init_serverengine("nntp",
+				 5,        /* depth to verify */
+				 !nntps,   /* can client auth? */
+				 !nntps);  /* TLS only? */
 
-	    last = uid;
+    if (result == -1) {
+
+	syslog(LOG_ERR, "[nntpd] error initializing TLS");
+
+	if (nntps == 0)
+	    prot_printf(nntp_out, "580 %s\r\n", "Error initializing TLS");
+	else
+	    fatal("tls_init() failed",EC_TEMPFAIL);
+
+	return;
+    }
+
+    if (nntps == 0)
+    {
+	prot_printf(nntp_out, "382 %s\r\n", "Begin TLS negotiation now");
+	/* must flush our buffers before starting tls */
+	prot_flush(nntp_out);
+    }
+  
+    result=tls_start_servertls(0, /* read */
+			       1, /* write */
+			       layerp,
+			       &auth_id,
+			       &tls_conn);
+
+    /* if error */
+    if (result==-1) {
+	if (nntps == 0) {
+	    prot_printf(nntp_out, "580 Starttls failed\r\n");
+	    syslog(LOG_NOTICE, "[nntpd] STARTTLS failed: %s", nntp_clienthost);
 	} else {
-	    prot_printf(nntp_out,
-			"430 No article found with that message-id\r\n");
-	    return;
+	    syslog(LOG_NOTICE, "nntps failed: %s", nntp_clienthost);
+	    fatal("tls_start_servertls() failed", EC_TEMPFAIL);
 	}
+	return;
     }
 
-    prot_printf(nntp_out, "%u Header follows:\r\n", cmd[0] == 'X' ? 221 : 225);
-
-    for (; uid <= last; uid++) {
-	msgno = index_finduid(uid);
-	if (index_getuid(msgno) != uid) continue;
-
-	if ((body = index_getheader(nntp_group, msgno, hdr))) {
-	    prot_printf(nntp_out, "%lu %s\r\n", by_msgid ? 0 : uid, body);
-	}
+    /* tell SASL about the negotiated layer */
+    result = sasl_setprop(nntp_saslconn, SASL_SSF_EXTERNAL, &ssf);
+    if (result != SASL_OK) {
+	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
     }
+    saslprops.ssf = ssf;
 
-    prot_printf(nntp_out, ".\r\n");
-
-    /* switch back to previously selected group */
-    if (oldgroup) {
-	open_group(oldgroup, 1);
-	free(oldgroup);
+    result = sasl_setprop(nntp_saslconn, SASL_AUTH_EXTERNAL, auth_id);
+    if (result != SASL_OK) {
+        fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
     }
+    if(saslprops.authid) {
+	free(saslprops.authid);
+	saslprops.authid = NULL;
+    }
+    if(auth_id)
+	saslprops.authid = xstrdup(auth_id);
+
+    /* tell the prot layer about our new layers */
+    prot_settls(nntp_in, tls_conn);
+    prot_settls(nntp_out, tls_conn);
+
+    nntp_starttls_done = 1;
 }
-
-static void cmd_over(unsigned long uid, unsigned long last)
+#else
+static void cmd_starttls(int nntps __attribute__((unused)))
 {
-    int msgno;
-    struct nntp_overview *over;
-
-    prot_printf(nntp_out, "224 Overview information follows:\r\n");
-
-    for (; uid <= last; uid++) {
-	msgno = index_finduid(uid);
-	if (index_getuid(msgno) != uid) continue;
-
-	if ((over = index_overview(nntp_group, msgno))) {
-	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t",
-			over->uid,
-			over->subj ? over->subj : "",
-			over->from ? over->from : "",
-			over->date ? over->date : "",
-			over->msgid ? over->msgid : "",
-			over->ref ? over->ref : "",
-			over->bytes);
-
-	    if (over->msgid &&
-		netnews_lookup(over->msgid, NULL, NULL, &over->lines, NULL))
-		prot_printf(nntp_out, "%lu", over->lines);
-
-	    prot_printf(nntp_out, "\r\n");
-	}
-    }
-
-    prot_printf(nntp_out, ".\r\n");
+    fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
 }
-
-static const int numdays[] = {
-    31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
-};
-
-#define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
-
-/*
- * Parse a date/time specification per draft-ietf-nntpext-base.
- */
-static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
-{
-    int datelen = strlen(datestr), leapday;
-    unsigned long d, t;
-    char *p;
-    struct tm tm;
-
-    /* check format of strings */
-    if ((datelen != 6 && datelen != 8) ||
-	strlen(timestr) != 6 || (gmt && strcasecmp(gmt, "GMT")))
-	return -1;
-
-    /* convert datestr to ulong */
-    d = strtoul(datestr, &p, 10);
-    if (d < 0 || *p) return -1;
-
-    /* convert timestr to ulong */
-    t = strtoul(timestr, &p, 10);
-    if (t < 0 || *p) return -1;
-
-    /* populate the time struct */
-    tm.tm_year = d / 10000;
-    d %= 10000;
-    tm.tm_mon = d / 100 - 1;
-    tm.tm_mday = d % 100;
-
-    tm.tm_hour = t / 10000;
-    t %= 10000;
-    tm.tm_min = t / 100;
-    tm.tm_sec = t % 100;
-
-    /* massage the year to years since 1900 */
-    if (tm.tm_year > 99) tm.tm_year -= 1900;
-    else {
-	/*
-	 * guess century
-	 * if year > current year, use previous century
-	 * otherwise, use current century
-	 */
-	time_t now = time(NULL);
-	struct tm *current;
-	int century;
-
-        current = gmt ? gmtime(&now) : localtime(&now);
-        century = current->tm_year / 100;
-        if (tm.tm_year > current->tm_year % 100) century--;
-        tm.tm_year += century * 100;
-    }
-
-    /* sanity check the date/time (including leap day and leap second) */
-    leapday = tm.tm_mon == 1 && isleap(tm.tm_year + 1900);
-    if (tm.tm_year < 70 || tm.tm_mon < 0 || tm.tm_mon > 11 ||
-	tm.tm_mday < 1 || tm.tm_mday > (numdays[tm.tm_mon] + leapday) ||
-	tm.tm_hour > 23 || tm.tm_min > 59 || tm.tm_sec > 60)
-        return -1;
-
-    return (gmt ? mkgmtime(&tm) : mktime(&tm));
-}
-
-/*
- * newnews_findall() callback function to list NEWNEWS
- */
-static int do_newnews(char *msgid, char *mailbox, unsigned long uid,
-		      unsigned long lines, time_t tstamp, void *rock)
-{
-    prot_printf(nntp_out, "%s\r\n", msgid);
-
-    return 0;
-}
+#endif /* HAVE_SSL */
