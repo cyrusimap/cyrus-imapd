@@ -1,7 +1,7 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.10 2001/07/27 23:09:34 leg Exp $
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * $Id: mupdate.c,v 1.11 2001/10/23 20:16:26 leg Exp $
+ * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
