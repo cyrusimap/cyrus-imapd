@@ -71,7 +71,7 @@ AC_TRY_COMPILE([#include <sys/types.h>
 	[struct sockaddr_storage ss; int i = ss.ss_family;],
 	[ipv6_cv_ss_family=yes], [ipv6_cv_ss_family=no])])dnl
 if test $ipv6_cv_ss_family = yes; then
-  ifelse([$1], , AC_DEFINE(HAVE_SS_FAMILY), [$1])
+  ifelse([$1], , AC_DEFINE(HAVE_SS_FAMILY,[],[Is there an ss_family in sockaddr_storage?]), [$1])
 else
   ifelse([$2], , :, [$2])
 fi
@@ -87,7 +87,7 @@ AC_TRY_COMPILE([#include <sys/types.h>
 	       [struct sockaddr sa; int i = sa.sa_len;],
 	       [ipv6_cv_sa_len=yes], [ipv6_cv_sa_len=no])])dnl
 if test $ipv6_cv_sa_len = yes; then
-  ifelse([$1], , AC_DEFINE(HAVE_SOCKADDR_SA_LEN), [$1])
+  ifelse([$1], , AC_DEFINE(HAVE_SOCKADDR_SA_LEN,[],[Does sockaddr have an sa_len?]), [$1])
 else
   ifelse([$2], , :, [$2])
 fi
@@ -103,7 +103,7 @@ AC_TRY_LINK([#include <sys/types.h>
 	    [socklen_t len = 0;],
 	    [ipv6_cv_socklen_t=yes], [ipv6_cv_socklen_t=no])])dnl
 if test $ipv6_cv_socklen_t = yes; then
-  ifelse([$1], , AC_DEFINE(HAVE_SOCKLEN_T), [$1])
+  ifelse([$1], , AC_DEFINE(HAVE_SOCKLEN_T,[],[Do we have a socklen_t?]), [$1])
 else
   ifelse([$2], , :, [$2])
 fi
