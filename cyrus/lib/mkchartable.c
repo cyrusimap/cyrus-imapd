@@ -414,7 +414,7 @@ char *name;
 	for (thischar = 0; thischar < 256; thischar++) {
 	    printf("   {");
 	    if ((code = table[curstate].ch[thischar].code) != -1) {
-		if (code <= 0x7f) {
+		if (code && code <= 0x7f) {
 		    if (isprint(code) && code != '\\' && code != '\"' &&
 			code != '\'') {
 			printf(" '%c', %s,   0,   0,", code,
