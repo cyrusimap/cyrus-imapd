@@ -1,17 +1,26 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.43.2.26 2003/07/14 16:40:08 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.43.2.27 2003/07/16 01:51:13 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Changes to the Cyrus IMAP Server</title>
 </head>
 <body>
+
 <h1>Changes to the Cyrus IMAP Server since 2.2.0</h1>
 
 <ul>
 <li>The improved directory hashing (fulldirhash) is now a runtime
 configuration option.</li>
+<li>The netnewsdb has been integrated into deliverdb.</li>
+<li>Full r/w ANNOTATEMORE support, including more annotations that
+allow the control of operations such as message expiration.
+ANNOTATEMORE is also always enabled now.</li>
+<li>Sieve Bytecode is now stored in network byte order, meaning that
+bytecode files can be freely moved between different platforms</li>
+<li>A large number of bugs involving virtual domain support have been
+fixed, including issues with the Murder, and with Sieve</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.1.x</h1>
@@ -1822,7 +1831,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/07/14 16:40:08 $ <br />
+last modified: $Date: 2003/07/16 01:51:13 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
