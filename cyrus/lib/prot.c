@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.10 2002/08/05 18:10:03 rjs3 Exp $
+ * $Id: prot.c,v 1.72.4.11 2002/08/06 15:22:37 rjs3 Exp $
  */
 
 #include <config.h>
@@ -963,7 +963,6 @@ int prot_read(struct protstream *s, char *buf, unsigned size)
  *
  * Only works for readable protstreams
  */ 
-/* xxx what about waitevents and idle timeouts */
 int prot_select(struct protgroup *readstreams, int extra_read_fd,
 		struct protgroup **out, int *extra_read_flag,
 		struct timeval *timeout) 
@@ -975,6 +974,7 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
     fd_set rfds;
     int have_readtimeout = 0;
     struct timeval my_timeout;
+    struct prot_waitevent *event;
     time_t now = time(NULL);
     time_t read_timeout = 0;
     
@@ -992,18 +992,36 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
     max_fd = extra_read_fd;
 
     for(i = 0; i<readstreams->next_element; i++) {
+	int have_thistimeout = 0; /* used to compute the minimal timeout for */
+	time_t this_timeout = 0;   /* this stream */
+	
 	s = readstreams->group[i];
 
 	assert(!s->write);
 
+	have_thistimeout = 0;
+	
+	/* scan for waitevent callbacks */
+	for (event = s->waitevent; event; event = event->next)
+	{
+	    if(!have_thistimeout || event->mark - now < this_timeout) {
+		this_timeout = event->mark - now;
+		have_thistimeout = 1;
+	    }
+	}
+	
+	/* check the idle timeout on this one as well */
+	if(!have_thistimeout || this_timeout > s->read_timeout)
+	    this_timeout = s->read_timeout;
+
 	if(!have_readtimeout && !s->dontblock) {
-	    read_timeout = now + s->read_timeout;
+	    read_timeout = now + this_timeout;
 	    have_readtimeout = 1;
 	    if(!timeout || read_timeout <= timeout->tv_sec)
 		timeout_prot = s;
 	} else if(!s->dontblock) {
 	    time_t new_timeout;
-	    new_timeout = now + s->read_timeout;
+	    new_timeout = now + this_timeout;
 	    if(new_timeout < read_timeout) {
 		read_timeout = new_timeout;
 		if(!timeout || read_timeout <= timeout->tv_sec)
