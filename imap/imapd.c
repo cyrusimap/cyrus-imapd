@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.259 2000/06/18 04:47:20 leg Exp $ */
+/* $Id: imapd.c,v 1.260 2000/06/20 02:13:33 leg Exp $ */
 
 #include <config.h>
 
@@ -524,6 +524,8 @@ int fd;
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
+    extern void seen_done(void);
+
     proc_cleanup();
     if (imapd_mailbox) {
 	index_closemailbox(imapd_mailbox);
@@ -1724,7 +1726,7 @@ void cmd_capability(char *tag)
     prot_printf(imapd_out, "* CAPABILITY " CAPABILITY_STRING);
 
     /* add the thread algorithms */
-    list_thread_algorithms();
+    list_thread_algorithms(imapd_out);
 
     if (starttls_enabled()) {
 	prot_printf(imapd_out, " STARTTLS");
@@ -2859,7 +2861,7 @@ int usinguid;
     /* get algorithm */
     c = getword(&arg);
     if (c != ' ') {
-	prot_printf(imapd_out, "%s BAD Missing charset in Thread\r\n", tag);
+	prot_printf(imapd_out, "%s BAD Missing algorithm in Thread\r\n", tag);
 	eatline(c);
 	return;
     }
@@ -2874,7 +2876,7 @@ int usinguid;
     /* get charset */
     c = getword(&arg);
     if (c != ' ') {
-	prot_printf(imapd_out, "%s BAD Missing search criteria in Thread\r\n",
+	prot_printf(imapd_out, "%s BAD Missing charset in Thread\r\n",
 		    tag);
 	eatline(c);
 	return;
@@ -2901,7 +2903,8 @@ int usinguid;
 
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
-	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to Thread\r\n", tag);
+	prot_printf(imapd_out, 
+		    "%s BAD Unexpected extra arguments to Thread\r\n", tag);
 	eatline(c);
 	freesearchargs(searchargs);
 	return;
@@ -4770,13 +4773,18 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
     static struct buf arg;
     int nsort, n;
 
+    *sortcrit = NULL;
+
     c = prot_getc(imapd_in);
     if (c != '(') goto missingcrit;
 
     c = getword(&arg);
     if (arg.s[0] == '\0') goto missingcrit;
 
-    for (*sortcrit = NULL, nsort = 0, n = 0;;) {
+    *sortcrit = NULL;
+    nsort = 0;
+    n = 0;
+    for (;;) {
 	if (n == nsort) {
 	    /* (Re)allocate an array for sort criteria */
 	    nsort += SORTGROWSIZE;
@@ -5277,6 +5285,7 @@ static void freesortcrit(struct sortcrit *s)
 {
     int i = 0;
 
+    if (!s) return;
     do {
 	if (s[i].args[0]) free(s[i].args[0]);
 	if (s[i].args[1]) free(s[i].args[1]);
