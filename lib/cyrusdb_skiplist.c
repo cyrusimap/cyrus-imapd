@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.19 2002/02/12 20:07:18 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.20 2002/02/12 20:26:20 rjs3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -784,7 +784,7 @@ int myforeach(struct db *db,
 {
     const char *ptr;
     struct txn t, *tp;
-    int r = 0;
+    int r = 0, cb_r = 0;
 
     assert(db != NULL);
 
@@ -826,8 +826,8 @@ int myforeach(struct db *db,
 	    /* xxx need to unlock */
 
 	    /* make callback */
-	    r = cb(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr));
-	    if (r) break;
+	    cb_r = cb(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr));
+	    if (cb_r) break;
 
 	    /* xxx relock, reposition */
 	}
@@ -850,7 +850,7 @@ int myforeach(struct db *db,
 	}
     }
 
-    return r;
+    return r ? r : cb_r;
 }
 
 int randlvl(struct db *db)
