@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.228 2004/01/20 01:11:00 ken3 Exp $
+ * $Id: mboxlist.c,v 1.229 2004/01/26 17:12:48 ken3 Exp $
  */
 
 #include <config.h>
@@ -2209,7 +2209,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
   		cbrock.checkshared = 1;
   	    }
 
-	    if (cbrock.checkshared && !*p) {
+	    if ((cbrock.checkshared || prefixlen == len) && !*p) {
 		/* special case:  LIST "" % -- output prefix
  		   (if we have a shared mbox) and quit */
 		strlcpy(domainpat+domainlen, "*", sizeof(domainpat)-domainlen);
@@ -2969,7 +2969,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
   		cbrock.checkshared = 1;
 	    }
 
-	    if (cbrock.checkshared && !*p) {
+	    if ((cbrock.checkshared || prefixlen == len) && !*p) {
 		/* special case:  LSUB "" % -- output prefix
 		   (if we have a shared mbox) and quit */
 		strlcpy(domainpat+domainlen, "*", sizeof(domainpat)-domainlen);
