@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.4 2001/11/27 02:25:00 ken3 Exp $
+ * $Id: version.c,v 1.5 2002/02/16 22:00:24 ken3 Exp $
  */
 
 #include <config.h>
@@ -52,6 +52,7 @@
 #include <ucd-snmp/version.h>
 #endif
 
+#include <string.h>
 #include "version.h"
 #include "xversion.h"
 #include "prot.h"
