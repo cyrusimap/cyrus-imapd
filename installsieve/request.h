@@ -30,6 +30,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "prot.h"
 #include "mystring.h"
+#include "isieve.h"
 
 /* old and new versions of the protocol */
 #define OLD_VERSION  4
@@ -48,6 +49,8 @@ int installdata(int version,struct protstream *pout, struct protstream *pin,
 		char *scriptname, char *data, int len);
 
 int showlist(int version, struct protstream *pout, struct protstream *pin);
+
+int list_wcb(int version, struct protstream *pout, struct protstream *pin,isieve_listcb_t *cb ,void *rock);
 
 int setscriptactive(int version,struct protstream *pout, struct protstream *pin,
 		    char *name);

@@ -26,6 +26,7 @@ srcdir = @srcdir@
 VPATH = @srcdir@
 
 CC = @CC@
+RANLIB = @RANLIB@
 
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../acap @CPPFLAGS@ @SASLFLAGS@
@@ -49,10 +50,15 @@ all: installsieve
 install:
 	$(INSTALL) -s -m 755 installsieve $(DESTDIR)$(exec_prefix)/bin
 
-OBJS=installscript.o lex.o mystring.o request.o 
+OBJS=lex.o mystring.o request.o isieve.o
 
-installsieve: $(OBJS) $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o installsieve $(OBJS) $(DEPLIBS) $(IMAP_LIBS)
+libinstallsieve.a: $(OBJS)
+	rm -f libinstallsieve.a
+	ar cr libinstallsieve.a $(OBJS)
+	$(RANLIB) libinstallsieve.a
+
+installsieve: libinstallsieve.a installscript.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o installsieve libinstallsieve.a installscript.o $(DEPLIBS) $(IMAP_LIBS)
 
 clean:
 	rm -f *.o *.a Makefile.bak makedepend.log
