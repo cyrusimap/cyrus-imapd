@@ -147,7 +147,6 @@ void **state;			/* On success, filled in with state ptr */
     char userbuf[MAX_K_NAME_SZ+1];
     char instance[INST_SZ];
     char realm[REALM_SZ];
-    int code;
     char uinst[INST_SZ];
     char urealm[INST_SZ];
     CREDENTIALS cr;
@@ -171,7 +170,7 @@ void **state;			/* On success, filled in with state ptr */
     strcpy(realm, krb_realmofhost(host_name->h_name));
     strcpy(instance, krb_get_phost(host_name->h_name));
 
-    if (code = krb_get_cred("imap", instance, realm, &cr)) {
+    if (krb_get_cred("imap", instance, realm, &cr)) {
 	return ACTE_FAIL;
     }
     
