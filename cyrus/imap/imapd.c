@@ -914,32 +914,52 @@ char *name;
     struct mailbox mailbox;
 
     /* Parse flags */
-    for (c = getword(&arg); c == ' ' && arg.s[0] != '{'; c = getword(&arg)) {
-	if (arg.s[0] == '\\') {
-	    lcase(arg.s);
-	    if (!strcmp(arg.s, "\\seen") && !strcmp(arg.s, "\\answered") &&
-		!strcmp(arg.s, "\\flagged") && !strcmp(arg.s, "\\draft") &&
-		!strcmp(arg.s, "\\deleted")) {
-		prot_printf(imapd_out, "%s BAD Invalid system flag in Append command\r\n",tag);
+    c = getword(&arg);
+    if  (c == '(' && !arg.s[0]) {
+	do {
+	    c = getword(&arg);
+	    if (arg.s[0] == '\\') {
+		lcase(arg.s);
+		if (!strcmp(arg.s, "\\seen") && !strcmp(arg.s, "\\answered") &&
+		    !strcmp(arg.s, "\\flagged") && !strcmp(arg.s, "\\draft") &&
+		    !strcmp(arg.s, "\\deleted")) {
+		    prot_printf(imapd_out, "%s BAD Invalid system flag in Append command\r\n",tag);
+		    if (c != '\n') eatline();
+		    goto freeflags;
+		}
+	    }
+	    else if (!is_atom(arg.s)) {
+		prot_printf(imapd_out, "%s BAD Invalid flag name %s in Append command\r\n",
+			    tag, arg.s);
 		if (c != '\n') eatline();
 		goto freeflags;
 	    }
-	}
-	else if (!is_atom(arg.s)) {
-	    prot_printf(imapd_out, "%s BAD Invalid flag name %s in Append command\r\n",
-		   tag, arg.s);
+	    if (nflags == flagalloc) {
+		flagalloc += FLAGGROW;
+		flag = (char **)xrealloc((char *)flag, flagalloc*sizeof(char *));
+	    }
+	    flag[nflags++] = strsave(arg.s);
+	} while (c == ' ');
+	if (c != ')') {
+	    prot_printf(imapd_out,
+	    "%s BAD Missing space or ) after flag name in Append command\r\n",
+			tag);
 	    if (c != '\n') eatline();
 	    goto freeflags;
 	}
-	if (nflags == flagalloc) {
-	    flagalloc += FLAGGROW;
-	    flag = (char **)xrealloc((char *)flag, flagalloc*sizeof(char *));
+	c = prot_getc(imapd_in);
+	if (c != ' ') {
+	    prot_printf(imapd_out,
+		  "%s BAD Missing space after flag list in Append command\r\n",
+			tag);
+	    if (c != '\n') eatline();
+	    goto freeflags;
 	}
-	flag[nflags++] = strsave(arg.s);
+	c = getword(&arg);
     }
 
     /* Parse internaldate */
-    if (c == '\"') {
+    if (c == '\"' && !arg.s[0]) {
 	prot_ungetc(c, imapd_in);
 	c = getdatetime(&internaldate);
 	if (c != ' ') {
@@ -948,14 +968,9 @@ char *name;
 	    goto freeflags;
 	}
 	c = getword(&arg);
-	if (arg.s[0] != '{') {
-	    prot_printf(imapd_out, "%s BAD Missing required argument to Append command\r\n",
-		   tag);
-	    if (c != '\n') eatline();
-	    goto freeflags;
-	}
     }
-    else if (arg.s[0] != '{') {
+
+    if (arg.s[0] != '{') {
 	prot_printf(imapd_out, "%s BAD Missing required argument to Append command\r\n",
 	       tag);
 	if (c != '\n') eatline();
@@ -967,12 +982,18 @@ char *name;
 	size = size*10 + *p - '0';
     }
     if (c == '\r') c = prot_getc(imapd_in);
-    if (*p != '}' || p[1] || c != '\n' || size < 2) {
+    if (*p != '}' || p[1] || c != '\n' || p == arg.s + 1) {
 	prot_printf(imapd_out, "%s BAD Invalid literal in Append command\r\n", tag);
 	if (c != '\n') eatline();
 	goto freeflags;
     }
-    
+    if (size < 2) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+		    error_message(size == 0 ? IMAP_ZERO_LITERAL :
+				  IMAP_MESSAGE_NOBLANKLINE));
+	if (c != '\n') eatline();
+	goto freeflags;
+    }
     /* Set up the append */
     if (strcasecmp(name, "inbox") == 0 &&
 	!strchr(imapd_userid, '.') &&
@@ -2557,7 +2578,7 @@ int parsecharset;
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
-		appendstrlist(&searchargs->bcc, str);
+		appendstrlistpat(&searchargs->bcc, str);
 	    }
 	}
 	else if (!strcmp(criteria.s, "body")) {
@@ -2569,7 +2590,7 @@ int parsecharset;
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
-		appendstrlist(&searchargs->body, str);
+		appendstrlistpat(&searchargs->body, str);
 	    }
 	}
 	else goto badcri;
@@ -2585,7 +2606,7 @@ int parsecharset;
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
-		appendstrlist(&searchargs->cc, str);
+		appendstrlistpat(&searchargs->cc, str);
 	    }
 	}
 	else if (parsecharset && !strcmp(criteria.s, "charset")) {
@@ -2621,7 +2642,7 @@ int parsecharset;
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
-		appendstrlist(&searchargs->from, str);
+		appendstrlistpat(&searchargs->from, str);
 	    }
 	}
 	else goto badcri;
@@ -2640,7 +2661,7 @@ int parsecharset;
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
-		appendstrlist(&searchargs->header, str);
+		appendstrlistpat(&searchargs->header, str);
 	    }
 	}
 	else goto badcri;
@@ -2847,7 +2868,7 @@ int parsecharset;
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
-		appendstrlist(&searchargs->subject, str);
+		appendstrlistpat(&searchargs->subject, str);
 	    }
 	}
 	else goto badcri;
@@ -2863,7 +2884,7 @@ int parsecharset;
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
-		appendstrlist(&searchargs->to, str);
+		appendstrlistpat(&searchargs->to, str);
 	    }
 	}
 	else if (!strcmp(criteria.s, "text")) {
@@ -2875,7 +2896,7 @@ int parsecharset;
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
-		appendstrlist(&searchargs->text, str);
+		appendstrlistpat(&searchargs->text, str);
 	    }
 	}
 	else goto badcri;
@@ -3283,6 +3304,24 @@ char *s;
 
     *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
     (*tail)->s = strsave(s);
+    (*tail)->p = 0;
+    (*tail)->next = 0;
+}
+
+/*
+ * Append 's' to the strlist 'l', compiling it as a pattern.
+ */
+appendstrlistpat(l, s)
+struct strlist **l;
+char *s;
+{
+    struct strlist **tail = l;
+
+    while (*tail) tail = &(*tail)->next;
+
+    *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
+    (*tail)->s = strsave(s);
+    (*tail)->p = charset_compilepat(s);
     (*tail)->next = 0;
 }
 
@@ -3297,6 +3336,7 @@ struct strlist *l;
     while (l) {
 	n = l->next;
 	free(l->s);
+	if (l->p) charset_freepat(l->p);
 	free((char *)l);
 	l = n;
     }

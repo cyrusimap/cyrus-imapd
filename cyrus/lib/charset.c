@@ -35,6 +35,10 @@ struct charset {
     const unsigned char (*table)[256][4];
 };
 
+#define PATLEN(pat) ((pat)[256])
+#define PATLASTCHAR(pat) ((pat)[257])
+#define PATSIZE 258
+
 /*
  * Mapping of character sets to tables
  */
@@ -115,7 +119,7 @@ int charset;
     static int alloced = 0;
     int pos = 0;
     const unsigned char (*table)[4];
-    const char *translation;
+    const unsigned char *translation;
     int len;
 
     if (!s) return 0;
@@ -158,7 +162,7 @@ char *s;
     const unsigned char (*table)[4];
     static char *retval = 0;
     static int alloced = 0;
-    const char *translation;
+    const unsigned char *translation;
     int pos = 0;
     int len;
 
@@ -310,6 +314,79 @@ char *s;
 }
 
 /*
+ * Compile the pattern 's' and return a pointer to the compiled form
+ */
+comp_pat *
+charset_compilepat(s)
+char *s;
+{
+    comp_pat *pat;
+    int i, len;
+
+    pat = (comp_pat *)xmalloc(PATSIZE * sizeof(comp_pat));
+    PATLEN(pat) = len = strlen(s);
+    if (len) PATLASTCHAR(pat) = (unsigned char)s[len-1];
+    for (i=0; i<256; i++) pat[i] = len;
+    for (i=0; i<len; i++) {
+	pat[(unsigned char)s[i]] = len-i-1;
+    }
+    return pat;
+}
+
+/*
+ * Free the compiled pattern 'pat'
+ */
+void
+charset_freepat(pat)
+comp_pat *pat;
+{
+    free((char *)pat);
+}
+
+/*
+ * Search for the string 'substr', with compiled pattern 'pat'
+ * in the string 's', with length 'len'.  Return nonzero if match
+ */
+int
+charset_searchstring(substr, pat, s, len)
+char *substr;
+comp_pat *pat;
+char *s;
+int len;
+{
+    int i, j, large;
+    
+    i = PATLEN(pat) - 1;
+    if (i < 0) return 1;
+    pat[PATLASTCHAR(pat)] = large = len + i + 2;
+    for (;;) {
+	/* Inner loop -- scan until last char match or end of string */
+	while (i < len) {
+	    i += pat[(unsigned char)s[i]];
+	}
+
+	/* End of string */
+	if (i < large) return 0;
+
+	/* Last char match--back up and do compare */
+	i -= large + 1;
+	j = PATLEN(pat) - 2;
+	while (j >= 0 && s[i] == substr[j]) {
+	    i--;
+	    j--;
+	}
+	if (j < 0) return 1;	/* Found match */
+	if (pat[(unsigned char)s[i]] == large ||
+	    pat[(unsigned char)s[i]] < PATLEN(pat)-j) {
+	    i += PATLEN(pat) - j;
+	}
+	else {
+	    i += pat[(unsigned char)s[i]];
+	}
+    }
+}    
+
+/*
  * The various charset_searchfile() helper functions
  */
 static int charset_readconvert();
@@ -342,19 +419,20 @@ static const unsigned char (*decodetable)[4];	/* Charset table to convert decode
  * Returns nonzero iff the string was found.
  */
 int
-charset_searchfile(substr, msgfile, mapnl, len, charset, encoding)
+charset_searchfile(substr, pat, msgfile, mapnl, len, charset, encoding)
 char *substr;
+comp_pat *pat;
 FILE *msgfile;
 int mapnl;
 int len;
 int charset;
 int encoding;
 {
-    int substrlen = strlen(substr);
+    int substrlen = PATLEN(pat);
     char *buf, smallbuf[4096];
     int bufsize;
-    char *p;
     int n;
+    int i, j, large;
     
     /* Initialize character set mapping */
     if (charset < 0 || charset >= NUM_CHARSETS) return 0;
@@ -390,6 +468,8 @@ int encoding;
 	return 0;
     }
 
+    if (substrlen == 0) return 1;
+
     /*
      * Select buffer to hold canonical searching fomat data to
      * search
@@ -409,21 +489,50 @@ int encoding;
 	if (buf != smallbuf) free(buf);
 	return 0;
     }
-    n -= substrlen-1;
-    do {
-	p = buf;
-	while (n-- > 0) {
-	    if (*substr == *p && !strncmp(substr, p, substrlen)) {
-		if (buf != smallbuf) free(buf);
-		return 1;
-	    }
-	    p++;
+    i = substrlen - 1;
+    pat[PATLASTCHAR(pat)] = large = bufsize + i + 2;
+    for (;;) {
+	/* Inner loop -- scan until last char match or end of buffer */
+	while (i < n) {
+	    i += pat[(unsigned char)buf[i]];
 	}
-	strncpy(buf, p, substrlen-1);
-    } while (n = charset_readconvert(buf+substrlen-1, bufsize-substrlen+1));
 
-    if (buf != smallbuf) free(buf);
-    return 0;
+	/* End of buffer */
+	if (i < large) {
+	    /* Read in more stuff */
+	    j = i-n;
+	    strncpy(buf, buf+i-(substrlen-1), substrlen-1-j);
+	    n = charset_readconvert(buf+substrlen-1-j,
+				    bufsize-substrlen+1+j);
+	    i = substrlen-1;
+	    if (n > 0) {
+		n += i-j;
+		continue;
+	    }
+	    if (buf != smallbuf) free(buf);
+	    return 0;
+	}
+
+	/* Last char match--back up and do compare */
+	i -= large + 1;
+	j = PATLEN(pat) - 2;
+	while (j >= 0 && buf[i] == substr[j]) {
+	    i--;
+	    j--;
+	}
+	if (j < 0) {
+	    /* Found match */
+	    if (buf != smallbuf) free(buf);
+	    return 1;
+	}
+	if (pat[(unsigned char)buf[i]] == large ||
+	    pat[(unsigned char)buf[i]] < PATLEN(pat)-j) {
+	    i += PATLEN(pat) - j;
+	}
+	else {
+	    i += pat[(unsigned char)buf[i]];
+	}
+    }
 }
 
 /*
@@ -437,7 +546,7 @@ char *buf;
 int size;
 {
     int retval = 0;
-    const char *translation;
+    const unsigned char *translation;
     int len;
 
     if (decodeleft && decodestart != 0) {

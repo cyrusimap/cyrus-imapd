@@ -92,7 +92,7 @@ static int index_forsequence();
 static int index_listflags();
 static int index_fetchflags(), index_fetchreply();
 static int index_storeseen(), index_storeflag();
-static int index_search_evaluate(), index_search_string();
+static int index_search_evaluate();
 static int index_searchmsg(), index_searchheader();
 static int index_copysetup();
 
@@ -1751,35 +1751,35 @@ FILE **msgfile;
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 	    
 	for (l = searchargs->from; l; l = l->next) {
-	    if (!index_search_string(l->s, cacheitem+4, cachelen)) return 0;
+	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) return 0;
 	}
 
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip from */
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->to; l; l = l->next) {
-	    if (!index_search_string(l->s, cacheitem+4, cachelen)) return 0;
+	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) return 0;
 	}
 
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip to */
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->cc; l; l = l->next) {
-	    if (!index_search_string(l->s, cacheitem+4, cachelen)) return 0;
+	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) return 0;
 	}
 
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip cc */
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->bcc; l; l = l->next) {
-	    if (!index_search_string(l->s, cacheitem+4, cachelen)) return 0;
+	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) return 0;
 	}
 
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip subject */
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->subject; l; l = l->next) {
-	    if (!index_search_string(l->s, cacheitem+4, cachelen)) return 0;
+	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) return 0;
 	}
     }
 
@@ -1802,7 +1802,7 @@ FILE **msgfile;
 
 	h = searchargs->header_name;
 	for (l = searchargs->header; l; (l = l->next), (h = h->next)) {
-	    if (!index_searchheader(h->s, l->s, *msgfile, mailbox->format,
+	    if (!index_searchheader(h->s, l->s, l->p, *msgfile, mailbox->format,
 				    HEADER_SIZE(msgno))) return 0;
 	}
 
@@ -1812,11 +1812,11 @@ FILE **msgfile;
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
 
 	for (l = searchargs->body; l; l = l->next) {
-	    if (!index_searchmsg(l->s, *msgfile, mailbox->format, 1,
+	    if (!index_searchmsg(l->s, l->p, *msgfile, mailbox->format, 1,
 				 cacheitem)) return 0;
 	}
 	for (l = searchargs->text; l; l = l->next) {
-	    if (!index_searchmsg(l->s, *msgfile, mailbox->format, 0,
+	    if (!index_searchmsg(l->s, l->p, *msgfile, mailbox->format, 0,
 				  cacheitem)) return 0;
 	}
     }
@@ -1825,30 +1825,12 @@ FILE **msgfile;
 }
 
 /*
- * Search a string
- */
-static int
-index_search_string(substr, text, textlen)
-char *substr;
-char *text;
-int textlen;
-{
-    int substrlen = strlen(substr);
-    textlen -= substrlen;
-    while (textlen-- >= 0) {
-	if (*substr == *text && !strncmp(substr, text, substrlen))
-	  return 1;
-	text++;
-    }
-    return 0;
-}
-	    
-/*
  * Search part of a message for a substring
  */
 static int
-index_searchmsg(substr, msgfile, format, skipheader, cacheitem)
+index_searchmsg(substr, pat, msgfile, format, skipheader, cacheitem)
 char *substr;
+comp_pat *pat;
 FILE *msgfile;
 int format;
 int skipheader;
@@ -1894,7 +1876,7 @@ char *cacheitem;
 		encoding = CACHE_ITEM_BIT32(cacheitem+8) & 0xff;
 		if (len > 0 && charset >= 0 && charset < 0xffff) {
 		    fseek(msgfile, CACHE_ITEM_BIT32(cacheitem), 0);
-		    if (charset_searchfile(substr, msgfile,
+		    if (charset_searchfile(substr, pat, msgfile,
 					   format == MAILBOX_FORMAT_NETNEWS,
 					   len, charset, encoding)) return 1;
 		}
@@ -1910,17 +1892,16 @@ char *cacheitem;
  * Search named header of a message for a substring
  */
 static int
-index_searchheader(name, substr, msgfile, format, size)
+index_searchheader(name, substr, pat, msgfile, format, size)
 char *name;
 char *substr;
+comp_pat *pat;
 FILE *msgfile;
 int format;
 int size;
 {
     char *p;
     static struct strlist header;
-    int n;
-    int substrlen = strlen(substr);
 
     header.s = name;
 
@@ -1928,14 +1909,7 @@ int size;
     p = index_readheader(msgfile, format, size);
     index_pruneheader(p, &header, 0);
     p = charset_decode1522(p);
-    n = strlen(p) - substrlen + 1;
-    while (n-- > 0) {
-	if (*substr == *p && !strncmp(substr, p, substrlen)) {
-	    return 1;
-	}
-	p++;
-    }
-    return 0;
+    return charset_searchstring(substr, pat, p, strlen(p));
 }
 
 /*
