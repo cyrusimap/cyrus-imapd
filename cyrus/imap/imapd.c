@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.270 2000/10/12 20:10:25 leg Exp $ */
+/* $Id: imapd.c,v 1.271 2000/10/18 21:00:27 leg Exp $ */
 
 #include <config.h>
 
@@ -3390,8 +3390,10 @@ char *pattern;
 	}
 
 	if (subscribed) {
+	    int force = config_getswitch("allowallsubscribe", 0);
+
 	    mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid,
-			     imapd_authstate, lsubdata, NULL, 0);
+			     imapd_authstate, lsubdata, NULL, force);
 	    lsubdata((char *)0, 0, 0, 0);
 	}
 	else {
@@ -3410,22 +3412,19 @@ char *pattern;
  * Perform a SUBSCRIBE (add is nonzero) or
  * UNSUBSCRIBE (add is zero) command
  */
-void
-cmd_changesub(tag, namespace, name, add)
-char *tag;
-char *namespace;
-char *name;
-int add;
+void cmd_changesub(char *tag, char *namespace, 
+		   char *name, int add)
 {
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
+    int force = config_getswitch("allowallsubscribe", 0);
 
     if (namespace) lcase(namespace);
     if (!namespace || !strcmp(namespace, "mailbox")) {
 	r = mboxname_tointernal(name, imapd_userid, mailboxname);
 	if (!r) {
 	    r = mboxlist_changesub(mailboxname, imapd_userid, 
-				   imapd_authstate, add, 0);
+				   imapd_authstate, add, force);
 	}
     }
     else if (!strcmp(namespace, "bboard")) {
