@@ -6,7 +6,7 @@
 
 /*     Copyright 1991 Rich Salz.
  *   All rights reserved.
- *   $Revision: 1.1 $
+ *   $Revision: 1.2 $
  *
  *    Redistribution and use in any form are permitted provided that the
  *    following restrictions are are met:
@@ -36,7 +36,9 @@
 
 #include "macros.h"
 
+#include "xmalloc.h"
 #include "imclient.h"
+#include "imparse.h"
 
 #define NUM_STORAGE_CLASSES 100
 
@@ -45,7 +47,7 @@
 #define TRUE  (1)
 #define STATIC static
 
-
+extern int wildmat(const char *text, const char *p);
 
 
 typedef struct _NEWSGROUP {
@@ -77,9 +79,9 @@ typedef struct _EXPIRECLASS {
 
 STATIC NEWSGROUP	EXPdefault;
 STATIC int		nGroups;
+STATIC int		nGroups_alloc;
 STATIC time_t		EXPremember;
 STATIC time_t		Now;
-STATIC time_t		RealNow;
 STATIC EXPIRECLASS      EXPclasses[NUM_STORAGE_CLASSES];
 STATIC NEWSGROUP	*Groups;
 
@@ -379,9 +381,11 @@ int readconfig_init(void)
     Now = time(NULL);
 
     nGroups = 0;
-    Groups=(NEWSGROUP *) malloc(sizeof(NEWSGROUP) * 20000);
+    nGroups_alloc = 1000;
+    Groups=(NEWSGROUP *) malloc(sizeof(NEWSGROUP) * 1000);
     if (Groups==NULL) fatal("Unable to alloc",0);
 
+    return 0;
 }
 
 void artificial_matchall(int days)
@@ -392,6 +396,7 @@ void artificial_matchall(int days)
     EXPmatch("*", &ne,'a');
 }
 
+#if 0 /* debugginf */
 void show_groups(void)
 {
     int lup;
@@ -406,6 +411,7 @@ void show_groups(void)
     }
 
 }
+#endif /* 0 */
 
 /*
  * Callback to deal with untagged LIST/LSUB data
@@ -453,26 +459,16 @@ callback_list(struct imclient *imclient,
 	strcpy(Groups[nGroups].Name, mailbox);
 	nGroups++;
 
-	/*	item = (mbox_list_t *) malloc (sizeof(mbox_list_t));
-	if (item == NULL) return;
-
-	item->name = malloc( strlen(mailbox)+1);
-	strcpy(item->name, mailbox);
-	item->next = NULL;
-	*/
-	/* put at the end of linked list */
-	/*	if (mb_list == NULL)
+	if (nGroups >= nGroups_alloc)
 	{
-	    mb_list = item;
-	    mb_list_tail = item;
-	} else {
+	    nGroups_alloc +=1000;
+	    Groups=(NEWSGROUP *) realloc(Groups, sizeof(NEWSGROUP) * nGroups_alloc);
+	    if (Groups==NULL) fatal("Unable to alloc",0);
+	}
 
-	    mb_list_tail->next = item;	    
-	    mb_list_tail = item;
-	    }*/
     }
 
-    for (s = attributes; end = strchr(s, ' '); s = end+1) {
+    for (s = attributes; (end = strchr(s, ' '))!=NULL; s = end+1) {
 	*s = '\0';
 
     }
