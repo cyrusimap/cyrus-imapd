@@ -27,19 +27,20 @@ void *s;
 const void *ct;
 unsigned int n;
 {
-    void *origs = s;
+    char *c_s = s;
+    const char *c_ct = ct;
 
-    if (s <= ct) {
+    if (c_s <= c_ct) {
 	while (n--) {
-	    *s++ = *ct++;
+	    *c_s++ = *c_ct++;
 	}
     }
     else {
 	while (n--) {
-	    s[n] = ct[n];
+	    c_s[n] = c_ct[n];
 	}
     }
 
-    return origs;
+    return s;
 }
 
