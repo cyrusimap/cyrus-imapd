@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.27 2002/02/20 22:48:37 rjs3 Exp $ */
+/* $Id: fud.c,v 1.28 2002/02/21 16:48:15 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -271,7 +271,7 @@ int handle_request(const char *who, const char *name,
     char *seenuids;
     unsigned numrecent;
     char mboxname[MAX_MAILBOX_NAME+1];
-    char *location;
+    char *location, *acl;
     int mbflag;
 
     numrecent = 0;
@@ -281,22 +281,33 @@ int handle_request(const char *who, const char *name,
     r = (*fud_namespace.mboxname_tointernal)(&fud_namespace,name,who,mboxname);
     if (r) return r; 
 
-    r = mboxlist_detail(mboxname, &mbflag, &location, NULL, NULL, NULL);
+    r = mboxlist_detail(mboxname, &mbflag, &location, NULL, &acl, NULL);
     if(r) {
 	send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
 	return r;
     }
 
     if(mbflag & MBTYPE_REMOTE) {
+	struct auth_state *mystate;
 	char *p = NULL;
 
 	/* xxx hide that we are storing partitions */
 	p = strchr(location, '!');
 	if(p) *p = '\0';
-	
-	/* We want to proxy this one */
-	syslog(LOG_ERR, "doing proxy");
-	return do_proxy_request(who, name, location, sfrom);
+
+	/* Check the ACL */
+	mystate = auth_newstate("anonymous", NULL);
+	if(cyrus_acl_myrights(mystate, acl) & ACL_USER0) {
+	    /* We want to proxy this one */
+	    auth_freestate(mystate);
+	    syslog(LOG_DEBUG, "doing proxy");
+	    return do_proxy_request(who, name, location, sfrom);
+	} else {
+	    /* Permission Denied */
+	    auth_freestate(mystate);
+	    send_reply(sfrom, REQ_DENY, who, name, 0, 0, 0);
+	    return 0;
+	}	
     }
 
     /*
