@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.70 2002/11/01 16:44:33 rjs3 Exp $ */
+/* $Id: master.c,v 1.71 2002/12/09 22:48:08 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1196,7 +1196,7 @@ void reread_conf(void)
 
 int main(int argc, char **argv)
 {
-    int i, opt, close_std = 1;
+    int i, opt, close_std = 1, daemon_mode = 0;
     extern int optind;
     extern char *optarg;
     int fd;
@@ -1205,12 +1205,22 @@ int main(int argc, char **argv)
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
-    while ((opt = getopt(argc, argv, "l:D")) != EOF) {
+    while ((opt = getopt(argc, argv, "l:Dd")) != EOF) {
 	switch (opt) {
-	case 'l': /* user defined listen queue backlog */
+	case 'l':
+            /* user defined listen queue backlog */
 	    listen_queue_backlog = atoi(optarg);
 	    break;
+	case 'd':
+	    /* Daemon Mode */
+	    if(!close_std)
+		fatal("Unable to both be debug and daemon mode", EX_CONFIG);
+	    daemon_mode = 1;
+	    break;
 	case 'D':
+	    /* Debug Mode */
+	    if(daemon_mode)
+		fatal("Unable to be both debug and daemon mode", EX_CONFIG);
 	    close_std = 0;
 	    break;
 	default:
@@ -1228,6 +1238,37 @@ int main(int argc, char **argv)
 	if (open("/dev/null", O_RDWR, 0) != fd)
 	  fatal("couldn't open /dev/null: %m", 2);
       }
+    }
+
+    if(daemon_mode) {
+	/* Daemonize */
+	int count = 5;
+	pid_t pid;
+	
+	while (count--) {
+	    pid = fork();
+	    
+	    if (pid > 0)
+		_exit(0);		/* parent dies */
+	    
+	    if ((pid == -1) && (errno == EAGAIN)) {
+		syslog(LOG_WARNING, "master fork failed (sleeping): %m");
+		sleep(5);
+		continue;
+	    }
+	}
+
+	if (pid == -1) {
+	    fatal("fork error", EX_OSERR);
+	}
+
+	/*
+	 * We're now running in the child. Lose our controlling terminal
+	 * and obtain a new process group.
+	 */
+	if (setsid() == -1) {
+	    fatal("setsid failure", EX_OSERR);
+	}
     }
 
     /* we reserve fds 3 and 4 for children to communicate with us, so they
