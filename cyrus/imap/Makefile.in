@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.183 2004/03/11 15:01:12 ken3 Exp $
+# $Id: Makefile.in,v 1.184 2004/05/28 18:03:02 rjs3 Exp $
 # 
 # @configure_input@
 # 
@@ -51,6 +51,7 @@ SEEN=seen_db.o
 IDLE=idle_@WITH_IDLE@.o
 
 srcdir = @srcdir@
+top_srcdir = @top_srcdir@
 VPATH = @srcdir@
 
 CC = @CC@
