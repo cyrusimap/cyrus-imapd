@@ -152,6 +152,10 @@ Configuring the IMAP Server
            lmtp      2003/tcp
            fud       4201/udp
 
+    12. Remove "/etc/[x]inetd.conf" entries. Any imap, imaps, pop3, pop3s,
+        kpop, lmtp and sieve lines need to be removed from
+        /etc/[x]inetd.conf and [x]inetd needs to be restarted. 
+
 Configuring the Master Process
 
      1. Choose a configuration from the master/conf directory: 

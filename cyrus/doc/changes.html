@@ -1,46 +1,68 @@
-<!-- $Id: changes.html,v 1.14 2001/05/30 17:05:01 leg Exp $ -->
+<!-- $Id: changes.html,v 1.15 2001/07/07 19:54:14 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
+<h2>Changes to the Cyrus IMAP Server since 2.0.14</h2>
+<ul>
+<li>fixed memory management bugs in <tt>imapd</tt>, <tt>lmtpd</tt> that
+were being hit due to the connection reuse code and causing subtle and
+annoying problems.</li>
+
+<li>we now clean up better when deleting a user</li>
+
+<li>fixed an endian bug in <tt>ipurge</tt></li>
+
+<li><tt>pop3d</tt> now can also reuse processes.</li>
+
+<li>fix a bug in <tt>imclient</tt> that would strike when
+<tt>cyradm</tt> specifies a mechanism on the command-line.  (SASL
+mechanism names aren't case sensitive.)</li>
+
+<li>fix some bugs in handling SIGHUP in <tt>master</tt></li>
+
+<li>fix a couple of goofs in <tt>Admin.pm</tt></li>
+
+</ul>
+
 <h2>Changes to the Cyrus IMAP Server since 2.0.13</h2>
 <ul>
-<li> fixed a silly bug with reusing SSL connections
+<li> fixed a silly bug with reusing SSL connections</li>
 
 <li> <tt>lmtpd</tt> can now service multiple clients in sequence,
-hopefully improving performance
+hopefully improving performance</li>
 
 <li> changed how Berkeley db databases are opened, hopefully lessening
-the chance of deadlock and improving performance
+the chance of deadlock and improving performance</li>
 
-<li> fixed a couple of memory leaks
+<li> fixed a couple of memory leaks</li>
 
-<li> lessened the chance of a race condition during <tt>index_check()</tt>
+<li> lessened the chance of a race condition during <tt>index_check()</tt></li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.12</h2>
 <ul>
-<li> refactored code so less duplication
+<li> refactored code so less duplication</li>
 
-<li> added alternate config file for partial virtual domain support
+<li> added alternate config file for partial virtual domain support</li>
 
-<li> <tt>pop3d</tt> can now disable USER/PASS commands.
+<li> <tt>pop3d</tt> can now disable USER/PASS commands.</li>
 
 <li> STARTTLS now accepts a SSLv23 hello but doesn't allow SSLv23 to
-be negotiated.
+be negotiated.</li>
 
 <li> <tt>imtest</tt> no longer buffers to aid use as an automated
-layer.
+layer.</li>
 
 <li> <tt>master</tt> now supports maximum number of service processes
-via the "maxchild" modifier.
+via the "maxchild" modifier.</li>
 
-<li> fixed a bug in the Sieve string lexer.
+<li> fixed a bug in the Sieve string lexer.</li>
 
 <li> one <tt>imapd</tt> process can now service multiple clients in
-sequence, eliminating a large number of forks.
+sequence, eliminating a large number of forks.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.11</h2>
@@ -1243,7 +1265,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2001/05/30 17:05:01 $
+last modified: $Date: 2001/07/07 19:54:14 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
