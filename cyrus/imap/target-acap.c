@@ -26,7 +26,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  *
- * $Id: target-acap.c,v 1.11 2000/04/18 01:00:20 leg Exp $
+ * $Id: target-acap.c,v 1.12 2000/04/20 16:30:03 leg Exp $
  */
 
 #include <config.h>
@@ -200,7 +200,7 @@ void myacap_change(acap_entry_t *entry,
 		   unsigned oldpos, unsigned newpos,
 		   void *rock)
 {
-    /* nothing to do here */
+    /* xxx ACL might've changed */
 }
 
 void myacap_modtime(char *modtime, void *rock)

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.229 2000/04/18 01:00:15 leg Exp $ */
+/* $Id: imapd.c,v 1.230 2000/04/20 16:30:01 leg Exp $ */
 
 #include <config.h>
 
@@ -3739,8 +3739,7 @@ struct buf *buf;
  * Parse an astring
  * (atom, quoted-string, or literal)
  */
-int getastring(buf)
-struct buf *buf;
+int getastring(struct buf *buf)
 {
     int c;
     int i, len = 0;
