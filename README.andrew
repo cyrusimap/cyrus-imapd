@@ -1,2 +1,11 @@
-autoconf, if you check this out elsewhere
-smake init all install
+you need to run autoconf, if you check this out elsewhere as 
+configure isn't part of the CVS colllection.
+
+to build:
+   smake init all 
+
+then as admin
+   smake -d install
+
+NOTE: if you get weird 'can not find sources' make sure imap/imap.c 
+      a+r
