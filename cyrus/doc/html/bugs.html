@@ -14,8 +14,10 @@ We plan to have this fixed in the next release.
 groups may be granted access to mailboes if ptclient has died.  We plan
 to have this fixed in the next release.
 
-<li> In past versions, cyrus.seen files were occasionally corrupted.  This
-	  should be fixed; if you se it happening, please let us know.
+<li> We are aware that cyrus.seen files are occasionally corrupted, but we
+are not sure why this is happening.  It seems to happen most with mailboxes
+with a large number of users.  We hope to have this fixed in a future
+release.
 
 <li> UID FETCH of a range of nonexistant UIDs causes the server to drop
 connection.
@@ -26,10 +28,9 @@ LOGIN (cleartext passwords).
 <li> In some failures of the krbck program, the error messages printed out
 bear no resemblance to what actually went wrong.
 
-<li> Deliver does not handle messages containing NUL properly 
-	  (the characters between the NUL and the LF will be
-	  lost).  This requires throwing out stdio (or taking a big
-	  performance hit).
+<li> Deliver does not handle messages containing NUL properly due to stdio
+	  problems (the characters between the NUL and the LF will be
+	  lost.)
 
 </ul>
 
