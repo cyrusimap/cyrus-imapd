@@ -60,8 +60,9 @@ HDRS = $(srcdir)/acl.h $(srcdir)/sasl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 
 OBJS = acl.o sasl.o assert.o bsearch.o charset.o glob.o retry.o util.o \
 	mkgmtime.o prot.o parseaddr.o imclient.o imparse.o xmalloc.o \
-	nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o gmtoff_@WITH_GMTOFF@.o \
-	map_@WITH_MAP@.o $(ACL) $(AUTH) @LIBOBJS@
+	chartable.o nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o \
+	gmtoff_@WITH_GMTOFF@.o map_@WITH_MAP@.o $(ACL) $(AUTH) \
+	@LIBOBJS@
 
 all: libcyrus.a
 
@@ -74,25 +75,32 @@ install:
 	done
 
 .c.o:
-	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) $<
+	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) \
+	$<
 
 libcyrus.a: $(OBJS)
 	rm -f libcyrus.a
 	ar cr libcyrus.a $(OBJS)
 	$(RANLIB) libcyrus.a
 
-charset.o: chartables.h
-
-chartables.h: mkchartable 
-	rm -f chartables.h
-	./mkchartable -m $(srcdir)/charset/unicode.map $(srcdir)/charset/*.t >x-chartables.h
-	mv x-chartables.h chartables.h
+chartable.c: mkchartable 
+	@echo "### Building chartables..."
+	rm -f chartable.c
+	./mkchartable \
+	 -m $(srcdir)/charset/unifix.txt	\
+	 -m $(srcdir)/charset/unidata2.txt \
+	 $(srcdir)/charset/*.t \
+	 > chartable.c \
+	 || (rm -f chartable.c && exit 1)
+	@echo "### Done building chartables."
+#	./mkchartable -m $(srcdir)/charset/unicode.map $(srcdir)/charset/*.t >x-chartables.h
+#	mv x-chartables.h chartables.h
 
 mkchartable: mkchartable.o xmalloc.o assert.o
 	$(CC) $(LDFLAGS) -o mkchartable mkchartable.o xmalloc.o assert.o
 
 clean:
-	rm -f *.o *.a chartables.h Makefile.bak mkchartable makedepend.log
+	rm -f *.o *.a chartable.c Makefile.bak mkchartable makedepend.log
 
 distclean: clean
 	rm -f Makefile
