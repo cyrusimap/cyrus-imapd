@@ -251,7 +251,7 @@ char *name;
 	return IMAP_IOERROR;
     }
     
-    bzero(buf, sizeof(buf));
+    memset(buf, 0, sizeof(buf));
     (*(bit32 *)buf) = mailbox.generation_no + 1;
     fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
     fwrite(buf, 1, sizeof(bit32), newcache);
