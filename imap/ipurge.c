@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.2 2000/02/14 20:05:40 tmartin Exp $
+ * $Id: ipurge.c,v 1.3 2000/02/17 02:48:27 leg Exp $
  *
  */
 
@@ -19,6 +19,8 @@
 #include <stdio.h>
 #include <syslog.h>
 #include <com_err.h>
+#include <string.h>
+#include <time.h>
 
 /* cyrus includes */
 #include "config.h"
@@ -26,6 +28,7 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
+#include "mboxlist.h"
 
 /* globals for getopt routines */
 extern char *optarg;
@@ -53,11 +56,12 @@ int verbose = 1;
 
 int purge_me(char *, int, int);
 int purge_check(void *, char *);
+int usage(char *name);
+void print_stats(mbox_stats_t *stats);
 
 int
 main (int argc, char *argv[]) {
   char option;
-  char *vhost = 0;
   char buf[MAX_MAILBOX_PATH];
 
   if (geteuid() == 0) { /* don't run as root, changes permissions */
@@ -115,6 +119,7 @@ main (int argc, char *argv[]) {
       mboxlist_findall(buf, 1, 0, 0, purge_me, NULL);
     }
   }
+  return 0;
 }
 
 int
