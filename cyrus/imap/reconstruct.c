@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81 2003/10/22 18:50:08 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.1 2004/01/27 23:13:50 ken3 Exp $ */
 
 #include <config.h>
 
@@ -89,6 +89,7 @@
 #include "global.h"
 #include "mboxname.h"
 #include "mboxlist.h"
+#include "quota.h"
 #include "seen.h"
 #include "retry.h"
 #include "convert_code.h"
@@ -171,7 +172,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "reconstruct");
+    cyrus_init(alt_config, "reconstruct", 0);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
@@ -197,6 +198,9 @@ int main(int argc, char **argv)
 
     mboxlist_init(0);
     mboxlist_open(NULL);
+
+    quotadb_init(0);
+    quotadb_open(NULL);
 
     mailbox_reconstructmode();
 
@@ -330,6 +334,9 @@ int main(int argc, char **argv)
     mboxlist_close();
     mboxlist_done();
 
+    quotadb_close();
+    quotadb_done();
+
     cyrus_done();
 
     return code;
@@ -448,7 +455,7 @@ int reconstruct(char *name, struct discovered *found)
     }
 
     /* Fix quota root */
-    hasquota = mailbox_findquota(quota_root, sizeof(quota_root), mailbox.name);
+    hasquota = quota_findroot(quota_root, sizeof(quota_root), mailbox.name);
     if (mailbox.quota.root) free(mailbox.quota.root);
     if (hasquota) {
 	mailbox.quota.root = xstrdup(quota_root);

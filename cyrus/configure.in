@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.268.2.5 2004/01/15 20:24:21 ken3 Exp $
+dnl $Id: configure.in,v 1.268.2.6 2004/01/27 23:13:34 ken3 Exp $
 dnl
 
 
@@ -166,7 +166,7 @@ AC_MSG_RESULT($WITH_AUTH)
 dnl function for doing each of the database backends
 dnl parameters: backend name, variable to set, withval
 
-CYRUSDB_OBJS="cyrusdb_flat.o cyrusdb_skiplist.o"
+CYRUSDB_OBJS="cyrusdb_flat.o cyrusdb_skiplist.o cyrusdb_quotalegacy.o"
 
 dnl Berkeley DB Detection
 
@@ -540,7 +540,7 @@ if test "$WITH_AUTH" = "pts"; then
 
 	    LDAP_LIBS=""
 	    AC_CHECK_LIB(ldap, ldap_initialize, [
-                         LDAP_LIBS="-lldap -llber -llutil" ],,-llber)
+                         LDAP_LIBS="-lldap -llber" ],,-llber)
 	else
 	    AC_ERROR(unknown with-pts value)
 	fi
@@ -1004,7 +1004,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.268.2.5 2004/01/15 20:24:21 ken3 Exp $ */
+/* $Id: configure.in,v 1.268.2.6 2004/01/27 23:13:34 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.43.2.1 2003/12/19 18:33:29 ken3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.43.2.2 2004/01/27 23:13:38 ken3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -689,7 +689,7 @@ int main(int argc, char *argv[])
 	libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
     }
     
-    cyrus_init(alt_config, "ctl_mboxlist");
+    cyrus_init(alt_config, "ctl_mboxlist", 0);
     global_sasl_init(1,0,NULL);
 
     switch (op) {

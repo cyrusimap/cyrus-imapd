@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.147.2.2 2004/01/15 20:24:31 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.3 2004/01/27 23:13:45 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,14 +52,6 @@
 #include <string.h>
 #include <errno.h>
 #include <syslog.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <netinet/in.h>
-#include <sys/un.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <ctype.h>
 #include <com_err.h>
 
 #ifdef HAVE_DIRENT_H
@@ -410,7 +402,6 @@ int mailbox_open_header_path(const char *name,
     int r;
 
     zeromailbox(*mailbox);
-    mailbox->quota.fd = -1;
 
     strlcpy(fnamebuf, path, sizeof(fnamebuf));
     strlcat(fnamebuf, FNAME_HEADER, sizeof(fnamebuf));
@@ -579,10 +570,6 @@ void mailbox_close(struct mailbox *mailbox)
 	map_free(&mailbox->cache_base, &mailbox->cache_len);
     }
 
-    if (mailbox->quota.fd != -1) {
-	close(mailbox->quota.fd);
-    }
-	
     free(mailbox->name);
     free(mailbox->path);
     free(mailbox->acl);
@@ -594,7 +581,6 @@ void mailbox_close(struct mailbox *mailbox)
     }
 
     zeromailbox(*mailbox);
-    mailbox->quota.fd = -1;
 }
 
 /*
@@ -627,15 +613,6 @@ int mailbox_read_header(struct mailbox *mailbox)
 	tab = eol;
     }
     if (mailbox->quota.root) {
-	/* check if this is the same as what's there */
-	if (strlen(mailbox->quota.root) != (size_t)(tab-p) ||
-	    strncmp(mailbox->quota.root, p, tab-p) != 0) {
-	    assert(mailbox->quota.lock_count == 0);
-	    if (mailbox->quota.fd != -1) {
-		close(mailbox->quota.fd);
-	    }
-	    mailbox->quota.fd = -1;
-	}
 	free(mailbox->quota.root);
     }
     if (p < tab) {
@@ -920,57 +897,6 @@ struct index_record *record;
 }
 
 /*
- * Open and read the quota file 'quota'
- */
-int
-mailbox_read_quota(quota)
-struct quota *quota;
-{
-    const char *p, *eol;
-    char buf[MAX_MAILBOX_PATH+1];
-    const char *quota_base = 0;
-    unsigned long quota_len = 0;
-
-
-    if (!quota->root) {
-	quota->used = 0;
-	quota->limit = -1;
-	return 0;
-    }
-
-    if (quota->fd == -1) {
-	mailbox_hash_quota(buf, sizeof(buf), quota->root);
-	quota->fd = open(buf, O_RDWR, 0);
-	if (quota->fd == -1) {
-	    syslog(LOG_ERR, "IOERROR: opening quota file %s: %m", buf);
-	    return IMAP_IOERROR;
-	}
-    }
-    
-    map_refresh(quota->fd, 1, &quota_base, &quota_len,
-		MAP_UNKNOWN_LEN, buf, 0);
-
-    p = quota_base;
-    eol = memchr(p, '\n', quota_len - (p - quota_base));
-    if (!eol) {
-	map_free(&quota_base, &quota_len);
-	return IMAP_MAILBOX_BADFORMAT;
-    }
-    quota->used = atol(p);
-
-    p = eol + 1;
-    eol = memchr(p, '\n', quota_len - (p - quota_base));
-    if (!eol) {
-	map_free(&quota_base, &quota_len);
-	return IMAP_MAILBOX_BADFORMAT;
-    }
-    quota->limit = atoi(p);
-
-    map_free(&quota_base, &quota_len);
-    return 0;
-}
-
-/*
  * Lock the header for 'mailbox'.  Reread header if necessary.
  */
 int
@@ -985,7 +911,6 @@ struct mailbox *mailbox;
     if (mailbox->header_lock_count++) return 0;
 
     assert(mailbox->index_lock_count == 0);
-    assert(mailbox->quota.lock_count == 0);
     assert(mailbox->seen_lock_count == 0);
 
     strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
@@ -1028,7 +953,6 @@ struct mailbox *mailbox;
 
     if (mailbox->index_lock_count++) return 0;
 
-    assert(mailbox->quota.lock_count == 0);
     assert(mailbox->seen_lock_count == 0);
 
     strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
@@ -1101,50 +1025,6 @@ struct mailbox *mailbox;
 }
 
 /*
- * Lock the quota file 'quota'.  Reread quota file if necessary.
- */
-int
-mailbox_lock_quota(quota)
-struct quota *quota;
-{
-    char quota_path[MAX_MAILBOX_PATH+1];
-    struct stat sbuf;
-    const char *lockfailaction;
-    int r;
-
-    /* assert(mailbox->header_lock_count != 0); */
-
-    if (quota->lock_count++) return 0;
-
-    /* assert(mailbox->seen_lock_count == 0); */
-
-    if (!quota->root) {
-	quota->used = 0;
-	quota->limit = -1;
-	return 0;
-    }
-    mailbox_hash_quota(quota_path, sizeof(quota_path), quota->root);
-    if (quota->fd == -1) {
-	quota->fd = open(quota_path, O_RDWR, 0);
-	if (quota->fd == -1) {
-	    syslog(LOG_ERR, "IOERROR: opening quota file %s: %m",
-		   quota_path);
-	    return IMAP_IOERROR;
-	}
-    }
-
-    r = lock_reopen(quota->fd, quota_path, &sbuf, &lockfailaction);
-    if (r == -1) {
-	quota->lock_count--;
-	syslog(LOG_ERR, "IOERROR: %s quota %s: %m", lockfailaction,
-	       quota->root);
-	return IMAP_IOERROR;
-    }
-
-    return mailbox_read_quota(quota);
-}
-
-/*
  * Release lock on the header for 'mailbox'
  */
 void mailbox_unlock_header(struct mailbox *mailbox)
@@ -1187,22 +1067,6 @@ struct mailbox *mailbox;
 	if (lock_unlock(mailbox->cache_fd))
 	    syslog(LOG_ERR, "IOERROR: unlocking POP lock of %s: %m", 
 		mailbox->name);
-    }
-}
-
-/*
- * Release lock on the quota file 'quota'
- */
-void
-mailbox_unlock_quota(quota)
-struct quota *quota;
-{
-    assert(quota->lock_count != 0);
-
-    if (--quota->lock_count == 0 && quota->root) {
-	if (lock_unlock(quota->fd))
-	    syslog(LOG_ERR, "IOERROR: unlocking quota for %s: %m", 
-		quota->root);
     }
 }
 
@@ -1447,102 +1311,6 @@ int mailbox_append_index(struct mailbox *mailbox,
 }
 
 /*
- * Write out the quota 'quota'
- */
-int mailbox_write_quota(struct quota *quota)
-{
-    int r;
-    int len;
-    char buf[1024];
-    char quota_path[MAX_MAILBOX_PATH+1];
-    char new_quota_path[MAX_MAILBOX_PATH+1];
-    int newfd;
-
-    assert(quota->lock_count != 0);
-
-    if (!quota->root) return 0;
-
-    mailbox_hash_quota(quota_path, sizeof(quota_path), quota->root);
-
-    strlcpy(new_quota_path, quota_path, sizeof(new_quota_path));
-    strlcat(new_quota_path, ".NEW", sizeof(new_quota_path));
-
-    newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
-    if (newfd == -1 && errno == ENOENT) {
-	if (cyrus_mkdir(new_quota_path, 0755) == -1) return IMAP_IOERROR;
-
-	newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
-    }
-    if (newfd == -1) {
-	syslog(LOG_ERR, "IOERROR: creating quota file %s: %m", new_quota_path);
-	return IMAP_IOERROR;
-    }
-
-    r = lock_blocking(newfd);
-    if (r) {
-	syslog(LOG_ERR, "IOERROR: locking quota file %s: %m",
-	       new_quota_path);
-	close(newfd);
-	return IMAP_IOERROR;
-    }
-
-    len = snprintf(buf, sizeof(buf) - 1,
-		   "%lu\n%d\n", quota->used, quota->limit);
-    r = write(newfd, buf, len);
-    
-    if (r == -1 || fsync(newfd)) {
-	syslog(LOG_ERR, "IOERROR: writing quota file %s: %m",
-	       new_quota_path);
-	close(newfd);
-	return IMAP_IOERROR;
-    }
-
-    if (rename(new_quota_path, quota_path)) {
-	syslog(LOG_ERR, "IOERROR: renaming quota file %s: %m",
-	       quota_path);
-	close(newfd);
-	return IMAP_IOERROR;
-    }
-
-    if (quota->fd != -1) {
-	close(quota->fd);
-	quota->fd = -1;
-    }
-
-    quota->fd = newfd;
-
-    return 0;
-}
-
-/*
- * Remove the quota root 'quota'
- */
-int
-mailbox_delete_quota(quota)
-struct quota *quota;
-{
-    char quota_path[MAX_MAILBOX_PATH+1];
-
-    assert(quota->lock_count != 0);
-
-    if (!quota->root) return 0;
-
-    mailbox_hash_quota(quota_path, sizeof(quota_path), quota->root);
-
-    unlink(quota_path);
-
-    if (quota->fd != -1) {
-	close(quota->fd);
-	quota->fd = -1;
-    }
-
-    free(quota->root);
-    quota->root = 0;
-
-    return 0;
-}
-
-/*
  * Lock the index file for 'mailbox'.
  * DON'T Reread index file header if necessary.
  */
@@ -1554,7 +1322,6 @@ static int mailbox_lock_index_for_upgrade(struct mailbox *mailbox)
 
     if (mailbox->index_lock_count++) return 0;
 
-    assert(mailbox->quota.lock_count == 0);
     assert(mailbox->seen_lock_count == 0);
 
     strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
@@ -1844,6 +1611,7 @@ mailbox_expunge(struct mailbox *mailbox,
     unsigned msgno;
     struct stat sbuf;
     char *fnametail;
+    struct txn *tid = NULL;
 
     /* Offset into the new cache file for use when updating the index record */
     size_t new_cache_total_size = sizeof(bit32);
@@ -2071,21 +1839,23 @@ mailbox_expunge(struct mailbox *mailbox,
     }
 
     /* Record quota release */
-    r = mailbox_lock_quota(&mailbox->quota);
-    if (r) goto fail;
-    if (mailbox->quota.used >= quotadeleted) {
-	mailbox->quota.used -= quotadeleted;
+    r = quota_read(&mailbox->quota, &tid, 1);
+    if (!r) {
+	if (mailbox->quota.used >= quotadeleted) {
+	    mailbox->quota.used -= quotadeleted;
+	}
+	else {
+	    mailbox->quota.used = 0;
+	}
+	r = quota_write(&mailbox->quota, &tid);
+	if (!r) quota_commit(&tid);
+	else {
+	    syslog(LOG_ERR,
+		   "LOSTQUOTA: unable to record free of %u bytes in quota %s",
+		   quotadeleted, mailbox->quota.root);
+	}
     }
-    else {
-	mailbox->quota.used = 0;
-    }
-    r = mailbox_write_quota(&mailbox->quota);
-    if (r) {
-	syslog(LOG_ERR,
-	       "LOSTQUOTA: unable to record free of %u bytes in quota %s",
-	       quotadeleted, mailbox->quota.root);
-    }
-    mailbox_unlock_quota(&mailbox->quota);
+    else if (r != IMAP_QUOTAROOT_NONEXISTENT) goto fail;
 
     strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
 
@@ -2160,40 +1930,6 @@ mailbox_expunge(struct mailbox *mailbox,
     return IMAP_IOERROR;
 }
 
-/* find the mailbox 'name' 's quotaroot, and return it in 'start'.
-   'start' must be at least MAX_MAILBOX_PATH. 
-
-   returns true if a quotaroot is found, 0 otherwise. 
-*/
-int mailbox_findquota(char *ret, size_t retlen, const char *name)
-{
-    char quota_path[MAX_MAILBOX_PATH+1];
-    char *tail, *p, *mbox;
-    struct stat sbuf;
-
-    strlcpy(ret, name, retlen);
-
-    /* find the start of the unqualified mailbox name */
-    mbox = (config_virtdomains && (p = strchr(ret, '!'))) ? p+1 : ret;
-    tail = mbox + strlen(mbox);
-
-    mailbox_hash_quota(quota_path, sizeof(quota_path), ret);
-    while (stat(quota_path, &sbuf) == -1) {
-	tail = strrchr(mbox, '.');
-	if (!tail) break;
-	*tail = '\0';
-	mailbox_hash_quota(quota_path, sizeof(quota_path), ret);
-    }
-    if (tail) return 1;
-    if (mbox == ret) return 0;
-
-    /* check for a domain quota */
-    *mbox = '\0';
-    mailbox_hash_quota(quota_path, sizeof(quota_path), ret);
-    return (stat(quota_path, &sbuf) != -1);
-}
-
-
 int mailbox_create(const char *name,
 		   char *path,
 		   const char *acl,
@@ -2224,9 +1960,8 @@ int mailbox_create(const char *name,
     }
 
     zeromailbox(mailbox);
-    mailbox.quota.fd = -1;
 
-    hasquota = mailbox_findquota(quota_root, sizeof(quota_root), name);
+    hasquota = quota_findroot(quota_root, sizeof(quota_root), name);
 
     /* Set up buffer */
     strlcpy(fnamebuf, path, sizeof(fnamebuf));
@@ -2362,16 +2097,19 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
     struct dirent *f;
     char buf[MAX_MAILBOX_PATH+1];
     char *tail;
+    struct txn *tid = NULL;
     
     /* Ensure that we are locked */
     if(!mailbox->header_lock_count) return IMAP_INTERNAL;
 
-    rquota = mailbox_lock_quota(&mailbox->quota);
+    rquota = quota_read(&mailbox->quota, &tid, 1);
 
     seen_delete_mailbox(mailbox);
 
     if (delete_quota_root && !rquota) {
-	mailbox_delete_quota(&mailbox->quota);
+	quota_delete(&mailbox->quota, &tid);
+	free(mailbox->quota.root);
+	mailbox->quota.root = NULL;
     } else if (!rquota) {
 	/* Free any quota being used by this mailbox */
 	if (mailbox->quota.used >= mailbox->quota_mailbox_used) {
@@ -2380,13 +2118,14 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 	else {
 	    mailbox->quota.used = 0;
 	}
-	r = mailbox_write_quota(&mailbox->quota);
+	r = quota_write(&mailbox->quota, &tid);
 	if (r) {
 	    syslog(LOG_ERR,
 		   "LOSTQUOTA: unable to record free of %lu bytes in quota %s",
 		   mailbox->quota_mailbox_used, mailbox->quota.root);
 	}
-	mailbox_unlock_quota(&mailbox->quota);
+	else
+	    quota_commit(&tid);
     }
 
     /* remove all files in directory */
@@ -2461,6 +2200,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     char oldfname[MAX_MAILBOX_PATH+1], newfname[MAX_MAILBOX_PATH+1];
     size_t oldfname_len, newfname_len, fn_len;
     char *oldfnametail, *newfnametail;
+    struct txn *tid = NULL;
 
     assert(oldmailbox->header_lock_count > 0
 	   && oldmailbox->index_lock_count > 0);
@@ -2494,7 +2234,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     /* Check quota if necessary */
     if (newmailbox->quota.root) {
-	r = mailbox_lock_quota(&(newmailbox->quota));
+	r = quota_read(&(newmailbox->quota), &tid, 1);
 	if (!oldmailbox->quota.root ||
 	    strcmp(oldmailbox->quota.root, newmailbox->quota.root) != 0) {
 	    if (!r && newmailbox->quota.limit >= 0 &&
@@ -2503,7 +2243,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 		r = IMAP_QUOTA_EXCEEDED;
 	    }
 	}
-	if (r) {
+	if (r && r != IMAP_QUOTAROOT_NONEXISTENT) {
 	    mailbox_close(newmailbox);
 	    return r;
 	}
@@ -2551,13 +2291,13 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     strlcpy(newfnametail, FNAME_INDEX, sizeof(newfname) - newfname_len);
     unlink(newfname);		/* Make link() possible */
 
-    r = mailbox_copyfile(oldfname, newfname);
+    r = mailbox_copyfile(oldfname, newfname, 0);
 
     strlcpy(oldfnametail, FNAME_CACHE, sizeof(oldfname) - oldfname_len);
     strlcpy(newfnametail, FNAME_CACHE, sizeof(newfname) - newfname_len);
     unlink(newfname);
 
-    if (!r) r = mailbox_copyfile(oldfname, newfname);
+    if (!r) r = mailbox_copyfile(oldfname, newfname, 0);
     if (r) {
 	mailbox_close(newmailbox);
 	return r;
@@ -2587,7 +2327,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 
 	strcpy(newfnametail, oldfnametail);
 
-	r = mailbox_copyfile(oldfname, newfname);
+	r = mailbox_copyfile(oldfname, newfname, 0);
 	if (r) break;
     }
     if (!r) r = seen_copy(oldmailbox, newmailbox);
@@ -2595,8 +2335,8 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     /* Record new quota usage */
     if (!r && newmailbox->quota.root) {
 	newmailbox->quota.used += oldmailbox->quota_mailbox_used;
-	r = mailbox_write_quota(&(newmailbox->quota));
-	mailbox_unlock_quota(&(newmailbox->quota));
+	r = quota_write(&(newmailbox->quota), &tid);
+	if (!r) quota_commit(&tid);
     }
     if (r) {
 	/* failure and back out */
@@ -2650,6 +2390,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
     char oldfname[MAX_MAILBOX_PATH+1], newfname[MAX_MAILBOX_PATH+1];
     size_t oldfname_len, newfname_len, fn_len;
     char *oldfnametail, *newfnametail;
+    struct txn *tid = NULL;
 
     /* Open old mailbox and lock */
     mailbox_open_header_path(oldname, oldpath, oldacl, 0, &oldmailbox, 0);
@@ -2707,7 +2448,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 
     /* Check quota if necessary */
     if (newmailbox.quota.root) {
-	r = mailbox_lock_quota(&newmailbox.quota);
+	r = quota_read(&newmailbox.quota, &tid, 1);
 	if (!oldmailbox.quota.root ||
 	    strcmp(oldmailbox.quota.root, newmailbox.quota.root) != 0) {
 	    if (!r && newmailbox.quota.limit >= 0 &&
@@ -2716,7 +2457,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 		r = IMAP_QUOTA_EXCEEDED;
 	    }
 	}
-	if (r) {
+	if (r && r != IMAP_QUOTAROOT_NONEXISTENT) {
 	    mailbox_close(&newmailbox);
 	    mailbox_close(&oldmailbox);
 	    return r;
@@ -2777,7 +2518,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 				      oldfnametail,
 				      sizeof(oldfname) - strlen(oldfname));
 	    strcpy(newfnametail, oldfnametail);
-	    r = mailbox_copyfile(oldfname, newfname);
+	    r = mailbox_copyfile(oldfname, newfname, 0);
 	    if (r) break;
 	}
     }
@@ -2808,7 +2549,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 	        sizeof(newfname) - (newfname_len - 1));
 
 	unlink(newfname);		/* Make link() possible */
-	r = mailbox_copyfile(oldfname, newfname);
+	r = mailbox_copyfile(oldfname, newfname, 0);
 
 	fn_len = strlen(FNAME_CACHE);
 	if((oldfname_len - 1) + fn_len > sizeof(oldfname))
@@ -2830,7 +2571,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 	        sizeof(newfname) - (newfname_len - 1));
 
 	unlink(newfname);
-	if (!r) r = mailbox_copyfile(oldfname, newfname);
+	if (!r) r = mailbox_copyfile(oldfname, newfname, 0);
 
 	if (r) {
 	    mailbox_close(&newmailbox);
@@ -2849,18 +2590,20 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
     /* Record new quota usage */
     if (!r && newmailbox.quota.root) {
 	newmailbox.quota.used += oldmailbox.quota_mailbox_used;
-	r = mailbox_write_quota(&newmailbox.quota);
-	mailbox_unlock_quota(&newmailbox.quota);
+	r = quota_write(&newmailbox.quota, &tid);
+	if (!r) quota_commit(&tid);
+	tid = NULL;
     }
     if (r) goto fail;
 
     if (r && newmailbox.quota.root) {
-	r2 = mailbox_lock_quota(&newmailbox.quota);
+	r2 = quota_read(&newmailbox.quota, &tid, 1);
 	newmailbox.quota.used += newmailbox.quota_mailbox_used;
 	if (!r2) {
-	    r2 = mailbox_write_quota(&newmailbox.quota);
-	    mailbox_unlock_quota(&newmailbox.quota);
+	    r2 = quota_write(&newmailbox.quota, &tid);
+	    if (!r2) quota_commit(&tid);
 	}
+	else if (r2 == IMAP_QUOTAROOT_NONEXISTENT) r2 = 0;
 	if (r2) {
 	    syslog(LOG_ERR,
 	      "LOSTQUOTA: unable to record use of %lu bytes in quota %s",
@@ -2895,9 +2638,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 /*
  * Copy (or link) the file 'from' to the file 'to'
  */
-int mailbox_copyfile(from, to)
-const char *from;
-const char *to;
+int mailbox_copyfile(const char *from, const char *to, int nolink)
 {
     int srcfd, destfd;
     struct stat sbuf;
@@ -2905,13 +2646,15 @@ const char *to;
     unsigned long src_size = 0;
     int n;
 
-    if (link(from, to) == 0) return 0;
-    if (errno == EEXIST) {
-	if (unlink(to) == -1) {
-	    syslog(LOG_ERR, "IOERROR: unlinking to recreate %s: %m", to);
-	    return IMAP_IOERROR;
-	}
+    if (!nolink) {
 	if (link(from, to) == 0) return 0;
+	if (errno == EEXIST) {
+	    if (unlink(to) == -1) {
+		syslog(LOG_ERR, "IOERROR: unlinking to recreate %s: %m", to);
+		return IMAP_IOERROR;
+	    }
+	    if (link(from, to) == 0) return 0;
+	}
     }
     
     destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
@@ -2995,52 +2738,5 @@ void mailbox_hash_mbox(char *buf, size_t buf_len,
     /* change all '.'s to '/' */
     for (p = buf; *p; p++) {
 	if (*p == '.') *p = '/';
-    }
-}
-
-/* simple hash so it's easy to find these things in the filesystem;
-   our human time is worth more than efficiency */
-void mailbox_hash_quota(char *buf, size_t size, const char *qr) {
-    const char *idx;
-    char c, *p;
-    unsigned len;
-
-    if ((len = snprintf(buf, size, "%s", config_dir)) >= size) {
-        fatal("insufficient buffer size in mailbox_hash_quota", EC_TEMPFAIL);
-    }
-    buf += len;
-    size -= len;
-
-    if (config_virtdomains && (p = strchr(qr, '!'))) {
-	*p = '\0';  /* split domain!qr */
-	c = (char) dir_hash_c(qr);
-	if ((len = snprintf(buf, size, "%s%c/%s", FNAME_DOMAINDIR, c, qr)) >= size) {
-	    fatal("insufficient buffer size in mailbox_hash_quota", EC_TEMPFAIL);
-	}
-	*p++ = '!';  /* reassemble domain!qr */
-	qr = p;
-	buf += len;
-	size -= len;
-
-	if (!*qr) {
-	    /* quota for entire domain */
-	    if (snprintf(buf, size, "%sroot", FNAME_QUOTADIR) >= size) {
-		fatal("insufficient buffer size in mailbox_hash_quota",
-		      EC_TEMPFAIL);
-	    }
-	    return;
-	}
-    }
-
-    idx = strchr(qr, '.'); /* skip past user. */
-    if (idx == NULL) {
-	idx = qr;
-    } else {
-	idx++;
-    }
-    c = (char) dir_hash_c(idx);
-
-    if (snprintf(buf, size, "%s%c/%s", FNAME_QUOTADIR, c, qr) >= size) {
-	fatal("insufficient buffer size in mailbox_hash_quota", EC_TEMPFAIL);
     }
 }

@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.23.2.1 2003/12/19 18:33:53 ken3 Exp $
+# $Id: Makefile.in,v 1.23.2.2 2004/01/27 23:13:54 ken3 Exp $
 # 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -100,14 +100,14 @@ ptloader: ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(DEPLIBS)
 ptloader.pure: ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(DEPLIBS)
 	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} ${LDAP_LDFLAGS} $(AFS_LIBS) ${LDAP_LIBS} $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
 
-ptexpire: ptexpire.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptexpire.o ../imap/mutex_fake.o $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+ptexpire: ptexpire.o $(DEPLIBS) $(UTIL_LIBS)
+	$(CC) $(LDFLAGS) -o $@ ptexpire.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_RT)
 
 ptexpire.pure: ptexpire.o ../imap/mutex_fake.o $(DEPLIBS)
 	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptexpire.o ../imap/mutex_fake.o $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
 
-ptdump: ptdump.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptdump.o ../imap/mutex_fake.o $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+ptdump: ptdump.o $(DEPLIBS) $(UTIL_LIBS)
+	$(CC) $(LDFLAGS) -o $@ ptdump.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_RT)
 
 ptdump.pure: ptexpire.o ../imap/mutex_fake.o $(DEPLIBS)
 	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptdump.o ../imap/mutex_fake.o $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)

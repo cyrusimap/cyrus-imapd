@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.11 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.11.2.1 2004/01/27 23:13:37 ken3 Exp $
  */
 
 #include <config.h>
@@ -216,7 +216,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "chk_cyrus");    
+    cyrus_init(alt_config, "chk_cyrus", 0);
 
     mboxlist_init(0);
     mboxlist_open(NULL);

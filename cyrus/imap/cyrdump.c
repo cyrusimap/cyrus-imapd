@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.14 2003/10/22 18:50:07 rjs3 Exp $
+/* $Id: cyrdump.c,v 1.14.2.1 2004/01/27 23:13:38 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
 	usage(argv[0]);
     }
 
-    cyrus_init(alt_config, "dump");
+    cyrus_init(alt_config, "dump", 0);
     mboxlist_init(0);
     mboxlist_open(NULL);
 

@@ -1,5 +1,4 @@
-/* 
- * tls_prune.c -- program to prune TLS session db of expired sessions
+/* quota.h -- Quota format definitions
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -38,54 +37,50 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ * $Id: quota.h,v 1.1.2.1 2004/01/27 23:13:50 ken3 Exp $
  */
 
-/* $Id: tls_prune.c,v 1.5.2.1 2004/01/27 23:13:51 ken3 Exp $ */
+#ifndef INCLUDED_QUOTA_H
+#define INCLUDED_QUOTA_H
 
-#include <config.h>
+#include "cyrusdb.h"
 
-#include <stdio.h>
-#include <unistd.h>
+#define FNAME_QUOTADB "/quotas.db"
 
-#include "exitcodes.h"
-#include "global.h"
-#include "tls.h"
-#include "xmalloc.h"
+#define QUOTA_UNITS (1024)
 
-/* global state */
-const int config_need_data = 0;
+extern struct db *qdb;
 
-void usage(void)
-{
-    fprintf(stderr, "tls_prune [-C <altconfig>]\n");
-    exit(-1);
-}
+struct quota {
+    char *root;
 
-int main(int argc, char *argv[])
-{
-    extern char *optarg;
-    int opt,r;
-    char *alt_config = NULL;
+    /* Information in quota entry */
+    unsigned long used;
+    int limit;			/* in QUOTA_UNITS */
+};
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+extern int quota_read(struct quota *quota, struct txn **tid, int wrlock);
 
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
+extern void quota_commit(struct txn **tid);
 
-	default:
-	    usage();
-	    break;
-	}
-    }
+extern int quota_write(struct quota *quota, struct txn **tid);
 
-    cyrus_init(alt_config, "tls_prune", 0);
+extern int quota_delete(struct quota *quota, struct txn **tid);
 
-    r = tls_prune_sessions();
+extern int quota_findroot(char *ret, size_t retlen, const char *name);
 
-    cyrus_done();
+/* open the quotas db */
+void quotadb_open(char *name);
 
-    return r;
-}
+/* close the database */
+void quotadb_close(void);
+
+/* initialize database structures */
+#define QUOTADB_SYNC 0x02
+void quotadb_init(int flags);
+
+/* done with database stuff */
+void quotadb_done(void);
+
+#endif /* INCLUDED_QUOTA_H */

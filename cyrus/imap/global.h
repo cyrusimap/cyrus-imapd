@@ -1,5 +1,5 @@
 /* global.h -- Header for global/shared variables & functions.
- * $Id: global.h,v 1.2.2.1 2003/12/19 18:33:30 ken3 Exp $
+ * $Id: global.h,v 1.2.2.2 2004/01/27 23:13:40 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,11 +48,17 @@
 #include "auth.h"
 #include "mboxname.h"
 
+/* Flags for cyrus_init() */
+enum {
+    CYRUSINIT_NODB =	(1<<0)
+};
+
 /* Startup the configuration subsystem */
 /* Note that cyrus_init is pretty much the wholesale startup function
  * for any libimap/libcyrus process, and should be called fairly early
  * (and needs an associated cyrus_done call) */
-extern int cyrus_init(const char *alt_config, const char *ident);
+extern int cyrus_init(const char *alt_config, const char *ident,
+		      unsigned flags);
 extern void global_sasl_init(int client, int server,
 			     const sasl_callback_t *callbacks);
 
@@ -144,6 +150,7 @@ extern int shutdown_file(char *buf, int size);
 /* Misc globals */
 extern int config_implicitrights;
 extern struct cyrusdb_backend *config_mboxlist_db;
+extern struct cyrusdb_backend *config_quota_db;
 extern struct cyrusdb_backend *config_subscription_db;
 extern struct cyrusdb_backend *config_annotation_db;
 extern struct cyrusdb_backend *config_seenstate_db;

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.31.2.1 2003/12/19 18:33:29 ken3 Exp $ */
+/* $Id: arbitron.c,v 1.31.2.2 2004/01/27 23:13:37 ken3 Exp $ */
 
 #include <config.h>
 
@@ -142,7 +142,7 @@ int main(int argc,char **argv)
     }
 
     /* Init Cyrus Backend Foo */
-    cyrus_init(alt_config, "arbitron");
+    cyrus_init(alt_config, "arbitron", 0);
 
     mboxlist_init(0);
     mboxlist_open(NULL);

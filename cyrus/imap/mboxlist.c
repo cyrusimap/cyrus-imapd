@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.4 2003/12/19 18:33:36 ken3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.5 2004/01/27 23:13:47 ken3 Exp $
  */
 
 #include <config.h>
@@ -79,6 +79,7 @@
 #include "mupdate-client.h"
 
 #include "mboxlist.h"
+#include "quota.h"
 
 #define DB config_mboxlist_db
 #define SUBDB config_subscription_db
@@ -96,6 +97,11 @@ static int mboxlist_rmquota(const char *name, int matchlen, int maycreate,
 			    void *rock);
 static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 				void *rock);
+
+struct change_rock {
+    struct quota *quota;
+    struct txn **tid;
+};
 
 #define FNAME_SUBSSUFFIX ".sub"
 
@@ -2197,7 +2203,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
   		cbrock.checkshared = 1;
   	    }
 
-	    if (cbrock.checkshared && !*p) {
+	    if ((cbrock.checkshared || prefixlen == len) && !*p) {
 		/* special case:  LIST "" % -- output prefix
  		   (if we have a shared mbox) and quit */
 		strlcpy(domainpat+domainlen, "*", sizeof(domainpat)-domainlen);
@@ -2243,6 +2249,8 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     struct quota quota;
     int have_mailbox = 1;
     int r, t;
+    struct txn *tid = NULL;
+    struct change_rock crock;
 
     if (!root[0] || root[0] == '.' || strchr(root, '/')
 	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
@@ -2252,20 +2260,20 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     memset(&quota, 0, sizeof(struct quota));
 
     quota.root = (char *) root;
-    mailbox_hash_quota(quota_path, sizeof(quota_path), root);
+    r = quota_read(&quota, &tid, 1);
 
-    if ((quota.fd = open(quota_path, O_RDWR, 0)) != -1) {
-	/* Just lock and change it */
-	r = mailbox_lock_quota(&quota);
+    if (!r) {
+	/* Just change it */
 
 	quota.limit = newquota;
 
-	if (!r) r = mailbox_write_quota(&quota);
-	if (quota.fd != -1) {
-	    close(quota.fd);
-	}
+	r = quota_write(&quota, &tid);
+	if (!r) quota_commit(&tid);
+
 	return r;
     }
+
+    if (r != IMAP_QUOTAROOT_NONEXISTENT) return r;
 
     /*
      * Have to create a new quota root
@@ -2298,25 +2306,21 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     }
 
     /* perhaps create .NEW, lock, check if it got recreated, move in place */
-    quota.lock_count = 1;
     quota.used = 0;
     quota.limit = newquota;
-    r = mailbox_write_quota(&quota);
+    r = quota_write(&quota, &tid);
+    if (r) return r;
 
-    if (r) {
-	return r;
-    }
-
+    crock.quota = &quota;
+    crock.tid = &tid;
     /* top level mailbox */
     if(have_mailbox)
-	mboxlist_changequota(quota.root, 0, 0, &quota);
+	mboxlist_changequota(quota.root, 0, 0, &crock);
     /* submailboxes - we're using internal names here */
-    mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_changequota, &quota);
+    mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_changequota, &crock);
     
-    r = mailbox_write_quota(&quota);
-    if (quota.fd != -1) {
-	close(quota.fd);
-    }
+    r = quota_write(&quota, &tid);
+    if (!r) quota_commit(&tid);
 
     return r;
 }
@@ -2326,9 +2330,8 @@ int mboxlist_setquota(const char *root, int newquota, int force)
  */
 int mboxlist_unsetquota(const char *root)
 {
-    char quota_path[MAX_MAILBOX_PATH+1];
     char pattern[MAX_MAILBOX_PATH+1];
-    int fd;
+    struct quota quota;
     int r=0;
 
     if (!root[0] || root[0] == '.' || strchr(root, '/')
@@ -2336,14 +2339,13 @@ int mboxlist_unsetquota(const char *root)
 	return IMAP_MAILBOX_BADNAME;
     }
     
-    mailbox_hash_quota(quota_path, sizeof(quota_path), root);
-
-    if ((fd = open(quota_path, O_RDWR, 0)) == -1) {
+    quota.root = (char *) root;
+    r = quota_read(&quota, NULL, 0);
+    if (r == IMAP_QUOTAROOT_NONEXISTENT) {
 	/* already unset */
 	return 0;
     }
-    
-    close(fd);
+    else if (r) return r;
 
     /*
      * Have to remove it from all affected mailboxes
@@ -2361,10 +2363,7 @@ int mboxlist_unsetquota(const char *root)
     /* submailboxes - we're using internal names here */
     mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_rmquota, (void *)root);
 
-    if(unlink(quota_path) == -1) {
-	syslog(LOG_ERR, "could not unlink %s (%m)", quota_path);
-	r = IMAP_SYS_ERROR;
-    }
+    r = quota_delete(&quota, NULL);
 
     return r;
 }
@@ -2456,7 +2455,9 @@ static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 {
     int r;
     struct mailbox mailbox;
-    struct quota *mboxlist_newquota = (struct quota *) rock;
+    struct change_rock *crock = (struct change_rock *) rock;
+    struct quota *mboxlist_newquota = crock->quota;
+    struct txn **tid = crock->tid;
 
     assert(rock != NULL);
 
@@ -2479,7 +2480,7 @@ static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 	    return 0;
 	}
 
-	r = mailbox_lock_quota(&mailbox.quota);
+	r = quota_read(&mailbox.quota, tid, 1);
 	if (r) goto error;
 	if (mailbox.quota.used >= mailbox.quota_mailbox_used) {
 	    mailbox.quota.used -= mailbox.quota_mailbox_used;
@@ -2487,13 +2488,12 @@ static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 	else {
 	    mailbox.quota.used = 0;
 	}
-	r = mailbox_write_quota(&mailbox.quota);
+	r = quota_write(&mailbox.quota, tid);
 	if (r) {
 	    syslog(LOG_ERR,
 		   "LOSTQUOTA: unable to record free of %lu bytes in quota %s",
 		   mailbox.quota_mailbox_used, mailbox.quota.root);
 	}
-	mailbox_unlock_quota(&mailbox.quota);
 	free(mailbox.quota.root);
     }
 
@@ -2963,7 +2963,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
   		cbrock.checkshared = 1;
 	    }
 
-	    if (cbrock.checkshared && !*p) {
+	    if ((cbrock.checkshared || prefixlen == len) && !*p) {
 		/* special case:  LSUB "" % -- output prefix
 		   (if we have a shared mbox) and quit */
 		strlcpy(domainpat+domainlen, "*", sizeof(domainpat)-domainlen);

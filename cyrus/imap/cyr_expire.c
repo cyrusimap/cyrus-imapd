@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.2 2003/10/22 18:02:57 rjs3 Exp $
+ * $Id: cyr_expire.c,v 1.2.2.1 2004/01/27 23:13:38 ken3 Exp $
  */
 
 #include <config.h>
@@ -237,13 +237,17 @@ int main(int argc, char *argv[])
 
     if (!days) usage();
 
-    cyrus_init(alt_config, "cyr_expire");
+    cyrus_init(alt_config, "cyr_expire", 0);
 
     annotatemore_init(0, NULL, NULL);
     annotatemore_open(NULL);
 
     mboxlist_init(0);
     mboxlist_open(NULL);
+
+    /* open the quota db, we'll need it for expunge */
+    quotadb_init(0);
+    quotadb_open(NULL);
 
     if (duplicate_init(NULL, 0) != 0) {
 	fprintf(stderr, 
@@ -272,6 +276,8 @@ int main(int argc, char *argv[])
 
     free_hash_table(&expire_table, free);
 
+    quotadb_close();
+    quotadb_done();
     mboxlist_close();
     mboxlist_done();
     annotatemore_close();

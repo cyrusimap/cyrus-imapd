@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ldap.c,v 1.2 2003/10/22 18:03:22 rjs3 Exp $";
+      "$Id: ldap.c,v 1.2.2.1 2004/01/27 23:13:55 ken3 Exp $";
 
 #include <config.h>
 
@@ -60,10 +60,7 @@ static char rcsid[] __attribute__((unused)) =
 
 #include <ldap.h>
 #include <lber.h>
-
-/* xxx autoconf checks for these? */
-#include <lutil.h>
-#include <lutil_ldap.h>
+#include <sasl/sasl.h>
 
 /* libimap */
 #include "global.h"
@@ -129,6 +126,51 @@ static char allowedchars[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
+typedef struct ldapglue {
+	const char *authc;
+	const char *authz;	
+	const char *realm;	
+	const char *password;
+} ldapglue;
+
+static int ldap_interact(
+	LDAP *ld, 
+	unsigned flags __attribute__((unused)), 
+	void *def, 
+	void *inter)
+{
+	sasl_interact_t *in = inter;
+	const char *p;
+	ldapglue *glue = def;
+
+	for (;in->id != SASL_CB_LIST_END;in++) {
+		p = NULL;
+		switch(in->id) {
+			case SASL_CB_AUTHNAME:
+				if (glue->authc)
+					p = glue->authc;
+				break;
+			case SASL_CB_USER:
+				if (glue->authz)
+					p = glue->authz;
+				break;
+			case SASL_CB_GETREALM:
+				if (glue->realm)
+					p = glue->realm;
+				break;          
+			case SASL_CB_PASS:
+				if (glue->password)
+					p = glue->password;
+				break;
+		}
+
+		in->result = p ? p : "";
+		in->len = strlen(in->result);
+	}
+
+	return LDAP_SUCCESS;
+}
+
 /*
  * Convert 'identifier' into canonical form.
  * Returns a pointer to a static buffer containing the canonical form
@@ -190,34 +232,25 @@ static int do_ldap_bind()
     /* Initilization */
     if(config_getswitch(IMAPOPT_LDAP_SASL))
     {
-	struct berval passwd = { 0, NULL };
 	const char *sasl_password =
 	    config_getstring(IMAPOPT_LDAP_SASL_PASSWORD);
 	const char *sasl_mech = config_getstring(IMAPOPT_LDAP_SASL_MECH);
 	const char *sasl_realm = config_getstring(IMAPOPT_LDAP_SASL_REALM);
 	const char *sasl_authc_id = config_getstring(IMAPOPT_LDAP_SASL_AUTHC);
 	const char *sasl_authz_id = config_getstring(IMAPOPT_LDAP_SASL_AUTHZ);
-	unsigned sasl_flags = LDAP_SASL_AUTOMATIC;
+    ldapglue glue;
 	
-	void *defaults;
 
-	passwd.bv_val = sasl_password;
-	if(passwd.bv_val) passwd.bv_len = strlen(passwd.bv_val);
-	
-	/* xxx security properties */
-	syslog(LOG_DEBUG, "making LDAP defaults");
-	defaults = lutil_sasl_defaults( ld,
-					(char *)sasl_mech,
-					(char *)sasl_realm,
-					(char *)sasl_authc_id,
-					passwd.bv_val,
-					(char *)sasl_authz_id );
+    glue.authc = sasl_authc_id;
+    glue.authz = sasl_authz_id;
+    glue.realm = sasl_realm;
+    glue.password = sasl_password;
 
 	syslog(LOG_DEBUG, "doing LDAP SASL bind");
 	rc = ldap_sasl_interactive_bind_s( ld, NULL /* binddn */,
 					   sasl_mech, NULL, NULL,
-					   sasl_flags, lutil_sasl_interact,
-					   defaults );
+					   LDAP_SASL_QUIET, ldap_interact,
+					   &glue );
     } else {
 	/* xxx we should probably also allow simple non-anonymous binds */
 	syslog(LOG_DEBUG, "doing LDAP SIMPLE [anonymous] bind");

@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.12 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: squatter.c,v 1.12.2.1 2004/01/27 23:13:50 ken3 Exp $
  */
 
 /*
@@ -509,7 +509,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "squatter");
+    cyrus_init(alt_config, "squatter", 0);
 
     syslog(LOG_NOTICE, "indexing mailboxes");
 

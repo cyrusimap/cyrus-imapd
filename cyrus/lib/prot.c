@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.82.2.1 2003/12/19 18:33:43 ken3 Exp $
+ * $Id: prot.c,v 1.82.2.2 2004/01/27 23:13:53 ken3 Exp $
  */
 
 #include <config.h>
@@ -312,7 +312,8 @@ void prot_removewaitevent(struct protstream *s, struct prot_waitevent *event)
  */
 const char *prot_error(struct protstream *s)
 {
-    return s->error;
+    if(!s) return "bad protstream passed to prot_error";
+    else return s->error;
 }
 
 /*

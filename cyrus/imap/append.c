@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: append.c,v 1.102.2.1 2004/01/27 23:13:37 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -65,6 +65,7 @@
 #include "mboxlist.h"
 #include "seen.h"
 #include "retry.h"
+#include "quota.h"
 
 struct stagemsg {
     char fname[1024];
@@ -136,21 +137,18 @@ int append_check(const char *name, int format,
 	return IMAP_MAILBOX_NOTSUPPORTED;
     }
 
-    r = mailbox_read_quota(&m.quota);
-    if (r) {
-	mailbox_close(&m);
-	return r;
-    }
-
-    if (m.quota.limit >= 0 && quotacheck >= 0 &&
-	m.quota.used + quotacheck > 
+    r = quota_read(&m.quota, NULL, 0);
+    if (!r) {
+	if (m.quota.limit >= 0 && quotacheck >= 0 &&
+	    m.quota.used + quotacheck > 
 	    ((unsigned) m.quota.limit * QUOTA_UNITS)) {
-	mailbox_close(&m);
-	return IMAP_QUOTA_EXCEEDED;
+	    r = IMAP_QUOTA_EXCEEDED;
+	}
     }
+    else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
 
     mailbox_close(&m);
-    return 0;
+    return r;
 }
 
 /*
@@ -206,17 +204,22 @@ int append_setup(struct appendstate *as, const char *name,
 	return r;
     }
 
-    r = mailbox_lock_quota(&as->m.quota);
+    as->tid = NULL;
+    r = quota_read(&as->m.quota, &as->tid, 1);
+    if (!r) {
+	if (as->m.quota.limit >= 0 && quotacheck >= 0 &&
+	    as->m.quota.used + quotacheck > 
+	    ((unsigned) as->m.quota.limit * QUOTA_UNITS)) {
+	    quota_abort(&as->tid);
+	    mailbox_close(&as->m);
+	    r = IMAP_QUOTA_EXCEEDED;
+	}
+    }
+    else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
+
     if (r) {
 	mailbox_close(&as->m);
 	return r;
-    }
-
-    if (as->m.quota.limit >= 0 && quotacheck >= 0 &&
-	as->m.quota.used + quotacheck > 
-	    ((unsigned) as->m.quota.limit * QUOTA_UNITS)) {
-	mailbox_close(&as->m);
-	return IMAP_QUOTA_EXCEEDED;
     }
 
     if (userid) {
@@ -242,6 +245,7 @@ int append_setup(struct appendstate *as, const char *name,
 /* may return non-zero, indicating that the entire append has failed
  and the mailbox is probably in an inconsistent state. */
 int append_commit(struct appendstate *as, 
+		  long quotacheck,
 		  unsigned long *uidvalidity, 
 		  unsigned long *start,
 		  unsigned long *num)
@@ -301,10 +305,12 @@ int append_commit(struct appendstate *as,
 	return r;
     }
 
-    /* Write out quota file */
+    /* Write out updated quota usage */
     as->m.quota.used += as->quota_used;
-    r = mailbox_write_quota(&as->m.quota);
-    if (r) {
+    r = quota_write(&as->m.quota, &as->tid);
+    if (!r) quota_commit(&as->tid);
+    else {
+	quota_abort(&as->tid);
 	syslog(LOG_ERR,
 	       "LOSTQUOTA: unable to record use of %u bytes in quota file %s",
 	       as->quota_used, as->m.quota.root);
@@ -318,7 +324,6 @@ int append_commit(struct appendstate *as,
 	free(as->seen_msgrange);
     }
 
-    mailbox_unlock_quota(&as->m.quota);
     mailbox_unlock_index(&as->m);
     mailbox_unlock_header(&as->m);
     mailbox_close(&as->m);
@@ -356,10 +361,12 @@ int append_abort(struct appendstate *as)
     ftruncate(as->m.cache_fd, as->orig_cache_len);
 
     /* unlock mailbox */
-    mailbox_unlock_quota(&as->m.quota);
     mailbox_unlock_index(&as->m);
     mailbox_unlock_header(&as->m);
     mailbox_close(&as->m);
+
+    /* unlock quota */
+    quota_abort(&as->tid);
 
     if (as->seen_msgrange) {
 	free(as->seen_msgrange);
@@ -386,7 +393,7 @@ int append_stageparts(struct stagemsg *stagep)
  * so it can double as the spool file
  */
 FILE *append_newstage(const char *mailboxname, time_t internaldate,
-		      struct stagemsg **stagep)
+		      int msgnum, struct stagemsg **stagep)
 {
     struct stagemsg *stage;
     char stagedir[MAX_MAILBOX_PATH+1], stagefile[MAX_MAILBOX_PATH+1];
@@ -400,8 +407,8 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
     stage->parts = xzmalloc(5 * (MAX_MAILBOX_PATH+1) * sizeof(char));
     stage->partend = stage->parts + 5 * (MAX_MAILBOX_PATH+1) * sizeof(char);
 
-    snprintf(stage->fname, sizeof(stage->fname), "%d-%d",
-	     (int) getpid(), (int) internaldate);
+    snprintf(stage->fname, sizeof(stage->fname), "%d-%d-%d",
+	     (int) getpid(), (int) internaldate, msgnum);
 
     r = mboxlist_findstage(mailboxname, stagedir, sizeof(stagedir));
     if (r) {
@@ -444,10 +451,8 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
  * is multiple partitions.
  */
 int append_fromstage(struct appendstate *as,
-		     struct protstream *messagefile,
-		     unsigned long size, time_t internaldate,
-		     const char **flag, int nflags,
-		     struct stagemsg *stage)
+		     struct stagemsg *stage, time_t internaldate,
+		     const char **flag, int nflags, int nolink)
 {
     struct mailbox *mailbox = &as->m;
     struct index_record message_index;
@@ -463,7 +468,6 @@ int append_fromstage(struct appendstate *as,
 
     assert(stage != NULL && stage->parts[0] != '\0');
     assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
-    assert(size != 0);
 
     zero_index(message_index);
 
@@ -493,7 +497,7 @@ int append_fromstage(struct appendstate *as,
 	   make sure not to overwrite stage->partend */
 
 	/* create the new staging file from the first stage part */
-	r = mailbox_copyfile(stage->parts, stagefile);
+	r = mailbox_copyfile(stage->parts, stagefile, 0);
 	if (r) {
 	    /* maybe the directory doesn't exist? */
 	    char stagedir[MAX_MAILBOX_PATH+1];
@@ -506,7 +510,7 @@ int append_fromstage(struct appendstate *as,
 	    } else {
 		syslog(LOG_NOTICE, "created stage directory %s",
 		       stagedir);
-		r = mailbox_copyfile(stage->parts, stagefile);
+		r = mailbox_copyfile(stage->parts, stagefile, 0);
 	    }
 	}
 	if (r) {
@@ -549,7 +553,7 @@ int append_fromstage(struct appendstate *as,
 			      fname + strlen(fname),
 			      sizeof(fname) - strlen(fname));
 
-    r = mailbox_copyfile(p, fname);
+    r = mailbox_copyfile(p, fname, nolink);
     destfile = fopen(fname, "r");
     if (!r && destfile) {
 	/* ok, we've successfully created the file */
@@ -838,7 +842,7 @@ int append_copy(struct mailbox *mailbox,
 	    mailbox_message_get_fname(mailbox, copymsg[msg].uid, fnamebuf,
 				      sizeof(fnamebuf));
 	    /* Link/copy message file */
-	    r = mailbox_copyfile(fnamebuf, fname);
+	    r = mailbox_copyfile(fnamebuf, fname, 0);
 	    if (r) goto fail;
 
 	    /* Write out cache info, copy other info */

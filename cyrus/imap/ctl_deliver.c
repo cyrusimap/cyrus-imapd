@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- * $Id: ctl_deliver.c,v 1.18 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: ctl_deliver.c,v 1.18.2.1 2004/01/27 23:13:38 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
     }
 
     case DUMP:
-	cyrus_init(alt_config, "ctl_deliver");
+	cyrus_init(alt_config, "ctl_deliver", 0);
 
 	if (duplicate_init(alt_file, flag) != 0) {
 	    fprintf(stderr, 

@@ -48,7 +48,7 @@
 #include "global.h"
 #include "libconfig.h"
 
-static char rcsid[] = "$Id: ptdump.c,v 1.8.2.1 2003/12/19 18:33:53 ken3 Exp $";
+static char rcsid[] = "$Id: ptdump.c,v 1.8.2.2 2004/01/27 23:13:55 ken3 Exp $";
 
 int config_need_data = 0;
 
@@ -104,7 +104,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    cyrus_init(alt_config, "ptdump");
+    cyrus_init(alt_config, "ptdump", 0);
 
     /* open database */
     strcpy(fnamebuf, config_dir);

@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.20.2.1 2003/12/19 18:33:35 ken3 Exp $
+ * $Id: ipurge.c,v 1.20.2.2 2004/01/27 23:13:43 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -169,7 +169,7 @@ int main (int argc, char *argv[]) {
     usage(argv[0]);
   }
 
-  cyrus_init(alt_config, "ipurge");
+  cyrus_init(alt_config, "ipurge", 0);
 
   /* Set namespace -- force standard (internal) */
   if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
@@ -179,6 +179,10 @@ int main (int argc, char *argv[]) {
 
   mboxlist_init(0);
   mboxlist_open(NULL);
+
+  /* open the quota db, we'll need it for expunge */
+  quotadb_init(0);
+  quotadb_open(NULL);
 
   if (optind == argc) { /* do the whole partition */
     strcpy(buf, "*");
@@ -195,6 +199,9 @@ int main (int argc, char *argv[]) {
 					  purge_me, NULL);
     }
   }
+  quotadb_close();
+  quotadb_done();
+
   mboxlist_close();
   mboxlist_done();
 

@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.77.2.1 2004/01/15 20:24:31 ken3 Exp $
+ * $Id: mailbox.h,v 1.77.2.2 2004/01/27 23:13:46 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -47,6 +47,7 @@
 #include <limits.h>
 
 #include "auth.h"
+#include "quota.h"
 
 #define BIT32_MAX 4294967295U
 
@@ -79,22 +80,8 @@ typedef unsigned short bit32;
 #define FNAME_INDEX "/cyrus.index"
 #define FNAME_CACHE "/cyrus.cache"
 #define FNAME_SQUAT_INDEX "/cyrus.squat"
-#define FNAME_QUOTADIR "/quota/"
 
 #define MAILBOX_FNAME_LEN 256
-
-#define QUOTA_UNITS (1024)
-
-struct quota {
-    int fd;
-
-    int lock_count;
-    char *root;
-
-    /* Information in quota file */
-    unsigned long used;
-    int limit;			/* in QUOTA_UNITS */
-};
 
 struct mailbox {
     int header_fd;
@@ -286,17 +273,13 @@ extern int mailbox_read_index_header(struct mailbox *mailbox);
 extern int mailbox_read_index_record(struct mailbox *mailbox,
 				     unsigned msgno,
 				     struct index_record *record);
-extern int mailbox_read_quota(struct quota *quota);
-extern void mailbox_hash_quota(char *buf, size_t size, const char *qr);
 extern int mailbox_lock_header(struct mailbox *mailbox);
 extern int mailbox_lock_index(struct mailbox *mailbox);
 extern int mailbox_lock_pop(struct mailbox *mailbox);
-extern int mailbox_lock_quota(struct quota *quota);
 
 extern void mailbox_unlock_header(struct mailbox *mailbox);
 extern void mailbox_unlock_index(struct mailbox *mailbox);
 extern void mailbox_unlock_pop(struct mailbox *mailbox);
-extern void mailbox_unlock_quota(struct quota *quota);
 
 extern int mailbox_write_header(struct mailbox *mailbox);
 extern int mailbox_write_index_header(struct mailbox *mailbox);
@@ -307,9 +290,6 @@ extern int mailbox_write_index_record(struct mailbox *mailbox,
 extern int mailbox_append_index(struct mailbox *mailbox,
 				struct index_record *record,
 				unsigned start, unsigned num, int sync);
-extern int mailbox_write_quota(struct quota *quota);
-
-extern int mailbox_delete_quota(struct quota *quota);
 
 extern int mailbox_expunge(struct mailbox *mailbox,
 			   int iscurrentdir,
@@ -317,7 +297,6 @@ extern int mailbox_expunge(struct mailbox *mailbox,
 			   void *deciderock);
 extern int mailbox_expungenews(struct mailbox *mailbox);
 
-extern int mailbox_findquota(char *ret, size_t retlen, const char *name);
 extern void mailbox_make_uniqueid(char *name, unsigned long uidvalidity,
 				  char *uniqueid, size_t outlen);
 
@@ -340,7 +319,7 @@ extern int mailbox_sync(const char *oldname, const char *oldpath,
 			bit32 *olduidvalidityp, bit32 *newuidvalidtyp,
 			struct mailbox *mailboxp);
 
-extern int mailbox_copyfile(const char *from, const char *to);
+extern int mailbox_copyfile(const char *from, const char *to, int nolink);
 extern void mailbox_hash_mbox(char *buf, size_t buf_len,
 			      const char *root, const char *name);
 

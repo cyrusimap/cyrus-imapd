@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.38.2.3 2003/12/19 18:33:37 ken3 Exp $
+ * $Id: mupdate-client.c,v 1.38.2.4 2004/01/27 23:13:48 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -168,6 +168,13 @@ int mupdate_connect(const char *server, const char *port,
 			       config_getstring(IMAPOPT_MUPDATE_PASSWORD));
     }
 
+    /* create protstream */
+    h->pin = prot_new(h->sock, 0);
+    h->pout = prot_new(h->sock, 1);
+
+    prot_setflushonread(h->pin, h->pout);
+    prot_settimeout(h->pin, 30*60);
+
     /* set the IP addresses */
     addrsize=sizeof(struct sockaddr_storage);
     if (getpeername(h->sock,(struct sockaddr *)&saddr_r,&addrsize)!=0)
@@ -199,13 +206,6 @@ int mupdate_connect(const char *server, const char *port,
     saslresult=sasl_setprop(h->saslconn, SASL_SEC_PROPS, secprops);
     if(saslresult != SASL_OK) goto noconn;
     free(secprops);
-
-    /* create protstream */
-    h->pin = prot_new(h->sock, 0);
-    h->pout = prot_new(h->sock, 1);
-
-    prot_setflushonread(h->pin, h->pout);
-    prot_settimeout(h->pin, 30*60);
 
     /* Read the mechlist & other capabilities */
     while(1) {
