@@ -71,6 +71,7 @@ all: imtest pop3test
 install:
 	$(INSTALL) -s -m 755 imtest $(DESTDIR)$(exec_prefix)/bin
 	$(INSTALL) -s -m 755 pop3test $(DESTDIR)$(exec_prefix)/bin
+	$(INSTALL) -s -m 755 lmtptest $(DESTDIR)$(exec_prefix)/bin
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
@@ -84,8 +85,11 @@ imtest.pure: imtest.o $(DEPLIBS)
 pop3test: pop3test.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o pop3test pop3test.o $(DEPLIBS) $(IMAP_LIBS)
 
+lmtptest: lmtptest.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o lmtptest lmtptest.o $(DEPLIBS) $(IMAP_LIBS)
+
 clean:
-	rm -f *.o Makefile.bak makedepend.log imtest pop3test
+	rm -f *.o Makefile.bak makedepend.log imtest pop3test lmtptest
 
 distclean: clean
 	rm -f Makefile
