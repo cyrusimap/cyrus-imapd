@@ -39,10 +39,12 @@
     The following are notes on specific Unix features: 
 
       * On any system with shadow passwords (including Solaris 2.5 with
-        Unix authentication), see the file "pwcheck/README" in the
-        distribution. 
+        Unix authentication), read the SASL documentation carefully to make
+        sure it is configured correctly. 
 
-    Send problems/questions/suggestions to cyrus-bugs@andrew.cmu.edu. 
+    Send problems/questions/suggestions to cyrus-bugs@andrew.cmu.edu. Be
+    sure to include the version numbers of imapd and libsasl, the platform
+    you are on, and what configuration options you selected. 
 
     The "info-cyrus@andrew.cmu.edu" mailing list exists for the discussion
     of this server and other Cyrus software. Send mail to
