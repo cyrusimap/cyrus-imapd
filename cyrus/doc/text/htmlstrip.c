@@ -13,7 +13,7 @@
  *
  */
   
-/* $Id: htmlstrip.c,v 1.5 2002/05/25 19:57:43 leg Exp $ */
+/* $Id: htmlstrip.c,v 1.5.4.1 2002/11/14 15:53:36 ken3 Exp $ */
   
 #include <stdio.h>
 #include <string.h>
@@ -342,6 +342,8 @@ int *linenoptr;
 	if (!strcasecmp(buf, "amp")) return '&';
 	if (!strcasecmp(buf, "lt")) return '<';
 	if (!strcasecmp(buf, "gt")) return '>';
+	if (!strcasecmp(buf, "quot")) return '"';
+	if (!strcasecmp(buf, "nbsp")) return ' ';
 	fprintf(stderr, "unrecognized entity '%s' on line %d\n", buf, lineno);
 	exit(1);
     }
