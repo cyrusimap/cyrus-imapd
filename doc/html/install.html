@@ -1,7 +1,7 @@
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers,  3-Nov-1995 -->
+<!-- Changed by: John Gardiner Myers, 14-Nov-1995 -->
 </HEAD>
 <BODY>
 <h1>           Installing and Configuring the Cyrus IMAP Server</h1>
@@ -25,6 +25,35 @@ this version of the software.  See the file <a
 HREF="changes.html"><TT>doc/changes</TT></a> in the distribution for more
 information.
 
+<H2>Prerequisites and other notes</H2>
+
+<P>The following programs and/or packages are required:
+
+<ul>
+
+<LI> makedepend.  A version is included in the <TT>makedepend</TT>
+subdirectory of the distribution.  If all else fails, make a shell
+script that does nothing, call it "<TT>makedepend</TT>", and make sure
+you always give the command "<TT>make clean</TT>" before "<TT>make
+all</TT>".
+
+<LI> Tcl, version 7.4 or later.  To obtain Tcl, see the <A
+HREF="ftp://rtfm.mit.edu/pub/usenet/comp.lang.tcl"><TT>comp.lang.tcl</TT>
+FAQ</A>
+
+<LI> If compiling with Kerberos support, the installed Kerberos must
+include the DES library.  Some vendor distributions of Kerberos,
+including the one with Solaris, do not have this support and cannot be
+used.  Sites in the USA and Canada may obtain Kerberos by following
+the instructions in <A
+HREF="ftp://athena-dist.mit.edu/pub/kerberos/README.KRB4">ftp://athena-dist.mit.edu/pub/kerberos/README.KRB4</A>.
+The author is unable to assist other sites in obtaining Kerberos.
+
+<LI> It is recommended that sites install Sendmail version 8.7.1 or later.  Sendmail distributions may
+be obtained from
+<A HREF="ftp://ftp.cs.berkeley.edu/ucb/sendmail">ftp://ftp.cs.berkely.edu/ucb/sendmail</A>
+
+</ul>
 <H2>Compiling the IMAP Server</H2>
 
 Once you have unpacked the files (see the <A
@@ -188,10 +217,8 @@ Kerberos v4 support from being compiled in. <P>
 <dt><tt>--without-tcl</tt>
 <dd>Specifies the path to the Tcl (version 7.4 or later) library and header file (optional).
 By default, looks in "<tt>/usr/local</tt>" and then in the compiler's
-default link path.  The Tcl library is needed to compile
-"<tt>cyradm</tt>", the administrative client.  Either
-"<tt>--without-tcl</tt>" or "<tt>--with-tcl=no</tt>" prevents cyradm from
-being compiled. <P>
+default link path.  The Tcl library is necessary to compile
+"<tt>cyradm</tt>", the administrative client.  <P>
 
 <dt><tt>--with-zephyr=PATH</tt>
 <dt><tt>--without-zephyr</tt>
@@ -214,6 +241,9 @@ methods are:
 
 By default, uses "<tt>flock</tt>" if the "<tt>flock()</tt>"
 function exists, "<tt>fcntl</tt>" otherwise. <P>
+
+<dt><tt>--disable-cyradm</tt>
+<dd>Do not compile the <TT>cyradm</TT> administrative client.<P>
 
 <dt><tt>--disable-privacy</tt>
 <dd>Disables all network privacy support.  Use this if you do not have
@@ -390,10 +420,9 @@ and a set of empty directories:
 <pre>
 <kbd>   cd imap
    true &gt;&gt; mailboxes
-   mkdir user
-   mkdir quota
-   mkdir proc
-   mkdir log
+   mkdir user quota proc log
+   chown cyrus *
+   chgrp mail *
 </kbd></pre>
 
 <li>Create the default partition directory specified in the
@@ -424,15 +453,15 @@ lead to data corruption and/or loss of mail after a system crash.
 
 <pre>
 <kbd>   cd /var/imap
-   chattr +S . user quota
-   chattr +S /var/spool/imap
+   /sbin/chattr +S . user quota
+   /sbin/chattr +S /var/spool/imap
 </kbd></pre>
 
 Also set the queue directory of the mail daemon to update
 synchronously.  The following example is for sendmail:
 
 <pre>
-<kbd>   chattr +S /var/spool/mqueue
+<kbd>   /sbin/chattr +S /var/spool/mqueue
 </kbd></pre>
 
 <li>If the Cyrus IMAP server was compiled with Kerberos v4 authentication,
@@ -446,7 +475,7 @@ name and "<tt>REALM</tt>" is the machine's Kerberos realm.
 host named "<tt>foobar</tt>":
 
 <pre>
-<kbd>   ksrvutil -f /var/imap/srvtab add  
+<kbd>   ksrvutil -f /var/imap/srvtab add
 </kbd></pre>
 
 Here is the information "<tt>ksrvutil</tt>" requests.  Respond by
@@ -472,6 +501,10 @@ identity "<tt>pop.HOST@REALM</tt>" and add the key to the "<tt>srvtab</tt>"
 file.
 
 <P>
+Make the "<TT>srvtab</TT>" file owned by the cyrus user:
+<pre>
+<kbd>   chown cyrus /var/imap/srvtab
+</kbd></pre>
 <li>Add the following lines to the "<tt>/etc/services</tt>" file if they 
 aren't already there.
 
