@@ -4,7 +4,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # script to translate sieve scripts to use unixhierarchysep and/or altnamespace
 # make sure you run it as the cyrus user
 #!/usr/bin/perl
-# $Id: translatesieve,v 1.4 2001/08/10 18:32:27 ken3 Exp $
+# $Id: translatesieve,v 1.5 2001/08/12 15:54:44 ken3 Exp $
 # 
 # Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
 #
@@ -88,8 +88,8 @@ sub ouch {
 $imapdconf = shift || "/etc/imapd.conf";
 
 $sievedir = "/usr/sieve";
-$unixhierarchysep = "no";
-$altnamespace = "no";
+$unixhierarchysep = 0;
+$altnamespace = 0;
 $userprefix = "Other Users";
 $sharedprefix = "Shared Folders";
 
@@ -99,15 +99,11 @@ while (<CONF>) {
 	$sievedir = $1;
 	print "you are using $sievedir as your sieve directory.\n";
     }
-    if (/^unixhierarchysep:\s*(.*)$/) {
-	$unixhierarchysep = $1;
-	# convert "on", "t", "1" to "yes" -- anything else is "no"
-	$unixhierarchysep =~ s/on|t|1/yes/;
+    if (/^unixhierarchysep:\s*(1|t|yes|on)/) {
+	$unixhierarchysep = 1;
     }
-    if (/^altnamespace:\s*(.*)$/) {
-	$altnamespace = $1;
-	# convert "on", "t", "1" to "yes" -- anything else is "no"
-	$altnamespace =~ s/on|t|1/yes/;
+    if (/^altnamespace:\s*(1|t|yes|on)/) {
+	$altnamespace = 1;
     }
     if (/^userprefix:\s*(.*)$/) {
 	$userprefix = $1;
@@ -120,8 +116,9 @@ while (<CONF>) {
 }
 close CONF;
 
-if ($unixhierarchysep ne "yes" && $altnamespace ne "yes") {
+unless ($unixhierarchysep || $altnamespace) {
     ouch "you are not using the Unix hierarchy separator or the alternate namespace";
+    exit;
 }
 
 print "translating sievedir $sievedir... ";
@@ -166,7 +163,7 @@ foreach $i ("a".."z") {
 	    $inbox = "[Ii][Nn][Bb][Oo][Xx]";
 	    while (<IN>) {
 		# Alternate namespace
-		if ($altnamespace eq "yes") {
+		if ($altnamespace) {
 		    # INBOX
 		    if (/\s+fileinto\s+"$inbox"\s*;/) {
 			# do nothing
@@ -185,7 +182,7 @@ foreach $i ("a".."z") {
 		    }
 		}
 		# Hierarchy separator
-		if ($unixhierarchysep eq "yes") {
+		if ($unixhierarchysep) {
 		    if (/\s+fileinto\s+"([^"]*)"\s*;/) {
 			substr($_, index($_, $1)) =~ s~\.~/~g;
 		    }
