@@ -1223,7 +1223,7 @@ struct mailbox *mailbox;
     int cancreate = 0;
     char sepchar = '(';
 
-    prot_printf(imapd_out, "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen");
+    prot_printf(imapd_out, "* FLAGS (\\Answered \\Flagged \\Draft \\Deleted \\Seen");
     for (i = 0; i < MAX_USER_FLAGS; i++) {
 	if (mailbox->flagname[i]) {
 	    prot_printf(imapd_out, " %s", mailbox->flagname[i]);
@@ -1232,7 +1232,7 @@ struct mailbox *mailbox;
     }
     prot_printf(imapd_out, ")\r\n* OK [PERMANENTFLAGS ");
     if (mailbox->myrights & ACL_WRITE) {
-	prot_printf(imapd_out, "%c\\Answered \\Flagged", sepchar);
+	prot_printf(imapd_out, "%c\\Answered \\Flagged \\Draft", sepchar);
 	sepchar = ' ';
     }
     if (mailbox->myrights & ACL_DELETE) {
@@ -1297,6 +1297,10 @@ time_t last_updated;
     }
     if (system_flags & FLAG_FLAGGED) {
 	prot_printf(imapd_out, "%c\\Flagged", sepchar);
+	sepchar = ' ';
+    }
+    if (system_flags & FLAG_DRAFT) {
+	prot_printf(imapd_out, "%c\\Draft", sepchar);
 	sepchar = ' ';
     }
     if (system_flags & FLAG_DELETED) {

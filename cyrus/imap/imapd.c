@@ -41,6 +41,7 @@
 #include "auth.h"
 #include "acte.h"
 #include "config.h"
+#include "version.h"
 #include "charset.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -127,7 +128,8 @@ char **envp;
     prot_settimeout(imapd_in, timeout*60);
 
     prot_printf(imapd_out,
-		"* OK %s Cyrus IMAP4 v0.4-ALPHA server ready\r\n", hostname);
+		"* OK %s Cyrus IMAP4 %s server ready\r\n", hostname,
+		CYRUS_VERSION);
     cmdloop();
 }
 
@@ -1472,6 +1474,9 @@ int usinguid;
 	    else if (!strcmp(flagname.s, "\\deleted")) {
 		storeargs.system_flags |= FLAG_DELETED;
 	    }
+	    else if (!strcmp(flagname.s, "\\draft")) {
+		storeargs.system_flags |= FLAG_DRAFT;
+	    }
 	    else {
 		prot_printf(imapd_out, "%s BAD Invalid system flag in %s command\r\n",
 		       tag, cmd);
@@ -2537,6 +2542,9 @@ int parsecharset;
 	if (!strcmp(criteria.s, "deleted")) {
 	    searchargs->system_flags_set |= FLAG_DELETED;
 	}
+	if (!strcmp(criteria.s, "draft")) {
+	    searchargs->system_flags_set |= FLAG_DRAFT;
+	}
 	else goto badcri;
 	break;
 
@@ -2828,6 +2836,9 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "undeleted")) {
 	    searchargs->system_flags_unset |= FLAG_DELETED;
+	}
+	else if (!strcmp(criteria.s, "undraft")) {
+	    searchargs->system_flags_unset |= FLAG_DRAFT;
 	}
 	else if (!strcmp(criteria.s, "unflagged")) {
 	    searchargs->system_flags_unset |= FLAG_FLAGGED;

@@ -123,6 +123,7 @@ struct index_record {
 #define FLAG_ANSWERED (1<<0)
 #define FLAG_FLAGGED (1<<1)
 #define FLAG_DELETED (1<<2)
+#define FLAG_DRAFT (1<<3)
 
 extern char *mailbox_cache_header_name[];
 extern int mailbox_num_cache_header;
