@@ -1,269 +1,316 @@
-/*  $Revision: 1.1 $
-**  Modified by Rich $alz <rsalz@osf.org> to be more portable to older
-**  systems.
-*/
-/*#define INET_SYSLOG */
 /*
- * Copyright (c) 1983, 1988 Regents of the University of California.
- * All rights reserved.
+ * Copyright (c) 1983, 1988, 1993
+ *      The Regents of the University of California.  All rights reserved.
  *
- * Redistribution and use in source and binary forms are permitted provided
- * that: (1) source distributions retain this entire copyright notice and
- * comment, and (2) distributions including binaries display the following
- * acknowledgement:  ``This product includes software developed by the
- * University of California, Berkeley and its contributors'' in the
- * documentation or other materials provided with the distribution and in
- * all advertising materials mentioning features or use of this software.
- * Neither the name of the University nor the names of its contributors may
- * be used to endorse or promote products derived from this software without
- * specific prior written permission.
- * THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. All advertising materials mentioning features or use of this software
+ *    must display the following acknowledgement:
+ *      This product includes software developed by the University of
+ *      California, Berkeley and its contributors.
+ * 4. Neither the name of the University nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
  */
 
 #if defined(LIBC_SCCS) && !defined(lint)
-static char sccsid[] = "@(#)syslog.c	5.28 (Berkeley) 6/27/90";
+static char sccsid[] = "@(#)syslog.c    8.8 (Berkeley) 8/30/95";
 #endif /* LIBC_SCCS and not lint */
 
-/*
- * SYSLOG -- print message on log file
- *
- * This routine looks a lot like printf, except that it outputs to the
- * log file instead of the standard output.  Also:
- *	adds a timestamp,
- *	prints the module name in front of the message,
- *	has some other formatting types (or will sometime),
- *	adds a newline on the end of the message.
- *
- * The output of this routine is intended to be read by syslogd(8).
- *
- * Author: Eric Allman
- * Modified to use UNIX domain IPC by Ralph Campbell
- */
-
+#include <sys/param.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/file.h>
-#include "syslog.h"
-#if	!defined(INET_SYSLOG)
 #include <sys/uio.h>
-#else
-#include <uio.h>
+#include <syslog.h>
+#include <netdb.h>
+
+#include <errno.h>
 #include <fcntl.h>
-#endif	/* !defined(INET_SYSLOG) */
-#include <varargs.h>
 #include <stdio.h>
-#if	defined(INET_SYSLOG)
-#include <netinet/in.h>
-#endif	/* defined(INET_SYSLOG) */
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
 
-#ifndef	_PATH_LOGNAME
-    /* if you are running an old syslog, change /dev/log to the same as it
-     * is in syslogd.c */
-#define	_PATH_LOGNAME	"/dev/log"
+#ifdef BSD4_4
+# include <paths.h>
+#else
+# ifndef _PATH_CONSOLE
+#  define _PATH_CONSOLE "/dev/console"
+# endif
+# ifndef _PATH_LOG
+#  define _PATH_LOG     "/dev/log"
+# endif
 #endif
-#define index		strchr
 
-#define	_PATH_CONSOLE	"/dev/console"
+#if __STDC__
+# include <stdarg.h>
+#else
+# include <varargs.h>
+# define const  /* */
+#endif
 
-static int	LogFile = -1;		/* fd for log */
-static int	connected;		/* have done connect */
-static int	LogStat = 0;		/* status bits, set by openlog() */
-static char	*LogTag = "syslog";	/* string to tag the entry with */
-static int	LogFacility = LOG_USER;	/* default facility code */
+#ifndef USESNPRINTF
+# if defined(BSD4_4)
+#  define USESNPRINTF   1       /* has snprintf(3), vsnprintf(3), etc. */
+# else
+#  define USESNPRINTF   0       /* cheesy old C library */
+# endif
+#endif
 
-extern char *index(), *strcpy(), *strncpy(), *strcat();
-/* =()<extern @<SIZE_T>@	strlen();>()= */
-extern int	strlen();
+#ifndef LOG_PRI
+# define LOG_PRI(p)     ((p) & LOG_PRIMASK)
+#endif
+
+#ifndef LOG_PERROR
+# define LOG_PERROR     0
+#endif
+
+#define BUFSLOP         1024    /* overflow space */
+
+static int      LogFile = -1;           /* fd for log */
+static int      connected;              /* have done connect */
+static int      LogStat = 0;            /* status bits, set by openlog() */
+static const char *LogTag = NULL;       /* string to tag the entry with */
+static int      LogFacility = LOG_USER; /* default facility code */
+static int      LogMask = 0xff;         /* mask of priorities to be logged */
+#if defined(BSD4_4)
+extern char     *__progname;            /* Program name, from crt0. */
+#else
+char            *__progname = NULL;
+#endif
 
 /*
-**  Return a string representation of errno.
-*/
-static char *
-xstrerror(e)
-    int		e;
+ * syslog, vsyslog --
+ *      print message on log file; output is intended for syslogd(8).
+ */
+void
+#if __STDC__
+syslog(int pri, const char *fmt, ...)
+#else
+syslog(pri, fmt, va_alist)
+        int pri;
+        char *fmt;
+        va_dcl
+#endif
 {
-    extern int	sys_nerr;
-    extern char	*sys_errlist[];
-    static char	buff[30];
+        va_list ap;
+        extern void vsyslog();
 
-    if (e >= 0 && e < sys_nerr)
-	return sys_errlist[e];
-    (void)sprintf(buff, "Error code %d\n", e);
-    return buff;
+#if __STDC__
+        va_start(ap, fmt);
+#else
+        va_start(ap);
+#endif
+        vsyslog(pri, fmt, ap);
+        va_end(ap);
 }
 
-/* VARARGS0 */
-syslog(va_alist)
-    va_dcl
-{
-	int pri;
-	char *fmt;
-	va_list ap;
-
-	va_start(ap);
-	pri = va_arg(ap, int);
-	fmt = va_arg(ap, char*);
-	vsyslog(pri, fmt, ap);
-	va_end(ap);
-}
-
+void
 vsyslog(pri, fmt, ap)
-	int pri;
-	register char *fmt;
-	va_list ap;
+        int pri;
+        register const char *fmt;
+        va_list ap;
 {
-	extern int errno;
-	register int cnt;
-	register char *p;
-	time_t now, time();
-	int fd, saved_errno;
-	char tbuf[2048], fmt_cpy[1024], *stdp, *ctime();
+        register int cnt;
+        register char ch, *p, *t;
+        time_t now;
+        int fd, saved_errno;
+        int panic = 0;
+        static int maxsend = BUFSIZ;
+        char *stdp, fmt_cpy[1024], tbuf[BUFSIZ + BUFSLOP];
+        extern void openlog();
 
-	saved_errno = errno;
+#define INTERNALLOG     LOG_ERR|LOG_CONS|LOG_PERROR|LOG_PID
+        /* Check for invalid bits. */
+        if (pri & ~(LOG_PRIMASK|LOG_FACMASK)) {
+                syslog(INTERNALLOG,
+                    "syslog: unknown facility/priority: %x", pri);
+                pri &= LOG_PRIMASK|LOG_FACMASK;
+        }
 
-	/* see if we should just throw out this message */
-	if (!LOG_MASK(LOG_PRI(pri)) || (pri &~ (LOG_PRIMASK|LOG_FACMASK)))
-		return;
-	if (LogFile < 0 || !connected)
-		openlog(LogTag, LogStat | LOG_NDELAY, 0);
+        /* Check priority against setlogmask values. */
+        if (!(LOG_MASK(LOG_PRI(pri)) & LogMask))
+                return;
 
-	/* set default facility if none specified */
-	if ((pri & LOG_FACMASK) == 0)
-		pri |= LogFacility;
+        saved_errno = errno;
 
-	/* build the message */
-	(void)time(&now);
-	(void)sprintf(tbuf, "<%d>%.15s ", pri, ctime(&now) + 4);
-	for (p = tbuf; *p; ++p);
-	if (LogStat & LOG_PERROR)
-		stdp = p;
-	if (LogTag) {
-		(void)strcpy(p, LogTag);
-		for (; *p; ++p);
-	}
-	if (LogStat & LOG_PID) {
-		(void)sprintf(p, "[%d]", getpid());
-		for (; *p; ++p);
-	}
-	if (LogTag) {
-		*p++ = ':';
-		*p++ = ' ';
-	}
+        /* Set default facility if none specified. */
+        if ((pri & LOG_FACMASK) == 0)
+                pri |= LogFacility;
 
-	/* substitute error message for %m */
-	{
-		register char ch, *t1, *t2;
-		char *xstrerror();
+        /* Get connected. */
+        if (!connected)
+                openlog(LogTag, LogStat | LOG_NDELAY, 0);
 
-		for (t1 = fmt_cpy; ch = *fmt; ++fmt)
-			if (ch == '%' && fmt[1] == 'm') {
-				++fmt;
-				for (t2 = xstrerror(saved_errno);
-				    *t1 = *t2++; ++t1);
-			}
-			else
-				*t1++ = ch;
-		*t1 = '\0';
-	}
+        /* Build the message. */
+        (void)time(&now);
+        sprintf(tbuf, "<%d>", pri);
+        p = tbuf + strlen(tbuf);
+        strftime(p, sizeof (tbuf) - (p - tbuf), "%h %e %T ", localtime(&now));
+        p += strlen(p);
+        stdp = p;
+        if (LogTag == NULL)
+                LogTag = __progname;
+        if (LogTag != NULL) {
+                sprintf(p, "%s", LogTag);
+                p += strlen(p);
+        }
+        if (LogStat & LOG_PID) {
+                sprintf(p, "[%d]", getpid());
+                p += strlen(p);
+        }
+        if (LogTag != NULL) {
+                *p++ = ':';
+                *p++ = ' ';
+        }
 
-	(void)vsprintf(p, fmt_cpy, ap);
+        /* Substitute error message for %m. */
+        for (t = fmt_cpy; ch = *fmt; ++fmt)
+                if (ch == '%' && fmt[1] == 'm') {
+                        ++fmt;
+                        sprintf(t, "%s", strerror(saved_errno));
+                        t += strlen(t);
+                } else
+                        *t++ = ch;
+        *t = '\0';
 
-	cnt = strlen(tbuf);
+#if USESNPRINTF
+        cnt = maxsend - (p - tbuf) + 1;
+        p += vsnprintf(p, cnt, fmt_cpy, ap);
+        cnt = p - tbuf;
+#else
+        vsprintf(p, fmt_cpy, ap);
+        p += strlen(p);
+        cnt = p - tbuf;
+        if (cnt > sizeof tbuf) {
+                /* Panic condition. */
+                panic = 1;
+        }
+        if (cnt > maxsend)
+                cnt = maxsend;
+#endif
 
-	/* output to stderr if requested */
-	if (LogStat & LOG_PERROR) {
-		struct iovec iov[2];
-		register struct iovec *v = iov;
+        /* Output to stderr if requested. */
+        if (LogStat & LOG_PERROR) {
+                struct iovec iov[2];
+                register struct iovec *v = iov;
 
-		v->iov_base = stdp;
-		v->iov_len = cnt - (stdp - tbuf);
-		++v;
-		v->iov_base = "\n";
-		v->iov_len = 1;
-		(void)writev(2, iov, 2);
-	}
+                v->iov_base = stdp;
+                v->iov_len = cnt - (stdp - tbuf);
+                ++v;
+                v->iov_base = "\n";
+                v->iov_len = 1;
+                (void)writev(STDERR_FILENO, iov, 2);
+        }
 
-	/* output the message to the local logger */
-	if (send(LogFile, tbuf, cnt, 0) >= 0 || !(LogStat&LOG_CONS))
-		return;
+        /* Output the message to the local logger. */
+        for (;;) {
+                if (send(LogFile, tbuf, cnt, 0) >= 0)
+                        goto done;
+                if (errno != EMSGSIZE || maxsend <= 256)
+                        break;
 
-	/*
-	 * output the message to the console; don't worry about
-	 * blocking, if console blocks everything will.
-	 */
-	if ((fd = open(_PATH_CONSOLE, O_WRONLY, 0)) < 0)
-		return;
-	(void)strcat(tbuf, "\r\n");
-	cnt += 2;
-	p = index(tbuf, '>') + 1;
-	(void)write(fd, p, cnt - (p - tbuf));
-	(void)close(fd);
+                /* Message was too large -- back it off. */
+                do {
+                        maxsend -= 128;
+                } while (cnt < maxsend && maxsend > 256);
+                cnt = maxsend;
+        }
+
+        /*
+         * Output the message to the console; don't worry about blocking,
+         * if console blocks everything will.  Make sure the error reported
+         * is the one from the syslogd failure.
+         */
+        if (LogStat & LOG_CONS &&
+            (fd = open(_PATH_CONSOLE, O_WRONLY, 0)) >= 0) {
+                (void)strcat(tbuf, "\r\n");
+                cnt += 2;
+                p = strchr(tbuf, '>') + 1;
+                (void)write(fd, p, cnt - (p - tbuf));
+                (void)close(fd);
+        }
+
+  done:
+#if !USESNPRINTF
+        /*
+         * If we had a buffer overrun, log a panic and abort.
+         * We can't return because our stack is probably toast.
+         */
+        if (panic) {
+                syslog(LOG_EMERG, "SYSLOG BUFFER OVERRUN -- EXITING");
+                abort();
+        }
+#endif
 }
 
-#if	!defined(INET_SYSLOG)
-static struct sockaddr SyslogAddr;	/* AF_UNIX address of local logger */
-#else
-static struct sockaddr_in SyslogAddr;	/* AF_INET address of local logger */
-#endif	/* !defined(INET_SYSLOG) */
-/*
- * OPENLOG -- open system log
- */
+static struct sockaddr SyslogAddr;      /* AF_UNIX address of local logger */
+
+void
 openlog(ident, logstat, logfac)
-	char *ident;
-	int logstat, logfac;
+        const char *ident;
+        int logstat, logfac;
 {
-	if (ident != NULL)
-		LogTag = ident;
-	LogStat = logstat;
-	if (logfac != 0 && (logfac &~ LOG_FACMASK) == 0)
-		LogFacility = logfac;
-	if (LogFile == -1) {
-#if	!defined(INET_SYSLOG)
-		SyslogAddr.sa_family = AF_UNIX;
-		strncpy(SyslogAddr.sa_data, _PATH_LOGNAME,
-		    sizeof(SyslogAddr.sa_data));
-		if (LogStat & LOG_NDELAY) {
-			LogFile = socket(AF_UNIX, SOCK_DGRAM, 0);
-			fcntl(LogFile, F_SETFD, 1);
-		}
-#else
-		SyslogAddr.sin_family = AF_INET;
-		SyslogAddr.sin_port = htons(514);
-		SyslogAddr.sin_addr.s_addr = INADDR_ANY;
-  		if (LogStat & LOG_NDELAY) {
-			LogFile = socket(AF_INET, SOCK_DGRAM, 0);
-  			fcntl(LogFile, F_SETFD, 1);
-  		}
-#endif	/* !defined(INET_SYSLOG) */
-	}
-	if (LogFile != -1 && !connected &&
-	    connect(LogFile, &SyslogAddr, sizeof(SyslogAddr)) != -1)
-		connected = 1;
+        if (ident != NULL)
+                LogTag = ident;
+        LogStat = logstat;
+        if (logfac != 0 && (logfac &~ LOG_FACMASK) == 0)
+                LogFacility = logfac;
+
+        if (LogFile == -1) {
+                SyslogAddr.sa_family = AF_UNIX;
+                (void)strncpy(SyslogAddr.sa_data, _PATH_LOG,
+                    sizeof(SyslogAddr.sa_data));
+                if (LogStat & LOG_NDELAY) {
+                        if ((LogFile = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1)
+                                return;
+                        (void)fcntl(LogFile, F_SETFD, 1);
+                }
+        }
+        if (LogFile != -1 && !connected)
+                if (connect(LogFile, &SyslogAddr, sizeof(SyslogAddr)) == -1) {
+                        (void)close(LogFile);
+                        LogFile = -1;
+                } else
+                        connected = 1;
 }
 
-/*
- * CLOSELOG -- close the system log
- */
+void
 closelog()
 {
-	(void) close(LogFile);
-	LogFile = -1;
-	connected = 0;
+        (void)close(LogFile);
+        LogFile = -1;
+        connected = 0;
 }
 
-static int	LogMask = 0xff;		/* mask of priorities to be logged */
-/*
- * SETLOGMASK -- set the log mask level
- */
+/* setlogmask -- set the log mask level */
+int
 setlogmask(pmask)
-	int pmask;
+        int pmask;
 {
-	int omask;
+        int omask;
 
-	omask = LogMask;
-	if (pmask != 0)
-		LogMask = pmask;
-	return (omask);
+        omask = LogMask;
+        if (pmask != 0)
+                LogMask = pmask;
+        return (omask);
 }
+
