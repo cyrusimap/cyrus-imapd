@@ -48,9 +48,12 @@ are listed with ``<none>''.
 .IP "\fBconfigdirectory:\fR <no default>" 5
 The pathname of the IMAP configuration directory.  This field is required.
 .IP "\fBdefaultpartition:\fR default" 5
-The partition name used by default for new mailboxes. This field is required.
+The partition name used by default for new mailboxes.
 .IP "\fBpartition-\fIname\fB:\fR <no default>" 5
-The pathname of the partition \fIname\fR.
+The pathname of the partition \fIname\fR.  At least one field, for the
+partition named in the \fBdefaultpartition\fR option, is required.
+For example, if the value of the \fBdefaultpartion\fR option is
+\fBdefault\fR, then the \fBpartition-default\fR field is required.
 .IP "\fBumask:\fR 077" 5
 The umask value used by various Cyrus IMAP programs.
 .IP "\fBallowanonymouslogin:\fR no" 5
