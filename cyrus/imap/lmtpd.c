@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.61.2.3 2001/06/20 02:08:29 ken3 Exp $
+ * $Id: lmtpd.c,v 1.61.2.3.2.1 2001/07/05 19:18:21 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.61.2.3 2001/06/20 02:08:29 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.61.2.3.2.1 2001/07/05 19:18:21 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -296,6 +296,12 @@ int service_init(int argc, char **argv, char **envp)
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
 
+    /* Set namespace */
+    if (!namespace_init(&lmtpd_namespace, 0)) {
+	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
+	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    }
+
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION, CYRUS_VERSION);
@@ -327,12 +333,6 @@ int service_main(int argc, char **argv, char **envp)
 	default:
 	    usage();
 	}
-    }
-
-    /* Set namespace */
-    if (!namespace_init(&lmtpd_namespace, 0)) {
-	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
-	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
     }
 
     snmp_increment(TOTAL_CONNECTIONS, 1);
@@ -1117,6 +1117,9 @@ int deliver_mailbox(struct protstream *msg,
     char namebuf[MAX_MAILBOX_PATH];
     time_t now = time(NULL);
 
+    /* Translate user */
+    if (user) hier_sep_tointernal(user, &lmtpd_namespace);
+
     r = (*lmtpd_namespace.mboxname_tointernal)(mailboxname, &lmtpd_namespace,
 					       user, namebuf);
 
@@ -1199,7 +1202,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	}
 
 	/* case 2: ordinary user, might have Sieve script */
-	else if (!strchr(rcpt, '.') &&
+	else if (!(lmtpd_namespace.hier_sep == '.' && strchr(rcpt, '.')) &&
 	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
 	    FILE *f = sieve_find_script(rcpt);
 
@@ -1353,7 +1356,10 @@ static int verify_user(const char *user)
     /* check to see if mailbox exists */
     if (!strncmp(user, BB, sl) && user[sl] == '+') {
 	/* special shared folder address */
-	r = mboxlist_lookup(user + sl + 1, NULL, NULL, NULL);
+	strcpy(buf, user + sl + 1);
+	/* Translate user */
+	hier_sep_tointernal(buf, &lmtpd_namespace);
+	r = mboxlist_lookup(buf, NULL, NULL, NULL);
     } else {
 	/* ordinary user */
 	if (strlen(user) > sizeof(buf)-10) {
@@ -1363,6 +1369,8 @@ static int verify_user(const char *user)
 	    strcat(buf, user);
 	    plus = strchr(buf, '+');
 	    if (plus) *plus = '\0';
+	    /* Translate user */
+	    hier_sep_tointernal(buf+5, &lmtpd_namespace);
 	    r = mboxlist_lookup(buf, NULL, NULL, NULL);
 	}
     }
