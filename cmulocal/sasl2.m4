@@ -1,12 +1,13 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.30 2003/07/02 13:13:40 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.31 2003/07/25 12:32:08 rjs3 Exp $
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
     gssapi=$enableval,
     gssapi=yes)
  AC_REQUIRE([SASL2_CRYPT_CHK])
+ AC_REQUIRE([CMU_SOCKETS])
 
  if test "$gssapi" != no; then
     if test -d ${gssapi}; then
@@ -27,7 +28,7 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
   dnl we might need libdb
   AC_CHECK_LIB(db, db_open)
 
-  gss_impl="mit";
+  gss_impl="no";
   AC_CHECK_LIB(resolv,res_search)
   if test -d ${gssapi}; then 
      CPPFLAGS="$CPPFLAGS -I$gssapi/include"
@@ -45,11 +46,15 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
   fi
 
   # Check a full link against the heimdal libraries.
+  # If this fails, check a full link against the MIT libraries.
   # If this fails, check a full link against the Solaris 8 and up libgss.
-  # If this fails, assume MIT.
-  AC_CHECK_LIB(gssapi,gss_unwrap,gss_impl="heimdal",,$GSSAPIBASE_LIBS -lgssapi -lkrb5 -lasn1 -lroken ${LIB_CRYPT} -lcom_err)
+  AC_CHECK_LIB(gssapi,gss_unwrap,gss_impl="heimdal",,$GSSAPIBASE_LIBS -lgssapi -lkrb5 -lasn1 -lroken ${LIB_CRYPT} -lcom_err ${LIB_SOCKET})
 
-  if test "$gss_impl" = "mit"; then
+  if test "$gss_impl" = "no"; then
+    AC_CHECK_LIB(gssapi_krb5,gss_unwrap,gss_impl="mit",,$GSSAPIBASE_LIBS -lgssapi_krb5 -lkrb5 -lk5crypto -lcom_err ${LIB_SOCKET})
+  fi
+
+  if test "$gss_impl" = "no"; then
     AC_CHECK_LIB(gss,gss_unwrap,gss_impl="seam",,-lgss)
   fi
 
