@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.59 2001/09/19 18:53:32 ken3 Exp $
+ $Id: imclient.c,v 1.60 2001/11/13 19:59:52 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -220,7 +220,7 @@ int imclient_connect(struct imclient **imclient,
     struct sockaddr_in addr;
     static struct imclient zeroimclient;
     int saslresult;
-    static didinit;
+    static int didinit;
 
     hp = gethostbyname(host);
     if (!hp) return -1;
@@ -267,10 +267,9 @@ int imclient_connect(struct imclient **imclient,
     (*imclient)->tls_on=0;
 #endif /* HAVE_SSL */
 
-
     if (!didinit) {
 	/* attempt to start sasl */
-	saslresult=sasl_client_init(NULL);
+	saslresult = sasl_client_init(NULL);
 	if (saslresult!=SASL_OK) return 1;
 	didinit = 1;
     }
