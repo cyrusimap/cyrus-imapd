@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.112 2000/06/07 20:30:51 leg Exp $
+ * $Id: index.c,v 1.113 2000/06/07 20:45:11 ken3 Exp $
  */
 #include <config.h>
 
@@ -3317,7 +3317,8 @@ static struct thread *index_thread_orderedsubj(unsigned *msgno_list, int nmsg)
 {
     struct msgdata *msgdata;
     signed char sortcrit[] = { SORT_SUBJECT, SORT_DATE, SORT_SEQUENCE };
-    unsigned psubj;
+    unsigned psubj_hash;
+    char *psubj;
     struct thread *threads, *tmp, *cur, *parent;
 
     /* Create/load the msgdata array */
@@ -3333,24 +3334,27 @@ static struct thread *index_thread_orderedsubj(unsigned *msgno_list, int nmsg)
     /* build threads under a dummy head */
     tmp = cur = NEWTHREAD;
     parent = NULL;
-    psubj = msgdata->xsubj_hash + 1;	/* guarantee psubj != first subj */
+    psubj_hash = msgdata->xsubj_hash + 1; /* guarantee psubj != first subj */
+    psubj = NULL;
     while (msgdata) {
-	/* if current subj != previous subj, then create a new thread */
-	if (msgdata->xsubj_hash != psubj) {
-	    cur->next = NEWTHREAD; /* create a new entry */
-	    parent = cur = cur->next; /* now work with the new entry */
-	    cur->msgdata = msgdata;
-	}
-
-	/* otherwise, add message to current thread */
-	else {
+	/* if current subj == prev subj, then add message to current thread */
+	if (msgdata->xsubj_hash == psubj_hash &&
+	    !strcmp(msgdata->xsubj, psubj)) { /* if 2 subjs have same key */
 	    parent->child = NEWTHREAD;
 	    parent = parent->child; /* this'll be the parent 
 				       next time around */
 	    parent->msgdata = msgdata;
 	}
 
-	psubj = msgdata->xsubj_hash;
+	/* otherwise, create a new thread */
+	else {
+	    cur->next = NEWTHREAD; /* create a new entry */
+	    parent = cur = cur->next; /* now work with the new entry */
+	    cur->msgdata = msgdata;
+	}
+
+	psubj_hash = msgdata->xsubj_hash;
+	psubj = msgdata->xsubj;
 	msgdata = msgdata->next;
     }
 
