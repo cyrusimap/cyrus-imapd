@@ -1,6 +1,6 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server FAQ</TITLE>
-    <!-- $Id: faq.html,v 1.14 2001/08/29 14:10:46 ken3 Exp $ -->
+    <!-- $Id: faq.html,v 1.15 2001/09/10 16:40:18 ken3 Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server FAQ</H1>
 
@@ -92,26 +92,42 @@ in my <tt>imapd.log</tt> file.  What's wrong?
 <tt>[x]inetd</tt>.
 
 <dt><b>Q:</b> How do I use different SSL/TLS certificates for
-imap and pop (or disable SSL/TLS for pop)?
+imap and pop?
 <dd>
-<p><b>A:</b> Use a separate config file for one of the services.  For
-example, change the pop3 service in <tt>cyrus.conf</tt> to something like:
-<pre>
-pop3    cmd="pop3d -C /etc/pop3d.conf" listen="pop3"
-</pre>
-then copy <tt>/etc/imapd.conf</tt> to <tt>/etc/pop3d.conf</tt> and
-change the <tt>tls_*</tt> options to use your POP3 specific
-certificate (or remove them to disable SSL/TLS).
+<p><b>A:</b> Specify the different certs using the appropriate options
+in <tt>imapd.conf<//t>.  Read <tt>imapd.conf(5)</tt> for details.
 
 <dt><b>Q:</b> My KPOP client is complaining about TLS keys.  What
 should I do?
 <dd>
-<p><b>A:</b> Disable TLS for the kpop service. See the answer to the
-previous question for details.
+<p><b>A:</b> Disable TLS for the kpop service.  Either set
+<tt>tls_pop3_cert_file</tt> to <b>disabled</b> in <tt>imapd.conf</tt>
+(which will also disable SSL/TLS for pop3), or use a separate config
+file for kpop.  For example, change the kpop service in
+<tt>cyrus.conf</tt> to something like:
+<pre>
+kpop    cmd="pop3d -k -C /etc/kpopd.conf" listen="kpop"
+</pre>
+then copy <tt>/etc/imapd.conf</tt> to <tt>/etc/kpopd.conf</tt> and
+remove the <tt>tls_*</tt> options.
+
+<dt><b>Q:</b> Eudora 5.x can't connect using STARTTLS ("SSL
+Neogotiation Failed").  What should I do?
+<dd>
+<p><b>A:</b> First, complain to QUALCOMM because their STARTTLS
+implementation is broken.  Eudora doesn't support TLSv1 (per RFC2246)
+and Cyrus requires it.  If you really need this before it is fixed in
+Eudora, remove or comment out the following lines in tls.c:
+<pre>
+    if (tlsonly) {
+	off |= SSL_OP_NO_SSLv2;
+	off |= SSL_OP_NO_SSLv3;
+    }
+</pre>
 </dl>
 
 <P><HR>
-last modified: $Date: 2001/08/29 14:10:46 $
+last modified: $Date: 2001/09/10 16:40:18 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
