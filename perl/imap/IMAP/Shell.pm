@@ -749,8 +749,10 @@ sub _sc_quota {
   my %quota = $$cyrref->listquota(@nargv);
   foreach my $quota (keys %quota) {
     $lfh->[1]->print(" ", $quota, " ", $quota{$quota}[0], "/",
-		     $quota{$quota}[1], " (",
-		     $quota{$quota}[0] * 100 / $quota{$quota}[1], "%)");
+		     $quota{$quota}[1]);
+    if ($quota{$quota}[1]) {
+      $lfh->[1]->print(" (", $quota{$quota}[0] * 100 / $quota{$quota}[1], "%)");
+    }
   }
   $lfh->[1]->print("\n");
   0;
@@ -784,8 +786,10 @@ sub _sc_quotaroot {
   foreach my $quota (keys %quota) {
     ($used, $tot) = split(/ /, $quota{$quota});
     $lfh->[1]->print(" ", $quota, " ", $quota{$quota}[0], "/",
-		     $quota{$quota}[1], " (",
-		     $quota{$quota}[0] * 100 / $quota{$quota}[1], "%)");
+		     $quota{$quota}[1]);
+    if ($quota{$quota}[1]) {
+      $lfh->[1]->print(" (", $quota{$quota}[0] * 100 / $quota{$quota}[1], "%)");
+    }
   }
   $lfh->[1]->print("\n");
   0;
