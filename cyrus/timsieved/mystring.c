@@ -7,8 +7,7 @@
 #include "codes.h"
 
 #include <stdlib.h>
-
-#include <strings.h>
+#include <string.h>
 
 int string_allocate(int length,
 		    const char *buf,	/* NULL => no copy */
