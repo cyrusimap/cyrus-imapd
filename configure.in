@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.174 2000/05/23 20:51:40 robeson Exp $
+dnl $Id: configure.in,v 1.175 2000/05/28 23:17:53 leg Exp $
 dnl
 
 
@@ -617,6 +617,7 @@ case "$with_openssl" in
 		
 		;;
 	*)  CPPFLAGS="${CPPFLAGS} -I${with_openssl}/include"
+	    LDFLAGS="${LDFLAGS} -L${with_openssl}/lib"
 	    LIBS="${LIBS} -lssl -lcrypto";;
 esac
 
