@@ -41,6 +41,9 @@
 use ExtUtils::MakeMaker;
 use Config;
 
+my $SASL_INC = $ENV{SASL_INC};
+my $SASL_LIB = $ENV{SASL_LIB} || "-lsasl";
+
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 $libs = "-lcyrus";
@@ -52,8 +55,8 @@ WriteMakefile(
     'macro'	=> {'IMCLIENT_LIBS' => ''},	# hack
     'clean'	=> {'FILES' => 'libcyrperl.a cyradm'},
     'OBJECT'    => 'IMAP.o ../../lib/libcyrus.a',
-    'LIBS'	=> ['-lsasl -lssl -lcrypto'],
+    'LIBS'	=> ["$SASL_LIB -lssl -lcrypto"],
     'DEFINE'	=> '',     # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> '-I../../lib',     # e.g., '-I/usr/include/other' 
+    'INC'	=> "-I../../lib $SASL_INC", 
     'EXE_FILES' => [cyradm],
 );

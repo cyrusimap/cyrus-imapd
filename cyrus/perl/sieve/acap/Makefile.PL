@@ -38,12 +38,16 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 use ExtUtils::MakeMaker;
+
+my $SASL_INC = $ENV{SASL_INC};
+my $SASL_LIB = $ENV{SASL_LIB} || "-lsasl";
+
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 WriteMakefile(
     'NAME'	=> 'Cyrus::SIEVE::acap',
     'VERSION_FROM' => 'acap.pm', # finds $VERSION
-    'LIBS'	=> ['-L../../../acap/ -lacap -lsasl -L../../../lib/ -lcyrus -lssl -lcrypto'],   # e.g., '-lm' 
+    'LIBS'	=> ["-L../../../acap/ -lacap $SASL_LIB -L../../../lib/ -lcyrus -lssl -lcrypto"],   # e.g., '-lm' 
     'DEFINE'	=> '',     # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> '-I../../../acap/',     # e.g., '-I/usr/include/other' 
+    'INC'	=> "-I../../../acap/ $SASL_INC",     # e.g., '-I/usr/include/other' 
 );

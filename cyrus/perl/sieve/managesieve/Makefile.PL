@@ -38,12 +38,16 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 use ExtUtils::MakeMaker;
+
+my $SASL_INC = $ENV{SASL_INC};
+my $SASL_LIB = $ENV{SASL_LIB} || "-lsasl";
+
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 WriteMakefile(
     'NAME'	=> 'Cyrus::SIEVE::managesieve',
     'VERSION_FROM' => 'managesieve.pm', # finds $VERSION
-    'LIBS'	=> ['-L../lib/ -lisieve -lsasl -L../../../lib/ -lcyrus -lssl -lcrypto'],   # e.g., '-lm' 
+    'LIBS'	=> ["-L../lib/ -lisieve $SASL_LIB -L../../../lib/ -lcyrus -lssl -lcrypto"], 
     'DEFINE'	=> '',     # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> '-I../lib/ -I../../../lib/',# isieve stuff and prot stuff
+    'INC'	=> "-I../lib/ -I../../../lib/ $SASL_INC",
 );
