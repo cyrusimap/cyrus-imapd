@@ -25,7 +25,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.84 1998/07/31 22:22:02 tjs Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.85 1998/08/05 21:25:13 tjs Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -578,13 +578,14 @@ int lmtpmode;
 		/* The message contained \r\0, and fgets is confusing us.
 		   XXX ignored
 		 */
+	    } else {
+		/*
+		 * We were unlucky enough to get a CR just before we ran
+		 * out of buffer--put it back.
+		 */
+		ungetc('\r', stdin);
+		*p = '\0';
 	    }
-	    /*
-	     * We were unlucky enough to get a CR just before we ran
-	     * out of buffer--put it back.
-	     */
-	    ungetc('\r', stdin);
-	    *p = '\0';
 	}
 	/* Remove any lone CR characters */
 	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
