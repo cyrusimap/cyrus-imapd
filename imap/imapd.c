@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.331 2001/12/04 02:23:04 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.332 2002/01/10 19:33:11 leg Exp $ */
 
 #include <config.h>
 
@@ -236,21 +236,20 @@ static struct
  * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
  * right to the principal 'auth_identity'. Returns 1 if so, 0 if not.
  */
-static int acl_ok(user, auth_identity)
-const char *user;
-const char *auth_identity;
+static int acl_ok(const char *user, 
+		  const char *auth_identity,
+		  struct auth_state *authstate)
 {
     char *acl;
     char inboxname[1024];
     int r;
-    struct auth_state *authstate;
 
     if (strchr(user, '.') || strlen(user)+6 >= sizeof(inboxname)) return 0;
 
     strcpy(inboxname, "user.");
     strcat(inboxname, user);
 
-    if (!(authstate = auth_newstate(auth_identity, (char *)0)) ||
+    if (!authstate ||
 	mboxlist_lookup(inboxname, (char **)0, &acl, NULL)) {
 	r = 0;  /* Failed so assume no proxy access */
     }
@@ -304,7 +303,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
 	int use_acl = config_getswitch("loginuseacl", 0);
 
 	if (imapd_userisadmin ||
-	    (use_acl && acl_ok(requested_user, auth_identity)) ||
+	    (use_acl && acl_ok(requested_user, auth_identity, imapd_authstate)) ||
 	    authisa(imapd_authstate, "imap", "proxyservers")) {
 	    /* proxy ok! */
 
