@@ -1,5 +1,5 @@
 # Makefile for the Cyrus controlling process
-# $Id: Makefile.in,v 1.6 2000/05/23 20:56:30 robeson Exp $
+# $Id: Makefile.in,v 1.7 2000/07/21 18:50:03 leg Exp $
 # 
 # @configure_input@
 #
@@ -77,7 +77,7 @@ install:
 	$(srcdir)/../install-sh -d ${DESTDIR}$(cyrus_prefix)/bin
 	for file in $(PROGS); \
 	do \
-		$(INSTALL) -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 755 $$file $(DESTDIR)$(cyrus_prefix)/bin || exit 1; \
+		$(INSTALL) -m 755 $$file $(DESTDIR)$(cyrus_prefix)/bin || exit 1; \
 	done
 
 .c.o:

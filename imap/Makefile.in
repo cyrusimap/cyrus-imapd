@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.121 2000/07/11 17:54:55 leg Exp $
+# $Id: Makefile.in,v 1.122 2000/07/21 18:50:02 leg Exp $
 # 
 # @configure_input@
 #
@@ -87,7 +87,7 @@ COMPILE_ET=@COMPILE_ET@
 #     the dynamic libraries that may crop up during run time.
 # 
 PURIFY=/usr/local/bin/purify
-PUREOPT= -best-effort -windows=no -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir
+PUREOPT= -best-effort -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir
 QUANTIFY=/usr/local/bin/quantify
 QUANTOPT=-windows=no -filename-prefix=/tmp/quant/%v.%p -write-summary-file= -logfile=/tmp/quant/%v.%p.log
 
@@ -115,10 +115,9 @@ install:
 	$(srcdir)/../install-sh -d ${DESTDIR}$(cyrus_prefix)/bin
 	for file in $(PROGS); \
 	do \
-		$(INSTALL) -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 755 $$file $(DESTDIR)$(cyrus_prefix)/bin || exit 1; \
+		$(INSTALL) -m 755 $$file $(DESTDIR)$(cyrus_prefix)/bin || exit 1; \
 	done
-#	$(INSTALL) -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 4750 $(SUIDPROGS) $(DESTDIR)$(cyrus_prefix)/bin
-	$(INSTALL) -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 755 feedcyrus $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -m 755 feedcyrus $(DESTDIR)$(cyrus_prefix)/bin
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
