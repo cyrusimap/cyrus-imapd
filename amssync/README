@@ -1,0 +1,48 @@
+This directory contains programs for shadowing a set of AMS (Andrew
+Message System) bboards into a Cyrus IMAP server.
+
+Usage: syncamstree [-a] [-c file | -s ] [-d] [-h] [-m] [-u principal] [-v] [server [port]]
+       -a          Synchronize ACL's (also creates any new bboards)
+       -c          Specify a config file name, otherwise use builtin default
+       -d          Print debugging info
+       -h          Print this message
+       -m          Synchronize content (messages)
+       -s          Read config file from stdin
+       -u          Give principal full perms on all acls (for testing only)
+       -v          List ams groups as they are processed
+The format of the config file is basedir:regexp
+basedir is the root of the AMS bboard tree (i.e. /afs/andrew.cmu.edu/usr0/bb)
+regexp is used to determine what groups in that tree are synchronized
+The current default config is:
+/afs/andrew/usr0/bb:^assocs
+
+this script should be run with postman authentication (with postman as IMAP
+server admin), as any server admin who can read the AMS groups, or, if the top 
+level groups (i.e. assocs, grafitti, org, internet) exist and grant a specific
+user create and administer privs.  In the latter cases the -u switch must be
+used. (in the third case, if the -u switch is ommited, the user will lose 
+their special access unless it is also present in the corresponding AMS 
+directory.)
+
+one of -a -m or -v is required.
+ 
+in order for this script to work properly, it must be called via a
+full pathname, or 1) it must be released to gamma host, 2) installed
+in /usr/cyrus/bin or 3) the BSYNCDIR environment variable must point
+to the correct location (the directory in which bin/syncamstree exists)
+
+Debugging info includes:
+* List ams groups as they are processed (same as -v)
+* print tracing info for ACL manipulation: (-a only)
+  X  existing imap acl
+  X< existing imap acl that was removed
+  +  AFS (positive) acl
+  +>  positive imap acl that was added/modified in response to AFS acl
+  - AFS (positive) acl
+  ->  negative imap acl that was added/modified in response to AFS acl
+* print summaries of AFS and IMAP area contents (number of messages) prior to sync (-m only)
+* print tracing of message appends/deletes (on a seperate line from above) (-m only)
+  A message from AMS appended to IMAP mailbox
+  D message from IMAP mailbox deleted
+
+

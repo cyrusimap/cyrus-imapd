@@ -1,0 +1,84 @@
+# Makefile for amssync
+# 
+# @configure_input@
+# 
+#	(C) Copyright 1995 by Carnegie Mellon University
+# 
+#                      All Rights Reserved
+# 
+# Permission to use, copy, modify, and distribute this software and its 
+# documentation for any purpose and without fee is hereby granted, 
+# provided that the above copyright notice appear in all copies and that
+# both that copyright notice and this permission notice appear in 
+# supporting documentation, and that the name of CMU not be
+# used in advertising or publicity pertaining to distribution of the
+# software without specific, written prior permission.  
+# 
+# CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+# ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+# CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+# ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+# WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+# ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+# SOFTWARE.
+# 
+srcdir = @srcdir@
+VPATH = @srcdir@
+
+CC = @CC@
+INSTALL = @INSTALL@
+RANLIB = @RANLIB@
+
+DEFS = @DEFS@
+CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
+LIBS = @LIBS@ 
+DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
+
+CFLAGS = -g
+LDFLAGS = -g
+
+SHELL = /bin/sh
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+cyrus_prefix = @cyrus_prefix@
+
+AFS=/usr/local
+
+OBJS=amssync.o ams.o imap.o
+MISCPH=prs_fs.ph afs_sysnames.ph venus.ph vice.ph
+MISCPERL=getacl.pl pioctl.pl 
+
+all: amssync afs.ph param.ph
+
+install:
+	- mkdir ${DESTDIR}$(cyrus_prefix)/perllib
+	- mkdir ${DESTDIR}$(cyrus_prefix)/perllib/afs
+	$(INSTALL) -s -m 755 amssync $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -m 755 amssynctree $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -m 644 afs.ph param.ph $(MISCPH) $(DESTDIR)$(cyrus_prefix)/perllib/afs
+	$(INSTALL) -m 644 $(MISCPERL $(DESTDIR)$(cyrus_prefix)/perllib
+
+.c.o:
+	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
+
+amssync: $(OBJS) $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o amssync $(OBJS) $(DEPLIBS) $(LIBS)
+
+afs.ph: ${AFS}/include/afs/afs.h
+	h2ph < $< > $@
+
+param.ph: ${AFS}/include/afs/param.h
+	h2ph < $< > $@
+
+clean:
+	rm -f *.o Makefile.bak amssync afs.ph param.ph
+
+distclean: clean
+	rm -f Makefile syncamstree
+
+depend: 
+	makedepend $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.
+
