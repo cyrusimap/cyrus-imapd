@@ -1,0 +1,26 @@
+This is a collection of com_err macros which've been written by
+various people at CMU.
+
+CMU_INIT_AUTOMAKE
+  If you use automake, you should call this after AM_INIT_AUTOMAKE.
+  It adds "-I cmulocal" to the aclocal command line, so that when
+  automake runs aclocal, aclocal'll continue to pick up these macros.
+
+CMU_COMERR
+  Requires that com_err exist in the collection (at CMU, do this by
+  running "cvs checkout com_err", and adding com_err to DIST_SUBDIRS
+  in your Makefile.am).
+
+  It sets the output variable COMPILE_ET to the compile_et program to
+  use, and adds the appropriate paths to LDFLAGS and CPPFLAGS.
+
+  It does *not* add -lcom_err to LIBS (this would cause later library
+  checks to fail if com_err needs to be built), so Makefiles need to
+  explicitly add -lcom_err (which, after all, should always exist as
+  long as the com_err compile doesn't blow up).
+
+  Note that com_err will only be compiled if the configure script
+  can't find compile_et or libcom_err; if the system already has them,
+  the configure script will use the system installation (although, due
+  to some autoconf wonkiness, com_err will still be configured; it just
+  won't show up in the @subdirs@ expansion).
