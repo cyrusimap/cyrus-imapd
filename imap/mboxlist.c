@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.188 2002/05/07 15:13:32 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.189 2002/05/08 16:28:24 rjs3 Exp $
  */
 
 #include <config.h>
@@ -807,7 +807,6 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	break;
 
     default:
-	DB->abort(mbdb, tid);
 	goto done;
     }
 
@@ -815,7 +814,10 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 
     /* are we reserved? (but for remote mailboxes this is okay, since
      * we don't touch their data files at all) */
-    if(!isremote && (mbtype & MBTYPE_RESERVE)) return IMAP_MAILBOX_RESERVED;
+    if(!isremote && (mbtype & MBTYPE_RESERVE)) {
+	r = IMAP_MAILBOX_RESERVED;
+	goto done;
+    }
 
     /* check if user has Delete right (we've already excluded non-admins
      * from deleting a user mailbox) */
@@ -830,7 +832,6 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	    /* Lie about error if privacy demands */
 	    r = (isadmin || (access & ACL_LOOKUP)) ?
 		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-	    DB->abort(mbdb, tid);
 	    goto done;
 	}
     }
@@ -876,6 +877,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 		   cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
 	}
+	tid = NULL;
     }
 
     if (r || isremote) goto done;
@@ -891,6 +893,11 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     }
 
  done:
+    if(r && tid) {
+	/* Abort the transaction if it is still in progress */
+	DB->abort(mbdb, tid);
+    }
+
     return r;
 }
 
@@ -945,7 +952,10 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	goto done;
     }
 
-    if(mbtype & MBTYPE_RESERVE) return IMAP_MAILBOX_RESERVED;
+    if(mbtype & MBTYPE_RESERVE) {
+	r = IMAP_MAILBOX_RESERVED;
+	goto done;
+    }
 
     /* make a copy of the old ACL so it doesn't get overwritten
        by another call to mboxlist_mylookup() */
@@ -1075,8 +1085,6 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
         
     /* 4. unlock mboxlist, Lock oldname/oldpath */
     if(r) {
-	DB->abort(mbdb,tid);
-	tid = NULL;
 	syslog(LOG_ERR, "Could not lock mailbox %s during rename", oldname);
 	goto done;
     } else {
@@ -2256,8 +2264,7 @@ void mboxlist_open(char *fname)
     mboxlist_dbopen = 1;
 }
 
-void
-mboxlist_close(void)
+void mboxlist_close(void)
 {
     int r;
 
