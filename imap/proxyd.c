@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.152 2003/03/12 19:03:26 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.153 2003/03/12 20:57:09 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -299,7 +299,7 @@ static int pipe_until_tag(struct backend *s, char *tag, int force_notfatal)
 
     s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
     
-    if(taglen < sizeof(buf)) {
+    if(taglen >= sizeof(buf)) {
 	fatal("tag too large",EC_TEMPFAIL);
     }
 
