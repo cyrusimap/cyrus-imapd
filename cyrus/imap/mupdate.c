@@ -3,6 +3,54 @@
 
 static int masterp = 0;
 
+enum settype {
+    SET_ACTIVE,
+    SET_RESERVE
+};
+
+struct pending {
+    char mailbox[MAX_MAILBOX_NAME];
+    char server[MAX_MAILBOX_NAME];
+    enum settype t;
+    
+    struct pending *next;
+};
+
+struct conn {
+    int fd;
+    struct protstream *pin;
+    struct protstream *pout;
+    sasl_conn_t *saslconn;
+    char *userid;
+
+    /* pending changes to send, in reverse order */
+    struct pending *plist;
+};
+
+void cmd_set(struct conn *C, 
+	     const char *tag, const char *mailbox,
+	     const char *server, enum settype t);
+void cmd_find(struct conn *C, const char *tag, const char *mailbox);
+
+static struct conn *conn_new(int fd)
+{
+    struct conn *C = xzmalloc(sizeof(struct conn));
+    
+    C->fd = fd;
+
+    return C;
+}
+
+static void conn_free(struct conn *C)
+{
+    if (C->userid) free(C->userid);
+    if (C->pin) prot_free(C->pin);
+    if (C->pout) prot_free(C->pout);
+    if (C->saslconn) sasl_dispose(&C->saslconn);
+
+    free(C);
+}
+
 /*
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
@@ -77,12 +125,10 @@ void fatal(const char *s, int code)
     exit(code);
 }
 
-struct conn {
-    int fd;
-    struct protstream *pin;
-    struct protstream *pout;
-    sasl_conn_t *saslconn;
-};
+#define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
+                       		 if ((ch) != '\n') goto extraargs; } while (0)
+
+
 
 void cmdloop(struct conn *c)
 {
@@ -102,7 +148,13 @@ void cmdloop(struct conn *c)
 
 	signals_poll();
 
-	ch = getword(c->pin, &tag);
+	if (c->streaming) {
+	    /* if streaming updates, do the select */
+
+	} else {
+	    /* not streaming */
+	    ch = getword(c->pin, &tag);
+	}
 	if (ch == EOF) {
 	    if ((err = prot_error(c->pin)) != NULL) {
 		syslog(LOG_WARNING, "%s, closing connection", err);
@@ -135,11 +187,41 @@ void cmdloop(struct conn *c)
 	switch (cmd.s[0]) {
 	case 'A':
 	    if (!strcmp(cmd.s, "Authenticate")) {
+		int opt = 0;
 
+		if (ch != ' ') goto missingargs;
+		ch = getword(&arg1);
+		if (ch == ' ') {
+		    ch = getword(&arg2);
+		    opt = 1;
+		}
+		CHECKNEWLINE(c, ch);
+
+		if (c->userid) {
+		    prot_printf(c->pout, "%s BAD \"already authenticated\"\r\n",
+				tag.s);
+		    continue;
+		}
+
+		/* xxx do authentication */
+		if (!strcasecmp(arg1.s, "backdoor") && opt) {
+		    c->userid = xstrdup(arg2.s);
+		    prot_printf(c->pout, "%s OK \"user logged in\"\r\n",
+				tag.s);
+		} else {
+		    prot_printf(c->pout, "%s BAD \"unknown mechanism\"\r\n",
+				tag.s);
+		}
 	    }
 	    else if (!c->userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Activate")) {
+		if (ch != ' ') goto missingargs;
+		ch = getword(&arg1);
+		if (ch != ' ') goto missingargs;
+		ch = getword(&arg2);
+		CHECKNEWLINE(c, ch);
 
+		cmd_set(c, tag.s, arg1.s, arg2.s, SET_ACTIVE);
 	    }
 	    else goto badcmd;
 
@@ -148,15 +230,30 @@ void cmdloop(struct conn *c)
 	case 'F':
 	    if (!c->userd) goto nologin;
 	    else if (!strcmp(cmd.s, "Find")) {
+		if (ch != ' ') goto missingargs;
+		ch = getword(&arg1);
+		CHECKNEWLINE(c, ch);
 
+		cmd_find(c, tag.s, arg1.s);
 	    }
 	    else goto badcmd;
 	    break;
 
 	case 'L':
 	    if (!strcmp(cmd.s, "Logout")) {
+		CHECKNEWLINE(c, ch);
 
+		prot_printf("%s OK \"bye-bye\"\r\n", tag.s);
 		goto done;
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'N':
+	    if (!strcmp(cmd.s, "Noop")) {
+		CHECKNEWLINE(c, ch);
+
+		prot_printf(c->pout, "%s \"Noop done\"\r\n", tag.s);
 	    }
 	    else goto badcmd;
 	    break;
@@ -164,8 +261,13 @@ void cmdloop(struct conn *c)
 	case 'R':
 	    if (!c->userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Reserve")) {
+		if (ch != ' ') goto missingargs;
+		ch = getword(&arg1);
+		if (ch != ' ') goto missingargs;
+		ch = getword(&arg2);
+		CHECKNEWLINE(c, ch);
 
-
+		cmd_set(c, tag.s, arg1.s, arg2.s, SET_RESERVE);
 	    }
 	    else goto badcmd;
 	    break;
@@ -247,9 +349,9 @@ void *start(void *rock)
     }
 
     cmdloop(c);
-
-    /* free connection context */
-    free(c);
+    
+    close (c->fd);
+    conn_free(c);
 
     return NULL;
 }
@@ -261,8 +363,39 @@ int service_main_fd(int fd, int argc, char **argv, char **envp)
 {
     /* spawn off a thread to handle this connection */
     pthread_t t;
-    struct conn *c = xmalloc(sizeof(struct conn));
+    struct conn *c = conn_new(fd);
 
-    c->fd = fd;
     return pthread_create(&t, NULL, &start, &c);
 }
+
+void cmd_set(struct conn *C, 
+	     const char *tag, const char *mailbox,
+	     const char *server, enum settype t)
+{
+    /* lock database */
+
+    /* change the database */
+    
+    /* post pending changes */
+
+    /* notify */
+
+    /* unlock database */
+}
+
+void cmd_find(struct conn *C, const char *tag, const char *mailbox)
+{
+    int r;
+    char *server;
+
+    r = mboxlist_lookup(mailbox, &server, NULL, NULL);
+    if (!r) {
+	prot_printf(C->pout, "%s MAILBOX {%d}\r\n%s {%d}\r\n%s\r\n",
+		    strlen(mailbox), mailbox,
+		    strlen(server), server);
+
+    }
+
+
+}
+
