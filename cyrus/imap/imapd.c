@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.324 2001/09/24 18:27:35 ken3 Exp $ */
+/* $Id: imapd.c,v 1.325 2001/10/01 20:17:32 leg Exp $ */
 
 #include <config.h>
 
@@ -520,8 +520,10 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
     }
 
+    /* never allow plaintext, since IMAP has the LOGIN command */
     secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     sasl_setprop(imapd_saslconn, SASL_SEC_PROPS, secprops);
+
     if (extprops.ssf) {
 	sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops);
     }
