@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.59 1999/01/12 16:11:00 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.60 1999/01/12 16:28:57 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -8,6 +8,13 @@
     <h2> Changes to the Cyrus IMAP Server Sice Version 1.5.19 </h2>
 
     <ul>
+      <li> Content-Disposition lines were being parsed improperly.  If they
+	had no optional arguments, they were being ignored as if they were
+	syntactically incorrect.  This is fixed, but imapd will continue to
+	serve wrong information unless cyrus.caches are rebuilt (with
+	reconstruct) for any message that was added to the mailbox before this 
+	bug was fixed.
+
       <li> The arbitron program now takes a mailbox pattern argument for the
 	mailbox to run on. The manpage always said it did anyway. 
 
@@ -652,7 +659,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Tue Jan 12 11:10:42 1999
+last modified by tjs at Tue Jan 12 11:28:44 1999
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
