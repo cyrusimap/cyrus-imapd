@@ -1,5 +1,5 @@
 /* tugowar.c -- Listens on unix domain udp socket and keeps track of oids
- * $Id: tugowar.c,v 1.7 2000/10/12 19:24:08 leg Exp $
+ * $Id: tugowar.c,v 1.8 2003/01/08 16:34:23 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -85,6 +85,8 @@ typedef struct oid_trie_s {
 oid_trie_t *trie_top;
 int           agentx_session; /* agentx session id */
 
+#define err(error_class, routine, call) \
+    printf("%s error in tugowar.c: %s; %s\n", (error_class), (routine), (call))
 
 #define IMAPMIB_NPARMS 11
 u_int IMAPCommandsMIB [IMAPMIB_NPARMS]  = { 1, 3, 6, 1, 4, 1, 3, 2, 2, 3 };
@@ -96,6 +98,12 @@ int mib_general_getn ( agentx_oid_t *name, int baselen, int map_handle );
 oid_trie_t *new_leaf(int value, oid_trie_t *parent, agentx_vartype_t type)
 {
     oid_trie_t *ret = (oid_trie_t *) malloc(sizeof(oid_trie_t));
+
+    if(!ret) {
+	err("Critical","mib_general_getn","memory allocation error");
+	exit(1);
+    }
+
     ret->value = value;
     ret->type = type;
     
@@ -107,6 +115,11 @@ oid_trie_t *new_leaf(int value, oid_trie_t *parent, agentx_vartype_t type)
     
     ret->numchildren_alloc = 10;
     ret->children = (oid_trie_t **)malloc(sizeof(oid_trie_t *)*ret->numchildren_alloc);
+
+    if(!ret->children) {
+	err("Critical","mib_general_getn,children","memory allocation error");
+	exit(1);
+    }
     
     return ret;
 }
@@ -124,6 +137,11 @@ oid_trie_t* add_leaf_to_branch(oid_trie_t *branch, oid_trie_t *leaf)
 	    (oid_trie_t **)realloc(branch->children,
 				   sizeof(oid_trie_t *)
 				          * branch->numchildren_alloc);
+
+	if(!branch->children) {
+	    err("Critical","add_leaf_to_branch","memory allocation error");
+	    exit(1);
+	}
     }
 
     /* we want the invariant that this list is always sorted so place in the right place */
@@ -333,8 +351,18 @@ agentx_oid_t *makeoid(char *str)
     int num;
     int lup;
     
+    if(!ret) {
+	err("Critical","makeoid","memory allocation error");
+	exit(1);
+    }
+  
     ret->Nsubid = 0;
     ret->subids = (u_int *) malloc(sizeof(u_int *)*50); /* xxx max oid size? */
+
+    if(!ret->subids) {
+	err("Critical","makeoid,subids","memory allocation error");
+	exit(1);
+    }
 
     str--;
 
@@ -388,6 +416,12 @@ static int mib_register(char *str)
 	registeredalloc+=100;
 	registeredlist = realloc(registeredlist, sizeof(agentx_oid_t *) * registeredalloc);
 	registrationmaplist = realloc(registrationmaplist, sizeof(int) * registeredalloc);
+
+	if(!registeredlist || !registrationmaplist) {
+	    err("Critical","mib_register",
+		"registeredlists memory allocation error");
+	    exit(1);
+	}
     }
 
     registeredlist[registeredsize] = oid;
@@ -398,18 +432,16 @@ static int mib_register(char *str)
 
     if (reg_imap < 0)
     {
-	    printf("error here\n");
-	    exit(1);
+	err("Internal","mib_register","");
+	exit(1);
     }
     
     registrationmaplist[registeredsize-1] = agentx_mapget( reg_imap, 0, NULL, &mib_general_get, &mib_general_getn );
 
     if (registrationmaplist[registeredsize-1] < 0)
-	{
-	    exit(1);
-	}
-
-
+    {
+	exit(1);
+    }
 
     return 0;
 }
@@ -422,7 +454,7 @@ oid_trie_t *find(char *str, char **tmp, agentx_vartype_t type)
 
     if (tree==NULL)
     {
-	printf("xxx\n");
+	err("Internal","find","find_oid_str");
 	exit(1);
     }
     
@@ -434,7 +466,7 @@ oid_trie_t *find(char *str, char **tmp, agentx_vartype_t type)
     /* find space */
     *tmp = strchr(str,' ');
     if (*tmp==NULL) {
-	printf("no space found\n");
+	err("Internal","find","no space found");
 	exit(1);
     }
     tmp++;
@@ -455,7 +487,12 @@ void log_cmd(char *str)
     oid_trie_t *tree;
     char *tmp;
 
-    printf("receieved [%s]\n",str);
+    printf("received [%s]\n",str);
+
+    if(strlen(str) < 2) {
+	printf("Not Understood");
+	return;
+    }
     
     switch(str[0])
 	{
@@ -476,8 +513,11 @@ void log_cmd(char *str)
 	    if (!tree) break;
 
 	    tree->vardata.ostr_data.len = strlen(tmp);
-	    tree->vardata.ostr_data.data = (char *) malloc(strlen(tmp)+1);
-	    strcpy(tree->vardata.ostr_data.data, tmp);
+	    tree->vardata.ostr_data.data = strdup(tmp);
+	    if(!tree->vardata.ostr_data.data) {
+		err("Critical","logcmd(\"S\")", "memory allocation error");
+		exit(1);
+	    }
 	    
 	    break;
 
@@ -516,8 +556,15 @@ mib_general_get  ( int Nsubid, u_int *subids, agentx_varbind_t *binding, int map
 
     oidt = find_oid_nums(oidt, Nsubid, subids);
 
-    if (oidt==NULL){ printf("unable to find specific\n"); return agentx_genErr; }
-    if (oidt->oid==NULL) { printf("blah\n"); return agentx_genErr; }
+    if (oidt==NULL){
+	err("Internal","mib_general_get","unable to find specific");
+	return agentx_genErr;
+    }
+
+    if (oidt->oid==NULL) { 
+	err("Internal","mib_general_get","");
+	return agentx_genErr;
+    }
            
     binding->type = oidt->type;
 
@@ -634,6 +681,11 @@ int main(int argc, char **argv)
     registeredlist = (agentx_oid_t **) malloc(sizeof(agentx_oid_t *)*registeredalloc);
     registrationmaplist = (int *) malloc(sizeof(int) * registeredalloc);
 
+    if(!registeredlist || !registrationmaplist) {
+	err("Critical","main","registeredlists memory allocation error");
+	exit(1);
+    }
+
     /*
      * All we do is:
      * -listen for an UDP packet
@@ -648,7 +700,12 @@ int main(int argc, char **argv)
 
 	fromlen = sizeof(from);
 	
-	n = recvfrom(s, str, 100, 0, (struct sockaddr *) &from, &fromlen);
+	n = recvfrom(s, str, (int)sizeof(str)-1, 0,
+		     (struct sockaddr *)&from, &fromlen);
+	if(n<0) {
+	    err("Network","main","recvfrom");
+	    exit(1);
+	}
 	str[n]  = '\0';
 
 	printf("read %d bytes\n",n);
