@@ -103,6 +103,7 @@ char **acl;
     /* Open mailbox list file */
     listfile = fopen(listfname, "r");
     if (!listfile) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
 	fatal("can't read mailbox list", EX_OSFILE);
     }
 
@@ -243,6 +244,7 @@ char **newpartition;
     /* Open mailbox list file */
     listfile = fopen(listfname, "r+");
     if (!listfile) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
 	fatal("can't read mailbox list", EX_OSFILE);
     }
 
@@ -359,18 +361,21 @@ char *userid;
     listfile = fopen(listfname, "r+");
     for (;;) {
 	if (!listfile) {
+	    syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
 	    fatal("can't read mailbox list", EX_OSFILE);
 	}
 
 	r = flock(fileno(listfile), LOCK_EX);
 	if (r == -1) {
 	    if (errno == EINTR) continue;
+	    syslog(LOG_ERR, "IOERROR: locking %s: %m", listfname);
 	    return IMAP_IOERROR;
 	}
 	
 	fstat(fileno(listfile), &sbuffd);
 	r = stat(listfname, &sbuffile);
 	if (r == -1) {
+	    syslog(LOG_ERR, "IOERROR: stating %s: %m", listfname);
 	    return IMAP_IOERROR;
 	}
 
@@ -413,6 +418,7 @@ char *userid;
     /* Create new mailbox list */
     newlistfile = fopen(newlistfname, "w+");
     if (!newlistfile) {
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
 	fclose(listfile);
 	free(partition);
 	free(acl);
@@ -425,6 +431,7 @@ char *userid;
     while (left) {
 	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
 	if (!n) {
+	    syslog(LOG_ERR, "IOERROR: reading %s: %m", listfname);
 	    fclose(listfile);
 	    fclose(newlistfile);
 	    free(partition);
@@ -442,6 +449,7 @@ char *userid;
     }
     fflush(newlistfile);
     if (ferror(newlistfile) || fsync(fileno(newlistfile))) {
+	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
 	fclose(listfile);
 	fclose(newlistfile);
 	return IMAP_IOERROR;
@@ -455,7 +463,9 @@ char *userid;
 	else if (*p == '.') *p = '/';
     }
     r = mailbox_create(name, buf2, format, (struct mailbox *)0);
-    if (r || rename(newlistfname, listfname) == -1) {
+    if (r) return r;
+    if (rename(newlistfname, listfname) == -1) {
+	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
 	fclose(listfile);
 	return IMAP_IOERROR;
     }
@@ -532,12 +542,14 @@ char *userid;
     listfile = fopen(listfname, "r+");
     for (;;) {
 	if (!listfile) {
+	    syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
 	    fatal("can't read mailbox list", EX_OSFILE);
 	}
 
 	r = flock(fileno(listfile), LOCK_EX);
 	if (r == -1) {
 	    if (errno == EINTR) continue;
+	    syslog(LOG_ERR, "IOERROR: locking %s: %m", listfname);
 	    fclose(listfile);
 	    return IMAP_IOERROR;
 	}
@@ -545,6 +557,7 @@ char *userid;
 	fstat(fileno(listfile), &sbuffd);
 	r = stat(listfname, &sbuffile);
 	if (r == -1) {
+	    syslog(LOG_ERR, "IOERROR: stating %s: %m", listfname);
 	    fclose(listfile);
 	    return IMAP_IOERROR;
 	}
@@ -587,6 +600,7 @@ char *userid;
     /* Create new mailbox list */
     newlistfile = fopen(newlistfname, "w+");
     if (!newlistfile) {
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
 	fclose(listfile);
 	return IMAP_IOERROR;
     }
@@ -597,6 +611,7 @@ char *userid;
     while (left) {
 	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
 	if (!n) {
+	    syslog(LOG_ERR, "IOERROR: reading %s: %m", listfname);
 	    fclose(listfile);
 	    fclose(newlistfile);
 	    return IMAP_IOERROR;
@@ -610,6 +625,7 @@ char *userid;
     }
     fflush(newlistfile);
     if (ferror(newlistfile) || fsync(fileno(newlistfile))) {
+	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
 	fclose(listfile);
 	fclose(newlistfile);
 	return IMAP_IOERROR;
@@ -624,6 +640,7 @@ char *userid;
 	return r;
     }
     if (rename(newlistfname, listfname) == -1) {
+	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
 	fclose(listfile);
 	/* XXX We're left in an inconsistent state here */
 	return IMAP_IOERROR;
@@ -666,18 +683,21 @@ char *userid;
     listfile = fopen(listfname, "r+");
     for (;;) {
 	if (!listfile) {
+	    syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
 	    fatal("can't read mailbox list", EX_OSFILE);
 	}
 
 	r = flock(fileno(listfile), LOCK_EX);
 	if (r == -1) {
 	    if (errno == EINTR) continue;
+	    syslog(LOG_ERR, "IOERROR: locking %s: %m", listfname);
 	    return IMAP_IOERROR;
 	}
 	
 	fstat(fileno(listfile), &sbuffd);
 	r = stat(listfname, &sbuffile);
 	if (r == -1) {
+	    syslog(LOG_ERR, "IOERROR: stating %s: %m", listfname);
 	    return IMAP_IOERROR;
 	}
 
@@ -784,6 +804,7 @@ char *userid;
     /* Create new mailbox list */
     newlistfile = fopen(newlistfname, "w+");
     if (!newlistfile) {
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
 	fclose(listfile);
 	free(acl);
 	free(partition);
@@ -796,6 +817,7 @@ char *userid;
     while (left) {
 	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
 	if (!n) {
+	    syslog(LOG_ERR, "IOERROR: reading %s: %m", listfname);
 	    fclose(listfile);
 	    fclose(newlistfile);
 	    free(partition);
@@ -819,6 +841,7 @@ char *userid;
     while (left) {
 	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
 	if (!n) {
+	    syslog(LOG_ERR, "IOERROR: reading %s: %m", listfname);
 	    fclose(listfile);
 	    fclose(newlistfile);
 	    free(partition);
@@ -843,6 +866,7 @@ char *userid;
     }
     fflush(newlistfile);
     if (ferror(newlistfile) || fsync(fileno(newlistfile))) {
+	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
 	fclose(listfile);
 	fclose(newlistfile);
 	return IMAP_IOERROR;
@@ -862,6 +886,7 @@ char *userid;
 	return r;
     }
     if (rename(newlistfname, listfname) == -1) {
+	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
 	fclose(listfile);
 	/* XXX We're left in an inconsistent state here */
 	return IMAP_IOERROR;
@@ -898,6 +923,7 @@ int (*proc)();
 
     listfile = fopen(listfname, "r");
     if (!listfile) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
 	fatal("can't read mailbox list", EX_OSFILE);
     }
 
@@ -1055,6 +1081,7 @@ int (*proc)();
 
     listfile = fopen(listfname, "r");
     if (!listfile) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
 	fatal("can't read mailbox list", EX_OSFILE);
     }
 
@@ -1230,6 +1257,7 @@ int add;
     rewind(subsfile);
     newsubsfile = fopen(newsubsfname, "w");
     if (!newsubsfile) {
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", newsubsfname);
 	fclose(subsfile);
 	return IMAP_IOERROR;
     }
@@ -1240,6 +1268,7 @@ int add;
 		  offset < sizeof(copybuf) ? offset : sizeof(copybuf),
 		  subsfile);
 	if (!n) {
+	    syslog(LOG_ERR, "IOERROR: reading %s: %m", subsfname);
 	    fclose(subsfile);
 	    fclose(newsubsfile);
 	    return IMAP_IOERROR;
@@ -1259,8 +1288,14 @@ int add;
 	fwrite(copybuf, 1, n, newsubsfile);
     }
     fflush(newsubsfile);
-    if (ferror(newsubsfile) || fsync(fileno(newsubsfile)) ||
-	rename(newsubsfname, subsfname) == -1) {
+    if (ferror(newsubsfile) || fsync(fileno(newsubsfile))) {
+	syslog(LOG_ERR, "IOERROR: writing %s: %m", newsubsfname);
+	fclose(subsfile);
+	fclose(newsubsfile);
+	return IMAP_IOERROR;
+    }	
+    if (rename(newsubsfname, subsfname) == -1) {
+	syslog(LOG_ERR, "IOERROR: renaming %s: %m", subsfname);
 	fclose(subsfile);
 	fclose(newsubsfile);
 	return IMAP_IOERROR;
@@ -1303,18 +1338,21 @@ char *userid;
     listfile = fopen(listfname, "r+");
     for (;;) {
 	if (!listfile) {
+	    syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
 	    fatal("can't read mailbox list", EX_OSFILE);
 	}
 
 	r = flock(fileno(listfile), LOCK_EX);
 	if (r == -1) {
 	    if (errno == EINTR) continue;
+	    syslog(LOG_ERR, "IOERROR: locking %s: %m", listfname);
 	    return IMAP_IOERROR;
 	}
 	
 	fstat(fileno(listfile), &sbuffd);
 	r = stat(listfname, &sbuffile);
 	if (r == -1) {
+	    syslog(LOG_ERR, "IOERROR: stating %s: %m", listfname);
 	    return IMAP_IOERROR;
 	}
 
@@ -1353,6 +1391,7 @@ char *userid;
     if (!r) {
 	newlistfile = fopen(newlistfname, "w+");
 	if (!newlistfile) {
+	    syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
 	    r = IMAP_IOERROR;
 	}
     }
@@ -1398,6 +1437,7 @@ char *userid;
     while (left) {
 	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
 	if (!n) {
+	    syslog(LOG_ERR, "IOERROR: reading %s: %m", listfname);
 	    fclose(listfile);
 	    fclose(newlistfile);
 	    free(newacl);
@@ -1412,8 +1452,15 @@ char *userid;
 	fwrite(buf2, 1, n, newlistfile);
     }
     fflush(newlistfile);
-    if (ferror(newlistfile) || fsync(fileno(newlistfile)) ||
-	rename(newlistfname, listfname) == -1) {
+    if (ferror(newlistfile) || fsync(fileno(newlistfile))) {
+	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
+	fclose(listfile);
+	fclose(newlistfile);
+	free(newacl);
+	return IMAP_IOERROR;
+    }
+    if (rename(newlistfname, listfname) == -1) {
+	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
 	fclose(listfile);
 	fclose(newlistfile);
 	free(newacl);
@@ -1475,6 +1522,7 @@ char **newfname;
 
     subsfd = open(subsfname, O_RDWR|O_CREAT, 0666);
     if (subsfd == -1) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", subsfname);
 	return IMAP_IOERROR;
     }
     *subsfile = fdopen(subsfd, "r+");
@@ -1482,6 +1530,7 @@ char **newfname;
 	r = flock(fileno(*subsfile), LOCK_EX);
 	if (r == -1) {
 	    if (errno == EINTR) continue;
+	    syslog(LOG_ERR, "IOERROR: locking %s: %m", subsfname);
 	    fclose(*subsfile);
 	    return IMAP_IOERROR;
 	}
@@ -1489,6 +1538,7 @@ char **newfname;
 	fstat(fileno(*subsfile), &sbuffd);
 	r = stat(subsfname, &sbuffile);
 	if (r == -1) {
+	    syslog(LOG_ERR, "IOERROR: stating %s: %m", subsfname);
 	    fclose(*subsfile);
 	    return IMAP_IOERROR;
 	}
@@ -1498,6 +1548,7 @@ char **newfname;
 	fclose(*subsfile);
 	*subsfile = fopen(subsfname, "r+");
 	if (!*subsfile) {
+	    syslog(LOG_ERR, "IOERROR: opening %s: %m", subsfname);
 	    return IMAP_IOERROR;
 	}
     }

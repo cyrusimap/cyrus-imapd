@@ -150,6 +150,7 @@ char *userid;
     strcat(fname, mailbox_message_fname(mailbox, message_index.uid));
     destfile = fopen(fname, "w+");
     if (!destfile) {
+	syslog(LOG_ERR, "IOERROR: creating message file %s: %m", fname);
 	return IMAP_IOERROR;
     }
 
@@ -330,6 +331,7 @@ char *userid;
 	     */
 	    destfile = fopen(fname, "w");
 	    if (!destfile) {
+		syslog(LOG_ERR, "IOERROR: writing message file %s: %m", fname);
 		r = IMAP_IOERROR;
 		goto fail;
 	    }
@@ -337,6 +339,8 @@ char *userid;
 			    "r");
 	    if (!srcfile) {
 		fclose(destfile);
+		syslog(LOG_ERR, "IOERROR: reading message file %s: %m",
+		       mailbox_message_fname(mailbox, copymsg[msg].uid));
 		r = IMAP_IOERROR;
 		goto fail;
 	    }

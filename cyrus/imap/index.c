@@ -197,12 +197,16 @@ int checkseen;
 				  MAP_SHARED, fileno(mailbox->index), 0L);
     
 	if (index_base == (char *)-1) {
+	    syslog(LOG_ERR, "IOERROR: mapping index file for %s: %m",
+		   mailbox->name);
 	    fatal("failed to mmap index file", EX_IOERR);
 	}
     }
 
     /* Re-mmap the cache file if necessary */
     if (fstat(fileno(mailbox->cache), &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: stating cache file for %s: %m",
+	       mailbox->name);
 	fatal("failed to stat cache file", EX_IOERR);
     }
     if (cache_len <= sbuf.st_size) {
@@ -213,6 +217,8 @@ int checkseen;
 				  MAP_SHARED, fileno(mailbox->cache), 0L);
 
 	if (cache_base == (char *)-1) {
+	    syslog(LOG_ERR, "IOERROR: mapping cache file for %s: %m",
+		   mailbox->name);
 	    fatal("failed to mmap cache file", EX_IOERR);
 	}
     }
