@@ -1,5 +1,5 @@
 /* telemetry.c -- common server telemetry
- * $Id: telemetry.c,v 1.7 2003/10/22 18:02:59 rjs3 Exp $
+ * $Id: telemetry.c,v 1.8 2003/10/22 18:50:08 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_mailto.c,v 1.7 2003/10/22 18:03:13 rjs3 Exp $
+ * $Id: notify_mailto.c,v 1.8 2003/10/22 18:50:16 rjs3 Exp $
  */
 
 #include <config.h>

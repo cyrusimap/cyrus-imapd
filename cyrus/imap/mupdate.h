@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.14 2003/10/22 18:02:58 rjs3 Exp $
+ * $Id: mupdate.h,v 1.15 2003/10/22 18:50:08 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

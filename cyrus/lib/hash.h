@@ -1,5 +1,5 @@
 /* +++Date last modified: 05-Jul-1997 */
-/* $Id: hash.h,v 1.8 2003/10/22 18:03:04 rjs3 Exp $ */
+/* $Id: hash.h,v 1.9 2003/10/22 18:50:12 rjs3 Exp $ */
 
 #ifndef HASH__H
 #define HASH__H

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.84 2003/10/22 18:03:09 rjs3 Exp $ */
+/* $Id: master.c,v 1.85 2003/10/22 18:50:14 rjs3 Exp $ */
 
 #include <config.h>
 

@@ -1,7 +1,7 @@
 /* lex.c -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.c,v 1.23 2003/10/22 18:03:46 rjs3 Exp $
+ * $Id: lex.c,v 1.24 2003/10/22 18:50:31 rjs3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.

@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.19 2003/10/22 18:02:57 rjs3 Exp $
+ * $Id: ipurge.c,v 1.20 2003/10/22 18:50:07 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

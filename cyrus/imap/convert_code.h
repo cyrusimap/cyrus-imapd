@@ -41,7 +41,7 @@
 
  */
 
-/* $Id: convert_code.h,v 1.5 2003/10/22 18:02:57 rjs3 Exp $ */
+/* $Id: convert_code.h,v 1.6 2003/10/22 18:50:07 rjs3 Exp $ */
 
 #ifndef CONVERT_CODE_H
 #define CONVERT_CODE_H

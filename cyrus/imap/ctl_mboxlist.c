@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.42 2003/10/22 18:02:57 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.43 2003/10/22 18:50:07 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 

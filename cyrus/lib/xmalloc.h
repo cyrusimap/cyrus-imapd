@@ -1,5 +1,5 @@
 /* xmalloc.h -- Allocation package that calls fatal() when out of memory
- * $Id: xmalloc.h,v 1.24 2003/10/22 18:03:05 rjs3 Exp $
+ * $Id: xmalloc.h,v 1.25 2003/10/22 18:50:12 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

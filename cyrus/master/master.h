@@ -1,7 +1,7 @@
 #ifndef HAVE_MASTER_H
 #define HAVE_MASTER_H
 
-/* $Id: master.h,v 1.8 2003/10/22 18:03:09 rjs3 Exp $ */
+/* $Id: master.h,v 1.9 2003/10/22 18:50:14 rjs3 Exp $ */
 
 #include <config.h>
 #include <sys/resource.h> /* for rlim_t */

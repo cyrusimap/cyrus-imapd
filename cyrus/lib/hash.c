@@ -1,5 +1,5 @@
 /* +++Date last modified: 05-Jul-1997 */
-/* $Id: hash.c,v 1.10 2003/10/22 18:03:04 rjs3 Exp $ */
+/* $Id: hash.c,v 1.11 2003/10/22 18:50:12 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>

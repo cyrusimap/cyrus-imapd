@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.18 2003/10/22 18:03:25 rjs3 Exp $
+ * $Id: sieve_interface.h,v 1.19 2003/10/22 18:50:30 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University

@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.11 2003/10/22 18:02:58 rjs3 Exp $
+ * $Id: mboxname.h,v 1.12 2003/10/22 18:50:08 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

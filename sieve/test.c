@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.20 2003/10/22 18:03:25 rjs3 Exp $
+ * $Id: test.c,v 1.21 2003/10/22 18:50:30 rjs3 Exp $
  *
  * usage: "test message script"
  */

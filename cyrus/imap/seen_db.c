@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
- * $Id: seen_db.c,v 1.41 2003/10/22 18:02:59 rjs3 Exp $
+ * $Id: seen_db.c,v 1.42 2003/10/22 18:50:08 rjs3 Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

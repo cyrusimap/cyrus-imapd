@@ -1,5 +1,5 @@
 # Makefile.in - notifyd makefile
-# $Id: Makefile.in,v 1.6 2003/10/22 18:03:13 rjs3 Exp $
+# $Id: Makefile.in,v 1.7 2003/10/22 18:50:16 rjs3 Exp $
 # @configure_input@
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.

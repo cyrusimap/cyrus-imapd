@@ -1,6 +1,6 @@
 /* message.h
  * Larry Greenfield
- * $Id: message.h,v 1.15 2003/10/22 18:03:24 rjs3 Exp $
+ * $Id: message.h,v 1.16 2003/10/22 18:50:30 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University

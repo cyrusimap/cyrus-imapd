@@ -1,6 +1,6 @@
 /* notify.h -- abstract interface for notifications
  *
- * $Id: notify.h,v 1.6 2003/10/22 18:02:58 rjs3 Exp $
+ * $Id: notify.h,v 1.7 2003/10/22 18:50:08 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: managesieve.xs,v 1.20 2003/10/22 18:03:20 rjs3 Exp $ */
+/* $Id: managesieve.xs,v 1.21 2003/10/22 18:50:27 rjs3 Exp $ */
 
 #ifdef __cplusplus
 extern "C" {

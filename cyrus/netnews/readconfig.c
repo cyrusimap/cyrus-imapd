@@ -45,7 +45,7 @@
  *
  */
 
-/* $Id: readconfig.c,v 1.7 2003/10/22 18:03:11 rjs3 Exp $ */
+/* $Id: readconfig.c,v 1.8 2003/10/22 18:50:15 rjs3 Exp $ */
 
 /*   Copyright 1991 Rich Salz.
  *   All rights reserved.
@@ -493,8 +493,9 @@ callback_list(struct imclient *imclient,
     c = imparse_astring(&s, &mailbox);
     if (c != '\0') return;
 
-    /* don't match one of our own INBOXs */
-    if (strncasecmp(mailbox,"INBOX",5) != 0) {
+    if ((strncasecmp(mailbox,"INBOX",5)!=0) && (strncasecmp(mailbox,"user.",5)!=0))
+    {
+
 	Groups[nGroups].Name = malloc( strlen(mailbox)+1);
 	strcpy(Groups[nGroups].Name, mailbox);
 	nGroups++;

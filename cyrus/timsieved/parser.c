@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.32 2003/10/22 18:03:46 rjs3 Exp $
+ * $Id: parser.c,v 1.33 2003/10/22 18:50:31 rjs3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.

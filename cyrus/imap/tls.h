@@ -43,7 +43,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: tls.h,v 1.17 2003/10/22 18:02:59 rjs3 Exp $ */
+/* $Id: tls.h,v 1.18 2003/10/22 18:50:09 rjs3 Exp $ */
 
 #ifndef INCLUDED_TLS_H
 #define INCLUDED_TLS_H
