@@ -3,6 +3,7 @@
 /* parse.y -- parser used by timsieved
  * Tim Martin
  * 9/21/99
+ * $Id: parse.y,v 1.5 1999/09/30 21:41:22 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -49,7 +50,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "mystring.h"
 
 extern sasl_conn_t *sieved_saslconn; /* the sasl connection context */
-extern char *sieved_clienthost;
+extern char sieved_clienthost[250];
 int authenticated = 0;
 
 %}
@@ -276,7 +277,7 @@ authenticate: notauthed AUTHENTICATE ' ' STRING authenticate_optional_string EOL
   syslog(LOG_NOTICE, "login: %s %s %s %s", sieved_clienthost, username,
 	 mech, "User logged in");
 
-  authenticated=1;
+  authenticated = 1;
 
   /* free memory */
 }
@@ -342,9 +343,12 @@ listscripts: authed LISTSCRIPTS EOL
 
 sievename: STRING
 {
-  if (verifyscriptname($1)!=TIMSIEVE_OK)
-    return -1;
-  $$=$1;
+    if (verifyscriptname($1)!=TIMSIEVE_OK) {
+	yyerror("invalid script name");
+	YYERROR;
+    } else {
+	$$=$1;
+    }
 }
 
 sievedata: STRING
@@ -384,8 +388,9 @@ report_error(struct protstream *conn, const char *msg)
   /* wait until we get a newline */
   do {
       result = timlex(&foo, conn);
-      if (result < 0)
+      if (result < 0) {
 	  exit(1);
+      }
   } while (result != EOL);
 }
 
