@@ -76,6 +76,9 @@ For example, if the value of the \fBdefaultpartion\fR option is
 \fBdefault\fR, then the \fBpartition-default\fR field is required.
 .IP "\fBumask:\fR 077" 5
 The umask value used by various Cyrus IMAP programs.
+.IP "\fBservername:\fR <result returned by gethostname(2)>" 5
+This is the hostname visible in the greeting messages of the POP, IMAP and LMTP
+daemons. If it is unset, then the result returned from gethostname(2) is used.
 .IP "\fBallowanonymouslogin:\fR no" 5
 Permit logins by the user "anonymous" using any password.  Also allows
 use of the SASL ANONYMOUS mechanism.
