@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.72 2003/04/22 15:55:13 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.73 2003/05/13 23:48:18 ken3 Exp $ */
 
 #include <config.h>
 
@@ -6223,10 +6223,17 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     }
 
     if (!r) {
-	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
-						   name,
-						   imapd_userid,
-						   mailboxname);
+	size_t res_size = strlcpy(mailboxname, name, sizeof(mailboxname));
+	
+	if(res_size >= sizeof(mailboxname)) {
+	    /* Overflow */
+	    r = IMAP_MAILBOX_BADNAME;
+	} else {
+	    /* Don't do full namespace tointernal, since for altnamespace
+	     * that will assume we're in this admin's inbox namespace, which
+	     * we aren't! */
+	    mboxname_hiersep_tointernal(&imapd_namespace, mailboxname);
+	}
     }
 
     /* NOTE: Since XFER can only be used by an admin, and we always connect
