@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.448 2003/12/05 21:33:07 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.449 2003/12/29 17:07:59 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -7217,7 +7217,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
     /* Suppress any output of a partial match */
     if ((name[matchlen]
 	 && strncmp(lastname, name, matchlen) == 0
-	 && lastname[matchlen] == '\0') || strlen(name) != matchlen) {
+	 && lastname[matchlen] == '\0')) {
 	return;
     }
 	
