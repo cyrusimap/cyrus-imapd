@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.47 2000/09/05 04:05:49 leg Exp $
+ * $Id: lmtpd.c,v 1.48 2000/09/13 17:42:02 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.47 2000/09/05 04:05:49 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.48 2000/09/13 17:42:02 leg Exp $";*/
 
 #include <config.h>
 
@@ -554,7 +554,7 @@ int send_rejection(const char *origid,
 	fwrite(buf, i, 1, sm);
     }
     fprintf(sm, "\r\n\r\n");
-    fprintf(sm, "--%d/%s\r\n", (int) p, config_servername);
+    fprintf(sm, "--%d/%s--\r\n", (int) p, config_servername);
 
     fclose(sm);
     while (waitpid(sm_pid, &sm_stat, 0) < 0);
@@ -863,7 +863,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     fprintf(sm, "%s\r\n", src->msg);
 
     if (src->mime) {
-	fprintf(sm, "\r\n--%d/%s\r\n", (int) p, config_servername);
+	fprintf(sm, "\r\n--%d/%s--\r\n", (int) p, config_servername);
     }
     fclose(sm);
     while (waitpid(sm_pid, &sm_stat, 0) < 0);
