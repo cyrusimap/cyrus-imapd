@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.57 2003/12/10 16:07:03 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.58 2003/12/15 17:50:51 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -696,7 +696,7 @@ void fatal(const char* s, int code)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
-    prot_flush(deliver_out);
+    if (deliver_out) prot_flush(deliver_out);
     if (mhandle) {
 	mupdate_disconnect(&mhandle);
     }
