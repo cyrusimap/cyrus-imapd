@@ -30,6 +30,9 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/uio.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 
 #include "retry.h"
 
@@ -80,10 +83,30 @@ int iovcnt;
     int n;
     int i;
     int written = 0;
-
+    static int iov_max =
+#ifdef MAXIOV
+	MAXIOV
+#else
+#ifdef IOV_MAX
+	IOV_MAX
+#else
+	10000
+#endif
+#endif
+	;
+    
     for (;;) {
-	n = writev(fd, iov, iovcnt);
+	while (iovcnt && iov[0].iov_len == 0) {
+	    iov++;
+	    iovcnt--;
+	}
+
+	n = writev(fd, iov, iovcnt > iov_max ? iov_max : iovcnt);
 	if (n == -1) {
+	    if (errno == EINVAL && iov_max > 10) {
+		iov_max /= 2;
+		continue;
+	    }
 	    if (errno == EINTR) continue;
 	    return -1;
 	}
