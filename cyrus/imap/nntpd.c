@@ -47,7 +47,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.20 2002/10/15 19:12:49 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.21 2002/10/16 01:11:11 ken3 Exp $
  */
 #include <config.h>
 
@@ -182,6 +182,7 @@ static void cmd_mode();
 static void cmd_list();
 static void cmd_article();
 static void cmd_post();
+static void cmd_over();
 static void cmdloop(void);
 static int open_group();
 static int parsenum(char *str, char **rem);
@@ -352,7 +353,6 @@ int service_main(int argc, char **argv, char **envp)
 
     nntp_in = prot_new(0, 0);
     nntp_out = prot_new(1, 1);
-    imapd_out = nntp_out; /* XXX hack for index.c */
 
     /* Find out name of client host */
     salen = sizeof(nntp_remoteaddr);
@@ -496,7 +496,6 @@ static void cmdloop(void)
     char *p;
     const char *err;
     unsigned long uid;
-    int idx;
 
     for (;;) {
 	signals_poll();
@@ -575,9 +574,9 @@ static void cmdloop(void)
 		} else {
 		    if (!nntp_group) goto noopengroup;
 		    if (uid) {
-			idx = index_finduid(uid);
-			if (index_getuid(idx) != uid) goto noarticle;
-			nntp_current = idx;
+			int msgno = index_finduid(uid);
+			if (index_getuid(msgno) != uid) goto noarticle;
+			nntp_current = msgno;
 		    } else {
 			uid = index_getuid(nntp_current);
 		    }
@@ -796,11 +795,7 @@ static void cmdloop(void)
 		prot_printf(nntp_out,
 			    "224 Overview information follows:\r\n");
 
-		for (; uid <= last; uid++) {
-		    idx = index_finduid(uid);
-		    if (index_getuid(idx) != uid) continue;
-		    index_overview(nntp_group, idx);
-		}
+		cmd_over(uid, last);
 
 		prot_printf(nntp_out, ".\r\n");
 	    }
@@ -1722,4 +1717,31 @@ static void cmd_post(char *msgid, int mode)
     }
 
     prot_flush(nntp_out);
+}
+
+static void cmd_over(unsigned long uid, unsigned long last)
+{
+    int msgno;
+    struct nntp_overview *over;
+
+    for (; uid <= last; uid++) {
+	msgno = index_finduid(uid);
+	if (index_getuid(msgno) != uid) continue;
+
+	if ((over = index_overview(nntp_group, msgno))) {
+	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t",
+			over->uid,
+			over->subj ? over->subj : "",
+			over->from ? over->from : "",
+			over->date ? over->date : "",
+			over->msgid ? over->msgid : "",
+			over->ref ? over->ref : "",
+			over->bytes);
+
+	    if (netnews_lookup(over->msgid, NULL, NULL, &over->lines, NULL))
+		prot_printf(nntp_out, "%lu", over->lines);
+
+	    prot_printf(nntp_out, "\t\r\n");
+	}
+    }
 }
