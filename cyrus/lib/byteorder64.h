@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: byteorder64.h,v 1.1.2.1 2004/08/09 18:51:22 ken3 Exp $
+ * $Id: byteorder64.h,v 1.1.2.2 2004/08/16 11:44:34 ken3 Exp $
  */
 
 #ifndef _BYTEORDER64_H
@@ -57,8 +57,8 @@
 #define ntohll(x) _ntohll(x)
 
 /* little-endian 64-bit host/network byte-order swap functions */
-unsigned long long _htonll(unsigned long long);
-unsigned long long _ntohll(unsigned long long);
+extern unsigned long long _htonll(unsigned long long);
+extern unsigned long long _ntohll(unsigned long long);
 
 #endif /* WORDS_BIGENDIAN */
 #endif /* HAVE_LONG_LONG_INT */
