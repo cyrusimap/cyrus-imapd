@@ -32,10 +32,6 @@ CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et -I$(TCLINCLUDE) 
 LIBS = ../lib/libcyrus.a @LIBS@ 
 NODEP_LIBS = @NODEP_LIBS@ 
 
-# XXX
-TCLLIBS = /usr/contributed/lib/libtcl.a
-TCLINCLUDE = /usr/contributed/include
-
 CFLAGS = -g
 LDFLAGS = -g
 
@@ -48,7 +44,7 @@ all: cyradm
 
 cyradm: cyradmapp.o cyradm.o cyrinit.o
 	$(CC) $(LDFLAGS) -o cyradm cyradmapp.o cyradm.o cyrinit.o \
-		$(TCLLIBS) -lm $(LIBS) $(NODEP_LIBS)
+		$(LIBS) $(NODEP_LIBS)
 
 cyrinit.c: cyrinit.tcl cyrinit.sed
 	sed -f $(srcdir)/cyrinit.sed $< >,cyrinit.c
