@@ -61,6 +61,12 @@ Compiling the IMAP Server
     Running "configure" takes awhile. While running, it prints some
     messages telling which features it is checking for. 
 
+    After configure runs, it runs makedepend. This program is useful, but
+    has the unfortunate habit of spitting out lots of warnings that are
+    basically spurious and should be ignored. (Makedepend can't see that
+    HAVE_KERBEROS isn't set, so it looks for krb.h anyway.) These are not
+    errors. Nothing is broken. Please do not worry. 
+
     You can compile the package in a different directory from the one
     containing the source code. Doing so allows you to compile it on more
     than one kind of computer at the same time. To do this, you must use a

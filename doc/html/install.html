@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.37 1998/06/24 15:39:27 dar Exp $ -->
+<!-- $Id: install.html,v 1.38 1998/06/25 20:46:02 tjs Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -83,6 +83,12 @@ debugging "<TT>configure</TT>").
 
 <P>Running "<tt>configure</tt>" takes awhile.  While running, it
 prints some messages telling which features it is checking for.
+
+<p>After configure runs, it runs <tt>makedepend</tt>.  This program is
+useful, but has the unfortunate habit of spitting out lots of warnings that
+are basically spurious and should be ignored.  (Makedepend can't see that
+HAVE_KERBEROS isn't set, so it looks for krb.h anyway.)
+These are not errors.  Nothing is broken.  Please do not worry.
 
 <P>You can compile the package in a different directory from the one
 containing the source code.  Doing so allows you to compile it on more
@@ -836,7 +842,7 @@ to work with the IMAP server.
 
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Tue Nov  4 17:03:03 1997
+last modified by tjs at Wed Feb  4 12:02:57 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page

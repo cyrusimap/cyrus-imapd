@@ -30,6 +30,9 @@ Changes to the Cyrus IMAP Server Since Version 1.5.10
 
 Changes to the Cyrus IMAP Server Since Version 1.5.2
 
+      * Fixed a bug with word alignment on Solaris using Kerberos compiled
+        with Sun's CC. (Several patches were submitted; thanks to everyone
+        who did so.) 
       * Patches from John Myers, including more glob fixes. 
       * Use the default hash function from DB. Note that this means that
         the existing delivered.db and ptscache.db is NOT compatible with
@@ -73,6 +76,8 @@ Changes to the Cyrus IMAP Server Since Version 1.5.2
       * Bug fix: Flags beginning with \ are system flags and users can only
         create the defined flags. The code to do this before was confused. 
       * The configure scripts and makefiles have some random fixes. 
+      * Added a contrib directory for reasons of laziness in collecting
+        patches, not all of which should be in the distribution. 
       * ptloader can now renew its AFS authentication by reading from a
         srvtab file. 
       * The configure script now looks for a libcom_err and can use an
