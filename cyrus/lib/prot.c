@@ -37,6 +37,9 @@
 #endif
 #include <sys/types.h>
 #include <netinet/in.h>
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
 
 #include "prot.h"
 #include "xmalloc.h"
