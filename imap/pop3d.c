@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.81 2000/12/26 21:35:41 leg Exp $
+ * $Id: pop3d.c,v 1.82 2001/02/16 18:55:10 leg Exp $
  */
 #include <config.h>
 
@@ -660,6 +660,7 @@ static void cmd_starttls(int pop3s)
     result=tls_init_serverengine(5,        /* depth to verify */
 				 !pop3s,   /* can client auth? */
 				 0,        /* require client to auth? */
+				 !pop3s,   /* TLS only? */
 				 (char *)config_getstring("tls_ca_file", ""),
 				 (char *)config_getstring("tls_ca_path", ""),
 				 (char *)config_getstring("tls_cert_file", ""),
