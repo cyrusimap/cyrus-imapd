@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.274 2003/12/19 22:13:50 rjs3 Exp $
+dnl $Id: configure.in,v 1.275 2003/12/19 22:14:32 rjs3 Exp $
 dnl
 
 
@@ -583,7 +583,7 @@ if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" -o "$with_krb" != "no";
   fi 
 
   dnl Do we need DES for kerberos?
-  AC_ARG_WITH(krbdes,[  --with-krbdes           use Kerberos DES implementation [yes]],
+  AC_ARG_WITH(krbdes,[  --with-krbdes           use Kerberos DES implementation [[yes]]],
 	with_krbdes="$withval", with_krbdes="yes")
   if test "$with_krbdes" = "yes"; then
     AC_CHECK_LIB(des,des_ecb_encrypt,
@@ -1001,7 +1001,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.274 2003/12/19 22:13:50 rjs3 Exp $ */
+/* $Id: configure.in,v 1.275 2003/12/19 22:14:32 rjs3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
