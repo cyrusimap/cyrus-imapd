@@ -25,7 +25,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.89 1999/03/01 20:02:32 tjs Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.90 1999/03/02 03:03:28 tjs Exp $";
 
 
 #ifdef HAVE_UNISTD_H
@@ -902,9 +902,7 @@ char
     return "554 5.0.0 Unexpected internal error";
 }
 
-fatal(s, code)
-char *s;
-int code;
+void fatal(const char* s, int code)
 {
     printf("421 4.3.0 deliver: %s\r\n", s);
     exit(code);

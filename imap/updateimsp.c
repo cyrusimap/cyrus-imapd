@@ -1,5 +1,5 @@
 /* updateimsp.c -- program to send mailbox updates to IMSP.
- $Id: updateimsp.c,v 1.14 1998/05/15 21:50:08 neplokh Exp $
+ $Id: updateimsp.c,v 1.15 1999/03/02 03:03:29 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -308,9 +308,7 @@ int size;
     }
 }
 
-fatal(msg, code)
-char *msg;
-int code;
+void fatal(const char* msg, int code)
 {
     fprintf(stderr, "updateimsp: %s\n", msg);
     exit(code);

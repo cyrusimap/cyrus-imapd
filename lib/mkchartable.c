@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include "xmalloc.h"
 
 #define XX 127
@@ -908,7 +909,7 @@ freemap(void)
     }
 }
 
-void fatal(char* s, int c)
+void fatal(const char* s, int c)
 {
     fprintf(stderr, "Error while building charset table: %s\n", s);
     exit(c);

@@ -170,7 +170,7 @@ Usage: syncams [-A | -a] [-d] [-h] [-m]\n\
     exit(1);
 } /* usage */
 
-void fatal(char *msg, int exitvalue)
+void fatal(const char *msg, int exitvalue)
 {
     fputs("amssync: ",stderr);
     fputs(msg,stderr);

@@ -26,7 +26,7 @@
  *
  */
 
-/* $Id: arbitron.c,v 1.13 1998/11/24 22:25:36 shadow Exp $ */
+/* $Id: arbitron.c,v 1.14 1999/03/02 03:03:28 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -185,9 +185,7 @@ char *name;
     return r;
 }
 
-fatal(s, code)
-char *s;
-int code;
+void fatal(const char* s, int code)
 {
     fprintf(stderr, "arbitron: %s\n", s);
     exit(code);
