@@ -1076,7 +1076,7 @@ char *tag;
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
-    prot_printf(imapd_out, "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA");
+    prot_printf(imapd_out, "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+");
     prot_printf(imapd_out, "%s", login_capabilities());
 #ifdef ENABLE_EXPERIMENT
     prot_printf(imapd_out, " OPTIMIZE-1");
@@ -2067,13 +2067,21 @@ int usinguid;
     }
     else {
 #ifdef ENABLE_EXPERIMENT
-	prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag, copyuid,
-		    error_message(IMAP_OK_COMPLETED));
+	if (copyuid) {
+	    prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
+			copyuid, error_message(IMAP_OK_COMPLETED));
+	    free(copyuid);
+	}
+	else {
+	    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+			error_message(IMAP_OK_COMPLETED));
+	}
 #else
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
+	if (copyuid) free(copyuid);
 #endif
-	free(copyuid);
+
     }
 }    
 
