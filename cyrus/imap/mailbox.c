@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.130 2002/05/23 20:24:18 rjs3 Exp $
+ $Id: mailbox.c,v 1.131 2002/05/24 13:32:33 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1097,7 +1097,7 @@ int mailbox_write_header(struct mailbox *mailbox)
     if(r != -1) {
 	niov = 0;
 	quota_root = mailbox->quota.root ? mailbox->quota.root : "";
-	WRITEV_ADDSTR_TO_IOVEC(iov,niov,quota_root);
+	WRITEV_ADDSTR_TO_IOVEC(iov,niov,(char *)quota_root);
 	WRITEV_ADD_TO_IOVEC(iov,niov,"\t",1);
 	WRITEV_ADDSTR_TO_IOVEC(iov,niov,mailbox->uniqueid);
 	WRITEV_ADD_TO_IOVEC(iov,niov,"\n",1);
