@@ -90,7 +90,7 @@ int iovcnt;
 #ifdef IOV_MAX
 	IOV_MAX
 #else
-	10000
+	8192
 #endif
 #endif
 	;
