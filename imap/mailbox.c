@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.121 2002/04/01 21:07:16 leg Exp $
+ $Id: mailbox.c,v 1.122 2002/04/04 18:22:45 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2053,7 +2053,7 @@ int mailbox_create(const char *name,
  */
 int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 {
-    int r;
+    int r, rquota;
     DIR *dirp;
     struct dirent *f;
     char buf[MAX_MAILBOX_PATH];
@@ -2063,7 +2063,7 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
     r =  mailbox_lock_header(mailbox);
     if (!r && mailbox->index_fd == -1) r = mailbox_open_index(mailbox);
     if (!r) r = mailbox_lock_index(mailbox);
-    if (!r) r = mailbox_lock_quota(&mailbox->quota);
+    if (!r) rquota = mailbox_lock_quota(&mailbox->quota);
     if (r) {
 	mailbox_close(mailbox);
 	return r;
@@ -2071,9 +2071,9 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 
     seen_delete_mailbox(mailbox);
 
-    if (delete_quota_root) {
+    if (delete_quota_root && !rquota) {
 	mailbox_delete_quota(&mailbox->quota);
-    } else {
+    } else if (!rquota) {
 	/* Free any quota being used by this mailbox */
 	if (mailbox->quota.used >= mailbox->quota_mailbox_used) {
 	    mailbox->quota.used -= mailbox->quota_mailbox_used;
