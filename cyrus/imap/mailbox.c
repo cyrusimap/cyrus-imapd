@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.18 2004/09/02 19:23:07 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.19 2004/09/23 20:40:20 ken3 Exp $
  *
  */
 
@@ -2774,10 +2774,10 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     /* Copy over message files */
     oldfname = &oldfpath.data;
-    *(oldfname->tail)++;
+    *(oldfname->tail)++ = '/';
     oldfname->len++;
     newfname = &newfpath.data;
-    *(newfname->tail)++;
+    *(newfname->tail)++ = '/';
     newfname->len++;
 
     for (msgno = 1; msgno <= oldmailbox->exists; msgno++) {
