@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.195 2003/05/15 22:20:13 rjs3 Exp $
+ * $Id: index.c,v 1.196 2003/07/21 19:22:31 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1027,7 +1027,10 @@ index_sort(struct mailbox *mailbox,
     unsigned *msgno_list;
     MsgData *msgdata = NULL, *freeme = NULL;
     int nmsg;
-    clock_t start = clock();
+    clock_t start;
+
+    if(CONFIG_TIMING_VERBOSE)
+	start = clock();
 
     /* Search for messages based on the given criteria */
     nmsg = _index_search(&msgno_list, mailbox, searchargs);
@@ -1102,7 +1105,10 @@ int index_thread(struct mailbox *mailbox, int algorithm,
 {
     unsigned *msgno_list;
     int nmsg;
-    clock_t start = clock();
+    clock_t start;
+
+    if(CONFIG_TIMING_VERBOSE)
+	start = clock();
 
     /* Search for messages based on the given criteria */
     nmsg = _index_search(&msgno_list, mailbox, searchargs);
