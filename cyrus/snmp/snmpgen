@@ -197,7 +197,7 @@ int snmp_connect(void)
 
     /* put us in non-blocking mode */
     fdflags = fcntl(s, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
+    if (fdflags == -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
     if (fdflags != -1) { close(s); return -1; }
 
     mysock = s;

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.209 2000/02/17 02:48:56 leg Exp $ */
+/* $Id: imapd.c,v 1.210 2000/02/17 04:51:19 tmartin Exp $ */
 
 #include <config.h>
 
@@ -434,6 +434,9 @@ int service_init(int argc, char **argv, char **envp)
 	return 2;
     }
 
+    /* create connection to the SNMP listener, if available. */
+    snmp_connect(); /* ignore return code */
+
     return 0;
 }
 
@@ -509,9 +512,6 @@ int service_main(int argc, char **argv, char **envp)
     if (timeout < 30) timeout = 30;
     prot_settimeout(imapd_in, timeout*60);
     prot_setflushonread(imapd_in, imapd_out);
-
-    /* create connection to the SNMP listener, if available. */
-    snmp_connect(); /* ignore return code */
 
     cmdloop();
 
