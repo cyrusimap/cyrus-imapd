@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.8 2004/04/03 18:44:52 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.9 2004/04/05 14:49:40 ken3 Exp $
  *
  */
 
@@ -1819,19 +1819,22 @@ int mailbox_expunge(struct mailbox *mailbox, int iscurrentdir,
 	strlcat(fnamebuf, FNAME_EXPUNGE_INDEX, sizeof(fnamebuf));
 
 	expunge_fd = open(fnamebuf, O_RDWR, 0666);
-	if (expunge_fd == -1 && errno == ENOENT) {
-	    if (flags & EXPUNGE_CLEANUP) {
-		/* no cyrus.expunge, we're done */
-		return 0;
-	    }
-	    else {
-		/* try creating one */
-		expunge_fd = open(fnamebuf, O_RDWR|O_CREAT, 0666);
-	    }
+	if (expunge_fd == -1 && errno == ENOENT &&
+	    !(flags & EXPUNGE_CLEANUP)) {
+	    /* we're not in cleanup mode, try creating one */
+	    expunge_fd = open(fnamebuf, O_RDWR|O_CREAT, 0666);
 	}
 	if (expunge_fd == -1) {
-	    syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
-	    return IMAP_IOERROR;
+	    if (errno == ENOENT && (flags & EXPUNGE_CLEANUP)) {
+		/* we're doing cleanup and no cyrus.expunge */
+		if (flags == EXPUNGE_CLEANUP) {
+		    /* we're ONLY doing cleanup, so we're done */
+		    return 0;
+		}
+	    } else {
+		syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
+		return IMAP_IOERROR;
+	    }
 	}
     }
 
