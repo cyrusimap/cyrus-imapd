@@ -29,6 +29,10 @@ Upgrading From Previous Versions
         if the delivered database is removed, there is a chance that some
         duplicate messages may come through, but this is not a serious
         concern. 
+      * The format for the PTS cache for IMSP has changed. If you use AFS
+        ACLs, IMSPd, and IMAPd on the same machine, make sure you have
+        version 1.5a5 of the IMSP server for this version of the IMAP
+        server. (If you don't have IMSP, or AFS, don't worry about it.) 
 
     See the file doc/changes in the distribution for more information. 
 
