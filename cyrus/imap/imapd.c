@@ -114,6 +114,7 @@ void cmd_find P((char *tag, char *namespace, char *pattern));
 void cmd_list P((char *tag, int subscribed, char *reference, char *pattern));
 void cmd_changesub P((char *tag, char *namespace, char *name, int add));
 void cmd_getacl P((char *tag, char *name, int oldform));
+void cmd_listrights P((char *tag, char *name, char *identifier));
 void cmd_myrights P((char *tag, char *name, int oldform));
 void cmd_setacl P((char *tag, char *name, char *identifier, char *rights));
 void cmd_getquota P((char *tag, char *name));
@@ -531,6 +532,14 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_list(tag.s, 1, arg1.s, arg2.s);
+	    }
+	    else if (!strcmp(cmd.s, "Listrights")) {
+		c = getastring(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_listrights(tag.s, arg1.s, arg2.s);
 	    }
 	    else goto badcmd;
 	    break;
@@ -2376,6 +2385,58 @@ int oldform;
 	prot_printf(imapd_out, "\r\n");
     }
     prot_printf(imapd_out, "%s OK Getacl completed\r\n", tag);
+}
+
+/*
+ * Perform a LISTRIGHTS command
+ */
+void
+cmd_listrights(tag, name, identifier)
+char *tag;
+char *name;
+char *identifier;
+{
+    char mailboxname[MAX_MAILBOX_NAME+1];
+    int r, rights;
+    int isowner = 0;
+    char *acl;
+
+    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+
+    if (!r) {
+	r = mboxlist_lookup(mailboxname, (char **)0, &acl);
+    }
+
+    if (!r) {
+	rights = acl_myrights(imapd_authstate, acl);
+
+	if (!rights && !imapd_userisadmin &&
+	    !mboxname_userownsmailbox(imapd_userid, mailboxname)) {
+	    r = IMAP_MAILBOX_NONEXISTENT;
+	}
+    }
+
+    if (!r) {
+	if (!auth_canonifyid(identifier)) {
+	    prot_printf(imapd_out, "* LISTRIGHTS %s %s \"\"",
+			name, identifier);
+	}
+	else if (mboxname_userownsmailbox(imapd_userid, mailboxname)) {
+	    prot_printf(imapd_out,
+			"* LISTRIGHTS %s %s lca r s w i p d 0 1 2 3 4 5 6 7 8 9",
+			name, identifier);
+	}
+	else {
+	    prot_printf(imapd_out,
+			"* LISTRIGHTS %s %s \"\" l r s w i p c d a 0 1 2 3 4 5 6 7 8 9",
+			name, identifier);
+	}
+
+	prot_printf(imapd_out, "\r\n%s OK Listrights completed\r\n", tag);
+	return;
+    }
+
+    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 }
 
 /*
