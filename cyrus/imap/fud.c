@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.35 2002/08/13 17:51:29 rjs3 Exp $ */
+/* $Id: fud.c,v 1.36 2002/08/13 19:32:32 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -229,7 +229,7 @@ int do_proxy_request(const char *who, const char *name,
     /* Open a UDP socket to the Cyrus mail server */
     if(!sp) {
 	sp = getservbyname("fud", "udp");
-	if(sp) backend_port = sp->s_port;
+	if(sp) backend_port = ntohs(sp->s_port);
     }
 
     hp = gethostbyname (backend_host);
