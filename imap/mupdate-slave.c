@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.1 2002/01/22 22:31:52 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.2 2002/01/23 21:53:04 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -127,6 +127,9 @@ void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 		       pingtimeout);
 		return;
 	    }
+
+	    /* Now that we recieved it, scarf up all data until the next OK */
+	    if(mupdate_scarf(handle, cmd_change, NULL, 1)) return;
 	} else {
 	    syslog(LOG_ERR, "select failed");
 	    return;

@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.25 2002/01/23 17:06:51 rjs3 Exp $
+ * $Id: mupdate.c,v 1.26 2002/01/23 21:53:05 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1133,7 +1133,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 {
     struct mbent *m = NULL;
     struct conn *upc = NULL;
-    enum settype t = 0;
+    enum settype t = -1;
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
@@ -1147,8 +1147,8 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    /* Mailbox doesn't exist */
 	    return -1;
 	}
-	m->t = SET_DELETE;
-	
+	m->t = t = SET_DELETE;
+
 	/* write to disk */
 	database_log(m);
 
@@ -1165,9 +1165,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    if (mdata->acl) strcpy(m->acl, mdata->acl);
 
 	    if(!strncmp(rock, "MAILBOX", 6)) {
-		m->t = SET_ACTIVE;
+		m->t = t = SET_ACTIVE;
 	    } else if(!strncmp(rock, "RESERVE", 7)) {
-		m->t = SET_RESERVE;
+		m->t = t = SET_RESERVE;
 	    } else {
 		syslog(LOG_DEBUG,
 		       "bad mupdate command in cmd_change: %s", rock);
@@ -1198,9 +1198,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    }
 
 	    if(!strncmp(rock, "MAILBOX", 6)) {
-		newm->t = SET_ACTIVE;
+		newm->t = t = SET_ACTIVE;
 	    } else if(!strncmp(rock, "RESERVE", 7)) {
-		newm->t = SET_RESERVE;
+		newm->t = t = SET_RESERVE;
 	    } else {
 		syslog(LOG_DEBUG,
 		       "bad mupdate command in cmd_change: %s", rock);
@@ -1340,7 +1340,7 @@ void sendupdates(struct conn *C)
 	p = p->next;
 
 	if (q->t == SET_DELETE) {
-	    prot_printf(C->pout, "%s DELETE {%d}\r\n%s\r\n",
+	    prot_printf(C->pout, "%s DELETE {%d+}\r\n%s\r\n",
 			C->streaming, strlen(q->mailbox), q->mailbox);
 	} else {
 	    /* notify just like a FIND */
