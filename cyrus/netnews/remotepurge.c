@@ -42,7 +42,7 @@
  *
  */
 
-/* $Id: remotepurge.c,v 1.16 2002/05/25 19:57:49 leg Exp $ */
+/* $Id: remotepurge.c,v 1.16.4.1 2002/12/16 01:44:27 ken3 Exp $ */
 
 #include <config.h>
 
@@ -476,30 +476,34 @@ int purge_me(char *name, time_t when)
 
     spew(2, "%s exists %d", name, current_mbox_exists);
 
-    /* make out list of uids */
-    uidlist.size = 0;		/* reset to 0 */
-
-    spew(3, "%s searching for messages %s", name, search_string);
-
-    imclient_addcallback(imclient_conn,
-			 "SEARCH", 0, callback_search,
-			 (void *)&uidlist, (char *)0);
-    imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
-		  "UID SEARCH %a", search_string);
-    
-
-    cmd_done = NOTFINISHED;
-    while (cmd_done == NOTFINISHED) {
-	imclient_processoneevent(imclient_conn);
+    /* Only search if there are actually messages in the mailbox! */
+    if(current_mbox_exists) {
+	/* make out list of uids */
+	uidlist.size = 0;		/* reset to 0 */
+	
+	spew(3, "%s searching for messages %s", name, search_string);
+	
+	imclient_addcallback(imclient_conn,
+			     "SEARCH", 0, callback_search,
+			     (void *)&uidlist, (char *)0);
+	imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
+		      "UID SEARCH %a", search_string);
+	
+	
+	cmd_done = NOTFINISHED;
+	while (cmd_done == NOTFINISHED) {
+	    imclient_processoneevent(imclient_conn);
+	}
+	if (cmd_done != IMAP_OK) {
+	    fatal("UID Search failed", EC_TEMPFAIL);
+	}
+	
+	if (uidlist.size > 0) {
+	    mark_all_deleted(name, &uidlist, &stats);
+	}
     }
-    if (cmd_done != IMAP_OK) {
-	fatal("UID Search failed", EC_TEMPFAIL);
-    }
 
-    if (uidlist.size > 0) {
-	mark_all_deleted(name, &uidlist, &stats);
-    }
-
+ after_search:
     /* close mailbox */   
     imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
 		  "CLOSE");
@@ -513,9 +517,14 @@ int purge_me(char *name, time_t when)
 	fatal("unable to CLOSE mailbox", EC_TEMPFAIL);
     }
 
-    spew(1, "%s exists %d deleted %d", 
-	 name, current_mbox_exists, uidlist.size);
-
+    if(current_mbox_exists) {
+	spew(1, "%s exists %d deleted %d", 
+	     name, current_mbox_exists, uidlist.size);
+    } else {
+	spew(1, "%s exists %d (skipped)",
+	     name, current_mbox_exists, uidlist.size);	
+    }
+    
     return 0;
 }
 
