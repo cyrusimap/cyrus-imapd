@@ -11,7 +11,6 @@
 #include "assert.h"
 #include "imap_err.h"
 #include "mailbox.h"
-#include "message.h"
 #include "append.h"
 #include "xmalloc.h"
 
