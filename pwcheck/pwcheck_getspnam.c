@@ -1,6 +1,6 @@
 /* pwcheck_getspnam.c -- check passwords using getspnam()
  *
- *      (C) Copyright 1995 by Carnegie Mellon University
+ *      (C) Copyright 1995-1996 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -39,14 +39,13 @@ char *password;
 
     pwd = getspnam(request);
     if (!pwd) {
-	reply = "Userid not found";
-	goto sendreply;
+	return "Userid not found";
     }
     
     if (strcmp(pwd->sp_pwdp, crypt(request + strlen(request) + 1, pwd->sp_pwdp)) != 0) {
-	reply = "Incorrect password";
+	return "Incorrect password";
     }
     else {
-	reply = "OK";
+	return "OK";
     }
 }
