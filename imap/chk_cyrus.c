@@ -40,12 +40,13 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.5 2002/05/22 19:48:53 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.6 2002/05/26 01:00:39 ken3 Exp $
  */
 
 #include <config.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <sys/types.h>
@@ -229,7 +230,7 @@ int main(int argc, char **argv)
 
     if(mailbox) {
 	fprintf(stderr, "Examining mailbox: %s\n", mailbox);
-	chkmbox(mailbox,0,0,NULL);
+	chkmbox((char *)mailbox,0,0,NULL);
     } else {
 	fprintf(stderr, "Examining partition: %s\n",
 		(check_part ? check_part : "ALL PARTITIONS"));
