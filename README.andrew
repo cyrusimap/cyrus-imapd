@@ -37,7 +37,7 @@ To make a release:
 - make sure to include the C versions of the lex & yacc files in sieve
 - make sure to build configure
 
-- add upgrade notes to doc/html/install.html
+- add upgrade notes to doc/install-upgrade.html
 - rebuild the doc/txt directory (cd doc/txt ; make all)
 
 - tag the CVS repository with cyrus-release-Major-Minor-Revision

@@ -19,6 +19,13 @@ imapd and core utilities
         threadsafe. 
       * during appendstage(), the message is parsed once per delivery, not
         once at the beginning. 
+      * master process should accept a SIGHUP and reread configuration file
+        on the fly. 
+      * master should pay attention to processes that have told it they are
+        listening, and make sure they don't die abnormally. likewise, it
+        should be on the lookout for continually forking services. 
+      * master should probably have a babysitting service ("always keep
+        this process running"). 
 
 proxyd and Cyrus Murder
 
@@ -35,6 +42,7 @@ proxyd and Cyrus Murder
       * target-acap doesn't work on ignoring zero-information updates. it
         doesn't deal with the ACAP server dying and in general should be
         replaced with something more general. 
+      * is proxyd implementing idle timeouts correctly? 
 
 lmtpd, deliver, and sieve
 
@@ -74,7 +82,6 @@ other utilities
 
                      Things we want to do
 
-      * Implement the IMAP ID extension. 
       * Implement the IMAP VIEW extension. 
       * Implement the IMAP SORT and THREAD extensions. 
       * Implement the IMAP ANNOTATE extension. 
