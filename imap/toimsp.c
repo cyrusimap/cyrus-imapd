@@ -152,6 +152,7 @@ time_t last_change;
 
     f = fopen(fnamebuf, "w");
     if (!f) {
+	if (errno == ENOENT) return 0;
 	syslog(LOG_ERR, "IOERROR: creating dropoff file %s: %m",
 	       fnamebuf);
 	return IMAP_IOERROR;
