@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102.2.9 2005/02/21 19:25:18 ken3 Exp $
+ * $Id: append.c,v 1.102.2.10 2005/03/03 01:13:03 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -984,12 +984,12 @@ int append_copy(struct mailbox *mailbox,
 	    addme(&as->seen_msgrange, &as->seen_alloced, 
 		  message_index[msg].uid);
 	}
+
+	/* Assign messageID for this message */
+	message_uuid_copy(&message_index[msg].uuid, &copymsg[msg].uuid);
     }
 
     if (body) free(body);
-
-    /* Assign messageID for this message */
-    message_uuid_copy(&message_index[msg].uuid, &copymsg[msg].uuid);
 
     /* Write out index file entries */
     r = mailbox_append_index(append_mailbox, message_index,
