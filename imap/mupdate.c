@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.13 2001/11/27 02:24:59 ken3 Exp $
+ * $Id: mupdate.c,v 1.14 2002/01/15 21:27:17 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -106,6 +106,14 @@ struct conn {
     sasl_conn_t *saslconn;
     char *userid;
 
+    const char *clienthost;
+
+    struct 
+    {
+	char *ipremoteport;
+	char *iplocalport;
+    } saslprops;
+
     /* pending changes to send, in reverse order */
     char *streaming; /* tag */
     pthread_mutex_t m;
@@ -126,6 +134,9 @@ pthread_mutex_t mailboxes_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct conn *updatelist;
 
 /* --- prototypes --- */
+void cmd_authenticate(struct conn *C,
+		      const char *tag, const char *mech,
+		      const char *clientstart);
 void cmd_set(struct conn *C, 
 	     const char *tag, const char *mailbox,
 	     const char *server, const char *acl, enum settype t);
@@ -133,6 +144,7 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 	      int dook);
 void cmd_startupdate(struct conn *C, const char *tag);
 void shut_down(int code);
+static int reset_saslconn(struct conn *c);
 void database_init();
 void sendupdates(struct conn *C);
 
@@ -190,7 +202,6 @@ static void conn_free(struct conn *C)
 
     pthread_mutex_unlock(&connlist_mutex); /* UNLOCK */
 
-    if (C->userid) free(C->userid);
     if (C->pin) prot_free(C->pin);
     if (C->pout) prot_free(C->pout);
     if (C->saslconn) sasl_dispose(&C->saslconn);
@@ -202,13 +213,49 @@ static void conn_free(struct conn *C)
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
-static int mysasl_authproc(void *context __attribute__((unused)),
-			   const char *auth_identity,
-			   const char *requested_user,
-			   const char **user,
-			   const char **errstr)
+static int mysasl_authproc(sasl_conn_t *conn,
+			   void *context,
+			   const char *requested_user, unsigned rlen,
+			   const char *auth_identity, unsigned alen,
+			   const char *def_realm, unsigned urlen,
+			   struct propctx *propctx)
 {
-    /* xxx verify this is a privileged user */
+    const char *val;
+    char *realm;
+    int allowed=0;
+    struct auth_state *authstate;
+
+    /* check if remote realm */
+    if ((realm = strchr(auth_identity, '@'))!=NULL) {
+	realm++;
+	val = config_getstring("loginrealms", "");
+	while (*val) {
+	    if (!strncasecmp(val, realm, strlen(realm)) &&
+		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
+		break;
+	    }
+	    /* not this realm, try next one */
+	    while (*val && !isspace((int) *val)) val++;
+	    while (*val && isspace((int) *val)) val++;
+	}
+	if (!*val) {
+	    sasl_seterror(conn, 0, "cross-realm login %s denied",
+			  auth_identity);
+	    return SASL_BADAUTH;
+	}
+    }
+
+    /* ok, is auth_identity an admin? 
+     * for now only admins can do mupdate from another machine
+     */
+    authstate = auth_newstate(auth_identity, NULL);
+    allowed = authisa(authstate, "mupdate", "admins");
+    auth_freestate(authstate);
+    
+    if (!allowed) {
+	sasl_seterror(conn, 0, "only admins may authenticate");
+	return SASL_BADAUTH;
+    }
 
     return SASL_OK;
 }
@@ -273,7 +320,7 @@ int service_init(int argc, char **argv, char **envp)
 
     if (!masterp) {
 	/* spawn off listener thread to connect to the master */
-
+	syslog(LOG_ERR, "mupdate running unimplimented slave code");
     }
 
     return 0;
@@ -295,7 +342,10 @@ void fatal(const char *s, int code)
 void cmdloop(struct conn *c)
 {
     struct buf tag, cmd, arg1, arg2, arg3;
-
+    const char *mechs;
+    int ret;
+    unsigned int mechcount;
+    
     syslog(LOG_DEBUG, "starting cmdloop() on fd %d", c->fd);
     
     /* zero out struct bufs */
@@ -305,9 +355,13 @@ void cmdloop(struct conn *c)
     memset(&arg2, 0, sizeof(struct buf));
     memset(&arg3, 0, sizeof(struct buf));
 
-    prot_printf(c->pout, "* OK %s Cyrus Murder MUPDATE %s %s\r\n", 
+    ret=sasl_listmech(c->saslconn, NULL, "\r\n* AUTH ", " ", "", &mechs,
+		      NULL, &mechcount);
+
+    prot_printf(c->pout, "* OK %s Cyrus Murder MUPDATE %s %s%s\r\n", 
 		config_servername,
-		CYRUS_VERSION, masterp ? "(master)" : "(slave)");
+		CYRUS_VERSION, masterp ? "(master)" : "(slave)",
+		(ret == SASL_OK && mechcount > 0) ? mechs : "");
     for (;;) {
 	int ch;
 	char *p;
@@ -355,7 +409,6 @@ void cmdloop(struct conn *c)
 	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
 	}
 	
-
 	switch (cmd.s[0]) {
 	case 'A':
 	    if (!strcmp(cmd.s, "Authenticate")) {
@@ -375,15 +428,7 @@ void cmdloop(struct conn *c)
 		    continue;
 		}
 
-		/* xxx do authentication */
-		if (!strcasecmp(arg1.s, "backdoor") && opt) {
-		    c->userid = xstrdup(arg2.s);
-		    prot_printf(c->pout, "%s OK \"user logged in\"\r\n",
-				tag.s);
-		} else {
-		    prot_printf(c->pout, "%s BAD \"unknown mechanism\"\r\n",
-				tag.s);
-		}
+		cmd_authenticate(c, tag.s, arg1.s, arg2.s);
 	    }
 	    else if (!c->userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Activate")) {
@@ -525,12 +570,16 @@ void *start(void *rock)
     struct sockaddr_in localaddr, remoteaddr;
     int haveaddr = 0;
     int salen;
+    int secflags, plaintext_result;
+    sasl_security_properties_t *secprops = NULL;
     char localip[60], remoteip[60];
     char clienthost[250];
     struct hostent *hp;
 
     c->pin = prot_new(c->fd, 0);
     c->pout = prot_new(c->fd, 1);
+    c->clienthost = clienthost;
+
     prot_setflushonread(c->pin, c->pout);
     prot_settimeout(c->pin, 30*60);
 
@@ -559,6 +608,11 @@ void *start(void *rock)
 	}
     }
 
+    if(haveaddr) {
+	c->saslprops.ipremoteport = remoteip;
+	c->saslprops.iplocalport = localip;
+    }
+
     /* create sasl connection */
     if (sasl_server_new("imap", config_servername, 
 			(haveaddr ? localip : NULL),
@@ -567,6 +621,15 @@ void *start(void *rock)
 			&c->saslconn) != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
     }
+
+    /* set my allowable security properties */
+    secflags = SASL_SEC_NOANONYMOUS;
+    plaintext_result = config_getswitch("allowplaintext",1);
+    if (!config_getswitch("mupdate_allowplaintext", plaintext_result)) {
+	secflags |= SASL_SEC_NOPLAINTEXT;
+    }
+    secprops = mysasl_secprops(secflags);
+    sasl_setprop(c->saslconn, SASL_SEC_PROPS, secprops);
 
     cmdloop(c);
     
@@ -808,6 +871,112 @@ void database_compress()
     }
 }
 
+void cmd_authenticate(struct conn *C,
+		      const char *tag, const char *mech,
+		      const char *clientstart)
+{
+    int r;
+    char *in = NULL;
+    const char *out = NULL;
+    unsigned int inlen = 0, outlen = 0;
+    
+    if(clientstart && clientstart[0]) {
+	unsigned len = strlen(clientstart);
+	in = xmalloc(len);
+	r = sasl_decode64(clientstart, len, in, len, &inlen);
+	if(r != SASL_OK) {
+	    prot_printf(C->pout, "%s NO \"cannot base64 decode\"\r\n",tag);
+	    free(in);
+	    return;
+	}
+    }
+
+    r = sasl_server_start(C->saslconn, mech, in, inlen, &out, &outlen);
+    free(in); in=NULL;
+    if(r == SASL_NOMECH) {
+	prot_printf(C->pout,
+		    "%s NO \"unknown authentication mechanism\"\r\n",tag);
+	return;
+    }
+
+    while(r == SASL_CONTINUE) {
+	char buf[4096];
+	char inbase64[4096];
+	char *p;
+	unsigned len;
+	
+	if(out) {
+	    r = sasl_encode64(out, outlen,
+			      inbase64, sizeof(inbase64), NULL);
+	    if(r != SASL_OK) break;
+	    
+	    /* send out */
+	    prot_printf(C->pout, "%s\r\n", inbase64);
+	}
+	
+	/* read a line */
+	if(!prot_fgets(buf, sizeof(buf)-1, C->pin))
+	    return;
+
+	p = buf + strlen(buf) - 1;
+	if(p >= buf && *p == '\n') *p-- = '\0';
+	if(p >= buf && *p == '\r') *p-- = '\0';
+
+	if(buf[0] == '*') {
+	    prot_printf(C->pout, "%s NO client canceled authentication\r\n",
+			tag);
+	    reset_saslconn(C);
+	    return;
+	}
+
+	len = strlen(buf);
+	in = xmalloc(len);
+	r = sasl_decode64(buf, len, in, len, &inlen);
+	if(r != SASL_OK) {
+	    prot_printf(C->pout, "%s NO \"cannot base64 decode\"\r\n",tag);
+	    free(in);
+	    reset_saslconn(C);
+	    return;
+	}
+
+	r = sasl_server_step(C->saslconn, in, inlen,
+			     &out, &outlen);
+	free(in); in=NULL;
+    }
+
+    if(r != SASL_OK) {
+	sleep(3);
+	
+	syslog(LOG_ERR, "badlogin: %s %s %s",
+	       C->clienthost,
+	       mech, sasl_errdetail(C->saslconn));
+
+	prot_printf(C->pout, "%s NO %s\r\n", tag,
+		    sasl_errstring((r == SASL_NOUSER ? SASL_BADAUTH : r),
+				   NULL, NULL));
+	reset_saslconn(C);
+	return;
+    }
+
+    /* Successful Authentication */
+    r = sasl_getprop(C->saslconn, SASL_USERNAME, (const void **)&C->userid);
+    if(r != SASL_OK) {
+	prot_printf(C->pout, "%s NO SASL Error\r\n", tag);
+	reset_saslconn(C);
+	return;
+    }
+
+    syslog(LOG_NOTICE, "login: %s from %s",
+	   C->userid, C->clienthost);
+
+    prot_printf(C->pout, "%s OK Authenticated\r\n", tag);
+
+    prot_setsasl(C->pin, C->saslconn);
+    prot_setsasl(C->pout, C->saslconn);
+
+    return;
+}
+
 void cmd_set(struct conn *C, 
 	     const char *tag, const char *mailbox,
 	     const char *server, const char *acl, enum settype t)
@@ -1020,4 +1189,40 @@ void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     exit(code);
+}
+
+/* Reset the given sasl_conn_t to a sane state */
+static int reset_saslconn(struct conn *c)
+{
+    int ret, secflags, plaintext_result;
+    sasl_security_properties_t *secprops = NULL;
+
+    sasl_dispose(&c->saslconn);
+    /* do initialization typical of service_main */
+    ret = sasl_server_new("imap", config_servername,
+                         NULL, NULL, NULL,
+                         NULL, 0, &c->saslconn);
+    if(ret != SASL_OK) return ret;
+
+    if(c->saslprops.ipremoteport)
+       ret = sasl_setprop(c->saslconn, SASL_IPREMOTEPORT,
+                          c->saslprops.ipremoteport);
+    if(ret != SASL_OK) return ret;
+    
+    if(c->saslprops.iplocalport)
+       ret = sasl_setprop(c->saslconn, SASL_IPLOCALPORT,
+                          c->saslprops.iplocalport);
+    if(ret != SASL_OK) return ret;
+    
+    secflags = SASL_SEC_NOANONYMOUS;
+    plaintext_result = config_getswitch("allowplaintext",1);
+    if (!config_getswitch("mupdate_allowplaintext", plaintext_result)) {
+	secflags |= SASL_SEC_NOPLAINTEXT;
+    }
+    secprops = mysasl_secprops(secflags);
+    ret = sasl_setprop(c->saslconn, SASL_SEC_PROPS, secprops);
+    if(ret != SASL_OK) return ret;
+    /* end of service_main initialization excepting SSF */
+
+    return SASL_OK;
 }
