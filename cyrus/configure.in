@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.168 2000/05/05 19:58:49 leg Exp $
+dnl $Id: configure.in,v 1.169 2000/05/07 19:53:36 leg Exp $
 dnl
 
 
@@ -112,6 +112,9 @@ fi
 if test "$with_perl" = "no"; then
     AC_MSG_WARN(No Perl found: administrative tools won't be available)
 else
+dnl compile perl stuff
+    EXTRA_SUBDIRS="${EXTRA_SUBDIRS} perl"
+dnl and compile perl/cyradm
     PERL_SUBDIRS="imap"
 fi
 

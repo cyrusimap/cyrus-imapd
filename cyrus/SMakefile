@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.57 2000/04/11 22:20:31 leg Exp $
+# $Id: SMakefile,v 1.58 2000/05/07 19:53:36 leg Exp $
 #
 
 if test ! -x configure; then
@@ -17,10 +17,8 @@ fi
 MAKE=gmake
 
 # settings; we have to disable these on some platforms
-AMSSYNC=--enable-amssync
 DEBUG=""
 WITHAUTH="--with-auth=krb_pts"
-# WITHAUTH="" # until the db stuff is fixed
 
 if test "${CC-unset}" = "unset"; then
   CC=cc
@@ -29,28 +27,33 @@ fi
 VER=`smake -D | sed 's;^.*\/;;'`
 LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 
-# Ryan's aggressive optimizations
-if test "${OVERRIDE-nil}" != "t" ; then
-  case `uname` in	
-    Linux) CC="gcc"
-	   CFLAGS="${CFLAGS} -O3 -g -Wall"
-	   LDFLAGS="${LDFLAGS}"
-	   #LIBS="-ldbm"
-	   export LIBS
+# PERL CONFIGURATION
+PERL_MM_OPT="INSTALLPRIVLIB=${DESTDIR}/usr/local/lib/perl5 INSTALLARCHLIB=${DESTDIR}/usr/local/lib/perl5/5.002 INSTALLSITELIB=${DESTDIR}/usr/local/lib/perl5/site_perl INSTALLSITEARCH=${DESTDIR}/usr/local/lib/perl5/site_perl INSTALLBIN=${DESTDIR}/usr/local/bin INSTALLMAN1DIR=${DESTDIR}/usr/local/man/man1 INSTALLMAN3DIR=${DESTDIR}/usr/local/man/man3"
+export PERL_MM_OPT
 
-           if test "${WASH_CYRUS_DEBUG}" = "t"; then
-	     CC="gcc"
-	     CFLAGS="-g"
-             LDFLAGS="${LDFLAGS}"
-           fi
-	   ;;
+# end perl configuration
+
+case `uname` in	
+    Linux) 
+	CC="gcc"
+	CFLAGS="${CFLAGS} -O3 -g -Wall"
+	LDFLAGS="${LDFLAGS}"
+	#LIBS="-ldbm"
+	export LIBS
+
+        if test "${WASH_CYRUS_DEBUG}" = "t"; then
+	    CC="gcc"
+	    CFLAGS="-g"
+            LDFLAGS="${LDFLAGS}"
+        fi
+    ;;
     SunOS)
 #      CFLAGS="${CFLAGS} -xs -xO3 -xdepend"
 #      LDFLAGS="${LDFLAGS} -xs -xO3 -xdepend"
 
-      CC="gcc"
-      CFLAGS="${CFLAGS} -g -O3 -Wall"
-      LDFLAGS="${LDFLAGS} -L/usr/local/lib -Wl,-R,/usr/local/lib"
+	CC="gcc"
+        CFLAGS="${CFLAGS} -g -O3 -Wall"
+        LDFLAGS="${LDFLAGS} -L/usr/local/lib -Wl,-R,/usr/local/lib"
 
 #     if test "${WASH_CYRUS_DEBUG}" = "t"; then
 #        CFLAGS="-g -xs"
@@ -61,19 +64,14 @@ if test "${OVERRIDE-nil}" != "t" ; then
         CFLAGS="-g"
       fi
       ;;
-    *)    
-      ;;
-  esac
-fi;
+  *)    
+  ;;
+esac
 
 if test "${WASH_CYRUS_DEBUG}" = "t"; then
   DEBUG="--enable-debug"
 fi
 
-if [ ! -r /usr/local/include/atk/unscribe.h ]; then
-  AMSSYNC=""
-fi
-
-LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --with-cyrus-group=staff --with-openssl=/usr/local/lib $DEBUG"
+MFCOMMAND="./configure $WITHAUTH --with-inn=/usr/news --enable-experiment --enable-cmulocal --with-cyrus-group=staff --with-openssl=/usr/local/lib $DEBUG"
 
 export CFLAGS CC VER LNCOMMAND LOCALDEFS LDFLAGS
