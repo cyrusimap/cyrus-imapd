@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.44 2003/11/27 23:07:18 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.45 2004/01/12 19:13:49 rjs3 Exp $
 
 AC_DEFUN([SASL_GSSAPI_CHK],[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -234,7 +234,7 @@ AC_SUBST(GSSAPI_LIBS)
 AC_SUBST(GSSAPIBASE_LIBS)
 ])
 
-AC_DEFUN(SASL_SET_GSSAPI_LIBS, [
+AC_DEFUN([SASL_SET_GSSAPI_LIBS], [
     SASL_GSSAPI_LIBS_SET="yes"
 ])
 
