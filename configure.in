@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.146 1999/10/30 23:07:36 leg Exp $
+dnl $Id: configure.in,v 1.147 1999/11/11 21:36:11 tmartin Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -813,6 +813,33 @@ case "$with_krb" in
 esac
 
 dnl
+dnl Test for OpenSSL
+dnl
+AC_ARG_WITH(with-openssl,[  --with-openssl=PATH      use OpenSSL from PATH],
+	with_openssl="${withval}")
+
+case "$with_openssl" in
+	no) with_openssl="no";;
+	""|yes) 
+		with_openssl="yes"
+		AC_CHECK_LIB(crypto,BIO_accept,LIBS=" -lcrypto ${LIBS}",
+		with_openssl="no",)
+		AC_CHECK_LIB(ssl,SSL_CTX_new,LIBS=" -lssl ${LIBS}",
+		with_openssl="no","-lcrypto")
+		
+				;;
+	*)  CPPFLAGS="${CPPFLAGS} -I${with_openssl}/include"
+	    LIBS="${LIBS} -lssl -lcrypto";;
+esac
+
+AC_MSG_CHECKING(for openssl)
+AC_MSG_RESULT($with_openssl)
+
+if test "$with_openssl" != "no"; then
+	AC_DEFINE(HAVE_SSL)
+fi
+
+dnl
 dnl Test for Zephyr
 dnl
 AC_ARG_WITH(zephyr,[  --with-zephyr=PATH      use Zephyr from PATH],
@@ -1114,6 +1141,5 @@ fi
 
 AC_SUBST(IMAP_COM_ERR_LIBS)
 AC_SUBST(IMAP_LIBS)
-AC_SUBST(SASLFLAGS)
 
 AC_OUTPUT(Makefile man/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile $EXTRA_OUTPUT)
