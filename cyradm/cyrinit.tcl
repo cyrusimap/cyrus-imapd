@@ -326,7 +326,11 @@ set body {
     for {set i 0} {$i < $rawlen} {incr i 3} {
 	set used [lindex $rawlist [expr $i+1]]
 	set limit [lindex $rawlist [expr $i+2]]
-	set percent [expr ($used*100)/$limit]
+	if {$limit == 0} {
+	    set percent 100
+	} else {
+	    set percent [expr ($used*100)/$limit]
+	}
 	append result "[lindex $rawlist $i] $used/$limit ($percent%)\n"
     }
     if {$rawlen == 0} {set result "NO LIMIT"}
@@ -355,7 +359,11 @@ set body {
 	for {set i 1} {$i < $rootlen} {incr i 3} {
 	    set used [lindex $root [expr $i+1]]
 	    set limit [lindex $root [expr $i+2]]
-	    set percent [expr ($used*100)/$limit]
+	    if {$limit == 0} {
+		set percent 100
+	    } else {
+		set percent [expr ($used*100)/$limit]
+	    }
 	    append result " [lindex $root $i] $used/$limit ($percent%)"
 	}
 	if {$rootlen == 1} {append result " NO LIMIT"}
