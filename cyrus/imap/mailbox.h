@@ -137,7 +137,7 @@ struct index_record {
 #define OFFSET_LAST_APPENDDATE 24
 #define OFFSET_LAST_UID 28
 #define OFFSET_QUOTA_MAILBOX_USED 32
-#define OFFSET_POP3_LAST_UID 36
+#define OFFSET_POP3_LAST_LOGIN 36
 #define OFFSET_UIDVALIDITY 40
 
 /* Offsets of index_record fields in index file */
