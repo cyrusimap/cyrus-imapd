@@ -80,10 +80,13 @@ char **argv;
     /* only allow setuid/setgid from news user */
     ruid = getuid();
     rgid = getgid();
-    if (ruid != geteuid() || rgid != getegid()) {
+    if (ruid && ruid != geteuid()) {
 	struct stat sbuf;
 	if (stat(newspartition, &sbuf) || sbuf.st_uid != ruid) {
 	    fprintf(stderr, "rmnews: renouncing set-uid/set-gid\n");
+	    syslog(LOG_ERR,
+		   "RENOUNCE: renouncing setuid/setgid since run by %d/%d",
+		   ruid, rgid);
 	    setuid(ruid);
 	    setgid(rgid);
 	}
@@ -288,7 +291,7 @@ fatal(s, code)
 char *s;
 int code;
 {
-    fprintf(stderr, "collectnews: %s\n", s);
+    fprintf(stderr, "rmnews: %s\n", s);
     exit(code);
 }
 
