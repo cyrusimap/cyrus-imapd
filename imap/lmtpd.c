@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.91 2002/03/21 21:10:02 ken3 Exp $
+ * $Id: lmtpd.c,v 1.92 2002/03/23 00:34:51 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1111,7 +1111,7 @@ int deliver_mailbox(struct protstream *msg,
 
     if (!r) {
 	r = append_setup(&as, namebuf, MAILBOX_FORMAT_NORMAL,
-			 NULL, authstate, acloverride ? 0 : ACL_POST, 
+			 user, authstate, acloverride ? 0 : ACL_POST, 
 			 quotaoverride ? -1 : 0);
     }
 
