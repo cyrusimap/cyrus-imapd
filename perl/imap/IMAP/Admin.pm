@@ -43,7 +43,7 @@ use strict;
 use Cyrus::IMAP;
 use vars qw($VERSION
 	    *create *delete *deleteacl *listacl *list *rename *setacl
-	    *subscribed *quota *quotaroot);
+	    *subscribed *quota *quotaroot *info);
 
 $VERSION = '1.00';
 
@@ -74,10 +74,13 @@ sub new {
   # but the API makes it difficult to get at the results of that command.
   if(defined($self)) {
     $self->{support_referrals} = 0;
+    $self->{support_annotatatemore} = 0;
     $self->addcallback({-trigger => 'CAPABILITY',
 			-callback => sub {my %a = @_;
 					  map { $self->{support_referrals} = 1
 						  if /^MAILBOX-REFERRALS$/i;
+						$self->{support_annotatemore} = 1
+						  if /^ANNOTATEMORE$/i;
 					      }
 					  split(/ /, $a{-text})}});
     $self->send(undef, undef, 'CAPABILITY');
@@ -597,6 +600,70 @@ sub setquota {
     }
   }
 }
+
+# xxx this is entirely untested ;)
+sub getinfo {
+  my ($self,$box) = @_;
+  my $pat;
+
+  if($box == undef) {
+    $pat = "/server/*";
+  } else {
+    $pat = "/mailbox/$box/*";
+  }
+
+  if(!$self->{support_annotatemore}) {
+    $self->{error} = "Remote does not support ANNOTATEMORE.";
+    return undef;
+  }
+
+  my %info = ();
+  $self->addcallback({-trigger => 'ANNOTATION',
+		      -callback => sub {
+			my %d = @_;
+			my $text = $d{-text};
+			my $annotation;
+
+			if($text =~ /^\([^\)]*\)$/) {
+			  # list of annotations
+			  $text =~ s/^\(//;
+			  
+			  while($text !~ /^\)/) {
+			    if($text =~
+			       /^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)/) {
+				 ${$d{-rock}}{$1} = $3;
+				 $text =~ s/^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)//;
+			       } else {
+				 # hrm, error
+				 $self->{error} = "Could not parse";
+				 return undef;
+			       }
+			  }
+			} elsif ($text =~ /^\"([^\"]+)\"/) {
+			  # Single annotation, but possibly multiple values
+			  # however, we are only asking for one value, so...
+			  $annotation = $1;
+			  $text =~ /\"(\S*)\"\)/;
+			  ${$d{-rock}}{$annotation} = $1;
+		        } else {
+			  next;
+			}
+		      },
+		      -rock => \%info});
+
+  # send getannotation "/mailbox/name/* or /server/*"
+  my ($rc, $msg) = $self->send('', '', "GETANNOTATION %s \"value.shared\"",
+			       $pat);
+  $self->addcallback({-trigger => 'ANNOTATION'});
+  if ($rc eq 'OK') {
+    $self->{error} = undef;
+    @info;
+  } else {
+    $self->{error} = $msg;
+    ();
+  }
+}
+*info = *getinfo;
 
 sub error {
   my $self = shift;
