@@ -212,11 +212,8 @@ Subject -
 
 Notes about access:
   - Expunge is very slow (it requires rewriting both the cache and
-  index file in addition to the unlinks; this is very painful on
-  synchronous
-
-  - On open we build up an in-memory representation of a UID->seqno index,
-    among other things. (xxx this isn't true, is it? -leg)
+    index file in addition to the unlinks; this is very painful on
+    synchronous filesystems)
 
   - Append is relatively fast (it only adds to the end of both the
     cache and index files and modifies the index header)
