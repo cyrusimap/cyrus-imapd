@@ -1,6 +1,6 @@
 /* scripttest.h -- test wheather the sieve script is valid
  * Tim Martin
- * 9/21/99
+ * $Id: scripttest.h,v 1.3 1999/09/30 21:42:24 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -29,10 +29,6 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #ifndef INCLUDE_SCRIPTTEST_H_
 #define INCLUDE_SCRIPTTEST_H_
 
-#include "mystring.h"
-
-
-int is_script_parsable(string_t *data);
-
+int is_script_parsable(FILE *f, char **errstr);
 
 #endif
