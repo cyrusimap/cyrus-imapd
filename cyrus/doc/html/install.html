@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.75 2000/01/28 22:09:41 leg Exp $ -->
+<!-- $Id: install.html,v 1.76 2000/02/18 00:09:33 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -59,10 +59,10 @@ cases it will do a really poor job) but as a quick hack it shouldn't
 make things worse.  Optionally, the data partitions can also be hashed
 by enabling the "hashimapspool" option.
 
-<p>Hash your directories using the "<tt>dohash</tt>" script in the
-tools subdirectory.  (If you want to hash your mail spool, be sure to
-set "hashimapspool" before running "<tt>dohash</tt>".)  This must be
-run as the Cyrus user. Be sure to stop mail service while
+<p>You must hash your directories using the "<tt>dohash</tt>" script
+in the tools subdirectory.  (If you want to hash your mail spool, be
+sure to set "hashimapspool" before running "<tt>dohash</tt>".)  This
+must be run as the Cyrus user. Be sure to stop mail service while
 converting. Doing this in single user mode is probably the safest.
 
 </ul>
@@ -94,27 +94,31 @@ machine, make sure you have version 1.5a5 of the IMSP server for this
 version of the IMAP server.  (If you don't have IMSP, or AFS, don't
 worry about it.)
 
-<li> If you are upgrading from 1.5.14 (or earlier) you should remove the
-delivered-db database and mkdir /var/imap/deliverdb.
-
 </ul>
-
-<h3>Upgrading from before 1.3</h3>
-
-<ul>
-<li> Upgrading from the Cyrus IMAP server version 1.4 or earlier
-requires running "<TT>reconstruct -r</TT>" after installing this
-version of the software.
-<li>
-Upgrading from the Cyrus IMAP server
-version 1.3 or earlier requires running "<TT>reconstruct -m</TT>"
-after installing this version of the software.
-</ul>
-
 
 <H2>Prerequisites and other notes</H2>
 
-<P>The following programs and/or packages are required:
+<P>The following programs and/or packages are <b>required</b>.
+
+<ul>
+<LI> <b>libsasl</b>, version 1.5.15 or higher.  To obtain libsasl, ftp
+it from <a
+href="ftp://ftp.andrew.cmu.edu/pub/cyrus-mail"><TT>ftp.andrew.cmu.edu</TT></a>.
+Earlier versions of SASL will not work; please get the latest one.
+Configure SASL so that it supports whatever authentication method your
+site uses.  It is recommended that if you have PAM, you configure SASL
+to use PAM.
+
+<li> <b>Berkeley DB</b>, version 3.0.55 or higher. Berkeley DB can be
+obtained from <a href="http://www.sleepycat.com">Sleepycat</a>.
+
+<li> <b>GNU Make</b> is required.  Get it from <a
+href="http://www.fsf.org/">the Free Software Foundation</a>.
+</ul>
+
+The following programs and/or packages are required for specific
+features.  If you don't have them, certain features of the IMAP server
+will be disabled.
 
 <ul>
 <LI> <b>makedepend</b>.  A version is included in the
@@ -130,37 +134,42 @@ isn't a big deal.
 HREF="ftp://rtfm.mit.edu/pub/usenet/comp.lang.tcl"><TT>comp.lang.tcl</TT>
 FAQ</A>.  Other versions of Tcl might work, but it must be at least
 Tcl 7.5.  (Tcl 7.4 ships with some Unix variants, and it is not
-sufficient.).
+sufficient.), for the older <tt>cyradm</tt>.
 
-<LI> <b>libsasl</b>, version 1.5.0 or higher.  To obtain libsasl, ftp
-it from <a
-href="ftp://ftp.andrew.cmu.edu/pub/cyrus-mail"><TT>ftp.andrew.cmu.edu</TT></a>.
-Earlier versions of SASL will not work; please get the latest one.
-Configure SASL so that it supports whatever authentication method your
-site uses.  It is recommended that if you have PAM, you configure SASL
-to use PAM.
+<LI> <b>Perl</b>, version 5.  To obtain Perl, see <a
+href="http://www.cpan.org/">the comprehensive Perl archive</a>.  This
+is required for the newer version of <tt>cyradm</tt> written by
+Brandon Allbery.  It is also used for some installation scripts: you
+don't need it but it may make your life easier.
 
-<li><b>perl</b> is used for some administrative scripts. You don't
-need it but it may make your life easier. Version 5 is required. Perl
-is available from <a http="http://www.cpan.org">CPAN</a>.
-
-<li>You can use Berkeley DB instead of some DBM variant. Berkeley DB
-can be obtained from <a
-href="http://www.sleepycat.com">Sleepycat</a>. DB is currently only
-used for duplicate delivery suppression and the AFS ptloader.
+<li> <b>OpenSSL</b>, version 0.9.4 or higher.  Required for STARTTLS
+support and eventually for IMAP wrapped in SSL (the imaps port).
 
 <LI> If you use AFS PTS support for groups, Cyrus still depends on
 Kerberos and AFS.  If you successfully compiled SASL with your
 Kerberos library, it's likely that it will work well with Cyrus.
 
-<LI> We use sendmail and we've gotten some others to work. If you want
-something with the least fuss, go with sendmail. Please use version
-8.7.1 or later as that includes support for Cyrus.  Sendmail
-distributions may be obtained from <A
-HREF="http://www.sendmail.org">http://www.sendmail.org</a>.
+<LI> We recommend using an MTA (mail transfer agent) that supports
+LMTP (local mail transfer protocol).  We use Sendmail and recommend
+version 8.10.0 or higher, available from <A
+HREF="http://www.sendmail.org">http://www.sendmail.org</a>.  Others
+have reported success with
+<href="http://www.postfix.org/">Postfix</a>.
 
 <LI> If you want to export netnews newsgroups using IMAP, the IMAP
-server must receive newsgroups with the INN news server.
+server must receive newsgroups with the INN news server.  We are also
+working on patches to the INN news server to allow it to deliver
+newsgroups via LMTP.
+
+<li> For SNMP monitoring of the IMAP server, AgentX and pthreads is
+required.  The CMU implementation is available from our Network
+Development group at <a href="http://www.net.cmu.edu/groups/netdev/agentx/">
+http://www.net.cmu.edu/groups/netdev/agentx/</a>.
+
+<li> For the Cyrus Murder, the IMAP aggregator, an ACAP server is
+required.  You can get an ACAP server from the <a
+href="http://asg.web.cmu.edu/asg/">Cyrus project</a>, and pthreads is
+required for proxy-side support.
 </ul>
 
 <H2>Compiling the IMAP Server</H2>
@@ -218,38 +227,20 @@ specify a server-specific installation prefix other than
 NAME="configure"><tt>configure</tt></A>".
 
 <dl>
-<dt><tt>--cache-file=FILE</tt>
-<dd>Save the results of the tests in FILE instead of "<tt>config.cache</tt>".
-Set FILE to "<tt>/dev/null</tt>" to disable caching, for debugging
-"<tt>configure</tt>". <P>
-
 <dt><tt>--help</tt>
 <dd>Print a summary of the options to "<tt>configure</tt>", and exit. <P>
 
-<dt><tt>--quiet</tt>
-<dt><tt>--silent</tt>
-<dt><tt>-q</tt>
-<dd>Do not print messages saying which checks are being made. <P>
-
-<dt><tt>--srcdir=DIR</tt>
-<dd>Look for the package's source code in directory DIR.  Usually
-"<tt>configure</tt>" can determine that directory automatically. <P>
-
-<dt><tt>--version</tt>
-<dd>Print the version of Autoconf used to generate the "<tt>configure</tt>"
-script, and exit. <P>
-
 <dt><tt>--with-cyrus-user=USER</tt>
-<dd>Specifies the userid used for installing setuid programs.  By default,
-configure uses "<TT>cyrus</TT>". <P>
+<dd>Specifies the userid that the Cyrus IMAP server will run as.  By
+default, configure uses "<TT>cyrus</TT>". <P>
 
 <dt><tt>--with-cyrus-group=USER</tt>
-<dd>Specifies the group used for installing setuid programs.  By default,
+<dd>Specifies the group used for installing setguid programs.  By default,
 configure uses "<TT>mail</TT>". <P>
 
 <dt><tt>--with-statedir=PATH</tt> 
-<dd>Specifies the directory used for the <TT>ptclient</TT> state
-directories.  By default, configure uses "<TT>/var</TT>". <P>
+<dd>Specifies the directory used for communicating with various
+daemons.  By default, configure uses "<TT>/var</TT>". <P>
 
 <dt><tt>--with-sasldir=PATH</tt> 
 <dd>Specifies the path to the directories containing the library
@@ -257,26 +248,29 @@ directories.  By default, configure uses "<TT>/var</TT>". <P>
 files for libsasl. <P>
 
 <dt><tt>--with-auth=METHOD</tt>
-<dd>Specifies the authorization module to use.  Currently implemented
-authorization modules are:
+<dd>Specifies the authorization (group membership) module to use.
+Currently implemented authorization modules are:
 
 <dl compact> 
-
 <DT><tt>unix</tt>
 <DD>Unix <tt>/etc/passwd</tt> and <tt>/etc/group</tt> file
 
 <DT><tt>krb</tt>
-<DD>Kerberos principals 
+<DD>Kerberos principals (requires Kerberos libraries).  Optionally,
+specify where to find Kerberos v4 with "<tt>--with-krb=DIR</tt>"
+<B>IMPORTANT:</B> The Kerberos v4 support requires the DES library.
+Some vendor distributions of Kerberos, including the one with Solaris,
+do not have this support and cannot be used.
 
 <DT><tt>krb_pts</tt>
-<DD>Kerberos principals with AFS PTserver groups
+<DD>Kerberos principals with AFS PTserver groups (requires Kerberos
+and AFS libraries).  Optionally, specify where the AFS libraries are
+found with "<tt>--with-afs=PATH</tt>".  Also requires krb support as above.
 
 </dl>
 
-Since the login module is now SASL, this is much more confusing.  We
-are considering adding group support to libsasl, thus solving this
-ambiguity.  Make sure you select an authorization module compatible
-with your system.
+Any method of authenticating with SASL can be used with any
+authorization module.
 
 <P>
 
@@ -288,34 +282,25 @@ Currently implemented notification methods are:
 <dl compact> 
 
 <DT><tt>zephyr</tt>
-<DD>New mail notification through Zephyr
+<DD>New mail notification through Zephyr.  Specify the location of
+the zephyr installation with "<tt>--with-zephyr=PATH</tt>".
 
 <DT><tt>no</tt>
-<DD>No new mail notification
+<DD>No new mail notification.
 
 </dl>
 
 By default, uses "<TT>zephyr</TT>" if the Zephyr libraries are available, 
 otherwise "<TT>no</TT>".<P>
 
+<dt><tt>--with-openssl=PATH</tt>
+<dd>Specifies where to find the OpenSSL library.<P>
+
 <dt><tt>--with-inn=PATH</tt>
 <dd>Specifies the location of INN's <TT>NEWSLIB</TT> directory.  By
 default, looks for INN in a few common places.  It is only necessary
 for "<tt>configure</tt>" to find INN if you are going to export newsgroups
 using IMAP. <P>
-
-<dt><tt>--with-krb=PATH</tt>
-<dt><tt>--without-krb</tt>
-<dd>Specifies the path to the Kerberos v4 libraries and header files 
-(optional).  By default, looks in "<tt>/usr/local</tt>" and then in the 
-compiler's default link path.
-
-<P><B>IMPORTANT:</B> The Kerberos v4 support requires the DES library.
-Some vendor distributions of Kerberos, including the one with Solaris,
-do not have this support and cannot be used.
-
-<p>Either "<tt>--without-krb</tt>" or "<tt>--with-krb=no</tt>" prevents
-Kerberos v4 support from being compiled in. <P>
 
 <dt><tt>--with-tcl=PATH</tt>
 <dt><tt>--without-tcl</tt>
@@ -324,13 +309,6 @@ By default, looks in "<tt>/usr/local</tt>" and then in the compiler's
 default link path.  The Tcl library is necessary to compile
 "<tt>cyradm</tt>", the administrative client.  If compiling without Tcl, it 
 is necessary to give configure the "<TT>--disable-cyradm</TT>" switch. <P>
-
-<dt><tt>--with-zephyr=PATH</tt>
-<dt><tt>--without-zephyr</tt>
-<dd>Specifies the path to the Zephyr library and header file
-(optional).  By default, looks in "<tt>/usr/local</tt>" and then in
-the compiler's default link path.  The Zephyr library is optional, if
-found it may be used to notify users of new mail.<P>
 
 <dt><tt>--with-lock=METHOD</tt>
 <dd>Specifies the locking method to use.  Currently implemented locking
@@ -348,20 +326,19 @@ By default, uses "<tt>flock</tt>" if the "<tt>flock()</tt>"
 function exists, "<tt>fcntl</tt>" otherwise. <P>
 
 <dt><tt>--disable-sieve</tt>
-<dd>By default, Sieve support is enabled.  Note that you need
-duplicate delivery suppression enabled if you're going to use Sieve.
-Use <tt>--disable-sieve</tt> to disable compiling Sieve support<p>
+<dd>By default, Sieve support is enabled.  Use
+<tt>--disable-sieve</tt> to disable compiling the Sieve library and to
+disable all Sieve support.<p>
 
 <dt><tt>--disable-cyradm</tt>
 <dd>Do not compile the <TT>cyradm</TT> administrative client.<P>
 
+<dt><tt>--disable-server</tt>
+<dd>Do not compile the IMAP server programs.<p>
+
 <dt><tt>--enable-amssync</tt>
 <dd>Include AMS (Andrew Message System) to IMAP bboard synchronization
 support.  Requires the AMS libraries. <P>
-
-<dt><tt>--enable-cmulocal</tt>
-<dd>Include Carnegie Mellon's internal support features.
-(Ignore this if you're not at CMU.)
 </dl>
 
 "<tt>configure</tt>" ignores any other arguments that you give it.
@@ -388,9 +365,10 @@ environment variables when running "<tt>configure</tt>" are:
 <DL compact>
 <DT><TT>CC</TT>
 <DD>C compiler program.<br>
-Default is "<tt>cc</tt>", or "<tt>gcc</tt>" if "<tt>gcc</tt>" is in your <tt>PATH</tt>.<br>
-(For "<tt>CC</tt>", any value given in the environment <strong>overrides</strong> the
-value that "<tt>configure</tt>" would choose.)
+Default is "<tt>cc</tt>", or "<tt>gcc</tt>" if "<tt>gcc</tt>" is in
+your <tt>PATH</tt>.<br> (For "<tt>CC</tt>", any value given in the
+environment <strong>overrides</strong> the value that
+"<tt>configure</tt>" would choose.)
 
 <DT><TT>CFLAGS</TT>
 <DD>Debugging and optimization options for the C compiler.<br>
@@ -421,10 +399,10 @@ you to figure out how "<tt>configure</tt>" could check whether to do them, and
 mail diffs or instructions to "<tt>cyrus-bugs@andrew.cmu.edu</tt>" so we
 can include them in the next release.
 
-<p>The file "<tt>configure.in</tt>" is used as a template to create 
-"<tt>configure</tt>" by
-a program called "<tt>autoconf</tt>".  You will only need it if you want to
-regenerate "<tt>configure</tt>" using a newer version of "<tt>autoconf</tt>".
+<p>The file "<tt>configure.in</tt>" is used as a template to create
+"<tt>configure</tt>" by a program called "<tt>autoconf</tt>".  You
+will only need it if you want to regenerate "<tt>configure</tt>" using
+a newer version of "<tt>autoconf</tt>".
 
 <p>Once you have successfully run "<tt>configure</tt>", execute the
 following commands:
@@ -462,30 +440,32 @@ used, it must have been previously specified in the
 <kbd>   make install
 </kbd></pre>
 
-<li>The Cyrus IMAP server uses the 4.3BSD syslog that separates
+Be sure that the server programs ended up in the directory specified
+by "<tt>--with-cyrus-prefix</tt>" (by default, "<tt>/usr/cyrus/bin</tt>").
+
+<p><li>The Cyrus IMAP server uses the 4.3BSD syslog that separates
 messages into both levels and categories.  Invoke "<kbd>man
 syslog</kbd>" to see if "<tt>openlog()</tt>" takes three arguments. If
 it does not, replace the system "<tt>syslogd</tt>" and
-"<tt>syslog.conf</tt>" with the files provided in the <A
-NAME="syslog"><tt>cyrus-imapd-1.5.14/syslog</tt></A> directory.
+"<tt>syslog.conf</tt>" with the files provided in the
+"<tt>syslog</tt>" directory.
 
 <pre>
 <kbd>   mv syslogd /etc/syslogd
    mv syslog.conf /etc/syslog.conf
 </kbd></pre>
 
-If you do not copy the "<tt>syslog.conf</tt>" file in 
-"<TT>cyrus-imapd-1.5.14/syslog</TT>" to the 
+If you do not copy the "<tt>syslog/syslog.conf</tt>" file to the 
 "<tt>/etc</tt>" directory, be sure to add support for
 "<tt>local6.debug</tt>".  The file should include a line like:
 
 <pre>
-   local6.debug  /var/adm/imapd.log
+   local6.debug  /var/log/imapd.log
 </pre>
 
 You probably also want to log SASL messages with a line like:
 <pre>
-   auth.debug /var/adm/auth.log
+   auth.debug /var/log/auth.log
 </pre>
 
 After installation and testing, you probably want to change the
@@ -493,7 +473,7 @@ After installation and testing, you probably want to change the
 files:
 
 <pre>
-<kbd>   touch /var/adm/imapd.log /var/adm/auth.log
+<kbd>   touch /var/log/imapd.log /var/log/auth.log
 </kbd></pre>
 
 <li>Create the file "<tt>/etc/imapd.conf</tt>". Here is a sample
@@ -503,13 +483,14 @@ files:
    configdirectory: /var/imap
    partition-default: /var/spool/imap
    admins: curtj abell
-   srvtab: /var/imap/srvtab
+   sasl_pwcheck_method: passwd
 </pre>
 
 For a description of all the fields in this file, see the <A
 HREF="imapd.conf.5.html"><tt>imapd.conf</tt>(5)</A> man page.  (Note
-that this file also exports values to libsasl; the srvtab setting here
-is in place of the srvtab setting in the SASL configuration file.)
+that this file also exports values to libsasl, the most important of
+them the <tt>pwcheck_method</tt>.  In this example, users are
+authenticated via the <tt>getpwnam()</tt> call.)
  <P>
 
 Note that <b>everyday users should not be administrators</b>.  Admins
@@ -521,7 +502,27 @@ administrating.
 
 <p>
 
-<li>Create the configuration directory specified by the
+<li>Decide how users are going to be authenticated.  The easiest
+method for authenticating users is to use the libsasl authentication
+database and create users using the "<tt>saslpasswd</tt>" utility.
+Set "<tt>sasl_pwcheck_method: sasldb</tt>".  Make sure Cyrus
+can read "<tt>/etc/sasldb</tt>":
+
+<pre>
+<kbd>   chown cyrus /etc/sasldb*
+</kbd></pre>
+
+<p>If you want to authenticate users from "<tt>/etc/shadow</tt>",
+things are considerably more complicated, since the "<tt>cyrus</tt>"
+cannot read the shadow password file.  It is suggested that you
+configure libsasl with <tt>pwcheck</tt> support, and set
+"<tt>sasl_pwcheck_method: pwcheck</tt>".  The SASL library will then
+make calls to an external utility running as root to authenticate users.
+
+<p>If you're using Kerberos authentication, see <a
+href="#kerberos">the section on configuring Kerberos below</a>.
+
+<p><li>Create the configuration directory specified by the
 "<tt>configdirectory</tt>" option in "<tt>imapd.conf.</tt>" The
 configuration directory is similar in concept to the
 "<tt>/usr/lib/news</tt>" directory.  It stores information about the
@@ -579,11 +580,12 @@ Sieve directory:
 <pre>
 <kbd>   su cyrus
    tools/mkimap
+   exit
 </kbd>
 </pre>
 
-If perl is not available, it should be easy to create these directories
-by hand. <P>
+If Perl is not available, it should be easy (but time consuming) to
+create these directories by hand. <P>
 
 <li><b>LINUX SYSTEMS ONLY</b>: Set the configuration, user, quota, and
 partition directories to update synchronously.  Failure to do this may
@@ -591,59 +593,21 @@ lead to data corruption and/or loss of mail after a system crash.
 
 <pre>
 <kbd>   cd /var/imap
-   chattr +S . user quota user/* quota/*
-   chattr +S /var/spool/imap
+   chattr +S user quota user/* quota/*
+   chattr +S /var/spool/imap /var/spool/imap/*
 </kbd></pre>
 
 Also set the queue directory of the mail daemon to update
 synchronously.  The following example is for sendmail:
 
 <pre>
-<kbd>   /sbin/chattr +S /var/spool/mqueue
+<kbd>   chattr +S /var/spool/mqueue
 </kbd></pre>
 
-<li>If the Cyrus IMAP server was compiled with Kerberos v4 authentication,
-create a Kerberos v4 identity for the server and add the server's key to
-the "<tt>srvtab</tt>" file.  The file must be readable by the cyrus
-user. The server's Kerberos identity is "<tt>imap.HOST@REALM</tt>",
-where "<tt>HOST</tt>" is the first component of the machine's host
-name and "<tt>REALM</tt>" is the machine's Kerberos realm.
+<p><li>To enable STARTTLS support, see <a href="#openssl">how to
+configure OpenSSL</a> below.
 
-<p>Here is a sample session, creating a srvtab file for the
-host named "<tt>foobar</tt>":
-
-<pre>
-<kbd>   ksrvutil -f /var/imap/srvtab add
-</kbd></pre>
-
-Here is the information "<tt>ksrvutil</tt>" requests.  Respond by
-filling in values or by pressing <KBD>RETURN</KBD>.  In this example,
-the host name is "<tt>foobar</tt>" and the realm is 
-"<tt>ANDREW.CMU.EDU</tt>".
-
-<pre>
-   Name: <kbd>imap</kbd>
-   Instance: <KBD>foobar</KBD>
-   Realm: <KBD>ANDREW.CMU.EDU</KBD>
-   Version number: 
-   New principal: imap.foobar@ANDREW.CMU.EDU; version 0
-   Is this correct? (y,n) [y] 
-   Password: 
-   Verifying, please re-enter Password: 
-   Key successfully added.
-   Would you like to add another key? (y,n) [y] <KBD>n</KBD>
-</pre>
-
-If you plan to install Kerberized POP, create the Kerberos
-identity "<tt>pop.HOST@REALM</tt>" and add the key to the "<tt>srvtab</tt>"
-file.
-
-<P>
-Make the "<TT>srvtab</TT>" file owned by the cyrus user:
-<pre>
-<kbd>   chown cyrus /var/imap/srvtab
-</kbd></pre>
-<li>Add the following lines to the "<tt>/etc/services</tt>" file if they 
+<p><li>Add the following lines to the "<tt>/etc/services</tt>" file if they 
 aren't already there.
 
 <pre>
@@ -652,99 +616,55 @@ aren't already there.
    imsp      406/tcp
    kpop      1109/tcp
    sieve     2000/tcp
-</pre>
-
-<li>Add the following line to the "<tt>/etc/inetd.conf</tt>" file.
-
-<pre>
-   imap  stream  tcp  nowait  cyrus  /usr/cyrus/bin/imapd  imapd
-</pre>
-
-If you want to run the POP3 protocol, add the following line.
-
-<pre>
-   pop3  stream  tcp  nowait  cyrus  /usr/cyrus/bin/pop3d  pop3d
-</pre>
-
-If you want to run MIT's KPOP (Kerberized POP)
-protocol, add the following line
-
-<pre>
-   kpop  stream  tcp  nowait  cyrus  /usr/cyrus/bin/pop3d  pop3d -k
-</pre>
-
-If you wish to use to timsieved service, add the following line
-
-<pre>
-   sieve  stream  tcp  nowait  cyrus  /usr/cyrus/bin/timsieved timsieved
-</pre>
-
-"<tt>cyrus</tt>" is the Cyrus user and "<tt>/usr/cyrus/bin/</tt>" is the
-path name to the executable.
-
-<p> If you'd like to be able to do a <kbd>ps</kbd> and see what the
-<tt>imapd</tt> or <tt>pop3d</tt> is doing, you may need to add this to
-the end of imapd or pop3d <tt>inetd.conf</tt> entry. 
-<pre>
- junk to allow room for setproctitle xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-</pre>
-
-<p><li>
- If you wish to use the interm finger information service,
- you need to enable support for
- it in "<tt>/etc/services</tt>" and "<tt>/etc/inetd.conf</tt>".
-
-<p> Note that this requires a finger client that supports this service.
- If you don't know that yours supports it, it doesn't.
- At this time, we are not providing a finger client that supports this.
-<ol>
-<li>Add the following line to the "<tt>/etc/services</tt>" file if it
-isn't already there.
-
-<pre>
+   lmtp      2003/tcp
    fud       4201/udp
 </pre>
 
-<li>Add the following line to the "<tt>/etc/inetd.conf</tt>" file.
+<p><li>Arrange to start "<tt>/usr/cyrus/bin/master</tt>" as root when
+the system starts.  It will bind some ports and then give up it's root
+privileges.  Until your system reboots, you can start the master
+process by hand:
 
 <pre>
-   fud  dgram  udp  wait  cyrus  /usr/cyrus/bin/fud   fud
-</pre>
+<kbd>   /usr/cyrus/bin/master &
+</kbd></pre>
 </ol>
 
- <P>
+<h3>Configuring the Mail Transfer Agent</h3>
 
-<li> Restart inetd.  Many systems provide an easy way to do this, but the
-generic method is to find the process id of inetd (use <tt>/bin/ps -elf</tt>
-on most systems), then <tt>kill -HUP <i>pid</i></tt>.
+<p>In order to deliver mail to the Cyrus system, you'll have to
+configure your MTA (usually Sendmail) appropriately.
 
- <P>
+<ol>
+<p>You can monitor the master processes's progress by looking at
+<tt>/var/log/imapd.log</tt> or wherever you are logging LOCAL6
+message.
+
+<P>
 <li> Generate a sendmail configuration file which delivers local mail
 to the IMAP server.  See the files <TT>cf/README</TT> and
 <TT>cf/cf/cyrusproto.mc</TT> in the Sendmail distribution for
-information on how to do this. Be sure the sendmail configuration file
-gets reloaded after you make the changes.
+information on how to do this.  It is preferable to tell Sendmail to
+use LMTP to deliver messages, which enables things such as <a
+href="overview.html#singleinstance">single instance store</a>.  Be
+sure the sendmail configuration file gets reloaded after you make the
+changes.
 
  <P> <LI> Edit <TT>/etc/group</TT> and add user "<TT>daemon</TT>" to
 the "<TT>mail</TT>" group.  This will permit sendmail to run the
 "<TT>deliver</TT>" program to deliver mail to the IMAP server.
 
- <P>
-<a name="dup-deliv"></a>
-<li>The Cyrus IMAP server support in Sendmail defaults to enabling
-duplicate delivery suppression, by invoking the "<TT>deliver</TT>"
-program with the "<TT>-e</TT>" switch.  This prevents two messages
-with the same <TT>Message-ID:</TT> (<TT>Resent-Message-ID:</TT> if it
-exits) from being delivered to the same mailbox.  Add a <TT>cron</TT>
-job to periodically prune the database of deliveries by running
-"<TT>/usr/cyrus/bin/deliver -E 3</TT>" daily as the cyrus user.
+<p><li> Add a <TT>cron</TT> job to periodically prune the database of
+deliveries by running "<TT>/usr/cyrus/bin/ctl_deliver -E 3</TT>" daily as
+the cyrus user.
 
- <P>Duplicate delivery suppression is required if you are using Sieve.
+</ol>
 
- <P>If you want to export netnews newsgroups using IMAP do the following:
+<h3>Exporting Netnews via IMAP</h3>
+
+If you want to export netnews newsgroups using IMAP do the following:
 
 <ol>
-
  <P><LI>Create a directory for the "news" partition.  This directory
 should be different than the news spool directory.  This document uses
 a news partition directory of "<TT>/var/spool/imap-news</TT>" in the
@@ -787,8 +707,6 @@ user.  Also add a <TT>cron</TT> job to run
 
 </ol>
 
-</ol>
-
 <h2>Testing the IMAP Server</h2>
 
 To test the IMAP server, reboot and perform the following steps (all
@@ -797,12 +715,6 @@ list of answers to common installation problems is maintained in <A
 HREF="http://asg.web.cmu.edu/cyrus/imapd/install-FAQ">http://asg.web.cmu.edu/cyrus/imapd/install-FAQ</A>.
 
 <ol>
-
-<P> 
-<li>If the server is compiled with Kerberos v4 authentication, run
-the program "<tt>krbck</tt>" as the cyrus user on the IMAP server.
-This program will diagnose some common Kerberos configuration errors.
-
 <p>
 <li>From your normal account, telnet to the IMAP port on the
 server you're setting up:
@@ -817,7 +729,7 @@ If your server is running, you'll get the following message:
    Trying 128.2.232.95...
    Connected to foobar.andrew.cmu.edu.
    Escape character is '^]'.
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.6.0 server ready
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v2.0.0 server ready
 </pre>
 
 <p>
@@ -832,19 +744,19 @@ installed.
 <li>Use "<tt>imtest</tt>" to test logging in with plaintext passwords:
 
 <pre>
-<kbd>   /usr/local/bin/imtest -m login -p imap foobar
+<kbd>   /usr/local/bin/imtest -m login foobar
 </kbd></pre>
 
 <p>If you want to specify a different user, do:
 
 <pre>
-<kbd>   /usr/local/bin/imtest -m login -a <i>USER</i> -p imap foobar
+<kbd>   /usr/local/bin/imtest -m login -a <i>USER</i> foobar
 </kbd></pre>
 
 If your server is running, you'll get the following message:
 <pre>
    <kbd>/usr/local/bin/imtest -m login -p imap foobar</kbd>
-   S: * OK mail1.andrew.cmu.edu Cyrus IMAP4 v1.6.20 server ready
+   S: * OK mail1.andrew.cmu.edu Cyrus IMAP4 v2.0.0 server ready
    C: C01 CAPABILITY
    S: * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS 
    X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=GSSAPI AUTH=ANONYMOUS 
@@ -863,15 +775,8 @@ written through <tt>syslog</tt> to the server log.  To terminate the
 connection, type "<kbd>. logout</kbd>".
 
 <li>You should now test the server with each of the various
-authentication mechanisms you have installed. First to find the
-mechanisms the server thinks are installed use imtest as above. After
-imtest logs in type:
-
-<pre> 
-   . CAPABILITY
-</pre> 
-
-This should produce a message similar to:
+authentication mechanisms you have installed. The supported mechanisms
+are listed in the CAPABILITY line:
 
 <pre>
   * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS 
@@ -881,7 +786,7 @@ This should produce a message similar to:
 </pre>
 
 Each of the mechanism names is preceded by a 'AUTH='. For this example
-the ANONYMOUS, KERBEROS_V4, DIGEST-MD5, and CRAM-MD5 mechanims are
+the ANONYMOUS, KERBEROS_V4, DIGEST-MD5, and CRAM-MD5 mechanisms are
 available. If a mechanism does not appear that you wish to use,
 examine the libsasl log messages.  Generally, if a mechanism does not
 appear, it means it failed to initialize.  (For example, if the server
@@ -890,51 +795,44 @@ refuse to load.)
 
 <p>Plaintext login is a special case: the PLAIN SASL mechanism is only
 advertised under an encrypted connection.  However, plaintext logins
-are available (if the IMAP server was configured to allow them) by
-using the <tt>LOGIN</tt> mechanism (as above).
+are available (as long as you haven't disabled plaintext)
+by using <tt>-m login</tt>(as above).
 
-<p>To terminate the imtest connection, type "<kbd>. logout</kbd>".
+<p>To terminate the <tt>imtest</tt> connection, type "<kbd>. logout</kbd>".
 
 <p>Once you are satisfied with the authentication mechanism list you
-should attempt to log in with each of those mechanisms. Run imtest
-specifying which mechanism you would like to use. The mechanism name
-must be in all capital letters.
+should attempt to log in with each of those mechanisms. Run <tt>imtest</tt>
+specifying which mechanism you would like to use.
 
 <pre>
-   <kbd>/usr/local/bin/imtest -m KERBEROS_V4 -p imap foobar</kbd>
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
-   . AUTHENTICATE KERBEROS_V4
-   + Ln8h6Q==
-   BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
-   BZSGgOy9ehHRj8NQjLjxDpib0D9uT0fo7QaXhLM6zCp9dQ1pX4FfNO2V39vBp
-   Q19QIK4S1410prvM2c45qeizecI7zAvA=
-   2cRhIC+aH70WHqYaW18YnQ==
-   . OK User logged in (no protection)
-   __No integrity protection__
+   <kbd>/usr/local/bin/imtest -m KERBEROS_V4 foobar</kbd>
+   C: C01 CAPABILITY
+   S: * OK foobar.andrew.cmu.edu Cyrus IMAP4 v2.0.0 server ready
+   S: * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE
+   UIDPLUS X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=ANONYMOUS
+   AUTH=GSSAPI AUTH=KERBEROS_V4 UNSELECT
+   S: C01 OK Completed
+   C: A01 AUTHENTICATE KERBEROS_V4
+   S: + wYcDAA==
+   C: BAYBQU5EUkVXLkNNVS5FRFUAOCAm7F/Y+HabCzJ
+      /UMtVcvWRjTohuq/USaCV6gYdkAU5DOcADAq
+   S: + 0aAsUGQZhgQ=
+   C: ADMe/cVivAYYzy1yd4Vojg==
+   S: A01 OK Success (privacy protection)
+   Authenticated.
+   Security strength factor: 56
 </pre>
 
-Any message other than one starting with a "<tt>A01 OK</tt>" means there is
+<p>Any message other than one starting with a "<tt>A01 OK</tt>" means there is
 a problem. If the test fails, a more specific error message is written
 through <TT>syslog</TT> to the server log.  To terminate the
-connection, type "<kbd>. logout</kbd>".
+connection, type "<kbd>. logout</kbd>".</p>
 
-<p>Make sure to test each mechanism this way. Also, many mechanisms have
-security layers. You should test each layer for mechanisms that
-support layers. imtest by default will choose the strongest layer. Use
-the '-l' parameter to force imtest to use a weaker layer. The '-l'
-parameter takes the security strength factor. A security strength
-factor of 0 means no layer and 1 means integrity layer. Privacy layer
-security strength factors depend upon the mechanism. For example
-KERBEROS_V4 has 3 layers: none, integrity, and privacy with security
-strength factors of 0,1, and 56 respectivly. By default imtest will
-attempt to use privacy layer. To force imtest to negotiate an
-integrity layer type:
-
-<pre><kbd>imtest -m KERBEROS_V4 -l 1 -p imap foobar</kbd>
-</pre>
-
-See the libsasl documentation for a full description of what
-mechanisms support what layers.
+<p>See the libsasl documentation for a full description of all the
+mechanisms.  It is also possible to support "security layers"
+(privacy or integrity protected connections).  By default,
+<tt>imtest</tt> uses the strongest layer available with the selected
+mechanism; use "<tt>-l</tt>" to choose an alternate layer.</p>
 
 </ol>
 
@@ -1009,7 +907,176 @@ Once you have created mailboxes, your IMAP server installation
 is done.  You must then configure a mail interface, such as Pine,
 to work with the IMAP server.
 
-<h2>Testing the sieve server</h2>
+<h2>Kerberos</h2><a name="kerberos"/>
+
+<h3>Configuring Kerberos v4</h3>
+
+<p>Cyrus IMAP supports Kerberos v4 if the SASL library was compiled
+with KERBEROS_V4 support.</p>
+
+<p>You'll have to 
+create a Kerberos v4 identity for the server and add the server's key to
+the "<tt>srvtab</tt>" file.  The file must be readable by the cyrus
+user. The server's Kerberos identity is "<tt>imap.HOST@REALM</tt>",
+where "<tt>HOST</tt>" is the first component of the machine's host
+name and "<tt>REALM</tt>" is the machine's Kerberos realm.</p>
+
+<ol>
+<li>Here is a sample session, creating a srvtab file for the
+host named "<tt>foobar</tt>":
+
+<pre>
+<kbd>   ksrvutil -f /var/imap/srvtab add
+</kbd></pre>
+
+<p>Here is the information "<tt>ksrvutil</tt>" requests.  Respond by
+filling in values or by pressing <KBD>RETURN</KBD>.  In this example,
+the host name is "<tt>foobar</tt>" and the realm is 
+"<tt>ANDREW.CMU.EDU</tt>".</p>
+
+<pre>
+   Name: <kbd>imap</kbd>
+   Instance: <KBD>foobar</KBD>
+   Realm: <KBD>ANDREW.CMU.EDU</KBD>
+   Version number: 
+   New principal: imap.foobar@ANDREW.CMU.EDU; version 0
+   Is this correct? (y,n) [y] 
+   Password: 
+   Verifying, please re-enter Password: 
+   Key successfully added.
+   Would you like to add another key? (y,n) [y] <KBD>n</KBD>
+</pre></li>
+
+<li><p>If you plan to install Kerberized POP, create the Kerberos
+identity "<tt>pop.HOST@REALM</tt>" and add the key to the "<tt>srvtab</tt>"
+file.</p></li>
+
+<li><P>Make the "<TT>srvtab</TT>" file owned by the cyrus user:
+<pre>
+<kbd>   chown cyrus /var/imap/srvtab
+</kbd></pre></li>
+
+<li>Add the option srvtab option to <tt>/etc/imapd.conf</tt>:
+<pre>   srvtab: /var/imap/srvtab</pre></li>
+
+<li>Test using <tt>imtest -m KERBEROS_V4</tt>.  <tt>imtest</tt> will
+attempt to authorize as the current Unix user regardless of the
+current ticket's held.  Override this with the <tt>-u</tt> option.</li>
+</ol>
+
+<h3>Troubleshooting Kerberos problems</h3>
+
+<p>Run the program "<tt>krbck</tt>" (found in the <tt>imap</tt>
+directory) as the cyrus user on the IMAP server.  This program will
+diagnose some common Kerberos v4 configuration errors.</p>
+
+<h3>Configuring Kerberos v5</h3>
+
+<p>Cyrus IMAP supports Kerberos v5 if the SASL library was compiled
+with GSSAPI support.</p>
+
+<p>You'll have to create a Kerberos v5 identity for the server.
+Kerberos v5 keys are generally stored in "<tt>/etc/krb5.keytab</tt>".
+
+<ol>
+<li>Add the "<tt>imap/hostname</tt>" key using "<tt>kadmin</tt>".
+
+<li> Let the cyrus user read "<tt>/etc/krb5.keytab</tt>":
+user:
+<pre>
+<kbd>   chown cyrus /var/imap/srvtab
+</kbd></pre></li>
+
+<li>Test using <tt>imtest -m GSSAPI</tt>.  <tt>imtest</tt> will
+attempt to authorize as the current Unix user regardless of the
+current ticket's held.  Override this with the <tt>-u</tt> option.</li>
+</ol>
+
+<h2>SSL, TLS, and OpenSSL</h2><a name="openssl"/>
+
+<p>Transport Layer Security (TLS), is a standardized version of the Secure
+Sockets Layer (SSL v3) standard.  IMAP can make use of two different
+versions of TLS/SSL: STARTTLS and an SSL wrapped session.</p>
+
+<p>In STARTTLS, a client connects to the IMAP port as normal and then
+issues the STARTTLS command, which begins a TLS negotiation.  This is
+currently supported by the Cyrus IMAP server when it is compiled with
+OpenSSL.</p>
+
+<p>The alternative, a SSL wrapped connection, involves the client
+connected to a seperate port ("<tt>imaps</tt>") and negotiating a SSL
+session before starting the IMAP protocol.  This is not currently
+supported natively by the Cyrus IMAP server.</p>
+
+<p>Both TLS and SSL require a server key and a certificate.
+Optionally, in addition to establishing a secure connection, TLS can
+authenticate the client.  Unfortunately, there's no standard on how to
+convert the client's authenticate DN (distinguished name) to a SASL
+authentication name.</p>
+
+<h3>Configuring Cyrus with OpenSSL</h3>
+
+<ol>
+<li><p>OpenSSL requires the certificate and key in PEM format.  You can
+create the server's private key and certificate yourself using
+OpenSSL.  Here, we create a key for the machine
+"<tt>cyrus.andrew.cmu.edu</tt>" and put both the certificate and key
+in the file "<tt>var/imap/server.pem</tt>".</p>
+
+<p>Please enter the appropriate information for your organization,
+instead of Carnegie Mellon University.</p>
+<pre>
+<kbd>openssl req -new -x509 -nodes -out /var/imap/server.pem -keyout /var/imap/server.pem -days 365</kbd>
+Using configuration from /usr/local/lib/openssl/openssl.cnf
+Generating a 1024 bit RSA private key
+.............+++++
+......................+++++
+writing new private key to 'FOO'
+-----
+You are about to be asked to enter information that will be incorporated
+into your certificate request.
+What you are about to enter is what is called a Distinguished Name or a DN.
+There are quite a few fields but you can leave some blank
+For some fields there will be a default value,
+If you enter '.', the field will be left blank.
+-----
+Country Name (2 letter code) [AU]:<kbd>US</kbd>
+State or Province Name (full name) [Some-State]:<kbd>Pennsylvania</kbd>
+Locality Name (eg, city) []:<kbd>Pittsburgh</kbd>
+Organization Name (eg, company) [Internet Widgits Pty Ltd]:<kbd>Carnegie Mellon University</kbd>
+Organizational Unit Name (eg, section) []:<kbd>Andrew Systems Group</kbd>
+Common Name (eg, YOUR name) []:<kbd>cyrus.andrew.cmu.edu</kbd>
+Email Address []:
+</pre></li>
+
+<li>Add the following to <tt>/etc/imapd.conf</tt> to tell the server
+where to find the certificate and key file:
+
+<pre>tls_cert_file: /var/imap/server.pem
+tls_key_file: /var/imap/server.pem
+</pre>
+</li>
+
+<li>You can test STARTTLS by using <tt>imtest</tt>:
+<pre><kbd>imtest -t "" cyrus.example.org
+</kbd></pre>
+
+</ol>
+
+<h2>Sieve</h2>
+
+<p>This section assumes that you compiled Cyrus with sieve support: you
+did not specify <tt>--disable-sieve</tt>.  You can find a brief
+introduction to Sieve at <a href="http://www.cyrusoft/sieve/">Cyrusoft
+International</a>.</p>
+
+<h3>Managing Sieve Scripts</h3>
+
+Since Cyrus is based around the concept of a sealed-server, the normal
+way for users to manipulate Sieve scripts is through the
+"<tt>installsieve</tt>" utility.
+
+<h3>Testing the sieve server</h3>
 <ol>
 
 <p>
@@ -1057,14 +1124,11 @@ specify the port use the "<tt>-p [port]</tt>" switch.
 This should produce the message "<tt>Authentication failed</tt>" with
 a description of the failure if there was a problem.
 
-<p>You might wish to test all authentication types. To force installsieve
-to use a specific mechanism use the "<tt>-m [mechanism]</tt>" switch.
-
-<p>
-<li>Next you should attempt to place a sieve script on the server. To
-do this create a file named "<tt>myscript.script</tt>" with the
-following lines. Replace "<tt>foo@bar.org</tt>" with an email address
-you can send mail from, but that is not the one you are working on now.
+<p><li>Next you should attempt to place a sieve script on the
+server. To do this create a file named "<tt>myscript.script</tt>" with
+the following lines. Replace "<tt>foo@bar.org</tt>" with an email
+address you can send mail from, but that is not the one you are
+working on now.
 
 <pre>
   require ["reject","fileinto"];
@@ -1122,13 +1186,9 @@ if your operating system doesn't have a good <tt>mmap()</tt>
 implementation. Other than trying to put <tt>/var/imap</tt> on its own
 disk, there really isn't a good short term solution to this.
 
-<p>It should not be hard to move this from a flat file to some other
-database. If you are interested in doing this work, send mail to <a
-href="mailto:cyrus-bugs+@andrew.cmu.edu">cyrus-bugs+@andrew.cmu.edu</a>.
-
-<p>(at this moment in time) We have 95105 entries in our mailboxes file
-(4.4MB). It resides on a Seagate 7200rpm Fast/Wide disk off of a Sun
-QLGC Fast-Wide sbus card. We haven't experienced any significant
+<p>(at this moment in time) We have 118416 entries in our mailboxes
+file (4.4MB). It resides on a Seagate 7200rpm Fast/Wide disk off of a
+Sun QLGC Fast-Wide sbus card. We haven't experienced any significant
 problem as a result of this though there have been other reports.
 
 <p><li><tt><b>/var/spool/mqueue</b></tt> - Sendmail can be pretty
@@ -1138,9 +1198,8 @@ seperate machine.
 
 </ul>
 
-
 <P><HR><P>
 <!-- hhmts start -->
-Last modified: Tue Oct  5 12:15:14 EDT 1999
+Last modified: 17-Feb-2000
 <!-- hhmts end -->
 </BODY></HTML>

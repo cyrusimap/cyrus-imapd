@@ -1,15 +1,37 @@
-<!-- $Id: changes.html,v 1.97 2000/01/28 22:09:40 leg Exp $ -->
+<!-- $Id: changes.html,v 1.98 2000/02/18 00:09:33 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
-    <h2> Changes to the Cyrus IMAP Server in 1.7 </h2>
-    <ul>
-    <li> deleting a user's inbox no longer deletes all of their
-    submailboxes.
-    </ul>
+<h2> Changes to the Cyrus IMAP Server in 2.0 </h2>
+<ul>
+<li> The mailboxes file is now a transaction-protected Berkeley
+database.
+
+<li> The core delivery process has been moved to <tt>lmtpd</tt>.
+<tt>deliver</tt> is now a simple wrapper to create an LMTP transaction.
+
+<li> master process, responsible for spawning services (<tt>imapd</tt>,
+<tt>lmtpd</tt>, etc.) and for routine housekeeping.
+
+<li> ACAP (Application Configuration Access Protocol) support for
+Cyrus Murder: IMAP Aggregator.
+
+<li> Sieve enhancements: regular expressions, notifications,
+automatically setting IMAP flags.
+
+<li> SNMP (Simple Network Management Protocol) support.
+
+<li> Perl version of <tt>cyradm</tt> contributed by Brandon Allbery
+(<tt>allbery@ece.cmu.edu</tt>).  Eventually we expect to transition to
+the Perl version away from the TCL version.
+
+<li>Bugfix in modified UTF-7 processing (for mailbox names).
+Bugfix in <tt>index_searchcacheheader()</tt>.
+
+</ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.20 </h2>
     <ul>
