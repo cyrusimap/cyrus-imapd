@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.217 2002/02/13 21:29:26 rjs3 Exp $
+dnl $Id: configure.in,v 1.218 2002/02/18 20:04:16 rjs3 Exp $
 dnl
 
 
@@ -77,6 +77,8 @@ AC_PROG_CC
 AC_PROG_RANLIB
 AC_PROG_MAKE_SET
 AC_PROG_INSTALL
+CMU_C___ATTRIBUTE__
+
 AC_AIX
 AC_ISC_POSIX
 AC_PROG_AWK
