@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.26 2001/12/04 17:07:46 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.27 2001/12/05 15:23:22 ken3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -71,6 +71,9 @@
 
 /* do we have an acceptable regex library? */
 #undef ENABLE_REGEX
+
+/* do we support LISTEXT? */
+#undef ENABLE_LISTEXT
 
 /* do we support XNETSCAPE */
 #undef ENABLE_X_NETSCAPE_HACK
