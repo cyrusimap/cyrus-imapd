@@ -1,4 +1,4 @@
-<!-- $Id: install-auth.html,v 1.8 2002/04/30 18:34:52 leg Exp $ -->
+<!-- $Id: install-auth.html,v 1.9 2002/11/18 04:04:53 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Authenticating Users
@@ -36,7 +36,7 @@ PLAIN) will send your password in clear-text to the server.
 
 <p>The POP server is capable of APOP authentication, but this requries that
 SASL be compiled <tt>--with-checkapop</tt>, and also that you are using
-an auxprop backend for your password store (e.g. sasldb).
+an auxprop backend for your password store (e.g. the sasldb auxprop plugin).
 
 <h2>Authentication Recommendations</h2>
 
@@ -84,7 +84,7 @@ the network.
 	
 <p>The easiest method for authenticating users is to use the libsasl
 authentication database and create users using the
-"<tt>saslpasswd</tt>" utility.  Set "<tt>sasl_pwcheck_method:
+"<tt>saslpasswd2</tt>" utility.  Set "<tt>sasl_pwcheck_method:
 auxprop</tt>", and be sure that the SASL sasldb auxprop module is
 installed (it is, by default). Make sure Cyrus can read "<tt>/etc/sasldb2</tt>":
 <pre>
@@ -188,5 +188,5 @@ current ticket's held.  Override this with the <tt>-u</tt> option.</li>
 </ol>
 
 <HR>
-last modified: $Date: 2002/04/30 18:34:52 $
+last modified: $Date: 2002/11/18 04:04:53 $
 </BODY></HTML>
