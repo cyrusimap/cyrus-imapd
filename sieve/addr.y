@@ -2,7 +2,7 @@
 /*
  * addr.y -- RFC 822 address parser
  * Ken Murchison
- * $Id: addr.y,v 1.6 2002/02/19 18:09:46 ken3 Exp $
+ * $Id: addr.y,v 1.6.4.1 2002/10/28 16:32:52 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -40,33 +40,7 @@ extern int yylex(void);
 
 %token ATOM QTEXT DTEXT
 
-%start sieve_address
-
 %%
-address: mailbox			/* one addressee */
-	| group				/* named list */
-	;
-
-group: phrase ':' ';'
-	| phrase ':' mailboxes ';'
-	;
-
-mailboxes: mailbox
-	| mailbox ',' mailboxes
-	;
-
-mailbox: addrspec			/* simple address */
-	| phrase routeaddr		/* name & addr-spec */
-	;
-
-routeaddr: '<' addrspec '>'
-	| '<' route ':' addrspec '>'
-	;
-
-route: '@' domain			/* path-relative */
-	| '@' domain ',' route
-	;
-
 sieve_address: addrspec			/* simple address */
 	| phrase '<' addrspec '>'	/* name & addr-spec */
 	;
