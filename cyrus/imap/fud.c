@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.26 2002/02/16 19:32:45 rjs3 Exp $ */
+/* $Id: fud.c,v 1.27 2002/02/20 22:48:37 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -286,8 +286,6 @@ int handle_request(const char *who, const char *name,
 	send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
 	return r;
     }
-
-    syslog(LOG_ERR, "foo");
 
     if(mbflag & MBTYPE_REMOTE) {
 	char *p = NULL;
