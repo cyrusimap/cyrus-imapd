@@ -3,6 +3,8 @@
 
 /* all functions return IMAP error codes */
 
+int acapmbox_init(void);
+
 typedef enum {
     ACAPMBOX_UNKNOWN,
     ACAPMBOX_RESERVED,
@@ -30,8 +32,6 @@ char *acapmbox_get_url(char *mbox);
 char *acapmbox_get_postaddr(char *mbox);
 
 typedef struct acapmbox_handle_s acapmbox_handle_t;
-
-int acapmbox_init(void);
 
 /*
  * get a handle.  all returns (including NULL) are valid!
@@ -97,15 +97,9 @@ int acapmbox_setproperty(acapmbox_handle_t *AC,
 			 acapmbox_property_t prop,
 			 int value);
 
-#if 0
-/*
- * listening functions
- */
+acapmbox_status mboxdata_convert_status(acap_value_t *v);
 
-/* acapmbox_dissect() fills in an (already allocated) acapmbox_data_t
-   with pointers into the acap_entry_t *e.  it is valid only as long
-   as acap_entry_t is valid. */
-int acapmbox_dissect(acap_entry_t *e, acapmbox_data_t *data);
-#endif
+/**************** proxy use *****************/
+#define FNAME_TARGET_SOCK "/target"
 
 #endif /* ACAP_MBOX_H_ */

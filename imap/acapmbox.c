@@ -10,6 +10,7 @@
 #include "acapmbox.h"
 #include "mailbox.h"
 #include "assert.h"
+#include "imapurl.h"
 
 #include "config.h"
 #include "imap_err.h"
@@ -28,21 +29,25 @@ struct acapmbox_handle_s {
 
 char *acapmbox_get_url(char *name)
 {
-    static char url[MAX_MAILBOX_PATH];
+    static char url[4 * MAX_MAILBOX_PATH];
 
-    snprintf(url, sizeof(url), "imap://%s/%s", config_servername, name);
+    imapurl_toURL(url, config_servername, name);
 
     return url;
 }
 
-/* xxx
-   this should probably vary depending on whether it's a private
+/* this should probably vary depending on whether it's a private
    mailbox or a bboard, and it should default to 
-   "bb+bboard.name@server.name" */
+   "bb+bboard.name@server.name".
+   currently, we don't set this for personal mailboxes */
 char *acapmbox_get_postaddr(char *name)
 {
     const char *postspec = config_getstring("postspec", NULL);
     static char postaddr[MAX_MAILBOX_PATH];
+
+    if (!strncmp(name, "user.", 5)) {
+	return NULL;
+    }
 
     if (postspec) {
 	snprintf(postaddr, sizeof(postaddr), postspec, name);
@@ -133,6 +138,7 @@ char *create_full_dataset_name(char *mailbox_name)
 {
     static char fullname[MAX_MAILBOX_PATH];
 
+    /* needs to convert from mUTF7 to UTF-8 */
     snprintf(fullname, sizeof(fullname), "%s/%s", 
 	     global_dataset, mailbox_name);
 
@@ -144,9 +150,9 @@ int add_attr(skiplist *sl, char *name, char *value)
     acap_attribute_t *tmpattr;
 
     tmpattr = acap_attribute_new_simple (name, value);
-    sinsert(sl, tmpattr);
+    if (tmpattr) sinsert(sl, tmpattr);
 
-    return ACAP_OK;
+    return 0;
 }
 
 static int acapmbox_store(acapmbox_handle_t *AC,

@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.59 2000/02/15 22:21:25 leg Exp $
+ * $Id: pop3d.c,v 1.60 2000/02/16 03:12:01 leg Exp $
  */
 
 #include <config.h>
@@ -207,7 +207,7 @@ int service_init(int argc, char **argv, char **envp)
 		   (sasl_free_t *) &free);
 
     /* load the SASL plugins */
-    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK) {
+    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
 	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
 	       sasl_errstring(r, NULL, NULL));
 	return 2;
