@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398 2002/07/03 20:40:05 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.399 2002/07/13 19:01:12 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -5132,8 +5132,8 @@ void cmd_getannotation(char *tag)
     }
 
     r = annotatemore_fetch(entries, attribs, &imapd_namespace,
-			   imapd_userisadmin, imapd_userid,
-			   imapd_authstate, &entryatts);
+			   imapd_userisadmin || imapd_userisproxyadmin,
+			   imapd_userid, imapd_authstate, &entryatts);
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));

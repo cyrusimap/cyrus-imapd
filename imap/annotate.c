@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.9 2002/07/12 21:32:48 rjs3 Exp $
+ * $Id: annotate.c,v 1.10 2002/07/13 19:01:12 rjs3 Exp $
  */
 
 #include <config.h>
@@ -167,6 +167,7 @@ struct fetchdata {
     char *userid;
     unsigned entries;
     unsigned attribs;
+    int isadmin;
     struct auth_state *auth_state;
     struct entryattlist **entryatts;
 };
@@ -235,8 +236,9 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
     if (r) return r;
 
     /* Check ACL - silently skip if we can't lookup this mailbox */
-    if(!acl ||
-       !(cyrus_acl_myrights(fdata->auth_state, acl) & ACL_LOOKUP))
+    if(!fdata->isadmin &&
+       (!acl ||
+        !(cyrus_acl_myrights(fdata->auth_state, acl) & ACL_LOOKUP)))
 	return 0;
 
     partition = strchr(server, '!');
@@ -345,6 +347,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		mboxname_hiersep_tointernal(namespace, mailbox);
 		fdata.namespace = namespace;
 		fdata.userid = userid;
+		fdata.isadmin = isadmin;
 		fdata.auth_state = auth_state;
 		fdata.entryatts = l;
 		(*namespace->mboxlist_findall)(namespace, mailbox,
