@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.171 2004/02/04 18:05:30 ken3 Exp $ */
+/* $Id: deliver.c,v 1.172 2004/02/19 16:54:58 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -355,6 +355,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     txn->auth = authuser;
     txn->data = deliver_in;
     txn->isdotstuffed = 0;
+    txn->tempfail_unknown_mailbox = 0;
     txn->rcpt_num = numusers ? numusers : 1;
     if (mailbox) ml = strlen(mailbox);
     if (numusers == 0) {
