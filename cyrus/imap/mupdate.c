@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.61 2002/07/17 18:27:46 rjs3 Exp $
+ * $Id: mupdate.c,v 1.62 2002/08/07 20:41:04 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -469,6 +469,18 @@ void cmdloop(struct conn *c)
 		syslog(LOG_WARNING, "%s, closing connection", err);
 		prot_printf(c->pout, "* BYE \"%s\"\r\n", err);
 	    }
+	    goto done;
+	}
+
+	/* are we no longer ready ? */
+	/* xxx this might be a race with streaming connections, but since
+	 * the waitevent time is much shorter than the typical time between
+	 * resyncs it is probably not a big concern.  For non-streaming
+	 * connections, this is fine because they will only get hung up on
+	 * if they ask for data before we are ready again. */
+	if(!ready_for_connections) {
+	    prot_printf(c->pout,
+			"* BYE \"Not ready for connections\"\r\n");
 	    goto done;
 	}
 
@@ -1615,8 +1627,7 @@ void mupdate_unready(void)
 
     syslog(LOG_NOTICE, "unready for connections");
 
-    /* close all connections to us */
-    while(connlist) conn_free(connlist);
+    /* signal our lack of readyness */
     ready_for_connections = 0;
 
     pthread_mutex_unlock(&ready_for_connections_mutex);
