@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.291 2005/02/16 20:37:14 shadow Exp $
+dnl $Id: configure.in,v 1.292 2005/02/17 18:37:20 shadow Exp $
 dnl
 
 
@@ -573,6 +573,7 @@ if test "$with_statickrb" = "yes" -a ! -d "$with_krb"; then
       AC_MSG_ERROR([--enable-statickrb specified but --with-krb did not specify a valid directory])
 fi 
 
+if test "$with_krb" != "no"; then
 dnl Do we need DES for kerberos?
 AC_ARG_WITH(krbdes,[  --with-krbdes           use Kerberos DES implementation [[yes]]],
       with_krbdes="$withval", with_krbdes="yes")
@@ -584,6 +585,7 @@ if test "$with_krbdes" = "yes"; then
           KRB_LIBS="-ldes"
       fi,
   AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.  You might want --with-auth=unix.]))
+fi
 fi
 
 dnl if we were ambitious, we'd look more aggressively for the
@@ -1005,7 +1007,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.291 2005/02/16 20:37:14 shadow Exp $ */
+/* $Id: configure.in,v 1.292 2005/02/17 18:37:20 shadow Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
