@@ -33,12 +33,10 @@
 #include "imap_err.h"
 #include "prot.h"
 #include "mailbox.h"
-#include "parseadd.h"
+#include "parseaddr.h"
 #include "charset.h"
 #include "util.h"
 #include "xmalloc.h"
-
-extern PARSED_ADDRESS *AppendAddresses();
 
 /* cyrus.cache file item buffer */
 struct ibuf {
@@ -78,12 +76,12 @@ struct body {
      */
     char *date;
     char *subject;
-    PARSED_ADDRESS *from;
-    PARSED_ADDRESS *sender;
-    PARSED_ADDRESS *reply_to;
-    PARSED_ADDRESS *to;
-    PARSED_ADDRESS *cc;
-    PARSED_ADDRESS *bcc;
+    struct address *from;
+    struct address *sender;
+    struct address *reply_to;
+    struct address *to;
+    struct address *cc;
+    struct address *bcc;
     char *in_reply_to;
     char *message_id;
 
@@ -123,10 +121,10 @@ static time_t message_parse_date();
 static PendingBoundary();
 static int message_write_cache(), message_write_envelope();
 static int message_write_body(), message_write_address();
-static int message_write_singleaddress(), message_write_nstring();
+static int message_write_nstring();
 static int message_write_number(), message_write_section();
 static int message_write_charset(), message_write_bit32();
-static int message_write_searchaddr(), message_write_singlesearchaddr();
+static int message_write_searchaddr();
 static int message_ibuf_init(), message_ibuf_ensure();
 static int message_ibuf_write(), message_ibuf_free(), message_free_body();
 
@@ -566,11 +564,9 @@ struct boundary *boundaries;
 static 
 message_parse_address(hdr, addrp)
 char *hdr;
-PARSED_ADDRESS **addrp;
+struct address **addrp;
 {
     char *hdrend, hdrendchar;
-    PARSED_ADDRESS *hdrlist;
-    int r;
 
     /* Find end of header */
     hdrend = hdr;
@@ -585,14 +581,10 @@ PARSED_ADDRESS **addrp;
 	*hdrend = '\0';
     }
 
-    r = ParseAddressList(hdr, &hdrlist);
+    parseaddr_list(hdr, addrp);
 
     /* Put character at end of header back */
     if (hdrend) *hdrend = hdrendchar;
-
-    if (r) return;
-
-    *addrp = AppendAddresses(*addrp, hdrlist);
 }
 
 /*
@@ -1388,106 +1380,30 @@ int newformat;
 static 
 message_write_address(ibuf, addrlist)
 struct ibuf *ibuf;
-PARSED_ADDRESS *addrlist;
+struct address *addrlist;
 {
-    int len = 0;
-
     /* If no addresses, write out NIL */
     if (!addrlist) {
 	message_write_nstring(ibuf, (char *)0);
 	return;
     }
-    FOR_ALL_ADDRESSES(thisaddr, addrlist, len++;);
-    if (!len) {
-	message_write_nstring(ibuf, (char *)0);
-	return;
-    }	
 
     PUTIBUF(ibuf, '(');
-    FOR_ALL_ADDRESSES(thisaddr, addrlist, message_write_singleaddress(ibuf, thisaddr););
-    PUTIBUF(ibuf, ')');
-}
 
-/*
- * Write the single address 'addr' to 'ibuf'.
- */
-static 
-message_write_singleaddress(ibuf, addr)
-struct ibuf *ibuf;
-PARSED_ADDRESS *addr;
-{
-    int nhosts=0, adllen=0;
-    char *name = 0, *adl = 0;
-    static char myhostname[128];
-
-    /* Recursively handle RFC-822 group addresses */
-    if (addr->Kind == GROUP_ADDRESS) {
+    while (addrlist) {
 	PUTIBUF(ibuf, '(');
-	message_write_nstring(ibuf, (char *)0);
+	message_write_nstring(ibuf, addrlist->name);
 	PUTIBUF(ibuf, ' ');
-	message_write_nstring(ibuf, (char *)0);
+	message_write_nstring(ibuf, addrlist->route);
 	PUTIBUF(ibuf, ' ');
-	message_write_nstring(ibuf, addr->LocalPart);
+	message_write_nstring(ibuf, addrlist->mailbox);
 	PUTIBUF(ibuf, ' ');
-	message_write_nstring(ibuf, (char *)0);
+	message_write_nstring(ibuf, addrlist->domain);
 	PUTIBUF(ibuf, ')');
-	
-	FOR_ALL_GROUP_MEMBERS(thisaddr, addr, message_write_singleaddress(ibuf, thisaddr););
-
-	PUTIBUF(ibuf, '(');
-	message_write_nstring(ibuf, (char *)0);
-	PUTIBUF(ibuf, ' ');
-	message_write_nstring(ibuf, (char *)0);
-	PUTIBUF(ibuf, ' ');
-	message_write_nstring(ibuf, (char *)0);
-	PUTIBUF(ibuf, ' ');
-	message_write_nstring(ibuf, (char *)0);
-	PUTIBUF(ibuf, ')');
-
-	return;
-    }
-    
-    /* If no route phrase, use first RFC-822 comment (without parens) */
-    name = addr->RoutePhrase;
-    if (!name && addr->Comments) {
-	name = addr->Comments->Text+1;
-	name[strlen(name)-1] = '\0';
-    }
-	
-    /* Fid out my hostname if necessary */
-    if (!addr->Hosts->Next->Name && !myhostname[0]) {
-	gethostname(myhostname, sizeof(myhostname)-1);
+	addrlist = addrlist->next;
     }
 
-    /* Count number of hosts and build any necessary at-domain-list */
-    FOR_ALL_REVERSE_HOSTS(h, addr, { nhosts++; adllen += 2+strlen(h->Name);});
-    if (nhosts > 1) {
-	adl = xmalloc(adllen);
-	*adl = '\0';
-	FOR_ALL_REVERSE_HOSTS(h, addr, {
-	      if (--nhosts) {
-		  if (*adl) strcat(adl, ",");
-		  strcat(adl, "@");
-		  strcat(adl, h->Name); }});
-	nhosts = 1;
-    }
-
-    PUTIBUF(ibuf, '(');
-    message_write_nstring(ibuf, name);
-    PUTIBUF(ibuf, ' ');
-    message_write_nstring(ibuf, adl);
-    PUTIBUF(ibuf, ' ');
-    message_write_nstring(ibuf, addr->LocalPart);
-    PUTIBUF(ibuf, ' ');
-    message_write_nstring(ibuf, nhosts ? addr->Hosts->Next->Name : myhostname);
     PUTIBUF(ibuf, ')');
-
-    /* If we used a comment for a name, put back the close parenthesis */
-    if (!addr->RoutePhrase && addr->Comments) {
-	name[strlen(name)] = ')';
-    }
-
-    if (adl) free(adl);
 }
 
 /*
@@ -1754,98 +1670,56 @@ int val;
 static 
 message_write_searchaddr(ibuf, addrlist)
 struct ibuf *ibuf;
-PARSED_ADDRESS *addrlist;
+struct address *addrlist;
 {
-    if (!addrlist) return;
-    
-    FOR_ALL_ADDRESSES(thisaddr, addrlist,
-		      message_write_singlesearchaddr(ibuf, thisaddr,
-				     thisaddr->Next->Kind == DUMMY_ADDRESS););
-}
+    int prevaddr = 0;
 
-/*
- * Unparse the single addres 'addr' to 'ibuf'.
- */
-static 
-message_write_singlesearchaddr(ibuf, addr, last)
-struct ibuf *ibuf;
-PARSED_ADDRESS *addr;
-int last;
-{
-    int nhosts=0, adllen=0;
-    char *name = 0, *adl = 0;
-    static char myhostname[128];
+    while (addrlist) {
 
-    /* Recursively handle RFC-822 group addresses */
-    if (addr->Kind == GROUP_ADDRESS) {
-	lcase(addr->LocalPart);
-	message_write_text(ibuf, addr->LocalPart);
-	PUTIBUF(ibuf, ':');
+	/* Handle RFC-822 group addresses */
+	if (!addrlist->domain) {
+	    if (addrlist->mailbox) {
+		if (prevaddr) PUTIBUF(ibuf, ',');
+		
+		message_write_text(ibuf,
+				   charset_decode1522(addrlist->mailbox));
+		PUTIBUF(ibuf, ':');
 	
-	FOR_ALL_GROUP_MEMBERS(thisaddr, addr,
-			      message_write_singlesearchaddr(ibuf, thisaddr,
-				     thisaddr->Next->Kind == DUMMY_ADDRESS););
-	PUTIBUF(ibuf, ';');
-	if (!last) PUTIBUF(ibuf, ',');
-	return;
-    }
-    
-    /* If no route phrase, use first RFC-822 comment (without parens) */
-    name = addr->RoutePhrase;
-    if (!name && addr->Comments) {
-	name = addr->Comments->Text+1;
-	name[strlen(name)-1] = '\0';
-    }
-	
-    /* Fid out my hostname if necessary */
-    if (!addr->Hosts->Next->Name && !myhostname[0]) {
-	gethostname(myhostname, sizeof(myhostname)-1);
-	lcase(myhostname);
-    }
+		/* Suppress a trailing comma */
+		prevaddr = 0;
+	    }
+	    else {
+		PUTIBUF(ibuf, ';');
+		prevaddr = 1;
+	    }
+	}
+	else {
+	    if (prevaddr) PUTIBUF(ibuf, ',');
 
-    /* Count number of hosts and build any necessary at-domain-list */
-    FOR_ALL_REVERSE_HOSTS(h, addr, { nhosts++; adllen += 2+strlen(h->Name);});
-    if (nhosts > 1) {
-	adl = xmalloc(adllen);
-	*adl = '\0';
-	FOR_ALL_REVERSE_HOSTS(h, addr, {
-	      if (--nhosts) {
-		  if (*adl) strcat(adl, ",");
-		  strcat(adl, "@");
-		  strcat(adl, h->Name); }});
-	nhosts = 1;
-    }
+	    if (addrlist->name) {
+		message_write_text(ibuf, charset_decode1522(addrlist->name));
+		PUTIBUF(ibuf, ' ');
+	    }
 
-    if (name) {
-	message_write_text(ibuf, charset_decode1522(name));
-	PUTIBUF(ibuf, ' ');
-    }
-    PUTIBUF(ibuf, '<');
-    if (adl) {
-	lcase(adl);
-	message_write_text(ibuf, adl);
-	PUTIBUF(ibuf, ':');
-    }
-    lcase(addr->LocalPart);
-    message_write_text(ibuf, addr->LocalPart);
-    PUTIBUF(ibuf, '@');
-    if (nhosts) {
-	lcase(addr->Hosts->Next->Name);
-	message_write_text(ibuf, addr->Hosts->Next->Name);
-    }
-    else {
-	message_write_text(ibuf, myhostname);
-    }
-    PUTIBUF(ibuf, '>');
-    if (!last) PUTIBUF(ibuf, ',');
+	    PUTIBUF(ibuf, '<');
+	    if (addrlist->route) {
+		lcase(addrlist->route);
+		message_write_text(ibuf, addrlist->route);
+		PUTIBUF(ibuf, ':');
+	    }
 
+	    lcase(addrlist->mailbox);
+	    message_write_text(ibuf, addrlist->mailbox);
+	    PUTIBUF(ibuf, '@');
 
-    /* If we used a comment for a name, put back the close parenthesis */
-    if (!addr->RoutePhrase && addr->Comments) {
-	name[strlen(name)] = ')';
+	    lcase(addrlist->domain);
+	    message_write_text(ibuf, addrlist->domain);
+	    PUTIBUF(ibuf, '>');
+	    prevaddr = 1;
+	}
+
+	addrlist = addrlist->next;
     }
-
-    if (adl) free(adl);
 }
 
 /*
@@ -1941,12 +1815,12 @@ struct body *body;
     if (body->md5) free(body->md5);
     if (body->date) free(body->date);
     if (body->subject) free(body->subject);
-    if (body->from) FreeAddressList(body->from);
-    if (body->sender) FreeAddressList(body->sender);
-    if (body->reply_to) FreeAddressList(body->reply_to);
-    if (body->to) FreeAddressList(body->to);
-    if (body->cc) FreeAddressList(body->cc);
-    if (body->bcc) FreeAddressList(body->bcc);
+    if (body->from) parseaddr_free(body->from);
+    if (body->sender) parseaddr_free(body->sender);
+    if (body->reply_to) parseaddr_free(body->reply_to);
+    if (body->to) parseaddr_free(body->to);
+    if (body->cc) parseaddr_free(body->cc);
+    if (body->bcc) parseaddr_free(body->bcc);
     if (body->in_reply_to) free(body->in_reply_to);
     if (body->message_id) free(body->message_id);
 
