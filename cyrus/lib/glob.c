@@ -42,7 +42,7 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.22 2000/12/20 22:53:49 leg Exp $
+ * $Id: glob.c,v 1.22.16.1 2002/09/20 17:45:44 ken3 Exp $
  */
 
 #include <config.h>
@@ -78,7 +78,7 @@ glob *glob_init_suppress (str, flags, suppress)
 
     newglob = flags & GLOB_HIERARCHY;
     if (suppress) slen = strlen(suppress);
-    g = (glob *) fs_get(sizeof (glob) + slen + strlen(str) + 1);
+    g = (glob *) xmalloc(sizeof (glob) + slen + strlen(str) + 1);
     if (g != 0) {
         strcpy(g->inbox, inbox);
 	g->sep_char = '.';
@@ -190,7 +190,7 @@ glob *glob_init_suppress (str, flags, suppress)
 void glob_free (g)
     glob **g;
 {
-    fs_give((void **) g);
+    free((void **) g);
 }
 
 /* returns -1 if no match, otherwise length of match or partial-match
