@@ -172,7 +172,7 @@ char *username;
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
 	g = glob_init(badmboxpatterns[i], GLOB_ICASE);
 	if (glob_test(g, name, -1)) {
-	    free((char *)g);
+	    glob_free(g);
 	    return IMAP_MAILBOX_BADNAME;
 	}
 	glob_free(g);
@@ -225,7 +225,6 @@ char *username;
 	    if (!(acl_myrights(acl) & ACL_LOOKUP)) {
 		r = IMAP_PERMISSION_DENIED;
 	    }
-	    if (acl) free(acl);
 	}
 	fclose(listfile);
 	return r;
@@ -253,7 +252,6 @@ char *username;
 	assert(r == 0);
 	if (!isadmin && !(acl_myrights(acl) & ACL_CREATE)) {
 	    fclose(listfile);
-	    free(acl);
 	    return IMAP_PERMISSION_DENIED;
 	}
 	strncpy(name, parent, strlen(parent)); /* Canonify case */
@@ -359,7 +357,118 @@ char *username;
     return 0;
 }
 	
+mboxlist_find(pattern, isadmin, username)
+char *pattern;
+int isadmin;
+char *username;
+{
+    FILE *listfile;
+    struct glob *g;
+    char usermboxname[MAX_NAME_LEN];
+    int usermboxnamelen;
+    char buf[512], *bufp = buf;
+    unsigned offset, buflen, prefixlen;
+    char *p, *acl;
+    int r;
 
+    if (!listfname) mboxlist_getfname();
+
+    listfile = fopen(listfname, "r");
+    if (!listfile) {
+	fatal("can't read mailbox list", EX_OSFILE);
+    }
+
+    g = glob_init(pattern, GLOB_ICASE);
+
+    if (!strchr(username, '.') && strlen(username)+5 < MAX_NAME_LEN) {
+	strcpy(usermboxname, "user.");
+	strcat(usermboxname, username);
+
+	if (glob_test(g, "inbox", -1)) {
+	    buflen = sizeof(buf);
+	    (void) n_binarySearchFD(fileno(listfile), usermboxname, 0, &bufp,
+				    &buflen, 0, 0);
+	    if (buflen) printf("* MAILBOX INBOX\r\n");
+	}
+
+	strcat(usermboxname, ".");
+	usermboxnamelen = strlen(usermboxname);
+    }
+    else {
+	username = 0;
+    }
+
+    /* Find fixed-string pattern prefix */
+    for (p = pattern; *p; p++) {
+	if (*p == '*' || *p == '%' || *p == '?') break;
+    }
+    prefixlen = p - pattern;
+    *p = '\0';
+
+    /* If user.X can match pattern, search for those mailboxes first */
+    if (username && !strncasecmp(usermboxname, pattern,
+	    prefixlen < usermboxnamelen ? prefixlen : usermboxnamelen)) {
+
+	buflen = sizeof(buf);
+	offset = n_binarySearchFD(fileno(listfile), usermboxname, 0, &bufp,
+				  &buflen, 0, 0);
+	fseek(listfile, offset, 0);
+	for (;;) {
+	    if (!fgets(buf, sizeof(buf), listfile)) break;
+	    /* XXX assuming \t before running past sizeof(buf) */
+	    p = strchr(buf, '\t');
+	    *p = '\0';
+	    if (strncasecmp(buf, usermboxname, usermboxnamelen)) break;
+	    if (glob_test(g, buf, -1)) printf("* MAILBOX %s\r\n", buf);
+	    *p = '\t';
+	    while (buf[strlen(buf)-1] != '\n') {
+		if (!fgets(buf, sizeof(buf), listfile)) break;
+	    }
+	}
+    }
+
+    buflen = sizeof(buf);
+    offset = n_binarySearchFD(fileno(listfile), pattern, 0, &bufp,
+			      &buflen, 0, 0);
+    fseek(listfile, offset, 0);
+    usermboxname[--usermboxnamelen] = '\0';
+    for (;;) {
+	if (!fgets(buf, sizeof(buf), listfile)) break;
+	/* XXX assuming \t before running past sizeof(buf) */
+	p = strchr(buf, '\t');
+	*p = '\0';
+	if (strncasecmp(buf, pattern, prefixlen)) break;
+	if (glob_test(g, buf, -1) &&
+	    (strncasecmp(buf, usermboxname, usermboxnamelen) ||
+	     (buf[usermboxnamelen] != '\0' && buf[usermboxnamelen] != '.'))) {
+	    if (isadmin) {
+		printf("* MAILBOX %s\r\n", buf);
+	    }
+	    else {
+		/* XXX assuming \t before running past sizeof(buf) */
+		acl = strchr(buf+strlen(buf)+1, '\t') + 1;
+		p = strchr(acl, '\n');
+		if (p) {
+		    *p = '\0';
+		}
+		else {
+		    r = mboxlist_lookup(buf, (char **)0, &acl);
+		    assert(r == 0);
+		}
+		if (acl_myrights(acl) & ACL_LOOKUP) {
+		    printf("* MAILBOX %s\r\n", buf);
+		}
+	    }
+	}
+	*p = '\t';
+	while (buf[strlen(buf)-1] != '\n') {
+	    if (!fgets(buf, sizeof(buf), listfile)) break;
+	}
+    }
+	
+    glob_free(g);
+    return;
+}
 
 static mboxlist_getfname()
 {

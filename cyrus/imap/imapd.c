@@ -188,6 +188,15 @@ cmdloop()
 		if (c != ' ') goto badsequence;
 		cmd_fetch(tag.s, arg1.s, usinguid);
 	    }
+	    else if (!strcmp(cmd.s, "Find")) {
+		c = getword(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_find(tag.s, arg1.s, arg2.s);
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -1045,6 +1054,12 @@ char *tag;
 		if (c == EOF) goto missingarg;
 		appendstrlist(&searchargs.bcc, arg.s);
 	    }
+	    else if (!strcmp(criteria.s, "body")) {
+		if (c != ' ') goto missingarg;		
+		c = getastring(&arg);
+		if (c == EOF) goto missingarg;
+		appendstrlist(&searchargs.body, arg.s);
+	    }
 	    else goto badcri;
 	    break;
 
@@ -1143,8 +1158,8 @@ char *tag;
 		if (c != ' ') goto missingarg;		
 		c = getdate(&start, &end);
 		if (c == EOF) goto baddate;
-		if (!searchargs.after || searchargs.after < end) {
-		    searchargs.after = end;
+		if (!searchargs.after || searchargs.after < start) {
+		    searchargs.after = start;
 		}
 	    }
 	    else if (!strcmp(criteria.s, "subject")) {
@@ -1162,6 +1177,12 @@ char *tag;
 		c = getastring(&arg);
 		if (c == EOF) goto missingarg;
 		appendstrlist(&searchargs.to, arg.s);
+	    }
+	    else if (!strcmp(criteria.s, "text")) {
+		if (c != ' ') goto missingarg;		
+		c = getastring(&arg);
+		if (c == EOF) goto missingarg;
+		appendstrlist(&searchargs.text, arg.s);
 	    }
 	    else goto badcri;
 	    break;
@@ -1200,7 +1221,7 @@ char *tag;
 	badcri:
 	    printf("%s BAD Invalid Search criteria\r\n", tag);
 	    if (c != '\n') eatline();
-	    return;
+	    goto freeargs;
 	}
     }
 
@@ -1208,7 +1229,7 @@ char *tag;
     if (c != '\n') {
 	printf("%s BAD Unexpected extra arguments to Search\r\n", tag);
 	eatline();
-	return;
+	goto freeargs;
     }
 
     if (nothing_found) {
@@ -1220,25 +1241,33 @@ char *tag;
 
     printf("%s OK Search completed\r\n", tag);
 
+ freeargs:
+    freestrlist(searchargs.from);
+    freestrlist(searchargs.to);
+    freestrlist(searchargs.cc);
+    freestrlist(searchargs.bcc);
+    freestrlist(searchargs.subject);
+    freestrlist(searchargs.body);
+    freestrlist(searchargs.text);
     return;
 
  missingarg:
     printf("%s BAD Missing required argument to Search %s\r\n",
 	   tag, criteria.s);
     if (c != '\n') eatline();
-    return;
+    goto freeargs;
 
  badflag:
     printf("%s BAD Invalid flag name %s in Search command\r\n",
 	   tag, arg.s);
     if (c != '\n') eatline();
-    return;
+    goto freeargs;
 
  baddate:
     printf("%s BAD Invalid date in Search command\r\n",
 	   tag);
     if (c != '\n') eatline();
-    return;
+    goto freeargs;
 }
     
 cmd_create(tag, name, partition)
@@ -1264,6 +1293,28 @@ char *partition;
     }
 }	
 
+cmd_find(tag, namespace, pattern)
+char *tag;
+char *namespace;
+char *pattern;
+{
+    lcase(namespace);
+    if (!strcmp(namespace, "mailboxes")) {
+	;
+    }
+    else if (!strcmp(namespace, "all.mailboxes")) {
+	mboxlist_find(pattern, imapd_userisadmin, imapd_userid);
+    }
+    else if (!strcmp(namespace, "bboards")
+	     || !strcmp(namespace, "all.bboards")) {
+	;
+    }
+    else {
+	printf("%s BAD Invalid FIND subcommand\r\n", tag);
+	return;
+    }
+    printf("%s OK Find completed\r\n", tag);
+}
   
 #define BUFGROWSIZE 100
 int getword(buf)
