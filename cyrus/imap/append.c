@@ -281,7 +281,7 @@ char *userid;
  * whose \Seen flag gets set.
  */
 int
-append_copy(mailbox, append_mailbox, nummsg, copymsg, format, userid)
+append_copy(mailbox, append_mailbox, nummsg, copymsg, userid)
 struct mailbox *mailbox;
 struct mailbox *append_mailbox;
 int nummsg;
