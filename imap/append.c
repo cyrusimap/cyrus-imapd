@@ -89,15 +89,19 @@ long quotacheck;
  * 'mailbox' must have been opened with append_setup().
  * If 'size', is nonzero it the expected size of the message.
  * If 'size' is zero, message may need LF to CRLF conversion.
+ * 'internaldate' specifies the internaldate for the new message.
  * 'flags' contains the names of the 'nflags' flags that the
  * user wants to set in the message.  If the '\Seen' flag is
  * in 'flags', then 'userid' contains the name of the user whose
  * \Seen flag gets set.
  */
-int append_fromstream(mailbox, messagefile, size, flag, nflags, userid)
+int
+append_fromstream(mailbox, messagefile, size, internaldate, flag, nflags,
+		  userid)
 struct mailbox *mailbox;
 FILE *messagefile;
 unsigned size;
+time_t internaldate;
 char **flag;
 int nflags;
 char *userid;
@@ -113,10 +117,15 @@ char *userid;
 
     assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
 
+    /* Setup */
+    fseek(mailbox->cache, 0L, 2);
+    last_cacheoffset = ftell(mailbox->cache);
     message_index = zero_index;
     message_index.uid = mailbox->last_uid + 1;
-    message_index.last_updated = message_index.internaldate = time(0);
+    message_index.last_updated = time(0);
+    message_index.internaldate = internaldate;
 
+    /* Create message file */
     strcpy(fname, mailbox->path);
     strcat(fname, "/");
     strcat(fname, mailbox_message_fname(mailbox, message_index.uid));
@@ -125,9 +134,7 @@ char *userid;
 	return IMAP_IOERROR;
     }
 
-    fseek(mailbox->cache, 0L, 2);
-    last_cacheoffset = ftell(mailbox->cache);
-
+    /* Copy and parse message */
     if (size) {
 	r = message_copy_strict(messagefile, destfile, size);
     }
@@ -141,6 +148,7 @@ char *userid;
 	return r;
     }
 
+    /* Handle flags the user wants to set in the message */
     for (i = 0; i < nflags; i++) {
 	if (!strcmp(flag[i], "\\seen")) setseen++;
 	else if (!strcmp(flag[i], "\\deleted")) {
@@ -159,6 +167,7 @@ char *userid;
 	    }
 	}
 	else if (mailbox->myrights & ACL_WRITE) {
+	    /* User flag */
 	    emptyflag = -1;
 	    for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
 		if (mailbox->flagname[userflag]) {
@@ -168,6 +177,7 @@ char *userid;
 		else if (emptyflag == -1) emptyflag = userflag;
 	    }
 
+	    /* Flag is not defined--create it */
 	    if (userflag == MAX_USER_FLAGS && emptyflag != -1) {
 		userflag = emptyflag;
 		mailbox->flagname[userflag] = strsave(flag[i]);
@@ -179,6 +189,8 @@ char *userid;
 	    }
 	}
     }
+
+    /* Write out the header if we created a new user flag */
     if (writeheader) {
 	r = mailbox_write_header(mailbox);
 	if (r) {
@@ -188,6 +200,7 @@ char *userid;
 	}
     }
 
+    /* Write out index file entry */
     r = mailbox_append_index(mailbox, &message_index, mailbox->exists, 1);
     if (r) {
 	unlink(fname);
@@ -195,6 +208,7 @@ char *userid;
 	return r;
     }
     
+    /* Calculate new index header information */
     mailbox->exists++;
     mailbox->last_uid = message_index.uid;
     mailbox->last_appenddate = time(0);
@@ -203,6 +217,7 @@ char *userid;
 	mailbox->minor_version = MAILBOX_MINOR_VERSION;
     }
 
+    /* Write out index header */
     r = mailbox_write_index_header(mailbox);
     if (r) {
 	unlink(fname);
@@ -211,6 +226,7 @@ char *userid;
 	return r;
     }
     
+    /* Write out quota file */
     mailbox->quota_used += message_index.size;
     r = mailbox_write_quota(mailbox);
     if (r) {
@@ -219,6 +235,7 @@ char *userid;
 	       message_index.size, mailbox->quota_path);
     }
 
+    /* Set \Seen flag if necessary */
     if (setseen && userid && (mailbox->myrights & ACL_SEEN)) {
 	append_addseen(mailbox, userid, message_index.uid, message_index.uid);
     }
@@ -226,6 +243,12 @@ char *userid;
     return 0;
 }
 
+/*
+ * Append to 'mailbox' the 'nummsg' messages listed in the array
+ * pointed to by 'copymsg'.  'mailbox' must have been opened with
+ * append_setup().  If the '\Seen' flag is to be set anywhere then
+ * 'userid' contains the name of the user whose \Seen flag gets set.
+ */
 int
 append_copy(mailbox, nummsg, copymsg, userid)
 struct mailbox *mailbox;
@@ -252,10 +275,10 @@ char *userid;
 
     fseek(mailbox->cache, 0L, 2);
     last_cacheoffset = ftell(mailbox->cache);
-
     message_index = (struct index_record *)
       xmalloc(nummsg * sizeof(struct index_record));
 
+    /* Copy/link all files and cache info */
     for (msg = 0; msg < nummsg; msg++) {
 	message_index[msg] = zero_index;
 	message_index[msg].uid = mailbox->last_uid + 1 + msg;
@@ -263,12 +286,14 @@ char *userid;
 	message_index[msg].internaldate = copymsg[msg].internaldate;
 
 	if (copymsg[msg].cache_len) {
+	    /* Link/copy message file */
 	    strcpy(fname, mailbox->path);
 	    strcat(fname, "/");
 	    strcat(fname, mailbox_message_fname(mailbox,
 						message_index[msg].uid));
 	    if (link(mailbox_message_fname(mailbox, copymsg[msg].uid),
 		     fname)) {
+		/* Link failed, have to copy */
 		destfile = fopen(fname, "w");
 		if (!destfile) {
 		    r = IMAP_IOERROR;
@@ -294,6 +319,8 @@ char *userid;
 		fclose(srcfile);
 		fclose(destfile);
 	    }
+
+	    /* Write out cache info, copy other info */
 	    message_index[msg].cache_offset = ftell(mailbox->cache);
 	    fwrite(copymsg[msg].cache_begin, 1, copymsg[msg].cache_len,
 		   mailbox->cache);
@@ -302,6 +329,10 @@ char *userid;
 	    message_index[msg].content_offset = copymsg[msg].header_size;
 	}
 	else {
+	    /*
+	     * Have to copy the message, possibly converting LF to CR LF
+	     * Then, we have to parse the message.
+	     */
 	    destfile = fopen(fname, "w");
 	    if (!destfile) {
 		r = IMAP_IOERROR;
@@ -323,6 +354,7 @@ char *userid;
 
 	quota_usage += message_index[msg].size;
 	
+	/* Handle any flags that need to be copied */
 	if (mailbox->myrights & ACL_WRITE) {
 	    message_index[msg].system_flags =
 	      copymsg[msg].system_flags & ~FLAG_DELETED;
@@ -338,6 +370,7 @@ char *userid;
 		    else if (emptyflag == -1) emptyflag = userflag;
 		}
 
+		/* Flag is not defined--create it */
 		if (userflag == MAX_USER_FLAGS && emptyflag != -1) {
 		    userflag = emptyflag;
 		    mailbox->flagname[userflag] =
@@ -357,13 +390,17 @@ char *userid;
 	}
     }
 
+    /* Write out the header if we created a new user flag */
     if (writeheader) {
 	r = mailbox_write_header(mailbox);
 	if (r) goto fail;
     }
 
+    /* Write out index file entries */
     r = mailbox_append_index(mailbox, message_index, mailbox->exists, nummsg);
+    if (r) goto fail;
 
+    /* Calculate new index header information */
     mailbox->exists += nummsg;
     mailbox->last_uid += nummsg;
     mailbox->last_appenddate = time(0);
@@ -372,9 +409,11 @@ char *userid;
 	mailbox->minor_version = MAILBOX_MINOR_VERSION;
     }
 
+    /* Write out index header */
     r = mailbox_write_index_header(mailbox);
     if (r) goto fail;
     
+    /* Write out quota file */
     mailbox->quota_used += quota_usage;
     r = mailbox_write_quota(mailbox);
     if (r) {
@@ -383,7 +422,7 @@ char *userid;
 	       quota_usage, mailbox->quota_path);
     }
     
-    /* Deal with \Seen */
+    /* Set \Seen flags if necessary */
     for (msg = seenbegin = 0; msg < nummsg; msg++) {
 	if (!seenbegin && !copymsg[msg].seen) continue;
 	if (seenbegin && copymsg[msg].seen) continue;
@@ -408,6 +447,7 @@ char *userid;
     return 0;
 
  fail:
+    /* Remove all new message files */
     for (msg = 0; msg < nummsg; msg++) {
 	strcpy(fname, mailbox->path);
 	strcat(fname, "/");
