@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.111 2001/03/05 22:27:05 leg Exp $
+ $Id: mailbox.c,v 1.112 2001/03/14 06:02:38 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2250,7 +2250,14 @@ const char *to;
     int n;
 
     if (link(from, to) == 0) return 0;
-
+    if (errno == EEXIST) {
+	if (unlink(to) == -1) {
+	    syslog(LOG_ERR, "IOERROR: unlinking to recreate %s: %m", to);
+	    return IMAP_IOERROR;
+	}
+	if (link(from, to) == 0) return 0;
+    }
+    
     destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (destfd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", to);
