@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.85 2003/02/13 20:15:26 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.86 2003/04/09 00:40:21 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -501,7 +501,7 @@ static char *parseautheq(char **strp)
 /* return malloc'd string containing the address */
 static char *parseaddr(char *s)
 {
-    char *p;
+    char *p, *ret;
     int len;
 
     p = s;
@@ -565,22 +565,22 @@ static char *parseaddr(char *s)
     if (*p && *p != ' ') return 0;
     len = p - s;
 
-    s = xstrdup(s);
-    s[len] = '\0';
-    return s;
+    ret = xmalloc(len + 1);
+    memcpy(ret, s, len);
+    ret[len] = '\0';
+    return ret;
 }
 
 /* clean off the <> from the return path */
 void clean_retpath(char *rpath)
 {
-    int i, sl;
+    int sl;
 
     /* Remove any angle brackets around return path */
     if (*rpath == '<') {
 	sl = strlen(rpath);
-	for (i = 0; i < sl; i++) {
-	    rpath[i] = rpath[i+1];
-	}
+	/* use strlen(rpath) so we move the NUL too */
+	memmove(rpath, rpath+1, sl);
 	sl--; /* string is one shorter now */
 	if (rpath[sl-1] == '>') {
 	    rpath[sl-1] = '\0';
@@ -643,7 +643,8 @@ static int copy_msg(struct protstream *fin, FILE *fout)
     char buf[8192], *p;
     int r = 0;
 
-    while (prot_fgets(buf, sizeof(buf)-1, fin)) {
+    /* -2: Might need room to add a \r\n\0 set */
+    while (prot_fgets(buf, sizeof(buf)-2, fin)) {
 	p = buf + strlen(buf) - 1;
 	if (p < buf) {
 	    /* buffer start with a \0 */
@@ -663,7 +664,7 @@ static int copy_msg(struct protstream *fin, FILE *fout)
 	    prot_ungetc('\r', fin);
 	    *p = '\0';
 	}
-	else if (p[0] == '\n' && p[-1] != '\r') {
+	else if (p[0] == '\n' && (p == buf || p[-1] != '\r')) {
 	    /* found an \n without a \r */
 	    p[0] = '\r';
 	    p[1] = '\n';
@@ -677,7 +678,9 @@ static int copy_msg(struct protstream *fin, FILE *fout)
 
 	/* Remove any lone CR characters */
 	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
-	    strcpy(p, p+1);
+	    /* Src/Target overlap, use memmove */
+	    /* strlen(p) will result in copying the NUL byte as well */
+	    memmove(p, p+1, strlen(p));
 	}
 	
 	if (buf[0] == '.') {
@@ -1214,7 +1217,6 @@ void lmtpmode(struct lmtp_func *func,
     int havelocal = 0, haveremote = 0;
     char localip[60], remoteip[60];
     socklen_t salen;
-    char clienthost[250];
 
     sasl_ssf_t ssf;
     char *auth_id;
@@ -1278,12 +1280,14 @@ void lmtpmode(struct lmtp_func *func,
 	if (!getsockname(fd, (struct sockaddr *)&localaddr, &salen)) {
 	    /* set the ip addresses here */
 	    if(iptostring((struct sockaddr *)&localaddr,
-                          sizeof(struct sockaddr_in), localip, 60) == 0) {
+                          sizeof(struct sockaddr_in),
+			  localip, sizeof(localip)) == 0) {
 		havelocal = 1;
                 saslprops.iplocalport = xstrdup(localip);
             }
             if(iptostring((struct sockaddr *)&remoteaddr,
-                          sizeof(struct sockaddr_in), remoteip, 60) == 0) {
+                          sizeof(struct sockaddr_in),
+			  remoteip, sizeof(remoteip)) == 0) {
 		haveremote = 1;
                 saslprops.ipremoteport = xstrdup(remoteip);
             }
@@ -1340,7 +1344,7 @@ void lmtpmode(struct lmtp_func *func,
     nextcmd:
       signals_poll();
 
-      if (!prot_fgets(buf, sizeof(buf)-1, pin)) {
+      if (!prot_fgets(buf, sizeof(buf), pin)) {
 	  const char *err = prot_error(pin);
 	  
 	  if (err != NULL) {
@@ -1567,6 +1571,8 @@ void lmtpmode(struct lmtp_func *func,
 				"503 5.5.1 Nested MAIL command\r\n");
 		    continue;
 		}
+		/* +5 to get past "mail "
+		 * +10 to get past "mail from:" */
 		if (strncasecmp(buf+5, "from:", 5) != 0 ||
 		    !(msg->return_path = parseaddr(buf+10))) {
 		    prot_printf(pout, 
@@ -1687,6 +1693,8 @@ void lmtpmode(struct lmtp_func *func,
 			xrealloc(msg->rcpt, (msg->rcpt_num + RCPT_GROW + 1) * 
 				 sizeof(address_data_t *));
 		}
+		/* +5 to get past "rcpt "
+		 * +8 to get past "rcpt to:" */
 		if (strncasecmp(buf+5, "to:", 3) != 0 ||
 		    !(rcpt = parseaddr(buf+8))) {
 		    prot_printf(pout,
@@ -1794,7 +1802,7 @@ void lmtpmode(struct lmtp_func *func,
 		/* if error */
 		if (r==-1) {
 		    prot_printf(pout, "454 4.3.3 STARTTLS failed\r\n");
-		    syslog(LOG_NOTICE, "[lmtpd] STARTTLS failed: %s", clienthost);
+		    syslog(LOG_NOTICE, "[lmtpd] STARTTLS failed: %s", cd.clienthost);
 		    continue;
 		}
 
@@ -2070,14 +2078,16 @@ static int do_auth(struct lmtp_conn *conn)
     
 
     if (iptostring((struct sockaddr *)&saddr_r,
-		   sizeof(struct sockaddr_in), remoteip, 60) != 0) {
+		   sizeof(struct sockaddr_in),
+		   remoteip, sizeof(remoteip)) != 0) {
 	syslog(LOG_ERR,
 	       "lmtpengine do_auth: iptostring() (remote) failed");
 	return AUTH_ERROR;
     }
     
     if (iptostring((struct sockaddr *)&saddr_l,
-		   sizeof(struct sockaddr_in), localip, 60) != 0) {
+		   sizeof(struct sockaddr_in),
+		   localip, sizeof(localip)) != 0) {
 	syslog(LOG_ERR,
 	       "lmtpengine do_auth: iptostring() (local) failed");	
 	return AUTH_ERROR;
@@ -2192,7 +2202,7 @@ int lmtp_connect(const char *phost,
 	    goto errsock;
 	}
 	addr.sun_family = AF_UNIX;
-	strcpy(addr.sun_path, host);
+	strlcpy(addr.sun_path, host, sizeof(addr.sun_path));
 	if (connect(sock, (struct sockaddr *) &addr, 
 		    sizeof(addr.sun_family) + strlen(addr.sun_path) + 1) < 0) {
 	    syslog(LOG_ERR, "connect(%s) failed: %m", addr.sun_path);
@@ -2268,7 +2278,7 @@ int lmtp_connect(const char *phost,
     prot_printf(conn->pout, "LHLO %s\r\n", config_servername);
     /* read responses */
     for (;;) {
-	if (prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
+	if (prot_fgets(buf, sizeof(buf), conn->pin)) {
 	    code = ask_code(buf);
 	    if (code == 250) {
 		chop(buf);
@@ -2336,7 +2346,8 @@ static void pushmsg(struct protstream *in, struct protstream *out,
     char buf[8192], *p;
     int lastline_hadendline = 1;
 
-    while (prot_fgets(buf, sizeof(buf)-1, in)) {
+    /* -2: Might need room to add a \r\n\0 set */
+    while (prot_fgets(buf, sizeof(buf)-2, in)) {
 	/* dot stuff */
 	if (!isdotstuffed && (lastline_hadendline == 1) && (buf[0]=='.')) {
 	    prot_putc('.', out);
@@ -2371,7 +2382,9 @@ static void pushmsg(struct protstream *in, struct protstream *out,
 
 	/* Remove any lone CR characters */
 	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
-	    strcpy(p, p+1);
+	    /* Src/Target overlap, use memmove */
+	    /* strlen(p) will result in copying the NUL byte as well */
+	    memmove(p, p+1, strlen(p));
 	}
 
 	prot_write(out, buf, strlen(buf));
