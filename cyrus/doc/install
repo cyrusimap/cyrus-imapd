@@ -5,12 +5,16 @@
     IMAP server stores and provides access to messages. 
 
     A list of answers to common installation problems is maintained in
-    http://andrew2.andrew.cmu.edu/cyrus/imapd/install-FAQ.html. 
+    http://asg.web.cmu.edu/cyrus/imapd/install-FAQ.html. It is somewhat out
+    of date and will eventually be updated. 
 
     Feedback on the software or on the document may be sent to
     "cyrus-bugs@andrew.cmu.edu". The info-cyrus@andrew.cmu.edu mailing list
     exists for the discussion of this server and other Cyrus software; more
-    information is availible in the mailing-list document. 
+    information is availible in the mailing-list document. Be sure to
+    include the version numbers of imapd and libsasl you are using, as well
+    as your system type (and version!) and any configuration options you
+    selected. 
 
 Upgrading From Previous Versions
 
@@ -37,10 +41,18 @@ Upgrading From Previous Versions
       * Upgrading from the Cyrus IMAP server version 1.5 or earlier:
         libsasl is now required. Configuring SASL to work may be a chore,
         especially if you use shadow passwords. If you use shadow
-        passwords, you must use PAM for authentication and configure PAM
-        such that non-root users can verify passwords. We believe pam_pwdb
-        contains support for using a pwcheck-like program for checking
-        shadow passwords. 
+        passwords, you must allow the cyrus user read access to
+        /etc/shadow. 
+      * Upgrading from the Cyrus IMAP server version 1.6.1 or earlier: the
+        quota and user directories are now hashed by the first character of
+        the username. Optionally, the data partitions can also be hashed by
+        enabling the "hashimapspool" option. 
+
+        You can automatically hash your directories using the "dohash"
+        script in the tools subdirectory. Be sure to set "hashimapspool"
+        before running "dohash" if you want to hash your mail spool. Be
+        sure to run it as the Cyrus user and to stop mail service while
+        converting. 
       * An ANSI C compiler is now required. You can acquire one from
         prep.ai.mit.edu. 
 
@@ -72,11 +84,6 @@ Prerequisites and other notes
         ftp://ftp.sendmail.org/ucb/sendmail 
       * If you want to export netnews newsgroups using IMAP, the IMAP
         server must receive newsgroups with the INN news server. 
-      * If you want Sieve support (a server-side mail filtering language),
-        cmu-sieve version 1.3 or higher is required. cmu-sieve releases
-        will most likely be made in conjunction with imapd releases. Unpack
-        cmu-sieve-xxx.tar.gz inside the cyrus directory; Sieve will bill
-        built at the same time as imapd. 
 
 Compiling the IMAP Server
 
@@ -153,8 +160,8 @@ Compiling the IMAP Server
             default, configure uses "mail". 
 
     --with-statedir=PATH 
-            Specifies the directory used for the pwcheck and/or ptclient
-            state directories. By default, configure uses "/var". 
+            Specifies the directory used for the ptclient state
+            directories. By default, configure uses "/var". 
 
     --with-auth=METHOD 
             Specifies the authorization module to use. Currently
@@ -192,9 +199,8 @@ Compiling the IMAP Server
             files (optional). By default, looks in "/usr/local" and then in
             the compiler's default link path. 
 
-            IMPORTANT: The Kerberos v4 support requires the DES library,
-            even if the "--disable-privacy" configure option is given. Some
-            vendor distributions of Kerberos, including the one with
+            IMPORTANT: The Kerberos v4 support requires the DES library.
+            Some vendor distributions of Kerberos, including the one with
             Solaris, do not have this support and cannot be used. 
 
             Either "--without-krb" or "--with-krb=no" prevents Kerberos v4
@@ -235,13 +241,6 @@ Compiling the IMAP Server
 
     --disable-cyradm 
             Do not compile the cyradm administrative client.
-
-    --disable-privacy 
-            Disables all network privacy support. Use this if you do not
-            have the appropriate routines in the authentication libraries
-            (for example, krb_rd_priv() and krb_mk_priv() for Kerberos v4)
-            or are compiling binaries subject to export control
-            restrictions. 
 
     --enable-amssync 
             Include AMS (Andrew Message System) to IMAP bboard
@@ -352,13 +351,15 @@ Configuring the IMAP Server
 
         For a description of all the fields in this file, see the
         imapd.conf(5) man page. (Note that this file also exports values to
-        libsasl; the srvtab setting here overrides the srvtab setting in
-        the SASL configuration file.) 
+        libsasl; the srvtab setting here is in place of the srvtab setting
+        in the SASL configuration file.) 
 
         Note that everyday users should not be administrators. Admins have
         powers not granted to regular users and while the server allows
         them to receive mail, some problems will occur if admins are used
-        as regular users. 
+        as regular users. You also should not read mail as an
+        administrator. You should have separate accounts for reading mail
+        and administrating. 
 
      5. Create the configuration directory specified by the
         "configdirectory" option in "imapd.conf." The configuration
@@ -375,16 +376,7 @@ Configuring the IMAP Server
            chgrp mail imap
            chmod 750 imap
 
-     6. In the configuration directory, create the empty file "mailboxes"
-        and a set of empty directories: 
-
-           cd imap
-           true >> mailboxes
-           mkdir user quota proc log msg
-           chown cyrus *
-           chgrp mail *
-
-     7. Create the default partition directory specified in the
+     6. Create the default partition directories specified in the
         "/etc/imapd.conf" file. 
 
         This document uses a default partition directory of
@@ -400,8 +392,28 @@ Configuring the IMAP Server
         It is where the mailboxes are stored. Unlike most netnews systems,
         Cyrus allows you to have more than one partition. Do not use the
         string "news" as a partition name, as it is reserved for netnews. 
+     7. If you wish to use Sieve, and you didn't configure deliver to look
+        in home directories (see the imapd.conf man page), create the Sieve
+        directory: 
 
-     8. LINUX SYSTEMS ONLY: Set the configuration, user, quota, and
+           cd /usr
+           mkdir sieve
+           chown cyrus sieve
+           chown mail sieve
+           chmod 750 sieve
+
+     8. Change to the Cyrus user and use the tool "tools/mkimap" to create
+        the rest of the directories (subdirectories of the directories you
+        just created). 
+
+           su cyrus
+           tools/mkimap
+
+
+        If perl is not available, it should be easy to create these
+        directories by hand. 
+
+     9. LINUX SYSTEMS ONLY: Set the configuration, user, quota, and
         partition directories to update synchronously. Failure to do this
         may lead to data corruption and/or loss of mail after a system
         crash. 
@@ -414,18 +426,6 @@ Configuring the IMAP Server
         synchronously. The following example is for sendmail: 
 
            /sbin/chattr +S /var/spool/mqueue
-
-     9. If the Cyrus IMAP server was configured to use the pwcheck daemon,
-        install pwcheck. The pwcheck daemon verifies passwords against the
-        shadow password database. Create the directory "/var/pwcheck" and
-        make it readable by only the cyrus user: 
-
-           mkdir /var/pwcheck
-           chown cyrus /var/pwcheck
-           chmod 700 /var/pwcheck
-
-        Upon system startup, arrange for the daemon /usr/cyrus/bin/pwcheck
-        to be run as root in the background. 
 
     10. If the Cyrus IMAP server was compiled with Kerberos v4
         authentication, create a Kerberos v4 identity for the server and
@@ -523,9 +523,7 @@ Configuring the IMAP Server
         Message-ID: (Resent-Message-ID: if it exits) from being delivered
         to the same mailbox. Add a cron job to periodically prune the
         database of deliveries by running "/usr/cyrus/bin/deliver -E 3"
-        daily as the cyrus user. You must also create the directory
-        "deliverdb" to store the database files in the configuration
-        directory, such as "mkdir /var/imap/deliverdb". 
+        daily as the cyrus user. 
 
         If you want to export netnews newsgroups using IMAP do the
         following: 
@@ -566,7 +564,7 @@ Testing the IMAP Server
     To test the IMAP server, reboot and perform the following steps (all of
     these samples use "foobar" as the IMAP server name). A list of answers
     to common installation problems is maintained in
-    http://andrew2.andrew.cmu.edu/cyrus/imapd/install-FAQ. 
+    http://asg.web.cmu.edu/cyrus/imapd/install-FAQ. 
 
      1. If the server is compiled with Kerberos v4 authentication, run the
         program "krbck" as the cyrus user on the IMAP server. This program
@@ -589,7 +587,7 @@ Testing the IMAP Server
 
      3. Use "imtest" to test logging in with plaintext passwords. 
 
-           /usr/local/bin/imtest -m login foobar
+           /usr/local/bin/imtest -m login -p imap foobar
 
         If your server is running, you'll get the following message: 
 
@@ -603,30 +601,64 @@ Testing the IMAP Server
         written through syslog to the server log. To terminate the
         connection, type ". logout". 
 
-     4. If the server is compiled with Kerberos v4 authentication, test
-        Kerberos authentication by using the imtest command. Change to the
-        "cyrus-v1.6.0" directory and type the following: 
+     4. You should now test the server with each of the various
+        authentication mechanisms you have installed. First to find the
+        mechanisms the server thinks are installed use imtest as above.
+        After imtest logs in type: 
 
-           /usr/local/bin/imtest -l 0 foobar
-           S: * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.6.0 server ready
-           S: * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE
-           UIDPLUS X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=PLAIN
-           AUTH=ANONYMOUS AUTH=KERBEROS_V4 AUTH=DIGEST-MD5 AUTH=CRAM-MD5
-           UNSELECT
-           S: C01 OK Completed
-           S: + Ln8h6Q==
-           C: BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
-           BZSGgOy9ehHRj8NQjLjxDpib0D9uT0fo7QaXhLM6zCp9dQ1pX4FfNO2V39vBpJ4
-           S: + bnjMDt4VXhw=
-           C: Qf7eymxrhqJ58IW/PzznVQ==
-           S: A01 OK User logged in (no protection)
-           Authenticated.
-           Security strength factor: 0
+         
+           . CAPABILITY
+
+        This should produce a message similar to: 
+
+          * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS 
+          X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=PLAIN AUTH=ANONYMOUS
+          AUTH=KERBEROS_V4 AUTH=DIGEST-MD5 AUTH=CRAM-MD5 UNSELECT
+          . OK Completed
+
+        Each of the mechanism names is preceded by a 'AUTH='. For this
+        example PLAIN, ANONYMOUS, KERBEROS_V4, DIGEST-MD5, and CRAM-MD5 are
+        available. If a mechanism does not appear that you believe should
+        appear it may be because the mechanism is unable to initialize. For
+        example, if the server is unable to access the srvtab file the
+        KERBEROS_V4 mechanism will be unable to initialize. To terminate
+        the imtest connection, type ". logout". Once you are satisfied with
+        the authentication mechanism list you should attempt to log in with
+        each of those mechanisms. Change to the "cyrus-v1.5.14" directory
+        and run imtest specify\ing which mechanism you would like to use.
+        The mechanism name must be in all capital letters. For example for
+        KERBEROS_V4 type: 
+
+           /usr/local/bin/imtest -m KERBEROS_V4 -p imap foobar
+           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
+           . AUTHENTICATE KERBEROS_V4
+           + Ln8h6Q==
+           BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
+           BZSGgOy9ehHRj8NQjLjxDpib0D9uT0fo7QaXhLM6zCp9dQ1pX4FfNO2V39vBp
+           Q19QIK4S1410prvM2c45qeizecI7zAvA=
+           2cRhIC+aH70WHqYaW18YnQ==
+           . OK User logged in (no protection)
+           __No integrity protection__
 
         Any message other than one starting with a "A01 OK" means there is
         a problem. If the test fails, a more specific error message is
         written through syslog to the server log. To terminate the
-        connection, type ". logout". 
+        connection, type ". logout". Make sure to test each mechanism this
+        way. Also, many mechanisms have security layers. You should test
+        each layer for mechanisms that support layers. imtest by default
+        will choose the strongest layer. Use the '-l' parameter to force
+        imtest to use a weaker layer. The '-l' parameter takes the security
+        strength factor. A security strength factor of 0 means no layer and
+        1 means integrity layer. Privacy layer security strength factors
+        depend upon the mechanism. For example KERBEROS_V4 has 3 layers:
+        none, integrity, and privacy with security strength factors of 0,1,
+        and 56 respectivly. By default imtest will attempt to use privacy
+        layer. To force imtest to negotiate an integrity layer type: 
+
+          imtest -m KERBEROS_V4 -l 1 -p imap foobar
+
+        See libsasl for a full description of what mechanisms support what
+        layers. 
 
 Administering Mailboxes
 

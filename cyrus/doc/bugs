@@ -7,8 +7,6 @@
       * Using AFS groups with ptclient, users with negative rights as part
         of groups may be granted access to mailboes if ptclient has died.
         We plan to have this fixed eventually. 
-      * COPY of a nonexistant sequence of messages results in OK, but
-        should result in NO. 
       * 8-bit set characters are coerced to 'X', but not before the
         notify_zephyr code (if used) has had a chance to send them out. 
       * In some failures of the krbck program, the error messages printed
@@ -16,6 +14,8 @@
       * Deliver does not handle messages containing NUL properly due to
         stdio problems (the characters between the NUL and the LF will be
         lost.) 
+      * Deliver doesn't gracefully handle CR CR sequences in messages.
+        Well, ok, it hangs. 
       * cyradm doesn't handle BYE quite properly (especially a BYE right
         after connect). 
       * Random kerberos problems (and no, we don't know why they happen): 
@@ -26,6 +26,12 @@
           * Running imtest and imapd from the same machine using Kerberos
             protection or privacy layers causes the same problem. A work
             around is to not use any layers (imtest -l 0). 
+
+                     Things we want to do
+
+      * Split the quota files into different directories. 
+      * Implement the IMAP ID extension. 
+      * Implement the IMAP VIEW extension. 
 
     Please report bugs to cyrus-bugs@andrew.cmu.edu. Be sure to include (at
     least) system type, compiler used, and the options passed to configure,

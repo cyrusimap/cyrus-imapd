@@ -1,5 +1,30 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server Since Version 1.6.1-BETA 
+
+      * cyradm should now work with all mechanisms (it now handles empty
+        challenges and responses). 
+      * Fixed deliver to deal with arbitrarily long headers 
+      * COPY for non-existent sequence numbers returns NO; this contrasts
+        to UID COPY, which always returns OK 
+      * FETCH for non-existent sequence numbers returns NO; this contrasts
+        to UID FETCH, which always returns OK 
+      * Fixed a misleading BAD responses to commands that take sequences. 
+      * Added UIDNEXT untagged response to a SELECT (from
+        draft-crispin-imapv-07.txt). 
+      * pop3d now correctly passes SASL configuration options to libsasl. 
+      * imtest now correctly flushes the server's output to the screen 
+      * Added more stupid hashing. Now whenever there is a mailbox access,
+        it goes through a hash function. 
+      * deliver now checks sieveusehomedir and sievedir to see where to
+        look for sieve scripts 
+      * ptloader now has a workaround for afs 3.5 
+      * clarified an error message in message.c when an unexpected end of
+        file is encountered 
+      * fixed some random memory leaks in deliver 
+      * fixed a fairly major bug in prot_fill. it was performing correctly
+        when reading only a single character. 
+
 Changes to the Cyrus IMAP Server Since Version 1.6.0-BETA 
 
       * fixed stupid bug in imapd 
@@ -16,9 +41,6 @@ Changes to the Cyrus IMAP Server Since Version 1.5.24
         should work against all IMAP servers. 
       * The prot layer now uses SASL for encryption and authentication.
         This changed a large amount of code, and some build procedures. 
-      * Since SASL seperates out userid and authid, admins are allowed to
-        act on behalf of any other normal user. currently, normal users are
-        not allowed to proxy. 
       * As a side effect of SASL, --enable-static-libraries now doesn't do
         anything. We are considering compiling cyrus with libtool to change
         this. 
@@ -26,8 +48,8 @@ Changes to the Cyrus IMAP Server Since Version 1.5.24
         EX_TEMPFAIL far more than they used to. This is because Sendmail
         considers most not-EX_TEMPFAIL errors permanent; now, if it may not
         be permanent, EX_TEMPFAIL is returned. (See lib/exitcodes.h.) 
-      * Two bugs fixed: FETCH's with no messages in range now return OK,
-        not BAD. And an obscure bug in LIST case sensitivity is fixed. 
+      * Two bugs fixed: UID FETCH's with no messages in range now return
+        OK, not BAD. And an obscure bug in LIST case sensitivity is fixed. 
 
 Changes to the Cyrus IMAP Server Since Version 1.5.19 
 

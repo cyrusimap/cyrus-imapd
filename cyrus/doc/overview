@@ -288,30 +288,42 @@ Login Authentication
     This section discusses different types of logins that can be used with
     IMAP. 
 
-    The Cyrus IMAP server comes with two login authentication mechanisms,
-    one for use with Kerberos, one for use with Unix "/etc/passwd" files.
-    Since authentication is closely tied with authorization, the login
-    authentication mechanism chosen must be compatible with the
-    authorization mechanism chosen. 
+    The Cyrus IMAP server uses the Cyrus SASL library for authentication.
+    This section describes how to configure SASL with use with Cyrus imapd. 
 
 Anonymous Logins
 
-    Regardless of the login authentication mechanism chosen, the server can
-    support anonymous login. If the "allowanonymouslogin" option in
-    "/etc/imapd.conf" is turned on, then the server will permit plaintext
-    password logins using the user "anonymous" and any password. 
+    Regardless of the SASL mechanism used by an individual connection, the
+    server can support anonymous login. If the "allowanonymouslogin" option
+    in "/etc/imapd.conf" is turned on, then the server will permit
+    plaintext password logins using the user "anonymous" and any password.
+    Additionally, the server will enable any SASL mechanisms that allow
+    anonymous logins. 
+
+Plaintext Authentication
+
+    The SASL library has several ways of verifying plaintext passwords
+    Plaintext passwords are passed either by the IMAP LOGIN command or by
+    the SASL PLAIN mechanism. 
+
+      * PAM 
+      * Kerberos v4 Plaintext passwords are verified by obtaining a ticket
+        for the server's Kerberos identity, to protect against Kerberos
+        server spoofing attacks. 
+      * /etc/passwd 
+      * /etc/shadow 
+
+    sasl_auto_transition automatically creates secrets for shared secret
+    authentication when given a password 
 
 Kerberos Logins
 
-    The Kerberos mechanism supports both the KERBEROS_V4 authentication
-    mechanism and plaintext logins, verifying information using Kerberos
-    version 4. The mechanism requires that a srvtab file exist in the
+    The Kerberos SASL mechanism supports the KERBEROS_V4 authentication
+    mechanism. The mechanism requires that a srvtab file exist in the
     location given in the "srvtab" configuration option. The srvtab file
     must be readable by the Cyrus server and must contain a
     "imap.<host>@<realm>" service key, where <host> is the first component
-    of the server's host name and <realm> is the server's Kerberos realm.
-    Plaintext passwords are verified by obtaining a ticket for the server's
-    Kerberos identity, to protect against Kerberos server spoofing attacks. 
+    of the server's host name and <realm> is the server's Kerberos realm. 
 
     The server will permit logins by identities in the local realm and
     identities in the realms listed in the "loginrealms" option in
@@ -322,18 +334,11 @@ Kerberos Logins
     fields. Any identity matching the first field of a line is permitted to
     log in as the identity in the second field. 
 
-    The IMAP server identities for the hosts listed in the "imspservers"
-    configuration option are permitted to log in as any user. This permits
-    IMSP servers to perform commands for their clients by proxy. 
-
     If the "loginuseacl" configuration option is turned on, than any
     Kerberos identity that is granted the "a" right on the user's INBOX is
     permitted to log in as that user. 
 
-Unix Logins
-
-    The Unix mechanism permits plaintext logins, verifying the supplied
-    user and password against information in the Unix passwd file. 
+Shared Secrets Logins
 
 Quotas
 
