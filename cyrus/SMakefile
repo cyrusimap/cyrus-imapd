@@ -1,6 +1,8 @@
 #
 # This file is specific to Carnegie Mellon University's
 # software build process
+# 
+# $Id: SMakefile,v 1.22 1998/05/13 03:59:20 wcw Exp $
 #
 
 MAKE=gmake
@@ -12,11 +14,11 @@ WITHAUTH="--with-auth=krb_pts"
 CC=cc
 
 VER=`smake -D | sed 's;^.*\/;;'`
-CFLAGS="-DEXTRA_IDENT=\\\"$VER\\\""
+LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 
 # Ryan's aggressive optimizations
 case `uname` in
-   Linux) CFLAGS="${CFLAGS} -O3"
+   Linux) CFLAGS="${CFLAGS} -g  -O3"
 	AMSSYNC=""
 	;;
   IRIX) CFLAGS="${CFLAGS} -O2"
@@ -26,7 +28,7 @@ case `uname` in
 	;;
   HP-UX)  
 	CC=gcc # cheat -- hp cc is miserable
-	CFLAGS="${CFLAGS} -O2"
+	CFLAGS="${CFLAGS} -g -O2"
 	;;
   SunOS)   
         CFLAGS="${CFLAGS} -xO4 -xdepend"
@@ -40,7 +42,6 @@ case `uname` in
 esac
 
 
-LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-user=cyrus --with-cyrus-group=staff"
-# --with-com-err=/usr/local"
+LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-user=cyrus --with-cyrus-group=staff  --with-com-err=/usr/local"
 
-export CFLAGS CC VER LNCOMMAND
+export CFLAGS CC VER LNCOMMAND LOCALDEFS
