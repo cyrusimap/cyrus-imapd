@@ -240,9 +240,9 @@ static int starttxn_or_refetch(struct db *db, struct txn **mytid)
 	    
 	    db->ino = sbuf.st_ino;
 	    map_free(&db->base, &db->size);
-	    map_refresh(db->fd, 1, &db->base, &db->size,
-			sbuf.st_size, db->fname, 0);
 	}
+	map_refresh(db->fd, 1, &db->base, &db->size,
+		    sbuf.st_size, db->fname, 0);
     }
 
     return 0;
