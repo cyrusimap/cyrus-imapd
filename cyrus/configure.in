@@ -14,7 +14,7 @@ if test -z "HAVE_LONG_FILE_NAMES"; then
 	exit 1
 fi
 AC_HAVE_HEADERS(unistd.h)
-AC_REPLACE_FUNCS(bcopy strcasecmp ftruncate)
+AC_REPLACE_FUNCS(bcopy strcasecmp ftruncate getdtablesize)
 AC_DIR_HEADER
 dnl AC_XENIX_DIR  Don't think Xenix handles long file names
 AC_SUBST(CPPFLAGS)
