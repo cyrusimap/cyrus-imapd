@@ -214,18 +214,33 @@ Subject -
   The Subject header.
 
 Notes about access:
-  - Expunge is very slow (it requires rewriting both the cache and index file)
+  - Expunge is very slow (it requires rewriting both the cache and
+    index file in addition to the unlinks; this is very painful on
+    synchronous filesystems)
 
-  - On open we build up an in-memory representation of a UID->seqno index,
-    among other things.
-
-  - Append is fast (it only adds to the end of both the cache and index files)
+  - Append is relatively fast (it only adds to the end of both the
+    cache and index files and modifies the index header)
 
   - Delivery is something like this:
 
-    - Sync message file
-    - Sync index file + generation number
-    - Sync cache file + generation number
+<ol>
+<li> write/sync message file
+<li> write/sync new <tt>cyrus.index</tt> record
+<li> write/sync new <tt>cyrus.cache</tt> record
+<li> calculate, write, sync new <tt>cyrus.index</tt> header
+<li> acknowledge message delivery
+</ol>
+
+<p>The message isn't delivered until the new index header is written. In
+case of a crash before the new index header is written, any previous
+writes will be overwritten on the next delivery (and will not be
+noticed by the readers).
+
+<p>Note that certain power failure situations (power failure in the
+middle of a disk sector write) could cause a mailbox to need to be
+reconstructed (possibly even losing some flag state). These failure
+modes are not possible in the "Hardware RAID disk model" (which we
+will describe somewhere else when we get around to it).
 
 Future considerations:
   - Cache all header fields? (or all up to Xk?)  This could greatly improve
