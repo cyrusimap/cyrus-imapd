@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.12 2002/07/25 18:37:10 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.13 2002/07/26 18:05:25 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4825,7 +4825,7 @@ static int namespacedata(char *name,
     if (!(strncmp(name, "INBOX.", 6))) {
 	/* The user has a "personal" namespace. */
 	sawone[NAMESPACE_INBOX] = 1;
-    } else if (!(strncmp(name, "user.", 5))) {
+    } else if (!(strncmp(name, "user.", 5)) || strstr(name, "!user.")) {
 	/* The user can see the "other users" namespace. */
 	sawone[NAMESPACE_USER] = 1;
     } else {
@@ -4852,7 +4852,8 @@ void cmd_namespace(tag)
 	if (strlen(imapd_userid) + 5 > MAX_MAILBOX_NAME)
 	    sawone[NAMESPACE_INBOX] = 0;
 	else {
-	    snprintf(inboxname, sizeof(inboxname), "user.%s", imapd_userid);
+	    (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
+						   imapd_userid, inboxname);
 	    sawone[NAMESPACE_INBOX] = 
 		!mboxlist_lookup(inboxname, NULL, NULL, NULL);
 	}
