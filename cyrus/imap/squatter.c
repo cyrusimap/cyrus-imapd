@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.5.4.11 2003/05/20 15:45:53 rjs3 Exp $
+ * $Id: squatter.c,v 1.5.4.12 2003/06/16 02:29:26 ken3 Exp $
  */
 
 /*
@@ -100,6 +100,9 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 extern char *optarg;
 extern int optind;
+
+/* current namespace */
+static struct namespace squat_namespace;
 
 /* Stuff to make index.c link */
 int imapd_exists;
@@ -294,7 +297,12 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
     struct stat index_file_info;
     struct stat tmp_file_info;
     char uid_validity_buf[30];
+    char extname[MAX_MAILBOX_NAME+1];
  
+    /* Convert internal name to external */
+    (*squat_namespace.mboxname_toexternal)(&squat_namespace, name,
+					   NULL, extname);
+
     data.mailbox_stats = &stats;
     data.mailbox = &m;
 
@@ -304,7 +312,7 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
     r = mailbox_open_header(name, 0, &m);
     if (r) {
         if (verbose) {
-            printf("error opening %s: %s\n", name, error_message(r));
+            printf("error opening %s: %s\n", extname, error_message(r));
         }
         return 1;
     }
@@ -313,7 +321,7 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
     if (!r) r = mailbox_lock_pop(&m);
     if (r) {
         if (verbose) {
-            printf("error locking index %s: %s\n", name, error_message(r));
+            printf("error locking index %s: %s\n", extname, error_message(r));
         }
         mailbox_close(&m);
         return 1;
@@ -330,9 +338,9 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
         !stat(index_file_name, &index_file_info)) {
         if (SKIP_FUZZ + tmp_file_info.st_mtime <
             index_file_info.st_mtime) {
-            syslog(LOG_DEBUG, "skipping mailbox %s", name);
+            syslog(LOG_DEBUG, "skipping mailbox %s", extname);
             if (verbose > 0) {
-                printf("Skipping mailbox %s\n", name);
+                printf("Skipping mailbox %s\n", extname);
             }
             mailbox_close(&m);
             return 0;
@@ -342,9 +350,9 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
     snprintf(tmp_file_name, sizeof(tmp_file_name),
              "%s%s.tmp", m.path, FNAME_SQUAT_INDEX);
 
-    syslog(LOG_INFO, "indexing mailbox %s... ", name);
+    syslog(LOG_INFO, "indexing mailbox %s... ", extname);
     if (verbose > 0) {
-      printf("Indexing mailbox %s... ", name);
+      printf("Indexing mailbox %s... ", extname);
     }
 
     if ((fd = open(tmp_file_name,
@@ -419,7 +427,6 @@ int main(int argc, char **argv)
     int rflag = 0;
     int i;
     char buf[MAX_MAILBOX_PATH+1];
-    struct namespace squat_namespace;
     int r;
 
     if(geteuid() == 0)
@@ -471,15 +478,15 @@ int main(int argc, char **argv)
 	    exit(EC_USAGE);
 	}
 	assert(!rflag);
-	strcpy(buf, "*");
+	strlcpy(buf, "*", sizeof(buf));
 	(*squat_namespace.mboxlist_findall)(&squat_namespace, buf, 1,
 					    0, 0, index_me, NULL);
     }
 
     for (i = optind; i < argc; i++) {
-        strlcpy(buf, argv[i], sizeof(buf));
 	/* Translate any separators in mailboxname */
-	mboxname_hiersep_tointernal(&squat_namespace, buf, 0);
+	(*squat_namespace.mboxname_tointernal)(&squat_namespace, argv[i],
+					       NULL, buf);
 	index_me(buf, 0, 0, NULL);
 	if (rflag) {
 	    strlcat(buf, ".*", sizeof(buf));
