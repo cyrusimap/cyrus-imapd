@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.73 1999/12/18 07:58:30 leg Exp $ -->
+<!-- $Id: install.html,v 1.74 1999/12/30 21:07:24 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -835,6 +835,12 @@ installed.
 <kbd>   /usr/local/bin/imtest -m login -p imap foobar
 </kbd></pre>
 
+<p>If you want to specify a different user, do:
+
+<pre>
+<kbd>   /usr/local/bin/imtest -m login -a <i>USER</i> -p imap foobar
+</kbd></pre>
+
 If your server is running, you'll get the following message:
 <pre>
    <kbd>/usr/local/bin/imtest -m login -p imap foobar</kbd>
@@ -850,9 +856,6 @@ If your server is running, you'll get the following message:
    Authenticated.
    Security strength factor: 0
 </pre>
-
-<p>Use the "-a" switch to <tt>imtest</tt> to specify a different user
-to authenticate as.
 
 <p>Any message other than one starting with a "<tt>L01 OK</tt>" means there is
 a problem.  If the test fails, a more specific error message should be
@@ -882,8 +885,8 @@ the ANONYMOUS, KERBEROS_V4, DIGEST-MD5, and CRAM-MD5 mechanims are
 available. If a mechanism does not appear that you wish to use,
 examine the libsasl log messages.  Generally, if a mechanism does not
 appear, it means it failed to initialize.  (For example, if the server
-is unable to access the srvtab file the KERBEROS_V4 mechanism refuse
-to load.)
+is unable to access the srvtab file the KERBEROS_V4 mechanism will
+refuse to load.)
 
 <p>Plaintext login is a special case: the PLAIN SASL mechanism is only
 advertised under an encrypted connection.  However, plaintext logins

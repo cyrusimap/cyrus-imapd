@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.52 1999/10/02 00:43:02 leg Exp $
+ $Id: append.c,v 1.53 1999/12/30 21:07:25 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -47,8 +47,17 @@
 #include "prot.h"
 #include "xmalloc.h"
 
-static int append_addseen P((struct mailbox *mailbox, const char *userid,
-			     unsigned start, unsigned end));
+struct stagemsg {
+    unsigned long size;
+    time_t internaldate;
+    char fname[1024];
+
+    int num_parts;
+    char parts[1][MAX_MAILBOX_PATH];
+};
+
+static int append_addseen(struct mailbox *mailbox, const char *userid,
+			  unsigned start, unsigned end);
 
 /*
  * Open a mailbox for appending
@@ -63,13 +72,9 @@ static int append_addseen P((struct mailbox *mailbox, const char *userid,
  * On success, the struct pointed to by 'mailbox' is set up.
  *
  */
-int append_setup(mailbox, name, format, auth_state, aclcheck, quotacheck)
-struct mailbox *mailbox;
-const char *name;
-int format;
-struct auth_state *auth_state;
-long aclcheck;
-long quotacheck;
+int append_setup(struct mailbox *mailbox, const char *name,
+		 int format, struct auth_state *auth_state,
+		 long aclcheck, long quotacheck)
 {
     int r;
 
@@ -118,6 +123,262 @@ long quotacheck;
 	return IMAP_QUOTA_EXCEEDED;
     }
 
+    return 0;
+}
+
+extern int mboxlist_findstage(const char *name, char *stagedir);
+
+/*
+ * staging, to allow for single-instance store.  the complication here
+ * is multiple partitions.
+ */
+int append_fromstage(struct mailbox *mailbox,
+		     struct protstream *messagefile,
+		     unsigned long size, time_t internaldate,
+		     const char **flag, int nflags,
+		     const char *userid,
+		     struct stagemsg **stagep)
+{
+    struct index_record message_index;
+    static struct index_record zero_index;
+    char fname[MAX_MAILBOX_PATH];
+    FILE *destfile;
+    int i, r;
+    long last_cacheoffset;
+    int setseen = 0, writeheader = 0;
+    int userflag, emptyflag;
+
+    /* for staging */
+    struct stagemsg *stage;
+    char stagefile[1024];
+    FILE *f;
+    int sp;
+
+    assert(stagep != NULL);
+    assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
+    assert(size != 0);
+
+    if (!*stagep) { /* create a new stage */
+	stage = xmalloc(sizeof(struct stagemsg) +
+			5 * MAX_MAILBOX_PATH * sizeof(char));
+
+	stage->size = size;
+	stage->internaldate = internaldate;
+	sprintf(stage->fname, "%d-%d", getpid(), internaldate);
+	stage->num_parts = 5; /* room for 5 paths */
+	stage->parts[0][0] = '\0';
+    } else {
+	stage = *stagep; /* reuse existing stage */
+    }
+
+    mboxlist_findstage(mailbox->name, stagefile);
+    strcat(stagefile, stage->fname);
+
+    sp = 0;
+    while (stage->parts[sp][0] != '\0') {
+	if (!strcmp(stagefile, stage->parts[i]))
+	    break;
+	sp++;
+    }
+    if (stage->parts[sp][0] == '\0') {
+	/* ok, create this file and add put it into stage->parts[i] */
+	f = fopen(stagefile, "w+");
+	if (!f) {
+	    syslog(LOG_ERR, "IOERROR: creating message file %s: %m", 
+		   stagefile);
+	    return IMAP_IOERROR;
+	}
+	
+	r = message_copy_strict(messagefile, f, size);
+	fclose(f);
+	if (r) {
+	    unlink(stagefile);
+	return r;
+	}
+	
+	if (sp == stage->num_parts) {
+	    /* need more room */
+	    stage->num_parts += 5;
+	    stage = xrealloc(stage, sizeof(struct stagemsg) +
+			     stage->num_parts * MAX_MAILBOX_PATH * 
+			     sizeof(char));
+	}
+	strcpy(stage->parts[sp], stagefile);
+	stage->parts[sp+1][0] = '\0';
+    }
+
+    /* stage->parts[i] contains the message and is on the same partition
+       as the mailbox we're looking at */
+
+    /* Setup */
+    last_cacheoffset= lseek(mailbox->cache_fd, 0L, SEEK_END);
+    message_index = zero_index;
+    message_index.uid = mailbox->last_uid + 1;
+    message_index.last_updated = time(0);
+    message_index.internaldate = internaldate;
+
+    /* Create message file */
+    strcpy(fname, mailbox->path);
+    strcat(fname, "/");
+    strcat(fname, mailbox_message_fname(mailbox, message_index.uid));
+
+    r = mailbox_copyfile(stage->parts[i], fname);
+    destfile = fopen(fname, "r");
+    if (!r && destfile) {
+	r = message_parse_file(destfile, mailbox, &message_index);
+    }
+    if (destfile) fclose(destfile);
+    if (!r) {
+	/* Flush out the cache file data */
+	if (fsync(mailbox->cache_fd)) {
+	    syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
+		   mailbox->name);
+	    r = IMAP_IOERROR;
+	}
+    }
+    if (r) {
+	unlink(fname);
+	ftruncate(mailbox->cache_fd, last_cacheoffset);
+	mailbox_unlock_quota(&mailbox->quota);
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
+	return r;
+    }
+
+    /* Handle flags the user wants to set in the message */
+    for (i = 0; i < nflags; i++) {
+	if (!strcmp(flag[i], "\\seen")) setseen++;
+	else if (!strcmp(flag[i], "\\deleted")) {
+	    if (mailbox->myrights & ACL_DELETE) {
+		message_index.system_flags |= FLAG_DELETED;
+	    }
+	}
+	else if (!strcmp(flag[i], "\\draft")) {
+	    if (mailbox->myrights & ACL_WRITE) {
+		message_index.system_flags |= FLAG_DRAFT;
+	    }
+	}
+	else if (!strcmp(flag[i], "\\flagged")) {
+	    if (mailbox->myrights & ACL_WRITE) {
+		message_index.system_flags |= FLAG_FLAGGED;
+	    }
+	}
+	else if (!strcmp(flag[i], "\\answered")) {
+	    if (mailbox->myrights & ACL_WRITE) {
+		message_index.system_flags |= FLAG_ANSWERED;
+	    }
+	}
+	else if (mailbox->myrights & ACL_WRITE) {
+	    /* User flag */
+	    emptyflag = -1;
+	    for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+		if (mailbox->flagname[userflag]) {
+		    if (!strcasecmp(flag[i], mailbox->flagname[userflag]))
+		      break;
+		}
+		else if (emptyflag == -1) emptyflag = userflag;
+	    }
+
+	    /* Flag is not defined--create it */
+	    if (userflag == MAX_USER_FLAGS && emptyflag != -1) {
+		userflag = emptyflag;
+		mailbox->flagname[userflag] = xstrdup(flag[i]);
+		writeheader++;
+	    }
+
+	    if (userflag != MAX_USER_FLAGS) {
+		message_index.user_flags[userflag/32] |= 1<<(userflag&31);
+	    }
+	}
+    }
+
+    /* Write out the header if we created a new user flag */
+    if (writeheader) {
+	r = mailbox_write_header(mailbox);
+	if (r) {
+	    unlink(fname);
+	    ftruncate(mailbox->cache_fd, last_cacheoffset);
+	    mailbox_unlock_quota(&mailbox->quota);
+	    mailbox_unlock_index(mailbox);
+	    mailbox_unlock_header(mailbox);
+	    return r;
+	}
+    }
+
+    /* Write out index file entry */
+    r = mailbox_append_index(mailbox, &message_index, mailbox->exists, 1);
+    if (r) {
+	unlink(fname);
+	ftruncate(mailbox->cache_fd, last_cacheoffset);
+	mailbox_unlock_quota(&mailbox->quota);
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
+	return r;
+    }
+    
+    /* Calculate new index header information */
+    mailbox->exists++;
+    mailbox->last_uid = message_index.uid;
+    mailbox->last_appenddate = time(0);
+    mailbox->quota_mailbox_used += message_index.size;
+    if (mailbox->minor_version > MAILBOX_MINOR_VERSION) {
+	mailbox->minor_version = MAILBOX_MINOR_VERSION;
+    }
+
+    /* Write out index header */
+    r = mailbox_write_index_header(mailbox);
+    if (r) {
+	unlink(fname);
+	ftruncate(mailbox->cache_fd, last_cacheoffset);
+	/* We don't ftruncate index file.  It doesn't matter */
+	mailbox_unlock_quota(&mailbox->quota);
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
+	return r;
+    }
+    
+    /* Write out quota file */
+    mailbox->quota.used += message_index.size;
+    r = mailbox_write_quota(&mailbox->quota);
+    if (r) {
+	syslog(LOG_ERR,
+	       "LOSTQUOTA: unable to record use of %u bytes in quota file %s",
+	       message_index.size, mailbox->quota.root);
+    }
+
+    /* Set \Seen flag if necessary */
+    if (setseen && userid && (mailbox->myrights & ACL_SEEN)) {
+	append_addseen(mailbox, userid, message_index.uid, message_index.uid);
+    }
+    
+    toimsp(mailbox->name, mailbox->uidvalidity,
+	   "UIDNnn", message_index.uid, mailbox->exists, 0);
+
+    mailbox_unlock_quota(&mailbox->quota);
+    mailbox_unlock_index(mailbox);
+    mailbox_unlock_header(mailbox);
+
+    *stagep = stage;
+
+    return 0;
+}
+
+int append_removestage(struct stagemsg *stage)
+{
+    int i;
+
+    if (stage == NULL) return 0;
+
+    while (stage->parts[i][0] != '\0') {
+	/* unlink the staging file */
+	if (unlink(stage->parts[i]) != 0) {
+	    syslog(LOG_ERR, "IOERROR: error unlinking file %s: %m",
+		   stage->parts[i]);
+	}
+	i++;
+    }
+
+    free(stage);
     return 0;
 }
 

@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.94 1999/12/23 21:06:39 leg Exp $ -->
+<!-- $Id: changes.html,v 1.95 1999/12/30 21:07:24 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -10,7 +10,8 @@
     <li> Some fixes to the TLS support to gracefully degrade service.
 
     <li> Sieve now correctly re-sieves messages that are received with
-    identical message-ids, but different envelopes.  (Fix by Ken
+    identical message-ids, but different envelopes.  It also obeys
+    plus-addressing on keep actions.  (Fixes by Ken
     Murchison, <tt>ken@oceana.com</tt>.)
 
     <li> The server wasn't correctly calculating the percentage of
@@ -22,7 +23,7 @@
     <li> Added STARTTLS support; requires OpenSSL.
 
     <li> Sieve now uses MDNs to reject messages instead of DSNs,
-    conforming to the latest Sieve specification.
+    conforming to the latest Sieve specification. (Ken Murchison)
 
     <li> The duplicate delivery database expiration (deliver -E) was
     deleting all entries; fixed.
