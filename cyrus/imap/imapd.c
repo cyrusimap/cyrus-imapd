@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.54 2003/01/08 14:33:48 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.55 2003/01/08 14:37:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -412,6 +412,7 @@ static void imapd_reset(void)
  */
 int service_init(int argc, char **argv, char **envp)
 {
+    int ret;
     int opt;
     
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
@@ -425,8 +426,13 @@ int service_init(int argc, char **argv, char **envp)
     /* load the SASL plugins */
     config_sasl_init(1, 1, mysasl_cb);
 
-    snprintf(shutdownfilename, sizeof(shutdownfilename), "%s/msg/shutdown",
-	     config_dir);
+    ret = snprintf(shutdownfilename, sizeof(shutdownfilename),
+		   "%s/msg/shutdown", config_dir);
+    
+    if(ret < 0 || ret >= sizeof(shutdownfilename)) {
+       fatal("shutdownfilename buffer too small (configdirectory too long)",
+	     EC_CONFIG);
+    }
 
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
@@ -686,6 +692,7 @@ void cmdloop()
     int fd;
     char motdfilename[1024];
     int c;
+    int ret;
     int usinguid, havepartition, havenamespace, recursive;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
     char *p;
@@ -695,7 +702,14 @@ void cmdloop()
 		"* OK %s Cyrus IMAP4 %s server ready\r\n", config_servername,
 		CYRUS_VERSION);
 
-    snprintf(motdfilename, sizeof(motdfilename), "%s/msg/motd", config_dir);
+    ret = snprintf(motdfilename, sizeof(motdfilename), "%s/msg/motd",
+		   config_dir);
+    
+    if(ret < 0 || ret >= sizeof(motdfilename)) {
+       fatal("motdfilename buffer too small (configdirectory too long)",
+	     EC_CONFIG);
+    }
+    
     if ((fd = open(motdfilename, O_RDONLY, 0)) != -1) {
 	motd_file(fd);
 	close(fd);
@@ -3463,6 +3477,7 @@ void cmd_delete(char *tag, char *name, int localonly)
 
 	p = mailboxname + strlen(mailboxname); /* end of mailboxname */
 	strcpy(p, ".*");
+	
 	/* build a list of mailboxes - we're using internal names here */
 	mboxlist_findall(NULL, mailboxname, imapd_userisadmin, imapd_userid,
 			 imapd_authstate, delmbox, NULL);
@@ -3739,16 +3754,22 @@ cmd_reconstruct(const char *tag, const char *name, int recursive)
 	    r = IMAP_SYS_ERROR;
 	} else if(pid == 0) {
 	    char buf[4096];
+	    int ret;
+	    
 	    /* Child - exec reconstruct*/	    
 	    syslog(LOG_NOTICE, "Reconstructing '%s' (%s) for user '%s'",
 		   mailboxname, recursive ? "recursive" : "not recursive",
 		   imapd_userid);
 
-	    snprintf(buf, sizeof(buf), "%s/reconstruct", SERVICE_PATH);
-
 	    fclose(stdin);
 	    fclose(stdout);
 	    fclose(stderr);
+
+	    ret = snprintf(buf, sizeof(buf), "%s/reconstruct", SERVICE_PATH);
+	    if(ret < 0 || ret >= sizeof(buf)) {
+		/* in child, so fatailing won't disconnect our user */ 
+	        fatal("reconstruct buffer not sufficiently big", EC_CONFIG);
+	    }
 
 	    if(recursive) {
 		execl(buf, buf, "-C", config_filename, "-r", "-f",
@@ -3795,16 +3816,22 @@ cmd_reconstruct(const char *tag, const char *name, int recursive)
 	    r = IMAP_SYS_ERROR;
 	} else if(pid == 0) {
 	    char buf[4096];
+	    int ret;
+	    
 	    /* Child - exec reconstruct*/	    
 	    syslog(LOG_NOTICE,
 		   "Regenerating quota roots starting with '%s' for user '%s'",
 		   mailboxname, imapd_userid);
 
-	    snprintf(buf, sizeof(buf), "%s/quota", SERVICE_PATH);
-
 	    fclose(stdin);
 	    fclose(stdout);
 	    fclose(stderr);
+
+	    ret = snprintf(buf, sizeof(buf), "%s/quota", SERVICE_PATH);
+	    if(ret < 0 || ret >= sizeof(buf)) {
+		/* in child, so fatailing won't disconnect our user */ 
+	        fatal("quota buffer not sufficiently big", EC_CONFIG);
+	    }
 
 	    execl(buf, buf, "-C", config_filename, "-f", quotaroot, NULL);
 	    
