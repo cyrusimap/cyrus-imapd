@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.114 2002/04/03 17:58:35 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.115 2002/04/05 19:52:27 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -3370,7 +3370,7 @@ void cmd_create(char *tag, char *name, char *server)
 	    }
 #endif
 	}
-	/* xxx */
+	/* make sure we've seen the update */
 	if (ultraparanoid && res == PROXY_OK) kick_mupdate();
     }
     
@@ -3422,7 +3422,7 @@ void cmd_delete(char *tag, char *name)
 #endif
 	}
 
-	/* xxx */
+	/* make sure we've seen the update */
 	if (ultraparanoid && res == PROXY_OK) kick_mupdate();
     }
 
@@ -3494,7 +3494,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 		    strlen(partition), partition);
 	res = pipe_including_tag(s, tag, 0);
 
-	/* xxx */
+	/* make sure we've seen the update */
 	if (ultraparanoid && res == PROXY_OK) kick_mupdate();
 
 	return;
@@ -3554,7 +3554,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	    }
 #endif
 	}
-	/* xxx */
+	/* make sure we've seen the update */
 	if (res == PROXY_OK) kick_mupdate();
     }
 
@@ -4177,8 +4177,8 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 	    }
 #endif
 	}
-	/* xxx */
-	if (res == PROXY_OK) kick_mupdate();
+	/* make sure we've seen the update */
+	if (ultraparanoid && res == PROXY_OK) kick_mupdate();
     }
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
