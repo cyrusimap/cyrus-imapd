@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.469 2004/05/29 05:18:18 ken3 Exp $ */
+/* $Id: imapd.c,v 1.470 2004/05/31 17:58:17 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2467,6 +2467,8 @@ cmd_append(char *tag, char *name)
     if (!r) {
 	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
 			 imapd_userid, imapd_authstate, ACL_INSERT, totalsize);
+    }
+    if (!r)
 	for (i = 0; !r && i < num; i++) {
 	    r = append_fromstage(&mailbox, stage[i], internaldate, 
 				 (const char **) flag, nflags, 0);
