@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.19.4.3 2002/09/03 18:12:06 rjs3 Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.19.4.4 2002/09/03 18:52:52 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -332,27 +332,6 @@ static int fetchlock(struct db *db,
 }
 
 
-#define GETENTRY(p)			\
-    key = p;				\
-    data = strchr(key, '\t');		\
-					\
-    if (!data) {			\
-	/* huh, might be corrupted? */	\
-	r = CYRUSDB_IOERROR;		\
-	break;				\
-    }					\
-    keylen = data - key;		\
-    data++; /* skip of the \t */	\
-					\
-    dataend = strchr(data, '\n');	\
-    if (!dataend) {			\
-	/* huh, might be corrupted? */	\
-	r = CYRUSDB_IOERROR;		\
-	break;				\
-    }					\
-    datalen = dataend - data;
-
-
 static int foreach(struct db *db,
 		   char *prefix, int prefixlen,
 		   foreach_p *goodp,
@@ -363,9 +342,6 @@ static int foreach(struct db *db,
     int offset;
     unsigned long len;
     const char *p, *pend;
-    char *savebuf = NULL;
-    size_t savebuflen = 0;
-    size_t savebufsize;
 
     r = starttxn_or_refetch(db, mytid);
     if (r) return r;
@@ -378,73 +354,38 @@ static int foreach(struct db *db,
     p = db->base + offset;
     pend = db->base + db->size;
     while (p < pend) {
-	const char *key;
+	const char *key = p;
 	int keylen;
-	const char *data, *dataend;
+	const char *data = strchr(key, '\t'), *dataend;
 	int datalen;
 
-	GETENTRY(p);
+	if (!data) {
+	    /* huh, might be corrupted? */
+	    r = CYRUSDB_IOERROR;
+	    break;
+	}
+	keylen = data - key;
+	data++; /* skip of the \t */
+       
+	dataend = strchr(data, '\n');
+	if (!dataend) {
+	    /* huh, might be corrupted? */
+	    r = CYRUSDB_IOERROR;
+	    break;
+	}
+	datalen = dataend - data;
 
 	/* does it still match prefix? */
 	if (keylen < prefixlen) break;
 	if (prefixlen && memcmp(key, prefix, prefixlen)) break;
 
 	if (goodp(rock, key, keylen, data, datalen)) {
-	    unsigned long ino = db->ino;
-	    unsigned long sz = db->size;
-
-	    if (!mytid) {
-		/* release read lock */
-		if ((r = lock_unlock(db->fd)) < 0) {
-		    return r;
-		}
-	    }
-
-	    /* save KEY, KEYLEN */
-	    if (keylen > savebuflen) {
-		savebuflen = keylen + 1024;
-		savebuf = xrealloc(savebuf, savebuflen);
-	    }
-	    memcpy(savebuf, key, keylen);
-	    savebufsize = keylen;
-
 	    /* make callback */
 	    r = cb(rock, key, keylen, data, datalen);
 	    if (r) break;
-
-	    if (!mytid) {
-		/* grab a r lock */
-		if ((r = starttxn_or_refetch(db, mytid)) != 0) {
-		    return r;
-		}
-	    }
-
-	    /* reposition */
-	    if (ino != db->ino || sz != db->size) {
-		/* something changed in the file; reseek */
-		offset = bsearch_mem(savebuf, 1, db->base, db->size, 0, &len);
-		p = db->base + offset;
-
-		GETENTRY(p);
-
-		/* 'key' might not equal 'savebuf'.  if it's different,
-		   we want to stay where we are.  if it's the same, we
-		   should move on to the next one */
-		if (savebufsize == keylen &&
-		    !memcmp(savebuf, key, savebufsize)) {
-		    p = dataend + 1;
-		} else {
-		    /* 'savebuf' got deleted, so we're now pointing at the
-		       right thing */
-		}
-	    }
 	}
 
 	p = dataend + 1;
-    }
-
-    if (savebuf) {
-	free(savebuf);
     }
 
     return r;
