@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.211 2004/08/04 13:03:13 ken3 Exp $
+ * $Id: index.c,v 1.212 2005/01/24 03:06:51 shadow Exp $
  */
 #include <config.h>
 
@@ -207,8 +207,7 @@ void index_closemailbox(struct mailbox *mailbox)
 	seendb = 0;
     }
     if (index_len) {
-	map_free(&index_base, &index_len);
-	map_free(&cache_base, &cache_len);
+	/* Let caller call mailbox_close() to unmap */
 	index_len = cache_end = 0;
     }
 }
