@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.218 2002/02/18 20:04:16 rjs3 Exp $
+dnl $Id: configure.in,v 1.219 2002/02/19 19:52:46 rjs3 Exp $
 dnl
 
 
@@ -77,8 +77,6 @@ AC_PROG_CC
 AC_PROG_RANLIB
 AC_PROG_MAKE_SET
 AC_PROG_INSTALL
-CMU_C___ATTRIBUTE__
-
 AC_AIX
 AC_ISC_POSIX
 AC_PROG_AWK
@@ -87,6 +85,8 @@ AC_SYS_LONG_FILE_NAMES
 if test $ac_cv_sys_long_file_names = no; then
 	AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
+
+CMU_C___ATTRIBUTE__
 
 dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
