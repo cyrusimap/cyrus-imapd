@@ -1,4 +1,4 @@
-<!-- $Id: sieve-protocol.html,v 1.1 2000/04/25 02:56:46 leg Exp $ -->
+<!-- $Id: sieve-protocol.html,v 1.2 2000/04/25 03:08:19 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Protocol for Sieve script exchange</TITLE>
@@ -61,17 +61,17 @@ The parameter is the name of the requested script.
 Returns: <tt>string EOL</tt> containing the script data.
 Get the script with name <i>sievename</i> from the server. OK, NO replies
 
-<DT><tt>PUTSCRIPT SP <i>sievename</i> SP <i>string</i> EOL
+<DT><tt>PUTSCRIPT SP <i>sievename</i> SP <i>string</i> </tt> EOL
 <DD>
 Puts <i>sievename</i> with data <i>data</i> onto the server if
 possible. OK, NO replies.
 
-<DT><tt> SETACTIVE SP <i>sievename</i> EOL
+<DT><tt> SETACTIVE SP <i>sievename</i> </tt>EOL
 <DD>
 Set the script with the name <i>sievename</i> as the active
 script. Any other script that was active is no longer. OK, NO replies
 
-<DT><TT>DELETESCRIPT SP <i>sievename</i> EOL
+<DT><TT>DELETESCRIPT SP <i>sievename</i> </tt>EOL
 <DD>
 Delete the script with <i>sievename</i>. OK or NO replies.
 

@@ -197,3 +197,209 @@ Configuring the Master Process
         privileges. Until your system reboots, you can start the master
         process by hand: 
 
+           /usr/cyrus/bin/master &
+
+     3. Monitor the progress of the master process by examining the
+        imapd.log file. It should never exit by itself, but if you can shut
+        down the mail system by sending it a signal with kill. 
+
+Configuring the Mail Transfer Agent
+
+    In order to deliver mail to the Cyrus system, you'll have to configure
+    your MTA (usually Sendmail) appropriately. 
+
+        You can monitor the master processes's progress by looking at
+        /var/log/imapd.log or wherever you are logging LOCAL6 message. 
+
+     1. Generate a sendmail configuration file which delivers local mail to
+        the IMAP server. See the files cf/README and cf/cf/cyrusproto.mc in
+        the Sendmail distribution for information on how to do this. It is
+        preferable to tell Sendmail to use LMTP to deliver messages, which
+        enables things such as single instance store. Be sure the sendmail
+        configuration file gets reloaded after you make the changes. 
+
+     2. Edit /etc/group and add user "daemon" to the "mail" group. This
+        will permit sendmail to run the "deliver" program to deliver mail
+        to the IMAP server. 
+
+Exporting Netnews via IMAP
+
+    If you want to export netnews newsgroups using IMAP do the following: 
+
+     1. Create a directory for the "news" partition. This directory should
+        be different than the news spool directory. This document uses a
+        news partition directory of "/var/spool/imap-news" in the following
+        examples: 
+
+           cd /var/spool
+           mkdir imap-news
+           chown cyrus imap-news
+           chgrp mail imap-news
+           chmod 750 imap-news
+
+     2. Set the "partition-news" and "newsspool" options to appropriate
+        values: 
+
+           partition-news: /var/spool/imap-news
+           newsspool: /var/spool/news
+
+     3. The cyrus user must be able to write to the out.going
+        ("/var/spool/news/out.going") directory. This can be done by
+        putting the cyrus user into the news group and making the oug.going
+        directory group writable. 
+
+     4. Add the following line to the newsfeeds file 
+
+           collectnews!:*:Tf,WO:collectnews
+
+     5. Add a cron job to run "/usr/cyrus/bin/feedcyrus" every ten minutes
+        as the cyrus user. Also add a cron job to run
+        "/usr/cyrus/bin/syncnews /var/news/active >/dev/null 2>&1" nightly.
+        (Using the appropriate path to the active file.) 
+
+Kerberos
+
+Configuring Kerberos v4
+
+    Cyrus IMAP supports Kerberos v4 if the SASL library was compiled with
+    KERBEROS_V4 support. 
+
+    You'll have to create a Kerberos v4 identity for the server and add the
+    server's key to the "srvtab" file. The file must be readable by the
+    cyrus user. The server's Kerberos identity is "imap.HOST@REALM", where
+    "HOST" is the first component of the machine's host name and "REALM" is
+    the machine's Kerberos realm. 
+
+     1. Here is a sample session, creating a srvtab file for the host named
+        "foobar": 
+
+           ksrvutil -f /var/imap/srvtab add
+
+        Here is the information "ksrvutil" requests. Respond by filling in
+        values or by pressing RETURN. In this example, the host name is
+        "foobar" and the realm is "ANDREW.CMU.EDU". 
+
+           Name: imap
+           Instance: foobar
+           Realm: ANDREW.CMU.EDU
+           Version number: 
+           New principal: imap.foobar@ANDREW.CMU.EDU; version 0
+           Is this correct? (y,n) [y] 
+           Password: 
+           Verifying, please re-enter Password: 
+           Key successfully added.
+           Would you like to add another key? (y,n) [y] n
+
+     2. 
+        If you plan to install Kerberized POP, create the Kerberos identity
+        "pop.HOST@REALM" and add the key to the "srvtab" file. 
+     3. 
+
+        Make the "srvtab" file owned by the cyrus user: 
+
+           chown cyrus /var/imap/srvtab
+
+     4. Add the option srvtab option to /etc/imapd.conf: 
+
+           srvtab: /var/imap/srvtab
+
+     5. Test using imtest -m KERBEROS_V4. imtest will attempt to authorize
+        as the current Unix user regardless of the current ticket's held.
+        Override this with the -u option. 
+
+Troubleshooting Kerberos problems
+
+    Run the program "krbck" (found in the imap directory) as the cyrus user
+    on the IMAP server. This program will diagnose some common Kerberos v4
+    configuration errors. 
+
+Configuring Kerberos v5
+
+    Cyrus IMAP supports Kerberos v5 if the SASL library was compiled with
+    GSSAPI support. 
+
+    You'll have to create a Kerberos v5 identity for the server. Kerberos
+    v5 keys are generally stored in "/etc/krb5.keytab". 
+
+     1. Add the "imap/hostname" key using "kadmin". 
+     2. Let the cyrus user read "/etc/krb5.keytab": user: 
+
+           chown cyrus /etc/krb5.keytab
+
+     3. Test using imtest -m GSSAPI. imtest will attempt to authorize as
+        the current Unix user regardless of the current ticket's held.
+        Override this with the -u option. 
+
+SSL, TLS, and OpenSSL
+
+    Transport Layer Security (TLS), is a standardized version of the Secure
+    Sockets Layer (SSL v3) standard. IMAP can make use of two different
+    versions of TLS/SSL: STARTTLS and an SSL wrapped session. 
+
+    In STARTTLS, a client connects to the IMAP port as normal and then
+    issues the STARTTLS command, which begins a TLS negotiation. This is
+    currently supported by the Cyrus IMAP server when it is compiled with
+    OpenSSL. 
+
+    The alternative, a SSL wrapped connection, involves the client
+    connected to a seperate port ("imaps") and negotiating a SSL session
+    before starting the IMAP protocol. Again, this is supported natively by
+    the Cyrus IMAP server when it is compiled with OpenSSL. 
+
+    Both TLS and SSL require a server key and a certificate. Optionally, in
+    addition to establishing a secure connection, TLS can authenticate the
+    client. 
+
+Configuring Cyrus with OpenSSL
+
+     1. 
+        OpenSSL requires the certificate and key in PEM format. You can
+        create the server's private key and certificate yourself using
+        OpenSSL. Here, we create a key for the machine "
+        foobar.andrew.cmu.edu" and put both the certificate and key in the
+        file "/var/imap/server.pem". 
+
+        Please enter the appropriate information for your organization,
+        instead of Carnegie Mellon University. 
+
+        openssl req -new -x509 -nodes -out /var/imap/server.pem -keyout /var/imap/server.pem -days 365
+        Using configuration from /usr/local/lib/openssl/openssl.cnf
+        Generating a 1024 bit RSA private key
+        .............+++++
+        ......................+++++
+        writing new private key to '/var/imap/server.pem'
+        -----
+        You are about to be asked to enter information that will be incorporated
+        into your certificate request.
+        What you are about to enter is what is called a Distinguished Name or a DN.
+        There are quite a few fields but you can leave some blank
+        For some fields there will be a default value,
+        If you enter '.', the field will be left blank.
+        -----
+        Country Name (2 letter code) [AU]:US
+        State or Province Name (full name) [Some-State]:Pennsylvania
+        Locality Name (eg, city) []:Pittsburgh
+        Organization Name (eg, company) [Internet Widgits Pty Ltd]:Carnegie Mellon University
+        Organizational Unit Name (eg, section) []:Andrew Systems Group
+        Common Name (eg, YOUR name) []:foobar.andrew.cmu.edu
+        Email Address []:
+
+     2. Make sure to make key file(s) readable by the Cyrus user. For
+        example: chown cyrus /var/imap/server.pem 
+     3. Add the following to /etc/imapd.conf to tell the server where to
+        find the certificate and key file: 
+
+        tls_cert_file: /var/imap/server.pem
+        tls_key_file: /var/imap/server.pem
+
+     4. You can test STARTTLS by using imtest: 
+
+        imtest -t "" foobar.andrew.cmu.edu
+
+Client-side certificates
+
+    TODO: write me! 
+
+    Unfortunately, there's no standard on how to convert the client's
+    authenticate DN (distinguished name) to a SASL authentication name. 
+

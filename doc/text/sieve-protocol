@@ -49,3 +49,5 @@ Commands
             Delete the script with sievename. OK or NO replies. 
     LISTSCRIPTS EOL 
             returns zero or more: sievename EOL. where the active script
+            has a '*' at the end of it's name OK or NO replies 
+
