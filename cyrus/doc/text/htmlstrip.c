@@ -82,6 +82,7 @@ struct tag cmds[] = {
     { "li",	FLAG_BREAK|FLAG_NOPUSH, 0,	-4, },
     { "br",	FLAG_BREAK|FLAG_NOPUSH,	0,	0, },
     { "hr",	FLAG_BREAK|FLAG_NOPUSH,	0,	0, },
+    { "meta",   FLAG_NOPUSH,    0,              0, },
 };
 
 
