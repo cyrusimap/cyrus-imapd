@@ -1,6 +1,6 @@
 /* mkchartable.c -- Generate character set mapping table
  *
- * $Id: mkchartable.c,v 1.15 1999/05/27 14:53:45 wcw Exp $
+ * $Id: mkchartable.c,v 1.16 1999/10/13 16:38:50 leg Exp $
  *
  * Copyright 1996, Carnegie Mellon University.  All Rights Reserved.
  * 
@@ -728,7 +728,7 @@ newstate(char *args)
 
     if (table_num == table_alloc) {
 	table_alloc += TABLEGROW;
-	table = (struct table *)realloc((char *)table,
+	table = (struct table *)xrealloc((char *)table,
 					 table_alloc * sizeof(struct table));
     }
 
