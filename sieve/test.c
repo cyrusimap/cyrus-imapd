@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.21.2.4 2004/07/16 14:37:45 ken3 Exp $
+ * $Id: test.c,v 1.21.2.5 2005/03/15 16:09:58 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -531,6 +531,19 @@ struct testcase tc[] =
   { B_ASCIICASEMAP, B_IS, "a", "a", 1 },
   { B_ASCIICASEMAP, B_IS, "a", "A", 1 },
 
+  { B_ASCIINUMERIC, B_IS, "123", "123", 1 },
+  { B_ASCIINUMERIC, B_IS, "123", "-123", 0 },
+  { B_ASCIINUMERIC, B_IS, "abc", "123", 0 },
+  { B_ASCIINUMERIC, B_IS, "abc", "abc", 1 },
+  { B_ASCIINUMERIC, B_IS, "12345678900", "3755744308", 0 },    /* test for 32bit overflow */
+  { B_ASCIINUMERIC, B_IS, "1567", "1567pounds", 1 },
+  { B_ASCIINUMERIC, B_IS, "", "", 1 },
+  { B_ASCIINUMERIC, B_IS, "123456789", "567", 0 },
+  { B_ASCIINUMERIC, B_IS, "567", "123456789", 0 },
+  { B_ASCIINUMERIC, B_IS, "123456789", "00000123456789", 1 },
+  { B_ASCIINUMERIC, B_IS, "102", "1024", 0 },
+  { B_ASCIINUMERIC, B_IS, "1567M", "1567 arg", 1 },
+
   { B_OCTET, B_CONTAINS, "", "", 1 },
   { B_OCTET, B_CONTAINS, "", "a", 1 },
   { B_OCTET, B_CONTAINS, "a", "", 0 },
@@ -665,13 +678,6 @@ struct testcase tc[] =
   { B_ASCIICASEMAP, B_MATCHES, "a*b", "aBBB", 1 },
   { B_ASCIICASEMAP, B_MATCHES, "a*b", "ACB", 1 },
   { B_ASCIICASEMAP, B_MATCHES, "a*b", "ACBC", 0 },
-
-  { B_ASCIINUMERIC, B_IS, "123", "123", 1 },
-  { B_ASCIINUMERIC, B_IS, "123", "00123", 1 },
-  { B_ASCIINUMERIC, B_IS, "123", "456", 0 },
-  { B_ASCIINUMERIC, B_IS, "123", "-123", 0 },
-  { B_ASCIINUMERIC, B_IS, "abc", "123", 0 },
-  { B_ASCIINUMERIC, B_IS, "abc", "abc", 1 },
 
   { 0, 0, NULL, NULL, 0 } };
 
