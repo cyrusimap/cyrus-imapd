@@ -28,6 +28,9 @@
 #include <errno.h>
 #include <string.h>
 
+#include <pwd.h>
+#include <sys/types.h>
+
 extern int errno;
 
 #include "imclient.h"
@@ -389,10 +392,6 @@ static char *parsemechlist(char *str)
   return ret;
 }
 
-typedef struct mechlist_s {
-  char *mechs;
-} mechlist_t;
-
 /*
  * IMAP command completion callback
  */
@@ -404,12 +403,12 @@ struct imclient_reply *reply;
 {
     struct admconn *conn = (struct admconn *)rock;
     char *s;
-    mechlist_t *mechs=(mechlist_t *)rock;
+    char **mechs = (char **) rock;
     conn->cmd_done++;
     
     s = reply->text;
  
-    mechs->mechs = parsemechlist(s);
+    *mechs = parsemechlist(s);
 }
 
 /*
@@ -428,9 +427,9 @@ char **argv;
     int r;
     int minssf=0;     /* default to allow any security layer */
     int maxssf=10000;
-    mechlist_t *mechlist=(mechlist_t *) xmalloc(sizeof(mechlist_t));
+    char *mech = NULL;
+    char *mechlist;
 
-    
     /* skip over command & subcommand */
     argv += 2;
 
@@ -444,32 +443,12 @@ char **argv;
 	    if (!argv[1]) break;
 	    user = *++argv;
 	}
-	else if (!strcmp(argv[0], "-protection")) {
+	else if (!strcmp(argv[0], "-layers")) {
 	    if (!argv[1]) break;
-	    for (p = *++argv; *p; p++) {
-		switch (*p) {
-		case 'n': /* no layer */
-		    maxssf=0;
-		    break;
-
-		case 'i':
-		    minssf=1;
-		    maxssf=1; 
-		    break;
-
-		case 'p':
-                    /* should be 2 must be stronger than integity */
-		    minssf=2;
-		    /* leave max alone */
-		    break;
-
-		default:
-		    Tcl_AppendResult(interp, "incorrect protection mode: ",
-				     "should be one or more of n, i, p",
-				     (char *) NULL);
-		    return TCL_ERROR;
-		}
-	    }
+	    maxssf = atoi(*++argv);
+	}
+	else if (!strcmp(argv[0], "-mech")) {
+	    mech = *++argv;
 	}
 	argv++;
     }
@@ -477,13 +456,18 @@ char **argv;
 	Tcl_AppendResult(interp, "incorrect args: should be \"",
 			 argv[0], " authenticate ",
 			 "[-pwcommand string] [-user user] ",
-			 "[-protection (n|i|p)+\"",
+			 "[-layers #] [-mech mechname]\"",
 			 (char *) NULL);
 	return TCL_ERROR;
     }
 
+    if (!user) {
+	user = xmalloc(sizeof(char) * 1024);
+	strcpy(user, getpwuid(getuid())->pw_name);
+    }
+
     imclient_addcallback(conn->imclient, "CAPABILITY", 0,
-			 callback_capability, (void *) mechlist, 
+			 callback_capability, (void *) &mechlist, 
 			 (char *) 0);
 
     imclient_send(conn->imclient, callback_finish, (void *) conn,
@@ -493,10 +477,12 @@ char **argv;
 	imclient_processoneevent(conn->imclient);
     }
 
-    r = imclient_authenticate(conn->imclient, mechlist->mechs, "imap",
-			      user, minssf, maxssf);
+    if (!pwcommand) {
+	r = imclient_authenticate(conn->imclient, mech ? mech : mechlist, 
+				  "imap", user, minssf, maxssf);
+    }
     
-    if (r == 1 && (minssf==0) && pwcommand) {
+    if (pwcommand) {
 	Tcl_DString command;
 	int comc;
 	char **comv;
@@ -546,7 +532,8 @@ char **argv;
 	}
 
 	imclient_send(conn->imclient, callback_finish, (void *)conn,
-		      "LOGIN %s %s", comv[0], comv[1]);
+		      "LOGIN %s {%d+}\r\n%s", 
+		      comv[0], strlen(comv[1]), comv[1]);
 	free((char *)comv);
 
 	while (!conn->cmd_done) {
