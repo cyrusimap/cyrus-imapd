@@ -744,8 +744,8 @@ char *name;
 		     ACL_INSERT, totalsize);
     if (r) return r;
 
-    r = append_copy(&append_mailbox, copyargs.nummsg, copyargs.copymsg,
-		    imapd_userid);
+    r = append_copy(mailbox, &append_mailbox, copyargs.nummsg,
+		    copyargs.copymsg, imapd_userid);
     mailbox_close(&append_mailbox);
 
     return r;
