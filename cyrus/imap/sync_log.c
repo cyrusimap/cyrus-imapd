@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_log.c,v 1.1.2.2 2005/02/28 20:45:15 ken3 Exp $
+ * $Id: sync_log.c,v 1.1.2.3 2005/03/15 01:28:41 ken3 Exp $
  */
 
 /* YYY Need better quoting for obscure filenames: use literals? */
@@ -161,6 +161,18 @@ void sync_log_meta(const char *user)
     if (!sync_log_file) return;
 
     len = snprintf(buf, sizeof(buf), "META %s\n", user);
+
+    sync_log_base(buf, len);
+}
+
+void sync_log_sieve(const char *user)
+{
+    char buf[64];
+    int len;
+
+    if (!sync_log_file) return;
+
+    len = snprintf(buf, sizeof(buf), "SIEVE %s\n", user);
 
     sync_log_base(buf, len);
 }

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.10 2005/03/14 19:37:17 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.11 2005/03/15 01:28:41 ken3 Exp $
  */
 
 #include <config.h>
@@ -583,7 +583,7 @@ static int user_reset(char *user)
 static int folder_select(char *name, char *myuniqueid,
 			 unsigned long *lastuidp)
 {
-    int r, c
+    int r, c;
     static struct buf uniqueid;
     static struct buf lastuid;
 
@@ -2432,6 +2432,7 @@ static int do_sync(const char *filename)
     struct sync_user        *user;
     struct sync_action_list *user_list   = sync_action_list_create();
     struct sync_action_list *meta_list   = sync_action_list_create();
+    struct sync_action_list *sieve_list  = sync_action_list_create();
     struct sync_action_list *mailbox_list= sync_action_list_create();
     struct sync_action_list *append_list = sync_action_list_create();
     struct sync_action_list *acl_list    = sync_action_list_create();
@@ -2505,6 +2506,8 @@ static int do_sync(const char *filename)
             sync_action_list_add(user_list, NULL, arg1s);
         else if (!strcmp(type.s, "META"))
             sync_action_list_add(meta_list, NULL, arg1s);
+        else if (!strcmp(type.s, "SIEVE"))
+            sync_action_list_add(meta_list, NULL, arg1s);
         else if (!strcmp(type.s, "MAILBOX"))
             sync_action_list_add(mailbox_list, arg1s, NULL);
         else if (!strcmp(type.s, "APPEND"))
@@ -2529,22 +2532,24 @@ static int do_sync(const char *filename)
 	char inboxname[MAX_MAILBOX_NAME+1];
 
 	/* USER action overrides any APPEND, ACL, QUOTA action on
-	   any of the user's mailboxes or any META, SEEN, SUB, UNSUB action 
-	   for same user */
+	   any of the user's mailboxes or any META, SIEVE, SEEN,
+	   SUB, UNSUB action for same user */
 	(sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
 					      action->user, inboxname);
         remove_folder(inboxname, append_list, 1);
         remove_folder(inboxname, acl_list, 1);
         remove_folder(inboxname, quota_list, 1);
         remove_meta(action->user, meta_list);
+        remove_meta(action->user, sieve_list);
         remove_meta(action->user, seen_list);
         remove_meta(action->user, sub_list);
         remove_meta(action->user, unsub_list);
     }
     
     for (action = meta_list->head ; action ; action = action->next) {
-	/* META action overrides any user SEEN, SUB, UNSUB action
+	/* META action overrides any user SIEVE, SEEN, SUB, UNSUB action
 	   for same user */
+        remove_meta(action->user, sieve_list);
         remove_meta(action->user, seen_list);
         remove_meta(action->user, sub_list);
         remove_meta(action->user, unsub_list);
@@ -2603,6 +2608,20 @@ static int do_sync(const char *filename)
             if (verbose_logging) {
                 syslog(LOG_INFO, "  Promoting: QUOTA %s -> MAILBOX %s",
                        action->name, action->name);
+            }
+        }
+    }
+
+    for (action = sieve_list->head ; action ; action = action->next) {
+        if (action->active && do_sieve(action->user)) {
+            sync_action_list_add(meta_list, NULL, action->user);
+            if (verbose) {
+                printf("  Promoting: SIEVE %s -> META %s\n",
+                       action->user, action->user);
+            }
+            if (verbose_logging) {
+                syslog(LOG_INFO, "  Promoting: SIEVE %s -> META %s",
+                       action->user, action->user);
             }
         }
     }
@@ -2692,6 +2711,7 @@ static int do_sync(const char *filename)
     sync_user_list_free(&user_folder_list);
     sync_action_list_free(&user_list);
     sync_action_list_free(&meta_list);
+    sync_action_list_free(&sieve_list);
     sync_action_list_free(&mailbox_list);
     sync_action_list_free(&append_list);
     sync_action_list_free(&acl_list);

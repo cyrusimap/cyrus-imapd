@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_log.h,v 1.1.2.2 2005/02/28 20:45:15 ken3 Exp $
+ * $Id: sync_log.h,v 1.1.2.3 2005/03/15 01:28:42 ken3 Exp $
  */
 
 #ifndef INCLUDED_SYNC_LOG_H
@@ -52,6 +52,8 @@
 void sync_log_init(void);
 
 void sync_log_user(const char *user);
+
+void sync_log_sieve(const char *user);
 
 void sync_log_meta(const char *user);
 

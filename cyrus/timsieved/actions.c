@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.36.2.3 2005/02/21 19:26:00 ken3 Exp $
+ * $Id: actions.c,v 1.36.2.4 2005/03/15 01:28:43 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -75,48 +75,15 @@
 #include "actions.h"
 #include "scripttest.h"
 
+#include "sync_log.h"
+
 /* after a user has authentication, our current directory is their Sieve 
    directory! */
 
 extern int sieved_userisadmin;
 char *sieve_dir = NULL;
 
-const static char *sync_log_file = NULL;
 const static char *sieved_userid = NULL;
-static int sync_log_setup = 0;
-
-static void
-sync_log_sieve()
-{
-    int fd, rc;
-    char buf[64];
-    int len;
-
-    len = snprintf(buf, 64, "META %s\n", sieved_userid);
-
-    if (!sync_log_setup) {
-        sync_log_file = config_getstring(IMAPOPT_SYNC_LOG_FILE);
-        sync_log_setup = 1;
-    }
-    if (!sync_log_file) return;
-
-
-    if ((fd = open(sync_log_file, O_WRONLY|O_APPEND|O_CREAT, 0640)) <0) {
-        syslog(LOG_ERR, "Unable to write to log file %s: %s",
-               sync_log_file, strerror(errno));
-        return;
-    }
-
-    if ((rc = retry_write(fd, buf, len)) < 0)
-        syslog(LOG_ERR, "write() to %s failed: %s",
-               sync_log_file, strerror(errno));
-
-    if (rc < len)
-        syslog(LOG_ERR, "Partial write to %s: %d out of %d only written",
-               sync_log_file, rc, len);
-
-    close(fd);
-}
 
 int actions_init(void)
 {
@@ -465,7 +432,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
   }
 
   prot_printf(conn, "OK\r\n");
-  sync_log_sieve();
+  sync_log_sieve(sieved_userid);
 
   return TIMSIEVE_OK;
 }
@@ -478,7 +445,7 @@ static int deleteactive(struct protstream *conn)
 	prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
 	return TIMSIEVE_FAIL;
     }
-    sync_log_sieve();
+    sync_log_sieve(sieved_userid);
 
     return TIMSIEVE_OK;
 }
@@ -540,7 +507,7 @@ int deletescript(struct protstream *conn, mystring_t *name)
       prot_printf(conn,"NO \"Error deleting bytecode\"\r\n");
       return TIMSIEVE_FAIL;
   }
-  sync_log_sieve();
+  sync_log_sieve(sieved_userid);
 
   prot_printf(conn,"OK\r\n");
   return TIMSIEVE_OK;
@@ -664,7 +631,7 @@ int setactive(struct protstream *conn, mystring_t *name)
 	prot_printf(conn,"NO \"Error renaming\"\r\n");
 	return TIMSIEVE_FAIL;
     }
-    sync_log_sieve();
+    sync_log_sieve(sieved_userid);
 
     prot_printf(conn,"OK\r\n");
     return TIMSIEVE_OK;

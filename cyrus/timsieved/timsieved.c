@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.48.2.9 2004/09/09 18:47:15 shadow Exp $
+ * $Id: timsieved.c,v 1.48.2.10 2005/03/15 01:28:43 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -88,6 +88,8 @@
 #include "util.h"
 
 #include "scripttest.h"
+
+#include "sync_log.h"
 
 /* global state */
 const int config_need_data = 0;
@@ -235,6 +237,8 @@ int service_main(int argc __attribute__((unused)),
     sasl_security_properties_t *secprops = NULL;
     char hbuf[NI_MAXHOST];
     int niflags;
+
+    sync_log_init();
 
     /* set up the prot streams */
     sieved_in = prot_new(0, 0);
