@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.45 1999/08/14 22:31:38 leg Exp $
+# $Id: SMakefile,v 1.46 1999/08/16 01:56:50 leg Exp $
 #
 
 if test ! -x configure; then
@@ -35,6 +35,13 @@ if test "${OVERRIDE-nil}" != "t" ; then
 	   LIBS="-ldbm"
 	   export LIBS
            AMSSYNC=""
+
+           if test "${WASH_CYRUS_DEBUG}" = "t"; then
+	     CC="gcc"
+	     CFLAGS="-g"
+             LDFLAGS="${LDFLAGS}"
+             STATIC=""
+           fi
 	   ;;
     IRIX) CFLAGS="${CFLAGS} -O2"
 	  LDFLAGS="${LDFLAGS}"
@@ -49,7 +56,13 @@ if test "${OVERRIDE-nil}" != "t" ; then
     SunOS)
       CFLAGS="${CFLAGS} -xs -xO3 -xdepend"
       LDFLAGS="${LDFLAGS} -xs -xO3 -xdepend"
-      STATIC="--enable-static-libraries"
+      STATIC=""
+
+      if test "${WASH_CYRUS_DEBUG}" = "t"; then
+        CFLAGS="-g -xs"
+        LDFLAGS="-L/usr/local/lib -R/usr/local/lib -xs -g"
+        STATIC=""
+      fi
       ;;
     ULTRIX)
       CC=gcc # cheat -- Ultrix cc is aged
@@ -62,11 +75,6 @@ if test "${OVERRIDE-nil}" != "t" ; then
   esac
 fi;
 
-if test "${WASH_CYRUS_DEBUG}" = "t"; then
-   CFLAGS="-g -xs"
-   LDFLAGS="-L/usr/local/lib -R/usr/local/lib -xs -g"
-   STATIC="--enable-static-libraries"
-fi
 
 LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --with-cyrus-group=staff"
 
