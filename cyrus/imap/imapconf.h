@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.3 2002/07/20 01:17:55 ken3 Exp $
+ * $Id: imapconf.h,v 1.16.4.4 2002/07/20 01:47:17 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,9 +61,6 @@ extern int config_getswitch(enum imapopt opt);
 extern const char *config_getoverflowstring(const char *key, const char *def);
 extern const char *config_partitiondir(const char *partition);
 
-/* domain magic for virtdomains */
-char *canonify_userid(char *user, char *loginis);
-
 /* sasl configuration */
 extern int mysasl_config(void *context,
 			 const char *plugin_name,
@@ -72,10 +69,9 @@ extern int mysasl_config(void *context,
 			 unsigned *len);
 extern sasl_security_properties_t *mysasl_secprops(int flags);
 
-#define HAS_SASL_2_1 ((SASL_VERSION_MAJOR > 2) || \
-	((SASL_VERSION_MAJOR == 2) && (SASL_VERSION_MINOR >= 1)))
+/* user canonification */
+extern char *canonify_userid(char *user, char *loginis);
 
-#if HAS_SASL_2_1
 extern int mysasl_canon_user(sasl_conn_t *conn,
 		             void *context,
 		             const char *user, unsigned ulen,
@@ -83,18 +79,6 @@ extern int mysasl_canon_user(sasl_conn_t *conn,
 		             const char *user_realm,
 		             char *out_user,
 		             unsigned out_max, unsigned *out_ulen);
-#else /* SASL 2.0 */
-extern int mysasl_canon_user(sasl_conn_t *conn,
-                             void *context,
-                             const char *user, unsigned ulen,
-                             const char *authid, unsigned alen,
-                             unsigned flags,
-                             const char *user_realm,
-                             char *out_user,
-                             unsigned out_max, unsigned *out_ulen,
-                             char *out_authid,
-                             unsigned out_amax, unsigned *out_alen);
-#endif
 
 /* check if `authstate' is a valid member of class */
 extern int config_authisa(struct auth_state *authstate, 
