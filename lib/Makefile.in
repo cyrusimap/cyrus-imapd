@@ -50,6 +50,9 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
+HDRS= acl.h acte.h assert.h auth.h charset.h glob.h imclient.h prot.h
+	sysexits.h util.h xmalloc.h
+
 OBJS= acl.o assert.o bsearch.o charset.o glob.o is.o retry.o util.o prot.o \
 	imclient.o imparse.o xmalloc.o \
 	nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o gmtoff_@WITH_GMTOFF@.o \
@@ -58,7 +61,8 @@ OBJS= acl.o assert.o bsearch.o charset.o glob.o is.o retry.o util.o prot.o \
 all: libcyrus.a
 
 install:
-	$(INSTALL) -m 644 libcyrus.a $(DESTDIR)$(exec_prefix)/lib
+	$(INSTALL) -m 644 libcyrus.a $(DESTDIR)$(exec_prefix)/lib/
+	$(INSTALL) -m 644 $(HDRS) $(DESTDIR)$(prefix)/include/cyrus/
 	$(RANLIB) $(DESTDIR)$(exec_prefix)/lib/libcyrus.a
 
 .c.o:
