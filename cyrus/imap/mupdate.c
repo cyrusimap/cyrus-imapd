@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.17 2002/12/20 18:32:05 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.18 2003/01/30 20:43:49 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,12 +71,15 @@
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "exitcodes.h"
+#include "nonblock.h"
 #include "prot.h"
 #include "imapconf.h"
 #include "imap_err.h"
 #include "version.h"
 #include "mpool.h"
 
+/* Sent to clients that we can't accept a connection for. */
+static const char SERVER_UNABLE_STRING[] = "* BYE \"Server Unable\"\r\n";
 
 static const int NO_NEW_CONNECTION = -1;
 
@@ -156,6 +159,8 @@ static int listener_lock = 0;
  * idle_connlist_mutex locked to remove anything from the idle_connlist */
 static pthread_mutex_t idle_connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct conn *idle_connlist = NULL; /* protected by listener_mutex */
+static pthread_mutex_t connection_count_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int connection_count = 0;
 static pthread_mutex_t idle_worker_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int idle_worker_count = 0;
 static pthread_mutex_t worker_count_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -172,6 +177,7 @@ pthread_mutex_t mailboxes_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct conn *updatelist = NULL;
 
 /* --- prototypes --- */
+static void conn_free(struct conn *C);
 mupdate_docmd_result_t docmd(struct conn *c);
 void cmd_authenticate(struct conn *C,
 		      const char *tag, const char *mech,
@@ -208,6 +214,7 @@ static struct conn *conn_new(int fd)
 {
     struct conn *C = xzmalloc(sizeof(struct conn));
     struct sockaddr_in localaddr, remoteaddr;
+    int r;    
     int haveaddr = 0;
     int salen;
     int secflags;
@@ -227,6 +234,10 @@ static struct conn *conn_new(int fd)
     C->next = connlist;
     connlist = C;
     pthread_mutex_unlock(&connlist_mutex); /* UNLOCK */
+
+    pthread_mutex_lock(&connection_count_mutex); /* LOCK */
+    connection_count++;
+    pthread_mutex_unlock(&connection_count_mutex); /* UNLOCK */
 
     /* Find out name of client host */
     salen = sizeof(remoteaddr);
@@ -263,13 +274,20 @@ static struct conn *conn_new(int fd)
     }
 
     /* create sasl connection */
-    if (sasl_server_new("mupdate",
+    r = sasl_server_new("mupdate",
 			config_servername, NULL,
 			C->saslprops.iplocalport,
 			C->saslprops.ipremoteport,
 			NULL, 0, 
-			&C->saslconn) != SASL_OK) {
-	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
+			&C->saslconn);
+    if(r != SASL_OK) {
+	syslog(LOG_ERR, "failed to start sasl for connection: %s",
+	       sasl_errstring(r, NULL, NULL));	
+	prot_printf(C->pout, SERVER_UNABLE_STRING);
+
+	C->idle = 0;
+	conn_free(C);
+	return NULL;
     }
 
     /* set my allowable security properties */
@@ -330,6 +348,10 @@ static void conn_free(struct conn *C)
 	t->next = C->next;
     }
     pthread_mutex_unlock(&connlist_mutex); /* UNLOCK */
+
+    pthread_mutex_lock(&connection_count_mutex);
+    connection_count--;
+    pthread_mutex_unlock(&connection_count_mutex); 
 
     if (C->ev) prot_removewaitevent(C->pin, C->ev);
 
@@ -730,6 +752,23 @@ int service_main_fd(int fd,
 		    char **argv __attribute__((unused)),
 		    char **envp __attribute__((unused)))
 {
+    /* First check that we can handle the new connection. */
+    pthread_mutex_lock(&connection_count_mutex);
+    if(connection_count >= config_getint(IMAPOPT_MUPDATE_CONNECTIONS_MAX)) {
+	pthread_mutex_unlock(&connection_count_mutex);	
+
+	/* Do the nonblocking write, if it fails, too bad for them. */
+	nonblock(fd, 1);
+	write(fd,SERVER_UNABLE_STRING,sizeof(SERVER_UNABLE_STRING));
+	close(fd);
+
+	syslog(LOG_ERR,
+	       "Server too busy, droping connection.");
+	return 0;
+    } else {
+	pthread_mutex_unlock(&connection_count_mutex);
+    }
+
     /* signal that a new file descriptor is available */
     if(write(conn_pipe[1], &fd, sizeof(fd)) == -1) {
 	syslog(LOG_CRIT,
@@ -896,6 +935,13 @@ static void *thread_main(void *rock __attribute__((unused)))
 
 	    /* setup the new connection */
 	    currConn = conn_new(new_fd);
+
+	    if(currConn == NULL) {
+		/* Startup Failed */
+		continue;
+	    }
+
+	    /* Can we actually support this connection? */
 
 	    /* send the banner + flush pout */
 	    ret = sasl_listmech(currConn->saslconn, NULL,
