@@ -8,12 +8,12 @@ BUILT_SOURCES = addr.c addr.h addr-lex.c \
 dist: $(BUILT_SOURCES)
 
 addr.c addr.h: addr.y
-	$(YACC) $(YFLAGS) -p addr $(srcdir)/addr.y
+	$(YACC) $(YFLAGS) -p addr addr.y
 	mv -f y.tab.c addr.c
 	mv -f y.tab.h addr.h
 
 addr-lex.c: addr-lex.l addr.h
-	$(LEX) -t -Paddr $(srcdir)/addr-lex.l > $@
+	$(LEX) -t -Paddr addr-lex.l > $@
 
 sieve.c sieve.h: sieve.y
 	$(YACC) $(YFLAGS) $(srcdir)/sieve.y
