@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: netnews.h,v 1.1.2.1 2002/10/15 19:12:49 ken3 Exp $ */
+/* $Id: netnews.h,v 1.1.2.2 2002/10/16 20:02:59 ken3 Exp $ */
 
 #ifndef NETNEWS_H
 #define NETNEWS_H
@@ -54,9 +54,10 @@ int netnews_lookup(char *msgid, char **mailbox, unsigned long *uid,
 		   unsigned long *lines, time_t *tstamp);
 void netnews_store(char *msgid, char *mailbox, unsigned long uid,
 		   unsigned long lines, time_t tstamp);
+void netnews_delete(char *msgid);
 
-int netnews_expire(int days);
-int netnews_dump(FILE *f);
+int netnews_findall(const char *pattern, time_t mark, int since,
+		    int (*proc)(), void *rock);
 
 int netnews_done(void);
 

@@ -1,0 +1,79 @@
+.\" -*- nroff -*-
+.TH EXPIRENEWS 8
+.\" 
+.\" Copyright (c) 1998-2002 Carnegie Mellon University.  All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\"
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer. 
+.\"
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in
+.\"    the documentation and/or other materials provided with the
+.\"    distribution.
+.\"
+.\" 3. The name "Carnegie Mellon University" must not be used to
+.\"    endorse or promote products derived from this software without
+.\"    prior written permission. For permission or any other legal
+.\"    details, please contact  
+.\"      Office of Technology Transfer
+.\"      Carnegie Mellon University
+.\"      5000 Forbes Avenue
+.\"      Pittsburgh, PA  15213-3890
+.\"      (412) 268-4387, fax: (412) 268-7395
+.\"      tech-transfer@andrew.cmu.edu
+.\"
+.\" 4. Redistributions of any form whatsoever must retain the following
+.\"    acknowledgment:
+.\"    "This product includes software developed by Computing Services
+.\"     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+.\"
+.\" CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+.\" THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+.\" AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+.\" FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+.\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+.\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\" 
+.\" $Id: expirenews.8,v 1.1.2.1 2002/10/16 20:03:00 ken3 Exp $
+.SH NAME
+expirenews \- expire news articles
+.SH SYNOPSIS
+.B expirenews
+[
+.B \-C
+.I config-file
+]
+.BI \-E " days"
+[
+.IR wildmat ...
+]
+.SH DESCRIPTION
+.I Expirenews
+is used to expire news articles in newsgroups specified by the
+\fIwildmat\fR pattern(s) that are older than specified by \fB-E\fR.
+If no \fIwildmat\fR is given, \fIexpirenews\fR works on all newsgroups.
+.I Expirenews
+both prunes the netnews database and deletes the articles.
+.PP
+.I Expirenews
+reads its configuration options out of the
+.IR imapd.conf (5)
+file unless specified otherwise by \fB-C\fR.
+.SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
+.TP
+. BI \-E " days"
+Expire articles older than \fIdays\fR.
+.SH FILES
+.TP
+.B /etc/imapd.conf
+.SH SEE ALSO
+.PP
+\fBimapd.conf(5)\fR, \fBmaster(8)\fR

@@ -6,6 +6,7 @@ ctl_mboxlist
 cvt_cyrusdb
 cyrdump
 deliver
+expirenews
 feedcyrus
 fetchnews
 fud

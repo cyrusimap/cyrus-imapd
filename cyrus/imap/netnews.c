@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: netnews.c,v 1.1.2.2 2002/10/16 17:23:56 ken3 Exp $ */
+/* $Id: netnews.c,v 1.1.2.3 2002/10/16 20:02:59 ken3 Exp $ */
 
 #include <config.h>
 
@@ -80,6 +80,7 @@
 #include "exitcodes.h"
 #include "util.h"
 #include "cyrusdb.h"
+#include "glob.h"
 
 #include "netnews.h"
 
@@ -217,67 +218,78 @@ void netnews_delete(char *msgid)
     return;
 }
 
-struct expirerock {
-    struct db *db;
-    time_t expmark;
+struct findrock {
+    struct glob *glob;
+    time_t mark;
+    int later;
     int count;
-    int deletions;
+    int (*proc)();
+    void *rock;
 };
 
-static int expire_p(void *rock, const char *id, int idlen,
-		    const char *data, int datalen)
+static int find_p(void *rock, const char *id, int idlen,
+		  const char *data, int datalen)
 {
-    struct expirerock *prock = (struct expirerock *) rock;
-    char *p = (char *) data;
-    unsigned long ul;
-    time_t mark;
+    struct findrock *frock = (struct findrock *) rock;
+    struct netnews_entry entry;
 
-    prock->count++;
+    frock->count++;
 
-    p += strlen(p); /* mailbox */
-    ul = strtoul(++p, &p, 10); /* uid */
-    ul = strtoul(++p, &p, 10); /* lines */
-    ul = strtoul(++p, &p, 10); /* timestamp */
-    mark = (time_t) ul;
+    parse_entry(data, &entry);
 
-    /* check if we should expire this entry */
-    return (mark < prock->expmark);
+    /* check mailbox against pattern */
+    if (GLOB_TEST(frock->glob, entry.mailbox) == -1)
+	return 0;
+
+    /* check timestamp against mark */
+    if (frock->later)
+	return (entry.tstamp >= frock->mark);
+    else
+	return (entry.tstamp < frock->mark);
 }
 
-static int expire_cb(void *rock, const char *id, int idlen,
-		     const char *data, int datalen)
+static int find_cb(void *rock, const char *id, int idlen,
+		   const char *data, int datalen)
 {
-    struct expirerock *prock = (struct expirerock *) rock;
+    struct findrock *frock = (struct findrock *) rock;
+    static char *msgid = NULL;
+    static int size = 0;
+    struct netnews_entry entry;
     int r;
 
-    prock->deletions++;
+    if (idlen+1 > size) {
+	size = idlen + 1;
+	msgid = xrealloc(msgid, size);
+    }
+    memcpy(msgid, id, idlen);
+    msgid[idlen] = '\0';
 
-    do {
-	r = DB->delete(prock->db, id, idlen, NULL, 0);
-    } while (r == CYRUSDB_AGAIN);
+    parse_entry(data, &entry);
 
+    r = (*frock->proc)(msgid, entry.mailbox, entry.uid, entry.lines,
+		       entry.tstamp, frock->rock);
 
-    return 0;
+    return r;
 }
 
-int netnews_expire(int days)
+int netnews_findall(const char *pattern, time_t mark, int later,
+		    int (*proc)(), void *rock)
 {
-    struct expirerock prock;
+    struct findrock frock;
 
-    if (days < 0) fatal("must specify positive number of days", EC_USAGE);
-
-    prock.count = prock.deletions = 0;
-    prock.expmark = time(NULL) - (days * 60 * 60 * 24);
-    syslog(LOG_NOTICE, "netnews_expire: pruning back %d days", days);
+    frock.glob = glob_init(pattern, GLOB_HIERARCHY);
+    frock.mark = mark;
+    frock.later = later;
+    frock.count = 0;
+    frock.proc = proc;
+    frock.rock = rock;
 
     /* check each entry in our database */
-    prock.db = newsdb;
-    DB->foreach(newsdb, "", 0, &expire_p, &expire_cb, &prock, NULL);
+    DB->foreach(newsdb, "", 0, &find_p, &find_cb, &frock, NULL);
 
-    syslog(LOG_NOTICE, "netnews_expire: purged %d out of %d entries",
-	   prock.deletions, prock.count);
+    glob_free(&frock.glob);
 
-    return 0;
+    return frock.count;
 }
 
 int netnews_done(void)

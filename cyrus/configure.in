@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.13 2002/10/15 19:12:47 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.14 2002/10/16 20:02:56 ken3 Exp $
 dnl
 
 
@@ -714,7 +714,7 @@ dnl
 AC_ARG_ENABLE(nntp,
         [  --enable-nntp           enable NNTP support (experimental)],
         if test "$enableval" != no; then
-	  IMAP_PROGS="$IMAP_PROGS nntpd fetchnews"
+	  IMAP_PROGS="$IMAP_PROGS nntpd fetchnews expirenews"
         fi) 
 
 AC_SUBST(IMAP_PROGS)
