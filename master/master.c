@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.61 2002/02/22 17:25:30 rjs3 Exp $ */
+/* $Id: master.c,v 1.62 2002/02/22 19:10:10 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -869,7 +869,7 @@ void add_service(const char *name, struct entry *e,
 	Services[i].exec = tokenize(cmd);
 	if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
 
-	if (strcmp(Services[i].proto, "tcp") == 0) {
+	if (!strcmp(Services[i].proto, "tcp")) {
 	    Services[i].desired_workers = prefork;
 	    Services[i].max_workers = atoi(max);
 	    if (Services[i].max_workers == -1) {
