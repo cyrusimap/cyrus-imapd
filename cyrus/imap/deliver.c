@@ -79,6 +79,7 @@ char **argv;
     int nflags = 0;
     char *authuser = 0;
     struct auth_state *authstate = 0;
+    int quotaoverride = 0;
     char *id = 0;
     char *notifyheader = 0;
 
@@ -86,7 +87,7 @@ char **argv;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
-    while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:s")) != EOF) {
+    while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:sq")) != EOF) {
 	switch(opt) {
 	case 'd':
 	    /* Ignore -- /bin/mail compatibility flags */
@@ -131,13 +132,17 @@ char **argv;
 	    smtpflag = 1;
 	    break;
 
+	case 'q':
+	    quotaoverride = 1;
+	    break;
+
 	default:
 	    usage();
 	}
     }
 
     if (smtpflag) {
-	smtpmode();
+	smtpmode(quotaoverride);
 	exit(0);
     }
 
@@ -152,9 +157,9 @@ char **argv;
 		     &size, 0);
 
     if (optind == argc) {
-	/* Deliver to global mailbox */
+	/* deliver to global mailbox */
 	r = deliver(prot_f, size, flag, nflags, authuser, authstate, id, notifyheader,
-		    (char *)0, mailboxname);
+		    (char *)0, mailboxname, quotaoverride);
 	
 	if (r) {
 	    com_err(mailboxname, r,
@@ -166,7 +171,7 @@ char **argv;
     }
     while (optind < argc) {
 	r = deliver(prot_f, size, flag, nflags, authuser, authstate, id, notifyheader,
-		       argv[optind], mailboxname);
+		       argv[optind], mailboxname, quotaoverride);
 
 	if (r) {
 	    com_err(argv[optind], r,
@@ -320,7 +325,8 @@ char *addr;
 
 #define RCPT_GROW 3 /* XXX 30 */
 
-smtpmode()
+smtpmode(quotaoverride)
+int quotaoverride;
 {
     char *return_path = 0;
     char **rcpt_addr = 0;
@@ -372,7 +378,8 @@ smtpmode()
 
 		    r = deliver(prot_f, size, flag, nflags, authuser, authstate, id,
 				notifyheader,
-				rcpt_addr[i][0] ? rcpt_addr[i] : (char *)0, p);
+				rcpt_addr[i][0] ? rcpt_addr[i] : (char *)0, p,
+				quotaoverride);
 		    printf("%s\r\n", convert_smtp(r));
 		}
 		prot_free(prot_f);
@@ -664,7 +671,8 @@ int smtpmode;
 }
 
 
-deliver(msg, size, flag, nflags, authuser, authstate, id, notifyheader, user, mailboxname)
+deliver(msg, size, flag, nflags, authuser, authstate, id, notifyheader,
+	user, mailboxname, quotaoverride)
 struct protstream *msg;
 unsigned size;
 char **flag;
@@ -675,6 +683,7 @@ char *id;
 char *notifyheader;
 char *user;
 char *mailboxname;
+int quotaoverride;
 {
     int r;
     struct mailbox mailbox;
@@ -704,7 +713,7 @@ char *mailboxname;
 	    }
 
 	    r = append_setup(&mailbox, namebuf, MAILBOX_FORMAT_NORMAL,
-			     authstate, ACL_POST, 0);
+			     authstate, ACL_POST, quotaoverride ? -1 : 0);
 	}
 	if (r) {
 	    strcpy(namebuf, "user.");
@@ -716,7 +725,7 @@ char *mailboxname;
 		return 0;
 	    }
 	    r = append_setup(&mailbox, namebuf, MAILBOX_FORMAT_NORMAL,
-			     authstate, 0, 0);
+			     authstate, 0, quotaoverride ? -1 : 0);
 	}
     }
     else if (mailboxname) {
@@ -725,7 +734,7 @@ char *mailboxname;
 	    return 0;
 	}
 	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
-			 authstate, ACL_POST, 0);
+			 authstate, ACL_POST, quotaoverride ? -1 : 0);
     }
     else {
 	fprintf(stderr, "deliver: either -m or user required\n");
