@@ -989,8 +989,7 @@ char *name;
     }
     if (size < 2) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag,
-		    error_message(size == 0 ? IMAP_ZERO_LITERAL :
-				  IMAP_MESSAGE_NOBLANKLINE));
+		    error_message(IMAP_MESSAGE_NOBLANKLINE);
 	if (c != '\n') eatline();
 	goto freeflags;
     }
@@ -2298,6 +2297,7 @@ struct buf *buf;
 {
     int c;
     int i, len = 0;
+    int sawdigit = 0;
 
     if (buf->alloc == 0) {
 	buf->alloc = BUFGROWSIZE;
@@ -2364,13 +2364,13 @@ struct buf *buf;
 	/* Literal */
 	buf->s[0] = '\0';
 	while ((c = prot_getc(imapd_in)) != EOF && isdigit(c)) {
+	    sawdigit = 1;
 	    len = len*10 + c - '0';
 	}
-	if (c != '}') {
+	if (!sawdigit || c != '}') {
 	    if (c != EOF) prot_ungetc(c, imapd_in);
 	    return EOF;
 	}
-	if (len == 0) return EOF;
 	c = prot_getc(imapd_in);
 	if (c == '\r') c = prot_getc(imapd_in);
 	if (c != '\n') {
