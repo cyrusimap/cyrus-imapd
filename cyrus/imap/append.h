@@ -3,6 +3,7 @@
  */
 struct copymsg {
     int msgno;
+    unsigned long uid;
     time_t internaldate;
     unsigned long size;
     unsigned long header_size;
@@ -10,7 +11,7 @@ struct copymsg {
     int cache_len;
     int seen;
     bit32 system_flags;
-    char *flags[MAX_USER_FLAGS+10];
+    char *flag[MAX_USER_FLAGS+1];
 };
 
     

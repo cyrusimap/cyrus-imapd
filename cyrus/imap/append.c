@@ -12,6 +12,7 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "message.h"
+#include "append.h"
 #include "xmalloc.h"
 
 /*
@@ -115,9 +116,6 @@ char *userid;
     message_index = zero_index;
     message_index.uid = mailbox->last_uid + 1;
     message_index.last_updated = message_index.internaldate = time(0);
-    if (message_index.internaldate <= mailbox->last_internaldate) {
-	message_index.internaldate = mailbox->last_internaldate + 1;
-    }
 
     strcpy(fname, mailbox->path);
     strcat(fname, "/");
@@ -199,7 +197,7 @@ char *userid;
     
     mailbox->exists++;
     mailbox->last_uid = message_index.uid;
-    mailbox->last_internaldate = message_index.internaldate;
+    mailbox->last_appenddate = time(0);
     mailbox->quota_mailbox_used += message_index.size;
     if (mailbox->minor_version > MAILBOX_MINOR_VERSION) {
 	mailbox->minor_version = MAILBOX_MINOR_VERSION;
@@ -226,6 +224,198 @@ char *userid;
     }
     
     return 0;
+}
+
+int
+append_copy(mailbox, nummsg, copymsg, userid)
+struct mailbox *mailbox;
+int nummsg;
+struct copymsg *copymsg;
+char *userid;
+{
+    int msg;
+    struct index_record *message_index;
+    static struct index_record zero_index;
+    unsigned long quota_usage = 0;
+    char fname[MAX_MAILBOX_PATH];
+    FILE *srcfile, *destfile;
+    char buf[4096];
+    int n, r;
+    long last_cacheoffset;
+    int writeheader = 0;
+    int flag, userflag, emptyflag;
+    int seenbegin;
+    
+    assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
+
+    if (!nummsg) return 0;
+
+    fseek(mailbox->cache, 0L, 2);
+    last_cacheoffset = ftell(mailbox->cache);
+
+    message_index = (struct index_record *)
+      xmalloc(nummsg * sizeof(struct index_record));
+
+    for (msg = 0; msg < nummsg; msg++) {
+	message_index[msg] = zero_index;
+	message_index[msg].uid = mailbox->last_uid + 1 + msg;
+	message_index[msg].last_updated = time(0);
+	message_index[msg].internaldate = copymsg[msg].internaldate;
+
+	if (copymsg[msg].cache_len) {
+	    strcpy(fname, mailbox->path);
+	    strcat(fname, "/");
+	    strcat(fname, mailbox_message_fname(mailbox,
+						message_index[msg].uid));
+	    if (link(mailbox_message_fname(mailbox, copymsg[msg].uid),
+		     fname)) {
+		destfile = fopen(fname, "w");
+		if (!destfile) {
+		    r = IMAP_IOERROR;
+		    goto fail;
+		}
+		srcfile = fopen(mailbox_message_fname(mailbox, copymsg[msg].uid), "r");
+		if (!srcfile) {
+		    fclose(destfile);
+		    r = IMAP_IOERROR;
+		    goto fail;
+		}
+
+		while (n = fread(buf, 1, sizeof(buf), srcfile)) {
+		    fwrite(buf, 1, n, destfile);
+		}
+		fflush(destfile);
+		if (ferror(destfile) || fsync(fileno(destfile))) {
+		    fclose(srcfile);
+		    fclose(destfile);
+		    r = IMAP_IOERROR;
+		    goto fail;
+		}
+		fclose(srcfile);
+		fclose(destfile);
+	    }
+	    message_index[msg].cache_offset = ftell(mailbox->cache);
+	    fwrite(copymsg[msg].cache_begin, 1, copymsg[msg].cache_len,
+		   mailbox->cache);
+	    message_index[msg].size = copymsg[msg].size;
+	    message_index[msg].header_size = copymsg[msg].header_size;
+	    message_index[msg].content_offset = copymsg[msg].header_size;
+	}
+	else {
+	    destfile = fopen(fname, "w");
+	    if (!destfile) {
+		r = IMAP_IOERROR;
+		goto fail;
+	    }
+	    srcfile = fopen(mailbox_message_fname(mailbox, copymsg[msg].uid),
+			    "r");
+	    if (!srcfile) {
+		fclose(destfile);
+		r = IMAP_IOERROR;
+		goto fail;
+	    }
+	    r = message_copy_byline(srcfile, destfile);
+	    fclose(srcfile);
+	    if (!r) r = message_parse(destfile, mailbox, &message_index[msg]);
+	    fclose(destfile);
+	    if (r) goto fail;
+	}
+
+	quota_usage += message_index[msg].size;
+	
+	if (mailbox->myrights & ACL_WRITE) {
+	    message_index[msg].system_flags =
+	      copymsg[msg].system_flags & ~FLAG_DELETED;
+
+	    for (flag = 0; copymsg[msg].flag[flag]; flag++) {
+		emptyflag = -1;
+		for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+		    if (mailbox->flagname[userflag]) {
+			if (!strcasecmp(copymsg[msg].flag[flag],
+					mailbox->flagname[userflag]))
+			  break;
+		    }
+		    else if (emptyflag == -1) emptyflag = userflag;
+		}
+
+		if (userflag == MAX_USER_FLAGS && emptyflag != -1) {
+		    userflag = emptyflag;
+		    mailbox->flagname[userflag] =
+		      strsave(copymsg[msg].flag[flag]);
+		    writeheader++;
+		}
+
+		if (userflag != MAX_USER_FLAGS) {
+		    message_index[msg].user_flags[userflag/32] |=
+		      1<<(userflag&31);
+		}
+	    }
+	}
+	if (mailbox->myrights & ACL_DELETE) {
+	    message_index[msg].system_flags |=
+	      copymsg[msg].system_flags & FLAG_DELETED;
+	}
+    }
+
+    if (writeheader) {
+	r = mailbox_write_header(mailbox);
+	if (r) goto fail;
+    }
+
+    r = mailbox_append_index(mailbox, message_index, mailbox->exists, nummsg);
+
+    mailbox->exists += nummsg;
+    mailbox->last_uid += nummsg;
+    mailbox->last_appenddate = time(0);
+    mailbox->quota_mailbox_used += quota_usage;
+    if (mailbox->minor_version > MAILBOX_MINOR_VERSION) {
+	mailbox->minor_version = MAILBOX_MINOR_VERSION;
+    }
+
+    r = mailbox_write_index_header(mailbox);
+    if (r) goto fail;
+    
+    mailbox->quota_used += quota_usage;
+    r = mailbox_write_quota(mailbox);
+    if (r) {
+	syslog(LOG_ERR,
+	       "LOSTQUOTA: unable to record use of %d bytes in quota file %s",
+	       quota_usage, mailbox->quota_path);
+    }
+    
+    /* Deal with \Seen */
+    for (msg = seenbegin = 0; msg < nummsg; msg++) {
+	if (!seenbegin && !copymsg[msg].seen) continue;
+	if (seenbegin && copymsg[msg].seen) continue;
+
+	if (!seenbegin) {
+	    seenbegin = msg+1;
+	}
+	else {
+	    append_addseen(mailbox, userid, message_index[seenbegin-1].uid,
+			   message_index[msg-1].uid);
+	    seenbegin = 0;
+	}
+    }
+    if (seenbegin) {
+	append_addseen(mailbox, userid, message_index[seenbegin-1].uid,
+		       message_index[nummsg-1].uid);
+    }
+
+    free(message_index);
+    return 0;
+
+ fail:
+    for (msg = 0; msg < nummsg; msg++) {
+	strcpy(fname, mailbox->path);
+	strcat(fname, "/");
+	strcat(fname, mailbox_message_fname(mailbox, mailbox->last_uid + 1 + msg));
+	unlink(fname);
+    }
+
+    ftruncate(fileno(mailbox->cache), last_cacheoffset);
+    free(message_index);
+    return r;
 }
 
 /*

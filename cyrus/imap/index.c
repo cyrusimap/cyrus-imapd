@@ -18,6 +18,7 @@
 #include "mailbox.h"
 #include "imapd.h"
 #include "message.h"
+#include "append.h"
 #include "xmalloc.h"
 
 /* The index and cache files, mapped into memory */
@@ -25,6 +26,7 @@ static char *index_base;
 static unsigned long index_len;
 static char *cache_base;
 static unsigned long cache_len;
+static unsigned long cache_end;
 
 /* Attributes of memory-mapped index file */
 static time_t index_ino;
@@ -64,6 +66,13 @@ static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 static int index_fetchreply();
 static int index_storeseen();
 static int index_storeflag();
+static int index_copysetup();
+
+struct copyargs {
+    struct copymsg *copymsg;
+    int nummsg;
+    int msgalloc;
+};
 
 /*
  * A new mailbox has been selected, map it into memory and do the
@@ -177,6 +186,7 @@ int checkseen;
     }
     if (cache_len <= sbuf.st_size) {
 	if (cache_len) munmap(cache_base, cache_len);
+	cache_end = sbuf.st_size;
 	cache_len = sbuf.st_size + CACHESLOP;
 	cache_base = (char *)mmap((caddr_t)0, cache_len, PROT_READ,
 				  MAP_SHARED, fileno(mailbox->cache), 0L);
@@ -817,6 +827,41 @@ int usinguid;
 }
 
 /*
+ * Performs a COPY command
+ */
+int
+index_copy(mailbox, sequence, usinguid, name)
+struct mailbox *mailbox;
+char *sequence;
+int usinguid;
+char *name;
+{
+    static struct copyargs copyargs;
+    int i;
+    unsigned long totalsize = 0;
+    int r;
+    struct mailbox append_mailbox;
+
+    copyargs.nummsg = 0;
+    index_forsequence(mailbox, sequence, usinguid, index_copysetup,
+		      (char *)&copyargs);
+
+    for (i = 0; i < copyargs.nummsg; i++) {
+	totalsize += copyargs.copymsg[i].size;
+    }
+
+    r = append_setup(&append_mailbox, name, MAILBOX_FORMAT_NORMAL,
+		     ACL_INSERT, totalsize);
+    if (r) return r;
+
+    r = append_copy(&append_mailbox, copyargs.nummsg, copyargs.copymsg,
+		    imapd_userid);
+    mailbox_close(&append_mailbox);
+
+    return r;
+}
+
+/*
  * Returns the msgno of the message with UID 'uid'.
  * If no message with UID 'uid', returns the message with
  * the higest UID not greater than 'uid'.
@@ -866,11 +911,19 @@ char *rock;
 	if (isdigit(*sequence)) {
 	    start = start*10 + *sequence - '0';
 	}
+	else if (*sequence == '*') {
+	    sequence++;
+	    start = usinguid ? UID(imapd_exists) : imapd_exists;
+	}
 	else if (*sequence == ':') {
 	    end = 0;
 	    sequence++;
 	    while (isdigit(*sequence)) {
 		end = end*10 + *sequence++ - '0';
+	    }
+	    if (*sequence == '*') {
+		sequence++;
+		end = usinguid ? UID(imapd_exists) : imapd_exists;
 	    }
 	    if (start > end) {
 		i = end;
@@ -1137,7 +1190,6 @@ struct strlist *headers_not;
     fputs(buf, stdout);
     printf("\r\n");		/* Delimiting blank line */
 }
-
 
 /*
  * Send a * FLAGS response.
@@ -1513,6 +1565,72 @@ char *rock;
 	    if (r) return r;
 	}
     }
+    return 0;
+}
+
+#define COPYARGSGROW 5 /* XXX 30 */
+static int
+index_copysetup(mailbox, msgno, rock)
+struct mailbox *mailbox;
+int msgno;
+char *rock;
+{
+    struct copyargs *copyargs = (struct copyargs *)rock;
+    int flag = 0;
+    unsigned userflag;
+    bit32 flagmask;
+
+    if (copyargs->nummsg == copyargs->msgalloc) {
+	copyargs->msgalloc += COPYARGSGROW;
+	copyargs->copymsg = (struct copymsg *)
+	  xrealloc((char *)copyargs->copymsg,
+		   copyargs->msgalloc * sizeof(struct copymsg));
+    }
+
+    copyargs->copymsg[copyargs->nummsg].msgno = msgno;
+    copyargs->copymsg[copyargs->nummsg].uid = UID(msgno);
+    copyargs->copymsg[copyargs->nummsg].internaldate = INTERNALDATE(msgno);
+    copyargs->copymsg[copyargs->nummsg].size = SIZE(msgno);
+    copyargs->copymsg[copyargs->nummsg].header_size = HEADER_SIZE(msgno);
+    copyargs->copymsg[copyargs->nummsg].cache_begin = cache_base + CACHE_OFFSET(msgno);
+    if (mailbox->format != MAILBOX_FORMAT_NORMAL) {
+	copyargs->copymsg[copyargs->nummsg].cache_len = 0;
+    }
+    else if (msgno < imapd_exists) {
+	copyargs->copymsg[copyargs->nummsg].cache_len =
+	  CACHE_OFFSET(msgno+1) - CACHE_OFFSET(msgno);
+    }
+    else {
+	copyargs->copymsg[copyargs->nummsg].cache_len =
+	  cache_end - CACHE_OFFSET(msgno);
+    }
+    copyargs->copymsg[copyargs->nummsg].seen = seenflag[msgno];
+    copyargs->copymsg[copyargs->nummsg].system_flags = SYSTEM_FLAGS(msgno);
+
+    for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+	if ((userflag & 31) == 0) {
+	    flagmask = USER_FLAGS(msgno,userflag/32);
+	}
+	if (!mailbox->flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
+	    mailbox_read_header(mailbox);
+	    index_listflags(mailbox);
+	    break;
+	}
+    }
+
+    for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+	if ((userflag & 31) == 0) {
+	    flagmask = USER_FLAGS(msgno,userflag/32);
+	}
+	if (mailbox->flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
+	    copyargs->copymsg[copyargs->nummsg].flag[flag++] =
+	      mailbox->flagname[userflag];
+	}
+    }
+    copyargs->copymsg[copyargs->nummsg].flag[flag] = 0;
+
+    copyargs->nummsg++;
+
     return 0;
 }
 
