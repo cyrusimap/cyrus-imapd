@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.38 2002/03/20 23:03:06 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.39 2002/04/15 14:42:18 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -83,7 +83,7 @@
 #include "lmtpengine.h"
 #include "lmtpstats.h"
 
-struct protstream *deliver_out, *deliver_in;
+struct protstream *deliver_out = NULL, *deliver_in = NULL;
 
 extern int optind;
 extern char *optarg;
@@ -705,8 +705,13 @@ int deliver(message_data_t *msgdata, char *authuser,
 
 void fatal(const char* s, int code)
 {
-    prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
-    prot_flush(deliver_out);
+    if(deliver_out) {
+	prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
+	prot_flush(deliver_out);
+    } else {
+	syslog(LOG_ERR, "FATAL: %s", s);
+    }
+    
     exit(code);
 }
 

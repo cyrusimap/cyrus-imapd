@@ -43,6 +43,10 @@
 #include <config.h>
 #endif
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/file.h>
@@ -500,6 +504,8 @@ int isieve_logout(isieve_t **obj)
     
     sieve_free_net(*obj);
     *obj = NULL;
+
+    return STAT_OK;
 }
 
 int isieve_put_file(isieve_t *obj, char *filename, char **errstr)
