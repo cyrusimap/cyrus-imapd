@@ -28,12 +28,15 @@ be checked for and disallowed.
 
 <li> <tt>reconstruct</tt> doesn't deal with the <tt>mailboxes.db</tt> file.
 
-<li> <tt>deliver</tt> (wrapper) should fill in a more useful
-Return-Path when none is given. (not important)
-
 <li> DELETE and deleting user mailboxes.
 
 <li> we should deal with having to reset UIDs
+
+<li> the algorithm used for naming stage files is fragile and not
+threadsafe.
+
+<li> during appendstage(), the message is parsed once per delivery,
+not once at the beginning.
 </ul>
 
 <h3>proxyd and Cyrus Murder</h3>
@@ -58,7 +61,9 @@ situations?
 <li> <tt>proxyd</tt> should deal with errors more cleanly in
 proxy_authenticate() and with backend servers overall.
 
-<li> <tt>target-acap</tt> doesn't act on ACL changes.
+<li> <tt>target-acap</tt> doesn't work on ignoring zero-information
+updates.  it doesn't deal with the ACAP server dying and in general
+should be replaced with something more general.
 </ul>
 
 <h3>lmtpd, deliver, and sieve</h3>
@@ -78,8 +83,6 @@ Well, ok, it hangs.
 opening and closing databases.  (Cache last N databases used?)
 
 <li> Should <tt>duplicate.c</tt> use transactions?  A single file?
-
-<li> does <tt>lmtpd</tt> correctly authenticate and authorize people?
 </ul>
 
 <h3>authentication and authorization</h3>
@@ -99,9 +102,9 @@ bear no resemblance to what actually went wrong.
 <li> <tt>cyradm</tt> may need to change authname/username stuff.
 Something to check.
 
-<li> <tt>imtest</tt> doesn't properly default to using the LOGIN
-command.  also, it would be nice for the authorization name to default
-to the authentication name, except when specifically overridden.
+<li> <tt>imtest</tt>: it would be nice for the authorization name to
+default to the authentication name, except when specifically
+overridden.
 
 <li> <tt>collectnews</tt>'s routines in <tt>append.c</tt> are broken.
 either remove <tt>collectnews</tt> or fix it.
@@ -131,7 +134,9 @@ efficient and easier to use than Amanda on the filesystem.
 
 <li> Design and implement ALIST, the advanced list command.
 
-<li> Change from the prot layer to using sfio.
+<li> Investigate changing from the prot layer to using sfio.
+
+<li> Write a test module for lmtp-parse.
 </ul>
 
 <p>
@@ -139,7 +144,7 @@ efficient and easier to use than Amanda on the filesystem.
 would like to submit a bug, feature request or (best of all) patch.
 
 <P><HR>
-Last update: $Date: 2000/05/24 05:02:45 $ 
+Last update: $Date: 2000/05/29 03:01:00 $ 
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
