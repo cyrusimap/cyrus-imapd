@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.26 2003/02/13 16:12:25 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.27 2003/02/21 18:47:40 rjs3 Exp $
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -90,7 +90,7 @@ dnl What we want to do here is setup LIB_SASL with what one would
 dnl generally want to have (e.g. if static is requested, make it that,
 dnl otherwise make it dynamic.
 
-dnl We also want to creat LIB_DYN_SASL and DYNSASLFLAGS.
+dnl We also want to create LIB_DYN_SASL and DYNSASLFLAGS.
 
 dnl Also sets using_static_sasl to "no" "static" or "staticonly"
 
