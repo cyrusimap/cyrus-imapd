@@ -1,0 +1,46 @@
+# This is where all the numbers go under. This is the CMU apps hierarchy? Should
+# be some IMAP hierarchy in some distant some in a land far away
+
+BASE 1.3.6.1
+
+# 'I' means increment
+# 'auto' means just pick any number you want
+
+I,AUTHENTICATE_COUNT,"Count of the number of authenticate", auto
+I,APPEND_COUNT,"Count of the number of append", auto
+I,BBOARD_COUNT,"Count of the number of bboard", auto
+I,CAPABILITY_COUNT,"Count of the number of capability", auto
+I,CHECK_COUNT,"Count of the number of check", auto
+I,COPY_COUNT,"Count of the number of copy", auto
+I,CREATE_COUNT,"Count of the number of create", auto
+I,CLOSE_COUNT,"Count of the number of close", auto
+I,DELETE_COUNT,"Count of the number of delete", auto
+I,DELETEACL_COUNT,"Count of the number of deleteacl", auto
+I,EXPUNGE_COUNT,"Count of the number of expunge", auto
+I,EXAMINE_COUNT,"Count of the number of examine", auto
+I,FETCH_COUNT,"Count of the number of fetch", auto
+I,FIND_COUNT,"Count of the number of find", auto
+I,GETACL_COUNT,"Count of the number of getacl", auto
+I,GETQUOTA_COUNT,"Count of the number of getquota", auto
+I,GETQUOTAROOT_COUNT,"Count of the number of getquotaroot", auto
+I,GETUIDS_COUNT,"Count of the number of getuids", auto
+I,LOGIN_COUNT,"Count of the number of login", auto
+I,LOGOUT_COUNT,"Count of the number of logout", auto
+I,LIST_COUNT,"Count of the number of list", auto
+I,LSUB_COUNT,"Count of the number of lsub", auto
+I,LISTRIGHTS_COUNT,"Count of the number of listrights", auto
+I,MYRIGHTS_COUNT,"Count of the number of myrights", auto
+I,NOOP_COUNT,"Count of the number of noop", auto
+I,NAMESPACE_COUNT,"Count of the number of namespace", auto
+I,PARTIAL_COUNT,"Count of the number of partial", auto
+I,RENAME_COUNT,"Count of the number of rename", auto
+I,STARTTLS_COUNT,"Count of the number of starttls", auto
+I,STORE_COUNT,"Count of the number of store", auto
+I,SELECT_COUNT,"Count of the number of select", auto
+I,SEARCH_COUNT,"Count of the number of search", auto
+I,SUBSCRIBE_COUNT,"Count of the number of subscribe", auto
+I,SETACL_COUNT,"Count of the number of setacl", auto
+I,SETQUOTA_COUNT,"Count of the number of setquota", auto
+I,STATUS_COUNT,"Count of the number of status", auto
+I,UNSUBSCRIBE_COUNT,"Count of the number of unsubscribe", auto
+I,UNSELECT_COUNT,"Count of the number of unselect", auto

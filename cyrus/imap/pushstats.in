@@ -1,4 +1,3 @@
-#include <config.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -11,7 +10,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <fcntl.h>
-#include "pushstats.h"
+/* pushstats.h included by script */
+
     
 #define SOCK_PATH "/tmp/imapd_log_socket"
 
@@ -55,61 +55,18 @@ int pushstats_log(pushstats_t cmd)
 
     if (pushstats_socket == -1) return 1;
 
-    /* xxx is this 64bit compat? */
-    memcpy(tosend, &cmd, sizeof(cmd));
-
-    strcpy(tosend+sizeof(cmd),"\n");
+    strcpy(tosend,pushstats_getoid(cmd));
+    strcat(tosend,"\n");
 
     len = strlen(pushstats_remote.sun_path) + sizeof(pushstats_remote.sun_family);
 
-    if (sendto(pushstats_socket, tosend, 
-	       sizeof(cmd)+strlen(tosend+sizeof(cmd)), 0, 
-	       (struct sockaddr *) &pushstats_remote, len) == -1) {
+    if (sendto(pushstats_socket, tosend, strlen(tosend), 0, 
+	       &pushstats_remote, len) == -1) {
 	return 1;
     }
 
     return 0;
 }
-
-static char pushstats_names[PUSHSTATS_MAXCMDS][20] = 
-{{"AUTHENTICATE"}, /* 0 */
- {"APPEND"},
- {"BBOARD"},
- {"CAPABILITY"},
- {"CHECK"},
- {"COPY"},
- {"CREATE"},
- {"CLOSE"},
- {"DELETE"},
- {"DELETEACL"},
- {"EXPUNGE"},
- {"EXAMINE"},
- {"FETCH"},
- {"FIND"},
- {"GETACL"},
- {"GETQUOTA"},
- {"GETQUOTAROOT"},
- {"GETUIDS"},
- {"LOGIN"},
- {"LOGOUT"},
- {"LIST"},
- {"LSUB"},
- {"LISTRIGHTS"},
- {"MYRIGHTS"},
- {"NOOP"},
- {"NAMESPACE"},
- {"PARTIAL"},
- {"RENAME"},
- {"STARTTLS"},
- {"STORE"},
- {"SELECT"},
- {"SEARCH"},
- {"SUBSCRIBE"},
- {"SETACL"},
- {"SETQUOTA"},
- {"STATUS"},
- {"UNSUBSCRIBE"},
- {"UNSELECT"}}; /* 37 */
 
 char* pushstats_getname(pushstats_t cmd)
 {
