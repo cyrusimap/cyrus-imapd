@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.7 2000/06/14 02:41:39 wcw Exp $
+ $Id: ctl_deliver.c,v 1.8 2001/01/27 02:49:44 ken3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -136,7 +136,7 @@ void fatal(const char *message, int code)
 
 void usage(void)
 {
-    fprintf(stderr, "ctl_deliver -d [-f <dbfile>]\n"
+    fprintf(stderr, "ctl_deliver -d -f <dbfile>\n"
 	    "ctl_deliver [-r] -E <days>\n");
     exit(-1);
 }
@@ -197,16 +197,11 @@ main(argc, argv)
 	break;
 
     case DUMP:
-	printf("it is NOW: %d\n", (int) time(NULL));
-  
 	if (alt_file == NULL) {
-	    char fname[MAX_MAILBOX_PATH];
-	    
-	    (void)strcpy(fname, config_dir);
-	    (void)strcat(fname, "/delivered.db");
-	    
-	    dump_deliver(fname);
+	    usage();
 	} else {
+	    printf("it is NOW: %d\n", (int) time(NULL));
+  
 	    dump_deliver(alt_file);
 	}
 	r = 0;
@@ -225,4 +220,4 @@ main(argc, argv)
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.7 2000/06/14 02:41:39 wcw Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.8 2001/01/27 02:49:44 ken3 Exp $ */
