@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.5 2002/07/31 17:48:50 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.6 2002/08/01 22:10:16 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1446,9 +1446,9 @@ void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
 {
     char pattern[2] = {'*','\0'};
 
-    /* List operations can result in a lot of output, let's
-     * buffer this one to disk */
-    prot_bigbuffer_start(C->pout, config_getstring(IMAPOPT_TEMP_PATH));
+    /* List operations can result in a lot of output, let's do this
+     * with the prot layer nonblocking so we don't hold the mutex forever*/
+    prot_NONBLOCK(C->pout);
 
     /* indicate interest in updates */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
@@ -1466,7 +1466,8 @@ void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
 
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
-    prot_bigbuffer_flush(C->pout);
+    prot_BLOCK(C->pout);
+    prot_flush(C->pout);
 }
 
 
@@ -1494,9 +1495,8 @@ void cmd_startupdate(struct conn *C, const char *tag)
     pthread_cond_init(&C->cond, NULL);
 
     /* The inital dump of the database can result in a lot of data,
-     * lets buffer to disk and not block on network I/O while holding
-     * mailboxes_mutex */
-    prot_bigbuffer_start(C->pout, config_getstring(IMAPOPT_TEMP_PATH));
+     * let's do this nonblocking */
+    prot_NONBLOCK(C->pout);
 
     /* indicate interest in updates */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
@@ -1513,7 +1513,8 @@ void cmd_startupdate(struct conn *C, const char *tag)
 
     prot_printf(C->pout, "%s OK \"streaming starts\"\r\n", tag);
 
-    prot_bigbuffer_flush(C->pout);
+    prot_BLOCK(C->pout);
+    prot_flush(C->pout);
 
     /* schedule our first update */
     C->ev = prot_addwaitevent(C->pin, time(NULL) + update_wait, 
