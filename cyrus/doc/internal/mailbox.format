@@ -1,0 +1,249 @@
+This is an attempt to document the cyrus mailbox format.  It should not
+be considered authoritative and is subject to change.
+
+No external tools should make use of this information.  Instead they should
+only make use of the standard interfaces to the cyurs mail store (IMAP, POP,
+LMTP, etc).
+
+---
+
+A cyrus mailbox is a directory in the filesystem.  Its entries can
+be one of the following types:
+
+-> A message file
+-> A metadata file (cyrus.header, cyrus.index, cyrus.cache)
+-> A sub-mailbox (a directory)
+
+The message files are named by their UID, followed by a '.', so UID 423
+would be named '423.'
+
+The metadata files are where things get interesting.
+
+cyrus.header:
+
+This file contains mailbox-wide information that does not change that
+often.
+
+Its format:
+<Mailbox Header Magic String>
+<Quota Root>\t<Mailbox Unique ID String>\n
+<Space-separated list of user flags>\n
+<Mailbox ACL>\n
+
+cyrus.index and cyrus.cache:
+
+These files cache frequently accessed information on a per-message basis.
+The index file holds fixed-length records on a per-message basis (and
+a header for the mailbox of related metadata), while the cache
+file holds variable-length information.
+
+These files have all binary data stored in network byte order.  Strings
+are stored NUL-terminated (this only applies to cyrus.cache).  All of the
+binary data is also 4-byte aligned (to accomplish this, the end of strings
+may be NUL-padded by up to 4 bytes).
+
+The overall format of these files looks sort of like this:
+
+cyrus.index:
++----------------+
+| Mailbox Header |
++----------------+
+| Msg: Seq Num 1 |
++----------------+
+| Msg: Seq Num 2 |
++----------------+
+|     ...        |
++----------------+
+
+The basic idea being that there is one header, and then all the message
+records are evenly spaced throughout the file.  All of the entires into
+each message record are at well-known offsets, making any part of
+the file accessable at roughly equal speed.
+
+cyrus.cache:
+
++------------------------------------------------------------------------+
+|Gen # (32bits)|Size 1 (32bits)|Data 1                                   |
++------------------------------------------------------------------------+
+|           |Size 2 (32bits)|Data 2            |Size 3 (32bits)| Data 3  |
++------------------------------------------------------------------------+
+| .....                                                                  |
++------------------------------------------------------------------------+
+
+The cache file is different from the index file.  It starts with a 4
+byte header (the generation number...more on that later), then it has
+a whole bunch of entries in (size)(data) format.  The entires for each
+message are always consecutive, and in the same order (i.e. for any given
+message, the envelope is always the first bit of data), but there is no
+way to tell (without use of an offset from the index file) what message
+starts where.
+
+Detail of cyrus.index header:
+
+The index header contains the following information, in order:
+
+Generation Number (4 bytes) -
+  A number that is basically the "revision number" of the mailbox.  It must
+  match between the cache and index files.  This is to ensure that if we
+  fail to sync both the cache and index files and a crash happens (so that
+  only one is synced), we do not provide bad data to the user.
+
+Format (4 bytes) -
+  Basically obsolete (indicates netnews or regular).
+
+Minor Version (4 bytes) -
+  Indicates the version number of the index file.  This can be used
+  for on-the-fly upgrades of the index and cache files.
+
+Start Offset (4 bytes) -
+  Size of index header.
+
+Record Size (4 bytes) -
+  Size of an index record.
+
+Exists (4 bytes) -
+  How many messages are in the mailbox.
+
+Last Appenddate (4 bytes) -
+  (time_t) of the last time a message was appended
+
+Last UID (4 bytes) -
+  ???  - (is this UIDNEXT - 1?)
+
+Quota Mailbox Used (4 bytes) -
+  ???
+
+POP3 Last Login (4 bytes) -
+  (time_t) of the last pop3 login to this INBOX
+
+UIDvalidity (4 bytes) -
+  Take a guess.
+
+Deleted, Answered, and Flagged (4 bytes each) -
+  Counts of how many messages have each flag.
+
+POP3 New UIDL (4 bytes) -
+  Flag signalling that we're using <uidvalidity>.<uid> instead of just
+  <uid> for the output of the POP3 UIDL command.
+
+There are also spare fields in the index header, to allow for future
+expansion without forcing an upgrade of the file.
+
+
+Detail of cyrus.index records:
+
+These records start immediately following the cyrus.index
+header, and are all fixed size.  They are in-order by sequence number
+of the message.
+
+UID (4 bytes) - 
+  UID of the message
+
+INTERNALDATE (4 bytes) -
+  INTERNALDATE of the message
+
+SENTDATE (4 bytes) -
+  Contents of the Date: header.
+
+SIZE (4 bytes) -
+  Size of the whole message (in octets)
+
+HEADER SIZE (4 bytes) -
+  Size of the message header (in octets)
+
+CONTENT_OFFSET (4 bytes) -
+  Offset into the message file where the message content begins.
+
+CACHE_OFFSET (4 bytes) -
+  Offset into the cache file for the beginning of this message's
+  cache entry.
+
+LAST UPDATED (4 bytes) -
+  (time_t) of the last time this record was changed
+
+SYSTEM FLAGS (4 bytes) -
+  Bitmask showing which system flags are set/unset
+
+USER FLAGS (MAX_USER_FLAGS / 32 bytes)
+  Bitmask showing which user flags are set/unset
+
+CONTENT_LINES (4 bytes) -
+  Number of text lines contained in the message content (body).
+
+Cache file format detail:
+
+The order of fields per record in the cache file is as follows:
+(keep in mind that they are all preceeded by a 4 byte network byte order
+size).
+
+Envelope Response -
+  Raw IMAP response for a request for the envelope.
+
+Bodystructure Response -
+  Raw IMAP response for a request for the bodystructure.
+
+Body Response -
+  Raw IMAP response for an (old style) request for the body.
+
+Binary Bodystructure -
+  Offsets into the message file to pull out various body parts.
+  (xxx this needs more description of the actual format used.
+   message_write_section in message.c)
+
+Cache Header -
+  Any cached header fields.  These are in the same format they would
+  appear in the message file:
+
+  HeaderName: headerdata\r\n
+
+  Examples include: References, In-Reply-To, etc.
+
+From -
+  The from header.
+
+To -
+  The to header.
+
+Cc -
+  The CC header.
+
+Bcc -
+  The BCC header.
+
+Subject -
+  The Subject header.
+
+Notes about access:
+  - Expunge is very slow (it requires rewriting both the cache and index file)
+
+  - On open we build up an in-memory representation of a UID->seqno index,
+    among other things.
+
+  - Append is fast (it only adds to the end of both the cache and index files)
+
+  - Delivery is something like this:
+
+    - Sync message file
+    - Sync index file + generation number
+    - Sync cache file + generation number
+
+Future considerations:
+  - Cache all header fields? (or all up to Xk?)  This could greatly improve
+    speeds of clients that just ask for everything, but also increases the
+    expense of rewriting the cache file (as well as the size it takes
+    on disk).
+
+  - Reformat cache file to use a (size)(size)(size)(size)(data)(data)(data)
+    format.  This makes accesses anywhere in the cache file equally fast,
+    as opposed to having to iterate through all the entires for a given
+    message to get to the last one.  Note that either way is still O(1)
+    so maybe it doesn't matter much.
+
+  - Can we do better with expunge if we don't rewrite the cache file as often?
+    (instead, allow it to accumulate dead data, and only once in a while
+     sweep through and clear out the dead data).  This should be fine
+    from a correctness standpoint since if we eliminate the index record we
+    just don't have a pointer to the cache file data anymore.
+
+  - It would be useful to store a uniqueid -> mailbox name index, so that
+    we could fix arbitron again.
