@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.33 2002/08/28 18:40:43 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.34 2002/08/31 01:48:35 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1657,6 +1657,8 @@ void cmd_login(char *tag, char *user)
     }
     
     imapd_authstate = auth_newstate(imapd_userid, NULL);
+
+    /* xxx why aren't we using authisa() */
     val = config_getstring(IMAPOPT_ADMINS);
     while (*val) {
 	for (p = (char *)val; *p && !isspace((int) *p); p++);
