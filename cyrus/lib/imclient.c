@@ -859,6 +859,23 @@ struct imclient *imclient;
 }
 
 /*
+ * Get information for calling select
+ * 'fd' is filled in with file descriptor to select() for read
+ * 'wanttowrite' is filled in with nonzero value iff should
+ * select() for write as well.
+ */
+void
+imclient_getselectinfo(imclient, fd, wanttowrite)
+struct imclient *imclient;
+int *fd;
+int *wanttowrite;
+{
+    *fd = imclient->fd;
+    *wanttowrite = imclient->outcryptlen ||
+	imclient->outptr - imclient->outstart;
+}
+
+/*
  * Process one input or output event on the connection 'imclient'.
  */
 void
