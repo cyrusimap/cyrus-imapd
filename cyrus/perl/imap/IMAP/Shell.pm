@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.19 2002/08/21 20:14:03 rjs3 Exp $
+# $Id: Shell.pm,v 1.20 2002/09/12 15:39:50 rjs3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -1310,8 +1310,9 @@ Remove ACLs from the specified mailbox.
 Delete the specified mailbox.
 
 Administrators do not have implicit delete rights on mailboxes.  Use the
-B<setaclmailbox> command to grant the C<d> permission to your principal
-if you need to delete a mailbox you do not own.
+B<setaclmailbox> command to grant the C<c> permission (or other permission
+as specified by the deleteright configuration option in imapd.conf)
+to your principal if you need to delete a mailbox you do not own. 
 
 Note that the online help admits to an optional host argument.  This argument
 is not currently used, and will be rejected with an error if specified; it
