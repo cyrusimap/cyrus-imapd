@@ -127,7 +127,9 @@ glob *glob_init_suppress(str, flags, suppress)
 		if (*str == '*') g->gstar = ++str, g->ghier = NULL;
 		else if (*str == '%') g->ghier = ++str;
 		else break;
-		while (*str && *dst && TOLOWER(*str) != TOLOWER(*dst)) ++dst;
+		if (*str != '%') {
+		    while (*dst && TOLOWER(*str) != TOLOWER(*dst)) ++dst;
+		}
 	    } while (*str && *dst);
 	    g->gptr = str;
 	    if (*dst) g->flags &= ~GLOB_INBOXCASE;
@@ -233,44 +235,42 @@ int glob_test(g, ptr, len, min)
 		++ptr, ++gptr;
 	    }
 	    if (*gptr == '*') {
-		/* if nothing after '*', we're done */
-		if (!*++gptr) {
-		    ptr = pend;
-		    break;
-		}
 		ghier = NULL;
-		gstar = gptr;
+		gstar = ++gptr;
 		pstar = ptr;
-	    } else if (*gptr == '%') {
-		/* if nothing after '%', we may be done */
-		if (!*++gptr) {
-		    while (ptr != pend && *ptr != g->sep_char) ++ptr;
-		    if (min && ptr != pend && ptr - start >= *min) {
+	    }
+	    if (*gptr == '%') {
+		ghier = ++gptr;
+		phier = ptr;
+	    }
+	    if (ghier) {
+		/* look for a match with first char following '%',
+		 * stop at a sep_char unless we're doing "*%"
+		 */
+		ptr = phier;
+		while (ptr != pend && *ghier != *ptr
+		       && (*ptr != g->sep_char ||
+			   (!*ghier && gstar && *gstar == '%' && min
+			    && ptr - start < *min))) {
+		    ++ptr;
+		}
+		if (ptr == pend) break;
+		if (*ptr == g->sep_char) {
+		    if (!*ghier && min) {
 			*min = gstar ? ptr - start + 1 : -1;
 			return (ptr - start);
 		    }
-		    if (gstar && *gstar == '%' && ptr < pend) {
-			pstar = ++ptr;
-			--gptr;
-		    }
-		} else {
-		    ghier = gptr;
-		    phier = ptr;
-		}
-	    }
-	    if (ghier) {
-		/* look for a match with first char following '%' */
-		while (phier != pend && *ghier != *phier
-		       && *phier != g->sep_char) ++phier;
-		if (phier == pend) break;
-		if (*phier == g->sep_char) {
 		    ghier = NULL;
 		} else {
-		    ptr = ++phier;
+		    phier = ++ptr;
 		    gptr = ghier + 1;
 		}
 	    }
 	    if (gstar && !ghier) {
+		if (!*gstar) {
+		    ptr = pend;
+		    break;
+		}
 		/* look for a match with first char following '*' */
 		while (pstar != pend && *gstar != *pstar) ++pstar;
 		if (pstar == pend) break;
@@ -291,44 +291,42 @@ int glob_test(g, ptr, len, min)
 		++ptr, ++gptr;
 	    }
 	    if (*gptr == '*') {
-		/* if nothing after '*', we're done */
-		if (!*++gptr) {
-		    ptr = pend;
-		    break;
-		}
 		ghier = NULL;
-		gstar = gptr;
+		gstar = ++gptr;
 		pstar = ptr;
-	    } else if (*gptr == '%') {
-		/* if nothing after '%', we may be done */
-		if (!*++gptr) {
-		    while (ptr != pend && *ptr != g->sep_char) ++ptr;
-		    if (min && ptr != pend && ptr - start >= *min) {
+	    }
+	    if (*gptr == '%') {
+		ghier = ++gptr;
+		phier = ptr;
+	    }
+	    if (ghier) {
+		/* look for a match with first char following '%',
+		 * stop at a sep_char unless we're doing "*%"
+		 */
+		ptr = phier;
+		while (ptr != pend && *ghier != TOLOWER(*ptr)
+		       && (*ptr != g->sep_char ||
+			   (!*ghier && gstar && *gstar == '%' && min
+			    && ptr - start < *min))) {
+		    ++ptr;
+		}
+		if (ptr == pend) break;
+		if (*ptr == g->sep_char) {
+		    if (!*ghier && min) {
 			*min = gstar ? ptr - start + 1 : -1;
 			return (ptr - start);
 		    }
-		    if (gstar && *gstar == '%' && ptr < pend) {
-			pstar = ++ptr;
-			--gptr;
-		    }
-		} else {
-		    ghier = gptr;
-		    phier = ptr;
-		}
-	    }
-	    if (ghier) {
-		/* look for a match with first char following '%' */
-		while (phier != pend && *ghier != TOLOWER(*phier)
-		       && *phier != g->sep_char) ++phier;
-		if (phier == pend) break;
-		if (*phier == g->sep_char) {
 		    ghier = NULL;
 		} else {
-		    ptr = ++phier;
+		    phier = ++ptr;
 		    gptr = ghier + 1;
 		}
 	    }
 	    if (gstar && !ghier) {
+		if (!*gstar) {
+		    ptr = pend;
+		    break;
+		}
 		/* look for a match with first char following '*' */
 		while (pstar != pend && *gstar != TOLOWER(*pstar)) ++pstar;
 		if (pstar == pend) break;
