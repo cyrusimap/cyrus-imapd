@@ -189,74 +189,6 @@ ifelse([$3], , , [$3
 fi
 ])
 
-dnl agentx.m4--detect agentx libraries
-dnl copied from x-unixrc
-dnl Tim Martin
-
-AC_DEFUN(CMU_AGENTX, [
-
-	dnl
-	dnl CMU AgentX
-	dnl
-	AC_MSG_CHECKING([for AgentX])
-	AC_ARG_WITH(agentx, [  --with-agentx              CMU AgentX libraries located in (val)], AGENTX_DIR="$withval", AGENTX_DIR=no)
-
-	found_agentx="no"
-
-	if test "${AGENTX_DIR}" != "no" &&
-	   test -f $AGENTX_DIR/lib${ABILIBDIR}/libagentx.a &&
-	   test -f $AGENTX_DIR/include/agentx.h; then
-	     AGENTX_DIR="$AGENTX_DIR"
-	     found_agentx="yes"
-	elif test -d /usr/local &&
-	   test -f /usr/local/lib${ABILIBDIR}/libagentx.a &&
-	   test -f /usr/local/include/agentx.h; then
-	     AGENTX_DIR="/usr/local"
-	     found_agentx="yes"
-
-	elif test -d /usr/ng &&
-	   test -f /usr/ng/lib${ABILIBDIR}/libagentx.a &&
-	   test -f /usr/ng/include/agentx.h; then
-	     AGENTX_DIR="/usr/ng"
-	     found_agentx="yes"
-	fi
-
-	if test "$found_agentx" = "no"; then
-	  AC_MSG_WARN([Could not locate AgentX Libraries! http://www.net.cmu.edu/groups/netdev/agentx/])
-	else
-	  LIB_AGENTX="-L$AGENTX_DIR/lib${ABILIBDIR} -lagentx"
-  	  AC_SUBST(LIB_AGENTX)
-	  AGENTXFLAGS="-I$AGENTX_DIR/include"
-          AC_SUBST(AGENTXFLAGS)   
-	  AC_MSG_RESULT([found $AGENTX_DIR/lib${ABILIBDIR}/libagentx.a])	
-	fi
-
-
-
-])
-dnl pthreads.m4--pthreads setup macro
-dnl Rob Earhart
-
-AC_DEFUN(CMU_PTHREADS, [
-   AC_REQUIRE([AC_CANONICAL_HOST])
-   cmu_save_LIBS="$LIBS"
-   AC_CHECK_LIB(pthread, pthread_create,LIB_PTHREAD="-lpthread",
-     AC_CHECK_LIB(c_r, pthread_create,LIB_PTHREAD="-lc_r",
-       AC_ERROR([Can't compile without pthreads])))
-  LIBS="$cmu_save_LIBS"
-   AC_SUBST(LIB_PTHREAD)
-   AC_DEFINE(_REENTRANT)
-   case "$host_os" in
-   solaris2*)
- 	AC_DEFINE(_POSIX_PTHREAD_SEMANTICS)
- 	AC_DEFINE(__EXTENSIONS__)
- 	;;
-   irix6*)
- 	AC_DEFINE(_SGI_REENTRANT_FUNCTIONS)
- 	;;
-   esac
-])
-
 dnl bsd_sockets.m4--which socket libraries do we need? 
 dnl Derrick Brashear
 dnl from Zephyr
@@ -302,5 +234,33 @@ AC_DEFUN(CMU_LIBWRAP, [
     AC_CHECK_LIB(nsl, yp_get_default_domain, LIB_WRAP="${LIB_WRAP} -lnsl")
   fi
   AC_SUBST(LIB_WRAP)
+])
+
+dnl look for the ucdsnmp libraries
+
+AC_DEFUN(CMU_UCDSNMP, [
+  AC_REQUIRE([CMU_SOCKETS])
+  AC_ARG_WITH(ucdsnmp, 
+              [  --with-ucdsnmp=DIR      use ucd snmp (rooted in DIR) [yes] ],
+              with_ucdsnmp=$withval, with_ucdsnmp=yes)
+  if test "$with_ucdsnmp" != no; then
+    if test -d "$with_ucdsnmp"; then
+      CPPFLAGS="$CPPFLAGS -I${with_ucdsnmp}/include"
+      LDFLAGS="$LDFLAGS -L${with_ucdsnmp}/lib"
+    fi
+    cmu_save_LIBS="$LIBS"
+    AC_CHECK_LIB(snmp, sprint_objid,
+		 AC_CHECK_HEADER(ucd-snmp/version.h,, with_ucdsnmp=no),
+		 with_ucdsnmp=no, ${LIB_SOCKET})
+    LIBS="$cmu_save_LIBS"
+  fi
+  AC_MSG_CHECKING(UCD SNMP libraries)
+  AC_MSG_RESULT($with_ucdsnmp)
+  LIB_UCDSNMP=""
+  if test "$with_ucdsnmp" != no; then
+    AC_DEFINE(HAVE_UCDSNMP)
+    LIB_UCDSNMP="-lucdagent -lucdmibs -lsnmp"
+  fi
+  AC_SUBST(LIB_UCDSNMP)
 ])
 
