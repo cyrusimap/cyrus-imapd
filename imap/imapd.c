@@ -46,6 +46,7 @@
 #include "util.h"
 #include "auth.h"
 #include "acte.h"
+#include "map.h"
 #include "config.h"
 #include "version.h"
 #include "charset.h"
@@ -2566,16 +2567,20 @@ char *name;
     char buf[MAX_MAILBOX_PATH];
 
     quota.root = name;
-    quota.file = 0;
+    quota.fd = -1;
 
     if (!imapd_userisadmin) r = IMAP_PERMISSION_DENIED;
     else {
 	sprintf(buf, "%s%s%s", config_dir, FNAME_QUOTADIR, quota.root);
-	quota.file = fopen(buf, "r+");
-	if (!quota.file) {
+	quota.fd = open(buf, O_RDWR, 0);
+	if (quota.fd == -1) {
 	    r = IMAP_QUOTAROOT_NONEXISTENT;
 	}
-	else r = mailbox_read_quota(&quota);
+	else {
+	    map_refresh(quota.fd, 1, &quota.base, &quota.len,
+			MAP_UNKNOWN_LEN, buf, 0);
+	    r = mailbox_read_quota(&quota);
+	}
     }
     
     if (!r) {
@@ -2589,7 +2594,10 @@ char *name;
 	prot_printf(imapd_out, ")\r\n");
     }
 
-    if (quota.file) fclose(quota.file);
+    if (quota.fd != -1) {
+	close(quota.fd);
+	map_free(&quota.base, &quota.len);
+    }
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));

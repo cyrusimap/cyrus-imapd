@@ -29,6 +29,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <fcntl.h>
 #include <ctype.h>
 #include <syslog.h>
 #include <sys/types.h>
@@ -189,7 +190,8 @@ char *name;
     int format = MAILBOX_FORMAT_NORMAL;
     bit32 valid_user_flags[MAX_USER_FLAGS/32];
     char fnamebuf[MAX_MAILBOX_PATH];
-    FILE *newindex, *newcache;
+    FILE *newindex;
+    int newcache_fd;
     char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
 	     INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
     unsigned long *uid;
@@ -212,7 +214,7 @@ char *name;
     if (r) {
 	return r;
     }
-    if (mailbox.header) {
+    if (mailbox.header_fd != -1) {
 	(void) mailbox_lock_header(&mailbox);
     }
     mailbox.header_lock_count = 1;
@@ -283,8 +285,8 @@ char *name;
 
     strcpy(fnamebuf, FNAME_CACHE+1);
     strcat(fnamebuf, ".NEW");
-    newcache = fopen(fnamebuf, "w+");
-    if (!newcache) {
+    newcache_fd = open(fnamebuf, O_RDWR|O_TRUNC, 0666);
+    if (newcache_fd == -1) {
 	fclose(newindex);
 	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
@@ -293,7 +295,7 @@ char *name;
     memset(buf, 0, sizeof(buf));
     (*(bit32 *)buf) = mailbox.generation_no + 1;
     fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
-    fwrite(buf, 1, sizeof(bit32), newcache);
+    retry_write(newcache_fd, buf, sizeof(bit32));
 
     /* Find all message files in directory */
     uid = (unsigned long *) xmalloc(UIDGROW * sizeof(unsigned long));
@@ -327,7 +329,7 @@ char *name;
     }
     if (!dirp) {
 	fclose(newindex);
-	fclose(newcache);
+	close(newcache_fd);
 	mailbox_close(&mailbox);
 	free(uid);
 	return IMAP_IOERROR;
@@ -358,8 +360,10 @@ char *name;
     old_msg = 0;
     old_index.uid = 0;
     mailbox.format = format;
-    if (mailbox.cache) fclose(mailbox.cache);
-    mailbox.cache = newcache;
+    if (mailbox.cache_fd) close(mailbox.cache_fd);
+    mailbox.cache_fd = newcache_fd;
+    /* Don't care about mailbox.cache_base and mailbox.cache_len */
+
     for (msg = 0; msg < uid_num; msg++) {
 	message_index = zero_index;
 	message_index.uid = uid[msg];
@@ -469,9 +473,8 @@ char *name;
 
     n = fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
     fflush(newindex);
-    fflush(newcache);
-    if (n != INDEX_HEADER_SIZE || ferror(newindex) || ferror(newcache)
-	|| fsync(fileno(newindex)) || fsync(fileno(newcache))) {
+    if (n != INDEX_HEADER_SIZE || ferror(newindex) 
+	|| fsync(fileno(newindex)) || fsync(newcache_fd)) {
 	fclose(newindex);
 	mailbox_close(&mailbox);
 	return IMAP_IOERROR;

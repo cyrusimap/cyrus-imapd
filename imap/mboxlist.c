@@ -1506,14 +1506,17 @@ int newquota;
     quota.root = quota_path + strlen(quota_path);
     strcpy(quota.root, root);
 
-    if (quota.file = fopen(quota_path, "r+")) {
+    if (quota.fd = open(quota_path, O_RDWR, 0)) {
 	/* Just lock and change it */
 	r = mailbox_lock_quota(&quota);
 
 	quota.limit = newquota;
 
 	if (!r) r = mailbox_write_quota(&quota);
-	if (quota.file) fclose(quota.file);
+	if (quota.fd != -1) {
+	    close(quota.fd);
+	    map_free(&quota.base, &quota.len);
+	}
 	return r;
     }
 
@@ -1557,7 +1560,10 @@ int newquota;
     mboxlist_findall(pattern, 1, 0, mboxlist_changequota);
     
     r = mailbox_write_quota(&quota);
-    if (quota.file) fclose(quota.file);
+    if (quota.fd != -1) {
+	close(quota.fd);
+	map_free(&quota.base, &quota.len);
+    }
     mboxlist_unlock();
     return r;
 }

@@ -33,6 +33,7 @@
 #include <time.h>
 #include <syslog.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
 
@@ -161,7 +162,7 @@ static char *message_getline P((char *s, unsigned n, struct msg *msg));
 static int message_pendingboundary P((char *s, char **boundaries,
 				      int *boundaryct));
 
-static void message_write_cache P((FILE *outfile, struct body *body));
+static int message_write_cache P((int outfd, struct body *body));
 
 static void message_write_envelope P((struct ibuf *ibuf, struct body *body));
 static void message_write_body P((struct ibuf *ibuf, struct body *body,
@@ -179,7 +180,7 @@ static void message_write_searchaddr P((struct ibuf *ibuf,
 
 static void message_ibuf_init P((struct ibuf *ibuf));
 static message_ibuf_ensure P((struct ibuf *ibuf, unsigned len));
-static void message_ibuf_write P((FILE *outfile, struct ibuf *ibuf));
+static void message_ibuf_iov P((struct iovec *iov, struct ibuf *ibuf));
 static void message_ibuf_free P((struct ibuf *ibuf));
 static void message_free_body P((struct body *body));
 
@@ -304,6 +305,7 @@ struct index_record *message_index;
 {
     struct body body;
     struct msg msg;
+    int n;
 
     msg.base = msg_base;
     msg.len = msg_len;
@@ -317,12 +319,11 @@ struct index_record *message_index;
     message_index->header_size = body.header_size;
     message_index->content_offset = body.content_offset;
 
-    message_index->cache_offset = ftell(mailbox->cache);
-
-    message_write_cache(mailbox->cache, &body);
+    message_index->cache_offset = lseek(mailbox->cache_fd, 0, SEEK_CUR);
+    n = message_write_cache(mailbox->cache_fd, &body);
     message_free_body(&body);
 
-    if (ferror(mailbox->cache)) {
+    if (n == -1) {
 	syslog(LOG_ERR, "IOERROR: appending cache for %s: %m", mailbox->name);
 	return IMAP_IOERROR;
     }
@@ -1371,14 +1372,16 @@ int *boundaryct;
  * Write the cache information for the message parsed to 'body'
  * to 'outfile'.
  */
-static void
-message_write_cache(outfile, body)
-FILE *outfile;
+static int
+message_write_cache(outfd, body)
+int outfd;
 struct body *body;
 {
     struct ibuf section, envelope, bodystructure, oldbody;
     struct ibuf from, to, cc, bcc, subject;
     struct body toplevel;
+    int n;
+    struct iovec iov[15];
 
     toplevel.type = "MESSAGE";
     toplevel.subtype = "RFC822";
@@ -1412,16 +1415,18 @@ struct body *body;
     message_write_nstring(&subject, charset_decode1522(body->subject));
 
 
-    message_ibuf_write(outfile, &envelope);
-    message_ibuf_write(outfile, &bodystructure);
-    message_ibuf_write(outfile, &oldbody);
-    message_ibuf_write(outfile, &section);
-    message_ibuf_write(outfile, &body->cacheheaders);
-    message_ibuf_write(outfile, &from);
-    message_ibuf_write(outfile, &to);
-    message_ibuf_write(outfile, &cc);
-    message_ibuf_write(outfile, &bcc);
-    message_ibuf_write(outfile, &subject);
+    message_ibuf_iov(&iov[0], &envelope);
+    message_ibuf_iov(&iov[1], &bodystructure);
+    message_ibuf_iov(&iov[2], &oldbody);
+    message_ibuf_iov(&iov[3], &section);
+    message_ibuf_iov(&iov[4], &body->cacheheaders);
+    message_ibuf_iov(&iov[5], &from);
+    message_ibuf_iov(&iov[6], &to);
+    message_ibuf_iov(&iov[7], &cc);
+    message_ibuf_iov(&iov[8], &bcc);
+    message_ibuf_iov(&iov[9], &subject);
+
+    n = retry_writev(outfd, iov, 10);
 
     message_ibuf_free(&envelope);
     message_ibuf_free(&bodystructure);
@@ -1432,6 +1437,8 @@ struct body *body;
     message_ibuf_free(&cc);
     message_ibuf_free(&bcc);
     message_ibuf_free(&subject);
+
+    return n;
 }
 
 /* Append character 'c' to 'ibuf' */
@@ -2037,23 +2044,29 @@ unsigned len;
 }
 
 /*
- * Write 'ibuf' to the cache file 'outfile'
+ * Set up 'iov' to write the data for 'ibuf'.
  */
 static void
-message_ibuf_write(outfile, ibuf)
-FILE *outfile;
+message_ibuf_iov(iov, ibuf)
+struct iovec *iov;
 struct ibuf *ibuf;
 {
     char *s;
     int len;
+    int pad;
+
+    /* Drop padding on end */
+    message_ibuf_ensure(ibuf, 3);
+    ibuf->end[0] = '\0';
+    ibuf->end[1] = '\0';
+    ibuf->end[2] = '\0';
 
     len = (ibuf->end - ibuf->start);
     s = ibuf->start - sizeof(bit32);
     *((bit32 *)s) = htonl(len);
-    fwrite(s, 1, len+sizeof(bit32), outfile);
-    if (len & 3) {
-	fwrite("\0\0\0", 1, 4 - (len & 3), outfile);
-    }
+
+    iov->iov_base = s;
+    iov->iov_len = (len+sizeof(bit32)+3) & ~3;
 }
 
 /*

@@ -280,17 +280,17 @@ int checkseen;
     newexists = mailbox->exists;
 
     /* Refresh the index and cache files */
-    map_refresh(fileno(mailbox->index), 0, &index_base, &index_len,
+    map_refresh(mailbox->index_fd, 0, &index_base, &index_len,
 		start_offset + newexists * record_size,
 		"index", mailbox->name);
-    if (fstat(fileno(mailbox->cache), &sbuf) == -1) {
+    if (fstat(mailbox->cache_fd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: stating cache file for %s: %m",
 	       mailbox->name);
 	fatal("failed to stat cache file", EX_IOERR);
     }
     if (cache_end < sbuf.st_size) {
 	cache_end = sbuf.st_size;
-	map_refresh(fileno(mailbox->cache), 0, &cache_base, &cache_len,
+	map_refresh(mailbox->cache_fd, 0, &cache_base, &cache_len,
 		    cache_end, "cache", mailbox->name);
     }
 
@@ -817,7 +817,7 @@ int nflags;
     mailbox_unlock_index(mailbox);
 
     /* Refresh the index file, for systems without mmap() */
-    map_refresh(fileno(mailbox->index), 0, &index_base, &index_len,
+    map_refresh(mailbox->index_fd, 0, &index_base, &index_len,
 		start_offset + imapd_exists * record_size,
 		"index", mailbox->name);
 
@@ -923,7 +923,7 @@ int statusitems;
 	    int msg;
 	    unsigned uid;
 
-	    map_refresh(fileno(mailbox->index), 0, &base, &len,
+	    map_refresh(mailbox->index_fd, 0, &base, &len,
 			mailbox->start_offset +
 			mailbox->exists * mailbox->record_size,
 			"index", mailbox->name);

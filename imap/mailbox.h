@@ -83,7 +83,10 @@ dont know what to use for bit32
 #define QUOTA_UNITS (1024)
 
 struct quota {
-    FILE *file;
+    int fd;
+    const char *base;
+    unsigned long len;
+
     int lock_count;
     char *root;
 
@@ -93,16 +96,23 @@ struct quota {
 };
 
 struct mailbox {
-    FILE *header;
-    FILE *index;
-    FILE *cache;
+    int header_fd;
+    int index_fd;
+    int cache_fd;
+
+    const char *header_base;
+    unsigned long header_len;
+    const char *index_base;
+    unsigned long index_len;
+    const char *cache_base;
+    unsigned long cache_len;
 
     int header_lock_count;
     int index_lock_count;
     int seen_lock_count;
     int pop_lock_count;
 
-    time_t header_mtime;
+    long header_ino;
     time_t index_mtime;
     long index_ino;
 
