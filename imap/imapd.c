@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.238 2000/05/09 17:54:42 leg Exp $ */
+/* $Id: imapd.c,v 1.239 2000/05/11 18:42:08 leg Exp $ */
 
 #include <config.h>
 
@@ -47,13 +47,13 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/utsname.h>
 
 #include <sasl.h>
 
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
-#include "map.h"
 #include "imapconf.h"
 #include "version.h"
 #include "charset.h"
@@ -67,6 +67,7 @@
 #include "mboxname.h"
 #include "append.h"
 #include "mboxlist.h"
+#include "acapmbox.h"
 
 #include "pushstats.h"		/* SNMP interface */
 
@@ -140,6 +141,7 @@ void cmd_status(char *tag, char *name);
 void cmd_getuids(char *tag, char *startuid);
 void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
+void cmd_id(char* tag);
 
 void cmd_starttls(char *tag, int imaps);
 int starttls_enabled(void);
@@ -148,8 +150,13 @@ int starttls_enabled(void);
 void cmd_netscrape(char* tag);
 #endif
 
+enum string_types { IMAP_ASTRING, IMAP_NSTRING, IMAP_STRING };
+#define getastring(buf)	getxstring((buf), IMAP_ASTRING)
+#define getnstring(buf)	getxstring((buf), IMAP_NSTRING)
+#define getstring(buf)	getxstring((buf), IMAP_STRING)
+
 int getword(struct buf *buf);
-int getastring(struct buf *buf);
+int getxstring(struct buf *buf, int type);
 int getsearchprogram(char *tag, struct searchargs *searchargs,
 			int *charset, int parsecharset);
 int getsearchcriteria(char *tag, struct searchargs *searchargs,
@@ -604,8 +611,9 @@ cmdloop()
 	    if (isupper((int) *p)) *p = tolower((int) *p);
 	}
 
-	/* Only Authenticate/Login/Logout/Noop/Starttls allowed when not logged in */
-	if (!imapd_userid && !strchr("ALNCS", cmd.s[0])) goto nologin;
+	/* Only Authenticate/Login/Logout/Noop/Capability/Id/Starttls
+	   allowed when not logged in */
+	if (!imapd_userid && !strchr("ALNCIS", cmd.s[0])) goto nologin;
     
 	/* note that about half the commands (the common ones that don't
 	   hit the mailboxes file) now close the mailboxes file just in
@@ -840,6 +848,14 @@ cmdloop()
 		cmd_getquotaroot(tag.s, arg1.s);
 
 		snmp_increment(GETQUOTAROOT_COUNT, 1);
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'I':
+	    if (!strcmp(cmd.s, "Id")) {
+		if (c != ' ') goto missingargs;
+		cmd_id(tag.s);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1511,7 +1527,9 @@ char *cmd;
 }
 
 /*
- * Perform an ID command.  
+ * Parse and perform an ID command.
+ *
+ * the command has been parsed up to the parameter list.
  *
  * we only record one ID response from a given client.
  *
@@ -1522,27 +1540,141 @@ char *cmd;
 void cmd_id(char *tag)
 {
     static int did_id = 0;
-    int c;
+    int c, d, i, npair = 0;
+    static struct buf arg, field;
+    struct strlist *fields = 0, *values = 0;
+    struct utsname os;
 
-    did_id = 1;
-    c = prot_getc(imapd_in);
-    if ((c = prot_getc(imapd_in)) != ' ') {
-	/* we lose */
+    c = getword(&arg);
+    /* check for "NIL" or start of parameter list */
+    if (strcmp(arg.s, "NIL") && c != '(') {
+	prot_printf(imapd_out, "%s BAD Invalid parameter list in Id\r\n", tag);
 	eatline(c);
-	prot_printf(imapd_out, "%s BAD required parameter missing\r\n");
 	return;
     }
 
-    /* now is either a list of nstrings or NIL */
+    /* parse parameter list */
+    if (c == '(') {
+	for (;;) {
+	    /* get field name */
+	    c = getstring(&field);
+
+	    /* if field is legal length and followed by a space, continue */
+	    if (c == ' ' && strlen(field.s) <= 30) {
+		/* get field value */
+		d = getnstring(&arg);
+
+		/* if value is legal length, and is followed by a space
+		   or close paren, and we have not exceeded max num of
+		   field-value pairs, continue */
+		if ((d == ' ' || d == ')') && strlen(arg.s) <= 1024 &&
+		    ++npair <= 30) {
+		    appendstrlist(&fields, field.s);
+		    appendstrlist(&values, arg.s);
+
+		    /* if value is followed by a close paren, we're done */
+		    if (d == ')') {
+			c = prot_getc(imapd_in);
+			break;
+		    }
+		    /* otherwise, get next pair */
+		    continue;
+		}
+	    }
+
+	    /* print error message, cleanup and exit */
+	    if (c == EOF)
+		prot_printf(imapd_out,
+			    "%s BAD Invalid/missing field name in Id\r\n",
+			    tag);
+	    else if (strlen(field.s) > 30)
+		prot_printf(imapd_out,
+			    "%s BAD Field \"%s\" longer than 30 octets in Id\r\n",
+			    tag, field.s);
+	    else if (c != ' ' || d == EOF)
+		prot_printf(imapd_out,
+			    "%s BAD Invalid/missing value for field \"%s\" in Id\r\n",
+			    tag, field.s);
+	    else if (strlen(arg.s) > 1024)
+		prot_printf(imapd_out,
+			    "%s BAD Value \"%s\" longer than 1024 octets in Id\r\n",
+			    tag, arg.s);
+	    else if (npair > 30)
+		prot_printf(imapd_out,
+			    "%s BAD More than 30 field-value pairs in Id\r\n",
+			    tag);
+	    else
+		prot_printf(imapd_out,
+			    "%s BAD Missing required close parenthesis in Id\r\n",
+			    tag);
+	    eatline(c);
+	    freestrlist(fields);
+	    freestrlist(values);
+	    return;
+	}
+    }
+
+    /* check for CRLF */
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected extra arguments to Id\r\n", tag);
+	eatline(c);
+	if (npair) {
+	    freestrlist(fields);
+	    freestrlist(values);
+	}
+	return;
+    }
+
+    /* log the client's ID string.
+       eventually this should be a callback or something. */
+    if (npair && !did_id) {
+	char logbuf[32768];
+	struct strlist *fptr, *vptr;
+
+	sprintf(logbuf, "client id:");
+	for (i = 0, fptr = fields, vptr = values; i < npair;
+	     i++, fptr = fptr->next, vptr = vptr->next) {
+	    /* should we check for an format literals here ??? */
+	    sprintf(logbuf+strlen(logbuf), " \"%s\" ", fptr->s);
+	    if (!strcmp(vptr->s, "NIL"))
+		sprintf(logbuf+strlen(logbuf), "NIL");
+	    else
+		sprintf(logbuf+strlen(logbuf), "\"%s\"", vptr->s);
+	}
+
+	syslog(LOG_INFO, "%s", logbuf);
+
+	freestrlist(fields);
+	freestrlist(values);
+
+	did_id = 1;
+    }
 
     /* spit out our ID string.
        eventually this might be configurable. */
     prot_printf(imapd_out, "* ID ("
-		"\"name\" \"Cyrus\" "
-		"\"version\" \"%s\" "
-	   "\"vendor\" \"Project Cyrus <http://asg.web.cmu.edu/cyrus>\")\r\n",
+		"\"name\" \"Cyrus\""
+		" \"version\" \"%s\""
+		" \"vendor\" \"Project Cyrus <http://asg.web.cmu.edu/cyrus>\"",
 		CYRUS_VERSION);
-    prot_printf(imapd_out, "%s OK id given\r\n");
+    /* add the os info */
+    if (!uname(&os))
+	prot_printf(imapd_out,
+		    " \"os\" \"%s\""
+		    " \"os-version\" \"%s\"",
+		    os.sysname, os.release);
+    /* add the environment info */
+    prot_printf(imapd_out,
+		" \"environment\" \"Cyrus SASL %d.%d.%d; %s",
+		SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
+		DB_VERSION_STRING);
+#ifdef HAVE_SSL
+    prot_printf(imapd_out, "; %s", OPENSSL_VERSION_TEXT);
+#endif
+    prot_printf(imapd_out, "\")\r\n%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 }
 
 /*
@@ -1552,15 +1684,23 @@ void cmd_capability(char *tag)
 {
     char *sasllist; /* the list of SASL mechanisms */
     unsigned mechcount;
+    const char *acapserver;
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
     prot_printf(imapd_out, "* CAPABILITY " CAPABILITY_STRING);
-    if (starttls_enabled())
+    if (starttls_enabled()) {
 	prot_printf(imapd_out, " STARTTLS");
-    if (!imapd_starttls_done && !config_getswitch("allowplaintext", 1))
-	prot_printf(imapd_out, " LOGINDISABLED");	
+    }
+    if (!imapd_starttls_done && !config_getswitch("allowplaintext", 1)) {
+	prot_printf(imapd_out, " LOGINDISABLED");
+    }
+    acapserver = config_getstring("acap_server", NULL);
+    if (acapserver != NULL) {
+	prot_printf(imapd_out, " ACAP=acap://%s%s/", 
+		    acapserver, global_dataset);
+    }
 
     /* add the SASL mechs */
     if (sasl_listmech(imapd_saslconn, NULL, 
@@ -3631,7 +3771,7 @@ void
 cmd_netscrape(tag)
     char *tag;
 {
-    char *url;
+    const char *url;
     /* so tempting, and yet ... */
     /* url = "http://random.yahoo.com/ryl/"; */
     url = config_getstring("netscapeurl",
@@ -3738,10 +3878,10 @@ struct buf *buf;
 }
 
 /*
- * Parse an astring
- * (atom, quoted-string, or literal)
+ * Parse an xstring
+ * (astring, nstring or string based on type)
  */
-int getastring(struct buf *buf)
+int getxstring(struct buf *buf, int type)
 {
     int c;
     int i, len = 0;
@@ -3767,21 +3907,45 @@ int getastring(struct buf *buf)
 	return EOF;
 
     default:
-	/*
-	 * Atom -- server is liberal in accepting specials other
-	 * than whitespace, parens, or double quotes
-	 */
-	for (;;) {
-	    if (c == EOF || isspace(c) || c == '(' || c == ')' || c == '\"') {
-		buf->s[len] = '\0';
-		return c;
+	switch (type) {
+	case IMAP_ASTRING:	 /* atom, quoted-string or literal */
+	    /*
+	     * Atom -- server is liberal in accepting specials other
+	     * than whitespace, parens, or double quotes
+	     */
+	    for (;;) {
+		if (c == EOF || isspace(c) || c == '(' || 
+		          c == ')' || c == '\"') {
+		    buf->s[len] = '\0';
+		    return c;
+		}
+		if (len == buf->alloc) {
+		    buf->alloc += BUFGROWSIZE;
+		    buf->s = xrealloc(buf->s, buf->alloc+1);
+		}
+		buf->s[len++] = c;
+		c = prot_getc(imapd_in);
 	    }
-	    if (len == buf->alloc) {
-		buf->alloc += BUFGROWSIZE;
-		buf->s = xrealloc(buf->s, buf->alloc+1);
+	    break;
+
+	case IMAP_NSTRING:	 /* "NIL", quoted-string or literal */
+	    /*
+	     * Look for "NIL"
+	     */
+	    if (c == 'N') {
+		prot_ungetc(c, imapd_in);
+		c = getword(buf);
+		if (!strcmp(buf->s, "NIL"))
+		    return c;
 	    }
-	    buf->s[len++] = c;
-	    c = prot_getc(imapd_in);
+	    if (c != EOF) prot_ungetc(c, imapd_in);
+	    return EOF;
+	    break;
+
+	case IMAP_STRING:	 /* quoted-string or literal */
+	    /*
+	     * Nothing to do here - fall through.
+	     */
 	}
 	
     case '\"':
