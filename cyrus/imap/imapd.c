@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.358 2002/03/18 22:41:00 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.359 2002/03/19 17:44:20 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -178,7 +178,7 @@ void cmd_status(char *tag, char *name);
 void cmd_getuids(char *tag, char *startuid);
 void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
-
+void cmd_mupdatepush(char *tag, char *name);
 void cmd_id(char* tag);
 extern void id_getcmdline(int argc, char **argv);
 extern void id_response(struct protstream *pout);
@@ -1220,7 +1220,16 @@ void cmdloop()
 
 		snmp_increment(MYRIGHTS_COUNT, 1);
 	    }
-	    else goto badcmd;
+	    else if (!strcmp(cmd.s, "Mupdatepush")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if(c == EOF) goto missingargs;
+		if(c == '\r') c = prot_getc(imapd_in);
+		if(c != '\n') goto extraargs;
+		cmd_mupdatepush(tag.s, arg1.s);
+		
+		/* snmp_increment(MUPDATEPUSH_COUNT, 1); */
+	    } else goto badcmd;
 	    break;
 
 	case 'N':
@@ -5831,7 +5840,7 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
 
 void cmd_xfer(char *tag, char *toserver, char *name) 
 {
-    int r = 0;
+    int r = 0, rerr = 0;
     char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
     char mailboxname[MAX_MAILBOX_NAME+1];
     char *path, *part;
@@ -5840,7 +5849,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     mupdate_handle *mupdate_h = NULL;
     int backout_mupdate = 0;
     int backout_remotebox = 0;
-
+    
     /* administrators only please */
     if (!imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
@@ -5866,6 +5875,10 @@ void cmd_xfer(char *tag, char *toserver, char *name)
      * 5) reconstruct remote mailbox
      * 6) mupdate.ACTIVATE(mailbox, remoteserver)
      * ** MAILBOX NOW LIVING ON REMOTE SERVER
+     * 6.5) force remote server to push the final mupdate entry to ensure
+     *      that the state of the world is correct (required if we do not
+     *      know the remote partition, but worst case it will be caught
+     *      when they next sync)
      * 7) local delete of mailbox
      * 8) remove local remote mailbox entry??????
      */
@@ -5906,11 +5919,9 @@ void cmd_xfer(char *tag, char *toserver, char *name)
  
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
     if(!r) {
-	/* xxx do we want it to be reserved on our host or on the remote
-	   host? I suspect recovery makes more sense for it to be on
-	   our host */
-	/* xxx we are setting it to the actual path here, and that sucks */
-	snprintf(buf, sizeof(buf), "%s!%s", config_servername, path);
+	/* Note we are making the reservation on OUR host so that recovery
+	 * make sense */
+	snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
 	r = mupdate_deactivate(mupdate_h, mailboxname, buf);
 	if(r) syslog(LOG_ERR,
 		     "Could not move mailbox: %s, MUPDATE DEACTIVATE failed",
@@ -5961,6 +5972,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     /* xxx if the reconstruct failed we need to delete the remote mailbox */
 
     /* Step 6: mupdate.activate(mailbox, remote) */
+    /* We do this from the local server first so that recovery is easier */
     if(!r) {
 	/* xxx partition????? */
 	snprintf(buf, sizeof(buf), "%s!", toserver);
@@ -5971,6 +5983,18 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     if(!r) {
 	backout_remotebox = 0;
 	backout_mupdate = 0;
+
+	/* 6.5) Kick remote server to correct mupdate entry */
+	/* Note that we don't really care if this succeeds or not */
+	prot_printf(be->out, "MP1 MUPDATEPUSH {%d+}\r\n%s\r\n",
+		    strlen(name), name);
+	rerr = getresult(be->in, "MP1");
+	if(rerr) {
+	    syslog(LOG_ERR,
+		   "Could not trigger remote push to mupdate server" \
+		   "during move of %s",
+		   mailboxname);
+	}
     }
 
     /* 7) local delete of mailbox */
@@ -5982,18 +6006,16 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 		     "Could not delete local mailbox during move of %s",
 		     mailboxname);
     }
-    
-    /* 8) remove local remote mailbox entry??????
-     * 9) ??? kick remote server to do a push of the
-     *    actual record w/correct partition to mupdate?
-     */
+
+    /* 9) remove local remote mailbox entry?????? */
 
  done:
     if(r && backout_mupdate) {
-	int rerr = 0;
+	rerr = 0;
 	/* xxx if the mupdate server is what failed, then this won't
 	   help any! */
-	snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
+	/* Note the flag that we don't have a valid partiton at the moment */
+	snprintf(buf, sizeof(buf), "%s!MOVED", config_servername);
 	rerr = mupdate_activate(mupdate_h, name, buf, acl);
 	if(rerr) {
 	    syslog(LOG_ERR,
@@ -6002,7 +6024,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	}
     }
     if(r && backout_remotebox) {
-	int rerr = 0;
+	rerr = 0;
 	prot_printf(be->out, "LD1 LOCALDELETE {%d+}\r\n%s\r\n",
 		    strlen(name), name);
 	rerr = getresult(be->in, "LD1");
@@ -6891,3 +6913,51 @@ static int reset_saslconn(sasl_conn_t **conn)
     return SASL_OK;
 }
 
+void cmd_mupdatepush(char *tag, char *name)
+{
+    int r = 0;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+    char *part, *acl;
+    mupdate_handle *mupdate_h = NULL;
+    char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
+
+    if (!imapd_userisadmin) {
+	r = IMAP_PERMISSION_DENIED;
+    }
+    if (!mupdate_server) {
+	r = IMAP_SERVER_UNAVAILABLE;
+    }
+
+    if (!r) {
+	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
+						   imapd_userid, mailboxname);
+    }
+
+    if (!r) {
+	r = mlookup(tag, name, mailboxname, NULL, &part, &acl, NULL);
+    }
+    if (r == IMAP_MAILBOX_MOVED) return;
+
+    /* Push mailbox to mupdate server */
+    if (!r) {
+	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);	
+    }
+
+    if (!r) {
+	sprintf(buf, "%s!%s", config_servername, part);
+
+	r = mupdate_activate(mupdate_h, mailboxname, buf, acl);
+    }
+
+    if(mupdate_h) {
+	mupdate_disconnect(&mupdate_h);
+    }
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    }
+    else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    }
+}
