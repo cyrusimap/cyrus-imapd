@@ -89,6 +89,11 @@ void **state;			/* On success, filled in with state ptr */
 
     strncpy(instance, host_name->h_name, sizeof(instance)-1);
     instance[sizeof(instance)-1] = '\0';
+    /* downcase the instance */
+    p = instance;
+    do {
+      if (isupper(*p)) *p=tolower(*p);
+    } while (*p++);
     strcpy(realm, krb_realmofhost(instance));
     if (p = strchr(instance, '.')) *p = '\0';
 
