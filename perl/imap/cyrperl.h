@@ -81,6 +81,7 @@ struct xscyrus {
   char *class;
   struct xscb *cb;
   int flags;
+  int authenticated;
   int cnt;			/* hack */
   /* For holding per-connection information during authentication */
   /* We need to initialize this when we create a new connection */  

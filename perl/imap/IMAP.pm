@@ -173,6 +173,7 @@ sub _stringize {
 sub authenticate {
   my ($self, $first) = @_;
   my (%opts, $rc);
+
   if (defined $first &&
       $first =~ /^-\w+|Mechanism|Service|Authz|User|Minssf|Maxssf|Password$/) {
     (undef, %opts) = @_;
