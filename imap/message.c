@@ -60,6 +60,9 @@ struct body {
     char *description;
     char *encoding;
     char *md5;
+    char *disposition;
+    struct param *disposition_params;
+    struct param *language;
 
     /* Location/size information */
     long header_offset;
@@ -459,12 +462,22 @@ struct boundary *boundaries;
 			if (!strncasecmp(next+10, "escription:", 11)) {
 			    message_parse_string(next+21, &body->description);
 			}
+			else if (!strncasecmp(next+10, "ispostion:", 10)) {
+			    message_parse_disposition(next+20, body);
+			}
 			break;
 
 		    case 'i':
 		    case 'I':
 			if (!strncasecmp(next+10, "d:", 2)) {
 			    message_parse_string(next+12, &body->id);
+			}
+			break;
+
+		    case 'l':
+		    case 'L':
+			if (!strncasecmp(next+10, "anguage:", 8)) {
+			    message_parse_language(next+18, &body->language);
 			}
 			break;
 
@@ -770,6 +783,53 @@ struct body *body;
 }
 
 /*
+ * Parse a Content-Disposition from a header.
+ */
+static 
+message_parse_disposition(hdr, body)	    
+char *hdr;
+struct body *body;
+{
+    char *disposition;
+    int dispositionlen;
+    char *p;
+
+    /* Ignore if we already saw one of these headers */
+    if (body->disposition) return;
+
+    /* Skip leading whitespace, ignore header if blank */
+    message_parse_rfc822space(&hdr);
+    if (!hdr) return;
+
+    /* Find end of disposition token */
+    disposition = hdr;
+    for (; *hdr && !isspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
+	if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
+    }
+    dispositionlen = hdr - disposition;
+
+    /* Skip whitespace after type */
+    message_parse_rfc822space(&hdr);
+    if (!hdr) return;
+
+    /* Ignore header if not at end of header or parameter delimiter */
+    if (hdr && *hdr != ';') return;
+
+    /* Save content disposition */
+    body->disposition = xmalloc(dispositionlen + 1);
+    strncpy(body->disposition, disposition, dispositionlen);
+    body->disposition[dispositionlen] = '\0';
+    for (p = body->disposition; *p; p++) {
+	if (islower(*p)) *p = toupper(*p);
+    }
+
+    /* Parse parameter list */
+    if (hdr) {
+	message_parse_params(hdr+1, &body->disposition_params);
+    }
+}
+
+/*
  * Parse a parameter list from a header
  */
 static 
@@ -859,6 +919,57 @@ struct param **paramp;
 	else {
 	    strncpy(param->value, value, valuelen);
 	    param->value[valuelen] = '\0';
+	}
+
+	/* Get ready to parse the next parameter */
+	paramp = &param->next;
+    }
+}
+
+/*
+ * Parse a language list from a header
+ */
+static 
+message_parse_language(hdr, paramp)
+char *hdr;
+struct param **paramp;
+{
+    struct param *param;
+    static struct param zeroparam;
+    char *value;
+    int valuelen;
+    char *p;
+
+    for (;;) {
+	/* Skip over leading whitespace */
+	message_parse_rfc822space(&hdr);
+	if (!hdr) return;
+
+	/* Skip whitespace before value */
+	message_parse_rfc822space(&hdr);
+	if (!hdr) return;
+
+	/* Find end of value */
+	value = hdr;
+	for (; *hdr && !isspace(*hdr) && *hdr != ',' && *hdr != '('; hdr++) {
+	    if (*hdr != '-' && !isalpha(*hdr)) return;
+	}
+	valuelen = hdr - value;
+
+	/* Skip whitespace after value */
+	message_parse_rfc822space(&hdr);
+
+	/* Ignore parameter if not at end of header or language delimiter */
+	if (hdr && *hdr++ != ',') return;
+		  
+	/* Save value pair */
+	*paramp = param = (struct param *)xmalloc(sizeof(struct param));
+	*param = zeroparam;
+	param->value = xmalloc(valuelen + 1);
+	strncpy(param->value, value, valuelen);
+	param->value[valuelen] = '\0';
+	for (p = param->value; *p; p++) {
+	    if (islower(*p)) *p = toupper(*p);
 	}
 
 	/* Get ready to parse the next parameter */
@@ -1322,6 +1433,37 @@ int newformat;
 		PUTIBUF(ibuf, ')');
 	    }
 	    else message_write_nstring(ibuf, (char *)0);
+	    PUTIBUF(ibuf, ' ');
+	    PUTIBUF(ibuf, '(');
+	    message_write_nstring(ibuf, body->disposition ? body->disposition :
+				  "INLINE");
+	    PUTIBUF(ibuf, ' ');
+	    if (param = body->disposition_params) {
+		PUTIBUF(ibuf, '(');
+		while (param) {
+		    message_write_nstring(ibuf, param->attribute);
+		    PUTIBUF(ibuf, ' ');
+		    message_write_nstring(ibuf, param->value);
+		    if (param = param->next) {
+			PUTIBUF(ibuf, ' ');
+		    }
+		}
+		PUTIBUF(ibuf, ')');
+	    }
+	    else message_write_nstring(ibuf, (char *)0);
+	    PUTIBUF(ibuf, ')');
+	    PUTIBUF(ibuf, ' ');
+	    if (param = body->language) {
+		PUTIBUF(ibuf, '(');
+		while (param) {
+		    message_write_nstring(ibuf, param->value);
+		    if (param = param->next) {
+			PUTIBUF(ibuf, ' ');
+		    }
+		}
+		PUTIBUF(ibuf, ')');
+	    }
+	    else message_write_nstring(ibuf, (char *)0);
 	}
 
 	PUTIBUF(ibuf, ')');
@@ -1377,6 +1519,37 @@ int newformat;
 	/* Add additional fields for BODYSTRUCTURE */
 	PUTIBUF(ibuf, ' ');
 	message_write_nstring(ibuf, body->md5);
+	PUTIBUF(ibuf, ' ');
+	PUTIBUF(ibuf, '(');
+	message_write_nstring(ibuf, body->disposition ? body->disposition :
+			      "INLINE");
+	PUTIBUF(ibuf, ' ');
+	if (param = body->disposition_params) {
+	    PUTIBUF(ibuf, '(');
+	    while (param) {
+		message_write_nstring(ibuf, param->attribute);
+		PUTIBUF(ibuf, ' ');
+		message_write_nstring(ibuf, param->value);
+		if (param = param->next) {
+		    PUTIBUF(ibuf, ' ');
+		}
+	    }
+	    PUTIBUF(ibuf, ')');
+	}
+	else message_write_nstring(ibuf, (char *)0);
+	PUTIBUF(ibuf, ')');
+	PUTIBUF(ibuf, ' ');
+	if (param = body->language) {
+	    PUTIBUF(ibuf, '(');
+	    while (param) {
+		message_write_nstring(ibuf, param->value);
+		if (param = param->next) {
+		    PUTIBUF(ibuf, ' ');
+		}
+	    }
+	    PUTIBUF(ibuf, ')');
+	}
+	else message_write_nstring(ibuf, (char *)0);
     }
 
     PUTIBUF(ibuf, ')');
@@ -1500,31 +1673,29 @@ struct body *body;
 	&& strcmp(body->subtype, "RFC822") == 0) {
 	if (body->subpart->numparts) {
 	    /*
-	     * Part 0 of a message/rfc822 is the message header.
+	     * Part 0 of a message/rfc822 is the message header/text.
 	     * Nested parts of a message/rfc822 containing a multipart
 	     * are the sub-parts of the multipart.
 	     */
 	    message_write_bit32(ibuf, body->subpart->numparts+1);
 	    message_write_bit32(ibuf, body->subpart->header_offset);
 	    message_write_bit32(ibuf, body->subpart->header_size);
+	    message_write_bit32(ibuf, body->subpart->content_offset);
+	    message_write_bit32(ibuf, body->subpart->content_size);
 	    message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
 	    for (part = 0; part < body->subpart->numparts; part++) {
+		message_write_bit32(ibuf, body->subpart->subpart[part].header_offset);
+		message_write_bit32(ibuf, body->subpart->subpart[part].header_size);
 		message_write_bit32(ibuf, body->subpart->subpart[part].content_offset);
-		if (strcmp(body->subpart->subpart[part].type, "MULTIPART") == 0) {
-		    if (body->subpart->subpart[part].numparts) {
-			/* Cannot fetch a multipart itself */
-			message_write_bit32(ibuf, -1);
-		    }
-		    else {
-			/* Treat 0-part multipart as 0-length text */
-			message_write_bit32(ibuf, 0);
-		    }
-		    message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
+		if (body->subpart[part].numparts == 0 &&
+		    strcmp(body->subpart->subpart[part].type, "MULTIPART") == 0) {
+		    /* Treat 0-part multipart as 0-length text */
+		    message_write_bit32(ibuf, 0);
 		}
 		else {
 		    message_write_bit32(ibuf, body->subpart->subpart[part].content_size);
-		    message_write_charset(ibuf, &body->subpart->subpart[part]);
 		}
+		message_write_charset(ibuf, &body->subpart->subpart[part]);
 	    }
 	    for (part = 0; part < body->subpart->numparts; part++) {
 		message_write_section(ibuf, &body->subpart->subpart[part]);
@@ -1532,14 +1703,18 @@ struct body *body;
 	}
 	else {
 	    /*
-	     * Part 0 of a message/rfc822 is the message header.
+	     * Part 0 of a message/rfc822 is the message header/text.
 	     * Part 1 of a message/rfc822 containing a non-multipart
 	     * is the message body.
 	     */
 	    message_write_bit32(ibuf, 2);
 	    message_write_bit32(ibuf, body->subpart->header_offset);
 	    message_write_bit32(ibuf, body->subpart->header_size);
+	    message_write_bit32(ibuf, body->subpart->content_offset);
+	    message_write_bit32(ibuf, body->subpart->content_size);
 	    message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
+	    message_write_bit32(ibuf, body->subpart->header_offset);
+	    message_write_bit32(ibuf, body->subpart->header_size);
 	    message_write_bit32(ibuf, body->subpart->content_offset);
 	    if (strcmp(body->subpart->type, "MULTIPART") == 0) {
 		/* Treat 0-part multipart as 0-length text */
@@ -1561,15 +1736,15 @@ struct body *body;
 	message_write_bit32(ibuf, body->numparts+1);	
 	message_write_bit32(ibuf, 0);
 	message_write_bit32(ibuf, -1);
+	message_write_bit32(ibuf, 0);
+	message_write_bit32(ibuf, -1);
 	message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
 	for (part = 0; part < body->numparts; part++) {
+	    message_write_bit32(ibuf, body->subpart[part].header_offset);
+	    message_write_bit32(ibuf, body->subpart[part].header_size);
 	    message_write_bit32(ibuf, body->subpart[part].content_offset);
-	    if (body->subpart[part].numparts) {
-		/* Cannot fetch a multipart itself */
-		message_write_bit32(ibuf, -1);
-		message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
-	    }
-	    else if (strcmp(body->subpart[part].type, "MULTIPART") == 0) {
+	    if (body->subpart[part].numparts == 0 &&
+		strcmp(body->subpart[part].type, "MULTIPART") == 0) {
 		/* Treat 0-part multipart as 0-length text */
 		message_write_bit32(ibuf, 0);
 		message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
@@ -1821,6 +1996,20 @@ struct body *body;
     if (body->description) free(body->description);
     if (body->encoding) free(body->encoding);
     if (body->md5) free(body->md5);
+    if (body->disposition) {
+	free(body->disposition);
+	for (param = body->disposition_params; param; param = nextparam) {
+	    nextparam = param->next;
+	    free(param->attribute);
+	    free(param->value);
+	    free(param);
+	}
+    }
+    for (param = body->language; param; param = nextparam) {
+	nextparam = param->next;
+	free(param->value);
+	free(param);
+    }
     if (body->date) free(body->date);
     if (body->subject) free(body->subject);
     if (body->from) parseaddr_free(body->from);
