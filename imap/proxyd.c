@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.113 2002/04/03 03:15:25 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.114 2002/04/03 17:58:35 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -3487,9 +3487,11 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	    return;
 	}
 
+	/* xxx dest partition? 
+	 * <tag> XFER <name> <dest server> (dest partition) */
 	prot_printf(s->out, "%s XFER {%d+}\r\n%s {%d+}\r\n%s\r\n", 
-		    tag, strlen(partition), partition,
-		    strlen(oldname), oldname);
+		    tag, strlen(oldname), oldname,
+		    strlen(partition), partition);
 	res = pipe_including_tag(s, tag, 0);
 
 	/* xxx */

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.377 2002/04/02 02:09:39 ken3 Exp $ */
+/* $Id: imapd.c,v 1.378 2002/04/03 17:58:35 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -161,7 +161,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly);
 void cmd_delete(char *tag, char *name, int localonly);
 void cmd_dump(char *tag, char *name, int uid_start);
 void cmd_undump(char *tag, char *name);
-void cmd_xfer(char *tag, char *toserver, char *name);
+void cmd_xfer(char *tag, char *name, char *toserver, char *topart);
 void cmd_rename(const char *tag, char *oldname, 
 		char *newname, char *partition);
 void cmd_reconstruct(const char *tag, const char *name, int recursive);
@@ -1187,7 +1187,7 @@ void cmdloop()
 		}
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : 0, 1);
+		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : NULL, 1);
 
 		/* xxxx snmp_increment(CREATE_COUNT, 1); */
 	    }
@@ -1579,18 +1579,28 @@ void cmdloop()
 
 	case 'X':
 	    if (!strcmp(cmd.s, "Xfer")) {
-		/* Dest Server */
+		int havepartition = 0;
+		
+		/* Mailbox */
 		if(c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
 
-		/* Mailbox */
+		/* Dest Server */
 		if(c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg2);
+
+		if(c == ' ') {
+		    /* Dest Partition */
+		    c = getastring(imapd_in, imapd_out, &arg3);
+		    if (!imparse_isatom(arg3.s)) goto badpartition;
+		    havepartition = 1;
+		}
 		
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 
-		cmd_xfer(tag.s, arg1.s, arg2.s);
+		cmd_xfer(tag.s, arg1.s, arg2.s,
+			 (havepartition ? arg3.s : NULL));
 	    /*	snmp_increment(XFER_COUNT, 1);*/
 	    }
 	    else goto badcmd;
@@ -5884,7 +5894,8 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
     return r;
 }
 
-static int do_xfer_single(char *toserver, char *name, char *mailboxname,
+static int do_xfer_single(char *toserver, char *topart,
+			  char *name, char *mailboxname,
 			  int mbflags, 
 			  char *path, char *part, char *acl,
 			  int prereserved,
@@ -5897,6 +5908,11 @@ static int do_xfer_single(char *toserver, char *name, char *mailboxname,
     int backout_mupdate = 0;
     int backout_remotebox = 0;
     int backout_remoteflag = 0;
+
+    /* Make sure we're given a sane value */
+    if(topart && !imparse_isatom(topart)) {
+	return IMAP_PARTITION_UNKNOWN;
+    }
 
     /* Okay, we have the mailbox, now the order of steps is:
      *
@@ -5942,9 +5958,14 @@ static int do_xfer_single(char *toserver, char *name, char *mailboxname,
 
     /* Step 2: LOCALCREATE on remote server */
     if(!r) {
-	/* xxx partition????? */
-	prot_printf(be->out, "LC1 LOCALCREATE {%d+}\r\n%s\r\n",
-		    strlen(name), name);
+	if(topart) {
+	    /* need to send partition as an atom */
+	    prot_printf(be->out, "LC1 LOCALCREATE {%d+}\r\n%s %s\r\n",
+			strlen(name), name, topart);
+	} else {
+	    prot_printf(be->out, "LC1 LOCALCREATE {%d+}\r\n%s\r\n",
+			strlen(name), name);
+	}
 	r = getresult(be->in, "LC1");
 	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, LOCALCREATE failed",
 		     mailboxname);
@@ -6102,6 +6123,7 @@ done:
 struct xfer_user_rock 
 {
     char *toserver;
+    char *topart;
     mupdate_handle *h;
 };
 
@@ -6112,6 +6134,7 @@ static int xfer_user_cb(char *name,
 {
     mupdate_handle *mupdate_h = ((struct xfer_user_rock *)rock)->h;
     char *toserver = ((struct xfer_user_rock *)rock)->toserver;
+    char *topart = ((struct xfer_user_rock *)rock)->topart;
     char externalname[MAX_MAILBOX_NAME];
     int mbflags;
     int r = 0;
@@ -6140,7 +6163,7 @@ static int xfer_user_cb(char *name,
     }
 
     if(!r) {
-	r = do_xfer_single(toserver, externalname, name, mbflags,
+	r = do_xfer_single(toserver, topart, externalname, name, mbflags,
 			   path, part, acl, 0, mupdate_h);
     }
 
@@ -6152,7 +6175,7 @@ static int xfer_user_cb(char *name,
 }
 
 
-void cmd_xfer(char *tag, char *toserver, char *name) 
+void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 {
     int r = 0;
     char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
@@ -6205,7 +6228,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 
     /* if we are not moving a user, just move the one mailbox */
     if(!r && !moving_user) {
-	r = do_xfer_single(toserver, name, mailboxname, mbflags,
+	r = do_xfer_single(toserver, topart, name, mailboxname, mbflags,
 			   path, part, acl, 0, NULL);
     } else {
 	/* we need to reserve the users inbox - connect to mupdate */
@@ -6236,6 +6259,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	    struct xfer_user_rock rock;
 
 	    rock.toserver = toserver;
+	    rock.topart = topart;
 	    rock.h = mupdate_h;
 	    
 	    snprintf(buf, sizeof(buf), "%s.*", mailboxname);
@@ -6247,9 +6271,9 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	/* xxx how do you back out if one of the above moves fails? */
 	    
 	/* move this mailbox */
-	/* and seen file, and subs file, and sieve scripts... */
+	/* ...and seen file, and subs file, and sieve scripts... */
 	if(!r) {
-	    r = do_xfer_single(toserver, name, mailboxname, mbflags,
+	    r = do_xfer_single(toserver, topart, name, mailboxname, mbflags,
 			       path, part, acl, 1, mupdate_h);
 	}
 
@@ -6266,8 +6290,8 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	    }
 	}
 
-	/* xxx this was a user delete, and we need to delete certain user
-	   meta-data */
+	/* this was a user delete, and we need to delete certain user
+	   meta-data (but not seen state!) */
 	user_delete(mailboxname+5, imapd_userid, imapd_authstate, 0);
 
 	if(!r && mupdate_h) {
