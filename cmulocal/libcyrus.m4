@@ -30,7 +30,7 @@ AC_DEFUN(CMU_LIBCYRUS_INC_WHERE, [
 AC_DEFUN(CMU_LIBCYRUS_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lcyrus ${SASL_LIB_FLAGS} ${LIBSSL_LIB_FLAGS} ${LIB_SOCKET}"
+LIBS="$saved_LIBS -L$1 -lcyrus ${LIB_SASL} ${LIBSSL_LIB_FLAGS} ${LIB_SOCKET}"
 AC_TRY_LINK(,
 [imclient_authenticate();],
 [ac_cv_found_libcyrus_lib=yes],
