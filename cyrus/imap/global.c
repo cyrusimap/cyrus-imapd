@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.11 2004/02/26 18:03:06 ken3 Exp $ */
+/* $Id: global.c,v 1.12 2004/03/09 15:05:57 ken3 Exp $ */
 
 #include <config.h>
 
@@ -207,6 +207,10 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 				  config_getenum(IMAPOPT_VIRTDOMAINS));
 	libcyrus_config_setint(CYRUSOPT_BERKELEY_CACHESIZE,
 			       config_getint(IMAPOPT_BERKELEY_CACHESIZE));
+	libcyrus_config_setint(CYRUSOPT_BERKELEY_LOCKS_MAX,
+			       config_getint(IMAPOPT_BERKELEY_LOCKS_MAX));
+	libcyrus_config_setint(CYRUSOPT_BERKELEY_TXNS_MAX,
+			       config_getint(IMAPOPT_BERKELEY_TXNS_MAX));
 
 	/* Not until all configuration parameters are set! */
 	libcyrus_init();

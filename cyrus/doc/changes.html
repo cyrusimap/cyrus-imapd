@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.79 2004/02/26 18:03:05 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.80 2004/03/09 15:05:56 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -20,7 +20,8 @@ skipped).</li>
 <li><tt>nntpd</tt> now uses the Followup-To: header (if exists) instead of
 the Newsgroups: header when constructing post address(es) and adds them
 to the Reply-To: header instead of the To: header.</li>
-<li>Added a <tt>berkeley_cachesize</tt> option.</li>
+<li>Added <tt>berkeley_locks_max</tt>, <tt>berkeley_txns_max</tt> and
+<tt>berkeley_cachesize</tt> options.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.2</h1>
@@ -1921,7 +1922,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2004/02/26 18:03:05 $ <br />
+last modified: $Date: 2004/03/09 15:05:56 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
