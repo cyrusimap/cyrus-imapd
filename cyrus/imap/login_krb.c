@@ -34,6 +34,7 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 #include <krb.h>
 #include <pwd.h>
 #include <sys/param.h>
