@@ -13,7 +13,7 @@
  *
  */
 
-static char rcsid[] = "$Id: ptloader.c,v 1.11 1998/05/13 03:47:01 wcw Exp $";
+static char rcsid[] = "$Id: ptloader.c,v 1.12 1998/05/13 16:41:53 wcw Exp $";
 #include <string.h>
 #include "auth_krb_pts.h"
 #include <stdio.h>
@@ -64,21 +64,25 @@ main(argc, argv)
     time_t next_auth_time;
     unsigned int auth_interval;
     int do_reauth = 1, use_srvtab = 0;
+    int use_newpag = 0;
 
     auth_interval = AUTH_INTERVAL;
     user = AUTH_USER;
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_DEBUG, "starting: $Id: ptloader.c,v 1.11 1998/05/13 03:47:01 wcw Exp $");
+    syslog(LOG_DEBUG, "starting: $Id: ptloader.c,v 1.12 1998/05/13 16:41:53 wcw Exp $");
 
-    while ((opt = getopt(argc, argv, "Usd:l:f:u:t:")) != EOF) {
+    while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
       switch (opt) {
       case 'U':
 	do_reauth = 0;
 	break;
       case 's':
 	use_srvtab = 1;
+	break;
+      case 'p':
+	use_newpag = 1;
 	break;
       case 'd':
 	ptclient_debug = atoi(optarg);
@@ -107,6 +111,7 @@ main(argc, argv)
 		"\n\t-u <userid>\tuser to authenticate as"
 		"\n\t-f <file>\tfile for the users password"
 		"\n\t-t <seconds>\tinterval between authentications"
+		"\n\t-p\tset a new pag"
 		"\n");
 	syslog(LOG_ERR, "Invalid command line option specified");
 	exit(-1);
@@ -159,7 +164,7 @@ main(argc, argv)
 	syslog(LOG_ERR, "Invalid password file specified. Exiting...");
 	exit(-1);
       }
-      if (reauth(user, pw_file, 1, use_srvtab) < 0) {
+      if (reauth(user, pw_file, use_newpag, use_srvtab) < 0) {
 	syslog(LOG_ERR, "initialization failed. exiting...");
 	exit(-1);
       }
@@ -184,7 +189,7 @@ main(argc, argv)
 	if (ptclient_debug > 10) {
 	  syslog(LOG_DEBUG, "Reauthenticating at %d", time(0));
 	}
-	if (reauth(user, pw_file, 0, use_srvtab) < 0) {
+	if (reauth(user, pw_file, use_newpag, use_srvtab) < 0) {
 	  syslog(LOG_ERR, "error reauthenticating. continuing...");
 	} else {
 	  next_auth_time = time(0) + auth_interval;
@@ -394,6 +399,10 @@ reauth(name, file, newpag, is_srvtab)
     struct ktc_principal aclient;
     struct ktc_token atoken, btoken;
 
+
+    if (newpag)
+      setpag();
+    
     if ((kerrno = krb_get_lrealm(lrealm, 1)) != 0) {
       syslog(LOG_ERR, "krb_get_lrealm: %d", kerrno);
       return(-1);
@@ -506,4 +515,4 @@ int exitcode;
   syslog(LOG_ERR, "%s", msg);
   exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.11 1998/05/13 03:47:01 wcw Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.12 1998/05/13 16:41:53 wcw Exp $ */
