@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.121 1999/12/30 22:29:31 leg Exp $
+ * $Id: deliver.c,v 1.122 1999/12/30 23:03:23 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.121 1999/12/30 22:29:31 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.122 1999/12/30 23:03:23 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -161,6 +161,9 @@ static int _lock_delivered_db();
 static void logdupelem();
 static void usage();
 static void setup_sieve();
+
+int msg_new(message_data_t **m);
+void msg_free(message_data_t *m);
 
 #ifdef USE_SIEVE
 static sieve_interp_t *sieve_interp;
