@@ -42,7 +42,7 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.25.2.2 2003/12/01 19:19:58 rjs3 Exp $
+ * $Id: glob.c,v 1.25.2.3 2003/12/01 19:40:55 rjs3 Exp $
  */
 
 #include <config.h>
@@ -253,8 +253,6 @@ int glob_test (g, ptr, len, min)
     /* main globbing loops */
     if (!(g->flags & GLOB_ICASE)) {
 	/* case sensitive version */
-
-	printf("%c %c\n", ghier ? *ghier : '-', gstar ? *gstar : '-');
 
 	/* loop to manage wildcards */
 	do {
