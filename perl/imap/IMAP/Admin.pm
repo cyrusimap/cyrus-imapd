@@ -655,7 +655,7 @@ sub getinfo {
 			my $text = $d{-text};
 			my $annotation;
 
-			if($text =~ /^\([^\)]*\)$/) {
+			if($text =~ /^\(.*\)$/) {
 			  # list of annotations
 			  $text =~ s/^\(//;
 			  
