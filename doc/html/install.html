@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.39 1998/07/29 02:44:06 tjs Exp $ -->
+<!-- $Id: install.html,v 1.40 1998/07/29 21:42:18 tjs Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -89,8 +89,8 @@ server must receive newsgroups with the INN news server.
 
 Once you have unpacked the files (see the <A
 HREF="readme.html"><TT>README</TT></A> file for more information),
-"<TT>cd</TT>" to the "<tt>cyrus-imapd-1.5</tt>" directory (assuming the
-version number is 1.5).  The configuration files and
+"<TT>cd</TT>" to the "<tt>cyrus-imapd-1.5.12</tt>" directory (assuming the
+version number is 1.5.12).  The configuration files and
 various subdirectories are stored there.  In the directory that the
 <TT>configure</TT> file is in, type "<kbd>./configure</kbd>" to
 configure the software.
@@ -194,6 +194,12 @@ implemented authentication modules are:
 
 By default, configure uses "<tt>krb</tt>" if the file <TT>/etc/krb.conf</TT>
 exists, "<tt>unix</tt>" otherwise. <P>
+
+If you use shadow passwords, you should use
+<tt>--with-login=unix_pwcheck</tt>, not just <tt>unix</tt>.
+The Cyrus imapd does not run as root, and the pwcheck daemon is required for
+authentication if you use shadow passwords.
+<p>
 
 <dt><tt>--with-pwcheck=METHOD</tt>
 <dd>Specifies the password checking module to use inside the pwcheck daemon.
@@ -316,6 +322,7 @@ support.  Requires the AMS libraries. <P>
 
 <dt><tt>--enable-cmulocal</tt>
 <dd>Include Carnegie Mellon's internal support features.
+(Ignore this if you're not at CMU.)
 </dl>
 
 "<tt>configure</tt>" ignores any other arguments that you give it.
@@ -421,7 +428,7 @@ messages into both levels and categories.  Invoke "<kbd>man
 syslog</kbd>" to see if "<tt>openlog()</tt>" takes three arguments. If
 it does not, replace the system "<tt>syslogd</tt>" and
 "<tt>syslog.conf</tt>" with the files provided in the <A
-NAME="syslog"><tt>cyrus-imapd-1.5/syslog</tt></A> directory.
+NAME="syslog"><tt>cyrus-imapd-1.5.12/syslog</tt></A> directory.
 
 <pre>
 <kbd>   mv syslogd /etc/syslogd
@@ -429,7 +436,7 @@ NAME="syslog"><tt>cyrus-imapd-1.5/syslog</tt></A> directory.
 </kbd></pre>
 
 If you do not copy the "<tt>syslog.conf</tt>" file in 
-"<TT>cyrus-imapd-1.5/syslog</TT>" to the 
+"<TT>cyrus-imapd-1.5.12/syslog</TT>" to the 
 "<tt>/etc</tt>" directory, be sure to add support for
 "<tt>local6.debug</tt>".  The file should include a line like:
 
@@ -614,7 +621,14 @@ protocol, add the following line
 path name to the executable.
 
 <p><li>
- If you wish to use the interm finger information service:
+ If you wish to use the interm finger information service,
+ you need to enable support for
+ it in "<tt>/etc/services</tt>" and "<tt>/etc/inetd.conf</tt>".
+
+<p> Note that this requires a finger client that supports this service.
+ If you don't know that yours supports it, it doesn't.
+ At this time, we are not providing a finger client that supports this.
+q
 <ol>
 <li>Add the following line to the "<tt>/etc/services</tt>" file if it
 isn't already there.
@@ -629,7 +643,6 @@ isn't already there.
    fud  dgram  udp  wait  cyrus  /usr/cyrus/bin/fud   fud
 </pre>
 </ol>
-
 
  <P>
 
@@ -735,7 +748,7 @@ If your server is running, you'll get the following message:
    Trying 128.2.44.20...
    Connected to foobar.andrew.cmu.edu.
    Escape character is '^]'.
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5 server ready
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.12 server ready
 </pre>
 
 Any message other than one starting with "<tt>* OK</tt>" means there
@@ -751,7 +764,7 @@ is a problem.  To terminate the connection, type "<kbd>. logout</kbd>".
 If your server is running, you'll get the following message:
 
 <pre>
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5 server ready
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.12 server ready
    Password: <var>&lt;enter your password, imtest does not echo it&gt;</var>
    . LOGIN smith X
    . OK User logged in
@@ -765,11 +778,11 @@ connection, type "<kbd>. logout</kbd>".
 <P>
 <li>If the server is compiled with Kerberos v4 authentication, test
 Kerberos authentication by using the imtest command.  Change
-to the "<tt>cyrus-v1.5</tt>" directory and type the following:
+to the "<tt>cyrus-v1.5.12</tt>" directory and type the following:
 
 <pre>
    <kbd>/usr/local/bin/imtest -k foobar imap</kbd>
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5 server ready
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.12 server ready
    . AUTHENTICATE KERBEROS_V4
    + Ln8h6Q==
    BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
@@ -860,7 +873,7 @@ to work with the IMAP server.
 
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Tue Jul 28 22:42:11 1998
+last modified by tjs at Tue Jul 28 22:46:51 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
