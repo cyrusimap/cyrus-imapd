@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: install-perf.html,v 1.4 2001/11/18 19:40:08 leg Exp $ -->
+<!-- $Id: install-perf.html,v 1.5 2002/02/13 17:10:13 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -52,11 +52,11 @@ usually a good idea. Consider using LMTP and delivering from a
 separate machine.</li>
 
 <li>Unused SASL mechanisms - If you just build the SASL library and
-copied all the mechanisms into /usr/lib/sasl, the <tt>imapd</tt>
+copied all the mechanisms into /usr/lib/sasl2, the <tt>imapd</tt>
 will try to use them and allocate some amount of memory. In
 general, the operating system will swap out those pages but you may
 be allocating more swap space than you need. So, look in
-/usr/lib/sasl and if you don't plan on using those mechanisms,
+/usr/lib/sasl2 and if you don't plan on using those mechanisms,
 don't leave them there.</li>
 
 <li>You may want to increase the listen queue value when starting
@@ -88,7 +88,7 @@ Solaris by Adrian Cockcroft. Go to your favorite search engine and
 look for his name.</p>
 
 <hr />
-last modified: $Date: 2001/11/18 19:40:08 $
+last modified: $Date: 2002/02/13 17:10:13 $
 </body>
 </html>
 
