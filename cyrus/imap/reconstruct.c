@@ -78,7 +78,7 @@ char **argv;
     config_init("reconstruct");
 
     /* Ensure we're up-to-date on the index file format */
-    assert(INDEX_HEADER_SIZE == (OFFSET_POP3_LAST_UID+4));
+    assert(INDEX_HEADER_SIZE == (OFFSET_UIDVALIDITY+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8));
 
     while ((opt = getopt(argc, argv, "r")) != EOF) {
@@ -226,6 +226,7 @@ char *name;
 	mailbox.last_uid = 0;
 	mailbox.last_appenddate = 0;
 	mailbox.pop3_last_uid = 0;
+	mailbox.uidvalidity = time(0);
     }
     else {
 	(void) mailbox_lock_index(&mailbox);
@@ -380,6 +381,9 @@ char *name;
     if (mailbox.pop3_last_uid > uid[uid_num-1]) {
 	mailbox.pop3_last_uid = uid[uid_num-1];
     }
+    if (mailbox.uidvalidity == 0 || mailbox.uidvalidity > time(0)) {
+	mailbox.uidvalidity = time(0);
+    }
     free(uid);
     *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox.generation_no + 1;
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox.format);
@@ -391,6 +395,7 @@ char *name;
     *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(mailbox.last_uid);
     *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(new_quota);
     *((bit32 *)(buf+OFFSET_POP3_LAST_UID)) = htonl(mailbox.pop3_last_uid);
+    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(mailbox.uidvalidity);
 
     n = fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
     fflush(newindex);
