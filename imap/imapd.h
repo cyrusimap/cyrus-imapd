@@ -52,11 +52,19 @@ struct strlist {
     struct strlist *next;
 };
 
+/* List of HEADER.FIELDS[.NOT] fetch specifications */
+struct fieldlist {
+    char *section;		/* First part of BODY[x] value */
+    struct strlist *fields;	/* List of field-names */
+    char *trail;		/* Last part of BODY[x] value */
+    struct fieldlist *next;
+};
 
 /* Items that may be fetched */
 struct fetchargs {
     int fetchitems;		/* Bitmask */
-    struct strlist *bodysections; /* BODY[x] values */
+    struct strlist *bodysections; /* BODY[x]<x> values */
+    struct fieldlist *fsections;  /* BODY[xHEADER.FIELDSx]<x> values */
     struct strlist *headers;	/* RFC822.HEADER.LINES */
     struct strlist *headers_not; /* RFC822.HEADER.LINES.NOT */
     int start_octet;		/* start_octet for partial fetch, or 0 */
