@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.93 2002/04/01 21:15:21 leg Exp $
+ * $Id: lmtpd.c,v 1.94 2002/04/02 00:03:56 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1483,16 +1483,8 @@ FILE *spoolfile(message_data_t *msgdata)
 	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
 	    user = rcpt;
 
-	    if (plus &&
-		strlen(rcpt) + strlen(plus) + 30 <= MAX_MAILBOX_PATH) {
-		/* delivery to + mailbox */
-		strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_INBOX]);
-		strcat(namebuf, plus);
-	    }
-	    else {
-		/* delivery to INBOX */
-		strcpy(namebuf, "INBOX");
-	    }
+	    /* assume delivery to INBOX for now */
+	    strcpy(namebuf, "INBOX");
 	}
 
 	/* case 3: unable to handle rcpt */
