@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.9.2.1 2002/08/09 19:12:13 rjs3 Exp $
+ * $Id: version.c,v 1.9.2.2 2003/01/13 02:05:56 ken3 Exp $
  */
 
 #include <config.h>
@@ -180,6 +180,8 @@ void id_response(struct protstream *pout)
 	     "; duplicate.db = %s", CONFIG_DB_DUPLICATE->name);
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; tls.db = %s", CONFIG_DB_TLS->name);
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; netnews.db = %s", CONFIG_DB_NETNEWS->name);
 
     prot_printf(pout, " \"environment\" \"%s\"", env_buf);
 }
