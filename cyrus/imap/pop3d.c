@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.88 2001/03/15 22:31:11 leg Exp $
+ * $Id: pop3d.c,v 1.89 2001/03/28 15:29:47 ken3 Exp $
  */
 #include <config.h>
 
@@ -127,6 +127,10 @@ int popd_starttls_done = 0;
 static struct mailbox mboxstruct;
 
 static mailbox_decideproc_t expungedeleted;
+
+static void cmd_apop(char *user, char *digest);
+static int apop_enabled(void);
+static char popd_apop_chal[300]; /* timestamp (44) + config_servername (256) */
 
 static void cmd_auth();
 static void cmd_capa();
@@ -281,7 +285,8 @@ int service_main(int argc, char **argv, char **envp)
     if (pop3s == 1) cmd_starttls(1);
 
     prot_printf(popd_out, "+OK %s Cyrus POP3 %s server ready\r\n",
-		config_servername, CYRUS_VERSION);
+		apop_enabled() ? popd_apop_chal : config_servername,
+		CYRUS_VERSION);
     cmdloop();
 
     return 0;
@@ -473,6 +478,22 @@ static void cmdloop(void)
 	    else if (!strcmp(inputbuf, "pass")) {
 		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 		else cmd_pass(arg);
+	    }
+	    else if (!strcmp(inputbuf, "apop") && apop_enabled()) {
+		char *user, *digest;
+
+		/* Parse into user and digest */
+		if (arg) arg = strchr(user = arg, ' ');
+		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
+		else {
+		    *arg++ = '\0';
+		    digest = arg;
+		    /* per RFC 1939, digest must be 32 hex digits */
+		    while (*arg && isxdigit((int) *arg)) arg++;
+		    if ((arg - digest) != 32)
+			prot_printf(popd_out, "-ERR Invalid digest string\r\n");
+		    else cmd_apop(user, digest);
+		}
 	    }
 	    else if (!strcmp(inputbuf, "auth")) {
 		cmd_auth(arg);
@@ -741,6 +762,93 @@ static void cmd_starttls(int pop3s __attribute__((unused)))
     fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
 }
 #endif /* HAVE_SSL */
+
+#ifdef HAVE_APOP
+static int apop_enabled(void)
+{
+    static int chal_done = 0;
+
+    /* Create APOP challenge string for banner */
+    if (!chal_done &&
+	!sasl_mkchal(popd_saslconn, popd_apop_chal, sizeof(popd_apop_chal), 1)) {
+	syslog(LOG_WARNING,
+	       "can't create APOP challenge string - APOP disabled");
+	popd_apop_chal[0] = '\0';
+    }
+
+    chal_done = 1;
+    return *popd_apop_chal;
+}
+
+static void cmd_apop(char *user, char *digest)
+{
+    int fd;
+    struct protstream *shutdown_in;
+    char buf[1024];
+    char *p;
+    char shutdownfilename[1024];
+    char *reply = 0;
+
+    if (popd_userid) {
+	prot_printf(popd_out, "-ERR Must give PASS command\r\n");
+	return;
+    }
+
+    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+    if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+	shutdown_in = prot_new(fd, 0);
+	prot_fgets(buf, sizeof(buf), shutdown_in);
+	if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
+	if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+
+	for(p = buf; *p == '['; p++); /* can't have [ be first char */
+	prot_printf(popd_out, "-ERR %s\r\n", p);
+	prot_flush(popd_out);
+	shut_down(0);
+    }
+    else if (!(p = auth_canonifyid(user)) ||
+	       strchr(p, '.') || strlen(p) + 6 > MAX_MAILBOX_PATH) {
+	prot_printf(popd_out, "-ERR Invalid user\r\n");
+	syslog(LOG_NOTICE,
+	       "badlogin: %s APOP %s invalid user",
+	       popd_clienthost, beautify_string(user));
+	return;
+    }
+    else if ((sasl_checkapop(popd_saslconn,
+			     p,
+			     strlen(p),
+			     popd_apop_chal,
+			     strlen(popd_apop_chal),
+			     digest,
+			     strlen(digest),
+			     (const char **) &reply))!=SASL_OK) { 
+	if (reply) {
+	    syslog(LOG_NOTICE, "badlogin: %s APOP %s %s",
+		   popd_clienthost, p, reply);
+	}
+	sleep(3);
+	prot_printf(popd_out, "-ERR Invalid login\r\n");
+	return;
+    }
+    else {
+	popd_userid = xstrdup(p);
+	syslog(LOG_NOTICE, "login: %s %s APOP %s",
+	       popd_clienthost, popd_userid, reply ? reply : "");
+    }
+    openinbox();
+}
+#else
+static int apop_enabled(void)
+{
+    return 0;
+}
+
+static void cmd_apop(char *user __attribute__((unused)),
+		     char *digest __attribute__((unused)))
+{
+    fatal("cmd_apop() called, but no sasl_checkapop()", EC_SOFTWARE);
+}
+#endif /* HAVE_APOP */
 
 void
 cmd_user(user)
