@@ -1,6 +1,6 @@
 /* tree.c -- abstract syntax tree handling
  * Larry Greenfield
- * $Id: tree.c,v 1.3 1999/07/31 21:49:41 leg Exp $
+ * $Id: tree.c,v 1.4 1999/09/06 02:52:31 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -119,6 +119,8 @@ void free_tl(testlist_t *tl)
 
 void free_test(test_t *t)
 {
+    if (t == NULL) return;
+
     switch (t->type) {
     case ANYOF:
     case ALLOF:
