@@ -1667,7 +1667,7 @@ struct mailbox *mailboxp;
     strcpy(fnamebuf, path);
     p = fnamebuf + strlen(fnamebuf);
     strcpy(p, FNAME_HEADER);
-    mailbox.header_fd = open(fnamebuf, O_WRONLY|O_TRUNC, 0666);
+    mailbox.header_fd = open(fnamebuf, O_WRONLY|O_TRUNC|O_CREAT, 0666);
     if (mailbox.header_fd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
 	return IMAP_IOERROR;
@@ -1678,7 +1678,7 @@ struct mailbox *mailboxp;
     mailbox.acl = xstrdup(acl);
 
     strcpy(p, FNAME_INDEX);
-    mailbox.index_fd = open(fnamebuf, O_WRONLY|O_TRUNC, 0666);
+    mailbox.index_fd = open(fnamebuf, O_WRONLY|O_TRUNC|O_CREAT, 0666);
     if (mailbox.index_fd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
 	mailbox_close(&mailbox);
@@ -1686,7 +1686,7 @@ struct mailbox *mailboxp;
     }
 
     strcpy(p, FNAME_CACHE);
-    mailbox.cache_fd = open(fnamebuf, O_WRONLY|O_TRUNC, 0666);
+    mailbox.cache_fd = open(fnamebuf, O_WRONLY|O_TRUNC|O_CREAT, 0666);
     if (mailbox.cache_fd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
 	mailbox_close(&mailbox);
