@@ -34,7 +34,7 @@ RANLIB = @RANLIB@
 CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
-DEFS = @DEFS@
+DEFS = @DEFS@ @LOCALDEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@
 LIBS = @LIBS@ @COM_ERR_LIBS@
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
