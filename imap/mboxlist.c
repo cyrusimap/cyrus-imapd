@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.128 2000/07/03 20:18:03 leg Exp $
+ * $Id: mboxlist.c,v 1.129 2000/07/04 00:10:43 leg Exp $
  */
 
 #include <config.h>
@@ -1229,29 +1229,31 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     /* 3. open ACAP connection if necessary */
     acaphandle = acapmbox_get_handle();
 
-    /* 4. Delete entry from berkeley db */
-    key.data = oldname;
-    key.size = strlen(oldname);
-
-    r = mbdb->del(mbdb, tid, &key, 0);
-    switch (r) {
-    case 0: /* success */
-	break;
-    case DB_LOCK_DEADLOCK:
-	goto retry;
-	break;
-    case DB_NOTFOUND:
-	syslog(LOG_ERR, "DBERROR: error deleting %s from db (NOT FOUND)",
-	       newent->name);
-	r = IMAP_IOERROR;
-	goto done;
-	break;
-    default:
-	syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
-	       oldname, db_strerror(r));
-	r = IMAP_IOERROR;
-	goto done;
-	break;
+    if (!isusermbox) {
+	/* 4. Delete entry from berkeley db */
+	key.data = oldname;
+	key.size = strlen(oldname);
+	
+	r = mbdb->del(mbdb, tid, &key, 0);
+	switch (r) {
+	case 0: /* success */
+	    break;
+	case DB_LOCK_DEADLOCK:
+	    goto retry;
+	    break;
+	case DB_NOTFOUND:
+	    syslog(LOG_ERR, "DBERROR: error deleting %s from db (NOT FOUND)",
+		   newent->name);
+	    r = IMAP_IOERROR;
+	    goto done;
+	    break;
+	default:
+	    syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
+		   oldname, db_strerror(r));
+	    r = IMAP_IOERROR;
+	    goto done;
+	    break;
+	}
     }
 
     /* create new entry */
