@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.16.2.9 2004/07/16 15:38:26 ken3 Exp $ */
+/* $Id: backend.c,v 1.16.2.10 2004/10/27 06:20:16 shadow Exp $ */
 
 #include <config.h>
 
@@ -468,6 +468,8 @@ void backend_disconnect(struct backend *s)
     prot_free(s->in);
     prot_free(s->out);
     s->in = s->out = NULL;
+
+    memset(s->hostname, 0, MAX_PARTITION_LEN);
 
     /* Free saslconn */
     if(s->saslconn) {
