@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.17 2003/10/22 18:50:07 rjs3 Exp $ */
+/* $Id: idled.c,v 1.18 2003/11/06 16:08:21 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -409,3 +409,11 @@ int main(int argc, char **argv)
     /* never gets here */      
     exit(1);
 }
+
+void printstring(const char *s __attribute__((unused)))
+{ 
+    /* needed to link against annotate.o */
+    fatal("printstring() executed, but its not used for POP3!",
+          EC_SOFTWARE);
+}
+
