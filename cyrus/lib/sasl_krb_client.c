@@ -41,7 +41,6 @@
 extern char *malloc();
 
 extern char *lcase P((char *str));
-extern char *krb_get_phost P((char *)), *krb_realmofhost P((char *));
 
 /*
  * Start the client side of an authentication exchange.

@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <sys/types.h>
 #include <krb.h>
 #include <pwd.h>
 #include <sys/param.h>
