@@ -50,7 +50,7 @@ char *identifier;
     if (strcmp(identifier, auth_userid) == 0) return 3;
 
     /* "anonymous" is not a member of any group */
-    if (strcmp(auth_userid, "anonymous")) return 0;
+    if (strcmp(auth_userid, "anonymous") == 0) return 0;
 
     aname[0] = inst[0] = realm[0] = '\0';
     if (kname_parse(aname, inst, realm, identifier) != 0) {
