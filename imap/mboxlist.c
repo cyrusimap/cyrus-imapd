@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.127 2000/06/28 05:48:51 leg Exp $
+ * $Id: mboxlist.c,v 1.128 2000/07/03 20:18:03 leg Exp $
  */
 
 #include <config.h>
@@ -73,11 +73,8 @@ extern int errno;
 #include "glob.h"
 #include "assert.h"
 #include "imapconf.h"
-#include "map.h"
-#include "bsearch.h"
-#include "lock.h"
+#include "cyrusdb.h"
 #include "util.h"
-#include "retry.h"
 #include "mailbox.h"
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -88,6 +85,8 @@ extern int errno;
 #include "mboxname.h"
 
 #include "mboxlist.h"
+
+#define SUBDB (&cyrusdb_flat)
 
 /* this is a transitional thing to avoid warnings */
 struct mbox_txn;
@@ -1867,6 +1866,85 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
     return r;
 }
 
+struct findsub_rock {
+    struct glob *g;
+    int inboxsubs;
+    int inboxoffset;
+    const char *inboxcase;
+    const char *usermboxname;
+    int usermboxnamelen;
+    int force;
+    int (*proc)(char *, int, int, void *rock);
+    void *procrock;
+};
+
+static int findsub_cb(void *rockp, 
+		      const char *key, int keylen,
+		      const char *data, int datalen)
+{
+    char namebuf[MAX_MAILBOX_NAME+1];
+    char namematchbuf[MAX_MAILBOX_NAME+1];
+    struct findsub_rock *rock = (struct findsub_rock *) rockp;
+    int r = 0;
+    long minmatch;
+    struct glob *g = rock->g;
+
+    /* foreach match, do this test */
+    minmatch = 0;
+    while (minmatch >= 0) {
+	long matchlen;
+
+	memcpy(namebuf, key, keylen);
+	namebuf[keylen] = '\0';
+	strcpy(namematchbuf, namebuf);
+	
+	if (!rock->inboxsubs && rock->usermboxname &&
+	    !strncmp(namebuf, rock->usermboxname, rock->usermboxnamelen)) {
+	    /* this would've been output with the inbox stuff, so skip it */
+	    return 0;
+	}
+
+	if (rock->inboxoffset) {
+	    namematchbuf[rock->inboxoffset] = rock->inboxcase[0];
+	    namematchbuf[rock->inboxoffset+1] = rock->inboxcase[1];
+	    namematchbuf[rock->inboxoffset+2] = rock->inboxcase[2];
+	    namematchbuf[rock->inboxoffset+3] = rock->inboxcase[3];
+	    namematchbuf[rock->inboxoffset+4] = rock->inboxcase[4];
+	}
+	
+	matchlen = glob_test(g, namematchbuf+rock->inboxoffset,
+			     keylen-rock->inboxoffset, &minmatch);
+	if (matchlen == -1) break;
+	
+      	/* make sure it's in the mailboxes db */
+	if (!rock->force) {
+	    r = mboxlist_lookup(namebuf, NULL, NULL, NULL);
+	} else {
+	    r = 0;		/* don't bother checking */
+	}
+	switch (r) {
+	case 0:
+	    /* found the entry; output it */
+	    r = (*rock->proc)(namematchbuf+rock->inboxoffset, matchlen, 
+			      1, rock->procrock);
+	    break;
+	    
+	case DB_NOTFOUND:
+	    /* didn't find the entry */
+	    break;
+
+	default:
+	    syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
+		   namebuf, db_strerror(r));
+	    r = IMAP_IOERROR;
+	}
+
+	if (r) break;
+    }
+
+    return r;
+}
+
 /*
  * Find subscribed mailboxes that match 'pattern'.
  * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
@@ -1874,62 +1952,38 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
  * 'proc' with the name of the mailbox.
  */
 int mboxlist_findsub(char *pattern, int isadmin, char *userid, 
-		     struct auth_state *auth_state, int (*proc)(), void *rock)
+		     struct auth_state *auth_state, 
+		     int (*proc)(), void *rock, int force)
 {
-    int subsfd;
-    const char *subs_base;
-    unsigned long subs_size;
-    char *subsfname;
-    struct glob *g;
+    struct db *subs = NULL;
+    struct findsub_rock cbrock;
     char usermboxname[MAX_MAILBOX_NAME+1];
     int usermboxnamelen = 0;
-    char namebuf[MAX_MAILBOX_NAME+1];
-    char namematchbuf[MAX_MAILBOX_NAME+1];
-    int r;
-    unsigned long offset, len, prefixlen;
-    int inboxoffset;
-    const char *name, *endname;
+    const char *data;
+    int datalen;
+    int r = 0;
     char *p;
-    unsigned long namelen;
-    long matchlen, minmatch;
-    char *acl;
-    char *inboxcase;
-    DB_TXN *tid;
+    int prefixlen;
 
     /* open the subscription file that contains the mailboxes the 
        user is subscribed to */
-    if ((r = mboxlist_opensubs(userid, 0, &subsfd, &subs_base, &subs_size,
-			      &subsfname, (char **) 0))!=0) {
+    if ((r = mboxlist_opensubs(userid, &subs)) != 0) {
 	goto done;
     }
 
-    g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
-    inboxcase = glob_inboxcase(g);
-
-    /* transaction restart place */
-    if (0) {
-      retry:
-	if ((r = txn_abort(tid)) != 0) {
-	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
-		   db_strerror(r));
-	    return IMAP_IOERROR;
-	}
-    }
-
-    /* begin the transaction */
-    if ((r = txn_begin(dbenv, NULL, &tid, 0)) != 0) {
-	syslog(LOG_ERR, "DBERROR: error beginning txn: %s", db_strerror(r));
-	return IMAP_IOERROR;
-    }
-
-
+    cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
+    cbrock.inboxcase = glob_inboxcase(cbrock.g);
+    cbrock.usermboxname = usermboxname;
+    cbrock.force = force;
+    cbrock.proc = proc;
+    cbrock.procrock = rock;
 
     /* Build usermboxname */
     if (userid && !strchr(userid, '.') &&
 	strlen(userid)+5 < MAX_MAILBOX_NAME) {
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
-	usermboxnamelen = strlen(usermboxname);
+	cbrock.usermboxnamelen = usermboxnamelen = strlen(usermboxname);
     }
     else {
 	userid = 0;
@@ -1937,30 +1991,26 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
 
     /* Check for INBOX first of all */
     if (userid) {
-	if (GLOB_TEST(g, "INBOX") != -1) {
-
-	    (void) bsearch_mem(usermboxname, 1, subs_base, subs_size, 0, &len);
-	    if (len) {
-		r = (*proc)(inboxcase, 5, 1, rock);
-		if (r) {
-		  goto done;
-		}
+	if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
+	    r = SUBDB->fetch(subs, usermboxname, usermboxnamelen,
+			     &data, &datalen, NULL);
+	    if (!r && data) {
+		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
 	    }
 	}
 	else if (!strncmp(pattern, usermboxname, usermboxnamelen) &&
-		 GLOB_TEST(g, usermboxname) != -1) {
-	    (void) bsearch_mem(usermboxname, 1, subs_base, subs_size, 0, &len);
-	    if (len) {
-		r = (*proc)(inboxcase, 5, 1, rock);
-		if (r) {
-		  goto done;
-		}
+		 GLOB_TEST(cbrock.g, usermboxname) != -1) {
+	    r = SUBDB->fetch(subs, usermboxname, usermboxnamelen,
+			     &data, &datalen, NULL);
+	    if (!r && data) {
+		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
 	    }
 	}
-
 	strcpy(usermboxname+usermboxnamelen, ".");
 	usermboxnamelen++;
     }
+
+    if (r) goto done;
 
     /* Find fixed-string pattern prefix */
     for (p = pattern; *p; p++) {
@@ -1978,284 +2028,32 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
 	 !strncasecmp("inbox.", pattern, prefixlen < 6 ? prefixlen : 6))) {
 
 	if (!strncmp(usermboxname, pattern, usermboxnamelen-1)) {
-	    inboxoffset = 0;
+	    cbrock.inboxoffset = 0;
 	}
 	else {
-	    inboxoffset = strlen(userid);
+	    cbrock.inboxoffset = strlen(userid);
 	}
 
-	offset = bsearch_mem(usermboxname, 1, subs_base, subs_size, 0,
-			     (unsigned long *)0);
-
-	while (offset < subs_size) {
-
-	name = subs_base + offset;
-	    p = memchr(name, '\n', subs_size - offset);
-	    endname = memchr(name, '\t', subs_size - offset);
-	    if (!p || !endname || endname - name > MAX_MAILBOX_NAME) {
-		syslog(LOG_ERR, "IOERROR: corrupted subscription file %s",
-		       subsfname);
-		/* xxx fatal inside a transaction */
-		fatal("corrupted subscription file", EC_OSFILE);
-	    }
-
-	    len = p - name + 1;
-	    namelen = endname - name;
-
-	    if (strncmp(name, usermboxname, usermboxnamelen)) break;
-	    minmatch = 0;
-	    while (minmatch >= 0) {
-		memcpy(namebuf, name, namelen);
-		namebuf[namelen] = '\0';
-		strcpy(namematchbuf, namebuf);
-
-		if (inboxoffset) {
-		    namematchbuf[inboxoffset] = inboxcase[0];
-		    namematchbuf[inboxoffset+1] = inboxcase[1];
-		    namematchbuf[inboxoffset+2] = inboxcase[2];
-		    namematchbuf[inboxoffset+3] = inboxcase[3];
-		    namematchbuf[inboxoffset+4] = inboxcase[4];
-		}
-
-		matchlen = glob_test(g, namematchbuf+inboxoffset,
-				     namelen-inboxoffset, &minmatch);
-		if (matchlen == -1) break;
-
-
-
-		/* make sure it's in the mailboxes db */
-		r = mboxlist_lookup(namebuf, (char **)0, NULL, tid);
-
-		switch (r) {
-		case 0:
-		  /* found the entry; output it */
-		  r = (*proc)(namematchbuf+inboxoffset, matchlen, 1, rock);
-		  if (r) {
-		    goto done;
-		  }
-		  break;
-		  
-		case DB_NOTFOUND:
-		  /* didn't find the entry; take away the subscription */
-		  mboxlist_changesub(namebuf, userid, auth_state, 0);
-		  break;
-		case DB_LOCK_DEADLOCK:
-		  goto retry;
-		  break;
-		default:
-		  syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
-			 name, db_strerror(r));
-		  r = IMAP_IOERROR;
-		  goto done;
-		  break;
-		}
-
-	    }
-	    offset += len;
-	}
+	cbrock.inboxsubs = 1;
+	/* iterate through prefixes matching usermboxname */
+	SUBDB->foreach(subs,
+		       usermboxname, usermboxnamelen,
+		       &findsub_cb, &cbrock,
+		       NULL);
     }
 
-    /* Search for all remaining mailboxes.  Start at the patten prefix */
-    offset = bsearch_mem(pattern, 1, subs_base, subs_size, 0,
-			 (unsigned long *)0);
-
-    if (userid) usermboxname[--usermboxnamelen] = '\0';
-    while (offset < subs_size) {
-	name = subs_base + offset;
-	p = memchr(name, '\n', subs_size - offset);
-	endname = memchr(name, '\t', subs_size - offset);
-	if (!p || !endname || endname - name > MAX_MAILBOX_NAME) {
-	    syslog(LOG_ERR, "IOERROR: corrupted subscription file %s",
-		   subsfname);
-	    /* xxx fatal inside transaction */
-	    fatal("corrupted subscription file", EC_OSFILE);
-	}
-
-	len = p - name + 1;
-	namelen = endname - name;
-
-	if (strncmp(name, pattern, prefixlen)) break;
-	minmatch = 0;
-	while (minmatch >= 0) {
-	    matchlen = glob_test(g, name, namelen, &minmatch);
-	    if (matchlen == -1 ||
-		(userid && namelen >= usermboxnamelen &&
-		 strncmp(name, usermboxname, usermboxnamelen) == 0 &&
-		 (namelen == usermboxnamelen ||
-		  name[usermboxnamelen] == '.'))) {
-		break;
-	    }
-
-	    memcpy(namebuf, name, namelen);
-	    namebuf[namelen] = '\0';
-
-	    r = mboxlist_lookup(namebuf, (char **)0, &acl, tid);
-
-	    switch (r) {
-	    case 0:
-	      /* found the entry; output it */
-	      r = (*proc)(namebuf, matchlen,
-			  (acl_myrights(auth_state, acl) & ACL_CREATE),
-			  rock);
-	      if (r) {
-		goto done;
-	      }
-	      break;
-		  
-	    case IMAP_MAILBOX_NONEXISTENT:
-	      /* didn't find the entry; take away the subscription */
-	      mboxlist_changesub(namebuf, userid, auth_state, 0);
-	      break;
-	    case IMAP_AGAIN:
-	      goto retry;
-	      break;
-	    default:
-	      syslog(LOG_ERR, "DBERROR: error fetching %s: %i",
-		     namebuf, r );
-	      r = IMAP_IOERROR;
-	      goto done;
-	      break;
-	    }
-
-	}
-	offset += len;
-    }
-	
+    cbrock.inboxsubs = 0;
+    cbrock.inboxoffset = 0;
+    /* search for all remaining mailboxes.
+       just bother looking at the ones that have the same pattern prefix. */
+    SUBDB->foreach(subs,
+		   pattern, prefixlen,
+		   &findsub_cb, &cbrock,
+		   NULL);
 
   done:
-
-    mboxlist_closesubs(subsfd, subs_base, subs_size);
-    glob_free(&g);
-
-    if (!r) {
-	r = txn_commit(tid, 0);
-
-	switch (r) {
-	case 0:
-	    break;
-	case EINVAL:
-	    syslog(LOG_WARNING, 
-		   "tried to commit an already aborted transaction");
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
-		   db_strerror(r));
-	    r = IMAP_IOERROR;
-	    break;
-	}
-    } else {
-	int r2;
-
-	if ((r2 = txn_abort(tid)) != 0) {
-	    syslog(LOG_ERR, "DBERROR: error aborting txn %s", db_strerror(r2));
-	    r = IMAP_IOERROR;
-	}
-    }
-
-    return r;
-}
-
-/* it's the responsibility of the caller to deal with this correctly if
-   we end up aborting and restarting */
-int mboxlist_foreach(foreach_proc *p, void *rock, int rw)
-{
-    /* iterate through all mailboxes, calling p on each one;
-       continue as above if we deadlock */
-    DB_TXN *tid = NULL;
-    DBT key, data;
-    DBC *cursor;
-    int r, r2;
-    struct mbox_entry *mboxent;
-    int flags = 0;
-
-    assert(mboxlist_dbinit && mboxlist_dbopen);
-    assert(rw == 0 || rw == 1);
-
-#if 0
-    if (rw) {
-	flags |= DB_RMW;
-    }
-#endif
-    
-    memset(&data, 0, sizeof(data));
-    memset(&key, 0, sizeof(key));
-
-    r = mbdb->cursor(mbdb, tid, &cursor, 0);
-    if (r != 0) { 
-	syslog(LOG_ERR, "DBERROR: Unable to create cursor");
-	goto done;
-    }
-
-    r = cursor_retryget(cursor, &key, &data, DB_FIRST | flags);
-    while (r != DB_NOTFOUND) {
-	switch (r) {
-	case 0:
-	    mboxent = (struct mbox_entry *) data.data;
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: error advancing: %s", db_strerror(r));
-	    r = IMAP_IOERROR;
-	    break;
-	}
-
-	if (r) { /* error! */
-	    break;
-	}
-
-	switch (p(rock, &mboxent)) {
-	case MB_NEXT:
-	    /* we liked this one; we keep going */
-	    break;
-	case MB_REMOVE:
-	    if (rw) {
-		r = mbdb->del(mbdb, tid, &key, 0);
-	    } else {
-		r = IMAP_IOERROR;
-		goto done;
-	    }
-	    break;
-	case MB_UPDATE:
-	    if (rw) {
-		data.data = (char *) mboxent;
-		data.size = sizeof(struct mbox_entry) + strlen(mboxent->acls);
-		r = cursor->c_put(cursor, &key, &data, DB_CURRENT);
-	    } else {
-		r = IMAP_IOERROR;
-		goto done;
-	    }
-	    break;
-	case MB_FATAL:
-	    r = IMAP_IOERROR;
-	    goto done;
-	    break;
-	}
-
-	switch (r) {
-	case 0:
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: error advancing: %s", db_strerror(r));
-	    r = IMAP_IOERROR;
-	    break;
-	}
-	if (r) goto done;
-
-	r = cursor_retryget(cursor, &key, &data, DB_NEXT | flags);
-    }
-    if (r == DB_NOTFOUND) {
-	r = 0;
-    }
-
-  done:
-    r2 = cursor->c_close(cursor);
-    switch (r2) {
-    case 0:
-	break;
-    default:
-	syslog(LOG_ERR, "DBERROR: couldn't close cursor: %s",
-	       db_strerror(r2));
-	break;
-    }
+    if (subs) mboxlist_closesubs(subs);
+    glob_free(&cbrock.g);
 
     return r;
 }
@@ -2263,90 +2061,49 @@ int mboxlist_foreach(foreach_proc *p, void *rock, int rw)
 /*
  * Change 'user's subscription status for mailbox 'name'.
  * Subscribes if 'add' is nonzero, unsubscribes otherwise.
+ * if 'force' is set, force the subscription through even if
+ * we don't know about 'name'.
  */
 int mboxlist_changesub(const char *name, const char *userid, 
-		       struct auth_state *auth_state, int add)
+		       struct auth_state *auth_state, int add, int force)
 {
     int r;
     char *acl;
-    int subsfd, newsubsfd;
-    const char *subs_base;
-    unsigned long subs_size;
-    char *subsfname, *newsubsfname;
-    unsigned long offset, len;
-    struct iovec iov[10];
-    int num_iov;
-    int n;
+    struct db *subs;
     
-    if ((r = mboxlist_opensubs(userid, 1, &subsfd, &subs_base, &subs_size,
-			       &subsfname, &newsubsfname))!=0) {
+    if ((r = mboxlist_opensubs(userid, &subs)) != 0) {
 	return r;
     }
 
-    if (add) {
+    if (add && !force) {
 	/* Ensure mailbox exists and can be either seen or read by user */
-	if ((r = mboxlist_lookup(name, (char **)0, &acl, NULL))!=0) {
-	    mboxlist_closesubs(subsfd, subs_base, subs_size);
+	if ((r = mboxlist_lookup(name, NULL, &acl, NULL))!=0) {
+	    mboxlist_closesubs(subs);
 	    return r;
 	}
 	if ((acl_myrights(auth_state, acl) & (ACL_READ|ACL_LOOKUP)) == 0) {
-	    mboxlist_closesubs(subsfd, subs_base, subs_size);
+	    mboxlist_closesubs(subs);
 	    return IMAP_MAILBOX_NONEXISTENT;
 	}
     }
 
-    /* Find where mailbox is/would go in subscription list */
-    offset = bsearch_mem(name, 1, subs_base, subs_size, 0, &len);
     if (add) {
-	if (len) {
-	    mboxlist_closesubs(subsfd, subs_base, subs_size);
-	    return 0;		/* Already unsubscribed */
-	}
-    }
-    else {
-	if (!len) {
-	    mboxlist_closesubs(subsfd, subs_base, subs_size);
-	    return 0;		/* Alredy subscribed */
-	}
+	r = SUBDB->store(subs, name, strlen(name), "", 0, NULL);
+    } else {
+	r = SUBDB->delete(subs, name, strlen(name), NULL);
+	/* if it didn't exist, that's ok */
+	if (r == CYRUSDB_EXISTS) r = CYRUSDB_OK;
     }
 
-    newsubsfd = open(newsubsfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (newsubsfd == -1) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", newsubsfname);
-	mboxlist_closesubs(subsfd, subs_base, subs_size);
-	return IMAP_IOERROR;
+    switch (r) {
+    case CYRUSDB_OK:
+	r = 0;
+    default:
+	r = IMAP_IOERROR;
     }
 
-    /* Copy over subscription list, making change */
-    num_iov = 0;
-    iov[num_iov].iov_base = (char *)subs_base;
-    iov[num_iov++].iov_len = offset;
-    if (add) {
-	iov[num_iov].iov_base = (char *)name;
-	iov[num_iov++].iov_len = strlen(name);
-	iov[num_iov].iov_base = "\t\n";
-	iov[num_iov++].iov_len = 2;
-    }
-    iov[num_iov].iov_base = (char *)subs_base + offset + len;
-    iov[num_iov++].iov_len = subs_size - (offset + len);
-
-    n = retry_writev(newsubsfd, iov, num_iov);
-
-    if (n == -1 || fsync(newsubsfd)) {
-	syslog(LOG_ERR, "IOERROR: writing %s: %m", newsubsfname);
-	mboxlist_closesubs(subsfd, subs_base, subs_size);
-	close(newsubsfd);
-	return IMAP_IOERROR;
-    }	
-    if (rename(newsubsfname, subsfname) == -1) {
-	syslog(LOG_ERR, "IOERROR: renaming %s: %m", subsfname);
-	mboxlist_closesubs(subsfd, subs_base, subs_size);
-	close(newsubsfd);
-	return IMAP_IOERROR;
-    }
-    mboxlist_closesubs(subsfd, subs_base, subs_size);
-    close(newsubsfd);
-    return 0;
+    mboxlist_closesubs(subs);
+    return r;
 }
 
 /*
@@ -2493,32 +2250,17 @@ void mboxlist_getinternalstuff(const char **listfnamep,
 }
 
 /*
- * Open the subscription list for 'userid'.  If 'lock' is nonzero,
- * lock it.
+ * Open the subscription list for 'userid'.
  * 
- * On success, returns zero.  The int pointed to by 'subsfile' is set
- * to the open, locked file.  The file is mapped into memory and the
- * base and size of the mapping are placed in variables pointed to by
- * 'basep' and 'sizep', respectively .  If they are non-null, the
- * character pointers pointed to by 'fname' and 'newfname' are set to
- * the filenames of the old and new subscription files, respectively.
- *
+ * On success, returns zero.
  * On failure, returns an error code.
  */
 static int
 mboxlist_opensubs(const char *userid,
-		  int lock,
-		  int *subsfdp,
-		  const char **basep,
-		  unsigned long *sizep,
-		  const char **fname,
-		  const char **newfname)
+		  struct db **ret)
 {
-    int r;
-    static char *subsfname, *newsubsfname;
-    int subsfd;
-    struct stat sbuf;
-    const char *lockfailaction;
+    int r = 0;
+    char *subsfname;
     char inboxname[MAX_MAILBOX_NAME+1];
 
     /* Users without INBOXes may not keep subscriptions */
@@ -2527,62 +2269,27 @@ mboxlist_opensubs(const char *userid,
     }
     strcpy(inboxname, "user.");
     strcat(inboxname, userid);
-    if (mboxlist_lookup(inboxname, (char **)0, (char **)0, NULL) != 0) {
+    if (mboxlist_lookup(inboxname, NULL, NULL, NULL) != 0) {
 	return IMAP_PERMISSION_DENIED;
-    }
-
-    if (subsfname) {
-	free(subsfname);
-	free(newsubsfname);
     }
 
     /* Build subscription list filename */
     subsfname = mboxlist_hash_usersubs(userid);
-
-    newsubsfname = xmalloc(strlen(subsfname)+5);
-    strcpy(newsubsfname, subsfname);
-    strcat(newsubsfname, ".NEW");
-
-    subsfd = open(subsfname, O_RDWR|O_CREAT, 0666);
-    if (subsfd == -1) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", subsfname);
-	return IMAP_IOERROR;
+    r = SUBDB->open(subsfname, ret);
+    if (r != CYRUSDB_OK) {
+	r = IMAP_IOERROR;
     }
+    free(subsfname);
 
-    if (lock) {
-	r = lock_reopen(subsfd, subsfname, &sbuf, &lockfailaction);
-	if (r == -1) {
-	    syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, subsfname);
-	    close(subsfd);
-	    return IMAP_IOERROR;
-	}
-    }
-    else {
-	if (fstat(subsfd, &sbuf) == -1) {
-	    syslog(LOG_ERR, "IOERROR: fstat on %s: %m", subsfname);
-	    fatal("can't fstat subscription list", EC_OSFILE);
-	}
-    }
-
-    *basep = 0;
-    *sizep = 0;
-    map_refresh(subsfd, 1, basep, sizep, sbuf.st_size, subsfname, 0);
-
-    *subsfdp = subsfd;
-    if (fname) *fname = subsfname;
-    if (newfname) *newfname = newsubsfname;
-    return 0;
+    return r;
 }
 
 /*
  * Close a subscription file
  */
-static void mboxlist_closesubs(int subsfd,
-			       const char *base,
-			       unsigned long size)
+static void mboxlist_closesubs(struct db *sub)
 {
-    map_free(&base, &size);
-    close(subsfd);
+    SUBDB->close(sub);
 }
 
 /* Case-dependent comparison converter.
