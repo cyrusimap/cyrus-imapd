@@ -1,0 +1,33 @@
+This is a Perl interface to the Cyrus imclient library, and an administrative
+library, and a replacement for the "cyradm" shell.  The imclient library is
+used (instead of using existing IMAP modules) because it supports SASL, which
+appears to be required for administrative connections to Cyrus 1.6.x.
+
+To build:
+
+	[export CYRUS_SRC=/path/to/cyrus-imapd-source-dir]
+	perl Makefile.PL
+	make
+	make test	# or see below
+	make install
+
+"make test" is supposed to test the imclient (IMAP::Cyrus) and perform very
+limited testing of IMAP::Cyrus::Admin.  Full testing cannot be done because
+it requires a test account on the IMAP server and the tester to have an admin
+credential.  (Unfortunately, SASL prompts for input via stdout and the test
+harness eats stdout, so you can only run the tests by hand.  Sigh.)
+
+For more complete testing, you may run it in interactive mode:
+
+	perl -Iblib/arch -Iblib/lib -MIMAP::Cyrus::Shell \
+		-e shell [-- --user adminname] [server]
+
+cyradm.sh does this (and will be installed as "cyradm"), but it expects
+IMAP::Cyrus to already be installed.
+
+For more information, perldoc is your friend:
+
+	perldoc IMAP::Cyrus		# imclient library
+	perldoc IMAP::Cyrus::Admin	# administrative library
+	perldoc IMAP::Cyrus::Shell	# cyradm shell
+	man cyradm			# the same
