@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.36 2002/01/29 19:11:11 rjs3 Exp $
+ * $Id: mupdate.c,v 1.37 2002/01/29 22:16:46 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -124,11 +124,11 @@ pthread_cond_t ready_for_connections_cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t ready_for_connections_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 pthread_mutex_t connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
-struct conn *connlist;
+struct conn *connlist = NULL;
 
 /* ---- database access ---- */
 pthread_mutex_t mailboxes_mutex = PTHREAD_MUTEX_INITIALIZER;
-struct conn *updatelist;
+struct conn *updatelist = NULL;
 
 /* --- prototypes --- */
 void cmd_authenticate(struct conn *C,
