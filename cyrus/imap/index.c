@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.3 2002/08/15 17:52:26 rjs3 Exp $
+ * $Id: index.c,v 1.180.4.4 2002/08/18 01:08:51 ken3 Exp $
  */
 #include <config.h>
 
@@ -3493,10 +3493,27 @@ static char *find_msgid(char *str, char **rem)
     src = str;
 
     /* find the start of a msgid (don't go past the end of the header) */
-    while ((cp = src = strpbrk(src, "<\r\n")) && (*cp == '<')) {
+    while ((cp = src = strpbrk(src, "<\r")) != NULL) {
+
+	/* check for fold or end of header
+	 *
+	 * Per RFC 2822 section 2.2.3, a long header may be folded by
+	 * inserting CRLF before any WSP.  Any other CRLF is the end
+	 * of the header.
+	 */
+	if (*cp++ == '\r') {
+	    if (*cp++ == '\n' && !isspace((int) *cp)) {
+		/* end of header, we're done */
+		break;
+	    }
+
+	    /* skip fold (or junk) */
+	    src++;
+	    continue;
+	}
 
 	/* see if we have (and skip) a quoted localpart */
-	if (*++cp == '\"') {
+	if (*cp == '\"') {
 	    /* find the endquote, making sure it isn't escaped */
 	    do {
 		++cp; cp = strchr(cp, '\"');
