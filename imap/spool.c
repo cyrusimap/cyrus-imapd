@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.4 2004/02/27 17:44:56 ken3 Exp $
+ * $Id: spool.c,v 1.5 2004/03/04 16:09:34 ken3 Exp $
  */
 
 #include <config.h>
@@ -304,6 +304,45 @@ static int parseheader(struct protstream *fin, FILE *fout,
     return 0;
 }
 
+void spool_cache_header(char *name, char *body, hdrcache_t cache)
+{
+    int cl, clinit;
+
+    lcase(name);
+    clinit = cl = hashheader(name);
+    while (cache[cl] != NULL && strcmp(name, cache[cl]->name)) {
+	cl++;		/* resolve collisions linearly */
+	cl %= HEADERCACHESIZE;
+	if (cl == clinit) break; /* gone all the way around, so bail */
+    }
+
+    /* found where to put it, so insert it into a list */
+    if (cache[cl]) {
+	/* add this body on */
+	cache[cl]->contents[cache[cl]->ncontents++] = body;
+
+	/* whoops, won't have room for the null at the end! */
+	if (!(cache[cl]->ncontents % 8)) {
+	    /* increase the size */
+	    cache[cl] = (header_t *)
+		xrealloc(cache[cl],sizeof(header_t) +
+			 ((8 + cache[cl]->ncontents) * sizeof(char *)));
+	}
+
+	/* have no need of this */
+	free(name);
+    } else {
+	/* create a new entry in the hash table */
+	cache[cl] = (header_t *) xmalloc(sizeof(header_t) + 8 * sizeof(char*));
+	cache[cl]->name = name;
+	cache[cl]->contents[0] = body;
+	cache[cl]->ncontents = 1;
+    }
+
+    /* we always want a NULL at the end */
+    cache[cl]->contents[cache[cl]->ncontents] = NULL;
+}
+
 int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
 			const char **skipheaders)
 {
@@ -312,7 +351,6 @@ int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
     /* let's fill that header cache */
     for (;;) {
 	char *name, *body;
-	int cl, clinit;
 
 	if ((r = parseheader(fin, fout, &name, &body, skipheaders)) < 0) {
 	    break;
@@ -323,40 +361,7 @@ int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
 	}
 
 	/* put it in the hash table */
-	lcase(name);
-	clinit = cl = hashheader(name);
-	while (cache[cl] != NULL && strcmp(name, cache[cl]->name)) {
-	    cl++;		/* resolve collisions linearly */
-	    cl %= HEADERCACHESIZE;
-	    if (cl == clinit) break; /* gone all the way around, so bail */
-	}
-
-	/* found where to put it, so insert it into a list */
-	if (cache[cl]) {
-	    /* add this body on */
-	    cache[cl]->contents[cache[cl]->ncontents++] = body;
-
-	    /* whoops, won't have room for the null at the end! */
-	    if (!(cache[cl]->ncontents % 8)) {
-		/* increase the size */
-		cache[cl] = (header_t *)
-		    xrealloc(cache[cl],sizeof(header_t) +
-			     ((8 + cache[cl]->ncontents) * sizeof(char *)));
-	    }
-
-	    /* have no need of this */
-	    free(name);
-	} else {
-	    /* create a new entry in the hash table */
-	    cache[cl] = (header_t *) xmalloc(sizeof(header_t) + 
-						8 * sizeof(char*));
-	    cache[cl]->name = name;
-	    cache[cl]->contents[0] = body;
-	    cache[cl]->ncontents = 1;
-	}
-
-	/* we always want a NULL at the end */
-	cache[cl]->contents[cache[cl]->ncontents] = NULL;
+	spool_cache_header(name, body, cache);
     }
 
     return r;
