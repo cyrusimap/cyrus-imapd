@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.27 2001/09/19 21:08:36 ken3 Exp $ */
+/* $Id: tls.c,v 1.28 2001/09/20 15:23:38 ken3 Exp $ */
 
 #include <config.h>
 
@@ -949,10 +949,19 @@ int tls_shutdown_serverengine(void)
 /*
  * Delete expired sessions.
  */
-static int find_p(void *rock, const char *id, int idlen,
-		  const char *data, int datalen)
+struct prunerock {
+    struct db *db;
+    int count;
+    int deletions;
+};
+
+static int prune_p(void *rock, const char *id, int idlen,
+		   const char *data, int datalen)
 {
+    struct prunerock *prock = (struct prunerock *) rock;
     time_t expire;
+
+    prock->count++;
 
     /* grab the expire time */
     memcpy(&expire, data, sizeof(time_t));
@@ -972,13 +981,16 @@ static int find_p(void *rock, const char *id, int idlen,
     return (expire < time(0));
 }
 
-static int find_cb(void *rock, const char *id, int idlen,
-		   const char *data, int datalen)
+static int prune_cb(void *rock, const char *id, int idlen,
+		    const char *data, int datalen)
 {
+    struct prunerock *prock = (struct prunerock *) rock;
     int ret;
 
+    prock->deletions++;
+
     do {
-	ret = DB->delete((struct db *) rock, id, idlen, NULL);
+	ret = DB->delete(prock->db, id, idlen, NULL);
     } while (ret == CYRUSDB_AGAIN);
 
     /* log this transaction */
@@ -998,6 +1010,7 @@ int tls_prune_sessions(void)
 {
     char dbdir[1024];
     int ret;
+    struct prunerock prock;
 
     /* initialize DB environment */
     strcpy(dbdir, config_dir);
@@ -1016,9 +1029,14 @@ int tls_prune_sessions(void)
     }
     else {
 	/* check each session in our database */
-	DB->foreach(sessdb, "", 0, &find_p, &find_cb, sessdb, NULL);
+	prock.db = sessdb;
+	prock.count = prock.deletions = 0;
+	DB->foreach(sessdb, "", 0, &prune_p, &prune_cb, &prock, NULL);
 	DB->close(sessdb);
 	sessdb = NULL;
+
+	syslog(LOG_NOTICE, "tls_prune: purged %d out of %d entries",
+	       prock.deletions, prock.count);
     }
 
     DB->done();
