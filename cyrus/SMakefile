@@ -5,9 +5,12 @@
 
 MAKE=gmake
 
+AMSSYNC=--enable-amssync
+
 WITHAUTH="--with-auth=krb_pts"
 if test `sys` = pmax_ul4; then
 	WITHAUTH=""
+	AMSSYNC=""
 fi
 
-LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news --enable-amssync --enable-cmulocal --with-cyrus-user=$USER --with-news-group=staff"
+LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-cmulocal --with-cyrus-user=$USER --with-news-group=staff"
