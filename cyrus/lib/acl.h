@@ -42,7 +42,7 @@
  * Start Date: 6/28/93
  */
 
-/* $Id: acl.h,v 1.15 2004/03/05 19:18:03 rjs3 Exp $ */
+/* $Id: acl.h,v 1.16 2004/03/05 19:19:21 rjs3 Exp $ */
 
 #ifndef INCLUDED_ACL_H
 #define INCLUDED_ACL_H
@@ -95,7 +95,7 @@ extern char *cyrus_acl_masktostr(int acl, char *str);
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
  * 'acl' must be writable, but is restored to its original condition.
  */
-extern int cyrus_acl_myrights(struct auth_state *auth_state, const char *acl);
+extern int cyrus_acl_myrights(struct auth_state *auth_state, char *acl);
 
 /*  cyrus_acl_set(acl, identifier, mode, access, canonproc, canonrock) Modify the
  * ACL pointed to by 'acl' to modify the rights granted to

@@ -8,7 +8,7 @@
  *
  */
 /* 
- $Id: acl_afs.c,v 1.23 2004/03/05 19:18:03 rjs3 Exp $
+ $Id: acl_afs.c,v 1.24 2004/03/05 19:19:21 rjs3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -64,7 +64,7 @@
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
  * 'acl' must be writable, but is restored to its original condition.
  */
-int cyrus_acl_myrights(struct auth_state *auth_state, const char *acl)
+int cyrus_acl_myrights(struct auth_state *auth_state, char *acl)
 {
     char *thisid, *rights, *nextid;
     long acl_positive = 0, acl_negative = 0;
