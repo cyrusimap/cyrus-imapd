@@ -1,5 +1,5 @@
 /* rfc822date.h -- Generate an 822 date
- $Id: rfc822date.h,v 1.1.2.1 2001/08/17 21:03:29 leg Exp $
+ $Id: rfc822date.h,v 1.1.2.2 2001/08/21 17:49:28 leg Exp $
  
  * Copyright (c) 1998-2001 Carnegie Mellon University.  All rights reserved.
  *
@@ -47,6 +47,6 @@
 #include <time.h>
 
 /* 'buf' must be at least 80 characters */
-void rfc822date_gen(char *buf, time_t t);
+void rfc822date_gen(char *buf, size_t len, time_t t);
 
 #endif
