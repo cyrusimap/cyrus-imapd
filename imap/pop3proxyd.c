@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.58 2003/05/29 02:14:34 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.59 2003/06/16 20:31:20 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1160,7 +1160,7 @@ static int proxy_authenticate(const char *hostname, char **authline_status)
 
     strcpy(buf, hostname);
     p = strchr(buf, '.');
-    *p = '\0';
+    if(p) *p = '\0';
     strcat(buf, "_mechs");
 
     /* we now do the actual SASL exchange */
