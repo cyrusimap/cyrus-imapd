@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.73 2000/06/04 22:28:17 leg Exp $
+ * $Id: pop3d.c,v 1.74 2000/06/06 00:51:52 leg Exp $
  */
 #include <config.h>
 
@@ -914,7 +914,7 @@ void cmd_auth(char *arg)
     while (*arg && !isspace((int) *arg)) {
 	arg++;
     }
-    if (isspace(*arg)) {
+    if (isspace((char) *arg)) {
 	/* null terminate authtype, get argument */
 	*arg++ = '\0';
     } else {
