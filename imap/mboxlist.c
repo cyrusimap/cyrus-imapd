@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.109 2000/02/08 06:34:14 leg Exp $
+ * $Id: mboxlist.c,v 1.110 2000/02/08 19:36:15 tmartin Exp $
  */
 
 #include <stdio.h>
@@ -69,6 +69,7 @@ extern int errno;
 
 #include "acap.h"
 #include "acapmbox.h"
+#include "mboxname.h"
 
 #include "mboxlist.h"
 
@@ -100,7 +101,7 @@ const char *acap_password = NULL;
 /*
  * Check our configuration for consistency, die if there's a problem
  */
-void mboxlist_checkconfig()
+void mboxlist_checkconfig(void)
 {
 }
 
@@ -146,8 +147,7 @@ static int mboxlist_getpath(char *partition, char *name, char **pathp)
 static int mboxlist_mylookup(const char* name, char** pathp, char** aclp, 
 			     DB_TXN *tid, int flags)
 {
-    unsigned long offset, len, partitionlen, acllen;
-    char *partition, *acl;
+    unsigned long partitionlen, acllen;
     static char *aclresult;
     static int aclresultalloced;
     int r;
@@ -233,11 +233,9 @@ int mboxlist_lookup_writelock(const char *name, char** pathp, char** aclp,
 
 int mboxlist_findstage(const char *name, char *stagedir) 
 {
-    unsigned long offset, len, partitionlen;
     DBT key, data;
     struct mbox_entry *mboxent;
     char optionbuf[MAX_MAILBOX_NAME+1];
-    char *partition;
     const char *root;
     int r;
 
@@ -290,13 +288,15 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
 {
     int r;
     char *p;
-    unsigned long offset;
     char *acl;
     char *defaultacl, *identifier, *rights;
     char parent[MAX_MAILBOX_NAME+1];
     unsigned long parentlen;
-    char *parentname, *parentpartition, *parentacl;
-    unsigned long parentpartitionlen, parentacllen;
+    char *parentname = NULL;
+    char *parentpartition = NULL;
+    char *parentacl = NULL;
+    unsigned long parentpartitionlen = 0;
+    unsigned long parentacllen = 0;
     DBT key, data;
     struct mbox_entry *mboxent;
 
@@ -510,11 +510,11 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
     int r;
     char *acl = NULL;
     char buf2[MAX_PARTITION_LEN + 30];
-    const char *root;
+    const char *root = NULL;
     char *newpartition = NULL;
     struct mailbox newmailbox;
     DB_TXN *tid;
-    DBT key, keydel, data;
+    DBT key, data;
     struct mbox_entry *mboxent = NULL;
     acapmbox_data_t mboxdata;
     int madereserved = 0; /* made reserved entry on ACAP server */
@@ -685,7 +685,7 @@ int mboxlist_insertremote(char *name, int mbtype, char *host, char *acl,
 			  void **rettid)
 {
     DB_TXN *tid;
-    DBT key, keydel, data;
+    DBT key, data;
     struct mbox_entry *mboxent = (struct mbox_entry *)
 	xmalloc(sizeof(struct mbox_entry) + strlen(acl));
     int r = 0;
@@ -782,16 +782,11 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     char *acl;
     long access;
     int deleteuser = 0; /* if we are deleting user.<user> */
-    unsigned long offset, len;
-    char submailboxname[MAX_MAILBOX_NAME+1];
-    int newlistfd;
-    int n;
     struct mailbox mailbox;
     int deletequotaroot = 0;
     char *path;
     DB_TXN *tid;
     DBT key, data;
-    DBC *cursor = NULL;
     struct mbox_entry *mboxent = NULL;
     acapmbox_handle_t *acaphandle = NULL;
 
@@ -1387,10 +1382,9 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
     int mailbox_isopen;
     char *newacl=NULL;
     char *path;
-    int n;
     DB_TXN *tid;
     DBT key, data;
-    struct mbox_entry *oldent, *newent=NULL;
+    struct mbox_entry *oldent = NULL, *newent=NULL;
     acapmbox_handle_t *acaphandle = NULL;
 
     if (!strncmp(name, "user.", 5) &&
@@ -1433,6 +1427,7 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
 	    break;
 	case DB_NOTFOUND:
 	    r = IMAP_MAILBOX_NONEXISTENT;
+	    goto done;
 	    break;
 	case DB_LOCK_DEADLOCK:
 	    goto retry;
@@ -1440,6 +1435,8 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
 	    syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
 		   name, db_strerror(r));
 	    r = IMAP_IOERROR;
+	    goto done;
+	    break;
 	}
     }
 
@@ -1512,7 +1509,6 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
 	goto done;
     }
 
-  done:
     if (!(newent->mbtype & MBTYPE_REMOTE)) {
 	/* calculate path */
 	mboxlist_getpath(newent->partition, newent->name, &path);
@@ -1531,6 +1527,8 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
 	    mailbox_close(&mailbox);
 	}
     }
+
+  done:
 
     if (newent) free(newent);
 
@@ -1640,12 +1638,11 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 {
     struct glob *g;
     char usermboxname[MAX_MAILBOX_NAME+1];
-    int usermboxnamelen;
-    unsigned long offset, len, namelen, prefixlen, acllen;
+    int usermboxnamelen = 0;
+    unsigned long namelen, prefixlen = 0;
     int inboxoffset;
     long matchlen, minmatch;
-    char *name, *p, *acl, *aclcopy;
-    char aclbuf[1024];
+    char *name, *p;
     char namebuf[MAX_MAILBOX_NAME+1];
     int rights;
     int r, r2;
@@ -1785,7 +1782,6 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
     if ((userid!=NULL) && (state < FINDALL_INBOXSTAR) &&
 	(!strncmp(usermboxname, pattern, usermboxnamelen-1) ||
 	 !strncasecmp("inbox.", pattern, prefixlen < 6 ? prefixlen : 6))) {
-	int result;
 	
 	if (!strncmp(usermboxname, pattern, usermboxnamelen-1)) {
 	    inboxoffset = 0;
@@ -2017,11 +2013,11 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
     char *subsfname;
     struct glob *g;
     char usermboxname[MAX_MAILBOX_NAME+1];
-    int usermboxnamelen;
+    int usermboxnamelen = 0;
     char namebuf[MAX_MAILBOX_NAME+1];
     char namematchbuf[MAX_MAILBOX_NAME+1];
     int r;
-    unsigned long offset, len, prefixlen, listlinelen;
+    unsigned long offset, len, prefixlen;
     int inboxoffset;
     const char *name, *endname;
     char *p;
@@ -2029,13 +2025,12 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
     long matchlen, minmatch;
     char *acl;
     char *inboxcase;
-    DBT key, data;
     DB_TXN *tid;
 
     /* open the subscription file that contains the mailboxes the 
        user is subscribed to */
-    if (r = mboxlist_opensubs(userid, 0, &subsfd, &subs_base, &subs_size,
-			      &subsfname, (char **) 0)) {
+    if ((r = mboxlist_opensubs(userid, 0, &subsfd, &subs_base, &subs_size,
+			      &subsfname, (char **) 0))!=0) {
 	goto done;
     }
 
@@ -2301,7 +2296,6 @@ int mboxlist_foreach(foreach_proc *p, void *rock, int rw)
     DBT key, data;
     DBC *cursor;
     int r, r2;
-    int lasttime = 0;
     struct mbox_entry *mboxent;
     int flags;
 
@@ -2474,14 +2468,14 @@ int mboxlist_changesub(const char *name, const char *userid,
     int num_iov;
     int n;
     
-    if (r = mboxlist_opensubs(userid, 1, &subsfd, &subs_base, &subs_size,
-			      &subsfname, &newsubsfname)) {
+    if ((r = mboxlist_opensubs(userid, 1, &subsfd, &subs_base, &subs_size,
+			       &subsfname, &newsubsfname))!=0) {
 	return r;
     }
 
     if (add) {
 	/* Ensure mailbox exists and can be either seen or read by user */
-	if (r = mboxlist_lookup(name, (char **)0, &acl, NULL)) {
+	if ((r = mboxlist_lookup(name, (char **)0, &acl, NULL))!=0) {
 	    mboxlist_closesubs(subsfd, subs_base, subs_size);
 	    return r;
 	}
@@ -2555,7 +2549,7 @@ int mboxlist_setquota(const char *root, int newquota)
     struct quota quota;
     static struct quota zeroquota;
     int r;
-    unsigned long offset, len;
+    unsigned long len = 0;
 
     if (!root[0] || root[0] == '.' || strchr(root, '/')
 	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
@@ -2689,7 +2683,6 @@ int mboxlist_syncnews(int num, char **group, int *seen)
     int r;
 
     int deletethis;
-    int deletedsomething = 0;
     int low, high, mid;
     struct mailbox mailbox;
 
@@ -2826,11 +2819,8 @@ int mboxlist_syncnews(int num, char **group, int *seen)
 /*
  * Retrieve internal information, for reconstructing mailboxes file
  */
-void mboxlist_getinternalstuff(listfnamep, newlistfnamep, basep, sizep)
-const char **listfnamep;
-const char **newlistfnamep;
-const char **basep;
-unsigned long *sizep;
+void mboxlist_getinternalstuff(const char **listfnamep,const char **newlistfnamep, 
+			       const char **basep,unsigned long * sizep)
 {
     printf("yikes! don't reconstruct me!\n");
     exit(1);
@@ -2986,7 +2976,6 @@ static int mbdb_order(const DBT *a, const DBT *b)
     char *s1 = a->data;
     char *s2 = b->data;
     int cmp;
-    char c2;
     int i, m;
 
     m = MIN(a->size, b->size);
@@ -3160,7 +3149,6 @@ void mboxlist_init(void)
 void mboxlist_open(char *fname)
 {
     int ret;
-    int flags = DB_CREATE;
     char *tofree = NULL;
 
     assert (mboxlist_dbinit);
