@@ -1220,18 +1220,28 @@ struct mailbox *mailboxp;
     char *quota_root;
     char fnamebuf[MAX_MAILBOX_PATH];
     static struct mailbox mailbox, zeromailbox;
+    int save_errno;
+    struct stat sbuf;
 
     while (p = strchr(p+1, '/')) {
 	*p = '\0';
 	if (mkdir(path, 0777) == -1 && errno != EEXIST) {
-	    syslog(LOG_ERR, "IOERROR: creating directory %s: %m", path);
-	    return IMAP_IOERROR;
+	    save_errno = errno;
+	    if (stat(path, &sbuf) == -1) {
+		errno = save_errno;
+		syslog(LOG_ERR, "IOERROR: creating directory %s: %m", path);
+		return IMAP_IOERROR;
+	    }
 	}
 	*p = '/';
     }
     if (mkdir(path, 0777) == -1 && errno != EEXIST) {
-	syslog(LOG_ERR, "IOERROR: creating directory %s: %m", path);
-	return IMAP_IOERROR;
+	save_errno = errno;
+	if (stat(path, &sbuf) == -1) {
+	    errno = save_errno;
+	    syslog(LOG_ERR, "IOERROR: creating directory %s: %m", path);
+	    return IMAP_IOERROR;
+	}
     }
 
     mailbox = zeromailbox;
