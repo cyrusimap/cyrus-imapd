@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.4 2001/01/02 05:54:05 leg Exp $ */
+/* $Id: idled.c,v 1.5 2001/01/17 17:39:22 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -53,7 +53,9 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <time.h>
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #include <signal.h>
 #include <fcntl.h>
 
