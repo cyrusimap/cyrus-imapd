@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.25.4.14 2003/02/13 20:32:58 rjs3 Exp $
+ * $Id: mboxname.c,v 1.25.4.15 2003/04/25 17:35:55 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -111,6 +111,9 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
     char *cp;
     int userlen, domainlen = 0, namelen;
 
+    /* Blank the result, just in case */
+    result[0] = '\0';
+
     userlen = userid ? strlen(userid) : 0;
     namelen = strlen(name);
 
@@ -185,12 +188,16 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
 }
 
 /* Handle conversion from the alternate namespace to the internal namespace */
-static int mboxname_tointernal_alt(struct namespace *namespace, const char *name,
+static int mboxname_tointernal_alt(struct namespace *namespace,
+				   const char *name,
 				   const char *userid, char *result)
 {
     char *cp;
     int userlen, domainlen = 0, namelen;
     int prefixlen;
+
+    /* Blank the result, just in case */
+    result[0] = '\0';
 
     userlen = userid ? strlen(userid) : 0;
     namelen = strlen(name);
@@ -235,6 +242,8 @@ static int mboxname_tointernal_alt(struct namespace *namespace, const char *name
 
     /* Shared namespace */
     prefixlen = strlen(namespace->prefix[NAMESPACE_SHARED]);
+    if(prefixlen == 0) return IMAP_MAILBOX_BADNAME;
+
     if (!strncmp(name, namespace->prefix[NAMESPACE_SHARED], prefixlen-1) &&
 	(namelen == prefixlen-1 || name[prefixlen-1] == namespace->hier_sep)) {
 
@@ -256,6 +265,8 @@ static int mboxname_tointernal_alt(struct namespace *namespace, const char *name
 
     /* Other Users namespace */
     prefixlen = strlen(namespace->prefix[NAMESPACE_USER]);
+    if(prefixlen == 0) return IMAP_MAILBOX_BADNAME;
+
     if (!strncmp(name, namespace->prefix[NAMESPACE_USER], prefixlen-1) &&
 	(namelen == prefixlen-1 || name[prefixlen-1] == namespace->hier_sep)) {
 
@@ -325,6 +336,11 @@ static int mboxname_toexternal(struct namespace *namespace, const char *name,
     char *domain = NULL, *cp;
     int domainlen = 0;
 
+    /* Blank the result, just in case */
+    result[0] = '\0';
+
+    if(strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
+    
     if (config_virtdomains && (cp = strchr(name, '!'))) {
 	domain = (char*) name;
 	domainlen = cp++ - name;
@@ -354,6 +370,11 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *name
 {
     char *domain;
 
+    /* Blank the result, just in case */
+    result[0] = '\0';
+
+    if(strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
+    
     if (!userid) return IMAP_MAILBOX_BADNAME;
 
     if (config_virtdomains && (domain = strchr(userid, '@')) &&
