@@ -128,7 +128,7 @@ CRLF		(\r\n|\r|\n)
 .		return yytext[0];
 
 %%
-/* " */
+/*  */
 static int tonum(char *c)
 {
   int val = atoi(c);
@@ -141,7 +141,7 @@ static int tonum(char *c)
   return val;
 }
 
-/* convert NLUL strings to "" */
+/* convert NULL strings to "" */
 static char *chkstr(char *str)
 {
     if (!str) return xstrdup("");
