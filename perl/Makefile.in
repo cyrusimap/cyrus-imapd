@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.4 2000/05/23 20:56:33 robeson Exp $
+# $Id: Makefile.in,v 1.5 2000/08/08 23:38:29 leg Exp $
 #
 # @configure_input@
 # 
@@ -50,6 +50,9 @@ srcdir = @srcdir@
 VPATH = @srcdir@
 
 INSTALL = @INSTALL@
+SASL_LIB=@LIB_SASL@
+SASL_INC=@SASLFLAGS@
+PERL=@PERL@
 
 SHELL = /bin/sh
 @SET_MAKE@
@@ -58,12 +61,20 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-all:: checkdepend
+PLMAKE = imap/Makefile
+
+all:: checkdepend $(PLMAKE)
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" all "in" `pwd`;	\
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all) || exit 1; \
 	done
+
+imap/Makefile: imap/Makefile.PL
+	(SASL_LIB=$(SASL_LIB); \
+	 SASL_INC=$(SASL_INC); \
+	 export SASL_LIB SASL_INC; \
+	 cd imap; $(PERL) Makefile.PL PREFIX=$prefix)
 
 install::
 	@for d in  $(SUBDIRS); \
