@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.115 1998/07/07 00:06:12 tjs Exp $
+dnl $Id: configure.in,v 1.116 1998/07/07 00:36:38 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -470,9 +470,17 @@ if test -n "$TCL_SUBDIRS"; then
 fi
 AC_SUBST(TCL_SUBDIRS)
 
-dnl Rob Earhart's alternative Tcl checks
-dnl note this requires tclsh to be in the path, which isn't too bad
-dnl Ask Tcl where it lives.
+dnl Once upon a time, to link against Tcl, one merely had to say,
+dnl -ltcl.  Then came shared libraries.  Then, one had to say, -ltcl -ldl,
+dnl maybe appease the runtime linker with a -L/usr/local/lib.  But these days
+dnl are over.
+dnl
+dnl In the modern world, we have to do several things:
+dnl * ask the user where they think Tcl lives, and try to find it
+dnl * ask the user what "tclsh" is called this week (i.e., "tclsh8.0")
+dnl * run tclsh, ask it for a path, then run that path through sed
+dnl * sanity check its result (many installs are sometimes broken)
+dnl * try to figure out where Tcl is based on this result
 dnl
 dnl XXX MUST CHECK FOR TCL BEFORE KERBEROS V4 XXX
 dnl This is because some genius at MIT named one of the Kerberos v4
@@ -484,16 +492,21 @@ dnl
 dnl Check for some information from the user
 AC_ARG_WITH(tcl,[  --with-tcl=PATH         use Tcl from PATH],
 	TclLibBase="${withval}/lib")
-AC_ARG_WITH(tclsh,[  --with-tclsh=TCLSH      use TCLSH as the tclsh program],
+AC_ARG_WITH(tclsh,[  --with-tclsh=TCLSH      use TCLSH as the tclsh program
+                          (let configure find Tcl using this program)],
 	TCLSH="${withval}")
 dnl $TCL_SUBDIRS is nonempty if we are using Tcl.
 if test "$TCL_SUBDIRS" != ""; then
   # Run tclsh and ask it where it lives.
   if test -z "$TclLibBase"; then
 
-    # Did the user tell us where to find tclsh?
+    # Did the user tell us where to find tclsh?  Ok, look there.
     if test -z "$TCLSH"; then
       # Try and find tclsh.  Any tclsh.
+      # If a new version of tcl comes out and unfortunately adds another
+      # filename, it should be safe to add it (to the front of the line --
+      # somef vendors have older, badly installed tclshs that we want to avoid
+      # if we can)
       AC_PATH_PROGS(TCLSH, [tclsh8.0 tclsh], "unknown")
     fi
 
@@ -508,16 +521,12 @@ if test "$TCL_SUBDIRS" != ""; then
   fi
 
   if test "$TclLibBase" != ""; then
-    # See if Tcl really lives there.
-    # It looks like under 7.5, it does -- and under 8.0, it lives elsewhere.
-    # That's "bad", as far as I know.
+    # See if tclConfig.sh is in there.
     AC_MSG_CHECKING([if tclsh knows where tclConfig.sh is])
     if test -r "${TclLibBase}/tclConfig.sh"; then
       AC_MSG_RESULT([yes])
     else
       AC_MSG_RESULT([no])
-      AC_MSG_WARN([tclsh does not really know where its install is.])
-      AC_MSG_WARN([The configure script will try and guess where it is.])
       AC_MSG_CHECKING([for a tclConfig.sh in likely places])
       # Whee!  Okay, let's guess -- maybe it's in ../tclConfig.sh, which is
       # likely on some of the warped tcl8 systems I tried.
@@ -525,11 +534,12 @@ if test "$TCL_SUBDIRS" != ""; then
         TclLibBase="${TclLibBase}/.."
       # possibly others for other creative vendors
       else
+        # oh, dear, we didn't find it.
         AC_MSG_RESULT("unknown")
         AC_MSG_WARN([tclsh was found, but tclConfig.sh could not be located.])
         AC_MSG_WARN([Either your Tcl install was too old to be usable,])
         AC_MSG_WARN([or tclsh doesn't know where it's supposed to live.])
-        AC_MSG_ERROR([Fix the Tcl install or reconfigure with --disable-cyradm.])
+        AC_MSG_ERROR([Use --with-tcl or --disable-cyradm, or fix your Tcl installation.])
       fi
       AC_MSG_RESULT(${TclLibBase}/)
     fi
@@ -537,7 +547,7 @@ if test "$TCL_SUBDIRS" != ""; then
     AC_MSG_CHECKING([with Tcl on how it says it should be compiled])
     . ${TclLibBase}/tclConfig.sh
     dnl no TK stuff for us.
-    dnl . ${TclLibBase}tkConfig.sh
+    dnl . ${TclLibBase}/tkConfig.sh
 
     TCL_CPPFLAGS="-I${TCL_PREFIX}/include"
     dnl TCL_LIBS="${TK_LIB_SPEC} ${TK_XLIBSW} ${TCL_LD_SEARCH_FLAGS} ${TCL_LIB_SPEC}"
@@ -552,14 +562,16 @@ if test "$TCL_SUBDIRS" != ""; then
   else
    AC_MSG_RESULT([can't find tclsh])
 
-   AC_MSG_WARN([The tclsh program could not be found.  You must either put])
-   AC_MSG_WARN([your path (by installing Tcl, then adding it to your PATH,])
+   AC_MSG_WARN([The "tclsh" program could not be found.  You must either put it])
+   AC_MSG_WARN([in your path (by installing Tcl, then adding it to your PATH),])
    AC_MSG_WARN([by using the --with-tcl variable to provide the location of])
    AC_MSG_WARN([Tcl configuration (perhaps /usr/local or /opt/tcl8.0),])
+   AC_MSG_WARN([by using --with-tclsh to give the location of the tclsh you])
+   AC_MSG_WARN([wish to (try and) get configuration information from,])
    AC_MSG_WARN([or by disabling cyradm by adding --disable-cyradm when])
    AC_MSG_WARN([running configure.])
 
-   AC_MSG_ERROR([Use --with-tcl, put tclsh in your path, or --disable-cyradm.])
+   AC_MSG_ERROR([Help configure find Tcl or use --disable-cyradm.])
   fi
 fi
 
