@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- * $Id: prot.h,v 1.31 2000/11/14 19:14:05 ken3 Exp $
+ * $Id: prot.h,v 1.32 2000/12/04 17:55:57 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -89,6 +89,7 @@ struct protstream {
 };
 
 typedef struct prot_waitevent *prot_waiteventcallback_t(struct protstream *s,
+							struct prot_waitevent *ev,
 							void *rock);
 
 struct prot_waitevent {

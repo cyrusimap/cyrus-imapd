@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.56 2000/11/14 19:14:05 ken3 Exp $
+ * $Id: prot.c,v 1.57 2000/12/04 17:55:57 ken3 Exp $
  */
 
 #include <config.h>
@@ -379,7 +379,7 @@ int prot_fill(struct protstream *s)
 		for (event = s->waitevent; event != NULL; event = event->next)
 		{
 		    if (now >= event->mark) {
-			event = (*event->proc)(s, event->rock);
+			event = (*event->proc)(s, event, event->rock);
 		    }
 		    if (event && sleepfor > (event->mark - now)) {
 			sleepfor = event->mark - now;
