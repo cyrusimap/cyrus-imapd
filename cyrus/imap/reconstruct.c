@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.58 2001/02/22 19:27:19 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.59 2001/03/05 22:27:31 leg Exp $ */
 
 #include <config.h>
 
@@ -110,7 +110,6 @@ int reconstruct(char *name, struct discovered *l);
 void usage(void);
 void shut_down(int code);
 
-extern char *mailbox_findquota(const char *name);
 extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
 static acapmbox_handle_t *acaphandle = NULL;
@@ -260,7 +259,8 @@ int reconstruct(char *name, struct discovered *found)
 {
     int r;
     struct mailbox mailbox;
-    char *quota_root;
+    char quota_root[MAX_MAILBOX_PATH];
+    int hasquota;
     int i, flag;
     char *p;
     int format = MAILBOX_FORMAT_NORMAL;
@@ -302,9 +302,9 @@ int reconstruct(char *name, struct discovered *found)
     }
 
     /* Fix quota root */
-    quota_root = mailbox_findquota(mailbox.name);
+    hasquota = mailbox_findquota(quota_root, mailbox.name);
     if (mailbox.quota.root) free(mailbox.quota.root);
-    if (quota_root) {
+    if (hasquota) {
 	mailbox.quota.root = xstrdup(quota_root);
     }
     else {

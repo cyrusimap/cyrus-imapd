@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.37 2001/02/22 19:27:19 ken3 Exp $ */
+/* $Id: quota.c,v 1.38 2001/03/05 22:27:25 leg Exp $ */
 
 
 #include <config.h>
@@ -99,8 +99,6 @@ int fixquota(int ispartial);
 int fixquota_fixroot(struct mailbox *mailbox,
 		     char *root);
 int fixquota_finish(int thisquota);
-
-extern char *mailbox_findquota();
 
 struct quotaentry {
     struct quota quota;
