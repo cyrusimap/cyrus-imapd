@@ -28,6 +28,7 @@
  */
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <syslog.h>
 
 #include "xmalloc.h"
@@ -51,7 +52,19 @@ const char *mboxname;
 {
     char *p;
     int n, left;
+    struct sbuf *sbuf;
+    char buf[80];
 
+    if (newlen == MAP_UNKNOWN_LEN) {
+	if (fstat(fd, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
+		   mboxname ? " for " : "", mboxname ? mboxname : "");
+	    sprintf(buf, "failed to fstat %s file", name);
+	    fatal(buf, EX_IOERR);
+	}
+	newlen = sbuf.st_size;
+    }
+	    
     /* Need a larger buffer */
     if (*len < newlen) {
 	if (*len) free((char *)*base);
@@ -66,7 +79,6 @@ const char *mboxname;
     while (left) {
 	n = read(fd, p, left);
 	if (n <= 0) {
-	    char buf[80];
 	    if (n == 0) {
 		syslog(LOG_ERR, "IOERROR: reading %s file%s%s: end of file",
 		       name,

@@ -37,6 +37,8 @@
 #endif
 #endif
 
+#define MAP_UNKNOWN_LEN ((unsigned long)-1)
+
 extern void map_refresh P((int fd, int onceonly, const char **base,
 		    unsigned long *len, unsigned long newlen,
 		    const char *name, const char *mboxname));
