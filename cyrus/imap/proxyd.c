@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.82 2002/01/29 20:45:09 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.83 2002/01/30 01:20:24 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -856,7 +856,6 @@ static int mlookup(const char *name, char **pathp,
 	c = strchr(*pathp, '!');
 	if(c) *c = '\0';
     }
-
     return r;
 }
 
@@ -2928,6 +2927,11 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	r = mboxlist_createmailboxcheck(mailboxname, 0, 0, proxyd_userisadmin, 
 					proxyd_userid, proxyd_authstate,
 					NULL, NULL);
+	if(!r && server) {
+	    char *c;
+	    c = strchr(server, '!');
+	    if(c) *c = '\0';
+	}
 	prot_printf(proxyd_out, "%s NO %s%s\r\n", tag,
 		    r == 0 ? "[TRYCREATE] " : "", error_message(r));
     } else if (s == backend_current) {
@@ -3294,6 +3298,11 @@ void cmd_create(char *tag, char *name, char *server)
 	r = mboxlist_createmailboxcheck(mailboxname, 0, 0, proxyd_userisadmin,
 					proxyd_userid, proxyd_authstate,
 					&acl, &server);
+	if(!r && server) {
+	    char *c;
+	    c = strchr(server, '!');
+	    if(c) *c = '\0';
+	}
     }
     if (!r && server) {
 	s = proxyd_findserver(server);
