@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.40 1998/12/02 18:54:46 tjs Exp $
+ * $Id: pop3d.c,v 1.41 1999/03/02 02:02:46 tjs Exp $
  */
 
 #include <stdio.h>
@@ -203,9 +203,7 @@ int code;
     exit(code);
 }
 
-fatal(s, code)
-char *s;
-int code;
+void fatal(const char* s, int code)
 {
     static int recurse_code = 0;
 
