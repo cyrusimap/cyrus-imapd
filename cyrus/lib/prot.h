@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- $Id: prot.h,v 1.17 1999/08/12 19:27:44 leg Exp $
+ $Id: prot.h,v 1.18 1999/11/05 01:00:41 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -31,6 +31,15 @@
 #include <stdlib.h>
 
 #include <sasl.h>
+
+#ifdef HAVE_SSL
+#include <openssl/lhash.h>
+#include <openssl/bn.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
+#include <openssl/ssl.h>
+#endif /* HAVE_SSL */
 
 #ifndef P
 #ifdef __STDC__
@@ -66,6 +75,11 @@ struct protstream {
     void *readcallback_rock;
     int buf_size;
     char *buf;
+
+#ifdef HAVE_SSL
+  SSL *tls_conn;
+#endif /* HAVE_SSL */
+
 };
 
 #define prot_getc(s) ((s)->cnt-- > 0 ? (int)*(s)->ptr++ : prot_fill(s))
@@ -77,6 +91,9 @@ extern int prot_free P((struct protstream *s));
 extern int prot_setlog P((struct protstream *s, int fd));
 extern int prot_setlogtime P((struct protstream *s, time_t *ptr));
 extern int prot_setsasl P((struct protstream *s, sasl_conn_t *conn));
+#ifdef HAVE_SSL
+extern int prot_settls P((struct protstream *s, SSL *tlsconn));
+#endif /* HAVE_SSL */
 extern int prot_settimeout P((struct protstream *s, int timeout));
 extern int prot_setflushonread P((struct protstream *s,
 				  struct protstream *flushs));

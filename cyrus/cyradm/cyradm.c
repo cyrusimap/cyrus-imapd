@@ -359,14 +359,40 @@ char **argv;
  *
  ***********************/
 
-static char *parsemechlist(char *str)
+typedef struct capabilies_s {
+
+  char *mechs;
+  
+  /* 0 = false; 1 = true */
+  int starttls;
+  int logindisabled;
+
+} capabilities_t;
+
+
+
+static capabilities_t *parsecapabilitylist(char *str)
 {
   char *tmp;
   int num=0;
-  char *ret=(char *)xmalloc(strlen(str)+1);
-  if (ret==NULL) return NULL;
+  capabilities_t *ret=(capabilities_t *) xmalloc(sizeof(capabilities_t));
+  ret->mechs = (char *)xmalloc(strlen(str)+1);
+  ret->starttls=0;
+  ret->logindisabled=0;
 
-  strcpy(ret,"");
+  /* check for stattls */
+  if (strstr(str,"STARTTLS")!=NULL)
+  {
+    ret->starttls=1;
+  }
+
+  /* check for login being disabled */
+  if (strstr(str,"LOGINDISABLED")!=NULL)
+  {
+    ret->logindisabled=1;
+  }
+
+  strcpy(ret->mechs,"");
 
   while ((tmp=strstr(str,"AUTH="))!=NULL)
   {
@@ -380,8 +406,8 @@ static char *parsemechlist(char *str)
 
     /* add entry to list */
     if (num>0)
-      strcat(ret," ");
-    strcat(ret, tmp);
+      strcat(ret->mechs," ");
+    strcat(ret->mechs, tmp);
     num++;
 
     /* reset the string */
@@ -395,18 +421,17 @@ static char *parsemechlist(char *str)
 /*
  * IMAP command completion callback
  */
-static void
-callback_capability(imclient, rock, reply)
-struct imclient *imclient;
-void *rock;
-struct imclient_reply *reply;
+static void callback_capability(struct imclient *imclient, 
+				void *rock,
+				struct imclient_reply *reply)
+
 {
     char *s;
-    char **mechs = (char **) rock;
+    capabilities_t **caps = (capabilities_t **) rock;
     
     s = reply->text;
  
-    *mechs = parsemechlist(s);
+    *caps = parsecapabilitylist(s);
 }
 
 /*
@@ -426,7 +451,9 @@ char **argv;
     int minssf=0;     /* default to allow any security layer */
     int maxssf=10000;
     char *mech = NULL;
-    char *mechlist;
+    char *tls_keyfile = "";
+    capabilities_t *capabilitylist;
+    int tls_layer;
 
     /* skip over command & subcommand */
     argv += 2;
@@ -446,16 +473,31 @@ char **argv;
 	    maxssf = atoi(*++argv);
 	}
 	else if (!strcmp(argv[0], "-mech")) {
+	    if (!argv[1]) break;
 	    mech = *++argv;
+	} else if (!strcmp(argv[0], "-tlskey")) {
+	    if (!argv[1]) break;
+	    tls_keyfile = *++argv;
+	} else if (!strcmp(argv[0], "-notls")) {
+	    tls_keyfile = NULL;
 	}
 	argv++;
     }
     if (*argv) {
+#ifdef HAVE_SSL
 	Tcl_AppendResult(interp, "incorrect args: should be \"",
 			 argv[0], " authenticate ",
 			 "[-pwcommand string] [-user user] ",
 			 "[-layers #] [-mech mechname]\"",
 			 (char *) NULL);
+#else /* HAVE_SSL */
+	Tcl_AppendResult(interp, "incorrect args: should be \"",
+			 argv[0], " authenticate ",
+			 "[-pwcommand string] [-user user] ",
+			 "[-layers #] [-mech mechname] [-tlskey keyfile] [-notls]\"",
+			 (char *) NULL);
+#endif /* HAVE_SSL */
+
 	return TCL_ERROR;
     }
 
@@ -465,7 +507,7 @@ char **argv;
     }
 
     imclient_addcallback(conn->imclient, "CAPABILITY", 0,
-			 callback_capability, (void *) &mechlist, 
+			 callback_capability, (void *) &capabilitylist, 
 			 (char *) 0);
 
     imclient_send(conn->imclient, callback_finish, (void *) conn,
@@ -475,8 +517,21 @@ char **argv;
 	imclient_processoneevent(conn->imclient);
     }
 
+#ifdef HAVE_SSL
+    /* starttls unless user told us not to */
+    if (capabilitylist->starttls == 1)
+    {
+      if (tls_keyfile!=NULL)
+      {
+	imclient_starttls(conn->imclient,
+			  10,
+			  tls_keyfile, tls_keyfile, &tls_layer);
+      }
+    }
+#endif /* HAVE_SSL */
+
     if (!pwcommand) {
-	r = imclient_authenticate(conn->imclient, mech ? mech : mechlist, 
+	r = imclient_authenticate(conn->imclient, mech ? mech : capabilitylist->mechs, 
 				  "imap", user, minssf, maxssf);
     }
     
