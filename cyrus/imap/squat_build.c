@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat_build.c,v 1.2 2002/02/19 18:50:14 ken3 Exp $
+ * $Id: squat_build.c,v 1.3 2002/03/31 20:40:59 ken3 Exp $
  */
 
 /*
@@ -264,7 +264,7 @@ struct _SquatIndex {
   int current_doc_len;                /* The total number of bytes
 					 processed in the current
 					 source document. */ 
-  SquatWordTable doc_word_table;      /* The root of the trie being
+  SquatWordTable *doc_word_table;     /* The root of the trie being
 					 built for the current
 					 document or for the current
 					 initial byte. */
@@ -293,10 +293,13 @@ struct _SquatIndex {
 };
 
 /* Initally, before we see a document, there are no words for the document. */
-static void init_doc_word_table(SquatWordTable* t) {
-  t->first_valid_entry = 256;
-  t->last_valid_entry = 0;
-  memset(t->entries, 0, sizeof(t->entries));
+static void init_doc_word_table(SquatWordTable** t) {
+  SquatWordTable *new = (SquatWordTable*)malloc(sizeof(SquatWordTable));
+
+  new->first_valid_entry = 256;
+  new->last_valid_entry = 0;
+  memset(new->entries, 0, sizeof(new->entries));
+  *t = new;
 }
 
 SquatIndex* squat_index_init(int fd, SquatOptions const* options) {
@@ -527,7 +530,7 @@ static int set_presence_bit(SquatWordTableLeafPresence* p, int ch) {
    word in the trie. */
 static int add_to_table(SquatIndex* index, char const* data, int data_len,
                         WordDocEntry* word_entry) {
-  SquatWordTable* t = &index->doc_word_table;
+  SquatWordTable* t = index->doc_word_table;
   int ch;
   SquatWordTableEntry* e;
 
@@ -922,7 +925,7 @@ int squat_index_close_document(SquatIndex* index) {
         
       cur_offset = index->index_buffers[i].total_output_bytes;
       if (write_words(index, index->index_buffers + i,
-                      index->doc_word_table.entries[i].table,
+                      index->doc_word_table->entries[i].table,
                       SQUAT_WORD_SIZE - 1, word_buf)
           != SQUAT_OK) {
         return SQUAT_ERR;
@@ -1297,7 +1300,7 @@ static int dump_index_trie_words(SquatIndex* index, int first_char,
   assert(word_ptr - word_list_ptr == buf->total_output_bytes);
  
   /* Now dump the trie to the index file. */
-  r = write_trie_word_data(index, &index->doc_word_table,
+  r = write_trie_word_data(index, index->doc_word_table,
                            SQUAT_WORD_SIZE - 1, result_offset);
 
 cleanup_map:
@@ -1338,7 +1341,7 @@ static int index_close_internal(SquatIndex* index, int OK) {
 
   /* Clear the current trie. We are now going to use it to build
      all-documents tries. */
-  delete_doc_word_table(&index->doc_word_table, SQUAT_WORD_SIZE);
+  delete_doc_word_table(index->doc_word_table, SQUAT_WORD_SIZE);
   init_doc_word_table(&index->doc_word_table);
 
   /* Write out the array that maps document IDs to offsets of the
@@ -1404,15 +1407,15 @@ static int index_close_internal(SquatIndex* index, int OK) {
     if (offset_buf[i] != 0) {
       offset_buf[i] = word_list_offset - offset_buf[i];
 
-      if (i < index->doc_word_table.first_valid_entry) {
-        index->doc_word_table.first_valid_entry = i;
+      if (i < index->doc_word_table->first_valid_entry) {
+        index->doc_word_table->first_valid_entry = i;
       }
-      index->doc_word_table.last_valid_entry = i;
+      index->doc_word_table->last_valid_entry = i;
     }
   }
 
   /* Dump out the offset buffer at last. */
-  if (dump_word_table_offsets(index, &index->doc_word_table, offset_buf)
+  if (dump_word_table_offsets(index, index->doc_word_table, offset_buf)
       != SQUAT_OK) {
     r = SQUAT_ERR;
     goto cleanup;
@@ -1457,7 +1460,7 @@ static int index_close_internal(SquatIndex* index, int OK) {
 
 cleanup:
   free(index->out.buf);
-  delete_doc_word_table(&index->doc_word_table, SQUAT_WORD_SIZE - 1);
+  delete_doc_word_table(index->doc_word_table, SQUAT_WORD_SIZE - 1);
   /* If we're bailing out because of an error, we might not have
      released all the temporary file resources. */
   for (i = 0; i < 256; i++) {
