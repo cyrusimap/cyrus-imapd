@@ -115,7 +115,10 @@ const char **reply;		/* On failure, filled in with ptr to reason */
     }
     kstate->authproc = authproc;
 
-    *(int *)outputbuf.num = htonl(kstate->challenge);
+    /* this has a bug */
+    /* *(int *)outputbuf.num = htonl(kstate->challenge); */
+    /* *output = outputbuf.buf; */
+    outputbuf.num = htonl(kstate->challenge);
     *output = outputbuf.buf;
     *outputlen = 4;
     *state = (void *)kstate;
