@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.18 2003/01/30 20:43:49 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.19 2003/01/30 22:49:08 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -334,6 +334,11 @@ static void conn_free(struct conn *C)
 	pthread_mutex_unlock(&mailboxes_mutex);
     }
 
+    /* decrease connection counter */
+    pthread_mutex_lock(&connection_count_mutex);
+    connection_count--;
+    pthread_mutex_unlock(&connection_count_mutex); 
+
     /* remove from connlist */
     pthread_mutex_lock(&connlist_mutex); /* LOCK */
     if (C == connlist) {
@@ -348,10 +353,6 @@ static void conn_free(struct conn *C)
 	t->next = C->next;
     }
     pthread_mutex_unlock(&connlist_mutex); /* UNLOCK */
-
-    pthread_mutex_lock(&connection_count_mutex);
-    connection_count--;
-    pthread_mutex_unlock(&connection_count_mutex); 
 
     if (C->ev) prot_removewaitevent(C->pin, C->ev);
 
@@ -740,6 +741,9 @@ mupdate_docmd_result_t docmd(struct conn *c)
     }
     
  done:
+
+    /* Necessary since we don't ever do a prot_read on an idle connection
+     * in mupdate */
     prot_flush(c->pout);
     return ret;
 }
@@ -752,11 +756,15 @@ int service_main_fd(int fd,
 		    char **argv __attribute__((unused)),
 		    char **envp __attribute__((unused)))
 {
-    /* First check that we can handle the new connection. */
-    pthread_mutex_lock(&connection_count_mutex);
-    if(connection_count >= config_getint(IMAPOPT_MUPDATE_CONNECTIONS_MAX)) {
-	pthread_mutex_unlock(&connection_count_mutex);	
+    int flag;
 
+    /* First check that we can handle the new connection. */
+    pthread_mutex_lock(&connection_count_mutex); /* LOCK */
+    flag =
+	(connection_count >= config_getint(IMAPOPT_MUPDATE_CONNECTIONS_MAX));
+    pthread_mutex_unlock(&connection_count_mutex); /* UNLOCK */
+
+    if (flag) {
 	/* Do the nonblocking write, if it fails, too bad for them. */
 	nonblock(fd, 1);
 	write(fd,SERVER_UNABLE_STRING,sizeof(SERVER_UNABLE_STRING));
@@ -764,13 +772,10 @@ int service_main_fd(int fd,
 
 	syslog(LOG_ERR,
 	       "Server too busy, droping connection.");
-	return 0;
-    } else {
-	pthread_mutex_unlock(&connection_count_mutex);
-    }
+    } else if(write(conn_pipe[1], &fd, sizeof(fd)) == -1) {
+	/* signal that a new file descriptor is available.
+	 * If it fails... */
 
-    /* signal that a new file descriptor is available */
-    if(write(conn_pipe[1], &fd, sizeof(fd)) == -1) {
 	syslog(LOG_CRIT,
 	       "write to conn_pipe to signal new connection failed: %m");
 	return EC_TEMPFAIL;
@@ -786,26 +791,29 @@ int service_main_fd(int fd,
 static void *thread_main(void *rock __attribute__((unused))) 
 {
     struct conn *C; /* used for loops */
-    struct conn *currConn; /* the connection we care about currently */
+    struct conn *currConn = NULL; /* the connection we care about currently */
     struct protgroup *protin = protgroup_new(PROTGROUP_SIZE_DEFAULT);
     struct protgroup *protout = NULL;
     struct timeval now;
     struct timespec timeout;
+    int do_a_command;
     int connflag;
     int new_fd;
-    int ret;
+    int ret = 0;
 
     /* Lock Worker Count Mutex */
-    pthread_mutex_lock(&worker_count_mutex);
+    pthread_mutex_lock(&worker_count_mutex); /* LOCK */
     /* Change total number of workers */
     worker_count++;
     syslog(LOG_DEBUG,
 	   "New worker thread started, for a total of %d", worker_count);
     /* Unlock Worker Count Mutex */
-    pthread_mutex_unlock(&worker_count_mutex);
+    pthread_mutex_unlock(&worker_count_mutex); /* UNLOCK */
     
     /* This is a big infinite loop */
     while(1) {
+	do_a_command = 0;
+	
 	pthread_mutex_lock(&idle_worker_mutex);
 	/* If we are over the limit on idle threads, die. */
 	if(idle_worker_count >=
@@ -819,35 +827,38 @@ static void *thread_main(void *rock __attribute__((unused)))
 
 	/* Lock Listen Mutex - If locking takes more than 60 seconds,
 	 * kill off this thread.  Ideally this is a FILO queue */
-	pthread_mutex_lock(&listener_mutex);
-	while(listener_lock) {
+	pthread_mutex_lock(&listener_mutex); /* LOCK */
+	ret = 0;
+	while(listener_lock && ret != ETIMEDOUT) {
 	    gettimeofday(&now, NULL);
 	    timeout.tv_sec = now.tv_sec + 60;
 	    timeout.tv_nsec = now.tv_usec * 1000;
 	    ret = pthread_cond_timedwait(&listener_cond,
 					 &listener_mutex,
 					 &timeout);
-	    if(ret == ETIMEDOUT) {
-		/* We timed out, this thread dies now */
-		pthread_mutex_unlock(&listener_mutex);
-		syslog(LOG_DEBUG,
-		       "Thread timed out waiting for listener_lock");
-		goto worker_thread_done;
-	    }
 	}
-	listener_lock = 1;
-	pthread_mutex_unlock(&listener_mutex);
+	if(!ret) {
+	    /* Set listener lock until we decide what to do */
+	    listener_lock = 1;
+	}
+	pthread_mutex_unlock(&listener_mutex); /* UNLOCK */
+
+	if(ret == ETIMEDOUT) {
+	    syslog(LOG_DEBUG,
+		   "Thread timed out waiting for listener_lock");
+	    goto worker_thread_done;
+	}
 
 	signals_poll();
 
 	/* Check if we are ready for connections, if not, wait */
-	pthread_mutex_lock(&ready_for_connections_mutex);
+	pthread_mutex_lock(&ready_for_connections_mutex); /* LOCK */
 	/* are we ready to take connections? */
 	while(!ready_for_connections) {
 	    pthread_cond_wait(&ready_for_connections_cond,
 			      &ready_for_connections_mutex);
 	}
-	pthread_mutex_unlock(&ready_for_connections_mutex);
+	pthread_mutex_unlock(&ready_for_connections_mutex); /* UNLOCK */
 
 	connflag = 0;
 
@@ -859,13 +870,13 @@ static void *thread_main(void *rock __attribute__((unused)))
 	protout = NULL;
 	
 	/* Build list of idle protstreams */
-	pthread_mutex_lock(&idle_connlist_mutex);
+	pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
 	for(C=idle_connlist; C; C=C->next_idle) {
 	    assert(C->idle);
 
 	    protgroup_insert(protin, C->pin);
 	}
-	pthread_mutex_unlock(&idle_connlist_mutex);
+	pthread_mutex_unlock(&idle_connlist_mutex); /* UNLOCK */
 	
 	/* Select on Idle Conns + conn_pipe */
 	if(prot_select(protin, conn_pipe[0],
@@ -875,9 +886,8 @@ static void *thread_main(void *rock __attribute__((unused)))
 	}
 
 	/* Decrement Idle Worker Count */
-	pthread_mutex_lock(&idle_worker_mutex);
+	pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
 	idle_worker_count--;
-	pthread_mutex_unlock(&idle_worker_mutex);
 
 	/* Do we need a new worker? (are we allowed to create one?) */
 	if(idle_worker_count == 0
@@ -891,11 +901,15 @@ static void *thread_main(void *rock __attribute__((unused)))
 		       "could not start a new worker thread (not fatal)");
 	    }
 	}
+	pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
 
 	/* If we've been signaled to be unready, drop all current connections
 	 * in the idle list */
 	if(!ready_for_connections) {
-	    pthread_mutex_lock(&idle_connlist_mutex);
+	    /* Free all connections on idle_connlist.  Note that
+	     * any connection not currently on the idle_connlist will
+	     * instead be freed when they drop out of their docmd() below */
+	    pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
 	    for(C=idle_connlist; C; C=C->next_idle) {
 		prot_printf(C->pout,
 			    "* BYE \"no longer ready for connections\"\r\n");
@@ -904,20 +918,13 @@ static void *thread_main(void *rock __attribute__((unused)))
 		conn_free(C);
 	    }
 	    idle_connlist = NULL;
-	    pthread_mutex_unlock(&idle_connlist_mutex);
+	    pthread_mutex_unlock(&idle_connlist_mutex); /* UNLOCK */
 
-	    /* Unlock the listener */
-	    pthread_mutex_lock(&listener_mutex);
-	    assert(listener_lock);
-	    listener_lock = 0;
-	    pthread_cond_signal(&listener_cond);
-	    pthread_mutex_unlock(&listener_mutex);
-
-	    continue;
+	    goto nextlistener;
 	}
 	
 	if(connflag) {
-	    /* read the fd */
+	    /* read the fd from the pipe, if needed */
 	    if(read(conn_pipe[0], &new_fd, sizeof(new_fd)) == -1) {
 		syslog(LOG_CRIT,
 		       "read from conn_pipe for new connection failed: %m");
@@ -936,12 +943,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    /* setup the new connection */
 	    currConn = conn_new(new_fd);
 
-	    if(currConn == NULL) {
-		/* Startup Failed */
-		continue;
-	    }
-
-	    /* Can we actually support this connection? */
+	    if(!currConn) goto nextlistener;
 
 	    /* send the banner + flush pout */
 	    ret = sasl_listmech(currConn->saslconn, NULL,
@@ -964,19 +966,22 @@ static void *thread_main(void *rock __attribute__((unused)))
 			config_servername,
 			CYRUS_VERSION, masterp ? "(master)" : slavebuf);
 
+	    /* xxx can we do this outside of the listner lock somehow? */
 	    prot_flush(currConn->pout);
 
-	    /* Let another listener in */
-	    pthread_mutex_lock(&listener_mutex);
-	    assert(listener_lock);
-	    listener_lock = 0;
-	    pthread_cond_signal(&listener_cond);
-	    pthread_mutex_unlock(&listener_mutex);
+	    /* Add new connection to the idle connlist */
+	    pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
+	    currConn->idle = 1;
+	    currConn->next_idle = idle_connlist;
+	    idle_connlist = currConn;
+	    pthread_mutex_unlock(&idle_connlist_mutex); /* UNLOCK */
 	} else if(protout) {
+	    /* Handle existing connection, we'll need to pull it off
+	     * the idle_connlist */
 	    struct protstream *ptmp;
 	    struct conn **prev;
 
-	    pthread_mutex_lock(&idle_connlist_mutex);
+	    pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
 	    prev = &(idle_connlist);
 
 	    /* Grab the first connection out of the ready set, and use it */
@@ -993,15 +998,22 @@ static void *thread_main(void *rock __attribute__((unused)))
 		    break;
 		}
 	    }
-	    pthread_mutex_unlock(&idle_connlist_mutex);
+	    pthread_mutex_unlock(&idle_connlist_mutex); /* UNLOCK */
 
-	    /* Let another listener in */
-	    pthread_mutex_lock(&listener_mutex);
-	    assert(listener_lock);
-	    listener_lock = 0;
-	    pthread_cond_signal(&listener_cond);
-	    pthread_mutex_unlock(&listener_mutex);
+	    do_a_command = 1;	    
+	}
 
+    nextlistener:
+	/* Let another listener in */
+	pthread_mutex_lock(&listener_mutex);
+	assert(listener_lock);
+	listener_lock = 0;
+	pthread_cond_signal(&listener_cond);
+	pthread_mutex_unlock(&listener_mutex);
+	
+	if(do_a_command) {
+	    assert(currConn);
+	    
 	    if(docmd(currConn) == DOCMD_CONN_FINISHED) {
 		conn_free(currConn);
 		/* continue to top of loop here since we won't be adding
@@ -1018,40 +1030,31 @@ static void *thread_main(void *rock __attribute__((unused)))
 		 * this back to the idle list */
 		continue;
 	    }
-	} else {
-	    /* No new connection, and no other connections ready */
-	    pthread_mutex_lock(&listener_mutex);
-	    assert(listener_lock);
-	    listener_lock = 0;
-	    pthread_cond_signal(&listener_cond);
-	    pthread_mutex_unlock(&listener_mutex);
 
-	    continue;
-	}
+	    pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
+	    currConn->idle = 1;
+	    currConn->next_idle = idle_connlist;
+	    idle_connlist = currConn;
+	    pthread_mutex_unlock(&idle_connlist_mutex); /* UNLOCK */
 
-	pthread_mutex_lock(&idle_connlist_mutex);
-	currConn->idle = 1;
-	currConn->next_idle = idle_connlist;
-	idle_connlist = currConn;
-	pthread_mutex_unlock(&idle_connlist_mutex);		
-	
-	/* Signal to our caller that we should add something
-	 * to select() on */
-	if(write(conn_pipe[1], &NO_NEW_CONNECTION,
-		 sizeof(NO_NEW_CONNECTION)) == -1) {
-	    fatal("write to conn_pipe to signal docmd done failed",
-		  EC_TEMPFAIL);
-	}
-    }
+	    /* Signal to our caller that we should add something
+	     * to select() on, since this connection is ready again */
+	    if(write(conn_pipe[1], &NO_NEW_CONNECTION,
+		     sizeof(NO_NEW_CONNECTION)) == -1) {
+		fatal("write to conn_pipe to signal docmd done failed",
+		      EC_TEMPFAIL);
+	    }
+	} /* done handling command */
+    } /* while(1) */
 
  worker_thread_done:
     /* Remove this worker from the pool */
-    pthread_mutex_lock(&worker_count_mutex);
+    pthread_mutex_lock(&worker_count_mutex); /* LOCK */
     worker_count--;
     syslog(LOG_DEBUG,
 	   "Worker thread finished, for a total of %d (%d spare)",
 	   worker_count, idle_worker_count);
-    pthread_mutex_unlock(&worker_count_mutex);
+    pthread_mutex_unlock(&worker_count_mutex); /* UNLOCK */
 
     protgroup_free(protin);
     protgroup_free(protout);
@@ -1193,6 +1196,11 @@ void cmd_set(struct conn *C,
     struct mbent *m;
     struct conn *upc;
 
+    /* Hold any output that we need to do */
+    enum {
+	EXISTS, NOTACTIVE, DOESNTEXIST, ISOK, NOOUTPUT
+    } msg = NOOUTPUT;
+    
     syslog(LOG_DEBUG, "cmd_set(fd:%d, %s)", C->fd, mailbox);
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
@@ -1200,14 +1208,13 @@ void cmd_set(struct conn *C,
     m = database_lookup(mailbox, NULL);
     if (m && t == SET_RESERVE) {
 	/* failed; mailbox already exists */
-	prot_printf(C->pout, "%s NO \"mailbox already exists\"\r\n", tag);
+	msg = EXISTS;
 	goto done;
     }
 
     if ((!m || m->t != SET_ACTIVE) && t == SET_DEACTIVATE) {
 	/* failed; mailbox not currently active */
-	prot_printf(C->pout, "%s NO \"mailbox not currently active\"\r\n",
-		    tag);
+	msg = NOTACTIVE;
 	goto done;
     } else if (t == SET_DEACTIVATE) {
 	t = SET_RESERVE;
@@ -1216,7 +1223,7 @@ void cmd_set(struct conn *C,
     if (t == SET_DELETE) {
 	if (!m) {
 	    /* failed; mailbox doesn't exist */
-            prot_printf(C->pout, "%s NO \"mailbox doesn't exist\"\r\n", tag);
+	    msg = DOESNTEXIST;
 	    goto done;
 	}
 
@@ -1272,10 +1279,30 @@ void cmd_set(struct conn *C,
 	pthread_mutex_unlock(&upc->m);
     }
 
-    prot_printf(C->pout, "%s OK \"done\"\r\n", tag);
+    msg = ISOK;
  done:
     free_mbent(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
+
+    /* Delay output until here to avoid blocking while holding
+     * mailboxes_mutex */
+    switch(msg) {
+    case EXISTS:
+	prot_printf(C->pout, "%s NO \"mailbox already exists\"\r\n", tag);
+	break;
+    case NOTACTIVE:
+	prot_printf(C->pout, "%s NO \"mailbox not currently active\"\r\n",
+		    tag);
+	break;
+    case DOESNTEXIST:
+	prot_printf(C->pout, "%s NO \"mailbox doesn't exist\"\r\n", tag);
+	break;
+    case ISOK:
+	prot_printf(C->pout, "%s OK \"done\"\r\n", tag);
+	break;
+    default:
+	break;
+    }    
 }
 
 void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook,
@@ -1711,6 +1738,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     struct mpool *pool;
     struct sync_rock rock;
     char pattern[] = { '*', '\0' };
+    int ret = 0;    
 
     if(!handle || !handle->saslcompleted) return 1;
 
@@ -1742,9 +1770,8 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    p = p_next;
 	}
 	
-	pthread_mutex_unlock(&mailboxes_mutex);
-	free_mpool(pool);
-	return 1;
+	ret = 1;
+	goto done;	
     }
 
     /* Make socket nonblocking now */
@@ -1813,9 +1840,11 @@ int mupdate_synchronize(mupdate_handle *handle)
 
     /* All up to date! */
     syslog(LOG_NOTICE, "mailbox list synchronization complete");
+
+ done:
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
     free_mpool(pool);
-    return 0;
+    return ret;
 }
 
 void mupdate_signal_db_synced(void) 
@@ -1839,6 +1868,8 @@ void mupdate_ready(void)
     pthread_mutex_unlock(&ready_for_connections_mutex);
 }
 
+/* Signal unreadyness.  Next active worker will kill off all idle connections.
+ * any non-idle connection will die off when it leaves docmd() */
 void mupdate_unready(void)
 {
     pthread_mutex_lock(&ready_for_connections_mutex);
