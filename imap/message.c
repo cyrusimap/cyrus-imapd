@@ -1088,6 +1088,7 @@ char *hdr;
     tm = zerotm;
 
     message_parse_rfc822space(&hdr);
+    if (!hdr) goto baddate;
 
     if (isalpha(*hdr)) {
 	/* Day name -- skip over it */
@@ -1097,8 +1098,9 @@ char *hdr;
 	if (!isalpha(*hdr)) goto baddate;
 	hdr++;
 	message_parse_rfc822space(&hdr);
-	if (*hdr++ != ',') goto baddate;
+	if (!hdr || *hdr++ != ',') goto baddate;
 	message_parse_rfc822space(&hdr);
+	if (!hdr) goto baddate;
     }
 
     if (!isdigit(*hdr)) goto baddate;
@@ -1109,6 +1111,7 @@ char *hdr;
     
     /* Parse month name */
     message_parse_rfc822space(&hdr);
+    if (!hdr) goto baddate;
     month[0] = *hdr++;
     if (!isalpha(month[0])) goto baddate;
     month[1] = *hdr++;
@@ -1124,7 +1127,7 @@ char *hdr;
     
     /* Parse year */
     message_parse_rfc822space(&hdr);
-    if (!isdigit(*hdr)) goto baddate;
+    if (!hdr || !isdigit(*hdr)) goto baddate;
     tm.tm_year = *hdr++ - '0';
     if (!isdigit(*hdr)) goto baddate;
     tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
