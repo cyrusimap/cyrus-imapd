@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.54 2002/03/15 20:20:25 rjs3 Exp $
+ * $Id: mupdate.c,v 1.55 2002/04/08 20:10:12 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1292,8 +1292,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	if(!m) {
 	    syslog(LOG_DEBUG, "attempt to delete unknown mailbox %s",
 		   mdata->mailbox);
-	    /* Mailbox doesn't exist */
-	    ret = -1;
+	    /* Mailbox doesn't exist - this isn't as fatal as you might
+	     * think. */
+            /* ret = -1; */
 	    goto done;
 	}
 	m->t = t = SET_DELETE;
