@@ -53,6 +53,7 @@ extern char *mailbox_findquota();
 struct quotaentry {
     struct quota quota;
     int refcount;
+    int deleted;
     unsigned long newused;
 };
 
@@ -62,20 +63,23 @@ struct quotaentry zeroquotaentry;
 struct quotaentry *quota;
 int quota_num = 0, quota_alloc = 0;
 
+int firstquota;
+int redofix;
+
 main(argc, argv)
 int argc;
 char **argv;
 {
     int opt;
-    int rflag = 0;
-    int i, r, code = 0;
+    int fflag = 0;
+    int r, code = 0;
 
     config_init("quota");
 
-    while ((opt = getopt(argc, argv, "r")) != EOF) {
+    while ((opt = getopt(argc, argv, "f")) != EOF) {
 	switch (opt) {
-	case 'r':
-	    rflag = 1;
+	case 'f':
+	    fflag = 1;
 	    break;
 
 	default:
@@ -85,12 +89,12 @@ char **argv;
 
     r = buildquotalist(argv+optind, argc-optind);
 
-    if (!r && rflag) r = fsckquota();
+    if (!r && fflag) r = fixquota();
 
-    if (!r) reportquota(rflag);
+    if (!r) reportquota();
 
     if (r) {
-	com_err("quota", r, (r == EX_IOERR) ? error_message(errno) : NULL);
+	com_err("quota", r, (r == IMAP_IOERROR) ? error_message(errno) : NULL);
 	code = convert_code(r);
     }
 
@@ -99,10 +103,13 @@ char **argv;
 
 usage()
 {
-    fprintf(stderr, "usage: quota [-r] [prefix]...\n");
+    fprintf(stderr, "usage: quota [-f] [prefix]...\n");
     exit(EX_USAGE);
 }    
 
+/*
+ * Comparison function for sorting quota roots
+ */
 int compare_quota(a, b)
 char *a, *b;
 {
@@ -112,6 +119,9 @@ char *a, *b;
 
 #define QUOTA_GROW 10 /* XXX 300 */
 
+/*
+ * Build the list of quota roots in 'quota'
+ */
 int 
 buildquotalist(roots, nroots)
 char **roots;
@@ -119,15 +129,9 @@ int nroots;
 {
     int r;
     char quota_path[MAX_MAILBOX_PATH];
-    int i, flag;
-    char *p;
-    FILE *newindex, *newcache;
+    int i;
     DIR *dirp;
     struct dirent *dirent;
-    int msg, old_msg = 0, new_exists = 0;
-    unsigned long new_quota = 0;
-    struct stat sbuf;
-    int n;
 
     sprintf(quota_path, "%s%s", config_dir, FNAME_QUOTADIR);
     if (chdir(quota_path)) {
@@ -183,37 +187,188 @@ int nroots;
     return 0;
 }
 
-int fsckquota()
+/*
+ * Account for mailbox 'name' when fixing the quota roots
+ */
+int
+fixquota_mailbox(name, matchlen, maycreate)
+char *name;
+int matchlen;
+int maycreate;
 {
-    /* XXX */ abort();
+    int r;
+    struct mailbox mailbox;
+    int i, len, thisquota, thisquotalen;
+
+    while (firstquota < quota_num &&
+	   strncasecmp(name, quota[firstquota].quota.root,
+		       strlen(quota[firstquota].quota.root)) > 0) {
+	r = fixquota_finish(firstquota++);
+	if (r) return r;
+    }
+
+    thisquota = -1;
+    thisquotalen = 0;
+    for (i = firstquota;
+	 i < quota_num && strcasecmp(name, quota[i].quota.root) >= 0; i++) {
+	len = strlen(quota[i].quota.root);
+	if (!strncasecmp(name, quota[i].quota.root, len) &&
+	    (!name[len] || name[len] == '.')) {
+	    quota[i].refcount++;
+	    if (len > thisquotalen) {
+		thisquota = i;
+		thisquotalen = len;
+	    }
+	}
+    }
+
+    r = mailbox_open_header(name, &mailbox);
+    if (r) return r;
+
+    if (thisquota == -1) {
+	if (mailbox.quota.root) {
+	    abort(); /* XXX */
+	}
+	return 0;
+    }
+
+    if (!mailbox.quota.root ||
+	strcmp(mailbox.quota.root, quota[thisquota].quota.root) != 0) {
+	abort(); /* XXX */
+    }
+    
+    if (!quota[thisquota].quota.file) {
+	r = mailbox_lock_quota(&quota[thisquota].quota);
+	if (r) {
+	    mailbox_close(&mailbox);
+	    return r;
+	}
+    }
+
+    r = mailbox_open_index(&mailbox);
+    if (r) {
+	mailbox_close(&mailbox);
+	return r;
+    }
+
+    quota[thisquota].newused += mailbox.quota_mailbox_used;
+    mailbox_close(&mailbox);
+
+    return 0;
+}
+	
+/*
+ * Finish fixing up a quota root
+ */
+int
+fixquota_finish(thisquota)
+int thisquota;
+{
+    int r;
+
+    if (!quota[thisquota].refcount) {
+	if (!quota[thisquota].deleted++) {
+	    printf("%s: removed\n", quota[thisquota].quota.root);
+	    unlink(quota[thisquota].quota.root);
+	}
+	return 0;
+    }
+
+    if (!quota[thisquota].quota.file) {
+	r = mailbox_lock_quota(&quota[thisquota].quota);
+	if (r) {
+	    if (quota[thisquota].quota.file) {
+		fclose(quota[thisquota].quota.file);
+		quota[thisquota].quota.file = 0;
+	    }
+	    return r;
+	}
+    }
+    
+    if (quota[thisquota].quota.used != quota[thisquota].newused) {
+	printf("%s: usage was %d, now %d\n", quota[thisquota].quota.root,
+	       quota[thisquota].quota.used, quota[thisquota].newused);
+	quota[thisquota].quota.used = quota[thisquota].newused;
+	r = mailbox_write_quota(&quota[thisquota].quota);
+	if (r) return r;
+    }
+
+    fclose(quota[thisquota].quota.file);
+    quota[thisquota].quota.file = 0;
+    return 0;
 }
 
-int reportquota(rflag)
-int rflag;
+
+/*
+ * Fix all the quota roots
+ */
+int
+fixquota()
+{
+    FILE *listfile;
+    int r;
+    char pattern[] = "*";
+
+    /*
+     * Lock mailbox list to prevent mailbox creation/deletion
+     * during the fix
+     */
+    r = mboxlist_openlock(&listfile, (unsigned *)0);
+    if (r) return r;
+
+    redofix = 1;
+    while (redofix) {
+	redofix = 0;
+	firstquota = 0;
+
+	r = mboxlist_findall(pattern, 1, 0, fixquota_mailbox);
+	if (r) {
+	    fclose(listfile);
+	    return r;
+	}
+
+	while (firstquota < quota_num) {
+	    r = fixquota_finish(firstquota++);
+	    if (r) {
+		fclose(listfile);
+		return r;
+	    }
+	}
+
+	if (redofix) {
+	    /* Allow time for any pending EXPUNGE operations to complete */
+	    sleep(60);
+	}
+    }
+    
+    fclose(listfile);
+    return 0;
+}
+    
+/*
+ * Print out the quota report
+ */
+int
+reportquota()
 {
     int i;
 
-    printf(
-	 "Root                                 %s    Used   Quota  %% Used\n",
-	   rflag ? "Mailboxes" : "         ");
+    printf("   Quota  %% Used    Used Root\n");
 
     for (i = 0; i < quota_num; i++) {
-	printf("%-37s", quota[i].quota.root);
-	if (rflag) {
-	    printf("%9d", quota[i].refcount);
-	}
-	else {
-	    printf("         ");
-	}
-	printf(" %7d", quota[i].quota.used / QUOTA_UNITS);
+	if (quota[i].deleted) continue;
 	if (quota[i].quota.limit > 0) {
 	    printf(" %7d %7d", quota[i].quota.limit,
 		   ((quota[i].quota.used / QUOTA_UNITS) * 100) / quota[i].quota.limit);
 	}
 	else if (quota[i].quota.limit == 0) {
-	    printf("       0");
+	    printf("       0        ");
 	}
-	printf("\n");
+	else {
+	    printf("                ");
+	}
+	printf(" %7d %s\n", quota[i].quota.used / QUOTA_UNITS,
+	       quota[i].quota.root);
     }
 }
 		   
