@@ -36,6 +36,7 @@ static int mlbufsz, mlcur;
 %}
 
 %option yylineno
+%option noyywrap
 
 ws		[ \t]+
 ident		[a-zA-Z_][a-zA-Z_0-9]*
@@ -47,8 +48,10 @@ CRLF		(\r\n|\r|\n)
 <MULTILINE>^\.{CRLF}	{ BEGIN INITIAL; yylval.sval = mlbuf; return STRING; }
 <MULTILINE>^\.\.  { /* dot stuffing! we want one . */ yyless(1); }
 <MULTILINE>(.|\n) { if (mlcur == mlbufsz) 
-			mlbuf = realloc(mlbuf, mlbufsz+=1024);
+			mlbuf = xrealloc(mlbuf, mlbufsz+=1024);
 		    mlbuf[mlcur++] = yytext[0]; }
+<MULTILINE><<EOF>> { yyerror("unexpected end of file in string"); 
+		     yyterminate(); }
 text:{ws}?(#.*)?{CRLF}	{ BEGIN MULTILINE;
 			  mlcur = 0; mlbufsz = 0; mlbuf = NULL; }
 [0-9]+[KMG]?	{ yylval.nval = tonum(yytext); return NUMBER; }
@@ -106,7 +109,7 @@ static int tonum(char *c)
 
 static char *fixstr(char *str)
 {
-    char *r, *s = (char *) malloc(sizeof(char) * strlen(str));
+    char *r, *s = (char *) xmalloc(sizeof(char) * strlen(str));
 
     r = s;
     str++; /* skip open " */
@@ -118,10 +121,3 @@ static char *fixstr(char *str)
     *s = '\0';
     return r;
 }
-
-/* i don't want to have to link in the library */
-int yywrap() 
-{
-   return 1;
-}
-

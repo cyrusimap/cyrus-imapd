@@ -1,6 +1,6 @@
 /* message.h
  * Larry Greenfield
- * $Id: message.h,v 1.1 1999/07/02 18:55:35 leg Exp $
+ * $Id: message.h,v 1.2 1999/07/31 21:49:40 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -27,8 +27,6 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #ifndef MESSAGE_H
 #define MESSAGE_H
-
-#include <cyrus/prot.h>
 
 typedef struct Action action_list_t;
 

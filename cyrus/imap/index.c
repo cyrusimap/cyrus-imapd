@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.87 1999/04/08 21:04:23 tjs Exp $
+ * $Id: index.c,v 1.88 1999/07/31 21:49:33 leg Exp $
  */
 #include <stdio.h>
 #include <string.h>
@@ -358,6 +358,8 @@ int checkseen;
 	}
         prot_printf(imapd_out, "* OK [UIDVALIDITY %u] \r\n",
 		    mailbox->uidvalidity);
+	prot_printf(imapd_out, "* OK [UIDNEXT %u] \r\n",
+		    mailbox->last_uid + 1);
     }
 
     for (msgno = 1; msgno <= oldexists; msgno++) {

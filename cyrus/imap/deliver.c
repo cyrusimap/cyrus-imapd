@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.95 1999/07/02 23:49:19 leg Exp $
+ * $Id: deliver.c,v 1.96 1999/07/31 21:49:27 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.95 1999/07/02 23:49:19 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.96 1999/07/31 21:49:27 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -53,7 +53,7 @@ static char _rcsid[] = "$Id: deliver.c,v 1.95 1999/07/02 23:49:19 leg Exp $";
 #ifdef USE_SIEVE
 #include <sieve_interface.h>
 
-#define HEADERCACHESIZE 1019
+#define HEADERCACHESIZE 4009
 
 #include <time.h>
 #include <pwd.h>
@@ -135,7 +135,7 @@ char *convert_lmtp();
 void clean822space();
 
 static time_t checkdelivered();
-static void markdelivered();
+static void markdelivered(char *, int, char *, int, time_t);
 
 static char *_get_db_name();
 static int _lock_delivered_db();
@@ -323,15 +323,27 @@ typedef enum {
     BODY
 } state;
 
+#define NAMEINC 128
+#define BODYINC 1024
+
 /* we don't have to worry about dotstuffing here, since it's illegal
    for a header to begin with a dot! */
 static int parseheader(FILE *fin, FILE *fout, int lmtpmode,
 		       char **headname, char **contents) {
     int c;
-    char name[80], body[1024];
+    static char *name = NULL, *body = NULL;
+    static int namelen = 0, bodylen = 0;
     int off = 0;
     state s = NAME_START;
 
+    if (namelen == 0) {
+	namelen += NAMEINC;
+	name = (char *) xrealloc(name, namelen * sizeof(char));
+    }
+    if (bodylen == 0) {
+	bodylen += BODYINC;
+	body = (char *) xrealloc(body, bodylen * sizeof(char));
+    }
 
     /* there are two ways out of this loop, both via gotos:
        either we successfully read a character (got_header)
@@ -362,6 +374,10 @@ static int parseheader(FILE *fin, FILE *fout, int lmtpmode,
 		goto ph_error;
 	    }
 	    name[off++] = tolower(c);
+	    if (off >= namelen - 3) {
+		namelen += NAMEINC;
+		name = (char *) xrealloc(name, namelen);
+	    }
 	    break;
 	
 	case COLON:
@@ -409,6 +425,10 @@ static int parseheader(FILE *fin, FILE *fout, int lmtpmode,
 	    } else {
 		/* just an ordinary character */
 		body[off++] = c;
+		if (off >= bodylen - 3) {
+		    bodylen += BODYINC;
+		    body = (char *) xrealloc(body, bodylen);
+		}
 	    }
 	}
 
@@ -429,8 +449,8 @@ static int parseheader(FILE *fin, FILE *fout, int lmtpmode,
     return -1;
 
  got_header:
-    if (headname != NULL) *headname = strdup(name);
-    if (contents != NULL) *contents = strdup(body);
+    if (headname != NULL) *headname = xstrdup(name);
+    if (contents != NULL) *contents = xstrdup(body);
 
     return 0;
 }
@@ -517,8 +537,8 @@ static void fill_cache(FILE *fin, FILE *fout, int lmtpmode, message_data_t *m)
 	    if (!(m->cache[cl]->ncontents % 8)) {
 		/* increase the size */
 		m->cache[cl] = (header_t *)
-		    realloc(m->cache[cl],sizeof(header_t) +
-			    (8 + m->cache[cl]->ncontents * sizeof(char *)));
+		    xrealloc(m->cache[cl],sizeof(header_t) +
+			     (8 + m->cache[cl]->ncontents * sizeof(char *)));
 		if (m->cache[cl] == NULL) {
 		    fprintf(stderr, "realloc() returned NULL\n");
 		    exit(1);
@@ -674,7 +694,7 @@ int send_rejection(char *rejto,
 	     global_outgoing_count++, hostname);
     
     namebuf = make_sieve_db(mailreceip);
-    markdelivered(buf, strlen(buf), namebuf, strlen(namebuf));
+    markdelivered(buf, strlen(buf), namebuf, strlen(namebuf), t);
     fprintf(sm, "Message-ID: %s\r\n", buf);
 
     tm = localtime(&t);
@@ -726,17 +746,24 @@ int send_rejection(char *rejto,
     return (i == 0 ? SIEVE_OK : SIEVE_FAIL); /* sendmail exit value */
 }
 
-int send_forward(char *forwardto, struct protstream *file)
+int send_forward(char *forwardto, char *return_path, struct protstream *file)
 {
     FILE *sm;
-    char *smbuf[3];
+    char *smbuf[5];
     int i;
     char buf[1024];
     pid_t p;
 
     smbuf[0] = "sendmail";
-    smbuf[1] = forwardto;
-    smbuf[2] = NULL;
+    if (return_path != NULL) {
+	smbuf[1] = "-f";
+	smbuf[2] = return_path;
+    } else {
+	smbuf[1] = "-f";
+	smbuf[2] = "postmaster";
+    }
+    smbuf[3] = forwardto;
+    smbuf[4] = NULL;
     p = open_sendmail(smbuf, &sm);
 	
     if (sm == NULL) {
@@ -761,7 +788,7 @@ int sieve_redirect(char *addr, void *ic, void *sc, void *mc)
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *m = (message_data_t *) mc;
 
-    if (send_forward(addr, m->data) == 0) {
+    if (send_forward(addr, m->return_path, m->data) == 0) {
 	return SIEVE_OK;
     } else {
 	return SIEVE_FAIL;
@@ -857,11 +884,11 @@ int autorespond(unsigned char *hash, int len, int days,
     time_t t, now;
     int ret;
 
+    now = time(NULL);
+
     /* ok, let's see if we've responded before */
     if (t = checkdelivered(hash, len, sd->username, strlen(sd->username))) {
-	now = time(NULL);
-
-	if (now >= t + days * (24 * 60 * 60)) {
+	if (now >= t) {
 	    /* yay, we can respond again! */
 	    ret = SIEVE_OK;
 	} else {
@@ -873,13 +900,14 @@ int autorespond(unsigned char *hash, int len, int days,
     }
 
     if (ret == SIEVE_OK) {
-	markdelivered(hash, len, sd->username, strlen(sd->username));
+	markdelivered((char *) hash, len, 
+		      sd->username, strlen(sd->username), now);
     }
 
     return ret;
 }
 
-int send_response(char *addr, char *subj, char *msg, int mime,
+int send_response(char *addr, char *subj, char *msg, int mime, int days,
 		  void *ic, void *sc, void *mc)
 {
     FILE *sm;
@@ -908,7 +936,8 @@ int send_response(char *addr, char *subj, char *msg, int mime,
 	     global_outgoing_count++, hostname);
     
     namebuf = make_sieve_db(sdata->username);
-    markdelivered(buf, strlen(buf), namebuf, strlen(namebuf));
+    markdelivered(buf, strlen(buf), namebuf, strlen(namebuf), 
+		  t + days * (24 * 60 * 60));
 
     fprintf(sm, "Message-ID: %s\r\n", buf);
 
@@ -932,7 +961,6 @@ int send_response(char *addr, char *subj, char *msg, int mime,
 	}
     fprintf(sm, "Subject: %s\r\n", subj);
     fprintf(sm, "Auto-Submitted: auto-generated (vacation)\r\n");
-    fprintf(sm, "Precedence: junk\r\n");
     if (mime) {
 	fprintf(sm, "MIME-Version: 1.0\r\n");
 	fprintf(sm, "Content-Type: multipart/mixed;"
@@ -1484,10 +1512,10 @@ savemsg(message_data_t *m, int lmtpmode)
     /* first check resent-message-id */
     if (strcpy(buf, "resent-message-id"),
 	getheader((void *) m, buf, &body) == SIEVE_OK) {
-	m->id = strdup(body[0]);
+	m->id = xstrdup(body[0]);
     } else if (strcpy(buf, "message-id"), 
 	       getheader((void *) m, buf, &body) == SIEVE_OK) {
-	m->id = strdup(body[0]);
+	m->id = xstrdup(body[0]);
     } else {
 	m->id = NULL;		/* no message-id */
     }
@@ -1529,7 +1557,7 @@ savemsg(message_data_t *m, int lmtpmode)
 	(strcpy(buf, "return-path"),
 	 getheader((void *) m, buf, &body) == SIEVE_OK)) {
 	/* let's grab return_path */
-	m->return_path = strdup(body[0]);
+	m->return_path = xstrdup(body[0]);
 	clean822space(m->return_path);
 	clean_retpath(m->return_path);
     }
@@ -1720,6 +1748,7 @@ int acloverride;
     int r;
     struct mailbox mailbox;
     char namebuf[MAX_MAILBOX_PATH];
+    time_t now = time(NULL);
 
     if (user && !strncasecmp(mailboxname, "INBOX", 5)) {
 	/* canonicalize mailbox */
@@ -1745,7 +1774,7 @@ int acloverride;
 
     if (!r) {
 	prot_rewind(msg);
-	r = append_fromstream(&mailbox, msg, size, time(0), flag, nflags,
+	r = append_fromstream(&mailbox, msg, size, now, flag, nflags,
 			      user);
 	mailbox_close(&mailbox);
     }
@@ -1757,7 +1786,8 @@ int acloverride;
     }
 
     if (!r && dupelim && id) markdelivered(id, strlen(id), 
-					   namebuf, strlen(namebuf));
+					   namebuf, strlen(namebuf),
+					   now);
 
     return r;
 }
@@ -1845,7 +1875,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 		char *sdb = make_sieve_db(user);
 
 		markdelivered(msgdata->id, strlen(msgdata->id), 
-			      sdb, strlen(sdb));
+			      sdb, strlen(sdb), time(NULL));
 	    }
 
 	    /* free everything */
@@ -2251,14 +2281,11 @@ int idlen, tolen;
 }
 
 static void
-markdelivered(id, idlen, to, tolen)
-char *id, *to;
-int idlen, tolen;
+markdelivered(char *id, int idlen, char *to, int tolen, time_t mark)
 {
   char buf[MAX_MAILBOX_PATH];
   char fname[MAX_MAILBOX_PATH];
   int lockfd;
-  time_t mark;
 #ifdef HAVE_LIBDB
   DBT date, delivery;
   HASHINFO info;
@@ -2270,7 +2297,7 @@ int idlen, tolen;
   buf[idlen] = '\0';
   memcpy(buf+idlen+1, to, tolen);
   buf[idlen+tolen+2] = '\0';
-  mark = time(0);
+  if (mark == 0) { mark = time(0); }
     
 #ifdef HAVE_LIBDB
   (void)memset(&info, 0, sizeof(info));

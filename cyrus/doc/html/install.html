@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.55 1999/07/08 22:19:33 tmartin Exp $ -->
+<!-- $Id: install.html,v 1.56 1999/07/31 21:49:26 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -106,7 +106,7 @@ server must receive newsgroups with the INN news server.
 language), cmu-sieve version 1.3 or higher is required.  cmu-sieve
 releases will most likely be made in conjunction with imapd releases.
 Unpack cmu-sieve-xxx.tar.gz inside the cyrus directory; Sieve will
-bill built at the same time as imapd.
+be built at the same time as imapd.
 </ul>
 <H2>Compiling the IMAP Server</H2>
 
@@ -252,8 +252,7 @@ using IMAP. <P>
 (optional).  By default, looks in "<tt>/usr/local</tt>" and then in the 
 compiler's default link path.
 
-<P><B>IMPORTANT:</B> The Kerberos v4 support requires the DES library,
-even if the "<TT>--disable-privacy</TT>" configure option is given.
+<P><B>IMPORTANT:</B> The Kerberos v4 support requires the DES library.
 Some vendor distributions of Kerberos, including the one with Solaris,
 do not have this support and cannot be used.
 
@@ -298,12 +297,6 @@ finds one.  Use <tt>--with-sieve=no</tt> to disable Sieve support<p>
 
 <dt><tt>--disable-cyradm</tt>
 <dd>Do not compile the <TT>cyradm</TT> administrative client.<P>
-
-<dt><tt>--disable-privacy</tt>
-<dd>Disables all network privacy support.  Use this if you do not have
-the appropriate routines in the authentication libraries (for example,
-<TT>krb_rd_priv()</TT> and <TT>krb_mk_priv()</TT> for Kerberos v4) or
-are compiling binaries subject to export control restrictions. <P>
 
 <dt><tt>--enable-amssync</tt>
 <dd>Include AMS (Andrew Message System) to IMAP bboard synchronization
@@ -459,9 +452,9 @@ file.)
 Note that <b>everyday users should not be administrators</b>.  Admins
 have powers not granted to regular users and while the server allows
 them to receive mail, some problems will occur if admins are used as
-regular users. You also should <b> not</b> read mail as an
-administrator. You should have seperate accounts for reading mail and
-administrating (for example: leg and leg.admin)
+regular users. You also should <b>not</b> read mail as an
+administrator. You should have separate accounts for reading mail and
+administrating.
 
 <p>
 

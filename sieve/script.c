@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.2 1999/07/02 23:24:01 leg Exp $
+ * $Id: script.c,v 1.3 1999/07/31 21:49:40 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -88,17 +88,24 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 	return res;
     }
 
-    s = (sieve_script_t *) malloc(sizeof(sieve_script_t));
+    s = (sieve_script_t *) xmalloc(sizeof(sieve_script_t));
     if (s == NULL)
 	return SIEVE_NOMEM;
     s->interp = *interp;
     s->script_context = script_context;
     s->support.fileinto = s->support.reject = s->support.envelope = 0;
+    s->err = NULL;
 
     s->cmds = sieve_parse(s, script);
     if (s->cmds == NULL) {
 	free(s);
 	s = NULL;
+	res = SIEVE_PARSE_ERROR;
+    }
+
+    if (s->err != NULL) {
+	free_tree(s->cmds);
+	free(s);
 	res = SIEVE_PARSE_ERROR;
     }
 
@@ -519,7 +526,7 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 		/* send the response */
 		ret = s->interp.vacation->send_response(a->u.vac.addr, 
 							a->u.vac.subj,
-			          a->u.vac.msg, a->u.vac.mime, 
+			          a->u.vac.msg, a->u.vac.mime, a->u.vac.days,
 			          s->interp.interp_context, s->script_context, 
 			          message_context);
 	    } else if (ret == SIEVE_DONE) {
@@ -554,3 +561,36 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 
     return ret;
 }
+
+struct sieve_errorlist *sieve_script_errors(sieve_script_t *s)
+{
+    return s->err;
+
+}
+
+void script_push_error(sieve_script_t *s, char *msg, int lineno)
+{
+    struct sieve_errorlist *e = 
+	(struct sieve_errorlist *) xmalloc(sizeof(struct sieve_errorlist));
+
+    e->lineno = lineno;
+    e->msg = msg;
+
+    e->next = s->err;
+    s->err = e;
+}
+
+void script_reverse_errors(sieve_script_t *script)
+{
+    struct sieve_errorlist *s = NULL, *t, *q;
+
+    t = script->err;		/* t steps through list */
+    q = t->next;		/* q trails t */
+    for (; q != NULL; t = q) {
+	q = t->next;
+	t->next = s;		/* s trails t */
+	s = t;
+    }
+    script->err = t;
+}
+

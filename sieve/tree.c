@@ -1,6 +1,6 @@
 /* tree.c -- abstract syntax tree handling
  * Larry Greenfield
- * $Id: tree.c,v 1.2 1999/07/02 23:24:02 leg Exp $
+ * $Id: tree.c,v 1.3 1999/07/31 21:49:41 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -31,7 +31,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 stringlist_t *new_sl(char *s, stringlist_t *n)
 {
-    stringlist_t *p = (stringlist_t *) malloc(sizeof(stringlist_t));
+    stringlist_t *p = (stringlist_t *) xmalloc(sizeof(stringlist_t));
     p->s = s;
     p->next = n;
     return p;
@@ -39,7 +39,7 @@ stringlist_t *new_sl(char *s, stringlist_t *n)
 
 tag_t *new_tag(int type, char *s)
 {
-    tag_t *p = (tag_t *) malloc(sizeof(tag_t));
+    tag_t *p = (tag_t *) xmalloc(sizeof(tag_t));
     p->type = type;
     p->arg = s;
     return p;
@@ -47,7 +47,7 @@ tag_t *new_tag(int type, char *s)
 
 taglist_t *new_taglist(tag_t *t, taglist_t *n)
 {
-    taglist_t *p = (taglist_t *) malloc(sizeof(taglist_t));
+    taglist_t *p = (taglist_t *) xmalloc(sizeof(taglist_t));
     p->t = t;
     p->next = n;
     return p;
@@ -55,14 +55,14 @@ taglist_t *new_taglist(tag_t *t, taglist_t *n)
 
 test_t *new_test(int type) 
 {
-    test_t *p = (test_t *) malloc(sizeof(test_t));
+    test_t *p = (test_t *) xmalloc(sizeof(test_t));
     p->type = type;
     return p;
 }
 
 testlist_t *new_testlist(test_t *t, testlist_t *n)
 {
-    testlist_t *p = (testlist_t *) malloc(sizeof(testlist_t));
+    testlist_t *p = (testlist_t *) xmalloc(sizeof(testlist_t));
     p->t = t;
     p->next = n;
     return p;
@@ -70,7 +70,7 @@ testlist_t *new_testlist(test_t *t, testlist_t *n)
 
 commandlist_t *new_command(int type)
 {
-    commandlist_t *p = (commandlist_t *) malloc(sizeof(commandlist_t));
+    commandlist_t *p = (commandlist_t *) xmalloc(sizeof(commandlist_t));
     p->type = type;
     p->next = NULL;
     return p;
@@ -78,7 +78,7 @@ commandlist_t *new_command(int type)
 
 commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n)
 {
-    commandlist_t *p = (commandlist_t *) malloc(sizeof(commandlist_t));
+    commandlist_t *p = (commandlist_t *) xmalloc(sizeof(commandlist_t));
     p->type = IF;
     p->u.i.t = t;
     p->u.i.do_then = y;

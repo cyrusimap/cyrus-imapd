@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.91 1999/04/08 21:04:26 tjs Exp $
+ * $Id: mboxlist.c,v 1.92 1999/07/31 21:49:34 leg Exp $
  */
 
 #include <stdio.h>
@@ -103,7 +103,7 @@ mboxlist_checkconfig()
  * is placed in the char * pointed to by it.  If 'acl' is non-nil, a pointer
  * to the mailbox ACL is placed in the char * pointed to by it.
  */
-int mboxlist_lookup(char* name, char** pathp, char** aclp)
+int mboxlist_lookup(const char* name, char** pathp, char** aclp)
 {
     unsigned long offset, len, partitionlen, acllen;
     char optionbuf[MAX_MAILBOX_NAME+1];

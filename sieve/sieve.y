@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.1 1999/07/02 18:55:35 leg Exp $
+ * $Id: sieve.y,v 1.2 1999/07/31 21:49:41 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -123,6 +123,7 @@ commands: command		{ $$ = $1; }
 
 command: action ';'		{ $$ = $1; }
 	| IF test block elsif   { $$ = new_if($2, $3, $4); }
+	| error ';'		{ $$ = new_command(STOP); }
 	;
 
 elsif: /* empty */               { $$ = NULL; }
@@ -139,9 +140,15 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 				     yyerror("fileinto not required");
 	                             YYERROR;
                                    }
+				   if (!verify_mailboxes($2)) {
+				     YYERROR; /* vm should call yyerror() */
+				   }
 	                           $$ = new_command(FILEINTO);
 				   $$->u.sl = $2; }
 	| FORWARD stringlist     { $$ = new_command(FORWARD);
+				   if (!verify_addresses($2)) {
+				     YYERROR; /* va should call yyerror() */
+				   }
 				   $$->u.sl = $2; }
 	| KEEP			 { $$ = new_command(KEEP); }
 	| STOP			 { $$ = new_command(STOP); }
@@ -153,17 +160,29 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 				   } else {
   				     $$ = build_vacation(VACATION,
 					    canon_vtags($2), $3);
-				     if ($$ == NULL) { YYERROR; } } }
+				   } }
 	;
 
 vtags: /* empty */		 { $$ = new_vtags(); }
-	| vtags DAYS NUMBER	 { if ($$->days != -1) { YYERROR; }
+	| vtags DAYS NUMBER	 { if ($$->days != -1) { 
+					yyerror("duplicate :days"); YYERROR; }
 				   else { $$->days = $3; } }
-	| vtags ADDRESSES stringlist { if ($$->addresses != NULL) { YYERROR; }
-				       else { $$->addresses = $3; } }
-	| vtags SUBJECT STRING	 { if ($$->subject != NULL) { YYERROR; }
-				   else { $$->subject = $3; } }
-	| vtags MIME		 { if ($$->mime != -1) { YYERROR; }
+	| vtags ADDRESSES stringlist { if ($$->addresses != NULL) { 
+					yyerror("duplicate :addresses"); 
+					YYERROR;
+				       } else if (!verify_addresses($3)) {
+					  YYERROR;
+				       } else {
+					 $$->addresses = $3; } }
+	| vtags SUBJECT STRING	 { if ($$->subject != NULL) { 
+					yyerror("duplicate :subject"); 
+					YYERROR;
+				   } else if (!ok_header($3)) {
+					YYERROR;
+				   } else { $$->subject = $3; } }
+	| vtags MIME		 { if ($$->mime != -1) { 
+					yyerror("duplicate :mime"); 
+					YYERROR; }
 				   else { $$->mime = MIME; } }
 	;
 
@@ -195,6 +214,7 @@ test: ANYOF testlist		 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 	| NOT test		 { $$ = new_test(NOT); $$->u.t = $2; }
 	| SIZE sizetag NUMBER    { $$ = new_test(SIZE); $$->u.sz.t = $2;
 		                   $$->u.sz.n = $3; }
+	| error			 { $$ = NULL; }
 	;
 
 addrorenv: ADDRESS		 { $$ = ADDRESS; }
@@ -203,22 +223,29 @@ addrorenv: ADDRESS		 { $$ = ADDRESS; }
 
 aetags: /* empty */              { $$ = new_aetags(); }
         | aetags addrparttag	 { $$ = $1;
-				   if ($$->addrtag != -1) { YYERROR; }
+				   if ($$->addrtag != -1) { 
+			yyerror("duplicate or conflicting address part tag");
+			YYERROR; }
 				   else { $$->addrtag = $2; } }
 	| aetags comptag         { $$ = $1;
-				   if ($$->comptag != -1) { YYERROR; }
+				   if ($$->comptag != -1) { 
+			yyerror("duplicate comparator type tag"); YYERROR; }
 				   else { $$->comptag = $2; } }
 	| aetags COMPARATOR STRING { $$ = $1;
-				   if ($$->comparator != NULL) { YYERROR; }
+				   if ($$->comparator != NULL) { 
+			yyerror("duplicate comparator tag"); YYERROR; }
 				   else { $$->comparator = $3; } }
 	;
 
 htags: /* empty */		 { $$ = new_htags(); }
 	| htags comptag		 { $$ = $1;
-				   if ($$->comptag != -1) { YYERROR; }
+				   if ($$->comptag != -1) { 
+			yyerror("duplicate comparator type tag"); YYERROR; }
 				   else { $$->comptag = $2; } }
 	| htags COMPARATOR STRING { $$ = $1;
-				   if ($$->comparator != NULL) { YYERROR; }
+				   if ($$->comparator != NULL) { 
+			yyerror("duplicate comparator tag");
+					YYERROR; }
 				   else { $$->comparator = $3; } }
 	;
 
@@ -261,11 +288,10 @@ commandlist_t *sieve_parse(sieve_script_t *script, FILE *f)
 
 int yyerror(char *msg)
 {
-#if 0
     extern int yylineno;
     extern char *yytext;
-    fprintf(stderr, "%d: %s at '%s'\n", yylineno, msg, yytext);
-#endif
+
+    script_push_error(parse_script, msg, yylineno);
     return 0;
 }
 
@@ -346,7 +372,7 @@ static commandlist_t *build_vacation(int t, struct vtags *v, char *reason)
 
 static struct aetags *new_aetags(void)
 {
-    struct aetags *r = (struct aetags *) malloc(sizeof(struct aetags));
+    struct aetags *r = (struct aetags *) xmalloc(sizeof(struct aetags));
 
     r->addrtag = r->comptag = -1;
     r->comparator = NULL;
@@ -370,7 +396,7 @@ static void free_aetags(struct aetags *ae)
 
 static struct htags *new_htags(void)
 {
-    struct htags *r = (struct htags *) malloc(sizeof(struct htags));
+    struct htags *r = (struct htags *) xmalloc(sizeof(struct htags));
 
     r->comptag = -1;
     r->comparator = NULL;
@@ -393,7 +419,7 @@ static void free_htags(struct htags *h)
 
 static struct vtags *new_vtags(void)
 {
-    struct vtags *r = (struct vtags *) malloc(sizeof(struct vtags));
+    struct vtags *r = (struct vtags *) xmalloc(sizeof(struct vtags));
 
     r->days = -1;
     r->addresses = NULL;
@@ -422,4 +448,34 @@ static void free_vtags(struct vtags *v)
     if (v->addresses) { free_sl(v->addresses); }
     if (v->subject) { free(v->subject); }
     free(v);
+}
+
+static int verify_address(char *s)
+{
+    /* if not an address, call yyerror */
+    return 1;
+}
+
+static int verify_addresses(stringlist_t *sl)
+{
+    for (; sl != NULL && verify_address(sl->s); sl = sl->next) ;
+    return (sl == NULL);
+}
+
+static int verify_mailbox(char *s)
+{
+    /* if not a mailbox, call yyerror */
+    return 1;
+}
+
+static int verify_mailboxes(stringlist_t *sl)
+{
+    for (; sl != NULL && verify_mailbox(sl->s); sl = sl->next) ;
+    return (sl == NULL);
+}
+
+/* is it ok to put this in an RFC822 header body? */
+static int ok_header(char *s)
+{
+    return 1;
 }

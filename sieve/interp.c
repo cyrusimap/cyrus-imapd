@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.2 1999/07/02 22:22:25 leg Exp $
+ * $Id: interp.c,v 1.3 1999/07/31 21:49:40 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -38,7 +38,7 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     sieve_interp_t *i;
 
     *interp = NULL;
-    i = (sieve_interp_t *) malloc(sizeof(sieve_interp_t));
+    i = (sieve_interp_t *) xmalloc(sizeof(sieve_interp_t));
     if (i == NULL) {
 	return SIEVE_NOMEM;
     }

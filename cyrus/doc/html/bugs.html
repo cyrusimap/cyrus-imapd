@@ -15,9 +15,6 @@ advertise this bug.  We plan to have this fixed eventually.
 groups may be granted access to mailboes if ptclient has died.  We plan
 to have this fixed eventually.
 
-<li> COPY of a nonexistant sequence of messages results in OK, but should
-result in NO.
-
 <li> 8-bit set characters are coerced to 'X', but not before the notify_zephyr 
 code (if used) has had a chance to send them out.
 
@@ -27,6 +24,9 @@ bear no resemblance to what actually went wrong.
 <li> Deliver does not handle messages containing NUL properly due to stdio
 problems (the characters between the NUL and the LF will be
 lost.)
+
+<li> Deliver doesn't gracefully handle CR CR sequences in messages.
+Well, ok, it hangs.
 
 <li> cyradm doesn't handle BYE quite properly (especially a BYE right after
 connect).
@@ -41,6 +41,18 @@ connect).
   protection or privacy layers causes the same problem.  A work
   around is to not use any layers (<tt>imtest -l 0</tt>).
   </ul>
+
+</ul>
+
+<h1>                     Things we want to do</h1>
+
+<ul>
+<li> Split the quota files into different directories.
+
+<li> Implement the IMAP ID extension.
+
+<li> Implement the IMAP VIEW extension.
+
 </ul>
 
 <p>

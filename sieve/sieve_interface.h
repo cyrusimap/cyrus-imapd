@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.1 1999/07/02 18:55:35 leg Exp $
+ * $Id: sieve_interface.h,v 1.2 1999/07/31 21:49:41 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -67,7 +67,7 @@ typedef struct sieve_vacation {
 		       void *message_context); 
 
     /* mail the response */
-    int (*send_response)(char *addr, char *subj, char *msg, int mime,
+    int (*send_response)(char *addr, char *subj, char *msg, int mime, int days,
 			 void *interp_context, void *script_context,
 			 void *message_context);
 } sieve_vacation_t;
@@ -91,10 +91,19 @@ int sieve_register_size(sieve_interp_t *interp, sieve_get_size *f);
 int sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
 int sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
 
+struct sieve_errorlist {
+    char *msg;
+    int lineno;
+    struct sieve_errorlist *next;
+};
+
 /* given an interpretor and a script, produce an executable script */
 int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 		       void *script_context, sieve_script_t **ret);
+
 int sieve_script_free(sieve_script_t **s);
+
+struct sieve_errorlist *sieve_script_errors(sieve_script_t *s);
 
 /* execute a script on a message, producing side effects via callbacks */
 int sieve_execute_script(sieve_script_t *script, 
