@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.44 2003/02/06 22:40:56 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.45 2003/02/11 15:47:14 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3324,22 +3324,24 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 		c = EOF; break;
 	    }
 	    c = chomp(backend_current->in, "fetch (");
-	    if (c == EOF) {
+	    if (c == EOF) { /* not a fetch response */
 		c = chomp(backend_current->in, "exists\r");
 		if (c == '\n') { /* got EXISTS response */
 		    prot_printf(proxyd_out, "* %d EXISTS\r\n", seqno);
 		    continue;
 		}
 	    }
-	    if (c == EOF) {
+	    if (c == EOF) { /* not an exists response */
 		c = chomp(backend_current->in, "recent\r");
 		if (c == '\n') { /* got RECENT response */
 		    prot_printf(proxyd_out, "* %d RECENT\r\n", seqno);
 		    continue;
 		}
 	    }
-	    /* huh, don't get this response */
-	    if (c == EOF) break;
+	    if (c == EOF) {
+                /* huh, don't get this response */
+                break;
+            }
 	    /* find seqno in the list */
 	    p = head;
 	    while (p->next && seqno != p->next->seqno) p = p->next;
