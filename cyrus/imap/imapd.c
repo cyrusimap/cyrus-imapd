@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.364 2002/03/24 18:31:11 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.365 2002/03/26 00:30:12 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -141,7 +141,7 @@ void shut_down(int code);
 void fatal(const char *s, int code);
 
 void cmdloop(void);
-void cmd_login(char *tag, char *user, char *passwd);
+void cmd_login(char *tag, char *user);
 void cmd_authenticate(char *tag, char *authtype);
 void cmd_noop(char *tag, char *cmd);
 void cmd_capability(char *tag);
@@ -1113,19 +1113,11 @@ void cmdloop()
 
 	case 'L':
 	    if (!strcmp(cmd.s, "Login")) {
-		if (c != ' ' || (c = getastring(imapd_in, imapd_out, &arg1)) != ' ') {
-		    goto missingargs;
-		}
-		c = getastring(imapd_in, imapd_out, &arg2);
-		if (c == EOF) goto missingargs;
-		if (c == '\r') c = prot_getc(imapd_in);
-		if (c != '\n') goto extraargs;
-		
-		if (imapd_userid) {
-		    prot_printf(imapd_out, "%s BAD Already logged in\r\n", tag.s);
-		    continue;
-		}
-		cmd_login(tag.s, arg1.s, arg2.s);
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if(c != ' ') goto missingargs;
+
+		cmd_login(tag.s, arg1.s);
 
 		snmp_increment(LOGIN_COUNT, 1);
 	    }
@@ -1632,12 +1624,11 @@ void cmdloop()
 /*
  * Perform a LOGIN command
  */
-void
-cmd_login(tag, user, passwd)
-char *tag;
-char *user;
-char *passwd;
+void cmd_login(char *tag, char *user)
 {
+    char c;
+    struct buf passwdbuf;
+    char *passwd;
     char *canon_user;
     const char *reply = 0;
     const char *val;
@@ -1645,17 +1636,14 @@ char *passwd;
     char *p;
     int plaintextloginpause;
     int r;
-
-    canon_user = auth_canonifyid(user, 0);
-
-    /* possibly disallow login */
-    if ((imapd_starttls_done == 0) &&
-	(config_getswitch("allowplaintext", 1) == 0) &&
-	strcmp(canon_user, "anonymous") != 0) {
-	prot_printf(imapd_out, "%s NO Login only available under a layer\r\n",
-		    tag);
+    
+    if (imapd_userid) {
+	eatline(imapd_in, ' ');
+	prot_printf(imapd_out, "%s BAD Already logged in\r\n", tag);
 	return;
     }
+
+    canon_user = auth_canonifyid(user, 0);
 
     if (!canon_user) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
@@ -1664,6 +1652,31 @@ char *passwd;
 		    error_message(IMAP_INVALID_USER));
 	return;
     }
+
+    /* possibly disallow login */
+    if ((imapd_starttls_done == 0) &&
+	(config_getswitch("allowplaintext", 1) == 0) &&
+	strcmp(canon_user, "anonymous") != 0) {
+	eatline(imapd_in, ' ');
+	prot_printf(imapd_out, "%s NO Login only available under a layer\r\n",
+		    tag);
+	return;
+    }
+
+    memset(&passwdbuf,0,sizeof(struct buf));
+    c = getastring(imapd_in, imapd_out, &passwdbuf);
+
+    if(c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	freebuf(&passwdbuf);
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected extra arguments to LOGIN\r\n",
+		    tag);
+	eatline(imapd_in, c);
+	return;
+    }
+
+    passwd = passwdbuf.s;
 
     if (!strcmp(canon_user, "anonymous")) {
 	if (config_getswitch("allowanonymouslogin", 0)) {
@@ -1679,6 +1692,7 @@ char *passwd;
 		   imapd_clienthost);
 	    prot_printf(imapd_out, "%s NO %s\r\n", tag,
 		   error_message(IMAP_ANONYMOUS_NOT_PERMITTED));
+	    freebuf(&passwdbuf);
 	    return;
 	}
     }
@@ -1702,6 +1716,7 @@ char *passwd;
 	snmp_increment_args(AUTHENTICATION_NO, 1,
 			    VARIABLE_AUTH, hash_simple("LOGIN"), 
 			    VARIABLE_LISTEND);
+    	freebuf(&passwdbuf);
 	return;
     }
     else {
@@ -1750,6 +1765,7 @@ char *passwd;
     /* Translate any separators in userid */
     mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid);
 
+    freebuf(&passwdbuf);
     return;
 }
 

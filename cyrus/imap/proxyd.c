@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.110 2002/03/22 19:21:22 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.111 2002/03/26 00:30:14 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -155,7 +155,7 @@ void fatal(const char *s, int code);
 void proxyd_downserver(struct backend *s);
 
 void cmdloop(void);
-void cmd_login(char *tag, char *user, char *passwd);
+void cmd_login(char *tag, char *user);
 void cmd_authenticate(char *tag, char *authtype);
 void cmd_noop(char *tag, char *cmd);
 void cmd_capability(char *tag);
@@ -1472,20 +1472,11 @@ void cmdloop()
 
 	case 'L':
 	    if (!strcmp(cmd.s, "Login")) {
-		if (c != ' ' || (c = getastring(proxyd_in, proxyd_out, &arg1)) != ' ') {
-		    goto missingargs;
-		}
-		c = getastring(proxyd_in, proxyd_out, &arg2);
-		if (c == EOF) goto missingargs;
-		if (c == '\r') c = prot_getc(proxyd_in);
-		if (c != '\n') goto extraargs;
-		
-		if (proxyd_userid) {
-		    prot_printf(proxyd_out, 
-				"%s BAD Already logged in\r\n", tag.s);
-		    continue;
-		}
-		cmd_login(tag.s, arg1.s, arg2.s);
+		if (c != ' ') goto missingargs;
+		c = getastring(proxyd_in, proxyd_out, &arg1);
+		if(c != ' ') goto missingargs;
+
+		cmd_login(tag.s, arg1.s);
 	    }
 	    else if (!strcmp(cmd.s, "Logout")) {
 		if (c == '\r') c = prot_getc(proxyd_in);
@@ -1877,9 +1868,12 @@ void cmdloop()
 /*
  * Perform a LOGIN command
  */
-void cmd_login(char *tag, char *user, char *passwd)
+void cmd_login(char *tag, char *user)
 {
     char *canon_user;
+    char c;
+    struct buf passwdbuf;
+    char *passwd;
     char *reply = 0;
     const char *val;
     char buf[MAX_MAILBOX_PATH];
@@ -1887,16 +1881,13 @@ void cmd_login(char *tag, char *user, char *passwd)
     int plaintextloginpause;
     int r;
 
-    canon_user = auth_canonifyid(user, 0);
-
-    /* possibly disallow login */
-    if ((proxyd_starttls_done == 0) &&
-	(config_getswitch("allowplaintext", 1) == 0) &&
-	strcmp(canon_user, "anonymous") != 0) {
-	prot_printf(proxyd_out, "%s NO Login only available under a layer\r\n",
-		    tag);
+    if (proxyd_userid) {
+	eatline(proxyd_in, ' ');
+	prot_printf(proxyd_out, "%s BAD Already logged in\r\n", tag);
 	return;
     }
+
+    canon_user = auth_canonifyid(user, 0);
 
     if (!canon_user) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
@@ -1905,6 +1896,31 @@ void cmd_login(char *tag, char *user, char *passwd)
 		    error_message(IMAP_INVALID_USER));
 	return;
     }
+
+    /* possibly disallow login */
+    if ((proxyd_starttls_done == 0) &&
+	(config_getswitch("allowplaintext", 1) == 0) &&
+	strcmp(canon_user, "anonymous") != 0) {
+	eatline(proxyd_in, ' ');
+	prot_printf(proxyd_out, "%s NO Login only available under a layer\r\n",
+		    tag);
+	return;
+    }
+
+    memset(&passwdbuf,0,sizeof(struct buf));
+    c = getastring(proxyd_in, proxyd_out, &passwdbuf);
+
+    if(c == '\r') c = prot_getc(proxyd_in);
+    if (c != '\n') {
+	freebuf(&passwdbuf);
+	prot_printf(proxyd_out,
+		    "%s BAD Unexpected extra arguments to LOGIN\r\n",
+		    tag);
+	eatline(proxyd_in, c);
+	return;
+    }
+
+    passwd = passwdbuf.s;
 
     if (!strcmp(canon_user, "anonymous")) {
 	if (config_getswitch("allowanonymouslogin", 0)) {
@@ -1920,6 +1936,7 @@ void cmd_login(char *tag, char *user, char *passwd)
 		   proxyd_clienthost);
 	    prot_printf(proxyd_out, "%s NO %s\r\n", tag,
 		   error_message(IMAP_ANONYMOUS_NOT_PERMITTED));
+	    freebuf(&passwdbuf);
 	    return;
 	}
     }
@@ -1941,7 +1958,8 @@ void cmd_login(char *tag, char *user, char *passwd)
 			tag, errorstring);
 	} else {
 	    prot_printf(proxyd_out, "%s NO Login failed.", tag);
-	}	    
+	}
+	freebuf(&passwdbuf);
 	return;
     }
     else {
@@ -1989,6 +2007,7 @@ void cmd_login(char *tag, char *user, char *passwd)
 	fatal(error_message(r), EC_CONFIG);
     }
 
+    freebuf(&passwdbuf);
     return;
 }
 
