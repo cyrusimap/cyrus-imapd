@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.6 2002/08/23 20:08:14 ken3 Exp $
+ $Id: mailbox.c,v 1.134.4.7 2002/08/29 14:25:35 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1119,8 +1119,6 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     
     assert(mailbox->index_lock_count != 0);
 
-    if (updatenotifier) updatenotifier(mailbox);
-
     *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox->generation_no;
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
     *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(mailbox->minor_version);
@@ -1192,6 +1190,8 @@ mailbox_write_index_record(struct mailbox *mailbox,
 	       msgno, mailbox->name);
 	return IMAP_IOERROR;
     }
+
+    if (updatenotifier) updatenotifier(mailbox);
 
     return 0;
 }
