@@ -34,6 +34,8 @@
 #include "append.h"
 #include "xmalloc.h"
 
+static int append_addseen();
+
 /*
  * Open a mailbox for appending
  *
