@@ -361,7 +361,7 @@ int r;
 
     case IMAP_MAILBOX_NONEXISTENT:
 	/* XXX Might have been moved to other server */
-	return EX_UNAVAILABLE;
+	return EX_NOUSER;
     }
 	
     /* Some error we're not expecting. */
