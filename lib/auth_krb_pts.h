@@ -1,5 +1,5 @@
 /* auth_krb_pts.h -- Kerberos authorization with AFS PTServer groups
-   $Id: auth_krb_pts.h,v 1.17 2000/01/28 22:09:54 leg Exp $
+   $Id: auth_krb_pts.h,v 1.18 2000/02/10 07:59:11 leg Exp $
 	
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -43,17 +43,13 @@
 #ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
 #endif
-#ifdef HAVE_DB_185_H
-#  define DB_LIBRARY_COMPATIBILITY_API
-#  include <db_185.h>
-#else
-#  include <db.h>
-#endif
+#include <db.h>
 #include <syslog.h>
 #include <ctype.h>
 #include <des.h> /* for int32, necessary for the AFS includes below */
 #include <afs/ptserver.h>
 #include <afs/cellconfig.h>
+#include <krb.h>
 
 #define PTS_DBFIL "/ptclient/ptscache.db"
 #define PTS_DBLOCK "/ptclient/ptscache.lock"
@@ -63,21 +59,16 @@
 
 
 #define PTCLIENT  "ptloader"
-
-typedef struct {
-    time_t cached;
-    char user[PR_MAXNAMELEN];
-    int ngroups;
-} ptluser;
-
-
-#define CLOSE(db) (db)->close((db))
-#define GET(db,key,data,flags) (db)->get((db),(key),(data),(flags))
-#define PUT(db,key,data,flags) (db)->put((db),(key),(data),(flags))
-#define SEQ(db,key,data,flags) (db)->seq((db),(key),(data),(flags))
-#define DEL(db,key,flags) (db)->del((db),(key),(flags))
-#define SYNC(db,flags) (db)->sync((db),(flags))
 #define EXPIRE_TIME (3 * 60 * 60) /* 3 hours */
 
+struct auth_state {
+    char userid[PR_MAXNAMELEN];
+    char aname[ANAME_SZ];
+    char inst[INST_SZ];
+    char realm[REALM_SZ];
+    time_t mark;
+    int ngroups;
+    char groups[1][PR_MAXNAMELEN];
+};
 
 #endif /* INCLUDED_AUTH_KRB_PTS_H */
