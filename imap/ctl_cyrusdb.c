@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.7 2002/02/05 21:34:17 ken3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.8 2002/02/15 20:32:10 leg Exp $
  */
 
 #include <config.h>
@@ -94,6 +94,11 @@ struct cyrusdb_backend *dbenvs[] =
     CONFIG_DB_TLS,
     NULL
 };
+
+static int compptr(const void *v1, const void *v2)
+{
+    return (v1 - v2);
+}
 
 void fatal(const char *message, int code)
 {
@@ -169,7 +174,15 @@ main(argc, argv)
     strcat(backup2, ".backup2/");
 
     syslog(LOG_NOTICE, "%s", msg);
+
+    /* sort dbenvs */
+    for (i = 0; dbenvs[i] != NULL; i++) ;
+    qsort(dbenvs, i, sizeof(struct db *), &compptr);
+    
     for (i = 0; dbenvs[i] != NULL; i++) {
+	/* deal with each dbenv once */
+	if (dbenvs[i] == dbenvs[i+1]) continue;
+
 	r = (dbenvs[i])->init(dirname, flag);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: init %s: %s", dirname,
@@ -195,11 +208,11 @@ main(argc, argv)
 			"ctl_cyrusdb: unable to sync environment\n");
 	    }
 
+#if 0
 	    /* ARCHIVE */
 	    r2 = 0;
 
-	    /* only rotate the backup the first time through */
-	    if (i == 0) {
+	    {
 		char *tail;
 		DIR *dirp;
 		struct dirent *dirent;
@@ -240,15 +253,14 @@ main(argc, argv)
 		fprintf(stderr, 
 			"ctl_cyrusdb: unable to archive environment\n");
 	    }
+#endif
 
 	    break;
 	    
 	default:
 	    break;
 	}
-    }
 
-    for (i = 0; dbenvs[i] != NULL; i++) {
 	r2 = (dbenvs[i])->done();
 	if (r2) {
 	    syslog(LOG_ERR, "DBERROR: done: %s", cyrusdb_strerror(r));
