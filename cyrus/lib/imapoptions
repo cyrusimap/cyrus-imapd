@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.10 2004/03/24 19:53:14 ken3 Exp $
+.\" $Id: imapoptions,v 1.2.2.11 2004/03/25 18:14:22 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -428,8 +428,13 @@ are listed with ``<none>''.
    mupdate server (if needed). */
 
 { "mupdate_config", "standard", ENUM("standard", "unified", "replicated") }
-/* The configuration of the mupdate servers in the Cyrus Murder.  The
-   3 valid options are "standard", "unified" and "replicated". */
+/* The configuration of the mupdate servers in the Cyrus Murder.
+   The "standard" config is one in which there are discreet frontend
+   (proxy) and backend servers.  The "unified" config is one in which
+   a server can be both a frontend and backend.  The "replicated"
+   config is one in which multiple backend servers all share the same
+   mailspool, but each have their own "replicated" copy of
+   mailboxes.db. */
 
 # xxx badly worded
 { "mupdate_connections_max", 128, INT }
