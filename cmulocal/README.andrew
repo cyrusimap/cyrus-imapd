@@ -51,3 +51,8 @@ CMU_PTHREADS
 CMU_SASL
   This tries to find a SASL library, and calls AC_SUBST on LIB_SASL
   if it finds one, or tells the user to go ftp it if it doesn't exist.
+
+CMU_KRB4
+  This attempts to find Kerberos 4 libraries and set up CFLAGS and LIBS
+  appropriately. It also updates and substitutes RPATH for shared library 
+  stuff.
