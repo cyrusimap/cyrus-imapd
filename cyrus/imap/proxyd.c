@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.122 2002/05/16 21:54:38 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.123 2002/05/29 19:42:04 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -3258,6 +3258,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 			    int j = (sz > sizeof(buf) ? sizeof(buf) : sz);
 
 			    j = prot_read(backend_current->in, buf, j);
+			    if(!j) break;
 			    prot_write(s->out, buf, j);
 			    sz -= j;
 			}
