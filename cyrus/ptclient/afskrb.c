@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.1.2.2 2002/12/20 20:36:15 rjs3 Exp $";
+      "$Id: afskrb.c,v 1.1.2.3 2003/01/10 18:23:17 rjs3 Exp $";
 
 #include <config.h>
 
@@ -283,6 +283,7 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
 					    const char **reply, int *dsize) 
 {
     const char *canon_id = afspts_canonifyid(identifier, size);
+    char canon_id_tmp[MAX_K_NAME_SZ+1];
     namelist groups;
     int i, rc;
     struct auth_state *newstate;
@@ -294,7 +295,10 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
     groups.namelist_len = 0;
     groups.namelist_val = NULL;
     
-    if ((rc = pr_ListMembers(canon_id, &groups))) {
+    /* canon_id_tmp is used because AFS would otherwise trample
+     * on our nice canonical user id */
+    strlcpy(canon_id_tmp,canon_id,sizeof(canon_id_tmp));
+    if ((rc = pr_ListMembers(canon_id_tmp, &groups))) {
 	/* Failure may indicate that we need new tokens */
 	pr_End();
 	rc = pr_Initialize (1L, AFSCONF_CLIENTNAME, 0);
@@ -303,7 +307,7 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
 	    fatal("pr_Initialize failed", EC_TEMPFAIL);
         }
 	/* Okay, rerun it now */
-	rc = pr_ListMembers(canon_id, &groups);
+	rc = pr_ListMembers(canon_id_tmp, &groups);
     }
 
     if(rc) 
