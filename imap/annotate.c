@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.7 2002/05/17 20:48:04 ken3 Exp $
+ * $Id: annotate.c,v 1.8 2002/06/03 15:22:20 ken3 Exp $
  */
 
 #include <config.h>
@@ -243,7 +243,8 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
     if (c) name[matchlen] = c;
 
     if (server && (fdata->entries & ENTRY_SERVER)) {
-	sprintf(entry, "/mailbox/{%s}/vendor/cyrus/server", mboxname);
+	sprintf(entry, "/mailbox/{%s}/vendor/cmu/cyrus-imapd/server",
+		mboxname);
 
 	attvalues = NULL;
 	if (fdata->attribs & ATTRIB_VALUE)
@@ -257,7 +258,8 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
     }
 
     if (fdata->entries & ENTRY_PARTITION) {
-	sprintf(entry, "/mailbox/{%s}/vendor/cyrus/partition", mboxname);
+	sprintf(entry, "/mailbox/{%s}/vendor/cmu/cyrus-imapd/partition",
+		mboxname);
 
 	attvalues = NULL;
 	if (fdata->attribs & ATTRIB_VALUE)
@@ -310,17 +312,17 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 	    mailbox = e->s + 10;
 	    *cp++ = '\0';
 
-	    /* we only support "/mailbox/{mbox}/vendor/cyrus/server" and
-	       "/mailbox/{mbox}/vendor/cyrus/partition" right now */
-	    if (!strncmp(cp, "/vendor/cyrus/server",
+	    /* we only support "/mailbox/{mbox}/vendor/cmu/cyrus-imapd/server"
+	       and ".../vendor/cmu/cyrus-imapd/partition" right now */
+	    if (!strncmp(cp, "/vendor/cmu/cyrus-imapd/server",
 			 (wildcard = strchr(cp, '*')) ? wildcard - cp : 20)) {
 		fdata.entries |= ENTRY_SERVER;
 	    }
-	    if (!strncmp(cp, "/vendor/cyrus/partition",
+	    if (!strncmp(cp, "/vendor/cmu/cyrus-imapd/partition",
 			 (wildcard = strchr(cp, '*')) ? wildcard - cp : 23)) {
 		fdata.entries |= ENTRY_PARTITION;
 	    }
-	    if (!strcmp(cp, "/vendor/cyrus/%")) {
+	    if (!strcmp(cp, "/vendor/cmu/cyrus-imapd/%")) {
 		fdata.entries |= (ENTRY_SERVER | ENTRY_PARTITION);
 	    }
 		
