@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.42 2000/12/18 20:08:15 ken3 Exp $
+ * $Id: imapd.h,v 1.43 2001/01/16 00:59:57 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -171,6 +171,7 @@ struct searchargs {
     struct strlist *cc;
     struct strlist *bcc;
     struct strlist *subject;
+    struct strlist *messageid;
     struct strlist *body;
     struct strlist *text;
     struct strlist *header_name, *header;

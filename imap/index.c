@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.151 2001/01/10 07:23:00 leg Exp $
+ * $Id: index.c,v 1.152 2001/01/16 00:59:57 leg Exp $
  */
 #include <config.h>
 
@@ -194,82 +194,83 @@ struct thread_algorithm {
 };
 
 /* Forward declarations */
-typedef int index_sequenceproc_t P((struct mailbox *mailbox, unsigned msgno,
-				    void *rock));
+typedef int index_sequenceproc_t(struct mailbox *mailbox, unsigned msgno,
+				 void *rock);
 
 static int index_forsequence(struct mailbox *mailbox, char *sequence,
 			     int usinguid,
 			     index_sequenceproc_t *proc, void *rock,
 			     int* fetchedsomething);
-static int index_insequence P((int num, char *sequence, int usinguid));
+static int index_insequence(int num, char *sequence, int usinguid);
 
-static void index_fetchmsg P((const char *msg_base, unsigned long msg_size,
-			      int format, unsigned offset, unsigned size,
-			      unsigned start_octet, unsigned octet_count));
-static void index_fetchsection P((const char *msg_base, unsigned long msg_size,
-				  int format, char *section,
-				  const char *cacheitem, unsigned size,
-				  unsigned start_octet, unsigned octet_count));
-static void index_fetchfsection P((const char *msg_base,
-				   unsigned long msg_size,
-				   int format, struct fieldlist *fsection,
-				   const char *cacheitem));
-static char *index_readheader P((const char *msg_base, unsigned long msg_size,
-				 int format, unsigned offset, unsigned size));
-static void index_pruneheader P((char *buf, struct strlist *headers,
-				 struct strlist *headers_not));
-static void index_fetchheader P((const char *msg_base, unsigned long msg_size,
+static void index_fetchmsg(const char *msg_base, unsigned long msg_size,
+			   int format, unsigned offset, unsigned size,
+			   unsigned start_octet, unsigned octet_count);
+static void index_fetchsection(const char *msg_base, unsigned long msg_size,
+			       int format, char *section,
+			       const char *cacheitem, unsigned size,
+			       unsigned start_octet, unsigned octet_count);
+static void index_fetchfsection(const char *msg_base,
+				unsigned long msg_size,
+				int format, struct fieldlist *fsection,
+				const char *cacheitem);
+static char *index_readheader(const char *msg_base, unsigned long msg_size,
+			      int format, unsigned offset, unsigned size);
+static void index_pruneheader(char *buf, struct strlist *headers,
+			      struct strlist *headers_not);
+static void index_fetchheader(const char *msg_base, unsigned long msg_size,
 				 int format, unsigned size,
 				 struct strlist *headers,
-				 struct strlist *headers_not));
-static void index_fetchcacheheader P((unsigned msgno, struct strlist *headers,
-				      char *trail));
-static void index_listflags P((struct mailbox *mailbox));
-static void index_fetchflags P((struct mailbox *mailbox, unsigned msgno,
+				 struct strlist *headers_not);
+static void index_fetchcacheheader(unsigned msgno, struct strlist *headers,
+				      char *trail);
+static void index_listflags(struct mailbox *mailbox);
+static void index_fetchflags(struct mailbox *mailbox, unsigned msgno,
 				bit32 system_flags, bit32 *user_flags,
-				time_t last_updated));
+				time_t last_updated);
 static index_sequenceproc_t index_fetchreply;
 static index_sequenceproc_t index_storeseen;
 static index_sequenceproc_t index_storeflag;
-static int index_search_evaluate P((struct mailbox *mailbox,
-				    struct searchargs *searchargs,
-				    unsigned msgno, struct mapfile *msgfile));
-static int index_searchmsg P((char *substr, comp_pat *pat,
+static int index_search_evaluate(struct mailbox *mailbox,
+				 struct searchargs *searchargs,
+				 unsigned msgno, struct mapfile *msgfile);
+static int index_searchmsg(char *substr, comp_pat *pat,
+			   struct mapfile *msgfile, int format,
+			   int skipheader, const char *cacheitem);
+static int index_searchheader(char *name, char *substr, comp_pat *pat,
 			      struct mapfile *msgfile, int format,
-			      int skipheader, const char *cacheitem));
-static int index_searchheader P((char *name, char *substr, comp_pat *pat,
-				 struct mapfile *msgfile, int format,
-				 int size));
-static int index_searchcacheheader P((unsigned msgno, char *name, char *substr,
-				      comp_pat *pat));
+			      int size);
+static int index_searchcacheheader(unsigned msgno, char *name, char *substr,
+				   comp_pat *pat);
 static index_sequenceproc_t index_copysetup;
-static int _index_search P((unsigned **msgno_list, struct mailbox *mailbox,
-			    struct searchargs *searchargs));
+static int _index_search(unsigned **msgno_list, struct mailbox *mailbox,
+			 struct searchargs *searchargs);
 
-static void parse_cached_envelope P((char *env, char *tokens[]));
-static char *get_localpart_addr P((const char *header));
+static void parse_cached_envelope(char *env, char *tokens[]);
+static char *find_msgid(char *str, int *len);
+static char *get_localpart_addr(const char *header);
 static char *index_extract_subject(const char *subj, int *is_refwd);
 static char *_index_extract_subject(char *s, int *is_refwd);
-static void index_get_ids P((MsgData *msgdata,
-			     char *envtokens[], const char *headers));
-static MsgData *index_msgdata_load P((unsigned *msgno_list, int n,
-				      struct sortcrit *sortcrit));
+static void index_get_ids(MsgData *msgdata,
+			  char *envtokens[], const char *headers);
+static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
+				   struct sortcrit *sortcrit);
 
-static void *index_sort_getnext P((MsgData *node));
-static void index_sort_setnext P((MsgData *node, MsgData *next));
-static int index_sort_compare P((MsgData *md1, MsgData *md2,
-				 struct sortcrit *call_data));
-static void index_msgdata_free P((MsgData *md));
+static void *index_sort_getnext(MsgData *node);
+static void index_sort_setnext(MsgData *node, MsgData *next);
+static int index_sort_compare(MsgData *md1, MsgData *md2,
+			      struct sortcrit *call_data);
+static void index_msgdata_free(MsgData *md);
 
-static void *index_thread_getnext P((Thread *thread));
-static void index_thread_setnext P((Thread *thread, Thread *next));
-static int index_thread_compare P((Thread *t1, Thread *t2,
-				   struct sortcrit *call_data));
-static void index_thread_orderedsubj P((unsigned *msgno_list, int nmsg,
-					int usinguid));
-static void index_thread_sort P((Thread *root, struct sortcrit *sortcrit));
-static void index_thread_print P((Thread *threads, int usinguid));
-static void index_thread_ref P((unsigned *msgno_list, int nmsg, int usinguid));
+static void *index_thread_getnext(Thread *thread);
+static void index_thread_setnext(Thread *thread, Thread *next);
+static int index_thread_compare(Thread *t1, Thread *t2,
+				struct sortcrit *call_data);
+static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
+				     int usinguid);
+static void index_thread_sort(Thread *root, struct sortcrit *sortcrit);
+static void index_thread_print(Thread *threads, int usinguid);
+static void index_thread_ref(unsigned *msgno_list, int nmsg, int usinguid);
 
 /* NOTE: Make sure these are listed in CAPABILITY_STRING */
 static const struct thread_algorithm thread_algs[] = {
@@ -2645,10 +2646,42 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	if (!index_insequence(UID(msgno), l->s, 1)) return 0;
     }
 
-    if (searchargs->from || searchargs->to ||searchargs->cc ||
-	searchargs->bcc || searchargs->subject) {
+    if (searchargs->from || searchargs->to || searchargs->cc ||
+	searchargs->bcc || searchargs->subject || searchargs->messageid) {
 
 	cacheitem = cache_base + CACHE_OFFSET(msgno);
+	cachelen = CACHE_ITEM_LEN(cacheitem);
+
+	if (searchargs->messageid) {
+	    char *tmpenv;
+	    char *envtokens[NUMENVTOKENS];
+	    char *msgid;
+	    int msgidlen;
+
+	    /* get msgid out of the envelope */
+
+	    /* get a working copy; strip outer ()'s */
+	    tmpenv = xstrndup(cacheitem + 5, cachelen - 2);
+	    parse_cached_envelope(tmpenv, envtokens);
+	    if (envtokens[ENV_MSGID]) {
+		msgid = lcase(envtokens[ENV_MSGID]);
+		msgidlen = strlen(msgid);
+	    } else {
+		msgid = "";
+		msgidlen = 0;
+	    }
+	    for (l = searchargs->messageid; l; l = l->next) {
+		if (!charset_searchstring(l->s, l->p, msgid, msgidlen)) {
+		    break;
+		}
+	    }
+
+	    /* free stuff */
+	    free(tmpenv);
+
+	    if (l) return 0;
+	}
+
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
@@ -2748,13 +2781,12 @@ static int index_search_evaluate(struct mailbox *mailbox,
  * Search part of a message for a substring
  */
 static int
-index_searchmsg(substr, pat, msgfile, format, skipheader, cacheitem)
-char *substr;
-comp_pat *pat;
-struct mapfile *msgfile;
-int format;
-int skipheader;
-const char *cacheitem;
+index_searchmsg(char *substr,
+		comp_pat *pat,
+		struct mapfile *msgfile,
+		int format,
+		int skipheader,
+		const char *cacheitem)
 {
     int partsleft = 1;
     int subparts;

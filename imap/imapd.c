@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.293 2001/01/09 04:31:46 ken3 Exp $ */
+/* $Id: imapd.c,v 1.294 2001/01/16 00:59:56 leg Exp $ */
 
 #include <config.h>
 
@@ -4658,6 +4658,21 @@ int parsecharset;
 	    c = getastring(&arg);
 	    if (c != ' ') goto missingarg;
 	    lcase(arg.s);
+
+	    /* we look message-id up in the envelope */
+	    if (!strcmp(arg.s, "message-id")) {
+		c = getastring(&arg);
+		if (c == EOF) goto missingarg;
+		str = charset_convert(arg.s, *charset, NULL, 0);
+		if (strchr(str, EMPTY)) {
+		    /* Force failure */
+		    searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
+		} else {
+		    appendstrlistpat(&searchargs->messageid, str);
+		}
+
+		break;
+	    }
 	    if (!(searchargs->flags & SEARCH_UNCACHEDHEADER)) {
 		for (i=0; i<mailbox_num_cache_header; i++) {
 		    if (!strcmp(mailbox_cache_header_name[i], arg.s)) break;
