@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.103 1999/09/13 00:07:24 tmartin Exp $
+ * $Id: deliver.c,v 1.104 1999/10/02 00:42:33 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,11 +26,12 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.103 1999/09/13 00:07:24 tmartin Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.104 1999/10/02 00:42:33 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -154,6 +155,72 @@ static sieve_interp_t *sieve_interp;
 static int sieve_usehomedir = 0;
 static const char *sieve_dir = NULL;
 #endif
+
+#ifdef DELIVER_USES_SASL
+#include <sasl.h>
+
+static sasl_security_properties_t *make_secprops(int min, int max)
+{
+    sasl_security_properties_t *ret = (sasl_security_properties_t *) 
+	xmalloc(sizeof(sasl_security_properties_t));
+
+    ret->maxbufsize = 4000;
+    ret->min_ssf = min;		/* minimum allowable security strength */
+    ret->max_ssf = max;		/* maximum allowable security strength */
+
+    ret->security_flags = 0;
+    if (!config_getswitch("allowplaintext", 1)) {
+	ret->security_flags |= SASL_SEC_NOPLAINTEXT;
+    }
+    if (!config_getswitch("allowanonymouslogin", 0)) {
+	ret->security_flags |= SASL_SEC_NOANONYMOUS;
+    }
+    ret->property_names = NULL;
+    ret->property_values = NULL;
+    
+    return ret;
+}
+
+/* this is a wrapper to call the cyrus configuration from SASL */
+static int mysasl_config(void *context __attribute__((unused)), 
+			 const char *plugin_name,
+			 const char *option,
+			 const char **result,
+			 unsigned *len)
+{
+    char opt[1024];
+
+    if (strcmp(option, "srvtab")) { /* we don't transform srvtab! */
+	int sl = 5 + (plugin_name ? strlen(plugin_name) + 1 : 0);
+
+	strncpy(opt, "sasl_", 1024);
+	if (plugin_name) {
+	    strncat(opt, plugin_name, 1019);
+	    strncat(opt, "_", 1024 - sl);
+	}
+ 	strncat(opt, option, 1024 - sl - 1);
+	opt[1023] = '\0';
+    } else {
+	strncpy(opt, option, 1024);
+    }
+
+    *result = config_getstring(opt, NULL);
+    if (*result != NULL) {
+	if (len) { *len = strlen(*result); }
+	return SASL_OK;
+    }
+   
+    return SASL_FAIL;
+}
+
+static struct sasl_callback mysasl_cb[] = {
+    { SASL_CB_GETOPT, &mysasl_config, NULL },
+    { SASL_CB_LIST_END, NULL, NULL }
+};
+
+
+#endif
+
 
 int
 main(argc, argv)
@@ -747,7 +814,7 @@ int send_rejection(char *rejto,
     fprintf(sm, "\r\n");
 
     /* this is the original message */
-    fprintf(sm, "--%d/%s\r\nContent-Type: message/rfc822\r\n",
+    fprintf(sm, "--%d/%s\r\nContent-Type: message/rfc822\r\n\r\n",
 	    p, hostname);
     prot_rewind(file);
     while ((i = prot_read(file, buf, sizeof(buf))) > 0) {
@@ -1016,57 +1083,57 @@ setup_sieve(deliver_opts_t *delopts, int lmtpmode)
 
     res = sieve_interp_alloc(&sieve_interp, (void *) delopts);
     if (res != SIEVE_OK) {
-	printf("sieve_interp_alloc() returns %d\n", res);
-	exit(1);
+	syslog(LOG_ERR, "sieve_interp_alloc() returns %d\n", res);
+	fatal("sieve_interp_alloc()", EC_TEMPFAIL);
     }
 
     res = sieve_register_redirect(sieve_interp, &sieve_redirect);
     if (res != SIEVE_OK) {
-	printf("sieve_register_redirect() returns %d\n", res);
-	exit(1);
+	syslog(LOG_ERR, "sieve_register_redirect() returns %d\n", res);
+	fatal("sieve_register_redirect()", EC_TEMPFAIL);
     }
     res = sieve_register_discard(sieve_interp, &sieve_discard);
     if (res != SIEVE_OK) {
-	printf("sieve_register_discard() returns %d\n", res);
-	exit(1);
+	syslog(LOG_ERR, "sieve_register_discard() returns %d\n", res);
+	fatal("sieve_register_discard()", EC_TEMPFAIL);
     }
     res = sieve_register_reject(sieve_interp, &sieve_reject);
     if (res != SIEVE_OK) {
-	printf("sieve_register_reject() returns %d\n", res);
-	exit(1);
+	syslog(LOG_ERR, "sieve_register_reject() returns %d\n", res);
+	fatal("sieve_register_reject()", EC_TEMPFAIL);
     }
     res = sieve_register_fileinto(sieve_interp, &sieve_fileinto);
     if (res != SIEVE_OK) {
-	printf("sieve_register_fileinto() returns %d\n", res);
-	exit(1);
+	syslog(LOG_ERR, "sieve_register_fileinto() returns %d\n", res);
+	fatal("sieve_register_fileinto()", EC_TEMPFAIL);
     }
     res = sieve_register_keep(sieve_interp, &sieve_keep);
     if (res != SIEVE_OK) {
-	printf("sieve_register_keep() returns %d\n", res);
-	exit(1);
+	syslog(LOG_ERR, "sieve_register_keep() returns %d\n", res);
+	fatal("sieve_register_keep()", EC_TEMPFAIL);
     }
     res = sieve_register_size(sieve_interp, &getsize);
     if (res != SIEVE_OK) {
-	printf("sieve_register_size() returns %d\n", res);
-	exit(1);
+	syslog(LOG_ERR, "sieve_register_size() returns %d\n", res);
+	fatal("sieve_register_size()", EC_TEMPFAIL);
     }
     res = sieve_register_header(sieve_interp, &getheader);
     if (res != SIEVE_OK) {
-	printf("sieve_register_header() returns %d\n", res);
-	exit(1);
+	syslog(LOG_ERR, "sieve_register_header() returns %d\n", res);
+	fatal("sieve_register_header()", EC_TEMPFAIL);
     }
 
     if (lmtpmode) {
 	res = sieve_register_envelope(sieve_interp, &getenvelope);
 	if (res != SIEVE_OK) {
-	    printf("sieve_register_envelope() returns %d\n", res);
-	    exit(1);
+	    syslog(LOG_ERR,"sieve_register_envelope() returns %d\n", res);
+	    fatal("sieve_register_envelope()", EC_TEMPFAIL);
 	}
 
 	res = sieve_register_vacation(sieve_interp, &vacation);
 	if (res != SIEVE_OK) {
-	    printf("sieve_register_vacation() returns %d\n", res);
-	    exit(1);
+	    syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+	    fatal("sieve_register_vacation()", EC_TEMPFAIL);
 	}
     }
 }
@@ -1310,9 +1377,16 @@ deliver_opts_t *delopts;
     int r;
     char *err;
     int i;
+    int mechcount = 0;
+#ifdef DELIVER_USES_SASL
+    sasl_conn_t *conn;
+    sasl_security_properties_t *secprops = NULL;
+#endif
 
     delopts->authuser = 0;
     delopts->authstate = 0;
+
+    signal(SIGPIPE, SIG_IGN);
 
     gethostname(myhostname, sizeof(myhostname)-1);
     r = msg_new(&msg);
@@ -1320,6 +1394,22 @@ deliver_opts_t *delopts;
 	/* damn */
 	fatal("out of memory", EC_TEMPFAIL);
     }
+
+#ifdef DELIVER_USES_SASL
+    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK) {
+	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL);
+    }
+
+    if (sasl_server_new("lmtp", NULL, NULL, NULL, 0, &conn) != SASL_OK) {
+	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
+    }
+
+    /* currently, we don't allow any encryption; this will change */
+    secprops = make_secprops(0, 0);
+    sasl_setprop(conn, SASL_SEC_PROPS, secprops);
+
+    /* set the ip addresses here */
+#endif
     
     printf("220 %s LMTP ready\r\n", myhostname);
     for (;;) {
@@ -1332,6 +1422,51 @@ deliver_opts_t *delopts;
 	if (p >= buf && *p == '\r') *p-- = '\0';
 
 	switch (buf[0]) {
+	case 'a':
+	case 'A':
+#ifdef DELIVER_USES_SASL
+	    if (!strncasecmp(buf, "auth ", 5)) {
+		char *mech;
+		char *in, *out;
+		int inlen, outlen;
+
+		if (mechcount == 0) {
+		    printf("503 5.3.3 AUTH not available\r\n");
+		    continue;
+		}
+		if (delopts->authuser) {
+		    printf("503 5.5.0 already authenticated\r\n");
+		    continue;
+		}
+		if (msg->rcpt_num != 0) {
+		    printf("503 5.5.0 AUTH not permitted now\r\n");
+		    continue;
+		}
+
+		/* ok, what mechanism ? */
+		mech = buf + 5;
+		while (*mech != ' ' && *mech != '\0') {
+		    mech++;
+		}
+		if (mech == ' ') {
+		    p = mech + 1;
+		} else {
+		    p = '\0';
+		}
+		*mech = '\0';
+		
+		in = xmalloc(strlen(q));
+		result = sasl_decode64(q, strlen(q), in, &inlen);
+		if (result != SASL_OK) {
+		    printf("501 5.5.4 cannot base64 decode\r\n");
+		    continue;
+		    if (in) { free(in); }
+		}
+
+		continue;
+	    }
+#endif
+	    goto syntaxerr;
 
 	case 'd':
 	case 'D':
@@ -1361,9 +1496,21 @@ deliver_opts_t *delopts;
 	case 'l':
 	case 'L':
 	    if (!strncasecmp(buf, "lhlo ", 5)) {
+		char *mechs;
+
 		printf("250-%s\r\n250-8BITMIME\r\n"
-		       "250-ENHANCEDSTATUSCODES\r\n250 PIPELINING\r\n",
+		       "250-ENHANCEDSTATUSCODES\r\n",
 		       myhostname);
+#ifdef DELIVER_USES_SASL
+		if (sasl_listmech(conn, NULL, "250-AUTH ", " ", "", &mechs, 
+				  NULL, &mechcount) == SASL_OK && 
+		    mechcount > 0) {
+		    printf("%s\r\n", mechs);
+		    free(mechs);
+		}
+#endif
+		printf("250 PIPELINING\r\n");
+
 		continue;
 	    }
 	    goto syntaxerr;
@@ -1905,11 +2052,19 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 
 	    r = sieve_script_parse(sieve_interp, f, (void *) sdata, &s);
 	    fclose(f);
-	    if (r == SIEVE_OK) {
+	    if (r != SIEVE_OK) {
+		syslog(LOG_INFO, "sieve parse error for %s",
+		       user);
+	    } else {
 		r = sieve_execute_script(s, (void *) msgdata);
+
+		if (r != SIEVE_OK) {
+		    syslog(LOG_INFO, "sieve runtime error for %s id %s",
+			   user, msgdata->id ? msgdata->id : "(null)");
+		}
 	    }
 
-	    if (msgdata->id) {
+	    if ((r == SIEVE_OK) && (msgdata->id)) {
 		/* ok, we've run the script */
 		char *sdb = make_sieve_db(user);
 
