@@ -220,7 +220,6 @@ char *s;
     struct state state;
     static char *retval = 0;
     static int alloced = 0;
-    const unsigned char *translation;
     int pos = 0;
     int len;
 
@@ -655,8 +654,6 @@ char *buf;
 int size;
 {
     int retval = 0;
-    const unsigned char *translation;
-    int len;
 
     if (decodeleft && decodestart != 0) {
 	bcopy(decodebuf+decodestart, decodebuf, decodeleft);
