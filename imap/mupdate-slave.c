@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.17 2002/10/03 18:48:44 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.18 2002/10/03 19:00:04 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -324,6 +324,8 @@ void *mupdate_placebo_kick_start(void *rock __attribute__((unused)))
     /* Don't leak the descriptor! */
     if(kickconn >= 0) close(kickconn);
     close(kicksock);
+
+    return NULL;
 }
 
 
