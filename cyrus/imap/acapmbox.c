@@ -237,6 +237,29 @@ int acapmbox_dataset_name(const char *mailbox_name, char *ret)
     return 0;
 }
 
+/* do the reverse of above */
+int acapmbox_decode_entry(const char *entryname, char *ret)
+{
+    int j;
+    int gdlen = strlen(global_dataset);
+
+    *ret = '\0';
+    if (strncmp(entryname, global_dataset, gdlen)) {
+	return IMAP_MAILBOX_BADNAME;
+    }
+
+    if (strlen(entryname + gdlen) > MAX_MAILBOX_NAME) {
+	return IMAP_MAILBOX_BADNAME;
+    }
+
+    strcpy(ret, entryname + gdlen + 1);
+    for (j = 0; ret[j] != '\0'; j++) {
+	if (ret[j] == '/') ret[j] = '.';
+    }
+
+    return 0;
+}
+
 int add_attr(skiplist *sl, char *name, char *value)
 {
     acap_attribute_t *tmpattr;
