@@ -30,6 +30,9 @@ bear no resemblance to what actually went wrong.
 problems (the characters between the NUL and the LF will be
 lost.)
 
+<li> Depending on how <tt>getpwnam</tt>/<tt>getspnam</tt> make their calls,
+pwcheck may "cache" users undesirably.  This has not yet been fixed.
+
 </ul>
 
 <p>
