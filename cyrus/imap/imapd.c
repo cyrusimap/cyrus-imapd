@@ -2553,7 +2553,7 @@ int parsecharset;
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
-	    if (strchr(str, EMPTY_CHAR)) {
+	    if (strchr(str, EMPTY)) {
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
@@ -2565,7 +2565,7 @@ int parsecharset;
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
-	    if (strchr(str, EMPTY_CHAR)) {
+	    if (strchr(str, EMPTY)) {
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
@@ -2581,7 +2581,7 @@ int parsecharset;
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
-	    if (strchr(str, EMPTY_CHAR)) {
+	    if (strchr(str, EMPTY)) {
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
@@ -2617,7 +2617,7 @@ int parsecharset;
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
-	    if (strchr(str, EMPTY_CHAR)) {
+	    if (strchr(str, EMPTY)) {
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
@@ -2636,7 +2636,7 @@ int parsecharset;
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
-	    if (strchr(str, EMPTY_CHAR)) {
+	    if (strchr(str, EMPTY)) {
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
@@ -2843,7 +2843,7 @@ int parsecharset;
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
-	    if (strchr(str, EMPTY_CHAR)) {
+	    if (strchr(str, EMPTY)) {
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
@@ -2859,7 +2859,7 @@ int parsecharset;
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
-	    if (strchr(str, EMPTY_CHAR)) {
+	    if (strchr(str, EMPTY)) {
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
@@ -2871,7 +2871,7 @@ int parsecharset;
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
-	    if (strchr(str, EMPTY_CHAR)) {
+	    if (strchr(str, EMPTY)) {
 		searchargs->recent_set = searchargs->recent_unset = 1;
 	    }
 	    else {
