@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.317 2001/08/22 01:34:25 ken3 Exp $ */
+/* $Id: imapd.c,v 1.318 2001/08/31 21:07:03 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1177,7 +1177,7 @@ cmdloop()
 		c = getword(imapd_in, &arg1);
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
 		c = getword(imapd_in, &arg2);
-		if (c != ' ') goto badsequence;
+		if (c != ' ') goto missingargs;
 
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
 
@@ -2943,6 +2943,8 @@ int usinguid;
 	    continue;
 	}
 
+	if (!flagname.s[0]) break;
+
 	if (flagname.s[0] == '\\') {
 	    lcase(flagname.s);
 	    if (!strcmp(flagname.s, "\\seen")) {
@@ -2986,6 +2988,11 @@ int usinguid;
 	if (c != ' ') break;
     }
 
+    if (!inlist && !flagsparsed) {
+	prot_printf(imapd_out, "%s BAD Missing required argument to %s\r\n", tag, cmd);
+	eatline(imapd_in, c);
+	return;
+    }
     if (inlist && c == ')') {
 	inlist = 0;
 	c = prot_getc(imapd_in);
@@ -2993,18 +3000,13 @@ int usinguid;
     if (inlist) {
 	prot_printf(imapd_out, "%s BAD Missing close parenthesis in %s\r\n", tag, cmd);
 	eatline(imapd_in, c);
-	return;
+	goto freeflags;
     }
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
 	eatline(imapd_in, c);
-	return;
-    }
-
-    if (!flagsparsed) {
-	prot_printf(imapd_out, "%s BAD Missing required argument to %s\r\n", tag, cmd);
-	return;
+	goto freeflags;
     }
 
     r = index_store(imapd_mailbox, sequence, usinguid, &storeargs,
