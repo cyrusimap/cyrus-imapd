@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.292 2001/01/05 05:59:30 leg Exp $ */
+/* $Id: imapd.c,v 1.293 2001/01/09 04:31:46 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1821,7 +1821,7 @@ void cmd_id(char *tag)
 #endif
 #ifdef HAVE_LIBWRAP
 	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-		 "; TCP Wrapper");
+		 "; TCP Wrappers");
 #endif
 	prot_printf(imapd_out, " \"environment\" \"%s\")\r\n", env_buf);
     }
