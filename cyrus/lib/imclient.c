@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.30 1999/08/12 19:27:42 leg Exp $
+ $Id: imclient.c,v 1.31 1999/08/20 18:51:00 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -1039,25 +1039,29 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   return ret;
 }
 
-void interaction (sasl_interact_t *t)
+void interaction (sasl_interact_t *t, char *user)
 {
   char result[1024];
 
-  printf("%s:",t->prompt);
-  scanf("%s",&result);
+  if (t->id == SASL_CB_USER && user && user[0]) {
+      t->len = strlen(user);
+      t->result = xstrdup(user);
+  } else {
+      printf("%s: ", t->prompt);
+      scanf("%s", &result);
 
-  t->len=strlen(result);
-  t->result=(char *) malloc(t->len+1);
-  memset(t->result, 0, t->len+1);
-  memcpy((char *) t->result, result, t->len);
-
+      t->len = strlen(result);
+      t->result = (char *) xmalloc(t->len+1);
+      memset(t->result, 0, t->len+1);
+      memcpy((char *) t->result, result, t->len);
+  }
 }
 
-void fillin_interactions(sasl_interact_t *tlist)
+void fillin_interactions(sasl_interact_t *tlist, char *user)
 {
   while (tlist->id!=SASL_CB_LIST_END)
   {
-    interaction(tlist);
+    interaction(tlist, user);
     tlist++;
   }
 
@@ -1165,9 +1169,9 @@ int imclient_authenticate(struct imclient *imclient,
 				 NULL, &client_interact,
 				 &out, &outlen,
 				 &mechusing);
-    if (saslresult==SASL_INTERACT)
-      fillin_interactions(client_interact); /* fill in prompts */      
-
+    if (saslresult==SASL_INTERACT) {
+	fillin_interactions(client_interact, user); /* fill in prompts */
+    }
   }
 
   if ((saslresult!=SASL_OK) && (saslresult!=SASL_CONTINUE)) return saslresult;
@@ -1204,8 +1208,9 @@ int imclient_authenticate(struct imclient *imclient,
 				  &out,
 				  &outlen);
 
-      if (saslresult==SASL_INTERACT)
-	  fillin_interactions(client_interact); /* fill in prompts */
+      if (saslresult==SASL_INTERACT) {
+	  fillin_interactions(client_interact, user); /* fill in prompts */
+      }
     }
 
     /* send to server */
