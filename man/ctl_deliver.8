@@ -47,23 +47,12 @@ ctl_deliver \- perform operations on the duplicate delivery database
 .B ctl_deliver \-E
 .I days
 .br
-.B ctl_deliver \-d
-[
-.B \-f
+.B ctl_deliver \-d \-f
 .I filename
-]
 .SH DESCRIPTION
 .I Ctl_deliver
 is used to perform various administrative operations on the duplicate
 delivery database.
-.PP
-.I Ctl_deliver
-determines the default location of the duplicate delivery database by
-reading the
-.I configdirectory
-option out of the
-.IR imapd.conf (5)
-file.
 .SH OPTIONS
 .TP
 .B \-r
