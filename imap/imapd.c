@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.269 2000/09/15 03:37:35 leg Exp $ */
+/* $Id: imapd.c,v 1.270 2000/10/12 20:10:25 leg Exp $ */
 
 #include <config.h>
 
@@ -1380,7 +1380,7 @@ char *passwd;
     val = config_getstring("admins", "");
     while (*val) {
 	for (p = (char *)val; *p && !isspace((int) *p); p++);
-	strncpy(buf, val, p - val);
+	strlcpy(buf, val, p - val);
 	buf[p-val] = 0;
 	if (auth_memberof(imapd_authstate, buf)) {
 	    imapd_userisadmin = 1;
