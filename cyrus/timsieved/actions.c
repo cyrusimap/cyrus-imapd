@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.16 2000/04/07 02:56:06 leg Exp $
+ * $Id: actions.c,v 1.17 2000/04/10 18:46:24 tmartin Exp $
  * 
  */
 /***********************************************************
@@ -347,10 +347,11 @@ static int isactive(char *name)
   struct stat filestats;  /* returned by stat */
   int result;  
 
-  snprintf(filename, 1023, "%s.script", string_DATAPTR(name));
+  snprintf(filename, 1023, "%s.script", name);
 
   result=stat(filename,&filestats);
   if (result != 0) {
+      syslog(LOG_ERR, "stat failed with %m");
       return FALSE;
   }
 
@@ -473,8 +474,16 @@ int setactive(struct protstream *conn, mystring_t *name)
     return TIMSIEVE_NOEXIST;
   }
 
+  /* if script already is the active one just say ok */
+  if (isactive(string_DATAPTR(name))==TRUE) {
+      prot_printf(conn,"OK\r\n");
+      return TIMSIEVE_OK;  
+  }
+
   /* get the name of the active sieve script */
   snprintf(filename, 1023, "%s.script", string_DATAPTR(name));
+
+
 
   /* ok we want to do this atomically so let's
      - make <activesieve>.NEW as a hard link
@@ -484,16 +493,19 @@ int setactive(struct protstream *conn, mystring_t *name)
   result = link(filename, "default.NEW");
 
   if (result!=0) {
-    prot_printf(conn, "NO \"Can't make link\"\r\n");    
-    return TIMSIEVE_FAIL;
+      syslog(LOG_ERR, "Error creating link %m");
+      prot_printf(conn, "NO \"Can't make link\"\r\n");    
+      return TIMSIEVE_FAIL;
   }
 
   result=rename("default.NEW", "default");
 
   if (result!=0) {
+      syslog(LOG_ERR, "Error renaming default.NEW to default %m");
       prot_printf(conn,"NO \"Error renaming\"\r\n");
       return TIMSIEVE_FAIL;
   }
+
 
   prot_printf(conn,"OK\r\n");
   return TIMSIEVE_OK;
