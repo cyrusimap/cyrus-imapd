@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * 9/21/99
+ * $Id: scripttest.c,v 1.4 1999/09/30 21:41:53 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -26,10 +26,10 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
 
 
+#include <sieve_interface.h>
+#include <syslog.h>
 
 #include "codes.h"
-
-#include <sieve_interface.h>
 
 #include "mystring.h"
 
@@ -49,16 +49,12 @@ sieve_vacation_t vacation = {
 
 
 /* returns TRUE or FALSE */
-int is_script_parsable(string_t *data)
+int is_script_parsable(FILE *stream, char **errstr)
 {
   sieve_interp_t *i;
   sieve_script_t *s;
   int fd, res;
-  FILE *stream;
-  char *dataptr;
   int lup;
-  char tmpname[100];
-
   
   res = sieve_interp_alloc(&i, NULL);
   if (res != SIEVE_OK) {
@@ -116,42 +112,31 @@ int is_script_parsable(string_t *data)
     return TIMSIEVE_FAIL;
   }
 
-  /* make a temporary file and copy the sieve script into it */
-  snprintf(tmpname,sizeof(tmpname),"/tmp/script.%d.%d",getpid(), time(NULL));
-
-  stream = tmpfile();
-
-  if (stream == NULL) {
-      perror("tmpfile");
-      return TIMSIEVE_FAIL;
-  }
-  
-  dataptr=string_DATAPTR(data);
-
-  for (lup=0;lup <= data->len / BLOCKSIZE; lup++)
-  {
-    int amount = BLOCKSIZE;
-
-    if (lup*BLOCKSIZE+BLOCKSIZE > data->len)
-      amount=data->len % BLOCKSIZE;
-
-    fwrite(dataptr, 1, amount, stream);
-
-    dataptr+=amount;
-  }
-
   rewind(stream);
-
   res = sieve_script_parse(i, stream, NULL, &s);
-  if (res != SIEVE_OK) {
-      free(i);
-      return TIMSIEVE_FAIL;
-  }
 
-  fclose(stream);
+  if (res == SIEVE_OK) {
+      sieve_script_free(&s);
+  } else {
+      struct sieve_errorlist *el = sieve_script_errors(s);
+
+      *errstr = (char *) xmalloc(20 * sizeof(char));
+      strcpy(*errstr, "script errors:\r\n");
+      while (el != NULL) {
+	  char buf[1024];
+
+	  snprintf(buf, 1023, "line %d: %s\r\n", el->lineno, el->msg);
+
+	  xrealloc(*errstr, strlen(*errstr) + strlen(buf));
+	  syslog(LOG_ERR, buf);
+	  strcat(*errstr, buf);
+
+	  el = el->next;
+      }
+  }
 
   /* free interpreter */
-  free(i);
+  sieve_interp_free(&i);
 
-  return TIMSIEVE_OK;
+  return (res == SIEVE_OK) ? TIMSIEVE_OK : TIMSIEVE_FAIL;
 }
