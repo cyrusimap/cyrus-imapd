@@ -24,7 +24,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  */
-/* $Id: imapd.c,v 1.145 1998/06/07 23:40:29 tjs Exp $ */
+/* $Id: imapd.c,v 1.146 1998/06/07 23:43:50 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -129,10 +129,9 @@ void cmd_getuids P((char *tag, char *startuid));
 #ifdef ENABLE_X_NETSCAPE_HACK
 void cmd_netscrape P((char* tag));
 #endif
-#ifdef ENABLE_EXPERIMENT_NAMESPACE
-void cmd_namespace P((char* tag));
-#endif
+
 #ifdef ENABLE_EXPERIMENT
+void cmd_namespace P((char* tag));
 void cmd_unselect P((char* tag));
 #endif
 
@@ -656,7 +655,7 @@ cmdloop()
 		mboxlist_close();	
 		cmd_noop(tag.s, cmd.s);
 	    }
-#ifdef ENABLE_EXPERIMENT_NAMESPACE
+#ifdef ENABLE_EXPERIMENT
 	    else if (!strcmp(cmd.s, "Namespace")) {
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -3015,9 +3014,11 @@ cmd_netscrape(tag)
 #endif /* ENABLE_X_NETSCAPE_HACK */
 
 #ifdef ENABLE_EXPERIMENT
-/*
- *
- *
+/* Callback for cmd_namespace to be passed to mboxlist_findall.
+ * For each top-level mailbox found, print a bit of the response
+ * if it is a shared namespace.  The rock is used as an integer in
+ * order to ensure the namespace response is correct on a server with
+ * no shared namespace.
  */
 static int
 namespace_cb(name, matchlen, maycreate, rock)
