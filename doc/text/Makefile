@@ -27,33 +27,15 @@
 
 all: htmlstrip docs clean
 
-DOCS= README install overview changes bugs anoncvs mailing-list
+docs:
+	for file in ../*.html; \
+	do \
+		echo "=== $$file ==="; \
+		./htmlstrip $$file > `basename $$file .html`; \
+	done
 
-docs: $(DOCS)
-
-htmlstrip: html/htmlstrip.c
-	$(CC) $(CFLAGS) -o htmlstrip html/htmlstrip.c
-
-README: html/readme.html htmlstrip
-	./htmlstrip html/readme.html > README
-
-install: html/install.html htmlstrip
-	./htmlstrip html/install.html > install
-
-overview: html/overview.html htmlstrip
-	./htmlstrip html/overview.html > overview
-
-changes: html/changes.html htmlstrip
-	./htmlstrip html/changes.html > changes
-
-bugs: html/bugs.html htmlstrip
-	./htmlstrip html/bugs.html > bugs
-
-anoncvs: html/anoncvs.html htmlstrip
-	./htmlstrip html/anoncvs.html > anoncvs
-
-mailing-list: html/mailing-list.html htmlstrip
-	./htmlstrip html/mailing-list.html > mailing-list
+htmlstrip: htmlstrip.c
+	$(CC) $(CFLAGS) -o htmlstrip htmlstrip.c
 
 clean:
 	rm -f *.o *~ Makefile.bak htmlstrip

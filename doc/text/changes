@@ -1,5 +1,32 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server in 2.0 
+
+      * The mailboxes file is now a transaction-protected Berkeley
+        database. 
+      * The core delivery process has been moved to lmtpd. deliver is now a
+        simple wrapper to create an LMTP transaction. 
+      * master process, responsible for spawning services (imapd, lmtpd,
+        etc.) and for routine housekeeping. 
+      * ACAP (Application Configuration Access Protocol) support for Cyrus
+        Murder: IMAP Aggregator. 
+      * Sieve enhancements: regular expressions, notifications,
+        automatically setting IMAP flags. 
+      * SNMP (Simple Network Management Protocol) support for monitoring
+        usage (e.g. number of users logged in) as well as for instrumenting
+        protocol usage (e.g. number of times CREATE has been called). 
+      * Perl version of cyradm contributed by Brandon Allbery
+        (allbery@ece.cmu.edu). Eventually we expect to transition to the
+        Perl version away from the TCL version. 
+      * Bugfix in modified UTF-7 processing (for mailbox names). Bugfix in
+        index_searchcacheheader(). 
+      * Implemented the extension MULTIAPPEND. 
+      * RENAME is now hierarchical. 
+      * The right that controls whether a mailbox may be deleted is now
+        "c". (It used to be "d".) 
+      * An additional backend for seen state has been created, seen_db. It
+        stores seen state in a per-user database. 
+
 Changes to the Cyrus IMAP Server Since Version 1.6.20 
 
       * Some fixes to the TLS support to gracefully degrade service. 
