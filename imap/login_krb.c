@@ -13,6 +13,7 @@
  * Kerberos-authenticated login
  */
 
+int
 login_authenticate(user, pass, reply)
 char *user;
 char *pass;
