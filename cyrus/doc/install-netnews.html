@@ -1,4 +1,4 @@
-<!-- $Id: install-netnews.html,v 1.1.2.3 2003/03/02 19:59:15 ken3 Exp $ -->
+<!-- $Id: install-netnews.html,v 1.1.2.4 2003/03/06 17:39:53 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus and Netnews
@@ -85,7 +85,13 @@ Cyrus) to feed articles to your Cyrus server via LMTP.  Consult the
 INN documentation for further details.
 
 <h4>Control Messages</h4>
-TODO: Discuss ACLs and PGP verification.
+Control messages are accepted, parsed and delivered to the
+corresponding <tt>control.*</tt> pseudo-group (eg,
+<tt>control.newgroup</tt>, <tt>control.cancel</tt>, etc) if it exists,
+so that they may be reviewed by an administrator.
+
+<p><b>NOTE:</b> Automatic execution of control messages is currently disabled until
+PGP verification and ACL checking are implemented (hopefully by v2.2.1).
 
 <h3>Reading/Posting articles</h3>
 In order to have articles posted by your local users propagate to the
@@ -136,5 +142,5 @@ use its "feed" operation mode.
 To expire usenet articles on a regular basis, you should use the <tt>expirenews</tt> utility.  This utility both expunges articles from their mailboxes and prunes message-ids from <tt>netnews.db</tt>.  The <tt>master/conf/normal.conf</tt> and <tt>master/conf/prefork.conf</tt> sample configs both include EVENT entries for <tt>expirenews</tt> (disabled by default).
 
 <P><HR>
-last modified: $Date: 2003/03/02 19:59:15 $
+last modified: $Date: 2003/03/06 17:39:53 $
 </BODY></HTML>
