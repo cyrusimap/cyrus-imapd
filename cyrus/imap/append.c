@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.81 2001/08/31 18:42:48 ken3 Exp $
+ * $Id: append.c,v 1.82 2001/09/30 12:39:55 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -131,6 +131,7 @@ int append_check(const char *name, int format,
 	return IMAP_QUOTA_EXCEEDED;
     }
 
+    mailbox_close(&m);
     return 0;
 }
 
