@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.61 1999/02/16 03:20:38 wcw Exp $ -->
+<!-- $Id: changes.html,v 1.62 1999/03/01 20:11:01 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -9,6 +9,10 @@
     <h2> Changes to the Cyrus IMAP Server Since Version 1.5.19 </h2>
 
     <ul>
+      <li> Annoying (and confusing) lines in syslog every time a message was
+	delivered if deliver was compiled using dbm saying that deliver was
+	"unable to fetch entry" have been removed.
+
       <li> Content-Disposition lines were being parsed improperly.  If they
 	had no optional arguments, they were being ignored as if they were
 	syntactically incorrect.  This is fixed, but imapd will continue to
@@ -674,7 +678,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Tue Jan 12 11:28:44 1999
+last modified by tjs at Mon Mar  1 15:06:08 1999
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
