@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.2.2.2 2004/06/24 15:16:32 ken3 Exp $
+ * $Id: bc_eval.c,v 1.2.2.3 2004/06/25 15:08:07 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -825,7 +825,14 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 		    }
 		} /* For each data */
 	    }
+
+	    /* free the bodypart */
+	    free(val[y]);
+
 	} /* For each body part */
+
+	/* free the bodypart array */
+	if (val) free(val);
 
 	/* free the decode buffer */
 	if (decbuf) free(decbuf);
