@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.46 2000/01/14 21:52:27 leg Exp $
+ * $Id: prot.c,v 1.47 2000/01/17 22:39:36 leg Exp $
  */
 
 #include <stdio.h>
@@ -314,24 +314,17 @@ struct protstream *s;
 	
 	do {
 #ifdef HAVE_SSL	  
-
-	  /* just do a SSL read instead if we're under a tls layer */
-	  if (s->tls_conn!=NULL)
-	  {
-	    n = SSL_read(s->tls_conn, s->buf, PROT_BUFSIZE);
-	  } else {
-	    n = read(s->fd, s->buf, PROT_BUFSIZE);
-	  }
-
+	    /* just do a SSL read instead if we're under a tls layer */
+	    if (s->tls_conn != NULL) {
+		n = SSL_read(s->tls_conn, s->buf, PROT_BUFSIZE);
+	    } else {
+		n = read(s->fd, s->buf, PROT_BUFSIZE);
+	    }
 #else  /* HAVE_SSL */
-	  n = read(s->fd, s->buf, PROT_BUFSIZE);
+	    n = read(s->fd, s->buf, PROT_BUFSIZE);
 #endif /* HAVE_SSL */
-
-
-	    
 	} while (n == -1 && errno == EINTR);
-	
-	
+		
 	if (n <= 0) {
 	    if (n) s->error = strerror(errno);
 	    else s->eof = 1;
@@ -374,8 +367,6 @@ struct protstream *s;
 	    s->cnt = n;
 	}
 	
-	  
-
 	if (s->cnt > 0) {
 	    if (s->logfd != -1) {
 		time_t newtime;
@@ -418,7 +409,7 @@ struct protstream *s;
     char *ptr = s->buf;
     int left = s->ptr - s->buf;
     int n;
-    char *foo;
+    char *encoded_output;
 
     if (s->eof || s->error) {
 	s->ptr = s->buf;
@@ -451,14 +442,12 @@ struct protstream *s;
 	ptr = s->buf;
     }
 
-
-
-    if (s->saslssf!=0) {
+    if (s->saslssf != 0) {
       /* Encode the data */  /* xxx handle left */
       unsigned int outlen;
       int result;
 
-      result=sasl_encode(s->conn, ptr, left, &foo, &outlen);
+      result=sasl_encode(s->conn, ptr, left, &encoded_output, &outlen);
       if (result!=SASL_OK)
       {
 	s->error = "Encoding error";
@@ -466,19 +455,18 @@ struct protstream *s;
 	return EOF;
       }
 
-      ptr=foo;
-      left=outlen;
+      ptr = encoded_output;
+      left = outlen;
     }
 
     /* Write out the data */
     do {
 #ifdef HAVE_SSL
-      if (s->tls_conn!=NULL)
-      {
-        n = SSL_write(s->tls_conn, ptr, left);
-      } else {
-	n = write(s->fd, ptr, left);
-      }
+	if (s->tls_conn != NULL) {
+	    n = SSL_write(s->tls_conn, ptr, left);
+	} else {
+	    n = write(s->fd, ptr, left);
+	}
 #else  /* HAVE_SSL */
 	n = write(s->fd, ptr, left);
 #endif /* HAVE_SSL */
@@ -494,9 +482,9 @@ struct protstream *s;
 	}
     } while (left);
 
-    /* sasl_encode did a malloc so we need to free for it */
-    if (s->saslssf!=0) { 
-      free(foo);
+    /* sasl_encode() did a malloc so we need to free for it */
+    if (s->saslssf != 0) { 
+	free(encoded_output);
     }
 
     /* Reset the output buffer */
@@ -515,6 +503,8 @@ struct protstream *s;
 const char *buf;
 unsigned len;
 {
+    assert(len >= 0);
+
     while (len >= s->cnt) {
 	memcpy(s->ptr, buf, s->cnt);
 	s->ptr += s->cnt;
@@ -534,28 +524,14 @@ unsigned len;
  * Stripped-down version of printf() that works on protection streams
  * Only understands '%d', '%s', '%c', and '%%' in the format string.
  */
-#ifdef __STDC__
 int prot_printf(struct protstream *s, const char *fmt, ...)
-#else
-int prot_printf(va_alist)
-va_dcl
-#endif
 {
     va_list pvar;
     char *percent, *p;
     int i;
     unsigned u;
     char buf[30];
-#ifdef __STDC__
     va_start(pvar, fmt);
-#else
-    struct protstream *s;
-    char *fmt;
-
-    va_start(pvar);
-    s = va_arg(pvar, struct protstream *);
-    fmt = va_arg(pvar, char *);
-#endif
 
     while ((percent = strchr(fmt, '%')) != 0) {
 	prot_write(s, fmt, percent-fmt);
