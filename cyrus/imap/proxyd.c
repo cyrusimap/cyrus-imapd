@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.107 2002/03/14 21:19:25 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.108 2002/03/18 15:53:32 wcw Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1946,8 +1946,11 @@ void cmd_login(char *tag, char *user, char *passwd)
     }
     else {
 	proxyd_userid = xstrdup(canon_user);
-	syslog(LOG_NOTICE, "login: %s %s plaintext %s", proxyd_clienthost,
-	       canon_user, reply ? reply : "");
+
+	syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", proxyd_clienthost,
+	       canon_user, proxyd_starttls_done ? "+TLS" : "", 
+	       reply ? reply : "");
+
 	plaintextloginpause = config_getint("plaintextloginpause", 0);
 	if (plaintextloginpause) {
 
