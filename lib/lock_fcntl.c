@@ -130,7 +130,7 @@ int fd;
  * Returns 0 for success, -1 for failure, with errno set to an
  * appropriate error code.
  */
-int lock_blocking(fd)
+int lock_shared(fd)
 int fd;
 {
     int r;
