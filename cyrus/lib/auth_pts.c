@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.1.2.1 2002/12/13 17:10:35 rjs3 Exp $
+ * $Id: auth_pts.c,v 1.1.2.2 2002/12/20 17:00:22 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -142,7 +142,12 @@ char *auth_canonifyid(const char *identifier, size_t len)
 	canonuser_cache = NULL;
     }
 
-    if(ptload(identifier, &canonuser_cache)) {
+    if(!strcmp(identifier, "anyone") ||
+       !strcmp(identifier, "anonymous")) {
+        /* we can fill this in ourselves - no cacheing */
+	strlcpy(retbuf, identifier, sizeof(retbuf));
+	return retbuf;
+    } else if(ptload(identifier, &canonuser_cache)) {
 	/* Couldn't contact ptloader/database.  Fail. */
 	return NULL;
     } else {
