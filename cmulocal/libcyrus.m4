@@ -31,7 +31,7 @@ AC_DEFUN(CMU_LIBCYRUS_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lcyrus ${LIB_SASL} ${LIBSSL_LIB_FLAGS} ${LIB_SOCKET}"
-AC_TRY_LINK(,
+AC_TRY_LINK([void fatal(){}],
 [imclient_authenticate();],
 [ac_cv_found_libcyrus_lib=yes],
 ac_cv_found_libcyrus_lib=no)
@@ -44,7 +44,7 @@ AC_DEFUN(CMU_LIBCYRUS_LIB_WHERE, [
       CMU_LIBCYRUS_LIB_WHERE1($i)
       dnl deal with false positives from implicit link paths
       CMU_TEST_LIBPATH($i, cyrus)
-      if test "$ac_cv_found_libcyrus_lib" = "yes" ; then
+      if test "$ac_cv_found_cyrus_lib" = "yes" ; then
         ac_cv_libcyrus_where_lib=$i
         AC_MSG_RESULT(found)
         break
