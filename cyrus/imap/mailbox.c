@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.8 2002/08/29 19:48:03 rjs3 Exp $
+ $Id: mailbox.c,v 1.134.4.9 2002/08/29 20:06:21 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -239,19 +239,19 @@ int mailbox_stat(const char *mbpath,
     assert(mbpath && (header || index));
     
     if(header) {
-	snprintf(fnamebuf, "%s/cyrus.header", mbpath);
+	snprintf(fnamebuf, sizeof(fnamebuf), "%s/cyrus.header", mbpath);
 	r = stat(fnamebuf, header);
 	if(r) ret |= 0x1;
     }
     
     if(!r && index) {
-	snprintf(fnamebuf, "%s/cyrus.index", mbpath);
+	snprintf(fnamebuf, sizeof(fnamebuf), "%s/cyrus.index", mbpath);
 	r = stat(fnamebuf, header);
 	if(r) ret |= 0x2;
     }
 
     if(!r && cache) {
-	snprintf(fnamebuf, "%s/cyrus.cache", mbpath);
+	snprintf(fnamebuf, sizeof(fnamebuf), "%s/cyrus.cache", mbpath);
 	r = stat(fnamebuf, header);
 	if(r) ret |= 0x4;
     }

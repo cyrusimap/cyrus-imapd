@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.68.4.2 2002/08/29 19:48:04 rjs3 Exp $
+ $Id: mailbox.h,v 1.68.4.3 2002/08/29 20:06:22 ken3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -43,6 +43,7 @@
 #define INCLUDED_MAILBOX_H
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <limits.h>
 
 #include "auth.h"
