@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.15 2004/02/19 15:39:29 ken3 Exp $
+ * $Id: nntpd.c,v 1.16 2004/02/19 15:45:54 ken3 Exp $
  */
 
 /*
@@ -2641,11 +2641,14 @@ static void cmd_mode(char *arg)
 
 static void cmd_newgroups(time_t tstamp)
 {
+    prot_printf(nntp_out, "503 Can't determine NEWGROUPS at this time\r\n");
+#if 0
     prot_printf(nntp_out, "231 List of new newsgroups follows:\r\n");
 
     /* Do search of annotations here. */
 
     prot_printf(nntp_out, ".\r\n");
+#endif
 }
 
 struct newrock {
