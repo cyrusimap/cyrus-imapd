@@ -38,10 +38,13 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_poll.c,v 1.2 2001/01/16 16:54:26 ken3 Exp $ */
+/* $Id: idle_poll.c,v 1.3 2001/01/17 17:39:22 ken3 Exp $ */
 
+#include <syslog.h>
 #include <time.h>
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #include <signal.h>
 
 #include "idle.h"
@@ -75,11 +78,23 @@ void idle_poll(int sig)
 
 int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc)
 {
+    struct sigaction action;
+
     idle_update = proc;
 
     /* Setup the mailbox polling function to be called at 'idle_period'
        seconds from now */
-    signal(SIGALRM, idle_poll);
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = 0;
+#ifdef SA_RESTART
+    action.sa_flags |= SA_RESTART;
+#endif
+    action.sa_handler = idle_poll;
+    if (sigaction(SIGALRM, &action, NULL) < 0) {
+	syslog(LOG_ERR, "sigaction: %m");
+	return 0;
+    }
+
     alarm(idle_period);
 
     return 1;
