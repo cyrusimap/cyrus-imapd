@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.13 2004/01/31 20:46:53 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.14 2004/02/04 20:26:29 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2144,7 +2144,7 @@ void cmd_idle(char *tag)
     protgroup_reset(protin);
     protgroup_insert(protin, imapd_in);
 
-    if (backend_current && CAPA(backend_current, IDLE)) {
+    if (backend_current && CAPA(backend_current, CAPA_IDLE)) {
 	/* Start IDLE on backend */
 	prot_printf(backend_current->out, "%s IDLE\r\n", tag);
 	if (!prot_fgets(buf, sizeof(buf), backend_current->in)) {
@@ -2220,7 +2220,7 @@ void cmd_idle(char *tag)
 
 	if (!done) {
 	    /* Check the mailbox for updates, unless we proxied IDLE */
-	    if (!backend_current || !CAPA(backend_current, IDLE)) {
+	    if (!backend_current || !CAPA(backend_current, CAPA_IDLE)) {
 		imapd_check(NULL, 0, 1);
 	    }
 
@@ -2231,7 +2231,7 @@ void cmd_idle(char *tag)
     /* Done listening to idled */
     if (idle_init()) idle_done(imapd_mailbox);
 
-    if (backend_current && CAPA(backend_current, IDLE)) {
+    if (backend_current && CAPA(backend_current, CAPA_IDLE)) {
 	/* Either the client timed out, or gave us a continuation.
 	   In either case we're done, so terminate IDLE on backend */
 	prot_printf(backend_current->out, "Done\r\n");
@@ -3827,7 +3827,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 
 	s = proxy_findserver(server);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
-	else if (!CAPA(s, MULTIAPPEND)) {
+	else if (!CAPA(s, CAPA_MULTIAPPEND)) {
 	    /* we need MULTIAPPEND for atomicity */
 	    r = IMAP_REMOTE_NO_MULTIAPPEND;
 	}
@@ -4000,7 +4000,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
 	    if (!r) {
-		if (!CAPA(s, MUPDATE)) {
+		if (!CAPA(s, CAPA_MUPDATE)) {
 		    /* reserve mailbox on MUPDATE */
 		}
 	    }
@@ -4017,7 +4017,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 				tag, strlen(name), name);
 		res = pipe_until_tag(s, tag, 0);
 	
-		if (!CAPA(s, MUPDATE)) {
+		if (!CAPA(s, CAPA_MUPDATE)) {
 		    /* do MUPDATE create operations */
 		}
 		/* make sure we've seen the update */
@@ -4138,7 +4138,7 @@ void cmd_delete(char *tag, char *name, int localonly)
 			tag, strlen(name), name);
 	    res = pipe_until_tag(s, tag, 0);
 
-	    if (!CAPA(s, MUPDATE) && res == PROXY_OK) {
+	    if (!CAPA(s, CAPA_MUPDATE) && res == PROXY_OK) {
 		/* do MUPDATE delete operations */
 	    }
 
@@ -4378,7 +4378,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	/* xxx  end of separate proxy-only code */
 
 	if (!r) {
-	    if (!CAPA(s, MUPDATE)) {
+	    if (!CAPA(s, CAPA_MUPDATE)) {
 		/* do MUPDATE create operations for new mailbox */
 	    }
 
@@ -4387,7 +4387,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 			strlen(newname), newname);
 	    res = pipe_until_tag(s, tag, 0);
 	
-	    if (!CAPA(s, MUPDATE)) {
+	    if (!CAPA(s, CAPA_MUPDATE)) {
 		/* Activate/abort new mailbox in MUPDATE*/
 		/* delete old mailbox from MUPDATE */
 	    }
@@ -5237,7 +5237,7 @@ void cmd_setacl(char *tag, const char *name,
 	    }
 	    res = pipe_until_tag(s, tag, 0);
 
-	    if (!CAPA(s, MUPDATE) && res == PROXY_OK) {
+	    if (!CAPA(s, CAPA_MUPDATE) && res == PROXY_OK) {
 		/* setup new ACL in MUPDATE */
 	    }
 	    /* make sure we've seen the update */
@@ -8269,7 +8269,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
     /* Suppress any output of a partial match */
     if ((name[matchlen]
 	 && strncmp(lastname, name, matchlen) == 0
-	 && lastname[matchlen] == '\0')) {
+	 && (lastname[matchlen] == '\0' || lastname[matchlen] == '.'))) {
 	return;
     }
 	

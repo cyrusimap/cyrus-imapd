@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.18 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: lmtpengine.h,v 1.18.2.1 2004/02/04 20:26:32 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -123,7 +123,7 @@ void lmtpmode(struct lmtp_func *func,
 
 /************** client-side LMTP ****************/
 
-struct lmtp_conn;
+#include "backend.h"
 
 struct lmtp_txn {
     const char *from;
@@ -148,21 +148,6 @@ struct lmtp_txn {
 #define LMTP_TXN_ALLOC(n) (xmalloc(sizeof(struct lmtp_txn) + \
 				   ((n) * (sizeof(struct lmtp_rcpt)))))
 
-
-int lmtp_connect(const char *host,
-		 sasl_callback_t *cb,
-		 struct lmtp_conn **conn);
-
-/* lmtp_runtxn() attempts delivery of the message in 'txn' on the
-   connection 'conn'.  regardless of the return code (which indicates
-   something about the protocol/connection state) 'rcpt[n].result' is
-   guaranteed to be filled in. */
-int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn);
-
-/* send a NOOP to the conn to verify it's still ok */
-int lmtp_verify_conn(struct lmtp_conn *conn);
-
-/* disconnect from lmtp server */
-int lmtp_disconnect(struct lmtp_conn *conn);
+int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn);
 
 #endif /* LMTPENGINE_H */

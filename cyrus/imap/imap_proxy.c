@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.2 2004/01/31 20:46:53 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.3 2004/02/04 20:26:28 ken3 Exp $
  */
 
 #include <config.h>
@@ -112,37 +112,6 @@ backend_timeout(struct protstream *s __attribute__((unused)),
     }
 }
 
-static void get_capability(struct backend *s)
-{
-    char mytag[128];
-    char resp[1024];
-    int st = 0;
-
-    proxy_gentag(mytag, sizeof(mytag));
-
-    prot_printf(s->out, "%s Capability\r\n", mytag);
-    do {
-	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
-	if (!strncasecmp(resp, "* Capability ", 13)) {
-	    st++; /* increment state */
-	    lcase(resp);
-	    if (strstr(resp, "idle")) s->capability |= IDLE;
-	    if (strstr(resp, "mupdate")) s->capability |= MUPDATE;
-	    if (strstr(resp, "multiappend")) s->capability |= MULTIAPPEND;
-	} else {
-	    /* line we weren't expecting. hmmm. */
-	}
-    } while (st == 0);
-    do {
-	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
-	if (!strncmp(resp, mytag, strlen(mytag))) {
-	    st++; /* increment state */
-	} else {
-	    /* line we weren't expecting. hmmm. */
-	}
-    } while (st == 1);
-}
-
 /* return the connection to the server */
 struct backend *proxy_findserver(const char *server)
 {
@@ -172,9 +141,6 @@ struct backend *proxy_findserver(const char *server)
 			      authid, NULL);
 	if(!ret) return NULL;
 
-	/* find the capabilities of the server */
-	get_capability(ret);
-    
 	/* add the timeout */
 	ret->timeout = prot_addwaitevent(imapd_in, time(NULL) + IDLE_TIMEOUT,
 					 backend_timeout, ret);

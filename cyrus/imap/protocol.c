@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.2 2003/10/22 18:02:59 rjs3 Exp $ */
+/* $Id: protocol.c,v 1.2.2.1 2004/02/04 20:26:32 ken3 Exp $ */
 
 #include <string.h>
 #include <limits.h>
@@ -55,7 +55,7 @@ static char *imap_parsemechlist(char *str, struct protocol_t *prot)
     
     ret[0] = '\0';
     
-    if (strstr(str, "SASL")) {
+    if (strstr(str, "SASL-IR")) {
 	/* server supports initial response in AUTHENTICATE command */
 	prot->sasl_cmd.maxlen = INT_MAX;
     }
@@ -97,28 +97,42 @@ static char *nntp_parsesuccess(char *str, const char **status)
 
 struct protocol_t protocol[] = {
     { "imap", "imap",
-      { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parsemechlist },
+      { "C01 CAPABILITY", "C01 ", &imap_parsemechlist,
+	{ { "AUTH=", CAPA_AUTH }, { "STARTTLS", CAPA_STARTTLS },
+	  { "IDLE", CAPA_IDLE }, { "MUPDATE", CAPA_MUPDATE },
+	  { "MULTIAPPEND", CAPA_MULTIAPPEND }, { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO" },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL },
+      { "N01 NOOP", "N01 OK" },
       { "Q01 LOGOUT", "Q01 " } },
     { "pop3", "pop",
-      { "CAPA", ".", "STLS", "SASL ", NULL },
+      { "CAPA", ".", NULL,
+	{ { "SASL ", CAPA_AUTH }, { "STLS", CAPA_STARTTLS }, { NULL, 0 } } },
       { "STLS", "+OK", "-ERR" },
       { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL },
+      { NULL },
       { "QUIT", "+OK" } },
     { "nntp", "news",
-      { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
+      { "LIST EXTENSIONS", ".", NULL,
+	{ { "SASL ", CAPA_AUTH }, { "STARTTLS", CAPA_STARTTLS }, { NULL, 0 } } },
       { "STARTTLS", "382", "580" },
       { "AUTHINFO SASL", 512, 0, "28", "5", "383 ", "*", &nntp_parsesuccess },
+      { "DATE", "111" },
       { "QUIT", "205" } },
     { "lmtp", "lmtp",
-      { "LHLO murder", "250 ", "STARTTLS", "AUTH ", NULL },
+      { "LHLO murder", "250 ", NULL,
+	{ { "AUTH ", CAPA_AUTH }, { "STARTTLS", CAPA_STARTTLS },
+	  { "PIPELINING", CAPA_PIPELINING },
+	  { "IGNOREQUOTA", CAPA_IGNOREQUOTA }, { NULL, 0 } } },
       { "STARTTLS", "220", "454" },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
+      { "NOOP", "250" },
       { "QUIT", "221" } },
     { "mupdate", "mupdate",
-      { NULL, "* OK", NULL, "* AUTH ", NULL },
+      { NULL, "* OK", NULL,
+	{ { "* AUTH ", CAPA_AUTH }, { NULL, 0 } } },
       { NULL },
       { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL },
+      { "N01 NOOP", "N01 OK" },
       { "Q01 LOGOUT", "Q01 " } }
 };

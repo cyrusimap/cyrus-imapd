@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.175.2.6 2004/01/31 18:56:53 ken3 Exp $
+# $Id: Makefile.in,v 1.175.2.7 2004/02/04 20:26:27 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -196,16 +196,16 @@ lmtpd.pure: lmtpd.o $(LMTPOBJS) mutex_fake.o \
 	 $(SERVICE) lmtpd.o $(LMTPOBJS) mutex_fake.o \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-lmtpproxyd: lmtpproxyd.o $(LMTPOBJS) mutex_fake.o \
+lmtpproxyd: lmtpproxyd.o backend.o $(LMTPOBJS) mutex_fake.o \
 	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o lmtpproxyd \
-	 $(SERVICE) lmtpproxyd.o $(LMTPOBJS) mutex_fake.o \
+	 $(SERVICE) lmtpproxyd.o backend.o $(LMTPOBJS) mutex_fake.o \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-lmtpproxyd.pure: lmtpproxyd.o $(LMTPOBJS) mutex_fake.o \
+lmtpproxyd.pure: lmtpproxyd.o backend.o $(LMTPOBJS) mutex_fake.o \
 	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o lmtpproxyd.pure \
-	 $(SERVICE) lmtpproxyd.o $(LMTPOBJS) mutex_fake.o \
+	 $(SERVICE) lmtpproxyd.o backend.o $(LMTPOBJS) mutex_fake.o \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 imapd: xversion $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
@@ -267,9 +267,9 @@ chk_cyrus: chk_cyrus.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o chk_cyrus chk_cyrus.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
 
-deliver: deliver.o $(LMTPOBJS) mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o deliver deliver.o $(LMTPOBJS) mutex_fake.o \
-	libimap.a $(DEPLIBS) $(LIBS)
+deliver: deliver.o backend.o $(LMTPOBJS) mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o deliver deliver.o backend.o $(LMTPOBJS) \
+	mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
 
 ctl_deliver: ctl_deliver.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \

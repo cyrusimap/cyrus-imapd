@@ -24,9 +24,9 @@ Single
 6 5250 1800 9225 2475
 4 0 0 50 0 0 12 0.0000 4 135 2940 5250 1950 Frontend server mailbox databases are\001
 4 0 0 50 0 0 12 0.0000 4 180 3300 5250 2400 mupdate connection to the mupdate master.\001
-4 0 0 50 0 0 12 0.0000 4 180 3915 5250 2175 updated based upon a stream on a frotnend-initiated\001
+4 0 0 50 0 0 12 0.0000 4 180 3960 5250 2175 updated based upon a stream on a frotnend-initiated\001
 -6
-6 9600 1500 11250 2550
+6 9600 1500 11250 2400
 4 0 0 50 0 0 12 0.0000 4 135 1575 9600 1650 Connection to LMTP\001
 4 0 0 50 0 0 12 0.0000 4 180 1440 9600 1875 proxy (possibly via\001
 4 0 0 50 0 0 12 0.0000 4 135 1620 9600 2100 unix socket on SMTP\001
@@ -35,13 +35,6 @@ Single
 6 6075 750 10950 1200
 4 0 0 50 0 0 12 0.0000 4 180 4875 6075 1125 the master mupdate server to determine final destination of mail.\001
 4 0 0 50 0 0 12 0.0000 4 180 4245 6075 900 LMTP proxies perform mupdate lookups directly against\001
--6
-6 3450 4200 6000 5325
-4 0 0 50 0 0 12 0.0000 4 180 2550 3450 4350 Frontend servers perform mailbox\001
-4 0 0 50 0 0 12 0.0000 4 180 2145 3450 4575 lookup, and then connect via\001
-4 0 0 50 0 0 12 0.0000 4 165 2400 3450 4800 IMAP, POP, MANAGESIEVE,\001
-4 0 0 50 0 0 12 0.0000 4 165 2205 3450 5025 or LMTP to backend servers,\001
-4 0 0 50 0 0 12 0.0000 4 180 1125 3450 5250 as appropriate.\001
 -6
 6 7950 3150 9075 4050
 4 0 0 50 0 0 12 0.0000 4 180 960 7950 3300 LMTP Proxy\001
@@ -54,6 +47,13 @@ Single
 4 0 0 50 0 0 12 0.0000 4 180 2595 10125 3975 proxy which uses LMTP to deliver\001
 4 0 0 50 0 0 12 0.0000 4 135 2715 10125 4200 to the correct backend server based\001
 4 0 0 50 0 0 12 0.0000 4 180 3060 10125 4425 on information from the mupdate master.\001
+-6
+6 3450 4200 6150 5325
+4 0 0 50 0 0 12 0.0000 4 180 2550 3450 4350 Frontend servers perform mailbox\001
+4 0 0 50 0 0 12 0.0000 4 180 2700 3450 4575 lookup, and then connect via IMAP,\001
+4 0 0 50 0 0 12 0.0000 4 165 2415 3450 4800 POP, NNTP, MANAGESIEVE,\001
+4 0 0 50 0 0 12 0.0000 4 165 2205 3450 5025 or LMTP to backend servers,\001
+4 0 0 50 0 0 12 0.0000 4 180 1125 3450 5250 as appropriate.\001
 -6
 2 2 0 1 0 7 50 0 -1 0.000 0 0 -1 0 0 5
 	 1650 3375 2550 3375 2550 5100 1650 5100 1650 3375
@@ -116,5 +116,5 @@ Single
 4 0 0 50 0 0 12 0.0000 4 135 1290 1575 7500 Backend Servers\001
 4 0 0 50 0 0 24 0.0000 4 330 6090 525 375 Cyrus MURDER component interactions\001
 4 0 0 50 0 0 12 0.0000 4 135 1305 6975 7500 Frontend Servers\001
-4 0 0 50 0 0 12 0.0000 4 135 1350 11025 6750 IMAP/POP Client\001
 4 0 0 50 0 0 12 0.0000 4 135 1020 11550 3450 SMTP Server\001
+4 0 0 50 0 0 12 0.0000 4 135 1875 10875 6750 IMAP/POP/NNTP Client\001
