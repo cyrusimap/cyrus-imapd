@@ -58,7 +58,6 @@ main(argc, argv)
 int argc;
 char **argv;
 {
-    int exitval = 0, code;
     char buf[4096], *group, *nextgroup, *uid, *p;
     int c;
 
@@ -174,7 +173,7 @@ unsigned long feeduid;
 	fatal("cannot open mailbox for newsgroup", convert_code(r));
     }
 
-    r = append_collectnews(&mailbox, &ng->last_uid, feeduid);
+    r = append_collectnews(&mailbox, feeduid);
 
     if (r) {
 	syslog(LOG_CRIT, "cannot append to %s: %s",
@@ -183,6 +182,7 @@ unsigned long feeduid;
 	fatal("cannot append to mailbox for newsgroup", convert_code(r));
     }
 
+    ng->last_uid = mailbox.last_uid; 
     mailbox_close(&mailbox);
 }
 
@@ -217,6 +217,7 @@ char *group;
     for (high = num_newsgroup; high > low; high--) {
 	newsgroup[high] = newsgroup[high-1];
     }
+    num_newsgroup++;
     newsgroup[low] = (struct newsgroup *)
       xmalloc(sizeof(struct newsgroup)+strlen(group));
     newsgroup[low]->last_uid = 0;
