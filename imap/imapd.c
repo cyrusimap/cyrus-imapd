@@ -331,7 +331,7 @@ cmdloop()
 	    else if (!strcmp(cmd.s, "Deleteacl")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg1);
-		if (!strcasecmp(arg1, "mailbox")) {
+		if (!strcasecmp(arg1.s, "mailbox")) {
 		    if (c != ' ') goto missingargs;
 		    c = getastring(&arg1);
 		}
@@ -391,7 +391,7 @@ cmdloop()
 		oldform = 0;
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg1);
-		if (!strcasecmp(arg1, "mailbox")) {
+		if (!strcasecmp(arg1.s, "mailbox")) {
 		    oldform = 1;
 		    if (c != ' ') goto missingargs;
 		    c = getastring(&arg1);
@@ -469,7 +469,7 @@ cmdloop()
 		oldform = 0;
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg1);
-		if (!strcasecmp(arg1, "mailbox")) {
+		if (!strcasecmp(arg1.s, "mailbox")) {
 		    oldform = 1;
 		    if (c != ' ') goto missingargs;
 		    c = getastring(&arg1);
@@ -579,7 +579,7 @@ cmdloop()
 	    else if (!strcmp(cmd.s, "Setacl")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg1);
-		if (!strcasecmp(arg1, "mailbox")) {
+		if (!strcasecmp(arg1.s, "mailbox")) {
 		    if (c != ' ') goto missingargs;
 		    c = getastring(&arg1);
 		}
@@ -939,7 +939,7 @@ char *tag;
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
-    prot_printf(imapd_out, "* CAPABILITY IMAP4 IMAP4rev1");
+    prot_printf(imapd_out, "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA");
     prot_printf(imapd_out, "%s", login_capabilities());
     prot_printf(imapd_out, "\r\n%s OK Capability completed\r\n", tag);
 };
@@ -1239,94 +1239,147 @@ int usinguid;
 	c = getword(&fetchatt);
     }
     for (;;) {
-	lcase(fetchatt.s);
+	ucase(fetchatt.s);
 	switch (fetchatt.s[0]) {
-	case 'a':
-	    if (!inlist && !strcmp(fetchatt.s, "all")) {
+	case 'A':
+	    if (!inlist && !strcmp(fetchatt.s, "ALL")) {
 		fetchitems |= FETCH_ALL;
 	    }
 	    else goto badatt;
 	    break;
 
-	case 'b':
-	    if (!strcmp(fetchatt.s, "body")) {
+	case 'B':
+	    if (!strcmp(fetchatt.s, "BODY")) {
 		fetchitems |= FETCH_BODY;
 	    }
-	    else if (!strcmp(fetchatt.s, "bodystructure")) {
+	    else if (!strcmp(fetchatt.s, "BODYSTRUCTURE")) {
 		fetchitems |= FETCH_BODYSTRUCTURE;
 	    }
-	    else if (!strncmp(fetchatt.s, "body[", 5) ||
-		     !strncmp(fetchatt.s, "body.peek[", 10)) {
+	    else if (!strncmp(fetchatt.s, "BODY[", 5) ||
+		     !strncmp(fetchatt.s, "BODY.PEEK[", 10)) {
 		p = section = fetchatt.s + 5;
-		if (*p == 'p') {
+		if (*p == 'P') {
 		    p = section += 5;
 		}
 		else {
 		    fetchitems |= FETCH_SETSEEN;
 		}
 		while (isdigit(*p) || *p == '.') {
-		    if (*p == '.' && (p == section || !isdigit(p[1]))) break;
+		    if (*p == '.' && !isdigit(p[-1])) break;
+		    /* Obsolete section 0 can only occur before close brace */
+		    if (*p == '0' && !isdigit(p[-1]) && p[1] != ']') break;
 		    p++;
 		}
-		if (p == section || *p != ']' || p[1]) {
+		switch (*p) {
+		case 'H':
+		    if (p != section && p[-1] != '.') break;
+		    if (!strncmp(p, "HEADER.FIELDS", 13)) {
+#if 0 /* XXX */
+			p += 13;
+			if (!strncmp(p, ".NOT", 4)) p += 4;
+			xxx-end-of-atom;
+			if (*p != '\0') {
+			    p--; /* force a syntax error */
+			    break;
+			}
+			xxx-parse-header-list-check-for-"]";
+#endif
+		    }
+		    else if (!strncmp(p, "HEADER]", 7)) p += 6;
+		    break;
+
+		case 'M':
+		    if (!strncmp(p-1, ".MIME]", 6)) p += 4;
+		    break;
+
+		case 'T':
+		    if (p != section && p[-1] != '.') break;
+		    if (!strncmp(p, "TEXT]", 5)) p += 4;
+		    break;
+		}
+
+		if (*p != ']') {
 		    prot_printf(imapd_out, "%s BAD Invalid body section\r\n", tag);
 		    if (c != '\n') eatline();
 		    goto freeargs;
 		}
-		*p = '\0';
+		p++;
+		if (*p == '<' && isdigit(p[1])) {
+		    p += 2;
+		    while (isdigit(*p)) p++;
+
+		    if (*p == '.' && p[1] >= '1' && p[1] <= '9') {
+			p += 2;
+			while (isdigit(*p)) p++;
+		    }
+		    else p--;
+
+		    if (*p != '>') {
+			prot_printf(imapd_out, "%s BAD Invalid body partial\r\n", tag);
+			if (c != '\n') eatline();
+			goto freeargs;
+		    }
+		    p++;
+		}
+
+		if (*p) {
+		    prot_printf(imapd_out, "%s BAD Junk after body section\r\n", tag);
+		    if (c != '\n') eatline();
+		    goto freeargs;
+		}
 		appendstrlist(&fetchargs.bodysections, section);
 	    }
 	    else goto badatt;
 	    break;
 
-	case 'e':
-	    if (!strcmp(fetchatt.s, "envelope")) {
+	case 'E':
+	    if (!strcmp(fetchatt.s, "ENVELOPE")) {
 		fetchitems |= FETCH_ENVELOPE;
 	    }
 	    else goto badatt;
 	    break;
 
-	case 'f':
-	    if (!inlist && !strcmp(fetchatt.s, "fast")) {
+	case 'F':
+	    if (!inlist && !strcmp(fetchatt.s, "FAST")) {
 		fetchitems |= FETCH_FAST;
 	    }
-	    else if (!inlist && !strcmp(fetchatt.s, "full")) {
+	    else if (!inlist && !strcmp(fetchatt.s, "FULL")) {
 		fetchitems |= FETCH_FULL;
 	    }
-	    else if (!strcmp(fetchatt.s, "flags")) {
+	    else if (!strcmp(fetchatt.s, "FLAGS")) {
 		fetchitems |= FETCH_FLAGS;
 	    }
 	    else goto badatt;
 	    break;
 
-	case 'i':
-	    if (!strcmp(fetchatt.s, "internaldate")) {
+	case 'I':
+	    if (!strcmp(fetchatt.s, "INTERNALDATE")) {
 		fetchitems |= FETCH_INTERNALDATE;
 	    }
 	    else goto badatt;
 	    break;
 
-	case 'r':
-	    if (!strcmp(fetchatt.s, "rfc822")) {
+	case 'R':
+	    if (!strcmp(fetchatt.s, "RFC822")) {
 		fetchitems |= FETCH_RFC822|FETCH_SETSEEN;
 	    }
-	    else if (!strcmp(fetchatt.s, "rfc822.header")) {
+	    else if (!strcmp(fetchatt.s, "RFC822.HEADER")) {
 		fetchitems |= FETCH_HEADER;
 	    }
-	    else if (!strcmp(fetchatt.s, "rfc822.peek")) {
+	    else if (!strcmp(fetchatt.s, "RFC822.PEEK")) {
 		fetchitems |= FETCH_RFC822;
 	    }
-	    else if (!strcmp(fetchatt.s, "rfc822.size")) {
+	    else if (!strcmp(fetchatt.s, "RFC822.SIZE")) {
 		fetchitems |= FETCH_SIZE;
 	    }
-	    else if (!strcmp(fetchatt.s, "rfc822.text")) {
+	    else if (!strcmp(fetchatt.s, "RFC822.TEXT")) {
 		fetchitems |= FETCH_TEXT|FETCH_SETSEEN;
 	    }
-	    else if (!strcmp(fetchatt.s, "rfc822.text.peek")) {
+	    else if (!strcmp(fetchatt.s, "RFC822.TEXT.PEEK")) {
 		fetchitems |= FETCH_TEXT;
 	    }
-	    else if (!strcmp(fetchatt.s, "rfc822.header.lines") ||
-		     !strcmp(fetchatt.s, "rfc822.header.lines.not")) {
+	    else if (!strcmp(fetchatt.s, "RFC822.HEADER.LINES") ||
+		     !strcmp(fetchatt.s, "RFC822.HEADER.LINES.NOT")) {
 		if (c != ' ') {
 		    prot_printf(imapd_out, "%s BAD Missing required argument to %s %s\r\n",
 			   tag, cmd, fetchatt.s);
@@ -1351,14 +1404,15 @@ int usinguid;
 			if (c != '\n') eatline();
 			goto freeargs;
 		    }
+		    lcase(fieldname.s);;
 		    appendstrlist(strlen(fetchatt.s) == 19 ?
 				  &fetchargs.headers : &fetchargs.headers_not,
 				  fieldname.s);
 		    if (strlen(fetchatt.s) == 19 &&
 			!(fetchitems & FETCH_UNCACHEDHEADER)) {
 			for (i=0; i<mailbox_num_cache_header; i++) {
-			    if (!strcasecmp(mailbox_cache_header_name[i],
-					    fieldname.s)) break;
+			    if (!strcmp(mailbox_cache_header_name[i],
+					fieldname.s)) break;
 			}
 			if (i == mailbox_num_cache_header) {
 			    fetchitems |= FETCH_UNCACHEDHEADER;
@@ -1376,8 +1430,8 @@ int usinguid;
 	    else goto badatt;
 	    break;
 
-	case 'u':
-	    if (!strcmp(fetchatt.s, "uid")) {
+	case 'U':
+	    if (!strcmp(fetchatt.s, "UID")) {
 		fetchitems |= FETCH_UID;
 	    }
 	    else goto badatt;

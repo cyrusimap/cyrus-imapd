@@ -1194,35 +1194,84 @@ int octet_count;
 {
     char *p;
     int skip;
+    int fetchmime = 0;
 
     cacheitem += 4;
     p = section;
-    while (*p) {
+
+    /* Special-case BODY[] */
+    if (*p == ']') {
+	p++;
+	if (*p == '<') {
+	    p++;
+	    start_octet = octet_count = 0;
+	    while (isdigit(*p)) start_octet = start_octet * 10 + *p++ - '0';
+	    p++;			/* Skip over '.' */
+	    while (isdigit(*p)) octet_count = octet_count * 10 + *p++ - '0';
+	    start_octet++;
+	}
+
+	index_fetchmsg(msg_base, msg_size, format, 0, msg_size,
+		       start_octet, octet_count);
+	return;
+    }
+
+    while (*p != ']' && *p != 'M') {
 	skip = 0;
 	while (isdigit(*p)) skip = skip * 10 + *p++ - '0';
 	if (*p == '.') p++;
 
-	/* section 0 only allowed on tail */
-	if (!skip && *p) goto badpart;
+	/* Handle .0, .HEADER, and .TEXT */
+	if (!skip) {
+	    switch (*p) {
+	    case 'H':
+		p += 6;
+		fetchmime++;	/* .HEADER maps internally to .0.MIME */
+		break;
+
+	    case 'T':
+		p += 4;
+		break;		/* .TEXT maps internally to .0 */
+
+	    default:
+		fetchmime++;	/* .0 maps internally to .0.MIME */
+		break;
+	    }
+	}
 	
 	/* section number too large */
 	if (skip >= CACHE_ITEM_BIT32(cacheitem)) goto badpart;
 
-	if (*p) {
-	    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 3 * 4 + 4;
+	if (*p != ']' && *p != 'M') {
+	    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4 + 4;
 	    while (--skip) {
 		if (CACHE_ITEM_BIT32(cacheitem) > 0) {
 		    skip += CACHE_ITEM_BIT32(cacheitem)-1;
-		    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 3 * 4;
+		    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4;
 		}
 		cacheitem += 4;
 	    }
 	}
     }
 
-    cacheitem += skip * 3 * 4 + 4;
+    if (*p == 'M') {
+	p += 4;
+	fetchmime++;
+    }
+    cacheitem += skip * 5 * 4 + 4 + (fetchmime ? 0 : 2 * 4);
+    
     if (CACHE_ITEM_BIT32(cacheitem+4) == -1) goto badpart;
 	
+    p++;
+    if (*p == '<') {
+	p++;
+	start_octet = octet_count = 0;
+	while (isdigit(*p)) start_octet = start_octet * 10 + *p++ - '0';
+	p++;			/* Skip over '.' */
+	while (isdigit(*p)) octet_count = octet_count * 10 + *p++ - '0';
+	start_octet++;
+    }
+
     index_fetchmsg(msg_base, msg_size, format, CACHE_ITEM_BIT32(cacheitem),
 		   CACHE_ITEM_BIT32(cacheitem+4),
 		   start_octet, octet_count);
@@ -1551,6 +1600,7 @@ char *rock;
     bit32 user_flags[MAX_USER_FLAGS/32];
     char *cacheitem;
     struct strlist *section;
+    char *partialdot;
 
     /* Open the message file if we're going to need it */
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822|FETCH_UNCACHEDHEADER)) ||
@@ -1683,7 +1733,16 @@ char *rock;
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
     for (section = fetchargs->bodysections; section; section = section->next) {
-	prot_printf(imapd_out, "%cBODY[%s] ", sepchar, section->s);
+	if (section->s[strlen(section->s)-1] == '>') {
+	    /* Have to trim off the maximum number of octets from the reply */
+	    partialdot = strrchr(section->s, '.');
+	    *partialdot = '\0';
+	    prot_printf(imapd_out, "%cBODY[%s> ", sepchar, section->s);
+	    *partialdot = '.';
+	}
+	else {
+	    prot_printf(imapd_out, "%cBODY[%s ", sepchar, section->s);
+	}
 	sepchar = ' ';
 	cacheitem = cache_base + CACHE_OFFSET(msgno);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
@@ -2058,13 +2117,13 @@ char *cacheitem;
 		    }
 		}
 	    }
-	    cacheitem += 3*4;
+	    cacheitem += 5*4;
 
 	    while (--subparts) {
-		start = CACHE_ITEM_BIT32(cacheitem);
-		len = CACHE_ITEM_BIT32(cacheitem+4);
-		charset = CACHE_ITEM_BIT32(cacheitem+8) >> 16;
-		encoding = CACHE_ITEM_BIT32(cacheitem+8) & 0xff;
+		start = CACHE_ITEM_BIT32(cacheitem+2*4);
+		len = CACHE_ITEM_BIT32(cacheitem+3*4);
+		charset = CACHE_ITEM_BIT32(cacheitem+4*4) >> 16;
+		encoding = CACHE_ITEM_BIT32(cacheitem+4*4) & 0xff;
 
 		if (start < msgfile->size && len > 0 &&
 		    charset >= 0 && charset < 0xffff) {
@@ -2073,7 +2132,7 @@ char *cacheitem;
 					   format == MAILBOX_FORMAT_NETNEWS,
 					   len, charset, encoding)) return 1;
 		}
-		cacheitem += 3*4;
+		cacheitem += 5*4;
 	    }
 	}
     }
