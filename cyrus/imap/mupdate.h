@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.9 2002/01/29 18:14:55 leg Exp $
+ * $Id: mupdate.h,v 1.10 2002/02/02 21:23:21 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -116,13 +116,20 @@ void mupdate_unready(void);
 /* --- internal client functions (mupdate-client.c) --- */
 /* these are used by the slave thread and by the client API */
 
+enum mupdate_cmd_response {
+    MUPDATE_OK = 0,
+    MUPDATE_NO = -1,
+    MUPDATE_BAD = -2
+};
+
 /* Scarf up the incoming data and perform the requested operations */
-/* Returns 0 on no error (or success, if wait_for_ok set) */
-/* Returns 1 on fatal error */
-/* Returns -1 on command-related error (if wait_for_ok set) */
+/* Returns 0 on no error
+   otherwise MUPDATE_error. */
+/* if 'wait_for_ok' is set and 'response' != NULL, *response is filled in */
 int mupdate_scarf(mupdate_handle *handle,
 		  mupdate_callback callback,
 		  void *context,
-		  int wait_for_ok);
+		  int wait_for_ok,
+		  enum mupdate_cmd_response *response);
 
 #endif /* INCLUDED_MUPDATE_H */

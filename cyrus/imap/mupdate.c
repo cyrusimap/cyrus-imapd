@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.40 2002/02/01 19:42:52 rjs3 Exp $
+ * $Id: mupdate.c,v 1.41 2002/02/02 21:23:21 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1120,6 +1120,12 @@ void cmd_startupdate(struct conn *C, const char *tag)
     prot_NONBLOCK(C->pin);
 }
 
+/* 
+ * we've registered this connection for streaming, so we wait for updates.
+ * this will return after 'poll_interval' seconds if no updates.
+ * regardless, after sending out a batch of updates, this returns to the
+ * caller.
+ */
 void sendupdates(struct conn *C)
 {
     struct pending *p, *q;
@@ -1372,6 +1378,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     struct mbent_queue remote_boxes;
     struct mbent *l,*r;
     char pattern[] = { '*', '\0' };
+    void *txn = NULL;
 
     if(!handle || !handle->saslcompleted) return 1;
 
@@ -1427,7 +1434,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 		mboxlist_insertremote(r->mailbox, 
 				     (r->t == SET_RESERVE ?
 				        MBTYPE_RESERVE : 0),
-				      r->server, r->acl, NULL);
+				      r->server, r->acl, &txn);
 	    }
 	    /* Okay, dump these two */
 	    local_boxes.head = l->next;
@@ -1436,7 +1443,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    free(r);
 	} else if (ret < 0) {
 	    /* Local without corresponding remote, delete it */
-	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0);
+	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, &txn);
 	    local_boxes.head = l->next;
 	    free(l);
 	} else /* (ret > 0) */ {
@@ -1444,7 +1451,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    mboxlist_insertremote(r->mailbox, 
 				  (r->t == SET_RESERVE ?
 				   MBTYPE_RESERVE : 0),
-				  r->server, r->acl, NULL);
+				  r->server, r->acl, &txn);
 	    remote_boxes.head = r->next;
 	    free(r);
 	}
@@ -1453,7 +1460,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     if(l && !r) {
 	/* we have more deletes to do */
 	while(l) {
-	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0);
+	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, &txn);
 	    local_boxes.head = l->next;
 	    free(l);
 	    l = local_boxes.head;
@@ -1464,12 +1471,14 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    mboxlist_insertremote(r->mailbox, 
 				  (r->t == SET_RESERVE ?
 				   MBTYPE_RESERVE : 0),
-				  r->server, r->acl, NULL);
+				  r->server, r->acl, &txn);
 	    remote_boxes.head = r->next;
 	    free(r);
 	    r = remote_boxes.head;
 	}
     }
+
+
 
     /* All up to date! */
     syslog(LOG_NOTICE, "mailbox list synchronization complete");

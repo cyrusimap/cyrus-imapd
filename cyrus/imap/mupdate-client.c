@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.18 2002/01/29 19:45:55 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.19 2002/02/02 21:23:21 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -421,6 +421,7 @@ int mupdate_activate(mupdate_handle *handle,
 {
     int ret;
     int called = 0;
+    enum mupdate_cmd_response response;
     
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox || !server || !acl) return MUPDATE_BADPARAM;
@@ -431,11 +432,10 @@ int mupdate_activate(mupdate_handle *handle,
 		handle->tagn++, strlen(mailbox), mailbox, 
 		strlen(server), server, strlen(acl), acl);
 
-    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1);
-
-    if (ret > 0) {
-	return MUPDATE_NOCONN;
-    } else if(ret < 0) {
+    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1, &response);
+    if (ret) {
+	return ret;
+    } else if (response != MUPDATE_OK) {
 	return MUPDATE_FAIL;
     } else {
 	return 0;
@@ -447,6 +447,7 @@ int mupdate_reserve(mupdate_handle *handle,
 {
     int ret;
     int called = 0;
+    enum mupdate_cmd_response response;
     
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox || !server) return MUPDATE_BADPARAM;
@@ -457,10 +458,10 @@ int mupdate_reserve(mupdate_handle *handle,
 		handle->tagn++, strlen(mailbox), mailbox, 
 		strlen(server), server);
 
-    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1);
-    if (ret > 0) {
-	return MUPDATE_NOCONN;
-    } else if (ret < 0) {
+    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1, &response);
+    if (ret) {
+	return ret;
+    } else if (response != MUPDATE_OK) {
 	return MUPDATE_FAIL;
     } else {
 	return 0;
@@ -472,6 +473,7 @@ int mupdate_delete(mupdate_handle *handle,
 {
     int ret;
     int called = 0;
+    enum mupdate_cmd_response response;
     
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox) return MUPDATE_BADPARAM;
@@ -481,10 +483,10 @@ int mupdate_delete(mupdate_handle *handle,
 		"X%u DELETE {%d+}\r\n%s\r\n", handle->tagn++, 
 		strlen(mailbox), mailbox);
 
-    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1);
-    if (ret > 0) {
-	return MUPDATE_NOCONN;
-    } else if(ret < 0) {
+    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1, &response);
+    if (ret) {
+	return ret;
+    } else if (response != MUPDATE_OK) {
 	return MUPDATE_FAIL;
     } else {
 	return 0;
@@ -535,6 +537,7 @@ int mupdate_find(mupdate_handle *handle, const char *mailbox,
 		 struct mupdate_mailboxdata **target) 
 {
     int ret;
+    enum mupdate_cmd_response response;
     
     if(!handle || !mailbox || !target) return MUPDATE_BADPARAM;
 
@@ -544,20 +547,14 @@ int mupdate_find(mupdate_handle *handle, const char *mailbox,
 
     memset(&(handle->mailboxdata_buf), 0, sizeof(handle->mailboxdata_buf));
 
-    ret = mupdate_scarf(handle, mupdate_find_cb, handle, 1);
+    ret = mupdate_scarf(handle, mupdate_find_cb, handle, 1, &response);
 
-    if (!ret) {
+    if (!ret && response == MUPDATE_OK) {
 	*target = &(handle->mailboxdata_buf);
+	return 0;
     } else {
 	*target = NULL;
-    }
-    
-    if (ret > 0) {
-	return MUPDATE_NOCONN;
-    } else if(ret < 0) {
-	return MUPDATE_FAIL;
-    } else {
-	return 0;
+	return ret ? ret : MUPDATE_FAIL;
     }
 }
 
@@ -565,6 +562,7 @@ int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 		 const char *prefix, void *context) 
 {
     int ret;
+    enum mupdate_cmd_response response;
     
     if(!handle || !callback) return MUPDATE_BADPARAM;
 
@@ -577,11 +575,11 @@ int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 		    "X%u LIST\r\n", handle->tagn++);
     }
      
-    ret = mupdate_scarf(handle, callback, context, 1);
+    ret = mupdate_scarf(handle, callback, context, 1, &response);
 
-    if (ret > 0) {
-	return MUPDATE_NOCONN;
-    } else if(ret < 0) {
+    if (ret) {
+	return ret;
+    } else if (response != MUPDATE_OK) {
 	return MUPDATE_FAIL;
     } else {
 	return 0;
@@ -591,37 +589,57 @@ int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
                                  if ((ch) != '\n') { syslog(LOG_ERR, \
                              "extra arguments recieved, aborting connection");\
-                                 return 1; }} while(0)
+                                 r = MUPDATE_PROTOCOL_ERROR;\
+                                 goto done; }} while(0)
 
 /* Scarf up the incoming data and perform the requested operations */
-int mupdate_scarf(mupdate_handle *handle, mupdate_callback callback,
-		  void *context, int wait_for_ok)
+int mupdate_scarf(mupdate_handle *handle, 
+		  mupdate_callback callback,
+		  void *context, 
+		  int wait_for_ok, 
+		  enum mupdate_cmd_response *response)
 {
-    fd_set read_set;
-    int highest_fd, select_result=0, ret;
-    struct timeval tv;
     struct mupdate_mailboxdata box;
+    int r = 0;
 
-    if(!handle || !callback) return 1;
+    if (!handle || !callback) return 1;
 
-    highest_fd = handle->sock + 1;
-
-    do {
+    /* keep going while we have input or if we're waiting for an OK */
+    while (!r) {
 	int ch;
 	unsigned char *p;
     
+	if (wait_for_ok) {
+	    prot_BLOCK(handle->pin);
+	} else {
+	    prot_NONBLOCK(handle->pin);
+	}
 	ch = getword(handle->pin, &(handle->tag));
+	if (ch == EOF && errno == EAGAIN) {
+	    /* this was just "no input" we return 0 */
+	    goto done;
+	} else {
+	    /* this was a fatal error, return 1 */
+	    r = MUPDATE_NOCONN;
+	    goto done;
+	}
+
+	/* set it blocking so we don't get half a line */
+	prot_BLOCK(handle->pin);
+
 	if(ch != ' ') {
 	    /* We always have a command */
-	    syslog(LOG_ERR, "Protocol error from master: no command",
+	    syslog(LOG_ERR, "Protocol error from master: no tag",
 		   handle->tag.s, ch);
-	    return 1;
+	    r = MUPDATE_PROTOCOL_ERROR;
+	    goto done;
 	}
 	ch = getword(handle->pin, &(handle->cmd));
 	if(ch != ' ') {
-	    /* We always have an arguement */
-	    syslog(LOG_ERR, "Protocol error from master: no argument");
-	    return 1;
+	    /* We always have an argument */
+	    syslog(LOG_ERR, "Protocol error from master: no keyword");
+	    r = MUPDATE_PROTOCOL_ERROR;
+	    break;
 	}
 	
 	if (islower((unsigned char) handle->cmd.s[0])) {
@@ -636,47 +654,53 @@ int mupdate_scarf(mupdate_handle *handle, mupdate_callback callback,
 	case 'B':
 	    if(!strncmp(handle->cmd.s, "BAD", 6)) {
 		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
-		
 		CHECKNEWLINE(handle, ch);
 
 		syslog(LOG_DEBUG, "mupdate BAD response: %s", handle->arg1.s);
-		if(wait_for_ok) return -1;
-		break;
+		if (wait_for_ok && response) {
+		    *response = MUPDATE_BAD;
+		}
+		goto done;
 	    }
-	    syslog(LOG_ERR, "bad command from master: %s", handle->cmd.s);
-	    return 1;
+	    goto badcmd;
+
 	case 'D':
 	    if(!strncmp(handle->cmd.s, "DELETE", 6)) {
 		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
-		
 		CHECKNEWLINE(handle, ch);
 
 		memset(&box, 0, sizeof(box));
 		box.mailbox = handle->arg1.s;
 
 		/* Handle delete command */
-		ret = callback(&box, handle->cmd.s, context);
-		if(ret) {
-		    syslog(LOG_ERR, "Error deleting mailbox");
-		    return ret;
+		r = callback(&box, handle->cmd.s, context);
+		if (r) {
+		    syslog(LOG_ERR, 
+			   "error deleting mailbox: callback returned %d", r);
+		    goto done;
 		}
 		break;
 	    }
-	    syslog(LOG_ERR, "bad command from master: %s", handle->cmd.s);
-	    return 1;
+	    goto badcmd;
+
 	case 'M':
 	    if(!strncmp(handle->cmd.s, "MAILBOX", 7)) {
 		/* Mailbox Name */
 		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
-		if(ch != ' ') return 1;
+		if(ch != ' ') { 
+		    r = MUPDATE_PROTOCOL_ERROR;
+		    goto done;
+		}
 		
 		/* Server */
 		ch = getstring(handle->pin, handle->pout, &(handle->arg2));
-		if(ch != ' ') return 1;
+		if(ch != ' ') {
+		    r = MUPDATE_PROTOCOL_ERROR;
+		    goto done;
+		}
 		
 		/* ACL */
 		ch = getstring(handle->pin, handle->pout, &(handle->arg3));
-		
 		CHECKNEWLINE(handle, ch);
 		
 		/* Handle mailbox command */
@@ -684,95 +708,82 @@ int mupdate_scarf(mupdate_handle *handle, mupdate_callback callback,
 		box.mailbox = handle->arg1.s;
 		box.server = handle->arg2.s;
 		box.acl = handle->arg3.s;
-		ret = callback(&box, handle->cmd.s, context);
-		if(ret) {
-		    /* Was there an error? */
-		    syslog(LOG_ERR, "Error activating mailbox");
-		    return ret;
+		r = callback(&box, handle->cmd.s, context);
+		if (r) { /* callback error ? */
+		    syslog(LOG_ERR, 
+			   "error activating mailbox: callback returned %d", r);
+		    goto done;
 		}
 		break;
 	    }
-	    syslog(LOG_ERR, "bad command from master: %s", handle->cmd.s);
-	    return 1;
+	    goto badcmd;
 	case 'N':
 	    if(!strncmp(handle->cmd.s, "NO", 6)) {
 		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
-		
 		CHECKNEWLINE(handle, ch);
 
 		syslog(LOG_DEBUG, "mupdate NO response: %s", handle->arg1.s);
-		if(wait_for_ok) return -1;
+		if (wait_for_ok) {
+		    if (response) *response = MUPDATE_NO;
+		    goto done;
+		}
 		break;
 	    }
-	    syslog(LOG_ERR, "bad command from master: %s", handle->cmd.s);
-	    return 1;
+	    goto badcmd;
 	case 'O':
 	    if(!strncmp(handle->cmd.s, "OK", 2)) {
 		/* It's all good, grab the attached string and move on */
 		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
 		
 		CHECKNEWLINE(handle, ch);
-		
-		if(wait_for_ok) return 0;
+		if (wait_for_ok) {
+		    if (response) *response = MUPDATE_OK;
+		    goto done;
+		}
 		break;
 	    }
-	    syslog(LOG_ERR, "bad command from master: %s", handle->cmd.s);
-	    return 1;
+	    goto badcmd;
 	case 'R':
 	    if(!strncmp(handle->cmd.s, "RESERVE", 7)) {
 		/* Mailbox Name */
 		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
-		if(ch != ' ') return 1;
+		if(ch != ' ') {
+		    r = MUPDATE_PROTOCOL_ERROR;
+		    goto done;
+		}
 		
 		/* Server */
 		ch = getstring(handle->pin, handle->pout, &(handle->arg2));
-		
 		CHECKNEWLINE(handle, ch);
 		
 		/* Handle reserve command */
 		memset(&box, 0, sizeof(box));
-		box.mailbox=handle->arg1.s;
-		box.server=handle->arg2.s;
-		ret = callback(&box, handle->cmd.s, context);
-		if(ret) {
-		    /* Was there an error? */
-		    syslog(LOG_ERR, "Error reserving mailbox");
-		    return ret;
+		box.mailbox = handle->arg1.s;
+		box.server = handle->arg2.s;
+		r = callback(&box, handle->cmd.s, context);
+		if (r) { /* callback error ? */
+		    syslog(LOG_ERR, 
+			   "error reserving mailbox: callback returned %d", r);
+		    goto done;
 		}
 		
 		break;
 	    }
-	    syslog(LOG_ERR, "bad command from master: %s", handle->cmd.s);
-	    return 1;
+	    goto badcmd;
+
 	default:
+	badcmd:
 	    /* Bad Command */
 	    syslog(LOG_ERR, "bad/unexpected command from master: %s",
 		   handle->cmd.s);
-	    return 1;
+	    r = MUPDATE_PROTOCOL_ERROR;
+	    goto done;
 	}
-
-	/* If we are waiting for an OK message, block, otherwise, drop
-	   through immediately */
-	ch = prot_getc(handle->pin);
-	if(ch != EOF) {
-	    prot_ungetc(ch, handle->pin);
-	    select_result = 1;
-	    continue;
-	}
-
-	FD_ZERO(&read_set);
-	FD_SET(handle->sock, &read_set);
-
-	tv.tv_sec = 0;
-	tv.tv_usec = 0;
-
-	select_result = select(highest_fd, &read_set, NULL, NULL, 
-			       (wait_for_ok ? NULL : &tv));
-    } while((!wait_for_ok && select_result > 0) || (select_result > 0));
-
-    if (select_result != 0) {
-	return 1;
-    } else {
-	return 0;
     }
+
+ done:
+    /* reset blocking */
+    prot_NONBLOCK(handle->pin);
+
+    return r;
 }
