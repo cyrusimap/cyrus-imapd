@@ -72,7 +72,7 @@ MAN8 = $(srcdir)/arbitron.8 $(srcdir)/collectnews.8 $(srcdir)/deliver.8 \
 	$(srcdir)/lmtpd.8 $(srcdir)/idled.8 $(srcdir)/ctl_mboxlist.8 \
 	$(srcdir)/ctl_deliver.8 $(srcdir)/ctl_cyrusdb.8 $(srcdir)/ipurge.8 \
 	$(srcdir)/tls_prune.8 $(srcdir)/squatter.8 $(srcdir)/cvt_cyrusdb.8 \
-	$(srcdir)/notifyd.8
+	$(srcdir)/notifyd.8 $(srcdir)/chk_cyrus.8
 
 all: $(MAN1) $(MAN3) $(MAN5) $(MAN8)
 
