@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.27 2004/06/23 02:55:23 rjs3 Exp $
+ * $Id: annotate.c,v 1.28 2005/02/14 06:39:54 shadow Exp $
  */
 
 #include <config.h>
@@ -920,7 +920,7 @@ static int fetch_cb(char *name, int matchlen,
 {
     struct fetchdata *fdata = (struct fetchdata *) rock;
     struct annotate_f_entry_list *entries_ptr;
-    static char lastname[MAX_MAILBOX_PATH];
+    static char lastname[MAX_MAILBOX_PATH+1];
     static int sawuser = 0;
     int c;
     char int_mboxname[MAX_MAILBOX_PATH+1], ext_mboxname[MAX_MAILBOX_PATH+1];
@@ -954,10 +954,10 @@ static int fetch_cb(char *name, int matchlen,
     if (!strncasecmp(lastname, "INBOX", 5)) {
 	(*fdata->namespace->mboxname_tointernal)(fdata->namespace, "INBOX",
 						 fdata->userid, int_mboxname);
-	strcat(int_mboxname, lastname+5);
+	strlcat(int_mboxname, lastname+5, sizeof(int_mboxname));
     }
     else
-	strcpy(int_mboxname, lastname);
+	strlcpy(int_mboxname, lastname, sizeof(int_mboxname));
 
     c = name[matchlen];
     if (c) name[matchlen] = '\0';
@@ -1377,7 +1377,7 @@ static int store_cb(char *name, int matchlen,
 {
     struct storedata *sdata = (struct storedata *) rock;
     struct annotate_st_entry_list *entries_ptr;
-    static char lastname[MAX_MAILBOX_PATH];
+    static char lastname[MAX_MAILBOX_PATH+1];
     static int sawuser = 0;
     char int_mboxname[MAX_MAILBOX_PATH+1];
     struct mailbox_annotation_rock mbrock;
@@ -1405,16 +1405,16 @@ static int store_cb(char *name, int matchlen,
 	sawuser = 1;
     }
 
-    strcpy(lastname, name);
+    strlcpy(lastname, name, sizeof(lastname));
     lastname[matchlen] = '\0';
 
     if (!strncasecmp(lastname, "INBOX", 5)) {
 	(*sdata->namespace->mboxname_tointernal)(sdata->namespace, "INBOX",
 						 sdata->userid, int_mboxname);
-	strcat(int_mboxname, lastname+5);
+	strlcat(int_mboxname, lastname+5, sizeof(int_mboxname));
     }
     else
-	strcpy(int_mboxname, lastname);
+	strlcpy(int_mboxname, lastname, sizeof(int_mboxname));
 
     memset(&mbrock, 0, sizeof(struct mailbox_annotation_rock));
     get_mb_data(int_mboxname, &mbrock);

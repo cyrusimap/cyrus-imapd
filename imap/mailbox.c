@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.155 2004/05/22 03:45:51 rjs3 Exp $
+ * $Id: mailbox.c,v 1.156 2005/02/14 06:39:57 shadow Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -187,7 +187,7 @@ int mailbox_cached_header(const char *s)
     /* Generate lower case copy of string */
     /* xxx sometimes the caller has already generated this .. 
      * maybe we can just require callers to do it? */
-    for (i=0 ; *s && (i < MAX_CACHED_HEADER_SIZE) ; i++)
+    for (i=0 ; *s && (i < (MAX_CACHED_HEADER_SIZE - 1)) ; i++)
 	hdr[i] = tolower(*s++);
     
     if (*s) return BIT32_MAX;   /* Input too long for match */
@@ -205,7 +205,7 @@ int mailbox_cached_header_inline(const char *text)
     int i;
     
     /* Scan for header */
-    for (i=0; i < MAX_CACHED_HEADER_SIZE; i++) {
+    for (i=0; i < (MAX_CACHED_HEADER_SIZE - 1); i++) {
 	if (!text[i] || text[i] == '\r' || text[i] == '\n') break;
 	
 	if (text[i] == ':') {

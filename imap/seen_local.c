@@ -1,5 +1,5 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
- * $Id: seen_local.c,v 1.42 2004/01/22 21:17:10 ken3 Exp $
+ * $Id: seen_local.c,v 1.43 2005/02/14 06:39:57 shadow Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -145,8 +145,8 @@ int seen_lockread(struct seen *seendb, time_t *lastreadptr, unsigned int *lastui
     unsigned long left;
     unsigned long length, namelen;
     
-    strcpy(fnamebuf, seendb->mailbox->path);
-    strcat(fnamebuf, FNAME_SEEN);
+    strlcpy(fnamebuf, seendb->mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_SEEN, sizeof(fnamebuf));
 
     /* Lock the database */
     if (!seendb->mailbox->seen_lock_count) {
@@ -279,10 +279,10 @@ int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid,
     num_iov = 0;
 
     if (replace) {
-	strcpy(fnamebuf, seendb->mailbox->path);
-	strcat(fnamebuf, FNAME_SEEN);
-	strcpy(newfnamebuf, fnamebuf);
-	strcat(newfnamebuf, ".NEW");
+	strlcpy(fnamebuf, seendb->mailbox->path, sizeof(fnamebuf));
+	strlcat(fnamebuf, FNAME_SEEN, sizeof(fnamebuf));
+	strlcpy(newfnamebuf, fnamebuf, sizeof(newfnamebuf));
+	strlcat(newfnamebuf, ".NEW", sizeof(newfnamebuf));
 
 	writefd = open(newfnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
 	if (writefd == -1) {
@@ -390,8 +390,8 @@ int seen_create(struct mailbox *mailbox)
     char fnamebuf[MAX_MAILBOX_PATH+1];
     int fd;
 
-    strcpy(fnamebuf, mailbox->path);
-    strcat(fnamebuf, FNAME_SEEN);
+    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_SEEN, sizeof(fnamebuf));
     
     fd = open(fnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (fd == -1) {
@@ -412,8 +412,8 @@ int seen_delete(struct mailbox *mailbox)
     int r;
     const char *lockfailaction;
 
-    strcpy(fnamebuf, mailbox->path);
-    strcat(fnamebuf, FNAME_SEEN);
+    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_SEEN, sizeof(fnamebuf));
     
     fd = open(fnamebuf, O_RDWR, 0666);
     if (fd == -1) {
@@ -441,10 +441,10 @@ int seen_copy(struct mailbox *oldmailbox,struct mailbox *newmailbox)
     char oldfname[MAX_MAILBOX_PATH+1];
     char newfname[MAX_MAILBOX_PATH+1];
 
-    strcpy(oldfname, oldmailbox->path);
-    strcat(oldfname, FNAME_SEEN);
-    strcpy(newfname, newmailbox->path);
-    strcat(newfname, FNAME_SEEN);
+    strlcpy(oldfname, oldmailbox->path, sizeof(oldfname));
+    strlcat(oldfname, FNAME_SEEN, sizeof(oldfname));
+    strlcpy(newfname, newmailbox->path, sizeof(newfname));
+    strlcat(newfname, FNAME_SEEN, sizeof(newfname));
     return mailbox_copyfile(oldfname, newfname, 0);
 }
 
@@ -567,8 +567,8 @@ int seen_reconstruct(struct mailbox *mailbox,
     time(&now);
     nowplus1day = now + 24*60*60;
 
-    strcpy(fnamebuf, mailbox->path);
-    strcat(fnamebuf, FNAME_SEEN);
+    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_SEEN, sizeof(fnamebuf));
 
     fd = open(fnamebuf, O_RDWR, 0666);
     if (fd == -1) {
@@ -722,8 +722,8 @@ int seen_reconstruct(struct mailbox *mailbox,
     r = 0;
 
     if (newiov_dirty) {
-	strcpy(newfnamebuf, fnamebuf);
-	strcat(newfnamebuf, ".NEW");
+	strlcpy(newfnamebuf, fnamebuf, sizeof(newfnamebuf));
+	strlcat(newfnamebuf, ".NEW", sizeof(newfnamebuf));
 
 	writefd = open(newfnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
 	if (writefd == -1) {

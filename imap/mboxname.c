@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.35 2004/07/13 15:02:08 ken3 Exp $
+ * $Id: mboxname.c,v 1.36 2005/02/14 06:39:57 shadow Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -122,8 +122,10 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
 	    userlen = cp++ - userid;
 	    /* don't prepend default domain */
 	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp))) {
+		domainlen = strlen(cp)+1;
+		if (domainlen > MAX_MAILBOX_NAME) 
+		    return IMAP_MAILBOX_BADNAME; 
 		sprintf(result, "%s!", cp);
-		domainlen = strlen(result);
 	    }
 	}
 	if ((cp = strrchr(name, '@'))) {
@@ -144,8 +146,10 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
 		       (except for global admin) */
 		    return IMAP_MAILBOX_BADNAME;
 		}
+		domainlen = strlen(cp+1)+1;
+		if (domainlen > MAX_MAILBOX_NAME) 
+		    return IMAP_MAILBOX_BADNAME; 
 		sprintf(result, "%s!", cp+1);
-		domainlen = strlen(result);
 	    }
 	}
 
@@ -194,6 +198,7 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
     char *cp;
     int userlen, domainlen = 0, namelen;
     int prefixlen;
+    size_t resultlen;
 
     /* Blank the result, just in case */
     result[0] = '\0';
@@ -207,8 +212,10 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
 	    userlen = cp++ - userid;
 	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp))) {
 		/* don't prepend default domain */
+		domainlen = strlen(cp)+1;
+		if (domainlen > MAX_MAILBOX_NAME) 
+		    return IMAP_MAILBOX_BADNAME; 
 		sprintf(result, "%s!", cp);
-		domainlen = strlen(result);
 	    }
 	}
 	if ((cp = strrchr(name, '@'))) {
@@ -229,8 +236,10 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
 		       (except for global admin) */
 		    return IMAP_MAILBOX_BADNAME;
 		}
+		domainlen = strlen(cp+1)+1;
+		if (domainlen > MAX_MAILBOX_NAME) 
+		    return IMAP_MAILBOX_BADNAME; 
 		sprintf(result, "%s!", cp+1);
-		domainlen = strlen(result);
 	    }
 	}
 
@@ -310,11 +319,14 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
 	return 0;
     }
 
+    resultlen = strlen(result);
+
     /* other personal folder */
-    if (domainlen+strlen(result)+6+namelen > MAX_MAILBOX_NAME) {
+    if (domainlen+resultlen+6+namelen > MAX_MAILBOX_NAME) {
 	return IMAP_MAILBOX_BADNAME;
     }
-    sprintf(result+strlen(result), ".%.*s", namelen, name);
+    snprintf(result+resultlen, MAX_MAILBOX_NAME+1-resultlen, ".%.*s", 
+	     namelen, name);
 
     /* Translate any separators in mailboxname */
     mboxname_hiersep_tointernal(namespace, result+6+userlen, 0);
@@ -333,7 +345,7 @@ static int mboxname_toexternal(struct namespace *namespace, const char *name,
 			       const char *userid, char *result)
 {
     char *domain = NULL, *cp;
-    size_t domainlen = 0;
+    size_t domainlen = 0, resultlen;
 
     /* Blank the result, just in case */
     result[0] = '\0';
@@ -356,9 +368,16 @@ static int mboxname_toexternal(struct namespace *namespace, const char *name,
     /* Translate any separators in mailboxname */
     mboxname_hiersep_toexternal(namespace, result, 0);
 
+    resultlen = strlen(result);
+
     /* Append domain */
-    if (domain)
-	sprintf(result+strlen(result), "@%.*s", domainlen, domain);
+    if (domain) {
+	if(resultlen+domainlen+1 > MAX_MAILBOX_NAME) 
+	    return IMAP_MAILBOX_BADNAME;
+
+	snprintf(result+resultlen, MAX_MAILBOX_NAME+1-resultlen, 
+		 "@%.*s", domainlen, domain);
+    }
 
     return 0;
 }
@@ -368,7 +387,7 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *name
 				  const char *userid, char *result)
 {
     char *domain;
-    size_t userlen;
+    size_t userlen, resultlen;
 
     /* Blank the result, just in case */
     result[0] = '\0';
@@ -412,12 +431,18 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *name
     /* Other Users namespace */
     else if (!strncmp(name, "user", 4) &&
 	     (name[4] == '\0' || name[4] == '.')) {
+	size_t prefixlen = strlen(namespace->prefix[NAMESPACE_USER]);
+
+	if ((prefixlen > MAX_MAILBOX_NAME) || 
+	    ((name[4] == '.') && 
+	     ((prefixlen+1+strlen(name+5)) > MAX_MAILBOX_NAME)))
+	    return IMAP_MAILBOX_BADNAME;
+
 	sprintf(result, "%.*s",
-		(int) strlen(namespace->prefix[NAMESPACE_USER])-1,
-		namespace->prefix[NAMESPACE_USER]);
+		prefixlen-1, namespace->prefix[NAMESPACE_USER]);
+	resultlen = strlen(result);
 	if (name[4] == '.') {
-	    sprintf(result+strlen(result), "%c%s",
-		    namespace->hier_sep, name+5);
+	    sprintf(result+resultlen, "%c%s", namespace->hier_sep, name+5);
 	}
     }
 
