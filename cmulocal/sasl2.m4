@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.39 2003/11/12 21:16:56 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.40 2003/11/13 02:35:56 rjs3 Exp $
 
 AC_DEFUN([SASL_GSSAPI_CHK],[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -87,6 +87,14 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
 
 
   # For Cybersafe one has to set a platform define in order to make compilation work
+  if test "$gss_impl" = "auto" -o "$gss_impl" = "heimdal"; then
+    AC_CHECK_LIB(gssapi,gss_unwrap,gss_impl="heimdal",,$GSSAPIBASE_LIBS -lgssapi -lkrb5 -lasn1 -lroken ${LIB_CRYPT} ${LIB_DES} -lcom_err ${LIB_SOCKET})
+  fi
+
+  if test "$gss_impl" = "auto" -o "$gss_impl" = "mit"; then
+    AC_CHECK_LIB(gssapi_krb5,gss_unwrap,gss_impl="mit",,$GSSAPIBASE_LIBS -lgssapi_krb5 -lkrb5 -lk5crypto -lcom_err ${LIB_SOCKET})
+  fi
+
   if test "$gss_impl" = "auto" -o "$gss_impl" = "cybersafe"; then
 
     cmu_saved_CPPFLAGS=$CPPFLAGS
@@ -94,14 +102,6 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
 
     AC_CHECK_LIB(gss,gss_unwrap,gss_impl="cybersafe",CPPFLAGS=$cmu_saved_CPPFLAGS,$GSSAPIBASE_LIBS -lgss)
 
-  fi
-
-  if test "$gss_impl" = "auto" -o "$gss_impl" = "heimdal"; then
-    AC_CHECK_LIB(gssapi,gss_unwrap,gss_impl="heimdal",,$GSSAPIBASE_LIBS -lgssapi -lkrb5 -lasn1 -lroken ${LIB_CRYPT} ${LIB_DES} -lcom_err ${LIB_SOCKET})
-  fi
-
-  if test "$gss_impl" = "auto" -o "$gss_impl" = "mit"; then
-    AC_CHECK_LIB(gssapi_krb5,gss_unwrap,gss_impl="mit",,$GSSAPIBASE_LIBS -lgssapi_krb5 -lkrb5 -lk5crypto -lcom_err ${LIB_SOCKET})
   fi
 
   if test "$gss_impl" = "auto" -o "$gss_impl" = "seam"; then
