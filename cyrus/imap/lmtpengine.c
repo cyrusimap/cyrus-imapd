@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.102 2004/02/12 02:32:23 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.103 2004/02/18 20:59:00 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -953,6 +953,7 @@ void lmtpmode(struct lmtp_func *func,
     char localip[60], remoteip[60];
     socklen_t salen;
     char hbuf[NI_MAXHOST];
+    int niflags;
 
     sasl_ssf_t ssf;
     char *auth_id;
@@ -996,6 +997,7 @@ void lmtpmode(struct lmtp_func *func,
 	(remoteaddr.ss_family == AF_INET ||
 	 remoteaddr.ss_family == AF_INET6)) {
 	/* connected to an internet socket */
+
 	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
 			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
 	    strncpy(cd.clienthost, hbuf, sizeof(hbuf));
@@ -1004,11 +1006,14 @@ void lmtpmode(struct lmtp_func *func,
 	} else {
 	    cd.clienthost[0] = '\0';
 	}
-	getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
-		    NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
-	strlcat(cd.clienthost, "[", sizeof(cd.clienthost));
-	strlcat(cd.clienthost, hbuf, sizeof(cd.clienthost));
-	strlcat(cd.clienthost, "]", sizeof(cd.clienthost));
+	niflags = NI_NUMERICHOST |
+		  (remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
+	if (getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
+		    NULL, 0, niflags) == 0) {
+		strlcat(cd.clienthost, "[", sizeof(cd.clienthost));
+		strlcat(cd.clienthost, hbuf, sizeof(cd.clienthost));
+		strlcat(cd.clienthost, "]", sizeof(cd.clienthost));
+	}
 	
 	salen = sizeof(localaddr);
 	if (!getsockname(fd, (struct sockaddr *)&localaddr, &salen)) {
@@ -1162,9 +1167,13 @@ void lmtpmode(struct lmtp_func *func,
 
 			  if (remoteaddr.ss_family == AF_INET ||
 			      remoteaddr.ss_family == AF_INET6)
-			      getnameinfo((struct sockaddr *)&remoteaddr,
+			      niflags = NI_NUMERICHOST |
+					(remoteaddr.ss_family == AF_INET6
+					? NI_WITHSCOPEID : 0);
+			      if (getnameinfo((struct sockaddr *)&remoteaddr,
 					  salen, hbuf, sizeof(hbuf), NULL, 0,
-					  NI_NUMERICHOST | NI_WITHSCOPEID);
+					  niflags) != 0)
+				    strlcpy(hbuf, "[unknown]", sizeof(hbuf));
 			  else
 			      strlcpy(hbuf, "[unix socket]", sizeof(hbuf));		  
 			  syslog(LOG_ERR, "badlogin: %s %s %s",

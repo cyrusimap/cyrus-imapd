@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.49 2003/10/24 18:24:12 rjs3 Exp $
+ * $Id: timsieved.c,v 1.50 2004/02/18 20:59:04 rjs3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -222,6 +222,7 @@ int service_main(int argc, char **argv, char **envp)
     char remoteip[60], localip[60];
     sasl_security_properties_t *secprops = NULL;
     char hbuf[NI_MAXHOST];
+    int niflags;
 
     /* set up the prot streams */
     sieved_in = prot_new(0, 0);
@@ -247,11 +248,15 @@ int service_main(int argc, char **argv, char **envp)
 	} else {
 	    sieved_clienthost[0] = '\0';
 	}
-	getnameinfo((struct sockaddr *)&sieved_remoteaddr, salen, hbuf,
-		    sizeof(hbuf), NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
-	strlcat(sieved_clienthost, "[", sizeof(sieved_clienthost));
-	strlcat(sieved_clienthost, hbuf, sizeof(sieved_clienthost));
-	strlcat(sieved_clienthost, "]", sizeof(sieved_clienthost));
+
+	niflags = NI_NUMERICHOST |
+		(sieved_remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
+	if (getnameinfo((struct sockaddr *)&sieved_remoteaddr, salen, hbuf,
+			 sizeof(hbuf), NULL, 0, niflags) == 0) {
+		strlcat(sieved_clienthost, "[", sizeof(sieved_clienthost));
+		strlcat(sieved_clienthost, hbuf, sizeof(sieved_clienthost));
+		strlcat(sieved_clienthost, "]", sizeof(sieved_clienthost));
+	}
 	salen = sizeof(sieved_localaddr);
 	if(getsockname(0, (struct sockaddr *)&sieved_localaddr, &salen) == 0) {
 	    sieved_haveaddr = 1;

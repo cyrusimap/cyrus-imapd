@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: iptostring.c,v 1.5 2003/02/13 20:15:40 rjs3 Exp $ */
+/* $Id: iptostring.c,v 1.6 2004/02/18 20:59:02 rjs3 Exp $ */
 
 #include <config.h>
 #include <stdlib.h>
@@ -54,14 +54,21 @@
 int iptostring(const struct sockaddr *addr, socklen_t addrlen,
 	       char *out, unsigned outlen) {
     char hbuf[NI_MAXHOST], pbuf[NI_MAXSERV];
+    int error, niflags;
     
     if(!addr || !out) {
 	errno = EINVAL;
 	return -1;
     }
 
-    getnameinfo(addr, addrlen, hbuf, sizeof(hbuf), pbuf, sizeof(pbuf),
-		NI_NUMERICHOST | NI_WITHSCOPEID | NI_NUMERICSERV);
+    niflags = NI_NUMERICHOST | NI_NUMERICSERV |
+	      (addr->sa_family == AF_INET6 ? NI_WITHSCOPEID : 0);
+    error = getnameinfo(addr, addrlen, hbuf, sizeof(hbuf), pbuf, sizeof(pbuf),
+		niflags);
+    if (error != 0) {
+	errno = EINVAL;
+	return -1;
+    }
 
     if(outlen < strlen(hbuf) + strlen(pbuf) + 2) {
 	errno = ENOMEM;
