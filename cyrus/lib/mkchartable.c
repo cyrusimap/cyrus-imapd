@@ -416,12 +416,13 @@ char *name;
 	    if ((code = table[curstate].ch[thischar].code) != -1) {
 		if (code <= 0x7FF) {
 		    printf(" %3d, %3d, %s,   0,", 0xc0 + (code>>6),
-		       0x80+(code&0x3f), table[curstate].endaction);
+			   0x80+(code&0x3f), table[curstate].endaction);
 		}
 		else {
 		    printf(" %3d, %3d, %3d, %s,", 0xe0 + (code>>12),
-		       0x80+((code>>6)&0x3f), 0x80+(code&0x3f),
-		       table[curstate].endaction);
+			   0x80+((code>>6)&0x3f), 0x80+(code&0x3f),
+			   table[curstate].endaction);
+		}
 	    }
 	    else if ((p = table[curstate].ch[thischar].translation) != 0) {
 		end = table[curstate].endaction;
