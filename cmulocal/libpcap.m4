@@ -38,6 +38,7 @@ AC_DEFUN(CMU_PCAP_LIB_WHERE, [
    for i in $1; do
       AC_MSG_CHECKING(for pcap library in $i)
       CMU_PCAP_LIB_WHERE1($i)
+      CMU_TEST_LIBPATH($i, pcap)
       if test "$ac_cv_found_pcap_lib" = "yes" ; then
         ac_cv_pcap_where_lib=$i
         AC_MSG_RESULT(found)

@@ -38,6 +38,7 @@ AC_DEFUN(CMU_LIBNET_LIB_WHERE, [
    for i in $1; do
       AC_MSG_CHECKING(for libnet library in $i)
       CMU_LIBNET_LIB_WHERE1($i)
+      CMU_TEST_LIBPATH($i, net)
       if test "$ac_cv_found_libnet_lib" = "yes" ; then
         ac_cv_libnet_where_lib=$i
         AC_MSG_RESULT(found)
