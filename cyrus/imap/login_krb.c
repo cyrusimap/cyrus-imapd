@@ -113,6 +113,12 @@ int (**authproc)();
     return 0;
 }
 
+char *
+login_capabilities()
+{
+    return " AUTH=KERBEROS_V4";
+}
+
 /*
  * kequiv_ok() checks to see if 'user' is mapped to from the principal
  * 'auth_aname', 'auth_inst', 'auth_realm'.  Returns 1 if so, 0 if

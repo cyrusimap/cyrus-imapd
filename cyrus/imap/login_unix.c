@@ -68,3 +68,8 @@ int (**authproc)();
     return 1;
 }
   
+char *
+login_capabilities()
+{
+    return "";
+}
