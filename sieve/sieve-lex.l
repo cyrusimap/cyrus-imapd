@@ -29,7 +29,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "xmalloc.h"
 
 #include "tree.h"
-#include "y.tab.h"
+#include "sieve.h"
 
 static int tonum(char *c);
 static char *fixstr(char *);
