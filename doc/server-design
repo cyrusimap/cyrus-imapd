@@ -1,7 +1,7 @@
 -*- text -*-
 
 		       Cyrus IMAP server design
-			   October 5, 1994
+			   March 1, 1995
 
 * Introduction
 
@@ -166,8 +166,9 @@ cyrus.seen	Contains the \Seen and \Recent information of users.
 
 - Userid
 - Time when mailbox last opened (for arbitron)
-- UID of last message when mailbox last opened (for \RECENT)
-- SEQUENCE of UID's of read messages
+- UID of last message that is not \Recent
+- Time \Seen state last changed (not present in older versions)
+- SEQUENCE of UID's of \Seen messages
 - Optional space character padding, to avoid having to rewrite file on updates
 
 In order to support replicated mailboxes in a future implementation,
@@ -395,6 +396,10 @@ Database of delivered messages, for duplicate delivery elimination.
 Stores mailbox name, message-id, and delivery time.  The delivery time
 is used for purging the database of old entries.
 
+- delivered.lock
+
+File locked before writing to delivered.dir/delivered.pag
+
 
 * User directory:
 
@@ -436,27 +441,42 @@ process-id.
 Contains one file for each SEEN or LAST command that needs to be sent
 to an IMSP server.
 
-Filename is one of:
+Files for LAST commands contain in their filenames:
 
-- last.UID.MAILBOX-NAME
-- seen.UID.USER.MAILBOX-NAME
+- The character 'L'
+- base64-encoded data (without any '=' padding) containing the
+  following 32-bit values, in network byte order
+  - the UID of the last message appended
+  - the time the mailbox was last modified
+  - the number of messages in the mailbox
+- The character '='
+- The name of the mailbox, converted to lower case and with any
+  occurences of the '=' character replaced with 'B'.
 
-With the following definitions:
+Files for SEEN commands contain in their filenames:
 
-	UID - UID of last message posted/read
-		A UID of "0" for seen means user no longer
-		read everything in mailbox.
-	USER - Name of user owning/reading
-	MAILBOX-NAME - Name of relevant mailbox
+- The character 'S'
+- base64-encoded data (without any '=' padding) containing the
+  following 32-bit values, in network byte order
+  - the UID of the last message \Seen, or 0 if user has
+    not \Seen all messages in the mailbox
+  - the time the user's \Seen data was last modified
+- The character '='
+- The name of the mailbox, converted to lower case and with any
+  occurences of the '=' character replaced with 'B'.
+- The character '='
+- The name of the user, converted to lower case and with any
+  occurences of the '/' character replaced with 'A' and any
+  occurences of the '=' character replaced with 'B'.
 
 The order of operations for the update daemon is:
 
 	list all files in directory
 	sort in following order
 		last before seen
-		larger UID's take precedence, except
-			if have a UID of 0, have to stat
-			and use the one which was written later
+		by mailbox
+		by user, for SEEN
+		by last update time
 	give IMSP SEEN and LAST commands
 	unlink files		
 	sleep, repeat
@@ -474,7 +494,7 @@ The following programs will be written
 	Called by the mail system to deliver message to mailbox.
 	Will be backwards-interface-compatable with rmail.
 
-- updateimsp [not implemented]
+- updateimsp [not completed]
 	Daemon to monitor the dropoff directory and give SEEN/LAST
 	commands to an IMSP server.
 
@@ -486,15 +506,16 @@ The following programs will be written
 	Called by the netnews system to remove and EXPUNGE articles
 	either expired or cancelled.
 
-- syncnews [not implemented]
+- syncnews
 	Run occasionally to synchronize the netnews active file
 	with the Cyrus netnews mailbox list.
 
 - expire [not implemented]
 	Expires old mailbox posts
 
-- arbitron [not implemented]
-	Reports readership statistics
+- arbitron
+	Reports readership statistics, optionally prunes old \Seen
+	data.
 
 - pop3d
 	Exports POP3/KPOP protocol to a connecting client.
@@ -536,29 +557,3 @@ On periodic basis:
 	Can write program to walk partitions and read quota roots.
 
 
-* Implementation priority
-
-Implementation order is as follows:
-
-
-- Full IMAP4 (implementation completed, details removed from this document)
-
-- Everything else
-
-  + arbitron
-
-  + sendmail v8 config macros
-
-  + updateimsp
-
-  + expire
-
-  + syncnews
-
-  + Gamma release
-
-  + IMSP move
-
-  + site-configurable mailbox namespace
-
-  + internationalization of error strings, "user."
