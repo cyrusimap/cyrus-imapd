@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpproxyd.c,v 1.1.2.1 2002/12/20 20:22:09 ken3 Exp $
+ * $Id: nntpproxyd.c,v 1.1.2.2 2002/12/22 22:41:46 ken3 Exp $
  */
 
 /*
@@ -1582,7 +1582,7 @@ int do_active(char *name, int matchlen, int maycreate __attribute__((unused)),
     if (!wild->pat || wild->not) return 0;
 
     /* look it up */
-    r = mboxlist_detail(name, NULL, NULL, NULL, &acl, NULL);
+    r = mboxlist_lookup(name, NULL, &acl, NULL);
     if (r) return 0;
 
     if (!(acl && (myrights = cyrus_acl_myrights(nntp_authstate, acl)) &&
@@ -1931,30 +1931,50 @@ static int savemsg(message_data_t *m, FILE *f)
 
 static int deliver(message_data_t *msg)
 {
-    int n, r = 0, success = 0;
-    char *rcpt = NULL;
-    struct backend *be;
+    int n, r, myrights;
+    char *rcpt = NULL, *acl, buf[4096];
+    struct backend *be = NULL;
     time_t now = time(NULL);
+    unsigned long long backend_mask = 0;
 
+    /* check ACLs of all mailboxes and 
+       check if corresponding backends want the article */
     for (n = 0; n < msg->rcpt_num; n++) {
 	rcpt = msg->rcpt[n];
+
+	/* look it up */
+	r = mboxlist_lookup(rcpt, NULL, &acl, NULL);
+	if (r) return IMAP_MAILBOX_NONEXISTENT;
+
+	if (!(acl && (myrights = cyrus_acl_myrights(nntp_authstate, acl)) &&
+	      (myrights & ACL_POST)))
+	    return IMAP_PERMISSION_DENIED;
+
+	/* connect to the backend */
 	r = open_group(NULL, rcpt, 1, &be);
+	if (r) return r;
 
-	if (!r) {
-	    char buf[4096];
+	/* tell the backend about our new article */
+	prot_printf(be->out, "CHECK %s\r\n", msg->id);
+	prot_flush(be->out);
 
-	    /* tell the peer about our new article */
-	    prot_printf(be->out, "IHAVE %s\r\n", msg->id);
-	    prot_flush(be->out);
+	if (!prot_fgets(buf, sizeof(buf), be->in) ||
+	    strncmp("238", buf, 3)) {
+	    syslog(LOG_NOTICE, "backend doesn't want article %s", msg->id);
+	    return NNTP_DONT_SEND;
+	}
 
-	    if (!prot_fgets(buf, sizeof(buf), be->in) ||
-		strncmp("335", buf, 3)) {
-		syslog(LOG_ERR, "backend doesn't want article %s", msg->id);
-		continue;
-	    }
+	/* flag this backend as one to transfer to */
+	backend_mask |= (1 << n);
+    }
 
+    /* loop through the backends and transfer the article */
+    n = 0;
+    while ((be = backend_cached[n])) {
+	if (backend_mask & (1 << n++)) {
 	    /* send the article */
 	    rewind(msg->f);
+	    prot_printf(be->out, "TAKETHIS %s\r\n", msg->id);
 	    while (fgets(buf, sizeof(buf), msg->f)) {
 		if (buf[0] == '.') prot_putc('.', be->out);
 		do {
@@ -1969,17 +1989,18 @@ static int deliver(message_data_t *msg)
 	    prot_printf(be->out, ".\r\n");
 
 	    if (!prot_fgets(buf, sizeof(buf), be->in) ||
-		strncmp("235", buf, 3)) {
-		syslog(LOG_ERR, "article %s transfer failed", msg->id);
-	    }
-	    else if (!success++ && have_newsdb && msg->id && rcpt) {
-		/* store msgid for IHAVE/CHECK/TAKETHIS and reader commands */
-		netnews_store(msg->id, rcpt, 0, 0, now);
+		strncmp("239", buf, 3)) {
+		syslog(LOG_WARNING, "article %s transfer failed", msg->id);
+		return NNTP_FAIL_TRANSFER;
 	    }
 	}
     }
 
-    return (success ? 0 : 1);
+    /* store msgid for IHAVE/CHECK/TAKETHIS and reader commands */
+    if (have_newsdb && msg->id && rcpt)
+	netnews_store(msg->id, rcpt, 0, 0, now);
+
+    return 0;
 }
 #if 0
 static int newgroup(message_data_t *msg)
