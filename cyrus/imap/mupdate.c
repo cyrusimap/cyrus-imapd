@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.13 2004/05/31 18:22:54 ken3 Exp $
+ * $Id: mupdate.c,v 1.77.2.14 2004/07/15 01:20:13 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1573,14 +1573,11 @@ void cmd_set(struct conn *C,
 	    }
 	    /* otherwise do nothing (local delete on master) */
 	} else {
+	    oldserver = xstrdup(m->server);
+
 	    /* do the deletion */
 	    m->t = SET_DELETE;
 	}
-
-	oldserver = xstrdup(m->server);
-
-	/* do the deletion */
-	m->t = SET_DELETE;
     } else {
 	if(m)
 	    oldserver = m->server;
