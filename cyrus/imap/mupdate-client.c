@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.2 2002/01/16 17:56:37 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.3 2002/01/17 19:30:41 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,6 +46,7 @@
 #include <string.h>
 #include <signal.h>
 #include <sasl/sasl.h>
+#include <syslog.h>
 #ifdef __STDC__
 #include <stdarg.h>
 #else
@@ -65,6 +66,9 @@
 #include "xmalloc.h"
 #include "assert.h"
 #include "mupdate_err.h"
+#include "exitcodes.h"
+
+const char service_name[] = "imap"; /* FIXME: Perhaps we could use something better */
 
 typedef struct mupdate_handle_s {
     int sock;
@@ -78,15 +82,29 @@ typedef struct mupdate_handle_s {
     int saslcompleted;
 } mupdate_handle;
 
+/* We're only going to supply SASL_CB_USER, other people can supply
+ * more if they feel like it */
+/* FIXME: this basically means we only get kerberos.  should be fixed */
+static int get_user(void *context __attribute__((unused)), int id,
+		    const char **result, unsigned *len) 
+{
+    if(id != SASL_CB_USER) return SASL_FAIL;
+    if(!result) return SASL_BADPARAM;
+
+    *result = "";
+    if(len) *len = 0;
+    
+    return SASL_OK;
+}
+
 static const sasl_callback_t callbacks[] = {
-  { SASL_CB_USER, NULL, NULL }, 
-  { SASL_CB_GETREALM, NULL, NULL }, 
-  { SASL_CB_AUTHNAME, NULL, NULL }, 
-  { SASL_CB_PASS, NULL, NULL },
+  { SASL_CB_USER, get_user, NULL }, 
   { SASL_CB_LIST_END, NULL, NULL }
 };
 
-int mupdate_connect(const char *server, const char *port, mupdate_handle **handle)
+int mupdate_connect(const char *server, const char *port,
+		    mupdate_handle **handle,
+		    sasl_callback_t *cbs)
 {
     mupdate_handle *h;
     struct hostent *hp;
@@ -124,10 +142,10 @@ int mupdate_connect(const char *server, const char *port, mupdate_handle **handl
     h = xzmalloc(sizeof(mupdate_handle));
     h->sock = s;
 
-    saslresult = sasl_client_new("imap", /* FIXME: real service name? */
+    saslresult = sasl_client_new(service_name,
 				 server,
 				 NULL, NULL,
-				 callbacks,
+				 cbs ? cbs : callbacks,
 				 0,
 				 &(h->saslconn));
 
@@ -140,10 +158,127 @@ int mupdate_connect(const char *server, const char *port, mupdate_handle **handl
 }
 
 
-int mupdate_authenticate(mupdate_handle *handle)
+static sasl_security_properties_t *make_secprops(int min,int max)
 {
-    /* create 'saslconn'? how to enable client to set sasl stuff? */
+  sasl_security_properties_t *ret =
+      (sasl_security_properties_t *)xzmalloc(sizeof(sasl_security_properties_t));
 
+  ret->maxbufsize=1024;
+  ret->min_ssf=min;
+  ret->max_ssf=max;
+
+  return ret;
+}
+
+int mupdate_authenticate(mupdate_handle *h,
+			 const char *mechlist)
+{
+    int saslresult;
+    sasl_security_properties_t *secprops=NULL;
+    socklen_t addrsize;
+    struct sockaddr_in saddr_l;
+    struct sockaddr_in saddr_r;
+    char localip[60], remoteip[60];
+    const char *out;
+    unsigned int outlen;
+    const char *mechusing;
+    char buf[4096];
+
+    /* Why do this again? */
+    if(h->saslcompleted) return 1;
+
+    secprops = make_secprops(0,256); /* FIXME: Actual configurable values? */
+    if(!secprops) return 1;
+    
+    saslresult=sasl_setprop(h->saslconn, SASL_SEC_PROPS, secprops);
+    if(saslresult != SASL_OK) return 1;
+    free(secprops);
+    
+    addrsize=sizeof(struct sockaddr_in);
+    if (getpeername(h->sock,(struct sockaddr *)&saddr_r,&addrsize)!=0)
+	return 1;
+
+    addrsize=sizeof(struct sockaddr_in);
+    if (getsockname(h->sock,(struct sockaddr *)&saddr_l,&addrsize)!=0)
+	return 1;
+
+    if(iptostring((const struct sockaddr *)&saddr_l, sizeof(struct sockaddr_in),
+		  localip, 60) != 0)
+	return 1;
+    
+    if(iptostring((const struct sockaddr *)&saddr_r, sizeof(struct sockaddr_in),
+		  remoteip, 60) != 0)
+	return 1;
+
+    saslresult=sasl_setprop(h->saslconn, SASL_IPREMOTEPORT, remoteip);
+    if (saslresult!=SASL_OK) return 1;
+
+    saslresult=sasl_setprop(h->saslconn, SASL_IPLOCALPORT, localip);
+    if (saslresult!=SASL_OK) return 1;
+
+    /* We shouldn't get sasl_interact's, because we provide explicit callbacks */
+    saslresult = sasl_client_start(h->saslconn, mechlist,
+				   NULL, &out, &outlen, &mechusing);
+
+    if(saslresult != SASL_OK && saslresult != SASL_CONTINUE) return 1;
+
+    if(out) {
+	int r = sasl_encode64(out, outlen,
+			      buf, sizeof(buf), NULL);
+	if(r != SASL_OK) return 1;
+	
+	prot_printf(h->pout, "A01 AUTHENTICATE \"%s\" \"%s\"\r\n", mechusing, buf);
+    } else {
+        prot_printf(h->pout, "A01 AUTHENTICATE \"%s\"\r\n", mechusing);
+    }
+
+    while(saslresult == SASL_CONTINUE) {
+	char *p, *in;
+	unsigned int len, inlen;
+	
+	if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
+	    /* Connection Dropped */
+	    return 1;
+	}
+
+	p = buf + strlen(buf) - 1;
+	if(p >= buf && *p == '\n') *p-- = '\0';
+	if(p >= buf && *p == '\r') *p-- = '\0';
+
+	len = strlen(buf);
+	in = xmalloc(len);
+	saslresult = sasl_decode64(buf, len, in, len, &inlen);
+	if(saslresult != SASL_OK) {
+	    /* CANCEL */
+	    prot_printf(h->pout, "*");
+	    return 1;
+	}
+
+	saslresult = sasl_server_step(h->saslconn, in, inlen, &out, &outlen);
+
+	free(in);
+
+	if(out) {
+	    int r = sasl_encode64(out, outlen,
+				  buf, sizeof(buf), NULL);
+	    if(r != SASL_OK) return 1;
+	    
+	    prot_printf(h->pout, "%s\r\n", buf);
+	    return 1;
+	}
+	
+    }
+
+    if(saslresult != SASL_OK) {
+	prot_printf(h->pout, "*");
+	return 1;
+    }
+
+	/* FIXME: Check server response */
+
+    h->saslcompleted = 1;
+
+    return 0; /* SUCCESS */
 }
 
 int mupdate_activate(mupdate_handle *handle, 
@@ -184,44 +319,119 @@ struct mupdate_mailboxdata {
 };
 typedef int (*mupdate_callback)(struct mupdate_mailboxdata *mdata, 
 				const char *rock);
+
+/*
 int mupdate_listen(mupdate_handle *handle,
 		   mupdate_callback *create,
 		   mupdate_callback *reserve,
 		   mupdate_callback *delete,
 		   mupdate_callback *noop,
 		   int pinginterval, int pingtimeout)
+*/
+int mupdate_listen(mupdate_handle *handle)
 {
     int gotdata = 0;
-
+    fd_set read_set, rset;
+    int highest_fd;
+    
     if (!handle) return MUPDATE_BADPARAM;
-    if (pinginterval < 0 || pingtimeout < 0) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
+    FD_ZERO(&read_set);
+    FD_SET(handle->sock, &read_set);
+    highest_fd = handle->sock + 1;
+    
     /* ask for updates */
 
     /* set protstream nonblocking */
 
 
     for (;;) {
-	/* select for 'pinginterval' */
+	struct timeval tv;
 
-	if (gotdata) {
+	tv.tv_sec = 15;
+	tv.tv_usec = 0;
+
+	rset = read_set;
+	gotdata = select(highest_fd, &rset, NULL, NULL, &tv);
+
+	if (gotdata > 0) {
 	    /* make the callbacks, if requested */
 	    
 	    /* if any callbacks fail, return */
 
 	    continue;
-	} else {
+	} else if(gotdata == 0) {
 	    prot_printf(handle->pout, "X%d NOOP\r\n", handle->tag++);
 	    /* timed out, send a NOOP */
 
 	    /* wait 'pingtimeout' seconds for response */
-
-	    
+	} else {
+	    fatal("select failed", EC_OSERR);
 	}
 
     }
 
 
+}
+
+void *mupdate_client_start(void *rock __attribute__((unused)))
+{
+    const char *server, *port;
+    char buf[4096];
+    mupdate_handle *h;
+    char *mechlist;
+    int ret;
+    
+    server = config_getstring("mupdate_server", NULL);
+    if(server == NULL) {
+	syslog(LOG_ERR, "unable to find option mupdate_server");
+	fatal("couldn't connect to mupdate server", EC_UNAVAILABLE);
+    }
+
+    /* A real port maybe? */
+    port = config_getstring("mupdate_port","1234");
+    
+    ret = mupdate_connect(server, port, &h, NULL);
+    if(ret) {
+	syslog(LOG_ERR, "connection to %s failed", server);
+	fatal("couldn't connect to mupdate server", EC_UNAVAILABLE);
+    }
+
+    /* Read the banner */
+    if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
+	syslog(LOG_ERR,
+	       "connection to %s dropped before authentication", server);
+	fatal("connection dropped", EC_UNAVAILABLE);
+    }
+    if(strncmp(buf, "* OK MUPDATE", 12)) {
+	syslog(LOG_ERR,
+	       "invalid banner from remote");
+	fatal("invalid remote server", EC_UNAVAILABLE);
+    }
+
+    /* Read the mechlist */
+    if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
+	syslog(LOG_ERR,
+	       "connection to %s dropped before authentication", server);
+	fatal("connection dropped", EC_UNAVAILABLE);
+    }
+    if(strncmp(buf, "* AUTH", 6)) {
+	syslog(LOG_ERR,
+	       "invalid auth banner from remote");
+	fatal("invalid remote server", EC_UNAVAILABLE);
+    }
+
+    mechlist = buf + 6;
+
+    ret = mupdate_authenticate(h, mechlist);
+    if(ret) {
+	syslog(LOG_ERR, "authentication failed");
+	fatal("authentication failed", EC_SOFTWARE);
+    }
+   
+    mupdate_listen(h);
+
+    return NULL;
 }
 
