@@ -1,9 +1,9 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.17.4.1 2002/08/08 20:20:29 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.17.4.2 2002/08/15 22:35:19 ken3 Exp $
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
- AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
+ AC_ARG_ENABLE(gssapi, [[  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ]],
     gssapi=$enableval,
     gssapi=yes)
 
@@ -12,8 +12,8 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
        CPPFLAGS="$CPPFLAGS -I$gssapi/include"
        LDFLAGS="$LDFLAGS -L$gssapi/lib"
     fi
-    AC_CHECK_HEADER(gssapi.h, AC_DEFINE(HAVE_GSSAPI_H),
-      AC_CHECK_HEADER(gssapi/gssapi.h,, AC_WARN(Disabling GSSAPI); gssapi=no))
+    AC_CHECK_HEADER(gssapi.h, AC_DEFINE(HAVE_GSSAPI_H), [
+      AC_CHECK_HEADER(gssapi/gssapi.h,, AC_WARN(Disabling GSSAPI); gssapi=no)])
  fi
 
  if test "$gssapi" != no; then
@@ -128,8 +128,8 @@ AC_ARG_WITH(staticsasl,
 	    with_staticsasl="/usr"
 	  fi
 
-	  AC_CHECK_HEADER(sasl/sasl.h,
-	    AC_CHECK_HEADER(sasl/saslutil.h,
+	  AC_CHECK_HEADER(sasl/sasl.h, [
+	    AC_CHECK_HEADER(sasl/saslutil.h, [
 	     if test -r ${with_staticsasl}/lib/libsasl2.a; then
 		ac_cv_found_sasl=yes
 		AC_MSG_CHECKING(for static libsasl)
@@ -138,7 +138,7 @@ AC_ARG_WITH(staticsasl,
 	        AC_MSG_CHECKING(for static libsasl)
 		AC_ERROR([Could not find ${with_staticsasl}/lib/libsasl2.a])
 	     fi
-	    ))
+	    ])])
 
 	  AC_MSG_RESULT(found)
 
