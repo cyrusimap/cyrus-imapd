@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.44 2004/03/11 18:36:45 ken3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.45 2004/06/03 17:56:16 rjs3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1004,9 +1004,9 @@ int myforeach(struct db *db,
     return r ? r : cb_r;
 }
 
-int randlvl(struct db *db)
+unsigned int randlvl(struct db *db)
 {
-    int lvl = 1;
+    unsigned int lvl = 1;
     
     while ((((float) rand() / (float) (RAND_MAX)) < PROB) 
 	   && (lvl < db->maxlevel)) {
@@ -1025,7 +1025,7 @@ int mystore(struct db *db,
     const char *ptr;
     bit32 klen, dlen;
     struct iovec iov[50];
-    int lvl;
+    unsigned int lvl;
     int num_iov;
     struct txn t, *tp;
     bit32 endpadding = htonl(-1);
@@ -1395,7 +1395,7 @@ int myabort(struct db *db, struct txn *tid)
 	    break;
 	case DELETE:
 	{
-	    int lvl;
+	    unsigned int lvl;
 	    int newoffset;
 	    const char *q;
 	    
@@ -1522,7 +1522,7 @@ static int mycheckpoint(struct db *db, int locked)
     offset = FORWARD(db->map_base + DUMMY_OFFSET(db), 0);
     db->listsize = 0;
     while (!r && offset != 0) {
-	int lvl;
+	unsigned int lvl;
 	bit32 newoffset, newoffsetnet;
 
 	ptr = db->map_base + offset;
@@ -2042,28 +2042,34 @@ static int recovery(struct db *db)
 
 	/* otherwise insert it */
 	} else if (TYPE(ptr) == ADD) {
-	    int lvl;
+	    unsigned int lvl;
 	    bit32 newoffsets[SKIPLIST_MAXLEVEL];
 
 	    db->listsize++;
 	    offsetnet = htonl(offset);
 
 	    lvl = LEVEL(ptr);
-	    for (i = 0; i < lvl; i++) {
-		/* set our next pointers */
-		newoffsets[i] = 
-		    htonl(FORWARD(db->map_base + updateoffsets[i], i));
-
-		/* replace 'updateoffsets' to point to me */
-		lseek(db->fd, 
-		      PTR(db->map_base + updateoffsets[i], i) - db->map_base,
-		      SEEK_SET);
-		retry_write(db->fd, (char *) &offsetnet, 4);
+	    if(lvl > SKIPLIST_MAXLEVEL) {
+		syslog(LOG_ERR,
+		       "DBERROR: skiplist node claims level %d (greater than maxlevel %d)",
+		       lvl, SKIPLIST_MAXLEVEL);
+		r = CYRUSDB_IOERROR;
+	    } else {
+		for (i = 0; i < lvl; i++) {
+		    /* set our next pointers */
+		    newoffsets[i] = 
+			htonl(FORWARD(db->map_base + updateoffsets[i], i));
+		    
+		    /* replace 'updateoffsets' to point to me */
+		    lseek(db->fd, 
+			  PTR(db->map_base + updateoffsets[i], i) - db->map_base,
+			  SEEK_SET);
+		    retry_write(db->fd, (char *) &offsetnet, 4);
+		}
+		/* write out newoffsets */
+		lseek(db->fd, FIRSTPTR(ptr) - db->map_base, SEEK_SET);
+		retry_write(db->fd, (char *) newoffsets, 4 * lvl);
 	    }
-	    /* write out newoffsets */
-	    lseek(db->fd, FIRSTPTR(ptr) - db->map_base, SEEK_SET);
-	    retry_write(db->fd, (char *) newoffsets, 4 * lvl);
-
 	/* can't happen */
 	} else {
 	    abort();
