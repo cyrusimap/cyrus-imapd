@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.11 2000/05/23 20:56:30 robeson Exp $ */
+/* $Id: master.c,v 1.12 2000/06/05 21:34:23 leg Exp $ */
 
 #include <config.h>
 
@@ -182,7 +182,7 @@ void service_create(struct service *s)
 	strcpy(sunsock.sun_path, s->listen);
 	unlink(s->listen);
 	sa = (struct sockaddr *) &sunsock;
-	salen = sizeof(sunsock.sun_family) + strlen(sunsock.sun_path);
+	salen = sizeof(sunsock.sun_family) + strlen(sunsock.sun_path) + 1;
 
 	s->socket = socket(AF_UNIX, SOCK_STREAM, 0);
     } else { /* inet socket */
