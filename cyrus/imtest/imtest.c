@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.70 2002/05/23 19:11:45 ken3 Exp $
+ * $Id: imtest.c,v 1.71 2002/05/23 19:18:01 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -154,7 +154,7 @@ struct cmd_t {
 };
 
 struct capa_cmd_t {
-    char *cmd;		/* capability command string */
+    char *cmd;		/* capability command string (NULL = unsupported) */
     char *resp;		/* end of capability response */
     char *tls;		/* [OPTIONAL] TLS capability string */
     char *auth;		/* [OPTIONAL] AUTH capability string */
