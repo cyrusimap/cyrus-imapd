@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.5 2004/01/31 18:56:57 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.6 2004/02/08 20:47:31 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,15 +59,6 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-
-#ifdef USE_SIEVE
-#include <sieve_interface.h>
-
-#include <pwd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#endif /* USE_SIEVE */
-
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -93,48 +84,13 @@
 #include "mboxlist.h"
 #include "notify.h"
 #include "idle.h"
-#include "rfc822date.h"
-#include "smtpclient.h"
 #include "tls.h"
 
 #include "lmtpengine.h"
 #include "lmtpstats.h"
-
-typedef struct mydata {
-    message_data_t *m;
-    int cur_rcpt;
-
-    struct stagemsg *stage;	/* staging location for single instance
-				   store */
-    char *notifyheader;
-    const char *temp[2];	/* used to avoid extra indirection in
-				   getenvelope() */
-
-    char *authuser;		/* user who submitted message */
-    struct auth_state *authstate;
-} mydata_t;
-
-/* data per script */
-typedef struct script_data {
-    char *username;
-    char *mailboxname;
-    struct auth_state *authstate;
-} script_data_t;
+#include "lmtp_sieve.h"
 
 /* forward declarations */
-int deliver_mailbox(struct protstream *msg,
-		    struct stagemsg *stage,
-		    unsigned size,
-		    char **flag,
-		    int nflags,
-		    char *authuser,
-		    struct auth_state *authstate,
-		    char *id,
-		    char *user,
-		    char *notifyheader,
-		    const char *mailboxname,
-		    int quotaoverride,
-		    int acloverride);
 static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
 static int verify_user(const char *user, long quotacheck,
@@ -150,7 +106,6 @@ struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
 			    &spoolfile, &removespool, 0, 1, 0 };
 
 static void usage();
-static void setup_sieve();
 
 /* global state */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
@@ -161,10 +116,9 @@ static int dupelim = 1;		/* eliminate duplicate messages with
 				   same message-id */
 static int singleinstance = 1;	/* attempt single instance store */
 const char *BB = "";
+
 #ifdef USE_SIEVE
-static sieve_interp_t *sieve_interp;
-static int sieve_usehomedir = 0;
-static const char *sieve_dir = NULL;
+static sieve_interp_t *sieve_interp = NULL;
 #endif
 
 /* per-user/session state */
@@ -194,28 +148,20 @@ int service_init(int argc __attribute__((unused)),
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
-#ifdef USE_SIEVE
-    sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
-    if (!sieve_usehomedir) {
-	sieve_dir = config_getstring(IMAPOPT_SIEVEDIR);
-    } else {
-	sieve_dir = NULL;
-    }
-
-    mylmtp.addheaders = xmalloc(80);
-    snprintf(mylmtp.addheaders, 80, "X-Sieve: %s\r\n", SIEVE_VERSION);
-
-    /* setup sieve support */
-    setup_sieve();
-#endif /* USE_SIEVE */
-
     singleinstance = config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
     BB = config_getstring(IMAPOPT_POSTUSER);
 
     global_sasl_init(0, 1, mysasl_cb);
 
     dupelim = config_getswitch(IMAPOPT_DUPLICATESUPPRESSION);
-#ifndef USE_SIEVE
+
+#ifdef USE_SIEVE
+    mylmtp.addheaders = xmalloc(80);
+    snprintf(mylmtp.addheaders, 80, "X-Sieve: %s\r\n", SIEVE_VERSION);
+
+    /* setup sieve support */
+    sieve_interp = setup_sieve();
+#else
     if (dupelim)
 #endif
     {
@@ -304,718 +250,6 @@ void service_abort(int error)
     shut_down(error);
 }
 
-#ifdef USE_SIEVE
-static char *make_sieve_db(const char *user)
-{
-    static char buf[MAX_MAILBOX_PATH+1];
-
-    buf[0] = '.';
-    buf[1] = '\0';
-    strlcat(buf, user, sizeof(buf));
-    strlcat(buf, ".sieve.", sizeof(buf));
-
-    return buf;
-}
-
-/* gets the header "head" from msg. */
-static int getheader(void *v, const char *phead, const char ***body)
-{
-    message_data_t *m = ((mydata_t *) v)->m;
-
-    if (phead==NULL) return SIEVE_FAIL;
-    *body = msg_getheader(m, phead);
-
-    if (*body) {
-	return SIEVE_OK;
-    } else {
-	return SIEVE_FAIL;
-    }
-}
-
-static int getsize(void *mc, int *size)
-{
-    message_data_t *m = ((mydata_t *) mc)->m;
-
-    *size = msg_getsize(m);
-    return SIEVE_OK;
-}
-
-/* we use the temp field in message_data to avoid having to malloc memory
-   to return, and we also can't expose our the receipients to the message */
-int getenvelope(void *mc, const char *field, const char ***contents)
-{
-    mydata_t *mydata = (mydata_t *) mc;
-    message_data_t *m = mydata->m;
-
-    if (!strcasecmp(field, "from")) {
-	*contents = mydata->temp;
-	mydata->temp[0] = m->return_path;
-	mydata->temp[1] = NULL;
-	return SIEVE_OK;
-    } else if (!strcasecmp(field, "to")) {
-	*contents = mydata->temp;
-	mydata->temp[0] = msg_getrcptall(m, mydata->cur_rcpt);
-	mydata->temp[1] = NULL;
-	return SIEVE_OK;
-    } else if (!strcasecmp(field, "auth") && mydata->authuser) {
-	*contents = mydata->temp;
-	mydata->temp[0] = mydata->authuser;
-	mydata->temp[1] = NULL;
-	return SIEVE_OK;
-    } else {
-	*contents = NULL;
-	return SIEVE_FAIL;
-    }
-}
-
-static int global_outgoing_count = 0;
-
-int send_rejection(const char *origid,
-		   const char *rejto,
-		   const char *origreceip, 
-		   const char *mailreceip, 
-		   const char *reason, 
-		   struct protstream *file)
-{
-    FILE *sm;
-    const char *smbuf[10];
-    char buf[8192], *namebuf;
-    int i, sm_stat;
-    time_t t;
-    char datestr[80];
-    pid_t sm_pid, p;
-
-    smbuf[0] = "sendmail";
-    smbuf[1] = "-i";		/* ignore dots */
-    smbuf[2] = "-f";
-    smbuf[3] = "<>";
-    smbuf[4] = "--";
-    smbuf[5] = rejto;
-    smbuf[6] = NULL;
-    sm_pid = open_sendmail(smbuf, &sm);
-    if (sm == NULL) {
-	return -1;
-    }
-
-    t = time(NULL);
-    p = getpid();
-    snprintf(buf, sizeof(buf), "<cmu-sieve-%d-%d-%d@%s>", p, (int) t, 
-	     global_outgoing_count++, config_servername);
-    
-    namebuf = make_sieve_db(mailreceip);
-    duplicate_mark(buf, strlen(buf), namebuf, strlen(namebuf), t, 0);
-    fprintf(sm, "Message-ID: %s\r\n", buf);
-
-    rfc822date_gen(datestr, sizeof(datestr), t);
-    fprintf(sm, "Date: %s\r\n", datestr);
-
-    fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
-    fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", config_getstring(IMAPOPT_POSTMASTER));
-    fprintf(sm, "To: <%s>\r\n", rejto);
-    fprintf(sm, "MIME-Version: 1.0\r\n");
-    fprintf(sm, "Content-Type: "
-	    "multipart/report; report-type=disposition-notification;"
-	    "\r\n\tboundary=\"%d/%s\"\r\n", (int) p, config_servername);
-    fprintf(sm, "Subject: Automatically rejected mail\r\n");
-    fprintf(sm, "Auto-Submitted: auto-replied (rejected)\r\n");
-    fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
-
-    /* this is the human readable status report */
-    fprintf(sm, "--%d/%s\r\n", (int) p, config_servername);
-    fprintf(sm, "Content-Type: text/plain; charset=utf-8\r\n");
-    fprintf(sm, "Content-Disposition: inline\r\n");
-    fprintf(sm, "Content-Transfer-Encoding: 8bit\r\n\r\n");
-
-    fprintf(sm, "Your message was automatically rejected by Sieve, a mail\r\n"
-	    "filtering language.\r\n\r\n");
-    fprintf(sm, "The following reason was given:\r\n%s\r\n\r\n", reason);
-
-    /* this is the MDN status report */
-    fprintf(sm, "--%d/%s\r\n"
-	    "Content-Type: message/disposition-notification\r\n\r\n",
-	    (int) p, config_servername);
-    fprintf(sm, "Reporting-UA: %s; Cyrus %s/%s\r\n",
-	    config_servername, CYRUS_VERSION, SIEVE_VERSION);
-    if (origreceip)
-	fprintf(sm, "Original-Recipient: rfc822; %s\r\n", origreceip);
-    fprintf(sm, "Final-Recipient: rfc822; %s\r\n", mailreceip);
-    if (origid)
-	fprintf(sm, "Original-Message-ID: %s\r\n", origid);
-    fprintf(sm, "Disposition: "
-	    "automatic-action/MDN-sent-automatically; deleted\r\n");
-    fprintf(sm, "\r\n");
-
-    /* this is the original message */
-    fprintf(sm, "--%d/%s\r\nContent-Type: message/rfc822\r\n\r\n",
-	    (int) p, config_servername);
-    prot_rewind(file);
-    while ((i = prot_read(file, buf, sizeof(buf))) > 0) {
-	fwrite(buf, i, 1, sm);
-    }
-    fprintf(sm, "\r\n\r\n");
-    fprintf(sm, "--%d/%s--\r\n", (int) p, config_servername);
-
-    fclose(sm);
-    while (waitpid(sm_pid, &sm_stat, 0) < 0);
-
-    return sm_stat;	/* sendmail exit value */
-}
-
-int send_forward(const char *forwardto,
-		 char *return_path,
-		 struct protstream *file)
-{
-    FILE *sm;
-    const char *smbuf[10];
-    int i, sm_stat;
-    char buf[1024];
-    pid_t sm_pid;
-
-    smbuf[0] = "sendmail";
-    smbuf[1] = "-i";		/* ignore dots */
-    if (return_path && *return_path) {
-	smbuf[2] = "-f";
-	smbuf[3] = return_path;
-    } else {
-	smbuf[2] = "-f";
-	smbuf[3] = "<>";
-    }
-    smbuf[4] = "--";
-    smbuf[5] = forwardto;
-    smbuf[6] = NULL;
-    sm_pid = open_sendmail(smbuf, &sm);
-	
-    if (sm == NULL) {
-	return -1;
-    }
-
-    prot_rewind(file);
-
-    while ((i = prot_read(file, buf, sizeof(buf))) > 0) {
-	fwrite(buf, i, 1, sm);
-    }
-
-    fclose(sm);
-    while (waitpid(sm_pid, &sm_stat, 0) < 0);
-
-    return sm_stat;	/* sendmail exit value */
-}
-
-
-static
-int sieve_redirect(void *ac, 
-		   void *ic __attribute__((unused)), 
-		   void *sc, void *mc, const char **errmsg)
-{
-    sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *m = ((mydata_t *) mc)->m;
-    char buf[8192], *sievedb = NULL;
-    int res;
-
-    /* if we have a msgid, we can track our redirects */
-    if (m->id) {
-	snprintf(buf, sizeof(buf), "%s-%s", m->id, rc->addr);
-	sievedb = make_sieve_db(sd->username);
-
-	/* ok, let's see if we've redirected this message before */
-	if (duplicate_check(buf, strlen(buf), sievedb, strlen(sievedb))) {
-	    duplicate_log(m->id, sd->username, "redirect");
-	    return SIEVE_OK;
-	}
-    }
-
-    if ((res = send_forward(rc->addr, m->return_path, m->data)) == 0) {
-	/* mark this message as redirected */
-	if (sievedb) duplicate_mark(buf, strlen(buf), 
-				    sievedb, strlen(sievedb), time(NULL), 0);
-
-	snmp_increment(SIEVE_REDIRECT, 1);
-	return SIEVE_OK;
-    } else {
-	if (res == -1) {
-	    *errmsg = "Could not spawn sendmail process";
-	} else {
-	    *errmsg = sendmail_errstr(res);
-	}
-	return SIEVE_FAIL;
-    }
-}
-
-static
-int sieve_discard(void *ac __attribute__((unused)), 
-		  void *ic __attribute__((unused)), 
-		  void *sc, void *mc, 
-		  const char **errmsg __attribute__((unused)))
-{
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *md = ((mydata_t *) mc)->m;
-
-    snmp_increment(SIEVE_DISCARD, 1);
-
-    /* ok, we won't file it, but log it */
-    if (md->id && strlen(md->id) < 80) {
-	char pretty[160];
-
-	beautify_copy(pretty, md->id);
-	syslog(LOG_INFO, "sieve: discarded message to %s id %s",
-	       sd->username, md->id);
-    }
-    else {
-	syslog(LOG_INFO, "sieve: discarded message to %s",
-	       sd->username);
-    }	
-
-    return SIEVE_OK;
-}
-
-static
-int sieve_reject(void *ac, 
-		 void *ic __attribute__((unused)), 
-		 void *sc, void *mc, const char **errmsg)
-{
-    sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *md = ((mydata_t *) mc)->m;
-    const char **body;
-    const char *origreceip;
-    int res;
-
-    if (md->return_path == NULL) {
-	/* return message to who?!? */
-	*errmsg = "No return-path for reply";
-	return SIEVE_FAIL;
-    }
-
-    if (strlen(md->return_path) == 0) {
-	syslog(LOG_INFO, "sieve: discarded reject to <> for %s id %s",
-	       sd->username, md->id);
-        return SIEVE_OK;
-    }
-
-    body = msg_getheader(md, "original-recipient");
-    origreceip = body ? body[0] : NULL;
-    if ((res = send_rejection(md->id, md->return_path, 
-			      origreceip, sd->username,
-			      rc->msg, md->data)) == 0) {
-	snmp_increment(SIEVE_REJECT, 1);
-	return SIEVE_OK;
-    } else {
-	if (res == -1) {
-	    *errmsg = "Could not spawn sendmail process";
-	} else {
-	    *errmsg = sendmail_errstr(res);
-	}
-	return SIEVE_FAIL;
-    }
-}
-
-static
-int sieve_fileinto(void *ac, 
-		   void *ic __attribute__((unused)),
-		   void *sc, 
-		   void *mc __attribute__((unused)), 
-		   const char **errmsg __attribute__((unused)))
-{
-    sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
-    script_data_t *sd = (script_data_t *) sc;
-    mydata_t *mdata = (mydata_t *) mc;
-    message_data_t *md = mdata->m;
-    int quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
-    int ret;
-
-    /* we're now the user who owns the script */
-    if (!sd->authstate)
-	return SIEVE_FAIL;
-
-    ret = deliver_mailbox(md->data, mdata->stage, md->size,
-			  fc->imapflags->flag, fc->imapflags->nflags,
-                          sd->username, sd->authstate, md->id,
-                          sd->username, mdata->notifyheader,
-                          fc->mailbox, quotaoverride, 0);
-
-    if (ret == 0) {
-
-	snmp_increment(SIEVE_FILEINTO, 1);
-
-	return SIEVE_OK;
-    } else {
-	*errmsg = error_message(ret);
-	return SIEVE_FAIL;
-    }
-}
-
-static
-int sieve_keep(void *ac, 
-	       void *ic __attribute__((unused)),
-	       void *sc, void *mc, const char **errmsg)
-{
-    sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
-    script_data_t *sd = (script_data_t *) sc;
-    mydata_t *mydata = (mydata_t *) mc;
-    message_data_t *md = mydata->m;
-    int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
-    char namebuf[MAX_MAILBOX_PATH+1];
-    int ret = 1;
-
-    if (sd->mailboxname) {
-	strlcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_INBOX],
-		sizeof(namebuf));
-	strlcat(namebuf, sd->mailboxname, sizeof(namebuf));
-
-	ret = deliver_mailbox(md->data, mydata->stage, md->size,
-			      kc->imapflags->flag, kc->imapflags->nflags,
-			      mydata->authuser, mydata->authstate, md->id,
-			      sd->username, mydata->notifyheader,
-			      namebuf, quotaoverride, 0);
-    }
-    if (ret) {
-	/* we're now the user who owns the script */
-	if (!sd->authstate)
-	    return SIEVE_FAIL;
-
-	strlcpy(namebuf, "INBOX", sizeof(namebuf));
-
-	ret = deliver_mailbox(md->data, mydata->stage, md->size,
-			      kc->imapflags->flag, kc->imapflags->nflags,
-			      sd->username, sd->authstate, md->id,
-			      sd->username, mydata->notifyheader,
-			      namebuf, quotaoverride, 1);
-    }
-
-    if (ret == 0) {	
-	snmp_increment(SIEVE_KEEP, 1);
-	return SIEVE_OK;
-    } else {
-	*errmsg = error_message(ret);
-	return SIEVE_FAIL;
-    }
-}
-
-static int sieve_notify(void *ac,
-			void *interp_context __attribute__((unused)), 
-			void *script_context,
-			void *mc __attribute__((unused)),
-			const char **errmsg __attribute__((unused)))
-{
-    const char *notifier = config_getstring(IMAPOPT_SIEVENOTIFIER);
-
-    if (notifier) {
-	sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
-	script_data_t *sd = (script_data_t *) script_context;
-	int nopt = 0;
-
-	snmp_increment(SIEVE_NOTIFY, 1);
-
-	/* count options */
-	while (nc->options[nopt]) nopt++;
-
-	/* "default" is a magic value that implies the default */
-	notify(!strcmp("default",nc->method) ? notifier : nc->method,
-	       "SIEVE", nc->priority, sd->username, NULL,
-	       nopt, nc->options, nc->message);
-    }
-    
-    return SIEVE_OK;
-}
-
-int autorespond(void *ac, 
-		void *ic __attribute__((unused)), 
-		void *sc,
-		void *mc __attribute__((unused)),
-		const char **errmsg __attribute__((unused)))
-{
-    sieve_autorespond_context_t *arc = (sieve_autorespond_context_t *) ac;
-    script_data_t *sd = (script_data_t *) sc;
-    time_t t, now;
-    int ret;
-
-    snmp_increment(SIEVE_VACATION_TOTAL, 1);
-
-    now = time(NULL);
-
-    /* ok, let's see if we've responded before */
-    t = duplicate_check(arc->hash, arc->len, 
-			sd->username, strlen(sd->username));
-    if (t) {
-	if (now >= t) {
-	    /* yay, we can respond again! */
-	    ret = SIEVE_OK;
-	} else {
-	    ret = SIEVE_DONE;
-	}
-    } else {
-	/* never responded before */
-	ret = SIEVE_OK;
-    }
-
-    if (ret == SIEVE_OK) {
-	duplicate_mark((char *) arc->hash, arc->len, 
-		       sd->username, strlen(sd->username), 
-		       now + arc->days * (24 * 60 * 60), 0);
-    }
-
-    return ret;
-}
-
-int send_response(void *ac, 
-		  void *ic __attribute__((unused)), 
-		  void *sc, void *mc, const char **errmsg)
-{
-    FILE *sm;
-    const char *smbuf[10];
-    char outmsgid[8192], *sievedb;
-    int i, sl, sm_stat;
-    time_t t;
-    char datestr[80];
-    pid_t sm_pid, p;
-    sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
-    message_data_t *md = ((mydata_t *) mc)->m;
-    script_data_t *sdata = (script_data_t *) sc;
-
-    smbuf[0] = "sendmail";
-    smbuf[1] = "-i";		/* ignore dots */
-    smbuf[2] = "-f";
-    smbuf[3] = "<>";
-    smbuf[4] = "--";
-    smbuf[5] = src->addr;
-    smbuf[6] = NULL;
-    sm_pid = open_sendmail(smbuf, &sm);
-    if (sm == NULL) {
-	*errmsg = "Could not spawn sendmail process";
-	return -1;
-    }
-
-    t = time(NULL);
-    p = getpid();
-    snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-%d-%d@%s>", 
-	     (int) p, (int) t, global_outgoing_count++, config_servername);
-    
-    fprintf(sm, "Message-ID: %s\r\n", outmsgid);
-
-    rfc822date_gen(datestr, sizeof(datestr), t);
-    fprintf(sm, "Date: %s\r\n", datestr);
-    
-    fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
-    fprintf(sm, "From: <%s>\r\n", src->fromaddr);
-    fprintf(sm, "To: <%s>\r\n", src->addr);
-    /* check that subject is sane */
-    sl = strlen(src->subj);
-    for (i = 0; i < sl; i++)
-	if (iscntrl((int) src->subj[i])) {
-	    src->subj[i] = '\0';
-	    break;
-	}
-    fprintf(sm, "Subject: %s\r\n", src->subj);
-    if (md->id) fprintf(sm, "In-Reply-To: %s\r\n", md->id);
-    fprintf(sm, "Auto-Submitted: auto-replied (vacation)\r\n");
-    fprintf(sm, "MIME-Version: 1.0\r\n");
-    if (src->mime) {
-	fprintf(sm, "Content-Type: multipart/mixed;"
-		"\r\n\tboundary=\"%d/%s\"\r\n", (int) p, config_servername);
-	fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
-	fprintf(sm, "--%d/%s\r\n", (int) p, config_servername);
-    } else {
-	fprintf(sm, "Content-Type: text/plain; charset=utf-8\r\n");
-	fprintf(sm, "Content-Transfer-Encoding: 8bit\r\n");
-	fprintf(sm, "\r\n");
-    }
-
-    fprintf(sm, "%s\r\n", src->msg);
-
-    if (src->mime) {
-	fprintf(sm, "\r\n--%d/%s--\r\n", (int) p, config_servername);
-    }
-    fclose(sm);
-    while (waitpid(sm_pid, &sm_stat, 0) < 0);
-
-    if (sm_stat == 0) { /* sendmail exit value */
-	sievedb = make_sieve_db(sdata->username);
-
-	duplicate_mark(outmsgid, strlen(outmsgid), 
-		       sievedb, strlen(sievedb), t, 0);
-
-	snmp_increment(SIEVE_VACATION_REPLIED, 1);
-
-	return SIEVE_OK;
-    } else {
-	*errmsg = sendmail_errstr(sm_stat);
-	return SIEVE_FAIL;
-    }
-}
-
-/* vacation support */
-sieve_vacation_t vacation = {
-    1,				/* min response */
-    31,				/* max response */
-    &autorespond,		/* autorespond() */
-    &send_response,		/* send_response() */
-};
-
-/* imapflags support */
-static char *markflags[] = { "\\flagged" };
-static sieve_imapflags_t mark = { markflags, 1 };
-
-int sieve_parse_error_handler(int lineno, const char *msg, 
-			      void *ic __attribute__((unused)),
-			      void *sc)
-{
-    script_data_t *sd = (script_data_t *) sc;
-    
-    syslog(LOG_INFO, "sieve parse error for %s: line %d: %s",
-	   sd->username, lineno, msg);
-    
-    return SIEVE_OK;
-}
-
-int sieve_execute_error_handler(const char *msg, 
-				void *ic  __attribute__((unused)), 
-				void *sc, void *mc)
-{
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *md = ((mydata_t *) mc)->m;
-    
-    syslog(LOG_INFO, "sieve runtime error for %s id %s: %s",
-	   sd->username, md->id ? md->id : "(null)", msg);
-    
-    return SIEVE_OK;
-}
- 
-static void setup_sieve(void)
-{
-    int res;
-
-    res = sieve_interp_alloc(&sieve_interp, NULL);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_interp_alloc() returns %d\n", res);
-	fatal("sieve_interp_alloc()", EC_SOFTWARE);
-    }
-
-    res = sieve_register_redirect(sieve_interp, &sieve_redirect);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_redirect() returns %d\n", res);
-	fatal("sieve_register_redirect()", EC_SOFTWARE);
-    }
-    res = sieve_register_discard(sieve_interp, &sieve_discard);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_discard() returns %d\n", res);
-	fatal("sieve_register_discard()", EC_SOFTWARE);
-    }
-    res = sieve_register_reject(sieve_interp, &sieve_reject);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_reject() returns %d\n", res);
-	fatal("sieve_register_reject()", EC_SOFTWARE);
-    }
-    res = sieve_register_fileinto(sieve_interp, &sieve_fileinto);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_fileinto() returns %d\n", res);
-	fatal("sieve_register_fileinto()", EC_SOFTWARE);
-    }
-    res = sieve_register_keep(sieve_interp, &sieve_keep);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_keep() returns %d\n", res);
-	fatal("sieve_register_keep()", EC_SOFTWARE);
-    }
-    res = sieve_register_imapflags(sieve_interp, &mark);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_imapflags() returns %d\n", res);
-	fatal("sieve_register_imapflags()", EC_SOFTWARE);
-    }
-    res = sieve_register_notify(sieve_interp, &sieve_notify);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_notify() returns %d\n", res);
-	fatal("sieve_register_notify()", EC_SOFTWARE);
-    }
-    res = sieve_register_size(sieve_interp, &getsize);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_size() returns %d\n", res);
-	fatal("sieve_register_size()", EC_SOFTWARE);
-    }
-    res = sieve_register_header(sieve_interp, &getheader);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_header() returns %d\n", res);
-	fatal("sieve_register_header()", EC_SOFTWARE);
-    }
-
-    res = sieve_register_envelope(sieve_interp, &getenvelope);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR,"sieve_register_envelope() returns %d\n", res);
-	fatal("sieve_register_envelope()", EC_SOFTWARE);
-    }
-    
-    res = sieve_register_vacation(sieve_interp, &vacation);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
-	fatal("sieve_register_vacation()", EC_SOFTWARE);
-    }
-
-    res = sieve_register_parse_error(sieve_interp, &sieve_parse_error_handler);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_parse_error() returns %d\n", res);
-	fatal("sieve_register_parse_error()", EC_SOFTWARE);
-    }
- 
-    res = sieve_register_execute_error(sieve_interp, 
-				       &sieve_execute_error_handler);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_execute_error() returns %d\n", res);
-	fatal("sieve_register_execute_error()", EC_SOFTWARE);
-    }
-}
-
-/* returns true if user has a sieve file */
-static int sieve_find_script(const char *user, char *fname, size_t size)
-{
-    if (strlen(user) > 900) {
-	return -1;
-    }
-    
-    if (sieve_usehomedir) { /* look in homedir */
-	struct passwd *pent = getpwnam(user);
-
-	if (pent == NULL) {
-	    return -1;
-	}
-
-	/* check ~USERNAME/.sieve */
-	snprintf(fname, size, "%s/%s", pent->pw_dir, ".sieve");
-    } else { /* look in sieve_dir */
-	char hash, *domain = NULL;
-	char bufuser[MAX_MAILBOX_NAME+1];
-
-	strlcpy(bufuser, user, sizeof(bufuser));
-
-	mboxname_hiersep_tointernal(&lmtpd_namespace, bufuser,
-				    config_virtdomains ?
-				    strcspn(bufuser, "@") : 0);
-
-	if (config_virtdomains && (domain = strchr(bufuser, '@'))) {
-	    *domain++ = '\0';  /* split user@domain */
-	}
-
-	hash = (char) dir_hash_c(bufuser);
-	if (domain &&
-	    !(config_defdomain && !strcasecmp(config_defdomain, domain))) {
-	    char d = (char) dir_hash_c(domain);
-	    snprintf(fname, size, "%s%s%c/%s/%c/%s/defaultbc",
-		     sieve_dir, FNAME_DOMAINDIR, d, domain,
-		     hash, bufuser);
-	}
-	else {
-	    snprintf(fname, size, "%s/%c/%s/defaultbc",
-		     sieve_dir, hash, bufuser);
-	}
-    }
-	
-    return 0;
-}
-#else /* USE_SIEVE */
-static int sieve_find_script(const char *user, char *fname, size_t size)
-{
-    return -1;
-}
-#endif /* USE_SIEVE */
-
 static void
 usage()
 {
@@ -1101,7 +335,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    struct auth_state *authstate)
 {
     int n, nrcpts;
-    mydata_t mydata;
+    sieve_msgdata_t mydata;
     char namebuf[MAX_MAILBOX_PATH+1];
     
     assert(msgdata);
@@ -1112,6 +346,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     mydata.m = msgdata;
     mydata.stage = (struct stagemsg *) msg_getrock(msgdata);
     mydata.notifyheader = generate_notify(msgdata);
+    mydata.namespace = &lmtpd_namespace;
     mydata.authuser = authuser;
     mydata.authstate = authstate;
     
@@ -1150,54 +385,17 @@ int deliver(message_data_t *msgdata, char *authuser,
 	/* case 2: ordinary user, might have Sieve script */
 	else if (!strchr(rcpt, lmtpd_namespace.hier_sep) &&
 	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
-	    char fname[MAX_MAILBOX_PATH+1];
 
 	    strlcpy(user, rcpt, sizeof(user));
 	    if (domain) sprintf(user+strlen(user), "@%s", domain);
 
 #ifdef USE_SIEVE
-	    if (sieve_find_script(user, fname, sizeof(fname)) != -1) {
-		script_data_t *sdata = NULL;
-		sieve_bytecode_t *bc = NULL;
-
-		sdata = (script_data_t *) xmalloc(sizeof(script_data_t));
-
-		sdata->username = user;
-		sdata->mailboxname = plus;
-		sdata->authstate = auth_newstate(user);
-
-		/* slap the mailboxname back on so we hash the envelope & id
-		   when we figure out whether or not to keep the message */
-		snprintf(namebuf, sizeof(namebuf), "%s+%s@%s", rcpt,
-			 plus ? plus : "", domain ? domain : "");
-		
-		r = sieve_script_load(fname, &bc);
-		if (r == SIEVE_OK) {
-		    r = sieve_execute_bytecode(bc, sieve_interp,
-					       (void *) sdata, (void *) &mydata);
-		}
-		if ((r == SIEVE_OK) && (msgdata->id)) {
-		    /* ok, we've run the script */
-		    char *sdb = make_sieve_db(namebuf);
-		    
-		    duplicate_mark(msgdata->id, strlen(msgdata->id), 
-				   sdb, strlen(sdb), time(NULL), 0);
-		}
-		
-		/* free everything */
-		if (sdata->authstate) auth_freestate(sdata->authstate);
-		if (sdata) free(sdata);
-		sieve_script_unload(&bc);
-		
-		/* if there was an error, r is non-zero and 
-		   we'll do normal delivery */
-	    } else {
-		/* no sieve script */
-		r = 1; /* do normal delivery actions */
-	    }
-#else /* USE_SIEVE */
+	    r = run_sieve(user, plus, sieve_interp, &mydata);
+	    /* if there was no sieve script, or an error during execution,
+	       r is non-zero and we'll do normal delivery */
+#else
 	    r = 1;		/* normal delivery */
-#endif /* USE_SIEVE */
+#endif
 
 	    if (r && plus &&
 		strlen(user) + strlen(plus) + 30 <= MAX_MAILBOX_PATH) {
@@ -1269,7 +467,9 @@ void fatal(const char* s, int code)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
-#ifndef USE_SIEVE
+#ifdef USE_SIEVE
+    sieve_interp_free(&sieve_interp);
+#else
     if (dupelim)
 #endif
 	duplicate_done();
