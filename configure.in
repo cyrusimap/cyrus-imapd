@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.201 2001/09/06 15:05:17 leg Exp $
+dnl $Id: configure.in,v 1.202 2001/09/19 18:53:30 ken3 Exp $
 dnl
 
 
@@ -546,6 +546,18 @@ AC_MSG_RESULT($with_openssl)
 if test "$with_openssl" != "no"; then
 	AC_DEFINE(HAVE_SSL)
 	IMAP_PROGS="$IMAP_PROGS tls_prune"
+fi
+
+dnl
+dnl Allow for setting EGD socket file on systems without /dev/*random.
+dnl
+AC_ARG_WITH(egd-socket,
+      [  --with-egd-socket=FILE  Entropy Gathering Daemon socket pathname
+                           for systems without /dev/urandom],
+              [ EGD_SOCKET="$withval" ]
+      )
+if test -n "$EGD_SOCKET" ; then
+      AC_DEFINE_UNQUOTED(EGD_SOCKET, "$EGD_SOCKET")
 fi
 
 dnl

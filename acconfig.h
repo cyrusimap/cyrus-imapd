@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.20 2001/08/21 14:19:14 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.21 2001/09/19 18:53:30 ken3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -83,6 +83,9 @@
 
 /* do we have OpenSSL? */
 #undef HAVE_SSL
+
+/* alternative to /dev/urandom? */
+#undef EGD_SOCKET
 
 /* where should we put state information? */
 #undef STATEDIR

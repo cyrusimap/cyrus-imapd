@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.24 2001/09/10 15:21:56 ken3 Exp $ */
+/* $Id: tls.c,v 1.25 2001/09/19 18:53:31 ken3 Exp $ */
 
 #include <config.h>
 
@@ -380,7 +380,7 @@ static int set_cert_stuff(SSL_CTX * ctx, char *cert_file, char *key_file)
  * negotiated and session caching is enabled.  We save the session in
  * a database so that we can share sessions between processes. 
  */ 
-int new_session_cb(SSL *ssl, SSL_SESSION *sess)
+static int new_session_cb(SSL *ssl, SSL_SESSION *sess)
 {
     int len;
     unsigned char *data = NULL, *asn;
@@ -451,7 +451,7 @@ int new_session_cb(SSL *ssl, SSL_SESSION *sess)
 /*
  * Function for removing session from our database.
  */
-void remove_session(unsigned char *id, int idlen)
+static void remove_session(unsigned char *id, int idlen)
 {
     char dbname[1024];
     struct db *sessdb;
@@ -493,7 +493,7 @@ void remove_session(unsigned char *id, int idlen)
  * removed because it is expired or when a connection was not shutdown
  * cleanly.
  */
-void remove_session_cb(SSL_CTX *ctx, SSL_SESSION *sess)
+static void remove_session_cb(SSL_CTX *ctx, SSL_SESSION *sess)
  {
     char dbname[1024];
     struct db *sessdb;
@@ -510,7 +510,7 @@ void remove_session_cb(SSL_CTX *ctx, SSL_SESSION *sess)
  * called, also when session caching was disabled.  We lookup the
  * session in our database in case it was stored by another process.
  */
-SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
+static SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
 {
     char dbname[1024];
     struct db *sessdb = NULL;
@@ -575,6 +575,19 @@ SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
     return sess;
 }
 
+/*
+ * Seed the random number generator.
+ */
+static int tls_rand_init(void)
+{
+#ifdef EGD_SOCKET
+    return (RAND_egd(EGD_SOCKET));
+#else
+    /* otherwise let OpenSSL do it internally */
+    return 0;
+#endif
+}
+
  /*
   * This is the setup routine for the SSL server. As smtpd might be called
   * more than once, we only want to do the initialization one time.
@@ -607,6 +620,10 @@ int     tls_init_serverengine(const char *ident,
 
     SSL_load_error_strings();
     SSLeay_add_ssl_algorithms();
+    if (tls_rand_init() == -1) {
+	syslog(LOG_ERR,"TLS engine: cannot seed PRNG");
+	return -1;
+    }
 
 #if 0
     if (tlsonly) {
