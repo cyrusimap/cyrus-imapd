@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.13.4.1 2002/07/27 13:05:47 ken3 Exp $ -->
+<!-- $Id: install-murder.html,v 1.13.4.2 2003/01/16 19:50:34 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -204,6 +204,14 @@ automatically synchronize itself with the contents of the mupdate master,
 and you should be ready to go.  Your clients should connect to the frontends,
 and the frontends will proxy or refer as applicable to the blackend servers.<p>
 
+<h3>Additional backend configuration</h3>
+
+If your authentication system requires usernames, passwords, etc, to
+authenticate (e.g. it isn't Kerberos), then you will also need to
+specify proxy_authname (and friends) in the backend imapd.confs as well.
+This is so that the backends can authenticate to eachother to facilitate
+maibox moves.  (Backend machines will need to be full admins).
+
 <h3>Delivering mail</h3>
 
 To deliver mail to your Murder, configure your MTA just as you did
@@ -332,7 +340,7 @@ to ensure that the mupdate slave process is started, (is prefork=1)</li>
 </ul>
 
 <P><HR>
-last modified: $Date: 2002/07/27 13:05:47 $
+last modified: $Date: 2003/01/16 19:50:34 $
 </BODY></HTML>
 
 
