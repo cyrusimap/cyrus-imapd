@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.23 2000/05/05 21:35:24 leg Exp $ */
+/* $Id: proxyd.c,v 1.24 2000/05/12 22:18:06 leg Exp $ */
 
 #include <config.h>
 
@@ -37,6 +37,7 @@
 #include <unistd.h>
 #endif
 #include <fcntl.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/stat.h>
@@ -48,6 +49,7 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 
 #include <sasl.h>
 #include <saslutil.h>
@@ -85,10 +87,17 @@ struct backend {
     int sock;
     time_t lastused;
     sasl_conn_t *saslconn;
+
+    enum {
+	ACAP = 1,
+    } capability;
+
     char last_result[LAST_RESULT_LEN];
     struct protstream *in; /* from the be server to me, the proxy */
     struct protstream *out; /* to the be server */
 };
+
+#define CAPA(s, c) ((s)->capability & (c))
 
 static unsigned int proxyd_cmdcnt;
 
@@ -435,7 +444,7 @@ static int pipe_command(struct backend *s, int optimistic_literal)
 		eol[0] = '\0';
 		
 		/* have to keep going for the send of the command */
-		continue; 
+		continue;
 	    } else {
 		/* no literal, so we're done! */
 		prot_write(s->out, eol, strlen(eol));
@@ -547,8 +556,9 @@ static int proxy_authenticate(struct backend *s)
 
     /* read the initial greeting */
     if (!prot_fgets(buf, sizeof(buf), s->in)) {
-	syslog(LOG_ERR,"proxyd_authenticate(): couldn't read initial greeting: %s",
-	       s->in->error ? s->in->error: "(null)");
+	syslog(LOG_ERR,
+	       "proxyd_authenticate(): couldn't read initial greeting: %s",
+	       s->in->error ? s->in->error : "(null)");
 	return SASL_FAIL;
     }
 
@@ -579,7 +589,6 @@ static int proxy_authenticate(struct backend *s)
 	    free(in);
 	}
 	if (r != SASL_OK && r != SASL_CONTINUE) {
-	    syslog(LOG_ERR,"proxyd_authenticate(): couldn't perform sasl_client_step");
 	    return r;
 	}
 
@@ -602,6 +611,33 @@ static int proxy_authenticate(struct backend *s)
 
     /* r == SASL_OK on success */
     return r;
+}
+
+void proxyd_capability(struct backend *s)
+{
+    char tag[128];
+    char resp[1024];
+    int st = 0;
+
+    proxyd_gentag(tag);
+    prot_printf(s->out, "%s Capability\r\n");
+    do {
+	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
+	if (!strncasecmp(resp, "* Capability ", 13)) {
+	    st++; /* increment state */
+	    if (strstr(resp, "ACAP=")) s->capability |= ACAP;
+	} else {
+	    /* line we weren't expecting. hmmm. */
+	}
+    } while (st == 0);
+    do {
+	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
+	if (!strncmp(resp, tag, strlen(tag))) {
+	    st++; /* increment state */
+	} else {
+	    /* line we weren't expecting. hmmm. */
+	}
+    } while (st == 1);
 }
 
 void proxyd_downserver(struct backend *s)
@@ -649,6 +685,7 @@ struct backend *proxyd_findserver(char *server)
 	struct hostent *hp;
 
 	ret = xmalloc(sizeof(struct backend));
+	memset(ret, 0, sizeof(struct backend));
 	ret->hostname = xstrdup(server);
 	if ((hp = gethostbyname(server)) == NULL) {
 	    syslog(LOG_ERR, "gethostbyname(%s) failed: %m", server);
@@ -692,6 +729,9 @@ struct backend *proxyd_findserver(char *server)
 	    free(ret);
 	    return NULL;
 	}
+
+	/* find the capabilities of the server */
+	proxyd_capability(ret);
     }
 
     ret->lastused = time(NULL);
@@ -730,6 +770,7 @@ static struct backend *proxyd_findinboxserver(void)
     char *server;
     struct backend *s;
 
+    if (strlen(proxyd_userid) > MAX_MAILBOX_NAME - 30) return NULL;
     strcpy(inbox, "user.");
     strcat(inbox, proxyd_userid);
 	
@@ -742,7 +783,7 @@ static struct backend *proxyd_findinboxserver(void)
 /* proxyd_refer() issues a referral to the client. */
 static void proxyd_refer(char *tag, char *server, char *mailbox)
 {
-    char url[4 * MAX_MAILBOX_NAME];
+    char url[MAX_MAILBOX_PATH];
 
     imapurl_toURL(url, server, mailbox);
     prot_printf(proxyd_out, "%s NO [REFERRAL %s] Remote mailbox.\r\n", 
@@ -1051,8 +1092,7 @@ void motd_file(int fd)
 /*
  * Found a shutdown file: Spit out an untagged BYE and shut down
  */
-void shutdown_file(fd)
-int fd;
+void shutdown_file(int fd)
 {
     struct protstream *shutdown_in;
     char buf[1024];
@@ -1120,9 +1160,6 @@ cmdloop()
     char hostname[MAXHOSTNAMELEN+1];
     int c;
 #ifdef NEEDS_PROXY
-    int i;
-    time_t mark, now;
-    fd_set rfds;
 #endif
     int usinguid, havepartition, havenamespace, oldform;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
@@ -1148,12 +1185,19 @@ cmdloop()
 	    shutdown_file(fd);
 	}
 
-#if NEEDS_PROXY
-	/* this doesn't properly work with the prot layer; perhaps do
-           it with a read callback in the prot layer? */
+	/* Parse tag */
+	prot_NONBLOCK(proxyd_in);
+	c = getword(&tag);
+	if (c == EOF && errno == EAGAIN) {
+	    time_t now, mark;
+	    int i;
+	    fd_set rfds;
+	    struct timeval tv;
 
-	prot_flush(proxyd_out);
-	do {
+	    /* no input from client */
+
+	    /* we may want to pause for less than our client idle timeout,
+	       if there's some server we're connected to */
 	    now = time(NULL);
 	    mark = IDLE_TIMEOUT + 1;
 	    i = 0;
@@ -1161,31 +1205,38 @@ cmdloop()
 		if ((backend_cached[i]->lastused != 0) &&
 		    (backend_cached[i] != backend_current)) {
 		    /* server i is connected and not our current server */
-
+		    
 		    if (backend_cached[i]->lastused + IDLE_TIMEOUT < now) {
 			/* idle too long */
 			proxyd_downserver(backend_cached[i]);
 		    } else {
-			/* it will timeout in mark seconds */
+			/* it will timeout in 'timeout' seconds */
 			int timeout = backend_cached[i]->lastused + 
-			                IDLE_TIMEOUT - now;
-
+			    IDLE_TIMEOUT - now;
+			
 			mark = (timeout < mark ? timeout : mark);
 		    }
 		}
 		i++;
 	    }
-	    tv.tv_sec = mark;
-	    tv.tv_usec = 0;
-	    
-	    FD_ZERO(&rfds);
-	    FD_SET(0, &rfds);
-	} while ((mark != IDLE_TIMEOUT + 1) &&
-		 (select(1, &rfds, NULL, NULL, &tv) == 0));
-#endif
-	
-	/* Parse tag */
-	c = getword(&tag);
+
+	    if (mark < IDLE_TIMEOUT + 1) {
+		/* 'mark' is the lowest of the timeouts */
+		tv.tv_sec = mark;
+		tv.tv_usec = 0;
+		
+		FD_ZERO(&rfds);
+		FD_SET(0, &rfds);
+		/* block until a server times out or we get input */
+		select(1, &rfds, NULL, NULL, &tv);
+		continue; /* resume the cmdloop at the top */
+	    } else {
+		/* just block on the client */
+		prot_BLOCK(proxyd_in);
+		c = getword(&tag);
+	    }
+	}
+	prot_BLOCK(proxyd_in);
 	if (c == EOF) {
 	    err = prot_error(proxyd_in);
 	    if (err) {
@@ -1213,7 +1264,8 @@ cmdloop()
 	    if (isupper(*p)) *p = tolower(*p);
 	}
 
-	/* Only Authenticate/Login/Logout/Noop/Starttls allowed when not logged in */
+	/* Only Authenticate/Login/Logout/Noop/Starttls 
+	   allowed when not logged in */
 	if (!proxyd_userid && !strchr("ALNCS", cmd.s[0])) goto nologin;
     	switch (cmd.s[0]) {
 	case 'A':
@@ -1578,7 +1630,7 @@ cmdloop()
 		/* if we've already done SASL fail */
 		if (proxyd_userid != NULL) {
 		    prot_printf(proxyd_out, 
-				"%s BAD Can't Starttls after authentication\r\n", tag.s);
+		     "%s BAD Can't Starttls after authentication\r\n", tag.s);
 		    continue;
 		}
 		
@@ -1995,12 +2047,11 @@ void cmd_authenticate(char *tag, char *authtype)
 
     sasl_getprop(proxyd_saslconn, SASL_SSF, (void **) &ssfp);
 
-    switch(*ssfp)
-      {
+    switch(*ssfp) {
       case 0: ssfmsg="no protection";break;
       case 1: ssfmsg="integrity protection";break;
       default: ssfmsg="privacy protection";break;
-      }
+    }
 
     prot_printf(proxyd_out, "%s OK Success (%s)\r\n", tag,ssfmsg);
 
@@ -2055,7 +2106,6 @@ void cmd_capability(char *tag)
     }
     prot_printf(proxyd_out, "* CAPABILITY ");
     prot_printf(proxyd_out, CAPABILITY_STRING);
-    /* xxx STARTTLS */
     prot_printf(proxyd_out, " MAILBOX-REFERRALS");
 
     if (starttls_enabled())
@@ -2670,6 +2720,8 @@ void cmd_create(char *tag, char *name, char *server)
     struct backend *s = NULL;
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r = 0;
+    acapmbox_data_t mboxdata;
+    char *acl = NULL;
 
     if (server && !proxyd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
@@ -2680,26 +2732,63 @@ void cmd_create(char *tag, char *name, char *server)
     if (!r && !server) {
 	r = mboxlist_createmailboxcheck(mailboxname, 0, 0, proxyd_userisadmin,
 					proxyd_userid, proxyd_authstate,
-					NULL, &server);
+					&acl, &server);
     }
     if (!r && server) {
 	s = proxyd_findserver(server);
-
-	if (s) {
-	    /* ok, send the create to that server */
-
-	    prot_printf(s->out, "%s CREATE {%d+}\r\n%s\r\n", 
-			tag, strlen(mailboxname), mailboxname);
-	    pipe_including_tag(s, tag);
-	} else {
-	    /* you want it where?!? */
-	    
-	    prot_printf(proxyd_out, "%s NO %s\r\n", 
-			error_message(IMAP_SERVER_UNAVAILABLE));
-	}
-    } else {
-	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+	if (!s) r = IMAP_SERVER_UNAVAILABLE;
     }
+    if (!r) {
+	if (!CAPA(s, ACAP)) {
+	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+	    
+	    /* reserve mailbox on ACAP */
+	    acapmbox_new(&mboxdata, s->hostname, mailboxname);
+	    r = acapmbox_create(acaphandle, &mboxdata);
+	    if (r) {
+		syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n",
+		       name, error_message(r));
+	    }
+	}
+    }
+
+    if (!r) {
+	/* ok, send the create to that server */
+	prot_printf(s->out, "%s CREATE {%d+}\r\n%s\r\n", 
+		    tag, strlen(mailboxname), mailboxname);
+	r = pipe_including_tag(s, tag);
+	tag = "*";		/* can't send another tagged response */
+	
+	if (!CAPA(s, ACAP)) {
+	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+	    
+	    switch (r) {
+	    case OK:
+		/* race condition here, but not much we can do about it */
+		mboxdata.acl = acl;
+
+		/* commit mailbox */
+		r = acapmbox_markactive(acaphandle, &mboxdata);
+		if (r) {
+		    syslog(LOG_ERR, "ACAP: unable to commit %s: %s\n",
+			   mailboxname, error_message(r));
+		}
+		break;
+		
+	    default:
+		/* abort mailbox */
+		r = acapmbox_delete(acaphandle, mailboxname);
+		if (r) {
+		    syslog(LOG_ERR, "ACAP: unable to unreserve %s: %s\n", 
+			   mailboxname, error_message(r));
+		}
+		break;
+	    }
+	}
+    }
+    
+    if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+    if (acl) free(acl);
 }
 
 /*
@@ -2722,18 +2811,29 @@ void cmd_delete(char *tag, char *name)
 
     if (!r) {
 	s = proxyd_findserver(server);
-
-	if (s) {
-	    prot_printf(s->out, "%s DELETE {%d+}\r\n%s\r\n", 
-			tag, strlen(mailboxname), mailboxname);
-	    pipe_including_tag(s, tag);
-	} else {
-	    prot_printf(proxyd_out, "%s NO %s\r\n",
-			error_message(IMAP_SERVER_UNAVAILABLE));
-	}
-    } else {
-	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+	if (!s) r = IMAP_SERVER_UNAVAILABLE;
     }
+
+    if (!r) {
+	prot_printf(s->out, "%s DELETE {%d+}\r\n%s\r\n", 
+		    tag, strlen(mailboxname), mailboxname);
+	r = pipe_including_tag(s, tag);
+	tag = "*";		/* can't send another tagged response */
+
+	if (!CAPA(s, ACAP) && r == OK) {
+	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+	    
+	    /* delete mailbox from acap server */
+	    r = acapmbox_delete(acaphandle, mailboxname);
+	    if (r) {
+		syslog(LOG_ERR, 
+		       "ACAP: can't delete mailbox entry '%s': %s",
+		       name, error_message(r));
+	    }
+	}
+    }
+
+    if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
 }	
 
 /*
@@ -2741,35 +2841,81 @@ void cmd_delete(char *tag, char *name)
  */
 void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 {
-    int r;
+    int r = 0;
     char *server;
     char oldmailboxname[MAX_MAILBOX_NAME+1];
     char newmailboxname[MAX_MAILBOX_NAME+1];
     struct backend *s = NULL;
+    acapmbox_data_t mboxdata;
+    char *acl = NULL;
 
     if (partition) {
 	prot_printf(proxyd_out, 
 		    "%s NO cross-server RENAME not implemented\r\n", tag);
-    } else {
-        r = mboxname_tointernal(oldname, proxyd_userid, oldmailboxname);
-	if (!r) mboxname_tointernal(newname, proxyd_userid, newmailboxname);
-	if (!r) r = mlookup(oldmailboxname, &server, NULL, NULL);
-	if (!r) {
-	    s = proxyd_findserver(server);
+	return;
+    }
 
-	    if (s) {
-		prot_printf(s->out, "%s RENAME {%d+}\r\n%s {%d+}\r\n%s\r\n", 
-			    tag, strlen(oldmailboxname), oldmailboxname,
-			    strlen(newmailboxname), newmailboxname);
-		pipe_including_tag(s, tag);
-	    } else {
-		prot_printf(proxyd_out, "%s NO %s\r\n",
-			    error_message(IMAP_SERVER_UNAVAILABLE));
+    r = mboxname_tointernal(oldname, proxyd_userid, oldmailboxname);
+    if (!r) mboxname_tointernal(newname, proxyd_userid, newmailboxname);
+    if (!r) r = mlookup(oldmailboxname, &server, &acl, NULL);
+    if (!r) {
+	s = proxyd_findserver(server);
+	if (!s) r = IMAP_SERVER_UNAVAILABLE;
+    }
+    if (!r) {
+	if (!CAPA(s, ACAP)) {
+	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+	    
+	    /* reserve new mailbox */
+	    acapmbox_new(&mboxdata, s->hostname, mailboxname);
+	    r = acapmbox_create(acaphandle, &mboxdata);
+ 	    if (r) {
+		syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n",
+		       name, error_message(r));
 	    }
-	} else {
-	    prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+	}
+
+	prot_printf(s->out, "%s RENAME {%d+}\r\n%s {%d+}\r\n%s\r\n", 
+		    tag, strlen(oldmailboxname), oldmailboxname,
+		    strlen(newmailboxname), newmailboxname);
+	r = pipe_including_tag(s, tag);
+	tag = "*";
+	
+	if (!CAPA(s, ACAP)) {
+	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+	    
+	    switch (r) {
+	    case OK:
+		/* commit new mailbox */
+		mboxdata.acl = acl;
+		r = acapmbox_markactive(acaphandle, &mboxdata);
+		if (r) {
+		    syslog(LOG_ERR, "ACAP: unable to commit %s: %s\n",
+			   oldmailboxname, error_message(r));
+		}
+
+		/* delete old mailbox */
+		r = acapmbox_delete(acaphandle, oldmailboxname);
+		if (r) {
+		    syslog(LOG_ERR, "ACAP: unable to delete %s: %s\n", 
+			   mailboxname, error_message(r));
+		}
+		break;
+		
+	    default:
+		/* abort new mailbox */
+		r = acapmbox_delete(acaphandle, newmailboxname);
+		if (r) {
+		    syslog(LOG_ERR, "ACAP: unable to unreserve %s: %s\n", 
+			   newmailboxname, error_message(r));
+		}
+		break;
+	    }
 	}
     }
+
+    if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+    if (acl) free(acl);
 }
 
 /*
@@ -3139,7 +3285,22 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 			tag, strlen(name), name,
 			strlen(identifier), identifier);
 	}	    
-	pipe_including_tag(s, tag);
+	r = pipe_including_tag(s, tag);
+	if (!CAPA(s, ACAP) && r == OK) {
+	    switch (r) {
+	    case OK:
+	    {
+		acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+
+		/* calculate new ACL; race conditions here */
+
+		/* change the ACAP server */
+
+		
+	    }
+	    default:
+		break;
+	}
     } else {
 	r = IMAP_SERVER_UNAVAILABLE;
     }

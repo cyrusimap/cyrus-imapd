@@ -33,14 +33,69 @@ struct acapmbox_handle_s {
     acap_conn_t *conn;
 };
 
-char *acapmbox_get_url(char *name)
+/* server may be NULL.
+   dst should be MAX_MAILBOX_PATH */
+static char *acapmbox_get_url(char *dst, const char *server, const char *name)
 {
-    static char url[4 * MAX_MAILBOX_PATH];
+    if (!server) server = config_servername;
+    imapurl_toURL(dst, server, name);
 
-    imapurl_toURL(url, config_servername, name);
-
-    return url;
+    return dst;
 }
+
+/* this varies depending on whether it's a private
+   mailbox or a bboard, and it should default to 
+   "bb+bboard.name@server.name". */
+/* postaddr should be MAX_MAILBOX_PATH */
+char *acapmbox_get_postaddr(char *postaddr, 
+			    const char *server, const char *name)
+{
+    if (!server) server = config_servername;
+    if (!strncmp(name, "user.", 5)) {
+	char *p;
+
+	/* user+detail */
+	strcpy(postaddr, name + 5);
+	p = strchr(postaddr, '.');
+	if (p) *p = '+';
+	strcat(postaddr, "@");
+	strcat(postaddr, server);
+    } else {
+	const char *postspec = config_getstring("postspec", NULL);
+	const char *BB = config_getstring("postuser", "bb");
+
+	if (postspec) {
+	    snprintf(postaddr, sizeof(postaddr), postspec, name);
+	} else {
+	    snprintf(postaddr, sizeof(postaddr), "%s+%s@%s", BB,
+		     name, server);
+	}
+    }
+
+    return postaddr;
+}
+
+/*
+ * generate an entry
+ *
+ * 'mboxdata' need not be initialized but must be allocated
+ * 'server' may be NULL
+ */
+acapmbox_data_t *acapmbox_new(acapmbox_data_t *mboxdata, 
+			      const char *server, 
+			      const char *name)
+{
+    assert(mboxdata != NULL);
+    assert(name != NULL);
+
+    memset(mboxdata, 0, sizeof(acapmbox_data_t));
+    strcpy(mboxdata->name, name);
+    acapmbox_get_postaddr(mboxdata->post, server, name);
+    acapmbox_get_url(mboxdata->url, server, name);
+
+    return mboxdata;
+}
+
 
 /*
  * Get the acapconn. This should only be used if you need to get the
@@ -50,37 +105,6 @@ char *acapmbox_get_url(char *name)
 acap_conn_t *acapmbox_get_acapconn(acapmbox_handle_t *AC)
 {
     return AC->conn;
-}
-
-/* this varies depending on whether it's a private
-   mailbox or a bboard, and it should default to 
-   "bb+bboard.name@server.name". */
-char *acapmbox_get_postaddr(char *name)
-{
-    static char postaddr[MAX_MAILBOX_PATH + 30];
-
-    if (!strncmp(name, "user.", 5)) {
-	char *p;
-
-	/* user+detail */
-	strcpy(postaddr, name + 5);
-	p = strchr(postaddr, '.');
-	if (p) *p = '+';
-	strcat(postaddr, "@");
-	strcat(postaddr, config_servername);
-    } else {
-	const char *postspec = config_getstring("postspec", NULL);
-	const char *BB = config_getstring("postuser", "bb");
-
-	if (postspec) {
-	    snprintf(postaddr, sizeof(postaddr), postspec, name);
-	} else {
-	    snprintf(postaddr, sizeof(postaddr), "%s+%s@%s", BB,
-		     name, config_servername);
-	}
-    }
-
-    return postaddr;
 }
 
 static acapmbox_handle_t *cached_conn = NULL;

@@ -26,7 +26,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  *
- * $Id: target-acap.c,v 1.12 2000/04/20 16:30:03 leg Exp $
+ * $Id: target-acap.c,v 1.13 2000/05/12 22:18:07 leg Exp $
  */
 
 #include <config.h>
@@ -87,15 +87,15 @@ static int dissect_entry(acap_entry_t *e, acapmbox_data_t *data)
 
     if (!e || !data) return ACAP_BAD_PARAM;
 
-    data->name = acap_entry_getname(e);
+    strlcpy(data->name, acap_entry_getname(e), MAX_MAILBOX_NAME);
     data->uidvalidity = getintattr(e, "mailbox.uidvalidity");
 
     v = acap_entry_getattr(e, "mailbox.status");
     data->status = mboxdata_convert_status(v);
 
-    data->post = getstrattr(e, "mailbox.post");
+    strlcpy(data->post, getstrattr(e, "mailbox.post"), sizeof(data->post));
+    strlcpy(data->url, getstrattr(e, "mailbox.url"), sizeof(data->url));
     data->haschildren = getintattr(e, "mailbox.haschildren");
-    data->url = getstrattr(e, "mailbox.url");
     data->acl = getstrattr(e, "mailbox.acl");
 
     data->answered = getintattr(e, "mailbox.answered");

@@ -2,6 +2,7 @@
 #define ACAPMBOX_H_
 
 #include "acap.h"
+#include "mailbox.h"
 
 /* all functions return IMAP error codes */
 
@@ -16,24 +17,20 @@ typedef enum {
 } acapmbox_status;
 
 typedef struct acapmbox_data_s {
-    char *name;			/* name of the mailbox */
+    char name[MAX_MAILBOX_NAME]; /* name of the mailbox */
     unsigned int uidvalidity;
 
-    acapmbox_status status;	/* reserved | committed */
-    char *post;			/* where a post to this mailbox should go */
-    int haschildren;		/* yes | no */
-    char *url;			/* where mailbox is located */
-    char *acl;			/* acl */
+    acapmbox_status status;	 /* reserved | committed */
+    int haschildren;		 /* yes | no */
+    char post[MAX_MAILBOX_PATH]; /* where a post to this mailbox should go */
+    char url[MAX_MAILBOX_PATH];	 /* where mailbox is located */
+    char *acl;			 /* acl */
 
-    unsigned int answered;      /* number of messages with attribute */
-    unsigned int flagged;       /* etc */
+    unsigned int answered;       /* number of messages with attribute */
+    unsigned int flagged;        /* etc */
     unsigned int deleted;
     unsigned int total;
 } acapmbox_data_t;
-
-/* helper functions to create an acapmbox_data_t */
-char *acapmbox_get_url(char *mbox);
-char *acapmbox_get_postaddr(char *mbox);
 
 typedef struct acapmbox_handle_s acapmbox_handle_t;
 
@@ -46,6 +43,15 @@ acapmbox_handle_t *acapmbox_get_handle(void);
 void acapmbox_disconnect(acapmbox_handle_t *conn);
 
 void acapmbox_release_handle(acapmbox_handle_t *handle);
+
+/*
+ * generate an entry
+ *
+ * 'mboxdata' need not be initialized but must be allocated
+ * 'server' may be NULL
+ */
+acapmbox_data_t *acapmbox_new(acapmbox_data_t *mboxdata,
+			      const char *server, const char *name);
 
 /*
  * Create a new entry for mailbox_name
