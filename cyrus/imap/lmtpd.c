@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.62 2001/05/21 18:21:47 leg Exp $
+ * $Id: lmtpd.c,v 1.63 2001/08/01 16:30:50 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.62 2001/05/21 18:21:47 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.63 2001/08/01 16:30:50 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -281,7 +281,7 @@ int service_init(int argc, char **argv, char **envp)
     dupelim = 1;
     if (duplicate_init(0) != 0) {
 	syslog(LOG_ERR, 
-	       "deliver: unable to init duplicate delivery database\n");
+	       "lmtpd: unable to init duplicate delivery database\n");
 	dupelim = 0;
     }
 
@@ -439,7 +439,7 @@ pid_t open_sendmail(const char *argv[], FILE **sm)
 	execv(SENDMAIL, (char **) argv);
 
 	/* if we're here we suck */
-	printf("451 deliver: didn't exec?!?\r\n");
+	printf("451 lmtpd: didn't exec?!?\r\n");
 	fatal("couldn't exec", EC_OSERR);
     }
     /* i'm the parent */
@@ -1319,7 +1319,7 @@ char *name;
 
 void fatal(const char* s, int code)
 {
-    prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
+    prot_printf(deliver_out,"421 4.3.0 lmtpd: %s\r\n", s);
     prot_flush(deliver_out);
     exit(code);
 }
