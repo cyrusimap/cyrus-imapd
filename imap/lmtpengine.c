@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.56 2002/02/14 22:41:58 leg Exp $
+ * $Id: lmtpengine.c,v 1.57 2002/02/20 21:03:00 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -232,7 +232,14 @@ static void send_lmtp_error(struct protstream *pout, int r)
 
     case IMAP_MAILBOX_NONEXISTENT:
 	/* XXX Might have been moved to other server */
-	prot_printf(pout, "550 5.1.1 User unknown\r\n");
+	if (LMTP_LONG_ERROR_MSGS) {
+	    prot_printf(pout, 
+"550-Mailbox unknown.  Either there is no mailbox associated with this\r\n"
+"550-name or you do not have authorization to see it.\r\n"
+"550 5.1.1 User unknown\r\n");
+	} else {
+	    prot_printf(pout, "550 5.1.1 User unknown\r\n");
+	}
 	break;
 
     case IMAP_PROTOCOL_BAD_PARAMETERS:
