@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.21 2002/09/04 21:03:56 rjs3 Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.22 2002/09/22 02:10:30 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -183,7 +183,7 @@ static int myarchive(const char **fnames, const char *dirname)
 
 static int myopen(const char *fname, struct db **ret)
 {
-    struct db *db = (struct db *) xmalloc(sizeof(struct db));
+    struct db *db = (struct db *) xzmalloc(sizeof(struct db));
     struct stat sbuf;
 
     assert(fname && ret);
@@ -203,8 +203,6 @@ static int myopen(const char *fname, struct db **ret)
     }
     db->ino = sbuf.st_ino;
 
-    db->base = 0;
-    db->len = 0;
     map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size,
 		fname, 0);
     db->size = sbuf.st_size;
