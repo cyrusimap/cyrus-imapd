@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.13 2000/04/06 15:14:49 leg Exp $ */
+/* $Id: proxyd.c,v 1.14 2000/04/11 03:36:29 leg Exp $ */
 
 #include <config.h>
 
@@ -370,7 +370,7 @@ static int pipe_command(struct backend *s, int optimistic_literal)
 	    i = strlen(eol);
 	    if (eol[i-1] == '\n' && eol[i-2] == '\r' && eol[i-3] == '}') {
 		/* possible literal */
-		i -= 3;
+		i -= 4;
 		if (eol[i] == '+') {
 		    nonsynch = 1;
 		    i--;
@@ -412,8 +412,8 @@ static int pipe_command(struct backend *s, int optimistic_literal)
 		while (litlen > 0) {
 		    int j = (litlen > sizeof(buf) ? sizeof(buf) : litlen);
 
-		    j = prot_read(s->in, buf, j);
-		    prot_write(proxyd_out, buf, j);
+		    j = prot_read(proxyd_in, buf, j);
+		    prot_write(s->out, buf, j);
 		    litlen -= j;
 		}
 
@@ -1957,6 +1957,7 @@ void cmd_capability(char *tag)
     }
     prot_printf(proxyd_out, "* CAPABILITY ");
     prot_printf(proxyd_out, CAPABILITY_STRING);
+    /* xxx STARTTLS */
     prot_printf(proxyd_out, " MAILBOX-REFERRALS");
 
     if (sasl_listmech(proxyd_saslconn, NULL, 
@@ -1986,7 +1987,7 @@ void cmd_capability(char *tag)
 void cmd_append(char *tag, char *name)
 {
     int r;
-    char *mailboxname = NULL;
+    char mailboxname[MAX_MAILBOX_PATH + 1];
     char *newserver;
     struct backend *s = NULL;
 
@@ -2023,7 +2024,7 @@ void cmd_append(char *tag, char *name)
     } else {
 	/* we're allowed to reference last_result since the noop, if
 	   sent, went to a different server */
-	prot_printf(proxyd_out, "%s %s\r\n", tag, s->last_result);
+	prot_printf(proxyd_out, "%s %s", tag, s->last_result);
     }
 }
 
