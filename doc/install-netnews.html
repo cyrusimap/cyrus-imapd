@@ -1,4 +1,4 @@
-<!-- $Id: install-netnews.html,v 1.4 2004/01/05 20:20:07 ken3 Exp $ -->
+<!-- $Id: install-netnews.html,v 1.5 2004/01/05 20:30:38 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus and Netnews
@@ -113,11 +113,17 @@ currently implemented.
 
 <h3>Reading/Posting articles</h3>
 In order to have articles posted by your local users propagate to the
-outside world, you must specify the name of your usenet peer with the
-<tt>newspeer</tt> option in <tt>imapd.conf</tt>.  This is the host
-that <tt>nntpd</tt> contacts to feed outgoing articles.  Also note
+outside world, you must specify the name of your usenet peer(s) with the
+<tt>newspeer</tt> option in <tt>imapd.conf</tt>.  This is the host(s)
+that <tt>nntpd</tt> contacts to feed outgoing articles.  Depending on the
+configuration of the <tt>newspeer</tt> option, articles will be fed to the
+upstream server(s) using either the POST or IHAVE command.  Also note
 that you may specify an optional wildmat to filter which groups will
 be fed (see <tt>imapd.conf(5)</tt> for details).
+
+<p>Newsgroups can also be gatewayed to email by setting
+<tt>/vendor/cmu/cyrus-imapd/news2mail</tt> mailbox annotations to the
+corresponding email addresses.
 
 <h4>News clients</h4>
 
@@ -131,16 +137,6 @@ enable the <tt>nntps</tt> service in <tt>cyrus.conf</tt>.
 <p>If you want to allow your news clients to use the NNTP NEWNEWS
 command, you will have to enable the <tt>allownewnews</tt> option in
 <tt>imapd.conf</tt>.
-
-<p>To have articles posted by NNTP client fed to upstream servers, you
-must set the <tt>newspeer</tt> option accordingly.  Depending on the
-configuration of the <tt>newspeer</tt> option, articles will be fed to the
-upstream server using either the POST or IHAVE command (see
-<tt>imapd.conf(5)</tt> for details).
-
-<p>Newsgroups can also be gatewayed to email by setting
-<tt>/vendor/cmu/cyrus-imapd/news2mail</tt> mailbox annotations to the
-corresponding email addresses.
 
 <h4>Email clients</h4>
 If you are exporting Usenet via IMAP, and your users' messaging clients
@@ -214,5 +210,5 @@ newsgroups under <tt>alt</tt> will be expired at the same time
 (independently from <tt>comp</tt>).
 
 <P><HR>
-last modified: $Date: 2004/01/05 20:20:07 $
+last modified: $Date: 2004/01/05 20:30:38 $
 </BODY></HTML>
