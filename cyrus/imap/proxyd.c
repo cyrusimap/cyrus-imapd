@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.5 2000/02/10 21:25:32 leg Exp $ */
+/* $Id: proxyd.c,v 1.6 2000/02/16 03:10:56 leg Exp $ */
 
 #include <config.h>
 
@@ -33,6 +33,9 @@
 #include <string.h>
 #include <time.h>
 #include <signal.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/param.h>
@@ -44,8 +47,10 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <assert.h>
+#include <ctype.h>
 
 #include <sasl.h>
+#include <saslutil.h>
 
 #include "prot.h"
 
@@ -63,6 +68,8 @@
 #include "mboxname.h"
 #include "mailbox.h"
 #include "xmalloc.h"
+#include "mboxlist.h"
+#include "pushstats.h"
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -116,12 +123,6 @@ char proxyd_clienthost[250] = "[local]";
 struct protstream *proxyd_out, *proxyd_in;
 time_t proxyd_logtime;
 
-static char *monthname[] = {
-    "jan", "feb", "mar", "apr", "may", "jun",
-    "jul", "aug", "sep", "oct", "nov", "dec"
-};
-
-void usage(void);
 void shutdown_file(int fd);
 void motd_file(int fd);
 void shut_down(int code);
@@ -193,7 +194,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
     char buf[2048];
     char eol[128];
     int sl;
-    int sawtag = 0, cont = 0, r = -1;
+    int cont = 0, r = -1;
     int taglen = strlen(tag);
 
     s->lastused = time(NULL);
@@ -348,7 +349,7 @@ static int pipe_command(struct backend *s, int optimistic_literal)
 	    prot_write(s->out, buf, sl - 64);
 	    continue;
 	} else {
-	    int i, nonsynch = 0, islit = 0, litlen;
+	    int i, nonsynch = 0, islit = 0, litlen = 0;
 
 	    if (sl < 64) {
 		strcat(eol, buf);
@@ -419,7 +420,7 @@ static int pipe_command(struct backend *s, int optimistic_literal)
 		/* no literal, so we're done! */
 		prot_write(s->out, eol, strlen(eol));
 
-		return;
+		return 0;
 	    }
 	}
     }
@@ -455,7 +456,6 @@ static int mysasl_getauthline(struct protstream *p, char *tag,
 			      char **line, unsigned int *linelen)
 {
     char buf[2096];
-    int saslresult;
     char *str = (char *) buf;
     
     if (!prot_fgets(str, sizeof(buf), p)) {
@@ -491,6 +491,11 @@ static int mysasl_getauthline(struct protstream *p, char *tag,
     }
 }
 
+extern sasl_callback_t *mysasl_callbacks(const char *username,
+					 const char *authname,
+					 const char *realm,
+					 const char *password);
+
 static int proxy_authenticate(struct backend *s)
 {
     int r;
@@ -503,14 +508,15 @@ static int proxy_authenticate(struct backend *s)
     sasl_callback_t *cb;
     char mytag[128];
     char buf[2048];
+    char optstr[128];
     char *in, *out, *p;
     unsigned int inlen, outlen;
     const char *mechusing;
     int b64len;
-    char *pass;
+    const char *pass;
 
-    strcpy(buf, s->hosntmae);
-    p = strchr(opstr, '.');
+    strcpy(buf, s->hostname);
+    p = strchr(optstr, '.');
     if (p) *p = '\0';
     strcat(optstr, "_password");
     pass = config_getstring(optstr, NULL);
@@ -611,6 +617,7 @@ void proxyd_downserver(struct backend *s)
 
     /* need to logout of server */
     proxyd_gentag(tag);
+    taglen = strlen(tag);
     prot_printf(s->out, "%s LOGOUT\r\n", tag);
     while (prot_fgets(buf, sizeof(buf), s->in)) {
 	if (!strncmp(tag, buf, taglen)) {
@@ -789,17 +796,15 @@ static int authisa(const char *item)
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
-static mysasl_authproc(void *context __attribute__((unused)),
-		       const char *auth_identity,
-		       const char *requested_user,
-		       const char **user,
-		       const char **errstr)
+static int mysasl_authproc(void *context __attribute__((unused)),
+			   const char *auth_identity,
+			   const char *requested_user,
+			   const char **user,
+			   const char **errstr)
 {
-    char *p;
     const char *val;
     char *canon_authuser, *canon_requser;
-    char *username=NULL, *realm;
-    char buf[MAX_MAILBOX_PATH];
+    char *realm;
     static char replybuf[100];
 
     canon_authuser = auth_canonifyid(auth_identity);
@@ -817,7 +822,8 @@ static mysasl_authproc(void *context __attribute__((unused)),
     canon_requser = xstrdup(canon_requser);
 
     /* check if remote realm */
-    if (realm = strchr(canon_authuser, '@')) {
+    realm = strchr(canon_authuser, '@');
+    if (realm) {
 	realm++;
 	val = config_getstring("loginrealms", "");
 	while (*val) {
@@ -879,42 +885,71 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-main(argc, argv, envp)
-int argc;
-char **argv;
-char **envp;
+extern void setproctitle_init(int argc, char **argv, char **envp);
+extern int proc_register(char *progname, char *clienthost, 
+			 char *userid, char *mailbox);
+extern void proc_cleanup(void);
+
+/*
+ * run once when process is forked;
+ * MUST NOT exit directly; must return with non-zero error code
+ */
+int service_init(int argc, char **argv, char **envp)
+{
+    int r;
+
+    config_changeident("proxyd");
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    setproctitle_init(argc, argv, envp);
+
+    /* open the mboxlist, we'll need it for real work */
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+
+    signal(SIGPIPE, SIG_IGN);
+
+    /* set the SASL allocation functions */
+    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
+		   (sasl_calloc_t *) &calloc, 
+		   (sasl_realloc_t *) &xrealloc, 
+		   (sasl_free_t *) &free);
+
+    /* load the SASL plugins */
+    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
+	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
+	       sasl_errstring(r, NULL, NULL));
+	return 2;
+    }
+
+    if (sasl_client_init(NULL) != SASL_OK) {
+	syslog(LOG_ERR, "SASL failed initializing: sasl_client_init(): %s", 
+	       sasl_errstring(r, NULL, NULL));
+	return 2;
+    }
+
+    return 0;
+}
+
+int service_main(int argc, char **argv, char **envp)
 {
     int salen;
     struct hostent *hp;
     int timeout;
-    char hostname[MAXHOSTNAMELEN+1];
     sasl_security_properties_t *secprops = NULL;
-
-    if (gethostname(hostname, MAXHOSTNAMELEN)!=0)
-      fatal("gethostname failed\n",EC_USAGE);
 
     proxyd_in = prot_new(0, 0);
     proxyd_out = prot_new(1, 1);
-
-    setproctitle_init(argc, argv, envp);
-    config_init("proxyd");
-
-    mboxlist_open();
-
-    signal(SIGPIPE, SIG_IGN);
-
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     /* Find out name of client host */
     salen = sizeof(proxyd_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&proxyd_remoteaddr, &salen) == 0 &&
 	proxyd_remoteaddr.sin_family == AF_INET) {
-	if (hp = gethostbyaddr((char *)&proxyd_remoteaddr.sin_addr,
-			       sizeof(proxyd_remoteaddr.sin_addr), AF_INET)) {
-	    strncpy(proxyd_clienthost, hp->h_name, sizeof(proxyd_clienthost)-30);
+	hp = gethostbyaddr((char *)&proxyd_remoteaddr.sin_addr,
+			   sizeof(proxyd_remoteaddr.sin_addr), AF_INET);
+	if (hp != NULL) {
+	    strncpy(proxyd_clienthost,hp->h_name,sizeof(proxyd_clienthost)-30);
 	    proxyd_clienthost[sizeof(proxyd_clienthost)-30] = '\0';
-	}
-	else {
+	} else {
 	    proxyd_clienthost[0] = '\0';
 	}
 	strcat(proxyd_clienthost, "[");
@@ -927,32 +962,19 @@ char **envp;
 	}
     }
 
-    /* set the SASL allocation functions */
-    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
-		   (sasl_calloc_t *) &calloc, 
-		   (sasl_realloc_t *) &xrealloc, 
-		   (sasl_free_t *) &free);
-
-    /* start up sasl */
-    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK) {
-	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL); 
-    }
-
-    if (sasl_client_init(NULL) != SASL_OK) {
-	fatal("SASL failed initializing: sasl_client_init()", EC_TEMPFAIL);
-    }
-    
+    /* create the SASL connection */
     /* Make a SASL connection and setup some properties for it */
     /* other params should be filled in */
-    if (sasl_server_new("imap", hostname, NULL, NULL, SASL_SECURITY_LAYER, 
-			&proxyd_saslconn)
-	   != SASL_OK)
+    if (sasl_server_new("imap", config_servername, 
+			NULL, NULL, SASL_SECURITY_LAYER, 
+			&proxyd_saslconn) != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
+    }
 
-    /* will always return something valid */
-    /* should be configurable! */
-    secprops = make_secprops(0, 2000);
+    secprops = make_secprops(config_getint("sasl_minimum_layer", 0),
+			     config_getint("sasl_maximum_layer", 256));
     sasl_setprop(proxyd_saslconn, SASL_SEC_PROPS, secprops);
+    free(secprops);
     
     sasl_setprop(proxyd_saslconn, SASL_IP_REMOTE, &proxyd_remoteaddr);  
     sasl_setprop(proxyd_saslconn, SASL_IP_LOCAL, &proxyd_localaddr);  
@@ -969,22 +991,19 @@ char **envp;
     backend_cached = xmalloc(sizeof(struct backend *));
     backend_cached[0] = NULL;
 
-    cmdloop();
-}
+    /* create connection to the SNMP listener, if available. */
+    snmp_connect(); /* ignore return code */
 
-void
-usage()
-{
-    prot_printf(proxyd_out, "* BYE usage: proxyd\r\n");
-    prot_flush(proxyd_out);
-    exit(EC_USAGE);
+    cmdloop();
+    
+    /* should never reach */
+    return 0;
 }
 
 /*
  * found a motd file; spit out message and return
  */
-void motd_file(fd)
-int fd;
+void motd_file(int fd)
 {
     struct protstream *motd_in;
     char buf[1024];
@@ -993,8 +1012,8 @@ int fd;
     motd_in = prot_new(fd, 0);
 
     prot_fgets(buf, sizeof(buf), motd_in);
-    if (p = strchr(buf, '\r')) *p = 0;
-    if (p = strchr(buf, '\n')) *p = 0;
+    if ((p = strchr(buf, '\r')) != NULL) *p = 0;
+    if ((p = strchr(buf, '\n')) != NULL) *p = 0;
 
     for(p = buf; *p == '['; p++); /* can't have [ be first char, sigh */
     prot_printf(proxyd_out, "* OK [ALERT] %s\r\n", p);
@@ -1013,8 +1032,8 @@ int fd;
     shutdown_in = prot_new(fd, 0);
 
     prot_fgets(buf, sizeof(buf), shutdown_in);
-    if (p = strchr(buf, '\r')) *p = 0;
-    if (p = strchr(buf, '\n')) *p = 0;
+    if ((p = strchr(buf, '\r')) != NULL) *p = 0;
+    if ((p = strchr(buf, '\n')) != NULL) *p = 0;
 
     for (p = buf; *p == '['; p++); /* can't have [ be first char, sigh */
     prot_printf(proxyd_out, "* BYE [ALERT] %s\r\n", p);
@@ -1072,10 +1091,12 @@ cmdloop()
     char shutdownfilename[1024];
     char motdfilename[1024];
     char hostname[MAXHOSTNAMELEN+1];
-    int c, i;
+    int c;
+#ifdef NEEDS_PROXY
+    int i;
     time_t mark, now;
-    struct timeval tv;
     fd_set rfds;
+#endif
     int usinguid, havepartition, havenamespace, oldform;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
     char *p;
@@ -1139,7 +1160,8 @@ cmdloop()
 	/* Parse tag */
 	c = getword(&tag);
 	if (c == EOF) {
-	    if (err = prot_error(proxyd_in)) {
+	    err = prot_error(proxyd_in);
+	    if (err) {
 		syslog(LOG_WARNING, "PROTERR: %s", err);
 		prot_printf(proxyd_out, "* BYE %s\r\n", err);
 	    }
@@ -1761,7 +1783,8 @@ char *passwd;
 	proxyd_userid = xstrdup(canon_user);
 	syslog(LOG_NOTICE, "login: %s %s plaintext %s", proxyd_clienthost,
 	       canon_user, reply ? reply : "");
-	if (plaintextloginpause = config_getint("plaintextloginpause", 0)) {
+	plaintextloginpause = config_getint("plaintextloginpause", 0);
+	if (plaintextloginpause) {
 	    sleep(plaintextloginpause);
 	}
     }
@@ -1820,7 +1843,6 @@ char *authtype;
     const char *errorstring = NULL;
 
     char buf[MAX_MAILBOX_PATH];
-    char *p;
     FILE *logfile;
 
     int *ssfp;
@@ -1995,7 +2017,7 @@ char *tag;
 void cmd_append(char *tag, char *name)
 {
     int r;
-    char *mailboxname;
+    char *mailboxname = NULL;
     char *newserver;
     struct backend *s = NULL;
 
@@ -2040,11 +2062,8 @@ void cmd_append(char *tag, char *name)
  */
 void cmd_select(char *tag, char *cmd, char *name)
 {
-    struct mailbox mailbox;
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r = 0;
-    int usage;
-    int doclose = 0;
     char *newserver;
 
     if (backend_current) {
@@ -2103,8 +2122,6 @@ void cmd_select(char *tag, char *cmd, char *name)
  */
 void cmd_close(char *tag)
 {
-    int r;
-
     assert(backend_current != NULL);
     
     prot_printf(backend_current->out, "%s Close\r\n", tag);
@@ -2228,8 +2245,6 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
  */
 void cmd_expunge(char *tag, char *sequence)
 {
-    int r;
-
     assert(backend_current != NULL);
 
     if (sequence) {
@@ -2356,7 +2371,7 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 
     if (!strcmp(namespace, "mailboxes")) {
 	mboxlist_findsub(pattern, proxyd_userisadmin, proxyd_userid,
-			 proxyd_authstate, mailboxdata);
+			 proxyd_authstate, mailboxdata, NULL);
     } else if (!strcmp(namespace, "all.mailboxes")) {
 	mboxlist_findall(pattern, proxyd_userisadmin, proxyd_userid,
 			 proxyd_authstate, mailboxdata, NULL);
@@ -2475,7 +2490,6 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 {
     char *cmd = add ? "Subscribe" : "Unsubscribe";
     int r;
-    char mailboxname[MAX_MAILBOX_NAME+1];
 
     if (!backend_inbox) {
 	backend_inbox = proxyd_findinboxserver();
@@ -2685,10 +2699,9 @@ void cmd_myrights(char *tag, char *name, int oldform)
 void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 {
     int r;
-    char *cmd = rights ? "Setacl" : "Deleteacl";
     char mailboxname[MAX_MAILBOX_NAME+1];
     char *server;
-    struct backend *s;
+    struct backend *s = NULL;
 
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
 
@@ -2740,7 +2753,7 @@ void cmd_getquotaroot(char *tag, char *name)
     char mailboxname[MAX_MAILBOX_NAME+1];
     char *server;
     int r;
-    struct backend *s;
+    struct backend *s = NULL;
 
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
     if (!r) r = mboxlist_lookup(mailboxname, &server, NULL, NULL);
@@ -2779,7 +2792,7 @@ void cmd_status(char *tag, char *name)
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r;
     char *server;
-    struct backend *s;
+    struct backend *s = NULL;
 
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
 
@@ -3205,16 +3218,16 @@ const char *s;
     int len = 0;
 
     /* Look for any non-QCHAR characters */
-    for (p = s; *p; p++) {
+    for (p = s; *p && len < 1024; p++) {
 	len++;
 	if (*p & 0x80 || *p == '\r' || *p == '\n'
 	    || *p == '\"' || *p == '%' || *p == '\\') break;
     }
 
+    /* if it's too long, literal it */
     if (*p || len >= 1024) {
 	prot_printf(proxyd_out, "{%u}\r\n%s", strlen(s), s);
-    }
-    else {
+    } else {
 	prot_printf(proxyd_out, "\"%s\"", s);
     }
 }
@@ -3233,16 +3246,16 @@ void printastring(const char *s)
     }
 
     /* Look for any non-QCHAR characters */
-    for ((p = s) && len < 1024; *p; p++) {
+    for (p = s; *p && len < 1024; p++) {
 	len++;
 	if (*p & 0x80 || *p == '\r' || *p == '\n'
 	    || *p == '\"' || *p == '%' || *p == '\\') break;
     }
 
+    /* if it's too long, literal it */
     if (*p || len >= 1024) {
 	prot_printf(proxyd_out, "{%u}\r\n%s", strlen(s), s);
-    }
-    else {
+    } else {
 	prot_printf(proxyd_out, "\"%s\"", s);
     }
 }
@@ -3314,7 +3327,7 @@ int maycreate;
 {
     static char lastname[MAX_MAILBOX_PATH];
     static int lastnamedelayed;
-    static sawuser = 0;
+    static int sawuser = 0;
     int lastnamehassub = 0;
     int c;
 
