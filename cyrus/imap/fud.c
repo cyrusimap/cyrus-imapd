@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.37 2002/08/13 19:33:39 rjs3 Exp $ */
+/* $Id: fud.c,v 1.38 2002/08/13 19:41:00 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -223,15 +223,14 @@ int do_proxy_request(const char *who, const char *name,
     int csoc = -1;
     struct sockaddr_in cin, cout;
     struct hostent *hp;
-    int backend_port = 4201; /* default fud udp port */
+    static int backend_port = 4201; /* default fud udp port in host order */
     static struct servent *sp = NULL;
 
     /* Open a UDP socket to the Cyrus mail server */
-    if(!sp)
+    if(!sp) {
 	sp = getservbyname("fud", "udp");
-
-    if(sp)
 	backend_port = ntohs(sp->s_port);
+    }
 
     hp = gethostbyname (backend_host);
     if (!hp) {
