@@ -1221,9 +1221,9 @@ struct mailbox *mailbox;
  * Expunge decision proc used by mailbox_rename() to expunge all messages
  * in INBOX
  */
-static int expungeall(name, rock)
-char *name;
+static int expungeall(rock, index)
 char *rock;
+char *index;
 {
     return 1;
 }
