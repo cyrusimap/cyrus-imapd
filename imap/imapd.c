@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.476 2004/07/15 00:55:15 ken3 Exp $ */
+/* $Id: imapd.c,v 1.477 2004/07/15 13:07:09 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2321,8 +2321,6 @@ void cmd_append(char *tag, char *name)
     int numalloc = 5;
     struct appendstage *curstage;
 
-    stage = xmalloc(numalloc * sizeof(struct appendstage *));
-
     /* See if we can append */
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -2342,6 +2340,8 @@ void cmd_append(char *tag, char *name)
 		    ? "[TRYCREATE] " : "", error_message(r));
 	return;
     }
+
+    stage = xmalloc(numalloc * sizeof(struct appendstage *));
 
     c = ' '; /* just parsed a space */
     /* we loop, to support MULTIAPPEND */
@@ -2507,7 +2507,7 @@ void cmd_append(char *tag, char *name)
 
     /* Cleanup the stage(s) */
     while (numstage) {
-	struct appendstage *curstage = stage[--numstage];
+	curstage = stage[--numstage];
 
 	append_removestage(curstage->stage);
 	while (curstage->nflags--) {
@@ -2516,7 +2516,7 @@ void cmd_append(char *tag, char *name)
 	if (curstage->flag) free((char *) curstage->flag);
 	free(curstage);
     }
-    free(stage);
+    if (stage) free(stage);
     stage = NULL;
 
     if (imapd_mailbox) {
