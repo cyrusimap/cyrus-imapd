@@ -1,0 +1,6 @@
+COMPILE_ET = /usr/local/bin/compile_et
+
+BUILT_SOURCES = imap_err.h imap_err.c
+
+imap_err.h imap_err.c: imap_err.et
+	$(COMPILE_ET) imap_err.et
