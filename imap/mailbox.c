@@ -928,6 +928,7 @@ char *deciderock;
     FILE *newindex, *newcache;
     unsigned long *deleted;
     unsigned numdeleted = 0, quotadeleted = 0;
+    unsigned newexists;
     char *buf;
     unsigned msgno;
     int lastmsgdeleted = 1;
@@ -1070,8 +1071,8 @@ char *deciderock;
 	goto fail;
     }
     /* Fix up exists */
-    *((bit32 *)(buf+OFFSET_EXISTS)) =
-      htonl(ntohl(*((bit32 *)(buf+OFFSET_EXISTS)))-numdeleted);
+    newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)))-numdeleted;
+    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
     /* Fix up quota_mailbox_used */
     *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
       htonl(ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)))-quotadeleted);
@@ -1130,6 +1131,11 @@ char *deciderock;
 	       mailbox->name);
 	/* Fall through and delete message files anyway */
     }
+
+    if (numdeleted) {
+	drop_last(mailbox->name, mailbox->last_uid, newexists);
+    }
+
     mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);

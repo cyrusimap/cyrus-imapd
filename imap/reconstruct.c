@@ -423,6 +423,8 @@ char *name;
 	return IMAP_IOERROR;
     }
     
+    drop_last(mailbox.name, mailbox.last_uid, new_exists);
+
     fclose(newindex);
     r = seen_reconstruct(&mailbox);
     mailbox_close(&mailbox);

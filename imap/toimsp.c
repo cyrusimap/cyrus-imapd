@@ -41,15 +41,16 @@ static drop_to64();
 
 /*
  * Drop off a request to send an IMSP LAST command stating the highest
- * uid for mailbox 'name' is 'uid'
+ * uid for mailbox 'name' is 'uid' and has 'exists' messages.
  */
 int
-drop_last(name, uid)
+drop_last(name, uid, exists)
 char *name;
 unsigned long uid;
+unsigned long exists;
 {
-    int last_change = 0;
-    bit32 intbuf[2];
+    int last_change = time(0);
+    bit32 intbuf[3];
     char fnamebuf[MAX_MAILBOX_PATH];
     char *p;
     FILE *f;
@@ -65,6 +66,7 @@ unsigned long uid;
 
     intbuf[0] = htonl(uid);
     intbuf[1] = htonl(last_change);
+    intbuf[2] = htonl(exists);
     
     sprintf(fnamebuf, "%s%sL", config_dir, FNAME_DROPDIR);
     drop_to64(fnamebuf+strlen(fnamebuf), (unsigned char *)intbuf,
@@ -168,8 +170,6 @@ int len;
 	else c2 = *from++;
 	*to++ = drop_basis_64[((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4)];
 	if (len == 0) {
-	    *to++ = '=';
-	    *to++ = '=';
 	    break;
 	}
 
@@ -177,12 +177,12 @@ int len;
 	else c3 = *from++;
         *to++ = drop_basis_64[((c2 & 0xF) << 2) | ((c3 & 0xC0) >>6)];
 	if (len == 0) {
-	    *to++ = '=';
 	    break;
 	}
 	
 	--len;
         *to++ = drop_basis_64[c3 & 0x3F];
     }
+    *to++ = '=';
     *to = '\0';
 }
