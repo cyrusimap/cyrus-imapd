@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.99 2000/06/06 00:55:02 leg Exp $
+ $Id: mailbox.c,v 1.100 2000/07/03 22:45:54 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1801,7 +1801,8 @@ void *deciderock;
 		       (struct sockaddr *) &acappush_remote, 
 		       acappush_remote_len) == -1) {
 		syslog(LOG_ERR, "Error sending to acappush: %m");
-		goto fail;
+		/* goto fail;
+		   don't fail if we just can't contact acappush */
 	    }
 	}
     }
