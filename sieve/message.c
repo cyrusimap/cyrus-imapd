@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.13 2000/02/22 08:08:12 tmartin Exp $
+ * $Id: message.c,v 1.3.2.1 2000/10/26 23:24:19 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -35,7 +35,6 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <string.h>
 
 #include "sieve_interface.h"
-#include "interp.h"
 #include "message.h"
 #include "parseaddr.h"
 #include "xmalloc.h"
@@ -55,21 +54,15 @@ int do_reject(action_list_t *a, char *msg)
 	    a->a == ACTION_KEEP ||
 	    a->a == ACTION_REDIRECT ||
 	    a->a == ACTION_REJECT ||
-	    a->a == ACTION_VACATION ||
-	    a->a == ACTION_SETFLAG ||
-	    a->a == ACTION_ADDFLAG ||
-	    a->a == ACTION_REMOVEFLAG ||
-	    a->a == ACTION_MARK ||
-	    a->a == ACTION_UNMARK
-	    )
-	    return SIEVE_RUN_ERROR;
+	    a->a == ACTION_VACATION)
+	    return -1;
 	a = a->next;
     }
 
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return SIEVE_NOMEM;
+	return -1;
     a->a = ACTION_REJECT;
     a->u.rej.msg = msg;
     b->next = a;
@@ -81,7 +74,7 @@ int do_reject(action_list_t *a, char *msg)
  *
  * incompatible with: reject
  */
-int do_fileinto(action_list_t *a, char *mbox, sieve_imapflags_t *imapflags)
+int do_fileinto(action_list_t *a, char *mbox)
 {
     action_list_t *b = NULL;
 
@@ -89,17 +82,16 @@ int do_fileinto(action_list_t *a, char *mbox, sieve_imapflags_t *imapflags)
     while (a != NULL) {
 	b = a;
 	if (a->a == ACTION_REJECT)
-	    return SIEVE_RUN_ERROR;
+	    return -1;
 	a = a->next;
     }
 
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return SIEVE_NOMEM;
+	return -1;
     a->a = ACTION_FILEINTO;
-    a->u.fil.mailbox = mbox;
-    a->u.fil.imapflags = imapflags;
+    a->u.fil.mbox = mbox;
     b->next = a;
     a->next = NULL;
     return 0;
@@ -119,14 +111,14 @@ int do_forward(action_list_t *a, char *addr)
     while (a != NULL) {
 	b = a;
 	if (a->a == ACTION_REJECT)
-	    return SIEVE_RUN_ERROR;
+	    return -1;
 	a = a->next;
     }
 
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return SIEVE_NOMEM;
+	return -1;
     a->a = ACTION_REDIRECT;
     a->u.red.addr = addr;
     a->next = NULL;
@@ -138,7 +130,7 @@ int do_forward(action_list_t *a, char *addr)
  *
  * incompatible with: reject
  */
-int do_keep(action_list_t *a, sieve_imapflags_t *imapflags)
+int do_keep(action_list_t *a)
 {
     action_list_t *b = NULL;
 
@@ -146,7 +138,7 @@ int do_keep(action_list_t *a, sieve_imapflags_t *imapflags)
     while (a != NULL) {
 	b = a;
 	if (a->a == ACTION_REJECT)
-	    return SIEVE_RUN_ERROR;
+	    return -1;
 	if (a->a == ACTION_KEEP) /* don't bother doing it twice */
 	    return 0;
 	a = a->next;
@@ -155,9 +147,8 @@ int do_keep(action_list_t *a, sieve_imapflags_t *imapflags)
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return SIEVE_NOMEM;
+	return -1;
     a->a = ACTION_KEEP;
-    a->u.keep.imapflags = imapflags;
     a->next = NULL;
     b->next = a;
     return 0;
@@ -182,7 +173,7 @@ int do_discard(action_list_t *a)
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return SIEVE_NOMEM;
+	return -1;
     a->a = ACTION_DISCARD;
     a->next = NULL;
     b->next = a;
@@ -200,229 +191,25 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
 	b = a;
 	if (a->a == ACTION_REJECT ||
 	    a->a == ACTION_VACATION) /* vacation can't be used twice */
-	    return SIEVE_RUN_ERROR;
+	    return -1;
 	a = a->next;
     }
 
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return SIEVE_NOMEM;
+	return -1;
     a->a = ACTION_VACATION;
-    a->u.vac.send.addr = addr;
-    a->u.vac.send.fromaddr = fromaddr;
-    a->u.vac.send.subj = subj;	/* user specified subject */
-    a->u.vac.send.msg = msg;
-    a->u.vac.send.mime = mime;
-    a->u.vac.autoresp.days = days;
+    a->u.vac.addr = addr;
+    a->u.vac.fromaddr = fromaddr;
+    a->u.vac.subj = subj;	/* user specified subject */
+    a->u.vac.msg = msg;
+    a->u.vac.days = days;
+    a->u.vac.mime = mime;
     a->next = NULL;
     b->next = a;
     return 0;
 }
-
-/* setflag f on message m
- *
- * incompatible with: reject
- */
-int do_setflag(action_list_t *a, char *flag)
-{
-    action_list_t *b = NULL;
- 
-    /* see if this conflicts with any previous actions taken on this message */
-    while (a != NULL) {
-	b = a;
-	if (a->a == ACTION_REJECT)
-	    return SIEVE_RUN_ERROR;
-	a = a->next;
-    }
- 
-    /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-	return SIEVE_NOMEM;
-    a->a = ACTION_SETFLAG;
-    a->u.fla.flag = flag;
-    b->next = a;
-    a->next = NULL;
-    return 0;
-}
-
-/* addflag f on message m
- *
- * incompatible with: reject
- */
-int do_addflag(action_list_t *a, char *flag)
-{
-    action_list_t *b = NULL;
- 
-    /* see if this conflicts with any previous actions taken on this message */
-    while (a != NULL) {
-	b = a;
-	if (a->a == ACTION_REJECT)
-	    return SIEVE_RUN_ERROR;
-	a = a->next;
-    }
- 
-    /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-	return SIEVE_NOMEM;
-    a->a = ACTION_ADDFLAG;
-    a->u.fla.flag = flag;
-    b->next = a;
-    a->next = NULL;
-    return 0;
-}
-
-/* removeflag f on message m
- *
- * incompatible with: reject
- */
-int do_removeflag(action_list_t *a, char *flag)
-{
-    action_list_t *b = NULL;
- 
-    /* see if this conflicts with any previous actions taken on this message */
-    while (a != NULL) {
-	b = a;
-	if (a->a == ACTION_REJECT)
-	    return SIEVE_RUN_ERROR;
-	a = a->next;
-    }
- 
-    /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-	return SIEVE_NOMEM;
-    a->a = ACTION_REMOVEFLAG;
-    a->u.fla.flag = flag;
-    b->next = a;
-    a->next = NULL;
-    return 0;
-}
-
-
-/* mark message m
- *
- * incompatible with: reject
- */
-int do_mark(action_list_t *a)
-{
-    action_list_t *b = NULL;
- 
-    /* see if this conflicts with any previous actions taken on this message */
-    while (a != NULL) {
-	b = a;
-	if (a->a == ACTION_REJECT)
-	    return SIEVE_RUN_ERROR;
-	a = a->next;
-    }
- 
-    /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-	return SIEVE_NOMEM;
-    a->a = ACTION_MARK;
-    b->next = a;
-    a->next = NULL;
-    return 0;
-}
-
-
-/* unmark message m
- *
- * incompatible with: reject
- */
-int do_unmark(action_list_t *a)
-{
-    action_list_t *b = NULL;
- 
-    /* see if this conflicts with any previous actions taken on this message */
-    while (a != NULL) {
-	b = a;
-	if (a->a == ACTION_REJECT)
-	    return SIEVE_RUN_ERROR;
-	a = a->next;
-    }
- 
-    /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-	return SIEVE_NOMEM;
-    a->a = ACTION_UNMARK;
-    b->next = a;
-    a->next = NULL;
-    return 0;
-}
-
-static int priority_tonum(const char *str)
-{
-    if (strcasecmp(str,"low")==0) return 1;
-    if (strcasecmp(str,"medium")==0) return 2;
-    if (strcasecmp(str,"high")==0) return 3;
-
-    return -1;
-}
-/* returns 1 if new is less than old */
-static int priority_compare(const char *old, const char *new)
-{
-    if (priority_tonum(new) < priority_tonum(old)) return 1;
-
-    return 0;
-}
-
-/* notify
- *
- * incomaptible with: none
- */
-int do_notify(sieve_interp_t *i,void *m, notify_action_t *notify,
-	      const char *priority, char *message, stringlist_t *sl)
-{
-    /* if non-default action exists, and
-     * priority is < old priority then leave current one
-     */
-    if ((notify->exists > 0) && (priority_compare(notify->priority, priority)==1))
-	return 0;
-
-    /* free old stuff if exists */
-    if (notify->exists)
-    {
-	if (notify->message)
-	    free(notify->message);
-	if (notify->headers)
-	    free_sl(notify->headers);
-    }
-
-    notify->exists = 1;
-    notify->priority = priority;
-    notify->message = message;
-    notify->headers = sl;
-
-    return 0;
-}
-
-/* denotify
- *
- * incomaptible with: none
- */
-int do_denotify(notify_action_t *notify)
-{
-
-    /* free old stuff if exists */
-    if (notify->exists)
-    {
-	if (notify->message)
-	    free(notify->message);
-	if (notify->headers)
-	    free_sl(notify->headers);
-    }
-    
-    notify->exists = 0;
-
-    return 0;
-}
-
-
 
 /* given a header, extract an address out of it.  if marker points to NULL,
    extract the first address.  otherwise, it's an index into the header to
@@ -496,24 +283,6 @@ char *get_address(address_part_t addrpart, void **data, void **marker)
 	case ADDRESS_DOMAIN:
 	    ret = a->domain;
 	    break;
-
-	case ADDRESS_USER:
-	{
-	    char *p = strchr(a->mailbox, '+');
-	    int len = p ? p - a->mailbox : strlen(a->mailbox);
-
-	    am->freeme = (char *) xmalloc(len + 1);
-	    strncpy(am->freeme, a->mailbox, len);
-	    am->freeme[len] = '\0';
-	    ret = am->freeme;
-	    break;
-	}
-	case ADDRESS_DETAIL:
-	{
-	    char *p = strchr(a->mailbox, '+');
-	    ret = (p ? p + 1 : NULL);
-	    break;
-	}
 	}
 	a = a->next;
 	am->where = a;
@@ -535,21 +304,6 @@ int free_address(void **data, void **marker)
     return SIEVE_OK;
 }
 
-#define NEWMAIL_MSG "You have new mail"
-
-notify_action_t *default_notify_action(void)    
-{
-    notify_action_t *ret = xmalloc(sizeof(notify_action_t));
-    
-    ret->exists   = -1; /* flag as default action */
-    ret->priority = "medium";
-    ret->message  = xmalloc(strlen(NEWMAIL_MSG)+1);
-    strcpy(ret->message, NEWMAIL_MSG); 
-    ret->headers  = NULL; /* subject, to, from */
-
-    return ret;
-}
-
 action_list_t *new_action_list(void)
 {
     action_list_t *ret = xmalloc(sizeof(action_list_t));
@@ -568,9 +322,9 @@ void free_action_list(action_list_t *a)
 	action_list_t *b = a->next;
 	switch (a->a) {
 	case ACTION_VACATION:
-	    if (a->u.vac.send.addr) free(a->u.vac.send.addr);
-	    if (a->u.vac.send.fromaddr) free(a->u.vac.send.addr);
-	    if (a->u.vac.send.subj) free(a->u.vac.send.subj);
+	    if (a->u.vac.addr) free(a->u.vac.addr);
+	    if (a->u.vac.fromaddr) free(a->u.vac.fromaddr);
+	    if (a->u.vac.subj) free(a->u.vac.subj);
 	    break;
 
 	default:
