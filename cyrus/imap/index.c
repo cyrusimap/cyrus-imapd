@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.152 2001/01/16 00:59:57 leg Exp $
+ * $Id: index.c,v 1.153 2001/01/18 17:42:31 ken3 Exp $
  */
 #include <config.h>
 
@@ -3104,28 +3104,31 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 
 /*
  * Parse a cached envelope into individual tokens
+ *
+ * When inside a list (ncom > 0), we parse the individual tokens but don't
+ * isolate them -- we return the entire list as a single token.
  */
 static void parse_cached_envelope(char *env, char *tokens[])
 {
     char *c;
-    int i = 0, len, ncom;
+    int i = 0, ncom = 0, len;
 
     c = env;
     while (*c != '\0') {
 	switch (*c) {
 	case ' ':			/* end of token */
-	    *c = '\0';			/* mark end of token */
+	    if (!ncom) *c = '\0';	/* mark end of token */
 	    c++;
 	    break;
 	case 'N':			/* "NIL" */
-	    tokens[i++] = NULL;		/* empty token */
+	    if (!ncom) tokens[i++] = NULL; /* empty token */
 	    c += 3;			/* skip "NIL" */
 	    break;
 	case '"':			/* quoted string */
 	    c++;			/* skip open quote */
-	    tokens[i++] = c;		/* start of string */
+	    if (!ncom) tokens[i++] = c;	/* start of string */
 	    c = strchr(c, '"');		/* find close quote */
-	    *c = '\0';			/* end of string */
+	    if (!ncom) *c = '\0';	/* end of string */
 	    c++;			/* skip close quote */
 	    break;
 	case '{':			/* literal */
@@ -3136,21 +3139,21 @@ static void parse_cached_envelope(char *env, char *tokens[])
 		c++;
 	    }
 	    c += 3;			/* skip close brace & CRLF */
-	    tokens[i++] = c;		/* start of literal */
+	    if (!ncom) tokens[i++] = c;	/* start of literal */
 	    c += len;			/* skip literal */
 	    break;
-	case '(':			/* address list */
+	case '(':			/* start of address */
 	    c++;			/* skip open paren */
-	    tokens[i++] = c;		/* start of address list */
-	    ncom = 1;			/* find matching close paren */
-	    while (ncom) {		/* until all paren are closed... */
-		if (*c == '(')		/* new open - inc counter */
-		    ncom++;
-		else if (*c == ')')	/* close - dec counter */
-		    ncom--;
-		c++;
+	    if (!ncom) tokens[i++] = c;	/* start of address list */
+	    ncom++;			/* new open - inc counter */
+	    break;
+	case ')':			/* end of address */
+	    c++;			/* skip close paren */
+	    if (ncom) {			/* paranoia */
+		ncom--;			/* close - dec counter */
+		if (!ncom)		/* all open paren are closed */
+		    *(c-1) = '\0';	/* end of list - trim close paren */
 	    }
-	    *(c-1) = '\0';		/* end of list - trim close paren */
 	    break;
 	default:
 	    /* yikes! unparsed junk, just skip it */
