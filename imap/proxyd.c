@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.67 2001/03/14 06:02:11 leg Exp $ */
+/* $Id: proxyd.c,v 1.68 2001/03/14 20:44:26 leg Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1902,7 +1902,6 @@ void cmd_login(char *tag, char *user, char *passwd)
     const char *val;
     char buf[MAX_MAILBOX_PATH];
     char *p;
-    FILE *logfile;
     int plaintextloginpause;
     int result;
 
@@ -2016,9 +2015,6 @@ void cmd_authenticate(char *tag, char *authtype)
     const char *errstr;
     
     const char *errorstring = NULL;
-
-    char buf[MAX_MAILBOX_PATH];
-    FILE *logfile;
 
     int *ssfp;
     char *ssfmsg=NULL;
