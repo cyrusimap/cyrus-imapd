@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.2 2003/10/22 18:02:57 rjs3 Exp $
+ * $Id: fetchnews.c,v 1.3 2004/01/02 01:14:32 ken3 Exp $
  */
 
 #include <config.h>
@@ -69,7 +69,8 @@ const int config_need_data = 0;
 void usage(void)
 {
     fprintf(stderr,
-	    "fetchnews [-C <altconfig>] [-s <server>] [-w <wildmat>] [-f <tstamp file>] <peer>\n");
+	    "fetchnews [-C <altconfig>] [-s <server>] [-w <wildmat>] [-f <tstamp file>]\n"
+	    "          [-a <authname> -p <password>] <peer>\n");
     exit(-1);
 }
 
@@ -224,29 +225,6 @@ int main(int argc, char *argv[])
     prot_printf(pout, "MODE READER\r\n");
     prot_fgets(buf, sizeof(buf), pin);
 
-    /* connect to the server */
-    if ((ssock = init_net(server, port, &sin, &sout)) < 0) {
-	fprintf(stderr, "connection to %s failed\n", server);
-	goto quit;
-    }
-
-    /* read the initial greeting */
-    if (!prot_fgets(buf, sizeof(buf), sin) || strncmp("20", buf, 2)) {
-	syslog(LOG_ERR, "server not available");
-	goto quit;
-    }
-
-    /* tell the server we're going to do streaming */
-    prot_printf(sout, "MODE STREAM\r\n");
-    if (!prot_fgets(sbuf, sizeof(sbuf), sin)) {
-	syslog(LOG_ERR, "MODE STREAM terminated abnormally");
-	goto quit;
-    }
-    else if (strncmp("203", sbuf, 3)) {
-	/* server doesn't support STREAM */
-	goto quit;
-    }
-
     /* read the previous timestamp */
     if (!sfile[0]) snprintf(sfile, sizeof(sfile), "%s/newsstamp", config_dir);
 
@@ -290,19 +268,32 @@ int main(int argc, char *argv[])
 	syslog(LOG_ERR, "NEWNEWS terminated abnormally");
 	goto quit;
     }
+    if (!offered) goto quit;
+
+    /* connect to the server */
+    if ((ssock = init_net(server, port, &sin, &sout)) < 0) {
+	fprintf(stderr, "connection to %s failed\n", server);
+	goto quit;
+    }
+
+    /* read the initial greeting */
+    if (!prot_fgets(buf, sizeof(buf), sin) || strncmp("20", buf, 2)) {
+	syslog(LOG_ERR, "server not available");
+	goto quit;
+    }
 
     /* fetch and store articles */
     /* XXX the output of NEWNEWS already contains the terminating \r\n
-       after the msgid, so we don't need to add it to CHECK/ARTICLE/TAKETHIS */
+       after the msgid, so we don't need to add it to IHAVE or ARTICLE */
     for (i = 0; i < offered; i++) {
 
 	/* see if we want this article */
-	prot_printf(sout, "CHECK %s", msgid[i]);
+	prot_printf(sout, "IHAVE %s", msgid[i]);
 	if (!prot_fgets(sbuf, sizeof(sbuf), sin)) {
-	    syslog(LOG_ERR, "CHECK terminated abnormally");
+	    syslog(LOG_ERR, "IHAVE terminated abnormally");
 	    goto quit;
 	}
-	else if (strncmp("238", sbuf, 3)) {
+	else if (strncmp("335", sbuf, 3)) {
 	    /* don't want it */
 	    rejected++;
 	    continue;
@@ -315,13 +306,11 @@ int main(int argc, char *argv[])
 	    goto quit;
 	}
 	else if (strncmp("220", buf, 3)) {
-	    /* doh! the article doesn't exist */
-	    failed++;
-	    continue;
+	    /* doh! the article doesn't exist, terminate IHAVE */
+	    prot_printf(sout, ".\r\n");
 	}
 	else {
 	    /* store the article */
-	    prot_printf(sout, "TAKETHIS %s", msgid[i]);
 	    while (prot_fgets(buf, sizeof(buf), pin)) {
 		prot_write(sout, buf, strlen(buf));
 		if (buf[0] == '.' && buf[1] != '.') break;
@@ -335,10 +324,10 @@ int main(int argc, char *argv[])
 
 	/* see how we did */
 	if (!prot_fgets(buf, sizeof(buf), sin)) {
-	    syslog(LOG_ERR, "TAKETHIS terminated abnormally");
+	    syslog(LOG_ERR, "IHAVE terminated abnormally");
 	    goto quit;
 	}
-	else if (!strncmp("239", buf, 3))
+	else if (!strncmp("235", buf, 3))
 	    accepted++;
 	else
 	    failed++;
