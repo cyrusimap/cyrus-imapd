@@ -282,6 +282,12 @@ Set a quota on the specified root, which may or may not be an actual mailbox.
 The only I<resource> understood by B<Cyrus> is C<STORAGE>.  The I<value> may
 be the special string C<none> which will remove the quota.
 
+=item C<version>
+
+=item C<ver>
+
+Display the version info of the current server.
+
 =back
 
 =head1 NOTES
