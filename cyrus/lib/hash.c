@@ -1,5 +1,5 @@
 /* +++Date last modified: 05-Jul-1997 */
-/* $Id: hash.c,v 1.8 2002/06/18 16:40:21 rjs3 Exp $ */
+/* $Id: hash.c,v 1.8.4.1 2002/08/19 20:41:33 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -110,16 +110,16 @@ void *hash_insert(char *key, void *data, hash_table *table)
       if (!((table->table)[val]))
       {
 	  if(table->pool) {
-            (table->table)[val] =
-		(bucket *)mpool_malloc(table->pool, sizeof(bucket));
-            (table->table)[val] -> key = mpool_strdup(table->pool, key);
+	      (table->table)[val] =
+		  (bucket *)mpool_malloc(table->pool, sizeof(bucket));
+	      (table->table)[val] -> key = mpool_strdup(table->pool, key);
 	  } else {
-            (table->table)[val] = (bucket *)xmalloc(sizeof(bucket));
-            (table->table)[val] -> key = xstrdup(key);
+	      (table->table)[val] = (bucket *)xmalloc(sizeof(bucket));
+	      (table->table)[val] -> key = xstrdup(key);
 	  }
-            (table->table)[val] -> next = NULL;
-            (table->table)[val] -> data = data;
-            return (table->table)[val] -> data;
+	  (table->table)[val] -> next = NULL;
+	  (table->table)[val] -> data = data;
+	  return (table->table)[val] -> data;
       }
 
       /*
