@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.107 2000/12/26 21:35:41 leg Exp $
+ $Id: mailbox.c,v 1.108 2001/01/09 00:18:20 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -536,8 +536,8 @@ int mailbox_read_header(struct mailbox *mailbox)
 
 	/* generate uniqueid */
 	mailbox_lock_header(mailbox);
-	mailbox_open_index(mailbox);
-	mailbox_make_uniqueid(mailbox->name, mailbox->uidvalidity, buf);
+ 	mailbox_open_index(mailbox);
+ 	mailbox_make_uniqueid(mailbox->name, mailbox->uidvalidity, buf);
 	mailbox->uniqueid = xstrdup(buf);
 	mailbox_write_header(mailbox);
 	mailbox_unlock_header(mailbox);
@@ -1856,6 +1856,7 @@ const char *name;
 int mailbox_create(const char *name,
 		   char *path,
 		   const char *acl,
+		   const char *uniqueid,
 		   int format,
 		   struct mailbox *mailboxp)
 {
@@ -1942,8 +1943,13 @@ int mailbox_create(const char *name,
     mailbox.answered = 0;
     mailbox.flagged = 0;
 
-    mailbox.uniqueid = xmalloc(sizeof(char) * 32);
-    mailbox_make_uniqueid(mailbox.name, mailbox.uidvalidity, mailbox.uniqueid);
+    if (!uniqueid) {
+	mailbox.uniqueid = xmalloc(sizeof(char) * 32);
+	mailbox_make_uniqueid(mailbox.name, mailbox.uidvalidity, 
+			      mailbox.uniqueid);
+    } else {
+	mailbox.uniqueid = xstrdup(uniqueid);
+    }
 
     r = mailbox_write_header(&mailbox);
     if (!r) r = mailbox_write_index_header(&mailbox);
@@ -2082,7 +2088,8 @@ mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl,
     }
 
     /* Create new mailbox */
-    r = mailbox_create(newname, newpath, oldmailbox.acl, oldmailbox.format,
+    r = mailbox_create(newname, newpath, 
+		       oldmailbox.acl, oldmailbox.uniqueid, oldmailbox.format,
 		       &newmailbox);
     if (r) {
 	mailbox_close(&oldmailbox);
