@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.38.4.13 2003/05/29 14:42:57 ken3 Exp $ */
+/* $Id: tls.c,v 1.38.4.14 2003/06/15 18:10:43 ken3 Exp $ */
 
 #include <config.h>
 
@@ -930,20 +930,14 @@ int tls_shutdown_serverengine(void)
 {
     int r;
 
-    if (tls_serverengine) {
-	/* close DB */
-	if (sess_dbopen) {
-	    r = DB->close(sessdb);
-	    if (r) {
-		syslog(LOG_ERR, "DBERROR: error closing tlsdb: %s",
-		       cyrusdb_strerror(r));
-	    }
-	    sessdb = NULL;
-	    sess_dbopen = 0;
+    if (tls_serverengine && sess_dbopen) {
+	r = DB->close(sessdb);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: error closing tlsdb: %s",
+		   cyrusdb_strerror(r));
 	}
-
-	/* close DB environment */
-	DB->done();
+	sessdb = NULL;
+	sess_dbopen = 0;
     }
 
     return 0;
@@ -1032,8 +1026,6 @@ int tls_prune_sessions(void)
 	syslog(LOG_NOTICE, "tls_prune: purged %d out of %d entries",
 	       prock.deletions, prock.count);
     }
-
-    DB->done();
 
     return 0;
 }

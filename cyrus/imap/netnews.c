@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: netnews.c,v 1.1.2.11 2003/05/09 02:11:38 ken3 Exp $ */
+/* $Id: netnews.c,v 1.1.2.12 2003/06/15 18:10:43 ken3 Exp $ */
 
 #include <config.h>
 
@@ -286,7 +286,7 @@ int netnews_findall(struct wildmat *wild, time_t mark, int later,
 
 int netnews_done(void)
 {
-    int r;
+    int r = 0;
 
     if (news_dbopen) {
 	r = DB->close(newsdb);
@@ -296,7 +296,6 @@ int netnews_done(void)
 	}
 	news_dbopen = 0;
     }
-    r = DB->done();
 
     return r;
 }

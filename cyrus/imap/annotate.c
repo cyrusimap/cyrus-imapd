@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.36 2003/06/13 00:59:50 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.37 2003/06/15 18:10:42 ken3 Exp $
  */
 
 #include <config.h>
@@ -276,13 +276,7 @@ void annotatemore_close(void)
 
 void annotatemore_done(void)
 {
-    int r;
-
-    r = DB->done();
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
-	       cyrusdb_strerror(r));
-    }
+    /* DB->done() handled by cyrus_done() */
 }
 
 enum {

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.44 2003/05/29 01:48:22 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.45 2003/06/15 18:10:42 ken3 Exp $
  */
 
 #include <config.h>
@@ -2521,13 +2521,7 @@ void mboxlist_close(void)
 
 void mboxlist_done(void)
 {
-    int r;
-
-    r = DB->done();
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
-	       cyrusdb_strerror(r));
-    }
+    /* DB->done() handled by cyrus_done() */
 }
 
 /* hash the userid to a file containing the subscriptions for that user */

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.31.4.5 2003/02/13 20:32:55 rjs3 Exp $ */
+/* $Id: duplicate.c,v 1.31.4.6 2003/06/15 18:10:42 ken3 Exp $ */
 
 #include <config.h>
 
@@ -333,7 +333,7 @@ int duplicate_dump(FILE *f)
 
 int duplicate_done(void)
 {
-    int r;
+    int r = 0;
 
     if (duplicate_dbopen) {
 	r = DB->close(dupdb);
@@ -343,7 +343,6 @@ int duplicate_done(void)
 	}
 	duplicate_dbopen = 0;
     }
-    r = DB->done();
 
     return r;
 }
