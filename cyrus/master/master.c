@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.2 2002/10/01 16:33:38 ken3 Exp $ */
+/* $Id: master.c,v 1.67.4.3 2002/10/01 19:10:31 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1075,7 +1075,7 @@ void add_event(const char *name, struct entry *e, void *rock)
 	}
     }
     else {
-	evt->mark = now + period;
+	evt->mark = now;
     }
     evt->period = period;
 
