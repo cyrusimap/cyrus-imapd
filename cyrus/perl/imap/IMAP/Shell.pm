@@ -1150,7 +1150,7 @@ sub _sc_info {
   }
   foreach my $attrib (keys %info) {
     $attrib =~ /([^\/]*)$/;
-    $lfh->[1]->print($1, " ", $info{$attrib}, "\n");
+    $lfh->[1]->print($1, ": ", $info{$attrib}, "\n");
   }
   0;
 }
