@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.113 2002/02/11 17:41:43 ken3 Exp $
+ * $Id: pop3d.c,v 1.114 2002/02/13 22:15:59 rjs3 Exp $
  */
 #include <config.h>
 
@@ -229,7 +229,9 @@ static void popd_reset(void)
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
  */
-int service_init(int argc, char **argv, char **envp)
+int service_init(int argc __attribute__((unused)),
+		 char **argv __attribute__((unused)),
+		 char **envp __attribute__((unused)))
 {
     int r;
     int opt;
