@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.118 2002/03/30 19:46:57 ken3 Exp $
+ * $Id: pop3d.c,v 1.119 2002/04/10 18:02:42 leg Exp $
  */
 #include <config.h>
 
@@ -794,21 +794,29 @@ static void cmdloop(void)
 			 popd_msg[msg].deleted) {
 		    prot_printf(popd_out, "-ERR No such message\r\n");
 		}
+		else if (mboxstruct.pop3_new_uidl) {
+			    prot_printf(popd_out, "+OK %u %lu.%u\r\n", msg, 
+					mboxstruct.uidvalidity,
+					popd_msg[msg].uid);
+		}
 		else {
-		    prot_printf(popd_out, "+OK %u %u\r\n", msg, popd_msg[msg].uid);
+		    /* old uidl format */
+		    prot_printf(popd_out, "+OK %u %u\r\n", 
+				msg, popd_msg[msg].uid);
 		}
 	    }
 	    else {
 		prot_printf(popd_out, "+OK unique-id listing follows\r\n");
 		for (msg = 1; msg <= popd_exists; msg++) {
 		    if (!popd_msg[msg].deleted) {
-			if (mboxstruct.pop3_new_uidl)
+			if (mboxstruct.pop3_new_uidl) {
 			    prot_printf(popd_out, "%u %lu.%u\r\n", msg, 
 					mboxstruct.uidvalidity,
 					popd_msg[msg].uid);
-			else
+			} else {
 			    prot_printf(popd_out, "%u %u\r\n", msg, 
 					popd_msg[msg].uid);
+			}
 		    }
 		}
 		prot_printf(popd_out, ".\r\n");
