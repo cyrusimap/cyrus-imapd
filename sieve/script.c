@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.54.4.4 2003/03/29 01:26:44 ken3 Exp $
+ * $Id: script.c,v 1.54.4.5 2003/04/01 20:44:36 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -424,7 +424,7 @@ int sieve_script_load(const char *fname, sieve_bytecode_t **ret)
     if (!fname || !ret) return SIEVE_FAIL;
     
     if (stat(fname, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstating sieve script %s: %m", fname);
+	syslog(LOG_DEBUG, "IOERROR: fstating sieve script %s: %m", fname);
 	return SIEVE_FAIL;
     }
 
