@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.55 2002/12/03 18:45:19 rjs3 Exp $
+ * $Id: script.c,v 1.56 2003/04/03 14:59:43 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -815,9 +815,15 @@ static int sieve_removeflag(sieve_imapflags_t *imapflags, char *flag)
 	for (; n < imapflags->nflags; n++)
 	    imapflags->flag[n] = imapflags->flag[n+1];
  
-	imapflags->flag =
-	    (char **) xrealloc((char *)imapflags->flag,
-			       imapflags->nflags*sizeof(char *));
+	if (imapflags->nflags) {
+	    imapflags->flag =
+		(char **) xrealloc((char *)imapflags->flag,
+				   imapflags->nflags*sizeof(char *));
+	}
+	else {
+	    free(imapflags->flag);
+	    imapflags->flag = NULL;
+	}
     }
  
     return SIEVE_OK;
