@@ -1,0 +1,78 @@
+.\" -*- nroff -*-
+.TH IMAPD.CONF 5
+.\" 	(C) Copyright 1994 by Carnegie Mellon University
+.\" 
+.\"                      All Rights Reserved
+.\" 
+.\" Permission to use, copy, modify, and distribute this software and its 
+.\" documentation for any purpose and without fee is hereby granted, 
+.\" provided that the above copyright notice appear in all copies and that
+.\" both that copyright notice and this permission notice appear in 
+.\" supporting documentation, and that the name of CMU not be
+.\" used in advertising or publicity pertaining to distribution of the
+.\" software without specific, written prior permission.  
+.\" 
+.\" CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+.\" ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+.\" CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+.\" ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+.\" WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+.\" ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+.\" SOFTWARE.
+.SH NAME
+\fBimapd.conf\fR \- IMAP configuration file
+.SH DESCRIPTION
+\fBimapd.conf\fR 
+is the configuration file for the IMAP daemon (??).  It defines
+local parameters for IMAP.  This file is typlically stored in
+.I /etc .
+.SH FIELD DESCRIPTIONS
+.IP "\fBconfigdirectory: \fIdir\fR" 5
+The path name of the IMAP configuration directory.  This field is required.
+.IP "\fBdefaultpartition: \fIpartition\fR" 5
+The partition name used by default for new mailboxes. This field is required.
+.IP "\fBpartition-X: \fIpartition\fR" 5
+The path name corresponding to partition X.
+.IP "\fBumask \fIvalue\fR" 5
+The umask value used by various Cyrus IMAP programs.
+.IP "\fBallowanonymouslogin:\fR" 5
+Permits logins by the user "anonymous" without a password; the default is no permission.
+.IP "\fBquotawarn \fIpercentage\fR" 5
+Sets the percent of quota utilization at which the server generates
+warnings; 90 is the recommended value.
+.IP "\fBtimeout \fIvalue\fR" 5
+Sets the length of the IMAP server's inactivity autologout timer,
+in minutes.  The minimum value is 30, the default.
+.IP "\fBpoptimeout \fIvalue\fR" 5
+Sets the length of the POP server's inactivity autologout timer,
+in minutes.  The minimum value is 10, the default.
+.IP "\fBadmins \fIuserids\fR" 5
+The list of userids with administrative rights.  Separate 
+each userid by a space. This field is required.  We recommend that administrator
+userids be separate from standard userids.  Sites using Kerberos may use
+separate "admin" instances.
+.IP "\fBimspservers \fIhosts\fR" 5
+The list of the host names of the mail domain's IMSP
+servers.  Separate each host name by a space.  The Kerberos 
+identities of these servers may login as any user in order to perform
+commands by proxy.
+.IP "\fBdefaultacl \fIacl\fR" 5
+The Access Control Llist (ACL) placed on a newly-created (non-user) 
+mailbox that does not have a parent mailbox.
+.IP "\fBsrvtab \fIpath_name\fR" 5
+The path name of srvtab file containing the server's private 
+key.  This option is only included when the server is compiled with
+Kerberos authentication.
+.IP "\fBloginrealms \fIrealms\fR" 5
+The list of remote realms whose users may log in using 
+cross-realm authentications.  Seperate each realm name
+by a space.  This value is only included when the servier is
+compiled with Kerberos authentication.
+.PP
+Blank lines and lines beginning with '#' are ignored.
+.SH SEE ALSO
+.PP
+\fBimapd(8)\fR
+
+
+
