@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.24 2002/11/06 20:43:20 rjs3 Exp $ */
+/* $Id: arbitron.c,v 1.25 2003/04/22 17:40:27 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -129,7 +129,7 @@ int main(int argc,char **argv)
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    if (optind != argc) strncpy(pattern, argv[optind], MAX_MAILBOX_NAME);
+    if (optind != argc) strlcpy(pattern, argv[optind], sizeof(pattern));
 
     report_time = time(0) - (report_days*60*60*24);
     if (prune_months) {
@@ -199,7 +199,7 @@ int arbitron(char *name)
     int r;
     struct mailbox mailbox;
     struct arbitronargs arbitronargs;
-    char buf[MAX_MAILBOX_PATH];
+    char buf[MAX_MAILBOX_PATH+1];
 
     /* Open/lock header */
     r = mailbox_open_header(name, 0, &mailbox);
