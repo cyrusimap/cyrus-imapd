@@ -66,12 +66,14 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-all: imtest pop3test lmtptest
+all: imtest
 
 install:
 	$(INSTALL) -s -m 755 imtest $(DESTDIR)$(exec_prefix)/bin
-	$(INSTALL) -s -m 755 pop3test $(DESTDIR)$(exec_prefix)/bin
-	$(INSTALL) -s -m 755 lmtptest $(DESTDIR)$(exec_prefix)/bin
+	ln -sf $(DESTDIR)$(exec_prefix)/bin/imtest $(DESTDIR)$(exec_prefix)/bin/pop3test
+	ln -sf $(DESTDIR)$(exec_prefix)/bin/imtest $(DESTDIR)$(exec_prefix)/bin/lmtptest
+	ln -sf $(DESTDIR)$(exec_prefix)/bin/imtest $(DESTDIR)$(exec_prefix)/bin/smtptest
+	ln -sf $(DESTDIR)$(exec_prefix)/bin/imtest $(DESTDIR)$(exec_prefix)/bin/sivtest
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
@@ -82,14 +84,8 @@ imtest: imtest.o $(DEPLIBS)
 imtest.pure: imtest.o $(DEPLIBS)
 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o imtest $(OBJS) $(DEPLIBS) $(LIBS) $(IMAP_LIBS)
 
-pop3test: pop3test.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o pop3test pop3test.o $(DEPLIBS) $(IMAP_LIBS)
-
-lmtptest: lmtptest.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o lmtptest lmtptest.o $(DEPLIBS) $(IMAP_LIBS)
-
 clean:
-	rm -f *.o Makefile.bak makedepend.log imtest pop3test lmtptest
+	rm -f *.o Makefile.bak makedepend.log imtest
 
 distclean: clean
 	rm -f Makefile
