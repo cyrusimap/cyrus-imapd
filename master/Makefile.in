@@ -1,5 +1,5 @@
 # Makefile for the Cyrus controlling process
-# $Id: Makefile.in,v 1.4 2000/04/27 17:03:39 leg Exp $
+# $Id: Makefile.in,v 1.5 2000/05/03 19:24:10 leg Exp $
 # 
 # @configure_input@
 #
@@ -24,7 +24,7 @@ DEPLIBS = @DEPLIBS@
 
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@ @CFLAGS@ @COM_ERR_LDFLAGS@
-LIBS = @LIBS@
+LIBS = @LIBS@ @COM_ERR_LIBS@
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@

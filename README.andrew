@@ -32,12 +32,13 @@ If you get the error 'can not find sources', make sure imap/imap.c is mode a+r.
 
 ----
 To make a release:
+- cvs co -P -d cyrus-imapd-Major.Minor.Revision cyrus
 - make sure the version number is correct
 - make sure to include the C versions of the lex & yacc files in sieve
 - make sure to build configure
 
 - add upgrade notes to doc/html/install.html
-- rebuild the doc/ directory (make all in the doc/ directory)
+- rebuild the doc/txt directory (cd doc/txt ; make all)
 
 - tag the CVS repository with cyrus-release-Major-Minor-Revision
 
