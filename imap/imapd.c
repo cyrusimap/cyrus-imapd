@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.185 1999/10/24 23:39:31 leg Exp $ */
+/* $Id: imapd.c,v 1.186 1999/10/27 21:04:30 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -210,7 +210,8 @@ static int mysasl_config(void *context __attribute__((unused)),
 
 	strncpy(opt, "sasl_", 1024);
 	if (plugin_name) {
-	    i = 5;
+	    int i = 5;
+
 	    for (i = 0; i < strlen(plugin_name); i++) {
 		opt[i + 5] = tolower(plugin_name[i]);
 	    }
