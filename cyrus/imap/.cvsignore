@@ -19,6 +19,7 @@ lmtpd
 lmtpproxyd
 lmtpstats.c
 lmtpstats.h
+mbexamine
 mbpath
 mupdate
 mupdate_err.c
