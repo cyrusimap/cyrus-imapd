@@ -688,10 +688,10 @@ char *user;
 char *passwd;
 {
     char *canon_user;
-    int userlen;
     char *reply = 0;
     char *val;
     char buf[MAX_MAILBOX_PATH];
+    char *p;
     FILE *logfile;
 
     canon_user = auth_canonifyid(user);
@@ -738,16 +738,17 @@ char *passwd;
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
     val = config_getstring("admins", "");
-    userlen = strlen(canon_user);
     while (*val) {
-	if (!strncmp(val, canon_user, userlen) &&
-	    (!val[userlen] || isspace(val[userlen]))) {
+	for (p = val; *p && !isspace(*p); p++);
+	strncpy(buf, val, p - val);
+	buf[p-val] = 0;
+	if (auth_memberof(buf)) {
+	    imapd_userisadmin = 1;
 	    break;
 	}
-	while (*val && !isspace(*val)) val++;
+	val = p;
 	while (*val && isspace(*val)) val++;
     }
-    if (*val != '\0') imapd_userisadmin = 1;
 
     if (!reply) reply = "User logged in";
 
@@ -776,7 +777,6 @@ char *tag;
 char *authtype;
 {
     char *canon_user;
-    int userlen;
     int r;
     struct acte_server *mech;
     int (*authproc)();
@@ -793,6 +793,7 @@ char *authtype;
     int maxplain;
     char *val;
     char buf[MAX_MAILBOX_PATH];
+    char *p;
     FILE *logfile;
 
     lcase(authtype);
@@ -854,16 +855,17 @@ char *authtype;
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
     val = config_getstring("admins", "");
-    userlen = strlen(canon_user);
     while (*val) {
-	if (!strncmp(val, canon_user, userlen) &&
-	    (!val[userlen] || isspace(val[userlen]))) {
+	for (p = val; *p && !isspace(*p); p++);
+	strncpy(buf, val, p - val);
+	buf[p-val] = 0;
+	if (auth_memberof(buf)) {
+	    imapd_userisadmin = 1;
 	    break;
 	}
-	while (*val && !isspace(*val)) val++;
+	val = p;
 	while (*val && isspace(*val)) val++;
     }
-    if (*val != '\0') imapd_userisadmin = 1;
 
     if (!reply) reply = "User logged in";
     syslog(LOG_NOTICE, "login: %s %s %s %s", imapd_clienthost, canon_user,
