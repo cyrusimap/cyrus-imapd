@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.50 1999/09/13 00:07:29 tmartin Exp $
+ * $Id: pop3d.c,v 1.51 1999/10/27 21:03:43 leg Exp $
  */
 
 #ifndef __GNUC__
@@ -280,8 +280,8 @@ usage()
 /*
  * Cleanly shut down and exit
  */
-shut_down(code)
-int code;
+void shut_down(int code) __attribute__((noreturn));
+void shut_down(int code)
 {
     proc_cleanup();
     if (popd_mailbox) {
