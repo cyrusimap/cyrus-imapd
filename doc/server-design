@@ -1,7 +1,7 @@
 -*- text -*-
 
 		       Cyrus IMAP server design
-			     Jul 21, 1993
+			     Sep 15, 1993
 
 * Introduction
 
@@ -18,10 +18,15 @@ The server can be compiled with or without Kerberos support.
 * Mailbox/Bboard namespace
 
 The Cyrus IMAP server presents folders using the "netnews" namespace
-convention.  Folder names match in a case-insensitive manner.
-Non-ASCII characters, shell metacharacters, and "/" are not permitted
-in folder names.  A folder name may not start or end with a "."
-character, nor may it contain two "." characters in a row.
+convention.  Folder names match in a case-insensitive manner.  The
+case used when creating a folder is preserved.  A folder name may not
+start or end with a "."  character, nor may it contain two "."
+characters in a row.
+
+In the initial implementation, non-ASCII characters, shell
+metacharacters, and "/" are not permitted in folder names.  Later
+versions of the server may make the set of permissible characters
+site-policy configurable
 
 * IMAP protocol extensions and implementation decisions
 
@@ -57,9 +62,8 @@ disk in a format best suited to its needs.
 
 Each folder is represented by a directory in the filesystem.  Within
 the directory, each message is stored in its own file in RFC 822
-format.  The filenames of the message files are sequentially-assigned
-internal numbers, with a period appended.  Once a message is appended
-to a folder, its internal sequence number never changes.  Lines are
+format.  The filenames of the message files are the
+sequentially-assigned UID's, with a period appended.  Lines are
 terminated by CRLF.
 
 In order to allow the server to export netnews spool directories,
@@ -83,21 +87,20 @@ cyrus.index	Contains a header and a sequence of fixed-length
 		records, one record per message in the folder.  The
 		header contains:
 
-- magic-number	?
-- folder-format	4 bytes		nonzero if folder in netnews format
 - generation-no	4 bytes		incremented each time cyrus.index is
 				rewritten by an expunge operation
+- folder-format	4 bytes		nonzero if folder in netnews format
 - start-offset	4 bytes		offset of first per-message record
 - record-size	4 bytes		size of per-message records
 - last-date	4 bytes		INTERNALDATE of the last message
 				appended to the folder
-- last-seqno	4 bytes		sequence number of the last message
-				appended to the folder
+- last-uid	4 bytes		UID of the last message	appended to
+				the folder
 - quota-used	4 bytes		size quota usage this folder
 
 		Each per-message record contains:
 
-- sequence-no	4 bytes		internal sequence number
+- uid		4 bytes		UID
 - internaldate	4 bytes		(in unix date format)
 - rfc822.size	4 bytes
 - body-offset	4 bytes		offset in file of message body
@@ -124,7 +127,7 @@ cyrus.seen	Contains the \seen and \recent information of users.
 
 - Userid
 - Time last opened (for \RECENT)
-- SEQUENCE of sequence-no's of read messages
+- SEQUENCE of UID's of read messages
 - Optional space character padding, to avoid having to rewrite file on updates
 
 In order to support replicated folders in a future implementation,
@@ -160,23 +163,20 @@ cyrus.quota for the folder.
 The order of the specific update operations is:
 
 To append one or more messages:
-	lock cyrus.header
+	open/lock cyrus.header
 	check ACL
-	open cyrus.index and cyrus.cache if not already reading them
-	lock already-open cyrus.index file
-	if cyrus.index has been replaced since last opened, close,
-		reopen, send EXPUNGE notifications, and repeat.
-	if reopened cyrus.index file, reopen cyrus.cache file.
-	Lock appropriate cyrus.quota
+	open/lock cyrus.index and cyrus.cache
+	open/lock appropriate cyrus.quota
 	check quota
-	assign sequence number as one plus last-seqno
+	assign uid as one plus last-uid
 	ensure new internaldate is later than last-date
-	write message file(s)
+	write or hard-link message file(s)
 	append info to cyrus.cache
 	append info to cyrus.index
-	update last-date, last-seqno, and quota-used
+	update last-date, last-uid, and quota-used
 	update cyrus.quota
 	release locks
+	if appending to currently-open folder, do check
 
 To add or remove flags:
 	if adding new user flag, lock cyrus.header, update, release lock
@@ -193,7 +193,6 @@ To add or remove flags:
 
 To expunge:
 	lock cyrus.header
-	lock appropriate cyrus.quota
 	open cyrus.index and cyrus.cache if not already reading them
 	lock already-open cyrus.index file
 	if cyrus.index has been replaced since last opened, close,
@@ -201,9 +200,10 @@ To expunge:
 	if reopened cyrus.index file, reopen cyrus.cache file.
 	create files cyrus.index.NEW and cyrus.cache.NEW
 	copy header, incrementing generation-no
-	copy non-\DELETED records to new files, remember seqnos and sizes
+	copy non-\DELETED records to new files, remember uid's and sizes
 	[remove unused user flags from cyrus.header?]
 	update quota-used in cyrus.index.NEW
+	lock appropriate cyrus.quota
 	rename cyrus.index.NEW to cyrus.index
 	rename cyrus.cache.NEW to cyrus.cache
 	update cyrus.quota
@@ -220,7 +220,7 @@ update recent/seen info:
 	find record
 	if user appears to have read everything and previously hadn't
 		check to make sure no new messages
-		mark as having read through last-seqno
+		mark as having read through last-uid
 		dropoff request for IMSP SEEN command
 	else if user previously had read everything but no longer does
 		dropoff request for IMSP SEEN (0) command
@@ -272,7 +272,7 @@ Search:
 	- INTERNALDATE based -- binary search in cyrus.index
 		ALL, BEFORE, ON, SINCE
 
-	- cyrus.seen based -- binary search seqno, internaldate in cyrus.index
+	- cyrus.seen based -- binary search uid, internaldate in cyrus.index
 		NEW, OLD, RECENT, SEEN, UNSEEN
 
 	- cyrus.header based
@@ -354,18 +354,18 @@ to an IMSP server.
 
 Filename is one of:
 
-- last.mailbox.USER.MAILBOX-NAME.SEQUENCE-NO
-- last.bboard.BBOARD-NAME.SEQUENCE-NO
-- seen.mailbox.USER.MAILBOX-NAME.SEQUENCE-NO
-- seen.bboard.USER.BBOARD-NAME.SEQUENCE-NO
+- last.mailbox.USER.MAILBOX-NAME.UID
+- last.bboard.BBOARD-NAME.UID
+- seen.mailbox.USER.MAILBOX-NAME.UID
+- seen.bboard.USER.BBOARD-NAME.UID
 
 With the following definitions:
 
 	USER - Name of user owning/reading
 	MAILBOX-NAME - Name of relevant mailbox
 	BBOARD-NAME - Name of relevant bboard
-	SEQUENCE-NO - Sequence-no of last message posted/read
-		A sequence-no of "0" for seen means user no longer
+	UID - UID of last message posted/read
+		A UID of "0" for seen means user no longer
 		read everything in folder.
 
 The order of operations for the update daemon is:
@@ -373,8 +373,8 @@ The order of operations for the update daemon is:
 	list all files in directory
 	sort in following order
 		last before seen
-		larger sequence-no's take precedence, except
-			if have a sequence-no of 0, have to stat
+		larger UID's take precedence, except
+			if have a UID of 0, have to stat
 			and use the one which was written later
 	give IMSP SEEN and LAST commands
 	unlink files		
@@ -469,7 +469,7 @@ Implementation order is as follows:
 
   + bboard/noop/logout, minimal cyrus-imapd
 
-  + fetch/partial (ex. MIME parts)
+  + fetch/partial (ex. MIME parts, header.matches)
 
 - Flags/Search
 
@@ -481,7 +481,7 @@ Implementation order is as follows:
 
 - Users
 
-  + login/select/MIME fetch, full-fledged cyrus-deliver
+  + login/select/MIME&hdr fetch, full-fledged cyrus-deliver
 
   + create/rename/delete/create.bboard/rename.bboard/delete.bboard
 
@@ -508,5 +508,7 @@ Implementation order is as follows:
   + quota-usage reporter, full cyrus-expire
 
   + cyrus-arbitron, cyrus-pop2d, cyrus-pop3d
+
+  + site-configurable folder namespace
 
   + connection-counting inetd;  Beta release
