@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.24 2001/08/16 20:52:05 ken3 Exp $ */
+/* $Id: fud.c,v 1.22.6.1 2002/12/03 19:26:08 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -81,9 +81,6 @@
 extern int errno;
 extern int optind;
 extern char *optarg;
-
-/* current namespace */
-static struct namespace fud_namespace;
 
 /* forward decls */
 int handle_request(const char *who, const char *name, 
@@ -130,13 +127,12 @@ int begin_handling(void)
 	    }
             for(off = 0; buf[off] != '|' && off < MAXLOGNAME; off++);
             if(off < MAXLOGNAME) {
-		strlcpy(username,buf,off);
+		strncpy(username,buf,off);
             } else {
 		continue;
             }
             q = buf + off + 1;
-            strlcpy(mbox,q,(r - (off + 1)  < MAX_MAILBOX_NAME) ? 
-		    r - (off + 1) : MAX_MAILBOX_NAME);
+            strlcpy(mbox, q, sizeof(mbox));
 
             handle_request(username,mbox,sfrom);
         }
@@ -183,12 +179,6 @@ int main(int argc, char **argv)
     mboxlist_open(NULL);
     mailbox_initialize();
 
-    /* Set namespace */
-    if ((r = mboxname_init_namespace(&fud_namespace, 1)) != 0) {
-	syslog(LOG_ERR, error_message(r));
-	fatal(error_message(r), EC_CONFIG);
-    }
-
     r = init_network(port);
     if (r) {
         fatal("unable to configure network port", EC_OSERR);
@@ -216,7 +206,7 @@ int handle_request(const char *who, const char *name,
     lastread = 0;
     lastarrived = 0;
 
-    r = (*fud_namespace.mboxname_tointernal)(&fud_namespace,name,who,mboxname);
+    r = mboxname_tointernal(name,who,mboxname);
     if (r) return r; 
 
     /*
