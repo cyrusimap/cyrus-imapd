@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.15 2002/08/29 20:27:57 rjs3 Exp $
+ * $Id: annotate.c,v 1.8.6.16 2002/08/29 20:33:50 ken3 Exp $
  */
 
 #include <config.h>
@@ -292,8 +292,7 @@ typedef enum {
 
 struct mailbox_annotation_rock 
 {
-    char *server, *partition, *acl;
-    const char *path;
+    char *server, *partition, *acl, *path;
 };
 
 struct annotation_result 
