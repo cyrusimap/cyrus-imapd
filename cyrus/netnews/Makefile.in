@@ -39,7 +39,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.6.4.2 2003/02/07 23:34:57 rjs3 Exp $
+# $Id: Makefile.in,v 1.6.4.3 2003/06/19 17:57:39 ken3 Exp $
 # 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -63,7 +63,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-OBJS = remotepurge.o readconfig.o wildmat.o
+OBJS = remotepurge.o readconfig.o
 
 all: remotepurge
 

@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.164.4.29 2003/06/19 15:26:29 ken3 Exp $
+# $Id: Makefile.in,v 1.164.4.30 2003/06/19 17:57:36 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -162,9 +162,6 @@ pushstats.c pushstats.h: pushstats.snmp $(srcdir)/../snmp/snmpgen
 lmtpstats.c lmtpstats.h: lmtpstats.snmp $(srcdir)/../snmp/snmpgen
 	$(srcdir)/../snmp/snmpgen $(srcdir)/lmtpstats.snmp
 
-wildmat.c:
-	ln -s ../netnews/wildmat.c wildmat.c
-
 imap_err.h imap_err.c: imap_err.et
 	$(COMPILE_ET) $(srcdir)/imap_err.et
 
@@ -245,10 +242,10 @@ pop3d: pop3d.o backend.o tls.o mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o pop3d pop3d.o backend.o tls.o $(SERVICE) \
 	 mutex_fake.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-nntpd: nntpd.o backend.o index.o spool.o netnews.o wildmat.o tls.o \
+nntpd: nntpd.o backend.o index.o spool.o netnews.o tls.o \
 	 mutex_fake.o nntp_err.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o nntpd nntpd.o backend.o index.o spool.o \
-	 netnews.o wildmat.o tls.o $(SERVICE) mutex_fake.o nntp_err.o \
+	 netnews.o tls.o $(SERVICE) mutex_fake.o nntp_err.o \
 	 libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 fud: fud.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
@@ -288,9 +285,9 @@ cyr_expire: cyr_expire.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ cyr_expire.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
 
-expirenews: expirenews.o netnews.o wildmat.o $(CLIOBJS) libimap.a $(DEPLIBS)
+expirenews: expirenews.o netnews.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
-	 $@ expirenews.o netnews.o wildmat.o $(CLIOBJS) libimap.a \
+	 $@ expirenews.o netnews.o $(CLIOBJS) libimap.a \
 	 $(DEPLIBS) $(LIBS)
 
 fetchnews: fetchnews.o $(CLIOBJS) libimap.a $(DEPLIBS)

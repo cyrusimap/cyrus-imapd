@@ -36,39 +36,13 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ * $Id: wildmat.h,v 1.1.2.1 2003/06/19 17:57:38 ken3 Exp $
  */
 
-/* $Id: netnews.h,v 1.1.2.6 2003/06/19 17:57:37 ken3 Exp $ */
+#ifndef INCLUDED_WILDMAT_H
+#define INCLUDED_WILDMAT_H
 
-#ifndef NETNEWS_H
-#define NETNEWS_H
+extern int wildmat(const char *text, const char *p);
 
-#include "wildmat.h"
-
-#define NETNEWS_RECOVER 0x01
-
-/* name of the netnews database */
-#define FNAME_NETNEWSDB "/netnews.db"
-
-struct wildmat {
-    char *pat;
-    int not;
-};
-
-struct wildmat *split_wildmats(char *str);
-void free_wildmats(struct wildmat *wild);
-
-int netnews_init(char*, int);
-
-int netnews_lookup(char *msgid, char **mailbox, unsigned long *uid,
-		   time_t *tstamp);
-void netnews_store(char *msgid, char *mailbox, unsigned long uid,
-		   time_t tstamp);
-void netnews_delete(char *msgid);
-
-int netnews_findall(struct wildmat *wild, time_t mark, int since,
-		    int (*proc)(), void *rock);
-
-int netnews_done(void);
-
-#endif /* NETNEWS_H */
+#endif /* INCLUDED_WILDMAT_H */

@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.53.4.6 2003/02/12 19:12:42 rjs3 Exp $
+# $Id: Makefile.in,v 1.53.4.7 2003/06/19 17:57:37 ken3 Exp $
 
 # Authorization namespace.
 AUTH=auth_@WITH_AUTH@.o
@@ -89,7 +89,7 @@ LIBCYR_OBJS = acl.o bsearch.o charset.o glob.o retry.o util.o \
 	chartable.o imapurl.o nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o \
 	gmtoff_@WITH_GMTOFF@.o map_@WITH_MAP@.o $(ACL) $(AUTH) \
 	@LIBOBJS@ cyrusdb_berkeley.o cyrusdb_flat.o cyrusdb_skiplist.o \
-	iptostring.o xmalloc.o
+	iptostring.o xmalloc.o wildmat.o
 
 LIBCYRM_HDRS = $(srcdir)/hash.h $(srcdir)/mpool.h $(srcdir)/xmalloc.h \
 	$(srcdir)/strhash.o $(srcdir)/libconfig.h $(srcdir)/assert.h \
