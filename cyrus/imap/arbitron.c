@@ -161,7 +161,7 @@ char *name;
     if (!r) {
 	if (arbitronargs.read_count ||
 	    strncasecmp(name, "user.", 5) != 0) {
-	    printf("%u\t%s\n", arbitronargs.read_count, name);
+	    printf("%u %s\n", arbitronargs.read_count, name);
 	}
     }
 
