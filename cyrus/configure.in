@@ -3,9 +3,8 @@ AC_INIT(imap/imapd.c)
 AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_RANLIB
-AC_SET_MAKE
+AC_PROG_MAKE_SET
 AC_AIX
-dnl AC_MINIX Don't think MINIX handles long file names
 AC_ISC_POSIX
 AC_PROG_LEX
 case "$LEX" in
@@ -14,40 +13,57 @@ case "$LEX" in
 esac
 AC_SUBST(LEXFLAGS)
 AC_PROG_YACC
-AC_CONST
-AC_LONG_FILE_NAMES
-case "$DEFS" in
-	*-DHAVE_LONG_FILE_NAMES*) ;;
-	*) echo "The Cyrus IMAPD requires support for long file names"
-	   exit 1;;
-esac
-AC_HAVE_HEADERS(unistd.h)
+AC_C_CONST
+AC_SYS_LONG_FILE_NAMES
+if test $ac_cv_sys_long_file_names = no; then
+	AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
+fi
+AC_CHECK_HEADERS(unistd.h)
 AC_REPLACE_FUNCS(bcopy strcasecmp ftruncate getdtablesize)
-AC_DIR_HEADER
-dnl AC_XENIX_DIR  Don't think Xenix handles long file names
+AC_HEADER_DIRENT
 AC_SUBST(CPPFLAGS)
 AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
-AC_VPRINTF
-echo checking setproctitle
-AC_TEST_CPP([#if defined(_AIX3) || defined(DGUX) || defined(_SEQUENT_) || defined(apollo)
+AC_FUNC_VPRINTF
+
+AC_MSG_CHECKING(for setproctitle)
+AC_CACHE_VAL(cyrus_cv_sys_setproctitle, AC_TRY_CPP([
+#if defined(_AIX3) || defined(DGUX) || defined(_SEQUENT_) || defined(apollo)
 #include </nonexistent>
-#endif],AC_DEFINE(SETPROCTITLE))
-AC_COMPILE_CHECK(nonblocking fcntl,[#include <sys/types.h>
+#endif],cyrus_cv_sys_setproctitle=yes,cyrus_cv_sys_setproctitle=no))
+if test $cyrus_cv_sys_setproctitle = yes; then
+	AC_DEFINE(SETPROCTITLE)
+fi
+AC_MSG_RESULT($cyrus_cv_sys_setproctitle)
+
+AC_MSG_CHECKING(nonblocking method)
+AC_CACHE_VAL(cyrus_cv_sys_nonblock,AC_TRY_LINK([#include <sys/types.h>
 #include <sys/file.h>
 #include <fcntl.h>
 #ifndef	FNDELAY
 #define FNDELAY		O_NDELAY
-#endif],[fcntl(0, F_GETFL, 0)&FNDELAY],WITH_NONBLOCK=fcntl,WITH_NONBLOCK=ioctl)
+#endif],[fcntl(0, F_GETFL, 0)&FNDELAY],
+cyrus_cv_sys_nonblock=fcntl,cyrus_cv_sys_nonblock=ioctl))
+WITH_NONBLOCK=$cyrus_cv_sys_nonblock
 AC_SUBST(WITH_NONBLOCK)
-AC_COMPILE_CHECK(tm_gmtoff,[#include <time.h>],[struct tm tm;
-tm.tm_gmtoff = 0;],WITH_GMTOFF=tm,WITH_GMTOFF=gmtime)
+AC_MSG_RESULT($WITH_NONBLOCK)
+
+AC_MSG_CHECKING(GMT offset method)
+AC_CACHE_VAL(cyrus_cv_struct_sys_gmtoff,AC_TRY_COMPILE([
+#include <time.h>],[struct tm tm;
+tm.tm_gmtoff = 0;
+],cyrus_cv_struct_sys_gmtoff=tm,cyrus_cv_struct_sys_gmtoff=gmtoff))
+WITH_GMTOFF=$cyrus_cv_struct_sys_gmtoff
 AC_SUBST(WITH_GMTOFF)
-AC_MMAP
-case "$DEFS" in
-	*-DHAVE_MMAP*) WITH_MAP="mmap" ;;
-	*) echo checking for non-shared mmap
-AC_TEST_PROGRAM([#include <sys/types.h>
+AC_MSG_RESULT($WITH_GMTOFF)
+
+AC_FUNC_MMAP
+if test $ac_cv_func_mmap = yes; then
+	WITH_MAP="mmap"
+else
+	AC_MSG_CHECKING(for non-shared mmap)
+	AC_CACHE_VAL(cyrus_cv_func_mmap_private,AC_TRY_RUN([
+#include <sys/types.h>
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -61,22 +77,39 @@ if (mmap((caddr_t)0, 100, PROT_READ, MAP_PRIVATE
 | MAP_VARIABLE
 #endif
 , fd, 0L) == (caddr_t)-1)
- exit(1);exit(0);}],
-   echo "*** This system's mmap() does not adequately support shared memory"
-   echo "*** Expect a performance penalty"
-   WITH_MAP=private,
-	   echo "*** This system does not have a working mmap()"
-	   echo "*** Expect a considerable performance penalty"
-	   WITH_MAP=nommap) ;;
-esac
+ exit(1);exit(0);}
+],cyrus_cv_func_mmap_private=yes,cyrus_cv_func_mmap_private=no,
+cyrus_cv_func_mmap_private=no))
+	AC_MSG_RESULT($cyrus_cv_func_mmap_private)
+
+	if test $cyrus_cv_func_mmap_private = yes; then
+		AC_MSG_WARN(*** mmap() does not adequately support shared memory)
+		AC_MSG_WARN(*** Expect a performance penalty)
+		WITH_MAP=private
+	else
+		AC_MSG_WARN(*** This system does not have a working mmap())
+		AC_MSG_WARN(*** Expect a considerable performance penalty)
+		WITH_MAP=nommap
+	fi
+fi
+
 AC_SUBST(WITH_MAP)
-AC_WITH(lock,WITH_LOCK="$withval",
-	AC_FUNC_CHECK(flock,WITH_LOCK="flock",WITH_LOCK="fcntl"))
+AC_ARG_WITH(lock,[  --with-lock=METHOD      force use of METHOD for locking
+                          METHOD is flock or fcntl],WITH_LOCK="$withval",
+	AC_CHECK_FUNC(flock,WITH_LOCK="flock",WITH_LOCK="fcntl"))
 AC_SUBST(WITH_LOCK)
-echo checking for Kerberos
-if test -f /etc/krb.conf; then have_kerberos=1; fi
-AC_WITH(login,WITH_LOGIN="$withval",
-	if test -n "$have_kerberos"; then
+
+AC_MSG_CHECKING(for Kerberos)
+AC_CACHE_VAL(cyrus_cv_lib_kerberos, if test -f /etc/krb.conf; then
+	cyrus_cv_lib_kerberos=yes
+else
+	cyrus_cv_lib_kerberos=no
+fi)
+AC_MSG_RESULT($cyrus_cv_lib_kerberos)
+
+AC_ARG_WITH(login,[  --with-login=METHOD     use login module METHOD
+                          METHOD is unix or krb], WITH_LOGIN="$withval",
+	if test $cyrus_cv_lib_kerberos = yes; then
 		echo using Kerberos authentication
 		WITH_LOGIN=krb
 	else
@@ -84,10 +117,11 @@ AC_WITH(login,WITH_LOGIN="$withval",
 		WITH_LOGIN=unix
 	fi)
 AC_SUBST(WITH_LOGIN)
-AC_WITH(auth,[WITH_AUTH="$withval"
+AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
+                          METHOD is unix or krb],[WITH_AUTH="$withval"
 	case "$withval" in
 	${WITH_LOGIN}*) true;;
-	*) echo Authorization module incompatibile with login module; exit 1;;
+	*) AC_MSG_ERROR(Authorization module incompatibile with login module);;
 	esac],WITH_AUTH="$WITH_LOGIN")
 AC_SUBST(WITH_AUTH)
 dnl
@@ -99,7 +133,8 @@ dnl
 dnl Checking for Tcl first puts -lm before -lkrb on the library list.
 dnl
 TCL_SUBDIRS="cyradm"
-AC_WITH(tcl,with_tcl="${withval}")
+AC_ARG_WITH(tcl,[  --with-tcl=PATH         use tcl from PATH],
+	with_tcl="${withval}")
 if test -z "$with_tcl"; then
      if test -f /usr/local/lib/libtcl.a; then
 	with_tcl="/usr/local"
@@ -107,9 +142,9 @@ if test -z "$with_tcl"; then
 fi
 case "$with_tcl" in
 	no) TCL_SUBDIRS="" ;;
-	"") AC_HAVE_LIBRARY(tcl,LIBS="${LIBS} -ltcl -lm",
-	    [echo "Unable to find Tcl, will not compile cyradm"
-	     TCL_SUBDIRS=""]) ;;
+	"") AC_CHECK_LIB(tcl,main,LIBS="${LIBS} -ltcl -lm",
+	    [AC_MSG_WARN([Unable to find Tcl, will not compile cyradm])
+	     TCL_SUBDIRS=""],-lm) ;;
 	*)  CPPFLAGS="${CPPFLAGS} -I${with_tcl}/include"
 	    LIBS="${LIBS} ${with_tcl}/lib/libtcl.a -lm" ;;
 esac
@@ -117,7 +152,8 @@ AC_SUBST(TCL_SUBDIRS)
 dnl
 dnl Test for Kerberos
 dnl
-AC_WITH(krb,with_krb="${withval}")
+AC_ARG_WITH(krb,[  --with-krb=PATH         use Kerberos from PATH],
+	with_krb="${withval}")
 if test -z "$with_krb"; then
      if test -f /usr/local/lib/libkrb.a; then
 	with_krb="/usr/local"
@@ -125,14 +161,14 @@ if test -z "$with_krb"; then
 fi
 case "$with_krb" in
 	no) true;;
-	"") AC_HAVE_LIBRARY(krb,LIBS="${LIBS} -lkrb -ldes",
-		with_krb="no");;
+	"") AC_CHECK_LIB(krb,main,LIBS="${LIBS} -lkrb -ldes",
+		with_krb="no",-ldes);;
 	*)  CPPFLAGS="${CPPFLAGS} -I${with_krb}/include"
 	    LIBS="${LIBS} ${with_krb}/lib/libkrb.a ${with_krb}/lib/libdes.a";;
 esac
 if test "$with_krb" = "no"; then
      if test "$WITH_LOGIN" = "krb"; then
-	echo Unable to find Kerberos libraries; exit 1
+	AC_MSG_ERROR(Unable to find Kerberos libraries)
      fi
 else
      AC_DEFINE(HAVE_ACTE_KRB)
@@ -141,7 +177,8 @@ fi
 dnl
 dnl Look for inn
 dnl
-AC_WITH(inn,INNSHELLVARS="$withval/innshellvars",[
+AC_ARG_WITH(inn,[  --with-inn=PATH         use INN from PATH],
+	INNSHELLVARS="$withval/innshellvars",[
 echo checking for inn
 if test -f /usr/local/news/innshellvars; then
 	INNSHELLVARS=/usr/local/news/innshellvars
@@ -154,13 +191,21 @@ else
 	INNSHELLVARS=/did/not/find/innshellvars
 fi])
 AC_SUBST(INNSHELLVARS)
-echo checking for modern syslog
-AC_TEST_CPP([#include <syslog.h>
+
+AC_MSG_CHECKING(for modern syslog)
+AC_CACHE_VAL(cyrus_cv_lib_syslog, AC_TRY_CPP([#include <syslog.h>
 #ifndef LOG_LOCAL6
 #include </nonexistent>
-#endif], ,EXTRA_SUBDIRS="${EXTRA_SUBDIRS} syslog" DEPLIBS="${DEPLIBS} ../syslog/libsyslog.a" CPPFLAGS="$CPPFLAGS -I\$(srcdir)/../syslog")
+#endif],cyrus_cv_lib_syslog=yes,cyrus_cv_lib_syslog=no))
+if test $cyrus_cv_lib_syslog = no; then
+	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} syslog"
+	DEPLIBS="${DEPLIBS} ../syslog/libsyslog.a"
+	CPPFLAGS="$CPPFLAGS -I\$(srcdir)/../syslog"
+fi
+AC_MSG_RESULT($cyrus_cv_lib_syslog)
+
 dnl
 dnl Some systems need a socket library
 dnl
-AC_HAVE_LIBRARY(socket, LIBS="${LIBS} -lsocket -lnsl")
+AC_CHECK_LIB(socket, main, LIBS="${LIBS} -lsocket -lnsl",,-lnsl)
 AC_OUTPUT(Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile cyradm/Makefile imtest/Makefile glue/feedcyrus)

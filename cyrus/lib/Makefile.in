@@ -1,5 +1,7 @@
 # Makefile for cyrus library
 # 
+# @configure_input@
+# 
 #	(C) Copyright 1994 by Carnegie Mellon University
 # 
 #                      All Rights Reserved
@@ -39,8 +41,8 @@ DEFS = @DEFS@
 CPPFLAGS = @CPPFLAGS@
 LIBS = @LIBS@
 
-CFLAGS = -g
-LDFLAGS = -g
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@
 
 SHELL = /bin/sh
 

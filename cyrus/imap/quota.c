@@ -31,24 +31,22 @@
 #include <sys/stat.h>
 #include <com_err.h>
 
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#if HAVE_DIRENT_H
+# include <dirent.h>
+# define NAMLEN(dirent) strlen((dirent)->d_name)
+#else
+# define dirent direct
+# define NAMLEN(dirent) (dirent)->d_namlen
+# if HAVE_SYS_NDIR_H
+#  include <sys/ndir.h>
+# endif
+# if HAVE_SYS_DIR_H
+#  include <sys/dir.h>
+# endif
+# if HAVE_NDIR_H
+#  include <ndir.h>
+# endif
 #endif
-/* unistd.h defines _POSIX_VERSION on POSIX.1 systems. */
-#if defined(DIRENT) || defined(_POSIX_VERSION)
-#include <dirent.h>
-#else /* not (DIRENT or _POSIX_VERSION) */
-#define dirent direct
-#ifdef SYSNDIR
-#include <sys/ndir.h>
-#endif /* SYSNDIR */
-#ifdef SYSDIR
-#include <sys/dir.h>
-#endif /* SYSDIR */
-#ifdef NDIR
-#include <ndir.n>
-#endif /* NDIR */
-#endif /* not (DIRENT or _POSIX_VERSION) */
 
 #include "assert.h"
 #include "config.h"

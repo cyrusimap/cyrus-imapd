@@ -1,4 +1,6 @@
 # Makefile for syslog replacement
+#
+# @configure_input@
 # 
 #	(C) Copyright 1994 by Carnegie Mellon University
 # 
@@ -33,8 +35,8 @@ DEFS = @DEFS@
 CPPFLAGS = @CPPFLAGS@
 LIBS = @LIBS@
 
-CFLAGS = -g
-LDFLAGS = -g
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@
 
 SHELL = /bin/sh
 

@@ -1,5 +1,6 @@
 #! /bin/sh
-##  $Revision: 1.2 $
+# @configure_input@
+##
 ##  Send news to Cyrus IMAPD
 ##  =()<. @<_PATH_SHELLVARS>@>()=
 . @INNSHELLVARS@
