@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.88 2004/01/20 21:18:38 rjs3 Exp $ */
+/* $Id: master.c,v 1.89 2004/01/20 21:27:31 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -129,6 +129,7 @@ struct event {
     char *name;
     time_t mark;
     time_t period;
+    int periodic;
     char *const *exec;
     struct event *next;
 };
@@ -767,7 +768,12 @@ void spawn_schedule(time_t now)
 	/* reschedule as needed */
 	b = a->next;
 	if (a->period) {
-	    a->mark = now + a->period;
+	    if(a->periodic) {
+		a->mark = now + a->period;
+	    } else {
+		/* Daily Event */
+		a->mark += a->period;
+	    }
 	    /* reschedule a */
 	    schedule_event(a);
 	} else {
@@ -1485,6 +1491,7 @@ void add_event(const char *name, struct entry *e, void *rock)
 	struct tm *tm = localtime(&now);
 
 	period = 86400; /* 24 hours */
+	evt->periodic = 1;
 	tm->tm_hour = hour;
 	tm->tm_min = min;
 	tm->tm_sec = 0;
@@ -1494,6 +1501,7 @@ void add_event(const char *name, struct entry *e, void *rock)
 	}
     }
     else {
+	evt->periodic = 0;
 	evt->mark = now;
     }
     evt->period = period;
