@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.14 2004/02/04 20:26:29 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.15 2004/02/05 21:21:54 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2700,6 +2700,18 @@ void cmd_select(char *tag, char *cmd, char *name)
     }
 
     /* local mailbox */
+    if (backend_current) {
+      char mytag[128];
+
+      /* switching servers; flush old server output */
+      proxy_gentag(mytag, sizeof(mytag));
+      prot_printf(backend_current->out, "%s Unselect\r\n", mytag);
+      /* do not fatal() here, because we don't really care about this
+       * server anymore anyway */
+      pipe_until_tag(backend_current, mytag, 1);
+    }
+    backend_current = NULL;
+
     if (!r) {
 	r = mailbox_open_header(mailboxname, imapd_authstate, &mailbox);
     }
