@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.8 2000/11/07 19:37:47 leg Exp $
+# $Id: Makefile.in,v 1.9 2000/12/18 04:53:42 leg Exp $
 #
 # @configure_input@
 # 
@@ -64,7 +64,7 @@ cyrus_prefix = @cyrus_prefix@
 CC = @CC@
 PLMAKE = imap/Makefile
 
-all:: checkdepend $(PLMAKE)
+all:: $(PLMAKE)
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" all "in" `pwd`;	\

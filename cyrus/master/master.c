@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.23 2000/12/14 19:26:51 ken3 Exp $ */
+/* $Id: master.c,v 1.24 2000/12/18 04:53:42 leg Exp $ */
 
 #include <config.h>
 
@@ -85,7 +85,7 @@
 enum {
     become_cyrus_early = 1,
     child_table_size = 10000,
-    child_table_inc = 100,
+    child_table_inc = 100
 };
 
 static int verbose = 0;
@@ -602,11 +602,11 @@ void sighandler_setup(void)
 void process_msg(struct service *s, int msg)
 {
     switch (msg) {
-    case SERVICE_AVAILABLE:
+    case MASTER_SERVICE_AVAILABLE:
 	s->ready_workers++;
 	break;
 
-    case SERVICE_UNAVAILABLE:
+    case MASTER_SERVICE_UNAVAILABLE:
 	s->ready_workers--;
 	break;
 	

@@ -45,8 +45,8 @@
 #define STATUS_FD (3)
 #define LISTEN_FD (4)
 
-#define SERVICE_AVAILABLE 0x01
-#define SERVICE_UNAVAILABLE 0x02
+#define MASTER_SERVICE_AVAILABLE 0x01
+#define MASTER_SERVICE_UNAVAILABLE 0x02
 
 extern int service_init(int argc, char **argv, char **envp);
 extern int service_main(int argc, char **argv, char **envp);

@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.16 2000/10/12 20:08:04 leg Exp $ */
+/* $Id: fud.c,v 1.17 2000/12/18 04:53:38 leg Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -104,7 +104,7 @@ int init_network(int port)
 int begin_handling(void)
 {
         struct sockaddr_in  sfrom;
-        int sfromsiz = sizeof(sfrom);
+        socklen_t sfromsiz = sizeof(sfrom);
         int r;
         char    buf[MAXLOGNAME + MAX_MAILBOX_NAME + 1];
         char    username[MAXLOGNAME];

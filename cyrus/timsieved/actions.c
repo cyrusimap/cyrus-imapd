@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.21 2000/08/21 16:52:51 leg Exp $
+ * $Id: actions.c,v 1.22 2000/12/18 04:53:43 leg Exp $
  * 
  */
 /*
@@ -44,7 +44,9 @@
  *
  */
 
+#ifdef HAVE_CONFIG_H
 #include <config.h>
+#endif
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -146,7 +148,7 @@ int scriptname_valid(mystring_t *name)
 int capabilities(struct protstream *conn, sasl_conn_t *saslconn)
 {
     char *sasllist;
-    int mechcount;
+    unsigned mechcount;
 
     /* implementation */
     prot_printf(conn, "\"IMPLEMENTATION\" \"" SIEVED_IDENT " " SIEVED_VERSION "\"\r\n");

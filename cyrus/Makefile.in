@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.38 2000/09/05 06:03:09 leg Exp $
+# $Id: Makefile.in,v 1.39 2000/12/18 04:53:37 leg Exp $
 #
 # @configure_input@
 # 
@@ -59,7 +59,7 @@ cyrus_prefix = @cyrus_prefix@
 
 VERSION = 2.0.7
 
-all:: checkdepend
+all:: 
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" all "in" `pwd`;	\

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.140 2000/12/12 18:40:56 leg Exp $
+ * $Id: mboxlist.c,v 1.141 2000/12/18 04:53:39 leg Exp $
  */
 
 #include <config.h>
@@ -87,7 +87,7 @@ extern int errno;
 #define DB CONFIG_DB_MBOX
 #define SUBDB CONFIG_DB_SUBS
 
-acl_canonproc_t mboxlist_ensureOwnerRights;
+cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
 struct db *mbdb;
 
@@ -341,7 +341,7 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
 	
 	/* Lie about error if privacy demands */
 	if (!isadmin && 
-	    !(acl_myrights(auth_state, acl) & ACL_LOOKUP)) {
+	    !(cyrus_acl_myrights(auth_state, acl) & ACL_LOOKUP)) {
 	    r = IMAP_PERMISSION_DENIED;
 	}
 	return r;       
@@ -382,7 +382,7 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
     }
     if (parentlen != 0) {
 	/* check acl */
-	if (!isadmin && !(acl_myrights(auth_state, parentacl) & ACL_CREATE)) {
+	if (!isadmin && !(cyrus_acl_myrights(auth_state, parentacl) & ACL_CREATE)) {
 	    return IMAP_PERMISSION_DENIED;
 	}
 
@@ -422,8 +422,8 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
 	     * Users by default have all access to their personal mailbox(es),
 	     * Nobody else starts with any access to same.
 	     */
-	    acl_set(&acl, name+5, ACL_MODE_SET, ACL_ALL,
-		    (acl_canonproc_t *)0, (void *)0);
+	    cyrus_acl_set(&acl, name+5, ACL_MODE_SET, ACL_ALL,
+		    (cyrus_acl_canonproc_t *)0, (void *)0);
 	} else {
 	    defaultacl = identifier = 
 		xstrdup(config_getstring("defaultacl", "anyone lrs"));
@@ -438,8 +438,8 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
 		p = rights;
 		while (*p && !isspace((int) *p)) p++;
 		if (*p) *p++ = '\0';
-		acl_set(&acl, identifier, ACL_MODE_SET, acl_strtomask(rights),
-			(acl_canonproc_t *)0, (void *)0);
+		cyrus_acl_set(&acl, identifier, ACL_MODE_SET, cyrus_acl_strtomask(rights),
+			(cyrus_acl_canonproc_t *)0, (void *)0);
 		identifier = p;
 	    }
 	    free(defaultacl);
@@ -726,7 +726,7 @@ int mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	 * the user is an admin.
 	 */
 	if (checkacl &&
-	    (!(acl_myrights(auth_state, acl) & ACL_CREATE))) {
+	    (!(cyrus_acl_myrights(auth_state, acl) & ACL_CREATE))) {
 	    r = IMAP_PERMISSION_DENIED;
 	    DB->abort(mbdb, tid);
 	    goto done;
@@ -752,7 +752,7 @@ int mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     isremote = mbtype & MBTYPE_REMOTE;
 
     /* check if user has Delete right */
-    access = acl_myrights(auth_state, acl);
+    access = cyrus_acl_myrights(auth_state, acl);
     if (checkacl && !(access & ACL_CREATE)) {
 	/* User has admin rights over their own mailbox namespace */
 	if (mboxname_userownsmailbox(userid, name)) {
@@ -897,7 +897,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     } else if (!strncmp(oldname, "user.", 5) && !strchr(oldname+5, '.')) {
 	if (!strcmp(oldname+5, userid)) {
 	    /* Special case of renaming inbox */
-	    access = acl_myrights(auth_state, oldacl);
+	    access = cyrus_acl_myrights(auth_state, oldacl);
 	    if (!(access & ACL_CREATE)) {
 	      r = IMAP_PERMISSION_DENIED;
 	      goto done;
@@ -909,7 +909,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	    goto done;
 	}
     } else {
-	access = acl_myrights(auth_state, oldacl);
+	access = cyrus_acl_myrights(auth_state, oldacl);
 	if (!(access & ACL_CREATE) && !isadmin) {
 	    r = (isadmin || (access & ACL_LOOKUP)) ?
 		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
@@ -1130,7 +1130,7 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
     }
 
     if (!r && !isadmin && !isusermbox) {
-	access = acl_myrights(auth_state, acl);
+	access = cyrus_acl_myrights(auth_state, acl);
 	if (!(access & ACL_ADMIN)) {
 	    r = (access & ACL_LOOKUP) ?
 	      IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
@@ -1151,7 +1151,7 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	    mode = ACL_MODE_REMOVE;
 	}
 	
-	if (acl_set(&newacl, identifier, mode, acl_strtomask(rights),
+	if (cyrus_acl_set(&newacl, identifier, mode, cyrus_acl_strtomask(rights),
 		    isusermbox ? mboxlist_ensureOwnerRights : 0,
 		    (void *)userid))
 	{
@@ -1160,7 +1160,7 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	}
     }
     else {
-	if (acl_remove(&newacl, identifier,
+	if (cyrus_acl_remove(&newacl, identifier,
 		       isusermbox ? mboxlist_ensureOwnerRights : 0,
 		       (void *)userid)) {
 	  r = IMAP_INVALID_IDENTIFIER;
@@ -1360,10 +1360,10 @@ static int find_cb(void *rockp,
 	    if (acllen < sizeof(aclbuf) - 1) {
 		memcpy(aclbuf, acl, acllen);
 		aclbuf[acllen] = '\0';
-		rights = acl_myrights(rock->auth_state, aclbuf);
+		rights = cyrus_acl_myrights(rock->auth_state, aclbuf);
 	    } else {
 		char *a = xstrndup(acl, datalen - (acl - data));
-		rights = acl_myrights(rock->auth_state, a);
+		rights = cyrus_acl_myrights(rock->auth_state, a);
 		free(a);
 	    }
 	    if (!(rights & ACL_LOOKUP)) {
@@ -1964,7 +1964,7 @@ int mboxlist_changesub(const char *name, const char *userid,
 	    mboxlist_closesubs(subs);
 	    return r;
 	}
-	if ((acl_myrights(auth_state, acl) & (ACL_READ|ACL_LOOKUP)) == 0) {
+	if ((cyrus_acl_myrights(auth_state, acl) & (ACL_READ|ACL_LOOKUP)) == 0) {
 	    mboxlist_closesubs(subs);
 	    return IMAP_MAILBOX_NONEXISTENT;
 	}

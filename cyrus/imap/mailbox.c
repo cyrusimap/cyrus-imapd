@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.105 2000/12/07 22:37:39 leg Exp $
+ $Id: mailbox.c,v 1.106 2000/12/18 04:53:39 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -337,7 +337,7 @@ int mailbox_open_header_path(const char *name,
     mailbox->name = xstrdup(name);
     mailbox->path = xstrdup(path);
     mailbox->acl = xstrdup(acl);
-    mailbox->myrights = acl_myrights(auth_state, mailbox->acl);
+    mailbox->myrights = cyrus_acl_myrights(auth_state, mailbox->acl);
 
     if (mailbox->header_fd == -1) return 0;
 
@@ -613,7 +613,7 @@ int mailbox_read_acl(struct mailbox *mailbox,
 
     free(mailbox->acl);
     mailbox->acl = xstrdup(acl);
-    mailbox->myrights = acl_myrights(auth_state, mailbox->acl);
+    mailbox->myrights = cyrus_acl_myrights(auth_state, mailbox->acl);
 
     return 0;
 }

@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.10 2000/02/17 06:20:27 tmartin Exp $
+ * $Id: sieve.y,v 1.11 2000/12/18 04:53:43 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -25,6 +25,10 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <stdlib.h>
 #include <assert.h>
@@ -109,7 +113,7 @@ extern int yylex(void);
 %token REJCT FILEINTO FORWARD KEEP STOP DISCARD VACATION REQUIRE
 %token SETFLAG ADDFLAG REMOVEFLAG MARK UNMARK
 %token NOTIFY DENOTIFY
-%token ANYOF ALLOF EXISTS FALSE TRUE HEADER NOT SIZE ADDRESS ENVELOPE
+%token ANYOF ALLOF EXISTS SFALSE STRUE HEADER NOT SIZE ADDRESS ENVELOPE
 %token COMPARATOR IS CONTAINS MATCHES REGEX OVER UNDER
 %token ALL LOCALPART DOMAIN USER DETAIL
 %token DAYS ADDRESSES SUBJECT MIME
@@ -294,8 +298,8 @@ block: '{' commands '}'		 { $$ = $2; }
 test: ANYOF testlist		 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 	| ALLOF testlist	 { $$ = new_test(ALLOF); $$->u.tl = $2; }
 	| EXISTS stringlist      { $$ = new_test(EXISTS); $$->u.sl = $2; }
-	| FALSE			 { $$ = new_test(FALSE); }
-	| TRUE			 { $$ = new_test(TRUE); }
+	| SFALSE		 { $$ = new_test(SFALSE); }
+	| STRUE			 { $$ = new_test(STRUE); }
 	| HEADER htags stringlist stringlist
 				 { patternlist_t *pl;
 				   $2 = canon_htags($2);

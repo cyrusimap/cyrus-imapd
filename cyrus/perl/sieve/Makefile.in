@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.8 2000/11/07 19:38:00 leg Exp $
+# $Id: Makefile.in,v 1.9 2000/12/18 04:53:42 leg Exp $
 #
 # @configure_input@
 # 
@@ -65,7 +65,7 @@ SASL_INC=@SASLFLAGS@
 CC=@CC@
 PERL=@PERL@
 
-all:: checkdepend
+all::
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" all "in" `pwd`;	\

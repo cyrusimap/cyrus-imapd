@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.14 2000/11/11 04:12:46 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.15 2000/12/18 04:53:39 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -958,7 +958,7 @@ void lmtpmode(struct lmtp_func *func,
     char *err;
 
     struct sockaddr_in localaddr, remoteaddr;
-    int salen;
+    socklen_t salen;
 
     sasl_conn_t *conn = NULL;
     sasl_security_properties_t *secprops = NULL;
@@ -1397,7 +1397,7 @@ void lmtpmode(struct lmtp_func *func,
 
 enum {
     CAPA_PIPELINING = 1 << 0,
-    CAPA_AUTH       = 1 << 1,
+    CAPA_AUTH       = 1 << 1
 };
 
 struct lmtp_conn {

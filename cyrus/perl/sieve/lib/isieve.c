@@ -38,6 +38,11 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/file.h>
@@ -138,7 +143,7 @@ int init_sasl(isieve_t *obj,
 {
   int saslresult;
   sasl_security_properties_t *secprops=NULL;
-  int addrsize=sizeof(struct sockaddr_in);
+  socklen_t addrsize=sizeof(struct sockaddr_in);
   struct sockaddr_in *saddr_l=malloc(sizeof(struct sockaddr_in));
   struct sockaddr_in *saddr_r=malloc(sizeof(struct sockaddr_in));
 

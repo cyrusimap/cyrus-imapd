@@ -274,7 +274,7 @@ int main(int argc, char **argv)
     struct sockaddr_un local;
     char str[sizeof(acapmbdata_t)];
     struct sockaddr_un from;
-    int fromlen;
+    socklen_t fromlen;
     mode_t oldumask;
     connected_t connected = DISCONNECTED;
     int acapsock = -1;

@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.23 2000/12/12 21:56:43 leg Exp $
+ * $Id: target-acap.c,v 1.24 2000/12/18 04:53:41 leg Exp $
  */
 
 #include <config.h>
@@ -445,7 +445,8 @@ void listen_for_kicks()
     struct sockaddr_un srvaddr;
     struct sockaddr_un clientaddr;
     char fnamebuf[1024];
-    int s, r, len;
+    int s, r;
+    socklen_t len;
     mode_t oldumask;
     int acapsock = acap_conn_get_sock(acap_conn);
     fd_set read_set, rset;

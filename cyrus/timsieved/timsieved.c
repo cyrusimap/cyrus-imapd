@@ -43,7 +43,9 @@
  *
  */
 
+#ifdef HAVE_CONFIG_H
 #include <config.h>
+#endif
 
 #include <sasl.h> /* yay! sasl */
 
@@ -146,6 +148,7 @@ static int mysasl_authproc(void *context,
     }
     canon_authuser = xstrdup(canon_authuser);
 
+    if (!requested_user) requested_user = auth_identity;
     canon_requser = (char *) auth_canonifyid(requested_user);
     if (!canon_requser) {
 	*errstr = "bad userid requested";
@@ -223,7 +226,7 @@ void service_abort(void)
 
 int service_main(int argc, char **argv, char **envp)
 {
-    int salen;
+    socklen_t salen;
     struct hostent *hp;
     int timeout;
     sasl_security_properties_t *secprops = NULL;

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.51 2000/12/18 01:23:28 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.52 2000/12/18 04:53:41 leg Exp $ */
 
 #define NEW_BACKEND_TIMEOUT
 
@@ -112,7 +112,7 @@ struct backend {
     sasl_conn_t *saslconn;
 
     enum {
-	ACAP = 1,
+	ACAP = 1
     } capability;
 
     char last_result[LAST_RESULT_LEN];
@@ -225,10 +225,10 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
 
 /* proxy support functions */
 enum {
-    NOCONNECTION = -1,
-    OK = 0,
-    NO = 1,
-    BAD = 2
+    PROXY_NOCONNECTION = -1,
+    PROXY_OK = 0,
+    PROXY_NO = 1,
+    PROXY_BAD = 2
 };
 
 static void proxyd_gentag(char *tag)
@@ -269,7 +269,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
 
 	if (!prot_fgets(buf, sizeof(buf), s->in)) {
 	    /* uh oh */
-	    return NOCONNECTION;
+	    return PROXY_NOCONNECTION;
 	}
 	if (!cont && buf[taglen] == ' ' && !strncmp(tag, buf, taglen)) {
 	    strlcpy(s->last_result, buf + taglen + 1, LAST_RESULT_LEN);
@@ -279,16 +279,16 @@ static int pipe_until_tag(struct backend *s, char *tag)
 	    s->last_result[LAST_RESULT_LEN - 1] = '\0';
 	    switch (buf[taglen + 1]) {
 	    case 'O': case 'o':
-		r = OK;
+		r = PROXY_OK;
 		break;
 	    case 'N': case 'n':
-		r = NO;
+		r = PROXY_NO;
 		break;
 	    case 'B': case 'b':
-		r = BAD;
+		r = PROXY_BAD;
 		break;
 	    default: /* huh? no result? */
-		r = NOCONNECTION;
+		r = PROXY_NOCONNECTION;
 		break;
 	    }
 
@@ -366,12 +366,12 @@ static int pipe_including_tag(struct backend *s, char *tag)
 
     r = pipe_until_tag(s, tag);
     switch (r) {
-    case OK:
-    case NO:
-    case BAD:
+    case PROXY_OK:
+    case PROXY_NO:
+    case PROXY_BAD:
 	prot_printf(proxyd_out, "%s %s", tag, s->last_result);
 	break;
-    case NOCONNECTION:
+    case PROXY_NOCONNECTION:
 	/* erg.  oh well, not much we can do about this. */
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, 
 		    error_message(IMAP_SERVER_UNAVAILABLE));
@@ -545,7 +545,7 @@ static int proxy_authenticate(struct backend *s)
 	(struct sockaddr_in *) malloc(sizeof(struct sockaddr_in));
     struct sockaddr_in *saddr_r = 
 	(struct sockaddr_in *) malloc(sizeof(struct sockaddr_in));
-    int addrsize = sizeof(struct sockaddr_in);
+    socklen_t addrsize = sizeof(struct sockaddr_in);
     sasl_callback_t *cb;
     char mytag[128];
     char buf[2048];
@@ -553,7 +553,7 @@ static int proxy_authenticate(struct backend *s)
     char *in, *out, *p;
     unsigned int inlen, outlen;
     const char *mechusing;
-    int b64len;
+    unsigned b64len;
     const char *pass;
 
     strcpy(optstr, s->hostname);
@@ -907,7 +907,7 @@ static int acl_ok(const char *user, const char *auth_identity)
 	r = 0;  /* Failed so assume no proxy access */
     }
     else {
-	r = (acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
+	r = (cyrus_acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
     }
     if (authstate) auth_freestate(authstate);
     return r;
@@ -933,6 +933,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
     }
     canon_authuser = xstrdup(canon_authuser);
 
+    if (!requested_user) requested_user = auth_identity;
     canon_requser = auth_canonifyid(requested_user);
     if (!canon_requser) {
 	if (errstr) *errstr = "bad userid requested";
@@ -1056,7 +1057,7 @@ int service_main(int argc, char **argv, char **envp)
 {
     int imaps = 0;
     int opt;
-    int salen;
+    socklen_t salen;
     struct hostent *hp;
     int timeout;
     sasl_security_properties_t *secprops = NULL;
@@ -2414,7 +2415,7 @@ void cmd_select(char *tag, char *cmd, char *name)
     prot_printf(backend_current->out, "%s %s {%d+}\r\n%s\r\n", tag, cmd, 
 		strlen(mailboxname), mailboxname);
     switch (pipe_including_tag(backend_current, tag)) {
-    case OK:
+    case PROXY_OK:
 	proc_register("proxyd", proxyd_clienthost, proxyd_userid, mailboxname);
 	syslog(LOG_DEBUG, "open: user %s opened %s on %s", proxyd_userid, name,
 	       newserver);
@@ -2918,7 +2919,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	    pipe_until_tag(backend_current, mytag);
 	    res = pipe_until_tag(s, tag);
 
-	    if (res == OK) {
+	    if (res == PROXY_OK) {
 		appenduid = strchr(s->last_result, '[');
 		/* skip over APPENDUID */
 		appenduid += strlen("[appenduid ");
@@ -3023,7 +3024,7 @@ void cmd_create(char *tag, char *name, char *server)
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    
 	    switch (res) {
-	    case OK:
+	    case PROXY_OK:
 		/* race condition here, but not much we can do about it */
 		mboxdata.acl = acl;
 
@@ -3045,7 +3046,7 @@ void cmd_create(char *tag, char *name, char *server)
 		break;
 	    }
 	}
-	if (ultraparanoid && res == OK) acapmbox_kick_target();
+	if (ultraparanoid && res == PROXY_OK) acapmbox_kick_target();
     }
     
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -3080,7 +3081,7 @@ void cmd_delete(char *tag, char *name)
 	res = pipe_including_tag(s, tag);
 	tag = "*";		/* can't send another tagged response */
 
-	if (!CAPA(s, ACAP) && res == OK) {
+	if (!CAPA(s, ACAP) && res == PROXY_OK) {
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    
 	    /* delete mailbox from acap server */
@@ -3092,7 +3093,7 @@ void cmd_delete(char *tag, char *name)
 	    }
 	}
 
-	if (ultraparanoid && res == OK) acapmbox_kick_target();
+	if (ultraparanoid && res == PROXY_OK) acapmbox_kick_target();
     }
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -3147,7 +3148,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    
 	    switch (res) {
-	    case OK:
+	    case PROXY_OK:
 		/* commit new mailbox */
 		mboxdata.acl = acl;
 		r = acapmbox_markactive(acaphandle, &mboxdata);
@@ -3174,7 +3175,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 		break;
 	    }
 	}
-	if (res == OK) acapmbox_kick_target();
+	if (res == PROXY_OK) acapmbox_kick_target();
     }
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -3353,7 +3354,7 @@ void cmd_getacl(char *tag, char *name, int oldform)
     if (!r) r = mlookup(mailboxname, (char **)0, &acl, NULL);
 
     if (!r) {
-	access = acl_myrights(proxyd_authstate, acl);
+	access = cyrus_acl_myrights(proxyd_authstate, acl);
 
 	if (!(access & (ACL_READ|ACL_ADMIN)) &&
 	    !proxyd_userisadmin &&
@@ -3431,7 +3432,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
     }
 
     if (!r) {
-	rights = acl_myrights(proxyd_authstate, acl);
+	rights = cyrus_acl_myrights(proxyd_authstate, acl);
 
 	if (!rights && !proxyd_userisadmin &&
 	    !mboxname_userownsmailbox(proxyd_userid, mailboxname)) {
@@ -3488,7 +3489,7 @@ void cmd_myrights(char *tag, char *name, int oldform)
     }
 
     if (!r) {
-	rights = acl_myrights(proxyd_authstate, acl);
+	rights = cyrus_acl_myrights(proxyd_authstate, acl);
 
 	/* Add in implicit rights */
 	if (proxyd_userisadmin ||
@@ -3509,7 +3510,7 @@ void cmd_myrights(char *tag, char *name, int oldform)
     if (oldform) prot_printf(proxyd_out, "MAILBOX ");
     printastring(name);
     prot_printf(proxyd_out, " ");
-    printastring(acl_masktostr(rights, str));
+    printastring(cyrus_acl_masktostr(rights, str));
     prot_printf(proxyd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 }
@@ -3547,7 +3548,7 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 	}	    
 	res = pipe_including_tag(s, tag);
 	tag = "*";		/* can't send another tagged response */
-	if (!CAPA(s, ACAP) && res == OK) {
+	if (!CAPA(s, ACAP) && res == PROXY_OK) {
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    int mode;
 	    
@@ -3562,12 +3563,12 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 		    mode = ACL_MODE_REMOVE;
 		}
 		
-		if (acl_set(&acl, identifier, mode, acl_strtomask(rights),
+		if (cyrus_acl_set(&acl, identifier, mode, cyrus_acl_strtomask(rights),
 			    NULL, proxyd_userid)) {
 		    r = IMAP_INVALID_IDENTIFIER;
 		}
 	    } else {
-		if (acl_remove(&acl, identifier, NULL, proxyd_userid)) {
+		if (cyrus_acl_remove(&acl, identifier, NULL, proxyd_userid)) {
 		    r = IMAP_INVALID_IDENTIFIER;
 		}
 	    }
@@ -3579,7 +3580,7 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 		       mailboxname, error_message(r));
 	    }
 	}
-	if (res == OK) acapmbox_kick_target();
+	if (res == PROXY_OK) acapmbox_kick_target();
     }
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));

@@ -1,5 +1,5 @@
 /* imclient.h -- Streaming IMxP client library
- $Id: imclient.h,v 1.19 2000/11/13 22:09:41 leg Exp $
+ $Id: imclient.h,v 1.20 2000/12/18 04:53:42 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,6 +44,14 @@
 
 #ifndef INCLUDED_IMCLIENT_H
 #define INCLUDED_IMCLIENT_H
+
+#ifndef P
+#ifdef __STDC__
+#define P(x) x
+#else
+#define P(x) ()
+#endif
+#endif
 
 #include <sasl.h>
 

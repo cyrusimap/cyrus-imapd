@@ -1,6 +1,6 @@
 /* tree.c -- abstract syntax tree handling
  * Larry Greenfield
- * $Id: tree.c,v 1.7 2000/02/02 20:01:27 leg Exp $
+ * $Id: tree.c,v 1.8 2000/12/18 04:53:43 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -24,6 +24,10 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <stdlib.h>
 #include "xmalloc.h"
@@ -163,8 +167,8 @@ void free_test(test_t *t)
 	break;
 
     case SIZE:
-    case FALSE:
-    case TRUE:
+    case SFALSE:
+    case STRUE:
 	break;
 
     case HEADER:

@@ -150,11 +150,8 @@ perlsieve_simple(context, id, result, len)
 }
 
 
-static void
-call_listcb(name, isactive, rock)
-char *name;
-int isactive;
-SV *    rock;
+static void *
+call_listcb(unsigned char *name, int isactive, void *rock)
 {
         dSP ;
         PUSHMARK(sp) ;
@@ -163,7 +160,8 @@ SV *    rock;
         PUTBACK ;
 
         /* call perl func */
-        perl_call_sv(rock, G_DISCARD) ;
+        perl_call_sv((SV *)rock, G_DISCARD) ;
+	return NULL;
 }
 
 
@@ -184,6 +182,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   acapsieve_handle_t *handle;
   Sieveobj ret = NULL;
   sasl_callback_t callbacks[10];
+  char *username;
 
   CODE:
 
@@ -201,7 +200,9 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   callbacks[3].context = username_cb;
   callbacks[4].id = SASL_CB_LIST_END;
 
-  handle = acapsieve_get_handle(servername, (void *) callbacks);
+  perlsieve_simple(username_cb, SASL_CB_USER, &username, NULL);
+ 
+  handle = acapsieve_connect(username, servername, (void *) callbacks);
 
   if (handle) {
 	  ret = malloc(sizeof(struct xscyrus));

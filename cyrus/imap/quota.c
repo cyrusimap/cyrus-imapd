@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.35 2000/10/12 18:35:24 leg Exp $ */
+/* $Id: quota.c,v 1.36 2000/12/18 04:53:41 leg Exp $ */
 
 
 #include <config.h>
@@ -169,8 +169,7 @@ void usage(void)
 /*
  * Comparison function for sorting quota roots
  */
-int compare_quota(a, b)
-char *a, *b;
+int compare_quota(const void *a, const void *b)
 {
     return strcasecmp(((struct quotaentry *)a)->quota.root,
 		      ((struct quotaentry *)b)->quota.root);

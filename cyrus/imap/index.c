@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.147 2000/11/28 16:33:28 ken3 Exp $
+ * $Id: index.c,v 1.148 2000/12/18 04:53:38 leg Exp $
  */
 #include <config.h>
 
@@ -137,7 +137,7 @@ enum {
     ENV_CC,
     ENV_BCC,
     ENV_INREPLYTO,
-    ENV_MSGID,
+    ENV_MSGID
 };
 #define NUMENVTOKENS (10)
 

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle.h,v 1.1 2000/12/14 19:26:48 ken3 Exp $ */
+/* $Id: idle.h,v 1.2 2000/12/18 04:53:38 leg Exp $ */
 
 #ifndef IDLE_H
 #define IDLE_H
@@ -47,7 +47,7 @@
 
 typedef enum {
     IDLE_MAILBOX =	0x1,
-    IDLE_ALERT =	0x2,
+    IDLE_ALERT =	0x2
 } idle_flags_t;
 
 typedef void idle_updateproc_t(idle_flags_t flags);

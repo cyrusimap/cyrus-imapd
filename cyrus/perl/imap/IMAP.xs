@@ -53,6 +53,10 @@
 
 typedef struct xscyrus *Cyrus_IMAP;
 
+/* Perl pre-5.6.0 compatibility */
+#ifndef aTHX_
+#define aTHX_
+#endif
 
 /*
  * This is the code from xsutil.c
@@ -151,7 +155,7 @@ void imclient_xs_fcmdcb(struct imclient *client, struct xsccb *rock,
   AV *av;
 
   SvREFCNT_dec(SvRV(rock->prock));
-  SvRV(rock->prock) = (SV *) av = newAV();
+  SvRV(rock->prock) = (SV *) (av = newAV());
   av_push(av, newSVpv(reply->keyword, 0));
   av_push(av, newSVpv(reply->text, 0));
   if (reply->msgno != -1) av_push(av, newSViv(reply->msgno));
@@ -202,10 +206,10 @@ CODE:
 	rc = imclient_connect(&client, host, port, NULL);
 	switch (rc) {
 	case -1:
-	  Perl_croak("imclient_connect: unknown host \"%s\"", host);
+	  Perl_croak(aTHX_ "imclient_connect: unknown host \"%s\"", host);
 	  break;
 	case -2:
-	  Perl_croak("imclient_connect: unknown service \"%s\", port");
+	  Perl_croak(aTHX_ "imclient_connect: unknown service \"%s\"", port);
 	  break;
 	case 0:
 	  if (client) {
@@ -222,7 +226,7 @@ CODE:
 	  /*FALLTHROUGH*/
 	default:
 	  bang = perl_get_sv("^E", TRUE);
-	  Perl_sv_setiv(bang, rc);
+	  Perl_sv_setiv(aTHX_ bang, rc);
 	  XSRETURN_UNDEF;
 	}
 	ST(0) = sv_newmortal();
@@ -316,7 +320,7 @@ PREINIT:
 	int arg;
 	HV *cb;
 	char *keyword;
-	int klen;
+	STRLEN klen;
 	int flags;
 	SV **val;
 	SV *pcb;
@@ -338,7 +342,7 @@ PPCODE:
 	 */
 	for (arg = 1; arg < items; arg++) {
 	  if (!SvROK(ST(arg)) || SvTYPE(SvRV(ST(arg))) != SVt_PVHV)
-	    Perl_croak("addcallback: arg %d not a hash reference", arg);
+	    Perl_croak(aTHX_ "addcallback: arg %d not a hash reference", arg);
 	  cb = (HV *) SvRV(ST(arg));
 	  /* pull callback crud */
 	  if (((val = hv_fetch(cb, "-trigger", 8, 0)) ||
@@ -346,7 +350,7 @@ PPCODE:
 	      SvTYPE(*val) == SVt_PV)
 	    keyword = SvPV(*val, klen);
 	  else
-	    Perl_croak("addcallback: arg %d missing trigger", arg);
+	    Perl_croak(aTHX_ "addcallback: arg %d missing trigger", arg);
 	  if ((((val = hv_fetch(cb, "-flags", 6, 0)) ||
 		 (val = hv_fetch(cb, "Flags", 5, 0)))))
 	  {	
@@ -433,7 +437,7 @@ imclient__send(client, finishproc, finishrock, fmt, arg1, arg2, arg3, arg4, arg5
 	char *arg7
 	char *arg8
 PREINIT:
-	int arg;
+	STRLEN arg;
 	SV *pcb;
 	SV *prock;
 	struct xscb *xcb;
@@ -500,10 +504,10 @@ PPCODE:
 	    else
 	      PUSHs(&sv_no);
 	    pcb = perl_get_sv("@", TRUE);
-	    Perl_sv_setsv(pcb, av_shift(av));
+	    Perl_sv_setsv(aTHX_ pcb, av_shift(av));
 	    if (av_len(av) != -1) {
 	      pcb = perl_get_sv("^E", TRUE);
-	      Perl_sv_setsv(pcb, av_shift(av));
+	      Perl_sv_setsv(aTHX_ pcb, av_shift(av));
 	    }
 	  } else {
 	    EXTEND(SP, av_len(av) + 1);

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.54 2000/07/11 17:55:01 leg Exp $ */
+/* $Id: reconstruct.c,v 1.55 2000/12/18 04:53:41 leg Exp $ */
 
 #include <config.h>
 
@@ -111,7 +111,7 @@ void usage(void);
 void shut_down(int code);
 
 extern char *mailbox_findquota(const char *name);
-extern acl_canonproc_t mboxlist_ensureOwnerRights;
+extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
 static acapmbox_handle_t *acaphandle = NULL;
 
@@ -217,8 +217,7 @@ void usage(void)
     exit(EC_USAGE);
 }    
 
-int compare_uid(a, b)
-char *a, *b;
+int compare_uid(const void *a, const void *b)
 {
     return *(unsigned long *)a - *(unsigned long *)b;
 }
