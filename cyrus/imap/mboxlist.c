@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.29 2003/01/11 04:01:21 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.30 2003/01/21 02:38:31 ken3 Exp $
  */
 
 #include <config.h>
@@ -2112,20 +2112,31 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     /*
      * Have to create a new quota root
      */
-    /* look for a top-level mailbox in the proposed quotaroot */
-    r = mboxlist_detail(quota.root, &t, NULL, NULL, NULL, NULL);
-    if (r) {
-	/* are we going to force the create anyway? */
-	if(!force) return r;
-	else {
-	    have_mailbox = 0;
-	    t = 0;
-	}
-    }
+    strcpy(pattern, quota.root);
 
-    if(t & (MBTYPE_REMOTE | MBTYPE_MOVING)) {
-	/* Can't set quota on a remote mailbox */
-	return IMAP_MAILBOX_NOTSUPPORTED;
+    if (config_virtdomains && quota.root[strlen(quota.root)-1] == '!') {
+	/* domain quota */
+	have_mailbox = 0;
+	strcat(pattern, "*");
+    }
+    else {
+	/* look for a top-level mailbox in the proposed quotaroot */
+	r = mboxlist_detail(quota.root, &t, NULL, NULL, NULL, NULL);
+	if (r) {
+	    /* are we going to force the create anyway? */
+	    if(!force) return r;
+	    else {
+		have_mailbox = 0;
+		t = 0;
+	    }
+	}
+
+	if(t & (MBTYPE_REMOTE | MBTYPE_MOVING)) {
+	    /* Can't set quota on a remote mailbox */
+	    return IMAP_MAILBOX_NOTSUPPORTED;
+	}
+
+	strcat(pattern, ".*");
     }
 
     /* perhaps create .NEW, lock, check if it got recreated, move in place */
@@ -2138,9 +2149,6 @@ int mboxlist_setquota(const char *root, int newquota, int force)
 	return r;
     }
 
-    strcpy(pattern, quota.root);
-    strcat(pattern, ".*");
-    
     /* top level mailbox */
     if(have_mailbox)
 	mboxlist_changequota(quota.root, 0, 0, &quota);
@@ -2183,7 +2191,12 @@ int mboxlist_unsetquota(const char *root)
      * Have to remove it from all affected mailboxes
      */
     strcpy(pattern, root);
-    strcat(pattern, ".*");
+    if (config_virtdomains && root[strlen(root)-1] == '!') {
+	/* domain quota */
+	strcat(pattern, "*");
+    }
+    else
+	strcat(pattern, ".*");
     
     /* top level mailbox */
     mboxlist_rmquota(root, 0, 0, (void *)root);

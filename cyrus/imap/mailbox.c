@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.14 2003/01/11 04:01:20 ken3 Exp $
+ $Id: mailbox.c,v 1.134.4.15 2003/01/21 02:38:31 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1913,19 +1913,29 @@ void *deciderock;
 int mailbox_findquota(char *start, const char *name)
 {
     char quota_path[MAX_MAILBOX_PATH+1];
-    char *tail;
+    char *tail, *p, *mbox;
     struct stat sbuf;
 
     strcpy(start, name);
 
+    /* find the start of the unqualified mailbox name */
+    mbox = (config_virtdomains && (p = strchr(start, '!'))) ? p+1 : start;
+    tail = mbox + strlen(mbox);
+
     mailbox_hash_quota(quota_path, sizeof(quota_path), start);
     while (stat(quota_path, &sbuf) == -1) {
-	tail = strrchr(start, '.');
-	if (!tail) return 0;
+	tail = strrchr(mbox, '.');
+	if (!tail) break;
 	*tail = '\0';
 	mailbox_hash_quota(quota_path, sizeof(quota_path), start);
     }
-    return 1;
+    if (tail) return 1;
+    if (mbox == start) return 0;
+
+    /* check for a domain quota */
+    *mbox = '\0';
+    mailbox_hash_quota(quota_path, sizeof(quota_path), start);
+    return (stat(quota_path, &sbuf) != -1);
 }
 
 
@@ -2636,6 +2646,15 @@ void mailbox_hash_quota(char *buf, unsigned size, const char *qr) {
 	qr = p;
 	buf += len;
 	size -= len;
+
+	if (!*qr) {
+	    /* quota for entire domain */
+	    if (snprintf(buf, size, "%sroot", FNAME_QUOTADIR) >= size) {
+		fatal("insufficient buffer size in mailbox_hash_quota",
+		      EC_TEMPFAIL);
+	    }
+	    return;
+	}
     }
 
     idx = strchr(qr, '.'); /* skip past user. */
