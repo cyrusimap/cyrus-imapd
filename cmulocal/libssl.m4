@@ -6,10 +6,7 @@ AC_DEFUN(CMU_LIBSSL_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
-AC_TRY_COMPILE([
-#include <ssl.h>
-],
-[SSL_CIPHER foo;],
+AC_CHECK_HEADER(ssl.h,
 ac_cv_found_libssl_inc=yes,
 ac_cv_found_libssl_inc=no)
 CPPFLAGS=$saved_CPPFLAGS
@@ -33,7 +30,7 @@ AC_DEFUN(CMU_LIBSSL_INC_WHERE, [
 AC_DEFUN(CMU_LIBSSL_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lssl"
+LIBS="$saved_LIBS -L$1 -lssl -lcrypto"
 AC_TRY_LINK(,
 [SSL_write();],
 [ac_cv_found_libssl_lib=yes],
@@ -109,7 +106,7 @@ AC_ARG_WITH(libssl-include,
 	  LIBSSL_INC_DIR=$ac_cv_libssl_where_inc
 	  LIBSSL_LIB_DIR=$ac_cv_libssl_where_lib
 	  LIBSSL_INC_FLAGS="-I${LIBSSL_INC_DIR}"
-	  LIBSSL_LIB_FLAGS="-L${LIBSSL_LIB_DIR} -lssl"
+	  LIBSSL_LIB_FLAGS="-L${LIBSSL_LIB_DIR} -lssl -lcrypto"
 	  if test "X$RPATH" = "X"; then
 		RPATH=""
 	  fi
@@ -118,7 +115,7 @@ AC_ARG_WITH(libssl-include,
 	      if test "X$RPATH" = "X"; then
 	        RPATH="-Wl,-rpath,${LIBSSL_LIB_DIR}"
 	      else 
-		RPATH="${RPATH}:${LIBSSL_LIB_DIR}"
+ 		RPATH="${RPATH}:${LIBSSL_LIB_DIR}"
 	      fi
 	      ;;
 	    *-*-hpux*)
