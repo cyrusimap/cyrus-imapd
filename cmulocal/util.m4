@@ -1,6 +1,6 @@
 dnl util.m4--robutil macro
 dnl Rob Earhart
-dnl $Id: util.m4,v 1.6 1998/11/10 19:03:00 rob Exp $
+dnl $Id: util.m4,v 1.7 1998/11/10 20:36:11 rob Exp $
 
 dnl robutil is a collection of stuff I (Rob Earhart) have found useful
 dnl to have around when writing code; it's the stuff I wind up rewriting
@@ -19,10 +19,7 @@ changequote([, ])
   AC_REQUIRE([AC_HEADER_STDC])
   AC_MSG_CHECKING(for $1)
   AC_CACHE_VAL(CMU_CV_NAME, [
-    AC_EGREP_CPP(
-changequote(<<, >>)
-<<$1[[^a-zA-Z_0-9]]>>
-changequote([, ]), [
+    AC_EGREP_CPP([$1[[^a-zA-Z_0-9]]], [
 #include <sys/types.h>
 #if STDC_HEADERS
 #include <stdlib.h>
