@@ -1,7 +1,7 @@
 -*- text -*-
 
 		       Cyrus IMAP server design
-			     May 5, 1994
+			    June 23, 1994
 
 * Introduction
 
@@ -30,8 +30,8 @@ The personal mailboxes for user "bovik" are named with "user.bovik."
 prepended.  The mailbox "user.bovik" is handled as a special
 case and is presented to the user "bovik" as if it were named "INBOX".
 
-FIND replies are returned in the following order: "INBOX", user's
-personal mailboxes sorted in a case-insensitive manner, other
+LIST/LSUB/FIND replies are returned in the following order: "INBOX",
+user's personal mailboxes sorted in a case-insensitive manner, other
 mailboxes sorted in a case-insensitive manner.
 
 
@@ -42,7 +42,7 @@ The Cyrus IMAP server supports the following protocol extensions:
 	QUOTA (STORAGE only)
 	ACL
 	partitions on CREATE
-	DUMP/RESTORE		[to be defined]
+	DUMP/RESTORE		[unimplemented, to be defined]
 
 The EXPUNGE operation is allowed at any time, even when other server
 processes are reading the mailbox.  If some other process performs an
@@ -57,9 +57,11 @@ replaced, the server will read the new index file and issue any
 necessary unsolicited EXPUNGE replies.  If the index file was replaced
 or modified, the server will scan for flags that have changed since
 the client was notified about them and issue any necessary unsolicited
-FETCH replies.  If any EXPUNGE replies were sent or if new messages
-have been appended, the server will issue unsolicited EXISTS and
-RECENT replies.
+FETCH replies.  If the index file was removed, the server assumes the
+mailbox was deleted or renamed and sends EXPUNGE notifications for all
+messages.  If any EXPUNGE replies were sent or if new messages have
+been appended, the server will issue unsolicited EXISTS and RECENT
+replies.
 
 The server has compile-time-selctable plug-compatible modules which
 determine the site's methods for:
@@ -70,7 +72,7 @@ determine the site's methods for:
 	Storage of \Seen state (local-file or remote-database)
 
 Posix ACL interpretation and remote database storage of \Seen state
-may not be implemented in the first versions of the server.
+are not implemented in the first versions of the server.
 
 * Mailbox storage format
 
@@ -117,6 +119,7 @@ cyrus.index	Contains a header and a sequence of fixed-length
 - last-uid	4 bytes		UID of the last message	appended to
 				the mailbox
 - quota-used	4 bytes		size quota usage this mailbox
+- pop3-last	4 bytes		UID of last message accessed via POP3
 
 		Each per-message record contains:
 
@@ -129,8 +132,8 @@ cyrus.index	Contains a header and a sequence of fixed-length
 - cache-offset	4 bytes		offset in cyrus.cache
 - last-updated	4 bytes		unix date of last modification
 				of flags
-- system-flags	4 bytes		bit-vector of system and internal flags:
-				\Answered \Flagged \Deleted
+- system-flags	4 bytes		bit-vector of system flags:
+				\Answered \Flagged \Deleted \Draft
 - user-flags	16 bytes	bit-vector of user-defined flags
 
 
@@ -157,7 +160,7 @@ Each field contains a 4 byte length in network byte order, the data,
 and padding to a 4 byte boundary.
 
 
-cyrus.seen	Contains the \seen and \recent information of users.
+cyrus.seen	Contains the \Seen and \Recent information of users.
 		One record per user, sorted by user, each record contains:
 
 - Userid
@@ -167,8 +170,8 @@ cyrus.seen	Contains the \seen and \recent information of users.
 - Optional space character padding, to avoid having to rewrite file on updates
 
 In order to support replicated mailboxes in a future implementation,
-access to cyrus.seen will be through an interface which can later be
-replaced by a distributed database.
+access to cyrus.seen is through an interface which can later be
+optionally replaced by a distributed database.
 
 
 * Mailbox locking semantics
@@ -212,7 +215,7 @@ To append one or more messages:
 	release locks
 	perform status update if permitted
 
-To add or remove flags:
+To set or clear flags:
 	if adding new user flag, lock cyrus.header, update, release lock
 	lock already-open cyrus.index file
 	if cyrus.index has been replaced since last opened
@@ -244,10 +247,6 @@ To expunge:
 	update quota root
 	release locks
 	remove deleted message files
-	lock cyrus.seen
-	create cyrus.seen.NEW
-	copy data, removing users who haven't read recently
-	rename cyrus.seen.NEW to cyrus.seen
 	release locks
 	perform status update
 
@@ -255,8 +254,6 @@ update recent/seen info:
 	lock cyrus.seen
 	find record
 	if user appears to have read everything and previously hadn't
-		check to make sure no new messages
-		mark as having read through last-uid
 		dropoff request for IMSP SEEN command
 	else if user previously had read everything but no longer does
 		dropoff request for IMSP SEEN (0) command
@@ -268,7 +265,49 @@ update recent/seen info:
 		rename cyrus.seen.NEW to cyrus.seen
 	release lock
 
-[delete/rename]
+delete mailbox:
+	if deleting a user's inbox
+		deny permission if not admin
+		recursively delete all sub-mailboxes
+		remove user's subscriptions
+	open/lock mailboxes
+	check ACL
+	create mailboxes.NEW
+	copy over mailboxes, removing entry
+	open/lock cyrus.header
+	open/lock cyrus.index
+	open/lock appropriate quota root
+	delete cyrus.seen
+	update quota root
+	remove all files in mailbox directory
+	remove any empty mailbox directories
+	rename mailboxes.NEW to mailboxes
+
+rename mailbox:
+	determine if renaming INBOX
+	open/lock mailboxes
+	check ACL
+	create mailboxes.NEW
+	copy over mailboxes, changing entry
+	open/lock cyrus.header
+	open/lock cyrus.index
+	open/lock appropriate quota root
+	create new mailbox
+	copy keyword names, write new mailbox header
+	if quota roots different
+		check space available in new quota root
+	link/copy over cyrus.index
+	link/copy over cyrus.cache
+	link/copy over message files
+	copy over cyrus.seen
+	update new quota root
+	if renaming INBOX
+		expunge all messages from old mailbox
+	else
+		delete old mailbox
+	if expunge/delete failed
+		back out change to new quota root
+	rename mailboxes.NEW to mailboxes
 
 [dump/restore, to implement IMSP MOVE]
 
@@ -374,10 +413,6 @@ tab-separated fields:
 - login name of user, if logged in
 - selected mailbox, if mailbox selected
 
-When a mailbox is deleted or renamed, this directory is scanned for
-processes reading the mailbox.  Those processes are sent a signal
-causing them to shut down.
-
 
 * Quota root directory
 
@@ -441,24 +476,26 @@ The following programs will be written
 	Called by the netnews system to remove and EXPUNGE articles
 	either expired or cancelled.
 
-- syncnews
+- syncnews [not implemented]
 	Run occasionally to synchronize the netnews active file
 	with the Cyrus netnews mailbox list.
 
-- expire
+- expire [not implemented]
 	Expires old mailbox posts
 
-- arbitron
+- arbitron [not implemented]
 	Reports readership statistics
 
-- pop2d
 - pop3d
-	Exports the POP2 or POP3 protocol to a connecting client.
+	Exports POP3 protocol to a connecting client.
 
 - reconstruct
-	Reconstructs/rebuilds a corrupted set of mailbox
-	header/index/cache/seen files.  Might be the same program as
-	builddir.
+	Reconstructs/rebuilds a corrupted/missing set of mailbox
+	header/index/cache/seen files.
+
+- quota
+	Generates a quota-usage report.  Optionally does a consistency
+	fix on the quota roots.
 
 
 * Monitoring
@@ -494,17 +531,7 @@ On periodic basis:
 Implementation order is as follows:
 
 
-- Full IMAP2bis (implementation completed, details removed from this document)
-
-- Full IMAP4
-
-  + Extended SEARCH - SENTBEFORE, CHARSET, HEADER
-
-  + LIST, LSUB
-
-  + \Draft
-
-  + Alpha release
+- Full IMAP4 (implementation completed, details removed from this document)
 
 - Everything else
 
@@ -512,23 +539,27 @@ Implementation order is as follows:
 
   + quota
 
+  + quota-usage reporter & consistency checker
+
+  + pop3d
+
+  + reconstruct
+
+  + arbitron
+
+  + remove "XXX" comments
+
+  + Beta release
+
+  + admin tools -- create/delete user, manipulate ACL, quota
+
   + sendmail v8 config macros
 
   + IMSP seen/last, updateimsp
 
-  + quota-usage reporter & consistency checker, expire
-
-  + admin tools -- create/delete user, manipulate ACL, quota
-
-  + pop3d, pop2d
-
-  + arbitron
+  + expire
 
   + syncnews
-
-  + Beta release
-
-  + reconstruct
 
   + IMSP move
 
