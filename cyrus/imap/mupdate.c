@@ -1,3 +1,9 @@
+/*
+ * Work in progress by larry. compiles now but not useful yet.
+ * 
+ */
+
+
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
@@ -822,26 +828,27 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox)
 void cmd_update(struct conn *C, const char *tag)
 {
     skipnode *ptr;
+    struct mbent *m;
 
     /* indicate interest in updates */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
-    c->updatelist_next = updatelist;
-    updatelist = c;
-    c->streaming = 1;
+    C->updatelist_next = updatelist;
+    updatelist = C;
+    C->streaming = 1;
 
     /* send current database */
     for (m = sfirst(mailboxes, &ptr); m != NULL; m = snext(&ptr)) {
 	switch (m->t) {
 	case SET_ACTIVE:
-	    prot_printf(c->pout, "%s MAILBOX {%d}\r\n%s {%d}\r\n%s {%d}\r\n%s\r\n",
+	    prot_printf(C->pout, "%s MAILBOX {%d}\r\n%s {%d}\r\n%s {%d}\r\n%s\r\n",
 			tag,
 			strlen(m->mailbox), m->mailbox,
 			strlen(m->server), m->server,
 			strlen(m->acl), m->acl);
 	    break;
 	case SET_RESERVE:
-	    prot_printf(c->pout, "%s RESERVE {%d}\r\n%s {%d}\r\n%s\r\n",
+	    prot_printf(C->pout, "%s RESERVE {%d}\r\n%s {%d}\r\n%s\r\n",
 			tag,
 			strlen(m->mailbox), m->mailbox,
 			strlen(m->server), m->server);
@@ -854,7 +861,7 @@ void cmd_update(struct conn *C, const char *tag)
 
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
-    prot_printf(c->pout, "%s OK \"streaming starts\"\r\n", tag);
+    prot_printf(C->pout, "%s OK \"streaming starts\"\r\n", tag);
 
     /* start streaming updates */
     for (;;) {
