@@ -77,6 +77,8 @@ char *mailbox_cache_header_name[] = {
     "priority",
     "references",
     "resent-from",
+    "newsgroups",
+    "followup-to",
 };
 int mailbox_num_cache_header =
   sizeof(mailbox_cache_header_name)/sizeof(char *);
