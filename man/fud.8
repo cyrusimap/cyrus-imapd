@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: fud.8,v 1.6 2002/06/03 18:22:32 rjs3 Exp $
+.\" $Id: fud.8,v 1.7 2002/07/03 15:18:10 rjs3 Exp $
 .SH NAME
 FUD \- provide information about user mailboxes
 .SH SYNOPSIS
@@ -88,6 +88,11 @@ Cyrus Master process configuration file.
 Though not really a bug, 
 .B FUD
 will silently ignore any requests that it does not consider valid.
+.PP
+Also not really a bug,
+.B FUD
+requires that the anonymous user has the 0 (zero) right on the mailbox
+in question.  This is only a "bug" because 0 is not a standard IMAP ACL bit.
 .PP
 .B FUD
 is an experimental interface meant to provide information to build a
