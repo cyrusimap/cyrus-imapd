@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.438 2003/08/18 20:35:38 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.439 2003/08/22 16:31:42 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -2389,6 +2389,7 @@ cmd_append(char *tag, char *name)
 	}
 	
 	/* Read size from literal */
+	isnowait = 0;
 	size = 0;
 	for (p = arg.s + 1; *p && isdigit((int) *p); p++) {
 	    sawdigit++;
