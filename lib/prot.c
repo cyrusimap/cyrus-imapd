@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.55 2000/11/10 21:52:38 leg Exp $
+ * $Id: prot.c,v 1.56 2000/11/14 19:14:05 ken3 Exp $
  */
 
 #include <config.h>
@@ -67,14 +67,6 @@
 #include "prot.h"
 #include "xmalloc.h"
 #include "assert.h"
-
-struct prot_waitevent {
-    time_t mark;
-    time_t period;
-    prot_waiteventcallback_t *proc;
-    void *rock;
-    prot_waitevent_t next;
-};
 
 /*
  * Create a new protection stream for file descriptor 'fd'.  Stream
@@ -251,22 +243,21 @@ int prot_setreadcallback(struct protstream *s,
 
 /*
  * Add an event on stream 's' so that the callback 'proc' taking
- * argument 'rock' will be called each 'period' seconds while
+ * argument 'rock' will be called at 'mark' (in seconds) while
  * waiting for input.
  */
-prot_waitevent_t prot_addwaitevent(struct protstream *s, time_t period,
-				   prot_waiteventcallback_t *proc,
-				   void *rock)
+struct prot_waitevent *prot_addwaitevent(struct protstream *s, time_t mark,
+					 prot_waiteventcallback_t *proc,
+					 void *rock)
 {
-    prot_waitevent_t new, cur;
+    struct prot_waitevent *new, *cur;
 
     /* if we aren't passed a callback function, don't bother */
     if (!proc) return s->waitevent;
 
     /* create new timer struct */
-    new = (prot_waitevent_t) xmalloc(sizeof(struct prot_waitevent));
-    new->mark = time(0) + period;
-    new->period = period;
+    new = (struct prot_waitevent *) xmalloc(sizeof(struct prot_waitevent));
+    new->mark = mark;
     new->proc = proc;
     new->rock = rock;
     new->next = NULL;
@@ -286,9 +277,9 @@ prot_waitevent_t prot_addwaitevent(struct protstream *s, time_t period,
 /*
  * Remove 'event' from stream 's'.
  */
-void prot_removewaitevent(struct protstream *s, prot_waitevent_t event)
+void prot_removewaitevent(struct protstream *s, struct prot_waitevent *event)
 {
-    prot_waitevent_t prev, cur;
+    struct prot_waitevent *prev, *cur;
 
     prev = NULL;
     cur = s->waitevent;
@@ -349,7 +340,7 @@ int prot_fill(struct protstream *s)
     fd_set rfds;
     int haveinput; 
     time_t read_timeout;
-    prot_waitevent_t event;
+    struct prot_waitevent *event;
    
     assert(!s->write);
 
@@ -388,10 +379,9 @@ int prot_fill(struct protstream *s)
 		for (event = s->waitevent; event != NULL; event = event->next)
 		{
 		    if (now >= event->mark) {
-			(*event->proc)(s, event->rock);
-			event->mark = now + event->period;
+			event = (*event->proc)(s, event->rock);
 		    }
-		    if (sleepfor > (event->mark - now)) {
+		    if (event && sleepfor > (event->mark - now)) {
 			sleepfor = event->mark - now;
 		    }
 		}
