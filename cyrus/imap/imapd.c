@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.395 2002/06/03 18:22:24 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.396 2002/06/06 00:12:33 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -239,8 +239,6 @@ extern void setproctitle_init(int argc, char **argv, char **envp);
 extern int proc_register(const char *progname, const char *clienthost, 
 			 const char *userid, const char *mailbox);
 extern void proc_cleanup(void);
-
-static int hash_simple (const char *str);
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
@@ -1764,7 +1762,7 @@ void cmd_login(char *tag, char *user)
 	    prot_printf(imapd_out, "%s NO Login failed: %d\r\n", tag, r);
 	}
 	snmp_increment_args(AUTHENTICATION_NO, 1,
-			    VARIABLE_AUTH, hash_simple("LOGIN"), 
+			    VARIABLE_AUTH, 0 /* hash_simple("LOGIN") */,
 			    VARIABLE_LISTEND);
     	freebuf(&passwdbuf);
 	return;
@@ -1772,7 +1770,7 @@ void cmd_login(char *tag, char *user)
     else {
 	imapd_userid = xstrdup(canon_user);
 	snmp_increment_args(AUTHENTICATION_YES, 1,
-			    VARIABLE_AUTH, hash_simple("LOGIN"), 
+			    VARIABLE_AUTH, 0 /*hash_simple("LOGIN") */, 
 			    VARIABLE_LISTEND);
 	syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", imapd_clienthost,
 	       canon_user, imapd_starttls_done ? "+TLS" : "", 
@@ -1817,20 +1815,6 @@ void cmd_login(char *tag, char *user)
 
     freebuf(&passwdbuf);
     return;
-}
-
-static int hash_simple (const char *str)
-{
-    int     value = 0;
-    int     i;
-
-    if (!str)
-	return 0;
-    for (i = 0; *str; i++)
-    {
-	value ^= (*str++ << ((i & 3)*8));
-    }
-    return value;
 }
 
 /*
@@ -1899,7 +1883,7 @@ cmd_authenticate(char *tag,char *authtype)
 	       imapd_clienthost, authtype, sasl_errdetail(imapd_saslconn));
 
 	snmp_increment_args(AUTHENTICATION_NO, 1,
-			    VARIABLE_AUTH, hash_simple(authtype), 
+			    VARIABLE_AUTH, 0, /* hash_simple(authtype) */ 
 			    VARIABLE_LISTEND);
 	sleep(3);
 
@@ -1950,7 +1934,7 @@ cmd_authenticate(char *tag,char *authtype)
     }
 
     snmp_increment_args(AUTHENTICATION_YES, 1,
-			VARIABLE_AUTH, hash_simple(authtype), 
+			VARIABLE_AUTH, 0, /* hash_simple(authtype) */
 			VARIABLE_LISTEND);
 
     prot_printf(imapd_out, "%s OK Success (%s)\r\n", tag, ssfmsg);
