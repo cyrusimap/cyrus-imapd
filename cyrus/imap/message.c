@@ -959,6 +959,8 @@ char *hdr;
 	"jul", "aug", "sep", "oct", "nov", "dec"
     };
 
+    if (!hdr) goto baddate;
+
     tm = zerotm;
 
     message_parse_rfc822space(&hdr);
