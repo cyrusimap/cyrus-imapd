@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.12 2002/10/03 19:02:37 ken3 Exp $ */
+/* $Id: idled.c,v 1.13 2002/12/11 14:57:09 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -262,8 +262,11 @@ int main(int argc, char **argv)
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
 
-    while ((opt = getopt(argc, argv, "d")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:d")) != EOF) {
 	switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
 	case 'd': /* don't fork. debugging mode */
 	    debugmode = 1;
 	    break;
