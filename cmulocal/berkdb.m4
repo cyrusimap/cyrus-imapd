@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.16 2004/08/22 19:41:47 shadow Exp $
+dnl $Id: berkdb.m4,v 1.17 2004/09/13 21:57:17 shadow Exp $
 
 AC_DEFUN([CMU_DB_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -211,16 +211,23 @@ AC_DEFUN([CYRUS_BERKELEY_DB_CHK_LIB],
 	    BDB_LIBADD=""
 	fi
 
+	saved_LIBS=$LIBS
         for dbname in db-4.2 db4.2 db42 db-4.1 db4.1 db41 db-4.0 db4.0 db-4 db40 db4 db-3.3 db3.3 db33 db-3.2 db3.2 db32 db-3.1 db3.1 db31 db-3 db30 db3 db
           do
-            AC_CHECK_LIB($dbname, db_create, BDB_LIBADD="$BDB_LIBADD -l$dbname";
-              dblib="berkeley"; break, dblib="no")
+	    LIBS="$saved_LIBS -l$dbname"
+	    AC_TRY_LINK([#include <db.h>],
+	    [db_create(NULL, NULL, 0);],
+	    BDB_LIBADD="$BDB_LIBADD -l$dbname"; dblib="berkeley"; dbname=db,
+            dblib="no")
           done
         if test "$dblib" = "no"; then
-          AC_CHECK_LIB(db, db_open, BDB_LIBADD="$BDB_LIBADD -ldb";
-            dblib="berkeley"; dbname=db,
+	    LIBS="$saved_LIBS -ldb"
+	    AC_TRY_LINK([#include <db.h>],
+	    [db_open(NULL, 0, 0, 0, NULL, NULL, NULL);],
+	    BDB_LIBADD="$BDB_LIBADD -ldb"; dblib="berkeley"; dbname=db,
             dblib="no")
         fi
+	LIBS=$saved_LIBS
 
 	LDFLAGS=$BDB_SAVE_LDFLAGS
 ])
