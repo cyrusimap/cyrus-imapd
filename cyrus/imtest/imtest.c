@@ -167,7 +167,7 @@ main(argc, argv)
     int sock, nfds, nfound, count, dologin, dopass;
     int len, done, maxplain;
     int prot_req, protlevel;
-    int (*encodefunc)(), (*decodefunc)();
+    char *(*encodefunc)(), *(*decodefunc)();
     char *host, *port, *pass, *outbuf, *user;
     fd_set read_set, rset;
     struct sockaddr_in addr, laddr;
