@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.6 2002/01/25 19:51:55 rjs3 Exp $
+ * $Id: mupdate.h,v 1.7 2002/01/28 22:07:14 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,13 @@ struct mupdate_handle_s {
     /* For mupdate_scarf and mupdate_authenticate */
     struct buf tag, cmd, arg1, arg2, arg3;
 
+    /* For client side mupdate_find calls */
+    char mailbox_buf[MAX_MAILBOX_NAME];
+    char server_buf[MAX_MAILBOX_NAME];
+    char *acl_buf;
+    size_t acl_buf_len;
+    struct mupdate_mailboxdata mailboxdata_buf;
+
     sasl_conn_t *saslconn;
     int saslcompleted;
 };
@@ -85,12 +92,6 @@ struct mbent_queue
     struct mbent *head;
     struct mbent **tail;
 };
-
-/* Callbacks for mupdate_scarf */
-/* cmd is one of DELETE, MAILBOX, RESERVE */
-/* context is as provided to mupdate_scarf */
-typedef int (*mupdate_callback)(struct mupdate_mailboxdata *mdata,
-                                const char *cmd, void *context);
 
 /* Scarf up the incoming data and perform the requested operations */
 /* Returns 0 on no error (or success, if wait_for_ok set) */

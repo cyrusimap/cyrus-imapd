@@ -1,6 +1,6 @@
 /* mupdate-client.h -- cyrus murder database clients
  *
- * $Id: mupdate-client.h,v 1.5 2002/01/25 19:51:55 rjs3 Exp $
+ * $Id: mupdate-client.h,v 1.6 2002/01/28 22:07:14 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -68,17 +68,47 @@ int mupdate_reserve(mupdate_handle *handle,
 int mupdate_delete(mupdate_handle *handle,
 		   const char *mailbox);
 
+enum mbtype {
+    ACTIVE, RESERVE 
+};
+
 /* mailbox data structure */
+/* when returned to client application, these strings are allocated and
+ * the type is correctly set.  For callbacks, the type is not used, and
+ * members are only set as needed. */
 struct mupdate_mailboxdata {
     const char *mailbox;
     const char *server;
     const char *acl;
+    enum mbtype t;
 };
 
 /* does a given mailbox exist?  1 if false, 0 if true, -1 if error,
- * if target is non-null, it fills in the caller-provided buffer 
+ * "target" gets pointed at a struct mudate_mailboxdata that is only valid
+ * until the next mupdate_* call.
  */
 int mupdate_find(mupdate_handle *handle, const char *mailbox,
 		 struct mupdate_mailboxdata **target);
 
+/* Callbacks for mupdate_scarf and mupdate_list */
+/* cmd is one of DELETE, MAILBOX, RESERVE */
+/* context is as provided to mupdate_scarf */
+/* FIXME/xxx: "cmd" can probabally go away and instead
+ * we just use the t in mdata */
+typedef int (*mupdate_callback)(struct mupdate_mailboxdata *mdata,
+                                const char *cmd, void *context);
+
+/* perform an MUPDATE LIST operation (callback is called for
+ * each remote mailbox) */
+int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
+		 void *context);
+
+/* Scarf up the incoming data and perform the requested operations */
+/* Returns 0 on no error (or success, if wait_for_ok set) */
+/* Returns 1 on fatal error */
+/* Returns -1 on command-related error (if wait_for_ok set) */
+/* wait_for_ok indicates if we should wait for an OK from the remote or
+ * just get the next command */
+int mupdate_scarf(mupdate_handle *handle, mupdate_callback callback,
+		  void *context, int wait_for_ok);
 #endif

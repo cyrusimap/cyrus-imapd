@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.13 2002/01/25 19:51:55 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.14 2002/01/28 22:07:14 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -357,6 +357,8 @@ void mupdate_disconnect(mupdate_handle **h)
     sasl_dispose(&((*h)->saslconn));
     close((*h)->sock);
 
+    if((*h)->acl_buf) free((*h)->acl_buf);
+
     free(*h); *h=NULL;
 }
 
@@ -457,7 +459,83 @@ int mupdate_delete(mupdate_handle *handle,
     }
 }
 
-/* mupdate_find ??? */
+
+static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
+			   const char *cmd, void *context) 
+{
+    struct mupdate_handle_s *h = (struct mupdate_handle_s *)context;
+
+    if(!h || !cmd || !mdata) return 1;
+
+    if(!strncmp(cmd, "MAILBOX", 7)) {
+	int len = strlen(mdata->acl) + 1;
+	
+	h->mailboxdata_buf.t = ACTIVE;
+	
+	if(len > h->acl_buf_len) {
+	    if(len < 2*h->acl_buf_len)
+		len = 2 * h->acl_buf_len;
+
+	    h->acl_buf = xrealloc(h->acl_buf, len);
+	    strcpy(h->acl_buf, mdata->acl);
+	}
+    } else if(!strncmp(cmd, "RESERVE", 7)) {
+	h->mailboxdata_buf.t = RESERVE;
+	if(!h->acl_buf) {
+	    h->acl_buf = xstrdup("");
+	    h->acl_buf_len = 1;
+	} else {
+	    h->acl_buf[0] = '\0';
+	}
+    } else {
+	/* Bad command */
+	return 1;
+    }
+   
+    h->mailboxdata_buf.mailbox = h->mailbox_buf;
+    h->mailboxdata_buf.server = h->server_buf;
+    h->mailboxdata_buf.acl = h->acl_buf;
+    
+    return 0;
+}
+
+int mupdate_find(mupdate_handle *handle, const char *mailbox,
+		 struct mupdate_mailboxdata **target) 
+{
+    int ret;
+    
+    if(!handle || !mailbox || !target) return MUPDATE_BADPARAM;
+
+    prot_printf(handle->pout,
+		"X%u FIND \"%s\"\r\n", handle->tagn++, mailbox);
+
+    memset(&(handle->mailboxdata_buf), 0, sizeof(handle->mailboxdata_buf));
+
+    ret = mupdate_scarf(handle, mupdate_find_cb, handle, 1);
+
+    if(!ret)
+	*target = &(handle->mailboxdata_buf);
+    else
+	*target = NULL;
+    
+    return ret;
+}
+
+/* xxx should extend list semantics to take a hostname too */
+int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
+		 void *context) 
+{
+    int ret;
+    
+    if(!handle || !callback) return MUPDATE_BADPARAM;
+
+    prot_printf(handle->pout,
+		"X%u LIST\r\n", handle->tagn++);
+
+    ret = mupdate_scarf(handle, callback, context, 1);
+
+    return ret;
+}
 
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
                                  if ((ch) != '\n') { syslog(LOG_ERR, \
