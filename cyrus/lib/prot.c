@@ -31,6 +31,8 @@
 #else
 #include <varargs.h>
 #endif
+#include <sys/types.h>
+#include <netinet/in.h>
 
 #include "prot.h"
 #include "xmalloc.h"
