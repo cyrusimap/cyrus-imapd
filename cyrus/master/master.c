@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.14 2003/02/12 19:12:45 rjs3 Exp $ */
+/* $Id: master.c,v 1.67.4.15 2003/02/13 18:01:26 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -111,6 +111,8 @@ enum {
 static int verbose = 0;
 static int listen_queue_backlog = 32;
 static int pidfd = -1;
+
+const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 
 struct service *Services = NULL;
 int allocservices = 0;
@@ -278,7 +280,7 @@ char *parse_host(char *listen)
     char *cp;
 
     /* do we have a hostname, or IP number? */
-    /* XXX are brackets necessary, like for IPv6 later? */
+    /* XXX are brackets necessary  */
     if (*listen == '[') {
         listen++;  /* skip first bracket */
         if ((cp = strrchr(listen,']')) != NULL) {
@@ -1316,10 +1318,13 @@ int main(int argc, char **argv)
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
-    while ((opt = getopt(argc, argv, "p:l:Dd")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:M:p:l:Dd")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt imapd.conf file */
 	    alt_config = optarg;
+	    break;
+	case 'M': /* alt cyrus.conf file */
+	    MASTER_CONFIG_FILENAME = optarg;
 	    break;
 	case 'l':
             /* user defined listen queue backlog */

@@ -1,5 +1,5 @@
 /* masterconfig.c -- Configuration routines for master process
- $Id: masterconf.c,v 1.6.6.5 2003/02/07 23:34:53 rjs3 Exp $
+ $Id: masterconf.c,v 1.6.6.6 2003/02/13 18:01:26 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -59,6 +59,8 @@
 #endif
 
 #include "masterconf.h"
+
+extern const char *MASTER_CONFIG_FILENAME;
 
 struct configlist {
     char *key;

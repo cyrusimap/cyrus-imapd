@@ -39,11 +39,19 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: master.8,v 1.6.4.2 2002/12/10 21:55:03 ken3 Exp $
+.\" $Id: master.8,v 1.6.4.3 2003/02/13 18:01:24 rjs3 Exp $
 .SH NAME
 master \- master Cyrus process
 .SH SYNOPSIS
 .B master
+[
+.B \-C
+.I alternate imapd.conf
+]
+[
+.B \-M
+.I alternate cyrus.conf
+]
 [
 .B \-l
 .I listen queue
@@ -68,6 +76,14 @@ If this process dies, then no new sessions will be started.
 It kills itself and all child processes
 when it receives a SIGTERM.
 .SH OPTIONS
+.TP
+.BI \-C " alternate imapd.conf"
+Specifies an alternate imapd.conf for use by master (note that this will
+not affect any sub-processes spawned by master, you should specify those
+specifically in the respective entries in cyrus.conf).
+.TP
+.BI \-M " alternate cyrus.conf"
+Specifies an alternate cyrus.conf for use by master.
 .TP
 .BI \-l " listen queue backlog"
 Increase the listen queue backlog. By default, the listen queue is set

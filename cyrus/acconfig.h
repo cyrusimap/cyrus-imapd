@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.12 2003/02/12 19:12:33 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.13 2003/02/13 18:01:21 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -264,7 +264,7 @@ struct sockaddr_storage {
 #define FNAME_LOGDIR "/log/"
 #define FNAME_PTSDB "/ptclient/ptscache.db"
 #define CONFIG_FILENAME "/etc/imapd.conf"
-#define MASTER_CONFIG_FILENAME "/etc/cyrus.conf"
+#define DEFAULT_MASTER_CONFIG_FILENAME "/etc/cyrus.conf"
 
 #ifndef HAVE_SHUTDOWN
 #define shutdown(fd, mode) 0
