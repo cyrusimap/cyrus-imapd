@@ -857,21 +857,30 @@ int usinguid;
  * Performs a COPY command
  */
 int
-index_copy(mailbox, sequence, usinguid, name)
+index_copy(mailbox, sequence, usinguid, name, copyuidp)
 struct mailbox *mailbox;
 char *sequence;
 int usinguid;
 char *name;
+char **copyuidp;
 {
     static struct copyargs copyargs;
     int i;
     unsigned long totalsize = 0;
     int r;
     struct mailbox append_mailbox;
+    char *copyuid;
+    int copyuid_len, copyuid_size;
+    int sepchar;
 
     copyargs.nummsg = 0;
     index_forsequence(mailbox, sequence, usinguid, index_copysetup,
 		      (char *)&copyargs);
+
+    if (copyargs.nummsg == 0) {
+	*copyuidp = 0;
+	return 0;
+    }
 
     for (i = 0; i < copyargs.nummsg; i++) {
 	totalsize += copyargs.copymsg[i].size;
@@ -883,6 +892,45 @@ char *name;
 
     r = append_copy(mailbox, &append_mailbox, copyargs.nummsg,
 		    copyargs.copymsg, imapd_userid);
+
+    if (!r) {
+	copyuid_size = 1024;
+	copyuid = xmalloc(copyuid_size);
+	sprintf(copyuid, "%u", append_mailbox.uidvalidity);
+	copyuid_len = strlen(copyuid);
+	sepchar = ' ';
+
+	for (i = 0; i < copyargs.nummsg; i++) {
+	    if (copyuid_size < copyuid_len + 50) {
+		copyuid_size += 1024;
+		copyuid = xrealloc(copyuid, copyuid_size);
+	    }
+	    sprintf(copyuid+copyuid_len, "%c%u", sepchar,
+		    copyargs.copymsg[i].uid);
+	    copyuid_len += strlen(copyuid+copyuid_len);
+	    if (i+1 < copyargs.nummsg &&
+		copyargs.copymsg[i+1].uid == copyargs.copymsg[i].uid + 1) {
+		do {
+		    i++;
+		} while (i+1 < copyargs.nummsg &&
+			 copyargs.copymsg[i+1].uid == copyargs.copymsg[i].uid + 1);
+		sprintf(copyuid+copyuid_len, ":%u",
+			copyargs.copymsg[i].uid);
+		copyuid_len += strlen(copyuid+copyuid_len);
+	    }
+	    sepchar = ',';
+	}
+	if (copyargs.nummsg == 1) {
+	    sprintf(copyuid+copyuid_len, " %u", append_mailbox.last_uid);
+	}
+	else {
+	    sprintf(copyuid+copyuid_len, " %u:%u",
+		    append_mailbox.last_uid - copyargs.nummsg + 1,
+		    append_mailbox.last_uid);
+	}
+	*copyuidp = copyuid;
+    }
+
     mailbox_close(&append_mailbox);
 
     return r;
@@ -974,7 +1022,7 @@ int statusitems;
 }
 
 /*
- * Performs a XGETUIDS command
+ * Performs a GETUIDS command
  */
 int
 index_getuids(mailbox, lowuid)
@@ -985,7 +1033,7 @@ unsigned lowuid;
     unsigned firstuid = 0, lastuid = 0;
 
 
-    prot_printf(imapd_out, "* XUIDS");
+    prot_printf(imapd_out, "* GETUIDS");
 
     for (msgno = 1; msgno <= imapd_exists; msgno++) {
 	if (firstuid == 0) {
