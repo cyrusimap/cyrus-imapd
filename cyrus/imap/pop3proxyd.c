@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.35 2002/02/27 03:47:15 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.36 2002/03/18 19:55:30 wcw Exp $
  */
 #include <config.h>
 
@@ -814,8 +814,10 @@ void cmd_pass(char *pass)
 	return;
     }
     else {
-	syslog(LOG_NOTICE, "login: %s %s plaintext %s",
-	       popd_clienthost, popd_userid, reply ? reply : "");
+	syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", popd_clienthost,
+	       popd_userid, popd_starttls_done ? "+TLS" : "", 
+	       reply ? reply : "");
+
 	plaintextloginpause = config_getint("plaintextloginpause", 0);
 	if (plaintextloginpause) sleep(plaintextloginpause);
     }
