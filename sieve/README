@@ -1,0 +1,35 @@
+$Id: README,v 1.1 1999/07/02 18:55:33 leg Exp $
+
+CMU Sieve 1.2
+-------------
+
+This is an implementation of a simple Sieve API.  This API is
+well-suited for incorporating in other programs, but is not
+extensible.  (If there is interest, we may implement an extensible API
+in the future.)
+
+It uses configure, so to compile type "./configure" and then "make".
+(There's more detailed but generic instructions in INSTALL.)
+
+It should compile without libcyrus, but then it does not implement the
+"address" test.	 That's just too much work to do when I have a neato
+library to do it for me.
+
+There's a simple "test" application included, which is not built by
+default (type "make test" to build it).  It expects:
+
+test <message> < <script>
+
+And prints out the actions taken or errors encountered.  (This
+implementation will attempt all the actions or no actions.)
+
+Some of this code will be integrated with the cyrus-imapd deliver
+program.
+
+Questions and comments to:
+Larry Greenfield (leg+@andrew.cmu.edu)
+
+References:
+
+[SIEVE] Showalter, T., "Sieve: A Mail Filtering Language",
+draft-showalter-sieve-07bis.txt, May, 1999.

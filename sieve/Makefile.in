@@ -1,0 +1,75 @@
+# Makefile.am--sieve library automake input
+# $Id: Makefile.in,v 1.1 1999/07/02 18:55:35 leg Exp $
+################################################################
+#        Copyright 1998 by Carnegie Mellon University
+#
+#                      All Rights Reserved
+#
+#Permission to use, copy, modify, and distribute this software and its
+#documentation for any purpose and without fee is hereby granted,
+#provided that the above copyright notice appear in all copies and that
+#both that copyright notice and this permission notice appear in
+#supporting documentation, and that the name of Carnegie Mellon University
+#not be used in advertising or publicity pertaining to distribution of the
+#software without specific, written prior permission.
+#
+#CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS
+#SOFTWARE, INCLUDING #ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, 
+#IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE FOR ANY SPECIAL, 
+#INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
+#LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+#OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+#PERFORMANCE OF THIS SOFTWARE.
+################################################################
+
+srcdir = @srcdir@
+VPATH = @srcdir@
+
+CC = @CC@
+BISON = @BISON@
+LEX = @LEX@
+RANLIB = @RANLIB@
+
+DEFS = @DEFS@
+CPPFLAGS = @CPPFLAGS@
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@
+
+MAKEDEPEND = @MAKEDEPEND@
+
+LIBS = libsieve.a
+DEPLIBS=../lib/libcyrus.a @DEPLIBS@
+
+all: libsieve.a
+
+install:
+
+test: test.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o test \
+	 test.o $(DEPLIBS) $(LIBS)
+
+OBJS=sieve-yacc.o sieve-lex.o comparator.o interp.o message.o script.o \
+	tree.o md5.o
+
+libsieve.a: $(OBJS)
+	rm -f libsieve.a
+	ar cr libsieve.a $(OBJS)
+	$(RANLIB) libsieve.a
+
+clean:
+	rm -f *.o *.a Makefile.bak makedepend.log
+
+distclean: clean
+	rm -f Makefile
+
+depend:
+	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
+
+.c.o:
+	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) \
+	$<
+
+%-yacc.c %.tab.h: %.y
+	$(BISON) -y -d $< && mv y.tab.c $*-yacc.c && mv y.tab.h $*.tab.h
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.

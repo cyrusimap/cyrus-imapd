@@ -1,0 +1,32 @@
+$Id: NEWS,v 1.1 1999/07/02 18:55:35 leg Exp $
+
+CMU Sieve 1.2
+-------------
+
+Added additional callbacks (ok, so I want to make my integration with deliver
+easier) and envelope and vacation support.
+
+Made it compile without libcyrus.
+It should compile without libcyrus, but then it does not implement the
+"address" test.	 That's just too much work to do when I have a neato
+library to do it for me.
+
+Todo:
+- regex matching
+
+CMU Sieve 1.1
+-------------
+
+- Updated to draft-showalter-sieve-07bis.txt
+
+- Simple API (see sieve_interface.h; currently mostly undocumented)
+
+- Implements all of the optional features except "envelope"
+
+- Maintains "if it parses, it probably runs" behavior. (Goal: minimize
+  run-time errors.)
+
+CMU Sieve 1.0
+-------------
+
+- prototype implementation
