@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.18 2002/04/05 21:55:42 rjs3 Exp $
+ * $Id: parser.c,v 1.19 2002/05/24 19:02:05 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -642,6 +642,9 @@ static int cmd_authenticate(struct protstream *sieved_out,
 	 mech, starttls_done ? "+TLS" : "", "User logged in");
 
   authenticated = 1;
+
+  prot_setsasl(sieved_in, sieved_saslconn);
+  prot_setsasl(sieved_out, sieved_saslconn);
 
   /* free memory */
 
