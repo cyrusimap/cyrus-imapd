@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.19 2004/05/05 14:42:19 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.20 2004/05/05 15:02:35 ken3 Exp $
  */
 #include <config.h>
 
@@ -254,7 +254,7 @@ static int popd_proxy_policy(sasl_conn_t *conn,
 	char userbuf[MAX_MAILBOX_NAME+1], *p;
 	size_t n;
 
-	/* make a working copy of the auth[z]id */
+	/* make a working copy of the authzid */
 	if (!rlen) rlen = strlen(requested_user);
 	memcpy(userbuf, requested_user, rlen);
 	userbuf[rlen] = '\0';
