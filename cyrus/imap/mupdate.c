@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.30 2003/04/02 02:12:25 ken3 Exp $
+ * $Id: mupdate.c,v 1.60.4.31 2003/04/19 02:01:44 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -78,6 +78,7 @@
 #include "version.h"
 #include "mpool.h"
 #include "util.h"
+#include "tls.h"
 
 /* Sent to clients that we can't accept a connection for. */
 static const char SERVER_UNABLE_STRING[] = "* BYE \"Server Unable\"\r\n";
@@ -109,6 +110,12 @@ struct conn {
     sasl_conn_t *saslconn;
     char *userid;
 
+#ifdef HAVE_SSL
+    SSL *tlsconn;
+#else
+    void *tlsconn;
+#endif
+
     int idle;
     
     char clienthost[NI_MAXHOST*2+1];
@@ -119,6 +126,8 @@ struct conn {
 	char ipremoteport_buf[60];
 	char *iplocalport;
 	char iplocalport_buf[60];
+	sasl_ssf_t ssf;
+	char *authid;
     } saslprops;
 
     /* pending changes to send, in reverse order */
@@ -190,6 +199,7 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 	      int dook, int send_delete);
 void cmd_list(struct conn *C, const char *tag, const char *host_prefix);
 void cmd_startupdate(struct conn *C, const char *tag);
+void cmd_starttls(struct conn *C, const char *tag);
 void shut_down(int code);
 static int reset_saslconn(struct conn *c);
 void database_init();
@@ -359,6 +369,13 @@ static void conn_free(struct conn *C)
     if (C->pout) prot_free(C->pout);
     cyrus_close_sock(C->fd);
     if (C->saslconn) sasl_dispose(&C->saslconn);
+
+    if (C->saslprops.authid) free(C->saslprops.authid);
+
+#ifdef HAVE_SSL
+    if (C->tlsconn) tls_reset_servertls(&C->tlsconn);
+    tls_shutdown_serverengine();
+#endif
 
     /* free struct bufs */
     freebuf(&(C->tag));
@@ -702,6 +719,35 @@ mupdate_docmd_result_t docmd(struct conn *c)
 	else goto badcmd;
 	break;
 	
+    case 'S':
+	if (!strcmp(c->cmd.s, "Starttls")) {
+	    CHECKNEWLINE(c, ch);
+	    
+	    if (!tls_enabled()) {
+		/* we don't support starttls */
+		goto badcmd;
+	    }
+
+	    /* if we've already done SASL fail */
+	    if (c->userid) {
+		prot_printf(c->pout, 
+			    "%s BAD Can't Starttls after authentication\r\n",
+			    c->tag.s);
+		goto nextcmd;
+	    }
+		
+	    /* check if already did a successful tls */
+	    if (c->tlsconn) {
+		prot_printf(c->pout, 
+			    "%s BAD Already did a successful Starttls\r\n",
+			    c->tag.s);
+		goto nextcmd;
+	    }
+	    cmd_starttls(c, c->tag.s);
+	}
+	else goto badcmd;
+	break;
+	
     case 'U':
 	if (!c->userid) goto nologin;
 	else if (!strcmp(c->cmd.s, "Update")) {
@@ -811,6 +857,46 @@ int service_main_fd(int fd,
 	return EC_TEMPFAIL;
     }
     return 0;
+}
+
+/*
+ * Issue the capability banner
+ */
+static void dobanner(struct conn *c)
+{
+    char slavebuf[4096];
+    const char *mechs;
+    unsigned int mechcount;
+    int ret;
+
+    /* send initial the banner + flush pout */
+    ret = sasl_listmech(c->saslconn, NULL,
+			"* AUTH \"", "\" \"", "\"",
+			&mechs, NULL, &mechcount);
+
+    /* Add mupdate:// tag if necessary */
+    if(!masterp) {
+	if(!config_mupdate_server)
+	    fatal("mupdate server was not specified for slave",
+		  EC_TEMPFAIL);
+		
+	snprintf(slavebuf, sizeof(slavebuf), "mupdate://%s",
+		 config_mupdate_server);
+    }
+	    
+    prot_printf(c->pout, "%s\r\n",
+		(ret == SASL_OK && mechcount > 0) ? mechs : "* AUTH");
+
+    if (tls_enabled() && !c->tlsconn) {
+	prot_printf(c->pout, "* STARTTLS\r\n");
+    }
+
+    prot_printf(c->pout,
+		"* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"\r\n",
+		config_servername,
+		CYRUS_VERSION, masterp ? "(master)" : slavebuf);
+
+    prot_flush(c->pout);
 }
 
 /*
@@ -1037,32 +1123,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 
 	/* Do work in this thread, if needed */
 	if(send_a_banner) {
-	    char slavebuf[4096];
-	    const char *mechs;
-	    unsigned int mechcount;
-
-	    /* send initial the banner + flush pout */
-	    ret = sasl_listmech(currConn->saslconn, NULL,
-				"* AUTH \"", "\" \"", "\"",
-				&mechs, NULL, &mechcount);
-
-	    /* Add mupdate:// tag if necessary */
-	    if(!masterp) {
-		if(!config_mupdate_server)
-		    fatal("mupdate server was not specified for slave",
-			  EC_TEMPFAIL);
-		
-		snprintf(slavebuf, sizeof(slavebuf), "mupdate://%s",
-			 config_mupdate_server);
-	    }
-	    
-	    prot_printf(currConn->pout,
-			"%s\r\n* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"\r\n",
-			(ret == SASL_OK && mechcount > 0) ? mechs : "* AUTH",
-			config_servername,
-			CYRUS_VERSION, masterp ? "(master)" : slavebuf);
-
-	    prot_flush(currConn->pout);
+	    dobanner(currConn);
 	} else if(do_a_command) {
 	    assert(currConn);
 	    
@@ -1238,8 +1299,8 @@ void cmd_authenticate(struct conn *C,
 	return;
     }
 
-    syslog(LOG_NOTICE, "login: %s from %s",
-	   C->userid, C->clienthost);
+    syslog(LOG_NOTICE, "login: %s %s %s%s %s", C->clienthost, C->userid,
+	   mech, C->tlsconn ? "+TLS" : "", "User logged in");
 
     prot_printf(C->pout, "%s OK \"Authenticated\"\r\n", tag);
 
@@ -1562,6 +1623,84 @@ void sendupdates(struct conn *C, int flushnow)
     }
 }
 
+#ifdef HAVE_SSL
+void cmd_starttls(struct conn *C, const char *tag)
+{
+    int result;
+    int *layerp;
+
+    char *auth_id;
+    sasl_ssf_t ssf;
+
+    /* SASL and openssl have different ideas about whether ssf is signed */
+    layerp = (int *) &ssf;
+
+    result=tls_init_serverengine("mupdate",
+				 5,        /* depth to verify */
+				 1,        /* can client auth? */
+				 1);       /* TLS only? */
+
+    if (result == -1) {
+
+	syslog(LOG_ERR, "error initializing TLS");
+
+	prot_printf(C->pout, "%s NO Error initializing TLS\r\n", tag);
+
+	return;
+    }
+
+    prot_printf(C->pout, "%s OK Begin TLS negotiation now\r\n", tag);
+    /* must flush our buffers before starting tls */
+    prot_flush(C->pout);
+  
+    result=tls_start_servertls(C->pin->fd, /* read */
+			       C->pout->fd, /* write */
+			       layerp,
+			       &auth_id,
+			       &C->tlsconn);
+
+    /* if error */
+    if (result==-1) {
+	prot_printf(C->pout, "%s NO Starttls negotiation failed\r\n", 
+		    tag);
+	syslog(LOG_NOTICE, "STARTTLS negotiation failed: %s", 
+	       C->clienthost);
+	return;
+    }
+
+    /* tell SASL about the negotiated layer */
+    result = sasl_setprop(C->saslconn, SASL_SSF_EXTERNAL, &ssf);
+    if (result != SASL_OK) {
+	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+    }
+    C->saslprops.ssf = ssf;
+
+    result = sasl_setprop(C->saslconn, SASL_AUTH_EXTERNAL, auth_id);
+    if (result != SASL_OK) {
+	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+    }
+    if(C->saslprops.authid) {
+	free(C->saslprops.authid);
+	C->saslprops.authid = NULL;
+    }
+    if(auth_id)
+        C->saslprops.authid = xstrdup(auth_id);
+
+    /* tell the prot layer about our new layers */
+    prot_settls(C->pin, C->tlsconn);
+    prot_settls(C->pout, C->tlsconn);
+
+    /* Reissue capability banner */
+    dobanner(C);
+}
+#else
+void cmd_starttls(struct conn *C, const char *tag)
+{
+    fatal("cmd_starttls() executed, but starttls isn't implemented!",
+	  EC_SOFTWARE);
+}
+#endif /* HAVE_SSL */
+
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
@@ -1601,6 +1740,18 @@ static int reset_saslconn(struct conn *c)
     ret = sasl_setprop(c->saslconn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
     /* end of service_main initialization excepting SSF */
+
+    /* If we have TLS/SSL info, set it */
+    if(c->saslprops.ssf) {
+	ret = sasl_setprop(c->saslconn, SASL_SSF_EXTERNAL, &c->saslprops.ssf);
+    }
+    if(ret != SASL_OK) return ret;
+
+    if(c->saslprops.authid) {
+	ret = sasl_setprop(c->saslconn, SASL_AUTH_EXTERNAL, c->saslprops.authid);
+	if(ret != SASL_OK) return ret;
+    }
+    /* End TLS/SSL Info */
 
     return SASL_OK;
 }

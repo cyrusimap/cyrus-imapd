@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.164.4.25 2003/02/27 18:10:28 rjs3 Exp $
+# $Id: Makefile.in,v 1.164.4.26 2003/04/19 02:01:44 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -228,11 +228,12 @@ proxyd.pure: $(PROXYDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
 	 $(SERVICE) $(PROXYDOBJS) mutex_fake.o libimap.a \
 	 $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-mupdate: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o \
+mupdate: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o tls.o \
 	libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o mupdate \
 	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mupdate-client.o \
-	 mutex_pthread.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
+	 mutex_pthread.o tls.o libimap.a \
+	 $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
 
 mupdate.pure: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o \
 	libimap.a $(DEPLIBS)
