@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.11 2002/01/25 16:45:49 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.12 2002/01/25 18:04:22 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -84,9 +84,9 @@ extern sasl_callback_t *mysasl_callbacks(const char *username,
 static sasl_security_properties_t *make_secprops(int min, int max)
 {
   sasl_security_properties_t *ret =
-      (sasl_security_properties_t *)xzmalloc(sizeof(sasl_security_properties_t));
+      (sasl_security_properties_t *) xzmalloc(sizeof(sasl_security_properties_t));
 
-  ret->maxbufsize=4096;
+  ret->maxbufsize = 4000; /* xxx */
   ret->min_ssf = config_getint("sasl_minimum_layer", min);	
   ret->max_ssf = config_getint("sasl_maximum_layer", max);
 
@@ -366,12 +366,13 @@ int mupdate_activate(mupdate_handle *handle,
 
     /* FIXME: NULL is invalid! */
     ret = mupdate_scarf(handle, NULL, NULL, 1);
-    if(ret > 0)
+    if (ret > 0) {
 	return MUPDATE_NOCONN;
-    else if(ret < 0)
+    } else if(ret < 0) {
 	return MUPDATE_FAIL;
-    else
+    } else {
 	return 0;
+    }
 }
 
 int mupdate_reserve(mupdate_handle *handle,
@@ -388,12 +389,13 @@ int mupdate_reserve(mupdate_handle *handle,
 
     /* FIXME: NULL is invalid! */
     ret = mupdate_scarf(handle, NULL, NULL, 1);
-    if(ret > 0)
+    if (ret > 0) {
 	return MUPDATE_NOCONN;
-    else if(ret < 0)
+    } else if (ret < 0) {
 	return MUPDATE_FAIL;
-    else
+    } else {
 	return 0;
+    }
 }
 
 int mupdate_delete(mupdate_handle *handle,
@@ -410,18 +412,19 @@ int mupdate_delete(mupdate_handle *handle,
 
     /* FIXME: NULL is invalid! */
     ret = mupdate_scarf(handle, NULL, NULL, 1);
-    if(ret > 0)
+    if (ret > 0) {
 	return MUPDATE_NOCONN;
-    else if(ret < 0)
+    } else if(ret < 0) {
 	return MUPDATE_FAIL;
-    else
+    } else {
 	return 0;
+    }
 }
 
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
                                  if ((ch) != '\n') { syslog(LOG_ERR, \
                              "extra arguments recieved, aborting connection");\
-                                 return 1; }} while(0);
+                                 return 1; }} while(0)
 
 /* Scarf up the incoming data and perform the requested operations */
 int mupdate_scarf(mupdate_handle *handle, mupdate_callback callback,
@@ -566,7 +569,7 @@ int mupdate_scarf(mupdate_handle *handle, mupdate_callback callback,
 		ret = callback(&box, handle->cmd.s, context);
 		if(ret) {
 		    /* Was there an error? */
-		    syslog(LOG_ERR, "Error reserveing mailbox");
+		    syslog(LOG_ERR, "Error reserving mailbox");
 		    return ret;
 		}
 		
@@ -600,6 +603,9 @@ int mupdate_scarf(mupdate_handle *handle, mupdate_callback callback,
 			       (wait_for_ok ? NULL : &tv));
     } while((!wait_for_ok && select_result > 0) || (select_result > 0));
 
-    if(select_result != 0) return 1;
-    else return 0;
+    if (select_result != 0) {
+	return 1;
+    } else {
+	return 0;
+    }
 }

@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.31 2002/01/25 16:45:49 rjs3 Exp $
+ * $Id: mupdate.c,v 1.32 2002/01/25 18:04:44 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1327,7 +1327,8 @@ int mupdate_synchronize(mupdate_handle *handle)
      * us for the duration.  this is a GOOD THING */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
     
-    syslog(LOG_NOTICE, "synchronizing mailbox list w/mupdate server");
+    syslog(LOG_NOTICE, 
+	   "synchronizing mailbox list with master mupdate server");
 
     local_boxes.head = NULL;
     local_boxes.tail = &(local_boxes.head);
@@ -1369,6 +1370,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	       strcmp(l->acl,r->acl)) {
 		/* Something didn't match, delete the current local entry
 		 * and replace it */
+		/* xxx can we do this in a single call? */
 		mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0);
 		mboxlist_insertremote(r->mailbox, 
 				     (r->t == SET_RESERVE ?
@@ -1426,7 +1428,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 void mupdate_ready(void) 
 {
     if(ready_for_connections) {
-	syslog(LOG_NOTICE, "mupdate_ready called when already ready");
+	syslog(LOG_CRIT, "mupdate_ready called when already ready");
 	fatal("mupdate_ready called when already ready", EC_TEMPFAIL);
     }
 
