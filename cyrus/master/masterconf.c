@@ -1,5 +1,5 @@
 /* masterconfig.c -- Configuration routines for master process
- $Id: masterconf.c,v 1.7 2002/07/24 19:30:53 rjs3 Exp $
+ $Id: masterconf.c,v 1.8 2002/11/06 20:43:31 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -46,6 +46,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -56,8 +57,6 @@
 #endif
 
 #include "masterconf.h"
-
-extern int errno;
 
 #define CONFIG_FILENAME "/etc/cyrus.conf"
 

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.204 2002/09/30 19:33:41 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.205 2002/11/06 20:43:22 rjs3 Exp $
  */
 
 #include <config.h>
@@ -63,8 +63,6 @@
 
 #include <sys/ipc.h>
 #include <sys/msg.h>
-
-extern int errno;
 
 #include "acl.h"
 #include "auth.h"

@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.19 2001/02/22 19:27:20 ken3 Exp $
+ * $Id: syncnews.c,v 1.20 2002/11/06 20:43:24 rjs3 Exp $
  */
 #include <config.h>
 
@@ -53,6 +53,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -68,8 +69,6 @@
 #include "mboxlist.h"
 #include "convert_code.h"
 
-
-extern int errno;
 extern int optind;
 extern char *optarg;
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.141 2002/10/21 20:51:01 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.142 2002/11/06 20:43:23 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -126,8 +126,6 @@ static int supports_referrals;
 
 extern int optind;
 extern char *optarg;
-
-extern int errno;
 
 /* global state */
 static char shutdownfilename[1024];

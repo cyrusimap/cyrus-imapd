@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_zephyr.c,v 1.2 2002/07/24 17:36:50 rjs3 Exp $
+ * $Id: notify_zephyr.c,v 1.3 2002/11/06 20:43:33 rjs3 Exp $
  */
 
 #include <config.h>
@@ -52,6 +52,7 @@
 #endif
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <netdb.h>
 #include <sys/types.h>
@@ -69,8 +70,6 @@
 #endif
 
 #include "notify_zephyr.h"
-
-extern int errno;
 
 char* notify_zephyr(const char *class, const char *priority,
 		    const char *user, const char *mailbox,

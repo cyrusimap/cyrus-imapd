@@ -1,5 +1,5 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
- $Id: seen_local.c,v 1.34 2002/07/24 19:30:39 rjs3 Exp $
+ $Id: seen_local.c,v 1.35 2002/11/06 20:43:24 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -67,8 +67,6 @@
 #include "xmalloc.h"
 
 #include "seen.h"
-
-extern int errno;
 
 #define FNAME_SEEN "/cyrus.seen"
 

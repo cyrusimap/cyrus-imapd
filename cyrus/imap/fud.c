@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.42 2002/10/31 19:04:15 rjs3 Exp $ */
+/* $Id: fud.c,v 1.43 2002/11/06 20:43:20 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -59,6 +59,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <errno.h>
 #include <com_err.h>
 #include <pwd.h>
 
@@ -78,7 +79,6 @@
 #define REQ_DENY	1
 #define REQ_UNK		2
 
-extern int errno;
 extern int optind;
 
 /* current namespace */
