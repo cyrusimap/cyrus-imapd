@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.17 2001/10/14 13:58:16 ken3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.18 2001/12/06 18:01:50 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -70,14 +70,15 @@ files:
    configdirectory: /var/imap
    partition-default: /var/spool/imap
    admins: curtj abell
-   sasl_pwcheck_method: passwd
+   sasl_pwcheck_method: saslauthd
 </pre>
 
 For a description of all the fields in this file, see the <A
 HREF="man/imapd.conf.5.html"><tt>imapd.conf(5)</tt></A> man page.  (Note
 that this file also exports values to libsasl, the most important of
 them the <tt>pwcheck_method</tt>.  In this example, users are
-authenticated via the <tt>getpwnam()</tt> call.)
+authenticated via the <tt>saslauthd</tt> daemon, which can be run
+in a number of different ways.)
 
 <p><b>READ THE <tt>imapd.conf(5)</tt> MAN PAGE</b>. There are options
 in there that you will want to know about and default behavior that
@@ -444,5 +445,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2001/10/14 13:58:16 $
+last modified: $Date: 2001/12/06 18:01:50 $
 </BODY></HTML>
