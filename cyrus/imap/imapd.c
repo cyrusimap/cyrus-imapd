@@ -855,7 +855,7 @@ char *authtype;
     FILE *logfile;
 
     lcase(authtype);
-    r = login_authenticate(authtype, &mech, &authproc);
+    r = login_authenticate(authtype, &mech, &authproc, &reply);
     if (!r) {
 	r = mech->start("imap", authproc, ACTE_PROT_ANY, PROT_BUFSIZE,
 			imapd_haveaddr ? &imapd_localaddr : 0,
