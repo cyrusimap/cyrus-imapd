@@ -47,20 +47,6 @@ ctl_mboxlist \- perform operations on the mailbox list database
 .B \-C
 .I config-file
 ]
-.B \-r
-.br
-.B ctl_mboxlist
-[
-.B \-C
-.I config-file
-]
-.B \-c
-.br
-.B ctl_mboxlist
-[
-.B \-C
-.I config-file
-]
 .B \-d
 [
 \fB\-f \fIfilename\fR
@@ -91,13 +77,6 @@ option is used to determine the default location of the mailbox list database.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
-.TP
-.B \-r
-Recover the database after an application or system failure.
-.TP
-.B \-c
-Checkpoint the database.  Changes to the database which are part of
-committed transactions are written to disk. 
 .TP
 .B \-d
 Dump the contents of the database to standard output in a portable

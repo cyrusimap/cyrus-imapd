@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.TH CTL_DELIVER 8
+.TH CTL_CYRUSDB 8
 .\" 
 .\" Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
 .\"
@@ -40,48 +40,44 @@
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
 .SH NAME
-ctl_deliver \- perform operations on the duplicate delivery database
+ctl_cyrusdb \- perform operations common to all Cyrus databases
 .SH SYNOPSIS
-.B ctl_deliver
+.B ctl_cyrusdb
 [
 .B \-C
 .I config-file
 ]
-.BI \-E " days"
+.B \-r
 .br
-.B ctl_deliver
+.B ctl_cyrusdb
 [
 .B \-C
 .I config-file
 ]
-.B \-d
-[
-\fB\-f \fIfilename\fR
-]
+.B \-c
 .SH DESCRIPTION
-.I Ctl_deliver
-is used to perform various administrative operations on the duplicate
-delivery database.
+.I Ctl_cyrusdb
+is used to perform various administrative operations on the Cyrus
+databases.
 .PP
-.I Ctl_deliver
+.I Ctl_cyrusdb
 reads its configuration options out of the
 .IR imapd.conf (5)
 file unless specified otherwise by \fB-C\fR.
+The
+.I configdirectory
+option is used to determine the default location of the Cyrus databases.
 .SH OPTIONS
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
 .TP
-\fB\-E \fIdays\fR
-Prune the database of entries older than \fIdays\fR.
+.B \-r
+Recover the databases after an application or system failure.
 .TP
-.B \-d
-Dump the contents of the database to standard output in a portable
-flat-text format.
-.TP
-\fB\-f \fIfilename\fR
-Use the database specified by \fIfilename\fR instead of the default
-(\fIconfigdirectory\fB/deliver.db\fR).
+.B \-c
+Checkpoint the databases.  Changes to the database which are part of
+committed transactions are written to disk. 
 .SH FILES
 .TP
 .B /etc/imapd.conf

@@ -1,12 +1,11 @@
 # standard standalone server implementation
 
 START {
-  # do not delete these entries!
-  mboxlist	cmd="ctl_mboxlist -r"
-  deliver	cmd="ctl_deliver -r"
+  # do not delete this entry!
+  recover	cmd="ctl_cyrusdb -r"
 
   # this is only necessary if using idled for IMAP IDLE
-  idled		cmd="idled"
+#  idled		cmd="idled"
 }
 
 # UNIX sockets start with a slash and are put into /var/imap/sockets
@@ -23,7 +22,7 @@ SERVICES {
 
 EVENTS {
   # this is required
-  checkpoint	cmd="ctl_mboxlist -c" period=30
+  checkpoint	cmd="ctl_cyrusdb -c" period=30
 
   # this is only necessary if using duplicate delivery suppression
   delprune	cmd="ctl_deliver -E 3" period=1440
