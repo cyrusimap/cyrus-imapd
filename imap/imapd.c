@@ -112,6 +112,9 @@ void cmd_getquotaroot P((char *tag, char *name));
 void cmd_setquota P((char *tag, char *quotaroot));
 void cmd_status P((char *tag, char *name));
 void cmd_getuids P((char *tag, char *startuid));
+#ifdef ENABLE_EXPERIMENT
+void cmd_unselect P((char* tag));
+#endif
 
 int getword P((struct buf *buf));
 int getastring P((struct buf *buf));
@@ -141,7 +144,11 @@ void printauthready P((int len, unsigned char *data));
 /* XXX fix when proto-izing mboxlist.c */
 static int mailboxdata(), listdata(), lsubdata();
 static int mstringdata P((char *cmd, char *name, int matchlen, int maycreate));
-
+#ifdef ENABLE_EXPERIMENT
+#ifdef ENABLE_MBOXLIST_FREE
+void mboxlist_close P((void))
+#endif
+#endif
 
 main(argc, argv, envp)
 int argc;
@@ -311,6 +318,14 @@ cmdloop()
 	if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
 	    shutdown_file(fd);
 	}
+
+#ifdef ENABLE_EXPERIMENT
+#ifdef ENABLE_MBOXLIST_FREE
+	/* Try and reclaim some memory.
+	 */
+	mboxlist_close();	
+#endif
+#endif
 
 	/* Parse tag */
 	c = getword(&tag);
@@ -793,6 +808,14 @@ cmdloop()
 		    cmd_changesub(tag.s, (char *)0, arg1.s, 0);
 		}
 	    }		
+#ifdef ENABLE_EXPERIMENT
+	    else if (!strcmp(cmd.s, "Unselect")) {
+		if (!imapd_mailbox) goto nomailbox;
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_close(tag.s);
+	    }
+#endif
 	    else goto badcmd;
 	    break;
 
@@ -1089,10 +1112,13 @@ char *tag;
 	index_check(imapd_mailbox, 0, 0);
     }
     prot_printf(imapd_out,
-"* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ X-NON-HIERARCHICAL-RENAME");
+		"* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+");
+    /* XXX */
+    prot_printf(imapd_out,
+		" X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME");
     prot_printf(imapd_out, "%s", login_capabilities());
 #ifdef ENABLE_EXPERIMENT
-    prot_printf(imapd_out, " OPTIMIZE-1");
+    prot_printf(imapd_out, " OPTIMIZE-1 UNSELECT");
 #endif
     prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
@@ -1408,6 +1434,24 @@ char *tag;
 		    error_message(IMAP_OK_COMPLETED));
     }
 }    
+
+#ifdef ENABLE_EXPERIMENT
+/*
+ * Perform an UNSELECT command -- for some support of IMAP proxy.
+ * Just like close except no expunge.
+ */
+void
+cmd_unselect(tag)
+char* tag;
+{
+    index_closemailbox(imapd_mailbox);
+    mailbox_close(imapd_mailbox);
+    imapd_mailbox = 0;
+
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
+}
+#endif
 
 /*
  * Parse and perform a FETCH/UID FETCH command
