@@ -11,7 +11,7 @@
     Feedback on the software or on the document may be sent to
     "cyrus-bugs@andrew.cmu.edu". The info-cyrus@andrew.cmu.edu mailing list
     exists for the discussion of this server and other Cyrus software; more
-    information is availible in the mailing-list document. Be sure to
+    information is available in the mailing-list document. Be sure to
     include the version numbers of imapd and libsasl you are using, as well
     as your system type (and version!) and any configuration options you
     selected. 
@@ -23,6 +23,11 @@ Upgrading From Previous Versions
 
 Upgrading from 1.6
 
+      * Upgrading from the Cyrus IMAP server version 1.6.13 or earlier: if
+        you use Sieve, you should run the "tools/upgradesieve" script, as
+        the format of the "/usr/sieve" directory has changed slightly.
+        timsieved, included in this release, will handle maintenance of
+        Sieve scripts. 
       * Upgrading from the Cyrus IMAP server version 1.6.10 or earlier: if
         you export news via the IMAP server, you'll have to change your
         "newsfeeds" file to contain 
@@ -263,7 +268,7 @@ Compiling the IMAP Server
     --disable-sieve 
             By default, Sieve support is enabled. Note that you need
             duplicate delivery suppression enabled if you're going to use
-            Sieve. Use --disable-sieve to disable Sieve support
+            Sieve. Use --disable-sieve to disable compiling Sieve support
 
     --disable-cyradm 
             Do not compile the cyradm administrative client.
@@ -363,9 +368,13 @@ Configuring the IMAP Server
 
            local6.debug  /var/adm/imapd.log
 
-        Create the imapd.log file: 
+        You probably also want to log SASL messages with a line like: 
 
-           touch /var/adm/imapd.log
+           auth.debug /var/adm/auth.log
+
+        Create the log files: 
+
+           touch /var/adm/imapd.log /var/adm/auth.log
 
      4. Create the file "/etc/imapd.conf". Here is a sample "imapd.conf"
         with a minimal number of values defined: 
@@ -511,7 +520,7 @@ Configuring the IMAP Server
 
         If you wish to use to timsieved service, add the following line 
 
-           sieve  stream  tcp  nowait  cyrus  /usr/cyrus/bin/timsieved
+           sieve  stream  tcp  nowait  cyrus  /usr/cyrus/bin/timsieved timsieved
 
         "cyrus" is the Cyrus user and "/usr/cyrus/bin/" is the path name to
         the executable. 
@@ -702,7 +711,13 @@ Testing the IMAP Server
 
 Testing the sieve server
 
-     1. From your normal account, telnet to the sieve port on the server
+     1. The Sieve server, "timsieved", is used for transporting user Sieve
+        scripts to the sealed IMAP server. It is incompatible with the
+        "sieveusehomedir" option. It is named after the principal author,
+        Tim Martin, who desperately wanted something named after him in the
+        Cyrus distribution. 
+
+     2. From your normal account, telnet to the sieve port on the server
         you're setting up: 
 
            telnet foobar sieve
@@ -718,21 +733,28 @@ Testing the sieve server
         Any message other than one similar to the one above means there is
         a problem. Make sure all of authentication methods you wish to
         support are listed. This list should be identical to the one listed
-        by "imapd" earlier. To terminate the connection, type "logout". 
+        by "imapd" earlier. Next terminate the connection, by typing
+        "logout". 
 
-     2. Next test authenticating to the sieve server. To do this run the
-        "installsieve" utility. You must specify the server. Note you may
-        have to specify the port if you run this utility from a different
-        machine. To specify the port use the "-p [port]" switch.
-        "installsieve foobar" This should produce either the message
-        "Authentication suceeded!" or "Authentication failed". You might
-        wish to test all authentication types. To force installsieve to use
-        a specific mechanism use the "-m [mechanism]" switch. 
+     3. Next test authenticating to the sieve server. To do this run the
+        "installsieve" utility. You must specify the server. You may have
+        to specify the port if you run this utility from a different
+        machine without the "sieve" entry in "/etc/services". To specify
+        the port use the "-p [port]" switch. 
 
-     3. Next you should attempt to place a sieve script on the server. To
+          "installsieve foobar"
+
+        This should produce the message "Authentication failed" with a
+        description of the failure if there was a problem. 
+
+        You might wish to test all authentication types. To force
+        installsieve to use a specific mechanism use the "-m [mechanism]"
+        switch. 
+
+     4. Next you should attempt to place a sieve script on the server. To
         do this create a file named "myscript.script" with the following
         lines. Replace "foo@bar.org" with an email address you can send
-        mail from that is not the one you are working on now. 
+        mail from, but that is not the one you are working on now. 
 
           require ["reject","fileinto"];
 
@@ -745,7 +767,7 @@ Testing the sieve server
         "installsieve -i myscript.script foobar" This should place your
         script on the server and make it the active script. 
 
-     4. Test that you the sieve script is actually run from deliver. Send a
+     5. Test that the sieve script is actually run from deliver. Send a
         message to the address you're working on from the address mentioned
         in the sieve script. The message should be rejected. 
 

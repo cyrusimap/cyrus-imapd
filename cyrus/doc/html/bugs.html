@@ -7,6 +7,8 @@
 <h1>                     Known bugs in the Cyrus IMAP Server</h1>
 
 <ul>
+<li> Multiple APPENDs don't always correctly return the EXISTS response.
+
 <li> Particularly large quotas can wrap around.
 
 <li> The Sieve subsystem will refuse to filter two messages with
@@ -41,10 +43,8 @@ connect).
   <ul>
   <li> It's possible to cause imtest/imapd to crash with <TT>Decoding
   error: Incorrect network address (krb_rd_req)</TT> by sending a
-  large amount of information at once.
+  large amount of information at once.  Possibly fixed?
   </ul>
-
-<li> imtest doesn't have a manpage.
 </ul>
 
 <h1>                     Things we want to do</h1>

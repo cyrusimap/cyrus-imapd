@@ -1,9 +1,28 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server Since Version 1.6.13 
+
+      * Added the sieve client (installsieve) and server (timsieved) for
+        getting sieve scripts onto the server. 
+      * The default Sieve script layout has changed to
+        sievedir/u/user/default; this supports multiple Sieve scripts per
+        user with the ability to switch between them. 
+      * Fixed the kerberos-to-local-host bug (patch by Greg Hudson,
+        ghudson@mit.edu). 
+      * Started changes to deliver to support LMTP AUTH. 
+      * Improved the error messages logged when authentication fails. 
+      * Fixed a bug dealing with argument processing in the arbitron
+        program. 
+      * pop3d now correctly supports SASL AUTH. 
+      * imtest will no longer prompt for authentication or authorization
+        names; instead, it defaults to the current Unix user. Override on
+        the command line. 
+      * Likewise, cyradm will no longer prompt. It now accepts "-m" to
+        specify what SASL mechanism to use, and the pwcommand option to
+        authenticate should once again work when used non-interactively. 
+
 Changes to the Cyrus IMAP Server Since Version 1.6.10 
 
-      * Added the sieve client and server for getting sieve scripts onto
-        the server 
       * Changed the sieve option in the configure script to
         --disable-sieve. 
       * Updated reconstruct and quota to check for hashed imap spool
@@ -17,7 +36,7 @@ Changes to the Cyrus IMAP Server Since Version 1.6.10
         you use INN to feed imapd news, you must change your "newsfeeds"
         file to contain 
 
-        collectnews!:*:Tf,WR:collectnews
+        collectnews!:*:Tf,WO:collectnews
 
       * The dohash script now takes a "-i" option to run interactively and
         the "-f" option to issue warnings instead of fatal errors. 

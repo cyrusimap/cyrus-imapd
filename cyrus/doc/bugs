@@ -1,11 +1,15 @@
                      Known bugs in the Cyrus IMAP Server
 
+      * Multiple APPENDs don't always correctly return the EXISTS response. 
+      * Particularly large quotas can wrap around. 
+      * The Sieve subsystem will refuse to filter two messages with
+        identical message-ids, even if they have different envelopes. 
       * The RENAME command does not have the hierarchical behavior required
         by the IMAP4rev1 specification. The CAPABILITY command now returns
         X-NON-HIERARCHICAL-RENAME in its response in order to advertise
         this bug. We plan to have this fixed eventually. 
       * Using AFS groups with ptclient, users with negative rights as part
-        of groups may be granted access to mailboes if ptclient has died.
+        of groups may be granted access to mailboxes if ptclient has died.
         We plan to have this fixed eventually. 
       * 8-bit set characters are coerced to 'X', but not before the
         notify_zephyr code (if used) has had a chance to send them out. 
@@ -22,12 +26,7 @@
 
           * It's possible to cause imtest/imapd to crash with Decoding
             error: Incorrect network address (krb_rd_req) by sending a
-            large amount of information at once. 
-          * Running imtest and imapd from the same machine using Kerberos
-            protection or privacy layers causes the same problem. A work
-            around is to not use any layers (imtest -l 0). 
-
-      * imtest doesn't have a manpage. 
+            large amount of information at once. Possibly fixed? 
 
                      Things we want to do
 

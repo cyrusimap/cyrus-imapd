@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.68 1999/10/05 16:17:57 tmartin Exp $ -->
+<!-- $Id: install.html,v 1.69 1999/10/13 16:40:01 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -33,6 +33,14 @@ HREF="changes.html"><TT>doc/changes</TT></a> in the distribution.
 
 <h3>Upgrading from 1.6</h3>
 <ul>
+
+<li> Upgrading from the Cyrus IMAP server version 1.6.13 or earlier:
+if you use Sieve, you should run the "<tt>tools/upgradesieve</tt>"
+script, as the format of the "<tt>/usr/sieve</tt>" directory has
+changed slightly.
+
+timsieved, included in this release, will handle maintenance of Sieve
+scripts.
 
 <li> Upgrading from the Cyrus IMAP server version 1.6.10 or earlier:
 if you export news via the IMAP server, you'll have to change your
