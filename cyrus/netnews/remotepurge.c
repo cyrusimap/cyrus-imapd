@@ -36,6 +36,12 @@
 
 #define SECS_IN_DAY (24*60*60)
 
+#define NOTFINISHED 0
+#define IMAP_OK 1
+#define IMAP_NO 2
+#define IMAP_BAD 3
+#define IMAP_EOF 4
+
 typedef struct mbox_list_s {
     
     char *name;
@@ -68,7 +74,8 @@ int size = -1;
 int exact = -1;
 int pattern = -1;
 
-
+int current_mbox_exists = 0;
+mbox_list_t *mb_list_tail = NULL;
 mbox_list_t *mb_list = NULL;
 
 int verbose = 0;
@@ -83,7 +90,8 @@ int cmd_done;
 /* libcyrus makes us define this */
 void fatal(const char *s, int code)
 {
-  exit(1);
+    printf("Error: %s\n",s);
+    exit(1);
 }
 
 /***********************
@@ -172,33 +180,29 @@ static void callback_capability(struct imclient *imclient,
  * IMAP command completion callback
  */
 static void
-callback_finish(imclient, rock, reply)
-struct imclient *imclient;
-void *rock;
-struct imclient_reply *reply;
+callback_finish(struct imclient *imclient,
+		void *rock,
+		struct imclient_reply *reply)
 {
-    struct admconn *conn = (struct admconn *)rock;
-
-    cmd_done = 1;
 
     if (!strcmp(reply->keyword, "OK")) {
-	printf("OK\n");
-	return;
-    }
-	    
-    if (!strcmp(reply->keyword, "NO")) {
+	cmd_done = IMAP_OK;
+    } else if (!strcmp(reply->keyword, "NO")) {
 	printf("NO %s\n", reply->text);
+	cmd_done = IMAP_NO;
     }
     else if (!strcmp(reply->keyword, "BAD")) {
 	printf("BAD %s\n",reply->text);
+	cmd_done = IMAP_BAD;
 
     }
     else if (!strcmp(reply->keyword, "EOF")) {
-	printf("EOF\n");
+	printf("Connection closed\n");
+	cmd_done = IMAP_EOF;
     }
     else {
-	printf("unkown\n");
-
+	printf("Huh?\n");
+	cmd_done = IMAP_BAD;
     }
 }
 
@@ -252,13 +256,13 @@ callback_list(struct imclient *imclient,
 	strcpy(item->name, mailbox);
 	item->next = NULL;
     
-
 	if (mb_list == NULL)
 	{
 	    mb_list = item;
+	    mb_list_tail = item;
 	} else {
-	    item->next = mb_list;
-	    mb_list = item;
+	    mb_list_tail->next = item;
+	    mb_list_tail = item;
 	}
     }
 
@@ -272,11 +276,18 @@ callback_list(struct imclient *imclient,
 void print_stats(mbox_stats_t *stats)
 {
     printf("total messages    \t\t %d\n",stats->total);
-    printf("total bytes       \t\t %d\n",stats->total_bytes);
     printf("Deleted messages  \t\t %d\n",stats->deleted);
-    printf("Deleted bytes     \t\t %d\n",stats->deleted_bytes);
     printf("Remaining messages\t\t %d\n",stats->total - stats->deleted);
-    printf("Remaining bytes   \t\t %d\n",stats->total_bytes - stats->deleted_bytes);
+}
+
+static void
+callback_exists(struct imclient *imclient,
+	       void *rock,
+	       struct imclient_reply *reply)
+{
+
+    current_mbox_exists = reply->msgno;
+
 }
 
 static void
@@ -290,8 +301,6 @@ callback_search(struct imclient *imclient,
 
     s = reply->text;
 
-    printf("s = %s\n",s);
-
     while (isdigit(*s)) {
 	num = 0;
 	
@@ -300,8 +309,6 @@ callback_search(struct imclient *imclient,
 	    num = num*10 + (*s-'0');
 	    s++;
 	}
-
-	printf("num = %d\n",num);
 
 	uids->list[uids->size] = num;
 	uids->size++;
@@ -319,133 +326,8 @@ callback_search(struct imclient *imclient,
    
 }
 
-/*
- * Callback to deal with untagged LIST/LSUB data
- */
-static void
-callback_fetch(struct imclient *imclient,
-	       void *rock,
-	       struct imclient_reply *reply)
-{
-    char name[100];
-    char *name_ptr;
-    char value[200];
-    char *value_ptr;
-    int value_num;
-    char *s;
 
-    s = reply->text;
-
-    if (*s != '(') printf("Expected LPAREN\n");
-    s++;
-
-    while (1) {
-
-	name_ptr = name;
-	while ((*s!=' ') && (*s!=')'))
-	    {
-		*name_ptr = *s;
-		name_ptr++;
-		s++;
-	    }
-	*name_ptr = '\0';
-
-	s++;
-
-	if (*s=='"') {
-	    s++;
-	    value_ptr = value;
-	    while ((*s!='"') && (*s!='\0'))
-		{
-		    *value_ptr = *s;
-		    value_ptr++;
-		    s++;
-		}
-	    *value_ptr = '\0';
-	    s++;
-	} else if (isdigit(*s)) {
-	    value_num = 0;
-	
-	    while ((*s!=' ') && (*s!=')'))
-		{
-		    value_num = value_num*10 + (*s-'0');
-		    s++;
-		}
-	} else {
-	    return;
-	}
-
-	if (strcasecmp(name,"UID")==0)
-	{
-	    printf("%s ^ %d\n",name, value_num);
-	} else if (strcasecmp(name,"INTERNALDATE")==0) {
-	    printf("%s ^ %s\n",name, value);
-	} else if (strcasecmp(name,"RFC822.SIZE")==0) {
-	    printf("%s ^ %d\n",name, value_num);
-	}
-	
-
-
-	s++;
-    }
-    
-}
-
-
-void deleteit(void *the_record, mbox_stats_t *stats)
-{
-    stats->deleted++;
-    /*    stats->deleted_bytes+=the_record->size; */
-}
-
-/* thumbs up routine, checks date & size and returns yes or no for deletion */
-/* 0 = no, 1 = yes */
-int purge_check(unsigned long msg_time, int msgsize, mbox_stats_t *stats)
-{
-    void *the_record;
-    unsigned long       my_time;
-
-    stats->total++;
-    /*  stats->total_bytes+=the_record->size;*/
-
-    if (exact == 1) {
-	if (days >= 0) {
-	    my_time = time(0);
-	    /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); 
-		  if (((my_time - the_record->sentdate)/86400) == (days/86400)) {
-		  deleteit(the_record, stats);
-		  return 1;
-		  }*/
-	}
-	if (size >= 0) {
-	    /* check size */
-	    /*      if (the_record->size == size) {
-		    deleteit(the_record, stats);
-		    return 1;
-		    }*/
-	}
-	return 0;
-    } else {
-	if (days >= 0) {
-	    my_time = time(0);
-	    /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); 
-		  if ((my_time - the_record->sentdate) > days) {
-		  deleteit(the_record, stats);
-		  return 1;
-		  }*/
-	}
-	if (size >= 0) {
-	    /* check size */
-	    /*      if (the_record->size > size) {
-		    deleteit(the_record, stats);
-		    return 1;
-		    }*/
-	}
-	return 0;
-    }
-}
-
-void mark_all_deleted(uid_list_t *list)
+void mark_all_deleted(uid_list_t *list, mbox_stats_t *stats)
 {
     int lup;
 
@@ -454,11 +336,16 @@ void mark_all_deleted(uid_list_t *list)
 	imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
 		      "%a %d +FLAGS.SILENT (\\Deleted)", "UID STORE",list->list[lup]);
 
-	cmd_done = 0;
+	cmd_done = NOTFINISHED;
 	
-	while (cmd_done == 0) {
+	while (cmd_done == NOTFINISHED) {
 	    imclient_processoneevent(imclient_conn);
 	}
+
+	if (cmd_done != IMAP_OK)
+	    fatal("Error marking message deleted",0);
+
+	stats->deleted++;
        	
     }
 
@@ -499,57 +386,48 @@ int purge_me(char *name)
 	printf("Working on %s...\n",name);
 
     /* select mailbox */
+    imclient_addcallback(imclient_conn,
+			 "EXISTS", CALLBACK_NUMBERED, callback_exists,
+			 (void *)0, (char *)0);
     imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
 		  "%a \"%s\"", "SELECT", name);		 
 
-    cmd_done = 0;
+    cmd_done = NOTFINISHED;
 
-    while (cmd_done == 0) {
+    while (cmd_done == NOTFINISHED) {
 	imclient_processoneevent(imclient_conn);
     }
 
-    /* xxx should check we can delete */
-    /* xxx check return code */
+    if (cmd_done == IMAP_NO)
+    {
+	printf("Unable to select %s mailbox\n",name);
+	return 0;
+    } else if (cmd_done != IMAP_OK) {
+	fatal("Error Selecting mailbox",0);
+    }
 
-    /* fetch all marking old as deleted */
+    stats.total = current_mbox_exists;
 
+    /* make out list of uids */
     uidlist = (uid_list_t *) malloc(sizeof(uid_list_t));
     uidlist->list = malloc (sizeof(unsigned long) * 500);
     uidlist->allocsize = 500;
     uidlist->size = 0;
 	
 
-    if (exact == 1) {
-	if (days >= 0) {
-	    struct tm *my_tm;
-
-	    my_time = time(NULL);
-	    my_time -= days * (SECS_IN_DAY);
-	    my_tm = gmtime(&my_time);
-
-	    snprintf(search_string,sizeof(search_string),
-		     "ON %d-%s-%d",
-		     my_tm->tm_mday,month_string(my_tm->tm_mon),1900+my_tm->tm_year);
-	}
-	if (size >= 0) {
-	    sprintf(search_string,"LARGER %d SMALLER %d",size-1,size+1);
-	}
-    } else {
-	if (days >= 0) {
-	    struct tm *my_tm;
-
-	    my_time = time(NULL);
-	    my_time -= days * (SECS_IN_DAY);
-	    my_tm = gmtime(&my_time);
-
-	    snprintf(search_string,sizeof(search_string),
-		     "BEFORE %d-%s-%d",
-		     my_tm->tm_mday,month_string(my_tm->tm_mon),1900+my_tm->tm_year);
-
-	}
-	if (size >= 0) {
-	    sprintf(search_string,"LARGER %d",size);
-	}
+    if (days >= 0) {
+	struct tm *my_tm;
+	
+	my_time = time(NULL);
+	my_time -= (days*(SECS_IN_DAY));
+	my_tm = gmtime(&my_time);
+	
+	snprintf(search_string,sizeof(search_string),
+		 "BEFORE %d-%s-%d",
+		 my_tm->tm_mday,month_string(my_tm->tm_mon),1900+my_tm->tm_year);
+	
+    } else if (size >= 0) {
+	sprintf(search_string,"LARGER %d",size);
     }
 
     imclient_addcallback(imclient_conn,
@@ -559,16 +437,19 @@ int purge_me(char *name)
 		  "%a %a", "UID SEARCH",search_string);
     
 
-    cmd_done = 0;
+    cmd_done = NOTFINISHED;
 
-    while (cmd_done == 0) {
+    while (cmd_done == NOTFINISHED) {
 	imclient_processoneevent(imclient_conn);
     }
+
+    if (cmd_done!=IMAP_OK)
+	fatal("UID Search failed",0);
 
     if (uidlist->size > 0)
     {
 
-	mark_all_deleted(uidlist);
+	mark_all_deleted(uidlist, &stats);
             	
 	print_stats(&stats);
     }
@@ -577,11 +458,14 @@ int purge_me(char *name)
     imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
 		  "%a", "CLOSE");
 
-    cmd_done = 0;
+    cmd_done = NOTFINISHED;
 
-    while (cmd_done == 0) {
+    while (cmd_done == NOTFINISHED) {
 	imclient_processoneevent(imclient_conn);
     }
+
+    if (cmd_done != IMAP_OK)
+	fatal("Unable to CLOSE mailbox",0);
 
     return 0;
 }
@@ -605,19 +489,46 @@ int purge_all(void)
     return 0;
 }
 
-void remote_purge(void)
+void do_list(void)
+{
+    cmd_done = NOTFINISHED;
+
+    while (cmd_done == NOTFINISHED) {
+	imclient_processoneevent(imclient_conn);
+    }
+
+    if (cmd_done!=IMAP_OK) fatal("List failed",0);
+}
+
+void remote_purge(char **matches)
 {
     imclient_addcallback(imclient_conn,
 			 "LIST", 0, callback_list,
 			 (void *)0, (char *)0);
-    imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
-		  "%a %s %s", "LIST", "*",
-		  "*");
 
-    cmd_done = 0;
+    if (matches[0]==NULL)
+    {
+	if (verbose)
+	    printf("Matching all\n");
 
-    while (cmd_done == 0) {
-	imclient_processoneevent(imclient_conn);
+	/* if nothing match all */
+	imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
+		      "%a %s %s", "LIST", "*",
+		      "*");
+	do_list();
+	
+    } else {
+	while (matches[0]!=NULL)
+	{
+	    if (verbose)
+		printf("Matching %s\n",matches[0]);
+
+	    imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
+			  "%a %a %a", "LIST", "\"\"",
+			  matches[0]);
+	    do_list();
+	    matches++;
+	}
     }
 
     if (verbose) printf("Completed list command\n");
@@ -638,7 +549,7 @@ void remote_purge(void)
 /* didn't give correct parameters; let's exit */
 void usage(void)
 {
-  printf("Usage: imtest [options] hostname\n");
+  printf("Usage: remotepurge [options] hostname [[match1] ... ]\n");
   printf("  -p port  : port to use\n");
   printf("  -k #     : minimum protection layer required\n");
   printf("  -l #     : max protection layer (0=none; 1=integrity; etc)\n");
@@ -688,7 +599,7 @@ int main(int argc, char **argv)
 	size = atoi(optarg);
 	break;
     case 'd':
-	days = atoi(optarg) * SECS_IN_DAY;
+	days = atoi(optarg);
 	break;
     case 'v':
 	verbose=1;
@@ -720,17 +631,9 @@ int main(int argc, char **argv)
       break;
     case '?':
     default:
-	errflg = 1;
+	usage();
 	break;
     }
-
-  if (optind != argc - 1) {
-      errflg = 1;
-  }
-
-  if (errflg) {
-      usage();
-  }
 
   /* next to last arg is server name */
   strncpy(servername, argv[optind], 1023);
@@ -742,6 +645,9 @@ int main(int argc, char **argv)
   {
       fatal("imclient_connect()",r);
   }
+
+  if (verbose)
+      printf("Connected\n");
 
   /* get capabilities */
   imclient_addcallback(imclient_conn, "CAPABILITY", 0,
@@ -769,8 +675,10 @@ int main(int argc, char **argv)
       fatal("imclient_authenticate()\n",r);
   }
 
+  if (verbose)
+      printf("Authenticated\n");
 
-  remote_purge();
+  remote_purge(argv+(optind+1));
 
   exit(0);
 }
