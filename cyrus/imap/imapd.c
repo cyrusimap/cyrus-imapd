@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.39 2002/10/18 20:02:22 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.40 2002/10/19 16:25:54 ken3 Exp $ */
 
 #include <config.h>
 
@@ -672,6 +672,7 @@ void fatal(const char *s, int code)
 	prot_printf(imapd_out, "* BYE Fatal error: %s\r\n", s);
 	prot_flush(imapd_out);
     }
+    syslog(LOG_ERR, "Fatal error: %s", s);
     shut_down(code);
 
 }
