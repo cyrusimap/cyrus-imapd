@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.57 2000/01/28 22:09:42 leg Exp $
+ $Id: append.c,v 1.58 2000/01/28 23:27:56 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -129,8 +129,6 @@ int append_setup(struct mailbox *mailbox, const char *name,
 
     return 0;
 }
-
-extern int mboxlist_findstage(const char *name, char *stagedir);
 
 /*
  * staging, to allow for single-instance store.  the complication here

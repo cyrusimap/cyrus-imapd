@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.101 2000/01/28 22:09:47 leg Exp $
+ * $Id: mboxlist.c,v 1.102 2000/01/28 23:27:58 leg Exp $
  */
 
 #include <stdio.h>
@@ -131,160 +131,93 @@ static char *mboxlist_hash_usersubs(const char *userid);
 
 acap_conn_t *acap_conn = NULL;
 
-int using_acap = 0; /* wheather acap support is turned on */
+int using_acap = 0; /* whether acap support is turned on */
 
 const char *acap_authname = NULL;
 const char *acap_realm = NULL;
 const char *acap_password = NULL;
 
 /* callback to get userid or authid */
-static int getsimple(void *context __attribute__((unused)),
-		     int id,
-		     const char **result,
-		     unsigned *len)
+static int mysasl_getsimple(void *context __attribute__((unused)),
+			    int id,
+			    const char **result,
+			    unsigned *len)
 {
-  char *username;
-  char *authid;
+    char *username;
+    char *authid;
 
-  if (! result)
-    return SASL_BADPARAM;
+    if (! result)
+	return SASL_BADPARAM;
 
-  switch (id) {
-  case SASL_CB_GETREALM:
-      if (acap_realm == NULL) return SASL_FAIL;
+    switch (id) {
+    case SASL_CB_GETREALM:
+	if (acap_realm == NULL) return SASL_FAIL;
 
-      *result = acap_realm;
-      if (len)
-	  *len = acap_realm ? strlen(acap_realm) : 0;
-      return SASL_FAIL;
-      break;
+	*result = acap_realm;
+	if (len)
+	    *len = acap_realm ? strlen(acap_realm) : 0;
+	return SASL_FAIL;
+	break;
 
-  case SASL_CB_USER:
-    *result = acap_authname;
-    if (len)
-      *len = acap_authname ? strlen(acap_authname) : 0;
-    break;
-  case SASL_CB_AUTHNAME:
-    *result = acap_authname;
-    if (len)
-      *len = acap_authname ? strlen(acap_authname) : 0;
-      break;
-  case SASL_CB_LANGUAGE:
-    *result = NULL;
-    if (len)
-      *len = 0;
-    break;
-  default:
-    return SASL_BADPARAM;
-  }
-  return SASL_OK;
+    case SASL_CB_USER:
+	*result = acap_authname;
+	if (len)
+	    *len = acap_authname ? strlen(acap_authname) : 0;
+	break;
+    case SASL_CB_AUTHNAME:
+	*result = acap_authname;
+	if (len)
+	    *len = acap_authname ? strlen(acap_authname) : 0;
+	break;
+    case SASL_CB_LANGUAGE:
+	*result = NULL;
+	if (len)
+	    *len = 0;
+	break;
+    default:
+	return SASL_BADPARAM;
+    }
+    return SASL_OK;
 }
 
 /* callback to get password */
-static int
-getsecret(sasl_conn_t *conn,
-	  void *context __attribute__((unused)),
-	  int id,
-	  sasl_secret_t **psecret)
+static int mysasl_getsecret(sasl_conn_t *conn,
+			    void *context __attribute__((unused)),
+			    int id,
+			    sasl_secret_t **psecret)
 {
-  if (! conn || ! psecret || id != SASL_CB_PASS)
-    return SASL_BADPARAM;
+    if (! conn || ! psecret || id != SASL_CB_PASS)
+	return SASL_BADPARAM;
 
-  if (acap_password==NULL)
-  {
-      syslog(LOG_ERR,"Unable to find acap_password\n");      
-      return SASL_FAIL;
-  }
+    if (acap_password == NULL) {
+	syslog(LOG_ERR,"unable to find acap_password\n");      
+	return SASL_FAIL;
+    }
 
-  *psecret = (sasl_secret_t *) malloc(sizeof(sasl_secret_t)+strlen(acap_password)+1);
-  if (! *psecret)
-    return SASL_FAIL;
+    *psecret = (sasl_secret_t *) malloc(sizeof(sasl_secret_t)+strlen(acap_password)+1);
+    if (! *psecret)
+	return SASL_FAIL;
 
-  strcpy((*psecret)->data, acap_password);
-  (*psecret)->len=strlen(acap_password);
+    strcpy((*psecret)->data, acap_password);
+    (*psecret)->len=strlen(acap_password);
 
-  return SASL_OK;
+    return SASL_OK;
 }
 
 /* callbacks we support */
-static sasl_callback_t callbacks[] = {
+static sasl_callback_t mysasl_callbacks[] = {
   {
-#ifdef SASL_CB_GETREALM
-    SASL_CB_GETREALM, &getsimple, NULL
+    SASL_CB_GETREALM, &mysasl_getsimple, NULL
   }, {
-#endif
-    SASL_CB_AUTHNAME, &getsimple, NULL
+    SASL_CB_AUTHNAME, &mysasl_getsimple, NULL
   }, {
-    SASL_CB_PASS, &getsecret, NULL    
+    SASL_CB_PASS, &mysasl_getsecret, NULL    
   }, {
     SASL_CB_LIST_END, NULL, NULL
   }
 };
 
 /* initialize acap connection if necessary */
-int mboxlist_acapinit(void)
-{
-    int r;
-    char *str;
-    const char *acapserver;
-
-    /* if it's already initialized just return */
-    if (acap_conn != NULL) return 0;
-
-    
-    /* See if it's turned on */
-    if (config_getswitch("useacap", 0)==0) {
-	using_acap = 0;
-	return 0;
-    }
-    using_acap = 1;
-    
-    r = acap_init();
-    if (r != ACAP_OK) {
-	syslog(LOG_ERR,"acap_init failed()");
-	return -1;
-    }
-
-    r = sasl_client_init(callbacks);
-    if (r != SASL_OK) {
-	syslog(LOG_ERR,"sasl_client_init() failed");
-	return -2;
-    }
-
-    acap_authname = config_getstring("acap_authname", NULL);
-    if (acap_authname == NULL)
-    {
-	syslog(LOG_ERR,"unable to find option acap_authname");
-	return -3;
-    }
-
-    /* these aren't required */
-    acap_password = config_getstring("acap_password", NULL);
-    acap_realm = config_getstring("acap_realm", NULL);
-    
-
-    acapserver = config_getstring("acap_server", NULL);
-    if (acapserver == NULL)
-    {
-	syslog(LOG_ERR,"unable to find option acap_server");
-	return -4;
-    }
-
-    str = (char *) xmalloc (strlen("acap://")+strlen(acap_authname)+1+strlen(acapserver)+2);
-    
-    sprintf(str,"acap://%s@%s/",acap_authname,acapserver);
-    
-    r = acap_conn_connect(str, &acap_conn);
-    free(str);
-    if (r != SASL_OK) {
-	acap_conn = NULL; /* xxx leaked? */
-	syslog(LOG_ERR,"acap_conn_connect() failed");
-	return -5;
-    }
-
-    return 0;
-}
-
 int convert_acap_errorcode(int r)
 {
     /* xxx */
@@ -3681,6 +3614,11 @@ void mboxlist_init(void)
 
     mboxlist_dbinit = 1;
 
+    r = acap_init();
+    if (r != ACAP_OK) {
+	syslog(LOG_ERR,"acap_init failed()");
+	return IMAP_SERVER_UNAVAILABLE;
+    }
 }
 
 void mboxlist_open(char *fname)
@@ -3752,6 +3690,8 @@ void mboxlist_done(void)
     }
     
     mboxlist_dbinit = 0;
+
+    /* finish ACAP API here */
 }
 
 /* hash the userid to a file containing the subscriptions for that user */
