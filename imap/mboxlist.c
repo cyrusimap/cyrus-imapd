@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.234 2004/03/15 20:06:33 ken3 Exp $
+ * $Id: mboxlist.c,v 1.235 2004/03/17 18:07:48 ken3 Exp $
  */
 
 #include <config.h>
@@ -1882,7 +1882,7 @@ static int find_cb(void *rockp,
  */
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
-		     char *pattern, int isadmin, char *userid, 
+		     const char *pattern, int isadmin, char *userid, 
 		     struct auth_state *auth_state, int (*proc)(), void *rock)
 {
     struct find_rock cbrock;
@@ -1895,6 +1895,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
     int prefixlen;
     int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_NAME+1] = ""; /* do intra-domain fetches only */
+    char *pat = NULL;
 
     if (config_virtdomains) {
 	if (userid && (p = strrchr(userid, '@'))) {
@@ -1979,8 +1980,11 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 
     if (r) goto done;
 
+    /* Make a working copy of pattern */
+    pattern = pat = xstrdup(pattern);
+
     /* Find fixed-string pattern prefix */
-    for (p = pattern; *p; p++) {
+    for (p = pat; *p; p++) {
 	if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
     }
     prefixlen = p - pattern;
@@ -2035,12 +2039,13 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 
   done:
     glob_free(&cbrock.g);
+    if (pat) free(pat);
 
     return r;
 }
 
 int mboxlist_findall_alt(struct namespace *namespace,
-			 char *pattern, int isadmin, char *userid,
+			 const char *pattern, int isadmin, char *userid,
 			 struct auth_state *auth_state, int (*proc)(),
 			 void *rock)
 {
@@ -2054,6 +2059,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
     int prefixlen, len;
     int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_NAME+1]; /* do intra-domain fetches only */
+    char *pat = NULL;
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
 	userlen = p - userid;
@@ -2113,8 +2119,11 @@ int mboxlist_findall_alt(struct namespace *namespace,
 
     glob_free(&cbrock.g);
 
+    /* Make a working copy of pattern */
+    pattern = pat = xstrdup(pattern);
+
     /* Find fixed-string pattern prefix */
-    for (p = pattern; *p; p++) {
+    for (p = pat; *p; p++) {
 	if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
     }
     prefixlen = p - pattern;
@@ -2197,7 +2206,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
 
 	if (prefixlen <= len) {
 	    /* Skip pattern which matches shared namespace prefix */
-	    for (p = pattern+prefixlen; *p; p++) {
+	    for (p = pat+prefixlen; *p; p++) {
 		if (*p == '%') continue;
 		else if (*p == '.') p++;
 		break;
@@ -2241,6 +2250,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
 
   done:
     glob_free(&cbrock.g);
+    if (pat) free(pat);
 
     return r;
 }
@@ -2663,7 +2673,7 @@ static void mboxlist_closesubs(struct db *sub)
  * 'proc' with the name of the mailbox.
  */
 int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
-		     char *pattern, int isadmin __attribute__((unused)),
+		     const char *pattern, int isadmin __attribute__((unused)),
 		     char *userid, struct auth_state *auth_state, 
 		     int (*proc)(), void *rock, int force)
 {
@@ -2678,6 +2688,7 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
     int prefixlen;
     int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_NAME+1]; /* do intra-domain fetches only */
+    char *pat = NULL;
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
 	userlen = p - userid;
@@ -2747,8 +2758,11 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
 
     if (r) goto done;
 
+    /* Make a working copy of pattern */
+    pattern = pat = xstrdup(pattern);
+
     /* Find fixed-string pattern prefix */
-    for (p = pattern; *p; p++) {
+    for (p = pat; *p; p++) {
 	if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
     }
     prefixlen = p - pattern;
@@ -2804,12 +2818,13 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
   done:
     if (subs) mboxlist_closesubs(subs);
     glob_free(&cbrock.g);
+    if (pat) free(pat);
 
     return r;
 }
 
 int mboxlist_findsub_alt(struct namespace *namespace,
-			 char *pattern, int isadmin __attribute__((unused)),
+			 const char *pattern, int isadmin __attribute__((unused)),
 			 char *userid, struct auth_state *auth_state, 
 			 int (*proc)(), void *rock, int force)
 {
@@ -2824,6 +2839,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
     int prefixlen, len;
     int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_NAME+1]; /* do intra-domain fetches only */
+    char *pat = NULL;
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
 	userlen = p - userid;
@@ -2885,8 +2901,11 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 
     glob_free(&cbrock.g);
 
+    /* Make a working copy of pattern */
+    pattern = pat = xstrdup(pattern);
+
     /* Find fixed-string pattern prefix */
-    for (p = pattern; *p; p++) {
+    for (p = pat; *p; p++) {
 	if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
     }
     prefixlen = p - pattern;
@@ -2975,7 +2994,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 
 	if (prefixlen <= len) {
 	    /* Skip pattern which matches shared namespace prefix */
-	    for (p = pattern+prefixlen; *p; p++) {
+	    for (p = pat+prefixlen; *p; p++) {
 		if (*p == '%') continue;
 		else if (*p == '.') p++;
 		break;
@@ -3020,6 +3039,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
   done:
     if (subs) mboxlist_closesubs(subs);
     glob_free(&cbrock.g);
+    if (pat) free(pat);
 
     return r;
 }
