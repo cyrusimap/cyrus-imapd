@@ -152,22 +152,6 @@ char **envp;
     if (timeout < 10) timeout = 10;
     prot_settimeout(popd_in, timeout*60);
 
-    {
-	/* XXX temp hack to find auth problems */
-	char buf[MAX_MAILBOX_PATH];
-	FILE *logfile;
-
-	/* Create telemetry log */
-	sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, "pop3-auth",
-		getpid());
-	logfile = fopen(buf, "w");
-	if (logfile) {
-	    prot_setlog(popd_in, fileno(logfile));
-	    prot_setlog(popd_out, fileno(logfile));
-	}
-    }
-
-
 #ifdef HAVE_ACTE_KRB
     if (kflag) kpop();
 #endif
