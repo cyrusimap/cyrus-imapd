@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.13.4.4 2003/03/13 20:45:49 leg Exp $ -->
+<!-- $Id: install-murder.html,v 1.13.4.5 2003/06/15 17:54:49 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -118,6 +118,10 @@ that they can authenticate to the backend as well.
 Importing the current mailboxes database is easy, as there is a ctl_mboxlist
 option to do so.  To do the first synchronization, simply change to the
 cyrus user, and issue a <tt>ctl_mboxlist -m</tt>.<p>
+
+<p>Note that you may wish to issue a <tt>ctl_mboxlist -mw</tt> first to
+be sure you understand all the operations that this command will perform,
+since it does require that all mailboxes are unique in the murder namespace.</p>
 
 If everything is configured properly, the
 mailbox database of the current host will dump to the mupdate master.  If
@@ -343,7 +347,7 @@ to ensure that the mupdate slave process is started, (is prefork=1)</li>
 </ul>
 
 <P><HR>
-last modified: $Date: 2003/03/13 20:45:49 $
+last modified: $Date: 2003/06/15 17:54:49 $
 </BODY></HTML>
 
 
