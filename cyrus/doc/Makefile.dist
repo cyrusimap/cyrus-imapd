@@ -6,7 +6,7 @@ dist:
 		groff -man -Thtml $$man > man/`basename $$man`.html; \
 	done
 
-	pod2html ../perl/imap/cyradm > man/cyradm.1.html
+	pod2html ../perl/imap/cyradm.sh > man/cyradm.1.html
 	pod2man ../perl/sieve/scripts/sieveshell.pl > ../man/sieveshell.1
 	pod2html ../perl/sieve/scripts/sieveshell.pl > man/sieveshell.1.html
 
