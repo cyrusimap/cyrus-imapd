@@ -35,7 +35,7 @@ INSTALL = @INSTALL@
 CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
-DEFS = @DEFS@
+DEFS = @DEFS@ @LOCALDEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib @CPPFLAGS@
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
