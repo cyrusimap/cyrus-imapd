@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.21 1999/06/29 06:38:58 tmartin Exp $
+ * $Id: imtest.c,v 1.22 1999/06/29 08:36:16 tmartin Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -44,6 +44,8 @@
 
 #include <sasl.h>
 #include <saslutil.h>
+
+#include <pwd.h>
 
 #include "prot.h"
 
@@ -110,7 +112,11 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   return ret;
 }
 
-int init_sasl(char *serverFQDN, int port, int ssf)
+/*
+ * Initialize SASL and set necessary options
+ */
+
+static int init_sasl(char *serverFQDN, int port, int ssf)
 {
   int saslresult;
   sasl_security_properties_t *secprops=NULL;
@@ -132,7 +138,7 @@ int init_sasl(char *serverFQDN, int port, int ssf)
 
   if (saslresult!=SASL_OK) return IMTEST_FAIL;
 
-
+  /* create a security structure and give it to sasl */
   secprops=make_secprops(0,ssf);
   if (secprops!=NULL)
   {
@@ -189,21 +195,27 @@ stat getauthline(char **line, int *linelen)
   return STAT_CONT;
 }
 
-void interaction (sasl_interact_t *t)
+void interaction (int id, char *prompt, char **tresult,int *tlen)
 {
   char result[1024];
 
-  if (((t->id==SASL_CB_USER) || (t->id==SASL_CB_AUTHNAME)) && (authname!=NULL))
+  if (id==SASL_CB_PASS)
+  {
+    *tresult=getpass(prompt);
+    *tlen=strlen(*tresult);
+    return;
+
+  } else if (((id==SASL_CB_USER) || (id==SASL_CB_AUTHNAME)) && (authname!=NULL))
   {
     strcpy(result,authname);
   } else {
-    printf("%s:",t->prompt);
+    printf("%s:",prompt);
     scanf("%s",&result);
   }
-  t->len=strlen(result);
-  t->result=(char *) malloc(t->len+1);
-  memset(t->result, 0, t->len+1);
-  memcpy((char *) t->result, result, t->len);
+  *tlen=strlen(result);
+  *tresult=(char *) malloc(*tlen+1);
+  memset(*tresult, 0, *tlen+1);
+  memcpy((char *) *tresult, result, *tlen);
 
 }
 
@@ -211,10 +223,35 @@ void fillin_interactions(sasl_interact_t *tlist)
 {
   while (tlist->id!=SASL_CB_LIST_END)
   {
-    interaction(tlist);
+    interaction(tlist->id, tlist->prompt,
+		&(tlist->result),&(tlist->len));
     tlist++;
   }
 
+}
+
+static int auth_login(void)
+{
+  /* we need username and password to do "login" */
+  char *username;
+  int userlen;
+  char *pass;
+  int passlen;
+
+  interaction(SASL_CB_AUTHNAME,"Userid",&username,&userlen);
+  interaction(SASL_CB_PASS,"Password: ",&pass,&passlen);
+
+  prot_printf(pout,"L01 LOGIN %s {%d}\r\n",username,passlen);
+  prot_flush(pout);
+
+  waitfor("+");
+
+  prot_printf(pout,"%s\r\n",pass);
+  prot_flush(pout);
+  waitfor("L01");
+
+
+  return IMTEST_OK;
 }
 
 int auth_sasl(char *mechlist)
@@ -672,7 +709,7 @@ int main(int argc, char **argv)
 
   if (mechanism) {
       if (!strcasecmp(mechanism, "login")) {
-	  result = IMTEST_FAIL;
+	  result = auth_login();
       } else {
 	  result = auth_sasl(mechanism);
       }
