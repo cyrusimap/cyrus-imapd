@@ -263,9 +263,9 @@ int getauthline(char **line, unsigned int *linelen)
       parseerror("EOL");
 
 
-    if (res==TOKEN_OK)
+    if (res==TOKEN_OK) {
       return STAT_OK;
-    else { /* server said no */
+    } else { /* server said no */
       printf("Authentication failed with: \"%s\"\n",string_DATAPTR(savestr));
       return STAT_NO;    
     }

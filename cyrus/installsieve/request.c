@@ -58,6 +58,7 @@ int deleteascript(struct protstream *pout, struct protstream *pin,char *name)
 {
   lexstate_t state;
   int res;
+  mystring_t *str;
 
   prot_printf(pout,"DELETESCRIPT \"%s\"\r\n",name);
   prot_flush(pout);  
@@ -68,25 +69,27 @@ int deleteascript(struct protstream *pout, struct protstream *pin,char *name)
     parseerror("OK | NO");
   }
 
+  if (res == TOKEN_NO) {
 
-  if (yylex(&state, pin)!=' ')
-    parseerror("SPACE");
+      if (yylex(&state, pin)!=' ')
+	  parseerror("SPACE");
 
-  if (yylex(&state, pin)!=STRING)
-    parseerror("STRING");
+      if (yylex(&state, pin)!=STRING)
+	  parseerror("STRING");
+
+      str = state.str;
+  }
+
+  if (yylex(&state, pin)!=EOL)
+      parseerror("EOL");
 
   if (res==TOKEN_NO)
   {
     printf("Deletescript error: %s\n",string_DATAPTR(state.str));
 
-    if (yylex(&state, pin)!=EOL)
-      parseerror("EOL");
 
     return -1;
   }
-
-  if (yylex(&state, pin)!=EOL)
-      parseerror("EOL");
 
   printf("Script %s deleted successfully\n",name);
 
@@ -97,7 +100,7 @@ int installdata(struct protstream *pout, struct protstream *pin,
 		char *scriptname, char *data, int len)
 {
   int res;
-  mystring_t *str;
+  mystring_t *str=NULL;
   lexstate_t state;
 
   prot_printf(pout, "PUTSCRIPT \"%s\" ",scriptname);
@@ -115,13 +118,15 @@ int installdata(struct protstream *pout, struct protstream *pin,
   if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
     parseerror("TOKEN");
 
-  if (yylex(&state,pin)!=' ')
-    parseerror("SPACE");
+  if (res == TOKEN_NO) {
+      if (yylex(&state,pin)!=' ')
+	  parseerror("SPACE");
 
-  if (yylex(&state,pin)!=STRING)
-    parseerror("STRING");
+      if (yylex(&state,pin)!=STRING)
+	  parseerror("STRING");
 
-  str=state.str;
+      str=state.str;
+  }
 
   if (yylex(&state,pin)!=EOL)
     parseerror("EOL");
@@ -170,7 +175,7 @@ int installafile(struct protstream *pout, struct protstream *pin,char *filename)
   int result;
   int cnt;
   int res;
-  mystring_t *str;
+  mystring_t *str=NULL;
   lexstate_t state;
   char *sievename;
 
@@ -225,13 +230,16 @@ int installafile(struct protstream *pout, struct protstream *pin,char *filename)
   if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
     parseerror("ATOM");
 
-  if (yylex(&state,pin)!=' ')
-    parseerror("SPACE");
+  if (res!=TOKEN_OK) {
 
-  if (yylex(&state,pin)!=STRING)
-    parseerror("STRING");
+      if (yylex(&state,pin)!=' ')
+	  parseerror("SPACE");
 
-  str=state.str;
+      if (yylex(&state,pin)!=STRING)
+	  parseerror("STRING");
+
+      str=state.str;
+  }
 
   if (yylex(&state,pin)!=EOL)
     parseerror("EOL");
@@ -253,6 +261,7 @@ int showlist(struct protstream *pout, struct protstream *pin)
 {
   lexstate_t state;
   int end=0;
+  int res;
 
   printf("You have the following scripts on the server:\n");
 
@@ -261,7 +270,7 @@ int showlist(struct protstream *pout, struct protstream *pin)
 
   do {
 
-    if (yylex(&state, pin)==STRING)
+    if ((res=yylex(&state, pin))==STRING)
     {
       char *str=string_DATAPTR(state.str);
 
@@ -281,17 +290,18 @@ int showlist(struct protstream *pout, struct protstream *pin)
 
     } else {
 
-	/* xxx check for error
-	   if (yylex(&state, pin)!=' ')
-	printf("expected sp\n");
+	if (res==TOKEN_NO) {
+	    if (yylex(&state, pin)!=' ')
+		printf("expected sp\n");
 
-      if (yylex(&state, pin)!=STRING)
-      printf("expected string\n");*/
+	    if (yylex(&state, pin)!=STRING)
+		printf("expected string\n");
+	}
 
-      if (yylex(&state, pin)!=EOL)
-	  printf("expected eol\n");
+	if (yylex(&state, pin)!=EOL)
+	    printf("expected eol\n");
 
-      end=1;
+	end=1;
     }
 
 
@@ -308,7 +318,7 @@ int setscriptactive(struct protstream *pout, struct protstream *pin,char *name)
 {
   lexstate_t state;
   int res;
-  mystring_t *str;
+  mystring_t *str=NULL;
 
   /* tell server we want "name" to be the active script */
   prot_printf(pout, "SETACTIVE \"%s\"\r\n",name);
@@ -321,13 +331,15 @@ int setscriptactive(struct protstream *pout, struct protstream *pin,char *name)
   if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
     parseerror("TOKEN");
   
-  if (yylex(&state, pin)!=' ')
-    parseerror("SPACE");
+  if (res==TOKEN_NO) {
+      if (yylex(&state, pin)!=' ')
+	  parseerror("SPACE");
 
-  if (yylex(&state, pin)!=STRING)
-    parseerror("STRING");
+      if (yylex(&state, pin)!=STRING)
+	  parseerror("STRING");
 
-  str=state.str;
+      str=state.str;
+  }
 
   if (yylex(&state, pin)!=EOL)
     parseerror("EOL");
@@ -377,7 +389,7 @@ static int writefile(mystring_t *data, char *name)
 int getscript(struct protstream *pout, struct protstream *pin,char *name, int save)
 {
   int res;
-  mystring_t *str;
+  mystring_t *str=NULL;
   lexstate_t state;
 
   prot_printf(pout,"GETSCRIPT \"%s\"\r\n",name);
@@ -402,13 +414,15 @@ int getscript(struct protstream *pout, struct protstream *pin,char *name, int sa
   if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
     parseerror("TOKEN");
   
-  if (yylex(&state, pin)!=' ')
-    parseerror("SPACE");
-
-  if (yylex(&state, pin)!=STRING)
-    parseerror("STRING");
-
-  str=state.str;
+  if (res==TOKEN_NO) {
+      if (yylex(&state, pin)!=' ')
+	  parseerror("SPACE");
+      
+      if (yylex(&state, pin)!=STRING)
+	  parseerror("STRING");
+      
+      str=state.str;
+  }
 
   if (yylex(&state, pin)!=EOL)
     parseerror("EOL");
@@ -428,7 +442,7 @@ int getscript(struct protstream *pout, struct protstream *pin,char *name, int sa
 int getscriptvalue(struct protstream *pout, struct protstream *pin,char *name, mystring_t **data)
 {
   int res;
-  mystring_t *str;
+  mystring_t *str=NULL;
   lexstate_t state;
 
   prot_printf(pout,"GETSCRIPT \"%s\"\r\n",name);
@@ -449,13 +463,15 @@ int getscriptvalue(struct protstream *pout, struct protstream *pin,char *name, m
   if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
     parseerror("TOKEN");
   
-  if (yylex(&state, pin)!=' ')
-    parseerror("SPACE");
+  if (res == TOKEN_NO) {
+      if (yylex(&state, pin)!=' ')
+	  parseerror("SPACE");
 
-  if (yylex(&state, pin)!=STRING)
-    parseerror("STRING");
+      if (yylex(&state, pin)!=STRING)
+	  parseerror("STRING");
 
-  str=state.str;
+      str=state.str;
+  }
 
   if (yylex(&state, pin)!=EOL)
     parseerror("EOL");

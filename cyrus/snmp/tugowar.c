@@ -1,5 +1,5 @@
 /* tugowar.c -- Listens on unix domain udp socket and keeps track of oids
- * $Id: tugowar.c,v 1.3 2000/03/07 00:56:16 tmartin Exp $
+ * $Id: tugowar.c,v 1.4 2000/04/06 22:53:38 tmartin Exp $
  *
  *        Copyright 2000 by Carnegie Mellon University
  *
@@ -43,6 +43,9 @@
 #endif
 
 #define SOCK_PATH "/tmp/.snmp_door"
+
+static int debugmode = 0;
+
 
 typedef struct oid_trie_s {
 
@@ -525,7 +528,7 @@ int mib_general_getn ( agentx_oid_t *name, int baselen, int map_handle )
     return AGENTX_OK;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     int s, len;
     struct sockaddr_un local;
@@ -535,6 +538,20 @@ int main(void)
     int fromlen;
     agentx_oid_t  session_oid;
     mode_t oldumask;
+    pid_t pid;
+    int opt;
+
+    while ((opt = getopt(argc, argv, "d")) != EOF) {
+	switch (opt) {
+	case 'd': /* don't fork. debugging mode */
+	    debugmode = 1;
+	    break;
+	default:
+	    printf("Invalid arguement\n");
+	    exit(1);
+	    break;
+	}
+    }
 
     /* start up agentx */
     if ( !agentx_init( NULL ) ) {
@@ -574,6 +591,23 @@ int main(void)
     umask(oldumask); /* for Linux */
     chmod(SOCK_PATH, 0777); /* for DUX */
 
+    /* fork unless we were given the -d option */
+    
+    if (debugmode == 0) {
+	pid = fork();
+	
+	if (pid == -1) {
+	    perror("fork");
+	    exit(1);
+	}
+	
+	if (pid != 0) { /* parent */
+	    
+	    exit(0);
+	}
+    }
+    /* child */
+    
     trie_top = new_leaf(1, NULL, agentx_Null);
 
     registeredalloc = 100;

@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.93 2000/04/06 15:14:41 leg Exp $
+ $Id: mailbox.c,v 1.94 2000/04/06 22:53:35 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -40,9 +40,9 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <netinet/in.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <ctype.h>
 #include <time.h>
