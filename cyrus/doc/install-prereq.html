@@ -1,4 +1,4 @@
-<!-- $Id: install-prereq.html,v 1.5 2000/05/09 17:54:42 leg Exp $ -->
+<!-- $Id: install-prereq.html,v 1.6 2000/06/10 03:54:16 wcw Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Prerequisites and other notes
@@ -89,8 +89,20 @@ required.  You can get an ACAP server from the <a
 href="http://asg.web.cmu.edu/asg/">Cyrus project</a>.
 </ul>
 
+
+<P>The following programs and/or packages are recommended:
+
+<ul>
+<li><a href="ftp://ftp.gnu.org/non-gnu/flex">flex</a> - libsieve has
+two different lexical analyzers, and that's hard to do with
+traditional lex.  
+
+<li><a href="ftp://ftp.gnu.org/gnu/gcc">gcc</a> - we build using gcc
+	  and the compiler options <tt>-O2 -g</tt>.
+</ul>
+
 <P><HR>
-last modified: $Date: 2000/05/09 17:54:42 $
+last modified: $Date: 2000/06/10 03:54:16 $
 </BODY></HTML>
 
 
