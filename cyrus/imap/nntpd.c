@@ -47,7 +47,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.22 2002/10/16 15:27:04 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.23 2002/10/16 17:25:46 ken3 Exp $
  */
 #include <config.h>
 
@@ -543,11 +543,13 @@ static void cmdloop(void)
 	    else if (!strcmp(cmd.s, "Article")) {
 		char fname[MAX_MAILBOX_PATH];
 		char *msgid;
-		struct mailbox *mbox, tmpbox;
+		struct mailbox *mbox;
+		int have_msgid;
 
 		mode = ARTICLE_ALL;
 
 	      article:
+		have_msgid = 0;
 		uid = 0;
 		if (c == ' ') {
 		    c = getword(nntp_in, &arg1);
@@ -558,16 +560,16 @@ static void cmdloop(void)
 		if (c != '\n') goto extraargs;
 		if (uid == -1) {
 		    char *mailbox, *path;
+		    struct mailbox tmpbox;
 
+		    have_msgid = 1;
 		    msgid = arg1.s;
 		    if (netnews_lookup(msgid, &mailbox, &uid, NULL, NULL)) {
 			r = mboxlist_lookup(mailbox, &path, NULL, NULL);
 			if (r) goto nogroup;
 
 			strcpy(fname, path);
-			mbox = &tmpbox;
-			mbox->name = mailbox;
-			mbox->format = MAILBOX_FORMAT_NORMAL;
+			mbox = memset(&tmpbox, 0, sizeof(struct mailbox));
 		    } else {
 			goto nomsgid;
 		    }
@@ -589,7 +591,9 @@ static void cmdloop(void)
 		strcat(fname, "/");
 		mailbox_message_get_fname(mbox, uid, fname + strlen(fname));
 
-		cmd_article(fname, msgid, uid, mode);
+		cmd_article(fname, msgid, have_msgid ? 0 : uid, mode);
+
+		if (!have_msgid) free(msgid);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1249,8 +1253,6 @@ static void cmd_article(char *fname, char *msgid, unsigned long uid, int part)
     }
     prot_printf(nntp_out, "%u %lu %s Article retrieved\r\n",
 		220 + part, uid, msgid ? msgid : "<0>");
-
-    if (msgid) free(msgid);
 
     if (part != ARTICLE_STAT) {
 	while (fgets(buf, sizeof(buf), msgfile)) {
