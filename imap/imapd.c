@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.352 2002/03/14 22:25:16 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.353 2002/03/15 19:54:25 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -100,10 +100,11 @@ extern char *optarg;
 extern int errno;
 
 /* global state */
-static const char *mupdate_server = NULL;
 static char shutdownfilename[1024];
 static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
+/* xxx this is duplicated in mboxlist.c, they should probably share */
+static const char *mupdate_server = NULL;
 
 /* per-user/session state */
 struct protstream *imapd_out = NULL;
@@ -5660,8 +5661,10 @@ static int getresult(struct protstream *p, char *tag)
 void cmd_xfer(char *tag, char *toserver, char *name) 
 {
     int r = 0;
+    char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
     char mailboxname[MAX_MAILBOX_NAME+1];
     char *path;
+    char *acl;
     struct backend *be = NULL;
     mupdate_handle *mupdate_h = NULL;
     int backout_mupdate = 0;
@@ -5677,7 +5680,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &path, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, &path, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5699,32 +5702,100 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	/* Just authorize as the IMAP server, so pass "" as our authzid */
 	be = findserver(NULL, toserver, "");
 	if(!be) r = IMAP_SERVER_UNAVAILABLE;
+	if(r) syslog(LOG_ERR,
+		     "Could not move mailbox: %s, Backend connect failed",
+		     mailboxname);
     }
 
     /* Step 1b: Connect to mupdate */
     if(!r) {
 	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
-	    syslog(LOG_ERR,
-		   "can not connect to mupdate server to move '%s'",
-		   name);
+	if(r) syslog(LOG_ERR,
+		     "Could not move mailbox: %s, MUPDATE connect failed",
+		     mailboxname);
 	    goto done;
 	}
     }
 
     /* Step 2: LOCALCREATE on remote server */
     if(!r) {
-	/* xxxx partition????? */
+	/* xxx partition????? */
 	prot_printf(be->out, "LC1 LOCALCREATE {%d+}\r\n%s\r\n",
 		    strlen(name), name);
 	r = getresult(be->in, "LC1");
+	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, LOCALCREATE failed",
+		     mailboxname);
     }
     
+    /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
+    if(!r) {
+	/* xxx do we want it to be reserved on our host or on the remote
+	   host? I suspect recovery makes more sense for it to be on
+	   our host */
+	/* xxx we are setting it to the actual path here, and that sucks */
+	snprintf(buf, sizeof(buf), "%s!%s", config_servername, path);
+	r = mupdate_deactivate(mupdate_h, mailboxname, buf);
+	if(r) syslog(LOG_ERR,
+		     "Could not move mailbox: %s, MUPDATE DEACTIVATE failed",
+		     mailboxname);
+    }
+
+    /* Step 4: Dump local -> remote */
+    if(!r) {
+	backout_mupdate = 1;
+
+	prot_printf(be->out, "D01 UNDUMP {%d+}\r\n%s ", strlen(mailboxname),
+		    mailboxname);
+
+	r = dump_mailbox(NULL, path, mailboxname, 0, be->in, be->out,
+			 imapd_authstate);
+	if(r) syslog(LOG_ERR,
+		     "Could not move mailbox: %s, dump_mailbox() failed",
+		     mailboxname);
+    }
+
+    if(!r) {
+	r = getresult(be->in, "D01");
+	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, UNDUMP failed",
+		     mailboxname);
+    }
+    
+
+    /* xxx Step 4.5: Set ACL on remote */
+
+    /* Step 5: Reconstruct remote */
+    if(!r) {
+	prot_printf(be->out, "RC1 RECONSTRUCT {%d+}\r\n%s\r\n",
+		    strlen(name),name);
+	r = getresult(be->in, "RC1");
+	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, RECONSTRUCT failed",
+		     mailboxname);
+    }
+    
+    /* xxx if the reconstruct failed we need to delete the remote mailbox */
+
+    /* Step 6: mupdate.activate(mailbox, remote) */
+    if(!r) {
+	/* xxx partition????? */
+	snprintf(buf, sizeof(buf), "%s!", toserver);
+	r = mupdate_activate(mupdate_h, mailboxname, buf, acl);
+    }
+    
+    /* MAILBOX NOW LIVES ON REMOTE */
+
+    /* 7) local delete of mailbox
+     * 8) remove local remote mailbox entry??????
+     * 9) ??? kick remote server to do a push of the
+     *    actual record w/correct partition to mupdate?
+     */
+
  done:
-    if(backout_mupdate) {
-	/* something like: 
-	 * mupdate_activate(mupdate_h, name, thisserver!thispartition, acl)
-	 */
+    if(r && backout_mupdate) {
+	/* xxx if the mupdate server is what failed, then this won't
+	   help any! */
+	snprintf(buf, sizeof(buf), "%s!%s", config_servername, path);
+	r = mupdate_activate(mupdate_h, name, buf, acl);
     }
     if(mupdate_h) mupdate_disconnect(&mupdate_h);
     if(be) downserver(be);

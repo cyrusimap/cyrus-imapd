@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.173 2002/03/14 18:32:46 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.174 2002/03/15 19:54:27 rjs3 Exp $
  */
 
 #include <config.h>
@@ -92,7 +92,6 @@ struct db *mbdb;
 
 static int mboxlist_dbopen = 0;
 
-#define HOSTNAME_SIZE 512
 static const char *mupdate_server = NULL;
 
 static int mboxlist_opensubs();

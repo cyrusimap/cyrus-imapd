@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.2 2002/03/14 21:19:25 rjs3 Exp $ */
+/* $Id: backend.c,v 1.3 2002/03/15 19:54:25 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -77,11 +77,15 @@
 
 static void get_capability(struct backend *s)
 {
-    char tag[128];
+    static int cap_tag_num = 0;
+    char tag[64];
     char resp[1024];
     int st = 0;
 
-    prot_printf(s->out, "C01 Capability\r\n");
+    cap_tag_num++;
+    snprintf(tag, sizeof(tag), "C%d", cap_tag_num);
+
+    prot_printf(s->out, "%s Capability\r\n",tag);
     do {
 	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
 	if (!strncasecmp(resp, "* Capability ", 13)) {
@@ -323,6 +327,11 @@ void downserver(struct backend *s)
     prot_printf(s->out, "L01 LOGOUT\r\n");
     while (prot_fgets(buf, sizeof(buf), s->in)) {
 	if (!strncmp("L01", buf, 3)) {
+	    break;
+	}
+	if (!strncmp("* BAD", buf, 5)) {
+	    syslog(LOG_ERR, "got BAD in response to LOGOUT command sent to %s",
+		   s->hostname);
 	    break;
 	}
     }

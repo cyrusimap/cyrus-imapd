@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.23 2002/03/14 18:32:47 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.24 2002/03/15 19:54:27 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -66,6 +66,8 @@ extern struct db *mbdb;
 
 /* master name of the mailboxes file */
 #define FNAME_MBOXLIST "/mailboxes.db"
+
+#define HOSTNAME_SIZE 512
 
 /* each mailbox has the following data */
 struct mbox_entry {
