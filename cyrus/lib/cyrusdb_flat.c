@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.33 2004/01/09 17:48:25 rjs3 Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.34 2004/01/09 19:42:37 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -416,11 +416,17 @@ static int foreach(struct db *db,
     }
 
     if (prefix) {
-	char *realprefix = xmalloc(prefixlen+1);
-	memcpy(realprefix, prefix, prefixlen);
-	realprefix[prefixlen] = '\0';
+	char *realprefix;
+	if(prefix[prefixlen] != '\0') {
+	    realprefix = xmalloc(prefixlen+1);
+	    memcpy(realprefix, prefix, prefixlen);
+	    realprefix[prefixlen] = '\0';
+	} else {
+	    realprefix = prefix;
+	}
 	offset = bsearch_mem(realprefix, 1, dbbase, db->size, 0, &len);
-	free(realprefix);
+
+	if(prefix[prefixlen] != '\0') free(realprefix);
     } else {
 	offset = 0;
     }
