@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.200 2002/08/06 18:52:37 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.201 2002/08/06 20:36:48 rjs3 Exp $
  */
 
 #include <config.h>
@@ -552,11 +552,12 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     struct txn *tid = NULL;
     mupdate_handle *mupdate_h = NULL;
     char *mboxent = NULL;
+    int newreserved = 0; /* made reserved entry in local mailbox list */
+    int madereserved = 0; /* made reserved entry on mupdate server */
 
     /* Must be atleast MAX_PARTITION_LEN + 30 for partition, need
      * MAX_PARTITION_LEN + HOSTNAME_SIZE + 2 for mupdate location */
     char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-    int madereserved = 0; /* made reserved entry on mupdate server */
 
  retry:
     tid = NULL;
@@ -595,8 +596,25 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	}
     }
 
+    /* 3a. Reserve mailbox in local database */
+    mboxent = mboxlist_makeentry(mbtype | MBTYPE_RESERVE,
+				 newpartition, acl);
+    r = DB->store(mbdb, name, strlen(name), 
+		  mboxent, strlen(mboxent), &tid);
+    free(mboxent);
+    mboxent = NULL;
+
+    /* 3b. Unlock mailbox list (before calling out to mupdate) */
+    if(r) {
+	syslog(LOG_ERR, "Could not reserve mailbox %s during create", name);
+	goto done;
+    } else {
+	DB->commit(mbdb, tid);
+	tid = NULL;
+	newreserved = 1;
+    }
+
     /* 4. Create mupdate reservation */
-    /* xxx this is network I/O being done while holding a mboxlist lock */
     if (config_mupdate_server && !localonly) {
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
@@ -616,32 +634,13 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	    goto done;
 	}
     }
-
     madereserved = 1; /* so we can roll back on failure */
-    
-    /* 5. add the new entry */
-    mboxent = mboxlist_makeentry(mbtype, newpartition, acl);
 
-    r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent),
-		  &tid);
-    switch (r) {
-    case CYRUSDB_OK:
-	break;
-    case CYRUSDB_AGAIN:
-	goto retry;
-	break;
-    default:
-	syslog(LOG_ERR, "DBERROR: error updating database %s: %s",
-	       name, cyrusdb_strerror(r));
-	r = IMAP_IOERROR;
-	goto done;
-    }
-
- done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
+ done: /* All checks compete.  Time to fish or cut bait. */
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
 	char mbbuf[MAX_MAILBOX_PATH];
 
-	/* Create new mailbox and move new mailbox list file into place */
+	/* Create new mailbox in the filesystem */
 	mailbox_hash_mbox(mbbuf, root, name);
 	r = mailbox_create(name, mbbuf, acl, NULL,
 			   ((mbtype & MBTYPE_NETNEWS) ?
@@ -651,20 +650,20 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     }
 
     if (r) { /* CREATE failed */ 
-	int r2;
+	int r2 = 0;
 
-	r2 = 0;
-	if (tid) r2 = DB->abort(mbdb, tid);
-	switch (r2) {
-	case 0:
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: failed on abort: %s", 
-		   cyrusdb_strerror(r2));
+	if(newreserved) {
+	    /* remove the RESERVED mailbox entry if we failed */
+	    r2 = DB->delete(mbdb, name, strlen(name), NULL, 0);
+	    if(r2) {
+		syslog(LOG_ERR,
+		       "DBERROR: can't remove RESERVE entry for %s (%s)",
+		       name, cyrusdb_strerror(r2));
+	    }
 	}
 
 	/* delete mupdate entry if we made it */
-	if (madereserved == 1 && config_mupdate_server) {
+	if (madereserved && config_mupdate_server) {
 	    r2 = mupdate_delete(mupdate_h, name);
 	    if(r2 > 0) {
 		/* Disconnect, reconnect, and retry */
@@ -683,12 +682,17 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 		       name);
 	    }		
 	}
-    } else { /* all is well */
-	switch (r = DB->commit(mbdb, tid)) {
+    } else { /* all is well - activate the mailbox */
+	mboxent = mboxlist_makeentry(mbtype, newpartition, acl);
+
+	switch(r = DB->store(mbdb, name, strlen(name),
+			     mboxent, strlen(mboxent), NULL)) {
 	case 0: 
 	    break;
 	default:
-	    syslog(LOG_ERR, "DBERROR: failed on commit: %s", 
+	    /* xxx This leaves a reserved entry around, it is unclear
+	     * that a DB->delete would work though */
+	    syslog(LOG_ERR, "DBERROR: failed on activation: %s", 
 		   cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
 	}
@@ -1063,7 +1067,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
         
     /* 3b. unlock mboxlist (before calling out to mupdate) */
     if(r) {
-	syslog(LOG_ERR, "Could not lock mailbox %s during rename", oldname);
+	syslog(LOG_ERR, "Could not reserve mailbox %s during rename", oldname);
 	goto done;
     } else {
 	DB->commit(mbdb, tid);
