@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_mailto.c,v 1.8 2003/10/22 18:50:16 rjs3 Exp $
+ * $Id: notify_mailto.c,v 1.9 2004/03/11 15:23:19 ken3 Exp $
  */
 
 #include <config.h>
@@ -57,7 +57,7 @@
 #include "global.h"
 #include "libconfig.h"
 #include "rfc822date.h"
-#include <sieve_interface.h>
+#include "sieve_interface.h"
 
 static int global_outgoing_count = 0;
 

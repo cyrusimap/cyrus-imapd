@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 
 
-#include <sieve_interface.h>
+#include "sieve_interface.h"
 
 #include "bytecode.h"
 #include "script.h"
