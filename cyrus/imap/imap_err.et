@@ -56,4 +56,7 @@ ec IMAP_MESSAGE_BADHEADER,
 ec IMAP_MESSAGE_NOBLANKLINE,
    "message has no header/body separator"
 
+ec IMAP_UNRECOGNIZED_CHARSET,
+   "unrecognized character set"
+
 end
