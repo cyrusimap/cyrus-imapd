@@ -682,6 +682,12 @@ int nflags;
 			  index_storeflag, (char *)storeargs);
 
     mailbox_unlock_index(mailbox);
+
+    /* Refresh the index file, for systems without mmap() */
+    map_refresh(fileno(mailbox->index), &index_base, &index_len,
+		start_offset + imapd_exists * record_size,
+		"index", mailbox->name);
+
     return r;
 }
 
