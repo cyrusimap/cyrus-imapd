@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: IMAP.xs,v 1.17 2002/09/19 16:49:28 rjs3 Exp $ */
+/* $Id: IMAP.xs,v 1.18 2002/12/02 21:05:13 rjs3 Exp $ */
 
 /*
  * Perl interface to the Cyrus imclient routines.  This enables the
@@ -50,9 +50,13 @@
 #include "perl.h"
 #include "XSUB.h"
 #include <pwd.h>
+#include <unistd.h>
+
 #include "imclient.h"
-#include "cyrperl.h"
 #include "imapurl.h"
+#include "xmalloc.h"
+
+#include "cyrperl.h"
 
 typedef struct xscyrus *Cyrus_IMAP;
 
@@ -66,8 +70,7 @@ typedef struct xscyrus *Cyrus_IMAP;
  */
 
 /* hack, since libcyrus apparently expects fatal() to exist */
-void
-fatal(char *s, int exit)
+void fatal(const char *s, int exit)
 {
   croak(s);
 }
