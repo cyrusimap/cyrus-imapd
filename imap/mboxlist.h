@@ -2,7 +2,7 @@
  * 
  * Copyright 1999 Carnegie Mellon University
  * 
- * $Id: mboxlist.h,v 1.6 2000/04/11 20:52:29 leg Exp $
+ * $Id: mboxlist.h,v 1.7 2000/04/20 16:30:02 leg Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -43,14 +43,6 @@ typedef enum {
     MB_FATAL
 } foreach_res;
 
-typedef struct mbox_txn mbox_txn_t;
-
-/* commit a previously started transaction */
-int mboxlist_commit(struct mbox_txn *tid);
-
-/* abort a previously started transaction */
-int mboxlist_abort(struct mbox_txn *tid);
-
 /* Lookup 'name' in the mailbox list. */
 int mboxlist_lookup(const char *name, char **pathp, char **aclp, void *tid);
 
@@ -64,7 +56,7 @@ int mboxlist_createmailboxcheck(char *name, int mbtype, char *partition,
 				struct auth_state *auth_state, 
 				char **newacl, char **newpartition);
 
-/* create mailbox; don't commit if tid != NULL */
+/* create mailbox */
 int mboxlist_createmailbox(char *name, int mbtype, char *partition, 
 			   int isadmin, char *userid, 
 			   struct auth_state *auth_state);
@@ -73,7 +65,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 int mboxlist_deletemailbox(char *name, int isadmin, char *userid, 
 			   struct auth_state *auth_state, int checkacl);
 
-/* Rename/move a mailbox */
+/* Rename/move a mailbox (hierarchical) */
 int mboxlist_renamemailbox(char *oldname, char *newname, char *partition, 
 			   int isadmin, char *userid, 
 			   struct auth_state *auth_state);
@@ -121,11 +113,5 @@ void mboxlist_init(int flags);
 
 /* done with database stuff */
 void mboxlist_done(void);
-
-void mboxlist_getinternalstuff(const char **listfnamep,
-			       const char **newlistfnamep, 
-			       const char **basep,
-			       unsigned long * sizep);
-
 
 #endif
