@@ -1,7 +1,7 @@
 dnl bsd_sockets.m4--which socket libraries do we need? 
 dnl Derrick Brashear
 dnl from Zephyr
-dnl $Id: bsd_sockets.m4,v 1.3 1999/01/12 19:03:15 rob Exp $
+dnl $Id: bsd_sockets.m4,v 1.4 1999/01/12 19:14:29 rob Exp $
 
 dnl Hacked on by Rob Earhart to not just toss stuff in LIBS
 dnl It now puts everything required for sockets into LIB_SOCKET
@@ -10,9 +10,9 @@ AC_DEFUN(CMU_SOCKETS, [
 	LIB_SOCKET=""
 	AC_CHECK_FUNC(connect, :,
 		AC_CHECK_LIB(nsl, gethostbyname,
-			     LIB_SOCKET="$(LIB_SOCKET) -lnsl")
+			     LIB_SOCKET="$LIB_SOCKET -lnsl")
 		AC_CHECK_LIB(socket, connect,
-			     LIB_SOCKET="$(LIB_SOCKET) -lsocket")
+			     LIB_SOCKET="$LIB_SOCKET -lsocket")
 	)
 	AC_SUBST(LIB_SOCKET)
 	])
