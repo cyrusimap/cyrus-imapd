@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.113 1999/11/05 01:26:51 leg Exp $
+ * $Id: deliver.c,v 1.114 1999/11/12 02:19:14 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.113 1999/11/05 01:26:51 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.114 1999/11/12 02:19:14 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -847,7 +847,8 @@ int open_sendmail(char *argv[], FILE **sm)
     return p;
 }
 
-int send_rejection(char *rejto,
+int send_rejection(char *origid,
+		   char *rejto,
 		   char *mailreceip, 
 		   char *reason, 
 		   struct protstream *file)
@@ -895,10 +896,11 @@ int send_rejection(char *rejto,
     fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", POSTMASTER);
     fprintf(sm, "To: <%s>\r\n", rejto);
     fprintf(sm, "MIME-Version: 1.0\r\n");
-    fprintf(sm, "Content-Type: multipart/report; report-type=delivery-status;"
+    fprintf(sm, "Content-Type: "
+	    "multipart/report; report-type=disposition-notification;"
 	    "\r\n\tboundary=\"%d/%s\"\r\n", p, hostname);
     fprintf(sm, "Subject: Automatically rejected mail\r\n");
-    fprintf(sm, "Auto-Submitted: auto-generated (rejected)\r\n");
+    fprintf(sm, "Auto-Submitted: auto-replied (rejected)\r\n");
     fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
 
     /* this is the human readable status report */
@@ -907,13 +909,19 @@ int send_rejection(char *rejto,
 	    "filtering language.\r\n\r\n");
     fprintf(sm, "The following reason was given:\r\n%s\r\n\r\n", reason);
 
-    /* this is the DSN status report */
-    fprintf(sm, "--%d/%s\r\nContent-Type: message/deliver-status\r\n\r\n",
+    /* this is the MDN status report */
+    fprintf(sm, "--%d/%s\r\n"
+	    "Content-Type: message/disposition-notification\r\n\r\n",
 	    p, hostname);
-    fprintf(sm, "Reporting-MTA: dns; %s\r\n", hostname);
-    fprintf(sm, "Action: failed\r\n");
+    fprintf(sm, "Reporting-UA: %s; Cyrus %s/%s\r\n",
+	    hostname, CYRUS_VERSION, sieve_version);
+#if 0
+    fprintf(sm, "Original-Recipient: rfc822; %s\r\n", mailreceip);
+#endif
     fprintf(sm, "Final-Recipient: rfc822; %s\r\n", mailreceip);
-    fprintf(sm, "Status: 5.7.1\r\n");
+    fprintf(sm, "Original-Message-ID: %s\r\n", origid);
+    fprintf(sm, "Disposition: "
+	    "automatic-action/MDN-sent-automatically; deleted\r\n");
     fprintf(sm, "\r\n");
 
     /* this is the original message */
@@ -935,7 +943,7 @@ int send_rejection(char *rejto,
 int send_forward(char *forwardto, char *return_path, struct protstream *file)
 {
     FILE *sm;
-    char *smbuf[5];
+    char *smbuf[6];
     int i;
     char buf[1024];
     pid_t p;
@@ -946,10 +954,11 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
 	smbuf[2] = return_path;
     } else {
 	smbuf[1] = "-f";
-	smbuf[2] = "postmaster";
+	smbuf[2] = "postmaster"; /* how do i represent <>? */
     }
-    smbuf[3] = forwardto;
-    smbuf[4] = NULL;
+    smbuf[3] = "--";
+    smbuf[4] = forwardto;
+    smbuf[5] = NULL;
     p = open_sendmail(smbuf, &sm);
 	
     if (sm == NULL) {
@@ -958,7 +967,7 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
 
     prot_rewind(file);
 
-    while ((i = prot_read(file, buf, 1024)) > 0) {
+    while ((i = prot_read(file, buf, sizeof(buf))) > 0) {
 	fwrite(buf, i, 1, sm);
     }
 
@@ -1002,7 +1011,8 @@ int sieve_reject(char *msg, void *ic, void *sc, void *mc)
 	return SIEVE_FAIL;
     }
     
-    if (send_rejection(m->return_path, sd->username, msg, m->data) == 0) {
+    if (send_rejection(m->id, m->return_path, sd->username,
+		       msg, m->data) == 0) {
 	return SIEVE_OK;
     } else {
 	return SIEVE_FAIL;
