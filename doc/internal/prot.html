@@ -1,0 +1,92 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta name="generator" content="HTML Tidy, see www.w3.org" />
+<title>prot layer</title>
+</head>
+<body>
+<h1>prot layer</h1>
+
+<p>The prot layer, defined in <tt>prot.h</tt>, is a stdio
+replacement for network i/o. It does the standard buffering of
+input and output and allows certain operations especially suited
+for request/response protocols like IMAP.</p>
+
+<h2>Events</h2>
+
+<p>The prot layer allows "events" to be associated with each prot
+stream. These events are trigger at the given time or after when
+the protstream is attempted to be read from.</p>
+
+<p>An event is currently represented by the following
+datastructure:</p>
+
+<pre>
+struct prot_waitevent;
+
+typedef struct prot_waitevent *prot_waiteventcallback_t(struct protstream *s,
+                            struct prot_waitevent *ev,
+                            void *rock);
+
+struct prot_waitevent {
+    time_t mark;
+    prot_waiteventcallback_t *proc;
+    void *rock;
+    struct prot_waitevent *next;
+};
+</pre>
+
+<p>The application is currently allowed to modify <i>mark</i>,
+<i>proc</i>, and <i>rock</i> as desired when there are no active
+calls to a prot function on the stream which this event is
+associated.</p>
+
+The API is as followed: 
+
+<ul>
+<li>Use <tt>prot_addwaitevent()</tt> to add an event callback onto
+the stream: 
+
+<pre>
+extern struct prot_waitevent *prot_addwaitevent(struct protstream *s,
+                        time_t mark,
+                        prot_waiteventcallback_t *proc,
+                        void *rock);
+</pre>
+
+where <i>s</i> is the stream to add the event to, <i>mark</i> is
+the time to trigger the event, <i>proc</i> is the callback to make,
+and <i>rock</i> is an opaque data item handed to the callback. It
+returns a pointer to the event structure; this is the pointer that
+must be used to remove the event or modify it in some way.</li>
+
+<li>Use <tt>prot_removewaitevent()</tt> to remove an event: 
+
+<pre>
+extern void prot_removewaitevent(struct protstream *s,
+                 struct prot_waitevent *event);
+</pre>
+
+It requires <i>event</i> to have been returned from
+<tt>prot_addwaitevent()</tt> previously. No further references are
+allowed to <i>event</i> or its fields. <i>event-&gt;rock</i> is not
+free'd nor examined in any way. This function may be called while
+inside the callback <i>event-&gt;proc()</i>. If an event is removed
+inside of its callback, that callback must return
+<tt>NULL</tt>.</li>
+</ul>
+
+<p>Some common things to do with events:</p>
+
+<ul>
+<li>To reschedule an event <i>ev</i>, simply set <i>ev-&gt;mark</i>
+to the next time it should trigger. If currently in
+<i>ev-&gt;proc()</i>, it should return <i>ev</i>.</li>
+</ul>
+
+<hr />
+last modified: $Date: 2002/02/04 03:49:45 $
+</body>
+</html>
+
