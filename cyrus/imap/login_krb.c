@@ -57,7 +57,7 @@ char **reply;
 	}
     }
 
-    if (kerberos_verify_password(user, pass, reply) == 0) {
+    if (kerberos_verify_password(user, pass, "imap", reply) == 0) {
 	return 1;
     }
 

@@ -128,8 +128,9 @@ int *maxplain;
 /*
  * Start the client side of an authentication exchange.
  */
-static int krb_client_start(host, user, protallowed, maxbufsize,
+static int krb_client_start(service, host, user, protallowed, maxbufsize,
 			    localaddr, remoteaddr, state)
+char *service;			/* Name of service */
 char *host;			/* Name of server host */
 char *user;			/* (optional) user to log in as */
 int protallowed;		/* Protection mechanisms allowed */
@@ -167,10 +168,10 @@ void **state;			/* On success, filled in with state ptr */
     strcpy(instance, krb_get_phost(host_name->h_name));
 
     /* Fetch imap.hostname service key */
-    (void) krb_mk_req(&authent, "imap", instance, realm, 0);
+    (void) krb_mk_req(&authent, service, instance, realm, 0);
     memset(&authent, 0, sizeof(authent));
 
-    if (krb_get_cred("imap", instance, realm, &cr)) {
+    if (krb_get_cred(service, instance, realm, &cr)) {
 	return ACTE_FAIL;
     }
     
@@ -240,7 +241,7 @@ char **output;			/* Set to point to client reply data */
 	}
 	kstate->challenge = ntohl(*(int *)input);
 
-	code = krb_mk_req(&authent, "imap", kstate->instance, kstate->realm,
+	code = krb_mk_req(&authent, service, kstate->instance, kstate->realm,
 			  kstate->challenge);
 	if (code) {
 	    kstate->authstepno = -1;
@@ -320,8 +321,9 @@ struct acte_client krb_acte_client = {
  * Start the server side of an authentication exchange
  */
 static int
-krb_server_start(authproc, protallowed, maxbufsize,
+krb_server_start(service, authproc, protallowed, maxbufsize,
 		 localaddr, remoteaddr, outputlen, output, state, reply)
+char *service;
 int (*authproc)();		/* (optional) function to decide
 				 * authoriztion to log in as given user
 				 */
@@ -409,7 +411,7 @@ char **reply;			/* On failure, filled in with ptr to reason */
 	memcpy(authent.dat, input, inputlen);
 	authent.mbz = 0;
 	strcpy(instance, "*");
-	code = krb_rd_req(&authent, "imap", instance, 0L, &kstate->kdata,
+	code = krb_rd_req(&authent, service, instance, 0L, &kstate->kdata,
 			  srvtab);
 	if (code) {
 	    kstate->authstepno = -1;
@@ -652,11 +654,13 @@ des_cblock returned_key;
 }
 
 /*
- * Securely verify the plaintext password 'passwd' for user 'user' against
- * the Kerberos database.  Returns 1 for success, 0 for failure.  On failure,
- * 'reply' is filled in with a pointer to the reason.
+ * Securely verify the plaintext password 'passwd' for user 'user'
+ * against the Kerberos database.  "service" is the name of a service
+ * we can verify the returned ticket against.  Returns 1 for success,
+ * 0 for failure.  On failure, 'reply' is filled in with a pointer to
+ * the reason.
  */
-int kerberos_verify_password(user, passwd, reply)
+int kerberos_verify_password(user, passwd, service, reply)
 char *user;
 char *passwd;
 char **reply;
@@ -704,7 +708,7 @@ char **reply;
     /* Check validity of returned ticket */
     gethostname(hostname, sizeof(hostname));
     strcpy(phost, krb_get_phost(hostname));
-    result = krb_mk_req(&authent, "imap", phost, realm, 0);
+    result = krb_mk_req(&authent, service, phost, realm, 0);
     if (result != 0) {
 	memset(&authent, 0, sizeof(authent));
 	dest_tkt();
@@ -712,7 +716,7 @@ char **reply;
 	return 0;
     }
     strcpy(instance, "*");
-    result = krb_rd_req(&authent, "imap", instance, 0L, &kdata, srvtab);
+    result = krb_rd_req(&authent, service, instance, 0L, &kdata, srvtab);
     memset(&authent, 0, sizeof(authent));
     memset(kdata.session, 0, sizeof(kdata.session));
     if (result != 0 || strcmp(kdata.pname, user) != 0 || kdata.pinst[0] ||

@@ -762,7 +762,7 @@ char *authtype;
     lcase(authtype);
     r = login_authenticate(authtype, &mech, &authproc);
     if (!r) {
-	r = mech->start(authproc, ACTE_PROT_ANY, PROT_BUFSIZE,
+	r = mech->start("imap", authproc, ACTE_PROT_ANY, PROT_BUFSIZE,
 			imapd_haveaddr ? &imapd_localaddr : 0,
 			imapd_haveaddr ? &imapd_remoteaddr : 0,
 			&outputlen, &output, &state, &reply);
