@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.31 1998/08/15 14:52:43 wcw Exp $
+# $Id: SMakefile,v 1.32 1998/09/18 19:27:13 wcw Exp $
 #
 
 MAKE=gmake
@@ -22,7 +22,7 @@ LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 
 # Ryan's aggressive optimizations
 case `uname` in
-  Linux) CFLAGS="${CFLAGS} -O3"
+  Linux) CFLAGS="${CFLAGS} -O3 -g"
 	 LDFLAGS="${LDFLAGS}"
 	 AMSSYNC="" # this might actually build now, but we don't need it
 	 ;;
