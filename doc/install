@@ -9,8 +9,8 @@
 
     Feedback on the software or on the document may be sent to
     "cyrus-bugs@andrew.cmu.edu". The info-cyrus@andrew.cmu.edu mailing list
-    exists for the discussion of this server and other Cyrus software. Send
-    mail to info-cyrus-request@andrew.cmu.edu to subscribe. 
+    exists for the discussion of this server and other Cyrus software; more
+    information is availible in the mailing-list document. 
 
 Upgrading From Previous Versions
 
@@ -28,7 +28,7 @@ Upgrading From Previous Versions
         must be removed. (There is no danger in deleting the PTS cache, and
         if the delivered database is removed, there is a chance that some
         duplicate messages may come through, but this is not a serious
-        concern. 
+        concern.) 
       * The format for the PTS cache for IMSP has changed. If you use AFS
         ACLs, IMSPd, and IMAPd on the same machine, make sure you have
         version 1.5a5 of the IMSP server for this version of the IMAP

@@ -2,6 +2,12 @@
 
 Changes to the Cyrus IMAP Server Since Version 1.5.14
 
+      * Added --disable-server switch to optionally prevent compilation of
+        server to help sites that just want client libraries (so cyradm and
+        libcyrus can be compiled on remote systems without installing stuff
+        into /usr/cyrus/bin, etc.) For now, the server is still configured
+        in this case, and a Makefile is generated. This could change in
+        future versions. 
       * Fixed a mmap leak in index.c in index_search_evaluate that caused
         problems on complex searches. Thanks to Jeff Schiller for pointing
         this out. Fixed a potential leak in mboxlist.c that happened if a
