@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.23 2003/05/21 16:36:12 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.24 2003/05/22 18:59:39 rjs3 Exp $
  */
 
 #include <config.h>
@@ -569,7 +569,7 @@ static int fetch_cb(char *name, int matchlen,
 	sawuser = 1;
     }
 
-    strcpy(lastname, name);
+    strlcpy(lastname, name, sizeof(lastname));
     lastname[matchlen] = '\0';
 
     if (!strncasecmp(lastname, "INBOX", 5)) {
