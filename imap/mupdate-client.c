@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.25 2002/02/25 02:37:45 leg Exp $
+ * $Id: mupdate-client.c,v 1.26 2002/02/28 16:39:04 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -290,14 +290,14 @@ int mupdate_connect(const char *server, const char *port,
 	addr.sin_port = htons(2004);
     }
 
-    h = xzmalloc(sizeof(mupdate_handle));
-    *handle = h;
-    h->sock = s;
-
     if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
 	syslog(LOG_ERR, "mupdate-client: connect(%s): %m", server);
 	return MUPDATE_NOCONN;
     }
+
+    h = xzmalloc(sizeof(mupdate_handle));
+    *handle = h;
+    h->sock = s;
 
     if(!cbs) {
 	cbs = mysasl_callbacks(config_getstring("mupdate_username",""),
@@ -366,17 +366,19 @@ void mupdate_disconnect(mupdate_handle **hp)
     if(!hp || !(*hp)) return;
     h = *hp;
 
-    prot_printf(h->pout, "L01 LOGOUT\r\n");
-    prot_flush(h->pout);
-
+    if(h->pout) {
+	prot_printf(h->pout, "L01 LOGOUT\r\n");
+	prot_flush(h->pout);
+    }
+    
     freebuf(&(h->tag));
     freebuf(&(h->cmd));
     freebuf(&(h->arg1));
     freebuf(&(h->arg2));
     freebuf(&(h->arg3));
     
-    prot_free(h->pin);
-    prot_free(h->pout);
+    if(h->pin) prot_free(h->pin);
+    if(h->pout) prot_free(h->pout);
     sasl_dispose(&(h->saslconn));
     close(h->sock);
 
