@@ -39,6 +39,8 @@
  *
  */
 
+/* $Id: duplicate.c,v 1.31 2002/05/25 19:57:44 leg Exp $ */
+
 #include <config.h>
 
 #include <stdio.h>

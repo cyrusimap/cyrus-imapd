@@ -38,6 +38,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* $Id: acappush.c,v 1.15 2002/05/25 19:57:43 leg Exp $ */
+
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H

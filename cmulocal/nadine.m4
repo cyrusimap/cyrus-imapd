@@ -1,6 +1,7 @@
 dnl nadine.m4--The nadine event library
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
+dnl $Id: nadine.m4,v 1.4 2002/05/25 19:57:42 leg Exp $
 
 AC_DEFUN(CMU_NADINE_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])

@@ -38,6 +38,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* $Id: codes.h,v 1.3 2002/05/25 19:57:46 leg Exp $ */
+
 #ifndef _CODES_H_
 #define _CODES_H_
 

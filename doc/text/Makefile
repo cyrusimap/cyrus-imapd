@@ -24,6 +24,7 @@
 #  (412) 268-4387, fax: (412) 268-7395
 #  tech-transfer@andrew.cmu.edu
 # 
+# $Id: Makefile,v 1.3 2002/05/25 19:57:43 leg Exp $
 
 all: htmlstrip docs clean
 

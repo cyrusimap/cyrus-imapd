@@ -1,6 +1,7 @@
 dnl kerberos_v5.m4--Kerberos 5 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
+dnl $Id: kerberos_v5.m4,v 1.5 2002/05/25 19:57:42 leg Exp $
 
 AC_DEFUN(CMU_KRB5_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])

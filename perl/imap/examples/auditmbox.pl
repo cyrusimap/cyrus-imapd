@@ -38,6 +38,8 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
+# $Id: auditmbox.pl,v 1.3 2002/05/25 19:57:49 leg Exp $
+#
 # This script WON'T work for you.  Guaranteed.
 # It checks CMU ECE policy, and your policy *will* be different.
 # Use it only as an example of how to use IMAP::Cyrus::Admin, as it will

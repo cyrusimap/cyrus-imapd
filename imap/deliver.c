@@ -41,6 +41,8 @@
  *
  */
 
+/* $Id: deliver.c,v 1.164 2002/05/25 19:57:44 leg Exp $ */
+
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H

@@ -38,6 +38,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+
+/* $Id: acap.h,v 1.3 2002/05/25 19:57:50 leg Exp $ */
+
 #include "acapsieve.h"
 
 struct xscyrus {

@@ -1,4 +1,5 @@
 /* +++Date last modified: 05-Jul-1997 */
+/* $Id: hash.h,v 1.4 2002/05/25 19:57:47 leg Exp $ */
 
 #ifndef HASH__H
 #define HASH__H

@@ -38,6 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* $Id: service.h,v 1.13 2002/05/25 19:57:49 leg Exp $ */
 
 #ifndef SERVICE_H
 #define SERVICE_H

@@ -1,6 +1,7 @@
 %{
 /* sieve.l -- sieve lexer
  * Larry Greenfield
+ * $Id: sieve-lex.l,v 1.19 2002/05/25 19:57:52 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University

@@ -1,4 +1,3 @@
-
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -38,6 +37,8 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+
+/* $Id: duplicate.h,v 1.11 2002/05/25 19:57:45 leg Exp $ */
 
 #ifndef DUPLICATE_H
 #define DUPLICATE_H

@@ -38,6 +38,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+
+/* $Id: test.c,v 1.3 2002/05/25 19:57:52 leg Exp $ */
+
 #include <stdio.h>
 #include <sys/syslog.h>
 int main(int argc, char **argv) {

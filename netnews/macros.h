@@ -1,4 +1,5 @@
-/*  $Revision: 1.3 $
+/*  $Revision: 1.4 $
+ *  $Id: macros.h,v 1.4 2002/05/25 19:57:49 leg Exp $
 **
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *

@@ -1,6 +1,7 @@
 dnl libssl.m4--Ssl libraries and includes
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
+dnl $Id: libssl.m4,v 1.7 2002/05/25 19:57:42 leg Exp $
 
 AC_DEFUN(CMU_LIBSSL_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])

@@ -1,6 +1,7 @@
 dnl librestrict.m4--restrict libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
+dnl $Id: librestrict.m4,v 1.2 2002/05/25 19:57:42 leg Exp $
 
 AC_DEFUN(CMU_RESTRICT_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])

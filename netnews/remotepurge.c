@@ -42,6 +42,8 @@
  *
  */
 
+/* $Id: remotepurge.c,v 1.16 2002/05/25 19:57:49 leg Exp $ */
+
 #include <config.h>
 
 #include <sys/types.h>

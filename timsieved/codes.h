@@ -1,6 +1,7 @@
 /* codes.h -- error codes functions in timsieved may return
  * Tim Martin
  * 9/21/99
+ * $Id: codes.h,v 1.5 2002/05/25 19:57:53 leg Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.

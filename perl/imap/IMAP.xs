@@ -39,6 +39,8 @@
  *
  */
 
+/* $Id: IMAP.xs,v 1.15 2002/05/25 19:57:49 leg Exp $ */
+
 /*
  * Perl interface to the Cyrus imclient routines.  This enables the
  * use of Perl to implement Cyrus utilities, in particular imtest and cyradm.

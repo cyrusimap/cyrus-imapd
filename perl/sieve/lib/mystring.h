@@ -1,6 +1,7 @@
 /* mystring.h
  * Tim Martin
  * 9/21/99
+ * $Id: mystring.h,v 1.4 2002/05/25 19:57:50 leg Exp $
  */
 /*
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.

@@ -39,6 +39,8 @@
  *
  */
 
+/* $Id: readconfig.h,v 1.3 2002/05/25 19:57:49 leg Exp $ */
+
 #ifndef READCONFIG_H
 #define READCONFIG_H
 

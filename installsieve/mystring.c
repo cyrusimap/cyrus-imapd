@@ -42,6 +42,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* $Id: mystring.c,v 1.5 2002/05/25 19:57:46 leg Exp $ */
+
 #include "mystring.h"
 
 #include "codes.h"
