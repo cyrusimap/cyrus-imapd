@@ -497,6 +497,7 @@ my %aclalias = (none => '',
 		post => 'lrsp',
 		append => 'lrsip',
 		write => 'lrswipcd',
+		delete => 'lrd',
 		all => 'lrswipcda');
 
 sub setaclmailbox {
@@ -505,9 +506,7 @@ sub setaclmailbox {
   my $res = '';
   my ($rc, $msg);
   foreach my $id (keys %acl) {
-    # this does the aliasing (read -> lrs, etc.)
     $acl{$id} = $aclalias{$acl{$id}} if defined $aclalias{$acl{$id}};
-
     ($rc, $msg) = $self->send('', '', 'SETACL %s %s %s', $mbx, $id, $acl{$id});
     if ($rc eq 'OK') {
       $cnt++;
@@ -702,7 +701,8 @@ Renames the specified mailbox, optionally moving it to a different partition.
 
 Set ACLs on a mailbox.  The ACL may be one of the special strings C<none>,
 C<read> (C<lrs>), C<post> (C<lrsp>), C<append> (C<lrsip>), C<write>
-(C<lrswipcd>), or C<all> (C<lrswipcda>), or any combinations of the ACL codes:
+(C<lrswipcd>), C<delete> (C<lrd>), or C<all> (C<lrswipcda>), or any combinations 
+of the ACL codes:
 
 =over 4
 
