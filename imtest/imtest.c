@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.54 2000/06/06 21:18:37 leg Exp $
+ * $Id: imtest.c,v 1.55 2000/09/07 03:20:43 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -500,7 +500,7 @@ int tls_start_clienttls(int *layer, char **authid)
     if (verbose==1)
 	do_dump = 1;
 
-    if ((sts = SSL_connect(tls_conn)) <= 0) {
+    if ((sts = SSL_connect(tls_conn)) < 0) {
 	printf("SSL_connect error %d\n", sts);
 	session = SSL_get_session(tls_conn);
 	if (session) {
@@ -514,7 +514,7 @@ int tls_start_clienttls(int *layer, char **authid)
     }
 
     /*
-     * Lets see, whether a peer certificate is availabe and what is
+     * Lets see, whether a peer certificate is available and what is
      * the actual information. We want to save it for later use.
      */
     peer = SSL_get_peer_certificate(tls_conn);
@@ -742,10 +742,12 @@ static int auth_login(void)
   interaction(SASL_CB_AUTHNAME,"Authname",&username,&userlen);
   interaction(SASL_CB_PASS,"Password",&pass,&passlen);
 
+  printf("C: %sLOGIN %s {%d}\r\n", tag, username, passlen);
   prot_printf(pout,"%sLOGIN %s {%d}\r\n", tag, username, passlen);
   prot_flush(pout);
 
   waitfor("+");
+  printf("C: <omitted>\r\n");
   prot_printf(pout,"%s\r\n",pass);
   prot_flush(pout);
 
