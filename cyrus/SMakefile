@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.68 2001/05/21 20:04:34 leg Exp $
+# $Id: SMakefile,v 1.69 2001/05/21 20:05:12 leg Exp $
 #
 
 if test ! -x configure; then
@@ -97,12 +97,12 @@ case `uname` in
 #      LDFLAGS="${LDFLAGS} -xs -xO3 -xdepend"
 
 # Standard build
-#        CC=gcc
-#        CFLAGS="${CFLAGS} -g -O3 -Wall"
+	CC=gcc
+	CFLAGS="${CFLAGS} -g -O3 -Wall"
 
 # Insure++ from parasoft
-	CC="insure"
-        CFLAGS="${CFLAGS} -g"
+#	CC="insure"
+#       CFLAGS="${CFLAGS} -g"
 
         LDFLAGS="${LDFLAGS} -L/usr/local/lib -Wl,-R,/usr/local/lib"
 	LIBS="-lkstat"
