@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.9 2002/01/22 22:31:52 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.10 2002/01/24 22:42:03 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -75,26 +75,6 @@
 #include "exitcodes.h"
 
 const char service_name[] = "mupdate";
-
-/* We're only going to supply SASL_CB_USER, other people can supply
- * more if they feel like it */
-/* FIXME: this basically means we only get kerberos.  should be fixed */
-static int get_user(void *context __attribute__((unused)), int id,
-		    const char **result, unsigned *len) 
-{
-    if(id != SASL_CB_USER) return SASL_FAIL;
-    if(!result) return SASL_BADPARAM;
-
-    *result = "";
-    if(len) *len = 0;
-    
-    return SASL_OK;
-}
-
-static const sasl_callback_t callbacks[] = {
-  { SASL_CB_USER, get_user, NULL }, 
-  { SASL_CB_LIST_END, NULL, NULL }
-};
 
 static sasl_security_properties_t *make_secprops(int min, int max)
 {
@@ -286,17 +266,25 @@ int mupdate_connect(const char *server, const char *port,
 	addr.sin_port = htons(2004);
     }
 
+    h = xzmalloc(sizeof(mupdate_handle));
+    *handle = h;
+    h->sock = s;
+
     if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
 	return errno;
     }
 
-    h = xzmalloc(sizeof(mupdate_handle));
-    h->sock = s;
+    if(!cbs) {
+	cbs = mysasl_callbacks(config_getstring("mupdate_username",""),
+			       config_getstring("mupdate_authname",NULL),
+			       config_getstring("mupdate_realm",NULL),
+			       config_getstring("mupdate_password",NULL));
+    }
 
     saslresult = sasl_client_new(service_name,
 				 server,
 				 NULL, NULL,
-				 cbs ? cbs : callbacks,
+				 cbs,
 				 0,
 				 &(h->saslconn));
 
@@ -306,8 +294,6 @@ int mupdate_connect(const char *server, const char *port,
 
     prot_setflushonread(h->pin, h->pout);
     prot_settimeout(h->pin, 30*60);
-
-    *handle = h;
 
     /* Read the banner */
     if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {

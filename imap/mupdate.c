@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.28 2002/01/24 21:03:22 rjs3 Exp $
+ * $Id: mupdate.c,v 1.29 2002/01/24 22:42:03 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -114,6 +114,10 @@ struct conn {
 
     struct conn *next;
 };
+
+int ready_for_connections = 0;
+pthread_cond_t ready_for_connections_cond = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t ready_for_connections_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 pthread_mutex_t connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct conn *connlist;
@@ -348,6 +352,8 @@ int service_init(int argc, char **argv, char **envp)
 	    syslog(LOG_ERR, "could not start client thread");
 	    return EC_SOFTWARE;
 	}
+    } else {
+	mupdate_ready();
     }
 
     return 0;
@@ -473,7 +479,8 @@ void cmdloop(struct conn *c)
 		CHECKNEWLINE(c, ch);
 
 		if (c->streaming) goto notwhenstreaming;
-		
+		if (!masterp) goto masteronly;
+
 		cmd_set(c, tag.s, arg1.s, arg2.s, arg3.s, SET_ACTIVE);
 	    }
 	    else goto badcmd;
@@ -487,7 +494,8 @@ void cmdloop(struct conn *c)
 		CHECKNEWLINE(c, ch);
 
 		if (c->streaming) goto notwhenstreaming;
-		
+		if (!masterp) goto masteronly;
+
 		cmd_set(c, tag.s, arg1.s, NULL, NULL, SET_DELETE);
 	    }
 	    else goto badcmd;
@@ -536,6 +544,7 @@ void cmdloop(struct conn *c)
 		CHECKNEWLINE(c, ch);
 
 		if (c->streaming) goto notwhenstreaming;
+		if (!masterp) goto masteronly;
 		
 		cmd_set(c, tag.s, arg1.s, arg2.s, NULL, SET_RESERVE);
 	    }
@@ -573,6 +582,12 @@ void cmdloop(struct conn *c)
 	    prot_printf(c->pout, "%s BAD \"not legal when streaming\"\r\n",
 			tag.s);
 	    continue;
+
+	masteronly:
+	    prot_printf(c->pout,
+			"%s BAD \"read-only session\"\r\n",
+			tag.s);
+	    continue;
 	}
 
 	continue;
@@ -607,6 +622,16 @@ void *start(void *rock)
     char localip[60], remoteip[60];
     char clienthost[250];
     struct hostent *hp;
+
+    if(!ready_for_connections) {
+	pthread_mutex_lock(&ready_for_connections_mutex);
+	/* did we get ready while getting this mutex? */
+	while(!ready_for_connections) {
+	    pthread_cond_wait(&ready_for_connections_cond,
+			      &ready_for_connections_mutex);
+	}
+	pthread_mutex_unlock(&ready_for_connections_mutex);
+    }
 
     c->pin = prot_new(c->fd, 0);
     c->pout = prot_new(c->fd, 1);
@@ -934,7 +959,6 @@ void cmd_set(struct conn *C,
     /* post pending changes */
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
 	/* for each connection, add to pending list */
-
 	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
 	strcpy(p->mailbox, mailbox);
 	p->t = t;
@@ -1135,7 +1159,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
     enum settype t = -1;
     int ret = 0;
 
-    if(!mdata || !rock) return 1;
+    if(!mdata || !rock || !mdata->mailbox) return 1;
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
@@ -1154,11 +1178,6 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	/* write to disk */
 	database_log(m);
     } else {
-	if(!mdata->mailbox) {
-	    ret = 1;
-	    goto done;
-	}
-
 	m = database_lookup(mdata->mailbox);
 	
 	if (m && (!mdata->acl || strlen(mdata->acl) < strlen(m->acl))) {
@@ -1208,7 +1227,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    
 	    /* write to disk */
 	    database_log(newm);
-	    free(newm);
+
+	    /* Bring it back into scope */
+	    m = newm;
 	}
     }
     
@@ -1328,6 +1349,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    p = p_next;
 	}
 	
+	pthread_mutex_unlock(&mailboxes_mutex);
 	return 1;
     }
 
@@ -1405,4 +1427,17 @@ int mupdate_synchronize(mupdate_handle *handle)
     syslog(LOG_NOTICE, "mailbox list synchronization complete");
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
     return 0;
+}
+
+void mupdate_ready(void) 
+{
+    if(ready_for_connections) {
+	syslog(LOG_ERR, "mupdate_ready called twice!");
+	fatal("mupdate_ready called twice", EC_TEMPFAIL);
+    }
+
+    pthread_mutex_lock(&ready_for_connections_mutex);
+    ready_for_connections = 1;
+    pthread_cond_broadcast(&ready_for_connections_cond);
+    pthread_mutex_unlock(&ready_for_connections_mutex);
 }

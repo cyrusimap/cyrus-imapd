@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.3 2002/01/24 21:03:22 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.4 2002/01/24 22:42:03 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -87,6 +87,9 @@ void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     /* First, resync the database */
     if(mupdate_synchronize(handle)) return;
 
+    /* Okay, we're all set to go */
+    mupdate_ready();
+
     /* Now just listen to the rest of the updates */
     while(1) {
 	struct timeval tv;
@@ -137,7 +140,7 @@ void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 void *mupdate_client_start(void *rock __attribute__((unused)))
 {
     const char *server, *port, *num;
-    mupdate_handle *h;
+    mupdate_handle *h = NULL;
     int connection_count = 0;
     int retries = 15;
     int retry_delay = 20;
@@ -181,10 +184,10 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 
     retry:
 	/* Cleanup */
-	prot_free(h->pin);
-	prot_free(h->pout);
+	if(h && h->pin) prot_free(h->pin);
+	if(h && h->pout) prot_free(h->pout);
 	close(h->sock);
-	sasl_dispose(&h->saslconn);
+	if(h->saslconn) sasl_dispose(&h->saslconn);
 	free(h); h = NULL;
 	
 	/* Should we retry? */
