@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.14 2004/02/14 21:13:03 cg2v Exp $
+dnl $Id: berkdb.m4,v 1.15 2004/03/16 21:58:21 rjs3 Exp $
 
 AC_DEFUN([CMU_DB_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -202,10 +202,10 @@ dnl this is unbelievably painful due to confusion over what db-3 should be
 dnl named and where the db-3 header file is located.  arg.
 AC_DEFUN([CYRUS_BERKELEY_DB_CHK_LIB],
 [
-	BDB_SAVE_LIBS=$LIBS
+	BDB_SAVE_LDFLAGS=$LDFLAGS
 
 	if test -d $with_bdb_lib; then
-	    CMU_ADD_LIBPATH_TO($with_bdb_lib, LIBS)
+	    CMU_ADD_LIBPATH_TO($with_bdb_lib, LDFLAGS)
 	    CMU_ADD_LIBPATH_TO($with_bdb_lib, BDB_LIBADD)
 	else
 	    BDB_LIBADD=""
@@ -222,7 +222,7 @@ AC_DEFUN([CYRUS_BERKELEY_DB_CHK_LIB],
             dblib="no")
         fi
 
-	LIBS=$BDB_SAVE_LIBS
+	LDFLAGS=$BDB_SAVE_LDFLAGS
 ])
 
 AC_DEFUN([CYRUS_BERKELEY_DB_OPTS],
