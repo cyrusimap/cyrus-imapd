@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.50 2001/09/25 16:49:50 ken3 Exp $
+ * $Id: imapd.h,v 1.51 2002/03/06 20:49:03 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -223,6 +223,13 @@ enum {
     LIST_SUBSCRIBED =		(1<<2),
     LIST_CHILDREN =		(1<<3),
     LIST_REMOTE =		(1<<4)
+};
+
+/* List of attrib-value pairs */
+struct attvaluelist {
+    char *attrib;
+    char *value;
+    struct attvaluelist *next;
 };
 
 extern struct protstream *imapd_out, *imapd_in;

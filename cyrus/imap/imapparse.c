@@ -111,6 +111,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    return EOF;
 	    break;
 
+	case IMAP_QSTRING:	 /* quoted-string */
 	case IMAP_STRING:	 /* quoted-string or literal */
 	    /*
 	     * Nothing to do here - fall through.
@@ -144,6 +145,13 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    buf->s[len++] = c;
 	}
     case '{':
+	if (type == IMAP_QSTRING) {
+	    /* Invalid starting character */
+	    buf->s[0] = '\0';
+	    if (c != EOF) prot_ungetc(c, pin);
+	    return EOF;
+	}
+
 	/* Literal */
 	isnowait = 0;
 	buf->s[0] = '\0';

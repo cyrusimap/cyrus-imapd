@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.344 2002/02/27 04:34:22 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.345 2002/03/06 20:49:02 ken3 Exp $ */
 
 #include <config.h>
 
@@ -85,6 +85,7 @@
 #include "idle.h"
 #include "telemetry.h"
 #include "user.h"
+#include "annotate.h"
 
 #include "pushstats.h"		/* SNMP interface */
 
@@ -170,15 +171,8 @@ void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
 
 void cmd_id(char* tag);
-struct idparamlist {
-    char *field;
-    char *value;
-    struct idparamlist *next;
-};
 extern void id_getcmdline(int argc, char **argv);
 extern void id_response(struct protstream *pout);
-void id_appendparamlist(struct idparamlist **l, char *field, char *value);
-void id_freeparamlist(struct idparamlist *l);
 
 void cmd_idle(char* tag);
 void idle_update(idle_flags_t flags);
@@ -188,6 +182,17 @@ void cmd_starttls(char *tag, int imaps);
 #ifdef ENABLE_X_NETSCAPE_HACK
 void cmd_netscrape(char* tag);
 #endif
+
+#ifdef ENABLE_ANNOTATEMORE
+void cmd_getannotation(char* tag);
+void cmd_setannotation(char* tag);
+
+int getannotatefetchdata(char *tag,
+			 struct strlist **entries, struct strlist **attribs);
+int getannotatestoredata(char *tag, struct entryattlist **entryatts);
+
+void annotate_response(struct entryattlist *l);
+#endif /* ENABLE_ANNOTATEMORE */
 
 #ifdef ENABLE_LISTEXT
 int getlistopts(char *tag, int *listopts);
@@ -214,6 +219,8 @@ void appendsearchargs(struct searchargs *s, struct searchargs *s1,
 			 struct searchargs *s2);
 void freesearchargs(struct searchargs *s);
 static void freesortcrit(struct sortcrit *s);
+void appendattvalue(struct attvaluelist **l, char *attrib, char *value);
+void freeattvalues(struct attvaluelist *l);
 
 static int mailboxdata(char *name, int matchlen, int maycreate, void *rock);
 static int listdata(char *name, int matchlen, int maycreate, void *rock);
@@ -954,6 +961,15 @@ cmdloop()
 
 		snmp_increment(GETACL_COUNT, 1);
 	    }
+#ifdef ENABLE_ANNOTATEMORE
+	    else if (!strcmp(cmd.s, "Getannotation")) {
+		if (c != ' ') goto missingargs;
+
+		cmd_getannotation(tag.s);
+
+		snmp_increment(GETANNOTATION_COUNT, 1);
+	    }
+#endif
 	    else if (!strcmp(cmd.s, "Getquota")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
@@ -1290,6 +1306,15 @@ cmdloop()
 
 		snmp_increment(SETACL_COUNT, 1);
 	    }
+#ifdef ENABLE_ANNOTATEMORE
+	    else if (!strcmp(cmd.s, "Setannotation")) {
+		if (c != ' ') goto missingargs;
+
+		cmd_setannotation(tag.s);
+
+		snmp_increment(SETANNOTATION_COUNT, 1);
+	    }
+#endif
 	    else if (!strcmp(cmd.s, "Setquota")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
@@ -1751,7 +1776,7 @@ void cmd_id(char *tag)
     int error = 0;
     int c = EOF, npair = 0;
     static struct buf arg, field;
-    struct idparamlist *params = 0;
+    struct attvaluelist *params = 0;
 
     /* check if we've already had an ID in non-authenticated state */
     if (!imapd_userid && did_id) {
@@ -1832,13 +1857,13 @@ void cmd_id(char *tag)
 	    }
 	    
 	    /* ok, we're happy enough */
-	    id_appendparamlist(&params, field.s, arg.s);
+	    appendattvalue(&params, field.s, arg.s);
 	}
 
 	if (error || c != ')') {
 	    /* erp! */
 	    eatline(imapd_in, c);
-	    id_freeparamlist(params);
+	    freeattvalues(params);
 	    failed_id++;
 	    return;
 	}
@@ -1851,7 +1876,7 @@ void cmd_id(char *tag)
 	prot_printf(imapd_out,
 		    "%s BAD Unexpected extra arguments to Id\r\n", tag);
 	eatline(imapd_in, c);
-	id_freeparamlist(params);
+	freeattvalues(params);
 	failed_id++;
 	return;
     }
@@ -1860,12 +1885,12 @@ void cmd_id(char *tag)
        eventually this should be a callback or something. */
     if (npair && logged_id < MAXIDLOG) {
 	char logbuf[MAXIDLOGLEN + 1] = "";
-	struct idparamlist *pptr;
+	struct attvaluelist *pptr;
 
 	for (pptr = params; pptr; pptr = pptr->next) {
 	    /* should we check for and format literals here ??? */
 	    snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
-		     " \"%s\" ", pptr->field);
+		     " \"%s\" ", pptr->attrib);
 	    if (!strcmp(pptr->value, "NIL"))
 		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
 			 "NIL");
@@ -1879,7 +1904,7 @@ void cmd_id(char *tag)
 	logged_id++;
     }
 
-    id_freeparamlist(params);
+    freeattvalues(params);
 
     /* spit out our ID string.
        eventually this might be configurable. */
@@ -1898,30 +1923,30 @@ void cmd_id(char *tag)
 }
 
 /*
- * Append the 'field'/'value' pair to the paramlist 'l'.
+ * Append the 'attrib'/'value' pair to the attvaluelist 'l'.
  */
-void id_appendparamlist(struct idparamlist **l, char *field, char *value)
+void appendattvalue(struct attvaluelist **l, char *attrib, char *value)
 {
-    struct idparamlist **tail = l;
+    struct attvaluelist **tail = l;
 
     while (*tail) tail = &(*tail)->next;
 
-    *tail = (struct idparamlist *)xmalloc(sizeof(struct idparamlist));
-    (*tail)->field = xstrdup(field);
+    *tail = (struct attvaluelist *)xmalloc(sizeof(struct attvaluelist));
+    (*tail)->attrib = xstrdup(attrib);
     (*tail)->value = xstrdup(value);
     (*tail)->next = 0;
 }
 
 /*
- * Free the idparamlist 'l'
+ * Free the attvaluelist 'l'
  */
-void id_freeparamlist(struct idparamlist *l)
+void freeattvalues(struct attvaluelist *l)
 {
-    struct idparamlist *n;
+    struct attvaluelist *n;
 
     while (l) {
 	n = l->next;
-	free(l->field);
+	free(l->attrib);
 	free(l->value);
 	l = n;
     }
@@ -2003,6 +2028,10 @@ void cmd_capability(char *tag)
 #ifdef ENABLE_LISTEXT
     prot_printf(imapd_out, " LISTEXT LIST-SUBSCRIBED");
 #endif /* ENABLE_LISTEXT */
+
+#ifdef ENABLE_ANNOTATEMORE
+    prot_printf(imapd_out, " ANNOTATEMORE");
+#endif
 
     if (idle_enabled()) {
 	prot_printf(imapd_out, " IDLE");
@@ -4567,6 +4596,325 @@ void cmd_namespace(tag)
 		error_message(IMAP_OK_COMPLETED));
 }
 
+#ifdef ENABLE_ANNOTATEMORE
+/*
+ * Parse annotate fetch data.
+ *
+ * This is a generic routine which parses just the annotation data.
+ * Any surrounding command text must be parsed elsewhere, ie,
+ * GETANNOTATION, FETCH.
+ */
+
+int getannotatefetchdata(char *tag,
+			 struct strlist **entries, struct strlist **attribs)
+{
+    int c;
+    static struct buf arg;
+
+    *entries = *attribs = NULL;
+
+    c = prot_getc(imapd_in);
+    if (c == EOF) {
+	prot_printf(imapd_out,
+		    "%s BAD Missing annotation entry\r\n", tag);
+	goto baddata;
+    }
+    else if (c == '(') {
+	/* entry list */
+	do {
+	    c = getqstring(imapd_in, imapd_out, &arg);
+	    if (c == EOF) {
+		prot_printf(imapd_out,
+			    "%s BAD Missing annotation entry\r\n", tag);
+		goto baddata;
+	    }
+
+	    /* add the entry to the list */
+	    appendstrlist(entries, arg.s);
+
+	} while (c == ' ');
+
+	if (c != ')') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing close paren in annotation entry list \r\n",
+			tag);
+	    goto baddata;
+	}
+
+	c = prot_getc(imapd_in);
+    }
+    else {
+	/* single entry -- add it to the list */
+	prot_ungetc(c, imapd_in);
+	c = getqstring(imapd_in, imapd_out, &arg);
+	if (c == EOF) {
+	    prot_printf(imapd_out,
+			"%s BAD Missing annotation entry\r\n", tag);
+	    goto baddata;
+	}
+
+	appendstrlist(entries, arg.s);
+    }
+
+    if (c != ' ' || (c = prot_getc(imapd_in)) == EOF) {
+	prot_printf(imapd_out,
+		    "%s BAD Missing annotation attribute(s)\r\n", tag);
+	goto baddata;
+    }
+
+    if (c == '(') {
+	/* attrib list */
+	do {
+	    c = getnstring(imapd_in, imapd_out, &arg);
+	    if (c == EOF) {
+		prot_printf(imapd_out,
+			    "%s BAD Missing annotation attribute(s)\r\n", tag);
+		goto baddata;
+	    }
+
+	    /* add the attrib to the list */
+	    appendstrlist(attribs, arg.s);
+
+	} while (c == ' ');
+
+	if (c != ')') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing close paren in "
+			"annotation attribute list\r\n", tag);
+	    goto baddata;
+	}
+
+	c = prot_getc(imapd_in);
+    }
+    else {
+	/* single attrib */
+	prot_ungetc(c, imapd_in);
+	c = getqstring(imapd_in, imapd_out, &arg);
+	    if (c == EOF) {
+		prot_printf(imapd_out,
+			    "%s BAD Missing annotation attribute\r\n", tag);
+		goto baddata;
+	    }
+
+	appendstrlist(attribs, arg.s);
+   }
+
+    return c;
+
+  baddata:
+    if (c != EOF) prot_ungetc(c, imapd_in);
+    return EOF;
+}
+
+/*
+ * Parse annotate store data.
+ *
+ * This is a generic routine which parses just the annotation data.
+ * Any surrounding command text must be parsed elsewhere, ie,
+ * SETANNOTATION, STORE, APPEND.
+ */
+
+int getannotatestoredata(char *tag, struct entryattlist **entryatts)
+{
+    int c;
+    static struct buf entry, attrib, value;
+    struct attvaluelist *attvalues = NULL;
+
+    *entryatts = NULL;
+
+    do {
+	/* get entry */
+	c = getqstring(imapd_in, imapd_out, &entry);
+	if (c == EOF) {
+	    prot_printf(imapd_out,
+			"%s BAD Missing annotation entry\r\n", tag);
+	    goto baddata;
+	}
+
+	/* parse att-value list */
+	if (c != ' ' || (c = prot_getc(imapd_in)) != '(') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing annotation attribute-values list\r\n",
+			tag);
+	    goto baddata;
+	}
+
+	do {
+	    /* get attrib */
+	    c = getqstring(imapd_in, imapd_out, &attrib);
+	    if (c == EOF) {
+		prot_printf(imapd_out,
+			    "%s BAD Missing annotation attribute\r\n", tag);
+		goto baddata;
+	    }
+
+	    /* get value */
+	    if (c != ' ' ||
+		(c = getnstring(imapd_in, imapd_out, &value)) == EOF) {
+		prot_printf(imapd_out,
+			    "%s BAD Missing annotation value\r\n", tag);
+		goto baddata;
+	    }
+
+	    /* add the attrib-value pair to the list */
+	    appendattvalue(&attvalues, attrib.s, value.s);
+
+	} while (c == ' ');
+
+	if (c != ')') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing close paren in annotation "
+			"attribute-values list\r\n", tag);
+	    goto baddata;
+	}
+
+	/* add the entry to the list */
+	appendentryatt(entryatts, entry.s, attvalues);
+	attvalues = NULL;
+
+	c = prot_getc(imapd_in);
+
+    } while (c == ' ');
+
+    return c;
+
+  baddata:
+    if (attvalues) freeattvalues(attvalues);
+    if (c != EOF) prot_ungetc(c, imapd_in);
+    return EOF;
+}
+
+/*
+ * Output an entry/attribute-value list response.
+ *
+ * This is a generic routine which outputs just the annotation data.
+ * Any surrounding response text must be output elsewhere, ie,
+ * GETANNOTATION, FETCH. 
+ */
+void annotate_response(struct entryattlist *l)
+{
+    int islist; /* do we have more than one entry? */
+
+    if (!l) return;
+
+    islist = (l->next != NULL);
+
+    while (l) {
+	if (islist) prot_printf(imapd_out, "(");
+	prot_printf(imapd_out, "\"%s\"", l->entry);
+
+	/* do we have attributes?  solicited vs. unsolicited */
+	if (l->attvalues) {
+	    struct attvaluelist *av = l->attvalues;
+
+	    prot_printf(imapd_out, " (");
+	    while (av) {
+		prot_printf(imapd_out, "\"%s\" ", av->attrib);
+		if (!strcasecmp(av->value, "NIL"))
+		    prot_printf(imapd_out, "NIL");
+		else
+		    prot_printf(imapd_out, "\"%s\"", av->value);
+
+		if ((av = av->next) == NULL)
+		    prot_printf(imapd_out, ")");
+		else
+		    prot_printf(imapd_out, " ");
+	    }
+	}
+	if (islist) prot_printf(imapd_out, ")");
+
+	if ((l = l->next) != NULL)
+	    prot_printf(imapd_out, " ");
+    }
+}
+
+/*
+ * Perform a GETANNOTATION command
+ *
+ * The command has been parsed up to the entries
+ */    
+void cmd_getannotation(char *tag)
+{
+    int c, r = 0;
+    struct strlist *entries = NULL, *attribs = NULL;
+    struct entryattlist *entryatts = NULL;
+
+    c = getannotatefetchdata(tag, &entries, &attribs);
+    if (c == EOF) {
+	eatline(imapd_in, c);
+	return;
+    }
+
+
+    /* check for CRLF */
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected extra arguments to Getannotation\r\n",
+		    tag);
+	eatline(imapd_in, c);
+	goto freeargs;
+    }
+
+    r = annotatemore_fetch(entries, attribs, &imapd_namespace,
+			   imapd_userisadmin, imapd_userid,
+			   imapd_authstate, &entryatts);
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    }
+    else if (entryatts) {
+	prot_printf(imapd_out, "* ANNOTATION ");
+	annotate_response(entryatts);
+	prot_printf(imapd_out, "\r\n");
+	prot_printf(imapd_out, "%s OK %s\r\n",
+		    tag, error_message(IMAP_OK_COMPLETED));
+    }
+    else
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+		    error_message(IMAP_NO_NOSUCHANNOTATION));
+
+  freeargs:
+    if (entries) freestrlist(entries);
+    if (attribs) freestrlist(attribs);
+    if (entryatts) freeentryatts(entryatts);
+
+    return;
+}
+
+/*
+ * Perform a SETANNOTATION command
+ *
+ * The command has been parsed up to the entry-att list
+ */    
+void cmd_setannotation(char *tag)
+{
+    int c;
+    struct entryattlist *entryatts = NULL;
+
+    c = getannotatestoredata(tag, &entryatts);
+    if (c == EOF) {
+	eatline(imapd_in, c);
+	return;
+    }
+
+    /* check for CRLF */
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected extra arguments to Setannotation\r\n",
+		    tag);
+	eatline(imapd_in, c);
+	goto freeargs;
+    }
+
+    prot_printf(imapd_out, "%s NO setting annotations not supported\r\n", tag);
+
+  freeargs:
+    if (entryatts) freeentryatts(entryatts);
+    return;
+}
+#endif /* ENABLE_ANNOTATEMORE */
 
 /*
  * Parse a search program
