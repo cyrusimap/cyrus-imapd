@@ -40,26 +40,18 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.20 2002/01/29 18:44:29 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.21 2002/02/28 19:54:17 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
 #define INCLUDED_MBOXLIST_H
 
+#include "config.h"
 #include "cyrusdb.h"
 #include "mailbox.h"
 #include "auth.h"
 #include "mboxname.h"
 
-/* --- cut here --- */
-#ifndef CONFIG_DB_SUBS
-#define CONFIG_DB_SUBS (&cyrusdb_flat)
-#endif
-
-#ifndef CONFIG_DB_MBOX
-#define CONFIG_DB_MBOX (&cyrusdb_db3)
-#endif
-/* -- cut here -- */
 extern struct db *mbdb;
 
 /*

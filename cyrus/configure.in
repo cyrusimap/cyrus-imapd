@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.220 2002/02/22 22:58:32 ken3 Exp $
+dnl $Id: configure.in,v 1.221 2002/02/28 19:54:15 rjs3 Exp $
 dnl
 
 
@@ -143,6 +143,33 @@ if test "$dbfound" = "no"; then
   AC_ERROR([this version requires Berkeley DB 3.x or later.
 (Get it from http://www.sleepycat.com/.)])
 fi
+
+AC_MSG_CHECKING([mboxlist database backend])
+AC_ARG_WITH(mboxlist-db,
+	[  --with-mboxlist-db=DB   use DB (flat, db3, skiplist) as a backend for the mailbox list (Default: db3) ],
+	DB_MBOX="$withval",CONFIG_DB_MBOX="db3")
+if test "$DB_MBOX" != "db3" -a \
+        "$DB_MBOX" != "flat" -a \
+	"$DB_MBOX" != "skiplist"; then
+   AC_ERROR([invalid --with-mboxlist-db value])
+fi
+CONFIG_DB_MBOX="(&cyrusdb_$DB_MBOX)"
+AC_DEFINE_UNQUOTED(CONFIG_DB_MBOX,$CONFIG_DB_MBOX)
+AC_MSG_RESULT($DB_MBOX)
+
+AC_MSG_CHECKING([subscription database backend])
+AC_ARG_WITH(subs-db,
+	[  --with-subs-db=DB       use DB (flat, db3, skiplist) as a backend for the subscriptions list (Default: flat) ],
+	DB_SUBS="$withval", DB_SUBS="flat")
+if test "$DB_SUBS" != "db3" -a \
+        "$DB_SUBS" != "flat" -a \
+	"$DB_SUBS" != "skiplist"; then
+   AC_ERROR([invalid --with-subs-db value])
+fi
+CONFIG_DB_SUBS="(&cyrusdb_$DB_SUBS)"
+AC_DEFINE_UNQUOTED(CONFIG_DB_SUBS,$CONFIG_DB_SUBS)
+AC_MSG_RESULT($DB_SUBS)
+
 
 sievedir="sieve"
 AC_ARG_ENABLE(sieve,
