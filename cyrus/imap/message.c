@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.88.16.10 2003/05/08 20:56:53 ken3 Exp $
+ * $Id: message.c,v 1.88.16.11 2003/06/30 19:21:17 ken3 Exp $
  */
 
 #include <config.h>
@@ -1699,6 +1699,7 @@ char **boundaries;
 int *boundaryct;
 {
     int i, len;
+    int eudora_mime_hack = config_getswitch(IMAPOPT_EUDORA_MIME_HACK);
 
     if (s[0] != '-' || s[1] != '-') return(0);
     s+=2;
@@ -1707,6 +1708,14 @@ int *boundaryct;
 	len = strlen(boundaries[i]);
         if (!strncmp(s, boundaries[i], len)) {
             if (s[len] == '-' && s[len+1] == '-') *boundaryct = i;
+	    else if (eudora_mime_hack && s[len] && !isspace((int) s[len])) {
+		/* Eudora hack: skip substring matches in the boundary
+		 * (supposedly fixed in v5.2).
+		 *
+		 * This breaks compliance with RFC 2046 section 5.1.1
+		 */
+		continue;
+	    }
             return(1);
         }
     }
