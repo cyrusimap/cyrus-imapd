@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.1 2001/10/23 20:17:21 leg Exp $
+ * $Id: mupdate-client.c,v 1.2 2002/01/16 17:56:37 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,23 +40,103 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "xmalloc.h"
+#include <config.h>
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
+#include <signal.h>
+#include <sasl/sasl.h>
+#ifdef __STDC__
+#include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <sys/types.h>
+#include <sys/time.h>
+#include <netinet/in.h>
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
 
-struct mupdate_handle_s {
+#include "prot.h"
+#include "xmalloc.h"
+#include "assert.h"
+#include "mupdate_err.h"
+
+typedef struct mupdate_handle_s {
     int sock;
-    int authed;
+
     struct protstream *pin;
     struct protstream *pout;
+
+    int tag;
+
     sasl_conn_t *saslconn;
+    int saslcompleted;
+} mupdate_handle;
+
+static const sasl_callback_t callbacks[] = {
+  { SASL_CB_USER, NULL, NULL }, 
+  { SASL_CB_GETREALM, NULL, NULL }, 
+  { SASL_CB_AUTHNAME, NULL, NULL }, 
+  { SASL_CB_PASS, NULL, NULL },
+  { SASL_CB_LIST_END, NULL, NULL }
 };
 
-int mupdate_connect(const char *server, mupdate_handle **handle)
+int mupdate_connect(const char *server, const char *port, mupdate_handle **handle)
 {
-    mupdate_handle *h = xzmalloc(sizeof(mupdate_handle));
+    mupdate_handle *h;
+    struct hostent *hp;
+    struct servent *sp;
+    struct sockaddr_in addr;
+    int s, saslresult;
+    
+    if(!server || !handle)
+	return MUPDATE_BADPARAM;
 
     /* open connection to 'server' */
+    hp = gethostbyname(server);
+    if(!hp) return -2;
+    
+    s = socket(AF_INET, SOCK_STREAM, 0);
+    if(s == -1) return errno;
+    
+    addr.sin_family = AF_INET;
+    memcpy(&addr.sin_addr, hp->h_addr, sizeof(addr.sin_addr));
+
+    if (port && imparse_isnumber(port)) {
+	addr.sin_port = htons(atoi(port));
+    } else if (port) {
+	sp = getservbyname(port, "tcp");
+	if (!sp) return -2;
+	addr.sin_port = sp->s_port;
+    } else {
+	addr.sin_port = htons(1234); /* FIXME: how about a real port number?! */
+    }
+
+    if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+	return errno;
+    }
+
+    h = xzmalloc(sizeof(mupdate_handle));
+    h->sock = s;
+
+    saslresult = sasl_client_new("imap", /* FIXME: real service name? */
+				 server,
+				 NULL, NULL,
+				 callbacks,
+				 0,
+				 &(h->saslconn));
 
     /* create protstream */
+    h->pin=prot_new(h->sock, 0);
+    h->pout=prot_new(h->sock, 1);
+
+    *handle = h;
+    return 0; /* SUCCESS */
 }
 
 
@@ -72,7 +152,7 @@ int mupdate_activate(mupdate_handle *handle,
 {
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox || !server || !acl) return MUPDATE_BADPARAM;
-    if (!handle->authed) return MUPDATE_NOAUTH;
+    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
 
 }
@@ -82,7 +162,7 @@ int mupdate_reserve(mupdate_handle *handle,
 {
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox || !server) return MUPDATE_BADPARAM;
-    if (!handle->authed) return MUPDATE_NOAUTH;
+    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
 
 }
@@ -92,7 +172,7 @@ int mupdate_delete(mupdate_handle *handle,
 {
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox) return MUPDATE_BADPARAM;
-    if (!handle->authed) return MUPDATE_NOAUTH;
+    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
 
 }
@@ -111,9 +191,11 @@ int mupdate_listen(mupdate_handle *handle,
 		   mupdate_callback *noop,
 		   int pinginterval, int pingtimeout)
 {
+    int gotdata = 0;
+
     if (!handle) return MUPDATE_BADPARAM;
     if (pinginterval < 0 || pingtimeout < 0) return MUPDATE_BADPARAM;
-    if (!handle->authed) return MUPDATE_NOAUTH;
+    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     /* ask for updates */
 
@@ -130,6 +212,7 @@ int mupdate_listen(mupdate_handle *handle,
 
 	    continue;
 	} else {
+	    prot_printf(handle->pout, "X%d NOOP\r\n", handle->tag++);
 	    /* timed out, send a NOOP */
 
 	    /* wait 'pingtimeout' seconds for response */

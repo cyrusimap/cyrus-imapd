@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.148 2001/12/12 22:22:29 rjs3 Exp $
+# $Id: Makefile.in,v 1.149 2002/01/16 17:56:36 rjs3 Exp $
 # 
 # @configure_input@
 #
@@ -120,7 +120,7 @@ PROGS = imapd lmtpd pop3d \
 	@IMAP_PROGS@
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
-	lmtpstats.c lmtpstats.h xversion.h
+	lmtpstats.c lmtpstats.h xversion.h mupdate_err.c mupdate_err.h
 
 all: $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
 
@@ -223,7 +223,7 @@ sendmail-map: sendmail-map.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o sendmail-map \
 	 sendmail-map.o libimap.a $(DEPLIBS) $(LIBS)
 
-mupdate: mupdate.o libimap.a $(DEPLIBS)
+mupdate: mupdate.o mupdate-client.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o mupdate \
 	 $(SERVICETHREAD) mupdate.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
 
@@ -273,6 +273,9 @@ libimap.a: $(LOBJS)
 
 imap_err.h imap_err.c: imap_err.et
 	$(COMPILE_ET) $(srcdir)/imap_err.et
+
+mupdate_err.h mupdate_err.c: mupdate_err.et
+	$(COMPILE_ET) $(srcdir)/mupdate_err.et
 
 clean:
 	rm -f *.o *.a Makefile.bak makedepend.log \
