@@ -298,6 +298,12 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : 0);
 	    }
+	    else if (!strcmp(cmd.s, "Close")) {
+		if (!imapd_mailbox) goto nomailbox;
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_close(tag.s);
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -1102,6 +1108,31 @@ char *name;
     syslog(LOG_INFO, "open: user %s opened %s", imapd_userid, name);
 }
 	  
+/*
+ * Perform a CLOSE command
+ */
+cmd_close(tag)
+char *tag;
+{
+    int r;
+
+    if (!(imapd_mailbox->myrights & ACL_DELETE)) r = 0;
+    else {
+	r = mailbox_expunge(imapd_mailbox, 1, (int (*)())0, (char *)0);
+    }
+
+    index_closemailbox(imapd_mailbox);
+    mailbox_close(imapd_mailbox);
+    imapd_mailbox = 0;
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    }
+    else {
+	prot_printf(imapd_out, "%s OK Close completed\r\n", tag);
+    }
+}    
+
 /*
  * Parse and perform a FETCH/UID FETCH command
  * The command has been parsed up to and including
