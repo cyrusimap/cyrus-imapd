@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.162 1999/03/01 20:17:47 tjs Exp $ */
+/* $Id: imapd.c,v 1.163 1999/03/01 21:11:57 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -161,7 +161,7 @@ void printauthready P((int len, unsigned char *data));
 
 /* XXX fix when proto-izing mboxlist.c */
 static int mailboxdata(), listdata(), lsubdata();
-static int mstringdata P((char *cmd, char *name, int matchlen, int maycreate));
+static void mstringdata P((char *cmd, char *name, int matchlen, int maycreate));
 void mboxlist_close P((void));
 
 main(argc, argv, envp)
