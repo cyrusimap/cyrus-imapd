@@ -107,6 +107,24 @@ int fd;
 }
 
 /*
+ * Obtain a shared lock on 'fd'.
+ * Returns 0 for success, -1 for failure, with errno set to an
+ * appropriate error code.
+ */
+int lock_shared(fd)
+int fd;
+{
+    int r;
+
+    for (;;) {
+	r = flock(fd, LOCK_SH);
+	if (r != -1) return 0;
+	if (errno == EINTR) continue;
+	return -1;
+    }
+}
+
+/*
  * Attempt to get an exclusive lock on 'fd' without blocking.
  * Returns 0 for success, -1 for failure, with errno set to an
  * appropriate error code.
