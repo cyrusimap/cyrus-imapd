@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.60 2001/02/19 19:32:06 leg Exp $
+ * $Id: imtest.c,v 1.61 2001/02/28 02:44:32 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1185,6 +1185,11 @@ int main(int argc, char **argv)
   int run_stress_test=0;
   int dotls=0;
   int server_supports_tls;
+
+  /* do not buffer */
+  setbuf(stdin, NULL);
+  setbuf(stdout, NULL);
+  setbuf(stderr, NULL);
 
   /* look at all the extra args */
   while ((c = getopt(argc, argv, "zvk:l:p:u:a:m:f:r:t:")) != EOF)
