@@ -2,8 +2,15 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.44 1999/06/23 02:17:37 leg Exp $
+# $Id: SMakefile,v 1.45 1999/08/14 22:31:38 leg Exp $
 #
+
+if test ! -x configure; then
+  echo aclocal -I cmulocal
+  aclocal -I cmulocal
+  echo autoconf
+  autoconf
+fi
 
 MAKE=gmake
 
