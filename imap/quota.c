@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.38 2001/03/05 22:27:25 leg Exp $ */
+/* $Id: quota.c,v 1.39 2001/07/27 23:36:47 leg Exp $ */
 
 
 #include <config.h>
@@ -174,7 +174,7 @@ void usage(void)
  */
 int compare_quota(const void *a, const void *b)
 {
-    return strcasecmp(((struct quotaentry *)a)->quota.root,
+    return strcmp(((struct quotaentry *)a)->quota.root,
 		      ((struct quotaentry *)b)->quota.root);
 }
 
@@ -211,8 +211,8 @@ int buildquotalist(char **roots, int nroots)
 	    /* If restricting our list, see if this quota file matches */
 	    if (nroots) {
 		for (i = 0; i < nroots; i++) {
-		    if (!strcasecmp(dirent->d_name, roots[i]) ||
-			(!strncasecmp(dirent->d_name, roots[i], strlen(roots[i])) &&
+		    if (!strcmp(dirent->d_name, roots[i]) ||
+			(!strncmp(dirent->d_name, roots[i], strlen(roots[i])) &&
 			 dirent->d_name[strlen(roots[i])] == '.')) break;
 		}
 		if (i == nroots) continue;
@@ -268,7 +268,7 @@ int fixquota_mailbox(char *name,
     int i, len, thisquota, thisquotalen;
 
     while (firstquota < quota_num &&
-	   strncasecmp(name, quota[firstquota].quota.root,
+	   strncmp(name, quota[firstquota].quota.root,
 		       strlen(quota[firstquota].quota.root)) > 0) {
 	r = fixquota_finish(firstquota++);
 	if (r) return r;
@@ -277,9 +277,9 @@ int fixquota_mailbox(char *name,
     thisquota = -1;
     thisquotalen = 0;
     for (i = firstquota;
-	 i < quota_num && strcasecmp(name, quota[i].quota.root) >= 0; i++) {
+	 i < quota_num && strcmp(name, quota[i].quota.root) >= 0; i++) {
 	len = strlen(quota[i].quota.root);
-	if (!strncasecmp(name, quota[i].quota.root, len) &&
+	if (!strncmp(name, quota[i].quota.root, len) &&
 	    (!name[len] || name[len] == '.')) {
 	    quota[i].refcount++;
 	    if (len > thisquotalen) {
