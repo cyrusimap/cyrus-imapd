@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.14 2000/12/20 21:33:15 leg Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.15 2001/01/31 19:15:00 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -9,9 +9,13 @@
 
 <body>
 
-<h3>Upgrading from 2.0.6, 2.0.7, or 2.0.8</h3>
+<h3>Upgrading from 2.0.6, 2.0.7, 2.0.8, or 2.0.9 or earlier</h3>
 
-nothing known.
+<ul>
+<li> If you use <tt>timsieved</tt> to manage Sieve scripts, run the
+script "<tt>tools/upgradesieve</tt>".  <tt>timsieved</tt> now uses
+symlinks instead of hard links.
+</ul>
 
 <h3>Upgrading from a previous 2.0 version to 2.0.6</h3>
 
@@ -162,7 +166,7 @@ worry about it.)
 </ul>
 
 <P><HR><P>
-last modified: $Date: 2000/12/20 21:33:15 $
+last modified: $Date: 2001/01/31 19:15:00 $
 </BODY></HTML>
 
 
