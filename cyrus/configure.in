@@ -15,6 +15,9 @@ AC_SUBST(cyrus_user)
 AC_ARG_WITH(cyrus-group,[  --with-cyrus-group=GROUPID use GROUPID cyrus group],
 	cyrus_group="$withval",cyrus_group="mail")
 AC_SUBST(cyrus_group)
+AC_ARG_WITH(statedir,[  --with-statedir=DIR        use DIR as state directory],
+	statedir="$withval",statedir="/var")
+AC_DEFINE_UNQUOTED(STATEDIR,"$statedir")
 AC_PROG_CC
 AC_PROG_RANLIB
 AC_PROG_MAKE_SET
@@ -35,6 +38,7 @@ AC_SUBST(PRE_SUBDIRS)
 AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
 AC_FUNC_VPRINTF
+
 dnl for et routines
 AC_FUNC_CHECK(strerror,AC_DEFINE(HAS_STRERROR),AC_DEFINE(NEED_SYS_ERRLIST))
 
