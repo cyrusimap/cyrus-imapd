@@ -85,6 +85,8 @@ C,mtaSuccessfulConvertedMessages,"Messages converted because of 8bit foo",10
 # Sieve stats
 #
 
+BASE [cmutree].7.4
+
 C,SIEVE_MESSAGES_PROCESSED,"Number of messages processed by Sieve scripts",auto
 
 C,SIEVE_REDIRECT        ,"sieve redirects",auto
