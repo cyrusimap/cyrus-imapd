@@ -72,14 +72,16 @@ sub new {
   # Figure out if the remote supports MAILBOX-REFERRALS
   # This is sort of annoying that authenticate also issues a CAPABILITY
   # but the API makes it difficult to get at the results of that command.
-  $self->{support_referrals} = 0;
-  $self->addcallback({-trigger => 'CAPABILITY',
-		      -callback => sub {my %a = @_;
-					map { $self->{support_referrals} = 1
-					       if /^MAILBOX-REFERRALS$/i}
-					split(/ /, $a{-text})}});
-  $self->send(undef, undef, 'CAPABILITY');
-  $self->addcallback({-trigger => 'CAPABILITY'});
+  if(defined($self)) {
+    $self->{support_referrals} = 0;
+    $self->addcallback({-trigger => 'CAPABILITY',
+			-callback => sub {my %a = @_;
+					  map { $self->{support_referrals} = 1
+						  if /^MAILBOX-REFERRALS$/i}
+					  split(/ /, $a{-text})}});
+    $self->send(undef, undef, 'CAPABILITY');
+    $self->addcallback({-trigger => 'CAPABILITY'});
+  }
 
   $self;
 }
