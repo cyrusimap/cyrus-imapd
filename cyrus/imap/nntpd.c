@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.30 2004/09/09 18:47:07 shadow Exp $
+ * $Id: nntpd.c,v 1.2.2.31 2004/12/04 23:29:55 ken3 Exp $
  */
 
 /*
@@ -159,12 +159,11 @@ struct stagemsg *stage = NULL;
 
 /* Bitmasks for NNTP modes */
 enum {
-    MODE_READ =		(1<<0),
-    MODE_FEED =		(1<<1),
-    MODE_STREAM =	(1<<2)
+    MODE_READ =	(1<<0),
+    MODE_FEED =	(1<<1)
 };
 
-static unsigned nntp_capa = MODE_READ | MODE_FEED | MODE_STREAM;
+static unsigned nntp_capa = MODE_READ | MODE_FEED; /* general-purpose */
 
 static int nntps = 0;
 int nntp_starttls_done = 0;
@@ -479,11 +478,11 @@ int service_init(int argc __attribute__((unused)),
 	    break;
 
 	case 'r': /* enter reader-only mode */
-	    nntp_capa &= MODE_READ;
+	    nntp_capa = MODE_READ;
 	    break;
 
 	case 'f': /* enter feeder-only mode */
-	    nntp_capa &= ~MODE_READ;
+	    nntp_capa = MODE_FEED;
 	    break;
 
 	default:
@@ -803,11 +802,9 @@ static void cmdloop(void)
 	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
 	}
 
-	/* Check/Takethis only allowed for streamers */
-	if (!(nntp_capa & MODE_STREAM) && strchr("CT", cmd.s[0])) goto noperm;
-    
-	/* Ihave only allowed for feeders */
-	if (!(nntp_capa & MODE_FEED) && cmd.s[0] == 'I') goto noperm;
+	/* Ihave/Check/Takethis only allowed for feeders */
+	if (!(nntp_capa & MODE_FEED) &&
+	    strchr("ICT", cmd.s[0])) goto noperm;
     
 	/* Body/Date/Group/Newgroups/Newnews/Next/Over/Post/Xhdr/Xover
 	   only allowed for readers */
@@ -2176,7 +2173,7 @@ static void cmd_help(void)
     if (tls_enabled() && !nntp_starttls_done)
 	prot_printf(nntp_out, "\tSTARTTLS\r\n");
 
-    /* reader-only commands */
+    /* reader commands */
     if (nntp_capa & MODE_READ) {
 	prot_printf(nntp_out, "\tARTICLE\r\n");
 	prot_printf(nntp_out, "\tBODY\r\n");
@@ -2194,11 +2191,9 @@ static void cmd_help(void)
 	prot_printf(nntp_out, "\tXPAT\r\n");
     }
 
-    /* feeder-only commands */
-    if (nntp_capa & MODE_FEED) prot_printf(nntp_out, "\tIHAVE\r\n");
-
-    /* streaming-only commands */
-    if (nntp_capa & MODE_STREAM) {
+    /* feeder commands */
+    if (nntp_capa & MODE_FEED) {
+	prot_printf(nntp_out, "\tIHAVE\r\n");
 	prot_printf(nntp_out, "\tCHECK\r\n");
 	prot_printf(nntp_out, "\tTAKETHIS\r\n");
     }
@@ -2214,7 +2209,7 @@ static void cmd_help(void)
 
     prot_printf(nntp_out, "\tMODE");
     if (nntp_capa & MODE_READ) prot_printf(nntp_out, " READER");
-    if (nntp_capa & MODE_STREAM) {
+    if (nntp_capa & MODE_FEED) {
 	prot_printf(nntp_out, "%s STREAM",
 		    (nntp_capa & MODE_READ) ? " |" : "");
     }
@@ -2464,6 +2459,9 @@ static void cmd_list(char *arg1, char *arg2)
 		     config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
 		    " USER" : "", mechlist);
 
+	if (tls_enabled() && !nntp_starttls_done && !nntp_authstate)
+	    prot_printf(nntp_out, "STARTTLS\r\n");
+
 	if ((nntp_capa & MODE_READ) &&
 	    (nntp_userid || allowanonymous)) {
 	    prot_printf(nntp_out, "HDR\r\n");
@@ -2471,10 +2469,7 @@ static void cmd_list(char *arg1, char *arg2)
 	    prot_printf(nntp_out, "OVER\r\n");
 	}
 
-	if (tls_enabled() && !nntp_starttls_done && !nntp_authstate)
-	    prot_printf(nntp_out, "STARTTLS\r\n");
-
-	if (nntp_capa & MODE_STREAM) {
+	if (nntp_capa & MODE_FEED) {
 	    prot_printf(nntp_out, "STREAMING\r\n");
 	}
 	prot_printf(nntp_out, ".\r\n");
@@ -2589,7 +2584,7 @@ static void cmd_mode(char *arg)
 		    (nntp_capa & MODE_READ) ? "allowed" : "prohibited");
     }
     else if (!strcmp(arg, "stream")) {
-	if (nntp_capa & MODE_STREAM) {
+	if (nntp_capa & MODE_FEED) {
 	    prot_printf(nntp_out, "203 Streaming allowed\r\n");
 	}
 	else {
