@@ -80,7 +80,7 @@ install:
 
 libcyrus.a: $(OBJS)
 	rm -f libcyrus.a
-	$(AR) cr libcyrus.a $(OBJS)
+	ar cr libcyrus.a $(OBJS)
 	$(RANLIB) libcyrus.a
 
 charset.o: chartables.h
