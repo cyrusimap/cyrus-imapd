@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.125 2000/06/09 02:44:51 leg Exp $
+ * $Id: mboxlist.c,v 1.126 2000/06/10 22:51:33 leg Exp $
  */
 
 #include <config.h>
@@ -2933,7 +2933,11 @@ void mboxlist_init(int myflags)
     strcat(dbdir, FNAME_DBDIR);
     flags |= DB_CREATE | DB_INIT_LOCK | DB_INIT_MPOOL | 
 	     DB_INIT_LOG | DB_INIT_TXN;
+#if DB_VERSION_MINOR > 0
+    r = dbenv->open(dbenv, dbdir, flags, 0644); 
+#else
     r = dbenv->open(dbenv, dbdir, NULL, flags, 0644); 
+#endif
     if (r) {
 	char err[1024];
 	    
@@ -2945,7 +2949,11 @@ void mboxlist_init(int myflags)
 
     if (myflags & MBOXLIST_SYNC) {
 	do {
+#if DB_VERSION_MINOR > 0
+	    r = txn_checkpoint(dbenv, 0, 0, 0);
+#else
 	    r = txn_checkpoint(dbenv, 0, 0);
+#endif
 	} while (r == DB_INCOMPLETE);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: couldn't checkpoint: %s",

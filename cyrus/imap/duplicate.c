@@ -132,7 +132,11 @@ int duplicate_init(int myflags)
     
     flags |= DB_INIT_CDB | DB_INIT_MPOOL | DB_CREATE;
     /* create the name of the db file */
+#if (DB_VERSION_MINOR > 0)
+    r = duplicate_dbenv->open(duplicate_dbenv, buf, flags, 0644);
+#else
     r = duplicate_dbenv->open(duplicate_dbenv, buf, NULL, flags, 0644);
+#endif
     if (r) {
 	char err[1024];
 	
