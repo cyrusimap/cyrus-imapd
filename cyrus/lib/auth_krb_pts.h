@@ -27,6 +27,17 @@
  *
  */ 
 
+#ifndef INCLUDED_AUTH_KRB_PTS_H
+#define INCLUDED_AUTH_KRB_PTS_H
+
+#ifndef P
+#ifdef __STDC__
+#define P(x) x
+#else
+#define P(x) ()
+#endif
+#endif
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -62,6 +73,8 @@ typedef struct {
 
 extern int errno;
 
+static int32_t hashfn P((const void *, size_t));
+
 /* Do not make this unsigned. you'll lose! (db won't open the file) */
 static int32_t hashfn(data, size)
 const void *data;
@@ -83,3 +96,4 @@ size_t size;
 }
 
 
+#endif /* INCLUDED_AUTH_KRB_PTS_H */

@@ -452,7 +452,7 @@ const char *cacheid;
         iov[0].iov_len = sizeof(key.size);
         iov[1].iov_base = key.data;
         iov[1].iov_len = key.size;
-        iov[2].iov_base = identifier;
+        iov[2].iov_base = (char *)identifier;
         iov[2].iov_len = PR_MAXNAMELEN;
         retry_writev(s, &iov, 3);
         
