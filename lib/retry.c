@@ -1,5 +1,5 @@
 /* retry.c -- keep trying write system calls
- $Id: retry.c,v 1.13 2002/02/22 22:58:33 ken3 Exp $
+ $Id: retry.c,v 1.14 2002/04/02 03:54:32 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -67,7 +67,12 @@ int retry_read(int fd, void *buf, unsigned nbyte)
 
     for (;;) {
 	n = read(fd, buf, nbyte);
-	if (n == -1 || n == 0) {
+	if (n == 0) {
+	    /* end of file */
+	    return -1;
+	}
+
+	if (n == -1) {
 	    if (errno == EINTR || errno == EAGAIN) continue;
 	    return -1;
 	}
