@@ -22,6 +22,8 @@
  *
  */
 
+#include <time.h>
+
 #define PROT_BUFSIZE 4096
 
 struct protstream {
@@ -33,6 +35,7 @@ struct protstream {
     int fd;
     int write;
     int logfd;
+    time_t *log_timeptr;
     char *(*func)();
     void *state;
     int maxplain;

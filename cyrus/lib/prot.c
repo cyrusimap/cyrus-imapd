@@ -65,6 +65,7 @@ int write;
     newstream->fd = fd;
     newstream->write = write;
     newstream->logfd = -1;
+    newstream->log_timeptr = 0;
     newstream->func = 0;
     newstream->state = 0;
     newstream->error = 0;
@@ -95,6 +96,17 @@ int fd;
     return 0;
 }
 
+/*
+ * Start logging timing information for stream 's'.
+ */
+int prot_setlogtime(s, ptr)
+struct protstream *s;
+time_t *ptr;
+{
+    s->log_timeptr = ptr;
+    time(s->log_timeptr);
+    return 0;
+}
 
 /*
  * Set the protection function for stream 's' to be 'func'.  The opaque
@@ -214,6 +226,16 @@ struct protstream *s;
 	    s->cnt = n-1;
 	    s->ptr = s->buf+1;
 	    if (s->logfd != -1) {
+		time_t newtime;
+		char timebuf[20];
+
+		if (s->log_timeptr) {
+		    time(&newtime);
+		    sprintf(timebuf, "<%d<", newtime - *s->log_timeptr);
+		    write(s->logfd, timebuf, strlen(timebuf));
+		    *s->log_timeptr = newtime;
+		}
+
 		left = s->cnt+1;
 		ptr = s->buf;
 		do {
@@ -256,6 +278,16 @@ struct protstream *s;
     }
 
     if (s->logfd != -1) {
+	time_t newtime;
+	char timebuf[20];
+
+	if (s->log_timeptr) {
+	    time(&newtime);
+	    sprintf(timebuf, "<%d<", newtime - *s->log_timeptr);
+	    write(s->logfd, timebuf, strlen(timebuf));
+	    *s->log_timeptr = newtime;
+	}
+
 	left = s->cnt;
 	ptr = s->ptr;
 	do {
@@ -293,6 +325,15 @@ struct protstream *s;
     if (!left) return 0;
 
     if (s->logfd != -1) {
+	time_t newtime;
+	char timebuf[20];
+
+	if (s->log_timeptr) {
+	    time(&newtime);
+	    sprintf(timebuf, ">%d>", newtime - *s->log_timeptr);
+	    write(s->logfd, timebuf, strlen(timebuf));
+	}
+
 	do {
 	    n = write(s->logfd, ptr, left);
 	    if (n == -1 && errno != EINTR) {
@@ -311,6 +352,7 @@ struct protstream *s;
 	/* Encode the data */
 	if (s->func(s->state, ptr, left, outputbuf+4, &left)) {
 	    s->error = "Encoding error";
+	    if (s->log_timeptr) time(s->log_timeptr);
 	    return EOF;
 	}
 	*(int *)outputbuf = htonl(left);
@@ -323,6 +365,7 @@ struct protstream *s;
 	n = write(s->fd, ptr, left);
 	if (n == -1 && errno != EINTR) {
 	    s->error = sys_errlist[errno];
+	    if (s->log_timeptr) time(s->log_timeptr);
 	    return EOF;
 	}
 	if (n > 0) {
@@ -335,6 +378,7 @@ struct protstream *s;
     s->ptr = s->buf;
     s->cnt = s->maxplain;
 
+    if (s->log_timeptr) time(s->log_timeptr);
     return 0;
 }
 
