@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.252 2000/06/06 00:52:59 leg Exp $ */
+/* $Id: imapd.c,v 1.253 2000/06/07 22:36:20 ken3 Exp $ */
 
 #include <config.h>
 
@@ -526,7 +526,6 @@ void shut_down(int code)
     prot_flush(imapd_out);
     /* one less active connection */
     snmp_increment(ACTIVE_CONNECTIONS, -1);
-    sort_thread_cleanup();
     exit(code);
 }
 
@@ -1126,10 +1125,6 @@ cmdloop()
 		snmp_increment(SETQUOTA_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Sort")) {
-		if (!sort_thread_enabled()) {
-		    /* we don't support Sort/Thread */
-		    goto badcmd;
-		}
 		if (!imapd_mailbox) goto nomailbox;
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
@@ -1150,10 +1145,6 @@ cmdloop()
 
 	case 'T':
 	    if (!strcmp(cmd.s, "Thread")) {
-		if (!sort_thread_enabled()) {
-		    /* we don't support Sort/Thread */
-		    goto badcmd;
-		}
 		if (!imapd_mailbox) goto nomailbox;
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
@@ -1181,12 +1172,10 @@ cmdloop()
 		else if (!strcmp(arg1.s, "search")) {
 		    goto search;
 		}
-		else if (!strcmp(arg1.s, "sort") &&
-			 sort_thread_enabled()) {
+		else if (!strcmp(arg1.s, "sort")) {
 		    goto sort;
 		}
-		else if (!strcmp(arg1.s, "thread") &&
-			 sort_thread_enabled()) {
+		else if (!strcmp(arg1.s, "thread")) {
 		    goto thread;
 		}
 		else if (!strcmp(arg1.s, "copy")) {
@@ -1726,6 +1715,10 @@ void cmd_capability(char *tag)
 	index_check(imapd_mailbox, 0, 0);
     }
     prot_printf(imapd_out, "* CAPABILITY " CAPABILITY_STRING);
+
+    /* add the thread algorithms */
+    list_thread_algorithms();
+
     if (starttls_enabled()) {
 	prot_printf(imapd_out, " STARTTLS");
     }
@@ -1747,11 +1740,6 @@ void cmd_capability(char *tag)
 	free(sasllist);
     } else {
 	/* else don't show anything */
-    }
-
-    if (sort_thread_enabled()) {
-	prot_printf(imapd_out, " SORT");
-	list_thread_algorithms();
     }
 
 #ifdef ENABLE_X_NETSCAPE_HACK
