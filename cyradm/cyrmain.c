@@ -169,12 +169,15 @@ main(argc, argv)
      * file if Tcl_AppInit specified one and if the file exists.
      */
 
-    if (tcl_RcFileName != NULL) {
+    if (Tcl_GetVar(interp, "tcl_rcFileName", TCL_GLOBAL_ONLY) != NULL) {
 	Tcl_DString buffer;
 	char *fullName;
 	FILE *f;
 
-	fullName = Tcl_TildeSubst(interp, tcl_RcFileName, &buffer);
+	fullName = Tcl_TildeSubst(interp, 
+				  Tcl_GetVar(interp, "tcl_rcFileName",
+					     TCL_GLOBAL_ONLY), 
+				  &buffer);
 	if (fullName == NULL) {
 	    fprintf(stderr, "%s\n", interp->result);
 	} else {
@@ -222,7 +225,7 @@ main(argc, argv)
 	if (fgets(buffer, 1000, stdin) == NULL) {
 	    if (ferror(stdin)) {
 		if (errno == EINTR) {
-		    if (tcl_AsyncReady) {
+		    if (Tcl_AsyncReady()) {
 			(void) Tcl_AsyncInvoke((Tcl_Interp *) NULL, 0);
 		    }
 		    clearerr(stdin);
