@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.305 2001/04/26 17:17:21 leg Exp $ */
+/* $Id: imapd.c,v 1.306 2001/05/07 00:28:39 leg Exp $ */
 
 #include <config.h>
 
@@ -99,6 +99,8 @@ extern int errno;
 
 /* global state */
 static char shutdownfilename[1024];
+static int imaps = 0;
+static sasl_ssf_t extprops_ssf = 0;
 
 /* per-user/session state */
 struct protstream *imapd_out, *imapd_in;
@@ -388,6 +390,7 @@ static void imapd_reset(void)
 int service_init(int argc, char **argv, char **envp)
 {
     int r;
+    int opt;
 
     config_changeident("imapd");
     
@@ -434,6 +437,26 @@ int service_init(int argc, char **argv, char **envp)
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
 
+    while ((opt = getopt(argc, argv, "C:sp:")) != EOF) {
+	switch (opt) {
+	case 'C': /* alt config file - handled by service::main() */
+	    break;
+	case 's': /* imaps (do starttls right away) */
+	    imaps = 1;
+	    if (!starttls_enabled()) {
+		syslog(LOG_ERR, "imaps: required OpenSSL options not present");
+		fatal("imaps: required OpenSSL options not present",
+		      EC_CONFIG);
+	    }
+	    break;
+	case 'p': /* external protection */
+	    extprops_ssf = atoi(optarg);
+	    break;
+	default:
+	    break;
+	}
+    }
+
     return 0;
 }
 
@@ -442,8 +465,6 @@ int service_init(int argc, char **argv, char **envp)
  */
 int service_main(int argc, char **argv, char **envp)
 {
-    int imaps = 0;
-    int opt;
     socklen_t salen;
     struct hostent *hp;
     int timeout;
@@ -460,25 +481,7 @@ int service_main(int argc, char **argv, char **envp)
 #endif
 
     memset(&extprops, 0, sizeof(sasl_external_properties_t));
-    while ((opt = getopt(argc, argv, "C:sp:")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file - handled by service::main() */
-	    break;
-	case 's': /* imaps (do starttls right away) */
-	    imaps = 1;
-	    if (!starttls_enabled()) {
-		syslog(LOG_ERR, "imaps: required OpenSSL options not present");
-		fatal("imaps: required OpenSSL options not present",
-		      EC_CONFIG);
-	    }
-	    break;
-	case 'p': /* external protection */
-	    extprops.ssf = atoi(optarg);
-	    break;
-	default:
-	    break;
-	}
-    }
+    extprops.ssf = extprops_ssf;
 
     imapd_in = prot_new(0, 0);
     imapd_out = prot_new(1, 1);
