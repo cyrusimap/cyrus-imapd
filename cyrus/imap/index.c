@@ -1159,7 +1159,6 @@ void *rock;
 	    start = start*10 + *sequence - '0';
 	}
 	else if (*sequence == '*') {
-	    sequence++;
 	    start = usinguid ? UID(imapd_exists) : imapd_exists;
 	}
 	else if (*sequence == ':') {
