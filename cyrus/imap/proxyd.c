@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.92 2002/02/11 20:12:54 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.93 2002/02/12 21:33:51 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -4055,11 +4055,66 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 }
 
 /*
+ * Callback for (get|set)quota, to ensure that all of the
+ * submailboxes are on the same server.
+ */
+static int quota_cb(char *name, int matchlen, int maycreate, void *rock) 
+{
+    int r;
+    char *this_server;
+    const char *servername = (const char *)rock;
+    
+    r = mlookup(name, &this_server, NULL, NULL);
+    if(r) return r;
+
+    if(strcmp(servername, this_server)) {
+	/* Not on same server as the root */
+	return IMAP_NOT_SINGULAR_ROOT;
+    } else {
+	return PROXY_OK;
+    }
+}
+
+/*
  * Perform a GETQUOTA command
  */
 void cmd_getquota(char *tag, char *name)
 {
-    prot_printf(proxyd_out, "%s NO not supported from proxy server\r\n", tag);
+    int r;
+    char *server_rock = NULL, *server_rock_tmp = NULL;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+    char quotarootbuf[MAX_MAILBOX_NAME + 3];
+
+    if(!proxyd_userisadmin) r = IMAP_PERMISSION_DENIED;
+    else if(!supports_referrals) r = IMAP_REQUIRE_REFERRALS;
+    else {
+	r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace,
+						    name,
+						    proxyd_userid,
+						    mailboxname);
+    }
+
+    if(!r)
+	r = mlookup(mailboxname, &server_rock_tmp, NULL, NULL);
+
+    if(!r) {
+	server_rock = xstrdup(server_rock_tmp);
+
+	snprintf(quotarootbuf, sizeof(quotarootbuf), "%s.*", mailboxname);
+
+	r = mboxlist_findall(&proxyd_namespace, quotarootbuf,
+			     proxyd_userisadmin, proxyd_userid,
+			     proxyd_authstate, quota_cb, server_rock);
+    }
+
+    if (!r) {
+	/* Do the referral */
+	proxyd_refer(tag, server_rock, mailboxname);
+	free(server_rock);
+    } else {
+	if(server_rock) free(server_rock);
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+    }
 }
 
 /*
@@ -4075,19 +4130,26 @@ void cmd_getquotaroot(char *tag, char *name)
     r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
-    if (!r) s = proxyd_findserver(server);
 
-    if (s) {
-	prot_printf(s->out, "%s Getquotaroot {%d+}\r\n%s\r\n",
-		    tag, strlen(name), name);
-	pipe_including_tag(s, tag);
+    if(proxyd_userisadmin && supports_referrals) {
+	/* If they are an admin, they won't be on the backend, so we
+	 * should refer them if we can. */
+	proxyd_refer(tag, server, name);
     } else {
-	r = IMAP_SERVER_UNAVAILABLE;
-    }
+	if (!r) s = proxyd_findserver(server);
 
-    if (r) {
-	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
-	return;
+	if (s) {
+	    prot_printf(s->out, "%s Getquotaroot {%d+}\r\n%s\r\n",
+			tag, strlen(name), name);
+	    pipe_including_tag(s, tag);
+	} else {
+	    r = IMAP_SERVER_UNAVAILABLE;
+	}
+
+	if (r) {
+	    prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+	    return;
+	}
     }
 }
 
@@ -4097,8 +4159,83 @@ void cmd_getquotaroot(char *tag, char *name)
  */
 void cmd_setquota(char *tag, char *quotaroot)
 {
-    prot_printf(proxyd_out, "%s NO not supported from proxy server\r\n", tag);
-    eatline(proxyd_in, prot_getc(proxyd_in));
+    int r;
+    char c;
+    char *p;
+    static struct buf arg;
+    int badresource = 0;
+    char *server_rock = NULL, *server_rock_tmp = NULL;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+    char quotarootbuf[MAX_MAILBOX_NAME + 3];
+
+    /* First ensure the validity of the command */
+    c = prot_getc(proxyd_in);
+    if (c != '(') goto badlist;
+
+    /* xxx maybe we don't want to be this stringant on what types
+     * of quota we allow to be set, since we will just be doing a referral
+     * anyway... */
+    c = getword(proxyd_in, &arg);
+    if (c != ')' || arg.s[0] != '\0') {
+	for (;;) {
+	    if (c != ' ') goto badlist;
+	    if (strcasecmp(arg.s, "storage") != 0) badresource = 1;
+	    c = getword(proxyd_in, &arg);
+	    if (c != ' ' && c != ')') goto badlist;
+	    if (arg.s[0] == '\0') goto badlist;
+	    /* We are just syntax checking here, no need to save the value */
+	    for (p = arg.s; *p; p++) {
+		if (!isdigit((int) *p)) goto badlist;
+	    }
+	    if (c == ')') break;
+	}
+    }
+    c = prot_getc(proxyd_in);
+    if (c == '\r') c = prot_getc(proxyd_in);
+    if (c != '\n') {
+	prot_printf(proxyd_out,
+		    "%s BAD Unexpected extra arguments to SETQUOTA\r\n", tag);
+	eatline(proxyd_in, c);
+	return;
+    }
+
+    if(badresource) r = IMAP_UNSUPPORTED_QUOTA;
+    else if(!proxyd_userisadmin) r = IMAP_PERMISSION_DENIED;
+    else if(!supports_referrals) r = IMAP_REQUIRE_REFERRALS;
+    else {
+	r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace,
+						    quotaroot,
+						    proxyd_userid,
+						    mailboxname);
+    }
+
+    if(!r)
+	r = mlookup(mailboxname, &server_rock_tmp, NULL, NULL);
+
+    if(!r) {
+	server_rock = xstrdup(server_rock_tmp);
+
+	snprintf(quotarootbuf, sizeof(quotarootbuf), "%s.*", mailboxname);
+
+	r = mboxlist_findall(&proxyd_namespace, quotarootbuf,
+			     proxyd_userisadmin, proxyd_userid,
+			     proxyd_authstate, quota_cb, server_rock);
+    }
+
+    if (!r) {
+	/* Do the referral */
+	proxyd_refer(tag, server_rock, mailboxname);
+	free(server_rock);
+    } else {
+	if(server_rock) free(server_rock);
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+    }
+
+    return;
+
+ badlist:
+    prot_printf(proxyd_out, "%s BAD Invalid quota list in Setquota\r\n", tag);
+    eatline(proxyd_in, c);
 }
 
 #ifdef HAVE_SSL
