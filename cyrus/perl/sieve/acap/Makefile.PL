@@ -43,7 +43,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     'NAME'	=> 'Cyrus::SIEVE::acap',
     'VERSION_FROM' => 'acap.pm', # finds $VERSION
-    'LIBS'	=> ['-L../../../acap/ -lacapsieve -lacap -lsasl -L../../../lib/ -lcyrus -lssl -lcrypto'],   # e.g., '-lm' 
+    'LIBS'	=> ['-L../../../acap/ -lacap -lsasl -L../../../lib/ -lcyrus -lssl -lcrypto'],   # e.g., '-lm' 
     'DEFINE'	=> '',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> '-I../../../acap/',     # e.g., '-I/usr/include/other' 
 );
