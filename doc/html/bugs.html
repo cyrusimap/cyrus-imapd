@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
-<!-- Changed by: Tim Showalter 19-Mar-1997 -->
+<!-- Changed by: Tim Showalter 16-Jun-1997 -->
 </HEAD><BODY>
 <h1>                     Known bugs in the Cyrus IMAP Server</h1>
 
@@ -10,17 +10,9 @@ the IMAP4rev1 specification.  The CAPABILITY command now returns
 X-NON-HIERARCHICAL-RENAME in its response in order to advertise this bug.
 We plan to have this fixed in the next release.
 
-<li>If a client tries to FETCH or UID FETCH a BODY[] attribute from a
-netnews-format mailbox, the server truncates the message by one character
-for each line in the message (due to LF/CRLF conversion) We plan to have
-this fixed in the next release.
-
 <li>Using AFS groups with ptclient, users with negative rights as part of
-groups may be granted access to mailboes if ptclient has failed.  We plan
+groups may be granted access to mailboes if ptclient has died.  We plan
 to have this fixed in the next release.
-
-<li>LIST NIL *.% causes the current imapd process to hang.  We plan to have
-this fixed in the next release.
 
 <li>We are aware that cyrus.seen files are occasionally corrupted, but we
 are not sure why this is happening.  It seems to happen most with mailboxes
@@ -30,6 +22,12 @@ release.
 <li> UID FETCH of a range of nonexistant UIDs causes the server to drop
 connection.
 
+<li> imtest cheats and sends a non-synchronizing literal if you try to
+LOGIN (cleartext passwords).
+
+<li> In some failures of the krbck program, the error messages printed out
+bear no resemblance to what actually went wrong.
+
 </ul>
 
 <p>
@@ -37,6 +35,10 @@ Please report bugs to cyrus-bugs@andrew.cmu.edu.  Be sure to include
 (at least) system type, compiler used, and the options passed to configure,
 along with a detailed report.  Additional information is welcome, and
 naturally, patches are deeply appreciated.
+
+<p>
+If you submit a patch, please send context diffs or unified diffs, not the
+	default unreadable diff.
 
 <P><HR><P>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page

@@ -1,6 +1,6 @@
+<!-- $Id: changes.html,v 1.25 1997/12/17 23:59:24 tjs Exp $ -->
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
-<!-- $Id: changes.html,v 1.24 1997/10/04 02:30:30 tjs Exp $ -->
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
@@ -8,8 +8,13 @@
 
 <ul>
 
+<li> Added some support for Netscape's very misleading "Administrate My
+	  Mail" menu option in Communicator.  Allows for a URL to be set in
+	  imapd.conf for the page to refer users to; needs to be turned on
+	  with --enable-netscapehack at compile time to enable it.
+
 <li> Bug swap: imtest quotes password with a non-synchronizing literal in
-order to allow wird characters like ) in passwords.  But it doesn't
+order to allow weird characters like ) in passwords.  But it doesn't
 look to see if the server supports non-synchronizing literals.
 
 <li> If the file "<TT>msg/motd</TT>" exists, the first line is sent to
@@ -460,5 +465,9 @@ restore tab before breaking out of loop.
 <li>Fixed other minor bugs.
 </ul>
 <P><HR><P>
+<!-- hhmts start -->
+last modified by tjs Wed Dec 17 18:43:27 1997
+<!-- hhmts end -->
+<br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
