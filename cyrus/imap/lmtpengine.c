@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.78 2002/07/24 19:46:11 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.79 2002/08/02 16:54:48 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2416,7 +2416,7 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
     onegood = 0;
     for (j = 0; j < txn->rcpt_num; j++) {
 	prot_printf(conn->pout, "RCPT TO:<%s>", txn->rcpt[j].addr);
-	if (txn->ignorequota && (conn->capability & CAPA_IGNOREQUOTA)) {
+	if (txn->rcpt[j].ignorequota && (conn->capability & CAPA_IGNOREQUOTA)) {
 	    prot_printf(conn->pout, " IGNOREQUOTA");
 	}
 	prot_printf(conn->pout, "\r\n");

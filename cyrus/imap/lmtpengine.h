@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.13 2002/04/11 18:36:56 ken3 Exp $
+ * $Id: lmtpengine.h,v 1.14 2002/08/02 16:54:49 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -136,13 +136,13 @@ struct lmtp_conn;
 struct lmtp_txn {
     const char *from;
     const char *auth;
-    int ignorequota;
     int isdotstuffed;		/* 1 if 'data' is a dotstuffed stream
                                    (including end-of-file \r\n.\r\n) */
     struct protstream *data;
     int rcpt_num;
     struct lmtp_rcpt {
 	char *addr;
+	int ignorequota;
 	enum {
 	    RCPT_GOOD,
 	    RCPT_TEMPFAIL,
