@@ -447,7 +447,7 @@ char *name;
     
     /* Write out new index file header */
     rewind(newindex);
-    if (mailbox.last_uid < uid[uid_num-1]) {
+    if (uid_num && mailbox.last_uid < uid[uid_num-1]) {
 	mailbox.last_uid = uid[uid_num-1] +
 	    ((format == MAILBOX_FORMAT_NETNEWS) ? 0 : 100);
     }
