@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.134.4.22 2003/05/08 20:56:52 ken3 Exp $
+ * $Id: mailbox.c,v 1.134.4.23 2003/05/08 21:07:40 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -436,8 +436,8 @@ int mailbox_open_index(struct mailbox *mailbox)
 	if (mailbox->index_len < 4 || mailbox->cache_len < 4) {
 	    return IMAP_MAILBOX_BADFORMAT;
 	}
-	index_gen = *(bit32 *)mailbox->index_base;
-	cache_gen = *(bit32 *)mailbox->cache_base;
+	index_gen = ntohl(*(bit32 *)(mailbox->index_base+OFFSET_GENERATION_NO));
+	cache_gen = ntohl(*(bit32 *)(mailbox->cache_base+OFFSET_GENERATION_NO));
 
 	if (index_gen != cache_gen) {
 	    close(mailbox->index_fd);
@@ -1178,7 +1178,7 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     
     assert(mailbox->index_lock_count != 0);
 
-    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox->generation_no;
+    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(mailbox->generation_no);
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
     *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(mailbox->minor_version);
     *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(mailbox->start_offset);
@@ -1508,7 +1508,7 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
     recsize_diff = INDEX_RECORD_SIZE - oldrecord_size;
 
     /* Write the new index header */ 
-    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox->generation_no;
+    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(mailbox->generation_no);
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
     *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(mailbox->minor_version);
     *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(mailbox->start_offset);
@@ -1769,8 +1769,14 @@ void *deciderock;
 
     /* Copy over headers */
     memcpy(buf, mailbox->index_base, mailbox->start_offset);
-    (*(bit32 *)buf)++;    /* Increment generation number */
+
+    /* Update Generation Number */
+    *((bit32 *)buf+OFFSET_GENERATION_NO) = htonl(mailbox->generation_no+1);
     fwrite(buf, 1, mailbox->start_offset, newindex);
+
+    /* Write generation number to cache file */
+    fwrite(buf, 1, sizeof(bit32), newcache);
+
     /* Grow the index header if necessary */
     for (n = mailbox->start_offset; n < INDEX_HEADER_SIZE; n++) {
 	if (n == OFFSET_UIDVALIDITY+3) {
@@ -1780,7 +1786,6 @@ void *deciderock;
 	    putc(0, newindex);
 	}
     }
-    fwrite(buf, 1, sizeof(bit32), newcache);
 
     /* Copy over records for nondeleted messages */
     for (msgno = 1; msgno <= mailbox->exists; msgno++) {
