@@ -1,30 +1,32 @@
 /* mboxlist.c -- Mailbox list manipulation routines
- $Id: mboxlist.c,v 1.87 1998/06/04 20:23:28 tjs Exp $
- 
- # Copyright 1998 Carnegie Mellon University
- # 
- # No warranties, either expressed or implied, are made regarding the
- # operation, use, or results of the software.
- #
- # Permission to use, copy, modify and distribute this software and its
- # documentation is hereby granted for non-commercial purposes only
- # provided that this copyright notice appears in all copies and in
- # supporting documentation.
- #
- # Permission is also granted to Internet Service Providers and others
- # entities to use the software for internal purposes.
- #
- # The distribution, modification or sale of a product which uses or is
- # based on the software, in whole or in part, for commercial purposes or
- # benefits requires specific, additional permission from:
- #
- #  Office of Technology Transfer
- #  Carnegie Mellon University
- #  5000 Forbes Avenue
- #  Pittsburgh, PA  15213-3890
- #  (412) 268-4387, fax: (412) 268-7395
- #  tech-transfer@andrew.cmu.edu
+ * 
+ * Copyright 1998 Carnegie Mellon University
+ * 
+ * No warranties, either expressed or implied, are made regarding the
+ * operation, use, or results of the software.
  *
+ * Permission to use, copy, modify and distribute this software and its
+ * documentation is hereby granted for non-commercial purposes only
+ * provided that this copyright notice appears in all copies and in
+ * supporting documentation.
+ *
+ * Permission is also granted to Internet Service Providers and others
+ * entities to use the software for internal purposes.
+ *
+ * The distribution, modification or sale of a product which uses or is
+ * based on the software, in whole or in part, for commercial purposes or
+ * benefits requires specific, additional permission from:
+ *
+ *  Office of Technology Transfer
+ *  Carnegie Mellon University
+ *  5000 Forbes Avenue
+ *  Pittsburgh, PA  15213-3890
+ *  (412) 268-4387, fax: (412) 268-7395
+ *  tech-transfer@andrew.cmu.edu
+ *
+ */
+/*
+ * $Id: mboxlist.c,v 1.88 1998/06/10 22:19:58 tjs Exp $
  */
 
 #include <stdio.h>
@@ -1045,7 +1047,8 @@ struct auth_state *auth_state;
  * is the user's login id.  For each matching mailbox, calls
  * 'proc' with the name of the mailbox.  If 'proc' ever returns
  * a nonzero value, mboxlist_findall immediately stops searching
- * and returns that value.
+ * and returns that value.  'rock' is passed along as an argument to proc in
+ * case it wants some persistant storage or extra data.
  */
 int mboxlist_findall(pattern, isadmin, userid, auth_state, proc, rock)
 char *pattern;
@@ -1093,7 +1096,7 @@ void* rock;
 	if (GLOB_TEST(g, "INBOX") != -1) {
 	    (void) bsearch_mem(usermboxname, 1, list_base, list_size, 0, &len);
 	    if (len) {
-		r = (*proc)(inboxcase, 5, 1, rock);
+		r = proc(inboxcase, 5, 1, rock);
 		if (r) {
 		    glob_free(&g);
 		    list_doingfind--;
@@ -1106,7 +1109,7 @@ void* rock;
 		 GLOB_TEST(g, usermboxname) != -1) {
 	    (void) bsearch_mem(usermboxname, 1, list_base, list_size, 0, &len);
 	    if (len) {
-		r = (*proc)(usermboxname, strlen(usermboxname), 1);
+		r = proc(usermboxname, strlen(usermboxname), 1, rock);
 		if (r) {
 		    glob_free(&g);
 		    list_doingfind--;
@@ -1177,7 +1180,7 @@ void* rock;
 				     namelen-inboxoffset, &minmatch);
 		if (matchlen == -1) break;
 
-		r = (*proc)(namebuf+inboxoffset, matchlen, 1);
+		r = proc(namebuf+inboxoffset, matchlen, 1, rock);
 		if (r) {
 		    glob_free(&g);
 		    list_doingfind--;
@@ -1226,7 +1229,7 @@ void* rock;
 	    namebuf[namelen] = '\0';
 
 	    if (isadmin) {
-		r = (*proc)(namebuf, matchlen, 1);
+		r = proc(namebuf, matchlen, 1, rock);
 		if (r) {
 		    glob_free(&g);
 		    list_doingfind--;
@@ -1247,7 +1250,8 @@ void* rock;
 		    free(aclcopy);
 		}
 		if (rights & ACL_LOOKUP) {
-		    r = (*proc)(namebuf, matchlen, (rights & ACL_CREATE));
+		    r = proc(namebuf, matchlen, (rights & ACL_CREATE),
+				rock);
 		    if (r) {
 			glob_free(&g);
 			list_doingfind--;
@@ -2211,7 +2215,7 @@ mboxlist_close()
  * This is to work around the race condition that happens when we have a
  * whole bunch of imapds attacking the mailboxes file at the same time.
  *
- * Compliments of Eric Haberg.
+ * Compliments of Eric Hagberg.
  */
 int mboxlist_safe_rename( newfname, oldfname, fd )
 const char *newfname, *oldfname;
