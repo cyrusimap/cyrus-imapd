@@ -409,8 +409,8 @@ int     tls_init_serverengine(int verifydepth,
 
     if ((!SSL_CTX_load_verify_locations(ctx, CAfile, CApath)) ||
 	(!SSL_CTX_set_default_verify_paths(ctx))) {
-	printf("TLS engine: cannot load CA data");
-	return (-1);
+	/* just a warning since this is only necessary for client auth */
+	syslog(LOG_NOTICE,"TLS engine: cannot load CA data");	
     }
     if (strlen(var_imapd_tls_cert_file) == 0)
 	s_cert_file = NULL;
@@ -422,7 +422,7 @@ int     tls_init_serverengine(int verifydepth,
 	s_key_file = var_imapd_tls_key_file;
 
     if (!set_cert_stuff(ctx, s_cert_file, s_key_file)) {
-	printf("TLS engine: cannot load cert/key data");
+	syslog(LOG_ERR,"TLS engine: cannot load cert/key data");
 	return (-1);
     }
     SSL_CTX_set_tmp_rsa_callback(ctx, tmp_rsa_cb);

@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.100 2000/02/18 22:51:34 leg Exp $
+# $Id: Makefile.in,v 1.101 2000/02/22 00:54:10 tmartin Exp $
 # 
 # @configure_input@
 #
@@ -150,18 +150,18 @@ target-acap: target-acap.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o target-acap \
 	 target-acap.o libimap.a $(DEPLIBS) $(LIBS) -lpthread
 
-imapd.pure: $(IMAPDOBJS) libimap.a $(DEPLIBS)
+imapd.pure: $(IMAPDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
 	$(PURIFY) $(PUREOPT) \
-	  $(CC) $(LDFLAGS) -o imapd.pure \
-	  $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o imapd.pure \
+	 $(SERVICE) $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
 imapd.quant: $(IMAPDOBJS) libimap.a $(DEPLIBS)
 	$(QUANTIFY) $(QUANTOPT) \
 	$(CC) $(LDFLAGS) -o imapd.quant \
 	 $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
-pop3d: pop3d.o libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o pop3d pop3d.o $(SERVICE) \
+pop3d: pop3d.o tls.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o pop3d pop3d.o tls.o $(SERVICE) \
 	 libimap.a $(DEPLIBS) $(LIBS)
 
 arbitron: arbitron.o libimap.a $(DEPLIBS)
