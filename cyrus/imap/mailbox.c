@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.106 2000/12/18 04:53:39 leg Exp $
+ $Id: mailbox.c,v 1.107 2000/12/26 21:35:41 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -196,7 +196,7 @@ void mailbox_make_uniqueid(char *name, unsigned long uidvalidity,
 
 /*
  * Calculate relative filename for the message with UID 'uid'
- * in 'mailbox'.
+ * in 'mailbox'. 'out' must be at least MAILBOX_FNAME_LEN long.
  */
 void mailbox_message_get_fname(struct mailbox *mailbox, unsigned long uid,
 			       char *out)
@@ -204,18 +204,6 @@ void mailbox_message_get_fname(struct mailbox *mailbox, unsigned long uid,
     assert(mailbox->format != MAILBOX_FORMAT_NETNEWS);
 
     sprintf(out, "%lu.", uid);
-}
-
-/*
- * Calculate relative filename for the message with UID 'uid'
- * in 'mailbox'. Returns pointer to static buffer.
- */
-char *mailbox_message_fname(struct mailbox *mailbox, unsigned long uid)
-{
-    static char buf[256];
-
-    mailbox_message_get_fname(mailbox, uid, buf);
-    return buf;
 }
 
 /*
@@ -1816,10 +1804,12 @@ void *deciderock;
     *fnametail++ = '/';
     for (msgno = 0; msgno < numdeleted; msgno++) {
 	if (iscurrentdir) {
-	    unlink(mailbox_message_fname(mailbox, deleted[msgno]));
+	    char shortfnamebuf[MAILBOX_FNAME_LEN];
+	    mailbox_message_get_fname(mailbox, deleted[msgno], shortfnamebuf);
+	    unlink(shortfnamebuf);
 	}
 	else {
-	    strcpy(fnametail, mailbox_message_fname(mailbox, deleted[msgno]));
+	    mailbox_message_get_fname(mailbox, deleted[msgno], fnametail);
 	    unlink(fnamebuf);
 	}
     }
@@ -2170,7 +2160,7 @@ mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl,
     for (msgno = 1; msgno <= oldmailbox.exists; msgno++) {
 	r = mailbox_read_index_record(&oldmailbox, msgno, &record);
 	if (r) break;
-	strcpy(oldfnametail, mailbox_message_fname(&oldmailbox, record.uid));
+	mailbox_message_get_fname(&oldmailbox, record.uid, oldfnametail);
 	strcpy(newfnametail, oldfnametail);
 	r = mailbox_copyfile(oldfname, newfname);
 	if (r) break;
@@ -2218,7 +2208,7 @@ mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl,
  fail:
     for (msgno = 1; msgno <= oldmailbox.exists; msgno++) {
 	if (mailbox_read_index_record(&oldmailbox, msgno, &record)) continue;
-	strcpy(newfnametail, mailbox_message_fname(&oldmailbox, record.uid));
+	mailbox_message_get_fname(&oldmailbox, record.uid, newfnametail);
 	(void) unlink(newfname);
     }
     mailbox_close(&newmailbox);

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.80 2000/12/18 04:53:40 leg Exp $
+ * $Id: pop3d.c,v 1.81 2000/12/26 21:35:41 leg Exp $
  */
 #include <config.h>
 
@@ -101,7 +101,7 @@ extern int errno;
 
 
 #ifdef HAVE_SSL
-extern SSL *tls_conn;
+static SSL *tls_conn;
 #endif /* HAVE_SSL */
 
 sasl_conn_t *popd_saslconn; /* the sasl connection context */
@@ -692,7 +692,8 @@ static void cmd_starttls(int pop3s)
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
 			       layerp,
-			       &(external.auth_id));
+			       &(external.auth_id),
+			       &tls_conn);
 
     /* if error */
     if (result==-1) {
@@ -1126,10 +1127,11 @@ static void blat(int msg,int lines)
 {
     FILE *msgfile;
     char buf[4096];
+    char fnamebuf[MAILBOX_FNAME_LEN];
     int thisline = -2;
 
-    msgfile = fopen(mailbox_message_fname(popd_mailbox, popd_msg[msg].uid),
-		    "r");
+    mailbox_message_get_fname(popd_mailbox, popd_msg[msg].uid, fnamebuf);
+    msgfile = fopen(fnamebuf, "r");
     if (!msgfile) {
 	prot_printf(popd_out, "-ERR Could not read message file\r\n");
 	return;

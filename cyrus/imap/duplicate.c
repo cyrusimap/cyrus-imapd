@@ -152,10 +152,10 @@ int duplicate_init(int myflags)
  * First pass will be to just have 26 db files based on the first letter of 
  * the mailbox name. As distribution goes, this really blows but, hey, what do 
  * you expect from something quick and dirty?
+ * 'buf' should be at least 1024
  */
-static char *get_db_name (char *mbox)
+static char *get_db_name (char *mbox, char *buf)
 {
-    static char buf[1024];
     char *idx;
     char c;
   
@@ -170,7 +170,7 @@ static char *get_db_name (char *mbox)
 	c = 'q';
     }
 
-    sprintf(buf, "%s/deliverdb/deliver-%c.db", config_dir, c);
+    snprintf(buf, 1024, "%s/deliverdb/deliver-%c.db", config_dir, c);
 
     return buf;
 }
@@ -179,7 +179,7 @@ static char *get_db_name (char *mbox)
 time_t duplicate_check(char *id, int idlen, char *to, int tolen)
 {
     char buf[1024];
-    char *fname;
+    char fname[1024];
     DB *d;
     DBT date, delivery;
     int r;
@@ -198,7 +198,7 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
     delivery.size = idlen + tolen + 2;
           /* +2 b/c 1 for the center null; +1 for the terminating null */
 
-    fname = get_db_name(to);
+    get_db_name(to, fname);
 
     r = db_create(&d, duplicate_dbenv, 0);
     if (r != 0) {
@@ -238,7 +238,7 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
 void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
 {
     char buf[1024];
-    char *fname;
+    char fname[1024];
     DB *d;
     DBT date, delivery;
     int r;
@@ -259,7 +259,7 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
     date.data = &mark;
     date.size = sizeof(mark);
 
-    fname = get_db_name(to);
+    get_db_name(to, fname);
 
     r = db_create(&d, duplicate_dbenv, 0);
     if (r != 0) {
@@ -311,9 +311,10 @@ int duplicate_prune(int days)
     
     c[1] = '\0';
     for (c[0] = 'a'; c[0] <= 'z'; c[0]++) {
-	char *fname = get_db_name(c);
+	char fname[1024];
 	int count = 0, deletions = 0;
 
+	get_db_name(c, fname);
 	r = db_create(&d, duplicate_dbenv, 0);
 	if (r != 0) {
 	    syslog(LOG_ERR, "duplicate_prune: db_create: %s", db_strerror(r));

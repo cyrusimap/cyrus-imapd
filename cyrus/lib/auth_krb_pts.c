@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.36 2000/05/23 20:52:40 robeson Exp $
+ $Id: auth_krb_pts.c,v 1.37 2000/12/26 21:35:42 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -67,7 +67,7 @@
 #define KRB_MAPNAME "/etc/krb.equiv"
 #endif
 
-static struct auth_state auth_anonymous = {
+static const struct auth_state auth_anonymous = {
     "anonymous", "anonymous", "", "", 
     (time_t) 0, (int) 0,
     { "" }

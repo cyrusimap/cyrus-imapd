@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.55 2000/12/18 04:53:41 leg Exp $ */
+/* $Id: reconstruct.c,v 1.56 2000/12/26 21:35:41 leg Exp $ */
 
 #include <config.h>
 
@@ -406,10 +406,13 @@ int reconstruct(char *name, struct discovered *found)
     mailbox.cache_fd = newcache_fd;
 
     for (msg = 0; msg < uid_num; msg++) {
+	char fnamebuf[MAILBOX_FNAME_LEN];
+
 	message_index = zero_index;
 	message_index.uid = uid[msg];
 	
-	msgfile = fopen(mailbox_message_fname(&mailbox, uid[msg]), "r");
+	mailbox_message_get_fname(&mailbox, uid[msg], fnamebuf);
+	msgfile = fopen(fnamebuf, "r");
 	if (!msgfile) continue;
 	if (fstat(fileno(msgfile), &sbuf)) {
 	    fclose(msgfile);
@@ -418,7 +421,7 @@ int reconstruct(char *name, struct discovered *found)
 	if (sbuf.st_size == 0) {
 	    /* Zero-length message file--blow it away */
 	    fclose(msgfile);
-	    unlink(mailbox_message_fname(&mailbox, uid[msg]));
+	    unlink(fnamebuf);
 	    continue;
 	}
 

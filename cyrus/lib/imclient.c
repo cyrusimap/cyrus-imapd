@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.54 2000/12/18 04:53:42 leg Exp $
+ $Id: imclient.c,v 1.55 2000/12/26 21:35:42 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -159,7 +159,7 @@ struct imclient {
  * Syntactic class of a character
  * 0 - literal, 1 - quoted-string, 2 - atom
  */
-static char charclass[256] = {
+static const char charclass[256] = {
     0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, /*  00 -  0f */
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /*  10 -  1f */
     1, 2, 0, 2, 2, 1, 2, 2, 1, 1, 1, 2, 2, 2, 2, 2, /* ' ' -  '/' */
@@ -192,18 +192,12 @@ static void imclient_eof P((struct imclient *imclient));
 static int imclient_decodebase64 P((char *input));
 
 /* callbacks we support */
-static sasl_callback_t callbacks[] = {
-  {
-    SASL_CB_USER, NULL, NULL
-  }, {
-    SASL_CB_GETREALM, NULL, NULL
-  }, {
-    SASL_CB_AUTHNAME, NULL, NULL
-  }, {
-    SASL_CB_PASS, NULL, NULL    
-  }, {
-    SASL_CB_LIST_END, NULL, NULL
-  }
+static const sasl_callback_t callbacks[] = {
+  { SASL_CB_USER, NULL, NULL }, 
+  { SASL_CB_GETREALM, NULL, NULL }, 
+  { SASL_CB_AUTHNAME, NULL, NULL }, 
+  { SASL_CB_PASS, NULL, NULL },
+  { SASL_CB_LIST_END, NULL, NULL }
 };
 
 /*

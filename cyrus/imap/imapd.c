@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.286 2000/12/21 20:32:04 ken3 Exp $ */
+/* $Id: imapd.c,v 1.287 2000/12/26 21:35:40 leg Exp $ */
 
 #include <config.h>
 
@@ -89,7 +89,8 @@
 #ifdef HAVE_SSL
 #include "tls.h"
 
-extern SSL *tls_conn;
+/* our tls connection, if any */
+static SSL *tls_conn = NULL;
 #endif /* HAVE_SSL */
 
 extern int optind;
@@ -113,7 +114,7 @@ static char shutdownfilename[1024];
 
 static struct mailbox mboxstruct;
 
-static char *monthname[] = {
+static const char *monthname[] = {
     "jan", "feb", "mar", "apr", "may", "jun",
     "jul", "aug", "sep", "oct", "nov", "dec"
 };
@@ -333,7 +334,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
     return SASL_OK;
 }
 
-static struct sasl_callback mysasl_cb[] = {
+static const struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
@@ -370,11 +371,13 @@ int service_init(int argc, char **argv, char **envp)
 	return EC_SOFTWARE;
     }
 
+#ifndef DELAY_SASL_CLIENT_INIT
     if ((r = sasl_client_init(NULL)) != SASL_OK) {
 	syslog(LOG_ERR, "SASL failed initializing: sasl_client_init(): %s", 
 	       sasl_errstring(r, NULL, NULL));
 	return EC_SOFTWARE;
     }
+#endif
 
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
@@ -406,8 +409,10 @@ int service_main(int argc, char **argv, char **envp)
 
     signals_poll();
 
+#ifdef ID_SAVE_CMDLINE
     /* get command line args for use in ID before getopt mangles them */
     id_getcmdline(argc, argv);
+#endif
 
     memset(&extprops, 0, sizeof(sasl_external_properties_t));
     while ((opt = getopt(argc, argv, "sp:")) != EOF) {
@@ -1624,15 +1629,19 @@ char *cmd;
  * we only allow MAXIDFAILED consecutive failed IDs from a given client.
  * we only record MAXIDLOG ID responses from a given client.
  */
-#define MAXIDFAILED	3
-#define MAXIDLOG	5
-#define MAXIDLOGLEN	(MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6))
-#define MAXIDFIELDLEN	30
-#define MAXIDVALUELEN	1024
-#define MAXIDPAIRS	30
+enum {
+    MAXIDFAILED	= 3,
+    MAXIDLOG = 5,
+    MAXIDFIELDLEN = 30,
+    MAXIDVALUELEN = 1024,
+    MAXIDPAIRS = 30,
+    MAXIDLOGLEN = (MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6))
+};
 
+#ifdef ID_SAVE_CMDLINE
 static char id_resp_command[MAXIDVALUELEN];
 static char id_resp_arguments[MAXIDVALUELEN] = "";
+#endif
 
 void cmd_id(char *tag)
 {
@@ -1792,12 +1801,15 @@ void cmd_id(char *tag)
 			" \"os-version\" \"%s\"",
 			os.sysname, os.release);
 
+#ifdef ID_SAVE_CMDLINE
 	/* add the command line info */
 	prot_printf(imapd_out, " \"command\" \"%s\"", id_resp_command);
-	if (strlen(id_resp_arguments))
+	if (strlen(id_resp_arguments)) {
 	    prot_printf(imapd_out, " \"arguments\" \"%s\"", id_resp_arguments);
-	else
+	} else {
 	    prot_printf(imapd_out, " \"arguments\" NIL");
+	}
+#endif
 
 	/* add the environment info */
 	snprintf(env_buf, MAXIDVALUELEN,"Cyrus SASL %d.%d.%d",
@@ -1822,6 +1834,7 @@ void cmd_id(char *tag)
     did_id = 1;
 }
 
+#ifdef ID_SAVE_CMDLINE
 /*
  * Grab the command line args for the ID response.
  */
@@ -1834,6 +1847,7 @@ void id_getcmdline(int argc, char **argv)
 		 "%s%s", *++argv, (argc > 1) ? " " : "");
     }
 }
+#endif
 
 /*
  * Append the 'field'/'value' pair to the paramlist 'l'.
@@ -4011,7 +4025,6 @@ void cmd_starttls(char *tag, int imaps)
     int *layerp;
     sasl_external_properties_t external;
 
-
     /* SASL and openssl have different ideas about whether ssf is signed */
     layerp = (int *) &(external.ssf);
 
@@ -4057,7 +4070,8 @@ void cmd_starttls(char *tag, int imaps)
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
 			       layerp,
-			       &(external.auth_id));
+			       &(external.auth_id),
+			       &tls_conn);
 
     /* if error */
     if (result==-1) {

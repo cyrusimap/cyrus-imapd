@@ -57,6 +57,10 @@ enum cyrusdb_initflags {
     CYRUSDB_RECOVER = 0x01
 };
 
+enum cyrusdb_dbflags {
+    CYRUSDB_NOSYNC = 0x01	/* durability not a concern */
+};
+
 typedef int foreach_p(void *rock,
 		      const char *key, int keylen);
 

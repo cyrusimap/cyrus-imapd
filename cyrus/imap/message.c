@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.87 2000/11/17 02:12:06 leg Exp $
+ * $Id: message.c,v 1.88 2000/12/26 21:35:41 leg Exp $
  */
 
 #include <config.h>
@@ -1383,11 +1383,11 @@ unsigned flags;
 
 		if (east) zone_off = -zone_off;
 	    }
-	    else if (isalpha(*hdr)) {
+	    else if (isalpha((unsigned char) *hdr)) {
 		char zone[4];
 
 		zone[0] = *hdr++;
-		if (!isalpha(*hdr)) {
+		if (!isalpha((unsigned char) *hdr)) {
 		    /* Parse military (single-char) zone */
 		    zone[1] = '\0';
 		    lcase(zone);
@@ -1404,7 +1404,7 @@ unsigned flags;
 		}
 		else {
 		    zone[1] = *hdr++;
-		    if (!isalpha(*hdr)) {
+		    if (!isalpha((unsigned char) *hdr)) {
 			/* Parse UT (universal time) */
 			zone[2] = '\0';
 			lcase(zone);
