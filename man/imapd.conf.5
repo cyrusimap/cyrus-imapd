@@ -1,4 +1,4 @@
- .\" -*- nroff -*-
+.\" -*- nroff -*-
 .TH IMAPD.CONF 5
 .\" 	(C) Copyright 1994 by Carnegie Mellon University
 .\" 
@@ -27,7 +27,7 @@ is the configuration file for the Cyrus IMAP server.  It defines
 local parameters for IMAP. 
 .PP
 Each line of the \fB/etc/imapd.conf\fR file has the form
-.PP
+.IP
 \fIoption\fR: \fIvalue\fR
 .PP
 where \fIoption\fR is the name of the configuration option being set
@@ -39,52 +39,58 @@ Blank lines and lines beginning with ``#'' are ignored.
 For boolean options, the values ``yes'', ``on'', ``t'', and ``1'' turn the
 option on, the values ``no'', ``off'', ``f'', and ``0'' turn the option off.
 .SH FIELD DESCRIPTIONS
-.IP "\fBconfigdirectory: \fR dir" 5
+.PP
+The sections below detail options that can be placed in the
+\fB/etc/imapd.conf\fR file, and show each option's default value.
+Some options have no default value, these are listed with
+``<no default>''.  Some options default to the empty string, these
+are listed with ``<none>''.
+.IP "\fBconfigdirectory:\fR <no default>" 5
 The pathname of the IMAP configuration directory.  This field is required.
-.IP "\fBdefaultpartition: \fR partition" 5
+.IP "\fBdefaultpartition:\fR default" 5
 The partition name used by default for new mailboxes. This field is required.
-.IP "\fBpartition-\fR <name>: <partitionname>" 5
-The name of additional partitions.
-.IP "\fBumask:\fR <value>" 5
-The umask value used by various Cyrus IMAP programs.  The suggested value is 077.
+.IP "\fBpartition-\fIname\fB:\fR <no default>" 5
+The pathname of the partition \fIname\fR.
+.IP "\fBumask:\fR 077" 5
+The umask value used by various Cyrus IMAP programs.
 .IP "\fBallowanonymouslogin:\fR no" 5
-Permit logins by the user "anonymous" without a password; the default is no permission.
-.IP "\fBquotawarn: \fR <value>" 5
-Sets the percent of quota utilization at which the server generates
-warnings; 90 is the recommended value.
-.IP "\fBtimeout:\fR <value>" 5
-Set the length of the IMAP server's inactivity autologout timer,
+Permit logins by the user "anonymous" using any password.
+.IP "\fBquotawarn:\fR 90" 5
+The percent of quota utilization over which the server generates
+warnings.
+.IP "\fBtimeout:\fR 30" 5
+The length of the IMAP server's inactivity autologout timer,
 in minutes.  The minimum value is 30, the default.
-.IP "\fBpoptimeout:\fR <value>" 5
+.IP "\fBpoptimeout:\fR 10" 5
 Set the length of the POP server's inactivity autologout timer,
 in minutes.  The minimum value is 10, the default.
-.IP "\fBadmins:\fR <userids>" 5
-The list of userids with administrative rights.  Separate 
-each userid by a space. This field is required.  We recommend that administrator
-userids be separate from standard userids.  Sites using Kerberos may use
+.IP "\fBadmins:\fR <none>" 5
+The list of userids with administrative rights.  Separate each userid
+with a space. We recommend that administrator userids be separate from
+standard userids.  Sites using Kerberos authentication may use
 separate "admin" instances.
-.IP "\fBimspservers:\fR <hosts>" 5
-The list of the host names of the mail domain's IMSP
-servers.  Separate each host name by a space.  The Kerberos 
-identities of these servers may login as any user in order to perform
-commands by proxy.
-.IP "\fBdefaultacl:\fR <acl>" 5
+.IP "\fBimspservers:\fR <none>" 5
+The list of the host names of the mail domain's IMSP servers.
+Separate each host name with a space.  The Kerberos identities of
+these servers may login as any user in order to perform commands by
+proxy.
+.IP "\fBdefaultacl:\fR anybody lrs" 5
 The Access Control List (ACL) placed on a newly-created (non-user) 
-mailbox that does not have a parent mailbox.  anybody lcs is the suggested value.
-.IP "\fBnewsprefix:\fR (none)" 5
+mailbox that does not have a parent mailbox.
+.IP "\fBnewsprefix:\fR <none>" 5
 Prefix to be prepended to newsgroup names to make the corresponding
 IMAP mailbox names.
-.IP "\fBsrvtab:\fR <pathname>" 5
-The pathname of \fI/etcsrvtab\fR file containing the server's private 
+.IP "\fBsrvtab:\fR /etc/srvtab" 5
+The pathname of \fIsrvtab\fR file containing the server's private 
 key.  This option is only used when the server is compiled with
 Kerberos authentication.
-.IP "\fBloginrealms:\fR (none)" 5
+.IP "\fBloginrealms:\fR <none>" 5
 The list of remote realms whose users may log in using 
 cross-realm authentications.  Seperate each realm name
 by a space.  This option is only used when the server is
 compiled with Kerberos authentication.
-.IP "\fBloginuseacl: \fR no" 5
-If enabled, any authentication identity which as \fBa\fR rights on a
+.IP "\fBloginuseacl:\fR no" 5
+If enabled, any authentication identity which has \fBa\fR rights on a
 user's INBOX may log in as that user.  This option is only used when
 the server is compiled with Kerberos authentication.
 .SH SEE ALSO
