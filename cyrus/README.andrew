@@ -37,3 +37,16 @@ To make a release:
     comp.mail.imap
     comp.os.linux.announce
     freshmeat.net
+
+---
+to bring up a new Andrew Cyrus server:
+
+- include cyrus-basic.mpp
+- include uses.imap.mpp
+- (optional) include uses.timsieved.mpp
+- create machine specific directory containing 
+    cyrus.conf
+    imapd.conf
+    diskmon.conf
+- rerun package
+- run tools/mkimap
