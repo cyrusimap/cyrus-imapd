@@ -666,7 +666,6 @@ int size;
 	if (retval + MAXTRANSLATION > size) {
 	    return retval;
 	}
-	len = 0;
 	TRANSLATE(decodestate, decodebuf[decodestart], buf, retval);
 	decodestart++;
 	decodeleft--;
