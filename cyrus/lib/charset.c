@@ -1,5 +1,5 @@
 /* charset.c -- International character set support
- $Id: charset.c,v 1.27 1998/10/14 21:08:31 tjs Exp $
+ $Id: charset.c,v 1.28 1998/10/14 21:09:30 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -48,7 +48,7 @@ struct state {
 #define TRANSLATE(state,c,ptr,idx) \
 { \
     int _ch; \
-    const unsigned char *_translation = (state).curtable[0][(unsigned char)(c)]; \
+    unsigned char *_translation = (state).curtable[0][(unsigned char)(c)]; \
     for (;;) { \
 	switch (_ch = *_translation++) { \
 	case JSR: \
