@@ -1,3 +1,7 @@
+/*
+ * Folder manipulation routines
+ */
+
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
@@ -6,10 +10,15 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <sys/file.h>
-#include "acl.h"
+
+#include <acl.h>
 #include "folder.h"
 #include "xmalloc.h"
 
+/*
+ * Open and read the header of the folder with pathname 'path'.
+ * The structure pointed to by 'folder' is initialized.
+ */
 folder_open_header(path, folder)
 char *path;
 struct folder *folder;
@@ -41,6 +50,10 @@ struct folder *folder;
 
 #define MAXTRIES 60
 
+/*
+ * Open the index and cache files for 'folder'.  Also 
+ * read the index header.
+ */
 folder_open_index(folder)
 struct folder *folder;
 {
@@ -84,6 +97,9 @@ struct folder *folder;
     return folder_read_index_header(folder);
 }
 
+/*
+ * Close the folder 'folder', freeing all associated resources.
+ */
 folder_close(folder)
 struct folder *folder;
 {
@@ -108,6 +124,9 @@ struct folder *folder;
     return 0;
 }
 
+/*
+ * Read the header of 'folder'
+ */
 folder_read_header(folder)
 struct folder *folder;
 {
@@ -127,6 +146,7 @@ struct folder *folder;
     fstat(fileno(folder->header), &sbuf);
     folder->header_mtime = sbuf.st_mtime;
 
+    /* Read quota file pathname */
     if (!fgets(buf, sizeof(buf), folder->header)) {
 	return 1;		/* XXX bad format */
     }
@@ -141,6 +161,7 @@ struct folder *folder;
     }
     folder->quota_path = strsave(buf);
 
+    /* Read names of user flags */
     if (!fgets(buf, sizeof(buf), folder->header)) {
 	return 1;		/* XXX bad format */
     }
@@ -159,11 +180,12 @@ struct folder *folder;
 	folder->flagname[flag++] = NULL;
     }
 
+    /* Read and interpret ACL */
     if (folder->acl) free(folder->acl);
-    aclbufsize = 3 /* 128 */;
+    aclbufsize = 128;
     p = folder->acl = xmalloc(aclbufsize);
     while (fgets(p, aclbufsize - (p - folder->acl), folder->header)) {
-	if (*p == '\n' && (p == folder->acl || p[-1] = '\n')) {
+	if (*p == '\n' && (p == folder->acl || p[-1] == '\n')) {
 	    *p = '\0';
 	    break;
 	}
@@ -175,11 +197,14 @@ struct folder *folder;
 	    p = folder->acl + n;
 	}
     }
-    folder->myacl = acl_myacl(folder->acl);
+    folder->my_acl = acl_myacl(folder->acl);
 
     return 0;
 }
 
+/*
+ * Read the header of the index file for folder
+ */
 folder_read_index_header(folder)
 struct folder *folder;
 {
@@ -207,6 +232,9 @@ struct folder *folder;
     return 0;
 }
 
+/*
+ * Open and read the quota file for 'folder'
+ */
 folder_read_quota(folder)
 struct folder *folder;
 {
@@ -232,6 +260,9 @@ struct folder *folder;
     return 0;
 }
 
+/*
+ * Lock the header for 'folder'.  Reread header if necessary.
+ */
 folder_lock_header(folder)
 struct folder *folder;
 {
@@ -284,6 +315,9 @@ struct folder *folder;
     return 0;
 }
 
+/*
+ * Lock the index file for 'folder'.  Reread index file header if necessary.
+ */
 folder_lock_index(folder)
 struct folder *folder;
 {
@@ -335,6 +369,9 @@ struct folder *folder;
     return 0;
 }
 
+/*
+ * Lock the quota file for 'folder'.  Reread quota file if necessary.
+ */
 folder_lock_quota(folder)
 struct folder *folder;
 {
@@ -375,6 +412,9 @@ struct folder *folder;
     return folder_read_quota(folder);
 }
 
+/*
+ * Release lock on the header for 'folder'
+ */
 folder_unlock_header(folder)
 struct folder *folder;
 {
@@ -386,6 +426,9 @@ struct folder *folder;
     return 0;
 }
 
+/*
+ * Release lock on the index file for 'folder'
+ */
 folder_unlock_index(folder)
 struct folder *folder;
 {
@@ -397,6 +440,9 @@ struct folder *folder;
     return 0;
 }
 
+/*
+ * Release lock on the quota file for 'folder'
+ */
 folder_unlock_quota(folder)
 struct folder *folder;
 {
@@ -408,6 +454,9 @@ struct folder *folder;
     return 0;
 }
 
+/*
+ * Write the index header for 'folder'
+ */
 folder_write_index_header(folder)
 struct folder *folder;
 {
@@ -437,6 +486,9 @@ struct folder *folder;
     return 0;
 }
 
+/*
+ * Append a new record to the index file
+ */
 folder_append_index(folder, record, num)
 struct folder *folder;
 struct index_record *record;
@@ -461,7 +513,7 @@ int num;
 	*((bit32 *)p) = htonl(record[i].uid);
 	*((bit32 *)(p+4)) = htonl(record[i].internaldate);
 	*((bit32 *)(p+8)) = htonl(record[i].size);
-	*((bit32 *)(p+12)) = htonl(record[i].body_offset);
+	*((bit32 *)(p+12)) = htonl(record[i].content_offset);
 	*((bit32 *)(p+16)) = htonl(record[i].cache_offset);
 	*((bit32 *)(p+20)) = htonl(record[i].last_updated);
 	*((bit32 *)(p+24)) = htonl(record[i].system_flags);
@@ -482,6 +534,9 @@ int num;
     return 0;
 }
 
+/*
+ * Write out the quota file for 'folder'
+ */
 folder_write_quota(folder)
 struct folder *folder;
 {

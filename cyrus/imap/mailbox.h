@@ -62,7 +62,7 @@ struct index_record {
     unsigned long uid;
     time_t internaldate;
     unsigned long size;
-    unsigned long body_offset;
+    unsigned long content_offset;
     unsigned long cache_offset;
     time_t last_updated;
     bit32 system_flags;

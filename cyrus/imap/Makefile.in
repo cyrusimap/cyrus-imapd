@@ -1,0 +1,79 @@
+ACL=acl_afs.o
+AUTH=auth_krb.o
+
+LOBJS= append.o folder.o message.o xmalloc.o \
+	parsel.o parsey.o parseadd.o parseutl.o\
+	$(ACL) $(AUTH)
+
+CFLAGS= $(OPT) $(INCLUDES) $(DEFINES)
+
+OPT=-g
+INCLUDES= -I../lib -I/usr/local/include
+LIBS=../lib/libcyrus.a /usr/local/lib/libkrb.a
+
+deliver: deliver.o libimap.a
+	$(CC) $(CFLAGS) -o deliver deliver.o libimap.a $(LIBS)
+
+libimap.a: $(LOBJS)
+	ar cr libimap.a $(LOBJS)
+	ranlib libimap.a
+
+.y.o:
+	$(YACC) $*.y
+	rm -f $*.c
+	mv y.tab.c $*.c
+	$(CC) -c $(CFLAGS) $*.c
+	rm -f $*.c
+
+.l.o:
+	$(LEX) $*.l
+	rm -f $*.c
+	mv lex.yy.c $*.c
+	$(CC) -c $(CFLAGS) $*.c
+	rm -f $*.c
+
+parsel.o: parsey.h
+
+parsey.c parsey.h: parsey.y
+	$(YACC) -d parsey.y
+	rm -f parsey.c parsey.h
+	mv y.tab.c parsey.c
+	mv y.tab.h parsey.h
+
+clean:
+	rm -f *.o *.a parsey.c parsey.h parsel.c deliver
+	rm -f testmkdir
+
+depend:
+	grep '^#[ 	]*include[ 	]*"' *.[ch] | \
+	sed -e 's/:[^"]*"\([^"]*\)"/:	\1/' -e 's/\.c/.o/' | \
+	awk ' { if ($$1 != prev) { print rec; rec = $$0; prev = $$1; } \
+		else { if (length(rec $$2) > 78) { print rec; rec = $$0; } \
+		       else rec = rec " " $$2 } } \
+	      END { print rec } ' > makedep
+	echo '/^# DO NOT DELETE THIS LINE/+2,$$d' >eddep
+	echo '$$r makedep' >>eddep
+	echo 'w' >>eddep
+	cp Makefile Makefile.bak
+	ed - Makefile < eddep
+	rm eddep makedep
+	echo '' >> Makefile
+	echo '# DEPENDENCIES MUST END AT END OF FILE' >> Makefile
+	echo '# IF YOU PUT STUFF HERE IT WILL GO AWAY' >> Makefile
+	echo '# see make depend above' >> Makefile
+
+# DO NOT DELETE THIS LINE -- make depend uses it
+
+
+acl_afs.o:	xmalloc.h
+append.o:	folder.h message.h
+deliver.o:	folder.h
+folder.o:	folder.h xmalloc.h
+message.o:	folder.h parseadd.h
+parsel.o:	parsey.h
+parseutl.o:	parseadd.h
+testmkdir.o:	folder.h
+
+# DEPENDENCIES MUST END AT END OF FILE
+# IF YOU PUT STUFF HERE IT WILL GO AWAY
+# see make depend above

@@ -1,6 +1,11 @@
+/*
+ * Program to deliver mail to a folder
+ */
+
 #include <stdio.h>
+
+#include <acl.h>
 #include "folder.h"
-#include "acl.h"
 
 main(argc, argv)
 {
