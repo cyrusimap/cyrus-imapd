@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.c,v 1.5.2.6 2005/02/18 06:07:54 shadow Exp $ */
+/* $Id: cyrusdb.c,v 1.5.2.7 2005/02/20 03:23:45 shadow Exp $ */
 
 #include <config.h>
 #include <stdlib.h>
@@ -76,7 +76,7 @@ void cyrusdb_init()
     int i, r;
     char dbdir[1024];
     const char *confdir = libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
-    long initflags = libcyrus_config_getint(CYRUSOPT_DB_INIT_FLAGS);
+    int initflags = libcyrus_config_getint(CYRUSOPT_DB_INIT_FLAGS);
     
     strcpy(dbdir, confdir);
     strcat(dbdir, FNAME_DBDIR);

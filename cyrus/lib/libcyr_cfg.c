@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.2.2.7 2005/02/17 18:09:44 shadow Exp $
+ * $Id: libcyr_cfg.c,v 1.2.2.8 2005/02/20 03:23:45 shadow Exp $
  */
 
 #include <config.h>
@@ -134,7 +134,7 @@ const char *libcyrus_config_getstring(enum cyrus_opt opt)
     return cyrus_options[opt].val.s;
 }
 
-long libcyrus_config_getint(enum cyrus_opt opt)
+int libcyrus_config_getint(enum cyrus_opt opt)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
@@ -143,7 +143,7 @@ long libcyrus_config_getint(enum cyrus_opt opt)
     return cyrus_options[opt].val.i;
 }
 
-long libcyrus_config_getswitch(enum cyrus_opt opt)
+int libcyrus_config_getswitch(enum cyrus_opt opt)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);

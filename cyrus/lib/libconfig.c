@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.2.2.13 2005/02/18 00:48:22 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.2.2.14 2005/02/20 03:23:45 shadow Exp $ */
 
 #include <config.h>
 
@@ -93,7 +93,7 @@ const char *config_getstring(enum imapopt opt)
     return imapopts[opt].val.s;
 }
 
-long config_getint(enum imapopt opt)
+int config_getint(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_INT);
@@ -101,7 +101,7 @@ long config_getint(enum imapopt opt)
     return imapopts[opt].val.i;
 }
 
-long config_getswitch(enum imapopt opt)
+int config_getswitch(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_SWITCH);

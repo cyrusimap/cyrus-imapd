@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.2.2.6 2005/02/17 18:09:43 shadow Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.2.2.7 2005/02/20 03:23:45 shadow Exp $ */
 
 #include <config.h>
 
@@ -116,7 +116,7 @@ static int init(const char *dbdir, int myflags)
     int maj, min, patch;
     char *vstr;
     static char errpfx[10]; /* needs to be static; bdb doesn't copy */
-    long opt;
+    int opt;
 
     if (dbinit++) return 0;
 
