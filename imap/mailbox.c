@@ -58,6 +58,8 @@
 #include "mailbox.h"
 #include "xmalloc.h"
 
+static int mailbox_doing_reconstruct = 0;
+
 /*
  * Names of the headers we cache in the cyrus.cache file.
  * Any changes to this list require corresponding changes to
@@ -86,6 +88,16 @@ unsigned long uid;
 }
 
 /*
+ * Set the "reconstruct" mode.  Causes most errors to be ignored.
+ */
+int
+mailbox_reconstructmode()
+{
+    mailbox_doing_reconstruct = 1;
+    return 0;
+}
+
+/*
  * Open and read the header of the mailbox with pathname 'path'.
  * The structure pointed to by 'mailbox' is initialized.
  */
@@ -108,7 +120,7 @@ struct mailbox *mailbox;
     strcat(fnamebuf, FNAME_HEADER);
     mailbox->header = fopen(fnamebuf, "r+");
     
-    if (!mailbox->header) {
+    if (!mailbox->header && !mailbox_doing_reconstruct) {
 	syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
 	return IMAP_IOERROR;
     }
@@ -118,8 +130,10 @@ struct mailbox *mailbox;
     mailbox->acl = strsave(acl);
     mailbox->myrights = acl_myrights(mailbox->acl);
 
+    if (!mailbox->header) return 0;
+
     r = mailbox_read_header(mailbox);
-    if (r) {
+    if (r && !mailbox_doing_reconstruct) {
 	mailbox_close(mailbox);
 	return r;
     }
@@ -138,7 +152,7 @@ mailbox_open_index(mailbox)
 struct mailbox *mailbox;
 {
     char fnamebuf[MAX_MAILBOX_PATH];
-    bit32 index_gen, cache_gen;
+    bit32 index_gen = 0, cache_gen = 0;
     int tries = 0;
 
     if (mailbox->index) fclose(mailbox->index);
@@ -147,6 +161,7 @@ struct mailbox *mailbox;
 	strcpy(fnamebuf, mailbox->path);
 	strcat(fnamebuf, FNAME_INDEX);
 	mailbox->index = fopen(fnamebuf, "r+");
+	if (mailbox_doing_reconstruct) break;
 	if (!mailbox->index) {
 	    syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
 	    return IMAP_IOERROR;
@@ -305,6 +320,8 @@ struct mailbox *mailbox;
     char buf[INDEX_HEADER_SIZE];
     int n;
 
+    if (!mailbox->index) return IMAP_MAILBOX_BADFORMAT;
+
     fstat(fileno(mailbox->index), &sbuf);
     mailbox->index_mtime = sbuf.st_mtime;
     mailbox->index_ino = sbuf.st_ino;
@@ -316,6 +333,9 @@ struct mailbox *mailbox;
 	return IMAP_MAILBOX_BADFORMAT;
     }
 
+    if (mailbox_doing_reconstruct) {
+	mailbox->generation_no = ntohl(*((bit32 *)(buf+OFFSET_GENERATION_NO)));
+    }
     mailbox->format = ntohl(*((bit32 *)(buf+OFFSET_FORMAT)));
     mailbox->minor_version = ntohl(*((bit32 *)(buf+OFFSET_MINOR_VERSION)));
     mailbox->start_offset = ntohl(*((bit32 *)(buf+OFFSET_START_OFFSET)));
@@ -468,7 +488,7 @@ struct mailbox *mailbox;
     if (sbuffd.st_mtime != mailbox->header_mtime) {
 	rewind(mailbox->header);
 	r = mailbox_read_header(mailbox);
-	if (r) {
+	if (r && !mailbox_doing_reconstruct) {
 	    mailbox_unlock_header(mailbox);
 	    return r;
 	}
@@ -525,7 +545,7 @@ struct mailbox *mailbox;
     if (sbuffd.st_mtime != mailbox->index_mtime) {
 	rewind(mailbox->index);
 	r = mailbox_read_index_header(mailbox);
-	if (r) {
+	if (r && !mailbox_doing_reconstruct) {
 	    mailbox_unlock_index(mailbox);
 	    return r;
 	}
@@ -720,7 +740,7 @@ struct mailbox *mailbox;
 	unlink(newfnamebuf);
 	return IMAP_IOERROR;
     }
-    fclose(mailbox->header);
+    if (mailbox->header) fclose(mailbox->header);
     mailbox->header = newheader;
     return 0;
 }
@@ -976,6 +996,7 @@ char *deciderock;
     newindex = fopen(fnamebuf, "w+");
     if (!newindex) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
+	mailbox_unlock_pop(mailbox);
 	mailbox_unlock_index(mailbox);
 	mailbox_unlock_header(mailbox);
 	return IMAP_IOERROR;
@@ -985,7 +1006,7 @@ char *deciderock;
     strcat(fnamebuf, FNAME_CACHE);
     strcat(fnamebuf, ".NEW");
     newcache = fopen(fnamebuf, "w+");
-    if (!newindex || !newcache) {
+    if (!newcache) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
 	fclose(newindex);
 	mailbox_unlock_pop(mailbox);
@@ -1162,7 +1183,7 @@ char *deciderock;
     return IMAP_IOERROR;
 }
 
-static char *
+char *
 mailbox_findquota(name)
 char *name;
 {
