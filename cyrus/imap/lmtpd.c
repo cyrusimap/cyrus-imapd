@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.30 2003/04/21 15:49:56 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.31 2003/05/12 22:47:00 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -468,7 +468,11 @@ int send_rejection(const char *origid,
     fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
 
     /* this is the human readable status report */
-    fprintf(sm, "--%d/%s\r\n\r\n", (int) p, config_servername);
+    fprintf(sm, "--%d/%s\r\n", (int) p, config_servername);
+    fprintf(sm, "Content-Type: text/plain; charset=utf-8\r\n");
+    fprintf(sm, "Content-Disposition: inline\r\n");
+    fprintf(sm, "Content-Transfer-Encoding: 8bit\r\n\r\n");
+
     fprintf(sm, "Your message was automatically rejected by Sieve, a mail\r\n"
 	    "filtering language.\r\n\r\n");
     fprintf(sm, "The following reason was given:\r\n%s\r\n\r\n", reason);
