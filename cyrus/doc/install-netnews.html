@@ -1,4 +1,4 @@
-<!-- $Id: install-netnews.html,v 1.1.2.7 2003/06/20 15:58:36 ken3 Exp $ -->
+<!-- $Id: install-netnews.html,v 1.1.2.8 2003/06/24 15:41:42 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus and Netnews
@@ -177,6 +177,16 @@ messages will never be expunged, but the corresponding database
 entries WILL be expired after the default number of days
 (<tt>cyr_expire -E</tt> option).
 
+<p>Note that the <tt>/vendor/cmu/cyrus-imapd/expire</tt> mailbox
+annotation is inherited by child mailboxes, so that you may control
+expiration on an entire mailbox/newsgroup hierarchy simply by setting
+the annotation on the root of the hierarchy.  For example, if you set
+the annotation on <tt>comp</tt>, then ALL of the newsgroups in the
+<tt>comp</tt> hierarchy will be expired at the same time.  Similarly,
+if you set the annotation on <tt>alt.binaries</tt>, all of the binary
+newsgroups under <tt>alt</tt> will be expired at the same time
+(independently from <tt>comp</tt>).
+
 <P><HR>
-last modified: $Date: 2003/06/20 15:58:36 $
+last modified: $Date: 2003/06/24 15:41:42 $
 </BODY></HTML>
