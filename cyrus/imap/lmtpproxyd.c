@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.36 2002/02/25 02:37:38 leg Exp $
+ * $Id: lmtpproxyd.c,v 1.37 2002/02/27 04:34:39 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -151,6 +151,7 @@ static int quotaoverride = 0;		/* should i override quota? */
 const char *BB = "";
 static mupdate_handle *mhandle = NULL;
 static const char *mupdate_server = NULL;
+int deliver_logfd = -1; /* used in lmtpengine.c */
 
 /* current namespace */
 static struct namespace lmtpd_namespace;
@@ -317,6 +318,12 @@ int service_main(int argc, char **argv, char **envp)
     /* free session state */
     if (deliver_in) prot_free(deliver_in);
     if (deliver_out) prot_free(deliver_out);
+
+    if (deliver_logfd != -1) {
+        close(deliver_logfd);
+        deliver_logfd = -1;
+    }
+
     close(0);
     close(1);
     close(2);

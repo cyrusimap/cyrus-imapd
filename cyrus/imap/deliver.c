@@ -83,6 +83,9 @@ static struct protstream *deliver_out, *deliver_in;
 
 static const char *sockaddr;
 
+/* unused for deliver.c, but needed to make lmtpengine.c happy */
+int deliver_logfd = -1;
+
 /* forward declarations */
 
 static int deliver_msg(char *return_path, char *authuser, int ignorequota,

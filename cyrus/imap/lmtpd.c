@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.86 2002/02/25 17:18:06 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.87 2002/02/27 04:34:39 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -164,6 +164,7 @@ static const char *sieve_dir = NULL;
 
 /* per-user/session state */
 static struct protstream *deliver_out, *deliver_in;
+int deliver_logfd = -1; /* used in lmtpengine.c */
 
 /* current namespace */
 static struct namespace lmtpd_namespace;
@@ -325,6 +326,12 @@ int service_main(int argc, char **argv, char **envp)
     if (deliver_in) prot_free(deliver_in);
     if (deliver_out) prot_free(deliver_out);
     deliver_in = deliver_out = NULL;
+
+    if (deliver_logfd != -1) {
+	close(deliver_logfd);
+	deliver_logfd = -1;
+    }
+
     close(0);
     close(1);
     close(2);
