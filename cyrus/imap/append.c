@@ -508,7 +508,7 @@ char *userid;
  * 'feeduid', as well as any existing consecutive articles after 'feeduid'
  * are appended.
  */
-#define COLLECTGROW 2 /* XXX 20 */
+#define COLLECTGROW 20
 int
 append_collectnews(mailbox, feeduid)
 struct mailbox *mailbox;
