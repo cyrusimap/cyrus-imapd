@@ -101,7 +101,7 @@ mailbox_reconstructmode()
 }
 
 /*
- * Open and read the header of the mailbox with pathname 'path'.
+ * Open and read the header of the mailbox with name 'name'
  * The structure pointed to by 'mailbox' is initialized.
  */
 int
@@ -110,14 +110,32 @@ char *name;
 struct mailbox *mailbox;
 {
     char *path, *acl;
+    int r;
+
+    r = mboxlist_lookup(name, &path, &acl);
+    if (r) return r;
+
+    return mailbox_open_header_path(name, path, acl, mailbox);
+}
+
+/*
+ * Open and read the header of the mailbox with name 'name'
+ * path 'path', and ACL 'acl'.
+ * The structure pointed to by 'mailbox' is initialized.
+ */
+int
+mailbox_open_header_path (name, path, acl, mailbox)
+char *name;
+char *path
+char *acl;
+struct mailbox *mailbox;
+{
+    char *path, *acl;
     char fnamebuf[MAX_MAILBOX_PATH];
     int r;
     static struct mailbox zeromailbox;
 
     *mailbox = zeromailbox;
-
-    r = mboxlist_lookup(name, &path, &acl);
-    if (r) return r;
 
     strcpy(fnamebuf, path);
     strcat(fnamebuf, FNAME_HEADER);
