@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.160 2002/01/29 18:44:28 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.161 2002/01/29 18:58:16 leg Exp $
  */
 
 #include <config.h>
@@ -78,8 +78,6 @@ extern int errno;
 #include "imap_err.h"
 #include "xmalloc.h"
 
-#include "acap.h"
-#include "acapmbox.h"
 #include "mboxname.h"
 #include "mupdate-client.h"
 
@@ -495,12 +493,12 @@ mboxlist_createmailboxcheck(char *name, int mbtype, char *partition,
  *
  * 1. start mailboxes transaction
  * 2. verify ACL's to best of ability (CRASH: abort)
- * 3. open ACAP connection if necessary
+ * 3. open mupdate connection if necessary
  * 4. verify parent ACL's if need to
- * 5. create ACAP entry and set as reserved (CRASH: ACAP inconsistant)
- * 6. create on disk (CRASH: ACAP inconsistant, disk inconsistant)
- * 8. commit local transaction (CRASH: ACAP inconsistant)
- * 9. set ACAP entry as commited (CRASH: commited)
+ * 5. create mupdate entry and set as reserved (CRASH: mupdate inconsistant)
+ * 6. create on disk (CRASH: mupdate inconsistant, disk inconsistant)
+ * 8. commit local transaction (CRASH: mupdate inconsistant)
+ * 9. set mupdate entry as commited (CRASH: commited)
  *
  */
 
@@ -520,7 +518,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     /* Must be atleast MAX_PARTITION_LEN + 30 for partition, need
      * MAX_PARTITION_LEN + HOSTNAME_SIZE + 2 for mupdate location */
     char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-    int madereserved = 0; /* made reserved entry on ACAP server */
+    int madereserved = 0; /* made reserved entry on mupdate server */
 
  retry:
     tid = NULL;
@@ -727,8 +725,8 @@ int mboxlist_insertremote(const char *name, int mbtype, const char *host,
  * 3. remove from database
  * 4. remove from disk
  * 5. commit transaction
- * 6. Open ACAP connection if necessary
- * 7. delete from ACAP
+ * 6. Open mupdate connection if necessary
+ * 7. delete from mupdate
  *
  */
 int mboxlist_deletemailbox(const char *name, int isadmin, char *userid, 
@@ -883,13 +881,13 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
  *
  * 1. start transaction
  * 2. verify acls
- * 3. open acap connection if needed
+ * 3. open mupdate connection if needed
  * 4. Delete entry from berkeley db
- * 5. ACAP make the new entry
+ * 5. mupdate make the new entry
  * 7. delete from disk
  * 8. commit transaction
- * 9. set new ACAP entry commited
- * 10. delete old ACAP entry
+ * 9. set new mupdate entry commited
+ * 10. delete old mupdate entry
  * */
 
 /* note: partition moving should really be moved to another function */
@@ -1204,11 +1202,11 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
  *
  * 1. Start transaction
  * 2. Check rights
- * 3. Open ACAP connection if necessary
+ * 3. Open mupdate connection if necessary
  * 4. Set db entry
  * 5. Change on disk
  * 6. Commit transaction
- * 7. Change ACAP entry 
+ * 7. Change mupdate entry 
  *
  */
 int mboxlist_setacl(char *name, char *identifier, char *rights, 
@@ -2029,11 +2027,6 @@ void mboxlist_init(int myflags)
 
     if (myflags & MBOXLIST_SYNC) {
 	r = DB->sync();
-    }
-
-    r = acap_init();
-    if (r != ACAP_OK) {
-	syslog(LOG_ERR,"acap_init failed()");
     }
 
     mupdate_server = config_getstring("mupdate_server", NULL);
