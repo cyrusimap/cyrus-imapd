@@ -26,3 +26,10 @@ CMU_COMERR
   the configure script will use the system installation (although, due
   to some autoconf wonkiness, com_err will still be configured; it just
   won't show up in the @subdirs@ expansion).
+
+CMU_PTHREADS
+  This attempts to link against libpthread (failing if it can't be found),
+  and attempts to do any system-specific setup required for thread
+  support (for example, most things want _REENTRANT to be defined,
+  but Solaris wants _POSIX_PTHREAD_SEMANTICS and __EXTENSIONS__, IRIX
+  wants to see _SGI_REENTRANT_FUNCTIONS, etc).
