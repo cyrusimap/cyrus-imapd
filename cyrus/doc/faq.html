@@ -4,7 +4,7 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.19.4.2 2002/09/20 02:30:53 ken3 Exp $ -->
+<!-- $Id: faq.html,v 1.19.4.3 2002/10/21 18:10:59 ken3 Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
@@ -25,6 +25,19 @@ along with the patch available in <tt>contrib/drac_auth.patch</tt>.</li>
 it may possibly work but you may also lose your email or have
 corrupted <tt>cyrus.*</tt> files. You can look at the mailing list
 archives for more information.</li>
+
+<li><b>Using AFS/Coda</b> We don't recommend it. It's even less likely
+to work than NFS. If you want to do it, it may possibly work but you
+may also lose your email or have corrupted <tt>cyrus.*</tt>
+files. CMU's previous e-mail system, AMS, leveraged AFS extensively
+for storage (and transit) purposes. For various reasons it didn't
+scale particularly well and led to CMU's interest in IMAP.
+
+<p>
+Cyrus was designed to use a local filesystem with Unix semantics and a
+working mmap()/write() combination. AFS doesn't provide these
+semantics so won't work correctly.</p>
+</li>
 
 <li><b>Virtual hosting</b> - See <a
 href="install-virtdomains.html">virtual domains configuration</a>.</li>
@@ -67,7 +80,7 @@ Cyrus user.</p>
 </dd>
 
 <dt><b>Q:</b> I'm using "<tt>sasl_pwcheck_method: saslauthd</tt>", but
-authentication isn't working.
+authentication isn't working.</dt>
 
 <dd>
 <p><b>A:</b> Make sure that the <tt>saslauthd</tt> daemon is running
@@ -87,11 +100,11 @@ user can access the unix domain socket (defaults to <tt>/var/run/mux</tt>).
 <dt><b>Q:</b> I'm getting messages about "duplicate_prune". What's
 wrong?</dt>
 
-<dd><b>A:</b>These messages look like 
+<dd><p><b>A:</b> These messages look like </p>
 
 <pre>
 Jan 14 13:46:24 grant ctl_deliver[9060]: duplicate_prune: opening
-/var/imap/deliverdb/deliver-x.db: No such file or directory
+  /var/imap/deliverdb/deliver-x.db: No such file or directory
 Jan 14 13:46:24 grant ctl_deliver[9060]: duplicate_prune: opening
   /var/imap/deliverdb/deliver-y.db: No such file or directory
 Jan 14 13:46:24 grant ctl_deliver[9060]: duplicate_prune: opening
@@ -137,8 +150,9 @@ service in <tt>cyrus.conf</tt> to something like:</p>
 kpop    cmd="pop3d -k -C /etc/kpopd.conf" listen="kpop"
 </pre>
 
-then copy <tt>/etc/imapd.conf</tt> to <tt>/etc/kpopd.conf</tt> and
-remove the <tt>tls_*</tt> options.</dd>
+<p>then copy <tt>/etc/imapd.conf</tt> to <tt>/etc/kpopd.conf</tt> and
+remove the <tt>tls_*</tt> options.</p>
+</dd>
 
 <dt><b>Q:</b> Eudora 5.x can't connect using STARTTLS ("SSL
 Neogotiation Failed"). What should I do?</dt>
@@ -168,11 +182,12 @@ Sep 11 17:23:56 ogg lmtpd[776]: DBERROR db3: 9 lockers
 What's wrong?
 </dt>
 
-<dd><b>A:</b> Nothing is wrong. These messages are logged whenever
+<dd>
+<p><b>A:</b> Nothing is wrong. These messages are logged whenever
 Berkeley db encounters lock contention, but isn't necessarily a
 problem by themselves. This is especially likely when you have an
 empty or small duplicate delivery database and are receiving a large
-volume of e-mail.
+volume of e-mail.</p>
 
 <p>Berkeley db 4.0 has a bug where the number of lockers isn't
 decremented properly, causing this number to be unreliable.</p>
@@ -181,7 +196,7 @@ decremented properly, causing this number to be unreliable.</p>
 </dl>
 
 <hr />
-last modified: $Date: 2002/09/20 02:30:53 $ <br />
+last modified: $Date: 2002/10/21 18:10:59 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
