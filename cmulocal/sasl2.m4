@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.31 2003/07/25 12:32:08 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.32 2003/09/30 17:31:35 rjs3 Exp $
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -230,7 +230,7 @@ AC_DEFUN(CMU_SASL2_CHECKAPOP_REQUIRED, [
 
 	LDFLAGS="$LDFLAGS $LIB_SASL"
 
-	AC_CHECK_LIB(sasl2, sasl_checkapop, AC_DEFINE(HAVE_APOP),
+	AC_CHECK_LIB(sasl2, sasl_checkapop, AC_DEFINE(HAVE_APOP,[],[Does our libsasl2 support APOP?]),
 		AC_MSG_ERROR([libsasl2 without working sasl_checkapop.  Cannot continue.]))
 
 	LDFLAGS=$cmu_saved_LDFLAGS
