@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.30 2002/01/10 19:36:25 leg Exp $ */
+/* $Id: tls.c,v 1.31 2002/01/12 16:12:53 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -874,7 +874,7 @@ int tls_start_servertls(int readfd, int writefd,
 	       SSL_session_reused(tls_conn) ? "reused" : "new",
 	       *authid);
     } else {
-	syslog(LOG_NOTICE, "starttls: %s, %s with cipher %s (%d/%d bits %s)"
+	syslog(LOG_NOTICE, "starttls: %s with cipher %s (%d/%d bits %s)"
 	                   " no authentication", 
 	       tls_protocol, tls_cipher_name,
 	       tls_cipher_usebits, tls_cipher_algbits,
