@@ -1,5 +1,5 @@
 # nntp_err.et -- Error codes for the Cyrus NNTP server
-# $Id: nntp_err.et,v 1.1.2.2 2002/09/24 23:00:50 ken3 Exp $
+# $Id: nntp_err.et,v 1.1.2.3 2002/12/27 14:14:25 ken3 Exp $
 #
 # Copyright 2002 Carnegie Mellon University
 # 
@@ -35,5 +35,8 @@ ec NNTP_FAIL_NEWSGROUPS,
 
 ec NNTP_DONT_SEND,
    "Already have this article"
+
+ec NNTP_FAIL_TRANSFER,
+   "Error transferring this article"
 
 end
