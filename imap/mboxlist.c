@@ -1647,6 +1647,17 @@ int *seen;
 	return 0;
     }
 
+    if (copyoffset < list_size) {
+	n = retry_write(newlistfd, list_base + copyoffset,
+			list_size - copyoffset);
+	if (n == -1) {
+	    syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
+	    mboxlist_unlock();
+	    close(newlistfd);
+	    return IMAP_IOERROR;
+	}
+    }
+
     if (fsync(newlistfd)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
 	mboxlist_unlock();
