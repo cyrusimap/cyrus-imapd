@@ -39,7 +39,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.4 2004/02/04 01:42:39 ken3 Exp $ */
+/* $Id: protocol.c,v 1.5 2004/02/17 14:28:43 rjs3 Exp $ */
+
+#include <config.h>
 
 #include <string.h>
 #include <limits.h>
