@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.23.2.11 2005/03/12 03:30:13 ken3 Exp $
+ * $Id: sieve.y,v 1.23.2.12 2005/04/05 14:58:34 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -169,7 +169,7 @@ extern void yyrestart(FILE *f);
 %token COMPARATOR IS CONTAINS MATCHES REGEX COUNT VALUE OVER UNDER
 %token GT GE LT LE EQ NE
 %token ALL LOCALPART DOMAIN USER DETAIL
-%token RAW TEXT CONTENT BINARY OFFSET
+%token RAW TEXT CONTENT
 %token DAYS ADDRESSES SUBJECT MIME
 %token METHOD ID OPTIONS LOW NORMAL HIGH ANY MESSAGE
 %token INCLUDE PERSONAL GLOBAL RETURN
@@ -178,7 +178,7 @@ extern void yyrestart(FILE *f);
 %type <cl> commands command action elsif block
 %type <sl> stringlist strings
 %type <test> test
-%type <nval> comptag relcomp sizetag addrparttag addrorenv offset location copy
+%type <nval> comptag relcomp sizetag addrparttag addrorenv location copy
 %type <testl> testlist tests
 %type <htag> htags
 %type <aetag> aetags
@@ -575,17 +575,6 @@ btags: /* empty */		 { $$ = new_btags(); }
 				       $$->transform = CONTENT;
 				       $$->content_types = $3;
 				   } }
-/* XXX don't allow this until we get clarification on its necessity
-        | btags BINARY stringlist offset { $$ = $1;
-				   if ($$->transform != -1) {
-			yyerror("duplicate or conflicting transform tag");
-			YYERROR; }
-				   else {
-				       $$->transform = BINARY;
-				       $$->content_types = $3;
-				       $$->offset = $4;
-				   } }
-*/
 	| btags comptag		 { $$ = $1;
 				   if ($$->comptag != -1) { 
 			yyerror("duplicate comparator type tag"); YYERROR; }
@@ -648,10 +637,6 @@ relcomp: COUNT			 { if (!parse_script->support.relational) {
 
 sizetag: OVER			 { $$ = OVER; }
 	| UNDER			 { $$ = UNDER; }
-	;
-
-offset: /* empty */		 { $$ = 0; }
-	| OFFSET NUMBER		 { $$ = $2; }
 	;
 
 copy: /* empty */		 { $$ = 0; }

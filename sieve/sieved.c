@@ -300,7 +300,6 @@ int dump2_test(bytecode_input_t * d, int i)
 	case B_RAW: printf("raw"); break;
 	case B_TEXT:printf("text"); break;
 	case B_CONTENT:printf("content"); break;
-	case B_BINARY:printf("binary"); break;
 	}
 	printf("\tOffset: %d\n", ntohl(d[i++].value));
 	printf("              Content-Types:");

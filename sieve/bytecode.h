@@ -203,12 +203,12 @@ enum bytecode_tags {
     B_RAW,		/* require body */
     B_TEXT,		/* require body */
     B_CONTENT,		/* require body */
-    B_BINARY,		/* require body */
 
     B_TRANSFORM_PLACEHOLDER_1,
     B_TRANSFORM_PLACEHOLDER_2,
     B_TRANSFORM_PLACEHOLDER_3,
     B_TRANSFORM_PLACEHOLDER_4,
+    B_TRANSFORM_PLACEHOLDER_5,
 
     /* Script locations */
     B_PERSONAL,		/* require include */

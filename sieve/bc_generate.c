@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_generate.c,v 1.2.2.4 2005/03/12 03:30:11 ken3 Exp $
+ * $Id: bc_generate.c,v 1.2.2.5 2005/04/05 14:58:33 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -382,9 +382,6 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 	    break;
 	case CONTENT:
 	    retval->data[codep++].value = B_CONTENT;
-	    break;
-	case BINARY:
-	    retval->data[codep++].value = B_BINARY;
 	    break;
 	default:
 	    return -1;

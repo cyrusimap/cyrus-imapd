@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.2.2.9 2005/03/14 16:37:53 ken3 Exp $
+ * $Id: bc_eval.c,v 1.2.2.10 2005/04/05 14:58:33 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -810,15 +810,7 @@ int eval_bc_test(sieve_interp_t *interp,
 			}
 		    }
 
-		    if (transform == B_BINARY) {
-			content += offset;
-			size -= offset;
-
-			/* XXX convert content to ascii-hex */
-		    }
-		    else {
-			/* XXX convert charset */
-		    }
+		    /* XXX convert charset */
 		}
 
 		/* search through all the data */ 

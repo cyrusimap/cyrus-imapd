@@ -1,7 +1,7 @@
 %{
 /* sieve.l -- sieve lexer
  * Larry Greenfield
- * $Id: sieve-lex.l,v 1.20.8.3 2005/03/12 03:30:13 ken3 Exp $
+ * $Id: sieve-lex.l,v 1.20.8.4 2005/04/05 14:58:34 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -135,8 +135,6 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>:raw		return RAW;
 <INITIAL>:text		return TEXT;
 <INITIAL>:content	return CONTENT;
-<INITIAL>:binary	return BINARY;
-<INITIAL>:offset	return OFFSET;
 <INITIAL>include	return INCLUDE;
 <INITIAL>:personal	return PERSONAL;
 <INITIAL>:global	return GLOBAL;
