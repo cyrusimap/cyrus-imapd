@@ -1,5 +1,5 @@
 /* xmalloc.h -- Allocation package that calls fatal() when out of memory
- * $Id: xmalloc.h,v 1.21 2003/02/13 20:15:42 rjs3 Exp $
+ * $Id: xmalloc.h,v 1.22 2003/02/27 15:51:41 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -61,6 +61,11 @@ extern size_t strlcpy(char *dst, const char *src, size_t len);
 #endif
 #ifndef HAVE_STRLCAT
 extern size_t strlcat(char *dst, const char *src, size_t len);
+#endif
+
+/* Needed because we cannot include config.h in a libcyrus .h file */
+#ifndef __attribute__
+#define __attribute__(x)
 #endif
 
 /* Functions using xmalloc.h must provide a function called fatal() conforming
