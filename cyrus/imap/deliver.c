@@ -7,6 +7,14 @@
  *
  */
 
+/* issues:
+   -l flag
+   buffer up whole message
+   doesn't deal w/ multiple responses from DATA
+   doesn't correctly exit based on response code
+   MAIL FROM:<> isn't filled in with the sender
+*/
+
 #include <config.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

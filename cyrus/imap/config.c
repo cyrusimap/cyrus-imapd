@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.27 2000/02/17 03:04:29 leg Exp $
+ $Id: config.c,v 1.28 2000/02/18 22:51:34 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -265,4 +265,36 @@ void config_scanpartition( void (*proc)() )
 	    (*proc)(xstrdup(""), s, configlist[opt].key+10);
 	}
     }
+}
+
+/* this is a wrapper to call the cyrus configuration from SASL */
+int mysasl_config(void *context __attribute__((unused)), 
+		  const char *plugin_name,
+		  const char *option,
+		  const char **result,
+		  unsigned *len)
+{
+    char opt[1024];
+
+    if (strcmp(option, "srvtab")) { /* we don't transform srvtab! */
+	int sl = 5 + (plugin_name ? strlen(plugin_name) + 1 : 0);
+
+	strncpy(opt, "sasl_", 1024);
+	if (plugin_name) {
+	    strncat(opt, plugin_name, 1019);
+	    strncat(opt, "_", 1024 - sl);
+	}
+ 	strncat(opt, option, 1024 - sl - 1);
+	opt[1023] = '\0';
+    } else {
+	strncpy(opt, option, 1024);
+    }
+
+    *result = config_getstring(opt, NULL);
+    if (*result != NULL) {
+	if (len) { *len = strlen(*result); }
+	return SASL_OK;
+    }
+   
+    return SASL_FAIL;
 }
