@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.147.2.4.2.2 2001/07/04 13:59:29 ken3 Exp $
+ * $Id: mboxlist.c,v 1.147.2.4.2.3 2001/07/05 17:27:16 ken3 Exp $
  */
 
 #include <config.h>
@@ -1678,7 +1678,7 @@ int mboxlist_findall_alt(char *pattern, struct namespace *namespace,
      */
     len = strlen(namespace->prefix[NAMESPACE_SHARED]);
     if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
-		 prefixlen < len ? prefixlen : len)) {
+		 prefixlen < len - 1 ? prefixlen : len - 1)) {
 
 	cbrock.find_namespace = NAMESPACE_SHARED;
 	cbrock.inboxoffset = 0;
@@ -1705,7 +1705,7 @@ int mboxlist_findall_alt(char *pattern, struct namespace *namespace,
 			&find_p, &find_cb, &cbrock,
 			NULL);
 	}
-	else {
+	else if (pattern[len-1] == '.') {
 	    strcpy(patbuf, "");
 	    strcat(patbuf, pattern+len);
 	    cbrock.g = glob_init(patbuf, GLOB_HIERARCHY);
@@ -2292,7 +2292,7 @@ int mboxlist_findsub_alt(char *pattern, struct namespace *namespace,
      */
     len = strlen(namespace->prefix[NAMESPACE_SHARED]);
     if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
-		 prefixlen < len ? prefixlen : len)) {
+		 prefixlen < len - 1 ? prefixlen : len - 1)) {
 
 	cbrock.find_namespace = NAMESPACE_SHARED;
 	cbrock.inboxoffset = 0;
@@ -2319,7 +2319,7 @@ int mboxlist_findsub_alt(char *pattern, struct namespace *namespace,
 			   &find_p, &find_cb, &cbrock,
 			   NULL);
 	}
-	else {
+	else if (pattern[len-1] == '.') {
 	    strcpy(patbuf, "");
 	    strcat(patbuf, pattern+len);
 	    cbrock.g = glob_init(patbuf, GLOB_HIERARCHY);
