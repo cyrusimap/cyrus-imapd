@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.14 2003/04/23 18:07:48 rjs3 Exp $
+ * $Id: user.c,v 1.15 2003/07/28 04:00:32 rjs3 Exp $
  */
 
 #include <config.h>
@@ -81,9 +81,9 @@
 #include "seen.h"
 #include "xmalloc.h"
 
+#if 0
 static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 {
-#if 0
     /* deleting all references to the user is too slow right now */
 
     char *ident = (char *) rock;
@@ -110,9 +110,9 @@ static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 
 	acl = nextid;
     }
-#endif
     return 0;
 }
+#endif
 
 int user_deletesieve(char *user) 
 {
@@ -153,7 +153,6 @@ int user_delete(char *user, char *userid, struct auth_state *authstate,
 		int wipe_user)
 {
     char *fname;
-    char pat[] = "*";
 
     /* delete seen state */
     if(wipe_user)
@@ -168,9 +167,15 @@ int user_delete(char *user, char *userid, struct auth_state *authstate,
     user_deletequotas(user);
 
     /* delete ACLs - we're using the internal names here */
-    if(wipe_user)
-	mboxlist_findall(NULL, pat, 1, userid, authstate, user_deleteacl,
+#if 0
+    /* xxx no reason to do this if user_deleteacl is a stub anyway. */
+    if(wipe_user) {
+	const char pat[] = "*";
+	mboxlist_findall(NULL, pat, sizeof(pat), userid,
+			 authstate, user_deleteacl,
 			 user);
+    }
+#endif
 
     /* delete sieve scripts */
     user_deletesieve(user);
