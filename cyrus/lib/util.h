@@ -41,6 +41,10 @@ extern char convert_to_lowercase[256];
  */
 char *lcase( /* char *str */ );
 
+/* convert string to all upper case
+ */
+char *ucase( /* char *str */ );
+
 /* clean up control characters in a string while copying it
  *  returns pointer to end of dst string.
  *  dst must have twice the length of source
