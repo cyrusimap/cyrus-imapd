@@ -40,9 +40,6 @@ CC = @CC@
 INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
-LEX = @LEX@
-YACC = @YACC@
-
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
 LIBS = @LIBS@ 
@@ -55,10 +52,8 @@ SHELL = /bin/sh
 
 COMPILE_ET=../et/compile_et
 
-LOBJS= append.o mailbox.o mboxlist.o message.o \
-	parsel.o parsey.o parseadd.o parseutl.o \
-	config.o imap_err.o proc.o drop.o \
-	setproctitle.o \
+LOBJS= append.o mailbox.o mboxlist.o message.o parseaddr.o \
+	config.o imap_err.o proc.o drop.o setproctitle.o \
 	$(SEEN) $(NOTIFY) $(LOGIN)
 
 IMAPDOBJS= imapd.o index.o
@@ -115,29 +110,16 @@ libimap.a: $(LOBJS)
 	ar cr libimap.a $(LOBJS)
 	$(RANLIB) libimap.a
 
-.l.c:
-	$(LEX) $<
-	rm -f $*.c
-	mv lex.yy.c $*.c
-
-parsel.o: parsel.c parsey.h
-
-parsey.c parsey.h: parsey.y
-	$(YACC) -d $(srcdir)/parsey.y
-	rm -f parsey.c parsey.h
-	mv y.tab.c parsey.c
-	mv y.tab.h parsey.h
-
 imap_err.h imap_err.c: imap_err.et
 	$(COMPILE_ET) $(srcdir)/imap_err.et
 
 clean:
-	rm -f *.o *.a Makefile.bak parsey.c parsey.h parsel.c imap_err.c imap_err.h $(PROGS)
+	rm -f *.o *.a Makefile.bak imap_err.c imap_err.h $(PROGS)
 
 distclean: clean
 	rm -f Makefile
 
-depend: parsel.c parsey.c imap_err.h
+depend: imap_err.h
 	makedepend $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
