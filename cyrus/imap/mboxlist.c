@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.159 2002/01/25 19:51:54 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.160 2002/01/29 18:44:28 rjs3 Exp $
  */
 
 #include <config.h>
@@ -81,6 +81,7 @@ extern int errno;
 #include "acap.h"
 #include "acapmbox.h"
 #include "mboxname.h"
+#include "mupdate-client.h"
 
 #include "mboxlist.h"
 
@@ -92,6 +93,10 @@ cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 struct db *mbdb;
 
 static int mboxlist_dbopen = 0;
+
+#define HOSTNAME_SIZE 512
+static const char *mupdate_server = NULL;
+static char myhostname[HOSTNAME_SIZE];
 
 static int mboxlist_opensubs();
 static void mboxlist_closesubs();
@@ -380,7 +385,8 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
     }
     if (parentlen != 0) {
 	/* check acl */
-	if (!isadmin && !(cyrus_acl_myrights(auth_state, parentacl) & ACL_CREATE)) {
+	if (!isadmin &&
+	    !(cyrus_acl_myrights(auth_state, parentacl) & ACL_CREATE)) {
 	    return IMAP_PERMISSION_DENIED;
 	}
 
@@ -508,11 +514,13 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     char *newpartition = NULL;
     struct mailbox newmailbox;
     struct txn *tid = NULL;
+    mupdate_handle *mupdate_h;
     char *mboxent = NULL;
 
-    acapmbox_data_t mboxdata;
+    /* Must be atleast MAX_PARTITION_LEN + 30 for partition, need
+     * MAX_PARTITION_LEN + HOSTNAME_SIZE + 2 for mupdate location */
+    char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
     int madereserved = 0; /* made reserved entry on ACAP server */
-    acapmbox_handle_t *acaphandle = NULL;
 
  retry:
     tid = NULL;
@@ -531,8 +539,6 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     }
 
     if (!(mbtype & MBTYPE_REMOTE)) {
-	char buf[MAX_PARTITION_LEN + 30];
-    
 	/* Get partition's path */
 	sprintf(buf, "partition-%s", newpartition);
 	root = config_getstring(buf, (char *)0);
@@ -546,17 +552,27 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	}
     }
 
-    /* 3. open ACAP connection if necessary */
-    acaphandle = acapmbox_get_handle();
-    
-    /* 4. create ACAP entry and set as reserved (CRASH: ACAP inconsistant) */
-    acapmbox_new(&mboxdata, NULL, name);
-    r = acapmbox_create(acaphandle, &mboxdata);
-    if (r) {
-	syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n", name,
-	       error_message(r));
-	goto done;
+    /* 4. Create mupdate reservation */
+    if (mupdate_server) {
+	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "can not connect to mupdate server for reservation on '%s'",
+		   name);
+	    goto done;
+	}
+
+	sprintf(buf, "%s!%s", myhostname, newpartition);
+
+	/* reserve the mailbox in MUPDATE */
+	r = mupdate_reserve(mupdate_h, name, buf);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "MUPDATE: can't reserve mailbox entry for '%s'", name);
+	    goto done;
+	}
     }
+
     madereserved = 1; /* so we can roll back on failure */
     
     /* 5. add the new entry */
@@ -579,18 +595,15 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 
  done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
-	char buf[MAX_MAILBOX_PATH];
+	char mbbuf[MAX_MAILBOX_PATH];
 
 	/* Create new mailbox and move new mailbox list file into place */
-	mailbox_hash_mbox(buf, root, name);
-	r = mailbox_create(name, buf, acl, NULL,
+	mailbox_hash_mbox(mbbuf, root, name);
+	r = mailbox_create(name, mbbuf, acl, NULL,
 			   ((mbtype & MBTYPE_NETNEWS) ?
 			    MAILBOX_FORMAT_NETNEWS :
 			    MAILBOX_FORMAT_NORMAL), 
 			   &newmailbox);
-	mboxdata.uidvalidity = newmailbox.uidvalidity;
-	mboxdata.acl = acl;
-	mboxdata.total = newmailbox.exists;
 	if (!r) {
 	    mailbox_close(&newmailbox);
 	}
@@ -609,13 +622,25 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 		   cyrusdb_strerror(r2));
 	}
 
-	/* delete ACAP entry if we made it */
-	if (madereserved == 1) {
-	    r2 = acapmbox_delete(acaphandle, name);
-	    if (r2) {
-		syslog(LOG_ERR, "ACAP: unable to unreserve %s: %s\n", name, 
-		       error_message(r2));
+	/* delete mupdate entry if we made it */
+	if (madereserved == 1 && mupdate_server) {
+	    r2 = mupdate_delete(mupdate_h, name);
+	    if(r2 > 0) {
+		/* Disconnect, reconnect, and retry */
+		syslog(LOG_WARNING,
+		       "MUPDATE: lost connection, retrying");
+		mupdate_disconnect(&mupdate_h);
+		r2 = mupdate_connect(mupdate_server, NULL,
+				     &mupdate_h, NULL);
+		if(!r2) {
+		    r2 = mupdate_delete(mupdate_h, name);
+		}
 	    }
+	    if(r2) {
+		syslog(LOG_ERR,
+		       "MUPDATE: can't unreserve mailbox entry '%s'",
+		       name);
+	    }		
 	}
     } else { /* all is well */
 	switch (r = DB->commit(mbdb, tid)) {
@@ -628,15 +653,30 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	}
     }
 
-    /* 9. set ACAP entry as commited (CRASH: commited) */
-    if (!r) {
-	r = acapmbox_markactive(acaphandle, &mboxdata);
-	if (r) {
-	    syslog(LOG_ERR, "ACAP: unable to commit %s: %s\n", name, 
-		   error_message(r));
+    /* 9. set MUPDATE entry as commited (CRASH: commited) */
+    /* xxx maybe we should roll back if this fails? */
+    if (!r && mupdate_server) {
+	/* commit the mailbox in MUPDATE */
+	sprintf(buf, "%s!%s", myhostname, newpartition);
+	    
+	r = mupdate_activate(mupdate_h, name, buf, acl);
+	if(r > 0) {
+	    /* Disconnect, reconnect, and retry */
+	    syslog(LOG_WARNING,
+		   "MUPDATE: lost connection, retrying");
+	    mupdate_disconnect(&mupdate_h);
+	    r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	    if(!r) {
+		r = mupdate_activate(mupdate_h, name, buf, acl);
+	    }
+	}
+	if(r) {
+	    syslog(LOG_ERR,
+		   "MUPDATE: can't commit mailbox entry for '%s'", name);
 	}
     }
-    acapmbox_release_handle(acaphandle);
+
+    if(mupdate_server) mupdate_disconnect(&mupdate_h);
 
     if (acl) free(acl);
     if (newpartition) free(newpartition);
@@ -705,6 +745,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     int isremote = 0;
     int mbtype;
     int deleteright = get_deleteright();
+    mupdate_handle *mupdate_h;
 
  retry:
     /* Check for request to delete a user:
@@ -807,25 +848,29 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 
     if (!r) r = mailbox_open_header_path(name, path, acl, 0, &mailbox, 0);
     if (!r) r = mailbox_delete(&mailbox, deletequotaroot);
-    if (!r) {
-	/* open ACAP connection if necessary */
-	acapmbox_handle_t *acaphandle = acapmbox_get_handle();
-	
-	/* delete from ACAP */
-	r = acapmbox_delete(acaphandle, name);
-	if (r) {
-	    syslog(LOG_ERR, 
-		   "ACAP: can't delete mailbox entry '%s': %s",
-		   name, error_message(r));
+
+    if (!r && mupdate_server) {
+	/* delete the mailbox in MUPDATE */
+	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "can not connect to mupdate server for delete of '%s'",
+		   name);
+	    goto done;
 	}
-	acapmbox_release_handle(acaphandle);
+	r = mupdate_delete(mupdate_h, name);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "MUPDATE: can't delete mailbox entry '%s'", name);
+	}
+	mupdate_disconnect(&mupdate_h);
     }
 
     /*
      * See if we have to remove mailbox's quota root
      */
     if (!r && mailbox.quota.root != NULL) {
-	/* look for any other mailboxes in this quotaroot */
+	/* xxx look for any other mailboxes in this quotaroot */
     }
 
  done:
@@ -860,7 +905,6 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     char *oldpath = NULL;
     char newpath[MAX_MAILBOX_PATH];
     struct mailbox newmailbox;
-    acapmbox_data_t mboxdata;
     char *oldacl = NULL, *newacl = NULL;
     const char *root = NULL;
     struct txn *tid = NULL;
@@ -868,7 +912,8 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     char *mboxent = NULL;
     int deleteright = get_deleteright();
 
-    int acap_madenew = 0;
+    mupdate_handle *mupdate_h;
+    int madenew = 0;
 
  retry:
     /* lookup the mailbox to make sure it exists and get its acl */
@@ -962,22 +1007,51 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    /* XXX mupdate will want to know about the partition change! */
-    if (!r && !partitionmove) {
-	/* 3. open ACAP connection if necessary */
-	acapmbox_handle_t *acaphandle = acapmbox_get_handle();
-
-	/* 5. ACAP make the new entry, set as reserved */
-	acapmbox_new(&mboxdata, NULL, newname);
-	r = acapmbox_create(acaphandle, &mboxdata);
-	if (r != ACAP_OK) {
+    if (!r && !partitionmove && mupdate_server) {
+	/* Reserve new name in MUPDATE */
+	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
+	sprintf(buf, "%s!%s", myhostname, newpartition);
+	
+	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "can not connect to mupdate server for reservation on '%s'",
+		   newname);
 	    goto done;
 	}
-	acap_madenew = 1;
+	
+	/* reserve the mailbox in MUPDATE */
+	r = mupdate_reserve(mupdate_h, newname, buf);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "MUPDATE: can't reserve mailbox entry for '%s'",
+		   newname);
+	    goto done;
+	}
+	
+	madenew = 1;
+    } else if(!r && partitionmove && mupdate_server) {
+	/* commit the update to MUPDATE */
+	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
+	sprintf(buf, "%s!%s", myhostname, newpartition);
 
-	acapmbox_release_handle(acaphandle);
+	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "can not connect to mupdate server for reservation on '%s'",
+		   newname);
+	    goto done;
+	}
+	
+	r = mupdate_activate(mupdate_h, oldname, buf, newacl);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "MUPDATE: can't update mailbox entry for '%s'",
+		   oldname);
+	    goto done;
+	}
     }
-
+    
     if (!isusermbox) {
 	/* 4. Delete entry from berkeley db */
 	r = DB->delete(mbdb, oldname, strlen(oldname), &tid);
@@ -1022,9 +1096,6 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	
 	r = mailbox_rename(oldname, oldpath, newacl, newname, 
 			   newpath, isusermbox, NULL, NULL, &newmailbox);
-	mboxdata.uidvalidity = newmailbox.uidvalidity;
-	mboxdata.acl = newacl;
-	mboxdata.total = newmailbox.exists;
 	if (!r) {
 	    mailbox_close(&newmailbox);
 	}
@@ -1038,15 +1109,25 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	    syslog(LOG_ERR, "DBERROR: can't abort: %s", cyrusdb_strerror(r2));
 	}
 	
-	/* unroll acap operations if necessary */
-	if (acap_madenew) {
-	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
-
-	    r2 = acapmbox_delete(acaphandle, newname);
-	    if (r2) syslog(LOG_ERR, "ACAP: can't rollback %s: %s", newname, 
-			   error_message(r));
-
-	    acapmbox_release_handle(acaphandle);
+	/* unroll mupdate operations if necessary */
+	if (madenew && mupdate_server) {
+	    r2 = mupdate_delete(mupdate_h, newname);
+	    if(r2 > 0) {
+		/* Disconnect, reconnect, and retry */
+		syslog(LOG_WARNING,
+		       "MUPDATE: lost connection, retrying");
+		mupdate_disconnect(&mupdate_h);
+		r2 = mupdate_connect(mupdate_server, NULL,
+				     &mupdate_h, NULL);
+		if(!r2) {
+		    r2 = mupdate_delete(mupdate_h, newname);
+		}
+	    }
+	    if(r2) {
+		syslog(LOG_ERR,
+		       "MUPDATE: can't unreserve mailbox entry '%s'",
+		       newname);
+	    }		
 	}
     } else {
 	/* commit now */
@@ -1062,26 +1143,49 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    if (!r && !partitionmove) {
-	acapmbox_handle_t *acaphandle = acapmbox_get_handle();
-
-	r = acapmbox_markactive(acaphandle, &mboxdata);
-	if (r) syslog(LOG_ERR, "ACAP: can't commit %s: %s", newname, 
-		      error_message(r));
-
-	acapmbox_release_handle(acaphandle);
-    }
-
-    if (!r && !partitionmove) {
-	acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+    if (!r && !partitionmove && mupdate_server) {
+	/* commit the mailbox in MUPDATE */
+	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
+	sprintf(buf, "%s!%s", myhostname, newpartition);
 	
-	/* delete old ACAP entry */
-	r = acapmbox_delete(acaphandle, oldname);
-	if (r) syslog(LOG_ERR, "ACAP: can't delete %s: %s", oldname, 
-		      error_message(r));
-
-	acapmbox_release_handle(acaphandle);
+	r = mupdate_activate(mupdate_h, newname, buf, newacl);
+	if(r > 0) {
+	    /* Disconnect, reconnect, and retry */
+	    syslog(LOG_WARNING,
+		   "MUPDATE: lost connection, retrying");
+	    mupdate_disconnect(&mupdate_h);
+	    r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	    if(!r) {
+		r = mupdate_activate(mupdate_h, newname, buf, newacl);
+	    }
+	}
+	if(r) {
+	    syslog(LOG_ERR,
+		   "MUPDATE: can't commit mailbox entry for '%s'",
+		   newname);
+	}
     }
+
+    if (!r && !partitionmove && mupdate_server) {
+	/* delete the old mailbox in MUPDATE */
+	r = mupdate_delete(mupdate_h, oldname);
+	if(r > 0) {
+	    /* Disconnect, reconnect, and retry */
+	    syslog(LOG_WARNING,
+		   "MUPDATE: lost connection, retrying");
+	    mupdate_disconnect(&mupdate_h);
+	    r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	    if(!r) {
+		r = mupdate_delete(mupdate_h, oldname);
+	    }
+	}
+	if(r) {
+	    syslog(LOG_ERR,
+		   "MUPDATE: can't delete mailbox entry '%s'", oldname);
+	}
+    }
+
+    if(mupdate_server) mupdate_disconnect(&mupdate_h);
 
     /* free memory */
     if (newacl) free(newacl);	/* we're done with the new ACL */
@@ -1234,10 +1338,27 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	}
     }
 
-    /* 7. Change ACAP entry  */
-    if (!r) { 
-	acapmbox_handle_t *acaphandle = acapmbox_get_handle();
-	r = acapmbox_setproperty_acl(acaphandle, name, newacl);
+    /* 7. Change mupdate entry  */
+    if (!r) {
+        mupdate_handle *mupdate_h;
+	/* commit the update to MUPDATE */
+	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
+	sprintf(buf, "%s!%s", myhostname, partition);
+
+	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "can not connect to mupdate server for reservation on '%s'",
+		   name);
+	} else {
+	    r = mupdate_activate(mupdate_h, name, buf, newacl);
+	    if(r) {
+		syslog(LOG_ERR,
+		       "MUPDATE: can't update mailbox entry for '%s'",
+		       name);
+	    }
+	}
+	mupdate_disconnect(&mupdate_h);
     }
     if (newacl) free(newacl);
     
@@ -1914,6 +2035,21 @@ void mboxlist_init(int myflags)
     if (r != ACAP_OK) {
 	syslog(LOG_ERR,"acap_init failed()");
     }
+
+    mupdate_server = config_getstring("mupdate_server", NULL);
+    r = gethostname(myhostname, HOSTNAME_SIZE);
+    if(r != 0) {
+	syslog(LOG_ERR, "couldn't get local hostname\n");
+	fatal("could not get local hostname", EC_TEMPFAIL);
+    }
+    if(mupdate_server) {
+	/* We're going to need SASL */
+	r = sasl_client_init(NULL);
+	if(r != 0) {
+	    syslog(LOG_ERR, "could not initialize SASL library");
+	    fatal("could not initialize SASL library", EC_TEMPFAIL);
+	}
+    }
 }
 
 void mboxlist_open(char *fname)
@@ -1967,8 +2103,6 @@ void mboxlist_done(void)
 	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
 	       cyrusdb_strerror(r));
     }
-    
-    /* finish ACAP API here */
 }
 
 /* hash the userid to a file containing the subscriptions for that user */
