@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.8 2002/06/03 18:22:35 rjs3 Exp $
+ * $Id: notifyd.c,v 1.9 2002/06/19 14:45:35 ken3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -99,7 +99,7 @@ int do_notify()
     int r, i;
     char *method, *class, *priority, *user, *mailbox, *message;
     char **options = NULL;
-    unsigned long nopt = 0;
+    long nopt = 0;
     char *reply = NULL;
     notifymethod_t *nmethod;
 
@@ -131,7 +131,7 @@ int do_notify()
 
 	if (cp) cp = fetch_arg(cp, tail); /* skip to nopt */
 	if (cp) nopt = strtol(cp, NULL, 10);
-	if (nopt < 0) cp = NULL;
+	if (nopt < 0 || errno == ERANGE) cp = NULL;
 
 	if (cp &&
 	    !(options = (char**) xrealloc(options, nopt * sizeof(char*)))) {
