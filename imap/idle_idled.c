@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.1 2000/12/14 19:26:48 ken3 Exp $ */
+/* $Id: idle_idled.c,v 1.2 2001/01/16 16:54:26 ken3 Exp $ */
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -156,9 +156,9 @@ void idle_done(struct mailbox *mailbox)
     idle_send_msg(IDLE_DONE, mailbox);
 
     /* Remove the signal handlers */
-    signal(SIGUSR1, SIG_DFL);
-    signal(SIGUSR2, SIG_DFL);
-    signal(SIGALRM, SIG_DFL);
+    signal(SIGUSR1, SIG_IGN);
+    signal(SIGUSR2, SIG_IGN);
+    signal(SIGALRM, SIG_IGN);
 }
 
 /*
