@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.6 2002/08/01 22:10:16 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.7 2002/08/06 15:47:31 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -345,6 +345,9 @@ static void conn_free(struct conn *C)
     pthread_mutex_unlock(&connlist_mutex); /* UNLOCK */
 
     if (C->ev) prot_removewaitevent(C->pin, C->ev);
+
+    prot_flush(C->pout);
+
     if (C->pin) prot_free(C->pin);
     if (C->pout) prot_free(C->pout);
     close(C->fd);
@@ -560,251 +563,238 @@ void fatal(const char *s, int code)
 mupdate_docmd_result_t docmd(struct conn *c)
 {
     mupdate_docmd_result_t ret = DOCMD_OK;
-    
-    do {
-	int ch;
-	char *p;
+    int ch;
+    char *p;
 
-	if(!ready_for_connections) {
-	    /* Are we allowed to continue serving data? */
-	    prot_printf(c->pout,
-			"* BYE \"no longer ready for connections\"\r\n");
-	    ret = DOCMD_CONN_FINISHED;
-	    goto done;
-	}
-
-	ch = getword(c->pin, &(c->tag));
-	if (ch == EOF && errno == EAGAIN) {
-	    /* streaming and no input from client */
-	    continue;
-	}
-	if (ch == EOF) {
-	    const char *err;
-	    
-	    if ((err = prot_error(c->pin)) != NULL) {
-		syslog(LOG_WARNING, "%s, closing connection", err);
-		prot_printf(c->pout, "* BYE \"%s\"\r\n", err);
-	    }
-
-	    ret = DOCMD_CONN_FINISHED;
-	    goto done;
-	}
-
-	/* send out any updates we have pending */
-	if (c->streaming) {
-	    sendupdates(c, 0); /* don't flush pout though */
-	}
-
-	if (ch != ' ') {
-	    prot_printf(c->pout, "* BAD \"Need command\"\r\n");
-	    eatline(c->pin, ch);
-	    continue;
-	}
-
-	/* parse command name */
-	ch = getword(c->pin, &(c->cmd));
-	if (!c->cmd.s[0]) {
-	    prot_printf(c->pout, "%s BAD \"Null command\"\r\n", c->tag.s);
-	    eatline(c->pin, ch);
-	    continue;
-	}
-
-	if (islower((unsigned char) c->cmd.s[0])) {
-	    c->cmd.s[0] = toupper((unsigned char) c->cmd.s[0]);
-	}
-	for (p = &(c->cmd.s[1]); *p; p++) {
-	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
+    ch = getword(c->pin, &(c->tag));
+    if (ch == EOF && errno == EAGAIN) {
+	/* streaming and no input from client */
+	goto done;
+    }
+    if (ch == EOF) {
+	const char *err;
+	
+	if ((err = prot_error(c->pin)) != NULL) {
+	    syslog(LOG_WARNING, "%s, closing connection", err);
+	    prot_printf(c->pout, "* BYE \"%s\"\r\n", err);
 	}
 	
-	switch (c->cmd.s[0]) {
-	case 'A':
-	    if (!strcmp(c->cmd.s, "Authenticate")) {
-		int opt = 0;
-		
-		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &(c->arg1));
-		if (ch == ' ') {
-		    ch = getstring(c->pin, c->pout, &(c->arg2));
-		    opt = 1;
-		}
-		CHECKNEWLINE(c, ch);
-
-		if (c->userid) {
-		    prot_printf(c->pout,
-				"%s BAD \"already authenticated\"\r\n",
-				c->tag.s);
-		    continue;
-		}
-
-		cmd_authenticate(c, c->tag.s, c->arg1.s,
-				 opt ? c->arg2.s : NULL);
-	    }
-	    else if (!c->userid) goto nologin;
-	    else if (!strcmp(c->cmd.s, "Activate")) {
-		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &(c->arg1));
-		if (ch != ' ') goto missingargs;
+	ret = DOCMD_CONN_FINISHED;
+	goto done;
+    }
+    
+    /* send out any updates we have pending */
+    if (c->streaming) {
+	sendupdates(c, 0); /* don't flush pout though */
+    }
+    
+    if (ch != ' ') {
+	prot_printf(c->pout, "* BAD \"Need command\"\r\n");
+	eatline(c->pin, ch);
+	goto done;
+    }
+    
+    /* parse command name */
+    ch = getword(c->pin, &(c->cmd));
+    if (!c->cmd.s[0]) {
+	prot_printf(c->pout, "%s BAD \"Null command\"\r\n", c->tag.s);
+	eatline(c->pin, ch);
+	goto done;
+    }
+    
+    if (islower((unsigned char) c->cmd.s[0])) {
+	c->cmd.s[0] = toupper((unsigned char) c->cmd.s[0]);
+    }
+    for (p = &(c->cmd.s[1]); *p; p++) {
+	if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
+    }
+    
+    switch (c->cmd.s[0]) {
+    case 'A':
+	if (!strcmp(c->cmd.s, "Authenticate")) {
+	    int opt = 0;
+	    
+	    if (ch != ' ') goto missingargs;
+	    ch = getstring(c->pin, c->pout, &(c->arg1));
+	    if (ch == ' ') {
 		ch = getstring(c->pin, c->pout, &(c->arg2));
-		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &(c->arg3));
-		CHECKNEWLINE(c, ch);
-
-		if (c->streaming) goto notwhenstreaming;
-		if (!masterp) goto masteronly;
-
-		cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s,
-			c->arg3.s, SET_ACTIVE);
+		opt = 1;
 	    }
-	    else goto badcmd;
-	    break;
-
-	case 'D':
-	    if (!c->userid) goto nologin;
-	    else if (!strcmp(c->cmd.s, "Deactivate")) {
-		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &(c->arg1));
-		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &(c->arg2));
-		CHECKNEWLINE(c, ch);
-
-		if (c->streaming) goto notwhenstreaming;
-		if (!masterp) goto masteronly;
-		
-		cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s,
-			NULL, SET_DEACTIVATE);
-	    }
-	    else if (!strcmp(c->cmd.s, "Delete")) {
-		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &(c->arg1));
-		CHECKNEWLINE(c, ch);
-
-		if (c->streaming) goto notwhenstreaming;
-		if (!masterp) goto masteronly;
-
-		cmd_set(c, c->tag.s, c->arg1.s, NULL, NULL, SET_DELETE);
-	    }
-	    else goto badcmd;
-	    break;
-
-	case 'F':
-	    if (!c->userid) goto nologin;
-	    else if (!strcmp(c->cmd.s, "Find")) {
-		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &(c->arg1));
-		CHECKNEWLINE(c, ch);
-
-		if (c->streaming) goto notwhenstreaming;
-		
-		cmd_find(c, c->tag.s, c->arg1.s, 1, 0);
-	    }
-	    else goto badcmd;
-	    break;
-
-	case 'L':
-	    if (!strcmp(c->cmd.s, "Logout")) {
-		CHECKNEWLINE(c, ch);
-
-		prot_printf(c->pout, "%s OK \"bye-bye\"\r\n", c->tag.s);
-		ret = DOCMD_CONN_FINISHED;
+	    CHECKNEWLINE(c, ch);
+	    
+	    if (c->userid) {
+		prot_printf(c->pout,
+			    "%s BAD \"already authenticated\"\r\n",
+			    c->tag.s);
 		goto done;
 	    }
-	    else if (!c->userid) goto nologin;
-	    else if (!strcmp(c->cmd.s, "List")) {
-		int opt = 0;
-
-		if (ch == ' ') {
-		    /* Optional partition/host prefix parameter */
-		    ch = getstring(c->pin, c->pout, &(c->arg1));
-		    opt = 1;
-		}
-		CHECKNEWLINE(c, ch);
-
-		if (c->streaming) goto notwhenstreaming;
-
-		cmd_list(c, c->tag.s, opt ? c->arg1.s : NULL);
-		
-		prot_printf(c->pout, "%s OK \"list complete\"\r\n", c->tag.s);
-	    }
-	    else goto badcmd;
-	    break;
-
-	case 'N':
-	    if (!c->userid) goto nologin;
-	    else if (!strcmp(c->cmd.s, "Noop")) {
-		CHECKNEWLINE(c, ch);
-
-		prot_printf(c->pout, "%s OK \"Noop done\"\r\n", c->tag.s);
-	    }
-	    else goto badcmd;
-	    break;
-
-	case 'R':
-	    if (!c->userid) goto nologin;
-	    else if (!strcmp(c->cmd.s, "Reserve")) {
-		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &(c->arg1));
-		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &(c->arg2));
-		CHECKNEWLINE(c, ch);
-
-		if (c->streaming) goto notwhenstreaming;
-		if (!masterp) goto masteronly;
-		
-		cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s, NULL, SET_RESERVE);
-	    }
-	    else goto badcmd;
-	    break;
-
-	case 'U':
-	    if (!c->userid) goto nologin;
-	    else if (!strcmp(c->cmd.s, "Update")) {
-		CHECKNEWLINE(c, ch);
-		if (c->streaming) goto notwhenstreaming;
-		
-		cmd_startupdate(c, c->tag.s);
-	    }
-	    else goto badcmd;
-	    break;
-
-	default:
-	badcmd:
-	    prot_printf(c->pout, "%s BAD \"Unrecognized command\"\r\n",
-			c->tag.s);
-	    eatline(c->pin, ch);
-	    continue;
-
-	extraargs:
-	    prot_printf(c->pout, "%s BAD \"Extra arguments\"\r\n",
-			c->tag.s);
-	    eatline(c->pin, ch);
-	    continue;
 	    
-	missingargs:
-	    prot_printf(c->pout, "%s BAD \"Missing arguments\"\r\n",
-			c->tag.s);
-	    eatline(c->pin, ch);
-	    continue;
-
-	notwhenstreaming:
-	    prot_printf(c->pout, "%s BAD \"not legal when streaming\"\r\n",
-			c->tag.s);
-	    continue;
-
-	masteronly:
-	    prot_printf(c->pout,
-			"%s BAD \"read-only session\"\r\n",
-			c->tag.s);
-	    continue;
+	    cmd_authenticate(c, c->tag.s, c->arg1.s,
+			     opt ? c->arg2.s : NULL);
 	}
-
-	continue;
+	else if (!c->userid) goto nologin;
+	else if (!strcmp(c->cmd.s, "Activate")) {
+	    if (ch != ' ') goto missingargs;
+	    ch = getstring(c->pin, c->pout, &(c->arg1));
+	    if (ch != ' ') goto missingargs;
+	    ch = getstring(c->pin, c->pout, &(c->arg2));
+	    if (ch != ' ') goto missingargs;
+	    ch = getstring(c->pin, c->pout, &(c->arg3));
+	    CHECKNEWLINE(c, ch);
+	    
+	    if (c->streaming) goto notwhenstreaming;
+	    if (!masterp) goto masteronly;
+	    
+	    cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s,
+		    c->arg3.s, SET_ACTIVE);
+	}
+	else goto badcmd;
+	break;
+	
+    case 'D':
+	if (!c->userid) goto nologin;
+	else if (!strcmp(c->cmd.s, "Deactivate")) {
+	    if (ch != ' ') goto missingargs;
+	    ch = getstring(c->pin, c->pout, &(c->arg1));
+	    if (ch != ' ') goto missingargs;
+	    ch = getstring(c->pin, c->pout, &(c->arg2));
+	    CHECKNEWLINE(c, ch);
+	    
+	    if (c->streaming) goto notwhenstreaming;
+	    if (!masterp) goto masteronly;
+	    
+	    cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s,
+		    NULL, SET_DEACTIVATE);
+	}
+	else if (!strcmp(c->cmd.s, "Delete")) {
+	    if (ch != ' ') goto missingargs;
+	    ch = getstring(c->pin, c->pout, &(c->arg1));
+	    CHECKNEWLINE(c, ch);
+	    
+	    if (c->streaming) goto notwhenstreaming;
+	    if (!masterp) goto masteronly;
+	    
+	    cmd_set(c, c->tag.s, c->arg1.s, NULL, NULL, SET_DELETE);
+	}
+	else goto badcmd;
+	break;
+	
+    case 'F':
+	if (!c->userid) goto nologin;
+	else if (!strcmp(c->cmd.s, "Find")) {
+	    if (ch != ' ') goto missingargs;
+	    ch = getstring(c->pin, c->pout, &(c->arg1));
+	    CHECKNEWLINE(c, ch);
+	    
+	    if (c->streaming) goto notwhenstreaming;
+	    
+	    cmd_find(c, c->tag.s, c->arg1.s, 1, 0);
+	}
+	else goto badcmd;
+	break;
+	
+    case 'L':
+	if (!strcmp(c->cmd.s, "Logout")) {
+	    CHECKNEWLINE(c, ch);
+	    
+	    prot_printf(c->pout, "%s OK \"bye-bye\"\r\n", c->tag.s);
+	    ret = DOCMD_CONN_FINISHED;
+	    goto done;
+	}
+	else if (!c->userid) goto nologin;
+	else if (!strcmp(c->cmd.s, "List")) {
+	    int opt = 0;
+	    
+	    if (ch == ' ') {
+		/* Optional partition/host prefix parameter */
+		ch = getstring(c->pin, c->pout, &(c->arg1));
+		opt = 1;
+	    }
+	    CHECKNEWLINE(c, ch);
+	    
+	    if (c->streaming) goto notwhenstreaming;
+	    
+	    cmd_list(c, c->tag.s, opt ? c->arg1.s : NULL);
+	    
+	    prot_printf(c->pout, "%s OK \"list complete\"\r\n", c->tag.s);
+	}
+	else goto badcmd;
+	break;
+	
+    case 'N':
+	if (!c->userid) goto nologin;
+	else if (!strcmp(c->cmd.s, "Noop")) {
+	    CHECKNEWLINE(c, ch);
+	    
+	    prot_printf(c->pout, "%s OK \"Noop done\"\r\n", c->tag.s);
+	}
+	else goto badcmd;
+	break;
+	
+    case 'R':
+	if (!c->userid) goto nologin;
+	else if (!strcmp(c->cmd.s, "Reserve")) {
+	    if (ch != ' ') goto missingargs;
+	    ch = getstring(c->pin, c->pout, &(c->arg1));
+	    if (ch != ' ') goto missingargs;
+	    ch = getstring(c->pin, c->pout, &(c->arg2));
+	    CHECKNEWLINE(c, ch);
+	    
+	    if (c->streaming) goto notwhenstreaming;
+	    if (!masterp) goto masteronly;
+	    
+	    cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s, NULL, SET_RESERVE);
+	}
+	else goto badcmd;
+	break;
+	
+    case 'U':
+	if (!c->userid) goto nologin;
+	else if (!strcmp(c->cmd.s, "Update")) {
+	    CHECKNEWLINE(c, ch);
+	    if (c->streaming) goto notwhenstreaming;
+	    
+	    cmd_startupdate(c, c->tag.s);
+	}
+	else goto badcmd;
+	break;
+	
+    default:
+    badcmd:
+	prot_printf(c->pout, "%s BAD \"Unrecognized command\"\r\n",
+		    c->tag.s);
+	eatline(c->pin, ch);
+	break;
+	
+    extraargs:
+	prot_printf(c->pout, "%s BAD \"Extra arguments\"\r\n",
+		    c->tag.s);
+	eatline(c->pin, ch);
+	break;
+	
+    missingargs:
+	prot_printf(c->pout, "%s BAD \"Missing arguments\"\r\n",
+		    c->tag.s);
+	eatline(c->pin, ch);
+	break;
+	
+    notwhenstreaming:
+	prot_printf(c->pout, "%s BAD \"not legal when streaming\"\r\n",
+		    c->tag.s);
+	break;
+	
+    masteronly:
+	prot_printf(c->pout,
+		    "%s BAD \"read-only session\"\r\n",
+		    c->tag.s);
+	break;
 
     nologin:
 	prot_printf(c->pout, "%s BAD Please login first\r\n", c->tag.s);
 	eatline(c->pin, ch);
-	continue;
-    } while(c->streaming);
-
+	break;
+    }
+    
  done:
     prot_flush(c->pout);
     return ret;
@@ -868,7 +858,6 @@ static void *thread_main(void *rock __attribute__((unused)))
 
 	/* Lock Listen Mutex - If locking takes more than 60 seconds,
 	 * kill off this thread.  Ideally this is a FILO queue */
-	/* XXX not doing the killoff stuff yet, that needs cond variables */
 	pthread_mutex_lock(&listener_mutex);
 	while(listener_lock) {
 	    gettimeofday(&now, NULL);
@@ -947,6 +936,9 @@ static void *thread_main(void *rock __attribute__((unused)))
 	if(!ready_for_connections) {
 	    pthread_mutex_lock(&idle_connlist_mutex);
 	    for(C=idle_connlist; C; C=C->next_idle) {
+		prot_printf(C->pout,
+			    "* BYE \"no longer ready for connections\"\r\n");
+
 		C->idle = 0;
 		conn_free(C);
 	    }
@@ -1043,6 +1035,16 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    pthread_mutex_unlock(&listener_mutex);
 
 	    if(docmd(currConn) == DOCMD_CONN_FINISHED) {
+		conn_free(currConn);
+		/* continue to top of loop here since we won't be adding
+		 * this back to the idle list */
+		continue;
+	    }
+
+	    /* Are we allowed to continue serving data? */
+	    if(!ready_for_connections) {
+		prot_printf(C->pout,
+			    "* BYE \"no longer ready for connections\"\r\n");
 		conn_free(currConn);
 		/* continue to top of loop here since we won't be adding
 		 * this back to the idle list */
