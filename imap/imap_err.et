@@ -73,7 +73,7 @@ ec IMAP_MESSAGE_NOBLANKLINE,
 # Following only used for internationalization of error messages
 
 ec IMAP_UNRECOGNIZED_CHARSET,
-   "Unrecognized character set"
+   "Unrecognized character set",
 
 ec IMAP_INVALID_USER,
    "Invalid user",
