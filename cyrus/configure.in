@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.284 2004/05/26 15:53:52 rjs3 Exp $
+dnl $Id: configure.in,v 1.285 2004/05/26 16:24:39 rjs3 Exp $
 dnl
 
 
@@ -932,7 +932,8 @@ dnl and compile perl/cyradm
     PERL="${with_perl}"
 dnl add perl cccdlflags when building libraries -- this ensures that the
 dnl libraries will be compiled as PIC if perl requires PIC objects
-    eval `${PERL} -V:cccdlflags`
+dnl -- this is needed on NetBSD, but seems to cause problems on atleast Solaris --
+dnl    eval `${PERL} -V:cccdlflags`
     PERL_CCCDLFLAGS="$cccdlflags"
     AC_SUBST(PERL_CCCDLFLAGS)
 fi
@@ -1011,7 +1012,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.284 2004/05/26 15:53:52 rjs3 Exp $ */
+/* $Id: configure.in,v 1.285 2004/05/26 16:24:39 rjs3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
