@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.147.2.1 2001/05/31 04:40:45 ken3 Exp $
+ * $Id: mboxlist.c,v 1.147.2.2 2001/06/08 00:31:50 ken3 Exp $
  */
 
 #include <config.h>
@@ -1245,6 +1245,7 @@ struct find_rock {
     const char *usermboxname;
     int usermboxnamelen;
     int checkmboxlist;
+    int checkshared;
     int isadmin;
     struct auth_state *auth_state;
     int (*proc)(char *, int, int, void *rock);
@@ -1390,8 +1391,18 @@ static int find_cb(void *rockp,
 	switch (r) {
 	case 0:
 	    /* found the entry; output it */
-	    r = (*rock->proc)(namebuf+rock->inboxoffset, matchlen, 
-			      1, rock->procrock);
+	    if (rock->find_namespace == NAMESPACE_SHARED &&
+		rock->checkshared && rock->namespace) {
+		/* special case:  LIST "" % -- output prefix only */
+		(*rock->proc)(rock->namespace->prefix[NAMESPACE_SHARED],
+			      strlen(rock->namespace->prefix[NAMESPACE_SHARED])-1,
+			      0, rock->procrock);
+		r = IMAP_OK_COMPLETED;
+	    }
+	    else {
+		r = (*rock->proc)(namebuf+rock->inboxoffset, matchlen, 
+				  1, rock->procrock);
+	    }
 	    break;
 	    
 	case IMAP_MAILBOX_NONEXISTENT:
@@ -1437,6 +1448,7 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
     cbrock.isadmin = isadmin;
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = 0;	/* don't duplicate work */
+    cbrock.checkshared = 0;
     cbrock.proc = proc;
     cbrock.procrock = rock;
 
@@ -1550,6 +1562,7 @@ int mboxlist_findall_alt(char *pattern, struct namespace *namespace,
     cbrock.isadmin = isadmin;
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = 0;	/* don't duplicate work */
+    cbrock.checkshared = 0;
     cbrock.proc = proc;
     cbrock.procrock = rock;
 
@@ -1670,21 +1683,19 @@ int mboxlist_findall_alt(char *pattern, struct namespace *namespace,
 		break;
 	    }
 
-	    cbrock.g = glob_init(p, GLOB_HIERARCHY);
-		
-	    /* special case:  LIST "" % */
 	    if (!*p) {
-		strcpy(patbuf, namespace->prefix[NAMESPACE_SHARED]);
-		r = (*proc)(patbuf,
-			    strlen(namespace->prefix[NAMESPACE_SHARED])-1,
-			    0, rock);
+		/* special case:  LIST "" % -- see if we have a shared mbox */
+		cbrock.g = glob_init("*", GLOB_HIERARCHY);
+		cbrock.checkshared = 1;
 	    }
 	    else {
-		DB->foreach(mbdb,
-			    "", 0,
-			    &find_p, &find_cb, &cbrock,
-			    NULL);
+		cbrock.g = glob_init(p, GLOB_HIERARCHY);
 	    }
+		
+	    DB->foreach(mbdb,
+			"", 0,
+			&find_p, &find_cb, &cbrock,
+			NULL);
 	}
 	else {
 	    strcpy(patbuf, "");
@@ -2033,6 +2044,7 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
     cbrock.isadmin = 1;		/* user can always see their subs */
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = !force;
+    cbrock.checkshared = 0;
     cbrock.proc = proc;
     cbrock.procrock = rock;
 
@@ -2155,6 +2167,7 @@ int mboxlist_findsub_alt(char *pattern, struct namespace *namespace,
     cbrock.isadmin = 1;		/* user can always see their subs */
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = !force;
+    cbrock.checkshared = 0;
     cbrock.proc = proc;
     cbrock.procrock = rock;
 
@@ -2284,21 +2297,19 @@ int mboxlist_findsub_alt(char *pattern, struct namespace *namespace,
 		break;
 	    }
 
-	    cbrock.g = glob_init(p, GLOB_HIERARCHY);
-		
-	    /* special case:  LSUB "" % */
 	    if (!*p) {
-		strcpy(patbuf, namespace->prefix[NAMESPACE_SHARED]);
-		r = (*proc)(patbuf,
-			    strlen(namespace->prefix[NAMESPACE_SHARED])-1,
-			    0, rock);
+		/* special case:  LSUB "" % -- see if we have a shared mbox */
+		cbrock.g = glob_init("*", GLOB_HIERARCHY);
+		cbrock.checkshared = 1;
 	    }
 	    else {
-		SUBDB->foreach(subs,
-			       "", 0,
-			       &find_p, &find_cb, &cbrock,
-			       NULL);
+		cbrock.g = glob_init(p, GLOB_HIERARCHY);
 	    }
+
+	    SUBDB->foreach(subs,
+			   "", 0,
+			   &find_p, &find_cb, &cbrock,
+			   NULL);
 	}
 	else {
 	    strcpy(patbuf, "");
