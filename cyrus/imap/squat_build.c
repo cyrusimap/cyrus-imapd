@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat_build.c,v 1.3 2002/03/31 20:40:59 ken3 Exp $
+ * $Id: squat_build.c,v 1.3.4.1 2003/01/11 04:07:00 ken3 Exp $
  */
 
 /*
@@ -97,6 +97,8 @@
 
 #include "squat_internal.h"
 
+#include "xmalloc.h"
+
 /* A simple write-buffering module which avoids copying of the output data. */
 
 typedef struct {
@@ -111,11 +113,7 @@ typedef struct {
 
 static int init_write_buffer(SquatWriteBuffer* b, int buf_size, int fd) {
   b->buf_size = buf_size;
-  b->buf = malloc(b->buf_size);
-  if (b->buf == NULL) {
-    squat_set_last_error(SQUAT_ERR_SYSERR);
-    return SQUAT_ERR;
-  }
+  b->buf = xmalloc(b->buf_size);
   b->fd = fd;
   b->data_len = 0;
   b->total_output_bytes = 0;
@@ -294,12 +292,12 @@ struct _SquatIndex {
 
 /* Initally, before we see a document, there are no words for the document. */
 static void init_doc_word_table(SquatWordTable** t) {
-  SquatWordTable *new = (SquatWordTable*)malloc(sizeof(SquatWordTable));
+  SquatWordTable *ret = (SquatWordTable*)xmalloc(sizeof(SquatWordTable));
 
-  new->first_valid_entry = 256;
-  new->last_valid_entry = 0;
-  memset(new->entries, 0, sizeof(new->entries));
-  *t = new;
+  ret->first_valid_entry = 256;
+  ret->last_valid_entry = 0;
+  memset(ret->entries, 0, sizeof(ret->entries));
+  *t = ret;
 }
 
 SquatIndex* squat_index_init(int fd, SquatOptions const* options) {
@@ -311,11 +309,7 @@ SquatIndex* squat_index_init(int fd, SquatOptions const* options) {
 
   squat_set_last_error(SQUAT_ERR_OK);
 
-  index = (SquatIndex*)malloc(sizeof(SquatIndex));
-  if (index == NULL) {
-    squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
-    return NULL;
-  }
+  index = (SquatIndex*)xmalloc(sizeof(SquatIndex));
 
   /* Copy processed options into the SquatIndex */
   if (options != NULL && (options->option_mask & SQUAT_OPTION_TMP_PATH) != 0) {
@@ -324,11 +318,7 @@ SquatIndex* squat_index_init(int fd, SquatOptions const* options) {
     tmp_path = "/tmp";
   }
   path_len = strlen(tmp_path);
-  index->tmp_path = malloc(path_len + 1 + 12);
-  if (index->tmp_path == NULL) {
-    squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
-    goto cleanup_index;
-  }
+  index->tmp_path = xmalloc(path_len + 1 + 12);
   memcpy(index->tmp_path, tmp_path, path_len);
   strcpy(index->tmp_path + path_len, "/squatXXXXXX");
 
@@ -360,11 +350,7 @@ SquatIndex* squat_index_init(int fd, SquatOptions const* options) {
   }
 
   index->doc_ID_list_size = 1000;
-  index->doc_ID_list = (char*)malloc(index->doc_ID_list_size*sizeof(SquatInt32));
-  if (index->doc_ID_list == NULL) {
-    squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
-    goto cleanup_tmp_path;
-  }
+  index->doc_ID_list = (char*)xmalloc(index->doc_ID_list_size*sizeof(SquatInt32));
 
   /* Use a 128K write buffer for the main index file */
   if (init_write_buffer(&index->out, 128*1024, fd) != SQUAT_OK) {
@@ -551,11 +537,7 @@ static int add_to_table(SquatIndex* index, char const* data, int data_len,
     t = e->table;
     /* Allocate the next branch node if it doesn't already exist. */
     if (t == NULL) {
-      t = (SquatWordTable*)malloc(sizeof(SquatWordTable));
-      if (t == NULL) {
-        squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
-        return SQUAT_ERR;
-      }
+      t = (SquatWordTable*)xmalloc(sizeof(SquatWordTable));
       e->table = t;
       /* Initially there are no valid entries. Set things up so that
 	 the obvious tests will set first_valid_entry and
@@ -596,11 +578,7 @@ static int add_to_table(SquatIndex* index, char const* data, int data_len,
 
 	/* Make an empty bit vector. */
         p = (SquatWordTableLeafPresence*)
-          malloc(sizeof(SquatWordTableLeafPresence));
-        if (p == NULL) {
-          squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
-          return SQUAT_ERR;
-        }
+          xmalloc(sizeof(SquatWordTableLeafPresence));
         p->first_valid_entry = 256;
         p->last_valid_entry = 0;
         memset(p->presence, 0, sizeof(p->presence));
@@ -630,11 +608,7 @@ static int add_to_table(SquatIndex* index, char const* data, int data_len,
     /* Make a new leaf table if we don't already have one. */
     if (docs == NULL) {
       docs = (SquatWordTableLeafDocs*)
-        malloc(sizeof(SquatWordTableLeafDocs));
-      if (docs == NULL) {
-        squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
-        return SQUAT_ERR;
-      }
+        xmalloc(sizeof(SquatWordTableLeafDocs));
       docs->first_valid_entry = 256;
       docs->last_valid_entry = 0;
       memset(docs->docs, 0, sizeof(docs->docs));
@@ -1256,11 +1230,7 @@ static int dump_index_trie_words(SquatIndex* index, int first_char,
   char const* word_ptr;
   
   /* Allocate all the necessary document-ID linked list entries at once. */
-  doc_table = (WordDocEntry*)malloc(sizeof(WordDocEntry)*num_words);
-  if (doc_table == NULL) {
-    squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
-    return SQUAT_ERR;
-  }
+  doc_table = (WordDocEntry*)xmalloc(sizeof(WordDocEntry)*num_words);
   index->word_doc_allocator = doc_table;
 
   /* mmap the temporary file. */
