@@ -1092,7 +1092,6 @@ char *name;
     struct mailbox mailbox;
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r = 0;
-    int i;
     int usage;
     int doclose = 0;
 
@@ -1426,7 +1425,6 @@ char *count;
 {
     char *p;
     struct fetchargs fetchargs;
-    int r;
     char *section;
 
     fetchargs = zerofetchargs;
@@ -2579,7 +2577,7 @@ int getbase64string(buf)
 struct buf *buf;
 {
     int c1, c2, c3, c4;
-    int i, len = 0;
+    int len = 0;
 
     if (buf->alloc == 0) {
 	buf->alloc = BUFGROWSIZE;
@@ -2682,7 +2680,7 @@ int parsecharset;
     static struct searchargs zerosearchargs;
     struct searchargs *sub1, *sub2;
     char *p, *str;
-    int c, i, flag, size;
+    int c, flag, size;
     time_t start, end;
 
     c = getword(&criteria);
