@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.122 2000/07/21 18:50:02 leg Exp $
+# $Id: Makefile.in,v 1.123 2000/11/30 15:55:42 ken3 Exp $
 # 
 # @configure_input@
 #
@@ -62,7 +62,7 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I. -I.. -I../sieve -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../acap @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @ZEPHYR_CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I.. -I../sieve -I$(srcdir) -I$(srcdir)/../master -I$(srcdir)/../lib -I$(srcdir)/../acap @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @ZEPHYR_CPPFLAGS@ @SASLFLAGS@
 IMAP_LIBS = @IMAP_LIBS@
 SIEVE_LIBS = @SIEVE_LIBS@
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
@@ -100,7 +100,7 @@ LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o \
 	duplicate.o saslclient.o acapmbox.o signals.o \
 	base64.o $(SEEN) $(NOTIFY)
 
-IMAPDOBJS=pushstats.o imapd.o index.o tls.o
+IMAPDOBJS=pushstats.o imapd.o index.o tls.o imapidle.o
 
 SERVICE=../master/service.o
 
@@ -141,10 +141,10 @@ deliver: deliver.o lmtpstats.o lmtpengine.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o deliver deliver.o lmtpengine.o lmtpstats.o \
 	libimap.a $(DEPLIBS) $(LIBS)
 
-lmtpd: lmtpstats.o lmtpd.o lmtpengine.o \
+lmtpd: lmtpstats.o lmtpd.o lmtpengine.o imapidle.o \
 	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o lmtpd \
-	 $(SERVICE) lmtpd.o lmtpengine.o lmtpstats.o \
+	 $(SERVICE) lmtpd.o lmtpengine.o lmtpstats.o imapidle.o \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS)
 
 lmtpproxyd: lmtpstats.o lmtpproxyd.o lmtpengine.o \
@@ -186,8 +186,8 @@ imapd.quant: $(IMAPDOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o imapd.quant \
 	 $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
-pop3d: pop3d.o tls.o libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o pop3d pop3d.o tls.o $(SERVICE) \
+pop3d: pop3d.o tls.o imapidle.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o pop3d pop3d.o tls.o imapidle.o $(SERVICE) \
 	 libimap.a $(DEPLIBS) $(LIBS)
 
 pop3proxyd: pop3proxyd.o tls.o libimap.a $(DEPLIBS) $(SERVICE)

@@ -1,5 +1,5 @@
 # Makefile for the Cyrus controlling process
-# $Id: Makefile.in,v 1.8 2000/11/05 22:11:28 leg Exp $
+# $Id: Makefile.in,v 1.9 2000/11/30 15:55:41 ken3 Exp $
 # 
 # @configure_input@
 #
@@ -53,8 +53,8 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I. -I.. -I$(srcdir) @CPPFLAGS@ @COM_ERR_CPPFLAGS@
-DEPLIBS = @DEPLIBS@
+CPPFLAGS = -I. -I.. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../imap @CPPFLAGS@ @COM_ERR_CPPFLAGS@
+DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@ @CFLAGS@ @COM_ERR_LDFLAGS@

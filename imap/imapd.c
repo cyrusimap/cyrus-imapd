@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.280 2000/11/17 02:11:29 leg Exp $ */
+/* $Id: imapd.c,v 1.281 2000/11/30 15:55:42 ken3 Exp $ */
 
 #include <config.h>
 
@@ -82,6 +82,8 @@
 #include "append.h"
 #include "mboxlist.h"
 #include "acapmbox.h"
+#include "service.h"
+#include "imapidle.h"
 
 #include "pushstats.h"		/* SNMP interface */
 
@@ -344,6 +346,7 @@ int service_init(int argc, char **argv, char **envp)
     signals_set_shutdown(&shut_down);
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
+    signal(SIGUSR1, SIG_IGN);
 
     /* set the SASL allocation functions */
     sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
@@ -368,6 +371,9 @@ int service_init(int argc, char **argv, char **envp)
     mboxlist_init(0);
     mboxlist_open(NULL);
     mailbox_initialize();
+
+    /* set the mailbox update notifier for IMAP IDLE */
+    mailbox_set_updatenotifier(imap_idlenotify);
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
@@ -476,7 +482,7 @@ int service_main(int argc, char **argv, char **envp)
 }
 
 /* called if 'service_init()' was called but not 'service_main()' */
-void service_abort(int error)
+void service_abort(void)
 {
     mboxlist_close();
     mboxlist_done();
@@ -1591,41 +1597,43 @@ char *cmd;
 /*
  * Perform an IDLE command
  */
-static time_t idle_period = -1;
-static struct prot_waitevent *idle_event;
+#define IDLE_POLL_INTERVAL 60
 
-struct prot_waitevent *idle_poll(struct protstream *s, void *rock)
+void idle_poll(int sig)
 {
-    struct mailbox *mailbox = (struct mailbox *) rock;
-
-    if (mailbox) {
-	index_check(mailbox, 0, 1);
+    if (imapd_mailbox) {
+	index_check(imapd_mailbox, 0, 1);
     }
     prot_flush(imapd_out);
 
-    idle_event->mark = time(NULL) + idle_period;
-    return idle_event;
+    if (sig == SIGALRM) alarm(IDLE_POLL_INTERVAL);
 }
 
 void cmd_idle(char *tag)
 {
     int c;
     static struct buf arg;
-
-    /* get polling period */
-    if (idle_period == -1) {
-      idle_period = config_getint("imapidlepoll", 60);
-      if (idle_period < 0) idle_period = 0;
-    }
+    imap_idledata_t idledata;
 
     /* Tell client we are idling and waiting for end of command */
     prot_printf(imapd_out, "+ go ahead\r\n");
     prot_flush(imapd_out);
 
-    /* Setup the mailbox polling function to be called at 'idle_period'
-       seconds from now */
-    idle_event = prot_addwaitevent(imapd_in, time(NULL) + idle_period,
-				   idle_poll, imapd_mailbox);
+    /* Tell master that we're idling */
+    idledata.pid = getpid();
+    /* if we don't have a mailbox selected, use "." as the name */
+    strcpy(idledata.mboxname, imapd_mailbox ? imapd_mailbox->name : ".");
+    idledata.namelen = strlen(idledata.mboxname)+1;
+    if (notify_master(STATUS_FD, SERVICE_IMAP_IDLE, &idledata,
+		      IDLEDATA_BASE_SIZE+idledata.namelen)) {
+	/* if we can talk to master, setup the signal handler for SIGUSR1 */
+	signal(SIGUSR1, idle_poll);
+    }
+    else {
+	/* otherwise, we'll use SIGALRM */
+	signal(SIGALRM, idle_poll);
+	alarm(IDLE_POLL_INTERVAL);
+    }
 
     /* Get continuation data */
     c = getword(&arg);
@@ -1643,8 +1651,12 @@ void cmd_idle(char *tag)
 	}
     }
 
-    /* Remove the polling function */
-    prot_removewaitevent(imapd_in, idle_event);
+    /* Tell master we're done idling and remove the signal handler */
+    if (notify_master(STATUS_FD, SERVICE_IMAP_IDLEDONE, &idledata,
+		      IDLEDATA_BASE_SIZE+idledata.namelen))
+	signal(SIGUSR1, SIG_IGN);
+    else
+	signal(SIGALRM, SIG_IGN);
 
     return;
 }
@@ -2857,7 +2869,7 @@ int usinguid;
 
     r = index_store(imapd_mailbox, sequence, usinguid, &storeargs,
 		    flag, nflags);
-	
+
     if (usinguid) {
 	index_check(imapd_mailbox, 1, 0);
     }
