@@ -1,5 +1,5 @@
 /* util.h -- general utility functions
- * $Id: util.h,v 1.17 2003/10/22 18:50:12 rjs3 Exp $
+ * $Id: util.h,v 1.17.2.1 2004/09/10 13:51:12 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -98,6 +98,9 @@ extern int create_tempfile();
 
 /* Close a network filedescriptor the "safe" way */
 extern int cyrus_close_sock(int fd);
+
+/* Reset stdin/stdout/stderr */
+extern void cyrus_reset_stdio();
 
 /* Create all parent directories for the given path,
  * up to but not including the basename.
