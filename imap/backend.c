@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.21 2004/02/26 21:11:10 rjs3 Exp $ */
+/* $Id: backend.c,v 1.22 2004/03/03 16:13:38 ken3 Exp $ */
 
 #include <config.h>
 
@@ -381,21 +381,23 @@ void backend_disconnect(struct backend *s, struct protocol_t *prot)
 
     if (!s) return;
     
-    if (prot && prot->logout_cmd.cmd) {
-	prot_printf(s->out, "%s\r\n", prot->logout_cmd.cmd);
-	prot_flush(s->out);
+    if (!prot_error(s->in)) {
+	if (prot && prot->logout_cmd.cmd) {
+	    prot_printf(s->out, "%s\r\n", prot->logout_cmd.cmd);
+	    prot_flush(s->out);
 
-	while (prot_fgets(buf, sizeof(buf), s->in)) {
-	    if (!strncmp(prot->logout_cmd.resp, buf,
-			 strlen(prot->logout_cmd.resp))) {
-		break;
+	    while (prot_fgets(buf, sizeof(buf), s->in)) {
+		if (!strncmp(prot->logout_cmd.resp, buf,
+			     strlen(prot->logout_cmd.resp))) {
+		    break;
+		}
 	    }
 	}
-    }
 
-    /* Flush the incoming buffer */
-    prot_NONBLOCK(s->in);
-    prot_fill(s->in);
+	/* Flush the incoming buffer */
+	prot_NONBLOCK(s->in);
+	prot_fill(s->in);
+    }
 
 #ifdef HAVE_SSL
     /* Free tlsconn */
