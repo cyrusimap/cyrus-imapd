@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.32 2003/01/17 15:29:15 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.33 2003/01/27 18:15:53 ken3 Exp $
 dnl
 
 
@@ -601,7 +601,7 @@ if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" -o "$with_krb" != "no";
      if test -n "${cyrus_krbinclude}"; then
        CPPFLAGS="$CPPFLAGS -I${cyrus_krbinclude}"
      fi
-     LDFLAGS="$LDFLAGS -L${with_krb}/lib"
+     CMU_ADD_LIBPATH(${with_krb}/lib)
   fi
 
   if test "$with_des" != no; then
@@ -657,9 +657,9 @@ case "$with_openssl" in
 		
 		;;
 	*)  OPENSSL_INC="-I${with_openssl}/include"
-	    OPENSSL_LIB="-L${with_openssl}/lib"
+	    OPENSSL_LIBPATH="${with_openssl}/lib"
 	    CPPFLAGS="${CPPFLAGS} ${OPENSSL_INC}"
-	    LDFLAGS="${LDFLAGS} ${OPENSSL_LIB}"
+	    CMU_ADD_LIBPATH(${OPENSSL_LIBPATH})
 	    LIBS="${LIBS} -lssl -lcrypto";;
 esac
 
