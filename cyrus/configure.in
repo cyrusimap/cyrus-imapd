@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.18 2002/11/14 19:36:12 rjs3 Exp $
+dnl $Id: configure.in,v 1.232.4.19 2002/11/17 03:57:13 ken3 Exp $
 dnl
 
 
@@ -561,7 +561,7 @@ if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" ; then
 	else
 	    KRB_LIBS="-ldes"
 	fi,
-  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.]))
+  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.  You might want --with-auth=unix.]))
 
   dnl if we were ambitious, we'd look more aggressively for the
   dnl krb4 install
