@@ -108,12 +108,12 @@ for "<tt>configure</tt>" to find INN. <P>
 
 <dt><tt>--with-krb=PATH</tt>
 <dt><tt>--without-krb</tt>
-<dd>Specifies the path to the Kerberos libraries and header files 
+<dd>Specifies the path to the Kerberos v4 libraries and header files 
 (optional).  By default, looks in "<tt>/usr/local</tt>" and then in the 
 compiler's default link path.
 
 <p>Either "<tt>--without-krb</tt>" or "<tt>--with-krb=no</tt>" prevents
-Kerberos support from being compiled in. <P>
+Kerberos v4 support from being compiled in. <P>
 
 <dt><tt>--with-tcl=PATH</tt>
 <dt><tt>--without-tcl</tt>
@@ -137,7 +137,13 @@ methods are:
 </DL>
 
 By default, uses "<tt>flock</tt>" if the "<tt>flock()</tt>"
-function exists, "<tt>fcntl</tt>" otherwise.
+function exists, "<tt>fcntl</tt>" otherwise. <P>
+
+<dt><tt>--disable-privacy</tt>
+<dd>Disables all network privacy support.  Use this if you do not have
+the appropriate routines in the authentication libraries (for example,
+<TT>krb_rd_priv()</TT> and <TT>krb_mk_priv()</TT> for Kerberos v4) or
+are compiling binaries subject to export control restrictions.
 
 </dl>
 
@@ -317,8 +323,8 @@ partition name as it is reserved for netnews.
 
  <P>
 
-<li>If the Cyrus IMAP server was compiled with Kerberos authentication,
-create a Kerberos identity for the server and add the server's key to
+<li>If the Cyrus IMAP server was compiled with Kerberos v4 authentication,
+create a Kerberos v4 identity for the server and add the server's key to
 the "<tt>srvtab</tt>" file.  The file must be readable by the cyrus
 user. The server's Kerberos identity is "<tt>imap.HOST@REALM</tt>",
 where "<tt>HOST</tt>" is the first component of the machine's host
@@ -452,7 +458,7 @@ through <tt>syslog</tt> to the server log.  To terminate the
 connection, type "<kbd>. logout</kbd>".
 
 <P>
-<li>If the server is compiled with Kerberos authentication, test
+<li>If the server is compiled with Kerberos v4 authentication, test
 Kerberos authentication by using the imtest command.  Change
 to the "<tt>cyrus-v1.2</tt>" directory and type the following:
 
@@ -501,7 +507,7 @@ following information is displayed:
    setquota, sq             set quota limits
 </pre>
 
-<b>Note:</b>If you run "<tt>cyradm</tt>" on a system where Kerberos is
+<b>Note:</b>If you run "<tt>cyradm</tt>" on a system where Kerberos v4 is
 not running, you are prompted for your user name an password before
 you can issue any "<tt>cyradm</tt>" commands.
 
