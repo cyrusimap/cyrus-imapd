@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.62 2002/01/16 16:04:11 rjs3 Exp $
+ * $Id: imclient.c,v 1.63 2002/01/16 22:08:24 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1138,8 +1138,8 @@ struct imclient_reply *reply;
 
 static sasl_security_properties_t *make_secprops(int min,int max)
 {
-  sasl_security_properties_t *ret=(sasl_security_properties_t *)
-  malloc(sizeof(sasl_security_properties_t));
+  sasl_security_properties_t *ret=
+      (sasl_security_properties_t *)xzmalloc(sizeof(sasl_security_properties_t));
 
   ret->maxbufsize=1024;
   ret->min_ssf=min;
@@ -1220,7 +1220,7 @@ static int imclient_authenticate_sub(struct imclient *imclient,
 {
   int saslresult;
   sasl_security_properties_t *secprops=NULL;
-  socklen_t addrsize=sizeof(struct sockaddr_in);
+  socklen_t addrsize;
   struct sockaddr_in saddr_l;
   struct sockaddr_in saddr_r;
   char localip[60], remoteip[60];
