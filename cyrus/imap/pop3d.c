@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.96 2001/07/04 13:29:07 ken3 Exp $
+ * $Id: pop3d.c,v 1.97 2001/07/06 01:51:21 ken3 Exp $
  */
 #include <config.h>
 
@@ -1079,6 +1079,7 @@ void cmd_auth(char *arg)
     char *serverout;
     unsigned int serveroutlen;
     const char *errstr;
+    char *canon_user;
 
     /* if client didn't specify an argument we give them the list */
     if (!arg) {
@@ -1180,7 +1181,8 @@ void cmd_auth(char *arg)
      * mysasl_authproc()
      */
     sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME,
-			       (void **) &popd_userid);
+			       (void **) &canon_user);
+    popd_userid = xstrdup(canon_user);
     if (sasl_result != SASL_OK) {
 	prot_printf(popd_out, 
 		    "-ERR weird SASL error %d getting SASL_USERNAME\r\n", 

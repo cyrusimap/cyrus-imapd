@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.308 2001/06/23 03:14:02 ken3 Exp $ */
+/* $Id: imapd.c,v 1.309 2001/07/06 01:51:20 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1526,6 +1526,8 @@ cmd_authenticate(char *tag,char *authtype)
     int *ssfp;
     char *ssfmsg=NULL;
 
+    char *canon_user;
+
     sasl_result = sasl_server_start(imapd_saslconn, authtype,
 				    NULL, 0,
 				    &serverout, &serveroutlen,
@@ -1589,7 +1591,8 @@ cmd_authenticate(char *tag,char *authtype)
      * mysasl_authproc()
      */
     sasl_result = sasl_getprop(imapd_saslconn, SASL_USERNAME,
-			       (void **) &imapd_userid);
+			       (void **) &canon_user);
+    imapd_userid = xstrdup(canon_user);
     if (sasl_result != SASL_OK) {
 	prot_printf(imapd_out, "%s NO weird SASL error %d SASL_USERNAME\r\n", 
 		    tag, sasl_result);
