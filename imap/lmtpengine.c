@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.60 2002/02/22 18:36:58 leg Exp $
+ * $Id: lmtpengine.c,v 1.61 2002/02/22 19:09:11 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1977,11 +1977,10 @@ static int getlastresp(char *buf, int len, int *code, struct protstream *pin)
 
 /* perform authentication against connection 'conn'
    returns the SMTP error code from the AUTH attempt */
-
-/* xxx returning wrong error codes; should be returning SMTP error codes ! */
 static int do_auth(struct lmtp_conn *conn)
 {
     int r;
+    const int AUTH_ERROR = 420, AUTH_OK = 250;
     sasl_security_properties_t *secprops = NULL;
     struct sockaddr_in saddr_l;
     struct sockaddr_in saddr_r;
@@ -1997,43 +1996,43 @@ static int do_auth(struct lmtp_conn *conn)
     secprops = mysasl_secprops(0);
     r = sasl_setprop(conn->saslconn, SASL_SEC_PROPS, secprops);
     if (r != SASL_OK) {
-	return r;
+	return AUTH_ERROR;
     }
 
     /* set the IP addresses */
     addrsize=sizeof(struct sockaddr_in);
     if (getpeername(conn->sock, (struct sockaddr *)&saddr_r, &addrsize) != 0)
-	return SASL_FAIL;
+	return AUTH_ERROR;
     addrsize=sizeof(struct sockaddr_in);
     if (getsockname(conn->sock, (struct sockaddr *)&saddr_l,&addrsize)!=0)
-	return SASL_FAIL;
+	return AUTH_ERROR;
 
     if (iptostring((struct sockaddr *)&saddr_r,
 		   sizeof(struct sockaddr_in), remoteip, 60) != 0)
-	return SASL_FAIL;
+	return AUTH_ERROR;
     if (iptostring((struct sockaddr *)&saddr_l,
 		   sizeof(struct sockaddr_in), localip, 60) != 0)
-	return SASL_FAIL;
+	return AUTH_ERROR;
 
     r = sasl_setprop(conn->saslconn, SASL_IPLOCALPORT, localip);
-    if (r != SASL_OK) return r;
+    if (r != SASL_OK) return AUTH_ERROR;
     r = sasl_setprop(conn->saslconn, SASL_IPREMOTEPORT, remoteip);
-    if (r != SASL_OK) return r;
+    if (r != SASL_OK) return AUTH_ERROR;
 
     /* we now do the actual SASL exchange */
     r = sasl_client_start(conn->saslconn, 
 			  conn->mechs,
 			  NULL, &out, &outlen, &mechusing);
-    if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
-	return r;
-    }
+    if ((r != SASL_OK) && (r != SASL_CONTINUE))
+	return AUTH_ERROR;
+
     if (out == NULL) {
 	prot_printf(conn->pout, "AUTH %s\r\n", mechusing);
     } else {
 	/* send initial challenge */
 	r = sasl_encode64(out, outlen, buf, sizeof(buf), &b64len);
 	if (r != SASL_OK)
-	    return r;
+	    return AUTH_ERROR;
 	prot_printf(conn->pout, "AUTH %s %s\r\n", mechusing, buf);
     }
 
@@ -2046,12 +2045,12 @@ static int do_auth(struct lmtp_conn *conn)
 	    free(in);
 	}
 	if (r != SASL_OK && r != SASL_CONTINUE) {
-	    return r;
+	    return AUTH_ERROR;
 	}
 
 	r = sasl_encode64(out, outlen, buf, sizeof(buf), &b64len);
 	if (r != SASL_OK) {
-	    return r;
+	    return AUTH_ERROR;
 	}
 
 	prot_write(conn->pout, buf, b64len);
@@ -2063,10 +2062,13 @@ static int do_auth(struct lmtp_conn *conn)
     if (r == SASL_OK) {
 	prot_setsasl(conn->pin, conn->saslconn);
 	prot_setsasl(conn->pout, conn->saslconn);
-    }
 
-    /* success */
-    return 250;
+	/* success */
+	return AUTH_OK;
+    } else {
+	/* don't bounce the message just because *we* can't authenticate */
+	return AUTH_ERROR;
+    }
 }
 
 /* establish connection, LHLO, and AUTH if possible */
