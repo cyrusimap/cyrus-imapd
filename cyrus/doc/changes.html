@@ -1,9 +1,63 @@
-<!-- $Id: changes.html,v 1.17 2001/08/20 17:33:48 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.18 2001/09/25 19:05:25 ken3 Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+<h2>Changes to the Cyrus IMAP Server since 2.0.16</h2>
+<ul>
+<li> altnamespace
+
+<li> unixhierarchysep
+
+<li> SSL/TLS session caching
+
+<li> support for IMAP CHILDREN & LISTEXT extensions
+
+<li> check recipient quota & ACL at time of RCPT TO:
+
+<li> support for LMTP STARTTLS & SIZE extensions
+
+<li> unified deliver.db (using cyrusdb interface)
+
+<li> fixed STORE FLAGS () bug
+
+<li> fixed SEARCH SUBJECT vs. SEARCH HEADER SUBJECT bug
+
+<li> users without an INBOX can have subscriptions
+
+<li> added cyrusdb_db3_nosync backend
+
+<li> do setgid and initgroups in master
+
+<li> configure now checks for DB3.3
+
+<li> SQUAT (Rob O'Callahan)
+
+<li> change SEARCH HEADER <x> to SEARCH <x> where possible (Rob O'Callahan)
+
+<li> improved directory hashing (Gary Mills <mills@cc.UManitoba.CA>)
+
+<li> use of EGD for SSL/TLS (Amos Gouaux <amos@utdallas.edu>)
+
+<li> separate certs/keys for services (Henning P. Schmiedehausen
+<hps@intermeta.de>)
+
+<li> ability to force ipurge to traverse personal folders (Carsten
+Hoeger <choeger@suse.de>)
+
+<li> fixed zero quota bugs in cyradm (Leena Heino <liinu@uta.fi>)
+
+<li> ignore trailing whitespace in imapd.conf
+
+<li> Received: header (with TLS and AUTH info)
+
+<li> added '-i' switch to sendmail command line for SIEVE reject,
+redirect and vacation
+
+<li> reconstruct -m works again???
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.15</h2>
 <ul>
@@ -1284,7 +1338,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2001/08/20 17:33:48 $
+last modified: $Date: 2001/09/25 19:05:25 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
