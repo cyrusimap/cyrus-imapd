@@ -86,7 +86,7 @@ char *header;
     memset((char *)&notice, 0, sizeof(notice));
     notice.z_kind = UNSAFE;
     notice.z_class = MAIL_CLASS;
-    notice.z_class_inst = mailbox[0] ? mailbox : "INBOX";
+    notice.z_class_inst = mailbox;
 
     notice.z_opcode = "";
     notice.z_sender = mysender;
