@@ -1,3 +1,5 @@
 Makefile
 chartable.c
+imapopts.c
+imapopts.h
 mkchartable

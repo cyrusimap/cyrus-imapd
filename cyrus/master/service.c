@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.37.4.5 2003/02/07 23:34:53 rjs3 Exp $ */
+/* $Id: service.c,v 1.37.4.6 2003/02/08 22:00:49 ken3 Exp $ */
 
 #include <config.h>
 
@@ -67,6 +67,7 @@
 #include <string.h>
 
 #include "service.h"
+#include "xmalloc.h"
 
 extern int optind, opterr;
 extern char *optarg;
