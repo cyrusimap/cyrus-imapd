@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.25.4.8 2002/08/04 13:55:45 ken3 Exp $
+ * $Id: mboxname.c,v 1.25.4.9 2002/08/09 13:24:41 ken3 Exp $
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -109,31 +109,31 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
 			       const char *userid, char *result)
 {
     char *cp;
-    int userlen, domainlen = 0;
+    int userlen, domainlen = 0, namelen;
 
     userlen = userid ? strlen(userid) : 0;
+    namelen = strlen(name);
 
     if (config_virtdomains) {
-	if (userid && (cp = strchr(userid, '@'))) {
+	if (userid && (cp = strrchr(userid, '@'))) {
 	    /* user logged in as user@domain */
-	    userlen = cp - userid;
-	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp+1))) {
-		/* don't prepend default domain */
-		sprintf(result, "%s!", cp+1);
+	    userlen = cp++ - userid;
+	    /* don't prepend default domain */
+	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp))) {
+		sprintf(result, "%s!", cp);
 		domainlen = strlen(result);
 	    }
 	}
-	if ((cp = strchr(name, '!'))) {
-	    /* admin specified domain!mbox */
+	if ((cp = strrchr(name, '@'))) {
+	    /* global admin specified mbox@domain */
 	    if (domainlen) {
-		/* can't do both user@domain and domain!mbox */
+		/* can't do both user@domain and mbox@domain */
 		return IMAP_MAILBOX_BADNAME;
 	    }
-	    if (!(config_defdomain && !strncasecmp(config_defdomain, name,
-						   cp - name))) {
-		/* don't prepend default domain */
-		sprintf(result, "%.*s!", cp - name, name);
-		name = cp+1;
+	    namelen = cp++ - name;
+	    /* don't prepend default domain */
+	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp))) {
+		sprintf(result, "%s!", cp);
 		domainlen = strlen(result);
 	    }
 	}
@@ -153,11 +153,11 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
-	if (domainlen+strlen(name+5)+userlen+5 > MAX_MAILBOX_NAME) {
+	if (domainlen+namelen+userlen > MAX_MAILBOX_NAME) {
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
-	sprintf(result, "user.%.*s%s", userlen, userid, name+5);
+	sprintf(result, "user.%.*s%.*s", userlen, userid, namelen-5, name+5);
 
 	/* Translate any separators in userid+mailbox */
 	mboxname_hiersep_tointernal(namespace, result+5+userlen, 0);
@@ -165,10 +165,10 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
     }
 
     /* Other Users & Shared namespace */
-    if (domainlen+strlen(name) > MAX_MAILBOX_NAME) {
+    if (domainlen+namelen > MAX_MAILBOX_NAME) {
 	return IMAP_MAILBOX_BADNAME;
     }
-    strcpy(result, name);
+    sprintf(result, "%.*s", namelen, name);
 
     /* Translate any separators in mailboxname */
     mboxname_hiersep_tointernal(namespace, result, 0);
@@ -192,20 +192,6 @@ static int mboxname_tointernal_alt(struct namespace *namespace, const char *name
 	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp))) {
 		/* don't prepend default domain */
 		sprintf(result, "%s!", cp+1);
-		domainlen = strlen(result);
-	    }
-	}
-	if ((cp = strchr(name, '!'))) {
-	    /* admin specified domain!mbox */
-	    if (domainlen) {
-		/* can't do both user@domain and domain!mbox */
-		return IMAP_MAILBOX_BADNAME;
-	    }
-	    if (!(config_defdomain && !strncasecmp(config_defdomain, name,
-						   cp - name))) {
-		/* don't prepend default domain */
-		sprintf(result, "%.*s!", cp - name, name);
-		name = cp+1;
 		domainlen = strlen(result);
 	    }
 	}
@@ -306,17 +292,29 @@ static int mboxname_tointernal_alt(struct namespace *namespace, const char *name
 static int mboxname_toexternal(struct namespace *namespace, const char *name,
 			       const char *userid, char *result)
 {
-    char *domain;
+    char *domain = NULL, *cp;
+    int domainlen = 0;
 
-    if (config_virtdomains && userid && (domain = strchr(userid, '@')) &&
-	!strncmp(name, domain+1, strlen(domain)-1) &&
-	name[strlen(domain)-1] == '!')
-	name += strlen(domain);
+    if (config_virtdomains && (cp = strchr(name, '!'))) {
+	domain = (char*) name;
+	domainlen = cp++ - name;
+	name = cp;
+
+	/* don't use the domain if it matches the user's domain */
+	if (userid && (cp = strchr(userid, '@')) &&
+	    (strlen(++cp) == domainlen) && !strncmp(domain, cp, domainlen))
+	    domain = NULL;
+    }
 
     strcpy(result, name);
 
     /* Translate any separators in mailboxname */
     mboxname_hiersep_toexternal(namespace, result);
+
+    /* Append domain */
+    if (domain)
+	sprintf(result+strlen(result), "@%.*s", domainlen, domain);
+
     return 0;
 }
 

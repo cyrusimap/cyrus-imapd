@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.12 2002/08/05 18:13:51 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.13 2002/08/09 13:24:41 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -4026,7 +4026,9 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	}
 
 	/* Translate any separators in pattern */
-	mboxname_hiersep_tointernal(&proxyd_namespace, pattern, 0);
+	mboxname_hiersep_tointernal(&proxyd_namespace, pattern,
+ 				    config_virtdomains ?
+ 				    strcspn(pattern, "@") : 0);
 
 	(*proxyd_namespace.mboxlist_findall)(&proxyd_namespace, pattern,
 					     proxyd_userisadmin, proxyd_userid,

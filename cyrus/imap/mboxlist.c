@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.11 2002/07/24 16:20:09 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.12 2002/08/09 13:24:41 ken3 Exp $
  */
 
 #include <config.h>
@@ -1727,15 +1727,33 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
     char *p;
     int prefixlen;
     int userlen = userid ? strlen(userid) : 0, domainlen = 0;
-    char domainpat[MAX_MAILBOX_NAME+1]; /* do intra-domain fetches only */
+    char domainpat[MAX_MAILBOX_NAME+1] = ""; /* do intra-domain fetches only */
 
-    if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
-	userlen = p - userid;
-	domainlen = strlen(p); /* includes separator */
-	sprintf(domainpat, "%s!%s", p+1, pattern);
+    if (config_virtdomains) {
+	if (userid && (p = strrchr(userid, '@'))) {
+	    userlen = p - userid;
+	    domainlen = strlen(p); /* includes separator */
+	    sprintf(domainpat, "%s!%s", p+1, pattern);
+	}
+	if ((p = strrchr(pattern, '@'))) {
+	    /* global admin specified mbox@domain */
+	    if (domainlen) {
+		/* can't do both user@domain and mbox@domain */
+		return IMAP_MAILBOX_BADNAME;
+	    }
+
+	    /* don't prepend default domain */
+	    if (!(config_defdomain && !strcasecmp(config_defdomain, p+1))) {
+		sprintf(domainpat, "%s!", p+1);
+		domainlen = strlen(p);
+	    }
+	    sprintf(domainpat+domainlen, "%.*s", p - pattern, pattern);
+	}
     }
-    else
+
+    if (domainpat[0] == '\0')
 	strcpy(domainpat, pattern);
+fprintf(stderr, "domainpat: '%s'\n", domainpat);
 
     cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
     cbrock.namespace = NULL;

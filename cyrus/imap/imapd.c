@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.18 2002/08/04 13:56:11 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.19 2002/08/09 13:24:40 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4037,7 +4037,9 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	}
 
 	/* Translate any separators in pattern */
-	mboxname_hiersep_tointernal(&imapd_namespace, pattern, 0);
+	mboxname_hiersep_tointernal(&imapd_namespace, pattern,
+				    config_virtdomains ?
+				    strcspn(pattern, "@") : 0);
 
 	/* Check to see if we should only list the personal namespace */
 	if (!strcmp(pattern, "*")
