@@ -73,7 +73,7 @@ main(argc, argv)
 	strcat(imapd_clienthost, "]");
     }
 
-    printf("* OK %s Cyrus IMAP2bis v0.1-ALPHA server ready\r\n", hostname);
+    printf("* OK %s Cyrus IMAP2bis v0.2-ALPHA server ready\r\n", hostname);
     cmdloop();
 }
 
@@ -162,7 +162,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_noop(tag.s, cmd.s);
 	    }
-	    if (!strcmp(cmd.s, "Copy")) {
+	    else if (!strcmp(cmd.s, "Copy")) {
 		if (!imapd_mailbox) goto nomailbox;
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
@@ -534,13 +534,14 @@ char *name;
     int nflags = 0, flagalloc = 0;
     static struct buf arg;
     char *p;
+    time_t internaldate = time(0);
     unsigned size = 0;
     int r;
     char inboxname[MAX_MAILBOX_PATH];
     struct mailbox mailbox;
 
     /* Get flags */
-    for (c = getword(&arg); arg.s[0] != '{'; c = getword(&arg)) {
+    for (c = getword(&arg); c == ' ' && arg.s[0] != '{'; c = getword(&arg)) {
 	if (arg.s[0] == '\\') {
 	    lcase(arg.s);
 	    if (!strcmp(arg.s, "\\seen") && !strcmp(arg.s, "\\answered") &&
@@ -561,6 +562,30 @@ char *name;
 	    flag = (char **)xrealloc((char *)flag, flagalloc*sizeof(char *));
 	}
 	flag[nflags++] = strsave(arg.s);
+    }
+
+    /* Get internaldate */
+    if (c == '\"') {
+	ungetc(c, stdin);
+	c = getdatetime(&internaldate);
+	if (c != ' ') {
+	    printf("%s BAD Invalid date-time in Append command\r\n", tag);
+	    if (c != '\n') eatline();
+	    goto freeflags;
+	}
+	c = getword(&arg);
+	if (arg.s[0] != '{') {
+	    printf("%s BAD Missing required argument to Append command\r\n",
+		   tag);
+	    if (c != '\n') eatline();
+	    goto freeflags;
+	}
+    }
+    else if (c != ' ') {
+	printf("%s BAD Missing required argument to Append command\r\n",
+	       tag);
+	if (c != '\n') eatline();
+	goto freeflags;
     }
 
     /* Read size from literal */
@@ -597,7 +622,7 @@ char *name;
     printf("+ go ahead\r\n");
     fflush(stdout);
 
-    r = append_fromstream(&mailbox, stdin, size, time(0), flag, nflags,
+    r = append_fromstream(&mailbox, stdin, size, internaldate, flag, nflags,
 			  imapd_userid);
     mailbox_close(&mailbox);
 
@@ -1779,6 +1804,11 @@ struct buf *buf;
     }
 }
 
+static char *monthname[] = {
+    "jan", "feb", "mar", "apr", "may", "jun",
+    "jul", "aug", "sep", "oct", "nov", "dec"
+};
+
 int getdate(start, end)
 time_t *start, *end;
 {
@@ -1787,9 +1817,6 @@ time_t *start, *end;
     static struct tm zerotm;
     int quoted = 0;
     char month[4];
-    static char *monthname[] = {
-	"jan", "feb", "mar", "apr", "may", "jun",
-	"jul", "aug", "sep", "oct", "nov", "dec" };
 
     tm = zerotm;
 
@@ -1861,7 +1888,185 @@ time_t *start, *end;
     return c;
 
  baddate:
-    ungetc(c);
+    ungetc(c, stdin);
+    return EOF;
+}
+
+int getdatetime(date)
+time_t *date;
+{
+    int c;
+    struct tm tm, *ltm;
+    int old_format = 0;
+    static struct tm zerotm;
+    char month[4], zone[4], *p;
+    int zone_off;
+
+    tm = zerotm;
+
+    c = getc(stdin);
+    if (c != '\"') goto baddate;
+    
+    c = getc(stdin);
+    if (c == ' ') c = '0';
+    if (!isdigit(c)) goto baddate;
+    tm.tm_mday = c - '0';
+    c = getc(stdin);
+    if (isdigit(c)) {
+	tm.tm_mday = tm.tm_mday * 10 + c - '0';
+	c = getc(stdin);
+    }
+    
+    if (c != '-') goto baddate;
+    c = getc(stdin);
+
+    if (!isalpha(c)) goto baddate;
+    month[0] = c;
+    c = getc(stdin);
+    if (!isalpha(c)) goto baddate;
+    month[1] = c;
+    c = getc(stdin);
+    if (!isalpha(c)) goto baddate;
+    month[2] = c;
+    c = getc(stdin);
+    month[3] = '\0';
+    lcase(month);
+
+    for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
+	if (!strcmp(month, monthname[tm.tm_mon])) break;
+    }
+    if (tm.tm_mon == 12) goto baddate;
+
+    if (c != '-') goto baddate;
+    c = getc(stdin);
+
+    if (!isdigit(c)) goto baddate;
+    tm.tm_year = c - '0';
+    c = getc(stdin);
+    if (!isdigit(c)) goto baddate;
+    tm.tm_year = tm.tm_year * 10 + c - '0';
+    c = getc(stdin);
+    if (isdigit(c)) {
+	if (tm.tm_year < 19) goto baddate;
+	tm.tm_year -= 19;
+	tm.tm_year = tm.tm_year * 10 + c - '0';
+	c = getc(stdin);
+	if (!isdigit(c)) goto baddate;
+	tm.tm_year = tm.tm_year * 10 + c - '0';
+	c = getc(stdin);
+    }
+    else old_format++;
+
+    if (c != ' ') goto baddate;
+    c = getc(stdin);
+    if (!isdigit(c)) goto baddate;
+    tm.tm_hour = c - '0';
+    c = getc(stdin);
+    if (!isdigit(c)) goto baddate;
+    tm.tm_hour = tm.tm_hour * 10 + c - '0';
+    c = getc(stdin);
+    if (tm.tm_hour > 23) goto baddate;
+
+    if (c != ':') goto baddate;
+    c = getc(stdin);
+    if (!isdigit(c)) goto baddate;
+    tm.tm_min = c - '0';
+    c = getc(stdin);
+    if (!isdigit(c)) goto baddate;
+    tm.tm_min = tm.tm_min * 10 + c - '0';
+    c = getc(stdin);
+    if (tm.tm_min > 59) goto baddate;
+
+    if (c != ':') goto baddate;
+    c = getc(stdin);
+    if (!isdigit(c)) goto baddate;
+    tm.tm_sec = c - '0';
+    c = getc(stdin);
+    if (!isdigit(c)) goto baddate;
+    tm.tm_sec = tm.tm_sec * 10 + c - '0';
+    c = getc(stdin);
+    if (tm.tm_min > 60) goto baddate;
+
+    if (old_format) {
+	if (c != '-') goto baddate;
+	c = getc(stdin);
+
+	if (!isalpha(c)) goto baddate;
+	zone[0] = c;
+	c = getc(stdin);
+
+	if (c == '\"') {
+	    zone[1] = '\0';
+	    lcase(zone);
+	    if (zone[0] <= 'm') {
+		zone_off = (zone[0] - 'a' + 1)*60;
+	    }
+	    else if (zone[0] < 'z') {
+		zone_off = ('m' - zone[0])*60;
+	    }
+	    else zone_off = 0;
+	}
+	else {
+	    zone[1] = c;
+	    c = getc(stdin);
+	    if (c == '\"') {
+		zone[2] = '\0';
+		lcase(zone);
+		if (!strcmp(zone, "ut")) goto baddate;
+		zone_off = 0;
+	    }
+	    else {
+		zone[2] = c;
+		c = getc(stdin);
+		if (c != '\"') goto baddate;
+		zone[3] = '\0';
+		lcase(zone);
+		p = strchr("aecmpyhb", zone[0]);
+		if (c != '\"' || zone[2] != 't' || !p) goto baddate;
+		zone_off = (strlen(p) - 12)*60;
+		if (zone[1] == 'd') zone_off -= 60;
+		else if (zone[1] != 's') goto baddate;
+	    }
+	}
+    }
+    else {
+	if (c != ' ') goto baddate;
+	c = getc(stdin);
+
+	if (c != '+' && c != '-') goto baddate;
+	zone[0] = c;
+
+	c = getc(stdin);
+	if (!isdigit(c)) goto baddate;
+	zone_off = c - '0';
+	c = getc(stdin);
+	if (!isdigit(c)) goto baddate;
+	zone_off = zone_off * 10 + c - '0';
+	c = getc(stdin);
+	if (!isdigit(c)) goto baddate;
+	zone_off = zone_off * 6 + c - '0';
+	c = getc(stdin);
+	if (!isdigit(c)) goto baddate;
+	zone_off = zone_off * 10 + c - '0';
+
+	if (zone[0] == '-') zone_off = -zone_off;
+
+	c = getc(stdin);
+	if (c != '\"') goto baddate;
+
+    }
+
+    c = getc(stdin);
+
+    tm.tm_isdst = -1;
+    *date = mktime(&tm);
+    ltm = localtime(date);
+    *date += ltm->tm_gmtoff - zone_off*60;
+
+    return c;
+
+ baddate:
+    ungetc(c, stdin);
     return EOF;
 }
 	
