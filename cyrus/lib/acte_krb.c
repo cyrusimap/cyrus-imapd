@@ -76,12 +76,11 @@ static int krb_en_integrity(), krb_de_integrity();
 static int krb_en_privacy(), krb_de_privacy();
 
 /*
- * Query public values of the state pointer.  Fills in buffers
- * pointed to by the following arguments:
+ * Query public values of the state pointer after authentiation
+ * complete.  Fills in buffers pointed to by the following arguments:
  *
- * completed  -- nonzero if the authentication protocol is complete
- *               if zero, none of the other buffers are filled in.
  * user       -- IMAP userid authenticated as
+ * protlevel  -- bitmask for selected protection mechanism
  * encodefunc -- if nonzero, protection mechanism function to encode
  *               outgoing data with.
  * decodefunc -- if nonzero, protection mechanism function to decode
@@ -90,22 +89,18 @@ static int krb_en_privacy(), krb_de_privacy();
  *                the encodefunc at one time
  */
 static void 
-krb_query_state(state, completed, user, encodefunc, decodefunc, maxplain)
+krb_query_state(state, user, protlevel, encodefunc, decodefunc, maxplain)
 void *state;
-int *completed;
 char **user;
+int *protlevel;
 int (**encodefunc)();
 int (**decodefunc)();
 int *maxplain;
 {
     struct krb_state *kstate = (struct krb_state *)state;
 
-    if (kstate->authstepno != 2) {
-	*completed = 0;
-	return;
-    }
-    *completed = 1;
     *user = kstate->user;
+    *protlevel = kstate->protallowed;
 
     switch (kstate->protallowed) {
     case ACTE_PROT_NONE:
@@ -221,6 +216,8 @@ void **state;			/* On success, filled in with state ptr */
 
 /*
  * Perform client-side authentication protocol exchange
+ * Returns ACTE_DONE if authentication can be complete after
+ * sending our client reply.
  */
 static int krb_client_auth(state, inputlen, input, outputlen, output)
 void *state;			/* State of exchange */
@@ -263,7 +260,7 @@ char **output;			/* Set to point to client reply data */
 	    return ACTE_FAIL;
 	}
 	des_ecb_encrypt(input, input, kstate->schedule, 0);
-	if (ntohl(*(int *)input) + 1 != kstate->challenge) {
+	if (ntohl(*(int *)input) != kstate->challenge + 1) {
 	    /* Server failed to mutually authenticte */
 	    kstate->authstepno = -1;
 	    return ACTE_FAIL;
@@ -302,7 +299,7 @@ char **output;			/* Set to point to client reply data */
 	*output = authent.dat;
 	*outputlen = authent.length;
 	kstate->maxbufsize = maxbufsize;
-	return 0;
+	return ACTE_DONE;
 
     default:
 	kstate->authstepno = -1;
@@ -489,7 +486,7 @@ char **reply;			/* On failure, filled in with ptr to reason */
 		strcat(clientname, ".");
 		strcat(clientname, kstate->kdata.pinst);
 	    }
-	    if (strcmp(kstate->kdata.prealm, realm) != 0) {
+	    if (kstate->kdata.prealm[0]) {
 		strcat(clientname, "@");
 		strcat(clientname, kstate->kdata.prealm);
 	    }

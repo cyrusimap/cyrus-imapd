@@ -740,7 +740,7 @@ char *authtype;
     static struct buf input;
     void *state;
     char *reply = 0;
-    int complete;
+    int protlevel;
     char *user;
     int (*encodefunc)();
     int (*decodefunc)();
@@ -787,7 +787,7 @@ char *authtype;
 	return;
     }
 
-    mech->query_state(state, &complete, &user, &encodefunc, &decodefunc,
+    mech->query_state(state, &user, &protlevel, &encodefunc, &decodefunc,
 		      &maxplain);
 
     canon_user = auth_canonifyid(user);
