@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.1 2003/02/27 18:13:51 rjs3 Exp $
+ * $Id: bc_eval.c,v 1.1.4.2 2003/02/28 18:13:22 rjs3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -448,6 +448,9 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 		/* Header */
 		if(interp->getheader(m, this_header, &val) != SIEVE_OK)
 		    continue;
+#if VERBOSE
+                printf(" header %s is %s\n", this_header, val[0]);
+#endif
 	    } else {
 		/* Envelope */
 		if(interp->getenvelope(m, this_header, &val) != SIEVE_OK)
@@ -463,9 +466,12 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 		    if (parse_address(val[y], &data, &marker)!=SIEVE_OK) 
 			return 0;
 
-		    addr=get_address(addrpart, &data, &marker, 0);
+		    while (!res &&
+			   (addr = get_address(addrpart, &data, &marker, 0))) {
+#if VERBOSE
+			printf("working addr %s\n", (addr ? addr : "[nil]"));
+#endif
 
-		    if (addr) {
 			/*search through all the data*/ 
 			currd=datai+2;
 			for (z=0; z<numdata && !res; z++)
@@ -494,8 +500,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 				res |= comp(addr, data_val, comprock);
 			    }
 			} /* For each data */
-		    }
-		  
+		    } /* For each address */
 		} /* For each message header */
 	    }
 	} /* For each script header */
