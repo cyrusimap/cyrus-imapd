@@ -1,4 +1,4 @@
-<!-- $Id: install-prereq.html,v 1.3 2000/05/03 17:10:43 leg Exp $ -->
+<!-- $Id: install-prereq.html,v 1.4 2000/05/04 03:11:03 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Prerequisites and other notes
@@ -20,7 +20,10 @@ site uses.  Please pay careful attention to the SASL
 configuration. This is the biggest problem that most people have.
 
 <li> <b>Berkeley DB</b>, version 3.0.55 or higher. Berkeley DB can be
-obtained from <a href="http://www.sleepycat.com">Sleepycat</a>.
+obtained from <a href="http://www.sleepycat.com">Sleepycat</a>.  It is
+strongly recommended that libsasl be compiled with Berkeley DB
+support, using the same version of Berkeley DB.  (If you have a
+Berkeley DB version mismatch, somewhat perplexing crashes result.)
 
 <li> <b>GNU Make</b> is required.  Get it from <a
 href="http://www.gnu.org/">the Free Software Foundation</a>. It is
@@ -80,7 +83,7 @@ href="http://asg.web.cmu.edu/asg/">Cyrus project</a>.
 </ul>
 
 <P><HR>
-last modified: $Date: 2000/05/03 17:10:43 $
+last modified: $Date: 2000/05/04 03:11:03 $
 </BODY></HTML>
 
 
