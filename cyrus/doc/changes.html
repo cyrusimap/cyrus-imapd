@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.52 2002/11/11 22:12:45 rjs3 Exp $ -->
+<!-- $Id: changes.html,v 1.53 2002/12/03 23:59:30 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -8,6 +8,15 @@
 </head>
 <body>
 <h1>Changes to the Cyrus IMAP Server</h1>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.10</h2>
+<ul>
+<li>Fixed some potential buffer overflows in the sieve code, as well
+as a pre-login buffer overflow in the IMAP parsing code.</li>
+<li>ipurge can now skip flagged messages</li>
+<li>Fix a problem with the flat backend and tracking new files</li>
+<li>Fix a problem with the memory pool routines on 64-bit machines</li>
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.9</h2>
 <ul>
@@ -1694,7 +1703,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/11/11 22:12:45 $ <br />
+last modified: $Date: 2002/12/03 23:59:30 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
