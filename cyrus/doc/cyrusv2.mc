@@ -3,8 +3,9 @@
 #	(C) Copyright 2000 by Carnegie Mellon University
 #
 #	This sample mc file is for a site that uses the Cyrus IMAP server
-#	exclusively for local mail.
+#	exclusively for local mail. This requires Sendmail 8.10 or later.
 #
+# $Id: cyrusv2.mc,v 1.2 2000/06/01 20:35:38 wcw Exp $
 
 divert(0)dnl
 VERSIONID(`cyrus v2 sample configuartion')
