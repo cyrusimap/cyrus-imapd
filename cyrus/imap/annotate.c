@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.16.2.11 2005/03/23 17:40:48 shadow Exp $
+ * $Id: annotate.c,v 1.16.2.12 2005/03/24 21:52:12 ken3 Exp $
  */
 
 #include <config.h>
@@ -823,10 +823,10 @@ static void annotation_get_lastpop(const char *int_mboxname,
     get_mb_data(int_mboxname, mbrock);
 
     /* Check ACL */
-    if(!fdata-&gt;isadmin &&
-       (!mbrock-&gt;acl ||
-      !(cyrus_acl_myrights(fdata-&gt;auth_state, mbrock-&gt;acl) & ACL_LOOKUP) ||
-      !(cyrus_acl_myrights(fdata-&gt;auth_state, mbrock-&gt;acl) & ACL_READ)))
+    if(!fdata->isadmin &&
+       (!mbrock->acl ||
+      !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
+      !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
       return;
 
 
