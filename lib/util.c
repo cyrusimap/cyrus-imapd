@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: util.c,v 1.22 2003/02/13 20:15:42 rjs3 Exp $
+/* $Id: util.c,v 1.23 2003/05/30 13:37:27 rjs3 Exp $
  */
 
 #include <config.h>
@@ -263,7 +263,7 @@ int dir_hash_c(const char *name)
 int cyrus_close_sock(int fd) 
 {
     int r = shutdown(fd, SHUT_RD);
-    if(r) {
+    if(r && r != ENOTCONN) {
 	syslog(LOG_DEBUG, "Could not shut down filedescriptor %d: %m", fd);
     }
     
