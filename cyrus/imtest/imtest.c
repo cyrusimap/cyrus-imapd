@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.82.2.2 2002/08/16 20:03:38 ken3 Exp $
+ * $Id: imtest.c,v 1.82.2.3 2002/09/19 14:36:27 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -891,7 +891,7 @@ void interaction (int id, const char *challenge, const char *prompt,
 	if (username != NULL) {
 	    strcpy(result, username);
 	} else {
-	    strcpy(result, getpwuid(getuid())->pw_name);
+	    strcpy(result, "");
 	}
     } else if (id==SASL_CB_AUTHNAME) {
 	if (authname != NULL) {
