@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.107 2004/03/03 21:23:49 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.108 2004/03/04 16:49:55 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -680,7 +680,7 @@ static int savemsg(struct clientdata *cd,
 		 config_servername,
 		 CYRUS_VERSION,
 		 cd->starttls_done ? "S" : "",
-		 cd->authenticated == DIDAUTH ? "A" : "");
+		 cd->authenticated != NOAUTH ? "A" : "");
 
 #ifdef HAVE_SSL
     if (cd->tls_conn) {
