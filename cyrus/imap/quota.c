@@ -378,7 +378,7 @@ int ispartial;
 {
     FILE *listfile;
     int r;
-    char pattern[] = "*";
+    const char pattern[2] = "*";
 
     /*
      * Lock mailbox list to prevent mailbox creation/deletion
