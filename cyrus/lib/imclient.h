@@ -72,7 +72,8 @@ extern void imclient_addcallback();
 extern void imclient_send();
 #endif
 extern void imclient_processoneevent P((struct imclient *imclient));
-extern void imclient_getselectinfo P((int *fd, int *wanttowrite));
+extern void imclient_getselectinfo P((struct imclient *imclient,
+				      int *fd, int *wanttowrite));
 extern int imclient_authenticate P((struct imclient *imclient,
 				    struct acte_client **availmech,
 				    const char *user, int protallowed));
