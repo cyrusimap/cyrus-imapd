@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.176 2004/03/03 17:27:50 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.177 2004/03/08 17:31:05 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -952,42 +952,6 @@ struct backend *proxyd_findserver(const char *server)
     }
 
     return ret;
-}
-
-static void kick_mupdate(void)
-{
-    char buf[2048];
-    struct sockaddr_un srvaddr;
-    int s, r;
-    int len;
-    
-    s = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (s == -1) {
-	syslog(LOG_ERR, "socket: %m");
-	return;
-    }
-
-    strlcpy(buf, config_dir, sizeof(buf));
-    strlcat(buf, FNAME_MUPDATE_TARGET_SOCK, sizeof(buf));
-    memset((char *)&srvaddr, 0, sizeof(srvaddr));
-    srvaddr.sun_family = AF_UNIX;
-    strcpy(srvaddr.sun_path, buf);
-    len = sizeof(srvaddr.sun_family) + strlen(srvaddr.sun_path) + 1;
-
-    r = connect(s, (struct sockaddr *)&srvaddr, len);
-    if (r == -1) {
-	syslog(LOG_ERR, "kick_mupdate: can't connect to target: %m");
-	goto done;
-    }
-
-    r = read(s, buf, sizeof(buf));
-    if (r <= 0) {
-	syslog(LOG_ERR, "kick_mupdate: can't read from target: %m");
-    }
-
- done:
-    close(s);
-    return;
 }
 
 /* proxy mboxlist_lookup; on misses, it asks the listener for this
