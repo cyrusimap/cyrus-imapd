@@ -1,4 +1,4 @@
-<!-- $Id: install-perf.html,v 1.1 2000/04/25 02:56:42 leg Exp $ -->
+<!-- $Id: install-perf.html,v 1.2 2001/05/01 02:00:07 wcw Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Performance Notes
@@ -9,9 +9,9 @@
 <body>
 
 Performance issues for you to consider. If you never expect to have
-      more than 100 users, chances are any hardware you have will be
-      fine. If you plan on having thousands or more users, please be
-      sure to review this section.
+more than 100 simultaneous users, chances are any hardware you 
+have will be fine. If you plan on having thousands or more users, 
+please be sure to review this section.
 
 <p>
 If your configuration directory is not <tt>/var/imap</tt>, adjust
@@ -55,10 +55,16 @@ will try to use them and allocate some amount of memory. In general,
 the operating system will swap out those pages but you may be allocating
 more swap space than you need. So, look in /usr/lib/sasl and if you don't
 plan on using those mechanisms, don't leave them there. 
+
+<p><li>You may want to increase the listen queue value when starting
+up the master process.  For example, you may want to do this if you see
+the Listen queue drop counter increasing quickly.  For example, under 
+Solaris, look at the variable tcpListenDrop (from netstat -sP tcp).
+
 </ul>
 
 <P><HR>
-last modified: $Date: 2000/04/25 02:56:42 $
+last modified: $Date: 2001/05/01 02:00:07 $
 </BODY></HTML>
 
 
