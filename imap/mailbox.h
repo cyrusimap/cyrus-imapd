@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.70 2002/09/30 19:33:41 rjs3 Exp $
+ $Id: mailbox.h,v 1.71 2003/01/08 17:40:17 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -262,8 +262,7 @@ extern int mailbox_read_index_record(struct mailbox *mailbox,
 				     unsigned msgno,
 				     struct index_record *record);
 extern int mailbox_read_quota(struct quota *quota);
-extern void mailbox_hash_quota(char *buf, const char *quotaroot);
-
+extern void mailbox_hash_quota(char *buf, unsigned size, const char *qr);
 extern int mailbox_lock_header(struct mailbox *mailbox);
 extern int mailbox_lock_index(struct mailbox *mailbox);
 extern int mailbox_lock_pop(struct mailbox *mailbox);

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.43 2002/11/06 20:43:24 rjs3 Exp $ */
+/* $Id: quota.c,v 1.44 2003/01/08 17:40:17 rjs3 Exp $ */
 
 
 #include <config.h>
@@ -409,10 +409,10 @@ int fixquota_finish(int thisquota)
 
     if (!quota[thisquota].refcount) {
 	if (!quota[thisquota].deleted++) {
-	    char buf[MAX_MAILBOX_PATH];
+	    char buf[MAX_MAILBOX_PATH+1];
 	    
 	    printf("%s: removed\n", quota[thisquota].quota.root);
-	    mailbox_hash_quota(buf, quota[thisquota].quota.root);
+	    mailbox_hash_quota(buf, sizeof(buf), quota[thisquota].quota.root);
 
 	    unlink(buf);
 	}
