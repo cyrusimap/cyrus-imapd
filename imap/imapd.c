@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.217 2000/02/24 07:28:00 leg Exp $ */
+/* $Id: imapd.c,v 1.218 2000/02/24 20:11:28 tmartin Exp $ */
 
 #include <config.h>
 
@@ -66,8 +66,11 @@
 #include "xmalloc.h"
 #include "mboxname.h"
 #include "append.h"
-#include "pushstats.h"
 #include "mboxlist.h"
+
+/* snmp foo */
+#include "pushstats.h"
+
 
 #ifdef HAVE_SSL
 #include "tls.h"
@@ -456,6 +459,9 @@ int service_main(int argc, char **argv, char **envp)
        TLS negotiation immediately */
     if (imaps == 1) cmd_starttls(NULL, 1);
 
+    snmp_increment(TOTAL_CONNECTIONS, 1);
+    snmp_increment(ACTIVE_CONNECTIONS, 1);
+
     cmdloop();
 
     /* never reaches! */
@@ -518,6 +524,8 @@ void shut_down(int code)
     mboxlist_close();
     mboxlist_done();
     prot_flush(imapd_out);
+    /* one less active connection */
+    snmp_increment(ACTIVE_CONNECTIONS, -1);
     exit(code);
 }
 
@@ -528,6 +536,7 @@ void fatal(const char *s, int code)
     if (recurse_code) {
 	/* We were called recursively. Just give up */
 	proc_cleanup();
+	snmp_increment(ACTIVE_CONNECTIONS, -1);
 	exit(recurse_code);
     }
     recurse_code = code;

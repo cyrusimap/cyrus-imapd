@@ -1,7 +1,7 @@
 #!/bin/sh
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: snmpgen,v 1.5 2000/02/19 07:58:57 tmartin Exp $
+# $Id: snmpgen,v 1.6 2000/02/24 20:11:33 tmartin Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -58,6 +58,8 @@ my %O; # maps names to oids
 
 my @list;
 
+print STDERR "!!!!!!!!!!!!!!!!!!!!!\n";
+
 #first find the BASE
 while (defined ($line = <INPUT>)) {
     $linenum++;
@@ -71,11 +73,21 @@ while (defined ($line = <INPUT>)) {
 	next;
     }
 
-    if ($line =~ /^BASE\s+((\d|\.)+)/) {
+    if ($line =~ /^BASE\s+((\d|\.)+)(\.\X)?/) {
 	$base = $1;
+	if ($2 eq ".X") {
+	  $basex = "true";
+	} else {
+	  $basex = "false";
+	}
 	$basecount = 0;
 	next;
     }
+    if ($line =~ /^LIST\s+\{(.*)\}/) {
+      @lis = split(/\s*,\s*/, $1);
+      next;
+    }
+
     chomp $line;
     ($type, $name, $desc, $oid, $dummy) = split(/\s*,\s*/, $line, 5);
 
@@ -84,13 +96,15 @@ while (defined ($line = <INPUT>)) {
     }
 
     if ($oid eq "auto") {
-	$oid = $base . ".$basecount";
+	$oid = $base;
 	$basecount++;
     }
 
     $T{$name} = $type;
     $D{$name} = $desc;
-    $O{$name} = $oid;
+    $Obeg{$name} = $oid;
+    $Omid{$name} = $basex;
+    $Oend{$name} = ".$basecount";
 }
     
 open (OUTPUT_H, ">$outheader");
@@ -130,7 +144,7 @@ int snmp_set(${basename}_t cmd, int);
                                     
 const char *snmp_getdescription(${basename}_t cmd); 
  
-const char *snmp_getoid(${basename}_t cmd); 
+const char *snmp_getoid(const char *name, ${basename}_t cmd); 
  
 #endif /* ${basename}_H */ 
 
@@ -175,7 +189,7 @@ print OUTPUT_C <<EOF
     return NULL;
 }
 
-const char *snmp_getoid(${basename}_t evt)
+const char *snmp_getoid(const char *name, ${basename}_t evt)
 {
     switch (evt) {
 EOF
@@ -183,7 +197,12 @@ EOF
 
 foreach my $a (keys %T)
 {
-    print OUTPUT_C "        case $a: return \"$O{$a}\";\n";
+  if ($Omid{$a} eq "true")
+    {
+      print OUTPUT_C "        case $a: return \"$Obeg{$a}.199$Oend{$a}\";\n";
+    } else {
+      print OUTPUT_C "        case $a: return \"$Obeg{$a}$Oend{$a}\";\n";
+    }
 }
 
 
@@ -240,7 +259,26 @@ int snmp_increment(${basename}_t cmd, int incr)
 
     if (mysock == -1) return 1;
 
-    strcpy(tosend, snmp_getoid(cmd));
+    strcpy(tosend, snmp_getoid(NULL,cmd));
+    strcat(tosend,"\\n");
+
+    len = strlen(remote.sun_path) + sizeof(remote.sun_family);
+
+    if (sendto(mysock, tosend, strlen(tosend), 0, (struct sockaddr *) &remote, len) == -1) {
+	return 1;
+    }
+
+    return 0;
+}
+
+int snmp_increment_str(${basename}_t cmd, const char *name, int incr)
+{
+    int len;
+    char tosend[256];
+
+    if (mysock == -1) return 1;
+
+    strcpy(tosend, snmp_getoid(name,cmd));
     strcat(tosend,"\\n");
 
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
