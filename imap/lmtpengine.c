@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.49 2002/01/29 20:11:37 leg Exp $
+ * $Id: lmtpengine.c,v 1.50 2002/02/05 19:10:27 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1941,6 +1941,8 @@ static int getlastresp(char *buf, int len, int *code, struct protstream *pin)
 
 /* perform authentication against connection 'conn'
    returns the SMTP error code from the AUTH attempt */
+
+/* xxx returning wrong error codes; should be returning SMTP error codes ! */
 static int do_auth(struct lmtp_conn *conn)
 {
     int r;
@@ -1982,6 +1984,8 @@ static int do_auth(struct lmtp_conn *conn)
     r = sasl_setprop(conn->saslconn, SASL_IPREMOTEPORT, remoteip);
     if (r != SASL_OK) return r;
 
+    syslog(LOG_ERR, "mechs: %s", conn->mechs);
+
     /* we now do the actual SASL exchange */
     r = sasl_client_start(conn->saslconn, 
 			  conn->mechs,
@@ -1989,7 +1993,7 @@ static int do_auth(struct lmtp_conn *conn)
     if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
 	return r;
     }
-    if (out == NULL || outlen == 0) {
+    if (out == NULL) {
 	prot_printf(conn->pout, "AUTH %s\r\n", mechusing);
     } else {
 	/* send initial challenge */
