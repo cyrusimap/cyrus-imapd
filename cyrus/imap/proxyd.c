@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.53 2000/12/18 20:08:17 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.54 2000/12/18 20:30:17 leg Exp $ */
 
 #define NEW_BACKEND_TIMEOUT
 
@@ -1119,10 +1119,15 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
     }
 
-    secprops = mysasl_secprops(0);
+    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     sasl_setprop(proxyd_saslconn, SASL_SEC_PROPS, secprops);
-    sasl_setprop(proxyd_saslconn, SASL_IP_REMOTE, &proxyd_remoteaddr);  
-    sasl_setprop(proxyd_saslconn, SASL_IP_LOCAL, &proxyd_localaddr);  
+    if (extprops.ssf) {
+	sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops);
+    }
+    if (proxyd_haveaddr) {
+	sasl_setprop(proxyd_saslconn, SASL_IP_REMOTE, &proxyd_remoteaddr);  
+	sasl_setprop(proxyd_saslconn, SASL_IP_LOCAL, &proxyd_localaddr);  
+    }
 
     proc_register("proxyd", proxyd_clienthost, (char *)0, (char *)0);
 
