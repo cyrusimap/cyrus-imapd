@@ -1,0 +1,65 @@
+# Makefile for syslog replacement
+# 
+#	(C) Copyright 1994 by Carnegie Mellon University
+# 
+#                      All Rights Reserved
+# 
+# Permission to use, copy, modify, and distribute this software and its 
+# documentation for any purpose and without fee is hereby granted, 
+# provided that the above copyright notice appear in all copies and that
+# both that copyright notice and this permission notice appear in 
+# supporting documentation, and that the name of CMU not be
+# used in advertising or publicity pertaining to distribution of the
+# software without specific, written prior permission.  
+# 
+# CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+# ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+# CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+# ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+# WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+# ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+# SOFTWARE.
+# 
+
+srcdir = @srcdir@
+VPATH = @srcdir@
+
+CC = @CC@
+
+INSTALL = @INSTALL@
+RANLIB = @RANLIB@
+
+DEFS = @DEFS@
+CPPFLAGS = @CPPFLAGS@
+LIBS = @LIBS@
+
+CFLAGS = -g
+LDFLAGS = -g
+
+SHELL = /bin/sh
+
+all: libsyslog.a syslogd
+
+.c.o:
+	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) $<
+
+libsyslog.a: syslog.o
+	ar cr libsyslog.a syslog.o
+	$(RANLIB) libsyslog.a
+
+syslogd: syslogd.o
+	$(CC) $(LDFLAGS) -o syslogd syslogd.o $(LIBS)
+	@echo "Install syslogd and syslog.conf as appropriate"
+
+clean:
+	rm -f *.o *.a Makefile.bak
+
+distclean: clean
+	rm -f Makefile
+
+depend:
+	makedepend $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) *.c $(srcdir)/*.c
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.
+
+
