@@ -1,7 +1,7 @@
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers, 11-Jun-1996 -->
+<!-- Changed by: John Gardiner Myers, 12-Jun-1996 -->
 </HEAD>
 <BODY>
 <h1>           Installing and Configuring the Cyrus IMAP Server</h1>
@@ -245,7 +245,8 @@ Kerberos v4 support from being compiled in. <P>
 <dd>Specifies the path to the Tcl (version 7.5) library and header file (optional).
 By default, looks in "<tt>/usr/local</tt>" and then in the compiler's
 default link path.  The Tcl library is necessary to compile
-"<tt>cyradm</tt>", the administrative client.  <P>
+"<tt>cyradm</tt>", the administrative client.  If compiling without Tcl, it 
+is necessary to give configure the "<TT>--disable-cyradm</TT>" switch. <P>
 
 <dt><tt>--with-zephyr=PATH</tt>
 <dt><tt>--without-zephyr</tt>
