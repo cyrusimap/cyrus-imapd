@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: master.c,v 1.7 2000/02/29 21:08:04 leg Exp $ */
+/* $Id: master.c,v 1.8 2000/04/06 15:16:24 leg Exp $ */
 
 #include <config.h>
 
@@ -57,7 +57,6 @@
 
 #include "service.h"
 
-#define MAXSERVICE 5
 #define CHKPOINT_INTERVAL (30 * 60)
 #define SERVICE_PATH (CYRUS_PATH "/bin")
 
@@ -225,15 +224,15 @@ void run_startup(char **cmd)
 
     switch (pid = fork()) {
     case -1:
-	syslog(LOG_CRIT, "can't fork process to run recovery");
-	fatal("can't run recovery", 1);
+	syslog(LOG_CRIT, "can't fork process to run startup");
+	fatal("can't run startup", 1);
 	break;
 	
     case 0:
 	become_cyrus();
 	get_prog(path, cmd);
 	execv(path, cmd);
-	syslog(LOG_ERR, "can't exec %s for recovery: %m", path);
+	syslog(LOG_ERR, "can't exec %s for startup: %m", path);
 	exit(1);
 	
     default:
