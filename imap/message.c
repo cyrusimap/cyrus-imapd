@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.74 2000/04/06 15:14:45 leg Exp $
+ * $Id: message.c,v 1.75 2000/04/06 22:53:36 tmartin Exp $
  */
 
 #include <config.h>
@@ -1272,6 +1272,7 @@ message_parse_date(hdr)
 char *hdr;
 {
     struct tm tm;
+    time_t t;
     static struct tm zerotm;
     char month[4];
     static char *monthname[] = {
@@ -1333,13 +1334,28 @@ char *hdr;
 	tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
 	if (!isdigit((int) *hdr)) goto baddate;
 	tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
+    } else {
+	if (tm.tm_year < 70) {
+	    /* two-digit year, probably after 2000.
+	     * This patent was overturned, right?
+	     */
+	    tm.tm_year += 100;
+	}
     }
+    if (isdigit(*hdr)) {
+       /* five-digit date */
+       goto baddate;
+     }
 
     tm.tm_isdst = -1;
     tm.tm_hour = 12;
 
-    return mktime(&tm);
-
+    t = mktime(&tm);
+    /* Don't return -1; it's never right.  Return the current time instead.
+     * That's much closer than 1969.
+     */
+    if (t >= 0) return t;
+    
  baddate:
     return time(0);
 }

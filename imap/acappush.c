@@ -27,6 +27,8 @@
 /* if disconnected and can't reconnect right away how long to wait until retrying */
 #define RECONNECT_TIME (10*60)
 
+static int debugmode = 0;
+
 typedef enum {
     CONNECTED,
     DISCONNECTED,
@@ -198,8 +200,10 @@ void sendsomequeued(acap_conn_t *acapconn, int num)
 
 void fatal(const char *msg, int err)
 {
-    printf("dieing with %s %d\n",msg,err);
-    exit(1);
+    if (debugmode) printf("dieing with %s %d\n",msg,err);
+    syslog(LOG_CRIT, msg);
+    syslog(LOG_NOTICE, "exiting");
+    exit(err);
 }
 
 acap_conn_t *connect_acap(void)
@@ -215,7 +219,7 @@ acap_conn_t *connect_acap(void)
     return acap_conn;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     int s, len;
     struct sockaddr_un local;
@@ -232,6 +236,20 @@ int main(void)
     acap_conn_t *acap_conn = NULL;
     struct timeval timeout;
     time_t when_disconnected = 0;
+    pid_t pid;
+    int opt;
+
+    while ((opt = getopt(argc, argv, "d")) != EOF) {
+	switch (opt) {
+	case 'd': /* don't fork. debugging mode */
+	    debugmode = 1;
+	    break;
+	default:
+	    printf("Invalid arguement\n");
+	    exit(1);
+	    break;
+	}
+    }
 
     /* timeout for select is 1 minute */
     timeout.tv_sec = 60;
@@ -265,7 +283,21 @@ int main(void)
     umask(oldumask); /* for Linux */
     chmod(ACAPPUSH_PATH, 0777); /* for DUX */
 
-
+    /* fork unless we were given the -d option */    
+    if (debugmode == 0) {
+	pid = fork();
+	
+	if (pid == -1) {
+	    perror("fork");
+	    exit(1);
+	}
+	
+	if (pid != 0) { /* parent */
+	    
+	    exit(0);
+	}
+    }
+    /* child */
 
     /* get ready for select() */
     FD_ZERO(&read_set);
@@ -284,6 +316,7 @@ int main(void)
 					 error_message(r));
 		if (r == ACAP_NO_CONNECTION)
 		{
+		    if (debugmode) printf("Acap connection dropped\n");
 		    connected = DISCONNECTED;
 		    FD_CLR(acapsock, &read_set);
 		    nfds = s+1;
@@ -293,6 +326,8 @@ int main(void)
 
 		acap_conn = connect_acap();
 		if (acap_conn != NULL) {
+		    if (debugmode) printf("Made connection to ACAP server\n");
+
 		    acapsock = acap_conn_get_sock(acap_conn);	    
 		    connected = CONNECTED;
 		    
@@ -300,6 +335,7 @@ int main(void)
 		    if (acapsock+1 > nfds) nfds = acapsock + 1;
 		    
 		} else {
+		    if (debugmode) printf("Failed to make connection to ACAP server\n");
 		    connected = LAST_CONNECT_FAILED;
 		    when_disconnected = time(NULL);
 		}
@@ -315,7 +351,6 @@ int main(void)
 		break;
 
 	    default:
-		syslog(LOG_ERR,"Bad state");
 		fatal("Bad state exiting",-1);
 		break;
 	}
