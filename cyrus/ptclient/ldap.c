@@ -1,4 +1,4 @@
-/* afskrb.c - AFS PTS Group (Kerberos Canonicalization) Backend to ptloader */
+/* ldap.c - LDAP Backend to ptloader */
 /*
  * Copyright (c) 1996-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ldap.c,v 1.1.2.1 2003/01/03 22:08:20 rjs3 Exp $";
+      "$Id: ldap.c,v 1.1.2.2 2003/01/20 19:34:19 rjs3 Exp $";
 
 #include <config.h>
 
@@ -179,28 +179,32 @@ static int do_ldap_bind()
 {
     int rc;
 
-    /* LDAP options that need to be configured */
-    struct berval passwd = { 0, NULL };
 
     /* Initilization */
     if(config_getswitch(IMAPOPT_LDAP_SASL))
     {
-	char *sasl_mech = config_getstring(IMAPOPT_LDAP_SASL_MECH);
-	char *sasl_realm = config_getstring(IMAPOPT_LDAP_SASL_REALM);
-	char *sasl_authc_id = config_getstring(IMAPOPT_LDAP_SASL_AUTHC);
-	char *sasl_authz_id = config_getstring(IMAPOPT_LDAP_SASL_AUTHZ);
+	struct berval passwd = { 0, NULL };
+	const char *sasl_password =
+	    config_getstring(IMAPOPT_LDAP_SASL_PASSWORD);
+	const char *sasl_mech = config_getstring(IMAPOPT_LDAP_SASL_MECH);
+	const char *sasl_realm = config_getstring(IMAPOPT_LDAP_SASL_REALM);
+	const char *sasl_authc_id = config_getstring(IMAPOPT_LDAP_SASL_AUTHC);
+	const char *sasl_authz_id = config_getstring(IMAPOPT_LDAP_SASL_AUTHZ);
 	unsigned sasl_flags = LDAP_SASL_AUTOMATIC;
 	
 	void *defaults;
+
+	passwd.bv_val = sasl_password;
+	if(passwd.bv_val) passwd.bv_len = strlen(passwd.bv_val);
 	
 	/* xxx security properties */
 	syslog(LOG_DEBUG, "making LDAP defaults");
 	defaults = lutil_sasl_defaults( ld,
-					sasl_mech,
-					sasl_realm,
-					sasl_authc_id,
+					(char *)sasl_mech,
+					(char *)sasl_realm,
+					(char *)sasl_authc_id,
 					passwd.bv_val,
-					sasl_authz_id );
+					(char *)sasl_authz_id );
 
 	syslog(LOG_DEBUG, "doing LDAP SASL bind");
 	rc = ldap_sasl_interactive_bind_s( ld, NULL /* binddn */,
@@ -216,19 +220,49 @@ static int do_ldap_bind()
     return rc;
 }
 
+int ptsmodule_ldap_connect(void) 
+{
+    int ldap_version = LDAP_VERSION2;
+    int rc;
+    
+    rc = ldap_initialize(&ld, config_getstring(IMAPOPT_LDAP_SERVERS));
+    if (rc != LDAP_SUCCESS) {
+	syslog(LOG_ERR, "ldap_initialize failed");
+	return rc;
+    }
+
+    syslog(LOG_DEBUG, "seting LDAP version");
+
+    if(config_getswitch(IMAPOPT_LDAP_SASL))
+	    ldap_version = LDAP_VERSION3;
+
+    rc = ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &ldap_version);
+    
+    if(rc != LDAP_OPT_SUCCESS)
+    {
+	syslog(LOG_ERR, "could not set LDAP_OPT_PROTOCOL_VERSION");
+	return rc;
+    }
+
+    syslog(LOG_DEBUG, "binding LDAP");
+
+    rc = do_ldap_bind();
+    if(rc != LDAP_SUCCESS) {
+	syslog(LOG_ERR, "do_ldap_bind() failed: (%s)", ldap_err2string(rc));
+    }
+
+    return rc;
+}
+
+
 /* API */
 const char *ptsmodule_name = "ldap";
 
 void ptsmodule_init(void) 
 {
-    int rc;
-    const char *ldap_servers;
-    int ldap_version = LDAP_VERSION2;
-
     syslog(LOG_DEBUG, "initing LDAP");
 
-    ldap_servers = config_getstring(IMAPOPT_LDAP_SERVERS);
-    if(!ldap_servers) {
+    if(!config_getstring(IMAPOPT_LDAP_SERVERS)) {
 	fatal("no LDAP servers defined", EC_CONFIG);
     }
 
@@ -241,28 +275,10 @@ void ptsmodule_init(void)
     {
 	fatal("LDAP search FILTER not defined", EC_CONFIG);
     }
-    
-    rc = ldap_initialize(&ld, ldap_servers);
-    if (rc != LDAP_SUCCESS) {
-	fatal("ldap_initialize failed", EC_TEMPFAIL);
-    }
 
-    syslog(LOG_DEBUG, "seting LDAP version");
-
-    if(config_getswitch(IMAPOPT_LDAP_SASL))
-	    ldap_version = LDAP_VERSION3;
-
-    if( ldap_set_option( ld, LDAP_OPT_PROTOCOL_VERSION, &ldap_version )
-	!= LDAP_OPT_SUCCESS )
+    if(ptsmodule_ldap_connect() != LDAP_SUCCESS)
     {
-	fatal("Could not set LDAP_OPT_PROTOCOL_VERSION", EC_TEMPFAIL);
-    }
-
-    syslog(LOG_DEBUG, "binding LDAP");
-
-    rc = do_ldap_bind();
-    if(rc != LDAP_SUCCESS) {
-	syslog(LOG_ERR, "do_ldap_bind() failed: (%s)", ldap_err2string(rc));
+	fatal("failed initial LDAP connection", EC_CONFIG);
     }
 }
 
@@ -429,12 +445,33 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
     char *attr, **vals;
     BerElement *ber;
 
+    static time_t down_until = 0;
+    int retries = 4;
+
     syslog(LOG_DEBUG, "doing LDAP lookup of user %s", canon_id);
 
- retry: 
+    if(down_until && down_until > time(NULL)) return NULL;
+    else if(down_until > 0) {
+	if(ld) ldap_unbind(ld);
+	ld = NULL;
+	
+	down_until = 0;
+    }
 
+ retry: 
+    if(--retries == 0) {
+	down_until = time(NULL)+60; /* xxx configurable */
+	return NULL;
+    } else if (ld == NULL) {
+	rc = ptsmodule_ldap_connect();
+	if(rc != LDAP_SUCCESS) {
+	    sleep(2);
+	    goto retry;
+	}
+    }
+    
     /* Initilization */
-    timeout.tv_sec = 10; /* xxx configurable */
+    timeout.tv_sec = 5; /* xxx configurable */
     timeout.tv_usec = 0;
 
     *reply = NULL;
@@ -479,7 +516,10 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
 		 "ldap_search_st() failed: %s. Trying to reconnect.",
 		 ldap_err2string(rc));
 	  ldap_msgfree(res);
-	  do_ldap_bind();
+
+	  ldap_unbind(ld);
+	  ld = NULL;
+
 	  goto retry;
       default:
 	syslog(LOG_ERR|LOG_AUTH,

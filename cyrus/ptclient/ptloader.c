@@ -1,4 +1,4 @@
-/* ptloader.c -- AFS group loader daemon
+/* ptloader.c -- group loader daemon
  */
 /*
  * Copyright (c) 1996-2000 Carnegie Mellon University.  All rights reserved.
@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.25.4.6 2002/12/13 17:10:37 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.25.4.7 2003/01/20 19:34:19 rjs3 Exp $";
 
 #include <config.h>
 
@@ -68,7 +68,6 @@ static char rcsid[] __attribute__((unused)) =
 #include "retry.h"
 #include "xmalloc.h"
 
-
 extern const char *ptsmodule_name;
 extern void ptsmodule_init(void);
 extern struct auth_state *ptsmodule_make_authstate(const char *identifier,
@@ -92,8 +91,15 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     char fnamebuf[1024];
     extern char *optarg;
 
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    setproctitle_init(argc, argv, envp);
+
+    /* set signal handlers */
+    signals_add_handlers();
+    signal(SIGPIPE, SIG_IGN);
+
     syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.25.4.6 2002/12/13 17:10:37 rjs3 Exp $ (%s)",
+	   "starting: $Id: ptloader.c,v 1.25.4.7 2003/01/20 19:34:19 rjs3 Exp $ (%s)",
 	   ptsmodule_name);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
@@ -212,4 +218,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(exitcode);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25.4.6 2002/12/13 17:10:37 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25.4.7 2003/01/20 19:34:19 rjs3 Exp $ */

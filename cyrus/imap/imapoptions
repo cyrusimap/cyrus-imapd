@@ -40,7 +40,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.1.4.14 2003/01/03 22:08:18 rjs3 Exp $
+.\" $Id: imapoptions,v 1.1.4.15 2003/01/20 19:34:23 rjs3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -220,6 +220,9 @@ are listed with ``<none>''.
 
 { "ldap_sasl_mech", NULL, STRING }
 /* Force the use of a particular SASL mechanism for LDAP authentication */
+
+{ "ldap_sasl_password", NULL, STRING }
+/* Password for the LDAP SASL mechanism (if needed) */
 
 { "ldap_sasl_realm", NULL, STRING }
 /* Force the use of a particular SASL realm for LDAP authentication */
