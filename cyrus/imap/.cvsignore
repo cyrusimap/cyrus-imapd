@@ -34,6 +34,7 @@ pushstats.c
 pushstats.h
 quota
 reconstruct
+smmapd
 squatter
 tls_prune
 xversion.h
