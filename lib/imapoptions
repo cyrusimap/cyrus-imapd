@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.22 2004/04/27 19:53:07 rjs3 Exp $
+.\" $Id: imapoptions,v 1.23 2004/04/28 17:23:41 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -221,7 +221,7 @@ are listed with ``<none>''.
    hashing done on configuration directories.  This is recommended if
    one partition has a very bushy mailbox tree. */
 
-# Commented out - there's no such thing as "partition-name", but we need
+# Commented out - there's no such thing as "hostname_mechs", but we need
 # this for the man page
 # { "hostname_mechs", NULL, STRING }
 /* Force a particuar list of SASL mechanisms to be used when authenticating
@@ -229,6 +229,8 @@ are listed with ``<none>''.
    the server in question). If it is not specified it will query the server
    for available mechanisms and pick one to use. - Cyrus Murder */
 
+# Commented out - there's no such thing as "hostname_password", but we need
+# this for the man page
 # { "hostname_password", NULL, STRING }
 /* The password to use for authentication to the backend server hostname
    (where hostname is the short hostname of the server) - Cyrus Murder */
@@ -254,6 +256,13 @@ are listed with ``<none>''.
 
 { "implicit_owner_rights", "lca", STRING }
 /* The implicit Access Control List (ACL) for the owner of a mailbox. */
+
+# Commented out - there's no such thing as "@include", but we need
+# this for the man page
+# { "@include", NULL, STRING }
+/* Directive which includes the specified file as part of the
+   configuration.  If the path to the file is not absolute, CYRUS_PATH
+   is prepended. */
 
 { "ldap_authz", NULL, STRING }
 /* SASL authorization ID for the LDAP server */
