@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.91 2003/06/25 19:42:00 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.92 2003/06/26 13:38:03 ken3 Exp $
  */
 
 /*
@@ -3034,7 +3034,7 @@ static void news2mail(message_data_t *msg)
 	    rewind(msg->f);
 
 	    while (fgets(buf, sizeof(buf), msg->f)) {
-		if (buf[0] == '\r' && buf[1] == '\n') {
+		if (!body && buf[0] == '\r' && buf[1] == '\n') {
 		    /* blank line between header and body */
 		    body = 1;
 
