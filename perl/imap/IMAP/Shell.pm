@@ -120,6 +120,9 @@ my %builtins = (exit =>
 		  [\&_sc_delete, 'mailbox [host]', 'delete mailbox'],
 		delete => 'deletemailbox',
 		dm => 'deletemailbox',
+		info =>
+		  [\&_sc_info, '[mailbox]',
+		   'display mailbox/server metadata'],
 		reconstruct =>
 		  [\&_sc_reconstruct, 'mailbox', 'reconstruct mailbox (if supported'],
 		renamemailbox =>
@@ -1121,6 +1124,37 @@ sub _sc_version {
   0;
 }
 
+sub _sc_info {
+  my ($cyrref, $name, $fh, $lfh, @argv) = @_;
+  my (@nargv, $opt);
+  shift(@argv);
+  while (defined ($opt = shift(@argv))) {
+    # gack.  bloody tcl.
+    last if $opt eq '--';
+    if ($opt =~ /^-/) {
+      die "usage: info [mailbox]\n";
+    }
+    else {
+      push(@nargv, $opt);
+      last;
+    }
+  }
+  push(@nargv, @argv);
+  if (!$cyrref || !$$cyrref) {
+    die "info: no connection to server\n";
+  }
+  my %info = $$cyrref->getinfo(@nargv);
+  if (defined $$cyrref->error) {
+    $lfh->[2]->print($$cyrref->error, "\n");
+    return 1;
+  }
+  foreach my $attrib (keys %info) {
+    $attrib =~ /([^\/]*)$/;
+    $lfh->[1]->print($1, " ", $info{$attrib}, "\n");
+  }
+  0;
+}
+
 ###############################################################################
 
 #
@@ -1252,6 +1286,10 @@ last command will be used if one is not specified.
 =item ? [command]
 
 Show help for C<command> or all commands.
+
+=item C<info> [I<mailbox>]
+
+Display the mailbox/server metadata.
 
 =item listaclmailbox I<mailbox>
 

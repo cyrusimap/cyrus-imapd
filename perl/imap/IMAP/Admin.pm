@@ -615,10 +615,10 @@ sub getinfo {
   my ($self,$box) = @_;
   my $pat;
 
-  if($box == undef) {
+  if(!defined($box)) {
     $pat = "/server/*";
   } else {
-    $pat = "/mailbox/$box/*";
+    $pat = "/mailbox/{$box}/*";
   }
 
   if(!$self->{support_annotatemore}) {
@@ -640,7 +640,7 @@ sub getinfo {
 			  while($text !~ /^\)/) {
 			    if($text =~
 			       /^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)/) {
-				 ${$d{-rock}}{$1} = $3;
+				 $d{-rock}{$1} = $3;
 				 $text =~ s/^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)//;
 			       } else {
 				 # hrm, error
@@ -653,7 +653,7 @@ sub getinfo {
 			  # however, we are only asking for one value, so...
 			  $annotation = $1;
 			  $text =~ /\"(\S*)\"\)/;
-			  ${$d{-rock}}{$annotation} = $1;
+			  $d{-rock}{$annotation} = $1;
 		        } else {
 			  next;
 			}
@@ -666,7 +666,7 @@ sub getinfo {
   $self->addcallback({-trigger => 'ANNOTATION'});
   if ($rc eq 'OK') {
     $self->{error} = undef;
-    @info;
+    %info;
   } else {
     $self->{error} = $msg;
     ();
