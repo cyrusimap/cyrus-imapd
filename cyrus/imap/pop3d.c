@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.63 2000/02/22 00:54:11 tmartin Exp $
+ * $Id: pop3d.c,v 1.64 2000/02/22 01:19:03 tmartin Exp $
  */
 
 #include <config.h>
@@ -117,7 +117,8 @@ static void cmd_auth();
 static void cmd_capa();
 static void cmd_pass();
 static void cmd_user();
-static void cmd_starttls(void);
+static void cmd_starttls(int pop3s);
+static int starttls_enabled(void);
 static void eatline(void);
 static void printauthready(int len,unsigned char *data);
 static void blat(int msg,int lines);
@@ -177,6 +178,7 @@ int service_init(int argc, char **argv, char **envp)
  */
 int service_main(int argc, char **argv, char **envp)
 {
+    int pop3s = 0;
     int opt;
     int salen;
     struct hostent *hp;
@@ -186,8 +188,19 @@ int service_main(int argc, char **argv, char **envp)
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
 
-    while ((opt = getopt(argc, argv, "k")) != EOF) {
+    while ((opt = getopt(argc, argv, "sk")) != EOF) {
 	switch(opt) {
+	case 's': /* pop3s (do starttls right away) */
+#ifdef HAVE_SSL
+	    pop3s = 1;
+	    if (!starttls_enabled()) {
+		syslog(LOG_ERR, "Required openSSL options not present. Cannot do pop3s");
+		fatal("Required openSSL optiongs not present. Cannot do pop3s",EC_TEMPFAIL);
+	    }
+#else
+	    syslog(LOG_ERR, "Not compiled with openSSL. Cannot do pop3s");
+	    fatal("Not compiled with openSSL. Cannot do pop3s",EC_TEMPFAIL);
+#endif /* HAVE_SSL */
 	case 'k':
 	    kflag++;
 	    break;
@@ -242,6 +255,9 @@ int service_main(int argc, char **argv, char **envp)
 #else
     if (kflag) usage();
 #endif
+
+    /* we were connected on pop3s port so we should do STARTTLS negotiation immediatly */
+    if (pop3s == 1) cmd_starttls(1);
 
     prot_printf(popd_out, "+OK %s Cyrus POP3 %s server ready\r\n",
 		config_servername, CYRUS_VERSION);
@@ -582,7 +598,7 @@ static void cmdloop(void)
 	else if (!strcmp(inputbuf, "stls")) {
 	    if (arg) prot_printf(popd_out,"-ERR STLS doesn't take any arguements\r\n");
 	    else {
-		cmd_starttls();
+		cmd_starttls(0);
 	    }
 	}
 #endif /* HAVE_SSL */
@@ -593,7 +609,14 @@ static void cmdloop(void)
 }
 
 #ifdef HAVE_SSL
-static void cmd_starttls(void)
+static int starttls_enabled(void)
+{
+    if (config_getstring("tls_cert_file", NULL) == NULL) return 0;
+    if (config_getstring("tls_key_file", NULL) == NULL) return 0;
+    return 1;
+}
+
+static void cmd_starttls(int pop3s)
 {
     int result;
     int *layerp;
@@ -626,13 +649,20 @@ static void cmd_starttls(void)
 	       (char *) config_getstring("tls_cert_file", ""),
 	       (char *) config_getstring("tls_key_file", ""));
 
-	prot_printf(popd_out, "-ERR %s\r\n", "Error initializing TLS");	
+	if (pop3s == 0)
+	    prot_printf(popd_out, "-ERR %s\r\n", "Error initializing TLS");	
+	else
+	    fatal("tls_init() failed",EC_TEMPFAIL);
+
 	return;
     }
 
-    prot_printf(popd_out, "+OK %s\r\n", "Begin TLS negotiation now");
-    /* must flush our buffers before starting tls */
-    prot_flush(popd_out);
+    if (pop3s == 0)
+    {
+	prot_printf(popd_out, "+OK %s\r\n", "Begin TLS negotiation now");
+	/* must flush our buffers before starting tls */
+	prot_flush(popd_out);
+    }
   
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
@@ -641,8 +671,13 @@ static void cmd_starttls(void)
 
     /* if error */
     if (result==-1) {
-	prot_printf(popd_out, "-ERR Starttls failed\r\n");
-	syslog(LOG_NOTICE, "[pop3d] STARTTLS failed: %s", popd_clienthost);
+	if (pop3s == 0) {
+	    prot_printf(popd_out, "-ERR Starttls failed\r\n");
+	    syslog(LOG_NOTICE, "[pop3d] STARTTLS failed: %s", popd_clienthost);
+	} else {
+	    syslog(LOG_NOTICE, "pop3s failed: %s", popd_clienthost);
+	    fatal("tls_start_servertls() failed", EC_TEMPFAIL);
+	}
 	return;
     }
 
@@ -806,7 +841,9 @@ cmd_capa()
 #endif
 
 #ifdef HAVE_SSL
-    prot_printf(popd_out, "STLS\r\n");
+    if (starttls_enabled()) {
+	prot_printf(popd_out, "STLS\r\n");
+    }
 #endif /* HAVE_SSL */
 
     if (expire < 0) {
