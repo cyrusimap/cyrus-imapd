@@ -84,6 +84,7 @@ struct txn {
 static int abort_txn(struct db *db, struct txn *tid)
 {
     int r = CYRUSDB_OK;
+    int rw = 0;
     struct stat sbuf;
 
     assert(db && tid);
@@ -92,6 +93,7 @@ static int abort_txn(struct db *db, struct txn *tid)
     if (tid->fnamenew) {
 	unlink(tid->fnamenew);
 	free(tid->fnamenew);
+	rw = 1;
     }
 
     /* release lock */
@@ -101,14 +103,17 @@ static int abort_txn(struct db *db, struct txn *tid)
 	r = CYRUSDB_IOERROR;
     }
 
-    /* return to our normally scheduled fd */
-    if (!r && fstat(db->fd, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", db->fname);
-	r = CYRUSDB_IOERROR;
-    }
-    if (!r) {
-	map_refresh(db->fd, 1, &db->base, &db->size, sbuf.st_size,
-		    db->fname, 0);
+    if (rw) {
+	/* return to our normally scheduled fd */
+	if (!r && fstat(db->fd, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: fstat on %s: %m", db->fname);
+	    r = CYRUSDB_IOERROR;
+	}
+	if (!r) {
+	    map_free(&db->base, &db->size);
+	    map_refresh(db->fd, 1, &db->base, &db->size, sbuf.st_size,
+			db->fname, 0);
+	}
     }
 
     free(tid);
@@ -187,15 +192,62 @@ static int myfetch(struct db *db,
 
     assert(db);
 
+    if (mytid && !*mytid) {
+	const char *lockfailaction;
+
+	/* start txn; grab lock */
+
+	r = lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction);
+	if (r < 0) {
+	    syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, db->fname);
+	    return CYRUSDB_IOERROR;
+	}
+	*mytid = (struct txn *) xmalloc(sizeof(struct txn));
+	(*mytid)->fnamenew = NULL;
+
+	if (db->ino != sbuf.st_ino) {
+	    map_free(&db->base, &db->size);
+	}
+	map_refresh(db->fd, 1, &db->base, &db->size, sbuf.st_size,
+		    db->fname, 0);
+    }
+
     if (!mytid) {
-	map_refresh(db->fd, 1, &db->base, &db->size,
-		    sbuf.st_size, db->fname, 0);
+	/* no txn, but let's try to be reasonably up-to-date */
+
+	if (stat(db->fname, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: stating %s: %m", db->fname);
+	    return CYRUSDB_IOERROR;
+	}
+
+	if (sbuf.st_ino != db->ino) {
+	    /* reopen */
+	    int newfd = open(db->fname, O_RDWR);
+
+	    if (newfd == -1) {
+		/* fail! */
+		syslog(LOG_ERR, "couldn't reopen %s: %m", db->fname);
+		return CYRUSDB_IOERROR;
+	    }
+	    dup2(newfd, db->fd);
+	    close(newfd);
+	    if (stat(db->fname, &sbuf) == -1) {
+		syslog(LOG_ERR, "IOERROR: stating %s: %m", db->fname);
+		return CYRUSDB_IOERROR;
+	    }
+	    
+	    db->ino = sbuf.st_ino;
+	    map_free(&db->base, &db->size);
+	    map_refresh(db->fd, 1, &db->base, &db->size,
+			sbuf.st_size, db->fname, 0);
+	}
     }
 
     offset = bsearch_mem(key, 1, db->base, db->size, 0, &len);
     if (len) {
 	*data = db->base + offset + keylen + 1;
-	*datalen = len - keylen - 1;
+	/* subtract one for \t, and one for the \n */
+	*datalen = len - keylen - 2;
     } else {
 	*data = NULL;
 	*datalen = 0;
@@ -217,23 +269,6 @@ static int fetchlock(struct db *db,
 		     const char **data, int *datalen,
 		     struct txn **mytid)
 {
-    struct stat sbuf;
-    const char *lockfailaction;
-    int r = CYRUSDB_OK;
-
-    if (mytid && !*mytid) {
-	r = lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction);
-	if (r < 0) {
-	    syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, db->fname);
-	    return CYRUSDB_IOERROR;
-	}
-	*mytid = (struct txn *) xmalloc(sizeof(struct txn));
-	(*mytid)->fnamenew = NULL;
-
-	map_refresh(db->fd, 1, &db->base, &db->size, sbuf.st_size,
-		    db->fname, 0);
-    }
-
     return myfetch(db, key, keylen, data, datalen, mytid);
 }
 
@@ -270,6 +305,14 @@ static int mystore(struct db *db,
 	    syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, db->fname);
 	    return CYRUSDB_IOERROR;
 	}
+
+	if (sbuf.st_ino != db->ino) {
+	    db->ino = sbuf.st_ino;
+	    map_free(&db->base, &db->size);
+	    map_refresh(db->fd, 1, &db->base, &db->size,
+			sbuf.st_size, db->fname, 0);
+	}
+
 	if (mytid) {
 	    *mytid = (struct txn *) xmalloc(sizeof(struct txn));
 	    (*mytid)->fnamenew = NULL;
@@ -333,18 +376,33 @@ static int mystore(struct db *db,
 
 	(*mytid)->fnamenew = xstrdup(fnamebuf);
 	(*mytid)->fd = writefd;
+	map_free(&db->base, &db->size);
 	map_refresh(writefd, 1, &db->base, &db->size, sbuf.st_size,
 		    fnamebuf, 0);
     } else {
 	/* commit immediately */
 	if (fsync(writefd) ||
-	    lock_blocking(writefd) == -1 ||
 	    fstat(writefd, &sbuf) == -1 ||
 	    rename(fnamebuf, db->fname) == -1) {
 	    syslog(LOG_ERR, "IOERROR: writing %s: %m", fnamebuf);
 	    close(writefd);
 	    return CYRUSDB_IOERROR;
 	}
+
+	/* release lock */
+	r = lock_unlock(db->fd);
+	if (r == -1) {
+	    syslog(LOG_ERR, "IOERROR: unlocking db %s: %m", db->fname);
+	    r = CYRUSDB_IOERROR;
+	}
+
+	close(db->fd);
+	db->fd = writefd;
+
+	db->ino = sbuf.st_ino;
+	map_free(&db->base, &db->size);
+	map_refresh(writefd, 1, &db->base, &db->size, sbuf.st_size,
+		    db->fname, 0);
     }
 
     return r;
@@ -386,7 +444,6 @@ static int commit_txn(struct db *db, struct txn *tid)
 
 	writefd = tid->fd;
 	if (fsync(writefd) ||
-	    lock_blocking(writefd) == -1 ||
 	    fstat(writefd, &sbuf) == -1 ||
 	    rename(tid->fnamenew, db->fname) == -1) {
 	    syslog(LOG_ERR, "IOERROR: writing %s: %m", tid->fnamenew);
@@ -397,21 +454,14 @@ static int commit_txn(struct db *db, struct txn *tid)
 	    /* we now deal exclusively with our new fd */
 	    close(db->fd);
 	    db->fd = writefd;
+	    db->ino = sbuf.st_ino;
 	}
 	free(tid->fnamenew);
     } else {
 	/* read-only txn */
     }
 
-    /* release lock */
-    r = lock_unlock(db->fd);
-    if (r == -1) {
-	syslog(LOG_ERR, "IOERROR: unlocking db %s: %m", db->fname);
-	r = CYRUSDB_IOERROR;
-    }
-
     free(tid);
-
     return r;
 }
 
