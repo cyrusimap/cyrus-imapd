@@ -64,9 +64,20 @@ int write;
     newstream->func = 0;
     newstream->state = 0;
     newstream->error = 0;
+    newstream->eof = 0;
     newstream->read_timeout = 0;
 
     return newstream;
+}
+
+/*
+ * Free a protection stream
+ */
+int prot_free(s)
+struct protstream *s;
+{
+    free((char *)s);
+    return 0;
 }
 
 /*
@@ -135,12 +146,14 @@ struct protstream *s;
 	return EOF;
     }
     s->cnt = s->leftcnt = 0;
+    s->error = 0;
+    s->eof = 0;
     return 0;
 }
 
 /*
  * Read data into the empty buffer for the stream 's' and return the
- * first character.  Returns EOF on error.
+ * first character.  Returns EOF on EOF or error.
  */
 int 
 prot_fill(s)
@@ -149,7 +162,7 @@ struct protstream *s;
     int n, cnt = 0;
     unsigned inputlen = 0;
     
-    if (s->error) return EOF;
+    if (s->eof || s->error) return EOF;
 
     do {
 	if (s->leftcnt) {
@@ -175,7 +188,8 @@ struct protstream *s;
 	}
     
 	if (n <= 0) {
-	    s->error = n ? sys_errlist[errno] : "EOF encountered";
+	    if (n) s->error = sys_errlist[errno];
+	    else s->eof = 1;
 	    return EOF;
 	}
 
@@ -223,7 +237,7 @@ struct protstream *s;
     int left = s->ptr - s->buf;
     int n;
 
-    if (s->error) return EOF;
+    if (s->eof || s->error) return EOF;
     if (!left) return 0;
 
     if (s->func) {
@@ -276,7 +290,7 @@ int len;
     bcopy(buf, s->ptr, len);
     s->ptr += len;
     s->cnt -= len;
-    if (s->error) return EOF;
+    if (s->error || s->eof) return EOF;
     return 0;
 }
 
@@ -336,7 +350,7 @@ va_dcl
     }
     prot_write(s, fmt, strlen(fmt));
     va_end(pvar);
-    if (s->error) return EOF;
+    if (s->error || s->eof) return EOF;
     return 0;
 }
 
