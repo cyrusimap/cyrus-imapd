@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.110 2004/03/09 18:08:40 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.111 2004/03/17 16:33:56 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1095,7 +1095,7 @@ void lmtpmode(struct lmtp_func *func,
 
     /* Setup SASL to go.  We need to do this *after* we decide if
      *  we are preauthed or not. */
-    if (sasl_server_new("lmtp", NULL, NULL, NULL,
+    if (sasl_server_new("lmtp", config_servername, NULL, NULL,
 			NULL, (func->preauth ? localauth_override_cb : NULL),
 			0, &cd.conn) != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
