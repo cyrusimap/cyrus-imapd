@@ -4,7 +4,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # script to translate sieve scripts to use unixhierarchysep and/or altnamespace
 # make sure you run it as the cyrus user
 #!/usr/bin/perl
-# translatesieve,v 1.2 2001/08/03 21:18:10 ken3 Exp
+# $Id: translatesieve,v 1.4 2001/08/10 18:32:27 ken3 Exp $
 # 
 # Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
 #

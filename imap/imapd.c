@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* imapd.c,v 1.310 2001/08/03 21:18:06 ken3 Exp */
+/* $Id: imapd.c,v 1.312 2001/08/10 18:32:16 ken3 Exp $ */
 
 #include <config.h>
 
