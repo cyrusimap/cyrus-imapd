@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.69 1999/06/29 18:30:19 leg Exp $ -->
+<!-- $Id: changes.html,v 1.70 1999/06/30 18:43:17 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -10,21 +10,30 @@
 
     <ul>
       <li> imtest's interface has changed, to allow for SASL
-      authentication.  Sorry, but it had to happen.  It now also
-      includes a timing test (-z) which we use to test the SASL layers.
+        authentication.  Sorry, but it had to happen.  It now also
+	includes a timing test (-z) which we use to test the SASL layers.
 
       <li> The prot layer now uses SASL for encryption and
-      authentication.  This changed a large amount of code, and some
-      build procedures.
+        authentication.  This changed a large amount of code, and some
+	build procedures.
 
       <li> Since SASL seperates out userid and authid, admins are
-      allowed to act on behalf of any other normal user.  currently,
-      normal users are not allowed to proxy.
+        allowed to act on behalf of any other normal user.  currently,
+	normal users are not allowed to proxy.
+
+      <li> As a side effect of SASL, --enable-static-libraries now 
+        doesn't do anything.  We are considering compiling cyrus with
+	libtool to change this.
 
       <li> Error codes returned by programs have changed, and programs return
 	EX_TEMPFAIL far more than they used to.  This is because Sendmail
 	considers most not-EX_TEMPFAIL errors permanent; now, if it may not be 
 	permanent, EX_TEMPFAIL is returned.  (See lib/exitcodes.h.)
+
+      <li> Two bugs fixed: FETCH's with no messages in range now
+	return OK, not BAD.  And an obscure bug in LIST case
+	sensitivity is fixed.
+
     </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.5.19 </h2>
