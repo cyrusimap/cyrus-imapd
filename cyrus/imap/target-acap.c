@@ -26,7 +26,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  *
- * $Id: target-acap.c,v 1.4 2000/02/16 03:12:01 leg Exp $
+ * $Id: target-acap.c,v 1.5 2000/02/19 04:46:06 leg Exp $
  */
 
 #include <config.h>
@@ -137,7 +137,7 @@ void connect_acap(const char *server)
     r = acap_conn_connect(acapurl, &acap_conn);
     if (r != ACAP_OK) {
 	syslog(LOG_ERR, "couldn't connect to ACAP server: %s",
-	       strerror(r));
+	       error_message(r));
 	fatal("couldn't connect to acap server", EC_NOHOST);
     }
 }
@@ -165,7 +165,7 @@ void myacap_entry(acap_entry_t *entry, void *rock)
     imapurl_fromURL(server, mailbox, url->data);
 
     r = mboxlist_insertremote(mailbox, 0, server, acl->data, NULL);
-    if (!r) {
+    if (r) {
 	syslog(LOG_ERR, "failed to insert %s into new mailboxes file",
 	       name);
 	fatal("fatal mailboxes error", 0);
@@ -245,7 +245,7 @@ void synchronize_mboxlist(void)
     mboxlist_open(newmblist);
     
     /* xxx eventually need to fill in context stuff here */
-    r = acap_search_dataset(acap_conn, "/mailbox/", 
+    r = acap_search_dataset(acap_conn, global_dataset "/", 
 			    "NOT EQUAL \"entry\" \"i;octet\" \"\"", 1,
 			    &myacap_request, NULL,
 			    NULL,
@@ -267,7 +267,7 @@ void synchronize_mboxlist(void)
     sprintf(mblist, "%s%s", config_dir, FNAME_MBOXLIST);
     errno = 0;
     r = rename(newmblist, mblist);
-    if (!r) {
+    if (r) {
 	syslog(LOG_ERR, "couldn't rename mailboxes file: %m");
 	fatal("couldn't rename mailboxes file", 0);
     }

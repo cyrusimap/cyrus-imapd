@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.7 2000/02/18 22:51:38 leg Exp $ */
+/* $Id: proxyd.c,v 1.8 2000/02/19 04:46:06 leg Exp $ */
 
 #include <config.h>
 
@@ -426,32 +426,6 @@ static int pipe_command(struct backend *s, int optimistic_literal)
     }
 }
 
-/* This creates a structure that defines the allowable
- *   security properties 
- */
-static sasl_security_properties_t *make_secprops(int min, int max)
-{
-    sasl_security_properties_t *ret = (sasl_security_properties_t *)
-	xmalloc(sizeof(sasl_security_properties_t));
-
-    ret->maxbufsize = 4096;
-    ret->min_ssf = min;
-    ret->max_ssf = max;
-    
-    ret->security_flags = 0;
-    if (!config_getswitch("allowplaintext", 1)) {
-	ret->security_flags |= SASL_SEC_NOPLAINTEXT;
-    }
-    if (!config_getswitch("allowanonymouslogin", 0)) {
-	ret->security_flags |= SASL_SEC_NOANONYMOUS;
-    }
-    
-    ret->property_names = NULL;
-    ret->property_values = NULL;
-
-    return ret;
-}
-
 static int mysasl_getauthline(struct protstream *p, char *tag,
 			      char **line, unsigned int *linelen)
 {
@@ -530,13 +504,10 @@ static int proxy_authenticate(struct backend *s)
 	return r;
     }
 
-    secprops = make_secprops(0, 0);
-    if (secprops != NULL) {
-	r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, secprops);
-	free(secprops);
-	if (r != SASL_OK) {
-	    return r;
-	}
+    secprops = mysasl_secprops();
+    r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, secprops);
+    if (r != SASL_OK) {
+	return r;
     }
 
     /* set the IP addresses */
@@ -939,11 +910,8 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
     }
 
-    secprops = make_secprops(config_getint("sasl_minimum_layer", 0),
-			     config_getint("sasl_maximum_layer", 256));
+    secprops = mysasl_secprops();
     sasl_setprop(proxyd_saslconn, SASL_SEC_PROPS, secprops);
-    free(secprops);
-    
     sasl_setprop(proxyd_saslconn, SASL_IP_REMOTE, &proxyd_remoteaddr);  
     sasl_setprop(proxyd_saslconn, SASL_IP_LOCAL, &proxyd_localaddr);  
 

@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: config.h,v 1.13 2000/02/18 22:51:35 leg Exp $
+ $Id: config.h,v 1.14 2000/02/19 04:46:03 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -30,17 +30,22 @@
 #ifndef INCLUDED_CONFIG_H
 #define INCLUDED_CONFIG_H
 
+#include <sasl.h>
+
 extern int config_init(const char *ident);
 extern const char *config_getstring(const char *key, const char *def);
 extern int config_getint(const char *key, int def);
 extern int config_getswitch(const char *key, int def);
 extern const char *config_partitiondir(const char *partition);
 extern int config_changeident(const char *ident);
+
+/* sasl configuration */
 extern int mysasl_config(void *context,
 			 const char *plugin_name,
 			 const char *option,
 			 const char **result,
 			 unsigned *len);
+extern sasl_security_properties_t *mysasl_secprops(void);
 
 /* Values of mandatory options */
 extern const char *config_dir;

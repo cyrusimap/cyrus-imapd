@@ -21,8 +21,6 @@ extern sasl_callback_t *mysasl_callbacks(const char *username,
 					 const char *realm,
 					 const char *password);
 
-const char *global_dataset = "/mb";
-
 struct acapmbox_handle_s {
     acap_conn_t *conn;
 };

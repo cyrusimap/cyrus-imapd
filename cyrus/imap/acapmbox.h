@@ -5,6 +5,8 @@
 
 int acapmbox_init(void);
 
+#define global_dataset "/mb"
+
 typedef enum {
     ACAPMBOX_UNKNOWN,
     ACAPMBOX_RESERVED,
@@ -101,6 +103,6 @@ int acapmbox_setproperty(acapmbox_handle_t *AC,
 acapmbox_status mboxdata_convert_status(acap_value_t *v);
 
 /**************** proxy use *****************/
-#define FNAME_TARGET_SOCK "/target"
+#define FNAME_TARGET_SOCK "/cyrus/target"
 
 #endif /* ACAP_MBOX_H_ */

@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.6 2000/02/18 22:51:37 leg Exp $
+ * $Id: lmtpd.c,v 1.7 2000/02/19 04:46:05 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.6 2000/02/18 22:51:37 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.7 2000/02/19 04:46:05 leg Exp $";*/
 
 #include <config.h>
 
@@ -185,27 +185,6 @@ static const char *sieve_dir = NULL;
 #endif
 
 struct sockaddr_in deliver_localaddr, deliver_remoteaddr;
-
-static sasl_security_properties_t *make_secprops(int min, int max)
-{
-    sasl_security_properties_t *ret = (sasl_security_properties_t *) 
-	xmalloc(sizeof(sasl_security_properties_t));
-
-    ret->maxbufsize = 4000;
-    ret->min_ssf = min;		/* minimum allowable security strength */
-    ret->max_ssf = max;		/* maximum allowable security strength */
-
-    ret->security_flags = 0;
-    if (!config_getswitch("allowplaintext", 1)) {
-	ret->security_flags |= SASL_SEC_NOPLAINTEXT;
-    }
-    ret->security_flags |= SASL_SEC_NOANONYMOUS;
-
-    ret->property_names = NULL;
-    ret->property_values = NULL;
-    
-    return ret;
-}
 
 /* returns true if imapd_authstate is in "item";
    expected: item = admins or proxyservers */
@@ -1505,7 +1484,7 @@ void lmtpmode(deliver_opts_t *delopts)
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
     }
 
-    secprops = make_secprops(0, 10000);
+    secprops = mysasl_secprops();
     sasl_setprop(conn, SASL_SEC_PROPS, secprops);
 
     fstat(0, &sbuf);
