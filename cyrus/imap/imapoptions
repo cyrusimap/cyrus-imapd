@@ -40,7 +40,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.1.4.2 2002/07/11 15:39:52 rjs3 Exp $
+.\" $Id: imapoptions,v 1.1.4.3 2002/07/30 16:20:12 rjs3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -242,6 +242,18 @@ are listed with ``<none>''.
 
 { "mupdate_server", NULL, STRING }
 /* The mupdate server for the Cyrus Murder */
+
+{ "mupdate_workers_start", 5, INT }
+/* The number of mupdate worker threads to start */
+
+{ "mupdate_workers_minspare", 2, INT }
+/* The minimum number of idle mupdate worker threads */
+
+{ "mupdate_workers_maxspare", 10, INT }
+/* The maximum number of idle mupdate worker threads */
+
+{ "mupdate_workers_max", 50, INT }
+/* The maximum number of mupdate worker threads (overall) */
 
 { "mupdate_username", "", STRING }
 /* The SASL username (Authorization Name) to use when authenticating to

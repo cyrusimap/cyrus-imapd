@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.3 2002/07/26 20:57:52 ken3 Exp $
+ * $Id: mupdate.c,v 1.60.4.4 2002/07/30 16:20:12 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -78,7 +78,15 @@
 #include "version.h"
 #include "mpool.h"
 
+
+static const int NO_NEW_CONNECTION = -1;
+
 static int masterp = 0;
+
+typedef enum {
+    DOCMD_OK = 0,
+    DOCMD_CONN_FINISHED = 1
+} mupdate_docmd_result_t;
 
 enum {
     poll_interval = 1,
@@ -98,12 +106,16 @@ struct conn {
     sasl_conn_t *saslconn;
     char *userid;
 
-    const char *clienthost;
+    int idle;
+    
+    char clienthost[250];
 
     struct 
     {
 	char *ipremoteport;
+	char ipremoteport_buf[60];
 	char *iplocalport;
+	char iplocalport_buf[60];
     } saslprops;
 
     /* pending changes to send, in reverse order */
@@ -120,25 +132,48 @@ struct conn {
     const char *list_prefix;
     size_t list_prefix_len;
 
+    /* For parsing */
+    struct buf tag, cmd, arg1, arg2, arg3;
+
+    /* For connection list management */
     struct conn *next;
+    struct conn *next_idle;
 };
 
-int ready_for_connections = 0;
-pthread_cond_t ready_for_connections_cond = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t ready_for_connections_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int ready_for_connections = 0;
+static pthread_cond_t ready_for_connections_cond = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t ready_for_connections_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int synced = 0;
-pthread_cond_t synced_cond = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t synced_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int synced = 0;
+static pthread_cond_t synced_cond = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t synced_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static pthread_mutex_t listener_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t listener_cond = PTHREAD_COND_INITIALIZER;
+static int listener_lock = 0;
+
+/* if you want to lick both listener and either of these two, you
+ * must lock listener first.  You must have both listener_mutex and
+ * idle_connlist_mutex locked to remove anything from the idle_connlist */
+static pthread_mutex_t idle_connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
+struct conn *idle_connlist = NULL; /* protected by listener_mutex */
+static pthread_mutex_t idle_worker_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int idle_worker_count = 0;
+static pthread_mutex_t worker_count_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int worker_count = 0;
 
 pthread_mutex_t connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct conn *connlist = NULL;
+
+/* ---- connection signaling pipe */
+static int conn_pipe[2];
 
 /* ---- database access ---- */
 pthread_mutex_t mailboxes_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct conn *updatelist = NULL;
 
 /* --- prototypes --- */
+mupdate_docmd_result_t docmd(struct conn *c);
 void cmd_authenticate(struct conn *C,
 		      const char *tag, const char *mech,
 		      const char *clientstart);
@@ -156,6 +191,9 @@ void sendupdates(struct conn *C, int flushnow);
 
 /* --- prototypes in mupdate-client.c */
 void *mupdate_client_start(void *rock);
+
+/* --- main() for each thread */
+static void *thread_main(void *rock);
 
 /* --- mutex wrapper functions for SASL */
 void *my_mutex_new(void)
@@ -182,18 +220,92 @@ int my_mutex_destroy(pthread_mutex_t *m)
 static struct conn *conn_new(int fd)
 {
     struct conn *C = xzmalloc(sizeof(struct conn));
+    struct sockaddr_in localaddr, remoteaddr;
+    int haveaddr = 0;
+    int salen;
+    int secflags;
+    struct hostent *hp;
     
     C->fd = fd;
+    
+    C->pin = prot_new(C->fd, 0);
+    C->pout = prot_new(C->fd, 1);
+    
+    prot_setflushonread(C->pin, C->pout);
+    prot_settimeout(C->pin, 180*60);
+
+    C->pin->userdata = C->pout->userdata = C;
+
     pthread_mutex_lock(&connlist_mutex); /* LOCK */
     C->next = connlist;
     connlist = C;
     pthread_mutex_unlock(&connlist_mutex); /* UNLOCK */
+
+    /* Find out name of client host */
+    salen = sizeof(remoteaddr);
+    if (getpeername(C->fd, (struct sockaddr *)&remoteaddr, &salen) == 0 &&
+	remoteaddr.sin_family == AF_INET) {
+	hp = gethostbyaddr((char *)&remoteaddr.sin_addr,
+			   sizeof(remoteaddr.sin_addr), AF_INET);
+	if (hp != NULL) {
+	    strncpy(C->clienthost, hp->h_name, sizeof(C->clienthost)-30);
+	    C->clienthost[sizeof(C->clienthost)-30] = '\0';
+	} else {
+	    C->clienthost[0] = '\0';
+	}
+	strcat(C->clienthost, "[");
+	strcat(C->clienthost, inet_ntoa(remoteaddr.sin_addr));
+	strcat(C->clienthost, "]");
+	salen = sizeof(localaddr);
+	if (getsockname(C->fd, (struct sockaddr *)&localaddr, &salen) == 0
+	    && iptostring((struct sockaddr *)&remoteaddr,
+			  sizeof(struct sockaddr_in),
+			  C->saslprops.ipremoteport_buf,
+			  sizeof(C->saslprops.ipremoteport_buf)) == 0
+	    && iptostring((struct sockaddr *)&localaddr,
+			  sizeof(struct sockaddr_in),
+			  C->saslprops.iplocalport_buf,
+			  sizeof(C->saslprops.iplocalport_buf)) == 0) {
+	    haveaddr = 1;
+	}
+    }
+
+    if(haveaddr) {
+	C->saslprops.ipremoteport = C->saslprops.ipremoteport_buf;
+	C->saslprops.iplocalport = C->saslprops.iplocalport_buf;
+    }
+
+    /* create sasl connection */
+    if (sasl_server_new("mupdate",
+			config_servername, NULL,
+			C->saslprops.iplocalport,
+			C->saslprops.ipremoteport,
+			NULL, 0, 
+			&C->saslconn) != SASL_OK) {
+	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
+    }
+
+    /* set my allowable security properties */
+    secflags = SASL_SEC_NOANONYMOUS;
+    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+	secflags |= SASL_SEC_NOPLAINTEXT;
+    }
+    sasl_setprop(C->saslconn, SASL_SEC_PROPS, mysasl_secprops(secflags));
+
+    /* Clear Buffers */
+    memset(&(C->tag), 0, sizeof(struct buf));
+    memset(&(C->cmd), 0, sizeof(struct buf));
+    memset(&(C->arg1), 0, sizeof(struct buf));
+    memset(&(C->arg2), 0, sizeof(struct buf));
+    memset(&(C->arg3), 0, sizeof(struct buf));
 
     return C;
 }
 
 static void conn_free(struct conn *C)
 {
+    assert(!C->idle); /* Not allowed to free idle connections */
+    
     if (C->streaming) {		/* remove from updatelist */
 	struct conn *upc;
 
@@ -217,8 +329,8 @@ static void conn_free(struct conn *C)
 	pthread_mutex_unlock(&mailboxes_mutex);
     }
 
-    pthread_mutex_lock(&connlist_mutex); /* LOCK */
     /* remove from connlist */
+    pthread_mutex_lock(&connlist_mutex); /* LOCK */
     if (C == connlist) {
 	connlist = connlist->next;
     } else {
@@ -230,7 +342,6 @@ static void conn_free(struct conn *C)
 	assert(t != NULL);
 	t->next = C->next;
     }
-
     pthread_mutex_unlock(&connlist_mutex); /* UNLOCK */
 
     if (C->ev) prot_removewaitevent(C->pin, C->ev);
@@ -239,7 +350,12 @@ static void conn_free(struct conn *C)
     close(C->fd);
     if (C->saslconn) sasl_dispose(&C->saslconn);
 
-    /* free update list */
+    /* free struct bufs */
+    freebuf(&(C->tag));
+    freebuf(&(C->cmd));
+    freebuf(&(C->arg1));
+    freebuf(&(C->arg2));
+    freebuf(&(C->arg3));
 
     free(C);
 }
@@ -313,10 +429,34 @@ static struct sasl_callback mysasl_cb[] = {
 int service_init(int argc, char **argv,
 		 char **envp __attribute__((unused)))
 {
-    int r;
+    int i, r, workers_to_start;
     int opt;
+    pthread_t t;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+
+    /* Do minor configuration checking */
+    workers_to_start = config_getint(IMAPOPT_MUPDATE_WORKERS_START);
+
+    if(config_getint(IMAPOPT_MUPDATE_WORKERS_MAX) < config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
+	syslog(LOG_CRIT, "Maximum total worker threads is less than minimum spare worker threads");
+	return EC_SOFTWARE;
+    }
+
+    if(config_getint(IMAPOPT_MUPDATE_WORKERS_MAXSPARE) < workers_to_start) {
+	syslog(LOG_CRIT, "Maximum spare worker threads is less than starting worker threads");
+	return EC_SOFTWARE;
+    }
+
+    if(config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE) > workers_to_start) {
+	syslog(LOG_CRIT, "Minimum spare worker threads is greater than starting worker threads");
+	return EC_SOFTWARE;
+    }
+
+    if(config_getint(IMAPOPT_MUPDATE_WORKERS_MAX) < workers_to_start) {
+	syslog(LOG_CRIT, "Maximum total worker threads is less than starting worker threads");
+	return EC_SOFTWARE;
+    }
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -363,11 +503,14 @@ int service_init(int argc, char **argv,
 	}
     }
 
+    if(pipe(conn_pipe) == -1) {
+	syslog(LOG_ERR, "could not setup connection signaling pipe %m");
+	return EC_OSERR;
+    }
+
     database_init();
 
     if (!masterp) {
-	pthread_t t;
-	
 	r = pthread_create(&t, NULL, &mupdate_client_start, NULL);
 	if(r == 0) {
 	    pthread_detach(t);
@@ -383,6 +526,17 @@ int service_init(int argc, char **argv,
 	pthread_mutex_unlock(&synced_mutex);
     } else {
 	mupdate_ready();
+    }
+
+    /* Now create the worker thread pool */
+    for(i=0; i < workers_to_start; i++) {
+	r = pthread_create(&t, NULL, &thread_main, NULL);  
+        if(r == 0) {
+            pthread_detach(t);
+        } else {
+            syslog(LOG_ERR, "could not start client thread");
+            return EC_SOFTWARE;
+        }
     }
 
     return 0;
@@ -403,49 +557,23 @@ void fatal(const char *s, int code)
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
                        		 if ((ch) != '\n') goto extraargs; } while (0)
 
-void cmdloop(struct conn *c)
+mupdate_docmd_result_t docmd(struct conn *c)
 {
-    struct buf tag, cmd, arg1, arg2, arg3;
-    const char *mechs;
-    int ret;
-    unsigned int mechcount;
-    char slavebuf[4096];
-
-    syslog(LOG_DEBUG, "starting cmdloop() on fd %d", c->fd);
-        
-    /* zero out struct bufs */
-    /* Note that since they live on the stack for the duration of the
-     * connection we don't need to fill up the struct conn with them */
-    memset(&tag, 0, sizeof(struct buf));
-    memset(&cmd, 0, sizeof(struct buf));
-    memset(&arg1, 0, sizeof(struct buf));
-    memset(&arg2, 0, sizeof(struct buf));
-    memset(&arg3, 0, sizeof(struct buf));
-
-    ret=sasl_listmech(c->saslconn, NULL, "* AUTH \"", "\" \"", "\"",
-		      &mechs, NULL, &mechcount);
-
-    /* AUTH banner is mandatory */
-    if(!masterp) {
-	if(!config_mupdate_server)
-	    fatal("mupdate server was not specified for slave", EC_TEMPFAIL);
-
-	snprintf(slavebuf, sizeof(slavebuf), "mupdate://%s",
-		 config_mupdate_server);
-    }
-		
-    prot_printf(c->pout,
-	       "%s\r\n* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"\r\n",
-    	       (ret == SASL_OK && mechcount > 0) ? mechs : "* AUTH",
-	       config_servername,
-	       CYRUS_VERSION, masterp ? "(master)" : slavebuf);
-    for (;;) {
+    mupdate_docmd_result_t ret = DOCMD_OK;
+    
+    do {
 	int ch;
 	char *p;
 
-	signals_poll();
-	
-	ch = getword(c->pin, &tag);
+	if(!ready_for_connections) {
+	    /* Are we allowed to continue serving data? */
+	    prot_printf(c->pout,
+			"* BYE \"no longer ready for connections\"\r\n");
+	    ret = DOCMD_CONN_FINISHED;
+	    goto done;
+	}
+
+	ch = getword(c->pin, &(c->tag));
 	if (ch == EOF && errno == EAGAIN) {
 	    /* streaming and no input from client */
 	    continue;
@@ -457,6 +585,8 @@ void cmdloop(struct conn *c)
 		syslog(LOG_WARNING, "%s, closing connection", err);
 		prot_printf(c->pout, "* BYE \"%s\"\r\n", err);
 	    }
+
+	    ret = DOCMD_CONN_FINISHED;
 	    goto done;
 	}
 
@@ -466,35 +596,35 @@ void cmdloop(struct conn *c)
 	}
 
 	if (ch != ' ') {
-	    prot_printf(c->pout, "%s BAD \"Need command\"\r\n", tag.s);
+	    prot_printf(c->pout, "%s BAD \"Need command\"\r\n", c->tag.s);
 	    eatline(c->pin, ch);
 	    continue;
 	}
 
 	/* parse command name */
-	ch = getword(c->pin, &cmd);
-	if (!cmd.s[0]) {
-	    prot_printf(c->pout, "%s BAD \"Null command\"\r\n", tag.s);
+	ch = getword(c->pin, &(c->cmd));
+	if (!c->cmd.s[0]) {
+	    prot_printf(c->pout, "%s BAD \"Null command\"\r\n", c->tag.s);
 	    eatline(c->pin, ch);
 	    continue;
 	}
 
-	if (islower((unsigned char) cmd.s[0])) {
-	    cmd.s[0] = toupper((unsigned char) cmd.s[0]);
+	if (islower((unsigned char) c->cmd.s[0])) {
+	    c->cmd.s[0] = toupper((unsigned char) c->cmd.s[0]);
 	}
-	for (p = &cmd.s[1]; *p; p++) {
+	for (p = &(c->cmd.s[1]); *p; p++) {
 	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
 	}
 	
-	switch (cmd.s[0]) {
+	switch (c->cmd.s[0]) {
 	case 'A':
-	    if (!strcmp(cmd.s, "Authenticate")) {
+	    if (!strcmp(c->cmd.s, "Authenticate")) {
 		int opt = 0;
 		
 		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &arg1);
+		ch = getstring(c->pin, c->pout, &(c->arg1));
 		if (ch == ' ') {
-		    ch = getstring(c->pin, c->pout, &arg2);
+		    ch = getstring(c->pin, c->pout, &(c->arg2));
 		    opt = 1;
 		}
 		CHECKNEWLINE(c, ch);
@@ -502,266 +632,182 @@ void cmdloop(struct conn *c)
 		if (c->userid) {
 		    prot_printf(c->pout,
 				"%s BAD \"already authenticated\"\r\n",
-				tag.s);
+				c->tag.s);
 		    continue;
 		}
 
-		cmd_authenticate(c, tag.s, arg1.s, opt ? arg2.s : NULL);
+		cmd_authenticate(c, c->tag.s, c->arg1.s,
+				 opt ? c->arg2.s : NULL);
 	    }
 	    else if (!c->userid) goto nologin;
-	    else if (!strcmp(cmd.s, "Activate")) {
+	    else if (!strcmp(c->cmd.s, "Activate")) {
 		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &arg1);
+		ch = getstring(c->pin, c->pout, &(c->arg1));
 		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &arg2);
+		ch = getstring(c->pin, c->pout, &(c->arg2));
 		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &arg3);
+		ch = getstring(c->pin, c->pout, &(c->arg3));
 		CHECKNEWLINE(c, ch);
 
 		if (c->streaming) goto notwhenstreaming;
 		if (!masterp) goto masteronly;
 
-		cmd_set(c, tag.s, arg1.s, arg2.s, arg3.s, SET_ACTIVE);
+		cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s,
+			c->arg3.s, SET_ACTIVE);
 	    }
 	    else goto badcmd;
 	    break;
 
 	case 'D':
 	    if (!c->userid) goto nologin;
-	    else if (!strcmp(cmd.s, "Deactivate")) {
+	    else if (!strcmp(c->cmd.s, "Deactivate")) {
 		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &arg1);
+		ch = getstring(c->pin, c->pout, &(c->arg1));
 		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &arg2);
+		ch = getstring(c->pin, c->pout, &(c->arg2));
 		CHECKNEWLINE(c, ch);
 
 		if (c->streaming) goto notwhenstreaming;
 		if (!masterp) goto masteronly;
 		
-		cmd_set(c, tag.s, arg1.s, arg2.s, NULL, SET_DEACTIVATE);
+		cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s,
+			NULL, SET_DEACTIVATE);
 	    }
-	    else if (!strcmp(cmd.s, "Delete")) {
+	    else if (!strcmp(c->cmd.s, "Delete")) {
 		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &arg1);
+		ch = getstring(c->pin, c->pout, &(c->arg1));
 		CHECKNEWLINE(c, ch);
 
 		if (c->streaming) goto notwhenstreaming;
 		if (!masterp) goto masteronly;
 
-		cmd_set(c, tag.s, arg1.s, NULL, NULL, SET_DELETE);
+		cmd_set(c, c->tag.s, c->arg1.s, NULL, NULL, SET_DELETE);
 	    }
 	    else goto badcmd;
 	    break;
 
 	case 'F':
 	    if (!c->userid) goto nologin;
-	    else if (!strcmp(cmd.s, "Find")) {
+	    else if (!strcmp(c->cmd.s, "Find")) {
 		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &arg1);
+		ch = getstring(c->pin, c->pout, &(c->arg1));
 		CHECKNEWLINE(c, ch);
 
 		if (c->streaming) goto notwhenstreaming;
 		
-		cmd_find(c, tag.s, arg1.s, 1, 0);
+		cmd_find(c, c->tag.s, c->arg1.s, 1, 0);
 	    }
 	    else goto badcmd;
 	    break;
 
 	case 'L':
-	    if (!strcmp(cmd.s, "Logout")) {
+	    if (!strcmp(c->cmd.s, "Logout")) {
 		CHECKNEWLINE(c, ch);
 
-		prot_printf(c->pout, "%s OK \"bye-bye\"\r\n", tag.s);
+		prot_printf(c->pout, "%s OK \"bye-bye\"\r\n", c->tag.s);
+		ret = DOCMD_CONN_FINISHED;
 		goto done;
 	    }
 	    else if (!c->userid) goto nologin;
-	    else if (!strcmp(cmd.s, "List")) {
+	    else if (!strcmp(c->cmd.s, "List")) {
 		int opt = 0;
 
 		if (ch == ' ') {
 		    /* Optional partition/host prefix parameter */
-		    ch = getstring(c->pin, c->pout, &arg1);
+		    ch = getstring(c->pin, c->pout, &(c->arg1));
 		    opt = 1;
 		}
 		CHECKNEWLINE(c, ch);
 
 		if (c->streaming) goto notwhenstreaming;
 
-		cmd_list(c, tag.s, opt ? arg1.s : NULL);
+		cmd_list(c, c->tag.s, opt ? c->arg1.s : NULL);
 		
-		prot_printf(c->pout, "%s OK \"list complete\"\r\n", tag.s);
+		prot_printf(c->pout, "%s OK \"list complete\"\r\n", c->tag.s);
 	    }
 	    else goto badcmd;
 	    break;
 
 	case 'N':
 	    if (!c->userid) goto nologin;
-	    else if (!strcmp(cmd.s, "Noop")) {
+	    else if (!strcmp(c->cmd.s, "Noop")) {
 		CHECKNEWLINE(c, ch);
 
-		prot_printf(c->pout, "%s OK \"Noop done\"\r\n", tag.s);
+		prot_printf(c->pout, "%s OK \"Noop done\"\r\n", c->tag.s);
 	    }
 	    else goto badcmd;
 	    break;
 
 	case 'R':
 	    if (!c->userid) goto nologin;
-	    else if (!strcmp(cmd.s, "Reserve")) {
+	    else if (!strcmp(c->cmd.s, "Reserve")) {
 		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &arg1);
+		ch = getstring(c->pin, c->pout, &(c->arg1));
 		if (ch != ' ') goto missingargs;
-		ch = getstring(c->pin, c->pout, &arg2);
+		ch = getstring(c->pin, c->pout, &(c->arg2));
 		CHECKNEWLINE(c, ch);
 
 		if (c->streaming) goto notwhenstreaming;
 		if (!masterp) goto masteronly;
 		
-		cmd_set(c, tag.s, arg1.s, arg2.s, NULL, SET_RESERVE);
+		cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s, NULL, SET_RESERVE);
 	    }
 	    else goto badcmd;
 	    break;
 
 	case 'U':
 	    if (!c->userid) goto nologin;
-	    else if (!strcmp(cmd.s, "Update")) {
+	    else if (!strcmp(c->cmd.s, "Update")) {
 		CHECKNEWLINE(c, ch);
 		if (c->streaming) goto notwhenstreaming;
 		
-		cmd_startupdate(c, tag.s);
+		cmd_startupdate(c, c->tag.s);
 	    }
 	    else goto badcmd;
 	    break;
 
 	default:
 	badcmd:
-	    prot_printf(c->pout, "%s BAD \"Unrecognized command\"\r\n", tag.s);
+	    prot_printf(c->pout, "%s BAD \"Unrecognized command\"\r\n",
+			c->tag.s);
 	    eatline(c->pin, ch);
 	    continue;
 
 	extraargs:
-	    prot_printf(c->pout, "%s BAD \"Extra arguments\"\r\n", tag.s);
+	    prot_printf(c->pout, "%s BAD \"Extra arguments\"\r\n",
+			c->tag.s);
 	    eatline(c->pin, ch);
 	    continue;
 	    
 	missingargs:
-	    prot_printf(c->pout, "%s BAD \"Missing arguments\"\r\n", tag.s);
+	    prot_printf(c->pout, "%s BAD \"Missing arguments\"\r\n",
+			c->tag.s);
 	    eatline(c->pin, ch);
 	    continue;
 
 	notwhenstreaming:
 	    prot_printf(c->pout, "%s BAD \"not legal when streaming\"\r\n",
-			tag.s);
+			c->tag.s);
 	    continue;
 
 	masteronly:
 	    prot_printf(c->pout,
 			"%s BAD \"read-only session\"\r\n",
-			tag.s);
+			c->tag.s);
 	    continue;
 	}
 
 	continue;
 
     nologin:
-	prot_printf(c->pout, "%s BAD Please login first\r\n", tag.s);
+	prot_printf(c->pout, "%s BAD Please login first\r\n", c->tag.s);
 	eatline(c->pin, ch);
 	continue;
-    }
+    } while(c->streaming);
 
  done:
     prot_flush(c->pout);
-
-    /* free struct bufs */
-    freebuf(&tag);
-    freebuf(&cmd);
-    freebuf(&arg1);
-    freebuf(&arg2);
-    freebuf(&arg3);
-
-    syslog(LOG_DEBUG, "ending cmdloop() on fd %d", c->fd);
-}
-
-void *start(void *rock)
-{
-    struct conn *c = (struct conn *) rock;
-    struct sockaddr_in localaddr, remoteaddr;
-    int haveaddr = 0;
-    int salen;
-    int secflags;
-    sasl_security_properties_t *secprops = NULL;
-    char localip[60], remoteip[60];
-    char clienthost[250];
-    struct hostent *hp;
-
-    pthread_mutex_lock(&ready_for_connections_mutex);
-    /* are we ready to take connections? */
-    while(!ready_for_connections) {
-	pthread_cond_wait(&ready_for_connections_cond,
-			  &ready_for_connections_mutex);
-    }
-    pthread_mutex_unlock(&ready_for_connections_mutex);
-
-    c->pin = prot_new(c->fd, 0);
-    c->pout = prot_new(c->fd, 1);
-    c->clienthost = clienthost;
-
-    prot_setflushonread(c->pin, c->pout);
-    prot_settimeout(c->pin, 180*60);
-
-    /* Find out name of client host */
-    salen = sizeof(remoteaddr);
-    if (getpeername(c->fd, (struct sockaddr *)&remoteaddr, &salen) == 0 &&
-	remoteaddr.sin_family == AF_INET) {
-	hp = gethostbyaddr((char *)&remoteaddr.sin_addr,
-			   sizeof(remoteaddr.sin_addr), AF_INET);
-	if (hp != NULL) {
-	    strncpy(clienthost, hp->h_name, sizeof(clienthost)-30);
-	    clienthost[sizeof(clienthost)-30] = '\0';
-	} else {
-	    clienthost[0] = '\0';
-	}
-	strcat(clienthost, "[");
-	strcat(clienthost, inet_ntoa(remoteaddr.sin_addr));
-	strcat(clienthost, "]");
-	salen = sizeof(localaddr);
-	if (getsockname(c->fd, (struct sockaddr *)&localaddr, &salen) == 0
-	    && iptostring((struct sockaddr *)&remoteaddr,
-			  sizeof(struct sockaddr_in), remoteip, 60) == 0
-	    && iptostring((struct sockaddr *)&localaddr,
-			  sizeof(struct sockaddr_in), localip, 60) == 0) {
-	    haveaddr = 1;
-	}
-    }
-
-    if(haveaddr) {
-	c->saslprops.ipremoteport = remoteip;
-	c->saslprops.iplocalport = localip;
-    }
-
-    /* create sasl connection */
-    if (sasl_server_new("mupdate",
-			config_servername, NULL,
-			(haveaddr ? localip : NULL),
-			(haveaddr ? remoteip : NULL),
-			NULL, 0, 
-			&c->saslconn) != SASL_OK) {
-	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
-    }
-
-    /* set my allowable security properties */
-    secflags = SASL_SEC_NOANONYMOUS;
-    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
-	secflags |= SASL_SEC_NOPLAINTEXT;
-    }
-    secprops = mysasl_secprops(secflags);
-    sasl_setprop(c->saslconn, SASL_SEC_PROPS, secprops);
-
-    cmdloop(c);
-
-    /* This will close c->fd also */
-    conn_free(c);
-
-    return NULL;
+    return ret;
 }
 
 /*
@@ -772,17 +818,275 @@ int service_main_fd(int fd,
 		    char **argv __attribute__((unused)),
 		    char **envp __attribute__((unused)))
 {
-    /* spawn off a thread to handle this connection */
-    pthread_t t;
-    struct conn *c = conn_new(fd);
-    int r;
+    /* signal that a new file descriptor is available */
+    if(write(conn_pipe[1], &fd, sizeof(fd)) == -1) {
+	syslog(LOG_CRIT,
+	       "write to conn_pipe to signal new connection failed: %m");
+	return EC_TEMPFAIL;
+    }
+    return 0;
+}
 
-    r = pthread_create(&t, NULL, &start, c);
-    if (r == 0) {
-	pthread_detach(t);
+/*
+ * The main thread loop
+ */
+/* Note that You Must Lock Listen mutex before idle worker mutex,
+ * though you can lock them individually too */
+static void *thread_main(void *rock __attribute__((unused))) 
+{
+    struct conn *C; /* used for loops */
+    struct conn *currConn; /* the connection we care about currently */
+    struct protgroup *protin = protgroup_new(PROTGROUP_SIZE_DEFAULT);
+    struct protgroup *protout = NULL;
+    struct timeval now;
+    struct timespec timeout;
+    int connflag;
+    int new_fd;
+    int ret;
+
+    /* Lock Worker Count Mutex */
+    pthread_mutex_lock(&worker_count_mutex);
+    /* Change total number of workers */
+    worker_count++;
+    syslog(LOG_DEBUG,
+	   "New worker thread started, for a total of %d", worker_count);
+    /* Unlock Worker Count Mutex */
+    pthread_mutex_unlock(&worker_count_mutex);
+    
+    /* This is a big infinite loop */
+    while(1) {
+	pthread_mutex_lock(&idle_worker_mutex);
+	/* If we are over the limit on idle threads, die. */
+	if(idle_worker_count >=
+	   config_getint(IMAPOPT_MUPDATE_WORKERS_MAXSPARE)) {
+	    pthread_mutex_unlock(&idle_worker_mutex);
+	    goto worker_thread_done;
+	}
+	/* Increment Idle Workers */
+	idle_worker_count++;
+	pthread_mutex_unlock(&idle_worker_mutex);
+
+	/* Lock Listen Mutex - If locking takes more than 60 seconds,
+	 * kill off this thread.  Ideally this is a FILO queue */
+	/* XXX not doing the killoff stuff yet, that needs cond variables */
+	pthread_mutex_lock(&listener_mutex);
+	while(listener_lock) {
+	    gettimeofday(&now, NULL);
+	    timeout.tv_sec = now.tv_sec + 60;
+	    timeout.tv_nsec = now.tv_usec * 1000;
+	    ret = pthread_cond_timedwait(&listener_cond,
+					 &listener_mutex,
+					 &timeout);
+	    if(ret == ETIMEDOUT) {
+		/* We timed out, this thread dies now */
+		pthread_mutex_unlock(&listener_mutex);
+		syslog(LOG_DEBUG,
+		       "Thread timed out waiting for listener_lock");
+		goto worker_thread_done;
+	    }
+	}
+	listener_lock = 1;
+	pthread_mutex_unlock(&listener_mutex);
+
+	signals_poll();
+
+	/* Check if we are ready for connections, if not, wait */
+	pthread_mutex_lock(&ready_for_connections_mutex);
+	/* are we ready to take connections? */
+	while(!ready_for_connections) {
+	    pthread_cond_wait(&ready_for_connections_cond,
+			      &ready_for_connections_mutex);
+	}
+	pthread_mutex_unlock(&ready_for_connections_mutex);
+
+	connflag = 0;
+
+	/* Reset protin to all zeros (to preserve memory allocation) */
+	protgroup_reset(protin);
+
+	/* Clear protout if needed */
+	protgroup_free(protout);
+	protout = NULL;
+	
+	/* Build list of idle protstreams */
+	pthread_mutex_lock(&idle_connlist_mutex);
+	for(C=idle_connlist; C; C=C->next_idle) {
+	    assert(C->idle);
+
+	    protgroup_insert(protin, C->pin);
+	}
+	pthread_mutex_unlock(&idle_connlist_mutex);
+	
+	/* Select on Idle Conns + conn_pipe */
+	if(prot_select(protin, conn_pipe[0],
+		       &protout, &connflag, NULL) == -1) {
+	    syslog(LOG_ERR, "prot_select() failed in thread_main: %m");
+	    fatal("prot_select() failed in thread_main", EC_TEMPFAIL);
+	}
+
+	/* Decrement Idle Worker Count */
+	pthread_mutex_lock(&idle_worker_mutex);
+	idle_worker_count--;
+	pthread_mutex_unlock(&idle_worker_mutex);
+
+	/* Do we need a new worker? (are we allowed to create one?) */
+	if(idle_worker_count == 0
+	   && worker_count < config_getint(IMAPOPT_MUPDATE_WORKERS_MAX)) {
+	    pthread_t t;
+	    int r = pthread_create(&t, NULL, &thread_main, NULL);
+	    if(r == 0) {
+		pthread_detach(t);
+	    } else {
+		syslog(LOG_ERR,
+		       "could not start a new worker thread (not fatal)");
+	    }
+	}
+
+	/* If we've been signaled to be unready, drop all current connections
+	 * in the idle list */
+	if(!ready_for_connections) {
+	    pthread_mutex_lock(&idle_connlist_mutex);
+	    for(C=idle_connlist; C; C=C->next_idle) {
+		C->idle = 0;
+		conn_free(C);
+	    }
+	    idle_connlist = NULL;
+	    pthread_mutex_unlock(&idle_connlist_mutex);
+
+	    /* Unlock the listener */
+	    pthread_mutex_lock(&listener_mutex);
+	    assert(listener_lock);
+	    listener_lock = 0;
+	    pthread_cond_signal(&listener_cond);
+	    pthread_mutex_unlock(&listener_mutex);
+
+	    continue;
+	}
+	
+	if(connflag) {
+	    /* read the fd */
+	    if(read(conn_pipe[0], &new_fd, sizeof(new_fd)) == -1) {
+		syslog(LOG_CRIT,
+		       "read from conn_pipe for new connection failed: %m");
+		fatal("conn_pipe read failed", EC_TEMPFAIL);
+	    }
+	} else {
+	    new_fd = NO_NEW_CONNECTION;
+	}
+	
+	if(new_fd != NO_NEW_CONNECTION) {
+	    /* new_fd indicates a new connection */
+	    char slavebuf[4096];
+	    const char *mechs;
+	    unsigned int mechcount;
+
+	    /* setup the new connection */
+	    currConn = conn_new(new_fd);
+
+	    /* send the banner + flush pout */
+	    ret = sasl_listmech(currConn->saslconn, NULL,
+				"* AUTH \"", "\" \"", "\"",
+				&mechs, NULL, &mechcount);
+
+	    /* AUTH banner is mandatory */
+	    if(!masterp) {
+		if(!config_mupdate_server)
+		    fatal("mupdate server was not specified for slave",
+			  EC_TEMPFAIL);
+		
+		snprintf(slavebuf, sizeof(slavebuf), "mupdate://%s",
+			 config_mupdate_server);
+	    }
+	    
+	    prot_printf(currConn->pout,
+			"%s\r\n* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"\r\n",
+			(ret == SASL_OK && mechcount > 0) ? mechs : "* AUTH",
+			config_servername,
+			CYRUS_VERSION, masterp ? "(master)" : slavebuf);
+
+	    prot_flush(currConn->pout);
+
+	    /* Let another listener in */
+	    pthread_mutex_lock(&listener_mutex);
+	    assert(listener_lock);
+	    listener_lock = 0;
+	    pthread_cond_signal(&listener_cond);
+	    pthread_mutex_unlock(&listener_mutex);
+	} else if(protout) {
+	    struct protstream *ptmp;
+	    struct conn **prev;
+
+	    pthread_mutex_lock(&idle_connlist_mutex);
+	    prev = &(idle_connlist);
+
+	    /* Grab the first connection out of the ready set, and use it */
+	    ptmp = protgroup_getelement(protout, 0);
+	    assert(ptmp);
+	    currConn = ptmp->userdata;
+	    assert(currConn);
+
+	    currConn->idle = 0;
+	    for(C=idle_connlist; C; prev = &(C->next_idle), C=C->next_idle) {
+		if(C == currConn) {
+		    *prev = C->next_idle;
+		    C->next_idle = NULL;
+		    break;
+		}
+	    }
+	    pthread_mutex_unlock(&idle_connlist_mutex);
+
+	    /* Let another listener in */
+	    pthread_mutex_lock(&listener_mutex);
+	    assert(listener_lock);
+	    listener_lock = 0;
+	    pthread_cond_signal(&listener_cond);
+	    pthread_mutex_unlock(&listener_mutex);
+
+	    if(docmd(currConn) == DOCMD_CONN_FINISHED) {
+		conn_free(currConn);
+		/* continue to top of loop here since we won't be adding
+		 * this back to the idle list */
+		continue;
+	    }
+	} else {
+	    /* No new connection, and no other connections ready */
+	    pthread_mutex_lock(&listener_mutex);
+	    assert(listener_lock);
+	    listener_lock = 0;
+	    pthread_cond_signal(&listener_cond);
+	    pthread_mutex_unlock(&listener_mutex);
+
+	    continue;
+	}
+
+	pthread_mutex_lock(&idle_connlist_mutex);
+	currConn->idle = 1;
+	currConn->next_idle = idle_connlist;
+	idle_connlist = currConn;
+	pthread_mutex_unlock(&idle_connlist_mutex);		
+	
+	/* Signal to our caller that we should add something
+	 * to select() on */
+	if(write(conn_pipe[1], &NO_NEW_CONNECTION,
+		 sizeof(NO_NEW_CONNECTION)) == -1) {
+	    fatal("write to conn_pipe to signal docmd done failed",
+		  EC_TEMPFAIL);
+	}
     }
 
-    return 0;
+ worker_thread_done:
+    /* Remove this worker from the pool */
+    pthread_mutex_lock(&worker_count_mutex);
+    worker_count--;
+    syslog(LOG_DEBUG,
+	   "Worker thread finished, for a total of %d (%d spare)",
+	   worker_count, idle_worker_count);
+    pthread_mutex_unlock(&worker_count_mutex);
+
+    protgroup_free(protin);
+    protgroup_free(protout);
+
+    return NULL;
 }
 
 /* read from disk database must be unlocked. */
@@ -1601,8 +1905,6 @@ void mupdate_unready(void)
 
     syslog(LOG_NOTICE, "unready for connections");
 
-    /* close all connections to us */
-    while(connlist) conn_free(connlist);
     ready_for_connections = 0;
 
     pthread_mutex_unlock(&ready_for_connections_mutex);
