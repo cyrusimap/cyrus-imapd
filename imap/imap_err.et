@@ -115,4 +115,14 @@ ec IMAP_NO_CHECKSEEN,
 ec IMAP_NO_CHECKPRESERVE,
    "Unable to preserve \\Seen state"
 
+# Following used for internationalization of untagged BYE response
+
+ec IMAP_BYE_LOGOUT,
+   "LOGOUT received"
+
+# Following used for internationalization of tagged OK response
+
+ec IMAP_OK_COMPLETED,
+   "Completed"
+
 end
