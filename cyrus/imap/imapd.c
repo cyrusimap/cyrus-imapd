@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.215 2000/02/22 05:02:27 leg Exp $ */
+/* $Id: imapd.c,v 1.216 2000/02/22 22:10:21 leg Exp $ */
 
 #include <config.h>
 
@@ -2674,7 +2674,7 @@ struct tmplist {
     char mb[1][MAX_MAILBOX_NAME];
 };
 
-#define TMPLIST_INC 10
+#define TMPLIST_INC 50
 
 static int addmbox(char *name, int matchlen, int maycreate, void *rock)
 {
@@ -2746,14 +2746,17 @@ void cmd_rename(const char *tag,
 
 	/* foreach mailbox in list, rename it, pretending we're admin */
 	for (i = 0; i < l->num; i++) {
+	    int r2 = 0;
+
 	    if (nl + strlen(l->mb[i] + ol) > MAX_MAILBOX_NAME) {
 		/* this mailbox name is too long */
 		continue;
 	    }
 	    strcpy(newmailboxname + nl, l->mb[i] + ol);
-	    mboxlist_renamemailbox(l->mb[i], newmailboxname,
-				   partition,
-				   1, imapd_userid, imapd_authstate);
+	    r2 = mboxlist_renamemailbox(l->mb[i], newmailboxname,
+					partition,
+					1, imapd_userid, imapd_authstate);
+	    if (r2) break;
 	}
 
 	free(l);
