@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.379 2002/04/03 23:11:18 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.380 2002/04/04 21:15:49 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3963,6 +3963,14 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
     static int ignorereference = 0;
     clock_t start = clock();
     char mytime[100];
+    int (*findall)(struct namespace *namespace, char *pattern,
+		   int isadmin, char *userid, 
+		   struct auth_state *auth_state, int (*proc)(),
+		   void *rock);
+    int (*findsub)(struct namespace *namespace, char *pattern,
+			    int isadmin, char *userid, 
+			    struct auth_state *auth_state, int (*proc)(),
+			    void *rock, int force);
 
     /* Ignore the reference argument?
        (the behavior in 1.5.10 & older) */
@@ -4007,21 +4015,30 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	/* Translate any separators in pattern */
 	mboxname_hiersep_tointernal(&imapd_namespace, pattern);
 
+	/* Check to see if we should only list the personal namespace */
+	if (!strcmp(pattern, "*") && config_getint("foolstupidclients", 0)) {
+	    if (buf) free(buf);
+	    buf = strdup("INBOX*");
+	    pattern = buf;
+	    findsub = mboxlist_findsub;
+	    findall = mboxlist_findall;
+	}
+	else {
+	    findsub = imapd_namespace.mboxlist_findsub;
+	    findall = imapd_namespace.mboxlist_findall;
+	}
+
 	if (listopts & LIST_LSUB || listopts & LIST_SUBSCRIBED) {
 	    int force = config_getswitch("allowallsubscribe", 0);
 
-	    (*imapd_namespace.mboxlist_findsub)(&imapd_namespace, pattern,
-						imapd_userisadmin,
-						imapd_userid,
-						imapd_authstate, listdata,
-						&listopts, force);
+	    (*findsub)(&imapd_namespace, pattern,
+		       imapd_userisadmin, imapd_userid, imapd_authstate,
+		       listdata, &listopts, force);
 	}
 	else {
-	    (*imapd_namespace.mboxlist_findall)(&imapd_namespace, pattern,
-						imapd_userisadmin,
-						imapd_userid,
-						imapd_authstate, listdata,
-						&listopts);
+	    (*findall)(&imapd_namespace, pattern,
+		       imapd_userisadmin, imapd_userid, imapd_authstate,
+		       listdata, &listopts);
 	}
 
 	listdata((char *)0, 0, 0, &listopts);
