@@ -71,6 +71,7 @@
 #include "prot.h"
 #include "imapconf.h"
 #include "xmalloc.h"
+#include "exitcodes.h"
 
 #include "codes.h"
 #include "actions.h"
@@ -124,8 +125,7 @@ void fatal(const char *s, int code)
     prot_printf(sieved_out, "NO Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
 
-    exit(1);
-
+    exit(EC_TEMPFAIL);
 }
 
 /* should we allow users to proxy?  return SASL_OK if yes,
@@ -301,7 +301,7 @@ int service_main(int argc, char **argv, char **envp)
     cmdloop();
 
     /* never reaches */
-    exit(-99);
+    exit(EC_SOFTWARE);
 }
 
 
