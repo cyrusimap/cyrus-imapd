@@ -12,12 +12,14 @@ imap_err.h
 imapd
 ipurge
 lmtpd
+lmtpproxyd
 lmtpstats.c
 lmtpstats.h
 mbpath
 mupdate
 mupdate_err.c
 mupdate_err.h
+mupdatetest
 pop3d
 pop3proxyd
 proxyd
