@@ -1,3 +1,69 @@
+$Id: drac_auth.patch,v 1.14.4.3 2003/03/22 06:01:13 rjs3 Exp $
+
+Patch to add support for Dynamic Relay Authorization Control
+
+For more information about DRAC, see:
+	http://mail.cc.umanitoba.ca/drac/index.html
+
+
+Installation
+------------
+
+1.  Apply this patch in the toplevel directory using the following command:
+
+	# patch -b -p0 < contrib/drac_auth.patch
+
+2.  Cleanup any previous builds:
+
+	# make distclean
+
+3a. If you DO NOT have 'smake' and 'autoconf' installed on your system, goto
+    step 3b.
+
+    Perform the following to reconfigure your build:
+
+	# rm aclocal.m4 configure config.h.in
+	# sh SMakefile
+	# ./configure ... --with-drac=<location of libdrac>
+
+    NOTE: you can find your original configure command in config.status
+
+    Proceed to step 4.
+
+3b. Edit imap/Makefile and modify the following three variables:
+
+	DEFS = ... -DDRAC_AUTH
+	LIBS = ... -ldrac
+	LDFLAGS = ... -L<location of libdrac>
+
+4.  Build and install the software:
+
+	# make
+	# make install
+
+5.  If dracd is not running on the same system as Cyrus (localhost),
+    use the 'drachost' option in imapd.conf(5) to specify the hostname of
+    the dracd server.
+
+6.  Installation is complete!
+
+
+Operation
+---------
+
+The behavior of DRAC is controlled by the value of the 'dracinterval' option
+in imapd.conf(5).  If 'dracinterval' is 0 (zero), DRAC support is disabled.
+Otherwise, DRAC support is enabled and has the following behavior:
+
+pop3d: Whenever a client opens a user's INBOX, drac_auth() is called.
+
+imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
+       drac_send() will be called once every 'dracinterval' minutes.
+
+
+
+
+
 Index: acconfig.h
 diff -u acconfig.h.orig acconfig.h
 --- acconfig.h.orig	Fri Feb 14 05:32:50 2003
