@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.25 2004/08/05 16:23:46 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.26 2004/09/04 13:23:27 ken3 Exp $
  */
 
 /*
@@ -147,6 +147,7 @@ int nntp_haveaddr = 0;
 char nntp_clienthost[NI_MAXHOST*2+1] = "[local]";
 struct protstream *nntp_out = NULL;
 struct protstream *nntp_in = NULL;
+struct protgroup *protin = NULL;
 static int nntp_logfd = -1;
 unsigned nntp_exists = 0;
 unsigned nntp_current = 0;
@@ -370,6 +371,8 @@ static void nntp_reset(void)
     
     nntp_in = nntp_out = NULL;
 
+    if (protin) protgroup_reset(protin);
+
 #ifdef HAVE_SSL
     if (tls_conn) {
 	tls_reset_servertls(&tls_conn);
@@ -498,6 +501,9 @@ int service_init(int argc __attribute__((unused)),
 
     singleinstance = config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
 
+    /* Create a protgroup for input from the client and selected backend */
+    protin = protgroup_new(2);
+
     return 0;
 }
 
@@ -520,6 +526,7 @@ int service_main(int argc __attribute__((unused)),
 
     nntp_in = prot_new(0, 0);
     nntp_out = prot_new(1, 1);
+    protgroup_insert(protin, nntp_in);
 
     /* Find out name of client host */
     salen = sizeof(nntp_remoteaddr);
@@ -669,6 +676,8 @@ void shut_down(int code)
 	prot_free(nntp_out);
     }
 
+    if (protin) protgroup_free(protin);
+
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
@@ -755,7 +764,24 @@ static void cmdloop(void)
     allowanonymous = config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN);
 
     for (;;) {
+	/* Flush any buffered output */
+	prot_flush(nntp_out);
+	if (backend_current) prot_flush(backend_current->out);
+
+	/* Check for shutdown file */
+	if (shutdown_file(buf, sizeof(buf))) {
+	    prot_printf(nntp_out, "400 %s\r\n", buf);
+	    shut_down(0);
+	}
+
 	signals_poll();
+
+	if (!proxy_check_input(protin, nntp_in, nntp_out,
+			       backend_current ? backend_current->in : NULL,
+			       NULL, 60)) {
+	    /* No input from client */
+	    continue;
+	}
 
 	/* Parse command name */
 	c = getword(nntp_in, &cmd);
@@ -766,10 +792,6 @@ static void cmdloop(void)
 		prot_printf(nntp_out, "400 %s\r\n", err);
 	    }
 	    return;
-	}
-	if (shutdown_file(buf, sizeof(buf))) {
-	    prot_printf(nntp_out, "400 %s\r\n", buf);
-	    shut_down(0);
 	}
 	if (!cmd.s[0]) {
 	    prot_printf(nntp_out, "501 Empty command\r\n");
@@ -862,13 +884,15 @@ static void cmdloop(void)
 			else
 			    prot_printf(be->out, "%s\r\n", cmd.s);
 
-			r = read_response(be, 0, &result);
-			if (r) goto noopengroup;
+			if (be != backend_current) {
+			    r = read_response(be, 0, &result);
+			    if (r) goto noopengroup;
 
-			prot_printf(nntp_out, "%s", result);
-			if (!strncmp(result, "22", 2) &&
-			    mode != ARTICLE_STAT) {
-			    pipe_to_end_of_response(be, 0);
+			    prot_printf(nntp_out, "%s", result);
+			    if (!strncmp(result, "22", 2) &&
+				mode != ARTICLE_STAT) {
+				pipe_to_end_of_response(be, 0);
+			    }
 			}
 		    }
 		    else
@@ -923,16 +947,34 @@ static void cmdloop(void)
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
-		r = open_group(arg1.s, 0, &backend_current, NULL);
+		r = open_group(arg1.s, 0, &be, NULL);
 		if (r) goto nogroup;
-		else if (backend_current) {
-		    prot_printf(backend_current->out, "GROUP %s\r\n", arg1.s);
-		    r = read_response(backend_current, 0, &result);
+
+		if (be) {
+		    prot_printf(be->out, "GROUP %s\r\n", arg1.s);
+		    r = read_response(be, 0, &result);
 		    if (r) goto nogroup;
 
 		    prot_printf(nntp_out, "%s", result);
+
+		    if (!strncmp(result, "211", 3)) {
+			if (backend_current && backend_current != be) {
+			    /* remove backend_current from the protgroup */
+			    protgroup_delete(protin, backend_current->in);
+			}
+			backend_current = be;
+
+			/* add backend_current to the protgroup */
+			protgroup_insert(protin, backend_current->in);
+		    }
 		}
 		else {
+		    if (backend_current) {
+			/* remove backend_current from the protgroup */
+			protgroup_delete(protin, backend_current->in);
+		    }
+		    backend_current = NULL;
+
 		    nntp_exists = nntp_group->exists;
 		    nntp_current = nntp_exists > 0;
 
@@ -989,12 +1031,14 @@ static void cmdloop(void)
 			else
 			    prot_printf(be->out, "%s %s\r\n", cmd.s, arg1.s);
 
-			r = read_response(be, 0, &result);
-			if (r) goto noopengroup;
+			if (be != backend_current) {
+			    r = read_response(be, 0, &result);
+			    if (r) goto noopengroup;
 
-			prot_printf(nntp_out, "%s", result);
-			if (!strncmp(result, "22", 2)) { /* 221 or 225 */
-			    pipe_to_end_of_response(be, 0);
+			    prot_printf(nntp_out, "%s", result);
+			    if (!strncmp(result, "22", 2)) { /* 221 or 225 */
+				pipe_to_end_of_response(be, 0);
+			    }
 			}
 		    }
 		    else
@@ -1050,11 +1094,6 @@ static void cmdloop(void)
 
 		if (backend_current) {
 		    prot_printf(backend_current->out, "LAST\r\n");
-
-		    r = read_response(backend_current, 0, &result);
-		    if (r) goto noopengroup;
-
-		    prot_printf(nntp_out, "%s", result);
 		}
 		else if (!nntp_group) goto noopengroup;
 		else if (!nntp_current) goto nocurrent;
@@ -1074,6 +1113,7 @@ static void cmdloop(void)
 	    }
 	    else if (!strcmp(cmd.s, "Listgroup")) {
 		arg1.len = 0;
+		be = NULL;
 
 		if (c == ' ') {
 		    c = getword(nntp_in, &arg1); /* group (optional) */
@@ -1083,7 +1123,7 @@ static void cmdloop(void)
 		if (c != '\n') goto extraargs;
 
 		if (arg1.len) {
-		    r = open_group(arg1.s, 0, &backend_current, NULL);
+		    r = open_group(arg1.s, 0, &be, NULL);
 		    if (r) goto nogroup;
 
 		    if (nntp_group) {
@@ -1091,26 +1131,44 @@ static void cmdloop(void)
 			nntp_current = nntp_exists > 0;
 		    }
 		}
-		if (backend_current) {
-		    if (arg1.len)
-			prot_printf(backend_current->out, "LISTGROUP %s\r\n",
-				    arg1.s);
-		    else
-			prot_printf(backend_current->out, "LISTGROUP\r\n");
+
+		if (be) {
+		    prot_printf(backend_current->out, "LISTGROUP %s\r\n",
+				arg1.s);
 
 		    r = read_response(backend_current, 0, &result);
 		    if (r) goto noopengroup;
 
 		    prot_printf(nntp_out, "%s", result);
+
 		    if (!strncmp(result, "211", 3)) {
 			pipe_to_end_of_response(backend_current, 0);
+
+			if (backend_current && backend_current != be) {
+			    /* remove backend_current from the protgroup */
+			    protgroup_delete(protin, backend_current->in);
+			}
+			backend_current = be;
+
+			/* add backend_current to the protgroup */
+			protgroup_insert(protin, backend_current->in);
 		    }
+		}
+		else if (backend_current) {
+		    prot_printf(backend_current->out, "LISTGROUP\r\n");
 		}
 		else if (!nntp_group) goto noopengroup;
 		else {
 		    int i;
 
+		    if (backend_current) {
+			/* remove backend_current from the protgroup */
+			protgroup_delete(protin, backend_current->in);
+		    }
+		    backend_current = NULL;
+
 		    nntp_exists = nntp_group->exists;
+		    /* XXX do we change this is we don't change the group? */
 		    nntp_current = nntp_exists > 0;
 
 		    prot_printf(nntp_out, "211 %u %lu %lu %s\r\n",
@@ -1198,11 +1256,6 @@ static void cmdloop(void)
 
 		if (backend_current) {
 		    prot_printf(backend_current->out, "NEXT\r\n");
-
-		    r = read_response(backend_current, 0, &result);
-		    if (r) goto noopengroup;
-
-		    prot_printf(nntp_out, "%s", result);
 		}
 		else if (!nntp_group) goto noopengroup;
 		else if (!nntp_current) goto nocurrent;
@@ -1251,12 +1304,14 @@ static void cmdloop(void)
 			else
 			    prot_printf(be->out, "%s\r\n", cmd.s);
 
-			r = read_response(be, 0, &result);
-			if (r) goto noopengroup;
+			if (be != backend_current) {
+			    r = read_response(be, 0, &result);
+			    if (r) goto noopengroup;
 
-			prot_printf(nntp_out, "%s", result);
-			if (!strncmp(result, "224", 3)) {
-			    pipe_to_end_of_response(be, 0);
+			    prot_printf(nntp_out, "%s", result);
+			    if (!strncmp(result, "224", 3)) {
+				pipe_to_end_of_response(be, 0);
+			    }
 			}
 		    }
 		    else
@@ -1359,12 +1414,14 @@ static void cmdloop(void)
 			prot_printf(be->out, "%s %s %s %s\r\n",
 				    cmd.s, arg1.s, arg2.s, arg3.s);
 
-			r = read_response(be, 0, &result);
-			if (r) goto noopengroup;
+			if (be != backend_current) {
+			    r = read_response(be, 0, &result);
+			    if (r) goto noopengroup;
 
-			prot_printf(nntp_out, "%s", result);
-			if (!strncmp(result, "221", 3)) {
-			    pipe_to_end_of_response(be, 0);
+			    prot_printf(nntp_out, "%s", result);
+			    if (!strncmp(result, "221", 3)) {
+				pipe_to_end_of_response(be, 0);
+			    }
 			}
 		    }
 		    else
@@ -2136,6 +2193,7 @@ static void cmd_help(void)
 	prot_printf(nntp_out, "\tOVER | XOVER\r\n");
 	prot_printf(nntp_out, "\tPOST\r\n");
 	prot_printf(nntp_out, "\tSLAVE\r\n");
+	prot_printf(nntp_out, "\tXPAT\r\n");
     }
 
     /* feeder-only commands */
