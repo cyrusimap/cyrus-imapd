@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.28 2003/08/01 03:43:54 rjs3 Exp $
+# $Id: Shell.pm,v 1.29 2003/08/09 23:47:32 rjs3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -431,6 +431,7 @@ sub shell {
 	     'port|p=i' => \$port,
 	     'auth|a=s' => \$mech,
 	     'password|w=s' => \$pw,
+	     'help|h' => sub { cyradm_usage(); exit(0); }
 	    );
   if ($server ne '' && @ARGV) {
     die "cyradm: may not specify server both with --server and bare arg\n";
@@ -465,6 +466,23 @@ sub shell {
 *cyradm = \&shell;
 
 ###############################################################################
+
+# show cyradm command line arguments
+sub cyradm_usage {
+  print <<'END_OF_HELP';
+Usage: cyradm [args] server
+  --user <user>         Connect as <user> (authentication name)
+  --authz <user>        Authorize as <user>
+  --[no]rc              (Do not) load the configuration files
+  --systemrc <file>     Use system-wide configuration <file>
+  --userrc <file>       Use user configuration <file>
+  --port <port>         Connect to server on <port>
+  --auth <mechanism>    Authenticate with <mechanism>
+
+Defaults to interactive mode. Please see man cyradm(1) and the 'help' command
+in the cyradm-shell for details.
+END_OF_HELP
+}
 
 # help display
 sub do_help {
