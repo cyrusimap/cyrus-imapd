@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.123 2002/04/04 22:22:38 rjs3 Exp $
+ $Id: mailbox.c,v 1.124 2002/04/08 02:19:26 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2133,6 +2133,9 @@ static int expungeall(struct mailbox *mailbox __attribute__((unused)),
     return 1;
 }
 
+/* if 'isinbox' is set, we perform the funky RENAME INBOX INBOX.old
+   semantics, regardless of whether or not the name of the mailbox is
+   'user.foo'.*/
 int
 mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl, 
 	       const char *newname, char *newpath, int isinbox, 
