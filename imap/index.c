@@ -249,11 +249,6 @@ int checkseen;
 		   error_message(IMAP_NO_CHECKPRESERVE), error_message(r));
 	}
 	else {
-	    if (!examining) {
-		/* Record our reading the mailbox */
-		(void) seen_write(seendb, time((time_t *)0), mailbox->last_uid,
-				  seenuids);
-	    }
 	    /*
 	     * Empty seenuids so that index_checkseen() will pick up the
 	     * initial \Seen info.  Leave the database locked.
@@ -415,6 +410,15 @@ int oldexists;
 	else if (seenflag[msgno] != newseen) {
 	    dirty++;
 	}
+    }
+
+    if (!examining && oldexists != imapd_exists) {
+	/* If just did a SELECT, record time of our reading the mailbox */
+	if (oldexists == -1) last_time = time((time_t *)0);
+
+	/* Update the \Recent high-water mark */
+	last_uid = mailbox->last_uid;
+	dirty++;
     }
 
     /* If there's nothing to save back to the database, clean up and return */
