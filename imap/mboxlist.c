@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.180 2002/04/03 16:14:41 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.181 2002/04/04 22:22:39 rjs3 Exp $
  */
 
 #include <config.h>
@@ -97,6 +97,8 @@ static const char *mupdate_server = NULL;
 static int mboxlist_opensubs();
 static void mboxlist_closesubs();
 
+static int mboxlist_rmquota(const char *name, int matchlen, int maycreate,
+			    void *rock);
 static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 				void *rock);
 
@@ -1945,6 +1947,49 @@ int mboxlist_setquota(const char *root, int newquota)
 }
 
 /*
+ *  Remove a quota root
+ */
+int mboxlist_unsetquota(const char *root)
+{
+    char quota_path[MAX_MAILBOX_PATH];
+    char pattern[MAX_MAILBOX_PATH];
+    int fd;
+    int r=0;
+
+    if (!root[0] || root[0] == '.' || strchr(root, '/')
+	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
+	return IMAP_MAILBOX_BADNAME;
+    }
+    
+    mailbox_hash_quota(quota_path, root);
+
+    if ((fd = open(quota_path, O_RDWR, 0)) == -1) {
+	/* already unset */
+	return 0;
+    }
+    
+    close(fd);
+
+    /*
+     * Have to remove it from all affected mailboxes
+     */
+    strcpy(pattern, root);
+    strcat(pattern, ".*");
+    
+    /* top level mailbox */
+    mboxlist_rmquota(root, 0, 0, (void *)root);
+    /* submailboxes - we're using internal names here */
+    mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_rmquota, (void *)root);
+
+    if(unlink(quota_path) == -1) {
+	syslog(LOG_ERR, "could not unlink %s (%m)", quota_path);
+	r = IMAP_SYS_ERROR;
+    }
+
+    return r;
+}
+
+/*
  * Retrieve internal information, for reconstructing mailboxes file
  */
 void mboxlist_getinternalstuff(const char **listfnamep,
@@ -1968,6 +2013,58 @@ int access;
     char *owner = (char *)rock;
     if (strcmp(identifier, owner) != 0) return access;
     return access|ACL_LOOKUP|ACL_ADMIN|ACL_CREATE;
+}
+
+/*
+ * Helper function to remove the quota root for 'name'
+ */
+static int mboxlist_rmquota(const char *name, int matchlen, int maycreate,
+			    void *rock)
+{
+    int r;
+    struct mailbox mailbox;
+    const char *oldroot = (const char *) rock;
+
+    assert(rock != NULL);
+
+    r = mailbox_open_header(name, 0, &mailbox);
+    if (r) goto error_noclose;
+
+    r = mailbox_lock_header(&mailbox);
+    if (r) goto error;
+
+    r = mailbox_open_index(&mailbox);
+    if (r) goto error;
+
+    r = mailbox_lock_index(&mailbox);
+    if (r) goto error;
+
+    if (mailbox.quota.root) {
+	if (strlen(mailbox.quota.root) != strlen(oldroot)
+	    || strcmp(mailbox.quota.root, oldroot)) {
+	    /* Part of a different quota root */
+	    mailbox_close(&mailbox);
+	    return 0;
+	}
+
+	/* Need to clear the quota root */
+	free(mailbox.quota.root);
+	mailbox.quota.root = NULL;
+
+	r = mailbox_write_header(&mailbox);	
+	if(r) goto error;
+    }
+
+    mailbox_close(&mailbox);
+    return 0;
+
+ error:
+    mailbox_close(&mailbox);
+ error_noclose:
+    syslog(LOG_ERR, "LOSTQUOTA: unable to remove quota root %s for %s: %s",
+	   oldroot, name, error_message(r));
+    
+    return 0;
 }
 
 /*
@@ -2033,7 +2130,9 @@ static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
  error_noclose:
     syslog(LOG_ERR, "LOSTQUOTA: unable to change quota root for %s to %s: %s",
 	   name, mboxlist_newquota->root, error_message(r));
-    
+
+    /* Note, we're a callback, and it's not a huge tragedy if we
+     * fail, so we don't ever return a failure */
     return 0;
 }
 
