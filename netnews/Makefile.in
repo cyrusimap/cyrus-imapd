@@ -47,6 +47,8 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
+OBJS = remotepurge.o readconfig.o wildmat.o
+
 all: remotepurge
 
 install:
@@ -55,8 +57,8 @@ install:
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
-remotepurge: remotepurge.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o remotepurge remotepurge.o \
+remotepurge: $(OBJS) $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o remotepurge $(OBJS) \
 		$(DEPLIBS) $(LIBS)
 
 
