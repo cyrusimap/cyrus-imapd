@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.440 2003/09/23 19:17:58 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.441 2003/09/24 14:16:02 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -6337,7 +6337,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     }
 
     if (!r) {
-	r = (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
 						   name,
 						   imapd_userid,
 						   mailboxname);
