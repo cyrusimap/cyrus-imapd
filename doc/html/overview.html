@@ -4,7 +4,9 @@
 </HEAD><BODY>
 <H1>              Cyrus IMAP Server:  Overview and Concepts</H1>
 
-This document gives an overview of the Cyrus IMAP server.  The
+<p><b>This document has not been updated for Cyrus IMAP 2.0.</b>
+
+<p>This document gives an overview of the Cyrus IMAP server.  The
 Cyrus IMAP (Internet Message Access Protocol) server provides 
 access to personal mail and system-wide bulletin boards through 
 the IMAP protocol.   The Cyrus IMAP server is a scaleable 
@@ -778,6 +780,43 @@ character.
 
 <p>The "<TT>proc</TT>" subdirectory is normally be cleaned out on
 server reboot.
+
+<h2>Message Delivery</h2>
+
+This section refers to version 2.0 of the Cyrus IMAP server.
+
+<h3>Local Mail Transfer Protocol</h3><a name="lmtp">
+
+<p>LMTP, the Local Mail Transfer Protocol, is a variant of SMTP design
+for transferring mail to the final message store.  The Cyrus server
+implements LMTP via the <tt>lmtpd</tt> daemon.  LMTP can either be
+used over a network via TCP or local via a UNIX domain socket.</p>
+
+<p>Many MTAs (such as the latest versions of <a
+href="http://www.sendmail.org/">Sendmail</a> or <a
+href="http://www.postfix.org/">Postfix</a>) can deliver "local" mail over a
+network.  This is an easy optimization so that the IMAP server doesn't
+need to maintain a queue of messages or run an MTA.</p>
+
+<p>Authenticated final delivery is also supported in the form of LMTP
+AUTH.  If the final delivery isn't authenticated, it is treated (for
+the purposes of checking ACLs) as if the "anonymous" user is
+attempting delivery.</p>
+
+<h3>Single Instance Store</h3><a name="singleinstance">
+
+<p>If a delivery attempt mentions several recipients (only possible if
+the MTA is speaking LMTP to <tt>lmtpd</tt>), the server attempts to
+store as few copies of a message as possible.  It will store one copy
+of the message per partition, and create hard links for all other
+recipients of the message.</p>
+
+<p>Single instance store can be turned off by using the
+"singleinstancestore" flag in the configuration file.</p>
+
+<h3>Duplicate delivery suppression</h3><a name="duplicate">
+
+<h3>Sieve</h3><a name="sieve">
 
 <P><HR><P>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
