@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.57 1998/07/24 01:05:34 tjs Exp $
+ * $Id: message.c,v 1.58 1998/07/31 22:22:38 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -210,6 +210,7 @@ unsigned size;
     int n;
     int sawcr = 0, sawnl;
     int reject8bit = config_getswitch("reject8bit", 0);
+    int inheader = 1, blankline = 1;
 
     while (size) {
 	n = prot_read(from, buf, size > 4096 ? 4096 : size);
@@ -228,13 +229,18 @@ unsigned size;
 	    if (*p == '\n') {
 		if (!sawcr) r = IMAP_MESSAGE_CONTAINSNL;
 		sawcr = 0;
+		if (blankline) {
+		    inheader = 0;
+		}
+		blankline = 1;
 	    }
 	    else if (*p == '\r') {
 		sawcr = 1;
 	    }
 	    else {
 		sawcr = 0;
-		if (*p >= 0x80) {
+		blankline = 0;
+		if (inheader && *p >= 0x80) {
 		    if (reject8bit) {
 			/* We have been configured to reject all mail of this
 			   form. */
