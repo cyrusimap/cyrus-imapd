@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.14 2004/04/08 21:13:10 ken3 Exp $
+.\" $Id: imapoptions,v 1.2.2.15 2004/04/14 16:18:51 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -447,7 +447,10 @@ are listed with ``<none>''.
    spool partition \fBpartition-name\fR.  For any mailbox residing in
    a directory on \fBpartition-name\fR, the metadata files listed in
    \fImetapartition_files\fR will be stored in a corresponding directory on
-   \fBmetapartition-name\fR. */
+   \fBmetapartition-name\fR.   Note that not every
+   \fBpartition-name\fR option is required to have a corresponding
+   \fBmetapartition-name\fR option, so that you can selectively choose
+   which spool partitions will have separate metadata partitions. */
 
 { "mupdate_authname", NULL, STRING }
 /* The SASL username (Authentication Name) to use when authenticating to the
