@@ -87,7 +87,7 @@ char **argv;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
-    while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:sq")) != EOF) {
+    while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:lq")) != EOF) {
 	switch(opt) {
 	case 'd':
 	    /* Ignore -- /bin/mail compatibility flags */
