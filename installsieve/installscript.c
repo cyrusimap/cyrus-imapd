@@ -87,9 +87,12 @@ void interaction (int id, const char *prompt,
 	*tresult=strdup(getpass(""));
 	*tlen=strlen(*tresult);
 	return;
-    } else if (((id==SASL_CB_USER) || 
-		(id==SASL_CB_AUTHNAME)) && (authname!=NULL)) {
-	strcpy(result, authname);
+    } else if ((id==SASL_CB_USER) || (id==SASL_CB_AUTHNAME)) {
+	if (authname) {
+	    strcpy(result, authname);
+	} else {
+	    strcpy(result, getpwuid(getuid())->pw_name);
+	}
 #ifdef SASL_CB_GETREALM
     } else if ((id==SASL_CB_GETREALM) && (realm!=NULL)) {
       strcpy(result, realm);
