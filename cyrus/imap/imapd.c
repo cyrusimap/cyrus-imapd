@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.3 2003/10/23 19:16:17 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.4 2003/10/23 19:29:57 ken3 Exp $ */
 
 #include <config.h>
 
@@ -47,7 +47,6 @@
 #endif
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <signal.h>
@@ -55,7 +54,6 @@
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/stat.h>
-#include <sys/un.h>
 #include <syslog.h>
 #include <com_err.h>
 #include <netdb.h>
