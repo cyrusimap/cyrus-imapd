@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.70 2003/03/27 19:36:24 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.71 2003/04/15 20:51:32 ken3 Exp $ */
 
 #include <config.h>
 
@@ -129,7 +129,7 @@ static struct proxy_context imapd_proxyctx = {
 /* current sub-user state */
 static struct mailbox mboxstruct;
 static struct mailbox *imapd_mailbox;
-int imapd_exists;
+int imapd_exists = -1;
 
 /* current namespace */
 static struct namespace imapd_namespace;
