@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.28 1999/08/16 01:56:59 leg Exp $
+ * $Id: imtest.c,v 1.29 1999/08/16 21:11:46 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -334,7 +334,7 @@ int auth_sasl(char *mechlist)
 
   prot_printf(pout,"A01 AUTHENTICATE %s\r\n",mechusing);
   prot_flush(pout);
-  printf("A01 AUTHENTICATE %s\r\n", mechusing);
+  printf("C: A01 AUTHENTICATE %s\r\n", mechusing);
 
   inlen = 0;
   status = getauthline(&in,&inlen);
