@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.31.4.8 2003/06/19 02:16:19 ken3 Exp $ */
+/* $Id: duplicate.c,v 1.31.4.9 2003/06/19 02:38:15 ken3 Exp $ */
 
 #include <config.h>
 
@@ -144,7 +144,8 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
     } while (r == CYRUSDB_AGAIN);
 
     if (data) {
-	assert(len >= sizeof(time_t));
+	assert((len == sizeof(time_t)) ||
+	       (len == sizeof(time_t) + sizeof(unsigned long)));
 
 	/* found the record */
 	memcpy(&mark, data, sizeof(time_t));
@@ -301,7 +302,8 @@ static int dump_cb(void *rock,
     int idlen, i;
     unsigned long uid = 0;
 
-    assert(datalen >= sizeof(time_t));
+    assert((datalen == sizeof(time_t)) ||
+	   (datalen == sizeof(time_t) + sizeof(unsigned long)));
 
     memcpy(&mark, data, sizeof(time_t));
     if (datalen > sizeof(mark))
