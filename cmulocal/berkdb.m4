@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.17 2004/09/13 21:57:17 shadow Exp $
+dnl $Id: berkdb.m4,v 1.18 2004/11/23 18:52:53 shadow Exp $
 
 AC_DEFUN([CMU_DB_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -219,6 +219,7 @@ AC_DEFUN([CYRUS_BERKELEY_DB_CHK_LIB],
 	    [db_create(NULL, NULL, 0);],
 	    BDB_LIBADD="$BDB_LIBADD -l$dbname"; dblib="berkeley"; dbname=db,
             dblib="no")
+	    if test "$dblib" = "berkeley"; then break; fi
           done
         if test "$dblib" = "no"; then
 	    LIBS="$saved_LIBS -ldb"
