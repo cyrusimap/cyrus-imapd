@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.14 2002/07/25 20:47:53 rjs3 Exp $ -->
+<!-- $Id: install-murder.html,v 1.15 2002/07/26 20:46:41 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -95,7 +95,21 @@ or all of the following:
 
 Once these settings are successfully made, any mailbox operation on the
 backend will be sent to the mupdate master for confirmation and entry into
-the mupdate database.
+the mupdate database.<p>
+
+You will also want to configure atleast one user/group using the
+<tt>proxyservers</tt> imapd.conf option.  This user <i>should not</i>
+be an administrator, since this means that anyone who can get ahold
+of your proxy servers now has full administrative control on your
+backend.  Example:<p>
+
+<pre>
+admins: cyrus
+proxyservers: murder
+</pre>
+
+Keep in mind that you will need to create the proxy user(s) and be sure
+that they can authenticate to the backend as well.
 
 <h3>Importing the database from the backend</h3>
 Importing the current mailboxes database is easy, as there is a ctl_mboxlist
@@ -181,7 +195,9 @@ proxy_authname: murder
 </pre>
 
 If your SASL mechanism does not require authnames or passwords (e.g.
-KERBEROS_V4), then this is not required.<p>
+KERBEROS_V4), then this is not required.  Note that we used the same
+authname as the configured in the <tt>proxyservers</tt> line in the backend's
+<tt>imapd.conf</tt> above.<p>
 
 When you start master on the frontend, a local mailboxes database should
 automatically synchronize itself with the contents of the mupdate master,
@@ -316,7 +332,7 @@ to ensure that the mupdate slave process is started, (is prefork=1)</li>
 </ul>
 
 <P><HR>
-last modified: $Date: 2002/07/25 20:47:53 $
+last modified: $Date: 2002/07/26 20:46:41 $
 </BODY></HTML>
 
 
