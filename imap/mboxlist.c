@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.170 2002/02/27 21:20:38 ken3 Exp $
+ * $Id: mboxlist.c,v 1.171 2002/02/28 19:53:33 rjs3 Exp $
  */
 
 #include <config.h>
@@ -673,7 +673,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	}
     }
 
-    if(mupdate_server) mupdate_disconnect(&mupdate_h);
+    if(mupdate_server && mupdate_h) mupdate_disconnect(&mupdate_h);
 
     if (acl) free(acl);
     if (newpartition) free(newpartition);
