@@ -27,17 +27,22 @@
  *
  */
 
-/* $Id: fud.c,v 1.1 1998/06/23 20:56:36 dar Exp $ */
+/* $Id: fud.c,v 1.2 1998/06/23 23:07:06 dar Exp $ */
 
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 #include <syslog.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/param.h>
-#include <netinet/in.h>
 #include <sys/stat.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #include <com_err.h>
+#include <pwd.h>
 
 #include "assert.h"
 #include "config.h"
@@ -50,6 +55,7 @@
 extern int errno;
 extern int optind;
 extern char *optarg;
+
 void send_reply(struct sockaddr_in sfrom, int status, char *user, char *mbox, int numrecent, time_t lastread, time_t lastarrived);
 
 int code = 0;
@@ -62,15 +68,40 @@ main(argc, argv)
 int argc; 
 char **argv;
 {
-    int port,r;
+    struct passwd *pw;
+    int cyrus_uid, cyrus_gid;
+    int port, r;
+   
+
+    r = 0; /* to shut up lint/gcc */
 
     config_init("fud");
-
-    if (geteuid() == 0)
-        fatal("must run as the Cyrus user", EX_USAGE);
-
     port = config_getint("fud-port", 4201);
-    r = init_network(port);
+
+    if (port < IPPORT_RESERVED) {
+	if(geteuid() != 0)
+            fatal("must run as root when fud-port is restricted", EX_USAGE);
+        pw = getpwnam(CYRUS_USER);    
+        if(!pw) 
+            fatal("unable to determine the cyrus user's uid", EX_USAGE);
+        cyrus_uid = pw->pw_uid;
+        cyrus_gid = pw->pw_gid;
+        endpwent(); /* just in case */
+
+        r = init_network(port);
+        
+        syslog(LOG_ERR,"RENOUNCE: renouncing root privledges in favor of %d,%d",cyrus_uid,cyrus_gid);
+        if(setgid(cyrus_gid) || setuid(cyrus_uid))  {
+            close(soc);
+            fatal("unable to renounce root privledges", EX_OSERR);
+        }
+    } else {
+        if (geteuid() == 0) 
+            fatal("must run as the Cyrus user", EX_USAGE);
+        r = init_network(port);
+    }
+    signal(SIGHUP,SIG_IGN);
+
     if (r)
         fatal("unable to configure network port", EX_OSERR);
     
