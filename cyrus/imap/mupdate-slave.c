@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.15 2002/02/18 21:35:17 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.16 2002/02/25 22:42:39 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -225,8 +225,10 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 {
     const char *server, *num;
     mupdate_handle *h = NULL;
-    int retry_delay = 20;
+    int retry_delay = 20, real_delay;
     int ret;
+
+    srand(time(NULL) * getpid());
 
     server = config_getstring("mupdate_server", NULL);
     if(server == NULL) {
@@ -259,13 +261,15 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 	if(h) close(h->sock);
 	if(h && h->saslconn) sasl_dispose(&h->saslconn);
 	free(h); h = NULL;
+
+	real_delay = retry_delay + (rand() % (retry_delay / 2));
 	
 	syslog(LOG_ERR,
 	       "retrying connection to mupdate server in %d seconds",
-	       retry_delay);
+	       real_delay);
 
 	/* Wait before retrying */
-	sleep(retry_delay);
+	sleep(real_delay);
     }
 
     return NULL;
