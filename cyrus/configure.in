@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.46 2003/03/27 16:53:40 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.47 2003/05/08 21:53:10 ken3 Exp $
 dnl
 
 
@@ -105,6 +105,7 @@ CMU_ADD_LIBPATH("/usr/local/lib")
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
+AC_CHECK_FUNCS(strlcat strlcpy)
 AC_HEADER_DIRENT
 
 dnl do this before Berkeley DB/IPv6 detection
