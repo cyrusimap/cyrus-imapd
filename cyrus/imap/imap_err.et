@@ -105,6 +105,8 @@ ec IMAP_ANNOTATION_BADATTRIB,
    "Invalid annotation attribute"
 
 # following used only proxy/db operations
+ec IMAP_BAD_SERVER,
+   "Invalid server requested"
 
 ec IMAP_SERVER_UNAVAILABLE,
    "Server(s) unavailable to complete operation"

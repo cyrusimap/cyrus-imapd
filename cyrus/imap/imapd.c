@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.378 2002/04/03 17:58:35 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.379 2002/04/03 23:11:18 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -5914,6 +5914,10 @@ static int do_xfer_single(char *toserver, char *topart,
 	return IMAP_PARTITION_UNKNOWN;
     }
 
+    if(!strcmp(toserver, config_servername)) {
+	return IMAP_BAD_SERVER;
+    }
+    
     /* Okay, we have the mailbox, now the order of steps is:
      *
      * 1) Connect to remote server.
@@ -6288,12 +6292,12 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 		       "Could not back out mupdate during move of %s (%s)",
 		       name, error_message(rerr));
 	    }
+	} else if(!r) {
+	    /* this was a successful user delete, and we need to delete
+	       certain user meta-data (but not seen state!) */
+	    user_delete(mailboxname+5, imapd_userid, imapd_authstate, 0);
 	}
-
-	/* this was a user delete, and we need to delete certain user
-	   meta-data (but not seen state!) */
-	user_delete(mailboxname+5, imapd_userid, imapd_authstate, 0);
-
+	
 	if(!r && mupdate_h) {
 	    mupdate_disconnect(&mupdate_h);
 	}
