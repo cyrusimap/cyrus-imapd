@@ -746,7 +746,7 @@ do_mboxlist()
 			if (!isdigit(*p)) break;
 			p++;
 		    }
-		    if (*p) continue;
+		    if (!*p) continue;
 		}
 
 		/* Probably a directory, enqueue it */
