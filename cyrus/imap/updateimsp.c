@@ -80,6 +80,7 @@ struct dropfile *getdroplist();
 main()
 {
     char fnamebuf[MAX_MAILBOX_PATH];
+    char *val;
 
     config_init("updateimsp");
 
@@ -91,7 +92,16 @@ main()
 	fatal("cannot change directory to dropoff directory", EX_TEMPFAIL);
     }
     
-    doupdate();
+#ifdef HAVE_ACTE_KRB
+    if (val = config_getstring("srvtab", 0)) {
+	kerberos_set_srvtab(val);
+    }
+#endif
+
+    for (;;) {
+	doupdate();
+	sleep(15*60);
+    }
 }
 
 doupdate()
@@ -142,6 +152,7 @@ getdroplist()
 	    xmalloc(sizeof(struct dropfile) + strlen(f->d_name));
 	strcpy (newfile->fname, f->d_name);
 	if (!parsefname(newfile)) {
+/*debug*/ printf("unparsable filename %s\n", newfile->fname);
 	    unlink(newfile->fname);
 	    free((char *)newfile);
 	    continue;
@@ -181,9 +192,10 @@ int
 parsefname(newfile)
 struct dropfile *newfile;
 {
-    char decodebuf[8];
+    unsigned char decodebuf[8];
     int c1, c2, c3, c4;
-    char *from, *to;
+    char *from;
+    unsigned char *to;
     int len;
     char *p;
 
@@ -205,7 +217,7 @@ struct dropfile *newfile;
 	c4 = *from++;
 	if (c4 != '=' && CHAR64(c4) == XX) return 0;
 
-	if (len + 2 >= sizeof(decodebuf)) return 0;
+	if (len + 2 > sizeof(decodebuf)) return 0;
 	to[len++] = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
 	to[len++] = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
 	if (c4 == '=') {
@@ -224,6 +236,7 @@ struct dropfile *newfile;
     if (newfile->fname[0] == 'S') {
 	p = strchr(p, '=');
 	if (!p) return 0;
+	p++;
     }
 
     if (strchr(p, '=')) return 0;
@@ -287,6 +300,7 @@ struct dropfile **listp;
 		tail = subb;
 		subb = subb->next;
 	    }
+/*debug*/ printf("older file %s\n", tail->fname);
 	    unlink(tail->fname);
 	    free((char *)tail);
 	    continue;
@@ -316,6 +330,7 @@ struct imclient_reply *reply;
     struct dropfile *dropfile = (struct dropfile *)rock;
 
     commands_pending--;
+/*debug*/ printf("%5d %s %s %s\n", commands_pending, reply->keyword, reply->text, dropfile->fname);
     if (!strcmp(reply->keyword, "OK")) {
 	unlink(dropfile->fname);
     }
@@ -326,6 +341,8 @@ sendtoimsp(droplist, hostname)
 struct dropfile *droplist;
 char *hostname;
 {
+    static time_t cred_expire, curtime, life;
+    int i, gotcred = 0;
     struct imclient *imspconn;
     int r;
     const char *err;
@@ -333,6 +350,25 @@ char *hostname;
     char *username = 0;
     char *p;
     struct dropfile *tmp;
+
+    curtime = time(0);
+    if (cred_expire < curtime+5*60) {
+	for (i = 0; login_acte_client[i]; i++) {
+/* XXX look for authmech (or similar) config option */
+	    err = login_acte_client[i]->new_cred("imap", &life);
+	    if (!err) {
+		if (!gotcred++ || curtime + life < cred_expire) {
+		    cred_expire = curtime + life;
+		}
+	    }
+	    else {
+		syslog(LOG_WARNING, "Error getting %s credential: %s",
+		       login_acte_client[i]->auth_type, err);
+/*debug*/printf("cannot get %s credential: %s", 
+		login_acte_client[i]->auth_type, err);
+	    }
+	}
+    }
 
     r = imclient_connect(&imspconn, hostname, "406");
     if (r) {
@@ -346,14 +382,16 @@ char *hostname;
 	    err = error_message(r);
 	}
 	
-	syslog(LOG_WARNING, "IMSP: Error connecting to IMSP server: %s", err);
+	syslog(LOG_WARNING, "Error connecting to IMSP server: %s", err);
+/*debug*/ printf("cannot connect to IMSP: %s\n", err);
 	goto freelist;
     }
 
     r = imclient_authenticate(imspconn, login_acte_client, (char *)0,
 			      ACTE_PROT_ANY);
     if (r) {
-	syslog(LOG_WARNING, "IMSP: Error authenticating to IMSP server");
+	syslog(LOG_WARNING, "Error authenticating to IMSP server");
+/*debug*/printf("cannot authenticate to imsp\n");
 	imclient_close(imspconn);
 	goto freelist;
     }
@@ -361,6 +399,7 @@ char *hostname;
     commands_pending = 0;
     while (droplist) {
 	if (strlen(droplist->fname+13) >= MAX_MAILBOX_PATH) {
+/*debug*/ printf("too long %s\n", droplist->fname);
 	    unlink(droplist->fname);
 	    tmp = droplist;
 	    droplist = droplist->next;
@@ -386,13 +425,12 @@ char *hostname;
 	commands_pending++;
 	if (droplist->fname[0] == 'L') {
 	    imclient_send(imspconn, callback_dropfile, (void *)droplist,
-			  "LAST %s %u %u", mailboxname, droplist->uid,
-			  droplist->last_change);
+			  "LAST %s %u", mailboxname, droplist->uid);
 	}
 	else {
 	    imclient_send(imspconn, callback_dropfile, (void *)droplist,
-			  "SEEN %s %s %u %u", mailboxname, username,
-			  droplist->uid, droplist->last_change);
+			  "SEEN %s %s %u", mailboxname, username,
+			  droplist->uid/*, droplist->last_change*/);
 	}
 	droplist = droplist->next;
     }
