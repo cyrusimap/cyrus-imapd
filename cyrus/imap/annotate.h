@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.h,v 1.2.6.11 2003/06/13 00:59:51 ken3 Exp $
+ * $Id: annotate.h,v 1.2.6.12 2003/06/16 15:40:15 ken3 Exp $
  */
 
 #ifndef ANNOTATE_H
@@ -49,6 +49,7 @@
 #include "imapd.h"
 #include "mboxname.h"
 #include "prot.h"
+#include "cyrusdb.h"
 
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
@@ -98,6 +99,10 @@ void annotatemore_init(int myflags,
 /* open the annotation db */
 void annotatemore_open(char *name);
 
+/* 'proc'ess all annotations matching 'mailbox' and 'entry' */
+int annotatemore_findall(const char *mailbox, const char *entry,
+			 int (*proc)(), void *rock, struct txn **tid);
+
 /* fetch annotations and output results */
 int annotatemore_fetch(char *mailbox,
 		       struct strlist *entries, struct strlist *attribs,
@@ -114,6 +119,7 @@ struct annotation_data {
 /* lookup a single annotation and return result */
 int annotatemore_lookup(const char *mboxname, const char *entry,
 			const char *userid, struct annotation_data *attrib);
+
 /* store annotations */
 int annotatemore_store(char *mailbox,
 		       struct entryattlist *l, struct namespace *namespace,

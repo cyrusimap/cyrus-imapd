@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.37 2003/06/15 18:10:42 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.38 2003/06/16 15:40:15 ken3 Exp $
  */
 
 #include <config.h>
@@ -277,6 +277,116 @@ void annotatemore_close(void)
 void annotatemore_done(void)
 {
     /* DB->done() handled by cyrus_done() */
+}
+
+static int make_key(const char *mboxname, const char *entry,
+		    const char *userid, char *key, size_t keysize)
+{
+    int keylen = 0;
+
+    strlcpy(key+keylen, mboxname, keysize-keylen);
+    keylen += strlen(mboxname) + 1;
+    strlcpy(key+keylen, entry, keysize-keylen);
+    keylen += strlen(entry);
+    /* if we don't have a userid, we're doing a foreach() */
+    if (userid) {
+	keylen++;
+	strlcpy(key+keylen, userid, keysize-keylen);
+	keylen += strlen(userid) + 1;
+    }
+
+    return keylen;
+}
+
+static int split_attribs(const char *data, int datalen,
+			 struct annotation_data *attrib)
+{
+    /* XXX sanity check the data */
+    attrib->size = (size_t) ntohl(*(unsigned long *) data);
+    data += sizeof(unsigned long); /* skip to value */
+
+    attrib->value = data;
+    data += strlen(data) + 1; /* skip to contenttype */
+
+    attrib->contenttype = data;
+    data += strlen(data) + 1; /* skip to modifiedsince */
+
+    attrib->modifiedsince = (size_t) ntohl(*(unsigned long *) data);
+    data += sizeof(unsigned long); /* skip to optional attribs */
+
+    return 0;
+}
+
+struct find_rock {
+    struct glob *mglob;
+    struct glob *eglob;
+    int (*proc)();
+    void *rock;
+};
+
+static int find_p(void *rock, const char *key,
+		int keylen __attribute__((unused)),
+		const char *data __attribute__((unused)),
+		int datalen __attribute__((unused)))
+{
+    struct find_rock *frock = (struct find_rock *) rock;
+    const char *mboxname, *entry, *userid;
+
+    mboxname = key;
+    entry = mboxname + strlen(mboxname) + 1;
+    userid = entry + strlen(entry) + 1;
+
+    return ((GLOB_TEST(frock->mglob, mboxname) != -1) &&
+	    (GLOB_TEST(frock->eglob, entry) != -1));
+}
+
+static int find_cb(void *rock, const char *key,
+		   int keylen __attribute__((unused)),
+		   const char *data, int datalen)
+{
+    struct find_rock *frock = (struct find_rock *) rock;
+    const char *mboxname, *entry, *userid;
+    struct annotation_data attrib;
+    int r;
+
+    mboxname = key;
+    entry = mboxname + strlen(mboxname) + 1;
+    userid = entry + strlen(entry) + 1;
+
+    r = split_attribs(data, datalen, &attrib);
+
+    if (!r) r = frock->proc(mboxname, entry, userid, &attrib, frock->rock);
+
+    return r;
+}
+
+int annotatemore_findall(const char *mailbox, const char *entry,
+			 int (*proc)(), void *rock, struct txn **tid)
+{
+    char key[MAX_MAILBOX_PATH+1], *p;
+    int keylen, r;
+    struct find_rock frock;
+
+    frock.mglob = glob_init(mailbox, GLOB_HIERARCHY);
+    frock.eglob = glob_init(entry, GLOB_HIERARCHY);
+    GLOB_SET_SEPARATOR(frock.eglob, '/');
+    frock.proc = proc;
+    frock.rock = rock;
+
+    /* Find fixed-string pattern prefix */
+    keylen = make_key(mailbox, entry, NULL, key, sizeof(key));
+
+    for (p = key; keylen; p++, keylen--) {
+	if (*p == '*' || *p == '%') break;
+    }
+    keylen = p - key;
+
+    r = DB->foreach(anndb, key, keylen, &find_p, &find_cb, &frock, tid);
+
+    glob_free(&frock.mglob);
+    glob_free(&frock.eglob);
+
+    return r;
 }
 
 enum {
@@ -673,90 +783,22 @@ static void annotation_get_lastupdate(const char *int_mboxname,
     output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
 }
 
-static int make_key(const char *mboxname, const char *entry,
-		    const char *userid, char *key, size_t keysize)
-{
-    int keylen = 0;
-
-    strlcpy(key+keylen, mboxname, keysize-keylen);
-    keylen += strlen(mboxname) + 1;
-    strlcpy(key+keylen, entry, keysize-keylen);
-    keylen += strlen(entry);
-    /* if we don't have a userid, we're doing a foreach() */
-    if (userid) {
-	keylen++;
-	strlcpy(key+keylen, userid, keysize-keylen);
-	keylen += strlen(userid) + 1;
-    }
-
-    return keylen;
-}
-
-static int split_attribs(const char *data, int datalen,
-			 struct annotation_data *attrib)
-{
-    /* XXX sanity check the data */
-    attrib->size = (size_t) ntohl(*(unsigned long *) data);
-    data += sizeof(unsigned long); /* skip to value */
-
-    attrib->value = data;
-    data += strlen(data) + 1; /* skip to contenttype */
-
-    attrib->contenttype = data;
-    data += strlen(data) + 1; /* skip to modifiedsince */
-
-    attrib->modifiedsince = (size_t) ntohl(*(unsigned long *) data);
-    data += sizeof(unsigned long); /* skip to optional attribs */
-
-    return 0;
-}
-
 struct rw_rock {
     const char *ext_mboxname;
     struct fetchdata *fdata;
-    struct glob *g;
 };
 
-static int rw_p(void *rock, const char *key,
-		int keylen __attribute__((unused)),
-		const char *data __attribute__((unused)),
-		int datalen __attribute__((unused)))
+static int rw_cb(const char *mailbox, const char *entry, const char *userid,
+		 struct annotation_data *attrib, void *rock)
 {
     struct rw_rock *rw_rock = (struct rw_rock *) rock;
-    const char *mboxname, *entry, *userid;
 
-    mboxname = key;
-    entry = mboxname + strlen(mboxname) + 1;
-    userid = entry + strlen(entry) + 1;
-
-    /* make sure that the entry matches our pattern and either the
-       userid is "" (shared) or the userid matches our user (priv) */ 
-    return ((GLOB_TEST(rw_rock->g, entry) != -1)
-	    && (!userid[0] || !strcmp(userid, rw_rock->fdata->userid)));
-}
-
-static int rw_cb(void *rock, const char *key,
-		 int keylen __attribute__((unused)),
-		 const char *data,
-		 int datalen)
-{
-    struct rw_rock *rw_rock = (struct rw_rock *) rock;
-    const char *mboxname, *entry, *userid;
-    struct annotation_data attrib;
-    int r;
-
-    mboxname = key;
-    entry = mboxname + strlen(mboxname) + 1;
-    userid = entry + strlen(entry) + 1;
-
-    r = split_attribs(data, datalen, &attrib);
-
-    if (!r) {
-	output_entryatt(rw_rock->ext_mboxname, entry, userid, &attrib,
+    if (!userid[0] || !strcmp(userid, rw_rock->fdata->userid)) {
+	output_entryatt(rw_rock->ext_mboxname, entry, userid, attrib,
 			rw_rock->fdata);
     }
 
-    return r;
+    return 0;
 }
 
 static void annotation_get_fromdb(const char *int_mboxname,
@@ -766,8 +808,6 @@ static void annotation_get_fromdb(const char *int_mboxname,
 				  struct mailbox_annotation_rock *mbrock,
 				  void *rock)
 {
-    char key[MAX_MAILBOX_PATH+1], *p;
-    int keylen;
     struct rw_rock rw_rock;
     const char *entrypat = (const char *) rock;
 
@@ -793,23 +833,10 @@ static void annotation_get_fromdb(const char *int_mboxname,
 	    return;
     }
 
-    /* Find fixed-string pattern prefix */
-    keylen = make_key(int_mboxname, entrypat, NULL, key, sizeof(key));
-
-    for (p = key; keylen; p++, keylen--) {
-	if (*p == '*' || *p == '%') break;
-    }
-    keylen = p - key;
-    *p = '\0';
-
     rw_rock.ext_mboxname = ext_mboxname;
     rw_rock.fdata = fdata;
-    rw_rock.g = glob_init(entrypat, GLOB_HIERARCHY);
-    GLOB_SET_SEPARATOR(rw_rock.g, '/');
 
-    DB->foreach(anndb, key, keylen, &rw_p, &rw_cb, &rw_rock, NULL);
-
-    glob_free(&(rw_rock.g));
+    annotatemore_findall(int_mboxname, entrypat, &rw_cb, &rw_rock, NULL);
 }
 
 struct annotate_f_entry
@@ -1662,65 +1689,38 @@ int annotatemore_store(char *mailbox,
 }
 
 struct rename_rock {
-    struct glob *g;
     const char *newmboxname;
     const char *olduserid;
     const char *newuserid;
     struct txn *tid;
 };
 
-static int rename_p(void *rock, const char *key,
-		    int keylen __attribute__((unused)),
-		    const char *data __attribute__((unused)),
-		    int datalen __attribute__((unused)))
+static int rename_cb(const char *mailbox, const char *entry,
+		     const char *userid, struct annotation_data *attrib,
+		     void *rock)
 {
     struct rename_rock *rrock = (struct rename_rock *) rock;
-    const char *mboxname, *entry, *userid;
+    int r = 0;
 
-    mboxname = key;
-    entry = mboxname + strlen(mboxname) + 1;
-    userid = entry + strlen(entry) + 1;
+    if (rrock->newmboxname) {
+	/* create newly renamed entry */
 
-    /* make sure that the mailbox matches our pattern */
-    return (GLOB_TEST(rrock->g, mboxname) != -1);
-}
-
-static int rename_cb(void *rock, const char *key,
-		     int keylen __attribute__((unused)),
-		     const char *data, int datalen)
-{
-    struct rename_rock *rrock = (struct rename_rock *) rock;
-    const char *mboxname, *entry, *userid;
-    struct annotation_data attrib;
-    int r;
-
-    mboxname = key;
-    entry = mboxname + strlen(mboxname) + 1;
-    userid = entry + strlen(entry) + 1;
-
-    r = split_attribs(data, datalen, &attrib);
+	if (rrock->olduserid  && rrock->newuserid &&
+	    !strcmp(rrock->olduserid, userid)) {
+	    /* renaming a user, so change the userid for priv annots */
+	    r = write_entry(rrock->newmboxname, entry, rrock->newuserid,
+			    attrib, &rrock->tid);
+	}
+	else {
+	    r = write_entry(rrock->newmboxname, entry, userid,
+			    attrib, &rrock->tid);
+	}
+    }
 
     if (!r) {
-	if (rrock->newmboxname) {
-	    /* create newly renamed entry */
-
-	    if (rrock->olduserid  && rrock->newuserid &&
-		!strcmp(rrock->olduserid, userid)) {
-		/* renaming a user, so change the userid for priv annots */
-		r = write_entry(rrock->newmboxname, entry, rrock->newuserid,
-				&attrib, &(rrock->tid));
-	    }
-	    else {
-		r = write_entry(rrock->newmboxname, entry, userid,
-				&attrib, &(rrock->tid));
-	    }
-	}
-
-	if (!r) {
-	    /* delete existing entry */
-	    attrib.value = "NIL";
-	    r = write_entry(mboxname, entry, userid, &attrib, &(rrock->tid));
-	}
+	/* delete existing entry */
+	attrib->value = "NIL";
+	r = write_entry(mailbox, entry, userid, attrib, &rrock->tid);
     }
 
     return r;
@@ -1730,25 +1730,14 @@ int annotatemore_rename(char *oldmboxname, char *newmboxname,
 			char *olduserid, char *newuserid)
 {
     struct rename_rock rrock;
-    char *p;
-    int patlen, r;
+    int r;
 
-    rrock.g = glob_init(oldmboxname, GLOB_HIERARCHY);
     rrock.newmboxname = newmboxname;
     rrock.olduserid = olduserid;
     rrock.newuserid = newuserid;
     rrock.tid = NULL;
 
-    /* Find fixed-string pattern prefix */
-    for (p = oldmboxname; *p; p++) {
-	if (*p == '*' || *p == '%') break;
-    }
-    patlen = p - oldmboxname;
-
-    r = DB->foreach(anndb, oldmboxname, patlen, &rename_p, &rename_cb,
-		    &rrock, &(rrock.tid));
-
-    glob_free(&(rrock.g));
+    r = annotatemore_findall(oldmboxname, "*", &rename_cb, &rrock, &rrock.tid);
 
     if (rrock.tid) {
 	if (!r) {
@@ -1769,43 +1758,6 @@ int annotatemore_delete(char *mboxname)
     /* we treat a deleteion as a rename without a new name */
 
     return annotatemore_rename(mboxname, NULL, NULL, NULL);
-}
-
-static int dump_p(void *rock __attribute__((unused)),
-		  const char *key __attribute__((unused)),
-		  int keylen __attribute__((unused)),
-		  const char *data __attribute__((unused)),
-		  int datalen __attribute__((unused)))
-{
-    return 1;
-}
-
-static int dump_cb(void *rock, const char *key,
-		     int keylen __attribute__((unused)),
-		     const char *data, int datalen)
-{
-    FILE *f = (FILE *) rock;
-    const char *mboxname, *entry, *userid;
-    struct annotation_data attrib;
-    int r;
-
-    mboxname = key;
-    entry = mboxname + strlen(mboxname) + 1;
-    userid = entry + strlen(entry) + 1;
-
-    r = split_attribs(data, datalen, &attrib);
-
-    if (!r)
-	fprintf(f, "%s\t%s\t%s\t%s\t%u\t%s\t%lu\n",
-		mboxname, entry, userid, attrib.value, attrib.size,
-		attrib.contenttype, attrib.modifiedsince);
-
-    return 0;
-}
-
-void annotatemore_dump(FILE *f)
-{
-    DB->foreach(anndb, "*", 0, &dump_p, &dump_cb, f, NULL);
 }
 
 #endif /* ENABLE_ANNOTATEMORE */
