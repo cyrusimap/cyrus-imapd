@@ -1,5 +1,5 @@
 /* mkgmtime.c - make time corresponding to a GMT timeval struct
- $Id: mkgmtime.c,v 1.5.16.3 2003/02/13 20:33:13 rjs3 Exp $
+ $Id: mkgmtime.c,v 1.5.16.4 2003/04/07 16:48:40 rjs3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -135,6 +135,9 @@ struct tm * const	tmp;
 	t = (t < 0) ? 0 : ((time_t) 1 << bits);
 	for ( ; ; ) {
 		mytm = gmtime(&t);
+
+		if(!mytm) return WRONG;
+
 		dir = tmcomp(mytm, &yourtm);
 		if (dir != 0) {
 			if (bits-- < 0)
