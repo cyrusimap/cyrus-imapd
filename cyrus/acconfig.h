@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.4 2002/11/14 19:36:12 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.5 2002/12/12 20:19:34 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -153,6 +153,18 @@
 #undef CONFIG_DB_NETNEWS
 
 @BOTTOM@
+
+/* time.h */
+#if TIME_WITH_SYS_TIME
+# include <sys/time.h>
+# include <time.h>
+#else
+# if HAVE_SYS_TIME_H
+#  include <sys/time.h>
+# else
+#  include <time.h>
+# endif
+#endif
 
 /* This allows us to work even when we don't have an fdatasync */
 #ifndef HAVE_FDATASYNC
