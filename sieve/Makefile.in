@@ -1,6 +1,6 @@
 # Makefile.in - sieve makefile
 # @configure_input@
-# $Id: Makefile.in,v 1.16 2000/06/23 16:09:50 ken3 Exp $
+# $Id: Makefile.in,v 1.17 2000/07/03 13:58:58 ken3 Exp $
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
 #
@@ -34,14 +34,15 @@ RANLIB = @RANLIB@
 COMPILE_ET = @COMPILE_ET@
 
 DEFS = @DEFS@
-CPPFLAGS = -I. -I.. -I$(srcdir) -I$(srcdir)/../lib @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I.. -I$(srcdir) -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
 
 MAKEDEPEND = @MAKEDEPEND@
 
-LIBS = libsieve.a
-DEPLIBS=../lib/libcyrus.a ../et/libcom_err.a @DEPLIBS@
+IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
+LIBS = libsieve.a $(IMAP_COM_ERR_LIBS)
+DEPLIBS=../lib/libcyrus.a @DEPLIBS@
 
 all: libsieve.a
 
