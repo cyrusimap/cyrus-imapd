@@ -271,17 +271,18 @@ reference name relative to which \fIpattern\fR is then interpreted.
 .IP
 Two wildcard characters are defined in \fIpattern\fR.  The ``*''
 wildcard matches zero or more characters.  The ``%'' wildcard is like
-the ``*'' wildcard except that it treats each string delimited by
-the ``.'' as a separate unit.  If ``listmailbox user.foo.%'' is specified,
-and the mailboxes ``user.foo.bar.'' and ``user.foo.bar.old'' both exist,
-then ``user.foo.bar'' is listed, but ``user.foo.bar.old'' is not. When you
-use the ``%'' wildcard, be aware that related mailboxes with differing numbers
-of delimited strings may not appear in the list.
+the ``*'' wildcard except that it will not match the hierarchy
+separator, ``.''.  For example, if ``listmailbox user.foo.%'' is
+specified, and the mailboxes ``user.foo.bar'' and
+``user.foo.bar.old'' both exist, then ``user.foo.bar'' is listed, but
+``user.foo.bar.old'' is not.
 .IP
-In some cases, where ``%'' is used as the last
-character of a pattern, non-mailbox names are listed in parentheses.
-This indicates that the name is not actually a mailbox, yet there
-are sub-mailboxes underneath that name.
+In some cases, where ``%'' is used as the last character of a pattern,
+non-mailbox names are listed in parentheses.  This indicates that the
+name is not actually a mailbox, yet there are sub-mailboxes underneath
+that name.  For example, if ``listmailbox user.foo.%'' is specified,
+and the mailbox ``user.foo.bar.old'' exists, but ``user.foo.bar'' does
+\fBnot\fR exist, then ``(user.foo.bar)'' is listed.
 .IP "\fBsetaclmailbox \fImailbox identifier rights\fR [\fIidentifier rights\fR]..." 5
 The \fBsetaclmailbox\fR (or \fBsam\fR) command modifies the access
 control list of the mailbox \fImailbox\fR.  One or more
