@@ -4,7 +4,7 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.19 2002/05/20 18:56:43 ken3 Exp $ -->
+<!-- $Id: faq.html,v 1.20 2002/09/19 20:03:43 leg Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
@@ -157,10 +157,31 @@ tls.c:</p>
     }
 </pre>
 </dd>
+
+<dt><b>Q:</b> I'm getting messages in <tt>imapd.log</tt> like:
+<pre>
+Sep 11 17:23:55 ogg lmtpd[773]: DBERROR db3: 16 lockers
+Sep 11 17:23:55 ogg lmtpd[1409]: DBERROR db3: 17 lockers
+Sep 11 17:23:56 ogg lmtpd[1508]: DBERROR db3: 9 lockers
+Sep 11 17:23:56 ogg lmtpd[776]: DBERROR db3: 9 lockers
+</pre>
+What's wrong?
+</dt>
+
+<dd><b>A:</b> Nothing is wrong. These messages are logged whenever
+Berkeley db encounters lock contention, but isn't necessarily a
+problem by themselves. This is especially likely when you have an
+empty or small duplicate delivery database and are receiving a large
+volume of e-mail.
+
+<p>Berkeley db 4.0 has a bug where the number of lockers isn't
+decremented properly, causing this number to be unreliable.</p>
+</dd>
+
 </dl>
 
 <hr />
-last modified: $Date: 2002/05/20 18:56:43 $ <br />
+last modified: $Date: 2002/09/19 20:03:43 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
