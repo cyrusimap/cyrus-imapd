@@ -176,6 +176,7 @@ void **state;			/* On success, filled in with state ptr */
     KTEXT_ST authent;
     CREDENTIALS cr;
     struct krb_state *kstate;
+    char *p;
 
     protallowed &= ACTE_PROT_NONE|ACTE_PROT_INTEGRITY
 #ifndef NOPRIVACY
@@ -196,8 +197,11 @@ void **state;			/* On success, filled in with state ptr */
 	return ACTE_FAIL;
     }
 
+    strcpy(instance, host_name->h_name, sizeof(instance)-1);
+    instance[sizeof(instance)-1] = '\0';
+    if (p = strchr(instance, '.')) *p = '\0';
+
     strcpy(realm, krb_realmofhost(host_name->h_name));
-    strcpy(instance, krb_get_phost(host_name->h_name));
 
     /* Fetch imap.hostname service key */
     (void) krb_mk_req(&authent, service, instance, realm, 0);
