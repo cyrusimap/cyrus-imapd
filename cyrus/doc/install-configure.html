@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.21 2002/06/05 02:27:35 ken3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.22 2002/06/10 17:50:37 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -251,8 +251,10 @@ configure your MTA (Sendmail, Postfix, Exim, etc) appropriately.
 <h4>Configuring <a href="http://www.sendmail.org/">Sendmail</a></h4>
 
 Generate a sendmail configuration file which delivers local mail
-to the IMAP server.  See the file <TT>cf/README</TT> in the Sendmail
-distribution for information on how to do this.
+to the IMAP server via LMTP.  See the file <TT>cf/README</TT> in the
+Sendmail distribution for information on how to do this.  This file
+also lists variables that can be used to customize the mailer
+definitions mentioned below.
 
 <ul>
 <li> For Sendmail 8.12.4 and higher, use the <tt>cyrusv2</tt> mailer
@@ -265,13 +267,75 @@ Sendmail configuration file.</li>
 <p><li> For Sendmail 8.9.x and earlier, use the <tt>cyrus</tt> mailer
 definition in the Sendmail distribution.  Edit <TT>/etc/group</TT> and
 add user "<TT>daemon</TT>" to the "<TT>mail</TT>" group.  This will
-permit sendmail to run the "<TT>deliver</TT>" program to deliver mail
-to the IMAP server.</li>
+permit sendmail to run the "<TT>deliver</TT>" (LMTP client) program to
+deliver mail to the IMAP server.</li>
 </ul>
 
 <h4>Configuring <a href="http://www.postfix.org/">Postfix</a></h4>
 
-[expected contribution from Amos Gouaux]
+The Postfix source distribution comes with the
+file "<tt>README_FILES/LMTP_README</tt>".  Even if you are using a
+binary distribution of Postfix, it would be well worth your while
+to download the full Postfix source.  Not only will you get the
+above file, but numerous other "readme" files and sample
+configuration files.
+
+<p>One thing you need to watch out for is the UID and GID of
+the Postfix software.  As it states in the Postfix "<tt>INSTALL</tt>"
+document, you must create a new account that does not share its UID
+and GID with any other user account.  This is for security reasons.
+If you installed Postfix with a GID of "<tt>mail</tt>", you will need
+to select a different GID for Cyrus.  See the Cyrus configure options
+"<tt>--with-cyrus-user</tt>" and "<tt>--with-cyrus-group</tt>".  (This
+was more crucial when the use of Cyrus' "<tt>deliver</tt>" was more
+prevalent, but it is still a good idea to follow this policy.)
+
+<p>Another thing to note is the location of your "<tt>sendmail</tt>"  
+command.  On some platforms this will be "<tt>/usr/sbin/sendmail</tt>",
+on others, "<tt>/usr/lib/sendmail</tt>".  Cyrus will need to know where
+this command is.  See <a href="install-sieve.html">Installing Sieve</a>
+for more details.
+
+<p>There are two ways you can configure Postfix to transmit mail to Cyrus:
+via the Cyrus "<tt>deliver</tt>" command or via the LMTP protocol. The
+LMTP protocol is now the preferred method so that is the approach
+described here.
+
+<p>The file "<tt>/etc/cyrus.conf</tt>" should have the following line
+in the "<tt>SERVICES</tt>" section:
+
+<pre>
+  lmtpunix      cmd="lmtpd" listen="/var/imap/socket/lmtp" prefork=0
+</pre>
+
+<p>On the Postfix side, the file "<tt>/etc/postfix/main.cf</tt>"
+should have the following line:
+
+<pre>
+  mailbox_transport = lmtp:unix:/var/imap/socket/lmtp
+</pre>
+
+<p>Naturally, both the Postfix UID and the Cyrus UID need to be
+able to access the specified socket file.
+
+<p>Starting with Postfix snapshot-20010222, you can improve the
+efficiency of LMTP delivery via the "<tt>mailbox_transport</tt>" by
+putting the following entries in "<tt>/etc/postfix/main.cf</tt>":
+
+<pre>
+  local_destination_recipient_limit = 300
+  local_destination_concurrency_limit = 5
+</pre>
+
+<p>Of course you should adjust these settings as appropriate for
+the capacity of the hardware you are using.  The recipient limit
+setting can be used to take advantage of the single instance
+message store capability of Cyrus.  The concurrency limit can be
+used to control how many simultaneous LMTP sessions will be
+permitted to the Cyrus message store.
+
+<p>Additional examples are included in the Postfix 
+file "<tt>README_FILES/LMTP_README</tt>".
 
 <h4>Configuring <a href="http://www.exim.org/">Exim</a></h4>
 
@@ -458,5 +522,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2002/06/05 02:27:35 $
+last modified: $Date: 2002/06/10 17:50:37 $
 </BODY></HTML>
