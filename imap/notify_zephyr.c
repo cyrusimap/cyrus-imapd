@@ -18,6 +18,7 @@
 #include <netdb.h>
 #include <sys/types.h>
 #ifdef HAVE_SASL_KRB
+#include <netinet/in.h>
 #include <krb.h>
 #endif
 #include <zephyr/zephyr.h>
