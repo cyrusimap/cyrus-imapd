@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.50 2000/04/06 15:14:50 leg Exp $ */
+/* $Id: reconstruct.c,v 1.51 2000/04/18 17:59:43 leg Exp $ */
 
 #include <config.h>
 
@@ -118,7 +118,7 @@ int main(int argc, char **argv)
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     /* Ensure we're up-to-date on the index file format */
-    assert(INDEX_HEADER_SIZE == (OFFSET_UIDVALIDITY+4));
+    assert(INDEX_HEADER_SIZE == (OFFSET_FLAGGED+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8));
 
     while ((opt = getopt(argc, argv, "rmf")) != EOF) {
@@ -251,7 +251,11 @@ int reconstruct(char *name, struct discovered *found)
     int uid_num, uid_alloc;
     DIR *dirp;
     struct dirent *dirent;
-    int msg, old_msg = 0, new_exists = 0;
+    int msg, old_msg = 0;
+    int new_exists = 0, 
+	new_answered = 0,
+	new_flagged = 0,
+	new_deleted = 0;
     unsigned long new_quota = 0;
     struct index_record message_index, old_index;
     static struct index_record zero_index;
@@ -513,6 +517,9 @@ int reconstruct(char *name, struct discovered *found)
 	}
 
 	new_exists++;
+	if (message_index.system_flags & FLAG_ANSWERED) new_answered++;
+	if (message_index.system_flags & FLAG_FLAGGED) new_flagged++;
+	if (message_index.system_flags & FLAG_DELETED) new_deleted++;
 	new_quota += message_index.size;
     }
     
@@ -540,6 +547,9 @@ int reconstruct(char *name, struct discovered *found)
     *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(new_quota);
     *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(mailbox.pop3_last_login);
     *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(mailbox.uidvalidity);
+    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(new_deleted);
+    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(new_answered);
+    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(new_flagged);
 
     n = fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
     fflush(newindex);
