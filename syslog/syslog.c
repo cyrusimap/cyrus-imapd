@@ -164,7 +164,7 @@ vsyslog(pri, fmt, ap)
         (void)time(&now);
         sprintf(tbuf, "<%d>", pri);
         p = tbuf + strlen(tbuf);
-        strftime(p, sizeof (tbuf) - (p - tbuf), "%h %e %T ", localtime(&now));
+        strftime(p, sizeof (tbuf) - (p - tbuf), "%h %d %T ", localtime(&now));
         p += strlen(p);
         stdp = p;
         if (LogTag == NULL)
