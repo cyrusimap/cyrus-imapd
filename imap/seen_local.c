@@ -82,15 +82,16 @@ struct seen **seendbptr;
 
 /*
  * Lock the database (if it isn't locked already) and read the user's
- * entry, returning it in the buffers pointed to by 'lasttimeptr',
+ * entry, returning it in the buffers pointed to by 'lastreadptr',
  * 'lastuidptr', and 'seenuidsptr'.  A malloc'ed string is placed in
  * the latter and the caller is responsible for freeing it.
  */
 #define BUFGROW 512
-int seen_lockread(seendb, lasttimeptr, lastuidptr, seenuidsptr)
+int seen_lockread(seendb, lastreadptr, lastuidptr, lastchangeptr, seenuidsptr)
 struct seen *seendb;
-time_t *lasttimeptr;
+time_t *lastreadptr;
 unsigned *lastuidptr;
+time_t *lastchangeptr;
 char **seenuidsptr;
 {
     int r;
@@ -127,8 +128,9 @@ char **seenuidsptr;
 	return IMAP_IOERROR;
     }
 
-    *lasttimeptr = 0;
+    *lastreadptr = 0;
     *lastuidptr = 0;
+    *lastchangeptr = 0;
     if (!left) {
 	/* No record for user */
 	seendb->length = 0;
@@ -143,7 +145,7 @@ char **seenuidsptr;
 
     /* Parse last-read timestamp */
     while (left && isdigit(*buf)) {
-	*lasttimeptr = *lasttimeptr * 10 + *buf++ - '0';
+	*lastreadptr = *lastreadptr * 10 + *buf++ - '0';
 	left--;
 	length++;
     }
@@ -165,12 +167,30 @@ char **seenuidsptr;
 	buf++;
     }
 
-    /* Scan for end of uids */
+    /* Scan for end of uids or last-change timestamp */
     p = buf;
     while (left && !isspace(*p)) {
 	p++;
 	left--;
 	length++;
+    }
+
+    if (left > 1 && p[0] == ' ' && isdigit(p[1])) {
+	/* Have a last-change timestamp */
+	while (buf < p) {
+	    *lastchangeptr = *lastchangeptr * 10 + *buf++ - '0';
+	}
+	buf++;
+	p++;
+	left--;
+	length++;
+
+	/* Scan for end of uids */
+	while (left && !isspace(*p)) {
+	    p++;
+	    left--;
+	    length++;
+	}
     }
 
     /* Copy what we have so far into malloc'ed space */
@@ -224,10 +244,11 @@ char **seenuidsptr;
  */
 #define PADSIZE 30
 #define PRUNESIZE 100
-int seen_write(seendb, lasttime, lastuid, seenuids)
+int seen_write(seendb, lastread, lastuid, lastchange, seenuids)
 struct seen *seendb;
-time_t lasttime;
+time_t lastread;
 unsigned lastuid;
+time_t lastchange;
 char *seenuids;
 {
     char timeuidbuf[80];
@@ -241,7 +262,7 @@ char *seenuids;
     
     assert(seendb->mailbox->seen_lock_count != 0);
 
-    sprintf(timeuidbuf, "%u %u", lasttime, lastuid);
+    sprintf(timeuidbuf, "%u %u %u", lastread, lastuid, lastchange);
     
     length = strlen(seendb->user)+1+strlen(timeuidbuf)+1+strlen(seenuids);
 

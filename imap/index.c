@@ -151,7 +151,7 @@ int checkseen;
     struct stat sbuf;
     int newexists, oldexists, oldmsgno, msgno, nexpunge, i, r;
     struct index_record record;
-    time_t last_read;
+    time_t last_read, last_change;
     bit32 user_flags[MAX_USER_FLAGS/32];
 
     oldexists = imapd_exists;
@@ -240,7 +240,8 @@ int checkseen;
     if (oldexists == -1 && keepingseen) {
 	r = seen_open(mailbox, imapd_userid, &seendb);
 	if (!r) {
-	    r = seen_lockread(seendb, &last_read, &recentuid, &seenuids);
+	    r = seen_lockread(seendb, &last_read, &recentuid, &last_change,
+			      &seenuids);
 	    if (r) seen_close(seendb);
 	}
 	if (r) {
@@ -322,7 +323,7 @@ int usinguid;
 int oldexists;
 {
     int r;
-    time_t last_time;
+    time_t last_read, last_change;
     unsigned last_uid;
     char *newseenuids;
     char *old, *new;
@@ -343,7 +344,8 @@ int oldexists;
     }
 
     /* Lock \Seen database and read current values */
-    r = seen_lockread(seendb, &last_time, &last_uid, &newseenuids);
+    r = seen_lockread(seendb, &last_read, &last_uid, &last_change,
+		      &newseenuids);
     if (r) {
 	prot_printf(imapd_out, "* OK %s: %s\r\n",
 	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
@@ -412,9 +414,13 @@ int oldexists;
 	}
     }
 
+    if (dirty) {
+	last_change = time((time_t *)0);
+    }
+
     if (!examining && oldexists != imapd_exists) {
 	/* If just did a SELECT, record time of our reading the mailbox */
-	if (oldexists == -1) last_time = time((time_t *)0);
+	if (oldexists == -1) last_read = time((time_t *)0);
 
 	/* Update the \Recent high-water mark */
 	last_uid = mailbox->last_uid;
@@ -567,7 +573,7 @@ int oldexists;
     }
 
     /* Write the changes, clean up, and return */
-    r = seen_write(seendb, last_time, last_uid, saveseenuids);
+    r = seen_write(seendb, last_read, last_uid, last_change, saveseenuids);
     seen_unlock(seendb);
     free(seenuids);
     if (r) {
