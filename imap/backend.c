@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.8 2002/07/16 19:58:21 leg Exp $ */
+/* $Id: backend.c,v 1.9 2002/07/26 17:28:13 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -421,6 +421,15 @@ void downserver(struct backend *s)
 
     /* close/free socket & prot layer */
     close(s->sock);
+    s->sock = -1;
+    
     prot_free(s->in);
     prot_free(s->out);
+    s->in = s->out = NULL;
+
+    /* Free saslconn */
+    if(s->saslconn) {
+	sasl_dispose(&(s->saslconn));
+	s->saslconn = NULL;
+    }
 }
