@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.4 2002/01/24 23:53:44 rjs3 Exp $
+ * $Id: mupdate.h,v 1.5 2002/01/25 16:45:49 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,6 +46,7 @@
 #include "mailbox.h"
 #include "mupdate-client.h"
 #include "mupdate_err.h"
+#include "imapconf.h"
 
 struct mupdate_handle_s {
     int sock;
@@ -53,7 +54,11 @@ struct mupdate_handle_s {
     struct protstream *pin;
     struct protstream *pout;
 
-    unsigned int tag;
+    /* For keeping track of what tag # is next */
+    unsigned int tagn;
+
+    /* For mupdate_scarf and mupdate_authenticate */
+    struct buf tag, cmd, arg1, arg2, arg3;
 
     sasl_conn_t *saslconn;
     int saslcompleted;

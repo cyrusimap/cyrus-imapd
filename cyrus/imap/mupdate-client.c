@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.10 2002/01/24 22:42:03 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.11 2002/01/25 16:45:49 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -76,6 +76,11 @@
 
 const char service_name[] = "mupdate";
 
+extern sasl_callback_t *mysasl_callbacks(const char *username,
+                                         const char *authname,
+                                         const char *realm,
+                                         const char *password);
+
 static sasl_security_properties_t *make_secprops(int min, int max)
 {
   sasl_security_properties_t *ret =
@@ -100,7 +105,6 @@ static int mupdate_authenticate(mupdate_handle *h,
     const char *out;
     unsigned int outlen;
     const char *mechusing;
-    struct buf tag;
     int ch;
     char buf[4096];
 
@@ -208,16 +212,14 @@ static int mupdate_authenticate(mupdate_handle *h,
     }
 
     /* Check Result */
-    memset(&tag, 0, sizeof(struct buf)) ;
-    
-    ch = getword(h->pin, &tag);
+    ch = getword(h->pin, &(h->tag));
     if(ch != ' ') return 1; /* need an OK or NO */
 
-    ch = getword(h->pin, &tag);
-    if(!strncmp(tag.s, "NO", 2)) {
+    ch = getword(h->pin, &(h->cmd));
+    if(!strncmp(h->cmd.s, "NO", 2)) {
 	if(ch != ' ') return 1; /* no reason really necessary, but we failed */
-	ch = getstring(h->pin, h->pout, &tag);
-	syslog(LOG_ERR, "authentication failed: %s", tag.s);
+	ch = getstring(h->pin, h->pout, &(h->arg1));
+	syslog(LOG_ERR, "authentication failed: %s", h->arg1.s);
 	return 1;
     }
 
@@ -334,6 +336,12 @@ void mupdate_disconnect(mupdate_handle **h)
     prot_printf((*h)->pout, "L01 LOGOUT\r\n");
     prot_flush((*h)->pout);
 
+    freebuf(&((*h)->tag));
+    freebuf(&((*h)->cmd));
+    freebuf(&((*h)->arg1));
+    freebuf(&((*h)->arg2));
+    freebuf(&((*h)->arg3));
+    
     prot_free((*h)->pin);
     prot_free((*h)->pout);
     sasl_dispose(&((*h)->saslconn));
@@ -353,7 +361,7 @@ int mupdate_activate(mupdate_handle *handle,
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     prot_printf(handle->pout,
-		"X%u ACTIVATE %s %s %s\r\n", handle->tag++,
+		"X%u ACTIVATE %s %s %s\r\n", handle->tagn++,
 		mailbox, server, acl);
 
     /* FIXME: NULL is invalid! */
@@ -376,7 +384,7 @@ int mupdate_reserve(mupdate_handle *handle,
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     prot_printf(handle->pout,
-		"X%u RESERVE %s %s\r\n", handle->tag++, mailbox, server);
+		"X%u RESERVE %s %s\r\n", handle->tagn++, mailbox, server);
 
     /* FIXME: NULL is invalid! */
     ret = mupdate_scarf(handle, NULL, NULL, 1);
@@ -398,7 +406,7 @@ int mupdate_delete(mupdate_handle *handle,
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     prot_printf(handle->pout,
-		"X%u DELETE %s\r\n", handle->tag++, mailbox);
+		"X%u DELETE %s\r\n", handle->tagn++, mailbox);
 
     /* FIXME: NULL is invalid! */
     ret = mupdate_scarf(handle, NULL, NULL, 1);
@@ -426,95 +434,87 @@ int mupdate_scarf(mupdate_handle *handle, mupdate_callback callback,
 
     if(!handle || !callback) return 1;
 
-    memset(&box, 0, sizeof(box));
-
     highest_fd = handle->sock + 1;
 
     do {
 	int ch;
-	struct buf tag, cmd, arg1, arg2, arg3;
 	unsigned char *p;
     
-	memset(&tag, 0, sizeof(tag));
-	memset(&cmd, 0, sizeof(cmd));
-	memset(&arg1,0, sizeof(arg1));
-    
-	ch = getword(handle->pin, &tag);
+	ch = getword(handle->pin, &(handle->tag));
 	if(ch != ' ') {
 	    /* We always have a command */
 	    syslog(LOG_ERR, "Protocol error from master: no command",
-		   tag.s, ch);
+		   handle->tag.s, ch);
 	    return 1;
 	}
-	ch = getword(handle->pin, &cmd);
+	ch = getword(handle->pin, &(handle->cmd));
 	if(ch != ' ') {
 	    /* We always have an arguement */
 	    syslog(LOG_ERR, "Protocol error from master: no argument");
 	    return 1;
 	}
 	
-	if (islower((unsigned char) cmd.s[0])) {
-	    cmd.s[0] = toupper((unsigned char) cmd.s[0]);
+	if (islower((unsigned char) handle->cmd.s[0])) {
+	    handle->cmd.s[0] = toupper((unsigned char) handle->cmd.s[0]);
 	}
-	for (p = &cmd.s[1]; *p; p++) {
+	for (p = &(handle->cmd.s[1]); *p; p++) {
 	    if (islower((unsigned char) *p))
 		*p = toupper((unsigned char) *p);
 	}
 	
-	switch(cmd.s[0]) {
+	switch(handle->cmd.s[0]) {
 	case 'B':
-	    if(!strncmp(cmd.s, "BAD", 6)) {
-		ch = getstring(handle->pin, handle->pout, &arg1);
+	    if(!strncmp(handle->cmd.s, "BAD", 6)) {
+		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
 		
 		CHECKNEWLINE(handle, ch);
 
-		syslog(LOG_DEBUG, "mupdate BAD response: %s", arg1.s);
+		syslog(LOG_DEBUG, "mupdate BAD response: %s", handle->arg1.s);
 		if(wait_for_ok) return -1;
 		break;
 	    }
-	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    syslog(LOG_ERR, "bad command from master: %s", handle->cmd.s);
 	    return 1;
 	case 'D':
-	    if(!strncmp(cmd.s, "DELETE", 6)) {
-		ch = getstring(handle->pin, handle->pout, &arg1);
+	    if(!strncmp(handle->cmd.s, "DELETE", 6)) {
+		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
 		
 		CHECKNEWLINE(handle, ch);
-		
-		box.mailbox = arg1.s;
+
+		memset(&box, 0, sizeof(box));
+		box.mailbox = handle->arg1.s;
 
 		/* Handle delete command */
-		ret = callback(&box, cmd.s, context);
+		ret = callback(&box, handle->cmd.s, context);
 		if(ret) {
 		    syslog(LOG_ERR, "Error deleting mailbox");
 		    return ret;
 		}
 		break;
 	    }
-	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    syslog(LOG_ERR, "bad command from master: %s", handle->cmd.s);
 	    return 1;
 	case 'M':
-	    if(!strncmp(cmd.s, "MAILBOX", 7)) {
-		memset(&arg2, 0, sizeof(arg2));
-		memset(&arg3, 0, sizeof(arg3));
-		
+	    if(!strncmp(handle->cmd.s, "MAILBOX", 7)) {
 		/* Mailbox Name */
-		ch = getstring(handle->pin, handle->pout, &arg1);
+		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
 		if(ch != ' ') return 1;
 		
 		/* Server */
-		ch = getstring(handle->pin, handle->pout, &arg2);
+		ch = getstring(handle->pin, handle->pout, &(handle->arg2));
 		if(ch != ' ') return 1;
 		
 		/* ACL */
-		ch = getstring(handle->pin, handle->pout, &arg3);
+		ch = getstring(handle->pin, handle->pout, &(handle->arg3));
 		
 		CHECKNEWLINE(handle, ch);
 		
 		/* Handle mailbox command */
-		box.mailbox = arg1.s;
-		box.server = arg2.s;
-		box.acl = arg3.s;
-		ret = callback(&box, cmd.s, context);
+		memset(&box, 0, sizeof(box));
+		box.mailbox = handle->arg1.s;
+		box.server = handle->arg2.s;
+		box.acl = handle->arg3.s;
+		ret = callback(&box, handle->cmd.s, context);
 		if(ret) {
 		    /* Was there an error? */
 		    syslog(LOG_ERR, "Error activating mailbox");
@@ -522,49 +522,48 @@ int mupdate_scarf(mupdate_handle *handle, mupdate_callback callback,
 		}
 		break;
 	    }
-	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    syslog(LOG_ERR, "bad command from master: %s", handle->cmd.s);
 	    return 1;
 	case 'N':
-	    if(!strncmp(cmd.s, "NO", 6)) {
-		ch = getstring(handle->pin, handle->pout, &arg1);
+	    if(!strncmp(handle->cmd.s, "NO", 6)) {
+		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
 		
 		CHECKNEWLINE(handle, ch);
 
-		syslog(LOG_DEBUG, "mupdate NO response: %s", arg1.s);
+		syslog(LOG_DEBUG, "mupdate NO response: %s", handle->arg1.s);
 		if(wait_for_ok) return -1;
 		break;
 	    }
-	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    syslog(LOG_ERR, "bad command from master: %s", handle->cmd.s);
 	    return 1;
 	case 'O':
-	    if(!strncmp(cmd.s, "OK", 2)) {
+	    if(!strncmp(handle->cmd.s, "OK", 2)) {
 		/* It's all good, grab the attached string and move on */
-		ch = getstring(handle->pin, handle->pout, &arg1);
+		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
 		
 		CHECKNEWLINE(handle, ch);
 		
 		if(wait_for_ok) return 0;
 		break;
 	    }
-	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    syslog(LOG_ERR, "bad command from master: %s", handle->cmd.s);
 	    return 1;
 	case 'R':
-	    if(!strncmp(cmd.s, "RESERVE", 7)) {
-		memset(&arg2, 0, sizeof(arg2));
-		
+	    if(!strncmp(handle->cmd.s, "RESERVE", 7)) {
 		/* Mailbox Name */
-		ch = getstring(handle->pin, handle->pout, &arg1);
+		ch = getstring(handle->pin, handle->pout, &(handle->arg1));
 		if(ch != ' ') return 1;
 		
 		/* Server */
-		ch = getstring(handle->pin, handle->pout, &arg2);
+		ch = getstring(handle->pin, handle->pout, &(handle->arg2));
 		
 		CHECKNEWLINE(handle, ch);
 		
 		/* Handle reserve command */
-		box.mailbox=arg1.s;
-		box.server=arg2.s;
-		ret = callback(&box, cmd.s, context);
+		memset(&box, 0, sizeof(box));
+		box.mailbox=handle->arg1.s;
+		box.server=handle->arg2.s;
+		ret = callback(&box, handle->cmd.s, context);
 		if(ret) {
 		    /* Was there an error? */
 		    syslog(LOG_ERR, "Error reserveing mailbox");
@@ -573,11 +572,12 @@ int mupdate_scarf(mupdate_handle *handle, mupdate_callback callback,
 		
 		break;
 	    }
-	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    syslog(LOG_ERR, "bad command from master: %s", handle->cmd.s);
 	    return 1;
 	default:
-	    /* Bad Data */
-	    syslog(LOG_ERR, "bad/unexpected command from master: %s", cmd.s);
+	    /* Bad Command */
+	    syslog(LOG_ERR, "bad/unexpected command from master: %s",
+		   handle->cmd.s);
 	    return 1;
 	}
 
