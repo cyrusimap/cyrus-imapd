@@ -27,7 +27,7 @@
  *
  */
 
-/* $Id: fud.c,v 1.4 1998/06/24 15:25:52 dar Exp $ */
+/* $Id: fud.c,v 1.5 1998/06/24 15:33:51 dar Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -80,7 +80,6 @@ char **argv;
     r = 0; /* to shut up lint/gcc */
 
     config_init("fud");
-    port = config_getint("fud-port", 4201);
 
     if(geteuid() == 0)
         fatal("must run as the Cyrus user", EX_USAGE);
