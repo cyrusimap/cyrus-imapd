@@ -289,10 +289,14 @@ Path to directory with certificates of CAs.
 The length of time (in minutes) that a TLS session will be cached for
 later reuse.  The maximum value is 1440 (24 hours), the default.  A
 value of 0 will disable session caching.
+.IP "\fBdeleteright:\fR c" 5
+The right that a user needs to delete a mailbox.
 .IP "\fBlmtpsocket:\fR /var/imap/socket/lmtp" 5
-Unix domain socket that lmtpd listens on.
+Unix domain socket that lmtpd listens on, used by deliver(8).
 .IP "\fBidlesocket:\fR /var/imap/socket/idle" 5
 Unix domain socket that idled listens on.
+.IP "\fBnotifysocket:\fR /var/imap/socket/notify" 5
+Unix domain socket that the new mail notification daemon listens on.
 .IP "\fBnotifysocket:\fR /var/imap/socket/notify" 5
 Unix domain socket that the new mail notification daemon listens on.
 .SH SEE ALSO
