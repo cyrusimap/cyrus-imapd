@@ -47,6 +47,11 @@ char *name;
 char *mboxname;
 {
     if (*len) munmap(*base, *len);
+    if (newlen == 0) {
+	*base = 0;
+	*len = 0;
+	return;
+    }
     *base = (char *)mmap((caddr_t)0, newlen, PROT_READ,
 			 (onceonly ? MAP_SHARED : MAP_PRIVATE)
 #ifdef MAP_FILE
