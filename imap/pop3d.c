@@ -56,6 +56,8 @@ extern int errno;
 
 char *popd_userid = 0;
 struct mailbox *popd_mailbox = 0;
+struct sockaddr_in popd_localaddr, popd_remoteaddr;
+int popd_haveaddr = 0;
 char popd_clienthost[250] = "[local]";
 struct protstream *popd_out, *popd_in;
 int popd_exists = 0;
@@ -92,11 +94,11 @@ char **envp;
     gethostname(hostname, sizeof(hostname));
 
     /* Find out name of client host */
-    salen = sizeof(sa);
-    if (getpeername(0, &sa, &salen) == 0 &&
-	sa.sin_family == AF_INET) {
-	if (hp = gethostbyaddr((char *)&sa.sin_addr,
-			       sizeof(sa.sin_addr), AF_INET)) {
+    salen = sizeof(popd_remoteaddr);
+    if (getpeername(0, &popd_remoteaddr, &salen) == 0 &&
+	popd_remoteaddr.sin_family == AF_INET) {
+	if (hp = gethostbyaddr((char *)&popd_remoteaddr.sin_addr,
+			       sizeof(popd_remoteaddr.sin_addr), AF_INET)) {
 	    if (strlen(hp->h_name) + 30 > sizeof(popd_clienthost)) {
 		hp->h_name[sizeof(popd_clienthost)-30] = '\0';
 	    }
@@ -106,8 +108,12 @@ char **envp;
 	    popd_clienthost[0] = '\0';
 	}
 	strcat(popd_clienthost, "[");
-	strcat(popd_clienthost, inet_ntoa(sa.sin_addr));
+	strcat(popd_clienthost, inet_ntoa(popd_remoteaddr.sin_addr));
 	strcat(popd_clienthost, "]");
+	salen = sizeof(popd_localaddr);
+	if (getsockname(0, &popd_localaddr, &salen) == 0) {
+	    popd_haveaddr = 1;
+	}
     }
 
     proc_register("pop3d", popd_clienthost, (char *)0, (char *)0);
@@ -239,6 +245,10 @@ cmdloop()
 	    else if (!strcmp(inputbuf, "pass")) {
 		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 		else cmd_pass(arg);
+	    }
+	    else if (!strcmp(inputbuf, "auth")) {
+		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
+		else cmd_auth(arg);
 	    }
 	    else {
 		prot_printf(popd_out, "-ERR Unrecognized command\r\n");
@@ -399,14 +409,9 @@ cmdloop()
 }
 
 cmd_pass(pass)
-char *pass;	
+char *pass;
 {
     char *reply;
-    char inboxname[MAX_MAILBOX_PATH];
-    int r, msg;
-    struct index_record record;
-    char buf[MAX_MAILBOX_PATH];
-    FILE *logfile;
 
     if (!popd_userid) {
 	prot_printf(popd_out, "-ERR Must give USER command\r\n");
@@ -434,9 +439,107 @@ char *pass;
 	}
 	free(popd_userid);
 	popd_userid = 0;
+	sleep(3);
 	prot_printf(popd_out, "-ERR Invalid login\r\n");
 	return;
     }
+    openinbox();
+}
+
+cmd_auth(authtype)
+char *authtype;
+{
+    char *canon_user;
+    int r;
+    struct acte_server *mech;
+    int (*authproc)();
+    int outputlen;
+    char *output;
+    int inputlen;
+    char *input;
+    void *state;
+    char *reply = 0;
+    int protlevel;
+    char *user;
+    char *(*encodefunc)();
+    char *(*decodefunc)();
+    int maxplain;
+    char *val;
+
+    lcase(authtype);
+    
+    r = login_authenticate(authtype, &mech, &authproc);
+    if (!r) {
+	r = mech->start("pop3", authproc, ACTE_PROT_ANY, PROT_BUFSIZE,
+			popd_haveaddr ? &popd_localaddr : 0,
+			popd_haveaddr ? &popd_remoteaddr : 0,
+			&outputlen, &output, &state, &reply);
+    }
+    if (r && r != ACTE_DONE) {
+	if (reply) {
+	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
+		   popd_clienthost, authtype, reply);
+	}
+	prot_printf(popd_out, "-ERR Invalid login\r\n");
+	return;
+    }
+
+    while (r == 0) {
+	printauthready(outputlen, output);
+	inputlen = readbase64string(&input);
+	if (inputlen == -1) {
+	    prot_printf(popd_out, "-ERR Invalid base64 string\r\n");
+	    mech->free_state(state);
+	    return;
+	}
+	r = mech->auth(state, inputlen, input, &outputlen, &output, &reply);
+    }
+    
+    if (r != ACTE_DONE) {
+	mech->free_state(state);
+	if (reply) {
+	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
+		   popd_clienthost, authtype, reply);
+	}
+	sleep(3);
+	prot_printf(popd_out, "-ERR Invalid login\r\n");
+	return;
+    }
+
+    mech->query_state(state, &user, &protlevel, &encodefunc, &decodefunc,
+		      &maxplain);
+
+    canon_user = auth_canonifyid(user);
+    if (!canon_user || strchr(canon_user, '.') ||
+	strlen(canon_user) + 6 > MAX_MAILBOX_PATH) {
+	syslog(LOG_NOTICE, "badlogin: %s %s %s bad userid",
+	       popd_clienthost, authtype, beautify_string(user));
+	mech->free_state(state);
+	prot_printf(popd_out, "-ERR Invalid user\r\n");
+	return;
+    }
+
+    popd_userid = strsave(canon_user);
+
+    if (openinbox() == 0 && (encodefunc || decodefunc)) {
+	prot_setfunc(popd_in, decodefunc, state, 0);
+	prot_setfunc(popd_out, encodefunc, state, maxplain);
+    }
+    else {
+	mech->free_state(state);
+    }
+}
+
+/*
+ * Complete the login process by opening and locking the user's inbox
+ */
+int openinbox()
+{
+    char inboxname[MAX_MAILBOX_PATH];
+    int r, msg;
+    struct index_record record;
+    char buf[MAX_MAILBOX_PATH];
+    FILE *logfile;
 
     strcpy(inboxname, "user.");
     strcat(inboxname, popd_userid);
@@ -444,8 +547,9 @@ char *pass;
     if (r) {
 	free(popd_userid);
 	popd_userid = 0;
+	sleep(3);
 	prot_printf(popd_out, "-ERR Invalid login\r\n");
-	return;
+	return 1;
     }
 
     r = mailbox_open_index(&mboxstruct);
@@ -455,7 +559,7 @@ char *pass;
 	free(popd_userid);
 	popd_userid = 0;
 	prot_printf(popd_out, "-ERR Unable to lock maildrop\r\n");
-	return;
+	return 1;
     }
 
     if (chdir(mboxstruct.path)) {
@@ -485,7 +589,7 @@ char *pass;
 	popd_msg = 0;
 	popd_exists = 0;
 	prot_printf(popd_out, "-ERR Unable to read maildrop\r\n");
-	return;
+	return 1;
     }
     popd_mailbox = &mboxstruct;
     proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
@@ -500,6 +604,7 @@ char *pass;
     }
 
     prot_printf(popd_out, "+OK Maildrop locked and ready\r\n");
+    return 0;
 }
 
 blat(msg, lines)
@@ -571,4 +676,169 @@ char *index;
 	}
     }
     return 0;
+}
+
+/*
+ * Print an authentication ready response
+ */
+static char basis_64[] =
+   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+printauthready(len, data)
+int len;
+unsigned char *data;
+{
+    int c1, c2, c3;
+
+    prot_putc('+', popd_out);
+    prot_putc(' ', popd_out);
+    while (len) {
+	c1 = *data++;
+	len--;
+	prot_putc(basis_64[c1>>2], popd_out);
+	if (len == 0) c2 = 0;
+	else c2 = *data++;
+	prot_putc(basis_64[((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4)], popd_out);
+	if (len == 0) {
+	    prot_putc('=', popd_out);
+	    prot_putc('=', popd_out);
+	    break;
+	}
+
+	if (--len == 0) c3 = 0;
+	else c3 = *data++;
+        prot_putc(basis_64[((c2 & 0xF) << 2) | ((c3 & 0xC0) >>6)], popd_out);
+	if (len == 0) {
+	    prot_putc('=', popd_out);
+	    break;
+	}
+	
+	--len;
+        prot_putc(basis_64[c3 & 0x3F], popd_out);
+    }
+    prot_putc('\r', popd_out);
+    prot_putc('\n', popd_out);
+    prot_flush(popd_out);
+}
+
+#define XX 127
+/*
+ * Table for decoding base64
+ */
+static const char index_64[256] = {
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, XX,XX,XX,63,
+    52,53,54,55, 56,57,58,59, 60,61,XX,XX, XX,XX,XX,XX,
+    XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
+    15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,XX,
+    XX,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
+    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+};
+#define CHAR64(c)  (index_64[(unsigned char)(c)])
+
+#define BUFGROWSIZE 100
+
+/*
+ * Parse a base64_string
+ */
+int readbase64string(ptr)
+char **ptr;
+{
+    int c1, c2, c3, c4;
+    int i, len = 0;
+    static char *buf;
+    static int alloc = 0;
+
+    if (alloc == 0) {
+	alloc = BUFGROWSIZE;
+	buf = xmalloc(alloc+1);
+    }
+	
+    for (;;) {
+	c1 = prot_getc(popd_in);
+	if (c1 == '\r') {
+	    c1 = prot_getc(popd_in);
+	    if (c1 != '\n') {
+		eatline();
+		return -1;
+	    }
+	    *ptr = buf;
+	    return len;
+	}
+	else if (c1 == '\n') {
+	    *ptr = buf;
+	    return len;
+	}
+
+	if (CHAR64(c1) == XX) {
+	    eatline();
+	    return -1;
+	}
+	
+	c2 = prot_getc(popd_in);
+	if (CHAR64(c2) == XX) {
+	    if (c2 != '\n') eatline();
+	    return -1;
+	}
+
+	c3 = prot_getc(popd_in);
+	if (c3 != '=' && CHAR64(c3) == XX) {
+	    if (c3 != '\n') eatline();
+	    return -1;
+	}
+
+	c4 = prot_getc(popd_in);
+	if (c4 != '=' && CHAR64(c4) == XX) {
+	    if (c4 != '\n') eatline();
+	    return -1;
+	}
+
+	if (len+3 >= alloc) {
+	    alloc = len+BUFGROWSIZE;
+	    buf = xrealloc(buf, alloc+1);
+	}
+
+	buf[len++] = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+	if (c3 == '=') {
+	    c1 = prot_getc(popd_in);
+	    if (c1 == '\r') c1 = prot_getc(popd_in);
+	    if (c1 != '\n') {
+		eatline();
+		return -1;
+	    }
+	    if (c4 != '=') return -1;
+	    *ptr = buf;
+	    return len;
+	}
+	buf[len++] = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
+	if (c4 == '=') {
+	    c1 = prot_getc(popd_in);
+	    if (c1 == '\r') c1 = prot_getc(popd_in);
+	    if (c1 != '\n') {
+		eatline();
+		return -1;
+	    }
+	    *ptr = buf;
+	    return len;
+	}
+	buf[len++] = (((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
+    }
+}
+
+/*
+ * Eat characters up to and including the next newline
+ */
+eatline()
+{
+    int c;
+
+    while ((c = prot_getc(popd_in)) != EOF && c != '\n');
 }
