@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.38 2003/07/09 15:58:25 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.39 2003/07/12 19:20:49 ken3 Exp $
  */
 #include <config.h>
 
@@ -126,7 +126,6 @@ struct msg {
 
 static int pop3s = 0;
 int popd_starttls_done = 0;
-int popd_auth_done = 0;
 
 static struct mailbox mboxstruct;
 
@@ -251,7 +250,6 @@ static void popd_reset(void)
 	popd_saslconn = NULL;
     }
     popd_starttls_done = 0;
-    popd_auth_done = 0;
 
     if(saslprops.iplocalport) {
        free(saslprops.iplocalport);
@@ -607,14 +605,11 @@ static void cmdloop(void)
     for (;;) {
 	signals_poll();
 
-	/* check if client has just authenticated */
-	if (popd_auth_done && !popd_mailbox) {
-	    if (backend) {
-		/* create a pipe from client to backend */
-		bitpipe();
-	    }
+	if (backend) {
+	    /* create a pipe from client to backend */
+	    bitpipe();
 
-	    /* either we failed to open INBOX, or pipe has been closed */
+	    /* pipe has been closed */
 	    return;
 	}
 
@@ -1032,7 +1027,6 @@ static void cmd_apop(char *response)
     syslog(LOG_NOTICE, "login: %s %s APOP %s",
 	   popd_clienthost, popd_userid, "User logged in");
 
-    popd_auth_done = 1;
     openinbox();
 }
 
@@ -1096,7 +1090,6 @@ void cmd_pass(char *pass)
 
 	syslog(LOG_NOTICE, "login: %s %s kpop", popd_clienthost, popd_userid);
 
-	popd_auth_done = 1;
 	openinbox();
 	return;
     }
@@ -1141,7 +1134,6 @@ void cmd_pass(char *pass)
 	}
     }
 
-    popd_auth_done = 1;
     openinbox();
 }
 
@@ -1157,7 +1149,7 @@ void cmd_capa()
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
 
     /* SASL special case: print SASL, then a list of supported capabilities */
-    if (!popd_auth_done &&
+    if (!popd_mailbox && !backend &&
 	sasl_listmech(popd_saslconn,
 		      NULL, /* should be id string */
 		      "SASL ", " ", "\r\n",
@@ -1166,7 +1158,7 @@ void cmd_capa()
 	prot_write(popd_out, mechlist, strlen(mechlist));
     }
 
-    if (tls_enabled() && !popd_starttls_done && !popd_auth_done) {
+    if (tls_enabled() && !popd_starttls_done && !popd_mailbox && !backend) {
 	prot_printf(popd_out, "STLS\r\n");
     }
     if (expire < 0) {
@@ -1182,7 +1174,7 @@ void cmd_capa()
     prot_printf(popd_out, "RESP-CODES\r\n");
     prot_printf(popd_out, "AUTH-RESP-CODE\r\n");
 
-    if (!popd_auth_done &&
+    if (!popd_mailbox && !backend &&
 	(kflag || popd_starttls_done
 	 || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(popd_out, "USER\r\n");
@@ -1303,11 +1295,13 @@ void cmd_auth(char *arg)
     syslog(LOG_NOTICE, "login: %s %s %s %s", popd_clienthost, popd_userid,
 	   authtype, "User logged in");
 
-    popd_auth_done = 1;
-    openinbox();
-
-    prot_setsasl(popd_in,  popd_saslconn);
-    prot_setsasl(popd_out, popd_saslconn);
+    if (!openinbox()) {
+	prot_setsasl(popd_in,  popd_saslconn);
+	prot_setsasl(popd_out, popd_saslconn);
+    }
+    else {
+	reset_saslconn(&popd_saslconn);
+    }
 }
 
 /*
@@ -1332,11 +1326,9 @@ int openinbox(void)
 
     if (!r) r = mboxlist_lookup(inboxname, &server, NULL, NULL);
     if (r) {
-	free(popd_userid);
-	popd_userid = 0;
 	sleep(3);
 	prot_printf(popd_out, "-ERR [SYS/PERM] Unable to locate maildrop\r\n");
-	return 1;
+	goto fail;
     }
 
     /* xxx hide the fact that we are storing partitions */
@@ -1356,21 +1348,17 @@ int openinbox(void)
 
 	r = mailbox_open_header(inboxname, 0, &mboxstruct);
 	if (r) {
-	    free(popd_userid);
-	    popd_userid = 0;
 	    sleep(3);
 	    prot_printf(popd_out, "-ERR [SYS/PERM] Unable to open maildrop\r\n");
-	    return 1;
+	    goto fail;
 	}
 
 	r = mailbox_open_index(&mboxstruct);
 	if (!r) r = mailbox_lock_pop(&mboxstruct);
 	if (r) {
 	    mailbox_close(&mboxstruct);
-	    free(popd_userid);
-	    popd_userid = 0;
 	    prot_printf(popd_out, "-ERR [IN-USE] Unable to lock maildrop\r\n");
-	    return 1;
+	    goto fail;
 	}
 
 	if ((minpoll = config_getint(IMAPOPT_POPMINPOLL)) &&
@@ -1383,9 +1371,7 @@ int openinbox(void)
 		mailbox_write_index_header(&mboxstruct);
 	    }
 	    mailbox_close(&mboxstruct);
-	    free(popd_userid);
-	    popd_userid = 0;
-	    return 1;
+	    goto fail;
 	}
 
 	if (chdir(mboxstruct.path)) {
@@ -1407,14 +1393,12 @@ int openinbox(void)
 	}
 	if (r) {
 	    mailbox_close(&mboxstruct);
-	    free(popd_userid);
-	    popd_userid = 0;
 	    free(popd_msg);
 	    popd_msg = 0;
 	    popd_exists = 0;
 	    prot_printf(popd_out,
 			"-ERR [SYS/PERM] Unable to read maildrop\r\n");
-	    return 1;
+	    goto fail;
 	}
 	popd_mailbox = &mboxstruct;
 	proc_register("pop3d", popd_clienthost, popd_userid,
@@ -1433,7 +1417,7 @@ int openinbox(void)
 			" Authentication to backend server failed\r\n");
 	    prot_flush(popd_out);
 
-	    return 1;
+	    goto fail;
 	}
     }
 
@@ -1444,6 +1428,11 @@ int openinbox(void)
 		statusline ? statusline : " Mailbox locked and ready\r\n");
     prot_flush(popd_out);
     return 0;
+
+  fail:
+    free(popd_userid);
+    popd_userid = 0;
+    return 1;
 }
 
 static void blat(int msg,int lines)
