@@ -1,0 +1,189 @@
+#!/bin/sh
+# 
+# Copyright (c) 2003 Carnegie Mellon University.  All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer. 
+#
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in
+#    the documentation and/or other materials provided with the
+#    distribution.
+#
+# 3. The name "Carnegie Mellon University" must not be used to
+#    endorse or promote products derived from this software without
+#    prior written permission. For permission or any other legal
+#    details, please contact  
+#      Office of Technology Transfer
+#      Carnegie Mellon University
+#      5000 Forbes Avenue
+#      Pittsburgh, PA  15213-3890
+#      (412) 268-4387, fax: (412) 268-7395
+#      tech-transfer@andrew.cmu.edu
+#
+# 4. Redistributions of any form whatsoever must retain the following
+#    acknowledgment:
+#    "This product includes software developed by Computing Services
+#     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+#
+# CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+# THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+# AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+# FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+# AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+# OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
+#!perl -w
+#
+# Create newsgroups on imap server
+# Based on the make_fromactive.pl script by Tim Martin
+#
+# $Id $
+
+if ($] !~ /^5\..*/) {
+  # uh-oh. this isn't perl 5.
+  foreach (split(/:/, $ENV{PATH})) { # try to find "perl5".
+    exec("$_/perl5", "-x", "-S", $0, @ARGV) if (-x "$_/perl5");
+  }
+  # we failed. bail.
+  die "Your perl is too old; I need perl 5.\n";
+}
+
+# load the real script. this is isolated in an 'eval' so perl4 won't
+# choke on the perl5-isms.
+eval join("\n", <DATA>);
+if ($@) { die "$@"; }
+
+__END__
+require 5;
+
+use Getopt::Long;
+use Cyrus::IMAP;
+use Cyrus::IMAP::Admin;
+
+$| = 1;
+
+my ($config, $active, $noop, $user, $acl, $wild, $pause, $help) = 
+    ("/etc/imapd.conf", "./active", 0, $ENV{USER}, "", "*", 0, 0);
+
+GetOptions("C|config=s" => \$config,
+	   "f|active=s" => \$active,
+	   "n|noop!" => \$noop,
+	   "u|user=s" => \$user,
+	   "a|acl=s" => \$acl,
+	   "w|wild=s" => \$wild,
+	   "p|pause=s" => \$pause,
+	   "h|help!" => \$help);
+
+if ($help || !($server = shift)) {
+    print "\n";
+    print "mknewsgroups [-h] [-n] [-C <config-file>] [-f <active-file>] [-u <user>]\n";
+    print "             [-a <acls>] [-w <wildmats>] <server>\n";
+    print "\n";
+    print "\t-h  print this help message\n";
+    print "\t-n  print the IMAP commands, but don't execute them\n";
+    print "\t-C  use the config in <config-file> instead of /etc/imapd.conf\n";
+    print "\t-f  use the newsgroups in <active-file> instead of ./active\n";
+    print "\t    (get current file from ftp://ftp.isc.org/usenet/CONFIG/active)\n";
+    print "\t-u  authenticate as <user> instead of the current shell user\n";
+    print "\t-a  set <acls> on the newsgroup.  <acls> is a whitespace-separated list\n";
+    print "\t    of cyradm-style userid/rights pairs (eg, \"anyone +p  news write\")\n";
+    print "\t-w  only create the newsgroups specified by <wildmats>.  <wildmats>\n";
+    print "\t    is a comma-separated list of wildmat pattern (eg, \"*,!alt.*\")\n";
+    print "\n";
+    exit;
+}
+
+# convert wildmat to regex
+$wild =~ s/\./\\./g;
+$wild =~ s/\*/\.\*/g;
+
+# split acl into a hash of ids and rights
+while ($acl =~ /^\s*([^\s]+)\s+([^\s]+)/) {
+    $aclhash{$1} = $2;
+    $acl =~ s/^\s*([^\s]+)\s+([^\s]+)//;	# skip this id/rights pair
+}
+
+my ($newsprefix, $unixhiersep) = (undef, 0);
+
+open CONF, $config or die "can't open $config";
+print "reading configure file...\n";
+while (<CONF>) {
+    if (/^#/) { 
+	next; 
+    }
+    if (/^newsprefix:\s+(.*)$/) {
+	$newsprefix = $1;
+	print "you are using \"$newsprefix\" as your news prefix.\n";
+    }
+    if (/^unixhierarchysep:\s+(1|t|yes|on)/) {
+	$unixhiersep = 1;
+	print "i will deal with unix hierarchy separator.\n";
+    }
+}
+print "done\n";
+close CONF;
+
+my $client;
+
+if (!$noop) {
+    print "connecting... ";
+    $client = Cyrus::IMAP::Admin->new($server);
+    print "authenticating... ";
+    $client->authenticate(-user => $user);
+    print "done\n";
+}
+
+open (INPUT,"<$active");
+while( <INPUT> )
+{
+    chop;
+    my $g;
+    
+    if (/((\w|\.|\-|\+)+)\s+(.*)/) {
+	$mbox = $1;
+
+	# compare group to each part of wildmat
+	my $match = 0;
+	foreach my $w (split(/,/, $wild)) {
+	    my $not = substr($w, 0, 1) eq "!";
+	    $w = substr($w, 1) if ($not);
+	    $match = !$not if ($mbox=~ /^$w$/);
+	}
+
+	if ($match) {
+	    # add newsprefix if necessary
+	    $mbox = $newsprefix . "." . $mbox if (defined($newsprefix));
+
+	    # switch to unixhiersep if necessary
+	    $mbox =~ s^\.^/^g if ($unixhiersep);
+
+	    if ($noop) {
+		print "C01 CREATE \"$mbox\"\n";
+		my $n = 1;
+		while (($id,$rights) = each(%aclhash)) {
+		    printf "S%02d SETACL \"$mbox\" $id $rights\n", $n++;
+		}
+	    } else {
+		$g = 0;
+		print "creating $mbox... ";
+		if ($client->create($mbox)) {
+		    while (($id,$rights) = each(%aclhash)) {
+			$client->setacl($mbox, $id => $rights);
+		    }
+		    $g = 1;
+		}
+		print "done\n";
+		sleep($pause) if ($g);
+	    }
+	}
+    }
+}
+
+close(INPUT);
