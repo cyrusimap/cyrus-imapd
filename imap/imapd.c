@@ -1561,7 +1561,7 @@ char *pattern;
     if (pattern[0] == '.') {
 	strcpy(buf, reference);
 	if (*reference && reference[strlen(reference)-1] == '.') {
-	    reference[strlen(reference)-1] = '\0';
+	    buf[strlen(reference)-1] = '\0';
 	}
 	strcat(buf, pattern);
 	pattern = buf;
