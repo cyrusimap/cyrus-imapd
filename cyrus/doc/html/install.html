@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.63 1999/08/24 18:11:35 leg Exp $ -->
+<!-- $Id: install.html,v 1.64 1999/08/30 18:53:41 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -33,6 +33,14 @@ HREF="changes.html"><TT>doc/changes</TT></a> in the distribution.
 
 <h3>Upgrading from 1.6</h3>
 <ul>
+
+<li> Upgrading from the Cyrus IMAP server version 1.6.10 or earlier:
+if you export news via the IMAP server, you'll have to change your
+"<tt>newsfeeds</tt>" file to contain
+<pre>collectnews!:*:Tf,WR:collectnews</pre>  The format of the
+input to collectnews has changed.
+
+Duplicate delivery suppression is now required for Sieve.
 
 <li> Upgrading from the Cyrus IMAP server version 1.6.1 or earlier:
 the quota and user directories are now hashed by the first character
@@ -327,7 +335,7 @@ function exists, "<tt>fcntl</tt>" otherwise. <P>
 <dt><tt>--disable-sieve</tt>
 <dd>By default, Sieve support is enabled.  Note that you need
 duplicate delivery suppression enabled if you're going to use Sieve.
-Use <tt>--disable-sieve=no</tt> to disable Sieve support<p>
+Use <tt>--disable-sieve</tt> to disable Sieve support<p>
 
 <dt><tt>--disable-cyradm</tt>
 <dd>Do not compile the <TT>cyradm</TT> administrative client.<P>
@@ -542,23 +550,6 @@ Sieve directory:
    chmod 750 sieve
 </kbd></pre>
 
-<li><b>LINUX SYSTEMS ONLY</b>: Set the configuration, user, quota, and
-partition directories to update synchronously.  Failure to do this may
-lead to data corruption and/or loss of mail after a system crash.
-
-<pre>
-<kbd>   cd /var/imap
-   chattr +S . user quota
-   chattr +S /var/spool/imap
-</kbd></pre>
-
-Also set the queue directory of the mail daemon to update
-synchronously.  The following example is for sendmail:
-
-<pre>
-<kbd>   /sbin/chattr +S /var/spool/mqueue
-</kbd></pre>
-
 <li>Change to the Cyrus user and use the tool
 "<tt>tools/mkimap</tt>" to create the rest of the directories
 (subdirectories of the directories you just created).
@@ -571,6 +562,23 @@ synchronously.  The following example is for sendmail:
 
 If perl is not available, it should be easy to create these directories
 by hand. <P>
+
+<li><b>LINUX SYSTEMS ONLY</b>: Set the configuration, user, quota, and
+partition directories to update synchronously.  Failure to do this may
+lead to data corruption and/or loss of mail after a system crash.
+
+<pre>
+<kbd>   cd /var/imap
+   chattr +S . user quota user/* quota/*
+   chattr +S /var/spool/imap
+</kbd></pre>
+
+Also set the queue directory of the mail daemon to update
+synchronously.  The following example is for sendmail:
+
+<pre>
+<kbd>   /sbin/chattr +S /var/spool/mqueue
+</kbd></pre>
 
 <li>If the Cyrus IMAP server was compiled with Kerberos v4 authentication,
 create a Kerberos v4 identity for the server and add the server's key to
@@ -1008,6 +1016,6 @@ usually a good idea.
 
 <P><HR><P>
 <!-- hhmts start -->
-Last modified: $Date: 1999/08/24 18:11:35 $
+Last modified: $Date: 1999/08/30 18:53:41 $
 <!-- hhmts end -->
 </BODY></HTML>

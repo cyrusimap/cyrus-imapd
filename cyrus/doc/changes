@@ -1,5 +1,25 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server Since Version 1.6.10 
+
+      * Changed the sieve option in the configure script to
+        --disable-sieve. 
+      * Updated reconstruct and quota to check for hashed imap spool
+        directories correctly. 
+      * deliver now will not use Sieve if duplicate delivery suppression is
+        disabled. There was also a bug that caused the duplicate delivery
+        database to be checked even if dupelim was disabled. 
+      * deliver now uses tm_gmtoff if available to check for the local
+        timezone. 
+      * The default format for reading information from INN has changed. If
+        you use INN to feed imapd news, you must change your "newsfeeds"
+        file to contain 
+
+        collectnews!:*:Tf,WR:collectnews
+
+      * The dohash script now takes a "-i" option to run interactively and
+        the "-f" option to issue warnings instead of fatal errors. 
+
 Changes to the Cyrus IMAP Server Since Version 1.6.1-BETA 
 
       * cyradm should now work with all mechanisms (it now handles empty

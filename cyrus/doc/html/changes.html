@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.83 1999/08/24 18:11:10 leg Exp $ -->
+<!-- $Id: changes.html,v 1.84 1999/08/30 18:53:41 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -10,8 +10,8 @@
       <li> Changed the sieve option in the configure script to
       <tt>--disable-sieve</tt>.
 
-      <li> Updated reconstruct to check for hashed imap spool
-      directories.
+      <li> Updated reconstruct and quota to check for hashed imap
+      spool directories correctly.
 
       <li> deliver now will not use Sieve if duplicate delivery
       suppression is disabled.  There was also a bug that caused the
@@ -20,6 +20,15 @@
 
       <li> deliver now uses tm_gmtoff if available to check for the
       local timezone.
+
+      <li> The default format for reading information from INN has
+      changed.  If you use INN to feed imapd news, you must change
+      your "<tt>newsfeeds</tt>" file to contain
+      <pre>collectnews!:*:Tf,WR:collectnews</pre>
+
+      <li> The dohash script now takes a "<tt>-i</tt>" option to run
+      interactively and the "<tt>-f</tt>" option to issue warnings
+      instead of fatal errors.
     </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.1-BETA </h2>
