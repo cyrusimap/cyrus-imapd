@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.354 2002/03/15 20:20:25 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.355 2002/03/18 21:21:19 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -378,12 +378,13 @@ static void imapd_refer(const char *tag,
 /* ext_name is the external name of the mailbox */
 /* you can avoid referring the client by setting tag or ext_name to NULL. */
 static int mlookup(const char *tag, const char *ext_name,
-		   const char *name, char **pathp, char **aclp, void *tid) 
+		   const char *name, char **pathp, char **partp,
+		   char **aclp, void *tid) 
 {
     int r, mbtype;
     char *remote, *acl;
 
-    r = mboxlist_detail(name, &mbtype, &remote, NULL, &acl, tid);
+    r = mboxlist_detail(name, &mbtype, &remote, partp, &acl, tid);
     if(pathp) *pathp = remote;
     if(aclp) *aclp = acl;
     if(r) return r;
@@ -750,8 +751,7 @@ void fatal(const char *s, int code)
 /*
  * Top-level command loop parsing
  */
-void
-cmdloop()
+void cmdloop()
 {
     int fd;
     char motdfilename[1024];
@@ -2436,7 +2436,7 @@ void cmd_select(char *tag, char *cmd, char *name)
     }
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -3727,7 +3727,7 @@ cmd_reconstruct(const char *tag, const char *name, int recursive)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4020,7 +4020,7 @@ int oldform;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4104,7 +4104,7 @@ char *identifier;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4167,7 +4167,7 @@ int oldform;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4216,7 +4216,7 @@ char *rights;
 
     /* is it remote? */
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4308,7 +4308,7 @@ char *name;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4610,7 +4610,7 @@ char *name;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5581,7 +5581,7 @@ void cmd_dump(char *tag, char *name, int uid_start)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &path, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, &path, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5615,7 +5615,7 @@ void cmd_undump(char *tag, char *name)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &path, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, &path, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5641,7 +5641,7 @@ void cmd_undump(char *tag, char *name)
 
 static int getresult(struct protstream *p, char *tag) 
 {
-    char buf[2096];
+    char buf[4096];
     char *str = (char *) buf;
     
     while(1) {
@@ -5658,12 +5658,102 @@ static int getresult(struct protstream *p, char *tag)
     }
 }
 
+/* given 2 protstreams and a mailbox, gets the acl and then wipes it */
+static int trashacl(struct protstream *pin, struct protstream *pout,
+		    char *mailbox) 
+{
+    int i=0, j=0;
+    char tagbuf[128];
+    char c;
+    struct buf tag, cmd, mb, user;
+    int r = 0;
+
+    memset(&tag, 0, sizeof(struct buf));
+    memset(&cmd, 0, sizeof(struct buf));
+    memset(&mb, 0, sizeof(struct buf));
+    memset(&user, 0, sizeof(struct buf));
+
+    prot_printf(pout, "ACL0 GETACL {%d+}\r\n%s\r\n",
+		strlen(mailbox), mailbox);
+
+    while(1) {
+	c = getword(pin, &tag);
+	if (c == EOF) {
+	    r = IMAP_SERVER_UNAVAILABLE;
+	    break;
+	}
+
+	c = getword(pin, &cmd);
+	if (c == EOF) {
+	    r = IMAP_SERVER_UNAVAILABLE;
+	    break;
+	}
+	
+	if (tag.s[0] == '*' && !strncmp(cmd.s, "ACL", 3)) {
+	    /* An ACL response, we should send a DELETEACL command */
+	    c = getastring(pin, pout, &mb);
+	    if (c == EOF) {
+		r = IMAP_SERVER_UNAVAILABLE;
+		break;
+	    }
+
+	    c = getastring(pin, pout, &user);
+	    if (c == EOF) {
+		r = IMAP_SERVER_UNAVAILABLE;
+		break;
+	    }
+
+	    snprintf(tagbuf, sizeof(tagbuf), "ACL%d", ++i);
+
+	    prot_printf(pout, "%s DELETEACL {%d+}\r\n%s {%d+}\r\n%s\r\n",
+			tagbuf, strlen(mailbox), mailbox,
+			strlen(user.s), user.s);
+	    
+	    eatline(pin, c);
+	    continue;
+	} else if (!strncmp(tag.s, "ACL0", 4)) {
+	    /* end of this command */
+	    if (!strcasecmp(cmd.s, "OK")) { break; }
+	    if (!strcasecmp(cmd.s, "NO")) { r = IMAP_REMOTE_DENIED; break; }
+	    r = IMAP_SERVER_UNAVAILABLE;
+	    break;
+	}
+    }
+
+    /* Now cleanup after all the DELETEACL commands */
+    if(!r) {
+	while(j < i) {
+	    c = getword(pin, &tag);
+	    if (c == EOF) {
+		r = IMAP_SERVER_UNAVAILABLE;
+		break;
+	    }
+	    
+	    syslog(LOG_ERR, "got word: %s", tag.s);
+	    eatline(pin, c);
+	    
+	    if(!strncmp("ACL", tag.s, 3)) {
+		j++;
+	    }
+	}
+    }
+
+    if(r) eatline(pin, c);
+
+    freebuf(&user);
+    freebuf(&mb);
+    freebuf(&cmd);
+    freebuf(&tag);
+
+    return r;
+}
+
 void cmd_xfer(char *tag, char *toserver, char *name) 
 {
     int r = 0;
     char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
     char mailboxname[MAX_MAILBOX_NAME+1];
-    char *path;
+    char *path, *part;
     char *acl;
     struct backend *be = NULL;
     mupdate_handle *mupdate_h = NULL;
@@ -5680,7 +5770,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &path, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, &path, &part, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5765,7 +5855,12 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     }
     
     /* xxx Step 4.5: Set ACL on remote */
-
+    if(!r) {
+	r = trashacl(be->in, be->out, mailboxname);
+	if(r) syslog(LOG_ERR, "Could not clear remote acl on %s",
+		     mailboxname);
+    }
+    
     /* Step 5: Reconstruct remote */
     if(!r) {
 	prot_printf(be->out, "RC1 RECONSTRUCT {%d+}\r\n%s\r\n",
@@ -5791,6 +5886,9 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	/* Note that we do not check the ACL, and we don't update MUPDATE */
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
 				   imapd_userid, imapd_authstate, 0, 1);
+	if(r) syslog(LOG_ERR,
+		     "Could not delete local mailbox during move of %s",
+		     mailboxname);
     }
     
     /* 8) remove local remote mailbox entry??????
@@ -5802,8 +5900,8 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     if(r && backout_mupdate) {
 	/* xxx if the mupdate server is what failed, then this won't
 	   help any! */
-	snprintf(buf, sizeof(buf), "%s!%s", config_servername, path);
-	r = mupdate_activate(mupdate_h, name, buf, acl);
+	snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
+	mupdate_activate(mupdate_h, name, buf, acl);
     }
     if(mupdate_h) mupdate_disconnect(&mupdate_h);
     if(be) downserver(be);
