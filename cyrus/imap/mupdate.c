@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.20 2002/01/18 17:27:46 rjs3 Exp $
+ * $Id: mupdate.c,v 1.21 2002/01/18 23:12:24 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1110,6 +1110,50 @@ void cmd_set(struct conn *C,
 
     prot_printf(C->pout, "%s OK \"done\"\r\n", tag);
  done:
+    database_compress();
+    pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
+}
+
+void cmd_change(struct mupdate_mailboxdata *mdata,
+		const char *rock)
+{
+    pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
+
+
+    switch (*rock) {
+    CREATE:
+	/* write to disk */
+	database_log(m);
+
+    RESERVE:
+	/* write to disk */
+	database_log(m);
+
+    DELETE:
+	/* write to disk */
+	database_log(m);
+	
+    NOOP:
+
+
+    }
+
+    /* post pending changes */
+    for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
+	/* for each connection, add to pending list */
+
+	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
+	strcpy(p->mailbox, mailbox);
+	p->t = t;
+	
+	pthread_mutex_lock(&upc->m);
+	p->next = upc->plist;
+	upc->plist = p;
+
+	pthread_cond_signal(&upc->cond);
+	pthread_mutex_unlock(&upc->m);
+    }
+
     database_compress();
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
