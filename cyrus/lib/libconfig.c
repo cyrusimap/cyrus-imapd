@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.8 2004/04/28 17:23:41 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.9 2004/05/22 03:45:54 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -49,7 +49,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>

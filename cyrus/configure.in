@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.282 2004/03/09 18:08:38 rjs3 Exp $
+dnl $Id: configure.in,v 1.283 2004/05/22 03:45:44 rjs3 Exp $
 dnl
 
 
@@ -788,11 +788,17 @@ if test -z "$with_com_err"; then
 		# guess we're okay
 		# can use system com_err
 		with_com_err=""
+		AC_CHECK_HEADER(et/com_err.h,
+		  [AC_DEFINE(HAVE_ET_COM_ERR_H,[],[We need et/com_err.h])],
+		  [AC_CHECK_HEADER(com_err.h,[],[AC_ERROR([cannot locate com_err.h])])])
 		AC_PATH_PROG(COMPILE_ET, compile_et, [no compile et])
 	], [
-	if test -f /usr/local/include/com_err.h; then
+	if test -f /usr/local/include/com_err.h -o -f /usr/local/include/et/com_err.h; then
 		with_com_err="/usr/local"
 		AC_PATH_PROG(COMPILE_ET, /usr/local/bin/compile_et, [no compile et])
+	elif test -f /usr/include/com_err.h -o -f /usr/include/et/com_err.h; then
+		with_com_err="/usr"
+		AC_PATH_PROG(COMPILE_ET, /usr/bin/compile_et, [no compile et])
 	else
 		# use ours
 		with_com_err=yes
@@ -1000,7 +1006,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.282 2004/03/09 18:08:38 rjs3 Exp $ */
+/* $Id: configure.in,v 1.283 2004/05/22 03:45:44 rjs3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1057,6 +1063,15 @@ AH_BOTTOM([
 #  include <time.h>
 # endif
 #endif
+
+/* com_err.h, as needed */
+#ifndef IN_COM_ERR
+#ifdef HAVE_ET_COM_ERR_H
+#include <et/com_err.h>
+#else
+#include <com_err.h>
+#endif /* HAVE_ET_COM_ERR_H */
+#endif /* IN_COM_ERR */
 
 /* This allows us to work even when we don't have an fdatasync */
 #ifndef HAVE_FDATASYNC

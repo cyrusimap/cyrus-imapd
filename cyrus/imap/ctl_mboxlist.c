@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.47 2004/03/17 15:12:54 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.48 2004/05/22 03:45:48 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -51,7 +51,6 @@
 #endif
 #include <errno.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sasl/sasl.h>

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.156 2004/03/26 01:56:44 ken3 Exp $
+ * $Id: pop3d.c,v 1.157 2004/05/22 03:45:52 rjs3 Exp $
  */
 #include <config.h>
 
@@ -57,7 +57,6 @@
 #include <sys/types.h>
 #include <sys/param.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

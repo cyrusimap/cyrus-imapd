@@ -44,6 +44,7 @@
  * For copyright info, see mit-sipb-copyright.h.
  */
 
+#define IN_COM_ERR
 #include <config.h>
 
 #include <stdio.h>

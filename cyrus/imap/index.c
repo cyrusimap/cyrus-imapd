@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.205 2004/05/18 18:11:08 rjs3 Exp $
+ * $Id: index.c,v 1.206 2004/05/22 03:45:50 rjs3 Exp $
  */
 #include <config.h>
 
@@ -52,7 +52,6 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <errno.h>
 #include <ctype.h>
 

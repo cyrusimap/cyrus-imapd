@@ -54,7 +54,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
-#include <com_err.h>
 
 #include "auth_pts.h"
 #include "cyrusdb.h"
@@ -67,7 +66,7 @@
 #include "xmalloc.h"
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.37 2004/02/25 16:05:08 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.38 2004/05/22 03:45:57 rjs3 Exp $";
 
 extern const char *ptsmodule_name;
 extern void ptsmodule_init(void);
@@ -101,7 +100,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     signal(SIGPIPE, SIG_IGN);
 
     syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.37 2004/02/25 16:05:08 rjs3 Exp $ (%s)",
+	   "starting: $Id: ptloader.c,v 1.38 2004/05/22 03:45:57 rjs3 Exp $ (%s)",
 	   ptsmodule_name);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {

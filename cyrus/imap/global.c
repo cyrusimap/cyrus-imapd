@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.15 2004/05/05 20:30:56 rjs3 Exp $ */
+/* $Id: global.c,v 1.16 2004/05/22 03:45:49 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -48,7 +48,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>

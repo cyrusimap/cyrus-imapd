@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.183 2004/05/06 15:11:38 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.184 2004/05/22 03:45:52 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -55,7 +55,6 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
