@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.39 2001/05/21 19:26:53 leg Exp $ */
+/* $Id: master.c,v 1.40 2001/06/23 00:59:48 ken3 Exp $ */
 
 #include <config.h>
 
@@ -261,35 +261,32 @@ int resolve_port(char *port, struct service *s, struct sockaddr_in *sin)
 }
 
 /* set sin_addr accordingly. return of 0 indicates failure. */
-int resolve_host(struct service *s, struct sockaddr_in *sin)
+int resolve_host(char *listen, struct sockaddr_in *sin)
 {
     struct hostent *hp;
     char *cp;
 
     /* do we have a hostname, or IP number? */
     /* XXX are brackets necessary, like for IPv6 later? */
-    if (*s->listen == '[') {
-        s->listen++;  /* skip first bracket */
-        if ((cp = strrchr(s->listen,']')) != NULL) {
+    if (*listen == '[') {
+        listen++;  /* skip first bracket */
+        if ((cp = strrchr(listen,']')) != NULL) {
             *cp = '\0';
         }
     }
-    sin->sin_addr.s_addr = inet_addr(s->listen);
+    sin->sin_addr.s_addr = inet_addr(listen);
     if ((sin->sin_addr.s_addr == INADDR_NONE) || (sin->sin_addr.s_addr == 0)) {
         /* looks like it isn't an IP address, so look up the host */
-        if ((hp = gethostbyname(s->listen)) == 0) {
-            syslog(LOG_INFO, "host not found: %s", s->listen);
-            s->exec = NULL;
+        if ((hp = gethostbyname(listen)) == 0) {
+            syslog(LOG_INFO, "host not found: %s", listen);
             return 0;
         }
         if (hp->h_addrtype != AF_INET) {
             syslog(LOG_INFO, "unexpected address family: %d", hp->h_addrtype);
-            s->exec = NULL;
             return 0;
         }
         if (hp->h_length != sizeof(sin->sin_addr)) {
             syslog(LOG_INFO, "unexpected address length %d", hp->h_length);
-            s->exec = NULL;
             return 0;
         }
         memcpy((char *) &sin->sin_addr, hp->h_addr, hp->h_length);
@@ -305,7 +302,6 @@ void service_create(struct service *s)
     mode_t oldumask;
     int on = 1, salen;
     int r;
-    char *port;
 
     memset(&sin, 0, sizeof(sin));
 
@@ -318,20 +314,28 @@ void service_create(struct service *s)
 
 	s->socket = socket(AF_UNIX, SOCK_STREAM, 0);
     } else { /* inet socket */
+	char *listen, *port;
+
 	sin.sin_family = AF_INET;
 
-        if ((port = parse_listen(s->listen)) == NULL) {
-            /* s->listen IS the port */
-            if (!resolve_port(s->listen, s, &sin)) {
+	/* parse_listen() and resolve_host() are destructive,
+	 * so make a work copy of s->listen
+	 */
+	listen = strdup(s->listen);
+
+        if ((port = parse_listen(listen)) == NULL) {
+            /* listen IS the port */
+            if (!resolve_port(listen, s, &sin)) {
                 return;
             }
             sin.sin_addr.s_addr = INADDR_ANY;
         } else {
-            /* s->listen is now just the address */
+            /* listen is now just the address */
             if (!resolve_port(port, s, &sin)) {
                 return;
             }
-            if (!resolve_host(s, &sin)) {
+            if (!resolve_host(listen, &sin)) {
+		s->exec = NULL;
                 return;
             }
         }
@@ -339,6 +343,8 @@ void service_create(struct service *s)
 	salen = sizeof(sin);
 
 	s->socket = socket(AF_INET, SOCK_STREAM, 0);
+
+	free(listen);
     }
 
     if (s->socket < 0) {
@@ -801,7 +807,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 
     /* see if we have an existing entry for this service */
     for (i = 0; i < nservices; i++) {
-	if (!strcmp(Services[i].name, name)) break;
+	if (Services[i].name && !strcmp(Services[i].name, name)) break;
     }
 
     if ((i < nservices) &&
@@ -813,6 +819,13 @@ void add_service(const char *name, struct entry *e, void *rock)
 	if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
 	Services[i].desired_workers = prefork;
 	Services[i].max_workers = (unsigned int) atoi(max);
+
+	if (verbose > 2)
+	    syslog(LOG_DEBUG, "reconfig: service %s (%s, %s/%s, %d, %d)",
+		   Services[i].name, cmd,
+		   Services[i].listen, Services[i].proto,
+		   Services[i].desired_workers,
+		   Services[i].max_workers);
     }
     else {
 	/* either we don't have an existing entry or we are changing
@@ -835,11 +848,18 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 	Services[nservices].ready_workers = 0;
 	Services[nservices].desired_workers = prefork;
-	Services[i].max_workers = atoi(max);
+	Services[nservices].max_workers = atoi(max);
 	memset(Services[nservices].stat, 0, sizeof(Services[nservices].stat));
 
 	Services[nservices].nforks = 0;
 	Services[nservices].nactive = 0;
+
+	if (verbose > 2)
+	    syslog(LOG_DEBUG, "add: service %s (%s, %s/%s, %d, %d)",
+		   Services[nservices].name, cmd,
+		   Services[nservices].listen, Services[nservices].proto,
+		   Services[nservices].desired_workers,
+		   Services[nservices].max_workers);
 
 	nservices++;
     }
@@ -923,6 +943,9 @@ void reread_conf(void)
 		syslog(LOG_DEBUG, "disable: service %s socket %d pipe %d %d",
 		       Services[i].name, Services[i].socket,
 		       Services[i].stat[0], Services[i].stat[1]);
+	    free(Services[i].name); Services[i].name = NULL;
+	    free(Services[i].listen);
+	    free(Services[i].proto);
 	    Services[i].desired_workers = 0;
 	    Services[i].nforks = 0;
 	    Services[i].nactive = 0;
