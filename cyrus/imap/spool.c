@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.2.2.3 2004/03/24 19:53:11 ken3 Exp $
+ * $Id: spool.c,v 1.2.2.4 2004/09/16 18:03:54 ken3 Exp $
  */
 
 #include <config.h>
@@ -165,7 +165,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		
 		if (peek == '\r' || peek == '\n') {
 		    /* just reached the end of message */
-		    r = IMAP_MESSAGE_NOBLANKLINE;
+		    r = 0;
 		    goto ph_error;
 		}
 	    }

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.44 2004/09/09 18:47:05 shadow Exp $ */
+/* $Id: imapd.c,v 1.443.2.45 2004/09/16 18:03:49 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2665,10 +2665,6 @@ void cmd_append(char *tag, char *name)
 	if (*p != '}' || p[1] || c != '\n' || !sawdigit) {
 	    parseerr = "Invalid literal in Append command";
 	    r = IMAP_PROTOCOL_ERROR;
-	    goto done;
-	}
-	if (size < 2) {
-	    r = IMAP_MESSAGE_NOBLANKLINE;
 	    goto done;
 	}
 
