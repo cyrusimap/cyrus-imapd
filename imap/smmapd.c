@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.2 2004/02/02 19:38:13 ken3 Exp $
+ * $Id: smmapd.c,v 1.3 2004/02/09 20:23:57 ken3 Exp $
  */
 
 #include <config.h>
@@ -254,8 +254,7 @@ int verify_user(const char *user, long quotacheck,
 	}
     }
 
-    if (r) syslog(LOG_DEBUG, "append_check() of '%s' failed (%s)", buf,
-		  error_message(r));
+    syslog(LOG_DEBUG, "append_check() of '%s': %s", buf, error_message(r));
 
     return r;
 }
@@ -322,7 +321,8 @@ int begin_handling(void)
 	    break;
 
 	case IMAP_MAILBOX_NONEXISTENT:
-	    prot_printf(map_out, "8:NOTFOUND,");
+	    prot_printf(map_out, "%d:NOTFOUND %s,",
+			9+strlen(error_message(r)), error_message(r));
 	    break;
 
 	case IMAP_QUOTA_EXCEEDED:
