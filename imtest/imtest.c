@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.65 2002/01/17 21:08:18 ken3 Exp $
+ * $Id: imtest.c,v 1.66 2002/04/03 21:00:49 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1139,10 +1139,14 @@ void interactive(char *filename)
 	      FD_CLR(0, &read_set);
 	  } else {
 	      count = strlen(buf);
-	      buf[count - 1] = '\r';
-	      buf[count] = '\n';
-	      buf[count + 1] = '\0';
-	      prot_write(pout, buf, count + 1);
+	      /* If we read a full line, translate the newline */
+	      if (buf[count - 1] == '\n') {
+		  buf[count - 1] = '\r';
+		  buf[count] = '\n';
+		  buf[count + 1] = '\0';
+		  count++;
+	      }
+	      prot_write(pout, buf, count);
 	  }
 	  prot_flush(pout);
       } else if (FD_ISSET(sock, &rset)) {
