@@ -8,7 +8,6 @@ cyrdump
 cyr_expire
 deliver
 expirenews
-feedcyrus
 fetchnews
 fud
 idled
@@ -26,17 +25,14 @@ mupdate
 mupdate_err.c
 mupdate_err.h
 nntpd
-nntpproxyd
 nntp_err.c
 nntp_err.h
 pop3d
-pop3proxyd
 proxyd
 pushstats.c
 pushstats.h
 quota
 reconstruct
 squatter
-target-acap
 tls_prune
 xversion.h
