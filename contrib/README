@@ -2,11 +2,12 @@
 This directory contains various patches to the distribution that were
 either couldn't be wedged into the configure script due to system
 dependancies or weren't worth getting into the configure script (laziness
-plays a large part here).  They are "not supported", meaning we didn't try
-them and don't use them for whatever reasons.
+plays a large part here).  They are "not supported" by us, meaning that we 
+didn't try them, don't use them for whatever reasons, or were too lazy to
+do a real integration at this point in time.
 
-Please send bugs to cyrus-bugs@andrew.cmu.edu.
-
+Bugs can still be sent to cyrus-bugs@andrew.cmu.edu. Patches are even
+better.
 
 If you wish to submit a patch, please submit either unified or context
 diffs; plain diffs are hard to apply if the source has changed.
