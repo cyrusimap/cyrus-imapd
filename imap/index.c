@@ -272,7 +272,7 @@ int checkseen;
     /* Check Flags */
     if (checkseen) index_checkseen(mailbox, 0, usinguid, oldexists);
     for (i = 1; i <= imapd_exists && seenflag[i]; i++);
-    if (i == imapd_exists) allseen = mailbox->last_uid;
+    if (i == imapd_exists + 1) allseen = mailbox->last_uid;
     if (oldexists == -1 && imapd_exists && i <= imapd_exists) {
 	prot_printf(imapd_out, "* OK [UNSEEN %d] \r\n", i);
     }
@@ -396,6 +396,15 @@ int oldexists;
 	seen_unlock(seendb);
 	free(seenuids);
 	seenuids = newseenuids;
+	/* We might have deleted our last unseen message */
+	if (!allseen) {
+	    for (msgno = 1; msgno <= imapd_exists; msgno++) {
+		if (!seenflag[msgno]) break;
+	    }
+	    if (msgno == imapd_exists + 1) {
+		drop_seen(mailbox->name, imapd_userid, mailbox->last_uid);
+	    }
+	}
 	return;
     }
     
