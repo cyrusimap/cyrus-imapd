@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.33 1999/09/21 23:15:59 tmartin Exp $
+ * $Id: imtest.c,v 1.34 1999/09/30 21:44:50 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -66,8 +66,9 @@ int sock; /* socket descriptor */
 
 struct protstream *pout, *pin;
 
-char *authname;
-char *realm=NULL;
+static char *authname = NULL;
+static char *username = NULL;
+static char *realm = NULL;
 
 extern int _sasl_debug;
 
@@ -234,11 +235,20 @@ void interaction (int id, const char *prompt,
 	*tresult=strdup(getpass(""));
 	*tlen=strlen(*tresult);
 	return;
-    } else if (((id==SASL_CB_USER) || 
-		(id==SASL_CB_AUTHNAME)) && (authname!=NULL)) {
-	strcpy(result, authname);
+    } else if (id==SASL_CB_USER) {
+	if (username != NULL) {
+	    strcpy(result, username);
+	} else {
+	    strcpy(result, getpwuid(getuid())->pw_name);
+	}
+    } else if (id==SASL_CB_AUTHNAME) {
+	if (authname != NULL) {
+	    strcpy(result, authname);
+	} else {
+	    strcpy(result, getpwuid(getuid())->pw_name);
+	}
 #ifdef SASL_CB_GETREALM
-    } else if ((id==SASL_CB_GETREALM) && (realm!=NULL)) {
+    } else if ((id==SASL_CB_GETREALM) && (realm != NULL)) {
       strcpy(result, realm);
 #endif
     } else {
@@ -336,14 +346,17 @@ int auth_sasl(char *mechlist)
 
   }
 
-  if ((saslresult!=SASL_OK) && (saslresult!=SASL_CONTINUE)) return saslresult;
+  if ((saslresult != SASL_OK) && 
+      (saslresult != SASL_CONTINUE)) {
+      return saslresult;
+  }
 
   prot_printf(pout,"A01 AUTHENTICATE %s\r\n",mechusing);
   prot_flush(pout);
   printf("C: A01 AUTHENTICATE %s\r\n", mechusing);
 
   inlen = 0;
-  status = getauthline(&in,&inlen);
+  status = getauthline(&in, &inlen);
 
   while (status==STAT_CONT)
   {
@@ -358,25 +371,25 @@ int auth_sasl(char *mechlist)
 				  &outlen);
 
       if (saslresult==SASL_INTERACT)
-	fillin_interactions(client_interact); /* fill in prompts */      	
+	fillin_interactions(client_interact); /* fill in prompts */
     }
 
     /* check if sasl suceeded */
-    if (saslresult!=SASL_OK) return saslresult;
-
-
+    if (saslresult != SASL_OK && saslresult != SASL_CONTINUE) {
+	return saslresult;
+    }
 
     /* convert to base64 */
-    saslresult=sasl_encode64(out,outlen,
-			     inbase64,2048,(unsigned *) &inbase64len);
-    if (saslresult!=SASL_OK) return saslresult;
+    saslresult = sasl_encode64(out, outlen,
+			       inbase64, 2048, (unsigned *) &inbase64len);
+    if (saslresult != SASL_OK) return saslresult;
 
     free(in);
     if (outlen > 0) free(out);
 
     /* send to server */
     printf("C: %s\n",inbase64);
-    prot_write(pout, inbase64,inbase64len);
+    prot_write(pout, inbase64, inbase64len);
     prot_printf(pout,"\r\n");
     prot_flush(pout);
 
@@ -663,9 +676,10 @@ void usage(void)
   printf("  -p port  : port to use\n");
   printf("  -z       : timing test\n");
   printf("  -l #     : max protection layer (0=none; 1=integrity; etc)\n");
-  printf("  -u user  : authentication name to use\n");
+  printf("  -u user  : authorization name to use\n");
+  printf("  -a user  : authentication name to use\n");
   printf("  -v       : verbose\n");
-  printf("  -m mech  : SASL mechanism to use (\"login\" for no authentication)\n");
+  printf("  -m mech  : SASL mechanism to use (\"login\" for LOGIN)\n");
   printf("  -f file  : pipe file into connection after authentication\n");
   printf("  -r realm : realm\n");
 
@@ -693,7 +707,7 @@ int main(int argc, char **argv)
   int verbose=0;
 
   /* look at all the extra args */
-  while ((c = getopt(argc, argv, "zvl:p:u:m:f:")) != EOF)
+  while ((c = getopt(argc, argv, "zvl:p:u:a:m:f:")) != EOF)
     switch (c) {
     case 'z':
 	run_stress_test=1;
@@ -708,7 +722,10 @@ int main(int argc, char **argv)
 	port = optarg;
 	break;
     case 'u':
-	authname=optarg;
+	username = optarg;
+	break;
+    case 'a':
+	authname = optarg;
 	break;
     case 'm':
 	mechanism=optarg;
@@ -777,7 +794,9 @@ int main(int argc, char **argv)
       prot_setsasl(pin,  conn);
       prot_setsasl(pout, conn);
   } else {
-      printf("Authentication failed. (Code = %i)\n",result);
+      const char *s = sasl_errstring(result, NULL, NULL);
+
+      printf("Authentication failed. %s\n", s);
   }
 
   result = sasl_getprop(conn, SASL_SSF, (void **)&ssfp);
