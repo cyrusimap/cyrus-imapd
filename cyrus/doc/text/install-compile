@@ -108,7 +108,7 @@ Options to configure
             poll    Periodically poll the mailbox for changes. 
             no      Disable IMAP IDLE. 
 
-            By default, uses "idled".
+            By default, uses "poll".
 
     --with-sasldir=PATH 
             Specifies the path to the directories containing the library
