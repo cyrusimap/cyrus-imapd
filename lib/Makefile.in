@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.57 2004/02/09 18:13:27 rjs3 Exp $
+# $Id: Makefile.in,v 1.58 2004/02/18 18:44:22 rjs3 Exp $
 
 # Authorization namespace.
 AUTH=auth_@WITH_AUTH@.o
@@ -130,7 +130,7 @@ libcyrus_min.a: $(LIBCYRM_OBJS)
 	$(RANLIB) libcyrus_min.a
 
 imapopts.c: imapoptions $(srcdir)/../tools/config2header
-	$(srcdir)/../tools/config2header $(srcdir)/imapopts.c $(srcdir)/imapopts.h < $(srcdir)/imapoptions
+	$(srcdir)/../tools/config2header CC=$(CC) $(srcdir)/imapopts.c $(srcdir)/imapopts.h < $(srcdir)/imapoptions
 
 imapopts.h: imapopts.c
 
