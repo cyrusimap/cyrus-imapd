@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.124 2003/10/24 18:24:06 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.125 2003/12/16 20:36:55 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -157,7 +157,6 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 extern int optind;
 extern char *optarg;
-static int have_dupdb = 1;	/* duplicate delivery db is initialized */
 static int dupelim = 1;		/* eliminate duplicate messages with
 				   same message-id */
 static int singleinstance = 1;	/* attempt single instance store */
@@ -216,9 +215,15 @@ int service_init(int argc __attribute__((unused)),
     global_sasl_init(0, 1, mysasl_cb);
 
     dupelim = config_getswitch(IMAPOPT_DUPLICATESUPPRESSION);
-    /* initialize duplicate delivery database */
-    if (duplicate_init(NULL, 0) != 0) {
-	fatal("lmtpd: unable to init duplicate delivery database", EC_SOFTWARE);
+#ifndef USE_SIEVE
+    if (dupelim)
+#endif
+    {
+	/* initialize duplicate delivery database */
+	if (duplicate_init(NULL, 0) != 0) {
+	    fatal("lmtpd: unable to init duplicate delivery database",
+		  EC_SOFTWARE);
+	}
     }
 
     /* so we can do mboxlist operations */
@@ -959,11 +964,6 @@ static int sieve_find_script(const char *user, char *fname, size_t size)
 	return -1;
     }
     
-    if (!have_dupdb) {
-	/* duplicate delivery database is needed for sieve */
-	return -1;
-    }
-
     if (sieve_usehomedir) { /* look in homedir */
 	struct passwd *pent = getpwnam(user);
 
@@ -1268,7 +1268,10 @@ void fatal(const char* s, int code)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
-    duplicate_done();
+#ifndef USE_SIEVE
+    if (dupelim)
+#endif
+	duplicate_done();
 
     mboxlist_close();
     mboxlist_done();
