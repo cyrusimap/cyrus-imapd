@@ -45,7 +45,7 @@
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
-#include "acte.h"
+#include "sasl.h"
 #include "map.h"
 #include "config.h"
 #include "version.h"
@@ -181,10 +181,8 @@ char **envp;
 	imapd_remoteaddr.sin_family == AF_INET) {
 	if (hp = gethostbyaddr((char *)&imapd_remoteaddr.sin_addr,
 			       sizeof(imapd_remoteaddr.sin_addr), AF_INET)) {
-	    if (strlen(hp->h_name) + 30 > sizeof(imapd_clienthost)) {
-		hp->h_name[sizeof(imapd_clienthost)-30] = '\0';
-	    }
-	    strcpy(imapd_clienthost, hp->h_name);
+	    strncpy(imapd_clienthost, hp->h_name, sizeof(imapd_clienthost)-30);
+	    imapd_clienthost[sizeof(imapd_clienthost)-30] = '\0';
 	}
 	else {
 	    imapd_clienthost[0] = '\0';
@@ -931,7 +929,7 @@ char *authtype;
 {
     char *canon_user;
     int r;
-    struct acte_server *mech;
+    struct sasl_server *mech;
     int (*authproc)();
     int outputlen;
     char *output;
@@ -941,8 +939,8 @@ char *authtype;
     const char *reply = 0;
     int protlevel;
     char *user;
-    acte_encodefunc_t *encodefunc;
-    acte_decodefunc_t *decodefunc;
+    sasl_encodefunc_t *encodefunc;
+    sasl_decodefunc_t *decodefunc;
     int maxplain;
     const char *val;
     char buf[MAX_MAILBOX_PATH];
@@ -952,12 +950,13 @@ char *authtype;
     lcase(authtype);
     r = login_authenticate(authtype, &mech, &authproc, &reply);
     if (!r) {
-	r = mech->start("imap", authproc, ACTE_PROT_ANY, PROT_BUFSIZE,
+	r = mech->start(mech->rock, "imap", authproc,
+			SASL_PROT_ANY, PROT_BUFSIZE,
 			imapd_haveaddr ? (struct sockaddr *)&imapd_localaddr : 0,
 			imapd_haveaddr ? (struct sockaddr *)&imapd_remoteaddr : 0,
 			&outputlen, &output, &state, &reply);
     }
-    if (r && r != ACTE_DONE) {
+    if (r && r != SASL_DONE) {
 	if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
 		   imapd_clienthost, authtype, reply);
@@ -978,7 +977,7 @@ char *authtype;
 	r = mech->auth(state, inputlen, input.s, &outputlen, &output, &reply);
     }
     
-    if (r != ACTE_DONE) {
+    if (r != SASL_DONE) {
 	mech->free_state(state);
 	if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
@@ -1025,7 +1024,7 @@ char *authtype;
 	   authtype, reply ? reply : "");
 
     prot_printf(imapd_out, "%s OK %s (%s)\r\n", tag, reply,
-		acte_prottostring(protlevel));
+		sasl_prottostring(protlevel));
 
     if (encodefunc || decodefunc) {
 	prot_setfunc(imapd_in, decodefunc, state, 0);

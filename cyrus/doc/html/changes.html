@@ -8,7 +8,10 @@
 
 <ul>
 
-<LI> Implemented the "<TT>IMAP4rev1</TT>" protocol commands.  Changes
+<LI> Implemented the "<TT>IMAP4rev1</TT>" protocol commands.  
+(The hierarchical behavior of RENAME, which was added late to the
+IMAP4rev1 specification, is not implemented.)
+Changes
 the minor version number of the cyrus mailbox database format to 1.
 <B>IMPORTANT:</B> it is necessary to run the command "<TT>reconstruct
 -r</TT>" as the cyrus user after upgrading the Cyrus IMAP software
@@ -43,13 +46,16 @@ RFC 822 addresses without the "@domain" part.
 
 <LI> Make "reconstruct -r" with no args reconstruct every mailbox.
 
-<LI> The configrue script now defaults to using unix_pwcheck instead
+<LI> The configure script now defaults to using unix_pwcheck instead
 of unix if the file /etc/shadow exists.
 
 <LI> The location of the pwcheck socket directory now defaults to
 "<TT>/var/ptclient/</TT>".  It is controlled by the
 "<TT>--with-statedir=DIR</TT>" option, which defaults to
 "<TT>/var</TT>".
+
+<LI> Bug fix: by using an certain address form, one could deliver to a
+user's mailbox bypassing the ACL's.
 
 <LI> Bug fix: un-fold header lines when parsing for the ENVELOPE.
 
@@ -73,6 +79,15 @@ POP3 server to occasionally drop the connection during authentication.
 
 <LI> Bug fix: The COPY command wasn't issuing a [TRYCREATE] when
 appropriate for sub-mailboxes of INBOX.
+
+<li> Bug fix: Renaming a mailbox wasn't correctly changing its
+UIDVALIDITY.
+
+<li> Bug fix: Renaming a mailbox to itself, in order to move it to a
+different partition, was not working correctly.
+
+<li> Update the AUTH support in pop3d to conform to the latest draft
+specification.
 
 <LI> Update cyradm to use Tcl 7.5 instead of Tcl 7.4
 
@@ -105,6 +120,9 @@ to stream its tagged responses.
 
 <LI> In deliver, change the MULT support to instead use the LMTP syntax.
 
+<li> imclient: support tagged intermediate replies and a default
+callback.
+
 <LI> Implement some experimental protocol extensions for optimizing
 disconnected use resynchronization.  Most extensions are disabled by
 default.  Client authors should contact info-cyrus@andrew.cmu.edu if
@@ -118,7 +136,8 @@ they wish to experiment with these.
 Unix.  It's not quite as bad as HPUX, but...
 
 <LI> Bug fix: in imclient.c, don't free NULL pointers and don't call
-htons() on the output of getservbyname()
+htons() on the output of getservbyname().  Have to abort sending
+the command if you get a tagged response when sending a literal.
 
 <LI> The auth_xxx routines now create/take a state argument instead of
 maintaining internal static state.

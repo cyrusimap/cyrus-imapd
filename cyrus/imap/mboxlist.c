@@ -658,15 +658,34 @@ struct auth_state *auth_state;
     r = mboxlist_openlock();
     if (r) return r;
 
+    r = mboxlist_lookup(oldname, &oldpath, &acl);
+    if (r) {
+	mboxlist_unlock();
+	return r;
+    }
+
     /* Check ability to delete old mailbox */
-    if (!strncmp(oldname, "user.", 5) && !strchr(oldname+5, '.')) {
+    if (strcmp(oldname, newname) == 0) {
+	/* Attempt to move mailbox across partition */
+	if (!isadmin || !partition) {
+	    mboxlist_unlock();
+	    return IMAP_MAILBOX_EXISTS;
+	}
+	root = config_partitiondir(partition);
+	if (!root) {
+	    mboxlist_unlock();
+	    return IMAP_PARTITION_UNKNOWN;
+	}
+	if (!strncmp(root, oldpath, strlen(root)) &&
+	    oldpath[strlen(root)] == '/') {
+	    /* partitions are the same or share common prefix */
+	    mboxlist_unlock();
+	    return IMAP_MAILBOX_EXISTS;
+	}
+    }
+    else if (!strncmp(oldname, "user.", 5) && !strchr(oldname+5, '.')) {
 	if (!strcmp(oldname+5, userid)) {
 	    /* Special case of renaming inbox */
-	    r = mboxlist_lookup(oldname, &oldpath, &acl);
-	    if (r) {
-		mboxlist_unlock();
-		return r;
-	    }
 	    access = acl_myrights(auth_state, acl);
 	    if (!(access & ACL_DELETE)) {
 		mboxlist_unlock();
@@ -681,11 +700,6 @@ struct auth_state *auth_state;
 	}
     }
     else {
-	r = mboxlist_lookup(oldname, &oldpath, &acl);
-	if (r) {
-	    mboxlist_unlock();
-	    return r;
-	}
 	access = acl_myrights(auth_state, acl);
 	if (!(access & ACL_DELETE)) {
 	    mboxlist_unlock();
@@ -695,19 +709,21 @@ struct auth_state *auth_state;
     }
     acl = xstrdup(acl);
 
-    /* Check ability to create new mailbox */
-    if (!strncmp(newname, "user.", 5) && !strchr(newname+5, '.')) {
-	/* Even admins can't rename to user's inboxes */
-	mboxlist_unlock();
-	free(acl);
-	return IMAP_MAILBOX_NOTSUPPORTED;
-    }
-    r = mboxlist_createmailboxcheck(newname, 0, partition, isadmin, userid,
-				    auth_state, (char **)0, &partition);
-    if (r) {
-	mboxlist_unlock();
-	free(acl);
-	return r;
+    if (strcmp(oldname, newname) != 0) {
+	/* Check ability to create new mailbox */
+	if (!strncmp(newname, "user.", 5) && !strchr(newname+5, '.')) {
+	    /* Even admins can't rename to user's inboxes */
+	    mboxlist_unlock();
+	    free(acl);
+	    return IMAP_MAILBOX_NOTSUPPORTED;
+	}
+	r = mboxlist_createmailboxcheck(newname, 0, partition, isadmin, userid,
+					auth_state, (char **)0, &partition);
+	if (r) {
+	    mboxlist_unlock();
+	    free(acl);
+	    return r;
+	}
     }
     
     /* Search for the old entry's location */

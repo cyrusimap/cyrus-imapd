@@ -703,7 +703,7 @@ int quotaoverride;
     if (user) {
 	if (strchr(user, '.') ||
 	    strlen(user) + 30 > MAX_MAILBOX_PATH) {
-	    r = IMAP_MAILBOX_NONEXISTENT;
+	    return IMAP_MAILBOX_NONEXISTENT;
 	}
 	if (!mailboxname ||
 	    strlen(user) + strlen(mailboxname) + 30 > MAX_MAILBOX_PATH) {

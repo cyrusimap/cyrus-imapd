@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <netdb.h>
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
 #include <krb.h>
 #endif
 #include <zephyr/zephyr.h>
@@ -77,7 +77,7 @@ char *header;
     }
     myhost[sizeof(myhost)-1] = '\0';
   
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
     mykrbhost = krb_get_phost(myhost);
 #endif
   

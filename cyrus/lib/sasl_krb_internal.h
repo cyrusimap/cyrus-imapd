@@ -1,4 +1,4 @@
-/* login_unix.c -- Unix password file login authentication
+/* sasl_krb.c -- KERBEROS_V4 authentication routines for SASL.
  *
  *	(C) Copyright 1994 by Carnegie Mellon University
  *
@@ -26,52 +26,45 @@
  * SOFTWARE.
  *
  */
-#include <stdio.h>
-#include <pwd.h>
 
-#include "sasl.h"
-#include "config.h"
-#include "sysexits.h"
-#include "mailbox.h"
-#include "imapd.h"
+/* Maximum number of bytes of overhead the protection mechanisms use */
+#define PROTECTION_OVERHEAD 31
 
-extern char *crypt();
+/* Private state used by this mechanism */
+struct krb_state {
+    /* common */
+    char service[MAX_K_NAME_SZ+1];
+    int authstepno;
+    des_cblock session;	/* Our session key */
+    des_key_schedule schedule; /* Schedule for our session key */
+    long challenge;
+    char user[MAX_K_NAME_SZ+1];
+    int protallowed;
+    int maxbufsize;
+    struct sockaddr_in localaddr, remoteaddr;
+    long prot_time_sec;
+    char prot_time_5ms;
+    /* client */
+    char instance[INST_SZ];
+    char realm[REALM_SZ];
+    /* server */
+    int (*authproc)();
+    AUTH_DAT kdata;
+};
 
-/*
- * Unix passwd-authenticated login
- */
+extern void krb_free_state P((void *state));
 
-int
-login_plaintext(user, pass, reply)
-char *user;
-char *pass;
-char **reply;
-{
-    struct passwd *pwd;
+extern sasl_encodefunc_t krb_en_integrity;
+extern sasl_decodefunc_t krb_de_integrity;
+#ifndef NOPRIVACY
+extern sasl_encodefunc_t krb_en_privacy;
+extern sasl_decodefunc_t krb_de_privacy;
+#endif
 
-    pwd = getpwnam(user);
-    if (!pwd) return 1;
+extern void 
+krb_query_state P((void *state, char **user, int *protlevel,
+			   sasl_encodefunc_t **encodefunc,
+			   sasl_decodefunc_t **decodefunc, int *maxplain));
 
-    if (strcmp(pwd->pw_passwd, crypt(pass, pwd->pw_passwd)) != 0) {
-	*reply = "wrong password";
-	return 1;
-    }
+extern char *krb_srvtab;	/* Srvtab filename */
 
-    return 0;
-}
-  
-int
-login_authenticate(authtype, mech, authproc, reply)
-char *authtype;
-struct sasl_server **mech;
-sasl_authproc_t **authproc;
-char **reply;
-{
-    return 1;
-}
-  
-const char *
-login_capabilities()
-{
-    return "";
-}

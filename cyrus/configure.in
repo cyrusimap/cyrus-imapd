@@ -386,8 +386,8 @@ if test "$with_krb" = "no"; then
 	AC_MSG_ERROR(Unable to find Kerberos/DES libraries)
      fi
 else
-     AC_DEFINE(HAVE_ACTE_KRB)
-     LIBOBJS="${LIBOBJS} acte_krb.o";
+     AC_DEFINE(HAVE_SASL_KRB)
+     LIBOBJS="${LIBOBJS} sasl_krb.o sasl_krb_client.o sasl_krb_server.o";
 fi     
 dnl
 dnl Look for inn

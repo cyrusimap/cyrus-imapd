@@ -27,17 +27,15 @@ similar complexity, except administrators will have to deal with
 <A HREF="cyradm.1.html">creation and deletion of users</A> and will 
 have the option of managing quotas and access control lists.
 
-<P> This server has been successfully installed on the following systems
+<P> This server has been successfully installed on a number of Unix
+systems.  The following are notes on particular Unix variants:
 
 <ul>
 
-<LI> SunOS 5.4 (Solaris 2.4), gcc 2.5.8 &amp; SunPro 3.01; Kerberos,
-unix_pwcheck, unix_getspnam.  If compiling with unix authentication,
+<LI> SunOS 5.5 (Solaris 2.5):  If compiling with unix authentication,
 see the file "<TT>pwcheck/README</TT>" in the distribution.
 
-<LI> SunOS 4.1.3, gcc &amp; cc; Kerberos
-
-<LI> HP-UX 9.0.4, gcc 2.7.0; passwd, Kerberos.  Comments from testers:
+<LI> HP-UX 9.0.4:  Comments from testers:
  <P> The C that ships with HP-UX is totally unsuited for use with unix
 packages.  Either the HP-UX ANSI C developers kit must be
 purchased separately from HP or GNU's gcc compiler (which can
@@ -49,19 +47,6 @@ consider using some other platform for IMAP servers.
 
 </ul>
 
-<P> Older versions of this server has been successfully installed on
-the following systems.  Newer versions have not been checked
-
-<ul>
-<LI> RS/6000 AIX 3.2.5, xlc, Kerberos
-
-<LI> NeXTStep 3.2, gcc, Kerberos
-
-<LI> Ultrix 4.2 (Decstation), gcc &amp; cc; Kerberos
-
-</ul>
-
-
 Send problems/questions/suggestions to
 "<TT>cyrus-bugs@andrew.cmu.edu</TT>".
 
@@ -71,9 +56,13 @@ discussion of this server and other Cyrus software.  Send mail
 to "<TT>info-cyrus-request@andrew.cmu.edu</TT>" to subscribe.
 
 <P>
-The Cyrus server supports the IMAP4 protocol described in
-<a href="http://andrew2.andrew.cmu.edu/cyrus/rfc/rfc1730.html">RFC 1730</a>,
-which is currently a Proposed Standard.
+The Cyrus server supports the IMAP4rev1 protocol described in the
+Internet Draft draft-crispin-imap-base-07.txt, with the exception that
+it does not currently support the
+hierarchical behavior of the RENAME command.  At the time this
+document was written, the IMAP4rev1 protocol specification has been
+approved as a Proposed Standard but has not
+yet been published as an RFC.  
 
 <P>
 Character sets supported for searching are: us-ascii, iso-8859-1,

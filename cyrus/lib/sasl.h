@@ -1,4 +1,4 @@
-/* acte.h -- Interface for IMAP AUTHENTICATE mechanisms 
+/* sasl.h -- Interface for SASL mechanisms 
  *
  *	(C) Copyright 1994,1996 by Carnegie Mellon University
  *
@@ -27,8 +27,8 @@
  *
  */
 
-#ifndef INCLUDED_ACTE_H
-#define INCLUDED_ACTE_H
+#ifndef INCLUDED_SASL_H
+#define INCLUDED_SASL_H
 
 #ifndef P
 #ifdef __STDC__
@@ -42,22 +42,25 @@
 
 struct sockaddr;
 
-typedef const char *acte_encodefunc_t P((void *state,
+typedef const char *sasl_encodefunc_t P((void *state,
 					  char *input, int inputlen,
 					  char *output, int *outputlen));
-typedef const char *acte_decodefunc_t P((void *state,
+typedef const char *sasl_decodefunc_t P((void *state,
 					  char *input, int inputlen,
 					  char **output, int *outputlen));
-typedef int acte_authproc_t P((const char *user, const char *auth_identity,
+typedef int sasl_authproc_t P((const char *user, const char *auth_identity,
 			       const char **reply));
 
 /* Client-side authentication mechanism */
-struct acte_client {
+struct sasl_client {
     /* Name of authentication mechanism */
     char *auth_type;
 
+    int can_send_initial_response;
+
     /* Start a client->server authentication */
-    int (*start) P((const char *service, const char *host, const char *user,
+    int (*start) P((void *rock,
+		    const char *service, const char *host, const char *user,
 		    int protallowed, int maxbufsize,
 		    struct sockaddr *localaddr, struct sockaddr *remoteaddr,
 		    void **state));
@@ -68,8 +71,8 @@ struct acte_client {
     
     /* Query an authentication state */
     void (*query_state) P((void *state, char **user, int *protlevel,
-			   acte_encodefunc_t **encodefunc,
-			   acte_decodefunc_t **decodefunc, int *maxplain));
+			   sasl_encodefunc_t **encodefunc,
+			   sasl_decodefunc_t **decodefunc, int *maxplain));
 
     /* Free an authentication state */
     void (*free_state) P((void *state));
@@ -79,15 +82,21 @@ struct acte_client {
 
     /* Free daemon's credentials */
     void (*free_cred) P((void));
+
+    /* Place to hide data useful for starting authentications
+     * (such as function for prompting user for password)
+     */
+    void *rock;
 };
 
 /* Server-side authentication mechanism */
-struct acte_server {
+struct sasl_server {
     /* Name of authentication mechanism */
     char *auth_type;		
 
     /* Start an incoming authentication */
-    int (*start) P((const char *service, acte_authproc_t *authproc,
+    int (*start) P((void *rock,
+		    const char *service, sasl_authproc_t *authproc,
 		    int protallowed, int maxbufsize,
 		    struct sockaddr *localaddr, struct sockaddr *remoteaddr,
 		    int *outputlen, char **output,
@@ -99,26 +108,31 @@ struct acte_server {
 
     /* Query an authentication state */
     void (*query_state) P((void *state, char **user, int *protlevel,
-			   acte_encodefunc_t **encodefunc,
-			   acte_decodefunc_t **decodefunc, int *maxplain));
+			   sasl_encodefunc_t **encodefunc,
+			   sasl_decodefunc_t **decodefunc, int *maxplain));
 
     /* Free an authentication state */
     void (*free_state) P((void *state));
     
     /* Get a cacheid, if available */
     char *(*get_cacheid) P((void *state));
+
+    /* Place to hide data useful for starting authentications
+     * (such as place to get credentials)
+     */
+    void *rock;
 };
 
 /* Protection mechanisms */
-#define ACTE_PROT_NONE 1
-#define ACTE_PROT_INTEGRITY 2
-#define ACTE_PROT_PRIVACY 4
-#define ACTE_PROT_ANY (ACTE_PROT_NONE|ACTE_PROT_INTEGRITY|ACTE_PROT_PRIVACY)
+#define SASL_PROT_NONE 1
+#define SASL_PROT_INTEGRITY 2
+#define SASL_PROT_PRIVACY 4
+#define SASL_PROT_ANY (SASL_PROT_NONE|SASL_PROT_INTEGRITY|SASL_PROT_PRIVACY)
 
-#define ACTE_FAIL 1		/* Authentication failed */
+#define SASL_FAIL 1		/* Authentication failed */
 
-#define ACTE_DONE 3		/* Server has authenticated user */
+#define SASL_DONE 3		/* Server has authenticated user */
 
-extern char *acte_prottostring P((int protlevel));
+extern char *sasl_prottostring P((int protlevel));
 
-#endif /* INCLUDED_ACTE_H */
+#endif /* INCLUDED_SASL_H */

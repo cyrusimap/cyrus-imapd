@@ -42,7 +42,7 @@
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
-#include "acte.h"
+#include "sasl.h"
 #include "config.h"
 #include "prot.h"
 #include "sysexits.h"
@@ -57,7 +57,9 @@ extern int opterr;
 
 extern int errno;
 
-#ifdef HAVE_ACTE_KRB
+extern char *login_capabilities();
+
+#ifdef HAVE_SASL_KRB
 #include <krb.h>
 
 /* MIT's kpop authentication kludge */
@@ -105,7 +107,7 @@ char **envp;
     opterr = 0;
     while ((opt = getopt(argc, argv, "k")) != EOF) {
 	switch(opt) {
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
 	case 'k':
 	    kflag++;
 	    break;
@@ -156,11 +158,11 @@ char **envp;
     prot_settimeout(popd_in, timeout*60);
     prot_setflushonread(popd_in, popd_out);
 
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
     if (kflag) kpop();
 #endif
 
-    prot_printf(popd_out,"+OK %s Cyrus POP3 %s server ready\r\n",
+    prot_printf(popd_out, "+OK %s Cyrus POP3 %s server ready\r\n",
 		hostname, CYRUS_VERSION);
 
     cmdloop();
@@ -169,7 +171,7 @@ char **envp;
 usage()
 {
     prot_printf(popd_out, "-ERR usage: pop3d%s\r\n",
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
 		" [-k]"
 #else
 		""
@@ -210,7 +212,7 @@ int code;
     shut_down(code);
 }
 
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
 /*
  * MIT's kludge of a kpop protocol
  * Client does a krb_sendauth() first thing
@@ -340,8 +342,7 @@ cmdloop()
 		else cmd_pass(arg);
 	    }
 	    else if (!strcmp(inputbuf, "auth")) {
-		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
-		else cmd_auth(arg);
+		cmd_auth(arg);
 	    }
 	    else {
 		prot_printf(popd_out, "-ERR Unrecognized command\r\n");
@@ -512,7 +513,7 @@ char *pass;
 	return;
     }
 
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
     if (kflag) {
 	if (strcmp(popd_userid, kdata.pname) != 0 ||
 	    kdata.pinst[0] ||
@@ -571,9 +572,10 @@ char *pass;
 cmd_auth(authtype)
 char *authtype;
 {
+    char *initial_response;
     char *canon_user;
     int r;
-    struct acte_server *mech;
+    struct sasl_server *mech;
     int (*authproc)();
     int outputlen;
     char *output;
@@ -583,27 +585,70 @@ char *authtype;
     const char *reply = 0;
     int protlevel;
     char *user;
-    acte_encodefunc_t *encodefunc;
-    acte_decodefunc_t *decodefunc;
+    sasl_encodefunc_t *encodefunc;
+    sasl_decodefunc_t *decodefunc;
     int maxplain;
     char *val;
 
+    if (!authtype) {
+	const char *capabilities, *next_capabilities;
+
+	prot_printf(popd_out, "+OK List of supported mechanisms follows\r\n");
+	next_capabilities = login_capabilities();
+	while (next_capabilities[0]) {
+	    capabilities = next_capabilities;
+	    next_capabilities = strchr(capabilities+1, ' ');
+	    if (!next_capabilities) {
+		next_capabilities = capabilities + strlen(capabilities);
+	    }
+	    if (!strncmp(capabilities, " AUTH=", 6)) {
+		capabilities += 6;
+		prot_write(popd_out, capabilities,
+			   next_capabilities - capabilities);
+		prot_printf(popd_out, "\r\n");
+	    }
+	}
+	prot_printf(popd_out, ".\r\n");
+	return;
+    }
+
+    if ((initial_response = strchr(authtype, ' '))) {
+	*initial_response++ = '\0';
+    }
     lcase(authtype);
     
     r = login_authenticate(authtype, &mech, &authproc, &reply);
     if (!r) {
-	r = mech->start("pop", authproc, ACTE_PROT_ANY, PROT_BUFSIZE,
+	r = mech->start(mech->rock, "pop", authproc,
+			SASL_PROT_ANY, PROT_BUFSIZE,
 			popd_haveaddr ? (struct sockaddr *)&popd_localaddr : 0,
 			popd_haveaddr ? (struct sockaddr *)&popd_remoteaddr : 0,
 			&outputlen, &output, &state, &reply);
     }
-    if (r && r != ACTE_DONE) {
+    if (r && r != SASL_DONE) {
 	if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
 		   popd_clienthost, authtype, reply);
 	}
 	prot_printf(popd_out, "-ERR Invalid login\r\n");
 	return;
+    }
+
+    if (initial_response) {
+	if (outputlen != 0) {
+	    prot_printf(popd_out,
+		   "-ERR Cannot give initial response to this mechanism\r\n");
+	    mech->free_state(state);
+	    return;
+	}
+
+	inputlen = parsebase64string(&input, initial_response);
+	if (inputlen == -1) {
+	    prot_printf(popd_out, "-ERR Invalid base64 string\r\n");
+	    mech->free_state(state);
+	    return;
+	}
+	r = mech->auth(state, inputlen, input, &outputlen, &output, &reply);
     }
 
     while (r == 0) {
@@ -617,7 +662,7 @@ char *authtype;
 	r = mech->auth(state, inputlen, input, &outputlen, &output, &reply);
     }
     
-    if (r != ACTE_DONE) {
+    if (r != SASL_DONE) {
 	mech->free_state(state);
 	if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
@@ -968,6 +1013,77 @@ char **ptr;
 	    if (c1 == '\r') c1 = prot_getc(popd_in);
 	    if (c1 != '\n') {
 		eatline();
+		return -1;
+	    }
+	    *ptr = buf;
+	    return len;
+	}
+	buf[len++] = (((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
+    }
+}
+
+/*
+ * Parse a base64_string
+ */
+int parsebase64string(ptr, s)
+char **ptr;
+const char *s;
+{
+    int c1, c2, c3, c4;
+    int i, len = 0;
+    static char *buf;
+    static int alloc = 0;
+
+    if (alloc == 0) {
+	alloc = BUFGROWSIZE;
+	buf = xmalloc(alloc+1);
+    }
+	
+    for (;;) {
+	c1 = *s++;
+	if (c1 == '\0') {
+	    *ptr = buf;
+	    return len;
+	}
+
+	if (CHAR64(c1) == XX) {
+	    return -1;
+	}
+	
+	c2 = *s++;
+	if (CHAR64(c2) == XX) {
+	    return -1;
+	}
+
+	c3 = *s++;
+	if (c3 != '=' && CHAR64(c3) == XX) {
+	    return -1;
+	}
+
+	c4 = *s++;
+	if (c4 != '=' && CHAR64(c4) == XX) {
+	    return -1;
+	}
+
+	if (len+3 >= alloc) {
+	    alloc = len+BUFGROWSIZE;
+	    buf = xrealloc(buf, alloc+1);
+	}
+
+	buf[len++] = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+	if (c3 == '=') {
+	    c1 = *s++;
+	    if (c1 != '\0') {
+		return -1;
+	    }
+	    if (c4 != '=') return -1;
+	    *ptr = buf;
+	    return len;
+	}
+	buf[len++] = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
+	if (c4 == '=') {
+	    c1 = *s++;
+	    if (c1 != '\0') {
 		return -1;
 	    }
 	    *ptr = buf;

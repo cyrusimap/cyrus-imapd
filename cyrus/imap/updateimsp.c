@@ -37,7 +37,7 @@
 #include <netinet/in.h>
 #include <com_err.h>
 
-#include "acte.h"
+#include "sasl.h"
 #include "imclient.h"
 #include "sysexits.h"
 #include "xmalloc.h"
@@ -48,13 +48,13 @@
 #include "config.h"
 #include "mailbox.h"
 
-#ifdef HAVE_ACTE_KRB
-extern struct acte_client krb_acte_client;
+#ifdef HAVE_SASL_KRB
+extern struct sasl_client krb_sasl_client;
 #endif
 
-struct acte_client *login_acte_client[] = {
-#ifdef HAVE_ACTE_KRB
-    &krb_acte_client,
+struct sasl_client *login_sasl_client[] = {
+#ifdef HAVE_SASL_KRB
+    &krb_sasl_client,
 #endif
     NULL
 };
@@ -78,7 +78,7 @@ main()
 	fatal("cannot change directory to config directory", EX_TEMPFAIL);
     }
     
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
     if (val = config_getstring("srvtab", 0)) {
 	kerberos_set_srvtab(val);
     }
@@ -198,9 +198,9 @@ char *hostname;
 
     curtime = time(0);
     if (cred_expire < curtime+5*60) {
-	for (i = 0; login_acte_client[i]; i++) {
+	for (i = 0; login_sasl_client[i]; i++) {
 /* XXX look for authmech (or similar) config option */
-	    err = login_acte_client[i]->new_cred("imap", &life);
+	    err = login_sasl_client[i]->new_cred("imap", &life);
 	    if (!err) {
 		if (!gotcred++ || curtime + life < cred_expire) {
 		    cred_expire = curtime + life;
@@ -208,9 +208,9 @@ char *hostname;
 	    }
 	    else {
 		syslog(LOG_WARNING, "Error getting %s credential: %s",
-		       login_acte_client[i]->auth_type, err);
+		       login_sasl_client[i]->auth_type, err);
 /*debug*/printf("cannot get %s credential: %s", 
-		login_acte_client[i]->auth_type, err);
+		login_sasl_client[i]->auth_type, err);
 	    }
 	}
     }
@@ -232,8 +232,8 @@ char *hostname;
 	return 0;
     }
 
-    r = imclient_authenticate(imspconn, login_acte_client, (char *)0,
-			      ACTE_PROT_ANY);
+    r = imclient_authenticate(imspconn, login_sasl_client, "imap", (char *)0,
+			      SASL_PROT_ANY);
     if (r) {
 	syslog(LOG_WARNING, "Error authenticating to IMSP server");
 /*debug*/printf("cannot authenticate to imsp\n");

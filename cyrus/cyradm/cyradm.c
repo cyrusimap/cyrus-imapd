@@ -32,19 +32,19 @@
 
 extern int errno;
 
-#include "acte.h"
+#include "sasl.h"
 #include "imclient.h"
 #include "imparse.h"
 #include "tcl.h"
 #include "xmalloc.h"
 
-#ifdef HAVE_ACTE_KRB
-extern struct acte_client krb_acte_client;
+#ifdef HAVE_SASL_KRB
+extern struct sasl_client krb_sasl_client;
 #endif
 
-struct acte_client *login_acte_client[] = {
-#ifdef HAVE_ACTE_KRB
-    &krb_acte_client,
+struct sasl_client *login_sasl_client[] = {
+#ifdef HAVE_SASL_KRB
+    &krb_sasl_client,
 #endif
     NULL
 };
@@ -375,7 +375,7 @@ char **argv;
 {
     char *pwcommand = 0;
     char *user = 0;
-    int prot = ACTE_PROT_ANY;
+    int prot = SASL_PROT_ANY;
     char *p;
     int r;
     
@@ -398,15 +398,15 @@ char **argv;
 	    for (p = *++argv; *p; p++) {
 		switch (*p) {
 		case 'n':
-		    prot |= ACTE_PROT_NONE;
+		    prot |= SASL_PROT_NONE;
 		    break;
 
 		case 'i':
-		    prot |= ACTE_PROT_INTEGRITY;
+		    prot |= SASL_PROT_INTEGRITY;
 		    break;
 
 		case 'p':
-		    prot |= ACTE_PROT_PRIVACY;
+		    prot |= SASL_PROT_PRIVACY;
 		    break;
 
 		default:
@@ -428,9 +428,10 @@ char **argv;
 	return TCL_ERROR;
     }
 
-    r = imclient_authenticate(conn->imclient, login_acte_client, user, prot);
+    r = imclient_authenticate(conn->imclient, login_sasl_client, "imap",
+			      user, prot);
     
-    if (r == 1 && (prot & ACTE_PROT_NONE) && pwcommand) {
+    if (r == 1 && (prot & SASL_PROT_NONE) && pwcommand) {
 	Tcl_DString command;
 	int comc;
 	char **comv;

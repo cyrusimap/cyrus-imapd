@@ -1,4 +1,4 @@
-/* acte.c -- Common functions for SASL mechanisms 
+/* sasl.c -- Common functions for SASL mechanisms 
  *
  *	(C) Copyright 1994 by Carnegie Mellon University
  *
@@ -27,19 +27,19 @@
  *
  */
 
-#include "acte.h"
+#include "sasl.h"
 
-char *acte_prottostring(protlevel)
+char *sasl_prottostring(protlevel)
 int protlevel;
 {
     switch (protlevel) {
-    case ACTE_PROT_NONE:
+    case SASL_PROT_NONE:
 	return "no protection";
 
-    case ACTE_PROT_INTEGRITY:
+    case SASL_PROT_INTEGRITY:
 	return "integrity protection";
 
-    case ACTE_PROT_PRIVACY:
+    case SASL_PROT_PRIVACY:
 	return "privacy protection";
 
     default:
