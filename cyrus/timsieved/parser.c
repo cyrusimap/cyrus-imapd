@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.20.4.10 2003/02/13 20:33:36 rjs3 Exp $
+ * $Id: parser.c,v 1.20.4.11 2003/06/24 15:48:47 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -201,7 +201,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       if(referral_host)
 	  goto do_referral;
 
-      capabilities(sieved_out, sieved_saslconn);
+      capabilities(sieved_out, sieved_saslconn, starttls_done, authenticated);
       break;
 
   case HAVESPACE:

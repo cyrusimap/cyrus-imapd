@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.30.4.8 2003/03/06 01:38:40 ken3 Exp $
+ * $Id: actions.c,v 1.30.4.9 2003/06/24 15:48:46 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -159,7 +159,8 @@ int scriptname_valid(mystring_t *name)
   return TIMSIEVE_OK;
 }
 
-int capabilities(struct protstream *conn, sasl_conn_t *saslconn)
+int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
+		 int starttls_done, int authenticated)
 {
     const char *sasllist;
     unsigned mechcount;
@@ -169,7 +170,8 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn)
 		CYRUS_VERSION);
     
     /* SASL */
-    if (sasl_listmech(saslconn, NULL, 
+    if (!authenticated &&
+	sasl_listmech(saslconn, NULL, 
 		    "\"SASL\" \"", " ", "\"\r\n",
 		    &sasllist,
 		    NULL, &mechcount) == SASL_OK && mechcount > 0)
@@ -180,7 +182,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn)
     /* Sieve capabilities */
     prot_printf(conn,"\"SIEVE\" \"%s\"\r\n",sieve_listextensions());
 
-    if (tls_enabled()) {
+    if (tls_enabled() && !starttls_done) {
 	prot_printf(conn, "\"STARTTLS\"\r\n");
     }
 

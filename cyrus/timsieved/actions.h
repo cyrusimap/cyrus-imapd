@@ -1,7 +1,7 @@
 /* actions.h -- executes the commands (creating, deleting scripts etc..) for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: actions.h,v 1.9.4.1 2003/02/13 20:33:36 rjs3 Exp $
+ * $Id: actions.h,v 1.9.4.2 2003/06/24 15:48:47 ken3 Exp $
 */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -56,7 +56,8 @@
  *
  */
 
-int capabilities(struct protstream *conn, sasl_conn_t *saslconn);
+int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
+		 int starttls_done, int authenticated);
 
 /*
  * Get a sieve scripe with name "name" and output it's contents
