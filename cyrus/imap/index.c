@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.165 2001/06/19 13:58:58 ken3 Exp $
+ * $Id: index.c,v 1.166 2001/09/12 15:54:15 ken3 Exp $
  */
 #include <config.h>
 
@@ -2709,13 +2709,16 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	    /* get a working copy; strip outer ()'s */
 	    tmpenv = xstrndup(cacheitem + 5, cachelen - 2);
 	    parse_cached_envelope(tmpenv, envtokens);
-	    if (envtokens[ENV_MSGID]) {
-		msgid = lcase(envtokens[ENV_MSGID]);
-		msgidlen = strlen(msgid);
-	    } else {
-		msgid = "";
-		msgidlen = 0;
+
+	    if (!envtokens[ENV_MSGID]) {
+		/* free stuff */
+		free(tmpenv);
+
+		return 0;
 	    }
+
+	    msgid = lcase(envtokens[ENV_MSGID]);
+	    msgidlen = strlen(msgid);
 	    for (l = searchargs->messageid; l; l = l->next) {
 		if (!charset_searchstring(l->s, l->p, msgid, msgidlen)) {
 		    break;
@@ -2736,7 +2739,8 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 	    
 	for (l = searchargs->from; l; l = l->next) {
-	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen))
+	    if ((cachelen == 3 && !strcmp(cacheitem+4, "NIL")) ||
+		!charset_searchstring(l->s, l->p, cacheitem+4, cachelen))
 		return 0;
 	}
 
@@ -2744,7 +2748,8 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->to; l; l = l->next) {
-	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
+	    if ((cachelen == 3 && !strcmp(cacheitem+4, "NIL")) ||
+		!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
 		return 0;
 	}
 
@@ -2752,7 +2757,8 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->cc; l; l = l->next) {
-	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
+	    if ((cachelen == 3 && !strcmp(cacheitem+4, "NIL")) ||
+		!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
 		return 0;
 	}
 
@@ -2760,7 +2766,8 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->bcc; l; l = l->next) {
-	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
+	    if ((cachelen == 3 && !strcmp(cacheitem+4, "NIL")) ||
+		!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
 		return 0;
 	}
 
@@ -2768,7 +2775,8 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->subject; l; l = l->next) {
-	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
+	    if ((cachelen == 3 && !strcmp(cacheitem+4, "NIL")) ||
+		!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
 		return 0;
 	}
     }
