@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.86 2001/03/14 06:02:11 leg Exp $
+ * $Id: pop3d.c,v 1.87 2001/03/15 19:08:08 ken3 Exp $
  */
 #include <config.h>
 
@@ -891,6 +891,7 @@ cmd_capa()
     prot_printf(popd_out, "UIDL\r\n");
     prot_printf(popd_out, "PIPELINING\r\n");
     prot_printf(popd_out, "USER\r\n");
+    prot_printf(popd_out, "RESP-CODES\r\n");
     
     prot_printf(popd_out,
 		"IMPLEMENTATION Cyrus POP3 server %s\r\n",
