@@ -160,6 +160,12 @@ char *name;
 	return r;
     }
 
+    r = mailbox_open_index(&mailbox);
+    if (r) {
+	mailbox_close(&mailbox);
+	return r;
+    }
+
     arbitronargs.name = name;
     arbitronargs.read_count = 0;
 
