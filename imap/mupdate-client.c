@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.40 2004/01/26 19:10:14 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.41 2004/01/29 15:21:43 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -98,6 +98,7 @@ int mupdate_connect(const char *server, const char *port,
     int err = 0;
     int local_cbs = 0;
     int s, saslresult;
+    const char *proterr;
     char buf[4096];
     char *mechlist = NULL;
     sasl_security_properties_t *secprops = NULL;
@@ -254,8 +255,9 @@ int mupdate_connect(const char *server, const char *port,
  noconn:
     if(mechlist) free(mechlist);
     if(secprops) free(secprops);
+    proterr = prot_error(h->pin);
     syslog(LOG_ERR, "mupdate-client: connection to server closed: %s",
-	   prot_error(h->pin));
+	   proterr ? proterr : "(unknown)");
     mupdate_disconnect(handle);
 
     return MUPDATE_NOCONN;

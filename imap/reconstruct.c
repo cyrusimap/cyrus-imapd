@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.84 2004/01/26 17:46:57 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.85 2004/01/29 15:21:43 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -173,6 +173,7 @@ int main(int argc, char **argv)
     }
 
     cyrus_init(alt_config, "reconstruct", 0);
+    global_sasl_init(1,0,NULL);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
