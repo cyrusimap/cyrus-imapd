@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sendmail-map.c,v 1.1 2000/12/07 22:59:32 leg Exp $
+ * $Id: sendmail-map.c,v 1.2 2000/12/18 20:30:25 leg Exp $
  */
 
 #include <config.h>
@@ -129,14 +129,16 @@ static char *getstrattr(acap_entry_t *e, char *attrname)
     return acap_entry_getattr_simple(e, attrname);
 }
 
-int connect_acap(const char *server)
+int connect_acap(const char *server, const char *user)
 {
-    const char *user, *authprog;
+    const char *authprog;
     char acapurl[1024];
     int r;
     sasl_callback_t *cb;
 
-    user = config_getstring("acap_username", NULL);
+    if (!user) {
+	user = config_getstring("acap_username", NULL);
+    }
     if (user == NULL) {
 	syslog(LOG_ERR, "unable to find option acap_username");
 	fatal("couldn't connect to acap server", EC_UNAVAILABLE);
@@ -438,8 +440,9 @@ int main(int argc, char *argv[], char *envp[])
     int r;
     int fd;
     int forkmode = 0;
+    char *user = NULL;
 
-    while ((opt = getopt(argc, argv, "d")) != EOF) {
+    while ((opt = getopt(argc, argv, "dfu:")) != EOF) {
 	switch (opt) {
 	case 'd': /* debugging mode */
 	    debugmode++;
@@ -447,6 +450,15 @@ int main(int argc, char *argv[], char *envp[])
 	case 'f': /* fork mode */
 	    forkmode++;
 	    break;
+	case 'u':
+	{
+	    char *at;
+	    
+	    user = optarg;
+	    at = strchr(user, '@');
+	    if (at) *at = '\0';
+	    break;
+	}
 	default:
 	    fprintf(stderr, "invalid argument\n");
 	    exit(EC_USAGE);
@@ -473,20 +485,19 @@ int main(int argc, char *argv[], char *envp[])
 
     lockfd = fd;
 
-    r = connect_acap(server);
+    r = connect_acap(server, user);
     if (!r) {
 	r = synchronize_map();
     }
 
-    if (r && debugmode) {
-	fatal("can't download list of mailboxes\n", EC_UNAVAILABLE);
-    }
-    while (r) {
-	acap_conn_close(acap_conn);
-	sleep(config_getint("acap_retry_timeout", 60));
-
-	r = connect_acap(server);
-	if (!r) r = synchronize_map();
+    if (r) {
+	if (debugmode) {
+	    fatal("can't download list of mailboxes\n", EC_UNAVAILABLE);
+	} else {
+	    acap_conn_close(acap_conn);
+	    sleep(config_getint("acap_retry_timeout", 60));
+	    execv(argv[0], argv);
+	}
     }
 
     /* release lock */
@@ -516,14 +527,9 @@ int main(int argc, char *argv[], char *envp[])
 	/* if this returns, we have a problem.  we should probably try
 	   to reestablish the connection with the ACAP server and
 	   resynchronize */
-	r = ACAP_NO_CONNECTION;
-	while (r) {
-	    acap_conn_close(acap_conn);
-	    sleep(config_getint("acap_retry_timeout", 60));
-
-	    r = connect_acap(server);
-	    if (!r) r = synchronize_map();
-	}
+	acap_conn_close(acap_conn);
+	sleep(config_getint("acap_retry_timeout", 60));
+	execv(argv[0], argv);
     }
 
     return 1;
