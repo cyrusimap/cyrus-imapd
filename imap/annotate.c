@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8 2002/06/03 15:22:20 ken3 Exp $
+ * $Id: annotate.c,v 1.9 2002/07/12 21:32:48 rjs3 Exp $
  */
 
 #include <config.h>
@@ -64,6 +64,7 @@
 
 extern int errno;
 
+#include "acl.h"
 #include "assert.h"
 #include "imapd.h"
 #include "imapconf.h"
@@ -166,6 +167,7 @@ struct fetchdata {
     char *userid;
     unsigned entries;
     unsigned attribs;
+    struct auth_state *auth_state;
     struct entryattlist **entryatts;
 };
 
@@ -188,7 +190,7 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
     static int sawuser = 0;
     int c, r;
     char mboxname[MAX_MAILBOX_PATH+1];
-    char *path, *server, *partition;
+    char *path, *server, *partition, *acl;
     char entry[MAX_MAILBOX_PATH+25];
     char size[100];
     struct attvaluelist *attvalues = NULL;
@@ -223,9 +225,19 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
     else
 	strcpy(mboxname, name);
 
+    /* Suppress any output of a partial match */
+    if (name[matchlen] && strncmp(mboxname, name, matchlen) == 0) {
+	return 0;
+    }
+
     /* lookup the partition info */
-    r = mboxlist_detail(mboxname, NULL, &path, &server, NULL, NULL);
+    r = mboxlist_detail(mboxname, NULL, &path, &server, &acl, NULL);
     if (r) return r;
+
+    /* Check ACL - silently skip if we can't lookup this mailbox */
+    if(!acl ||
+       !(cyrus_acl_myrights(fdata->auth_state, acl) & ACL_LOOKUP))
+	return 0;
 
     partition = strchr(server, '!');
     if (partition) {
@@ -333,6 +345,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		mboxname_hiersep_tointernal(namespace, mailbox);
 		fdata.namespace = namespace;
 		fdata.userid = userid;
+		fdata.auth_state = auth_state;
 		fdata.entryatts = l;
 		(*namespace->mboxlist_findall)(namespace, mailbox,
 					       isadmin, userid,
