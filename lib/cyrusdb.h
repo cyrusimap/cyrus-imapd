@@ -146,7 +146,8 @@ struct cyrusdb_backend {
 		 struct txn **tid);
     int (*delete)(struct db *db, 
 		  const char *key, int keylen,
-		  struct txn **tid);
+		  struct txn **tid,
+		  int force); /* 1 = ignore not found errors */
     
     int (*commit)(struct db *db, struct txn *tid);
     int (*abort)(struct db *db, struct txn *tid);

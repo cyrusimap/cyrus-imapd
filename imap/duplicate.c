@@ -224,7 +224,7 @@ static int prune_cb(void *rock, const char *id, int idlen,
     prock->deletions++;
 
     do {
-	r = DB->delete(prock->db, id, idlen, NULL);
+	r = DB->delete(prock->db, id, idlen, NULL, 0);
     } while (r == CYRUSDB_AGAIN);
 
 

@@ -537,7 +537,7 @@ static int store(struct db *db,
 
 static int delete(struct db *db, 
 		  const char *key, int keylen,
-		  struct txn **mytid)
+		  struct txn **mytid, int force)
 {
     return mystore(db, key, keylen, NULL, 0, mytid, 1);
 }
