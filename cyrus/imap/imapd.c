@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.304.2.5 2001/06/03 23:58:14 ken3 Exp $ */
+/* $Id: imapd.c,v 1.304.2.6 2001/06/12 20:41:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -5538,13 +5538,16 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate)
     mstringdatacalls++;
     
     if (lastnamedelayed) {
-	if (name && strncmp(lastname, name, strlen(lastname)) == 0 &&
+	if (name && strcasecmp(lastname, "INBOX") != 0 &&
+	    strncmp(lastname, name, strlen(lastname)) == 0 &&
 	    name[strlen(lastname)] == '.') {
 	    lastnamehassub = 1;
 	}
 	prot_printf(imapd_out, "* %s (%s) \".\" ", cmd,
 	       lastnamehassub ? "" : "\\Noinferiors");
-	printastring(lastname);
+	(*imapd_namespace.mboxname_toexternal)(lastname, &imapd_namespace,
+					       imapd_userid, mboxname);
+	printstring(mboxname);
 	prot_printf(imapd_out, "\r\n");
 	lastnamedelayed = 0;
     }

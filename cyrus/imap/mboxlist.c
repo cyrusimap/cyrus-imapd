@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.147.2.2 2001/06/08 00:31:50 ken3 Exp $
+ * $Id: mboxlist.c,v 1.147.2.3 2001/06/12 20:41:59 ken3 Exp $
  */
 
 #include <config.h>
@@ -1583,7 +1583,7 @@ int mboxlist_findall_alt(char *pattern, struct namespace *namespace,
 	    r = DB->fetch(mbdb, usermboxname, usermboxnamelen,
 			  &data, &datalen, NULL);
 	    if (!r && data) {
-		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
+		r = (*proc)(cbrock.inboxcase, 5, 0, rock);
 	    }
 	}
 	strcpy(usermboxname+usermboxnamelen, ".");
@@ -2194,7 +2194,7 @@ int mboxlist_findsub_alt(char *pattern, struct namespace *namespace,
 	    r = SUBDB->fetch(subs, usermboxname, usermboxnamelen,
 			     &data, &datalen, NULL);
 	    if (!r && data) {
-		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
+		r = (*proc)(cbrock.inboxcase, 5, 0, rock);
 	    }
 	}
 	strcpy(usermboxname+usermboxnamelen, ".");
