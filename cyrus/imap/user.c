@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.10.4.5 2002/08/21 19:52:42 ken3 Exp $
+ * $Id: user.c,v 1.10.4.6 2002/08/23 02:42:49 ken3 Exp $
  */
 
 #include <config.h>
@@ -303,7 +303,10 @@ static int user_renamesieve(char *olduser, char *newuser)
 		 config_getstring(IMAPOPT_SIEVEDIR), hash, newuser);
     }
 
-    /* rename sieve directory */
+    /* rename sieve directory
+     *
+     * XXX this doesn't rename sieve scripts
+     */
     r = rename(oldpath, newpath);
     if (r < 0) {
 	if (errno == ENOENT) {
