@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers, 16-May-1996 -->
+<!-- Changed by: John Gardiner Myers,  6-Jun-1996 -->
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
@@ -16,6 +16,11 @@ from version 1.4 or earlier.
 
 <LI> Permit SPACE in mailbox names.
 
+<LI> Permit the "modified UTF-7" internationalized mailbox name convention.
+
+<LI> "User opened mailbox" messages are now logged at the DEBUG level
+instead of the INFO level.
+
 <LI> AUTHENTICATE command now reports the protection mechanism in use
 in the text of the tagged OK response
 
@@ -27,6 +32,9 @@ in the text of the tagged OK response
 RFC 822 addresses without the "@domain" part.
 
 <LI> Make "reconstruct -r" with no args reconstruct every mailbox.
+
+<LI> The configrue script now defaults to using unix_pwcheck instead
+of unix if the file /etc/shadow exists.
 
 <LI> Bug fix: un-fold header lines when parsing for the ENVELOPE.
 
@@ -48,6 +56,17 @@ POP3 logins.
 <LI> Bug fix: Have to initialize reply to 0 in pop3d.  Was causing
 POP3 server to occasionally drop the connection during authentication.
 
+<LI> Bug fix: The COPY command wasn't issuing a [TRYCREATE] when
+appropriate for sub-mailboxes of INBOX.
+
+<LI> Re-implement large sections of the netnews support.  It no longer
+requires modifications to INN, as it now expunges the index entries
+for expired/canceled articles upon select of the newsgroup.
+
+<LI> Implement newsspool configuration option, for separating the
+directories for the news spool and the various cyrus.* IMAP server
+index files.
+
 <LI> Bug fix: permit empty flag list in APPEND command
 
 <LI> Bug fix: deal with truncated Date: header values.
@@ -60,6 +79,8 @@ mmap() appears to crap out on that boundary condition.
 <LI> Bug fix: used append instead of lappend in cyradmin, preventing
 use of any port other than IMAP.
 
+<LI> Add a bunch of prototype declararations to the code.
+
 <LI> In deliver, change the MULT support to instead use the MRSMTP syntax.
 
 <LI> Implement some experimental protocol extensions for optimizing
@@ -71,13 +92,20 @@ they wish to experiment with these.
 
 <LI> In deliver, use HAVE_LIBDB to select use of db over dbm
 
-<LI> Add map_stupidshared mapping module for Digital Unix.  It's not
-quite as bad as HPUX, but...
+<LI> Add map_stupidshared mapping module for older versions of Digital
+Unix.  It's not quite as bad as HPUX, but...
 
-<LI> Bug fix: in imclient.c, don't free NULL pointers
+<LI> Bug fix: in imclient.c, don't free NULL pointers and don't call
+htons() on the output of getservbyname()
+
+<LI> The auth_xxx routines now create/take a state argument instead of
+maintaining internal static state.
 
 <LI> Solaris mktime() is buggy in some releases.  Create and use
 mkgmtime() for parsing date strings.
+
+<LI> Message parsing routines now use memory mapping, though they
+still copy data around in line-sized buffers.
 
 </ul>
 
