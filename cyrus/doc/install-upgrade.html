@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28.4.12 2003/05/09 13:56:20 rjs3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28.4.13 2003/06/20 16:46:59 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -15,7 +15,15 @@
 the fly, so you need to do nothing to upgrade.  However, to downgrade them
 you will need to remove the cyrus.index files, and reconstruct the mailboxes,
 otherwise the index files will be invalid.</li>
+
+<li><tt>ctl_deliver -E</tt> has been deprecated in favor of
+<tt>cyr_expire -E</tt>.  This new tool does both duplicate delivery
+database pruning as well as message expunging. You should replace the
+appropriate <tt>EVENTS</tt> entry in <tt>cyrus.conf</tt> with one of
+those in the sample configurations in the <tt>master/conf</tt>
+directory.
 </ul>
+
 
 <h2>Upgrading from 2.1.x or earlier</h2>
 
@@ -187,7 +195,7 @@ and Sieve) have been merged into a single <tt>deliver.db</tt> database.
 You can safely remove the entire <tt>/var/imap/deliverdb</tt>
 directory structure after shutting down the server.
 
-<li>All of the Cyrus databases have been unified under a single DB3 
+<li>All of the Cyrus databases have been unified under a single BDB 
 environment.  A new <tt>ctl_cyrusdb</tt> tool is now used for database 
 recovery and checkpointing instead of <tt>ctl_mboxlist</tt> and 
 <tt>ctl_deliver</tt>.  You should replace the appropriate <tt>START</tt> and 
@@ -360,7 +368,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2003/05/09 13:56:20 $
+last modified: $Date: 2003/06/20 16:46:59 $
 </BODY></HTML>
 
 
