@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.65 2002/02/13 20:56:28 rjs3 Exp $
+ * $Id: imclient.c,v 1.66 2002/02/20 22:26:48 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1331,7 +1331,7 @@ static int imclient_authenticate_sub(struct imclient *imclient,
     outlen = 0;
   }
 
-  imclient->saslcompleted = 1;
+  if(result.replytype == replytype_ok) imclient->saslcompleted = 1;
 
   return (result.replytype != replytype_ok);
 }
