@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.20 2003/01/31 17:35:04 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.21 2003/01/31 17:37:22 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -946,9 +946,8 @@ static void *thread_main(void *rock __attribute__((unused)))
 	if(new_fd != NO_NEW_CONNECTION) {
 	    /* new_fd indicates a new connection */
 	    currConn = conn_new(new_fd);
-	    if(!currConn) goto nextlistener;
-	    
-	    send_a_banner = 1;
+	    if(currConn)
+		send_a_banner = 1;
 	} else if(protout) {
 	    /* Handle existing connection, we'll need to pull it off
 	     * the idle_connlist */
