@@ -136,7 +136,7 @@ va_dcl
     }
 
     (void) retry_writev(fd, iov, num_iov);
-    fclose(fd);
+    close(fd);
     
     return 0;
 }
