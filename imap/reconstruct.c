@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.61 2001/08/16 20:52:08 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.62 2001/09/18 13:21:03 ken3 Exp $ */
 
 #include <config.h>
 
@@ -619,6 +619,102 @@ int reconstruct(char *name, struct discovered *found)
     return r;
 }
 
+/* List of directories to scan for mailboxes */
+struct todo {
+    char *name;
+    char *path;
+    char *partition;
+    struct todo *next;
+} *todo_head = 0, **todo_tail = &todo_head;
+
+void
+todo_append(name, path, partition)
+char *name;
+char *path;
+char *partition;
+{
+    struct todo *newentry;
+
+    newentry = (struct todo *)xmalloc(sizeof(struct todo));
+    newentry->name = name;
+    newentry->path = path;
+    newentry->partition = partition;
+    newentry->next = 0;
+    *todo_tail = newentry;
+    todo_tail = &newentry->next;
+}
+
+void
+todo_append_hashed(char *name, char *path, char *partition)
+{
+    DIR *dirp;
+    struct dirent *dirent;
+
+    dirp = opendir(path);
+    if (!dirp) {
+	fprintf(stderr, "reconstruct: couldn't open partition %s: %s\n", 
+		partition, strerror(errno));
+    } else while ((dirent = readdir(dirp))!=NULL) {
+	struct todo *newentry;
+
+	if (strchr(dirent->d_name, '.')) {
+	    continue;
+	}
+
+	newentry = (struct todo *)xmalloc(sizeof(struct todo));
+	newentry->name = xstrdup(name);
+	newentry->path = xmalloc(strlen(path) +
+				 strlen(dirent->d_name) + 2);
+	sprintf(newentry->path, "%s/%s", path, dirent->d_name);
+	newentry->partition = partition;
+	newentry->next = 0;
+	*todo_tail = newentry;
+	todo_tail = &newentry->next;
+    }
+}
+
+char *cleanacl(acl, mboxname)
+char *acl;
+char *mboxname;
+{
+    char owner[MAX_MAILBOX_NAME+1];
+    cyrus_acl_canonproc_t *aclcanonproc = 0;
+    char *p;
+    char *newacl;
+    char *identifier;
+    char *rights;
+
+    /* Rebuild ACL */
+    if (!strncmp(mboxname, "user.", 5)) {
+	strcpy(owner, mboxname+5);
+	p = strchr(owner, '.');
+	if (p) *p = '\0';
+	aclcanonproc = mboxlist_ensureOwnerRights;
+    }
+    newacl = xstrdup("");
+    if (aclcanonproc) {
+	cyrus_acl_set(&newacl, owner, ACL_MODE_SET, ACL_ALL,
+		      (cyrus_acl_canonproc_t *)0, (void *)0);
+    }
+    for (;;) {
+	identifier = acl;
+	rights = strchr(acl, '\t');
+	if (!rights) break;
+	*rights++ = '\0';
+	acl = strchr(rights, '\t');
+	if (!acl) break;
+	*acl++ = '\0';
+
+	cyrus_acl_set(&newacl, identifier, ACL_MODE_SET,
+		      cyrus_acl_strtomask(rights), aclcanonproc, (void *)owner);
+    }
+
+    return newacl;
+}
+
+/*
+ * Reconstruct the mailboxes list.
+ */
 void do_mboxlist(void)
 {
     fprintf(stderr, "reconstructing mailboxes.db currently not supported\n");
