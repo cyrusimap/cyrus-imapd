@@ -32,9 +32,14 @@ extern int errno;
 #include "tcl.h"
 #include "xmalloc.h"
 
+#ifdef HAVE_ACTE_KRB
 extern struct acte_client krb_acte_client;
+#endif
+
 struct acte_client *login_acte_client[] = {
+#ifdef HAVE_ACTE_KRB
     &krb_acte_client,
+#endif
     NULL
 };
 
