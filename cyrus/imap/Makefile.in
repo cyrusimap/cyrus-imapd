@@ -39,7 +39,7 @@ INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
 LEX = @LEX@
-YACC = yacc
+YACC = @YACC@
 
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
