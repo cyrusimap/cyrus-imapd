@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.118 2002/04/24 16:35:41 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.119 2002/04/28 18:12:50 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -358,6 +358,10 @@ static int pipe_until_tag(struct backend *s, char *tag, int force_notfatal)
 		    int j = (litlen > sizeof(buf) ? sizeof(buf) : litlen);
 		    
 		    j = prot_read(s->in, buf, j);
+		    if(!j) {
+			/* EOF or other error */
+			return -1;
+		    }
 		    if (!last) prot_write(proxyd_out, buf, j);
 		    litlen -= j;
 		}
@@ -467,6 +471,10 @@ static int pipe_to_end_of_response(struct backend *s, int force_notfatal)
 		    int j = (litlen > sizeof(buf) ? sizeof(buf) : litlen);
 		    
 		    j = prot_read(s->in, buf, j);
+		    if(!j) {
+			/* EOF or other error */
+			return -1;
+		    }
 		    prot_write(proxyd_out, buf, j);
 		    litlen -= j;
 		}
