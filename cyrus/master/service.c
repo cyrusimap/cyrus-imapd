@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.5 2000/05/23 20:56:31 robeson Exp $ */
+/* $Id: service.c,v 1.6 2000/05/24 05:08:42 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -88,8 +88,6 @@ static void libwrap_init(struct request_info *r, char *service)
 
 static int libwrap_ask(struct request_info *r, int fd)
 {
-    int a;
-
     /* i hope using the sock_* functions are legal; it certainly makes
        this code very easy! */
     request_set(r, RQ_FILE, fd, 0);
