@@ -1,25 +1,29 @@
-$Id: COPYRIGHT,v 1.4 2000/05/25 22:33:35 wcw Exp $
+$Id: COPYRIGHT,v 1.5 2000/05/26 13:52:07 wcw Exp $
 
-If you find this software useful and valuable in your work, we
-would welcome any support you can offer toward continuing
-this work.  
+The Cyrus IMAP distribution is covered by the following copyright 
+until July 1, 2000: 
 
-We gratefully accept contributions, whether
-intellectual or monetary.  Intellectual contributions in the
-form code or constructive collaboration can be directed to
-cyrus-bugs+@andrew.cmu.edu (even if it is not a bug).  
+        Copyright 1994-2000 by Carnegie Mellon University
 
-If you wish to provide financial support to the Cyrus Project, 
-send a check payable to "Carnegie Mellon University" to
+                      All Rights Reserved
 
-	Project Cyrus
-	Computing Services
-	Carnegie Mellon University
-	5000 Forbes Ave
-	Pittsburgh, PA 15213
-	USA
+ Permission to use, copy, modify, and distribute this software and its
+ documentation for any purpose and without fee is hereby granted,
+ provided that the above copyright notice appear in all copies and that
+ both that copyright notice and this permission notice appear in
+ supporting documentation, and that the name of CMU not be
+ used in advertising or publicity pertaining to distribution of the
+ software without specific, written prior permission.
 
-The Cyrus IMAP server is distributed under the following copyright:
+ CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+ ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+ CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+ ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+ WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+ SOFTWARE.
+
+After July 1, 2000, the following copyright applies to the code: 
 
  * Copyright (c) 1994-2000 Carnegie Mellon University.  All rights reserved.
  *
