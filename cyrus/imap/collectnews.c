@@ -172,7 +172,7 @@ unsigned long feeduid;
      * Avoid O(n**2) behavior when we're indexing articles
      * that have already expired.
      */
-    if (mailbox.last_uid < ng->last_uid) mailbox.last_uid = ng.last_uid;
+    if (mailbox.last_uid < ng->last_uid) mailbox.last_uid = ng->last_uid;
 
     r = append_collectnews(&mailbox, feeduid);
 
