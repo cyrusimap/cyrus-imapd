@@ -644,7 +644,8 @@ char *mboxname;
     }
     newacl = xstrdup("");
     if (aclcanonproc) {
-	acl_set(&newacl, owner, ACL_ALL, (acl_canonproc_t *)0, (void *)0);
+	acl_set(&newacl, owner, ACL_MODE_SET, ACL_ALL,
+		(acl_canonproc_t *)0, (void *)0);
     }
     for (;;) {
 	identifier = acl;
@@ -655,7 +656,7 @@ char *mboxname;
 	if (!acl) break;
 	*acl++ = '\0';
 
-	acl_set(&newacl, identifier, acl_strtomask(rights),
+	acl_set(&newacl, identifier, ACL_MODE_SET, acl_strtomask(rights),
 		aclcanonproc, (void *)owner);
     }
 

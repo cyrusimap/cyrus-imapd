@@ -91,9 +91,10 @@ char *acl;
  * 'identifier' the set specified in the mask 'access'.  The pointer
  * pointed to by 'acl' must have been obtained from malloc().
  */
-int acl_set(acl, identifier, access, canonproc, canonrock)
+int acl_set(acl, identifier, mode, access, canonproc, canonrock)
 char **acl;
 const char *identifier;
+int mode;
 int access;
 acl_canonproc_t *canonproc;
 void *canonrock;
@@ -101,6 +102,7 @@ void *canonrock;
     char *newidentifier = 0;
     char *newacl;
     char *thisid, *nextid;
+    int oldaccess = 0;
     char *rights;
 
     /* Convert 'identifier' into canonical form */
@@ -147,10 +149,27 @@ void *canonrock;
 	}
 	*nextid++ = '\0';
 
-	if (strcmp(identifier, thisid) == 0) break;
+	if (strcmp(identifier, thisid) == 0) {
+	    oldaccess = acl_strtomask(rights);
+	    break;
+	}
 	rights[-1] = '\t';
 	nextid[-1] = '\t';
     }
+
+    switch (mode) {
+    case ACL_MODE_SET:
+	break;
+
+    case ACL_MODE_ADD:
+	access |= oldaccess;
+	break;
+
+    case ACL_MODE_REMOVE:
+	access = oldaccess & ~access;
+	break;
+    }
+
     if (access == 0L) {
 	/* Remove any existing entry for 'identifier' */
 	strcpy(thisid, nextid);
@@ -177,11 +196,11 @@ void *canonrock;
  * Remove any entry for 'identifier' in the ACL pointed to by 'acl'.
  * The pointer pointed to by 'acl' must have been obtained from malloc().
  */
-acl_delete(acl, identifier, canonproc, canonrock)
+acl_remove(acl, identifier, canonproc, canonrock)
 char **acl;
 const char *identifier;
 acl_canonproc_t canonproc;
 void *canonrock;
 {
-    return acl_set(acl, identifier, 0, canonproc, canonrock);
+    return acl_set(acl, identifier, ACL_MODE_SET, 0, canonproc, canonrock);
 }

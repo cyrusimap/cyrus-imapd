@@ -273,7 +273,8 @@ char **newpartition;
 	     * Users by default have all access to their personal mailbox(es),
 	     * Nobody else starts with any access to same.
 	     */
-	    acl_set(&acl, name+5, ACL_ALL, (acl_canonproc_t *)0, (void *)0);
+	    acl_set(&acl, name+5, ACL_MODE_SET, ACL_ALL,
+		    (acl_canonproc_t *)0, (void *)0);
 	}
 	else {
 	    defaultacl = identifier = 
@@ -289,7 +290,7 @@ char **newpartition;
 		p = rights;
 		while (*p && !isspace(*p)) p++;
 		if (*p) *p++ = '\0';
-		acl_set(&acl, identifier, acl_strtomask(rights),
+		acl_set(&acl, identifier, ACL_MODE_SET, acl_strtomask(rights),
 			(acl_canonproc_t *)0, (void *)0);
 		identifier = p;
 	    }
@@ -823,7 +824,8 @@ struct auth_state *auth_state;
 {
     int useridlen = strlen(userid);
     int r;
-    long access;
+    int access;
+    int mode = ACL_MODE_SET;
     int isusermbox = 0;
     struct mailbox mailbox;
     unsigned long offset, len;
@@ -884,7 +886,16 @@ struct auth_state *auth_state;
     /* Make change to ACL */
     newacl = xstrdup(acl);
     if (rights) {
-	if (acl_set(&newacl, identifier, acl_strtomask(rights),
+	if (*rights == '+') {
+	    rights++;
+	    mode = ACL_MODE_ADD;
+	}
+	else if (*rights == '-') {
+	    rights++;
+	    mode = ACL_MODE_REMOVE;
+	}
+	
+	if (acl_set(&newacl, identifier, mode, acl_strtomask(rights),
 		    isusermbox ? mboxlist_ensureOwnerRights : 0,
 		    (void *)userid)) {
 	    mailbox_close(&mailbox);
@@ -894,7 +905,7 @@ struct auth_state *auth_state;
 	}
     }
     else {
-	if (acl_delete(&newacl, identifier,
+	if (acl_remove(&newacl, identifier,
 		       isusermbox ? mboxlist_ensureOwnerRights : 0,
 		       (void *)userid)) {
 	    mailbox_close(&mailbox);
