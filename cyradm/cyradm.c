@@ -401,10 +401,8 @@ struct imclient *imclient;
 void *rock;
 struct imclient_reply *reply;
 {
-    struct admconn *conn = (struct admconn *)rock;
     char *s;
     char **mechs = (char **) rock;
-    conn->cmd_done++;
     
     s = reply->text;
  
