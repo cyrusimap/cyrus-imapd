@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.35 2003/06/12 22:26:22 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.36 2003/06/13 00:59:50 ken3 Exp $
  */
 
 #include <config.h>
@@ -303,14 +303,6 @@ typedef enum {
     BACKEND_ONLY = 2,
     PROXY_AND_BACKEND = 3
 } annotation_proxy_t;
-
-struct annotation_data 
-{
-    const char *value;
-    size_t size;
-    time_t modifiedsince;
-    const char *contenttype;
-};
 
 struct mailbox_annotation_rock
 {
@@ -1168,8 +1160,8 @@ int annotatemore_fetch(char *mailbox,
 
 /**************************  Annotation Storing  *****************************/
 
-static int read_entry(const char *mboxname, const char *entry, char *userid,
-		      struct annotation_data *attrib)
+int annotatemore_lookup(const char *mboxname, const char *entry,
+			const char *userid, struct annotation_data *attrib)
 {
     char key[MAX_MAILBOX_PATH+1];
     int keylen, datalen, r;
@@ -1405,7 +1397,8 @@ static int annotation_set_todb(const char *int_mboxname,
 	    if (!entry->shared.value) {
 		struct annotation_data shared;
 
-		r = read_entry(int_mboxname, entry->entry->name, "", &shared);
+		r = annotatemore_lookup(int_mboxname, entry->entry->name,
+					"", &shared);
 		if (r) return r;
 
 		entry->shared.value = shared.value;
@@ -1429,8 +1422,8 @@ static int annotation_set_todb(const char *int_mboxname,
 	    if (!entry->priv.value) {
 		struct annotation_data priv;
 
-		r = read_entry(int_mboxname, entry->entry->name,
-			       sdata->userid, &priv);
+		r = annotatemore_lookup(int_mboxname, entry->entry->name,
+					sdata->userid, &priv);
 		if (r) return r;
 
 		entry->priv.value = priv.value;
