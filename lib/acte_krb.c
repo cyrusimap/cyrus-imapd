@@ -298,7 +298,7 @@ char **output;			/* Set to point to client reply data */
 			 kstate->schedule, kstate->session, 1);
 	*output = authent.dat;
 	*outputlen = authent.length;
-	kstate->maxbufsize = maxbufsize;
+	if (maxbufsize < kstate->maxbufsize) kstate->maxbufsize = maxbufsize;
 	return ACTE_DONE;
 
     default:
@@ -391,6 +391,7 @@ char **reply;			/* On failure, filled in with ptr to reason */
     char instance[INST_SZ];
     char realm[REALM_SZ];
     int protallowed;
+    int maxbufsize;
     char clientname[MAX_K_NAME_SZ+1];
 
     switch (kstate->authstepno++) {
@@ -446,7 +447,8 @@ char **reply;			/* On failure, filled in with ptr to reason */
 	    *reply = "Incorrect checksum in Kerberos authenticator";
 	    return ACTE_FAIL;
 	}
-	kstate->maxbufsize = ntohl(*(int *)(input+4)) & 0xfffff;
+	maxbufsize = ntohl(*(int *)(input+4)) & 0xfffff;
+	if (maxbufsize < kstate->maxbufsize) kstate->maxbufsize = maxbufsize;
 	protallowed = input[4];
 	if (!(protallowed & kstate->protallowed)) {
 	    kstate->authstepno = -1;
