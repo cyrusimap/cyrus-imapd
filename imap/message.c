@@ -380,6 +380,14 @@ struct boundary *boundaries;
 	    next = headers + len;
 	}
     }
+
+    /* If reading netnews format, convert terminating LF to CRLF */
+    if (format == MAILBOX_FORMAT_NETNEWS) {
+	next = headers + strlen(headers);
+	next[-1] = '\r';
+	*next++ = '\n';
+	*next = '\0';
+    }
     
     body->content_offset = ftell(infile);
     body->header_size = strlen(headers+1);
