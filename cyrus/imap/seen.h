@@ -1,5 +1,5 @@
 /* seen.h -- abstract interface for /Recent and /Seen information
-   $Id: seen.h,v 1.9 2002/03/29 00:03:57 rjs3 Exp $
+   $Id: seen.h,v 1.10 2002/05/13 20:32:04 rjs3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -94,5 +94,8 @@ int seen_done(void);
 /* Return a path to the seen database for the given user (or NULL if we are
  * using bigdb) */
 char *seen_getpath(const char *userid);
+
+/* Merge tmpfile into tgtfile */
+int seen_merge(const char *tmpfile, const char *tgtfile);
 
 #endif /* SEEN_LOCAL_H */

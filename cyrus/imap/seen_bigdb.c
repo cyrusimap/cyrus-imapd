@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_bigdb.c,v 1.2 2002/03/29 00:03:57 rjs3 Exp $
+   $Id: seen_bigdb.c,v 1.3 2002/05/13 20:32:04 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -395,3 +395,8 @@ int seen_done(void)
     return 0;
 }
 
+int seen_merge(const char *tmpfile, const char *tgtfile) 
+{
+    /* Not supported */
+    return -1;
+}

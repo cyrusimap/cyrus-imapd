@@ -26,6 +26,9 @@
 # 
 error_table imap
 
+ec IMAP_INTERNAL,
+   "Internal Error"
+
 ec IMAP_IOERROR,
    "System I/O error"
 
