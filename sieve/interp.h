@@ -1,6 +1,6 @@
 /* interp.h -- interpretor definition
  * Larry Greenfield
- * $Id: interp.h,v 1.1 1999/07/02 18:55:35 leg Exp $
+ * $Id: interp.h,v 1.2 1999/10/04 18:23:06 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -38,6 +38,8 @@ struct sieve_interp {
     sieve_get_size *getsize;
     sieve_get_header *getheader;
     sieve_get_envelope *getenvelope;
+
+    sieve_parse_error *err;
 
     /* context to pass along */
     void *interp_context;

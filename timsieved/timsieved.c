@@ -105,7 +105,7 @@ int code;
 	exit(recurse_code);
     }
     recurse_code = code;
-    prot_printf(sieved_out, "* BYE Fatal error: %s\r\n", s);
+    prot_printf(sieved_out, "NO Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
 }
 
@@ -233,11 +233,9 @@ static mysasl_authproc(void *context,
 
 	if (sieved_userisadmin)
 	{	    
-	    
 	    /* proxy ok! */
 
 	    sieved_userisadmin = 0;	/* no longer admin */
-	    
 	} else {
 	    *errstr = "user is not allowed to proxy";
 	    

@@ -1,6 +1,6 @@
 /* lex.c -- lexers for command line script installer
  * Tim Martin
- * $Id: lex.c,v 1.4 1999/09/30 21:36:30 leg Exp $
+ * $Id: lex.c,v 1.5 1999/10/04 18:23:05 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -84,8 +84,12 @@ int yylex(lexstate_t * lvalp, void * client)
        in the buffer */
 
     ch=prot_getc(stream);
+    printf("%c\n", ch);
 
-    if (ch==-1) return SIEVE_FAIL;
+    if (ch==-1) {
+	printf("eof\n");
+	return SIEVE_FAIL;
+    }
 
     switch (lexer_state)
     {
@@ -146,12 +150,7 @@ int yylex(lexstate_t * lvalp, void * client)
 	count = newcount;
 	break;
       }
-      if (ch == '+') {
-	synchronizing = FALSE;
-	ch=prot_getc(stream);
-	if (ch < 0)
-	  ERR();
-      }
+      synchronizing = FALSE;
 
       if (ch != '}')
 	ERR_PUSHBACK();

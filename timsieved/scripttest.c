@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.4 1999/09/30 21:41:53 leg Exp $
+ * $Id: scripttest.c,v 1.5 1999/10/04 18:23:08 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -47,6 +47,19 @@ sieve_vacation_t vacation = {
     &foo			/* send_response() */
 };
 
+int mysieve_error(int lineno, char *msg,
+		  void *i, void *s)
+{
+    char buf[1024];
+    char **errstr = (char **) s;
+
+    snprintf(buf, 80, "line %d: %s\r\n", lineno, msg);
+    xrealloc(*errstr, strlen(*errstr) + strlen(buf));
+    syslog(LOG_ERR, buf);
+    strcat(*errstr, buf);
+
+    return SIEVE_OK;
+}
 
 /* returns TRUE or FALSE */
 int is_script_parsable(FILE *stream, char **errstr)
@@ -58,81 +71,77 @@ int is_script_parsable(FILE *stream, char **errstr)
   
   res = sieve_interp_alloc(&i, NULL);
   if (res != SIEVE_OK) {
-    printf("sieve_interp_alloc() returns %d\n", res);
+    syslog(LOG_ERR, "sieve_interp_alloc() returns %d\n", res);
     return TIMSIEVE_FAIL;
   }
 
   res = sieve_register_redirect(i, (sieve_callback *) &foo);
   if (res != SIEVE_OK) {
-    printf("sieve_register_redirect() returns %d\n", res);
+    syslog(LOG_ERR, "sieve_register_redirect() returns %d\n", res);
     return TIMSIEVE_FAIL;
   }
   res = sieve_register_discard(i, (sieve_callback *) &foo);
   if (res != SIEVE_OK) {
-    printf("sieve_register_discard() returns %d\n", res);
+    syslog(LOG_ERR, "sieve_register_discard() returns %d\n", res);
     return TIMSIEVE_FAIL;
   }
   res = sieve_register_reject(i, (sieve_callback *) &foo);
   if (res != SIEVE_OK) {
-    printf("sieve_register_reject() returns %d\n", res);
+    syslog(LOG_ERR, "sieve_register_reject() returns %d\n", res);
     return TIMSIEVE_FAIL;
   }
   res = sieve_register_fileinto(i, (sieve_callback *) &foo);
   if (res != SIEVE_OK) {
-    printf("sieve_register_fileinto() returns %d\n", res);
+    syslog(LOG_ERR, "sieve_register_fileinto() returns %d\n", res);
     return TIMSIEVE_FAIL;
   }
   res = sieve_register_keep(i, (sieve_callback *) &foo);
   if (res != SIEVE_OK) {
-    printf("sieve_register_keep() returns %d\n", res);
+    syslog(LOG_ERR, "sieve_register_keep() returns %d\n", res);
     return TIMSIEVE_FAIL;
   }
   
   res = sieve_register_size(i, (sieve_get_size *) &foo);
   if (res != SIEVE_OK) {
-    printf("sieve_register_size() returns %d\n", res);
+    syslog(LOG_ERR, "sieve_register_size() returns %d\n", res);
     return TIMSIEVE_FAIL;
   }
   
   res = sieve_register_header(i, (sieve_get_header *) &foo);
   if (res != SIEVE_OK) {
-    printf("sieve_register_header() returns %d\n", res);
+    syslog(LOG_ERR, "sieve_register_header() returns %d\n", res);
     return TIMSIEVE_FAIL;
   }
   
   res = sieve_register_envelope(i, (sieve_get_envelope *) &foo);
   if (res != SIEVE_OK) {
-    printf("sieve_register_envelope() returns %d\n", res);
+    syslog(LOG_ERR, "sieve_register_envelope() returns %d\n", res);
     return TIMSIEVE_FAIL;
   }
   
   res = sieve_register_vacation(i, &vacation);
   if (res != SIEVE_OK) {
-    printf("sieve_register_vacation() returns %d\n", res);
+    syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+    return TIMSIEVE_FAIL;
+  }
+
+  res = sieve_register_parse_error(i, &mysieve_error);
+  if (res != SIEVE_OK) {
+    syslog(LOG_ERR, "sieve_register_parse_error() returns %d\n", res);
     return TIMSIEVE_FAIL;
   }
 
   rewind(stream);
-  res = sieve_script_parse(i, stream, NULL, &s);
+
+  *errstr = (char *) xmalloc(20 * sizeof(char));
+  strcpy(*errstr, "script errors:\r\n");
+
+  res = sieve_script_parse(i, stream, errstr, &s);
 
   if (res == SIEVE_OK) {
       sieve_script_free(&s);
-  } else {
-      struct sieve_errorlist *el = sieve_script_errors(s);
-
-      *errstr = (char *) xmalloc(20 * sizeof(char));
-      strcpy(*errstr, "script errors:\r\n");
-      while (el != NULL) {
-	  char buf[1024];
-
-	  snprintf(buf, 1023, "line %d: %s\r\n", el->lineno, el->msg);
-
-	  xrealloc(*errstr, strlen(*errstr) + strlen(buf));
-	  syslog(LOG_ERR, buf);
-	  strcat(*errstr, buf);
-
-	  el = el->next;
-      }
+      free(*errstr);
+      *errstr = NULL;
   }
 
   /* free interpreter */

@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.4 1999/09/30 07:36:59 leg Exp $
+ * $Id: sieve.y,v 1.5 1999/10/04 18:23:07 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -298,8 +298,15 @@ commandlist_t *sieve_parse(sieve_script_t *script, FILE *f)
 int yyerror(char *msg)
 {
     extern int yylineno;
+    int ret;
 
-    script_push_error(parse_script, msg, yylineno);
+    parse_script->err++;
+    if (parse_script->interp.err) {
+	ret = parse_script->interp.err(yylineno, msg, 
+				       parse_script->interp.interp_context,
+				       parse_script->script_context);
+    }
+
     return 0;
 }
 

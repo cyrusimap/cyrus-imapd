@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.9 1999/09/30 21:44:13 leg Exp $
+ * $Id: script.c,v 1.10 1999/10/04 18:23:06 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -94,10 +94,10 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     s->interp = *interp;
     s->script_context = script_context;
     s->support.fileinto = s->support.reject = s->support.envelope = 0;
-    s->err = NULL;
+    s->err = 0;
 
     s->cmds = sieve_parse(s, script);
-    if (s->err != NULL) {
+    if (s->err > 0) {
 	if (s->cmds) {
 	    free_tree(s->cmds);
 	}
@@ -109,25 +109,11 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     return res;
 }
 
-static void sieve_script_free_errs(struct sieve_errorlist *e)
-{
-    struct sieve_errorlist *f = e;
-
-    while (f) {
-	e = f->next;
-	free(e);
-	f = e;
-    }
-}
-
 int sieve_script_free(sieve_script_t **s)
 {
     if (*s) {
 	if ((*s)->cmds) {
 	    free_tree((*s)->cmds);
-	}
-	if ((*s)->err) {
-	    sieve_script_free_errs((*s)->err);
 	}
 	free(*s);
     }
@@ -579,36 +565,3 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 
     return ret;
 }
-
-struct sieve_errorlist *sieve_script_errors(sieve_script_t *s)
-{
-    return s->err;
-
-}
-
-void script_push_error(sieve_script_t *s, char *msg, int lineno)
-{
-    struct sieve_errorlist *e = 
-	(struct sieve_errorlist *) xmalloc(sizeof(struct sieve_errorlist));
-
-    e->lineno = lineno;
-    e->msg = strdup(msg);
-
-    e->next = s->err;
-    s->err = e;
-}
-
-void script_reverse_errors(sieve_script_t *script)
-{
-    struct sieve_errorlist *s = NULL, *t, *q;
-
-    t = script->err;		/* t steps through list */
-    q = t->next;		/* q trails t */
-    for (; q != NULL; t = q) {
-	q = t->next;
-	t->next = s;		/* s trails t */
-	s = t;
-    }
-    script->err = t;
-}
-

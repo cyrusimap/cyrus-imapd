@@ -3,7 +3,7 @@
 /* parse.y -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parse.y,v 1.5 1999/09/30 21:41:22 leg Exp $
+ * $Id: parse.y,v 1.6 1999/10/04 18:23:08 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -192,7 +192,7 @@ authenticate: notauthed AUTHENTICATE ' ' STRING authenticate_optional_string EOL
 		  inbase64, serveroutlen*2+1, &inbase64len);
 
     /* send out the string always as a literal */
-    prot_printf(sieved_out, "{%d+}\r\n",inbase64len);
+    prot_printf(sieved_out, "{%d}\r\n",inbase64len);
     prot_write(sieved_out,inbase64,inbase64len);
     prot_printf(sieved_out,"\r\n");
 
