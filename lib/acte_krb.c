@@ -747,7 +747,7 @@ int *outputlen;
 }
 #endif /* !NOPRIVACY */
 
-static afs_string_to_key P((char *str, des_cblock *key, char *cell));
+static afs_string_to_key P((char *str, des_cblock key, char *cell));
 
 /*
  * Kerberos set srvtab filename
@@ -869,8 +869,8 @@ const char **reply;
  */
 
 /* forward declarations */
-static afs_transarc_StringToKey P((char *str, char *cell, des_cblock *key));
-static afs_cmu_StringToKey P((char *str, char *cell, des_cblock *key));
+static afs_transarc_StringToKey P((char *str, char *cell, des_cblock key));
+static afs_cmu_StringToKey P((char *str, char *cell, des_cblock key));
 
 extern char *crypt();
 
@@ -884,7 +884,7 @@ static
 afs_cmu_StringToKey (str, cell, key)
 char *str;
 char *cell;                  /* cell for password */
-des_cblock *key;
+des_cblock key;
 {   char  password[8+1];                /* crypt is limited to 8 chars anyway */
     int   i;
     int   passlen;
@@ -924,7 +924,7 @@ static
 afs_transarc_StringToKey (str, cell, key)
 char *str;
 char *cell;                  /* cell for password */
-des_cblock *key;
+des_cblock key;
 {   des_key_schedule schedule;
     char temp_key[8];
     char ivec[8];
@@ -952,7 +952,7 @@ des_cblock *key;
 
 static afs_string_to_key(str, key, cell)
 char *str;
-des_cblock *key;
+des_cblock key;
 char *cell;                  /* cell for password */
 {
     if (strlen(str) > 8) {
