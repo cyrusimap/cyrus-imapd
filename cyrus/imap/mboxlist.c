@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.9 2002/07/21 15:30:14 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.10 2002/07/24 14:42:55 ken3 Exp $
  */
 
 #include <config.h>
@@ -779,6 +779,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     int isremote = 0;
     int mbtype;
     int deleteright = get_deleteright();
+    const char *p;
     mupdate_handle *mupdate_h = NULL;
 
     if(!isadmin && force) return IMAP_PERMISSION_DENIED;
@@ -786,9 +787,11 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
  retry:
     /* Check for request to delete a user:
        user.<x> with no dots after it */
-    if (!strncmp(name, "user.", 5) && !strchr(name+5, '.')) {
+    if (((!strncmp(name, "user.", 5) && (p = name+5)) ||
+		  ((p = strstr(name, "!user.")) && (p += 6))) &&
+		  !strchr(p, '.')) { 
 	/* Can't DELETE INBOX (your own inbox) */
-	if (userid && !strcmp(name+5, userid)) {
+	if (userid && !strcmp(p, userid)) {
 	    r = IMAP_MAILBOX_NOTSUPPORTED;
 	    goto done;
 	}
@@ -944,6 +947,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     char *newpartition = NULL;
     char *mboxent = NULL;
     int deleteright = get_deleteright();
+    char *p;
 
     mupdate_handle *mupdate_h = NULL;
     int madenew = 0;
@@ -992,8 +996,10 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	    r = IMAP_MAILBOX_EXISTS;
 	    goto done;
 	}
-    } else if (!strncmp(oldname, "user.", 5) && !strchr(oldname+5, '.')) {
-	if (!strcmp(oldname+5, userid)) {
+    } else if (((!strncmp(oldname, "user.", 5) && (p = oldname+5)) ||
+		  ((p = strstr(oldname, "!user.")) && (p += 6))) &&
+		  !strchr(p, '.')) { 
+	if (!strcmp(p, userid)) {
 	    /* Special case of renaming inbox */
 	    access = cyrus_acl_myrights(auth_state, oldacl);
 	    if (!(access & deleteright)) {
@@ -1023,7 +1029,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 
     /* Check ability to create new mailbox */
     if (!partitionmove) {
-	if (!strncmp(newname, "user.", 5) && !strchr(newname+5, '.')) {
+	if (((!strncmp(newname, "user.", 5) && (p = newname+5)) ||
+		  ((p = strstr(newname, "!user.")) && (p += 6))) &&
+		  !strchr(p, '.')) { 
 	    /* Even admins can't rename to user's inboxes */
 	    r = IMAP_MAILBOX_NOTSUPPORTED;
 	    goto done;
