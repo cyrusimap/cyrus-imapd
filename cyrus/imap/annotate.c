@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.5 2002/07/13 19:38:01 rjs3 Exp $
+ * $Id: annotate.c,v 1.8.6.6 2002/07/20 01:21:12 ken3 Exp $
  */
 
 #include <config.h>
@@ -314,9 +314,13 @@ struct annotate_attrib
 
 const struct annotate_attrib annotation_attributes[] = 
 {
+    { "value", ATTRIB_VALUE_SHARED },
     { "value.shared", ATTRIB_VALUE_SHARED },
+    { "size", ATTRIB_SIZE_SHARED },
     { "size.shared", ATTRIB_SIZE_SHARED },
+    { "modifiedsince", ATTRIB_MODIFIEDSINCE_SHARED },
     { "modifiedsince.shared", ATTRIB_MODIFIEDSINCE_SHARED },
+    { "content-type", ATTRIB_CONTENTTYPE_SHARED },
     { "content-type.shared", ATTRIB_CONTENTTYPE_SHARED },
     { NULL, 0 }
 };
@@ -341,7 +345,8 @@ static int fetch_cb(char *name, int matchlen,
     static char lastname[MAX_MAILBOX_PATH];
     static int sawuser = 0;
     int c;
-    char mboxname[MAX_MAILBOX_PATH+1];
+    char int_mboxname[MAX_MAILBOX_PATH+1], ext_mboxname[MAX_MAILBOX_PATH+1];
+
     char entry[MAX_MAILBOX_PATH+25];
     char size[100], modifiedsince[100];
     struct attvaluelist *attvalues = NULL;
@@ -374,15 +379,18 @@ static int fetch_cb(char *name, int matchlen,
     strcpy(lastname, name);
     lastname[matchlen] = '\0';
 
-    if (!strncasecmp(lastname, "INBOX", 5))
-	sprintf(mboxname, "user.%s%s", fdata->userid, lastname+5);
+    if (!strncasecmp(lastname, "INBOX", 5)) {
+	(*fdata->namespace->mboxname_tointernal)(fdata->namespace, "INBOX",
+						 fdata->userid, int_mboxname);
+	strcat(int_mboxname, lastname+5);
+    }
     else
-	strcpy(mboxname, name);
+	strcpy(int_mboxname, name);
 
     c = name[matchlen];
     if (c) name[matchlen] = '\0';
     (*fdata->namespace->mboxname_toexternal)(fdata->namespace, name,
-					     fdata->userid, mboxname);
+					     fdata->userid, ext_mboxname);
     if (c) name[matchlen] = c;
 
     memset(&mbrock, 0, sizeof(struct mailbox_annotation_rock));
@@ -394,12 +402,12 @@ static int fetch_cb(char *name, int matchlen,
 	int appended_one = 0;
 	
 	sprintf(entry, "/mailbox/{%s}%s",
-		mboxname, entries_ptr->entry->name);
+		ext_mboxname, entries_ptr->entry->name);
 
 	attvalues = NULL;
 	memset(&result,0,sizeof(struct annotation_result));
 
-	entries_ptr->entry->get(mboxname, fdata->isadmin,
+	entries_ptr->entry->get(int_mboxname, fdata->isadmin,
 				fdata->auth_state,
 				&result, &mbrock, NULL);
 
