@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.88 1998/06/10 22:19:58 tjs Exp $
+ * $Id: mboxlist.c,v 1.89 1998/10/29 20:16:32 tjs Exp $
  */
 
 #include <stdio.h>
@@ -466,6 +466,7 @@ struct auth_state *auth_state;
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
 	close(newlistfd);
 	mboxlist_unlock();
+	mailbox_close(&newmailbox);
 	return IMAP_IOERROR;
     }
 
@@ -1019,6 +1020,7 @@ struct auth_state *auth_state;
     if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
 	mboxlist_unlock();
+	mailbox_close(&mailbox);
 	close(newlistfd);
 	free(newacl);
 	return IMAP_IOERROR;
