@@ -42,7 +42,7 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.25 2003/02/13 20:15:40 rjs3 Exp $
+ * $Id: glob.c,v 1.26 2003/12/01 19:19:45 rjs3 Exp $
  */
 
 #include <config.h>
@@ -255,6 +255,13 @@ int glob_test (g, ptr, len, min)
 
 	/* loop to manage wildcards */
 	do {
+	    /* reset hierarchy state */
+	    if(firsttime) {
+		firsttime = 0;
+	    } else {
+		ghier = NULL;
+	    }
+
 	    /* see if we match to the next '%' or '*' wildcard */
 	    while (*gptr != '*' && *gptr != '%' && ptr != pend
 		   && (*gptr == *ptr || (!newglob && *gptr == '?'))) {
@@ -329,6 +336,13 @@ int glob_test (g, ptr, len, min)
 
 	/* loop to manage wildcards */
 	do {
+	    /* reset hierarchy state */
+	    if(firsttime) {
+		firsttime = 0;
+	    } else {
+		ghier = NULL;
+	    }
+
 	    /* see if we match to the next '%' or '*' wildcard */
 	    while (*gptr != '*' && *gptr != '%' && ptr != pend
 		   && ((unsigned char) *gptr == TOLOWER(*ptr) || 
