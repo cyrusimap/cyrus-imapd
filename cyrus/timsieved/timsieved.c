@@ -101,17 +101,31 @@ int sieved_userisadmin;
 
 void cmdloop()
 {
-  chdir("/tmp/");
+    int ret = FALSE;
+    
+    chdir("/tmp/");
 
-  capabilities(sieved_out, sieved_saslconn);
+    capabilities(sieved_out, sieved_saslconn);
 
-  /* initialize lexer */
-  lex_init();
+    /* initialize lexer */
+    lex_init();
 
-  while (1)
-  {
-    parser(sieved_out, sieved_in);
-  }
+    while (ret != TRUE)
+    {
+	ret = parser(sieved_out, sieved_in);
+    }
+
+    /* close mailboxes */
+    mboxlist_close();
+    mboxlist_done();
+
+    /* cleanup */
+    prot_flush(sieved_out);
+    prot_free(sieved_out);
+    prot_free(sieved_in);
+    
+    /* done */
+    exit(0);
 }
 
 
@@ -124,8 +138,14 @@ void fatal(const char *s, int code)
 	exit(recurse_code);
     }
     recurse_code = code;
+
+    mboxlist_close();
+    mboxlist_done();
+
     prot_printf(sieved_out, "NO Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
+    prot_free(sieved_out);
+    prot_free(sieved_in);
 
     exit(EC_TEMPFAIL);
 }
@@ -148,10 +168,6 @@ static int acl_ok(const char *user,
 
     strcpy(inboxname, "user.");
     strcat(inboxname, user);
-
-    /* open mailboxes */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
 
     if (!authstate ||
         mboxlist_lookup(inboxname, (char **)0, &acl, NULL)) {
@@ -241,11 +257,17 @@ static struct sasl_callback mysasl_cb[] = {
 
 int service_init(int argc, char **argv, char **envp)
 {
+    /* open mailboxes */
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+
     return 0;
 }
 
 void service_abort(void)
 {
+    mboxlist_close();
+    mboxlist_done();
     return;
 }
 

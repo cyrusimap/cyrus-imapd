@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.13 2002/01/18 22:58:51 rjs3 Exp $
+ * $Id: parser.c,v 1.14 2002/02/05 19:51:59 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -56,6 +56,7 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
+#include "mboxlist.h"
 #include "xmalloc.h"
 #include "prot.h"
 #include "tls.h"
@@ -63,8 +64,13 @@
 #include "actions.h"
 #include "exitcodes.h"
 
-extern sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 extern char sieved_clienthost[250];
+
+/* xxx these are both leaked, but we only handle one connection at a
+ * time... */
+extern sasl_conn_t *sieved_saslconn; /* the sasl connection context */
+const char *referral_host = NULL;
+
 int authenticated = 0;
 int verify_only = 0;
 int starttls_done = 0;
@@ -77,13 +83,13 @@ static SSL *tls_conn = NULL;
 void fatal(const char *s, int code);
 
 /* forward declarations */
-static int cmd_logout(struct protstream *sieved_out, struct protstream *sieved_in);
+static void cmd_logout(struct protstream *sieved_out,
+		       struct protstream *sieved_in);
 static int cmd_authenticate(struct protstream *sieved_out, struct protstream *sieved_in,
 			    mystring_t *mechanism_name, mystring_t *initial_challenge, const char **errmsg);
 static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved_in);
 
-
-
+/* Returns TRUE if we are done */
 int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 {
   int token;
@@ -94,9 +100,28 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   mystring_t *sieve_name = NULL;
   mystring_t *sieve_data = NULL;
   unsigned long num;
+  int ret = FALSE;
 
   /* get one token from the lexer */
   token = timlex(NULL, NULL, sieved_in);
+
+  /* If we have a referral host, no matter what the command is, we want
+   * to send them there */
+  /* note that referral_host is only non-NULL if we are authenticated */
+  if(referral_host) {
+      char buf[4096];
+      char *c;
+
+      /* Truncate the hostname if necessary */
+      strcpy(buf, referral_host);
+      c = strchr(buf, '!');
+      if(c) *c = '\0';
+      
+      prot_printf(sieved_out, "BYE (REFERRAL \"%s\") \"Try Remote.\"\r\n",
+		  buf);
+      ret = TRUE;
+      goto done;
+  }
 
   if (!authenticated && (token > 255) && (token!=AUTHENTICATE) &&
       (token!=LOGOUT) && (token!=CAPABILITY) &&
@@ -163,16 +188,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	prot_printf(sieved_out, "NO \"Already authenticated\"\r\n");
     else if (cmd_authenticate(sieved_out, sieved_in, mechanism_name, initial_challenge, &error_msg)==FALSE)
     {
-	/* free memory */
-	free(mechanism_name);
-	free(initial_challenge);
-	
-	prot_printf(sieved_out, "NO (\"SASL\" \"%s\") \"Authentication error\"\r\n",error_msg);
-	prot_flush(sieved_out);
-
-	return -1;
+	error_msg = "Authentication Error";
+	goto error;
     }
-    
     break;
 
   case CAPABILITY:
@@ -229,7 +247,8 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
     cmd_logout(sieved_out, sieved_in);
 
-    return TRUE;			/* *do* close the connection */   
+    ret = TRUE;
+    goto done;
     break;
 
   case GETSCRIPT:
@@ -367,7 +386,8 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     break;
 
   }
- 
+
+ done: 
   /* free memory */
   free(mechanism_name);
   free(initial_challenge);
@@ -376,7 +396,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
  
   prot_flush(sieved_out);
 
-  return 0;
+  return ret;
 
  error:
 
@@ -386,22 +406,18 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   free(sieve_name);
   free(sieve_data);
 
-
   prot_printf(sieved_out, "NO \"%s\"\r\n",error_msg);
   prot_flush(sieved_out);
 
-  return -1;
+  return FALSE;
 }
 
 
-static int cmd_logout(struct protstream *sieved_out, struct protstream *sieved_in)
+void cmd_logout(struct protstream *sieved_out,
+		struct protstream *sieved_in __attribute__((unused)))
 {
     prot_printf(sieved_out, "Ok \"Logout Complete\"\r\n");
     prot_flush(sieved_out);
-    
-    prot_free(sieved_out);
-    
-    exit(0);    
 }
 
 static int cmd_authenticate(struct protstream *sieved_out, struct protstream *sieved_in,
@@ -539,8 +555,20 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
   verify_only = !strcmp(username, "anonymous");
 
   if (!verify_only) {
-      if (actions_setuser(username) != TIMSIEVE_OK)
-      {
+      /* Check for a remote mailbox (should we setup a redirect?) */
+      char inboxname[1024];
+      char *server;
+      int type;
+      
+      strcpy(inboxname, "user.");
+      strcat(inboxname, username);
+
+      mboxlist_detail(inboxname, &type, &server, NULL, NULL, NULL);
+      
+      if(type & MBTYPE_REMOTE) {
+	  /* It's a remote mailbox, we want to set up a referral */
+	  referral_host = xstrdup(server);
+      } else if (actions_setuser(username) != TIMSIEVE_OK) {
 	  *errmsg = "internal error";
 	  syslog(LOG_ERR, "error in actions_setuser()");
 	  return FALSE;
