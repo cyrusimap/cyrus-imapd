@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.127 2002/06/07 02:05:33 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.128 2002/06/07 15:42:15 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -238,6 +238,9 @@ void printastring (const char *s);
 static int mailboxdata(char *name, int matchlen, int maycreate, void *rock);
 static int listdata(char *name, int matchlen, int maycreate, void *rock);
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
+
+static int mlookup(const char *name, char **pathp, 
+		   char **aclp, void *tid);
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
@@ -624,6 +627,200 @@ static int pipe_command(struct backend *s, int optimistic_literal)
 	    }
 	}
     }
+}
+
+/* This handles piping of the LSUB command, because we have to figure out
+ * what mailboxes actually exist before passing them to the end user.
+ *
+ * It is also needed if we are doing a FIND MAILBOXES, for that we do an
+ * LSUB on the backend anyway, because the semantics of FIND do not allow
+ * it to return nonexistant mailboxes (RFC1176), but we need to really dumb
+ * down the response when this is the case.
+ */
+static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
+		     int for_find) 
+{
+    int taglen = strlen(tag);
+    int c;
+    int r = PROXY_OK;
+    int exist_r;
+    char mailboxname[MAX_MAILBOX_PATH + 1];
+    static struct buf tagb, cmd, sep, name;
+    int cur_flags_size = 64;
+    char *flags = xmalloc(cur_flags_size);
+    
+    assert(s);
+    assert(s->timeout);
+    
+    s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
+
+    while(1) {
+	c = getword(s->in, &tagb);
+
+	if(c == EOF) {
+	    if(s == backend_current && !force_notfatal)
+		fatal("Lost connection to selected backend", EC_UNAVAILABLE);
+	    proxyd_downserver(s);
+	    free(flags);
+	    return PROXY_NOCONNECTION;
+	}
+
+	if(!strncmp(tag, tagb.s, taglen)) {
+	    char buf[2048];
+	    if(!prot_fgets(buf, sizeof(buf), s->in)) {
+		if(s == backend_current && !force_notfatal)
+		    fatal("Lost connection to selected backend",
+			  EC_UNAVAILABLE);
+		proxyd_downserver(s);
+		free(flags);
+		return PROXY_NOCONNECTION;
+	    }	
+	    /* Got the end of the response */
+	    strlcpy(s->last_result, buf, LAST_RESULT_LEN);
+	    /* guarantee that 's->last_result' has \r\n\0 at the end */
+	    s->last_result[LAST_RESULT_LEN - 3] = '\r';
+	    s->last_result[LAST_RESULT_LEN - 2] = '\n';
+	    s->last_result[LAST_RESULT_LEN - 1] = '\0';
+	    switch (buf[0]) {
+	    case 'O': case 'o':
+		r = PROXY_OK;
+		break;
+	    case 'N': case 'n':
+		r = PROXY_NO;
+		break;
+	    case 'B': case 'b':
+		r = PROXY_BAD;
+		break;
+	    default: /* huh? no result? */
+		if(s == backend_current && !force_notfatal)
+		    fatal("Lost connection to selected backend",
+			  EC_UNAVAILABLE);
+		proxyd_downserver(s);
+		r = PROXY_NOCONNECTION;
+		break;
+	    }
+	    break; /* we're done */
+	}
+
+	c = getword(s->in, &cmd);
+
+	if(c == EOF) {
+	    if(s == backend_current && !force_notfatal)
+		fatal("Lost connection to selected backend", EC_UNAVAILABLE);
+	    proxyd_downserver(s);
+	    free(flags);
+	    return PROXY_NOCONNECTION;
+	}
+
+	if(strncasecmp("LSUB", cmd.s, 4)) {
+	    prot_printf(proxyd_out, "%s %s ", tagb.s, cmd.s);
+	    r = pipe_to_end_of_response(s, force_notfatal);
+	    if(r != PROXY_OK) {
+		free(flags);
+		return r;
+	    }
+	} else {
+	    /* build up the response bit by bit */
+	    int i = 0;
+
+	    c = prot_getc(s->in);
+	    while(c != ')' && c != EOF) {
+		flags[i++] = c;
+		if(i == cur_flags_size) {
+		    /* expand our buffer */
+		    cur_flags_size *= 2;
+		    flags = xrealloc(flags, cur_flags_size);
+		}
+		c = prot_getc(s->in);
+	    }
+
+	    if(c != EOF) {
+		/* terminate string */
+		flags[i++] = ')';
+		if(i == cur_flags_size) {
+		    /* expand our buffer */
+		    cur_flags_size *= 2;
+		    flags = xrealloc(flags, cur_flags_size);
+		}
+		flags[i] = '\0';
+		/* get the next character */
+ 		c = prot_getc(s->in);
+	    }
+	    
+	    if(c != ' ') {
+		if(s == backend_current && !force_notfatal)
+		    fatal("Bad LSUB response from  selected backend",
+			  EC_UNAVAILABLE);
+		proxyd_downserver(s);
+		free(flags);
+		return PROXY_NOCONNECTION;
+	    }
+
+	    /* Get separator */
+	    c = getastring(s->in, s->out, &sep);
+
+	    if(c != ' ') {
+		if(s == backend_current && !force_notfatal)
+		    fatal("Bad LSUB response from selected backend",
+			  EC_UNAVAILABLE);
+		proxyd_downserver(s);
+		free(flags);
+		return PROXY_NOCONNECTION;
+	    }
+
+	    /* Get name */
+	    c = getastring(s->in, s->out, &name);
+
+	    if(c == '\r') c = prot_getc(s->in);
+	    if(c != '\n') {
+		if(s == backend_current && !force_notfatal)
+		    fatal("Bad LSUB response from selected backend",
+			  EC_UNAVAILABLE);
+		proxyd_downserver(s);
+		free(flags);
+		return PROXY_NOCONNECTION;
+	    }
+
+	    /* lookup name */
+	    exist_r = 1;
+	    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace,
+							name.s,
+							proxyd_userid,
+							mailboxname);
+	    if (!r) {
+		exist_r = mlookup(mailboxname, NULL, NULL, NULL);
+	    } else {
+		/* skip this one */
+		syslog(LOG_ERR, "could not convert %s to internal form",
+		       name.s);
+		continue;
+	    }
+
+	    /* send our response */
+	    /* we need to set \Noselect if it's not in our mailboxes.db */
+	    if(!for_find) {
+		if(!exist_r) {
+		    prot_printf(proxyd_out, "* LSUB %s \"%s\" ",
+				flags, sep.s);
+		} else {
+		    prot_printf(proxyd_out, "* LSUB (\\Noselect) \"%s\" ",
+				sep.s);
+		}
+
+		printstring(name.s);
+		prot_printf(proxyd_out, "\r\n");
+
+	    } else if(for_find && !exist_r) {
+		/* Note that it has to exist for a find response */
+
+		/* xxx what happens if name.s isn't an atom? */
+		prot_printf(proxyd_out, "* MAILBOX %s\r\n",name.s);
+	    }
+	}
+    } /* while(1) */
+
+    free(flags);
+    return r;
 }
 
 void proxyd_downserver(struct backend *s)
@@ -3669,10 +3866,18 @@ void cmd_find(char *tag, char *namespace, char *pattern)
     mboxname_hiersep_tointernal(&proxyd_namespace, pattern);
 
     if (!strcasecmp(namespace, "mailboxes")) {
-	(*proxyd_namespace.mboxlist_findsub)(&proxyd_namespace, pattern,
-					     proxyd_userisadmin, proxyd_userid,
-					     proxyd_authstate, mailboxdata,
-					     NULL, 1);
+	if (!backend_inbox) {
+	    backend_inbox = proxyd_findinboxserver();
+	}
+
+	if (backend_inbox) {
+	    prot_printf(backend_inbox->out, 
+			"%s Lsub \"\" {%d+}\r\n%s\r\n",
+			tag, strlen(pattern), pattern);
+	    pipe_lsub(backend_inbox, tag, 0, 1);
+	} else {		/* user doesn't have an INBOX */
+	    /* noop */
+	}
     } else if (!strcasecmp(namespace, "all.mailboxes")) {
 	(*proxyd_namespace.mboxlist_findall)(&proxyd_namespace, pattern,
 					     proxyd_userisadmin, proxyd_userid,
@@ -3697,183 +3902,6 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 
     prot_printf(proxyd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
-}
-
-static int pipe_lsub(struct backend *s, char *tag, int force_notfatal) 
-{
-    int taglen = strlen(tag);
-    int c;
-    int r = PROXY_OK;
-    int exist_r;
-    char mailboxname[MAX_MAILBOX_PATH + 1];
-    static struct buf tagb, cmd, sep, name;
-    int cur_flags_size = 64;
-    char *flags = xmalloc(cur_flags_size);
-    
-    assert(s);
-    assert(s->timeout);
-    
-    s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
-
-    while(1) {
-	c = getword(s->in, &tagb);
-
-	if(c == EOF) {
-	    if(s == backend_current && !force_notfatal)
-		fatal("Lost connection to selected backend", EC_UNAVAILABLE);
-	    proxyd_downserver(s);
-	    free(flags);
-	    return PROXY_NOCONNECTION;
-	}
-
-	if(!strncmp(tag, tagb.s, taglen)) {
-	    char buf[2048];
-	    if(!prot_fgets(buf, sizeof(buf), s->in)) {
-		if(s == backend_current && !force_notfatal)
-		    fatal("Lost connection to selected backend",
-			  EC_UNAVAILABLE);
-		proxyd_downserver(s);
-		free(flags);
-		return PROXY_NOCONNECTION;
-	    }	
-	    /* Got the end of the response */
-	    strlcpy(s->last_result, buf, LAST_RESULT_LEN);
-	    /* guarantee that 's->last_result' has \r\n\0 at the end */
-	    s->last_result[LAST_RESULT_LEN - 3] = '\r';
-	    s->last_result[LAST_RESULT_LEN - 2] = '\n';
-	    s->last_result[LAST_RESULT_LEN - 1] = '\0';
-	    switch (buf[0]) {
-	    case 'O': case 'o':
-		r = PROXY_OK;
-		break;
-	    case 'N': case 'n':
-		r = PROXY_NO;
-		break;
-	    case 'B': case 'b':
-		r = PROXY_BAD;
-		break;
-	    default: /* huh? no result? */
-		if(s == backend_current && !force_notfatal)
-		    fatal("Lost connection to selected backend",
-			  EC_UNAVAILABLE);
-		proxyd_downserver(s);
-		r = PROXY_NOCONNECTION;
-		break;
-	    }
-	    break; /* we're done */
-	}
-
-	c = getword(s->in, &cmd);
-
-	if(c == EOF) {
-	    if(s == backend_current && !force_notfatal)
-		fatal("Lost connection to selected backend", EC_UNAVAILABLE);
-	    proxyd_downserver(s);
-	    free(flags);
-	    return PROXY_NOCONNECTION;
-	}
-
-	if(strncmp("LSUB", cmd.s, 4)) {
-	    prot_printf(proxyd_out, "%s %s ", tagb.s, cmd.s);
-	    r = pipe_to_end_of_response(s, force_notfatal);
-	    if(r != PROXY_OK) {
-		free(flags);
-		return r;
-	    }
-	} else {
-	    /* build up the response bit by bit */
-	    int i = 0;
-
-	    c = prot_getc(s->in);
-	    while(c != ')' && c != EOF) {
-		flags[i++] = c;
-		if(i == cur_flags_size) {
-		    /* expand our buffer */
-		    cur_flags_size *= 2;
-		    flags = xrealloc(flags, cur_flags_size);
-		}
-		c = prot_getc(s->in);
-	    }
-
-	    if(c != EOF) {
-		/* terminate string */
-		flags[i++] = ')';
-		if(i == cur_flags_size) {
-		    /* expand our buffer */
-		    cur_flags_size *= 2;
-		    flags = xrealloc(flags, cur_flags_size);
-		}
-		flags[i] = '\0';
-		/* get the next character */
- 		c = prot_getc(s->in);
-	    }
-	    
-	    if(c != ' ') {
-		if(s == backend_current && !force_notfatal)
-		    fatal("Bad LSUB response from  selected backend",
-			  EC_UNAVAILABLE);
-		proxyd_downserver(s);
-		free(flags);
-		return PROXY_NOCONNECTION;
-	    }
-
-	    /* Get separator */
-	    c = getastring(s->in, s->out, &sep);
-
-	    if(c != ' ') {
-		if(s == backend_current && !force_notfatal)
-		    fatal("Bad LSUB response from selected backend",
-			  EC_UNAVAILABLE);
-		proxyd_downserver(s);
-		free(flags);
-		return PROXY_NOCONNECTION;
-	    }
-
-	    /* Get name */
-	    c = getastring(s->in, s->out, &name);
-
-	    if(c == '\r') c = prot_getc(s->in);
-	    if(c != '\n') {
-		if(s == backend_current && !force_notfatal)
-		    fatal("Bad LSUB response from selected backend",
-			  EC_UNAVAILABLE);
-		proxyd_downserver(s);
-		free(flags);
-		return PROXY_NOCONNECTION;
-	    }
-
-	    /* lookup name */
-	    exist_r = 1;
-	    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace,
-							name.s,
-							proxyd_userid,
-							mailboxname);
-	    if (!r) {
-		exist_r = mlookup(mailboxname, NULL, NULL, NULL);
-	    } else {
-		/* skip this one */
-		syslog(LOG_ERR, "could not convert %s to internal form",
-		       name.s);
-		continue;
-	    }
-
-	    /* send our response */
-	    /* we need to set \Noselect if it's not in our mailboxes.db */
-	    if(!exist_r) {
-		prot_printf(proxyd_out, "* LSUB %s \"%s\" ",
-			    flags, sep.s);
-	    } else {
-		prot_printf(proxyd_out, "* LSUB (\\Noselect) \"%s\" ",
-			    sep.s);
-	    }
-
-	    printstring(name.s);
-	    prot_printf(proxyd_out, "\r\n");
-	}
-    } /* while(1) */
-
-    free(flags);
-    return r;
 }
 
 /*
@@ -3911,7 +3939,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 			"%s Lsub {%d+}\r\n%s {%d+}\r\n%s\r\n",
 			tag, strlen(reference), reference,
 			strlen(pattern), pattern);
-	    pipe_lsub(backend_inbox, tag, 0);
+	    pipe_lsub(backend_inbox, tag, 0, 0);
 	} else {		/* user doesn't have an INBOX */
 	    /* noop */
 	}
