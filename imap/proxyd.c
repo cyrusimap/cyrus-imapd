@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.42 2000/09/30 01:17:54 leg Exp $ */
+/* $Id: proxyd.c,v 1.43 2000/10/09 03:28:50 leg Exp $ */
 
 #include <config.h>
 
@@ -788,15 +788,17 @@ static struct backend *proxyd_findinboxserver(void)
 {
     char inbox[MAX_MAILBOX_NAME];
     int r;
-    char *server;
-    struct backend *s;
+    char *server = NULL;
+    struct backend *s = NULL;
 
     if (strlen(proxyd_userid) > MAX_MAILBOX_NAME - 30) return NULL;
     strcpy(inbox, "user.");
     strcat(inbox, proxyd_userid);
 	
     r = mlookup(inbox, &server, NULL, NULL);
-    s = proxyd_findserver(server);
+    if (!r) {
+	s = proxyd_findserver(server);
+    }
 
     return s;
 }
