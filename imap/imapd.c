@@ -24,7 +24,8 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  */
-/* $Id: imapd.c,v 1.155 1998/07/27 20:37:24 tjs Exp $ */
+
+/* $Id: imapd.c,v 1.156 1998/08/11 00:21:09 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -2370,31 +2371,55 @@ int subscribed;
 char *reference;
 char *pattern;
 {
-    char buf[MAX_MAILBOX_PATH];
+    char *buf = NULL;
+    int patlen = 0;
+    int reflen = 0;
 
-    /* Handle name-in-reference */
-    if (pattern[0] == '.') {
-	strcpy(buf, reference);
-	if (*reference && reference[strlen(reference)-1] == '.') {
-	    buf[strlen(reference)-1] = '\0';
-	}
-	strcat(buf, pattern);
-	pattern = buf;
-    }
+    /* Ignore the reference argument?
+       (the behavior in 1.5.10 & older) */
+    int ignorereference = config_getswitch("ignorereference", 0);
 
-    if (subscribed) {
-	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid,
-			 imapd_authstate, lsubdata, NULL);
-	lsubdata((char *)0, 0, 0, 0);
-    }
-    else if (!pattern[0]) {
+    if (!pattern[0] && !subscribed) {
 	/* Special case: query top-level hierarchy separator */
 	prot_printf(imapd_out, "* LIST (\\Noselect) \".\" \"\"\r\n");
-    }
-    else {
-	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
-			 imapd_authstate, listdata, NULL);
-	listdata((char *)0, 0, 0, 0);
+    } else {
+	/* Do we need to concatenate fields? */
+	if (!ignorereference || pattern[0] == '.') {
+	    /* Either
+	     * - name begins with dot
+	     * - we're configured to honor the reference argument */
+
+	    /* Allocate a buffer, figure out how to stick the arguments
+	       together, do it, then do that instead of using pattern. */
+	    patlen = strlen(pattern);
+	    reflen = strlen(reference);
+	    
+	    buf = xmalloc(patlen + reflen + 1);
+	    buf[0] = '\0';
+
+	    if (*reference) {
+		/* check for LIST A. .B, change to LIST "" A.B */
+		if (reference[reflen-1] == '.' && pattern[0] == '.') {
+		    reference[--reflen] = '\0';
+		}
+		strcpy(buf, reference);
+	    }
+	    strcat(buf, pattern);
+	    pattern = buf;
+	}
+
+	if (subscribed) {
+	    mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid,
+			     imapd_authstate, lsubdata, NULL);
+	    lsubdata((char *)0, 0, 0, 0);
+	}
+	else {
+	    mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
+			     imapd_authstate, listdata, NULL);
+	    listdata((char *)0, 0, 0, 0);
+	}
+
+	if (buf) free(buf);
     }
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
