@@ -26,7 +26,7 @@ LIBS = @LIBS@
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = -g
-LDFLAGS = -g
+LDFLAGS = -g @LDFLAGS@
 
 SHELL = /bin/sh
 
