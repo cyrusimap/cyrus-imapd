@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.13 2002/08/09 13:24:41 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.14 2002/08/12 21:30:08 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1187,6 +1187,11 @@ int service_init(int argc, char **argv, char **envp)
 	    break;
 	}
     }
+
+#ifdef ENABLE_ANNOTATEMORE
+    /* Initialize the annotatemore extention */
+    annotatemore_init(ANNOTATE_PROXY);
+#endif 
 
     return 0;
 }

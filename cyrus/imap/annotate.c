@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.8 2002/08/02 17:22:13 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.9 2002/08/12 21:30:06 rjs3 Exp $
  */
 
 #include <config.h>
@@ -83,6 +83,7 @@ extern int errno;
 struct db *anndb;
 
 static int annotate_dbopen = 0;
+static int annotate_isproxy = 0;
 
 extern void appendattvalue(struct attvaluelist **l, char *attrib,
 			   const char *value);
@@ -137,6 +138,10 @@ void annotatemore_init(int myflags)
     if (myflags & ANNOTATE_SYNC) {
 	r = DB->sync();
     }
+
+    if (myflags & ANNOTATE_PROXY) {
+	annotate_isproxy = 1;
+    }
 }
 
 void annotatemore_open(char *fname)
@@ -182,6 +187,14 @@ enum {
     ATTRIB_CONTENTTYPE_SHARED = 	(1<<3)
 };
 
+typedef enum {
+    ANNOTATION_PROXY_T_INVALID = 0,
+
+    PROXY_ONLY = 1,
+    BACKEND_ONLY = 2,
+    PROXY_AND_BACKEND = 3
+} annotation_proxy_t;
+
 struct mailbox_annotation_rock 
 {
     char *server, *partition, *acl;
@@ -196,7 +209,7 @@ struct annotation_result
 };
 
 /* To free values in the mailbox_annotation_rock as needed */
-static void cleanup_mbrock(struct mailbox_annotation_rock *mbrock) 
+static void cleanup_mbrock(struct mailbox_annotation_rock *mbrock __attribute__((unused))) 
 {
     /* Don't free server and partition, since they're straight from the
      * output of mboxlist_detail() */
@@ -281,6 +294,7 @@ struct annotate_entry
 		void *rock);
     void *rock;
     int entry;
+    annotation_proxy_t proxytype;
 };
 
 struct annotate_entry_list
@@ -292,17 +306,17 @@ struct annotate_entry_list
 const struct annotate_entry mailbox_ro_entries[] =
 {
     { "/vendor/cmu/cyrus-imapd/partition", annotation_get_partition,
-	  NULL, ENTRY_PARTITION },
+	  NULL, ENTRY_PARTITION, PROXY_AND_BACKEND },
     { "/vendor/cmu/cyrus-imapd/server", annotation_get_server,
-	  NULL, ENTRY_SERVER },
-    { NULL, NULL, NULL, 0 }
+	  NULL, ENTRY_SERVER, PROXY_AND_BACKEND },
+    { NULL, NULL, NULL, 0, ANNOTATION_PROXY_T_INVALID }
 };
 
 const struct annotate_entry server_entries[] =
 {
-    { "motd", NULL, NULL, SRVENTRY_MOTD },
-    { "comment", NULL, NULL, SRVENTRY_COMMENT },
-    { NULL, NULL, NULL, 0 }
+    { "motd", NULL, NULL, SRVENTRY_MOTD, PROXY_AND_BACKEND },
+    { "comment", NULL, NULL, SRVENTRY_COMMENT, PROXY_AND_BACKEND },
+    { NULL, NULL, NULL, 0, ANNOTATION_PROXY_T_INVALID }
 };
 
 /* Annotation attributes and their flags */
@@ -500,6 +514,19 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 	    for(entrycount = 0;
 		mailbox_ro_entries[entrycount].name;
 		entrycount++) {
+
+		/* Skip this entry if it doesn't apply to our particular
+		   server type */
+		if(mailbox_ro_entries[entrycount].proxytype !=
+		   PROXY_AND_BACKEND) {
+		    if((annotate_isproxy &&
+			mailbox_ro_entries[entrycount].proxytype != PROXY_ONLY)
+		       ||(!annotate_isproxy &&
+			  mailbox_ro_entries[entrycount].proxytype !=
+			  BACKEND_ONLY))
+			continue;
+		}
+		
 		if(GLOB_TEST(g, mailbox_ro_entries[entrycount].name) != -1) {
 		    struct annotate_entry_list *nentry =
 			xmalloc(sizeof(struct annotate_entry_list));

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.19 2002/08/09 13:24:40 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.20 2002/08/12 21:30:06 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -564,6 +564,11 @@ int service_init(int argc, char **argv, char **envp)
 	    break;
 	}
     }
+
+#ifdef ENABLE_ANNOTATEMORE
+    /* Initialize the annotatemore extention */
+    annotatemore_init(0);
+#endif
 
     return 0;
 }
