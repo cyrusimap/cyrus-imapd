@@ -1,4 +1,4 @@
-$Id: TODO,v 1.4 2002/05/25 19:57:53 leg Exp $
+$Id: TODO,v 1.5 2003/08/01 13:22:25 rjs3 Exp $
 
 does authenticating leak memory?  (mechanism name parameter in yacc
 not freed?)
@@ -6,7 +6,3 @@ not freed?)
 
 document the sieve quotas in:
 	sieve.html (yet to be written)
-
-proxying is broken
-
-should probably use symlinks instead of hard links
