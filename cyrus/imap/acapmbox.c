@@ -60,6 +60,7 @@
 #include "mailbox.h"
 #include "assert.h"
 #include "imapurl.h"
+#include "exitcodes.h"
 
 #include "imapconf.h"
 #include "imap_err.h"
@@ -152,9 +153,7 @@ static acapmbox_handle_t *cached_conn = NULL;
 
 void acapmbox_disconnect(acapmbox_handle_t *conn)
 {
-
     if (conn == cached_conn) {
-
 	acap_conn_close(conn->conn);
 	free(conn);
 	/* xxx free memory */
@@ -248,11 +247,64 @@ int add_attr(skiplist *sl, char *name, char *value)
     return 0;
 }
 
+static void nab_entrycb(acap_entry_t *entry, void *rock)
+{
+    acap_entry_t **ret = (acap_entry_t **) rock;
+
+    *ret = acap_entry_copy(entry);
+}
+
+static struct acap_search_callback nab_search_cb = {
+    &nab_entrycb, NULL
+};
+
+static struct acap_requested nab_request = {
+    1, {{"*" , 0 }}
+};
+
+/* returns the entry associated with 'entryname'.  returns NULL
+   if it doesn't exist or other ACAP error occurs. */
+static acap_entry_t *nab_entry(acap_conn_t *conn, const char *entryname)
+{
+    int r = 0;
+    char dset[MAX_MAILBOX_PATH];
+    char ent[50 + MAX_MAILBOX_PATH];
+    char *p;
+    acap_entry_t *ret = NULL;
+    acap_cmd_t *cmd;
+
+    strcpy(dset, entryname);
+    p = strrchr(dset, '/');
+    assert(p != NULL);
+
+    p++;
+    sprintf(ent, "EQUAL \"entry\" \"i;octet\" \"%s\"", p);
+    *p = '\0';
+
+    r = acap_search_dataset(conn, dset, ent, 1,
+			    &nab_request, NULL,
+			    NULL,
+			    &nab_search_cb,
+			    NULL, NULL,
+			    &ret,
+			    &cmd);
+    if (r == ACAP_OK) {
+	r = acap_process_on_command(conn, cmd, NULL);
+    }
+
+    if (r == ACAP_OK) {
+	return ret;
+    } else {
+	return NULL;
+    }
+}
+
 int acapmbox_store(acapmbox_handle_t *AC,
 		   acapmbox_data_t *mboxdata,
 		   int commit)
 {
     int result;
+    int retry = 0;
     acap_entry_t *newentry;
     acap_result_t acapres;
 
@@ -271,8 +323,9 @@ int acapmbox_store(acapmbox_handle_t *AC,
     if (result) return result;
 
     newentry = acap_entry_new(fullname);
-    if (newentry == NULL) return ACAP_NOMEM;
+    if (newentry == NULL) fatal("out of memory", EC_TEMPFAIL);
 
+ retry:
     /* make and insert all our initial attributes */
     snprintf(tmpstr, sizeof(tmpstr), "%d", mboxdata->uidvalidity);
     add_attr(newentry->attrs, "mailbox.uidvalidity", tmpstr);
@@ -306,18 +359,66 @@ int acapmbox_store(acapmbox_handle_t *AC,
 			      newentry,
 			      NULL,
 			      NULL,
-			      commit ? 0 : ACAP_STORE_INITIAL,
+			      (commit || retry) ? 0 : ACAP_STORE_INITIAL,
 			      &cmd);
     if (result == ACAP_OK) {
 	result = acap_process_on_command(AC->conn, cmd, &acapres);
-	if (result == ACAP_NO_CONNECTION) {
+	switch (result) {
+	case ACAP_OK:
+	    switch (acapres) {
+	    case ACAP_RESULT_OK:
+		/* good */
+		break;
+
+	    case ACAP_RESULT_NO:
+	    case ACAP_RESULT_BAD:
+		/* we'll treat these the same */
+		if (commit) {
+		    /* this shouldn't have happened */
+		    result = IMAP_IOERROR;
+		} else {
+		    /* unfortunately, we could be in the situation where a
+		       child mailbox exists but we don't. */
+		    acap_entry_free(newentry);
+		    newentry = NULL;
+
+		    /* search against the ACAP server to find current entry
+		     and it's modtime */
+		    newentry = nab_entry(AC->conn, fullname);
+
+		    /* does the mailbox exist? check 'mailbox.status' */
+		    if (newentry && 
+			!acap_entry_getattr_simple(newentry, "mailbox.status"))
+		    {
+		        /* retry store */
+			syslog(LOG_DEBUG, "ACAP: retrying reservation of '%s'",
+			       mboxdata->name);
+
+			retry = 1;
+			goto retry;
+		    } else {
+			result = IMAP_MAILBOX_EXISTS;
+		    }
+		}
+
+	    case ACAP_RESULT_NOTDONE:
+		fatal("acap command finished but not done?", EC_SOFTWARE);
+		break;
+	    }
+	    break;
+	    
+	case ACAP_NO_CONNECTION:
 	    result = IMAP_SERVER_UNAVAILABLE;
-	} else if (acapres != ACAP_RESULT_OK) {
-	    /* this is a likely but not certain error */
-	    result = IMAP_MAILBOX_EXISTS;
+	    break;
+
+	default:
+	    /* yikes, we didn't expect anything else; we'll leave the
+	     error as is */
+	    break;
 	}
     }
 
+    if (newentry) acap_entry_free(newentry);
     return result;
 }
 
@@ -388,7 +489,7 @@ int acapmbox_entryexists(acapmbox_handle_t *AC,
 
     /* create search criteria */
     search_crit = (char *) malloc(strlen(mailbox_name)+30);
-    if (search_crit==NULL) return ACAP_NOMEM;
+    if (search_crit==NULL) fatal("out of memory", EC_TEMPFAIL);
 
     sprintf(search_crit,"EQUAL \"entry\" \"i;octet\" \"%s\"",mailbox_name);
 
@@ -439,7 +540,7 @@ int acapmbox_setsomeprops(acapmbox_handle_t *AC,
     if (result) return result;
 
     newentry = acap_entry_new(fullname);
-    if (newentry == NULL) return ACAP_NOMEM;
+    if (newentry == NULL) fatal("out of memory", EC_TEMPFAIL);
 
     /* make and insert all our attributes */
     snprintf(tmpstr, sizeof(tmpstr), "%d", uidvalidity);
@@ -457,7 +558,6 @@ int acapmbox_setsomeprops(acapmbox_handle_t *AC,
     snprintf(tmpstr, sizeof(tmpstr), "%d", exists);
     add_attr(newentry->attrs, "mailbox.total", tmpstr);
 
-    /* create the cmd; if it's the first time through, we ACAP_STORE_INITIAL */
     result = acap_store_entry(AC->conn,
 			      newentry,
 			      NULL,
@@ -469,13 +569,13 @@ int acapmbox_setsomeprops(acapmbox_handle_t *AC,
 	if (result == ACAP_NO_CONNECTION) {
 	    result = IMAP_SERVER_UNAVAILABLE;
 	} else if (acapres != ACAP_RESULT_OK) {
-	    /* this is a likely but not certain error */
-	    result = IMAP_MAILBOX_EXISTS;
+	    result = IMAP_IOERROR;
 	}
     }
 
-    return result;    
+    acap_entry_free(newentry);
 
+    return result;    
 }
 
 int acapmbox_setproperty(acapmbox_handle_t *AC,
@@ -484,7 +584,7 @@ int acapmbox_setproperty(acapmbox_handle_t *AC,
 			 int value)
 {
     int result;
-    char fullname[1024];
+    char fullname[MAX_MAILBOX_PATH];
     acap_cmd_t *cmd;
     acap_attribute_t *tmpattr;
     char *attrname;
@@ -522,7 +622,7 @@ int acapmbox_setproperty(acapmbox_handle_t *AC,
     snprintf(attrvalue, sizeof(attrvalue), "%d", value);
     
     tmpattr = acap_attribute_new_simple (attrname,attrvalue);
-    if (tmpattr==NULL) return ACAP_NOMEM;
+    if (tmpattr==NULL) fatal("out of memory", EC_TEMPFAIL);
 
     /* issue store command */
     result = acap_store_attribute(AC->conn,
@@ -550,7 +650,7 @@ int acapmbox_setproperty_acl(acapmbox_handle_t *AC,
 			     char *newvalue)
 {
     int result;
-    char fullname[1024];
+    char fullname[MAX_MAILBOX_PATH];
     acap_cmd_t *cmd;
     acap_attribute_t *tmpattr;
     char *attrname;
@@ -570,7 +670,7 @@ int acapmbox_setproperty_acl(acapmbox_handle_t *AC,
 
     tmpattr = acap_attribute_new_simple (attrname,newvalue);
 
-    if (tmpattr==NULL) return ACAP_NOMEM;
+    if (tmpattr==NULL) fatal("out of memory", EC_TEMPFAIL);
 
     /* issue store command */
     result = acap_store_attribute(AC->conn,
@@ -604,17 +704,13 @@ acapmbox_status mboxdata_convert_status(acap_value_t *v)
     else return ACAPMBOX_UNKNOWN;
 }
 
-static void myacap_copy_modtime(char *modtime, void *rock)
-{
-    printf("\tmodtime = %s\n", modtime);
-}
-
 int acapmbox_delete(acapmbox_handle_t *AC,
 		    char *mailbox_name)
 {
     acap_cmd_t *cmd;
     int r;
-    char fullname[1024];
+    char fullname[MAX_MAILBOX_PATH];
+    acap_entry_t *entry;
 
     if (AC == NULL) return 0;
     assert(mailbox_name != NULL);
@@ -626,12 +722,19 @@ int acapmbox_delete(acapmbox_handle_t *AC,
     r = acapmbox_dataset_name(mailbox_name, fullname);
     if (r) return r;
 
-    r = acap_delete_entry_name(AC->conn,
-			       fullname,
-			       NULL,
-			       NULL,
-			       &cmd);
+    /* we can't just delete the entry, since that will delete subdatasets
+       of the entry, as well.  instead, we just delete "mailbox.status"
+       and "mailbox.url". */
+    entry = acap_entry_new(fullname);
+    if (entry == NULL) fatal("out of memory", EC_TEMPFAIL);
+
+    add_attr(entry->attrs, "mailbox.status", NULL);
+    add_attr(entry->attrs, "mailbox.url", NULL);
+
+    r = acap_store_entry(AC->conn, entry, NULL, NULL, 0, &cmd);
     if (!r) r = acap_process_on_command(AC->conn, cmd, NULL);
+    
+    acap_entry_free(entry);
 
     return r;
 }
