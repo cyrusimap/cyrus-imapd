@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.175.2.10 2004/02/18 19:08:45 ken3 Exp $
+# $Id: Makefile.in,v 1.175.2.11 2004/02/19 21:16:14 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -186,16 +186,16 @@ idled: idled.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o idled \
 	 idled.o mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
 
-lmtpd: lmtpd.o proxy.o lmtp_proxy.o $(LMTPOBJS) $(SIEVE_OBJS) mutex_fake.o \
+lmtpd: lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) mutex_fake.o \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o lmtpd \
-	 $(SERVICE) lmtpd.o proxy.o lmtp_proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
+	 $(SERVICE) lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
 	 mutex_fake.o libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-lmtpd.pure: lmtpd.o proxy.o lmtp_proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
+lmtpd.pure: lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
 	 mutex_fake.o libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o lmtpd.pure \
-	 $(SERVICE) lmtpd.o proxy.o lmtp_proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
+	 $(SERVICE) lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
 	 mutex_fake.o libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 imapd: xversion $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)

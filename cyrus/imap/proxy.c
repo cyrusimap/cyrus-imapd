@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.c,v 1.1.2.1 2004/02/18 19:08:52 ken3 Exp $
+ * $Id: proxy.c,v 1.1.2.2 2004/02/19 21:16:15 ken3 Exp $
  */
 
 #include <config.h>
@@ -60,6 +60,42 @@
 #include "xmalloc.h"
 
 #define IDLE_TIMEOUT (5 * 60)
+
+void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
+		   char *server, const char *authas)
+{
+    struct dest *d;
+
+    /* see if we currently have a 'mailboxdata->server'/'authas' 
+       combination. */
+    for (d = *dlist; d != NULL; d = d->next) {
+	if (!strcmp(d->server, server) && 
+	    !strcmp(d->authas, authas ? authas : "")) break;
+    }
+
+    if (d == NULL) {
+	/* create a new one */
+	d = xmalloc(sizeof(struct dest));
+	strlcpy(d->server, server, sizeof(d->server));
+	strlcpy(d->authas, authas ? authas : "", sizeof(d->authas));
+	d->rnum = 0;
+	d->to = NULL;
+	d->next = *dlist;
+	*dlist = d;
+    }
+
+    if (rcpt) {
+	struct rcpt *new_rcpt = xmalloc(sizeof(struct rcpt));
+
+	strlcpy(new_rcpt->rcpt, rcpt, sizeof(new_rcpt->rcpt));
+	new_rcpt->rcpt_num = rcpt_num;
+    
+	/* add rcpt to d */
+	d->rnum++;
+	new_rcpt->next = d->to;
+	d->to = new_rcpt;
+    }
+}
 
 void proxy_downserver(struct backend *s)
 {

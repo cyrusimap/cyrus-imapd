@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.12 2004/02/19 19:41:18 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.13 2004/02/19 21:16:15 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -84,6 +84,7 @@
 #include "mupdate-client.h"
 #include "notify.h"
 #include "prot.h"
+#include "proxy.h"
 #include "tls.h"
 #include "util.h"
 #include "version.h"
@@ -92,7 +93,6 @@
 #include "lmtpengine.h"
 #include "lmtpstats.h"
 #include "lmtp_sieve.h"
-#include "lmtp_proxy.h"
 
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
@@ -431,31 +431,119 @@ int deliver_mailbox(struct protstream *msg,
     return r;
 }
 
+enum rcpt_status {
+    done = 0,
+    nosieve,			/* no sieve script */
+    s_wait,			/* processing sieve requests */
+    s_err,			/* error in sieve processing/sending */
+    s_done,			/* sieve script successfully run */
+};
+
+void deliver_remote(message_data_t *msgdata,
+		    struct dest *dlist, enum rcpt_status *status)
+{
+    struct dest *d;
+
+    /* run the txns */
+    d = dlist;
+    while (d) {
+	struct lmtp_txn *lt = LMTP_TXN_ALLOC(d->rnum);
+	struct rcpt *rc;
+	struct backend *remote;
+	int i = 0;
+	int r = 0;
+	
+	lt->from = msgdata->return_path;
+	lt->auth = d->authas[0] ? d->authas : NULL;
+	lt->isdotstuffed = 0;
+	lt->tempfail_unknown_mailbox = 1;
+	
+	prot_rewind(msgdata->data);
+	lt->data = msgdata->data;
+	lt->rcpt_num = d->rnum;
+	rc = d->to;
+	for (rc = d->to; rc != NULL; rc = rc->next, i++) {
+	    assert(i < d->rnum);
+	    lt->rcpt[i].addr = rc->rcpt;
+	    lt->rcpt[i].ignorequota =
+		msg_getrcpt_ignorequota(msgdata, rc->rcpt_num);
+	}
+	assert(i == d->rnum);
+
+	remote = proxy_findserver(d->server, &protocol[PROTOCOL_LMTP], "",
+				  &backend_cached, NULL, NULL, NULL);
+	if (remote) {
+	    r = lmtp_runtxn(remote, lt);
+	} else {
+	    /* remote server not available; tempfail all deliveries */
+	    for (rc = d->to, i = 0; i < d->rnum; i++) {
+		lt->rcpt[i].result = RCPT_TEMPFAIL;
+		lt->rcpt[i].r = IMAP_SERVER_UNAVAILABLE;
+	    }
+	}
+
+	/* process results of the txn, propogating error state to the
+	   recipients */
+	for (rc = d->to, i = 0; rc != NULL; rc = rc->next, i++) {
+	    int j = rc->rcpt_num;
+	    switch (status[j]) {
+	    case s_wait:
+		/* hmmm, if something fails we'll want to try an 
+		   error delivery */
+		if (lt->rcpt[i].result != RCPT_GOOD) {
+		    status[j] = s_err;
+		}
+		break;
+	    case s_err:
+		/* we've already detected an error for this recipient,
+		   and nothing will convince me otherwise */
+		break;
+	    case nosieve:
+		/* this is the only delivery we're attempting for this rcpt */
+		msg_setrcpt_status(msgdata, j, lt->rcpt[i].r);
+		status[j] = done;
+		break;
+	    case done:
+	    case s_done:
+		/* yikes! we shouldn't be getting a notification for this
+		   person! */
+		abort();
+		break;
+	    }
+	}
+
+	free(lt);
+	d = d->next;
+    }
+}
+
 int deliver(message_data_t *msgdata, char *authuser,
 	    struct auth_state *authstate)
 {
     int n, nrcpts;
-    sieve_msgdata_t localdata;
-    remote_msgdata_t remotedata;
-    struct dest *d;
+    struct dest *dlist = NULL;
+    enum rcpt_status *status;
+    struct stagemsg *stage;
+    char *notifyheader;
+    sieve_msgdata_t sievedata;
     
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
     assert(nrcpts);
+    stage = (struct stagemsg *) msg_getrock(msgdata);
+    notifyheader = generate_notify(msgdata);
 
-    /* create 'localdata', our per-delivery local data */
-    localdata.m = msgdata;
-    localdata.stage = (struct stagemsg *) msg_getrock(msgdata);
-    localdata.notifyheader = generate_notify(msgdata);
-    localdata.namespace = &lmtpd_namespace;
-    localdata.authuser = authuser;
-    localdata.authstate = authstate;
+    /* create our per-recipient status */
+    status = xzmalloc(sizeof(enum rcpt_status) * nrcpts);
+
+    /* create our per-delivery sieve data */
+    sievedata.m = msgdata;
+    sievedata.stage = stage;
+    sievedata.notifyheader = notifyheader;
+    sievedata.namespace = &lmtpd_namespace;
+    sievedata.authuser = authuser;
+    sievedata.authstate = authstate;
     
-    /* create 'remotedata', our per-delivery remote data */
-    remotedata.authuser = authuser;
-    remotedata.dlist = NULL;
-    remotedata.pend = xzmalloc(sizeof(enum pending) * nrcpts);
-
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
 	char namebuf[MAX_MAILBOX_NAME+1] = "", *server;
@@ -465,7 +553,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 
 	rcpt = msg_getrcptall(msgdata, n);
 	msg_getrcpt(msgdata, n, &user, &domain, &mailbox);
-	localdata.cur_rcpt = remotedata.cur_rcpt = n;
+	sievedata.cur_rcpt = n;
 
 	if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
 
@@ -476,17 +564,14 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    r = mlookup(namebuf, &server, NULL, NULL);
 	    if (!r && server) {
 		/* remote mailbox */
-		adddest(&remotedata, rcpt, server, remotedata.authuser);
-		remotedata.pend[n] = nosieve;
+		proxy_adddest(&dlist, rcpt, n, server, authuser);
+		status[n] = nosieve;
 	    }
 	    else if (!r) {
 		/* local mailbox */
-		r = deliver_mailbox(msgdata->data, 
-				    localdata.stage,
-				    msgdata->size, 
-				    NULL, 0,
-				    localdata.authuser, localdata.authstate,
-				    msgdata->id, NULL, localdata.notifyheader,
+		r = deliver_mailbox(msgdata->data, stage, msgdata->size, 
+				    NULL, 0, authuser, authstate,
+				    msgdata->id, NULL, notifyheader,
 				    namebuf, quotaoverride, 0);
 	    }
 	}
@@ -499,8 +584,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    r = mlookup(namebuf, &server, NULL, NULL);
 	    if (!r && server) {
 		/* remote mailbox */
-		adddest(&remotedata, rcpt, server, authuser);
-		remotedata.pend[n] = nosieve;
+		proxy_adddest(&dlist, rcpt, n, server, authuser);
+		status[n] = nosieve;
 	    }
 	    else if (!r) {
 		/* local mailbox */
@@ -514,7 +599,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 		}
 
 #ifdef USE_SIEVE
-		r = run_sieve(user, domain, mailbox, sieve_interp, &localdata);
+		r = run_sieve(user, domain, mailbox, sieve_interp, &sievedata);
 		/* if there was no sieve script, or an error during execution,
 		   r is non-zero and we'll do normal delivery */
 #else
@@ -526,14 +611,9 @@ int deliver(message_data_t *msgdata, char *authuser,
 		    strlcat(namebuf, ".", sizeof(namebuf));
 		    strlcat(namebuf, mailbox, sizeof(namebuf));
 		
-		    r = deliver_mailbox(msgdata->data, 
-					localdata.stage, 
-					msgdata->size, 
-					NULL, 0, 
-					localdata.authuser,
-					localdata.authstate,
-					msgdata->id, userbuf,
-					localdata.notifyheader,
+		    r = deliver_mailbox(msgdata->data, stage,  msgdata->size, 
+					NULL, 0, authuser, authstate,
+					msgdata->id, userbuf, notifyheader,
 					namebuf, quotaoverride, 0);
 		}
 
@@ -542,14 +622,9 @@ int deliver(message_data_t *msgdata, char *authuser,
 		    *tail = '\0';
 		
 		    /* ignore ACL's trying to deliver to INBOX */
-		    r = deliver_mailbox(msgdata->data, 
-					localdata.stage,
-					msgdata->size, 
-					NULL, 0, 
-					localdata.authuser,
-					localdata.authstate,
-					msgdata->id, userbuf,
-					localdata.notifyheader,
+		    r = deliver_mailbox(msgdata->data, stage, msgdata->size, 
+					NULL, 0, authuser, authstate,
+					msgdata->id, userbuf, notifyheader,
 					namebuf, quotaoverride, 1);
 		}
 	    }
@@ -558,12 +633,14 @@ int deliver(message_data_t *msgdata, char *authuser,
 	msg_setrcpt_status(msgdata, n, r);
     }
 
-    if (remotedata.dlist) {
+    if (dlist) {
+	struct dest *d;
+
 	/* run the txns */
-	runme(&remotedata, msgdata, &backend_cached);
+	deliver_remote(msgdata, dlist, status);
 
 	/* free the recipient/destination lists */
-	d = remotedata.dlist;
+	d = dlist;
 	while (d) {
 	    struct dest *nextd = d->next;
 	    struct rcpt *rc = d->to;
@@ -576,11 +653,11 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    free(d);
 	    d = nextd;
 	}
-	remotedata.dlist = NULL;
+	dlist = NULL;
 
 	/* do any sieve error recovery, if needed */
 	for (n = 0; n < nrcpts; n++) {
-	    switch (remotedata.pend[n]) {
+	    switch (status[n]) {
 	    case s_wait:
 	    case s_err:
 	    case s_done:
@@ -602,20 +679,18 @@ int deliver(message_data_t *msgdata, char *authuser,
 	}
 
 	/* run the error recovery txns */
-	runme(&remotedata, msgdata, &backend_cached);
+	deliver_remote(msgdata, dlist, status);
 
 	/* everything should be in the 'done' state now, verify this */
 	for (n = 0; n < nrcpts; n++) {
-	    assert(remotedata.pend[n] == done || remotedata.pend[n] == s_done);
+	    assert(status[n] == done || status[n] == s_done);
 	}
     }
    
-    /* free remote data */
-    free(remotedata.pend);
-
-    /* free local data */
-    append_removestage(localdata.stage);
-    if (localdata.notifyheader) free(localdata.notifyheader);
+    /* cleanup */
+    free(status);
+    append_removestage(stage);
+    if (notifyheader) free(notifyheader);
 
     return 0;
 }

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.h,v 1.1.2.1 2004/02/18 19:08:52 ken3 Exp $
+ * $Id: proxy.h,v 1.1.2.2 2004/02/19 21:16:15 ken3 Exp $
  */
 
 #ifndef _PROXY_H
@@ -49,13 +49,31 @@
 #include "protocol.h"
 #include "prot.h"
 
-void proxy_downserver(struct backend *s);
+/* a final destination for a message */
+struct rcpt {
+    char rcpt[MAX_MAILBOX_NAME+1]; /* where? */
+    int rcpt_num;		    /* credit this to who? */
+    struct rcpt *next;
+};
+
+struct dest {
+    char server[MAX_MAILBOX_NAME+1];  /* where? */
+    char authas[MAX_MAILBOX_NAME+1];  /* as who? */
+    int rnum;			      /* number of rcpts */
+    struct rcpt *to;
+    struct dest *next;
+};
+
+void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
+		   char *server, const char *authas);
 
 struct backend *
 proxy_findserver(const char *server, struct protocol_t *prot,
 		 const char *userid, struct backend ***cache,
 		 struct backend **current, struct backend **inbox,
 		 struct protstream *clientin);
+
+void proxy_downserver(struct backend *s);
 
 void kick_mupdate(void);
 
