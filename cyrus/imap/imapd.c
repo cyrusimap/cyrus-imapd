@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.284 2000/12/18 04:53:38 leg Exp $ */
+/* $Id: imapd.c,v 1.285 2000/12/18 20:08:14 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1899,9 +1899,6 @@ void cmd_capability(char *tag)
 	index_check(imapd_mailbox, 0, 0);
     }
     prot_printf(imapd_out, "* CAPABILITY " CAPABILITY_STRING);
-
-    /* add the thread algorithms */
-    list_thread_algorithms(imapd_out);
 
     if (idle_enabled()) {
 	prot_printf(imapd_out, " IDLE");

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.148 2000/12/18 04:53:38 leg Exp $
+ * $Id: index.c,v 1.149 2000/12/18 20:08:15 ken3 Exp $
  */
 #include <config.h>
 
@@ -271,6 +271,7 @@ static void index_thread_sort P((Thread *root, struct sortcrit *sortcrit));
 static void index_thread_print P((Thread *threads, int usinguid));
 static void index_thread_ref P((unsigned *msgno_list, int nmsg, int usinguid));
 
+/* NOTE: Make sure these are listed in CAPABILITY_STRING */
 static struct thread_algorithm thread_algs[] = {
     { "ORDEREDSUBJECT", index_thread_orderedsubj },
     { "REFERENCES", index_thread_ref },
@@ -3692,17 +3693,6 @@ static void index_thread_print(Thread *thread, int usinguid)
     }
 
     prot_printf(imapd_out, "\r\n");
-}
-
-/*
- * List threading algorithms for CAPABILITY.
- */
-void list_thread_algorithms(struct protstream *out)
-{
-    struct thread_algorithm *thr_alg;
-
-    for (thr_alg = thread_algs; thr_alg->alg_name; thr_alg++)
-	prot_printf(out, " THREAD=%s", thr_alg->alg_name);
 }
 
 /*
