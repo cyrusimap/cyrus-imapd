@@ -63,11 +63,12 @@ typedef struct glob {
  *  flags    -- see flag values above
  *  suppress -- prefix to suppress
  */
-glob *glob_init_suppress P((const char *str, int flags, const char *suppress));
+extern glob *glob_init_suppress P((const char *str, int flags,
+				   const char *suppress));
 
 /* free a glob structure
  */
-void glob_free P((glob **g));
+extern void glob_free P((glob **g));
 
 /* returns -1 if no match, otherwise length of match or partial-match
  *  g         pre-processed glob string
@@ -78,7 +79,7 @@ void glob_free P((glob **g));
  *     	      if another match is possible.  If NULL, no partial-matches
  *            are returned.
  */
-int glob_test P((glob *g, const char *str, long len, long *min));
+extern int glob_test P((glob *g, const char *str, long len, long *min));
 
 /* macros */
 #define glob_init(str, flags) glob_init_suppress((str), (flags), NULL)

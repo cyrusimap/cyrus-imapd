@@ -33,6 +33,7 @@
 #include <sys/un.h>
 #include <sys/uio.h>
 
+#include "retry.h"
 #include "config.h"
 #include "sysexits.h"
 #include "mailbox.h"

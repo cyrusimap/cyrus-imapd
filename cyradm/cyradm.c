@@ -34,6 +34,7 @@ extern int errno;
 
 #include "acte.h"
 #include "imclient.h"
+#include "imparse.h"
 #include "tcl.h"
 #include "xmalloc.h"
 
@@ -803,12 +804,12 @@ char **argv;
     argv += 3;
     num = (argc - 3)/2;
     for (i = 0; i < num; i++) {
-	if (!is_atom(argv[2*i])) {
+	if (!imparse_isatom(argv[2*i])) {
 	    Tcl_AppendResult(interp, "invalid quota resource '",
 			     argv[2*i], "'", (char *) NULL);
 	    return -1;
 	}
-	if (!is_number(argv[2*i+1])) {
+	if (!imparse_isnumber(argv[2*i+1])) {
 	    Tcl_AppendResult(interp, "non-numeric quota value '",
 			     argv[2*i+1], "'", (char *) NULL);
 	    return -1;

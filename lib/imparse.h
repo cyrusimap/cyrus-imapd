@@ -39,5 +39,8 @@
 
 extern int imparse_word P((char **s, char **retval));
 extern int imparse_astring P((char **s, char **retval));
+extern int imparse_isatom P((const char *s));
+extern int imparse_issequence P((const char *s));
+extern int imparse_isnumber P((const char *s));
 
 #endif /* INCLUDED_IMPARSE_H */

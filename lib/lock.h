@@ -39,7 +39,7 @@
 
 #include <sys/stat.h>
 
-extern void lock_reopen P((int fd, const char *filename,
+extern int lock_reopen P((int fd, const char *filename,
 			   struct stat *sbuf, const char **failaction));
 
 extern int lock_blocking P((int fd));

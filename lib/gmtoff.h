@@ -39,7 +39,7 @@
 
 #include <time.h>
 
-int gmtoff_of P((struct tm *tm, time_t time));
+extern int gmtoff_of P((struct tm *tm, time_t time));
 
 #endif /* INCLUDED_GMTOFF_H */
 

@@ -48,6 +48,8 @@
 #include "config.h"
 #include "version.h"
 #include "charset.h"
+#include "imparse.h"
+#include "mkgmtime.h"
 #include "sysexits.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -85,7 +87,71 @@ static char *monthname[] = {
     "jul", "aug", "sep", "oct", "nov", "dec"
 };
 
+void usage P((void));
+void shut_down P((int code));
+void fatal P((const char *s, int code));
+
+void cmdloop P((void));
+void cmd_login P((char *tag, char *user, char *passwd));
+void cmd_authenticate P((char *tag, char *authtype));
+void cmd_noop P((char *tag, char *cmd));
+void cmd_capability P((char *tag));
+void cmd_append P((char *tag, char *name));
+void cmd_select P((char *tag, char *cmd, char *name));
+void cmd_close P((char *tag));
+void cmd_fetch P((char *tag, char *sequence, int usinguid));
+void cmd_partial P((char *tag, char *msgno, char *data,
+		    char *start, char *count));
+void cmd_store P((char *tag, char *sequence, char *operation, int usinguid));
+void cmd_search P((char *tag, int usinguid));
+void cmd_copy P((char *tag, char *sequence, char *name, int usinguid));
+void cmd_expunge P((char *tag, char *sequence));
+void cmd_create P((char *tag, char *name, char *partition));
+void cmd_delete P((char *tag, char *name));
+void cmd_rename P((char *tag, char *oldname, char *newname, char *partition));
+void cmd_find P((char *tag, char *namespace, char *pattern));
+void cmd_list P((char *tag, int subscribed, char *reference, char *pattern));
+void cmd_changesub P((char *tag, char *namespace, char *name, int add));
+void cmd_getacl P((char *tag, char *name, int oldform));
+void cmd_myrights P((char *tag, char *name, int oldform));
+void cmd_setacl P((char *tag, char *name, char *identifier, char *rights));
+void cmd_getquota P((char *tag, char *name));
+void cmd_getquotaroot P((char *tag, char *name));
+void cmd_setquota P((char *tag, char *quotaroot));
+void cmd_status P((char *tag, char *name));
+void cmd_getuids P((char *tag, char *startuid));
+void cmd_getstate P((char *tag));
+void cmd_checkstate P((char *tag, char *state1, char *state2));
+
+int getword P((struct buf *buf));
+int getastring P((struct buf *buf));
+int getbase64string P((struct buf *buf));
+int getsearchprogram P((char *tag, struct searchargs *searchargs,
+			int *charset, int parsecharset));
+int getsearchcriteria P((char *tag, struct searchargs *searchargs,
+			 int *charset, int parsecharset));
+int getsearchdate P((time_t *start, time_t *end));
+int getdatetime P((time_t *date));
+
+void eatline P((int c));
+void printastring P((const char *s));
+
+void appendfieldlist P((struct fieldlist **l, char *section,
+			struct strlist *fields, char *trail));
+void appendstrlist P((struct strlist **l, char *s));
+void appendstrlistpat P((struct strlist **l, char *s));
+void freefieldlist P((struct fieldlist *l));
+void freestrlist P((struct strlist *l));
+void appendsearchargs P((struct searchargs *s, struct searchargs *s1,
+			 struct searchargs*s2));
+void freesearchargs P((struct searchargs *s));
+
+void printauthready P((int len, unsigned char *data));
+
+/* XXX fix when proto-izing mboxlist.c */
 static int mailboxdata(), listdata(), lsubdata();
+static int mstringdata P((char *cmd, char *name, int matchlen, int maycreate));
+
 
 main(argc, argv, envp)
 int argc;
@@ -144,6 +210,7 @@ char **envp;
     cmdloop();
 }
 
+void
 usage()
 {
     prot_printf(imapd_out, "* BYE usage: imapd\r\n");
@@ -154,6 +221,7 @@ usage()
 /*
  * Cleanly shut down and exit
  */
+void
 shut_down(code)
 int code;
 {
@@ -166,8 +234,9 @@ int code;
     exit(code);
 }
 
+void
 fatal(s, code)
-char *s;
+const char *s;
 int code;
 {
     static int recurse_code = 0;
@@ -186,6 +255,7 @@ int code;
 /*
  * Top-level command loop parsing
  */
+void
 cmdloop()
 {
     int c;
@@ -205,7 +275,7 @@ cmdloop()
 	    }
 	    shut_down(0);
 	}
-	if (c != ' ' || !is_atom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
+	if (c != ' ' || !imparse_isatom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
 	    prot_printf(imapd_out, "* BAD Invalid tag\r\n");
 	    eatline(c);
 	    continue;
@@ -231,7 +301,7 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Authenticate")) {
 		if (c != ' ') goto missingargs;
 		c = getword(&arg1);
-		if (!is_atom(arg1.s)) {
+		if (!imparse_isatom(arg1.s)) {
 		    prot_printf(imapd_out, "%s BAD Invalid authenticate mechanism\r\n", tag.s);
 		    eatline(c);
 		    continue;
@@ -288,7 +358,7 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 	    copy:
 		c = getword(&arg1);
-		if (c != ' ' || !is_sequence(arg1.s)) goto badsequence;
+		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
 		c = getastring(&arg2);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
@@ -304,7 +374,7 @@ cmdloop()
 		if (c == ' ') {
 		    havepartition = 1;
 		    c = getword(&arg2);
-		    if (!is_atom(arg2.s)) goto badpartition;
+		    if (!imparse_isatom(arg2.s)) goto badpartition;
 		}
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -371,7 +441,7 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 	    fetch:
 		c = getword(&arg1);
-		if (c != ' ' || !is_sequence(arg1.s)) goto badsequence;
+		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
 		cmd_fetch(tag.s, arg1.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Find")) {
@@ -521,7 +591,7 @@ cmdloop()
 		if (c == ' ') {
 		    havepartition = 1;
 		    c = getword(&arg3);
-		    if (!is_atom(arg3.s)) goto badpartition;
+		    if (!imparse_isatom(arg3.s)) goto badpartition;
 		}
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -537,7 +607,7 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 	    store:
 		c = getword(&arg1);
-		if (c != ' ' || !is_sequence(arg1.s)) goto badsequence;
+		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
 		c = getword(&arg2);
 		if (c != ' ') goto badsequence;
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
@@ -630,7 +700,7 @@ cmdloop()
 #ifdef ENABLE_EXPERIMENT
 		else if (!strcmp(arg1.s, "expunge")) {
 		    c = getword(&arg1);
-		    if (!is_sequence(arg1.s)) goto badsequence;
+		    if (!imparse_issequence(arg1.s)) goto badsequence;
 		    if (c == '\r') c = prot_getc(imapd_in);
 		    if (c != '\n') goto extraargs;
 		    cmd_expunge(tag.s, arg1.s);
@@ -736,6 +806,7 @@ cmdloop()
 /*
  * Perform a LOGIN command
  */
+void
 cmd_login(tag, user, passwd)
 char *tag;
 char *user;
@@ -743,7 +814,7 @@ char *passwd;
 {
     char *canon_user;
     char *reply = 0;
-    char *val;
+    const char *val;
     char buf[MAX_MAILBOX_PATH];
     char *p;
     FILE *logfile;
@@ -792,12 +863,12 @@ char *passwd;
     
 
     auth_setid(canon_user, (char *)0);
-    imapd_userid = strsave(canon_user);
+    imapd_userid = xstrdup(canon_user);
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
     val = config_getstring("admins", "");
     while (*val) {
-	for (p = val; *p && !isspace(*p); p++);
+	for (p = (char *)val; *p && !isspace(*p); p++);
 	strncpy(buf, val, p - val);
 	buf[p-val] = 0;
 	if (auth_memberof(buf)) {
@@ -830,6 +901,7 @@ char *passwd;
 /*
  * Perform an AUTHENTICATE command
  */
+void
 cmd_authenticate(tag, authtype)
 char *tag;
 char *authtype;
@@ -849,7 +921,7 @@ char *authtype;
     acte_encodefunc_t *encodefunc;
     acte_decodefunc_t *decodefunc;
     int maxplain;
-    char *val;
+    const char *val;
     char buf[MAX_MAILBOX_PATH];
     char *p;
     FILE *logfile;
@@ -909,12 +981,12 @@ char *authtype;
     }
 
     auth_setid(canon_user, mech->get_cacheid(state));
-    imapd_userid = strsave(canon_user);
+    imapd_userid = xstrdup(canon_user);
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
     val = config_getstring("admins", "");
     while (*val) {
-	for (p = val; *p && !isspace(*p); p++);
+	for (p = (char *)val; *p && !isspace(*p); p++);
 	strncpy(buf, val, p - val);
 	buf[p-val] = 0;
 	if (auth_memberof(buf)) {
@@ -959,6 +1031,7 @@ char *authtype;
 /*
  * Perform a NOOP command
  */
+void
 cmd_noop(tag, cmd)
 char *tag;
 char *cmd;
@@ -972,6 +1045,7 @@ char *cmd;
 /*
  * Perform a CAPABILITY command
  */
+void
 cmd_capability(tag)
 char *tag;
 {
@@ -992,6 +1066,7 @@ char *tag;
  * the mailbox name.
  */
 #define FLAGGROW 10
+void
 cmd_append(tag, name)
 char *tag;
 char *name;
@@ -1024,7 +1099,7 @@ char *name;
 		    goto freeflags;
 		}
 	    }
-	    else if (!is_atom(arg.s)) {
+	    else if (!imparse_isatom(arg.s)) {
 		if (!nflags && !arg.s[0] && c == ')') break; /* empty list */
 		prot_printf(imapd_out, "%s BAD Invalid flag name %s in Append command\r\n",
 			    tag, arg.s);
@@ -1035,7 +1110,7 @@ char *name;
 		flagalloc += FLAGGROW;
 		flag = (char **)xrealloc((char *)flag, flagalloc*sizeof(char *));
 	    }
-	    flag[nflags++] = strsave(arg.s);
+	    flag[nflags++] = xstrdup(arg.s);
 	} while (c == ' ');
 	if (c != ')') {
 	    prot_printf(imapd_out,
@@ -1168,6 +1243,7 @@ char *name;
 /*
  * Perform a SELECT/EXAMINE/BBOARD command
  */
+void
 cmd_select(tag, cmd, name)
 char *tag;
 char *cmd;
@@ -1216,6 +1292,10 @@ char *name;
 	return;
     }
 
+    if (mailbox.format == MAILBOX_FORMAT_NETNEWS) {
+	(void) mailbox_expungenews(&mailbox);
+    }
+
     mboxstruct = mailbox;
     imapd_mailbox = &mboxstruct;
 
@@ -1256,6 +1336,7 @@ char *name;
 /*
  * Perform a CLOSE command
  */
+void
 cmd_close(tag)
 char *tag;
 {
@@ -1283,6 +1364,7 @@ char *tag;
  * The command has been parsed up to and including
  * the sequence
  */
+void
 cmd_fetch(tag, sequence, usinguid)
 char *tag;
 char *sequence;
@@ -1640,6 +1722,7 @@ int usinguid;
 /*
  * Perform a PARTIAL command
  */
+void
 cmd_partial(tag, msgno, data, start, count)
 char *tag;
 char *msgno;
@@ -1737,6 +1820,7 @@ char *count;
  * The command has been parsed up to and including
  * the FLAGS/+FLAGS/-FLAGS
  */
+void
 cmd_store(tag, sequence, operation, usinguid)
 char *tag;
 char *sequence;
@@ -1809,7 +1893,7 @@ int usinguid;
 		goto freeflags;
 	    }
 	}
-	else if (!is_atom(flagname.s)) {
+	else if (!imparse_isatom(flagname.s)) {
 	    prot_printf(imapd_out, "%s BAD Invalid flag name %s in %s command\r\n",
 		   tag, flagname.s, cmd);
 	    eatline(c);
@@ -1821,7 +1905,7 @@ int usinguid;
 		flag = (char **)xrealloc((char *)flag,
 					 flagalloc*sizeof(char *));
 	    }
-	    flag[nflags++] = strsave(flagname.s);
+	    flag[nflags++] = xstrdup(flagname.s);
 	}
 
 	flagsparsed++;
@@ -1870,6 +1954,7 @@ int usinguid;
     if (flag) free((char *)flag);
 }
 
+void
 cmd_search(tag, usinguid)
 char *tag;
 int usinguid;
@@ -1912,6 +1997,7 @@ int usinguid;
 /*
  * Perform a COPY/UID COPY command
  */    
+void
 cmd_copy(tag, sequence, name, usinguid)
 char *tag;
 char *sequence;
@@ -1945,6 +2031,7 @@ int usinguid;
 /*
  * Perform an EXPUNGE command
  */
+void
 cmd_expunge(tag, sequence)
 char *tag;
 char *sequence;
@@ -1956,7 +2043,8 @@ char *sequence;
 	r = mailbox_expunge(imapd_mailbox, 1, index_expungeuidlist, sequence);
     }
     else {
-	r = mailbox_expunge(imapd_mailbox, 1, (int (*)())0, (char *)0);
+	r = mailbox_expunge(imapd_mailbox, 1, (mailbox_decideproc_t *)0,
+			    (void *)0);
     }
 
     index_check(imapd_mailbox, 0, 0);
@@ -1973,6 +2061,7 @@ char *sequence;
 /*
  * Perform a CREATE command
  */
+void
 cmd_create(tag, name, partition)
 char *tag;
 char *name;
@@ -2025,6 +2114,7 @@ char *partition;
 /*
  * Perform a DELETE command
  */
+void
 cmd_delete(tag, name)
 char *tag;
 char *name;
@@ -2054,6 +2144,7 @@ char *name;
 /*
  * Perform a RENAME command
  */
+void
 cmd_rename(tag, oldname, newname, partition)
 char *tag;
 char *oldname;
@@ -2096,6 +2187,7 @@ char *partition;
 /*
  * Perform a FIND command
  */
+void
 cmd_find(tag, namespace, pattern)
 char *tag;
 char *namespace;
@@ -2130,6 +2222,7 @@ char *pattern;
 /*
  * Perform a LIST or LSUB command
  */
+void
 cmd_list(tag, subscribed, reference, pattern)
 char *tag;
 int subscribed;
@@ -2169,6 +2262,7 @@ char *pattern;
  * Perform a SUBSCRIBE (add is nonzero) or
  * UNSUBSCRIBE (add is zero) command
  */
+void
 cmd_changesub(tag, namespace, name, add)
 char *tag;
 char *namespace;
@@ -2207,6 +2301,7 @@ int add;
 /*
  * Perform a GETACL command
  */
+void
 cmd_getacl(tag, name, oldform)
 char *tag;
 char *name;
@@ -2285,6 +2380,7 @@ int oldform;
 /*
  * Perform a MYRIGHTS command
  */
+void
 cmd_myrights(tag, name, oldform)
 char *tag;
 char *name;
@@ -2330,6 +2426,7 @@ int oldform;
 /*
  * Perform a SETACL command
  */
+void
 cmd_setacl(tag, name, identifier, rights)
 char *tag;
 char *name;
@@ -2358,6 +2455,7 @@ char *rights;
 /*
  * Perform a GETQUOTA command
  */
+void
 cmd_getquota(tag, name)
 char *tag;
 char *name;
@@ -2404,6 +2502,7 @@ char *name;
 /*
  * Perform a GETQUOTAROOT command
  */
+void
 cmd_getquotaroot(tag, name)
 char *tag;
 char *name;
@@ -2463,6 +2562,7 @@ char *name;
  * Parse and perform a SETQUOTA command
  * The command has been parsed up to the resource list
  */
+void
 cmd_setquota(tag, quotaroot)
 char *tag;
 char *quotaroot;
@@ -2524,6 +2624,7 @@ char *quotaroot;
  * Parse and perform a STATUS command
  * The command has been parsed up to the attribute list
  */
+void
 cmd_status(tag, name)
 char *tag;
 char *name;
@@ -2630,6 +2731,7 @@ char *name;
 /*
  * Perform a XGETUIDS command
  */
+void
 cmd_getuids(tag, startuid)
 char *tag;
 char *startuid;
@@ -2656,6 +2758,7 @@ char *startuid;
 /*
  * Perform a XGETSTATE command
  */
+void
 cmd_getstate(tag)
 char *tag;
 {
@@ -2671,6 +2774,7 @@ char *tag;
 /*
  * Perform a XCHECKSTATE command
  */
+void
 cmd_checkstate(tag, state1, state2)
 char *tag;
 char *state1;
@@ -3012,7 +3116,7 @@ int parsecharset;
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
     case '*':
-	if (is_sequence(criteria.s)) {
+	if (imparse_issequence(criteria.s)) {
 	    appendstrlist(&searchargs->sequence, criteria.s);
 	}
 	else goto badcri;
@@ -3153,7 +3257,7 @@ int parsecharset;
 	if (!strcmp(criteria.s, "keyword")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getword(&arg);
-	    if (!is_atom(arg.s)) goto badflag;
+	    if (!imparse_isatom(arg.s)) goto badflag;
 	    lcase(arg.s);
 	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
 		if (imapd_mailbox->flagname[flag] &&
@@ -3348,7 +3452,7 @@ int parsecharset;
 	if (!strcmp(criteria.s, "uid")) {
 	    if (c != ' ') goto missingarg;
 	    c = getword(&arg);
-	    if (!is_sequence(arg.s)) goto badcri;
+	    if (!imparse_issequence(arg.s)) goto badcri;
 	    appendstrlist(&searchargs->uidsequence, arg.s);
 	}
 	else if (!strcmp(criteria.s, "unseen")) {
@@ -3369,7 +3473,7 @@ int parsecharset;
 	else if (!strcmp(criteria.s, "unkeyword")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getword(&arg);
-	    if (!is_atom(arg.s)) goto badflag;
+	    if (!imparse_isatom(arg.s)) goto badflag;
 	    lcase(arg.s);
 	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
 		if (imapd_mailbox->flagname[flag] &&
@@ -3699,6 +3803,7 @@ time_t *date;
  * Eat characters up to and including the next newline
  * Also look for and eat no-wait literals.
  */
+void
 eatline(c)
 int c;
 {
@@ -3733,13 +3838,14 @@ int c;
 /*
  * Print 's' as an atom, quoted-string, or literal
  */
+void
 printastring(s)
-char *s;
+const char *s;
 {
-    char *p;
+    const char *p;
     int len = 0;
 
-    if (is_atom(s)) {
+    if (imparse_isatom(s)) {
 	prot_printf(imapd_out, "%s", s);
 	return;
     }
@@ -3762,6 +3868,7 @@ char *s;
 /*
  * Append 'section', 'fields', 'trail' to the fieldlist 'l'.
  */
+void
 appendfieldlist(l, section, fields, trail)
 struct fieldlist **l;
 char *section;
@@ -3773,15 +3880,16 @@ char *trail;
     while (*tail) tail = &(*tail)->next;
 
     *tail = (struct fieldlist *)xmalloc(sizeof(struct fieldlist));
-    (*tail)->section = strsave(section);
+    (*tail)->section = xstrdup(section);
     (*tail)->fields = fields;
-    (*tail)->trail = strsave(trail);
+    (*tail)->trail = xstrdup(trail);
     (*tail)->next = 0;
 }
 
 /*
  * Append 's' to the strlist 'l'.
  */
+void
 appendstrlist(l, s)
 struct strlist **l;
 char *s;
@@ -3791,7 +3899,7 @@ char *s;
     while (*tail) tail = &(*tail)->next;
 
     *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
-    (*tail)->s = strsave(s);
+    (*tail)->s = xstrdup(s);
     (*tail)->p = 0;
     (*tail)->next = 0;
 }
@@ -3799,6 +3907,7 @@ char *s;
 /*
  * Append 's' to the strlist 'l', compiling it as a pattern.
  */
+void
 appendstrlistpat(l, s)
 struct strlist **l;
 char *s;
@@ -3808,7 +3917,7 @@ char *s;
     while (*tail) tail = &(*tail)->next;
 
     *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
-    (*tail)->s = strsave(s);
+    (*tail)->s = xstrdup(s);
     (*tail)->p = charset_compilepat(s);
     (*tail)->next = 0;
 }
@@ -3816,6 +3925,7 @@ char *s;
 /*
  * Free the fieldlist 'l'
  */
+void
 freefieldlist(l)
 struct fieldlist *l;
 {
@@ -3834,6 +3944,7 @@ struct fieldlist *l;
 /*
  * Free the strlist 'l'
  */
+void
 freestrlist(l)
 struct strlist *l;
 {
@@ -3851,6 +3962,7 @@ struct strlist *l;
 /*
  * Append the searchargs 's1' and 's2' to the sublist of 's'
  */
+void
 appendsearchargs(s, s1, s2)
 struct searchargs *s, *s1, *s2;
 {
@@ -3868,6 +3980,7 @@ struct searchargs *s, *s1, *s2;
 /*
  * Free the searchargs 's'
  */
+void
 freesearchargs(s)
 struct searchargs *s;
 {
@@ -3901,6 +4014,7 @@ struct searchargs *s;
  */
 static char basis_64[] =
    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+void
 printauthready(len, data)
 int len;
 unsigned char *data;

@@ -49,6 +49,8 @@
 #include "mailbox.h"
 #include "sysexits.h"
 #include "util.h"
+#include "lock.h"
+#include "retry.h"
 #include "imap_err.h"
 #include "xmalloc.h"
 
@@ -152,7 +154,7 @@ static int toimsp_open()
 {
     int fd, r;
     char fnamebuf[MAX_MAILBOX_PATH];
-    char *lockfailaction;
+    const char *lockfailaction;
 
     sprintf(fnamebuf, "%s%s", config_dir, FNAME_TOIMSPFILE);
     fd = open(fnamebuf, O_WRONLY, 0666);

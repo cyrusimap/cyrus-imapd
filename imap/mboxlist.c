@@ -44,7 +44,11 @@ extern int errno;
 #include "glob.h"
 #include "assert.h"
 #include "config.h"
+#include "map.h"
+#include "bsearch.h"
+#include "lock.h"
 #include "util.h"
+#include "retry.h"
 #include "mailbox.h"
 #include "sysexits.h"
 #include "imap_err.h"
@@ -55,7 +59,7 @@ acl_canonproc_t mboxlist_ensureOwnerRights;
 static char *listfname, *newlistfname;
 static int listfd = -1;
 static long list_ino;
-static char *list_base;
+static const char *list_base;
 static unsigned long list_size = 0;
 static int list_locked = 0;
 
@@ -101,7 +105,8 @@ char **aclp;
 {
     unsigned long offset, len, partitionlen, acllen;
     char optionbuf[MAX_MAILBOX_NAME+1];
-    char *p, *partition, *acl, *root;
+    char *p, *partition, *acl;
+    const char *root;
     static char pathresult[MAX_MAILBOX_PATH];
     static char *aclresult;
     static int aclresultalloced;
@@ -224,7 +229,7 @@ char **newpartition;
 	    partition[parentpartitionlen] = '\0';
 	}
 	else {
-	    partition = strsave(partition);
+	    partition = xstrdup(partition);
 	}
 
 	/* Copy ACL */
@@ -246,7 +251,7 @@ char **newpartition;
 	    return IMAP_PERMISSION_DENIED;
 	}
 	
-	acl = strsave("");
+	acl = xstrdup("");
 	if (!strncmp(name, "user.", 5)) {
 	    if (strchr(name+5, '.')) {
 		/* Disallow creating user.X.* when no user.X */
@@ -271,7 +276,7 @@ char **newpartition;
 	}
 	else {
 	    defaultacl = identifier = 
-	      strsave(config_getstring("defaultacl", "anyone lrs"));
+	      xstrdup(config_getstring("defaultacl", "anyone lrs"));
 	    for (;;) {
 		while (*identifier && isspace(*identifier)) identifier++;
 		rights = identifier;
@@ -291,13 +296,13 @@ char **newpartition;
 	}
 
 	if (!partition) {  
-	    partition = config_defpartition;
+	    partition = (char *)config_defpartition;
 	    if (strlen(partition) > MAX_PARTITION_LEN) {
 		/* Configuration error */
 		fatal("name of default partition is too long", EX_CONFIG);
 	    }
 	}
-	partition = strsave(partition);
+	partition = xstrdup(partition);
     }	      
 
     if (newpartition) *newpartition = partition;
@@ -323,7 +328,7 @@ char *userid;
     unsigned long offset, len;
     char *acl;
     char buf2[MAX_MAILBOX_PATH];
-    char *root;
+    const char *root;
     int newlistfd;
     struct iovec iov[10];
     int n;
@@ -372,7 +377,7 @@ char *userid;
     }
 
     /* Copy mailbox list, adding new entry */
-    iov[0].iov_base = list_base;
+    iov[0].iov_base = (char *)list_base;
     iov[0].iov_len = offset;
     iov[1].iov_base = name;
     iov[1].iov_len = strlen(name);
@@ -386,7 +391,7 @@ char *userid;
     iov[5].iov_len = strlen(acl);
     iov[6].iov_base = "\n";
     iov[6].iov_len = 1;
-    iov[7].iov_base = list_base + offset;
+    iov[7].iov_base = (char *)list_base + offset;
     iov[7].iov_len = list_size - offset;
 
     n = retry_writev(newlistfd, iov, 8);
@@ -553,9 +558,9 @@ int checkacl;
     }
 
     /* Copy mailbox list, removing entry/entries */
-    iov[0].iov_base = list_base;
+    iov[0].iov_base = (char *)list_base;
     iov[0].iov_len = offset;
-    iov[1].iov_base = list_base + offset + len;
+    iov[1].iov_base = (char *)list_base + offset + len;
     iov[1].iov_len = list_size - offset - len;
 
     n = retry_writev(newlistfd, iov, 2);
@@ -627,7 +632,7 @@ char *userid;
     bit32 olduidvalidity, newuidvalidity;
     char *acl;
     char buf2[MAX_MAILBOX_PATH];
-    char *root;
+    const char *root;
     int newlistfd;
     struct iovec iov[10];
     int num_iov;
@@ -672,7 +677,7 @@ char *userid;
 	      IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	}
     }
-    acl = strsave(acl);
+    acl = xstrdup(acl);
 
     /* Check ability to create new mailbox */
     if (!strncmp(newname, "user.", 5) && !strchr(newname+5, '.')) {
@@ -729,10 +734,10 @@ char *userid;
 
     /* Copy mailbox list, changing entry */
     num_iov  = 0;
-    iov[num_iov].iov_base = list_base;
+    iov[num_iov].iov_base = (char *)list_base;
     if (oldoffset < newoffset) {
 	iov[num_iov++].iov_len = oldoffset;
-	iov[num_iov].iov_base = list_base + oldoffset + oldlen;
+	iov[num_iov].iov_base = (char *)list_base + oldoffset + oldlen;
 	iov[num_iov++].iov_len = newoffset - (oldoffset + oldlen);
     }
     else {
@@ -750,13 +755,13 @@ char *userid;
     iov[num_iov++].iov_len = strlen(acl);
     iov[num_iov].iov_base = "\n";
     iov[num_iov++].iov_len = 1;
-    iov[num_iov].iov_base = list_base + newoffset;
+    iov[num_iov].iov_base = (char *)list_base + newoffset;
     if (oldoffset < newoffset) {
 	iov[num_iov++].iov_len = list_size - newoffset;
     }
     else {
 	iov[num_iov++].iov_len = oldoffset - newoffset;
-	iov[num_iov].iov_base = list_base + oldoffset + oldlen;
+	iov[num_iov].iov_base = (char *)list_base + oldoffset + oldlen;
 	iov[num_iov++].iov_len = list_size - (oldoffset + oldlen);
     }
 	
@@ -870,7 +875,7 @@ char *userid;
     }
 
     /* Make change to ACL */
-    newacl = strsave(acl);
+    newacl = xstrdup(acl);
     if (rights) {
 	if (acl_set(&newacl, identifier, acl_strtomask(rights),
 		    isusermbox ? mboxlist_ensureOwnerRights : 0,
@@ -904,11 +909,11 @@ char *userid;
     mboxlist_parseline(offset, len, (char **)0, (unsigned long *)0,
 		      (char **)0, (unsigned long *)0, &oldacl, &oldacllen);
 
-    iov[0].iov_base = list_base;
+    iov[0].iov_base = (char *)list_base;
     iov[0].iov_len = oldacl - list_base;
     iov[1].iov_base = newacl;
     iov[1].iov_len = strlen(newacl);
-    iov[2].iov_base = list_base + offset + len - 1;
+    iov[2].iov_base = (char *)list_base + offset + len - 1;
     iov[2].iov_len = list_size - (offset + len - 1);
     
     n = retry_writev(newlistfd, iov, 3);
@@ -930,7 +935,7 @@ char *userid;
 
     /* Change the redundant copy in mailbox header */
     free(mailbox.acl);
-    mailbox.acl = strsave(newacl);
+    mailbox.acl = xstrdup(newacl);
     (void) mailbox_write_header(&mailbox);
     timestamp = time(0);
     uidvalidity = mailbox.uidvalidity;
@@ -1160,7 +1165,7 @@ char *userid;
 int (*proc)();
 {
     int subsfd;
-    char *subs_base;
+    const char *subs_base;
     unsigned long subs_size;
     char *subsfname;
     struct glob *g;
@@ -1171,7 +1176,8 @@ int (*proc)();
     int r;
     unsigned long offset, len, prefixlen, listlinelen;
     int inboxoffset;
-    char *name, *endname, *p;
+    const char *name, *endname;
+    char *p;
     unsigned long namelen;
     long matchlen, minmatch;
     char *acl;
@@ -1366,17 +1372,17 @@ int (*proc)();
  */
 int 
 mboxlist_changesub(name, userid, add)
-char *name;
-char *userid;
+const char *name;
+const char *userid;
 int add;
 {
     int r;
     char *acl;
     int subsfd, newsubsfd;
-    char *subs_base;
+    const char *subs_base;
     unsigned long subs_size;
     char *subsfname, *newsubsfname;
-    unsigned offset, len;
+    unsigned long offset, len;
     struct iovec iov[10];
     int num_iov;
     int n;
@@ -1422,15 +1428,15 @@ int add;
 
     /* Copy over subscription list, making change */
     num_iov = 0;
-    iov[num_iov].iov_base = subs_base;
+    iov[num_iov].iov_base = (char *)subs_base;
     iov[num_iov++].iov_len = offset;
     if (add) {
-	iov[num_iov].iov_base = name;
+	iov[num_iov].iov_base = (char *)name;
 	iov[num_iov++].iov_len = strlen(name);
 	iov[num_iov].iov_base = "\t\n";
 	iov[num_iov++].iov_len = 2;
     }
-    iov[num_iov].iov_base = subs_base + offset + len;
+    iov[num_iov].iov_base = (char *)subs_base + offset + len;
     iov[num_iov++].iov_len = subs_size - (offset + len);
 
     n = retry_writev(newsubsfd, iov, num_iov);
@@ -1457,7 +1463,7 @@ int add;
  */
 int
 mboxlist_setquota(root, newquota)
-char *root;
+const char *root;
 int newquota;
 {
     char quota_path[MAX_MAILBOX_PATH];
@@ -1465,7 +1471,7 @@ int newquota;
     struct quota quota;
     static struct quota zeroquota;
     int r;
-    unsigned offset, len;
+    unsigned long offset, len;
 
     if (!root[0] || root[0] == '.' || strchr(root, '/')
 	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
@@ -1682,7 +1688,7 @@ int
 mboxlist_openlock()
 {
     struct stat sbuf;
-    char *lockfailaction;
+    const char *lockfailaction;
     int r;
 
     assert(list_locked == 0);
@@ -1723,9 +1729,9 @@ mboxlist_unlock()
  * Retrieve internal information, for reconstructing mailboxes file
  */
 mboxlist_getinternalstuff(listfnamep, newlistfnamep, basep, sizep)
-char **listfnamep;
-char **newlistfnamep;
-char **basep;
+const char **listfnamep;
+const char **newlistfnamep;
+const char **basep;
 unsigned long *sizep;
 {
     *listfnamep = listfname;
@@ -1749,19 +1755,19 @@ unsigned long *sizep;
  */
 static int
 mboxlist_opensubs(userid, lock, subsfdp, basep, sizep, fname, newfname)
-char *userid;
+const char *userid;
 int lock;
 int *subsfdp;
-char **basep;
+const char **basep;
 unsigned long *sizep;
-char **fname;
-char **newfname;
+const char **fname;
+const char **newfname;
 {
     int r;
     static char *subsfname, *newsubsfname;
     int subsfd;
     struct stat sbuf;
-    char *lockfailaction;
+    const char *lockfailaction;
     char inboxname[MAX_MAILBOX_NAME+1];
 
     /* Users without INBOXes may not keep subscriptions */
@@ -1827,7 +1833,7 @@ char **newfname;
 static void
 mboxlist_closesubs(subsfd, base, size)
 int subsfd;
-char *base;
+const char *base;
 unsigned long size;
 {
     map_free(&base, &size);
@@ -1887,7 +1893,7 @@ mboxlist_badline(line, error)
 char *line;
 char *error;
 {
-    char *p;
+    const char *p;
     char buf[1024];
     int lineno = 1;
 
@@ -1910,15 +1916,15 @@ mboxlist_parseline(offset, len, namep, namelenp, partitionp, partitionlenp,
 		   aclp, acllenp)
 unsigned long offset;
 unsigned long len;
-char **namep;
+const char **namep;
 unsigned long *namelenp;
-char **partitionp;
+const char **partitionp;
 unsigned long *partitionlenp;
-char **aclp;
+const char **aclp;
 unsigned long *acllenp;
 {
-    char *line = list_base + offset;
-    char *p;
+    const char *line = list_base + offset;
+    const char *p;
     unsigned fieldlen;
 
     if (namep) *namep = line;
@@ -2019,7 +2025,7 @@ int maycreate;
 	free(mailbox.quota.root);
     }
 
-    mailbox.quota.root = strsave(mboxlist_newquota->root);
+    mailbox.quota.root = xstrdup(mboxlist_newquota->root);
     r = mailbox_write_header(&mailbox);
     if (r) goto error;
 

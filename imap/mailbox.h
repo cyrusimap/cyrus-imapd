@@ -26,6 +26,17 @@
  * SOFTWARE.
  *
  */
+#ifndef INCLUDED_MAILBOX_H
+#define INCLUDED_MAILBOX_H
+
+#ifndef P
+#ifdef __STDC__
+#define P(x) x
+#else
+#define P(x) ()
+#endif
+#endif
+
 #include <sys/types.h>
 #include <limits.h>
 
@@ -162,5 +173,73 @@ struct index_record {
 extern char *mailbox_cache_header_name[];
 extern int mailbox_num_cache_header;
 
-extern char *mailbox_message_fname();
+typedef int mailbox_decideproc_t P((void *rock, char *indexbuf));
 
+extern char *mailbox_message_fname P((struct mailbox *mailbox,
+				      unsigned long uid));
+extern int mailbox_map_message P((struct mailbox *mailbox,
+				  unsigned long uid,
+				  const char **basep, unsigned long *lenp));
+extern void mailbox_unmap_message P((struct mailbox *mailbox,
+				    unsigned long uid,
+				    const char **basep, unsigned long *lenp));
+
+extern void mailbox_reconstructmode P((void));
+extern int mailbox_open_header P((const char *name, struct mailbox *mailbox));
+extern int mailbox_open_header_path P((const char *name, const char *path,
+				       const char *acl,
+				       struct mailbox *mailbox,
+				       int suppresslog));
+extern int mailbox_open_index P((struct mailbox *mailbox));
+extern void mailbox_close P((struct mailbox *mailbox));
+
+extern int mailbox_read_header P((struct mailbox *mailbox));
+extern int mailbox_read_header_acl P((struct mailbox *mailbox));
+extern int mailbox_read_acl P((struct mailbox *mailbox));
+extern int mailbox_read_index_header P((struct mailbox *mailbox));
+extern int mailbox_read_index_record P((struct mailbox *mailbox,
+					unsigned msgno,
+					struct index_record *record));
+extern int mailbox_read_quota P((struct quota *quota));
+
+extern int mailbox_lock_header P((struct mailbox *mailbox));
+extern int mailbox_lock_index P((struct mailbox *mailbox));
+extern int mailbox_lock_pop P((struct mailbox *mailbox));
+extern int mailbox_lock_quota P((struct quota *quota));
+
+extern void mailbox_unlock_header P((struct mailbox *mailbox));
+extern void mailbox_unlock_index P((struct mailbox *mailbox));
+extern void mailbox_unlock_pop P((struct mailbox *mailbox));
+extern void mailbox_unlock_quota P((struct quota *quota));
+
+extern int mailbox_write_header P((struct mailbox *mailbox));
+extern int mailbox_write_index_header P((struct mailbox *mailbox));
+extern int mailbox_write_index_record P((struct mailbox *mailbox,
+					 unsigned msgno,
+					 struct index_record *record));
+extern int mailbox_append_index P((struct mailbox *mailbox,
+				   struct index_record *record,
+				   unsigned start, unsigned num));
+extern int mailbox_write_quota P((struct quota *quota));
+
+extern int mailbox_delete_quota P((struct quota *quota));
+
+extern int mailbox_expunge P((struct mailbox *mailbox,
+			      int iscurrentdir,
+			      mailbox_decideproc_t *decideproc,
+			      void *deciderock));
+extern int mailbox_expungenews P((struct mailbox *mailbox));
+
+extern char *mailbox_findquota P((const char *name));
+
+extern int mailbox_create P((const char *name, char *path,
+			     const char *acl, int format,
+			     struct mailbox *mailboxp));
+extern int mailbox_delete P((struct mailbox *mailbox, int delete_quota_root));
+extern int mailbox_rename P((const char *oldname, const char *newname,
+			     char *newpath, int isinbox,
+			     bit32 *olduidvalidityp, bit32 *newuidvalidtyp));
+
+extern int mailbox_copyfile P((const char *from, const char *to));
+
+#endif /* INCLUDED_MAILBOX_H */

@@ -38,6 +38,10 @@
 #include <syslog.h>
 
 #include "assert.h"
+#include "map.h"
+#include "bsearch.h"
+#include "lock.h"
+#include "retry.h"
 #include "mailbox.h"
 #include "imap_err.h"
 #include "xmalloc.h"
@@ -48,7 +52,7 @@ extern int errno;
 
 struct seen {
     int fd;
-    char *base;
+    const char *base;
     unsigned long size;
     long ino;
     long offset;
@@ -64,7 +68,7 @@ struct seen {
  */
 int seen_open(mailbox, user, seendbptr)
 struct mailbox *mailbox;
-char *user;
+const char *user;
 struct seen **seendbptr;
 {
     struct seen *seendb;
@@ -73,7 +77,7 @@ struct seen **seendbptr;
     
     seendb = (struct seen *)xmalloc(sizeof(struct seen));
     seendb->mailbox = mailbox;
-    seendb->user = strsave(user);
+    seendb->user = xstrdup(user);
     
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_SEEN);
@@ -123,8 +127,8 @@ char **seenuidsptr;
     int r;
     char fnamebuf[MAX_MAILBOX_PATH];
     struct stat sbuf;
-    char *lockfailaction;
-    char *buf = 0, *p;
+    const char *lockfailaction;
+    const char *buf = 0, *p;
     unsigned long left;
     unsigned long length, namelen;
     
@@ -159,7 +163,7 @@ char **seenuidsptr;
     *lastchangeptr = 0;
     if (!length) {
 	/* No record for user */
-	*seenuidsptr = strsave("");
+	*seenuidsptr = xstrdup("");
 	return 0;
     }
 
@@ -277,7 +281,7 @@ char *seenuids;
 	    return IMAP_IOERROR;
 	}
 
-	iov[num_iov].iov_base = seendb->base;
+	iov[num_iov].iov_base = (char *)seendb->base;
 	iov[num_iov++].iov_len = seendb->offset;
     }
     iov[num_iov].iov_base = seendb->user;
@@ -297,7 +301,8 @@ char *seenuids;
     iov[num_iov].iov_base = "\n";
     iov[num_iov++].iov_len = 1;
     if (replace) {
-	iov[num_iov].iov_base = seendb->base + seendb->offset + seendb->length;
+	iov[num_iov].iov_base = (char *)seendb->base
+	    + seendb->offset + seendb->length;
 	iov[num_iov++].iov_len =
 	    seendb->size - (seendb->offset + seendb->length);
     }
@@ -401,7 +406,7 @@ struct mailbox *mailbox;
     char fnamebuf[MAX_MAILBOX_PATH];
     int fd;
     int r;
-    char *lockfailaction;
+    const char *lockfailaction;
 
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_SEEN);
@@ -482,7 +487,7 @@ void *rock;
     char fnamebuf[MAX_MAILBOX_PATH];
     char newfnamebuf[MAX_MAILBOX_PATH];
     struct stat sbuf;
-    char *lockfailaction;
+    const char *lockfailaction;
     FILE *seenfile;
     FILE *writefile = 0;
     unsigned n, left, skiplen;

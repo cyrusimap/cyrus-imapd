@@ -1,6 +1,6 @@
 /* append.c -- Routines for appending messages to a mailbox
  *
- *	(C) Copyright 1994 by Carnegie Mellon University
+ *	(C) Copyright 1994-1996 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -29,6 +29,7 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 #include <sys/types.h>
 #include <syslog.h>
 
@@ -36,11 +37,14 @@
 #include "assert.h"
 #include "imap_err.h"
 #include "mailbox.h"
+#include "message.h"
 #include "append.h"
+#include "config.h"
 #include "prot.h"
 #include "xmalloc.h"
 
-static int append_addseen();
+static int append_addseen P((struct mailbox *mailbox, const char *userid,
+			     unsigned start, unsigned end));
 
 /*
  * Open a mailbox for appending
@@ -57,7 +61,7 @@ static int append_addseen();
  */
 int append_setup(mailbox, name, format, aclcheck, quotacheck)
 struct mailbox *mailbox;
-char *name;
+const char *name;
 int format;
 long aclcheck;
 long quotacheck;
@@ -128,22 +132,25 @@ append_fromstream(mailbox, messagefile, size, internaldate, flag, nflags,
 		  userid)
 struct mailbox *mailbox;
 struct protstream *messagefile;
-unsigned size;
+unsigned long size;
 time_t internaldate;
-char **flag;
+const char **flag;
 int nflags;
-char *userid;
+const char *userid;
 {
     struct index_record message_index;
     static struct index_record zero_index;
     char fname[MAX_MAILBOX_PATH];
     FILE *destfile;
+    unsigned char *msg_base;
+    unsigned long *msg_len;
     int i, r;
     long last_cacheoffset;
     int setseen = 0, writeheader = 0;
     int userflag, emptyflag;
 
     assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
+    assert(size != 0);
 
     /* Setup */
     fseek(mailbox->cache, 0L, 2);
@@ -160,17 +167,17 @@ char *userid;
     destfile = fopen(fname, "w+");
     if (!destfile) {
 	syslog(LOG_ERR, "IOERROR: creating message file %s: %m", fname);
+	mailbox_unlock_quota(&mailbox->quota);
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
 	return IMAP_IOERROR;
     }
 
     /* Copy and parse message */
-    if (size) {
-	r = message_copy_strict(messagefile, destfile, size);
+    r = message_copy_strict(messagefile, destfile, size);
+    if (!r) {
+	r = message_parse_file(destfile, mailbox, &message_index);
     }
-    else {
-	r = message_copy_byline(messagefile, destfile);
-    }
-    if (!r) r = message_parse(destfile, mailbox, &message_index);
     fclose(destfile);
     if (!r) {
 	/* Flush out the cache file data */
@@ -184,6 +191,9 @@ char *userid;
     if (r) {
 	unlink(fname);
 	ftruncate(fileno(mailbox->cache), last_cacheoffset);
+	mailbox_unlock_quota(&mailbox->quota);
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
 	return r;
     }
 
@@ -224,7 +234,7 @@ char *userid;
 	    /* Flag is not defined--create it */
 	    if (userflag == MAX_USER_FLAGS && emptyflag != -1) {
 		userflag = emptyflag;
-		mailbox->flagname[userflag] = strsave(flag[i]);
+		mailbox->flagname[userflag] = xstrdup(flag[i]);
 		writeheader++;
 	    }
 
@@ -240,6 +250,9 @@ char *userid;
 	if (r) {
 	    unlink(fname);
 	    ftruncate(fileno(mailbox->cache), last_cacheoffset);
+	    mailbox_unlock_quota(&mailbox->quota);
+	    mailbox_unlock_index(mailbox);
+	    mailbox_unlock_header(mailbox);
 	    return r;
 	}
     }
@@ -249,6 +262,9 @@ char *userid;
     if (r) {
 	unlink(fname);
 	ftruncate(fileno(mailbox->cache), last_cacheoffset);
+	mailbox_unlock_quota(&mailbox->quota);
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
 	return r;
     }
     
@@ -267,6 +283,9 @@ char *userid;
 	unlink(fname);
 	ftruncate(fileno(mailbox->cache), last_cacheoffset);
 	/* We don't ftruncate index file.  It doesn't matter */
+	mailbox_unlock_quota(&mailbox->quota);
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
 	return r;
     }
     
@@ -287,6 +306,9 @@ char *userid;
     toimsp(mailbox->name, mailbox->uidvalidity,
 	   "UIDNnn", message_index.uid, mailbox->exists, 0);
 
+    mailbox_unlock_quota(&mailbox->quota);
+    mailbox_unlock_index(mailbox);
+    mailbox_unlock_header(mailbox);
     return 0;
 }
 
@@ -303,15 +325,17 @@ struct mailbox *mailbox;
 struct mailbox *append_mailbox;
 int nummsg;
 struct copymsg *copymsg;
-char *userid;
+const char *userid;
 {
     int msg;
     struct index_record *message_index;
     static struct index_record zero_index;
     unsigned long quota_usage = 0;
     char fname[MAX_MAILBOX_PATH];
-    FILE *srcfile, *destfile;
-    struct protstream *prot_src;
+    const char *src_base;
+    unsigned long src_size;
+    const char *startline, *endline;
+    FILE *destfile;
     int r;
     long last_cacheoffset;
     int writeheader = 0;
@@ -320,7 +344,12 @@ char *userid;
     
     assert(append_mailbox->format == MAILBOX_FORMAT_NORMAL);
 
-    if (!nummsg) return 0;
+    if (!nummsg) {
+	mailbox_unlock_quota(&append_mailbox->quota);
+	mailbox_unlock_index(append_mailbox);
+	mailbox_unlock_header(append_mailbox);
+	return 0;
+    }
 
     fseek(append_mailbox->cache, 0L, 2);
     last_cacheoffset = ftell(append_mailbox->cache);
@@ -360,27 +389,45 @@ char *userid;
 	     * Have to copy the message, possibly converting LF to CR LF
 	     * Then, we have to parse the message.
 	     */
+	    r = 0;
 	    destfile = fopen(fname, "w+");
 	    if (!destfile) {
 		syslog(LOG_ERR, "IOERROR: writing message file %s: %m", fname);
 		r = IMAP_IOERROR;
 		goto fail;
 	    }
-	    srcfile = fopen(mailbox_message_fname(mailbox, copymsg[msg].uid),
-			    "r");
-	    if (!srcfile) {
+	    if (mailbox_map_message(mailbox, copymsg[msg].uid,
+				    &src_base, &src_size) != 0) {
 		fclose(destfile);
-		syslog(LOG_ERR, "IOERROR: opening message file %s: %m",
-		       mailbox_message_fname(mailbox, copymsg[msg].uid));
+		syslog(LOG_ERR, "IOERROR: opening message file %u of %s: %m",
+		       copymsg[msg].uid, mailbox->name);
 		r = IMAP_IOERROR;
 		goto fail;
 	    }
-	    prot_src = prot_new(fileno(srcfile), 0);
-	    r = message_copy_byline(prot_src, destfile);
-	    prot_free(prot_src);
-	    fclose(srcfile);
-	    if (!r) r = message_parse(destfile, append_mailbox,
-				      &message_index[msg]);
+
+	    startline = src_base;
+	    while (endline = memchr(startline, '\n',
+				    src_size - (startline - src_base))) {
+		fwrite(startline, 1, (endline - startline), destfile);
+		if (endline == startline || endline[-1] != '\r') {
+		    putc('\r', destfile);
+		}
+		putc('\n', destfile);
+		startline = endline+1;
+	    }
+	    fwrite(startline, 1, src_size - (startline - src_base), destfile);
+
+	    fflush(destfile);
+	    if (ferror(destfile) || fsync(fileno(destfile))) {
+		syslog(LOG_ERR, "IOERROR: writing message: %m");
+		r = IMAP_IOERROR;
+	    }
+
+	    mailbox_unmap_message(mailbox, copymsg[msg].uid,
+				  &src_base, &src_size);
+
+	    if (!r) r = message_parse_file(destfile, append_mailbox,
+					   &message_index[msg]);
 	    fclose(destfile);
 	    if (r) goto fail;
 	}
@@ -407,7 +454,7 @@ char *userid;
 		if (userflag == MAX_USER_FLAGS && emptyflag != -1) {
 		    userflag = emptyflag;
 		    append_mailbox->flagname[userflag] =
-		      strsave(copymsg[msg].flag[flag]);
+		      xstrdup(copymsg[msg].flag[flag]);
 		    writeheader++;
 		}
 
@@ -492,6 +539,9 @@ char *userid;
 	   "UIDNnn", message_index[nummsg-1].uid, append_mailbox->exists, 0);
 
     free(message_index);
+    mailbox_unlock_quota(&append_mailbox->quota);
+    mailbox_unlock_index(append_mailbox);
+    mailbox_unlock_header(append_mailbox);
     return 0;
 
  fail:
@@ -506,6 +556,9 @@ char *userid;
 
     ftruncate(fileno(append_mailbox->cache), last_cacheoffset);
     free(message_index);
+    mailbox_unlock_quota(&append_mailbox->quota);
+    mailbox_unlock_index(append_mailbox);
+    mailbox_unlock_header(append_mailbox);
     return r;
 }
 
@@ -517,10 +570,12 @@ char *userid;
  */
 #define COLLECTGROW 50
 int
-append_collectnews(mailbox, feeduid)
+append_collectnews(mailbox, group, feeduid)
 struct mailbox *mailbox;
+const char *group;
 unsigned long feeduid;
 {
+    char newspath[4096], *end_newspath;
     time_t curtime, internaldate;
     struct index_record *message_index;
     int size_message_index;
@@ -543,15 +598,38 @@ unsigned long feeduid;
     message_index = (struct index_record *)
       xmalloc(size_message_index * sizeof(struct index_record));
 
-    if (chdir(mailbox->path)) {
+    if (config_newsspool) {
+	strcpy(newspath, config_newsspool);
+	end_newspath = newspath + strlen(newspath);
+	if (end_newspath == newspath || end_newspath[-1] != '/') {
+	    *end_newspath++ = '/';
+	}
+	strcpy(end_newspath, group);
+	while (*end_newspath) {
+	    if (*end_newspath == '.') *end_newspath = '/';
+	    end_newspath++;
+	}
+	if (chdir(newspath)) {
+	    syslog(LOG_ERR, "IOERROR: changing dir to %s: %m", newspath);
+	    mailbox_unlock_quota(&mailbox->quota);
+	    mailbox_unlock_index(mailbox);
+	    mailbox_unlock_header(mailbox);
+	    return IMAP_IOERROR;
+	}
+    }
+    else if (chdir(mailbox->path)) {
 	syslog(LOG_ERR, "IOERROR: changing dir to %s: %m", mailbox->path);
+	mailbox_unlock_quota(&mailbox->quota);
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
 	return IMAP_IOERROR;
     }
 
     /* Find and parse the new messages */
     for (;;) {
 	uid++;
-	f = fopen(mailbox_message_fname(mailbox, uid), "r");
+	sprintf(newspath, "%u", uid);
+	f = fopen(newspath, "r");
 	if (!f) {
 	    if (uid < feeduid) continue;
 	    break;
@@ -568,7 +646,7 @@ unsigned long feeduid;
 	message_index[msg].uid = uid;
 	message_index[msg].last_updated = curtime;
 	message_index[msg].internaldate = internaldate++;
-	r = message_parse(f, mailbox, &message_index[msg]);
+	r = message_parse_file(f, mailbox, &message_index[msg]);
 	fclose(f);
 	if (r) goto fail;
 	quota_usage += message_index[msg].size;
@@ -579,6 +657,9 @@ unsigned long feeduid;
     /* Didn't find anything to append */
     if (msg == 0) {
 	free(message_index);
+	mailbox_unlock_quota(&mailbox->quota);
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
 	return 0;
     }
 
@@ -622,11 +703,17 @@ unsigned long feeduid;
     toimsp(mailbox->name, mailbox->uidvalidity,
 	   "UIDNnn", uid-1, mailbox->exists, 0);
 
+    mailbox_unlock_quota(&mailbox->quota);
+    mailbox_unlock_index(mailbox);
+    mailbox_unlock_header(mailbox);
     return 0;
 
  fail:
     ftruncate(fileno(mailbox->cache), last_cacheoffset);
     free(message_index);
+    mailbox_unlock_quota(&mailbox->quota);
+    mailbox_unlock_index(mailbox);
+    mailbox_unlock_header(mailbox);
     return r;
 }
 
@@ -637,7 +724,7 @@ unsigned long feeduid;
  */
 static int append_addseen(mailbox, userid, start, end)
 struct mailbox *mailbox;
-char *userid;
+const char *userid;
 unsigned start;
 unsigned end;
 {

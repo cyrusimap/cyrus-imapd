@@ -49,15 +49,15 @@
 
 typedef int comp_pat;
 
-int charset_lookupname P((const char *name));
-char *charset_convert P((const char *s, int charset));
-char *charset_decode1522 P((const char *s));
-comp_pat *charset_compilepat P((const char *s));
-void charset_freepat P((comp_pat *pat));
-int charset_searchstring P((const char *substr, comp_pat *pat,
-			    const char *s, int len));
-int charset_searchfile P((const char *substr, comp_pat *pat,
-			  const char *msg_base, int mapnl,
-			  int len, int charset, int encoding));
+extern int charset_lookupname P((const char *name));
+extern char *charset_convert P((const char *s, int charset));
+extern char *charset_decode1522 P((const char *s));
+extern comp_pat *charset_compilepat P((const char *s));
+extern void charset_freepat P((comp_pat *pat));
+extern int charset_searchstring P((const char *substr, comp_pat *pat,
+				   const char *s, int len));
+extern int charset_searchfile P((const char *substr, comp_pat *pat,
+				 const char *msg_base, int mapnl,
+				 int len, int charset, int encoding));
 
 #endif /* INCLUDED_CHARSET_H */

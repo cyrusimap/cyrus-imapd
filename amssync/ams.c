@@ -115,11 +115,13 @@ int getams(amsname, abbd)
 
     sprintf(dname, "%s/%s", amsname, MS_DIRNAME);
     if ((msdir = fopen(dname, "r")) == NULL) {
-	fprintf(stderr, "  Couldn't open mail folder: %s\n", abbd->name);
+	fprintf(stderr, "Couldn't open AMS folder ");
+	perror(amsname);
 	return (1);
     }
     if (fstat(fileno(msdir), &stbuf) < 0) {
-	fprintf(stderr, "  Couldn't access mail folder: %s\n", abbd->name);
+	fprintf(stderr, "Couldn't stat AMS folder");
+	perror(amsname);
 	fclose(msdir);
 	return (1);
     }

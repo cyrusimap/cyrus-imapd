@@ -27,8 +27,12 @@
  *
  */
 
+#ifndef INCLUDED_IMAPD_H
+#define INCLUDED_IMAPD_H
+
 #include "prot.h"
 #include "charset.h"
+#include "mailbox.h"
 
 /* Userid client has logged in as */
 extern char *imapd_userid;
@@ -156,8 +160,33 @@ struct searchargs {
 
 extern struct protstream *imapd_out, *imapd_in;
 
-#ifdef __STDC__
-extern int index_expungeuidlist(char *rock, char *index);
-#else
-extern int index_expungeuidlist();
-#endif
+
+extern void index_closemailbox P((struct mailbox *mailbox));
+extern void index_newmailbox P((struct mailbox *mailbox, int examine_mode));
+extern void index_check P((struct mailbox *mailbox, int usinguid,
+			   int checkseen));
+extern void index_checkseen P((struct mailbox *mailbox, int quiet,
+			       int usinguid, int oldexists));
+
+extern void index_fetch P((struct mailbox *mailbox, char *sequence,
+			   int usinguid, struct fetchargs *fetchargs));
+extern int index_store P((struct mailbox *mailbox, char *sequence,
+			  int usinguid, struct storeargs *storeargs,
+			  char **flag, int nflags));
+extern void index_search P((struct mailbox *mailbox,
+			    struct searchargs *searchargs, int usinguid));
+extern int index_copy P((struct mailbox *mailbox, char *sequence,
+			 int usinguid, char *name));
+extern int index_status P((struct mailbox *mailbox, char *name,
+			   int statusitems));
+
+extern int index_getuids P((struct mailbox *mailbox, unsigned lowuid));
+extern int index_getstate P((struct mailbox *mailbox));
+extern int index_checkstate P((struct mailbox *mailbox, unsigned indexdate,
+			       unsigned seendate));
+
+extern int index_finduid P((unsigned uid));
+
+extern mailbox_decideproc_t index_expungeuidlist;
+
+#endif /* INCLUDED_IMAPD_H */

@@ -37,11 +37,11 @@
 #endif
 #endif
 
-void bsearch_mem P((const char *word, int caseSensitive,
-		    const char *base, unsigned long len,
-		    unsigned long hint,
-		    unsigned long *linelenp));
+extern int bsearch_mem P((const char *word, int caseSensitive,
+			   const char *base, unsigned long len,
+			   unsigned long hint,
+			   unsigned long *linelenp));
 
-int bsearch_compare P((const char *s1, const char *s2));
+extern int bsearch_compare P((const char *s1, const char *s2));
 
 #endif /* INCLUDED_BSEARCH_H */

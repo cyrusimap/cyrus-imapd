@@ -47,16 +47,18 @@ struct configlist {
 static struct configlist *configlist;
 static int nconfiglist;
 
-char *config_dir;
-char *config_defpartition;
+const char *config_dir;
+const char *config_defpartition;
+const char *config_newsspool;
 
-static int config_read();
+static void config_read P((void));
 
 config_init(ident)
-char *ident;
+const char *ident;
 {
     char buf[100];
     char *p;
+    const char *val;
     int umaskval = 0;
 
     initialize_imap_error_table();
@@ -76,33 +78,35 @@ char *ident;
 
     /* Look up default partition */
     config_defpartition = config_getstring("defaultpartition", "default");
-    for (p = config_defpartition; *p; p++) {
+    for (p = (char *)config_defpartition; *p; p++) {
 	if (!isalnum(*p))
 	  fatal("defaultpartition option contains non-alphanumeric character",
 		EX_CONFIG);
 	if (isupper(*p)) *p = tolower(*p);
     }
-    p = config_partitiondir(config_defpartition);
-    if (!p) {
+    if (!config_partitiondir(config_defpartition)) {
 	sprintf(buf, "partition-%s option not specified in configuration file",
 		config_defpartition);
 	fatal(buf, EX_CONFIG);
     }
 
     /* Look up umask */
-    p = config_getstring("umask", "077");
-    while (*p) {
-	if (*p >= '0' && *p <= '7') umaskval = umaskval*8 + *p - '0';
-	p++;
+    val = config_getstring("umask", "077");
+    while (*val) {
+	if (*val >= '0' && *val <= '7') umaskval = umaskval*8 + *val - '0';
+	val++;
     }
     umask(umaskval);
+
+    /* Look up news spool */
+    config_newsspool = config_getstring("newsspool", 0);
 
     return 0;
 }
 
-char *config_getstring(key, def)
-char *key;
-char *def;
+const char *config_getstring(key, def)
+const char *key;
+const char *def;
 {
     int opt;
 
@@ -115,10 +119,10 @@ char *def;
 }
 
 config_getint(key, def)
-char *key;
+const char *key;
 int def;
 {
-    char *val = config_getstring(key, (char *)0);
+    const char *val = config_getstring(key, (char *)0);
 
     if (!val) return def;
     if (!isdigit(*val) && (*val != '-' || !isdigit(val[1]))) return def;
@@ -126,10 +130,10 @@ int def;
 }
 
 config_getswitch(key, def)
-char *key;
+const char *key;
 int def;
 {
-    char *val = config_getstring(key, (char *)0);
+    const char *val = config_getstring(key, (char *)0);
 
     if (!val) return def;
 
@@ -144,8 +148,8 @@ int def;
     return def;
 }
 
-char *config_partitiondir(partition)
-char *partition;
+const char *config_partitiondir(partition)
+const char *partition;
 {
     char buf[80];
 
@@ -157,7 +161,8 @@ char *partition;
 }
 
 #define CONFIGLISTGROWSIZE 10 /* 100 */
-static config_read()
+static void
+config_read()
 {
     FILE *infile;
     int lineno = 0;
@@ -206,8 +211,8 @@ static config_read()
 	      xrealloc((char *)configlist, alloced*sizeof(struct configlist));
 	}
 
-	configlist[nconfiglist].key = strsave(key);
-	configlist[nconfiglist].value = strsave(p);
+	configlist[nconfiglist].key = xstrdup(key);
+	configlist[nconfiglist].value = xstrdup(p);
 	nconfiglist++;
     }
     fclose(infile);
@@ -226,8 +231,8 @@ void (*proc)();
 
     for (opt = 0; opt < nconfiglist; opt++) {
 	if (!strncmp(configlist[opt].key, "partition-", 10)) {
-	    s = strsave(configlist[opt].value);
-	    (*proc)(strsave(""), s, configlist[opt].key+10);
+	    s = xstrdup(configlist[opt].value);
+	    (*proc)(xstrdup(""), s, configlist[opt].key+10);
 	}
     }
 }

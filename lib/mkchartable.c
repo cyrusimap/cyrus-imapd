@@ -267,7 +267,7 @@ char *name;
 		char action[1024];
 		sprintf(action, ">%s_%02x <", table[thisstate].name,
 			thischar>>8);
-		table[thisstate].ch[thischar>>8].action = strsave(action);
+		table[thisstate].ch[thischar>>8].action = xstrdup(action);
 		*(strchr(table[thisstate].ch[thischar>>8].action, ' ')) = '\0';
 		table[thisstate].ch[thischar>>8].comment = "multi-byte";
 		thisstate = newstate(action+1);
@@ -298,14 +298,14 @@ char *name;
 	    exit(1);
 	}
 
-	table[thisstate].ch[thischar].comment = strsave(buf);
+	table[thisstate].ch[thischar].comment = xstrdup(buf);
 
 	if (*p == '?') {
 	    continue;
 	}
 
 	if (*p == ':' || *p == '>' || *p == '<') {
-	    p = table[thisstate].ch[thischar].action = strsave(p);
+	    p = table[thisstate].ch[thischar].action = xstrdup(p);
 	    while (*p && !isspace(*p)) p++;
 	    *p = '\0';
 	    continue;
@@ -358,7 +358,7 @@ char *args;
 					 table_alloc * sizeof(struct table));
     }
 
-    table[table_num].name = strsave(args);
+    table[table_num].name = xstrdup(args);
     table[table_num].endaction = "END";
     for (i = 0; i < 256; i++) {
 	table[table_num].ch[i].code = -1;

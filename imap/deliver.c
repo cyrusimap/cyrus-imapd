@@ -45,6 +45,8 @@
 #include "util.h"
 #include "auth.h"
 #include "prot.h"
+#include "imparse.h"
+#include "lock.h"
 #include "config.h"
 #include "sysexits.h"
 #include "imap_err.h"
@@ -252,7 +254,7 @@ char *s;
     if (*p && *p != ' ') return 0;
     len = p - s;
 
-    s = strsave(s);
+    s = xstrdup(s);
     s[len] = '\0';
     return s;
 }
@@ -514,7 +516,7 @@ int smtpmode;
     if (return_path) {
 	/* Remove any angle brackets around return path */
 	if (*return_path == '<') {
-	    return_path = strsave(return_path+1);
+	    return_path = xstrdup(return_path+1);
 	    if (return_path[strlen(return_path)-1] == '>') {
 		return_path[strlen(return_path)-1] = '\0';
 	    }
@@ -592,7 +594,7 @@ int smtpmode;
 		     (!strncasecmp(buf, "from:", 5) ||
 		      !strncasecmp(buf, "subject:", 8) ||
 		      !strncasecmp(buf, "to:", 3))) {
-		if (!*notifyptr) *notifyptr = strsave(buf);
+		if (!*notifyptr) *notifyptr = xstrdup(buf);
 		else {
 		    *notifyptr =
 			xrealloc(*notifyptr,
@@ -605,7 +607,7 @@ int smtpmode;
 	    if (p) {
 		clean822space(p);
 		if (*p) {
-		    *idptr = strsave(p);
+		    *idptr = xstrdup(p);
 		    /*
 		     * If we got a resent-message-id header,
 		     * we're done looking for *message-id headers.
@@ -860,7 +862,7 @@ char *f;
 	}
 	return 1;
     }
-    if (!is_atom(f)) return 0;
+    if (!imparse_isatom(f)) return 0;
     return 1;
 }
 

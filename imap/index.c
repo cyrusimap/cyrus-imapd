@@ -39,8 +39,10 @@
 
 #include "acl.h"
 #include "util.h"
+#include "map.h"
 #include "assert.h"
 #include "sysexits.h"
+#include "gmtoff.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "imapd.h"
@@ -51,9 +53,9 @@
 extern int errno;
 
 /* The index and cache files, mapped into memory */
-static char *index_base;
+static const char *index_base;
 static unsigned long index_len;
-static char *cache_base;
+static const char *cache_base;
 static unsigned long cache_len;
 static unsigned long cache_end;
 
@@ -95,17 +97,6 @@ static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 #define CACHE_ITEM_LEN(ptr) CACHE_ITEM_BIT32(ptr)
 #define CACHE_ITEM_NEXT(ptr) ((ptr)+4+((3+CACHE_ITEM_LEN(ptr))&~3))
 
-/* Forward declarations */
-static int index_forsequence(), index_insequence();
-static int index_listflags();
-static int index_fetchflags(), index_fetchreply();
-static char *index_readheader();
-static void index_pruneheader();
-static int index_storeseen(), index_storeflag();
-static int index_search_evaluate();
-static int index_searchmsg(), index_searchheader(), index_searchcacheheader();
-static int index_copysetup();
-
 struct copyargs {
     struct copymsg *copymsg;
     int nummsg;
@@ -113,14 +104,64 @@ struct copyargs {
 };
 
 struct mapfile {
-    int fd;
-    char *base;
+    const char *base;
     unsigned long size;
 };
+
+/* Forward declarations */
+typedef int index_sequenceproc_t P((struct mailbox *mailbox, unsigned msgno,
+				    void *rock));
+
+static int index_forsequence P((struct mailbox *mailbox, char *sequence,
+				int usinguid,
+				index_sequenceproc_t *proc, void *rock));
+static int index_insequence P((int num, char *sequence, int usinguid));
+
+static void index_fetchmsg P((const char *msg_base, unsigned long msg_size,
+			      int format, unsigned offset, unsigned size,
+			      unsigned start_octet, unsigned octet_count));
+static void index_fetchsection P((const char *msg_base, unsigned long msg_size,
+				  int format, char *section,
+				  const char *cacheitem,
+				  unsigned start_octet, unsigned octet_count));
+static void index_fetchfsection P((const char *msg_base,
+				   unsigned long msg_size,
+				   int format, struct fieldlist *fsection,
+				   const char *cacheitem));
+static char *index_readheader P((const char *msg_base, unsigned long msg_size,
+				 int format, unsigned offset, unsigned size));
+static void index_pruneheader P((char *buf, struct strlist *headers,
+				 struct strlist *headers_not));
+static void index_fetchheader P((const char *msg_base, unsigned long msg_size,
+				 int format, unsigned size,
+				 struct strlist *headers,
+				 struct strlist *headers_not));
+static void index_fetchcacheheader P((unsigned msgno, struct strlist *headers,
+				      char *trail));
+static void index_listflags P((struct mailbox *mailbox));
+static void index_fetchflags P((struct mailbox *mailbox, unsigned msgno,
+				bit32 system_flags, bit32 *user_flags,
+				time_t last_updated));
+static index_sequenceproc_t index_fetchreply;
+static index_sequenceproc_t index_storeseen;
+static index_sequenceproc_t index_storeflag;
+static int index_search_evaluate P((struct mailbox *mailbox,
+				    struct searchargs *searchargs,
+				    unsigned msgno, struct mapfile *msgfile));
+static int index_searchmsg P((char *substr, comp_pat *pat,
+			      struct mapfile *msgfile, int format,
+			      int skipheader, const char *cacheitem));
+static int index_searchheader P((char *name, char *substr, comp_pat *pat,
+				 struct mapfile *msgfile, int format,
+				 int size));
+static int index_searchcacheheader P((unsigned msgno, char *name, char *substr,
+				      comp_pat *pat));
+static index_sequenceproc_t index_copysetup;
 
 /*
  * A mailbox is about to be closed.
  */
+void
 index_closemailbox(mailbox)
 struct mailbox *mailbox;
 {
@@ -140,6 +181,7 @@ struct mailbox *mailbox;
  * A new mailbox has been selected, map it into memory and do the
  * initial CHECK.
  */
+void
 index_newmailbox(mailbox, examine_mode)
 struct mailbox *mailbox;
 int examine_mode;
@@ -158,6 +200,7 @@ int examine_mode;
 /*
  * Check for and report updates
  */
+void
 index_check(mailbox, usinguid, checkseen)
 struct mailbox *mailbox;
 int usinguid;
@@ -331,6 +374,7 @@ int checkseen;
  * Checkpoint the user's \Seen state
  */
 #define SAVEGROW 200
+void
 index_checkseen(mailbox, quiet, usinguid, oldexists)
 struct mailbox *mailbox;
 int quiet;
@@ -618,6 +662,7 @@ int oldexists;
 /*
  * Perform a FETCH-related command on a sequence.
  */
+void
 index_fetch(mailbox, sequence, usinguid, fetchargs)
 struct mailbox *mailbox;
 char *sequence;
@@ -733,7 +778,7 @@ int nflags;
 
 		    return IMAP_USERFLAG_EXHAUSTED;
 		}
-		mailbox->flagname[emptyflag] = strsave(flag[i]);
+		mailbox->flagname[emptyflag] = xstrdup(flag[i]);
 	    }
 	}
 		
@@ -782,6 +827,7 @@ int nflags;
 /*
  * Performs a SEARCH command
  */
+void
 index_search(mailbox, searchargs, usinguid)
 struct mailbox *mailbox;
 struct searchargs *searchargs;
@@ -790,7 +836,6 @@ int usinguid;
     unsigned msgno;
     struct mapfile msgfile;
 
-    msgfile.fd = -1;
     msgfile.base = 0;
     msgfile.size = 0;
 
@@ -800,10 +845,9 @@ int usinguid;
 	if (index_search_evaluate(mailbox, searchargs, msgno, &msgfile)) {
 	    prot_printf(imapd_out, " %u", usinguid ? UID(msgno) : msgno);
 	}
-	if (msgfile.fd != -1) {
-	    map_free(&msgfile.base, &msgfile.size);
-	    close(msgfile.fd);
-	    msgfile.fd = -1;
+	if (msgfile.base) {
+	    mailbox_unmap_message(mailbox, UID(msgno),
+				  &msgfile.base, &msgfile.size);
 	}
     }
     prot_printf(imapd_out, "\r\n");
@@ -874,7 +918,7 @@ int statusitems;
 	if (r) return r;
 
 	if (statusitems & (STATUS_RECENT | STATUS_UNSEEN)) {
-	    char *base;
+	    const char *base;
 	    unsigned long len = 0;
 	    int msg;
 	    unsigned uid;
@@ -1053,10 +1097,10 @@ unsigned seendate;
  */
 int
 index_finduid(uid)
-int uid;
+unsigned uid;
 {
-    int low=1, high=imapd_exists;
-    int mid, miduid;
+    int low=1, high=imapd_exists, mid;
+    unsigned miduid;
 
     while (low <= high) {
 	mid = (high - low)/2 + low;
@@ -1078,15 +1122,15 @@ int uid;
  * Expunge decision procedure to get rid of articles
  * both \Deleted and listed in the sequence under 'rock'.
  */
-int index_expungeuidlist(rock, index)
-char *rock;
-char *index;
+int index_expungeuidlist(rock, indexbuf)
+void *rock;
+char *indexbuf;
 {
-    char *sequence = rock;
-    unsigned uid = ntohl(*((bit32 *)(index+OFFSET_UID)));
+    char *sequence = (char *)rock;
+    unsigned uid = ntohl(*((bit32 *)(indexbuf+OFFSET_UID)));
 
     /* Don't expunge if not \Deleted */
-    if (!(ntohl(*((bit32 *)(index+OFFSET_SYSTEM_FLAGS))) & FLAG_DELETED))
+    if (!(ntohl(*((bit32 *)(indexbuf+OFFSET_SYSTEM_FLAGS))) & FLAG_DELETED))
 	return 0;
 
     return index_insequence(uid, sequence, 1);
@@ -1104,8 +1148,8 @@ index_forsequence(mailbox, sequence, usinguid, proc, rock)
 struct mailbox *mailbox;
 char *sequence;
 int usinguid;
-int (*proc)();
-char *rock;
+index_sequenceproc_t *proc;
+void *rock;
 {
     int i, start = 0, end;
     int r, result = 0;
@@ -1220,10 +1264,10 @@ int usinguid;
  * further constrained by 'start_octet' and 'octet_count' as per the
  * IMAP command PARTIAL.
  */
-static
+static void
 index_fetchmsg(msg_base, msg_size, format, offset, size,
 	       start_octet, octet_count)
-char *msg_base;
+const char *msg_base;
 unsigned long msg_size;
 int format;
 unsigned offset;
@@ -1231,7 +1275,7 @@ unsigned size;
 unsigned start_octet;
 unsigned octet_count;
 {
-    char *line, *p;
+    const char *line, *p;
     int n;
 
     /* partial fetch: adjust 'size', normalize 'start_octet' to be 0-based */
@@ -1318,16 +1362,16 @@ unsigned octet_count;
 /*
  * Helper function to fetch a body section
  */
-static
+static void
 index_fetchsection(msg_base, msg_size, format, section, cacheitem,
 		   start_octet, octet_count)
-char *msg_base;
+const char *msg_base;
 unsigned long msg_size;
 int format;
 char *section;
-char *cacheitem;
-int start_octet;
-int octet_count;
+const char *cacheitem;
+unsigned start_octet;
+unsigned octet_count;
 {
     char *p;
     int skip;
@@ -1421,13 +1465,13 @@ int octet_count;
 /*
  * Helper function to fetch a HEADER.FIELDS[.NOT] body section
  */
-static
+static void
 index_fetchfsection(msg_base, msg_size, format, fsection, cacheitem)
-char *msg_base;
+const char *msg_base;
 unsigned long msg_size;
 int format;
 struct fieldlist *fsection;
-char *cacheitem;
+const char *cacheitem;
 {
     char *p;
     int skip = 0;
@@ -1545,7 +1589,7 @@ char *cacheitem;
  */
 static char *
 index_readheader(msg_base, msg_size, format, offset, size)
-char *msg_base;
+const char *msg_base;
 unsigned long msg_size;
 int format;
 unsigned offset;
@@ -1665,9 +1709,9 @@ struct strlist *headers_not;
  * Handle a FETCH RFC822.HEADER.LINES or RFC822.HEADER.LINES.NOT
  * that can't use the cacheheaders in cyrus.cache
  */
-static
+static void
 index_fetchheader(msg_base, msg_size, format, size, headers, headers_not)
-char *msg_base;
+const char *msg_base;
 unsigned long msg_size;
 int format;
 unsigned size;
@@ -1694,7 +1738,7 @@ struct strlist *headers_not;
  * Handle a FETCH RFC822.HEADER.LINES that can use the
  * cacheheaders in cyrus.cache
  */
-static
+static void
 index_fetchcacheheader(msgno, headers, trail)
 unsigned msgno;
 struct strlist *headers;
@@ -1702,7 +1746,7 @@ char *trail;
 {
     static char *buf;
     static int bufsize;
-    char *cacheitem;
+    const char *cacheitem;
     unsigned size;
     unsigned crlf_start = 0;
     unsigned crlf_size = 2;
@@ -1770,7 +1814,7 @@ char *trail;
 /*
  * Send a * FLAGS response.
  */
-static int
+static void
 index_listflags(mailbox)
 struct mailbox *mailbox;
 {
@@ -1817,7 +1861,7 @@ struct mailbox *mailbox;
  * Does not send the terminating close paren or CRLF.
  * Also sends preceeding * FLAGS if necessary.
  */
-static int
+static void
 index_fetchflags(mailbox, msgno, system_flags, user_flags, last_updated)
 struct mailbox *mailbox;
 unsigned msgno;
@@ -1887,19 +1931,18 @@ time_t last_updated;
 static int
 index_fetchreply(mailbox, msgno, rock)
 struct mailbox *mailbox;
-int msgno;
-char *rock;
+unsigned msgno;
+void *rock;
 {
     struct fetchargs *fetchargs = (struct fetchargs *)rock;    
     int fetchitems = fetchargs->fetchitems;
-    int msgfd = -1;
-    char *msg_base = 0;
+    const char *msg_base = 0;
     unsigned long msg_size = 0;
     struct stat sbuf;
     int sepchar;
     int i;
     bit32 user_flags[MAX_USER_FLAGS/32];
-    char *cacheitem;
+    const char *cacheitem;
     struct strlist *section, *field;
     struct fieldlist *fsection;
     char *partialdot;
@@ -1907,21 +1950,10 @@ char *rock;
     /* Open the message file if we're going to need it */
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822|FETCH_UNCACHEDHEADER)) ||
 	fetchargs->bodysections) {
-	msgfd = open(mailbox_message_fname(mailbox, UID(msgno)), O_RDONLY,
-		     0666);
-	if (msgfd == -1) {
+	if (mailbox_map_message(mailbox, UID(msgno), &msg_base, &msg_size)) {
 	    prot_printf(imapd_out, "* OK ");
 	    prot_printf(imapd_out, error_message(IMAP_NO_MSGGONE), msgno);
 	    prot_printf(imapd_out, "\r\n");
-	}
-	else {
-	    if (fstat(msgfd, &sbuf) == -1) {
-		syslog(LOG_ERR, "IOERROR: fstat on %s: %m",
-		       mailbox_message_fname(mailbox, UID(msgno)));
-		fatal("can't fstat message file", EX_OSFILE);
-	    }
-	    map_refresh(msgfd, 1, &msg_base, &msg_size, sbuf.st_size,
-			"message file", mailbox->name);
 	}
     }
 
@@ -2091,9 +2123,8 @@ char *rock;
 			   fetchargs->start_octet, fetchargs->octet_count);
     }
     prot_printf(imapd_out, ")\r\n");
-    if (msgfd != -1) {
-	map_free(&msg_base, &msg_size);
-	close(msgfd);
+    if (msg_base) {
+	mailbox_unmap_message(mailbox, UID(msgno), &msg_base, &msg_size);
     }
     return 0;
 }
@@ -2105,8 +2136,8 @@ char *rock;
 static int
 index_storeseen(mailbox, msgno, rock)
 struct mailbox *mailbox;
-int msgno;
-char *rock;
+unsigned msgno;
+void *rock;
 {
     struct storeargs *storeargs = (struct storeargs *)rock;
     int val = (storeargs->operation == STORE_ADD) ? 1 : 0;
@@ -2137,8 +2168,8 @@ char *rock;
 static int
 index_storeflag(mailbox, msgno, rock)
 struct mailbox *mailbox;
-int msgno;
-char *rock;
+unsigned msgno;
+void *rock;
 {
     struct storeargs *storeargs = (struct storeargs *)rock;
     int i;
@@ -2278,12 +2309,12 @@ static int
 index_search_evaluate(mailbox, searchargs, msgno, msgfile)
 struct mailbox *mailbox;
 struct searchargs *searchargs;
-int msgno;
+unsigned msgno;
 struct mapfile *msgfile;
 {
     int i;
     struct strlist *l, *h;
-    char *cacheitem;
+    const char *cacheitem;
     int cachelen;
     struct searchsub *s;
     struct stat sbuf;
@@ -2379,14 +2410,9 @@ struct mapfile *msgfile;
 
     if (searchargs->body || searchargs->text ||
 	(searchargs->flags & SEARCH_UNCACHEDHEADER)) {
-	if (msgfile->fd == -1) {
-	    msgfile->fd = open(mailbox_message_fname(mailbox, UID(msgno)),
-			       O_RDONLY, 0666);
-	    if (msgfile->fd == -1 || fstat(msgfile->fd, &sbuf) == -1) {
-		return 0;
-	    }
-	    map_refresh(msgfile->fd, 1, &msgfile->base, &msgfile->size,
-			sbuf.st_size, "message file", mailbox->name);
+	if (mailbox_map_message(mailbox, UID(msgno),
+				&msgfile->base, &msgfile->size)) {
+	    return 0;
 	}
 
 	h = searchargs->header_name;
@@ -2429,7 +2455,7 @@ comp_pat *pat;
 struct mapfile *msgfile;
 int format;
 int skipheader;
-char *cacheitem;
+const char *cacheitem;
 {
     int partsleft = 1;
     int subparts;
@@ -2521,7 +2547,7 @@ comp_pat *pat;
     static struct strlist header;
     static char *buf;
     static int bufsize;
-    char *cacheitem;
+    const char *cacheitem;
     unsigned size;
 
     cacheitem = cache_base + CACHE_OFFSET(msgno);
@@ -2556,8 +2582,8 @@ comp_pat *pat;
 static int
 index_copysetup(mailbox, msgno, rock)
 struct mailbox *mailbox;
-int msgno;
-char *rock;
+unsigned msgno;
+void *rock;
 {
     struct copyargs *copyargs = (struct copyargs *)rock;
     int flag = 0;
