@@ -1,5 +1,13 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the cyrus IMAP Server since 2.0.11
+
+      * portability fixes involving setrlimit() 
+      * fixed compiler warnings 
+      * the STARTTLS command will only accept TLSv1 now, not SSLv2/v3. The
+        imaps port is unaffected by this change. 
+      * timsieved no longer returns garbage strings. 
+
 Changes to the cyrus IMAP Server since 2.0.9
 
       * some small memory savings 
