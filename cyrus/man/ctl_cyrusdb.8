@@ -48,6 +48,9 @@ ctl_cyrusdb \- perform operations common to all Cyrus databases
 .I config-file
 ]
 .B \-r
+[
+.B \-x
+]
 .br
 .B ctl_cyrusdb
 [
@@ -73,7 +76,12 @@ option is used to determine the default location of the Cyrus databases.
 Read configuration options from \fIconfig-file\fR.
 .TP
 .B \-r
-Recover the databases after an application or system failure.
+Recover the databases after an application or system failure.  Also performs
+database cleanup like removing mailbox reservations (and any assoiciated
+mailbox files).
+.TP
+.B \-x
+Used with -r to recover the database only.  (Prevents database cleanup).
 .TP
 .B \-c
 Checkpoint and archive the databases.  Changes to the database which
