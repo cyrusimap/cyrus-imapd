@@ -43,7 +43,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #
 # Script for mass compilation of sieve scripts.
 #
-# $Id: masssievec,v 1.1.4.3 2003/07/14 23:07:11 rjs3 Exp $
+# $Id: masssievec,v 1.1.4.4 2003/07/15 00:56:49 rjs3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -110,15 +110,16 @@ while (defined($s = readdir TOP)) {
     chdir $sievedir . "/$s";
     opendir THISONE, ".";
 
-    # default.bc was a mistake in naming in 2.2.0
-    # If this is actually for a script named "default" it will be
-    # recreated below
-    unlink "default.bc";
-
     while(defined($t = readdir THISONE)) {
 	next if ($t =~ /^\./s);
 	print "processing user $t\n";
 	chdir $t;
+
+        # default.bc was a mistake in naming in 2.2.0
+        # If this is actually for a script named "default" it will be
+        # recreated below
+        unlink "default.bc";
+
 	opendir USER, ".";
 	while(defined($u = readdir USER)) {
 	    next if ($u =~ /^\./s);
