@@ -100,6 +100,12 @@ ec IMAP_SERVER_UNAVAILABLE,
 ec IMAP_AGAIN,
    "Retry operation"
 
+ec IMAP_REQUIRE_REFERRALS,
+   "Your client must support referrals to complete this operation."
+
+ec IMAP_NOT_SINGULAR_ROOT,
+   "This mailbox hierarchy does not exist on a single backend server."
+
 # Following only used for internationalization of error messages
 
 ec IMAP_UNRECOGNIZED_CHARSET,
