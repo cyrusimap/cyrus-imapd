@@ -419,18 +419,25 @@ PPCODE:
 	}
 	
 void
-imclient__send(client, finishproc, finishrock, str)
+imclient__send(client, finishproc, finishrock, fmt, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
 	Cyrus_IMAP client
 	SV *finishproc
 	SV *finishrock
-	char *str
+	char *fmt
+	char *arg1
+	char *arg2
+	char *arg3
+	char *arg4
+	char *arg5
+	char *arg6
+	char *arg7
+	char *arg8
 PREINIT:
 	int arg;
 	SV *pcb;
 	SV *prock;
 	struct xscb *xcb;
 	struct xsccb *rock;
-	char *cp, *dp, *xstr;
 PPCODE:
 	/*
 	 * The C version does escapes.  It also does varargs, which I would
@@ -472,24 +479,12 @@ PPCODE:
 	xcb->rock = rock;
 	xcb->next = client->cb;
 	client->cb = xcb;
-	/* protect %'s in the string, since the caller does the dirty work */
-	arg = 0;
-	for (cp = str; *cp; cp++)
-	  if (*cp == '%') arg++;
-	xstr = safemalloc(strlen(str) + arg + 1);
-	dp = xstr;
-	for (cp = str; *cp; cp++) {
-	  *dp++ = *cp;
-	  if (*cp == '%') *dp++ = *cp;
-	}
-	*dp = 0;
 	/* and do it to it */
 	imclient_send(client->imclient,
 		      (pcb == &sv_undef ?
 		       imclient_xs_fcmdcb :
 		       imclient_xs_cb),
-		      rock, xstr);
-	safefree(xstr);
+		      rock, fmt, arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8);
 	/* if there was no Perl callback, spin on events until finished */
 	if (pcb == &sv_undef) {
 	  AV *av;
