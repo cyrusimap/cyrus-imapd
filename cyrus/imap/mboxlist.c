@@ -33,7 +33,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/file.h>
+#include <fcntl.h>
 #include <syslog.h>
 #include <com_err.h>
 
@@ -1048,7 +1048,7 @@ int (*proc)();
     if (r = mboxlist_opensubs(userid, &subsfile, &subsfname, &newsubsfname)) {
 	return r;
     }
-    flock(fileno(subsfile), LOCK_UN);
+    lock_unlock(fileno(subsfile));
 
     if (!listfname) mboxlist_getfname();
 
@@ -1524,40 +1524,26 @@ FILE **lfile;
 unsigned *sizep;
 {
     FILE *listfile = 0;
-    struct stat sbuffd, sbuffile;
+    struct stat sbuf;
+    char *lockfailaction;
     int r;
 
     if (!listfname) mboxlist_getfname();
 
     listfile = fopen(listfname, "r+");
-    for (;;) {
-	if (!listfile) {
-	    syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	    fatal("can't read mailbox list", EX_OSFILE);
-	}
-
-	r = flock(fileno(listfile), LOCK_EX);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    syslog(LOG_ERR, "IOERROR: locking %s: %m", listfname);
-	    fclose(listfile);
-	    return IMAP_IOERROR;
-	}
-	
-	fstat(fileno(listfile), &sbuffd);
-	r = stat(listfname, &sbuffile);
-	if (r == -1) {
-	    syslog(LOG_ERR, "IOERROR: stating %s: %m", listfname);
-	    fclose(listfile);
-	    return IMAP_IOERROR;
-	}
-
-	if (sizep) *sizep = sbuffd.st_size;
-	if (sbuffd.st_ino == sbuffile.st_ino) break;
-
-	fclose(listfile);
-	listfile = fopen(listfname, "r+");
+    if (!listfile) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
+	fatal("can't read mailbox list", EX_OSFILE);
     }
+
+    r = lock_reopen(listfile, listfname, &sbuf, &lockfailaction);
+    if (r == -1) {
+	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, listfname);
+	fclose(listfile);
+	return IMAP_IOERROR;
+    }
+
+    if (sizep) *sizep = sbuf.st_size;
     *lfile = listfile;
     return 0;
 }
@@ -1580,7 +1566,7 @@ char **newfname;
     int r;
     static char *subsfname, *newsubsfname;
     int subsfd;
-    struct stat sbuffile, sbuffd;
+    char *lockfailaction;
     char buf[MAX_MAILBOX_PATH];
 
     /* Users without INBOXes may not keep subscriptions */
@@ -1614,34 +1600,15 @@ char **newfname;
 	syslog(LOG_ERR, "IOERROR: opening %s: %m", subsfname);
 	return IMAP_IOERROR;
     }
-    *subsfile = fdopen(subsfd, "r+");
-    for (;;) {
-	r = flock(fileno(*subsfile), LOCK_EX);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    syslog(LOG_ERR, "IOERROR: locking %s: %m", subsfname);
-	    fclose(*subsfile);
-	    return IMAP_IOERROR;
-	}
-	
-	fstat(fileno(*subsfile), &sbuffd);
-	r = stat(subsfname, &sbuffile);
-	if (r == -1) {
-	    syslog(LOG_ERR, "IOERROR: stating %s: %m", subsfname);
-	    fclose(*subsfile);
-	    return IMAP_IOERROR;
-	}
 
-	if (sbuffd.st_ino == sbuffile.st_ino) break;
-
-	fclose(*subsfile);
-	*subsfile = fopen(subsfname, "r+");
-	if (!*subsfile) {
-	    syslog(LOG_ERR, "IOERROR: opening %s: %m", subsfname);
-	    return IMAP_IOERROR;
-	}
+    r = lock_reopen(subsfd, subsfname, 0, &lockfailaction);
+    if (r == -1) {
+	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, subsfname);
+	close(subsfd);
+	return IMAP_IOERROR;
     }
 
+    *subsfile = fdopen(subsfd, "r+");
     *fname = subsfname;
     *newfname = newsubsfname;
     return 0;
