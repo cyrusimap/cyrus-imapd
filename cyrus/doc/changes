@@ -26,8 +26,8 @@ Changes to the Cyrus IMAP Server Since Version 1.5.2
         in order to allow weird characters like ) in passwords. But it
         doesn't look to see if the server supports non-synchronizing
         literals. 
-      * If the file "msg/motd" exists, the first line is sent to clients
-        upon login. 
+      * If the file "msg/motd" exists, the first line is now sent to
+        clients upon login. 
       * Bug fix: to handle BODY[] properly when fetching news articles
         (truncation no longer occurs). (thanks to John Prevost) 
       * The makedepend supplied should now run on Solaris Intel. (thanks to
@@ -38,6 +38,10 @@ Changes to the Cyrus IMAP Server Since Version 1.5.2
       * Bug fix: Flags beginning with \ are system flags and users can only
         create the defined flags. The code to do this before was confused. 
       * The configure scripts and makefiles have some random fixes. 
+      * ptloader can now renew its AFS authentication by reading from a
+        srvtab file. 
+      * The configure script now looks for a libcom_err and can use an
+        installed one if one exists. 
       * Other small bug fixes. 
 
 Changes to the Cyrus IMAP Server Since Version 1.5
