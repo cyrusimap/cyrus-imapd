@@ -29,6 +29,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/file.h>
+#include <syslog.h>
 
 #include "assert.h"
 #include "mailbox.h"
@@ -444,8 +445,8 @@ struct mailbox *mailbox;
 	    fclose(f);
 	    f = fopen(fnamebuf, "r+");
 	    if (!f) {
-		return IMAP_IOERROR;
 		syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
+		return IMAP_IOERROR;
 	    }
 	}
     }

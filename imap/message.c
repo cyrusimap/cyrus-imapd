@@ -26,6 +26,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <time.h>
+#include <syslog.h>
 
 #include "imap_err.h"
 #include "mailbox.h"

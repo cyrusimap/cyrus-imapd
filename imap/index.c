@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <netinet/in.h>
 #include <sys/mman.h>
+#include <syslog.h>
 #include <com_err.h>
 
 #include "acl.h"
