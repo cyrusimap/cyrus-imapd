@@ -201,10 +201,10 @@ AC_SUBST(WITH_LOGIN)
 case "$WITH_LOGIN" in
 	unix|unix_*) AC_CHECK_LIB(crypt, main);;
 esac
-if test "$WITH_LOGIN" = unix_pwcheck; then
-	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} pwcheck"
-	EXTRA_OUTPUT="${EXTRA_OUTPUT} pwcheck/Makefile"
-fi
+case "$WITH_LOGIN" in
+	*_pwcheck) EXTRA_SUBDIRS="${EXTRA_SUBDIRS} pwcheck"
+		EXTRA_OUTPUT="${EXTRA_OUTPUT} pwcheck/Makefile";;
+esac
 AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
                           METHOD is unix or krb],[WITH_AUTH="$withval"
 	with_login_base=`echo ${WITH_LOGIN}|sed 's/_.*//'`
