@@ -407,8 +407,8 @@ va_dcl
 	    break;
 
 	case 'u':
-	    unum = va_arg(pvar, int);
-	    sprintf(buf, "%lu", unum);
+	    unum = va_arg(pvar, unsigned);
+	    sprintf(buf, "%lu", (unsigned long)unum);
 	    imclient_write(imclient, buf, strlen(buf));
 	    break;
 
@@ -426,6 +426,8 @@ va_dcl
 	}
 	fmt = percent + 1;
     }
+    va_end(pvar);
+
     imclient_write(imclient, fmt, strlen(fmt));
     imclient_write(imclient, "\r\n", 2);
 }
