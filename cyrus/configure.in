@@ -537,6 +537,7 @@ case "$with_com_err" in
 	  COM_ERR_LDFLAGS=""
 	  COM_ERR_CPPFLAGS=[-I${srcdir}/../et]
 	  PRE_SUBDIRS="et ${PRE_SUBDIRS}"
+	  EXTRA_OUTPUT="${EXTRA_OUTPUT} et/Makefile"
 	  ;;
   *) # use whatever they told us, or whatever we found
      COM_ERR_LIBS="-lcom_err"
@@ -641,4 +642,4 @@ dnl
 AC_CHECK_LIB(dld, shl_load, TCL_LIBS="${TCL_LIBS} -ldld")dnl HPUX
 AC_CHECK_LIB(dl, dlopen, TCL_LIBS="${TCL_LIBS} -ldl")dnl Solaris
 
-AC_OUTPUT(Makefile man/Makefile et/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile $EXTRA_OUTPUT)
+AC_OUTPUT(Makefile man/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile $EXTRA_OUTPUT)
