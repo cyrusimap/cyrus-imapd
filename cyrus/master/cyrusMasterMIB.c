@@ -29,6 +29,7 @@
 
 #endif /* !IN_UCD_SNMP_SOURCE */
 
+#include <time.h>
 
 #include "cyrusMasterMIB.h"
 
@@ -59,6 +60,8 @@ struct variable4 cyrusMasterMIB_variables[] = {
   { CYRUSMASTERINFODESCR, ASN_OCTET_STR , RONLY , var_cyrusMasterMIB, 2, { 1,1 } },
 #define   CYRUSMASTERINFOVERS   2
   { CYRUSMASTERINFOVERS , ASN_OCTET_STR , RONLY , var_cyrusMasterMIB, 2, { 1,2 } },
+#define   CYRUSMASTERINFOUPTIME 3
+  { CYRUSMASTERINFOUPTIME , ASN_TIMETICKS , RONLY , var_cyrusMasterMIB, 2, { 1,3 } },
 #define   SERVICEFORKS          5
   { SERVICEFORKS        , ASN_COUNTER   , RONLY , var_serviceTable, 3, { 2,1,1 } },
 #define   SERVICEACTIVE         6
@@ -71,6 +74,8 @@ struct variable4 cyrusMasterMIB_variables[] = {
 };
 /*    (L = length of the oidsuffix) */
 
+
+static time_t startTime;
 
 /*
  * init_cyrusMasterMIB():
@@ -86,6 +91,7 @@ void init_cyrusMasterMIB(void) {
 
 
   /* place any other initialization junk you need here */
+  startTime = time(NULL);
 }
 
 
@@ -109,42 +115,38 @@ var_cyrusMasterMIB(struct variable *vp,
                 size_t  *var_len, 
                 WriteMethod **write_method)
 {
+    /* variables we may use later */
+    static long long_ret;
+    static unsigned char string[SPRINT_MAX_LEN];
+    static oid objid[MAX_OID_LEN];
+    static struct counter64 c64;
 
+    if (header_generic(vp,name,length,exact,var_len,write_method)
+	== MATCH_FAILED )
+	return NULL;
 
-  /* variables we may use later */
-  static long long_ret;
-  static unsigned char string[SPRINT_MAX_LEN];
-  static oid objid[MAX_OID_LEN];
-  static struct counter64 c64;
-
-  if (header_generic(vp,name,length,exact,var_len,write_method)
-                                  == MATCH_FAILED )
-    return NULL;
-
-
-  /* 
-   * this is where we do the value assignments for the mib results.
-   */
-  switch(vp->magic) {
-
-
+    /* 
+     * this is where we do the value assignments for the mib results.
+     */
+    switch(vp->magic) {
     case CYRUSMASTERINFODESCR:
-        
-        strcpy(string, "Cyrus IMAP server master process");
-        *var_len = strlen(string);
-        return (unsigned char *) string;
-
+	strcpy(string, "Cyrus IMAP server master process");
+	*var_len = strlen(string);
+	return (unsigned char *) string;
+      
     case CYRUSMASTERINFOVERS:
-        
-        strcpy(string, CYRUS_VERSION);
-        *var_len = strlen(string);
-        return (unsigned char *) string;
-
-
+	strcpy(string, CYRUS_VERSION);
+	*var_len = strlen(string);
+	return (unsigned char *) string;
+      
+    case CYRUSMASTERINFOUPTIME:
+	long_ret = 100 * (time(NULL) - startTime);
+	return (unsigned char *) &long_ret;
+      
     default:
-      ERROR_MSG("");
-  }
-  return NULL;
+	ERROR_MSG("");
+    }
+    return NULL;
 }
 
 
@@ -161,63 +163,56 @@ var_serviceTable(struct variable *vp,
     	    size_t  *var_len,
     	    WriteMethod **write_method)
 {
+    /* variables we may use later */
+    static long long_ret;
+    static unsigned char string[SPRINT_MAX_LEN];
+    static oid objid[MAX_OID_LEN];
+    static struct counter64 c64;
+    int index;
+
+    /* 
+     * This assumes that the table is a 'simple' table.
+     *	See the implementation documentation for the meaning of this.
+     *	You will need to provide the correct value for the TABLE_SIZE parameter
+     *
+     * If this table does not meet the requirements for a simple table,
+     *	you will need to provide the replacement code yourself.
+     *	Mib2c is not smart enough to write this for you.
+     *    Again, see the implementation documentation for what is required.
+     */
+    if (header_simple_table(vp,name,length,exact,var_len,write_method, nservices)
+	== MATCH_FAILED )
+	return NULL;
 
 
-  /* variables we may use later */
-  static long long_ret;
-  static unsigned char string[SPRINT_MAX_LEN];
-  static oid objid[MAX_OID_LEN];
-  static struct counter64 c64;
-  int index;
+    index = name[*length - 1];
 
-  /* 
-   * This assumes that the table is a 'simple' table.
-   *	See the implementation documentation for the meaning of this.
-   *	You will need to provide the correct value for the TABLE_SIZE parameter
-   *
-   * If this table does not meet the requirements for a simple table,
-   *	you will need to provide the replacement code yourself.
-   *	Mib2c is not smart enough to write this for you.
-   *    Again, see the implementation documentation for what is required.
-   */
-  if (header_simple_table(vp,name,length,exact,var_len,write_method, nservices)
-                                                == MATCH_FAILED )
-    return NULL;
-
-
-  index = name[*length - 1];
-
-  /* 
-   * this is where we do the value assignments for the mib results.
-   */
-  switch(vp->magic) {
-
-
+    /* 
+     * this is where we do the value assignments for the mib results.
+     */
+    switch(vp->magic) {
     case SERVICEFORKS:
-        long_ret = Services[index - 1].nforks;
-        return (unsigned char *) &long_ret;
-
+	long_ret = Services[index - 1].nforks;
+	return (unsigned char *) &long_ret;
+      
     case SERVICEACTIVE:
-        long_ret = Services[index - 1].nactive;
-        return (unsigned char *) &long_ret;
-
+	long_ret = Services[index - 1].nactive;
+	return (unsigned char *) &long_ret;
+      
     case SERVICENAME:
-        strcpy(string, Services[index - 1].name);
-        *var_len = strlen(string);
-        return (unsigned char *) string;
-
+	strcpy(string, Services[index - 1].name);
+	*var_len = strlen(string);
+	return (unsigned char *) string;
+      
     case SERVICEID:
-        
-        long_ret = index;
-        return (unsigned char *) &long_ret;
-
+	long_ret = index;
+	return (unsigned char *) &long_ret;
 
     default:
-      ERROR_MSG("");
-  }
-  return NULL;
+	ERROR_MSG("");
+    }
+    return NULL;
 }
-
 
 
 
