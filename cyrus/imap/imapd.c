@@ -24,7 +24,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  */
-/* $Id: imapd.c,v 1.150 1998/06/10 22:00:13 tjs Exp $ */
+/* $Id: imapd.c,v 1.151 1998/07/10 20:25:05 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -2226,12 +2226,13 @@ char *partition;
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
     }
-    else if (name[0] && name[strlen(name)-1] == '.') {
-	prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		    error_message(IMAP_OK_COMPLETED));
-	return;
+
+    if (name[0] && name[strlen(name)-1] == '.') {
+	/* We don't care about trailing hierarchy delimiters. */
+	name[strlen(name)-1] = '\0';
     }
-    else {
+
+    if (!r) {
 	r = mboxname_tointernal(name, imapd_userid, mailboxname);
     }
 
