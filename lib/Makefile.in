@@ -1,0 +1,41 @@
+ACL=acl_afs.o
+AUTH=auth_krb.o
+
+OPT=-g
+
+OBJS= acl.o glob.o kerberos.o util.o n_binsearch.o $(ACL) $(AUTH)
+
+CFLAGS=$(OPT) $(DEFINES) -I/usr/local/include
+
+all: libcyrus.a
+
+libcyrus.a: $(OBJS)
+	ar cr libcyrus.a $(OBJS)
+	ranlib libcyrus.a
+
+clean:
+	rm -f *.o *.a
+
+depend:
+	makedepend $(CFLAGS) *.c
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.
+
+acl.o: /usr/include/stdio.h acl.h
+glob.o: /usr/include/stdio.h /usr/include/ctype.h util.h glob.h
+kerberos.o: /usr/include/stdio.h /usr/include/string.h
+kerberos.o: /usr/include/sys/stdtypes.h /usr/include/netdb.h
+kerberos.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h
+kerberos.o: /usr/include/sys/param.h /usr/include/machine/param.h
+kerberos.o: /usr/include/machine/devaddr.h /usr/include/sys/signal.h
+kerberos.o: /usr/include/vm/faultcode.h /usr/include/netinet/in.h
+kerberos.o: /usr/local/include/krb.h /usr/local/include/mit-copyright.h
+kerberos.o: /usr/local/include/des.h /usr/local/include/mit-cpyright.h
+kerberos.o: kerberos.h
+n_binsearch.o: /usr/include/sys/param.h /usr/include/machine/param.h
+n_binsearch.o: /usr/include/machine/devaddr.h /usr/include/sys/signal.h
+n_binsearch.o: /usr/include/vm/faultcode.h /usr/include/sys/file.h
+n_binsearch.o: /usr/include/sys/types.h /usr/include/sys/stdtypes.h
+n_binsearch.o: /usr/include/sys/sysmacros.h /usr/include/sys/fcntlcom.h
+n_binsearch.o: /usr/include/sys/stat.h /usr/include/ctype.h util.h
+util.o: /usr/include/stdio.h /usr/include/ctype.h util.h
