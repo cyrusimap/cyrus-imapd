@@ -78,6 +78,9 @@ struct ibuf {
 /* (draft standard) MIME tspecials */
 #define TSPECIALS "()<>@,;:\\\"/[]?="
 
+/* Default MIME Content-type */
+#define DEFAULT_CONTENT_TYPE "TEXT/PLAIN; CHARSET=us-ascii"
+
 /*
  * Calculate relative filename for the message with UID 'uid'
  * in 'mailbox'.  Returns pointer to static buffer.
@@ -138,7 +141,7 @@ struct index_record *message_index;
 
     rewind(infile);
     message_parse_body(infile, mailbox->format, &body,
-		       "TEXT/PLAIN; CHARSET=us-ascii", (struct boundary *)0);
+		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
     
     message_index->content_offset = body.content_offset;
     message_index->size = body.header_size + body.content_size;
@@ -739,7 +742,7 @@ struct boundary *boundaries;
     struct body preamble, epilogue;
     static struct body zerobody;
     struct param *boundary;
-    char *defaultContentType = "TEXT/PLAIN; CHARSET=us-ascii";
+    char *defaultContentType = DEFAULT_CONTENT_TYPE;
     int i, depth;
 
     preamble = epilogue = zerobody;
@@ -971,12 +974,22 @@ int newformat;
 {
     struct param *param;
 
-    PUTIBUF(ibuf, '(');
-
     if (strcmp(body->type, "MULTIPART") == 0) {
 	int i;
 
+	/* 0-part multiparts are illegal--convert to 0-len text parts */
+	if (body->numparts == 0) {
+	    static struct body zerotextbody;
+
+	    if (!zerotextbody.type) {
+		message_parse_type(DEFAULT_CONTENT_TYPE, &zerotextbody);
+	    }
+	    message_write_body(ibuf, &zerotextbody, newformat);
+	    return;
+	}
+
 	/* Multipart types get a body_multipart */
+	PUTIBUF(ibuf, '(');
 	for (i = 0; i < body->numparts; i++) {
 	    message_write_body(ibuf, &body->subpart[i], newformat);
 	}
@@ -987,6 +1000,7 @@ int newformat;
 	return;
     }
 
+    PUTIBUF(ibuf, '(');
     message_write_nstring(ibuf, body->type);
     PUTIBUF(ibuf, ' ');
     message_write_nstring(ibuf, body->subtype);
@@ -1213,7 +1227,7 @@ struct body *body;
 
     if (strcmp(body->type, "MESSAGE") == 0
 	&& strcmp(body->subtype, "RFC822") == 0) {
-	if (strcmp(body->subpart->type, "MULTIPART") == 0) {
+	if (body->subpart->numparts) {
 	    /*
 	     * Part 0 of a message/rfc822 is the message header.
 	     * Nested parts of a message/rfc822 containing a multipart
@@ -1225,8 +1239,14 @@ struct body *body;
 	    for (part = 0; part < body->subpart->numparts; part++) {
 		message_write_bit32(ibuf, body->subpart->subpart[part].content_offset);
 		if (strcmp(body->subpart->subpart[part].type, "MULTIPART") == 0) {
-		    /* Cannot fetch a multipart itself */
-		    message_write_bit32(ibuf, -1);
+		    if (body->subpart->subpart[part].numparts) {
+			/* Cannot fetch a multipart itself */
+			message_write_bit32(ibuf, -1);
+		    }
+		    else {
+			/* Treat 0-part multipart as 0-length text */
+			message_write_bit32(ibuf, 0);
+		    }
 		}
 		else {
 		    message_write_bit32(ibuf, body->subpart->subpart[part].content_size);
@@ -1246,7 +1266,13 @@ struct body *body;
 	    message_write_bit32(ibuf, body->subpart->header_offset);
 	    message_write_bit32(ibuf, body->subpart->header_size);
 	    message_write_bit32(ibuf, body->subpart->content_offset);
-	    message_write_bit32(ibuf, body->subpart->content_size);
+	    if (strcmp(body->subpart->type, "MULTIPART") == 0) {
+		/* Treat 0-part multipart as 0-length text */
+		message_write_bit32(ibuf, 0);
+	    }
+	    else {
+		message_write_bit32(ibuf, body->subpart->content_size);
+	    }
 	    message_write_section(ibuf, body->subpart);
 	}
     }
@@ -1260,8 +1286,13 @@ struct body *body;
 	message_write_bit32(ibuf, -1);
 	for (part = 0; part < body->numparts; part++) {
 	    message_write_bit32(ibuf, body->subpart[part].content_offset);
-	    if (strcmp(body->subpart[part].type, "MULTIPART") == 0) {
+	    if (body->subpart[part].numparts) {
+		/* Cannot fetch a multipart itself */
 		message_write_bit32(ibuf, -1);
+	    }
+	    else if (strcmp(body->subpart[part].type, "MULTIPART") == 0) {
+		/* Treat 0-part multipart as 0-length text */
+		message_write_bit32(ibuf, 0);
 	    }
 	    else {
 		message_write_bit32(ibuf, body->subpart[part].content_size);
@@ -1270,6 +1301,13 @@ struct body *body;
 	for (part = 0; part < body->numparts; part++) {
 	    message_write_section(ibuf, &body->subpart[part]);
 	}
+    }
+    else if (strcmp(body.type, "MULTIPART") == 0) {
+	/*
+	 * 0-part multipart -- give hint so if we are top-level,
+	 * fetch body[1] will return 0-length string
+	 */
+	message_write_bit32(ibuf, -1);
     }
     else {
 	/*
