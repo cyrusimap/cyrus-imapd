@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.81 2004/02/25 21:11:18 rjs3 Exp $
+ * $Id: mupdate.c,v 1.82 2004/03/05 16:37:37 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1404,6 +1404,40 @@ void cmd_authenticate(struct conn *C,
     return;
 }
 
+/* Log the update out to anyone who is in our updatelist */
+/* INVARIANT: caller MUST hold mailboxes_mutex */
+/* oldserver is the previous value of the server in this update,
+   thisserver is the current value of the mailbox's server */
+void log_update(const char *mailbox,
+		const char *oldserver,
+		const char *thisserver) 
+{
+    struct conn *upc;
+    
+    for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
+	/* for each connection, add to pending list */
+	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
+	strlcpy(p->mailbox, mailbox, sizeof(p->mailbox));
+	
+	/* this might need to be inside the mutex, but I doubt it */
+	if(upc->streaming_hosts
+	   && (!oldserver || !stringlist_contains(upc->streaming_hosts,
+						  oldserver))
+	   && (!thisserver || !stringlist_contains(upc->streaming_hosts,
+						   thisserver))) {
+	    /* No Match! Continue! */
+	    continue;
+	}
+	
+	pthread_mutex_lock(&upc->m);
+	p->next = upc->plist;
+	upc->plist = p;
+	
+	pthread_cond_signal(&upc->cond);
+	pthread_mutex_unlock(&upc->m);
+    }
+}
+
 void cmd_set(struct conn *C, 
 	     const char *tag, const char *mailbox,
 	     const char *server, const char *acl, enum settype t)
@@ -1499,28 +1533,7 @@ void cmd_set(struct conn *C,
     }
 
     /* post pending changes */
-    for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
-	/* for each connection, add to pending list */
-	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
-	strlcpy(p->mailbox, mailbox, sizeof(p->mailbox));
-	
-	/* xxx does this need to be inside the mutex?  probably not... */
-	if(upc->streaming_hosts
-	   && (!oldserver || !stringlist_contains(upc->streaming_hosts,
-						  oldserver))
-	   && (!thisserver || !stringlist_contains(upc->streaming_hosts,
-						   thisserver))) {
-	    /* No Match! Continue! */
-	    continue;
-	}
-
-	pthread_mutex_lock(&upc->m);
-	p->next = upc->plist;
-	upc->plist = p;
-
-	pthread_cond_signal(&upc->cond);
-	pthread_mutex_unlock(&upc->m);
-    }
+    log_update(mailbox, oldserver, thisserver);
 
     msg = ISOK;
  done:
@@ -1900,7 +1913,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	       const char *rock, void *context __attribute__((unused)))
 {
     struct mbent *m = NULL;
-    struct conn *upc = NULL;
+    char *oldserver = NULL;
+    char *thisserver = NULL;
+    char *tmp;
     enum settype t = -1;
     int ret = 0;
 
@@ -1920,12 +1935,17 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    goto done;
 	}
 	m->t = t = SET_DELETE;
+
+	oldserver = xstrdup(m->server);
     } else {
 	m = database_lookup(mdata->mailbox, NULL);
-	
+
+	if(m)
+	    oldserver = m->server;
+
 	if (m && (!mdata->acl || strlen(mdata->acl) < strlen(m->acl))) {
 	    /* change what's already there */
-	    free(m->server);
+            /* old m->server freed when oldserver is freed */
 	    m->server = xstrdup(mdata->server);
 
 	    if (mdata->acl) strcpy(m->acl, mdata->acl);
@@ -1946,7 +1966,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 
 	    if(m) {
 		free(m->mailbox);
-		free(m->server);
+		/* m->server freed when oldserver freed */
 	    }
 
 	    /* allocate new mailbox */
@@ -1978,29 +1998,30 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    
 	    /* Bring it back into scope */
 	    m = newm;
-	
 	}
     }
 
     /* write to disk */
     database_log(m, NULL);
     
-    /* post pending changes to anyone we are talking to */
-    for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
-	/* for each connection, add to pending list */
-
-	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
-	strlcpy(p->mailbox, mdata->mailbox, sizeof(p->mailbox));
-	
-	pthread_mutex_lock(&upc->m);
-	p->next = upc->plist;
-	upc->plist = p;
-
-	pthread_cond_signal(&upc->cond);
-	pthread_mutex_unlock(&upc->m);
+    if(oldserver) {
+	tmp = strchr(oldserver, '!');
+	if(tmp) *tmp = '\0';
     }
 
+    if(mdata->server) {
+	thisserver = xstrdup(mdata->server);
+	tmp = strchr(thisserver, '!');
+	if(tmp) *tmp = '\0';
+    }
+
+    /* post pending changes to anyone we are talking to */
+    log_update(mdata->mailbox, oldserver, thisserver);
+
  done:
+    if(oldserver) free(oldserver);
+    if(thisserver) free(thisserver);
+    
     free_mbent(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
