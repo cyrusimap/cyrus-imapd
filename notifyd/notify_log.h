@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_log.h,v 1.3 2002/07/03 14:57:44 rjs3 Exp $
+ * $Id: notify_log.h,v 1.4 2002/07/08 19:29:16 ken3 Exp $
  */
 
 #ifndef _NOTIFY_LOG_H_
@@ -53,4 +53,4 @@ char* notify_log(const char *class, const char *priority,
 		 int nopt, char **options,
 		 const char *message);
 
-#endif _NOTIFY_LOG_H_
+#endif /* _NOTIFY_LOG_H_ */
