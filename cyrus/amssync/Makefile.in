@@ -25,8 +25,8 @@ CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@
 LIBS = -lutil @LIBS@ /usr/local/lib/afs/libsys.a
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
-CFLAGS = -g
-LDFLAGS = -g
+CFLAGS = -g @CFLAGS@
+LDFLAGS = -g @LDFLAGS@
 
 SHELL = /bin/sh
 
