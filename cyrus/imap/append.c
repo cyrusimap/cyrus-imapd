@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.64 2000/03/07 00:56:03 tmartin Exp $
+ $Id: append.c,v 1.65 2000/03/14 21:34:53 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -345,7 +345,7 @@ int append_fromstage(struct mailbox *mailbox,
 	mailbox->minor_version = MAILBOX_MINOR_VERSION;
     }
 
-    /* Write out index header */
+    /* Write out index header; this writes to acappush too */
     r = mailbox_write_index_header(mailbox);
     if (r) {
 	unlink(fname);
@@ -373,13 +373,8 @@ int append_fromstage(struct mailbox *mailbox,
 
     
 
-
-    acaphandle = acapmbox_get_handle();
-    acapmbox_setproperty(acaphandle,
-			 mailbox->name,
-			 ACAPMBOX_TOTAL,
-			 mailbox->exists);
-    acapmbox_release_handle(acaphandle);
+        
+    
 
     mailbox_unlock_quota(&mailbox->quota);
     mailbox_unlock_index(mailbox);
@@ -494,6 +489,7 @@ const char *userid;
 	else if (!strcmp(flag[i], "\\deleted")) {
 	    if (mailbox->myrights & ACL_DELETE) {
 		message_index.system_flags |= FLAG_DELETED;
+		mailbox->deleted++;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\draft")) {
@@ -504,11 +500,13 @@ const char *userid;
 	else if (!strcmp(flag[i], "\\flagged")) {
 	    if (mailbox->myrights & ACL_WRITE) {
 		message_index.system_flags |= FLAG_FLAGGED;
+		mailbox->flagged++;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\answered")) {
 	    if (mailbox->myrights & ACL_WRITE) {
 		message_index.system_flags |= FLAG_ANSWERED;
+		mailbox->answered++;
 	    }
 	}
 	else if (mailbox->myrights & ACL_WRITE) {
@@ -568,7 +566,7 @@ const char *userid;
 	mailbox->minor_version = MAILBOX_MINOR_VERSION;
     }
 
-    /* Write out index header */
+    /* Write out index header; this writes to acappush */
     r = mailbox_write_index_header(mailbox);
     if (r) {
 	unlink(fname);

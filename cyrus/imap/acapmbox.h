@@ -1,6 +1,8 @@
 #ifndef ACAPMBOX_H_
 #define ACAPMBOX_H_
 
+#include "acap.h"
+
 /* all functions return IMAP error codes */
 
 int acapmbox_init(void);
@@ -104,7 +106,17 @@ int acapmbox_setproperty(acapmbox_handle_t *AC,
 			 acapmbox_property_t prop,
 			 int value);
 
+int acapmbox_setsomeprops(acapmbox_handle_t *AC,
+			  char *mailbox_name,
+			  int uidvalidity,
+			  int exists,
+			  int deleted,
+			  int flagged,
+			  int answered);
+
 acapmbox_status mboxdata_convert_status(acap_value_t *v);
+
+acap_conn_t *acapmbox_get_acapconn(acapmbox_handle_t *AC);
 
 /**************** proxy use *****************/
 #define FNAME_TARGET_SOCK "/socket/target"
