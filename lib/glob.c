@@ -42,7 +42,7 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.21 2000/12/20 22:51:25 leg Exp $
+ * $Id: glob.c,v 1.22 2000/12/20 22:53:49 leg Exp $
  */
 
 #include <config.h>
@@ -330,7 +330,7 @@ int glob_test (g, ptr, len, min)
 	do {
 	    /* see if we match to the next '%' or '*' wildcard */
 	    while (*gptr != '*' && *gptr != '%' && ptr != pend
-		   && (((unsigned char) *gptr == TOLOWER(*ptr) || 
+		   && ((unsigned char) *gptr == TOLOWER(*ptr) || 
 			(!newglob && *gptr == '?'))) {
 		++ptr, ++gptr;
 	    }
