@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.3 2002/05/16 16:02:43 ken3 Exp $
+ * $Id: annotate.c,v 1.4 2002/05/16 19:11:25 ken3 Exp $
  */
 
 #include <config.h>
@@ -164,8 +164,14 @@ void annotatemore_open(char *fname)
 struct fetchdata {
     struct namespace *namespace;
     char *userid;
-    int flags;
+    unsigned entries;
+    unsigned attribs;
     struct entryattlist **entryatts;
+};
+
+enum {
+    ENTRY_SERVER =		(1<<0),
+    ENTRY_PARTITION =		(1<<1)
 };
 
 enum {
@@ -182,7 +188,7 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
     static int sawuser = 0;
     int c, r;
     char mboxname[MAX_MAILBOX_PATH+1];
-    char *path, *partition;
+    char *path, *server, *partition;
     char entry[MAX_MAILBOX_PATH+25];
     char size[100];
     struct attvaluelist *attvalues = NULL;
@@ -218,8 +224,17 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
 	strcpy(mboxname, name);
 
     /* lookup the partition info */
-    r = mboxlist_detail(mboxname, NULL, &path, &partition, NULL, NULL);
+    r = mboxlist_detail(mboxname, NULL, &path, &server, NULL, NULL);
     if (r) return r;
+
+    partition = strchr(server, '!');
+    if (partition) {
+	*partition++ = '\0';
+    }
+    else {
+	partition = server;
+	server = NULL;
+    }
 
     c = name[matchlen];
     if (c) name[matchlen] = '\0';
@@ -227,16 +242,31 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
 					     fdata->userid, mboxname);
     if (c) name[matchlen] = c;
 
-    sprintf(entry, "/mailbox/{%s}/vendor/cyrus/partition", mboxname);
+    if (server && (fdata->entries & ENTRY_SERVER)) {
+	sprintf(entry, "/mailbox/{%s}/vendor/cyrus/server", mboxname);
 
-    if (fdata->flags & ATTRIB_VALUE)
-	appendattvalue(&attvalues, "value.shared", partition);
-    if (fdata->flags & ATTRIB_SIZE) {
-	sprintf(size, "%u", strlen(partition));
-	appendattvalue(&attvalues, "size.shared", size);
+	if (fdata->attribs & ATTRIB_VALUE)
+	    appendattvalue(&attvalues, "value.shared", server);
+	if (fdata->attribs & ATTRIB_SIZE) {
+	    sprintf(size, "%u", strlen(server));
+	    appendattvalue(&attvalues, "size.shared", size);
+	}
+
+	appendentryatt(fdata->entryatts, entry, attvalues);
     }
 
-    appendentryatt(fdata->entryatts, entry, attvalues);
+    if (fdata->entries & ENTRY_PARTITION) {
+	sprintf(entry, "/mailbox/{%s}/vendor/cyrus/partition", mboxname);
+
+	if (fdata->attribs & ATTRIB_VALUE)
+	    appendattvalue(&attvalues, "value.shared", partition);
+	if (fdata->attribs & ATTRIB_SIZE) {
+	    sprintf(size, "%u", strlen(partition));
+	    appendattvalue(&attvalues, "size.shared", size);
+	}
+
+	appendentryatt(fdata->entryatts, entry, attvalues);
+    }
 
     return 0;
 }
@@ -253,33 +283,46 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
     *l = NULL;
 
     /* we only do shared annotations right now */
-    fdata.flags = 0;
+    fdata.attribs = 0;
     while (a) {
 	if (!strcmp(a->s, "*") || !strcmp(a->s, "%"))
-	    fdata.flags |= ATTRIB_VALUE | ATTRIB_SIZE;
+	    fdata.attribs |= ATTRIB_VALUE | ATTRIB_SIZE;
 	else if (!strcmp(a->s, "value.*") || !strcmp(a->s, "value.%") ||
 		 !strcmp(a->s, "value") || !strcmp(a->s, "value.shared"))
-	    fdata.flags |= ATTRIB_VALUE;
+	    fdata.attribs |= ATTRIB_VALUE;
 	else if (!strcmp(a->s, "size.*") || !strcmp(a->s, "size.%") ||
 		 !strcmp(a->s, "size") || !strcmp(a->s, "size.shared"))
-	    fdata.flags |= ATTRIB_SIZE;
+	    fdata.attribs |= ATTRIB_SIZE;
 
 	a = a->next;
     }
 
-    if (!fdata.flags) return 0;
+    if (!fdata.attribs) return 0;
 
     while (e) {
+	fdata.entries = 0;
+
 	/* XXX fix this cheesy matching stuff so we support wildcards */
 	if (!strncmp(e->s, "/mailbox/{", 10) &&
 	    ((cp = strchr(e->s + 10, '}')) != NULL)) {
 	    mailbox = e->s + 10;
 	    *cp++ = '\0';
 
-	    /* we only support "/vendor/cyrus/partition" right now */
+	    /* we only support "/vendor/cyrus/server" and
+	       "/vendor/cyrus/partition" right now */
+	    if (!strncmp(cp, "/vendor/cyrus/server",
+			 (wildcard = strchr(cp, '*')) ? wildcard - cp : 20)) {
+		fdata.entries |= ENTRY_SERVER;
+	    }
 	    if (!strncmp(cp, "/vendor/cyrus/partition",
-			 (wildcard = strchr(cp, '*')) ? wildcard - cp : 23) ||
-		!strcmp(cp, "/vendor/cyrus/%")) {
+			 (wildcard = strchr(cp, '*')) ? wildcard - cp : 23)) {
+		fdata.entries |= ENTRY_PARTITION;
+	    }
+	    if (!strcmp(cp, "/vendor/cyrus/%")) {
+		fdata.entries |= (ENTRY_SERVER | ENTRY_PARTITION);
+	    }
+		
+	    if (fdata.entries) {
 		/* Reset state in fetch_cb */
 		fetch_cb(NULL, 0, 0, 0);
 
