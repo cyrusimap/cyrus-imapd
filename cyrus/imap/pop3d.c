@@ -706,7 +706,7 @@ int openinbox()
     if ((minpoll = config_getint("popminpoll", 0)) &&
 	mboxstruct.pop3_last_login + 60*minpoll > popd_login_time) {
 	prot_printf(popd_out,
-		    "-ERR Logins must be at least %d minute%s apart\r\n"
+		    "-ERR Logins must be at least %d minute%s apart\r\n",
 		    minpoll, minpoll > 1 ? "s" : "");
 	if (!mailbox_lock_index(&mboxstruct)) {
 	    mboxstruct.pop3_last_login = popd_login_time;
