@@ -99,6 +99,26 @@ char sieved_clienthost[250] = "[local]";
 
 int sieved_userisadmin;
 
+/*
+ * Cleanly shut down and exit
+ */
+void shut_down(int code)
+{
+    /* close mailboxes */
+    mboxlist_close();
+    mboxlist_done();
+
+    /* cleanup */
+    if (sieved_out) {
+	prot_flush(sieved_out);
+	prot_free(sieved_out);
+    }
+    if (sieved_in) prot_free(sieved_in);
+    
+    /* done */
+    exit(code);
+}
+
 void cmdloop()
 {
     int ret = FALSE;
@@ -115,17 +135,8 @@ void cmdloop()
 	ret = parser(sieved_out, sieved_in);
     }
 
-    /* close mailboxes */
-    mboxlist_close();
-    mboxlist_done();
-
-    /* cleanup */
-    prot_flush(sieved_out);
-    prot_free(sieved_out);
-    prot_free(sieved_in);
-    
     /* done */
-    exit(0);
+    shut_down(0);
 }
 
 
@@ -139,15 +150,10 @@ void fatal(const char *s, int code)
     }
     recurse_code = code;
 
-    mboxlist_close();
-    mboxlist_done();
-
     prot_printf(sieved_out, "NO Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
-    prot_free(sieved_out);
-    prot_free(sieved_in);
 
-    exit(EC_TEMPFAIL);
+    shut_down(EC_TEMPFAIL);
 }
 
 /*
@@ -258,11 +264,9 @@ int service_init(int argc, char **argv, char **envp)
     return 0;
 }
 
-void service_abort(void)
+void service_abort(int error)
 {
-    mboxlist_close();
-    mboxlist_done();
-    return;
+    shut_down(error);
 }
 
 int service_main(int argc, char **argv, char **envp)
