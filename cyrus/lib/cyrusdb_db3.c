@@ -46,9 +46,11 @@
 #include <assert.h>
 #include <string.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #include "cyrusdb.h"
 #include "exitcodes.h"
+#include "xmalloc.h"
 
 /* --- cut here --- */
 /*
@@ -308,13 +310,36 @@ static int fetchlock(struct db *mydb,
     return myfetch(mydb, key, keylen, data, datalen, mytid, DB_RMW);
 }
 
+#define OPENCURSOR() do { \
+    r = db->cursor(db, tid, &cursor, 0); \
+    if (r != 0) { \
+	syslog(LOG_ERR, "DBERROR: unable to create cursor: %s", \
+	       db_strerror(r)); \
+	cursor = NULL; \
+	goto done; \
+    } \
+ } while (0)
 
+#define CLOSECURSOR() do { \
+    int r = cursor->c_close(cursor); \
+    if (r) { \
+	syslog(LOG_ERR, "DBERROR: error closing cursor: %s", \
+	       db_strerror(r)); \
+	cursor = NULL; \
+	goto done; \
+    } \
+ } while (0)
+
+
+/* instead of "DB_DBT_REALLOC", we might want DB_DBT_USERMEM and allocate
+   this to the maximum length at the beginning. */
 static int foreach(struct db *mydb,
 		   char *prefix, int prefixlen,
+		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **mytid)
 {
-    int r = 0, r2;
+    int r = 0;
     DBT k, d;
     DBC *cursor = NULL;
     DB *db = (DB *) mydb;
@@ -326,29 +351,24 @@ static int foreach(struct db *mydb,
     memset(&k, 0, sizeof(k));
     memset(&d, 0, sizeof(d));
 
+    k.flags |= DB_DBT_REALLOC;
+    d.flags |= DB_DBT_REALLOC;
+
     r = gettid(mytid, &tid);
     if (r) return r;
 
     if (0) {
     restart:
-	r = cursor->c_close(cursor);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing cursor: %s",
-		   db_strerror(r));
-	}
-	return r;
+	CLOSECURSOR();
     }
 
     /* create cursor */
-    r = db->cursor(db, tid, &cursor, 0);
-    if (r != 0) { 
-	syslog(LOG_ERR, "DBERROR: unable to create cursor: %s",db_strerror(r));
-	return r;
-    }
+    OPENCURSOR();
 
     /* find first record */
     if (prefix && *prefix) {
-	k.data = prefix;
+	if (k.data) free(k.data);
+	k.data = xstrdup(prefix);
 	k.size = prefixlen;
 
 	r = cursor->c_get(cursor, &k, &d, DB_SET_RANGE);
@@ -362,52 +382,66 @@ static int foreach(struct db *mydb,
 	/* does this match our prefix? */
 	if (prefixlen && memcmp(k.data, prefix, prefixlen)) break;
 
-	r = cb(rock, k.data, k.size, d.data, d.size);
-	if (r != 0) break;
+	if (goodp(rock, k.data, k.size)) {
+	    /* we have a winner! */
 
-	r = cursor->c_get(cursor, &k, &d, DB_NEXT);
-	if (r == DB_LOCK_DEADLOCK && tid) {
-	    break;		/* don't autoretry txn-protected */
-	}
+	    /* close the cursor, so we're not holding locks 
+	       during a callback */
+	    CLOSECURSOR();
 
-	while (r == DB_LOCK_DEADLOCK) {
-	    /* if we deadlock, close and reopen the cursor, and
-	       reposition it */
-	    switch (r = cursor->c_close(cursor)) {
-	    case 0:
-		break;
-	    default:
-		syslog(LOG_ERR, "DBERROR: couldn't close cursor: %s",
-		       db_strerror(r));
-		goto done;
-	    }
-	    switch (r = db->cursor(db, NULL, &cursor, 0)) {
-	    case 0:
-		break;
-	    default:
-		syslog(LOG_ERR, "DBERROR: couldn't recreate cursor: %s",
-		       db_strerror(r));
-		goto done;
-	    }
+	    r = cb(rock, k.data, k.size, d.data, d.size);
+	    if (r != 0) break;
+
+	    /* restore the current location & advance */
+	    OPENCURSOR();
+	    
 	    r = cursor->c_get(cursor, &k, &d, DB_SET);
 	    switch (r) {
 	    case 0:
+		r = cursor->c_get(cursor, &k, &d, DB_NEXT);
+		break;
+
+	    case DB_NOTFOUND:
+		/* deleted during callback? */
+		r = cursor->c_get(cursor, &k, &d, DB_SET_RANGE);
+		break;
+
+	    default:
+		/* handle other cases below */
+		break;
+	    }
+	} else {
+	    /* advance the cursor */
+	    r = cursor->c_get(cursor, &k, &d, DB_NEXT);
+	}
+
+	while (r == DB_LOCK_DEADLOCK) {
+	    if (tid) {
+		break;		/* don't autoretry txn-protected */
+	    }
+
+	    /* if we deadlock, close and reopen the cursor, and
+	       reposition it */
+	    CLOSECURSOR();
+	    OPENCURSOR();
+
+	    r = cursor->c_get(cursor, &k, &d, DB_SET);
+	    switch (r) {
+	    case 0:
+		r = cursor->c_get(cursor, &k, &d, DB_NEXT);
 		break;
 	    case DB_LOCK_DEADLOCK:
 		continue;
-	    case DB_NOTFOUND:
+	    case DB_NOTFOUND: /* deleted? */
 		r = cursor->c_get(cursor, &k, &d, DB_SET_RANGE);
-		if (r == DB_LOCK_DEADLOCK) continue;
 		break;
 	    }
-	    r = cursor->c_get(cursor, &k, &d, DB_NEXT);
 	}
     }
 
  done:
-    r2 = cursor->c_close(cursor);
-    if (r2 != 0) {
-	syslog(LOG_ERR, "DBERROR: error closing cursor: %s", db_strerror(r2));
+    if (cursor) {
+	CLOSECURSOR();
     }
 
     switch (r) {
@@ -430,6 +464,9 @@ static int foreach(struct db *mydb,
 	r = CYRUSDB_IOERROR;
 	break;
     }
+
+    if (k.data) free(k.data);
+    if (d.data) free(d.data);
 
     return r;
 }
