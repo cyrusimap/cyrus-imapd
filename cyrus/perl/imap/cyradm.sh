@@ -39,7 +39,7 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 #
-# $Id: cyradm.sh,v 1.14 2003/11/24 20:19:50 rjs3 Exp $
+# $Id: cyradm.sh,v 1.15 2004/01/05 19:00:25 ken3 Exp $
 case "x$BASH_VERSION" in
 x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
 *) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
@@ -199,6 +199,33 @@ find the quota root for a mailbox.
 
 show quota roots and quotas for mailbox
 
+=item C<mboxconfig> I<mailbox> I<attribute> I<value>
+
+=item C<mboxcfg> I<mailbox> I<attribute> I<value>
+
+Set mailbox metadata.  The currently supported attributes are:
+
+=over 4
+
+=item C<comment>
+
+Sets a comment or description associated with the mailbox.
+
+=item C<expire>
+
+Sets the number of days after which messages will be expired from the mailbox.
+
+=item C<squat>
+
+Indicates that the mailbox should have a squat index created for it.
+
+=item C<news2mail>
+
+Sets an email address to which messages injected into the server via NNTP 
+will be sent.
+
+=back 
+
 =item C<renamemailbox> [C<--partition> I<partition>] I<oldname> I<newname>
 
 =item C<rename> [C<--partition> I<partition>] I<oldname> I<newname>
@@ -279,6 +306,23 @@ Delete (STORE \DELETED, EXPUNGE)
 Administer (SETACL)
 
 =back
+
+=item C<setinfo> I<attribute> I<value>
+
+Set server metadata.  The currently supported attributes are:
+
+=over 4
+
+=item C<motd>
+
+Sets a "message of the day".  The message gets displayed as an ALERT after
+authentication.
+
+=item C<comment>
+
+Sets a comment or description associated with the server.
+
+=back 
 
 =item C<setquota> I<root> I<resource> I<value> [I<resource> I<value> ...]
 
