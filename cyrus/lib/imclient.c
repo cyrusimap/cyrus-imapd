@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.66 2002/02/20 22:26:48 rjs3 Exp $
+ * $Id: imclient.c,v 1.67 2002/02/22 21:56:17 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -43,6 +43,7 @@
  *
  */
 #include <config.h>
+#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -231,6 +232,9 @@ int imclient_connect(struct imclient **imclient,
     int saslresult;
     static int didinit;
 
+    assert(imclient);
+    assert(host);
+
     hp = gethostbyname(host);
     if (!hp) return -1;
 
@@ -299,12 +303,13 @@ int imclient_connect(struct imclient **imclient,
  * Close and free the connection 'imclient'
  */
 void
-imclient_close(imclient)
-struct imclient *imclient;
+imclient_close(struct imclient *imclient)
 {
     int i;
     struct stringlist *cur, *cur_next;
-    
+
+    assert(imclient);
+
     imclient_eof(imclient);
     close(imclient->fd);
     free(imclient->servername);
@@ -325,30 +330,26 @@ struct imclient *imclient;
     free((char *)imclient);
 }
 
-void 
-imclient_setflags(imclient, flags)
-struct imclient *imclient;
-int flags;
+void imclient_setflags(struct imclient *imclient, int flags)
 {
+    assert(imclient);
     imclient->flags |= flags;
 }
 
-void
-imclient_clearflags(imclient, flags)
-struct imclient *imclient;
-int flags;
+void imclient_clearflags(struct imclient *imclient, int flags)
 {
+    assert(imclient);
     imclient->flags &= ~flags;
 }
 
 char *
-imclient_servername(imclient)
-struct imclient *imclient;
+imclient_servername(struct imclient *imclient)
 {
+    assert(imclient);
     return imclient->servername;
 }
 
-#define CALLBACKGROW 2 /* XXX 30 */
+#define CALLBACKGROW 5
 
 /*
  * Add untagged data callbacks to a connection.
@@ -389,6 +390,8 @@ va_dcl
     va_start(pvar);
     imclient = va_arg(pvar, struct imclient *);
 #endif
+
+    assert(imclient);
 
     while ((keyword = va_arg(pvar, char *))) {
 	flags = va_arg(pvar, int);
@@ -476,6 +479,8 @@ va_dcl
     finishrock = va_arg(pvar, void *);
     fmt = va_arg(pvar, char *);
 #endif
+
+    assert(imclient);
 
     imclient->gensym++;
     if (imclient->gensym <= 0) imclient->gensym = 1;
@@ -569,16 +574,16 @@ fail:
     }
 }
 
-static int
-imclient_writeastring(imclient, str)
-struct imclient *imclient;
-const char *str;
+static int imclient_writeastring(struct imclient *imclient, const char *str)
 {
     const char *p;
     unsigned len = 0;
     int class = 2;
     char buf[30];
 
+    assert(imclient);
+    assert(str);
+    
     for (p = str; *p; p++) {
 	len++;
 	if (class > charclass[(unsigned char)*p]) {
@@ -619,12 +624,11 @@ const char *str;
 /*
  * Write to the connection 'imclient' the data 's', of length 'len'
  */
-void
-imclient_write(imclient, s, len)
-struct imclient *imclient;
-const char *s;
-size_t len;
+void imclient_write(struct imclient *imclient, const char *s, size_t len)
 {
+    assert(imclient);
+    assert(s);
+    
     /* If no data pending for output, reset the buffer */
     if (imclient->outptr == imclient->outstart) {
 	imclient->outstart = imclient->outptr = imclient->outbuf;
@@ -662,8 +666,7 @@ size_t len;
  */
 #define REPLYSLACK 80		/* When growing, allocate this extra slack */
 #define REPLYSHRINK (4096+500)	/* If more than this free, shrink buffer */
-static void
-imclient_input(struct imclient *imclient, char *buf, int len)
+static void imclient_input(struct imclient *imclient, char *buf, int len)
 {
     unsigned long replytag;
     struct imclient_reply reply;
@@ -677,6 +680,9 @@ imclient_input(struct imclient *imclient, char *buf, int len)
     const char *plainbuf;
     unsigned plainlen;
     int result;
+
+    assert(imclient);
+    assert(buf);
     
     if (imclient->saslcompleted == 1) {
 	/* decrypt what we have */
@@ -942,12 +948,12 @@ imclient_input(struct imclient *imclient, char *buf, int len)
  * Received an EOF on the connection 'imclient'
  * Issue appropriate callbacks.
  */
-static void
-imclient_eof(imclient)
-struct imclient *imclient;
+static void imclient_eof(struct imclient *imclient)
 {
     struct imclient_cmdcallback *cmdcb;
     struct imclient_reply reply;
+
+    assert(imclient);
 
     imclient->readytag = 0;
     imclient->readytxt = 0;
@@ -974,12 +980,13 @@ struct imclient *imclient;
  * 'wanttowrite' is filled in with nonzero value iff should
  * select() for write as well.
  */
-void
-imclient_getselectinfo(imclient, fd, wanttowrite)
-struct imclient *imclient;
-int *fd;
-int *wanttowrite;
+void imclient_getselectinfo(struct imclient *imclient, int *fd,
+			    int *wanttowrite)
 {
+    assert(imclient);
+    assert(fd);
+    assert(wanttowrite);
+    
     *fd = imclient->fd;
     *wanttowrite = imclient->outptr - imclient->outstart;
 }
@@ -987,9 +994,7 @@ int *wanttowrite;
 /*
  * Process one input or output event on the connection 'imclient'.
  */
-void
-imclient_processoneevent(imclient)
-struct imclient *imclient;
+void imclient_processoneevent(struct imclient *imclient)
 {
     char buf[4+IMCLIENT_BUFSIZE];
     int n;
@@ -997,6 +1002,8 @@ struct imclient *imclient;
     fd_set rfds, wfds;
     FD_ZERO(&rfds);
     FD_ZERO(&wfds);
+
+    assert(imclient);
 
     for (;;) {
 	writelen = imclient->outptr - imclient->outstart;
@@ -1100,11 +1107,14 @@ struct authresult {
 };
 
 /* Command completion callback for imclient_authenticate */
-static void  authresult(struct imclient *imclient __attribute__((unused)),
-			void *rock,
-			struct imclient_reply *reply)
+static void authresult(struct imclient *imclient __attribute__((unused)),
+		       void *rock,
+		       struct imclient_reply *reply)
 {
     struct authresult *result = (struct authresult *)rock;
+
+    assert(result);
+    assert(reply);
 
     if (!strcmp(reply->keyword, "OK")) {
 	result->replytype = replytype_ok;
@@ -1122,8 +1132,11 @@ static void tlsresult(struct imclient *imclient __attribute__((unused)),
 {
     struct authresult *result = (struct authresult *)rock;
 
+    assert(result);
+    assert(reply);
+
     if (!strcmp(reply->keyword, "OK")) {
-      result->replytype = replytype_ok;
+	result->replytype = replytype_ok;
     }
     else if (!strcmp(reply->keyword, "NO")) {
 	result->replytype = replytype_no;
@@ -1149,6 +1162,9 @@ void interaction (struct imclient *context, sasl_interact_t *t, char *user)
   char result[1024];
   struct stringlist *cur;
   
+  assert(context);
+  assert(t);
+
   cur = malloc(sizeof(struct stringlist));
   if(!cur) {
       t->len=0;
@@ -1186,11 +1202,14 @@ void interaction (struct imclient *context, sasl_interact_t *t, char *user)
 void fillin_interactions(struct imclient *context,
 			 sasl_interact_t *tlist, char *user)
 {
-  while (tlist->id!=SASL_CB_LIST_END)
-  {
-    interaction(context, tlist, user);
-    tlist++;
-  }
+    assert(context);
+    assert(tlist);
+
+    while (tlist->id!=SASL_CB_LIST_END)
+    {
+	interaction(context, tlist, user);
+	tlist++;
+    }
 }
 
 /*
@@ -1221,6 +1240,9 @@ static int imclient_authenticate_sub(struct imclient *imclient,
   int inlen;
   struct authresult result;
 
+  assert(imclient);
+  assert(mechlist);
+  
   /*******
    * Now set the SASL properties
    *******/
@@ -1348,6 +1370,9 @@ int imclient_authenticate(struct imclient *imclient,
     char *mlist;
     const char *mtried;
 
+    assert(imclient);
+    assert(mechlist);
+
     mlist = xstrdup(mechlist);
     ucase(mlist);
 
@@ -1426,6 +1451,8 @@ static int imclient_decodebase64(char *input)
     unsigned char *output = (unsigned char *)input;
     int c1, c2, c3, c4;
 
+    assert(input);
+
     while (*input) {
 	c1 = *input++;
 	if (CHAR64(c1) == XX) return -1;
@@ -1459,6 +1486,9 @@ static void imclient_writebase64(struct imclient *imclient,
     char buf[1024];
     size_t buflen = 0;
     int c1, c2, c3;
+
+    assert(imclient);
+    assert(output);
 
     while (len) {
 	if (buflen >= (size_t)(sizeof(buf)-4)) {
@@ -1640,6 +1670,7 @@ static int tls_init_clientengine(struct imclient *imclient,
     char   *c_cert_file;
     char   *c_key_file;
 
+    assert(imclient);
 
     SSL_load_error_strings();
     SSLeay_add_ssl_algorithms();
