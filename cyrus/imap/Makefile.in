@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.170 2003/05/12 19:43:55 rjs3 Exp $
+# $Id: Makefile.in,v 1.171 2003/07/13 15:04:53 rjs3 Exp $
 # 
 # @configure_input@
 # 
@@ -298,11 +298,15 @@ libimap.a: $(LOBJS)
 	ar cr libimap.a $(LOBJS)
 	$(RANLIB) libimap.a
 
-imap_err.h imap_err.c: imap_err.et
+imap_err.c: imap_err.et
 	$(COMPILE_ET) $(srcdir)/imap_err.et
 
-mupdate_err.h mupdate_err.c: mupdate_err.et
+imap_err.h: imap_err.c
+
+mupdate_err.c: mupdate_err.et
 	$(COMPILE_ET) $(srcdir)/mupdate_err.et
+
+mupdate_err.h: mupdate_err.c
 
 clean:
 	rm -f *.o *.a Makefile.bak makedepend.log \
