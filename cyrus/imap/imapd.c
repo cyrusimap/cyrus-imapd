@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.255 2000/06/09 02:44:49 leg Exp $ */
+/* $Id: imapd.c,v 1.256 2000/06/14 02:41:33 wcw Exp $ */
 
 #include <config.h>
 
@@ -4134,6 +4134,7 @@ int getxstring(struct buf *buf, int type)
 	    /*
 	     * Nothing to do here - fall through.
 	     */
+	  break;
 	}
 	
     case '\"':
