@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.37 2000/06/07 22:36:22 ken3 Exp $
+ * $Id: imapd.h,v 1.38 2000/06/16 03:32:03 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -177,9 +177,13 @@ struct searchargs {
     struct searchsub *sublist;
 };
 
-/* Values for sort criteria */
-#define SORT_REVERSE (-1)
+/* Sort criterion */
+struct sortcrit {
+    unsigned key;		/* sort key + modifier as defined below */
+    char *args[2];		/* argument(s) to the sort key */
+};
 
+/* Values for sort keys */
 enum {
     SORT_SEQUENCE = 0,
     SORT_ARRIVAL,
@@ -188,9 +192,14 @@ enum {
     SORT_FROM,
     SORT_SIZE,
     SORT_SUBJECT,
-    SORT_TO
+    SORT_TO,
+    SORT_ANNOTATION
+    /* values > 255 are reserved for internal use */
 };
-#define NUMSORTCRIT (8)
+#define SORT_KEY_MASK		0xff
+
+/* Sort key modifier flag bits */
+#define SORT_REVERSE		(1<<15)
 
 /* Bitmask for status queries */
 enum {
@@ -221,7 +230,7 @@ extern void index_search(struct mailbox *mailbox,
 			    struct searchargs *searchargs, int usinguid);
 extern void list_thread_algorithms(void);
 extern int find_thread_algorithm(char *arg);
-extern void index_sort(struct mailbox *mailbox, signed char *sortcrit,
+extern void index_sort(struct mailbox *mailbox, struct sortcrit *sortcrit,
 		       struct searchargs *searchargs, int usinguid);
 extern void index_thread(struct mailbox *mailbox, int algorithm,
 			 struct searchargs *searchargs, int usinguid);
