@@ -1,5 +1,5 @@
 /* namespace.c -- Namespace manipulation routines
- * $Id: namespace.c,v 1.2 2001/08/03 21:18:07 ken3 Exp $
+ * $Id: namespace.c,v 1.3 2001/08/14 16:10:08 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -56,6 +56,8 @@ int namespace_init(struct namespace *namespace, int force_std)
 {
     const char *prefix;
 
+    assert(namespace != NULL);
+
     namespace->hier_sep = config_getswitch("unixhierarchysep", 0) ? '/' : '.';
     namespace->isalt = !force_std && config_getswitch("altnamespace", 0);
 
@@ -103,6 +105,9 @@ char *hier_sep_tointernal(char *name, struct namespace *namespace)
 {
     char *p;
 
+    assert(namespace != NULL);
+    assert(namespace->hier_sep == '.' || namespace->hier_sep == '/');
+
     if (namespace->hier_sep == '/') {
 	/* change all '/'s to '.' and all '.'s to DOTCHAR */
 	for (p = name; *p; p++) {
@@ -117,6 +122,9 @@ char *hier_sep_tointernal(char *name, struct namespace *namespace)
 char *hier_sep_toexternal(char *name, struct namespace *namespace)
 {
     char *p;
+
+    assert(namespace != NULL);
+    assert(namespace->hier_sep == '.' || namespace->hier_sep == '/');
 
     if (namespace->hier_sep == '/') {
 	/* change all '.'s to '/' and all DOTCHARs to '.' */

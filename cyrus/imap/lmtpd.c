@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.65 2001/08/12 18:22:12 ken3 Exp $
+ * $Id: lmtpd.c,v 1.66 2001/08/14 16:10:07 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.65 2001/08/12 18:22:12 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.66 2001/08/14 16:10:07 leg Exp $";*/
 
 #include <config.h>
 
@@ -1201,8 +1201,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	}
 
 	/* case 2: ordinary user, might have Sieve script */
-	else if (!(lmtpd_namespace.hier_sep == '.' && strchr(rcpt, '.')) &&
-		 /* '.' isn't allowed if '.' is the hierarchy separator */
+	else if (!strchr(rcpt, lmtpd_namespace.hier_sep) &&
 	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
 	    FILE *f = sieve_find_script(rcpt);
 
