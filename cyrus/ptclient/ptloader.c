@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.28 2002/12/12 16:46:05 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.29 2003/01/10 17:44:56 rjs3 Exp $";
 
 #include <config.h>
 
@@ -118,7 +118,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog("ptloader", LOG_PID, LOG_LOCAL7);
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.28 2002/12/12 16:46:05 rjs3 Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.29 2003/01/10 17:44:56 rjs3 Exp $");
 
     while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
 	switch (opt) {
@@ -267,6 +267,7 @@ int c;
     DBT key, data;
     char indata[PTS_DB_KEYSIZE];
     char user[PR_MAXNAMELEN];
+    char user_tmp[PR_MAXNAMELEN];
     namelist groups;
     int i,fd,rc;
     size_t size;
@@ -316,8 +317,11 @@ int c;
     memset(&groups, 0, sizeof(groups));
     groups.namelist_len = 0;
     groups.namelist_val = NULL;
-    
-    if ((rc = pr_ListMembers(user, &groups))) {
+
+    /* afs is going to overwrite our nice canonicalized user if we don't
+     * give it something else to chew on */
+    strlcpy(user_tmp, user, sizeof(user_tmp));
+    if ((rc = pr_ListMembers(user_tmp, &groups))) {
         syslog(LOG_ERR, "pr_ListMembers %s: %s", user, error_message(rc));
         reply = error_message(rc);
         goto sendreply;
@@ -569,4 +573,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.28 2002/12/12 16:46:05 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.29 2003/01/10 17:44:56 rjs3 Exp $ */
