@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.3 1999/07/31 21:49:40 leg Exp $
+ * $Id: script.c,v 1.4 1999/08/31 18:25:43 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -101,11 +101,10 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 	free(s);
 	s = NULL;
 	res = SIEVE_PARSE_ERROR;
-    }
-
-    if (s->err != NULL) {
+    } else if (s->err != NULL) {
 	free_tree(s->cmds);
 	free(s);
+	s = NULL;
 	res = SIEVE_PARSE_ERROR;
     }
 
