@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.19 2002/01/17 23:12:49 rjs3 Exp $
+ * $Id: mupdate.c,v 1.20 2002/01/18 17:27:46 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -656,7 +656,7 @@ void *start(void *rock)
     }
 
     /* create sasl connection */
-    if (sasl_server_new("imap", /* FIXME: real service name? */
+    if (sasl_server_new("mupdate",
 			config_servername, NULL,
 			(haveaddr ? localip : NULL),
 			(haveaddr ? remoteip : NULL),
@@ -996,7 +996,7 @@ void cmd_authenticate(struct conn *C,
 	       C->clienthost,
 	       mech, sasl_errdetail(C->saslconn));
 
-	prot_printf(C->pout, "%s NO %s\r\n", tag,
+	prot_printf(C->pout, "%s NO \"%s\"\r\n", tag,
 		    sasl_errstring((r == SASL_NOUSER ? SASL_BADAUTH : r),
 				   NULL, NULL));
 	reset_saslconn(C);
@@ -1006,7 +1006,7 @@ void cmd_authenticate(struct conn *C,
     /* Successful Authentication */
     r = sasl_getprop(C->saslconn, SASL_USERNAME, (const void **)&C->userid);
     if(r != SASL_OK) {
-	prot_printf(C->pout, "%s NO SASL Error\r\n", tag);
+	prot_printf(C->pout, "%s NO \"SASL Error\"\r\n", tag);
 	reset_saslconn(C);
 	return;
     }
@@ -1014,7 +1014,7 @@ void cmd_authenticate(struct conn *C,
     syslog(LOG_NOTICE, "login: %s from %s",
 	   C->userid, C->clienthost);
 
-    prot_printf(C->pout, "%s OK Authenticated\r\n", tag);
+    prot_printf(C->pout, "%s OK \"Authenticated\"\r\n", tag);
 
     prot_setsasl(C->pin, C->saslconn);
     prot_setsasl(C->pout, C->saslconn);
@@ -1244,7 +1244,7 @@ static int reset_saslconn(struct conn *c)
 
     sasl_dispose(&c->saslconn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("imap", config_servername,
+    ret = sasl_server_new("mupdate", config_servername,
                          NULL, NULL, NULL,
                          NULL, 0, &c->saslconn);
     if(ret != SASL_OK) return ret;
