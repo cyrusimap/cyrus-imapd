@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.20 1999/08/09 21:43:35 leg Exp $
+ $Id: config.c,v 1.21 1999/08/09 21:46:07 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -50,6 +50,8 @@ static int nconfiglist;
 const char *config_dir;
 const char *config_defpartition;
 const char *config_newsspool;
+
+int config_hashimapspool;
 
 static void config_read P((void));
 
