@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.79 2003/05/03 02:05:20 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.80 2003/05/08 20:56:53 ken3 Exp $
  */
 
 /*
@@ -1895,7 +1895,18 @@ static void cmd_hdr(char *cmd, char *hdr, char *msgid,
 
 	if (!msgno || index_getuid(msgno) != uid) continue;
 
-	if ((body = index_getheader(nntp_group, msgno, hdr))) {
+	/* see if we're looking for metadata */
+	if (hdr[0] == ':') {
+	    if (!strcasecmp(":size", hdr))
+		prot_printf(nntp_out, "%lu %lu\r\n", msgid ? 0 : uid,
+			    index_getsize(nntp_group, msgno));
+	    else if (!strcasecmp(":lines", hdr))
+		prot_printf(nntp_out, "%lu %lu\r\n", msgid ? 0 : uid,
+			    index_getlines(nntp_group, msgno));
+	    else
+		prot_printf(nntp_out, "%lu \r\n", msgid ? 0 : uid);
+	}
+	else if ((body = index_getheader(nntp_group, msgno, hdr))) {
 	    prot_printf(nntp_out, "%lu %s\r\n", msgid ? 0 : uid, body);
 	}
     }
@@ -2142,20 +2153,14 @@ static void cmd_over(unsigned long uid, unsigned long last)
 	    if (!found++)
 		prot_printf(nntp_out, "224 Overview information follows:\r\n");
 
-	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t",
+	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t%lu\r\n",
 			over->uid,
 			over->subj ? over->subj : "",
 			over->from ? over->from : "",
 			over->date ? over->date : "",
 			over->msgid ? over->msgid : "",
 			over->ref ? over->ref : "",
-			over->bytes);
-
-	    if (over->msgid &&
-		netnews_lookup(over->msgid, NULL, NULL, &over->lines, NULL))
-		prot_printf(nntp_out, "%lu", over->lines);
-
-	    prot_printf(nntp_out, "\r\n");
+			over->bytes, over->lines);
 	}
     }
 

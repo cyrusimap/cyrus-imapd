@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.68.4.10 2003/03/31 20:33:45 ken3 Exp $
+ * $Id: mailbox.h,v 1.68.4.11 2003/05/08 20:56:53 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -72,7 +72,7 @@ typedef unsigned short bit32;
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
 
-#define MAILBOX_MINOR_VERSION	4
+#define MAILBOX_MINOR_VERSION	5
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
@@ -166,6 +166,7 @@ struct index_record {
     time_t last_updated;
     bit32 system_flags;
     bit32 user_flags[MAX_USER_FLAGS/32];
+    unsigned long content_lines;
 };
 
 /* Offsets of index header fields */
@@ -200,9 +201,10 @@ struct index_record {
 #define OFFSET_LAST_UPDATED 28
 #define OFFSET_SYSTEM_FLAGS 32
 #define OFFSET_USER_FLAGS 36
+#define OFFSET_CONTENT_LINES (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8) /* added for nntpd */
 
 #define INDEX_HEADER_SIZE (OFFSET_SPARE3+4)
-#define INDEX_RECORD_SIZE (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8)
+#define INDEX_RECORD_SIZE (OFFSET_CONTENT_LINES+4)
 
 #define FLAG_ANSWERED (1<<0)
 #define FLAG_FLAGGED (1<<1)
@@ -282,6 +284,7 @@ extern void mailbox_unlock_quota(struct quota *quota);
 
 extern int mailbox_write_header(struct mailbox *mailbox);
 extern int mailbox_write_index_header(struct mailbox *mailbox);
+extern void mailbox_index_record_to_buf(struct index_record *record, char *buf);
 extern int mailbox_write_index_record(struct mailbox *mailbox,
 				      unsigned msgno,
 				      struct index_record *record, int sync);

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.25 2003/03/12 17:34:45 ken3 Exp $
+ * $Id: index.c,v 1.180.4.26 2003/05/08 20:56:51 ken3 Exp $
  */
 #include <config.h>
 
@@ -3053,6 +3053,7 @@ void *rock;
     copyargs->copymsg[copyargs->nummsg].sentdate = SENTDATE(msgno);
     copyargs->copymsg[copyargs->nummsg].size = SIZE(msgno);
     copyargs->copymsg[copyargs->nummsg].header_size = HEADER_SIZE(msgno);
+    copyargs->copymsg[copyargs->nummsg].content_lines = CONTENT_LINES(msgno);
     copyargs->copymsg[copyargs->nummsg].cache_begin = cache_base + CACHE_OFFSET(msgno);
     if (mailbox->format != MAILBOX_FORMAT_NORMAL) {
 	/* Force copy and re-parse of message */
@@ -4628,7 +4629,7 @@ static void parse_env_address(char *str, struct address *addr)
     addr->domain = parse_nstring(&str);
 }
 
-extern struct nntp_overview *index_overview(struct mailbox *mailbox __attribute__((unused)),
+extern struct nntp_overview *index_overview(struct mailbox *mailbox,
 					    unsigned msgno)
 {
     static struct nntp_overview over;
@@ -4666,7 +4667,7 @@ extern struct nntp_overview *index_overview(struct mailbox *mailbox __attribute_
 
     over.uid = UID(msgno);
     over.bytes = SIZE(msgno);
-    over.lines = 0; /* we can't get this from index */
+    over.lines = index_getlines(mailbox, msgno);
     over.date = envtokens[ENV_DATE];
     over.msgid = envtokens[ENV_MSGID];
 
@@ -4763,4 +4764,69 @@ extern char *index_getheader(struct mailbox *mailbox, unsigned msgno,
     }
 
     return buf;
+}
+
+extern unsigned long index_getsize(struct mailbox *mailbox __attribute__((unused)),
+				   unsigned msgno)
+{
+    return SIZE(msgno);
+}
+
+extern unsigned long index_getlines(struct mailbox *mailbox, unsigned msgno)
+{
+    unsigned long lines = CONTENT_LINES(msgno);
+
+    if (lines == BIT32_MAX) {
+	int r;
+	char fname[MAX_MAILBOX_PATH+1];
+	FILE *msgfile;
+	char buf[4096];
+	struct index_record record;
+
+	lines = 0;
+
+	r = mailbox_lock_index(mailbox);
+	if (r) return lines;
+
+	/* get the existing record */
+	r = mailbox_read_index_record(mailbox, msgno, &record);
+	if (r) goto done;
+
+	/* Open the message file */
+	strlcpy(fname, mailbox->path, sizeof(fname));
+	strlcat(fname, "/", sizeof(fname));
+	mailbox_message_get_fname(mailbox, record.uid,
+				  fname + strlen(fname),
+				  sizeof(fname) - strlen(fname));
+
+	msgfile = fopen(fname, "r");
+	if (!msgfile) goto done;
+
+	/* Find start of body */
+	while (fgets(buf, sizeof(buf), msgfile)) {
+	    if (buf[0] == '\r' && buf[1] == '\n') {
+		/* blank line between header and body */
+		break;
+	    }
+	}
+
+	/* Count the number of lines in the message body */
+	while (fgets(buf, sizeof(buf), msgfile)) {
+	    while (buf[strlen(buf)-1] != '\n' &&
+		   fgets(buf, sizeof(buf), msgfile));
+	    lines++;
+	}
+	fclose(msgfile);
+
+	/* Update the index record */
+	record.content_lines = lines;
+	record.last_updated = time(0);
+
+	r = mailbox_write_index_record(mailbox, msgno, &record, 1);
+
+      done:
+	mailbox_unlock_index(mailbox);
+    }
+
+    return lines;
 }

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68.4.12 2003/04/04 01:14:07 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.13 2003/05/08 20:56:54 ken3 Exp $ */
 
 #include <config.h>
 
@@ -134,7 +134,7 @@ int main(int argc, char **argv)
 
     /* Ensure we're up-to-date on the index file format */
     assert(INDEX_HEADER_SIZE == (OFFSET_SPARE3+4));
-    assert(INDEX_RECORD_SIZE == (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8));
+    assert(INDEX_RECORD_SIZE == (OFFSET_CONTENT_LINES+4));
 
     while ((opt = getopt(argc, argv, "C:rmf")) != EOF) {
 	switch (opt) {
@@ -502,18 +502,8 @@ int reconstruct(char *name, struct discovered *found)
 	fclose(msgfile);
 	
 	/* Write out new entry in index file */
-	*((bit32 *)(buf+OFFSET_UID)) = htonl(message_index.uid);
-	*((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(message_index.internaldate);
-	*((bit32 *)(buf+OFFSET_SENTDATE)) = htonl(message_index.sentdate);
-	*((bit32 *)(buf+OFFSET_SIZE)) = htonl(message_index.size);
-	*((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(message_index.header_size);
-	*((bit32 *)(buf+OFFSET_CONTENT_OFFSET)) = htonl(message_index.content_offset);
-	*((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(message_index.cache_offset);
-	*((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(message_index.last_updated);
-	*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)) = htonl(message_index.system_flags);
-	for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-	    *((bit32 *)(buf+OFFSET_USER_FLAGS+4*i)) = htonl(message_index.user_flags[i]);
-	}
+	mailbox_index_record_to_buf(&message_index, buf);
+
 	n = fwrite(buf, 1, INDEX_RECORD_SIZE, newindex);
 	if (n != INDEX_RECORD_SIZE) {
 	    fclose(newindex);

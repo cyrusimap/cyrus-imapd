@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.4.6.7 2003/04/17 22:49:25 ken3 Exp $
+ * $Id: index.h,v 1.4.6.8 2003/05/08 20:56:52 ken3 Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -78,6 +78,7 @@
 #define LAST_UPDATED(msgno) ((time_t)ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_LAST_UPDATED))))
 #define SYSTEM_FLAGS(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_SYSTEM_FLAGS)))
 #define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_USER_FLAGS+((i)*4))))
+#define CONTENT_LINES(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CONTENT_LINES)))
 
 /* Access assistance macros for memory-mapped cache file data */
 #define CACHE_ITEM_BIT32(ptr) (ntohl(*((bit32 *)(ptr))))
@@ -173,5 +174,7 @@ extern struct nntp_overview *index_overview(struct mailbox *mailbox,
 					    unsigned msgno);
 extern char *index_getheader(struct mailbox *mailbox, unsigned msgno,
 			     char *hdr);
+extern unsigned long index_getsize(struct mailbox *mailbox, unsigned msgno);
+extern unsigned long index_getlines(struct mailbox *mailbox, unsigned msgno);
 
 #endif /* INDEX_H */

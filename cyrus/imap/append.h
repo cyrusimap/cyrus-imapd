@@ -1,5 +1,5 @@
 /* append.h -- Description of messages to be copied 
- * $Id: append.h,v 1.21.4.3 2003/04/15 16:11:57 ken3 Exp $ 
+ * $Id: append.h,v 1.21.4.4 2003/05/08 20:56:51 ken3 Exp $ 
  *
  * Copyright (c) 1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -54,6 +54,7 @@ struct copymsg {
     time_t sentdate;
     unsigned long size;
     unsigned long header_size;
+    unsigned long content_lines;
     const char *cache_begin;
     int cache_len;		/* 0 if need to copy & parse message */
     int seen;

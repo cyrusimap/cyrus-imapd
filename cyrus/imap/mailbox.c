@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.134.4.21 2003/03/12 16:38:13 ken3 Exp $
+ * $Id: mailbox.c,v 1.134.4.22 2003/05/08 20:56:52 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -739,6 +739,10 @@ int mailbox_read_index_header(struct mailbox *mailbox)
 	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_POP3_NEW_UIDL)));
     }
 
+    if (mailbox->record_size < INDEX_RECORD_SIZE) {
+	upgrade = 1;
+    }
+
     if (upgrade) {
 	if (mailbox_upgrade_index(mailbox))
 	    return IMAP_IOERROR;
@@ -790,6 +794,7 @@ struct index_record *record;
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
 	record->user_flags[n] = htonl(*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)));
     }
+    record->content_lines = htonl(*((bit32 *)(buf+OFFSET_CONTENT_LINES)));
     return 0;
 }
 
@@ -1206,17 +1211,11 @@ int mailbox_write_index_header(struct mailbox *mailbox)
 }
 
 /*
- * Write an index record to a mailbox
- * call fsync() on index_fd if 'sync' is true
+ * Put an index record into a buffer suitable for writing to a file.
  */
-int
-mailbox_write_index_record(struct mailbox *mailbox,
-			   unsigned msgno,
-			   struct index_record *record,
-			   int sync)
+void mailbox_index_record_to_buf(struct index_record *record, char *buf)
 {
     int n;
-    char buf[INDEX_RECORD_SIZE];
 
     *((bit32 *)(buf+OFFSET_UID)) = htonl(record->uid);
     *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record->internaldate);
@@ -1230,6 +1229,23 @@ mailbox_write_index_record(struct mailbox *mailbox,
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
 	*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)) = htonl(record->user_flags[n]);
     }
+    *((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(record->content_lines);
+}
+
+/*
+ * Write an index record to a mailbox
+ * call fsync() on index_fd if 'sync' is true
+ */
+int
+mailbox_write_index_record(struct mailbox *mailbox,
+			   unsigned msgno,
+			   struct index_record *record,
+			   int sync)
+{
+    int n;
+    char buf[INDEX_RECORD_SIZE];
+
+    mailbox_index_record_to_buf(record, buf);
 
     n = lseek(mailbox->index_fd,
 	      mailbox->start_offset + (msgno-1) * mailbox->record_size,
@@ -1261,7 +1277,7 @@ int mailbox_append_index(struct mailbox *mailbox,
 			 int sync)
 {
     unsigned i;
-    int j, len, n;
+    int len, n;
     char *buf, *p;
     long last_offset;
 
@@ -1277,19 +1293,8 @@ int mailbox_append_index(struct mailbox *mailbox,
 
     for (i = 0; i < num; i++) {
 	p = buf + i*mailbox->record_size;
-	*((bit32 *)(p+OFFSET_UID)) = htonl(record[i].uid);
-	*((bit32 *)(p+OFFSET_INTERNALDATE)) = htonl(record[i].internaldate);
-	*((bit32 *)(p+OFFSET_SENTDATE)) = htonl(record[i].sentdate);
-	*((bit32 *)(p+OFFSET_SIZE)) = htonl(record[i].size);
-	*((bit32 *)(p+OFFSET_HEADER_SIZE)) = htonl(record[i].header_size);
-	*((bit32 *)(p+OFFSET_CONTENT_OFFSET)) = htonl(record[i].content_offset);
-	*((bit32 *)(p+OFFSET_CACHE_OFFSET)) = htonl(record[i].cache_offset);
-	*((bit32 *)(p+OFFSET_LAST_UPDATED)) = htonl(record[i].last_updated);
-	*((bit32 *)(p+OFFSET_SYSTEM_FLAGS)) = htonl(record[i].system_flags);
-	p += OFFSET_USER_FLAGS;
-	for (j = 0; j < MAX_USER_FLAGS/32; j++, p += 4) {
-	    *((bit32 *)p) = htonl(record[i].user_flags[j]);
-	}
+
+	mailbox_index_record_to_buf(&record[i], p);
     }
 
     last_offset = mailbox->start_offset + start * mailbox->record_size;
@@ -1455,8 +1460,9 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 {
     int r;
     unsigned msgno;
-    bit32 oldstart_offset;
-    char buf[INDEX_HEADER_SIZE];
+    bit32 oldstart_offset, oldrecord_size, recsize_diff;
+    char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
+	     INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
     char fnamebuf[MAX_MAILBOX_PATH+1], fnamebufnew[MAX_MAILBOX_PATH+1];
     size_t fnamebuf_len;
     FILE *newindex;
@@ -1496,6 +1502,11 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
     oldstart_offset = mailbox->start_offset;
     mailbox->start_offset = INDEX_HEADER_SIZE;
 
+    /* save old record_size; change record_size */
+    oldrecord_size = mailbox->record_size;
+    mailbox->record_size = INDEX_RECORD_SIZE;
+    recsize_diff = INDEX_RECORD_SIZE - oldrecord_size;
+
     /* Write the new index header */ 
     *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox->generation_no;
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
@@ -1515,12 +1526,28 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 
     fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
 
-    /* Write the rest of new index same as old */
+    /* Write the rest of new index */
+    memset(buf, 0, INDEX_RECORD_SIZE);
     for (msgno = 1; msgno <= mailbox->exists; msgno++) {
+	/* Write the existing (old) part of the index record */
 	bufp = (char *) (mailbox->index_base + oldstart_offset +
-			(msgno - 1)*mailbox->record_size);
+			 (msgno - 1)*oldrecord_size);
+	
+	fwrite(bufp, oldrecord_size, 1, newindex);
 
-	fwrite(bufp, mailbox->record_size, 1, newindex);
+	if (recsize_diff) {
+	    /* We need to upgrade the index record to include new fields. */
+
+	    /* Currently, this means adding a content_lines placeholder.
+	     * We use BIT32_MAX rather than 0, since a message body can
+	     * be empty.  We'll calculate the actual value on demand.
+	     */
+	    if (oldrecord_size < OFFSET_CONTENT_LINES+sizeof(unsigned long)) {
+		*((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(BIT32_MAX);
+	    }
+
+	    fwrite(buf+oldrecord_size, recsize_diff, 1, newindex);
+	}
     }
 
     /* Ensure everything made it to disk */

@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.88.16.9 2003/04/17 22:53:15 ken3 Exp $
+ * $Id: message.c,v 1.88.16.10 2003/05/08 20:56:53 ken3 Exp $
  */
 
 #include <config.h>
@@ -365,6 +365,7 @@ struct index_record *message_index;
     message_index->size = body.header_size + body.content_size;
     message_index->header_size = body.header_size;
     message_index->content_offset = body.content_offset;
+    message_index->content_lines = body.content_lines;
 
     message_index->cache_offset = lseek(mailbox->cache_fd, 0, SEEK_CUR);
     n = message_write_cache(mailbox->cache_fd, &body);

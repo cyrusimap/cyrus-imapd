@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.93.4.7 2003/04/15 16:11:56 ken3 Exp $
+ * $Id: append.c,v 1.93.4.8 2003/05/08 20:56:51 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -843,6 +843,7 @@ int append_copy(struct mailbox *mailbox,
 	    message_index[msg].size = copymsg[msg].size;
 	    message_index[msg].header_size = copymsg[msg].header_size;
 	    message_index[msg].content_offset = copymsg[msg].header_size;
+	    message_index[msg].content_lines = copymsg[msg].content_lines;
 
 	    n = retry_write(append_mailbox->cache_fd, copymsg[msg].cache_begin,
 			    copymsg[msg].cache_len);
