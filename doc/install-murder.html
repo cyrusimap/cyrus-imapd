@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.5 2002/02/15 16:51:44 rjs3 Exp $ -->
+<!-- $Id: install-murder.html,v 1.6 2002/02/15 20:39:53 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -8,12 +8,12 @@
 </h1>
 <body>
 
-<font size="+2"><b><i>Note that Cyrus Murder is still in the Beta stages of
+<b><i>Note that Cyrus Murder is still in the Beta stages of
 development, and if you choose to deploy you are doing so at your own risk.
 Many of the failure modes can be difficult to track without a detailed
 understanding of the mupdate protocol and IMAP in general, and thus even
 considering a deployment is not for the faint at heart.
-</i></b></font><br>
+</i></b><br>
 
 <h3>Introduction & Assumptions</h3>
 This document is intended to be a guide to the configuration of a Cyrus
@@ -128,7 +128,7 @@ and the fact that mailbox operations are denied if the mupdate master is down),
 it <b>is</b> possible when first creating the mupdate database or
 when bringing a new backend server into the murder.
 
-<h3>Configuring the Frontends</h3>
+<h3>Configuring the frontends</h3>
 
 Configuring the frontends is a two step process.  First, you want to set
 <tt>mupdate_server</tt> (and friends) as you did for the backends above.
@@ -138,7 +138,7 @@ same machine, in the <tt>SERVICES</tt> section of cyrus.conf, like so:
 
 <pre>
   # mupdate database service - must prefork atleast 1
-  mupdate       cmd="/usr/cyrus/bin/mupdate" listen=2004 prefork=1 
+  mupdate       cmd="mupdate" listen=2004 prefork=1 
 </pre>
 
 Note that as this is a threaded service, you must prefork atleast 1 of them
@@ -160,6 +160,7 @@ section that looks more like this now:
   pop3s         cmd="pop3proxyd -s" listen="pop3s" prefork=0
   kpop          cmd="pop3proxyd -k" listen="kpop" prefork=0
   sieve         cmd="timsieved" listen="sieve" prefork=0
+  lmtp          cmd="lmtpproxyd" listen="/var/imap/socket/lmtp" prefork=0
 </pre>
 
 Note that timsieved does not need a proxy daemon, the managesieve protocol
@@ -170,8 +171,13 @@ automatically synchronize itself with the contents of the mupdate master,
 and you should be ready to go.  Your clients should connect to the frontends,
 and the frontends will proxy or refer as applicable to the blackend servers.<p>
 
-<h3>Configuring lmtpproxyd</h3>
-xxx todo: Larry?
+<h3>Delivering mail</h3>
+
+To deliver mail to your Murder, configure your MTA just as you did
+before, but instead of connecting directly to <tt>lmtpd</tt>, it
+should connect to <tt>lmtpproxyd</tt>.  You can connect to the
+<tt>lmtpproxyd</tt> running on the frontend machines, or you can
+install <tt>master</tt> and <tt>lmtpproxyd</tt> on your SMTP servers.
 
 <h2>Administration</h2>
 
@@ -183,7 +189,7 @@ xxx todo: Larry?
 <h3>&quot;Gotchyas&quot;</h3>
 <ul>
 <li><b>Clients dealing with a pool of frontend servers</b> - Some clients may
-not be terribly efficient cacheing connections to a pool of imap servers, this
+not be terribly efficient caching connections to a pool of imap servers, this
 isn't a problem, per se, but it may mean that you will see many more
 authentications than you are used to.
 <ul><li><b>Kerberos issues</b> - If you are using kerberos authentication,
@@ -239,7 +245,7 @@ to ensure that the mupdate slave process is started, (is prefork=1)</li>
 <li><A HREF=http://asg.web.cmu.edu/cyrus/mupdate.html>MUPDATE Protocol Reference</A></li>
 
 <P><HR>
-last modified: $Date: 2002/02/15 16:51:44 $
+last modified: $Date: 2002/02/15 20:39:53 $
 </BODY></HTML>
 
 
