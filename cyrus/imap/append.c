@@ -304,12 +304,12 @@ char *userid;
 	message_index[msg].last_updated = time(0);
 	message_index[msg].internaldate = copymsg[msg].internaldate;
 
+	strcpy(fname, mailbox->path);
+	strcat(fname, "/");
+	strcat(fname, mailbox_message_fname(mailbox, message_index[msg].uid));
+
 	if (copymsg[msg].cache_len) {
 	    /* Link/copy message file */
-	    strcpy(fname, mailbox->path);
-	    strcat(fname, "/");
-	    strcat(fname, mailbox_message_fname(mailbox,
-						message_index[msg].uid));
 	    r = mailbox_copyfile(mailbox_message_fname(mailbox,
 						       copymsg[msg].uid),
 				  fname);
