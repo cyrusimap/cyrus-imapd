@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.37 1999/11/15 21:30:44 leg Exp $
+ * $Id: imtest.c,v 1.38 1999/12/02 05:22:43 tmartin Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -30,6 +30,9 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -552,7 +555,7 @@ static sasl_security_properties_t *make_secprops(int min,int max)
  * Initialize SASL and set necessary options
  */
 
-static int init_sasl(char *serverFQDN, int port, int ssf)
+static int init_sasl(char *serverFQDN, int port, int minssf, int maxssf)
 {
   int saslresult;
   sasl_security_properties_t *secprops=NULL;
@@ -575,7 +578,7 @@ static int init_sasl(char *serverFQDN, int port, int ssf)
   if (saslresult!=SASL_OK) return IMTEST_FAIL;
 
   /* create a security structure and give it to sasl */
-  secprops = make_secprops(0, ssf);
+  secprops = make_secprops(minssf, maxssf);
   if (secprops != NULL)
   {
     sasl_setprop(conn, SASL_SEC_PROPS, secprops);
@@ -1000,17 +1003,19 @@ static void send_recv_test(void)
 
 void interactive(char *filename)
 {
-  char buf[4096];
+  char buf[1024];
   fd_set read_set, rset;
+  fd_set write_set, wset;
   int nfds;
   int nfound;
   int count;
-  FILE *fp;
+  int fd;
   int atend=0;
+  int donewritingfile = 1;
 
   /* open the file if available */
   if (filename != NULL) {
-    if ((fp = fopen(filename, "r")) == NULL) {
+    if ((fd = open(filename, O_RDONLY)) == -1) {
       fprintf(stderr,"Unable to open file: %s:", filename);
       perror("");
       exit(1);
@@ -1022,11 +1027,19 @@ void interactive(char *filename)
     FD_SET(0, &read_set);  
   
   FD_SET(sock, &read_set);
+
+  FD_ZERO(&write_set);
+  if (filename != NULL) 
+      FD_SET(fd, &write_set);  
+
   nfds = getdtablesize();
 
+  if (filename != NULL)
+      donewritingfile = 0;
+  
   /* let's send the whole file. IMAP is smart. it'll handle everything
      in order*/
-  if (filename!=NULL)
+  /*  if (filename!=NULL)
   {
 
     while (atend==0)
@@ -1045,12 +1058,13 @@ void interactive(char *filename)
       }
       prot_flush(pout);
     }
-  }
+    }*/
 
   /* loop reading from network and from stdin if applicable */
   while(1) {
       rset = read_set;
-      nfound = select(nfds, &rset, NULL, NULL, NULL);
+      wset = write_set;
+      nfound = select(nfds, &rset, &wset, NULL, NULL);
       if (nfound < 0) {
 	  perror("select");
 	  imtest_fatal("select");
@@ -1070,9 +1084,7 @@ void interactive(char *filename)
 	      prot_write(pout, buf, count + 1);
 	  }
 	  prot_flush(pout);
-      }
-      
-      if (FD_ISSET(sock, &rset)) {
+      } else if (FD_ISSET(sock, &rset)) {
 	  do {
 	      count = prot_read(pin, buf, sizeof (buf) - 1);
 	      if (count == 0) {
@@ -1088,9 +1100,31 @@ void interactive(char *filename)
 		  imtest_fatal("prot_read");
 	      }
 	      buf[count] = '\0';
-	      printf("%s", buf);
+	      printf("%s", buf); 
 	  } while (pin->cnt > 0);
+      } else if ((FD_ISSET(fd, &wset)) && (donewritingfile == 0)) {
+	  /* read from disk */	
+	  int numr = read(fd, buf, sizeof(buf));
+
+	  if (numr < 0)
+	  {
+	      perror("read");
+	      imtest_fatal("read");
+	  } else if (numr==0) {
+	      donewritingfile = 1;
+
+	      /* send LOGOUT */
+	      printf(LOGOUT);
+	      prot_write(pout, LOGOUT, sizeof (LOGOUT));	      
+	      prot_flush(pout);
+	  } else {
+	      prot_write(pout, buf, numr);
+	      prot_flush(pout);
+	  }
+
       }
+
+
   }
 }
 
@@ -1100,6 +1134,7 @@ void usage(void)
   printf("Usage: imtest [options] hostname\n");
   printf("  -p port  : port to use\n");
   printf("  -z       : timing test\n");
+  printf("  -k #     : minimum protection layer required\n");
   printf("  -l #     : max protection layer (0=none; 1=integrity; etc)\n");
   printf("  -u user  : authorization name to use\n");
   printf("  -a user  : authentication name to use\n");
@@ -1124,7 +1159,8 @@ int main(int argc, char **argv)
 
   char *mechlist;
   int *ssfp;
-  int ssf = 128;
+  int maxssf = 128;
+  int minssf = 0;
   char c;
   int result;
   int errflg = 0;
@@ -1138,7 +1174,7 @@ int main(int argc, char **argv)
   int server_supports_tls;
 
   /* look at all the extra args */
-  while ((c = getopt(argc, argv, "zvl:p:u:a:m:f:t:")) != EOF)
+  while ((c = getopt(argc, argv, "zvk:l:p:u:a:m:f:t:")) != EOF)
     switch (c) {
     case 'z':
 	run_stress_test=1;
@@ -1146,8 +1182,11 @@ int main(int argc, char **argv)
     case 'v':
 	verbose=1;
 	break;
+    case 'k':
+	minssf=atoi(optarg);      
+	break;
     case 'l':
-	ssf=atoi(optarg);      
+	maxssf=atoi(optarg);      
 	break;
     case 'p':
 	port = optarg;
@@ -1200,7 +1239,7 @@ int main(int argc, char **argv)
       imtest_fatal("Network initialization");
   }
   
-  if (init_sasl(servername, servport, ssf) != IMTEST_OK) {
+  if (init_sasl(servername, servport, minssf, maxssf) != IMTEST_OK) {
       imtest_fatal("SASL initialization");
   }
 

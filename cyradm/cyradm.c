@@ -31,6 +31,8 @@
 #include <pwd.h>
 #include <sys/types.h>
 
+#include <sasl.h>
+
 extern int errno;
 
 #include "imclient.h"
@@ -435,6 +437,42 @@ static void callback_capability(struct imclient *imclient,
 }
 
 /*
+ * Use the IMAP login command
+ */
+
+static int cmd_login(struct admconn *conn, char *userid, char *pass, int passlen, int tls_layer, int logindisabled)
+{
+  char **comv;
+
+  if (logindisabled==1)
+  {
+    printf("Login Disabled. Aborting\n");
+    return -1;
+  }
+
+  if (pass==NULL)
+  {
+    /*    if (tls_layer==0)
+	  printf("Warning: About to send password cleartext (ctrl-c to abort)\n"); */
+
+    printf("Password: ");
+    pass = getpass("");
+    passlen = strlen(pass);
+  }
+
+
+  imclient_send(conn->imclient, callback_finish, (void *)conn,
+		"LOGIN %s {%d+}\r\n%s", 
+		userid, passlen, pass);
+  
+  while (!conn->cmd_done) {
+    imclient_processoneevent(conn->imclient);
+  }
+
+  return conn->cmd_result;  
+}
+
+/*
  * Perform the authenticate subcommand
  */
 static int
@@ -453,7 +491,7 @@ char **argv;
     char *mech = NULL;
     char *tls_keyfile = "";
     capabilities_t *capabilitylist;
-    int tls_layer;
+    int tls_layer = 0;
 
     /* skip over command & subcommand */
     argv += 2;
@@ -525,7 +563,23 @@ char **argv;
       {
 	imclient_starttls(conn->imclient,
 			  10,
-			  tls_keyfile, tls_keyfile, &tls_layer);
+			  tls_keyfile, tls_keyfile,
+			  &tls_layer);
+
+	/* ask for capabilities again */
+
+	imclient_addcallback(conn->imclient, "CAPABILITY", 0,
+			     callback_capability, (void *) &capabilitylist, 
+			     (char *) 0);
+
+	imclient_send(conn->imclient, callback_finish, (void *) conn,
+		      "CAPABILITY");
+
+	conn->cmd_done = 0;	
+	while (!conn->cmd_done) {
+	  imclient_processoneevent(conn->imclient);
+	}
+
       }
     }
 #endif /* HAVE_SSL */
@@ -533,6 +587,12 @@ char **argv;
     if (!pwcommand) {
 	r = imclient_authenticate(conn->imclient, mech ? mech : capabilitylist->mechs, 
 				  "imap", user, minssf, maxssf);
+
+	if (r == SASL_NOMECH) {
+	  r = cmd_login(conn, user, NULL, 0, tls_layer, capabilitylist->logindisabled);
+	  printf("r=%i\n",r);
+	}
+
     }
     
     if (pwcommand) {
@@ -584,15 +644,7 @@ char **argv;
 	    return TCL_ERROR;
 	}
 
-	imclient_send(conn->imclient, callback_finish, (void *)conn,
-		      "LOGIN %s {%d+}\r\n%s", 
-		      comv[0], strlen(comv[1]), comv[1]);
-	free((char *)comv);
-
-	while (!conn->cmd_done) {
-	    imclient_processoneevent(conn->imclient);
-	}
-	r = conn->cmd_result;
+	r = cmd_login(conn, comv[0], comv[1], strlen(comv[1]), tls_layer, capabilitylist->logindisabled);
     }
 
     if (r) {
