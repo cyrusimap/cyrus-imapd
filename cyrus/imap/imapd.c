@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.47 2004/11/17 21:35:23 shadow Exp $ */
+/* $Id: imapd.c,v 1.443.2.48 2004/11/17 22:30:06 shadow Exp $ */
 
 #include <config.h>
 
@@ -2577,11 +2577,14 @@ void cmd_append(char *tag, char *name)
     while (!r && c == ' ') {
 	/* Grow the stage array, if necessary */
 	if (numstage == numalloc) {
+	    /* Avoid integer wrap as arg to xrealloc */
+	    if (numalloc > INT_MAX/(2*sizeof(struct appendstage *)))
+		goto done;
 	    numalloc *= 2;
 	    stage = xrealloc(stage, numalloc * sizeof(struct appendstage *));
 	}
-	curstage = stage[numstage++] = xzmalloc(sizeof(struct appendstage));
-
+	curstage = stage[numstage] = xzmalloc(sizeof(struct appendstage));
+	numstage++;
 	/* Parse flags */
 	c = getword(imapd_in, &arg);
 	if  (c == '(' && !arg.s[0]) {
@@ -2600,7 +2603,8 @@ void cmd_append(char *tag, char *name)
 			(char **) xrealloc((char *) curstage->flag, 
 					   curstage->flagalloc * sizeof(char *));
 		}
-		curstage->flag[curstage->nflags++] = xstrdup(arg.s);
+		curstage->flag[curstage->nflags] = xstrdup(arg.s);
+		curstage->nflags++;
 	    } while (c == ' ');
 	    if (c != ')') {
 		parseerr = 
