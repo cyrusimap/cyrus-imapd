@@ -2,6 +2,7 @@ Makefile
 ctl_cyrusdb
 ctl_deliver
 ctl_mboxlist
+cvt_cyrusdb
 cyrdump
 deliver
 feedcyrus
