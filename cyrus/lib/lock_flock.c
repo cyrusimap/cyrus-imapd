@@ -1,5 +1,5 @@
 /* lock_flock.c -- Lock files using flock()
- $Id: lock_flock.c,v 1.8 1998/05/15 21:51:56 neplokh Exp $
+ $Id: lock_flock.c,v 1.9 1999/09/30 07:31:52 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -26,6 +26,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 
 #include "lock.h"
 
@@ -143,8 +146,7 @@ int fd;
 /*
  * Release any lock on 'fd'.  Always returns success.
  */
-lock_unlock(fd)
-int fd;
+int lock_unlock(int fd)
 {
     flock(fd, LOCK_UN);
     return 0;
