@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.114 2004/07/19 15:39:46 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.115 2004/08/10 17:18:38 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -610,7 +610,7 @@ static int savemsg(struct clientdata *cd,
     int nrcpts = m->rcpt_num;
     time_t now = time(NULL);
     static unsigned msgid_count = 0;
-    char datestr[80];
+    char datestr[80], tls_info[250] = "";
     const char *skipheaders[] = {
 	"Return-Path",  /* need to remove (we add our own) */
 	NULL
@@ -658,6 +658,11 @@ static int savemsg(struct clientdata *cd,
     addlen = 8 + strlen(cd->lhlo_param) + strlen(cd->clienthost);
     if (m->authuser) addlen += 28 + strlen(m->authuser) + 5; /* +5 for ssf */
     addlen += 25 + strlen(config_servername) + strlen(CYRUS_VERSION);
+#ifdef HAVE_SSL
+    if (cd->tls_conn) {
+	addlen += 3 + tls_get_info(cd->tls_conn, tls_info, sizeof(tls_info));
+    }
+#endif
     addlen += 2 + strlen(datestr);
     p = addbody = xmalloc(addlen + 1);
 
@@ -679,23 +684,10 @@ static int savemsg(struct clientdata *cd,
 		 cd->starttls_done ? "S" : "",
 		 cd->authenticated != NOAUTH ? "A" : "");
 
-#ifdef HAVE_SSL
-    if (cd->tls_conn) {
-	char tls_info[250];
-
-	tls_info[0] = '\0';
-	/* grab TLS info for Received: header */
-	tls_get_info(cd->tls_conn, tls_info, sizeof(tls_info));
-	if (*tls_info) {
-	    size_t offset = p - addbody;
-	    fold[nfold++] = p;
-	    addlen += 3 + strlen(tls_info);
-	    addbody = xrealloc(addbody, addlen + 1);
-	    p = addbody + offset;
-	    p += sprintf(p, " (%s)", tls_info);
-	}
+    if (*tls_info) {
+	fold[nfold++] = p;
+	p += sprintf(p, " (%s)", tls_info);
     }
-#endif /* HAVE_SSL */
 
     strcat(p++, ";");
     fold[nfold++] = p;
