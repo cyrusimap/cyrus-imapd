@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.91 2003/02/13 20:15:28 rjs3 Exp $
+ * $Id: message.c,v 1.92 2003/04/17 18:25:23 rjs3 Exp $
  */
 
 #include <config.h>
@@ -305,7 +305,7 @@ unsigned size;
 	   Unfortunately, we still need to look for the end of the string. */
 	for(p = (unsigned char*) buf; *p; p++);
 	
-	sawnl = (p[-1] == '\n');
+	sawnl = (p > buf) && (p[-1] == '\n');
     }
 }
 
@@ -772,15 +772,15 @@ char **hdrp;
     *hdrp = xmalloc(len + 1);
     strlcpy(*hdrp, hdr, len + 1);
 
-    /* Un-fold header */
+    /* Un-fold header (overlapping buffers, use memmove) */
     hdrend = *hdrp;
     while ((hdrend = strchr(hdrend, '\n'))!=NULL) {
 	if (hdrend > *hdrp && hdrend[-1] == '\r') {
 	    hdrend--;
-	    strcpy(hdrend, hdrend+2);
+	    memmove(hdrend, hdrend+2, strlen(hdrend+2)+1);
 	}
 	else {
-	    strcpy(hdrend, hdrend+1);
+	    memmove(hdrend, hdrend+1, strlen(hdrend+1)+1);
 	}
     }
 }
