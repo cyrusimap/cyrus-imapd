@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.1.2.2 2002/10/08 20:52:39 ken3 Exp $
+ * $Id: fetchnews.c,v 1.1.2.3 2002/10/09 14:19:21 ken3 Exp $
  */
 
 #include <config.h>
@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
     struct protstream *pin, *pout, *sin, *sout;
     char buf[4096], sbuf[4096];
     char sfile[1024] = "";
-    int fd, i, n;
+    int fd, i, offered, rejected, accepted, failed;
     time_t stamp;
     struct tm *tm;
     char **msgid = NULL;
@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
 	goto quit;
     }
 
-    /* change to reader mode */
+    /* change to reader mode - not always necessary, so ignore result */
     prot_printf(pout, "MODE READER\r\n");
     prot_fgets(buf, sizeof(buf), pin);
 
@@ -190,14 +190,6 @@ int main(int argc, char *argv[])
     /* read the initial greeting */
     if (!prot_fgets(buf, sizeof(buf), sin) || strncmp("200", buf, 3)) {
 	syslog(LOG_ERR, "server not available");
-	goto quit;
-    }
-
-    /* change to stream mode */
-    prot_printf(sout, "MODE STREAM\r\n");
-
-    if (!prot_fgets(buf, sizeof(buf), sin) || strncmp("203", buf, 3)) {
-	syslog(LOG_ERR, "server does not support streaming");
 	goto quit;
     }
 
@@ -223,24 +215,15 @@ int main(int argc, char *argv[])
 
     /* process the list */
     stamp = time(NULL);
-    n = 0;
+    offered = rejected = accepted = failed = 0;
     while (prot_fgets(buf, sizeof(buf), pin)) {
 	if (buf[0] == '.') break;
 
-	/* see if we want this article */
-	prot_printf(sout, "CHECK %s", buf);
-	if (!prot_fgets(sbuf, sizeof(sbuf), sin)) {
-	    syslog(LOG_ERR, "CHECK terminated abnormally");
-	    goto quit;
+	if (!(offered % MSGID_GROW)) { /* time to alloc more */
+	    msgid = (char **)
+		xrealloc(msgid, (offered + MSGID_GROW) * sizeof(char *));
 	}
-
-	if (!strncmp("238", sbuf, 3)) {
-	    if (!(n % MSGID_GROW)) { /* time to alloc more */
-		msgid = (char **)
-		    xrealloc(msgid, (n + MSGID_GROW) * sizeof(char *));
-	    }
-	    msgid[n++] = xstrdup(buf);
-	}
+	msgid[offered++] = xstrdup(buf);
     }
     if (buf[0] != '.') {
 	syslog(LOG_ERR, "NEWNEWS terminated abnormally");
@@ -248,17 +231,32 @@ int main(int argc, char *argv[])
     }
 
     /* fetch and store articles */
-    for (i = 0; i < n; i++) {
+    for (i = 0; i < offered; i++) {
+
+	/* see if we want this article */
+	prot_printf(sout, "IHAVE %s", msgid[i]);
+	if (!prot_fgets(sbuf, sizeof(sbuf), sin)) {
+	    syslog(LOG_ERR, "IHAVE terminated abnormally");
+	    goto quit;
+	}
+	else if (strncmp("335", sbuf, 3)) {
+	    /* don't want it */
+	    rejected++;
+	    continue;
+	}
+
 	/* fetch the article */
 	prot_printf(pout, "ARTICLE %s", msgid[i]);
 	if (!prot_fgets(buf, sizeof(buf), pin)) {
 	    syslog(LOG_ERR, "ARTICLE terminated abnormally");
 	    goto quit;
 	}
-	if (!strncmp("220", buf, 3)) {
+	else if (strncmp("220", buf, 3)) {
+	    /* doh! the article doesn't exist, abort IHAVE */
+	    prot_printf(sout, ".\r\n");
+	}
+	else {
 	    /* store the article */
-	    prot_printf(sout, "TAKETHIS %s", msgid[i]);
-
 	    while (prot_fgets(buf, sizeof(buf), pin)) {
 		prot_write(sout, buf, strlen(buf));
 		if (buf[0] == '.' && buf[1] != '.') break;
@@ -268,13 +266,24 @@ int main(int argc, char *argv[])
 		syslog(LOG_ERR, "ARTICLE terminated abnormally");
 		goto quit;
 	    }
-
-	    if (!prot_fgets(buf, sizeof(buf), sin)) {
-		syslog(LOG_ERR, "TAKETHIS terminated abnormally");
-		goto quit;
-	    }
 	}
+
+	/* see how we did */
+	if (!prot_fgets(buf, sizeof(buf), sin)) {
+	    syslog(LOG_ERR, "IHAVE terminated abnormally");
+	    goto quit;
+	}
+	else if (!strncmp("235", buf, 3))
+	    accepted++;
+	else if (!strncmp("437", buf, 3))
+	    rejected++;
+	else
+	    failed++;
     }
+
+    syslog(LOG_NOTICE,
+	   "fetchnews: offered %d, rejected %d, accepted %d, failed %d",
+	   offered, rejected, accepted, failed);
 
     /* write the current timestamp */
     fd = open(sfile, O_RDWR | O_CREAT, 0644);
