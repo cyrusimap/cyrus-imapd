@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: charset.c,v 1.36 2001/09/25 16:49:51 ken3 Exp $
+/* $Id: charset.c,v 1.37 2001/11/20 19:25:12 leg Exp $
  */
 #include <config.h>
 #include <ctype.h>
@@ -143,10 +143,20 @@ static int writeutf8(unsigned utfcode, char *to);
     } \
 }
 
+/* for a comp_pat, ascii[0x80] == 0 if there are any non-ascii characters
+   in the pattern */
+struct comp_pat_s {
+    int pat[256];		/* boyer-moore skip table */
+    int ascii[256];		/* case-mapped vesion of table */
+    int patlen;
+    int patlastchar;		/* last character in the pattern */
+    int patotherlastchar;	/* case-flip of the last character */
+};
+
 #define PATASCII(pat) (pat+256)
 #define PATLEN(pat) ((pat)[512])
-#define PATLASTCHAR(pat) ((pat)[513])
-#define PATOTHERLASTCHAR(pat) ((pat)[514])
+#define PATLASTCHAR(pat) ((pat)[513]) /* last character in the pattern */
+#define PATOTHERLASTCHAR(pat) ((pat)[514]) /* case-flip of the pattern */
 #define PATSIZE 515
 
 #define GROWSIZE 100
@@ -518,10 +528,13 @@ typedef int rawproc_t(struct input_state *state, char *buf, int size);
 
 static int charset_readconvert(struct input_state *state, char *buf, int size);
 static rawproc_t charset_readplain;
+static rawproc_t charset_readplain_nospc;
 static rawproc_t charset_readmapnl;
 static rawproc_t charset_readqp;
+static rawproc_t charset_readqp_nospc;
 static rawproc_t charset_readqpmapnl;
 static rawproc_t charset_readbase64;
+static rawproc_t charset_readbase64_nospc;
 
 /*
  * State for the various charset_searchfile() helper functions
@@ -561,30 +574,7 @@ int charset_searchfile(const char *substr, comp_pat *pat,
     START(state.decodestate, chartables_charset_table[charset].table);
     state.decodeleft = 0;
 
-    /* Initialize transfer-decoding */
-    state.rawbase = msg_base;
-    state.rawlen = len;
-    switch (encoding) {
-    case ENCODING_NONE:
-	state.rawproc = mapnl ? charset_readmapnl : charset_readplain;
-	break;
-
-    case ENCODING_QP:
-	state.rawproc = mapnl ? charset_readqpmapnl : charset_readqp;
-	break;
-
-    case ENCODING_BASE64:
-	state.rawproc = charset_readbase64;
-	/* XXX have to have nl-mapping base64 in order to
-	 * properly count \n as 2 raw characters
-	 */
-	break;
-
-    default:
-	/* Don't know encoding--nothing can match */
-	return 0;
-    }
-
+    /* check for trivial search */
     if (substrlen == 0) return 1;
 
     /*
@@ -600,8 +590,34 @@ int charset_searchfile(const char *substr, comp_pat *pat,
 	buf = xmalloc(bufsize);
     }
 
-    /* Optimized searching of us-ascii */
+    /* Optimized searching of us-ascii, using boyer-moore */
     if (charset == 0) {
+	/* Initialize transfer-decoding */
+	state.rawbase = msg_base;
+	state.rawlen = len;
+	/* don't need to special case mapnl since all such chars will
+	   be ignored, anyway */
+	switch (encoding) {
+	case ENCODING_NONE:
+	    state.rawproc = charset_readplain_nospc;
+	    break;
+	    
+	case ENCODING_QP:
+	    state.rawproc = charset_readqp_nospc;
+	    break;
+	    
+	case ENCODING_BASE64:
+	    state.rawproc = charset_readbase64_nospc;
+	    /* XXX have to have nl-mapping base64 in order to
+	     * properly count \n as 2 raw characters
+	     */
+	    break;
+	    
+	default:
+	    /* Don't know encoding--nothing can match */
+	    return 0;
+	}
+	
 	if (PATASCII(pat)[0x80] == 0) {
 	    /* 8-bit chars in pattern--search must fail */
 	    if (buf != smallbuf) free(buf);
@@ -662,6 +678,31 @@ int charset_searchfile(const char *substr, comp_pat *pat,
     }
 
     /* Do the (generalized) search */
+
+    /* Initialize transfer-decoding */
+    state.rawbase = msg_base;
+    state.rawlen = len;
+    switch (encoding) {
+    case ENCODING_NONE:
+	state.rawproc = mapnl ? charset_readmapnl : charset_readplain;
+	break;
+
+    case ENCODING_QP:
+	state.rawproc = mapnl ? charset_readqpmapnl : charset_readqp;
+	break;
+
+    case ENCODING_BASE64:
+	state.rawproc = charset_readbase64;
+	/* XXX have to have nl-mapping base64 in order to
+	 * properly count \n as 2 raw characters
+	 */
+	break;
+
+    default:
+	/* Don't know encoding--nothing can match */
+	return 0;
+    }
+
     n = charset_readconvert(&state, buf, bufsize);
     if (n < substrlen) {
 	if (buf != smallbuf) free(buf);
@@ -811,6 +852,33 @@ static int charset_readplain(struct input_state *state, char *buf, int size)
 }
 
 /*
+ * Helper function to read at most 'size' bytes of trivial
+ * transfer-decoded data into 'buf'.  Removes any US-ASCII whitespace.
+ * Returns the number of decoded bytes, or 0 for end-of-data.  
+ */
+static int charset_readplain_nospc(struct input_state *state, 
+				   char *buf, int size)
+{
+    int i;
+
+    for (i = 0; i < size; i++) {
+	/* remove any whitespace at the beginning of rawbase */
+	while (state->rawlen > 0 && USASCII(*state->rawbase) == END) {
+	    state->rawlen--;
+	    state->rawbase++;
+	}
+
+	if (state->rawlen == 0) break;
+
+	/* copy a char */
+	buf[i] = *state->rawbase++;
+	state->rawlen--;
+    }
+
+    return i;
+}
+
+/*
  * Helper function to read at most 'size' bytes of trivial newline-mapped
  * transfer-decoded data into 'buf'.  Returns the number of decoded
  * bytes, or 0 for end-of-data.
@@ -895,6 +963,75 @@ static int charset_readqp(struct input_state *state, char *buf, int size)
 	    *buf++ = (char)c;
 	    retval++;
 	    size--;
+	}
+    }
+    return retval;
+}
+
+/*
+ * Helper function to read at most 'size' bytes of quoted-printable
+ * transfer-decoded data into 'buf'.  Returns the number of decoded
+ * bytes, or 0 for end-of-data.  Removes any US-ASCII whitespace.
+ * Since it just throws out \r's anyway, it's simplier than paying
+ * attention to them 
+ */
+static int charset_readqp_nospc(struct input_state *state, char *buf, int size)
+{
+    int retval = 0;
+    int c, c1, c2;
+    char dec;
+    const char *nextline, *endline;
+
+    nextline = endline = state->rawbase;
+
+    while (size && state->rawlen) {
+	if (state->rawbase >= nextline) {
+	    /* Ignore trailing whitespace at end of line */
+
+	    nextline =
+		(const char*) memchr(state->rawbase+1, '\n', state->rawlen-1);
+	    if (!nextline) nextline = state->rawbase + state->rawlen;
+	    endline = nextline;
+	    while (endline > state->rawbase && (USASCII(endline[-1]) == END)) {
+		endline--;
+	    }
+	}
+	if (state->rawbase >= endline) {
+	    state->rawbase += nextline - endline;
+	    state->rawlen -= nextline - endline;
+	    continue;
+	}
+
+	c = state->rawbase[0];
+	if (c == '=') {
+	    if (state->rawlen < 3) {
+		return retval;
+	    }
+	    c1 = state->rawbase[1];
+	    c2 = state->rawbase[2];
+	    state->rawbase += 3;
+	    state->rawlen -= 3;
+	    c1 = HEXCHAR(c1);
+	    c2 = HEXCHAR(c2);
+	    /* Following line also takes care of soft line breaks */
+	    if (c1 == XX && c2 == XX) continue;
+	    dec = (char)((c1 << 4) + c2);
+	    if (USASCII(dec) != END) {
+		/* non-whitespace, take it */
+		*buf++ = (char)((c1 << 4) + c2);
+		retval++;
+		size--;
+	    }
+	}
+	else {
+	    state->rawbase++;
+	    state->rawlen--;
+	    if (USASCII(c) != END) {
+		/* non-whitespace, grab it */
+		*buf++ = (char)c;
+		retval++;
+		size--;
+	    }
 	}
     }
     return retval;
@@ -1046,6 +1183,104 @@ static int charset_readbase64(struct input_state *state, char *buf, int size)
 	*buf++ = (char)(((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
 	retval += 3;
 	size -= 3;
+    }
+    return retval;
+}
+
+/*
+ * Helper function to read at most 'size' bytes of base64
+ * transfer-decoded data into 'buf'.  Returns the number of decoded
+ * bytes, or 0 for end-of-data.  Removes any US-ASCII whitespace.
+ */
+static int charset_readbase64_nospc(struct input_state *state, 
+				    char *buf, int size)
+{
+    int retval = 0;
+    int c1, c2, c3, c4;
+    char dec;
+
+    while (size >= 3 && state->rawlen) {
+	do {
+	    c1 = *state->rawbase++;
+	    state->rawlen--;
+	    if (c1 == '=') {
+		state->rawlen = 0;
+		return retval;
+	    }
+	} while (state->rawlen && CHAR64(c1) == XX);
+	if (!state->rawlen) {
+	    return retval;
+	}
+
+	do {
+	    c2 = *state->rawbase++;
+	    state->rawlen--;
+	    if (c2 == '=') {
+		state->rawlen = 0;
+		return retval;
+	    }
+	} while (state->rawlen && CHAR64(c2) == XX);
+	if (!state->rawlen) {
+	    return retval;
+	}
+
+	do {
+	    c3 = *state->rawbase++;
+	    state->rawlen--;
+	    if (c3 == '=') {
+		dec = (char)((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+		if (USASCII(dec) != END) {
+		    *buf++ = dec;
+		    retval++;
+		}
+		state->rawlen = 0;
+		return retval;
+	    }
+	} while (state->rawlen && CHAR64(c3) == XX);
+	if (!state->rawlen) {
+	    return retval;
+	}
+
+	do {
+	    c4 = *state->rawbase++;
+	    state->rawlen--;
+	    if (c4 == '=') {
+		dec = (char)((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+		if (USASCII(dec) != END) {
+		    *buf++ = dec;
+		    retval++;
+		}
+		dec = (char)(((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
+		if (USASCII(dec) != END) {
+		    *buf++ = dec;
+		    retval++;
+		}
+		state->rawlen = 0;
+		return retval;
+	    }
+	} while (state->rawlen && CHAR64(c4) == XX);
+	if (CHAR64(c4) == XX) {
+	    return retval;
+	}
+
+	dec  = (char)((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+	if (USASCII(dec) != END) {
+	    *buf++ = dec;
+	    retval++;
+	    size--;
+	}
+	dec = (char)(((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
+	if (USASCII(dec) != END) {
+	    *buf++ = dec;
+	    retval++;
+	    size--;
+	}
+	dec = (char)(((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
+	if (USASCII(dec) != END) {
+	    *buf++ = dec;
+	    retval++;
+	    size--;
+	}
     }
     return retval;
 }
