@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.388 2002/05/17 20:56:42 ken3 Exp $ */
+/* $Id: imapd.c,v 1.389 2002/05/20 19:13:50 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4760,23 +4760,20 @@ char *name;
 /*
  * Reply to Netscape's crock with a crock of my own
  */
-void
-cmd_netscrape(tag)
-    char *tag;
+void cmd_netscrape(char *tag)
 {
     const char *url;
-    /* so tempting, and yet ... */
-    /* url = "http://random.yahoo.com/ryl/"; */
-    url = config_getstring("netscapeurl",
-			   "http://andrew2.andrew.cmu.edu/cyrus/imapd/netscape-admin.html");
+
+    url = config_getstring("netscapeurl", NULL);
 
     /* I only know of three things to reply with: */
     prot_printf(imapd_out,
-"* OK [NETSCAPE] Carnegie Mellon Cyrus IMAP\r\n* VERSION %s\r\n",
+		"* OK [NETSCAPE] Carnegie Mellon Cyrus IMAP\r\n"
+		"* VERSION %s\r\n",
 		CYRUS_VERSION);
-    prot_printf(imapd_out,
-		"* ACCOUNT-URL %s\r\n%s OK %s\r\n",
-		url, tag, error_message(IMAP_OK_COMPLETED));
+    if (url) prot_printf(imapd_out, "* ACCOUNT-URL %s\r\n", url);
+    prot_printf(imapd_out, "%s OK %s\r\n",
+		tag, error_message(IMAP_OK_COMPLETED));
 }
 #endif /* ENABLE_X_NETSCAPE_HACK */
 

@@ -203,12 +203,11 @@ Userid used to deliver messages to shared folders.  For example, if
 set to "bb", email sent to "bb+shared.blah" would be delivered to the
 "shared.blah" folder.  By default, an email address of "+shared.blah"
 would be used.
-.IP "\fBnetscapeurl:\fR http://andrew2.andrew.cmu.edu/cyrus/imapd/netscape-admin.html" 5
-If enabled at compile time, this specifies a URL to reply when Netscape
-asks the server where the mail administration HTTP server is.  The default
-is a site at CMU with a hopefully informative message; administrators
-should set this to a local resource with some information of greater
-use.
+.IP "\fBnetscapeurl:\fR <no default>" 5
+If enabled at compile time, this specifies a URL to reply when
+Netscape asks the server where the mail administration HTTP server is.
+Administrators should set this to a local resource with some
+useful information for end users.  If not set, no URL is advertised.
 .IP "\fBmailnotifier:\fR <no default>" 5
 Notifyd(8) method to use for "MAIL" notifications.  If not set, "MAIL"
 notifications are disabled.
