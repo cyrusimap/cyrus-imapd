@@ -68,10 +68,14 @@
 #define ACL_USER9  0x40000L
 #define ACL_FULL   0xFFFFFL
 
+#define ACL_MODE_SET 0
+#define ACL_MODE_ADD 1
+#define ACL_MODE_REMOVE 2
+
 typedef int acl_canonproc_t P((void *rock, const char *identifier, int rights));
 
 /* convert a string to an acl bit vector */
-extern long acl_strtomask P((const char *str));
+extern int acl_strtomask P((const char *str));
 
 /*  acl_masktostr(acl, dst)
  * convert an acl bit vector to a string
@@ -86,22 +90,23 @@ extern char *acl_masktostr P((int acl, char *str));
  */
 extern int acl_myrights P((struct auth_state *auth_state, char *acl));
 
-/*  acl_set(acl, identifier, access, canonproc, canonrock)
- * Modify the ACL pointed to by 'acl' to make the rights granted to
- * 'identifier' the set specified in the mask 'access'.  The pointer
- * pointed to by 'acl' must have been obtained from malloc().
- *  returns -1 on error, 0 on success
- */
+/*  acl_set(acl, identifier, mode, access, canonproc, canonrock) Modify the
+ * ACL pointed to by 'acl' to modify the rights granted to
+ * 'identifier' as specified by 'mode' and the set specified in the
+ * mask 'access'.  'mode' is one of ACL_MODE_SET, ACL_MODE_ADD, or
+ * ACL_MODE_REMOVE.  The pointer pointed to by 'acl' must have been
+ * obtained from malloc().  returns -1 on error, 0 on success */
 
-extern int acl_set P((char **acl, const char *identifier, int access,
+extern int acl_set P((char **acl, const char *identifier,
+		      int mode, int access,
 		      acl_canonproc_t *canonproc, void *canonrock));
 
-/*  acl_delete(acl, identifier, canonproc, canonrock)
+/*  acl_remove(acl, identifier, canonproc, canonrock)
  * Remove any entry for 'identifier' in the ACL pointed to by 'acl'.
  * The pointer pointed to by 'acl' must have been obtained from malloc().
  *  returns -1 on error, 0 on success
  */
-extern int acl_delete P((char **acl, const char *identifier,
+extern int acl_remove P((char **acl, const char *identifier,
 			 acl_canonproc_t *canonproc, void *canonrock));
 
 #endif /* INCLUDED_ACL_H */

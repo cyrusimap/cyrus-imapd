@@ -34,7 +34,7 @@
 
 /* convert a string to an acl bit vector
  */
-long acl_strtomask(str)
+int acl_strtomask(str)
 const char *str;
 {
     long result = 0;
