@@ -1,8 +1,9 @@
 This directory contains programs for shadowing a set of AMS (Andrew
 Message System) bboards into a Cyrus IMAP server.
 
-Usage: amssynctree [-a] [-c file | -s ] [-d] [-h] [-m] [-u principal] [-v] [server [port]]
-       -a          Synchronize ACL's (also creates any new bboards)
+Usage: amssynctree [-A | -a] [-c file | -s ] [-d] [-h] [-m] [-u principal] [-v] [server [port]]
+       -a          Synchronize ACL's (read-only) (also creates any new bboards)
+       -A          Synchronize ACL's (also creates any new bboards)
        -c          Specify a config file name, otherwise use builtin default
        -d          Print debugging info
        -h          Print this message
@@ -24,7 +25,7 @@ used. (in the third case, if the -u switch is ommited, the user will lose
 their special access unless it is also present in the corresponding AMS 
 directory.)
 
-one of -a -m or -v is required.
+one of -a -A -m or -v is required.
  
 in order for this script to work properly, it must be called via a
 full pathname, or 1) it must be released to gamma host, 2) installed
