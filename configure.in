@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.259 2003/02/05 17:49:55 rjs3 Exp $
+dnl $Id: configure.in,v 1.260 2003/03/18 19:14:48 ken3 Exp $
 dnl
 
 
@@ -611,7 +611,7 @@ dnl
 dnl Test for OpenSSL
 dnl
 IMAP_PROGS=""
-AC_ARG_WITH(with-openssl,[  --with-openssl=PATH     use OpenSSL from PATH],
+AC_ARG_WITH(openssl,[  --with-openssl=PATH     use OpenSSL from PATH],
 	with_openssl="${withval}")
 
 OPENSSL_INC=
