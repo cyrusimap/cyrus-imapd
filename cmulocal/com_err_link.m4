@@ -7,11 +7,7 @@ dnl Derrick Brashear
 AC_DEFUN(CMU_COMERR_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
-if test "$ac_cv_prog_gcc" = "yes" ; then
-  CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I/usr/include"
-else
-  CPPFLAGS="$saved_CPPFLAGS -I$1"
-fi
+CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <com_err.h>],
 [int foo;],
 ac_cv_found_com_err_inc=yes,
@@ -23,6 +19,7 @@ AC_DEFUN(CMU_COMERR_INC_WHERE, [
    for i in $1; do
       AC_MSG_CHECKING(for com_err headers in $i)
       CMU_COMERR_INC_WHERE1($i)
+      CMU_TEST_INCPATH($i, com_err)
       if test "$ac_cv_found_com_err_inc" = "yes"; then
         ac_cv_comerr_where_inc=$i
         AC_MSG_RESULT(found)

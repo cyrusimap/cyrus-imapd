@@ -5,11 +5,7 @@ dnl from KTH krb and Arla
 AC_DEFUN(CMU_KRB5_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
-if test "$ac_cv_prog_gcc" = "yes" ; then
-  CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I/usr/include"
-else
-  CPPFLAGS="$saved_CPPFLAGS -I$1"
-fi
+CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <krb5.h>],
 [krb5_keyblock foo;],
 ac_cv_found_krb5_inc=yes,
@@ -21,6 +17,7 @@ AC_DEFUN(CMU_KRB5_INC_WHERE, [
    for i in $1; do
       AC_MSG_CHECKING(for krb5 headers in $i)
       CMU_KRB5_INC_WHERE1($i)
+      CMU_TEST_INCPATH($i, krb5)
       if test "$ac_cv_found_krb5_inc" = "yes"; then
         ac_cv_krb5_where_inc=$i
         AC_MSG_RESULT(found)
@@ -81,24 +78,26 @@ AC_ARG_WITH(krb5-include,
 	fi])
 
 	if test "X$with_krb5" != "X"; then
-	  if test "$with_krb5" != "yes"; then
+	  if test "$with_krb5" != "yes" -a "$with_krb5" != "no"; then
 	    ac_cv_krb5_where_lib=$with_krb5/lib
 	    ac_cv_krb5_where_inc=$with_krb5/include
 	  fi
 	fi
 
-	if test "X$with_krb5_lib" != "X"; then
-	  ac_cv_krb5_where_lib=$with_krb5_lib
-	fi
-	if test "X$ac_cv_krb5_where_lib" = "X"; then
-	  CMU_KRB5_LIB_WHERE(/usr/athena/lib /usr/lib /usr/local/lib)
-	fi
+	if test "$with_krb5" != "no"; then
+	  if test "X$with_krb5_lib" != "X"; then
+	    ac_cv_krb5_where_lib=$with_krb5_lib
+	  fi
+	  if test "X$ac_cv_krb5_where_lib" = "X"; then
+	    CMU_KRB5_LIB_WHERE(/usr/athena/lib /usr/lib /usr/local/lib)
+	  fi
 
-	if test "X$with_krb5_include" != "X"; then
-	  ac_cv_krb5_where_inc=$with_krb5_include
-	fi
-	if test "X$ac_cv_krb5_where_inc" = "X"; then
-	  CMU_KRB5_INC_WHERE(/usr/athena/include /usr/include/kerberos /usr/local/include)
+	  if test "X$with_krb5_include" != "X"; then
+	    ac_cv_krb5_where_inc=$with_krb5_include
+	  fi
+	  if test "X$ac_cv_krb5_where_inc" = "X"; then
+	    CMU_KRB5_INC_WHERE(/usr/athena/include /usr/include/kerberos /usr/local/include)
+	  fi
 	fi
 
 	AC_MSG_CHECKING(whether to include kerberos 5)

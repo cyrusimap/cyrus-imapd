@@ -29,6 +29,7 @@ AC_DEFUN(CMU_LOGUSE_LIB_WHERE, [
 ])
 
 AC_DEFUN(CMU_LOGUSE, [
+AC_REQUIRE([CMU_SOCKETS])
 AC_ARG_WITH(loguse,
 	[  --with-loguse=PREFIX      Compile with LOGUSE support],
 	[if test "X$with_loguse" = "X"; then
@@ -49,11 +50,12 @@ AC_ARG_WITH(loguse,
 	fi
 
 	AC_MSG_CHECKING(whether to include loguse)
-	if test "X$ac_cv_loguse_where_lib"; then
+	if test "X$ac_cv_loguse_where_lib" = "X"; then
 	  ac_cv_found_loguse=no
 	  AC_MSG_RESULT(no)
 	else
 	  ac_cv_found_loguse=yes
+	  AC_DEFINE(HAVE_LOGUSE)
 	  AC_MSG_RESULT(yes)
 	  LOGUSE_LIB_DIR=$ac_cv_loguse_where_lib
 	  LOGUSE_LIB_FLAGS="-L${LOGUSE_LIB_DIR} -lloguse"

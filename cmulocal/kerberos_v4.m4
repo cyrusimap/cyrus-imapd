@@ -5,21 +5,13 @@ dnl from KTH krb and Arla
 AC_DEFUN(CMU_KRB_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
-if test "$ac_cv_prog_gcc" = "yes" ; then
-  CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I/usr/include"
-else
-  CPPFLAGS="$saved_CPPFLAGS -I$1"
-fi
+CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <krb.h>],
 [struct ktext foo;],
 ac_cv_found_krb_inc=yes,
 ac_cv_found_krb_inc=no)
 if test "$ac_cv_found_krb_inc" = "no"; then
-  if test "$ac_cv_prog_gcc" = "yes" ; then
-    CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I$1/kerberosIV -I/usr/include"
-  else
-    CPPFLAGS="$saved_CPPFLAGS -I$1 -I$1/kerberosIV"
-  fi
+  CPPFLAGS="$saved_CPPFLAGS -I$1 -I$1/kerberosIV"
   AC_TRY_COMPILE([#include <krb.h>],
   [struct ktext foo;],
   [ac_cv_found_krb_inc=yes],
@@ -32,6 +24,7 @@ AC_DEFUN(CMU_KRB_INC_WHERE, [
    for i in $1; do
       AC_MSG_CHECKING(for kerberos headers in $i)
       CMU_KRB_INC_WHERE1($i)
+      CMU_TEST_INCPATH($i, krb)
       if test "$ac_cv_found_krb_inc" = "yes"; then
         ac_cv_krb_where_inc=$i
         AC_MSG_RESULT(found)
@@ -92,24 +85,26 @@ AC_ARG_WITH(krb4-include,
 	fi])
 
 	if test "X$with_krb4" != "X"; then
-	  if test "$with_krb4" != "yes"; then
+	  if test "$with_krb4" != "yes" -a "$with_krb4" != "no"; then
 	    ac_cv_krb_where_lib=$with_krb4/lib
 	    ac_cv_krb_where_inc=$with_krb4/include
 	  fi
 	fi
 
-	if test "X$with_krb4_lib" != "X"; then
-	  ac_cv_krb_where_lib=$with_krb4_lib
-	fi
-	if test "X$ac_cv_krb_where_lib" = "X"; then
-	  CMU_KRB_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
-	fi
+	if test "$with_krb4" != "no"; then
+	  if test "X$with_krb4_lib" != "X"; then
+	    ac_cv_krb_where_lib=$with_krb4_lib
+	  fi
+	  if test "X$ac_cv_krb_where_lib" = "X"; then
+	    CMU_KRB_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
+	  fi
 
-	if test "X$with_krb4_include" != "X"; then
-	  ac_cv_krb_where_inc=$with_krb4_include
-	fi
-	if test "X$ac_cv_krb_where_inc" = "X"; then
-	  CMU_KRB_INC_WHERE(/usr/athena/include /usr/include/kerberosIV /usr/local/include /usr/include/kerberos)
+	  if test "X$with_krb4_include" != "X"; then
+	    ac_cv_krb_where_inc=$with_krb4_include
+	  fi
+	  if test "X$ac_cv_krb_where_inc" = "X"; then
+	    CMU_KRB_INC_WHERE(/usr/athena/include /usr/include/kerberosIV /usr/local/include /usr/include/kerberos)
+	  fi
 	fi
 
 	AC_MSG_CHECKING(whether to include kerberos 4)
@@ -127,7 +122,7 @@ AC_ARG_WITH(krb4-include,
 	  LIBS="${LIBS} ${KRB_LIB_FLAGS}"
 	  AC_CHECK_LIB(resolv, dns_lookup, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lresolv",,"${KRB_LIB_FLAGS}")
 	  AC_CHECK_FUNCS(krb_get_int krb_life_to_time)
-	  LIBS="${cmu_save_LIBS} ${KRB_LIB_FLAGS}"
+	  LIBS="${cmu_save_LIBS}"
 	  AC_DEFINE(KERBEROS)
 	  if test "X$RPATH" = "X"; then
 		RPATH=""

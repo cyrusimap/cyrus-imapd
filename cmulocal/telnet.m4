@@ -81,6 +81,42 @@ fi
 AC_MSG_RESULT($cmu_cv_des_key_sched_proto)
 ])
 
+AC_DEFUN(CMU_TELNET_DES_SET_RANDOM_GENERATOR_SEED_PROTO, [
+AC_MSG_CHECKING(for des_set_random_generator_seed prototype)
+AC_CACHE_VAL(cmu_cv_des_set_random_generator_seed_proto, [
+AC_TRY_COMPILE(
+[
+#include <des.h>
+char des_set_random_generator_seed(int foo, int bar, int baz);
+],
+[des_set_random_generator_seed(NULL, NULL);],
+cmu_cv_des_set_random_generator_seed_proto=no,
+cmu_cv_des_set_random_generator_seed_proto=yes)
+])
+if test "$cmu_cv_des_set_random_generator_seed_proto" = yes; then
+        AC_DEFINE(HAVE_DES_SET_RANDOM_GENERATOR_SEED_PROTO)dnl
+fi
+AC_MSG_RESULT($cmu_cv_des_set_random_generator_seed_proto)
+])
+
+AC_DEFUN(CMU_TELNET_DES_NEW_RANDOM_KEY_PROTO, [
+AC_MSG_CHECKING(for des_new_random_key prototype)
+AC_CACHE_VAL(cmu_cv_des_new_random_key_proto, [
+AC_TRY_COMPILE(
+[
+#include <des.h>
+char des_new_random_key(int foo, int bar, int baz);
+],
+[des_new_random_key(NULL, NULL);],
+cmu_cv_des_new_random_key_proto=no,
+cmu_cv_des_new_random_key_proto=yes)
+])
+if test "$cmu_cv_des_new_random_key_proto" = yes; then
+        AC_DEFINE(HAVE_DES_NEW_RANDOM_KEY_PROTO)dnl
+fi
+AC_MSG_RESULT($cmu_cv_des_new_random_key_proto)
+])
+
 AC_DEFUN(CMU_TELNET_DES_ECB_ENCRYPT_PROTO, [
 AC_MSG_CHECKING(for des_ecb_encrypt prototype)
 AC_CACHE_VAL(cmu_cv_des_ecb_encrypt_proto, [
@@ -100,17 +136,53 @@ AC_MSG_RESULT($cmu_cv_des_ecb_encrypt_proto)
 ])
 
 AC_DEFUN(CMU_TELNET_NEWDES, [
+AC_REQUIRE([CMU_KRB4])
+AC_REQUIRE([CMU_KRB5])
+	 saved_LIBS=$LIBS
+	 LIBS="$KRB_LIB_FLAGS $KRB5_LIB_FLAGS"
 	 if test "$with_des" = yes; then
 		AC_CHECK_FUNCS(des_new_random_key)
 		if test "$ac_cv_func_des_new_random_key" = yes; then
 			AC_DEFINE(NEWDESLIB)
 		fi
 	 fi
+	 LIBS=$saved_LIBS
+	 ])
+
+AC_DEFUN(CMU_TELNET_GETTYTAB, [
+	 if test -f "/etc/gettytab"; then
+		AC_CHECK_FUNCS(getent getstr)
+	        if test "X$ac_cv_func_getent" != "Xyes"; then
+			AC_DEFINE(HAVE_GETTYTAB)
+			if test "X$ac_cv_func_getstr" = "Xyes"; then
+				CFLAGS="$CFLAGS -Dgetstr=ggetstr"
+			fi
+		fi
+	 else
+		AC_CHECK_FUNCS(cgetent)
+	 fi
+	 ])
+
+AC_DEFUN(CMU_TELNET_ISSUE, [
+	 if test -f "/etc/issue.net"; then
+		AC_DEFINE(ISSUE_FILE, "/etc/issue.net")
+	 else
+		if test -f "/etc/issue"; then
+			AC_DEFINE(ISSUE_FILE, "/etc/issue")
+		fi
+	 fi
 	 ])
 
 AC_DEFUN(CMU_TELNET_PTYDIR, [
-	 if test -d "/dev/pts" -o -d "/dev/pty"; then
-		AC_DEFINE(PTYDIR)
+
+	 if test -d /dev/pts -o -d /dev/pty; then
+	  	case "${host}" in
+		  *-*-irix*)
+		    ;;
+		  *)
+		    AC_DEFINE(PTYDIR)
+		    ;;
+		esac
 	 fi
 	 ])
 

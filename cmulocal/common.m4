@@ -8,3 +8,14 @@ if test "$CMU_AC_CV_FOUND" = "yes"; then
   fi
 fi
 ])
+
+AC_DEFUN(CMU_TEST_INCPATH, [
+changequote(<<, >>)
+define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_inc, [ *], [_p]))
+changequote([, ])
+if test "$CMU_AC_CV_FOUND" = "yes"; then
+  if test \! -f "$1/$2.h"; then
+    CMU_AC_CV_FOUND=no
+  fi
+fi
+])
