@@ -25,7 +25,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.82 1998/07/07 19:04:32 tjs Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.83 1998/07/07 19:12:44 tjs Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -1061,7 +1061,7 @@ char *id, *to;
     delivery.dptr = buf;
     delivery.dsize = strlen(id) + strlen(to) + 2;
     date = dbm_fetch(DeliveredDBptr, delivery);
-    if (date->dptr == NULL) {
+    if (date.dptr == NULL) {
       syslog(LOG_ERR, "unable to fetch entry for %s/%s: %m", id, to);
       close(lockfd);
       return 0;
