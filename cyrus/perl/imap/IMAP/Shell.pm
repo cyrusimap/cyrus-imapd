@@ -136,6 +136,11 @@ my %builtins = (exit =>
 		   'mailbox resource value [resource value ...]',
 		   'set quota on mailbox or resource'],
 		sq => 'setquota',
+		version =>
+		  [\&_sc_version, '',
+		   'display version info of current server'],
+		ver => 'version',
+		info => 'version',
 		#? alias
 		#? unalias
 		#? load
@@ -1019,6 +1024,58 @@ sub _sc_setquota {
   0;
 }
 
+sub _sc_version {
+  my ($cyrref, $name, $fh, $lfh, @argv) = @_;
+  my (@nargv, $opt);
+  shift(@argv);
+  while (defined ($opt = shift(@argv))) {
+    # gack.  bloody tcl.
+    last if $opt eq '--';
+    if ($opt =~ /^-/) {
+      die "usage: version\n";
+    }
+    else {
+      push(@nargv, $opt);
+      last;
+    }
+  }
+  push(@nargv, @argv);
+  if (@nargv != 0) {
+    die "usage: version\n";
+  }
+  if (!$cyrref || !$$cyrref) {
+    die "version: no connection to server\n";
+  }
+
+  my $info;
+  $$cyrref->addcallback({-trigger => 'ID',
+		      -callback => sub {
+			my %d = @_;
+			$info = $d{-text};
+		      }});
+  my ($rc, $msg) = $$cyrref->send('', '', 'ID NIL');
+  $$cyrref->addcallback({-trigger => 'ID'});
+  if ($rc ne 'OK') {
+    $lfh->[2]->print($msg, "\n");
+    return 1;
+  }
+
+  if ($info eq 'NIL') {
+    $lfh->[1]->print("no version info returned by server\n");
+    return 0;
+  }
+  while ($info =~ s/\"([^\"]+)\"\s+(\"[^\"]+\"|NIL)\s*//) {
+    my $field = $1;
+    my $value = $2;
+    $value =~ s/\"//g;			# strip quotes
+    # split environment into multiple lines
+    $value =~ s/;/\n            /g if $field eq 'environment';
+    $value = '' if $value eq 'NIL';	# convert NIL to empty string
+    $lfh->[1]->printf("%-11s: %s\n", $field, $value);
+  }
+  0;
+}
+
 ###############################################################################
 
 #
@@ -1099,7 +1156,7 @@ action will run C<pwd> from a shell if invoked.
 
 =item C<create> [C<--partition> I<partition>] I<mailbox>
 
-=item C<create> I<mailbox I<partition>
+=item C<create> I<mailbox> I<partition>
 
 =item C<cm> [C<--partition> I<partition>] I<mailbox>
 
@@ -1281,6 +1338,14 @@ Administer (SETACL)
 
 Set a quota on the specified root, which may or may not be an actual mailbox.
 The only I<resource> understood by B<Cyrus> is C<STORAGE>.
+
+=item C<version>
+
+=item C<ver>
+
+=item C<info>
+
+Display the version info of the current server.
 
 =back
 
