@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.43 2003/11/25 18:53:26 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.44 2003/11/27 23:07:18 rjs3 Exp $
 
 AC_DEFUN([SASL_GSSAPI_CHK],[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -121,9 +121,9 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
 # Check for CyberSafe with two libraries first, than fall back to a single 
 # library (older CyberSafe)
 
-    unset ac_cv_lib_gss_csf_gss_get_X500_name
-    AC_CHECK_LIB(gss,csf_gss_get_X500_name,gss_impl="cybersafe03",[
-      unset ac_cv_lib_gss_csf_gss_get_X500_name;AC_CHECK_LIB(gss,csf_gss_get_X500_name,gss_impl="cybersafe",gss_failed=1,$GSSAPIBASE_LIBS -lgss)],$GSSAPIBASE_LIBS -lgss -lcstbk5)
+    unset ac_cv_lib_gss_csf_gss_acq_user
+    AC_CHECK_LIB(gss,csf_gss_acq_user,gss_impl="cybersafe03",[
+      unset ac_cv_lib_gss_csf_gss_acq_user;AC_CHECK_LIB(gss,csf_gss_acq_user,gss_impl="cybersafe",gss_failed=1,$GSSAPIBASE_LIBS -lgss)],$GSSAPIBASE_LIBS -lgss -lcstbk5)
 
     if test "$gss_failed" = "1"; then
 # Restore variables
