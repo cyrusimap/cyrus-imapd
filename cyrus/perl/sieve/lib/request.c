@@ -64,9 +64,7 @@
 
 void parseerror(char *str)
 {
-  printf("Parse error:\n");
-
-  printf("client expected %s\n",str);
+  printf("Parse error: %s\n", str);
   printf("exiting\n");
 
   exit(2);
@@ -354,8 +352,6 @@ int list_wcb(int version, struct protstream *pout, struct protstream *pin,isieve
   int end=0;
   int res;
   int ret = 0;
-
-  printf("You have the following scripts on the server:\n");
 
   prot_printf(pout, "LISTSCRIPTS\r\n");
   prot_flush(pout);
