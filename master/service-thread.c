@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.4 2002/06/03 18:22:34 rjs3 Exp $ */
+/* $Id: service-thread.c,v 1.5 2002/06/03 19:00:33 rjs3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -65,6 +65,7 @@
 #include <sysexits.h>
 
 #include "service.h"
+#include "xmalloc.h"
 
 extern int optind;
 extern char *optarg;
@@ -134,6 +135,7 @@ static int libwrap_ask(struct request_info *r, int fd)
 #endif
 
 extern void config_init(const char *, const char *);
+extern const char *config_getstring(const char *key, const char *def);
 
 int main(int argc, char **argv, char **envp)
 {
@@ -172,7 +174,7 @@ int main(int argc, char **argv, char **envp)
 	syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
 	exit(EX_SOFTWARE);
     }
-    service = strdup(p);
+    service = xstrdup(p);
     if (service == NULL) {
 	syslog(LOG_ERR, "couldn't strdup() service: %m");
 	exit(EX_OSERR);
