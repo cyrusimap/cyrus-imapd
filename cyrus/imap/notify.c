@@ -1,5 +1,5 @@
 /* notify.c -- Module to notify of new mail
- * $Id: notify.c,v 1.5 2002/04/11 19:23:25 leg Exp $ 
+ * $Id: notify.c,v 1.6 2002/05/07 18:50:21 leg Exp $ 
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -132,6 +132,7 @@ void notify(const char *method,
 
     if (r) {
         syslog(LOG_ERR, "notify datagram too large");
+	close(soc);
 	return;
     }
 
