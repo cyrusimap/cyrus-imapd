@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.20 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: ipurge.c,v 1.21 2003/11/20 18:47:46 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -84,6 +84,8 @@ int size = -1;
 int exact = -1;
 int pattern = -1;
 int skipflagged = 0;
+int datemode = OFFSET_SENTDATE;
+int invertmatch = 0;
 
 /* for statistical purposes */
 typedef struct mbox_stats_s {
@@ -114,7 +116,7 @@ int main (int argc, char *argv[]) {
 
   if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
-  while ((option = getopt(argc, argv, "C:hxd:b:k:m:fs")) != EOF) {
+  while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsXi")) != EOF) {
     switch (option) {
     case 'C': /* alt config file */
       alt_config = optarg;
@@ -151,6 +153,12 @@ int main (int argc, char *argv[]) {
     } break;
     case 's' : {
       skipflagged = 1;
+    } break;
+    case 'X' : {
+      datemode = OFFSET_INTERNALDATE;
+    } break;
+    case 'i' : {
+      invertmatch = 1;
     } break;
     case 'h':
     default: usage(argv[0]);
@@ -197,12 +205,14 @@ int main (int argc, char *argv[]) {
 
 int
 usage(char *name) {
-  printf("usage: %s [-f] [-s] [-C <alt_config>] [-x] {-d days &| -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
+  printf("usage: %s [-f] [-s] [-C <alt_config>] [-x] [-X] [-i] {-d days | -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
   printf("\tthere are no defaults and at least one of -d, -b, -k, -m\n\tmust be specified\n");
   printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
   printf("\t -x specifies an exact match for days or size\n");
   printf("\t -f force also to delete mail below user.* and INBOX.*\n");
   printf("\t -s skip over messages that are flagged.\n");
+  printf("\t -X use delivery time instead of date header for date matches.\n");
+  printf("\t -i invert match logic: -x means not equal, date is for newer, size is for smaller.\n");
   exit(0);
 }
 
@@ -278,7 +288,7 @@ int purge_check(struct mailbox *mailbox __attribute__((unused)),
   bit32 msgsize;
   bit32 flagged;
 
-  senttime = ntohl(*((bit32 *)(buf + OFFSET_SENTDATE)));
+  senttime = ntohl(*((bit32 *)(buf + datemode)));
   msgsize = ntohl(*((bit32 *)(buf + OFFSET_SIZE)));
   flagged = ntohl(*((bit32 *)(buf + OFFSET_SYSTEM_FLAGS))) & FLAG_FLAGGED;
 
@@ -293,6 +303,11 @@ int purge_check(struct mailbox *mailbox __attribute__((unused)),
       my_time = time(0);
       /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
       if (((my_time - (time_t) senttime)/86400) == (days/86400)) {
+	  if (invertmatch) return 0;
+	  deleteit(msgsize, stats);
+	  return 1;
+      } else {
+	  if (!invertmatch) return 0;
 	  deleteit(msgsize, stats);
 	  return 1;
       }
@@ -300,6 +315,11 @@ int purge_check(struct mailbox *mailbox __attribute__((unused)),
     if (size >= 0) {
       /* check size */
       if (msgsize == size) {
+	  if (invertmatch) return 0;
+	  deleteit(msgsize, stats);
+	  return 1;
+      } else {
+	  if (!invertmatch) return 0;
 	  deleteit(msgsize, stats);
 	  return 1;
       }
@@ -309,14 +329,22 @@ int purge_check(struct mailbox *mailbox __attribute__((unused)),
     if (days >= 0) {
       my_time = time(0);
       /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
-      if ((my_time - (time_t) senttime) > days) {
+      if (!invertmatch && ((my_time - (time_t) senttime) > days)) {
+	  deleteit(msgsize, stats);
+	  return 1;
+      }
+      if (invertmatch && ((my_time - (time_t) senttime) < days)) {
 	  deleteit(msgsize, stats);
 	  return 1;
       }
     }
     if (size >= 0) {
       /* check size */
-      if (msgsize > size) {
+      if (!invertmatch && (msgsize > size)) {
+	  deleteit(msgsize, stats);
+	  return 1;
+      }
+      if (invertmatch && (msgsize < size)) {
 	  deleteit(msgsize, stats);
 	  return 1;
       }
