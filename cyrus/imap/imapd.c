@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.427 2003/04/15 18:44:41 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.428 2003/04/22 16:02:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -452,6 +452,15 @@ static void imapd_reset(void)
     
     imapd_in = imapd_out = NULL;
 
+#ifdef HAVE_SSL
+    if (tls_conn) {
+	if (tls_reset_servertls(&tls_conn) == -1) {
+	    fatal("tls_reset() failed", EC_TEMPFAIL);
+	}
+	tls_conn = NULL;
+    }
+#endif
+
     cyrus_close_sock(0);    
     cyrus_close_sock(1);
     cyrus_close_sock(2);
@@ -490,15 +499,6 @@ static void imapd_reset(void)
 	saslprops.authid = NULL;
     }
     saslprops.ssf = 0;
-
-#ifdef HAVE_SSL
-    if (tls_conn) {
-	if (tls_reset_servertls(&tls_conn) == -1) {
-	    fatal("tls_reset() failed", EC_TEMPFAIL);
-	}
-	tls_conn = NULL;
-    }
-#endif
 
     imapd_exists = -1;
 }
