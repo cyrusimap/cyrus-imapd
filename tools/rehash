@@ -45,7 +45,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #
 # Written by Gary Mills <mills@cc.UManitoba.CA>
 #
-# $Id: rehash,v 1.1 2001/08/12 18:22:14 ken3 Exp $
+# $Id: rehash,v 1.2 2001/08/12 20:06:41 leg Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -144,7 +144,7 @@ while (<CONF>) {
     if (/^configdirectory:\s*(.*)$/) {
 	$conf = $1;
     }
-    if (/^sieveuserhomedir:\s+(1|t|yes|on)/) {
+    if (/^sieveusehomedir:\s+(1|t|yes|on)/) {
 	$nosievedir = 1;
 	print "you are storing sieve scripts in user's home directories.\n";
     }

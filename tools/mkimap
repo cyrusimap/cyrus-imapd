@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: mkimap,v 1.11 2001/01/24 21:26:51 leg Exp $
+# $Id: mkimap,v 1.12 2001/08/12 20:06:41 leg Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -74,7 +74,7 @@ while (<CONF>) {
 	$conf = $1;
 	print "i will configure directory $conf.\n";
     }
-    if (/^sieveuserhomedir:\s+(1|t|yes|on)/) {
+    if (/^sieveusehomedir:\s+(1|t|yes|on)/) {
 	$nosievedir = 1;
 	print "you are storing sieve scripts in user's home directories.\n";
     }
