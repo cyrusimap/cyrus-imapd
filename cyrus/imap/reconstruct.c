@@ -499,7 +499,7 @@ char *name;
 	   "UIDNnn", mailbox.last_uid, new_exists, 0);
 
     fclose(newindex);
-    r = seen_reconstruct(&mailbox);
+    r = seen_reconstruct(&mailbox, (time_t)0, (time_t)0, (int (*)())0, (void *)0);
     mailbox_close(&mailbox);
     return r;
 }
