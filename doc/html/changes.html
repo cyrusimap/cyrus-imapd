@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.64 1999/03/01 20:36:59 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.65 1999/03/02 01:00:38 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -9,6 +9,9 @@
     <h2> Changes to the Cyrus IMAP Server Since Version 1.5.19 </h2>
 
     <ul>
+      <li> Most of the charset.c code (and mkchartable.c code) has been
+	replaced thanks to John Myers).
+
       <li> A little code cleanup in imapd.c (thanks to Bruce Balden).
 
       <li> Annoying (and confusing) lines in syslog every time a message was
@@ -28,10 +31,10 @@
       <li> Uninitialized variable fixed in imapd.c with the shutdown file
 	code.
 
-      <li> Minor tweaks to purify build config
+      <li> Minor tweaks to purify build config.
 
       <li> Fix minor memory leak in proc.c where procfname wasn't
-	being free'd
+	being free'd.
 
       <li> Fix brain fart in auth_krb_pts.c where a CLOSE() was done
       to a DB handle BEFORE we access the data read from the DB
@@ -41,6 +44,14 @@
 
       <li>Committed minor syslog log level changes in ptloader and
 	deliver. 
+
+      <li>make distclean now does what it's supposed to.
+
+      <li>Possibly misnamed experimental --enable-static-libraries switch that
+	tries to do a good job of building binaries with whatever static
+	libraries are availible.  If you use this, you do so at your own risk,
+	and if it fails, we will disavow all knowledge of you and your team.
+	Good luck, Jim.
 
     </ul>
 
@@ -683,7 +694,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Mon Mar  1 15:31:55 1999
+last modified by tjs at Mon Mar  1 19:28:14 1999
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
