@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.33 2002/10/25 19:56:38 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.34 2002/10/26 03:34:10 ken3 Exp $
  */
 
 /*
@@ -188,7 +188,8 @@ static void cmd_hdr();
 static void cmd_over();
 static void cmdloop(void);
 static int open_group();
-static int parsenum(char *str, char **rem);
+static int parserange(char *str, unsigned long *uid, unsigned long *last,
+		      char **msgid);
 static time_t parse_datetime(char *datestr, char *timestr, char *gmt);
 static int do_newnews(char *msgid, char *mailbox, unsigned long uid,
 		      unsigned long lines, time_t tstamp, void *rock);
@@ -544,7 +545,7 @@ static int reset_saslconn(sasl_conn_t **conn)
  */
 static void cmdloop(void)
 {
-    int c, r, mode;
+    int c, r = 0, mode;
     static struct buf cmd, arg1, arg2, arg3, arg4;
     char *p;
     const char *err;
@@ -576,60 +577,28 @@ static void cmdloop(void)
 	switch (cmd.s[0]) {
 	case 'A':
 	    if (!strcmp(cmd.s, "Article")) {
-		char fname[MAX_MAILBOX_PATH];
 		char *msgid;
-		struct mailbox *mbox;
-		int have_msgid;
 
 		mode = ARTICLE_ALL;
 
 	      article:
-		have_msgid = 0;
-		uid = 0;
+		msgid = NULL;
+		if (arg1.s) *arg1.s = 0;
+
 		if (c == ' ') {
 		    c = getword(nntp_in, &arg1);
 		    if (c == EOF) goto missingargs;
-		    uid = parsenum(arg1.s, NULL);
 		}
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
-		if (uid == -1) {
-		    char *mailbox, *path;
-		    struct mailbox tmpbox;
 
-		    have_msgid = 1;
-		    msgid = arg1.s;
-		    if (netnews_lookup(msgid, &mailbox, &uid, NULL, NULL)) {
-			r = mboxlist_lookup(mailbox, &path, NULL, NULL);
-			if (r) goto nogroup;
-
-			strcpy(fname, path);
-			mbox = memset(&tmpbox, 0, sizeof(struct mailbox));
-		    } else {
-			goto nomsgid;
-		    }
-		} else {
-		    if (!nntp_group) goto noopengroup;
+		if (parserange(arg1.s, &uid, NULL, &msgid) == -1) {
+		    if (!nntp_group) goto nogroup;
 		    if (!nntp_current) goto nocurrent;
-		    if (uid) {
-			int msgno = index_finduid(uid);
-			if (index_getuid(msgno) != uid) goto noarticle;
-			nntp_current = msgno;
-		    } else {
-			uid = index_getuid(nntp_current);
-		    }
-
-		    msgid = index_get_msgid(nntp_group, index_finduid(uid));
-		    strcpy(fname, nntp_group->path);
-		    mbox = nntp_group;
+		    goto noarticle;
 		}
 
-		strcat(fname, "/");
-		mailbox_message_get_fname(mbox, uid, fname + strlen(fname));
-
-		cmd_article(fname, msgid, have_msgid ? 0 : uid, mode);
-
-		if (!have_msgid) free(msgid);
+		cmd_article(mode, msgid, uid);
 	    }
 	    else if (!strcmp(cmd.s, "Authinfo")) {
 		arg3.len = 0;
@@ -717,12 +686,11 @@ static void cmdloop(void)
 	case 'H':
 	    if (!strcmp(cmd.s, "Hdr")) {
 		unsigned long last;
-		char *oldgroup;
+		char *msgid;
 
 	      hdr:
-		uid = 0;
-		p = NULL;
-		oldgroup = NULL;
+		msgid = NULL;
+		if (arg2.s) *arg2.s = 0;
 
 		if (c != ' ') goto missingargs;
 		c = getword(nntp_in, &arg1);
@@ -730,56 +698,17 @@ static void cmdloop(void)
 		if (c == ' ') {
 		    c = getword(nntp_in, &arg2);
 		    if (c == EOF) goto missingargs;
-		    uid = parsenum(arg2.s, &p);
 		}
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
-		if (uid == -1) {
-		    char *mailbox;
-
-		    if (netnews_lookup(arg2.s, &mailbox, &uid, NULL, NULL)) {
-			oldgroup = xstrdup(nntp_group->name);
-			r = open_group(mailbox, 1);
-			if (r) {
-			    /* switch back to previously selected group */
-			    open_group(oldgroup, 1);
-			    free(oldgroup);
-			    goto nogroup;
-			}
-
-			last = uid;
-		    } else {
-			goto nomsgid;
-		    }
-		} else {
-		    if (!nntp_group) goto noopengroup;
-		    if (!uid)
-			last = uid = index_getuid(nntp_current);
-		    else if (p && *p) {
-			if (*p != '-') goto noarticle;
-			if (*++p)
-			    last = parsenum(p, NULL);
-			else
-			    last = index_getuid(nntp_exists);
-		    }
-		    else
-			last = uid;
-		    if (last == -1) goto noarticle;
+		if (parserange(arg2.s, &uid, &last, &msgid) == -1) {
+		    if (!nntp_group) goto nogroup;
+		    if (!nntp_current) goto nocurrent;
+		    goto noarticle;
 		}
 
-		prot_printf(nntp_out, "%u Header follows:\r\n",
-			    cmd.s[0] == 'X' ? 221 : 225);
-
-		cmd_hdr(arg1.s, uid, last);
-
-		prot_printf(nntp_out, ".\r\n");
-
-		/* switch back to previously selected group */
-		if (oldgroup) {
-		    open_group(oldgroup, 1);
-		    free(oldgroup);
-		}
+		cmd_hdr(cmd.s, arg1.s, msgid, uid, last);
 	    }
 	    else if (!strcmp(cmd.s, "Head")) {
 		mode = ARTICLE_HEAD;
@@ -952,37 +881,22 @@ static void cmdloop(void)
 		unsigned long last;
 
 	      over:
-		uid = 0;
-		p = NULL;
+		if (arg1.s) *arg1.s = 0;
 
 		if (c == ' ') {
 		    c = getword(nntp_in, &arg1);
 		    if (c == EOF) goto missingargs;
-		    uid = parsenum(arg1.s, &p);
-		    if (uid == -1) goto noarticle;
 		}
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
-		if (!nntp_group) goto noopengroup;
-		if (!uid)
-		    last = uid = index_getuid(nntp_current);
-		else if (p && *p) {
-		    if (*p != '-') goto noarticle;
-		    if (*++p)
-			last = parsenum(p, NULL);
-		    else
-			last = index_getuid(nntp_exists);
+		if (parserange(arg1.s, &uid, &last, NULL) == -1) {
+		    if (!nntp_group) goto noopengroup;
+		    if (!nntp_current) goto nocurrent;
+		    goto noarticle;
 		}
-		else
-		    last = uid;
-		if (last == -1) goto noarticle;
-
-		prot_printf(nntp_out, "224 Overview information follows:\r\n");
 
 		cmd_over(uid, last);
-
-		prot_printf(nntp_out, ".\r\n");
 	    }
 	    else goto badcmd;
 	    break;
@@ -1076,7 +990,6 @@ static void cmdloop(void)
 
       baddatetime:
 	prot_printf(nntp_out, "501 Bad date/time\r\n");
-	eatline(nntp_in, c);
 	continue;
 
       nogroup:
@@ -1094,12 +1007,6 @@ static void cmdloop(void)
 
       noarticle:
 	prot_printf(nntp_out, "423 No such article in this newsgroup\r\n");
-	eatline(nntp_in, c);
-	continue;
-
-      nomsgid:
-	prot_printf(nntp_out, "430 No article found with that message-id\r\n");
-	eatline(nntp_in, c);
 	continue;
     }
 }
@@ -1620,10 +1527,44 @@ int open_group(char *name, int has_prefix)
     return 0;
 }
 
-static void cmd_article(char *fname, char *msgid, unsigned long uid, int part)
+static void cmd_article(int part, char *msgid, unsigned long uid)
 {
+    int by_msgid;
+    char fname[MAX_MAILBOX_PATH];
+    struct mailbox *mbox;
     FILE *msgfile;
     char buf[4096];
+
+    if (msgid) {
+	int r;
+	char *mailbox, *path;
+	struct mailbox tmpbox;
+
+	by_msgid = 1;
+	if (netnews_lookup(msgid, &mailbox, &uid, NULL, NULL)) {
+	    r = mboxlist_lookup(mailbox, &path, NULL, NULL);
+	    if (r) {
+		prot_printf(nntp_out, "411 No such newsgroup (%s)\r\n",
+			    error_message(r));
+		return;
+	    }
+
+	    strcpy(fname, path);
+	    mbox = memset(&tmpbox, 0, sizeof(struct mailbox));
+	} else {
+	    prot_printf(nntp_out,
+			"430 No article found with that message-id\r\n");
+	    return;
+	}
+    } else {
+	by_msgid = 0;
+	msgid = index_get_msgid(nntp_group, index_finduid(uid));
+	strcpy(fname, nntp_group->path);
+	mbox = nntp_group;
+    }
+
+    strcat(fname, "/");
+    mailbox_message_get_fname(mbox, uid, fname + strlen(fname));
 
     msgfile = fopen(fname, "r");
     if (!msgfile) {
@@ -1631,7 +1572,9 @@ static void cmd_article(char *fname, char *msgid, unsigned long uid, int part)
 	return;
     }
     prot_printf(nntp_out, "%u %lu %s Article retrieved\r\n",
-		220 + part, uid, msgid ? msgid : "<0>");
+		220 + part, by_msgid ? 0 : uid, msgid ? msgid : "<0>");
+
+    if (!by_msgid) free(msgid);
 
     if (part != ARTICLE_STAT) {
 	while (fgets(buf, sizeof(buf), msgfile)) {
@@ -1682,6 +1625,44 @@ static int parsenum(char *str, char **rem)
     }
 
     return (*p ? -1 : result);
+}
+
+static int parserange(char *str, unsigned long *uid, unsigned long *last,
+		      char **msgid)
+{
+    char *p = NULL;
+
+    if (!str || !*str) {
+	/* no string, use current article */
+	if (!nntp_group || !nntp_current) return -1;
+
+	*uid = index_getuid(nntp_current);
+	if (last) *last = *uid;
+    }
+    else if ((*uid = parsenum(str, &p)) == -1) {
+	/* not a number, assume msgid */
+	if (msgid) {
+	    *msgid = str;
+	    return 0;
+	}
+	else return -1;
+    }
+    else if (!nntp_group) return -1;
+    else if (p && *p) {
+	/* extra stuff, check for range */
+	if (!last || (*p != '-')) return -1;
+	if (*++p)
+	    *last = parsenum(p, NULL);
+	else
+	    *last = index_getuid(nntp_exists);
+	if (*last == -1) return -1;
+    }
+    else if (last)
+	*last = *uid;
+
+    if (msgid) *msgid = NULL;
+
+    return 0;
 }
 
 /* ----- this section defines functions on message_data_t.
@@ -2108,20 +2089,58 @@ static void cmd_post(char *msgid, int mode)
     prot_flush(nntp_out);
 }
 
-static void cmd_hdr(char *hdr, unsigned long uid, unsigned long last)
+static void cmd_hdr(char *cmd, char *hdr, char *msgid,
+		    unsigned long uid, unsigned long last)
 {
-    int msgno;
-    char *body;
+    int by_msgid = 0, msgno;
+    char *oldgroup = NULL, *body;
 
     lcase(hdr);
+
+    if (msgid) {
+	char *mailbox;
+	int r;
+
+	by_msgid = 1;
+	if (netnews_lookup(msgid, &mailbox, &uid, NULL, NULL)) {
+	    if (nntp_group) oldgroup = xstrdup(nntp_group->name);
+	    r = open_group(mailbox, 1);
+	    if (r) {
+		/* switch back to previously selected group */
+		if (oldgroup) {
+		    open_group(oldgroup, 1);
+		    free(oldgroup);
+		    prot_printf(nntp_out, "411 No such newsgroup (%s)\r\n",
+				error_message(r));
+		}
+		return;
+	    }
+
+	    last = uid;
+	} else {
+	    prot_printf(nntp_out,
+			"430 No article found with that message-id\r\n");
+	    return;
+	}
+    }
+
+    prot_printf(nntp_out, "%u Header follows:\r\n", cmd[0] == 'X' ? 221 : 225);
 
     for (; uid <= last; uid++) {
 	msgno = index_finduid(uid);
 	if (index_getuid(msgno) != uid) continue;
 
 	if ((body = index_getheader(nntp_group, msgno, hdr))) {
-	    prot_printf(nntp_out, "%lu %s\r\n", uid, body);
+	    prot_printf(nntp_out, "%lu %s\r\n", by_msgid ? 0 : uid, body);
 	}
+    }
+
+    prot_printf(nntp_out, ".\r\n");
+
+    /* switch back to previously selected group */
+    if (oldgroup) {
+	open_group(oldgroup, 1);
+	free(oldgroup);
     }
 }
 
@@ -2129,6 +2148,8 @@ static void cmd_over(unsigned long uid, unsigned long last)
 {
     int msgno;
     struct nntp_overview *over;
+
+    prot_printf(nntp_out, "224 Overview information follows:\r\n");
 
     for (; uid <= last; uid++) {
 	msgno = index_finduid(uid);
@@ -2148,9 +2169,11 @@ static void cmd_over(unsigned long uid, unsigned long last)
 		netnews_lookup(over->msgid, NULL, NULL, &over->lines, NULL))
 		prot_printf(nntp_out, "%lu", over->lines);
 
-	    prot_printf(nntp_out, "\t\r\n");
+	    prot_printf(nntp_out, "\r\n");
 	}
     }
+
+    prot_printf(nntp_out, ".\r\n");
 }
 
 static const int numdays[] = {
