@@ -1,0 +1,124 @@
+.\" -*- nroff -*-
+.TH DELIVER 8
+.\" 	(C) Copyright 1994 by Carnegie Mellon University
+.\" 
+.\"                      All Rights Reserved
+.\" 
+.\" Permission to use, copy, modify, and distribute this software and its 
+.\" documentation for any purpose and without fee is hereby granted, 
+.\" provided that the above copyright notice appear in all copies and that
+.\" both that copyright notice and this permission notice appear in 
+.\" supporting documentation, and that the name of CMU not be
+.\" used in advertising or publicity pertaining to distribution of the
+.\" software without specific, written prior permission.  
+.\" 
+.\" CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+.\" ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+.\" CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+.\" ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+.\" WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+.\" ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+.\" SOFTWARE.
+.SH NAME
+deliver \- deliver mail to an IMAP mailbox
+.SH SYNOPSIS
+.B deliver
+[
+.B \-d
+]
+[
+.B \-r
+.I address
+]
+[
+.B \-f
+.I address
+]
+[
+.B \-m
+.I mailbox
+]
+[
+.B \-a
+.I auth-id
+]
+[
+.B \-i
+message-id
+]
+[
+.B \-F
+flag
+]...
+[
+.I userid
+]...
+.br
+deliver
+.B \-I 
+.I days
+.SH DESCRIPTION
+.I Deliver
+reads a message from the standard input and delivers it to one or more
+IMAP mailboxes.
+.PP
+.I Deliver
+reads its configuration options out of the
+.IR imapd.conf (5)
+file.
+.SH OPTIONS
+.TP
+.B \-d
+Ignored for compatability with /bin/mail.
+.TP
+.BI \-r " address"
+Ignored for compatability with /bin/mail.
+.TP
+.BI \-f " address"
+Ignored for compatability with /bin/mail.
+.TP
+.BI \-m " mailbox"
+Deliver to 
+.IR mailbox .
+If any
+.IR userid s
+are specified, attempts to deliver to
+.RI user. userid . mailbox
+for each 
+.IR userid .
+If the ACL on any such mailbox does not grant the sender the "p" right
+or if 
+.B \-m
+is not specified,
+then delivers to the INBOX for the
+.IR userid ,
+regardless of the ACL on the INBOX.
+If no
+.IR userid s
+are specified, attempts to deliver to
+.IR mailbox .
+If the ACL on
+.I mailbox
+does not grant the sender the "p" right, the delivery fails.
+.TP
+.BI \-a " auth-id"
+Specify the authorization id of the sender.  Defaults to "anonymous".
+.TP
+.BI \-i " message-id"
+Enable duplicate delivery suppression, specifying the message-id of
+the message.  Will suppress delivery of the message to a mailbox if a
+message with the same message-id is recorded as having already been
+delivered to the mailbox.  Records the mailbox and message-id of all
+successful deliveries.
+.TP
+.BI \-F " flag"
+Set the system flag or keyword
+.I flag
+on the delivered message.
+.TP
+.BI \-I " days"
+Prune the duplicate delivery database of entries older than
+.IR days .
+.SH FILES
+.TP
+.B /etc/imapd.conf
