@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.18.6.9 2003/04/17 17:00:56 ken3 Exp $
+ * $Id: mbdump.c,v 1.18.6.10 2003/07/15 13:52:02 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -84,11 +84,11 @@ static int sieve_isactive(char *sievepath, char *name)
     int len;
 
     snprintf(filename, sizeof(filename), "%s/%s", sievepath, name);
-    snprintf(linkname, sizeof(linkname), "%s/default", sievepath);
+    snprintf(linkname, sizeof(linkname), "%s/defaultbc", sievepath);
 
     len = readlink(linkname, activelink, sizeof(activelink)-1);
     if(len < 0) {
-	if(errno != ENOENT) syslog(LOG_ERR, "readlink(default): %m");
+	if(errno != ENOENT) syslog(LOG_ERR, "readlink(defaultbc): %m");
 	return 0;
     }
 
@@ -405,10 +405,10 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	    if(mbdir) {
 		while((next = readdir(mbdir)) != NULL) {
 		    int length=strlen(next->d_name);
-		    if (length >= strlen(".script")) /* if ends in .script */
+		    /* 7 == strlen(".script"); 3 == strlen(".bc") */
+		    if ((length >= 7 && !strcmp(next->d_name + (length - 7), ".script")) ||
+			(length >= 3 && !strcmp(next->d_name + (length - 3), ".bc")))
 		    {
-			if (strcmp(next->d_name + (length - 7), ".script")==0)
-			{
 			    /* map file */
 			    snprintf(filename, sizeof(filename), "%s/%s",
 				     sieve_path, next->d_name);
@@ -451,7 +451,6 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 					(!tag ? "+" : ""));
 			    prot_write(pout, base, len);
 			    map_free(&base, &len);
-			}
 		    }
 		}
 	    }
@@ -616,7 +615,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 		} else if(isdefault) {
 		    char linkbuf[2048];
 		    		    
-		    snprintf(linkbuf, sizeof(linkbuf), "%s/default",
+		    snprintf(linkbuf, sizeof(linkbuf), "%s/defaultbc",
 			     sieve_path);
 		    ret = symlink(realname, linkbuf);
 		    if(ret) {
