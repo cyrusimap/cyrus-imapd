@@ -58,3 +58,22 @@ char *str;
     strcpy(p, str);
     return p;
 }
+
+/* Same as xmalloc() */
+void *fs_get(size)
+int size;
+{
+    char *ret;
+
+    if (ret = malloc((unsigned) size))
+      return (void *)ret;
+
+    fatal("Virtual memory exhausted", EX_TEMPFAIL);
+}
+
+void fs_give(ptr)
+void **ptr;
+{
+    free((char *)*ptr);
+    *ptr = 0;
+}

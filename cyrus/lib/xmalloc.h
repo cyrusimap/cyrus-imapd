@@ -24,3 +24,5 @@
 extern char *xmalloc();
 extern char *xrealloc();
 extern char *strsave();
+extern void *fs_get();
+extern void fs_give();
