@@ -29,6 +29,12 @@ ec IMAP_MAILBOX_EXISTS,
 ec IMAP_MAILBOX_BADNAME,
    "invalid mailbox name"
 
+ec IMAP_MAILBOX_SUBSCRIBED,
+   "already subscribed to mailbox"
+
+ec IMAP_MAILBOX_UNSUBSCRIBED,
+   "not subscribed to mailbox"
+
 ec IMAP_PARTITION_UNKNOWN,
    "unknown/invalid partition"
 
