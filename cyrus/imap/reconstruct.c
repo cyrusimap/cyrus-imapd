@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.77 2003/08/12 17:55:28 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.78 2003/08/12 18:20:52 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -125,6 +125,7 @@ int main(int argc, char **argv)
     int rflag = 0;
     int mflag = 0;
     int fflag = 0;
+    int xflag = 0;
     char buf[MAX_MAILBOX_PATH+1];
     char mbbuf[MAX_MAILBOX_PATH+1];
     struct discovered head;
@@ -140,7 +141,7 @@ int main(int argc, char **argv)
     assert(INDEX_HEADER_SIZE == (OFFSET_SPARE3+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8));
 
-    while ((opt = getopt(argc, argv, "C:p:rmf")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:p:rmfx")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -162,6 +163,10 @@ int main(int argc, char **argv)
 	    fflag = 1;
 	    break;
 
+	case 'x':
+	    xflag = 1;
+	    break;
+	    
 	default:
 	    usage();
 	}
@@ -249,7 +254,7 @@ int main(int argc, char **argv)
 	    mboxname_hiersep_tointernal(&recon_namespace, buf);
 
 	    r = mboxlist_createmailbox(buf, 0, start_part, 1,
-				       "cyrus", NULL, 0, 0, 1);
+				       "cyrus", NULL, 0, 0, !xflag);
 	    if(r) {
 		fprintf(stderr, "could not create %s\n", argv[i]);
 	    }
@@ -295,7 +300,7 @@ int main(int argc, char **argv)
 	/* create p (database only) and reconstruct it */
 	/* partition is defined by the parent mailbox */
 	r = mboxlist_createmailbox(p->name, 0, NULL, 1,
-				   "cyrus", NULL, 0, 0, 1);
+				   "cyrus", NULL, 0, 0, !xflag);
 	if (!r) {
 	    do_reconstruct(p->name, strlen(p->name), 0, &head);
 	} else {
@@ -317,7 +322,7 @@ int main(int argc, char **argv)
 void usage(void)
 {
     fprintf(stderr,
-	    "usage: reconstruct [-C <alt_config>] [-p partition] [-r] [-f] mailbox...\n");
+	    "usage: reconstruct [-C <alt_config>] [-p partition] [-rfx] mailbox...\n");
     fprintf(stderr, "       reconstruct [-C <alt_config>] -m\n");
     exit(EC_USAGE);
 }    

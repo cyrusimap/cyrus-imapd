@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: reconstruct.8,v 1.15 2003/08/12 17:55:27 rjs3 Exp $
+.\" $Id: reconstruct.8,v 1.16 2003/08/12 18:20:50 rjs3 Exp $
 .SH NAME
 reconstruct \- reconstruct mailboxes
 .SH SYNOPSIS
@@ -51,6 +51,9 @@ reconstruct \- reconstruct mailboxes
 [
 .B \-p
 .I partition
+]
+[
+.B \-x
 ]
 [
 .B \-r
@@ -111,6 +114,12 @@ Read configuration options from \fIconfig-file\fR.
 Search for the listed (non-existant) mailboxes on the indicated partition.
 Create the mailboxes in the database in addition to reconstructing them.
 (not compatible with the use of wildcards)
+.TP
+.B \-x
+When processing a mailbox which is not in the mailbox list (e.g. via
+the -p or -f options), do not import the metadata from the mailbox,
+instead create it anew (this specifically affects atleast the mailbox's seen
+stat unique identifier, user flags, and ACL).
 .TP
 .B \-r
 Recursively reconstruct all sub-mailboxes of the mailboxes or mailbox
