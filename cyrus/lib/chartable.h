@@ -41,7 +41,18 @@
  *
  */
 
-/* $Id: chartable.h,v 1.3 2002/05/25 19:57:47 leg Exp $ */
+/* $Id: chartable.h,v 1.3.4.1 2002/12/27 14:00:34 ken3 Exp $ */
+
+/* note that these are all uppercase letters. since the translation
+   tables canonicalize to lower case letters, we never see these bytes
+   in the output UTF-8 and they're safely used as control codes to the
+   character decoder. */
+
+/* note that currently we never return a character that is represented
+ * by more than 3 octets in UTF-8, since we only deal with characters
+ * in UCS-2. this means that 11110xxx, 111110xx, and 1111110x never
+ * appear in our outgoing tables, and could be used instead of the following.
+ */
 
 #define XLT 'N'			/* Long translation */
 #define U7F 'O'			/* UTF-7 first base64 character */
