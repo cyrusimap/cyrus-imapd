@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.39 2003/06/17 14:11:06 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.40 2003/06/17 15:25:19 ken3 Exp $
  */
 
 #include <config.h>
@@ -1475,6 +1475,12 @@ const struct annotate_st_entry server_entries[] =
     { "/vendor/cmu/cyrus-imapd/shutdown", PROXY_AND_BACKEND,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_tofile, "shutdown" },
+    { "/vendor/cmu/cyrus-imapd/squat", PROXY_AND_BACKEND,
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      ACL_ADMIN, annotation_set_todb, NULL },
+    { "/vendor/cmu/cyrus-imapd/expire", PROXY_AND_BACKEND,
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      ACL_ADMIN, annotation_set_todb, NULL },
     { NULL, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
 };
 
