@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.48 1998/11/03 19:57:25 tjs Exp $ -->
+<!-- $Id: install.html,v 1.49 1998/12/07 16:16:47 tjs Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -43,6 +43,9 @@ messages may come through, but this is not a serious concern.)
 AFS ACLs, IMSPd, and IMAPd on the same machine, make sure you have version
 1.5a5 of the IMSP server for this version of the IMAP server.  (If you don't
 have IMSP, or AFS, don't worry about it.)
+
+<li> If you are upgrading from 1.5.14 (or earlier) you should remove the
+delivered-db database and mkdir /var/imap/deliverdb.
 
 </ul>
 <p>
@@ -888,7 +891,7 @@ to work with the IMAP server.
 
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Tue Nov  3 14:45:56 1998
+last modified by tjs at Mon Dec  7 11:10:18 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
