@@ -1,4 +1,4 @@
-/* convert_code.c: Convert IMAP_* error to exitcodes.h exit status
+/* convert_code.h
  * Copyright 1998 Carnegie Mellon University
  * 
  * No warranties, either expressed or implied, are made regarding the
@@ -24,38 +24,11 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: convert_code.c,v 1.3 2000/02/10 05:10:33 tmartin Exp $ */
 
-/* Same old convert_code function moved into one place instead of being
- * redundant in every file.
- * tjs 23-jul-1998
- */
+#ifndef CONVERT_CODE_H
+#define CONVERT_CODE_H
 
-#include "imap_err.h"
-#include "exitcodes.h"
 
-int convert_code(int r)
-{
-    switch (r) {
-    case 0:
-        return 0;
-        
-    case IMAP_IOERROR:
-        return EC_IOERR;
+int convert_code(int r);
 
-    case IMAP_PERMISSION_DENIED:
-        return EC_NOPERM;
-
-    case IMAP_QUOTA_EXCEEDED:
-        return EC_TEMPFAIL;
-
-    case IMAP_MAILBOX_NOTSUPPORTED:
-        return EC_DATAERR;
-
-    case IMAP_MAILBOX_NONEXISTENT:
-        return EC_UNAVAILABLE;
-    }
-        
-    /* Some error we're not expecting. */
-    return EC_SOFTWARE;
-}       
+#endif /* CONVERT_CODE_H */

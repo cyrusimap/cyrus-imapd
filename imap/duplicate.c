@@ -3,17 +3,19 @@
 #include <syslog.h>
 #include <db.h>
 #include <assert.h>
+#include <ctype.h>
 
 #include "imap_err.h"
 #include "config.h"
 #include "exitcodes.h"
+#include "xmalloc.h"
 
 #include "duplicate.h"
 
 /* it would be nice to cache some DBs so that we're not constantly
    opening and closing them; something to be evaluated */
 
-static duplicate_dbinit = 0;
+static int duplicate_dbinit = 0;
 DB_ENV *duplicate_dbenv;
 
 static void db_err(const char *db_prfx, char *buffer)
@@ -76,7 +78,7 @@ static char *get_db_name (char *mbox)
 	idx++;                   /* skip past '.' */
     }
     c = (char) tolower((int) *idx);
-    if (!islower(c)) {
+    if (!islower((int) c)) {
 	c = 'q';
     }
 
@@ -201,6 +203,7 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
     return;
 }
 
+
 int duplicate_prune(int days)
 {
     int r;
@@ -285,7 +288,7 @@ int duplicate_prune(int days)
     return 0;
 }
 
-int duplicate_done()
+int duplicate_done(void)
 {
     int r;
 
@@ -298,4 +301,6 @@ int duplicate_done()
     }
 
     duplicate_dbinit = 0;
+
+    return 0;
 }

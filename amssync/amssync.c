@@ -34,6 +34,7 @@
 #include <string.h>
 #include <sysexits.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include <sys/ioctl.h>
 #ifndef _IOW
@@ -59,6 +60,8 @@
 #include "xmalloc.h"
 #include "amssync.h"
 #include "hash.h" /* tjs -- for bboard deletion stuff */
+#include "imparse.h"
+#include "util.h"
 
 struct cbdata {
     int done;
@@ -85,6 +88,11 @@ char *imapkey[1024], *imapval[1024];
 struct imclient *imclient;
 ht_table *bb_hash; /* tjs */
 char* capb_str; /* tjs */
+
+/* declarations */
+extern void do_imap_noop(struct imclient *imclient);
+extern void do_imap_close(struct imclient *imclient);
+extern void DeleteIMAP(struct imclient * imclient, char *name, message *msg);
 
 /* tjs */
 /* This is a hash function
@@ -136,7 +144,7 @@ NULL on reply set!");
  */
 void bbdelete(void* bboard) {
     if (verbose) {
-	fprintf(logfile, "Deleting mailbox %s\n", bboard);
+	fprintf(logfile, "Deleting mailbox %s\n", (char *) bboard);
     }
     if (noncommit == 0) {
 	imclient_send(imclient, (void(*)()) 0, (void *)0,
@@ -378,8 +386,6 @@ do_acl(char *amsdir, char *bbd)
 {
     char space[MAXSIZE], *p, *q, *at;
     struct ViceIoctl blob;
-    struct AclEntry *te;
-    struct Acl *ta;
     int i, j, k;
     const char *dirs[4] = {
 	"system:anyuser",
@@ -419,7 +425,7 @@ do_acl(char *amsdir, char *bbd)
     blob.out_size = MAXSIZE;
     blob.in_size = 0;
     blob.out = &(space[0]);
-    if (i = pioctl(amsdir,VIOCGETAL,&blob,1)) {
+    if ((i = pioctl(amsdir,VIOCGETAL,&blob,1))!=0) {
 	fprintf(stderr,"VIOCGETAL returned %d\n",i);
 	return 1;
     }
@@ -436,7 +442,7 @@ do_acl(char *amsdir, char *bbd)
 	q = strchr(posacl[i],'\t') + 1;
 	posval[i] = atoi(q);
 	*(q - 1) = 0;
-	if (at = strchr(posacl[i], '@')) ucase(at);
+	if ((at = strchr(posacl[i], '@'))!=NULL) ucase(at);
     }
     for (i = 0; i < neg; i++) {
 	*(q = strchr(p,'\n')) = 0;
@@ -445,7 +451,7 @@ do_acl(char *amsdir, char *bbd)
 	q = strchr(negacl[i],'\t') + 1;
 	negval[i] = atoi(q);
 	*(q - 1) = 0;
-	if (at = strchr(negacl[i], '@')) ucase(at);
+	if ((at = strchr(negacl[i], '@'))!=NULL) ucase(at);
     }
     negacl[neg] = "anonymous";
     negval[neg] = 127;
@@ -585,7 +591,7 @@ do_content(char *amsname, char *imapname)
 	    /* finished AMS first, remove remaining IMAP */
 	    while ((imapidx <= imapbbd.inuse) && (!imap_bboard_error)) {
 		if (imapbbd.msgs[imapidx].stamp != 0x7fffffff) {
-		    DeleteIMAP(imclient,imapname,imapbbd.msgs[imapidx]);
+		    DeleteIMAP(imclient,imapname,&imapbbd.msgs[imapidx]);
 		    deleted++;
 		    if (verbose) {
 			fprintf(logfile,"Deleted %d:%s\n",
@@ -634,7 +640,7 @@ do_content(char *amsname, char *imapname)
 /* Connect and authenticate */
 void cyr_connect(void)
 {
-    int code, errs;
+    int code, errs = 0;
     int minssf=0;
     int maxssf=0;
     char *user = 0;
@@ -827,7 +833,7 @@ Port: %s\n\
 	*(p1++) = 0;
 	dir = buf;
 	rexp = p1;
-	if (p1 = strchr(rexp,'\n')) { *p1 = 0; } /* chop newline */
+	if ((p1 = strchr(rexp,'\n'))!=NULL) { *p1 = 0; } /* chop newline */
 	if (verbose)  {
 	    fprintf(logfile,"Working on '%s:%s'\n",dir,rexp);
 	}
@@ -874,7 +880,7 @@ Port: %s\n\
 	    *(p1++) = 0;
 	    bbd = buf2;
 	    amsdir = p1;
-	    if (p1 = strchr(amsdir,'\n')) { *p1 = 0; } /* chop newline */
+	    if ((p1 = strchr(amsdir,'\n'))!=NULL) { *p1 = 0; } /* chop newline */
 	    if (verbose)  {
 		fprintf(logfile,"\t'%s:%s'\n",bbd,amsdir);
 	    }

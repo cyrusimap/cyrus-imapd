@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.92 2000/01/28 22:09:45 leg Exp $
+ * $Id: index.c,v 1.93 2000/02/10 05:10:37 tmartin Exp $
  */
 #include <stdio.h>
 #include <string.h>
@@ -38,6 +38,7 @@
 #include <syslog.h>
 #include <com_err.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "acl.h"
 #include "util.h"
@@ -51,8 +52,11 @@
 #include "append.h"
 #include "charset.h"
 #include "xmalloc.h"
+#include "seen_local.h"
 
 extern int errno;
+
+extern void printastring (const char *s);
 
 /* The index and cache files, mapped into memory */
 static const char *index_base;
@@ -423,8 +427,8 @@ int oldexists;
      */
     old = seenuids;
     new = newseenuids;
-    while (isdigit(*old)) oldnext = oldnext * 10 + *old++ - '0';
-    while (isdigit(*new)) newnext = newnext * 10 + *new++ - '0';
+    while (isdigit((int) *old)) oldnext = oldnext * 10 + *old++ - '0';
+    while (isdigit((int) *new)) newnext = newnext * 10 + *new++ - '0';
 
     for (msgno = 1; msgno <= imapd_exists; msgno++) {
 	uid = UID(msgno);
@@ -438,7 +442,7 @@ int oldexists;
 		oldnext = 0;
 		if (!*old) oldnext = mailbox->last_uid+1;
 		else old++;
-		while (isdigit(*old)) oldnext = oldnext * 10 + *old++ - '0';
+		while (isdigit((int) *old)) oldnext = oldnext * 10 + *old++ - '0';
 		oldnext += oldseen;
 	    }
 	}
@@ -455,7 +459,7 @@ int oldexists;
 		    neweof++;
 		}
 		else new++;
-		while (isdigit(*new)) newnext = newnext * 10 + *new++ - '0';
+		while (isdigit((int) *new)) newnext = newnext * 10 + *new++ - '0';
 		newnext += newseen;
 	    }
 	}
@@ -567,7 +571,7 @@ int oldexists;
 		neweof++;
 	    }
 	    else new++;
-	    while (isdigit(*new)) newnext = newnext * 10 + *new++ - '0';
+	    while (isdigit((int) *new)) newnext = newnext * 10 + *new++ - '0';
 	    newnext += newseen;
 	}
     }
@@ -585,7 +589,7 @@ int oldexists;
 		/* There's a ":M" after the ",N".  Parse/include that too. */
 		new++;
 		newnext = 0;
-		while (isdigit(*new)) newnext = newnext * 10 + *new++ - '0';
+		while (isdigit((int) *new)) newnext = newnext * 10 + *new++ - '0';
 	    }
 	    uid = newnext;
 	    newseen++;		/* Forget we parsed ",N" */
@@ -906,7 +910,7 @@ char **copyuidp;
     if (!r) {
 	copyuid_size = 1024;
 	copyuid = xmalloc(copyuid_size);
-	sprintf(copyuid, "%u", append_mailbox.uidvalidity);
+	sprintf(copyuid, "%lu", append_mailbox.uidvalidity);
 	copyuid_len = strlen(copyuid);
 	sepchar = ' ';
 
@@ -915,7 +919,7 @@ char **copyuidp;
 		copyuid_size += 1024;
 		copyuid = xrealloc(copyuid, copyuid_size);
 	    }
-	    sprintf(copyuid+copyuid_len, "%c%u", sepchar,
+	    sprintf(copyuid+copyuid_len, "%c%lu", sepchar,
 		    copyargs.copymsg[i].uid);
 	    copyuid_len += strlen(copyuid+copyuid_len);
 	    if (i+1 < copyargs.nummsg &&
@@ -924,17 +928,17 @@ char **copyuidp;
 		    i++;
 		} while (i+1 < copyargs.nummsg &&
 			 copyargs.copymsg[i+1].uid == copyargs.copymsg[i].uid + 1);
-		sprintf(copyuid+copyuid_len, ":%u",
+		sprintf(copyuid+copyuid_len, ":%lu",
 			copyargs.copymsg[i].uid);
 		copyuid_len += strlen(copyuid+copyuid_len);
 	    }
 	    sepchar = ',';
 	}
 	if (copyargs.nummsg == 1) {
-	    sprintf(copyuid+copyuid_len, " %u", append_mailbox.last_uid);
+	    sprintf(copyuid+copyuid_len, " %lu", append_mailbox.last_uid);
 	}
 	else {
-	    sprintf(copyuid+copyuid_len, " %u:%u",
+	    sprintf(copyuid+copyuid_len, " %lu:%lu",
 		    append_mailbox.last_uid - copyargs.nummsg + 1,
 		    append_mailbox.last_uid);
 	}
@@ -1076,9 +1080,7 @@ unsigned lowuid;
 int
 index_getstate(mailbox)
 struct mailbox *mailbox;
-{
-    int r;
-    int msgno;
+{    
 
     prot_printf(imapd_out, "* XSTATE %u %u\r\n", mailbox->index_mtime,
 		seen_last_change);
@@ -1221,7 +1223,7 @@ index_forsequence(struct mailbox* mailbox,
     }
 
     for (;;) {
-	if (isdigit(*sequence)) {
+	if (isdigit((int) *sequence)) {
 	    start = start*10 + *sequence - '0';
 	}
 	else if (*sequence == '*') {
@@ -1230,7 +1232,7 @@ index_forsequence(struct mailbox* mailbox,
 	else if (*sequence == ':') {
 	    end = 0;
 	    sequence++;
-	    while (isdigit(*sequence)) {
+	    while (isdigit((int) *sequence)) {
 		end = end*10 + *sequence++ - '0';
 	    }
 	    if (*sequence == '*') {
@@ -1288,7 +1290,7 @@ int usinguid;
     unsigned i, start = 0, end;
 
     for (;;) {
-	if (isdigit(*sequence)) {
+	if (isdigit((int) *sequence)) {
 	    start = start*10 + *sequence - '0';
 	}
 	else if (*sequence == '*') {
@@ -1298,7 +1300,7 @@ int usinguid;
 	else if (*sequence == ':') {
 	    end = 0;
 	    sequence++;
-	    while (isdigit(*sequence)) {
+	    while (isdigit((int) *sequence)) {
 		end = end*10 + *sequence++ - '0';
 	    }
 	    if (*sequence == '*') {
@@ -1444,7 +1446,7 @@ unsigned start_octet;
 unsigned octet_count;
 {
     char *p;
-    int skip;
+    int skip = 0;
     int fetchmime = 0;
 
     cacheitem += 4;
@@ -1456,9 +1458,9 @@ unsigned octet_count;
 	if (*p == '<') {
 	    p++;
 	    start_octet = octet_count = 0;
-	    while (isdigit(*p)) start_octet = start_octet * 10 + *p++ - '0';
+	    while (isdigit((int) *p)) start_octet = start_octet * 10 + *p++ - '0';
 	    p++;			/* Skip over '.' */
-	    while (isdigit(*p)) octet_count = octet_count * 10 + *p++ - '0';
+	    while (isdigit((int) *p)) octet_count = octet_count * 10 + *p++ - '0';
 	    start_octet++;	/* Make 1-based */
 	}
 
@@ -1469,7 +1471,7 @@ unsigned octet_count;
 
     while (*p != ']' && *p != 'M') {
 	skip = 0;
-	while (isdigit(*p)) skip = skip * 10 + *p++ - '0';
+	while (isdigit((int) *p)) skip = skip * 10 + *p++ - '0';
 	if (*p == '.') p++;
 
 	/* section number too large */
@@ -1517,9 +1519,9 @@ unsigned octet_count;
     if (*p == '<') {
 	p++;
 	start_octet = octet_count = 0;
-	while (isdigit(*p)) start_octet = start_octet * 10 + *p++ - '0';
+	while (isdigit((int) *p)) start_octet = start_octet * 10 + *p++ - '0';
 	p++;			/* Skip over '.' */
-	while (isdigit(*p)) octet_count = octet_count * 10 + *p++ - '0';
+	while (isdigit((int) *p)) octet_count = octet_count * 10 + *p++ - '0';
 	start_octet++;		/* Make 1-based */
     }
 
@@ -1564,7 +1566,7 @@ const char *cacheitem;
 
     while (*p != 'H') {
 	skip = 0;
-	while (isdigit(*p)) skip = skip * 10 + *p++ - '0';
+	while (isdigit((int) *p)) skip = skip * 10 + *p++ - '0';
 	if (*p == '.') p++;
 
 	/* section number too large */
@@ -1593,9 +1595,9 @@ const char *cacheitem;
     if (p[1] == '<') {
 	p += 2;
 	start_octet = octet_count = 0;
-	while (isdigit(*p)) start_octet = start_octet * 10 + *p++ - '0';
+	while (isdigit((int) *p)) start_octet = start_octet * 10 + *p++ - '0';
 	p++;			/* Skip over '.' */
-	while (isdigit(*p)) octet_count = octet_count * 10 + *p++ - '0';
+	while (isdigit((int) *p)) octet_count = octet_count * 10 + *p++ - '0';
 	start_octet++;		/* Make 1-based */
     }
 
@@ -1690,7 +1692,7 @@ unsigned size;
     if (format == MAILBOX_FORMAT_NETNEWS) {
 	left = size;
 	p = buf;
-	while (endline = memchr(msg_base, '\n', left)) {
+	while ((endline = memchr(msg_base, '\n', left))!=NULL) {
 	    linelen = endline - msg_base;
 	    memcpy(p, msg_base, linelen);
 	    p += linelen;
@@ -1844,9 +1846,9 @@ char *trail;
     if (trail[1]) {
 	/* Deal with ]<start.count> */
 	trail += 2;
-	while (isdigit(*trail)) start_octet = start_octet * 10 + *trail++ - '0';
+	while (isdigit((int) *trail)) start_octet = start_octet * 10 + *trail++ - '0';
 	trail++;			/* Skip over '.' */
-	while (isdigit(*trail)) octet_count = octet_count * 10 + *trail++ - '0';
+	while (isdigit((int) *trail)) octet_count = octet_count * 10 + *trail++ - '0';
 
 	if (size <= start_octet) {
 	    crlf_start = start_octet - size;
@@ -1941,7 +1943,7 @@ time_t last_updated;
 {
     int sepchar = '(';
     unsigned flag;
-    bit32 flagmask;
+    bit32 flagmask = 0;
 
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
 	if ((flag & 31) == 0) {
@@ -2008,7 +2010,6 @@ void *rock;
     int fetchitems = fetchargs->fetchitems;
     const char *msg_base = 0;
     unsigned long msg_size = 0;
-    struct stat sbuf;
     int sepchar;
     int i;
     bit32 user_flags[MAX_USER_FLAGS/32];
@@ -2070,7 +2071,7 @@ void *rock;
 	    gmtnegative = 1;
 	}
 	gmtoff /= 60;
-	sprintf(datebuf, "%2u-%s-%u %.2u:%.2u:%.2u %c%.2u%.2u",
+	sprintf(datebuf, "%2u-%s-%u %.2u:%.2u:%.2u %c%.2lu%.2lu",
 		tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
 		tm->tm_hour, tm->tm_min, tm->tm_sec,
 		gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
@@ -2247,7 +2248,7 @@ void *rock;
     struct index_record record;
     int uid = UID(msgno);
     int low=1, high=mailbox->exists;
-    int mid;
+    int mid = 0;
     int r;
     int firsttry = 1;
     int dirty = 0;
@@ -2388,7 +2389,6 @@ struct mapfile *msgfile;
     const char *cacheitem;
     int cachelen;
     struct searchsub *s;
-    struct stat sbuf;
 
     if ((searchargs->flags & SEARCH_RECENT_SET) && msgno <= lastnotrecent) return 0;
     if ((searchargs->flags & SEARCH_RECENT_UNSET) && msgno > lastnotrecent) return 0;
@@ -2669,7 +2669,7 @@ void *rock;
     struct copyargs *copyargs = (struct copyargs *)rock;
     int flag = 0;
     unsigned userflag;
-    bit32 flagmask;
+    bit32 flagmask = 0;
 
     if (copyargs->nummsg == copyargs->msgalloc) {
 	copyargs->msgalloc += COPYARGSGROW;

@@ -1,5 +1,5 @@
 /* toimsp.c -- Drop off information to be sent to IMSP server
- $Id: toimsp.c,v 1.26 1999/04/08 21:04:28 tjs Exp $
+ $Id: toimsp.c,v 1.27 2000/02/10 05:10:46 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -107,11 +107,11 @@ va_dcl
     iov[num_iov].iov_len = strlen(iovbuf[num_iov]) + 1;
     num_iov++;
 
-    while (tag = va_arg(pvar, char *)) {
+    while ((tag = va_arg(pvar, char *))!=NULL) {
 	iov[num_iov].iov_base = tag;
 	iov[num_iov++].iov_len = strlen(tag) + 1;
 
-	while (*tag && isupper(*tag)) tag++;
+	while (*tag && isupper((int) *tag)) tag++;
 	while (*tag) {
 	    switch(*tag++) {
 	    case 's':

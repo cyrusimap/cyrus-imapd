@@ -26,8 +26,12 @@
  *
  */
 
-/* $Id: arbitron.c,v 1.16 1999/08/31 18:39:19 leg Exp $ */
+/* $Id: arbitron.c,v 1.17 2000/02/10 05:10:32 tmartin Exp $ */
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -36,6 +40,7 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <com_err.h>
+#include <time.h>
 
 #include "assert.h"
 #include "config.h"
@@ -43,6 +48,9 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
+#include "mboxlist.h"
+#include "convert_code.h"
+#include "seen_local.h"
 
 extern int errno;
 extern int optind;
@@ -52,18 +60,19 @@ int code = 0;
 
 time_t report_time, prune_time = 0;
 
+/* forward declarations */
+void usage(void);
 int do_mailbox();
+int arbitron(char *name);
 
 struct arbitronargs {
     char *name;
     unsigned read_count;
 };
 
-main(argc, argv)
-int argc;
-char **argv;
+int main(int argc,char **argv)
 {
-    int opt, i;
+    int opt;
     int report_days = 30;
     int prune_months = 0;
     char pattern[MAX_MAILBOX_NAME+1];
@@ -101,9 +110,11 @@ char **argv;
     mboxlist_findall(pattern, 1, 0, 0, do_mailbox, NULL);
 
     exit(code);
+
+    return -1; /* never reaches */
 }
 
-usage()
+void usage(void)
 {
     fprintf(stderr, "usage: arbitron [-d days] [-p months] [mboxpattern]\n");
     exit(EC_USAGE);
@@ -148,9 +159,7 @@ const char *line;
     return 0;
 }
 
-int 
-arbitron(name)
-char *name;
+int arbitron(char *name)
 {
     int r;
     struct mailbox mailbox;

@@ -44,6 +44,9 @@ LDFLAGS = -g @LDFLAGS@
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@
 
+PURIFY=/usr/local/bin/purify
+PUREOPT= -best-effort -windows=no -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir
+
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
@@ -60,6 +63,9 @@ install:
 
 imtest: $(OBJS) $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o imtest $(OBJS) $(DEPLIBS) $(LIBS) $(IMAP_LIBS)
+
+imtest.pure: $(OBJS) $(DEPLIBS)
+	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o imtest $(OBJS) $(DEPLIBS) $(LIBS) $(IMAP_LIBS)
 
 clean:
 	rm -f *.o Makefile.bak makedepend.log imtest

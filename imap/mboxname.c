@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- $Id: mboxname.c,v 1.14 2000/01/28 22:09:49 leg Exp $
+ $Id: mboxname.c,v 1.15 2000/02/10 05:10:41 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -134,7 +134,7 @@ int mboxname_netnewscheck(char *name)
     int c;
     int sawnonnumeric = 0;
 
-    while (c = *name++) {
+    while ((c = *name++)!=0) {
 	switch (c) {
 	case '.':
 	    if (!sawnonnumeric) return IMAP_MAILBOX_BADNAME;

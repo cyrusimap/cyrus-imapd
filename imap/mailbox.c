@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.85 2000/02/01 20:17:18 leg Exp $
+ $Id: mailbox.c,v 1.86 2000/02/10 05:10:38 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -72,6 +72,7 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "acapmbox.h"
+#include "seen_local.h"
 
 static int mailbox_doing_reconstruct = 0;
 static struct mailbox zeromailbox = {-1, -1, -1};
@@ -760,7 +761,7 @@ struct mailbox *mailbox;
 
 	if (sbuffd.st_ino == sbuffile.st_ino) break;
 
-	if (r = mailbox_open_index(mailbox)) {
+	if ((r = mailbox_open_index(mailbox))) {
 	    return r;
 	}
     }
@@ -1504,7 +1505,7 @@ struct mailbox *mailbox;
     unsigned long uid, miduid;
     char *p;
     int i;
-    int low, high, mid;
+    int low, high, mid = 0;
 
     assert(mailbox->format == MAILBOX_FORMAT_NETNEWS);
     assert(mailbox->index_lock_count == 0);
@@ -1529,7 +1530,7 @@ struct mailbox *mailbox;
 	}
 
 	group = mailbox->name;
-	if (newsprefixlen = strlen(config_getstring("newsprefix", ""))) {
+	if ((newsprefixlen = strlen(config_getstring("newsprefix", "")))) {
 	    group += newsprefixlen;
 	    if (*group == '.') group++;
 	}
@@ -1552,11 +1553,11 @@ struct mailbox *mailbox;
     }
     
     /* For each article in directory, mark it in msg_seen */
-    while (dirent = readdir(dirp)) {
-	if (!isdigit(dirent->d_name[0]) || dirent->d_name[0] == '0') continue;
+    while ((dirent = readdir(dirp))) {
+	if (!isdigit((int) (dirent->d_name[0])) || dirent->d_name[0] == '0') continue;
 	uid = 0;
 	p = dirent->d_name;
-	while (isdigit(*p)) {
+	while (isdigit((int) *p)) {
 	    uid = uid * 10 + *p++ - '0';
 	}
 	if (*p) continue;
@@ -1648,7 +1649,7 @@ struct mailbox *mailboxp;
     int n;
     struct stat sbuf;
 
-    while (p = strchr(p+1, '/')) {
+    while ((p = strchr(p+1, '/'))) {
 	*p = '\0';
 	if (mkdir(path, 0777) == -1 && errno != EEXIST) {
 	    save_errno = errno;
@@ -1789,7 +1790,7 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
     *tail++ = '/';
     dirp = opendir(mailbox->path);
     if (dirp) {
-	while (f = readdir(dirp)) {
+	while ((f = readdir(dirp))!=NULL) {
 	    if (f->d_name[0] == '.'
 		&& (f->d_name[1] == '\0'
 		    || (f->d_name[1] == '.' &&
@@ -2058,7 +2059,7 @@ void mailbox_hash_mbox(char *buf,
 	    c = *(idx + 1);
 	}
 	c = (char) tolower((int) c);
-	if (!islower(c))
+	if (!islower((int) c))
 	    c = 'q';
 	
 	sprintf(buf, "%s/%c/%s", root, c, name);
@@ -2087,7 +2088,7 @@ void mailbox_hash_quota(char *buf, const char *qr)
 	c = *(idx + 1);
     }
     c = (char) tolower((int) c);
-    if (!islower(c))
+    if (!islower((int) c))
 	c = 'q';
 
     sprintf(buf, "%s%s%c/%s", config_dir, FNAME_QUOTADIR, c, qr);

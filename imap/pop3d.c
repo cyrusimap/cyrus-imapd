@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.55 2000/01/28 22:09:49 leg Exp $
+ * $Id: pop3d.c,v 1.56 2000/02/10 05:10:43 tmartin Exp $
  */
 
 #ifndef __GNUC__
@@ -34,6 +34,9 @@
 #define __attribute__(foo)
 #endif
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
@@ -46,6 +49,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <ctype.h>
 
 #include <sasl.h>
 
@@ -53,6 +57,8 @@
 #include "util.h"
 #include "auth.h"
 #include "config.h"
+#include "setproctitle.h"
+#include "proc.h"
 
 /* openSSL has it's own DES function which conflict in names with those used by krb.h */
 #ifdef HAVE_SSL
@@ -108,6 +114,15 @@ static void cmd_auth();
 static void cmd_capa();
 static void cmd_pass();
 static void cmd_user();
+static void eatline(void);
+static void printauthready(int len,unsigned char *data);
+static void blat(int msg,int lines);
+static int readbase64string(char **ptr);
+int openinbox(void);
+static void cmdloop(void);
+void kpop(void);
+static int parsenum(char **ptr);
+void usage(void);
 
 /* This creates a structure that defines the allowable
  *   security properties 
@@ -171,16 +186,12 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-main(argc, argv, envp)
-int argc;
-char **argv;
-char **envp;
+int main(int argc,char **argv,char **envp)
 {
     int opt;
     char hostname[MAXHOSTNAMELEN+1];
     int salen;
     struct hostent *hp;
-    struct sockaddr_in sa;
     int timeout;
     sasl_security_properties_t *secprops=NULL;
 
@@ -213,8 +224,8 @@ char **envp;
     salen = sizeof(popd_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&popd_remoteaddr, &salen) == 0 &&
 	popd_remoteaddr.sin_family == AF_INET) {
-	if (hp = gethostbyaddr((char *)&popd_remoteaddr.sin_addr,
-			       sizeof(popd_remoteaddr.sin_addr), AF_INET)) {
+	if ((hp = gethostbyaddr((char *)&popd_remoteaddr.sin_addr,
+			       sizeof(popd_remoteaddr.sin_addr), AF_INET))!=NULL) {
 	    if (strlen(hp->h_name) + 30 > sizeof(popd_clienthost)) {
 		strncpy(popd_clienthost, hp->h_name, sizeof(popd_clienthost)-30);
 		popd_clienthost[sizeof(popd_clienthost)-30] = '\0';
@@ -268,9 +279,11 @@ char **envp;
 		hostname, CYRUS_VERSION);
 
     cmdloop();
+
+    return 0;
 }
 
-usage()
+void usage(void)
 {
     prot_printf(popd_out, "-ERR usage: pop3d%s\r\n",
 #ifdef HAVE_KRB
@@ -318,7 +331,7 @@ void fatal(const char* s, int code)
  * MIT's kludge of a kpop protocol
  * Client does a krb_sendauth() first thing
  */
-kpop()
+void kpop(void)
 {
     Key_schedule schedule;
     KTEXT_ST ticket;
@@ -366,11 +379,11 @@ kpop()
 /*
  * Top-level command loop parsing
  */
-cmdloop()
+static void cmdloop(void)
 {
     char inputbuf[8192];
     char *p, *arg;
-    unsigned msg;
+    unsigned msg = 0;
 
     for (;;) {
 	if (!prot_fgets(inputbuf, sizeof(inputbuf), popd_in)) {
@@ -382,12 +395,12 @@ cmdloop()
 	if (p > inputbuf && p[-1] == '\r') *--p = '\0';
 
 	/* Parse into keword and argument */
-	for (p = inputbuf; *p && !isspace(*p); p++);
+	for (p = inputbuf; *p && !isspace((int) *p); p++);
 	if (*p) {
 	    *p++ = '\0';
 	    arg = p;
 	    if (strcasecmp(inputbuf, "pass") != 0) {
-		while (*arg && isspace(*arg)) {
+		while (*arg && isspace((int) *arg)) {
 		    arg++;
 		}
 	    }
@@ -623,8 +636,8 @@ char *user;
     if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
 	shutdown_in = prot_new(fd, 0);
 	prot_fgets(buf, sizeof(buf), shutdown_in);
-	if (p = strchr(buf, '\r')) *p = 0;
-	if (p = strchr(buf, '\n')) *p = 0;
+	if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
+	if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
 
 	for(p = buf; *p == '['; p++); /* can't have [ be first char */
 	prot_printf(popd_out, "-ERR %s\r\n", p);
@@ -710,7 +723,7 @@ char *pass;
     else {
 	syslog(LOG_NOTICE, "login: %s %s plaintext %s",
 	       popd_clienthost, popd_userid, reply ? reply : "");
-	if (plaintextloginpause = config_getint("plaintextloginpause", 0)) {
+	if ((plaintextloginpause = config_getint("plaintextloginpause", 0))!=0) {
 	    sleep(plaintextloginpause);
 	}
     }
@@ -722,11 +735,8 @@ char *pass;
 void
 cmd_capa()
 {
-    int i;
     int minpoll = config_getint("popminpoll", 0) * 60;
     int expire = config_getint("popexpiretime", -1);
-    const char *capabilities, *next_capabilities;
-    char *sasllist;
     
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
 
@@ -782,14 +792,6 @@ char *authtype;
     
     const char *errorstring = NULL;
 
-    char buf[MAX_MAILBOX_PATH];
-    char *p;
-    FILE *logfile;
-
-    int *ssfp;
-    char *ssfmsg=NULL;
-
-   
     /* if client didn't specify an auth mechanism we give them the list */
     if (!authtype) {
       char *sasllist;
@@ -912,7 +914,7 @@ char *authtype;
 /*
  * Complete the login process by opening and locking the user's inbox
  */
-int openinbox()
+int openinbox(void)
 {
     char inboxname[MAX_MAILBOX_PATH];
     int r, msg;
@@ -969,7 +971,7 @@ int openinbox()
 	popd_highest = 0;
 	popd_msg = (struct msg *)xmalloc((popd_exists+1) * sizeof(struct msg));
 	for (msg = 1; msg <= popd_exists; msg++) {
-	    if (r = mailbox_read_index_record(&mboxstruct, msg, &record))
+	    if ((r = mailbox_read_index_record(&mboxstruct, msg, &record))!=0)
 	      break;
 	    popd_msg[msg].uid = record.uid;
 	    popd_msg[msg].size = record.size;
@@ -990,8 +992,8 @@ int openinbox()
     proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, popd_userid,
-	    getpid());
+    sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, popd_userid,
+	    (long unsigned) getpid());
     logfile = fopen(buf, "w");
     if (logfile) {
 	prot_setlog(popd_in, fileno(logfile));
@@ -1002,9 +1004,7 @@ int openinbox()
     return 0;
 }
 
-blat(msg, lines)
-int msg;
-int lines;
+static void blat(int msg,int lines)
 {
     FILE *msgfile;
     char buf[4096];
@@ -1039,22 +1039,21 @@ int lines;
     prot_printf(popd_out, ".\r\n");
 }
 
-int parsenum(ptr)
-char **ptr;
+static int parsenum(char **ptr)
 {
     char *p = *ptr;
     int result = 0;
 
-    if (!isdigit(*p)) {
+    if (!isdigit((int) *p)) {
 	*ptr = 0;
 	return -1;
     }
-    while (*p && isdigit(*p)) {
+    while (*p && isdigit((int) *p)) {
 	result = result * 10 + *p++ - '0';
     }
 
     if (*p) {
-	while (*p && isspace(*p)) p++;
+	while (*p && isspace((int) *p)) p++;
 	*ptr = p;
     }
     else *ptr = 0;
@@ -1081,9 +1080,8 @@ char *index;
  */
 static char basis_64[] =
    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-printauthready(len, data)
-int len;
-unsigned char *data;
+
+static void printauthready(int len,unsigned char *data)
 {
     int c1, c2, c3;
 
@@ -1147,11 +1145,10 @@ static const char index_64[256] = {
 /*
  * Parse a base64_string
  */
-int readbase64string(ptr)
-char **ptr;
+static int readbase64string(char **ptr)
 {
     int c1, c2, c3, c4;
-    int i, len = 0;
+    int len = 0;
     static char *buf;
     static int alloc = 0;
 
@@ -1239,7 +1236,7 @@ char **ptr;
 const char *s;
 {
     int c1, c2, c3, c4;
-    int i, len = 0;
+    int len = 0;
     static char *buf;
     static int alloc = 0;
 
@@ -1305,9 +1302,10 @@ const char *s;
 /*
  * Eat characters up to and including the next newline
  */
-eatline()
+static void eatline(void)
 {
     int c;
 
-    while ((c = prot_getc(popd_in)) != EOF && c != '\n');
+    while ((c = prot_getc(popd_in)) != EOF && c != '\n')
+    { }
 }

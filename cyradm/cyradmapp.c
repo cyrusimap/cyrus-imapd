@@ -29,6 +29,8 @@
 extern int main();
 int *tclDummyMainPtry = (int *) main;
 
+extern int Cyradm_Init(Tcl_Interp *interp);
+
 extern char cyrinit[];
 
 int Tcl_AppInit(interp)
@@ -53,8 +55,7 @@ Tcl_Interp *interp;
     return TCL_OK;
 }
 
-fatal(msg)
-char *msg;
+int fatal(char *msg)
 {
     fprintf(stderr, "cyradm: %s\n", msg);
     exit(1);

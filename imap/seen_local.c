@@ -1,5 +1,5 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
- $Id: seen_local.c,v 1.27 1999/10/02 00:43:07 leg Exp $
+ $Id: seen_local.c,v 1.28 2000/02/10 05:10:45 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -27,6 +27,9 @@
  *
  */
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -48,6 +51,8 @@
 #include "imap_err.h"
 #include "xmalloc.h"
 
+#include "seen_local.h"
+
 extern int errno;
 
 #define FNAME_SEEN "/cyrus.seen"
@@ -68,10 +73,7 @@ struct seen {
  * Returns pointer to abstract database type in buffer pointed to
  * by 'seendbptr'.
  */
-int seen_open(mailbox, user, seendbptr)
-struct mailbox *mailbox;
-const char *user;
-struct seen **seendbptr;
+int seen_open(struct mailbox *mailbox, const char *user, struct seen **seendbptr)
 {
     struct seen *seendb;
     char fnamebuf[MAX_MAILBOX_PATH];
@@ -118,12 +120,8 @@ struct seen **seendbptr;
  * 'lastuidptr', and 'seenuidsptr'.  A malloc'ed string is placed in
  * the latter and the caller is responsible for freeing it.
  */
-int seen_lockread(seendb, lastreadptr, lastuidptr, lastchangeptr, seenuidsptr)
-struct seen *seendb;
-time_t *lastreadptr;
-unsigned *lastuidptr;
-time_t *lastchangeptr;
-char **seenuidsptr;
+int seen_lockread(struct seen *seendb, time_t *lastreadptr, unsigned int *lastuidptr, 
+		  time_t *lastchangeptr, char **seenuidsptr)
 {
     int r;
     char fnamebuf[MAX_MAILBOX_PATH];
@@ -174,7 +172,7 @@ char **seenuidsptr;
     left = length - namelen;
 
     /* Parse last-read timestamp */
-    while (left && isdigit(*buf)) {
+    while (left && isdigit((int) *buf)) {
 	*lastreadptr = *lastreadptr * 10 + *buf++ - '0';
 	left--;
     }
@@ -184,7 +182,7 @@ char **seenuidsptr;
     }
 
     /* Parse last-read uid */
-    while (left && isdigit(*buf)) {
+    while (left && isdigit((int) *buf)) {
 	*lastuidptr = *lastuidptr * 10 + *buf++ - '0';
 	left--;
     }
@@ -195,12 +193,12 @@ char **seenuidsptr;
 
     /* Scan for end of uids or last-change timestamp */
     p = buf;
-    while (left && !isspace(*p)) {
+    while (left && !isspace((int) *p)) {
 	p++;
 	left--;
     }
 
-    if (left > 1 && p[0] == ' ' && isdigit(p[1])) {
+    if (left > 1 && p[0] == ' ' && isdigit((int) p[1])) {
 	/* Have a last-change timestamp */
 	while (buf < p) {
 	    *lastchangeptr = *lastchangeptr * 10 + *buf++ - '0';
@@ -210,7 +208,7 @@ char **seenuidsptr;
 	left--;
 
 	/* Scan for end of uids */
-	while (left && !isspace(*p)) {
+	while (left && !isspace((int) *p)) {
 	    p++;
 	    left--;
 	}
@@ -228,16 +226,12 @@ char **seenuidsptr;
  * Write out new data for the user
  */
 #define PADSIZE 30
-int seen_write(seendb, lastread, lastuid, lastchange, seenuids)
-struct seen *seendb;
-time_t lastread;
-unsigned lastuid;
-time_t lastchange;
-char *seenuids;
+int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid, 
+	       time_t lastchange, char *seenuids)
 {
     char timeuidbuf[80];
     int length;
-    int writefd;
+    int writefd = -1;
     int replace;
     char fnamebuf[MAX_MAILBOX_PATH];
     char newfnamebuf[MAX_MAILBOX_PATH];
@@ -261,7 +255,7 @@ char *seenuids;
 
     assert(seendb->mailbox->seen_lock_count != 0);
 
-    sprintf(timeuidbuf, "\t%u %u %u ", lastread, lastuid, lastchange);
+    sprintf(timeuidbuf, "\t%u %u %u ", (unsigned int) lastread, lastuid, (unsigned int) lastchange);
     
     length = strlen(seendb->user)+strlen(timeuidbuf)+strlen(seenuids)+1;
 
@@ -345,8 +339,7 @@ char *seenuids;
 /*
  * Unlock the database
  */
-int seen_unlock(seendb)
-struct seen *seendb;
+int seen_unlock(struct seen *seendb)
 {
     int r;
 
@@ -366,8 +359,7 @@ struct seen *seendb;
 /*
  * Close the database
  */
-int seen_close(seendb)
-struct seen *seendb;
+int seen_close(struct seen *seendb)
 {
     map_free(&seendb->base, &seendb->size);
     close(seendb->fd);
@@ -379,9 +371,7 @@ struct seen *seendb;
 /*
  * Make the \Seen database for the newly created mailbox 'mailbox'.
  */
-int
-seen_create(mailbox)
-struct mailbox *mailbox;
+int seen_create(struct mailbox *mailbox)
 {
     char fnamebuf[MAX_MAILBOX_PATH];
     int fd;
@@ -401,9 +391,7 @@ struct mailbox *mailbox;
 /*
  * Remove the \Seen database for the mailbox 'mailbox'.
  */
-int
-seen_delete(mailbox)
-struct mailbox *mailbox;
+int seen_delete(struct mailbox *mailbox)
 {
     char fnamebuf[MAX_MAILBOX_PATH];
     int fd;
@@ -434,9 +422,7 @@ struct mailbox *mailbox;
 /*
  * Copy the seen database from 'oldmailbox' to 'newmailbox'
  */
-int seen_copy(oldmailbox, newmailbox)
-struct mailbox *oldmailbox;
-struct mailbox *newmailbox;
+int seen_copy(struct mailbox *oldmailbox,struct mailbox *newmailbox)
 {
     char oldfname[MAX_MAILBOX_PATH];
     char newfname[MAX_MAILBOX_PATH];
@@ -538,12 +524,11 @@ int freeit;
  * calling 'report_proc' with 'report_rock' and a pointer to the line
  * in the database.
  */
-int seen_reconstruct(mailbox, report_time, prune_time, report_proc, report_rock)
-struct mailbox *mailbox;
-time_t report_time;
-time_t prune_time;
-int (*report_proc)();
-void *report_rock;
+int seen_reconstruct(struct mailbox *mailbox,
+		     time_t report_time,
+		     time_t prune_time,
+		     int (*report_proc)(),
+		     void *report_rock)
 {
     char fnamebuf[MAX_MAILBOX_PATH];
     char newfnamebuf[MAX_MAILBOX_PATH];
@@ -588,7 +573,7 @@ void *report_rock;
     newiov_num = 0;
 
     endline = base;
-    while (endline = memchr(line=endline, '\n', size - (endline - base))) {
+    while ((endline = memchr(line=endline, '\n', size - (endline - base)))) {
 	endline++;
 
 	/* Parse/check username */
@@ -602,7 +587,7 @@ void *report_rock;
 	/* Parse last-read timestamp */
 	p++;
 	lastread = 0;
-	while (p < endline && isdigit(*p)) {
+	while (p < endline && isdigit((int) *p)) {
 	    lastread = lastread * 10 + *p++ - '0';
 	}
 	if (p >= endline || *p++ != ' ') {
@@ -627,7 +612,7 @@ void *report_rock;
 	
 	/* Parse last-read uid */
 	lastuidread = 0;
-	while (p < endline && isdigit(*p)) {
+	while (p < endline && isdigit((int) *p)) {
 	    lastuidread = lastuidread * 10 + *p++ - '0';
 	}
 	if (p >= endline || *p++ != ' ' || lastuidread > uidtoobig) {
@@ -642,9 +627,9 @@ void *report_rock;
 	space = memchr(p, ' ', endline - p);
 
 	if (space && space+1 < endline &&
-	    space[0] == ' ' && isdigit(space[1])) {
+	    space[0] == ' ' && isdigit((int) space[1])) {
 	    /* Have a last-change timestamp */
-	    while (p < space && isdigit(*p)) {
+	    while (p < space && isdigit((int) *p)) {
 		lastchange = lastchange * 10 + *p++ - '0';
 	    }
 	    if (p != space) {
@@ -672,7 +657,7 @@ void *report_rock;
 
 	while (p < space) {
 	    thisuid = 0;
-	    while (p < space && isdigit(*p)) {
+	    while (p < space && isdigit((int) *p)) {
 		if (dst) *dst++ = *p;
 		thisuid = thisuid * 10 + *p++ - '0';
 	    }
@@ -680,7 +665,7 @@ void *report_rock;
 	    if (thisuid <= lastuid || thisuid > uidtoobig) {
 		/* Remove this UID and trailing separator */
 		FIXING();
-		while (isdigit(dst[-1])) dst--;
+		while (isdigit((int) dst[-1])) dst--;
 		if (dst[-1] == ':') dst[-1] = ',';
 	    }
 	    else if (lastsep == ':' && *p == ':') {

@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.8 2000/02/10 00:39:14 leg Exp $
+ * $Id: test.c,v 1.9 2000/02/10 05:10:50 tmartin Exp $
  *
  * usage: "test message < script"
  */
@@ -378,6 +378,7 @@ int keep(void *ac, void *ic, void *sc, void *mc)
 
 int notify(void *ac, void *ic, void *sc, void *mc)
 {
+
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
 
     printf("notify msg = '%s' with priority = %s\n",nc->message, nc->priority);
@@ -504,6 +505,7 @@ int main(int argc, char *argv[])
     }
 
     res = sieve_register_imapflags(i, &mark);
+
     if (res != SIEVE_OK) {
 	printf("sieve_register_imapflags() returns %d\n", res);
 	exit(1);

@@ -1,5 +1,5 @@
 /* proc.c -- Server process registry
- $Id: proc.c,v 1.15 2000/01/28 22:09:50 leg Exp $
+ $Id: proc.c,v 1.16 2000/02/10 05:10:44 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -26,6 +26,7 @@
  #  tech-transfer@andrew.cmu.edu
  *
  */
+#include <stdlib.h>
 #include <stdio.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -35,6 +36,7 @@
 #include "config.h"
 #include "exitcodes.h"
 #include "xmalloc.h"
+#include "setproctitle.h"
 
 #define FNAME_PROCDIR "/proc/"
 
@@ -81,7 +83,7 @@ char *mailbox;
     return 0;
 }
 
-void proc_cleanup()
+void proc_cleanup(void)
 {
     if (procfname) {
 	fclose(procfile);

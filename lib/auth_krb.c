@@ -1,5 +1,5 @@
 /* auth_krb.c -- Kerberos authorization
- $Id: auth_krb.c,v 1.30 2000/01/28 22:09:53 leg Exp $
+ $Id: auth_krb.c,v 1.31 2000/02/10 05:10:48 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -23,6 +23,7 @@
  *
  */
 
+#include <stdlib.h>
 #include <limits.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -93,7 +94,7 @@ const char *identifier;
     if (strcmp(auth_state->userid, "anonymous") == 0) return 0;
 
     aname[0] = inst[0] = realm[0] = '\0';
-    if (kname_parse(aname, inst, realm, identifier) != 0) {
+    if (kname_parse(aname, inst, realm, (char *) identifier) != 0) {
 	return 0;
     }
 
@@ -246,7 +247,7 @@ const char *identifier;
     }
     
     aname[0] = inst[0] = realm[0] = '\0';
-    if (kname_parse(aname, inst, realm, identifier) != 0) {
+    if (kname_parse(aname, inst, realm, (char *) identifier) != 0) {
 	return 0;
     }
 
@@ -266,7 +267,7 @@ const char *identifier;
     }
 
     /* Check for krb.equiv remappings. */
-    if (p = auth_map_krbid(aname, inst, realm)) {
+    if ((p = auth_map_krbid(aname, inst, realm)) ) {
         strcpy(retbuf, p);
         return retbuf;
     }
@@ -303,7 +304,7 @@ const char *cacheid;
 
     strcpy(newstate->userid, identifier);
     newstate->aname[0] = newstate->inst[0] = newstate->realm[0] = '\0';
-    kname_parse(newstate->aname, newstate->inst, newstate->realm, identifier);
+    kname_parse(newstate->aname, newstate->inst, newstate->realm, (char *) identifier);
 
     return newstate;
 }

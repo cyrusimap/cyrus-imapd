@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.111 2000/02/10 00:33:41 leg Exp $
+ * $Id: mboxlist.c,v 1.112 2000/02/10 05:10:38 tmartin Exp $
  */
 
 #include <stdio.h>
@@ -439,15 +439,15 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
 	    defaultacl = identifier = 
 		xstrdup(config_getstring("defaultacl", "anyone lrs"));
 	    for (;;) {
-		while (*identifier && isspace(*identifier)) identifier++;
+		while (*identifier && isspace((int) *identifier)) identifier++;
 		rights = identifier;
-		while (*rights && !isspace(*rights)) rights++;
+		while (*rights && !isspace((int) *rights)) rights++;
 		if (!*rights) break;
 		*rights++ = '\0';
-		while (*rights && isspace(*rights)) rights++;
+		while (*rights && isspace((int) *rights)) rights++;
 		if (!*rights) break;
 		p = rights;
-		while (*p && !isspace(*p)) p++;
+		while (*p && !isspace((int) *p)) p++;
 		if (*p) *p++ = '\0';
 		acl_set(&acl, identifier, ACL_MODE_SET, acl_strtomask(rights),
 			(acl_canonproc_t *)0, (void *)0);
@@ -3072,7 +3072,7 @@ static char *mboxlist_hash_usersubs(const char *userid)
     char c;
 
     c = (char) tolower((int) *userid);
-    if (!islower(c)) {
+    if (!islower((int) c)) {
 	c = 'q';
     }
     sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,

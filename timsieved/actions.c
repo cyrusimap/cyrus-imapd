@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.12 2000/02/03 20:14:23 tmartin Exp $
+ * $Id: actions.c,v 1.13 2000/02/10 05:10:51 tmartin Exp $
  * 
  */
 /***********************************************************
@@ -44,6 +44,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "prot.h"
 #include "config.h"
 #include "xmalloc.h"
+#include "sieve_interface.h"
+
 
 #include "codes.h"
 #include "actions.h"
@@ -109,7 +111,6 @@ int scriptname_valid(mystring_t *name)
 {
   int lup;
   char *ptr;
-  char *newptr;
 
   /* must be at least one character long */
   if (name->len < 1) return TIMSIEVE_FAIL;
@@ -245,10 +246,6 @@ static int countscripts(char *name)
     return number;
 }
 
-static int allowedmorescripts(int num)
-{
-
-}
 
 /* save name as a sieve script */
 int putscript(struct protstream *conn, mystring_t *name, mystring_t *data)

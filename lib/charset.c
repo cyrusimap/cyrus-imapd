@@ -20,7 +20,7 @@
  * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
  * SOFTWARE.
  */
-/* $Id: charset.c,v 1.32 1999/09/30 07:30:32 leg Exp $
+/* $Id: charset.c,v 1.33 2000/02/10 05:10:48 tmartin Exp $
  */
 #include <ctype.h>
 #include <stdlib.h>
@@ -344,15 +344,15 @@ char *charset_decode1522(const char *s, char *retval, int alloced)
 		if (c1 == XX) break;
 		c2 = CHAR64(p[1]);
 		if (c2 == XX) break;
-		TRANSLATE(state,(c1<<2) | ((c2&0x30)>>4), retval, pos);
+		TRANSLATE(state,((c1<<2) | ((c2&0x30)>>4)), retval, pos);
 
 		c3 = CHAR64(p[2]);
 		if (c3 == XX) break;
-		TRANSLATE(state,((c2&0XF)<<4) | ((c3&0x3C)>>2), retval, pos);
+		TRANSLATE(state,(((c2&0XF)<<4) | ((c3&0x3C)>>2)), retval, pos);
 
 		c4 = CHAR64(p[3]);
 		if (c4 == XX) break;
-		TRANSLATE(state,((c3&0x03) <<6) | c4, retval, pos);
+		TRANSLATE(state,(((c3&0x03) <<6) | c4), retval, pos);
 
 		p += 4;
 	    }

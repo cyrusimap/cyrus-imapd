@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.88 2000/02/10 00:33:41 leg Exp $
+# $Id: Makefile.in,v 1.89 2000/02/10 05:10:31 tmartin Exp $
 # 
 # @configure_input@
 #
@@ -81,13 +81,13 @@ cyrus_prefix = @cyrus_prefix@
 
 LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o \
 	config.o imap_err.o proc.o toimsp.o setproctitle.o convert_code.o \
-	duplicate.o saslclient.o acapmbox.o \
+	duplicate.o saslclient.o acapmbox.o\
 	$(SEEN) $(NOTIFY)
 
-IMAPDOBJS= imapd.o index.o tls.o
+IMAPDOBJS= imapd.o index.o tls.o pushstats.o
 
 PROGS = collectnews syncnews imapd pop3d \
-	arbitron fud reconstruct quota dump_deliverdb dump_mboxlist mbpath
+	arbitron fud reconstruct quota dump_deliverdb mbpath purge remotepurge listenstats
 SUIDPROGS = deliver
 
 
@@ -179,6 +179,15 @@ fud: fud.o libimap.a $(DEPLIBS)
 
 mbpath: mbpath.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o mbpath mbpath.o libimap.a $(DEPLIBS) $(LIBS)
+
+purge: purge.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o purge purge.o libimap.a $(DEPLIBS) $(LIBS)
+
+remotepurge: remotepurge.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o remotepurge remotepurge.o libimap.a $(DEPLIBS) $(LIBS)
+
+listenstats: listenstats.o pushstats.o
+	$(CC) $(LDFLAGS) -o listenstats listenstats.o pushstats.o $(LIBS)
 
 reconstruct: reconstruct.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \

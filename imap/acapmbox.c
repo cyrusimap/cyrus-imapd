@@ -10,6 +10,7 @@
 
 #include "config.h"
 #include "imap_err.h"
+#include "xmalloc.h"
 
 extern sasl_callback_t *mysasl_callbacks(const char *username,
 					 const char *authname,
@@ -379,7 +380,6 @@ int acapmbox_setproperty_acl(acapmbox_handle_t *AC,
     acap_cmd_t *cmd;
     acap_attribute_t *tmpattr;
     char *attrname;
-    char attrvalue[30];
 
     if (AC == NULL) return 0;
     assert(mailbox_name != NULL);
@@ -430,6 +430,7 @@ acapmbox_status mboxdata_convert_status(acap_value_t *v)
     else return ACAPMBOX_UNKNOWN;
 }
 
+#if 0
 static void myacap_copy_entry(acap_entry_t *entry, void *rock)
 {
     acapmbox_data_t *mboxdata = (acapmbox_data_t *) rock;
@@ -450,19 +451,12 @@ static void myacap_copy_entry(acap_entry_t *entry, void *rock)
 	attr = snext(&node);
     }
 }
+#endif /* 0 */
 
 static void myacap_copy_modtime(char *modtime, void *rock)
 {
     printf("\tmodtime = %s\n", modtime);
 }
-
-static struct acap_search_callback myacap_search_copy_cb = {
-    &myacap_copy_entry, &myacap_copy_modtime
-};
-
-static struct acap_requested myacap_copy_request = {
-    1, { "*" }
-};
 
 int acapmbox_delete(acapmbox_handle_t *AC,
 		    char *mailbox_name)

@@ -25,8 +25,13 @@
  *  tech-transfer@andrew.cmu.edu
  *
  */
-/* $Id: quota.c,v 1.30 2000/01/28 22:09:51 leg Exp $ */
+/* $Id: quota.c,v 1.31 2000/02/10 05:10:44 tmartin Exp $ */
 
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -59,10 +64,25 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
+#include "mboxlist.h"
+#include "convert_code.h"
 
 extern int errno;
 extern int optind;
 extern char *optarg;
+
+/* forward declarations */
+void usage(void);
+void reportquota(void);
+int buildquotalist(char **roots, int nroots);
+int fixquota_mailbox(char *name,
+		     int matchlen,
+		     int maycreate,
+		     void* rock);
+int fixquota(int ispartial);
+int fixquota_fixroot(struct mailbox *mailbox,
+		     char *root);
+int fixquota_finish(int thisquota);
 
 extern char *mailbox_findquota();
 
@@ -83,9 +103,7 @@ int firstquota;
 int redofix;
 int partial;
 
-main(argc, argv)
-int argc;
-char **argv;
+int main(int argc,char **argv)
 {
     int opt;
     int fflag = 0;
@@ -118,9 +136,11 @@ char **argv;
     }
 
     exit(code);
+
+    return 0;
 }
 
-usage()
+void usage(void)
 {
     fprintf(stderr, "usage: quota [-f] [prefix]...\n");
     exit(EC_USAGE);
@@ -139,10 +159,7 @@ char *a, *b;
 /*
  * Build the list of quota roots in 'quota'
  */
-int 
-buildquotalist(roots, nroots)
-char **roots;
-int nroots;
+int buildquotalist(char **roots, int nroots)
 {
     int r;
     char quota_path[MAX_MAILBOX_PATH];
@@ -160,13 +177,13 @@ int nroots;
     if (!topp) {
 	return IMAP_IOERROR;
     }
-    while (dirent = readdir(topp)) {
+    while ((dirent = readdir(topp))!=NULL) {
 	if (dirent->d_name[0] == '.') continue;
 	
 	dirp = opendir(dirent->d_name);
 	if (!dirp) continue;
 
-	while (dirent = readdir(dirp)) {
+	while ((dirent = readdir(dirp))!=NULL) {
 	    if (dirent->d_name[0] == '.') continue;
 
 	    /* If restricting our list, see if this quota file matches */
@@ -219,12 +236,10 @@ int nroots;
 /*
  * Account for mailbox 'name' when fixing the quota roots
  */
-int
-fixquota_mailbox(name, matchlen, maycreate, rock)
-char *name;
-int matchlen;
-int maycreate;
-void* rock;
+int fixquota_mailbox(char *name,
+		     int matchlen,
+		     int maycreate,
+		     void* rock)
 {
     int r;
     struct mailbox mailbox;
@@ -298,10 +313,8 @@ void* rock;
     return 0;
 }
 	
-int
-fixquota_fixroot(mailbox, root)
-struct mailbox *mailbox;
-char *root;
+int fixquota_fixroot(struct mailbox *mailbox,
+		     char *root)
 {
     int i, r;
 
@@ -346,9 +359,7 @@ char *root;
 /*
  * Finish fixing up a quota root
  */
-int
-fixquota_finish(thisquota)
-int thisquota;
+int fixquota_finish(int thisquota)
 {
     int r;
 
@@ -372,7 +383,7 @@ int thisquota;
     }
     
     if (quota[thisquota].quota.used != quota[thisquota].newused) {
-	printf("%s: usage was %u, now %u\n", quota[thisquota].quota.root,
+	printf("%s: usage was %lu, now %lu\n", quota[thisquota].quota.root,
 	       quota[thisquota].quota.used, quota[thisquota].newused);
 	quota[thisquota].quota.used = quota[thisquota].newused;
 	r = mailbox_write_quota(&quota[thisquota].quota);
@@ -388,19 +399,16 @@ int thisquota;
 /*
  * Fix all the quota roots
  */
-int
-fixquota(ispartial)
-int ispartial;
+int fixquota(int ispartial)
 {
-    int r;
+    int r = 0;
     static char pattern[2] = "*";
 
     /*
      * Lock mailbox list to prevent mailbox creation/deletion
      * during the fix
      */
-    r = mboxlist_open();
-    if (r) return r;
+    mboxlist_open(NULL);
 
     redofix = 1;
     while (redofix) {
@@ -430,8 +438,8 @@ int ispartial;
 /*
  * Print out the quota report
  */
-int
-reportquota()
+void
+reportquota(void)
 {
     int i;
 
@@ -440,7 +448,7 @@ reportquota()
     for (i = 0; i < quota_num; i++) {
 	if (quota[i].deleted) continue;
 	if (quota[i].quota.limit > 0) {
-	    printf(" %7d %7d", quota[i].quota.limit,
+	    printf(" %7d %7ld", quota[i].quota.limit,
 		   ((quota[i].quota.used / QUOTA_UNITS) * 100) / quota[i].quota.limit);
 	}
 	else if (quota[i].quota.limit == 0) {
@@ -449,7 +457,7 @@ reportquota()
 	else {
 	    printf("                ");
 	}
-	printf(" %7d %s\n", quota[i].quota.used / QUOTA_UNITS,
+	printf(" %7ld %s\n", quota[i].quota.used / QUOTA_UNITS,
 	       quota[i].quota.root);
     }
 }

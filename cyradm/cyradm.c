@@ -24,6 +24,7 @@
  #  tech-transfer@andrew.cmu.edu
  *
  */
+#include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -61,8 +62,7 @@ static int cmd_setquota(), cmd_listquota(), cmd_listquotaroot();
 /*
  * Initialize the cyradm package
  */
-int Cyradm_Init(interp)
-Tcl_Interp *interp;
+int Cyradm_Init(Tcl_Interp *interp)
 {
     Tcl_CreateCommand(interp, "cyradm", Cyradm_CyradmCmd,
 		      (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
@@ -215,7 +215,7 @@ int argc;
 char **argv;
 {
     struct admconn *conn = (struct admconn *)clientData;
-    int numcmd = 1, r;
+    int numcmd = 1;
 
     conn->cmd_done = 0;
     conn->cmd_result = TCL_OK;
@@ -446,7 +446,6 @@ static void callback_capability(struct imclient *imclient,
 
 static int cmd_login(struct admconn *conn, char *userid, char *pass, int passlen, int tls_layer, int logindisabled)
 {
-  char **comv;
 
   if (logindisabled==1)
   {
@@ -490,7 +489,7 @@ char **argv;
     char *pwcommand = 0;
     char *user = 0;
     char *p;
-    int r;
+    int r = 0;
     int minssf=0;     /* default to allow any security layer */
     int maxssf=10000;
     char *mech = NULL;
@@ -605,7 +604,7 @@ char **argv;
 
 	/* Expand the %-escapes in pwcommand */
 	Tcl_DStringInit(&command);
-	while (p = strchr(pwcommand, '%')) {
+	while ((p = strchr(pwcommand, '%'))!=NULL) {
 	    Tcl_DStringAppend(&command, pwcommand, p - pwcommand);
 	    switch (*++p) {
 	    case '%':
@@ -673,7 +672,7 @@ struct imclient_reply *reply;
 {
     struct mailboxdata *mailboxdata = (struct mailboxdata *)rock;
     char *s, *end;
-    char *mailbox, *attributes, *separator;
+    char *mailbox, *attributes, *separator = NULL;
     int c;
 
     s = reply->text;
@@ -705,7 +704,7 @@ struct imclient_reply *reply;
     Tcl_DStringStartSublist(&mailboxdata->data);
     Tcl_DStringAppendElement(&mailboxdata->data, mailbox);
     Tcl_DStringStartSublist(&mailboxdata->data);
-    for (s = attributes; end = strchr(s, ' '); s = end+1) {
+    for (s = attributes; (end = strchr(s, ' '))!=NULL ; s = end+1) {
 	*s = '\0';
 	Tcl_DStringAppendElement(&mailboxdata->data, s);
     }
@@ -725,8 +724,7 @@ Tcl_Interp *interp;
 int argc;
 char **argv;
 {
-    char *command = argv[0];
-    int i;
+    char *command = argv[0];    
     struct mailboxdata mailboxdata;
     int subscribed = 0;
     char *reference = "";
@@ -793,7 +791,6 @@ char **argv;
 {
     int i, num;
     char *mailbox;
-    char *rights;
 
     if (argc < 4) {
 	Tcl_AppendResult(interp, "wrong # args: should be \"",
@@ -906,7 +903,6 @@ Tcl_Interp *interp;
 int argc;
 char **argv;
 {
-    int i;
     struct acldata acldata;
 
     if (argc != 3) {

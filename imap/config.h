@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: config.h,v 1.9 2000/02/01 04:05:52 leg Exp $
+ $Id: config.h,v 1.10 2000/02/10 05:10:33 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -52,5 +52,7 @@ extern const char *config_newsspool;
 extern const char *config_servername;
 
 extern int config_hashimapspool;
+
+void config_scanpartition( void (*proc)() );
 
 #endif /* INCLUDED_CONFIG_H */
