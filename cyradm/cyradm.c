@@ -372,7 +372,7 @@ static char *parsemechlist(char *str)
 {
   char *tmp;
   int num=0;
-  char *ret=malloc(strlen(str)+1);
+  char *ret=(char *)xmalloc(strlen(str)+1);
   if (ret==NULL) return NULL;
 
   strcpy(ret,"");
@@ -440,7 +440,7 @@ char **argv;
     int r;
     int minssf=0;     /* default to allow any security layer */
     int maxssf=10000;
-    mechlist_t *mechlist=(mechlist_t *) malloc(sizeof(mechlist_t));
+    mechlist_t *mechlist=(mechlist_t *) xmalloc(sizeof(mechlist_t));
 
     
     /* skip over command & subcommand */
