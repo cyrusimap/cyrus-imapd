@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.98 2002/02/25 22:15:18 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.99 2002/02/28 22:03:38 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -146,8 +146,6 @@ extern char *optarg;
 
 extern int errno;
 
-
-
 /* global state */
 static char shutdownfilename[1024];
 static int imaps = 0;
@@ -174,6 +172,8 @@ void shutdown_file(int fd);
 void motd_file(int fd);
 void shut_down(int code);
 void fatal(const char *s, int code);
+
+void proxyd_downserver(struct backend *s);
 
 void cmdloop(void);
 void cmd_login(char *tag, char *user, char *passwd);
@@ -294,6 +294,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
 
 	if (!prot_fgets(buf, sizeof(buf), s->in)) {
 	    /* uh oh */
+	    proxyd_downserver(s);
 	    return PROXY_NOCONNECTION;
 	}
 	if (!cont && buf[taglen] == ' ' && !strncmp(tag, buf, taglen)) {
@@ -313,6 +314,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
 		r = PROXY_BAD;
 		break;
 	    default: /* huh? no result? */
+		proxyd_downserver(s);
 		r = PROXY_NOCONNECTION;
 		break;
 	    }
@@ -398,6 +400,8 @@ static int pipe_including_tag(struct backend *s, char *tag)
 	break;
     case PROXY_NOCONNECTION:
 	/* erg.  oh well, not much we can do about this. */
+	/* down the server, so we will attempt to reconnect next time */
+	proxyd_downserver(s);
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, 
 		    error_message(IMAP_SERVER_UNAVAILABLE));
 	break;
@@ -753,11 +757,16 @@ struct prot_waitevent *backend_timeout(struct protstream *s,
 /* return the connection to the server */
 struct backend *proxyd_findserver(char *server)
 {
-    int i = 0;
+    int r = 0, i = 0;
     struct backend *ret = NULL;
 
     while (backend_cached && backend_cached[i]) {
 	if (!strcmp(server, backend_cached[i]->hostname)) {
+	    char mytag[128];
+	
+	    /* ping the server */
+	    r = 
+
 	    ret = backend_cached[i];
 	    break;
 	}
