@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.180 2004/05/05 19:14:59 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.181 2004/05/05 20:46:34 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1029,9 +1029,10 @@ static int proxyd_canon_user(sasl_conn_t *conn, void *context,
     size_t n;
     int r;
 
+    if (!ulen) ulen = strlen(user);
+
     if (config_getswitch(IMAPOPT_IMAPMAGICPLUS)) {
 	/* make a working copy of the auth[z]id */
-	if (!ulen) ulen = strlen(user);
 	memcpy(userbuf, user, ulen);
 	userbuf[ulen] = '\0';
 	user = userbuf;
