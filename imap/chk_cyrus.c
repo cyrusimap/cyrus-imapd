@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.1 2002/05/20 16:17:07 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.2 2002/05/20 17:53:08 rjs3 Exp $
  */
 
 #include <config.h>
@@ -104,6 +104,8 @@ static int chkmbox(char *name,
     /* Do an mboxlist_detail on the mailbox */
     r = mboxlist_detail(name, NULL, &path, &part, NULL, NULL);
 
+    /* xxx reserved mailboxes? */
+
     if(r) {
 	fprintf(stderr, "bad mailbox %s in chkmbox\n", name);
 	fatal("fatal error",EC_TEMPFAIL);
@@ -144,6 +146,8 @@ static int chkmbox(char *name,
 	exit(3);
     }
 
+    /* xxx index file versions */
+
     exists = ntohl(*((bit32 *)(index_base + OFFSET_EXISTS)));
     start_offset =
 	ntohl(*((bit32 *)(index_base+OFFSET_START_OFFSET)));
@@ -154,6 +158,8 @@ static int chkmbox(char *name,
 
     for(i=1;i<=exists;i++) {
 	char filebuf[1024];
+
+	/* xxx check for monotonic increasing UIDs in the index file */
 
 	sprintf(filebuf, "%s/%d.", path, UID(i));
 	if(stat(filebuf, &sbuf) == -1) {
