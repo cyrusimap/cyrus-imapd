@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.7 1999/09/06 02:57:00 tmartin Exp $
+ * $Id: script.c,v 1.8 1999/09/30 07:36:59 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -29,6 +29,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <string.h>
 #include <md5global.h>
 #include <md5.h>
+
+#include "xmalloc.h"
 
 #include "sieve_interface.h"
 #include "interp.h"

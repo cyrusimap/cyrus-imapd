@@ -26,6 +26,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
 
 #include <string.h> /* for strdup */
+#include "xmalloc.h"
+
 #include "tree.h"
 #include "y.tab.h"
 
@@ -33,6 +35,7 @@ static int tonum(char *c);
 static char *fixstr(char *);
 static char *mlbuf;
 static int mlbufsz, mlcur;
+extern int yyerror(char *);
 %}
 
 %option yylineno
