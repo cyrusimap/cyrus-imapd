@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.345 2002/03/06 20:49:02 ken3 Exp $ */
+/* $Id: imapd.c,v 1.346 2002/03/07 22:01:44 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -65,27 +65,28 @@
 #include <sasl/sasl.h>
 
 #include "acl.h"
-#include "util.h"
-#include "auth.h"
-#include "imapconf.h"
-#include "tls.h"
-#include "version.h"
-#include "charset.h"
-#include "imparse.h"
-#include "mkgmtime.h"
-#include "exitcodes.h"
-#include "imap_err.h"
-#include "mailbox.h"
-#include "imapd.h"
-#include "xmalloc.h"
-#include "mboxname.h"
-#include "append.h"
-#include "iptostring.h"
-#include "mboxlist.h"
-#include "idle.h"
-#include "telemetry.h"
-#include "user.h"
 #include "annotate.h"
+#include "append.h"
+#include "auth.h"
+#include "charset.h"
+#include "exitcodes.h"
+#include "idle.h"
+#include "imapconf.h"
+#include "imap_err.h"
+#include "imapd.h"
+#include "imapurl.h"
+#include "imparse.h"
+#include "iptostring.h"
+#include "mailbox.h"
+#include "mboxname.h"
+#include "mboxlist.h"
+#include "mkgmtime.h"
+#include "telemetry.h"
+#include "tls.h"
+#include "user.h"
+#include "util.h"
+#include "version.h"
+#include "xmalloc.h"
 
 #include "pushstats.h"		/* SNMP interface */
 
@@ -248,11 +249,10 @@ static struct
 
 /*
  * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
- * right to the principal 'auth_identity'. Returns 1 if so, 0 if not.
+ * right to 'authstate'. Returns 1 if so, 0 if not.
  */
-/* xxx is auth_identity really needed here? */
+/* Note that we do not determine if the mailbox is remote or not */
 static int acl_ok(const char *user, 
-		  const char *auth_identity __attribute__((unused)),
 		  struct auth_state *authstate)
 {
     char *acl;
@@ -265,7 +265,7 @@ static int acl_ok(const char *user,
     strcat(inboxname, user);
 
     if (!authstate ||
-	mboxlist_lookup(inboxname, (char **)0, &acl, NULL)) {
+	mboxlist_lookup(inboxname, NULL, &acl, NULL)) {
 	r = 0;  /* Failed so assume no proxy access */
     }
     else {
@@ -318,7 +318,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
 	int use_acl = config_getswitch("loginuseacl", 0);
 
 	if (imapd_userisadmin ||
-	    (use_acl && acl_ok(requested_user, auth_identity, imapd_authstate)) ||
+	    (use_acl && acl_ok(requested_user, imapd_authstate)) ||
 	    authisa(imapd_authstate, "imap", "proxyservers")) {
 	    /* proxy ok! */
 
@@ -345,6 +345,59 @@ static const struct sasl_callback mysasl_cb[] = {
     { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
+
+/* imapd_refer() issues a referral to the client. */
+static void imapd_refer(const char *tag,
+			const char *server,
+			const char *mailbox)
+{
+    char url[MAX_MAILBOX_PATH];
+
+    if(!strcmp(imapd_userid, "anonymous")) {
+	imapurl_toURL(url, server, mailbox, "ANONYMOUS");
+    } else {
+	imapurl_toURL(url, server, mailbox, "*");
+    }
+    
+    prot_printf(imapd_out, "%s NO [REFERRAL %s] Remote mailbox.\r\n", 
+		tag, url);
+}
+
+/* wrapper for mboxlist_lookup that will force a referral if we are remote
+ * returns IMAP_SERVER_UNAVAILABLE if we don't have a place to send the client
+ * (that'd be a bug).
+ * returns IMAP_MAILBOX_MOVED if we referred the client */
+/* ext_name is the external name of the mailbox */
+/* you can avoid referring the client by setting tag or ext_name to NULL. */
+static int mlookup(const char *tag, const char *ext_name,
+		   const char *name, char **pathp, char **aclp, void *tid) 
+{
+    int r, mbtype;
+    char *remote, *acl;
+
+    r = mboxlist_detail(name, &mbtype, &remote, NULL, &acl, tid);
+    if(pathp) *pathp = remote;
+    if(aclp) *aclp = acl;
+    if(r) return r;
+
+    if(mbtype & MBTYPE_REMOTE) {
+	/* do we have rights on the mailbox? */
+	if(!imapd_userisadmin &&
+	   (!acl || !(cyrus_acl_myrights(imapd_authstate,acl) & ACL_LOOKUP))) {
+	    r = IMAP_MAILBOX_NONEXISTENT;
+	} else if(tag && ext_name && remote && *remote) {
+	    char *c;
+	    c = strchr(remote, '!');
+	    if(c) *c = '\0';
+	    imapd_refer(tag, remote, ext_name);
+	    r = IMAP_MAILBOX_MOVED;
+	} else {
+	    r = IMAP_SERVER_UNAVAILABLE;
+	}
+    }
+    
+    return r;
+}
 
 static void imapd_reset(void)
 {
@@ -2311,6 +2364,11 @@ void cmd_select(char *tag, char *cmd, char *name)
     }
 
     if (!r) {
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL);
+    }
+    if (r == IMAP_MAILBOX_MOVED) return;
+
+    if (!r) {
 	r = mailbox_open_header(mailboxname, imapd_authstate, &mailbox);
     }
 
@@ -3597,12 +3655,13 @@ cmd_reconstruct(const char *tag, const char *name, int recursive)
     }
     
     if (!r) {
-	/* Check for mailbox in mailbox list */
-	r = mboxlist_lookup(mailboxname, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL);
     }
+    if (r == IMAP_MAILBOX_MOVED) return;
 
     if (!r) {
 	int pid;
+	    
 	/* Reconstruct it */
 
 	pid = fork();
@@ -3873,8 +3932,9 @@ int oldform;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, &acl, NULL);
     }
+    if (r == IMAP_MAILBOX_MOVED) return;
 
     if (!r) {
 	access = cyrus_acl_myrights(imapd_authstate, acl);
@@ -3956,8 +4016,9 @@ char *identifier;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, &acl, NULL);
     }
+    if (r == IMAP_MAILBOX_MOVED) return;
 
     if (!r) {
 	rights = cyrus_acl_myrights(imapd_authstate, acl);
@@ -4018,8 +4079,9 @@ int oldform;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, &acl, NULL);
     }
+    if (r == IMAP_MAILBOX_MOVED) return;
 
     if (!r) {
 	rights = cyrus_acl_myrights(imapd_authstate, acl);
@@ -4063,6 +4125,12 @@ char *rights;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
+
+    /* is it remote? */
+    if (!r) {
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL);
+    }
+    if (r == IMAP_MAILBOX_MOVED) return;
 
     if (!r) {
 	r = mboxlist_setacl(mailboxname, identifier, rights,
@@ -4150,6 +4218,11 @@ char *name;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
+
+    if (!r) {
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL);
+    }
+    if (r == IMAP_MAILBOX_MOVED) return;
 
     if (!r) {
 	r = mailbox_open_header(mailboxname, imapd_authstate, &mailbox);
@@ -4447,6 +4520,11 @@ char *name;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
+
+    if (!r) {
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL);
+    }
+    if (r == IMAP_MAILBOX_MOVED) return;
 
     if (!r) {
 	r = mailbox_open_header(mailboxname, imapd_authstate, &mailbox);
