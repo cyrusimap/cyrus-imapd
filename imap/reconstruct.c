@@ -99,7 +99,7 @@ char **argv;
 
     mailbox_reconstructmode();
 
-    for (i = 1; i < argc; i++) {
+    for (i = optind; i < argc; i++) {
 	do_reconstruct(argv[i], 0, 0);
 
 	if (rflag) {
