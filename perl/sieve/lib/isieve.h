@@ -64,7 +64,7 @@ typedef enum {
     STAT_OK = 2
 } imt_stat;
 
-int auth_sasl(char *mechlist, isieve_t *obj, char **errstr);
+int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing, char **errstr);
 
 int isieve_logout(isieve_t **obj);
 int isieve_put_file(isieve_t *obj, char *filename, char **errstr);

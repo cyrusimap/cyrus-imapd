@@ -82,9 +82,12 @@ int handle_response(int res,int version,struct protstream *pin,
 
   *refer_to = NULL;
 
+  if (res == -1)
+      parseerror("lost connection");
+  
   if ((res!=TOKEN_OK) && (res!=TOKEN_NO) && (res!=TOKEN_BYE))
-    parseerror("ATOM");
-
+      parseerror("ATOM");
+  
   if(res == TOKEN_BYE) {
       if (yylex(&state, pin)!=' ')
 	  parseerror("expected space");
@@ -501,7 +504,7 @@ int setscriptactive(int version, struct protstream *pout,
   /* now let's see what the server said */
   res=yylex(&state, pin);
 
-  ret = handle_response(res,version,pin, &errstr, NULL);
+  ret = handle_response(res, version, pin, refer_to, &errstr);
 
   /* if command failed */
   if(ret == -2 && *refer_to) {
@@ -512,7 +515,6 @@ int setscriptactive(int version, struct protstream *pout,
 	       "Setting script active: %s",string_DATAPTR(errstr));
       return -1;
   }
-
   return 0;
 }
 
