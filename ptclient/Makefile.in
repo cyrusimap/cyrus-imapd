@@ -44,9 +44,9 @@ PROGS = ptexpire ptloader $(EXTRA_PROGS)
 all: $(PROGS)
 
 install:
-	$(INSTALL) @STRIP@ -m 755 ptloader $(DESTDIR)$(cyrus_prefix)/bin
-	$(INSTALL) @STRIP@ -m 755 ptexpire $(DESTDIR)$(cyrus_prefix)/bin
-	$(INSTALL) @STRIP@ -m 755 $(srcdir)/doptclient   $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -m 755 ptloader $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -m 755 ptexpire $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -m 755 $(srcdir)/doptclient   $(DESTDIR)$(cyrus_prefix)/bin
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
