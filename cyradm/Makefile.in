@@ -29,8 +29,8 @@ RANLIB = @RANLIB@
 
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
-LIBS = ../lib/libcyrus.a @LIBS@ 
-NODEP_LIBS = @NODEP_LIBS@ 
+LIBS = @LIBS@ 
+DEPLIBS = ../lib/libcyrus.a @DEPLIBS@ 
 
 CFLAGS = -g
 LDFLAGS = -g
@@ -42,9 +42,9 @@ all: cyradm
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
-cyradm: cyradmapp.o cyradm.o cyrinit.o cyrmain.o $(LIBS)
+cyradm: cyradmapp.o cyradm.o cyrinit.o cyrmain.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o cyradm cyradmapp.o cyradm.o cyrinit.o cyrmain.o \
-		$(LIBS) $(NODEP_LIBS)
+		$(DEPLIBS) $(LIBS)
 
 cyrinit.c: cyrinit.tcl cyrinit.sed
 	sed -f $(srcdir)/cyrinit.sed $< >,cyrinit.c
