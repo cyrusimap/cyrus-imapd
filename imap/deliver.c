@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.115 1999/11/17 20:02:23 leg Exp $
+ * $Id: deliver.c,v 1.116 1999/12/23 02:33:21 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.115 1999/11/17 20:02:23 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.116 1999/12/23 02:33:21 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -1753,6 +1753,7 @@ deliver_opts_t *delopts;
 	case 'Q':
 	    if (!strcasecmp(buf, "quit")) {
 		prot_printf(deliver_out,"221 2.0.0 bye\r\n");
+		prot_flush(deliver_out);
 		exit(0);
 	    }
 	    goto syntaxerr;
