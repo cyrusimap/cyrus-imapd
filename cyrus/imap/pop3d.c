@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.19 2002/12/20 18:32:06 rjs3 Exp $
+ * $Id: pop3d.c,v 1.122.4.20 2003/01/10 21:53:28 ken3 Exp $
  */
 #include <config.h>
 
@@ -548,8 +548,17 @@ static void cmdloop(void)
 		}
 	    }
 	    if (!*arg) {
-		prot_printf(popd_out, "-ERR Syntax error\r\n");
-		continue;
+		if (strcasecmp(inputbuf, "auth") == 0) {
+		    /* HACK for MS Outlook's incorrect use of the old-style
+		     * SASL discovery method.
+		     * Outlook uses "AUTH \r\n" instead if "AUTH\r\n"
+		     */
+		    arg = 0;
+		}
+		else {
+		    prot_printf(popd_out, "-ERR Syntax error\r\n");
+		    continue;
+		}
 	    }
 	}
 	else {
