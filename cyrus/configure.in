@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.141 1999/08/24 18:09:13 leg Exp $
+dnl $Id: configure.in,v 1.142 1999/08/25 21:56:42 leg Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -918,6 +918,8 @@ if test -f /usr/local/news/innshellvars; then
 	INNSHELLVARS=/usr/local/news/innshellvars
 elif test -f /usr/lib/news/innshellvars; then
 	INNSHELLVARS=/usr/lib/news/innshellvars
+elif test -f /usr/news/lib/innshellvars; then
+	INNSHELLVARS=/usr/news/lib/innshellvars
 elif test -f /usr/news/innshellvars; then
 	INNSHELLVARS=/usr/news/innshellvars
 else
