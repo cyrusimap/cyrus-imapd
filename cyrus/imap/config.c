@@ -61,6 +61,7 @@
 #include "util.h"
 #include "imap_err.h"
 #include "mupdate_err.h"
+#include "prot.h" /* for PROT_BUFSIZE */
 
 extern int errno;
 
@@ -339,7 +340,7 @@ sasl_security_properties_t *mysasl_secprops(int flags)
 {
     static sasl_security_properties_t ret;
 
-    ret.maxbufsize = 4000;
+    ret.maxbufsize = PROT_BUFSIZE;
     ret.min_ssf = config_getint("sasl_minimum_layer", 0);	
 				/* minimum allowable security strength */
     ret.max_ssf = config_getint("sasl_maximum_layer", 256);
