@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.479 2004/07/15 16:14:48 ken3 Exp $ */
+/* $Id: imapd.c,v 1.480 2004/07/15 16:19:18 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2400,7 +2400,7 @@ void cmd_append(char *tag, char *name)
 	    }
 	    c = getword(imapd_in, &arg);
 	} else {
-	    curstage->internaldate = time(NULL);
+	    curstage->internaldate = now;
 	}
 
 	p = arg.s;
