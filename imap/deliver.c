@@ -59,6 +59,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sasl.h>
+#include <sys/un.h>
 
 #include "acl.h"
 #include "util.h"
@@ -312,7 +313,7 @@ int main(int argc, char **argv)
 
     if (lmtpflag == 1)
     {
-	int s = init_net("localhost",portnum);
+	int s = init_net("/var/lmtp",portnum);
 
 	pipe_through(s,s,0,1);
     }
@@ -331,23 +332,20 @@ void just_exit(const char *msg)
     fatal(msg,0);
 }
 
-/* initialize the network */
-static int init_net(char *serverFQDN, int port)
+/* initialize the network 
+ * we talk on unix sockets
+ */
+static int init_net(char *unixpath, int port)
 {
-  struct sockaddr_in addr;
+  struct sockaddr_un addr;
   struct hostent *hp;
 
-  if ((hp = gethostbyname(serverFQDN)) == NULL) {
-      just_exit("gethostbyname failed");
-  }
-
-  if ((lmtpdsock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+  if ((lmtpdsock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
       just_exit("socket failed");
   }
 
-  addr.sin_family = AF_INET;
-  memcpy(&addr.sin_addr, hp->h_addr, hp->h_length);
-  addr.sin_port = htons(port);
+  addr.sun_family = AF_UNIX;
+  strcpy(addr.sun_path, unixpath);
 
   if (connect(lmtpdsock, (struct sockaddr *) &addr, sizeof (addr)) < 0) {
       just_exit("connect failed");
@@ -466,6 +464,7 @@ static void say_whofrom(char *from, char *authuser)
     if (from) who = from;
 
     if (authuser)
+    {
 	r = prot_printf(lmtpd_out,"MAIL FROM:<%s> AUTH=%s\r\n",who,authuser);
     } else {
 	r = prot_printf(lmtpd_out,"MAIL FROM:<%s>\r\n",who);
@@ -588,7 +587,7 @@ static void pump_data(int rcpts)
 	if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
 	    close_and_exit(EC_IOERR, "Error reading after message data");
 	
-	switch ((ask_code(buf))
+	switch (ask_code(buf))
 		{
 		case 552:
 		case 452: /* quota issue */
@@ -612,7 +611,7 @@ void deliver_msg(char *return_path, char *authuser, char **users, int numusers, 
     int rcpts;
 
     /* connect */
-    init_net("localhost",portnum);
+    init_net("/var/lmtp",portnum);
 
     lmtpd_in = prot_new(lmtpdsock, 0);
     lmtpd_out = prot_new(lmtpdsock, 1);
