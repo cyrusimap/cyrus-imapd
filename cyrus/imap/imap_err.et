@@ -90,7 +90,7 @@ ec IMAP_ANONYMOUS_NOT_PERMITTED,
 ec IMAP_UNSUPPORTED_QUOTA,
    "Unsupported quota resource"
 
-# Following used for internationalizatio of untagged NO responses
+# Following used for internationalization of untagged OK/NO responses
 
 ec IMAP_NO_OVERQUOTA,
    "Mailbox is over quota"
