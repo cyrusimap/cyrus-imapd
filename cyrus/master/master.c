@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.55 2001/10/23 14:08:35 ken3 Exp $ */
+/* $Id: master.c,v 1.56 2001/11/13 20:00:06 leg Exp $ */
 
 #include <config.h>
 
@@ -47,6 +47,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <grp.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #ifdef HAVE_UNISTD_H
@@ -471,8 +472,7 @@ void spawn_service(struct service *s)
 
     switch (p = fork()) {
     case -1:
-	syslog(LOG_ERR, "can't fork process to run service %s: %m",
-	       Services[i].name);
+	syslog(LOG_ERR, "can't fork process to run service %s: %m", s->name);
 	break;
 
     case 0:
