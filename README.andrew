@@ -47,20 +47,51 @@ To make a release:
 ---
 to bring up a new Andrew Cyrus server:
 
+package.protos for:
 a) backend server
+
+%define cyrus21
+%define sasl2
+
+%define is_imap
+%define is_backend
+%define is_saslauthd
+%define usesvxfs
+
+%define multiple_lun
+
+%define hasuser.permits
+F /etc/user.permits
+%define hasroot.permits
+F /etc/root.permits
+
+%include /afs/andrew.cmu.edu/wsadmin/cyrus2/src/cyrus.proto
+
 b) frontend server
+
+%define cyrus21
+%define sasl2
+
+%define uses_readwrite
+
+%define wsadmin /afs/.andrew.cmu.edu/wsadmin
+
+%define is_imap
+%define is_saslauthd
+%define is_frontend
+
+%include /afs/andrew.cmu.edu/wsadmin/cyrus2/src/cyrus.proto
+
 c) smtp server
+???? - Larry?
 
+----
 
-- include cyrus-basic.mpp
-- include uses.imap.mpp
-- (optional) include uses.timsieved.mpp
-- create machine specific directory containing 
-    cyrus.conf
-    imapd.conf
-    diskmon.conf
-- rerun package
-- run tools/mkimap
+Repackage, Reboot, (and redepot/repackage again)
+
+- Key the machine (imap, lmtp, smtp, pop, and put them in /imap/conf/srvtab)
+- Generate an SSL key for the machine and install to /imap/conf/server.pem
+- run tools/mkimap (as cyrus!)
 
 ----------------------------------------------------------------------
 
