@@ -1,7 +1,7 @@
 -*- text -*-
 
 		       Cyrus IMAP server design
-			    June 28, 1994
+			   October 5, 1994
 
 * Introduction
 
@@ -473,7 +473,7 @@ The following programs will be written
 	Called by the mail system to deliver message to mailbox.
 	Will be backwards-interface-compatable with rmail.
 
-- updateimsp
+- updateimsp [not implemented]
 	Daemon to monitor the dropoff directory and give SEEN/LAST
 	commands to an IMSP server.
 
@@ -496,7 +496,7 @@ The following programs will be written
 	Reports readership statistics
 
 - pop3d
-	Exports POP3 protocol to a connecting client.
+	Exports POP3/KPOP protocol to a connecting client.
 
 - reconstruct
 	Reconstructs/rebuilds a corrupted/missing set of mailbox
@@ -544,29 +544,17 @@ Implementation order is as follows:
 
 - Everything else
 
-  + collectnews, rmnews
-
-  + QUOTA protocol extension
-
-  + quota-usage reporter & consistency checker
-
-  + pop3d
-
-  + reconstruct
-
-  + Beta release
-
   + arbitron
-
-  + admin tools -- create/delete user, manipulate ACL, quota
 
   + sendmail v8 config macros
 
-  + IMSP seen/last, updateimsp
+  + updateimsp
 
   + expire
 
   + syncnews
+
+  + Gamma release
 
   + IMSP move
 
