@@ -2,8 +2,8 @@
 #include <ctype.h>
 #include <string.h>
 #include "assert.h"
-#include "xmalloc.h"
 #include "charset.h"
+#include "xmalloc.h"
 
 #include "charset/us-ascii.h"
 #include "charset/iso-8859-1.h"
@@ -332,5 +332,395 @@ char *s;
 	s++;
     }
     retval[pos++] = '\0';
+    return retval;
+}
+
+static int charset_readconvert();
+static char decodebuf[4096];
+static int decodestart, decodeleft;
+static char **decodetable;
+static int (*rawproc)();
+static FILE *rawfile;
+static int rawlen;
+static char rawbuf[4096];
+static int rawstart, rawleft;
+static int charset_readplain();
+static int charset_readmapnl();
+static int charset_readqp();
+static int charset_readqpmapnl();
+static int charset_readbase64();
+
+int
+charset_searchfile(substr, msgfile, mapnl, len, charset, encoding)
+char *substr;
+FILE *msgfile;
+int mapnl;
+int len;
+int charset;
+int encoding;
+{
+    int substrlen = strlen(substr);
+    char *buf, smallbuf[4096];
+    int bufsize;
+    char *p;
+    int n;
+    
+    if (charset < 0 || charset >= NUM_CHARSETS) return 0;
+    decodetable = charset_table[charset].table;
+
+    rawfile = msgfile;
+    rawlen = len;
+    rawleft = decodeleft = 0;
+
+    if (mapnl && !strchr(substr, '\n') && !strchr(substr, '\r')) {
+	/* Doesn't matter -- CRLF won't match anything */
+	mapnl = 0;
+    }
+
+    switch (encoding) {
+    case ENCODING_NONE:
+	rawproc = mapnl ? charset_readmapnl : charset_readplain;
+	break;
+
+    case ENCODING_QP:
+	rawproc = mapnl ? charset_readqpmapnl : charset_readqp;
+	break;
+
+    case ENCODING_BASE64:
+	rawproc = charset_readbase64;
+	break;
+
+    default:
+	/* Don't know encoding--nothing can match */
+	return 0;
+    }
+
+    if (substrlen < sizeof(smallbuf)/2) {
+	bufsize = sizeof(smallbuf);
+	buf = smallbuf;
+    }
+    else {
+	bufsize = substrlen+sizeof(smallbuf);
+	buf = xmalloc(bufsize);
+    }
+
+    n = charset_readconvert(buf, bufsize);
+    if (n < substrlen) {
+	if (buf != smallbuf) free(buf);
+	return 0;
+    }
+    n -= substrlen-1;
+    do {
+	p = buf;
+	while (n-- > 0) {
+	    if (*substr == *p && !strncmp(substr, p, substrlen)) {
+		if (buf != smallbuf) free(buf);
+		return 1;
+	    }
+	    p++;
+	}
+	strncpy(buf, p, substrlen-1);
+    } while (n = charset_readconvert(buf+substrlen-1, bufsize-substrlen+1));
+
+    if (buf != smallbuf) free(buf);
+    return 0;
+}
+
+static int
+charset_readconvert(buf, size)
+char *buf;
+int size;
+{
+    int retval = 0;
+    char *translation;
+    int len;
+
+    if (decodeleft && decodestart != 0) {
+	bcopy(decodebuf+decodestart, decodebuf, decodeleft);
+    }
+    decodestart = 0;
+
+    decodeleft += (*rawproc)(decodebuf+decodeleft, sizeof(decodebuf)-decodeleft);
+
+    while (decodeleft) {
+	translation = decodetable[(unsigned char)(decodebuf[decodestart])];
+	len = strlen(translation);
+	if (len > size) {
+	    return retval;
+	}
+	decodestart++;
+	decodeleft--;
+	while (*buf++ = *translation++) {
+	    retval++;
+	    size--;
+	}
+    }
+    return retval;
+}
+    
+static int
+charset_readplain(buf, size)
+char *buf;
+int size;
+{
+    int n;
+
+    if (size > rawlen) size = rawlen;
+    if (!size) return 0;
+
+    n = fread(buf, 1, size, rawfile);
+    rawlen -= n;
+
+    return n;
+}
+
+static int
+charset_readmapnl(buf, size)
+char *buf;
+int size;
+{
+    int retval = 0;
+    int n, limit;
+    int c;
+
+    if (rawleft && rawstart != 0) {
+	bcopy(rawbuf+rawstart, rawbuf, rawleft);
+    }
+    rawstart = 0;
+
+    limit = sizeof(rawbuf)-rawleft;
+    if (limit > rawlen) limit = rawlen;
+    n = fread(rawbuf+rawleft, 1, sizeof(rawbuf)-rawleft, rawfile);
+    rawlen -= n;
+    rawleft += n;
+
+    while (size && rawleft) {
+	c = rawbuf[rawstart];
+	if (c == '\n') {
+	    if (size < 2) {
+		return retval;
+	    }
+	    *buf++ = '\r';
+	    retval++;
+	    size--;
+	}
+	rawstart++;
+	rawleft--;
+	*buf++ = c;
+	retval++;
+	size--;
+    }
+    return retval;
+}
+
+static int
+charset_readqp(buf, size)
+char *buf;
+int size;
+{
+    int retval = 0;
+    int n, limit;
+    int c, c1, c2;
+
+    if (rawleft && rawstart != 0) {
+	bcopy(rawbuf+rawstart, rawbuf, rawleft);
+    }
+    rawstart = 0;
+
+    limit = sizeof(rawbuf)-rawleft;
+    if (limit > rawlen) limit = rawlen;
+    n = fread(rawbuf+rawleft, 1, sizeof(rawbuf)-rawleft, rawfile);
+    rawlen -= n;
+    rawleft += n;
+
+    while (size && rawleft) {
+	c = rawbuf[rawstart];
+	if (c == '=') {
+	    if (rawleft < 3) {
+		return retval;
+	    }
+	    c1 = rawbuf[rawstart+1];
+	    c2 = rawbuf[rawstart+2];
+	    rawstart += 3;
+	    rawleft -= 3;
+	    c1 = HEXCHAR(c1);
+	    c2 = HEXCHAR(c2);
+	    /* Following line also takes care of soft line breaks */
+	    if (c1 == -1 && c2 == -1) continue;
+	    *buf++ = (c1 << 4) + c2;
+	    retval++;
+	    size--;
+	}
+	else {
+	    rawstart++;
+	    rawleft--;
+	    *buf++ = c;
+	    retval++;
+	    size--;
+	}
+    }
+    return retval;
+}
+
+static int
+charset_readqpmapnl(buf, size)
+char *buf;
+int size;
+{
+    int retval = 0;
+    int n, limit;
+    int c, c1, c2;
+
+    if (rawleft && rawstart != 0) {
+	bcopy(rawbuf+rawstart, rawbuf, rawleft);
+    }
+    rawstart = 0;
+
+    limit = sizeof(rawbuf)-rawleft;
+    if (limit > rawlen) limit = rawlen;
+    n = fread(rawbuf+rawleft, 1, sizeof(rawbuf)-rawleft, rawfile);
+    rawlen -= n;
+    rawleft += n;
+
+    while (size && rawleft) {
+	c = rawbuf[rawstart];
+	if (c == '=') {
+	    if (rawleft < 2) {
+		return retval;
+	    }
+	    c1 = rawbuf[rawstart+1];
+	    if (c1 == '\n') {
+		rawstart += 2;
+		rawleft -= 2;
+		continue;
+	    }
+	    if (rawleft < 3) {
+		return retval;
+	    }
+	    c2 = rawbuf[rawstart+2];
+	    rawstart += 3;
+	    rawleft -= 3;
+	    c1 = HEXCHAR(c1);
+	    c2 = HEXCHAR(c2);
+	    if (c1 == -1 && c2 == -1) continue;
+	    *buf++ = (c1 << 4) + c2;
+	    retval++;
+	    size--;
+	}
+	else if (c == '\n') {
+	    if (size < 2) {
+		return retval;
+	    }
+	    rawstart++;
+	    rawleft--;
+	    *buf++ = '\r';
+	    *buf++ = '\n';
+	    retval += 2;
+	    size -= 2;
+	}
+	else {
+	    rawstart++;
+	    rawleft--;
+	    *buf++ = c;
+	    retval++;
+	    size--;
+	}
+    }
+    return retval;
+}
+
+static int
+charset_readbase64(buf, size)
+char *buf;
+int size;
+{
+    int retval = 0;
+    int n, limit;
+    int c1, c2, c3, c4;
+
+    if (rawleft && rawstart != 0) {
+	bcopy(rawbuf+rawstart, rawbuf, rawleft);
+    }
+    rawstart = 0;
+
+    limit = sizeof(rawbuf)-rawleft;
+    if (limit > rawlen) limit = rawlen;
+    n = fread(rawbuf+rawleft, 1, sizeof(rawbuf)-rawleft, rawfile);
+    rawlen -= n;
+    rawleft += n;
+
+    while (size >= 3 && rawleft) {
+	do {
+	    c1 = rawbuf[rawstart++];
+	    rawleft--;
+	    if (c1 == '=') {
+		rawlen = rawleft = 0;
+		return retval;
+	    }
+	} while (rawleft && CHAR64(c1) == -1);
+	if (!rawleft) {
+	    rawbuf[--rawstart] = c1;
+	    rawleft++;
+	    return retval;
+	}
+
+	do {
+	    c2 = rawbuf[rawstart++];
+	    rawleft--;
+	    if (c2 == '=') {
+		rawlen = rawleft = 0;
+		return retval;
+	    }
+	} while (rawleft && CHAR64(c2) == -1);
+	if (!rawleft) {
+	    rawbuf[--rawstart] = c2;
+	    rawbuf[--rawstart] = c1;
+	    rawleft += 2;
+	    return retval;
+	}
+
+	do {
+	    c3 = rawbuf[rawstart++];
+	    rawleft--;
+	    if (c3 == '=') {
+		*buf++ = ((c1<<2) | ((c2&0x30)>>4));
+		retval++;
+		rawlen = rawleft = 0;
+		return retval;
+	    }
+	} while (rawleft && CHAR64(c3) == -1);
+	if (!rawleft) {
+	    rawbuf[--rawstart] = c3;
+	    rawbuf[--rawstart] = c2;
+	    rawbuf[--rawstart] = c1;
+	    rawleft += 3;
+	    return retval;
+	}
+
+	do {
+	    c4 = rawbuf[rawstart++];
+	    rawleft--;
+	    if (c4 == '=') {
+		*buf++ = ((c1<<2) | ((c2&0x30)>>4));
+		*buf++ = (((c2&0XF) << 4) | ((c3&0x3C) >> 2));
+		retval += 2;
+		rawlen = rawleft = 0;
+		return retval;
+	    }
+	} while (rawleft && CHAR64(c4) == -1);
+	if (CHAR64(c4) == -1) {
+	    rawbuf[--rawstart] = c3;
+	    rawbuf[--rawstart] = c2;
+	    rawbuf[--rawstart] = c1;
+	    rawleft += 3;
+	    return retval;
+	}
+
+	*buf++ = ((c1<<2) | ((c2&0x30)>>4));
+	*buf++ = (((c2&0XF) << 4) | ((c3&0x3C) >> 2));
+	*buf++ = (((c3&0x03) <<6) | c4);
+	retval += 3;
+	size -= 3;
+    }
     return retval;
 }

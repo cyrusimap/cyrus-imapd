@@ -10,4 +10,6 @@
 int charset_lookupname(/* char *name */);
 char *charset_convert(/* char *s, int charset */);
 char *charset_decode1522(/* char *s */);
+int charset_searchfile(/* char *substr, FILE *msgfile, int mapnl,
+			  int len, int charset, int encoding */);
 
