@@ -1901,6 +1901,7 @@ bit32 *newuidvalidityp;
     close(newmailbox.index_fd);
     newmailbox.index_fd = dup(oldmailbox.index_fd);
     (void) mailbox_read_index_header(&newmailbox);
+    newmailbox.generation_no = oldmailbox.generation_no;
     newmailbox.uidvalidity = *newuidvalidityp;
     (void) mailbox_write_index_header(&newmailbox);
 
