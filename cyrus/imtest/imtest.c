@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.80 2002/06/03 18:52:54 ken3 Exp $
+ * $Id: imtest.c,v 1.81 2002/06/04 18:53:50 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2042,6 +2042,7 @@ void usage(char *prog, char *prot)
 	   "             (enter one-time password instead of secret pass-phrase)\n");
     printf("  -n       : number of auth attempts (default=1)\n");
     printf("  -x file  : open the named socket for the interactive portion\n");
+    printf("  -X file  : same as -X, except close all file descriptors & dameonize\n");
     
     exit(1);
 }
@@ -2135,7 +2136,7 @@ int main(int argc, char **argv)
     prog = strrchr(argv[0], '/') ? strrchr(argv[0], '/')+1 : argv[0];
 
     /* look at all the extra args */
-    while ((c = getopt(argc, argv, "P:sczvk:l:p:u:a:m:f:r:t:n:x:w:?")) != EOF)
+    while ((c = getopt(argc, argv, "P:sczvk:l:p:u:a:m:f:r:t:n:x:X:w:?")) != EOF)
 	switch (c) {
 	case 'P':
 	    prot = optarg;
@@ -2198,10 +2199,27 @@ int main(int argc, char **argv)
 	    if (reauth <= 0)
 		imtest_fatal("number of auth attempts must be > 0\n");
 	    break;
+	case 'X':
 	case 'x':
 	    if(filename)
 		imtest_fatal("cannot pipe a file when using unix domain socket output");
+	    if(output_socket)
+		imtest_fatal("cannot specify both -X and -x");
+	    
 	    output_socket = optarg;
+
+	    if(c == 'X'){
+		/* close all already-open file descriptors that are
+		 * not stdin/stdout/stderr */
+		int i, dsize = getdtablesize();
+
+		/* close all file descriptors */
+		for(i=0; i<dsize; i++) close(i);
+
+		/* background ourselves and lose the process group info */
+		for(i=0;i<3;i++) if(fork()) exit(0);
+	    }
+	    
 	    break;
 	case '?':
 	default:
