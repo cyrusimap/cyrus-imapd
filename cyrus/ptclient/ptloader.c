@@ -1,6 +1,6 @@
 /* ptloader.c -- AFS group loader daemon
  *
- * Copyright 1996, Carnegie Mellon University.  All Rights Reserved.
+ * Copyright 1996-1998, Carnegie Mellon University.  All Rights Reserved.
  * 
  * This software is made available for academic and research
  * purposes only.  No commercial license is hereby granted.
@@ -13,7 +13,7 @@
  *
  */
 
-static char rcsid[] = "$Id: ptloader.c,v 1.10 1998/05/01 21:56:02 tjs Exp $";
+static char rcsid[] = "$Id: ptloader.c,v 1.11 1998/05/13 03:47:01 wcw Exp $";
 #include <string.h>
 #include "auth_krb_pts.h"
 #include <stdio.h>
@@ -70,7 +70,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_DEBUG, "starting: $Id: ptloader.c,v 1.10 1998/05/01 21:56:02 tjs Exp $");
+    syslog(LOG_DEBUG, "starting: $Id: ptloader.c,v 1.11 1998/05/13 03:47:01 wcw Exp $");
 
     while ((opt = getopt(argc, argv, "Usd:l:f:u:t:")) != EOF) {
       switch (opt) {
@@ -394,12 +394,21 @@ reauth(name, file, newpag, is_srvtab)
     struct ktc_principal aclient;
     struct ktc_token atoken, btoken;
 
-    krb_get_lrealm(lrealm, 1);
-    read_service_key(name, NULL, lrealm, bkvno, file, (char *)password);
-    memcpy(use_as_key, password, 8);
-    kerrno = krb_get_in_tkt(name, NULL, lrealm, "krbtgt", lrealm, 
+    if ((kerrno = krb_get_lrealm(lrealm, 1)) != 0) {
+      syslog(LOG_ERR, "krb_get_lrealm: %d", kerrno);
+      return(-1);
+    }
+
+    (void)memset(password, 0, sizeof(password));
+    kerrno = read_service_key(name, "", lrealm, bkvno, file, (char *)password);
+    if (kerrno != 0) {
+      syslog(LOG_ERR, "read_service_key: %d", kerrno);
+      return(-1);
+    }
+    (void)memcpy(use_as_key, password, 8);
+    kerrno = krb_get_in_tkt(name, "", lrealm, "krbtgt", lrealm, 
 			    DEFAULT_TKT_LIFE, key_to_key, NULL, use_as_key);
-    memset(use_as_key, 0, sizeof(use_as_key));
+    (void)memset(use_as_key, 0, sizeof(use_as_key));
     if (kerrno != 0) {
       syslog(LOG_ERR, "get_in_tkt: %d", kerrno);
       return(-1);
@@ -444,7 +453,7 @@ reauth(name, file, newpag, is_srvtab)
       syslog(LOG_ERR, "ktc_SetToken: %d", kerrno);
       return(-1);
     }
-  } else {
+  } else { /* not using srvtab but using a regular file */
     if ((fp = fopen(file, "r")) == NULL) {
       syslog(LOG_ERR, "fopen: password file: %m");
       return(-1);
@@ -497,4 +506,4 @@ int exitcode;
   syslog(LOG_ERR, "%s", msg);
   exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.10 1998/05/01 21:56:02 tjs Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.11 1998/05/13 03:47:01 wcw Exp $ */
