@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.93.2.8 2004/06/18 14:44:44 ken3 Exp $
+ * $Id: imtest.c,v 1.93.2.9 2004/06/29 17:05:29 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1017,6 +1017,7 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
     int inbase64len;
     char cmdbuf[40];
     int sendliteral = sasl_cmd->quote;
+    int initial_response = 1;
     imt_stat status;
     
     if (!sasl_cmd || !sasl_cmd->cmd) return IMTEST_FAIL;
@@ -1062,6 +1063,8 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 	    printf(" ");
 	    prot_printf(pout, " ");
 	}
+    } else {
+	goto noinitresp;
     }
 
     do {
@@ -1077,7 +1080,7 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 		prot_printf(pout, "{%d+}\r\n", inbase64len);
 		prot_flush(pout);
 	    }
-	    printf("C: %s", inbase64);
+	    printf("%s%s", initial_response ? "" : "C: ", inbase64);
 	    prot_write(pout, inbase64, inbase64len);
 
 	    out = NULL;
@@ -1086,8 +1089,12 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 	       empty literal in this case */
 	    printf("{0+}\r\nC: ");
 	    prot_printf(pout, "{0+}\r\n");
+	} else {
+	    printf("C: ");
 	}
       noinitresp:
+	initial_response = 0;
+	
 	printf("\r\n");
 	prot_printf(pout, "\r\n");
 	prot_flush(pout);
@@ -1118,7 +1125,6 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 	    return saslresult;
 	}
 
-	if (status == STAT_CONT) printf("C: ");
 	sendliteral = !sasl_cmd->cont;
 
     } while (status == STAT_CONT);
