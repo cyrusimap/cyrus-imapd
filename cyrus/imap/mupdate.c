@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.14 2004/07/15 01:20:13 ken3 Exp $
+ * $Id: mupdate.c,v 1.77.2.15 2004/12/17 18:15:13 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -571,7 +571,6 @@ int service_init(int argc, char **argv,
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
-    signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
     global_sasl_init(1, 1, mysasl_cb);

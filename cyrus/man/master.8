@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: master.8,v 1.10.2.2 2004/12/08 18:07:41 ken3 Exp $
+.\" $Id: master.8,v 1.10.2.3 2004/12/17 18:15:18 ken3 Exp $
 .SH NAME
 master \- master Cyrus process
 .SH SYNOPSIS
@@ -146,15 +146,6 @@ configuration file will be allowed to run until completion.
 The environment variable \fBCYRUS_VERBOSE\fR can be set to log additional
 debugging information. Setting the value to 1 results in base level logging. 
 Setting it higher results in more log messages being generated.
-.SH BUGS
-Services do not always go away silently when removed through a SIGHUP.  If
-there are workers of the removed service still running, messages to syslog
-about broken pipes and accept() failures are to be expected.
-.PP
-The in-memory list of services is not cleaned up ever, so a Cyrus master
-daemon that has been sent an extremely high amount of SIGHUP signals to
-add/remove/modify services will lose performance eventually.  Restarting
-Cyrus master fixes this.
 .SH FILES
 .TP
 .B /etc/cyrus.conf, /etc/imapd.conf, /var/run/cyrus-master.pid

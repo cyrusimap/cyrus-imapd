@@ -1,7 +1,7 @@
 #ifndef HAVE_MASTER_H
 #define HAVE_MASTER_H
 
-/* $Id: master.h,v 1.9.2.2 2004/12/09 17:56:20 ken3 Exp $ */
+/* $Id: master.h,v 1.9.2.3 2004/12/17 18:15:20 ken3 Exp $ */
 
 #include <config.h>
 #include <sys/resource.h> /* for rlim_t */
@@ -20,7 +20,6 @@ struct service {
 
     /* communication info */
     int socket;			/* client/child communication channel */
-    struct sockaddr *saddr;
     int stat[2];		/* master/child communication channel */
 
     /* limits */

@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.48.2.4 2004/12/03 16:29:35 ken3 Exp $ */
+/* $Id: fud.c,v 1.48.2.5 2004/12/17 18:15:00 ken3 Exp $ */
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -123,7 +123,10 @@ int begin_handling(void)
             memset(mbox,'\0',MAX_MAILBOX_NAME+1);
             memset(buf, '\0', MAXLOGNAME + MAX_MAILBOX_NAME + 1);
 
-	    signals_poll();
+	    if (signals_poll() == SIGHUP) {
+		/* caught a SIGHUP, return */
+		return 0;
+	    }
             r = recvfrom(soc, buf, 511, 0, 
 			 (struct sockaddr *) &sfrom, &sfromsiz);
             if (r == -1) {
@@ -170,7 +173,6 @@ int service_init(int argc, char **argv, char **envp)
     setproctitle_init(argc, argv, envp);
 
     signals_set_shutdown(&shut_down);
-    signals_add_handlers();
 
     mboxlist_init(0);
     mboxlist_open(NULL);

@@ -1,4 +1,4 @@
-/* signals.c -- signal handling functions to allow clean shutdown
+/* signals.h -- signal handling functions to allow clean shutdown
 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -37,76 +37,17 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
  */
-/* $Id: signals.c,v 1.11.2.1 2004/12/17 18:15:17 ken3 Exp $ */
+/* $Id: signals.h,v 1.1.2.1 2004/12/17 18:15:17 ken3 Exp $ */
 
-#include <config.h>
+#ifndef INCLUDED_SIGNALS_H
+#define INCLUDED_SIGNALS_H
 
-#include <stdlib.h>
-#include <signal.h>
-#include <syslog.h>
+typedef void shutdownfn(int);
 
-#include "signals.h"
-#include "xmalloc.h"
-#include "exitcodes.h"
+void signals_add_handlers(int alarm);
+void signals_set_shutdown(shutdownfn *s);
+int signals_poll(void);
 
-static int gotsignal = 0;
-
-static void sighandler(int sig)
-{
-    /* syslog(LOG_DEBUG, "got signal %d", sig); */
-    gotsignal = sig;
-}
-
-static const int catch[] = { SIGHUP, SIGINT, SIGQUIT, 0 };
-
-void signals_add_handlers(int alarm)
-{
-    struct sigaction action;
-    int i;
-    
-    sigemptyset(&action.sa_mask);
-
-    action.sa_flags = 0;
-#ifdef SA_RESETHAND
-    action.sa_flags |= SA_RESETHAND;
-#endif
-
-    action.sa_handler = sighandler;
-
-    /* SIGALRM used as a syscall timeout, so we don't set SA_RESTART */
-    if (alarm && sigaction(SIGALRM, &action, NULL) < 0) {
-	fatal("unable to install signal handler for %d: %m", SIGALRM);
-    }
-
-#ifdef SA_RESTART
-    action.sa_flags |= SA_RESTART;
-#endif
-    
-    for (i = 0; catch[i] != 0; i++) {
-	if (catch[i] != SIGALRM && sigaction(catch[i], &action, NULL) < 0) {
-	    fatal("unable to install signal handler for %d: %m", catch[i]);
-	}
-    }
-}
-
-static shutdownfn *shutdown_cb = NULL;
-
-void signals_set_shutdown(shutdownfn *s)
-{
-    shutdown_cb = s;
-}
-
-int signals_poll(void)
-{
-    switch (gotsignal) {
-    case SIGINT:
-    case SIGQUIT:
-	if (shutdown_cb) shutdown_cb(EC_TEMPFAIL);
-	else exit(EC_TEMPFAIL);
-	break;
-    default:
-	return gotsignal;
-	break;
-    }
-}
+#endif /* INCLUDED_SIGNALS_H */

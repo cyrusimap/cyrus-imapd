@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.30 2004/09/09 18:47:07 shadow Exp $
+ * $Id: pop3d.c,v 1.144.2.31 2004/12/17 18:15:16 ken3 Exp $
  */
 #include <config.h>
 
@@ -380,7 +380,6 @@ int service_init(int argc __attribute__((unused)),
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
-    signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */

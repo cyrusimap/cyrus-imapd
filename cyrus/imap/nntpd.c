@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.32 2004/12/07 19:34:22 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.33 2004/12/17 18:15:14 ken3 Exp $
  */
 
 /*
@@ -438,7 +438,6 @@ int service_init(int argc __attribute__((unused)),
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
-    signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.26 2004/09/09 18:47:06 shadow Exp $
+ * $Id: lmtpd.c,v 1.121.2.27 2004/12/17 18:15:11 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -156,7 +156,6 @@ int service_init(int argc __attribute__((unused)),
     if (geteuid() == 0) return 1;
     
     signals_set_shutdown(&shut_down);
-    signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
     singleinstance = config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);

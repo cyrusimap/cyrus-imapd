@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.45.2.6 2004/09/13 22:12:21 shadow Exp $ */
+/* $Id: service.c,v 1.45.2.7 2004/12/17 18:15:20 ken3 Exp $ */
 
 #include <config.h>
 
@@ -70,6 +70,7 @@
 #include "service.h"
 #include "libconfig.h"
 #include "xmalloc.h"
+#include "signals.h"
 
 extern int optind, opterr;
 extern char *optarg;
@@ -77,8 +78,8 @@ extern char *optarg;
 /* number of times this service has been used */
 static int use_count = 0;
 static int verbose = 0;
-static volatile int gotalrm = 0;
 static int lockfd = -1;
+static int newfile = 0;
 
 void notify_master(int fd, int msg)
 {
@@ -182,10 +183,10 @@ static int lockaccept(void)
 	alockinfo.l_type = F_WRLCK;
 	while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 && 
 	       errno == EINTR &&
-	       !gotalrm)
+	       !signals_poll())
 	    /* noop */;
 	
-	if (rc < 0 && gotalrm) {
+	if (rc < 0 && signals_poll()) {
 	    if (MESSAGE_MASTER_ON_EXIT) 
 		notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	    service_abort(0);
@@ -228,33 +229,6 @@ static int unlockaccept(void)
 	    service_abort(EX_OSERR);
 	    return -1;
 	}
-    }
-
-    return 0;
-}
-
-static void sigalrm(int sig)
-{
-    /* syslog(LOG_DEBUG, "got signal %d", sig); */
-    if (sig == SIGALRM) {
-	gotalrm = 1;
-    }
-}
-
-int setsigalrm(void)
-{
-    struct sigaction action;
-    
-    sigemptyset(&action.sa_mask);
-
-    action.sa_flags = 0;
-#ifdef SA_RESETHAND
-    action.sa_flags |= SA_RESETHAND;
-#endif
-    action.sa_handler = sigalrm;
-    if (sigaction(SIGALRM, &action, NULL) < 0) {
-	syslog(LOG_ERR, "installing SIGALRM handler: sigaction: %m");
-	return -1;
     }
 
     return 0;
@@ -426,14 +400,11 @@ int main(int argc, char **argv, char **envp)
     for (;;) {
 	/* ok, listen to this socket until someone talks to us */
 
+	/* (re)set signal handlers, including SIGALRM */
+	signals_add_handlers(SIGALRM);
+
 	if (use_count > 0) {
 	    /* we want to time out after 60 seconds, set an alarm */
-	    if (setsigalrm() < 0) {
-		if (MESSAGE_MASTER_ON_EXIT) 
-		    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-		service_abort(EX_OSERR);
-	    }
-	    gotalrm = 0;
 	    alarm(reuse_timeout);
 	}
 
@@ -441,13 +412,13 @@ int main(int argc, char **argv, char **envp)
 	lockaccept();
 
 	fd = -1;
-	while (fd < 0 && !gotalrm) { /* loop until we succeed */
+	while (fd < 0 && !signals_poll()) { /* loop until we succeed */
 	    /* check current process file inode, size and mtime */
 	    stat(path, &sbuf);
 	    if (sbuf.st_ino != start_ino || sbuf.st_size != start_size ||
 		sbuf.st_mtime != start_mtime) {
 		syslog(LOG_INFO, "process file has changed");
-		gotalrm = 1;
+		newfile = 1;
 		break;
 	    }
 
@@ -470,6 +441,9 @@ int main(int argc, char **argv, char **envp)
 		    case EAGAIN:
 		    case EINTR:
 			break;
+
+		    case EINVAL:
+			if (signals_poll() == SIGHUP) break;
 			
 		    default:
 			syslog(LOG_ERR, "accept failed: %m");
@@ -501,8 +475,8 @@ int main(int argc, char **argv, char **envp)
 	/* unlock */
 	unlockaccept();
 
-	if (fd < 0 && gotalrm) {
-	    /* timed out */
+	if (fd < 0 && (signals_poll() || newfile)) {
+	    /* timed out (SIGALRM), SIGHUP, or new process file */
 	    if (MESSAGE_MASTER_ON_EXIT) 
 		notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	    service_abort(0);
@@ -517,7 +491,6 @@ int main(int argc, char **argv, char **envp)
 
 	/* cancel the alarm */
 	alarm(0);
-	gotalrm = 0;
 
 	/* tcp only */
 	if(soctype == SOCK_STREAM) {
@@ -557,7 +530,8 @@ int main(int argc, char **argv, char **envp)
 	service_main(newargc, newargv, envp);
 	/* if we returned, we can service another client with this process */
 
-	if (use_count >= max_use) {
+	if (signals_poll() || use_count >= max_use) {
+	    /* caught SIGHUP or exceeded max use count */
 	    break;
 	}
 

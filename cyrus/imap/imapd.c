@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.48 2004/11/17 22:30:06 shadow Exp $ */
+/* $Id: imapd.c,v 1.443.2.49 2004/12/17 18:15:01 ken3 Exp $ */
 
 #include <config.h>
 
@@ -600,7 +600,6 @@ int service_init(int argc, char **argv, char **envp)
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
-    signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */

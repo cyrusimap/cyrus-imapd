@@ -1,5 +1,5 @@
 /* global.h -- Header for global/shared variables & functions.
- * $Id: global.h,v 1.2.2.3 2004/04/08 21:12:58 ken3 Exp $
+ * $Id: global.h,v 1.2.2.4 2004/12/17 18:15:00 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,6 +47,7 @@
 #include "libconfig.h"
 #include "auth.h"
 #include "mboxname.h"
+#include "signals.h"
 
 /* Flags for cyrus_init() */
 enum {
@@ -97,13 +98,6 @@ extern int mysasl_proxy_policy(sasl_conn_t *conn,
 /* check if `authstate' is a valid member of class */
 extern int global_authisa(struct auth_state *authstate, 
 			  enum imapopt opt);
-
-/* signal handling (signals.c) */
-typedef void shutdownfn(int);
-
-void signals_add_handlers(void);
-void signals_set_shutdown(shutdownfn *s);
-void signals_poll(void);
 
 /* useful types */
 struct protstream;
