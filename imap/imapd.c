@@ -745,6 +745,14 @@ char *name;
 			  imapd_userid);
     mailbox_close(&mailbox);
 
+    /* Parse newline terminating command */
+    c = getc(stdin);
+    if (c == '\r') c = getc(stdin);
+    if (c != '\n') {
+	printf("* BAD Junk after literal in APPEND command\r\n");
+	eatline();
+    }
+
     if (imapd_mailbox) {
 	/*
 	 * We do a full check, to pick up any \Seen flag we might have
