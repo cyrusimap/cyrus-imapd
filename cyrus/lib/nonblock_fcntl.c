@@ -1,5 +1,5 @@
 /* nonblock_fcntl.c -- Set nonblocking mode using fcntl()
- $Id: nonblock_fcntl.c,v 1.6 1998/05/15 21:52:34 neplokh Exp $
+ $Id: nonblock_fcntl.c,v 1.7 1999/09/30 07:32:07 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -26,6 +26,7 @@
 #include <sys/file.h>
 #include <fcntl.h>
 
+#include "xmalloc.h"
 #include "nonblock.h"
 
 #ifndef	FNDELAY
@@ -51,7 +52,7 @@ int mode;
     int flags;
 
     flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0) fatal("Internal error: fcntl F_GETFL failed");
+    if (flags < 0) fatal("Internal error: fcntl F_GETFL failed", -1);
     if (mode) {
 	flags |= NON_BLOCKING_MODE;
     }
