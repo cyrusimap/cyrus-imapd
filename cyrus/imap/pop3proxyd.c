@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.21 2002/12/16 16:15:02 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.22 2002/12/16 17:22:45 ken3 Exp $
  */
 #include <config.h>
 
@@ -1048,8 +1048,8 @@ static void openproxy(void)
 	if(c) *c = '\0';
     }
 
-    backend = findserver(NULL, server, &protocol[PROTOCOL_POP3],
-			 popd_userid, &statusline);
+    backend = backend_connect(NULL, server, &protocol[PROTOCOL_POP3],
+			      popd_userid, &statusline);
 
     if (!backend) {
 	syslog(LOG_ERR, "couldn't authenticate to backend server");
@@ -1106,7 +1106,7 @@ static void bitpipe(void)
     }
  done:
     /* ok, we're done. close backend connection */
-    downserver(backend, NULL);
+    backend_disconnect(backend, NULL);
 
     /* close the connection to the client */
     close(0);

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7.6.9 2002/12/16 16:15:01 ken3 Exp $ */
+/* $Id: backend.c,v 1.7.6.10 2002/12/16 17:22:44 ken3 Exp $ */
 
 #include <config.h>
 
@@ -261,9 +261,9 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     return r;
 }
 
-struct backend *findserver(struct backend *ret, const char *server,
-			   struct protocol_t *prot, const char *userid,
-			   const char **auth_status)
+struct backend *backend_connect(struct backend *ret, const char *server,
+				struct protocol_t *prot, const char *userid,
+				const char **auth_status)
 {
     /* need to (re)establish connection to server or create one */
     int sock;
@@ -323,7 +323,7 @@ struct backend *findserver(struct backend *ret, const char *server,
     return ret;
 }
 
-void downserver(struct backend *s, struct protocol_t *prot)
+void backend_disconnect(struct backend *s, struct protocol_t *prot)
 {
     char buf[1024];
     if(!s) return;
@@ -338,13 +338,6 @@ void downserver(struct backend *s, struct protocol_t *prot)
 		     strlen(prot->logout_cmd.resp))) {
 	    break;
 	}
-#if 0 /* XXX do we care?  should we do a protocol specific check? */
-	if (!strncmp("* BAD", buf, 5)) {
-	    syslog(LOG_ERR, "got BAD in response to LOGOUT command sent to %s",
-		   s->hostname);
-	    break;
-	}
-#endif
     }
 
     /* Flush the incoming buffer */

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.48 2002/12/16 01:28:54 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.49 2002/12/16 17:22:44 ken3 Exp $ */
 
 #include <config.h>
 
@@ -5915,7 +5915,7 @@ static int do_xfer_single(char *toserver, char *topart,
     /* Step 1: Connect to remote server */
     if(!r && !be_in) {
 	/* Just authorize as the IMAP server, so pass "" as our authzid */
-	be = findserver(NULL, toserver, &protocol[PROTOCOL_IMAP], "", NULL);
+	be = backend_connect(NULL, toserver, &protocol[PROTOCOL_IMAP], "", NULL);
 	if(!be) r = IMAP_SERVER_UNAVAILABLE;
 	if(r) syslog(LOG_ERR,
 		     "Could not move mailbox: %s, Backend connect failed",
@@ -6087,7 +6087,7 @@ done:
     if(mupdate_h && !h_in)
 	mupdate_disconnect(&mupdate_h);
     if(be && !be_in)
-	downserver(be, &protocol[PROTOCOL_IMAP]);
+	backend_disconnect(be, &protocol[PROTOCOL_IMAP]);
 
     return r;
 }
@@ -6231,7 +6231,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	}
 
 	/* Get a single connection to the remote backend */
-	be = findserver(NULL, toserver, &protocol[PROTOCOL_IMAP], "", NULL);
+	be = backend_connect(NULL, toserver, &protocol[PROTOCOL_IMAP], "", NULL);
 	if(!be) {
 	    r = IMAP_SERVER_UNAVAILABLE;
 	    syslog(LOG_ERR,
@@ -6306,7 +6306,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	}
 
 	if(be) {
-	    downserver(be, &protocol[PROTOCOL_IMAP]);
+	    backend_disconnect(be, &protocol[PROTOCOL_IMAP]);
 	    free(be);
 	}
 

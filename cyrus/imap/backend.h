@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.3.6.6 2002/12/16 16:15:02 ken3 Exp $ */
+/* $Id: backend.h,v 1.3.6.7 2002/12/16 17:22:44 ken3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -78,10 +78,10 @@ struct backend {
 
 /* if cache is NULL, returns a new struct backend, otherwise returns
  * cache on success (and returns NULL on failure, but leaves cache alone) */
-struct backend *findserver(struct backend *cache, const char *server,
-			   struct protocol_t *prot, const char *userid,
-			   const char **auth_status);
-void downserver(struct backend *s, struct protocol_t *prot);
+struct backend *backend_connect(struct backend *cache, const char *server,
+				struct protocol_t *prot, const char *userid,
+				const char **auth_status);
+void backend_disconnect(struct backend *s, struct protocol_t *prot);
 
 #define CAPA(s, c) ((s)->capability & (c))
 

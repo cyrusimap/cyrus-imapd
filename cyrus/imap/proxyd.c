@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.38 2002/12/16 01:28:55 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.39 2002/12/16 17:22:46 ken3 Exp $ */
 
 #include <config.h>
 
@@ -877,7 +877,7 @@ void proxyd_downserver(struct backend *s)
     }
 
     /* need to logout of server */
-    downserver(s, &protocol[PROTOCOL_IMAP]);
+    backend_disconnect(s, &protocol[PROTOCOL_IMAP]);
 
     if(s == backend_inbox) backend_inbox = NULL;
     if(s == backend_current) backend_current = NULL;
@@ -954,8 +954,8 @@ struct backend *proxyd_findserver(const char *server)
 
     if (!ret || !ret->timeout) {
 	/* need to (re)establish connection to server or create one */
-	ret = findserver(ret, server, &protocol[PROTOCOL_IMAP],
-			 proxyd_userid, NULL);
+	ret = backend_connect(ret, server, &protocol[PROTOCOL_IMAP],
+			      proxyd_userid, NULL);
 	if(!ret) return NULL;
 
 	/* find the capabilities of the server */
