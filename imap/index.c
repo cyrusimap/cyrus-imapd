@@ -199,10 +199,10 @@ int checkseen;
 		    oldmsgno++;
 		}
 		if (nexpunge) {
-		    bcopy(flagreport+msgno+nexpunge, flagreport+msgno,
-			  (oldexists-msgno-nexpunge+1)*sizeof(*flagreport));
-		    bcopy(seenflag+msgno+nexpunge, seenflag+msgno,
-			  (oldexists-msgno-nexpunge+1)*sizeof(*seenflag));
+		    memmove(flagreport+msgno, flagreport+msgno+nexpunge,
+			    (oldexists-msgno-nexpunge+1)*sizeof(*flagreport));
+		    memmove(seenflag+msgno, seenflag+msgno+nexpunge,
+			    (oldexists-msgno-nexpunge+1)*sizeof(*seenflag));
 		    oldexists -= nexpunge;
 		    while (nexpunge--) {
 			prot_printf(imapd_out, "* %u EXPUNGE\r\n", msgno);
@@ -1406,7 +1406,7 @@ struct strlist *headers;
 	buf = xrealloc(buf, bufsize);
     }
 
-    bcopy(cacheitem+4, buf, size);
+    memcpy(buf, cacheitem+4, size);
     buf[size] = '\0';
 
     index_pruneheader(buf, headers, 0);

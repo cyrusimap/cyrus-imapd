@@ -654,7 +654,7 @@ int size;
     int retval = 0;
 
     if (decodeleft && decodestart != 0) {
-	bcopy(decodebuf+decodestart, decodebuf, decodeleft);
+	memmove(decodebuf, decodebuf+decodestart, decodeleft);
     }
     decodestart = 0;
 

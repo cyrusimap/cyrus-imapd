@@ -186,7 +186,7 @@ struct protstream *s;
 	if (s->leftcnt) {
 	    /* Crypttext left over from last fill, process it */
 	    n = s->leftcnt;
-	    bcopy(s->leftptr, s->buf, n);
+	    memmove(s->buf, s->leftptr, n);
 	    s->leftcnt = 0;
 	}
 	else {
@@ -347,14 +347,14 @@ char *buf;
 int len;
 {
     while (len >= s->cnt) {
-	bcopy(buf, s->ptr, s->cnt);
+	memcpy(s->ptr, buf, s->cnt);
 	s->ptr += s->cnt;
 	buf += s->cnt;
 	len -= s->cnt;
 	s->cnt = 0;
 	if (prot_flush(s) == EOF) return EOF;
     }
-    bcopy(buf, s->ptr, len);
+    memcpy(s->ptr, buf, len);
     s->ptr += len;
     s->cnt -= len;
     if (s->error || s->eof) return EOF;
@@ -445,7 +445,7 @@ int size;
     if (s->cnt) {
 	/* Some data in the input buffer, return that */
 	if (size > s->cnt) size = s->cnt;
-	bcopy(s->ptr, buf, size);
+	memcpy(buf, s->ptr, size);
 	s->ptr += size;
 	s->cnt -= size;
 	return size;
@@ -455,7 +455,7 @@ int size;
     if (c == EOF) return 0;
     buf[0] = c;
     if (--size > s->cnt) size = s->cnt;
-    bcopy(s->ptr, buf+1, size);
+    memcpy(buf+1, s->ptr, size);
     s->ptr += size;
     s->cnt -= size;
     return size+1;
