@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.104 2000/05/31 16:21:57 ken3 Exp $
+ * $Id: index.c,v 1.105 2000/06/01 20:50:17 ken3 Exp $
  */
 #include <config.h>
 
@@ -3002,15 +3002,12 @@ static unsigned hash(char *string)
 #define NEWMSGDATA \
     (struct msgdata *) memset(xmalloc(sizeof(struct msgdata)), 0, \
 			      sizeof(struct msgdata))
-#define GETADDR(header)					\
-    parseaddr_list(header+4, &addr);			\
-    if (addr) {						\
-	sprintf(buf, "%s@%s",				\
-		addr->mailbox ? addr->mailbox : "",	\
-		addr->domain ? addr->domain : "");	\
-    }							\
-    cur->header = xstrdup(buf);				\
-    parseaddr_free(addr)
+
+#define GETADDR(header)							\
+    parseaddr_list(header+4, &addr);					\
+    cur->header = xstrdup(addr && addr->mailbox ? addr->mailbox : "");	\
+    parseaddr_free(addr);						\
+    addr=NULL
 
 static struct msgdata *index_msgdata_load(unsigned *msgno_list, int n,
 					  signed char *sortcrit)
@@ -3019,7 +3016,6 @@ static struct msgdata *index_msgdata_load(unsigned *msgno_list, int n,
     unsigned sortcrit_mask = 0;
     const char *cacheitem, *env, *from, *to, *cc, *subj;
     struct address *addr;
-    char buf[1024];
     int i, j;
 
     if (!n)
@@ -3046,8 +3042,6 @@ static struct msgdata *index_msgdata_load(unsigned *msgno_list, int n,
 
 	j = 0;
 	while (sortcrit[j]) {
-	    buf[0] = '\0';
-
 	    switch (abs(sortcrit[j++])) {
 	    case SORT_ARRIVAL:
 		cur->arrival = INTERNALDATE(cur->msgno);
