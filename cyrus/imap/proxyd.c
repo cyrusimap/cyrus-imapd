@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.36 2000/06/06 19:23:20 leg Exp $ */
+/* $Id: proxyd.c,v 1.37 2000/06/07 20:12:25 leg Exp $ */
 
 #include <config.h>
 
@@ -2791,7 +2791,6 @@ void cmd_create(char *tag, char *name, char *server)
     }
     
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
-    if (acl) free(acl);
 }
 
 /*
@@ -2921,7 +2920,6 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     }
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
-    if (acl) free(acl);
 }
 
 /*
@@ -3327,7 +3325,6 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
     }
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
-    if (acl) free(acl);
 }
 
 /*
