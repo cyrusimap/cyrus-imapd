@@ -1,5 +1,5 @@
 /* xmalloc.c -- Allocation package that calls fatal() when out of memory
- $Id: xmalloc.c,v 1.14 1999/03/01 21:16:44 tjs Exp $
+ $Id: xmalloc.c,v 1.15 1999/03/02 01:01:22 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -23,48 +23,42 @@
  *
  */
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "xmalloc.h"
 
 #include "sysexits.h"
 
-extern char *malloc(), *realloc();
-extern void free(void* ptr);
-
-char *xmalloc (size)
-unsigned size;
+void* xmalloc(unsigned size)
 {
-    char *ret;
+    void *ret;
 
     if (ret = malloc(size))
       return ret;
 
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
+    return 0; /*NOTREACHED*/
 }
 
-
-char *xrealloc (ptr, size)
-char *ptr;
-unsigned size;
+void *xrealloc (void* ptr, unsigned size)
 {
-    char *ret;
+    void *ret;
 
     /* xrealloc (NULL, size) behaves like xmalloc (size), as in ANSI C */
-    if (ret = !ptr ? malloc (size) : realloc (ptr, size))
-      return ret;
+    if (ret = !ptr ? malloc (size) : realloc (ptr, size)) return ret;
 
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
+    return 0; /*NOTREACHED*/
 }
 
-char *xstrdup(str)
-const char *str;
+char *xstrdup(const char* str)
 {
     char *p = xmalloc(strlen(str)+1);
     strcpy(p, str);
     return p;
 }
 
-char *xstrndup(str, len)
-const char *str;
-unsigned len;
+char *xstrndup(const char* str, unsigned len)
 {
     char *p = xmalloc(len+1);
     strncpy(p, str, len);
@@ -73,10 +67,9 @@ unsigned len;
 }
 
 /* Same as xmalloc() */
-void *fs_get(size)
-unsigned size;
+void *fs_get(unsigned size)
 {
-    char *ret;
+    void *ret;
 
     if (ret = malloc(size))
       return (void *)ret;
@@ -84,9 +77,8 @@ unsigned size;
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
 }
 
-void fs_give(ptr)
-void **ptr;
+void fs_give(void** ptr)
 {
-    free((char *)*ptr);
+    free((void *)*ptr);
     *ptr = 0;
 }
