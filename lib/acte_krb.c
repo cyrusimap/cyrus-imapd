@@ -586,7 +586,7 @@ int *outputlen;
 {
     struct krb_state *kstate = (struct krb_state *)state;
 
-    *outputlen = krb_mk_safe(input, output, inputlen, kstate->schedule,
+    *outputlen = krb_mk_priv(input, output, inputlen, kstate->schedule,
 			     kstate->session, &kstate->localaddr,
 			     &kstate->remoteaddr);
     return 0;
