@@ -122,10 +122,15 @@ sub authenticate {
 }
 
 sub reconstruct {
-    my ($self, $mailbox) = @_;
+    my ($self, $mailbox, $recurse) = @_;
     my $rc;
     my $msg;
-    ($rc, $msg) = $self->send('', '', 'RECONSTRUCT %s', $mailbox);
+    if($recurse == 1) {
+      ($rc, $msg) = $self->send('', '', 'RECONSTRUCT "%s" RECURSEIVE',
+				$mailbox);
+    } else {
+      ($rc, $msg) = $self->send('', '', 'RECONSTRUCT "%s"', $mailbox);
+    }
     $self->{error} = $msg;
     if($rc eq "OK") {
       $rc = 1;

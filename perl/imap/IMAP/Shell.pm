@@ -917,11 +917,16 @@ sub _sc_delete {
 sub _sc_reconstruct {
   my ($cyrref, $name, $fh, $lfh, @argv) = @_;
   my (@nargv, $opt);
+  my $recurse = 0;
   shift(@argv);
   while (defined ($opt = shift(@argv))) {
     last if $opt eq '--';
     if ($opt =~ /^-/) {
-      die "usage: reconstruct mailbox\n";
+      if($opt eq "-r") {
+	$recurse = 1;
+      } else {
+	die "usage: reconstruct [-r] mailbox\n";
+      }
     }
     else {
       push(@nargv, $opt);
@@ -930,7 +935,7 @@ sub _sc_reconstruct {
   }
   push(@nargv, @argv);
   if (!@nargv || @nargv > 1) {
-    die "usage: reconstruct mailbox\n";
+    die "usage: reconstruct [-r] mailbox\n";
   }
   if (!$cyrref || !$$cyrref) {
     die "reconstruct: no connection to server\n";

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.342 2002/02/19 18:50:11 ken3 Exp $ */
+/* $Id: imapd.c,v 1.343 2002/02/20 19:29:05 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -154,7 +154,7 @@ void cmd_create(char *tag, char *name, char *partition);
 void cmd_delete(char *tag, char *name);
 void cmd_rename(const char *tag, char *oldname, 
 		char *newname, char *partition);
-void cmd_reconstruct(const char *tag, const char *name);
+void cmd_reconstruct(const char *tag, const char *name, int recursive);
 void cmd_find(char *tag, char *namespace, char *pattern);
 void cmd_list(char *tag, int subscribed, char *reference, char *pattern);
 void cmd_changesub(char *tag, char *namespace, char *name, int add);
@@ -687,7 +687,7 @@ cmdloop()
     int fd;
     char motdfilename[1024];
     int c;
-    int usinguid, havepartition, havenamespace, oldform;
+    int usinguid, havepartition, havenamespace, recursive, oldform;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
     char *p;
     const char *err;
@@ -1167,11 +1167,22 @@ cmdloop()
 
 		snmp_increment(RENAME_COUNT, 1);
 	    } else if(!strcmp(cmd.s, "Reconstruct")) {
+		recursive = 0;
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
+		if(c == ' ') {
+		    /* Optional RECURSEIVE argument */
+		    c = getword(imapd_in, &arg2);
+		    if(!imparse_isatom(arg2.s))
+			goto extraargs;
+		    else if(!strcasecmp(arg2.s, "RECURSIVE"))
+			recursive = 1;
+		    else
+			goto extraargs;
+		}
 		if(c == '\r') c = prot_getc(imapd_in);
 		if(c != '\n') goto extraargs;
-		cmd_reconstruct(tag.s, arg1.s);
+		cmd_reconstruct(tag.s, arg1.s, recursive);
 
 		/* xxx needed? */
 		/* snmp_increment(RECONSTRUCT_COUNT, 1); */
@@ -3543,7 +3554,7 @@ void cmd_rename(const char *tag,
  * Perform a RECONSTRUCT command
  */
 void
-cmd_reconstruct(const char *tag, const char *name)
+cmd_reconstruct(const char *tag, const char *name, int recursive)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_NAME+1];
@@ -3573,8 +3584,9 @@ cmd_reconstruct(const char *tag, const char *name)
 	} else if(pid == 0) {
 	    char buf[4096];
 	    /* Child - exec reconstruct*/	    
-	    syslog(LOG_NOTICE, "Reconstructing '%s' for user '%s'",
-		   mailboxname, imapd_userid);
+	    syslog(LOG_NOTICE, "Reconstructing '%s' (%s) for user '%s'",
+		   mailboxname, recursive ? "recursive" : "not recursive",
+		   imapd_userid);
 
 	    snprintf(buf, sizeof(buf), "%s/reconstruct", SERVICE_PATH);
 
@@ -3582,8 +3594,48 @@ cmd_reconstruct(const char *tag, const char *name)
 	    fclose(stdout);
 	    fclose(stderr);
 
-	    execl(buf, buf, mailboxname, NULL);
+	    if(recursive) {
+		execl(buf, buf, "-C", config_filename, "-r", "-f",
+		      mailboxname, NULL);
+	    } else {
+		execl(buf, buf, "-C", config_filename, mailboxname, NULL);
+	    }
+	    
+	    /* if we are here, we have a problem */
+	    exit(-1);
+	} else {
+	    int status;
 
+	    /* Parent, wait on child */
+	    if(waitpid(pid, &status, 0) < 0) r = IMAP_SYS_ERROR;
+
+	    /* Did we fail? */
+	    if(WEXITSTATUS(status) != 0) r = IMAP_SYS_ERROR;
+	}
+    }
+
+    /* Still in parent, run quota -f */
+    if (!r) {
+	int pid;
+	/* Reconstruct it */
+
+	pid = fork();
+	if(pid == -1) {
+	    r = IMAP_SYS_ERROR;
+	} else if(pid == 0) {
+	    char buf[4096];
+	    /* Child - exec reconstruct*/	    
+	    syslog(LOG_NOTICE, "Regenerating quota roots for user '%s'",
+		   imapd_userid);
+
+	    snprintf(buf, sizeof(buf), "%s/quota", SERVICE_PATH);
+
+	    fclose(stdin);
+	    fclose(stdout);
+	    fclose(stderr);
+
+	    execl(buf, buf, "-C", config_filename, "-f", NULL);
+	    
 	    /* if we are here, we have a problem */
 	    exit(-1);
 	} else {

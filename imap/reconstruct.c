@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.64 2001/11/12 16:55:02 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.65 2002/02/20 19:29:06 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -252,7 +252,10 @@ int compare_uid(const void *a, const void *b)
  * mboxlist_findall() callback function to reconstruct a mailbox
  */
 int
-do_reconstruct(char *name, int matchlen, int maycreate, void *rock)
+do_reconstruct(char *name,
+	       int matchlen __attribute__((unused)),
+	       int maycreate __attribute__((unused)),
+	       void *rock)
 {
     int r;
     char buf[MAX_MAILBOX_PATH];
