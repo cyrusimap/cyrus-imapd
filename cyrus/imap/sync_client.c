@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.4 2005/03/01 18:15:50 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.5 2005/03/01 21:04:27 ken3 Exp $
  */
 
 #include <config.h>
@@ -796,9 +796,8 @@ static int sieve_deactivate(char *user)
 static int update_quota_work(struct quota *client, struct quota *server)
 {
     int  r;
-    struct txn *tid = NULL;
 
-    if ((r = quota_read(client, &tid, 0))) {
+    if ((r = quota_read(client, NULL, 0))) {
         syslog(LOG_INFO, "Warning: failed to read quotaroot %s: %s",
                client->root, error_message(r));
         return(0);

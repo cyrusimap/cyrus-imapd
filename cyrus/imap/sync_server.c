@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.2 2005/02/28 20:45:15 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.3 2005/03/01 21:04:28 ken3 Exp $
  */
 
 #include <config.h>
@@ -1530,12 +1530,12 @@ static void cmd_quota_work(char *quotaroot)
     struct mailbox m;
     int mboxopen = 0;
     int r;
-    struct txn *tid = NULL;                                                     
+
     /* Open and lock mailbox */
     r = mailbox_open_header(quotaroot, 0, &m);
 
     if (!r) mboxopen = 1;
-    if (!r) r = quota_read(&m.quota, &tid, 0);
+    if (!r) r = quota_read(&m.quota, NULL, 0);
 
     if (r) {
         prot_printf(sync_out, "OK 0\r\n");
