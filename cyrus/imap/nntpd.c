@@ -50,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.5 2002/09/24 20:34:24 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.6 2002/09/24 20:53:22 ken3 Exp $
  */
 #include <config.h>
 
@@ -1780,9 +1780,7 @@ static void cmd_post(char *msgid, int mode)
 	    }
 	}
 
-	msg_free(msg);
-
-	fclose(f);
+	msg_free(msg); /* does fclose() */
     }
     else {
 	/* flush the article from the stream */
