@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.34 2002/03/21 21:10:01 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.35 2002/04/30 18:32:12 leg Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -15,7 +15,45 @@
 <li> All "MAIL" and "SIEVE" notifications are now handled by
 <tt>notifyd</tt> which is a daemon that supports multiple notification
 methods.  The <tt>mailnotifier</tt> and <tt>sievenotifier</tt> options
-have been added to <tt>/etc/imapd.conf</tt> to configure notifications.</li>
+have been added to <tt>/etc/imapd.conf</tt> to configure
+notifications. (Ken Murchison) </li>
+
+<li> Many feature enhancements and bugfixes for the Cyrus Murder.  The
+code now supports live (but not transparent) moving of mailboxes from
+one server to another. </li>
+
+<li> Some warning fixes. </li>
+
+<li> <tt>fdatasync()</tt> is no longer required. </li>
+
+<li> Fixed a bug in <tt>imap/append.c</tt> that would show itself if a
+message was being delivered to five or more different
+partitions. </li>
+
+<li> Deliveries now don't create a redudant temporary file using
+<tt>tmpfile()</tt>; the staging directory is used instead. (Ken
+Murchison) </li>
+
+<li> Fix a possible crashing bug in <tt>squatter</tt>.  (Ken
+Murchison) </li>
+
+<li> Deleting a user now also removes their Sieve scripts. </li>
+
+<li> <tt>cyrusdb_skiplist</tt>: release locks during iteration.
+Should prevent denial of service attacks and possibly increase
+performance. </li>
+
+<li> <tt>cyrusdb_skiplist</tt>: introduce a new mode using
+<tt>O_DSYNC</tt> writes which is possibly faster on Solaris.
+Currently off (it seems to hurt performance on Linux). </li>
+
+<li> <tt>master</tt> has preliminary code to avoid forking
+storms. </li> 
+
+<li> <tt>sieveshell</tt> should now loop through all available SASL
+mechanisms before conceding defeat. </li>
+
+<li> <tt>sieveshell</tt> can now upload a file to a different name. </li>
 
 </ul>
 
@@ -1542,7 +1580,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/03/21 21:10:01 $ <br />
+last modified: $Date: 2002/04/30 18:32:12 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
