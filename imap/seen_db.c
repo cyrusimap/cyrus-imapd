@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.24 2001/11/19 21:32:45 leg Exp $
+   $Id: seen_db.c,v 1.25 2002/01/18 22:58:48 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -278,7 +278,8 @@ static int seen_readit(struct seen *seendb,
 	return IMAP_AGAIN;
 	break;
     case CYRUSDB_IOERROR:
-	syslog(LOG_ERR, "DBERROR: error fetching txn", cyrusdb_strerror(r));
+	syslog(LOG_ERR, "DBERROR: error fetching txn %s",
+	       cyrusdb_strerror(r));
 	return IMAP_IOERROR;
 	break;
     }

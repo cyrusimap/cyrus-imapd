@@ -157,7 +157,7 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
 	/* found the record */
 	memcpy(&mark, data, sizeof(time_t));
     } else if (r != CYRUSDB_OK) {
-	syslog(LOG_ERR, "duplicate_check: error looking up %s/%d: %s",
+	syslog(LOG_ERR, "duplicate_check: error looking up %s/%s: %s",
 	       id, to,
 	       cyrusdb_strerror(r));
 	mark = 0;

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.156 2001/11/19 20:53:41 leg Exp $
+ * $Id: mboxlist.c,v 1.157 2002/01/18 22:58:47 rjs3 Exp $
  */
 
 #include <config.h>
@@ -565,7 +565,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	goto retry;
 	break;
     default:
-	syslog(LOG_ERR, "DBERROR: error updating database: %s",
+	syslog(LOG_ERR, "DBERROR: error updating database %s: %s",
 	       name, cyrusdb_strerror(r));
 	r = IMAP_IOERROR;
 	goto done;
@@ -659,7 +659,7 @@ int mboxlist_insertremote(char *name, int mbtype, char *host, char *acl,
 	abort(); /* shouldn't happen ! */
 	break;
     default:
-	syslog(LOG_ERR, "DBERROR: error updating database: %s",
+	syslog(LOG_ERR, "DBERROR: error updating database %s: %s",
 	       name, cyrusdb_strerror(r));
 	r = IMAP_IOERROR;
 	break;

@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.12 2001/11/27 02:25:06 ken3 Exp $
+ * $Id: parser.c,v 1.13 2002/01/18 22:58:51 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -73,6 +73,8 @@ int starttls_done = 0;
 static SSL *tls_conn = NULL;
 #endif /* HAVE_SSL */
 
+/* from elsewhere */
+void fatal(const char *s, int code);
 
 /* forward declarations */
 static int cmd_logout(struct protstream *sieved_out, struct protstream *sieved_in);

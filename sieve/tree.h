@@ -1,6 +1,6 @@
 /* tree.h -- abstract syntax tree
  * Larry Greenfield
- * $Id: tree.h,v 1.3 2000/02/03 06:51:11 tmartin Exp $
+ * $Id: tree.h,v 1.4 2002/01/18 22:58:49 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -117,6 +117,7 @@ struct Commandlist {
 };
 
 stringlist_t *new_sl(char *s, stringlist_t *n);
+patternlist_t *new_pl(void *pat, patternlist_t *n);
 tag_t *new_tag(int type, char *s);
 taglist_t *new_taglist(tag_t *t, taglist_t *n);
 test_t *new_test(int type);
@@ -125,6 +126,7 @@ commandlist_t *new_command(int type);
 commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n);
 
 void free_sl(stringlist_t *sl);
+void free_pl(patternlist_t *pl, int comptag);
 void free_test(test_t *t);
 void free_tree(commandlist_t *cl);
 
