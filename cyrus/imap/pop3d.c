@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.2 2002/07/10 20:45:10 rjs3 Exp $
+ * $Id: pop3d.c,v 1.122.4.3 2002/07/12 01:11:52 ken3 Exp $
  */
 #include <config.h>
 
@@ -1030,7 +1030,7 @@ char *user;
     int fd;
     struct protstream *shutdown_in;
     char buf[1024];
-    char *p;
+    char *p, *dot, *domain;
     char shutdownfilename[1024];
 
     /* possibly disallow USER */
@@ -1060,7 +1060,9 @@ char *user;
     }
     else if (!(p = auth_canonifyid(user,0)) ||
 	     /* '.' isn't allowed if '.' is the hierarchy separator */
-	     (popd_namespace.hier_sep == '.' && strchr(p, '.')) ||
+	     (popd_namespace.hier_sep == '.' && (dot = strchr(p, '.')) &&
+	      !(config_virtdomains &&
+		(domain = strchr(p, '@')) && (dot > domain))) ||
 	     strlen(p) + 6 > MAX_MAILBOX_PATH) {
 	prot_printf(popd_out, "-ERR [AUTH] Invalid user\r\n");
 	syslog(LOG_NOTICE,
