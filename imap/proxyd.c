@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.44 2000/10/23 20:32:09 leg Exp $ */
+/* $Id: proxyd.c,v 1.45 2000/10/26 23:08:56 leg Exp $ */
 
 #include <config.h>
 
@@ -1273,9 +1273,9 @@ cmdloop()
 	    eatline(c);
 	    continue;
 	}
-	if (islower((int) cmd.s[0])) cmd.s[0] = toupper(cmd.s[0]);
+	if (islower((unsigned char) cmd.s[0])) cmd.s[0] = toupper(cmd.s[0]);
 	for (p = &cmd.s[1]; *p; p++) {
-	    if (isupper((int) *p)) *p = tolower(*p);
+	    if (isupper((unsigned char) *p)) *p = tolower(*p);
 	}
 
 	/* Only Authenticate/Login/Logout/Noop/Starttls 
