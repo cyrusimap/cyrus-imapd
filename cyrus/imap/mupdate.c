@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.8 2004/02/05 20:32:01 ken3 Exp $
+ * $Id: mupdate.c,v 1.77.2.9 2004/02/19 16:59:19 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -267,14 +267,21 @@ static struct conn *conn_new(int fd)
     if (getpeername(C->fd, (struct sockaddr *)&remoteaddr, &salen) == 0 &&
 	(remoteaddr.ss_family == AF_INET ||
 	 remoteaddr.ss_family == AF_INET6)) {
-	getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
-		    NULL, 0, NI_WITHSCOPEID);
-	strlcpy(C->clienthost, hbuf, sizeof(C->clienthost)-30);
-	strlcat(C->clienthost, " [", sizeof(C->clienthost));
-	getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
-		    NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
-	strlcat(C->clienthost, hbuf, sizeof(C->clienthost));
-	strlcat(C->clienthost, "]", sizeof(C->clienthost));
+	int niflags = (remoteaddr.ss_family == AF_INET6) ? NI_WITHSCOPEID : 0;
+	if (getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
+		    NULL, 0, niflags) == 0) {
+		strlcpy(C->clienthost, hbuf, sizeof(C->clienthost)-30);
+	} else
+		strlcpy(C->clienthost, "Unknown", sizeof(C->clienthost)-30);
+
+	niflags = NI_NUMERICHOST |
+		(remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
+	if (getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
+		    NULL, 0, niflags) == 0) {
+		strlcat(C->clienthost, " [", sizeof(C->clienthost));
+		strlcat(C->clienthost, hbuf, sizeof(C->clienthost));
+		strlcat(C->clienthost, "]", sizeof(C->clienthost));
+	}
 	salen = sizeof(localaddr);
 	if (getsockname(C->fd, (struct sockaddr *)&localaddr, &salen) == 0
 	    && iptostring((struct sockaddr *)&remoteaddr, salen,
