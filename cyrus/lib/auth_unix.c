@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.33.2.6 2003/05/13 23:01:00 ken3 Exp $
+ * $Id: auth_unix.c,v 1.33.2.7 2003/06/26 22:36:11 rjs3 Exp $
  */
 
 #include <config.h>
@@ -229,8 +229,6 @@ struct auth_state *auth_newstate(const char *identifier)
     if (!identifier) return 0;
     if (!strncmp(identifier, "group:", 6)) return 0;
     
-    pwd = getpwnam(identifier);
-
     newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
 
     strcpy(newstate->userid, identifier);
@@ -240,6 +238,8 @@ struct auth_state *auth_newstate(const char *identifier)
     if(!libcyrus_config_getswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE))
 	return newstate;
 
+    pwd = getpwnam(identifier);
+	
     setgrent();
     while ((grp = getgrent())) {
 	for (mem = grp->gr_mem; *mem; mem++) {
