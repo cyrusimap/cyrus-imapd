@@ -37,7 +37,7 @@ struct auth_state {
     char userid[30];
     char **group;
     int ngroups;
-}
+};
 
 static struct auth_state auth_anonymous = {
     "anonymous", 0, 0
