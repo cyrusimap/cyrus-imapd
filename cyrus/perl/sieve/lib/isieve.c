@@ -443,6 +443,10 @@ int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
 	      return -1;
       }
 
+      /* turn on layer if need be */
+      prot_setsasl(obj->pin,  obj->conn);
+      prot_setsasl(obj->pout, obj->conn);
+
       /* There wasn't a last send, or we are already OK */
       return 0;
   } else {
