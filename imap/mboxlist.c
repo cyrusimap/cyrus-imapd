@@ -136,7 +136,7 @@ char **acl;
     /* Parse partition name, construct pathname if requested */
     partition = buf + namelen + 1;
     p = strchr(partition, '\t');
-    /* XXX assuming \t before running past buflen */
+    assert(p != 0);
     *p = '\0';
     if (path) {
 	sprintf(buf2, "partition-%s", partition);
@@ -279,7 +279,7 @@ char **newpartition;
 	if (!partition) {
 	    partition = buf + strlen(parent) + 1;
 	    p = strchr(partition, '\t');
-	    /* XXX assuming \t before running past buflen */
+	    assert(p != 0);
 	    *p = '\0';
 	}
 	partition = strsave(partition);
@@ -519,9 +519,11 @@ char *userid;
 	r = mboxlist_lookup(name, (char **)0, &acl);
 	if (r) return r;
 	
-	/* Check ACL before doing anything stupid */
+	/* Check ACL before doing anything stupid
+	 * We don't have to lie about the error code since we know
+	 * the user is an admin.
+	 */
 	if (!(acl_myrights(acl) & ACL_DELETE)) return IMAP_PERMISSION_DENIED;
-	/* XXX might have to lie about error code ? */
 	
 	/* Delete sub-mailboxes */
 	strcpy(buf2, name);
@@ -930,8 +932,8 @@ int (*proc)();
 	fseek(listfile, offset, 0);
 	for (;;) {
 	    if (!fgets(buf, sizeof(buf), listfile)) break;
-	    /* XXX assuming \t before running past sizeof(buf) */
 	    p = strchr(buf, '\t');
+	    assert(p != 0);
 	    *p = '\0';
 	    if (strncasecmp(buf, usermboxname, usermboxnamelen) != 0) break;
 	    minmatch = 0;
@@ -960,8 +962,8 @@ int (*proc)();
     if (userid) usermboxname[--usermboxnamelen] = '\0';
     for (;;) {
 	if (!fgets(buf, sizeof(buf), listfile)) break;
-	/* XXX assuming \t before running past sizeof(buf) */
 	endname = strchr(buf, '\t');
+	assert(endname != 0);
 	*endname = '\0';
 	if (strncasecmp(buf, pattern, prefixlen)) break;
 	minmatch = 0;
@@ -982,8 +984,9 @@ int (*proc)();
 		}
 	    }
 	    else {
-		/* XXX assuming \t before running past sizeof(buf) */
-		acl = strchr(buf+strlen(buf)+1, '\t') + 1;
+		acl = strchr(buf+strlen(buf)+1, '\t');
+		assert(acl != 0);
+		acl++;
 		p = strchr(acl, '\n');
 		if (p) {
 		    *p = '\0';
@@ -1101,8 +1104,8 @@ int (*proc)();
 	fseek(subsfile, offset, 0);
 	for (;;) {
 	    if (!fgets(buf, sizeof(buf), subsfile)) break;
-	    /* XXX assuming \t before running past sizeof(buf) */
 	    p = strchr(buf, '\t');
+	    assert(p != 0);
 	    *p = '\0';
 	    if (strncasecmp(buf, usermboxname, usermboxnamelen)) break;
 	    minmatch = 0;
@@ -1138,8 +1141,8 @@ int (*proc)();
     if (userid) usermboxname[--usermboxnamelen] = '\0';
     for (;;) {
 	if (!fgets(buf, sizeof(buf), subsfile)) break;
-	/* XXX assuming \t before running past sizeof(buf) */
 	endname = strchr(buf, '\t');
+	assert(endname != 0);
 	*endname = '\0';
 	if (strncasecmp(buf, pattern, prefixlen)) break;
 	minmatch = 0;
