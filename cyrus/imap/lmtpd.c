@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.8 2000/02/22 07:56:39 tmartin Exp $
+ * $Id: lmtpd.c,v 1.9 2000/02/22 20:17:16 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.8 2000/02/22 07:56:39 tmartin Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.9 2000/02/22 20:17:16 leg Exp $";*/
 
 #include <config.h>
 
@@ -965,7 +965,7 @@ int sieve_fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 }
 
 static
-int sieve_keep(void *ac, void *ic, void *sc, void *mc, char **errmsg)
+int sieve_keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     deliver_opts_t *dop = (deliver_opts_t *) ic;
@@ -1010,7 +1010,7 @@ static int sieve_notify(void *ac,
 			void *interp_context, 
 			void *script_context,
 			void *mc,
-			char **errmsg)
+			const char **errmsg)
 {
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
     script_data_t *sd = (script_data_t *) script_context;
@@ -1025,7 +1025,7 @@ static int sieve_notify(void *ac,
 }
 
 
-int autorespond(void *ac, void *ic, void *sc, void *mc, char **errmsg)
+int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_autorespond_context_t *arc = (sieve_autorespond_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
@@ -1058,7 +1058,7 @@ int autorespond(void *ac, void *ic, void *sc, void *mc, char **errmsg)
     return ret;
 }
 
-int send_response(void *ac, void *ic, void *sc, void *mc, char **errmsg)
+int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     FILE *sm;
     char *smbuf[3];
