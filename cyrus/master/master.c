@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.85.2.12 2005/03/07 04:40:31 shadow Exp $ */
+/* $Id: master.c,v 1.85.2.13 2005/03/07 04:56:27 shadow Exp $ */
 
 #include <config.h>
 
@@ -1473,7 +1473,7 @@ void add_event(const char *name, struct entry *e, void *rock)
     time_t now = time(NULL);
     struct event *evt;
 
-    if (!strdup(cmd,"")) {
+    if (!strcmp(cmd,"")) {
 	char buf[256];
 	snprintf(buf, sizeof(buf),
 		 "unable to find command or port for event '%s'", name);
