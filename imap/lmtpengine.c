@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.71 2002/04/11 18:36:56 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.72 2002/04/17 20:31:52 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1412,7 +1412,7 @@ void lmtpmode(struct lmtp_func *func,
 		  inlen = 0;
 	      } else {
 		  unsigned len = strlen(p);
-		  in = xmalloc(len);
+		  in = xmalloc(len+1);
 		  r = sasl_decode64(p, len, in, len, &inlen);
 		  if (r != SASL_OK) {
 		      prot_printf(pout,
@@ -1461,7 +1461,7 @@ void lmtpmode(struct lmtp_func *func,
 		  }
 		  
 		  len = strlen(buf);
-		  in = xmalloc(len);
+		  in = xmalloc(len+1);
 		  r = sasl_decode64(buf, len, in, len, &inlen);
 		  if (r != SASL_OK) {
 		      prot_printf(pout,
