@@ -1,5 +1,5 @@
 /* notify.c -- Module to notify of new mail
- $Id: notify.c,v 1.1 2002/03/21 21:10:03 ken3 Exp $
+ $Id: notify.c,v 1.2 2002/04/02 04:15:00 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -98,7 +98,7 @@ void notify(const char *method,
 	strcat(srvaddr.sun_path, FNAME_NOTIFY_SOCK);
     }
 
-    /* put us in non-blocking mode */
+    /* put us in non-blocking mode so we don't wait for a connection */
     fdflags = fcntl(s, F_GETFD, 0);
     if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
     if (fdflags == -1) { 
@@ -111,8 +111,20 @@ void notify(const char *method,
     r = connect(s, (struct sockaddr *) &srvaddr, sizeof(srvaddr));
     if (r == -1) {
 	syslog(LOG_ERR, "unable to connect to notify socket(): %m");
+	close(s);
 	return;
     }
+
+    /* now we block because we don't want to send just a partial notification
+       packet to notifyd */
+    fdflags = fcntl(s, F_SETFL, ~O_NONBLOCK & fdflags);
+    if (fdflags == -1) { 
+	syslog(LOG_ERR, 
+	       "error setting notify socket to blocking: fcntl(): %m");
+	close(s);
+	return; 
+    }
+
 
     /*
      * build request of the form:
@@ -160,6 +172,7 @@ void notify(const char *method,
 
 	if (retry_writev(s, iov, num_iov) == -1) {
             syslog(LOG_ERR, "write to notifyd failed");
+	    close(s);
   	    return;
   	}
     }
@@ -171,26 +184,28 @@ void notify(const char *method,
      */
     if (retry_read(s, &count, sizeof(count)) < (int) sizeof(count)) {
         syslog(LOG_ERR, "read size from notifyd\n");
+	close(s);
 	return;
     }
   
     count = ntohs(count);
     if (count < 2) { /* MUST have at least "OK" or "NO" */
-	close(s);
         syslog(LOG_ERR, "bad response from notifyd");
+	close(s);
 	return;
     }
   
     count = (int)sizeof(response) < count ? sizeof(response) : count;
     if (retry_read(s, response, count) < count) {
-	close(s);
         syslog(LOG_ERR, "read from notifyd failed");
+	close(s);
 	return;
     }
     response[count] = '\0';
 
     close(s);
   
-    if (!strncmp(response, "NO", 2))
+    if (!strncmp(response, "NO", 2)) {
 	syslog(LOG_ERR, "%s", response);
+    }
 }
