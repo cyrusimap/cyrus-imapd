@@ -471,7 +471,10 @@ static int mystore(struct db *mydb,
     if (!mytid) {
 	/* finish once-off txn */
 	if (r) {
-	    int r2 = txn_abort(tid);
+	    int r2;
+
+	    syslog(LOG_DEBUG, "aborting txn %d", txn_id(tid));
+	    r2 = txn_abort(tid);
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
 		       db_strerror(r));
@@ -482,6 +485,7 @@ static int mystore(struct db *mydb,
 		goto restart;
 	    }
 	} else {
+	    syslog(LOG_DEBUG, "committing txn %d", txn_id(tid));
 	    r = txn_commit(tid, 0);
 	}
     }
@@ -551,7 +555,9 @@ static int delete(struct db *mydb,
     if (!mytid) {
 	/* finish txn for the write */
 	if (r) {
-	    int r2 = txn_abort(tid);
+	    int r2;
+	    syslog(LOG_DEBUG, "aborting txn %d", txn_id(tid));
+	    r2 = txn_abort(tid);
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
 		       db_strerror(r));
@@ -562,6 +568,7 @@ static int delete(struct db *mydb,
 		goto restart;
 	    }
 	} else {
+	    syslog(LOG_DEBUG, "committing txn %d", txn_id(tid));
 	    r = txn_commit(tid, 0);
 	}
     }
@@ -587,6 +594,7 @@ static int commit_txn(struct db *db, struct txn *tid)
 
     assert(dbinit && tid);
 
+    syslog(LOG_DEBUG, "committing txn %d", txn_id(t));
     r = txn_commit(t, 0);
     switch (r) {
     case 0:
@@ -612,6 +620,7 @@ static int abort_txn(struct db *db, struct txn *tid)
 
     assert(dbinit && tid);
 
+    syslog(LOG_DEBUG, "aborting txn %d", txn_id(tid));
     r = txn_abort(t);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: error aborting txn: %s", db_strerror(r));
