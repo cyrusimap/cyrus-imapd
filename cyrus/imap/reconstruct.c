@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68.4.11 2003/03/12 16:38:17 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.12 2003/04/04 01:14:07 ken3 Exp $ */
 
 #include <config.h>
 
@@ -124,7 +124,7 @@ int main(int argc, char **argv)
     int rflag = 0;
     int mflag = 0;
     int fflag = 0;
-    char buf[MAX_MAILBOX_PATH];
+    char buf[MAX_MAILBOX_PATH+1];
     struct discovered head;
     char *alt_config = NULL;
 
@@ -187,20 +187,20 @@ int main(int argc, char **argv)
 	    exit(EC_USAGE);
 	}
 	assert(!rflag);
-	strcpy(buf, "*");
+	strlcpy(buf, "*", sizeof(buf));
 	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
 					    do_reconstruct, NULL);
     }
 
     for (i = optind; i < argc; i++) {
-	strcpy(buf, argv[i]);
+	strlcpy(buf, argv[i], sizeof(buf));
 	/* Translate any separators in mailboxname */
 	mboxname_hiersep_tointernal(&recon_namespace, buf, 0);
 	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
 					    0, do_reconstruct, 
 					    fflag ? &head : NULL);
 	if (rflag) {
-	    strcat(buf, ".*");
+	    strlcat(buf, ".*", sizeof(buf));
 	    (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
 						0, do_reconstruct, 
 						fflag ? &head : NULL);
@@ -262,8 +262,8 @@ do_reconstruct(char *name,
 	       void *rock)
 {
     int r;
-    char buf[MAX_MAILBOX_PATH];
-    static char lastname[MAX_MAILBOX_PATH] = "";
+    char buf[MAX_MAILBOX_PATH+1];
+    static char lastname[MAX_MAILBOX_PATH+1] = "";
 
     signals_poll();
 
@@ -271,6 +271,9 @@ do_reconstruct(char *name,
     if (matchlen == strlen(lastname) &&
 	!strncmp(name, lastname, matchlen)) return 0;
 
+    if(matchlen >= sizeof(lastname))
+	matchlen = sizeof(lastname) - 1;
+    
     strncpy(lastname, name, matchlen);
     lastname[matchlen] = '\0';
 
@@ -278,8 +281,7 @@ do_reconstruct(char *name,
     if (r) {
 	com_err(name, r, (r == IMAP_IOERROR) ? error_message(errno) : NULL);
 	code = convert_code(r);
-    }
-    else {
+    } else {
 	/* Convert internal name to external */
 	(*recon_namespace.mboxname_toexternal)(&recon_namespace, lastname,
 					       NULL, buf);
@@ -302,7 +304,7 @@ int reconstruct(char *name, struct discovered *found)
     char *p;
     int format = MAILBOX_FORMAT_NORMAL;
     bit32 valid_user_flags[MAX_USER_FLAGS/32];
-    char fnamebuf[MAX_MAILBOX_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH+1];
     FILE *newindex;
     int newcache_fd;
     char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
@@ -319,7 +321,6 @@ int reconstruct(char *name, struct discovered *found)
     unsigned long new_quota = 0;
     struct index_record message_index, old_index;
     static struct index_record zero_index;
-    char newspath[4096], *end_newspath;
     FILE *msgfile;
     struct stat sbuf;
     int n;
@@ -380,16 +381,16 @@ int reconstruct(char *name, struct discovered *found)
     mailbox.pop3_last_login = 0;
 
     /* Create new index/cache files */
-    strcpy(fnamebuf, FNAME_INDEX+1);
-    strcat(fnamebuf, ".NEW");
+    strlcpy(fnamebuf, FNAME_INDEX+1, sizeof(fnamebuf));
+    strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
     newindex = fopen(fnamebuf, "w+");
     if (!newindex) {
 	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
     }
 
-    strcpy(fnamebuf, FNAME_CACHE+1);
-    strcat(fnamebuf, ".NEW");
+    strlcpy(fnamebuf, FNAME_CACHE+1, sizeof(fnamebuf));
+    strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
     newcache_fd = open(fnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (newcache_fd == -1) {
 	fclose(newindex);
@@ -407,7 +408,7 @@ int reconstruct(char *name, struct discovered *found)
     uid_num = 0;
     uid_alloc = UIDGROW;
     dirp = opendir(".");
-    end_newspath = newspath;
+
     if (!dirp) {
 	fclose(newindex);
 	close(newcache_fd);
@@ -584,15 +585,15 @@ int reconstruct(char *name, struct discovered *found)
     }
 
     /* Rename new index/cache file in place */
-    strcpy(fnamebuf, FNAME_INDEX+1);
-    strcat(fnamebuf, ".NEW");
+    strlcpy(fnamebuf, FNAME_INDEX+1, sizeof(fnamebuf));
+    strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
     if (rename(fnamebuf, FNAME_INDEX+1)) {
 	fclose(newindex);
 	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
     }
-    strcpy(fnamebuf, FNAME_CACHE+1);
-    strcat(fnamebuf, ".NEW");
+    strlcpy(fnamebuf, FNAME_CACHE+1, sizeof(fnamebuf));
+    strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
     if (rename(fnamebuf, FNAME_CACHE+1)) {
 	fclose(newindex);
 	mailbox_close(&mailbox);
@@ -710,7 +711,7 @@ char *cleanacl(char *acl, char *mboxname)
 
     /* Rebuild ACL */
     if ((p = mboxname_isusermailbox(mboxname, 0))) {
-	strcpy(owner, p);
+	strlcpy(owner, p, sizeof(owner));
 	p = strchr(owner, '.');
 	if (p) *p = '\0';
 	aclcanonproc = mboxlist_ensureOwnerRights;
