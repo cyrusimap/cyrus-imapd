@@ -673,6 +673,7 @@ char *mailboxname;
     int r;
     struct mailbox mailbox;
     char namebuf[MAX_MAILBOX_PATH];
+    char notifybuf[MAX_MAILBOX_PATH];
     char *submailbox = 0;
     
     if (user) {
@@ -733,12 +734,12 @@ char *mailboxname;
     }
 
     if (!r && user) {
-	strcpy(namebuf, "INBOX");
+	strcpy(notifybuf, "INBOX");
 	if (submailbox) {
-	    strcat(namebuf, ".");
-	    strcat(namebuf, submailbox);
+	    strcat(notifybuf, ".");
+	    strcat(notifybuf, submailbox);
 	}
-	notify(user, namebuf, notifyheader ? notifyheader : "");
+	notify(user, notifybuf, notifyheader ? notifyheader : "");
     }
 
     if (!r && dupelim && id) markdelivered(id, user ? namebuf : mailboxname);
@@ -923,7 +924,7 @@ char *id, *to;
     if (!initialized) {
 	initialized++;
 
-	sprintf(buf, "%s/delivered.db", CONFIG_DIR);
+	sprintf(buf, "%s/delivered.db", config_dir);
 	DeliveredDBptr = dbopen(buf, O_RDWR|O_CREAT, 0666, DB_HASH, NULL);
 	if (!DeliveredDBptr) {
 	    fprintf(stderr, "deliver: can't open %s: %s", buf,
@@ -1005,7 +1006,8 @@ char *id, *to;
     date.data = datebuf;
     date.size = strlen(datebuf);
 
-    (void) DeliveredDBptr->put(DeliveredDBptr, delivery, date, R_OVERWRITE);
+    (void) DeliveredDBptr->put(DeliveredDBptr, &delivery, &date, 0);
+    (void) DeliveredDBptr->sync(DeliveredDBptr, 0);
 #else /* HAVE_LIBDB */
     sprintf(buf, "%s%c%s", id, '\0', to);
     delivery.dptr = buf;
@@ -1027,11 +1029,15 @@ int age;
     char buf[MAX_MAILBOX_PATH];
     int lockfd;
     int rcode = 0;
-#ifdef HAVE_LIBDB
-not written
-#else /* HAVE_LIBDB */
     char datebuf[40];
     int len;
+
+#ifdef HAVE_LIBDB
+    int rc, mode;
+    DBT date, delivery;
+    DBT *deletions = 0;
+    int num_deletions = 0, alloc_deletions = 0;
+#else /* HAVE_LIBDB */
     datum date, delivery;
 #endif
 
@@ -1063,12 +1069,33 @@ not written
 	return 1;
     }
 
-#ifdef HAVE_LIBDB
-not written
-#else /* HAVE_LIBDB */
     sprintf(datebuf, "%d", time(0) - age*60*60*24);
     len = strlen(datebuf);
 
+#ifdef HAVE_LIBDB
+    mode = R_FIRST;
+
+    while ((rc = DeliveredDBptr->seq(DeliveredDBptr, &delivery, &date, mode)) == 0) {
+	mode = R_NEXT;
+	if (date.size < len ||
+	    (date.size == len && memcmp(date.data, datebuf, len) < 0)) {
+	    if (num_deletions >= alloc_deletions) {
+		alloc_deletions += 1000;
+		deletions = (DBT *) xrealloc(deletions,
+					       alloc_deletions * sizeof(DBT));
+	    }
+	    deletions[num_deletions].size = delivery.size;
+	    deletions[num_deletions].data = xmalloc(delivery.size);
+	    memcpy(deletions[num_deletions].data, delivery.data, delivery.size);
+	    num_deletions++;
+	}
+    }
+
+    while (num_deletions--) {
+	DeliveredDBptr->del(DeliveredDBptr, &deletions[num_deletions], 0);
+    }
+    DeliveredDBptr->close(DeliveredDBptr);
+#else /* HAVE_LIBDB */
     for (delivery = dbm_firstkey(DeliveredDBptr); delivery.dptr;
 	 delivery = dbm_nextkey(DeliveredDBptr)) {
 	date = dbm_fetch(DeliveredDBptr, delivery);
