@@ -1,5 +1,5 @@
 dnl afs.m4--AFS libraries, includes, and dependencies
-dnl $Id: afs.m4,v 1.27 2004/03/10 05:14:33 jf6b Exp $
+dnl $Id: afs.m4,v 1.28 2004/04/29 22:00:07 cg2v Exp $
 dnl Chaskiel Grundman
 dnl based on kerberos_v4.m4
 dnl Derrick Brashear
@@ -120,6 +120,36 @@ AC_ARG_WITH(AFS,
 	  AFS_CLIENT_LIBS="-lvolser -lvldb -lkauth -lprot -lubik -lauth -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp ${AFS_LIBDES} -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a"
 	  AFS_RX_LIBS="-lauth -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp ${AFS_LIBDES} -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a"
           AFS_KTC_LIBS="-lauth ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp ${AFS_LIBDES} -lcom_err ${AFS_LIB_DIR}/afs/util.a"
+
+          LIBS="$cmu_save_LIBS $AFS_CLIENT_LIBS ${LIB_SOCKET}"
+          AC_CHECK_FUNC(des_pcbc_init)
+          if test "X$ac_cv_func_des_pcbc_init" != "Xyes"; then
+           AC_CHECK_LIB(descompat, des_pcbc_init, AFS_DESCOMPAT_LIB="-ldescompat")
+           if test "X$AFS_DESCOMPAT_LIB" != "X" ; then
+                AFS_CLIENT_LIBS_STATIC="$AFS_CLIENT_LIBS_STATIC $AFS_DESCOMPAT_LIB"
+                AFS_KTC_LIBS_STATIC="$AFS_KTC_LIBS_STATIC $AFS_DESCOMPAT_LIB"
+                AFS_CLIENT_LIBS="$AFS_CLIENT_LIBS $AFS_DESCOMPAT_LIB"
+                AFS_KTC_LIBS="$AFS_KTC_LIBS $AFS_DESCOMPAT_LIB"
+           else
+
+           AC_MSG_CHECKING([if rxkad needs des_pcbc_init])
+           AC_TRY_LINK(,[tkt_DecodeTicket();],RXKAD_PROBLEM=no,RXKAD_PROBLEM=maybe)
+            if test "$RXKAD_PROBLEM" = "maybe"; then
+              AC_TRY_LINK([int des_pcbc_init() { return 0;}],
+              [tkt_DecodeTicket();],RXKAD_PROBLEM=yes,RXKAD_PROBLEM=error)
+              if test "$RXKAD_PROBLEM" = "yes"; then
+                    AC_MSG_RESULT([yes])
+                    AC_MSG_ERROR([cannot use rxkad])
+              else
+                    AC_MSG_RESULT([unknown])        
+                    AC_MSG_ERROR([Unknown error testing rxkad])
+              fi
+            else
+              AC_MSG_RESULT([no])
+            fi
+           fi
+          fi
+
           LIBS="$cmu_save_LIBS"
           AC_CHECK_FUNC(flock)
           LIBS="$cmu_save_LIBS ${AFS_CLIENT_LIBS} ${LIB_SOCKET}"
@@ -188,34 +218,6 @@ extern int UV_SetSecurity();],
                 AFS_CLIENT_LIBS="$AFS_CLIENT_LIBS $AFS_BSD_LIB"
                 AFS_RX_LIBS="$AFS_CLIENT_LIBS $AFS_BSD_LIB"
                 AFS_KTC_LIBS="$AFS_KTC_LIBS $AFS_BSD_LIB"
-          fi
-          LIBS="$cmu_save_LIBS $AFS_CLIENT_LIBS ${LIB_SOCKET}"
-          AC_CHECK_FUNC(des_pcbc_init)
-          if test "X$ac_cv_func_des_pcbc_init" != "Xyes"; then
-           AC_CHECK_LIB(descompat, des_pcbc_init, AFS_DESCOMPAT_LIB="-ldescompat")
-           if test "X$AFS_DESCOMPAT_LIB" != "X" ; then
-                AFS_CLIENT_LIBS_STATIC="$AFS_CLIENT_LIBS_STATIC $AFS_DESCOMPAT_LIB"
-                AFS_KTC_LIBS_STATIC="$AFS_KTC_LIBS_STATIC $AFS_DESCOMPAT_LIB"
-                AFS_CLIENT_LIBS="$AFS_CLIENT_LIBS $AFS_DESCOMPAT_LIB"
-                AFS_KTC_LIBS="$AFS_KTC_LIBS $AFS_DESCOMPAT_LIB"
-           else
-
-           AC_MSG_CHECKING([if rxkad needs des_pcbc_init])
-           AC_TRY_LINK(,[tkt_DecodeTicket();],RXKAD_PROBLEM=no,RXKAD_PROBLEM=maybe)
-            if test "$RXKAD_PROBLEM" = "maybe"; then
-              AC_TRY_LINK([int des_pcbc_init() { return 0;}],
-              [tkt_DecodeTicket();],RXKAD_PROBLEM=yes,RXKAD_PROBLEM=error)
-              if test "$RXKAD_PROBLEM" = "yes"; then
-                    AC_MSG_RESULT([yes])
-                    AC_MSG_ERROR([cannot use rxkad])
-              else
-                    AC_MSG_RESULT([unknown])        
-                    AC_MSG_ERROR([Unknown error testing rxkad])
-              fi
-            else
-              AC_MSG_RESULT([no])
-            fi
-           fi
           fi
 
           AC_MSG_CHECKING([if libaudit is needed])
