@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.6 2002/12/21 18:44:24 cg2v Exp $
+dnl $Id: berkdb.m4,v 1.7 2003/01/28 17:19:12 rjs3 Exp $
 
 AC_DEFUN(CMU_DB_INC_WHERE1, [
 saved_CPPFLAGS=$CPPFLAGS
@@ -205,8 +205,8 @@ AC_DEFUN(CYRUS_BERKELEY_DB_CHK_LIB,
 	BDB_SAVE_LIBS=$LIBS
 
 	if test -d $with_bdb_lib; then
-	    LIBS="$LIBS -L$with_bdb_lib"
-	    BDB_LIBADD="-L$with_bdb_lib -R $with_bdb_lib"
+	    CMU_ADD_LIBPATH_TO($with_bdb_lib, LIBS)
+	    CMU_ADD_LIBPATH_TO($with_bdb_lib, BDB_LIBADD)
 	else
 	    BDB_LIBADD=""
 	fi
