@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.24 2001/11/27 02:24:54 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.25 2001/12/04 02:44:24 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -53,6 +53,9 @@
 
 /* do we have kerberos? */
 #undef HAVE_KRB
+
+/* do we have gssapi.h? */
+#undef HAVE_GSSAPI_H
 
 /* do we already have sys_errlist? */
 #undef NEED_SYS_ERRLIST
