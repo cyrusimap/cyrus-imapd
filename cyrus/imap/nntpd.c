@@ -50,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.12 2002/09/26 19:19:16 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.13 2002/09/30 19:53:37 ken3 Exp $
  */
 #include <config.h>
 
@@ -1149,6 +1149,7 @@ struct message_data {
     FILE *f;			/* FILE * corresponding */
 
     char *id;			/* message id */
+    char *path;			/* path */
     char *control;		/* control message */
     int size;			/* size of message */
 
@@ -1167,6 +1168,7 @@ int msg_new(message_data_t **m)
     ret->data = NULL;
     ret->f = NULL;
     ret->id = NULL;
+    ret->path = NULL;
     ret->control = NULL;
     ret->size = 0;
     ret->rcpt = NULL;
@@ -1191,6 +1193,9 @@ void msg_free(message_data_t *m)
     }
     if (m->id) {
 	free(m->id);
+    }
+    if (m->path) {
+	free(m->path);
     }
     if (m->control) {
 	free(m->control);
@@ -1637,8 +1642,11 @@ static int savemsg(message_data_t *m, FILE *f)
 
     /* now, using our header cache, fill in the data that we want */
 
-    /* add Path: header (if necessary) */
-    if ((body = msg_getheader(m, "path")) == NULL) {
+    /* get path */
+    if ((body = msg_getheader(m, "path")) != NULL) {
+	m->path = xstrdup(body[0]);
+    } else {
+	m->path = NULL;		/* no path-id */
 	fprintf(f, "Path: %s!%s\r\n",
 		config_servername, nntp_userid ? nntp_userid : "anonymous");
     }
@@ -1647,7 +1655,7 @@ static int savemsg(message_data_t *m, FILE *f)
     if ((body = msg_getheader(m, "message-id")) != NULL) {
 	m->id = xstrdup(body[0]);
     } else {
-	m->id = NULL;	/* no message-id */
+	m->id = NULL;		/* no message-id */
     }
 
     /* get control */
@@ -1751,20 +1759,25 @@ static int deliver(message_data_t *msg)
 static void feedpeer(message_data_t *msg)
 {
     const char *server;
+    char *path, *s;
+    int len;
     struct hostent *hp;
     struct sockaddr_in sin;
     int sock;
     struct protstream *pin, *pout;
     char buf[4096];
 
-    /* XXX need to filter the newsgroups we send upstream.
-       should we do this via imapd.conf, or via an annotation on the
-       mailbox?
-    */
-
     if ((server = config_getstring(IMAPOPT_NEWSPEER)) == NULL) {
 	syslog(LOG_ERR, "no newspeer defined");
 	return;
+    }
+
+    /* check path to see if this message came through our peer */
+    len = strlen(server);
+    path = msg->path;
+    while (path && (s = strchr(path, '!'))) {
+	if ((s - path) == len && !strncmp(path, server, len)) return;
+	path = s + 1;
     }
 
     if ((hp = gethostbyname(server)) == NULL) {
@@ -1894,14 +1907,8 @@ static void cmd_post(char *msgid, int mode)
 	}
 
 	if (!r) {
-	    if (mode == POST_POST && msg->id) {
+	    if (msg->id) {
 		/* send the article upstream */
-		/* XXX should also do this for IHAVE/TAKETHIS, since
-		   posting via email will come in from lmtp2nntp in
-		   this fashion.
-		   should we check the Path: header so we don't try to
-		   feed articles that originated upstream?
-		*/
 		feedpeer(msg);
 	    }
 
