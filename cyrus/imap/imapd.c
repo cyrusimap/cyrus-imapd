@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.262 2000/07/11 17:54:56 leg Exp $ */
+/* $Id: imapd.c,v 1.263 2000/07/14 20:03:25 ken3 Exp $ */
 
 #include <config.h>
 
@@ -157,6 +157,8 @@ void cmd_getuids(char *tag, char *startuid);
 void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
 void cmd_id(char* tag);
+
+void id_getcmdline(int argc, char **argv);
 
 void cmd_starttls(char *tag, int imaps);
 int starttls_enabled(void);
@@ -387,6 +389,9 @@ int service_main(int argc, char **argv, char **envp)
     sasl_external_properties_t extprops;
 
     signals_poll();
+
+    /* get command line args for use in ID before getopt mangles them */
+    id_getcmdline(argc, argv);
 
     memset(&extprops, 0, sizeof(sasl_external_properties_t));
     while ((opt = getopt(argc, argv, "sp:")) != EOF) {
@@ -1570,25 +1575,68 @@ char *cmd;
  *
  * the command has been parsed up to the parameter list.
  *
- * we only record one ID response from a given client.
+ * we only allow one ID in non-authenticated state from a given client.
+ * we only allow MAXIDFAILED consecutive failed IDs from a given client.
+ * we only record MAXIDLOG ID responses from a given client.
  *
  * the ID specification (draft-showalter-imap-id-03.txt) that i'm
  * working from says one thing and does another.  i'll do what i think
  * it means, which means that this is subject to change.  
  */
+#define MAXIDFAILED	3
+#define MAXIDLOG	5
+#define MAXIDFIELDLEN	30
+#define MAXIDVALUELEN	1024
+#define MAXIDPAIRS	30
+
+static char id_resp_command[MAXIDVALUELEN];
+static char id_resp_arguments[MAXIDVALUELEN] = "";
+
+void id_getcmdline(int argc, char **argv)
+{
+    snprintf(id_resp_command, MAXIDVALUELEN, *argv);
+    while (--argc > 0) {
+	snprintf(id_resp_arguments + strlen(id_resp_arguments),
+		 MAXIDVALUELEN - strlen(id_resp_arguments),
+		 "%s%s", *++argv, (argc > 1) ? " " : "");
+    }
+}
+
 void cmd_id(char *tag)
 {
     static int did_id = 0;
+    static int failed_id = 0;
+    static int logged_id = 0;
+    int error = 0;
     int c, npair = 0;
     static struct buf arg, field;
     struct strlist *fields = 0, *values = 0;
     struct utsname os;
 
+    /* check if we've already had an ID in non-authenticated state */
+    if (!imapd_userid && did_id) {
+	prot_printf(imapd_out,
+		    "%s NO Only one Id allowed in non-authenticated state\r\n",
+		    tag);
+	eatline(c);
+	return;
+    }
+
+    /* check if we've had too many failed IDs in a row */
+    if (failed_id >= MAXIDFAILED) {
+	prot_printf(imapd_out, "%s NO Too many (%u) invalid Id commands\r\n",
+		    tag, failed_id);
+	eatline(c);
+	return;
+    }
+
+    /* ok, accept parameter list */
     c = getword(&arg);
     /* check for "NIL" or start of parameter list */
-    if (strcmp(arg.s, "NIL") && c != '(') {
+    if (strcasecmp(arg.s, "NIL") && c != '(') {
 	prot_printf(imapd_out, "%s BAD Invalid parameter list in Id\r\n", tag);
 	eatline(c);
+	failed_id++;
 	return;
     }
 
@@ -1606,6 +1654,7 @@ void cmd_id(char *tag)
 		prot_printf(imapd_out,
 			    "%s BAD Invalid/missing field name in Id\r\n",
 			    tag);
+		error = 1;
 		break;
 	    }
 
@@ -1615,24 +1664,31 @@ void cmd_id(char *tag)
 		prot_printf(imapd_out,
 			    "%s BAD Invalid/missing value in Id\r\n",
 			    tag);
+		error = 1;
 		break;
 	    }
 
 	    /* ok, we're anal, but we'll still process the ID command */
-	    if (strlen(field.s) > 30) {
+	    if (strlen(field.s) > MAXIDFIELDLEN) {
 		prot_printf(imapd_out, 
-			    "* BAD field longer than 30 octets in Id\r\n");
-		continue;
+			    "%s BAD field longer than %u octets in Id\r\n",
+			    tag, MAXIDFIELDLEN);
+		error = 1;
+		break;
 	    }
-	    if (strlen(arg.s) > 1024) {
+	    if (strlen(arg.s) > MAXIDVALUELEN) {
 		prot_printf(imapd_out,
-			    "* BAD value longer than 1024 octets in Id\r\n");
-		continue;
+			    "%s BAD value longer than %u octets in Id\r\n",
+			    tag, MAXIDVALUELEN);
+		error = 1;
+		break;
 	    }
-	    if (++npair > 30) {
+	    if (++npair > MAXIDPAIRS) {
 		prot_printf(imapd_out,
-			    "* BAD too many field-value pairs in ID\r\n");
-		continue;
+			    "%s BAD too many (%u) field-value pairs in ID\r\n",
+			    tag, MAXIDPAIRS);
+		error = 1;
+		break;
 	    }
 	    
 	    /* ok, we're happy enough */
@@ -1640,11 +1696,12 @@ void cmd_id(char *tag)
 	    appendstrlist(&values, arg.s);
 	}
 
-	if (c != ')') {
+	if (error || c != ')') {
 	    /* erp! */
 	    eatline(c);
 	    freestrlist(fields);
 	    freestrlist(values);
+	    failed_id++;
 	    return;
 	}
 	c = prot_getc(imapd_in);
@@ -1658,16 +1715,19 @@ void cmd_id(char *tag)
 	eatline(c);
 	freestrlist(fields);
 	freestrlist(values);
+	failed_id++;
 	return;
     }
 
     /* log the client's ID string.
        eventually this should be a callback or something. */
-    if (npair && !did_id) {
-	char logbuf[40000];	/* limit of 30 * (1024 + 30) */
+    if (npair && logged_id < MAXIDLOG) {
+#define LOGSTR	"client id:"
+	char logbuf[strlen(LOGSTR) +
+		   MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6)];
 	struct strlist *fptr, *vptr;
 
-	sprintf(logbuf, "client id:");
+	strcpy(logbuf, LOGSTR);
 	for (fptr = fields, vptr = values; fptr;
 	     fptr = fptr->next, vptr = vptr->next) {
 	    /* should we check for and format literals here ??? */
@@ -1680,35 +1740,59 @@ void cmd_id(char *tag)
 
 	syslog(LOG_INFO, "%s", logbuf);
 
-	freestrlist(fields);
-	freestrlist(values);
-
-	did_id = 1;
+	logged_id++;
     }
+
+    freestrlist(fields);
+    freestrlist(values);
 
     /* spit out our ID string.
        eventually this might be configurable. */
-    prot_printf(imapd_out, "* ID ("
-		"\"name\" \"Cyrus\""
-		" \"version\" \"%s\""
-		" \"vendor\" \"Project Cyrus <http://asg.web.cmu.edu/cyrus>\"",
-		CYRUS_VERSION);
-    /* add the os info */
-    if (uname(&os) != -1)
-	prot_printf(imapd_out,
-		    " \"os\" \"%s\""
-		    " \"os-version\" \"%s\"",
-		    os.sysname, os.release);
-    /* add the environment info */
-    prot_printf(imapd_out,
-		" \"environment\" \"Cyrus SASL %d.%d.%d; %s",
-		SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
-		DB_VERSION_STRING);
-#ifdef HAVE_SSL
-    prot_printf(imapd_out, "; %s", OPENSSL_VERSION_TEXT);
+    if (config_getswitch("imapidresponse", 1)) {
+	char env_buf[MAXIDVALUELEN];
+
+	prot_printf(imapd_out, "* ID ("
+		    "\"name\" \"Cyrus\""
+		    " \"version\" \"%s\""
+		    " \"vendor\" \"Project Cyrus\""
+		    " \"support-url\" \"http://asg.web.cmu.edu/cyrus\"",
+		    CYRUS_VERSION);
+
+	/* add the os info */
+	if (uname(&os) != -1)
+	    prot_printf(imapd_out,
+			" \"os\" \"%s\""
+			" \"os-version\" \"%s\"",
+			os.sysname, os.release);
+
+	/* add the command line info */
+	prot_printf(imapd_out, " \"command\" \"%s\"", id_resp_command);
+	if (strlen(id_resp_arguments))
+	    prot_printf(imapd_out, " \"arguments\" \"%s\"", id_resp_arguments);
+	else
+	    prot_printf(imapd_out, " \"arguments\" NIL");
+
+	/* add the environment info */
+	snprintf(env_buf, MAXIDVALUELEN,"Cyrus SASL %d.%d.%d",
+		 SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
+#ifdef DB_VERSION_STRING
+	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+		 "; %s", DB_VERSION_STRING);
 #endif
-    prot_printf(imapd_out, "\")\r\n%s OK %s\r\n", tag,
+#ifdef HAVE_SSL
+	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+		 "; %s", OPENSSL_VERSION_TEXT);
+#endif
+	prot_printf(imapd_out, " \"environment\" \"%s\")\r\n", env_buf);
+    }
+    else
+	prot_printf(imapd_out, "* ID NIL\r\n");
+
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
+
+    failed_id = 0;
+    did_id = 1;
 }
 
 /*
@@ -4135,7 +4219,7 @@ int getxstring(struct buf *buf, int type)
 	    /*
 	     * Nothing to do here - fall through.
 	     */
-	  break;
+	    break;
 	}
 	
     case '\"':
