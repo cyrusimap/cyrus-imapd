@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.16.6.5 2003/02/13 20:32:59 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.16.6.6 2003/04/02 02:03:09 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -90,13 +90,13 @@ static int open_kick_socket()
 	fatal("socket failed", EC_OSERR);
     }
 
-    strncpy(fnamebuf, config_dir, sizeof(fnamebuf));
-    strncat(fnamebuf, FNAME_MUPDATE_TARGET_SOCK, sizeof(fnamebuf));
+    strlcpy(fnamebuf, config_dir, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_MUPDATE_TARGET_SOCK, sizeof(fnamebuf));
 
     (void) unlink(fnamebuf);
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
-    strcpy(srvaddr.sun_path, fnamebuf);
+    strlcpy(srvaddr.sun_path, fnamebuf, sizeof(srvaddr.sun_path));
     len = strlen(srvaddr.sun_path) + sizeof(srvaddr.sun_family) + 1;
     oldumask = umask((mode_t) 0); /* for Linux */
     r = bind(s, (struct sockaddr *)&srvaddr, len);

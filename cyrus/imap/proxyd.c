@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.55 2003/03/27 19:36:26 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.56 2003/04/02 02:03:09 ken3 Exp $ */
 
 #include <config.h>
 
@@ -271,9 +271,9 @@ enum {
     PROXY_BAD = 2
 };
 
-static void proxyd_gentag(char *tag)
+static void proxyd_gentag(char *tag, size_t len)
 {
-    sprintf(tag, "PROXY%d", proxyd_cmdcnt++);
+    snprintf(tag, len, "PROXY%d", proxyd_cmdcnt++);
 }
 
 /* pipe_until_tag() reads from 's->in' until the tagged response
@@ -2719,7 +2719,7 @@ static struct prot_waitevent *idle_poll(struct protstream *s,
 {
     char mytag[128];
 	
-    proxyd_gentag(mytag);
+    proxyd_gentag(mytag, sizeof(mytag));
     prot_printf(backend_current->out, "%s Noop\r\n", mytag);
     pipe_until_tag(backend_current, mytag, 0);
     prot_flush(proxyd_out);
@@ -2762,7 +2762,7 @@ void cmd_capability(char *tag)
     if (backend_current) {
 	char mytag[128];
 	
-	proxyd_gentag(mytag);
+	proxyd_gentag(mytag, sizeof(mytag));
 	/* do i want to do a NOOP for every operation? */
 	prot_printf(backend_current->out, "%s Noop\r\n", mytag);
 	pipe_until_tag(backend_current, mytag, 0);
@@ -2846,7 +2846,7 @@ void cmd_append(char *tag, char *name)
     if (backend_current && backend_current != s) {
 	char mytag[128];
 
-	proxyd_gentag(mytag);
+	proxyd_gentag(mytag, sizeof(mytag));
 	
 	prot_printf(backend_current->out, "%s Noop\r\n", mytag);
 	pipe_until_tag(backend_current, mytag, 0);
@@ -2895,7 +2895,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 	char mytag[128];
 
 	/* switching servers; flush old server output */
-	proxyd_gentag(mytag);
+	proxyd_gentag(mytag, sizeof(mytag));
 	prot_printf(backend_current->out, "%s Unselect\r\n", mytag);
 	/* do not fatal() here, because we don't really care about this
 	 * server anymore anyway */
@@ -3156,7 +3156,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	   them to the other mailbox */
 
 	/* find out what the flags & internaldate for this message are */
-	proxyd_gentag(mytag);
+	proxyd_gentag(mytag, sizeof(mytag));
 	prot_printf(backend_current->out, 
 		    "%s %s %s (Flags Internaldate)\r\n", 
 		    tag, usinguid ? "Uid Fetch" : "Fetch", sequence);
@@ -3753,7 +3753,7 @@ void cmd_find(char *tag, char *namespace, char *pattern)
     if (backend_current) {
 	char mytag[128];
 
-	proxyd_gentag(mytag);
+	proxyd_gentag(mytag, sizeof(mytag));
 
 	prot_printf(backend_current->out, "%s Noop\r\n", mytag);
 	pipe_until_tag(backend_current, mytag, 0);
@@ -3847,7 +3847,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	   backend_current == backend_inbox */
 	char mytag[128];
 
-	proxyd_gentag(mytag);
+	proxyd_gentag(mytag, sizeof(mytag));
 
 	prot_printf(backend_current->out, "%s Noop\r\n", mytag);
 	pipe_until_tag(backend_current, mytag, 0);
@@ -4465,7 +4465,7 @@ void cmd_status(char *tag, char *name)
 	if (backend_current && s != backend_current) {
 	    char mytag[128];
 	    
-	    proxyd_gentag(mytag);
+	    proxyd_gentag(mytag, sizeof(mytag));
 
 	    prot_printf(backend_current->out, "%s Noop\r\n", mytag);
 	    pipe_until_tag(backend_current, mytag, 0);
@@ -5068,7 +5068,7 @@ int annotate_proxy(const char *server, const char *entry_pat,
     if(!be) return IMAP_SERVER_UNAVAILABLE;
 
     /* Send command to remote */
-    proxyd_gentag(mytag);
+    proxyd_gentag(mytag, sizeof(mytag));
     prot_printf(be->out, "%s GETANNOTATION \"%s\" (", mytag, entry_pat);
     for(l=attribute_pat;l;l=l->next) {
 	prot_printf(be->out, "\"%s\"", l->s);
