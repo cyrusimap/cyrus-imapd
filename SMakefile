@@ -5,16 +5,16 @@
 
 MAKE=gmake
 
+# settings; we have to disable these on some platforms
 AMSSYNC=--enable-amssync
-
 WITHAUTH="--with-auth=krb_pts"
 
-# Ryan's aggressive optimizations
 CC=cc
-VER=`smake -D | sed 's;^.*\/;;'`
-IDENT="-DEXTRA_IDENT=\\\"-${VER}\\\""
-DEFS="${IDENT}"
 
+VER=`smake -D | sed 's;^.*\/;;'`
+CFLAGS="-DEXTRA_IDENT=\\\"$VER\\\""
+
+# Ryan's aggressive optimizations
 case `uname` in
    Linux) CFLAGS="${CFLAGS} -O3"
 	AMSSYNC=""
@@ -42,5 +42,4 @@ esac
 
 LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-user=cyrus --with-cyrus-group=staff"
 
-export CFLAGS CC CXXFLAGS DEFS
-
+export CFLAGS CC VER LNCOMMAND
