@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.11 2000/12/18 04:53:43 leg Exp $
+ * $Id: sieve.y,v 1.11.10.1 2002/12/03 20:30:47 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -523,7 +523,9 @@ static struct aetags *new_aetags(void)
 static struct aetags *canon_aetags(struct aetags *ae)
 {
     if (ae->addrtag == -1) { ae->addrtag = ALL; }
-    if (ae->comparator == NULL) { ae->comparator = strdup("i;ascii-casemap"); }
+    if (ae->comparator == NULL) {
+	ae->comparator = xstrdup("i;ascii-casemap");
+    }
     if (ae->comptag == -1) { ae->comptag = IS; }
     return ae;
 }
@@ -546,7 +548,9 @@ static struct htags *new_htags(void)
 
 static struct htags *canon_htags(struct htags *h)
 {
-    if (h->comparator == NULL) { h->comparator = strdup("i;ascii-casemap"); }
+    if (h->comparator == NULL) {
+	h->comparator = xstrdup("i;ascii-casemap");
+    }
     if (h->comptag == -1) { h->comptag = IS; }
     return h;
 }
@@ -599,7 +603,7 @@ static int verify_address(char *s)
 
     addrptr = s;
     if (addrparse()) {
-	sprintf(errbuf, "address '%s': %s", s, addrerr);
+	snprintf(errbuf, sizeof(errbuf), "address '%s': %s", s, addrerr);
 	yyerror(errbuf);
 	return 0;
     }
@@ -633,14 +637,16 @@ static int verify_flag(char *f)
 	if (strcmp(f, "\\seen") && strcmp(f, "\\answered") &&
 	    strcmp(f, "\\flagged") && strcmp(f, "\\draft") &&
 	    strcmp(f, "\\deleted")) {
-	    sprintf(errbuf, "flag '%s': not a system flag", f);
+	    snprintf(errbuf, sizeof(errbuf),
+		     "flag '%s': not a system flag", f);
 	    yyerror(errbuf);
 	    return 0;
 	}
 	return 1;
     }
     if (!imparse_isatom(f)) {
-	sprintf(errbuf, "flag '%s': not a valid keyword", f);
+	snprintf(errbuf, sizeof(errbuf),
+		 "flag '%s': not a valid keyword", f);
 	yyerror(errbuf);
 	return 0;
     }

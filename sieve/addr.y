@@ -8,6 +8,8 @@
 
 #include "addr.h"
 
+#include "script.h"
+    
 int yyerror(char *msg);
 extern int yylex(void);
 
@@ -87,8 +89,6 @@ qstring: '"' QTEXT '"'
 /* copy address error message into buffer provided by sieve parser */
 int yyerror(char *s)
 {
-extern char addrerr[];
-
-    strcpy(addrerr, s);
+    strlcpy(addrerr, s, sizeof(addrerr));
     return 0;
 }
