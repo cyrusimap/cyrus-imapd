@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.3 2002/01/17 19:30:41 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.4 2002/01/17 23:12:49 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -153,6 +153,9 @@ int mupdate_connect(const char *server, const char *port,
     h->pin=prot_new(h->sock, 0);
     h->pout=prot_new(h->sock, 1);
 
+    prot_setflushonread(h->pin, h->pout);
+    prot_settimeout(h->pin, 30*60);
+
     *handle = h;
     return 0; /* SUCCESS */
 }
@@ -216,7 +219,8 @@ int mupdate_authenticate(mupdate_handle *h,
     saslresult=sasl_setprop(h->saslconn, SASL_IPLOCALPORT, localip);
     if (saslresult!=SASL_OK) return 1;
 
-    /* We shouldn't get sasl_interact's, because we provide explicit callbacks */
+    /* We shouldn't get sasl_interact's,
+     * because we provide explicit callbacks */
     saslresult = sasl_client_start(h->saslconn, mechlist,
 				   NULL, &out, &outlen, &mechusing);
 
@@ -231,6 +235,7 @@ int mupdate_authenticate(mupdate_handle *h,
     } else {
         prot_printf(h->pout, "A01 AUTHENTICATE \"%s\"\r\n", mechusing);
     }
+    prot_flush(h->pout);
 
     while(saslresult == SASL_CONTINUE) {
 	char *p, *in;
