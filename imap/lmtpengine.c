@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75 2002/06/06 00:12:34 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.76 2002/07/10 20:44:09 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -986,7 +986,7 @@ static int savemsg(struct clientdata *cd,
 	clean_retpath(rpath);
 	/* Append our hostname if there's no domain in address */
 	hostname = NULL;
-	if (!strchr(rpath, '@')) {
+	if (!strchr(rpath, '@') && strlen(rpath) > 0) {
 	    hostname = config_servername;
 	}
 

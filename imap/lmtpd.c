@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99 2002/07/07 14:04:18 ken3 Exp $
+ * $Id: lmtpd.c,v 1.100 2002/07/10 20:44:08 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -686,7 +686,13 @@ int sieve_reject(void *ac,
 	*errmsg = "No return-path for reply";
 	return SIEVE_FAIL;
     }
-    
+
+    if (strlen(md->return_path) == 0) {
+	syslog(LOG_INFO, "sieve: discarded reject to <> for %s id %s",
+	       sd->username, md->id);
+        return SIEVE_OK;
+    }
+
     body = msg_getheader(md, "original-recipient");
     origreceip = body ? body[0] : NULL;
     if ((res = send_rejection(md->id, md->return_path, 
