@@ -59,9 +59,10 @@ int string_allocate(int length,
 		    const char *buf,	/* NULL => no copy */
 		    mystring_t ** str)
 {
-  *str=(mystring_t *) malloc(sizeof(mystring_t)+length+1);
+  *str=(mystring_t *) malloc(sizeof(mystring_t)+length+3);
 
   (*str)->len=length;
+  ((char *) (*str))[sizeof(mystring_t)+length]='\0';
 
   if (buf==NULL) return SIEVE_OK;
 
