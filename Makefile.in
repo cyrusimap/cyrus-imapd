@@ -1,3 +1,5 @@
+# Top-level Makefile for cyrus software
+# $Id: Makefile.in,v 1.66.2.1 2003/10/28 16:52:14 rjs3 Exp $
 #
 # @configure_input@
 # 
@@ -40,7 +42,7 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 # 
 
-SUBDIRS = man @PRE_SUBDIRS@ lib @SIEVE_SUBDIRS@ @SERVER_SUBDIRS@ \
+SUBDIRS = man @PRE_SUBDIRS@ acap lib @SERVER_SUBDIRS@ \
 	imtest @SNMP_SUBDIRS@ @EXTRA_SUBDIRS@
 DISTSUBDIRS = doc
 
@@ -56,7 +58,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-VERSION = 2.2.1-BETA
+VERSION = 2.1.15
 
 all:: 
 	@for d in  $(SUBDIRS); \
@@ -86,7 +88,7 @@ distcvs:
 	if [ \! -d dist ]; then mkdir dist ; fi
 	@echo "checking out the distribution"
 	@cd dist ; cvs -Q -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs \
-		co -r cyrus-imapd-2_2 -d cyrus-imapd-$(VERSION) cyrus
+		co -r cyrus-2_1-tail -d cyrus-imapd-$(VERSION) cyrus
 	touch distcvs
 
 install::
