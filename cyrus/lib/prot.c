@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.76 2003/01/06 19:40:36 rjs3 Exp $
+ * $Id: prot.c,v 1.77 2003/01/06 19:47:13 rjs3 Exp $
  */
 
 #include <config.h>
@@ -214,6 +214,7 @@ int prot_settimeout(struct protstream *s, int timeout)
 int prot_setflushonread(struct protstream *s, struct protstream *flushs)
 {
     assert(!s->write);
+    if(flushs) assert(flushs->write);
 
     s->flushonread = flushs;
     return 0;
@@ -589,6 +590,9 @@ int prot_flush(struct protstream *s)
 #endif /* HAVE_SSL */
 	if (n == -1 && errno != EINTR) {
 	    s->error = xstrdup(strerror(errno));
+            /* Reset the output buffer, we are returning EOF */
+            s->ptr = s->buf;
+            s->cnt = s->maxplain;
 	    return EOF;
 	}
 
