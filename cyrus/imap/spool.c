@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.1.2.6 2003/05/09 02:11:39 ken3 Exp $
+ * $Id: spool.c,v 1.1.2.7 2003/07/07 18:04:30 ken3 Exp $
  */
 
 #include <config.h>
@@ -134,7 +134,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
     int c;
     static char *name = NULL, *body = NULL;
     static int namelen = 0, bodylen = 0;
-    int off = 0;
+    int off = 0, skip = 0;
     state s = NAME_START;
     int r = 0;
     int reject8bit = config_getswitch(IMAPOPT_REJECT8BIT);
@@ -181,7 +181,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		r = IMAP_MESSAGE_BADHEADER;
 		goto ph_error;
 	    }
-	    name[0] = tolower(c);
+	    name[0] = c;
 	    off = 1;
 	    s = NAME;
 	    break;
@@ -189,6 +189,15 @@ static int parseheader(struct protstream *fin, FILE *fout,
 	case NAME:
 	    if (c == ' ' || c == '\t' || c == ':') {
 		name[off] = '\0';
+		if (!strcasecmp(name, "xref")) {
+		    /* remove Xref: header (usenet) */
+		    skip = 1;
+		}
+		else {
+		    /* write the header name to the output */
+		    fputs(name, fout);
+		    skip = 0;
+		}
 		s = (c == ':' ? BODY_START : COLON);
 		break;
 	    }
@@ -196,7 +205,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		r = IMAP_MESSAGE_BADHEADER;
 		goto ph_error;
 	    }
-	    name[off++] = tolower(c);
+	    name[off++] = c;
 	    if (off >= namelen - 3) {
 		namelen += NAMEINC;
 		name = (char *) xrealloc(name, namelen);
@@ -209,7 +218,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 	    } else if (c != ' ' && c != '\t') {
 		/* i want to avoid confusing dot-stuffing later */
 		while (c == '.') {
-		    fputc(c, fout);
+		    if (!skip) fputc(c, fout);
 		    c = prot_getc(fin);
 		}
 		r = IMAP_MESSAGE_BADHEADER;
@@ -236,8 +245,10 @@ static int parseheader(struct protstream *fin, FILE *fout,
 
 		peek = prot_getc(fin);
 		
-		fputc('\r', fout);
-		fputc('\n', fout);
+		if (!skip) {
+		    fputc('\r', fout);
+		    fputc('\n', fout);
+		}
 		/* we should peek ahead to see if it's folded whitespace */
 		if (c == '\r' && peek == '\n') {
 		    c = prot_getc(fin);
@@ -248,7 +259,11 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		    /* this is the end of the header */
 		    body[off] = '\0';
 		    prot_ungetc(c, fin);
-		    goto got_header;
+		    if (!skip) goto got_header;
+
+		    /* skipping this header, so get next one */
+		    off = 0;
+		    s = NAME_START;
 		}
 		/* ignore this whitespace, but we'll copy all the rest in */
 		break;
@@ -275,7 +290,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 	}
 
 	/* copy this to the output */
-	fputc(c, fout);
+	if (s != NAME && !skip) fputc(c, fout);
     }
 
     /* if we fall off the end of the loop, we hit some sort of error
@@ -315,6 +330,7 @@ int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache)
 	}
 
 	/* put it in the hash table */
+	lcase(name);
 	clinit = cl = hashheader(name);
 	while (cache[cl] != NULL && strcmp(name, cache[cl]->name)) {
 	    cl++;		/* resolve collisions linearly */

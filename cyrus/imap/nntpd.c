@@ -38,13 +38,12 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.94 2003/07/06 13:37:58 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.95 2003/07/07 18:04:29 ken3 Exp $
  */
 
 /*
  * TODO:
  *
- * - remove Xref header from articles
  * - add PGP verification code and ACLs for control messages
  * - figure out what to do with control messages when proxying
  * - figure out how to do singleinstancestore
