@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.h,v 1.2.6.5 2003/02/13 20:32:54 rjs3 Exp $
+ * $Id: annotate.h,v 1.2.6.6 2003/05/21 16:36:12 ken3 Exp $
  */
 
 #ifndef ANNOTATE_H
@@ -96,12 +96,14 @@ void annotatemore_init(int flags, int (*func)(const char *, const char *,
 void annotatemore_open(char *name);
 
 /* fetch annotations */
-int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
+int annotatemore_fetch(char *mailbox,
+		       struct strlist *entries, struct strlist *attribs,
 		       struct namespace *namespace, int isadmin, char *userid,
 		       struct auth_state *auth_state, struct protstream *pout);
 
 /* store annotations */
-int annotatemore_store(struct entryattlist *l, struct namespace *namespace,
+int annotatemore_store(char *mailbox,
+		       struct entryattlist *l, struct namespace *namespace,
 		       int isadmin, char *userid,
 		       struct auth_state *auth_state);
 

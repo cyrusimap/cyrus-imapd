@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.76 2003/05/21 16:26:56 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.77 2003/05/21 16:36:12 ken3 Exp $ */
 
 #include <config.h>
 
@@ -203,8 +203,8 @@ void cmd_netscrape(char* tag);
 #endif
 
 #ifdef ENABLE_ANNOTATEMORE
-void cmd_getannotation(char* tag);
-void cmd_setannotation(char* tag);
+void cmd_getannotation(char* tag, char *mboxpat);
+void cmd_setannotation(char* tag, char *mboxpat);
 
 int getannotatefetchdata(char *tag,
 			 struct strlist **entries, struct strlist **attribs);
@@ -622,6 +622,10 @@ void shut_down(int code)
     mboxlist_close();
     mboxlist_done();
 
+#ifdef ENABLE_ANNOTATEMORE
+    annotatemore_done();
+#endif
+
     if (imapd_in) {
 	/* Flush the incoming buffer */
 	prot_NONBLOCK(imapd_in);
@@ -964,8 +968,10 @@ void cmdloop()
 #ifdef ENABLE_ANNOTATEMORE
 	    else if (!strcmp(cmd.s, "Getannotation")) {
 		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if (c != ' ') goto missingargs;
 
-		cmd_getannotation(tag.s);
+		cmd_getannotation(tag.s, arg1.s);
 
 		snmp_increment(GETANNOTATION_COUNT, 1);
 	    }
@@ -1347,8 +1353,10 @@ void cmdloop()
 #ifdef ENABLE_ANNOTATEMORE
 	    else if (!strcmp(cmd.s, "Setannotation")) {
 		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if (c != ' ') goto missingargs;
 
-		cmd_setannotation(tag.s);
+		cmd_setannotation(tag.s, arg1.s);
 
 		snmp_increment(SETANNOTATION_COUNT, 1);
 	    }
@@ -5058,7 +5066,7 @@ void annotate_response(struct entryattlist *l)
  *
  * The command has been parsed up to the entries
  */    
-void cmd_getannotation(char *tag)
+void cmd_getannotation(char *tag, char *mboxpat)
 {
     int c, r = 0;
     struct strlist *entries = NULL, *attribs = NULL;
@@ -5079,7 +5087,7 @@ void cmd_getannotation(char *tag)
 	goto freeargs;
     }
 
-    r = annotatemore_fetch(entries, attribs, &imapd_namespace,
+    r = annotatemore_fetch(mboxpat, entries, attribs, &imapd_namespace,
 			   imapd_userisadmin || imapd_userisproxyadmin,
 			   imapd_userid, imapd_authstate, imapd_out);
 
@@ -5102,7 +5110,7 @@ void cmd_getannotation(char *tag)
  *
  * The command has been parsed up to the entry-att list
  */    
-void cmd_setannotation(char *tag)
+void cmd_setannotation(char *tag, char *mboxpat)
 {
     int c, r = 0;
     struct entryattlist *entryatts = NULL;
@@ -5129,7 +5137,8 @@ void cmd_setannotation(char *tag)
     }
 
     if (!r) {
-	r = annotatemore_store(entryatts, &imapd_namespace, imapd_userisadmin,
+	r = annotatemore_store(mboxpat,
+			       entryatts, &imapd_namespace, imapd_userisadmin,
 			       imapd_userid, imapd_authstate);
     }
 

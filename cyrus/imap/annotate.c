@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.22 2003/02/13 20:32:54 rjs3 Exp $
+ * $Id: annotate.c,v 1.8.6.23 2003/05/21 16:36:12 ken3 Exp $
  */
 
 #include <config.h>
@@ -486,8 +486,8 @@ const struct annotate_entry mailbox_ro_entries[] =
 
 const struct annotate_entry server_entries[] =
 {
-    { "motd", NULL, NULL, SRVENTRY_MOTD, PROXY_AND_BACKEND },
-    { "comment", NULL, NULL, SRVENTRY_COMMENT, PROXY_AND_BACKEND },
+    { "/motd", NULL, NULL, SRVENTRY_MOTD, PROXY_AND_BACKEND },
+    { "/comment", NULL, NULL, SRVENTRY_COMMENT, PROXY_AND_BACKEND },
     { NULL, NULL, NULL, 0, ANNOTATION_PROXY_T_INVALID }
 };
 
@@ -541,7 +541,6 @@ static int fetch_cb(char *name, int matchlen,
     int c;
     char int_mboxname[MAX_MAILBOX_PATH+1], ext_mboxname[MAX_MAILBOX_PATH+1];
 
-    char entry[MAX_MAILBOX_PATH+25];
     char size[100], modifiedsince[100];
     struct attvaluelist *attvalues = NULL;
 
@@ -599,9 +598,6 @@ static int fetch_cb(char *name, int matchlen,
 	entries_ptr = entries_ptr->next) {
 	int appended_one = 0;
 	
-	snprintf(entry, sizeof(entry), "/mailbox/{%s}%s",
-		ext_mboxname, entries_ptr->entry->name);
-
 	attvalues = NULL;
 	memset(&result,0,sizeof(struct annotation_result));
 
@@ -640,7 +636,8 @@ static int fetch_cb(char *name, int matchlen,
 	}
 
 	if(appended_one) {
-	    prot_printf(fdata->pout, "* ANNOTATION \"%s\" ", entry);
+	    prot_printf(fdata->pout, "* ANNOTATION \"%s\" \"%s\" ",
+			ext_mboxname, entries_ptr->entry->name);
 	    output_attlist(fdata->pout, attvalues);
 	    prot_printf(fdata->pout, "\r\n");
 	    
@@ -683,14 +680,13 @@ static void output_attlist(struct protstream *pout, struct attvaluelist *l)
     prot_putc(')',pout);
 }
 
-int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
+int annotatemore_fetch(char *mailbox,
+		       struct strlist *entries, struct strlist *attribs,
 		       struct namespace *namespace, int isadmin, char *userid,
 		       struct auth_state *auth_state, struct protstream *pout)
 {
     struct strlist *e = entries;
     struct strlist *a = attribs;
-    char *tmp_entry = NULL;
-    char *mailbox, *cp;
     struct fetchdata fdata;
 
     memset(&fdata, 0, sizeof(struct fetchdata));
@@ -719,19 +715,85 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 
     while (e) {
 	int exact_match = 0;
-	
-	if(tmp_entry) free(tmp_entry);
-	tmp_entry = xstrdup(e->s);
-	
-	if (!strncmp(tmp_entry, "/mailbox/{", 10) &&
-	    ((cp = strchr(tmp_entry + 10, '}')) != NULL)) {
+
+	if (!mailbox[0]) {
+	    /* server annotation */
+	    FILE *f;
+	    char filename[1024], buf[1024], size[100], *p;
+	    struct attvaluelist *attvalues;
 	    int entrycount;
 	    struct glob *g;
 
-	    mailbox = tmp_entry + 10;
-	    *cp++ = '\0'; /* just after mailbox w/leading slash */
+	    g = glob_init(e->s, GLOB_HIERARCHY);
+	    GLOB_SET_SEPARATOR(g, '/');
+	    for(entrycount = 0;
+		server_entries[entrycount].name;
+		entrycount++) {
+		if(GLOB_TEST(g, server_entries[entrycount].name) != -1) {
+		    fdata.entries |= server_entries[entrycount].entry;
+		}
+	    }
 
-	    g = glob_init(cp, GLOB_HIERARCHY);
+	    glob_free(&g);
+
+	    if (fdata.entries & SRVENTRY_MOTD) {
+		snprintf(filename, sizeof(filename), "%s/msg/motd", config_dir);
+		if ((f = fopen(filename, "r")) != NULL) {
+		    fgets(buf, sizeof(buf), f);
+		    fclose(f);
+
+		    if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
+		    if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+
+		    attvalues = NULL;
+		    if (fdata.attribs & ATTRIB_VALUE_SHARED)
+			appendattvalue(&attvalues, "value.shared", buf);
+		    if (fdata.attribs & ATTRIB_SIZE_SHARED) {
+			snprintf(size, sizeof(size), "%u", strlen(buf));
+			appendattvalue(&attvalues, "size.shared", size);
+		    }
+
+		    prot_printf(pout, "* ANNOTATION \"\" \"/motd\" ");
+		    output_attlist(pout, attvalues);
+		    prot_printf(pout, "\r\n");
+
+		    freeattvalues(attvalues);
+		    attvalues = NULL;
+		}
+	    }
+	    if (fdata.entries & SRVENTRY_COMMENT) {
+		snprintf(filename, sizeof(filename), 
+			 "%s/msg/comment", config_dir);
+		if ((f = fopen(filename, "r")) != NULL) {
+		    fgets(buf, sizeof(buf), f);
+		    fclose(f);
+
+		    if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
+		    if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+
+		    attvalues = NULL;
+		    if (fdata.attribs & ATTRIB_VALUE_SHARED)
+			appendattvalue(&attvalues, "value.shared", buf);
+		    if (fdata.attribs & ATTRIB_SIZE_SHARED) {
+			snprintf(size, sizeof(size), "%u", strlen(buf));
+			appendattvalue(&attvalues, "size.shared", size);
+		    }
+
+		    prot_printf(pout, "* ANNOTATION \"\" \"/comment\" ");
+		    output_attlist(pout, attvalues);
+		    prot_printf(pout, "\r\n");
+
+		    freeattvalues(attvalues);
+		    attvalues = NULL;
+		}
+	    }
+	}
+	else {
+	    /* mailbox annotation */
+	    int entrycount;
+	    struct glob *g;
+
+	    g = glob_init(e->s, GLOB_HIERARCHY);
 	    GLOB_SET_SEPARATOR(g, '/');
 
 	    for(entrycount = 0;
@@ -757,7 +819,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		    nentry->next = fdata.entry_list;
 		    nentry->entry = &(mailbox_ro_entries[entrycount]);
 		    fdata.entry_list = nentry;
-		    if(!strcmp(cp, mailbox_ro_entries[entrycount].name)) {
+		    if(!strcmp(e->s, mailbox_ro_entries[entrycount].name)) {
 			exact_match = 1;
 			break;
 		    }
@@ -806,83 +868,8 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 	    free(freeme);
 	}
 
-	if (!strncmp(e->s, "/server/", 8)) {
-	    FILE *f;
-	    char filename[1024], buf[1024], size[100], *p;
-	    struct attvaluelist *attvalues;
-	    int entrycount;
-	    struct glob *g;
-
-	    cp = e->s + 8;
-
-	    g = glob_init(cp, GLOB_HIERARCHY);
-	    GLOB_SET_SEPARATOR(g, '/');
-	    for(entrycount = 0;
-		server_entries[entrycount].name;
-		entrycount++) {
-		if(GLOB_TEST(g, server_entries[entrycount].name) != -1) {
-		    fdata.entries |= server_entries[entrycount].entry;
-		}
-	    }
-
-	    glob_free(&g);
-
-	    if (fdata.entries & SRVENTRY_MOTD) {
-		snprintf(filename, sizeof(filename), "%s/msg/motd", config_dir);
-		if ((f = fopen(filename, "r")) != NULL) {
-		    fgets(buf, sizeof(buf), f);
-		    fclose(f);
-
-		    if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-		    if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
-
-		    attvalues = NULL;
-		    if (fdata.attribs & ATTRIB_VALUE_SHARED)
-			appendattvalue(&attvalues, "value.shared", buf);
-		    if (fdata.attribs & ATTRIB_SIZE_SHARED) {
-			snprintf(size, sizeof(size), "%u", strlen(buf));
-			appendattvalue(&attvalues, "size.shared", size);
-		    }
-
-		    prot_printf(pout, "* ANNOTATION \"/server/motd\" ");
-		    output_attlist(pout, attvalues);
-		    prot_printf(pout, "\r\n");
-
-		    freeattvalues(attvalues);
-		    attvalues = NULL;
-		}
-	    }
-	    if (fdata.entries & SRVENTRY_COMMENT) {
-		snprintf(filename, sizeof(filename), 
-			 "%s/msg/comment", config_dir);
-		if ((f = fopen(filename, "r")) != NULL) {
-		    fgets(buf, sizeof(buf), f);
-		    fclose(f);
-
-		    if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-		    if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
-
-		    attvalues = NULL;
-		    if (fdata.attribs & ATTRIB_VALUE_SHARED)
-			appendattvalue(&attvalues, "value.shared", buf);
-		    if (fdata.attribs & ATTRIB_SIZE_SHARED) {
-			snprintf(size, sizeof(size), "%u", strlen(buf));
-			appendattvalue(&attvalues, "size.shared", size);
-		    }
-
-		    prot_printf(pout, "* ANNOTATION \"/server/comment\" ");
-		    output_attlist(pout, attvalues);
-		    prot_printf(pout, "\r\n");
-
-		    freeattvalues(attvalues);
-		    attvalues = NULL;
-		}
-	    }
-	}
-
 	e = e->next;
     }
-    if(tmp_entry) free(tmp_entry);
 
     return 0;
 }
@@ -903,7 +890,8 @@ static int server_store(char *filename, char *value)
     return 0;
 }
 
-int annotatemore_store(struct entryattlist *l,
+int annotatemore_store(char *mailbox,
+		       struct entryattlist *l,
 		       struct namespace *namespace __attribute__((unused)),
 		       int isadmin __attribute__((unused)),
 		       char *userid __attribute__((unused)),
@@ -917,11 +905,6 @@ int annotatemore_store(struct entryattlist *l,
     syslog(LOG_INFO, "annotatemore_store");
 
     while (e) {
-	if (strncmp(e->entry, "/server/", 8) &&
-	    strncmp(e->entry, "/mailbox/", 9)) {
-	    return IMAP_ANNOTATION_BADENTRY;
-	}
-
 	av = e->attvalues;
 	while (av) {
 	    if (!strcmp(av->attrib, "value.shared")) {
@@ -934,12 +917,19 @@ int annotatemore_store(struct entryattlist *l,
 	    av = av->next;
 	}
 
-	if (value && !strcmp(e->entry, "/server/motd"))
-	    motd = value;
-	else if (value && !strcmp(e->entry, "/server/comment"))
-	    comment = value;
-	else
+	if (!mailbox[0]) {
+	    /* server annotation */
+	    if (value && !strcmp(e->entry, "/motd"))
+		motd = value;
+	    else if (value && !strcmp(e->entry, "/comment"))
+		comment = value;
+	    else
+		return IMAP_PERMISSION_DENIED;
+	}
+	else {
+	    /* mailbox annotation */
 	    return IMAP_PERMISSION_DENIED;
+	}
 
 	e = e->next;
     }
