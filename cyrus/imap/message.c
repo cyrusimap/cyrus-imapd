@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.82 2000/08/15 20:41:23 leg Exp $
+ * $Id: message.c,v 1.83 2000/08/17 18:12:49 ken3 Exp $
  */
 
 #include <config.h>
@@ -1376,6 +1376,8 @@ unsigned flags;
 	    int offset;
 
 	    message_parse_rfc822space(&hdr);
+	    if (!hdr) goto baddate;
+
 	    if (*hdr == '+' || *hdr == '-') {
 		/* Parse numeric offset */
 		int east = 1;
