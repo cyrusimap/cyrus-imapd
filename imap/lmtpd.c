@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.48 2000/09/13 17:42:02 leg Exp $
+ * $Id: lmtpd.c,v 1.49 2000/11/11 04:12:46 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.48 2000/09/13 17:42:02 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.49 2000/11/11 04:12:46 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -148,7 +148,7 @@ static char *generate_notify(message_data_t *m);
 
 void shut_down(int code);
 
-struct lmtp_func mylmtp = { &deliver, &verify_user, 0 };
+struct lmtp_func mylmtp = { &deliver, &verify_user, 0, 0 };
 
 static int quotaoverride = 0;		/* should i override quota? */
 int dupelim = 0;
@@ -307,8 +307,12 @@ int service_main(int argc, char **argv, char **envp)
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
 
-    while ((opt = getopt(argc, argv, "q")) != EOF) {
+    while ((opt = getopt(argc, argv, "aq")) != EOF) {
 	switch(opt) {
+	case 'a':
+	    mylmtp.preauth = 1;
+	    break;
+
 	case 'q':
 	    quotaoverride = 1;
 	    break;
@@ -1042,7 +1046,7 @@ static FILE *sieve_find_script(const char *user)
 static void
 usage()
 {
-    fprintf(stderr, "421-4.3.0 usage: lmtpd [-q]\r\n");
+    fprintf(stderr, "421-4.3.0 usage: lmtpd [-a] [-q]\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
     exit(EC_USAGE);
 }

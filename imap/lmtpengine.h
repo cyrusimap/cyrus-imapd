@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.3 2000/06/16 02:37:15 leg Exp $
+ * $Id: lmtpengine.h,v 1.4 2000/11/11 04:12:46 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -89,6 +89,7 @@ struct lmtp_func {
 		   char *authuser, struct auth_state *authstate);
     int (*verify_user)(const char *user);
     char *addheaders;		/* add these headers to all messages */
+    int preauth;		/* preauth connection? */
 };
 
 /* run LMTP on 'pin' and 'pout', doing callbacks to 'func' where appropriate
