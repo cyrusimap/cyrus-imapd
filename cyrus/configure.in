@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.42 2003/03/06 18:08:25 rjs3 Exp $
+dnl $Id: configure.in,v 1.232.4.43 2003/03/06 18:11:00 rjs3 Exp $
 dnl
 
 
@@ -938,7 +938,7 @@ AC_ARG_WITH(perl,       [  --with-perl=PERL        use PERL for perl],
 	with_perl="$withval", with_perl="perl")
 
 if test "${with_perl}" = yes; then
-    with_perl="perl5"
+    with_perl="perl"
 fi
 if test "${with_perl}" != no; then
     if test ${using_static_sasl} = "staticonly"; then
