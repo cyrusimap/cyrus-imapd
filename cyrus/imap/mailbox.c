@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.88 2000/02/10 21:25:28 leg Exp $
+ $Id: mailbox.c,v 1.89 2000/02/21 07:24:43 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -2071,7 +2071,7 @@ void mailbox_hash_mbox(char *buf,
     }
 
     /* change all '.'s to '/' */
-    for (p = buf + strlen(root) + 3; *p; p++) {
+    for (p = buf + strlen(root) + 1; *p; p++) {
 	if (*p == '.') *p = '/';
     }
 }
