@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.122 2000/05/23 21:30:43 leg Exp $
+ * $Id: mboxlist.c,v 1.123 2000/05/24 03:09:29 leg Exp $
  */
 
 #include <config.h>
@@ -162,11 +162,13 @@ static int mboxlist_mylookup(const char* name, char** pathp, char** aclp,
     struct mbox_entry *mboxent;
 
     memset(&data, 0, sizeof(key));
-
     memset(&key, 0, sizeof(key));
     key.data = (char *) name;
     key.size = strlen(name);
 
+    if (key.size == 0) {
+	return IMAP_MAILBOX_NONEXISTENT;
+    }
     r = mbdb->get(mbdb, tid, &key, &data, flags);
     switch (r) {
     case 0:
