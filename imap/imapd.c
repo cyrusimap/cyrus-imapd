@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.223 2000/04/06 15:14:35 leg Exp $ */
+/* $Id: imapd.c,v 1.224 2000/04/06 18:32:26 leg Exp $ */
 
 #include <config.h>
 
@@ -1536,7 +1536,7 @@ void cmd_id(char *tag)
 		"\"name\" \"Cyrus\" "
 		"\"version\" \"%s\" "
 	   "\"vendor\" \"Project Cyrus <http://asg.web.cmu.edu/cyrus>\")\r\n",
-		CYRUS_VERSION
+		CYRUS_VERSION);
 }
 
 /*
