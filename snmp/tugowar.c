@@ -1,5 +1,5 @@
 /* tugowar.c -- Listens on unix domain udp socket and keeps track of oids
- * $Id: tugowar.c,v 1.6 2000/05/23 20:56:47 robeson Exp $
+ * $Id: tugowar.c,v 1.7 2000/10/12 19:24:08 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -87,7 +87,7 @@ int           agentx_session; /* agentx session id */
 
 
 #define IMAPMIB_NPARMS 11
-u_int IMAPCommandsMIB [IMAPMIB_NPARMS]  = { 1, 3, 6, 1, 4, 1, 3, 2, 2, 2, 6 };
+u_int IMAPCommandsMIB [IMAPMIB_NPARMS]  = { 1, 3, 6, 1, 4, 1, 3, 2, 2, 3 };
 
 agentx_errortype_t
 mib_general_get  ( int Nsubid, u_int *subids, agentx_varbind_t *binding, int map );
@@ -117,23 +117,25 @@ oid_trie_t* add_leaf_to_branch(oid_trie_t *branch, oid_trie_t *leaf)
     int lup, lup2;
 
     /* do we need to make the trie bigger? */
-    if (branch->numchildren >= branch->numchildren_alloc)
+    if (branch->numchildren >= branch->numchildren_alloc - 1)
     {
 	branch->numchildren_alloc+=10;
-	branch->children = (oid_trie_t **)realloc(branch->children,
-					      sizeof(oid_trie_t *)*branch->numchildren_alloc);
+	branch->children = 
+	    (oid_trie_t **)realloc(branch->children,
+				   sizeof(oid_trie_t *)
+				          * branch->numchildren_alloc);
     }
 
     /* we want the invariant that this list is always sorted so place in the right place */
     
-    for (lup=0;lup<branch->numchildren;lup++)
+    for (lup=0; lup < branch->numchildren; lup++)
 	if (leaf->value < branch->children[lup]->value)
 	    break;
 
     /* we're inserting in middle. move end ones back */
     if (lup < branch->numchildren)
     { 	
-	for (lup2=branch->numchildren;lup2>=lup;lup2--)
+	for (lup2 = branch->numchildren - 1; lup2 >= lup; lup2--)
 	    branch->children[lup2+1]=branch->children[lup2];
     }
     
