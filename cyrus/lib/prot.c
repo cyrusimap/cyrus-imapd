@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.9 2002/08/05 17:08:06 rjs3 Exp $
+ * $Id: prot.c,v 1.72.4.10 2002/08/05 18:10:03 rjs3 Exp $
  */
 
 #include <config.h>
@@ -715,15 +715,6 @@ int prot_flush_internal(struct protstream *s, int force)
 	    if (n > 0) {
 		s->bigbuf_pos += n;
 	    }
-
-	    /* are we done with the big buffer? */
-	    /* Free the bigbuffer */
-	    if(s->bigbuf_pos == s->bigbuf_len) {
-		map_free(&(s->bigbuf_base), &(s->bigbuf_siz));
-		close(s->big_buffer);
-		s->bigbuf_len = s->bigbuf_pos = 0;
-		s->big_buffer = PROT_NO_FD;
-	    }
 	}
 
 	/* If there isn't anything in the memory buffer, we're done now */
@@ -741,8 +732,9 @@ int prot_flush_internal(struct protstream *s, int force)
 	    goto done;
 	}
 
-	if(s->big_buffer == PROT_NO_FD) {
-	    /* No bigbuffer currently open, write what we can from memory */
+	if(s->big_buffer == PROT_NO_FD || s->bigbuf_pos == s->bigbuf_len) {
+	    /* No bigbuffer currently open (or we've written the current
+	       one to its entirety), so write what we can from memory */
 
 	    n = prot_flush_writebuffer(s, ptr, left);
 
@@ -810,6 +802,14 @@ int prot_flush_internal(struct protstream *s, int force)
     s->cnt = s->maxplain;
     
  done:
+    /* are we done with the big buffer? If so, free it. */
+    if(s->big_buffer != PROT_NO_FD && s->bigbuf_pos == s->bigbuf_len) {
+	map_free(&(s->bigbuf_base), &(s->bigbuf_siz));
+	close(s->big_buffer);
+	s->bigbuf_len = s->bigbuf_pos = 0;
+	s->big_buffer = PROT_NO_FD;
+    }
+
     if(force) {
 	/* we don't need to call nonblock() again, because it will be
 	 * set correctly on the next prot_flush_internal() anyway */
