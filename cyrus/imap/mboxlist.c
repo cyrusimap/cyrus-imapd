@@ -6,13 +6,12 @@
 #include <sysexits.h>
 #include <string.h>
 #include <errno.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/file.h>
 
-#include <acl.h>
-#include <glob.h>
+#include "acl.h"
+#include "glob.h"
 #include "assert.h"
 #include "config.h"
 #include "mailbox.h"

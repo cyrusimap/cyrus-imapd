@@ -11,8 +11,8 @@
 #include <sys/mman.h>
 #include <com_err.h>
 
-#include <acl.h>
-#include <util.h>
+#include "acl.h"
+#include "util.h"
 #include "assert.h"
 #include "imap_err.h"
 #include "mailbox.h"

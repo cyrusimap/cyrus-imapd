@@ -7,7 +7,7 @@
 #include <sys/types.h>
 #include <syslog.h>
 
-#include <acl.h>
+#include "acl.h"
 #include "assert.h"
 #include "imap_err.h"
 #include "mailbox.h"

@@ -13,8 +13,8 @@
 #endif
 #include <sys/file.h>
 
-#include <acl.h>
-#include <util.h>
+#include "acl.h"
+#include "util.h"
 #include "auth.h"
 #include "config.h"
 #include "imap_err.h"
