@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.2 2002/07/10 20:45:11 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.3 2002/07/12 20:16:40 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -228,7 +228,7 @@ void annotate_response(struct entryattlist *l);
 
 void appendstrlist(struct strlist **l, char *s);
 void freestrlist(struct strlist *l);
-void appendattvalue(struct attvaluelist **l, char *attrib, char *value);
+void appendattvalue(struct attvaluelist **l, char *attrib, const char *value);
 void freeattvalues(struct attvaluelist *l);
 #endif /* ENABLE_ANNOTATEMORE */
 
@@ -5289,7 +5289,7 @@ struct strlist *l;
 /*
  * Append the 'attrib'/'value' pair to the attvaluelist 'l'.
  */
-void appendattvalue(struct attvaluelist **l, char *attrib, char *value)
+void appendattvalue(struct attvaluelist **l, char *attrib, const char *value)
 {
     struct attvaluelist **tail = l;
 

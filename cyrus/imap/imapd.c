@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.3 2002/07/12 19:06:37 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.4 2002/07/12 20:16:38 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -227,7 +227,7 @@ void appendsearchargs(struct searchargs *s, struct searchargs *s1,
 			 struct searchargs *s2);
 void freesearchargs(struct searchargs *s);
 static void freesortcrit(struct sortcrit *s);
-void appendattvalue(struct attvaluelist **l, char *attrib, char *value);
+void appendattvalue(struct attvaluelist **l, char *attrib, const char *value);
 void freeattvalues(struct attvaluelist *l);
 
 static int mailboxdata(char *name, int matchlen, int maycreate, void *rock);
@@ -2138,7 +2138,7 @@ void cmd_id(char *tag)
 /*
  * Append the 'attrib'/'value' pair to the attvaluelist 'l'.
  */
-void appendattvalue(struct attvaluelist **l, char *attrib, char *value)
+void appendattvalue(struct attvaluelist **l, char *attrib, const char *value)
 {
     struct attvaluelist **tail = l;
 
