@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.367 2002/03/26 19:24:54 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.368 2002/03/27 22:27:31 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -5864,47 +5864,20 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
     return r;
 }
 
-void cmd_xfer(char *tag, char *toserver, char *name) 
+/* xxx need to handle prereserved case */
+static int do_xfer_single(char *toserver, char *name, char *mailboxname,
+			  int mbflags, 
+			  char *path, char *part, char *acl,
+			  int prereserved,
+			  mupdate_handle *h_in) 
 {
     int r = 0, rerr = 0;
     char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
-    char mailboxname[MAX_MAILBOX_NAME+1];
-    char *inpath, *inpart, *inacl;
-    char *path = NULL, *part = NULL, *acl = NULL;
-    int mbflags;
     struct backend *be = NULL;
     mupdate_handle *mupdate_h = NULL;
     int backout_mupdate = 0;
     int backout_remotebox = 0;
     int backout_remoteflag = 0;
-    
-    /* administrators only please */
-    /* however, proxys can do this, if their authzid is an admin */
-    if (!imapd_userisadmin && !imapd_userisproxyadmin) {
-	r = IMAP_PERMISSION_DENIED;
-    }
-
-    /* if we're not in a murder this [currently] makes no sense */
-    if (!mupdate_server) {
-	r = IMAP_SERVER_UNAVAILABLE;
-    }
-
-    if (!r) {
-	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
-						   imapd_userid, mailboxname);
-    }
-    
-    if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbflags,
-		    &inpath, &inpart, &inacl, NULL);
-    }
-    if (r == IMAP_MAILBOX_MOVED) return;
-
-    if (!r) {
-	path = xstrdup(inpath);
-	part = xstrdup(inpart);
-	acl = xstrdup(inacl);
-    }
 
     /* Okay, we have the mailbox, now the order of steps is:
      *
@@ -5934,15 +5907,18 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 		     mailboxname);
     }
 
-    /* Step 1b: Connect to mupdate */
-    if(!r) {
+    /* Step 1a: Connect to mupdate (as needed) */
+    if(h_in) {
+	mupdate_h = h_in;
+    } else {
 	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
-	if(r) syslog(LOG_ERR,
-		     "Could not move mailbox: %s, MUPDATE connect failed",
-		     mailboxname);
+	    syslog(LOG_ERR,
+		   "Could not move mailbox: %s, MUPDATE connect failed",
+		   mailboxname);
 	    goto done;
 	}
+
     }
 
     /* Step 2: LOCALCREATE on remote server */
@@ -5957,7 +5933,6 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     }
 
     /* Step 2.5: Set mailbox as REMOTE on local server */
-    /* xxx NEED TO ALSO SET REMOTE HOST SO REFERRAL WORKS CORRECTLY */
     if(!r) {
 	snprintf(buf, sizeof(buf), "%s!%s", toserver, part);
 	r = mboxlist_update(mailboxname, mbflags|MBTYPE_MOVING, buf, acl);
@@ -6061,7 +6036,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 		     mailboxname);
     }
 
- done:
+done:
     if(r && backout_mupdate) {
 	rerr = 0;
 	/* xxx if the mupdate server is what failed, then this won't
@@ -6093,9 +6068,71 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 			mailboxname);
     }
 
-    if(mupdate_h) mupdate_disconnect(&mupdate_h);
+    /* release the handle we got locally if necessary */
+    if(!h_in) {
+	mupdate_disconnect(&mupdate_h);
+    }
     if(be) downserver(be);
 
+    return r;
+}
+
+void cmd_xfer(char *tag, char *toserver, char *name) 
+{
+    int r = 0;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+    int mbflags;
+    char *inpath, *inpart, *inacl;
+    char *path = NULL, *part = NULL, *acl = NULL;
+    
+    /* administrators only please */
+    /* however, proxys can do this, if their authzid is an admin */
+    if (!imapd_userisadmin && !imapd_userisproxyadmin) {
+	r = IMAP_PERMISSION_DENIED;
+    }
+
+    /* if we're not in a murder this [currently] makes no sense */
+    if (!mupdate_server) {
+	r = IMAP_SERVER_UNAVAILABLE;
+    }
+
+    if (!r) {
+	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
+						   imapd_userid, mailboxname);
+    }
+    
+    if (!r) {
+	r = mlookup(tag, name, mailboxname, &mbflags,
+		    &inpath, &inpart, &inacl, NULL);
+    }
+    if (r == IMAP_MAILBOX_MOVED) return;
+
+    if (!r) {
+	path = xstrdup(inpath);
+	part = xstrdup(inpart);
+	acl = xstrdup(inacl);
+    }
+
+#if 0
+    /* Step 1b: Connect to mupdate */
+    /* (if we need to reserve a user mailbox */
+    if(!r) {
+	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "Could not move mailbox: %s, MUPDATE connect failed",
+		   mailboxname);
+	    goto done;
+	}
+    }
+#endif
+
+    if(!r) {
+	r = do_xfer_single(toserver, name, mailboxname, mbflags,
+			   path, part, acl, 0, NULL);
+    }
+
+ done:
     if(part) free(part);
     if(path) free(path);
     if(acl) free(acl);
