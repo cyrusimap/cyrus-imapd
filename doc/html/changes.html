@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.98 2000/02/18 00:09:33 leg Exp $ -->
+<!-- $Id: changes.html,v 1.99 2000/04/06 15:10:21 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -31,6 +31,12 @@ the Perl version away from the TCL version.
 <li>Bugfix in modified UTF-7 processing (for mailbox names).
 Bugfix in <tt>index_searchcacheheader()</tt>.
 
+<li>Implemented the extension MULTIAPPEND.
+
+<li>RENAME is now hierarchical.
+
+<li>The right that controls whether a mailbox may be deleted is now
+"c".  (It used to be "d".)
 </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.20 </h2>

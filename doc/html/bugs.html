@@ -9,17 +9,40 @@
 <h3>imapd and core utilities</h3>
 
 <ul>
-<li> Multiple APPENDs don't always correctly return the EXISTS response.
+<li> Multiple APPENDs don't always correctly return the EXISTS
+response. (can't reproduce?)
 
 <li> Particularly large quotas can wrap around.
 
-<li>The RENAME command does not have the hierarchical behavior
-required by the IMAP4rev1 specification.  The CAPABILITY command now
-returns X-NON-HIERARCHICAL-RENAME in its response in order to
-advertise this bug.  We plan to have this fixed eventually.
+<li> The RENAME command is not atomic.
+
+<li> append.c: doesn't set the \Seen flag if the client requests it.
+
+<li> MULTIAPPEND: does it do the right thing with an aborted APPEND
+(literal length {0})?
+
+<li> seen_db: doesn't use network byte order. also, need to close the
+database before exiting and before the environment is closed down.
+
+<li> does <tt>reconstruct</tt> correctly deal with the new header and
+index summary information?
+
+<li> <tt>deliver</tt> (wrapper) should fill in a more useful
+Return-Path when none is given. (not important)
 </ul>
 
-<h3>deliver and sieve</h3>
+<h3>proxyd and Cyrus Murder</h3>
+<ul>
+<li> <tt>proxyd</tt> doesn't support STARTTLS/imaps.
+
+<li> COPY across servers isn't tested and isn't robust.
+
+<li> RENAME across servers isn't implemented (less severe).
+
+<li> Tagged lines with literals can cause problems.
+</ul>
+
+<h3>lmtpd, deliver, and sieve</h3>
 
 <ul>
 <li> 8-bit set characters are coerced to 'X', but not before the notify_zephyr 
@@ -35,8 +58,7 @@ Well, ok, it hangs.
 <li> <tt>duplicate.c</tt> could be much more efficient than repeatedly
 opening and closing databases.  (Cache last N databases used?)
 
-<li> The vacation action in Sieve shouldn't respond to messages that
-have an "Auto-Submitted" category anything but "No".
+<li> Should <tt>duplicate.c</tt> use transactions?  A single file?
 </ul>
 
 <h3>authentication and authorization</h3>
@@ -53,12 +75,15 @@ bear no resemblance to what actually went wrong.
 <h3>other utilities</h3>
 
 <ul>
-<li> cyradm doesn't handle BYE quite properly (especially a BYE right after
-connect).
+<li> <tt>cyradm</tt> doesn't handle BYE quite properly (especially a
+BYE right after connect).
 
 <li> <tt>imtest</tt> doesn't properly default to using the LOGIN
 command.  also, it would be nice for the authorization name to default
 to the authentication name, except when specifically overridden.
+
+<li> <tt>collectnews</tt>'s routines in <tt>append.c</tt> are broken.
+either remove <tt>collectnews</tt> or fix it.
 
 </ul>
 
@@ -71,17 +96,25 @@ to the authentication name, except when specifically overridden.
 
 <li> Implement the IMAP SORT and THREAD extensions.
 
-<li> Do imaps natively.
+<li> Implement the IMAP ANNOTATE extension.
 
-<li> Do STARTTLS for POP, LMTP?
+<li> Implement some sort of backup/restore system that's more
+efficient and easier to use than Amanda on the filesystem.
+
+<li> Add mailbox version numbers.
+
+<li> Add mailbox tombstones (gives NEWNAME support).
+
+<li> Design and implement ALIST, the advanced list command.
 </ul>
 
 <p>
 Please report bugs to <a
 href="mailto:cyrus-bugs@andrew.cmu.edu">cyrus-bugs@andrew.cmu.edu</a>.
-Be sure to include (at least) system type, compiler used, and the
-options passed to configure, along with a detailed report.  Additional
-information is welcome, and naturally, patches are deeply appreciated.
+Be sure to include (at least) the version of Cyrus you're using,
+system type, compiler used, and the options passed to configure, along
+with a detailed report.  Additional information is welcome, and
+naturally, patches are deeply appreciated.
 
 <p>
 If you submit a patch, please send unified diffs (-u) if your diff program
