@@ -312,7 +312,26 @@ if test "$WITH_AUTH" = krb_pts; then
 	if test -f /usr/ucblib/libucb.a; then
 		AFSLIBS="$AFSLIBS ${ld_runpath_switch}/usr/ucblib -L/usr/ucblib -lucb"
 	fi
-	AC_SUBST(AFSLIBS)	
+
+#dnl This is necessary because AFS wants sigvec, which may not be in
+#dnl the C library.
+#AC_CHECKING(for sigvec:)
+#AC_CACHE_VAL(cyrus_afs_bsdlibs,[AC_CHECK_FUNC(sigvec, [cyrus_afs_bsdlibs=""], [
+#	AC_CHECK_LIB(BSD, sigvec, cyrus_afs_bsdlibs="-lBSD",
+#	[ SAVE_CFLAGS="$CFLAGS"
+#	CFLAGS="-L/usr/ucblib -R/usr/ucblib $CFLAGS"
+#	AC_CHECK_LIB(ucb, sigvec, cyrus_afs_bsdlibs="-L/usr/ucblib -R/usr/ucblib -lucb",[
+#AC_MSG_WARN(Can't find a sigvec(), needed for AFS libs.)
+#AC_MSG_WARN(You will need to add it by hand.)
+#	]
+#	CFLAGS="$SAVE_CFLAGS")
+#	])])]
+#AC_MSG_RESULT(cyrus_afs_bsdlibs)
+#AFSLIBS="$AFSLIBS $cyrus_afs_bsdlibs"
+
+	# XXX
+	AFSLIBS="$AFSLIBS -lossup"
+	AC_SUBST(AFSLIBS)
 fi
 
 TCL_SUBDIRS="cyradm"
@@ -400,13 +419,19 @@ case "$with_krb" in
 		 if test -d /usr/include/kerberosIV; then
 			CFLAGS="${CFLAGS} -I/usr/include/kerberosIV"
 		 fi],
-		with_krb="no",-ldes);;
+		with_krb="no",-ldes)
+		;;
 	*)  if test -f ${with_krb}/lib/libdes.a; then
 		CPPFLAGS="${CPPFLAGS} -I${with_krb}/include"
 		LIBS="${LIBS} ${with_krb}/lib/libkrb.a ${with_krb}/lib/libdes.a"
 	    else
 		AC_MSG_ERROR(The Kerberos DES library is required for Kerberos support)
-	    fi;;
+	    fi
+	    AC_CHECK_LIB(resolv,krb_realmofhost,
+	    [LIBS="${LIBS} -lresolv"], , -lresolv)
+	    AC_CHECK_LIB(iberty,basename,
+	    [LIBS="${LIBS} -liberty"], , -liberty)
+	    ;;
 esac
 if test "$with_krb" = "no"; then
      if test "$WITH_LOGIN" = "krb"; then
@@ -458,7 +483,8 @@ AC_ARG_ENABLE(amssync,
 	if test "$enableval" = yes; then
 		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} amssync"
 		EXTRA_OUTPUT="${EXTRA_OUTPUT} amssync/Makefile"
-		AC_CHECK_LIB(ossup, strchr, LIBS="${LIBS} -lossup")
+# strchr in ossup?
+#		AC_CHECK_LIB(ossup, strchr, LIBS="${LIBS} -lossup")
 	fi)			
 dnl Have to check getdtabalesize after adding ossup, as some ossup's define it
 AC_REPLACE_FUNCS(getdtablesize)
@@ -467,7 +493,6 @@ AC_ARG_ENABLE(cmulocal,
 	if test "$enableval" = yes; then
 		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} cmulocal"
 		EXTRA_OUTPUT="${EXTRA_OUTPUT} cmulocal/Makefile"
-		AC_DEFINE(ENABLE_MONITOR_LOGS)
 	fi)			
 AC_ARG_ENABLE(experiment,
 	[  --enable-experiment       enable experimental code (gurus only)],
