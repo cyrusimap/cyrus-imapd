@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.151 2002/01/22 22:31:52 rjs3 Exp $
+# $Id: Makefile.in,v 1.152 2002/01/25 19:36:39 rjs3 Exp $
 # 
 # @configure_input@
 #
@@ -190,9 +190,9 @@ ctl_deliver: ctl_deliver.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
 	 $@ ctl_deliver.o libimap.a $(DEPLIBS) $(LIBS)
 
-ctl_mboxlist: ctl_mboxlist.o libimap.a $(DEPLIBS)
+ctl_mboxlist: ctl_mboxlist.o mupdate-client.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
-	 $@ ctl_mboxlist.o libimap.a $(DEPLIBS) $(LIBS)
+	 $@ ctl_mboxlist.o mupdate-client.o libimap.a $(DEPLIBS) $(LIBS)
 
 ctl_cyrusdb: ctl_cyrusdb.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
