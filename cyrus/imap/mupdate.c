@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.47 2002/02/11 20:07:02 rjs3 Exp $
+ * $Id: mupdate.c,v 1.48 2002/02/12 16:37:02 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1274,7 +1274,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	
 	if (m && (!mdata->acl || strlen(mdata->acl) < strlen(m->acl))) {
 	    /* change what's already there */
-	    strcpy(m->server, mdata->server);
+	    free(m->server);
+	    m->server = xstrdup(mdata->server);
+
 	    if (mdata->acl) strcpy(m->acl, mdata->acl);
 	    else m->acl[0] = '\0';
 
@@ -1291,14 +1293,21 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	} else {
 	    struct mbent *newm;
 
+	    if(m) {
+		free(m->mailbox);
+		free(m->server);
+	    }
+
 	    /* allocate new mailbox */
 	    if (mdata->acl) {
 		newm = xrealloc(m, sizeof(struct mbent) + strlen(mdata->acl));
 	    } else {
 		newm = xrealloc(m, sizeof(struct mbent) + 1);
 	    }
-	    strcpy(newm->mailbox, mdata->mailbox);
-	    strcpy(newm->server, mdata->server);
+
+	    newm->mailbox = xstrdup(mdata->mailbox);
+	    newm->server = xstrdup(mdata->server);
+
 	    if (mdata->acl) {
 		strcpy(newm->acl, mdata->acl);
 	    } else {
