@@ -45,7 +45,7 @@ struct acte_server {
     int (*auth)();		/* Do an authentication protocol exchange */
     void (*query_state)();	/* Query an authentication state */
     void (*free_state)();	/* Free an authentication state */
-    char (*get_cacheid)();	/* Get a cacheid, if available */
+    char *(*get_cacheid)();	/* Get a cacheid, if available */
 };
 
 /* Protection mechanisms */
