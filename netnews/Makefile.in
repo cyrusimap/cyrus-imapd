@@ -1,0 +1,73 @@
+# Makefile for cyradm
+#
+# @configure_input@
+# Copyright 1998 Carnegie Mellon University
+# 
+# No warranties, either expressed or implied, are made regarding the
+# operation, use, or results of the software.
+#
+# Permission to use, copy, modify and distribute this software and its
+# documentation is hereby granted for non-commercial purposes only
+# provided that this copyright notice appears in all copies and in
+# supporting documentation.
+#
+# Permission is also granted to Internet Service Providers and others
+# entities to use the software for internal purposes.
+#
+# The distribution, modification or sale of a product which uses or is
+# based on the software, in whole or in part, for commercial purposes or
+# benefits requires specific, additional permission from:
+#
+#  Office of Technology Transfer
+#  Carnegie Mellon University
+#  5000 Forbes Avenue
+#  Pittsburgh, PA  15213-3890
+#  (412) 268-4387, fax: (412) 268-7395
+#  tech-transfer@andrew.cmu.edu
+# 
+srcdir = @srcdir@
+VPATH = @srcdir@
+
+CC = @CC@
+INSTALL = @INSTALL@
+RANLIB = @RANLIB@
+
+DEFS = @DEFS@ @TCL_DEFS@
+CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ @TCL_CPPFLAGS@
+LIBS =  @TCL_LIBS@ @IMAP_LIBS@
+DEPLIBS = ../lib/libcyrus.a @DEPLIBS@ 
+
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@
+
+SHELL = /bin/sh
+MAKEDEPEND = @MAKEDEPEND@
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+cyrus_prefix = @cyrus_prefix@
+
+all: remotepurge
+
+install:
+	$(INSTALL) -s -m 755 cyradm $(DESTDIR)$(exec_prefix)/bin
+
+.c.o:
+	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
+
+remotepurge: remotepurge.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o remotepurge remotepurge.o \
+		$(DEPLIBS) $(LIBS)
+
+
+clean:
+	rm -f *.o Makefile.bak remotepurge makedepend.log
+
+distclean: clean
+	rm -f Makefile
+
+depend:
+	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.
+
