@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.158 1998/11/03 19:59:31 tjs Exp $ */
+/* $Id: imapd.c,v 1.159 1998/11/09 21:03:11 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -2563,6 +2563,7 @@ char *identifier;
     char *canon_identifier;
     int canonidlen;
     char *acl;
+    char *rightsdesc;
 
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
 
@@ -2584,23 +2585,24 @@ char *identifier;
 	if (canon_identifier) canonidlen = strlen(canon_identifier);
 
 	if (!canon_identifier) {
-	    prot_printf(imapd_out, "* LISTRIGHTS %s %s \"\"",
-			name, identifier);
+	    rightsdesc = "\"\"";
 	}
 	else if (!strncmp(mailboxname, "user.", 5) &&
 		 !strchr(canon_identifier, '.') &&
 		 !strncmp(mailboxname+5, canon_identifier, canonidlen) &&
 		 (mailboxname[5+canonidlen] == '\0' ||
 		  mailboxname[5+canonidlen] == '.')) {
-	    prot_printf(imapd_out,
-			"* LISTRIGHTS %s %s lca r s w i p d 0 1 2 3 4 5 6 7 8 9",
-			name, identifier);
+	    rightsdesc = "lca r s w i p d 0 1 2 3 4 5 6 7 8 9";
 	}
 	else {
-	    prot_printf(imapd_out,
-			"* LISTRIGHTS %s %s \"\" l r s w i p c d a 0 1 2 3 4 5 6 7 8 9",
-			name, identifier);
+	    rightsdesc = "\"\" l r s w i p c d a 0 1 2 3 4 5 6 7 8 9";
 	}
+
+	prot_printf(imapd_out, "* LISTRIGHTS");
+	printastring(name);
+	prot_putc(' ', imapd_out);
+	printastring(identifier);
+	prot_printf(imapd_out, " %s", rightsdesc);
 
 	prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
