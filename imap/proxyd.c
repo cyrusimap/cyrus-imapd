@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.130 2002/06/24 16:28:48 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131 2002/07/09 14:58:47 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -650,10 +650,8 @@ static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
     char *flags = xmalloc(cur_flags_size);
 
     const char *end_strip_flags[] = { " \\NonExistent)", "\\NonExistent)",
-				      " \\Noselect)", "\\Noselect)",
 				      NULL };
     const char *mid_strip_flags[] = { "\\NonExistent ",
-				      "\\Noselect ",
 				      NULL 
 				    };
 
@@ -776,9 +774,10 @@ static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
 	    }
 
 	    for(i=0; mid_strip_flags[i]; i++) {
+		int mid_strip_len = strlen(mid_strip_flags[i]);
 		p = strstr(flags, mid_strip_flags[i]);
 		while(p) {
-		    strcpy(p, p + 13);
+		    strcpy(p, p + mid_strip_len);
 		    p = strstr(flags, mid_strip_flags[i]);
 		}
 	    }
