@@ -13,8 +13,8 @@ WITHAUTH="--with-auth=krb_pts"
 CC=cc
 VER=`smake -D | sed 's;^.*\/;;'`
 IDENT="-DEXTRA_IDENT=\\\"-${VER}\\\""
+DEFS="${IDENT}"
 
-CFLAGS="${IDENT}"
 case `uname` in
    Linux) CFLAGS="${CFLAGS} -O3"
 	AMSSYNC=""
@@ -42,4 +42,5 @@ esac
 
 LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-user=cyrus --with-cyrus-group=staff"
 
-export CFLAGS CC CXXFLAGS
+export CFLAGS CC CXXFLAGS DEFS
+
