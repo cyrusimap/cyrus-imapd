@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.63 2002/02/19 17:09:40 rjs3 Exp $
+ * $Id: prot.c,v 1.64 2002/02/19 18:13:41 ken3 Exp $
  */
 
 #include <config.h>
@@ -600,12 +600,15 @@ int prot_write(struct protstream *s, const char *buf, unsigned len)
 
 /*
  * Stripped-down version of printf() that works on protection streams
- * Only understands '%d', '%s', '%c', and '%%' in the format string.
+ * Only understands '%ld', '%lu', '%d', %u', '%s', '%c', and '%%'
+ * in the format string.
  */
 int prot_printf(struct protstream *s, const char *fmt, ...)
 {
     va_list pvar;
     char *percent, *p;
+    long l;
+    unsigned long ul;
     int i;
     unsigned u;
     char buf[30];
@@ -618,6 +621,25 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 	switch (*++percent) {
 	case '%':
 	    prot_putc('%', s);
+	    break;
+
+	case 'l':
+	    switch (*++percent) {
+	    case 'd':
+		l = va_arg(pvar, long);
+		sprintf(buf, "%ld", l);
+		prot_write(s, buf, strlen(buf));
+		break;
+
+	    case 'u':
+		ul = va_arg(pvar, long);
+		sprintf(buf, "%lu", ul);
+		prot_write(s, buf, strlen(buf));
+		break;
+
+	    default:
+		abort();
+	    }
 	    break;
 
 	case 'd':
