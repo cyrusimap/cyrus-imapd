@@ -38,22 +38,21 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapidle.h,v 1.2 2000/11/30 16:26:31 ken3 Exp $ */
+/* $Id: idle_no.c,v 1.1 2000/12/14 19:26:48 ken3 Exp $ */
 
-#ifndef IMAPIDLE_H
-#define IMAPIDLE_H
+#include "idle.h"
 
-#include "mailbox.h"
 
-typedef struct imap_idledata_s {
-    unsigned long pid;
-    unsigned long namelen;
+int idle_enabled(void)
+{
+    return 0;
+}
 
-    /* 1 for null. leave at end of structure for alignment */
-    char mboxname[MAX_MAILBOX_NAME+1];
-} imap_idledata_t;
+int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc)
+{
+    return 0;
+}
 
-#define IDLEDATA_BASE_SIZE 8
-void imap_idlenotify(struct mailbox *mailbox);
-
-#endif
+void idle_done(struct mailbox *mailbox)
+{
+}

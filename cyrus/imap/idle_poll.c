@@ -38,20 +38,55 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* $Id: idle_poll.c,v 1.1 2000/12/14 19:26:48 ken3 Exp $ */
 
-#ifndef SERVICE_H
-#define SERVICE_H
+#include <time.h>
+#include <unistd.h>
+#include <signal.h>
 
-#define STATUS_FD (3)
-#define LISTEN_FD (4)
+#include "idle.h"
+#include "imapconf.h"
 
-#define SERVICE_AVAILABLE 0x01
-#define SERVICE_UNAVAILABLE 0x02
+/* function to report mailbox updates to the client */
+static idle_updateproc_t *idle_update = NULL;
 
-extern int service_init(int argc, char **argv, char **envp);
-extern int service_main(int argc, char **argv, char **envp);
-extern int service_abort(void);
+/* how often to poll the mailbox */
+static time_t idle_period = -1;
 
-#define MAX_USE 100
 
-#endif
+int idle_enabled(void)
+{
+    /* get polling period */
+    if (idle_period == -1) {
+      idle_period = config_getint("imapidlepoll", 60);
+      if (idle_period < 0) idle_period = 0;
+    }
+
+    /* a period of zero disables IDLE */
+    return idle_period;
+}
+
+void idle_poll(int sig)
+{
+    idle_update(IDLE_MAILBOX|IDLE_ALERT);
+
+    alarm(idle_period);
+}
+
+int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc)
+{
+    idle_update = proc;
+
+    /* Setup the mailbox polling function to be called at 'idle_period'
+       seconds from now */
+    signal(SIGALRM, idle_poll);
+    alarm(idle_period);
+
+    return 1;
+}
+
+void idle_done(struct mailbox *mailbox)
+{
+    /* Remove the polling function */
+    signal(SIGALRM, SIG_DFL);
+}

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.22 2000/12/07 22:39:24 leg Exp $ */
+/* $Id: master.c,v 1.23 2000/12/14 19:26:51 ken3 Exp $ */
 
 #include <config.h>
 
@@ -80,17 +80,12 @@
 #include "master.h"
 #include "service.h"
 
-#include "imapidle.h"
-#include "hash.h"
-
 #define SERVICE_PATH (CYRUS_PATH "/bin")
 
 enum {
     become_cyrus_early = 1,
     child_table_size = 10000,
     child_table_inc = 100,
-    idle_table_size = 10000,
-    idle_table_inc = 100,
 };
 
 static int verbose = 0;
@@ -117,24 +112,10 @@ static struct event *schedule = NULL;
 struct centry {
     pid_t pid;
     struct service *s;
-    unsigned long flags;
     struct centry *next;
-};
-/* child flag bits */
-enum {
-    CFLAG_IMAPIDLE =		(1<<0),
 };
 static struct centry *ctable[child_table_size];
 static struct centry *cfreelist;
-
-struct ientry {
-    pid_t pid;
-    struct centry *cproc;
-    struct ientry *next;
-};
-static struct hash_table idle_table;
-static struct ientry *ifreelist;
-void imap_idledone(char *mboxname, struct ientry *t, pid_t *pid);
 
 void fatal(char *msg, int code)
 {
@@ -398,7 +379,6 @@ void spawn_service(struct service *s)
 	c = get_centry();
 	c->pid = p;
 	c->s = s;
-	c->flags = 0;
 	c->next = ctable[p % child_table_size];
 	ctable[p % child_table_size] = c;
 	break;
@@ -471,7 +451,6 @@ void spawn_schedule(time_t now)
 	    c = get_centry();
 	    c->pid = p;
 	    c->s = NULL;
-	    c->flags = 0;
 	    c->next = ctable[p % child_table_size];
 	    ctable[p % child_table_size] = c;
 
@@ -495,7 +474,7 @@ void reap_child(void)
 {
     int status;
     pid_t pid;
-    struct centry *c, *p;
+    struct centry *c;
 
     while ((pid = waitpid((pid_t) -1, &status, WNOHANG)) > 0) {
 	if (WIFEXITED(status)) {
@@ -509,39 +488,37 @@ void reap_child(void)
 	}
 
 	/* account for the child */
-	p = NULL;
 	c = ctable[pid % child_table_size];
-	while (c && c->pid != pid) {
-	    p = c;
-	    c = c->next;
-	}
-	if (c) {
-	    if (!p) {
-		/* first thing in the linked list */
-
-		ctable[pid % child_table_size] = c->next; /* remove node */
-	    }
-	    else {
-		/* not the first thing in the linked list */
-
-		p->next = c->next; /* remove node */
-	    }
-	    c->next = cfreelist; /* add to freelist */
-	    cfreelist = c;
+	if (c && c->pid == pid) {
+	    /* first thing in the linked list */
 
 	    /* decrement active count for service */
 	    if (c->s) c->s->nactive--;
 
-	    /* if this process was IMAP IDLEing when it died,
-	       find and remove it from the idle_table */
-	    if (c->flags & CFLAG_IMAPIDLE)
-		hash_enumerate(&idle_table,
-			       (void (*)(char*,void*,void*)) imap_idledone,
-			       (void*) &pid);
-	}
-	else {
-	    /* yikes! don't know about this child! */
-	    syslog(LOG_ERR, "process %d not recognized", pid);
+	    ctable[pid % child_table_size] = c->next;
+	    c->next = cfreelist;
+	    cfreelist = c;
+	} else {
+	    /* not the first thing in the linked list */
+
+	    while (c->next) {
+		if (c->next->pid == pid) break;
+		c = c->next;
+	    }
+	    if (c->next) {
+		struct centry *t;
+
+		t = c->next;
+		/* decrement active count for service */
+		if (t->s) t->s->nactive--;
+
+		c->next = t->next; /* remove node */
+		t->next = cfreelist; /* add to freelist */
+		cfreelist = t;
+	    } else {
+		/* yikes! don't know about this child! */
+		syslog(LOG_ERR, "process %d not recognized", pid);
+	    }
 	}
     }
 }
@@ -622,140 +599,26 @@ void sighandler_setup(void)
     }
 }
 
-/* return a new 'ientry', either from the freelist or by malloc'ing it */
-static struct ientry *get_ientry(void)
-{
-    struct ientry *t;
-
-    if (!ifreelist) {
-	/* create child_table_inc more and add them to the freelist */
-	struct ientry *n;
-	int i;
-
-	n = malloc(idle_table_inc * sizeof(struct ientry));
-	ifreelist = n;
-	for (i = 0; i < idle_table_inc - 1; i++) {
-	    n[i].next = n + (i + 1);
-	}
-    }
-
-    t = ifreelist;
-    ifreelist = ifreelist->next;
-
-    return t;
-}
-
-/* remove pid from list of those idling on mboxname */
-void imap_idledone(char *mboxname, struct ientry *t, pid_t *pid)
-{
-    struct ientry *p = NULL;
-
-    while (t && t->cproc->pid != *pid) {
-	p = t;
-	t = t->next;
-    }
-    if (t) {
-	/* unset the IMAPIDLE flag on the child */
-	t->cproc->flags &= ~CFLAG_IMAPIDLE;
-
-	if (!p) {
-	    /* first pid in the linked list */
-
-	    p = t->next; /* remove node */
-
-	    /* we just removed the data that the hash entry
-	       was pointing to, so insert the new data */
-	    hash_insert(mboxname, p, &idle_table);
-	}
-	else {
-	    /* not the first pid in the linked list */
-
-	    p->next = t->next; /* remove node */
-	}
-	t->next = ifreelist; /* add to freelist */
-	ifreelist = t;
-    }
-}
-
 void process_msg(struct service *s, int msg)
 {
     switch (msg) {
     case SERVICE_AVAILABLE:
+	s->ready_workers++;
+	break;
+
     case SERVICE_UNAVAILABLE:
-	if (msg == SERVICE_AVAILABLE)
-	    s->ready_workers++;
-	else
-	    s->ready_workers--;
-
-	if (verbose)
-	    syslog(LOG_DEBUG, "service %s now has %d workers\n", 
-		   s->name, s->ready_workers);
+	s->ready_workers--;
 	break;
-
-    case SERVICE_IMAP_IDLE:
-    case SERVICE_IMAP_IDLENOTIFY:
-    case SERVICE_IMAP_IDLEDONE: {
-	imap_idledata_t idledata;
-	struct ientry *n, *t;
-	struct centry *c;
-
-	read(s->stat[0], &idledata, IDLEDATA_BASE_SIZE);
-	read(s->stat[0], idledata.mboxname, idledata.namelen);
-
-	switch (msg) {
-	case SERVICE_IMAP_IDLE:
-	    if (verbose) syslog(LOG_DEBUG, "imapd[%d]: IDLE '%s'\n",
-				idledata.pid, idledata.mboxname);
-
-	    /* find centry for this pid */
-	    c = ctable[idledata.pid % child_table_size];
-	    while (c && c->pid != idledata.pid) c = c->next;
-
-	    if (c) {
-		/* set the IMAPIDLE flag on the child */
-		c->flags |= CFLAG_IMAPIDLE;
-
-		/* add pid to list of those idling on mboxname */
-		t = (struct ientry *) hash_lookup(idledata.mboxname, &idle_table);
-		n = get_ientry();
-		n->cproc = c;
-		n->next = t;
-		hash_insert(idledata.mboxname, n, &idle_table);
-	    }
-	    break;
-	
-	case SERVICE_IMAP_IDLENOTIFY:
-	    if (verbose)
-		syslog(LOG_DEBUG, "IDLENOTIFY '%s'\n", idledata.mboxname);
-
-	    /* send SIGUSR1 to all pids idling on mboxname */
-	    t = (struct ientry *) hash_lookup(idledata.mboxname, &idle_table);
-	    while (t) {
-		if (verbose)
-		    syslog(LOG_DEBUG, "    SIGUSR1 %d\n", t->cproc->pid);
-
-		kill(t->cproc->pid, SIGUSR1);
-		t = t->next;
-	    }
-	    break;
-	
-	case SERVICE_IMAP_IDLEDONE:
-	    if (verbose) syslog(LOG_DEBUG, "imapd[%d]: IDLEDONE '%s'\n",
-				idledata.pid, idledata.mboxname);
-
-	    /* remove pid from list of those idling on mboxname */
-	    t = (struct ientry *) hash_lookup(idledata.mboxname, &idle_table);
-	    imap_idledone(idledata.mboxname, t, (pid_t *) &idledata.pid);
-	    break;
-	}
-	break;
-    }
 	
     default:
 	syslog(LOG_ERR, "unrecognized message for service '%s': %x", 
 	       s->name, msg);
 	break;
     }
+
+    if (verbose)
+	syslog(LOG_DEBUG, "service %s now has %d workers\n", 
+	       s->name, s->ready_workers);
 }
 
 static char **tokenize(char *p)
@@ -886,13 +749,8 @@ int main(int argc, char **argv, char **envp)
 	}
     }
 
-    /* create idle table */
-    construct_hash_table(&idle_table, idle_table_size);
-    ifreelist = NULL;
-
     /* zero out the children table */
     memset(&ctable, 0, sizeof(struct centry *) * child_table_size);
-    cfreelist = NULL;
 
     /* close stdin/out/err */
     for (fd = 0; fd < 3; fd++) {

@@ -38,20 +38,31 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* $Id: idle.h,v 1.1 2000/12/14 19:26:48 ken3 Exp $ */
 
-#ifndef SERVICE_H
-#define SERVICE_H
+#ifndef IDLE_H
+#define IDLE_H
 
-#define STATUS_FD (3)
-#define LISTEN_FD (4)
+#include "mailbox.h"
 
-#define SERVICE_AVAILABLE 0x01
-#define SERVICE_UNAVAILABLE 0x02
+typedef enum {
+    IDLE_MAILBOX =	0x1,
+    IDLE_ALERT =	0x2,
+} idle_flags_t;
 
-extern int service_init(int argc, char **argv, char **envp);
-extern int service_main(int argc, char **argv, char **envp);
-extern int service_abort(void);
+typedef void idle_updateproc_t(idle_flags_t flags);
 
-#define MAX_USE 100
+
+/* Is IDLE enabled?  Can also do initial setup, if necessary */
+int idle_enabled(void);
+
+/* Setup for IDLE on 'mailbox'.
+ * Accepts pointer to a function which reports mailbox updates and/or
+ * ALERTs to the client.
+ */
+int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc);
+
+/* Cleanup when IDLE is completed. */
+void idle_done(struct mailbox *mailbox);
 
 #endif

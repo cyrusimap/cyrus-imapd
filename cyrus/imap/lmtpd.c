@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.54 2000/11/30 15:55:43 ken3 Exp $
+ * $Id: lmtpd.c,v 1.55 2000/12/14 19:26:49 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.54 2000/11/30 15:55:43 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.55 2000/12/14 19:26:49 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -95,7 +95,7 @@
 #include "append.h"
 #include "mboxlist.h"
 #include "notify.h"
-#include "imapidle.h"
+#include "idle.h"
 
 #include "lmtpengine.h"
 #include "lmtpstats.h"
@@ -289,8 +289,8 @@ int service_init(int argc, char **argv, char **envp)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    /* set the mailbox update notifier for IMAP IDLE */
-    mailbox_set_updatenotifier(imap_idlenotify);
+    /* setup for sending IMAP IDLE notifications */
+    idle_enabled();
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
