@@ -3,7 +3,7 @@ changequote(<<, >>)
 define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_lib, [ *], [_p]))
 changequote([, ])
 if test "$CMU_AC_CV_FOUND" = "yes"; then
-  if test \! -e "$1/lib$2.a" -a \! -e "$i/lib$2.so" -a \! -e "$i/lib$2.sl"; then
+  if test \! -r "$1/lib$2.a" -a \! -r "$i/lib$2.so" -a \! -r "$i/lib$2.sl"; then
     CMU_AC_CV_FOUND=no
   fi
 fi
@@ -14,7 +14,7 @@ changequote(<<, >>)
 define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_inc, [ *], [_p]))
 changequote([, ])
 if test "$CMU_AC_CV_FOUND" = "yes"; then
-  if test \! -e "$1/$2.h"; then
+  if test \! -r "$1/$2.h"; then
     CMU_AC_CV_FOUND=no
   fi
 fi
