@@ -233,6 +233,9 @@ const char *s2;
 	}
 	cmp = TOCOMPARE(*s1) - TOCOMPARE(c2);
 	if (cmp) return cmp;
+	if (c2 == TOCOMPARE('\t')) {
+	    return 0;
+	}
 	s1++;
 	s2++;
     }
