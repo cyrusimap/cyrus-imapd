@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.6 2000/06/15 15:35:08 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.7 2000/09/05 05:44:18 leg Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -71,6 +71,9 @@
 
 /* do we support THREAD=JWZ */
 #undef ENABLE_THREAD_JWZ
+
+/* do we support THREAD=REF */
+#undef ENABLE_THREAD_REF
 
 /* we better have berkeley db 3.x */
 #undef HAVE_LIBDB
