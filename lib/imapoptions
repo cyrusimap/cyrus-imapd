@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.23 2004/04/28 17:23:41 ken3 Exp $
+.\" $Id: imapoptions,v 1.24 2004/04/28 17:30:12 rjs3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -88,7 +88,9 @@ are listed with ``<none>''.
 
 { "afspts_localrealms", NULL, STRING }
 /* The list of realms which are to be treated as local, and thus stripped
-   during identifier canoicalization (for the AFSPTS ptloader module) */
+   during identifier canoicalization (for the AFSPTS ptloader module).
+   This is different from loginrealms in that it occurs later in the
+   authorization process (as the user id is canonified for PTS lookup) */
 
 { "afspts_mycell", NULL, STRING }
 /* Cell to use for AFS PTS lookups.  Defaults to the local cell. */
@@ -421,10 +423,10 @@ are listed with ``<none>''.
 
 # xxx how does this tie into virtual domains?
 { "loginrealms", "", STRING }
-/* The list of remote realms whose users may log in using cross-realm
-   authentications.  Seperate each realm name by a space.  (A
+/* The list of remote realms whose users may authenticate using cross-realm
+   authentication identifiers.  Seperate each realm name by a space.  (A
    cross-realm identity is considered any identity returned by SASL
-   with an "@" in it.) */
+   with an "@" in it.). */
 
 { "loginuseacl", 0, SWITCH }
 /* If enabled, any authentication identity which has \fBa\fR rights on a
