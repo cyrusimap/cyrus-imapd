@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.59.2.5 2004/06/28 18:44:30 ken3 Exp $
+ * $Id: script.c,v 1.59.2.6 2004/06/28 20:01:22 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -38,6 +38,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <unistd.h>
 #include <assert.h>
 
+#include "charset.h"
 #include "hash.h"
 #include "xmalloc.h"
 
@@ -216,8 +217,10 @@ static void add_header(sieve_interp_t *i, int isenv, char *header,
     *outlen += addlen;
 }
 
-static int fillin_headers(sieve_interp_t *i, const char *msg, 
-			  void *message_context, char **out, int *outlen)
+static int build_notify_message(sieve_interp_t *i,
+				struct hash_table *body_cache,
+				const char *msg, 
+				void *message_context, char **out, int *outlen)
 {
     int allocsize = GROW_AMOUNT;
     const char *c;
@@ -260,8 +263,40 @@ static int fillin_headers(sieve_interp_t *i, const char *msg,
 	    i->getbody(message_context, content_types, &parts);
 
 	    /* we only use the first text part */
-	    if (parts && *parts) {
-		if (n == 0 || n > parts[0]->size) n = parts[0]->size;
+	    if (parts && parts[0]) {
+		const char *content = parts[0]->content;
+		int size = parts[0]->size;
+		int encoding;
+
+		/* XXX currently unknown encodings are processed as raw */
+		if (!parts[0]->encoding)
+		    encoding = ENCODING_NONE;
+		else if (!strcmp(parts[0]->encoding, "BASE64"))
+		    encoding = ENCODING_BASE64;
+		else if (!strcmp(parts[0]->encoding, "QUOTED-PRINTABLE"))
+		    encoding = ENCODING_QP;
+		else
+		    encoding = ENCODING_NONE;
+
+		if (encoding != ENCODING_NONE) {
+		    content = hash_lookup(parts[0]->section, body_cache);
+		    if (content) {
+			/* already decoded this part */
+			size = strlen(content);
+		    }
+		    else {
+			/* decode this part and add it to the cache */
+			char *decbuf = NULL;
+			content = charset_decode_mimebody(parts[0]->content,
+							  parts[0]->size,
+							  encoding, &decbuf,
+							  0, &size);
+			hash_insert(parts[0]->section, (void *) content,
+				    body_cache);
+		    }
+		}
+
+		if (n == 0 || n > size) n = size;
 
 		/* realloc if necessary */
 		if ( (*outlen) + n+1 >= allocsize) {
@@ -352,7 +387,9 @@ static int sieve_removeflag(sieve_imapflags_t *imapflags, const char *flag)
     return SIEVE_OK;
 }
 
-static int send_notify_callback(sieve_interp_t *interp, void *message_context, 
+static int send_notify_callback(sieve_interp_t *interp,
+				struct hash_table *body_cache,
+				void *message_context, 
 				void * script_context, notify_list_t *notify, 
 				char *actions_string, const char **errmsg)
 {
@@ -372,8 +409,8 @@ static int send_notify_callback(sieve_interp_t *interp, void *message_context,
     nc.options = notify->options ? notify->options : NULL;
     nc.priority = notify->priority;
 
-    fillin_headers(interp, notify->message, message_context, 
-		   &out_msg, &out_msglen);
+    build_notify_message(interp, body_cache, notify->message, message_context, 
+			 &out_msg, &out_msglen);
 
     build_msg = xmalloc(out_msglen + strlen(actions_string) + 30);
 
@@ -518,6 +555,7 @@ int sieve_script_unload(sieve_bytecode_t **s)
 
 static int do_sieve_error(int ret,
 			  sieve_interp_t *interp,
+			  struct hash_table *body_cache,
 			  void *script_context,
 			  void *message_context,
 			  sieve_imapflags_t * imapflags,
@@ -556,9 +594,10 @@ static int do_sieve_error(int ret,
 	    if (n->isactive) 
 	      {
 	      lastaction = ACTION_NOTIFY;
-	       notify_ret = send_notify_callback(interp, message_context, 
-						script_context,n,
-						actions_string, &errmsg);
+	       notify_ret = send_notify_callback(interp, body_cache,
+						 message_context, 
+						 script_context,n,
+						 actions_string, &errmsg);
 	      ret |= notify_ret;
 	      }
 	    n = n->next;
@@ -569,7 +608,8 @@ static int do_sieve_error(int ret,
 	
 	
 	if (notify_ret != SIEVE_OK) 
-	  return do_sieve_error(ret, interp, script_context, message_context,
+	  return do_sieve_error(ret, interp, body_cache,
+				script_context, message_context,
 				imapflags, actions, notify_list, lastaction,
 				implicit_keep, actions_string, errmsg);
       
@@ -602,7 +642,8 @@ static int do_sieve_error(int ret,
 		     "Kept\n");
 	else {
 	    implicit_keep = 0;	/* don't try an implicit keep again */
-	    return do_sieve_error(ret, interp, script_context, message_context,
+	    return do_sieve_error(ret, interp, body_cache,
+				  script_context, message_context,
 				  imapflags, actions, notify_list, lastaction,
 				  implicit_keep, actions_string, errmsg);
 	}
@@ -616,6 +657,7 @@ static int do_sieve_error(int ret,
 
 
 static int do_action_list(sieve_interp_t *interp,
+			  struct hash_table *body_cache,
 			  void *script_context,
 			  void *message_context,
 			  sieve_imapflags_t *imapflags,
@@ -804,7 +846,8 @@ static int do_action_list(sieve_interp_t *interp,
 	}
     }
 
-    return do_sieve_error(ret, interp, script_context, message_context, 
+    return do_sieve_error(ret, interp, body_cache,
+			  script_context, message_context, 
 			  imapflags, actions, notify_list, lastaction, 
 			  implicit_keep, actions_string, errmsg);
 }
@@ -834,48 +877,45 @@ int sieve_execute_bytecode(sieve_bytecode_t *bc, sieve_interp_t *interp,
     imapflags.flag = NULL; 
     imapflags.nflags = 0;
     
-    if (interp->notify)
-    {
+    if (interp->notify) {
 	notify_list = new_notify_list();
-	if (notify_list == NULL)
-	    {
-		ret = SIEVE_NOMEM;
-		return do_sieve_error(ret, interp, script_context,
-				      message_context, &imapflags,
-				      actions, notify_list, lastaction, 0,
-				      actions_string, errmsg);
-	    }
-    }
-
-    actions = new_action_list();
-    if (actions == NULL) 
-    {
-	ret = SIEVE_NOMEM;
-	return do_sieve_error(ret, interp, script_context,
-			      message_context, &imapflags,
-			      actions, notify_list, lastaction, 0,
-			      actions_string, errmsg);
+	if (notify_list == NULL) {
+	    return do_sieve_error(SIEVE_NOMEM, interp, NULL,
+				  script_context, message_context, &imapflags,
+				  actions, notify_list, lastaction, 0,
+				  actions_string, errmsg);
+	}
     }
 
     /* build a hash table to cache decoded body parts */
     construct_hash_table(&body_cache, 10, 1);
     
-    ret = sieve_eval_bc(interp, bc->data, bc->len,
-			&body_cache, message_context,
-			&imapflags, actions, notify_list, &errmsg);
+    actions = new_action_list();
+    if (actions == NULL) {
+	ret = do_sieve_error(SIEVE_NOMEM, interp, &body_cache,
+			     script_context, message_context, &imapflags,
+			     actions, notify_list, lastaction, 0,
+			     actions_string, errmsg);
+    }
+    else {
+	ret = sieve_eval_bc(interp, bc->data, bc->len,
+			    &body_cache, message_context,
+			    &imapflags, actions, notify_list, &errmsg);
+
+	if (ret < 0) {
+	    ret = do_sieve_error(SIEVE_RUN_ERROR, interp, &body_cache,
+				 script_context, message_context, &imapflags,
+				 actions, notify_list, lastaction, 0,
+				 actions_string, errmsg);
+	}
+	else {
+	    ret = do_action_list(interp, &body_cache,
+				 script_context, message_context, 
+				 &imapflags, actions, notify_list,
+				 actions_string, errmsg);
+	}
+    }
 
     free_hash_table(&body_cache, free);
-
-    if (ret < 0)
-    {
-	ret = SIEVE_RUN_ERROR;
-	return do_sieve_error(ret, interp, script_context,
-			      message_context, &imapflags,
-			      actions, notify_list, lastaction, 0,
-			      actions_string, errmsg);
-    }
-    
-    return do_action_list(interp, script_context, message_context, 
-			  &imapflags, actions, notify_list, actions_string,
-			  errmsg);
+    return ret;
 }
