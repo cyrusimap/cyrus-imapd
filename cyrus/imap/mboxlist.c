@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.209 2003/04/09 17:49:20 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.210 2003/04/17 18:25:04 rjs3 Exp $
  */
 
 #include <config.h>
@@ -622,7 +622,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	    goto done;
 	}
 
-	sprintf(buf, sizeof(buf), "%s!%s", config_servername, newpartition);
+	snprintf(buf, sizeof(buf), "%s!%s", config_servername, newpartition);
 
 	/* reserve the mailbox in MUPDATE */
 	r = mupdate_reserve(mupdate_h, name, buf);
@@ -708,7 +708,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     /* xxx maybe we should roll back if this fails? */
     if (!r && config_mupdate_server && !localonly) {
 	/* commit the mailbox in MUPDATE */
-	sprintf(buf, sizeof(buf), "%s!%s", config_servername, newpartition);
+	snprintf(buf, sizeof(buf), "%s!%s", config_servername, newpartition);
 	    
 	r = mupdate_activate(mupdate_h, name, buf, acl);
 	if(r > 0) {
