@@ -1,7 +1,7 @@
 /* util.h -- general utility functions
- * $Id: util.h,v 1.9 1999/03/02 01:46:03 tjs Exp $
+ * $Id: util.h,v 1.10 1999/03/02 01:50:54 tjs Exp $
  *
- *        Copyright 1998 by Carnegie Mellon University
+ *        Copyright 1999 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -31,7 +31,7 @@
 extern const unsigned char convert_to_lowercase[256];
 extern const unsigned char convert_to_uppercase[256];
 
-#define TOUPPER(c) (charset_convert_to_uppercase[(unsigned char)(c)])
+#define TOUPPER(c) (convert_to_uppercase[(unsigned char)(c)])
 #define TOLOWER(c) (convert_to_lowercase[(unsigned char)(c)])
 
 typedef struct keyvalue {
