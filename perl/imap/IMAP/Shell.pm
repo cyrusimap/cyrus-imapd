@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.23 2002/12/02 19:45:09 rjs3 Exp $
+# $Id: Shell.pm,v 1.24 2003/03/27 14:48:10 rjs3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -126,7 +126,7 @@ my %builtins = (exit =>
 		  [\&_sc_info, '[mailbox]',
 		   'display mailbox/server metadata'],
 		reconstruct =>
-		  [\&_sc_reconstruct, 'mailbox', 'reconstruct mailbox (if supported'],
+		  [\&_sc_reconstruct, 'mailbox', 'reconstruct mailbox (if supported)'],
 		renamemailbox =>
 		  [\&_sc_rename,
 		   '[--partition partition] oldname newname [partition]',
