@@ -569,11 +569,11 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
         }
 	/* If a BE2 message, pass the version number into UnScribeInit */
 	if ((!strncmp(buf, "Content-Type: X-BE2", 19)) || 
-	    (!strncmp(buf, "X-Andrew-ScribeFormat: 10", 25))) 
+	    (!strncmp(buf, "X-Andrew-ScribeFormat: ", 23))) 
 	  {
 	    r=&buf[strlen(buf)-2];
 	    buf[strlen(buf)-1]=0;
-	    if ((scribeval = UnScribeInit(&buf[20], &scribestate)) < 0) {
+	    if ((scribeval = UnScribeInit(&buf[((buf[0] == 'X') ? 22 : 20)], &scribestate)) < 0) {
 		fprintf(stderr, "Unknown scribe version \"%s\"\n",
 			&buf[20]);
 		fprintf(stderr, "Not Unscribing %s\n", amsfile);
