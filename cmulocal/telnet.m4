@@ -8,7 +8,8 @@ AC_CHECK_LIB(c, setupterm, TCLIB="/usr/ccs/lib/libtermlib.a",TCLIB="-ltermlib","
 ],  TCLIB="-ltermcap")
 ])
 
-AC_DEFUN(CMU_TELNET_CC_T, [
+AC_DEFUN(CMU_TELNET_CC_T, 
+[
 AC_MSG_CHECKING(for cc_t definition)
 AC_CACHE_VAL(cmu_cv_cc_t_definition, [
 AC_TRY_COMPILE(
@@ -21,12 +22,12 @@ AC_TRY_COMPILE(
 #endif
 #endif
 ],
-[cc_t foo;],
+[cc_t ffoo;],
 cmu_cv_cc_t_definition=yes,
 cmu_cv_cc_t_definition=no)
 ])
 if test "$cmu_cv_cc_t_definition" = "no"; then
-        AC_DEFINE(NO_CC_T)dnl
+        AC_DEFINE(NO_CC_T)
 fi
 AC_MSG_RESULT($cmu_cv_cc_t_definition)
 ])
