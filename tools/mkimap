@@ -1,7 +1,7 @@
 #!/bin/sh
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: mkimap,v 1.7 2000/02/17 05:32:33 leg Exp $
+# $Id: mkimap,v 1.8 2000/02/24 05:16:41 leg Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -74,6 +74,7 @@ foreach $i ("a".."z") { mkdir "quota/$i", 0755; }
 
 mkdir "proc", 0755;
 mkdir "db", 0755;
+mkdir "socket", 0755;
 mkdir "log", 0755;
 mkdir "msg", 0755;
 mkdir "deliverdb", 0755;
