@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imtest.1,v 1.9 2002/05/25 19:57:48 leg Exp $
+.\" $Id: imtest.1,v 1.10 2002/07/01 20:25:01 rjs3 Exp $
 .SH NAME
 imtest \- interactive IMAP test program
 .SH SYNOPSIS
@@ -98,6 +98,18 @@ imtest \- interactive IMAP test program
 ]
 [
 .B \-v
+]
+[
+.B \-I
+.I file
+]
+[
+.B \-x
+.I file
+]
+[
+.B \-X
+.I file
 ]
 \fIhostname\fR
 .SH DESCRIPTION
@@ -161,6 +173,17 @@ Enable IMAP over SSL (imaps).
 Enable challenge prompt callbacks.  This will cause the OTP mechanism
 to ask for the the one-time password instead of the secret pass-phrase
 (library generates the correct response).
+.TP
+.BI -I " file"
+Echo the PID of the running process into
+.I file
+(This can be useful with -X).
+.TP
+.BI -x " file"
+Open the named socket for the interactive portion
+.TP
+.BI -X " file"
+Like -x, only close all file descriptors & daemonize the process.
 .TP
 .B -v
 Verbose. Print out more information than usual.
