@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.9 2000/12/20 00:06:06 leg Exp $ -->
+<!-- $Id: install-configure.html,v 1.9.4.1 2001/06/21 15:13:44 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -89,7 +89,9 @@ have powers not granted to regular users and while the server allows
 them to receive mail, some problems will occur if admins are used as
 regular users. You also should <b>not</b> read mail as an
 administrator. You should have separate accounts for reading mail and
-administrating.
+administrating.  This is especially true if using the
+<tt>altnamespace</tt> option, because admins are <b>always</b>
+presented with the standard (internal) namespace.
 
 <p><li>Create the configuration directory specified by the
 "<tt>configdirectory</tt>" option in "<tt>imapd.conf.</tt>" The
@@ -402,5 +404,5 @@ authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
 <P><HR>
-last modified: $Date: 2000/12/20 00:06:06 $
+last modified: $Date: 2001/06/21 15:13:44 $
 </BODY></HTML>
