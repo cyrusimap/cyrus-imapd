@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.372 2002/03/29 21:14:32 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.373 2002/03/29 21:52:14 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -3625,7 +3625,7 @@ void cmd_delete(char *tag, char *name, int localonly)
 
 	/* take care of deleting ACLs, subscriptions, seen state and quotas */
 	*p = '\0'; /* clip off pattern */
-	user_delete(mailboxname+5, imapd_userid, imapd_authstate);
+	user_delete(mailboxname+5, imapd_userid, imapd_authstate, 1);
     }
 
     if (imapd_mailbox) {
@@ -6248,6 +6248,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 
 	/* xxx this was a user delete, and we need to delete certain user
 	   meta-data */
+	user_delete(mailboxname+5, imapd_userid, imapd_authstate, 0);
 
 	if(!r && mupdate_h) {
 	    mupdate_disconnect(&mupdate_h);

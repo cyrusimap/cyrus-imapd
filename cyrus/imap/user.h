@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.h,v 1.2 2001/06/23 03:14:03 ken3 Exp $
+ * $Id: user.h,v 1.3 2002/03/29 21:52:15 rjs3 Exp $
  */
 
 #ifndef INCLUDED_USER_H
@@ -49,7 +49,11 @@
 #include "auth.h"
 
 /* Delete meta-data (seen state, subscriptions, ACLs, quota) for 'user' */
-int user_delete(char *user, char *userid, struct auth_state *authstate);
+/*
+ * wipe-user says to delete seen state also (remove the user from the murder)
+ */
+int user_delete(char *user, char *userid, struct auth_state *authstate,
+		int wipe_user);
 
 /* Rename/change user meta-data (seen state, subscriptions, ACLs, quota) */
 int user_rename(char *oldmailboxname, char *newmailboxname,
