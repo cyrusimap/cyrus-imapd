@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.23 2001/05/21 20:10:17 leg Exp $ */
+/* $Id: service.c,v 1.24 2001/08/01 16:34:19 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -260,8 +260,8 @@ int main(int argc, char **argv, char **envp)
 	    continue;
 	}
 	
-	syslog(LOG_DEBUG, "accepted connection");
 	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+	syslog(LOG_DEBUG, "accepted connection");
 
 	if (fd != 0 && dup2(fd, 0) < 0) {
 	    syslog(LOG_ERR, "can't duplicate accepted socket: %m");
