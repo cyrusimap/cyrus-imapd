@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.8 2002/01/24 22:38:02 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.9 2002/01/24 23:10:46 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -196,12 +196,12 @@ static int myinit(const char *dbdir, int myflags)
 	if (r != -1) r = close(fd);
 
 	if (r == -1) {
-	    syslog(LOG_ERR, "DBERROR: reading %s: %m", sfile);
-	    if (fd != -1) close(fd);
-	    return CYRUSDB_IOERROR;
+	    syslog(LOG_ERR, "DBERROR: reading %s, assuming the worst: %m", 
+		   sfile);
+	    global_recovery = 0;
+	} else {
+	    global_recovery = ntohl(a);
 	}
-
-	global_recovery = ntohl(a);
     }
 
     srand(time(NULL) * getpid());
