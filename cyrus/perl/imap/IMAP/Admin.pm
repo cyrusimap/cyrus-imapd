@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.36 2003/06/26 13:56:57 rjs3 Exp $
+# $Id: Admin.pm,v 1.37 2003/07/15 13:36:09 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -394,7 +394,7 @@ sub listquota {
 		      -callback => sub {
 			my %d = @_;
 			next unless
-			  $d{-text} =~ s/^\S+ \((\S+) (\S+) (\S+)\)//;
+			  $d{-text} =~ s/^\S+.* \((\S*) *?(\S*) *?(\S*)\)//;
 			push @{$d{-rock}}, $1, [$2, $3];
 		      },
 		      -rock => \@info});
