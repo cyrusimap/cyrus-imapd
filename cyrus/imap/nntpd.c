@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.90 2003/06/25 18:57:46 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.91 2003/06/25 19:42:00 ken3 Exp $
  */
 
 /*
@@ -2987,7 +2987,7 @@ static void news2mail(message_data_t *msg)
     static int allocsize = 0;
     int sm_stat;
     pid_t sm_pid;
-    char buf[4096];
+    char buf[4096], to[1024] = "";
 
     if (!smbuf) {
 	allocsize += ALLOC_SIZE;
@@ -3007,7 +3007,7 @@ static void news2mail(message_data_t *msg)
 				&attrib);
 	if (r) continue;
 
-	/* add the email address as a RCPT */
+	/* add the email address to our argv[] and to our To: header */
 	if (attrib.value) {
 	    if (i >= allocsize - 1) {
 		allocsize += ALLOC_SIZE;
@@ -3016,6 +3016,9 @@ static void news2mail(message_data_t *msg)
 
 	    smbuf[i++] = xstrdup(attrib.value);
 	    smbuf[i] = NULL;
+
+	    if (to[0]) strlcat(to, ", ", sizeof(to));
+	    strlcat(to, attrib.value, sizeof(to));
 	}
     }
 
@@ -3026,7 +3029,7 @@ static void news2mail(message_data_t *msg)
 	if (!sm)
 	    syslog(LOG_ERR, "news2mail: could not spawn sendmail process");
 	else {
-	    int body = 0, skip;
+	    int body = 0, skip, found_to = 0;
 
 	    rewind(msg->f);
 
@@ -3034,17 +3037,30 @@ static void news2mail(message_data_t *msg)
 		if (buf[0] == '\r' && buf[1] == '\n') {
 		    /* blank line between header and body */
 		    body = 1;
+
+		    /* insert a To: header if the message doesn't have one */
+		    if (!found_to) fprintf(sm, "To: %s\r\n", to);
 		}
 
 		skip = 0;
 		if (!body) {
 		    /* munge various news-specific headers */
-		    if (!strncasecmp(buf, "Newsgroups:", 11))
+		    if (!strncasecmp(buf, "Newsgroups:", 11)) {
+			/* rename Newsgroups: to X-Newsgroups: */
 			fprintf(sm, "X-");
-		    else if (!strncasecmp(buf, "Xref:", 5) ||
-			     !strncasecmp(buf, "Path:", 5) ||
-			     !strncasecmp(buf, "NNTP-Posting-", 13))
+		    } else if (!strncasecmp(buf, "Xref:", 5) ||
+			       !strncasecmp(buf, "Path:", 5) ||
+			       !strncasecmp(buf, "NNTP-Posting-", 13)) {
+			/* skip these (for now) */
 			skip = 1;
+		    } else if (!strncasecmp(buf, "To:", 3)) {
+			/* insert our mailing list RCPTs first, and then
+			   fold the header to accomodate the original RCPTs */
+			fprintf(sm, "To: %s,\r\n", to);
+			/* overwrite the original "To:" with spaces */
+			memset(buf, ' ', 3);
+			found_to = 1;
+		    }
 		}
 
 		do {
