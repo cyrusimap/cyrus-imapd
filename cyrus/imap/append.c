@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.55 1999/12/30 22:25:57 leg Exp $
+ $Id: append.c,v 1.56 2000/01/04 19:42:22 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -183,6 +183,19 @@ int append_fromstage(struct mailbox *mailbox,
     if (stage->parts[sp][0] == '\0') {
 	/* ok, create this file and add put it into stage->parts[sp] */
 	f = fopen(stagefile, "w+");
+	if (!f) {
+	    char stagedir[1024];
+
+	    mboxlist_findstage(mailbox->name, stagedir);
+	    if (mkdir(stagedir, 0755) != 0) {
+		syslog(LOG_ERR, "couldn't create stage directory: %s: %m",
+		       stagedir);
+	    } else {
+		syslog(LOG_NOTICE, "created stage directory %s",
+		       stagedir);
+		f = fopen(stagefile, "w+");
+	    }
+	} 
 	if (!f) {
 	    syslog(LOG_ERR, "IOERROR: creating message file %s: %m", 
 		   stagefile);
