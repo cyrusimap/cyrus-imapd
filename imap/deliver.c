@@ -565,6 +565,11 @@ int lmtpmode;
 	    *p = '\0';
 	}
 
+	/* Remove any lone CR characters */
+	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
+	    strcpy(p, p+1);
+	}
+
 	if (lmtpmode && buf[0] == '.') {
 	    if (buf[1] == '\r' && buf[2] == '\n') {
 		/* End of message */
