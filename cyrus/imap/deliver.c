@@ -58,6 +58,8 @@
 #include <syslog.h>
 #include <com_err.h>
 #include <errno.h>
+#include <pwd.h>
+#include <sys/types.h>
 
 #include <netdb.h>
 #include <sys/socket.h>
@@ -315,6 +317,12 @@ int main(int argc, char **argv)
 	int s = init_net(sockaddr);
 
 	pipe_through(s,s,0,1);
+    }
+
+    if (return_path == NULL) {
+	uid_t me = getuid();
+	struct passwd *p = getpwuid(me);
+	return_path = p->pw_name;
     }
 
     /* deliver to users or global mailbox */
