@@ -64,6 +64,63 @@ static char index_64[128] = {
 
 #define CHAR64(c)  (((c) < 0 || (c) > 127) ? -1 : index_64[(c)])
 
+static char usascii_lcase[256] = {
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+    0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+    0x40, 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
+    'p', 'q', 'r', 's', 't', 'u', 'v', 'w',
+    'x', 'y', 'z', 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+    0x60, 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
+    'p', 'q', 'r', 's', 't', 'u', 'v', 'w',
+    'x', 'y', 'z', 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
+};
+
+#define USASCII(c) (usascii_lcase[(unsigned char)(c)])
+
+/*
+ * Lookup the character set 'name'.  Returns the character set number
+ * or -1 if there is no matching character set.
+ */
 int charset_lookupname(name)
 char *name;
 {
@@ -75,6 +132,10 @@ char *name;
     return -1;
 }
 
+/*
+ * Convert the string 's' in the character set numbered 'charset'
+ * into canonical searching form.
+ */
 char *charset_convert(s, charset)
 char *s;
 int charset;
@@ -86,8 +147,7 @@ int charset;
     char *translation;
     int len;
 
-    assert(charset >= 0);
-    assert(charset < NUM_CHARSETS);
+    if (charset < 0 || charset >= NUM_CHARSETS) return EMPTY;
 
     table = charset_table[charset].table;
     
@@ -99,9 +159,6 @@ int charset;
 
     while (*s) {
 	translation = table[(unsigned char)*s];
-	if (!translation) {
-	    translation = EMPTY_CHARACTER_STRING;
-	}
 	len = strlen(translation);
 	if (pos + len >= alloced) {
 	    alloced += len + GROWSIZE;
@@ -115,6 +172,9 @@ int charset;
     return retval;
 }
 
+/*
+ * Decode 1522-strings in 's', converting it into canonical searching form.
+ */
 char *charset_decode1522(s)
 char *s;
 {
@@ -155,8 +215,10 @@ char *s;
 		alloced += len + GROWSIZE;
 		retval = xrealloc(retval, alloced);
 	    }
-	    strncpy(retval+pos, s, len);
-	    pos += len;
+	    while (len--) {
+		retval[pos++] = USASCII(*s);
+		s++;
+	    }
 	}
 
 	/*
@@ -177,7 +239,7 @@ char *s;
 		alloced += 2 + GROWSIZE;
 		retval = xrealloc(retval, alloced);
 	    }
-	    strcpy(retval+pos, EMPTY_CHARACTER_STRING);
+	    strcpy(retval+pos, EMPTY);
 	    pos += 1;
 	}
 	else if (encoding[1] == 'q' || encoding[1] == 'Q') {
@@ -199,8 +261,8 @@ char *s;
 		else if (c == '_') c = ' ';
 
 		translation = table[(unsigned char)c];
-		if (!c || !translation) {
-		    translation = EMPTY_CHARACTER_STRING;
+		if (!c) {
+		    translation = EMPTY;
 		}
 		len = strlen(translation);
 		if (pos + len >= alloced) {
@@ -220,9 +282,6 @@ char *s;
 		c2 = CHAR64(p[1]);
 		if (c2 == -1) break;
 		translation = table[(unsigned char)((c1<<2) | ((c2&0x30)>>4))];
-		if (!translation) {
-		    translation = EMPTY_CHARACTER_STRING;
-		}
 		len = strlen(translation);
 		if (pos + len >= alloced) {
 		    alloced += len + GROWSIZE;
@@ -234,9 +293,6 @@ char *s;
 		c3 = CHAR64(p[2]);
 		if (c3 == -1) break;
 		translation = table[(unsigned char)(((c2&0XF) << 4) | ((c3&0x3C) >> 2))];
-		if (!translation) {
-		    translation = EMPTY_CHARACTER_STRING;
-		}
 		len = strlen(translation);
 		if (pos + len >= alloced) {
 		    alloced += len + GROWSIZE;
@@ -248,9 +304,6 @@ char *s;
 		c4 = CHAR64(p[3]);
 		if (c4 == -1) break;
 		translation = table[(unsigned char)(((c3&0x03) <<6) | c4)];
-		if (!translation) {
-		    translation = EMPTY_CHARACTER_STRING;
-		}
 		len = strlen(translation);
 		if (pos + len >= alloced) {
 		    alloced += len + GROWSIZE;
@@ -268,15 +321,16 @@ char *s;
 	eatspace = 1;
     }
 
-    /* If no 1522-words, just return our input */
-    if (!pos) return s;
-
     /* Copy over the tail part of the input string */
     len = strlen(s);
     if (pos + len >= alloced) {
 	alloced += len + 1;
 	retval = xrealloc(retval, alloced);
     }
-    strcpy(retval+pos, s);
+    while (len--) {
+	retval[pos++] = USASCII(*s);
+	s++;
+    }
+    retval[pos++] = '\0';
     return retval;
 }

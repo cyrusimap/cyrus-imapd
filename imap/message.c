@@ -10,6 +10,8 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "parseadd.h"
+#include "charset.h"
+#include "util.h"
 #include "xmalloc.h"
 
 extern PARSED_ADDRESS *AppendAddresses();
@@ -1051,7 +1053,7 @@ FILE *outfile;
 struct body *body;
 {
     struct ibuf section, envelope, bodystructure, oldbody;
-    struct ibuf from, to, cc, bcc;
+    struct ibuf from, to, cc, bcc, subject;
     struct body toplevel;
 
     toplevel.type = "MESSAGE";
@@ -1082,6 +1084,9 @@ struct body *body;
     message_ibuf_init(&bcc);
     message_write_searchaddr(&bcc, body->bcc);
 
+    message_ibuf_init(&subject);
+    message_write_nstring(&subject, charset_decode1522(body->subject));
+
 
     message_ibuf_write(outfile, &envelope);
     message_ibuf_write(outfile, &bodystructure);
@@ -1091,6 +1096,7 @@ struct body *body;
     message_ibuf_write(outfile, &to);
     message_ibuf_write(outfile, &cc);
     message_ibuf_write(outfile, &bcc);
+    message_ibuf_write(outfile, &subject);
 
     message_ibuf_free(&envelope);
     message_ibuf_free(&bodystructure);
@@ -1100,6 +1106,7 @@ struct body *body;
     message_ibuf_free(&to);
     message_ibuf_free(&cc);
     message_ibuf_free(&bcc);
+    message_ibuf_free(&subject);
 }
 
 /* Append character 'c' to 'ibuf' */
@@ -1570,6 +1577,7 @@ int last;
 
     /* Recursively handle RFC-822 group addresses */
     if (addr->Kind == GROUP_ADDRESS) {
+	lcase(addr->LocalPart);
 	message_write_text(ibuf, addr->LocalPart);
 	PUTIBUF(ibuf, ':');
 	
@@ -1591,6 +1599,7 @@ int last;
     /* Fid out my hostname if necessary */
     if (!addr->Hosts->Next->Name && !myhostname[0]) {
 	gethostname(myhostname, sizeof(myhostname)-1);
+	lcase(myhostname);
     }
 
     /* Count number of hosts and build any necessary at-domain-list */
@@ -1607,17 +1616,25 @@ int last;
     }
 
     if (name) {
-	message_write_text(ibuf, name);
+	message_write_text(ibuf, charset_decode1522(name));
 	PUTIBUF(ibuf, ' ');
     }
     PUTIBUF(ibuf, '<');
     if (adl) {
+	lcase(adl);
 	message_write_text(ibuf, adl);
 	PUTIBUF(ibuf, ':');
     }
+    lcase(addr->LocalPart);
     message_write_text(ibuf, addr->LocalPart);
     PUTIBUF(ibuf, '@');
-    message_write_text(ibuf, nhosts ? addr->Hosts->Next->Name : myhostname);
+    if (nhosts) {
+	lcase(addr->Hosts->Next->Name);
+	message_write_text(ibuf, addr->Hosts->Next->Name);
+    }
+    else {
+	message_write_text(ibuf, myhostname);
+    }
     PUTIBUF(ibuf, '>');
     if (!last) PUTIBUF(ibuf, ',');
 

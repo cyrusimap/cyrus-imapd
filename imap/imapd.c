@@ -22,6 +22,7 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "imapd.h"
+#include "charset.h"
 #include "xmalloc.h"
 
 extern int optind;
@@ -1276,7 +1277,7 @@ char *tag;
 int usinguid;
 {
     int c;
-    char *charset = 0;
+    int charset = 0;
     struct searchargs *searchargs;
     static struct searchargs zerosearchargs;
 
@@ -1284,7 +1285,6 @@ int usinguid;
     *searchargs = zerosearchargs;
 
     c = getsearchprogram(tag, searchargs, &charset, 1);
-    if (charset) free(charset);
     if (c == EOF) {
 	eatline();
 	freesearchargs(searchargs);
@@ -1299,9 +1299,14 @@ int usinguid;
 	return;
     }
 
-    index_search(imapd_mailbox, searchargs, usinguid);
-
-    printf("%s OK Search completed\r\n", tag);
+    if (charset == -1) {
+	printf("%s NO Search failed: %s\r\n", tag,
+	       error_message(IMAP_UNRECOGNIZED_CHARSET));
+    }
+    else {
+	index_search(imapd_mailbox, searchargs, usinguid);
+	printf("%s OK Search completed\r\n", tag);
+    }
 
     freesearchargs(searchargs);
 }
@@ -1822,7 +1827,7 @@ struct buf *buf;
 int getsearchprogram(tag, searchargs, charset, parsecharset)
 char *tag;
 struct searchargs *searchargs;
-char **charset;
+int *charset;
 int parsecharset;
 {
     int c;
@@ -1840,13 +1845,13 @@ int parsecharset;
 int getsearchcriteria(tag, searchargs, charset, parsecharset)
 char *tag;
 struct searchargs *searchargs;
-char **charset;
+int *charset;
 int parsecharset;
 {
     static struct buf criteria, arg;
     static struct searchargs zerosearchargs;
     struct searchargs *sub1, *sub2;
-    char *p;
+    char *p, *str;
     int c, i, flag, size;
     time_t start, end;
 
@@ -1898,13 +1903,25 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    appendstrlist(&searchargs->bcc, arg.s);
+	    str = charset_convert(arg.s, *charset);
+	    if (strchr(str, EMPTY_CHAR)) {
+		searchargs->recent_set = searchargs->recent_unset = 1;
+	    }
+	    else {
+		appendstrlist(&searchargs->bcc, str);
+	    }
 	}
 	else if (!strcmp(criteria.s, "body")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    appendstrlist(&searchargs->body, arg.s);
+	    str = charset_convert(arg.s, *charset);
+	    if (strchr(str, EMPTY_CHAR)) {
+		searchargs->recent_set = searchargs->recent_unset = 1;
+	    }
+	    else {
+		appendstrlist(&searchargs->body, str);
+	    }
 	}
 	else goto badcri;
 	break;
@@ -1914,14 +1931,20 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    appendstrlist(&searchargs->cc, arg.s);
+	    str = charset_convert(arg.s, *charset);
+	    if (strchr(str, EMPTY_CHAR)) {
+		searchargs->recent_set = searchargs->recent_unset = 1;
+	    }
+	    else {
+		appendstrlist(&searchargs->cc, str);
+	    }
 	}
 	else if (parsecharset && !strcmp(criteria.s, "charset")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c != ' ') goto missingarg;
 	    lcase(arg.s);
-	    *charset = strsave(arg.s);
+	    *charset = charset_lookupname(arg.s);
 	}
 	else goto badcri;
 	break;
@@ -1941,7 +1964,13 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    appendstrlist(&searchargs->from, arg.s);
+	    str = charset_convert(arg.s, *charset);
+	    if (strchr(str, EMPTY_CHAR)) {
+		searchargs->recent_set = searchargs->recent_unset = 1;
+	    }
+	    else {
+		appendstrlist(&searchargs->from, str);
+	    }
 	}
 	else goto badcri;
 	break;
@@ -1954,7 +1983,13 @@ int parsecharset;
 	    appendstrlist(&searchargs->header_name, arg.s);
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    appendstrlist(&searchargs->header, arg.s);
+	    str = charset_convert(arg.s, *charset);
+	    if (strchr(str, EMPTY_CHAR)) {
+		searchargs->recent_set = searchargs->recent_unset = 1;
+	    }
+	    else {
+		appendstrlist(&searchargs->header, str);
+	    }
 	}
 	else goto badcri;
 	break;
@@ -2155,7 +2190,13 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    appendstrlist(&searchargs->subject, arg.s);
+	    str = charset_convert(arg.s, *charset);
+	    if (strchr(str, EMPTY_CHAR)) {
+		searchargs->recent_set = searchargs->recent_unset = 1;
+	    }
+	    else {
+		appendstrlist(&searchargs->subject, str);
+	    }
 	}
 	else goto badcri;
 	break;
@@ -2165,13 +2206,25 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    appendstrlist(&searchargs->to, arg.s);
+	    str = charset_convert(arg.s, *charset);
+	    if (strchr(str, EMPTY_CHAR)) {
+		searchargs->recent_set = searchargs->recent_unset = 1;
+	    }
+	    else {
+		appendstrlist(&searchargs->to, str);
+	    }
 	}
 	else if (!strcmp(criteria.s, "text")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
-	    appendstrlist(&searchargs->text, arg.s);
+	    str = charset_convert(arg.s, *charset);
+	    if (strchr(str, EMPTY_CHAR)) {
+		searchargs->recent_set = searchargs->recent_unset = 1;
+	    }
+	    else {
+		appendstrlist(&searchargs->text, str);
+	    }
 	}
 	else goto badcri;
 	break;

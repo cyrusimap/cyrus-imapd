@@ -1603,45 +1603,12 @@ FILE **msgfile;
 	for (l = searchargs->bcc; l; l = l->next) {
 	    if (!index_search_string(l->s, cacheitem+4, cachelen)) return 0;
 	}
-    }
 
-    if (searchargs->subject) {
-	cacheitem = cache_base + CACHE_OFFSET(msgno) + 5;
-
-	/* Skip over date */
-	if (*cacheitem == '\"') {
-	    cacheitem = strchr(cacheitem+1, '\"') + 2;
-	}
-	else if (*cacheitem == 'N') {
-	    cacheitem += 4;
-	}
-	else {
-	    cacheitem++;
-	    cachelen = 0;
-	    while (isdigit(*cacheitem)) {
-		cachelen = cachelen*10 + *cacheitem++ - '0';
-	    }
-	    cacheitem += cachelen + 4;
-	}
-	    
-	if (*cacheitem == '\"') {
-	    cacheitem++;
-	    cachelen = strchr(cacheitem+1, '\"') - cacheitem;
-	}
-	else if (*cacheitem == 'N') {
-	    cachelen = 0;
-	}
-	else {
-	    cacheitem++;
-	    cachelen = 0;
-	    while (isdigit(*cacheitem)) {
-		cachelen = cachelen*10 + *cacheitem++ - '0';
-	    }
-	    cacheitem += 3;
-	}
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip subject */
+	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->subject; l; l = l->next) {
-	    if (!index_search_string(l->s, cacheitem, cachelen)) return 0;
+	    if (!index_search_string(l->s, cacheitem+4, cachelen)) return 0;
 	}
     }
 
@@ -1689,8 +1656,7 @@ int textlen;
     int substrlen = strlen(substr);
     textlen -= substrlen;
     while (textlen-- >= 0) {
-	if (TOLOWER(*substr) == TOLOWER(*text) &&
-	    !strncasecmp(substr, text, substrlen))
+	if (*substr == *text && !strncmp(substr, text, substrlen))
 	  return 1;
 	text++;
     }
