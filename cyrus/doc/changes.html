@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.25 2004/09/15 17:33:38 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.26 2004/11/26 21:45:11 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -56,6 +56,24 @@ FastMail</i>.</li>
 <li>Support 64-bit quota usage (both per mailbox and for the entire
 quotaroot), based on a patch from Jeremy Rumpf.  <i>Development
 sponsored by FastMail</i>.</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.2.9</h1>
+<ul>
+<li>Fix 0 termination in mysasl_canon_user.</li>
+<li>Check for imap magic plus buffer overflow in proxyd also (CAN-2004-1015).</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.2.8</h1>
+<ul>
+<li>Change ACLs correctly when renaming a user</li>
+<li>Do not abandon std{in,out,err} file descriptors; syslog assumes it can 
+use stderr if syslogd isn't running.</li>
+<li>Clean up imap magic plus to avoid buffer overrun (CAN-2004-1011)</li>
+<li>Fix lack of bounds checking in PARTIAL and FETCH (CAN-2004-1012, CAN-2004-1013)</li>
+<li>Do not attempt to reuse a freed connection in lmtpproxyd.</li>
+<li>Allow login without authentication with -N switch in proxyd.</li>
+<li>Fix use of xrealloc and fold pointers in lmtpengine.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.7</h1>
@@ -2022,7 +2040,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2004/09/15 17:33:38 $ <br />
+last modified: $Date: 2004/11/26 21:45:11 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
