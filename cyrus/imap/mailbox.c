@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.128 2002/05/23 03:10:50 leg Exp $
+ $Id: mailbox.c,v 1.129 2002/05/23 19:52:10 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -330,7 +330,12 @@ int mailbox_open_header_path(const char *name,
 
     mailbox->name = xstrdup(name);
     mailbox->path = xstrdup(path);
+
+    /* Note that the header does have the ACL information, but it is only
+     * a backup, and the mboxlist data is considered authoritative, so
+     * we will just use what we were passed */
     mailbox->acl = xstrdup(acl);
+
     mailbox->myrights = cyrus_acl_myrights(auth_state, mailbox->acl);
 
     if (mailbox->header_fd == -1) return 0;
@@ -1063,11 +1068,14 @@ struct quota *quota;
 int mailbox_write_header(struct mailbox *mailbox)
 {
     int flag;
-    FILE *newheader;
     int newheader_fd;
+    int r = 0;
+    const char *quota_root;
     char fnamebuf[MAX_MAILBOX_PATH];
     char newfnamebuf[MAX_MAILBOX_PATH];
     struct stat sbuf;
+    struct iovec iov[10];
+    int niov;
 
     assert(mailbox->header_lock_count != 0);
 
@@ -1076,37 +1084,55 @@ int mailbox_write_header(struct mailbox *mailbox)
     strcpy(newfnamebuf, fnamebuf);
     strcat(newfnamebuf, ".NEW");
 
-    newheader = fopen(newfnamebuf, "w+");
-    if (!newheader) {
+    newheader_fd = open(newfnamebuf, O_CREAT | O_TRUNC | O_RDWR, 0666);
+    if (newheader_fd == -1) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", newfnamebuf);
 	return IMAP_IOERROR;
     }
 
-    fputs(MAILBOX_HEADER_MAGIC, newheader);
-    fprintf(newheader, "%s\t%s\n", 
-	    mailbox->quota.root ? mailbox->quota.root : "",
-	    mailbox->uniqueid);
-    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	if (mailbox->flagname[flag]) {
-	    fprintf(newheader, "%s ", mailbox->flagname[flag]);
+    /* Write magic header, do NOT write the trailing NUL */
+    r = write(newheader_fd, MAILBOX_HEADER_MAGIC,
+	      sizeof(MAILBOX_HEADER_MAGIC) - 1);
+
+    if(r != -1) {
+	niov = 0;
+	quota_root = mailbox->quota.root ? mailbox->quota.root : "";
+	WRITEV_ADDSTR_TO_IOVEC(iov,niov,quota_root);
+	WRITEV_ADD_TO_IOVEC(iov,niov,"\t",1);
+	WRITEV_ADDSTR_TO_IOVEC(iov,niov,mailbox->uniqueid);
+	WRITEV_ADD_TO_IOVEC(iov,niov,"\n",1);
+	r = retry_writev(newheader_fd, iov, niov);
+    }
+
+    if(r != -1) {
+	for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+	    if (mailbox->flagname[flag]) {
+		niov = 0;
+		WRITEV_ADDSTR_TO_IOVEC(iov,niov,mailbox->flagname[flag]);
+		WRITEV_ADD_TO_IOVEC(iov,niov," ",1);
+		r = retry_writev(newheader_fd, iov, niov);
+		if(r == -1) break;
+	    }
 	}
     }
-    fprintf(newheader, "\n");
-    fprintf(newheader, "%s\n", mailbox->acl);
-
-    fflush(newheader);
-    newheader_fd = dup(fileno(newheader));
-    if (ferror(newheader) || fsync(fileno(newheader)) ||
+    
+    if(r != -1) {
+	niov = 0;
+	WRITEV_ADD_TO_IOVEC(iov,niov,"\n",1);
+	WRITEV_ADDSTR_TO_IOVEC(iov,niov,mailbox->acl);
+	WRITEV_ADD_TO_IOVEC(iov,niov,"\n",1);
+	r = retry_writev(newheader_fd, iov, niov);
+    }
+    
+ write_error:
+    if (r == -1 || fsync(newheader_fd) ||
 	lock_blocking(newheader_fd) == -1 ||
 	rename(newfnamebuf, fnamebuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", newfnamebuf);
-	fclose(newheader);
 	close(newheader_fd);
 	unlink(newfnamebuf);
 	return IMAP_IOERROR;
     }
-
-    fclose(newheader);
 
     if (mailbox->header_fd != -1) {
 	close(mailbox->header_fd);
@@ -1118,12 +1144,11 @@ int mailbox_write_header(struct mailbox *mailbox)
 	syslog(LOG_ERR, "IOERROR: fstating %s: %m", fnamebuf);
 	fatal("can't fstat header file", EC_OSFILE);
     }
+
     map_refresh(mailbox->header_fd, 1, &mailbox->header_base,
 		&mailbox->header_len, sbuf.st_size, "header", mailbox->name);
     mailbox->header_ino = sbuf.st_ino;
 
-    /* xxx how do we know that we have a lock on the new header ? */
-    
     return 0;
 }
 

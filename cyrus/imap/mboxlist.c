@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.191 2002/05/23 03:09:04 leg Exp $
+ * $Id: mboxlist.c,v 1.192 2002/05/23 19:52:11 rjs3 Exp $
  */
 
 #include <config.h>
@@ -1407,6 +1407,8 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
     /* Do change to mailbox header file; we already have 
        it locked from above */
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
+	if(mailbox.acl) free(mailbox.acl);
+	mailbox.acl = xstrdup(newacl);
 	r = mailbox_write_header(&mailbox);
     }
 
