@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.2 2002/03/14 21:19:25 rjs3 Exp $ */
+/* $Id: backend.h,v 1.3 2002/03/15 00:49:57 ken3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -79,4 +79,4 @@ void downserver(struct backend *s);
 
 #define CAPA(s, c) ((s)->capability & (c))
 
-#endif _INCLUDED_BACKEND_H
+#endif /* _INCLUDED_BACKEND_H */
