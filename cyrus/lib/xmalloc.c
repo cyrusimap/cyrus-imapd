@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <sysexits.h>
+
 extern char *malloc(), *realloc();
 
 char *xmalloc (size)
@@ -9,8 +11,7 @@ int size;
     if (ret = malloc((unsigned) size))
       return ret;
 
-    fprintf(stderr, "Virtual memory exhausted\n");
-    exit(1);
+    fatal("Virtual memory exhausted", EX_TEMPFAIL);
 }
 
 
@@ -24,8 +25,7 @@ int size;
     if (ret = !ptr ? malloc ((unsigned) size) : realloc (ptr, (unsigned) size))
       return ret;
 
-    fprintf(stderr, "Virtual memory exhausted\n");
-    exit(1);
+    fatal("Virtual memory exhausted", EX_TEMPFAIL);
 }
 
 char *strsave(str)
