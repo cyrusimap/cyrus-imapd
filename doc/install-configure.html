@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.3 2000/05/05 01:42:38 leg Exp $ -->
+<!-- $Id: install-configure.html,v 1.4 2000/05/12 20:45:01 wcw Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -91,27 +91,6 @@ regular users. You also should <b>not</b> read mail as an
 administrator. You should have separate accounts for reading mail and
 administrating.
 
-<p><li>Decide how users are going to be authenticated.  The easiest
-method for authenticating users is to use the libsasl authentication
-database and create users using the "<tt>saslpasswd</tt>" utility.
-Set "<tt>sasl_pwcheck_method: sasldb</tt>".  Make sure Cyrus
-can read "<tt>/etc/sasldb</tt>":
-
-<pre>
-<kbd>   chown cyrus /etc/sasldb*
-</kbd></pre>
-
-<p>If you want to authenticate users from "<tt>/etc/shadow</tt>",
-things are considerably more complicated, since the cyrus user cannot
-read the shadow password file.  It is suggested that you configure
-libsasl with <tt>pwcheck</tt> support, and set
-"<tt>sasl_pwcheck_method: pwcheck</tt>".  The SASL library will then
-make calls to an external utility running as root to authenticate
-users.
-
-<p>If you are using Kerberos, see the section <a
-href="#kerberos">below</a> on configuring Kerberos.
-
 <p><li>Create the configuration directory specified by the
 "<tt>configdirectory</tt>" option in "<tt>imapd.conf.</tt>" The
 configuration directory is similar in concept to the
@@ -121,7 +100,6 @@ IMAP server as a whole.
 <p>This document uses the configuration directory "<tt>/var/imap</tt>"
 in its examples.  This directory should be owned by the
 cyrus user and group and should not permit access to other users.
-
 
 <pre>
 <kbd>   cd /var
@@ -323,91 +301,6 @@ user.  Also add a <TT>cron</TT> job to run
 <TT>active</TT> file.)
 
 </ol>
-<h2>Kerberos</h2><a name="kerberos"></a>
-
-<h3>Configuring Kerberos v4</h3>
-
-<p>Cyrus IMAP supports Kerberos v4 if the SASL library was compiled
-with KERBEROS_V4 support.</p>
-
-<p>You'll have to 
-create a Kerberos v4 identity for the server and add the server's key to
-the "<tt>srvtab</tt>" file.  The file must be readable by the cyrus
-user. The server's Kerberos identity is "<tt>imap.HOST@REALM</tt>",
-where "<tt>HOST</tt>" is the first component of the machine's host
-name and "<tt>REALM</tt>" is the machine's Kerberos realm.</p>
-
-<ol>
-<li>Here is a sample session, creating a srvtab file for the
-host named "<tt>foobar</tt>":
-
-<pre>
-<kbd>   ksrvutil -f /var/imap/srvtab add
-</kbd></pre>
-
-<p>Here is the information "<tt>ksrvutil</tt>" requests.  Respond by
-filling in values or by pressing <KBD>RETURN</KBD>.  In this example,
-the host name is "<tt>foobar</tt>" and the realm is 
-"<tt>ANDREW.CMU.EDU</tt>".</p>
-
-<pre>
-   Name: <kbd>imap</kbd>
-   Instance: <KBD>foobar</KBD>
-   Realm: <KBD>ANDREW.CMU.EDU</KBD>
-   Version number: 
-   New principal: imap.foobar@ANDREW.CMU.EDU; version 0
-   Is this correct? (y,n) [y] 
-   Password: 
-   Verifying, please re-enter Password: 
-   Key successfully added.
-   Would you like to add another key? (y,n) [y] <KBD>n</KBD>
-</pre></li>
-
-<li><p>If you plan to install Kerberized POP, create the Kerberos
-identity "<tt>pop.HOST@REALM</tt>" and add the key to the "<tt>srvtab</tt>"
-file.</p></li>
-
-<li><P>Make the "<TT>srvtab</TT>" file owned by the cyrus user:
-<pre>
-<kbd>   chown cyrus /var/imap/srvtab
-</kbd></pre></li>
-
-<li>Add the option srvtab option to <tt>/etc/imapd.conf</tt>:
-<pre>   srvtab: /var/imap/srvtab</pre></li>
-
-<li>Test using <tt>imtest -m KERBEROS_V4</tt>.  <tt>imtest</tt> will
-attempt to authorize as the current Unix user regardless of the
-current ticket's held.  Override this with the <tt>-u</tt> option.</li>
-</ol>
-
-<h3>Troubleshooting Kerberos problems</h3>
-
-<p>Run the program "<tt>krbck</tt>" (found in the <tt>imap</tt>
-directory) as the cyrus user on the IMAP server.  This program will
-diagnose some common Kerberos v4 configuration errors.</p>
-
-<h3>Configuring Kerberos v5</h3>
-
-<p>Cyrus IMAP supports Kerberos v5 if the SASL library was compiled
-with GSSAPI support.</p>
-
-<p>You'll have to create a Kerberos v5 identity for the server.
-Kerberos v5 keys are generally stored in "<tt>/etc/krb5.keytab</tt>".
-
-<ol>
-<li>Add the "<tt>imap/hostname</tt>" key using "<tt>kadmin</tt>".
-
-<li> Let the cyrus user read "<tt>/etc/krb5.keytab</tt>":
-user:
-<pre>
-<kbd>   chown cyrus /etc/krb5.keytab
-</kbd></pre></li>
-
-<li>Test using <tt>imtest -m GSSAPI</tt>.  <tt>imtest</tt> will
-attempt to authorize as the current Unix user regardless of the
-current ticket's held.  Override this with the <tt>-u</tt> option.</li>
-</ol>
-
 <h2>SSL, TLS, and OpenSSL</h2><a name="openssl"></a>
 
 <p>Transport Layer Security (TLS), is a standardized version of the Secure
@@ -490,5 +383,5 @@ authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
 <P><HR>
-last modified: $Date: 2000/05/05 01:42:38 $
+last modified: $Date: 2000/05/12 20:45:01 $
 </BODY></HTML>
