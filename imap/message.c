@@ -1446,23 +1446,28 @@ int newformat;
 	    }
 	    else message_write_nstring(ibuf, (char *)0);
 	    PUTIBUF(ibuf, ' ');
-	    PUTIBUF(ibuf, '(');
-	    message_write_nstring(ibuf, body->disposition);
-	    PUTIBUF(ibuf, ' ');
-	    if (param = body->disposition_params) {
+	    if (body->disposition) {
 		PUTIBUF(ibuf, '(');
-		while (param) {
-		    message_write_nstring(ibuf, param->attribute);
-		    PUTIBUF(ibuf, ' ');
-		    message_write_nstring(ibuf, param->value);
-		    if (param = param->next) {
+		message_write_nstring(ibuf, body->disposition);
+		PUTIBUF(ibuf, ' ');
+		if (param = body->disposition_params) {
+		    PUTIBUF(ibuf, '(');
+		    while (param) {
+			message_write_nstring(ibuf, param->attribute);
 			PUTIBUF(ibuf, ' ');
+			message_write_nstring(ibuf, param->value);
+			if (param = param->next) {
+			    PUTIBUF(ibuf, ' ');
+			}
 		    }
+		    PUTIBUF(ibuf, ')');
 		}
+		else message_write_nstring(ibuf, (char *)0);
 		PUTIBUF(ibuf, ')');
 	    }
-	    else message_write_nstring(ibuf, (char *)0);
-	    PUTIBUF(ibuf, ')');
+	    else {
+		message_write_nstring(ibuf, (char *)0);
+	    }
 	    PUTIBUF(ibuf, ' ');
 	    if (param = body->language) {
 		PUTIBUF(ibuf, '(');
@@ -1531,23 +1536,28 @@ int newformat;
 	PUTIBUF(ibuf, ' ');
 	message_write_nstring(ibuf, body->md5);
 	PUTIBUF(ibuf, ' ');
-	PUTIBUF(ibuf, '(');
-	message_write_nstring(ibuf, body->disposition);
-	PUTIBUF(ibuf, ' ');
-	if (param = body->disposition_params) {
+	if (body->disposition) {
 	    PUTIBUF(ibuf, '(');
-	    while (param) {
-		message_write_nstring(ibuf, param->attribute);
-		PUTIBUF(ibuf, ' ');
-		message_write_nstring(ibuf, param->value);
-		if (param = param->next) {
+	    message_write_nstring(ibuf, body->disposition);
+	    PUTIBUF(ibuf, ' ');
+	    if (param = body->disposition_params) {
+		PUTIBUF(ibuf, '(');
+		while (param) {
+		    message_write_nstring(ibuf, param->attribute);
 		    PUTIBUF(ibuf, ' ');
+		    message_write_nstring(ibuf, param->value);
+		    if (param = param->next) {
+			PUTIBUF(ibuf, ' ');
+		    }
 		}
+		PUTIBUF(ibuf, ')');
 	    }
+	    else message_write_nstring(ibuf, (char *)0);
 	    PUTIBUF(ibuf, ')');
 	}
-	else message_write_nstring(ibuf, (char *)0);
-	PUTIBUF(ibuf, ')');
+	else {
+	    message_write_nstring(ibuf, (char *)0);
+	}
 	PUTIBUF(ibuf, ' ');
 	if (param = body->language) {
 	    PUTIBUF(ibuf, '(');
