@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- * $Id: ctl_deliver.c,v 1.14.4.6 2003/02/27 18:10:32 rjs3 Exp $
+ * $Id: ctl_deliver.c,v 1.14.4.7 2003/05/08 14:06:43 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -104,7 +104,7 @@ main(argc, argv)
 	case 'r':
 	    /* deprecated, but we still support it */
 	    fprintf(stderr, "ctl_deliver -r is deprecated: "
-		    "use ctl_cyrusdb -r instead\b");
+		    "use ctl_cyrusdb -r instead\n");
 	    libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
 	    if (op == NONE) op = RECOVER;
 	    break;
