@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.23 2000/05/22 23:30:12 leg Exp $
+ * $Id: lmtpd.c,v 1.24 2000/05/23 18:55:44 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.23 2000/05/22 23:30:12 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.24 2000/05/23 18:55:44 leg Exp $";*/
 
 #include <config.h>
 
@@ -1697,6 +1697,7 @@ void lmtpmode(deliver_opts_t *delopts)
     prot_printf(deliver_out,"220 %s LMTP Cyrus %s ready\r\n", myhostname,
 		CYRUS_VERSION);
     for (;;) {
+    nextcmd:
       signals_poll();
 
       if (!prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
@@ -1710,12 +1711,12 @@ void lmtpmode(deliver_opts_t *delopts)
       switch (buf[0]) {
       case 'a':
       case 'A':
-
 	  if (!strncasecmp(buf, "auth ", 5)) {
 	      char *mech;
 	      char *in, *out;
 	      unsigned int inlen, outlen;
 	      const char *errstr;
+	      char *user;
 	      
 	      if (delopts->authuser) {
 		  prot_printf(deliver_out,
@@ -1797,7 +1798,7 @@ void lmtpmode(deliver_opts_t *delopts)
 		      prot_printf(deliver_out,
 				  "501 5.5.4 cannot base64 decode\r\n");
 		      if (in) { free(in); }
-		      continue; /* what's the state of our sasl_conn_t? */
+		      goto nextcmd; /* what's the state of our sasl_conn_t? */
 		  }
 		  
 		  r = sasl_server_step(conn,
@@ -1810,29 +1811,47 @@ void lmtpmode(deliver_opts_t *delopts)
 	      }
 	      
 	      if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
-
-		  if (errstr)
-		      syslog(LOG_ERR, "sasl_server_step error: %s:%s",
-			     sasl_errstring(r,NULL,NULL),errstr);		  
-		      else
-			  syslog(LOG_ERR, "sasl_server_step error: %s",
-				 sasl_errstring(r,NULL,NULL));		  
+		  if (errstr) {
+		      syslog(LOG_ERR, "badlogin: %s %s %s [%s]",
+			     deliver_remoteaddr.sin_family == AF_INET ?
+			        inet_ntoa(deliver_remoteaddr.sin_addr) :
+			        "[unix socket]",
+			     mech,
+			     sasl_errstring(r, NULL, NULL), 
+			     errstr);
+		  } else {
+		      syslog(LOG_ERR, "badlogin: %s %s %s",
+			     deliver_remoteaddr.sin_family == AF_INET ?
+			        inet_ntoa(deliver_remoteaddr.sin_addr) :
+			        "[unix socket]",
+			     mech,
+			     sasl_errstring(r, NULL, NULL));
+		  }
 		  
 		  snmp_increment_args(AUTHENTICATION_NO, 1,
-				      VARIABLE_AUTH, hash_simple(mech), VARIABLE_LISTEND);
+				      VARIABLE_AUTH, hash_simple(mech), 
+				      VARIABLE_LISTEND);
 
 		  prot_printf(deliver_out, "501 5.5.4 %s\r\n",
 			      sasl_errstring(sasl_usererr(r), NULL, NULL));
 		  continue;
 	      }
-	      
+	      r = sasl_getprop(conn, SASL_USERNAME, (void **) user);
+	      if (r != SASL_OK) user = "[sasl error]";
+
 	      /* authenticated successfully! */
 	      snmp_increment_args(AUTHENTICATION_YES,1,
-				  VARIABLE_AUTH, hash_simple(mech), VARIABLE_LISTEND);
+				  VARIABLE_AUTH, hash_simple(mech), 
+				  VARIABLE_LISTEND);
+	      syslog(LOG_NOTICE, "login: %s %s %s %s",
+		     deliver_remoteaddr.sin_family == AF_INET ?
+		        inet_ntoa(deliver_remoteaddr.sin_addr) :
+		        "[unix socket]",
+		     user, mech, "User logged in");
 
 	      authenticated++;
 	      prot_printf(deliver_out, "235 Authenticated!\r\n");
-	      
+
 	      /* set protection layers */
 	      prot_setsasl(deliver_in,  conn);
 	      prot_setsasl(deliver_out, conn);
@@ -1868,11 +1887,12 @@ void lmtpmode(deliver_opts_t *delopts)
 		    prot_printf(deliver_out,"%s\r\n", convert_lmtp(r));
 		}
 
-
 		if (singleinstance) {		    
-		    snmp_increment(mtaTransmittedMessages, append_stageparts(msg->stage));
+		    snmp_increment(mtaTransmittedMessages, 
+				   append_stageparts(msg->stage));
 		    snmp_increment(mtaTransmittedVolume, 
-				   roundToK(append_stageparts(msg->stage) * msg->size));
+				   roundToK(append_stageparts(msg->stage) * 
+					    msg->size));
 
 		} else {
 		    snmp_increment(mtaTransmittedMessages, delivered);
