@@ -26,11 +26,12 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.37 1998/08/15 22:15:02 tjs Exp $
+ * $Id: pop3d.c,v 1.38 1998/11/03 20:03:24 tjs Exp $
  */
 
 #include <stdio.h>
 #include <string.h>
+#include <fcntl.h>
 #include <time.h>
 #include <signal.h>
 #include <sys/types.h>
@@ -329,22 +330,11 @@ cmdloop()
 	}
 	else if (!popd_mailbox) {
 	    if (!strcmp(inputbuf, "user")) {
-		if (popd_userid) {
-		    prot_printf(popd_out, "-ERR Must give PASS command\r\n");
-		}
-		else if (!arg) {
+		if (!arg) {
 		    prot_printf(popd_out, "-ERR Missing argument\r\n");
 		}
-		else if (!(p = auth_canonifyid(arg)) ||
-			 strchr(p, '.') || strlen(p) + 6 > MAX_MAILBOX_PATH) {
-		    prot_printf(popd_out, "-ERR Invalid user\r\n");
-		    syslog(LOG_NOTICE,
-			   "badlogin: %s plaintext %s invalid user",
-			   popd_clienthost, beautify_string(arg));
-		}
 		else {
-		    popd_userid = xstrdup(p);
-		    prot_printf(popd_out, "+OK Name is a valid mailbox\r\n");
+		    cmd_pass(arg);
 		}
 	    }
 	    else if (!strcmp(inputbuf, "pass")) {
@@ -512,6 +502,46 @@ cmdloop()
     }		
 }
 
+void
+cmd_user(user)
+char *user;
+{
+    int fd;
+    struct protstream *shutdown_in;
+    char buf[1024];
+    char *p;
+    char shutdownfilename[1024];
+
+    if (popd_userid) {
+	prot_printf(popd_out, "-ERR Must give PASS command\r\n");
+	return;
+    }
+
+    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+    if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+	shutdown_in = prot_new(fd, 0);
+	prot_fgets(buf, sizeof(buf), shutdown_in);
+	if (p = strchr(buf, '\r')) *p = 0;
+	if (p = strchr(buf, '\n')) *p = 0;
+
+	for(p = buf; *p == '['; p++); /* can't have [ be first char */
+	prot_printf(popd_out, "-ERR %s\r\n", p);
+	prot_flush(popd_out);
+	shut_down(0);
+    }
+    else if (!(p = auth_canonifyid(user)) ||
+	       strchr(p, '.') || strlen(p) + 6 > MAX_MAILBOX_PATH) {
+	prot_printf(popd_out, "-ERR Invalid user\r\n");
+	syslog(LOG_NOTICE,
+	       "badlogin: %s plaintext %s invalid user",
+	       popd_clienthost, beautify_string(user));
+    }
+    else {
+	popd_userid = xstrdup(p);
+	prot_printf(popd_out, "+OK Name is a valid mailbox\r\n");
+    }
+}
+
 cmd_pass(pass)
 char *pass;
 {
@@ -619,6 +649,7 @@ cmd_capa()
     prot_printf(popd_out, "LOGIN-DELAY %d\r\n", minpoll);
     prot_printf(popd_out, "TOP\r\n");
     prot_printf(popd_out, "UIDL\r\n");
+    prot_printf(popd_out, "PIPELINE\r\n");
     
     prot_printf(popd_out,
 		"IMPLEMENTATION Cyrus POP3 server %s\r\n",
