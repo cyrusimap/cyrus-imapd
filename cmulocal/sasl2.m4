@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.28 2003/05/14 18:32:16 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.29 2003/05/14 18:36:41 rjs3 Exp $
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -44,13 +44,13 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
      gssapi_dir="/usr/local/lib"
   fi
 
-  # Check a full link against the Solaris 8 and up libgss.
-  # If this fails, check a full link against the heimdal libraries.
+  # Check a full link against the heimdal libraries.
+  # If this fails, check a full link against the Solaris 8 and up libgss.
   # If this fails, assume MIT.
-  AC_CHECK_LIB(gss,gss_unwrap,gss_impl="seam",,-lgss)
+  AC_CHECK_LIB(gssapi,gss_unwrap,gss_impl="heimdal",,$GSSAPIBASE_LIBS -lgssapi -lkrb5 -lasn1 -lroken ${LIB_CRYPT} -lcom_err)
 
   if test "$gss_impl" = "mit"; then
-    AC_CHECK_LIB(gssapi,gss_unwrap,gss_impl="heimdal",,$GSSAPIBASE_LIBS -lgssapi -lkrb5 -lasn1 -lroken ${LIB_CRYPT} -lcom_err)
+    AC_CHECK_LIB(gss,gss_unwrap,gss_impl="seam",,-lgss)
   fi
 
   if test "$gss_impl" = "mit"; then
