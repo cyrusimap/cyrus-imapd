@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.96 2002/02/19 16:58:54 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.97 2002/02/21 00:50:03 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -237,7 +237,6 @@ void printastring (const char *s);
 
 static int mailboxdata(char *name, int matchlen, int maycreate, void *rock);
 static int listdata(char *name, int matchlen, int maycreate, void *rock);
-static int lsubdata(char *name, int matchlen, int maycreate, void *rock);
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
 
 /* Enable the resetting of a sasl_conn_t */
@@ -4648,15 +4647,6 @@ int maycreate;
 static int listdata(char *name, int matchlen, int maycreate, void *rock)
 {
     mstringdata("LIST", name, matchlen, maycreate);
-    return 0;
-}
-
-/*
- * Issue a LSUB untagged response
- */
-static int lsubdata(char *name, int matchlen, int maycreate, void *rock)
-{
-    mstringdata("LSUB", name, matchlen, maycreate);
     return 0;
 }
 
