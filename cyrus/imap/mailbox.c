@@ -29,7 +29,6 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
-#include <sys/file.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -443,7 +442,8 @@ mailbox_lock_header(mailbox)
 struct mailbox *mailbox;
 {
     char fnamebuf[MAX_MAILBOX_PATH];
-    struct stat sbuffd, sbuffile;
+    struct stat sbuf;
+    char *lockfailaction;
     int r;
 
     if (mailbox->header_lock_count++) return 0;
@@ -455,37 +455,15 @@ struct mailbox *mailbox;
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_HEADER);
 
-    for (;;) {
-	r = flock(fileno(mailbox->header), LOCK_EX);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    mailbox->header_lock_count--;
-	    syslog(LOG_ERR, "IOERROR: locking header for %s: %m",
-		   mailbox->name);
-	    return IMAP_IOERROR;
-	}
-
-	fstat(fileno(mailbox->header), &sbuffd);
-	r = stat(fnamebuf, &sbuffile);
-	if (r == -1) {
-	    syslog(LOG_ERR, "IOERROR: stating header for %s: %m",
-		   mailbox->name);
-	    mailbox_unlock_header(mailbox);
-	    return IMAP_IOERROR;
-	}
-
-	if (sbuffd.st_ino == sbuffile.st_ino) break;
-
-	fclose(mailbox->header);
-	mailbox->header = fopen(fnamebuf, "r+");
-	if (!mailbox->header) {
-	    syslog(LOG_ERR, "IOERROR: opening header for %s: %m",
-		   mailbox->name);
-	    return IMAP_IOERROR;
-	}
+    r = lock_reopen(fileno(mailbox->header), fnamebuf, &sbuf, &lockfailaction);
+    if (r) {
+	mailbox->header_lock_count--;
+	syslog(LOG_ERR, "IOERROR: %s header for %s: %m",
+	       lockfailaction, mailbox->name);
+	return IMAP_IOERROR;
     }
 
-    if (sbuffd.st_mtime != mailbox->header_mtime) {
+    if (sbuf.st_mtime != mailbox->header_mtime) {
 	rewind(mailbox->header);
 	r = mailbox_read_header(mailbox);
 	if (r && !mailbox_doing_reconstruct) {
@@ -516,10 +494,10 @@ struct mailbox *mailbox;
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_INDEX);
 
+    
     for (;;) {
-	r = flock(fileno(mailbox->index), LOCK_EX);
+	r = lock_blocking(fileno(mailbox->index));
 	if (r == -1) {
-	    if (errno == EINTR) continue;
 	    mailbox->index_lock_count--;
 	    syslog(LOG_ERR, "IOERROR: locking index for %s: %m",
 		   mailbox->name);
@@ -565,18 +543,14 @@ struct mailbox *mailbox;
 
     if (mailbox->pop_lock_count++) return 0;
 
-    while (r != 0) {
-	r = flock(fileno(mailbox->cache), LOCK_EX|LOCK_NB);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    mailbox->pop_lock_count--;
-	    if (errno == EWOULDBLOCK || errno == EAGAIN) {
-		return IMAP_MAILBOX_POPLOCKED;
-	    }
-	    syslog(LOG_ERR, "IOERROR: locking cache for %s: %m",
-		   mailbox->name);
-	    return IMAP_IOERROR;
+    r = lock_nonblocking(fileno(mailbox->cache));
+    if (r == -1) {
+	mailbox->pop_lock_count--;
+	if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EACCES) {
+	    return IMAP_MAILBOX_POPLOCKED;
 	}
+	syslog(LOG_ERR, "IOERROR: locking cache for %s: %m", mailbox->name);
+	return IMAP_IOERROR;
     }
 
     return 0;
@@ -590,7 +564,7 @@ mailbox_lock_quota(quota)
 struct quota *quota;
 {
     char quota_path[MAX_MAILBOX_PATH];
-    struct stat sbuffd, sbuffile;
+    char *lockfailaction;
     int r;
 
     /* assert(mailbox->header_lock_count != 0); */
@@ -613,31 +587,14 @@ struct quota *quota;
 	}
     }
 
-    for (;;) {
-	r = flock(fileno(quota->file), LOCK_EX);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    quota->lock_count--;
-	    syslog(LOG_ERR, "IOERROR: locking quota %s: %m", quota->root);
-	    return IMAP_IOERROR;
-	}
-	fstat(fileno(quota->file), &sbuffd);
-	r = stat(quota_path, &sbuffile);
-	if (r == -1) {
-	    syslog(LOG_ERR, "IOERROR: stating quota file %s: %m", quota_path);
-	    mailbox_unlock_quota(quota);
-	    return IMAP_IOERROR;
-	}
-
-	if (sbuffd.st_ino == sbuffile.st_ino) break;
-
-	fclose(quota->file);
-	quota->file = fopen(quota_path, "r+");
-	if (!quota->file) {
-	    syslog(LOG_ERR, "IOERROR: opening quota file %s: %m", quota_path);
-	    return IMAP_IOERROR;
-	}
+    r = lock_reopen(fileno(quota->file), quota_path, 0, &lockfailaction);
+    if (r == -1) {
+	quota->lock_count--;
+	syslog(LOG_ERR, "IOERROR: %s quota %s: %m", lockfailaction,
+	       quota->root);
+	return IMAP_IOERROR;
     }
+
     return mailbox_read_quota(quota);
 }
 
@@ -650,7 +607,7 @@ struct mailbox *mailbox;
     assert(mailbox->header_lock_count != 0);
 
     if (--mailbox->header_lock_count == 0) {
-	flock(fileno(mailbox->header), LOCK_UN);
+	lock_unlock(fileno(mailbox->header));
     }
     return 0;
 }
@@ -664,7 +621,7 @@ struct mailbox *mailbox;
     assert(mailbox->index_lock_count != 0);
 
     if (--mailbox->index_lock_count == 0) {
-	flock(fileno(mailbox->index), LOCK_UN);
+	lock_unlock(fileno(mailbox->index));
     }
     return 0;
 }
@@ -678,7 +635,7 @@ struct mailbox *mailbox;
     assert(mailbox->pop_lock_count != 0);
 
     if (--mailbox->pop_lock_count == 0) {
-	flock(fileno(mailbox->cache), LOCK_UN);
+	lock_unlock(fileno(mailbox->cache));
     }
     return 0;
 }
@@ -692,7 +649,7 @@ struct quota *quota;
     assert(quota->lock_count != 0);
 
     if (--quota->lock_count == 0 && quota->root) {
-	flock(fileno(quota->file), LOCK_UN);
+	lock_unlock(fileno(quota->file));
     }
     return 0;
 }
@@ -733,7 +690,7 @@ struct mailbox *mailbox;
 
     fflush(newheader);
     if (ferror(newheader) || fsync(fileno(newheader)) ||
-	flock(fileno(newheader), LOCK_EX) == -1 ||
+	lock_blocking(fileno(newheader)) == -1 ||
 	rename(newfnamebuf, fnamebuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", newfnamebuf);
 	fclose(newheader);
@@ -920,7 +877,7 @@ struct quota *quota;
 	syslog(LOG_ERR, "IOERROR: creating quota file %s: %m", new_quota_path);
 	return IMAP_IOERROR;
     }
-    r = flock(fileno(newfile), LOCK_EX);
+    r = lock_blocking(fileno(newfile));
     if (r) {
 	syslog(LOG_ERR, "IOERROR: locking quota file %s: %m",
 	       new_quota_path);

@@ -45,6 +45,9 @@ if (fd == -1) exit(1);
 if (mmap((caddr_t)0, 100, PROT_READ, MAP_SHARED, fd, 0L) == (caddr_t)-1)
  exit(1);exit(0);}],WITH_MAP=mmap,WITH_MAP=nommap)
 AC_SUBST(WITH_MAP)
+AC_WITH(lock,WITH_LOCK="$withval",
+	AC_FUNC_CHECK(flock,WITH_LOCK="flock",WITH_LOCK="fcntl"))
+AC_SUBST(WITH_LOCK)
 echo checking for Kerberos
 if test -f /etc/krb.conf; then have_kerberos=1; fi
 AC_WITH(login,WITH_LOGIN="$withval",
