@@ -45,7 +45,7 @@ unset i
 
 # Connect to server
 if {[llength $conn_args] == 0} {
-    if {$tcl_interactive != 0) {
+    if {$tcl_interactive != 0} {
         puts "usage: $argv0 \[-user user] \[-protection prot] server \[port]"
         exit 1
     } else {
