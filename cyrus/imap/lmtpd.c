@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.32 2000/05/29 04:07:22 leg Exp $
+ * $Id: lmtpd.c,v 1.33 2000/06/04 22:46:25 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.32 2000/05/29 04:07:22 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.33 2000/06/04 22:46:25 leg Exp $";*/
 
 #include <config.h>
 
@@ -242,6 +242,8 @@ static struct sasl_callback mysasl_cb[] = {
 
 int service_init(int argc, char **argv, char **envp)
 {
+    int r;
+
     config_changeident("lmtpd");
     if (geteuid() == 0) return 1;
     
@@ -278,8 +280,10 @@ int service_init(int argc, char **argv, char **envp)
     singleinstance = config_getswitch("singleinstancestore", 1);
     BB = config_getstring("postuser", BB);
 
-    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK) {
-	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL);
+    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
+	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
+	       sasl_errstring(r, NULL, NULL));
+	return EC_SOFTWARE;
     }
 
     /* create connection to the SNMP listener, if available. */
@@ -301,7 +305,7 @@ int service_main(int argc, char **argv, char **envp)
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
 
-    while ((opt = getopt(argc, argv, "uq")) != EOF) {
+    while ((opt = getopt(argc, argv, "q")) != EOF) {
 	switch(opt) {
 	case 'q':
 	    quotaoverride = 1;
@@ -428,7 +432,7 @@ int send_rejection(const char *origid,
 {
     FILE *sm;
     const char *smbuf[3];
-    char hostname[1024], buf[8192], *namebuf;
+    char buf[8192], *namebuf;
     int i;
     time_t t;
     struct tm *tm;
@@ -444,11 +448,10 @@ int send_rejection(const char *origid,
 	return -1;
     }
 
-    gethostname(hostname, 1024);
     t = time(NULL);
     p = getpid();
     snprintf(buf, sizeof(buf), "<cmu-sieve-%d-%d-%d@%s>", p, (int) t, 
-	     global_outgoing_count++, hostname);
+	     global_outgoing_count++, config_servername);
     
     namebuf = make_sieve_db(mailreceip);
     duplicate_mark(buf, strlen(buf), namebuf, strlen(namebuf), t);
@@ -473,13 +476,13 @@ int send_rejection(const char *origid,
     fprintf(sm, "MIME-Version: 1.0\r\n");
     fprintf(sm, "Content-Type: "
 	    "multipart/report; report-type=disposition-notification;"
-	    "\r\n\tboundary=\"%d/%s\"\r\n", (int) p, hostname);
+	    "\r\n\tboundary=\"%d/%s\"\r\n", (int) p, config_servername);
     fprintf(sm, "Subject: Automatically rejected mail\r\n");
     fprintf(sm, "Auto-Submitted: auto-replied (rejected)\r\n");
     fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
 
     /* this is the human readable status report */
-    fprintf(sm, "--%d/%s\r\n\r\n", (int) p, hostname);
+    fprintf(sm, "--%d/%s\r\n\r\n", (int) p, config_servername);
     fprintf(sm, "Your message was automatically rejected by Sieve, a mail\r\n"
 	    "filtering language.\r\n\r\n");
     fprintf(sm, "The following reason was given:\r\n%s\r\n\r\n", reason);
@@ -487,9 +490,9 @@ int send_rejection(const char *origid,
     /* this is the MDN status report */
     fprintf(sm, "--%d/%s\r\n"
 	    "Content-Type: message/disposition-notification\r\n\r\n",
-	    (int) p, hostname);
+	    (int) p, config_servername);
     fprintf(sm, "Reporting-UA: %s; Cyrus %s/%s\r\n",
-	    hostname, CYRUS_VERSION, sieve_version);
+	    config_servername, CYRUS_VERSION, sieve_version);
     if (origreceip)
 	fprintf(sm, "Original-Recipient: rfc822; %s\r\n", origreceip);
     fprintf(sm, "Final-Recipient: rfc822; %s\r\n", mailreceip);
@@ -500,13 +503,13 @@ int send_rejection(const char *origid,
 
     /* this is the original message */
     fprintf(sm, "--%d/%s\r\nContent-Type: message/rfc822\r\n\r\n",
-	    (int) p, hostname);
+	    (int) p, config_servername);
     prot_rewind(file);
     while ((i = prot_read(file, buf, sizeof(buf))) > 0) {
 	fwrite(buf, i, 1, sm);
     }
     fprintf(sm, "\r\n\r\n");
-    fprintf(sm, "--%d/%s\r\n", (int) p, hostname);
+    fprintf(sm, "--%d/%s\r\n", (int) p, config_servername);
 
     fclose(sm);
     waitpid(p, &i, 0);
@@ -746,7 +749,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     FILE *sm;
     const char *smbuf[6];
-    char hostname[1024], outmsgid[8192], *sievedb;
+    char outmsgid[8192], *sievedb;
     int i, sl;
     struct tm *tm;
     long tz;
@@ -768,11 +771,10 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	return -1;
     }
 
-    gethostname(hostname, 1024);
     t = time(NULL);
     p = getpid();
     snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-%d-%d@%s>", 
-	     (int) p, (int) t, global_outgoing_count++, hostname);
+	     (int) p, (int) t, global_outgoing_count++, config_servername);
     
     fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
@@ -804,9 +806,9 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     if (src->mime) {
 	fprintf(sm, "MIME-Version: 1.0\r\n");
 	fprintf(sm, "Content-Type: multipart/mixed;"
-		"\r\n\tboundary=\"%d/%s\"\r\n", (int) p, hostname);
+		"\r\n\tboundary=\"%d/%s\"\r\n", (int) p, config_servername);
 	fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
-	fprintf(sm, "--%d/%s\r\n", (int) p, hostname);
+	fprintf(sm, "--%d/%s\r\n", (int) p, config_servername);
     } else {
 	fprintf(sm, "\r\n");
     }
@@ -814,7 +816,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     fprintf(sm, "%s\r\n", src->msg);
 
     if (src->mime) {
-	fprintf(sm, "\r\n--%d/%s\r\n", (int) p, hostname);
+	fprintf(sm, "\r\n--%d/%s\r\n", (int) p, config_servername);
     }
     fclose(sm);
     waitpid(p, &i, 0);
@@ -1219,6 +1221,9 @@ char *msgid;
 char *name;
 {
     if (strlen(msgid) < 80) {
+	char *pretty;
+
+	beautify_copy(pretty, msgid);
 	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s",
 	       name, msgid);
     }
