@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.89 2002/03/13 21:39:17 ken3 Exp $
+ * $Id: lmtpd.c,v 1.90 2002/03/15 00:47:47 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1111,7 +1111,7 @@ int deliver_mailbox(struct protstream *msg,
 
     if (!r) {
 	prot_rewind(msg);
-	if (singleinstance && stage) {
+	if (stage) {
 	    r = append_fromstage(&as, msg, size, now, 
 				 (const char **) flag, nflags, stage);
 	} else {
@@ -1419,10 +1419,10 @@ char *generate_notify(message_data_t *m)
 
 FILE *spoolfile(message_data_t *msgdata)
 {
-    /* if we have multiple recipients and are using single-instance store,
+    /* if we have a single recipient OR are using single-instance store,
      * spool to the stage of the first recipient
      */
-    if ((msg_getnumrcpt(msgdata) > 1) && singleinstance) {
+    if ((msg_getnumrcpt(msgdata) == 1) || singleinstance) {
 	int r = 0;
 	char *rcpt, *plus, *user = NULL;
 	char namebuf[MAX_MAILBOX_PATH], mailboxname[MAX_MAILBOX_PATH];
