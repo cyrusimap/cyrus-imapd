@@ -1223,6 +1223,9 @@ int octet_count;
 	while (isdigit(*p)) skip = skip * 10 + *p++ - '0';
 	if (*p == '.') p++;
 
+	/* section number too large */
+	if (skip >= CACHE_ITEM_BIT32(cacheitem)) goto badpart;
+
 	/* Handle .0, .HEADER, and .TEXT */
 	if (!skip) {
 	    switch (*p) {
@@ -1241,9 +1244,6 @@ int octet_count;
 	    }
 	}
 	
-	/* section number too large */
-	if (skip >= CACHE_ITEM_BIT32(cacheitem)) goto badpart;
-
 	if (*p != ']' && *p != 'M') {
 	    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4 + 4;
 	    while (--skip) {
@@ -1321,19 +1321,20 @@ char *cacheitem;
 	/* section number too large */
 	if (skip >= CACHE_ITEM_BIT32(cacheitem)) goto badpart;
 
-	if (*p != 'H') {
-	    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4 + 4;
-	    while (--skip) {
-		if (CACHE_ITEM_BIT32(cacheitem) > 0) {
-		    skip += CACHE_ITEM_BIT32(cacheitem)-1;
-		    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4;
-		}
-		cacheitem += 4;
+	cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4 + 4;
+	while (--skip) {
+	    if (CACHE_ITEM_BIT32(cacheitem) > 0) {
+		skip += CACHE_ITEM_BIT32(cacheitem)-1;
+		cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4;
 	    }
+	    cacheitem += 4;
 	}
     }
 
-    cacheitem += skip * 5 * 4 + 4;
+    /* leaf object */
+    if (0 == CACHE_ITEM_BIT32(cacheitem)) goto badpart;
+
+    cacheitem += 4;
 
     if (CACHE_ITEM_BIT32(cacheitem+4) == -1) goto badpart;
 	
