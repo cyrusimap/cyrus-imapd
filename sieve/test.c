@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.19.4.2 2003/03/05 17:52:25 rjs3 Exp $
+ * $Id: test.c,v 1.19.4.3 2003/03/27 19:30:43 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -315,7 +315,7 @@ int getsize(void *mc, int *size)
 
 int getenvelope(void *v, const char *head, const char ***body)
 {
-    static char *buf[2];
+    static const char *buf[2];
 
     if (buf[0] == NULL) { buf[0] = malloc(sizeof(char) * 256); buf[1] = NULL; }
     printf("Envelope body of '%s'? ", head);
@@ -402,7 +402,7 @@ int notify(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 
     printf("notify ");
     if (nc->method) {
-	char **opts = nc->options;
+	const char **opts = nc->options;
 
 	printf("%s(", nc->method);
 	while (opts && *opts) {
@@ -813,8 +813,6 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
-    close(script_fd);
-
     if (message) {
 	fd = open(message, O_RDONLY);
 	res = fstat(fd, &sbuf);
@@ -839,6 +837,7 @@ int main(int argc, char *argv[])
     }
     /*used to be sieve_script_free*/
     res = sieve_script_unload(&bc);
+    close(script_fd);
     if (res != SIEVE_OK) {
 	printf("sieve_script_unload() returns %d\n", res);
 	exit(1);
