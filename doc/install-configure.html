@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.18 2001/12/06 18:01:50 leg Exp $ -->
+<!-- $Id: install-configure.html,v 1.19 2002/02/22 23:30:01 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -158,13 +158,12 @@ Sieve directory:
 If Perl is not available, it should be easy (but time consuming) to
 create these directories by hand. <P>
 
-<li><b>LINUX SYSTEMS ONLY</b>: Set the user, quota, and partition
+<li><b>LINUX SYSTEMS USING EXT2FS ONLY</b>: Set the user, quota, and partition
 directories to update synchronously.  Failure to do this may lead to
 data corruption and/or loss of mail after a system
 crash. Unfortunately, doing so may result in a serious performance
-hit. Note this is for ext2fs. If you are using a newer filesystem,
-either the performance hit may not be as bad or you may not need to do
-this.
+hit.  If you are using a newer filesystem than ext2fs on Linux, this
+step should not be necessary.
 
 <pre>
 <kbd>   cd /var/imap
@@ -445,5 +444,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2001/12/06 18:01:50 $
+last modified: $Date: 2002/02/22 23:30:01 $
 </BODY></HTML>
