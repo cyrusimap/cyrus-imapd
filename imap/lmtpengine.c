@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.9 2000/06/16 02:37:15 leg Exp $
+ * $Id: lmtpengine.c,v 1.10 2000/06/28 00:42:31 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -417,9 +417,6 @@ static char *parseaddr(char *s)
 	if (!*p++) return 0;
     }
     else {
-	/* disallow plus addressing without giving a name */
-	if (*p == '+') return 0;
-	
 	while (*p && *p != '@' && *p != '>') {
 	    if (*p == '\\') {
 		if (!*++p) return 0;
