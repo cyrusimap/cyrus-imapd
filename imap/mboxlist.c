@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.96 1999/10/13 02:09:34 leg Exp $
+ * $Id: mboxlist.c,v 1.97 1999/10/13 21:02:08 tmartin Exp $
  */
 
 #include <stdio.h>
@@ -44,6 +44,8 @@
 #include <time.h>
 #include <syslog.h>
 #include <com_err.h>
+
+#include <db.h>
 
 extern int errno;
 
@@ -64,12 +66,9 @@ extern int errno;
 
 acl_canonproc_t mboxlist_ensureOwnerRights;
 
-static char *listfname, *newlistfname;
-static int listfd = -1;
-static long list_ino;
-static const char *list_base;
-static unsigned long list_size = 0;
-static int list_locked = 0;
+static char *listfname;
+static DB *mbdb;
+static DB_ENV dbenv;
 static int list_doingfind = 0;
 
 static int mboxlist_opensubs();
@@ -86,7 +85,8 @@ static int mboxlist_safe_rename();
 static char *mboxlist_hash_usersubs(const char *userid);
 
 
-#define FNAME_MBOXLIST "/mailboxes"
+#define FNAME_MBOXLIST "/mailboxesdb"
+#define FNAME_DBDIR "/db"
 #define FNAME_USERDIR "/user/"
 #define FNAME_SUBSSUFFIX ".sub"
 
@@ -96,12 +96,31 @@ static char *mboxlist_hash_usersubs(const char *userid);
  */
 #define MAX_PARTITION_LEN 10
 
+struct mbox_entry {
+    char name[MAX_MAILBOX_NAME];
+    char partition[MAX_PARTITION_LEN];
+    char acls[1];
+};
+
+static void tmp_log_string(char *str)
+{
+  FILE *stream;
+
+  char name[100];
+  sprintf(name,"/tmp/foo%i",getpid());
+
+  stream=fopen(name,"a+");
+
+  fwrite(str, 1, strlen(str), stream);
+
+  fclose(stream);
+}
+
 /*
  * Check our configuration for consistency, die if there's a problem
  */
 void mboxlist_checkconfig()
 {
-    mboxlist_reopen();
 }
 
 /*
@@ -121,46 +140,62 @@ int mboxlist_lookup(const char* name, char** pathp, char** aclp)
     static char pathresult[MAX_MAILBOX_PATH];
     static char *aclresult;
     static int aclresultalloced;
+    int r;
+    DBT key, data;
+    struct mbox_entry *mboxent;
 
-    mboxlist_reopen();
+    memset(&data, 0, sizeof(key));
 
-    /* Find mailbox */
-    offset = bsearch_mem(name, 1, list_base, list_size, 0, &len);
-    if (!len) {
-	return IMAP_MAILBOX_NONEXISTENT;
-    }
+    memset(&key, 0, sizeof(key));
+    key.data = (char *) name;
+    key.size = strlen(name);
+
+    tmp_log_string("Looking up: ");
+    tmp_log_string(name);
+
+    /* we don't bother with a transaction for this one */
+    r = mbdb->get(mbdb, NULL, &key, &data, 0);
 	
-    /* Parse partition name, construct pathname if requested */
-    mboxlist_parseline(offset, len, (char **)0, (unsigned long *)0,
-		       &partition, &partitionlen, &acl, &acllen);
+    switch (r) {
+    case 0:
+      tmp_log_string("Mailbox does exist!");
+	break;
+    case DB_NOTFOUND:
+      tmp_log_string("Mailbox does NOT exist!");
+	return IMAP_MAILBOX_NONEXISTENT;
+	break;
+    default:
+	syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
+	       name, strerror(r));
+	return IMAP_IOERROR;
+	break;
+    }
+    mboxent = (struct mbox_entry *) data.data;
 
+    /* construct pathname if requested */
     if (pathp) {
 	if (partitionlen > sizeof(optionbuf)-11) {
 	    return IMAP_PARTITION_UNKNOWN;
 	}
 	strcpy(optionbuf, "partition-");
-	memcpy(optionbuf + 10, partition, partitionlen);
-	optionbuf[10+partitionlen] = '\0';
+	strcat(optionbuf, mboxent->partition);
 	
 	root = config_getstring(optionbuf, (char *)0);
 	if (!root) {
 	    return IMAP_PARTITION_UNKNOWN;
 	}
-	
 	mailbox_hash_mbox(pathresult, root, name);
-
 	*pathp = pathresult;
     }
 
-    /* Parse ACL if requested */
+    /* return ACL if requested */
     if (aclp) {
-	if (acllen+1 > aclresultalloced) {
-	    aclresultalloced = acllen+100;
+	if ((strlen(mboxent->acls) + 1) > aclresultalloced) {
+	    aclresultalloced = strlen(mboxent->acls) + 100;
 	    aclresult = xrealloc(aclresult, aclresultalloced);
 	}
 
-	memcpy(aclresult, acl, acllen);
-	aclresult[acllen] = '\0';
+	strcpy(aclresult, mboxent->acls);
 
 	*aclp = aclresult;
     }
@@ -171,16 +206,12 @@ int mboxlist_lookup(const char* name, char** pathp, char** aclp)
 /*
  * Check/set up for mailbox creation
  */
-int mboxlist_createmailboxcheck(name, format, partition, isadmin, userid,
-				auth_state, newacl, newpartition)
-char *name;
-int format;
-char *partition;
-int isadmin;
-char *userid;
-struct auth_state *auth_state;
-char **newacl;
-char **newpartition;
+int
+mboxlist_createmailboxcheck(char *name, int format, char *partition, 
+			    int isadmin, char *userid, 
+			    struct auth_state *auth_state, 
+			    char **newacl, char **newpartition,
+			    DB_TXN *tid)
 {
     int r;
     char *p;
@@ -191,6 +222,7 @@ char **newpartition;
     unsigned long parentlen;
     char *parentname, *parentpartition, *parentacl;
     unsigned long parentpartitionlen, parentacllen;
+    DBT key, data;
 
     /* Check for invalid name/partition */
     if (partition && strlen(partition) > MAX_PARTITION_LEN) {
@@ -226,14 +258,42 @@ char **newpartition;
     /* Search for a parent */
     strcpy(parent, name);
     parentlen = 0;
-    while (!parentlen && (p = strrchr(parent, '.'))) {
+    while ((parentlen==0) && (p = strrchr(parent, '.'))) {
 	*p = '\0';
-	offset = bsearch_mem(parent, 1, list_base, list_size, 0, &parentlen);
+	/* no need to search. we're using a DB! */
+	memset(&key, 0, sizeof(key));
+	key.data=parent;
+	key.size=strlen(parent);
+	memset(&data, 0, sizeof(data));
+
+	r = mbdb->get(mbdb, tid, &key, &data, 0);
+
+	switch(r)
+	{
+	case DB_NOTFOUND:	  
+	  break;
+	case 0:
+	  parentlen=strlen(parent);
+	  break;
+	case EAGAIN:
+	  /* xxx	  goto retry;*/
+	  break;
+	default:
+	  tmp_log_string("error updatng db\n");
+	  tmp_log_string(strerror(r));
+	  syslog(LOG_ERR, "DBERROR: error updating database: %s",
+		 name, strerror(r));
+	  r = IMAP_IOERROR;	  
+	}
+
     }
-    if (parentlen) {
+    if (parentlen!=0) {
+
+      /*
 	mboxlist_parseline(offset, parentlen, &parentname, (unsigned long *)0,
 			   &parentpartition, &parentpartitionlen,
 			   &parentacl, &parentacllen);
+      */
 
 	/* Copy partition, if not specified */
 	if (!partition) {
@@ -258,8 +318,9 @@ char **newpartition;
 
 	/* Canonicalize case of parent prefix */
 	strncpy(name, parent, strlen(parent));
-    }
-    else {
+
+    } 
+    else { /* parentlen == 0 */
 	if (!isadmin) {
 	    return IMAP_PERMISSION_DENIED;
 	}
@@ -330,14 +391,9 @@ char **newpartition;
 /*
  * Create a mailbox
  */
-int mboxlist_createmailbox(name, format, partition, isadmin, 
-			   userid, auth_state)
-char *name;
-int format;
-char *partition;
-int isadmin;
-char *userid;
-struct auth_state *auth_state;
+mboxlist_createmailbox(char *name, int format, char *partition, 
+		       int isadmin, char *userid, 
+		       struct auth_state *auth_state)
 {
     int r;
     unsigned long offset, len;
@@ -348,104 +404,137 @@ struct auth_state *auth_state;
     struct iovec iov[10];
     int n;
     struct mailbox newmailbox;
+    DB_TXN *tid;
+    DB_TXNMGR *txnp;
+    DBT key, keydel, data;
+    struct mbox_entry *mboxent;
 
-    /* Open and lock mailbox list file */
-    r = mboxlist_openlock();
-    if (r) return r;
+    txnp = dbenv.tx_info;
+
+    if (0) {
+      retry:
+	if ((r = txn_abort(tid)) != 0) {
+	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
+		   strerror(r));
+	    return IMAP_IOERROR;
+	}
+    }
+
+    /* begin transaction */
+    if ((r = txn_begin(txnp, NULL, &tid)) != 0) {
+	syslog(LOG_ERR, "DBERROR: error beginning txn: %s", strerror(r));
+	return IMAP_IOERROR;
+    }
+
+    tmp_log_string("started transaction\n");
 
     /* Check ability to create mailbox */
     r = mboxlist_createmailboxcheck(name, format, partition, isadmin, userid,
-				    auth_state, &acl, &partition);
-    if (r) {
-	mboxlist_unlock();
+				    auth_state, &acl, &partition, tid);
+
+    tmp_log_string("create mailboxes returned\n");
+
+    if (r!=0)
+    {
+      tmp_log_string("create mailboxes returned with error\n");
+	txn_abort(tid);
 	return r;
     }
-
-    /* Search for where the new entry goes */
-    offset = bsearch_mem(name, 1, list_base, list_size, 0, &len);
-    assert(len == 0);
 
     /* Get partition's path */
     sprintf(buf2, "partition-%s", partition);
     root = config_getstring(buf2, (char *)0);
     if (!root) {
-	mboxlist_unlock();
+      tmp_log_string("partition unknown\n");
+	txn_abort(tid);
 	free(partition);
 	free(acl);
 	return IMAP_PARTITION_UNKNOWN;
     }
     if (strlen(root)+strlen(name)+20 > MAX_MAILBOX_PATH) {
-	mboxlist_unlock();
+      tmp_log_string("bad name\n");
+	txn_abort(tid);
 	free(partition);
 	free(acl);
 	return IMAP_MAILBOX_BADNAME;
     }
     
-    /* Create new mailbox list */
-    newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (newlistfd == -1) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
-	mboxlist_unlock();
-	free(partition);
-	free(acl);
-	return IMAP_IOERROR;
-    }
-
-    /* Copy mailbox list, adding new entry */
-    iov[0].iov_base = (char *)list_base;
-    iov[0].iov_len = offset;
-    iov[1].iov_base = name;
-    iov[1].iov_len = strlen(name);
-    iov[2].iov_base = "\t";
-    iov[2].iov_len = 1;
-    iov[3].iov_base = partition;
-    iov[3].iov_len = strlen(partition);
-    iov[4].iov_base = "\t";
-    iov[4].iov_len = 1;
-    iov[5].iov_base = acl;
-    iov[5].iov_len = strlen(acl);
-    iov[6].iov_base = "\n";
-    iov[6].iov_len = 1;
-    iov[7].iov_base = (char *)list_base + offset;
-    iov[7].iov_len = list_size - offset;
-
-    n = retry_writev(newlistfd, iov, 8);
+    /* add the new entry */
+    mboxent = (struct mbox_entry *) malloc(sizeof(struct mbox_entry) +
+					   strlen(acl));
     
+    tmp_log_string("mbox entry");
+    tmp_log_string(name);
+    tmp_log_string(partition);
+    tmp_log_string(acl);
+    
+    strcpy(mboxent->name, name);
+    strcpy(mboxent->partition, partition);
+    strcpy(mboxent->acls, acl);
     free(partition);
 
-    if (n == -1 || fsync(newlistfd)) {
-	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
-	mboxlist_unlock();
-	close(newlistfd);
-	free(acl);
-	return IMAP_IOERROR;
+    memset(&key, 0, sizeof(key));
+    key.data = name;
+    key.size = strlen(name);
+
+    memset(&data, 0, sizeof(data));
+    data.data = mboxent;
+    data.size = sizeof(struct mbox_entry) + strlen(acl);
+
+    tmp_log_string("trying to put into db\n");
+    tmp_log_string(name);
+    
+    r = mbdb->put(mbdb, NULL, &key, &data, 0);
+
+    switch (r) {
+    case 0:
+	break;
+    case EAGAIN:
+	goto retry;
+	break;
+    default:
+      tmp_log_string("error updatng db\n");
+      tmp_log_string(strerror(r));
+	syslog(LOG_ERR, "DBERROR: error updating database: %s",
+	       name, strerror(r));
+	r = IMAP_IOERROR;
+    }
+    /*
+    memset(&data, 0, sizeof(data));
+    r = mbdb->get(mbdb, NULL, &key, &data, 0);
+    tmp_log_string("[");
+    tmp_log_string(data.data);
+    tmp_log_string("\n");
+    */
+    if (!r) {
+	/* Create new mailbox and move new mailbox list file into place */
+	mailbox_hash_mbox(buf2, root, name);
+	r = mailbox_create(name, buf2, acl, format, &newmailbox);
     }
 
-    /* Create new mailbox and move new mailbox list file into place */
-    mailbox_hash_mbox(buf2, root, name);
-    r = mailbox_create(name, buf2, acl, format, &newmailbox);
     free(acl);
 
     if (r) {
-	close(newlistfd);
+	txn_abort(tid);
 	return r;
     }
-    if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
-	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
-	close(newlistfd);
-	mboxlist_unlock();
-	mailbox_close(&newmailbox);
-	return IMAP_IOERROR;
-    }
 
-    close(newlistfd);
-    mboxlist_unlock();
+    /* commit */
+    switch (txn_commit(tid)) {
+    case 0:
+	break;
+    default:
+	syslog(LOG_ERR, "DBERROR: failed on commit: %s", strerror(r));
+	r = IMAP_IOERROR;
+    }
+    
+    tmp_log_string("\nTransaction complete!\n");
 
     toimsp(name, newmailbox.uidvalidity,
 	   "ACLsn", newmailbox.acl, newmailbox.uidvalidity, 0);
     mailbox_close(&newmailbox);
 
-    return 0;
+    return r;
 }
 	
 /*
@@ -531,16 +620,18 @@ int checkacl;
 	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
     }
 
-    offset = bsearch_mem(name, 1, list_base, list_size, 0, &len);
+    /* no need to search. we're using a DB! */
+    /*    offset = bsearch_mem(name, 1, list_base, list_size, 0, &len);*/
     assert(len > 0);
 
     /* Create new mailbox list */
-    newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+
+    /*    newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (newlistfd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
 	mboxlist_unlock();
 	return IMAP_IOERROR;
-    }
+	}*/
 
     if (deleteuser) {
 	int namelen = strlen(name)+1;
@@ -550,7 +641,7 @@ int checkacl;
 	strcat(submailboxname, ".");
 
 	/* Delete sub-mailboxes */
-	while (offset + len + namelen < list_size &&
+	/*	while (offset + len + namelen < list_size &&
 	       !strncmp(list_base + offset + len, submailboxname, namelen)) {
 	    endname = memchr(list_base + offset + len, '\t',
 			     list_size-offset-len);
@@ -567,15 +658,15 @@ int checkacl;
 		    endname - (list_base + offset + len));
 	    submailboxname[endname - (list_base + offset + len)] = '\0';
 	    len = endline - (list_base + offset) + 1;
-	    
+	*/  
 	    /* Remove the sub-mailbox  */
-	    r = mailbox_open_header(submailboxname, 0, &mailbox);
+	/*  r = mailbox_open_header(submailboxname, 0, &mailbox);
 	    if (!r) r = mailbox_delete(&mailbox, 0);
-	}
+	    }*/
     }
 
     /* Copy mailbox list, removing entry/entries */
-    iov[0].iov_base = (char *)list_base;
+    /*    iov[0].iov_base = (char *)list_base;
     iov[0].iov_len = offset;
     iov[1].iov_base = (char *)list_base + offset + len;
     iov[1].iov_len = list_size - offset - len;
@@ -590,7 +681,7 @@ int checkacl;
     }
     
     r = mailbox_open_header(name, 0, &mailbox);
-
+    */
     /*
      * See if we have to remove mailbox's quota root
      *
@@ -598,17 +689,17 @@ int checkacl;
      * orphaned quota roots on renaming or when inside the
      * ``if (deleteuser)'' code above.
      */
-    if (mailbox.quota.root &&
+    /*    if (mailbox.quota.root &&
 	bsearch_mem(mailbox.quota.root, 1, list_base, list_size, 0, 0) == offset &&
 	(list_size <= offset + len + strlen(mailbox.quota.root) ||
 	 strncmp(list_base+offset+len, mailbox.quota.root, strlen(mailbox.quota.root)) != 0 ||
 	 (list_base[offset+len+strlen(mailbox.quota.root)] != '.' &&
 	  list_base[offset+len+strlen(mailbox.quota.root)] != '\t'))) {
 	delete_quota_root = 1;
-    }
+	}*/
 
     /* Remove the mailbox and move new mailbox list file into place */
-    uidvalidity = mailbox.uidvalidity;
+    /*    uidvalidity = mailbox.uidvalidity;
     if (!r) r = mailbox_delete(&mailbox, delete_quota_root);
     if (r) {
 	close(newlistfd);
@@ -619,16 +710,16 @@ int checkacl;
     if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
 	close(newlistfd);
-	mboxlist_unlock();
+	mboxlist_unlock();*/
 	/* XXX We're left in an inconsistent state here */
-	return IMAP_IOERROR;
+    /*	return IMAP_IOERROR;
     }
 
     close(newlistfd);
     mboxlist_unlock();
 
     toimsp(name, uidvalidity, "RENsn", "", 0, 0);
-
+    */
     return 0;
 }
 
@@ -726,7 +817,7 @@ struct auth_state *auth_state;
 	    return IMAP_MAILBOX_NOTSUPPORTED;
 	}
 	r = mboxlist_createmailboxcheck(newname, 0, partition, isadmin, userid,
-					auth_state, (char **)0, &partition);
+					auth_state, (char **)0, &partition, NULL); /* xxx */
 	if (r) {
 	    mboxlist_unlock();
 	    free(acl);
@@ -739,12 +830,12 @@ struct auth_state *auth_state;
 	oldoffset = oldlen = 0;
     }
     else {
-	oldoffset = bsearch_mem(oldname, 1, list_base, list_size, 0, &oldlen);
+      /* xxx	oldoffset = bsearch_mem(oldname, 1, list_base, list_size, 0, &oldlen);*/
 	assert(oldlen > 0);
     }
 
     /* Search for where the new entry goes */
-    newoffset = bsearch_mem(newname, 1, list_base, list_size, 0, &newlen);
+    /* xxx    newoffset = bsearch_mem(newname, 1, list_base, list_size, 0, &newlen);*/
 
     /* Get partition's path */
     sprintf(buf2, "partition-%s", partition);
@@ -763,17 +854,17 @@ struct auth_state *auth_state;
     }
     
     /* Create new mailbox list */
-    newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    /*    newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (newlistfd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
 	mboxlist_unlock();
 	free(acl);
 	free(partition);
 	return IMAP_IOERROR;
-    }
+	}*/
 
     /* Copy mailbox list, changing entry */
-    num_iov  = 0;
+    /*    num_iov  = 0;
     iov[num_iov].iov_base = (char *)list_base;
     if (oldoffset < newoffset) {
 	iov[num_iov++].iov_len = oldoffset;
@@ -812,10 +903,10 @@ struct auth_state *auth_state;
 	mboxlist_unlock();
 	close(newlistfd);
 	return IMAP_IOERROR;
-    }
+	}*/
 
     /* Rename the mailbox and move new mailbox list file into place */
-    mailbox_hash_mbox(buf2, root, newname);
+    /*    mailbox_hash_mbox(buf2, root, newname);
 
     r = mailbox_rename(oldname, newname, buf2, isusermbox,
 		       &olduidvalidity, &newuidvalidity);
@@ -828,16 +919,16 @@ struct auth_state *auth_state;
     if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
 	close(newlistfd);
-	mboxlist_unlock();
+	mboxlist_unlock();*/
 	/* XXX We're left in an inconsistent state here */
-	return IMAP_IOERROR;
+    /*	return IMAP_IOERROR;
     }
 
     close(newlistfd);
     mboxlist_unlock();
 
     toimsp(oldname, olduidvalidity, "RENsn", newname, newuidvalidity, 0);
-
+    */
     return 0;
 }
 
@@ -869,10 +960,10 @@ struct auth_state *auth_state;
     struct iovec iov[10];
     int n;
     bit32 uidvalidity, timestamp;
-
-    /* Open and lock mailbox list file */
-    r = mboxlist_openlock();
-    if (r) return r;
+    DB_TXN *tid;
+    DB_TXNMGR *txnp = dbenv.tx_info;
+    DBT key, data;
+    struct mbox_entry *mboxent, *newent;
 
     if (!strncmp(name, "user.", 5) &&
 	!strchr(userid, '.') &&
@@ -881,10 +972,42 @@ struct auth_state *auth_state;
 	isusermbox = 1;
     }
 
+    if (0) {
+      retry:
+	if ((r = txn_abort(tid)) != 0) {
+	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
+		   strerror(r));
+	    return IMAP_IOERROR;
+	}
+    }
+
+    /* begin transaction */
+    if ((r = txn_begin(txnp, NULL, &tid)) != 0) {
+	syslog(LOG_ERR, "DBERROR: error beginning txn: %s", strerror(r));
+	return IMAP_IOERROR;
+    }
+
     /* Get old ACL */
-    r = mboxlist_lookup(name, (char **)0, &acl);
+    key.data = name;
+    key.size = strlen(name);
+    r = mbdb->get(mbdb, tid, &key, &data, DB_RMW);
+    switch (r) {
+    case 0:
+	mboxent = (struct mbox_entry *) data.data;
+	break;
+    case DB_NOTFOUND:
+	r = IMAP_MAILBOX_NONEXISTENT;
+	break;
+    case EAGAIN:
+	goto retry;
+    default:
+	syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
+	       name, strerror(r));
+	r = IMAP_IOERROR;
+    }
+
     if (!r && !isadmin && !isusermbox) {
-	access = acl_myrights(auth_state, acl);
+	access = acl_myrights(auth_state, mboxent->acls);
 	if (!(access & ACL_ADMIN)) {
 	    r = (access & ACL_LOOKUP) ?
 	      IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
@@ -896,29 +1019,15 @@ struct auth_state *auth_state;
 	r = mailbox_open_header(name, auth_state, &mailbox);
     }
     if (r) {
-	mboxlist_unlock();
+	txn_abort(tid);
 	return r;
     }
     if (!r) {
 	r = mailbox_lock_header(&mailbox);
     }
 
-    if (!r) {
-	newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
-	if (newlistfd == -1) {
-	    syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
-	    r = IMAP_IOERROR;
-	}
-    }
-
-    if (r) {
-	mailbox_close(&mailbox);
-	mboxlist_unlock();
-	return r;
-    }
-
     /* Make change to ACL */
-    newacl = xstrdup(acl);
+    newacl = xstrdup(mboxent->acls);
     if (rights) {
 	if (*rights == '+') {
 	    rights++;
@@ -933,8 +1042,8 @@ struct auth_state *auth_state;
 		    isusermbox ? mboxlist_ensureOwnerRights : 0,
 		    (void *)userid)) {
 	    mailbox_close(&mailbox);
-	    mboxlist_unlock();
 	    free(newacl);
+	    txn_abort(tid);
 	    return IMAP_INVALID_IDENTIFIER;
 	}
     }
@@ -945,63 +1054,55 @@ struct auth_state *auth_state;
 	    mailbox_close(&mailbox);
 	    mboxlist_unlock();
 	    free(newacl);
+	    txn_abort(tid);
 	    return IMAP_INVALID_IDENTIFIER;
 	}
     }
 
-    /* Copy over mailbox list, making change */
-    offset = bsearch_mem(name, 1, list_base, list_size, 0, &len);
-    if (!len) {
+    /* ok, make the change */
+    newent = (struct mbox_entry *) xmalloc(sizeof(struct mbox_entry) +
+					   strlen(newacl));
+    strcpy(newent->name, mboxent->name);
+    strcpy(newent->partition, mboxent->partition);
+    strcpy(newent->acls, newacl);
+    r = mbdb->put(mbdb, tid, &key, newent, 0);
+    switch (r) {
+    case 0:
+	break;
+    case EAGAIN:
 	mailbox_close(&mailbox);
-	mboxlist_unlock();
-	close(newlistfd);
-	return IMAP_MAILBOX_NONEXISTENT;
+	goto retry;
+	break;
+    default:
+	syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
+	       newent->name, strerror(r));
+	r = IMAP_IOERROR;
+    }	
+
+    if (!r) {
+	/* Change the redundant copy in mailbox header */
+	free(mailbox.acl);
+	mailbox.acl = xstrdup(newacl);
+	(void) mailbox_write_header(&mailbox);
+	timestamp = time(0);
+	uidvalidity = mailbox.uidvalidity;
+	toimsp(name, uidvalidity, "ACLsn", newacl, timestamp, 0);
     }
-
-    mboxlist_parseline(offset, len, (char **)0, (unsigned long *)0,
-		      (char **)0, (unsigned long *)0, &oldacl, &oldacllen);
-
-    iov[0].iov_base = (char *)list_base;
-    iov[0].iov_len = oldacl - list_base;
-    iov[1].iov_base = newacl;
-    iov[1].iov_len = strlen(newacl);
-    iov[2].iov_base = (char *)list_base + offset + len - 1;
-    iov[2].iov_len = list_size - (offset + len - 1);
-    
-    n = retry_writev(newlistfd, iov, 3);
-
-    if (n == -1 || fsync(newlistfd)) {
-	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
-	mboxlist_unlock();
-	close(newlistfd);
-	free(newacl);
-	return IMAP_IOERROR;
-    }
-
-    if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
-	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
-	mboxlist_unlock();
-	mailbox_close(&mailbox);
-	close(newlistfd);
-	free(newacl);
-	return IMAP_IOERROR;
-    }
-
-    /* Change the redundant copy in mailbox header */
-    free(mailbox.acl);
-    mailbox.acl = xstrdup(newacl);
-    (void) mailbox_write_header(&mailbox);
-    timestamp = time(0);
-    uidvalidity = mailbox.uidvalidity;
+	
     mailbox_close(&mailbox);
-
-    mboxlist_unlock();
-
-    toimsp(name, uidvalidity, "ACLsn", newacl, timestamp, 0);
-
-    close(newlistfd);
     free(newacl);
-    return 0;
+
+  done:
+    switch (txn_commit(&tid)) {
+    case 0: 
+	break;
+    default:
+	syslog(LOG_ERR, "DBERROR: failed on commit: %s",
+	       strerror(r));
+	r = IMAP_IOERROR;
+    }
+
+    return r;
 }
 
 /*
@@ -1033,8 +1134,16 @@ void* rock;
     int rights;
     int r;
     char *inboxcase;
+    DBC *cursor;
+    DB_TXN *tid;
+    DB_TXNMGR *txnp;
+    DBT key, data;
+    struct mbox_entry *mboxent;
 
-    mboxlist_reopen();
+    mboxlist_open();
+
+    txnp = dbenv.tx_info;
+
     list_doingfind++;
 
     g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
@@ -1051,30 +1160,75 @@ void* rock;
 	userid = 0;
     }
 
+    if (0) {
+      retry:
+	if ((r = txn_abort(tid)) != 0) {
+	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
+		   strerror(r));
+	    return IMAP_IOERROR;
+	}
+    }
+
+    /* begin the transaction */
+    if ((r = txn_begin(txnp, NULL, &tid)) != 0) {
+	syslog(LOG_ERR, "DBERROR: error beginning txn: %s", strerror(r));
+	return IMAP_IOERROR;
+    }
+
     /* Check for INBOX first of all */
     if (userid) {
 	if (GLOB_TEST(g, "INBOX") != -1) {
-	    (void) bsearch_mem(usermboxname, 1, list_base, list_size, 0, &len);
-	    if (len) {
+	    DBT key, data;
+
+	    key.data = usermboxname;
+	    key.size = usermboxnamelen;
+	    r = mbdb->get(mbdb, tid, &key, &data, 0);
+	    switch (r) {
+	    case 0:
 		r = proc(inboxcase, 5, 1, rock);
 		if (r) {
 		    glob_free(&g);
 		    list_doingfind--;
-		    return r;
+		    goto done;
 		}
+		break;
+	    case DB_NOTFOUND:
+		break;
+	    case EAGAIN:
+		goto retry;
+	    default: /* DB error */
+		syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
+		       usermboxname, strerror(r));
+		r = IMAP_IOERROR;
+		goto done;
 	    }
 	}
+
 	/* "user.X" matches patterns "user.X", "user.X*", "user.X%", etc */
 	else if (!strncmp(pattern, usermboxname, usermboxnamelen) &&
 		 GLOB_TEST(g, usermboxname) != -1) {
-	    (void) bsearch_mem(usermboxname, 1, list_base, list_size, 0, &len);
-	    if (len) {
-		r = proc(usermboxname, strlen(usermboxname), 1, rock);
+	    key.data = usermboxname;
+	    key.size = usermboxnamelen;
+	    r = mbdb->get(mbdb, tid, &key, &data, 0);
+	    switch (r) {
+	    case 0:
+		r = proc(usermboxname, usermboxnamelen, 1, rock);
 		if (r) {
 		    glob_free(&g);
 		    list_doingfind--;
-		    return r;
+		    goto done;
 		}
+		break;
+	    case DB_NOTFOUND:
+		break;
+	    case EAGAIN:
+		goto retry;
+		break;
+	    default: /* DB error */
+		syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
+		       usermboxname, strerror(r));
+		r = IMAP_IOERROR;
+		goto done;
 	    }
 	}
 
@@ -1096,7 +1250,6 @@ void* rock;
     if (userid &&
 	(!strncmp(usermboxname, pattern, usermboxnamelen-1) ||
 	 !strncasecmp("inbox.", pattern, prefixlen < 6 ? prefixlen : 6))) {
-
 	if (!strncmp(usermboxname, pattern, usermboxnamelen-1)) {
 	    inboxoffset = 0;
 	}
@@ -1104,119 +1257,129 @@ void* rock;
 	    inboxoffset = strlen(userid);
 	}
 
-	offset = bsearch_mem(usermboxname, 1, list_base, list_size, 0,
-			     (unsigned long *)0);
+	mbdb->cursor(mbdb, tid, &cursor, 0);
 
-	while (offset < list_size) {
-	    p = memchr(list_base + offset, '\n', list_size-offset);
-	    if (!p) {
-		mboxlist_badline(list_base + offset, "no newline terminator");
-	    }
-
-	    len = p - (list_base + offset) + 1;
-	    mboxlist_parseline(offset, len, &name, &namelen,
-			       (char **)0, (unsigned long *)0,
-			       (char **)0, (unsigned long *)0);
+	key.data = usermboxname;
+	key.size = usermboxnamelen;
+	r = cursor->c_get(cursor, &key, &data, DB_SET_RANGE);
+	while (r != DB_NOTFOUND) {
+	    switch (r) {
+	    case 0:
+		break;
 		
-	    if (strncmp(list_base + offset,
-			    usermboxname, usermboxnamelen) != 0) break;
-	    minmatch = 0;
-	    while (minmatch >= 0) {
-		memcpy(namebuf, name, namelen);
-		namebuf[namelen] = '\0';
-
-		if (inboxoffset) {
-		    namebuf[inboxoffset] = inboxcase[0];
-		    namebuf[inboxoffset+1] = inboxcase[1];
-		    namebuf[inboxoffset+2] = inboxcase[2];
-		    namebuf[inboxoffset+3] = inboxcase[3];
-		    namebuf[inboxoffset+4] = inboxcase[4];
-		}
-
-		matchlen = glob_test(g, namebuf+inboxoffset,
-				     namelen-inboxoffset, &minmatch);
-		if (matchlen == -1) break;
-
-		r = proc(namebuf+inboxoffset, matchlen, 1, rock);
-		if (r) {
-		    glob_free(&g);
-		    list_doingfind--;
-		    return r;
-		}
+	    case EAGAIN:
+		syslog(LOG_WARNING, "unexpected deadlock in mboxlist.c");
+		goto retry;
+		break;
+		
+	    default:
+		syslog(LOG_ERR, "DBERROR: error advancing: %s", strerror(r));
+		r = IMAP_IOERROR;
+		goto done;
 	    }
-	    offset += len;
+	    strcpy(namebuf, key.data);
+
+	    if (inboxoffset) {
+		namebuf[inboxoffset] = inboxcase[0];
+		namebuf[inboxoffset+1] = inboxcase[1];
+		namebuf[inboxoffset+2] = inboxcase[2];
+		namebuf[inboxoffset+3] = inboxcase[3];
+		namebuf[inboxoffset+4] = inboxcase[4];
+	    }
+
+	    namelen = key.size;
+	    matchlen = glob_test(g, namebuf+inboxoffset,
+				 namelen-inboxoffset, &minmatch);
+	    if (matchlen == -1) break;
+
+	    r = proc(namebuf+inboxoffset, matchlen, 1, rock);
+	    if (r) {
+		glob_free(&g);
+		list_doingfind--;
+		goto done;
+	    }
+
+	    r = cursor->c_get(cursor, &key, &data, DB_NEXT);
 	}
     }
 
     /* Search for all remaining mailboxes.  Start at the pattern prefix */
-    offset = bsearch_mem(pattern, 1, list_base, list_size, 0,
-			 (unsigned long *)0);
+    r = cursor->c_get(cursor, &key, &data, DB_SET_RANGE);
 
     if (userid) usermboxname[--usermboxnamelen] = '\0';
-    while (offset < list_size) {
-	p = memchr(list_base + offset, '\n', list_size-offset);
-	if (!p) {
-	    mboxlist_badline(list_base + offset, "no newline terminator");
+    while (r != DB_NOTFOUND) {
+	switch (r) {
+	case 0:
+	    break;
+
+	case EAGAIN:
+	    syslog(LOG_WARNING, "unexpected deadlock in mboxlist.c");
+	    goto retry;
+	    break;
+	    
+	default:
+	    syslog(LOG_ERR, "DBERROR: error advancing: %s", strerror(r));
+	    r = IMAP_IOERROR;
+	    goto done;
+	}
+	
+	strcpy(namebuf, key.data);
+	namelen = key.size;
+	mboxent = (struct mbox_entry *) data.data;
+
+	/* does this even match our prefix? */
+	if (strncmp(namebuf, pattern, prefixlen)) break;
+
+	matchlen = glob_test(g, namebuf, namelen, &minmatch);
+
+	if (matchlen == -1 ||
+	    (userid && namelen >= usermboxnamelen &&
+	     strncmp(namebuf, usermboxname, usermboxnamelen) == 0 &&
+	     (namelen == usermboxnamelen ||
+	      namebuf[usermboxnamelen] == '.'))) {
+	    break;
 	}
 
-	len = p - (list_base + offset) + 1;
-	mboxlist_parseline(offset, len, &name, &namelen,
-			   (char **)0, (unsigned long *)0, &acl, &acllen);
-		
-	if (strncmp(list_base + offset, pattern, prefixlen)) break;
-	minmatch = 0;
-	while (minmatch >= 0) {
-	    matchlen = glob_test(g, name, namelen, &minmatch);
-
-	    if (matchlen == -1 ||
-		(userid && namelen >= usermboxnamelen &&
-		 strncmp(name, usermboxname, usermboxnamelen) == 0 &&
-		 (namelen == usermboxnamelen ||
-		  name[usermboxnamelen] == '.'))) {
-		break;
+	if (isadmin) {
+	    r = proc(namebuf, matchlen, 1, rock);
+	    if (r) {
+		glob_free(&g);
+		list_doingfind--;
+		goto done;
 	    }
-
-	    memcpy(namebuf, name, namelen);
-	    namebuf[namelen] = '\0';
-
-	    if (isadmin) {
-		r = proc(namebuf, matchlen, 1, rock);
+	} else {
+	    rights = acl_myrights(auth_state, mboxent->acls);
+	    if (rights & ACL_LOOKUP) {
+		r = proc(namebuf, matchlen, (rights & ACL_CREATE),
+			 rock);
 		if (r) {
 		    glob_free(&g);
 		    list_doingfind--;
-		    return r;
-		}
-	    }
-	    else {
-		if (acllen < sizeof(aclbuf)) {
-		    memcpy(aclbuf, acl, acllen);
-		    aclbuf[acllen] = '\0';
-		    rights = acl_myrights(auth_state, aclbuf);
-		}
-		else {
-		    aclcopy = xmalloc(acllen + 1);
-		    memcpy(aclcopy, acl, acllen);
-		    aclcopy[acllen] = '\0';
-		    rights = acl_myrights(auth_state, aclcopy);
-		    free(aclcopy);
-		}
-		if (rights & ACL_LOOKUP) {
-		    r = proc(namebuf, matchlen, (rights & ACL_CREATE),
-				rock);
-		    if (r) {
-			glob_free(&g);
-			list_doingfind--;
-			return r;
-		    }
+		    goto done;
 		}
 	    }
 	}
-	offset += len;
+
+	r = cursor->c_get(cursor, &key, &data, DB_NEXT);
+    }
+    r = 0;
+
+  done:
+    switch (txn_commit(&tid)) {
+    case 0:
+	break;
+    case EINVAL:
+	syslog(LOG_WARNING, "tried to commit an already aborted transaction");
+	break;
+    default:
+	syslog(LOG_WARNING, "failed on commit to read-only transaction");
+	r = IMAP_IOERROR;
+	break;
     }
 	
     glob_free(&g);
     list_doingfind--;
-    return 0;
+    return r;
 }
 
 /*
@@ -1256,7 +1419,7 @@ int (*proc)();
 	return r;
     }
 
-    mboxlist_reopen();
+    /* xxx    mboxlist_reopen();*/
     list_doingfind++;
 
     g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
@@ -1363,8 +1526,8 @@ int (*proc)();
 				     namelen-inboxoffset, &minmatch);
 		if (matchlen == -1) break;
 		
-		(void) bsearch_mem(namebuf, 1, list_base, list_size, 0,
-				   &listlinelen);
+		/*		(void) bsearch_mem(namebuf, 1, list_base, list_size, 0,
+				&listlinelen);*/
 		
 		if (listlinelen) {
 		    r = (*proc)(namematchbuf+inboxoffset, matchlen, 1);
@@ -1581,7 +1744,7 @@ int newquota;
     if (r) return r;
 
     /* Ensure there is at least one mailbox under the quota root */
-    offset = bsearch_mem(quota.root, 1, list_base, list_size, 0, &len);
+    /*    offset = bsearch_mem(quota.root, 1, list_base, list_size, 0, &len);
     if (!len) {
 	if (strlen(quota.root) >= list_size - offset ||
 	    strncmp(quota.root, list_base + offset,
@@ -1590,7 +1753,7 @@ int newquota;
 	    mboxlist_unlock();
 	    return IMAP_MAILBOX_NONEXISTENT;
 	}
-    }
+	}*/
     
     /* perhaps create .NEW, lock, check if it got recreated, move in place */
     quota.lock_count = 1;
@@ -1631,61 +1794,63 @@ int num;
 char **group;
 int *seen;
 {
+    DB_TXN *tid;
+    DB_TXNMGR *txnp = dbenv.tx_info;
+    DBC cursor;
+    DBT key, keydel, data;
+    struct mbox_entry *mboxent;
     int r;
+
     int deletethis;
     int deletedsomething = 0;
     int low, high, mid;
-    int newlistfd;
     struct mailbox mailbox;
-    unsigned long offset, copyoffset;
-    char *name;
-    unsigned long namelen;
     char *partition;
-    unsigned long partitionlen;
-    char namebuf[MAX_MAILBOX_NAME+1];
-    char *p;
-    unsigned long len;
-    int n;
 
-    /* Open and lock mailbox list file */
-    r = mboxlist_openlock();
-    if (r) return r;
+    if (0) {
+      retry:
+	if ((r = txn_abort(tid)) != 0) {
+	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
+		   strerror(r));
+	    return IMAP_IOERROR;
+	}
+    }
 
-    newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (newlistfd == -1) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
-	mboxlist_unlock();
+    /* begin the transaction */
+    if ((r = txn_begin(txnp, NULL, &tid)) != 0) {
+	syslog(LOG_ERR, "DBERROR: error beginning txn: %s", strerror(r));
 	return IMAP_IOERROR;
     }
 
-    offset = copyoffset = 0;
+    mbdb->cursor(mbdb, tid, &cursor, 0);
 
-    /* Copy over mailbox list, making change */
-    while (offset < list_size) {
-	p = memchr(list_base + offset, '\n', list_size-offset);
-	if (!p) {
-	    mboxlist_badline(list_base + offset, "no newline terminator");
+    r = cursor.c_get(&cursor, &key, &data, DB_FIRST);
+    while (r != DB_NOTFOUND) {
+	switch (r) {
+	case 0:
+	    break;
+
+	case EAGAIN:
+	    goto retry;
+	    break;
+
+	default:
+	    syslog(LOG_ERR, "DBERROR: error advancing: %s", strerror(r));
+	    r = IMAP_IOERROR;
+	    goto done;
 	}
-
-	len = p - (list_base + offset) + 1;
-	mboxlist_parseline(offset, len, &name, &namelen,
-			   &partition, &partitionlen,
-			   (char **)0, (unsigned long *)0);
-		
+	
+	mboxent = (struct mbox_entry *) data.data;
 	deletethis = 0;
-
-	if (partitionlen == 4 && strncasecmp(partition, "news", 4) == 0) {
+	if (!strcasecmp(partition, "news")) {
 	    deletethis = 1;
-
-	    memcpy(namebuf, name, namelen);
-	    namebuf[namelen] = '\0';
 
 	    /* Search for name in 'group' array */
 	    low = 0;
 	    high = num;
 	    while (low <= high) {
 		mid = (high - low)/2 + low;
-		r = strcmp(namebuf, group[mid]);
+		r = strcmp(key.data, group[mid]);
 		if (r == 0) {
 		    deletethis = 0;
 		    seen[mid] = 1;
@@ -1700,66 +1865,61 @@ int *seen;
 	    }
 	    if (deletethis) {
 		/* Remove the mailbox.  Don't care about errors */
-		r = mailbox_open_header(namebuf, 0, &mailbox);
+		r = mailbox_open_header(key.data, 0, &mailbox);
 		if (!r) {
-		    toimsp(namebuf, mailbox.uidvalidity, "RENsn", "", 0, 0);
+		    toimsp(key.data, mailbox.uidvalidity, "RENsn", "", 0, 0);
 		    r = mailbox_delete(&mailbox, 0);
 		}
-		printf("deleted %s\n", namebuf);
+		printf("deleted %s\n", key.data);
 	    }
 	}
+
+	keydel = key;
+	r = cursor.c_get(&cursor, &key, &data, DB_NEXT);
 
 	if (deletethis) {
-	    n = retry_write(newlistfd, list_base + copyoffset,
-			    offset - copyoffset);
-	    if (n == -1) {
-		syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
-		mboxlist_unlock();
-		close(newlistfd);
-		return IMAP_IOERROR;
+	    switch (mbdb->del(mbdb, tid, &keydel, 0)) {
+	    case 0:
+		break;
+
+	    case EAGAIN:
+		goto retry;
+		break;
+
+	    default:
+		syslog(LOG_ERR, "DBERROR: error deleting newsgroup");
+		r = IMAP_IOERROR;
+		goto done;
 	    }
-	    copyoffset = offset + len;
-
-	    deletedsomething++;
-	}
-
-	offset += len;
-    }
-
-    if (!deletedsomething) {
-	mboxlist_unlock();
-	close(newlistfd);
-	return 0;
-    }
-
-    if (copyoffset < list_size) {
-	n = retry_write(newlistfd, list_base + copyoffset,
-			list_size - copyoffset);
-	if (n == -1) {
-	    syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
-	    mboxlist_unlock();
-	    close(newlistfd);
-	    return IMAP_IOERROR;
 	}
     }
+    r = 0;
 
-    if (fsync(newlistfd)) {
-	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
-	mboxlist_unlock();
-	close(newlistfd);
-	return IMAP_IOERROR;
+  done:
+    if (r == 0) {
+	r = txn_commit(&tid);
+
+	switch (txn_commit(&tid)) {
+	case 0:
+	    break;
+	case EINVAL:
+	    syslog(LOG_WARNING, "tried to commit an already aborted transaction");
+	    break;
+	default:
+	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
+		   strerror(r));
+	    r = IMAP_IOERROR;
+	    break;
+	}
+    } else {
+	if ((r = txn_abort(tid)) != 0) {
+	    syslog(LOG_ERR, "DBERROR: error aborting txn %s",
+		   strerror(r));
+	    r = IMAP_IOERROR;
+	}
     }
 
-    if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
-	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
-	mboxlist_unlock();
-	close(newlistfd);
-	return IMAP_IOERROR;
-    }
-
-    mboxlist_unlock();
-    close(newlistfd);
-    return 0;
+    return r;
 }
 
 /*
@@ -1768,31 +1928,6 @@ int *seen;
 int
 mboxlist_openlock()
 {
-    struct stat sbuf;
-    const char *lockfailaction;
-    int r;
-
-    assert(list_locked == 0);
-    assert(list_doingfind == 0);
-
-    if (listfd == -1) mboxlist_reopen();
-
-    r = lock_reopen(listfd, listfname, &sbuf, &lockfailaction);
-    if (r == -1) {
-	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, listfname);
-	return IMAP_IOERROR;
-    }
-
-    list_locked = 1;
-
-    if (sbuf.st_ino != list_ino) {
-	list_ino = sbuf.st_ino;
-
-	map_free(&list_base, &list_size);
-	map_refresh(listfd, 1, &list_base, &list_size, sbuf.st_size,
-		    listfname, 0);
-    }
-
     return 0;
 }
 
@@ -1802,8 +1937,6 @@ mboxlist_openlock()
 int
 mboxlist_unlock()
 {
-    lock_unlock(listfd);
-    list_locked = 0;
     return 0;
 }
 
@@ -1816,10 +1949,8 @@ const char **newlistfnamep;
 const char **basep;
 unsigned long *sizep;
 {
-    *listfnamep = listfname;
-    *newlistfnamep = newlistfname;
-    *basep = list_base;
-    *sizep = list_size;
+    printf("yikes! don't reconstruct me!\n");
+    exit(1);
 }
 
 /*
@@ -1918,130 +2049,70 @@ unsigned long size;
     close(subsfd);
 }
 
-
-/*
- * Get the filenames of the mailbox list and the temporary file to
- * use when updating the mailbox list.
+/* Case-dependent comparison converter.
+ * Treats \r and \t as end-of-string and treats '.' lower than
+ * everything else.
  */
-static void
-mboxlist_reopen(void)
+#define TOCOMPARE(c) (convert_to_compare[(unsigned char)(c)])
+static unsigned char convert_to_compare[256] = {
+    0x00, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+    0x0a, 0x01, 0x01, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+    0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x02, 0x2f,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+    0x40, 'A', 'B', 'C', 'D', 'E', 'F', 'G',
+    'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
+    'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
+    'X', 'Y', 'Z', 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+    0x60, 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
+    'p', 'q', 'r', 's', 't', 'u', 'v', 'w',
+    'x', 'y', 'z', 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
+    0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+    0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
+    0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
+    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
+    0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
+    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
+    0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
+    0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
+    0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
+    0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
+    0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+    0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
+    0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
+};
+
+static int mbdb_order(const DBT *a, const DBT *b)
 {
-    struct stat sbuf;
+    char *s1 = a->data;
+    char *s2 = b->data;
+    int cmp;
+    char c2;
 
-    if (!listfname) {
-	listfname = xmalloc(strlen(config_dir)+sizeof(FNAME_MBOXLIST));
-	strcpy(listfname, config_dir);
-	strcat(listfname, FNAME_MBOXLIST);
-	newlistfname = xmalloc(strlen(config_dir)+sizeof(FNAME_MBOXLIST)+4);
-	strcpy(newlistfname, config_dir);
-	strcat(newlistfname, FNAME_MBOXLIST);
-	strcat(newlistfname, ".NEW");
-    }
+    return strcmp(s1,s2);
 
-    if (list_locked || list_doingfind) return;
+    tmp_log_string("in order function\n");
 
-    if (listfd != -1) {
-	if (stat(listfname, &sbuf) == -1) {
-	    syslog(LOG_ERR, "IOERROR: stat on %s: %m", listfname);
-	    /* Exiting TEMPFAIL because Sendmail thinks this
-	       EC_OSFILE == permenant failure. */
-	    fatal("can't stat mailboxes file", EC_TEMPFAIL);
+    for (;;) {
+	if ((c2 = *s2) == 0) {
+	    return (unsigned char)*s1;
 	}
-	if (sbuf.st_ino == list_ino) return;
-	close(listfd);
-	map_free(&list_base, &list_size);
+	cmp = TOCOMPARE(*s1) - TOCOMPARE(c2);
+	cmp = 1;
+	if (cmp) return cmp;
+	s1++;
+	s2++;
     }
-
-    listfd = open(listfname, O_RDWR, 0666);
-    if (listfd == -1) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	    /* Exiting TEMPFAIL because Sendmail thinks this
-	       EC_OSFILE == permenant failure. */
-	fatal("can't read mailboxes file", EC_TEMPFAIL);
-    }
-	
-    if (fstat(listfd, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", listfname);
-	fatal("can't fstat mailboxes file", EC_OSFILE);
-    }
-    list_ino = sbuf.st_ino;
-
-    map_refresh(listfd, 1, &list_base, &list_size, sbuf.st_size,
-		listfname, 0);
 }
 
-static void
-mboxlist_badline(line, error)
-char *line;
-char *error;
-{
-    const char *p;
-    char buf[1024];
-    int lineno = 1;
 
-    for (p = list_base; p < line; p++) {
-	if (*p == '\n') lineno++;
-    }
-
-    syslog(LOG_ERR, "IOERROR: corrupted mailboxes file, line %d: %s",
-	   lineno, error);
-    sprintf(buf, "corrupted mailboxes file, line %d: %s", lineno, error);
-    fatal(buf, EC_OSFILE);
-}
-    
-
-/*
- * Parse a mailboxes line
- */
-static void
-mboxlist_parseline(offset, len, namep, namelenp, partitionp, partitionlenp,
-		   aclp, acllenp)
-unsigned long offset;
-unsigned long len;
-const char **namep;
-unsigned long *namelenp;
-const char **partitionp;
-unsigned long *partitionlenp;
-const char **aclp;
-unsigned long *acllenp;
-{
-    const char *line = list_base + offset;
-    const char *p;
-    unsigned fieldlen;
-
-    if (namep) *namep = line;
-    p = memchr(line, '\t', len);
-    if (!p) {
-	mboxlist_badline(line, "no tab separator");
-    }
-    fieldlen = p - line;
-    if (fieldlen > MAX_MAILBOX_NAME) {
-	mboxlist_badline(line, "mailbox name too long");
-    }
-
-    if (namelenp) *namelenp = fieldlen;
-    p++;
-    len -= fieldlen + 1;
-    line += fieldlen + 1;
-
-    if (partitionp) *partitionp = line;
-    p = memchr(line, '\t', len);
-    if (!p) {
-	mboxlist_badline(line, "only one tab separator");
-    }
-    fieldlen = p - line;
-    if (partitionlenp) *partitionlenp = fieldlen;
-    p++;
-    len -= fieldlen + 1;
-    line += fieldlen + 1;
-
-    if (!len || line[len-1] != '\n') {
-	mboxlist_badline(line, "no newline terminator");
-    }
-    len--;
-    if (aclp) *aclp = line;
-    if (acllenp) *acllenp = len;
-}
 
 /*
  * ACL access canonicalization routine which ensures that 'owner'
@@ -2124,52 +2195,107 @@ int maycreate;
     return 0;
 }
 
-/* Free the mailboxes file.  In older versions, we just kept this open, and
-   reopened if we needed to.  imapd.c calls this frequently to get rid of
-   this, based on a sligtly educated guess of when it is likely to be
-   needed again.  Because of the constant renaming and rewriting of
-   mailboxes files, servers got to keep some large number of mailboxes
-   files in memory, increasingly inaccurate, that would simply be thrown
-   out at some future time.  */
 void
 mboxlist_close(void)
 {
-    if (list_size && list_base && *list_base) {
-	map_free(&list_base, &list_size);
-    }
-    if (listfd != -1) {
-	close(listfd);
-	listfd = -1;
-    }
+    /* noop with db */
 }
 
-/* Safe rename, for file being renamed to a file that might get locked
- *
- * Assumes oldfname has already been locked, and newfname's fd is 3rd
- * arg to this function
- *
- * This is to work around the race condition that happens when we have a
- * whole bunch of imapds attacking the mailboxes file at the same time.
- *
- * Compliments of Eric Hagberg.
- */
-int mboxlist_safe_rename( newfname, oldfname, fd )
-const char *newfname, *oldfname;
-int fd;
+void db_panic(DB_ENV *dbenv, int errno)
 {
-
-    if (lock_blocking(fd) == -1) {
-        syslog(LOG_ERR, "IOERROR: locking %s: %m", newfname);
-        return -1;
-    }
-    if (rename(newfname, oldfname) == -1) {
-	lock_unlock(fd);
-	return -1;
-    }
-    lock_unlock(fd);
-    return 0;
+    syslog(LOG_CRIT, "DBERROR: critical database situation");
+    /* but don't bounce mail */
+    exit(EC_TEMPFAIL);
 }
 
+void db_err(char *db_prfx, char *buffer)
+{
+    syslog(LOG_INFO, "DBINFO: %s", buffer);
+}
+
+/*
+ * Get the filenames of the mailbox list and the temporary file to
+ * use when updating the mailbox list.
+ */
+void
+mboxlist_open(void)
+{
+    int ret;
+    DB_INFO dbinfo;
+
+    tmp_log_string("Started open func");
+
+    mboxlist_init();
+
+    /* create db file name if necessary */
+    if (!listfname) {
+	listfname = xmalloc(strlen(config_dir)+sizeof(FNAME_MBOXLIST));
+	strcpy(listfname, config_dir);
+	strcat(listfname, FNAME_MBOXLIST);
+    }
+
+    /*    if (list_locked || list_doingfind) return;*/
+
+    memset(&dbinfo, 0, sizeof(dbinfo));
+    dbinfo.bt_compare = &mbdb_order;
+    /*    dbinfo.bt_prefix = &mbdb_prefix;*/
+
+    ret = db_open(listfname, DB_BTREE, DB_CREATE, 0664, &dbenv, &dbinfo, &mbdb);
+    if (ret != 0) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
+	    /* Exiting TEMPFAIL because Sendmail thinks this
+	       EC_OSFILE == permanent failure. */
+	fatal("can't read mailboxes file", EC_TEMPFAIL);
+    }    
+
+    tmp_log_string("Completed open func");
+}
+
+void mboxlist_init(void)
+{
+    int r;
+    char dbdir[1024];
+    
+    memset(&dbenv, 0, sizeof(dbenv));
+    dbenv.db_paniccall = &db_panic;
+    dbenv.db_errcall = &db_err;
+    dbenv.db_verbose = 1;
+
+    /* create the name of the db file */
+    strcpy(dbdir, config_dir);
+    /*    strcat(dbdir, FNAME_DBDIR);*/
+
+    
+    r = db_appinit(dbdir, NULL, &dbenv, 
+		   DB_INIT_LOCK | DB_INIT_MPOOL | DB_INIT_TXN | DB_TXN_NOSYNC
+	         | DB_CREATE);
+    if (r) {
+        tmp_log_string("DB error");
+	tmp_log_string(strerror(r));
+	syslog(LOG_ERR, "DBERROR: db_appinit failed: %s", strerror(r));
+	exit(EC_TEMPFAIL);
+    }
+
+    tmp_log_string("Inited ok");
+}
+
+void mboxlist_done(void)
+{
+    int r;
+
+    /* r = mbdb->close(&db, 0);
+    if (!r) {
+	syslog(LOG_ERR, "DBERROR: error closing mailboxes: %s",
+	       strerror(r));
+    }
+    r = mbdb->appexit(dbenv);
+    if (!r) {
+	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
+	       strerror(r));
+	       }*/
+}
+
+/* hash the userid to a file containing the subscriptions for that user */
 static char *mboxlist_hash_usersubs(const char *userid)
 {
     char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_USERDIR) +
