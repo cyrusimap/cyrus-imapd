@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.1.2.2 2002/12/20 17:00:22 rjs3 Exp $
+ * $Id: auth_pts.c,v 1.1.2.3 2002/12/20 17:48:51 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -122,15 +122,13 @@ int auth_memberof(struct auth_state *auth_state,
  * Returns a pointer to a static buffer containing the canonical form
  * or NULL if 'identifier' is invalid.
  */
-char *auth_canonifyid(const char *identifier, size_t len)
+char *auth_canonifyid(const char *identifier,
+		      size_t len __attribute__((unused)))
 {
     static char retbuf[PTS_DB_KEYSIZE];
 
-    if(!len) len = strlen(identifier);
-
     if(canonuser_id &&
-       (!memcmp(canonuser_id, identifier, len)
-	|| !memcmp(canonuser_id, retbuf, len))) {
+       (!strcmp(identifier, canonuser_id) || !strcmp(identifier, retbuf))) {
 	/* It's the currently cached user, return the previous result */
 	return retbuf;
     } else {
