@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.25 2002/11/07 15:11:18 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.26 2002/11/15 21:46:57 rjs3 Exp $
  */
 
 #include <config.h>
@@ -2346,20 +2346,12 @@ static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
     return 0;
 }
 
+/* must be called after config_init */
 void mboxlist_init(int myflags)
 {
     int r;
     char dbdir[1024];
     int flags = 0;
-
-    /* create the name of the db file */
-    strcpy(dbdir, config_dir);
-    strcat(dbdir, FNAME_DBDIR);
-    if (myflags & MBOXLIST_RECOVER) flags |= CYRUSDB_RECOVER;
-    r = DB->init(dbdir, flags);
-    if (r != CYRUSDB_OK) {
-	fatal("can't initialize mboxlist environment", EC_TEMPFAIL);
-    }
 
     if (myflags & MBOXLIST_SYNC) {
 	r = DB->sync();

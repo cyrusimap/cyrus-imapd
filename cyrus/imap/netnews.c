@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: netnews.c,v 1.1.2.4 2002/10/23 19:55:07 ken3 Exp $ */
+/* $Id: netnews.c,v 1.1.2.5 2002/11/15 21:46:58 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -89,18 +89,11 @@
 static struct db *newsdb = NULL;
 static int news_dbopen = 0;
 
-
+/* must be called after config_init */
 int netnews_init(char *fname, int myflags)
 {
     char buf[1024];
     int r = 0;
-    int flags = 0;
-
-    /* create the name of the db file */
-    strcpy(buf, config_dir);
-    strcat(buf, FNAME_DBDIR);
-    if (myflags & NETNEWS_RECOVER) flags |= CYRUSDB_RECOVER;
-    r = DB->init(buf, flags);
 
     if (r != 0)
 	syslog(LOG_ERR, "DBERROR: init %s: %s", buf,

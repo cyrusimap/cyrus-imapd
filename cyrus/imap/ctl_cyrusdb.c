@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.14.4.3 2002/11/14 19:36:19 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.14.4.4 2002/11/15 21:46:55 rjs3 Exp $
  */
 
 #include <config.h>
@@ -74,18 +74,16 @@
 # endif
 #endif
 
-#include "util.h"
+#include "cyrusdb.h"
+#include "duplicate.h"
 #include "imapconf.h"
 #include "exitcodes.h"
-#include "xmalloc.h"
-#include "cyrusdb.h"
-
-/* find out what things are using... */
 #include "mboxlist.h"
-#include "seen.h"
-#include "duplicate.h"
-#include "tls.h"
 #include "netnews.h"
+#include "seen.h"
+#include "tls.h"
+#include "util.h"
+#include "xmalloc.h"
 
 #define N(a) (sizeof(a) / sizeof(a[0]))
 
@@ -111,12 +109,6 @@ static int compdb(const void *v1, const void *v2)
     struct cyrusdb *db2 = (struct cyrusdb *) v2;
 
     return (db1->env - db2->env);
-}
-
-void fatal(const char *message, int code)
-{
-    fprintf(stderr, "fatal error: %s\n", message);
-    exit(code);
 }
 
 void usage(void)
@@ -219,19 +211,15 @@ int main(int argc, char *argv[])
 	}
     }
 
-    if (op == NONE) {
+    if (op == NONE || (op != RECOVER && !reserve_flag)) {
 	usage();
-	exit(1);
-    }
-
-    if(op != RECOVER && !reserve_flag) {
-	usage();
-	exit(1);
+	/* NOTREACHED */
     }
 
     config_init(alt_config, "ctl_cyrusdb");
 
     /* create the name of the db directory */
+    /* (used by backup directory names) */
     strcpy(dirname, config_dir);
     strcat(dirname, FNAME_DBDIR);
 
@@ -260,18 +248,7 @@ int main(int argc, char *argv[])
 	/* deal with each dbenv once */
 	if (dblist[i].env == dblist[i+1].env) continue;
 
-	r = (dblist[i].env)->init(dirname, flag);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: init %s: %s", dirname,
-		   cyrusdb_strerror(r));
-	    fprintf(stderr, 
-		    "ctl_cyrusdb: unable to init environment\n");
-	    dblist[i].env = NULL;
-	    /* stop here, but we need to close all existing ones */
-	    break;
-	}
-	
-	r2 = 0;
+	r = r2 = 0;
 	switch (op) {
 	case RECOVER:
 	    break;
@@ -345,15 +322,12 @@ int main(int argc, char *argv[])
 	    free(archive_files[--j]);
 	    archive_files[j] = NULL;
 	}
-
-	r2 = (dblist[i].env)->done();
-	if (r2) {
-	    syslog(LOG_ERR, "DBERROR: done: %s", cyrusdb_strerror(r));
-	}
     }
 
     if(op == RECOVER && reserve_flag)
 	recover_reserved();
+
+    cyrus_done();
 
     syslog(LOG_NOTICE, "done %s", msg);
     exit(r || r2);

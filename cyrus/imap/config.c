@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.21 2002/11/14 19:36:19 rjs3 Exp $ */
+/* $Id: config.c,v 1.55.4.22 2002/11/15 21:46:55 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -96,12 +96,26 @@ extern const int config_need_data;
 
 static void config_read(const char *alt_config);
 
+static enum {
+    NOT_RUNNING = 0,
+    RUNNING = 1,
+    DONE = 2
+} config_init_run = NOT_RUNNING;
+
+/* Called before a cyrus application starts (but after command line parameters
+ * are read) */
 int config_init(const char *alt_config, const char *ident)
 {
     char buf[100];
     char *p;
     const char *val;
     int umaskval = 0;
+
+    if(config_init_run != NOT_RUNNING) {
+	fatal("config_init called twice!", EC_CONFIG);
+    } else {
+	config_init_run = RUNNING;
+    }
 
     initialize_imap_error_table();
     initialize_mupd_error_table();
@@ -171,6 +185,9 @@ int config_init(const char *alt_config, const char *ident)
     libcyrus_config_setint(CYRUSOPT_PTS_CACHE_TIMEOUT,
 			   config_getint(IMAPOPT_PTSCACHE_TIMEOUT));
 
+    /* Not until all configuration parameters are set! */
+    libcyrus_init();
+    
     return 0;
 }
 
@@ -835,4 +852,13 @@ void cyrus_ctime(time_t date, char *datebuf)
 	    tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
 	    tm->tm_hour, tm->tm_min, tm->tm_sec,
 	    gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
+}
+
+/* call before a cyrus application exits */
+void cyrus_done() 
+{
+    if(config_init_run != RUNNING) return;
+    config_init_run = DONE;
+    
+    libcyrus_done();
 }

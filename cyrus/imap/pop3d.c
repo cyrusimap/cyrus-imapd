@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.15 2002/11/07 15:11:19 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.16 2002/11/15 21:46:58 rjs3 Exp $
  */
 #include <config.h>
 
@@ -440,6 +440,8 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
+
+    cyrus_done();
 
     exit(code);
 }

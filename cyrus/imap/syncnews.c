@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.19.14.1 2002/11/07 15:11:21 ken3 Exp $
+ * $Id: syncnews.c,v 1.19.14.2 2002/11/15 21:46:59 rjs3 Exp $
  */
 #include <config.h>
 
@@ -114,7 +114,9 @@ int main(int argc, char **argv)
     readactive(argv[optind]);
     do_syncnews();
 
-    exit(code);
+    cyrus_done();
+
+    return code;
 }
 
 #define GROUPGROW 300
@@ -151,6 +153,7 @@ void readactive(char *active)
     if (!active_file) {
 	perror(active);
 	syslog(LOG_ERR, "cannot read active file %s: %m", active);
+	cyrus_done();
 	exit(EC_NOINPUT);
     }
 
@@ -192,6 +195,7 @@ void readactive(char *active)
     if (ferror(active_file)) {
 	fprintf(stderr, "syncnews: error reading active file\n");
 	syslog(LOG_ERR, "error reading active file");
+	cyrus_done();
 	exit(EC_DATAERR);
     }
     fclose(active_file);
@@ -199,6 +203,7 @@ void readactive(char *active)
     if (group_num == 0) {
 	fprintf(stderr, "syncnews: no groups in active file\n");
 	syslog(LOG_ERR, "no groups in active file");
+	cyrus_done();
 	exit(EC_DATAERR);
     }
 
@@ -208,6 +213,7 @@ void readactive(char *active)
   badactive:
     fprintf(stderr, "syncnews: bad line %d in active file\n", lineno);
     syslog(LOG_ERR, "bad line %d in active file", lineno);
+    cyrus_done();
     exit(EC_DATAERR);
     
 }
@@ -263,6 +269,7 @@ void do_syncnews(void)
 void fatal(const char* s, int code)
 {
     fprintf(stderr, "syncnews: %s\n", s);
+    cyrus_done();
     exit(code);
 }
 

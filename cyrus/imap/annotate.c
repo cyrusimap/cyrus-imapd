@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.18 2002/11/07 15:11:15 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.19 2002/11/15 21:46:55 rjs3 Exp $
  */
 
 #include <config.h>
@@ -212,21 +212,13 @@ void freeentryatts(struct entryattlist *l)
     }
 }
 
+/* must be called after config_init */
 void annotatemore_init(int myflags,int (*func)(const char *, const char *,
 					       struct strlist *))
 {
     int r;
     char dbdir[1024];
     int flags = 0;
-
-    /* create the name of the db file */
-    strcpy(dbdir, config_dir);
-    strcat(dbdir, FNAME_DBDIR);
-    if (myflags & ANNOTATE_RECOVER) flags |= CYRUSDB_RECOVER;
-    r = DB->init(dbdir, flags);
-    if (r != CYRUSDB_OK) {
-	fatal("can't initialize annotate environment", EC_TEMPFAIL);
-    }
 
     if (myflags & ANNOTATE_SYNC) {
 	r = DB->sync();

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.c,v 1.2.6.1 2002/08/14 20:21:05 ken3 Exp $ */
+/* $Id: cyrusdb.c,v 1.2.6.2 2002/11/15 21:47:01 rjs3 Exp $ */
 
 #include <config.h>
 #include <stdlib.h>
@@ -55,8 +55,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include "cyrusdb.h"
-#include "xmalloc.h"
+#include "libcyr_cfg.h"
 #include "retry.h"
+#include "xmalloc.h"
 
 struct cyrusdb_backend *cyrusdb_backends[] = {
     &cyrusdb_berkeley,
@@ -64,6 +65,34 @@ struct cyrusdb_backend *cyrusdb_backends[] = {
     &cyrusdb_flat,
     &cyrusdb_skiplist,
     NULL };
+
+void cyrusdb_init() 
+{
+    int i, r;
+    char dbdir[1024];
+    const char *confdir = libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
+    int initflags = libcyrus_config_getint(CYRUSOPT_DB_INIT_FLAGS);
+    
+    strcpy(dbdir, confdir);
+    strcat(dbdir, FNAME_DBDIR);
+
+    for(i=0; cyrusdb_backends[i]; i++) {
+	r = (cyrusdb_backends[i])->init(dbdir, initflags);
+	if(r) {
+	    syslog(LOG_ERR, "DBERROR: init() on %s",
+		   cyrusdb_backends[i]->name);
+	}
+    }
+}
+
+void cyrusdb_done() 
+{
+    int i;
+    
+    for(i=0; cyrusdb_backends[i]; i++) {
+	(cyrusdb_backends[i])->done();
+    }
+}
 
 int cyrusdb_copyfile(const char *srcname, const char *dstname)
 {

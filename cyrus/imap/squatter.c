@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.5.4.4 2002/10/08 20:50:13 rjs3 Exp $
+ * $Id: squatter.c,v 1.5.4.5 2002/11/15 21:46:58 rjs3 Exp $
  */
 
 /*
@@ -107,7 +107,7 @@ int imapd_exists;
 struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
 char *imapd_userid = NULL;
-void printastring(const char *s)
+void printastring(const char *s __attribute__((unused)))
 {
     fatal("not implemented", EC_SOFTWARE);
 }
@@ -145,27 +145,12 @@ static void print_stats(FILE* out, SquatStats* stats) {
           stats->index_size, (int) (stats->end_time - stats->start_time));
 }
 
-static void shut_down(int code) __attribute__((noreturn));
-static void shut_down(int code)
-{
-    seen_done();
-    mboxlist_close();
-    mboxlist_done();
-    exit(code);
-}
-
 static int usage(const char *name)
 {
     fprintf(stderr,
 	    "usage: %s [-C <alt_config>] [-r] [-v] mailbox...\n", name);
  
     exit(EC_USAGE);
-}
-
-void fatal(const char* s, int code)
-{
-    fprintf(stderr, "squatter: %s\n", s);
-    exit(code);
 }
 
 static void fatal_syserror(const char* s)
@@ -444,9 +429,6 @@ int main(int argc, char **argv)
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    signals_set_shutdown(&shut_down);
-    signals_add_handlers();
-
     mboxlist_init(0);
     mboxlist_open(NULL);
     mailbox_initialize();
@@ -484,5 +466,11 @@ int main(int argc, char **argv)
 
     syslog(LOG_NOTICE, "done indexing mailboxes");
 
-    shut_down(0);
+    seen_done();
+    mboxlist_close();
+    mboxlist_done();
+
+    cyrus_done();
+    
+    return 0;
 }

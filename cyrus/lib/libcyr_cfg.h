@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: libcyr_cfg.h,v 1.1.2.3 2002/11/14 19:36:23 rjs3 Exp $
+/* $Id: libcyr_cfg.h,v 1.1.2.4 2002/11/15 21:47:01 rjs3 Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -80,6 +80,8 @@ enum cyrus_opt {
     CYRUSOPT_PTS_CACHE_TIMEOUT,
     /* IMAPd config directory */
     CYRUSOPT_CONFIG_DIR,
+    /* CyrusDB INIT flags */
+    CYRUSOPT_DB_INIT_FLAGS,
 
     CYRUSOPT_LAST
     
@@ -107,5 +109,9 @@ void libcyrus_config_setstring(enum cyrus_opt opt, const char *val);
 void libcyrus_config_setint(enum cyrus_opt opt, int val);
 void libcyrus_config_setswitch(enum cyrus_opt opt, int val);
 
+/* Start/Stop the Library */
+/* Should be done AFTER setting configuration options */
+void libcyrus_init();
+void libcyrus_done();
 
 #endif

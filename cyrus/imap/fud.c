@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32.4.10 2002/11/07 15:11:16 ken3 Exp $ */
+/* $Id: fud.c,v 1.32.4.11 2002/11/15 21:46:56 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -154,6 +154,7 @@ void shut_down(int code)
     mboxlist_close();
     mboxlist_done();
     closelog();
+    cyrus_done();
     exit(code);
 }
 

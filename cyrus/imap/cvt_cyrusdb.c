@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.6.6.4 2002/11/07 15:11:16 ken3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.6.6.5 2002/11/15 21:46:55 rjs3 Exp $
  */
 
 #include <config.h>
@@ -84,28 +84,6 @@ struct cyrusdb_backend *DB_OLD = NULL, *DB_NEW = NULL;
 struct db *odb = NULL, *ndb = NULL;
 struct txn *tid = NULL;
 
-void fatal(const char *message, int code)
-{
-    static int recurse_code = 0;
-    
-    if(recurse_code) exit(recurse_code);
-    else recurse_code = code;
-    
-    fprintf(stderr, "fatal error: %s\n", message);
-
-    if(DB_OLD && odb) DB_OLD->close(odb);
-    if(DB_NEW && ndb) {
-	if(tid) DB_NEW->abort(ndb, tid);
-	DB_NEW->close(ndb);
-    }
-	
-    if(DB_OLD) DB_OLD->done();
-    if(DB_NEW) DB_NEW->done();
-
-    exit(code);
-}
-
-
 int converter_p(void *rock __attribute__((unused)),
 		const char *key __attribute__((unused)),
 		int keylen __attribute__((unused)),
@@ -126,7 +104,6 @@ int converter_cb(void *rock __attribute__((unused)),
 int main(int argc, char *argv[])
 {
     const char *old_db, *new_db;
-    char dbdir[1024];
     int i,r;
     int opt;
     char *alt_config = NULL;
@@ -192,17 +169,6 @@ int main(int argc, char *argv[])
     printf("Converting from %s (%s) to %s (%s)\n", old_db, DB_OLD->name,
 	   new_db, DB_NEW->name);
 
-    /* create the name of the db file */
-    strcpy(dbdir, config_dir);
-    strcat(dbdir, FNAME_DBDIR);
-
-    r = DB_OLD->init(dbdir, 0);
-    if(r != CYRUSDB_OK)
-	fatal("can't initialize old database", EC_TEMPFAIL);
-    r = DB_NEW->init(dbdir, 0);
-    if(r != CYRUSDB_OK)
-	fatal("can't initialize new database", EC_TEMPFAIL);
-
     r = DB_OLD->open(old_db, &odb);
     if(r != CYRUSDB_OK)
 	fatal("can't open old database", EC_TEMPFAIL);
@@ -222,7 +188,7 @@ int main(int argc, char *argv[])
     DB_OLD->close(odb);
     DB_NEW->close(ndb);
     
-    DB_OLD->done();
-    DB_NEW->done();
+    cyrus_done();
+
     return 0;
 }

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.10.4.4 2002/10/09 18:32:28 ken3 Exp $ */
+/* $Id: idled.c,v 1.10.4.5 2002/11/15 21:46:56 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -91,6 +91,9 @@ void fatal(const char *msg, int err)
     if (debugmode) fprintf(stderr, "dying with %s %d\n",msg,err);
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
+
+    cyrus_done();
+    
     exit(err);
 }
 
@@ -307,6 +310,7 @@ int main(int argc, char **argv)
     /* create socket we are going to use for listening */
     if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
 	perror("socket");
+	cyrus_done();
 	exit(1);
     }
 
@@ -327,6 +331,7 @@ int main(int argc, char **argv)
 
     if (bind(s, (struct sockaddr *)&local, len) == -1) {
 	perror("bind");
+	cyrus_done();
 	exit(1);
     }
     umask(oldumask); /* for Linux */
@@ -339,10 +344,12 @@ int main(int argc, char **argv)
 	
 	if (pid == -1) {
 	    perror("fork");
+	    cyrus_done();
 	    exit(1);
 	}
 	
 	if (pid != 0) { /* parent */
+	    cyrus_done();
 	    exit(0);
 	}
     }
@@ -399,6 +406,8 @@ int main(int argc, char **argv)
 	}
 
     }
+
+    cyrus_done();
 
     /* never gets here */      
     exit(1);

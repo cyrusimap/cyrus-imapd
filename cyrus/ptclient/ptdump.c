@@ -46,7 +46,7 @@
 #include "cyrusdb.h"
 #include "imapconf.h"
 
-static char rcsid[] = "$Id: ptdump.c,v 1.5.16.1 2002/11/14 19:36:27 rjs3 Exp $";
+static char rcsid[] = "$Id: ptdump.c,v 1.5.16.2 2002/11/15 21:47:05 rjs3 Exp $";
 
 int config_need_data = 0;
 
@@ -101,16 +101,6 @@ int main(int argc, char *argv[])
     }
 
     config_init(alt_config, "ptdump");
-    
-    /* init database */
-    strcpy(fnamebuf, config_dir);
-    strcat(fnamebuf, FNAME_DBDIR);
-    r = CONFIG_DB_PTS->init(fnamebuf, 0);
-    if(r != CYRUSDB_OK) {
-	fprintf(stderr,"error with CONFIG_DB_PTS->init()",
-	       cyrusdb_strerror(r));
-	exit(1);
-    }
 
     /* open database */
     strcpy(fnamebuf, config_dir);
@@ -127,7 +117,7 @@ int main(int argc, char *argv[])
 
     CONFIG_DB_PTS->close(ptdb);
 
-    CONFIG_DB_PTS->done();
+    cyrus_done();
 
     return 0;
 }

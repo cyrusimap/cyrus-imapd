@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.42 2002/11/07 15:11:16 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.43 2002/11/15 21:46:56 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -654,6 +654,8 @@ void shut_down(int code)
     tls_shutdown_serverengine();
 #endif
 
+    cyrus_done();
+
     exit(code);
 }
 
@@ -674,7 +676,6 @@ void fatal(const char *s, int code)
     }
     syslog(LOG_ERR, "Fatal error: %s", s);
     shut_down(code);
-
 }
 
 /*

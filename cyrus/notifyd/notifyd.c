@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.10.2.3 2002/10/08 20:50:22 rjs3 Exp $
+ * $Id: notifyd.c,v 1.10.2.4 2002/11/15 21:47:04 rjs3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -79,6 +79,8 @@ static notifymethod_t *default_method;	/* default method daemon is using */
 void shut_down(int code) __attribute__ ((noreturn));
 void shut_down(int code)
 {
+    cyrus_done();
+
     /* done */
     exit(code);
 }

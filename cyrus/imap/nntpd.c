@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.41 2002/11/07 15:11:19 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.42 2002/11/15 21:46:58 rjs3 Exp $
  */
 
 /*
@@ -477,6 +477,8 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
+
+    cyrus_done();
 
     exit(code);
 }

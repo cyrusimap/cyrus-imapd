@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.33.4.1 2002/08/28 18:40:44 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.33.4.2 2002/11/15 21:46:57 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -183,7 +183,6 @@ void mboxlist_open(char *name);
 void mboxlist_close(void);
 
 /* initialize database structures */
-#define MBOXLIST_RECOVER 0x01
 #define MBOXLIST_SYNC 0x02
 void mboxlist_init(int flags);
 

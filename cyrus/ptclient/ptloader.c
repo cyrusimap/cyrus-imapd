@@ -42,12 +42,11 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.25.4.4 2002/11/14 20:15:50 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.25.4.5 2002/11/15 21:47:05 rjs3 Exp $";
 
 #include <config.h>
 
 #include <string.h>
-#include "auth_krb_pts.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -59,10 +58,9 @@ static char rcsid[] __attribute__((unused)) =
 #include <sys/un.h>
 #include <sys/uio.h>
 #include <krb.h>
-#include <rx/rxkad.h>
-#include <afs/auth.h>
 #include <com_err.h>
 
+#include "auth_krb_pts.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "hash.h"
@@ -70,6 +68,10 @@ static char rcsid[] __attribute__((unused)) =
 #include "lock.h"
 #include "retry.h"
 #include "xmalloc.h"
+
+/* AFS stuff after auth_krb_pts */
+#include <rx/rxkad.h>
+#include <afs/auth.h>
 
 /* config.c info (libimap) */
 const int config_need_data = 0;
@@ -93,7 +95,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     char fnamebuf[1024];
     extern char *optarg;
 
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.25.4.4 2002/11/14 20:15:50 rjs3 Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.25.4.5 2002/11/15 21:47:05 rjs3 Exp $");
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {
@@ -114,13 +116,6 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     if (r) {
 	syslog(LOG_DEBUG, "pr_Initialize failed: %d", r);
 	fatal("pr_initialize failed", EC_TEMPFAIL);
-    }
-
-    strcpy(fnamebuf, config_dir);
-    strcat(fnamebuf, FNAME_DBDIR);
-    r = DB->init(fnamebuf, 0);
-    if (r != CYRUSDB_OK) {
-	fatal("can't initialize the database environment", EC_TEMPFAIL);
     }
 
     strcpy(fnamebuf, config_dir);
@@ -276,4 +271,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25.4.4 2002/11/14 20:15:50 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25.4.5 2002/11/15 21:47:05 rjs3 Exp $ */

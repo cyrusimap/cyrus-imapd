@@ -67,7 +67,7 @@
 #include "imapconf.h"
 #include "lock.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.10.16.3 2002/11/14 19:36:27 rjs3 Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.10.16.4 2002/11/15 21:47:05 rjs3 Exp $";
 
 /* global */
 time_t timenow;
@@ -147,16 +147,6 @@ int main(int argc, char *argv[])
 	   expire_time, timenow);
     syslog(LOG_DEBUG, "%s", rcsid);
     
-    /* init database */
-    strcpy(fnamebuf, config_dir);
-    strcat(fnamebuf, FNAME_DBDIR);
-    r = CONFIG_DB_PTS->init(fnamebuf, 0);
-    if(r != CYRUSDB_OK) {
-	syslog(LOG_ERR, "error with CONFIG_DB_PTS->init()",
-	       cyrusdb_strerror(r));
-	exit(1);
-    }
-
     /* open database */
     strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBFIL);
@@ -172,7 +162,7 @@ int main(int argc, char *argv[])
 
     CONFIG_DB_PTS->close(ptdb);
 
-    CONFIG_DB_PTS->done();
+    cyrus_done();
 
     syslog(LOG_INFO, "finished");
     return 0;

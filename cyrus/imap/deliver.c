@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.164.4.3 2002/10/08 20:50:10 rjs3 Exp $ */
+/* $Id: deliver.c,v 1.164.4.4 2002/11/15 21:46:55 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -97,8 +97,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 		       char **users, int numusers, char *mailbox);
 static int init_net(const char *sockaddr);
 
-static void
-usage()
+static void usage()
 {
     fprintf(stderr, 
 	    "421-4.3.0 usage: deliver [-C <alt_config> ] [-m mailbox]"
@@ -109,8 +108,14 @@ usage()
 
 void fatal(const char* s, int code)
 {
+    static int recurse_code = 0;
+    
+    if(recurse_code) exit(code);
+    else recurse_code = 0;
+    
     prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
     prot_flush(deliver_out);
+    cyrus_done();
     exit(code);
 }
 
@@ -186,6 +191,7 @@ void pipe_through(int lmtp_in, int lmtp_out, int local_in, int local_out)
 
 int main(int argc, char **argv)
 {
+    int r;
     int opt;
     int lmtpflag = 0;
     int ignorequota = 0;
@@ -218,6 +224,7 @@ int main(int argc, char **argv)
 	    if (mailboxname) {
 		fprintf(stderr, "deliver: multiple -m options\n");
 		usage();
+		/* NOTREACHED */
 	    }
 	    if (*optarg) mailboxname = optarg;
 	    break;
@@ -226,6 +233,7 @@ int main(int argc, char **argv)
 	    if (authuser) {
 		fprintf(stderr, "deliver: multiple -a options\n");
 		usage();
+		/* NOTREACHED */
 	    }
 	    authuser = optarg;
 	    break;
@@ -254,6 +262,7 @@ int main(int argc, char **argv)
 
 	default:
 	    usage();
+	    /* NOTREACHED */
 	}
     }
 
@@ -284,8 +293,12 @@ int main(int argc, char **argv)
     }
 
     /* deliver to users or global mailbox */
-    return deliver_msg(return_path,authuser, ignorequota,
-		       argv+optind, argc - optind, mailboxname);
+    r = deliver_msg(return_path,authuser, ignorequota,
+		    argv+optind, argc - optind, mailboxname);
+
+    cyrus_done();
+
+    return r;
 }
 
 void just_exit(const char *msg)

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.1.2.4 2002/10/09 18:32:17 ken3 Exp $
+ * $Id: fetchnews.c,v 1.1.2.5 2002/11/15 21:46:56 rjs3 Exp $
  */
 
 #include <config.h>
@@ -52,25 +52,19 @@
 #include <time.h>
 #include <signal.h>
 
+#include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/un.h>
+
 #include "prot.h"
-#include "xmalloc.h"
 #include "imapconf.h"
 #include "exitcodes.h"
+#include "xmalloc.h"
 
 /* global state */
 const int config_need_data = 0;
-
-void fatal(const char *message, int code)
-{
-    fprintf(stderr, "fatal error: %s\n", message);
-    exit(code);
-}
-
-void shut_down(int code) __attribute__((noreturn));
-void shut_down(int code)
-{
-    exit(code);
-}
 
 void usage(void)
 {
@@ -130,10 +124,6 @@ int main(int argc, char *argv[])
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    signals_set_shutdown(&shut_down);
-    signals_add_handlers();
-    signal(SIGPIPE, SIG_IGN);
-
     while ((opt = getopt(argc, argv, "C:s:p:w:f:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
@@ -158,10 +148,13 @@ int main(int argc, char *argv[])
 
 	default:
 	    usage();
-	    break;
+	    /* NOTREACHED */
 	}
     }
-    if (argc - optind < 1) usage();
+    if (argc - optind < 1) {
+	usage();
+	/* NOTREACHED */
+    }
 
     peer = argv[optind++];
 
@@ -170,6 +163,7 @@ int main(int argc, char *argv[])
     /* connect to the peer */
     if ((psock = init_net(peer, 119, &pin, &pout)) < 0) {
 	fprintf(stderr, "connection to %s failed\n", peer);
+	cyrus_done();
 	exit(-1);
     }
 
@@ -325,5 +319,7 @@ int main(int argc, char *argv[])
 	prot_free(sout);
     }
 
+    cyrus_done();
+    
     return 0;
 }

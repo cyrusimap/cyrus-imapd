@@ -41,7 +41,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: expirenews.c,v 1.1.2.2 2002/10/23 19:55:07 ken3 Exp $ */
+/* $Id: expirenews.c,v 1.1.2.3 2002/11/15 21:46:56 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -57,15 +57,10 @@
 #include "exitcodes.h"
 #include "imapconf.h"
 #include "netnews.h"
+#include "xmalloc.h"
 
 /* global state */
 const int config_need_data = 0;
-
-void fatal(const char *message, int code)
-{
-    fprintf(stderr, "fatal error: %s\n", message);
-    exit(code);
-}
 
 void usage(void)
 {
@@ -112,7 +107,7 @@ int main(int argc, char *argv[])
 	
 	default:
 	    usage();
-	    break;
+	    /* NOTREACHED */
 	}
     }
 
@@ -122,7 +117,8 @@ int main(int argc, char *argv[])
     if (netnews_init(NULL, 0) != 0) {
 	fprintf(stderr, "expirenews: unable to init news database\n");
 	syslog(LOG_ERR, "expirenews: unable to init news database\n");
-	exit(1);
+	cyrus_done();
+	exit(-1);
     }
 
     syslog(LOG_NOTICE, "expirenews: pruning back %d days", days);
@@ -144,6 +140,7 @@ int main(int argc, char *argv[])
     free_wildmats(wild);
 
     netnews_done();
+    cyrus_done();
 
-    exit(0);
+    return 0;
 }

@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.15 2002/10/21 18:07:53 ken3 Exp $
+ * $Id: mupdate.c,v 1.60.4.16 2002/11/15 21:46:57 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -464,13 +464,21 @@ int service_init(int argc, char **argv,
 /* called if 'service_init()' was called but not 'service_main()' */
 void service_abort(int error)
 {
-    exit(error);
+    shut_down(error);
 }
 
 void fatal(const char *s, int code)
 {
+    static int recurse_code = 0;
+
+    if(recurse_code) exit(code);
+    else recurse_code = code;
+    
     syslog(LOG_ERR, "%s", s);
-    exit(code);
+    shut_down(code);
+
+    /* NOTREACHED */
+    exit(code); /* shut up GCC */
 }
 
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
@@ -1426,6 +1434,8 @@ void sendupdates(struct conn *C, int flushnow)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
+    cyrus_done();
+    
     exit(code);
 }
 

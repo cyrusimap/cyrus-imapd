@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.23.6.2 2002/11/07 15:11:15 ken3 Exp $ */
+/* $Id: arbitron.c,v 1.23.6.3 2002/11/15 21:46:55 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -142,9 +142,9 @@ int main(int argc,char **argv)
     (*arb_namespace.mboxlist_findall)(&arb_namespace, pattern, 1, 0, 0,
 				      do_mailbox, NULL);
 
-    exit(code);
-
-    return -1; /* never reaches */
+    cyrus_done();
+    
+    return code; /* never reaches */
 }
 
 void usage(void)
@@ -232,10 +232,3 @@ int arbitron(char *name)
 
     return r;
 }
-
-void fatal(const char* s, int code)
-{
-    fprintf(stderr, "arbitron: %s\n", s);
-    exit(code);
-}
-

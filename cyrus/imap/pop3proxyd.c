@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.17 2002/11/07 15:11:19 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.18 2002/11/15 21:46:58 rjs3 Exp $
  */
 #include <config.h>
 
@@ -356,6 +356,8 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
+
+    cyrus_done();
 
     exit(code);
 }

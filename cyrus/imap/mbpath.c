@@ -1,6 +1,6 @@
 /* mbpath.c -- help the sysadmin to find the path matching the mailbox
  *
- * $Id: mbpath.c,v 1.9.14.2 2002/11/07 15:11:18 ken3 Exp $
+ * $Id: mbpath.c,v 1.9.14.3 2002/11/15 21:46:57 rjs3 Exp $
  * 
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -42,7 +42,7 @@
  *
  */
 
-/* static char _rcsid[] = "$Id: mbpath.c,v 1.9.14.2 2002/11/07 15:11:18 ken3 Exp $"; */
+/* static char _rcsid[] = "$Id: mbpath.c,v 1.9.14.3 2002/11/15 21:46:57 rjs3 Exp $"; */
 
 #include <config.h>
 
@@ -77,21 +77,11 @@ extern char *optarg;
 /* config.c stuff */
 const int config_need_data = 0;
 
-void
-fatal(const char *s, int code) 
-{
-  if (s) {
-    fprintf(stderr,"%s\n",s);
-  }
-  mboxlist_done();
-  exit(code);
-}
-
 static int 
 usage(void) {
-  fprintf(stderr,"usage: cdmb [-C <alt_config>] [-q] <mailbox name>...\n");
+  fprintf(stderr,"usage: mbpath [-C <alt_config>] [-q] <mailbox name>...\n");
   fprintf(stderr,"\t-q\tquietly drop any error messages\n");
-  fatal(NULL, -1);
+  exit(-1);
 }
 
 int
@@ -145,8 +135,10 @@ main(int argc, char **argv)
   mboxlist_close();
   mboxlist_done();
 
-  exit(0);
+  cyrus_done();
+
+  return 0;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.9.14.2 2002/11/07 15:11:18 ken3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.9.14.3 2002/11/15 21:46:57 rjs3 Exp $ */
 

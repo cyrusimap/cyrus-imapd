@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.6.6.2 2002/10/08 20:50:09 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.6.6.3 2002/11/15 21:46:55 rjs3 Exp $
  */
 
 #include <config.h>
@@ -65,11 +65,12 @@
 #endif
 
 #include "exitcodes.h"
-#include "mboxlist.h"
-#include "mailbox.h"
 #include "index.h"
 #include "imapconf.h"
+#include "mboxlist.h"
+#include "mailbox.h"
 #include "map.h"
+#include "xmalloc.h"
 
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
@@ -79,12 +80,6 @@ static const char *index_base;
 static unsigned long index_len;
 static unsigned long start_offset;
 static unsigned long record_size;
-
-void fatal(const char *message, int code)
-{
-    fprintf(stderr, "fatal error: %s\n", message);
-    exit(code);
-}
 
 void usage(void)
 {
@@ -220,8 +215,7 @@ int main(int argc, char **argv)
 
 	default:
 	    usage();
-	    exit(EC_USAGE);
-	    break;
+	    /* NOTREACHED */
 	}
     }
 
@@ -245,5 +239,7 @@ int main(int argc, char **argv)
     mboxlist_close();
     mboxlist_done();
 
+    cyrus_done();
+    
     return 0;
 }

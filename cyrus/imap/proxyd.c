@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.33 2002/11/07 15:11:19 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.34 2002/11/15 21:46:58 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1367,6 +1367,8 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
+
+    cyrus_done();
 
     exit(code);
 }

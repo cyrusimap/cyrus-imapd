@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.31.4.1 2002/09/25 19:08:54 ken3 Exp $ */
+/* $Id: duplicate.c,v 1.31.4.2 2002/11/15 21:46:56 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -88,18 +88,11 @@
 static struct db *dupdb = NULL;
 static int duplicate_dbopen = 0;
 
-
+/* must be called after config_init */
 int duplicate_init(char *fname, int myflags)
 {
     char buf[1024];
     int r = 0;
-    int flags = 0;
-
-    /* create the name of the db file */
-    strcpy(buf, config_dir);
-    strcat(buf, FNAME_DBDIR);
-    if (myflags & DUPLICATE_RECOVER) flags |= CYRUSDB_RECOVER;
-    r = DB->init(buf, flags);
 
     if (r != 0)
 	syslog(LOG_ERR, "DBERROR: init %s: %s", buf,

@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.11 2002/11/14 19:36:19 rjs3 Exp $
+ * $Id: imapconf.h,v 1.16.4.12 2002/11/15 21:46:56 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,9 +49,15 @@
 #include "mboxname.h"
 
 /* Startup the configuration subsystem */
+/* Note that config_init is pretty much the wholesale startup function
+ * for any libimap/libcyrus process, and should be called fairly early
+ * (and needs an associated cyrus_done call) */
 extern int config_init(const char *alt_config, const char *ident);
 extern void config_sasl_init(int client, int server,
 			     const sasl_callback_t *callbacks);
+
+/* Shutdown a cyrus process */
+extern void cyrus_done();
 
 /* these will assert() if they're called on the wrong type of
    option (imapopt.c) */

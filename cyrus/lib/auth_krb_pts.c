@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- * $Id: auth_krb_pts.c,v 1.44.4.6 2002/11/14 20:59:43 leg Exp $
+ * $Id: auth_krb_pts.c,v 1.44.4.7 2002/11/15 21:47:00 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -369,16 +369,9 @@ struct auth_state *auth_newstate(const char *identifier,
     }
 
 #ifdef RUNNING_QUANTIFY
+/* xxx do we still need this with the cyrusdb routines? */
     return newstate;
 #endif
-
-    strcpy(fnamebuf, config_dir);
-    strcat(fnamebuf, FNAME_DBDIR);
-    /* XXX */
-    r = CONFIG_DB_PTS->init(fnamebuf, 0);
-    if (r != CYRUSDB_OK) {
-	return newstate;
-    }
     
     strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBFIL);
@@ -493,9 +486,6 @@ struct auth_state *auth_newstate(const char *identifier,
  done:
     /* close and unlock the database */
     CONFIG_DB_PTS->close(ptdb);
-
-    /* XXX */
-    CONFIG_DB_PTS->done();
 
     return newstate;
 }

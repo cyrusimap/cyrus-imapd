@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: tls_prune.c,v 1.2.6.1 2002/10/08 20:50:13 rjs3 Exp $ */
+/* $Id: tls_prune.c,v 1.2.6.2 2002/11/15 21:46:59 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -50,15 +50,10 @@
 #include "exitcodes.h"
 #include "imapconf.h"
 #include "tls.h"
+#include "xmalloc.h"
 
 /* global state */
 const int config_need_data = 0;
-
-void fatal(const char *message, int code)
-{
-    fprintf(stderr, "fatal error: %s\n", message);
-    exit(code);
-}
 
 void usage(void)
 {
@@ -66,11 +61,10 @@ void usage(void)
     exit(-1);
 }
 
-
 int main(int argc, char *argv[])
 {
     extern char *optarg;
-    int opt;
+    int opt,r;
     char *alt_config = NULL;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
@@ -89,5 +83,9 @@ int main(int argc, char *argv[])
 
     config_init(alt_config, "tls_prune");
 
-    return tls_prune_sessions();
+    r = tls_prune_sessions();
+
+    cyrus_done();
+
+    return r;
 }

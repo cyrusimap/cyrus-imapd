@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.41.4.4 2002/11/07 15:11:20 ken3 Exp $ */
+/* $Id: quota.c,v 1.41.4.5 2002/11/15 21:46:58 rjs3 Exp $ */
 
 
 #include <config.h>
@@ -171,9 +171,9 @@ int main(int argc,char **argv)
 	code = convert_code(r);
     }
 
-    exit(code);
+    cyrus_done();
 
-    return 0;
+    return code;
 }
 
 void usage(void)
@@ -516,10 +516,4 @@ reportquota(void)
 					       "cyrus", buf);
 	printf(" %7ld %s\n", quota[i].quota.used / QUOTA_UNITS, buf);
     }
-}
-
-void fatal(const char* s, int code)
-{
-    fprintf(stderr, "quota: %s\n", s);
-    exit(code);
 }

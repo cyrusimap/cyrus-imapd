@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.14.4.1 2002/10/08 20:50:10 rjs3 Exp $
+ $Id: ctl_deliver.c,v 1.14.4.2 2002/11/15 21:46:55 rjs3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,26 +57,16 @@
 #include <time.h>
 #include <signal.h>
 
-#include "util.h"
-#include "imapconf.h"
-#include "exitcodes.h"
+#include "cyrusdb.h"
 #include "duplicate.h"
+#include "exitcodes.h"
+#include "imapconf.h"
+#include "libcyr_cfg.h"
+#include "util.h"
+#include "xmalloc.h"
 
 /* global state */
 const int config_need_data = 0;
-
-void fatal(const char *message, int code)
-{
-    fprintf(stderr, "fatal error: %s\n", message);
-    exit(code);
-}
-
-void shut_down(int code) __attribute__((noreturn));
-void shut_down(int code)
-{
-    duplicate_done();
-    exit(code);
-}
 
 void usage(void)
 {
@@ -85,7 +75,6 @@ void usage(void)
 	    "ctl_deliver [-C <altconfig>] -E <days>\n");
     exit(-1);
 }
-
 
 int
 main(argc, argv)
@@ -102,10 +91,6 @@ main(argc, argv)
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    signals_set_shutdown(&shut_down);
-    signals_add_handlers();
-    signal(SIGPIPE, SIG_IGN);
-
     while ((opt = getopt(argc, argv, "C:drE:f:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
@@ -121,7 +106,7 @@ main(argc, argv)
 	    /* deprecated, but we still support it */
 	    fprintf(stderr, "ctl_deliver -r is deprecated: "
 		    "use ctl_cyrusdb -r instead\b");
-	    flag |= DUPLICATE_RECOVER;
+	    libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
 	    if (op == NONE) op = RECOVER;
 	    break;
 
@@ -170,8 +155,9 @@ main(argc, argv)
 	break;
     }
     duplicate_done();
+    cyrus_done();
 
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.14.4.1 2002/10/08 20:50:10 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.14.4.2 2002/11/15 21:46:55 rjs3 Exp $ */

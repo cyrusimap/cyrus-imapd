@@ -3,7 +3,7 @@
  * 9/21/99
  *
  *  Based upon Lutz Jaenicke's TLS patches for postfix
-
+ *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.38.4.1 2002/07/10 20:45:13 rjs3 Exp $ */
+/* $Id: tls.c,v 1.38.4.2 2002/11/15 21:46:59 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -559,6 +559,7 @@ static int tls_rand_init(void)
   * returns -1 on error
   */
 
+/* must be called after config_init */
 int     tls_init_serverengine(const char *ident,
 			      int verifydepth,
 			      int askcert,
@@ -636,11 +637,6 @@ int     tls_init_serverengine(const char *ident,
 	SSL_CTX_sess_set_new_cb(ctx, new_session_cb);
 	SSL_CTX_sess_set_remove_cb(ctx, remove_session_cb);
 	SSL_CTX_sess_set_get_cb(ctx, get_session_cb);
-
-	/* Initialize DB environment */
-	strcpy(dbdir, config_dir);
-	strcat(dbdir, FNAME_DBDIR);
-	r = DB->init(dbdir, 0);
 
 	if (r != 0)
 	    syslog(LOG_ERR, "DBERROR: init: %s", cyrusdb_strerror(r));
@@ -996,16 +992,12 @@ static int prune_cb(void *rock, const char *id, int idlen,
     return 0;
 }
 
+/* must be called after config_init */
 int tls_prune_sessions(void)
 {
     char dbdir[1024];
     int ret;
     struct prunerock prock;
-
-    /* initialize DB environment */
-    strcpy(dbdir, config_dir);
-    strcat(dbdir, FNAME_DBDIR);
-    DB->init(dbdir, 0);
 
    /* create the name of the db file */
     strcpy(dbdir, config_dir);

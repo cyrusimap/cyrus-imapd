@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: libcyr_cfg.c,v 1.1.2.3 2002/11/14 19:36:23 rjs3 Exp $
+/* $Id: libcyr_cfg.c,v 1.1.2.4 2002/11/15 21:47:01 rjs3 Exp $
  */
 
 #include <config.h>
@@ -51,6 +51,7 @@
 #include <stdlib.h>
 
 #include "libcyr_cfg.h"
+#include "cyrusdb.h"
 
 struct cyrusopt_s cyrus_options[] = {
     { CYRUSOPT_ZERO, { NULL }, CYRUS_OPT_NOTOPT },
@@ -75,6 +76,10 @@ struct cyrusopt_s cyrus_options[] = {
       (union cyrus_config_value)((const char *)"/var/imap"),
       CYRUS_OPT_STRING },
 
+    { CYRUSOPT_DB_INIT_FLAGS,
+      (union cyrus_config_value)((int)0),
+      CYRUS_OPT_INT },
+   
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }
 };
 
@@ -130,4 +135,14 @@ void libcyrus_config_setswitch(enum cyrus_opt opt, int val)
     assert(cyrus_options[opt].t == CYRUS_OPT_SWITCH);
 
     cyrus_options[opt].val.b = val;
+}
+
+void libcyrus_init()
+{
+    cyrusdb_init();
+}
+
+void libcyrus_done()
+{
+    cyrusdb_done();
 }

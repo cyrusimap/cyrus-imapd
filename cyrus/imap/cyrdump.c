@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.9.4.5 2002/11/15 18:16:44 rjs3 Exp $
+/* $Id: cyrdump.c,v 1.9.4.6 2002/11/15 21:46:55 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -98,9 +98,7 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
     struct incremental_record irec;
 
-    if (geteuid() == 0) {
-	usage(argv[0]);
-    }
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
     while ((option = getopt(argc, argv, "v")) != EOF) {
 	switch (option) {
@@ -144,6 +142,8 @@ int main(int argc, char *argv[])
     mboxlist_close();
     mboxlist_done();
 
+    cyrus_done();
+    
     return 0;
 }
 
@@ -152,12 +152,6 @@ int usage(const char *name)
     fprintf(stderr, "usage: %s [-v] [mboxpattern ...]\n", name);
 
     exit(EC_USAGE);
-}
-
-void fatal(const char *s, int code) 
-{
-    fprintf(stderr, "fatal error: %s\n", s);
-    exit(code);
 }
 
 /* 'boundary' must be at least 100 long */

@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.40.4.7 2002/10/08 20:50:25 rjs3 Exp $
+ * $Id: timsieved.c,v 1.40.4.8 2002/11/15 21:47:07 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -134,6 +134,8 @@ void shut_down(int code)
     if (sieved_in) prot_free(sieved_in);
 
     if (sieved_logfd != -1) close(sieved_logfd);
+
+    cyrus_done();
     
     /* done */
     exit(code);

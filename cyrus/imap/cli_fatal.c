@@ -1,4 +1,5 @@
-/* 
+/* cli_fatal.c -- Provide a generic fatal() for the command line utilities
+ *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,25 +37,29 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ * $Id: cli_fatal.c,v 1.1.2.1 2002/11/15 21:46:55 rjs3 Exp $
  */
 
-/* $Id: duplicate.h,v 1.11.4.2 2002/11/15 21:46:56 rjs3 Exp $ */
+#include <config.h>
 
-#ifndef DUPLICATE_H
-#define DUPLICATE_H
+#include <stdlib.h>
+#include <stdio.h>
 
-/* name of the duplicate delivery database */
-#define FNAME_DELIVERDB "/deliver.db"
+#include "imapconf.h"
+#include "xmalloc.h"
 
-int duplicate_init(char*, int);
+/* generic fatal() routine for command line utilities */
+void fatal(const char *message, int code)
+{
+    static int recurse_code = 0;
 
-time_t duplicate_check(char *id, int idlen, char *to, int tolen);
-void duplicate_log(char *msgid, char *name);
-void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark);
+    if (recurse_code) {
+	exit(code);
+    }
 
-int duplicate_prune(int days);
-int duplicate_dump(FILE *f);
-
-int duplicate_done(void);
-
-#endif /* DUPLICATE_H */
+    recurse_code = code;
+    fprintf(stderr, "fatal error: %s\n", message);
+    cyrus_done();
+    exit(code);
+}

@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.36.2.3 2002/11/07 15:11:15 ken3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.36.2.4 2002/11/15 21:46:55 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -56,13 +56,14 @@
 #include <string.h>
 #include <sasl/sasl.h>
 
-#include "exitcodes.h"
-#include "mboxlist.h"
-#include "imapconf.h"
 #include "assert.h"
-#include "xmalloc.h"
+#include "exitcodes.h"
 #include "imap_err.h"
+#include "imapconf.h"
+#include "libcyr_cfg.h"
+#include "mboxlist.h"
 #include "mupdate-client.h"
+#include "xmalloc.h"
 
 /* config.c stuff */
 const int config_need_data = 0;
@@ -78,12 +79,6 @@ enum mboxop { DUMP,
 	      CHECKPOINT,
 	      UNDUMP,
 	      NONE };
-
-void fatal(const char *message, int code)
-{
-    fprintf(stderr, "fatal error: %s\n", message);
-    exit(code);
-}
 
 struct dumprock {
     enum mboxop op;
@@ -134,7 +129,8 @@ static int warn_only = 0;
  * to verify that its info is up to date.
  */
 static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
-			   const char *cmd, void *context) 
+			   const char *cmd,
+			   void *context __attribute__((unused))) 
 {
     int ret;
 
@@ -688,22 +684,25 @@ int main(int argc, char *argv[])
     if(op != DUMP && partition) usage();
     if(op != DUMP && dopurge) usage();
 
+    if(op == RECOVER) {
+	syslog(LOG_NOTICE, "running mboxlist recovery");
+	libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
+    }
+    
     config_init(alt_config, "ctl_mboxlist");
     config_sasl_init(1,0,NULL);
 
     switch (op) {
     case RECOVER:
-	syslog(LOG_NOTICE, "running mboxlist recovery");
-	mboxlist_init(MBOXLIST_RECOVER);
-	mboxlist_done();
+	/* this was done by the call to config_init via libcyrus */
 	syslog(LOG_NOTICE, "done running mboxlist recovery");
-	return 0;
+	break;
 
     case CHECKPOINT:
 	syslog(LOG_NOTICE, "checkpointing mboxlist");
 	mboxlist_init(MBOXLIST_SYNC);
 	mboxlist_done();
-	return 0;
+	break;
 
     case DUMP:
     case M_POPULATE:
@@ -714,7 +713,7 @@ int main(int argc, char *argv[])
 	
 	mboxlist_close();
 	mboxlist_done();
-	return 0;
+	break;
 
     case UNDUMP:
 	mboxlist_init(0);
@@ -724,12 +723,14 @@ int main(int argc, char *argv[])
 
 	mboxlist_close();
 	mboxlist_done();
-	return 0;
+	break;
 
     default:
 	usage();
+	cyrus_done();
 	return 1;
     }
 
+    cyrus_done();
     return 0;
 }

@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.15.2.5 2002/11/13 14:44:53 ken3 Exp $
+ * $Id: ipurge.c,v 1.15.2.6 2002/11/15 21:46:56 rjs3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -114,9 +114,7 @@ main (int argc, char *argv[]) {
   char *alt_config = NULL;
   int r;
 
-  if (geteuid() == 0) { /* don't run as root, changes permissions */
-    usage(argv[0]);
-  }
+  if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
   while ((option = getopt(argc, argv, "C:hxd:b:k:m:fs")) != EOF) {
     switch (option) {
@@ -167,8 +165,6 @@ main (int argc, char *argv[]) {
 
   config_init(alt_config, "ipurge");
 
-  if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-
   /* Set namespace -- force standard (internal) */
   if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
       syslog(LOG_ERR, error_message(r));
@@ -194,6 +190,8 @@ main (int argc, char *argv[]) {
   mboxlist_close();
   mboxlist_done();
 
+  cyrus_done();
+  
   return 0;
 }
 
@@ -328,12 +326,6 @@ void print_stats(mbox_stats_t *stats)
     printf("Deleted messages  \t\t %d\n",stats->deleted);
     printf("Deleted bytes     \t\t %d\n",stats->deleted_bytes);
     printf("Remaining messages\t\t %d\n",stats->total - stats->deleted);
-    printf("Remaining bytes   \t\t %d\n",stats->total_bytes - stats->deleted_bytes);
-}
-
-/* fatal needed for imap library */
-void
-fatal(const char *s, int code) {
-  fprintf(stderr, "ipurge: %s\n", s);
-  exit(code);
+    printf("Remaining bytes   \t\t %d\n",
+	   stats->total_bytes - stats->deleted_bytes);
 }

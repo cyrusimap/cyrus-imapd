@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68.4.7 2002/11/07 15:11:20 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.8 2002/11/15 21:46:58 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -113,7 +113,6 @@ void do_mboxlist(void);
 int do_reconstruct(char *name, int matchlen, int maycreate, void *rock);
 int reconstruct(char *name, struct discovered *l);
 void usage(void);
-void shut_down(int code);
 
 extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
@@ -169,21 +168,22 @@ int main(int argc, char **argv)
     }
 
     if (mflag) {
-	if (rflag || fflag || optind != argc) usage();
+	if (rflag || fflag || optind != argc) {
+	    cyrus_done();
+	    usage();
+	}
 	do_mboxlist();
     }
 
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    signals_set_shutdown(&shut_down);
-    signals_add_handlers();
-
     mailbox_reconstructmode();
 
     if (optind == argc) {
 	if (rflag) {
 	    fprintf(stderr, "please specify a mailbox to recurse from\n");
+	    cyrus_done();
 	    exit(EC_USAGE);
 	}
 	assert(!rflag);
@@ -231,7 +231,9 @@ int main(int argc, char **argv)
     mboxlist_close();
     mboxlist_done();
 
-    exit(code);
+    cyrus_done();
+
+    return code;
 }
 
 void usage(void)
@@ -727,7 +729,8 @@ char *cleanacl(char *acl, char *mboxname)
 	*acl++ = '\0';
 
 	cyrus_acl_set(&newacl, identifier, ACL_MODE_SET,
-		      cyrus_acl_strtomask(rights), aclcanonproc, (void *)owner);
+		      cyrus_acl_strtomask(rights), aclcanonproc,
+		      (void *)owner);
     }
 
     return newacl;
@@ -740,29 +743,4 @@ void do_mboxlist(void)
 {
     fprintf(stderr, "reconstructing mailboxes.db currently not supported\n");
     exit(EC_USAGE);
-}
-
-/*
- * Cleanly shut down and exit
- */
-void shut_down(int code) __attribute__((noreturn));
-void shut_down(int code)
-{
-    mboxlist_close();
-    mboxlist_done();
-    exit(code);
-}
-
-void fatal(const char* s, int code)
-{
-    static int recurse_code = 0;
-    
-    if (recurse_code) {
-	/* We were called recursively. Just give up */
-	exit(recurse_code);
-    }
-    
-    recurse_code = code;
-    fprintf(stderr, "reconstruct: %s\n", s);
-    shut_down(code);
 }
