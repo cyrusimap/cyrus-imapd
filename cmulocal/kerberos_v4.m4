@@ -37,7 +37,7 @@ AC_DEFUN(CMU_KRB_INC_WHERE, [
         AC_MSG_RESULT(found)
         break
       else
-        AC_MSG_RESULT(no found)
+        AC_MSG_RESULT(not found)
       fi
     done
 ])
@@ -51,7 +51,7 @@ AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lkrb -ldes"
 AC_TRY_LINK(,
-[dest_tkt();],
+[dest_tkt();des_ecb_encrypt();],
 [ac_cv_found_krb_lib=yes],
 ac_cv_found_krb_lib=no)
 LIBS=$saved_LIBS
@@ -66,7 +66,7 @@ AC_DEFUN(CMU_KRB_LIB_WHERE, [
         AC_MSG_RESULT(found)
         break
       else
-        AC_MSG_RESULT(no found)
+        AC_MSG_RESULT(not found)
       fi
     done
 ])
@@ -106,7 +106,7 @@ AC_ARG_WITH(krb4-include,
 	  ac_cv_krb_where_inc=$with_krb4_include
 	fi
 	if test "X$ac_cv_krb_where_inc" = "X"; then
-	  CMU_KRB_INC_WHERE(/usr/athena/include /usr/include/kerberosIV /usr/include/kerberos /usr/local/include)
+	  CMU_KRB_INC_WHERE(/usr/athena/include /usr/include/kerberosIV /usr/local/include /usr/include/kerberos)
 	fi
 
 	AC_MSG_CHECKING(whether to include kerberos 4)
