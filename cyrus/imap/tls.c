@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.21 2001/08/22 01:34:27 ken3 Exp $ */
+/* $Id: tls.c,v 1.22 2001/08/23 12:59:31 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1009,6 +1009,21 @@ int tls_prune_sessions(void)
     DB->done();
 
     return 0;
+}
+
+/* fill string buffer with info about tls connection */
+int tls_get_info(SSL *conn, char *buf, size_t len)
+{
+    int usebits = 0;
+    int algbits = 0;
+
+    usebits = SSL_get_cipher_bits(conn, &algbits);
+    snprintf(buf, len, "version=%s cipher=%s bits=%d/%d verify=%s",
+	     SSL_get_cipher_version(conn), SSL_get_cipher_name(conn),
+	     usebits, algbits,
+	     SSL_get_verify_result(conn) == X509_V_OK ? "YES" : "NO");
+
+    return (strlen(buf));
 }
 
 #else

@@ -73,6 +73,9 @@ int tls_shutdown_serverengine(void);
 /* remove expired sessions from the external cache */
 int tls_prune_sessions(void);
 
+/* fill string buffer with info about tls connection */
+int tls_get_info(SSL *conn, char *buf, size_t len);
+
 #endif /* HAVE_SSL */
 
 #endif /* TLS_H */

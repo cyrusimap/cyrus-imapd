@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.31 2001/08/22 14:51:36 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.32 2001/08/23 12:59:31 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -109,6 +109,7 @@ struct clientdata {
 
     char clienthost[250];
     char lhlo_param[250];
+    char tls_info[250];
 
     sasl_conn_t *conn;
 };
@@ -851,17 +852,17 @@ static int savemsg(struct clientdata *cd,
     /* add a received header */
     t = time(NULL);
     rfc822date_gen(datestr, sizeof(datestr), t);
+    fprintf(f, "Received: from %s (%s)",
+	    cd->lhlo_param, cd->clienthost);
     if (m->authuser) {
-	fprintf(f, "Received: from %s (%s) (author=%s)\r\n"
-		"\tby %s (Cyrus %s); %s\r\n",
-		cd->lhlo_param, cd->clienthost, m->authuser,
-		config_servername, CYRUS_VERSION, datestr);
-    } else {
-	fprintf(f, "Received: from %s (%s)\r\n"
-		"\tby %s (Cyrus %s); %s\r\n",
-		cd->lhlo_param, cd->clienthost, 
-		config_servername, CYRUS_VERSION, datestr);
+	int *ssfp;
+	sasl_getprop(cd->conn, SASL_SSF, (void **) &ssfp);
+	fprintf(f, " (authenticated user=%s bits=%d)", m->authuser, *ssfp);
     }
+    fprintf(f, "\r\n\tby %s (Cyrus %s) with LMTP",
+		config_servername, CYRUS_VERSION);
+    if (*cd->tls_info) fprintf(f, " (%s)", cd->tls_info);
+    fprintf(f, "; %s\r\n", datestr);
 
     /* add any requested headers */
     if (addheaders) {
@@ -1028,6 +1029,7 @@ void lmtpmode(struct lmtp_func *func,
     cd.pout = pout;
     cd.clienthost[0] = '\0';
     cd.lhlo_param[0] = '\0';
+    cd.tls_info[0] = '\0';
 
     msg_new(&msg);
     if (sasl_server_new("lmtp", NULL, NULL, NULL, 0, &cd.conn) != SASL_OK) {
@@ -1542,6 +1544,9 @@ void lmtpmode(struct lmtp_func *func,
 		/* tell the prot layer about our new layers */
 		prot_settls(pin, tls_conn);
 		prot_settls(pout, tls_conn);
+
+		/* grab TLS info for Received: header */
+		tls_get_info(tls_conn, cd.tls_info, sizeof(cd.tls_info));
 
 		starttls_done = 1;
 
