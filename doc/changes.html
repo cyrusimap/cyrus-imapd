@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.19 2001/10/05 19:22:21 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.20 2001/10/23 20:15:18 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -7,39 +7,49 @@
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.16</h2>
 <ul>
-<li> altnamespace
+<li> altnamespace: it is now possible to display user mailboxes as
+siblings to the INBOX at the top-level (Ken Murchison)
 
-<li> unixhierarchysep
+<li> unixhierarchysep: it is now possible possible to use slash as the
+hierarchy seperator, instead of a period. (Ken Murchison, inspired by
+David Fuchs <dfuchs@uniserve.com>)
 
-<li> SSL/TLS session caching
+<li> SSL/TLS session caching (Ken Murchison)
 
-<li> support for IMAP CHILDREN & LISTEXT extensions
+<li> support for IMAP CHILDREN & LISTEXT extensions (Ken Murchison,
+work in progress)
 
-<li> check recipient quota & ACL at time of RCPT TO:
+<li> check recipient quota & ACL at time of RCPT TO: in <tt>lmtpd</tt>
+(Ken Murchison)
 
-<li> support for LMTP STARTTLS & SIZE extensions
+<li> support for LMTP STARTTLS & SIZE extensions (Ken Murchison)
 
-<li> unified deliver.db (using cyrusdb interface)
+<li> unified deliver.db, using cyrusdb interface, hopefully improving
+concurrency and performance (Ken Murchison)
 
-<li> fixed STORE FLAGS () bug
+<li> fixed STORE FLAGS () bug (Ken Murchison)
 
-<li> fixed SEARCH SUBJECT vs. SEARCH HEADER SUBJECT bug
+<li> fixed SEARCH SUBJECT vs. SEARCH HEADER SUBJECT bug (Ken Murchison)
 
-<li> users without an INBOX can have subscriptions
+<li> users without an INBOX can have subscriptions (Ken Murchison;
+noticing a trend here?)
 
-<li> added cyrusdb_db3_nosync backend
+<li> added cyrusdb_db3_nosync backend, used for duplicatedb and
+session cache, to postpone non-critical writes. (Ken Murchison)
 
-<li> do setgid and initgroups in master
+<li> do setgid and initgroups in master (as urged by several people)
 
-<li> added more config info to IMAP ID
+<li> added more config info to IMAP ID (in a vain attempt to improve debugging)
 
 <li> configure now checks for DB3.3
 
-<li> SQUAT (Rob O'Callahan)
+<li> SQUAT (Rob O'Callahan <roc@cs.cmu.edu>)
 
-<li> change SEARCH HEADER <x> to SEARCH <x> where possible (Rob O'Callahan)
+<li> change SEARCH HEADER <x> to SEARCH <x> utilizing internal cache
+where possible (Rob O'Callahan <roc@cs.cmu.edu>)
 
-<li> improved directory hashing (Gary Mills <mills@cc.UManitoba.CA>)
+<li> an improved directory hashing option (Gary Mills
+<mills@cc.UManitoba.CA>)
 
 <li> use of EGD for SSL/TLS (Amos Gouaux <amos@utdallas.edu>)
 
@@ -59,6 +69,8 @@ Hoeger <choeger@suse.de>)
 redirect and vacation
 
 <li> reconstruct -m works again???
+
+<li> small fixes to notify_unix
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.15</h2>
@@ -67,12 +79,12 @@ redirect and vacation
 people with unusual top-level hierarchy, fix by John Darrow,
 <tt>John.P.Darrow@wheaton.edu</tt>.
 
-<li> some important fixes to db3 interface code, by Walter Wong,
-<tt>wcw@cmu.edu</tt>, prompted by complaints from Scott Adkins,
+<li> some important fixes to db3 interface code, by Walter Wong
+<tt>wcw@cmu.edu</tt>, prompted by complaints from Scott Adkins
 <tt>adkinss@ohio.edu</tt>.
 
 <li> fixed some memory leaks in imclient and in the Perl IMAP module,
-prompted by Toni Andjelkovic, <tt>toni@soth.at</tt>.
+prompted by Toni Andjelkovic <tt>toni@soth.at</tt>.
 
 <li> fixed a longstanding authentication error in the Perl IMAP
 module, should remove pesky extra Password: prompt.
@@ -1340,7 +1352,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2001/10/05 19:22:21 $
+last modified: $Date: 2001/10/23 20:15:18 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
