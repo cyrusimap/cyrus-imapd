@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.21 2002/02/05 02:20:57 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.22 2002/02/05 05:23:56 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -501,19 +501,26 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
 
     if(!h || !cmd || !mdata) return 1;
 
+    /* coyp the data to the handle storage */
+    /* xxx why can't we just point to the 'mdata' buffers? */
+    strlcpy(h->mailbox_buf, mdata->mailbox, MAX_MAILBOX_NAME);
+    strlcpy(h->server_buf, mdata->server, MAX_MAILBOX_NAME);
+
     if(!strncmp(cmd, "MAILBOX", 7)) {
 	int len = strlen(mdata->acl) + 1;
 	
 	h->mailboxdata_buf.t = ACTIVE;
 	
 	if(len > h->acl_buf_len) {
-	    if(len < 2*h->acl_buf_len)
+	    /* we want to at least double the buffer */
+	    if (len < 2 * h->acl_buf_len) {
 		len = 2 * h->acl_buf_len;
+	    }
 
 	    h->acl_buf = xrealloc(h->acl_buf, len);
 	    strcpy(h->acl_buf, mdata->acl);
 	}
-    } else if(!strncmp(cmd, "RESERVE", 7)) {
+    } else if (!strncmp(cmd, "RESERVE", 7)) {
 	h->mailboxdata_buf.t = RESERVE;
 	if(!h->acl_buf) {
 	    h->acl_buf = xstrdup("");
