@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.35 2002/06/03 19:00:33 rjs3 Exp $ */
+/* $Id: service.c,v 1.36 2002/06/03 19:13:42 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -67,7 +67,6 @@
 #include <string.h>
 
 #include "service.h"
-#include "xmalloc.h"
 
 extern int optind;
 extern char *optarg;
@@ -290,7 +289,7 @@ int main(int argc, char **argv, char **envp)
 	syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
 	exit(EX_SOFTWARE);
     }
-    service = xstrdup(p);
+    service = strdup(p);
     if (service == NULL) {
 	syslog(LOG_ERR, "couldn't strdup() service: %m");
 	exit(EX_OSERR);
