@@ -1,5 +1,5 @@
 /* map.h -- memory mapping functions
- $Id: map.h,v 1.7 2000/05/23 20:56:17 robeson Exp $
+ $Id: map.h,v 1.8 2000/06/28 05:46:57 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,20 +44,12 @@
 #ifndef INCLUDED_MAP_H
 #define INCLUDED_MAP_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
 #define MAP_UNKNOWN_LEN ((unsigned long)-1)
 
-extern void map_refresh P((int fd, int onceonly, const char **base,
-		    unsigned long *len, unsigned long newlen,
-		    const char *name, const char *mboxname));
+extern void map_refresh(int fd, int onceonly, const char **base,
+			unsigned long *len, unsigned long newlen,
+			const char *name, const char *mboxname);
 
-extern void map_free P((const char **base, unsigned long *len));
+extern void map_free(const char **base, unsigned long *len);
 
 #endif /* INCLUDED_MAP_H */
