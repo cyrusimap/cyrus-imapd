@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.21 2002/01/18 23:12:24 leg Exp $
+ * $Id: mupdate.c,v 1.22 2002/01/19 21:09:00 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -69,6 +69,7 @@
 
 #include <pthread.h>
 #include <sasl/sasl.h>
+#include <sasl/saslutil.h>
 
 #include <skip-list.h>
 
@@ -1114,6 +1115,7 @@ void cmd_set(struct conn *C,
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
 
+#if 0
 void cmd_change(struct mupdate_mailboxdata *mdata,
 		const char *rock)
 {
@@ -1157,6 +1159,8 @@ void cmd_change(struct mupdate_mailboxdata *mdata,
     database_compress();
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
+
+#endif
 
 void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
 {
