@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.99 2002/02/28 22:03:38 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.100 2002/03/01 20:47:01 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -274,7 +274,10 @@ static void proxyd_gentag(char *tag)
    b) don't contain literals
    
    IMAP grammar allows both, unfortunately */
-static int pipe_until_tag(struct backend *s, char *tag)
+
+/* force_notfatal says to not fatal() if we lose connection to backend_current
+ * even though it is in 95% of the cases, a good idea... */
+static int pipe_until_tag(struct backend *s, char *tag, int force_notfatal)
 {
     char buf[2048];
     char eol[128];
@@ -294,6 +297,8 @@ static int pipe_until_tag(struct backend *s, char *tag)
 
 	if (!prot_fgets(buf, sizeof(buf), s->in)) {
 	    /* uh oh */
+	    if(s == backend_current && !force_notfatal)
+		fatal("Lost connection to selected backend", EC_UNAVAILABLE);
 	    proxyd_downserver(s);
 	    return PROXY_NOCONNECTION;
 	}
@@ -314,6 +319,9 @@ static int pipe_until_tag(struct backend *s, char *tag)
 		r = PROXY_BAD;
 		break;
 	    default: /* huh? no result? */
+		if(s == backend_current && !force_notfatal)
+		    fatal("Lost connection to selected backend",
+			  EC_UNAVAILABLE);
 		proxyd_downserver(s);
 		r = PROXY_NOCONNECTION;
 		break;
@@ -387,11 +395,11 @@ static int pipe_until_tag(struct backend *s, char *tag)
     return r;
 }
 
-static int pipe_including_tag(struct backend *s, char *tag)
+static int pipe_including_tag(struct backend *s, char *tag, int force_notfatal)
 {
     int r;
 
-    r = pipe_until_tag(s, tag);
+    r = pipe_until_tag(s, tag, force_notfatal);
     switch (r) {
     case PROXY_OK:
     case PROXY_NO:
@@ -399,9 +407,8 @@ static int pipe_including_tag(struct backend *s, char *tag)
 	prot_printf(proxyd_out, "%s %s", tag, s->last_result);
 	break;
     case PROXY_NOCONNECTION:
-	/* erg.  oh well, not much we can do about this. */
-	/* down the server, so we will attempt to reconnect next time */
-	proxyd_downserver(s);
+	/* don't have to worry about downing the server, since
+	 * pipe_until_tag does that for us */
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, 
 		    error_message(IMAP_SERVER_UNAVAILABLE));
 	break;
@@ -757,16 +764,12 @@ struct prot_waitevent *backend_timeout(struct protstream *s,
 /* return the connection to the server */
 struct backend *proxyd_findserver(char *server)
 {
-    int r = 0, i = 0;
+    int i = 0;
     struct backend *ret = NULL;
 
     while (backend_cached && backend_cached[i]) {
 	if (!strcmp(server, backend_cached[i]->hostname)) {
-	    char mytag[128];
-	
-	    /* ping the server */
-	    r = 
-
+	    /* xxx do we want to ping/noop the server here? */
 	    ret = backend_cached[i];
 	    break;
 	}
@@ -2289,7 +2292,7 @@ void cmd_noop(char *tag, char *cmd)
 {
     if (backend_current) {
 	prot_printf(backend_current->out, "%s %s\r\n", tag, cmd);
-	pipe_including_tag(backend_current, tag);
+	pipe_including_tag(backend_current, tag, 0);
     } else {
 	prot_printf(proxyd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
@@ -2645,7 +2648,7 @@ char idle_passthrough(char *tag, int idle_period, struct buf *arg)
     /* Either the client timed out, or gave us a continuation.
        In either case we're done, so terminate IDLE on backend */
     prot_printf(backend_current->out, "DONE\r\n");
-    pipe_until_tag(backend_current, tag);
+    pipe_until_tag(backend_current, tag, 0);
 
     return c;
 }
@@ -2658,7 +2661,7 @@ static struct prot_waitevent *idle_poll(struct protstream *s,
 	
     proxyd_gentag(mytag);
     prot_printf(backend_current->out, "%s Noop\r\n", mytag);
-    pipe_until_tag(backend_current, mytag);
+    pipe_until_tag(backend_current, mytag, 0);
     prot_flush(proxyd_out);
 
     return idle_getalerts(s, ev, rock);
@@ -2702,7 +2705,7 @@ void cmd_capability(char *tag)
 	proxyd_gentag(mytag);
 	/* do i want to do a NOOP for every operation? */
 	prot_printf(backend_current->out, "%s Noop\r\n", mytag);
-	pipe_until_tag(backend_current, mytag);
+	pipe_until_tag(backend_current, mytag, 0);
     }
     prot_printf(proxyd_out, "* CAPABILITY ");
     prot_printf(proxyd_out, CAPABILITY_STRING);
@@ -2769,7 +2772,7 @@ void cmd_append(char *tag, char *name)
     if (!r) {
 	prot_printf(s->out, "%s Append {%d+}\r\n%s ", tag, strlen(name), name);
 	if (!pipe_command(s, 16384)) {
-	    pipe_until_tag(s, tag);
+	    pipe_until_tag(s, tag, 0);
 	}
     } else {
 	eatline(proxyd_in, prot_getc(proxyd_in));
@@ -2781,7 +2784,7 @@ void cmd_append(char *tag, char *name)
 	proxyd_gentag(mytag);
 	
 	prot_printf(backend_current->out, "%s Noop\r\n", mytag);
-	pipe_until_tag(backend_current, mytag);
+	pipe_until_tag(backend_current, mytag, 0);
     }
 
     if (r) {
@@ -2829,7 +2832,9 @@ void cmd_select(char *tag, char *cmd, char *name)
 	/* switching servers; flush old server output */
 	proxyd_gentag(mytag);
 	prot_printf(backend_current->out, "%s Unselect\r\n", mytag);
-	pipe_until_tag(backend_current, mytag);
+	/* do not fatal() here, because we don't really care about this
+	 * server anymore anyway */
+	pipe_until_tag(backend_current, mytag, 1);
     }
     backend_current = backend_next;
 
@@ -2840,7 +2845,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 
     prot_printf(backend_current->out, "%s %s {%d+}\r\n%s\r\n", tag, cmd, 
 		strlen(name), name);
-    switch (pipe_including_tag(backend_current, tag)) {
+    switch (pipe_including_tag(backend_current, tag, 0)) {
     case PROXY_OK:
 	proc_register("proxyd", proxyd_clienthost, proxyd_userid, mailboxname);
 	syslog(LOG_DEBUG, "open: user %s opened %s on %s", proxyd_userid, name,
@@ -2863,7 +2868,9 @@ void cmd_close(char *tag)
     assert(backend_current != NULL);
     
     prot_printf(backend_current->out, "%s Close\r\n", tag);
-    pipe_including_tag(backend_current, tag);
+    /* xxx do we want this to say OK if the connection is gone?
+     * saying NO is clearly wrong, hense the fatal request. */
+    pipe_including_tag(backend_current, tag, 0);
     backend_current = NULL;
 }
 
@@ -2876,7 +2883,9 @@ void cmd_unselect(char *tag)
     assert(backend_current != NULL);
 
     prot_printf(backend_current->out, "%s Unselect\r\n", tag);
-    pipe_including_tag(backend_current, tag);
+    /* xxx do we want this to say OK if the connection is gone?
+     * saying NO is clearly wrong, hense the fatal request. */
+    pipe_including_tag(backend_current, tag, 0);
     backend_current = NULL;
 }
 
@@ -2893,7 +2902,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 
     prot_printf(backend_current->out, "%s %s %s ", tag, cmd, sequence);
     if (!pipe_command(backend_current, 65536)) {
-	pipe_including_tag(backend_current, tag);
+	pipe_including_tag(backend_current, tag, 0);
     }
 }
 
@@ -2906,7 +2915,7 @@ void cmd_partial(char *tag, char *msgno, char *data, char *start, char *count)
 
     prot_printf(backend_current->out, "%s Partial %s %s %s %s\r\n",
 		tag, msgno, data, start, count);
-    pipe_including_tag(backend_current, tag);
+    pipe_including_tag(backend_current, tag, 0);
 }
 
 /*
@@ -2916,26 +2925,26 @@ void cmd_partial(char *tag, char *msgno, char *data, char *start, char *count)
  */
 void cmd_store(char *tag, char *sequence, char *operation, int usinguid)
 {
-    char *cmd = usinguid ? "UID Store" : "Store";
+    const char *cmd = usinguid ? "UID Store" : "Store";
 
     assert(backend_current != NULL);
 
     prot_printf(backend_current->out, "%s %s %s %s ",
 		tag, cmd, sequence, operation);
     if (!pipe_command(backend_current, 65536)) {
-	pipe_including_tag(backend_current, tag);
+	pipe_including_tag(backend_current, tag, 0);
     }
 }
 
 void cmd_search(char *tag, int usinguid)
 {
-    char *cmd = usinguid ? "UID Search" : "Search";
+    const char *cmd = usinguid ? "UID Search" : "Search";
 
     assert(backend_current != NULL);
 
     prot_printf(backend_current->out, "%s %s ", tag, cmd);
     if (!pipe_command(backend_current, 65536)) {
-	pipe_including_tag(backend_current, tag);
+	pipe_including_tag(backend_current, tag, 0);
     }
 }
 
@@ -2947,7 +2956,7 @@ void cmd_sort(char *tag, int usinguid)
 
     prot_printf(backend_current->out, "%s %s ", tag, cmd);
     if (!pipe_command(backend_current, 65536)) {
-	pipe_including_tag(backend_current, tag);
+	pipe_including_tag(backend_current, tag, 0);
     }
 }
 
@@ -2959,7 +2968,7 @@ void cmd_thread(char *tag, int usinguid)
 
     prot_printf(backend_current->out, "%s %s ", tag, cmd);
     if (!pipe_command(backend_current, 65536)) {
-	pipe_including_tag(backend_current, tag);
+	pipe_including_tag(backend_current, tag, 0);
     }
 }
 
@@ -3067,7 +3076,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	/* this is the easy case */
 	prot_printf(backend_current->out, "%s %s %s {%d+}\r\n%s\r\n",
 		    tag, cmd, sequence, strlen(name), name);
-	pipe_including_tag(backend_current, tag);
+	pipe_including_tag(backend_current, tag, 0);
     } else {
 	char mytag[128];
 	struct d {
@@ -3211,11 +3220,11 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	    prot_ungetc(c, backend_current->in);
 
 	    /* we should be looking at the tag now */
-	    pipe_until_tag(backend_current, tag);
+	    pipe_until_tag(backend_current, tag, 0);
 	}
 	if (c == EOF) {
 	    /* uh oh, we're not happy */
-	    fatal("inter-server COPY failed", EC_TEMPFAIL);
+	    fatal("Lost connection to selected backend", EC_UNAVAILABLE);
 	}
 
 	/* start the append */
@@ -3348,8 +3357,8 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 
 	    /* should be looking at 'mytag' on 'backend_current', 
 	       'tag' on 's' */
-	    pipe_until_tag(backend_current, mytag);
-	    res = pipe_until_tag(s, tag);
+	    pipe_until_tag(backend_current, mytag, 0);
+	    res = pipe_until_tag(s, tag, 0);
 
 	    if (res == PROXY_OK) {
 		appenduid = strchr(s->last_result, '[');
@@ -3365,8 +3374,8 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	} else {
 	    /* abort the append */
 	    prot_printf(s->out, " {0}\r\n");
-	    pipe_until_tag(backend_current, mytag);
-	    pipe_until_tag(s, tag);
+	    pipe_until_tag(backend_current, mytag, 0);
+	    pipe_until_tag(s, tag, 0);
 	    
 	    /* report failure */
 	    prot_printf(proxyd_out, "%s NO inter-server COPY failed\r\n", tag);
@@ -3397,7 +3406,7 @@ void cmd_expunge(char *tag, char *sequence)
     } else {
 	prot_printf(backend_current->out, "%s Expunge\r\n", tag);
     }
-    pipe_including_tag(backend_current, tag);
+    pipe_including_tag(backend_current, tag, 0);
 }    
 
 /*
@@ -3457,7 +3466,7 @@ void cmd_create(char *tag, char *name, char *server)
 	/* ok, send the create to that server */
 	prot_printf(s->out, "%s CREATE {%d+}\r\n%s\r\n", 
 		    tag, strlen(name), name);
-	res = pipe_including_tag(s, tag);
+	res = pipe_including_tag(s, tag, 0);
 	tag = "*";		/* can't send another tagged response */
 	
 	if (!CAPA(s, MUPDATE)) {
@@ -3522,7 +3531,7 @@ void cmd_delete(char *tag, char *name)
     if (!r) {
 	prot_printf(s->out, "%s DELETE {%d+}\r\n%s\r\n", 
 		    tag, strlen(name), name);
-	res = pipe_including_tag(s, tag);
+	res = pipe_including_tag(s, tag, 0);
 	tag = "*";		/* can't send another tagged response */
 
 	if (!CAPA(s, MUPDATE) && res == PROXY_OK) {
@@ -3591,7 +3600,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	prot_printf(s->out, "%s RENAME {%d+}\r\n%s {%d+}\r\n%s\r\n", 
 		    tag, strlen(oldname), oldname,
 		    strlen(newname), newname);
-	res = pipe_including_tag(s, tag);
+	res = pipe_including_tag(s, tag, 0);
 	tag = "*";		/* can't send another tagged response */
 	
 	if (!CAPA(s, MUPDATE)) {
@@ -3673,7 +3682,7 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 	proxyd_gentag(mytag);
 
 	prot_printf(backend_current->out, "%s Noop\r\n", mytag);
-	pipe_until_tag(backend_current, mytag);
+	pipe_until_tag(backend_current, mytag, 0);
     }
 
     prot_printf(proxyd_out, "%s OK %s\r\n", tag,
@@ -3715,7 +3724,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 			"%s Lsub {%d+}\r\n%s {%d+}\r\n%s\r\n",
 			tag, strlen(reference), reference,
 			strlen(pattern), pattern);
-	    pipe_until_tag(backend_inbox, tag);
+	    pipe_until_tag(backend_inbox, tag, 0);
 	} else {		/* user doesn't have an INBOX */
 	    /* noop */
 	}
@@ -3765,7 +3774,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	proxyd_gentag(mytag);
 
 	prot_printf(backend_current->out, "%s Noop\r\n", mytag);
-	pipe_until_tag(backend_current, mytag);
+	pipe_until_tag(backend_current, mytag, 0);
     }
 
     prot_printf(proxyd_out, "%s OK %s\r\n", tag,
@@ -3809,7 +3818,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 			tag, cmd, 
 			strlen(name), name);
 	}
-	pipe_including_tag(backend_inbox, tag);
+	pipe_including_tag(backend_inbox, tag, 0);
     } else {
 	r = IMAP_SERVER_UNAVAILABLE;
     }
@@ -4032,7 +4041,7 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 			tag, strlen(name), name,
 			strlen(identifier), identifier);
 	}	    
-	res = pipe_including_tag(s, tag);
+	res = pipe_including_tag(s, tag, 0);
 	tag = "*";		/* can't send another tagged response */
 	if (!CAPA(s, MUPDATE) && res == PROXY_OK) {
 #if 0
@@ -4162,7 +4171,7 @@ void cmd_getquotaroot(char *tag, char *name)
 	if (s) {
 	    prot_printf(s->out, "%s Getquotaroot {%d+}\r\n%s\r\n",
 			tag, strlen(name), name);
-	    pipe_including_tag(s, tag);
+	    pipe_including_tag(s, tag, 0);
 	} else {
 	    r = IMAP_SERVER_UNAVAILABLE;
 	}
@@ -4391,7 +4400,7 @@ void cmd_status(char *tag, char *name)
 	prot_printf(s->out, "%s Status {%d+}\r\n%s ", tag,
 		    strlen(name), name);
 	if (!pipe_command(s, 65536)) {
-	    pipe_until_tag(s, tag);
+	    pipe_until_tag(s, tag, 0);
 	}
 	if (backend_current && s != backend_current) {
 	    char mytag[128];
@@ -4399,7 +4408,7 @@ void cmd_status(char *tag, char *name)
 	    proxyd_gentag(mytag);
 
 	    prot_printf(backend_current->out, "%s Noop\r\n", mytag);
-	    pipe_until_tag(backend_current, mytag);
+	    pipe_until_tag(backend_current, mytag, 0);
 	}
     } else {
 	eatline(proxyd_in, prot_getc(proxyd_in));
