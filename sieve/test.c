@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.24 2005/03/15 12:30:11 mel Exp $
+ * $Id: test.c,v 1.25 2005/03/15 16:08:48 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -496,6 +496,10 @@ struct testcase tc[] =
   { B_ASCIICASEMAP, B_IS, "a", "a", 1 },
   { B_ASCIICASEMAP, B_IS, "a", "A", 1 },
 
+  { B_ASCIINUMERIC, B_IS, "123", "123", 1 },
+  { B_ASCIINUMERIC, B_IS, "123", "-123", 0 },
+  { B_ASCIINUMERIC, B_IS, "abc", "123", 0 },
+  { B_ASCIINUMERIC, B_IS, "abc", "abc", 1 },
   { B_ASCIINUMERIC, B_IS, "12345678900", "3755744308", 0 },    /* test for 32bit overflow */
   { B_ASCIINUMERIC, B_IS, "1567", "1567pounds", 1 },
   { B_ASCIINUMERIC, B_IS, "", "", 1 },
