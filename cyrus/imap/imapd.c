@@ -575,12 +575,14 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 		cmd_setquota(tag.s, arg1.s);
 	    }
+#if 0 /* Not yet ready for prime time */
 	    else if (!strcmp(cmd.s, "Status")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg1);
 		if (c != ' ') goto missingargs;
 		cmd_status(tag.s, arg1.s);
 	    }
+#endif
 	    else goto badcmd;
 	    break;
 
