@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.485 2004/09/16 17:58:53 ken3 Exp $ */
+/* $Id: imapd.c,v 1.486 2004/11/16 15:38:10 ken3 Exp $ */
 
 #include <config.h>
 
@@ -287,6 +287,10 @@ static int imapd_canon_user(sasl_conn_t *conn, void *context,
 
     if (config_getswitch(IMAPOPT_IMAPMAGICPLUS)) {
 	/* make a working copy of the auth[z]id */
+	if (ulen > MAX_MAILBOX_NAME) {
+	    sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	    return SASL_BUFOVER;
+	}
 	memcpy(userbuf, user, ulen);
 	userbuf[ulen] = '\0';
 	user = userbuf;
@@ -345,6 +349,10 @@ static int imapd_proxy_policy(sasl_conn_t *conn,
 
 	/* make a working copy of the authzid */
 	if (!rlen) rlen = strlen(requested_user);
+	if (rlen > MAX_MAILBOX_NAME) {
+	    sasl_seterror(conn, 0, "buffer overflow while proxying");
+	    return SASL_BUFOVER;
+	}
 	memcpy(userbuf, requested_user, rlen);
 	userbuf[rlen] = '\0';
 	requested_user = userbuf;
