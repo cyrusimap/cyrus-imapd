@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.20.4.2 2002/08/04 14:04:48 ken3 Exp $
+ * $Id: parser.c,v 1.20.4.3 2002/08/19 02:43:41 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -617,6 +617,11 @@ static int cmd_authenticate(struct protstream *sieved_out,
 	  fatal(error_message(r), EC_CONFIG);
       }
 
+      /* Translate any separators in userid */
+      mboxname_hiersep_tointernal(&sieved_namespace, username,
+				  config_virtdomains ?
+				  strcspn(username, "@") : 0);
+
       (*sieved_namespace.mboxname_tointernal)(&sieved_namespace, "INBOX",
 					     username, inboxname);
 
@@ -627,7 +632,11 @@ static int cmd_authenticate(struct protstream *sieved_out,
 	  if (sieved_domainfromip) {
 	      char *authname, *p;
 
-	      /* get the userid from SASL */
+	      /* get a new copy of the userid */
+	      free(username);
+	      username = xstrdup(canon_user);
+
+	      /* get the authid from SASL */
 	      sasl_result=sasl_getprop(sieved_saslconn, SASL_AUTHUSER,
 				       (const void **) &canon_user);
 	      if (sasl_result!=SASL_OK)
