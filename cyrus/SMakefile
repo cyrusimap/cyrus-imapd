@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.35 1999/01/11 00:07:49 tjs Exp $
+# $Id: SMakefile,v 1.36 1999/02/09 01:16:49 tjs Exp $
 #
 
 MAKE=gmake
@@ -21,11 +21,10 @@ VER=`smake -D | sed 's;^.*\/;;'`
 LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 
 # Ryan's aggressive optimizations
-if test "${OVERIDE-no}" != "no" ; then
+if test "${OVERRIDE-nil}" != "t" ; then
   case `uname` in	
     Linux) CFLAGS="${CFLAGS} -O3 -g"
 	   LDFLAGS="${LDFLAGS}"
-	   AMSSYNC=""
 	   ;;
     IRIX) CFLAGS="${CFLAGS} -O2"
 	  LDFLAGS="${LDFLAGS}"
