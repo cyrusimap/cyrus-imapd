@@ -3871,7 +3871,7 @@ time_t *date;
 
 /*
  * Eat characters up to and including the next newline
- * Also look for and eat no-wait literals.
+ * Also look for and eat non-synchronizing literals.
  */
 void
 eatline(c)
@@ -3887,7 +3887,7 @@ int c;
 	    state++;
 	    if (state == 1) size = 0;
 	    else if (c == '\r') {
-		/* Got a no-wait literal */
+		/* Got a non-synchronizing literal */
 		c = prot_getc(imapd_in);/* Eat newline */
 		while (size) {
 		    c = prot_getc(imapd_in); /* Eat contents */
