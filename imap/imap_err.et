@@ -78,6 +78,9 @@ ec IMAP_UNRECOGNIZED_CHARSET,
 ec IMAP_INVALID_USER,
    "Invalid user"
 
+ec IMAP_INVALID_LOGIN,
+   "Login incorrect"
+
 ec IMAP_ANONYMOUS_NOT_PERMITTED,
    "Anonymous login is not permitted"
 
