@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.8 2002/07/21 14:24:49 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.9 2002/07/21 15:30:14 ken3 Exp $
  */
 
 #include <config.h>
@@ -1715,7 +1715,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
     int r = 0;
     char *p;
     int prefixlen;
-    int userlen = strlen(userid), domainlen = 0;
+    int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_NAME+1]; /* do intra-domain fetches only */
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
@@ -1852,7 +1852,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
     int r = 0;
     char *p;
     int prefixlen, len;
-    int userlen = strlen(userid), domainlen = 0;
+    int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_NAME+1]; /* do intra-domain fetches only */
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
@@ -2457,7 +2457,7 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
     int r = 0;
     char *p;
     int prefixlen;
-    int userlen = strlen(userid), domainlen = 0;
+    int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_NAME+1]; /* do intra-domain fetches only */
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
@@ -2599,7 +2599,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
     int r = 0;
     char *p;
     int prefixlen, len;
-    int userlen = strlen(userid), domainlen = 0;
+    int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_NAME+1]; /* do intra-domain fetches only */
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
