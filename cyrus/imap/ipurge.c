@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.5 2000/05/23 20:52:18 robeson Exp $
+ * $Id: ipurge.c,v 1.6 2000/06/01 01:10:58 wcw Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -147,6 +147,9 @@ main (int argc, char *argv[]) {
   config_init("ipurge");
 
   if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
+  mboxlist_init(0);
+  mboxlist_open(NULL);
 
   if (optind == argc) { /* do the whole partition */
     strcpy(buf, "*");
