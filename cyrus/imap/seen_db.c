@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.29 2002/05/13 20:32:04 rjs3 Exp $
+   $Id: seen_db.c,v 1.30 2002/05/14 16:18:40 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -559,7 +559,7 @@ static int seen_merge_cb(void *rockp,
     if(!tgt) return IMAP_INTERNAL;
 
     r = DB->fetch(tgt, key, keylen, &tgtdata, &tgtdatalen, NULL);
-    if(!r) {
+    if(!r && tgtdata) {
 	/* compare timestamps */
 	int version, tmplast, tgtlast;
 	char *p, *tmp = tmpdata, *tgt = tgtdata;
