@@ -1497,6 +1497,8 @@ char *rock;
     if (seenflag[msgno] == val) return 0;
     seenflag[msgno] = val;
 
+    if (storeargs->silent) return 0;
+
     for (i=0; i < MAX_USER_FLAGS/32; i++) {
 	user_flags[i] = USER_FLAGS(msgno, i);
     }
@@ -1620,16 +1622,27 @@ char *rock;
 
     if (dirty || seendirty) {
 	if (dirty) {
+	    /* If .SILENT, assume client has updated their cache */
+	    if (storeargs->silent && flagreport[msgno] &&
+		flagreport[msgno] == record.last_updated) {
+		flagreport[msgno] = 
+		  (record.last_updated >= storeargs->update_time) ?
+		    record.last_updated + 1 : storeargs->update_time;
+	    }
+
 	    record.last_updated =
 	      (record.last_updated >= storeargs->update_time) ?
 		record.last_updated + 1 : storeargs->update_time;
 	}
-	index_fetchflags(mailbox, msgno, record.system_flags,
-			 record.user_flags, record.last_updated);
-	if (storeargs->usinguid) {
-	    prot_printf(imapd_out, " UID %d", UID(msgno));
+
+	if (!storeargs->silent) {
+	    index_fetchflags(mailbox, msgno, record.system_flags,
+			     record.user_flags, record.last_updated);
+	    if (storeargs->usinguid) {
+		prot_printf(imapd_out, " UID %d", UID(msgno));
+	    }
+	    prot_printf(imapd_out, ")\r\n");
 	}
-	prot_printf(imapd_out, ")\r\n");
 
 	if (dirty && mid) {
 	    r = mailbox_write_index_record(mailbox, mid, &record);
