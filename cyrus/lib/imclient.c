@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.64 2002/01/16 23:29:28 rjs3 Exp $
+ * $Id: imclient.c,v 1.65 2002/02/13 20:56:28 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -92,8 +92,8 @@ extern int errno;
 /* Command completion callback record */
 struct imclient_cmdcallback {
     struct imclient_cmdcallback *next;
-    long tag;			/* Command tag # */
-    imclient_proc_t *proc;		/* Callback function */
+    unsigned long tag;		/* Command tag # */
+    imclient_proc_t *proc;	/* Callback function */
     void *rock;			/* Callback rock */
 };
 
@@ -122,15 +122,15 @@ struct imclient {
     /* Data to be output to server */
     char outbuf[IMCLIENT_BUFSIZE];
     char *outptr;
-    int outleft;
+    size_t outleft;
     char *outstart;
 
     /* Replies being received from server */
     char *replybuf;
     char *replystart;
-    int replyliteralleft;
-    int replylen;
-    int alloc_replybuf;
+    size_t replyliteralleft;
+    size_t replylen;
+    size_t alloc_replybuf;
     
     /* Protection mechanism data */
     /* struct sasl_client *mech;
@@ -623,7 +623,7 @@ void
 imclient_write(imclient, s, len)
 struct imclient *imclient;
 const char *s;
-unsigned len;
+size_t len;
 {
     /* If no data pending for output, reset the buffer */
     if (imclient->outptr == imclient->outstart) {
@@ -665,13 +665,13 @@ unsigned len;
 static void
 imclient_input(struct imclient *imclient, char *buf, int len)
 {
-    long replytag;
+    unsigned long replytag;
     struct imclient_reply reply;
     char *endreply;
     char *p;
-    int parsed;
-    int literallen;
-    int keywordlen;
+    size_t parsed;
+    size_t literallen;
+    size_t keywordlen;
     int keywordindex;
     struct imclient_cmdcallback **cmdcb, *cmdcbtemp;
     const char *plainbuf;
@@ -1100,11 +1100,9 @@ struct authresult {
 };
 
 /* Command completion callback for imclient_authenticate */
-static void 
-authresult(imclient, rock, reply)
-struct imclient *imclient;
-void *rock;
-struct imclient_reply *reply;
+static void  authresult(struct imclient *imclient __attribute__((unused)),
+			void *rock,
+			struct imclient_reply *reply)
 {
     struct authresult *result = (struct authresult *)rock;
 
@@ -1118,11 +1116,9 @@ struct imclient_reply *reply;
 }
 
 /* Command completion for starttls */
-static void 
-tlsresult(imclient, rock, reply)
-struct imclient *imclient;
-void *rock;
-struct imclient_reply *reply;
+static void tlsresult(struct imclient *imclient __attribute__((unused)),
+		      void *rock,
+		      struct imclient_reply *reply)
 {
     struct authresult *result = (struct authresult *)rock;
 
@@ -1208,7 +1204,6 @@ void fillin_interactions(struct imclient *context,
  */
 static int imclient_authenticate_sub(struct imclient *imclient, 
 				     char *mechlist, 
-				     char *service, 
 				     char *user,
 				     int minssf, 
 				     int maxssf,
@@ -1341,13 +1336,13 @@ static int imclient_authenticate_sub(struct imclient *imclient,
   return (result.replytype != replytype_ok);
 }
 
-int 
-imclient_authenticate(struct imclient *imclient, 
-		      char *mechlist, 
-		      char *service, 
-		      char *user,
-		      int minssf, 
-		      int maxssf)
+/* xxx service is not needed here */
+int imclient_authenticate(struct imclient *imclient, 
+			  char *mechlist, 
+			  char *service __attribute__((unused)),
+			  char *user,
+			  int minssf, 
+			  int maxssf)
 {
     int r;
     char *mlist;
@@ -1361,7 +1356,6 @@ imclient_authenticate(struct imclient *imclient,
 
 	r = imclient_authenticate_sub(imclient,
 				      mlist,
-				      service,
 				      user,
 				      minssf,
 				      maxssf,
@@ -1458,18 +1452,16 @@ static int imclient_decodebase64(char *input)
  * Write to the connection 'imclient' the base-64 encoded data
  * 'output', of (unencoded) length 'len'.
  */
-static void
-imclient_writebase64(imclient, output, len)
-struct imclient *imclient;
-const char *output;
-unsigned len;
+static void imclient_writebase64(struct imclient *imclient,
+				 const char *output,
+				 size_t len)
 {
     char buf[1024];
-    int buflen = 0;
+    size_t buflen = 0;
     int c1, c2, c3;
 
     while (len) {
-	if (buflen >= sizeof(buf)-4) {
+	if (buflen >= (size_t)(sizeof(buf)-4)) {
 	    imclient_write(imclient, buf, buflen);
 	    buflen = 0;
 	}
@@ -1515,7 +1507,6 @@ unsigned len;
 
 static int verify_depth;
 static int verify_error = X509_V_OK;
-static int do_dump = 1;
 
 #define CCERT_BUFSIZ 256
 static char peer_CN[CCERT_BUFSIZ];
@@ -1606,8 +1597,9 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
 
 
 /* taken from OpenSSL apps/s_cb.c */
-
-static RSA *tmp_rsa_cb(SSL * s, int export, int keylength)
+static RSA *tmp_rsa_cb(SSL *s __attribute__((unused)),
+		       int export __attribute__((unused)),
+		       int keylength)
 {
     static RSA *rsa_tmp = NULL;
 
@@ -1616,46 +1608,6 @@ static RSA *tmp_rsa_cb(SSL * s, int export, int keylength)
     }
     return (rsa_tmp);
 }
-
-/* taken from OpenSSL apps/s_cb.c 
- * tim - this seems to just be giving logging messages
- */
-
-static void apps_ssl_info_callback(SSL * s, int where, int ret)
-{
-    char   *str;
-    int     w;
-
-    /*    return; */ /* only useful for debugging */
-
-    w = where & ~SSL_ST_MASK;
-
-    if (w & SSL_ST_CONNECT)
-	str = "SSL_connect";
-    else if (w & SSL_ST_ACCEPT)
-	str = "SSL_accept";
-    else
-	str = "undefined";
-
-    if (where & SSL_CB_LOOP) {
-      printf("%s:%s\n", str, SSL_state_string_long(s));
-    } else if (where & SSL_CB_ALERT) {
-	str = (where & SSL_CB_READ) ? "read" : "write";
-	if ((ret & 0xff) != SSL3_AD_CLOSE_NOTIFY)
-	  printf("SSL3 alert %s:%s:%s\n", str,
-		   SSL_alert_type_string_long(ret),
-		   SSL_alert_desc_string_long(ret));
-    } else if (where & SSL_CB_EXIT) {
-	if (ret == 0)
-	    printf("%s:failed in %s\n",
-		     str, SSL_state_string_long(s));
-	else if (ret < 0) {
-	    printf("%s:error in %s %i\n",
-		     str, SSL_state_string_long(s),ret);
-	}
-    }
-}
-
 
 /*
  * Seed the random number generator.
@@ -1743,6 +1695,9 @@ static int tls_init_clientengine(struct imclient *imclient,
     return 0;
 }
 
+#if 0 /* Dead code only for debugging */
+static int do_dump = 1;
+
 /*
  * taken from OpenSSL crypto/bio/b_dump.c, modified to save a lot of strcpy
  * and strcat by Matti Aarnio.
@@ -1816,11 +1771,13 @@ static int tls_dump(const char *s, int len)
     return (ret);
 }
 
-
-/* taken from OpenSSL apps/s_cb.c */
-
-static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
-			long argl, long ret)
+/* these next two taken from OpenSSL apps/s_cb.c */
+static long bio_dump_cb(BIO * bio,
+			int cmd,
+			const char *argp,
+			int argi,
+			long argl __attribute__((unused)),
+			long ret)
 {
     if (!do_dump)
 	return (ret);
@@ -1839,6 +1796,40 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
     }
     return (ret);
 }
+
+static void apps_ssl_info_callback(SSL * s, int where, int ret)
+{
+    char   *str;
+    int     w;
+
+    w = where & ~SSL_ST_MASK;
+
+    if (w & SSL_ST_CONNECT)
+	str = "SSL_connect";
+    else if (w & SSL_ST_ACCEPT)
+	str = "SSL_accept";
+    else
+	str = "undefined";
+
+    if (where & SSL_CB_LOOP) {
+      printf("%s:%s\n", str, SSL_state_string_long(s));
+    } else if (where & SSL_CB_ALERT) {
+	str = (where & SSL_CB_READ) ? "read" : "write";
+	if ((ret & 0xff) != SSL3_AD_CLOSE_NOTIFY)
+	    printf("SSL3 alert %s:%s:%s\n", str,
+		   SSL_alert_type_string_long(ret),
+		   SSL_alert_desc_string_long(ret));
+    } else if (where & SSL_CB_EXIT) {
+	if (ret == 0)
+	    printf("%s:failed in %s\n",
+		     str, SSL_state_string_long(s));
+	else if (ret < 0) {
+	    printf("%s:error in %s %i\n",
+		     str, SSL_state_string_long(s),ret);
+	}
+    }
+}
+#endif
 
 int tls_start_clienttls(struct imclient *imclient,
 			unsigned *layer, char **authid, int fd)
@@ -1935,10 +1926,10 @@ int tls_start_clienttls(struct imclient *imclient,
 }
 
 int imclient_starttls(struct imclient *imclient,
-			     int verifydepth,
+			     int verifydepth __attribute__((unused)),
 			     char *var_tls_cert_file, 
 			     char *var_tls_key_file,
-			     int *layer)
+			     int *layer __attribute__((unused)))
 {
   int result;
   struct authresult theresult;
