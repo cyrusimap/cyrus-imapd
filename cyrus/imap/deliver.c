@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.108 1999/10/27 21:20:28 leg Exp $
+ * $Id: deliver.c,v 1.109 1999/10/28 03:03:56 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.108 1999/10/27 21:20:28 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.109 1999/10/28 03:03:56 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -513,7 +513,7 @@ typedef enum {
 
 /* we don't have to worry about dotstuffing here, since it's illegal
    for a header to begin with a dot! */
-static int parseheader(struct protstream *fin, struct protstream *fout, 
+static int parseheader(struct protstream *fin, FILE *fout, 
 		       int lmtpmode, char **headname, char **contents) {
     int c;
     static char *name = NULL, *body = NULL;
@@ -571,7 +571,7 @@ static int parseheader(struct protstream *fin, struct protstream *fout,
 	    } else if (c != ' ' && c != '\t') {
 		/* i want to avoid confusing dot-stuffing later */
 		while (c == '.') {
-		    prot_putc(c, fout);
+		    fputc(c, fout);
 		    c = prot_getc(fin);
 		}
 		goto ph_error;
@@ -591,8 +591,8 @@ static int parseheader(struct protstream *fin, struct protstream *fout,
 
 		peek = prot_getc(fin);
 		
-		prot_putc('\r', fout);
-		prot_putc('\n', fout);
+		fputc('\r', fout);
+		fputc('\n', fout);
 		/* we should peek ahead to see if it's folded whitespace */
 		if (c == '\r' && peek == '\n') {
 		    c = prot_getc(fin);
@@ -618,7 +618,7 @@ static int parseheader(struct protstream *fin, struct protstream *fout,
 	}
 
 	/* copy this to the output */
-	prot_putc(c, fout);
+	fputc(c, fout);
     }
 
     /* if we fall off the end of the loop, we hit some sort of error
@@ -643,7 +643,7 @@ static int parseheader(struct protstream *fin, struct protstream *fout,
 /* copies the message from fin to fout, massaging accordingly: mostly
  * newlines are fiddled. in lmtpmode, "." terminates; otherwise, EOF
  * does it.  */
-static void copy_msg(struct protstream *fin, struct protstream *fout, 
+static void copy_msg(struct protstream *fin, FILE *fout, 
 		     int lmtpmode)
 {
     char buf[8192], *p;
@@ -679,9 +679,9 @@ static void copy_msg(struct protstream *fin, struct protstream *fout,
 		goto lmtpdot;
 	    }
 	    /* Remove the dot-stuffing */
-	    prot_write(fout, buf+1, strlen(buf+1));
+	    fputs(buf+1, fout);
 	} else {
-	    prot_write(fout, buf, strlen(buf));
+	    fputs(buf, fout);
 	}
     }
 
@@ -694,7 +694,7 @@ lmtpdot:
     return;
 }
 
-static void fill_cache(struct protstream *fin, struct protstream *fout, 
+static void fill_cache(struct protstream *fin, FILE *fout, 
 		       int lmtpmode, message_data_t *m)
 {
     /* let's fill that header cache */
@@ -1672,7 +1672,7 @@ deliver_opts_t *delopts;
 		    prot_printf(deliver_out,"503 5.5.1 No recipients\r\n");
 		    continue;
 		}
-		savemsg(msg, 1);
+		savemsg(msg, msg->rcpt_num);
 		if (!msg->data) continue;
 
 		i = msg->rcpt_num;
@@ -1852,7 +1852,6 @@ savemsg(message_data_t *m, int lmtpmode)
 	exit(EC_TEMPFAIL);
     }
 
-    m->data = prot_new(fileno(f), 1);
     if (lmtpmode) {
 	prot_printf(deliver_out,"354 go ahead\r\n");
     }
@@ -1869,16 +1868,16 @@ savemsg(message_data_t *m, int lmtpmode)
 	    hostname = buf;
 	}
 
-	prot_printf(m->data, "Return-Path: <%s%s%s>\r\n",
-		    rpath, hostname ? "@" : "", hostname ? hostname : "");
+	fprintf(f, "Return-Path: <%s%s%s>\r\n",
+		rpath, hostname ? "@" : "", hostname ? hostname : "");
     }
 
 #ifdef USE_SIEVE
     /* add the Sieve header */
-    prot_printf(m->data, "X-Sieve: %s\r\n", sieve_version);
+    fprintf(f, "X-Sieve: %s\r\n", sieve_version);
 
     /* fill the cache */
-    fill_cache(deliver_in, m->data, lmtpmode, m);
+    fill_cache(deliver_in, f, lmtpmode, m);
 
     /* now, using our header cache, fill in the data that we want */
 
@@ -1970,10 +1969,10 @@ savemsg(message_data_t *m, int lmtpmode)
 		goto lmtpdot;
 	    }
 	    /* Remove the dot-stuffing */
-	    prot_write(m->data, buf+1, strlen(buf+1));
+	    fputs(buf+1, f);
 	}
 	else {
-	    prot_write(m->data, buf, strlen(buf));
+	    fputs(buf, f);
 	}
 
 	/* Look for message-id or resent-message-id headers */
@@ -2094,7 +2093,7 @@ savemsg(message_data_t *m, int lmtpmode)
     }
     m->size = sbuf.st_size;
     m->f = f;
-    prot_rewind(m->data);
+    m->data = prot_new(fileno(f), 0);
 }
 
 
