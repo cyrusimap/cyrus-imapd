@@ -3,7 +3,7 @@ dnl Rob Siemborski
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
  AC_ARG_WITH(gssapi, [  --with-gssapi=<DIR>	  enable GSSAPI authentication [yes] ],
-    gssapi=$enableval,
+    gssapi=$withval,
     gssapi=yes)
 
  if test "$gssapi" != no; then
