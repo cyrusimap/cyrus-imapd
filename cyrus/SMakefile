@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.85.4.4 2002/10/16 13:34:31 ken3 Exp $
+# $Id: SMakefile,v 1.85.4.5 2002/12/13 17:10:30 rjs3 Exp $
 #
 
 if test ! -x configure; then
@@ -104,7 +104,7 @@ esac
 
 # settings; we have to disable these on some platforms
 DEBUG=""
-WITHAUTH="--with-auth=krb_pts"
+WITHAUTH="--with-auth=pts"
 SSL_CONFIG="--with-openssl=/usr/local/lib"
 
 # the defaults are good enough for us

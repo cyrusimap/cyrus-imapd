@@ -43,11 +43,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "auth_krb_pts.h"
+#include "auth_pts.h"
 #include "cyrusdb.h"
 #include "imapconf.h"
 
-static char rcsid[] = "$Id: ptdump.c,v 1.5.16.3 2002/12/11 17:24:14 rjs3 Exp $";
+static char rcsid[] = "$Id: ptdump.c,v 1.5.16.4 2002/12/13 17:10:37 rjs3 Exp $";
 
 int config_need_data = 0;
 
@@ -61,15 +61,17 @@ static int dump_p(void *rockp __attribute__((unused)),
 }
 
 static int dump_cb(void *rockp __attribute__((unused)),
-		     const char *key, int keylen __attribute__((unused)),
+		     const char *key, int keylen,
 		     const char *data,
 		     int datalen __attribute__((unused))) 
 {
     struct auth_state *authstate = (struct auth_state *)data;
     int i;
     
-    printf("user: %s time: %d groups: %d\n",
-	   key, (unsigned)authstate->mark, (unsigned)authstate->ngroups);
+    printf("user: ");
+    fwrite(key, keylen, 1, stdout);
+    printf(" time: %d groups: %d\n",
+	   (unsigned)authstate->mark, (unsigned)authstate->ngroups);
 
     for (i=0; i < authstate->ngroups; i++)
 	printf("  %s\n",authstate->groups[i].id);

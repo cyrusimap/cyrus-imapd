@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.20.4.1 2002/11/14 19:36:27 rjs3 Exp $
+# $Id: Makefile.in,v 1.20.4.2 2002/12/13 17:10:37 rjs3 Exp $
 # 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -88,8 +88,8 @@ install:
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
-ptloader: ptloader.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptloader.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} $(AFS_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+ptloader: ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} $(AFS_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
 
 ptloader.pure: ptloader.o ../imap/mutex_fake.o $(DEPLIBS)
 	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptloader.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} $(AFS_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP)

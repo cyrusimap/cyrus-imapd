@@ -1,5 +1,5 @@
-/* auth_krb_pts.h -- Kerberos authorization with AFS PTServer groups
-   $Id: auth_krb_pts.h,v 1.21.16.3 2002/12/12 16:27:11 rjs3 Exp $
+/* auth_pts.h -- PTLOADER authorization module.
+   $Id: auth_pts.h,v 1.1.2.1 2002/12/13 17:10:36 rjs3 Exp $
 	
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -42,8 +42,8 @@
  *
  */ 
 
-#ifndef INCLUDED_AUTH_KRB_PTS_H
-#define INCLUDED_AUTH_KRB_PTS_H
+#ifndef INCLUDED_AUTH_PTS_H
+#define INCLUDED_AUTH_PTS_H
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -56,29 +56,23 @@
 #include <db.h>
 #include <syslog.h>
 #include <ctype.h>
-#include <des.h> /* for int32, necessary for the AFS includes below */
-#include <afs/ptserver.h>
-#include <afs/cellconfig.h>
-#include <krb.h>
+
+#include "auth.h"
 
 #define PTS_DBFIL FNAME_PTSDB
 #define PTS_DBSOCKET "/ptclient/ptsock"
-#define PTS_DB_HOFFSET PR_MAXNAMELEN  /* index to the header character 'H' or 'D' */
-#define PTS_DB_KEYSIZE (PR_MAXNAMELEN+4) /* full key size; header char + 3 NULL */
+#define PTS_DB_KEYSIZE 512
 
 struct auth_ident {
     unsigned hash;
-    char id[PR_MAXNAMELEN];
+    char id[PTS_DB_KEYSIZE];
 };
 
 struct auth_state {
-    struct auth_ident userid;
-    char aname[ANAME_SZ];
-    char inst[INST_SZ];
-    char realm[REALM_SZ];
+    struct auth_ident userid; /* the CANONICAL userid */
     time_t mark;
     int ngroups;
-    struct auth_ident groups[1];
+    struct auth_ident groups[1]; /* variable sized */
 };
 
-#endif /* INCLUDED_AUTH_KRB_PTS_H */
+#endif /* INCLUDED_AUTH_PTS_H */

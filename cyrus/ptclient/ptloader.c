@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.25.4.5 2002/11/15 21:47:05 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.25.4.6 2002/12/13 17:10:37 rjs3 Exp $";
 
 #include <config.h>
 
@@ -57,10 +57,9 @@ static char rcsid[] __attribute__((unused)) =
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
-#include <krb.h>
 #include <com_err.h>
 
-#include "auth_krb_pts.h"
+#include "auth_pts.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "hash.h"
@@ -69,23 +68,21 @@ static char rcsid[] __attribute__((unused)) =
 #include "retry.h"
 #include "xmalloc.h"
 
-/* AFS stuff after auth_krb_pts */
-#include <rx/rxkad.h>
-#include <afs/auth.h>
+
+extern const char *ptsmodule_name;
+extern void ptsmodule_init(void);
+extern struct auth_state *ptsmodule_make_authstate(const char *identifier,
+						   size_t size,
+						   const char **reply,
+						   int *dsize);
 
 /* config.c info (libimap) */
 const int config_need_data = 0;
 
-/* blame transarc i've been told */
-#ifndef AFSCONF_CLIENTNAME
-#include <afs/dirpath.h>
-#define AFSCONF_CLIENTNAME AFSDIR_CLIENT_ETC_DIRPATH
-#endif
+/* Globals */
+#define DB (CONFIG_DB_PTS)
 
 static char ptclient_debug = 0;
-
-#define DB (CONFIG_DB_PTS)
-  
 struct db *ptsdb = NULL;
   
 int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
@@ -95,7 +92,9 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     char fnamebuf[1024];
     extern char *optarg;
 
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.25.4.5 2002/11/15 21:47:05 rjs3 Exp $");
+    syslog(LOG_NOTICE,
+	   "starting: $Id: ptloader.c,v 1.25.4.6 2002/12/13 17:10:37 rjs3 Exp $ (%s)",
+	   ptsmodule_name);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {
@@ -112,12 +111,6 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
 	}
     }
 
-    r = pr_Initialize (1L, AFSCONF_CLIENTNAME, 0);
-    if (r) {
-	syslog(LOG_DEBUG, "pr_Initialize failed: %d", r);
-	fatal("pr_initialize failed", EC_TEMPFAIL);
-    }
-
     strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBFIL);
     r = DB->open(fnamebuf, &ptsdb);
@@ -126,6 +119,8 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
 	       cyrusdb_strerror(ret));
 	fatal("can't read pts database", EC_TEMPFAIL);
     }
+
+    ptsmodule_init();
 
     return 0;
 }
@@ -152,14 +147,14 @@ void service_abort(int error)
 
 /* we're a 'threaded' service, but since we never fork or create any
    threads, we're just one-person-at-a-time based */
-int service_main_fd(int c, int argc, char **argv, char **envp)
+int service_main_fd(int c, int argc __attribute__((unused)),
+		    char **argv __attribute__((unused)),
+		    char **envp __attribute__((unused)))
 {
     char keyinhex[512];
     const char *reply = NULL;
-    char indata[PTS_DB_KEYSIZE];
-    char user[PR_MAXNAMELEN];
-    namelist groups;
-    int i, rc, dsize;
+    char user[PTS_DB_KEYSIZE];
+    int rc, dsize;
     size_t size;
     struct auth_state *newstate;
 
@@ -177,20 +172,8 @@ int service_main_fd(int c, int argc, char **argv, char **envp)
 	goto sendreply;
     }
 
-    memset(&indata, 0, PTS_DB_KEYSIZE);
-    if (read(c, &indata, size) < 0) {
-        syslog(LOG_ERR,"socket (indata; size = %d): %m", size);
-        reply = "Error reading request (key)";
-        goto sendreply;
-    }
-
-    /* convert request to hex */
-    for (i=0; i<size; i++) {
-	sprintf(keyinhex+(2*i), "%.2x", indata[i]);
-    }
-
     memset(&user, 0, sizeof(user));
-    if (read(c, &user, PR_MAXNAMELEN) < 0) {
+    if (read(c, &user, size) < 0) {
         syslog(LOG_ERR, "socket(user; size = %d; key = %s): %m", 
 	       size, keyinhex);
         reply = "Error reading request (user)";
@@ -201,59 +184,17 @@ int service_main_fd(int c, int argc, char **argv, char **envp)
 	syslog(LOG_DEBUG, "user %s, cacheid %s", user, keyinhex);
     }
 
-    memset(&groups, 0, sizeof(groups));
-    groups.namelist_len = 0;
-    groups.namelist_val = NULL;
-    
-    if ((rc = pr_ListMembers(user, &groups))) {
-	/* Failure may indicate that we need new tokens */
-	pr_End();
-	rc = pr_Initialize (1L, AFSCONF_CLIENTNAME, 0);
-        if (rc) {
-	    syslog(LOG_DEBUG, "pr_Initialize failed: %d", rc);
-	    fatal("pr_Initialize failed", EC_TEMPFAIL);
-        }
-	/* Okay, rerun it now */
-	rc = pr_ListMembers(user, &groups);
+    newstate = ptsmodule_make_authstate(user, size, &reply, &dsize);
+
+    if(newstate) {
+	/* Success! */
+	rc = DB->store(ptsdb, user, size, (void *)newstate, dsize, NULL);
+        free(newstate);
+	
+	/* and we're done */
+	reply = "OK";
     }
 
-    if(rc) 
-    {
-        syslog(LOG_ERR, "pr_ListMembers %s: %s", user, error_message(rc));
-        reply = error_message(rc);
-        goto sendreply;
-    }
-
-    /* fill in our new state structure */
-    dsize = sizeof(struct auth_state) + 
-	(groups.namelist_len * sizeof(struct auth_ident));
-    newstate = (struct auth_state *) xmalloc(dsize);
-
-    strcpy(newstate->userid.id, user);
-    newstate->userid.hash = hash(user);
-    kname_parse(newstate->aname, newstate->inst, newstate->realm, user);
-    newstate->mark = time(0);
-    newstate->ngroups = groups.namelist_len;
-    /* store group list in contiguous array for easy storage in the database */
-    memset(newstate->groups, 0, newstate->ngroups * sizeof(struct auth_ident));
-    for (i = 0; i < newstate->ngroups; i++) {
-        strcpy(newstate->groups[i].id, groups.namelist_val[i]);
-	newstate->groups[i].hash = hash(groups.namelist_val[i]);
-	/* don't free groups.namelist_val[i]. Something else currently
-	 * takes care of that data. 
-	 */
-    }
-    if (groups.namelist_val != NULL) {
-	free(groups.namelist_val);
-    }
-
-    rc = DB->store(ptsdb, indata, size, newstate, dsize, NULL);
-    
-    free(newstate);
-
-    /* and we're done */
-    reply = "OK";
-    
  sendreply:
     if (retry_write(c, reply, strlen(reply)) <0) {
 	syslog(LOG_WARNING, "retry_write: %m");
@@ -269,6 +210,6 @@ int service_main_fd(int c, int argc, char **argv, char **envp)
 void fatal(const char *msg, int exitcode)
 {
     syslog(LOG_ERR, "%s", msg);
-    exit(-1);
+    exit(exitcode);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25.4.5 2002/11/15 21:47:05 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25.4.6 2002/12/13 17:10:37 rjs3 Exp $ */

@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.5 2002/12/12 20:19:34 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.6 2002/12/13 17:10:31 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -67,9 +67,6 @@
 
 /* how should we setproctitle? */
 #undef SPT_TYPE
-
-/* do we have the AFS symbol pr_End? */
-#undef HAVE_PR_END
 
 /* do we have an acceptable regex library? */
 #undef ENABLE_REGEX

@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28.4.4 2002/11/14 19:36:16 rjs3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28.4.5 2002/12/13 17:10:34 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -51,9 +51,16 @@ list).</li>
 
 <li>If you use ptloader, it now runs as a regular cyrus service.  This means
 that you will need master to acquire and maintain AFS tokens for it.
-Additionally, you will need to create the ptclient directory under your
-imap configdirectory, to hold the PTS cache and socket.  The socket should
-be setup to be <i>&lt;configdirectory&gt;</i>/ptclient/ptsock</li>
+You will also need to create the ptclient directory under your
+imap configdirectory, to hold the PTS cache (now a full-fledged cyrusdb)
+and UNIX socket.  In cyrus.conf, ptloader should be setup to listen on
+<i>&lt;configdirectory&gt;</i>/ptclient/ptsock.</li>
+
+<li>Also, ptloader has been given a much more generic interface, and you
+should now specify --with-auth=pts (instead of --with-auth=krb_pts).
+There is also a --with-pts= configure option that defaults to afskrb
+(Kerberos Canonicalization, AFS PTS Groups), which should be expanded
+to support LDAP as well.</li>
 
 <li> Configuration subsystem changes:
 <ul>
@@ -297,7 +304,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2002/11/14 19:36:16 $
+last modified: $Date: 2002/12/13 17:10:34 $
 </BODY></HTML>
 
 

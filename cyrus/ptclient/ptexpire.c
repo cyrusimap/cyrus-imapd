@@ -61,13 +61,13 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "auth_krb_pts.h"
+#include "auth_pts.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "imapconf.h"
 #include "lock.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.10.16.4 2002/11/15 21:47:05 rjs3 Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.10.16.5 2002/12/13 17:10:37 rjs3 Exp $";
 
 /* global */
 time_t timenow;
