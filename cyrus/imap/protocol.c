@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.2.2.6 2004/05/06 18:09:22 ken3 Exp $ */
+/* $Id: protocol.c,v 1.2.2.7 2004/05/06 18:14:35 ken3 Exp $ */
 
 #include <config.h>
 
@@ -96,6 +96,7 @@ struct protocol_t protocol[] = {
 	  { " IDLE", CAPA_IDLE },
 	  { " MUPDATE", CAPA_MUPDATE },
 	  { " MULTIAPPEND", CAPA_MULTIAPPEND },
+	  { " LIST-SUBSCRIBED", CAPA_LISTSUBSCRIBED },
 	  { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO" },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL },

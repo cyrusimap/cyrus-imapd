@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.h,v 1.2.2.3 2004/05/06 18:09:22 ken3 Exp $ */
+/* $Id: protocol.h,v 1.2.2.4 2004/05/06 18:14:36 ken3 Exp $ */
 
 #ifndef _INCLUDED_PROTOCOL_H
 #define _INCLUDED_PROTOCOL_H
@@ -55,13 +55,14 @@ enum {
     CAPA_IDLE		= (1 << 2),
     CAPA_MUPDATE	= (1 << 3),
     CAPA_MULTIAPPEND	= (1 << 4),
+    CAPA_LISTSUBSCRIBED	= (1 << 5),
 
     /* LMTP capabilities */
     CAPA_PIPELINING	= (1 << 2),
     CAPA_IGNOREQUOTA	= (1 << 3)
 };
 
-#define MAX_CAPA 5
+#define MAX_CAPA 6
 
 struct capa_t {
     const char *str;

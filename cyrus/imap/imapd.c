@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.23 2004/05/05 20:52:15 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.24 2004/05/06 18:14:28 ken3 Exp $ */
 
 #include <config.h>
 
@@ -207,7 +207,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart);
 void cmd_rename(char *tag, char *oldname, char *newname, char *partition);
 void cmd_reconstruct(const char *tag, const char *name, int recursive);
 void cmd_find(char *tag, char *namespace, char *pattern);
-void cmd_list(char *tag, int subscribed, char *reference, char *pattern);
+void cmd_list(char *tag, int listopts, char *reference, char *pattern);
 void cmd_changesub(char *tag, char *namespace, char *name, int add);
 void cmd_getacl(const char *tag, const char *name);
 void cmd_listrights(char *tag, char *name, char *identifier);
@@ -1255,6 +1255,7 @@ void cmdloop()
 		else
 		    prot_ungetc(c, imapd_in);
 #endif /* ENABLE_LISTEXT */
+		if (imapd_magicplus) listopts += LIST_SUBSCRIBED;
 		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg2);
@@ -4988,12 +4989,23 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	/* Special case: query top-level hierarchy separator */
 	prot_printf(imapd_out, "* LIST (\\Noselect) \"%c\" \"\"\r\n",
 		    imapd_namespace.hier_sep);
-    } else if ((imapd_magicplus || (listopts & LIST_LSUB)) &&
+    } else if ((listopts & (LIST_LSUB | LIST_SUBSCRIBED)) &&
 	       (backend_inbox || (backend_inbox = proxy_findinboxserver()))) {
 	/* remote INBOX */
+	if ((listopts & LIST_SUBSCRIBED) && (listopts & LIST_EXT) &&
+	    CAPA(backend_inbox, CAPA_LISTSUBSCRIBED)) {
+	    prot_printf(backend_inbox->out, "%s List (subscribed", tag);
+	    if (listopts & LIST_CHILDREN)
+		prot_printf(backend_inbox->out, " children");
+	    if (listopts & LIST_REMOTE)
+		prot_printf(backend_inbox->out, " remote");
+	    prot_printf(backend_inbox->out, ") ");
+	} else {
+	    prot_printf(backend_inbox->out, "%s Lsub ", tag);
+	}
 	prot_printf(backend_inbox->out, 
-		    "%s Lsub {%d+}\r\n%s {%d+}\r\n%s\r\n",
-		    tag, strlen(reference), reference,
+		    "{%d+}\r\n%s {%d+}\r\n%s\r\n",
+		    strlen(reference), reference,
 		    strlen(pattern), pattern);
 	pipe_lsub(backend_inbox, tag, 0, (listopts & LIST_LSUB) ? "LSUB" : "LIST");
     } else {
@@ -5042,8 +5054,7 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	    findall = imapd_namespace.mboxlist_findall;
 	}
 
-	if (imapd_magicplus ||
-	    listopts & LIST_LSUB || listopts & LIST_SUBSCRIBED) {
+	if (listopts & (LIST_LSUB | LIST_SUBSCRIBED)) {
 	    int force = config_getswitch(IMAPOPT_ALLOWALLSUBSCRIBE);
 
 	    (*findsub)(&imapd_namespace, pattern,
@@ -5061,7 +5072,7 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	if (buf) free(buf);
     }
 
-    imapd_check(!imapd_magicplus && !(listopts & LIST_LSUB) ?
+    imapd_check(!(listopts & (LIST_LSUB | LIST_SUBSCRIBED)) ?
 		backend_inbox : NULL, 0, 0);
 
     snprintf(mytime, sizeof(mytime), "%2.3f",

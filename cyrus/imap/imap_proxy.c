@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.9 2004/05/05 20:52:15 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.10 2004/05/06 18:14:28 ken3 Exp $
  */
 
 #include <config.h>
@@ -557,7 +557,7 @@ int pipe_lsub(struct backend *s, const char *tag,
 	    return PROXY_NOCONNECTION;
 	}
 
-	if(strncasecmp("LSUB", cmd.s, 4)) {
+	if(strncasecmp("LSUB", cmd.s, 4) && strncasecmp("LIST", cmd.s, 4)) {
 	    prot_printf(imapd_out, "%s %s ", tagb.s, cmd.s);
 	    r = pipe_to_end_of_response(s, force_notfatal);
 	    if(r != PROXY_OK) {
