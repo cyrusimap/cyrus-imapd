@@ -98,7 +98,7 @@ AC_ARG_WITH(libcyrus-include,
 	fi
 
 	AC_MSG_CHECKING(whether to include libcyrus)
-	if test "X$ac_cv_libcyrus_where_lib" = "X" -a "X$ac_cv_libcyrus_where_inc" = "X"; then
+	if test "X$ac_cv_libcyrus_where_lib" = "X" -o "X$ac_cv_libcyrus_where_inc" = "X"; then
 	  ac_cv_found_libcyrus=no
 	  AC_MSG_RESULT(no)
 	else

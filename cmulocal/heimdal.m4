@@ -35,7 +35,7 @@ AC_DEFUN(CMU_LIBHEIMDAL_INC_WHERE, [
 AC_DEFUN(CMU_LIBHEIMDAL_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lkadm5clnt -lkrb5 -lasn1 /usr/local/lib/libdes.a -lroken -lresolv"
+LIBS="$saved_LIBS -L$1 -lkadm5clnt -lkrb5 -lasn1 -lkadm5clnt -ldes -lroken -lresolv"
 AC_TRY_LINK(,
 [krb5_get_in_tkt();],
 [ac_cv_found_libheimdal_lib=yes],
@@ -110,7 +110,7 @@ AC_ARG_WITH(libheimdal-include,
 	  LIBHEIMDAL_INC_DIR=$ac_cv_libheimdal_where_inc
 	  LIBHEIMDAL_LIB_DIR=$ac_cv_libheimdal_where_lib
 	  LIBHEIMDAL_INC_FLAGS="-I${LIBHEIMDAL_INC_DIR}"
-	  LIBHEIMDAL_LIB_FLAGS="-L${LIBHEIMDAL_LIB_DIR} -lkrb5 -lasn1 /usr/local/lib/libdes.a -lroken -lresolv"
+	  LIBHEIMDAL_LIB_FLAGS="-L${LIBHEIMDAL_LIB_DIR} -lkadm5clnt -lkrb5 -lasn1 -ldes -lroken -lresolv"
 	  AC_SUBST(LIBHEIMDAL_INC_FLAGS)
 	  AC_SUBST(LIBHEIMDAL_LIB_FLAGS)
 	  if test "X$RPATH" = "X"; then
