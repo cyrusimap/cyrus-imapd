@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: master.c,v 1.5 2000/02/21 06:22:58 leg Exp $ */
+/* $Id: master.c,v 1.6 2000/02/25 21:29:36 leg Exp $ */
 
 #include <config.h>
 
@@ -150,7 +150,7 @@ void get_statsock(int filedes[2])
 void service_create(struct service *s)
 {
     struct sockaddr_in sin;
-    struct sockaddr_un sun;
+    struct sockaddr_un sunsock;
     struct sockaddr *sa;
     struct servent *serv;
     int on = 1, salen;
@@ -158,11 +158,11 @@ void service_create(struct service *s)
     memset(&sin, 0, sizeof(sin));
 
     if (s->listen[0] == '/') { /* unix socket */
-	sun.sun_family = AF_UNIX;
-	strcpy(sun.sun_path, s->listen);
+	sunsock.sun_family = AF_UNIX;
+	strcpy(sunsock.sun_path, s->listen);
 	unlink(s->listen);
-	sa = (struct sockaddr *) &sun;
-	salen = sizeof(sun.sun_family) + strlen(sun.sun_path);
+	sa = (struct sockaddr *) &sunsock;
+	salen = sizeof(sunsock.sun_family) + strlen(sunsock.sun_path);
 
 	s->socket = socket(AF_UNIX, SOCK_STREAM, 0);
     } else { /* inet socket */
@@ -493,14 +493,14 @@ static char **tokenize(char *p)
 
     if (!p || !*p) return NULL; /* sanity check */
     while (*p) {
-	while (*p && isspace(*p)) p++; /* skip whitespace */
+	while (*p && isspace((int) *p)) p++; /* skip whitespace */
 
 	if (!(i % 10)) tokens = realloc(tokens, (i+10) * sizeof(char *));
 	if (!tokens) return NULL;
 
 	/* got a token */
 	tokens[i++] = p;
-	while (*p && !isspace(*p)) p++;
+	while (*p && !isspace((int) *p)) p++;
 
 	/* p is whitespace or end of cmd */
 	if (*p) *p++ = '\0';
