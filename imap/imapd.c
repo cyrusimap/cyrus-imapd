@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.441.2.1 2004/02/04 19:32:45 ken3 Exp $ */
+/* $Id: imapd.c,v 1.441.2.2 2004/11/23 19:12:45 shadow Exp $ */
 
 #include <config.h>
 
@@ -2687,7 +2687,7 @@ int usinguid;
 	    else if (!strncmp(fetchatt.s, "BODY[", 5) ||
 		     !strncmp(fetchatt.s, "BODY.PEEK[", 10)) {
 		p = section = fetchatt.s + 5;
-		if (*p == 'P') {
+                if (!strncmp(p, "PEEK[", 5)) {
 		    p = section += 5;
 		}
 		else {
@@ -3051,7 +3051,7 @@ cmd_partial(const char *tag, const char *msgno, char *data,
     else if (!strncmp(data, "body[", 5) ||
 	     !strncmp(data, "body.peek[", 10)) {
 	p = section = data + 5;
-	if (*p == 'p') {
+        if (!strncmp(p, "peek[", 5)) {
 	    p = section += 5;
 	}
 	else {
