@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.4 2000/05/23 21:28:07 leg Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.5 2000/05/23 21:30:41 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -42,8 +42,8 @@ those changes.  You will also want to run <tt>remotepurge</tt> on a
 regular basis to purge old netnews posts.
 
 <li>remove inetd.conf entries. The <tt>imap</tt> and <tt>popd3d</tt>
-lines need to be removed from inetd.conf and inetd.conf needs to be
-restarted.
+lines need to be removed from <tt>/etc/inetd.conf</tt> and inetd needs
+to be restarted.
 
 <li>sendmail configuration. You need to use a new cyrus mc file. See
 <a href="cyrusv2.mc"><tt>doc/cyrusv2.mc</tt></a> for a sample mc file.
@@ -114,7 +114,7 @@ worry about it.)
 </ul>
 
 <P><HR><P>
-last modified: $Date: 2000/05/23 21:28:07 $
+last modified: $Date: 2000/05/23 21:30:41 $
 </BODY></HTML>
 
 

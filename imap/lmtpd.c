@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.25 2000/05/23 20:52:18 robeson Exp $
+ * $Id: lmtpd.c,v 1.26 2000/05/23 21:30:43 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.25 2000/05/23 20:52:18 robeson Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.26 2000/05/23 21:30:43 leg Exp $";*/
 
 #include <config.h>
 
@@ -1695,7 +1695,7 @@ void lmtpmode(deliver_opts_t *delopts)
 	    syslog(LOG_DEBUG, "connection from [%s]", 
 		   inet_ntoa(deliver_remoteaddr.sin_addr));
 	} else {
-	    syslog(LOG_ERR, "can't get local addr\n");
+	    syslog(LOG_ERR, "can't get local addr");
 	}
     } else {
 	/* we're not connected to a internet socket! */
@@ -1973,13 +1973,13 @@ void lmtpmode(deliver_opts_t *delopts)
 		    }
 		    tmp += 5;
 		    delopts->authuser = parseautheq(tmp);
-
-		    if ((delopts->authuser == NULL) || 
-			!(delopts->authstate = auth_newstate(tmp, NULL))) {
+		    if (delopts->authuser) {
+			delopts->authstate =
+			    auth_newstate(delopts->authuser, NULL);
+		    } else {
 			/* do we want to bounce mail because of this? */
 			/* i guess not. accept with no auth user */
-			prot_printf(deliver_out, "250 2.1.0 ok\r\n");
-			continue;			
+			delopts->authstate = NULL;
 		    }
 		} else if (*tmp != '\0') {
 		    prot_printf(deliver_out, 
@@ -2642,7 +2642,7 @@ char
 	/* XXX Might have been moved to other server */
 	return "550 5.1.1 User unknown";
     }
-	
+
     /* Some error we're not expecting. */
     return "554 5.0.0 Unexpected internal error";
 }

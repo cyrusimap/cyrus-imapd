@@ -1,6 +1,5 @@
 /* mboxlist.c -- Mailbox list manipulation routines
  * 
-
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.121 2000/05/23 20:52:21 robeson Exp $
+ * $Id: mboxlist.c,v 1.122 2000/05/23 21:30:43 leg Exp $
  */
 
 #include <config.h>
@@ -1078,7 +1077,6 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     int mbtype;
     char *oldpath = NULL;
     char newpath[MAX_MAILBOX_PATH];
-    char postaddr[MAX_MAILBOX_PATH], url[MAX_MAILBOX_PATH];
     struct mailbox newmailbox;
     acapmbox_data_t mboxdata;
     char buf2[MAX_PARTITION_LEN + 30];

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.246 2000/05/23 20:52:16 robeson Exp $ */
+/* $Id: imapd.c,v 1.247 2000/05/23 21:30:41 leg Exp $ */
 
 #include <config.h>
 
@@ -1307,25 +1307,27 @@ char *passwd;
 	} else {
 	    prot_printf(imapd_out, "%s NO Login failed: %d\r\n", tag, result);
 	}
-	snmp_increment_args(AUTHENTICATION_NO,1,VARIABLE_AUTH,hash_simple("LOGIN"), VARIABLE_LISTEND);
+	snmp_increment_args(AUTHENTICATION_NO, 1,
+			    VARIABLE_AUTH, hash_simple("LOGIN"), 
+			    VARIABLE_LISTEND);
 	return;
     }
     else {
 	imapd_userid = xstrdup(canon_user);
-	snmp_increment_args(AUTHENTICATION_YES,1,VARIABLE_AUTH,hash_simple("LOGIN"), VARIABLE_LISTEND);
+	snmp_increment_args(AUTHENTICATION_YES, 1,
+			    VARIABLE_AUTH, hash_simple("LOGIN"), 
+			    VARIABLE_LISTEND);
 	syslog(LOG_NOTICE, "login: %s %s plaintext %s", imapd_clienthost,
 	       canon_user, reply ? reply : "");
-	if ((plaintextloginpause = config_getint("plaintextloginpause", 0))!=0) {
 
+	plaintextloginpause = config_getint("plaintextloginpause", 0);
+	if (plaintextloginpause != 0 && !imapd_starttls_done) {
 	    /* Apply penalty only if not under layer */
-	    if (imapd_starttls_done == 0)
-		sleep(plaintextloginpause);
+	    sleep(plaintextloginpause);
 	}
     }
     
-
     imapd_authstate = auth_newstate(canon_user, (char *)0);
-
     val = config_getstring("admins", "");
     while (*val) {
 	for (p = (char *)val; *p && !isspace((int) *p); p++);
@@ -1429,16 +1431,17 @@ cmd_authenticate(char *tag,char *authtype)
 	/* convert the sasl error code to a string */
 	errorstring = sasl_errstring(sasl_usererr(sasl_result), NULL, NULL);
       
-	syslog(LOG_NOTICE, "badlogin: %s %s %s",
-	       imapd_clienthost, authtype, errorstring);
-	
 	if (errstr) {
+	    syslog(LOG_NOTICE, "badlogin: %s %s %s [%s]",
+		   imapd_clienthost, authtype, errorstring, errstr);
+	} else {
 	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
-		   imapd_clienthost, authtype, errstr);
+		   imapd_clienthost, authtype, errorstring);
 	}
 
-	snmp_increment_args(AUTHENTICATION_NO, 1,VARIABLE_AUTH, hash_simple(authtype), VARIABLE_LISTEND);
-
+	snmp_increment_args(AUTHENTICATION_NO, 1,
+			    VARIABLE_AUTH, hash_simple(authtype), 
+			    VARIABLE_LISTEND);
 	sleep(3);
 	
 	if (errorstring) {
@@ -1456,9 +1459,8 @@ cmd_authenticate(char *tag,char *authtype)
      * mysasl_authproc()
      */
     sasl_result = sasl_getprop(imapd_saslconn, SASL_USERNAME,
-			     (void **) &imapd_userid);
-    if (sasl_result!=SASL_OK)
-    {
+			       (void **) &imapd_userid);
+    if (sasl_result != SASL_OK) {
 	prot_printf(imapd_out, "%s NO weird SASL error %d SASL_USERNAME\r\n", 
 		    tag, sasl_result);
 	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", 
@@ -1473,14 +1475,15 @@ cmd_authenticate(char *tag,char *authtype)
 
     sasl_getprop(imapd_saslconn, SASL_SSF, (void **) &ssfp);
 
-    switch(*ssfp)
-      {
-      case 0: ssfmsg="no protection";break;
-      case 1: ssfmsg="integrity protection";break;
-      default: ssfmsg="privacy protection";break;
-      }
+    switch(*ssfp) {
+    case 0: ssfmsg="no protection";break;
+    case 1: ssfmsg="integrity protection";break;
+    default: ssfmsg="privacy protection";break;
+    }
 
-    snmp_increment_args(AUTHENTICATION_YES,1,VARIABLE_AUTH, hash_simple(authtype), VARIABLE_LISTEND);
+    snmp_increment_args(AUTHENTICATION_YES, 1,
+			VARIABLE_AUTH, hash_simple(authtype), 
+			VARIABLE_LISTEND);
 
     prot_printf(imapd_out, "%s OK Success (%s)\r\n", tag,ssfmsg);
 
