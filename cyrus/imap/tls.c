@@ -2,7 +2,7 @@
  * Tim Martin
  * 9/21/99
  *
- *  Based upon Lutz Jaenicke's TLS patches for postfix
+ * Based upon Lutz Jaenicke's TLS patches for postfix
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.38.4.11 2003/02/27 20:02:51 ken3 Exp $ */
+/* $Id: tls.c,v 1.38.4.12 2003/04/03 20:56:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -232,7 +232,7 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
     err = X509_STORE_CTX_get_error(ctx);
     depth = X509_STORE_CTX_get_error_depth(ctx);
 
-    X509_NAME_oneline(X509_get_subject_name(err_cert), buf, 256);
+    X509_NAME_oneline(X509_get_subject_name(err_cert), buf, sizeof(buf));
     if (ok==0)
     {
       syslog(LOG_ERR, "verify error:num=%d:%s", err,
@@ -248,7 +248,7 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
     }
     switch (ctx->error) {
     case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
-	X509_NAME_oneline(X509_get_issuer_name(ctx->current_cert), buf, 256);
+	X509_NAME_oneline(X509_get_issuer_name(ctx->current_cert), buf, sizeof(buf));
 	syslog(LOG_NOTICE, "issuer= %s", buf);
 	break;
     case X509_V_ERR_CERT_NOT_YET_VALID:
@@ -286,7 +286,6 @@ static int tls_dump(const char *s, int len)
 
     trunc = 0;
 
-
 #ifdef TRUNCATE
     for (; (len > 0) && ((s[len - 1] == ' ') || (s[len - 1] == '\0')); len--)
 	trunc++;
@@ -297,17 +296,24 @@ static int tls_dump(const char *s, int len)
 	rows++;
 
     for (i = 0; i < rows; i++) {
+	unsigned int val;
 	buf[0] = '\0';				/* start with empty string */
 	ss = buf;
 
+	val = i * DUMP_WIDTH;
+	assert(val <= 0xFFFF);
 	sprintf(ss, "%04x ", i * DUMP_WIDTH);
 	ss += strlen(ss);
+
 	for (j = 0; j < DUMP_WIDTH; j++) {
 	    if (((i * DUMP_WIDTH) + j) >= len) {
 		strcpy(ss, "   ");
 	    } else {
 		ch = ((unsigned char) *((char *) (s) + i * DUMP_WIDTH + j))
-		    & 0xff;
+		    & 0xFF;
+
+		assert(ch <= 0xFF); /* paranoia */
+
 		sprintf(ss, "%02x%c", ch, j == 7 ? '|' : ' ');
 		ss += 3;
 	    }
@@ -332,7 +338,7 @@ static int tls_dump(const char *s, int len)
     }
 #ifdef TRUNCATE
     if (trunc > 0) {
-	sprintf(buf, "%04x - <SPACES/NULS>\n", len+ trunc);
+	snprintf(buf, sizeof(buf), "%04x - <SPACES/NULS>\n", len+ trunc);
 	if (var_imapd_tls_loglevel>0)
 	  printf("%s", buf);
 	ret += strlen(buf);
@@ -428,9 +434,10 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
     if (var_imapd_tls_loglevel > 0) {
 	unsigned int i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
-	for (i = 0; i < sess->session_id_length; i++)
+	for (i = 0; i < sess->session_id_length; i++) {
+	    assert(sess->session_id[i] <= 0xFF);
 	    sprintf(idstr+i*2, "%02X", sess->session_id[i]);
-
+	}
 	syslog(LOG_DEBUG, "new TLS session: id=%s, expire=%s, status=%s",
 	       idstr, ctime(&expire), ret ? "failed" : "ok");
     }
@@ -446,7 +453,8 @@ static void remove_session(unsigned char *id, int idlen)
     int ret;
 
     assert(id);
-
+    assert(idlen <= SSL_MAX_SSL_SESSION_ID_LENGTH);
+    
     if (!sess_dbopen) return;
 
     do {
@@ -457,9 +465,12 @@ static void remove_session(unsigned char *id, int idlen)
     if (var_imapd_tls_loglevel > 0) {
 	int i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
-	for (i = 0; i < idlen; i++)
-	    sprintf(idstr+i*2, "%02X", id[i]);
 
+	for (i = 0; i < idlen; i++) {
+	    assert(id[i] <= 0xFF);
+	    sprintf(idstr+i*2, "%02X", id[i]);
+	}
+	    
 	syslog(LOG_DEBUG, "remove TLS session: id=%s", idstr);
     }
 }
@@ -495,6 +506,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
     SSL_SESSION *sess = NULL;
 
     assert(id);
+    assert(idlen <= SSL_MAX_SSL_SESSION_ID_LENGTH);
 
     if (!sess_dbopen) return NULL;
 
@@ -639,8 +651,8 @@ int     tls_init_serverengine(const char *ident,
 	SSL_CTX_sess_set_get_cb(s_ctx, get_session_cb);
 
 	/* create the name of the db file */
-	strcpy(dbdir, config_dir);
-	strcat(dbdir, FNAME_TLSSESSIONS);
+	strlcpy(dbdir, config_dir, sizeof(dbdir));
+	strlcat(dbdir, FNAME_TLSSESSIONS, sizeof(dbdir));
 
 	r = DB->open(dbdir, &sessdb);
 	if (r != 0) {
@@ -967,9 +979,14 @@ static int prune_p(void *rock, const char *id, int idlen,
     if (var_imapd_tls_loglevel > 0) {
 	int i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
-	for (i = 0; i < idlen; i++)
-	    sprintf(idstr+i*2, "%02X", (unsigned char) id[i]);
 
+	assert(idlen <= SSL_MAX_SSL_SESSION_ID_LENGTH);
+
+	for (i = 0; i < idlen; i++) {
+	    assert((unsigned char)id[i] <= 0xFF);
+	    sprintf(idstr+i*2, "%02X", (unsigned char) id[i]);
+	}
+	
 	syslog(LOG_DEBUG, "found TLS session: id=%s, expire=%s",
 	       idstr, ctime(&expire));
     }
@@ -999,8 +1016,8 @@ int tls_prune_sessions(void)
     struct prunerock prock;
 
    /* create the name of the db file */
-    strcpy(dbdir, config_dir);
-    strcat(dbdir, FNAME_TLSSESSIONS);
+    strlcpy(dbdir, config_dir, sizeof(dbdir));
+    strlcat(dbdir, FNAME_TLSSESSIONS, sizeof(dbdir));
 
     ret = DB->open(dbdir, &sessdb);
     if (ret != CYRUSDB_OK) {
