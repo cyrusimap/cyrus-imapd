@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.475 2004/07/14 17:20:24 ken3 Exp $ */
+/* $Id: imapd.c,v 1.476 2004/07/15 00:55:15 ken3 Exp $ */
 
 #include <config.h>
 
@@ -124,7 +124,11 @@ static SSL *tls_conn = NULL;
 #endif /* HAVE_SSL */
 
 /* stage(s) for APPEND */
-struct stagemsg **stage = NULL;
+struct appendstage {
+    struct stagemsg *stage;
+    char **flag;
+    int nflags, flagalloc;
+} **stage = NULL;
 unsigned long numstage = 0;
 
 /* the sasl proxy policy context */
@@ -778,7 +782,16 @@ void fatal(const char *s, int code)
     }
     if (stage) {
 	/* Cleanup the stage(s) */
-	while (numstage) append_removestage(stage[--numstage]);
+	while (numstage) {
+	    struct appendstage *curstage = stage[--numstage];
+
+	    append_removestage(curstage->stage);
+	    while (curstage->nflags--) {
+		free(curstage->flag[curstage->nflags]);
+	    }
+	    if (curstage->flag) free((char *) curstage->flag);
+	    free(curstage);
+	}
 	free(stage);
     }
 
@@ -2292,8 +2305,6 @@ void cmd_append(char *tag, char *name)
 
 {
     int c;
-    char **flag = NULL;
-    int nflags = 0, flagalloc = 0;
     static struct buf arg;
     char *p;
     time_t internaldate, now = time(NULL);
@@ -2308,8 +2319,9 @@ void cmd_append(char *tag, char *name)
     const char *parseerr = NULL;
     FILE *f;
     int numalloc = 5;
+    struct appendstage *curstage;
 
-    stage = xmalloc(numalloc * sizeof(struct stagemsg *));
+    stage = xmalloc(numalloc * sizeof(struct appendstage *));
 
     /* See if we can append */
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
@@ -2334,24 +2346,32 @@ void cmd_append(char *tag, char *name)
     c = ' '; /* just parsed a space */
     /* we loop, to support MULTIAPPEND */
     while (!r && c == ' ') {
+	/* Grow the stage array, if necessary */
+	if (numstage == numalloc) {
+	    numalloc *= 2;
+	    stage = xrealloc(stage, numalloc * sizeof(struct appendstage *));
+	}
+	curstage = stage[numstage++] = xzmalloc(sizeof(struct appendstage));
+
 	/* Parse flags */
 	c = getword(imapd_in, &arg);
 	if  (c == '(' && !arg.s[0]) {
-	    nflags = 0;
+	    curstage->nflags = 0;
 	    do {
 		c = getword(imapd_in, &arg);
-		if (!nflags && !arg.s[0] && c == ')') break; /* empty list */
+		if (!curstage->nflags && !arg.s[0] && c == ')') break; /* empty list */
 		if (!isokflag(arg.s)) {
 		    parseerr = "Invalid flag in Append command";
 		    r = IMAP_PROTOCOL_ERROR;
 		    goto done;
 		}
-		if (nflags == flagalloc) {
-		    flagalloc += FLAGGROW;
-		    flag = (char **)xrealloc((char *)flag, 
-					     flagalloc * sizeof(char *));
+		if (curstage->nflags == curstage->flagalloc) {
+		    curstage->flagalloc += FLAGGROW;
+		    curstage->flag =
+			(char **) xrealloc((char *) curstage->flag, 
+					   curstage->flagalloc * sizeof(char *));
 		}
-		flag[nflags++] = xstrdup(arg.s);
+		curstage->flag[curstage->nflags++] = xstrdup(arg.s);
 	    } while (c == ' ');
 	    if (c != ')') {
 		parseerr = 
@@ -2438,14 +2458,9 @@ void cmd_append(char *tag, char *name)
 	}
 	
 	/* Stage the message */
-	if (numstage == numalloc) {
-	    numalloc *= 2;
-	    stage = xrealloc(stage, numalloc * sizeof(struct stagemsg *));
-	}
-	stage[numstage] = NULL;
-	f = append_newstage(mailboxname, now, numstage, &stage[numstage]);
+	f = append_newstage(mailboxname, now, numstage,
+			    &(curstage->stage));
 	if (f) {
-	    numstage++;
 	    totalsize += size;
 	    r = message_copy_strict(imapd_in, f, size);
 	    fclose(f);
@@ -2479,8 +2494,8 @@ void cmd_append(char *tag, char *name)
     }
     if (!r) {
 	for (i = 0; !r && i < numstage; i++) {
-	    r = append_fromstage(&mailbox, stage[i], internaldate, 
-				 (const char **) flag, nflags, 0);
+	    r = append_fromstage(&mailbox, stage[i]->stage, internaldate, 
+				 (const char **) stage[i]->flag, stage[i]->nflags, 0);
 	}
 
 	if (!r) {
@@ -2491,7 +2506,16 @@ void cmd_append(char *tag, char *name)
     }
 
     /* Cleanup the stage(s) */
-    while (numstage) append_removestage(stage[--numstage]);
+    while (numstage) {
+	struct appendstage *curstage = stage[--numstage];
+
+	append_removestage(curstage->stage);
+	while (curstage->nflags--) {
+	    free(curstage->flag[curstage->nflags]);
+	}
+	if (curstage->flag) free((char *) curstage->flag);
+	free(curstage);
+    }
     free(stage);
     stage = NULL;
 
@@ -2520,12 +2544,6 @@ void cmd_append(char *tag, char *name)
 	}
 	prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
     }
-
-    /* free memory */
-    while (nflags--) {
-	free(flag[nflags]);
-    }
-    if (flag) free((char *)flag);
 }
 
 /*
