@@ -207,7 +207,7 @@ cmdloop()
 	}
 	if (c != ' ' || !is_atom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
 	    prot_printf(imapd_out, "* BAD Invalid tag\r\n");
-	    if (c != '\n') eatline();
+	    eatline(c);
 	    continue;
 	}
 
@@ -215,7 +215,7 @@ cmdloop()
 	c = getword(&cmd);
 	if (!cmd.s[0]) {
 	    prot_printf(imapd_out, "%s BAD Null command\r\n", tag.s);
-	    if (c != '\n') eatline();
+	    eatline(c);
 	    continue;
 	}
 	if (islower(cmd.s[0])) cmd.s[0] = toupper(cmd.s[0]);
@@ -233,7 +233,7 @@ cmdloop()
 		c = getword(&arg1);
 		if (!is_atom(arg1.s)) {
 		    prot_printf(imapd_out, "%s BAD Invalid authenticate mechanism\r\n", tag.s);
-		    if (c != '\n') eatline();
+		    eatline(c);
 		    continue;
 		}
 		if (c == '\r') c = prot_getc(imapd_in);
@@ -629,7 +629,7 @@ cmdloop()
 		}
 		else {
 		    prot_printf(imapd_out, "%s BAD Unrecognized UID subcommand\r\n", tag.s);
-		    if (c != '\n') eatline();
+		    eatline(c);
 		}
 	    }
 	    else if (!strcmp(cmd.s, "Unsubscribe")) {
@@ -656,40 +656,40 @@ cmdloop()
 	default:
 	badcmd:
 	    prot_printf(imapd_out, "%s BAD Unrecognized command\r\n", tag.s);
-	    if (c != '\n') eatline();
+	    eatline(c);
 	}
 
 	continue;
 
     nologin:
 	prot_printf(imapd_out, "%s BAD Please login first\r\n", tag.s);
-	if (c != '\n') eatline();
+	eatline(c);
 	continue;
 
     nomailbox:
 	prot_printf(imapd_out, "%s BAD Please select a mailbox first\r\n", tag.s);
-	if (c != '\n') eatline();
+	eatline(c);
 	continue;
 
     missingargs:
 	prot_printf(imapd_out, "%s BAD Missing required argument to %s\r\n", tag.s, cmd.s);
-	if (c != '\n') eatline();
+	eatline(c);
 	continue;
 
     extraargs:
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag.s, cmd.s);
-	if (c != '\n') eatline();
+	eatline(c);
 	continue;
 
     badsequence:
 	prot_printf(imapd_out, "%s BAD Invalid sequence in %s\r\n", tag.s, cmd.s);
-	if (c != '\n') eatline();
+	eatline(c);
 	continue;
 
     badpartition:
 	prot_printf(imapd_out, "%s BAD Invalid partition name in %s\r\n",
 	       tag.s, cmd.s);
-	if (c != '\n') eatline();
+	eatline(c);
 	continue;
     }
 }
@@ -961,6 +961,8 @@ char *name;
     char *p;
     time_t internaldate = time(0);
     unsigned size = 0;
+    int sawdigit = 0;
+    int isnowait = 0;
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
     struct mailbox mailbox;
@@ -976,7 +978,7 @@ char *name;
 		    !strcmp(arg.s, "\\flagged") && !strcmp(arg.s, "\\draft") &&
 		    !strcmp(arg.s, "\\deleted")) {
 		    prot_printf(imapd_out, "%s BAD Invalid system flag in Append command\r\n",tag);
-		    if (c != '\n') eatline();
+		    eatline(c);
 		    goto freeflags;
 		}
 	    }
@@ -984,7 +986,7 @@ char *name;
 		if (!nflags && !arg.s[0] && c == ')') break; /* empty list */
 		prot_printf(imapd_out, "%s BAD Invalid flag name %s in Append command\r\n",
 			    tag, arg.s);
-		if (c != '\n') eatline();
+		eatline(c);
 		goto freeflags;
 	    }
 	    if (nflags == flagalloc) {
@@ -997,7 +999,7 @@ char *name;
 	    prot_printf(imapd_out,
 	    "%s BAD Missing space or ) after flag name in Append command\r\n",
 			tag);
-	    if (c != '\n') eatline();
+	    eatline(c);
 	    goto freeflags;
 	}
 	c = prot_getc(imapd_in);
@@ -1005,7 +1007,7 @@ char *name;
 	    prot_printf(imapd_out,
 		  "%s BAD Missing space after flag list in Append command\r\n",
 			tag);
-	    if (c != '\n') eatline();
+	    eatline(c);
 	    goto freeflags;
 	}
 	c = getword(&arg);
@@ -1017,7 +1019,7 @@ char *name;
 	c = getdatetime(&internaldate);
 	if (c != ' ') {
 	    prot_printf(imapd_out, "%s BAD Invalid date-time in Append command\r\n", tag);
-	    if (c != '\n') eatline();
+	    eatline(c);
 	    goto freeflags;
 	}
 	c = getword(&arg);
@@ -1026,24 +1028,37 @@ char *name;
     if (arg.s[0] != '{') {
 	prot_printf(imapd_out, "%s BAD Missing required argument to Append command\r\n",
 	       tag);
-	if (c != '\n') eatline();
+	eatline(c);
 	goto freeflags;
     }
 
     /* Read size from literal */
     for (p = arg.s + 1; *p && isdigit(*p); p++) {
+	sawdigit++;
 	size = size*10 + *p - '0';
     }
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (*p != '}' || p[1] || c != '\n' || p == arg.s + 1) {
+    if (*p == '+') {
+	isnowait++;
+	p++;
+    }
+
+    if (c == '\r') {
+	c = prot_getc(imapd_in);
+    }
+    else {
+	ungetc(c);
+	c = ' ';		/* Force a syntax error */
+    }
+
+    if (*p != '}' || p[1] || c != '\n' || !sawdigit) {
 	prot_printf(imapd_out, "%s BAD Invalid literal in Append command\r\n", tag);
-	if (c != '\n') eatline();
+	eatline(c);
 	goto freeflags;
     }
     if (size < 2) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag,
 		    error_message(IMAP_MESSAGE_NOBLANKLINE));
-	if (c != '\n') eatline();
+	eatline(c);
 	goto freeflags;
     }
 
@@ -1054,6 +1069,12 @@ char *name;
 			 ACL_INSERT, size);
     }
     if (r) {
+	if (isnowait) {
+	    /* Eat message and trailing newline */
+	    while (size--) c = prot_getc(imapd_in);
+	    eatline(' ');
+	}
+	    
 	prot_printf(imapd_out, "%s NO %s%s\r\n",
 	       tag,
 	       (r == IMAP_MAILBOX_NONEXISTENT &&
@@ -1064,9 +1085,11 @@ char *name;
 	goto freeflags;
     }
 
-    /* Tell client to send the message */
-    prot_printf(imapd_out, "+ go ahead\r\n");
-    prot_flush(imapd_out);
+    if (!isnowait) {
+	/* Tell client to send the message */
+	prot_printf(imapd_out, "+ go ahead\r\n");
+	prot_flush(imapd_out);
+    }
 
     /* Perform the rest of the append */
     r = append_fromstream(&mailbox, imapd_in, size, internaldate, flag, nflags,
@@ -1079,7 +1102,7 @@ char *name;
     if (c != '\n') {
 	if (c == EOF) return;
 	prot_printf(imapd_out, "* BAD Junk after literal in APPEND command\r\n");
-	eatline();
+	eatline(c);
     }
 
     if (imapd_mailbox) {
@@ -1300,7 +1323,7 @@ int usinguid;
 
 		if (*p != ']') {
 		    prot_printf(imapd_out, "%s BAD Invalid body section\r\n", tag);
-		    if (c != '\n') eatline();
+		    eatline(c);
 		    goto freeargs;
 		}
 		p++;
@@ -1316,7 +1339,7 @@ int usinguid;
 
 		    if (*p != '>') {
 			prot_printf(imapd_out, "%s BAD Invalid body partial\r\n", tag);
-			if (c != '\n') eatline();
+			eatline(c);
 			goto freeargs;
 		    }
 		    p++;
@@ -1324,7 +1347,7 @@ int usinguid;
 
 		if (*p) {
 		    prot_printf(imapd_out, "%s BAD Junk after body section\r\n", tag);
-		    if (c != '\n') eatline();
+		    eatline(c);
 		    goto freeargs;
 		}
 		appendstrlist(&fetchargs.bodysections, section);
@@ -1383,14 +1406,14 @@ int usinguid;
 		if (c != ' ') {
 		    prot_printf(imapd_out, "%s BAD Missing required argument to %s %s\r\n",
 			   tag, cmd, fetchatt.s);
-		    if (c != '\n') eatline();
+		    eatline(c);
 		    goto freeargs;
 		}
 		c = prot_getc(imapd_in);
 		if (c != '(') {
 		    prot_printf(imapd_out, "%s BAD Missing required open parenthesis in %s %s\r\n",
 			   tag, cmd, fetchatt.s);
-		    if (c != '\n') eatline();
+		    eatline(c);
 		    goto freeargs;
 		}
 		do {
@@ -1401,7 +1424,7 @@ int usinguid;
 		    if (*p || !*fieldname.s) {
 			prot_printf(imapd_out, "%s BAD Invalid field-name in %s %s\r\n",
 			       tag, cmd, fetchatt.s);
-			if (c != '\n') eatline();
+			eatline(c);
 			goto freeargs;
 		    }
 		    lcase(fieldname.s);;
@@ -1422,7 +1445,7 @@ int usinguid;
 		if (c != ')') {
 		    prot_printf(imapd_out, "%s BAD Missing required close parenthesis in %s %s\r\n",
 			   tag, cmd, fetchatt.s);
-		    if (c != '\n') eatline();
+		    eatline(c);
 		    goto freeargs;
 		}
 		c = prot_getc(imapd_in);
@@ -1440,7 +1463,7 @@ int usinguid;
 	default:
 	badatt:
 	    prot_printf(imapd_out, "%s BAD Invalid %s attribute %s\r\n", tag, cmd, fetchatt.s);
-	    if (c != '\n') eatline();
+	    eatline(c);
 	    goto freeargs;
 	}
 
@@ -1454,13 +1477,13 @@ int usinguid;
     }
     if (inlist) {
 	prot_printf(imapd_out, "%s BAD Missing close parenthesis in %s\r\n", tag, cmd);
-	if (c != '\n') eatline();
+	eatline(c);
 	goto freeargs;
     }
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
-	eatline();
+	eatline(c);
 	goto freeargs;
     }
 
@@ -1623,7 +1646,7 @@ int usinguid;
     }
     else {
 	prot_printf(imapd_out, "%s BAD Invalid %s attribute\r\n", tag, cmd);
-	eatline();
+	eatline(' ');
 	return;
     }
 
@@ -1654,14 +1677,14 @@ int usinguid;
 	    else {
 		prot_printf(imapd_out, "%s BAD Invalid system flag in %s command\r\n",
 		       tag, cmd);
-		if (c != '\n') eatline();
+		eatline(c);
 		goto freeflags;
 	    }
 	}
 	else if (!is_atom(flagname.s)) {
 	    prot_printf(imapd_out, "%s BAD Invalid flag name %s in %s command\r\n",
 		   tag, flagname.s, cmd);
-	    if (c != '\n') eatline();
+	    eatline(c);
 	    goto freeflags;
 	}
 	else {
@@ -1683,13 +1706,13 @@ int usinguid;
     }
     if (inlist) {
 	prot_printf(imapd_out, "%s BAD Missing close parenthesis in %s\r\n", tag, cmd);
-	if (c != '\n') eatline();
+	eatline(c);
 	return;
     }
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
-	eatline();
+	eatline(c);
 	return;
     }
 
@@ -1733,7 +1756,7 @@ int usinguid;
 
     c = getsearchprogram(tag, searchargs, &charset, 1);
     if (c == EOF) {
-	eatline();
+	eatline(' ');
 	freesearchargs(searchargs);
 	return;
     }
@@ -1741,7 +1764,7 @@ int usinguid;
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to Search\r\n", tag);
-	eatline();
+	eatline(c);
 	freesearchargs(searchargs);
 	return;
     }
@@ -2337,7 +2360,7 @@ char *quotaroot;
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to SETQUOTA\r\n", tag);
-	eatline();
+	eatline(c);
 	return;
     }
 
@@ -2357,7 +2380,7 @@ char *quotaroot;
 
  badlist:
     prot_printf(imapd_out, "%s BAD Invalid quota list in Setquota\r\n", tag);
-    if (c != '\n') eatline();
+    eatline(c);
 }
 
 /*
@@ -2401,7 +2424,7 @@ char *name;
 	else {
 	    prot_printf(imapd_out, "%s BAD Invalid Status attribute %s\r\n",
 			tag, arg.s);
-	    if (c != '\n') eatline();
+	    eatline(c);
 	    return;
 	}
 	    
@@ -2412,7 +2435,7 @@ char *name;
     if (c != ')') {
 	prot_printf(imapd_out,
 		    "%s BAD Missing close parenthesis in Status\r\n", tag);
-	if (c != '\n') eatline();
+	eatline(c);
 	return;
     }
 
@@ -2421,7 +2444,7 @@ char *name;
     if (c != '\n') {
 	prot_printf(imapd_out,
 		    "%s BAD Unexpected extra arguments to Status\r\n", tag);
-	eatline();
+	eatline(c);
 	return;
     }
 
@@ -2464,7 +2487,7 @@ char *name;
 
  badlist:
     prot_printf(imapd_out, "%s BAD Invalid status list in Status\r\n", tag);
-    if (c != '\n') eatline();
+    eatline(c);
 }
 
 /*
@@ -2507,6 +2530,7 @@ struct buf *buf;
     int c;
     int i, len = 0;
     int sawdigit = 0;
+    int isnowait;
 
     if (buf->alloc == 0) {
 	buf->alloc = BUFGROWSIZE;
@@ -2571,17 +2595,26 @@ struct buf *buf;
 	}
     case '{':
 	/* Literal */
+	isnowait = 0;
 	buf->s[0] = '\0';
 	while ((c = prot_getc(imapd_in)) != EOF && isdigit(c)) {
 	    sawdigit = 1;
 	    len = len*10 + c - '0';
+	}
+	if (c == '+') {
+	    isnowait++;
+	    c = prot_getc(imapd_in);
 	}
 	if (!sawdigit || c != '}') {
 	    if (c != EOF) prot_ungetc(c, imapd_in);
 	    return EOF;
 	}
 	c = prot_getc(imapd_in);
-	if (c == '\r') c = prot_getc(imapd_in);
+	if (c != '\r') {
+	    if (c != EOF) prot_ungetc(c, imapd_in);
+	    return EOF;
+	}
+	c = prot_getc(imapd_in);
 	if (c != '\n') {
 	    if (c != EOF) prot_ungetc(c, imapd_in);
 	    return EOF;
@@ -2590,8 +2623,10 @@ struct buf *buf;
 	    buf->alloc = len+1;
 	    buf->s = xrealloc(buf->s, buf->alloc+1);
 	}
-	prot_printf(imapd_out, "+ go ahead\r\n");
-	prot_flush(imapd_out);
+	if (!isnowait) {
+	    prot_printf(imapd_out, "+ go ahead\r\n");
+	    prot_flush(imapd_out);
+	}
 	for (i = 0; i < len; i++) {
 	    c = prot_getc(imapd_in);
 	    if (c == EOF) {
@@ -2649,7 +2684,7 @@ struct buf *buf;
 	if (c1 == '\r') {
 	    c1 = prot_getc(imapd_in);
 	    if (c1 != '\n') {
-		eatline();
+		eatline(c1);
 		return -1;
 	    }
 	    return len;
@@ -2657,25 +2692,25 @@ struct buf *buf;
 	else if (c1 == '\n') return len;
 
 	if (CHAR64(c1) == XX) {
-	    eatline();
+	    eatline(c1);
 	    return -1;
 	}
 	
 	c2 = prot_getc(imapd_in);
 	if (CHAR64(c2) == XX) {
-	    if (c2 != '\n') eatline();
+	    eatline(c2);
 	    return -1;
 	}
 
 	c3 = prot_getc(imapd_in);
 	if (c3 != '=' && CHAR64(c3) == XX) {
-	    if (c3 != '\n') eatline();
+	    eatline(c3);
 	    return -1;
 	}
 
 	c4 = prot_getc(imapd_in);
 	if (c4 != '=' && CHAR64(c4) == XX) {
-	    if (c4 != '\n') eatline();
+	    eatline(c4);
 	    return -1;
 	}
 
@@ -2689,7 +2724,7 @@ struct buf *buf;
 	    c1 = prot_getc(imapd_in);
 	    if (c1 == '\r') c1 = prot_getc(imapd_in);
 	    if (c1 != '\n') {
-		eatline();
+		eatline(c1);
 		return -1;
 	    }
 	    if (c4 != '=') return -1;
@@ -2700,7 +2735,7 @@ struct buf *buf;
 	    c1 = prot_getc(imapd_in);
 	    if (c1 == '\r') c1 = prot_getc(imapd_in);
 	    if (c1 != '\n') {
-		eatline();
+		eatline(c1);
 		return -1;
 	    }
 	    return len;
@@ -3474,12 +3509,37 @@ time_t *date;
 
 /*
  * Eat characters up to and including the next newline
+ * Also look for and eat no-wait literals.
  */
-eatline()
+eatline(c)
+int c;
 {
-    int c;
+    int state = 0;
+    char *statediagram = " {+}\r";
+    int size;
 
-    while ((c = prot_getc(imapd_in)) != EOF && c != '\n');
+    for (;;) {
+	if (c == '\n') return;
+	if (c == statediagram[state+1]) {
+	    state++;
+	    if (state == 1) size = 0;
+	    else if (c == '\r') {
+		/* Got a no-wait literal */
+		c = prot_getc(imapd_in);/* Eat newline */
+		while (size) {
+		    c = prot_getc(imapd_in); /* Eat contents */
+		}
+		state = 0;	/* Go back to scanning for eol */
+	    }
+	}
+	else if (state == 1 && isdigit(c)) {
+	    size = size * 10 + c - '0';
+	}
+	else state = 0;
+
+	c = prot_getc(imapd_in);
+	if (c == EOF) return;
+    }
 }
 
 /*
