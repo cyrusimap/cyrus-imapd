@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- * $Id: prot.h,v 1.24 2000/01/28 22:09:55 leg Exp $
+ * $Id: prot.h,v 1.25 2000/02/22 05:07:26 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -36,20 +36,12 @@
 #include <openssl/ssl.h>
 #endif /* HAVE_SSL */
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
 #define PROT_BUFSIZE 4096
 /* #define PROT_BUFSIZE 8192 */
 
 struct protstream;
 
-typedef void prot_readcallback_t P((struct protstream *s, void *rock));
+typedef void prot_readcallback_t(struct protstream *s, void *rock);
 
 struct protstream {
     unsigned char *ptr;
@@ -82,11 +74,9 @@ extern int prot_getc(struct protstream *s);
 extern int prot_ungetc(int c, struct protstream *s);
 extern int prot_putc(int c, struct protstream *s);
 
-#if 0
 #define prot_getc(s) ((s)->cnt-- > 0 ? (int)*(s)->ptr++ : prot_fill(s))
 #define prot_ungetc(c, s) ((s)->cnt++, (*--(s)->ptr = (c)))
 #define prot_putc(c, s) ((*(s)->ptr++ = (c)), --(s)->cnt == 0 ? prot_flush(s) : 0)
-#endif
 
 extern struct protstream *prot_new(int fd, int write);
 extern int prot_free(struct protstream *s);
