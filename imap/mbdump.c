@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.7 2002/03/29 00:03:55 rjs3 Exp $
+ * $Id: mbdump.c,v 1.8 2002/03/29 21:29:51 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -193,6 +193,34 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     if(tag) prot_printf(pout, "%s DUMP ", tag);
     prot_putc('(',pout);
 
+    /* The first member is either a number (if it is a quota root), or NIL
+     * (if it isn't) */
+    {
+	char buf[MAX_MAILBOX_PATH];
+	struct quota quota;
+
+	quota.fd = -1;
+	quota.root = (char *)mbname; /* xxx */
+	mailbox_hash_quota(buf,quota.root);
+	quota.fd = open(buf, O_RDWR, 0);
+	if(quota.fd == -1) {
+	    prot_printf(pout, "NIL ");
+	    goto dump_files;
+	}
+
+	r = mailbox_read_quota(&quota);
+	close(quota.fd);
+
+	if(r) {
+	    prot_printf(pout, "NIL ");
+	    goto dump_files; 
+	}
+	
+	prot_printf(pout, "%d ", quota.limit);
+    }
+
+ dump_files:
+    
     while((next = readdir(mbdir)) != NULL) {
 	char *name = next->d_name;  /* Alias */
 	char *p = name;
@@ -479,7 +507,30 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	eatline(pin, c);
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
+    
+    /* We should now have a number or a NIL */
+    c = getword(pin, &data);
+    if(!strcmp(data.s, "NIL")) {
+	/* Set No Quota */
+	r = mboxlist_setquota(mbname, -1);
+    } else if(imparse_isnumber(data.s)) {
+	/* Set a Quota */ 
+	mboxlist_setquota(mbname, atoi(data.s));
+    } else {
+	/* Huh? */
+	freebuf(&data);
+	eatline(pin, c);
+	return IMAP_PROTOCOL_BAD_PARAMETERS;
+    }
 
+    if(c != ' ' && c != ')') {
+	freebuf(&data);
+	eatline(pin, c);
+	return IMAP_PROTOCOL_BAD_PARAMETERS;
+    } else if(c == ')') {
+	goto done;
+    }
+    
     r = lock_mailbox_ctl_files(mbname, mbpath, mbacl, auth_state, &mb);
     if(r) goto done;
 
