@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.45 2001/08/14 16:11:26 leg Exp $ */
+/* $Id: master.c,v 1.46 2001/08/18 14:00:02 ken3 Exp $ */
 
 #include <config.h>
 
@@ -166,8 +166,8 @@ int become_cyrus(void)
     }
 
     if (setgid(gid)) {
-        syslog(LOG_ERR, "unable to set set group id to %d for user %s: %s",
-	       uid, CYRUS_USER, strerror(errno));
+        syslog(LOG_ERR, "unable to set group id to %d for user %s: %s",
+              gid, CYRUS_USER, strerror(errno));
         return -1;
     }
 
