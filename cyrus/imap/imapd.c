@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.31 2004/06/24 16:28:14 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.32 2004/07/12 20:20:46 ken3 Exp $ */
 
 #include <config.h>
 
@@ -153,6 +153,10 @@ static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 /* our tls connection, if any */
 static SSL *tls_conn = NULL;
 #endif /* HAVE_SSL */
+
+/* stage(s) for APPEND */
+struct stagemsg **stage = NULL;
+unsigned long numstage = 0;
 
 /* the sasl proxy policy context */
 static struct proxy_context imapd_proxyctx = {
@@ -851,6 +855,12 @@ void fatal(const char *s, int code)
 	prot_printf(imapd_out, "* BYE Fatal error: %s\r\n", s);
 	prot_flush(imapd_out);
     }
+    if (stage) {
+	/* Cleanup the stage(s) */
+	while (numstage) append_removestage(stage[--numstage]);
+	free(stage);
+    }
+
     syslog(LOG_ERR, "Fatal error: %s", s);
     shut_down(code);
 }
@@ -2510,7 +2520,8 @@ void cmd_append(char *tag, char *name)
     char *newserver;
     FILE *f;
     int numalloc = 5;
-    struct stagemsg **stage = xmalloc(numalloc * sizeof(struct stagemsg *));
+
+    stage = xmalloc(numalloc * sizeof(struct stagemsg *));
 
     /* See if we can append */
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
@@ -2683,14 +2694,14 @@ void cmd_append(char *tag, char *name)
 	}
 	
 	/* Stage the message */
-	if (num == numalloc) {
+	if (numstage == numalloc) {
 	    numalloc *= 2;
 	    stage = xrealloc(stage, numalloc * sizeof(struct stagemsg *));
 	}
-	stage[num] = NULL;
-	f = append_newstage(mailboxname, now, num, &stage[num]);
+	stage[numstage] = NULL;
+	f = append_newstage(mailboxname, now, num, &stage[numstage]);
 	if (f) {
-	    num++;
+	    numstage++;
 	    totalsize += size;
 	    r = message_copy_strict(imapd_in, f, size);
 	    fclose(f);
@@ -2725,7 +2736,7 @@ void cmd_append(char *tag, char *name)
     if (!r) {
 	struct body *body = NULL;
 
-	for (i = 0; !r && i < num; i++) {
+	for (i = 0; !r && i < numstage; i++) {
 	    r = append_fromstage(&mailbox, &body, stage[i], internaldate, 
 				 (const char **) flag, nflags, 0);
 	    if (body) message_free_body(body);
@@ -2740,10 +2751,9 @@ void cmd_append(char *tag, char *name)
     }
 
     /* Cleanup the stage(s) */
-    for (i = 0; i < num; i++) {
-	append_removestage(stage[i]);
-    }
+    while (numstage) append_removestage(stage[--numstage]);
     free(stage);
+    stage = NULL;
 
     imapd_check(NULL, 0, 0);
 

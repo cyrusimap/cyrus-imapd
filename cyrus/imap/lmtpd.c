@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.22 2004/06/18 16:13:39 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.23 2004/07/12 20:20:49 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -127,6 +127,8 @@ extern char *optarg;
 static int dupelim = 1;		/* eliminate duplicate messages with
 				   same message-id */
 static int singleinstance = 1;	/* attempt single instance store */
+
+struct stagemsg *stage = NULL;
 
 /* per-user/session state */
 static struct protstream *deliver_out, *deliver_in;
@@ -620,7 +622,6 @@ int deliver(message_data_t *msgdata, char *authuser,
     int n, nrcpts;
     struct dest *dlist = NULL;
     enum rcpt_status *status;
-    struct stagemsg *stage;
     struct message_content content = { NULL, 0, NULL };
     char *notifyheader;
 #ifdef USE_SIEVE
@@ -631,7 +632,6 @@ int deliver(message_data_t *msgdata, char *authuser,
     nrcpts = msg_getnumrcpt(msgdata);
     assert(nrcpts);
 
-    stage = (struct stagemsg *) msg_getrock(msgdata);
     notifyheader = generate_notify(msgdata);
 
     /* create our per-recipient status */
@@ -809,6 +809,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	free(content.body);
     }
     append_removestage(stage);
+    stage = NULL;
     if (notifyheader) free(notifyheader);
 
     return 0;
@@ -828,6 +829,7 @@ void fatal(const char* s, int code)
 	prot_printf(deliver_out,"421 4.3.0 lmtpd: %s\r\n", s);
 	prot_flush(deliver_out);
     }
+    if (stage) append_removestage(stage);
 
     syslog(LOG_ERR, "FATAL: %s", s);
     
@@ -1006,7 +1008,6 @@ FILE *spoolfile(message_data_t *msgdata)
     int i, n;
     time_t now = time(NULL);
     FILE *f = NULL;
-    struct stagemsg *stage = NULL;
 
     /* spool to the stage of one of the recipients
        (don't bother if we're only a proxy) */
@@ -1035,15 +1036,12 @@ FILE *spoolfile(message_data_t *msgdata)
 
 	r = mlookup(namebuf, &server, NULL, NULL);
 	if (!r && !server) {
-	  /* local mailbox -- setup stage for later use by deliver() */
-	  f = append_newstage(namebuf, now, 0, &stage);
+	    /* local mailbox -- setup stage for later use by deliver() */
+	    f = append_newstage(namebuf, now, 0, &stage);
 	}
     }
 
-    if (f) {
-	/* found a stage */
-	msg_setrock(msgdata, (void*) stage);
-    } else {
+    if (!f) {
 	/* we only have remote mailboxes, so use a tmpfile */
 	f = tmpfile();
     }
@@ -1051,9 +1049,8 @@ FILE *spoolfile(message_data_t *msgdata)
     return f;
 }
 
-void removespool(message_data_t *msgdata)
+void removespool(message_data_t *msgdata __attribute__((unused)))
 {
-    struct stagemsg *stage = (struct stagemsg *) msg_getrock(msgdata);
-
     append_removestage(stage);
+    stage = NULL;
 }

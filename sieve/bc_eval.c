@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.2.2.5 2004/06/28 19:49:02 ken3 Exp $
+ * $Id: bc_eval.c,v 1.2.2.6 2004/07/12 20:25:28 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -154,7 +154,7 @@ static char* look_for_me(char *myaddr, int numaddresses,
 	while (!found &&
 	       ((addr = get_address(ADDRESS_ALL,&data, &marker, 1))!= NULL)) {
 
-	    if (!strcmp(addr, myaddr)) {
+	    if (!strcasecmp(addr, myaddr)) {
 		found = xstrdup(myaddr);
 		break;
 	    }
@@ -174,7 +174,7 @@ static char* look_for_me(char *myaddr, int numaddresses,
 
 		altaddr = get_address(ADDRESS_ALL, &altdata, &altmarker, 1);
 
-		if (!strcmp(addr,altaddr)) {
+		if (!strcasecmp(addr,altaddr)) {
 		    found=xstrdup(str);
 		    break;
 		}
@@ -212,6 +212,19 @@ int shouldRespond(void * m, sieve_interp_t *interp,
 	while (*body[0] && isspace((int) *body[0])) body[0]++;
 	if (strcasecmp(body[0], "no")) l = SIEVE_DONE;
     }
+
+    /* is there a Precedence keyword of "junk | bulk | list"? */
+    strcpy(buf, "precedence");
+    if (interp->getheader(m, buf, &body) == SIEVE_OK) {
+	/* we don't deal with comments, etc. here */
+	/* skip leading white-space */
+	while (*body[0] && isspace((int) *body[0])) body[0]++;
+	if (!strcasecmp(body[0], "junk") ||
+	    !strcasecmp(body[0], "bulk") ||
+	    !strcasecmp(body[0], "list"))
+	    l = SIEVE_DONE;
+    }
+
     /* Note: the domain-part of all addresses are canonicalized */
     /* grab my address from the envelope */
     if (l == SIEVE_OK) {

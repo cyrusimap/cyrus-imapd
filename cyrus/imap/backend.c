@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.16.2.7 2004/06/09 19:42:39 ken3 Exp $ */
+/* $Id: backend.c,v 1.16.2.8 2004/07/12 20:20:46 ken3 Exp $ */
 
 #include <config.h>
 
@@ -253,6 +253,17 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     return r;
 }
 
+static int timedout = 0;
+
+static void timed_out(int sig) 
+{
+    if (sig == SIGALRM) {
+	timedout = 1;
+    } else {
+	fatal("Bad signal in timed_out", EC_SOFTWARE);
+    }
+}
+
 struct backend *backend_connect(struct backend *ret, const char *server,
 				struct protocol_t *prot, const char *userid,
 				const char **auth_status)
@@ -264,6 +275,7 @@ struct backend *backend_connect(struct backend *ret, const char *server,
     struct addrinfo hints, *res0 = NULL, *res;
     struct sockaddr_un sunsock;
     char buf[2048], *mechlist = NULL;
+    struct sigaction action;
 
     if (!ret) {
 	ret = xmalloc(sizeof(struct backend));
@@ -305,15 +317,33 @@ struct backend *backend_connect(struct backend *ret, const char *server,
 	}
     }
 
+    /* Setup timeout */
+    timedout = 0;
+    action.sa_flags = 0;
+    action.sa_handler = timed_out;
+    if(sigaction(SIGALRM, &action, NULL) < 0) 
+    {
+	syslog(LOG_ERR, "Setting timeout in backend_connect failed: sigaction: %m");
+	/* continue anyway */
+    }
+    
     for (res = res0; res; res = res->ai_next) {
 	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	if (sock < 0)
 	    continue;
+	alarm(config_getint(IMAPOPT_CLIENT_TIMEOUT));
 	if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
 	    break;
+	if(errno == EINTR && timedout == 1)
+	    errno = ETIMEDOUT;
 	close(sock);
 	sock = -1;
     }
+
+    /* Remove timeout code */
+    alarm(0);
+    signal(SIGALRM, SIG_IGN);
+    
     if (sock < 0) {
 	freeaddrinfo(res0);
 	syslog(LOG_ERR, "connect(%s) failed: %m", server);

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.22 2004/06/15 17:13:31 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.23 2004/07/12 20:20:50 ken3 Exp $
  */
 
 /*
@@ -153,6 +153,8 @@ unsigned nntp_current = 0;
 unsigned did_extensions = 0;
 int allowanonymous = 0;
 int singleinstance = 1;	/* attempt single instance store */
+
+struct stagemsg *stage = NULL;
 
 /* Bitmasks for NNTP modes */
 enum {
@@ -690,6 +692,7 @@ void fatal(const char* s, int code)
 	prot_printf(nntp_out, "205 Fatal error: %s\r\n", s);
 	prot_flush(nntp_out);
     }
+    if (stage) append_removestage(stage);
     syslog(LOG_ERR, "Fatal error: %s", s);
     shut_down(code);
 }
@@ -2658,9 +2661,6 @@ struct message_data {
     struct protstream *data;	/* message in temp file */
     FILE *f;			/* FILE * corresponding */
 
-    struct stagemsg *stage;	/* staging location for single instance
-				   store */
-
     char *id;			/* message id */
     char *path;			/* path */
     char *control;		/* control message */
@@ -2679,7 +2679,6 @@ int msg_new(message_data_t **m)
 
     ret->data = NULL;
     ret->f = NULL;
-    ret->stage = NULL;
     ret->id = NULL;
     ret->path = NULL;
     ret->control = NULL;
@@ -2702,9 +2701,6 @@ void msg_free(message_data_t *m)
     }
     if (m->f) {
 	fclose(m->f);
-    }
-    if (m->stage) {
-	append_removestage(m->stage);
     }
     if (m->id) {
 	free(m->id);
@@ -2968,7 +2964,7 @@ static int savemsg(message_data_t *m, FILE *f)
 
     /* spool to the stage of one of the recipients */
     for (i = 0; !stagef && (i < m->rcpt_num); i++) {
-	stagef = append_newstage(m->rcpt[i], now, 0, &m->stage);
+	stagef = append_newstage(m->rcpt[i], now, 0, &stage);
     }
 
     if (stagef) {
@@ -2984,7 +2980,8 @@ static int savemsg(message_data_t *m, FILE *f)
 	if (n == -1) {
 	    /* close and remove the stage */
 	    fclose(stagef);
-	    append_removestage(m->stage);
+	    append_removestage(stage);
+	    stage = NULL;
 	    return IMAP_IOERROR;
 	}
 	else {
@@ -3106,8 +3103,8 @@ static int deliver(message_data_t *msg)
 
 	    if (!r) {
 		prot_rewind(msg->data);
-		if (msg->stage) {
-		    r = append_fromstage(&as, &body, msg->stage, now,
+		if (stage) {
+		    r = append_fromstage(&as, &body, stage, now,
 					 (const char **) NULL, 0, !singleinstance);
 		} else {
 		    /* XXX should never get here */
@@ -3795,6 +3792,8 @@ static void cmd_post(char *msgid, int mode)
 	}
 
 	msg_free(msg); /* does fclose() */
+	if (stage) append_removestage(stage);
+	stage = NULL;
     }
     else {
 	/* flush the article from the stream */
