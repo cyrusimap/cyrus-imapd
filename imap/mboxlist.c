@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.214 2003/04/30 20:33:20 ken3 Exp $
+ * $Id: mboxlist.c,v 1.215 2003/05/29 01:47:23 ken3 Exp $
  */
 
 #include <config.h>
@@ -2696,7 +2696,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 	}
 	else if (pattern[len] == '.') {
 	    /* patbuf[0] = '\0' */
-	    strlcat(patbuf, pattern+len+1, sizeof(patbuf));
+	    strlcpy(patbuf, pattern+len+1, sizeof(patbuf));
 	    cbrock.g = glob_init(patbuf, GLOB_HIERARCHY);
 
 	    pattern[prefixlen] = '\0';
