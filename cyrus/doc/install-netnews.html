@@ -1,4 +1,4 @@
-<!-- $Id: install-netnews.html,v 1.1.2.4 2003/03/06 17:39:53 ken3 Exp $ -->
+<!-- $Id: install-netnews.html,v 1.1.2.5 2003/03/12 20:54:32 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus and Netnews
@@ -46,9 +46,11 @@ example above, <tt>newsprefix</tt> would be set to <tt>netnews</tt>.
 
 <p>You must create a mailbox for each newsgroup that you would like to
 receive/export before the newsgroups can be used.  If some groups are
-private, be sure to set the ACLs accordingly.  The <tt>tools/???</tt>
-script can be used to help facilitate mass creation of newsgroup
-mailboxes.
+private, be sure to set the ACLs accordingly.  The
+<tt>tools/mknewsgroups</tt> script can be used to help facilitate mass
+creation of newsgroup mailboxes.  When using this script, be sure to
+add posting rights for 'anyone' (eg. <tt>mknewsgroups -a 'anyone +p'
+...</tt>) so that articles can be fed/posted.
 
 <h3>Receiving articles</h3>
 In order to receive usenet articles, you must make sure that the Cyrus
@@ -142,5 +144,5 @@ use its "feed" operation mode.
 To expire usenet articles on a regular basis, you should use the <tt>expirenews</tt> utility.  This utility both expunges articles from their mailboxes and prunes message-ids from <tt>netnews.db</tt>.  The <tt>master/conf/normal.conf</tt> and <tt>master/conf/prefork.conf</tt> sample configs both include EVENT entries for <tt>expirenews</tt> (disabled by default).
 
 <P><HR>
-last modified: $Date: 2003/03/06 17:39:53 $
+last modified: $Date: 2003/03/12 20:54:32 $
 </BODY></HTML>
