@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.12 2002/01/25 18:04:22 leg Exp $
+ * $Id: mupdate-client.c,v 1.13 2002/01/25 19:51:55 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -243,10 +243,20 @@ int mupdate_connect(const char *server, const char *port,
     char buf[4096];
     char *mechlist;
     
-    if(!server || !handle)
+    if(!handle)
 	return MUPDATE_BADPARAM;
 
     /* open connection to 'server' */
+    if(!server) {
+	server = config_getstring("mupdate_server", NULL);
+	if(server == NULL) {
+	    fatal("couldn't get mupdate server name", EC_UNAVAILABLE);
+	}
+    }
+    if(!port) {
+	port = config_getstring("mupdate_port",NULL);
+    }
+    
     hp = gethostbyname(server);
     if(!hp) return -2;
     
@@ -350,22 +360,47 @@ void mupdate_disconnect(mupdate_handle **h)
     free(*h); *h=NULL;
 }
 
+/* We're really only looking for an OK or NO or BAD here */
+static int mupdate_scarf_one(struct mupdate_mailboxdata *mdata __attribute__((unused)),
+			     const char *cmd,
+			     void *context) 
+{
+    int *called = context;
+    
+    if(*called) {
+	/* Only want to be called once per command */
+	return -1;
+    }
+    *called = 1;
+
+    /*only accept OK, NO and BAD */
+    if(strncmp(cmd, "OK", 2)) {
+	return 0;
+    } else if (strncmp(cmd, "NO", 2) || strncmp(cmd, "BAD", 3)) {
+	return -1;
+    } else {
+	return 1;
+    }
+}
+
+
 int mupdate_activate(mupdate_handle *handle, 
 		     const char *mailbox, const char *server,
 		     const char *acl)
 {
     int ret;
+    int called = 0;
     
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox || !server || !acl) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     prot_printf(handle->pout,
-		"X%u ACTIVATE %s %s %s\r\n", handle->tagn++,
+		"X%u ACTIVATE \"%s\" \"%s\" \"%s\"\r\n", handle->tagn++,
 		mailbox, server, acl);
 
-    /* FIXME: NULL is invalid! */
-    ret = mupdate_scarf(handle, NULL, NULL, 1);
+    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1);
+
     if (ret > 0) {
 	return MUPDATE_NOCONN;
     } else if(ret < 0) {
@@ -379,16 +414,17 @@ int mupdate_reserve(mupdate_handle *handle,
 		    const char *mailbox, const char *server)
 {
     int ret;
+    int called = 0;
     
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox || !server) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     prot_printf(handle->pout,
-		"X%u RESERVE %s %s\r\n", handle->tagn++, mailbox, server);
+		"X%u RESERVE \"%s\" \"%s\"\r\n",
+		handle->tagn++, mailbox, server);
 
-    /* FIXME: NULL is invalid! */
-    ret = mupdate_scarf(handle, NULL, NULL, 1);
+    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1);
     if (ret > 0) {
 	return MUPDATE_NOCONN;
     } else if (ret < 0) {
@@ -402,16 +438,16 @@ int mupdate_delete(mupdate_handle *handle,
 		   const char *mailbox)
 {
     int ret;
+    int called = 0;
     
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     prot_printf(handle->pout,
-		"X%u DELETE %s\r\n", handle->tagn++, mailbox);
+		"X%u DELETE \"%s\"\r\n", handle->tagn++, mailbox);
 
-    /* FIXME: NULL is invalid! */
-    ret = mupdate_scarf(handle, NULL, NULL, 1);
+    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1);
     if (ret > 0) {
 	return MUPDATE_NOCONN;
     } else if(ret < 0) {
@@ -420,6 +456,8 @@ int mupdate_delete(mupdate_handle *handle,
 	return 0;
     }
 }
+
+/* mupdate_find ??? */
 
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
                                  if ((ch) != '\n') { syslog(LOG_ERR, \

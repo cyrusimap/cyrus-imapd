@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.158 2002/01/24 16:39:27 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.159 2002/01/25 19:51:54 rjs3 Exp $
  */
 
 #include <config.h>
@@ -962,6 +962,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
+    /* XXX mupdate will want to know about the partition change! */
     if (!r && !partitionmove) {
 	/* 3. open ACAP connection if necessary */
 	acapmbox_handle_t *acaphandle = acapmbox_get_handle();

@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.19 2001/09/19 18:33:16 ken3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.20 2002/01/25 19:51:54 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -53,6 +53,7 @@
 #include <com_err.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sasl/sasl.h>
 
 #include "exitcodes.h"
 #include "mboxlist.h"
@@ -61,12 +62,13 @@
 #include "assert.h"
 #include "xmalloc.h"
 #include "imap_err.h"
+#include "mupdate-client.h"
 
 extern int optind;
 extern char *optarg;
 extern int errno;
 
-enum mboxop { DUMP, POPULATE, RECOVER, CHECKPOINT, UNDUMP, NONE };
+enum mboxop { DUMP, POPULATE, M_POPULATE, RECOVER, CHECKPOINT, UNDUMP, NONE };
 
 void fatal(const char *message, int code)
 {
@@ -74,8 +76,12 @@ void fatal(const char *message, int code)
     exit(code);
 }
 
+#define HOSTNAME_SIZE 512
+
 struct dumprock {
     enum mboxop op;
+    mupdate_handle *h;
+    char hostname[HOSTNAME_SIZE];
 };
 
 static int dump_p(void *rockp,
@@ -161,6 +167,29 @@ static int dump_cb(void *rockp,
 	break;
     }
 
+    case M_POPULATE: 
+    {
+	char *realpart = xmalloc(strlen(d->hostname) + 1 + strlen(part) + 1);
+
+	/* realpart is 'hostname!partition' */
+	sprintf(realpart, "%s!%s", d->hostname, part);
+
+	r = mupdate_activate(d->h,name,realpart,acl);
+
+	free(realpart);
+	
+	if(r == MUPDATE_NOCONN) {
+	    fprintf(stderr, "permanant failure storing '%s'\n", name);
+	    return IMAP_IOERROR;
+	} else if (r == MUPDATE_FAIL) {
+	    fprintf(stderr,
+		    "temporary failure storing '%s' (update continuing)",
+		    name);
+	}
+	    
+	break;
+    }
+
     default: /* yikes ! */
 	abort();
 	break;
@@ -177,12 +206,34 @@ void do_dump(enum mboxop op)
 {
     struct dumprock d;
 
-    assert(op == DUMP || op == POPULATE);
+    assert(op == DUMP || op == POPULATE || op == M_POPULATE);
 
     d.op = op;
 
+    if(op == M_POPULATE) {
+	int ret;
+	ret = gethostname(d.hostname, HOSTNAME_SIZE);
+	if(ret != 0) {
+	    fprintf(stderr, "couldn't get local hostname\n");
+	    exit(1);
+	}
+
+	sasl_client_init(NULL);
+
+	ret = mupdate_connect(NULL, NULL, &(d.h), NULL);
+	if(ret) {
+	    fprintf(stderr, "couldn't connect to mupdate server\n");
+	    exit(1);
+	}
+    }
+
     CONFIG_DB_MBOX->foreach(mbdb, "", 0, &dump_p, &dump_cb, &d, NULL);
 
+    if(op == M_POPULATE) {
+	mupdate_disconnect(&(d.h));
+	sasl_done();
+    }
+    
     return;
 }
 
@@ -264,11 +315,16 @@ void do_undump(void)
 
 void usage(void)
 {
-    fprintf(stderr, "ctl_mboxlist [-C <alt_config>] -d [-f filename]\n");
+    fprintf(stderr, "DUMP:\n");
+    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -d [-f filename]\n");
+    fprintf(stderr, "UNDUMP:\n");
     fprintf(stderr,
-	    "ctl_mboxlist [-C <alt_config>] -u [-f filename]"
-	    " [< mboxlist.dump]\n");
-    fprintf(stderr, "ctl_mboxlist [-C <alt_config>] -a [-f filename]\n");
+	    "  ctl_mboxlist [-C <alt_config>] -u [-f filename]"
+	    "    [< mboxlist.dump]\n");
+    fprintf(stderr, "ACAP populate:\n");
+    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -a [-f filename]\n");
+    fprintf(stderr, "MUPDATE populate:\n");
+    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -m [-f filename]\n");
     exit(1);
 }
 
@@ -281,7 +337,7 @@ int main(int argc, char *argv[])
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "C:adurcf:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:amdurcf:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -330,6 +386,11 @@ int main(int argc, char *argv[])
 	    else usage();
 	    break;
 
+	case 'm':
+	    if (op == NONE) op = M_POPULATE;
+	    else usage();
+	    break;
+
 	default:
 	    usage();
 	    break;
@@ -351,9 +412,10 @@ int main(int argc, char *argv[])
 	mboxlist_init(MBOXLIST_SYNC);
 	mboxlist_done();
 	return 0;
-	
+
     case DUMP:
     case POPULATE:
+    case M_POPULATE:
 	mboxlist_init(0);
 	mboxlist_open(mboxdb_fname);
 	
