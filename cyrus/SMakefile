@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.37 1999/02/15 09:58:26 tjs Exp $
+# $Id: SMakefile,v 1.38 1999/02/15 09:58:47 tjs Exp $
 #
 
 MAKE=gmake
@@ -17,8 +17,7 @@ fi
 
 # CFLAGS="${CFLAGS} -g"
 
-#VER=`smake -D | sed 's;^.*\/;;'`
-VER="XXX"
+VER=`smake -D | sed 's;^.*\/;;'`
 LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 
 # Ryan's aggressive optimizations
