@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 /*
- * $Id: xmalloc.c,v 1.23.16.2 2002/08/13 19:50:30 ken3 Exp $
+ * $Id: xmalloc.c,v 1.23.16.3 2002/08/30 13:16:01 ken3 Exp $
  */
 #include <config.h>
 #include <stdio.h>
@@ -133,7 +133,7 @@ size_t strlcpy(char *dst, const char *src, size_t len)
     for (n = 0; n < len-1; n++) {
 	if ((dst[n] = src[n]) == '\0') break;
     }
-    if (src[n] != '\0') {
+    if (n >= len-1) {
 	/* ran out of space */
 	dst[n] = '\0';
 	while(src[n]) n++;
