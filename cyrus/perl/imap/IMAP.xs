@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: IMAP.xs,v 1.15.4.5 2003/04/22 15:50:19 ken3 Exp $ */
+/* $Id: IMAP.xs,v 1.15.4.6 2003/04/23 17:03:19 ken3 Exp $ */
 
 /*
  * Perl interface to the Cyrus imclient routines.  This enables the
@@ -604,10 +604,10 @@ PPCODE:
 	    else
 	      PUSHs(&sv_no);
 	    pcb = perl_get_sv("@", TRUE);
-	    sv_setsv(aTHX_ pcb, av_shift(av));
+	    Perl_sv_setsv(aTHX_ pcb, av_shift(av));
 	    if (av_len(av) != -1) {
 	      pcb = perl_get_sv("^E", TRUE);
-	      sv_setsv(aTHX_ pcb, av_shift(av));
+	      Perl_sv_setsv(aTHX_ pcb, av_shift(av));
 	    }
 	  } else {
 	    EXTEND(SP, av_len(av) + 1);
