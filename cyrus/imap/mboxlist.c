@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.1 2003/11/04 16:27:32 ken3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.2 2003/11/04 19:53:04 ken3 Exp $
  */
 
 #include <config.h>
@@ -813,6 +813,7 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     struct txn **tid;
     struct txn *lcl_tid = NULL;
     int mbtype;
+    char *part;
 
     if(in_tid) {
 	tid = in_tid;
@@ -821,7 +822,7 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     }
 
  retry:
-    r = mboxlist_mylookup(name, &mbtype, NULL, NULL, NULL, tid, 1);
+    r = mboxlist_mylookup(name, &mbtype, NULL, &part, NULL, tid, 1);
     switch (r) {
     case 0:
 	break;
@@ -834,7 +835,7 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid)
 	goto done;
     }
 
-    if(!(mbtype & MBTYPE_REMOTE)) {
+    if((mbtype & MBTYPE_REMOTE) && !strchr(part, '!')) {
 	syslog(LOG_ERR,
 	       "mboxlist_deleteremote called on non-remote mailbox: %s",
 	       name);
