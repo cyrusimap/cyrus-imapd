@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.17 2000/11/05 22:11:28 leg Exp $ */
+/* $Id: master.c,v 1.18 2000/11/07 19:36:02 leg Exp $ */
 
 #include <config.h>
 
@@ -80,7 +80,11 @@
 
 #define SERVICE_PATH (CYRUS_PATH "/bin")
 
-static const int become_cyrus_early = 1;
+enum {
+    become_cyrus_early = 1,
+    child_table_size = 10000,
+    child_table_inc = 100,
+};
 
 static int verbose = 0;
 static int listen_queue_backlog = 10;
@@ -101,8 +105,15 @@ struct event {
     char *const *exec;
     struct event *next;
 };
-
 static struct event *schedule = NULL;
+
+struct centry {
+    pid_t pid;
+    struct service *s;
+    struct centry *next;
+};
+static struct centry *ctable[child_table_size];
+static struct centry *cfreelist;
 
 void fatal(char *msg, int code)
 {
@@ -157,6 +168,29 @@ void get_statsock(int filedes[2])
     if (fdflags == -1) {
 	fatal("unable to set close-on-exec: %m", 1);
     }
+}
+
+/* return a new 'centry', either from the freelist or by malloc'ing it */
+static struct centry *get_centry(void)
+{
+    struct centry *t;
+
+    if (!cfreelist) {
+	/* create child_table_inc more and add them to the freelist */
+	struct centry *n;
+	int i;
+
+	n = malloc(child_table_inc * sizeof(struct centry));
+	cfreelist = n;
+	for (i = 0; i < child_table_inc - 1; i++) {
+	    n[i].next = n + (i + 1);
+	}
+    }
+
+    t = cfreelist;
+    cfreelist = cfreelist->next;
+
+    return t;
 }
 
 void service_create(struct service *s)
@@ -287,6 +321,7 @@ void spawn_service(struct service *s)
     int i;
     char path[1024];
     int fdflags;
+    struct centry *c;
 
     switch (p = fork()) {
     case -1:
@@ -333,10 +368,17 @@ void spawn_service(struct service *s)
 	execv(path, s->exec);
 	syslog(LOG_ERR, "couldn't exec %s: %m", path);
 
-    default: 
-	/* parent */
+    default:			/* parent */
 	s->ready_workers++;
 	s->nforks++;
+	s->nactive++;
+
+	/* add to child table */
+	c = get_centry();
+	c->pid = p;
+	c->s = s;
+	c->next = ctable[p % child_table_size];
+	ctable[p % child_table_size] = c;
 	break;
     }
 
@@ -365,6 +407,7 @@ void spawn_schedule(time_t now)
     struct event *a, *b;
     char path[1024];
     pid_t p;
+    struct centry *c;
 
     a = NULL;
     /* update schedule accordingly */
@@ -401,6 +444,14 @@ void spawn_schedule(time_t now)
 	    
 	default:
 	    /* we don't wait for it to complete */
+	    
+	    /* add to child table */
+	    c = get_centry();
+	    c->pid = p;
+	    c->s = NULL;
+	    c->next = ctable[p % child_table_size];
+	    ctable[p % child_table_size] = c;
+
 	    break;
 	}
 
@@ -421,19 +472,52 @@ void reap_child(void)
 {
     int status;
     pid_t pid;
+    struct centry *c;
 
     while ((pid = waitpid((pid_t) -1, &status, WNOHANG)) > 0) {
 	if (WIFEXITED(status)) {
-	    syslog(LOG_DEBUG, "process %d exited, status %d\n", pid, 
+	    syslog(LOG_DEBUG, "process %d exited, status %d", pid, 
 		   WEXITSTATUS(status));
 	}
 
 	if (WIFSIGNALED(status)) {
-	    syslog(LOG_DEBUG, "process %d exited, signaled to death by %d\n",
+	    syslog(LOG_DEBUG, "process %d exited, signaled to death by %d",
 		   pid, WTERMSIG(status));
 	}
 
-	/* do we want to do child accounting at some point? probably */
+	/* account for the child */
+	c = ctable[pid % child_table_size];
+	if (c && c->pid == pid) {
+	    /* first thing in the linked list */
+
+	    /* decrement active count for service */
+	    if (c->s) c->s->nactive--;
+
+	    ctable[pid % child_table_size] = c->next;
+	    c->next = cfreelist;
+	    cfreelist = c;
+	} else {
+	    /* not the first thing in the linked list */
+
+	    while (c->next) {
+		if (c->next->pid == pid) break;
+		c = c->next;
+	    }
+	    if (c->next) {
+		struct centry *t;
+
+		t = c->next;
+		/* decrement active count for service */
+		if (t->s) t->s->nactive--;
+
+		c->next = t->next; /* remove node */
+		t->next = cfreelist; /* add to freelist */
+		cfreelist = t;
+	    } else {
+		/* yikes! don't know about this child! */
+		syslog(LOG_ERR, "process %d not recognized", pid);
+	    }
+	}
     }
 }
 
@@ -657,6 +741,10 @@ int main(int argc, char **argv, char **envp)
 	    break;
 	}
     }
+
+    /* zero out the children table */
+    memset(&ctable, 0, sizeof(struct centry *) * child_table_size);
+
     /* close stdin/out/err */
     for (fd = 0; fd < 3; fd++) {
 	close(fd);
