@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.221 2002/02/28 19:54:15 rjs3 Exp $
+dnl $Id: configure.in,v 1.222 2002/02/28 20:33:19 rjs3 Exp $
 dnl
 
 
@@ -144,32 +144,45 @@ if test "$dbfound" = "no"; then
 (Get it from http://www.sleepycat.com/.)])
 fi
 
-AC_MSG_CHECKING([mboxlist database backend])
+dnl function for doing each of the database backends
+dnl parameters: backend name, variable to set, withval
+AC_DEFUN(CYRUS_SET_BACKEND, [
+	AC_MSG_CHECKING([$1 database backend])
+	if test "$3" != "db3" -a \
+		"$3" != "db3_nosync" -a \
+	 	"$3" != "flat" -a \
+		"$3" != "skiplist"; then
+	   AC_ERROR([invalid $1 value])
+	fi
+	DB_STRING="(&cyrusdb_$3)"
+	AC_DEFINE_UNQUOTED($2, $DB_STRING)
+	AC_MSG_RESULT($3)
+])
+
+AC_ARG_WITH(duplicate-db,
+	[  --with-duplicate-db=DB       use DB (flat, db3, skiplist) as a backend for the duplicate delivery db (Default: db3_nosync) ],
+	DB="$withval", DB="db3_nosync")
+CYRUS_SET_BACKEND("duplicate db", CONFIG_DB_DUPLICATE, $DB)
+
 AC_ARG_WITH(mboxlist-db,
 	[  --with-mboxlist-db=DB   use DB (flat, db3, skiplist) as a backend for the mailbox list (Default: db3) ],
-	DB_MBOX="$withval",CONFIG_DB_MBOX="db3")
-if test "$DB_MBOX" != "db3" -a \
-        "$DB_MBOX" != "flat" -a \
-	"$DB_MBOX" != "skiplist"; then
-   AC_ERROR([invalid --with-mboxlist-db value])
-fi
-CONFIG_DB_MBOX="(&cyrusdb_$DB_MBOX)"
-AC_DEFINE_UNQUOTED(CONFIG_DB_MBOX,$CONFIG_DB_MBOX)
-AC_MSG_RESULT($DB_MBOX)
+	DB="$withval",DB="db3")
+CYRUS_SET_BACKEND("mboxlist", CONFIG_DB_MBOX, $DB)
 
-AC_MSG_CHECKING([subscription database backend])
+AC_ARG_WITH(seen-db,
+	[  --with-seen-db=DB       use DB (flat, db3, skiplist) as a backend for the seen state (Default: flat) ],
+	DB="$withval", DB="flat")
+CYRUS_SET_BACKEND("seen state", CONFIG_DB_SEEN, $DB)
+
 AC_ARG_WITH(subs-db,
 	[  --with-subs-db=DB       use DB (flat, db3, skiplist) as a backend for the subscriptions list (Default: flat) ],
-	DB_SUBS="$withval", DB_SUBS="flat")
-if test "$DB_SUBS" != "db3" -a \
-        "$DB_SUBS" != "flat" -a \
-	"$DB_SUBS" != "skiplist"; then
-   AC_ERROR([invalid --with-subs-db value])
-fi
-CONFIG_DB_SUBS="(&cyrusdb_$DB_SUBS)"
-AC_DEFINE_UNQUOTED(CONFIG_DB_SUBS,$CONFIG_DB_SUBS)
-AC_MSG_RESULT($DB_SUBS)
+	DB="$withval", DB="flat")
+CYRUS_SET_BACKEND("subscription", CONFIG_DB_SUBS, $DB)
 
+AC_ARG_WITH(tls-db,
+	[  --with-tls-db=DB       use DB (flat, db3, skiplist) as a backend for the TLS cache (Default: db3_nosync) ],
+	DB="$withval", DB="db3_nosync")
+CYRUS_SET_BACKEND("TLS cache", CONFIG_DB_TLS, $DB)
 
 sievedir="sieve"
 AC_ARG_ENABLE(sieve,
