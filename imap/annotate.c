@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.24 2004/05/22 03:45:48 rjs3 Exp $
+ * $Id: annotate.c,v 1.25 2004/06/22 16:59:16 rjs3 Exp $
  */
 
 #include <config.h>
@@ -1775,7 +1775,9 @@ int annotatemore_store(char *mailbox,
 	if (proxy_store_func) {
 	    if (!r) {
 		/* proxy command to backends */
-		struct proxy_rock prock = { mailbox, l };
+		struct proxy_rock prock = { NULL, NULL };
+		prock.mbox_pat = mailbox;
+		prock.entryatts = l;
 		hash_enumerate(&sdata.server_table, store_proxy, &prock);
 	    }
 	    free_hash_table(&sdata.server_table, NULL);
