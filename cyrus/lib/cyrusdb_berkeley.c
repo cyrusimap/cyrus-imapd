@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.5 2004/02/26 18:03:07 ken3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.6 2004/02/26 18:36:27 ken3 Exp $ */
 
 #include <config.h>
 
@@ -170,12 +170,12 @@ static int init(const char *dbdir, int myflags)
     /* do bounds checking */
     if (cachesize < MIN_CACHESIZE) {
 	cachesize = MIN_CACHESIZE;
-	syslog(LOG_ERR, "DBERROR: cachesize too small, changed to %uKB",
+	syslog(LOG_WARNING, "DBERROR: cachesize too small, changed to %uKB",
 	       MIN_CACHESIZE);
     }
     if (cachesize > MAX_CACHESIZE) {
 	cachesize = MAX_CACHESIZE;
-	syslog(LOG_ERR, "DBERROR: cachesize too large, changed to %uKB",
+	syslog(LOG_WARNING, "DBERROR: cachesize too large, changed to %uKB",
 	       MAX_CACHESIZE);
     }
     if ((r = dbenv->set_cachesize(dbenv, 0, cachesize * 1024, 0)) != 0) {
