@@ -271,9 +271,16 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   ret->errstr = NULL;
   
   mechlist=read_capability(obj);
+  if(!mechlist) {
+	globalerr = "sasl mech list empty";
+	XSRETURN_UNDEF;
+  }
 
   mlist = (char*) xstrdup(mechlist);
-  if(!mlist) XSRETURN_UNDEF;
+  if(!mlist) {
+	globalerr = "could not allocate memory for mech list";
+	XSRETURN_UNDEF;
+  }
 
   /* loop through all the mechanisms */
   do {
