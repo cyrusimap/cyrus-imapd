@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.31 2002/09/12 15:39:50 rjs3 Exp $
+# $Id: Admin.pm,v 1.32 2002/10/11 18:50:07 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -130,10 +130,10 @@ sub reconstruct {
     my $rc;
     my $msg;
     if($recurse == 1) {
-      ($rc, $msg) = $self->send('', '', 'RECONSTRUCT "%s" RECURSIVE',
+      ($rc, $msg) = $self->send('', '', 'RECONSTRUCT %s RECURSIVE',
 				$mailbox);
     } else {
-      ($rc, $msg) = $self->send('', '', 'RECONSTRUCT "%s"', $mailbox);
+      ($rc, $msg) = $self->send('', '', 'RECONSTRUCT %s', $mailbox);
     }
     $self->{error} = $msg;
     if($rc eq "OK") {
