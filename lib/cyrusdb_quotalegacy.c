@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_quotalegacy.c,v 1.2 2004/02/27 18:17:32 ken3 Exp $ */
+/* $Id: cyrusdb_quotalegacy.c,v 1.3 2004/03/10 21:25:39 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -55,7 +55,7 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <fcntl.h>
-#include "/usr/include/glob.h"
+#include <glob.h>
 
 #include "assert.h"
 #include "cyrusdb.h"
