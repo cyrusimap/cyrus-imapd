@@ -105,6 +105,18 @@ struct index_record {
     bit32 user_flags[MAX_USER_FLAGS/32];
 };
 
+/* Offsets of index header fields */
+#define OFFSET_GENERATION_NO 0
+#define OFFSET_FORMAT 4
+#define OFFSET_MINOR_VERSION 8
+#define OFFSET_START_OFFSET 12
+#define OFFSET_RECORD_SIZE 16
+#define OFFSET_EXISTS 20
+#define OFFSET_LAST_APPENDDATE 24
+#define OFFSET_LAST_UID 28
+#define OFFSET_QUOTA_MAILBOX_USED 32
+#define OFFSET_POP3_LAST 36
+
 /* Offsets of index_record fields in index file */
 #define OFFSET_UID 0
 #define OFFSET_INTERNALDATE 4
@@ -117,7 +129,7 @@ struct index_record {
 #define OFFSET_SYSTEM_FLAGS 32
 #define OFFSET_USER_FLAGS 36
 
-#define INDEX_HEADER_SIZE (9*4)
+#define INDEX_HEADER_SIZE (OFFSET_POP3_LAST)
 #define INDEX_RECORD_SIZE (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8)
 
 #define FLAG_ANSWERED (1<<0)
