@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.17 2001/08/18 00:46:46 ken3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.18 2001/09/18 21:04:54 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -21,11 +21,23 @@ translate the folder names in <tt>fileinto</tt> actions.
 the script "<tt>tools/rehash full</tt>".  This script will rehash your
 existing directories.
 
+<li> The hashed deliver databases (used for duplicate delivery suppression
+and Sieve) have been merged into a single <tt>deliver.db</tt> database.
+You can remove the entire <tt>/var/imap/deliverdb</tt> directory structure 
+after shutting down the server.
+
+<li>All of the Cyrus databases have been unified under a single DB3 
+environment.  A new <tt>ctl_cyrusdb</tt> tool is now used for database 
+recovery and checkpointing instead of <tt>ctl_mboxlist</tt> and 
+<tt>ctl_deliver</tt>.  You should replace the appropriate <tt>START</tt> and 
+<tt>EVENTS</tt> entries in <tt>cyrus.conf</tt> with those in the 
+sample configurations in the <tt>master/conf</tt> directory.
+
 <li> Cyrus now caches SSL/TLS sessions in an external database. If you
-  have support for SSL/TLS, and haven't disabled session caching (see
-  <tt>imapd.conf(5)</tt>), you should add a line like the following to
-  the <tt>EVENTS</tt> section of <tt>cyrus.conf</tt> to prune expired
-  sessions from the database:
+have support for SSL/TLS, and haven't disabled session caching (see
+<tt>imapd.conf(5)</tt>), you should add a line like the following to
+the <tt>EVENTS</tt> section of <tt>cyrus.conf</tt> to prune expired
+sessions from the database:
 
 <pre><kdb>   # this is only necessary if caching TLS sessions
    tlsprune      cmd="tls_prune" period=1440
@@ -189,7 +201,7 @@ worry about it.)
 </ul>
 
 <P><HR><P>
-last modified: $Date: 2001/08/18 00:46:46 $
+last modified: $Date: 2001/09/18 21:04:54 $
 </BODY></HTML>
 
 

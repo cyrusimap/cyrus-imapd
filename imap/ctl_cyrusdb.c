@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.1 2001/09/18 14:05:06 ken3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.2 2001/09/18 21:04:54 ken3 Exp $
  */
 
 #include <config.h>
@@ -71,8 +71,8 @@ void fatal(const char *message, int code)
 
 void usage(void)
 {
-    fprintf(stderr,
-	    "ctl_cyrusdb [-C <altconfig>] [-r]\n");
+    fprintf(stderr, "ctl_cyrusdb [-C <altconfig>] -c\n");
+    fprintf(stderr, "ctl_cyrusdb [-C <altconfig>] -r\n");
     exit(-1);
 }
 
@@ -83,15 +83,16 @@ main(argc, argv)
      char *argv[];
 {
     extern char *optarg;
-    int opt, r = 0;
+    int opt, r, r2;
     char *alt_config = NULL;
     int flag = 0;
-    enum { RECOVER, NONE } op = NONE;
-    char buf[1024];
+    enum { RECOVER, CHECKPOINT, NONE } op = NONE;
+    char dirname[1024];
+    char *msg = "";
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "C:r")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:rc")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -99,7 +100,15 @@ main(argc, argv)
 
 	case 'r':
 	    flag |= CYRUSDB_RECOVER;
+	    msg = "recovering cyrus databases";
 	    if (op == NONE) op = RECOVER;
+	    else usage();
+	    break;
+
+	case 'c':
+	    msg = "checkpointing cyrus databases";
+	    if (op == NONE) op = CHECKPOINT;
+	    else usage();
 	    break;
 
 	default:
@@ -108,30 +117,49 @@ main(argc, argv)
 	}
     }
 
-    config_init(alt_config, "ctl_cyrusdb");
-
-    /* create the name of the db file */
-    strcpy(buf, config_dir);
-    strcat(buf, FNAME_DBDIR);
-    r = (&cyrusdb_db3)->init(buf, flag);
-
-    if (r != 0) {
-	syslog(LOG_ERR, "DBERROR: init %s: %s", buf,
-	       cyrusdb_strerror(r));
-	fprintf(stderr, 
-		"ctl_cyrusdb: unable to init databases\n");
+    if (op == NONE) {
+	usage();
 	exit(1);
     }
+
+    config_init(alt_config, "ctl_cyrusdb");
+
+    /* create the name of the db directory */
+    strcpy(dirname, config_dir);
+    strcat(dirname, FNAME_DBDIR);
+
+    syslog(LOG_NOTICE, "%s", msg);
+    r = (&cyrusdb_db3)->init(dirname, flag);
+
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: init %s: %s", dirname,
+	       cyrusdb_strerror(r));
+	fprintf(stderr, 
+		"ctl_cyrusdb: unable to init environment\n");
+	op = NONE;
+    }
+
     switch (op) {
     case RECOVER:
 	break;
 
-    case NONE:
-	r = 2;
-	usage();
+    case CHECKPOINT:
+	r2 = (&cyrusdb_db3)->sync();
+	if (r2) {
+	    syslog(LOG_ERR, "DBERROR: sync %s: %s", dirname,
+		   cyrusdb_strerror(r));
+	    fprintf(stderr, 
+		    "ctl_cyrusdb: unable to sync environment\n");
+	}
+	break;
+
+    default:
 	break;
     }
-    (&cyrusdb_db3)->done();
 
-    return r;
+    if (!r) (&cyrusdb_db3)->done();
+
+    syslog(LOG_NOTICE, "done %s", msg);
+
+    exit(r || r2);
 }

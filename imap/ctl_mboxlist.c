@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.17 2001/02/22 19:27:16 ken3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.18 2001/09/18 21:04:55 ken3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -264,8 +264,6 @@ void do_undump(void)
 
 void usage(void)
 {
-    fprintf(stderr, "ctl_mboxlist [-C <alt_config>] -c\n");
-    fprintf(stderr, "ctl_mboxlist [-C <alt_config>] -r\n");
     fprintf(stderr, "ctl_mboxlist [-C <alt_config>] -d [-f filename]\n");
     fprintf(stderr,
 	    "ctl_mboxlist [-C <alt_config>] -u [-f filename]"
@@ -290,11 +288,21 @@ int main(int argc, char *argv[])
 	    break;
 
 	case 'r':
+	    /* deprecated, but we still support it */
+	    fprintf(stderr, "ctl_mboxlist -r is deprecated: "
+		    "use ctl_cyrusdb -r instead\b");
+	    syslog(LOG_WARN, "ctl_mboxlist -r is deprecated: "
+		   "use ctl_cyrusdb -r instead\b");
 	    if (op == NONE) op = RECOVER;
 	    else usage();
 	    break;
 
 	case 'c':
+	    /* deprecated, but we still support it */
+	    fprintf(stderr, "ctl_mboxlist -c is deprecated: "
+		    "use ctl_cyrusdb -c instead\b");
+	    syslog(LOG_WARN, "ctl_mboxlist -c is deprecated: "
+		   "use ctl_cyrusdb -c instead\b");
 	    if (op == NONE) op = CHECKPOINT;
 	    else usage();
 	    break;
