@@ -40,8 +40,7 @@ extern PARSED_ADDRESS *AppendAddresses();
 
 /* cyrus.cache file item buffer */
 struct ibuf {
-    char *start, *end;
-    int left;
+    char *start, *end, *last;
 };
     
 /*
@@ -1239,7 +1238,7 @@ struct body *body;
 }
 
 /* Append character 'c' to 'ibuf' */
-#define PUTIBUF(ibuf,c) (((ibuf)->left || message_ibuf_ensure((ibuf),1)),((ibuf)->left--),(*((ibuf)->end)++ = (c)))
+#define PUTIBUF(ibuf,c) (((ibuf)->end<(ibuf)->last || message_ibuf_ensure((ibuf),1)),(*((ibuf)->end)++ = (c)))
 
 /*
  * Write the IMAP envelope for 'body' to 'ibuf'
@@ -1858,7 +1857,7 @@ struct ibuf *ibuf;
     char *s = xmalloc(IBUFGROWSIZE);
 
     ibuf->start = ibuf->end = s + sizeof(bit32);
-    ibuf->left = IBUFGROWSIZE - sizeof(bit32);
+    ibuf->last = ibuf->start + IBUFGROWSIZE - sizeof(bit32);
 }
 
 /*
@@ -1870,16 +1869,18 @@ struct ibuf *ibuf;
 int len;
 {
     char *s;
+    int size;
 
-    if (len <= ibuf->left) return;
+    if (ibuf->last - ibuf->end >= len) return;
     if (len < IBUFGROWSIZE) len = IBUFGROWSIZE;
 
     s = ibuf->start - sizeof(bit32);
-    s = xrealloc(s, len + (ibuf->end - ibuf->start) + ibuf->left + sizeof(bit32));
-    ibuf->left += len;
+    size = len + (ibuf->last - ibuf->start);
+    s = xrealloc(s, size + sizeof(bit32));
     s += sizeof(bit32);
     ibuf->end = (ibuf->end - ibuf->start) + s;
     ibuf->start = s;
+    ibuf->last = s + size;
 }
 
 /*
