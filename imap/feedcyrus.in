@@ -29,7 +29,7 @@ PPID=$$
 echo "${PROGNAME}: [${PPID}] start"
 
 ##  Set up environment.
-export BATCH PROGNAME PPID
+export BATCH PROGNAME PPID CYRUS_DIR
 
 ##  Loop over all sites.
 for PROG in collectnews rmnews; do
