@@ -26,7 +26,7 @@
  *
  */
 
-/* $Id: arbitron.c,v 1.12 1998/08/07 06:52:30 tjs Exp $ */
+/* $Id: arbitron.c,v 1.13 1998/11/24 22:25:36 shadow Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -66,9 +66,11 @@ char **argv;
     int opt, i;
     int report_days = 30;
     int prune_months = 0;
-    char pattern[30];
+    char pattern[MAX_MAILBOX_NAME+1];
 
     config_init("arbitron");
+
+    strcpy(pattern, "*");
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
@@ -89,14 +91,13 @@ char **argv;
 	}
     }
 
-    if (optind != argc) usage();
+    if (optind != argc) strncpy(pattern, argv[1], MAX_MAILBOX_NAME);
 
     report_time = time(0) - (report_days*60*60*24);
     if (prune_months) {
 	prune_time = time(0) - (prune_months*60*60*24*31);
     }
 
-    strcpy(pattern, "*");
     mboxlist_findall(pattern, 1, 0, 0, do_mailbox, NULL);
 
     exit(code);
@@ -104,7 +105,7 @@ char **argv;
 
 usage()
 {
-    fprintf(stderr, "usage: arbitron [-d days] [-p months]\n");
+    fprintf(stderr, "usage: arbitron [-d days] [-p months] [mboxpattern]\n");
     exit(EX_USAGE);
 }    
 
