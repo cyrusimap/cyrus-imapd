@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.43 2000/07/10 20:08:05 leg Exp $
+ * $Id: lmtpd.c,v 1.44 2000/07/14 13:38:25 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.43 2000/07/10 20:08:05 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.44 2000/07/14 13:38:25 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -1174,7 +1174,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 
 		/* slap the mailboxname back on so we hash the envelope & id
 		   when we figure out whether or not to keep the message */
-		snprintf(namebuf, sizeof(namebuf), "%s+%s", rcpt, plus);
+		snprintf(namebuf, sizeof(namebuf), "%s+%s", rcpt,
+			 plus ? plus : "");
 		
 		/* is this the first time we've sieved the message? */
 		if (msgdata->id) {

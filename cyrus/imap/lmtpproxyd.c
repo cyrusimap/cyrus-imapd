@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to sieve and proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.6 2000/07/10 20:08:36 leg Exp $
+ * $Id: lmtpproxyd.c,v 1.7 2000/07/14 13:38:25 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.6 2000/07/10 20:08:36 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.7 2000/07/14 13:38:25 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -1245,7 +1245,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    
 	    /* slap the mailboxname back on so we hash the envelope & id
 	       when we figure out whether or not to keep the message */
-	    snprintf(namebuf, sizeof(namebuf), "%s+%s", rcpt, plus);
+		snprintf(namebuf, sizeof(namebuf), "%s+%s", rcpt,
+			 plus ? plus : "");
 	    
 	    /* is this the first time we've sieved the message? */
 	    if (msgdata->id) {
