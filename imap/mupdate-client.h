@@ -1,6 +1,6 @@
 /* mupdate-client.h -- cyrus murder database clients
  *
- * $Id: mupdate-client.h,v 1.7 2002/01/28 22:34:07 rjs3 Exp $
+ * $Id: mupdate-client.h,v 1.8 2002/01/29 18:13:48 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -82,7 +82,7 @@ struct mupdate_mailboxdata {
 
 /* does a given mailbox exist?  1 if false, 0 if true, -1 if error,
  * "target" gets pointed at a struct mudate_mailboxdata that is only valid
- * until the next mupdate_* call.
+ * until the next mupdate_* call on this mupdate_handle.
  */
 int mupdate_find(mupdate_handle *handle, const char *mailbox,
 		 struct mupdate_mailboxdata **target);
@@ -100,12 +100,4 @@ typedef int (*mupdate_callback)(struct mupdate_mailboxdata *mdata,
 int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 		 void *context);
 
-/* Scarf up the incoming data and perform the requested operations */
-/* Returns 0 on no error (or success, if wait_for_ok set) */
-/* Returns 1 on fatal error */
-/* Returns -1 on command-related error (if wait_for_ok set) */
-/* wait_for_ok indicates if we should wait for an OK from the remote or
- * just get the next command */
-int mupdate_scarf(mupdate_handle *handle, mupdate_callback callback,
-		  void *context, int wait_for_ok);
 #endif
