@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68 2002/03/30 19:46:57 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.69 2002/07/17 17:37:19 ken3 Exp $ */
 
 #include <config.h>
 
@@ -196,7 +196,9 @@ int main(int argc, char **argv)
 	strcpy(buf, argv[i]);
 	/* Translate any separators in mailboxname */
 	mboxname_hiersep_tointernal(&recon_namespace, buf);
-	do_reconstruct(buf, 0, 0, fflag ? &head : NULL);
+	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
+					    0, do_reconstruct, 
+					    fflag ? &head : NULL);
 	if (rflag) {
 	    strcat(buf, ".*");
 	    (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
@@ -253,22 +255,31 @@ int compare_uid(const void *a, const void *b)
  */
 int
 do_reconstruct(char *name,
-	       int matchlen __attribute__((unused)),
+	       int matchlen,
 	       int maycreate __attribute__((unused)),
 	       void *rock)
 {
     int r;
     char buf[MAX_MAILBOX_PATH];
+    static char lastname[MAX_MAILBOX_PATH] = "";
 
     signals_poll();
-    r = reconstruct(name, rock);
+
+    /* don't repeat */
+    if (matchlen == strlen(lastname) &&
+	!strncmp(name, lastname, matchlen)) return 0;
+
+    strncpy(lastname, name, matchlen);
+    lastname[matchlen] = '\0';
+
+    r = reconstruct(lastname, rock);
     if (r) {
 	com_err(name, r, (r == IMAP_IOERROR) ? error_message(errno) : NULL);
 	code = convert_code(r);
     }
     else {
 	/* Convert internal name to external */
-	(*recon_namespace.mboxname_toexternal)(&recon_namespace, name,
+	(*recon_namespace.mboxname_toexternal)(&recon_namespace, lastname,
 					       "cyrus", buf);
 	printf("%s\n", buf);
     }
