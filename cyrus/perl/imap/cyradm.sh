@@ -39,7 +39,7 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 #
-# $Id: cyradm.sh,v 1.10.4.1 2002/08/19 14:54:06 ken3 Exp $
+# $Id: cyradm.sh,v 1.10.4.2 2002/09/12 15:44:57 ken3 Exp $
 case "x$BASH_VERSION" in
 x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
 *) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
@@ -125,8 +125,9 @@ Remove ACLs from the specified mailbox.
 Delete the specified mailbox.
 
 Administrators do not have implicit delete rights on mailboxes.  Use the
-B<setaclmailbox> command to grant the C<d> permission to your principal
-if you need to delete a mailbox you do not own.
+B<setaclmailbox> command to grant the C<c> permission (or other permission
+as specified by the deleteright configuration option in imapd.conf)
+to your principal if you need to delete a mailbox you do not own.
 
 Note that the online help admits to an optional host argument.  This argument
 is not currently used, and will be rejected with an error if specified; it
