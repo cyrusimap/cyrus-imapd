@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.5 2000/06/04 22:47:32 leg Exp $
+ * $Id: lmtpengine.c,v 1.6 2000/06/05 18:36:01 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1651,6 +1651,7 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
     char buf[8192];
     int onegood;
 
+    assert(conn && txn);
     /* pipelining v. no pipelining? */
 
     /* here's the straightforward non-pipelining version */
