@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.5 2002/08/02 16:55:04 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.6 2002/08/27 17:33:54 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2183,14 +2183,14 @@ int lmtp_connect(const char *phost,
 	/* open unix socket */
 	if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
 	    syslog(LOG_ERR, "socket() failed %m");
-	    goto donesock;
+	    goto errsock;
 	}
 	addr.sun_family = AF_UNIX;
 	strcpy(addr.sun_path, host);
 	if (connect(sock, (struct sockaddr *) &addr, 
 		    sizeof(addr.sun_family) + strlen(addr.sun_path) + 1) < 0) {
 	    syslog(LOG_ERR, "connect(%s) failed: %m", addr.sun_path);
-	    goto donesock;
+	    goto errsock;
 	}
 
 	/* set that we are preauthed */
@@ -2214,13 +2214,13 @@ int lmtp_connect(const char *phost,
 
 	if ((hp = gethostbyname(host)) == NULL) {
 	    syslog(LOG_ERR, "gethostbyname(%s) failed", host);
-	    goto donesock;
+	    goto errsock;
 	}
 
 	/* open inet socket */
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 	    syslog(LOG_ERR, "socket() failed: %m");
-	    goto donesock;
+	    goto errsock;
 	}
 
 	addr.sin_family = AF_INET;
@@ -2232,22 +2232,15 @@ int lmtp_connect(const char *phost,
 	    int pn = atoi(p);
 	    if (pn == 0) {
 		syslog(LOG_ERR, "couldn't find valid lmtp port");
-		goto donesock;
+		goto errsock;
 	    }
 	    addr.sin_port = htons(pn);
 	}
 
 	if (connect(sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 	    syslog(LOG_ERR, "connect(%s:%s) failed: %m", host, p);
-	    goto donesock;
+	    goto errsock;
 	}	    
-    }
-
- donesock:
-    if (sock == -1) {
-	/* error during connection */
-	free(host);
-	return IMAP_IOERROR;
     }
     
     conn = xmalloc(sizeof(struct lmtp_conn));
@@ -2322,6 +2315,13 @@ int lmtp_connect(const char *phost,
 	}
 	return IMAP_SERVER_UNAVAILABLE;
     }
+
+ errsock:
+    /* error during connection */
+    if (sock != -1) close(sock);
+	
+    free(host);
+    return IMAP_IOERROR;
 }
 
 static void pushmsg(struct protstream *in, struct protstream *out,
