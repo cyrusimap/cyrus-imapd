@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.89 2002/02/06 17:19:10 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.90 2002/02/08 03:30:27 leg Exp $ */
 
 #undef PROXY_IDLE
 
@@ -146,21 +146,26 @@ extern char *optarg;
 
 extern int errno;
 
-#ifdef HAVE_SSL
-static SSL *tls_conn;
-#endif /* HAVE_SSL */
 
-sasl_conn_t *proxyd_saslconn; /* the sasl connection context to the client */
-int proxyd_starttls_done = 0; /* have we done a successful starttls yet? */
 
+/* global state */
+static char shutdownfilename[1024];
+static int imaps = 0;
+static sasl_ssf_t extprops_ssf = 0;
+
+/* per-user session state */
+struct protstream *proxyd_out = NULL;
+struct protstream *proxyd_in = NULL;
+char proxyd_clienthost[250] = "[local]";
+time_t proxyd_logtime;
 char *proxyd_userid;
 struct auth_state *proxyd_authstate = 0;
 int proxyd_userisadmin;
-char proxyd_clienthost[250] = "[local]";
-struct protstream *proxyd_out = NULL;
-struct protstream *proxyd_in = NULL;
-time_t proxyd_logtime;
-static char shutdownfilename[1024];
+sasl_conn_t *proxyd_saslconn; /* the sasl connection context to the client */
+int proxyd_starttls_done = 0; /* have we done a successful starttls yet? */
+#ifdef HAVE_SSL
+static SSL *tls_conn;
+#endif /* HAVE_SSL */
 
 /* current namespace */
 static struct namespace proxyd_namespace;
@@ -1035,6 +1040,7 @@ extern void proc_cleanup(void);
  */
 int service_init(int argc, char **argv, char **envp)
 {
+    int opt;
     int r;
 
     config_changeident("proxyd");
@@ -1068,6 +1074,26 @@ int service_init(int argc, char **argv, char **envp)
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
     mboxlist_open(NULL);
+
+    while ((opt = getopt(argc, argv, "C:sp:")) != EOF) {
+	switch (opt) {
+	case 'C': /* alt config file - handled by service::main() */
+	    break;
+	case 's': /* imaps (do starttls right away) */
+	    imaps = 1;
+	    if (!tls_enabled("imap")) {
+		syslog(LOG_ERR, "imaps: required OpenSSL options not present");
+		fatal("imaps: required OpenSSL options not present",
+		      EC_CONFIG);
+	    }
+	    break;
+	case 'p': /* external protection */
+	    extprops_ssf = atoi(optarg);
+	    break;
+	default:
+	    break;
+	}
+    }
 
     return 0;
 }
@@ -1146,8 +1172,6 @@ static void proxyd_reset(void)
 
 int service_main(int argc, char **argv, char **envp)
 {
-    int imaps = 0;
-    int opt;
     socklen_t salen;
     struct hostent *hp;
     struct sockaddr_in proxyd_localaddr, proxyd_remoteaddr;
@@ -1163,27 +1187,6 @@ int service_main(int argc, char **argv, char **envp)
     /* get command line args for use in ID before getopt mangles them */
     id_getcmdline(argc, argv);
 #endif
-
-    while ((opt = getopt(argc, argv, "C:sp:")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file - handled by service::main() */
-	    break;
-
-	case 's': /* imaps (do starttls right away) */
-	    imaps = 1;
-	    if (!tls_enabled("imap")) {
-		syslog(LOG_ERR, "imaps: required OpenSSL options not present");
-		fatal("imaps: required OpenSSL options not present",
-		      EC_CONFIG);
-	    }
-	    break;
-	case 'p': /* external protection */
-	    saslprops.ssf = ssf = atoi(optarg);
-	    break;
-	default:
-	    break;
-	}
-    }
 
     proxyd_in = prot_new(0, 0);
     proxyd_out = prot_new(1, 1);
@@ -1234,6 +1237,7 @@ int service_main(int argc, char **argv, char **envp)
 
     secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     sasl_setprop(proxyd_saslconn, SASL_SEC_PROPS, secprops);
+    sasl_setprop(proxyd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf);
 
     proc_register("proxyd", proxyd_clienthost, (char *)0, (char *)0);
 
@@ -4555,9 +4559,10 @@ static int reset_saslconn(sasl_conn_t **conn)
     /* If we have TLS/SSL info, set it */
     if(saslprops.ssf) {
        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+    } else {
+       ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
     if(ret != SASL_OK) return ret;
-
 
     if(saslprops.authid) {
        ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, saslprops.authid);
