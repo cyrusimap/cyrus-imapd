@@ -1061,7 +1061,8 @@ char *tag;
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
-    prot_printf(imapd_out, "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+");
+    prot_printf(imapd_out,
+"* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ X-NON-HIERARCHICAL-RENAME");
     prot_printf(imapd_out, "%s", login_capabilities());
 #ifdef ENABLE_EXPERIMENT
     prot_printf(imapd_out, " OPTIMIZE-1");
