@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.67 1999/10/02 00:44:45 leg Exp $ -->
+<!-- $Id: install.html,v 1.68 1999/10/05 16:17:57 tmartin Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -936,7 +936,7 @@ If your server is running, you'll get a message similar to the following one:
 Any message other than one similar to the one above means there is a
 problem. Make sure all of authentication methods you wish to support
 are listed. This list should be identical to the one listed by
-"<tt>imapd</tt>" earlier. To terminate the connection, type
+"<tt>imapd</tt>" earlier. Next terminate the connection, by typing
     "<kbd>logout</kbd>".
 
 <p>
@@ -946,19 +946,22 @@ have to specify the port if you run this utility from a different
 machine without the "sieve" entry in "<tt>/etc/services</tt>". To
 specify the port use the "<tt>-p [port]</tt>" switch.
 
-"<kbd>installsieve foobar</kbd>"
+<pre>
+  "<kbd>installsieve foobar</kbd>"
+</pre>
 
-This should produce either the message "<tt>Authentication
-succeeded!</tt>" or "<tt>Authentication failed</tt>".
 
-You might wish to test all authentication types. To force installsieve
+This should produce the message "<tt>Authentication failed</tt>" with
+a description of the failure if there was a problem.
+
+<p>You might wish to test all authentication types. To force installsieve
 to use a specific mechanism use the "<tt>-m [mechanism]</tt>" switch.
 
 <p>
 <li>Next you should attempt to place a sieve script on the server. To
 do this create a file named "<tt>myscript.script</tt>" with the
 following lines. Replace "<tt>foo@bar.org</tt>" with an email address
-you can send mail from that is not the one you are working on now.
+you can send mail from, but that is not the one you are working on now.
 
 <pre>
   require ["reject","fileinto"];
@@ -976,7 +979,7 @@ To place this script on the server run the following command
 This should place your script on the server and make it the active script.
 
 <p>
-<li>Test that you the sieve script is actually run from deliver. Send
+<li>Test that the sieve script is actually run from deliver. Send
 a message to the address you're working on from the address mentioned
 in the sieve script. The message should be rejected.
 
@@ -1105,6 +1108,6 @@ usually a good idea.
 
 <P><HR><P>
 <!-- hhmts start -->
-Last modified: Mon Sep 27 19:40:11 EDT 1999
+Last modified: Tue Oct  5 12:15:14 EDT 1999
 <!-- hhmts end -->
 </BODY></HTML>
