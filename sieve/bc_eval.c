@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.4 2004/07/12 15:45:59 ken3 Exp $
+ * $Id: bc_eval.c,v 1.5 2004/07/12 15:50:11 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -210,6 +210,19 @@ int shouldRespond(void * m, sieve_interp_t *interp,
 	while (*body[0] && isspace((int) *body[0])) body[0]++;
 	if (strcasecmp(body[0], "no")) l = SIEVE_DONE;
     }
+
+    /* is there a Precedence keyword of "junk | bulk | list"? */
+    strcpy(buf, "precedence");
+    if (interp->getheader(m, buf, &body) == SIEVE_OK) {
+	/* we don't deal with comments, etc. here */
+	/* skip leading white-space */
+	while (*body[0] && isspace((int) *body[0])) body[0]++;
+	if (!strcasecmp(body[0], "junk") ||
+	    !strcasecmp(body[0], "bulk") ||
+	    !strcasecmp(body[0], "list"))
+	    l = SIEVE_DONE;
+    }
+
     /* Note: the domain-part of all addresses are canonicalized */
     /* grab my address from the envelope */
     if (l == SIEVE_OK) {
