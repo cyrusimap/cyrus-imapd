@@ -3468,7 +3468,7 @@ int parsecharset;
 	    lcase(arg.s);
 	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
 		if (imapd_mailbox->flagname[flag] &&
-		    !strcmp(imapd_mailbox->flagname[flag], arg.s)) break;
+		    !strcasecmp(imapd_mailbox->flagname[flag], arg.s)) break;
 	    }
 	    if (flag == MAX_USER_FLAGS) {
 		/* Force failure */
@@ -3684,7 +3684,7 @@ int parsecharset;
 	    lcase(arg.s);
 	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
 		if (imapd_mailbox->flagname[flag] &&
-		    !strcmp(imapd_mailbox->flagname[flag], arg.s)) break;
+		    !strcasecmp(imapd_mailbox->flagname[flag], arg.s)) break;
 	    }
 	    if (flag != MAX_USER_FLAGS) {
 		searchargs->user_flags_unset[flag/32] |= 1<<(flag&31);
