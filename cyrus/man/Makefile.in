@@ -62,6 +62,7 @@ exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
 MAN1 = $(srcdir)/imtest.1 $(srcdir)/pop3test.1 $(srcdir)/lmtptest.1 \
+	$(srcdir)/smtptest.1 $(srcdir)/sivtest.1 \
 	$(srcdir)/installsieve.1 $(srcdir)/sieveshell.1
 MAN3 = $(srcdir)/imclient.3
 MAN5 = $(srcdir)/imapd.conf.5 $(srcdir)/krb.equiv.5 $(srcdir)/cyrus.conf.5

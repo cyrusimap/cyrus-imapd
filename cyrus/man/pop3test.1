@@ -82,6 +82,10 @@ pop3test \- interactive POP3 test program
 .I file
 ]
 [
+.B \-n
+.I num
+]
+[
 .B \-s
 ]
 [
@@ -141,6 +145,11 @@ Specify the \fIrealm\fR to use. Certain authentication mechanisms
 .TP
 .BI -f " file"
 Pipe \fIfile\fR into connection after authentication.
+.TP
+.BI -n " num"
+Number of authentication attempts; default = 1.  The client will
+attempt to do SSL/TLS session reuse and/or fast reauth
+(e.g. DIGEST-MD5), if possible.
 .TP
 .B -s
 Enable POP3 over SSL (pop3s).
