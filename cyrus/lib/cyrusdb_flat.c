@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.19.4.10 2003/03/06 01:17:50 ken3 Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.19.4.11 2003/06/11 01:31:08 ken3 Exp $ */
 
 #include <config.h>
 
@@ -160,17 +160,19 @@ static int mysync(void)
 
 static int myarchive(const char **fnames, const char *dirname)
 {
-    int r;
+    int r, d_length, d_remain;
     const char **fname;
     char dstname[1024], *dp;
 
-    strcpy(dstname, dirname);
-    dp = dstname + strlen(dstname);
+    strlcpy(dstname, dirname, sizeof(dstname));
+    d_length = strlen(dstname);
+    dp = dstname + d_length;
+    d_remain = sizeof(dstname)-d_length;
 
     /* archive those files specified by the app */
     for (fname = fnames; *fname != NULL; ++fname) {
 	syslog(LOG_DEBUG, "archiving database file: %s", *fname);
-	strcpy(dp, strrchr(*fname, '/'));
+	strlcpy(dp, strrchr(*fname, '/'), d_remain);
 	r = cyrusdb_copyfile(*fname, dstname);
 	if (r) {
 	    syslog(LOG_ERR,
@@ -547,10 +549,10 @@ static int mystore(struct db *db,
 
     /* write new file */
     if (mytid && (*mytid)->fnamenew) {
-	strcpy(fnamebuf, (*mytid)->fnamenew);
+	strlcpy(fnamebuf, (*mytid)->fnamenew, sizeof(fnamebuf));
     } else {
-	strcpy(fnamebuf, db->fname);
-	strcat(fnamebuf, ".NEW");
+	strlcpy(fnamebuf, db->fname, sizeof(fnamebuf));
+	strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
     }
 
     unlink(fnamebuf);
