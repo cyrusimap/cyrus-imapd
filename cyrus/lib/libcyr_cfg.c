@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.2.2.10 2005/02/20 05:24:41 shadow Exp $
+ * $Id: libcyr_cfg.c,v 1.2.2.11 2005/02/21 18:54:29 ken3 Exp $
  */
 
 #include <config.h>
@@ -48,6 +48,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <syslog.h>
 
 #include "libcyr_cfg.h"
 #include "cyrusdb.h"
