@@ -1,5 +1,5 @@
 /*
- * IMAP server
+ * IMAP server protocol parsing
  */
 
 #include <stdio.h>
@@ -44,6 +44,11 @@ static struct mailbox mboxstruct;
 
 static struct fetchargs zerofetchargs;
 
+static char *monthname[] = {
+    "jan", "feb", "mar", "apr", "may", "jun",
+    "jul", "aug", "sep", "oct", "nov", "dec"
+};
+
 main(argc, argv)
 {
     char hostname[MAXHOSTNAMELEN+1];
@@ -56,6 +61,7 @@ main(argc, argv)
     signal(SIGPIPE, SIG_IGN);
     gethostname(hostname, sizeof(hostname));
 
+    /* Find out name of client host */
     if (getpeername(0, &sa, &salen) == 0 &&
 	sa.sin_family == AF_INET) {
 	if (hp = gethostbyaddr((char *)&sa.sin_addr, sizeof(sa.sin_addr),
@@ -83,6 +89,19 @@ usage()
     exit(EX_USAGE);
 }
 
+/*
+ * Cleanly shut down and exit
+ */
+shutdown(code)
+int code;
+{
+    if (imapd_mailbox) {
+	index_checkseen(imapd_mailbox, 1, 0, imapd_exists);
+	mailbox_close(imapd_mailbox);
+    }
+    exit(code);
+}
+
 fatal(s, code)
 char *s;
 int code;
@@ -90,6 +109,7 @@ int code;
     static int recurse_code = 0;
 
     if (recurse_code) {
+	/* We were called recursively. Just give up */
 	exit(recurse_code);
     }
     recurse_code = code;
@@ -97,6 +117,9 @@ int code;
     shutdown(code);
 }
 
+/*
+ * Top-level command loop parsing
+ */
 cmdloop()
 {
     int c;
@@ -107,6 +130,7 @@ cmdloop()
     for (;;) {
 	fflush(stdout);
 
+	/* Parse tag */
 	c = getword(&tag);
 	if (c == EOF) {
 	    shutdown(0);
@@ -117,6 +141,7 @@ cmdloop()
 	    continue;
 	}
 
+	/* Parse command name */
 	c = getword(&cmd);
 	if (!cmd.s[0]) {
 	    printf("%s BAD Null command\r\n", tag.s);
@@ -128,6 +153,7 @@ cmdloop()
 	    if (isupper(*p)) *p = tolower(*p);
 	}
 
+	/* Only Login/Logout/Noop allowed when not logged in */
 	if (!imapd_userid && cmd.s[0] != 'L' && cmd.s[0] != 'N') goto nologin;
     
 	switch (cmd.s[0]) {
@@ -468,6 +494,9 @@ cmdloop()
     }
 }
 
+/*
+ * Perform a LOGIN command
+ */
 cmd_login(tag, user, passwd)
 char *tag;
 char *user;
@@ -514,6 +543,9 @@ char *passwd;
     return;
 };
 
+/*
+ * Perform a NOOP command
+ */
 cmd_noop(tag, cmd)
 char *tag;
 char *cmd;
@@ -524,6 +556,11 @@ char *cmd;
     printf("%s OK %s completed\r\n", tag, cmd);
 };
 
+/*
+ * Parse and perform an APPEND command.
+ * The command has been parsed up to and including
+ * the mailbox name.
+ */
 #define FLAGGROW 10
 cmd_append(tag, name)
 char *tag;
@@ -540,7 +577,7 @@ char *name;
     char inboxname[MAX_MAILBOX_PATH];
     struct mailbox mailbox;
 
-    /* Get flags */
+    /* Parse flags */
     for (c = getword(&arg); c == ' ' && arg.s[0] != '{'; c = getword(&arg)) {
 	if (arg.s[0] == '\\') {
 	    lcase(arg.s);
@@ -564,7 +601,7 @@ char *name;
 	flag[nflags++] = strsave(arg.s);
     }
 
-    /* Get internaldate */
+    /* Parse internaldate */
     if (c == '\"') {
 	ungetc(c, stdin);
 	c = getdatetime(&internaldate);
@@ -599,6 +636,7 @@ char *name;
 	goto freeflags;
     }
     
+    /* Set up the append */
     if (strcasecmp(name, "inbox") == 0 &&
 	!strchr(imapd_userid, '.') &&
 	strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
@@ -619,17 +657,20 @@ char *name;
 	goto freeflags;
     }
 
+    /* Tell client to send the message */
     printf("+ go ahead\r\n");
     fflush(stdout);
 
+    /* Perform the rest of the append */
     r = append_fromstream(&mailbox, stdin, size, internaldate, flag, nflags,
 			  imapd_userid);
     mailbox_close(&mailbox);
 
     if (imapd_mailbox) {
 	/*
-	 * We do a full check to pick up any \Seen flag we might have
+	 * We do a full check, to pick up any \Seen flag we might have
 	 * set on the appended message.
+	 * XXX full check isn't necessary--test removing it
 	 */
 	index_check(imapd_mailbox, 0, 1);
     }
@@ -649,7 +690,9 @@ char *name;
     if (flag) free((char *)flag);
 }
 
-
+/*
+ * Perform a SELECT/EXAMINE/BBOARD command
+ */
 cmd_select(tag, cmd, name)
 char *tag;
 char *cmd;
@@ -697,6 +740,7 @@ char *name;
     }
 
     if (imapd_mailbox) {
+	/* Save \Seen state and close previously open mailbox */
 	index_checkseen(imapd_mailbox, 1, 0, imapd_exists);
 	mailbox_close(imapd_mailbox);
     }
@@ -711,6 +755,7 @@ char *name;
     }
 
     if (imapd_mailbox->myrights & ACL_DELETE) {
+	/* Warn if mailbox is close to or over quota */
 	mailbox_read_quota(imapd_mailbox);
 	if (imapd_mailbox->quota_limit > 0) {
 	    usage = imapd_mailbox->quota_used * 100 /
@@ -731,6 +776,11 @@ char *name;
     syslog(LOG_INFO, "open: user %s opened %s", imapd_userid, name);
 }
 	  
+/*
+ * Parse and perform a FETCH/UID FETCH command
+ * The command has been parsed up to and including
+ * the sequence
+ */
 cmd_fetch(tag, sequence, usinguid)
 char *tag;
 char *sequence;
@@ -935,6 +985,9 @@ int usinguid;
     freestrlist(fetchargs.headers_not);
 }
 
+/*
+ * Perform a PARTIAL command
+ */
 cmd_partial(tag, msgno, data, start, count)
 char *tag;
 char *msgno;
@@ -964,8 +1017,14 @@ char *count;
     else if (!strcmp(data, "rfc822.header")) {
 	fetchargs.fetchitems = FETCH_HEADER;
     }
+    else if (!strcmp(data, "rfc822.peek")) {
+	fetchargs.fetchitems = FETCH_RFC822;
+    }
     else if (!strcmp(data, "rfc822.text")) {
 	fetchargs.fetchitems = FETCH_TEXT|FETCH_SETSEEN;
+    }
+    else if (!strcmp(data, "rfc822.text.peek")) {
+	fetchargs.fetchitems = FETCH_TEXT;
     }
     else if (!strncmp(data, "body[", 5) ||
 	     !strncmp(data, "body.peek[", 10)) {
@@ -1022,6 +1081,11 @@ char *count;
     freestrlist(fetchargs.bodysections);
 }
 
+/*
+ * Parse and perform a STORE/UID STORE command
+ * The command has been parsed up to and including
+ * the FLAGS/+FLAGS/-FLAGS
+ */
 cmd_store(tag, sequence, operation, usinguid)
 char *tag;
 char *sequence;
@@ -1403,7 +1467,10 @@ int usinguid;
     if (c != '\n') eatline();
     goto freeargs;
 }
-    
+
+/*
+ * Perform a COPY/UID COPY command
+ */    
 cmd_copy(tag, sequence, name, usinguid)
 char *tag;
 char *sequence;
@@ -1435,6 +1502,9 @@ int usinguid;
     }
 }    
 
+/*
+ * Perform an EXPUNGE command
+ */
 cmd_expunge(tag)
 char *tag;
 {
@@ -1455,6 +1525,9 @@ char *tag;
     }
 }    
 
+/*
+ * Perform a CREATE command
+ */
 cmd_create(tag, name, partition)
 char *tag;
 char *name;
@@ -1478,6 +1551,9 @@ char *partition;
     }
 }	
 
+/*
+ * Perform a FIND command
+ */
 cmd_find(tag, namespace, pattern)
 char *tag;
 char *namespace;
@@ -1501,6 +1577,10 @@ char *pattern;
     printf("%s OK Find completed\r\n", tag);
 }
   
+/*
+ * Perform a SUBSCRIBE (add is nonzero) or
+ * UNSUBSCRIBE (add is zero) command
+ */
 cmd_changesub(tag, namespace, name, add)
 char *tag;
 char *namespace;
@@ -1532,6 +1612,9 @@ int add;
     }
 }
 
+/*
+ * Perform a GETACL command
+ */
 cmd_getacl(tag, namespace, name)
 char *tag;
 char *namespace;
@@ -1596,6 +1679,9 @@ char *name;
     printf("%s OK Getacl completed\r\n", tag);
 }
 
+/*
+ * Perform a MYRIGHTS command
+ */
 cmd_myrights(tag, namespace, name)
 char *tag;
 char *namespace;
@@ -1657,6 +1743,9 @@ char *name;
     printf("\r\n%s OK Myrights completed\r\n", tag);
 }
 
+/*
+ * Perform a SETACL command
+ */
 cmd_setacl(tag, namespace, name, identifier, rights)
 char *tag;
 char *namespace;
@@ -1688,6 +1777,10 @@ char *rights;
     printf("%s OK %s completed\r\n", tag, cmd);
 }
 
+/*
+ * Parse a word
+ * (token not containing whitespace, parens, or double quotes)
+ */
 #define BUFGROWSIZE 100
 int getword(buf)
 struct buf *buf;
@@ -1714,6 +1807,10 @@ struct buf *buf;
     }
 }
 
+/*
+ * Parse an astring
+ * (atom, quoted-string, or literal)
+ */
 int getastring(buf)
 struct buf *buf;
 {
@@ -1733,11 +1830,16 @@ struct buf *buf;
     case ')':
     case '\r':
     case '\n':
+	/* Invalid starting character */
 	buf->s[0] = '\0';
 	if (c != EOF) ungetc(c, stdin);
 	return EOF;
 
     default:
+	/*
+	 * Atom -- server is liberal in accepting specials other
+	 * than whitespace, parens, or double quotes
+	 */
 	for (;;) {
 	    if (c == EOF || isspace(c) || c == '(' || c == ')' || c == '\"') {
 		buf->s[len] = '\0';
@@ -1752,6 +1854,10 @@ struct buf *buf;
 	}
 	
     case '\"':
+	/*
+	 * Quoted-string.  Server is liberal in accepting qspecials
+	 * other than double-quote, CR, and LF.
+	 */
 	for (;;) {
 	    c = getc(stdin);
 	    if (c == '\"') {
@@ -1770,6 +1876,7 @@ struct buf *buf;
 	    buf->s[len++] = c;
 	}
     case '{':
+	/* Literal */
 	buf->s[0] = '\0';
 	while ((c = getc(stdin)) != EOF && isdigit(c)) {
 	    len = len*10 + c - '0';
@@ -1778,6 +1885,7 @@ struct buf *buf;
 	    if (c != EOF) ungetc(c, stdin);
 	    return EOF;
 	}
+	if (len == 0) return EOF;
 	c = getc(stdin);
 	if (c == '\r') c = getc(stdin);
 	if (c != '\n') {
@@ -1804,11 +1912,11 @@ struct buf *buf;
     }
 }
 
-static char *monthname[] = {
-    "jan", "feb", "mar", "apr", "may", "jun",
-    "jul", "aug", "sep", "oct", "nov", "dec"
-};
-
+/*
+ * Parse a "date", for SEARCH criteria
+ * The time_t's pointed to by 'start' and 'end' are set to the
+ * times of the start and end of the parsed date.
+ */
 int getdate(start, end)
 time_t *start, *end;
 {
@@ -1826,6 +1934,7 @@ time_t *start, *end;
 	c = getc(stdin);
     }
 
+    /* Day of month */
     if (!isdigit(c)) goto baddate;
     tm.tm_mday = c - '0';
     c = getc(stdin);
@@ -1837,6 +1946,7 @@ time_t *start, *end;
     if (c != '-') goto baddate;
     c = getc(stdin);
 
+    /* Month name */
     if (!isalpha(c)) goto baddate;
     month[0] = c;
     c = getc(stdin);
@@ -1857,6 +1967,7 @@ time_t *start, *end;
     if (c != '-') goto baddate;
     c = getc(stdin);
 
+    /* Year */
     if (!isdigit(c)) goto baddate;
     tm.tm_year = c - '0';
     c = getc(stdin);
@@ -1892,6 +2003,9 @@ time_t *start, *end;
     return EOF;
 }
 
+/*
+ * Parse a date_time, for the APPEND command
+ */
 int getdatetime(date)
 time_t *date;
 {
@@ -1907,6 +2021,7 @@ time_t *date;
     c = getc(stdin);
     if (c != '\"') goto baddate;
     
+    /* Day of month */
     c = getc(stdin);
     if (c == ' ') c = '0';
     if (!isdigit(c)) goto baddate;
@@ -1920,6 +2035,7 @@ time_t *date;
     if (c != '-') goto baddate;
     c = getc(stdin);
 
+    /* Month name */
     if (!isalpha(c)) goto baddate;
     month[0] = c;
     c = getc(stdin);
@@ -1940,6 +2056,7 @@ time_t *date;
     if (c != '-') goto baddate;
     c = getc(stdin);
 
+    /* Year */
     if (!isdigit(c)) goto baddate;
     tm.tm_year = c - '0';
     c = getc(stdin);
@@ -1957,6 +2074,7 @@ time_t *date;
     }
     else old_format++;
 
+    /* Hour */
     if (c != ' ') goto baddate;
     c = getc(stdin);
     if (!isdigit(c)) goto baddate;
@@ -1967,6 +2085,7 @@ time_t *date;
     c = getc(stdin);
     if (tm.tm_hour > 23) goto baddate;
 
+    /* Minute */
     if (c != ':') goto baddate;
     c = getc(stdin);
     if (!isdigit(c)) goto baddate;
@@ -1977,6 +2096,7 @@ time_t *date;
     c = getc(stdin);
     if (tm.tm_min > 59) goto baddate;
 
+    /* Second */
     if (c != ':') goto baddate;
     c = getc(stdin);
     if (!isdigit(c)) goto baddate;
@@ -1987,6 +2107,7 @@ time_t *date;
     c = getc(stdin);
     if (tm.tm_min > 60) goto baddate;
 
+    /* Time zone */
     if (old_format) {
 	if (c != '-') goto baddate;
 	c = getc(stdin);
@@ -1996,6 +2117,7 @@ time_t *date;
 	c = getc(stdin);
 
 	if (c == '\"') {
+	    /* Military (single-char) zones */
 	    zone[1] = '\0';
 	    lcase(zone);
 	    if (zone[0] <= 'm') {
@@ -2007,6 +2129,7 @@ time_t *date;
 	    else zone_off = 0;
 	}
 	else {
+	    /* UT (universal time) */
 	    zone[1] = c;
 	    c = getc(stdin);
 	    if (c == '\"') {
@@ -2016,6 +2139,7 @@ time_t *date;
 		zone_off = 0;
 	    }
 	    else {
+		/* 3-char time zone */
 		zone[2] = c;
 		c = getc(stdin);
 		if (c != '\"') goto baddate;
@@ -2070,6 +2194,9 @@ time_t *date;
     return EOF;
 }
 	
+/*
+ * Return nonzero if 's' matches the grammar for an atom
+ */
 int isatom(s)
 char *s;
 {
@@ -2082,6 +2209,9 @@ char *s;
     return 1;
 }
 
+/*
+ * Return nonzero if 's' matches the grammar for a sequence
+ */
 int issequence(s)
 char *s;
 {
@@ -2115,6 +2245,9 @@ char *s;
     return 1;
 }
 
+/*
+ * Eat characters up to and including the next newline
+ */
 eatline()
 {
     char c;
@@ -2122,6 +2255,9 @@ eatline()
     while ((c = getc(stdin)) != EOF && c != '\n');
 }
 
+/*
+ * Print 's' as an atom, quoted-string, or literal
+ */
 printastring(s)
 char *s;
 {
@@ -2146,6 +2282,9 @@ char *s;
     }
 }
 
+/*
+ * Append 's' to the strlist 'l'.
+ */
 appendstrlist(l, s)
 struct strlist **l;
 char *s;
@@ -2159,6 +2298,9 @@ char *s;
     (*tail)->next = 0;
 }
 
+/*
+ * Free the strlist 'l'
+ */
 freestrlist(l)
 struct strlist *l;
 {
@@ -2172,13 +2314,4 @@ struct strlist *l;
     }
 }
 
-shutdown(code)
-int code;
-{
-    if (imapd_mailbox) {
-	index_checkseen(imapd_mailbox, 1, 0, imapd_exists);
-	mailbox_close(imapd_mailbox);
-    }
-    exit(code);
-}
 
