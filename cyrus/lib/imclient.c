@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.55 2000/12/26 21:35:42 leg Exp $
+ $Id: imclient.c,v 1.56 2001/02/17 20:19:40 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1660,7 +1660,7 @@ static int tls_init_clientengine(struct imclient *imclient,
     SSL_load_error_strings();
     SSLeay_add_ssl_algorithms();
 
-    imclient->tls_ctx = SSL_CTX_new(SSLv23_client_method());
+    imclient->tls_ctx = SSL_CTX_new(TLSv1_client_method());
     if (imclient->tls_ctx == NULL) {
 	return -1;
     };
