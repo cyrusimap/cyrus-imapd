@@ -74,6 +74,9 @@ The pathname of the partition \fIname\fR.  At least one field, for the
 partition named in the \fBdefaultpartition\fR option, is required.
 For example, if the value of the \fBdefaultpartion\fR option is
 \fBdefault\fR, then the \fBpartition-default\fR field is required.
+.IP "\fBunixhierarchysep:\fR no" 5
+Use the UNIX separator character '/' for delimiting levels of mailbox
+hierarchy.  The default is to use the netnews separator character '.'. 
 .IP "\fBaltnamespace:\fR no" 5
 Use the alternate IMAP namespace, where personal folders reside at the
 same level in the hierarchy as INBOX.
