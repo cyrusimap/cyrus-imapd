@@ -179,7 +179,7 @@ extern int index_store P((struct mailbox *mailbox, char *sequence,
 extern void index_search P((struct mailbox *mailbox,
 			    struct searchargs *searchargs, int usinguid));
 extern int index_copy P((struct mailbox *mailbox, char *sequence,
-			 int usinguid, char *name));
+			 int usinguid, char *name, char **copyuidp));
 extern int index_status P((struct mailbox *mailbox, char *name,
 			   int statusitems));
 
