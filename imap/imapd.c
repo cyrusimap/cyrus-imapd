@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.386 2002/05/16 21:54:37 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.387 2002/05/17 20:48:04 ken3 Exp $ */
 
 #include <config.h>
 
@@ -5166,7 +5166,7 @@ void cmd_getannotation(char *tag)
  */    
 void cmd_setannotation(char *tag)
 {
-    int c;
+    int c, r = 0;
     struct entryattlist *entryatts = NULL;
 
     c = getannotatestoredata(tag, &entryatts);
@@ -5185,7 +5185,20 @@ void cmd_setannotation(char *tag)
 	goto freeargs;
     }
 
-    prot_printf(imapd_out, "%s NO setting annotations not supported\r\n", tag);
+    /* administrators only please */
+    if (!imapd_userisadmin) {
+	r = IMAP_PERMISSION_DENIED;
+    }
+
+    r = annotatemore_store(entryatts, &imapd_namespace, imapd_userisadmin,
+			   imapd_userid, imapd_authstate);
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    } else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    }
 
   freeargs:
     if (entryatts) freeentryatts(entryatts);
