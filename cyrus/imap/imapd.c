@@ -24,7 +24,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  */
-/* $Id: imapd.c,v 1.144 1998/06/04 20:23:26 tjs Exp $ */
+/* $Id: imapd.c,v 1.145 1998/06/07 23:40:29 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -129,8 +129,10 @@ void cmd_getuids P((char *tag, char *startuid));
 #ifdef ENABLE_X_NETSCAPE_HACK
 void cmd_netscrape P((char* tag));
 #endif
-#ifdef ENABLE_EXPERIMENT
+#ifdef ENABLE_EXPERIMENT_NAMESPACE
 void cmd_namespace P((char* tag));
+#endif
+#ifdef ENABLE_EXPERIMENT
 void cmd_unselect P((char* tag));
 #endif
 
@@ -654,7 +656,7 @@ cmdloop()
 		mboxlist_close();	
 		cmd_noop(tag.s, cmd.s);
 	    }
-#ifdef ENABLE_EXPERIMENT
+#ifdef ENABLE_EXPERIMENT_NAMESPACE
 	    else if (!strcmp(cmd.s, "Namespace")) {
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -3047,7 +3049,7 @@ namespace_cb(name, matchlen, maycreate, rock)
 
 /*
  * Print out a response to the NAMESPACE command defined by
- * RFC 2342.txt.  This isn't configurable, but it wasn't obvious that there
+ * RFC 2342.  This isn't configurable, but it wasn't obvious that there
  * was any reason that it needs to be.
  */
 void
