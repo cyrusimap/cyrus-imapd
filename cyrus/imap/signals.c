@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: signals.c,v 1.5 2000/05/29 03:03:00 leg Exp $ */
+/* $Id: signals.c,v 1.6 2000/07/19 01:10:22 leg Exp $ */
 
 #include <config.h>
 
@@ -54,7 +54,7 @@ static int gotsignal = 0;
 
 static void sighandler(int sig)
 {
-    syslog(LOG_DEBUG, "got signal %d", sig);
+    /* syslog(LOG_DEBUG, "got signal %d", sig); */
     gotsignal = sig;
 }
 
