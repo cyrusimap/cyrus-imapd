@@ -35,7 +35,7 @@ int duplicate_init()
     
     /* create the name of the db file */
     r = duplicate_dbenv->open(duplicate_dbenv, buf, NULL, 
-			      DB_INIT_CDB, 0644);
+			      DB_INIT_CDB | DB_CREATE, 0644);
     if (r) {
 	char err[1024];
 	
@@ -45,6 +45,8 @@ int duplicate_init()
     }
 
     duplicate_dbinit = 1;
+
+    return 0;
 }
 
 /* too many processes are contending for single locks on delivered.db 

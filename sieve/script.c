@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.13 2000/01/28 22:09:56 leg Exp $
+ * $Id: script.c,v 1.14 2000/02/02 02:34:45 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -82,8 +82,7 @@ int script_require(sieve_script_t *s, char *req)
 	    return 0;
 	}
     } else if (!strcmp("notify",req)) {
-	if (s->interp.notify &&
-	    s->interp.denotify) {
+	if (s->interp.notify) {
 	    s->support.notify = 1;
 	    return 1;
 	} else {
@@ -694,13 +693,6 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 				   s->interp.interp_context,
 				   s->script_context,
 				   message_context);
-	    break;
-	case ACTION_DENOTIFY:
-	    if (!s->interp.denotify)
-		return SIEVE_INTERNAL_ERROR;
-	    ret = s->interp.denotify(NULL, s->interp.interp_context,
-				     s->script_context,
-				     message_context);
 	    break;
 
 	case ACTION_NONE:

@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.5 2000/01/28 22:09:56 leg Exp $
+ * $Id: test.c,v 1.6 2000/02/02 02:34:46 tmartin Exp $
  *
  * usage: "test message < script"
  */
@@ -497,14 +497,6 @@ int notify(char *priority,
     return 1;
 }
  
-int denotify(char *arg, void *ic, void *sc, void *mc)
-{
- 
-    printf("denotify\n");
- 
-    return 1;
-}
- 
 int mysieve_error(int lineno, char *msg,
 		  void *i, void *s)
 {
@@ -659,12 +651,6 @@ int main(int argc, char *argv[])
     res = sieve_register_notify(i, &notify);
     if (res != SIEVE_OK) {
 	printf("sieve_register_notify() returns %d\n", res);
-	exit(1);
-    }
- 
-    res = sieve_register_denotify(i, &denotify);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_denotify() returns %d\n", res);
 	exit(1);
     }
  
