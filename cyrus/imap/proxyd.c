@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.50 2000/12/07 22:37:56 leg Exp $ */
+/* $Id: proxyd.c,v 1.51 2000/12/18 01:23:28 ken3 Exp $ */
 
 #define NEW_BACKEND_TIMEOUT
 
@@ -2204,55 +2204,9 @@ void cmd_noop(char *tag, char *cmd)
 /*
  * Perform an IDLE command
  */
-#ifdef HAVE_PTHREAD
-#include <pthread.h>
-
-/* Get continuation data */
-void idle_continuation(char *tag)
-{
-/* NOTE: we may need to rewrite this to be cancellation-safe */
-    int c;
-    static struct buf arg;
-
-    c = getword(&arg);
-    if (c != EOF &&
-	!(!strcasecmp(arg.s, "Done") &&
-	  (c = (c == '\r') ? prot_getc(imapd_in) : c) == '\n')) {
-	/* invalid continuation, spit out a message */
-	prot_printf(backend_current->out, 
-		    "* BAD Invalid Idle continuation\r\n");
-	eatline(c);
-    }
-    
-    /* either the client timed out, or gave us a continuation.
-       in either case we're done, so terminate the IDLE */
-    prot_printf(backend_current->out, "DONE\r\n");
-}
-
-void cmd_idle(char *tag)
-{
-    int c;
-    static struct buf arg;
-    pthread_t cont_thread;
-    void *res;
-
-    assert(backend_current != NULL);
-
-    prot_printf(backend_current->out, "%s IDLE\r\n", tag);
-
-    pthread_create(&cont_thread, NULL,
-		   (void *) idle_continuation, (void *) tag);
-
-    pipe_including_tag(backend_current, tag);
-
-    /* if the backend timeout out on us (can it??),
-       we need to cancel the thread listening to the client */
-    pthread_cancel(cont_thread);
-}
-#else
 #define IDLECONT_POLL 1
 
-/* Get continuation data */
+/* Get continuation data (listen to client) */
 struct prot_waitevent *idle_continuation(struct protstream *s,
 					 struct prot_waitevent *ev, void *rock)
 {
@@ -2290,6 +2244,7 @@ struct prot_waitevent *idle_continuation(struct protstream *s,
     return ev;
 }
 
+/* Body of the command (listen to backend) */
 void cmd_idle(char *tag)
 {
     struct prot_waitevent *idle_event;
@@ -2310,7 +2265,6 @@ void cmd_idle(char *tag)
     /* Remove the continuation data function */
     prot_removewaitevent(backend_current->in, idle_event);
 }
-#endif /* HAVE_PTHREAD */
 
 /*
  * Perform a CAPABILITY command
