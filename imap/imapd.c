@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.339 2002/02/13 21:30:44 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.340 2002/02/13 21:34:37 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -4468,7 +4468,8 @@ int parsecharset;
     static struct buf criteria, arg;
     struct searchargs *sub1, *sub2;
     char *p, *str;
-    int i, c, flag, size;
+    int i, c, flag;
+    unsigned size;
     time_t start, end;
 
     c = getword(imapd_in, &criteria);
