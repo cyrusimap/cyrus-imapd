@@ -54,7 +54,8 @@ static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 #define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+32+((i)*4))))
 
 /* Access assistance macros for memory-mapped cache file data */
-#define CACHE_ITEM_LEN(ptr) (ntohl(*((bit32 *)(ptr))))
+#define CACHE_ITEM_BIT32(ptr) (ntohl(*((bit32 *)(ptr))))
+#define CACHE_ITEM_LEN(ptr) CACHE_ITEM_BIT32(ptr)
 #define CACHE_ITEM_NEXT(ptr) ((ptr)+4+((3+CACHE_ITEM_LEN(ptr))&~3))
 
 /* Forward declarations */
@@ -634,7 +635,6 @@ index_search(mailbox, searchargs)
 struct mailbox *mailbox;
 struct searchargs *searchargs;
 {
-    int hits = 0;
     int msgno, start=1, end=imapd_exists;
     int seen_matters = (searchargs->seen_state != SEARCH_DONTCARE);
     int seenstate = (searchargs->seen_state == SEARCH_SET);
@@ -646,6 +646,8 @@ struct searchargs *searchargs;
     else if (searchargs->recent_state == SEARCH_UNSET) {
 	end = lastnotrecent;
     }
+
+    printf("* SEARCH");
 
     for (msgno = start; msgno <= end; msgno++) {
 	if (seen_matters && seenstate != seenflag[msgno]) continue;
@@ -666,12 +668,9 @@ struct searchargs *searchargs;
 	}
 	if (i != MAX_USER_FLAGS/32) continue;
 
-	if (!hits++) {
-	    printf("* SEARCH");
-	}
 	printf(" %d", msgno);
     }
-    if (hits) printf("\r\n");
+    printf("\r\n");
 }
 
 /*
@@ -855,6 +854,61 @@ int octet_count;
 }
 
 /*
+ * Helper function to fetch a body section
+ */
+static
+index_fetchsection(msgfile, format, msgno, section, cacheitem,
+		   start_octet, octet_count)
+FILE *msgfile;
+int format;
+int msgno;
+char *section;
+char *cacheitem;
+int start_octet;
+int octet_count;
+{
+    char *p;
+    int skip;
+
+    cacheitem += 4;
+    p = section;
+    while (*p) {
+	skip = 0;
+	while (isdigit(*p)) skip = skip * 10 + *p++ - '0';
+	if (*p == '.') p++;
+
+	/* section 0 only allowed on tail */
+	if (!skip && *p) goto badpart;
+	
+	/* section number too large */
+	if (skip >= CACHE_ITEM_BIT32(cacheitem)) goto badpart;
+
+	if (*p) {
+	    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 2 * 4 + 4;
+	    while (--skip) {
+		if (CACHE_ITEM_BIT32(cacheitem) > 0) {
+		    skip += CACHE_ITEM_BIT32(cacheitem);
+		    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 2 * 4;
+		}
+		cacheitem += 4;
+	    }
+	}
+    }
+
+    cacheitem += skip * 2 * 4 + 4;
+    if (CACHE_ITEM_BIT32(cacheitem+4) == -1) goto badpart;
+	
+    index_fetchmsg(msgfile, format, CACHE_ITEM_BIT32(cacheitem),
+		   CACHE_ITEM_BIT32(cacheitem+4),
+		   start_octet, octet_count);
+    return;
+
+ badpart:
+    printf("NIL");
+}
+
+
+/*
  * Send a * FLAGS response.
  */
 static int
@@ -960,16 +1014,18 @@ char *rock;
     int i;
     bit32 user_flags[MAX_USER_FLAGS/32];
     char *cacheitem;
+    struct strlist *section;
 
     /* Open the message file if we're going to need it */
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822)) ||
-	fetchargs->bodyparts || fetchargs->headers || fetchargs->headers_not) {
+	fetchargs->bodysections ||
+	fetchargs->headers || fetchargs->headers_not) {
 	msgfile = fopen(message_fname(mailbox, UID(msgno)), "r");
 	if (!msgfile) printf("* NO Message %d no longer exists\r\n", msgno);
     }
 
     /* set the \Seen flag if necessary */
-    if ((fetchitems & (FETCH_TEXT|FETCH_RFC822)) || fetchargs->bodyparts) {
+    if ((fetchitems & (FETCH_TEXT|FETCH_RFC822)) || fetchargs->bodysections) {
 	if (!seenflag[msgno] && (mailbox->my_acl & ACL_SEEN)) {
 	    seenflag[msgno] = 1;
 	    fetchitems |= FETCH_FLAGS;
@@ -1060,7 +1116,18 @@ char *rock;
 	index_fetchmsg(msgfile, mailbox->format, 0, SIZE(msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
-    /* XXX body[x] */
+    for (section = fetchargs->bodysections; section; section = section->next) {
+	printf("%cBODY[%s] ", sepchar, section->s);
+	sepchar = ' ';
+	cacheitem = cache_base + CACHE_OFFSET(msgno);
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
+
+	index_fetchsection(msgfile, mailbox->format, msgno, section->s,
+			   cacheitem,
+			   fetchargs->start_octet, fetchargs->octet_count);
+    }
     printf(")\r\n");
     if (msgfile) fclose(msgfile);
     return 0;
