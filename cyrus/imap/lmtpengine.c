@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.105 2004/02/27 17:44:53 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.106 2004/03/02 20:01:07 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -615,8 +615,13 @@ static int savemsg(struct clientdata *cd,
     const char **body;
     int r;
     int nrcpts = m->rcpt_num;
-    time_t t;
+    time_t now = time(NULL);
+    static unsigned msgid_count = 0;
     char datestr[80];
+    const char *skipheaders[] = {
+	"Return-Path",  /* need to remove (we add our own) */
+	NULL
+    };
 
     /* Copy to spool file */
     f = func->spoolfile(m);
@@ -650,8 +655,7 @@ static int savemsg(struct clientdata *cd,
     }
 
     /* add a received header */
-    t = time(NULL);
-    rfc822date_gen(datestr, sizeof(datestr), t);
+    rfc822date_gen(datestr, sizeof(datestr), now);
     fprintf(f, "Received: from %s (%s)",
 	    cd->lhlo_param, cd->clienthost);
     if (m->authuser) {
@@ -685,7 +689,41 @@ static int savemsg(struct clientdata *cd,
     }
 
     /* fill the cache */
-    r = spool_fill_hdrcache(cd->pin, f, m->hdrcache, NULL);
+    r = spool_fill_hdrcache(cd->pin, f, m->hdrcache, skipheaders);
+
+    /* now, using our header cache, fill in the data that we want */
+
+    /* first check resent-message-id */
+    if ((body = msg_getheader(m, "resent-message-id")) && body[0][0]) {
+	m->id = xstrdup(body[0]);
+    } else if ((body = msg_getheader(m, "message-id")) && body[0][0]) {
+	m->id = xstrdup(body[0]);
+    } else if (body) {
+	r = IMAP_MESSAGE_BADHEADER;  /* empty message-id */
+    } else {
+	/* no message-id, create one */
+	pid_t p = getpid();
+
+	m->id = xmalloc(40 + strlen(config_servername));
+	sprintf(m->id, "<cmu-lmtpd-%d-%d-%u@%s>", p, (int) now, 
+		msgid_count++, config_servername);
+	fprintf(f, "Message-ID: %s\r\n", m->id);
+    }
+
+    /* get date */
+    if (!(body = spool_getheader(m->hdrcache, "date"))) {
+	/* no date, create one */
+	fprintf(f, "Date: %s\r\n", datestr);
+    }
+
+    if (!m->return_path &&
+	(body = msg_getheader(m, "return-path"))) {
+	/* let's grab return_path */
+	m->return_path = xstrdup(body[0]);
+	clean822space(m->return_path);
+	clean_retpath(m->return_path);
+    }
+
     r |= spool_copy_msg(cd->pin, f);
     if (r) {
 	fclose(f);
@@ -697,25 +735,6 @@ static int savemsg(struct clientdata *cd,
 	    send_lmtp_error(cd->pout, r);
 	}
 	return r;
-    }
-
-    /* now, using our header cache, fill in the data that we want */
-
-    /* first check resent-message-id */
-    if ((body = msg_getheader(m, "resent-message-id")) != NULL) {
-	m->id = xstrdup(body[0]);
-    } else if ((body = msg_getheader(m, "message-id")) != NULL) {
-	m->id = xstrdup(body[0]);
-    } else {
-	m->id = NULL;		/* no message-id */
-    }
-
-    if (!m->return_path &&
-	(body = msg_getheader(m, "return-path"))) {
-	/* let's grab return_path */
-	m->return_path = xstrdup(body[0]);
-	clean822space(m->return_path);
-	clean_retpath(m->return_path);
     }
 
     fflush(f);
