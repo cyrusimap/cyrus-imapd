@@ -59,6 +59,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 
+struct auth_state *sieved_authstate = 0;
+
 struct sockaddr_in sieved_localaddr;
 struct sockaddr_in sieved_remoteaddr;
 
@@ -173,13 +175,27 @@ static int mysasl_config(void *context,
     return SASL_FAIL;
 }
 
-#if 0
-
 /* returns true if imapd_authstate is in "item";
-   expected: item = admins or proxyservers */
+   expected: item = admins or proxyservers 
+*/
 static int authisa(const char *item)
 {
-  /* xxx i don't understand larry's code that goes here yet */
+    const char *val = config_getstring(item, "");
+    char buf[1024];
+
+    while (*val) {
+	char *p;
+	
+	for (p = (char *) val; *p && !isspace(*p); p++);
+	strncpy(buf, val, p-val);
+	buf[p-val] = 0;
+
+	if (auth_memberof(sieved_authstate, buf)) {
+	    return 1;
+	}
+	val = p;
+	while (*val && isspace(*val)) val++;
+    }
     return 0;
 }
 
@@ -232,13 +248,15 @@ static int mysasl_authproc(void *context,
 	}
     }
 
+    sieved_authstate = auth_newstate(canon_authuser, NULL);
+
     /* ok, is auth_identity an admin? */
     sieved_userisadmin = authisa("admins");
 
-    if (strcmp(canon_authuser, canon_requser)) {
+    if (strcmp(canon_authuser, canon_requser)!=0) {
       /* we want to authenticate as a different user; we'll NEVER allow this */
-
-      return SASL_BADAUTH;
+      if (sieved_userisadmin!=1)
+	return SASL_BADAUTH;
     }
 
     free(canon_authuser);
@@ -246,13 +264,10 @@ static int mysasl_authproc(void *context,
     *errstr = NULL;
     return SASL_OK;
 }
-#endif /* 0 */
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-#if 0
     { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
-#endif
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
