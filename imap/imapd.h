@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.38 2000/06/16 03:32:03 ken3 Exp $
+ * $Id: imapd.h,v 1.39 2000/06/17 04:21:20 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -196,7 +196,6 @@ enum {
     SORT_ANNOTATION
     /* values > 255 are reserved for internal use */
 };
-#define SORT_KEY_MASK		0xff
 
 /* Sort key modifier flag bits */
 #define SORT_REVERSE		(1<<15)
