@@ -216,7 +216,7 @@ struct uidlist *uidlist;
 
     /* Remove any remaining files that weren't in the index file */
     for (i = uidlist->first; i < uidlist->last; i++) {
-	sprintf(buf, "%u", i);
+	sprintf(buf, "%u", uidlist->list[i]);
 	unlink(buf);
     }
 }
