@@ -230,7 +230,7 @@ int getscript(struct protstream *conn, string_t *name)
 }
 
 /* counts the number of scripts user has. used for enforcing quotas */
-static int countscripts(void)
+static int countscripts(char *name)
 {
   DIR *dp;
   struct dirent *dir;
@@ -247,7 +247,15 @@ static int countscripts(void)
       {
 	if (strcmp(dir->d_name + (length - 7), ".script")==0)
 	{
-	  number++;
+	  char *tmp=(char *) malloc(strlen(name)+10);
+
+	  strcpy(tmp,name);
+	  strcat(tmp,".script");
+
+	  if (strcmp(tmp, dir->d_name)!=0)
+	      number++;
+
+	  free(tmp);
 	}
       }
 
@@ -282,7 +290,7 @@ int putscript(struct protstream *conn, string_t *name, string_t *data)
   /* see if this would put the user over quota */
   maxscripts=config_getint("maxscripts",3);
 
-  if (countscripts()+1 > maxscripts)
+  if (countscripts(string_DATAPTR(name))+1 > maxscripts)
   {
     prot_printf(conn,"NO \"You are only allowed %d scripts on this server\"\r\n",maxscripts);
     return TIMSIEVE_FAIL;
