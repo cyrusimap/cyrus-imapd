@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.26.2.7 2004/08/09 18:51:19 ken3 Exp $
+ * $Id: mbdump.c,v 1.26.2.8 2004/08/11 18:18:47 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -249,7 +249,6 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     fname_tail = filename + fname_len;
 
     for (msgno = 1; msgno <= mb.exists; msgno++) {
-	char name[MAILBOX_FNAME_LEN];
 	struct index_record record;
 
 	r = mailbox_read_index_record(&mb, msgno, &record);
@@ -287,7 +286,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	/* send filename, size, and contents */
 	if(first) {
 	    prot_printf(pout, "{%d}\r\n",
-			strlen(name));
+			strlen(fname_tail));
 
 	    if(!tag) {
 		/* synchronize */
@@ -302,15 +301,15 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	    }
 
 	    prot_printf(pout, "%s {%lu%s}\r\n",
-			name, len,
+			fname_tail, len,
 			(!tag ? "+" : ""));
 
 	    first = 0;
 	} else {
 	    prot_printf(pout, " {%d%s}\r\n%s {%lu%s}\r\n",
-			strlen(name),
+			strlen(fname_tail),
 			(!tag ? "+" : ""),
-			name, len,
+			fname_tail, len,
 			(!tag ? "+" : ""));
 	}
 	prot_write(pout, base, len);
