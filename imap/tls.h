@@ -43,7 +43,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: tls.h,v 1.14 2002/05/25 19:57:45 leg Exp $ */
+/* $Id: tls.h,v 1.15 2002/06/02 15:25:43 ken3 Exp $ */
 
 #ifndef INCLUDED_TLS_H
 #define INCLUDED_TLS_H
@@ -62,7 +62,6 @@ int tls_enabled(const char *ident);
 int tls_init_serverengine(const char *ident,
 			  int verifydepth, /* depth to verify */
 			  int askcert,     /* 1 = client auth */
-			  int requirecert, /* 1 = require client auth */
 			  int tlsonly);
 
 /* start tls negotiation */

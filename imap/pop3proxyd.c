@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.39 2002/05/06 17:18:51 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.40 2002/06/02 15:25:41 ken3 Exp $
  */
 #include <config.h>
 
@@ -575,7 +575,6 @@ static void cmd_starttls(int pop3s)
     result=tls_init_serverengine("pop3",
 				 5,        /* depth to verify */
 				 !pop3s,   /* can client auth? */
-				 0,        /* require client to auth? */
 				 !pop3s);  /* TLSv1 only? */
 
     if (result == -1) {

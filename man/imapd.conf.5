@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapd.conf.5,v 1.59 2002/05/25 19:57:48 leg Exp $
+.\" $Id: imapd.conf.5,v 1.60 2002/06/02 15:25:43 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -258,10 +258,12 @@ Any other SASL option can be set by preceeding it with "sasl_".  This
 file overrides the SASL configuration file.
 .IP "\fBtls_cert_file:\fR <none>" 5
 File containing the global certificate used for ALL services (imap,
-pop3, lmtp).
+pop3, lmtp, sieve).
 .IP "\fBtls_key_file:\fR <none>" 5
 File containing the private key belonging to the global server
 certificate.
+.IP "\fBtls_require_cert:\fR 0" 5
+Require a client certificate for ALL services (imap, pop3, lmtp, sieve).
 .IP "\fBtls_imap_cert_file:\fR <none>" 5
 File containing the certificate used for imap ONLY.  If not specified,
 the global certificate is used.  A value of "disabled" will disable
@@ -270,6 +272,8 @@ SSL/TLS for imap.
 File containing the private key belonging to the imap-specific server
 certificate.  If not specified, the global private key is used.  A
 value of "disabled" will disable SSL/TLS for imap.
+.IP "\fBtls_imap_require_cert:\fR 0" 5
+Require a client certificate for imap ONLY.
 .IP "\fBtls_pop3_cert_file:\fR <none>" 5
 File containing the certificate used for pop3 ONLY.  If not specified,
 the global certificate is used.  A value of "disabled" will disable
@@ -278,6 +282,8 @@ SSL/TLS for pop3.
 File containing the private key belonging to the pop3-specific server
 certificate.  If not specified, the global private key is used.  A
 value of "disabled" will disable SSL/TLS for pop3.
+.IP "\fBtls_pop3_require_cert:\fR 0" 5
+Require a client certificate for pop3 ONLY.
 .IP "\fBtls_lmtp_cert_file:\fR <none>" 5
 File containing the certificate used for lmtp ONLY.  If not specified,
 the global certificate is used.  A value of "disabled" will disable
@@ -286,6 +292,8 @@ TLS for lmtp.
 File containing the private key belonging to the lmtp-specific server
 certificate.  If not specified, the global private key is used.  A
 value of "disabled" will disable TLS for lmtp.
+.IP "\fBtls_lmtp_require_cert:\fR 0" 5
+Require a client certificate for lmtp ONLY.
 .IP "\fBtls_sieve_cert_file:\fR <none>" 5
 File containing the certificate used for sieve ONLY.  If not specified,
 the global certificate is used.  A value of "disabled" will disable
@@ -294,6 +302,8 @@ TLS for sieve.
 File containing the private key belonging to the sieve-specific server
 certificate.  If not specified, the global private key is used.  A
 value of "disabled" will disable TLS for sieve.
+.IP "\fBtls_sieve_require_cert:\fR 0" 5
+Require a client certificate for sieve ONLY.
 .IP "\fBtls_ca_file:\fR <none>" 5
 File containing one or more Certificate Authority (CA) certificates.
 .IP "\fBtls_ca_path:\fR <none>" 5

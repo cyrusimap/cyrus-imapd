@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.73 2002/05/07 16:06:20 leg Exp $
+ * $Id: lmtpengine.c,v 1.74 2002/06/02 15:25:41 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1824,7 +1824,6 @@ void lmtpmode(struct lmtp_func *func,
 		r=tls_init_serverengine("lmtp",
 					5,   /* depth to verify */
 					1,   /* can client auth? */
-					0,   /* require client to auth? */
 					1);   /* TLS only? */
 
 		if (r == -1) {

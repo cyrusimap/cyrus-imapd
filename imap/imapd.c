@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.393 2002/05/29 16:49:14 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.394 2002/06/02 15:25:40 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4578,7 +4578,6 @@ void cmd_starttls(char *tag, int imaps)
     result=tls_init_serverengine("imap",
 				 5,        /* depth to verify */
 				 !imaps,   /* can client auth? */
-				 0,        /* require client to auth? */
 				 !imaps);  /* TLS only? */
 
     if (result == -1) {
