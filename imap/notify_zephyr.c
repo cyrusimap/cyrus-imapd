@@ -33,7 +33,9 @@
 #include <krb.h>
 #include <zephyr/zephyr.h>
 #include <syslog.h>
+
 #include "sysexits.h"
+#include "xmalloc.h"
 
 #ifndef MAIL_CLASS
 #define MAIL_CLASS "MAIL"

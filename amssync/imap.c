@@ -356,7 +356,7 @@ void processfetch(struct imclient *conn, bboard *bbd, struct
  * or 2 depending on the success or failure of the command
  */
 
-void markdone(struct imclient *conn, char *rock, struct
+void markdone(struct imclient *conn, void *rock, struct
                  imclient_reply *inmsg)
 {
     if (!strncmp(inmsg->keyword, "OK", 2)) {
@@ -377,7 +377,7 @@ void markdone(struct imclient *conn, char *rock, struct
  * message and continues if the problem is message related, otherwise,
  * prints the message and exits
  */
-void errcheck(struct imclient *conn, char *rock, struct
+void errcheck(struct imclient *conn, void *rock, struct
                  imclient_reply *inmsg)
 {
   
