@@ -66,6 +66,7 @@ typedef enum {
 
 int auth_sasl(char *mechlist, isieve_t *obj, char **errstr);
 
+int isieve_logout(isieve_t **obj);
 int isieve_put_file(isieve_t *obj, char *filename, char **errstr);
 int isieve_put(isieve_t *obj, char *name, char *data, int len, char **errstr);
 int isieve_delete(isieve_t *obj, char *name, char **errstr);

@@ -470,6 +470,17 @@ int do_referral(isieve_t *obj, char *refer_to)
     return STAT_OK;
 }
 
+int isieve_logout(isieve_t **obj) 
+{
+    prot_printf((*obj)->pout, "LOGOUT");
+    prot_flush((*obj)->pout);
+
+    close((*obj)->sock);
+    
+    sieve_free_net(*obj);
+    *obj = NULL;
+}
+
 int isieve_put_file(isieve_t *obj, char *filename, char **errstr)
 {
     char *refer_to;

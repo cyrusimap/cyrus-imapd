@@ -295,6 +295,14 @@ sieve_get_global_error()
     RETVAL
 
 int
+sieve_logout(obj)
+  Sieveobj obj
+  CODE:
+	/* xxx this leaves the object unusable */
+	isieve_logout(&(obj->isieve));
+	XSRETURN_UNDEF;
+
+int
 sieve_put_file(obj, filename)
   Sieveobj obj
   char *filename
