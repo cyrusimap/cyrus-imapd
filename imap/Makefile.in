@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.159 2002/03/12 21:00:10 rjs3 Exp $
+# $Id: Makefile.in,v 1.160 2002/03/14 20:02:02 rjs3 Exp $
 # 
 # @configure_input@
 # 
@@ -105,7 +105,9 @@ LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	search_engines.o squat.o squat_internal.o mbdump.o \
 	base64.o imapparse.o telemetry.o user.o $(SEEN) $(NOTIFY) $(IDLE)
 
-IMAPDOBJS=pushstats.o imapd.o index.o tls.o version.o
+IMAPDOBJS=pushstats.o backend.o imapd.o index.o tls.o version.o
+
+PROXYDOBJS=backend.o pushstats.o proxyd.o tls.o version.o 
 
 LMTPOBJS=lmtpstats.o lmtpengine.o tls.o
 
@@ -212,9 +214,9 @@ imapd.quant: $(IMAPDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
 	$(QUANTIFY) $(QUANTOPT) $(CC) $(LDFLAGS) -o imapd.quant \
 	 $(SERVICE) $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-proxyd: pushstats.o proxyd.o tls.o version.o libimap.a $(DEPLIBS) $(SERVICE)
+proxyd: $(PROXYDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o proxyd \
-	 $(SERVICE) pushstats.o proxyd.o tls.o version.o libimap.a \
+	 $(SERVICE) $(PROXYDOBJS) libimap.a \
 	 $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 target-acap: target-acap.o libimap.a $(DEPLIBS)
