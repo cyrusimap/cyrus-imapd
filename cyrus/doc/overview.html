@@ -1,10 +1,10 @@
 <HTML><HEAD>
 <title>Cyrus IMAP Server:  Overview and Concepts</title>
-<!-- $Id: overview.html,v 1.9 2002/04/08 23:38:53 ken3 Exp $ -->
+<!-- $Id: overview.html,v 1.10 2002/04/22 21:47:28 rjs3 Exp $ -->
 </HEAD><BODY>
-<H1>              Cyrus IMAP Server:  Overview and Concepts</H1>
-
-<p><b>This document has not been updated for Cyrus IMAP 2.0.</b>
+<CENTER>
+<H1>Cyrus IMAP Server:  Overview and Concepts</H1>
+</CENTER>
 
 <p>This document gives an overview of the Cyrus IMAP server.  The
 Cyrus IMAP (Internet Message Access Protocol) server provides 
@@ -77,7 +77,6 @@ Mailboxes</A>
 <li><a href="#newsrm"><TT>rmnews</TT></a>
 <li><a href="#newssync"><TT>syncnews</TT></a>
 </UL>
-<li><A href="#imsp">IMSP Integration</A>
 <li><A href="#pop3">POP3 Server</A>
 <li><A href="#syslog">The <TT>syslog</TT> facility</A>
 <li><A href="#recovery">Mail Directory Recovery</A>
@@ -137,8 +136,9 @@ user "<TT>bovik</TT>" as "<TT>INBOX</TT>".  The mailbox
 users' <TT>INBOX</TT>.  If a user has an <TT>INBOX</TT>, then they are
 allowed to subscribe to mailboxes.  Only users without dots in their
 userid are permitted to have an <TT>INBOX</TT>.  (A user with a dot in
-their userid would be able to login but would
-not be able to receive mail.)
+their userid would be able to login but would not be able to receive mail.
+Note that when using the unix hierarchy seperator, this is not the case, and
+any user may have a dot in their userid.)
 
 <p>When an administrator deletes a user's <TT>INBOX</TT>, all of the
 user's personal mailboxes are deleted as well.
@@ -146,7 +146,7 @@ user's personal mailboxes are deleted as well.
 <p>With the one notable exception of <TT>INBOX</TT>, all mailbox names are
 system-wide--they refer to the same mailbox regardless of the user.
 <A HREF="#acl">Access control lists</A> determine which users can
-access or see which mailboxes.
+access or see which mailboxes.  Using 
 
 <p>In contexts which permit relative mailbox names, the mailbox namespace
 works as follows:
@@ -156,8 +156,7 @@ works as follows:
 <LI> Names that start with "." are relative to the current context.
 </UL>
 
-Thus, if you are 
-working with folder names and the top of the
+Thus, if you are working with folder names and the top of the
 hierarchy is named "<TT>cmu.</TT>", the name "<TT>comp.infosystems.www</TT>" 
 resolves to "<TT>comp.infosystems.www</TT>" and the name 
 "<TT>.comp.infosystems.www</TT>" resolves to
@@ -168,7 +167,10 @@ resolves to "<TT>comp.infosystems.www</TT>" and the name
 The Cyrus IMAP server can also use an <a
 href=altnamespace.html#altname> alternate namespace</a> which allows
 a user's personal mailboxes to appear as if they reside at the same
-level as that user's <TT>INBOX</TT> as opposed to children of it.
+level as that user's <TT>INBOX</TT> as opposed to children of it.  With
+this feature, it may appear that there are non-unique names for mailboxes
+between users (2 different users may each have a top level "work" mailbox),
+but the internal representation is still <tt>user.name.work</tt>.
 
 <H2><A NAME="acl">Access Control Lists</A></H2>
 
@@ -391,6 +393,7 @@ spoofing attacks.
 
 <li><tt>/etc/passwd</tt>
 <li><tt>/etc/shadow</tt>
+<li>etc.
 </ul>
 
 <tt>sasl_auto_transition</tt> automatically creates secrets for shared
@@ -423,7 +426,12 @@ the user's <TT>INBOX</TT> is permitted to log in as that user.
 
 <h3><a name="loginmd5">Shared Secrets Logins</a></h3>
 
-
+Some mechanisms require the user and the server to share a secret (generally
+a password) that can be used for comparison without actually passing the
+password in the clear across the network.  For these mechanism (such as
+CRAM-MD5 and DIGEST-MD5), you will need to supply a source of passwords,
+such as the sasldb (which is described more fully in the Cyrus SASL
+distribution)
 
 <h2><a name="quota">Quotas</a></h2>
 
@@ -563,8 +571,8 @@ partition specified in the "<TT>defaultpartition</TT>" configuration
 option.
 
 <P>The optional second argument to the "<TT>create</TT>" command can
-usually be given only when using a specialized administrative client
-such as <I>cyradm</I>.
+usually be given only when using a specialized Cyrus-aware administrative
+client such as <I>cyradm</I>.
 
 <h3><a name="partitionsrename">Changing Partitions with "<TT>rename</TT>"</a></h3>
 
@@ -646,12 +654,6 @@ considered listed in the active file.
 
 The "<tt>syncnews</tt>" program should be invoked by the
 <tt>cyrus</tt> user at least daily from cron.
-
-<h2><a name="imsp">IMSP Integration</a></h2>
-
-Integration with the Cyrus IMSP server, to allow transparent location
-of mailboxes on multiple servers, is not completed as of version
-1.5.
 
 <h2><a name="pop3">POP3 Server</a></h2>
 
@@ -822,8 +824,6 @@ server reboot.
 
 <h2>Message Delivery</h2><a name="messagedelivery"></a>
 
-This section refers to version 2.0 of the Cyrus IMAP server.
-
 <h3>Local Mail Transfer Protocol</h3><a name="lmtp"></a>
 
 <p>LMTP, the Local Mail Transfer Protocol, is a variant of SMTP design
@@ -868,6 +868,16 @@ Disabling duplicate delivery suppression will also disable Sieve, and
 as such should only be disabled for performance reasons.
 
 <h3>Sieve, a Mail Filtering Language</h3><a name="sieve"></a>
+
+Sieve is a mail filtering language that can filter mail into an appropriate
+IMAP mailbox as it is delivered via lmtp.  For more information, look
+<A HREF="sieve.html">here</a>.
+
+<h3>Cyrus Murder, the IMAP Aggregator</h3><a name="aggregator"></a>
+
+Cyrus now supports the distribution of mailboxes across a number of IMAP
+servers to allow for horizontal scalability.  For information on setting
+up this configuration, see <A href="install-murder.html">here</A>.
 
 <P><HR><P>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
