@@ -59,10 +59,10 @@ install:
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
-listenstats: $(OBJS)
+tugowar: $(OBJS)
 	$(CC) $(LDFLAGS) -o tugowar $(OBJS) $(LIBS)
 
-listenstats.pure: $(OBJS)
+tugowar.pure: $(OBJS)
 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o tugowar $(OBJS) $(LIBS)
 
 clean:
