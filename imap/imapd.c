@@ -575,6 +575,12 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 		cmd_setquota(tag.s, arg1.s);
 	    }
+	    else if (!strcmp(cmd.s, "Status")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg1);
+		if (c != ' ') goto missingargs;
+		cmd_status(tag.s, arg1.s);
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -895,7 +901,7 @@ char *tag;
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
-    prot_printf(imapd_out, "* CAPABILITY IMAP4\r\n%s OK Capability completed\r\n", tag);
+    prot_printf(imapd_out, "* CAPABILITY IMAP4 STATUS\r\n%s OK Capability completed\r\n", tag);
 };
 
 /*
@@ -2261,6 +2267,124 @@ char *quotaroot;
 
  badlist:
     prot_printf(imapd_out, "%s BAD Invalid quota list in Setquota\r\n", tag);
+    if (c != '\n') eatline();
+}
+
+/*
+ * Parse and perform a STATUS command
+ * The command has been parsed up to the attribute list
+ */
+cmd_status(tag, name)
+char *tag;
+char *name;
+{
+    int c;
+    int statusitems = 0;
+    static struct buf arg;
+    struct mailbox mailbox;
+    char inboxname[MAX_MAILBOX_PATH];
+    int r = 0;
+    int doclose = 0;
+
+    c = prot_getc(imapd_in);
+    if (c != '(') goto badlist;
+
+    c = getword(&arg);
+    if (arg.s[0] == '\0') goto badlist;
+    for (;;) {
+	lcase(arg.s);
+	if (!strcmp(arg.s, "messages")) {
+	    statusitems |= STATUS_MESSAGES;
+	}
+	else if (!strcmp(arg.s, "recent")) {
+	    statusitems |= STATUS_RECENT;
+	}
+	else if (!strcmp(arg.s, "uid-next")) {
+	    statusitems |= STATUS_UID_NEXT;
+	}
+	else if (!strcmp(arg.s, "uid-validity")) {
+	    statusitems |= STATUS_UID_VALIDITY;
+	}
+	else if (!strcmp(arg.s, "unseen")) {
+	    statusitems |= STATUS_UNSEEN;
+	}
+	else if (!strcmp(arg.s, "unseen")) {
+	    statusitems |= STATUS_UNSEEN;
+	}
+	else if (!strcmp(arg.s, "update-number")) {
+	    statusitems |= STATUS_UPDATE_NUMBER;
+	}
+	else {
+	    prot_printf(imapd_out, "%s BAD Invalid Status attribute %s\r\n",
+			tag, arg.s);
+	    if (c != '\n') eatline();
+	    return;
+	}
+	    
+	if (c == ' ') c = getword(&arg);
+	else break;
+    }
+
+    if (c != ')') {
+	prot_printf(imapd_out,
+		    "%s BAD Missing close parenthesis in Status\r\n", tag);
+	if (c != '\n') eatline();
+	return;
+    }
+
+    c = prot_getc(imapd_in);
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected extra arguments to Status\r\n", tag);
+	eatline();
+	return;
+    }
+
+    /*
+     * Perform a full checkpoint of any open mailbox, in case we're
+     * doing a STATUS check of the current mailbox.
+     */
+    if (imapd_mailbox) {
+	index_check(imapd_mailbox, 0, 1);
+    }
+
+    if (strcasecmp(name, "inbox") == 0 &&
+	!strchr(imapd_userid, '.') &&
+	strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
+	strcpy(inboxname, "user.");
+	strcat(inboxname, imapd_userid);
+	r = mailbox_open_header(inboxname, &mailbox);
+    }
+    else {
+	r = mailbox_open_header(name, &mailbox);
+    }
+
+    if (!r) {
+	doclose = 1;
+	r = mailbox_open_index(&mailbox);
+    }
+    if (!r && !(mailbox.myrights & ACL_READ)) {
+	r = (imapd_userisadmin || (mailbox.myrights & ACL_LOOKUP)) ?
+	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+    }
+
+    if (!r) {
+	r = index_status(&mailbox, name, statusitems);
+    }
+
+    if (doclose) mailbox_close(&mailbox);
+    
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	return;
+    }
+    
+    prot_printf(imapd_out, "%s OK Status completed\r\n", tag);
+    return;
+
+ badlist:
+    prot_printf(imapd_out, "%s BAD Invalid status list in Status\r\n", tag);
     if (c != '\n') eatline();
 }
 
