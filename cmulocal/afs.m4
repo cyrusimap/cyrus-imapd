@@ -7,7 +7,19 @@ dnl from KTH krb and Arla
 AC_DEFUN(CMU_AFS_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
-CPPFLAGS="$CPPFLAGS -I$1"
+if test "$ac_cv_prog_gcc" = "yes" ; then
+  cmu_gcc_inc_dir=`gcc --print-file-name=include`
+  if test "$cmu_gcc_inc_dir" = "include"  ; then
+     cmu_gcc_inc_dir=""
+  fi
+  if test "$cmu_gcc_inc_dir" != ""  ; then
+     CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I${cmu_gcc_inc_dir} -I/usr/include"
+  else
+     CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I/usr/include"
+  fi
+else
+  CPPFLAGS="$saved_CPPFLAGS -I$1"
+fi
 AC_TRY_COMPILE([#include <afs/param.h>],
 [#ifndef SYS_NAME
 choke me
