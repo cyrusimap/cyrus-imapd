@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.2 2003/10/22 18:03:04 rjs3 Exp $ */
+/* $Id: libconfig.c,v 1.3 2003/12/07 01:00:58 ken3 Exp $ */
 
 #include <config.h>
 
@@ -101,6 +101,14 @@ int config_getswitch(enum imapopt opt)
     assert(imapopts[opt].t == OPT_SWITCH);
     
     return imapopts[opt].val.b;
+}
+
+enum enum_value config_getenum(enum imapopt opt)
+{
+    assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert(imapopts[opt].t == OPT_ENUM);
+     
+    return imapopts[opt].val.e;
 }
 
 const char *config_getoverflowstring(const char *key, const char *def)
@@ -307,6 +315,24 @@ void config_read(const char *alt_config)
 		else {
 		    /* error during conversion */
 		    sprintf(errbuf, "non-switch value for %s in line %d",
+			    imapopts[opt].optname, lineno);
+		    fatal(buf, EC_CONFIG);
+		}
+		break;
+	    }
+	    case OPT_ENUM:
+	    {
+		const struct enum_option_s *e = imapopts[opt].enum_options;
+
+		while (e->name) {
+		    if (!strcasecmp(e->name, p)) break;
+		    e++;
+		}
+		if (e->name)
+		    imapopts[opt].val.e = e->val;
+		else {
+		    /* error during conversion */
+		    sprintf(errbuf, "invalid value for %s in line %d",
 			    imapopts[opt].optname, lineno);
 		    fatal(buf, EC_CONFIG);
 		}
