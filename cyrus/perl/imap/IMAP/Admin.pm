@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.39.2.2 2004/02/27 21:17:43 ken3 Exp $
+# $Id: Admin.pm,v 1.39.2.3 2005/02/22 05:57:10 shadow Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -337,6 +337,7 @@ sub listmailbox {
 			next unless $d{-text} =~ s/^\(([^\)]*)\) //;
 			my $attrs = $1;
 			my $sep = '';
+			my $mbox;
 			# NIL or (attrs) "sep" "str"
 			if ($d{-text} =~ /^N/) {
 			  return if $d{-text} !~ s/^NIL//;
@@ -345,8 +346,10 @@ sub listmailbox {
 			  $sep = $1;
 			}
 			return unless $d{-text} =~ s/^ //;
-			my $mbox;
-			if ($d{-text} =~ /\"(([^\\\"]*\\)*[^\\\"]*)\"/) {
+                        if ($d{-text} =~ /{\d+}(.*)/) {
+			  # cope with literals (?)
+			  (undef, $mbox) = split(/\n/, $d{-text});
+                        } elsif ($d{-text} =~ /\"(([^\\\"]*\\)*[^\\\"]*)\"/) {
 			  ($mbox = $1) =~ s/\\(.)/$1/g;
 			} else {
 			  $d{-text} =~ /^([]!\#-[^-~]+)/;
