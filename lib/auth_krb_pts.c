@@ -169,7 +169,7 @@ const char *real_realm;
 		    strcmp(lrealm, realm) == 0) {
                     *realm = 0;
                 }
-                else if (krb_get_krbhst(krbhst, realm, 0)) {
+                else if (krb_get_krbhst(krbhst, realm, 1)) {
                     return 0;           /* Unknown realm */
                 }
             }
@@ -231,7 +231,7 @@ const char *identifier;
 	    strcmp(lrealm, realm) == 0) {
             *realm = 0;
         }
-        else if (krb_get_krbhst(krbhst, realm, 0)) {
+        else if (krb_get_krbhst(krbhst, realm, 1)) {
             return 0;           /* Unknown realm */
         }
     }
