@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.33 2000/06/01 05:53:16 leg Exp $ */
+/* $Id: proxyd.c,v 1.34 2000/06/01 23:01:47 leg Exp $ */
 
 #include <config.h>
 
@@ -3335,7 +3335,7 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
  */
 void cmd_getquota(char *tag, char *name)
 {
-    prot_printf(proxyd_out, "%s NO not supported from proxy server\r\n");
+    prot_printf(proxyd_out, "%s NO not supported from proxy server\r\n", tag);
 }
 
 /*
