@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.175.2.16 2005/02/21 19:25:17 ken3 Exp $
+# $Id: Makefile.in,v 1.175.2.17 2005/03/30 03:16:04 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -118,7 +118,7 @@ PROGS = imapd lmtpd pop3d \
 	fud smmapd reconstruct quota mbpath ipurge \
 	cyrdump chk_cyrus cvt_cyrusdb deliver ctl_mboxlist \
 	ctl_deliver ctl_cyrusdb squatter mbexamine cyr_expire arbitron \
-	@IMAP_PROGS@
+	unexpunge @IMAP_PROGS@
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 	lmtpstats.c lmtpstats.h xversion.h mupdate_err.c mupdate_err.h \
@@ -321,6 +321,10 @@ quota: quota.o $(CLIOBJS) libimap.a $(DEPLIBS)
 tls_prune: tls_prune.o tls.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
 	 $@ tls_prune.o tls.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+unexpunge: unexpunge.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ unexpunge.o $(CLIOBJS) \
+	libimap.a $(DEPLIBS) $(LIBS)
 
 make_md5: make_md5.o libimap.a mutex_fake.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o make_md5 make_md5.o libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)

@@ -41,4 +41,5 @@ sync_client
 sync_reset
 sync_server
 tls_prune
+unexpunge
 xversion.h
