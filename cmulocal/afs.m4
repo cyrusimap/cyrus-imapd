@@ -211,6 +211,19 @@ extern int UV_SetSecurity();],
           else
              AC_MSG_RESULT([no])
           fi
+          AC_MSG_CHECKING([if VL_ProbeServer exists])
+          LIBS="$cmu_save_LIBS $AFS_CLIENT_LIBS ${LIB_SOCKET}"
+          AC_TRY_LINK([#include <afs/param.h>
+#ifdef HAVE_AFS_STDS_H
+#include <afs/stds.h>
+#endif],
+          [VL_ProbeServer();],VLPROBESERVER=yes,VLPROBESERVER=no)
+	  if test $VLPROBESERVER = "no"; then
+          	AC_MSG_RESULT([no])
+          else
+                AC_MSG_RESULT([yes])
+		AC_DEFINE(HAVE_VL_PROBESERVER)
+          fi
           AC_MSG_CHECKING([if new-style afs_ integer types are defined])
           AC_CACHE_VAL(ac_cv_afs_int32,
 dnl The next few lines contain a quoted argument to egrep
