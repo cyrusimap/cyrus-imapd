@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.27 2003/07/23 12:57:46 rjs3 Exp $
+# $Id: Shell.pm,v 1.28 2003/08/01 03:43:54 rjs3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -1093,7 +1093,7 @@ sub _sc_setacl {
   while (defined ($opt = shift(@argv))) {
     last if $opt eq '--';
     if ($opt =~ /^-/) {
-      die "usage: setaclmailbox mailbox id [id ...]\n";
+      die "usage: setaclmailbox mailbox id rights [id rights ...]\n";
     }
     else {
       push(@nargv, $opt);
