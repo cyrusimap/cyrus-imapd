@@ -6,13 +6,7 @@ AC_PROG_RANLIB
 AC_PROG_MAKE_SET
 AC_AIX
 AC_ISC_POSIX
-AC_PROG_LEX
-case "$LEX" in
-	flex*) LEXFLAGS="-l";;
-	*) LEXFLAGS="";;
-esac
-AC_SUBST(LEXFLAGS)
-AC_PROG_YACC
+AC_PROG_AWK
 AC_C_CONST
 AC_SYS_LONG_FILE_NAMES
 if test $ac_cv_sys_long_file_names = no; then
@@ -25,6 +19,9 @@ AC_SUBST(CPPFLAGS)
 AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
 AC_FUNC_VPRINTF
+
+dnl for et routines
+AC_FUNC_CHECK(strerror,AC_DEFINE(HAS_STRERROR))
 
 AC_MSG_CHECKING(for setproctitle)
 AC_CACHE_VAL(cyrus_cv_sys_setproctitle, AC_TRY_CPP([
