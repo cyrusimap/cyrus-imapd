@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.174 2002/04/02 15:40:24 rjs3 Exp $
+ * $Id: index.c,v 1.175 2002/04/02 15:49:48 rjs3 Exp $
  */
 #include <config.h>
 
@@ -445,6 +445,8 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	    seendb = 0;
 	    prot_printf(imapd_out, "* OK (seen state failure) %s: %s\r\n",
 		   error_message(IMAP_NO_CHECKPRESERVE), error_message(r));
+	    syslog(LOG_ERR, "Could not open seen state for %s (%s)",
+		   imapd_userid, error_message(r));
 	}
 	else {
 	    /*
