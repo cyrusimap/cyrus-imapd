@@ -1080,10 +1080,11 @@ char *deciderock;
 	goto fail;
     }
     /* Fix up exists */
-    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(ntohl(*((bit32 *)(buf+20)))-numdeleted);
+    *((bit32 *)(buf+OFFSET_EXISTS)) =
+      htonl(ntohl(*((bit32 *)(buf+OFFSET_EXISTS)))-numdeleted);
     /* Fix up quota_mailbox_used */
     *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
-      htonl(ntohl(*((bit32 *)(buf+32)))-quotadeleted);
+      htonl(ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)))-quotadeleted);
     /* Fix up start offset if necessary */
     if (mailbox->start_offset < INDEX_HEADER_SIZE) {
 	*((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
