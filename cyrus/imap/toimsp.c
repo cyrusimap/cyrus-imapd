@@ -42,6 +42,7 @@
 #include "imap_err.h"
 #include "xmalloc.h"
 
+#if 0
 extern int errno;
 
 #define FNAME_DROPDIR "/dropoff/"
@@ -49,6 +50,7 @@ extern int errno;
 static int dodropoff = -1;
 
 static drop_to64();
+#endif
 
 /*
  * Drop off a request to send an IMSP LAST command stating the highest
@@ -60,6 +62,7 @@ char *name;
 unsigned long uid;
 unsigned long exists;
 {
+#if 0
     int last_change = time(0);
     bit32 intbuf[3];
     char fnamebuf[MAX_MAILBOX_PATH];
@@ -99,6 +102,7 @@ unsigned long exists;
 	return IMAP_IOERROR;
     }
     fclose(f);
+#endif
     return 0;
 }
       
@@ -114,6 +118,7 @@ char *userid;
 unsigned long uid;
 time_t last_change;
 {
+#if 0
     bit32 intbuf[2];
     char fnamebuf[MAX_MAILBOX_PATH];
     char *p;
@@ -163,9 +168,11 @@ time_t last_change;
 	return IMAP_IOERROR;
     }
     fclose(f);
+#endif
     return 0;
 }
       
+#if 0
 static char drop_basis_64[] =
    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+:";
 
@@ -200,3 +207,4 @@ int len;
     *to++ = '=';
     *to = '\0';
 }
+#endif
