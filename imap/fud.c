@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.19 2001/01/05 03:20:16 leg Exp $ */
+/* $Id: fud.c,v 1.20 2001/01/05 05:59:55 leg Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -83,13 +83,13 @@ extern int optind;
 extern char *optarg;
 
 /* forward decls */
-int handle_request(char *who, char *name, struct sockaddr_in sfrom);
+int handle_request(const char *who, const char *name, 
+		   struct sockaddr_in sfrom);
 
 void send_reply(struct sockaddr_in sfrom, int status,
-		char *user, char *mbox, int numrecent, time_t lastread,
-		time_t lastarrived);
+		const char *user, const char *mbox, 
+		int numrecent, time_t lastread, time_t lastarrived);
 
-int code = 0;
 int soc;
 
 char who[16];
@@ -119,9 +119,12 @@ int begin_handling(void)
             memset(mbox,'\0',MAX_MAILBOX_NAME+1);
             memset(buf, '\0', MAXLOGNAME + MAX_MAILBOX_NAME + 1);
 
-            r = recvfrom(soc, buf, 511, 0, (struct sockaddr *) &sfrom, &sfromsiz);
-            if(r == -1)
-                    return(errno);
+	    signals_poll();
+            r = recvfrom(soc, buf, 511, 0, 
+			 (struct sockaddr *) &sfrom, &sfromsiz);
+            if (r == -1) {
+		return(errno);
+	    }
             for(off = 0; buf[off] != '|' && off < MAXLOGNAME; off++);
             if(off < MAXLOGNAME) {
 		strlcpy(username,buf,off);
@@ -172,22 +175,18 @@ int main(int argc, char **argv)
     
     begin_handling();
 
-    exit(code);
+    shut_down(0);
 }
 
-
-
-
-
-
-int handle_request(char *who,char *name,struct sockaddr_in sfrom)
+int handle_request(const char *who, const char *name,
+		   struct sockaddr_in sfrom)
 {
     int r;
     struct mailbox mailbox;
     struct seen *seendb;
     time_t lastread;
     time_t lastarrived;
-    unsigned lastuid;
+    unsigned recentuid;
     char *seenuids;
     unsigned numrecent;
     char mboxname[MAX_MAILBOX_NAME+1];
@@ -202,49 +201,60 @@ int handle_request(char *who,char *name,struct sockaddr_in sfrom)
     /*
      * Open/lock header 
      */
-    r = mailbox_open_header(mboxname, 0, &mailbox);
+    r = mailbox_open_header(mboxname, NULL, &mailbox);
     if (r) {
         send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
 	return r; 
     }
-    r = mailbox_open_index(&mailbox);
 
+    r = mailbox_open_index(&mailbox);
     if (r) {
+        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
 	mailbox_close(&mailbox);
 	return r;
     }
 
     if(!(strncmp(mboxname,"user.",5)) && !(mailbox.myrights & ACL_USER0)) {
         send_reply(sfrom, REQ_DENY, who, name, 0, 0, 0);
+	return 0;
     }
    
 
     r = seen_open(&mailbox, who, &seendb);
-    if (r) return r;
-    r = seen_read(seendb, &lastread, &lastuid, &lastarrived, &seenuids);
+    if (r) {
+        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+	mailbox_close(&mailbox);
+	return r;
+    }
+
+    seenuids = NULL;
+    r = seen_read(seendb, &lastread, &recentuid, &lastarrived, &seenuids);
+    if (seenuids) free(seenuids);
     seen_close(seendb);
-    if (r) return r;
+    if (r) {
+        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+	mailbox_close(&mailbox);
+	return r;
+    }
     
     lastarrived = mailbox.last_appenddate;
     {
-        const char *base;
-        unsigned long len = 0;
-        int msg;
-        unsigned uid;
-         
-        map_refresh(mailbox.index_fd, 0, &base, &len,
-                    mailbox.start_offset + mailbox.exists * 
-                    mailbox.record_size,  "index",
-                    mailbox.name);
-
-        for (msg = 0; msg < mailbox.exists; msg++) {
-                uid = ntohl(*((bit32 *)(base + mailbox.start_offset +
-                                        msg * mailbox.record_size +
-                                        OFFSET_UID)));
-                if (uid > lastuid) numrecent++;
+	const char *base;
+	unsigned long len = 0;
+	int msg;
+	unsigned uid;
+	
+	map_refresh(mailbox.index_fd, 0, &base, &len,
+		    mailbox.start_offset +
+		    mailbox.exists * mailbox.record_size,
+		    "index", mailbox.name);
+	for (msg = 0; msg < mailbox.exists; msg++) {
+	    uid = ntohl(*((bit32 *)(base + mailbox.start_offset +
+				    msg * mailbox.record_size +
+				    OFFSET_UID)));
+	    if (uid > recentuid) numrecent++;
 	}
-        map_free(&base,&len);
-        free(seenuids);
+	map_free(&base, &len);
     }
 
     mailbox_close(&mailbox);
@@ -255,14 +265,9 @@ int handle_request(char *who,char *name,struct sockaddr_in sfrom)
 }
 
 void
-send_reply(sfrom, status, user, mbox, numrecent, lastread, lastarrived)
-struct sockaddr_in sfrom;
-int status; 
-char *user; 
-char *mbox; 
-int numrecent; 
-time_t lastread; 
-time_t lastarrived;
+send_reply(struct sockaddr_in sfrom, int status, 
+	   const char *user, const char *mbox,
+	   int numrecent, time_t lastread, time_t lastarrived)
 {
     char buf[MAX_MAILBOX_PATH + 16 + 9];
     int siz;
