@@ -182,7 +182,7 @@ root for other mailboxes, as opposed to a mailbox itself.
 =item C<lq> I<root>
 
 List quotas on specified root.  If the specified mailbox path does not have
-a quota assigned, an error will be raised; see L<listquotaroot> for a way to
+a quota assigned, an error will be raised; see I<listquotaroot> for a way to
 find the quota root for a mailbox.
 
 =item C<listquotaroot> I<mailbox>
@@ -262,7 +262,7 @@ Post (send mail to mailbox)
 
 =item c
 
-Create (subfolders)
+Create and Delete mailbox (CREATE new sub-mailboxes, RENAME or DELETE mailbox)
 
 =item d
 
