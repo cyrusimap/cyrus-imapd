@@ -1463,7 +1463,7 @@ int usinguid;
     struct storeargs storeargs;
     static struct storeargs zerostoreargs;
     static struct buf flagname;
-    int c;
+    int len, c;
     char **flag = 0;
     int nflags = 0, flagalloc = 0;
     int flagsparsed = 0, inlist = 0;
@@ -1472,6 +1472,13 @@ int usinguid;
     storeargs = zerostoreargs;
 
     lcase(operation);
+
+    len = strlen(operation);
+    if (len > 7 && !strcmp(operation+len-7, ".silent")) {
+	storeargs.silent = 1;
+	operation[len-7] = '\0';
+    }
+    
     if (!strcmp(operation, "+flags")) {
 	storeargs.operation = STORE_ADD;
     }
