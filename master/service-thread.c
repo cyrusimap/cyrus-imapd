@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.3 2002/02/12 00:28:54 ken3 Exp $ */
+/* $Id: service-thread.c,v 1.4 2002/06/03 18:22:34 rjs3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -137,18 +137,21 @@ extern void config_init(const char *, const char *);
 
 int main(int argc, char **argv, char **envp)
 {
-    char name[64];
     int fdflags;
     int fd;
-    char *p = NULL;
+    char *p = NULL, *service;
     struct request_info request;
     int opt;
     char *alt_config = NULL;
+    int call_debugger = 0;
 
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:D")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
+	    break;
+	case 'D':
+	    call_debugger = 1;
 	    break;
 	default:
 	    break;
@@ -164,9 +167,30 @@ int main(int argc, char **argv, char **envp)
 	sleep(15);
     }
 
-    snprintf(name, sizeof(name) - 1, "service-%s", getenv("CYRUS_SERVICE"));
-    config_init(alt_config, name);
+    p = getenv("CYRUS_SERVICE");
+    if (p == NULL) {
+	syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
+	exit(EX_SOFTWARE);
+    }
+    service = strdup(p);
+    if (service == NULL) {
+	syslog(LOG_ERR, "couldn't strdup() service: %m");
+	exit(EX_OSERR);
+    }
+    config_init(alt_config, service);
 
+    if (call_debugger) {
+	char debugbuf[1024];
+	int ret;
+	const char *debugger = config_getstring("debug_command", NULL);
+	if (debugger) {
+	    snprintf(debugbuf, sizeof(debugbuf), debugger, 
+		     argv[0], getpid(), service);
+	    syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
+	    ret = system(debugbuf); /* run debugger */
+	    syslog(LOG_DEBUG, "debugger returned exit status: %d", ret);
+	}
+    }
     syslog(LOG_DEBUG, "executed");
 
     /* set close on exec */

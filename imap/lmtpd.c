@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.97 2002/05/15 18:41:53 ken3 Exp $
+ * $Id: lmtpd.c,v 1.98 2002/06/03 18:22:26 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -312,11 +312,12 @@ int service_main(int argc, char **argv,
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 360);
 
-    while ((opt = getopt(argc, argv, "C:a")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:Da")) != EOF) {
 	switch(opt) {
 	case 'C': /* alt config file - handled by service::main() */
 	    break;
-
+	case 'D': /* ext. debugger - handled by service::main() */
+ 	    break;
 	case 'a':
 	    mylmtp.preauth = 1;
 	    break;

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.394 2002/06/02 15:25:40 ken3 Exp $ */
+/* $Id: imapd.c,v 1.395 2002/06/03 18:22:24 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -548,10 +548,12 @@ int service_init(int argc, char **argv, char **envp)
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
 
-    while ((opt = getopt(argc, argv, "C:sp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:Dsp:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file - handled by service::main() */
 	    break;
+	case 'D': /* external debugger - handled by service::main() */
+ 	    break;
 	case 's': /* imaps (do starttls right away) */
 	    imaps = 1;
 	    if (!tls_enabled("imap")) {

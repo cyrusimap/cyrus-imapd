@@ -43,7 +43,7 @@ sub runone {
 
     mkdir $tname, 0755;
     chdir $tname;
-    $res = mysys("gcc $d -g -o $t ../$t.c -L../.. -lcyrus");
+    $res = mysys("gcc $d -g -o $t ../$t.c -L../.. -lcyrus -lrt");
     if (!$res) {
 	$res = mysys("./$t $p < ../$input > $t.TEMP");
 	$res = mysys("cmp -s $t.TEMP ../$output");

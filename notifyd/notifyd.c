@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.7 2002/04/08 20:49:26 rjs3 Exp $
+ * $Id: notifyd.c,v 1.8 2002/06/03 18:22:35 rjs3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -215,15 +215,15 @@ int service_init(int argc, char **argv, char **envp)
     config_changeident("notifyd");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "C:m:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:Dm:")) != EOF) {
 	switch(opt) {
 	case 'C': /* alt config file - handled by service::main() */
 	    break;
-
+	case 'D': /* ext debugger - handled by service::main() */
+ 	    break;
 	case 'm':
 	    method = optarg;
 	    break;
-
 	default:
 	    usage();
 	}

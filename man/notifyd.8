@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: notifyd.8,v 1.4 2002/05/25 19:57:48 leg Exp $
+.\" $Id: notifyd.8,v 1.5 2002/06/03 18:22:33 rjs3 Exp $
 .SH NAME
 notifyd \- Cyrus notification server
 .SH SYNOPSIS
@@ -47,6 +47,9 @@ notifyd \- Cyrus notification server
 [
 .B \-C
 .I config-file
+]
+[
+.B \-D
 ]
 .SH DESCRIPTION
 .B Notifyd
@@ -73,6 +76,9 @@ notifications.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-D
+Run external debugger specified in debug_command.
 .SH NOTIFICATION METHODS
 .TP
 .B null

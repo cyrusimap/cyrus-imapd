@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: lmtpd.8,v 1.4 2002/05/25 19:57:48 leg Exp $
+.\" $Id: lmtpd.8,v 1.5 2002/06/03 18:22:33 rjs3 Exp $
 .SH NAME
 lmtpd \- LMTP server process
 .SH SYNOPSIS
@@ -47,6 +47,9 @@ lmtpd \- LMTP server process
 [
 .B \-C
 .I config-file
+]
+[
+.B \-D
 ]
 [
 .B \-a
@@ -67,6 +70,9 @@ file unless specified otherwise by \fB-C\fR.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-D
+Run external debugger specified in debug_command.
 .TP
 .BI \-a
 Preauthorize connections initiated on an internet socket, instead of
