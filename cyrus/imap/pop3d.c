@@ -51,7 +51,7 @@ extern int errno;
 
 /* The Eudora kludge */
 #define STATUS "Status: "
-#define SLEN (sizeof(status)+2)
+#define SLEN (sizeof(STATUS)+2)
 
 char *popd_userid = 0;
 struct mailbox *popd_mailbox = 0;
@@ -397,7 +397,21 @@ char *pass;
 	return;
     }
 
-    if (login_plaintext(popd_userid, pass, &reply) != 0) {
+    if (!strcmp(popd_userid, "anonymous")) {
+	if (config_getswitch("allowanonymouslogin", 0)) {
+	    pass = beautify_string(pass);
+	    if (strlen(pass) > 500) pass[500] = '\0';
+	    syslog(LOG_NOTICE, "login: %s anonymous %s",
+		   popd_clienthost, pass);
+	}
+	else {
+	    syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
+		   popd_clienthost);
+	    fprintf(stdout, "-ERR Invalid login\r\n");
+	    return;
+	}
+    }
+    else if (login_plaintext(popd_userid, pass, &reply) != 0) {
 	if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   popd_clienthost, popd_userid, reply);
@@ -458,6 +472,7 @@ char *pass;
 	return;
     }
     popd_mailbox = &mboxstruct;
+    proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
     fprintf(stdout, "+OK Maildrop locked and ready\r\n");
 }
 
@@ -476,7 +491,7 @@ int lines;
 	return;
     }
     fprintf(stdout, "+OK Message follows\r\n");
-    printf("%s%c\r\n", STATUS, msg <= popd_initialhighest ? "R" : "U");
+    printf("%s%c\r\n", STATUS, msg <= popd_initialhighest ? 'R' : 'U');
     while (lines != thisline) {
 	if (!fgets(buf, sizeof(buf), msgfile)) break;
 
