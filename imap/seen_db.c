@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.7 2000/04/18 01:00:20 leg Exp $
+   $Id: seen_db.c,v 1.8 2000/04/18 18:33:12 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -32,29 +32,42 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <syslog.h>
+#include <string.h>
 #include <ctype.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <db.h>
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/uio.h>
+#include "map.h"
+#include "bsearch.h"
 
 #include "imapconf.h"
 #include "xmalloc.h"
 #include "mailbox.h"
 #include "imap_err.h"
 
-#define FNAME_SEENSUFFIX ".seen"
+#define FNAME_SEENSUFFIX ".seen" /* per user seen state extension */
+#define FNAME_SEEN "/cyrus.seen" /* for legacy seen state */
 
 extern DB_ENV *dbenv;
 
 struct seen {
     const char *user;		/* what user is this for? */
     const char *uniqueid;	/* what mailbox? */
+    const char *path;		/* where is this mailbox? */
     DB *db;
     DB_TXN *tid;		/* outstanding txn, if any */
 };
 
 /* indexed by unique id */
 struct seenentry {
+    int version;		/* currently must be 1 */
     time_t lastread;
     unsigned long lastuid;
     time_t lastchange;
@@ -134,11 +147,68 @@ int seen_open(struct mailbox *mailbox,
 
     seendb->tid = NULL;
     seendb->uniqueid = mailbox->uniqueid;
+    seendb->path = mailbox->path;
     seendb->user = user;
 
     *seendbptr = seendb;
     lastseen = seendb;
     return r;
+}
+
+static int seen_readold(struct seen *seendb, 
+			time_t *lastreadptr, unsigned int *lastuidptr, 
+			time_t *lastchangeptr, char **seenuidsptr)
+{
+    char fnamebuf[MAX_MAILBOX_PATH];
+    struct stat sbuf;
+    int fd;
+    const char *base;
+    const char *buf = 0, *p;
+    unsigned long len, linelen;
+    unsigned long offset;
+
+    strcpy(fnamebuf, seendb->path);
+    strcat(fnamebuf, FNAME_SEEN);
+
+    fd = open(fnamebuf, O_RDWR, 0);
+    if (fd == -1) {
+	return IMAP_IOERROR;
+    }
+    if (fstat(fd, &sbuf) == -1) {
+	close(fd);
+	return IMAP_IOERROR;
+    }
+    map_refresh(fd, 1, &base, &len, sbuf.st_size, fnamebuf, 0);
+
+    /* Find record for user */
+    offset = bsearch_mem(seendb->user, 1, base, len, 0, &linelen);
+    
+    *lastreadptr = 0;
+    *lastuidptr = 0;
+    *lastchangeptr = 0;
+    if (!linelen) {
+	*seenuidsptr = xstrdup("");
+	return 0;
+    }
+
+    /* Skip over username we know is there */
+    buf = base + offset + strlen(seendb->user)+1;
+    *lastreadptr = strtol(buf, (char **) &p, 10); buf = p;
+    *lastuidptr = strtol(buf, (char **) &p, 10); buf = p;
+    *lastchangeptr = strtol(buf, (char **) &p, 10); buf = p;
+    while (isspace((int) *p)) p++;
+    buf = p;
+    /* Scan for end of uids */
+    while (p < base + offset + linelen && !isspace((int) *p)) p++;
+
+    *seenuidsptr = xmalloc(p - buf + 1);
+    strncpy(*seenuidsptr, buf, p - buf);
+    (*seenuidsptr)[p - buf] = '\0';
+
+    map_free(&base, &len);
+    close(fd);
+
+    return 0;
 }
 
 static int seen_readit(struct seen *seendb, 
@@ -162,8 +232,8 @@ static int seen_readit(struct seen *seendb,
     case 0:
 	break;
     case DB_NOTFOUND:
-	*seenuidsptr = xstrdup("");
-	return 0;
+	return seen_readold(seendb, lastreadptr, lastuidptr,
+			    lastchangeptr, seenuidsptr);
 	break;
     case DB_LOCK_DEADLOCK:
 	syslog(LOG_DEBUG, "deadlock in seen database for '%s/%s'",
@@ -177,6 +247,7 @@ static int seen_readit(struct seen *seendb,
     }
 
     e = (struct seenentry *) data.data;
+    assert(ntohl(e->version) == 1);
     *lastreadptr = ntohl(e->lastread);
     *lastuidptr = ntohl(e->lastuid);
     *lastchangeptr = ntohl(e->lastchange);
@@ -231,6 +302,7 @@ int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid,
     key.data = (void *) seendb->uniqueid;
     key.size = strlen(seendb->uniqueid);
 
+    e->version = htonl(1);
     e->lastread = htonl(lastread);
     e->lastuid = htonl(lastuid);
     e->lastchange = htonl(lastchange);
