@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.4 2002/01/17 23:12:49 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.5 2002/01/18 01:44:02 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,6 +46,7 @@
 #include <string.h>
 #include <signal.h>
 #include <sasl/sasl.h>
+#include <sasl/saslutil.h>
 #include <syslog.h>
 #ifdef __STDC__
 #include <stdarg.h>
@@ -65,6 +66,8 @@
 #include "prot.h"
 #include "xmalloc.h"
 #include "assert.h"
+#include "imparse.h"
+#include "iptostring.h"
 #include "mupdate_err.h"
 #include "exitcodes.h"
 
@@ -231,11 +234,11 @@ int mupdate_authenticate(mupdate_handle *h,
 			      buf, sizeof(buf), NULL);
 	if(r != SASL_OK) return 1;
 	
-	prot_printf(h->pout, "A01 AUTHENTICATE \"%s\" \"%s\"\r\n", mechusing, buf);
+	prot_printf(h->pout, "A01 AUTHENTICATE \"%s\" \"%s\"\r\n",
+		    mechusing, buf);
     } else {
         prot_printf(h->pout, "A01 AUTHENTICATE \"%s\"\r\n", mechusing);
     }
-    prot_flush(h->pout);
 
     while(saslresult == SASL_CONTINUE) {
 	char *p, *in;
@@ -255,26 +258,29 @@ int mupdate_authenticate(mupdate_handle *h,
 	saslresult = sasl_decode64(buf, len, in, len, &inlen);
 	if(saslresult != SASL_OK) {
 	    /* CANCEL */
+	    syslog(LOG_ERR, "couldn't base64 decode: aborted authentication");
 	    prot_printf(h->pout, "*");
 	    return 1;
 	}
 
-	saslresult = sasl_server_step(h->saslconn, in, inlen, &out, &outlen);
-
+	saslresult = sasl_client_step(h->saslconn, in, inlen, NULL,
+				      &out, &outlen);
 	free(in);
 
-	if(out) {
+	if((saslresult == SASL_OK || saslresult == SASL_CONTINUE) && out) {
 	    int r = sasl_encode64(out, outlen,
 				  buf, sizeof(buf), NULL);
 	    if(r != SASL_OK) return 1;
 	    
 	    prot_printf(h->pout, "%s\r\n", buf);
-	    return 1;
+	    syslog(LOG_DEBUG, "sent: %s\n", buf);
 	}
-	
     }
 
     if(saslresult != SASL_OK) {
+	syslog(LOG_ERR, "bad authentication: %s",
+	       sasl_errdetail(h->saslconn));
+	
 	prot_printf(h->pout, "*");
 	return 1;
     }
@@ -294,7 +300,7 @@ int mupdate_activate(mupdate_handle *handle,
     if (!mailbox || !server || !acl) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
-
+    return 0;
 }
 
 int mupdate_reserve(mupdate_handle *handle,
@@ -304,7 +310,7 @@ int mupdate_reserve(mupdate_handle *handle,
     if (!mailbox || !server) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
-
+    return 0;
 }
 
 int mupdate_delete(mupdate_handle *handle,
@@ -314,7 +320,7 @@ int mupdate_delete(mupdate_handle *handle,
     if (!mailbox) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
-
+    return 0;
 }
 
 struct mupdate_mailboxdata {
@@ -346,9 +352,9 @@ int mupdate_listen(mupdate_handle *handle)
     FD_SET(handle->sock, &read_set);
     highest_fd = handle->sock + 1;
     
-    /* ask for updates */
+    /* FIXME: ask for updates */
 
-    /* set protstream nonblocking */
+    /* FIXME: set protstream nonblocking */
 
 
     for (;;) {
@@ -390,7 +396,6 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
     
     server = config_getstring("mupdate_server", NULL);
     if(server == NULL) {
-	syslog(LOG_ERR, "unable to find option mupdate_server");
 	fatal("couldn't connect to mupdate server", EC_UNAVAILABLE);
     }
 
@@ -399,31 +404,22 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
     
     ret = mupdate_connect(server, port, &h, NULL);
     if(ret) {
-	syslog(LOG_ERR, "connection to %s failed", server);
 	fatal("couldn't connect to mupdate server", EC_UNAVAILABLE);
     }
 
     /* Read the banner */
     if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
-	syslog(LOG_ERR,
-	       "connection to %s dropped before authentication", server);
 	fatal("connection dropped", EC_UNAVAILABLE);
     }
     if(strncmp(buf, "* OK MUPDATE", 12)) {
-	syslog(LOG_ERR,
-	       "invalid banner from remote");
 	fatal("invalid remote server", EC_UNAVAILABLE);
     }
 
     /* Read the mechlist */
     if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
-	syslog(LOG_ERR,
-	       "connection to %s dropped before authentication", server);
 	fatal("connection dropped", EC_UNAVAILABLE);
     }
     if(strncmp(buf, "* AUTH", 6)) {
-	syslog(LOG_ERR,
-	       "invalid auth banner from remote");
 	fatal("invalid remote server", EC_UNAVAILABLE);
     }
 
@@ -431,7 +427,6 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 
     ret = mupdate_authenticate(h, mechlist);
     if(ret) {
-	syslog(LOG_ERR, "authentication failed");
 	fatal("authentication failed", EC_SOFTWARE);
     }
    
