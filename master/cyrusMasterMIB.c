@@ -118,8 +118,8 @@ var_cyrusMasterMIB(struct variable *vp,
     /* variables we may use later */
     static long long_ret;
     static unsigned char string[SPRINT_MAX_LEN];
-    static oid objid[MAX_OID_LEN];
-    static struct counter64 c64;
+    /* static oid objid[MAX_OID_LEN]; */
+    /* static struct counter64 c64; */
 
     if (header_generic(vp,name,length,exact,var_len,write_method)
 	== MATCH_FAILED )
@@ -166,8 +166,8 @@ var_serviceTable(struct variable *vp,
     /* variables we may use later */
     static long long_ret;
     static unsigned char string[SPRINT_MAX_LEN];
-    static oid objid[MAX_OID_LEN];
-    static struct counter64 c64;
+    /* static oid objid[MAX_OID_LEN]; */
+    /* static struct counter64 c64; */
     int index;
 
     /* 
