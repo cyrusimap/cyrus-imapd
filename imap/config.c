@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.31 2000/04/09 22:01:55 leg Exp $
+ $Id: config.c,v 1.32 2000/04/12 18:12:48 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -289,14 +289,14 @@ int mysasl_config(void *context __attribute__((unused)),
 	    strlcat(opt, plugin_name, sl);
 	    strlcat(opt, "_", sl);
 	    strlcat(opt, option, sl);
-	    *result = config_getstring(option, NULL);
+	    *result = config_getstring(opt, NULL);
 	}
 
 	if (*result == NULL) {
 	    /* try without the plugin name */
 	    strlcpy(opt, "sasl_", sl);
 	    strlcat(opt, option, sl);
-	    *result = config_getstring(option, NULL);
+	    *result = config_getstring(opt, NULL);
 	}
     }
 
