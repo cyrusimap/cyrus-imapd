@@ -1,5 +1,6 @@
-/* actions.c -- executes the commands (creating, deleting scripts etc..) for timsieved
+/* actions.c -- executes the commands for timsieved
  * Tim Martin
+ * $Id: actions.c,v 1.6 1999/09/30 21:40:22 leg Exp $
  * 
  */
 /***********************************************************
@@ -31,20 +32,22 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <stdio.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include <dlfcn.h>
 #include <stdlib.h>
 #include <limits.h>
 #include <sys/param.h>
-
+#include <syslog.h>
 #include <dirent.h>
-#include "codes.h"
-
-#include "actions.h"
-#include "scripttest.h"
 
 #include "prot.h"
 #include "config.h"
 #include "xmalloc.h"
+
+#include "codes.h"
+#include "actions.h"
+#include "scripttest.h"
+
+/* after a user has authentication, our current directory is their Sieve 
+   directory! */
 
 char *sieve_dir = NULL;
 
@@ -55,12 +58,12 @@ int actions_init(void)
   sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
   
   if (!sieve_usehomedir) {
-    sieve_dir = (char *) config_getstring("sievedir", "/usr/sieve");
-    
-
+      sieve_dir = (char *) config_getstring("sievedir", "/usr/sieve");
   } else {
-    /* can't use home directories with timsieved */
-    return TIMSIEVE_FAIL;
+      /* can't use home directories with timsieved */
+      syslog(LOG_ERR, "can't use home directories");
+
+      return TIMSIEVE_FAIL;
   }
   
   return TIMSIEVE_OK;
@@ -75,80 +78,32 @@ int actions_setuser(char *userid)
   struct stat filestats;  /* returned by stat */
   int result;  
 
-
   sieve_dir=(char *) xmalloc(1024);
   
   hash = (char) tolower((int) *userid);
   if (!islower(hash)) { hash = 'q'; }
     
-  snprintf(sieve_dir, 1023, "%s/%c/", foo, hash);
+  snprintf(sieve_dir, 1023, "%s/%c/%s", foo, hash,userid);
 
-  /* see if we need to create the /%c/ directory */
-  result=stat(sieve_dir,&filestats);
-
-  if (result!=0)
-  {
-    result=mkdir(sieve_dir, 0755);
-    if (result!=0)
-      return TIMSIEVE_FAIL;
-  }
-
-  snprintf(sieve_dir, 1023, "%s/%c/%s/", foo, hash,userid);
-
-  /* see if we need to create the /%c/<user>/ directory */
-  result=stat(sieve_dir,&filestats);
-
-  if (result!=0)
-  {
-    result=mkdir(sieve_dir, 0755);
-    if (result!=0)
-      return TIMSIEVE_FAIL;
+  result = chdir(sieve_dir);
+  if (result != 0) {
+      result = mkdir(sieve_dir, 0755);
+      if (result!=0) {
+	  syslog(LOG_ERR, "mkdir %s: %m", sieve_dir);
+	  return TIMSIEVE_FAIL;
+      }
   }
 
   return TIMSIEVE_OK;
 }
 
-
-static char *getsievepath(void)
-{
-  return sieve_dir;
-}
-
-static char *getpath(char *name)
-{
-  char *buf;
-  char hash;
-
-  buf=(char *) xmalloc(1024);
-     
-  snprintf(buf, 1023, "%s/%s.script", sieve_dir, name);
-  
-  return buf;
-}
-
-static char *getactivepath(void)
-{
-  char *buf;
-  char hash;
-
-  buf=(char *) xmalloc(1024);
-     
-  snprintf(buf, 1023, "%s/default", sieve_dir);
-  
-  return buf;
-}
-
 static int validchar(char ch)
 {
-  if (isalpha(ch)!=0) return TIMSIEVE_OK;
+    if (isalnum(ch) || (ch == '_') || (ch == '-') || (ch == ' ')) {
+	return TIMSIEVE_OK;
+    }
 
-  if (isalnum(ch)!=0) return TIMSIEVE_OK;
-
-  if ((ch=='_') || (ch=='-') || (ch==' '))
-    return TIMSIEVE_OK;
-
-
-  return TIMSIEVE_FAIL;
+    return TIMSIEVE_FAIL;
 }
 
 int verifyscriptname(string_t *name)
@@ -157,13 +112,12 @@ int verifyscriptname(string_t *name)
   char *ptr;
 
   /* must be at least one character long */
-  if (name->len<1) return TIMSIEVE_FAIL;
+  if (name->len < 1) return TIMSIEVE_FAIL;
 
   ptr=string_DATAPTR(name);
 
-  for (lup=0;lup<name->len;lup++)
-  {
-    if ( validchar(ptr[lup])!=TIMSIEVE_OK) return TIMSIEVE_FAIL;
+  for (lup=0;lup<name->len;lup++) {
+      if ( validchar(ptr[lup])!=TIMSIEVE_OK) return TIMSIEVE_FAIL;
   }
   
   return TIMSIEVE_OK;
@@ -172,54 +126,48 @@ int verifyscriptname(string_t *name)
 int getscript(struct protstream *conn, string_t *name)
 {
   FILE *stream;
-  struct stat filestats;  /* returned by stat */
-  int size;     /* size of the file */
+  struct stat filestats;	/* returned by stat */
+  int size;			/* size of the file */
   int result;
   int cnt;
 
-  char *path;
+  char path[1024];
 
-  path=getpath(string_DATAPTR(name));
+  snprintf(path, 1023, "%s.script", string_DATAPTR(name));
 
-  result=stat(path,&filestats);
-
-  if (result!=0) {
-    prot_printf(conn,"NO \"Unable to stat script\"\r\n");
+  result = stat(path, &filestats);
+  if (result != 0) {
+    prot_printf(conn,"NO \"Script doesn't exist\"\r\n");
     return TIMSIEVE_NOEXIST;
   }
+  size = filestats.st_size;
 
-  size=filestats.st_size;
+  stream = fopen(path, "r");
 
-  stream=fopen(path, "r");
-
-  if (stream==NULL)
-  {
-    prot_printf(conn,"NO \"Unable to open script\"\r\n");
-    return TIMSIEVE_NOEXIST;
+  if (stream == NULL) {
+      prot_printf(conn,"NO \"fopen failed\"\r\n");
+      return TIMSIEVE_NOEXIST;
   }
 
   prot_printf(conn, "{%d+}\r\n", size);
 
-  cnt=0;
+  cnt = 0;
+  while (cnt < size) {
+      char buf[BLOCKSIZE];
+      int amount=BLOCKSIZE;
 
-  while (cnt < size)
-  {
-    char buf[BLOCKSIZE];
-    int amount=BLOCKSIZE;
+      if (size-cnt < BLOCKSIZE)
+	  amount=size-cnt;
 
-    if (size-cnt < BLOCKSIZE)
-      amount=size-cnt;
-
-    /* xxx what to do on failure? */
-    if (fread(buf, 1, BLOCKSIZE, stream) == 0) {
-	if (ferror(stream)) {
-	    fatal("fatal error (fread)", 0);
-	}
-    }
+      if (fread(buf, 1, BLOCKSIZE, stream) == 0) {
+	  if (ferror(stream)) {
+	      fatal("fatal error (fread)", 0);
+	  }
+      }
     
-    prot_write(conn, buf, amount);
-
-    cnt += amount;
+      prot_write(conn, buf, amount);
+      
+      cnt += amount;
   }
 
   prot_printf(conn,"\r\n");
@@ -229,55 +177,50 @@ int getscript(struct protstream *conn, string_t *name)
   return TIMSIEVE_OK;
 }
 
-/* counts the number of scripts user has. used for enforcing quotas */
+/* counts the number of scripts user has that are DIFFERENT from name. 
+   used for enforcing quotas */
 static int countscripts(char *name)
 {
-  DIR *dp;
-  struct dirent *dir;
-  int length;
-  int number=0;
-
-  char *path = getsievepath();
-
-  if ((dp=opendir(path)) !=NULL) /* ignore errors */    
-    while ((dir=readdir(dp)) != NULL)
-    {
-      length=strlen(dir->d_name);
-      if (length >= strlen(".script"))
-      {
-	if (strcmp(dir->d_name + (length - 7), ".script")==0)
-	{
-	  char *tmp=(char *) malloc(strlen(name)+10);
-
-	  strcpy(tmp,name);
-	  strcat(tmp,".script");
-
-	  if (strcmp(tmp, dir->d_name)!=0)
-	      number++;
-
-	  free(tmp);
-	}
-      }
-
+    DIR *dp;
+    struct dirent *dir;
+    int length;
+    int number=0;
+    char myname[1024];
+    
+    snprintf(myname, 1023, "%s.script", name);
+    
+    if ((dp = opendir(".")) == NULL) {
+	return -1;
     }
-
-  return number;
+    
+    while ((dir=readdir(dp)) != NULL) {
+	length=strlen(dir->d_name);
+	if (length >= strlen(".script") && 
+	    (strcmp(dir->d_name + (length - 7), ".script") == 0)) {
+	    /* this is a sieve script */
+	    if (strcmp(myname, dir->d_name) != 0) {
+		/* and it's different from me */
+		number++;
+	    }
+	}
+    }
+    
+    return number;
 }
-
-
 
 /* save name as a sieve script */
 int putscript(struct protstream *conn, string_t *name, string_t *data)
 {
   FILE *stream;
   char *dataptr;
+  char *errstr;
   int lup;
   int result;
-  char *path;
+  char path[1024], p2[1024];
   int maxscripts;
 
   /* see if this would put the user over quota */
-  maxscripts=config_getint("sieve_maxscripts",5);
+  maxscripts = config_getint("sieve_maxscripts",5);
 
   if (countscripts(string_DATAPTR(name))+1 > maxscripts)
   {
@@ -287,42 +230,46 @@ int putscript(struct protstream *conn, string_t *name, string_t *data)
     return TIMSIEVE_FAIL;
   }
 
+  snprintf(path, 1023, "%s.script.NEW", string_DATAPTR(name));
+
+  stream = fopen(path, "w+");
+  if (stream == NULL) {
+      prot_printf(conn, "NO \"Unable to open script for writing (%s)\"\r\n",
+		  path);
+      return TIMSIEVE_NOEXIST;
+  }
+
+  dataptr = string_DATAPTR(data);
+
+  for (lup=0;lup<= data->len / BLOCKSIZE; lup++) {
+      int amount = BLOCKSIZE;
+
+      if (lup*BLOCKSIZE+BLOCKSIZE > data->len)
+	  amount=data->len % BLOCKSIZE;
+
+      fwrite(dataptr, 1, amount, stream);
+      
+      dataptr+=amount;
+  }
+
   /* let's make sure this is a valid script
      (no parse errors)
   */
-  result=is_script_parsable(data);
+  result = is_script_parsable(stream, &errstr);
 
-  if (result!=TIMSIEVE_OK)
-  {
-    prot_printf(conn,"NO \"Script is not a valid sieve script\"\r\n");
+  if (result != TIMSIEVE_OK) {
+    prot_printf(conn,"NO \"%s\"\r\n", errstr);
+    free(errstr);
+    fclose(stream);
+    unlink(path);
     return result;
   }
 
-  path=getpath(string_DATAPTR(name));
-
-  stream=fopen(path,"w+");
-
-  if (stream==NULL)
-  {
-    prot_printf(conn,"NO \"Unable to open script for writing (%s)\"\r\n",path);
-    return TIMSIEVE_NOEXIST;
-  }
-
-  dataptr=string_DATAPTR(data);
-
-  for (lup=0;lup<= data->len / BLOCKSIZE; lup++)
-  {
-    int amount=BLOCKSIZE;
-
-    if (lup*BLOCKSIZE+BLOCKSIZE > data->len)
-      amount=data->len % BLOCKSIZE;
-
-    fwrite(dataptr, 1, amount, stream);
-
-    dataptr+=amount;
-  }
-
+  fsync(stream);
   fclose(stream);
+  
+  snprintf(p2, 1023, "%s.script", string_DATAPTR(name));
+  rename(path, p2);
 
   prot_printf(conn, "OK \"Success\"\r\n");
 
@@ -337,18 +284,9 @@ static int deleteactive(struct protstream *conn)
   int result;  
   char *active;
 
-  active=getactivepath();
-
-  /* first see if it exists; if it doesn't we're fine */
-  result=stat(active,&filestats);
-  if (result!=0) return TIMSIEVE_OK;
-
-  result=unlink(active);
-
-  if (result==-1)
-  {
-    prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
-    return TIMSIEVE_FAIL;
+  if (unlink("default") != 0) {
+      prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
+      return TIMSIEVE_FAIL;
   }
 
   return TIMSIEVE_OK;
@@ -358,16 +296,20 @@ static int deleteactive(struct protstream *conn)
 /* is this the active script? */
 static int isactive(char *name)
 {
-  char *filename=getpath(name);
+  char filename[1024];
   struct stat filestats;  /* returned by stat */
   int result;  
 
+  snprintf(filename, 1023, "%s.script", name);
+
   result=stat(filename,&filestats);
+  if (result != 0) {
+      return FALSE;
+  }
 
-  if (result!=0) return FALSE;
-
-  if (filestats.st_nlink>1)
+  if (filestats.st_nlink>1) {
     return TRUE;
+  }
 
   return FALSE;
 }
@@ -376,27 +318,22 @@ static int isactive(char *name)
 int deletescript(struct protstream *conn, string_t *name)
 {
   int result;
+  char path[1024];
 
-  char *path;
+  snprintf(path, 1023, "%s.script", string_DATAPTR(name));
 
-  path=getpath(string_DATAPTR(name));
-
-  if (isactive(string_DATAPTR(name))==TRUE)
-    if (deleteactive(conn)!=TIMSIEVE_OK)
-    {
+  if (isactive(string_DATAPTR(name)) && (deleteactive(conn)!=TIMSIEVE_OK)) {
       return TIMSIEVE_FAIL;
-    }
+  }
 
-  result=unlink(path);
+  result = unlink(path);
 
-  if (result==-1)
-  {
-    prot_printf(conn,"NO \"Error deleting script\"\r\n");
-    return TIMSIEVE_FAIL;
+  if (result != 0) {
+      prot_printf(conn,"NO \"Error deleting script\"\r\n");
+      return TIMSIEVE_FAIL;
   }
 
   prot_printf(conn,"OK \"Success\"\r\n");
-
   return TIMSIEVE_OK;
 }
 
@@ -407,10 +344,8 @@ int listscripts(struct protstream *conn)
   struct dirent *dir;
   int length;
 
-  char *path = getsievepath();
-
   /* open the directory */
-  dp=opendir(path);
+  dp=opendir(".");
   
   if (dp==NULL)
   {
@@ -435,7 +370,6 @@ int listscripts(struct protstream *conn)
 	else
 	  prot_printf(conn,"\"%s\"\r\n", namewo);
 
-
 	free(namewo);
       }
     }    
@@ -450,14 +384,17 @@ int listscripts(struct protstream *conn)
    return TRUE | FALSE */
 static int exists(char *str)
 {
-  char *filename=getpath(str);
+  char filename[1024];
   struct stat filestats;  /* returned by stat */
   int result;
 
-  result=stat(filename,&filestats);  
+  snprintf(filename, 1023, "%s.script", str);
 
-  if (result!=0)
+  result = stat(filename,&filestats);  
+
+  if (result != 0) {
     return FALSE;
+  }
 
   return TRUE;
 }
@@ -467,9 +404,7 @@ static int exists(char *str)
 int setactive(struct protstream *conn, string_t *name)
 {
   int result;
-  char *filename;
-  char *active;
-  char *activebak;
+  char filename[1024];
 
   if (exists(string_DATAPTR(name))==FALSE)
   {
@@ -477,44 +412,28 @@ int setactive(struct protstream *conn, string_t *name)
     return TIMSIEVE_NOEXIST;
   }
 
-  if (deleteactive(conn)!=TIMSIEVE_OK)
-    return TIMSIEVE_FAIL;
-
   /* get the name of the active sieve script */
-  filename=getpath(string_DATAPTR(name));
-  active=getactivepath();
-
-  /* make a name with .bak so we can do this atomically */
-  activebak=(char *) xmalloc(strlen(active)+30);
-  strcpy(activebak, active);
-  strcat(activebak,".bak");
+  snprintf(filename, 1023, "%s.script", string_DATAPTR(name));
 
   /* ok we want to do this atomically so let's
-     - make <activesieve>.bak as a hard link
+     - make <activesieve>.NEW as a hard link
      - rename it to <activesieve>
   */
 
-  result=link(  filename, activebak);
+  result = link(filename, "default.NEW");
 
-  if (result!=0)
-  {
+  if (result!=0) {
     prot_printf(conn,"NO \"Can't make link\"\r\n");    
     return TIMSIEVE_FAIL;
   }
 
-  result=rename(activebak, active);
+  result=rename("default.NEW", "default");
 
-  free(activebak);
-
-  if (result!=0)
-  {
-    prot_printf(conn,"NO \"Error renaming\"\r\n");
-    return TIMSIEVE_FAIL;
+  if (result!=0) {
+      prot_printf(conn,"NO \"Error renaming\"\r\n");
+      return TIMSIEVE_FAIL;
   }
 
   prot_printf(conn,"OK \"Worked\"\r\n");
-
-  
-
   return TIMSIEVE_OK;
 }
