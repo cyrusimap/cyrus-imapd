@@ -43,7 +43,7 @@ define mgmt 1.3.6.1.2
 define mib2 [mgmt].1
 define mtamib [mib2].28
 
-define cmutree 1.3.6.1.4.3.2.2.2
+define cmutree 1.3.6.1.4.1.3.2.2.2
 
 # 'C' means counter
 # 'auto' means just pick any number you want
