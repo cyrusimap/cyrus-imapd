@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.8 2001/07/15 18:08:15 leg Exp $
+ * $Id: mupdate.c,v 1.9 2001/07/16 17:06:44 leg Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -106,7 +106,7 @@ struct conn {
     char *userid;
 
     /* pending changes to send, in reverse order */
-    int streaming;
+    char *streaming; /* tag */
     pthread_mutex_t m;
     pthread_cond_t cond;
 
@@ -130,9 +130,10 @@ void cmd_set(struct conn *C,
 	     const char *server, const char *acl, enum settype t);
 void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 	      int dook);
-void cmd_update(struct conn *C, const char *tag);
+void cmd_startupdate(struct conn *C, const char *tag);
 void shut_down(int code);
 void database_init();
+void sendupdates(struct conn *C);
 
 static struct conn *conn_new(int fd)
 {
@@ -314,11 +315,15 @@ void cmdloop(struct conn *c)
 	
 	if (c->streaming) {
 	    /* if streaming updates, check if i have data to send */
-
+	    sendupdates(c);
 	}
 
 	ch = getword(c->pin, &tag);
-	if (ch == EOF && errno != EAGAIN) {
+	if (ch == EOF && errno == EAGAIN) {
+	    /* streaming and no input from client */
+	    continue;
+	}
+	if (ch == EOF) {
 	    const char *err;
 	    
 	    if ((err = prot_error(c->pin)) != NULL) {
@@ -466,8 +471,6 @@ void cmdloop(struct conn *c)
 		if (c->streaming) goto notwhenstreaming;
 		
 		cmd_startupdate(c, tag.s);
-		/* no other commands are legal after this */
-		goto done;
 	    }
 	    else goto badcmd;
 	    break;
@@ -503,7 +506,14 @@ void cmdloop(struct conn *c)
     }
 
  done:
+    prot_flush(c->pout);
+
     /* free struct bufs */
+    freebuf(&tag);
+    freebuf(&cmd);
+    freebuf(&arg1);
+    freebuf(&arg2);
+    freebuf(&arg3);
 
     syslog(LOG_DEBUG, "ending cmdloop() on fd %d", c->fd);
 }
@@ -911,7 +921,7 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
     }
 }
 
-void cmd_update(struct conn *C, const char *tag)
+void cmd_startupdate(struct conn *C, const char *tag)
 {
     skipnode *ptr;
     struct mbent *m;
@@ -924,7 +934,7 @@ void cmd_update(struct conn *C, const char *tag)
 
     C->updatelist_next = updatelist;
     updatelist = C;
-    C->streaming = 1;
+    C->streaming = xstrdup(tag);
 
     /* send current database */
     for (m = sfirst(mailboxes, &ptr); m != NULL; m = snext(&ptr)) {
@@ -954,58 +964,47 @@ void cmd_update(struct conn *C, const char *tag)
     prot_flush(C->pout);
 
     prot_NONBLOCK(C->pin);
+}
 
-    /* start streaming updates */
-    for (;;) {
-	struct pending *p, *q;
-	struct timeval now;
-	struct timespec timeout;
-	int r, ch;
+void sendupdates(struct conn *C)
+{
+    struct pending *p, *q;
+    struct timeval now;
+    struct timespec timeout;
+    int r, ch;
 
-	pthread_mutex_lock(&C->m);
+    pthread_mutex_lock(&C->m);
 
-	do {
-	    gettimeofday(&now, NULL);
-	    timeout.tv_sec = now.tv_sec + poll_interval;
-	    timeout.tv_nsec = now.tv_usec * 1000;
+    gettimeofday(&now, NULL);
+    timeout.tv_sec = now.tv_sec + poll_interval;
+    timeout.tv_nsec = now.tv_usec * 1000;
 	    
-	    r = pthread_cond_timedwait(&C->cond, &C->m, &timeout);
-
-	    /* xxx poll input for LOGOUT, NOOP, closed connection */
-	    ch = prot_getc(C->pin);
-	    if (ch != -1 || errno != EAGAIN) {
-		/* whoa, have input */
-		if (ch == -1) {
-		    /* "input" is a closed connection */
-		} else {
-		    /* input is a command */
-
-		}
-	    }
-	} while (r == ETIMEDOUT);
-
-	/* just grab the update list and release the lock */
-	p = C->plist;
-	C->plist = NULL;
-	pthread_mutex_unlock(&C->m);
-
-	while (p != NULL) {
-	    /* send update */
-	    q = p;
-	    p = p->next;
-
-	    if (q->t == SET_DELETE) {
-		prot_printf(C->pout, "%s DELETE {%d}\r\n%s\r\n",
-			    tag, strlen(q->mailbox), q->mailbox);
-	    } else {
-		/* notify just like a FIND */
-		cmd_find(C, tag, q->mailbox, 0);
-	    }
-	    free(q);
-	}
-
-	prot_flush(C->pout);
+    r = 0;
+    while (r != ETIMEDOUT) {
+	r = pthread_cond_timedwait(&C->cond, &C->m, &timeout);
     }
+
+    /* just grab the update list and release the lock */
+    p = C->plist;
+    C->plist = NULL;
+    pthread_mutex_unlock(&C->m);
+
+    while (p != NULL) {
+	/* send update */
+	q = p;
+	p = p->next;
+
+	if (q->t == SET_DELETE) {
+	    prot_printf(C->pout, "%s DELETE {%d}\r\n%s\r\n",
+			C->streaming, strlen(q->mailbox), q->mailbox);
+	} else {
+	    /* notify just like a FIND */
+	    cmd_find(C, C->streaming, q->mailbox, 0);
+	}
+	free(q);
+    }
+
+    prot_flush(C->pout);
 }
 
 void shut_down(int code) __attribute__((noreturn));
