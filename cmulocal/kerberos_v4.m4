@@ -203,7 +203,7 @@ AC_ARG_WITH(krb4-include,
           AC_SUBST(KRB_INC_FLAGS)
           AC_SUBST(KRB_LIB_FLAGS)
 	  LIBS="${cmu_save_LIBS}"
-	  AC_DEFINE(KERBEROS)
+	  AC_DEFINE(KERBEROS,,[Use kerberos 4. find out what needs this symbol])
 	  if test "X$RPATH" = "X"; then
 		RPATH=""
 	  fi
