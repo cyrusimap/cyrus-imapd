@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.154 2002/02/06 18:08:55 leg Exp $
+# $Id: Makefile.in,v 1.155 2002/02/19 22:33:44 rjs3 Exp $
 # 
 # @configure_input@
 #
@@ -115,7 +115,7 @@ SERVICETHREAD=../master/service-thread.o
 
 PROGS = imapd lmtpd pop3d \
 	fud reconstruct quota \
-	mbpath ipurge cyrdump deliver \
+	mbpath ipurge cyrdump cvt_cyrusdb deliver \
 	ctl_mboxlist ctl_deliver ctl_cyrusdb squatter \
 	@IMAP_PROGS@
 
@@ -163,6 +163,9 @@ lmtpstats.c lmtpstats.h: lmtpstats.snmp $(srcdir)/../snmp/snmpgen
 collectnews: collectnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o collectnews collectnews.o libimap.a $(DEPLIBS) \
 	 $(LIBS)
+
+cvt_cyrusdb: cvt_cyrusdb.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o cvt_cyrusdb cvt_cyrusdb.o libimap.a $(DEPLIBS) $(LIBS)
 
 deliver: deliver.o $(LMTPOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o deliver deliver.o $(LMTPOBJS) \

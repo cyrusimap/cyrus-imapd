@@ -81,7 +81,7 @@ HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 
 OBJS = acl.o assert.o bsearch.o charset.o glob.o retry.o util.o \
 	mkgmtime.o prot.o parseaddr.o imclient.o imparse.o xmalloc.o \
-	lsort.o stristr.o hash.o rfc822date.o mpool.o \
+	lsort.o stristr.o hash.o rfc822date.o mpool.o cyrusdb.o \
 	chartable.o imapurl.o nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o \
 	gmtoff_@WITH_GMTOFF@.o map_@WITH_MAP@.o $(ACL) $(AUTH) \
 	@LIBOBJS@ cyrusdb_db3.o cyrusdb_flat.o cyrusdb_skiplist.o iptostring.o
