@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.25 2002/12/04 14:53:12 rjs3 Exp $
+ * $Id: parser.c,v 1.26 2002/12/18 16:13:25 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -75,6 +75,9 @@ const char *referral_host = NULL;
 int authenticated = 0;
 int verify_only = 0;
 int starttls_done = 0;
+
+struct namespace sieve_namespace;
+
 #ifdef HAVE_SSL
 /* our tls connection, if any */
 static SSL *tls_conn = NULL;
@@ -638,6 +641,15 @@ static int cmd_authenticate(struct protstream *sieved_out,
       
       strcpy(inboxname, "user.");
       strcat(inboxname, username);
+
+      /* Set namespace */
+      if ((r = mboxname_init_namespace(&sieve_namespace, 1)) != 0) {
+          *errmsg = "mailbox unknown";
+	  return FALSE;
+      }
+
+      /* Translate any separators in userid */
+      mboxname_hiersep_tointernal(&sieve_namespace, inboxname+5);
 
       r = mboxlist_detail(inboxname, &type, &server, NULL, NULL, NULL);
       
