@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.29 2003/05/29 18:43:25 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.30 2003/05/30 16:47:02 ken3 Exp $
  */
 
 #include <config.h>
@@ -522,6 +522,7 @@ struct fetchdata {
     unsigned entries; /* xxx used for server annotations, shouldn't be */
     unsigned attribs;
     struct entryattlist **entryatts;
+    struct hash_table entry_table;
 
     /* For proxies (a null entry_list indicates that we ONLY proxy) */
     /* if these are NULL, we have had a local exact match, and we
@@ -598,6 +599,7 @@ static int fetch_cb(char *name, int matchlen,
 	entries_ptr;
 	entries_ptr = entries_ptr->next) {
 	int appended_one = 0;
+	char key[MAX_MAILBOX_PATH+1];
 	
 	attvalues = NULL;
 	memset(&result,0,sizeof(struct annotation_result));
@@ -605,6 +607,16 @@ static int fetch_cb(char *name, int matchlen,
 	entries_ptr->entry->get(int_mboxname, fdata->isadmin,
 				fdata->auth_state,
 				&result, &mbrock, NULL);
+
+	/* check if we already returned this entry
+	 *
+	 * XXX we must do this after the fetch because we might not know
+	 * the entry name until after we search for the pattern in the db
+	 */
+	strlcpy(key, int_mboxname, sizeof(key));
+	strlcat(key, entries_ptr->entry->name, sizeof(key));
+	if (hash_lookup(key, &(fdata->entry_table))) continue;
+	hash_insert(key, (void *)0xDEADBEEF, &(fdata->entry_table));
 
 	if ((fdata->attribs & ATTRIB_VALUE_SHARED) && result.value) {
 	    appended_one = 1;
@@ -619,7 +631,7 @@ static int fetch_cb(char *name, int matchlen,
 	}
 
 	/* Base the return of the size attribute on whether or not there is
-	 * an attribute, not wether size is nonzero. */
+	 * an attribute, not whether size is nonzero. */
 	if ((fdata->attribs & ATTRIB_SIZE_SHARED) && result.value) {
 	    appended_one = 1;
 	    snprintf(size, sizeof(size), "%u", result.size);
@@ -840,6 +852,9 @@ int annotatemore_fetch(char *mailbox,
 	    /* Reset state in fetch_cb */
 	    fetch_cb(NULL, 0, 0, 0);
 
+	    /* xxx better way to determine a size for this table? */
+	    construct_hash_table(&fdata.entry_table, 100, 1);
+
 	    if(proxy_func && fdata.orig_entry) {
 		fdata.orig_mailbox = mailbox;
 		fdata.orig_attribute = attribs;
@@ -862,6 +877,8 @@ int annotatemore_fetch(char *mailbox,
 					   isadmin, userid,
 					   auth_state, fetch_cb,
 					   &fdata);
+
+	    free_hash_table(&fdata.entry_table, NULL);
 
 	    if(proxy_func && fdata.orig_entry) {
 		free_hash_table(&fdata.server_table, NULL);
