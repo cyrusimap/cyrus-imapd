@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.8 2002/01/25 19:26:54 leg Exp $
+ * $Id: lmtpengine.h,v 1.9 2002/01/29 20:11:53 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -74,6 +74,8 @@ struct message_data {
     char *authuser;
     struct auth_state *authstate;
 
+    void *rock;
+
     header_t *cache[HEADERCACHESIZE];
 };
 
@@ -98,6 +100,9 @@ int msg_getrcpt_ignorequota(message_data_t *m, int rcpt_num);
 /* set a recipient status; 'r' should be an IMAP error code that will be
    translated into an LMTP status code */
 void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r);
+
+void *msg_getrock(message_data_t *m);
+void msg_setrock(message_data_t *m, void *rock);
 
 struct lmtp_func {
     int (*deliver)(message_data_t *m, 
