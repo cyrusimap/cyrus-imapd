@@ -50,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.7 2002/09/24 23:00:50 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.8 2002/09/25 16:59:17 ken3 Exp $
  */
 #include <config.h>
 
@@ -88,7 +88,6 @@
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "nntp_err.h"
-#include "index.h"
 #include "mailbox.h"
 #include "append.h"
 #include "duplicate.h"
@@ -102,6 +101,22 @@ extern char *optarg;
 extern int opterr;
 
 extern int errno;
+
+/* Stuff to make index.c link */
+int imapd_exists;
+struct protstream *imapd_out = NULL;
+struct auth_state *imapd_authstate = NULL;
+char *imapd_userid = NULL;
+void printastring(const char *s)
+{
+    fatal("not implemented", EC_SOFTWARE);
+}
+/* end stuff to make index.c link */
+
+extern void index_operatemailbox(struct mailbox *mailbox);
+extern int index_finduid(unsigned uid);
+extern int index_getuid(unsigned msgno);
+
 
 #ifdef HAVE_SSL
 static SSL *tls_conn;
@@ -123,10 +138,6 @@ struct protstream *nntp_out = NULL;
 struct protstream *nntp_in = NULL;
 unsigned nntp_exists = 0;
 unsigned nntp_current = 0;
-struct msg {
-    unsigned long uid;
-    unsigned long size;
-} *nntp_msg = NULL;
 
 static int nntps = 0;
 int nntp_starttls_done = 0;
@@ -183,17 +194,6 @@ extern void setproctitle_init(int argc, char **argv, char **envp);
 extern int proc_register(const char *progname, const char *clienthost, 
 			 const char *userid, const char *mailbox);
 extern void proc_cleanup(void);
-
-/* compare to msg uids */
-int compar_msguid(const unsigned long *key, const struct msg *msg)
-{
-    return (*key - msg->uid);
-}
-
-/* find msg with given uid */
-#define find_msguid(uid) \
-    (struct msg *) bsearch(&uid, nntp_msg, nntp_exists+1, sizeof(struct msg), \
-			   (int (*)(const void *, const void *)) compar_msguid)
 
 
 static struct 
@@ -586,7 +586,7 @@ static void cmdloop(void)
 		int i;
 		prot_printf(nntp_out, "211 list of articles follows\r\n");
 		for (i = 1; i <= nntp_exists; i++)
-		    prot_printf(nntp_out, "%lu\r\n", nntp_msg[i].uid);
+		    prot_printf(nntp_out, "%u\r\n", index_getuid(i));
 		prot_printf(nntp_out, ".\r\n");
 	    }
 	}
@@ -599,9 +599,9 @@ static void cmdloop(void)
 
 	    nntp_group = open_group(arg1.s, 0);
 	    if (nntp_group) {
-		prot_printf(nntp_out, "211 %u %lu %lu %s\r\n",
-			    nntp_exists, nntp_exists ? nntp_msg[1].uid : 1,
-			    nntp_exists ? nntp_msg[nntp_exists].uid : 0,
+		prot_printf(nntp_out, "211 %u %u %u %s\r\n",
+			    nntp_exists, nntp_exists ? index_getuid(1) : 1,
+			    nntp_exists ? index_getuid(nntp_exists) : 0,
 			    arg1.s);
 	    }
 	}
@@ -613,8 +613,8 @@ static void cmdloop(void)
 		prot_printf(nntp_out,
 			    "422 No previous article in this group\r\n");
 	    } else {
-		prot_printf(nntp_out, "223 %lu %s\r\n",
-			    nntp_msg[--nntp_current].uid, "<0>");
+		prot_printf(nntp_out, "223 %u %s\r\n",
+			    index_getuid(--nntp_current), "<0>");
 	    }
 	}
 	else if (!strcmp(cmd.s, "next")) {
@@ -624,15 +624,14 @@ static void cmdloop(void)
 	    if (nntp_current == nntp_exists) {
 		prot_printf(nntp_out, "422 No next article in this group\r\n");
 	    } else {
-		prot_printf(nntp_out, "223 %lu %s\r\n",
-			    nntp_msg[++nntp_current].uid, "<0>");
+		prot_printf(nntp_out, "223 %u %s\r\n",
+			    index_getuid(++nntp_current), "<0>");
 	    }
 	}
 	else if (!strcmp(cmd.s, "article") || !strcmp(cmd.s, "head") ||
 		 !strcmp(cmd.s, "body") || !strcmp(cmd.s, "stat")) {
 	    unsigned long uid = 0;
-	    struct msg *msg = NULL;
-	    int part = 0;
+	    int part = 0, idx;
 
 	    if (c == ' ') {
 		c = getword(nntp_in, &arg1);
@@ -645,10 +644,11 @@ static void cmdloop(void)
 	    else {
 		if (!nntp_group) goto nogroup;
 		if (uid) {
-		    if (!(msg = find_msguid(uid))) goto noarticle;
-		    nntp_current = msg - nntp_msg;
+		    idx = index_finduid(uid);
+		    if (index_getuid(idx) != uid) goto noarticle;
+		    nntp_current = idx;
 		} else {
-		    uid = nntp_msg[nntp_current].uid;
+		    uid = index_getuid(nntp_current);
 		}
 	    }
 
@@ -949,9 +949,9 @@ int do_list(char *name, int matchlen, int maycreate __attribute__((unused)),
 	/* see if we can post */
 	post = acl && (cyrus_acl_myrights(nntp_authstate, acl) & ACL_POST);
 
-	prot_printf(nntp_out, "%s %lu %lu %c\r\n", name+strlen(newsprefix),
-		    nntp_exists ? nntp_msg[1].uid : 1,
-		    nntp_exists ? nntp_msg[nntp_exists].uid : 0,
+	prot_printf(nntp_out, "%s %u %u %c\r\n", name+strlen(newsprefix),
+		    nntp_exists ? index_getuid(1) : 1,
+		    nntp_exists ? index_getuid(nntp_exists) : 0,
 		    post ? 'y' : 'n');
     }
 
@@ -1006,8 +1006,7 @@ void cmd_list(char *arg1, char *arg2)
 struct mailbox *open_group(char *name, int has_prefix)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
-    int r = 0, msg;
-    struct index_record record;
+    int r = 0;
     int doclose = 0;
 
     if (nntp_group) {
@@ -1040,14 +1039,7 @@ struct mailbox *open_group(char *name, int has_prefix)
     if (!r) {
 	nntp_exists = mboxstruct.exists;
 	nntp_current = 1;
-	nntp_msg = (struct msg *)xrealloc(nntp_msg,
-					  (nntp_exists+1) * sizeof(struct msg));
-	for (msg = 1; msg <= nntp_exists; msg++) {
-	    if ((r = mailbox_read_index_record(&mboxstruct, msg, &record))!=0)
-	      break;
-	    nntp_msg[msg].uid = record.uid;
-	    nntp_msg[msg].size = record.size;
-	}
+	index_operatemailbox(&mboxstruct);
     }
 
     if (r) {
