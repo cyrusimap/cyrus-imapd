@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.62 2002/02/22 19:10:10 rjs3 Exp $ */
+/* $Id: master.c,v 1.63 2002/03/10 03:56:11 ken3 Exp $ */
 
 #include <config.h>
 
@@ -861,6 +861,13 @@ void add_service(const char *name, struct entry *e,
 	if (Services[i].name && !strcmp(Services[i].name, name)) break;
     }
 
+    /* we have duplicate service names in the config file */
+    if ((i < nservices) && Services[i].exec) {
+	char buf[256];
+	snprintf(buf, sizeof(buf), "multiple entries for service '%s'", name);
+	fatal(buf, EX_CONFIG);
+    }
+
     if ((i < nservices) &&
 	!strcmp(Services[i].listen, listen) &&
 	!strcmp(Services[i].proto, proto)) {
@@ -883,9 +890,9 @@ void add_service(const char *name, struct entry *e,
 	}
 
 	if (verbose > 2)
-	    syslog(LOG_DEBUG, "reconfig: service %s (%s, %s/%s, %d, %d)",
+	    syslog(LOG_DEBUG, "reconfig: service '%s' (%s, %s:%s, %d, %d)",
 		   Services[i].name, cmd,
-		   Services[i].listen, Services[i].proto,
+		   Services[i].proto, Services[i].listen,
 		   Services[i].desired_workers,
 		   Services[i].max_workers);
     }
@@ -930,9 +937,9 @@ void add_service(const char *name, struct entry *e,
 	Services[nservices].nconnections = 0;
 
 	if (verbose > 2)
-	    syslog(LOG_DEBUG, "add: service %s (%s, %s/%s, %d, %d)",
+	    syslog(LOG_DEBUG, "add: service '%s' (%s, %s:%s, %d, %d)",
 		   Services[nservices].name, cmd,
-		   Services[nservices].listen, Services[nservices].proto,
+		   Services[nservices].proto, Services[nservices].listen,
 		   Services[nservices].desired_workers,
 		   Services[nservices].max_workers);
 
