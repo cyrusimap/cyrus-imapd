@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
+#include <errno.h>
 #include <com_err.h>
 
 #include "config.h"
@@ -32,6 +33,8 @@
 #include "sysexits.h"
 #include "imap_err.h"
 #include "xmalloc.h"
+
+extern int errno;
 
 #define FNAME_DROPDIR "/dropoff/"
 
