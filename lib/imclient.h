@@ -38,7 +38,7 @@ struct imclient_reply {
 #define CALLBACK_NOLITERAL 2	/* Data cannot contain a literal */
 
 /* Connection flags */
-#define IMCLIENT_CONN_NOWAITLITERAL 1
+#define IMCLIENT_CONN_NOWAITLITERAL 1 /* Server supports no-wait literals */
 
 #ifdef __STDC__
 struct imclient;
