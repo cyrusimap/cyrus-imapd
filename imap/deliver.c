@@ -81,7 +81,7 @@ char **argv;
 	    break;
 
         case 'D':
-	    debug = 1;
+	    logdebug = 1;
 	    break;
 
 	case 'r':
@@ -1021,7 +1021,7 @@ char *id, *to;
     date.data = datebuf;
     date.size = strlen(datebuf);
 
-    if (debug)
+    if (logdebug)
       syslog(LOG_DEBUG, "deliver: delivered %s to %s at %s", id, to, datebuf);
     (void) DeliveredDBptr->put(DeliveredDBptr, &delivery, &date, 0);
     (void) DeliveredDBptr->sync(DeliveredDBptr, 0);
