@@ -28,9 +28,48 @@
 #include "charset.h"
 #include "xmalloc.h"
 
+#define JSR 'T'
+#define JMP 'U'
+#define RET 'V'
+#define END 'W'
 #include "chartables.h"
 
 #define MAXTRANSLATION 3
+struct state {
+    const unsigned char (*curtable)[256][4];
+    const unsigned char (*lasttable)[256][4];
+    const unsigned char (*initialtable)[256][4];
+};
+#define START(state,table) \
+((state).curtable = (state.initialtable) = (table))
+
+#define TRANSLATE(state,c,ptr,idx) \
+{ \
+    int _ch; \
+    unsigned char *_translation = (state).curtable[0][(unsigned char)(c)]; \
+    for (;;) { \
+	switch (_ch = *_translation++) { \
+	case JSR: \
+	    (state).lasttable = (state).curtable; \
+	    /* FALL THROUGH */ \
+	case JMP: \
+	    (state).curtable = (state).initialtable + \
+	      (_translation[0]<<8) + (_translation[1]); \
+	    break; \
+ \
+	case RET: \
+	    (state).curtable = (state).lasttable; \
+	    /* FALL THROUGH */ \
+	case END: \
+	    break; \
+ \
+	default: \
+	    (ptr)[(idx)++] = _ch; \
+	    continue; \
+	} \
+	break; \
+    } \
+}
 
 struct charset {
     char *name;
@@ -73,15 +112,15 @@ static const char index_hex[256] = {
     XX,10,11,12, 13,14,15,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,10,11,12, 13,14,15,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
 };
 #define HEXCHAR(c)  (index_hex[(unsigned char)(c)])
 
@@ -96,7 +135,7 @@ static const char index_64[256] = {
     XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
     15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,XX,
     XX,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
-    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX
+    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
@@ -137,13 +176,12 @@ int charset;
     static char *retval = 0;
     static int alloced = 0;
     int pos = 0;
-    const unsigned char (*table)[4];
-    const unsigned char *translation;
+    struct state state;
 
     if (!s) return 0;
     if (charset < 0 || charset >= NUM_CHARSETS) return EMPTY_STRING;
 
-    table = charset_table[charset].table[0];
+    START(state,charset_table[charset].table);
     
     if (!alloced) {
 	alloced = GROWSIZE;
@@ -156,10 +194,7 @@ int charset;
 	    alloced += GROWSIZE;
 	    retval = xrealloc(retval, alloced);
 	}
-	translation = table[(unsigned char)*s];
-	while (*translation) {
-	    retval[pos++] = *translation++;
-	}
+	TRANSLATE(state, *s, retval, pos);
 	s++;
     }
 
@@ -178,7 +213,7 @@ char *s;
     char *start, *encoding, *end;
     char *p;
     int i, c, c1, c2, c3, c4;
-    const unsigned char (*table)[4];
+    struct state state;
     static char *retval = 0;
     static int alloced = 0;
     const unsigned char *translation;
@@ -227,7 +262,7 @@ char *s;
 	for (i=0; i<NUM_CHARSETS; i++) {
 	    if (strlen(charset_table[i].name) == encoding-start &&
 		!strncasecmp(start, charset_table[i].name, encoding-start)) {
-		table = charset_table[i].table[0];
+		START(state,charset_table[i].table);
 		break;
 	    }
 	}
@@ -264,10 +299,7 @@ char *s;
 		    alloced += GROWSIZE;
 		    retval = xrealloc(retval, alloced);
 		}
-		translation = table[(unsigned char)c];
-		while (*translation) {
-		    retval[pos++] = *translation++;
-		}
+		TRANSLATE(state, c, retval, pos);
 	    }
 	}
 	else {
@@ -282,24 +314,15 @@ char *s;
 		if (c1 == XX) break;
 		c2 = CHAR64(p[1]);
 		if (c2 == XX) break;
-		translation = table[(unsigned char)((c1<<2) | ((c2&0x30)>>4))];
-		while (*translation) {
-		    retval[pos++] = *translation++;
-		}
+		TRANSLATE(state,(c1<<2) | ((c2&0x30)>>4), retval, pos);
 
 		c3 = CHAR64(p[2]);
 		if (c3 == XX) break;
-		translation = table[(unsigned char)(((c2&0XF) << 4) | ((c3&0x3C) >> 2))];
-		while (*translation) {
-		    retval[pos++] = *translation++;
-		}
+		TRANSLATE(state,((c2&0XF)<<4) | ((c3&0x3C)>>2), retval, pos);
 
 		c4 = CHAR64(p[3]);
 		if (c4 == XX) break;
-		translation = table[(unsigned char)(((c3&0x03) <<6) | c4)];
-		while (*translation) {
-		    retval[pos++] = *translation++;
-		}
+		TRANSLATE(state,((c3&0x03) <<6) | c4, retval, pos);
 
 		p += 4;
 	    }
@@ -418,8 +441,8 @@ static int rawstart, rawleft;	/* Location/count of unprocessed raw data */
 static char decodebuf[4096];	/* Buffer of data deocded, but not converted
 				 * into canonical searching form */
 static int decodestart, decodeleft; /* Location/count of decoded data */
-static const unsigned char (*decodetable)[4];	/* Charset table to convert decoded data
-				 * into canonical searching form */
+static struct state decodestate; /* Charset state to convert decoded data
+				  * into canonical searching form */
 
 /*
  * Search for the string 'substr' in the next 'len' bytes of 
@@ -447,7 +470,7 @@ int encoding;
     
     /* Initialize character set mapping */
     if (charset < 0 || charset >= NUM_CHARSETS) return 0;
-    decodetable = charset_table[charset].table[0];
+    START(decodestate, charset_table[charset].table);
     decodeleft = 0;
 
     /* Initialize transfer-decoding */
@@ -568,17 +591,13 @@ int size;
     decodeleft += (*rawproc)(decodebuf+decodeleft, sizeof(decodebuf)-decodeleft);
 
     while (decodeleft) {
-	if (MAXTRANSLATION > size) {
+	if (retval + MAXTRANSLATION > size) {
 	    return retval;
 	}
-	translation = decodetable[(unsigned char)(decodebuf[decodestart])];
+	len = 0;
+	TRANSLATE(decodestate, decodebuf[decodestart], buf, retval);
 	decodestart++;
 	decodeleft--;
-	while (*translation) {
-	    *buf++ = *translation++;
-	    retval++;
-	    size--;
-	}
     }
     return retval;
 }
