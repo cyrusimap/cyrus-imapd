@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.10 2000/01/28 22:09:56 leg Exp $
+ * $Id: actions.c,v 1.11 2000/02/03 06:51:11 tmartin Exp $
  * 
  */
 /***********************************************************
@@ -100,30 +100,56 @@ int actions_setuser(char *userid)
   return TIMSIEVE_OK;
 }
 
-static int validchar(char ch)
-{
-    if (isalnum((int) ch) || (ch == '_') || (ch == '-') || (ch == ' ')) {
-	return TIMSIEVE_OK;
-    }
+/*
+ *
+ * Everything but '/' and '\0' are valid.
+ *
+ */
 
-    return TIMSIEVE_FAIL;
-}
-
-int verifyscriptname(mystring_t *name)
+int scriptname_valid(mystring_t *name)
 {
   int lup;
   char *ptr;
+  char *newptr;
 
   /* must be at least one character long */
   if (name->len < 1) return TIMSIEVE_FAIL;
 
   ptr=string_DATAPTR(name);
 
-  for (lup=0;lup<name->len;lup++) {
-      if ( validchar(ptr[lup])!=TIMSIEVE_OK) return TIMSIEVE_FAIL;
+  for (int lup=0;lup<name->len;lup++)
+  {
+      if ((ptr[lup]=='/') || (ptr[lup]=='\0'))
+	  return TIMSIEVE_FAIL;
   }
   
   return TIMSIEVE_OK;
+}
+
+int capabilities(struct protstream *conn, sasl_conn_t *saslconn)
+{
+    char *sasllist;
+
+    /* implementation */
+    prot_printf(conn, "\"IMPLEMENTATION\" \"" SIEVED_IDENT " " SIEVED_VERSION "\"\r\n");
+    
+    /* SASL */
+    if (sasl_listmech(saslconn, NULL, 
+		    "\"SASL\" \"", " ", "\"\r\n",
+		    &sasllist,
+		    NULL, &mechcount) == SASL_OK && mechcount > 0)
+    {
+      prot_printf(sieved_out,"%s",sasllist);
+    }
+    
+    /* Sieve capabilities */
+    prot_printf(sieved_out,"\"SIEVE\" \"%s\"\r\n",sieve_extensions());
+
+    /* TODO: STARTTLS */
+
+    prot_printf("OK\r\n");
+
+    return TIMSIEVE_OK;
 }
 
 int getscript(struct protstream *conn, mystring_t *name)
@@ -135,6 +161,14 @@ int getscript(struct protstream *conn, mystring_t *name)
   int cnt;
 
   char path[1024];
+
+  result = scriptname_valid(name);
+  if (result!=TIMSIEVE_OK)
+  {
+      prot_printf(conn,"NO \"Invalid script name\"\r\n");
+      return result;
+  }
+
 
   snprintf(path, 1023, "%s.script", string_DATAPTR(name));
 
@@ -222,6 +256,13 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data)
   char path[1024], p2[1024];
   int maxscripts;
 
+  result = scriptname_valid(name);
+  if (result!=TIMSIEVE_OK)
+  {
+      prot_printf(conn,"NO \"Invalid script name\"\r\n");
+      return result;
+  }
+
   /* see if this would put the user over quota */
   maxscripts = config_getint("sieve_maxscripts",5);
 
@@ -305,6 +346,13 @@ static int isactive(char *name)
   struct stat filestats;  /* returned by stat */
   int result;  
 
+  result = scriptname_valid(name);
+  if (result!=TIMSIEVE_OK)
+  {
+      prot_printf(conn,"NO \"Invalid script name\"\r\n");
+      return result;
+  }
+
   snprintf(filename, 1023, "%s.script", name);
 
   result=stat(filename,&filestats);
@@ -324,6 +372,13 @@ int deletescript(struct protstream *conn, mystring_t *name)
 {
   int result;
   char path[1024];
+
+  result = scriptname_valid(name);
+  if (result!=TIMSIEVE_OK)
+  {
+      prot_printf(conn,"NO \"Invalid script name\"\r\n");
+      return result;
+  }
 
   snprintf(path, 1023, "%s.script", string_DATAPTR(name));
 
@@ -410,6 +465,13 @@ int setactive(struct protstream *conn, mystring_t *name)
 {
   int result;
   char filename[1024];
+
+  result = scriptname_valid(name);
+  if (result!=TIMSIEVE_OK)
+  {
+      prot_printf(conn,"NO \"Invalid script name\"\r\n");
+      return result;
+  }
 
   if (exists(string_DATAPTR(name))==FALSE)
   {

@@ -1,7 +1,7 @@
 /* lex.c -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.c,v 1.11 2000/01/28 22:09:56 leg Exp $
+ * $Id: lex.c,v 1.12 2000/02/03 06:51:12 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -46,12 +46,19 @@ int token_lookup (char *str, int len)
 	if (strcmp(str, "authenticate")==0) return AUTHENTICATE;
 	break;
 
+    case 'c':
+	if (strcmp(str, "capability")==0) return CAPABILITY;
+	break;
+
     case 'd':
 	if (strcmp(str, "deletescript")==0) return DELETESCRIPT;
 	break;
 
     case 'g':
 	if (strcmp(str, "getscript")==0) return GETSCRIPT;
+	break;
+    case 'h':
+	if (strcmp(str, "havespace")==0) return HAVESPACE;
 	break;
 
     case 'l':
@@ -116,7 +123,7 @@ int lex_init(void)
  * if outstr is NULL it isn't filled in
  */
 
-int timlex(mystring_t **outstr,   struct protstream *stream)
+int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *stream)
 {
 
   int ch;
@@ -127,11 +134,6 @@ int timlex(mystring_t **outstr,   struct protstream *stream)
   unsigned long count=0;
 
   int result = TIMSIEVE_OK;
-
-  int synchronizing=TRUE;  /* wheather we are in the process of reading a
-			      synchronizing string or not */
-
-
 
 
   buff_ptr = buffer; /* ptr into the buffer */
@@ -222,12 +224,6 @@ int timlex(mystring_t **outstr,   struct protstream *stream)
 	count = newcount;
 	break;
       }
-      if (ch == '+') {
-	synchronizing = FALSE;
-	ch=prot_getc(stream);
-	if (ch < 0)
-	  ERR();
-      }
 
       if (ch != '}')
 	ERR_PUSHBACK();
@@ -241,11 +237,6 @@ int timlex(mystring_t **outstr,   struct protstream *stream)
 	ERR();
       if (ch != '\n')
 	ERR_PUSHBACK();
-      if (synchronizing==TRUE) {
-	static const char sync_reply[] = "\"Ready for data\"\r\n";
-
-	prot_printf(sieved_out, sync_reply);
-      }
 
       if (count > maxscriptsize) {
 	  ERR();
@@ -277,11 +268,31 @@ int timlex(mystring_t **outstr,   struct protstream *stream)
       }
       lexer_state=LEXER_STATE_NORMAL;
       return STRING;
+    case LEXER_STATE_NUMBER:
+
+	if (isdigit((unsigned char) ch)) {
+	    unsigned long   newcount = (*outnum) * 10 + (ch - '0');
+
+	    if (newcount < (*outnum))
+		ERR_PUSHBACK();	/* overflow */
+	    *outnum = newcount;
+	} else {
+	    lexer_state=LEXER_STATE_NORMAL;
+	    prot_ungetc(ch, stream);
+
+	    return NUMBER;
+	}
+	
+	break;
     case LEXER_STATE_NORMAL:
       if (isalpha((unsigned char) ch)) {
 	lexer_state=LEXER_STATE_ATOM;
 	*buff_ptr++ = tolower(ch);
 	break;
+      }
+      if (isdigit((unsigned char) ch)) {
+	lexer_state=LEXER_STATE_NUMBER;
+	*outnum = ch -'0';
       }
       switch (ch) {
       case '(':

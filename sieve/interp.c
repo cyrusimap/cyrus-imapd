@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.8 2000/02/02 02:34:45 tmartin Exp $
+ * $Id: interp.c,v 1.9 2000/02/03 06:51:10 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -57,6 +57,18 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
 
     *interp = i;
     return SIEVE_OK;
+}
+
+const char *sieve_extensions = "fileinto reject envelope vacation imapflags notify" 
+#ifdef ENABLE_REGEX
+"regex";
+#else
+"";
+#endif /* ENABLE_REGEX */
+
+const char *sieve_listextensions(void)
+{
+    return sieve_extensions;
 }
 
 int sieve_interp_free(sieve_interp_t **interp)

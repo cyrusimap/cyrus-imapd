@@ -34,6 +34,13 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "mystring.h"
 
 /*
+ * Get the list of capabilities
+ *
+ */
+
+int capabilities(struct protstream *conn);
+
+/*
  * Get a sieve scripe with name "name" and output it's contents
  *
  */

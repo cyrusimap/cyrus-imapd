@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.4 2000/01/28 22:09:55 leg Exp $
+ * $Id: message.c,v 1.5 2000/02/03 06:51:10 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -357,55 +357,23 @@ int do_unmark(action_list_t *a)
  *
  * incomaptible with: none
  */
-int do_notify(sieve_interp_t *i,void *m, action_list_t *a,
-	      char *priority, char *method, char *message, char **headers)
+int do_notify(sieve_interp_t *i,void *m, notify_action_t *notify,
+	      const char *priority, char *message, stringlist_t *sl)
 {
-    action_list_t *b = NULL;
-    int oldnum = 0;
-    char **newheaders;
-    int lup;
- 
-    /* just go to end */
-    while (a != NULL) {
-	b = a;
-	a = a->next;
-    }
-
-    /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-	return -1;
-    a->a = ACTION_NOTIFY;
-    a->u.not.priority = priority;
-    a->u.not.method   = method;
-    a->u.not.message  = message;
-
-    /* count number of headers */
-    if (headers)
+    /* free old stuff if exists */
+    if (notify->exists)
     {
-	while (headers[oldnum]!=NULL)
-	    oldnum++;
-    }
-    
-
-    newheaders = xmalloc(sizeof(char *)*(oldnum*2+1));
-
-    for (lup=0;lup<oldnum;lup++)
-    {
-	char **tmp;
-	newheaders[lup*2] = headers[lup];
-	i->getheader(m,headers[lup], &tmp);
-
-	if (tmp) newheaders[lup*2+1] = tmp[0];
-	else newheaders[lup*2+1] = NULL;
+	if (notify->message)
+	    free(notify->message);
+	if (notify->headers)
+	    free_sl(notify->headers);
     }
 
-    newheaders[oldnum*2]=NULL;
+    notify->exists = 1;
+    notify->priority = priority;
+    notify->message = message;
+    notify->headers = sl;
 
-    a->u.not.headers  = newheaders;
-    
-    a->next = NULL;
-    b->next = a;
     return 0;
 }
 
@@ -413,36 +381,19 @@ int do_notify(sieve_interp_t *i,void *m, action_list_t *a,
  *
  * incomaptible with: none
  */
-int do_denotify(action_list_t **list)
+int do_denotify(notify_action_t *notify)
 {
-    action_list_t *a = *list;
-    action_list_t *b = NULL;
-    action_list_t *elim = NULL;
-    action_list_t *prev = NULL;
-    action_list_t *next = NULL;
 
-    /* eliminate the last ACTION_NOTIFY we see */
-    while (a != NULL) {
-
-	if (a->a == ACTION_NOTIFY)
-	{
-	    prev = b;
-	    elim = a;
-	    next = a->next;
-	}
-	b = a;
-	a = a->next;
+    /* free old stuff if exists */
+    if (notify->exists)
+    {
+	if (notify->message)
+	    free(notify->message);
+	if (notify->headers)
+	    free_sl(notify->headers);
     }
     
-    /* if didn't find return */
-    if (elim == NULL) return 0;
-
-    if (prev != NULL)
-	prev->next = next;
-    else
-	*list = next;
-
-    free(elim);
+    notify->exists = 0;
 
     return 0;
 }
@@ -540,6 +491,20 @@ int free_address(void **data, void **marker)
     free(am);
     *marker = NULL;
     return SIEVE_OK;
+}
+
+notify_action_t *default_notify_action(void)
+{
+    notify_action_t *ret = xmalloc(sizeof(notify_action_t));
+    const char *defmsg = "You have new mail";
+
+    ret->exists   = 1;
+    ret->priority = "medium";
+    ret->message  = xmalloc(strlen("You have new mail")+1);
+    strcpy(ret->message, "You have new mail"); 
+    ret->headers  = NULL; /* subject, to, from */
+
+    return ret;
 }
 
 action_list_t *new_action_list(void)
