@@ -188,7 +188,7 @@ sub showsize {
   my ($size,$msgs, $name) = @_;
 
   if ($size < 1024) {
-    printf "%9.2f bytes\t", $size;
+    printf "%9.2f byte%s\t", $size, $size == 1 ? "" : "s";
   } elsif ($size < 1024*1024) {
     $size = $size/1024;
     printf "%9.2f KB\t", $size;
@@ -197,7 +197,7 @@ sub showsize {
     printf "%9.2f MB\t", $size;
   }
 
-  printf "%6d msgs\t", $msgs;
+  printf "%6d msg%s\t", $msgs, $msgs == 1 ? "" : "s";
 
   print "\t$name\n";
 }
