@@ -47,7 +47,7 @@ cyrus_prefix = @cyrus_prefix@
 all: installsieve
 
 install:
-	$(INSTALL) -s -m 755 imtest $(DESTDIR)$(exec_prefix)/bin
+	$(INSTALL) -s -m 755 installsieve $(DESTDIR)$(exec_prefix)/bin
 
 OBJS=installscript.o lex.o mystring.o request.o
 
