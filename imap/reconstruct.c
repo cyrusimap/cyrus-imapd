@@ -50,11 +50,17 @@ extern char *optarg;
 
 extern char *mailbox_findquota();
 
+int code = 0;
+
+int do_reconstruct();
+
 main(argc, argv)
 int argc;
 char **argv;
 {
-    int i, r, code = 0;
+    int opt, i;
+    int rflag = 0;
+    char buf[MAX_MAILBOX_PATH];
 
     config_init("reconstruct");
 
@@ -62,18 +68,37 @@ char **argv;
     assert(INDEX_HEADER_SIZE == (OFFSET_POP3_LAST_UID+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8));
 
+    while ((opt = getopt(argc, argv, "r")) != EOF) {
+	switch (opt) {
+	case 'r':
+	    rflag = 1;
+	    break;
+
+	default:
+	    usage();
+	}
+    }
+
     mailbox_reconstructmode();
 
     for (i = 1; i < argc; i++) {
-	r = reconstruct(argv[i]);
-	if (r) {
-	    com_err(argv[i], r, (r == EX_IOERR) ? error_message(errno) : NULL);
-	    code = convert_code(r);
+	do_reconstruct(argv[i], 0, 0);
+
+	if (rflag) {
+	    strcpy(buf, argv[i]);
+	    strcat(buf, ".*");
+	    mboxlist_findall(buf, 1, 0, do_reconstruct);
 	}
     }
 
     exit(code);
 }
+
+usage()
+{
+    fprintf(stderr, "usage: reconstruct [-r] mailbox...\n");
+    exit(EX_USAGE);
+}    
 
 int compare_uid(a, b)
 char *a, *b;
@@ -82,6 +107,26 @@ char *a, *b;
 }
 
 #define UID_GROW 10 /* XXX 300 */
+
+int
+do_reconstruct(name, matchlen, maycreate)
+char *name;
+int matchlen;
+int maycreate;
+{
+    int r;
+
+    r = reconstruct(name);
+    if (r) {
+	com_err(name, r, (r == IMAP_IOERROR) ? error_message(errno) : NULL);
+	code = convert_code(r);
+    }
+    else {
+	printf("%s\n", name);
+    }
+
+    return 0;
+}
 
 int 
 reconstruct(name)
