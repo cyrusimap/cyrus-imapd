@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.13.4.3 2003/02/27 18:10:21 rjs3 Exp $ -->
+<!-- $Id: install-murder.html,v 1.13.4.4 2003/03/13 20:45:49 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -167,7 +167,7 @@ to the slave (which is not a recommended configuration at this point).<p>
 
 You will also want to change all of your <tt>imapd</tt> entries to be
 <tt>proxyd</tt>, and all of your <tt>pop3d</tt> entries to be
-<tt>pop3proxyd</tt>.  That is, you will probabally have a <tt>SERVICES</tt>
+<tt>pop3proxyd</tt>.  That is, you will probably have a <tt>SERVICES</tt>
 section that looks more like this now:<p>
 
 <pre>
@@ -330,7 +330,7 @@ on the frontend, and have the mupdate process resynch the local database.
 You may need to remove the local mailboxes database if the corruption is
 extreme.</li>
 <li><b>A mailbox's location keeps switching between two (or more) backend
-hosts.</b> - It probabally actually exists on both hosts.  Delete the
+hosts.</b> - It probably actually exists on both hosts.  Delete the
 mailbox from all but one of the hosts, and run a ctl_mboxlist -m on the one
 where you want it to actually live.</li>
 <li><b>Databases are never created on the frontends/slaves</b> - Check
@@ -343,7 +343,7 @@ to ensure that the mupdate slave process is started, (is prefork=1)</li>
 </ul>
 
 <P><HR>
-last modified: $Date: 2003/02/27 18:10:21 $
+last modified: $Date: 2003/03/13 20:45:49 $
 </BODY></HTML>
 
 
