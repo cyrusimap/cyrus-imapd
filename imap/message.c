@@ -320,11 +320,11 @@ struct boundary *boundaries;
 
 	if (sawboundary) {
 	    *body->subpart = zerobody;
-	    message_parse_type(defaultContentType, body->subpart);
+	    message_parse_type(DEFAULT_CONTENT_TYPE, body->subpart);
 	}
 	else {
 	    message_parse_body(infile, format, body->subpart,
-			       defaultContentType, boundaries);
+			       DEFAULT_CONTENT_TYPE, boundaries);
 	}
 
 	/* Calculate our size/lines information */
