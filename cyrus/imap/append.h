@@ -1,5 +1,5 @@
 /* append.h -- Description of messages to be copied 
- $Id: append.h,v 1.18 2000/05/23 20:52:12 robeson Exp $ 
+ $Id: append.h,v 1.19 2000/08/04 18:38:27 leg Exp $ 
 
  * Copyright (c) 1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -65,6 +65,7 @@ struct copymsg {
 struct appendstate {
     /* mailbox we're appending to */
     struct mailbox m;
+    char userid[MAX_MAILBOX_NAME];
 
     enum { APPEND_READY, APPEND_DONE } s;
 				/* current state of append */
@@ -80,6 +81,10 @@ struct appendstate {
     /* summary information to change on commit */
     int numanswered, numdeleted, numflagged;
 
+    /* set seen on these message on commit */
+    char *seen_msgrange;
+    int seen_alloced;
+
     /* the amount of quota we've used so far in this append */
     int quota_used;
 };
@@ -90,7 +95,8 @@ struct stagemsg;
 
 /* appendstate must be allocated by client */
 extern int append_setup(struct appendstate *mailbox, const char *name,
-			int format, struct auth_state *auth_state,
+			int format, 
+			const char *userid, struct auth_state *auth_state,
 			long aclcheck, long quotacheck);
 
 extern int append_commit(struct appendstate *mailbox,
@@ -106,7 +112,6 @@ extern int append_fromstage(struct appendstate *mailbox,
 			    struct protstream *messagefile,
 			    unsigned long size, time_t internaldate,
 			    const char **flag, int nflags,
-			    const char *userid,
 			    struct stagemsg **stagep);
 
 /* removes the stage (frees memory, deletes the staging files) */
@@ -115,13 +120,11 @@ extern int append_removestage(struct stagemsg *stage);
 extern int append_fromstream(struct appendstate *as,
 			     struct protstream *messagefile,
 			     unsigned long size, time_t internaldate,
-			     const char **flag, int nflags,
-			     const char *userid);
+			     const char **flag, int nflags);
 
 extern int append_copy(struct mailbox *mailbox,
 		       struct appendstate *append_mailbox,
-		       int nummsg, struct copymsg *copymsg,
-		       const char *userid);
+		       int nummsg, struct copymsg *copymsg);
 
 extern int append_collectnews(struct appendstate *mailbox,
 			      const char *group, unsigned long feeduid);

@@ -1,5 +1,5 @@
 /* collectnews.c -- program to add news articles to relevant header files
- $Id: collectnews.c,v 1.24 2000/05/23 20:52:13 robeson Exp $
+ $Id: collectnews.c,v 1.25 2000/08/04 18:38:27 leg Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -188,7 +188,7 @@ void collect(char *group, unsigned long feeduid)
     }
 
     r = append_setup(&as, newsprefix ? namebuf : group,
-		     MAILBOX_FORMAT_NETNEWS, 0, 0, 0);
+		     MAILBOX_FORMAT_NETNEWS, 0, 0, 0, 0);
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	r = mboxlist_createmailbox(newsprefix ? namebuf : group,
@@ -206,7 +206,7 @@ void collect(char *group, unsigned long feeduid)
 	}
 
 	r = append_setup(&as, newsprefix ? namebuf : group,
-			 MAILBOX_FORMAT_NETNEWS, 0, 0, 0);
+			 MAILBOX_FORMAT_NETNEWS, 0, 0, 0, 0);
     }
 
     if (r) {

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.266 2000/07/19 02:01:54 ken3 Exp $ */
+/* $Id: imapd.c,v 1.267 2000/08/04 18:38:27 leg Exp $ */
 
 #include <config.h>
 
@@ -1891,7 +1891,7 @@ cmd_append(char *tag, char *name)
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
     if (!r) {
 	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
-			 imapd_authstate, ACL_INSERT, size);
+			 imapd_userid, imapd_authstate, ACL_INSERT, size);
     }
     if (r) {
 	eatline(' ');
@@ -1999,8 +1999,7 @@ cmd_append(char *tag, char *name)
 	
 	/* Perform the rest of the append */
 	if (!r) r = append_fromstream(&mailbox, imapd_in, size, internaldate, 
-				      (const char **) flag, nflags,
-				      imapd_userid);
+				      (const char **) flag, nflags);
 
 	/* if we see a SP, we're trying to append more than one message */
 
