@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.60 2000/12/26 21:35:41 leg Exp $ */
+/* $Id: proxyd.c,v 1.61 2000/12/27 18:08:12 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1053,8 +1053,10 @@ int service_main(int argc, char **argv, char **envp)
 
     signals_poll();
 
+#ifdef ID_SAVE_CMDLINE
     /* get command line args for use in ID before getopt mangles them */
     id_getcmdline(argc, argv);
+#endif
 
     memset(&extprops, 0, sizeof(sasl_external_properties_t));
     while ((opt = getopt(argc, argv, "sp:")) != EOF) {
@@ -2169,15 +2171,19 @@ void cmd_noop(char *tag, char *cmd)
  * we only allow MAXIDFAILED consecutive failed IDs from a given client.
  * we only record MAXIDLOG ID responses from a given client.
  */
-#define MAXIDFAILED	3
-#define MAXIDLOG	5
-#define MAXIDLOGLEN	(MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6))
-#define MAXIDFIELDLEN	30
-#define MAXIDVALUELEN	1024
-#define MAXIDPAIRS	30
+enum {
+    MAXIDFAILED	= 3,
+    MAXIDLOG = 5,
+    MAXIDFIELDLEN = 30,
+    MAXIDVALUELEN = 1024,
+    MAXIDPAIRS = 30,
+    MAXIDLOGLEN = (MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6))
+};
 
+#ifdef ID_SAVE_CMDLINE
 static char id_resp_command[MAXIDVALUELEN];
 static char id_resp_arguments[MAXIDVALUELEN] = "";
+#endif
 
 #if 0
 void cmd_id(char *tag)
@@ -2338,13 +2344,15 @@ void cmd_id(char *tag)
 			" \"os-version\" \"%s\"",
 			os.sysname, os.release);
 
+#ifdef ID_SAVE_CMDLINE
 	/* add the command line info */
 	prot_printf(proxyd_out, " \"command\" \"%s\"", id_resp_command);
-	if (strlen(id_resp_arguments))
+	if (strlen(id_resp_arguments)) {
 	    prot_printf(proxyd_out, " \"arguments\" \"%s\"", id_resp_arguments);
-	else
+	} else {
 	    prot_printf(proxyd_out, " \"arguments\" NIL");
-
+	}
+#endif
 	/* add the environment info */
 	snprintf(env_buf, MAXIDVALUELEN,"Cyrus SASL %d.%d.%d",
 		 SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
@@ -2355,6 +2363,10 @@ void cmd_id(char *tag)
 #ifdef HAVE_SSL
 	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 		 "; %s", OPENSSL_VERSION_TEXT);
+#endif
+#ifdef HAVE_LIBWRAP
+	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+		 "; TCP Wrapper");
 #endif
 	/* XXX  anything else? ACAP info perhaps? */
 	prot_printf(proxyd_out, " \"environment\" \"%s\")\r\n", env_buf);
@@ -2381,6 +2393,7 @@ void cmd_id(char *tag)
 
 #endif
 
+#ifdef ID_SAVE_CMDLINE
 /*
  * Grab the command line args for the ID response.
  */
@@ -2393,6 +2406,7 @@ void id_getcmdline(int argc, char **argv)
 		 "%s%s", *++argv, (argc > 1) ? " " : "");
     }
 }
+#endif
 
 /*
  * Append the 'field' / 'value' pair to the idparamlist 'l'.

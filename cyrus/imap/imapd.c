@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.287 2000/12/26 21:35:40 leg Exp $ */
+/* $Id: imapd.c,v 1.288 2000/12/27 18:08:11 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1785,7 +1785,7 @@ void cmd_id(char *tag)
     /* spit out our ID string.
        eventually this might be configurable. */
     if (config_getswitch("imapidresponse", 1)) {
-	char env_buf[MAXIDVALUELEN];
+	char env_buf[MAXIDVALUELEN+1];
 
 	prot_printf(imapd_out, "* ID ("
 		    "\"name\" \"Cyrus\""
@@ -1821,6 +1821,10 @@ void cmd_id(char *tag)
 #ifdef HAVE_SSL
 	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 		 "; %s", OPENSSL_VERSION_TEXT);
+#endif
+#ifdef HAVE_LIBWRAP
+	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+		 "; TCP Wrapper");
 #endif
 	prot_printf(imapd_out, " \"environment\" \"%s\")\r\n", env_buf);
     }
