@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.44 2002/01/15 21:12:54 ken3 Exp $
+ * $Id: script.c,v 1.45 2002/01/18 16:50:47 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -427,6 +427,18 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		    /* skip leading white-space */
 		    while (*body[0] && isspace((int) *body[0])) body[0]++;
 		    if (strcasecmp(body[0], "no")) l = SIEVE_DONE;
+		}
+
+		/* is there a Precedence keyword of "junk | bulk | list"? */
+		strcpy(buf, "precedence");
+		if (i->getheader(m, buf, &body) == SIEVE_OK) {
+		    /* we don't deal with comments, etc. here */
+		    /* skip leading white-space */
+		    while (*body[0] && isspace((int) *body[0])) body[0]++;
+		    if (!strcasecmp(body[0], "junk") ||
+			!strcasecmp(body[0], "bulk") ||
+			!strcasecmp(body[0], "list"))
+			l = SIEVE_DONE;
 		}
 
 		/* Note: the domain-part of all addresses are canonicalized */
