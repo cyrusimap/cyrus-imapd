@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.90 2003/07/22 19:17:15 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.91 2003/09/02 19:48:22 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1341,6 +1341,8 @@ void lmtpmode(struct lmtp_func *func,
 	auth_id = "postman";
 	sasl_setprop(cd.conn, SASL_SSF_EXTERNAL, &ssf);
 	sasl_setprop(cd.conn, SASL_AUTH_EXTERNAL, auth_id);
+
+	deliver_logfd = telemetry_log(auth_id, pin, pout, 0);
     } else {
 	if(havelocal) sasl_setprop(cd.conn, SASL_IPLOCALPORT,  &localip );
 	if(haveremote) sasl_setprop(cd.conn, SASL_IPREMOTEPORT, &remoteip);  
