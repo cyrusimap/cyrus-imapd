@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.26 2000/05/23 21:30:43 leg Exp $
+ * $Id: lmtpd.c,v 1.27 2000/05/24 18:42:11 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.26 2000/05/23 21:30:43 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.27 2000/05/24 18:42:11 leg Exp $";*/
 
 #include <config.h>
 
@@ -1852,7 +1852,7 @@ void lmtpmode(deliver_opts_t *delopts)
 			      sasl_errstring(sasl_usererr(r), NULL, NULL));
 		  continue;
 	      }
-	      r = sasl_getprop(conn, SASL_USERNAME, (void **) user);
+	      r = sasl_getprop(conn, SASL_USERNAME, (void **) &user);
 	      if (r != SASL_OK) user = "[sasl error]";
 
 	      /* authenticated successfully! */
