@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.32 2000/06/01 05:44:22 leg Exp $ */
+/* $Id: proxyd.c,v 1.33 2000/06/01 05:53:16 leg Exp $ */
 
 #include <config.h>
 
@@ -586,12 +586,12 @@ static int proxy_authenticate(struct backend *s)
     /* we now do the actual SASL exchange */
     r = sasl_client_start(s->saslconn, config_getstring(buf, "KERBEROS_V4"),
 			  NULL, NULL, &out, &outlen, &mechusing);
+    if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
+	return r;
+    }
     if (out) {
 	/* IMAP can't deal with client-sends-first */
 	free(out);
-    }
-    if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
-	return r;
     }
     proxyd_gentag(mytag);
     prot_printf(s->out, "%s AUTHENTICATE %s\r\n", mytag, mechusing);
@@ -740,8 +740,7 @@ struct backend *proxyd_findserver(char *server)
 	/* now need to authenticate to backend server */
 	if ((r = proxy_authenticate(ret))) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
-		   sasl_errstring(r,NULL,NULL));
-		   
+		   sasl_errstring(r, NULL, NULL));
 	    free(ret);
 	    return NULL;
 	}
