@@ -218,13 +218,11 @@ char **argv;
 	
 	if (!strcmp(key, "srvtab")) {
 	    /* "right thing" is in p */
-	    srvtab = p;
-	    break;
+	    srvtab = xstrdup(p);
 	}
 	if (!strcmp(key, "configdirectory")) {
 	    /* "right thing" is in p */
-	    configdirectory = p;
-	    break;
+	    configdirectory = xstrdup(p);
 	}
 	
     }
@@ -352,8 +350,7 @@ char **argv;
     if (evalcheck("krb_mk_request(&authent,\"imap\", phost, realm, 0)",
 		  !(err=krb_mk_req(&authent, "imap", phost, realm, 0)),
 		  "returned nonzero")) {
-	printf("\terror %d in krb_err_txt[]: %s\n",
-	       err, krb_err_txt[err]);
+	printf("\terror is: %s\n", error_message(err));
     }
 
     /* krb_rd_req(...)
@@ -367,11 +364,10 @@ char **argv;
      */
 
     if (evalcheck("krb_rd_req(&authent, \"imap\", phost, 0L, ad, srvtab)",
-		  (err=krb_rd_req(&authent, "imap", phost, 
+		  !(err=krb_rd_req(&authent, "imap", phost, 
 				 0L /* XXX why? */, ad, srvtab)),
 		  "returned nonzero")) {
-	printf("\terror %d in krb_err_txt[]: %s\n",
-	       err, krb_err_txt[err]);
+	printf("\terror is: %s\n", error_message(err));
 	exit(EXIT_CHOKE);
     }
 				 
