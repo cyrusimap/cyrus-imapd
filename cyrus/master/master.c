@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.27 2000/12/27 19:18:10 ken3 Exp $ */
+/* $Id: master.c,v 1.28 2000/12/31 03:05:29 ken3 Exp $ */
 
 #include <config.h>
 
@@ -769,6 +769,7 @@ void add_service(const char *name, struct entry *e, void *rock)
     int prefork = masterconf_getint(e, "prefork", 0);
     char *listen = strdup(masterconf_getstring(e, "listen", NULL));
     char *proto = strdup(masterconf_getstring(e, "proto", "tcp"));
+    int i;
 
     if (!cmd || !listen) {
 	char buf[256];
@@ -776,29 +777,49 @@ void add_service(const char *name, struct entry *e, void *rock)
 		 name);
 	fatal(buf, EX_CONFIG);
     }
-    if (nservices == allocservices) {
-	Services = realloc(Services, 
-			   (allocservices+=5) * sizeof(struct service));
-	if (!Services) fatal("out of memory", EX_UNAVAILABLE);
+
+    /* see if we have an existing entry for this service */
+    for (i = 0; i < nservices; i++) {
+	if (!strcmp(Services[i].name, name)) break;
     }
 
-    Services[nservices].name = strdup(name);
-    Services[nservices].listen = listen;
-    Services[nservices].proto = proto;
-    Services[nservices].exec = tokenize(cmd);
-    if (!Services[nservices].exec) fatal("out of memory", EX_UNAVAILABLE);
+    if ((i < nservices) &&
+	!strcmp(Services[i].listen, listen) &&
+	!strcmp(Services[i].proto, proto)) {
 
-    Services[nservices].socket = 0;
-    Services[nservices].saddr = NULL;
+	/* we found an existing entry and the port paramters are the same */
+	Services[i].exec = tokenize(cmd);
+	if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
+	Services[i].desired_workers = prefork;
+    }
+    else {
+	/* either we don't have an existing entry or we are changing
+	 * the port parameters, so create a new service
+	 */
+	if (nservices == allocservices) {
+	    Services = realloc(Services, 
+			       (allocservices+=5) * sizeof(struct service));
+	    if (!Services) fatal("out of memory", EX_UNAVAILABLE);
+	}
 
-    Services[nservices].ready_workers = 0;
-    Services[nservices].desired_workers = prefork;
-    memset(Services[nservices].stat, 0, sizeof(Services[nservices].stat));
+	Services[nservices].name = strdup(name);
+	Services[nservices].listen = listen;
+	Services[nservices].proto = proto;
+	Services[nservices].exec = tokenize(cmd);
+	if (!Services[nservices].exec) fatal("out of memory", EX_UNAVAILABLE);
 
-    Services[nservices].nforks = 0;
-    Services[nservices].nactive = 0;
+	Services[nservices].socket = 0;
+	Services[nservices].saddr = NULL;
 
-    nservices++;
+	Services[nservices].ready_workers = 0;
+	Services[nservices].desired_workers = prefork;
+	memset(Services[nservices].stat, 0, sizeof(Services[nservices].stat));
+
+	Services[nservices].nforks = 0;
+	Services[nservices].nactive = 0;
+
+	nservices++;
+    }
 }
 
 void add_event(const char *name, struct entry *e, void *rock)
@@ -848,6 +869,64 @@ void unlimit_fds(void)
 {
 }
 #endif
+
+void reread_conf(void)
+{
+    int i;
+    struct event *ptr;
+
+    /* disable all services -
+       they will be re-enabled if they appear in config file */
+    for (i = 0; i < nservices; i++) Services[i].exec = NULL;
+
+     /* read services */
+    masterconf_getsection("SERVICES", &add_service, NULL);
+
+    for (i = 0; i < nservices; i++) {
+	if (!Services[i].exec && Services[i].socket) {
+	    /* cleanup newly disabled services */
+
+	    if (verbose > 2)
+		syslog(LOG_DEBUG, "disable: service %s socket %d pipe %d %d",
+		       Services[i].name, Services[i].socket,
+		       Services[i].stat[0], Services[i].stat[1]);
+	    Services[i].desired_workers = 0;
+	    Services[i].nforks = 0;
+	    Services[i].nactive = 0;
+
+	    /* close all listeners */
+	    if (Services[i].socket > 0) close(Services[i].socket);
+	    Services[i].socket = 0;
+	    Services[i].saddr = NULL;
+
+	    if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
+	    if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
+	    memset(Services[i].stat, 0, sizeof(Services[i].stat));
+	}
+	else if (Services[i].exec && !Services[i].socket) {
+	    /* initialize new services */
+
+	    service_create(&Services[i]);
+	    if (verbose > 2)
+		syslog(LOG_DEBUG, "init: service %s socket %d pipe %d %d",
+		       Services[i].name, Services[i].socket,
+		       Services[i].stat[0], Services[i].stat[1]);
+	}
+    }
+
+
+    /* remove existing events */
+    while (schedule) {
+	ptr = schedule;
+	schedule = schedule->next;
+	free(ptr->name);
+	free((char**) ptr->exec);
+	free(ptr);
+    }
+
+    /* read events */
+    masterconf_getsection("EVENTS", &add_event, NULL);
+}
 
 int main(int argc, char **argv, char **envp)
 {
@@ -961,6 +1040,7 @@ int main(int argc, char **argv, char **envp)
 	if (gotsighup) {
 	    syslog(LOG_NOTICE, "got SIGHUP");
 	    gotsighup = 0;
+	    reread_conf();
 	}
 
 	FD_ZERO(&rfds);
