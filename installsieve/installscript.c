@@ -72,6 +72,8 @@ int sock; /* socket descriptor */
 
 struct protstream *pout, *pin;
 
+static int version;
+
 void imtest_fatal(char *msg)
 {
   if (msg!=NULL)
@@ -159,9 +161,10 @@ static sasl_callback_t callbacks[] = {
 
 
 /* libcyrus makes us define this */
-void fatal(void)
+void fatal(const char *s, int code)
 {
-  exit(1);
+    printf("Error: %s\n",s);
+    exit(code);
 }
 
 static sasl_security_properties_t *make_secprops(int min,int max)
@@ -282,7 +285,7 @@ int getauthline(char **line, unsigned int *linelen)
   return STAT_CONT;
 }
 
-int auth_sasl(char *mechlist)
+int auth_sasl(int version, char *mechlist)
 {
   sasl_interact_t *client_interact=NULL;
   int saslresult=SASL_INTERACT;
@@ -399,10 +402,12 @@ int init_net(char *serverFQDN, int port)
   return IMTEST_OK;
 }
 
-char *read_capability(void)
+char *read_capability(int *version)
 {
   lexstate_t state;
   char *cap = NULL;
+
+  *version = NEW_VERSION;
 
   while (yylex(&state,pin)==STRING)
   {
@@ -430,10 +435,16 @@ char *read_capability(void)
 
       } else if (strcasecmp(attr,"IMPLEMENTATION")==0) {
 
+      } else if (strncmp(val,"SASL=",5)==0) {
+	  *version = OLD_VERSION;
+	  cap = (char *) malloc(strlen(val));
+	  memset(cap, '\0', strlen(val));
+	  memcpy(cap, val+6, strlen(val)-7);
+
+	  return cap;
       } else {
 	  /* unkown capability */
       }
-
   }
 
   if (yylex(&state,pin)!=EOL)
@@ -562,15 +573,15 @@ int main(int argc, char **argv)
   pin = prot_new(sock, 0);
   pout = prot_new(sock, 1); 
 
-  mechlist=read_capability();
+  mechlist=read_capability(&version);
 
   if (mechanism!=NULL) {
-    result=auth_sasl(mechanism);
+    result=auth_sasl(version,mechanism);
   } else if (mechlist==NULL) {
     printf("Error reading mechanism list from server\n");
     exit(1);
   } else {
-    result=auth_sasl(mechlist);
+    result=auth_sasl(version,mechlist);
   }
 
   if (result!=IMTEST_OK) {
@@ -580,31 +591,31 @@ int main(int argc, char **argv)
 
   if (viewfile!=NULL)
   {
-    getscript(pout,pin, viewfile,0);
+    getscript(version,pout,pin, viewfile,0);
   }
 
   if (installfile!=NULL)
   {
-    installafile(pout,pin,installfile);
+    installafile(version,pout,pin,installfile);
   }
 
   if (setactive!=NULL)
   {
-    setscriptactive(pout,pin,setactive);
+    setscriptactive(version,pout,pin,setactive);
   }
 
   if (deletescript!=NULL)
   {
-    deleteascript(pout, pin, deletescript);
+    deleteascript(version,pout, pin, deletescript);
   }
 
   if (getscriptname!=NULL)
   {
-    getscript(pout,pin, getscriptname,1);
+    getscript(version,pout,pin, getscriptname,1);
   }
 
   if (dolist || deflist) {
-      showlist(pout,pin);
+      showlist(version,pout,pin);
   }
 
   return 0;

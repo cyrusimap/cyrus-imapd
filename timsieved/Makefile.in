@@ -1,5 +1,5 @@
 # Makefile.in - timsieved makefile
-# $Id: Makefile.in,v 1.12 2000/04/06 15:20:09 leg Exp $
+# $Id: Makefile.in,v 1.13 2000/04/10 18:46:24 tmartin Exp $
 # @configure_input@
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
@@ -34,7 +34,7 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I. -I.. -I$(srcdir) -I$(srcdir)/../sieve -I$(srcdir)/../imap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I.. -I../sieve/ -I$(srcdir) -I$(srcdir)/../sieve -I$(srcdir)/../imap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
 

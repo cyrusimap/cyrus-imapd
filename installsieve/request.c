@@ -54,53 +54,71 @@ void parseerror(char *str)
   exit(2);
 }
 
-int deleteascript(struct protstream *pout, struct protstream *pin,char *name)
+static int handle_response(int res,int version,struct protstream *pin, mystring_t **errstr)
+{    
+  lexstate_t state;
+
+  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
+    parseerror("ATOM");
+
+  if (res==TOKEN_NO) {
+      if (yylex(&state, pin)!=' ')
+	  parseerror("expected sp\n");
+      
+      if (yylex(&state, pin)!=STRING)
+	  parseerror("expected string\n");
+
+      if (errstr)
+	  *errstr = state.str;
+
+      return -1;
+  }
+  
+  /* old version of protocol had strings with ok responses too */
+  if (version == OLD_VERSION) {
+      if (yylex(&state, pin)!=' ')
+	  parseerror("expected sp\n");
+      
+      if (yylex(&state, pin)!=STRING)
+	  parseerror("expected string\n");
+  }
+  
+  if (yylex(&state, pin)!=EOL)
+      printf("expected eol\n");
+  
+  return 0;
+}
+
+int deleteascript(int version, struct protstream *pout, struct protstream *pin,char *name)
 {
   lexstate_t state;
   int res;
-  mystring_t *str;
+  int ret;
+  mystring_t *errstr;
 
   prot_printf(pout,"DELETESCRIPT \"%s\"\r\n",name);
   prot_flush(pout);  
 
   res=yylex(&state, pin);
 
-  if ((res!=TOKEN_OK) && (res!=TOKEN_NO)) {
-    parseerror("OK | NO");
-  }
+  ret = handle_response(res,version,pin,&errstr);
 
-  if (res == TOKEN_NO) {
-
-      if (yylex(&state, pin)!=' ')
-	  parseerror("SPACE");
-
-      if (yylex(&state, pin)!=STRING)
-	  parseerror("STRING");
-
-      str = state.str;
-  }
-
-  if (yylex(&state, pin)!=EOL)
-      parseerror("EOL");
-
-  if (res==TOKEN_NO)
+  if (ret!=0)
   {
-    printf("Deletescript error: %s\n",string_DATAPTR(state.str));
-
-
+    printf("Deletescript error: %s\n",string_DATAPTR(errstr));
     return -1;
   }
 
   printf("Script %s deleted successfully\n",name);
-
   return 0;
 }
 
-int installdata(struct protstream *pout, struct protstream *pin,
+int installdata(int version,struct protstream *pout, struct protstream *pin,
 		char *scriptname, char *data, int len)
 {
   int res;
-  mystring_t *str=NULL;
+  int ret;
+  mystring_t *errstr=NULL;
   lexstate_t state;
 
   prot_printf(pout, "PUTSCRIPT \"%s\" ",scriptname);
@@ -115,31 +133,17 @@ int installdata(struct protstream *pout, struct protstream *pin,
   /* now let's see what the server said */
   res=yylex(&state,pin);
 
-  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
-    parseerror("TOKEN");
-
-  if (res == TOKEN_NO) {
-      if (yylex(&state,pin)!=' ')
-	  parseerror("SPACE");
-
-      if (yylex(&state,pin)!=STRING)
-	  parseerror("STRING");
-
-      str=state.str;
-  }
-
-  if (yylex(&state,pin)!=EOL)
-    parseerror("EOL");
+  ret = handle_response(res,version,pin,&errstr);
 
   /* if command failed */
-  if (res==TOKEN_NO)
+  if (ret!=0)
   {
-    printf("Putting script failed with message: %s\n",string_DATAPTR(str));
+    printf("Putting script failed with message: %s\n",string_DATAPTR(errstr));
     
     return -1;
   }
 
-  return setscriptactive(pout,pin,scriptname);
+  return setscriptactive(version,pout,pin,scriptname);
 }
 
 static char *getsievename(char *filename)
@@ -167,7 +171,7 @@ static char *getsievename(char *filename)
 }
 
 
-int installafile(struct protstream *pout, struct protstream *pin,char *filename)
+int installafile(int version,struct protstream *pout, struct protstream *pin,char *filename)
 {
   FILE *stream;
   struct stat filestats;  /* returned by stat */
@@ -175,7 +179,8 @@ int installafile(struct protstream *pout, struct protstream *pin,char *filename)
   int result;
   int cnt;
   int res;
-  mystring_t *str=NULL;
+  int ret;
+  mystring_t *errstr=NULL;
   lexstate_t state;
   char *sievename;
 
@@ -200,7 +205,6 @@ int installafile(struct protstream *pout, struct protstream *pin,char *filename)
   }
 
   prot_printf(pout, "PUTSCRIPT \"%s\" ",sievename);
-
 
   prot_printf(pout, "{%d+}\r\n",size);
 
@@ -227,41 +231,26 @@ int installafile(struct protstream *pout, struct protstream *pin,char *filename)
   /* now let's see what the server said */
   res=yylex(&state,pin);
 
-  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
-    parseerror("ATOM");
-
-  if (res!=TOKEN_OK) {
-
-      if (yylex(&state,pin)!=' ')
-	  parseerror("SPACE");
-
-      if (yylex(&state,pin)!=STRING)
-	  parseerror("STRING");
-
-      str=state.str;
-  }
-
-  if (yylex(&state,pin)!=EOL)
-    parseerror("EOL");
+  ret = handle_response(res,version,pin,&errstr);
 
   /* if command failed */
-  if (res==TOKEN_NO)
+  if (ret!=0)
   {
-    printf("Putting script failed with message: %s\n",string_DATAPTR(str));
-    
+    printf("Putting script failed with message: %s\n",string_DATAPTR(errstr));    
     return -1;
   }
 
-  return setscriptactive(pout,pin,sievename);
+  return setscriptactive(version,pout,pin,sievename);
 }
 
 
 
-int showlist(struct protstream *pout, struct protstream *pin)
+int showlist(int version, struct protstream *pout, struct protstream *pin)
 {
   lexstate_t state;
   int end=0;
   int res;
+  int ret = 0;
 
   printf("You have the following scripts on the server:\n");
 
@@ -283,24 +272,27 @@ int showlist(struct protstream *pout, struct protstream *pin)
 
 	  printf("  %s  <- Active Sieve Script\n",str);	  
       } else {
-	  /* assume it's a EOL */
-	  printf("  %s\n",str);	  
-	  
-      }      
+
+	  /* in old version we had that '*' means active script thing */
+	  if (version == OLD_VERSION) {
+
+	      if (str[strlen(str)-1]=='*') {
+		  str[strlen(str)-1]='\0';
+		  printf("  %s  <- Active Sieve Script\n",str);	  
+	      } else {
+		  printf("  %s\n",str);	  	  
+	      }
+
+	  } else { /* NEW_VERSION */
+	      /* assume it's a EOL */
+	      printf("  %s\n",str);	  	  
+	  }
+      }
 
     } else {
 
-	if (res==TOKEN_NO) {
-	    if (yylex(&state, pin)!=' ')
-		printf("expected sp\n");
-
-	    if (yylex(&state, pin)!=STRING)
-		printf("expected string\n");
-	}
-
-	if (yylex(&state, pin)!=EOL)
-	    printf("expected eol\n");
-
+	ret = handle_response(res,version,pin,NULL);
+	
 	end=1;
     }
 
@@ -308,17 +300,17 @@ int showlist(struct protstream *pout, struct protstream *pin)
     
   } while (end==0);
 
-
-  return 0;
+  return ret;
 }
 
 
 
-int setscriptactive(struct protstream *pout, struct protstream *pin,char *name)
+int setscriptactive(int version, struct protstream *pout, struct protstream *pin,char *name)
 {
   lexstate_t state;
   int res;
-  mystring_t *str=NULL;
+  int ret;
+  mystring_t *errstr=NULL;
 
   /* tell server we want "name" to be the active script */
   prot_printf(pout, "SETACTIVE \"%s\"\r\n",name);
@@ -328,26 +320,12 @@ int setscriptactive(struct protstream *pout, struct protstream *pin,char *name)
   /* now let's see what the server said */
   res=yylex(&state, pin);
 
-  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
-    parseerror("TOKEN");
-  
-  if (res==TOKEN_NO) {
-      if (yylex(&state, pin)!=' ')
-	  parseerror("SPACE");
-
-      if (yylex(&state, pin)!=STRING)
-	  parseerror("STRING");
-
-      str=state.str;
-  }
-
-  if (yylex(&state, pin)!=EOL)
-    parseerror("EOL");
+  ret = handle_response(res,version,pin, &errstr);
 
   /* if command failed */
-  if (res==TOKEN_NO)
+  if (ret!=0)
   {
-    printf("Setting script %s active failed with message: %s\n",name, string_DATAPTR(str));
+    printf("Setting script %s active failed with message: %s\n",name, string_DATAPTR(errstr));
     return -1;
   }
 
@@ -386,11 +364,14 @@ static int writefile(mystring_t *data, char *name)
   return 0;
 }
 
-int getscript(struct protstream *pout, struct protstream *pin,char *name, int save)
+int getscript(int version, struct protstream *pout, 
+	      struct protstream *pin,char *name, int save)
 {
   int res;
   mystring_t *str=NULL;
+  mystring_t *errstr=NULL;
   lexstate_t state;
+  int ret = 0;
 
   prot_printf(pout,"GETSCRIPT \"%s\"\r\n",name);
   prot_flush(pout);
@@ -411,38 +392,25 @@ int getscript(struct protstream *pout, struct protstream *pin,char *name, int sa
     res=yylex(&state,pin);
   }
 
-  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
-    parseerror("TOKEN");
-  
-  if (res==TOKEN_NO) {
-      if (yylex(&state, pin)!=' ')
-	  parseerror("SPACE");
-      
-      if (yylex(&state, pin)!=STRING)
-	  parseerror("STRING");
-      
-      str=state.str;
-  }
-
-  if (yylex(&state, pin)!=EOL)
-    parseerror("EOL");
+  ret = handle_response(res,version,pin, &errstr);
 
   /* if command failed */
-  if (res==TOKEN_NO)
+  if (ret!=0)
   {
     printf("Getting script %s active failed with message: %s\n",name, string_DATAPTR(str));
-    return -1;
   }
 
-  return 0;
+  return ret;
 
 }
 
 
-int getscriptvalue(struct protstream *pout, struct protstream *pin,char *name, mystring_t **data)
+int getscriptvalue(int version, struct protstream *pout, 
+		   struct protstream *pin,char *name, mystring_t **data)
 {
   int res;
-  mystring_t *str=NULL;
+  int ret;
+  mystring_t *errstr=NULL;
   lexstate_t state;
 
   prot_printf(pout,"GETSCRIPT \"%s\"\r\n",name);
@@ -460,26 +428,12 @@ int getscriptvalue(struct protstream *pout, struct protstream *pin,char *name, m
     res=yylex(&state,pin);
   }
 
-  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
-    parseerror("TOKEN");
-  
-  if (res == TOKEN_NO) {
-      if (yylex(&state, pin)!=' ')
-	  parseerror("SPACE");
-
-      if (yylex(&state, pin)!=STRING)
-	  parseerror("STRING");
-
-      str=state.str;
-  }
-
-  if (yylex(&state, pin)!=EOL)
-    parseerror("EOL");
+  ret = handle_response(res,version,pin, &errstr);
 
   /* if command failed */
-  if (res==TOKEN_NO)
+  if (ret!=0)
   {
-    printf("Getting script %s active failed with message: %s\n",name, string_DATAPTR(str));
+    printf("Getting script %s active failed with message: %s\n",name, string_DATAPTR(errstr));
     return -1;
   }
 

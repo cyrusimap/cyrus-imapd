@@ -31,30 +31,34 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "prot.h"
 #include "mystring.h"
 
+/* old and new versions of the protocol */
+#define OLD_VERSION 4
+#define NEW_VERSION 5
 
-int deleteascript(struct protstream *pout, struct protstream *pin,
+
+int deleteascript(int version,struct protstream *pout, struct protstream *pin,
 		  char *name);
 
-int installafile(struct protstream *pout, struct protstream *pin,
+int installafile(int version,struct protstream *pout, struct protstream *pin,
 		 char *filename);
 
-int installdata(struct protstream *pout, struct protstream *pin,
+int installdata(int version,struct protstream *pout, struct protstream *pin,
 		char *scriptname, char *data, int len);
 
-int showlist(struct protstream *pout, struct protstream *pin);
+int showlist(int version, struct protstream *pout, struct protstream *pin);
 
-int setscriptactive(struct protstream *pout, struct protstream *pin,
+int setscriptactive(int version,struct protstream *pout, struct protstream *pin,
 		    char *name);
 
 /*
  * Getscript. Save {0,1} wheather to save to disk or display on screen
  */
 
-int getscript(struct protstream *pout, struct protstream *pin,
+int getscript(int version, struct protstream *pout, struct protstream *pin,
 	      char *name, int save);
 
-int getscriptvalue(struct protstream *pout, struct protstream *pin,
-	      char *name, mystring_t **data);
+int getscriptvalue(int version,struct protstream *pout, struct protstream *pin,
+		   char *name, mystring_t **data);
 
 void parseerror(char *str);
 
