@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.21 1998/07/30 21:30:49 wcw Exp $
+ $Id: auth_krb_pts.c,v 1.22 1998/08/15 14:53:43 wcw Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -407,6 +407,7 @@ const char *cacheid;
 	}
     }
     if (cacheid) {
+      /* this should be the session key + the userid */
         memset(keydata, 0, key.size);
         memcpy(keydata, cacheid, 16); /* why 16? see sasl_krb_server.c */
 	/* toss on userid to further uniquify */
@@ -417,8 +418,13 @@ const char *cacheid;
 	}
     } /* cacheid */
     else {
+      /* this is just the userid but we offset it by the length of the session key
+       * above just in case a user's userid ends up being the same value as a session
+       * key. Also note ptexpire MUST run and nuke this entry as there is no way for the 
+       * user to invalidate his cached entry.
+       */
         memset(keydata, 0, key.size);
-        strncpy(keydata, identifier, PR_MAXNAMELEN);
+        strncpy(keydata+16, identifier, PR_MAXNAMELEN);
     }
     /* Fetch and process the header record for the user, if any */
     keydata[PTS_DB_HOFFSET] = 'H';
