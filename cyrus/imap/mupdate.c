@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.31 2003/04/19 02:01:44 ken3 Exp $
+ * $Id: mupdate.c,v 1.60.4.32 2003/04/22 15:55:14 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -367,15 +367,16 @@ static void conn_free(struct conn *C)
 
     if (C->pin) prot_free(C->pin);
     if (C->pout) prot_free(C->pout);
-    cyrus_close_sock(C->fd);
-    if (C->saslconn) sasl_dispose(&C->saslconn);
-
-    if (C->saslprops.authid) free(C->saslprops.authid);
 
 #ifdef HAVE_SSL
     if (C->tlsconn) tls_reset_servertls(&C->tlsconn);
     tls_shutdown_serverengine();
 #endif
+
+    cyrus_close_sock(C->fd);
+    if (C->saslconn) sasl_dispose(&C->saslconn);
+
+    if (C->saslprops.authid) free(C->saslprops.authid);
 
     /* free struct bufs */
     freebuf(&(C->tag));

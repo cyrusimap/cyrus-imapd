@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.75 2003/03/20 18:26:26 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.76 2003/04/22 15:55:15 ken3 Exp $
  */
 
 /*
@@ -464,6 +464,13 @@ static void nntp_reset(void)
     
     nntp_in = nntp_out = NULL;
 
+#ifdef HAVE_SSL
+    if (tls_conn) {
+	tls_reset_servertls(&tls_conn);
+	tls_conn = NULL;
+    }
+#endif
+
     cyrus_close_sock(0);
     cyrus_close_sock(1);
     cyrus_close_sock(2);
@@ -496,13 +503,6 @@ static void nntp_reset(void)
        saslprops.authid = NULL;
     }
     saslprops.ssf = 0;
-
-#ifdef HAVE_SSL
-    if (tls_conn) {
-	tls_reset_servertls(&tls_conn);
-	tls_conn = NULL;
-    }
-#endif
 
     nntp_exists = 0;
     nntp_current = 0;

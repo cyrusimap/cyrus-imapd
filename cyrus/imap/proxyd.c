@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.56 2003/04/02 02:03:09 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.57 2003/04/22 15:55:15 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1173,6 +1173,16 @@ static void proxyd_reset(void)
     }
     
     proxyd_in = proxyd_out = NULL;
+
+#ifdef HAVE_SSL
+    if (tls_conn) {
+	if (tls_reset_servertls(&tls_conn) == -1) {
+	    fatal("tls_reset() failed", EC_TEMPFAIL);
+	}
+	tls_conn = NULL;
+    }
+#endif
+
     cyrus_close_sock(0);
     cyrus_close_sock(1);
     cyrus_close_sock(2);
@@ -1219,15 +1229,6 @@ static void proxyd_reset(void)
 	saslprops.authid = NULL;
     }
     saslprops.ssf = 0;
-
-#ifdef HAVE_SSL
-    if (tls_conn) {
-	if (tls_reset_servertls(&tls_conn) == -1) {
-	    fatal("tls_reset() failed", EC_TEMPFAIL);
-	}
-	tls_conn = NULL;
-    }
-#endif
 }
 
 int service_main(int argc, char **argv, char **envp)

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.29 2003/03/12 16:38:16 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.30 2003/04/22 15:55:15 ken3 Exp $
  */
 #include <config.h>
 
@@ -227,6 +227,13 @@ static void popd_reset(void)
     
     popd_in = popd_out = NULL;
 
+#ifdef HAVE_SSL
+    if (tls_conn) {
+	tls_reset_servertls(&tls_conn);
+	tls_conn = NULL;
+    }
+#endif
+
     cyrus_close_sock(0);
     cyrus_close_sock(1);
     cyrus_close_sock(2);
@@ -260,13 +267,6 @@ static void popd_reset(void)
        saslprops.authid = NULL;
     }
     saslprops.ssf = 0;
-
-#ifdef HAVE_SSL
-    if (tls_conn) {
-	tls_reset_servertls(&tls_conn);
-	tls_conn = NULL;
-    }
-#endif
 
     popd_exists = 0;
 }
