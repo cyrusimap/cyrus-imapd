@@ -163,9 +163,10 @@ char **aclp;
 /*
  * Check/set up for mailbox creation
  */
-mboxlist_createmailboxcheck(name, partition, isadmin, userid, auth_state, newacl,
-			    newpartition)
+mboxlist_createmailboxcheck(name, format, partition, isadmin, userid,
+			    auth_state, newacl, newpartition)
 char *name;
+int format;
 char *partition;
 int isadmin;
 char *userid;
@@ -188,6 +189,9 @@ char **newpartition;
 	return IMAP_PARTITION_UNKNOWN;
     }
     r = mboxname_policycheck(name);
+    if (r) return r;
+
+    if (format == MAILBOX_FORMAT_NETNEWS) r = mboxname_netnewscheck(name);
     if (r) return r;
 
     /* User has admin rights over their own mailbox namespace */
@@ -342,8 +346,8 @@ struct auth_state *auth_state;
     if (r) return r;
 
     /* Check ability to create mailbox */
-    r = mboxlist_createmailboxcheck(name, partition, isadmin, userid, auth_state,
-				    &acl, &partition);
+    r = mboxlist_createmailboxcheck(name, format, partition, isadmin, userid,
+				    auth_state, &acl, &partition);
     if (r) {
 	mboxlist_unlock();
 	return r;
@@ -645,6 +649,10 @@ struct auth_state *auth_state;
     int num_iov;
     int n;
 
+    if (partition && !strcmp(partition, "news")) {
+	return IMAP_MAILBOX_NOTSUPPORTED;
+    }
+
     /* Open and lock mailbox list file */
     r = mboxlist_openlock();
     if (r) return r;
@@ -691,10 +699,10 @@ struct auth_state *auth_state;
 	/* Even admins can't rename to user's inboxes */
 	mboxlist_unlock();
 	free(acl);
-	return IMAP_PERMISSION_DENIED;
+	return IMAP_MAILBOX_NOTSUPPORTED;
     }
-    r = mboxlist_createmailboxcheck(newname, partition, isadmin, userid, auth_state,
-				    (char **)0, &partition);
+    r = mboxlist_createmailboxcheck(newname, 0, partition, isadmin, userid,
+				    auth_state, (char **)0, &partition);
     if (r) {
 	mboxlist_unlock();
 	free(acl);

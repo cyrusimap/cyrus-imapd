@@ -214,7 +214,11 @@ do_syncnews()
 	    r = mboxlist_createmailbox(group[i],
 				       MAILBOX_FORMAT_NETNEWS, "news",
 				       1, "anonymous", 0);
-	    if (r) {
+
+	    if (r == IMAP_MAILBOX_BADNAME) {
+		printf("ignored %s\n", group[i]);
+	    }
+	    else if (r) {
 		fprintf(stderr, "syncnews: cannot creat %s: %s\n",
 			group[i], error_message(r));
 		syslog(LOG_ERR, "cannot create %s: %s",
