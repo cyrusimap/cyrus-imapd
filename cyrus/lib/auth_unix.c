@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.33.2.5 2003/03/19 19:00:39 rjs3 Exp $
+ * $Id: auth_unix.c,v 1.33.2.6 2003/05/13 23:01:00 ken3 Exp $
  */
 
 #include <config.h>
@@ -167,7 +167,7 @@ size_t len;
     if(!len) len = strlen(identifier);
     if(len >= sizeof(retbuf)) return NULL;
 
-    memcpy(retbuf, identifier, len);
+    memmove(retbuf, identifier, len);
     retbuf[len] = '\0';
 
     /* This used to be far more restrictive, but many sites seem to ignore the 
