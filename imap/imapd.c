@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.383 2002/04/10 20:07:36 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.384 2002/04/25 18:15:14 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -5753,12 +5753,12 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
     int i=0, j=0;
     char tagbuf[128];
     char c;
-    struct buf tag, cmd, mb, user;
+    struct buf tag, cmd, tmp, user;
     int r = 0;
 
     memset(&tag, 0, sizeof(struct buf));
     memset(&cmd, 0, sizeof(struct buf));
-    memset(&mb, 0, sizeof(struct buf));
+    memset(&tmp, 0, sizeof(struct buf));
     memset(&user, 0, sizeof(struct buf));
 
     prot_printf(pout, "ACL0 GETACL {%d+}\r\n%s\r\n",
@@ -5777,27 +5777,53 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
 	    break;
 	}
 	
+	if(c == '\r') {
+	    c = prot_getc(pin);
+	    if(c != '\n') {
+		r = IMAP_SERVER_UNAVAILABLE;
+		goto cleanup;
+	    }
+	}
+	if(c == '\n') goto cleanup;	
+
 	if (tag.s[0] == '*' && !strncmp(cmd.s, "ACL", 3)) {
-	    /* An ACL response, we should send a DELETEACL command */
-	    c = getastring(pin, pout, &mb);
-	    if (c == EOF) {
-		r = IMAP_SERVER_UNAVAILABLE;
-		break;
+	    while(c != '\n') {
+		/* An ACL response, we should send a DELETEACL command */
+		c = getastring(pin, pout, &tmp);
+		if (c == EOF) {
+		    r = IMAP_SERVER_UNAVAILABLE;
+		    goto cleanup;
+		}
+
+		if(c == '\r') {
+		    c = prot_getc(pin);
+		    if(c != '\n') {
+			r = IMAP_SERVER_UNAVAILABLE;
+			goto cleanup;
+		    }
+		}
+		if(c == '\n') goto cleanup;
+		
+		c = getastring(pin, pout, &user);
+		if (c == EOF) {
+		    r = IMAP_SERVER_UNAVAILABLE;
+		    goto cleanup;
+		}
+
+		snprintf(tagbuf, sizeof(tagbuf), "ACL%d", ++i);
+		
+		prot_printf(pout, "%s DELETEACL {%d+}\r\n%s {%d+}\r\n%s\r\n",
+			    tagbuf, strlen(mailbox), mailbox,
+			    strlen(user.s), user.s);
+		if(c == '\r') {
+		    c = prot_getc(pin);
+		    if(c != '\n') {
+			r = IMAP_SERVER_UNAVAILABLE;
+			goto cleanup;
+		    }
+		}
+		/* if the next character is \n, we'll exit the loop */
 	    }
-
-	    c = getastring(pin, pout, &user);
-	    if (c == EOF) {
-		r = IMAP_SERVER_UNAVAILABLE;
-		break;
-	    }
-
-	    snprintf(tagbuf, sizeof(tagbuf), "ACL%d", ++i);
-
-	    prot_printf(pout, "%s DELETEACL {%d+}\r\n%s {%d+}\r\n%s\r\n",
-			tagbuf, strlen(mailbox), mailbox,
-			strlen(user.s), user.s);
-	    
-	    eatline(pin, c);
 	    continue;
 	} else if (!strncmp(tag.s, "ACL0", 4)) {
 	    /* end of this command */
@@ -5807,6 +5833,8 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
 	    break;
 	}
     }
+
+    cleanup:
 
     /* Now cleanup after all the DELETEACL commands */
     if(!r) {
@@ -5828,7 +5856,7 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
     if(r) eatline(pin, c);
 
     freebuf(&user);
-    freebuf(&mb);
+    freebuf(&tmp);
     freebuf(&cmd);
     freebuf(&tag);
 
