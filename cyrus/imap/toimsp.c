@@ -131,6 +131,10 @@ va_dcl
 
     va_end(pvar);
 
+    /* End with newline */
+    iov[num_iov].iov_base = "\n";
+    iov[num_iov++].iov_len = 1;
+
     if (num_iov > VECSIZE) {
 	abort("Internal error: toimsp arg list overflow", EX_SOFTWARE);
     }
