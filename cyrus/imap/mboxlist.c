@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.39 2003/04/10 17:55:17 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.40 2003/04/17 19:44:32 ken3 Exp $
  */
 
 #include <config.h>
@@ -279,7 +279,7 @@ int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
     root = config_partitiondir(partition);
     if (!root) return IMAP_PARTITION_UNKNOWN;
 	
-    sprintf(stagedir, "%s/stage./", root);
+    snprintf(stagedir, sd_len, "%s/stage./", root);
     
     return 0;
 }
@@ -446,7 +446,7 @@ mboxlist_mycreatemailboxcheck(char *name,
 	     */
 	    if(firstdot) *firstdot = '\0';
 	    identifier = xmalloc(mbox - name + strlen(mbox+5) + 1);
-	    strlcpy(identifier, mbox+5, sizeof(identifier));
+	    strcpy(identifier, mbox+5);
 	    if(firstdot) *firstdot = '.';
 
 	    if (config_getswitch(IMAPOPT_UNIXHIERARCHYSEP)) {
@@ -1428,7 +1428,8 @@ int mboxlist_setacl(const char *name, const char *identifier,
 	    if ((config_defdomain && !strcasecmp(config_defdomain, cp+1)) ||
 		!strcmp(identifier, "anonymous") ||
 		!strcmp(identifier, "anyone")) {
-		sprintf(ident, "%.*s", cp - identifier, identifier);
+		snprintf(ident, sizeof(ident),
+			 "%.*s", cp - identifier, identifier);
 	    } else {
 		strlcpy(ident, identifier, sizeof(ident));
 	    }
@@ -1834,7 +1835,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 	if (userid && (p = strrchr(userid, '@'))) {
 	    userlen = p - userid;
 	    domainlen = strlen(p); /* includes separator */
-	    sprintf(domainpat, "%s!%s", p+1, pattern);
+	    snprintf(domainpat, sizeof(domainpat), "%s!%s", p+1, pattern);
 	}
 	if ((p = strrchr(pattern, '@'))) {
 	    /* global admin specified mbox@domain */
@@ -1845,10 +1846,11 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 
 	    /* don't prepend default domain */
 	    if (!(config_defdomain && !strcasecmp(config_defdomain, p+1))) {
-		sprintf(domainpat, "%s!", p+1);
+		snprintf(domainpat, sizeof(domainpat), "%s!", p+1);
 		domainlen = strlen(p);
 	    }
-	    sprintf(domainpat+domainlen, "%.*s", p - pattern, pattern);
+	    snprintf(domainpat+domainlen, sizeof(domainpat)-domainlen,
+		     "%.*s", p - pattern, pattern);
 	}
     }
 
