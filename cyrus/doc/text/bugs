@@ -1,0 +1,15 @@
+                     Known bugs in the Cyrus IMAP Server
+
+imapd and core utilities
+
+      * Multiple APPENDs don't always correctly return the EXISTS response.
+        (can't reproduce?) 
+      * Particularly large quotas can wrap around. 
+      * The RENAME command is not atomic. 
+      * RENAMEing INBOX doesn't work correctly. (important!) 
+      * append.c: doesn't set the \Seen flag if the client requests it. 
+      * MULTIAPPEND: does it do the right thing with an aborted APPEND
+        (literal length {0})? 
+      * reconstruct doesn't deal with the mailboxes.db file. 
+      * deliver (wrapper) should fill in a more useful Return-Path when
+        none is given. (not important) 

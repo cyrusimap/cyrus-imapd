@@ -1,5 +1,7 @@
               Cyrus IMAP Server:  Overview and Concepts
 
+    This document has not been updated for Cyrus IMAP 2.0. 
+
     This document gives an overview of the Cyrus IMAP server. The Cyrus
     IMAP (Internet Message Access Protocol) server provides access to
     personal mail and system-wide bulletin boards through the IMAP
@@ -159,9 +161,10 @@ Access Rights
             mailbox. This right differs from the "i" right in that the
             delivery system inserts trace information into submitted
             messages. 
-    c       create - The user may create new sub-mailboxes of the mailbox. 
-    d       delete - The user may store the "Deleted" flag, perform
-            expunges, and delete or rename the mailbox. 
+    c       create - The user may create new sub-mailboxes of the mailbox,
+            or delete or rename the current mailbox. 
+    d       delete - The user may store the "Deleted" flag, and perform
+            expunges. 
     a       administer - The user may change the ACL on the mailbox. 
 
     You can combine access rights in different ways. For example: 
@@ -693,4 +696,40 @@ Configuration Directory
     character. 
 
     The "proc" subdirectory is normally be cleaned out on server reboot. 
+
+Message Delivery
+
+    This section refers to version 2.0 of the Cyrus IMAP server. 
+
+Local Mail Transfer Protocol
+
+    LMTP, the Local Mail Transfer Protocol, is a variant of SMTP design for
+    transferring mail to the final message store. The Cyrus server
+    implements LMTP via the lmtpd daemon. LMTP can either be used over a
+    network via TCP or local via a UNIX domain socket. 
+
+    Many MTAs (such as the latest versions of Sendmail or Postfix) can
+    deliver "local" mail over a network. This is an easy optimization so
+    that the IMAP server doesn't need to maintain a queue of messages or
+    run an MTA. 
+
+    Authenticated final delivery is also supported in the form of LMTP
+    AUTH. If the final delivery isn't authenticated, it is treated (for the
+    purposes of checking ACLs) as if the "anonymous" user is attempting
+    delivery. 
+
+Single Instance Store
+
+    If a delivery attempt mentions several recipients (only possible if the
+    MTA is speaking LMTP to lmtpd), the server attempts to store as few
+    copies of a message as possible. It will store one copy of the message
+    per partition, and create hard links for all other recipients of the
+    message. 
+
+    Single instance store can be turned off by using the
+    "singleinstancestore" flag in the configuration file. 
+
+Duplicate delivery suppression
+
+Sieve
 

@@ -46,9 +46,9 @@ Cyrus IMAP: Anonymous CVS Access
     anything in CVS, and even less of a guarantee of it working. (There.
     You've been warned.) 
 
-    Send bugs, questions, suggestions, and (best of all) patches to
-    cyrus-bugs+@andrew.cmu.edu; please be sure to note your architechture,
-    OS, compiler, etc. 
+    Please refer to Sending Feedback if you would like to submit a bug,
+    feature request or (best of all) patch. 
 
     Thanks to Ryan Troll for putting the time in to make the CVS server
     work and actually documenting it. 
+
