@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.4 1999/08/31 18:25:43 leg Exp $
+ * $Id: script.c,v 1.5 1999/08/31 18:43:21 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -342,14 +342,21 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		/* we have to parse this address & decide whether we
 		   want to respond to it */
 		void *data = NULL, *marker = NULL;
+		char *tmp;
 		
 		parse_address(body[0], &data, &marker);
-		reply_to = strdup(get_address(ADDRESS_ALL, &data, &marker));
+		tmp = get_address(ADDRESS_ALL, &data, &marker);
+		reply_to = (tmp != NULL) ? xstrdup(tmp) ? NULL;
 		free_address(&data, &marker);
+
+		/* first, is there a reply-to address? */
+		if (reply_to == NULL) {
+		    l = SIEVE_DONE;
+		}
 
 		/* first, is it from me? really should use a
 		   compare_address function */
-		if (!strcmp(myaddr, reply_to)) {
+		if (l == SIEVE_OK && !strcmp(myaddr, reply_to)) {
 		    l = SIEVE_DONE;
 		}
 
