@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.117 1999/12/23 18:44:24 leg Exp $
+ * $Id: deliver.c,v 1.118 1999/12/29 18:49:33 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.117 1999/12/23 18:44:24 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.118 1999/12/29 18:49:33 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -135,6 +135,7 @@ typedef struct message_data {
 /* data per script */
 typedef struct script_data {
     char *username;
+    char *mailboxname;
     struct auth_state *authstate;
 } script_data_t;
 
@@ -1049,6 +1050,7 @@ int sieve_keep(char *arg, void *ic, void *sc, void *mc)
     deliver_opts_t *dop = (deliver_opts_t *) ic;
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
+    char namebuf[MAX_MAILBOX_PATH];
     int ret;
 
     /* we're now the user who owns the script */
@@ -1056,10 +1058,18 @@ int sieve_keep(char *arg, void *ic, void *sc, void *mc)
     if (!sd->authstate)
 	return SIEVE_FAIL;
 
+    if (sd->mailboxname) {
+	strcpy(namebuf, "INBOX.");
+	strcat(namebuf, sd->mailboxname);
+    }
+    else {
+	strcpy(namebuf, "INBOX");
+    }
+
     ret = deliver_mailbox(md->data, md->size, 0, 0,
 			  sd->username, sd->authstate, md->id,
 			  sd->username, md->notifyheader,
-			  "INBOX", dop->quotaoverride, 1);
+			  namebuf, dop->quotaoverride, 1);
 
     if (ret == 0) {
 	return SIEVE_OK;
@@ -2244,6 +2254,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    sdata = (script_data_t *) xmalloc(sizeof(script_data_t));
 
 	    sdata->username = user;
+	    sdata->mailboxname = mailboxname;
 	    sdata->authstate = auth_newstate(user, (char *)0);
 	    
 	    /* slap the mailboxname back on so we hash the envelope & id
