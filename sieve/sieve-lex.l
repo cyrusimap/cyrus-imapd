@@ -105,6 +105,8 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>:all		return ALL;
 <INITIAL>:localpart	return LOCALPART;
 <INITIAL>:domain		return DOMAIN;
+<INITIAL>:user		return USER;
+<INITIAL>:detail	return DETAIL;
 <INITIAL>\"([^"]|\\.)*\"	{ yylval.sval = fixstr(yytext); return STRING; }
 <INITIAL>[ \t\n\r] ;	/* ignore whitespace */
 <INITIAL>#.* ;		/* ignore comments */

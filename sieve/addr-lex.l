@@ -1,6 +1,6 @@
 %{
 /*
- * addr-lex.y -- RFC 822 address parser
+ * addr-lex.l -- RFC 822 address lexer
  */
 
 #include "addr.h"
@@ -40,19 +40,19 @@ static int ncom;	/* number of open comments */
 <COMMENT>\(			ncom++;
 <COMMENT>\)			{ ncom--; if (ncom == 0) BEGIN INITIAL; }
 <COMMENT><<EOF>>		{ addrerror("address parse error, "
-					  
 					  "expecting `')'' "
 					  "(unterminated comment)");
 				  yyterminate(); }
 
 %%
 
-extern char *addrptr;	/* current position in address string */
-
+/* take input from address string provided by sieve parser */
 int addrinput(char *buf, int max_size)
 {
-    int n = strlen(addrptr) < max_size ? strlen(addrptr) : max_size;
+    extern char *addrptr;	/* current position in address string */
+    int n;			/* number of characters to read from string */
 
+    n = strlen(addrptr) < max_size ? strlen(addrptr) : max_size;
     if (n > 0) {
 	memcpy(buf, addrptr, n);
 	addrptr += n;

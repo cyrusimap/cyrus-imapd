@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.6 2000/02/07 23:25:37 tmartin Exp $
+ * $Id: message.c,v 1.7 2000/02/10 00:39:14 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -81,7 +81,7 @@ int do_reject(action_list_t *a, char *msg)
  *
  * incompatible with: reject
  */
-int do_fileinto(action_list_t *a, char *mbox)
+int do_fileinto(action_list_t *a, char *mbox, sieve_imapflags_t *imapflags)
 {
     action_list_t *b = NULL;
 
@@ -98,7 +98,8 @@ int do_fileinto(action_list_t *a, char *mbox)
     if (a == NULL)
 	return -1;
     a->a = ACTION_FILEINTO;
-    a->u.fil.mbox = mbox;
+    a->u.fil.mailbox = mbox;
+    a->u.fil.imapflags = imapflags;
     b->next = a;
     a->next = NULL;
     return 0;
@@ -137,7 +138,7 @@ int do_forward(action_list_t *a, char *addr)
  *
  * incompatible with: reject
  */
-int do_keep(action_list_t *a)
+int do_keep(action_list_t *a, sieve_imapflags_t *imapflags)
 {
     action_list_t *b = NULL;
 
@@ -156,6 +157,7 @@ int do_keep(action_list_t *a)
     if (a == NULL)
 	return -1;
     a->a = ACTION_KEEP;
+    a->u.keep.imapflags = imapflags;
     a->next = NULL;
     b->next = a;
     return 0;
@@ -207,12 +209,12 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
     if (a == NULL)
 	return -1;
     a->a = ACTION_VACATION;
-    a->u.vac.addr = addr;
-    a->u.vac.fromaddr = fromaddr;
-    a->u.vac.subj = subj;	/* user specified subject */
-    a->u.vac.msg = msg;
-    a->u.vac.days = days;
-    a->u.vac.mime = mime;
+    a->u.vac.send.addr = addr;
+    a->u.vac.send.fromaddr = fromaddr;
+    a->u.vac.send.subj = subj;	/* user specified subject */
+    a->u.vac.send.msg = msg;
+    a->u.vac.send.mime = mime;
+    a->u.vac.autoresp.days = days;
     a->next = NULL;
     b->next = a;
     return 0;
@@ -472,6 +474,15 @@ char *get_address(address_part_t addrpart, void **data, void **marker)
 	case ADDRESS_DOMAIN:
 	    ret = a->domain;
 	    break;
+
+	case ADDRESS_USER:
+	    am->freeme = (char *) xmalloc(strcspn(a->mailbox, "+") + 1);
+	    strncpy(am->freeme, a->mailbox, strcspn(a->mailbox, "+"));
+	    ret = am->freeme;
+	    break;
+	case ADDRESS_DETAIL:
+	    ret = (strchr(a->mailbox, '+') ? strchr(a->mailbox, '+')+1 : NULL);
+	    break;
 	}
 	a = a->next;
 	am->where = a;
@@ -526,9 +537,9 @@ void free_action_list(action_list_t *a)
 	action_list_t *b = a->next;
 	switch (a->a) {
 	case ACTION_VACATION:
-	    if (a->u.vac.addr) free(a->u.vac.addr);
-	    if (a->u.vac.fromaddr) free(a->u.vac.addr);
-	    if (a->u.vac.subj) free(a->u.vac.subj);
+	    if (a->u.vac.send.addr) free(a->u.vac.send.addr);
+	    if (a->u.vac.send.fromaddr) free(a->u.vac.send.addr);
+	    if (a->u.vac.send.subj) free(a->u.vac.send.subj);
 	    break;
 
 	default:

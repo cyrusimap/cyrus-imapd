@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.131 2000/02/08 06:34:01 leg Exp $
+ * $Id: deliver.c,v 1.132 2000/02/10 00:39:12 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.131 2000/02/08 06:34:01 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.132 2000/02/10 00:39:12 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -132,8 +132,6 @@ typedef struct script_data {
     char *username;
     char *mailboxname;
     struct auth_state *authstate;
-    char **flag;
-    int nflags;
 } script_data_t;
 
 int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
@@ -988,12 +986,13 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
 
 
 static
-int sieve_redirect(char *addr, void *ic, void *sc, void *mc)
+int sieve_redirect(void *ac, void *ic, void *sc, void *mc)
 {
+    sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
 
-    if (send_forward(addr, md->return_path, md->data) == 0) {
+    if (send_forward(rc->addr, md->return_path, md->data) == 0) {
 	return SIEVE_OK;
     } else {
 	return SIEVE_FAIL;
@@ -1001,7 +1000,7 @@ int sieve_redirect(char *addr, void *ic, void *sc, void *mc)
 }
 
 static
-int sieve_discard(char *arg, void *ic, void *sc, void *mc)
+int sieve_discard(void *ac, void *ic, void *sc, void *mc)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
@@ -1011,8 +1010,9 @@ int sieve_discard(char *arg, void *ic, void *sc, void *mc)
 }
 
 static
-int sieve_reject(char *msg, void *ic, void *sc, void *mc)
+int sieve_reject(void *ac, void *ic, void *sc, void *mc)
 {
+    sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
     char buf[8192];
@@ -1032,7 +1032,7 @@ int sieve_reject(char *msg, void *ic, void *sc, void *mc)
     }
 
     if (send_rejection(md->id, md->return_path, origreceip, sd->username,
-		       msg, md->data) == 0) {
+		       rc->msg, md->data) == 0) {
 	return SIEVE_OK;
     } else {
 	return SIEVE_FAIL;
@@ -1040,8 +1040,9 @@ int sieve_reject(char *msg, void *ic, void *sc, void *mc)
 }
 
 static
-int sieve_fileinto(char *mailbox, void *ic, void *sc, void *mc)
+int sieve_fileinto(void *ac, void *ic, void *sc, void *mc)
 {
+    sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     deliver_opts_t *dop = (deliver_opts_t *) ic;
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
@@ -1052,10 +1053,10 @@ int sieve_fileinto(char *mailbox, void *ic, void *sc, void *mc)
 	return SIEVE_FAIL;
 
     ret = deliver_mailbox(md->data, &md->stage, md->size,
-			  sd->flag, sd->nflags,
+			  fc->imapflags->flag, fc->imapflags->nflags,
                           sd->username, sd->authstate, md->id,
                           sd->username, md->notifyheader,
-                          mailbox, dop->quotaoverride, 0);
+                          fc->mailbox, dop->quotaoverride, 0);
 
     if (ret == 0) {
 	return SIEVE_OK;
@@ -1065,8 +1066,9 @@ int sieve_fileinto(char *mailbox, void *ic, void *sc, void *mc)
 }
 
 static
-int sieve_keep(char *arg, void *ic, void *sc, void *mc)
+int sieve_keep(void *ac, void *ic, void *sc, void *mc)
 {
+    sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     deliver_opts_t *dop = (deliver_opts_t *) ic;
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
@@ -1078,7 +1080,7 @@ int sieve_keep(char *arg, void *ic, void *sc, void *mc)
 	strcat(namebuf, sd->mailboxname);
 
 	ret = deliver_mailbox(md->data, &md->stage, md->size,
-			      sd->flag, sd->nflags,
+			      kc->imapflags->flag, kc->imapflags->nflags,
 			      dop->authuser, dop->authstate, md->id,
 			      sd->username, md->notifyheader,
 			      namebuf, dop->quotaoverride, 0);
@@ -1090,7 +1092,8 @@ int sieve_keep(char *arg, void *ic, void *sc, void *mc)
 
 	strcpy(namebuf, "INBOX");
 
-	ret = deliver_mailbox(md->data, &md->stage, md->size, sd->flag, sd->nflags,
+	ret = deliver_mailbox(md->data, &md->stage, md->size,
+			      kc->imapflags->flag, kc->imapflags->nflags,
 			      sd->username, sd->authstate, md->id,
 			      sd->username, md->notifyheader,
 			      namebuf, dop->quotaoverride, 1);
@@ -1103,122 +1106,27 @@ int sieve_keep(char *arg, void *ic, void *sc, void *mc)
     }
 }
 
-static
-void free_flags(char **flag, int nflags)
-{
-    int n;
- 
-    for (n = 0; n < nflags; n++)
-	free(flag[n]);
-    free(flag);
-}
-
-static
-int sieve_addflag(char *flag, void *ic, void *sc, void *mc)
-{
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *m = (message_data_t *) mc;
-    int n;
- 
-    /* search for flag already in list */
-    for (n = 0; n < sd->nflags; n++) {
-	if (!strcmp(sd->flag[n], flag))
-	    break;
-    }
- 
-    /* add flag to list, iff not in list */
-    if (n == sd->nflags) {
-	sd->nflags++;
-	sd->flag =
-	    (char **)xrealloc((char *)sd->flag, sd->nflags*sizeof(char *));
-	sd->flag[sd->nflags-1] = strdup(flag);
-    }
- 
-    return SIEVE_OK;
-}
-
-
-static
-int sieve_setflag(char *flag, void *ic, void *sc, void *mc)
-{
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *m = (message_data_t *) mc;
- 
-    free_flags(sd->flag, sd->nflags);
-    sd->flag = NULL; sd->nflags = 0;
- 
-    return sieve_addflag(flag, ic, sc, mc);
-}
-
-
-static
-int sieve_removeflag(char *flag, void *ic, void *sc, void *mc)
-{
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *m = (message_data_t *) mc;
-    int n;
- 
-    /* search for flag already in list */
-    for (n = 0; n < sd->nflags; n++) {
-	if (!strcmp(sd->flag[n], flag))
-	    break;
-    }
- 
-    /* remove flag from list, iff in list */
-    if (n < sd->nflags) {
-	free(sd->flag[n]);
-	sd->nflags--;
- 
-	for (; n < sd->nflags; n++)
-	    sd->flag[n] = sd->flag[n+1];
- 
-	sd->flag =
-	    (char **)xrealloc((char *)sd->flag, sd->nflags*sizeof(char *));
-    }
- 
-    return SIEVE_OK;
-}
-
-
-static
-int sieve_mark(char *arg, void *ic, void *sc, void *mc)
-{
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *m = (message_data_t *) mc;
- 
-    return sieve_addflag("\\flagged", ic, sc, mc);
-}
- 
-static
-int sieve_unmark(char *arg, void *ic, void *sc, void *mc)
-{
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *m = (message_data_t *) mc;
- 
-    return sieve_removeflag("\\flagged", ic, sc, mc);
-}
-
-static int sieve_notify(const char *priority, 
-			char *message, 
+static int sieve_notify(void *ac,
 			void *interp_context, 
 			void *script_context,
 			void *mc)
 {
+    sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
     script_data_t *sd = (script_data_t *) script_context;
 
     notify("SIEVE",
-	   priority,
+	   nc->priority,
 	   sd->username,
 	   NULL,
-	   message);
+	   nc->message);
     
     return SIEVE_OK;
 }
 
 
-int autorespond(unsigned char *hash, int len, int days,
-		void *ic, void *sc, void *mc)
+int autorespond(void *ac, void *ic, void *sc, void *mc)
 {
+    sieve_autorespond_context_t *arc = (sieve_autorespond_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
     time_t t, now;
     int ret;
@@ -1226,7 +1134,7 @@ int autorespond(unsigned char *hash, int len, int days,
     now = time(NULL);
 
     /* ok, let's see if we've responded before */
-    if (t = duplicate_check(hash, len, sd->username, strlen(sd->username))) {
+    if (t = duplicate_check(arc->hash, arc->len, sd->username, strlen(sd->username))) {
 	if (now >= t) {
 	    /* yay, we can respond again! */
 	    ret = SIEVE_OK;
@@ -1239,17 +1147,15 @@ int autorespond(unsigned char *hash, int len, int days,
     }
 
     if (ret == SIEVE_OK) {
-	duplicate_mark((char *) hash, len, 
+	duplicate_mark((char *) arc->hash, arc->len, 
 		       sd->username, strlen(sd->username), 
-		       now + days * (24 * 60 * 60));
+		       now + arc->days * (24 * 60 * 60));
     }
 
     return ret;
 }
 
-int send_response(char *addr, char *fromaddr,
-		  char *subj, char *msg, int mime, 
-		  void *ic, void *sc, void *mc)
+int send_response(void *ac, void *ic, void *sc, void *mc)
 {
     FILE *sm;
     char *smbuf[3];
@@ -1259,11 +1165,12 @@ int send_response(char *addr, char *fromaddr,
     int tz;
     time_t t;
     pid_t p;
+    sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
     script_data_t *sdata = (script_data_t *) sc;
 
     smbuf[0] = "sendmail";
-    smbuf[1] = addr;
+    smbuf[1] = src->addr;
     smbuf[2] = NULL;
     p = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
@@ -1291,18 +1198,18 @@ int send_response(char *addr, char *fromaddr,
             tz > 0 ? '-' : '+', tz / 60, tz % 60);
     
     fprintf(sm, "X-Sieve: %s\r\n", sieve_version);
-    fprintf(sm, "From: <%s>\r\n", fromaddr);
-    fprintf(sm, "To: <%s>\r\n", addr);
+    fprintf(sm, "From: <%s>\r\n", src->fromaddr);
+    fprintf(sm, "To: <%s>\r\n", src->addr);
     /* check that subject is sane */
-    sl = strlen(subj);
+    sl = strlen(src->subj);
     for (i = 0; i < sl; i++)
-	if (iscntrl(subj[i])) {
-	    subj[i] = '\0';
+	if (iscntrl(src->subj[i])) {
+	    src->subj[i] = '\0';
 	    break;
 	}
-    fprintf(sm, "Subject: %s\r\n", subj);
+    fprintf(sm, "Subject: %s\r\n", src->subj);
     fprintf(sm, "Auto-Submitted: auto-generated (vacation)\r\n");
-    if (mime) {
+    if (src->mime) {
 	fprintf(sm, "MIME-Version: 1.0\r\n");
 	fprintf(sm, "Content-Type: multipart/mixed;"
 		"\r\n\tboundary=\"%d/%s\"\r\n", p, hostname);
@@ -1312,9 +1219,9 @@ int send_response(char *addr, char *fromaddr,
 	fprintf(sm, "\r\n");
     }
 
-    fprintf(sm, "%s\r\n", msg);
+    fprintf(sm, "%s\r\n", src->msg);
 
-    if (mime) {
+    if (src->mime) {
 	fprintf(sm, "\r\n--%d/%s\r\n", p, hostname);
     }
     fclose(sm);
@@ -1338,6 +1245,10 @@ sieve_vacation_t vacation = {
     &autorespond,		/* autorespond() */
     &send_response,		/* send_response() */
 };
+
+/* imapflags support */
+static char *markflags[] = { "\\flagged" };
+static sieve_imapflags_t mark = { markflags, 1 };
 
 static void
 setup_sieve(deliver_opts_t *delopts, int lmtpmode)
@@ -1375,30 +1286,10 @@ setup_sieve(deliver_opts_t *delopts, int lmtpmode)
 	syslog(LOG_ERR, "sieve_register_keep() returns %d\n", res);
 	fatal("sieve_register_keep()", EC_TEMPFAIL);
     }
-    res = sieve_register_setflag(sieve_interp, &sieve_setflag);
+    res = sieve_register_imapflags(sieve_interp, &mark);
     if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_setflag() returns %d\n", res);
-	fatal("sieve_register_setflag()", EC_TEMPFAIL);
-    }
-    res = sieve_register_addflag(sieve_interp, &sieve_addflag);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_addflag() returns %d\n", res);
-	fatal("sieve_register_addflag()", EC_TEMPFAIL);
-    }
-    res = sieve_register_removeflag(sieve_interp, &sieve_removeflag);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_removeflag() returns %d\n", res);
-	fatal("sieve_register_removeflag()", EC_TEMPFAIL);
-    }
-    res = sieve_register_mark(sieve_interp, &sieve_mark);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_mark() returns %d\n", res);
-	fatal("sieve_register_mark()", EC_TEMPFAIL);
-    }
-    res = sieve_register_unmark(sieve_interp, &sieve_unmark);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_unmark() returns %d\n", res);
-	fatal("sieve_register_unmark()", EC_TEMPFAIL);
+	syslog(LOG_ERR, "sieve_register_imapflags() returns %d\n", res);
+	fatal("sieve_register_imapflags()", EC_TEMPFAIL);
     }
     res = sieve_register_notify(sieve_interp, &sieve_notify);
     if (res != SIEVE_OK) {
@@ -2441,7 +2332,6 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    sdata->username = user;
 	    sdata->mailboxname = mailboxname;
 	    sdata->authstate = auth_newstate(user, (char *)0);
-	    sdata->flag = NULL; sdata->nflags = 0;
 	    
 	    /* slap the mailboxname back on so we hash the envelope & id
 	       when we figure out whether or not to keep the message */
@@ -2489,7 +2379,6 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 
 	    /* free everything */
 	    if (sdata->authstate) auth_freestate(sdata->authstate);
-	    if (sdata->nflags) free_flags(sdata->flag, sdata->nflags);
 	    if (sdata) free(sdata);
 	    sieve_script_free(&s);
 

@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.17 2000/02/07 23:25:37 tmartin Exp $
+ * $Id: script.c,v 1.18 2000/02/10 00:39:14 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -71,11 +71,7 @@ int script_require(sieve_script_t *s, char *req)
 	    return 0;
 	}
     } else if (!strcmp("imapflags", req)) {
-	if (s->interp.setflag &&
-	    s->interp.addflag &&
-	    s->interp.removeflag &&
-	    s->interp.mark &&
-	    s->interp.unmark) {
+	if (s->interp.markflags->flag) {
 	    s->support.imapflags = 1;
 	    return 1;
 	} else {
@@ -93,6 +89,9 @@ int script_require(sieve_script_t *s, char *req)
 	s->support.regex = 1;
 	return 1;
 #endif
+    } else if (!strcmp("subaddress", req)) {
+	s->support.subaddress = 1;
+	return 1;
     } else if (!strcmp("comparator-i;octet", req)) {
 	return 1;
     } else if (!strcmp("comparator-i;ascii-casemap", req)) {
@@ -117,7 +116,8 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     s->interp = *interp;
     s->script_context = script_context;
     s->support.fileinto = s->support.reject = s->support.envelope = 
-	s->support.vacation = s->support.imapflags = s->support.regex = 0;
+	s->support.vacation = s->support.imapflags = s->support.regex =
+	s->support.subaddress = 0;
     s->err = 0;
 
     s->cmds = sieve_parse(s, script);
@@ -258,6 +258,8 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
 	case ALL: addrpart = ADDRESS_ALL; break;
 	case LOCALPART: addrpart = ADDRESS_LOCALPART; break;
 	case DOMAIN: addrpart = ADDRESS_DOMAIN; break;
+	case USER: addrpart = ADDRESS_USER; break;
+	case DETAIL: addrpart = ADDRESS_DETAIL; break;
 	}
 	for (sl = t->u.ae.sl; sl != NULL && !res; sl = sl->next) {
 	    int l;
@@ -375,7 +377,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 	    break;
 	case FILEINTO:
 	    for (sl = c->u.sl; res == 0 && sl != NULL; sl = sl->next) {
-		res = do_fileinto(actions, sl->s);
+		res = do_fileinto(actions, sl->s, &i->curflags);
 	    }
 	    break;
 	case FORWARD:
@@ -384,7 +386,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 	    }
 	    break;
 	case KEEP:
-	    res = do_keep(actions);
+	    res = do_keep(actions, &i->curflags);
 	    break;
 	case VACATION:
 	    {
@@ -596,6 +598,54 @@ static int fillin_headers(sieve_interp_t *i, stringlist_t *sl, void *message_con
     return SIEVE_OK;
 }
 
+static int sieve_addflag(sieve_imapflags_t *imapflags, char *flag)
+{
+    int n;
+ 
+    /* search for flag already in list */
+    for (n = 0; n < imapflags->nflags; n++) {
+	if (!strcmp(imapflags->flag[n], flag))
+	    break;
+    }
+ 
+    /* add flag to list, iff not in list */
+    if (n == imapflags->nflags) {
+	imapflags->nflags++;
+	imapflags->flag =
+	    (char **) xrealloc((char *)imapflags->flag,
+			       imapflags->nflags*sizeof(char *));
+	imapflags->flag[imapflags->nflags-1] = strdup(flag);
+    }
+ 
+    return SIEVE_OK;
+}
+
+static int sieve_removeflag(sieve_imapflags_t *imapflags, char *flag)
+{
+    int n;
+ 
+    /* search for flag already in list */
+    for (n = 0; n < imapflags->nflags; n++) {
+	if (!strcmp(imapflags->flag[n], flag))
+	    break;
+    }
+ 
+    /* remove flag from list, iff in list */
+    if (n < imapflags->nflags) {
+	free(imapflags->flag[n]);
+	imapflags->nflags--;
+ 
+	for (; n < imapflags->nflags; n++)
+	    imapflags->flag[n] = imapflags->flag[n+1];
+ 
+	imapflags->flag =
+	    (char **) xrealloc((char *)imapflags->flag,
+			       imapflags->nflags*sizeof(char *));
+    }
+ 
+    return SIEVE_OK;
+}
+
 static int send_notify_callback(sieve_script_t *s, void *message_context, 
 				notify_action_t *notify, char *actions_string)
 {
@@ -604,28 +654,28 @@ static int send_notify_callback(sieve_script_t *s, void *message_context,
     
     int ret;
 
-    char *message;
+    sieve_notify_context_t nc;
 
     fillin_headers(&(s->interp), notify->headers, message_context, &headers, &headerslen);
 
-    message = xmalloc( strlen(notify->message) + headerslen + strlen(actions_string) + 30);
+    nc.message = xmalloc( strlen(notify->message) + headerslen + strlen(actions_string) + 30);
 
-    strcpy(message,notify->message);
-    strcat(message,"\n\n");
+    strcpy(nc.message,notify->message);
+    strcat(nc.message,"\n\n");
     
-    strcat(message,headers);
-    strcat(message,"\n");
+    strcat(nc.message,headers);
+    strcat(nc.message,"\n");
     free(headers);
 
-    strcat(message,actions_string);
-        
-    ret =  s->interp.notify(notify->priority,
-			    message,
+    strcat(nc.message,actions_string);
+    nc.priority = notify->priority;
+
+    ret =  s->interp.notify(&nc,
 			    s->interp.interp_context,
 			    s->script_context,
 			    message_context);    
 
-    free(message);
+    free(nc.message);
 
     return ret;
 }
@@ -717,7 +767,8 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	    implicit_keep = 0;
 	    if (!s->interp.reject)
 		return SIEVE_INTERNAL_ERROR;
-	    ret = s->interp.reject(a->u.rej.msg, s->interp.interp_context,
+	    ret = s->interp.reject(&a->u.rej,
+				   s->interp.interp_context,
 				   s->script_context,
 				   message_context);
 	    
@@ -730,19 +781,21 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	    implicit_keep = 0;
 	    if (!s->interp.fileinto)
 		return SIEVE_INTERNAL_ERROR;
-	    ret = s->interp.fileinto(a->u.fil.mbox, s->interp.interp_context,
+	    ret = s->interp.fileinto(&a->u.fil,
+				     s->interp.interp_context,
 				     s->script_context,
 				     message_context);
 
 	    if (ret == SIEVE_OK)
 		snprintf(actions_string+strlen(actions_string),sizeof(actions_string)-
-			 strlen(actions_string),"Filed into: %s\n",a->u.fil.mbox);
+			 strlen(actions_string),"Filed into: %s\n",a->u.fil.mailbox);
 	    break;
 	case ACTION_KEEP:
 	    implicit_keep = 0;
 	    if (!s->interp.keep)
 		return SIEVE_INTERNAL_ERROR;
-	    ret = s->interp.keep(NULL, s->interp.interp_context,
+	    ret = s->interp.keep(&a->u.keep,
+				 s->interp.interp_context,
 				 s->script_context,
 				 message_context);
 	    if (ret == SIEVE_OK)
@@ -753,7 +806,8 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	    implicit_keep = 0;
 	    if (!s->interp.redirect)
 		return SIEVE_INTERNAL_ERROR;
-	    ret = s->interp.redirect(a->u.red.addr, s->interp.interp_context,
+	    ret = s->interp.redirect(&a->u.red,
+				     s->interp.interp_context,
 				     s->script_context,
 				     message_context);
 	    if (ret == SIEVE_OK)
@@ -779,19 +833,21 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 		    return SIEVE_INTERNAL_ERROR;
 
 		/* first, let's figure out if we should respond to this */
-		ret = makehash(hash, a->u.vac.addr, a->u.vac.msg);
+		ret = makehash(hash, a->u.vac.send.addr,
+			       a->u.vac.send.msg);
 		if (ret == SIEVE_OK) {
-		    ret = s->interp.vacation->autorespond(hash, HASHSIZE, 
-							  a->u.vac.days, s->interp.interp_context,
-							  s->script_context, message_context);
+		    a->u.vac.autoresp.hash = hash;
+		    a->u.vac.autoresp.len = HASHSIZE;
+		    ret = s->interp.vacation->autorespond(&a->u.vac.autoresp,
+							  s->interp.interp_context,
+							  s->script_context,
+							  message_context);
 		}
 		if (ret == SIEVE_OK) {
 		    /* send the response */
-		    ret = s->interp.vacation->send_response(a->u.vac.addr, 
-							    a->u.vac.fromaddr,
-							    a->u.vac.subj,
-							    a->u.vac.msg, a->u.vac.mime,
-							    s->interp.interp_context, s->script_context, 
+		    ret = s->interp.vacation->send_response(&a->u.vac.send,
+							    s->interp.interp_context,
+							    s->script_context, 
 							    message_context);
 
 		    if (ret == SIEVE_OK)
@@ -811,40 +867,37 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 
  
 	case ACTION_SETFLAG:
-	    if (!s->interp.setflag)
-		return SIEVE_INTERNAL_ERROR;
-	    ret = s->interp.setflag(a->u.fla.flag, s->interp.interp_context,
-                                    s->script_context,
-                                    message_context);
+	    free_imapflags(&s->interp.curflags);
+	    ret = sieve_addflag(&s->interp.curflags, a->u.fla.flag);
 	    break;
 	case ACTION_ADDFLAG:
-	    if (!s->interp.addflag)
-		return SIEVE_INTERNAL_ERROR;
-	    ret = s->interp.addflag(a->u.fla.flag, s->interp.interp_context,
-                                    s->script_context,
-                                    message_context);
+	    ret = sieve_addflag(&s->interp.curflags, a->u.fla.flag);
 	    break;
 	case ACTION_REMOVEFLAG:
-	    if (!s->interp.removeflag)
-		return SIEVE_INTERNAL_ERROR;
-	    ret = s->interp.removeflag(a->u.fla.flag, s->interp.interp_context,
-				       s->script_context,
-				       message_context);
+	    ret = sieve_removeflag(&s->interp.curflags, a->u.fla.flag);
 	    break;
 	case ACTION_MARK:
-	    if (!s->interp.mark)
-		return SIEVE_INTERNAL_ERROR;
-	    ret = s->interp.mark(NULL, s->interp.interp_context,
-				 s->script_context,
-				 message_context);
+	{
+	    int n = s->interp.markflags->nflags;
+
+	    ret = SIEVE_OK;
+	    while (n && ret == SIEVE_OK) {
+		ret = sieve_addflag(&s->interp.curflags,
+				    s->interp.markflags->flag[--n]);
+	    }
 	    break;
+	}
 	case ACTION_UNMARK:
-	    if (!s->interp.unmark)
-		return SIEVE_INTERNAL_ERROR;
-	    ret = s->interp.unmark(NULL, s->interp.interp_context,
-				   s->script_context,
-				   message_context);
+	{
+	    int n = s->interp.markflags->nflags;
+
+	    ret = SIEVE_OK;
+	    while (n && ret == SIEVE_OK) {
+		ret = sieve_removeflag(&s->interp.curflags,
+				    s->interp.markflags->flag[--n]);
+	    }
 	    break;
+	}
 
 	case ACTION_NONE:
 	    break;

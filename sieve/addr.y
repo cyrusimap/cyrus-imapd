@@ -78,10 +78,11 @@ qstring: '"' QTEXT '"'
 
 %%
 
-extern char addrerr[];
-
+/* copy address error message into buffer provided by sieve parser */
 int yyerror(char *s)
 {
+extern char addrerr[];
+
     strcpy(addrerr, s);
     return 0;
 }

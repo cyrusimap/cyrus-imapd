@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.8 2000/02/07 23:25:38 tmartin Exp $
+ * $Id: sieve.y,v 1.9 2000/02/10 00:39:14 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -110,7 +110,8 @@ extern int yylex(void);
 %token SETFLAG ADDFLAG REMOVEFLAG MARK UNMARK
 %token NOTIFY DENOTIFY
 %token ANYOF ALLOF EXISTS FALSE TRUE HEADER NOT SIZE ADDRESS ENVELOPE
-%token COMPARATOR IS CONTAINS MATCHES REGEX OVER UNDER ALL LOCALPART DOMAIN
+%token COMPARATOR IS CONTAINS MATCHES REGEX OVER UNDER
+%token ALL LOCALPART DOMAIN USER DETAIL
 %token DAYS ADDRESSES SUBJECT MIME
 %token LOW MEDIUM HIGH
 
@@ -363,6 +364,16 @@ htags: /* empty */		 { $$ = new_htags(); }
 addrparttag: ALL                 { $$ = ALL; }
 	| LOCALPART		 { $$ = LOCALPART; }
 	| DOMAIN                 { $$ = DOMAIN; }
+	| USER                   { if (!parse_script->support.subaddress) {
+				     yyerror("subaddress not required");
+				     YYERROR;
+				   }
+				   $$ = USER; }
+	| DETAIL                { if (!parse_script->support.subaddress) {
+				     yyerror("subaddress not required");
+				     YYERROR;
+				   }
+				   $$ = DETAIL; }
 	;
 
 comptag: IS			 { $$ = IS; }
@@ -574,8 +585,8 @@ static void free_vtags(struct vtags *v)
     free(v);
 }
 
-char *addrptr;
-char addrerr[100];
+char *addrptr;		/* pointer to address string for address lexer */
+char addrerr[500];	/* buffer for address parser error messages */
 
 static int verify_address(char *s)
 {
