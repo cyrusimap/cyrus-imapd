@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.98 2003/07/12 13:52:56 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.99 2003/07/12 20:10:55 ken3 Exp $
  */
 
 /*
@@ -1799,12 +1799,12 @@ static void cmd_authinfo_user(char *user)
     }
 
     if (nntp_userid) {
-	prot_printf(nntp_out, "381 Must give AUTHINFO PASS command\r\n");
+	prot_printf(nntp_out, "502 Must give AUTHINFO PASS command\r\n");
 	return;
     }
 
     if (!(p = canonify_userid(user, NULL, NULL))) {
-	prot_printf(nntp_out, "482 Invalid user\r\n");
+	prot_printf(nntp_out, "581 Invalid user\r\n");
 	syslog(LOG_NOTICE,
 	       "badlogin: %s plaintext %s invalid user",
 	       nntp_clienthost, beautify_string(user));
@@ -1825,7 +1825,7 @@ static void cmd_authinfo_pass(char *pass)
     }
 
     if (!nntp_userid) {
-	prot_printf(nntp_out, "480 Must give AUTHINFO USER command first\r\n");
+	prot_printf(nntp_out, "482 Must give AUTHINFO USER command first\r\n");
 	return;
     }
 
@@ -1839,7 +1839,7 @@ static void cmd_authinfo_pass(char *pass)
 	else {
 	    syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
 		   nntp_clienthost);
-	    prot_printf(nntp_out, "482 Invalid login\r\n");
+	    prot_printf(nntp_out, "581 Invalid login\r\n");
 	    return;
 	}
     }
@@ -1852,7 +1852,7 @@ static void cmd_authinfo_pass(char *pass)
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   nntp_clienthost, nntp_userid, reply);
 	}
-	prot_printf(nntp_out, "482 Invalid login\r\n");
+	prot_printf(nntp_out, "581 Invalid login\r\n");
 	free(nntp_userid);
 	nntp_userid = 0;
 
@@ -1885,7 +1885,7 @@ static void cmd_authinfo_sasl(char *mech, char *resp)
 	return;
     }
 
-    r = saslserver(nntp_saslconn, mech, resp, "381 ", nntp_in, nntp_out,
+    r = saslserver(nntp_saslconn, mech, resp, "383 ", nntp_in, nntp_out,
 		   &sasl_result, &success_data);
 
     if (r) {
@@ -1913,9 +1913,9 @@ static void cmd_authinfo_sasl(char *mech, char *resp)
 	    sleep(3);
 
 	    if (errorstring) {
-		prot_printf(nntp_out, "482 %s\r\n", errorstring);
+		prot_printf(nntp_out, "581 %s\r\n", errorstring);
 	    } else {
-		prot_printf(nntp_out, "482 Error authenticating\r\n");
+		prot_printf(nntp_out, "581 Error authenticating\r\n");
 	    }
 	}
 

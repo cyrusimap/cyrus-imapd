@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.1.2.6 2003/07/10 20:52:05 ken3 Exp $ */
+/* $Id: protocol.c,v 1.1.2.7 2003/07/12 20:10:55 ken3 Exp $ */
 
 #include <string.h>
 #include <limits.h>
@@ -104,7 +104,7 @@ struct protocol_t protocol[] = {
     { "nntp", "news",
       { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
       { "STARTTLS", "382", "580" },
-      { "AUTHINFO SASL", 512, 0, "28", "482", "381 ", "*", &nntp_parsesuccess },
+      { "AUTHINFO SASL", 512, 0, "28", "5", "383 ", "*", &nntp_parsesuccess },
       { "QUIT", "205" } },
     { "lmtp", "lmtp",
       { "LHLO murder", "250 ", "STARTTLS", "AUTH ", NULL },

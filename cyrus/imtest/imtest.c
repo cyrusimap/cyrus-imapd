@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.82.2.19 2003/07/10 20:52:06 ken3 Exp $
+ * $Id: imtest.c,v 1.82.2.20 2003/07/12 20:10:56 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1924,8 +1924,6 @@ static int auth_nntp(void)
     unsigned int passlen;
     
     interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
-    interaction(SASL_CB_PASS, NULL, "Please enter your password",
-		&pass, &passlen);
     
     printf("C: AUTHINFO USER %s\r\n", username);
     prot_printf(pout,"AUTHINFO USER %s\r\n", username);
@@ -1937,17 +1935,20 @@ static int auth_nntp(void)
     
     printf("S: %s", str);
     
-    if (strncmp(str, "381", 3)) return IMTEST_FAIL;
+    if (!strncmp(str, "381", 3)) {
+	interaction(SASL_CB_PASS, NULL, "Please enter your password",
+		    &pass, &passlen);
+
+	printf("C: AUTHINFO PASS <omitted>\r\n");
+	prot_printf(pout,"AUTHINFO PASS %s\r\n",pass);
+	prot_flush(pout);
     
-    printf("C: AUTHINFO PASS <omitted>\r\n");
-    prot_printf(pout,"AUTHINFO PASS %s\r\n",pass);
-    prot_flush(pout);
+	if (prot_fgets(str, 1024, pin) == NULL) {
+	    imtest_fatal("prot layer failure");
+	}
     
-    if (prot_fgets(str, 1024, pin) == NULL) {
-	imtest_fatal("prot layer failure");
+	printf("S: %s", str);
     }
-    
-    printf("S: %s", str);
     
     if (!strncmp(str, "281", 3)) {
 	return IMTEST_OK;
@@ -2151,7 +2152,7 @@ static struct protocol_t protocols[] = {
       { 0, "20", NULL },
       { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
       { "STARTTLS", "382", "580", 0 },
-      { "AUTHINFO SASL", 512, 0, "28", "482", "381 ", "*", &nntp_parse_success },
+      { "AUTHINFO SASL", 512, 0, "28", "5", "383 ", "*", &nntp_parse_success },
       &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp",
