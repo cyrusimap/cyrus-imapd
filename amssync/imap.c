@@ -278,6 +278,11 @@ void processexists(struct imclient *conn, bboard *bbd, struct
 /*
  * Callback for the FETCH untagged response. Parses the INTERNALDATE
  * and UID fields (UID is used for message->name)
+ *
+ * NOTE: this is a horrible example of a FETCH callback function.
+ * It makes broad assumptions about how the Cyrus IMAPd generates
+ * FETCH responses; it does not parse them according to the IMAP
+ * protocol specificiation.
  */
 void processfetch(struct imclient *conn, bboard *bbd, struct
                  imclient_reply *inmsg)
