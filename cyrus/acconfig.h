@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.42 2003/07/02 13:18:05 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.43 2003/07/25 16:59:22 rjs3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -215,11 +215,14 @@ typedef int rlim_t;
 #define	getaddrinfo	sasl_getaddrinfo
 #define	freeaddrinfo	sasl_freeaddrinfo
 #define	gai_strerror	sasl_gai_strerror
-#include "gai.h"
 #endif
 
 #ifndef HAVE_GETNAMEINFO
 #define	getnameinfo	sasl_getnameinfo
+#endif
+
+#if !defined(HAVE_GETADDRINFO) || !defined(HAVE_GETNAMEINFO)
+#include "gai.h"
 #endif
 
 #ifndef	NI_WITHSCOPEID
