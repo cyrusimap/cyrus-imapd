@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.175 2004/02/27 17:44:55 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.176 2004/03/03 17:27:50 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2598,6 +2598,22 @@ void cmd_idle(char *tag)
     prot_flush(proxyd_out);
 
     while (!done) {
+	/* check for shutdown file */
+	if (!proxyd_userisadmin && shutdown_file(shut, sizeof(shut))) {
+	    shutdown = done = 1;
+	    goto done;
+	}
+
+	if (backend_current && !CAPA(backend_current, CAPA_IDLE)) {
+	    /* Simulate IDLE by polling the backend */
+	    char mytag[128];
+	
+	    proxyd_gentag(mytag, sizeof(mytag));
+	    prot_printf(backend_current->out, "%s Noop\r\n", mytag);
+	    pipe_until_tag(backend_current, mytag, 0);
+	    prot_flush(proxyd_out);
+	}
+
 	/* Clear protout if needed */
 	protgroup_free(protout);
 	protout = NULL;
@@ -2620,20 +2636,15 @@ void cmd_idle(char *tag)
 		    done = 1;
 		}
 		else if (backend_current && ptmp == backend_current->in) {
-		    /* Get unsolicited untagged responses from the backend
-		       assumes that untagged responses are:
-		       a) short
-		       b) don't contain literals
-		    */
+		    /* Get unsolicited untagged responses from the backend */
+		    do {
+			int c = prot_read(backend_current->in, buf, sizeof(buf));
+			if (c == 0 || c < 0) break;
+			prot_write(proxyd_out, buf, c);
+		    } while (backend_current->in->cnt > 0);
+		    prot_flush(proxyd_out);
 
-		    prot_NONBLOCK(backend_current->in);
-		    while (prot_fgets(buf, sizeof(buf), backend_current->in)) {
-			prot_write(proxyd_out, buf, strlen(buf));
-			prot_flush(proxyd_out);
-		    }
-		    prot_BLOCK(backend_current->in);
-
-		    if(prot_error(backend_current->in)) {
+		    if (prot_error(backend_current->in)) {
 			/* uh oh, we're not happy */
 			fatal("Lost connection to selected backend",
 			      EC_UNAVAILABLE);
@@ -2646,26 +2657,19 @@ void cmd_idle(char *tag)
 		}
 	    }
 	}
-
-	/* Check for ALERTs */
-	if (!proxyd_userisadmin && shutdown_file(shut, sizeof(shut))) {
-	    shutdown = done = 1;
-	}
-
-	if (!done && backend_current && !CAPA(backend_current, CAPA_IDLE)) {
-	    /* Simulate IDLE by polling the backend */
-	    char mytag[128];
-	
-	    proxyd_gentag(mytag, sizeof(mytag));
-	    prot_printf(backend_current->out, "%s Noop\r\n", mytag);
-	    pipe_until_tag(backend_current, mytag, 0);
-	    prot_flush(proxyd_out);
-	}
     }
 
-    if (backend_current && CAPA(backend_current, CAPA_IDLE)) {
-	/* Either the client timed out, or gave us a continuation.
-	   In either case we're done, so terminate IDLE on backend */
+    /* Get continuation data */
+    c = getword(proxyd_in, &arg);
+
+  done:
+    protgroup_free(protin);
+    protgroup_free(protout);
+
+    if (done && backend_current && CAPA(backend_current, CAPA_IDLE)) {
+	/* Either the client timed out, or gave us a continuation,
+	   or we found a shutdown file.  In any case we're done,
+	   so terminate IDLE on backend */
 	prot_printf(backend_current->out, "DONE\r\n");
 	pipe_until_tag(backend_current, tag, 0);
     }
@@ -2677,14 +2681,6 @@ void cmd_idle(char *tag)
 	prot_printf(proxyd_out, "* BYE [ALERT] %s\r\n", p);
 	shut_down(0);
     }
-
-    /* Get continuation data */
-    c = getword(proxyd_in, &arg);
-
-  done:
-    protgroup_free(protin);
-    protgroup_free(protout);
-
 
     if (c != EOF) {
 	if (!strcasecmp(arg.s, "Done") &&
