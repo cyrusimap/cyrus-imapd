@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68.4.2 2002/07/21 14:24:50 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.3 2002/08/02 20:51:13 ken3 Exp $ */
 
 #include <config.h>
 
@@ -280,7 +280,7 @@ do_reconstruct(char *name,
     else {
 	/* Convert internal name to external */
 	(*recon_namespace.mboxname_toexternal)(&recon_namespace, lastname,
-					       "cyrus", buf);
+					       NULL, buf);
 	printf("%s\n", buf);
     }
 
@@ -709,8 +709,9 @@ char *cleanacl(char *acl, char *mboxname)
     char *rights;
 
     /* Rebuild ACL */
-    if (!strncmp(mboxname, "user.", 5)) {
-	strcpy(owner, mboxname+5);
+    if ((!strncmp(mboxname, "user.", 5) && (p = mboxname+5)) ||
+	((p = strstr(mboxname, "!user.")) && (p += 6))) {
+	strcpy(owner, p);
 	p = strchr(owner, '.');
 	if (p) *p = '\0';
 	aclcanonproc = mboxlist_ensureOwnerRights;

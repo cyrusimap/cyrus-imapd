@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.25.4.6 2002/07/24 16:20:10 ken3 Exp $
+ * $Id: mboxname.c,v 1.25.4.7 2002/08/02 20:51:12 ken3 Exp $
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -308,7 +308,7 @@ static int mboxname_toexternal(struct namespace *namespace, const char *name,
 {
     char *domain;
 
-    if (config_virtdomains && (domain = strchr(userid, '@')) &&
+    if (config_virtdomains && userid && (domain = strchr(userid, '@')) &&
 	!strncmp(name, domain+1, strlen(domain)-1) &&
 	name[strlen(domain)-1] == '!')
 	name += strlen(domain);
@@ -325,6 +325,8 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *name
 				  const char *userid, char *result)
 {
     char *domain;
+
+    if (!userid) return IMAP_MAILBOX_BADNAME;
 
     if (config_virtdomains && (domain = strchr(userid, '@')) &&
 	!strncmp(name, domain+1, strlen(domain)-1) &&
