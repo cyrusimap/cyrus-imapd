@@ -73,6 +73,9 @@ ec IMAP_MESSAGE_BADHEADER,
 ec IMAP_MESSAGE_NOBLANKLINE,
    "Message has no header/body separator"
 
+ec IMAP_QUOTAROOT_NONEXISTENT,
+   "Quota root does not exist"
+
 # Following only used for internationalization of error messages
 
 ec IMAP_UNRECOGNIZED_CHARSET,

@@ -2113,7 +2113,7 @@ char *name;
 	sprintf(buf, "%s%s%s", config_dir, FNAME_QUOTADIR, quota.root);
 	quota.file = fopen(buf, "r+");
 	if (!quota.file) {
-	    r = IMAP_MAILBOX_NONEXISTENT;
+	    r = IMAP_QUOTAROOT_NONEXISTENT;
 	}
 	else r = mailbox_read_quota(&quota);
     }
