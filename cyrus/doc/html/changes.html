@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers, 18-Oct-1995 -->
+<!-- Changed by: John Gardiner Myers, 20-Nov-1995 -->
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
@@ -94,6 +94,8 @@ whitespace, as required by MIME.
 
 <LI>Bug fix: Don't spew cascade errors if the server gets an EOF
 during/after reading an APPEND literal.
+
+<LI>Bug fix: gmtmoff_gmtime.c was returning results with the wrong sign.
 
 <LI>Bug fix: imclient_send was appending spaces to %d and %u and the
 response parser was not handling responses that did not contain a
