@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.1.2.6 2003/05/01 20:24:40 ken3 Exp $
+.\" $Id: imapoptions,v 1.1.2.7 2003/06/19 21:18:02 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -235,6 +235,9 @@ are listed with ``<none>''.
 { "ldap_member_attribute", "memberOf", STRING }
 /* The multi-valued attribute name for an entity that lists its groups. */
 
+{ "lmtp_downcase_rcpt", 0, SWITCH }
+/* If enabled, lmtpd will convert the recipient address to lowercase
+   (up to a '+' character, if present). */
 { "lmtp_over_quota_perm_failure", 0, SWITCH }
 /* If enabled, lmtpd returns a permanent failure code when a user's
    mailbox is over quota.  By default, the failure is temporary,

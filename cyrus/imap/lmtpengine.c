@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.21 2003/05/09 02:11:37 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.22 2003/06/19 21:18:01 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -744,6 +744,7 @@ static int process_recipient(char *addr,
     char *user;
     int r, sl;
     address_data_t *ret = (address_data_t *) xmalloc(sizeof(address_data_t));
+    int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
 
     assert(addr != NULL && msg != NULL);
 
@@ -777,6 +778,15 @@ static int process_recipient(char *addr,
 	}
     }
     else {
+	if(forcedowncase) {
+	    /* We should downcase the localpart up to the first + */
+	    while(*addr != '@' && *addr != '>' && *addr != '+') {
+		if(*addr == '\\') addr++;
+		*dest++ = TOLOWER(*addr++);
+	    }
+	}
+
+	/* Now finish the remainder of the localpart */
 	while ((config_virtdomains || *addr != '@') && *addr != '>') {
 	    if (*addr == '\\') addr++;
 	    *dest++ = *addr++;
