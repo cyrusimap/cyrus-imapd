@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.27 2002/06/12 20:04:10 rjs3 Exp $
+# $Id: Admin.pm,v 1.28 2002/07/09 00:33:59 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -140,7 +140,7 @@ sub reconstruct {
       $rc = 1;
     } else {
       if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
-	my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+	my ($refserver, $box) = $self->fromURL($1);
 	my $port = 143;
 	
 	if($refserver =~ /:/) {
@@ -176,7 +176,7 @@ sub createmailbox {
     1;
   } else {
     if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
-      my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+      my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
       if($refserver =~ /:/) {
@@ -210,7 +210,7 @@ sub deletemailbox {
     1;
   } else {
     if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
-      my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+      my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
       if($refserver =~ /:/) {
@@ -393,7 +393,7 @@ sub listquota {
     @info;
   } else {
     if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
-      my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+      my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
       if($refserver =~ /:/) {
@@ -447,7 +447,7 @@ sub listquotaroot {
     ($qr, @info);
   } else {
     if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
-      my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+      my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
       if($refserver =~ /:/) {
@@ -495,8 +495,8 @@ sub renamemailbox {
     if($self->{support_referrals} &&
        $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\s+([^\]\s]+)\]|) {
       # We need two referrals for this to be valid
-      my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
-      my ($refserver2, $nbox) = Cyrus::IMAP->fromURL($2);
+      my ($refserver, $box) = $self->fromURL($1);
+      my ($refserver2, $nbox) = $self->fromURL($2);
       my $port = 143;
 
       if(!($refserver eq $refserver2)) {
@@ -549,7 +549,7 @@ sub setaclmailbox {
       $cnt++;
     } else {
       if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
-	my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+	my ($refserver, $box) = $self->fromURL($1);
 	my $port = 143;
 
 	if($refserver =~ /:/) {
@@ -607,7 +607,7 @@ sub setquota {
     1;
   } else {
     if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
-      my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+      my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
       if($refserver =~ /:/) {
