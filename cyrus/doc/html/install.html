@@ -1,7 +1,7 @@
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers, 12-Jun-1996 -->
+<!-- Changed by: John Gardiner Myers, 17-Jun-1996 -->
 </HEAD>
 <BODY>
 <h1>           Installing and Configuring the Cyrus IMAP Server</h1>
@@ -143,6 +143,11 @@ configure uses "<TT>cyrus</TT>". <P>
 <dt><tt>--with-cyrus-group=USER</tt>
 <dd>Specifies the group used for installing setuid programs.  By default,
 configure uses "<TT>mail</TT>". <P>
+
+<dt><tt>--with-statedir=PATH</tt> 
+<dd>Specifies the directory used for
+the <TT>pwcheck</TT> and/or <TT>ptclient</TT> state directories.  By
+default, configure uses "<TT>/var</TT>". <P>
 
 <dt><tt>--with-login=METHOD</tt>
 <dd>Specifies the login authentication module to use.  Currently
@@ -497,16 +502,17 @@ synchronously.  The following example is for sendmail:
 <li>If the Cyrus IMAP server was configured to use the pwcheck
 daemon, install pwcheck.  The pwcheck daemon verifies passwords
 against the shadow password database.  Create the directory
-"<TT>/etc/pwcheck</TT>" and make it readable by only the cyrus user:
+"<TT>/var/pwcheck</TT>" and make it readable by only the cyrus user:
 
 <pre>
-<kbd>   mkdir /etc/pwcheck
-   chown cyrus /etc/pwcheck
-   chmod 700 /etc/pwcheck
+<kbd>   mkdir /var/pwcheck
+   chown cyrus /var/pwcheck
+   chmod 700 /var/pwcheck
 </kbd></pre>
 
 Upon system startup, arrange for the daemon
 <TT>/usr/cyrus/bin/pwcheck</TT> to be run as root in the background.
+ <P>
 
 <li>If the Cyrus IMAP server was compiled with Kerberos v4 authentication,
 create a Kerberos v4 identity for the server and add the server's key to
