@@ -120,6 +120,7 @@ cyrus.index	Contains a header and a sequence of fixed-length
 				the mailbox
 - quota-used	4 bytes		size quota usage this mailbox
 - pop3-last	4 bytes		UID of last message accessed via POP3
+- uidvalidity	4 bytes		UIDVALIDITY value
 
 		Each per-message record contains:
 
@@ -184,7 +185,7 @@ To prevent deadlocks, an implementation may not lock a given file while
 holding a lock on a later file.
 
 After obtaining a lock on any file, the implementation must
-double-check to make sure the file wasn't rewritten.
+re-read any data previously obtained from the file.
 
 It is necessary to lock cyrus.header before locking the quota-root in
 order to guard against the possibility of another process changing the
