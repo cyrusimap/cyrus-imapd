@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.33.2.2 2002/08/02 17:18:23 rjs3 Exp $
+ * $Id: auth_unix.c,v 1.33.2.3 2002/12/11 20:40:29 rjs3 Exp $
  */
 
 #include <config.h>
@@ -212,10 +212,7 @@ size_t len;
  * points to a 16-byte binary key to cache identifier's information
  * with.
  */
-struct auth_state *
-auth_newstate(identifier, cacheid)
-const char *identifier;
-const char *cacheid;
+struct auth_state *auth_newstate(const char *identifier)
 {
     struct auth_state *newstate;
     struct passwd *pwd;

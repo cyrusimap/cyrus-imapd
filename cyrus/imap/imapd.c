@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.45 2002/11/18 15:46:55 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.46 2002/12/11 20:40:24 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1658,7 +1658,7 @@ void cmd_login(char *tag, char *user)
 	}
     }
     
-    imapd_authstate = auth_newstate(imapd_userid, NULL);
+    imapd_authstate = auth_newstate(imapd_userid);
 
     imapd_userisadmin = config_authisa(imapd_authstate, IMAPOPT_ADMINS);
 
@@ -4116,7 +4116,7 @@ char *identifier;
     }
 
     if (!r) {
-	struct auth_state *authstate = auth_newstate(identifier, NULL);
+	struct auth_state *authstate = auth_newstate(identifier);
 
 	if (config_authisa(authstate, IMAPOPT_ADMINS))
 	    canon_identifier = identifier; /* don't canonify global admins */

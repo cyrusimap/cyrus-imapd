@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.12 2002/11/03 14:18:04 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.13 2002/12/11 20:40:26 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1218,7 +1218,7 @@ void lmtpmode(struct lmtp_func *func,
 			tmp += 5;
 			msg->authuser = parseautheq(&tmp);
 			if (msg->authuser) {
-			    msg->authstate = auth_newstate(msg->authuser, NULL);
+			    msg->authstate = auth_newstate(msg->authuser);
 			} else {
 			    /* do we want to bounce mail because of this? */
 			    /* i guess not. accept with no auth user */

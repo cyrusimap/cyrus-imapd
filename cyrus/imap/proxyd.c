@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.35 2002/11/17 03:50:23 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.36 2002/12/11 20:40:26 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -2176,8 +2176,7 @@ void cmd_login(char *tag, char *user)
 	}
     }
     
-
-    proxyd_authstate = auth_newstate(proxyd_userid, (char *)0);
+    proxyd_authstate = auth_newstate(proxyd_userid);
 
     proxyd_userisadmin = config_authisa(proxyd_authstate, IMAPOPT_ADMINS);
 
@@ -3959,7 +3958,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
     }
 
     if (!r) {
-	struct auth_state *authstate = auth_newstate(identifier, NULL);
+	struct auth_state *authstate = auth_newstate(identifier);
 
 	if (config_authisa(authstate, IMAPOPT_ADMINS))
 	    canon_identifier = identifier; /* don't canonify global admins */

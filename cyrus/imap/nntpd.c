@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.45 2002/11/17 16:01:42 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.46 2002/12/11 20:40:26 rjs3 Exp $
  */
 
 /*
@@ -1363,7 +1363,7 @@ void cmd_authinfo_pass(char *pass)
 	prot_printf(nntp_out, "%u User logged in\r\n",
 		    did_extensions ? 250 : 281);
 
-	nntp_authstate = auth_newstate(nntp_userid, NULL);
+	nntp_authstate = auth_newstate(nntp_userid);
 
 	/* Create telemetry log */
 	nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out);

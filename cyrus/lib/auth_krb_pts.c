@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- * $Id: auth_krb_pts.c,v 1.44.4.7 2002/11/15 21:47:00 rjs3 Exp $
+ * $Id: auth_krb_pts.c,v 1.44.4.8 2002/12/11 20:40:29 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -318,8 +318,7 @@ char *auth_canonifyid(const char *identifier, size_t len)
  * this object is formed by appending a 'D' and 3 nulls to the base key.
  */
 
-struct auth_state *auth_newstate(const char *identifier, 
-				 const char *cacheid)
+struct auth_state *auth_newstate(const char *identifier)
 {
     struct auth_state *newstate;
     struct auth_state *fetched;
@@ -351,22 +350,10 @@ struct auth_state *auth_newstate(const char *identifier,
 
     if (!strcmp(identifier, "anyone")) return newstate;
     if (!strcmp(identifier, "anonymous")) return newstate;
-
-    if (cacheid) {
-	/* this should be the session key + the userid */
-        memset(keydata, 0, PTS_DB_KEYSIZE);
-        memcpy(keydata, cacheid, 16); /* why 16? see sasl_krb_server.c */
-	/* toss on userid to further uniquify */
-	if ((strlen(identifier) + 16)  < PTS_DB_KEYSIZE) {
-	    memcpy(keydata+16, identifier, strlen(identifier)); 
-	} else {
-	    memcpy(keydata+16, identifier, PTS_DB_KEYSIZE-16);
-	}
-    } else {
-	/* this is just the userid */
-        memset(keydata, 0, PTS_DB_KEYSIZE);
-        strncpy(keydata, identifier, PR_MAXNAMELEN);
-    }
+    
+    /* we're using this as a db key, it has to be zeroed */
+    memset(keydata, 0, sizeof(keydata));
+    strlcpy(keydata, identifier, sizeof(keydata));
 
 #ifdef RUNNING_QUANTIFY
 /* xxx do we still need this with the cyrusdb routines? */

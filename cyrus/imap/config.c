@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.22 2002/11/15 21:46:55 rjs3 Exp $ */
+/* $Id: config.c,v 1.55.4.23 2002/12/11 20:40:24 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -771,7 +771,7 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
 	}
     }
 
-    authstate = auth_newstate(auth_identity, NULL);
+    authstate = auth_newstate(auth_identity);
 
     /* ok, is auth_identity an admin? */
     userisadmin = config_authisa(authstate, IMAPOPT_ADMINS);
@@ -802,7 +802,7 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
 	    userisadmin = 0;	/* no longer admin */
 	    auth_freestate(authstate);
 	    
-	    authstate = auth_newstate(requested_user, NULL);
+	    authstate = auth_newstate(requested_user);
 
 	    /* are we a proxy admin? */
 	    if (ctx->userisproxyadmin)

@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32.4.11 2002/11/15 21:46:56 rjs3 Exp $ */
+/* $Id: fud.c,v 1.32.4.12 2002/12/11 20:40:24 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -304,7 +304,7 @@ int handle_request(const char *who, const char *name,
 	if(p) *p = '\0';
 
 	/* Check the ACL */
-	mystate = auth_newstate("anonymous", NULL);
+	mystate = auth_newstate("anonymous");
 	if(cyrus_acl_myrights(mystate, acl) & ACL_USER0) {
 	    /* We want to proxy this one */
 	    auth_freestate(mystate);

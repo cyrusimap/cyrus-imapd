@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.18 2002/12/07 00:57:58 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.19 2002/12/11 20:40:25 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1201,7 +1201,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 
 		sdata->username = user;
 		sdata->mailboxname = plus;
-		sdata->authstate = auth_newstate(user, (char *)0);
+		sdata->authstate = auth_newstate(user);
 
 		/* slap the mailboxname back on so we hash the envelope & id
 		   when we figure out whether or not to keep the message */

@@ -1,5 +1,5 @@
 /* auth_krb.c -- Kerberos authorization
- $Id: auth_krb.c,v 1.36.6.1 2002/07/20 01:18:24 ken3 Exp $
+ $Id: auth_krb.c,v 1.36.6.2 2002/12/11 20:40:29 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -316,9 +316,7 @@ size_t len;
  * with.
  */
 struct auth_state *
-auth_newstate(identifier, cacheid)
-const char *identifier;
-const char *cacheid;
+auth_newstate(const char *identifier)
 {
     struct auth_state *newstate;
 
