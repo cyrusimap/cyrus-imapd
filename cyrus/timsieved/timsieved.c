@@ -126,32 +126,6 @@ void fatal(const char *s, int code)
 
 }
 
-/* This creates a structure that defines the allowable
- *   security properties 
- */
-static sasl_security_properties_t *make_secprops(int min,int max)
-{
-  sasl_security_properties_t *ret=
-    (sasl_security_properties_t *) xmalloc(sizeof(sasl_security_properties_t));
-
-  ret->maxbufsize = 4000;
-  ret->min_ssf = min;		/* minimum allowable security strength */
-  ret->max_ssf = max;		/* maximum allowable security strength */
-
-  ret->security_flags = 0;
-  if (!config_getswitch("allowplaintext", 1)) {
-      ret->security_flags |= SASL_SEC_NOPLAINTEXT;
-  }
-
-  /* never allow anonymous */
-  ret->security_flags |= SASL_SEC_NOANONYMOUS;
-
-  ret->property_names = NULL;
-  ret->property_values = NULL;
-
-  return ret;
-}
-
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 static int mysasl_authproc(void *context,
@@ -304,7 +278,7 @@ int service_main(int argc, char **argv, char **envp)
 
     /* will always return something valid */
     /* should be configurable! */
-    secprops = mysasl_secprops();
+    secprops = mysasl_secprops(0);
     sasl_setprop(sieved_saslconn, SASL_SEC_PROPS, secprops);
     
     sasl_setprop(sieved_saslconn, SASL_IP_REMOTE, &sieved_remoteaddr);  
