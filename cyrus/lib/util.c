@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: util.c,v 1.19.6.8 2003/03/06 01:17:51 ken3 Exp $
+ * $Id: util.c,v 1.19.6.9 2003/05/30 15:40:22 ken3 Exp $
  */
 
 #include <config.h>
@@ -56,6 +56,9 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+
+#include <sys/socket.h>
+#include <errno.h>
 
 #include "exitcodes.h"
 #include "libcyr_cfg.h"
@@ -270,7 +273,7 @@ int dir_hash_c(const char *name)
 int cyrus_close_sock(int fd) 
 {
     int r = shutdown(fd, SHUT_RD);
-    if(r) {
+    if(r && errno != ENOTCONN) {
 	syslog(LOG_DEBUG, "Could not shut down filedescriptor %d: %m", fd);
     }
     
