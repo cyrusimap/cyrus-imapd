@@ -42,6 +42,16 @@ char *acapmbox_get_url(char *name)
     return url;
 }
 
+/*
+ * Get the acapconn. This should only be used if you need to get the
+ * acapconn file descriptor
+ */
+
+acap_conn_t *acapmbox_get_acapconn(acapmbox_handle_t *AC)
+{
+    return AC->conn;
+}
+
 /* this should probably vary depending on whether it's a private
    mailbox or a bboard, and it should default to 
    "bb+bboard.name@server.name".
@@ -149,7 +159,7 @@ void acapmbox_cb(acap_result_t res, void *rock)
  *
  */
 
-char *create_full_dataset_name(char *mailbox_name)
+static char *create_full_dataset_name(char *mailbox_name)
 {
     static char fullname[MAX_MAILBOX_PATH];
 
@@ -232,7 +242,9 @@ int acapmbox_store(acapmbox_handle_t *AC,
 			      &cmd);
     if (result == ACAP_OK) {
 	result = acap_process_on_command(AC->conn, cmd, &acapres);
-	if (acapres != ACAP_RESULT_OK) {
+	if (result == ACAP_NO_CONNECTION) {
+	    result = IMAP_SERVER_UNAVAILABLE;
+	} else if (acapres != ACAP_RESULT_OK) {
 	    /* this is a likely but not certain error */
 	    result = IMAP_MAILBOX_EXISTS;
 	}
@@ -332,6 +344,72 @@ int acapmbox_entryexists(acapmbox_handle_t *AC,
     return (exists == 0) ? ACAP_FAIL : ACAP_OK;
 }
 
+int acapmbox_setsomeprops(acapmbox_handle_t *AC,
+			  char *mailbox_name,
+			  int uidvalidity,
+			  int exists,
+			  int deleted,
+			  int flagged,
+			  int answered)
+{
+    int result;
+    char *fullname;
+    acap_cmd_t *cmd;
+    acap_entry_t *newentry;
+    acap_result_t acapres;
+    char tmpstr[30];
+
+
+    if (AC == NULL) return 0;
+
+    assert(mailbox_name != NULL);
+    if (AC->conn == NULL) {
+	return IMAP_SERVER_UNAVAILABLE;
+    }
+
+    /* get the entry path */
+    fullname = create_full_dataset_name(mailbox_name);
+    if (fullname == NULL) return ACAP_NOMEM;
+
+    newentry = acap_entry_new(fullname);
+    if (newentry == NULL) return ACAP_NOMEM;
+
+    /* make and insert all our attributes */
+    snprintf(tmpstr, sizeof(tmpstr), "%d", uidvalidity);
+    add_attr(newentry->attrs, "mailbox.uidvalidity", tmpstr);
+
+    snprintf(tmpstr, sizeof(tmpstr), "%d", answered);
+    add_attr(newentry->attrs, "mailbox.answered", tmpstr);
+
+    snprintf(tmpstr, sizeof(tmpstr), "%d", flagged);
+    add_attr(newentry->attrs, "mailbox.flagged", tmpstr);
+
+    snprintf(tmpstr, sizeof(tmpstr), "%d", deleted);
+    add_attr(newentry->attrs, "mailbox.deleted", tmpstr);
+
+    snprintf(tmpstr, sizeof(tmpstr), "%d", exists);
+    add_attr(newentry->attrs, "mailbox.total", tmpstr);
+
+    /* create the cmd; if it's the first time through, we ACAP_STORE_INITIAL */
+    result = acap_store_entry(AC->conn,
+			      newentry,
+			      NULL,
+			      NULL,
+			      0,
+			      &cmd);
+    if (result == ACAP_OK) {
+	result = acap_process_on_command(AC->conn, cmd, &acapres);
+	if (result == ACAP_NO_CONNECTION) {
+	    result = IMAP_SERVER_UNAVAILABLE;
+	} else if (acapres != ACAP_RESULT_OK) {
+	    /* this is a likely but not certain error */
+	    result = IMAP_MAILBOX_EXISTS;
+	}
+    }
+
+    return result;    
+
+}
 
 int acapmbox_setproperty(acapmbox_handle_t *AC,
 			 char *mailbox_name,

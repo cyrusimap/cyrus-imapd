@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.90 2000/03/07 00:56:08 tmartin Exp $
+ $Id: mailbox.c,v 1.91 2000/03/14 21:34:55 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -40,6 +40,7 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <sys/un.h>
 #include <sys/stat.h>
 #include <ctype.h>
 #include <time.h>
@@ -75,6 +76,7 @@
 #include "mboxlist.h"
 #include "acapmbox.h"
 #include "seen.h"
+#include "acappush.h"
 
 static int mailbox_doing_reconstruct = 0;
 static struct mailbox zeromailbox = {-1, -1, -1};
@@ -96,6 +98,41 @@ char *mailbox_cache_header_name[] = {
 };
 int mailbox_num_cache_header =
   sizeof(mailbox_cache_header_name)/sizeof(char *);
+
+/* acappush variables */
+static int acappush_sock = -1;
+static struct sockaddr_un acappush_remote;
+static int acappush_remote_len = 0;
+
+
+/*
+ * Create connection to acappush
+ */
+int mailbox_initialize(void)
+{
+    int s;
+    int fdflags;
+
+    /* if not configured to do acap do nothing */
+    if (config_getstring("acap_server", NULL)==NULL) return 0;
+
+    if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
+	return errno;
+    }
+
+    acappush_remote.sun_family = AF_UNIX;
+    strcpy(acappush_remote.sun_path, ACAPPUSH_PATH);
+    acappush_remote_len = strlen(acappush_remote.sun_path) + sizeof(acappush_remote.sun_family);
+
+    /* put us in non-blocking mode */
+    fdflags = fcntl(s, F_GETFD, 0);
+    if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
+    if (fdflags == -1) { close(s); return -1; }
+
+    acappush_sock = s;
+
+    return 0;
+}
 
 /*
  * Calculate relative filename for the message with UID 'uid'
@@ -998,9 +1035,27 @@ mailbox_write_index_header(struct mailbox *mailbox)
     char buf[INDEX_HEADER_SIZE];
     int header_size = INDEX_HEADER_SIZE;
     int n;
-    acapmbox_handle_t *acaphandle = NULL;
 
     assert(mailbox->index_lock_count != 0);
+
+    if (acappush_sock != -1) {
+	acapmbdata_t acapdata;
+
+	/* fill in structure */
+	strcpy(acapdata.name, mailbox->name);
+	acapdata.uidvalidity = mailbox->uidvalidity;
+	acapdata.exists      = mailbox->exists;
+	acapdata.deleted     = mailbox->deleted;
+	acapdata.answered    = mailbox->answered;
+	acapdata.flagged     = mailbox->flagged;
+	
+	/* send */
+	if (sendto(acappush_sock, &acapdata, 20+strlen(mailbox->name), 0,
+		   (struct sockaddr *) &acappush_remote, acappush_remote_len) == -1) {
+	    syslog(LOG_ERR, "Error sending to acappush: %m");
+	    return errno;	    
+	}
+    }
 
     *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox->generation_no;
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
@@ -1024,17 +1079,9 @@ mailbox_write_index_header(struct mailbox *mailbox)
     if (n != header_size || fsync(mailbox->index_fd)) {
 	syslog(LOG_ERR, "IOERROR: writing index header for %s: %m",
 	       mailbox->name);
+	/* xxx can we unroll the acap send??? */
 	return IMAP_IOERROR;
     }
-
-    acaphandle = acapmbox_get_handle();
-    acapmbox_setproperty(acaphandle, mailbox->name,
-			 ACAPMBOX_ANSWERED,mailbox->answered);
-    acapmbox_setproperty(acaphandle, mailbox->name,
-			 ACAPMBOX_DELETED,mailbox->deleted);
-    acapmbox_setproperty(acaphandle, mailbox->name,
-			 ACAPMBOX_FLAGGED,mailbox->flagged);
-    acapmbox_release_handle(acaphandle);
 
     return 0;
 }
@@ -1683,23 +1730,24 @@ void *deciderock;
     }
 
     if (numdeleted) {
-	acaphandle = acapmbox_get_handle();
-	acapmbox_setproperty(acaphandle,
-			     mailbox->name,
-			     ACAPMBOX_TOTAL,
-			     newexists);
-	
-	if (numansweredflag)
-	    acapmbox_setproperty(acaphandle, mailbox->name,
-				 ACAPMBOX_ANSWERED,newanswered);
-	if (numdeletedflag)
-	    acapmbox_setproperty(acaphandle, mailbox->name,
-				 ACAPMBOX_DELETED,newdeleted);
-	if (numflaggedflag)
-	    acapmbox_setproperty(acaphandle, mailbox->name,
-				 ACAPMBOX_FLAGGED, newflagged);
-	
-	acapmbox_release_handle(acaphandle);
+	if (acappush_sock != -1) {
+	    acapmbdata_t acapdata;
+	    
+	    /* fill in structure */
+	    strcpy(acapdata.name, mailbox->name);
+	    acapdata.uidvalidity = mailbox->uidvalidity;
+	    acapdata.exists      = newexists;
+	    acapdata.deleted     = newdeleted;
+	    acapdata.answered    = newanswered;
+	    acapdata.flagged     = newflagged;		
+	    
+	    /* send */
+	    if (sendto(acappush_sock, &acapdata, 20+strlen(mailbox->name), 0,
+		       (struct sockaddr *) &acappush_remote, acappush_remote_len) == -1) {
+		syslog(LOG_ERR, "Error sending to acappush: %m");
+		goto fail;
+	    }
+	}
     }
 
     mailbox_unlock_pop(mailbox);

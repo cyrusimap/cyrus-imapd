@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.220 2000/03/07 00:56:05 tmartin Exp $ */
+/* $Id: imapd.c,v 1.221 2000/03/14 21:34:53 tmartin Exp $ */
 
 #include <config.h>
 
@@ -352,6 +352,7 @@ int service_init(int argc, char **argv, char **envp)
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
     mboxlist_open(NULL);
+    mailbox_initialize();
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers();
