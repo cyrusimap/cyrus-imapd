@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.164.4.35 2003/07/14 02:30:24 ken3 Exp $
+# $Id: Makefile.in,v 1.164.4.36 2003/07/14 15:56:08 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -165,7 +165,7 @@ pushstats.h: pushstats.c
 lmtpstats.c: lmtpstats.snmp $(srcdir)/../snmp/snmpgen
 	$(srcdir)/../snmp/snmpgen $(srcdir)/lmtpstats.snmp
 
-lmtpstats.h lmtpstats.c
+lmtpstats.h: lmtpstats.c
 
 imap_err.c: imap_err.et
 	$(COMPILE_ET) $(srcdir)/imap_err.et
