@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.155 2001/02/23 17:35:52 leg Exp $
+ * $Id: index.c,v 1.156 2001/02/23 22:01:49 leg Exp $
  */
 #include <config.h>
 
@@ -81,18 +81,6 @@ extern int errno;
 
 extern void printastring (const char *s);
 
-/* The index and cache files, mapped into memory */
-static const char *index_base;
-static unsigned long index_len;
-static const char *cache_base;
-static unsigned long cache_len;
-static unsigned long cache_end;
-
-/* Attributes of memory-mapped index file */
-static long index_ino;
-static unsigned long start_offset;
-static unsigned long record_size;
-
 static unsigned recentuid;	/* UID of last non-\Recent message */
 static unsigned lastnotrecent;	/* Msgno of last non-\Recent message */
 
@@ -109,17 +97,17 @@ struct seen *seendb;		/* Seen state database object */
 static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 
 /* Access macros for the memory-mapped index file data */
-#define INDEC_OFFSET(msgno) (index_base+start_offset+(((msgno)-1)*record_size))
-#define UID(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_UID)))
-#define INTERNALDATE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_INTERNALDATE)))
-#define SENTDATE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_SENTDATE)))
-#define SIZE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_SIZE)))
-#define HEADER_SIZE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_HEADER_SIZE)))
-#define CONTENT_OFFSET(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CONTENT_OFFSET)))
-#define CACHE_OFFSET(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CACHE_OFFSET)))
-#define LAST_UPDATED(msgno) ((time_t)ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_LAST_UPDATED))))
-#define SYSTEM_FLAGS(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_SYSTEM_FLAGS)))
-#define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_USER_FLAGS+((i)*4))))
+#define INDEC_OFFSET(m, msgno) ((m)->index_base+(m)->start_offset+(((msgno)-1)*(m)->record_size))
+#define UID(m, msgno) ntohl(*((bit32 *)(INDEC_OFFSET(m, msgno)+OFFSET_UID)))
+#define INTERNALDATE(m, msgno) ntohl(*((bit32 *)(INDEC_OFFSET(m, msgno)+OFFSET_INTERNALDATE)))
+#define SENTDATE(m, msgno) ntohl(*((bit32 *)(INDEC_OFFSET(m, msgno)+OFFSET_SENTDATE)))
+#define SIZE(m, msgno) ntohl(*((bit32 *)(INDEC_OFFSET(m, msgno)+OFFSET_SIZE)))
+#define HEADER_SIZE(m, msgno) ntohl(*((bit32 *)(INDEC_OFFSET(m, msgno)+OFFSET_HEADER_SIZE)))
+#define CONTENT_OFFSET(m, msgno) ntohl(*((bit32 *)(INDEC_OFFSET(m, msgno)+OFFSET_CONTENT_OFFSET)))
+#define CACHE_OFFSET(m, msgno) ntohl(*((bit32 *)(INDEC_OFFSET(m, msgno)+OFFSET_CACHE_OFFSET)))
+#define LAST_UPDATED(m, msgno) ((time_t)ntohl(*((bit32 *)(INDEC_OFFSET(m, msgno)+OFFSET_LAST_UPDATED))))
+#define SYSTEM_FLAGS(m, msgno) ntohl(*((bit32 *)(INDEC_OFFSET(m, msgno)+OFFSET_SYSTEM_FLAGS)))
+#define USER_FLAGS(m, msgno,i) ntohl(*((bit32 *)(INDEC_OFFSET(m, msgno)+OFFSET_USER_FLAGS+((i)*4))))
 
 /* Access assistance macros for memory-mapped cache file data */
 #define CACHE_ITEM_BIT32(ptr) (ntohl(*((bit32 *)(ptr))))
@@ -190,7 +178,13 @@ struct rootset {
 
 struct thread_algorithm {
     char *alg_name;
-    void (*threader)(unsigned *msgno_list, int nmsg, int usinguid);
+    void (*threader)(struct mailbox *mailbox, 
+		     unsigned *msgno_list, int nmsg, int usinguid);
+};
+
+struct sortrock {
+    struct mailbox *mailbox;
+    struct sortcrit *sortcrit;
 };
 
 /* Forward declarations */
@@ -201,7 +195,8 @@ static int index_forsequence(struct mailbox *mailbox, char *sequence,
 			     int usinguid,
 			     index_sequenceproc_t *proc, void *rock,
 			     int* fetchedsomething);
-static int index_insequence(int num, char *sequence, int usinguid);
+static int index_insequence(struct mailbox *mailbox, 
+			    int num, char *sequence, int usinguid);
 
 static void index_fetchmsg(const char *msg_base, unsigned long msg_size,
 			   int format, unsigned offset, unsigned size,
@@ -222,8 +217,9 @@ static void index_fetchheader(const char *msg_base, unsigned long msg_size,
 				 int format, unsigned size,
 				 struct strlist *headers,
 				 struct strlist *headers_not);
-static void index_fetchcacheheader(unsigned msgno, struct strlist *headers,
-				      char *trail);
+static void index_fetchcacheheader(struct mailbox *mailbox, 
+				   unsigned msgno, struct strlist *headers,
+				   char *trail);
 static void index_listflags(struct mailbox *mailbox);
 static void index_fetchflags(struct mailbox *mailbox, unsigned msgno,
 				bit32 system_flags, bit32 *user_flags,
@@ -240,7 +236,8 @@ static int index_searchmsg(char *substr, comp_pat *pat,
 static int index_searchheader(char *name, char *substr, comp_pat *pat,
 			      struct mapfile *msgfile, int format,
 			      int size);
-static int index_searchcacheheader(unsigned msgno, char *name, char *substr,
+static int index_searchcacheheader(struct mailbox *mailbox, unsigned msgno, 
+				   char *name, char *substr,
 				   comp_pat *pat);
 static index_sequenceproc_t index_copysetup;
 static int _index_search(unsigned **msgno_list, struct mailbox *mailbox,
@@ -253,24 +250,29 @@ static char *index_extract_subject(const char *subj, int *is_refwd);
 static char *_index_extract_subject(char *s, int *is_refwd);
 static void index_get_ids(MsgData *msgdata,
 			  char *envtokens[], const char *headers);
-static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
+static MsgData *index_msgdata_load(struct mailbox *mailbox,
+				   unsigned *msgno_list, int n,
 				   struct sortcrit *sortcrit);
 
 static void *index_sort_getnext(MsgData *node);
 static void index_sort_setnext(MsgData *node, MsgData *next);
 static int index_sort_compare(MsgData *md1, MsgData *md2,
-			      struct sortcrit *call_data);
+			      struct sortrock *call_data);
 static void index_msgdata_free(MsgData *md);
 
 static void *index_thread_getnext(Thread *thread);
 static void index_thread_setnext(Thread *thread, Thread *next);
 static int index_thread_compare(Thread *t1, Thread *t2,
-				struct sortcrit *call_data);
-static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
+				struct sortrock *call_data);
+static void index_thread_orderedsubj(struct mailbox *mailbox,
+				     unsigned *msgno_list, int nmsg,
 				     int usinguid);
-static void index_thread_sort(Thread *root, struct sortcrit *sortcrit);
-static void index_thread_print(Thread *threads, int usinguid);
-static void index_thread_ref(unsigned *msgno_list, int nmsg, int usinguid);
+static void index_thread_sort(struct mailbox *mailbox, 
+			      Thread *root, struct sortcrit *sortcrit);
+static void index_thread_print(struct mailbox *mailbox,
+			       Thread *threads, int usinguid);
+static void index_thread_ref(struct mailbox *mailbox, 
+			     unsigned *msgno_list, int nmsg, int usinguid);
 
 /* NOTE: Make sure these are listed in CAPABILITY_STRING */
 static const struct thread_algorithm thread_algs[] = {
@@ -291,21 +293,14 @@ struct mailbox *mailbox;
 	seen_close(seendb);
 	seendb = 0;
     }
-    if (index_len) {
-	map_free(&index_base, &index_len);
-	map_free(&cache_base, &cache_len);
-	index_len = cache_end = 0;
-    }
 }
 
 /*
  * A new mailbox has been selected, map it into memory and do the
  * initial CHECK.
  */
-void
-index_newmailbox(mailbox, examine_mode)
-struct mailbox *mailbox;
-int examine_mode;
+void index_newmailbox(struct mailbox *mailbox,
+		      int examine_mode)
 {
     keepingseen = (mailbox->myrights & ACL_SEEN);
     examining = examine_mode;
@@ -332,7 +327,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     oldexists = imapd_exists;
 
     /* Check for expunge */
-    if (index_len) {
+    if (mailbox->index_len) {
 	if (stat(FNAME_INDEX+1, &sbuf) != 0) {
 	    if (errno == ENOENT) {
 		/* Mailbox has been deleted */
@@ -362,7 +357,8 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 		}
 		
 		nexpunge = 0;
-		while (oldmsgno<=imapd_exists && UID(oldmsgno) < record.uid) {
+		while (oldmsgno<=imapd_exists && 
+		       UID(mailbox,oldmsgno) < record.uid) {
 		    nexpunge++;
 		    oldmsgno++;
 		}
@@ -378,10 +374,10 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 		}
 	    }
 
-	    /* Force re-map of index/cache files */
-	    map_free(&index_base, &index_len);
-	    map_free(&cache_base, &cache_len);
-	    cache_end = 0;
+ 	    /* Force re-map of index/cache files */
+	    map_free(&mailbox->index_base, &mailbox->index_len);
+	    map_free(&mailbox->cache_base, &mailbox->cache_len);
+	    mailbox->cache_size = 0;
 
 	    /* Force a * n EXISTS message */
 	    imapd_exists = -1;
@@ -390,25 +386,24 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	    mailbox_read_index_header(mailbox);
 	}
     }
-    index_ino = mailbox->index_ino;
 
-    start_offset = mailbox->start_offset;
-    record_size = mailbox->record_size;
     newexists = mailbox->exists;
 
     /* Refresh the index and cache files */
-    map_refresh(mailbox->index_fd, 0, &index_base, &index_len,
-		start_offset + newexists * record_size,
+    map_refresh(mailbox->index_fd, 0, 
+		&mailbox->index_base, &mailbox->index_len,
+		mailbox->start_offset + newexists * mailbox->record_size,
 		"index", mailbox->name);
     if (fstat(mailbox->cache_fd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: stating cache file for %s: %m",
 	       mailbox->name);
 	fatal("failed to stat cache file", EC_IOERR);
     }
-    if (cache_end < sbuf.st_size) {
-	cache_end = sbuf.st_size;
-	map_refresh(mailbox->cache_fd, 0, &cache_base, &cache_len,
-		    cache_end, "cache", mailbox->name);
+    if (mailbox->cache_size < sbuf.st_size) {
+	mailbox->cache_size = sbuf.st_size;
+	map_refresh(mailbox->cache_fd, 0, 
+		    &mailbox->cache_base, &mailbox->cache_len,
+		    sbuf.st_size, "cache", mailbox->name);
     }
 
     /* If opening mailbox, get \Recent info */
@@ -437,7 +432,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     /* If opening mailbox or had an EXPUNGE, find where \Recent starts */
     if (imapd_exists == -1) {
 	imapd_exists = newexists;
-	lastnotrecent = index_finduid(recentuid);
+	lastnotrecent = index_finduid(mailbox, recentuid);
 	imapd_exists = -1;
     }
     
@@ -453,7 +448,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 
 	/* Zero out array entry for newly arrived messages */
 	for (i = oldexists+1; i <= newexists; i++) {
-	    flagreport[i] = LAST_UPDATED(i);
+	    flagreport[i] = LAST_UPDATED(mailbox, i);
 	    seenflag[i] = 0;
 	}
 
@@ -479,13 +474,16 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     }
 
     for (msgno = 1; msgno <= oldexists; msgno++) {
-	if (flagreport[msgno] < LAST_UPDATED(msgno)) {
+	if (flagreport[msgno] < LAST_UPDATED(mailbox, msgno)) {
 	    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-		user_flags[i] = USER_FLAGS(msgno, i);
+		user_flags[i] = USER_FLAGS(mailbox, msgno, i);
 	    }
-	    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
-			     LAST_UPDATED(msgno));
-	    if (usinguid) prot_printf(imapd_out, " UID %u", UID(msgno));
+	    index_fetchflags(mailbox, msgno, 
+			     SYSTEM_FLAGS(mailbox, msgno), user_flags,
+			     LAST_UPDATED(mailbox, msgno));
+	    if (usinguid) {
+		prot_printf(imapd_out, " UID %u", UID(mailbox, msgno));
+	    }
 	    prot_printf(imapd_out, ")\r\n");
 	}
     }
@@ -542,7 +540,7 @@ int oldexists;
     while (isdigit((int) *new)) newnext = newnext * 10 + *new++ - '0';
 
     for (msgno = 1; msgno <= imapd_exists; msgno++) {
-	uid = UID(msgno);
+	uid = UID(mailbox, msgno);
 	while (oldnext <= uid) {
 	    if (*old != ':' && !oldseen && oldnext == uid) {
 		oldseen = 1;
@@ -585,12 +583,13 @@ int oldexists;
 		seenflag[msgno] = newseen;
 		if (!quiet && msgno <= oldexists && oldexists != -1) {
 		    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-			user_flags[i] = USER_FLAGS(msgno, i);
+			user_flags[i] = USER_FLAGS(mailbox, msgno, i);
 		    }
-		    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), 
-				     user_flags, LAST_UPDATED(msgno));
+		    index_fetchflags(mailbox, msgno, 
+				     SYSTEM_FLAGS(mailbox, msgno), 
+				     user_flags, LAST_UPDATED(mailbox, msgno));
 		    if (usinguid) {
-			prot_printf(imapd_out, " UID %u", UID(msgno));
+			prot_printf(imapd_out, " UID %u", UID(mailbox, msgno));
 		    }
 		    prot_printf(imapd_out, ")\r\n");
 		}
@@ -644,7 +643,7 @@ int oldexists;
     save = saveseenuids = xmalloc(savealloced);
     *save = '\0';
     for (msgno = 1; msgno <= imapd_exists; msgno++) {
-	uid = UID(msgno);
+	uid = UID(mailbox, msgno);
 	if (seenflag[msgno] != inrange) {
 	    newallseen = 0;
 	    if (inrange) {
@@ -961,8 +960,9 @@ int nflags;
     mailbox_unlock_index(mailbox);
 
     /* Refresh the index file, for systems without mmap() */
-    map_refresh(mailbox->index_fd, 0, &index_base, &index_len,
-		start_offset + imapd_exists * record_size,
+    map_refresh(mailbox->index_fd, 0, 
+		&mailbox->index_base, &mailbox->index_len,
+		mailbox->start_offset + imapd_exists * mailbox->record_size,
 		"index", mailbox->name);
 
     return r;
@@ -994,7 +994,7 @@ struct searchargs *searchargs;
 	    (*msgno_list)[n++] = msgno;
 	}
 	if (msgfile.base) {
-	    mailbox_unmap_message(mailbox, UID(msgno),
+	    mailbox_unmap_message(mailbox, UID(mailbox, msgno),
 				  &msgfile.base, &msgfile.size);
 	}
     }
@@ -1024,7 +1024,7 @@ int index_getuidsequence(struct mailbox *mailbox,
     }
 
     for (i = 0; i < n; i++) {
-	msgno_list[i] = UID(msgno_list[i]);
+	msgno_list[i] = UID(mailbox, msgno_list[i]);
     }
 
     *uid_list = msgno_list;
@@ -1050,7 +1050,7 @@ int usinguid;
 
     for (i = 0; i < n; i++)
 	prot_printf(imapd_out, " %u",
-		    usinguid ? UID(msgno_list[i]) : msgno_list[i]);
+		    usinguid ? UID(mailbox, msgno_list[i]) : msgno_list[i]);
 
     if (n) free(msgno_list);
 
@@ -1077,21 +1077,26 @@ index_sort(struct mailbox *mailbox,
     prot_printf(imapd_out, "* SORT");
 
     if (nmsg) {
+	struct sortrock sortrock;
+
 	/* Create/load the msgdata array */
-	freeme = msgdata = index_msgdata_load(msgno_list, nmsg, sortcrit);
+	freeme = msgdata = index_msgdata_load(mailbox, 
+					      msgno_list, nmsg, sortcrit);
 	free(msgno_list);
 
+	sortrock.mailbox = mailbox;
+	sortrock.sortcrit = sortcrit;
 	/* Sort the messages based on the given criteria */
 	msgdata = lsort(msgdata,
 			(void * (*)(void*)) index_sort_getnext,
 			(void (*)(void*,void*)) index_sort_setnext,
 			(int (*)(void*,void*,void*)) index_sort_compare,
-			sortcrit);
+			&sortrock);
 
 	/* Output the sorted messages */ 
 	while (msgdata) {
 	    prot_printf(imapd_out, " %u",
-			usinguid ? UID(msgdata->msgno) : msgdata->msgno);
+			usinguid ? UID(mailbox, msgdata->msgno) : msgdata->msgno);
 
 	    /* free contents of the current node */
 	    index_msgdata_free(msgdata);
@@ -1144,14 +1149,15 @@ void index_thread(struct mailbox *mailbox, int algorithm,
 
     if (nmsg) {
 	/* Thread messages using given algorithm */
-	(*thread_algs[algorithm].threader)(msgno_list, nmsg, usinguid);
+	(*thread_algs[algorithm].threader)(mailbox, 
+					   msgno_list, nmsg, usinguid);
 
 	free(msgno_list);
     }
 
     /* print an empty untagged response */
     else
-	index_thread_print(NULL, usinguid);
+	index_thread_print(mailbox, NULL, usinguid);
 
     if (CONFIG_TIMING_VERBOSE) {
 	/* debug */
@@ -1286,10 +1292,12 @@ int statusitems;
 					OFFSET_UID)));
 		if (uid > last_uid) num_recent++;
 		if ((statusitems & STATUS_UNSEEN) &&
-		    !index_insequence(uid, last_seenuids, 0)) num_unseen++;
-		/* NB: The value of the third argument to index_insequence()
-		 * above does not matter.
-		 */
+		    !index_insequence(mailbox, uid, last_seenuids, 0)) {
+		    /* NB: The value of the fourth argument to
+		     * index_insequence() above does not matter.  
+		     */
+		    num_unseen++;
+		}
 	    }
 	    map_free(&base, &len);
 	    free(last_seenuids);
@@ -1342,17 +1350,17 @@ unsigned lowuid;
 
     for (msgno = 1; msgno <= imapd_exists; msgno++) {
 	if (firstuid == 0) {
-	    if (UID(msgno) >= lowuid) {
-		prot_printf(imapd_out, " %u %u", msgno, UID(msgno));
-		firstuid = lastuid = UID(msgno);
+	    if (UID(mailbox, msgno) >= lowuid) {
+		prot_printf(imapd_out, " %u %u", msgno, UID(mailbox, msgno));
+		firstuid = lastuid = UID(mailbox, msgno);
 	    }
 	}
 	else {
-	    if (UID(msgno) != ++lastuid) {
+	    if (UID(mailbox, msgno) != ++lastuid) {
 		if (lastuid-1 != firstuid) {
 		    prot_printf(imapd_out, ":%u", lastuid-1);
 		}
-		firstuid = lastuid = UID(msgno);
+		firstuid = lastuid = UID(mailbox, msgno);
 		prot_printf(imapd_out, ",%u", firstuid);
 	    }
 	}
@@ -1449,16 +1457,14 @@ unsigned seendate;
  * If no message with UID 'uid', returns the message with
  * the higest UID not greater than 'uid'.
  */
-int
-index_finduid(uid)
-unsigned uid;
+int index_finduid(struct mailbox *mailbox, unsigned uid)
 {
     int low=1, high=imapd_exists, mid;
     unsigned miduid;
 
     while (low <= high) {
 	mid = (high - low)/2 + low;
-	miduid = UID(mid);
+	miduid = UID(mailbox, mid);
 	if (miduid == uid) {
 	    return mid;
 	}
@@ -1476,20 +1482,18 @@ unsigned uid;
  * Expunge decision procedure to get rid of articles
  * both \Deleted and listed in the sequence under 'rock'.
  */
-int index_expungeuidlist(rock, indexbuf)
-void *rock;
-char *indexbuf;
+int index_expungeuidlist(struct mailbox *mailbox, void *rock, char *indexbuf)
 {
     char *sequence = (char *)rock;
     unsigned uid = ntohl(*((bit32 *)(indexbuf+OFFSET_UID)));
-
+    
     /* Don't expunge if not \Deleted */
     if (!(ntohl(*((bit32 *)(indexbuf+OFFSET_SYSTEM_FLAGS))) & FLAG_DELETED))
-	return 0;
-
-    return index_insequence(uid, sequence, 1);
+ 	return 0;
+    
+    return index_insequence(mailbox, uid, sequence, 1);
 }
-
+ 
 /*
  * Call a function 'proc' on each message in 'sequence'.  If 'usinguid'
  * is nonzero, 'sequence' is interpreted as a sequence of UIDs instead
@@ -1518,7 +1522,7 @@ index_forsequence(struct mailbox* mailbox,
 	    start = start*10 + *sequence - '0';
 	}
 	else if (*sequence == '*') {
-	    start = usinguid ? UID(imapd_exists) : imapd_exists;
+	    start = usinguid ? UID(mailbox, imapd_exists) : imapd_exists;
 	}
 	else if (*sequence == ':') {
 	    end = 0;
@@ -1528,7 +1532,7 @@ index_forsequence(struct mailbox* mailbox,
 	    }
 	    if (*sequence == '*') {
 		sequence++;
-		end = usinguid ? UID(imapd_exists) : imapd_exists;
+		end = usinguid ? UID(mailbox, imapd_exists) : imapd_exists;
 	    }
 	    if (start > end) {
 		i = end;
@@ -1536,10 +1540,10 @@ index_forsequence(struct mailbox* mailbox,
 		start = i;
 	    }
 	    if (usinguid) {
-		i = index_finduid(start);
-		if (!i || start != UID(i)) i++;
+		i = index_finduid(mailbox, start);
+		if (!i || start != UID(mailbox, i)) i++;
 		start = i;
-		end = index_finduid(end);
+		end = index_finduid(mailbox, end);
 	    }
 	    if (start < 1) start = 1;
 	    if (end > imapd_exists) end = imapd_exists;
@@ -1553,8 +1557,8 @@ index_forsequence(struct mailbox* mailbox,
 	}
 	else {
 	    if (start && usinguid) {
-		i = index_finduid(start);
-		if (!i || start != UID(i)) i = 0;
+		i = index_finduid(mailbox, start);
+		if (!i || start != UID(mailbox, i)) i = 0;
 		start = i;
 	    }
 	    if (start > 0 && start <= imapd_exists) {
@@ -1572,11 +1576,8 @@ index_forsequence(struct mailbox* mailbox,
 /*
  * Return nonzero iff 'num' is included in 'sequence'
  */
-static int
-index_insequence(num, sequence, usinguid)
-int num;
-char *sequence;
-int usinguid;
+static int index_insequence(struct mailbox *mailbox, int num,
+			    char *sequence, int usinguid)
 {
     unsigned i, start = 0, end;
 
@@ -1586,7 +1587,7 @@ int usinguid;
 	}
 	else if (*sequence == '*') {
 	    sequence++;
-	    start = usinguid ? UID(imapd_exists) : imapd_exists;
+	    start = usinguid ? UID(mailbox, imapd_exists) : imapd_exists;
 	}
 	else if (*sequence == ':') {
 	    end = 0;
@@ -1596,7 +1597,7 @@ int usinguid;
 	    }
 	    if (*sequence == '*') {
 		sequence++;
-		end = usinguid ? UID(imapd_exists) : imapd_exists;
+		end = usinguid ? UID(mailbox, imapd_exists) : imapd_exists;
 	    }
 	    if (start > end) {
 		i = end;
@@ -2031,10 +2032,9 @@ struct strlist *headers_not;
  * cacheheaders in cyrus.cache
  */
 static void
-index_fetchcacheheader(msgno, headers, trail)
-unsigned msgno;
-struct strlist *headers;
-char *trail;
+index_fetchcacheheader(struct mailbox *mailbox, unsigned msgno,
+		       struct strlist *headers,
+		       char *trail)
 {
     static char *buf;
     static int bufsize;
@@ -2045,7 +2045,7 @@ char *trail;
     int start_octet = 0;
     int octet_count = 0;
 
-    cacheitem = cache_base + CACHE_OFFSET(msgno);
+    cacheitem = mailbox->cache_base + CACHE_OFFSET(mailbox, msgno);
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
@@ -2219,10 +2219,9 @@ time_t last_updated;
  * Helper function to send requested * FETCH data for a message
  */
 static int
-index_fetchreply(mailbox, msgno, rock)
-struct mailbox *mailbox;
-unsigned msgno;
-void *rock;
+index_fetchreply(struct mailbox *mailbox,
+		 unsigned msgno,
+		 void *rock)
 {
     struct fetchargs *fetchargs = (struct fetchargs *)rock;    
     int fetchitems = fetchargs->fetchitems;
@@ -2239,7 +2238,8 @@ void *rock;
     /* Open the message file if we're going to need it */
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822|FETCH_UNCACHEDHEADER)) ||
 	fetchargs->bodysections) {
-	if (mailbox_map_message(mailbox, 1, UID(msgno), &msg_base, &msg_size)) {
+	if (mailbox_map_message(mailbox, 1, 
+				UID(mailbox, msgno), &msg_base, &msg_size)) {
 	    prot_printf(imapd_out, "* OK ");
 	    prot_printf(imapd_out, error_message(IMAP_NO_MSGGONE), msgno);
 	    prot_printf(imapd_out, "\r\n");
@@ -2256,10 +2256,11 @@ void *rock;
 
     if (fetchitems & FETCH_FLAGS) {
 	for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-	    user_flags[i] = USER_FLAGS(msgno, i);
+	    user_flags[i] = USER_FLAGS(mailbox, msgno, i);
 	}
-	index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
-			 LAST_UPDATED(msgno));
+	index_fetchflags(mailbox, msgno, 
+			 SYSTEM_FLAGS(mailbox, msgno), user_flags,
+			 LAST_UPDATED(mailbox, msgno));
 	sepchar = ' ';
     }
     else {
@@ -2267,11 +2268,11 @@ void *rock;
 	sepchar = '(';
     }
     if (fetchitems & FETCH_UID) {
-	prot_printf(imapd_out, "%cUID %u", sepchar, UID(msgno));
+	prot_printf(imapd_out, "%cUID %u", sepchar, UID(mailbox, msgno));
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_INTERNALDATE) {
-	time_t msgdate = INTERNALDATE(msgno);
+	time_t msgdate = INTERNALDATE(mailbox, msgno);
 	struct tm *tm = localtime(&msgdate);
 	long gmtoff = gmtoff_of(tm, msgdate);
 	int gmtnegative = 0;
@@ -2298,26 +2299,26 @@ void *rock;
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_SIZE) {
-	prot_printf(imapd_out, "%cRFC822.SIZE %u", sepchar, SIZE(msgno));
+	prot_printf(imapd_out, "%cRFC822.SIZE %u", sepchar, SIZE(mailbox, msgno));
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_ENVELOPE) {
 	prot_printf(imapd_out, "%cENVELOPE ", sepchar);
 	sepchar = ' ';
-	cacheitem = cache_base + CACHE_OFFSET(msgno);
+	cacheitem = mailbox->cache_base + CACHE_OFFSET(mailbox, msgno);
 	prot_write(imapd_out, cacheitem+4, CACHE_ITEM_LEN(cacheitem));
     }
     if (fetchitems & FETCH_BODYSTRUCTURE) {
 	prot_printf(imapd_out, "%cBODYSTRUCTURE ", sepchar);
 	sepchar = ' ';
-	cacheitem = cache_base + CACHE_OFFSET(msgno);
+	cacheitem = mailbox->cache_base + CACHE_OFFSET(mailbox, msgno);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
 	prot_write(imapd_out, cacheitem+4, CACHE_ITEM_LEN(cacheitem));
     }
     if (fetchitems & FETCH_BODY) {
 	prot_printf(imapd_out, "%cBODY ", sepchar);
 	sepchar = ' ';
-	cacheitem = cache_base + CACHE_OFFSET(msgno);
+	cacheitem = mailbox->cache_base + CACHE_OFFSET(mailbox, msgno);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
 	prot_write(imapd_out, cacheitem+4, CACHE_ITEM_LEN(cacheitem));
@@ -2327,7 +2328,7 @@ void *rock;
 	prot_printf(imapd_out, "%cRFC822.HEADER ", sepchar);
 	sepchar = ' ';
 	index_fetchmsg(msg_base, msg_size, mailbox->format, 0,
-		       HEADER_SIZE(msgno),
+		       HEADER_SIZE(mailbox, msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
     else if (fetchargs->headers || fetchargs->headers_not) {
@@ -2335,11 +2336,11 @@ void *rock;
 	sepchar = ' ';
 	if (fetchitems & FETCH_UNCACHEDHEADER) {
 	    index_fetchheader(msg_base, msg_size, mailbox->format,
-			      HEADER_SIZE(msgno),
+			      HEADER_SIZE(mailbox, msgno),
 			      fetchargs->headers, fetchargs->headers_not);
 	}
 	else {
-	    index_fetchcacheheader(msgno, fetchargs->headers, "]");
+	    index_fetchcacheheader(mailbox, msgno, fetchargs->headers, "]");
 	}
     }
 
@@ -2347,13 +2348,15 @@ void *rock;
 	prot_printf(imapd_out, "%cRFC822.TEXT ", sepchar);
 	sepchar = ' ';
 	index_fetchmsg(msg_base, msg_size, mailbox->format,
-		       CONTENT_OFFSET(msgno), SIZE(msgno) - HEADER_SIZE(msgno),
+		       CONTENT_OFFSET(mailbox, msgno), 
+		       SIZE(mailbox, msgno) - HEADER_SIZE(mailbox, msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
     if (fetchitems & FETCH_RFC822) {
 	prot_printf(imapd_out, "%cRFC822 ", sepchar);
 	sepchar = ' ';
-	index_fetchmsg(msg_base, msg_size, mailbox->format, 0, SIZE(msgno),
+	index_fetchmsg(msg_base, msg_size, mailbox->format, 
+		       0, SIZE(mailbox, msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
     for (fsection = fetchargs->fsections; fsection; fsection = fsection->next) {
@@ -2379,7 +2382,7 @@ void *rock;
 	}
 
 	if (fetchitems & FETCH_UNCACHEDHEADER) {
-	    cacheitem = cache_base + CACHE_OFFSET(msgno);
+	    cacheitem = mailbox->cache_base + CACHE_OFFSET(mailbox, msgno);
 	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
 	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
 	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
@@ -2388,7 +2391,8 @@ void *rock;
 				cacheitem);
 	}
 	else {
-	    index_fetchcacheheader(msgno, fsection->fields, fsection->trail);
+	    index_fetchcacheheader(mailbox, 
+				   msgno, fsection->fields, fsection->trail);
 	}
     }
     for (section = fetchargs->bodysections; section; section = section->next) {
@@ -2403,18 +2407,19 @@ void *rock;
 	    prot_printf(imapd_out, "%cBODY[%s ", sepchar, section->s);
 	}
 	sepchar = ' ';
-	cacheitem = cache_base + CACHE_OFFSET(msgno);
+	cacheitem = mailbox->cache_base + CACHE_OFFSET(mailbox, msgno);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
 
 	index_fetchsection(msg_base, msg_size, mailbox->format, section->s,
-			   cacheitem, SIZE(msgno),
+			   cacheitem, SIZE(mailbox, msgno),
 			   fetchargs->start_octet, fetchargs->octet_count);
     }
     prot_printf(imapd_out, ")\r\n");
     if (msg_base) {
-	mailbox_unmap_message(mailbox, UID(msgno), &msg_base, &msg_size);
+	mailbox_unmap_message(mailbox, UID(mailbox, msgno), 
+			      &msg_base, &msg_size);
     }
     return 0;
 }
@@ -2440,12 +2445,12 @@ void *rock;
     if (storeargs->silent) return 0;
 
     for (i=0; i < MAX_USER_FLAGS/32; i++) {
-	user_flags[i] = USER_FLAGS(msgno, i);
+	user_flags[i] = USER_FLAGS(mailbox, msgno, i);
     }
-    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
-		     LAST_UPDATED(msgno));
+    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(mailbox, msgno), user_flags,
+		     LAST_UPDATED(mailbox, msgno));
     if (storeargs->usinguid) {
-	prot_printf(imapd_out, " UID %u", UID(msgno));
+	prot_printf(imapd_out, " UID %u", UID(mailbox, msgno));
     }
     prot_printf(imapd_out, ")\r\n");
 
@@ -2464,7 +2469,7 @@ void *rock;
     struct storeargs *storeargs = (struct storeargs *)rock;
     int i;
     struct index_record record;
-    int uid = UID(msgno);
+    int uid = UID(mailbox, msgno);
     int low=1, high=mailbox->exists;
     int mid = 0;
     int r;
@@ -2518,9 +2523,9 @@ void *rock;
 	/* Fake setting the flags */
 	mid = 0;
 	storeargs->last_found = high;
-	record.system_flags = SYSTEM_FLAGS(msgno);
+	record.system_flags = SYSTEM_FLAGS(mailbox, msgno);
 	for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-	    record.user_flags[i] = USER_FLAGS(msgno, i);
+	    record.user_flags[i] = USER_FLAGS(mailbox, msgno, i);
 	}
     }
 
@@ -2604,7 +2609,7 @@ void *rock;
 	index_fetchflags(mailbox, msgno, record.system_flags,
 			 record.user_flags, record.last_updated);
 	if (storeargs->usinguid) {
-	    prot_printf(imapd_out, " UID %u", UID(msgno));
+	    prot_printf(imapd_out, " UID %u", UID(mailbox, msgno));
 	}
 	prot_printf(imapd_out, ")\r\n");
     }
@@ -2640,39 +2645,43 @@ static int index_search_evaluate(struct mailbox *mailbox,
     if ((searchargs->flags & SEARCH_SEEN_SET) && !seenflag[msgno]) return 0;
     if ((searchargs->flags & SEARCH_SEEN_UNSET) && seenflag[msgno]) return 0;
 
-    if (searchargs->smaller && SIZE(msgno) >= searchargs->smaller) return 0;
-    if (searchargs->larger && SIZE(msgno) <= searchargs->larger) return 0;
+    if (searchargs->smaller && SIZE(mailbox, msgno) >= searchargs->smaller)
+	return 0;
+    if (searchargs->larger && SIZE(mailbox, msgno) <= searchargs->larger)
+	return 0;
 
-    if (searchargs->after && INTERNALDATE(msgno) < searchargs->after)
+    if (searchargs->after && INTERNALDATE(mailbox, msgno) < searchargs->after)
       return 0;
-    if (searchargs->before && INTERNALDATE(msgno) > searchargs->before)
+    if (searchargs->before && INTERNALDATE(mailbox, msgno) > searchargs->before)
       return 0;
-    if (searchargs->sentafter && SENTDATE(msgno) < searchargs->sentafter)
+    if (searchargs->sentafter && SENTDATE(mailbox, msgno) < searchargs->sentafter)
       return 0;
-    if (searchargs->sentbefore && SENTDATE(msgno) > searchargs->sentbefore)
+    if (searchargs->sentbefore && SENTDATE(mailbox, msgno) > searchargs->sentbefore)
       return 0;
 
-    if (~SYSTEM_FLAGS(msgno) & searchargs->system_flags_set) return 0;
-    if (SYSTEM_FLAGS(msgno) & searchargs->system_flags_unset) return 0;
+    if (~SYSTEM_FLAGS(mailbox, msgno) & searchargs->system_flags_set) 
+	return 0;
+    if (SYSTEM_FLAGS(mailbox, msgno) & searchargs->system_flags_unset) 
+	return 0;
 	
     for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-	if (~USER_FLAGS(msgno,i) & searchargs->user_flags_set[i])
+	if (~USER_FLAGS(mailbox, msgno,i) & searchargs->user_flags_set[i])
 	  return 0;
-	if (USER_FLAGS(msgno,i) & searchargs->user_flags_unset[i])
+	if (USER_FLAGS(mailbox, msgno,i) & searchargs->user_flags_unset[i])
 	  return 0;
     }
 
     for (l = searchargs->sequence; l; l = l->next) {
-	if (!index_insequence(msgno, l->s, 0)) return 0;
+	if (!index_insequence(mailbox, msgno, l->s, 0)) return 0;
     }
     for (l = searchargs->uidsequence; l; l = l->next) {
-	if (!index_insequence(UID(msgno), l->s, 1)) return 0;
+	if (!index_insequence(mailbox, UID(mailbox, msgno), l->s, 1)) return 0;
     }
 
     if (searchargs->from || searchargs->to || searchargs->cc ||
 	searchargs->bcc || searchargs->subject || searchargs->messageid) {
 
-	cacheitem = cache_base + CACHE_OFFSET(msgno);
+	cacheitem = mailbox->cache_base + CACHE_OFFSET(mailbox, msgno);
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	if (searchargs->messageid) {
@@ -2764,7 +2773,7 @@ static int index_search_evaluate(struct mailbox *mailbox,
     if (searchargs->body || searchargs->text ||
 	(searchargs->flags & SEARCH_UNCACHEDHEADER)) {
 	if (! msgfile->size) { /* Map the message in if we haven't before */
-	    if (mailbox_map_message(mailbox, 1, UID(msgno),
+	    if (mailbox_map_message(mailbox, 1, UID(mailbox, msgno),
 				    &msgfile->base, &msgfile->size)) {
 		return 0;
 	    }
@@ -2773,10 +2782,10 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	h = searchargs->header_name;
 	for (l = searchargs->header; l; (l = l->next), (h = h->next)) {
 	    if (!index_searchheader(h->s, l->s, l->p, msgfile, mailbox->format,
-				    HEADER_SIZE(msgno))) return 0;
+				    HEADER_SIZE(mailbox, msgno))) return 0;
 	}
 
-	cacheitem = cache_base + CACHE_OFFSET(msgno);
+	cacheitem = mailbox->cache_base + CACHE_OFFSET(mailbox, msgno);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
@@ -2793,7 +2802,8 @@ static int index_search_evaluate(struct mailbox *mailbox,
     else if (searchargs->header_name) {
 	h = searchargs->header_name;
 	for (l = searchargs->header; l; (l = l->next), (h = h->next)) {
-	    if (!index_searchcacheheader(msgno, h->s, l->s, l->p)) return 0;
+	    if (!index_searchcacheheader(mailbox, msgno, h->s, l->s, l->p))
+		return 0;
 	}
     }
 
@@ -2898,11 +2908,11 @@ int size;
  * Search named cached header of a message for a substring
  */
 static int
-index_searchcacheheader(msgno, name, substr, pat)
-unsigned msgno;
-char *name;
-char *substr;
-comp_pat *pat;
+index_searchcacheheader(struct mailbox *mailbox,
+			unsigned msgno,
+			char *name,
+			char *substr,
+			comp_pat *pat)
 {
     char *q;
     static struct strlist header;
@@ -2912,7 +2922,7 @@ comp_pat *pat;
     unsigned size;
     int r;
 
-    cacheitem = cache_base + CACHE_OFFSET(msgno);
+    cacheitem = mailbox->cache_base + CACHE_OFFSET(mailbox, msgno);
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
@@ -2944,10 +2954,9 @@ comp_pat *pat;
  */
 #define COPYARGSGROW 30
 static int
-index_copysetup(mailbox, msgno, rock)
-struct mailbox *mailbox;
-unsigned msgno;
-void *rock;
+index_copysetup(struct mailbox *mailbox,
+		unsigned msgno,
+		void *rock)
 {
     struct copyargs *copyargs = (struct copyargs *)rock;
     int flag = 0;
@@ -2961,30 +2970,34 @@ void *rock;
 		   copyargs->msgalloc * sizeof(struct copymsg));
     }
 
-    copyargs->copymsg[copyargs->nummsg].uid = UID(msgno);
-    copyargs->copymsg[copyargs->nummsg].internaldate = INTERNALDATE(msgno);
-    copyargs->copymsg[copyargs->nummsg].sentdate = SENTDATE(msgno);
-    copyargs->copymsg[copyargs->nummsg].size = SIZE(msgno);
-    copyargs->copymsg[copyargs->nummsg].header_size = HEADER_SIZE(msgno);
-    copyargs->copymsg[copyargs->nummsg].cache_begin = cache_base + CACHE_OFFSET(msgno);
+    copyargs->copymsg[copyargs->nummsg].uid = UID(mailbox, msgno);
+    copyargs->copymsg[copyargs->nummsg].internaldate = 
+	INTERNALDATE(mailbox, msgno);
+    copyargs->copymsg[copyargs->nummsg].sentdate = SENTDATE(mailbox, msgno);
+    copyargs->copymsg[copyargs->nummsg].size = SIZE(mailbox, msgno);
+    copyargs->copymsg[copyargs->nummsg].header_size = 
+	HEADER_SIZE(mailbox, msgno);
+    copyargs->copymsg[copyargs->nummsg].cache_begin = 
+	mailbox->cache_base + CACHE_OFFSET(mailbox, msgno);
     if (mailbox->format != MAILBOX_FORMAT_NORMAL) {
 	/* Force copy and re-parse of message */
 	copyargs->copymsg[copyargs->nummsg].cache_len = 0;
     }
     else if (msgno < imapd_exists) {
 	copyargs->copymsg[copyargs->nummsg].cache_len =
-	  CACHE_OFFSET(msgno+1) - CACHE_OFFSET(msgno);
-    }
-    else {
+	    CACHE_OFFSET(mailbox, msgno+1) - CACHE_OFFSET(mailbox, msgno);
+    } else {
+	/* last message, just copy to the end of the cache */
 	copyargs->copymsg[copyargs->nummsg].cache_len =
-	  cache_end - CACHE_OFFSET(msgno);
+	    mailbox->cache_size - CACHE_OFFSET(mailbox, msgno);
     }
     copyargs->copymsg[copyargs->nummsg].seen = seenflag[msgno];
-    copyargs->copymsg[copyargs->nummsg].system_flags = SYSTEM_FLAGS(msgno);
+    copyargs->copymsg[copyargs->nummsg].system_flags = 
+	SYSTEM_FLAGS(mailbox, msgno);
 
     for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
 	if ((userflag & 31) == 0) {
-	    flagmask = USER_FLAGS(msgno,userflag/32);
+	    flagmask = USER_FLAGS(mailbox, msgno,userflag/32);
 	}
 	if (!mailbox->flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
 	    mailbox_read_header(mailbox);
@@ -2995,7 +3008,7 @@ void *rock;
 
     for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
 	if ((userflag & 31) == 0) {
-	    flagmask = USER_FLAGS(msgno,userflag/32);
+	    flagmask = USER_FLAGS(mailbox, msgno,userflag/32);
 	}
 	if (mailbox->flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
 	    copyargs->copymsg[copyargs->nummsg].flag[flag++] =
@@ -3017,7 +3030,8 @@ void *rock;
  */
 #define ANNOTGROWSIZE	10
 
-static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
+static MsgData *index_msgdata_load(struct mailbox *mailbox, 
+				   unsigned *msgno_list, int n,
 				   struct sortcrit *sortcrit)
 {
     MsgData *md, *cur;
@@ -3057,7 +3071,7 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 		!did_cache) {
 
 		/* fetch cached info */
-		env = cache_base + CACHE_OFFSET(cur->msgno);
+		env = mailbox->cache_base + CACHE_OFFSET(mailbox, cur->msgno);
 		cacheitem = CACHE_ITEM_NEXT(env); /* bodystructure */
 		cacheitem = CACHE_ITEM_NEXT(cacheitem); /* body */
 		cacheitem = CACHE_ITEM_NEXT(cacheitem); /* section */
@@ -3478,9 +3492,11 @@ static int numcmp(int i1, int i2)
  * Comparison function for sorting message lists.
  */
 static int index_sort_compare(MsgData *md1, MsgData *md2,
-			      struct sortcrit *sortcrit)
+			      struct sortrock *sortrock)
 {
     int reverse, ret = 0, i = 0, ann = 0;
+    struct sortcrit *sortcrit = sortrock->sortcrit;
+    struct mailbox *mailbox = sortrock->mailbox;
 
     do {
 	/* determine sort order from reverse flag bit */
@@ -3491,7 +3507,8 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	    ret = numcmp(md1->msgno, md2->msgno);
 	    break;
 	case SORT_ARRIVAL:
-	    ret = numcmp(INTERNALDATE(md1->msgno), INTERNALDATE(md2->msgno));
+	    ret = numcmp(INTERNALDATE(mailbox, md1->msgno), 
+			 INTERNALDATE(mailbox, md2->msgno));
 	    break;
 	case SORT_CC:
 	    ret = strcmp(md1->cc, md2->cc);
@@ -3504,7 +3521,7 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	    ret = strcmp(md1->from, md2->from);
 	    break;
 	case SORT_SIZE:
-	    ret = numcmp(SIZE(md1->msgno), SIZE(md2->msgno));
+	    ret = numcmp(SIZE(mailbox, md1->msgno), SIZE(mailbox, md2->msgno));
 	    break;
 	case SORT_SUBJECT:
 	    ret = strcmp(md1->xsubj, md2->xsubj);
@@ -3565,7 +3582,7 @@ static void index_thread_setnext(Thread *thread, Thread *next)
  * Comparison function for sorting threads.
  */
 static int index_thread_compare(Thread *t1, Thread *t2,
-				struct sortcrit *call_data)
+				struct sortrock *call_data)
 {
     MsgData *md1, *md2;
 
@@ -3578,50 +3595,58 @@ static int index_thread_compare(Thread *t1, Thread *t2,
 /*
  * Sort a list of threads.
  */
-static void index_thread_sort(Thread *root, struct sortcrit *sortcrit)
+static void index_thread_sort(struct mailbox *mailbox,
+			      Thread *root, struct sortcrit *sortcrit)
 {
     Thread *child;
+    struct sortrock sortrock;
 
     /* sort the grandchildren */
     child = root->child;
     while (child) {
 	/* if the child has children, sort them */
 	if (child->child)
-	    index_thread_sort(child, sortcrit);
+	    index_thread_sort(mailbox, child, sortcrit);
 	child = child->next;
     }
 
+    sortrock.mailbox = mailbox;
+    sortrock.sortcrit = sortcrit;
     /* sort the children */
     root->child = lsort(root->child,
 			(void * (*)(void*)) index_thread_getnext,
 			(void (*)(void*,void*)) index_thread_setnext,
 			(int (*)(void*,void*,void*)) index_thread_compare,
-			sortcrit);
+			(void *) &sortrock);
 }
 
 /*
  * Thread a list of messages using the ORDEREDSUBJECT algorithm.
  */
-static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
+static void index_thread_orderedsubj(struct mailbox *mailbox, 
+				     unsigned *msgno_list, int nmsg,
 				     int usinguid)
 {
     MsgData *msgdata, *freeme;
     struct sortcrit sortcrit[] = {{ SORT_SUBJECT,  0 },
 				  { SORT_DATE,     0 },
 				  { SORT_SEQUENCE, 0 }};
+    struct sortrock sortrock;
     unsigned psubj_hash = 0;
     char *psubj;
     Thread *head, *newnode, *cur, *parent;
 
     /* Create/load the msgdata array */
-    freeme = msgdata = index_msgdata_load(msgno_list, nmsg, sortcrit);
+    freeme = msgdata = index_msgdata_load(mailbox, msgno_list, nmsg, sortcrit);
 
+    sortrock.mailbox = mailbox;
+    sortrock.sortcrit = sortcrit;
     /* Sort messages by subject and date */
     msgdata = lsort(msgdata,
 		    (void * (*)(void*)) index_sort_getnext,
 		    (void (*)(void*,void*)) index_sort_setnext,
 		    (int (*)(void*,void*,void*)) index_sort_compare,
-		    sortcrit);
+		    (void *) &sortrock);
 
     /* create an array of Thread to use as nodes of thread tree
      *
@@ -3665,10 +3690,10 @@ static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
     }
 
     /* Sort threads by date */
-    index_thread_sort(head, sortcrit+1);
+    index_thread_sort(mailbox, head, sortcrit+1);
 
     /* Output the threaded messages */ 
-    index_thread_print(head, usinguid);
+    index_thread_print(mailbox, head, usinguid);
 
     /* free the thread array */
     free(head);
@@ -3682,7 +3707,8 @@ static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
  *
  * Frees contents of msgdata as a side effect.
  */
-static void _index_thread_print(Thread *thread, int usinguid)
+static void _index_thread_print(struct mailbox *mailbox, 
+				Thread *thread, int usinguid)
 {
     Thread *child;
 
@@ -3696,7 +3722,7 @@ static void _index_thread_print(Thread *thread, int usinguid)
 	 */
 	if (thread->msgdata) {
 	    prot_printf(imapd_out, "%u",
-			usinguid ? UID(thread->msgdata->msgno) :
+			usinguid ? UID(mailbox, thread->msgdata->msgno) :
 			thread->msgdata->msgno);
 
 	    /* if we have a child, print the parent-child separator */
@@ -3711,13 +3737,13 @@ static void _index_thread_print(Thread *thread, int usinguid)
 	while (child) {
 	    /* if the child has siblings, print new branch and break */
 	    if (child->next) {
-		_index_thread_print(child, usinguid);
+		_index_thread_print(mailbox, child, usinguid);
 		break;
 	    }
 	    /* otherwise print the only child */
 	    else {
 		prot_printf(imapd_out, "%u",
-			    usinguid ? UID(child->msgdata->msgno) :
+			    usinguid ? UID(mailbox, child->msgdata->msgno) :
 			    child->msgdata->msgno);
 
 		/* if we have a child, print the parent-child separator */
@@ -3743,13 +3769,14 @@ static void _index_thread_print(Thread *thread, int usinguid)
  * This is a wrapper around _index_thread_print() which simply prints the
  * start and end of the untagged thread response.
  */
-static void index_thread_print(Thread *thread, int usinguid)
+static void index_thread_print(struct mailbox *mailbox,
+			       Thread *thread, int usinguid)
 {
     prot_printf(imapd_out, "* THREAD");
 
     if (thread) {
 	prot_printf(imapd_out, " ");
-	_index_thread_print(thread->child, usinguid);
+	_index_thread_print(mailbox, thread->child, usinguid);
     }
 
     prot_printf(imapd_out, "\r\n");
@@ -4013,12 +4040,16 @@ static void ref_prune_tree(Thread *parent)
 /*
  * Sort the messages in the root set by date.
  */
-static void ref_sort_root(Thread *root)
+static void ref_sort_root(struct mailbox *mailbox, Thread *root)
 {
     Thread *cur;
     struct sortcrit sortcrit[] = {{ SORT_DATE,     0 },
 				  { SORT_SEQUENCE, 0 }};
-
+    struct sortrock sortrock;
+    
+    sortrock.mailbox = mailbox;
+    sortrock.sortcrit = sortcrit;
+    
     cur = root->child;
     while (cur) {
 	/* if the message is a dummy, sort its children */
@@ -4027,7 +4058,7 @@ static void ref_sort_root(Thread *root)
 			       (void * (*)(void*)) index_thread_getnext,
 			       (void (*)(void*,void*)) index_thread_setnext,
 			       (int (*)(void*,void*,void*)) index_thread_compare,
-			       sortcrit);
+			       &sortrock);
 	}
 	cur = cur->next;
     }
@@ -4037,7 +4068,7 @@ static void ref_sort_root(Thread *root)
 			(void * (*)(void*)) index_thread_getnext,
 			(void (*)(void*,void*)) index_thread_setnext,
 			(int (*)(void*,void*,void*)) index_thread_compare,
-			sortcrit);
+			&sortrock);
 }
 
 /*
@@ -4268,7 +4299,8 @@ static void index_thread_search(Thread *root, int (*searchproc) (MsgData *))
  * Guts of the REFERENCES algorithms.  Behavior is tweaked with loadcrit[],
  * searchproc() and sortcrit[].
  */
-static void _index_thread_ref(unsigned *msgno_list, int nmsg,
+static void _index_thread_ref(struct mailbox *mailbox, 
+			      unsigned *msgno_list, int nmsg,
 			      struct sortcrit loadcrit[],
 			      int (*searchproc) (MsgData *),
 			      struct sortcrit sortcrit[], int usinguid)
@@ -4280,7 +4312,7 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
     struct rootset rootset;
 
     /* Create/load the msgdata array */
-    freeme = msgdata = index_msgdata_load(msgno_list, nmsg, loadcrit);
+    freeme = msgdata = index_msgdata_load(mailbox, msgno_list, nmsg, loadcrit);
 
     /* calculate the sum of the number of references for all messages */
     for (md = msgdata, tref = 0; md; md = md->next)
@@ -4330,7 +4362,7 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
     ref_prune_tree(rootset.root);
 
     /* Step 4: sort the root set */
-    ref_sort_root(rootset.root);
+    ref_sort_root(mailbox, rootset.root);
 
     /* Step 5: group root set by subject */
     ref_group_subjects(rootset.root, rootset.nroot, &newnode);
@@ -4339,10 +4371,10 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
     if (searchproc) index_thread_search(rootset.root, searchproc);
 
     /* Step 6: sort threads */
-    if (sortcrit) index_thread_sort(rootset.root, sortcrit);
+    if (sortcrit) index_thread_sort(mailbox, rootset.root, sortcrit);
 
     /* Output the threaded messages */ 
-    index_thread_print(rootset.root, usinguid);
+    index_thread_print(mailbox, rootset.root, usinguid);
 
     /* free the thread array */
     free(rootset.root);
@@ -4354,7 +4386,8 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
 /*
  * Thread a list of messages using the REFERENCES algorithm.
  */
-static void index_thread_ref(unsigned *msgno_list, int nmsg, int usinguid)
+static void index_thread_ref(struct mailbox *mailbox,
+			     unsigned *msgno_list, int nmsg, int usinguid)
 {
     struct sortcrit loadcrit[] = {{ LOAD_IDS,      0 },
 				  { SORT_SUBJECT,  0 },
@@ -4363,5 +4396,6 @@ static void index_thread_ref(unsigned *msgno_list, int nmsg, int usinguid)
     struct sortcrit sortcrit[] = {{ SORT_DATE,     0 },
 				  { SORT_SEQUENCE, 0 }};
 
-    _index_thread_ref(msgno_list, nmsg, loadcrit, NULL, sortcrit, usinguid);
+    _index_thread_ref(mailbox,
+		      msgno_list, nmsg, loadcrit, NULL, sortcrit, usinguid);
 }

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.298 2001/02/22 19:27:17 ken3 Exp $ */
+/* $Id: imapd.c,v 1.299 2001/02/23 22:01:48 leg Exp $ */
 
 #include <config.h>
 
@@ -105,9 +105,11 @@ struct auth_state *imapd_authstate = 0;
 int imapd_userisadmin;
 struct mailbox *imapd_mailbox;
 int imapd_exists;
-struct sockaddr_in imapd_localaddr, imapd_remoteaddr;
-int imapd_haveaddr = 0;
-char imapd_clienthost[250] = "[local]";
+
+static struct sockaddr_in imapd_localaddr, imapd_remoteaddr;
+static int imapd_haveaddr = 0;
+static char imapd_clienthost[250] = "[local]";
+
 struct protstream *imapd_out, *imapd_in;
 time_t imapd_logtime;
 static char shutdownfilename[1024];

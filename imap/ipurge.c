@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.9 2001/02/22 19:27:18 ken3 Exp $
+ * $Id: ipurge.c,v 1.10 2001/02/23 22:01:49 leg Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -93,7 +93,7 @@ typedef struct mbox_stats_s {
 int verbose = 1;
 
 int purge_me(char *, int, int);
-int purge_check(void *, char *);
+int purge_check(struct mailbox *, void *, char *);
 int usage(char *name);
 void print_stats(mbox_stats_t *stats);
 
@@ -236,7 +236,7 @@ void deleteit(struct index_record *the_record, mbox_stats_t *stats)
 /* thumbs up routine, checks date & size and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
 int
-purge_check(void *deciderock, char *buf) {
+purge_check(struct mailbox *mailbox, void *deciderock, char *buf) {
   struct index_record *the_record;
   unsigned long       my_time;
   mbox_stats_t *stats = (mbox_stats_t *) deciderock;

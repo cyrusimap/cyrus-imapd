@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.109 2001/01/10 07:23:08 leg Exp $
+ $Id: mailbox.c,v 1.110 2001/02/23 22:01:49 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -224,6 +224,7 @@ int mailbox_map_message(struct mailbox *mailbox,
     if (!iscurrentdir) {
 	strcpy(buf, mailbox->path);
 	p = buf + strlen(buf);
+	*p++ = '/';
     }
 
     sprintf(p, "%lu.", uid);
@@ -377,8 +378,15 @@ int mailbox_open_index(struct mailbox *mailbox)
 	strcat(fnamebuf, FNAME_CACHE);
 	mailbox->cache_fd = open(fnamebuf, O_RDWR, 0);
 	if (mailbox->cache_fd != -1) {
+	    struct stat sbuf;
+
+	    if (fstat(mailbox->cache_fd, &sbuf) == -1) {
+		syslog(LOG_ERR, "IOERROR: fstating %s: %m", mailbox->name);
+		fatal("can't fstat cache file", EC_OSFILE);
+	    }
+	    mailbox->cache_size = sbuf.st_size;
 	    map_refresh(mailbox->cache_fd, 0, &mailbox->cache_base,
-			&mailbox->cache_len, MAP_UNKNOWN_LEN, "cache",
+			&mailbox->cache_len, mailbox->cache_size, "cache",
 			mailbox->name);
 	}
 	if (mailbox->cache_fd == -1) {
@@ -1385,7 +1393,6 @@ static int mailbox_calculate_flagcounts(struct mailbox *mailbox)
     bit32 newversion;
     struct stat sbuf;
     char buf[INDEX_HEADER_SIZE];
-    unsigned long cache_len;
     char fnamebuf[MAX_MAILBOX_PATH], fnamebufnew[MAX_MAILBOX_PATH];
     FILE *newindex;
     char *fnametail;
@@ -1437,9 +1444,10 @@ static int mailbox_calculate_flagcounts(struct mailbox *mailbox)
 	syslog(LOG_ERR, "IOERROR: fstating %s: %m", mailbox->name);
 	fatal("can't fstat cache file", EC_OSFILE);
     }
-    cache_len = sbuf.st_size;
+    mailbox->cache_size = sbuf.st_size;
     map_refresh(mailbox->cache_fd, 0, &mailbox->cache_base,
-		&mailbox->cache_len, cache_len, "cache", mailbox->name);
+		&mailbox->cache_len, mailbox->cache_size, 
+		"cache", mailbox->name);
 
     /* for each message look at the system flags */
     for (msgno = 1; msgno <= mailbox->exists; msgno++) {
@@ -1550,7 +1558,6 @@ void *deciderock;
     int lastmsgdeleted = 1;
     unsigned long cachediff = 0;
     unsigned long cachestart = sizeof(bit32);
-    unsigned long cache_len;
     unsigned long cache_offset;
     struct stat sbuf;
     char *fnametail;
@@ -1575,9 +1582,10 @@ void *deciderock;
 	syslog(LOG_ERR, "IOERROR: fstating %s: %m", fnamebuf); /* xxx is fnamebuf initialized??? */
 	fatal("can't fstat cache file", EC_OSFILE);
     }
-    cache_len = sbuf.st_size;
+    mailbox->cache_size = sbuf.st_size;
     map_refresh(mailbox->cache_fd, 0, &mailbox->cache_base,
-		&mailbox->cache_len, cache_len, "cache", mailbox->name);
+		&mailbox->cache_len, mailbox->cache_size,
+		"cache", mailbox->name);
 
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_INDEX);
@@ -1644,7 +1652,7 @@ void *deciderock;
 	    goto fail;
 	}
 
-	if (decideproc ? decideproc(deciderock, buf) :
+	if (decideproc ? decideproc(mailbox, deciderock, buf) :
 	    (ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS))) & FLAG_DELETED)) {
 	    bit32 sysflags;
 
@@ -1691,7 +1699,7 @@ void *deciderock;
     /* Copy over any remaining cache file data */
     if (!lastmsgdeleted) {
 	fwrite(mailbox->cache_base + cachestart, 1,
-	       cache_len - cachestart, newcache);
+	       mailbox->cache_size - cachestart, newcache);
     }
 
     /* Fix up information in index header */
