@@ -48,7 +48,7 @@ INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
 DEFS = @DEFS@
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@
+CPPFLAGS = -I.. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@
 LIBS =  @IMAP_LIBS@
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@ 
 
