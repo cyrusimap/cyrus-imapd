@@ -92,6 +92,7 @@ int config_init(const char *alt_config, const char *ident)
     int umaskval = 0;
 
     initialize_imap_error_table();
+    initialize_mupd_error_table();
 
     openlog(ident, LOG_PID, LOG_LOCAL6);
 
