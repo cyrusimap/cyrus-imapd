@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.23 2001/03/18 17:38:17 leg Exp $
+ * $Id: lmtpengine.c,v 1.24 2001/03/20 19:59:50 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1084,7 +1084,7 @@ void lmtpmode(struct lmtp_func *func,
 		  if (r != SASL_OK) {
 		      prot_printf(pout,
 				  "501 5.5.4 cannot base64 decode\r\n");
-		      if (in) { free(in); }
+		      if (in) { free(in); in = NULL; }
 		      continue;
 		  }
 	      } else {
