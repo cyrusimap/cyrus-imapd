@@ -79,7 +79,7 @@ char **failaction;
 	    return -1;
 	}
 	dup2(newfd, fd);
-	close(fd);
+	close(newfd);
     }
 }
 
