@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.43 2003/12/15 16:04:35 ken3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.44 2004/03/11 18:36:45 ken3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -923,7 +923,8 @@ int myforeach(struct db *db,
 	if (KEYLEN(ptr) < (bit32) prefixlen) break;
 	if (prefixlen && compare(KEY(ptr), prefixlen, prefix, prefixlen)) break;
 
-	if (goodp(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr))) {
+	if (!goodp ||
+	    goodp(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr))) {
 	    ino_t ino = db->map_ino;
 	    unsigned long sz = db->map_size;
 

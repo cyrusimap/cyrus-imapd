@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.45 2004/01/26 17:46:54 ken3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.46 2004/03/11 18:36:42 ken3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -90,15 +90,6 @@ struct dumprock {
 
     mupdate_handle *h;
 };
-
-static int dump_p(void *rockp __attribute__((unused)),
-			const char *key __attribute__((unused)),
-			int keylen __attribute__((unused)),
-			const char *data __attribute__((unused)),
-			int datalen __attribute__((unused)))
-{
-    return 1;
-}
 
 struct mb_node 
 {
@@ -409,7 +400,7 @@ void do_dump(enum mboxop op, const char *part, int purge)
     }
 
     /* Dump Database */
-    config_mboxlist_db->foreach(mbdb, "", 0, &dump_p, &dump_cb, &d, NULL);
+    config_mboxlist_db->foreach(mbdb, "", 0, NULL, &dump_cb, &d, NULL);
 
     if(d.tid) {
 	config_mboxlist_db->commit(mbdb, d.tid);

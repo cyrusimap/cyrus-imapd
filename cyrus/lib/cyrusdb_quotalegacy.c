@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_quotalegacy.c,v 1.4 2004/03/11 18:12:53 ken3 Exp $ */
+/* $Id: cyrusdb_quotalegacy.c,v 1.5 2004/03/11 18:36:45 ken3 Exp $ */
 
 #include <config.h>
 
@@ -514,7 +514,7 @@ static int foreach(struct db *db,
 
 	keylen = strlen(key);
 
-	if (goodp(rock, key, keylen, data, datalen)) {
+	if (!goodp || goodp(rock, key, keylen, data, datalen)) {
 	    /* make callback */
 	    r = cb(rock, key, keylen, data, datalen);
 	    if (r) break;
