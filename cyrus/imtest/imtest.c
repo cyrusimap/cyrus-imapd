@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.93.2.6 2004/05/31 18:22:57 ken3 Exp $
+ * $Id: imtest.c,v 1.93.2.7 2004/06/15 14:20:17 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1965,12 +1965,14 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *rock,
 
 static char *nntp_parse_mechlist(const char *str, struct protocol_t *prot)
 {
-    char *ret = xzmalloc(strlen(str)+1);
+    char *ret;
     char *tmp;
     int num = 0;
     
     tmp = strstr(str, " SASL:") + 6;
+    if (isspace((int) *tmp)) return NULL;
 
+    ret = xzmalloc(strlen(tmp)+1);
     do {
 	char *end = tmp;
 	
