@@ -33,7 +33,9 @@
 /*
  * Create/refresh mapping of file
  */
-map_refresh(fd, base, len, newlen, name, mboxname)
+map_refresh(fd, onceonly, base, len, newlen, name, mboxname)
+int fd;
+int onceonly;
 char **base;
 unsigned long *len;
 unsigned long newlen;
@@ -59,12 +61,14 @@ char *mboxname;
 	if (n <= 0) {
 	    char buf[80];
 	    if (n == 0) {
-		syslog(LOG_ERR, "IOERROR: reading %s file for %s: end of file",
-		       name, mboxname);
+		syslog(LOG_ERR, "IOERROR: reading %s file%s%s: end of file",
+		       name,
+		       mboxname ? " for " : "", mboxname ? mboxname : "");
 	    }
 	    else {
-		syslog(LOG_ERR, "IOERROR: reading %s file for %s: %m",
-		       name, mboxname);
+		syslog(LOG_ERR, "IOERROR: reading %s file%s%s: %m",
+		       name, 
+		       mboxname ? " for " : "", mboxname ? mboxname : "");
 	    }
 	    sprintf(buf, "failed to read %s file", name);
 	    fatal(buf, EX_IOERR);

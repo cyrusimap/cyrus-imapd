@@ -222,7 +222,7 @@ int checkseen;
     newexists = mailbox->exists;
 
     /* Refresh the index and cache files */
-    map_refresh(fileno(mailbox->index), &index_base, &index_len,
+    map_refresh(fileno(mailbox->index), 0, &index_base, &index_len,
 		start_offset + newexists * record_size,
 		"index", mailbox->name);
     if (fstat(fileno(mailbox->cache), &sbuf) == -1) {
@@ -232,7 +232,7 @@ int checkseen;
     }
     if (cache_end < sbuf.st_size) {
 	cache_end = sbuf.st_size;
-	map_refresh(fileno(mailbox->cache), &cache_base, &cache_len,
+	map_refresh(fileno(mailbox->cache), 0, &cache_base, &cache_len,
 		    cache_end, "cache", mailbox->name);
     }
 
@@ -754,7 +754,7 @@ int nflags;
     mailbox_unlock_index(mailbox);
 
     /* Refresh the index file, for systems without mmap() */
-    map_refresh(fileno(mailbox->index), &index_base, &index_len,
+    map_refresh(fileno(mailbox->index), 0, &index_base, &index_len,
 		start_offset + imapd_exists * record_size,
 		"index", mailbox->name);
 
@@ -856,7 +856,7 @@ int statusitems;
 	    int msg;
 	    unsigned uid;
 
-	    map_refresh(fileno(mailbox->index), &base, &len,
+	    map_refresh(fileno(mailbox->index), 0, &base, &len,
 			mailbox->start_offset +
 			mailbox->exists * mailbox->record_size,
 			"index", mailbox->name);
