@@ -1,6 +1,6 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
- * $Id: comparator.c,v 1.2 1999/07/02 23:24:01 leg Exp $
+ * $Id: comparator.c,v 1.3 1999/11/05 02:05:10 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -144,13 +144,13 @@ static int ascii_casemap_matches(char *pat, char *text)
  equality: numerically equal, or both not numbers */
 static int ascii_numeric_is(char *pat, char *text)
 {
-    if (isdigit(*pat)) {
-	if (isdigit(*text)) {
+    if (isdigit((int) *pat)) {
+	if (isdigit((int) *text)) {
 	    return (atoi(pat) == atoi(text));
 	} else {
 	    return 0;
 	}
-    } else if (isdigit(*text)) return 0;
+    } else if (isdigit((int) *text)) return 0;
     else return 1; /* both not digits */
 }
 
