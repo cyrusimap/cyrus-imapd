@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.6 2004/02/26 18:36:27 ken3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.7 2004/03/09 15:05:58 ken3 Exp $ */
 
 #include <config.h>
 
@@ -116,7 +116,7 @@ static int init(const char *dbdir, int myflags)
     int maj, min, patch;
     char *vstr;
     static char errpfx[10]; /* needs to be static; bdb doesn't copy */
-    u_int32_t cachesize;
+    int opt;
 
     if (dbinit++) return 0;
 
@@ -146,43 +146,49 @@ static int init(const char *dbdir, int myflags)
     if (CONFIG_DB_VERBOSE > 1) {
 	dbenv->set_verbose(dbenv, DB_VERB_CHKPOINT, 1);
     }
-    dbenv->set_lk_detect(dbenv, CONFIG_DEADLOCK_DETECTION);
-
-    /* XXX should make this value runtime configurable */
-    r = dbenv->set_lk_max(dbenv, 50000);
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: set_lk_max(): %s", db_strerror(r));
-	abort();
-    }
-
-    /* XXX should make this value runtime configurable */
-    r = dbenv->set_tx_max(dbenv, 100);
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: set_tx_max(): %s", db_strerror(r));
-	abort();
-    }
 
     dbenv->set_errcall(dbenv, db_err);
     snprintf(errpfx, sizeof(errpfx), "db%d", DB_VERSION_MAJOR);
     dbenv->set_errpfx(dbenv, errpfx);
 
-    cachesize = libcyrus_config_getint(CYRUSOPT_BERKELEY_CACHESIZE);
-    /* do bounds checking */
-    if (cachesize < MIN_CACHESIZE) {
-	cachesize = MIN_CACHESIZE;
-	syslog(LOG_WARNING, "DBERROR: cachesize too small, changed to %uKB",
-	       MIN_CACHESIZE);
+    dbenv->set_lk_detect(dbenv, CONFIG_DEADLOCK_DETECTION);
+
+    if ((opt = libcyrus_config_getint(CYRUSOPT_BERKELEY_LOCKS_MAX)) < 0) {
+	syslog(LOG_WARNING,
+	       "DBERROR: invalid berkeley_locks_max value, using internal default");
+    } else {
+	r = dbenv->set_lk_max(dbenv, opt);
+	if (r) {
+	    dbenv->err(dbenv, r, "set_lk_max");
+	    syslog(LOG_ERR, "DBERROR: set_lk_max(): %s", db_strerror(r));
+	    abort();
+	}
     }
-    if (cachesize > MAX_CACHESIZE) {
-	cachesize = MAX_CACHESIZE;
-	syslog(LOG_WARNING, "DBERROR: cachesize too large, changed to %uKB",
-	       MAX_CACHESIZE);
+
+    if ((opt = libcyrus_config_getint(CYRUSOPT_BERKELEY_TXNS_MAX)) < 0) {
+	syslog(LOG_WARNING,
+	       "DBERROR: invalid berkeley_txns_max value, using internal default");
+    } else {
+	r = dbenv->set_tx_max(dbenv, opt);
+	if (r) {
+	    dbenv->err(dbenv, r, "set_tx_max");
+	    syslog(LOG_ERR, "DBERROR: set_tx_max(): %s", db_strerror(r));
+	    abort();
+	}
     }
-    if ((r = dbenv->set_cachesize(dbenv, 0, cachesize * 1024, 0)) != 0) {
-	dbenv->err(dbenv, r, "set_cachesize");
-	dbenv->close(dbenv, 0);
-	syslog(LOG_ERR, "DBERROR: set_cachesize(): %s", db_strerror(r));
-	return CYRUSDB_IOERROR;
+
+    opt = libcyrus_config_getint(CYRUSOPT_BERKELEY_CACHESIZE);
+    if (opt < MIN_CACHESIZE || opt > MAX_CACHESIZE) {
+	syslog(LOG_WARNING,
+	       "DBERROR: invalid berkeley_cachesize value, using internal default");
+    } else {
+	r = dbenv->set_cachesize(dbenv, 0, opt * 1024, 0);
+	if (r) {
+	    dbenv->err(dbenv, r, "set_cachesize");
+	    dbenv->close(dbenv, 0);
+	    syslog(LOG_ERR, "DBERROR: set_cachesize(): %s", db_strerror(r));
+	    return CYRUSDB_IOERROR;
+	}
     }
 
     /* what directory are we in? */

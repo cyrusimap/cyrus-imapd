@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.h,v 1.6 2004/02/26 18:03:07 ken3 Exp $
+ * $Id: libcyr_cfg.h,v 1.7 2004/03/09 15:05:58 ken3 Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -93,6 +93,10 @@ enum cyrus_opt {
     CYRUSOPT_VIRTDOMAINS,
     /* BDB cache size (512KB) */
     CYRUSOPT_BERKELEY_CACHESIZE,
+    /* BDB max locks (50000) */
+    CYRUSOPT_BERKELEY_LOCKS_MAX,
+    /* BDB max txns (100) */
+    CYRUSOPT_BERKELEY_TXNS_MAX,
 
     CYRUSOPT_LAST
     
