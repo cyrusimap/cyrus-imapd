@@ -18,6 +18,7 @@
 #include <ctype.h>
 #include <time.h>
 
+#include "master.h"
 #include "message_uuid_master.h"
 
 /* Four possible forms of messageID:
@@ -339,35 +340,48 @@ static int
 master_uuid_write_and_test(struct uuid_info *uuid_info)
 {
     struct uuid_info uuid_tmp;
+    int code = 1;
+    char *nfname = (char *)xmalloc(strlen(config_dir) + strlen(MASTER_UUID_FILE)+6);
+    char *fname = (char *)xmalloc(strlen(config_dir) + strlen(MASTER_UUID_FILE)+2);
+
+    sprintf(fname, "%s/%s", config_dir, MASTER_UUID_FILE);
+    sprintf(nfname, "%s/%s.NEW", config_dir, MASTER_UUID_FILE);
 
     uuid_info_clear(&uuid_tmp);
 
-    if (!master_uuid_write(uuid_info, MASTER_UUID_FILE"-NEW")) {
+    if (!master_uuid_write(uuid_info, nfname)) {
         uuid_info_clear(uuid_info);
-        return(0);
+	code = 0;
+	goto uuidout;
     }
 
     /* Ultra paranoid: read file back in and test values the same */
     
-    if (!master_uuid_read(&uuid_tmp, MASTER_UUID_FILE"-NEW")) {
+    if (!master_uuid_read(&uuid_tmp, nfname)) {
         syslog(LOG_ERR, "Failed to read in %s: %m",
-               MASTER_UUID_FILE"-NEW");
-        return(0);
+               nfname);
+	code = 0;
+	goto uuidout;
     }
 
     if (!uuid_info_compare(&uuid_private, &uuid_tmp)) {
         syslog(LOG_ERR, "Sanity check failed on %s",
-               MASTER_UUID_FILE"-NEW");
-        return(0);
+               nfname);
+	code = 0;
+	goto uuidout;
     }
 
-    if (rename(MASTER_UUID_FILE"-NEW", MASTER_UUID_FILE) < 0) {
+    if (rename(nfname, fname) < 0) {
         syslog(LOG_ERR, "Failed to commit: %s -> %s: %m",
-               MASTER_UUID_FILE"-NEW", MASTER_UUID_FILE);
-        return(0);
+               nfname, fname);
+	code = 0;
+	goto uuidout;
     }
 
-    return(1);
+ uuidout:
+    free(fname);
+    free(nfname);
+    return(code);
 }
 
 /* ====================================================================== */
@@ -385,14 +399,21 @@ message_uuid_master_init()
     struct uuid_info uuid_tmp;
     unsigned long machine = 0;
 
+    char *ufname = (char *)xmalloc(strlen(config_dir) + strlen(MASTER_UUID_FILE)+2);
+    char *fname = (char *)xmalloc(strlen(config_dir) + strlen(MASTER_MACHINE_FILE)+2);
+
+    sprintf(fname, "%s/%s", config_dir, MASTER_MACHINE_FILE);
+    sprintf(ufname, "%s/%s", config_dir, MASTER_UUID_FILE);
+
     uuid_info_clear(&uuid_private);
     uuid_info_clear(&uuid_tmp);
 
-    if (!master_machine_read(&machine, MASTER_MACHINE_FILE))
+    if ((master_machine_read(&machine, fname) == 0) ||
+	(master_uuid_read(&uuid_private, ufname) == 0)) {
+	free(fname);
+	free(ufname);
         return(0);
-
-    if (!master_uuid_read(&uuid_private, MASTER_UUID_FILE))
-        return(0);
+    }
 
     if (uuid_private.machine != machine) {
         syslog(LOG_ERR, "Machine mismatch: %lu |= %lu",

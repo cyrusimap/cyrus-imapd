@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.45.2.7 2004/12/17 18:15:20 ken3 Exp $ */
+/* $Id: service.c,v 1.45.2.8 2005/02/28 20:16:41 shadow Exp $ */
 
 #include <config.h>
 
@@ -147,7 +147,6 @@ static int libwrap_ask(struct request_info *r __attribute__((unused)),
 #endif
 
 extern void cyrus_init(const char *, const char *, unsigned);
-extern const char *config_dir;
 
 static int getlockfd(char *service, int id)
 {

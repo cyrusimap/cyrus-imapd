@@ -1,7 +1,7 @@
 /* Public interface */
 
-#define MASTER_UUID_FILE    "/var/imap/master_uuid"
-#define MASTER_MACHINE_FILE "/var/imap/master_machine"
+#define MASTER_UUID_FILE    "master_uuid"
+#define MASTER_MACHINE_FILE "master_machine"
 
 #define MESSAGE_UUID_SIZE         (12)    /* Size of UUID byte sequence */
 #define MESSAGE_UUID_PACKED_SIZE  (12)    /* Size on disk */
