@@ -1,26 +1,25 @@
 /* parseaddr.c -- RFC 822 address parser
- $Id: parseaddr.c,v 1.10 1998/05/15 21:52:41 neplokh Exp $
- 
- #        Copyright 1998 by Carnegie Mellon University
- #
- #                      All Rights Reserved
- #
- # Permission to use, copy, modify, and distribute this software and its
- # documentation for any purpose and without fee is hereby granted,
- # provided that the above copyright notice appear in all copies and that
- # both that copyright notice and this permission notice appear in
- # supporting documentation, and that the name of CMU not be
- # used in advertising or publicity pertaining to distribution of the
- # software without specific, written prior permission.
- #
- # CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
- # ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
- # CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
- # ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
- # WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
- # ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
- # SOFTWARE.
+ * $Id: parseaddr.c,v 1.11 1999/03/02 03:10:26 tjs Exp $
  *
+ *        Copyright 1998 by Carnegie Mellon University
+ *
+ *                      All Rights Reserved
+ *
+ * Permission to use, copy, modify, and distribute this software and its
+ * documentation for any purpose and without fee is hereby granted,
+ * provided that the above copyright notice appear in all copies and that
+ * both that copyright notice and this permission notice appear in
+ * supporting documentation, and that the name of CMU not be
+ * used in advertising or publicity pertaining to distribution of the
+ * software without specific, written prior permission.
+ *
+ * CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+ * ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+ * CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+ * ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+ * WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+ * SOFTWARE.
  */
 
 #include <stdio.h>
@@ -32,12 +31,12 @@
 
 static char parseaddr_unspecified_domain[] = "unspecified-domain";
 
-static void parseaddr_append P((struct address ***addrpp, char *name,
+static void parseaddr_append P(struct address ***addrpp, char *name,
 				char *route, char *mailbox, char *domain,
-				char **freemep));
-static int parseaddr_phrase P((char **inp, char **phrasep, char *specials));
-static int parseaddr_domain P((char **inp, char **domainp, char **commmentp));
-static int parseaddr_route P((char **inp, char **routep));
+				char **freemep);
+static int parseaddr_phrase P(char **inp, char **phrasep, char *specials);
+static int parseaddr_domain P(char **inp, char **domainp, char **commmentp);
+static int parseaddr_route P(char **inp, char **routep);
 
 /*
  * Parse an address list in 's', appending address structures to
@@ -188,11 +187,11 @@ char **freemep;
 { \
     int _c, _comment = 0; \
  \
-    while (_c = *(s)) { \
+    while ((_c = *(s))) { \
 	if (_c == '(') { \
 	    _comment = 1; \
 	    (s)++; \
-	    while (_comment && (_c = *(s))) { \
+	    while ((_comment && (_c = *(s)))) { \
 		(s)++; \
 		if (_c == '\\' && *(s)) (s)++; \
 		else if (_c == '(') _comment++; \
@@ -224,7 +223,7 @@ char *specials;
     for (;;) {
         c = *src++;
 	if (c == '\"') {
-	    while (c = *src) {
+	    while ((c = *src)) {
 		src++;
 		if (c == '\"') break;
 		if (c == '\\') {
