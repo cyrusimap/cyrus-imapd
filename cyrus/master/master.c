@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: master.c,v 1.1 2000/02/15 22:21:53 leg Exp $ */
+/* $Id: master.c,v 1.2 2000/02/18 06:41:26 leg Exp $ */
 
 #include <config.h>
 
@@ -47,7 +47,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include "config.h"
+#include "masterconf.h"
 
 #include "service.h"
 
@@ -56,6 +56,9 @@
 #define SERVICE_PATH (CYRUS_PATH "/bin")
 
 static const int become_cyrus_early = 1;
+static const int dupelim = 1;
+
+static int verbose = 0;
 
 struct service {
     char *name;
@@ -77,8 +80,8 @@ char *const timsieved_exec[] = { "timsieved", NULL };
 
 static struct service Services[] =
 {
-    { "imap", "tcp", imapd_exec, 0, 0, 0, 0, {0,0} },
     { "pop3", "tcp", pop3d_exec, 0, 0, 0, 0, {0,0} },
+    { "imap", "tcp", imapd_exec, 0, 0, 0, 0, {0,0} },
     { "lmtp", "tcp", deliver_exec, 0, 0, 0, 0, {0,0} },
 /*    { "sieve", "tcp", timsieved_exec, 0, 0, 0, 0, {0,0} }*/
 };
@@ -86,6 +89,7 @@ static struct service Services[] =
 static int nservices = 3;
 
 char *const recovery_exec[] = { "ctl_mboxlist", "-r", NULL };
+char *const recoveryd_exec[] = { "ctl_deliver", "-r", "-E", "3", NULL };
 char *const checkpoint_exec[] = { "ctl_mboxlist", "-c", NULL };
 
 void fatal(char *msg, int code)
@@ -146,7 +150,7 @@ void service_create(struct service *s)
 
     /* let people disable this service */
     sprintf(buffer, "%s-service", s->name);
-    if (!config_getswitch(buffer, 1)) return;
+    if (!masterconf_getswitch(buffer, 1)) return;
 
     memset(&sin, 0, sizeof(sin));
 
@@ -190,7 +194,7 @@ void service_create(struct service *s)
 
     s->ready_workers = 0;
     sprintf(buffer, "%s-workers", s->name);
-    s->desired_workers = config_getint(buffer, 1);
+    s->desired_workers = masterconf_getint(buffer, 0);
 
     get_statsock(s->stat);
 }
@@ -218,6 +222,25 @@ void run_recovery(void)
 	waitpid(p, &res, 0);
 	if (res != 0) {
 	    syslog(LOG_CRIT, "recovery process exited with code '%d'", res);
+	}
+	break;
+    }
+
+    switch (p = fork()) {
+    case -1:
+	break;
+
+    case 0:
+	become_cyrus();
+	sprintf(path, "%s/%s", SERVICE_PATH, recoveryd_exec[0]);
+	execv(path, recoveryd_exec);
+	syslog(LOG_ERR, "can't exec %s for recovery: %m", path);
+	exit(1);
+
+    default:
+	waitpid(p, &res, 0);
+	if (res != 0) {
+	    syslog(LOG_ERR, "duplicate expire exited with code '%d'", res);
 	}
 	break;
     }
@@ -312,8 +335,15 @@ void reap_child(void)
     pid_t pid;
 
     while ((pid = waitpid((pid_t) -1, &status, WNOHANG)) > 0) {
-	syslog(LOG_DEBUG, "process %d exited, status %d\n", pid, 
-	       WEXITSTATUS(status));
+	if (WIFEXITED(status)) {
+	    syslog(LOG_DEBUG, "process %d exited, status %d\n", pid, 
+		   WEXITSTATUS(status));
+	}
+
+	if (WIFSIGNALED(status)) {
+	    syslog(LOG_DEBUG, "process %d exited, signaled to death by %d\n",
+		   pid, WTERMSIG(status));
+	}
 
 	/* do we want to do child accounting at some point? probably */
     }
@@ -331,6 +361,27 @@ static int gotsighup = 0;
 void sighup_handler(int sig)
 {
     gotsighup = 1;
+}
+
+void sigterm_handler(int sig)
+{
+    struct sigaction action;
+
+    /* send all the other processes SIGTERM, then exit */
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = 0;
+    action.sa_handler = SIG_IGN;
+    if (sigaction(SIGTERM, &action, (struct sigaction *) 0) < 0) {
+	syslog(LOG_ERR, "sigaction: %m");
+	exit(1);
+    }
+    /* kill my process group */
+    if (kill(0, SIGTERM) < 0) {
+	syslog(LOG_ERR, "kill(0, SIGTERM): %m");
+    }
+
+    syslog(LOG_INFO, "exiting on SIGTERM");
+    exit(2);
 }
 
 static int do_chkpoint = 0;
@@ -360,6 +411,11 @@ void sighandler_setup(void)
 	fatal("unable to install signal handler for SIGALRM: %m", 1);
     }
 
+    action.sa_handler = sigterm_handler;
+    if (sigaction(SIGTERM, &action, NULL) < 0) {
+	fatal("unable to install signal handler for SIGTERM: %m", 1);
+    }
+
     action.sa_flags |= SA_NOCLDSTOP;
     action.sa_handler = sigchld_handler;
     if (sigaction(SIGCHLD, &action, NULL) < 0) {
@@ -383,6 +439,10 @@ void process_msg(struct service *s, int msg)
 	       s->name, msg);
 	break;
     }
+
+    if (verbose)
+	syslog(LOG_DEBUG, "service %s now has %d workers\n", 
+	       s->name, s->ready_workers);
 }
 
 int main(int argc, char **argv, char **envp)
@@ -390,9 +450,10 @@ int main(int argc, char **argv, char **envp)
     int i;
     int fd;
     fd_set rfds;
+    char *p;
 
-    config_init("master");
-    syslog(LOG_NOTICE, "process started");
+    p = getenv("CYRUS_VERBOSE");
+    if (p) verbose = atoi(p);
 
     /* close stdin/out/err */
     for (fd = 0; fd < 3; fd++) {
@@ -408,7 +469,8 @@ int main(int argc, char **argv, char **envp)
 	if (dup(0) != fd) fatal("couldn't dup fd 0: %m", 2);
     }
 
-    /* kill all previous clients */
+    masterconf_init("master");
+    syslog(LOG_NOTICE, "process started");
 
     /* run recovery on database environments */
     run_recovery();
@@ -422,6 +484,10 @@ int main(int argc, char **argv, char **envp)
     /* initialize services */
     for (i = 0; i < nservices; i++) {
 	service_create(&Services[i]);
+	if (verbose > 2)
+	    syslog(LOG_DEBUG, "init: service %s socket %d pipe %d %d",
+		   Services[i].name, Services[i].socket,
+		   Services[i].stat[0], Services[i].stat[1]);
     }
 
     if (become_cyrus_early) become_cyrus();
@@ -464,8 +530,31 @@ int main(int argc, char **argv, char **envp)
 	maxfd = 0;
 	for (i = 0; i < nservices; i++) {
 	    int x = Services[i].stat[0];
-	    if (x > 0) FD_SET(x, &rfds);
+	    int y = Services[i].socket;
+
+	    /* messages */
+	    if (x > 0) {
+		if (verbose > 2)
+		    syslog(LOG_DEBUG, "listening for messages from %s",
+			   Services[i].name);
+		FD_SET(x, &rfds);
+	    }
 	    if (x > maxfd) maxfd = x;
+
+	    /* connections */
+	    if (y > 0 && Services[i].ready_workers == 0) {
+		if (verbose > 2)
+		    syslog(LOG_DEBUG, "listening for connections for %s", 
+			   Services[i].name);
+		FD_SET(y, &rfds);
+		if (y > maxfd) maxfd = y;
+	    }
+
+	    /* paranoia */
+	    if (Services[i].ready_workers < 0) {
+		syslog(LOG_ERR, "%s has %d workers?!?", Services[i].name,
+		       Services[i].ready_workers);
+	    }
 	}
 	errno = 0;
 	r = select(maxfd + 1, &rfds, NULL, NULL, NULL);
@@ -478,6 +567,7 @@ int main(int argc, char **argv, char **envp)
 
 	for (i = 0; i < nservices; i++) {
 	    int x = Services[i].stat[0];
+	    int y = Services[i].socket;
 
 	    if (FD_ISSET(x, &rfds)) {
 		r = read(x, &msg, sizeof(int));
@@ -487,6 +577,12 @@ int main(int argc, char **argv, char **envp)
 		}
 		
 		process_msg(&Services[i], msg);
+	    }
+
+	    if (Services[i].ready_workers == 0 && 
+		FD_ISSET(y, &rfds)) {
+		/* huh, someone wants to talk to us */
+		spawn_service(&Services[i]);
 	    }
 	}
     }
