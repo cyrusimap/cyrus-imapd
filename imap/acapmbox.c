@@ -400,6 +400,7 @@ int acapmbox_store(acapmbox_handle_t *AC,
 			result = IMAP_MAILBOX_EXISTS;
 		    }
 		}
+		break;
 
 	    case ACAP_RESULT_NOTDONE:
 		fatal("acap command finished but not done?", EC_SOFTWARE);
