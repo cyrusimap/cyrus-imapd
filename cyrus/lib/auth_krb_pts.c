@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- * $Id: auth_krb_pts.c,v 1.48 2003/02/13 20:15:39 rjs3 Exp $
+ * $Id: auth_krb_pts.c,v 1.49 2003/06/17 20:37:35 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -209,14 +209,14 @@ char *auth_map_krbid(const char *real_aname,
                 }
             }
             
-            strcpy(localuser, aname);
+            strlcpy(localuser, aname, sizeof(localuser));
             if (*inst) {
-                strcat(localuser, ".");
-                strcat(localuser, inst);
+                strlcat(localuser, ".", sizeof(localuser));
+                strlcat(localuser, inst, sizeof(localuser));
             }
             if (*realm) {
-                strcat(localuser, "@");
-                strcat(localuser, realm);
+                strlcat(localuser, "@", sizeof(localuser));
+                strlcat(localuser, realm, sizeof(localuser));
             }
             
             return localuser;
@@ -286,18 +286,18 @@ char *auth_canonifyid(const char *identifier, size_t len)
     /* Check for krb.equiv remappings. */
     p = auth_map_krbid(aname, inst, realm);
     if (p) {
-        strcpy(retbuf, p);
+        strlcpy(retbuf, p, sizeof(retbuf));
         return retbuf;
     }
     
-    strcpy(retbuf, aname);
+    strlcpy(retbuf, aname, sizeof(retbuf));
     if (*inst) {
-        strcat(retbuf, ".");
-        strcat(retbuf, inst);
+        strlcat(retbuf, ".", sizeof(retbuf));
+        strlcat(retbuf, inst, sizeof(retbuf));
     }
     if (*realm) {
-        strcat(retbuf, "@");
-        strcat(retbuf, realm);
+        strlcat(retbuf, "@", sizeof(retbuf));
+        strlcat(retbuf, realm, sizeof(retbuf));
     }
     
     return retbuf;
@@ -351,7 +351,7 @@ struct auth_state *auth_newstate(const char *identifier,
 
     kname_parse(newstate->aname, newstate->inst, newstate->realm, 
 		(char *) identifier);
-    strcpy(newstate->userid.id, identifier);
+    strlcpy(newstate->userid.id, identifier, sizeof(newstate->userid.id));
     newstate->userid.hash = hash(identifier);
 
     if (!strcmp(identifier, "anyone")) return newstate;
@@ -382,8 +382,8 @@ struct auth_state *auth_newstate(const char *identifier,
     return newstate;
 #endif
 
-    strcpy(fnamebuf, STATEDIR);
-    strcat(fnamebuf, PTS_DBLOCK);
+    strlcpy(fnamebuf, STATEDIR, sizeof(fnamebuf));
+    strlcat(fnamebuf, PTS_DBLOCK, sizeof(fnamebuf));
     fd = open(fnamebuf, O_RDWR, 0664);
     if (fd == -1) {
         syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
@@ -394,8 +394,8 @@ struct auth_state *auth_newstate(const char *identifier,
 	close(fd);
         return newstate;
     }
-    strcpy(fnamebuf, STATEDIR);
-    strcat(fnamebuf, PTS_DBFIL);
+    strlcpy(fnamebuf, STATEDIR, sizeof(fnamebuf));
+    strlcat(fnamebuf, PTS_DBFIL, sizeof(fnamebuf));
 
     /* open PTS database */
     r = db_create(&ptdb, NULL, 0);
@@ -463,12 +463,12 @@ struct auth_state *auth_newstate(const char *identifier,
       return newstate;
     }
         
-    strcpy(fnamebuf, STATEDIR);
-    strcat(fnamebuf, PTS_DBSOCKET);
+    strlcpy(fnamebuf, STATEDIR, sizeof(fnamebuf));
+    strlcat(fnamebuf, PTS_DBSOCKET, sizeof(fnamebuf));
 
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
-    strcpy(srvaddr.sun_path, fnamebuf);
+    strlcpy(srvaddr.sun_path, fnamebuf, sizeof(srvaddr.sun_path));
     r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
     if (r == -1) {
 	syslog(LOG_ERR, "auth_newstate: can't connect to ptloader server: %m");
@@ -498,8 +498,8 @@ struct auth_state *auth_newstate(const char *identifier,
     /* re-opened database after external modifications; it would be
      significantly faster to use the berkeley db routines here, but then
      we'd have to create an environment */
-    strcpy(fnamebuf, STATEDIR);
-    strcat(fnamebuf, PTS_DBLOCK);
+    strlcpy(fnamebuf, STATEDIR, sizeof(fnamebuf));
+    strlcat(fnamebuf, PTS_DBLOCK, sizeof(fnamebuf));
     fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0664);
     if (fd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
@@ -509,8 +509,8 @@ struct auth_state *auth_newstate(const char *identifier,
 	syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
 	return newstate;
     }
-    strcpy(fnamebuf, STATEDIR);
-    strcat(fnamebuf, PTS_DBFIL);
+    strlcpy(fnamebuf, STATEDIR, sizeof(fnamebuf));
+    strlcat(fnamebuf, PTS_DBFIL, sizeof(fnamebuf));
     r = db_create(&ptdb, NULL, 0);
     if (r != 0) {
 	syslog(LOG_ERR, "auth_newstate: db_create: %s", db_strerror(r));
