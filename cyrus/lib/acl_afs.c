@@ -19,7 +19,7 @@
  * Calculate the set of rights the user has in the ACL 'acl'.
  * 'acl' must be writable, but is restored to its original condition.
  */
-long acl_myacl(acl)
+long acl_myrights(acl)
 char *acl;
 {
     char *thisid, *rights, *nextid;
@@ -53,11 +53,7 @@ char *acl;
 	nextid[-1] = '\t';
     }
 
-    acl_positive &= ~acl_negative;
-
-    /* XXX add in base rights */
-
-    return acl_positive;
+    return acl_positive & ~acl_negative;
 }
 	
 /*
@@ -78,7 +74,7 @@ long access;
     if (*identifier == '-') {
 	char *canonid = auth_canonifyid(identifier+1);
 	if (!canonid) {
-	    return 1;		/* XXX invalid ACL identifier */
+	    return -1;
 	}
 	identifier = xmalloc(strlen(canonid)+2);
 	identifier[0] = '-';
@@ -87,14 +83,14 @@ long access;
     else {
 	identifier = auth_canonifyid(identifier);
 	if (!identifier) {
-	    return 1;		/* XXX invalid ACL identifier */
+	    return -1;
 	}
     }
 
     /* XXX also canonify access bits.  Something clever for neg. acl */
 
     /* Find any existing entry for 'identifier' in 'acl' */
-    for (thisid = *acl; *thisid; thisid = nextid) {
+    for (thisid = nextid = *acl; *thisid; thisid = nextid) {
 	rights = strchr(thisid, '\t');
 	if (!rights) {
 	    /* ACK, nuke trailing garbage */

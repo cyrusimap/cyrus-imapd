@@ -2,6 +2,7 @@
  * Routines for dealing with the index file in the imapd
  */
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <sysexits.h>
 #include <sys/types.h>
@@ -70,7 +71,7 @@ static int index_storeflag();
 index_newmailbox(mailbox)
 struct mailbox *mailbox;
 {
-    keepingseen = (mailbox->my_acl & ACL_SEEN);
+    keepingseen = (mailbox->myrights & ACL_SEEN);
     recentuid = 0;
     if (seendb) {
 	seen_close(seendb);
@@ -120,11 +121,12 @@ int checkseen;
 
     start_offset = mailbox->start_offset;
     record_size = mailbox->record_size;
+    newexists = mailbox->exists;
 
     /* Re-mmap the index file if necessary */
-    if (mailbox->index_size > index_len) {
+    if (index_len < start_offset + newexists * record_size) {
 	if (index_len) munmap(index_base, index_len);
-	index_len =  mailbox->index_size + (SLOP*record_size);
+	index_len =  start_offset + (newexists+SLOP) * record_size;
 	index_base = (char *)mmap((caddr_t)0, index_len, PROT_READ,
 				  MAP_SHARED, fileno(mailbox->index), 0L);
     
@@ -147,9 +149,6 @@ int checkseen;
 	    fatal("failed to mmap cache file", EX_IOERR);
 	}
     }
-
-    /* Calculate the new number of messages */
-    newexists = (mailbox->index_size - start_offset) / record_size;
 
     /* If opening mailbox, get \Recent info */
     if (oldexists == -1 && keepingseen) {
@@ -496,13 +495,13 @@ int nflags;
     int i, r, userflag, emptyflag;
     int writeheader = 0;
     int newflag[MAX_USER_FLAGS];
-    long my_acl = mailbox->my_acl;
+    long myrights = mailbox->myrights;
 
     /* Handle simple case of just changing /Seen */
     if (storeargs->operation != STORE_REPLACE &&
 	!storeargs->system_flags && !nflags) {
 	if (!storeargs->seen) return 0; /* Nothing to change */
-	if (!(my_acl & ACL_SEEN)) return IMAP_PERMISSION_DENIED;
+	if (!(myrights & ACL_SEEN)) return IMAP_PERMISSION_DENIED;
 	storeargs->usinguid = usinguid;
 
 	index_forsequence(mailbox, sequence, usinguid,
@@ -511,15 +510,15 @@ int nflags;
     }
 
     mailbox_read_acl(mailbox);
-    my_acl &= mailbox->my_acl;
+    myrights &= mailbox->myrights;
 
     /* First pass at checking permission */
-    if ((storeargs->seen && !(my_acl & ACL_SEEN)) ||
+    if ((storeargs->seen && !(myrights & ACL_SEEN)) ||
 	((storeargs->system_flags & FLAG_DELETED) &&
-	 !(my_acl & ACL_DELETE)) ||
+	 !(myrights & ACL_DELETE)) ||
 	(((storeargs->system_flags & ~FLAG_DELETED) || nflags) &&
-	 !(my_acl & ACL_WRITE))) {
-	mailbox->my_acl = my_acl;
+	 !(myrights & ACL_WRITE))) {
+	mailbox->myrights = myrights;
 	return IMAP_PERMISSION_DENIED;
     }
 
@@ -571,7 +570,7 @@ int nflags;
 	    if (userflag == MAX_USER_FLAGS) {
 		if (emptyflag == -1) {
 		    mailbox_unlock_header(mailbox);
-		    mailbox->my_acl = my_acl;
+		    mailbox->myrights = myrights;
 
 		    /* Undo the new assignments */
 		    for (userflag=0; userflag < MAX_USER_FLAGS; userflag++) {
@@ -595,11 +594,11 @@ int nflags;
 	
 	r = mailbox_write_header(mailbox);
 	mailbox_unlock_header(mailbox);
-	mailbox->my_acl = my_acl;
+	mailbox->myrights = myrights;
 	if (r) return r;
     }
     /* Not reading header anymore--can put back our working ACL */
-    mailbox->my_acl = my_acl;
+    mailbox->myrights = myrights;
 
     /* Now we know all user flags are in the mailbox header, find the bits */
     for (i=0; i < nflags; i++) {
@@ -614,8 +613,6 @@ int nflags;
     }
     
     storeargs->update_time = time((time_t *)0);
-    storeargs->exists =
-      (mailbox->index_size - mailbox->start_offset) / mailbox->record_size;
     storeargs->usinguid = usinguid;
 
     r = mailbox_lock_index(mailbox);
@@ -906,6 +903,95 @@ int octet_count;
     printf("NIL");
 }
 
+static
+index_fetchheader(msgfile, format, size, headers, headers_not)
+FILE *msgfile;
+int format;
+int size;
+struct strlist *headers;
+struct strlist *headers_not;
+{
+    int n, left;
+    char *buf = xmalloc(size+2);
+    char *p, *colon, *nextheader;
+    int goodheader;
+    char *endlastgood = buf;
+    struct strlist *l;
+
+    rewind(msgfile);
+    if (format == MAILBOX_FORMAT_NETNEWS) {
+	left = size;
+	p = buf;
+	while (left > 0) {
+	    if (!fgets(p, left+1, msgfile)) {
+		*p = '\0';
+		break;
+	    }
+	    left -= strlen(buf);
+	    p = buf + strlen(buf);
+	    if (p[-1] == '\n') {
+		p[-1] = '\r';
+		*p++ = '\n';
+		*p = '\0';
+		left--;
+	    }
+	}
+    }
+    else {
+	n = fread(buf, 1, size, msgfile);
+	buf[n] = '\0';
+    }
+
+    p = buf;
+    while (*p && *p != '\r') {
+	colon = strchr(p, ':');
+	if (colon && headers_not) {
+	    goodheader = 1;
+	    for (l = headers_not; l; l = l->next) {
+		if (colon - p == strlen(l->s) &&
+		    !strncasecmp(p, l->s, colon - p)) {
+		    goodheader = 0;
+		    break;
+		}
+	    }
+	}
+	else {
+	    goodheader = 0;
+	}
+	if (colon) {
+	    for (l = headers; l; l = l->next) {
+		if (colon - p == strlen(l->s) &&
+		    !strncasecmp(p, l->s, colon - p)) {
+		    goodheader = 1;
+		    break;
+		}
+	    }
+	}
+
+	nextheader = p;
+	do {
+	    nextheader = strchr(nextheader, '\n');
+	    if (nextheader) nextheader++;
+	    else nextheader = p + strlen(p);
+	} while (*nextheader == ' ' || *nextheader == '\t');
+
+	if (goodheader) {
+	    if (endlastgood != p) {
+		strcpy(endlastgood, p);
+		nextheader -= p - endlastgood;
+	    }
+	    endlastgood = nextheader;
+	}
+	p = nextheader;
+    }
+	    
+    *endlastgood = '\0';
+    size = strlen(buf);
+    printf("{%d}\r\n", size+2);
+    fputs(buf, stdout);
+    printf("\r\n");		/* Delimiting blank line */
+}
+
 
 /*
  * Send a * FLAGS response.
@@ -944,17 +1030,13 @@ time_t last_updated;
     int sepchar = '(';
     unsigned flag;
     bit32 flagmask;
-    long my_acl;
 
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
 	if ((flag & 31) == 0) {
 	    flagmask = user_flags[flag/32];
 	}
 	if (!mailbox->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
-	    my_acl = mailbox->my_acl;
 	    mailbox_read_header(mailbox);
-	    mailbox->my_acl = my_acl;
-
 	    index_listflags(mailbox);
 	    break;
 	}
@@ -1025,7 +1107,7 @@ char *rock;
 
     /* set the \Seen flag if necessary */
     if ((fetchitems & (FETCH_TEXT|FETCH_RFC822)) || fetchargs->bodysections) {
-	if (!seenflag[msgno] && (mailbox->my_acl & ACL_SEEN)) {
+	if (!seenflag[msgno] && (mailbox->myrights & ACL_SEEN)) {
 	    seenflag[msgno] = 1;
 	    fetchitems |= FETCH_FLAGS;
 	}
@@ -1095,11 +1177,11 @@ char *rock;
 	index_fetchmsg(msgfile, mailbox->format, 0, HEADER_SIZE(msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
-    else if (fetchargs->headers_not) {
-	/* XXX todo */
-    }
-    else if (fetchargs->headers) {
-	/* XXX todo */
+    else if (fetchargs->headers || fetchargs->headers_not) {
+	printf("%cRFC822.HEADER ", sepchar);
+	sepchar = ' ';
+	index_fetchheader(msgfile, mailbox->format, HEADER_SIZE(msgno),
+			  fetchargs->headers, fetchargs->headers_not);
     }
 
     if (fetchitems & FETCH_TEXT) {
@@ -1175,14 +1257,14 @@ char *rock;
     int i;
     struct index_record record;
     int uid = UID(msgno);
-    int low=1, high=storeargs->exists;
+    int low=1, high=mailbox->exists;
     int mid;
     int r;
     int firsttry = 1;
     int seendirty = 0, dirty = 0;
 
     /* Change \Seen flag */
-    if (storeargs->operation == STORE_REPLACE && (mailbox->my_acl&ACL_SEEN)) {
+    if (storeargs->operation == STORE_REPLACE && (mailbox->myrights&ACL_SEEN)) {
 	if (seenflag[msgno] != storeargs->seen) seendirty++;
 	seenflag[msgno] = storeargs->seen;
     }
@@ -1235,12 +1317,12 @@ char *rock;
     }
 
     if (storeargs->operation == STORE_REPLACE) {
-	if (!(mailbox->my_acl & ACL_WRITE)) {
+	if (!(mailbox->myrights & ACL_WRITE)) {
 	    record.system_flags = (record.system_flags&~FLAG_DELETED) |
 	      (storeargs->system_flags&FLAG_DELETED);
 	}
 	else {
-	    if (!(mailbox->my_acl & ACL_DELETE)) {
+	    if (!(mailbox->myrights & ACL_DELETE)) {
 		record.system_flags = (record.system_flags&FLAG_DELETED) |
 		  (storeargs->system_flags&~FLAG_DELETED);
 	    }

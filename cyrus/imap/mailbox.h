@@ -12,7 +12,7 @@ typedef unsigned bit32;
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
 
-#defien MAILBOX_MINOR_VERSION	0
+#define MAILBOX_MINOR_VERSION	0
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
@@ -21,15 +21,14 @@ typedef unsigned bit32;
 
 #define QUOTA_UNITS (1024)
 
+#define INDEX_HEADER_SIZE (9*4)
+#define INDEX_RECORD_SIZE (8*4+MAX_USER_FLAGS/4)
+
 struct mailbox {
     FILE *header;
     FILE *index;
     FILE *cache;
-    FILE *seen;
     FILE *quota;
-
-    char *name;
-    char *path;
 
     int header_lock_count;
     int index_lock_count;
@@ -39,20 +38,24 @@ struct mailbox {
     time_t header_mtime;
     time_t index_mtime;
     long index_ino;
-    long index_size;
+
+    /* Information in mailbox list */
+    char *name;
+    char *path;
+    char *acl;
+    long myrights;
 
     /* Information in header */
     char *quota_path;
     char *flagname[MAX_USER_FLAGS];
-    char *acl;
-    long my_acl;
 
     /* Information in index file */
-    unsigned long generation_no;
+    bit32 generation_no;
     int format;
     int minor_version;
     unsigned long start_offset;
     unsigned long record_size;
+    unsigned long exists;
     time_t last_internaldate;
     unsigned long last_uid;
     unsigned long quota_mailbox_used;

@@ -39,21 +39,17 @@ long quotacheck;
     r = mailbox_open_header(name, mailbox);
     if (r) return r;
 
-    if ((mailbox->my_acl & aclcheck) != aclcheck) {
+    if ((mailbox->myrights & aclcheck) != aclcheck) {
+	r = (mailbox->myrights & ACL_LOOKUP) ?
+	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	mailbox_close(mailbox);
-	return IMAP_PERMISSION_DENIED;
+	return r;
     }
 
     r = mailbox_lock_header(mailbox);
     if (r) {
 	mailbox_close(mailbox);
 	return r;
-    }
-
-    /* In case it changed */
-    if ((mailbox->my_acl & aclcheck) != aclcheck) {
-	mailbox_close(mailbox);
-	return IMAP_PERMISSION_DENIED;
     }
 
     r = mailbox_open_index(mailbox);
@@ -150,21 +146,21 @@ char *userid;
     for (i = 0; i < nflags; i++) {
 	if (!strcmp(flag[i], "\\seen")) setseen++;
 	else if (!strcmp(flag[i], "\\deleted")) {
-	    if (mailbox->my_acl & ACL_DELETE) {
+	    if (mailbox->myrights & ACL_DELETE) {
 		message_index.system_flags |= FLAG_DELETED;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\flagged")) {
-	    if (mailbox->my_acl & ACL_WRITE) {
+	    if (mailbox->myrights & ACL_WRITE) {
 		message_index.system_flags |= FLAG_FLAGGED;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\answered")) {
-	    if (mailbox->my_acl & ACL_WRITE) {
+	    if (mailbox->myrights & ACL_WRITE) {
 		message_index.system_flags |= FLAG_ANSWERED;
 	    }
 	}
-	else if (mailbox->my_acl & ACL_WRITE) {
+	else if (mailbox->myrights & ACL_WRITE) {
 	    emptyflag = -1;
 	    for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
 		if (mailbox->flagname[userflag]) {
@@ -194,6 +190,14 @@ char *userid;
 	}
     }
 
+    r = mailbox_append_index(mailbox, &message_index, mailbox->exists, 1);
+    if (r) {
+	unlink(fname);
+	ftruncate(fileno(mailbox->cache), last_cacheoffset);
+	return r;
+    }
+    
+    mailbox->exists++;
     mailbox->last_uid = message_index.uid;
     mailbox->last_internaldate = message_index.internaldate;
     mailbox->quota_mailbox_used += message_index.size;
@@ -205,22 +209,9 @@ char *userid;
     if (r) {
 	unlink(fname);
 	ftruncate(fileno(mailbox->cache), last_cacheoffset);
+	/* We don't ftruncate index file.  It doesn't matter */
 	return r;
     }
-
-    r = mailbox_append_index(mailbox, &message_index, 1);
-    if (r) {
-	unlink(fname);
-	ftruncate(fileno(mailbox->cache), last_cacheoffset);
-
-	/* Try to back out index header changes */
-	mailbox->last_uid--;
-	mailbox->quota_mailbox_used -= message_index.size;
-	(void) mailbox_write_index_header(mailbox);
-
-	return r;
-    }
-    
     
     mailbox->quota_used += message_index.size;
     r = mailbox_write_quota(mailbox);

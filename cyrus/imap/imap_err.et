@@ -23,6 +23,12 @@ ec IMAP_MAILBOX_NOTSUPPORTED,
 ec IMAP_MAILBOX_NONEXISTENT,
    "mailbox does not exist"
 
+ec IMAP_MAILBOX_EXISTS,
+   "mailbox already exists"
+
+ec IMAP_MAILBOX_BADNAME,
+   "invalid mailbox name"
+
 ec IMAP_PARTITION_UNKNOWN,
    "unknown/invalid partition"
 
