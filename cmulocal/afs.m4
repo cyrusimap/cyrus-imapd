@@ -3,7 +3,7 @@ dnl Chaskiel Grundman
 dnl based on kerberos_v4.m4
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: afs.m4,v 1.2 1998/10/08 00:09:59 cg2v Exp $
+dnl $Id: afs.m4,v 1.3 1998/10/26 22:25:40 cg2v Exp $
 
 AC_DEFUN(CMU_AFS_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
@@ -61,6 +61,7 @@ AC_ARG_WITH(AFS,
 	  AC_MSG_RESULT(yes)
 	  AFS_INC_DIR="$ac_cv_afs_where/include"
 	  AFS_LIB_DIR="$ac_cv_afs_where/lib"
+	  AFS_TOP_DIR="$ac_cv_afs_where"
 	  AFS_INC_FLAGS="-I${AFS_INC_DIR}"
 	  AFS_LIB_FLAGS="-L${AFS_LIB_DIR}/afs -L${AFS_LIB_DIR}"
           cmu_save_LIBS="$LIBS"
@@ -195,6 +196,7 @@ extern int UV_SetSecurity();],
           AC_SUBST(AFS_KTC_LIBS)
           AC_SUBST(AFS_INC_FLAGS)
           AC_SUBST(AFS_LIB_FLAGS)
+	  AC_SUBST(AFS_TOP_DIR)
        	fi
 	])
 
