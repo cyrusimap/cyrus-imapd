@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.38 1999/07/31 21:49:38 leg Exp $
+ * $Id: prot.c,v 1.39 1999/08/12 19:27:44 leg Exp $
  */
 
 #include <stdio.h>
@@ -299,10 +299,11 @@ struct protstream *s;
 	if (s->saslssf) { /* decode it */
 	    int result;
 	    char *out;
-	    int outlen;
+	    unsigned outlen;
 	    
 	    /* Decode the input token */
-	    result = sasl_decode(s->conn, s->buf, n, &out, &outlen);
+	    result = sasl_decode(s->conn, (const char *) s->buf, n, 
+				 &out, &outlen);
 	    
 	    if (result != SASL_OK) {
 		snprintf(s->buf, 200, "Decoding error: %s (%i)",
@@ -373,8 +374,7 @@ struct protstream *s;
 int prot_flush(s)
 struct protstream *s;
 {
-    unsigned char outputbuf[PROT_BUFSIZE+4];
-    unsigned char *ptr = s->buf;
+    char *ptr = s->buf;
     int left = s->ptr - s->buf;
     int n;
     char *foo;
@@ -414,7 +414,7 @@ struct protstream *s;
 
     if (s->saslssf!=0) {
       /* Encode the data */  /* xxx handle left */
-      int outlen;
+      unsigned int outlen;
       int result;
       int lup;
 

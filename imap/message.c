@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.66 1999/04/08 21:04:27 tjs Exp $
+ * $Id: message.c,v 1.67 1999/08/12 19:27:40 leg Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -217,7 +217,7 @@ unsigned size;
     while (size) {
 	n = prot_read(from, buf, size > 4096 ? 4096 : size);
 	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading message: %m");
+	    syslog(LOG_ERR, "IOERROR: reading message: unexpected end of file");
 	    return IMAP_IOERROR;
 	}
 
