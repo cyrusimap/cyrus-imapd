@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.12 2004/04/22 15:04:52 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.13 2004/05/02 01:09:45 ken3 Exp $
  *
  */
 
@@ -2115,6 +2115,25 @@ int mailbox_expunge(struct mailbox *mailbox,
 			expunge_fd, last_offset, decideproc, deciderock, 0);
     if (r) goto fail;
 
+    /* Record quota release */
+    r = quota_read(&mailbox->quota, &tid, 1);
+    if (!r) {
+	if (mailbox->quota.used >= quotadeleted) {
+	    mailbox->quota.used -= quotadeleted;
+	}
+	else {
+	    mailbox->quota.used = 0;
+	}
+	r = quota_write(&mailbox->quota, &tid);
+	if (!r) quota_commit(&tid);
+	else {
+	    syslog(LOG_ERR,
+		   "LOSTQUOTA: unable to record free of %u bytes in quota %s",
+		   quotadeleted, mailbox->quota.root);
+	}
+    }
+    else if (r != IMAP_QUOTAROOT_NONEXISTENT) goto fail;
+
     if (flags & EXPUNGE_CLEANUP) {
 	unsigned new_deleted = numdeleted;
 
@@ -2142,73 +2161,52 @@ int mailbox_expunge(struct mailbox *mailbox,
 	if (r) goto fail;
 	expunge_exists -= (numdeleted - new_deleted);
     }
-    else {
-	if (config_expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
-	    /* Fix up information in expunge index header */
-	    lseek(expunge_fd, 0, SEEK_SET);
-	    n = read(expunge_fd, buf, mailbox->start_offset);
-	    if ((unsigned long)n != mailbox->start_offset) {
-		syslog(LOG_ERR,
-		       "IOERROR: reading expunge index header for %s: got %d of %ld",
-		       mailbox->name, n, mailbox->start_offset);
-		ftruncate(expunge_fd, last_offset);
-		goto fail;
-	    }
-
-	    /* Update appenddate */
-	    *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(now);
-
-	    /* Fix up exists */
-	    newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)))+numdeleted;
-	    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
-	    
-	    /* Fix up other counts */
-	    newanswered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED)))+numansweredflag;
-	    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(newanswered);
-	    newdeleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED)))+numdeletedflag;
-	    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(newdeleted);
-	    newflagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED)))+numflaggedflag;
-	    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(newflagged);
-
-	    /* Fix up quota_mailbox_used */
-	    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
-		htonl(ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)))+quotadeleted);
-	    /* Fix up start offset if necessary */
-	    if (mailbox->start_offset < INDEX_HEADER_SIZE) {
-		*((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
-	    }
-	
-	    /* Write out new cyrus.expunge header */
-	    lseek(expunge_fd, 0, SEEK_SET);
-	    n = retry_write(expunge_fd, buf, mailbox->start_offset);
-    
-	    /* Ensure everything made it to disk */
-	    if (n != mailbox->start_offset || fsync(expunge_fd)) {
-		syslog(LOG_ERR, "IOERROR: writing index/cache for %s: %m",
-		       mailbox->name);
-		ftruncate(expunge_fd, last_offset);
-		goto fail;
-	    }
+    else if (config_expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
+	/* Fix up information in expunge index header */
+	lseek(expunge_fd, 0, SEEK_SET);
+	n = read(expunge_fd, buf, mailbox->start_offset);
+	if ((unsigned long)n != mailbox->start_offset) {
+	    syslog(LOG_ERR,
+		   "IOERROR: reading expunge index header for %s: got %d of %ld",
+		   mailbox->name, n, mailbox->start_offset);
+	    ftruncate(expunge_fd, last_offset);
+	    goto fail;
 	}
 
-	/* Record quota release */
-	r = quota_read(&mailbox->quota, &tid, 1);
-	if (!r) {
-	    if (mailbox->quota.used >= quotadeleted) {
-		mailbox->quota.used -= quotadeleted;
-	    }
-	    else {
-		mailbox->quota.used = 0;
-	    }
-	    r = quota_write(&mailbox->quota, &tid);
-	    if (!r) quota_commit(&tid);
-	    else {
-		syslog(LOG_ERR,
-		       "LOSTQUOTA: unable to record free of %u bytes in quota %s",
-		       quotadeleted, mailbox->quota.root);
-	    }
+	/* Update appenddate */
+	*((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(now);
+
+	/* Fix up exists */
+	newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)))+numdeleted;
+	*((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
+
+	/* Fix up other counts */
+	newanswered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED)))+numansweredflag;
+	*((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(newanswered);
+	newdeleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED)))+numdeletedflag;
+	*((bit32 *)(buf+OFFSET_DELETED)) = htonl(newdeleted);
+	newflagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED)))+numflaggedflag;
+	*((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(newflagged);
+
+	/* Fix up quota_mailbox_used */
+	*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
+	    htonl(ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)))+quotadeleted);
+	/* Fix up start offset if necessary */
+	if (mailbox->start_offset < INDEX_HEADER_SIZE) {
+	    *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
 	}
-	else if (r != IMAP_QUOTAROOT_NONEXISTENT) goto fail;
+
+	/* Write out new cyrus.expunge header */
+	lseek(expunge_fd, 0, SEEK_SET);
+	n = retry_write(expunge_fd, buf, mailbox->start_offset);
+
+	/* Ensure everything made it to disk */
+	if (n != mailbox->start_offset || fsync(expunge_fd)) {
+	    syslog(LOG_ERR, "IOERROR: writing index/cache for %s: %m",
+		   mailbox->name);
+	    ftruncate(expunge_fd, last_offset);
+	    goto fail;
+	}
     }
 
     /* Ensure everything made it to disk */
