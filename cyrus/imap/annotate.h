@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.h,v 1.2.6.2 2002/08/15 17:52:24 rjs3 Exp $
+ * $Id: annotate.h,v 1.2.6.3 2002/08/21 18:53:51 rjs3 Exp $
  */
 
 #ifndef ANNOTATE_H
@@ -48,6 +48,7 @@
 #include "charset.h" /* for comp_pat */
 #include "imapd.h"
 #include "mboxname.h"
+#include "prot.h"
 
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
@@ -89,8 +90,8 @@ void freeentryatts(struct entryattlist *l);
 /* initialize database structures */
 #define ANNOTATE_RECOVER (1 << 0)
 #define ANNOTATE_SYNC (1 << 1)
-#define ANNOTATE_PROXY (1 << 2) /* If not set this implies a backend */
-void annotatemore_init(int flags);
+void annotatemore_init(int flags, int (*func)(const char *, const char *,
+					      struct strlist *));
 
 /* open the annotation db */
 void annotatemore_open(char *name);
@@ -98,7 +99,7 @@ void annotatemore_open(char *name);
 /* fetch annotations */
 int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		       struct namespace *namespace, int isadmin, char *userid,
-		       struct auth_state *auth_state, struct entryattlist **l);
+		       struct auth_state *auth_state, struct protstream *pout);
 
 /* store annotations */
 int annotatemore_store(struct entryattlist *l, struct namespace *namespace,

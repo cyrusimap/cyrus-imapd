@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.26 2002/08/19 01:57:20 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.27 2002/08/21 18:53:51 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -457,7 +457,7 @@ int service_init(int argc, char **argv, char **envp)
 
 #ifdef ENABLE_ANNOTATEMORE
     /* Initialize the annotatemore extention */
-    annotatemore_init(0);
+    annotatemore_init(0, NULL);
 #endif
 
     return 0;
@@ -5006,14 +5006,12 @@ void cmd_getannotation(char *tag)
 {
     int c, r = 0;
     struct strlist *entries = NULL, *attribs = NULL;
-    struct entryattlist *entryatts = NULL;
 
     c = getannotatefetchdata(tag, &entries, &attribs);
     if (c == EOF) {
 	eatline(imapd_in, c);
 	return;
     }
-
 
     /* check for CRLF */
     if (c == '\r') c = prot_getc(imapd_in);
@@ -5027,26 +5025,18 @@ void cmd_getannotation(char *tag)
 
     r = annotatemore_fetch(entries, attribs, &imapd_namespace,
 			   imapd_userisadmin || imapd_userisproxyadmin,
-			   imapd_userid, imapd_authstate, &entryatts);
+			   imapd_userid, imapd_authstate, imapd_out);
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-    }
-    else if (entryatts) {
-	prot_printf(imapd_out, "* ANNOTATION ");
-	annotate_response(entryatts);
-	prot_printf(imapd_out, "\r\n");
+    } else {
 	prot_printf(imapd_out, "%s OK %s\r\n",
 		    tag, error_message(IMAP_OK_COMPLETED));
     }
-    else
-	prot_printf(imapd_out, "%s NO %s\r\n", tag,
-		    error_message(IMAP_NO_NOSUCHANNOTATION));
 
   freeargs:
     if (entries) freestrlist(entries);
     if (attribs) freestrlist(attribs);
-    if (entryatts) freeentryatts(entryatts);
 
     return;
 }

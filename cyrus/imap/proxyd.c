@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.20 2002/08/19 16:42:50 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.21 2002/08/21 18:53:52 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -232,6 +232,8 @@ int getannotatefetchdata(char *tag,
 int getannotatestoredata(char *tag, struct entryattlist **entryatts);
 
 void annotate_response(struct entryattlist *l);
+int annotate_proxy(const char *server, const char *entry_pat,
+		   struct strlist *attribute_pat);
 #endif /* ENABLE_ANNOTATEMORE */
 
 void printstring (const char *s);
@@ -893,7 +895,7 @@ struct prot_waitevent *backend_timeout(struct protstream *s,
 }
 
 /* return the connection to the server */
-struct backend *proxyd_findserver(char *server)
+struct backend *proxyd_findserver(const char *server)
 {
     int i = 0;
     struct backend *ret = NULL;
@@ -1089,7 +1091,7 @@ int service_init(int argc, char **argv, char **envp)
 
 #ifdef ENABLE_ANNOTATEMORE
     /* Initialize the annotatemore extention */
-    annotatemore_init(ANNOTATE_PROXY);
+    annotatemore_init(0,annotate_proxy);
 #endif 
 
     return 0;
@@ -5117,7 +5119,6 @@ void cmd_getannotation(char *tag)
 {
     int c, r = 0;
     struct strlist *entries = NULL, *attribs = NULL;
-    struct entryattlist *entryatts = NULL;
 
     c = getannotatefetchdata(tag, &entries, &attribs);
     if (c == EOF) {
@@ -5138,26 +5139,18 @@ void cmd_getannotation(char *tag)
 
     r = annotatemore_fetch(entries, attribs, &proxyd_namespace,
 			   proxyd_userisadmin, proxyd_userid,
-			   proxyd_authstate, &entryatts);
+			   proxyd_authstate, proxyd_out);
 
     if (r) {
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
-    }
-    else if (entryatts) {
-	prot_printf(proxyd_out, "* ANNOTATION ");
-	annotate_response(entryatts);
-	prot_printf(proxyd_out, "\r\n");
+    } else {
 	prot_printf(proxyd_out, "%s OK %s\r\n",
 		    tag, error_message(IMAP_OK_COMPLETED));
     }
-    else
-	prot_printf(proxyd_out, "%s NO %s\r\n", tag,
-		    error_message(IMAP_NO_NOSUCHANNOTATION));
-
+    
   freeargs:
     if (entries) freestrlist(entries);
     if (attribs) freestrlist(attribs);
-    if (entryatts) freeentryatts(entryatts);
 
     return;
 }
@@ -5194,6 +5187,36 @@ void cmd_setannotation(char *tag)
     if (entryatts) freeentryatts(entryatts);
     return;
 }
+
+/* Proxy annotation commands to backend */
+int annotate_proxy(const char *server, const char *entry_pat,
+		   struct strlist *attribute_pat) 
+{
+    struct backend *be;
+    struct strlist *l;
+    char mytag[128];
+    
+    assert(server && entry_pat && attribute_pat);
+    
+    be = proxyd_findserver(server);    
+    if(!be) return IMAP_SERVER_UNAVAILABLE;
+
+    /* Send command to remote */
+    proxyd_gentag(mytag);
+    prot_printf(be->out, "%s GETANNOTATION \"%s\" (", mytag, entry_pat);
+    for(l=attribute_pat;l;l=l->next) {
+	prot_printf(be->out, "\"%s\"", l->s);
+    }
+    prot_printf(be->out, ")\r\n");
+    prot_flush(be->out);
+
+    /* Pipe the results.  Note that backend-current may also pipe us other
+       messages. */
+    pipe_until_tag(be, mytag, 0);
+
+    return 0;
+}
+
 #endif /* ENABLE_ANNOTATEMORE */
 
 /* Reset the given sasl_conn_t to a sane state */

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.11 2002/08/15 17:52:24 rjs3 Exp $
+ * $Id: annotate.c,v 1.8.6.12 2002/08/21 18:53:51 rjs3 Exp $
  */
 
 #include <config.h>
@@ -67,6 +67,7 @@ extern int errno;
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "glob.h"
+#include "hash.h"
 #include "imapd.h"
 #include "imapconf.h"
 #include "imap_err.h"
@@ -80,15 +81,16 @@ extern int errno;
 
 #define DB (&cyrusdb_skiplist) /* CONFIG_DB_ANNOTATION */
 
-struct db *anndb;
-
-static int annotate_dbopen = 0;
-static int annotate_isproxy = 0;
-
+extern void printstring(const char *s);
 extern void appendattvalue(struct attvaluelist **l, char *attrib,
 			   const char *value);
 extern void freeattvalues(struct attvaluelist *l);
+static void output_attlist(struct protstream *pout, struct attvaluelist *l);
 
+struct db *anndb;
+static int annotate_dbopen = 0;
+int (*proxy_func)(const char *server, const char *entry_pat,
+		  struct strlist *attribute_pat) = NULL;
 #endif
 
 /* String List Management */
@@ -128,7 +130,6 @@ char *s;
     (*tail)->p = charset_compilepat(s);
     (*tail)->next = 0;
 }
-
 
 /*
  * Free the strlist 'l'
@@ -213,7 +214,8 @@ void freeentryatts(struct entryattlist *l)
     }
 }
 
-void annotatemore_init(int myflags)
+void annotatemore_init(int myflags,int (*func)(const char *, const char *,
+					       struct strlist *))
 {
     int r;
     char dbdir[1024];
@@ -232,8 +234,8 @@ void annotatemore_init(int myflags)
 	r = DB->sync();
     }
 
-    if (myflags & ANNOTATE_PROXY) {
-	annotate_isproxy = 1;
+    if (func) {
+	proxy_func = func;
     }
 }
 
@@ -447,9 +449,9 @@ struct annotate_entry_list
 const struct annotate_entry mailbox_ro_entries[] =
 {
     { "/vendor/cmu/cyrus-imapd/partition", annotation_get_partition,
-	  NULL, ENTRY_PARTITION, PROXY_AND_BACKEND },
+	  NULL, ENTRY_PARTITION, BACKEND_ONLY },
     { "/vendor/cmu/cyrus-imapd/server", annotation_get_server,
-	  NULL, ENTRY_SERVER, PROXY_AND_BACKEND },
+	  NULL, ENTRY_SERVER, PROXY_ONLY },
     { "/vendor/cmu/cyrus-imapd/size", annotation_get_size,
 	  NULL, ENTRY_SIZE, BACKEND_ONLY },
     { NULL, NULL, NULL, 0, ANNOTATION_PROXY_T_INVALID }
@@ -485,6 +487,7 @@ const struct annotate_attrib annotation_attributes[] =
 /* Mailbox Annotation Fetching */
 struct fetchdata {
     struct namespace *namespace;
+    struct protstream *pout;
     char *userid;
     int isadmin;
     struct auth_state *auth_state;
@@ -492,6 +495,13 @@ struct fetchdata {
     unsigned entries; /* xxx used for server annotations, shouldn't be */
     unsigned attribs;
     struct entryattlist **entryatts;
+
+    /* For proxies (a null entry_list indicates that we ONLY proxy) */
+    /* if these are NULL, we have had a local exact match, and we
+       DO NOT proxy */
+    struct hash_table server_table;
+    const char *orig_entry;
+    struct strlist *orig_attribute;
 };
 
 static int fetch_cb(char *name, int matchlen,
@@ -552,6 +562,10 @@ static int fetch_cb(char *name, int matchlen,
 
     memset(&mbrock, 0, sizeof(struct mailbox_annotation_rock));
 
+    if(proxy_func && fdata->orig_entry) {
+	get_mb_data(int_mboxname, &mbrock);
+    }
+
     /* Loop through the list of provided entries to get */
     for(entries_ptr = fdata->entry_list;
 	entries_ptr;
@@ -598,8 +612,21 @@ static int fetch_cb(char *name, int matchlen,
 	    appendattvalue(&attvalues, "modifiedsince.shared", modifiedsince);
 	}
 
-	if(appended_one)
-	    appendentryatt(fdata->entryatts, entry, attvalues);
+	if(appended_one) {
+	    prot_printf(fdata->pout, "* ANNOTATION \"%s\" ", entry);
+	    output_attlist(fdata->pout, attvalues);
+	    prot_printf(fdata->pout, "\r\n");
+	    
+	    freeattvalues(attvalues);
+	    attvalues = NULL;
+	}
+    }
+
+    if(proxy_func && fdata->orig_entry
+       && !hash_lookup(mbrock.server, &(fdata->server_table))) {
+	/* xxx ignoring result */
+	proxy_func(mbrock.server, fdata->orig_entry, fdata->orig_attribute);
+	hash_insert(mbrock.server, (void *)0xDEADBEEF, &(fdata->server_table));
     }
 
     cleanup_mbrock(&mbrock);
@@ -607,18 +634,39 @@ static int fetch_cb(char *name, int matchlen,
     return 0;
 }
 
+static void output_attlist(struct protstream *pout, struct attvaluelist *l) 
+{
+    int flag = 0;
+    
+    assert(l);
+    
+    prot_putc('(',pout);
+    
+    while(l) {
+	if(flag) prot_putc(' ',pout);
+	else flag = 1;
+	
+	printstring(l->attrib);
+	prot_putc(' ',pout);
+	printstring(l->value);
+
+	l = l->next;
+    }
+
+    prot_putc(')',pout);
+}
+
 int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		       struct namespace *namespace, int isadmin, char *userid,
-		       struct auth_state *auth_state, struct entryattlist **l)
+		       struct auth_state *auth_state, struct protstream *pout)
 {
     struct strlist *e = entries;
     struct strlist *a = attribs;
+    char *tmp_entry = NULL;
     char *mailbox, *cp;
     struct fetchdata fdata;
 
     memset(&fdata, 0, sizeof(struct fetchdata));
-
-    *l = NULL;
 
     /* we only do shared annotations right now */
     while (a) {
@@ -643,12 +691,17 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
     if (!fdata.attribs) return 0;
 
     while (e) {
-	if (!strncmp(e->s, "/mailbox/{", 10) &&
-	    ((cp = strchr(e->s + 10, '}')) != NULL)) {
+	int exact_match = 0;
+	
+	if(tmp_entry) free(tmp_entry);
+	tmp_entry = xstrdup(e->s);
+	
+	if (!strncmp(tmp_entry, "/mailbox/{", 10) &&
+	    ((cp = strchr(tmp_entry + 10, '}')) != NULL)) {
 	    int entrycount;
 	    struct glob *g;
 
-	    mailbox = e->s + 10;
+	    mailbox = tmp_entry + 10;
 	    *cp++ = '\0'; /* just after mailbox w/leading slash */
 
 	    g = glob_init(cp, GLOB_HIERARCHY);
@@ -662,9 +715,9 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		   server type */
 		if(mailbox_ro_entries[entrycount].proxytype !=
 		   PROXY_AND_BACKEND) {
-		    if((annotate_isproxy &&
+		    if((proxy_func &&
 			mailbox_ro_entries[entrycount].proxytype != PROXY_ONLY)
-		       ||(!annotate_isproxy &&
+		       ||(!proxy_func &&
 			  mailbox_ro_entries[entrycount].proxytype !=
 			  BACKEND_ONLY))
 			continue;
@@ -677,27 +730,45 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		    nentry->next = fdata.entry_list;
 		    nentry->entry = &(mailbox_ro_entries[entrycount]);
 		    fdata.entry_list = nentry;
+		    if(!strcmp(cp, mailbox_ro_entries[entrycount].name)) {
+			exact_match = 1;
+			break;
+		    }
 		}
 	    }
 		
 	    glob_free(&g);
 	    
-	    if (fdata.entry_list) {
+	    if (fdata.entry_list || proxy_func) {
 		/* Reset state in fetch_cb */
 		fetch_cb(NULL, 0, 0, 0);
+
+		if(proxy_func && !exact_match) {
+		    fdata.orig_entry = e->s;
+		    fdata.orig_attribute = attribs;
+		    /* xxx better way to determine a size for this table? */
+		    construct_hash_table(&fdata.server_table, 10, 1);
+		} else if (proxy_func) {
+		    fdata.orig_entry = NULL;
+		    fdata.orig_attribute = NULL;
+		}
 
 		mboxname_hiersep_tointernal(namespace, mailbox,
 				    config_virtdomains ?
 				    strcspn(mailbox, "@") : 0);
+		fdata.pout = pout;
 		fdata.namespace = namespace;
 		fdata.userid = userid;
 		fdata.isadmin = isadmin;
 		fdata.auth_state = auth_state;
-		fdata.entryatts = l;
 		(*namespace->mboxlist_findall)(namespace, mailbox,
 					       isadmin, userid,
 					       auth_state, fetch_cb,
 					       &fdata);
+
+		if(proxy_func && !exact_match) {
+		    free_hash_table(&fdata.server_table, NULL);
+		}
 	    }
 	}
 
@@ -746,7 +817,12 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 			appendattvalue(&attvalues, "size.shared", size);
 		    }
 
-		    appendentryatt(l, "/server/motd", attvalues);
+		    prot_printf(pout, "* ANNOTATION \"/server/motd\" ");
+		    output_attlist(pout, attvalues);
+		    prot_printf(pout, "\r\n");
+
+		    freeattvalues(attvalues);
+		    attvalues = NULL;
 		}
 	    }
 	    if (fdata.entries & SRVENTRY_COMMENT) {
@@ -767,13 +843,19 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 			appendattvalue(&attvalues, "size.shared", size);
 		    }
 
-		    appendentryatt(l, "/server/comment", attvalues);
+		    prot_printf(pout, "* ANNOTATION \"/server/comment\" ");
+		    output_attlist(pout, attvalues);
+		    prot_printf(pout, "\r\n");
+
+		    freeattvalues(attvalues);
+		    attvalues = NULL;
 		}
 	    }
 	}
 
 	e = e->next;
     }
+    if(tmp_entry) free(tmp_entry);
 
     return 0;
 }
