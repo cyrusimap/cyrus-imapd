@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.49 2000/04/10 00:33:04 leg Exp $
+ * $Id: imtest.c,v 1.50 2000/05/09 15:35:32 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -27,12 +27,13 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
+#include <config.h>
+
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -55,6 +56,7 @@
 #include "prot.h"
 
 #ifdef HAVE_SSL
+#include <ssl.h>
 
 static SSL_CTX *tls_ctx = NULL;
 static SSL *tls_conn = NULL;
