@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.51 2001/09/05 20:14:12 leg Exp $ */
+/* $Id: master.c,v 1.52 2001/09/13 20:17:34 leg Exp $ */
 
 #include <config.h>
 
@@ -432,7 +432,7 @@ void run_startup(char **cmd)
 	syslog(LOG_DEBUG, "about to exec %s", path);
 	execv(path, cmd);
 	syslog(LOG_ERR, "can't exec %s for startup: %m", path);
-	exit(1);
+	exit(EX_OSERR);
 	
     default:
 	if (waitpid(pid, &status, 0) < 0) {
@@ -463,7 +463,8 @@ void spawn_service(struct service *s)
 
     switch (p = fork()) {
     case -1:
-	syslog(LOG_ERR, "can't fork process to run checkpoint");
+	syslog(LOG_ERR, "can't fork process to run service %s: %m",
+	       Services[i].name);
 	break;
 
     case 0:
@@ -512,6 +513,7 @@ void spawn_service(struct service *s)
 
 	execv(path, s->exec);
 	syslog(LOG_ERR, "couldn't exec %s: %m", path);
+	exit(EX_OSERR);
 
     default:			/* parent */
 	s->ready_workers++;
@@ -586,7 +588,7 @@ void spawn_schedule(time_t now)
 	    syslog(LOG_DEBUG, "about to exec %s", path);
 	    execv(path, a->exec);
 	    syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
-	    exit(1);
+	    exit(EX_OSERR);
 	    break;
 	    
 	default:
