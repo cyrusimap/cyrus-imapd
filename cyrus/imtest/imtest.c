@@ -305,7 +305,7 @@ main(argc, argv)
 		    ++dologin;
 		    len = sizeof (laddr);
 		    if (getsockname(sock, &laddr, &len) < 0 ||
-			client_start(host, NULL, prot_req,
+			client_start("imap", host, NULL, prot_req,
 				     sizeof (buf) - 4, &laddr,
 				     &addr, &authstate) != 0) {
 			printf("__Kerberos initialization failed__\n");
