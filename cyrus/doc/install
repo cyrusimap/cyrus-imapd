@@ -707,7 +707,8 @@ Testing the sieve server
 
            telnet foobar sieve
 
-        If your server is running, you'll get the following message: 
+        If your server is running, you'll get a message similar to the
+        following one: 
 
            Trying 128.2.10.192...
            Connected to cyrus-dev.andrew.cmu.edu.
@@ -717,7 +718,7 @@ Testing the sieve server
         Any message other than one similar to the one above means there is
         a problem. Make sure all of authentication methods you wish to
         support are listed. This list should be identical to the one listed
-        by "Imapd" earlier. To terminate the connection, type "logout". 
+        by "imapd" earlier. To terminate the connection, type "logout". 
 
      2. Next test authenticating to the sieve server. To do this run the
         "installsieve" utility. You must specify the server. Note you may
