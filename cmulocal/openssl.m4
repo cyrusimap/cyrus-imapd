@@ -1,6 +1,6 @@
 dnl
 dnl macros for configure.in to detect openssl
-dnl $Id: openssl.m4,v 1.4 2003/02/13 16:49:18 rjs3 Exp $
+dnl $Id: openssl.m4,v 1.5 2003/02/13 16:49:47 rjs3 Exp $
 dnl
 
 AC_DEFUN(CMU_HAVE_OPENSSL, [
@@ -21,7 +21,6 @@ case "$with_openssl" in
 	no)
 	  with_openssl="no";;
 	*) 
-	echo ack
 	  dnl if openssl has been compiled with the rsaref2 libraries,
 	  dnl we need to include the rsaref libraries in the crypto check
                 LIB_RSAREF=""
