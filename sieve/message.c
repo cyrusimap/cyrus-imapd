@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.7 2000/02/10 00:39:14 leg Exp $
+ * $Id: message.c,v 1.8 2000/02/14 20:05:41 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -477,7 +477,7 @@ char *get_address(address_part_t addrpart, void **data, void **marker)
 
 	case ADDRESS_USER:
 	    am->freeme = (char *) xmalloc(strcspn(a->mailbox, "+") + 1);
-	    strncpy(am->freeme, a->mailbox, strcspn(a->mailbox, "+"));
+	    sprintf(am->freeme, "%.*s", strcspn(a->mailbox, "+"), a->mailbox);
 	    ret = am->freeme;
 	    break;
 	case ADDRESS_DETAIL:

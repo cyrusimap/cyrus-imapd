@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.1 2000/02/10 22:46:00 leg Exp $
+ * $Id: ipurge.c,v 1.2 2000/02/14 20:05:40 tmartin Exp $
  *
  */
 
@@ -132,6 +132,10 @@ purge_me(char *name, int matchlen, int maycreate) {
   struct mailbox the_box;
   int            error;
   mbox_stats_t   stats;
+
+  /* DON'T purge INBOX* and user.* */
+  if ((strncasecmp(name,"INBOX",5)==0) || (strncasecmp(name,"user.",5)==0))
+      return 0;
 
   memset(&stats, '\0', sizeof(mbox_stats_t));
 
