@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.75 2004/01/07 19:59:26 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.76 2004/01/14 02:18:05 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -34,6 +34,9 @@ is necessary (when using Sieve or <tt>duplicatesuppression</tt>).</li>
 <li>Sieve now verifies that address tests and envelope tests are done
 on headers which contain addresses (can be disabled with
 <tt>rfc3028_strict: no</tt>).</li>
+<li>Services will now notice that a new binary has been installed and
+will restart using the new binary once the existing connection is
+closed.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.1</h1>
@@ -1903,7 +1906,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2004/01/07 19:59:26 $ <br />
+last modified: $Date: 2004/01/14 02:18:05 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
