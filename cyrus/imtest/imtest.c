@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.78 2002/05/31 18:32:23 rjs3 Exp $
+ * $Id: imtest.c,v 1.79 2002/06/02 20:34:29 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -623,7 +623,7 @@ int tls_start_clienttls(unsigned *layer, char **authid)
     if (tls_sess)  /* Reuse a session if we have one */
 	SSL_set_session(tls_conn, tls_sess);
 
-    if ((sts = SSL_connect(tls_conn)) < 0) {
+    if ((sts = SSL_connect(tls_conn)) <= 0) {
 	printf("SSL_connect error %d\n", sts);
 	tls_sess = SSL_get_session(tls_conn);
 	if (tls_sess) {
