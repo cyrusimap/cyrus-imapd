@@ -43,7 +43,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #
 # Script for mass compilation of sieve scripts.
 #
-# $Id: masssievec,v 1.2 2003/10/22 18:03:47 rjs3 Exp $
+# $Id: masssievec,v 1.3 2004/01/08 06:25:59 rjs3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -106,18 +106,18 @@ print "you are using $sievedir as your sieve directory.\n";
 
 opendir TOP, $sievedir;
 while (defined($s = readdir TOP)) {
-    next if ($s =~ /^\./s);
+    next if ($s eq "." || $s eq "..");
     chdir $sievedir . "/$s";
     opendir THISONE, ".";
 
     while(defined($t = readdir THISONE)) {
-	next if ($t =~ /^\./s);
+	next if ($t eq "." || $t eq "..");
 	print "processing user $t\n";
 	chdir $t;
 
 	opendir USER, ".";
 	while(defined($u = readdir USER)) {
-	    next if ($u =~ /^\./s);
+	    next if ($u eq "." || $u eq "..");
 	    if($u eq "default") {
 		# special case
 		$dest = readlink $u;
