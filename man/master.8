@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: master.8,v 1.7 2002/12/09 22:48:55 rjs3 Exp $
+.\" $Id: master.8,v 1.8 2002/12/10 15:49:10 rjs3 Exp $
 .SH NAME
 master \- master Cyrus process
 .SH SYNOPSIS
@@ -47,6 +47,10 @@ master \- master Cyrus process
 [
 .B \-l
 .I listen queue
+]
+[
+.B \-p
+.I pidfile
 ]
 .B \-d
 [
@@ -69,6 +73,11 @@ when it receives a SIGTERM.
 Increase the listen queue backlog. By default, the listen queue is set
 to 32.   On systems with a high connection rate, it may be desirable
 to increase this value. refer to \fBlisten(2)\fR for details.
+.TP
+.BI \-p " pidfile"
+Use
+.I pidfile
+as the pidfile.  If not specified, defaults to /var/run/cyrus-master.pid
 .TP
 .BI \-d
 Start in daemon mode (run in background and disconnect from controlling
@@ -94,7 +103,7 @@ debugging information. Setting the value to 1 results in base level logging.
 Setting it higher results in more log messages being generated.
 .SH FILES
 .TP
-.B /etc/cyrus.conf, /etc/imapd.conf
+.B /etc/cyrus.conf, /etc/imapd.conf, /var/run/cyrus-master.pid
 .SH SEE ALSO
 .PP
 \fBcyrus.conf(5)\fR, \fBimapd.conf(5)\fR, \fBimapd(8)\fR,
