@@ -1,11 +1,45 @@
-<!-- $Id: changes.html,v 1.8 2000/08/08 17:54:44 leg Exp $ -->
+<!-- $Id: changes.html,v 1.9 2000/09/05 06:02:22 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
-<h2>Changes to the cyrus IMAP Server SINCE 2.0.5</h2>
+<h2>Changes to the cyrus IMAP Server since 2.0.6</h2>
+<ul>
+<li> some number of random static variables eliminated, to save on
+memory footprint
+
+<li> recursive RENAME was a little to eager; fixed.  RENAME will also
+give the client a hint that a sub-RENAME failed.  (mostly probably
+useful for cyradm, but cyradm doesn't take advantage of it yet.)
+
+<li> THREAD=X-JWZ has turned into THREAD=REFERENCES (Ken Murchison)
+
+<li> DELETE wasn't failing cleanly in database code; fixed.
+
+<li> off-by-one bug in seen_db fixed.
+
+<li> starting/committing/aborting transactions now logged more
+correctly in cyrsudb_db3
+
+<li> master will now accept port numbers instead of just service names
+in cyrus.conf.  also logs even more verbosely (see bug #115.)
+
+<li> libwrap_init() is now inside the loop, since i don't quite
+understand the semantics of libwrap calls.
+
+<li> setquota in cyradm now behaves more sanely (and gives correct
+usage message).
+
+<li> bugfixes to the managesieve client perl api. (still needs work.)
+
+<li> small fixes in timsieved.
+
+<li> added a "make dist" target so i won't dread releases as much.
+</ul>
+
+<h2>Changes to the cyrus IMAP Server since 2.0.5</h2>
 <ul>
 <li> APPEND now honors the \Seen flag.
 
@@ -1078,7 +1112,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2000/08/08 17:54:44 $
+last modified: $Date: 2000/09/05 06:02:22 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>

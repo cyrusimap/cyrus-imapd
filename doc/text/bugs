@@ -1,15 +1,15 @@
                      Known bugs in the Cyrus IMAP Server
 
+    We're working on moving to a Bugzilla database. It's still being built
+    up, but you can search/add to it here. Eventually, all the bugs below
+    will be in there. 
+
 imapd and core utilities
 
       * Multiple APPENDs don't always correctly return the EXISTS response.
         (can't reproduce?) 
       * Particularly large quotas can wrap around. 
       * The RENAME command is not atomic. 
-      * RENAMEing INBOX doesn't work correctly. (important!) 
-      * In general, renaming an mailbox to be a subset of itself should be
-        checked for and disallowed. 
-      * append.c: doesn't set the \Seen flag if the client requests it. 
       * reconstruct doesn't deal with the mailboxes.db file. 
       * DELETE and deleting user mailboxes. 
       * we should deal with having to reset UIDs 
@@ -80,8 +80,6 @@ other utilities
         them to see if it should exit (like mbpath, ipurge). 
       * it would be nice if cyradm had a version command (would do an ID
         against the server). 
-      * deliver: should look for AUTH capability instead of just assuming
-        it. possibly do LMTP over TCP? full SASL authentication? 
 
 libraries
 
