@@ -778,6 +778,10 @@ int lines;
 	while (buf[strlen(buf)-1] != '\n' && fgets(buf, sizeof(buf), msgfile));
     }
     fclose(msgfile);
+
+    /* Protect against messages not ending in CRLF */
+    if (buf[strlen(buf)-1] != '\n') prot_printf(popd_out, "\r\n");
+
     prot_printf(popd_out, ".\r\n");
 }
 
