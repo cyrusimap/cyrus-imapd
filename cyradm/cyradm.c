@@ -30,13 +30,13 @@
 
 extern int errno;
 
-#include "sasl.h"
+/*#include "sasl.h"*/
 #include "imclient.h"
 #include "imparse.h"
 #include "tcl.h"
 #include "xmalloc.h"
 
-#ifdef HAVE_SASL_KRB
+/*#ifdef HAVE_SASL_KRB
 extern struct sasl_client krb_sasl_client;
 #endif
 
@@ -45,7 +45,7 @@ struct sasl_client *login_sasl_client[] = {
     &krb_sasl_client,
 #endif
     NULL
-};
+    };*/
 
 struct admconn {
     struct imclient *imclient;
@@ -373,9 +373,10 @@ char **argv;
 {
     char *pwcommand = 0;
     char *user = 0;
-    int prot = SASL_PROT_ANY;
     char *p;
     int r;
+    int minssf=0;     /* default to allow any security layer */
+    int maxssf=10000;
     
     /* skip over command & subcommand */
     argv += 2;
@@ -392,19 +393,20 @@ char **argv;
 	}
 	else if (!strcmp(argv[0], "-protection")) {
 	    if (!argv[1]) break;
-	    prot = 0;
 	    for (p = *++argv; *p; p++) {
 		switch (*p) {
-		case 'n':
-		    prot |= SASL_PROT_NONE;
+		case 'n': /* no layer */
+		    maxssf=0;
 		    break;
 
 		case 'i':
-		    prot |= SASL_PROT_INTEGRITY;
+		    minssf=1;
+		    maxssf=1; 
 		    break;
 
 		case 'p':
-		    prot |= SASL_PROT_PRIVACY;
+		  minssf=0; /* xxx should be 2 must be stronger than integity */
+		    /* leave max alone */
 		    break;
 
 		default:
@@ -426,10 +428,12 @@ char **argv;
 	return TCL_ERROR;
     }
 
-    r = imclient_authenticate(conn->imclient, login_sasl_client, "imap",
-			      user, prot);
+    /*    r = imclient_authenticate(conn->imclient, login_sasl_client, "imap",
+	  user, prot);*/
+    r = timclient_authenticate(conn->imclient, "KERBEROS_V4", "imap",
+	  user, minssf, maxssf);
     
-    if (r == 1 && (prot & SASL_PROT_NONE) && pwcommand) {
+    if (r == 1 && (minssf==0) && pwcommand) {
 	Tcl_DString command;
 	int comc;
 	char **comv;

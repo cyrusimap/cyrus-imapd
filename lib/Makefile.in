@@ -50,7 +50,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-HDRS = $(srcdir)/acl.h $(srcdir)/sasl.h $(srcdir)/assert.h $(srcdir)/auth.h \
+HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 	$(srcdir)/bsearch.h $(srcdir)/charset.h $(srcdir)/glob.h \
 	$(srcdir)/gmtoff.h $(srcdir)/imclient.h $(srcdir)/imparse.h \
 	$(srcdir)/lock.h $(srcdir)/map.h $(srcdir)/mkgmtime.h \
@@ -58,7 +58,7 @@ HDRS = $(srcdir)/acl.h $(srcdir)/sasl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 	$(srcdir)/retry.h $(srcdir)/sysexits.h \
 	$(srcdir)/util.h $(srcdir)/xmalloc.h
 
-OBJS = acl.o sasl.o assert.o bsearch.o charset.o glob.o retry.o util.o \
+OBJS = acl.o assert.o bsearch.o charset.o glob.o retry.o util.o \
 	mkgmtime.o prot.o parseaddr.o imclient.o imparse.o xmalloc.o \
 	chartable.o nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o \
 	gmtoff_@WITH_GMTOFF@.o map_@WITH_MAP@.o $(ACL) $(AUTH) \

@@ -49,6 +49,14 @@
 #include "sasl.h"
 #include "prot.h"
 
+int main(void)
+{
+    fprintf(stderr, "I NEED TO BE UPDATED FOR SASL!!!\n");
+    exit(33);
+}
+
+#if 0 /* NOT UPDATED FOR SASL!!! */
+
 /* from OS: */
 extern char *getpass();
 extern struct hostent *gethostbyname();
@@ -405,3 +413,5 @@ main(argc, argv)
     }
     exit(0);
 }
+
+#endif

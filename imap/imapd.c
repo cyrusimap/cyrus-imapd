@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.170 1999/04/08 21:04:22 tjs Exp $ */
+/* $Id: imapd.c,v 1.171 1999/06/19 02:18:50 leg Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -42,10 +42,11 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include <sasl.h>
+
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
-#include "sasl.h"
 #include "map.h"
 #include "config.h"
 #include "version.h"
@@ -69,6 +70,8 @@ struct buf {
     char *s;
     int alloc;
 };
+
+sasl_conn_t *imapd_saslconn; /* the sasl connection context */
 
 char *imapd_userid;
 struct auth_state *imapd_authstate = 0;
@@ -164,6 +167,31 @@ static int mailboxdata(), listdata(), lsubdata();
 static void mstringdata P((char *cmd, char *name, int matchlen, int maycreate));
 void mboxlist_close P((void));
 
+/* This creates a structure that defines the allowable
+ *   security properties 
+ */
+static sasl_security_properties_t *make_secprops(int min,int max)
+{
+  sasl_security_properties_t *ret=
+    (sasl_security_properties_t *) xmalloc(sizeof(sasl_security_properties_t));
+
+  ret->maxbufsize = 4000;
+  ret->min_ssf = min;		/* minimum allowable security strength */
+  ret->max_ssf = max;		/* maximum allowable security strength */
+
+  ret->security_flags = 0;
+  if (!config_getswitch("allowplaintext", 1)) {
+      ret->security_flags |= SASL_SEC_NOPLAINTEXT;
+  }
+  if (!config_getswitch("allowanonymouslogin", 0)) {
+      ret->security_flags |= SASL_SEC_NOANONYMOUS;
+  }
+  ret->property_names = NULL;
+  ret->property_values = NULL;
+
+  return ret;
+}
+
 main(argc, argv, envp)
 int argc;
 char **argv;
@@ -172,6 +200,11 @@ char **envp;
     int salen;
     struct hostent *hp;
     int timeout;
+    char hostname[MAXHOSTNAMELEN+1]; /* XXX sasl should be MAX_something */
+    sasl_security_properties_t *secprops=NULL;
+
+    if (gethostname(hostname, MAXHOSTNAMELEN)!=0)
+      fatal("gethostname failed\n",EC_USAGE);
 
     imapd_in = prot_new(0, 0);
     imapd_out = prot_new(1, 1);
@@ -203,6 +236,34 @@ char **envp;
 	    imapd_haveaddr = 1;
 	}
     }
+
+    /* Make a SASL connection and setup some properties for it */
+
+    if (sasl_server_init(NULL,"Cyrus")!=SASL_OK)
+      fatal("SASL failed initializing: sasl_server_init()",EC_USAGE); 
+    /* XXX different error code? */
+
+    /* other params should be filled in */
+    if (sasl_server_new("imap", hostname, NULL, NULL, 2000, &imapd_saslconn)
+	   != SASL_OK)
+	fatal("SASL failed initializing: sasl_server_new()",EC_USAGE); 
+    /* XXX different error code? */
+
+    /* will always return something valid */
+    secprops=make_secprops(0,2000);        
+    sasl_setprop(imapd_saslconn, SASL_SEC_PROPS, secprops);
+    
+    if (1) {
+	FILE *stream;
+
+	stream=fopen("/tmp/krbfoo","a");
+	fprintf(stream, "imap remote: %x\n", imapd_remoteaddr.sin_addr);
+	fprintf(stream, "imap local: %x\n", imapd_localaddr.sin_addr);
+	fclose(stream);
+    }
+
+    sasl_setprop(imapd_saslconn, SASL_IP_REMOTE, &imapd_remoteaddr);  
+    sasl_setprop(imapd_saslconn, SASL_IP_LOCAL, &imapd_localaddr);  
 
     proc_register("imapd", imapd_clienthost, (char *)0, (char *)0);
 
@@ -909,6 +970,7 @@ char *passwd;
     char *p;
     FILE *logfile;
     int plaintextloginpause;
+    int result;
 
     canon_user = auth_canonifyid(user);
     if (!canon_user) {
@@ -934,14 +996,19 @@ char *passwd;
 	    return;
 	}
     }
-    else if (login_plaintext(canon_user, passwd, &reply) != 0) {
-	if (reply) {
+    else if ((result=sasl_checkpass(imapd_saslconn,
+				    canon_user,
+				    strlen(canon_user),
+				    passwd,
+				    strlen(passwd),
+				    (const char **) &reply))!=SASL_OK) { 
+      if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   imapd_clienthost, canon_user, reply);
-	}
-	sleep(3);
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_INVALID_LOGIN));
-	return;
+      }
+      sleep(3);
+      prot_printf(imapd_out, "%s NO Login failed. Error=%d\r\n", tag, result);
+      return;
     }
     else {
 	syslog(LOG_NOTICE, "login: %s %s plaintext %s", imapd_clienthost,
@@ -996,90 +1063,118 @@ cmd_authenticate(tag, authtype)
 char *tag;
 char *authtype;
 {
+    int sasl_result;
+    static struct buf clientin;
+    int clientinlen=0;
+    
+    char *serverout;
+    unsigned int serveroutlen;
+    const char *errstr;
+    
+    const char *errorstring=NULL;
+
+    char *username=NULL;
     char *canon_user;
-    int r;
-    struct sasl_server *mech;
-    int (*authproc)();
-    int outputlen;
-    char *output;
-    int inputlen;
-    static struct buf input;
-    void *state;
-    const char *reply = 0;
-    int protlevel;
-    char *user;
-    sasl_encodefunc_t *encodefunc;
-    sasl_decodefunc_t *decodefunc;
-    int maxplain;
+
     const char *val;
     char buf[MAX_MAILBOX_PATH];
     char *p;
     FILE *logfile;
+    char foo[1024];    
 
-    lcase(authtype);
-    r = login_authenticate(authtype, &mech, &authproc, &reply);
-    if (!r) {
-	r = mech->start(mech->rock, "imap", authproc,
-			SASL_PROT_ANY, PROT_BUFSIZE,
-			imapd_haveaddr ? (struct sockaddr *)&imapd_localaddr : 0,
-			imapd_haveaddr ? (struct sockaddr *)&imapd_remoteaddr : 0,
-			&outputlen, &output, &state, &reply);
-    }
-    if (r && r != SASL_DONE) {
-	if (reply) {
-	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
-		   imapd_clienthost, authtype, reply);
-	}
-	prot_printf(imapd_out, "%s NO %s\r\n", tag,
-		    error_message(IMAP_INVALID_LOGIN));
+    int *ssfp;
+    char *ssfmsg=NULL;
+
+    sasl_result = sasl_server_start(imapd_saslconn, authtype,
+				    NULL, 0,
+				    &serverout, &serveroutlen,
+				    &errstr);    
+
+    /* sasl_server_start will return SASL_OK or SASL_CONTINUE on success */
+
+    while (sasl_result==SASL_CONTINUE)
+    {
+
+      /* print the message to the user */
+      printauthready(serveroutlen, (unsigned char *)serverout);
+
+      /* get string from user */
+      clientinlen = getbase64string(&clientin);
+      if (clientinlen == -1) {
+	prot_printf(imapd_out, "%s BAD Invalid base64 string\r\n", tag);
 	return;
+      }
+
+      sasl_result = sasl_server_step(imapd_saslconn,
+				     clientin.s,
+				     clientinlen,
+				     &serverout, &serveroutlen,
+				     &errstr);
     }
 
-    while (r == 0) {
-	printauthready(outputlen, (unsigned char *)output);
-	inputlen = getbase64string(&input);
-	if (inputlen == -1) {
-	    prot_printf(imapd_out, "%s BAD Invalid base64 string\r\n", tag);
-	    mech->free_state(state);
-	    return;
-	}
-	r = mech->auth(state, inputlen, input.s, &outputlen, &output, &reply);
-    }
-    
-    if (r != SASL_DONE) {
-	mech->free_state(state);
-	if (reply) {
-	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
-		   imapd_clienthost, authtype, reply);
-	}
-	sleep(3);
-	prot_printf(imapd_out, "%s NO %s\r\n", tag,
-		    error_message(IMAP_INVALID_LOGIN));
-	return;
+
+    /* failed authentication */
+    if (sasl_result!=SASL_OK)
+    {
+      syslog(LOG_NOTICE, "badlogin: %s %s %i",
+	     imapd_clienthost, authtype, sasl_result);
+
+      if (clientin.s) {
+	syslog(LOG_NOTICE, "badlogin: %s %s %s",
+	       imapd_clienthost, authtype, clientin.s);
+      } else {
+	syslog(LOG_NOTICE, "badlogin: %s %s",
+	       imapd_clienthost, authtype);
+      }
+
+      /* i guess this prevents time gaining info from time of failure
+	 shouldn't it be a random time tho? */
+      sleep(3);      
+
+      /* convert the sasl error code to a string */
+      errorstring=sasl_errstring(sasl_result,NULL,NULL);
+      
+      if (errorstring)
+	prot_printf(imapd_out, "%s NO %s\r\n",tag,errorstring);
+      else
+	prot_printf(imapd_out, "%s NO Error Authenticating\r\n",tag);
+
+      return;
     }
 
-    mech->query_state(state, &user, &protlevel, &encodefunc, &decodefunc,
-		      &maxplain);
+    /* successful authentication */
 
-    canon_user = auth_canonifyid(user);
+    /* get the userid from SASL */
+    sasl_result=sasl_getprop(imapd_saslconn, SASL_USERNAME,(void **) &username);
+    if (sasl_result!=SASL_OK)
+    {
+      prot_printf(imapd_out, "%s NO Error getting username from SASL\r\n",tag);
+      return;
+    }
+
+    canon_user = auth_canonifyid(username);
     if (!canon_user) {
 	syslog(LOG_NOTICE, "badlogin: %s %s %s bad userid",
-	       imapd_clienthost, authtype, beautify_string(user));
-	mech->free_state(state);
+	       imapd_clienthost, authtype, beautify_string(username));
 	prot_printf(imapd_out, "%s NO %s\r\n", tag,
 		    error_message(IMAP_INVALID_USER));
 	return;
     }
 
-    imapd_authstate = auth_newstate(canon_user, mech->get_cacheid(state));
+    /* this is used for groups */
+    imapd_authstate = auth_newstate(canon_user, NULL);
+
     imapd_userid = xstrdup(canon_user);
+
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
+    /* see if the user is an admin */
     val = config_getstring("admins", "");
     while (*val) {
 	for (p = (char *)val; *p && !isspace(*p); p++);
 	strncpy(buf, val, p - val);
 	buf[p-val] = 0;
+
 	if (auth_memberof(imapd_authstate, buf)) {
 	    imapd_userisadmin = 1;
 	    break;
@@ -1088,20 +1183,24 @@ char *authtype;
 	while (*val && isspace(*val)) val++;
     }
 
-    if (!reply) reply = "User logged in";
     syslog(LOG_NOTICE, "login: %s %s %s %s", imapd_clienthost, canon_user,
-	   authtype, reply ? reply : "");
+	   authtype, "User logged in");
 
-    prot_printf(imapd_out, "%s OK %s (%s)\r\n", tag, reply,
-		sasl_prottostring(protlevel));
+    
+    sasl_getprop(imapd_saslconn, SASL_SSF, (void **) &ssfp);
 
-    if (encodefunc || decodefunc) {
-	prot_setfunc(imapd_in, decodefunc, state, 0);
-	prot_setfunc(imapd_out, encodefunc, state, maxplain);
-    }
-    else {
-	mech->free_state(state);
-    }
+    switch(*ssfp)
+      {
+      case 0: ssfmsg="no protection";break;
+      case 1: ssfmsg="integrity protection";break;
+      default: ssfmsg="privacy protection";break;
+      }
+
+    prot_printf(imapd_out, "%s OK Success (%s)\r\n", tag,ssfmsg);
+
+    prot_setsasl(imapd_in,  imapd_saslconn);
+    prot_setsasl(imapd_out, imapd_saslconn);
+
 
     /* Create telemetry log */
     sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, imapd_userid,
@@ -1141,6 +1240,8 @@ void
 cmd_capability(tag)
 char *tag;
 {
+  char *sasllist; /* the list of SASL mechanisms */
+
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
@@ -1149,13 +1250,28 @@ char *tag;
     /* XXX */
     prot_printf(imapd_out,
 		" X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME");
-    prot_printf(imapd_out, "%s", login_capabilities());
+
+    if (sasl_listmech(imapd_saslconn,
+			 "", /* should be id string */
+			 "AUTH="," AUTH=","",
+			 &sasllist,
+			 NULL,NULL)==SASL_OK)
+    {
+      prot_printf(imapd_out," %s",sasllist);      
+    } else {
+      /* else don't show anything */
+    }
+
     prot_printf(imapd_out, " UNSELECT");
 #ifdef ENABLE_X_NETSCAPE_HACK
     prot_printf(imapd_out, " X-NETSCAPE");
 #endif
     prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
+
+    prot_flush(imapd_out); /* we need to free the string so let's flush then
+			    we can safely free it */
+    free(sasllist);
 }
 
 /*
