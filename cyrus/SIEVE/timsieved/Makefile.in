@@ -1,0 +1,82 @@
+# Makefile for imtest
+# 
+# @configure_input@
+# Copyright 1998 Carnegie Mellon University
+# 
+# No warranties, either expressed or implied, are made regarding the
+# operation, use, or results of the software.
+#
+# Permission to use, copy, modify and distribute this software and its
+# documentation is hereby granted for non-commercial purposes only
+# provided that this copyright notice appears in all copies and in
+# supporting documentation.
+#
+# Permission is also granted to Internet Service Providers and others
+# entities to use the software for internal purposes.
+#
+# The distribution, modification or sale of a product which uses or is
+# based on the software, in whole or in part, for commercial purposes or
+# benefits requires specific, additional permission from:
+#
+#  Office of Technology Transfer
+#  Carnegie Mellon University
+#  5000 Forbes Avenue
+#  Pittsburgh, PA  15213-3890
+#  (412) 268-4387, fax: (412) 268-7395
+#  tech-transfer@andrew.cmu.edu
+# 
+srcdir = @srcdir@
+VPATH = @srcdir@
+
+CC = @CC@
+INSTALL = @INSTALL@
+RANLIB = @RANLIB@
+
+DEFS = @DEFS@ -Dbool=char -DHAS_BOOL
+CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../../lib @CPPFLAGS@ -I/usr/local/lib/perl5/5.004/CORE -I$(srcdir)/../../installsieve
+LIBS = @LIBS@ ../../lib/libcyrus.a
+IMAP_LIBS = @IMAP_LIBS@
+DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
+
+CFLAGS = -g
+LDFLAGS = -g @LDFLAGS@
+
+SHELL = /bin/sh
+MAKEDEPEND = @MAKEDEPEND@
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+cyrus_prefix = @cyrus_prefix@
+
+PERL=perl5
+PERLINC=-I/usr/local/lib/perl5/5.004 -I/usr/local/lib/perl5
+
+OBJS=isieve.o lex.o mystring.o request.o Cyrus.o 
+
+all: Cyrus.so
+
+install:
+	$(INSTALL) -s -m 755 imtest $(DESTDIR)$(exec_prefix)/bin
+
+.c.o:
+	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
+
+Cyrus.c: Cyrus.xs typemap
+	$(PERL) $(PERLINC) /usr/local/lib/perl5/ExtUtils/xsubpp -typemap /usr/local/lib/perl5/ExtUtils/typemap -typemap $(srcdir)/typemap $(srcdir)/Cyrus.xs >Cyrus.c
+
+Cyrus.o: Cyrus.c
+	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
+
+Cyrus.so: $(OBJS) 
+	$(CC) -shared $(OBJS) -o Cyrus.so $(LIBS)
+
+clean:
+	rm -f *.o Makefile.bak makedepend.log Cyrus.so Cyrus.c
+
+distclean: clean
+	rm -f Makefile
+
+depend: 
+	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1> makedepend.log 2>&1
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.
