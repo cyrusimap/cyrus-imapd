@@ -152,7 +152,6 @@ int deleteascript(int version, struct protstream *pout, struct protstream *pin,c
     return -1;
   }
 
-  printf("Script %s deleted successfully\n",name);
   return 0;
 }
 
@@ -421,9 +420,9 @@ int setscriptactive(int version, struct protstream *pout,
   ret = handle_response(res,version,pin, &errstr);
 
   /* if command failed */
-  if (ret!=0)
-  {
-    printf("Setting script %s active failed with message: %s\n",name, string_DATAPTR(errstr));
+  if (ret != 0) {
+    printf("Setting script %s active failed with message: %s\n",
+	   name, string_DATAPTR(errstr));
     return -1;
   }
 

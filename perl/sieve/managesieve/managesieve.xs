@@ -257,27 +257,19 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
 	printf("network init failure!\n");
   }
 
-  printf("network inited\n");
-  
   if (init_sasl(obj, 128, callbacks)) {
       printf("sasl init failure!\n");
   }
   
-  printf("sasl inited\n");
-
   ret = malloc(sizeof(struct xscyrus));
   ret->class = safemalloc(10);
   strcpy(ret->class,"foo");
   ret->isieve = obj;
   
-  printf("reading capability\n");
-
   mechlist=read_capability(obj);
 
-  printf("mechlist = %s\n",mechlist);
-
   if (auth_sasl(mechlist, obj)) {
-	  printf("auth failed\n");
+      printf("auth failed\n");
   }
 
   ST(0) = sv_newmortal();
