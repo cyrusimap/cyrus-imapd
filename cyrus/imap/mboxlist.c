@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.219.2.1 2003/11/04 21:39:18 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.219.2.2 2004/02/04 19:30:47 ken3 Exp $
  */
 
 #include <config.h>
@@ -1998,7 +1998,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
 		cbrock.checkshared = 1;
 	    }
 
-	    if (cbrock.checkshared && !*p) {
+	    if ((cbrock.checkshared || prefixlen == len) && !*p) {
 		/* special case:  LIST "" % -- output prefix
 		   (if we have a shared mbox) and quit */
 		cbrock.g = glob_init("*", GLOB_HIERARCHY);
@@ -2720,7 +2720,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 		cbrock.checkshared = 1;
 	    }
 
-	    if (cbrock.checkshared && !*p) {
+	    if ((cbrock.checkshared || prefixlen == len) && !*p) {
 		/* special case:  LSUB "" % -- output prefix
 		   (if we have a shared mbox) and quit */
 		cbrock.g = glob_init("*", GLOB_HIERARCHY);
