@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.25 1997/12/17 23:59:24 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.26 1998/02/11 07:08:06 tjs Exp $ -->
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
@@ -7,6 +7,9 @@
 <h2>Changes to the Cyrus IMAP Server Since Version 1.5.2</h2>
 
 <ul>
+
+<li> On mailbox delete, the server will no longer try and unlink ".." and
+	  "." as we got a report that it confuses one Unix file system.
 
 <li> Added some support for Netscape's very misleading "Administrate My
 	  Mail" menu option in Communicator.  Allows for a URL to be set in
@@ -466,7 +469,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs Wed Dec 17 18:43:27 1997
+last modified by tjs at Wed Feb 11 00:30:54 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page

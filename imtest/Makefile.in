@@ -54,7 +54,7 @@ distclean: clean
 	rm -f Makefile
 
 depend: 
-	makedepend $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c
+	makedepend $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c >& makedepend.log
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 

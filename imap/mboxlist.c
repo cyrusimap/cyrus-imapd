@@ -40,6 +40,38 @@ extern int errno;
 #include "imap_err.h"
 #include "xmalloc.h"
 
+#define DEBUG /* XXX */
+#ifdef DEBUG
+/* globcheck
+   Called with some of glob_tests's arguments; if it gets called too many
+   times (as indicated by a variable passed in), it bails out, killing
+   imapd by calling fatal.  (glob_test has a bug where it doesn't update
+   minmatch, causing problems.)
+ */
+#define NGLOBLIMIT 30000
+void globcheck(globpat, target, tlen, n, line)
+char* globpat;
+char* target;
+int tlen;
+int n;
+char* line;
+{
+    char buf[512];
+    if (!n) {
+	strncpy(buf, target, n);
+	if (tlen > 511) {
+	    tlen = 511;
+	}
+	buf[tlen] = '\0';
+	syslog(LOG_ERR,
+	       "Too many globs in one loop, globbing <%s> against <%s> at line %d",
+	       buf, globpat, line);
+	fatal("too many globs in one loop", EX_SOFTWARE);
+    }
+}
+
+#endif
+
 acl_canonproc_t mboxlist_ensureOwnerRights;
 
 static char *listfname, *newlistfname;
@@ -1006,6 +1038,9 @@ int (*proc)();
     int rights;
     int r;
     char *inboxcase;
+#ifdef DEBUG
+    int nglobtests = NGLOBLIMIT;
+#endif /* DEBUG */
 
     mboxlist_reopen();
     list_doingfind++;
@@ -1094,6 +1129,9 @@ int (*proc)();
 	    if (strncmp(list_base + offset,
 			    usermboxname, usermboxnamelen) != 0) break;
 	    minmatch = 0;
+#ifdef DEBUG
+	    nglobtests = NGLOBLIMIT;
+#endif /* DEBUG */
 	    while (minmatch >= 0) {
 		memcpy(namebuf, name, namelen);
 		namebuf[namelen] = '\0';
@@ -1138,12 +1176,20 @@ int (*proc)();
 		
 	if (strncmp(list_base + offset, pattern, prefixlen)) break;
 	minmatch = 0;
+#ifdef DEBUG
+	nglobtests = NGLOBLIMIT;
+#endif /* DEBUG */
 	while (minmatch >= 0) {
+#ifdef DEBUG
+	    globcheck(pattern, name, namelen, nglobtests--, __LINE__);
+#endif /* DEBUG */
 	    matchlen = glob_test(g, name, namelen, &minmatch);
+
 	    if (matchlen == -1 ||
 		(userid && namelen >= usermboxnamelen &&
 		 strncmp(name, usermboxname, usermboxnamelen) == 0 &&
-		 (namelen == usermboxnamelen || name[usermboxnamelen] == '.'))) {
+		 (namelen == usermboxnamelen ||
+		  name[usermboxnamelen] == '.'))) {
 		break;
 	    }
 
@@ -1220,6 +1266,9 @@ int (*proc)();
     long matchlen, minmatch;
     char *acl;
     char *inboxcase;
+#ifdef DEBUG
+    int nglobtests = NGLOBLIMIT;
+#endif /* DEBUG */
 
     if (r = mboxlist_opensubs(userid, 0, &subsfd, &subs_base, &subs_size,
 			      &subsfname, (char **) 0)) {
@@ -1301,7 +1350,8 @@ int (*proc)();
 			     (unsigned long *)0);
 
 	while (offset < subs_size) {
-	    name = subs_base + offset;
+
+	name = subs_base + offset;
 	    p = memchr(name, '\n', subs_size - offset);
 	    endname = memchr(name, '\t', subs_size - offset);
 	    if (!p || !endname || endname - name > MAX_MAILBOX_NAME) {
@@ -1328,13 +1378,17 @@ int (*proc)();
 		    namematchbuf[inboxoffset+4] = inboxcase[4];
 		}
 
+#ifdef DEBUG
+		globcheck(pattern, name, namelen, nglobtests--, __LINE__);
+#endif /* DEBUG */
+		
 		matchlen = glob_test(g, namematchbuf+inboxoffset,
 				     namelen-inboxoffset, &minmatch);
 		if (matchlen == -1) break;
-
+		
 		(void) bsearch_mem(namebuf, 1, list_base, list_size, 0,
 				   &listlinelen);
-
+		
 		if (listlinelen) {
 		    r = (*proc)(namematchbuf+inboxoffset, matchlen, 1);
 		    if (r) {
@@ -1373,12 +1427,19 @@ int (*proc)();
 
 	if (strncmp(name, pattern, prefixlen)) break;
 	minmatch = 0;
+#ifdef DEBUG
+	nglobtests = NGLOBLIMIT;
+#endif
 	while (minmatch >= 0) {
+#ifdef DEBUG
+	    globcheck(pattern, name, namelen, nglobtests--, __LINE__);
+#endif
 	    matchlen = glob_test(g, name, namelen, &minmatch);
 	    if (matchlen == -1 ||
 		(userid && namelen >= usermboxnamelen &&
 		 strncmp(name, usermboxname, usermboxnamelen) == 0 &&
-		 (namelen == usermboxnamelen || name[usermboxnamelen] == '.'))) {
+		 (namelen == usermboxnamelen ||
+		  name[usermboxnamelen] == '.'))) {
 		break;
 	    }
 

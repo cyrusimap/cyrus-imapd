@@ -1777,6 +1777,15 @@ int delete_quota_root;
     dirp = opendir(mailbox->path);
     if (dirp) {
 	while (f = readdir(dirp)) {
+	    if (f->d_name[0] == '.'
+		&& (f->d_name[1] == '\0'
+		    || (f->d_name[1] == '.' &&
+			f->d_name[2] == '\0'))) {
+		/* readdir() can return "." or "..", and I got a bug report
+		   that SCO might blow the file system to smithereens if we
+		   unlink("..").  Let's not do that. */
+		continue;
+	    }
 	    strcpy(tail, f->d_name);
 	    (void) unlink(buf);
 	}
