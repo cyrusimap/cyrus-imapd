@@ -64,7 +64,7 @@ struct map {
 struct map *map;
 int map_num;
 int map_alloc;
-#define MAPGROW 10 /* XXX 200 */
+#define MAPGROW 200
 
 struct tablechar {
     int code;
@@ -83,7 +83,7 @@ struct table {
 struct table *table;
 int table_num;
 int table_alloc;
-#define TABLEGROW 10 /* XXX 200 */
+#define TABLEGROW 200
 
 
 main(argc, argv)
