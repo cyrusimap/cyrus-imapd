@@ -508,16 +508,18 @@ int isieve_logout(isieve_t **obj)
     return STAT_OK;
 }
 
-int isieve_put_file(isieve_t *obj, char *filename, char **errstr)
+int isieve_put_file(isieve_t *obj, char *filename, char *destname,
+		    char **errstr)
 {
     char *refer_to;
     int ret = installafile(obj->version,
 			   obj->pout, obj->pin,
-			   filename, &refer_to, errstr);
+			   filename, destname,
+			   &refer_to, errstr);
     if(ret == -2 && refer_to) {
 	ret = do_referral(obj, refer_to);
 	if(ret == STAT_OK) {
-	    ret = isieve_put_file(obj, filename, errstr);
+	    ret = isieve_put_file(obj, filename, destname, errstr);
 	} else {
 	    *errstr = "referral failed";
 	}

@@ -49,7 +49,8 @@ use Pod::Usage;
 use Term::ReadLine;
 use POSIX qw(:sys_wait_h);
 
-my $puthelp =        "put <filename>   - upload script to server\n";
+my $puthelp =        "put <filename> [<target name>]\n" .
+                     "                 - upload script to server\n";
 my $gethelp =        "get <name> [<filename>]\n" .
                      "                 - get script. if no filename display to stdout\n";
 my $activatehelp =   "activate <name>  - set a script as the active script\n";
@@ -188,15 +189,18 @@ while(defined($_  = $term->readline('> '))){
 
     if (($words[0] eq "put") || 
 	($words[0] eq "p")) {
-	if ($#words != 1) {
-	    print $puthelp;
-	    next;
-	}
+      if($#words == 1) {
 	$ret = sieve_put_file($obj, $words[1]);
-	if ($ret != 0) { 
-	    my $errstr = sieve_get_error($obj);
-	    print "upload failed: $errstr\n"; 
-	}
+      } elsif ($#words == 2) {
+	$ret = sieve_put_file_withdest($obj, $words[1], $words[2]);
+      } else {
+	print $puthelp;
+	next;
+      }
+      if ($ret != 0) { 
+	my $errstr = sieve_get_error($obj);
+	print "upload failed: $errstr\n"; 
+      }
     } elsif (($words[0] eq "list") || 
 	     ($words[0] eq "l") || 
 	     ($words[0] eq "ls")) {
