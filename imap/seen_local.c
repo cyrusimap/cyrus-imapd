@@ -1,5 +1,5 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
- $Id: seen_local.c,v 1.30 2000/02/10 21:25:34 leg Exp $
+ $Id: seen_local.c,v 1.31 2000/04/12 18:25:00 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -753,4 +753,11 @@ int seen_reconstruct(struct mailbox *mailbox,
 	
     return r;
 }
+
+/* done with all seen operations for this process */
+int seen_done(void)
+{
+    return 0;
+}
+
 
