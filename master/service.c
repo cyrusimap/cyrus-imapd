@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.45 2003/10/22 18:50:14 rjs3 Exp $ */
+/* $Id: service.c,v 1.46 2004/01/11 23:39:32 ken3 Exp $ */
 
 #include <config.h>
 
@@ -275,6 +275,11 @@ int main(int argc, char **argv, char **envp)
     int newargc = 0;
     char **newargv = (char **) xmalloc(ARGV_GROW * sizeof(char *));
     int id;
+    char path[PATH_MAX];
+    struct stat sbuf;
+    ino_t start_ino;
+    off_t start_size;
+    time_t start_mtime;
     
     opterr = 0; /* disable error reporting,
 		   since we don't know about service-specific options */
@@ -403,6 +408,17 @@ int main(int argc, char **argv, char **envp)
 	return 1;
     }
 
+    /* determine initial process file inode, size and mtime */
+    if (newargv[0][0] == '/')
+	strlcpy(path, newargv[0], sizeof(path));
+    else
+	snprintf(path, sizeof(path), "%s/%s", SERVICE_PATH, newargv[0]);
+
+    stat(path, &sbuf);
+    start_ino= sbuf.st_ino;
+    start_size = sbuf.st_size;
+    start_mtime = sbuf.st_mtime;
+
     getlockfd(service, id);
     for (;;) {
 	/* ok, listen to this socket until someone talks to us */
@@ -530,6 +546,14 @@ int main(int argc, char **argv, char **envp)
 	/* if we returned, we can service another client with this process */
 
 	if (use_count >= max_use) {
+	    break;
+	}
+
+	/* check current process file inode, size and mtime */
+	stat(path, &sbuf);
+	if (sbuf.st_ino != start_ino ||sbuf.st_size != start_size ||
+	    sbuf.st_mtime != start_mtime) {
+	    syslog(LOG_INFO, "process file has changed");
 	    break;
 	}
 
