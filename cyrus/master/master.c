@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.28 2000/12/31 03:05:29 ken3 Exp $ */
+/* $Id: master.c,v 1.29 2001/01/02 05:19:44 leg Exp $ */
 
 #include <config.h>
 
@@ -127,6 +127,8 @@ struct centry {
 };
 static struct centry *ctable[child_table_size];
 static struct centry *cfreelist;
+
+void limit_fds(int);
 
 void fatal(char *msg, int code)
 {
@@ -390,6 +392,8 @@ void run_startup(char **cmd)
 	    exit(1);
 	}
 
+	limit_fds(256);
+
 	get_prog(path, cmd);
 	syslog(LOG_DEBUG, "about to exec %s", path);
 	execv(path, cmd);
@@ -463,6 +467,8 @@ void spawn_service(struct service *s)
 	    if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
 	    if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
 	}
+	limit_fds(256);
+
 	syslog(LOG_DEBUG, "about to exec %s", path);
 	execv(path, s->exec);
 	syslog(LOG_ERR, "couldn't exec %s: %m", path);
@@ -534,6 +540,8 @@ void spawn_schedule(time_t now)
 		syslog(LOG_ERR, "can't change to the cyrus user");
 		exit(1);
 	    }
+	    limit_fds(256);
+
 	    get_prog(path, a->exec);
 	    syslog(LOG_DEBUG, "about to exec %s", path);
 	    execv(path, a->exec);
@@ -855,17 +863,23 @@ void add_event(const char *name, struct entry *e, void *rock)
 #  define RLIMIT_NUMFDS RLIMIT_OFILE
 # endif
 #endif
-void unlimit_fds(void)
+void limit_fds(int x)
 {
-    struct rlimit r;
+    struct rlimit rl;
+    int r;
 
-    r.rlim_max = RLIM_INFINITY;
-    if (setrlimit(RLIMIT_NUMFDS, &r) < 0) {
+    rl.rlim_cur = x;
+    rl.rlim_max = x;
+    if (setrlimit(RLIMIT_NUMFDS, &rl) < 0) {
 	syslog(LOG_ERR, "unable to unlimit the number of file descriptors avialable");
     }
+
+    r = getrlimit(RLIMIT_NUMFDS, &rl);
+    syslog(LOG_DEBUG, "set maximum file descriptors to %d/%d", rl.rlim_cur,
+	   rl.rlim_max);
 }
 #else
-void unlimit_fds(void)
+void limit_fds(int x)
 {
 }
 #endif
@@ -948,6 +962,8 @@ int main(int argc, char **argv, char **envp)
 	    break;
 	}
     }
+
+    limit_fds(RLIM_INFINITY);
 
     /* zero out the children table */
     memset(&ctable, 0, sizeof(struct centry *) * child_table_size);
