@@ -58,6 +58,10 @@ cyrus_prefix = @cyrus_prefix@
 
 mandir = @mandir@
 
+YACC = @YACC@
+LEX = @LEX@
+COMPILE_ET = @COMPILE_ET@
+
 VERSION = 2.2.3
 
 all:: 
@@ -75,7 +79,8 @@ dist:: distcvs
 		(cd dist/cyrus-imapd-$(VERSION)/$$d; \
 		  if [ -f Makefile.dist ]; then \
 		    echo "### Making" dist "in" `pwd`;	\
-		    $(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) -f Makefile.dist dist ; \
+		    $(MAKE) $(MFLAGS) YACC='$(YACC)' LEX='$(LEX)' \
+			COMPILE_ET='$(COMPILE_ET)' -f Makefile.dist dist ; \
 		  fi) || exit 1; \
 	done
 	@echo "creating tarfile"
