@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.2 2003/10/22 18:03:04 rjs3 Exp $
+ * $Id: auth_pts.c,v 1.3 2003/10/28 21:14:31 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -162,9 +162,9 @@ struct auth_state *auth_newstate(const char *identifier)
 {
     struct auth_state *output = NULL;
 
-    if(canonuser_id &&
-       (!strcmp(canonuser_id, identifier) ||
-	!strcmp(canonuser_id, canonuser_cache->userid.id))) {
+    if(canonuser_id && 
+       (!strcmp(identifier, canonuser_id) ||
+        !strcmp(identifier, canonuser_cache->userid.id))) {
 	/* It's the currently cached user, return the previous result */
 	free(canonuser_id);
 	canonuser_id = NULL;
