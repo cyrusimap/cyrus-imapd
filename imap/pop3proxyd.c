@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.14 2001/03/29 00:44:49 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.15 2001/04/03 20:11:12 ken3 Exp $
  */
 #include <config.h>
 
@@ -457,7 +457,8 @@ static void cmdloop(void)
 		cmd_capa();
 	    }
 	}
-	else if (!strcmp(inputbuf, "user")) {
+	else if (!strcmp(inputbuf, "user") &&
+		 (popd_starttls_done || config_getswitch("allowplaintext", 1))) {
 	    if (!arg) {
 		prot_printf(popd_out, "-ERR Missing argument\r\n");
 	    }
@@ -465,26 +466,27 @@ static void cmdloop(void)
 		cmd_user(arg);
 	    }
 	}
-	else if (!strcmp(inputbuf, "pass")) {
+	else if (!strcmp(inputbuf, "pass") &&
+		 (popd_starttls_done || config_getswitch("allowplaintext", 1))) {
 	    if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 	    else cmd_pass(arg);
 	}
-	    else if (!strcmp(inputbuf, "apop") && apop_enabled()) {
-		char *user, *digest;
+	else if (!strcmp(inputbuf, "apop") && apop_enabled()) {
+	    char *user, *digest;
 
-		/* Parse into user and digest */
-		if (arg) arg = strchr(user = arg, ' ');
-		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
-		else {
-		    *arg++ = '\0';
-		    digest = arg;
-		    /* per RFC 1939, digest must be 32 hex digits */
-		    while (*arg && isxdigit((int) *arg)) arg++;
-		    if ((arg - digest) != 32)
-			prot_printf(popd_out, "-ERR Invalid digest string\r\n");
-		    else cmd_apop(user, digest);
-		}
+	    /* Parse into user and digest */
+	    if (arg) arg = strchr(user = arg, ' ');
+	    if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
+	    else {
+		*arg++ = '\0';
+		digest = arg;
+		/* per RFC 1939, digest must be 32 hex digits */
+		while (*arg && isxdigit((int) *arg)) arg++;
+		if ((arg - digest) != 32)
+		    prot_printf(popd_out, "-ERR Invalid digest string\r\n");
+		else cmd_apop(user, digest);
 	    }
+	}
 	else if (!strcmp(inputbuf, "auth")) {
 	    cmd_auth(arg);
 	}
@@ -829,7 +831,10 @@ cmd_capa()
     prot_printf(popd_out, "TOP\r\n");
     prot_printf(popd_out, "UIDL\r\n");
     prot_printf(popd_out, "PIPELINING\r\n");
-    prot_printf(popd_out, "USER\r\n");
+
+    if (popd_starttls_done || config_getswitch("allowplaintext", 1)) {
+	prot_printf(popd_out, "USER\r\n");
+    }
     
     prot_printf(popd_out,
 		"IMPLEMENTATION Cyrus POP3 proxy server %s\r\n",
