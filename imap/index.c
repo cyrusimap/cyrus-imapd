@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.133 2000/07/20 19:55:03 ken3 Exp $
+ * $Id: index.c,v 1.134 2000/07/21 18:34:34 ken3 Exp $
  */
 #include <config.h>
 
@@ -242,7 +242,8 @@ static int _index_search P((unsigned **msgno_list, struct mailbox *mailbox,
 
 static void parse_cached_envelope P((char *env, char *tokens[]));
 static char *get_localpart_addr P((const char *header));
-static char *index_extract_subject(const char *subj, int *is_refwd, int flags);
+static char *index_extract_subject(const char *subj, int *is_refwd);
+static char *_index_extract_subject(char *s, int *is_refwd);
 static void index_get_ids P((MsgData *msgdata,
 			     char *envtokens[], const char *headers));
 static MsgData *index_msgdata_load P((unsigned *msgno_list, int n,
@@ -2990,7 +2991,7 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 		cur->size = SIZE(cur->msgno);
 		break;
 	    case SORT_SUBJECT:
-		cur->xsubj = index_extract_subject(subj+4, &cur->is_refwd, 0);
+		cur->xsubj = index_extract_subject(subj+4, &cur->is_refwd);
 		cur->xsubj_hash = hash(cur->xsubj);
 		break;
 	    case SORT_TO:
@@ -3078,30 +3079,55 @@ static char *get_localpart_addr(const char *header)
 
 /*
  * Extract base subject from subject header
+ *
+ * This is a wrapper around _index_extract_subject() which preps the
+ * subj NSTRING and checks for Netscape "[Fwd: ]".
  */
-static char *index_extract_subject(const char *subj, int *is_refwd, int flags)
+static char *index_extract_subject(const char *subj, int *is_refwd)
 {
-#define NS_FWD	1
-    char *s, *base, *ret, *x;
+    char *buf, *s, *base;
 
-    /* make a working copy of subj.
-     *
-     * if this is the initial pass, prepare the nstring
-     */
-    if (!flags) {
-	if (!strcmp(subj, "NIL"))		       	/* NIL? */
-	    return xstrdup("");				/* yes, return empty */
+    /* parse the subj NSTRING and make a working copy */
+    if (!strcmp(subj, "NIL"))		       		/* NIL? */
+	return xstrdup("");				/* yes, return empty */
 
-	else if (*subj == '"')				/* quoted? */
-	    s = xstrndup(subj+1, strlen(subj) - 2);	/* yes, strip quotes */
+    else
+	buf = (*subj == '"') ?				/* quoted? */
+	    xstrndup(subj + 1, strlen(subj) - 2) :	/* yes, strip quotes */
+	xstrdup(strchr(subj, '}') + 3);			/* literal, skip { } */
 
-	else if (*subj == '{')				/* literal? */
-	    s = xstrdup(strchr(subj, '}') + 3);		/* yes, skip to str */
+    for (s = buf;;) {
+	base = _index_extract_subject(s, is_refwd);
+
+	/* If we have a Netscape "[Fwd: ...]", extract the contents */
+	if (!strncasecmp(base, "[fwd:", 5) &&
+	    base[strlen(base) - 1]  == ']') {
+
+	    /* trim "]" */
+	    base[strlen(base) - 1] = '\0';
+
+	    /* trim "[fwd:" */
+	    s = base + 5;
+	}
+	else	/* otherwise, we're done */
+	    break;
     }
 
-    /* if we're inside a Netscape [Fwd: ], just use what we're given */
-    else
-	s = xstrdup(subj);
+    base = xstrdup(base);
+
+    free(buf);
+
+    return base;
+}
+
+/*
+ * Guts if subject extraction.
+ *
+ * Takes a subject string and returns a pointer to the base.
+ */
+static char *_index_extract_subject(char *s, int *is_refwd)
+{
+    char *base, *x;
 
     /* trim trailer
      *
@@ -3212,24 +3238,7 @@ static char *index_extract_subject(const char *subj, int *is_refwd, int flags)
 	    break;					/* we're done */
     }
 
-    /* Hack to catch Netscape's wacky "[Fwd: ...]" notation. */
-    if (!strncasecmp(base, "[fwd:", 5) &&
-	base[strlen(base) - 1]  == ']') {
-
-	/* trim ']' */
-	base[strlen(base) - 1] = '\0';
-
-	/* extract contents */
-	ret = index_extract_subject(base+1, is_refwd, NS_FWD);
-    }
-
-    /* make a copy of the extracted base */
-    else
-	ret = xstrdup(base);
-
-    free(s);
-
-    return ret;
+    return base;
 }
 
 /* Find a message-id looking thingy in a string.  Returns a pointer to the
