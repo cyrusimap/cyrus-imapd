@@ -383,22 +383,49 @@ dnl Checking for Tcl first puts -lm before -lkrb on the library list.
 dnl
 AC_ARG_WITH(tcl,[  --with-tcl=PATH         use Tcl from PATH],
 	with_tcl="${withval}")
+tcllib=tcl
 if test -z "$with_tcl"; then
      if test -f /usr/local/lib/libtcl.a; then
 	with_tcl="/usr/local"
+     elif test -f /usr/local/lib/libtcl8.0.a; then
+       dnl sigh
+       with_tcl="/usr/local"
+       tcllib="tcl8.0"
      fi
 fi
 case "$with_tcl" in
-	no) if test "$TCL_SUBDIRS" != ""; then
-		AC_MSG_ERROR(Could not find Tcl libraries.  You must either install Tcl or configure with --disable-cyradm)
-	    fi;;
-	""|yes) AC_CHECK_LIB(tcl,Tcl_Init,TCLLIBS="-ltcl -lm",
-	    [if test "$TCL_SUBDIRS" != ""; then
-		AC_MSG_ERROR(Could not find Tcl libraries.  You must either install Tcl or configure with --disable-cyradm)
-	     fi],-lm) ;;
-	*)  TCLCPPFLAGS="${CPPFLAGS} -I${with_tcl}/include"
-	    TCLLIBS="-L${with_tcl}/lib ${ld_runpath_switch}${with_tcl}/lib -ltcl -lm" ;;
+  no)
+      if test "$TCL_SUBDIRS" != ""; then
+	AC_MSG_ERROR(Tcl is required for cyradm.  Please re-configure with with --disable-cyradm)
+      fi;;
+  
+  dnl do bizarro tcl hunt, but only if we have to -- that is, if TCL_SUBDIRS
+  dnl is set.
+  ""|yes) if test "$TCL_SUBDIRS" != ""; then
+    AC_CHECK_LIB(tcl,Tcl_Init,TCLLIBS="-ltcl -lm",
+        dnl not here -- maybe they hid it.
+        [
+	SAVE_LIBS="$LIBS"
+	AC_CHECK_LIB(tcl, Tcl_Init, TCLLIBS="-ltcl -lm",
+	    dnl not there -- maybe we want a different name.
+	    AC_CHECK_LIB(tcl8.0,
+	       Tcl_Init,
+	       TCLLIBS="-ltcl8.0 -lm",
+	       AC_MSG_ERROR(Could not find Tcl libraries.  You must either install Tcl or configure with --disable-cyradm),
+	       "-lm"), "-lm")
+	LIBS="$SAVE_LIBS"
+	],
+	"-lm")
+  fi
+  ;;
+
+  dnl hey, the user told us where it is, do the completely obvious thing!
+  *) TCLCPPFLAGS="${CPPFLAGS} -I${with_tcl}/include"
+     TCLLIBS="-L${with_tcl}/lib ${ld_runpath_switch}${with_tcl}/lib -l${tcllib} -lm"
+     ;;
 esac
+
+
 AC_SUBST(TCLLIBS)
 AC_SUBST(TCLCPPFLAGS)
 dnl

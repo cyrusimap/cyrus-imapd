@@ -28,7 +28,7 @@ case `uname` in
         export LDFLAGS
 	;;
   HP-UX)   CFLAGS="-Ae +O3 +Oaggressive"
-	CC=gcc #cheat for now
+	CC=gcc # cheat -- hp cc is miserable
 	CFLAGS="-O2"
 	;;
   SunOS)   
