@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.1.2.6 2003/06/17 20:40:43 ken3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.1.2.7 2003/06/19 00:35:49 ken3 Exp $ */
 
 #include <config.h>
 
@@ -340,7 +340,7 @@ static int myarchive(const char **fnames, const char *dirname)
 
 static int myopen(const char *fname, struct db **ret)
 {
-    DB *db;
+    DB *db = NULL;
     int r;
 
     assert(dbinit && fname && ret);
@@ -349,7 +349,7 @@ static int myopen(const char *fname, struct db **ret)
 
     r = db_create(&db, dbenv, 0);
     if (r != 0) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, db_strerror(r));
+	syslog(LOG_ERR, "DBERROR: opening %s (creating database handle): %s", fname, db_strerror(r));
 	return CYRUSDB_IOERROR;
     }
     /* xxx set comparator! */
@@ -361,6 +361,10 @@ static int myopen(const char *fname, struct db **ret)
 #endif
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, db_strerror(r));
+	r = db->close(db, DB_NOSYNC);
+        if (r != 0) {
+            syslog(LOG_ERR, "DBERROR: closing %s: %s", fname, db_strerror(r));
+        }
 	return CYRUSDB_IOERROR;
     }
 
