@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.27 1999/03/01 20:18:29 tjs Exp $
+ $Id: auth_krb_pts.c,v 1.28 1999/03/01 20:26:55 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -554,11 +554,13 @@ const char *cacheid;
 
     newstate->ngroups = us.ngroups;
 
+#if 0
     if (newstate->ngroups * PR_MAXNAMELEN < datalist.size) {
 	syslog(LOG_ERR,
 	       "Database %s inconsistent: ngroups(%d) * PR_MAXNAMELEN(%d) < datalist.size(%d)",
 	       fnamebuf, newstate->ngroups, PR_MAXNAMELEN, datalist.size);
     }
+#endif
 
     if (newstate->ngroups) {
       newstate->groups = (char (*)[PR_MAXNAMELEN])xmalloc(newstate->ngroups *
