@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.60 2003/05/01 19:03:11 rjs3 Exp $ -->
+<!-- $Id: changes.html,v 1.61 2003/06/17 16:04:07 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -8,6 +8,26 @@
 </head>
 <body>
 <h1>Changes to the Cyrus IMAP Server</h1>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.13</h2>
+<ul>
+<li>Allow cyradm to handle aggregate mailbox sets for ACL and DELETE
+operations.</li>
+<li>Include more MIME headers in sieve rejection notices</li>
+<li>Add an mbexamine command for debugging purposes</li>
+<li>Continued audit by Security Appraisers and Bynari</li>
+<li>Correctly terminate the processes by calling service_abort even on
+    successful exit (helps to fix a db3 lockers problem)</li>
+<li>Fix some murder+altnamespace/unixhiersep issues</li>
+<li>Fix imclient's handling of literals.</li>
+<li>Add support for the windows-1256 character set</li>
+<li>Don't log 'could not shut down filedescriptor' messages when the
+    socket is already not connected</li>
+<li>Now include a script to convert sieve script names to the altnamespace
+    format</li>
+<li>Minor build fixes.</li>
+<li>Minor other bug fixes.</li>
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.12</h2>
 <ul>
@@ -1734,7 +1754,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/05/01 19:03:11 $ <br />
+last modified: $Date: 2003/06/17 16:04:07 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
