@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.25 2003/02/05 01:31:04 ken3 Exp $
+ * $Id: mupdate.c,v 1.60.4.26 2003/02/05 01:39:56 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -77,6 +77,7 @@
 #include "imap_err.h"
 #include "version.h"
 #include "mpool.h"
+#include "util.h"
 
 /* Sent to clients that we can't accept a connection for. */
 static const char SERVER_UNABLE_STRING[] = "* BYE \"Server Unable\"\r\n";
