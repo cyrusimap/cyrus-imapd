@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.26 2001/11/27 02:24:59 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.27 2001/12/01 04:03:16 ken3 Exp $
  */
 #include <config.h>
 
@@ -348,7 +348,7 @@ void fatal(const char* s, int code)
 	exit(recurse_code);
     }
     recurse_code = code;
-    prot_printf(popd_out, "-ERR Fatal error: %s\r\n", s);
+    prot_printf(popd_out, "-ERR [SYS/PERM] Fatal error: %s\r\n", s);
     prot_flush(popd_out);
     shut_down(code);
 }
@@ -374,7 +374,7 @@ void shutdown_file(void)
     if ((p = strchr(buf, '\n')) != NULL) *p = 0;
 
     for (p = buf; *p == '['; p++); /* can't have [ be first char, sigh */
-    prot_printf(popd_out, "-ERR %s\r\n", p);
+    prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
 
     shut_down(0);
 }
@@ -405,7 +405,7 @@ static void kpop(void)
 		     &kdata, (char*) srvtab, schedule, version);
     
     if (r) {
-	prot_printf(popd_out, "-ERR Kerberos authentication failure: %s\r\n",
+	prot_printf(popd_out, "-ERR [AUTH] Kerberos authentication failure: %s\r\n",
 		    krb_err_txt[r]);
 	syslog(LOG_NOTICE,
 	       "badlogin: %s kpop ? %s%s%s@%s %s",
@@ -417,7 +417,7 @@ static void kpop(void)
     
     r = krb_get_lrealm(klrealm,1);
     if (r) {
-	prot_printf(popd_out, "-ERR Kerberos failure: %s\r\n",
+	prot_printf(popd_out, "-ERR [AUTH] Kerberos failure: %s\r\n",
 		    krb_err_txt[r]);
 	syslog(LOG_NOTICE,
 	       "badlogin: %s kpop ? %s%s%s@%s krb_get_lrealm: %s",
@@ -563,7 +563,7 @@ static void cmd_starttls(int pop3s)
 	syslog(LOG_ERR, "[pop3d] error initializing TLS");
 
 	if (pop3s == 0)
-	    prot_printf(popd_out, "-ERR %s\r\n", "Error initializing TLS");
+	    prot_printf(popd_out, "-ERR [SYS/PERM] %s\r\n", "Error initializing TLS");
 	else
 	    fatal("tls_init() failed",EC_TEMPFAIL);
 
@@ -586,7 +586,7 @@ static void cmd_starttls(int pop3s)
     /* if error */
     if (result==-1) {
 	if (pop3s == 0) {
-	    prot_printf(popd_out, "-ERR Starttls failed\r\n");
+	    prot_printf(popd_out, "-ERR [SYS/PERM] Starttls failed\r\n");
 	    syslog(LOG_NOTICE, "[pop3d] STARTTLS failed: %s", popd_clienthost);
 	} else {
 	    syslog(LOG_NOTICE, "pop3s failed: %s", popd_clienthost);
@@ -648,7 +648,7 @@ static void cmd_apop(char *response)
     assert(response != NULL);
 
     if (popd_userid) {
-	prot_printf(popd_out, "-ERR Must give PASS command\r\n");
+	prot_printf(popd_out, "-ERR [AUTH] Must give PASS command\r\n");
 	return;
     }
 
@@ -664,7 +664,7 @@ static void cmd_apop(char *response)
 	if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
 
 	for(p = buf; *p == '['; p++); /* can't have [ be first char */
-	prot_printf(popd_out, "-ERR %s\r\n", p);
+	prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
 	prot_flush(popd_out);
 	shut_down(0);
     }
@@ -680,7 +680,7 @@ static void cmd_apop(char *response)
     {
 	sleep(3);      
 		
-	prot_printf(popd_out, "-ERR authenticating: %s\r\n",
+	prot_printf(popd_out, "-ERR [AUTH] authenticating: %s\r\n",
 		    sasl_errstring(sasl_result, NULL, NULL));
 
 	syslog(LOG_NOTICE, "badlogin: %s APOP (%s) %s",
@@ -701,7 +701,7 @@ static void cmd_apop(char *response)
     popd_userid = xstrdup(canon_user);
     if (sasl_result != SASL_OK) {
 	prot_printf(popd_out, 
-		    "-ERR weird SASL error %d getting SASL_USERNAME\r\n", 
+		    "-ERR [AUTH] weird SASL error %d getting SASL_USERNAME\r\n", 
 		    sasl_result);
 	return;
     }
@@ -723,12 +723,12 @@ char *user;
     if (!(kflag || popd_starttls_done ||
 	  config_getswitch("allowplaintext", 1))) {
 	prot_printf(popd_out,
-		    "-ERR USER command only available under a layer\r\n");
+		    "-ERR [AUTH] USER command only available under a layer\r\n");
 	return;
     }
 
     if (popd_userid) {
-	prot_printf(popd_out, "-ERR Must give PASS command\r\n");
+	prot_printf(popd_out, "-ERR [AUTH] Must give PASS command\r\n");
 	return;
     }
 
@@ -738,7 +738,7 @@ char *user;
 	(popd_namespace.hier_sep == '.' && strchr(p, '.')) ||
 	strlen(p) + 6 > MAX_MAILBOX_PATH) {
 
-	prot_printf(popd_out, "-ERR Invalid user\r\n");
+	prot_printf(popd_out, "-ERR [AUTH] Invalid user\r\n");
 	syslog(LOG_NOTICE,
 	       "badlogin: %s plaintext %s invalid user",
 	       popd_clienthost, beautify_string(user));
@@ -755,7 +755,7 @@ void cmd_pass(char *pass)
     int plaintextloginpause;
 
     if (!popd_userid) {
-	prot_printf(popd_out, "-ERR Must give USER command\r\n");
+	prot_printf(popd_out, "-ERR [AUTH] Must give USER command\r\n");
 	return;
     }
 
@@ -764,7 +764,7 @@ void cmd_pass(char *pass)
 	if (strcmp(popd_userid, kdata.pname) != 0 ||
 	    kdata.pinst[0] ||
 	    strcmp(klrealm, kdata.prealm) != 0) {
-	    prot_printf(popd_out, "-ERR Invalid login\r\n");
+	    prot_printf(popd_out, "-ERR [AUTH] Invalid login\r\n");
 	    syslog(LOG_NOTICE,
 		   "badlogin: %s kpop %s %s%s%s@%s access denied",
 		   popd_clienthost, popd_userid,
@@ -790,7 +790,7 @@ void cmd_pass(char *pass)
 	else {
 	    syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
 		   popd_clienthost);
-	    prot_printf(popd_out, "-ERR Invalid login\r\n");
+	    prot_printf(popd_out, "-ERR [AUTH] Invalid login\r\n");
 	    return;
 	}
     }
@@ -804,7 +804,7 @@ void cmd_pass(char *pass)
 		   popd_clienthost, popd_userid, reply);
 	}
 	sleep(3);
-	prot_printf(popd_out, "-ERR Invalid login\r\n");
+	prot_printf(popd_out, "-ERR [AUTH] Invalid login\r\n");
 	free(popd_userid);
 	popd_userid = 0;
 
@@ -855,6 +855,8 @@ cmd_capa()
     prot_printf(popd_out, "TOP\r\n");
     prot_printf(popd_out, "UIDL\r\n");
     prot_printf(popd_out, "PIPELINING\r\n");
+    prot_printf(popd_out, "RESP-CODES\r\n");
+    prot_printf(popd_out, "AUTH-RESP-CODE\r\n");
 
     if (kflag || popd_starttls_done || config_getswitch("allowplaintext", 1)) {
 	prot_printf(popd_out, "USER\r\n");
@@ -947,7 +949,7 @@ void cmd_auth(char *arg)
         if(c == '*') {
             eatline(popd_in,c);
             prot_printf(popd_out,
-                        "-ERR Client canceled authentication\r\n");
+                        "-ERR [AUTH] Client canceled authentication\r\n");
             reset_saslconn(&popd_saslconn);
             return;
         } else {
@@ -957,7 +959,7 @@ void cmd_auth(char *arg)
 	/* get string from user */
 	clientinlen = getbase64string(popd_in, &clientin);
 	if (clientinlen == -1) {
-	    prot_printf(popd_out, "-ERR Invalid base64 string\r\n");
+	    prot_printf(popd_out, "-ERR [AUTH] Invalid base64 string\r\n");
 	    return;
 	}
 
@@ -977,7 +979,7 @@ void cmd_auth(char *arg)
 	reset_saslconn(&popd_saslconn);
 	
 	/* convert the sasl error code to a string */
-	prot_printf(popd_out, "-ERR authenticating: %s\r\n",
+	prot_printf(popd_out, "-ERR [AUTH] authenticating: %s\r\n",
 		    sasl_errstring(sasl_result, NULL, NULL));
 
 	if (authtype) {
@@ -1001,7 +1003,7 @@ void cmd_auth(char *arg)
 			       (const void **) &popd_userid);
     if (sasl_result != SASL_OK) {
 	prot_printf(popd_out, 
-		    "-ERR weird SASL error %d getting SASL_USERNAME\r\n", 
+		    "-ERR [AUTH] weird SASL error %d getting SASL_USERNAME\r\n", 
 		    sasl_result);
 	return;
     }
