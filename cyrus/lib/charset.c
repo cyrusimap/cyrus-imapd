@@ -180,6 +180,7 @@ int charset;
     char *translation;
     int len;
 
+    if (!s) return 0;
     if (charset < 0 || charset >= NUM_CHARSETS) return EMPTY;
 
     table = charset_table[charset].table;
@@ -222,6 +223,8 @@ char *s;
     char *translation;
     int pos = 0;
     int len;
+
+    if (!s) return 0;
 
     start = s;
     while (start = strchr(start, '=')) {
