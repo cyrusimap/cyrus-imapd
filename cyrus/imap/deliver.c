@@ -365,7 +365,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 
     /* examine txn for error state */
     r = 0;
-    for (j = 0; j < numusers; j++) {
+    for (j = 0; j < txn->rcpt_num; j++) {
 	switch (txn->rcpt[j].result) {
 	case RCPT_GOOD:
 	    break;
@@ -377,7 +377,11 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 	case RCPT_PERMFAIL:
 	    /* we just need any permanent failure, though we should
 	       probably return data from the client-side LMTP info */
-	    if (r != EC_TEMPFAIL) r = EC_DATAERR;
+	    printf("%s: %s\n", 
+		   txn->rcpt[j].addr, error_message(txn->rcpt[j].r));
+	    if (r != EC_TEMPFAIL) {
+		r = EC_DATAERR;
+	    }
 	    break;
 	}
     }

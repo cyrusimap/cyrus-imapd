@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.22 2001/03/14 22:24:00 leg Exp $
+ * $Id: lmtpengine.c,v 1.23 2001/03/18 17:38:17 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1866,6 +1866,8 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
     code = ask_code(buf);
     if (code != 354) {
 	/* erg? */
+	if (ISGOOD(code)) code = 400;
+	r = IMAP_PROTOCOL_ERROR;
 	goto failall;
     }
 
