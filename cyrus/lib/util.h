@@ -1,5 +1,5 @@
 /* util.h -- general utility functions
- * $Id: util.h,v 1.13 2001/08/13 16:36:56 ken3 Exp $
+ * $Id: util.h,v 1.14 2003/02/04 17:46:09 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -99,5 +99,8 @@ enum {
  *  of the name.
  */
 extern int dir_hash_c(const char *name);
+
+/* Close a network filedescriptor the "safe" way */
+int cyrus_close_sock(int fd);
 
 #endif /* INCLUDED_UTIL_H */

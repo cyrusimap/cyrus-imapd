@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.12 2002/08/16 20:25:19 ken3 Exp $ */
+/* $Id: backend.c,v 1.13 2003/02/04 17:46:05 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -74,6 +74,7 @@
 #include "imapconf.h"
 #include "xmalloc.h"
 #include "iptostring.h"
+#include "util.h"
 
 /* In SASL 2.1.6 and prior, SASL_NEED_PROXY was not available, and thus 
  * proxyds could get a mechanism such as CRAM-MD5 which wouldn't convey the
@@ -431,7 +432,7 @@ void downserver(struct backend *s)
     prot_fill(s->in);
 
     /* close/free socket & prot layer */
-    close(s->sock);
+    cyrus_close_sock(s->sock);
     s->sock = -1;
     
     prot_free(s->in);

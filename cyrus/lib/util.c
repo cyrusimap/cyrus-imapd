@@ -41,13 +41,17 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: util.c,v 1.19 2001/09/25 19:35:27 ken3 Exp $
+/* $Id: util.c,v 1.20 2003/02/04 17:46:09 rjs3 Exp $
  */
 
 #include <config.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+
+#include <syslog.h>
+#include <unistd.h>
+
 #include "util.h"
 #include "xmalloc.h"
 
@@ -254,4 +258,14 @@ int dir_hash_c(const char *name)
     if (!isascii(c) || !islower(c)) c = 'q';
 #endif
     return c;
+}
+
+int cyrus_close_sock(int fd) 
+{
+    int r = shutdown(fd, SHUT_RD);
+    if(r) {
+	syslog(LOG_ERR, "Could not shut down filedescriptor %d: %m", fd);
+    }
+    
+    return close(fd);
 }

@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.38 2003/01/27 22:12:48 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.39 2003/02/04 17:46:02 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -224,6 +224,10 @@ typedef int rlim_t;
 #define SIEVE_SERVICE_NAME "imap"
 #else
 #define SIEVE_SERVICE_NAME "sieve"
+#endif
+
+#ifndef HAVE_SHUTDOWN
+#define shutdown(fd, mode) 0
 #endif
 
 /* compile time options; think carefully before modifying */
