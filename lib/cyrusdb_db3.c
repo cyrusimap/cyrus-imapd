@@ -105,7 +105,8 @@ static int init(const char *dbdir, int myflags)
     int r, do_retry = 1;
     int flags = 0;
     int maj, min, patch;
-    char *vstr, errpfx[10];
+    char *vstr;
+    static char errpfx[10]; /* needs to be static; bdb doesn't copy */
 
     if (dbinit++) return 0;
 
