@@ -42,7 +42,11 @@
 #include <string.h>
 #include <krb.h>
 #include <pwd.h>
+#include <sys/types.h>
 #include <sys/param.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/uio.h>
 
 #include "acte.h"
 #include "config.h"
@@ -63,6 +67,8 @@ static int use_acl = 0;
 static void
 login_init()
 {
+    char *val;
+
     if (krb_get_lrealm(lrealm,1)) {
 	lrealm[0] == '\0';
     }
@@ -85,7 +91,6 @@ char *user;
 char *pass;
 char **reply;
 {
-    char *val;
     int s;
     struct sockaddr_un srvaddr;
     int r;
@@ -109,7 +114,7 @@ char **reply;
     r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
     if (r == -1) {
 	*reply = "cannot connect to pwcheck server";
-	return 0;
+	return 1;
     }
 
     iov[0].iov_base = user;
@@ -142,8 +147,6 @@ struct acte_server **mech;
 int (**authproc)();
 char **reply;
 {
-    char *val;
-
     if (strcmp(authtype, "kerberos_v4") != 0) return 1;
 
     if (!inited) login_init();
@@ -163,7 +166,7 @@ login_capabilities()
 {
     if (!inited) login_init();
 
-    if (!lrealm[0]) reutrn "";
+    if (!lrealm[0]) return "";
     
     return " AUTH=KERBEROS_V4";
 }
