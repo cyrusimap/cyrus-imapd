@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.47 2000/11/14 19:24:39 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.48 2000/12/04 14:51:50 ken3 Exp $ */
 
 #include <config.h>
 
@@ -101,8 +101,11 @@ struct backend {
     char *hostname;
     struct sockaddr_in addr;
     int sock;
-    time_t lastused;
+#ifdef NEW_BACKEND_TIMEOUT
     struct prot_waitevent *timeout;
+#else
+    time_t lastused;
+#endif
 
     sasl_conn_t *saslconn;
 
@@ -247,7 +250,11 @@ static int pipe_until_tag(struct backend *s, char *tag)
     int cont = 0, last = 0, r = -1;
     int taglen = strlen(tag);
 
+#ifdef NEW_BACKEND_TIMEOUT
+    s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
+#else
     s->lastused = time(NULL);
+#endif
     
     /* the only complication here are literals */
     while (!last || cont) {
@@ -383,7 +390,11 @@ static int pipe_command(struct backend *s, int optimistic_literal)
     char eol[128];
     int sl;
 
+#ifdef NEW_BACKEND_TIMEOUT
+    s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
+#else
     s->lastused = time(NULL);
+#endif
     
     eol[0] = '\0';
 
@@ -670,7 +681,11 @@ void proxyd_downserver(struct backend *s)
     int taglen;
     char buf[1024];
 
+#ifdef NEW_BACKEND_TIMEOUT
+    if (!s->timeout) {
+#else
     if (!s->lastused) {
+#endif
 	/* already disconnected */
 	return;
     }
@@ -688,30 +703,32 @@ void proxyd_downserver(struct backend *s)
     close(s->sock);
     prot_free(s->in);
     prot_free(s->out);
-    s->lastused = 0;
-
 #ifdef NEW_BACKEND_TIMEOUT
     /* remove the timeout */
     prot_removewaitevent(proxyd_in, s->timeout);
+    s->timeout = NULL;
+#else
+    s->lastused = 0;
 #endif
 }
 
+#ifdef NEW_BACKEND_TIMEOUT
 struct prot_waitevent *backend_timeout(struct protstream *s, void *rock)
 {
     struct backend *be = (struct backend *) rock;
 
-    if ((be != backend_current) &&
-	(be->lastused + IDLE_TIMEOUT < be->timeout->mark)) {
+    if (be != backend_current) {
 	/* server is not our current server, and idle too long */
 	proxyd_downserver(be);
 	return NULL;
     }
     else {
-	/* it will timeout in IDLE_TIMEOUT seconds from lastused */
-	be->timeout->mark = be->lastused + IDLE_TIMEOUT;
+	/* it will timeout in IDLE_TIMEOUT seconds from now */
+	be->timeout->mark = time(NULL) + IDLE_TIMEOUT;
 	return be->timeout;
     }
 }
+#endif
 
 /* return the connection to the server */
 struct backend *proxyd_findserver(char *server)
@@ -742,10 +759,18 @@ struct backend *proxyd_findserver(char *server)
 	memcpy(&ret->addr.sin_addr, hp->h_addr, hp->h_length);
 	ret->addr.sin_port = htons(143);
 
+#ifdef NEW_BACKEND_TIMEOUT
+	ret->timeout = NULL;
+#else
 	ret->lastused = 0;
+#endif
     }
  	
+#ifdef NEW_BACKEND_TIMEOUT
+    if (!ret->timeout) {
+#else
     if (!ret->lastused) {
+#endif
 	/* need to (re)establish connection to server or create one */
 	int sock;
 	int r;
@@ -785,7 +810,11 @@ struct backend *proxyd_findserver(char *server)
 #endif
     }
 
+#ifdef NEW_BACKEND_TIMEOUT
+    ret->timeout->mark = time(NULL) + IDLE_TIMEOUT;
+#else
     ret->lastused = time(NULL);
+#endif
 
     if (!backend_cached[i]) {
 	/* insert server in list of cached connections */
