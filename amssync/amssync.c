@@ -41,7 +41,8 @@ int cmpmsg(const message *m1, const message *m2)
 
 void fatal(char *msg, int exitvalue)
 {
-    fprintf(stderr, msg);
+    fputs(msg, stderr);
+    fflush(stderr);
     exit(exitvalue);
 }
 
@@ -185,7 +186,7 @@ int main(int argc, char *argv[])
 			       amsbbd->msgs[amsidx].stamp); 
 			printf("Uploaded %s\n",amsbbd->msgs[amsidx].name);
 		    }
-		    UploadAMS(imapbbd, amsbbd, amsbbd->msgs[amsidx]);
+		    UploadAMS(imapbbd, amsbbd, amsbbd->msgs+amsidx);
 		    amsidx++;
 		} else {
 		    printf("Tried uploaing sentinel %d\n",amsidx);

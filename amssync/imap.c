@@ -374,7 +374,7 @@ void errcheck(struct imclient *conn, char *rock, struct
 	    fatal(buf, EX_PROTOCOL);
 	}
 	else {
-	    fprintf(stderr, buf);
+	    fputs(buf,stderr);
 	}
     }
     if (rock) {
@@ -769,7 +769,7 @@ void UploadAMS(bboard *imapdest, bboard *amssrc, message *msg)
 	    fname);
     
     imclient_send(bboard_imclient(imapdest), errcheck, descbuf,
-		  "APPEND %a \"%a\" %s", imapdest->name, buf, withcrnl);
+		  "APPEND %s \"%a\" %s", imapdest->name, buf, withcrnl);
     
     free(withcrnl);
     
