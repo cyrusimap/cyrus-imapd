@@ -12,7 +12,7 @@ if test `sys` = pmax_ul4; then
 	WITHAUTH=""
 	AMSSYNC=""
 fi
-if test `sys` = sgi_62; then
+if test `sys` = sgi_62 -o `sys` = i386_linux2 ; then
 	AMSSYNC=""
 fi
 

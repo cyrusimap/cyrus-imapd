@@ -245,15 +245,16 @@ AC_ARG_WITH(lock,[  --with-lock=METHOD      force use of METHOD for locking
 AC_SUBST(WITH_LOCK)
 
 AC_CACHE_VAL(cyrus_sigveclib,[
-AC_MSG_CHECKING(for sigvec)
- AC_CHECK_FUNC(sigvec, [cyrus_sigveclib=""], [
+ AC_CHECK_FUNC(sigvec, [
+	cyrus_sigveclib=""
+  ], [
   AC_CHECK_LIB(BSD, sigvec, cyrus_sigveclib="-lBSD", [
     SAVE_CFLAGS="$CFLAGS"
     CFLAGS="-L/usr/ucblib -R/usr/ucblib $CFLAGS"
     AC_CHECK_LIB(ucb, sigvec, [
       cyrus_sigveclib="-L/usr/ucblib -R/usr/ucblib -lucb"],
-      [AC_MSG_WARN(** Can't find a sigvec() -- makedepend and)
-       AC_MSG_WARN(AFS dependant programs may not build.)])
+      [ AC_MSG_WARN(** Can't find a sigvec() -- makedepend and)
+	AC_MSG_WARN(AFS dependant programs may not build.)])
     CFLAGS="$SAVE_CFLAGS"])
   ])
 ])
@@ -323,30 +324,31 @@ if test "$WITH_AUTH" = krb_pts; then
 	if test -f ${with_afs}/lib/afs/libaudit.a; then
 		AFSLIBS="$AFSLIBS ${with_afs}/lib/afs/libaudit.a"
 	fi
-	if test -f /usr/ucblib/libucb.a; then
-		AFSLIBS="$AFSLIBS ${ld_runpath_switch}/usr/ucblib -L/usr/ucblib -lucb"
-	fi
+dnl	if test -f /usr/ucblib/libucb.a; then
+dnl		AFSLIBS="$AFSLIBS ${ld_runpath_switch}/usr/ucblib -L/usr/ucblib -lucb"
+dnl	fi
 
-	SAVE_LIBS="$LIBS"
-	LIBS="$LIBS $AFSLIBS"
-	AC_CACHE_VAL(cyrus_sigveclib,[
-	AC_MSG_CHECKING(if AFS libraries need sigvec)
-	dnl Does AFS need sigvec?  We have to link against lwp and see
-	dnl if IOMGR_Initialize wants it
-	AC_TRY_LINK([
-	IOMGR_Initialize();
-	], [void* foo = (void*) IOMGR_Initialize;],
-	[
-		dnl it linked; don't need it
-		AC_MSG_RESULT(no)
-	], [
-		dnl didn't link; lose
-		AC_MSG_RESULT(yes)
+	AC_CACHE_VAL(cyrus_afs_sigvec,[
+		SAVE_LIBS="$LIBS"
+		LIBS="${with_afs}/lib/liblwp.a"
+		AC_MSG_CHECKING(if AFS libraries need sigvec)
+		dnl Does AFS need sigvec?  We have to link against lwp and see
+		dnl if IOMGR_Initialize wants it
+		AC_TRY_LINK([IOMGR_Initialize();],
+			[IOMGR_Initialize()],
+			[
+				dnl it linked; don't need it
+				AC_MSG_RESULT(no)
+				cyrus_afs_sigvec="no"
+			], [
+				dnl didn't link; pick up sigvec
+				AC_MSG_RESULT(yes)
+				cyrus_afs_sigvec="yes"
+			])
+		])
+	if test "$cyrus_afs_sigvec" = yes; then
 		AFSLIBS="${AFSLIBS} $cyrus_sigveclib"
-		dnl now we cheat and hope that's good enough.
-		dnl we're ok as long as cyrus_sigveclib is set right.
-	])
-	])
+	fi
 	LIBS="$SAVE_LIBS"
 	AC_SUBST(AFSLIBS)
 fi
