@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.6 2004/04/02 16:43:48 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.7 2004/04/02 20:53:21 ken3 Exp $
  *
  */
 
@@ -2607,9 +2607,9 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	r = mailbox_read_index_record(oldmailbox, msgno, &record);
 	if (r) break;
 	mailbox_message_get_fname(oldmailbox, record.uid, oldfnametail,
-				  sizeof(oldfname) - strlen(oldfname));
+				  sizeof(oldfname) - oldfname_len);
 
-	if(strlen(newfname) + strlen(oldfnametail) >= sizeof(newfname)) {
+	if(newfname_len + strlen(oldfnametail) >= sizeof(newfname)) {
 	    syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
 		   newfname, oldfnametail);
 	    fatal("Path too long", EC_OSFILE);
@@ -2637,7 +2637,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	    if (mailbox_read_index_record(oldmailbox, msgno, &record))
 		continue;
 	    mailbox_message_get_fname(oldmailbox, record.uid, newfnametail,
-				      sizeof(newfname) - strlen(newfname));
+				      sizeof(newfname) - newfname_len);
 	    (void) unlink(newfname);
 	}
     }
