@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.460 2004/03/10 04:18:53 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.461 2004/03/19 14:49:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4057,12 +4057,12 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
     static int ignorereference = 0;
     clock_t start = clock();
     char mytime[100];
-    int (*findall)(struct namespace *namespace, char *pattern,
-		   int isadmin, char *userid, 
+    int (*findall)(struct namespace *namespace,
+		   const char *pattern, int isadmin, char *userid, 
 		   struct auth_state *auth_state, int (*proc)(),
 		   void *rock);
-    int (*findsub)(struct namespace *namespace, char *pattern,
-		   int isadmin, char *userid, 
+    int (*findsub)(struct namespace *namespace,
+		   const char *pattern, int isadmin, char *userid, 
 		   struct auth_state *auth_state, int (*proc)(),
 		   void *rock, int force);
 
