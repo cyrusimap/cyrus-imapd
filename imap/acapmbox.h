@@ -174,6 +174,12 @@ acap_conn_t *acapmbox_get_acapconn(acapmbox_handle_t *AC);
  */
 int acapmbox_dataset_name(const char *mailbox, char *ret);
 
+/* 
+ * given an ACAP entry 'entryname', return 'mailbox'.
+ * 'ret' must be at least MAX_MAILBOX_NAME
+ */
+int acapmbox_decode_entry(const char *entryname, char *ret);
+
 /* helper function */
 int add_attr(skiplist *sl, char *name, char *value);
 
