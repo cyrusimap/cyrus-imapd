@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28.4.3 2002/09/27 19:06:04 rjs3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28.4.4 2002/11/14 19:36:16 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -48,6 +48,12 @@ list).</li>
 
 <li>User moves via RENAME and XFER are now controlled by the
 <tt>allowusermoves</tt> option, which defaults to off.</li>
+
+<li>If you use ptloader, it now runs as a regular cyrus service.  This means
+that you will need master to acquire and maintain AFS tokens for it.
+Additionally, you will need to create the ptclient directory under your
+imap configdirectory, to hold the PTS cache and socket.  The socket should
+be setup to be <i>&lt;configdirectory&gt;</i>/ptclient/ptsock</li>
 
 <li> Configuration subsystem changes:
 <ul>
@@ -291,7 +297,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2002/09/27 19:06:04 $
+last modified: $Date: 2002/11/14 19:36:16 $
 </BODY></HTML>
 
 

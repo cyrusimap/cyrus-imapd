@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: libcyr_cfg.c,v 1.1.2.2 2002/10/07 16:18:34 rjs3 Exp $
+/* $Id: libcyr_cfg.c,v 1.1.2.3 2002/11/14 19:36:23 rjs3 Exp $
  */
 
 #include <config.h>
@@ -70,6 +70,10 @@ struct cyrusopt_s cyrus_options[] = {
     { CYRUSOPT_PTS_CACHE_TIMEOUT,
       (union cyrus_config_value)((int)(3 * 60 * 60)), /* 3 hours */
       CYRUS_OPT_INT },
+
+    { CYRUSOPT_CONFIG_DIR,
+      (union cyrus_config_value)((const char *)"/var/imap"),
+      CYRUS_OPT_STRING },
 
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }
 };

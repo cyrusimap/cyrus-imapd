@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.10 2002/10/18 20:02:22 ken3 Exp $
+ * $Id: imapconf.h,v 1.16.4.11 2002/11/14 19:36:19 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -153,12 +153,6 @@ void eatline(struct protstream *pin, int c);
 
 /* Misc utils */
 extern void cyrus_ctime(time_t date, char *datebuf);
-
-/* filenames */
-#define FNAME_DBDIR "/db"
-#define FNAME_USERDIR "/user/"
-#define FNAME_DOMAINDIR "/domain/"
-#define FNAME_LOGDIR "/log/"
 
 /* config requirement flags */
 #define CONFIG_NEED_PARTITION_DATA (1<<0)

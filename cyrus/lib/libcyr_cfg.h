@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: libcyr_cfg.h,v 1.1.2.2 2002/10/07 16:18:35 rjs3 Exp $
+/* $Id: libcyr_cfg.h,v 1.1.2.3 2002/11/14 19:36:23 rjs3 Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -78,6 +78,8 @@ enum cyrus_opt {
     CYRUSOPT_TEMP_PATH,
     /* PTS Cache Timeout */
     CYRUSOPT_PTS_CACHE_TIMEOUT,
+    /* IMAPd config directory */
+    CYRUSOPT_CONFIG_DIR,
 
     CYRUSOPT_LAST
     

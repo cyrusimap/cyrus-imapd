@@ -1,8 +1,13 @@
-$Id: README,v 1.3 2002/05/25 19:57:52 leg Exp $
+$Id: README,v 1.3.4.1 2002/11/14 19:36:27 rjs3 Exp $
 
-This directory contains support programs for the krb_pts authorization
-module, which supports Kerberos authorization with AFS PTServer
-groups.
+This directory contains support programs for various protection database
+authorization modules (ptloader for AFS PTS groups, and hopefully an ldaploader
+soon).
 
-This code requires the Berkeley db library.
+This code links against the rest of the cyrus libraries.
 
+The files to care about:
+
+ptloader: the AFS pts server loader service
+ptexpire: program to expire pts entries on command
+ptdump: program to dump the current cache

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.20 2002/11/07 15:11:15 ken3 Exp $ */
+/* $Id: config.c,v 1.55.4.21 2002/11/14 19:36:19 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -161,6 +161,7 @@ int config_init(const char *alt_config, const char *ident)
     config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
 
     /* configure libcyrus as needed */
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
     libcyrus_config_setswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
 			      config_getswitch(IMAPOPT_UNIX_GROUP_ENABLE));
     libcyrus_config_setswitch(CYRUSOPT_SKIPLIST_UNSAFE,

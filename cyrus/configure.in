@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.17 2002/11/04 20:15:50 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.18 2002/11/14 19:36:12 rjs3 Exp $
 dnl
 
 
@@ -195,6 +195,13 @@ AC_ARG_WITH(seen-db,
                           for the seen state (Default: skiplist) ],
 	DB="$withval", DB="skiplist")
 CYRUS_SET_BACKEND("seen state", CONFIG_DB_SEEN, $DB)
+
+AC_ARG_WITH(pts-db,
+	[  --with-pts-db=DB       use DB (flat, berkeley, skiplist) as a backend
+                          for the pts cache (Default: berkeley) ],
+	DB="$withval", DB="berkeley") 
+CYRUS_SET_BACKEND("pts", CONFIG_DB_PTS, $DB)
+
 
 AC_ARG_WITH(subs-db,
 	[  --with-subs-db=DB       use DB (flat, berkeley, skiplist) as a backend
@@ -940,8 +947,9 @@ for flag in ${ldflags} ${default_ldflags}; do
 done
 
 IMAP_COM_ERR_LIBS="${COM_ERR_LIBS}"
-IMAP_LIBS="${LIB_SASL} ${LIB_RT} ${LIBS}"
+IMAP_LIBS="${LIB_SASL} ${LIBS}"
 
+AC_SUBST(LIB_RT)
 AC_SUBST(IMAP_COM_ERR_LIBS)
 AC_SUBST(IMAP_LIBS)
 

@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: mkimap,v 1.13.6.2 2002/08/03 03:00:25 ken3 Exp $
+# $Id: mkimap,v 1.13.6.3 2002/11/14 19:36:30 rjs3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -136,6 +136,7 @@ mkdir "db", 0755;
 mkdir "socket", 0755;
 mkdir "log", 0755;
 mkdir "msg", 0755;
+mkdir "ptclient", 0755;
 
 if ($domain) {
     mkdomain($domain, 1);

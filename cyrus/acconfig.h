@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.3 2002/10/15 19:12:46 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.4 2002/11/14 19:36:12 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -147,6 +147,7 @@
 #undef CONFIG_DB_DUPLICATE
 #undef CONFIG_DB_MBOX
 #undef CONFIG_DB_SEEN
+#undef CONFIG_DB_PTS
 #undef CONFIG_DB_SUBS
 #undef CONFIG_DB_TLS
 #undef CONFIG_DB_NETNEWS
@@ -213,6 +214,13 @@ typedef int rlim_t;
 #else
 #define SIEVE_SERVICE_NAME "sieve"
 #endif
+
+/* filenames */
+#define FNAME_DBDIR "/db"
+#define FNAME_USERDIR "/user/"
+#define FNAME_DOMAINDIR "/domain/"
+#define FNAME_LOGDIR "/log/"
+#define FNAME_PTSDB "/ptclient/ptscache.db"
 
 /* compile time options; think carefully before modifying */
 enum {

@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- * $Id: auth_krb_pts.c,v 1.44.4.4 2002/10/07 16:18:34 rjs3 Exp $
+ * $Id: auth_krb_pts.c,v 1.44.4.5 2002/11/14 19:36:22 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,10 +54,10 @@
 #include <sys/uio.h>
 
 #include <krb.h>
-#include <db.h>
 
 #include "auth_krb_pts.h"
 #include "auth.h"
+#include "cyrusdb.h"
 #include "hash.h"
 #include "libcyr_cfg.h"
 #include "lock.h"
@@ -323,17 +323,20 @@ struct auth_state *auth_newstate(const char *identifier,
 {
     struct auth_state *newstate;
     struct auth_state *fetched;
-    DBT key, data;
     char keydata[PTS_DB_KEYSIZE];
+    const char *data;
+    int ksize, dsize;
     char fnamebuf[1024];
-    DB *ptdb;
+    struct db *ptdb;
     int s;
     struct sockaddr_un srvaddr;
     int r;
-    int fd;
     static char response[1024];
     struct iovec iov[10];
-    int start, n;
+    int niov, n;
+    unsigned int start;
+    const char *config_dir =
+	libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
 
     identifier = auth_canonifyid(identifier, 0);
     if (!identifier) return 0;
@@ -349,14 +352,9 @@ struct auth_state *auth_newstate(const char *identifier,
     if (!strcmp(identifier, "anyone")) return newstate;
     if (!strcmp(identifier, "anonymous")) return newstate;
 
-    memset(&key, 0, sizeof(key));
-    memset(&data, 0, sizeof(data));
-    key.data = keydata;
-    key.size = PTS_DB_KEYSIZE;
-
     if (cacheid) {
 	/* this should be the session key + the userid */
-        memset(keydata, 0, key.size);
+        memset(keydata, 0, PTS_DB_KEYSIZE);
         memcpy(keydata, cacheid, 16); /* why 16? see sasl_krb_server.c */
 	/* toss on userid to further uniquify */
 	if ((strlen(identifier) + 16)  < PTS_DB_KEYSIZE) {
@@ -366,7 +364,7 @@ struct auth_state *auth_newstate(const char *identifier,
 	}
     } else {
 	/* this is just the userid */
-        memset(keydata, 0, key.size);
+        memset(keydata, 0, PTS_DB_KEYSIZE);
         strncpy(keydata, identifier, PR_MAXNAMELEN);
     }
 
@@ -374,86 +372,55 @@ struct auth_state *auth_newstate(const char *identifier,
     return newstate;
 #endif
 
-    strcpy(fnamebuf, STATEDIR);
-    strcat(fnamebuf, PTS_DBLOCK);
-    fd = open(fnamebuf, O_RDWR, 0664);
-    if (fd == -1) {
-        syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
-        return newstate;
+    strcpy(fnamebuf, config_dir);
+    strcat(fnamebuf, FNAME_DBDIR);
+    /* XXX */
+    r = CONFIG_DB_PTS->init(fnamebuf, 0);
+    if (r != CYRUSDB_OK) {
+	return newstate;
     }
-    if (lock_shared(fd) < 0) {
-        syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
-	close(fd);
-        return newstate;
-    }
-    strcpy(fnamebuf, STATEDIR);
+    
+    strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBFIL);
-
-    /* open PTS database */
-    r = db_create(&ptdb, NULL, 0);
-
+    r = CONFIG_DB_PTS->open(fnamebuf, &ptdb);
     if (r != 0) {
-	syslog(LOG_ERR, "auth_newstate: db_create: %s", db_strerror(r));
-	close(fd);
+	syslog(LOG_ERR, "DBERROR: opening %s: %s", fnamebuf,
+	       cyrusdb_strerror(ret));
 	return newstate;
     }
-
-#if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1    
-    r = ptdb->open(ptdb, NULL, fnamebuf, NULL, DB_HASH, DB_RDONLY, 0664);
-#else
-    r = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_RDONLY, 0664);
-#endif
-    /* no database. load it */
-    if (r == ENOENT) 
-      goto load;
-
-    if (r != 0) {
-	syslog(LOG_ERR, "auth_newstate: opening %s: %s", fnamebuf, 
-	       db_strerror(r));
-	close(fd);
-	return newstate;
-    }
-
+      
     /* fetch the current record for the user */
-    r = ptdb->get(ptdb, NULL, &key, &data, 0);
+    r = CONFIG_DB_PTS->fetch(ptdb, keydata, PTS_DB_KEYSIZE,
+                             &data, &dsize, NULL);
+    if (r != 0) {
+      /* close and unlock the database */
+      CONFIG_DB_PTS->close(ptdb);
 
-    if (r != 0 && r != DB_NOTFOUND) {
-	/* close and unlock the database */
-	ptdb->close(ptdb, 0);
-	close(fd);
-	
-	syslog(LOG_ERR, "auth_newstate: error fetching record: %s", 
-	       db_strerror(r));
-	return newstate;
+      syslog(LOG_ERR, "auth_newstate: error fetching record: %s",
+             cyrusdb_strerror(r));
+      return newstate;
     }
 
- load:
     /* if it's expired, ask the ptloader to reload it and reread it */
-    if (!r) {
-	fetched = (struct auth_state *) data.data;
+    fetched = (struct auth_state *) data;
 
-	syslog(LOG_DEBUG,
-	       "auth_newstate: fetched cache record (mark %d, current %d, limit %d)",
-	       fetched->mark, time(0),
-	       time(0) - libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT));
-	
-	if (fetched->mark >
-	    time(0) - libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT)) {
-	    /* not expired; let's return it */
-	    newstate = (struct auth_state *) xrealloc(newstate, data.size);
-	    memcpy(newstate, fetched, data.size);
-
-	    /* Close the database before we return */
-	    ptdb->close(ptdb,0);
-	    close(fd);
-
-	    return newstate;
-	}
+    if(fetched) {        
+      syslog(LOG_DEBUG,
+             "auth_newstate: fetched cache record (mark %d, current %d, limit %d)",
+             fetched->mark, time(0),
+             time(0) - libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT));
     }
 
-    /* close and unlock the database */
-    ptdb->close(ptdb, 0);
-    close(fd);
+    if (fetched && fetched->mark > time(0) - libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT)) {
+      /* not expired; let's return it */
+      newstate = (struct auth_state *) xrealloc(newstate, dsize);
+      memcpy(newstate, fetched, dsize);
+                           
+      /* Close the database before we return */
+      CONFIG_DB_PTS->close(ptdb);
+      
+      return newstate;
+    }
 
     syslog(LOG_DEBUG, "auth_newstate: pinging ptloader");
 
@@ -464,7 +431,7 @@ struct auth_state *auth_newstate(const char *identifier,
       return newstate;
     }
         
-    strcpy(fnamebuf, STATEDIR);
+    strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBSOCKET);
 
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
@@ -476,14 +443,15 @@ struct auth_state *auth_newstate(const char *identifier,
 	close(s);
 	return newstate;
     }
-        
-    iov[0].iov_base = (char *)&key.size;
-    iov[0].iov_len = sizeof(key.size);
-    iov[1].iov_base = key.data;
-    iov[1].iov_len = key.size;
-    iov[2].iov_base = (char *)identifier;
-    iov[2].iov_len = PR_MAXNAMELEN;
-    retry_writev(s, iov, 3);
+
+    ksize = PTS_DB_KEYSIZE;
+
+    niov = 0;
+    WRITEV_ADD_TO_IOVEC(iov, niov, (char *) &ksize, sizeof(ksize));
+    WRITEV_ADD_TO_IOVEC(iov, niov, keydata, ksize);
+    WRITEV_ADD_TO_IOVEC(iov, niov, (char *) identifier, PR_MAXNAMELEN);
+
+    retry_writev(s, iov, niov);
         
     start = 0;
     while (start < sizeof(response) - 1) {
@@ -496,65 +464,40 @@ struct auth_state *auth_newstate(const char *identifier,
         
     if (start <= 1 || strncmp(response, "OK", 2)) return newstate;
 
-    /* re-opened database after external modifications; it would be
-     significantly faster to use the berkeley db routines here, but then
-     we'd have to create an environment */
-    strcpy(fnamebuf, STATEDIR);
-    strcat(fnamebuf, PTS_DBLOCK);
-    fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0664);
-    if (fd == -1) {
-	syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
-	return newstate;
-    }
-    if (lock_shared(fd) < 0) {
-	syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
-	return newstate;
-    }
-    strcpy(fnamebuf, STATEDIR);
-    strcat(fnamebuf, PTS_DBFIL);
-    r = db_create(&ptdb, NULL, 0);
-    if (r != 0) {
-	syslog(LOG_ERR, "auth_newstate: db_create: %s", db_strerror(r));
-	return newstate;
-    }
-
-#if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
-    r = ptdb->open(ptdb, NULL, fnamebuf, NULL, DB_HASH, DB_RDONLY, 0664);
-#else
-    r = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_RDONLY, 0664);
-#endif
-    if (r != 0) {
-	syslog(LOG_ERR, "auth_newstate: opening %s: %s", fnamebuf, 
-	       db_strerror(r));
-	return newstate;
-    }
-
     /* fetch the current record for the user */
-    r = ptdb->get(ptdb, NULL, &key, &data, 0);
-
+    r = CONFIG_DB_PTS->fetch(ptdb, keydata, PTS_DB_KEYSIZE, 
+			     &data, &dsize, NULL);
     if (r != 0) {
-        /* The record still isn't there, even though the child claimed success
-         */ 
+	/* close and unlock the database */
+	CONFIG_DB_PTS->close(ptdb);
+	
+	syslog(LOG_ERR, "auth_newstate: error fetching record: %s", 
+	       cyrusdb_strerror(r));
+	return newstate;
+    }
+
+    if (!data) {
+	/* close and unlock the database */
+	CONFIG_DB_PTS->close(ptdb);
+	
 	syslog(LOG_ERR, "auth_newstate: error fetching record: %s "
 	       "(did ptloader add the record?)", 
-	       db_strerror(r));
-
-	/* close and unlock the database */
-	ptdb->close(ptdb, 0);
-	close(fd);
-
+	       cyrusdb_strerror(r));
 	return newstate;
     }
 
-    fetched = (struct auth_state *) data.data;
+    /* if it's expired, ask the ptloader to reload it and reread it */
+    fetched = (struct auth_state *) data;
 
     /* copy it into our structure */
-    newstate = (struct auth_state *) xrealloc(newstate, data.size);
-    memcpy(newstate, fetched, data.size);
+    newstate = (struct auth_state *) xrealloc(newstate, dsize);
+    memcpy(newstate, fetched, dsize);
 
     /* close and unlock the database */
-    ptdb->close(ptdb, 0);
-    close(fd);
+    CONFIG_DB_PTS->close(ptdb);
+
+    /* XXX */
+    CONFIG_DB_PTS->done();
 
     return newstate;
 }

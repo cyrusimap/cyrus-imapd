@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.1.2.3 2002/11/04 17:55:03 ken3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.1.2.4 2002/11/14 19:36:23 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -71,7 +71,6 @@ extern void fatal(const char *, int);
  */
 
 #define CONFIG_DEADLOCK_DETECTION DB_LOCK_YOUNGEST
-#define FNAME_DBDIR "/db"
 
 /* --- cut here --- */
 
