@@ -1,6 +1,6 @@
 /* glob.h -- fast globbing routine using '*', '%', and '?'
  *
- *	(C) Copyright 1993-1994 by Carnegie Mellon University
+ *	(C) Copyright 1993-1995 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -27,9 +27,11 @@
 /* "compiled" glob structure: may change
  */
 typedef struct glob {
-    int flags;
-    char sep_char;
-    char str[3];
+    int flags;			/* glob flags, see below */
+    int slen;			/* suppress string length */
+    char *suppress;		/* suppress string pointer */
+    char sep_char;		/* separator character */
+    char str[3];		/* glob string & suppress string */
 } glob;
 
 /* glob_init flags: */
@@ -38,10 +40,11 @@ typedef struct glob {
 #define GLOB_HIERARCHY    0x04	/* use '%' as hierarchy matching and no '?' */
 
 /* initialize globbing structure
- *  str -- globbing string
- *  flags -- see flag values above
+ *  str      -- globbing string
+ *  flags    -- see flag values above
+ *  suppress -- prefix to suppress
  */
-glob *glob_init( /* char *str, int flags */ );
+glob *glob_init_suppress( /* char *str, int flags, char *suppress */ );
 
 /* free a glob structure
  */
@@ -59,5 +62,6 @@ void glob_free( /* glob **g */ );
 int glob_test( /* glob *g, char *str, long len, long *min */ );
 
 /* macros */
+#define glob_init(str, flags) glob_init_suppress((str), (flags), NULL)
 #define GLOB_TEST(g, str) glob_test((g), (str), 0, NULL)
 #define GLOB_SET_SEPARATOR(g, c) ((g)->sep_char = (c))

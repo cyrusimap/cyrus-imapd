@@ -1,6 +1,6 @@
 /* glob.c -- fast globbing routine using '*', '%', and '?'
  *
- *	(C) Copyright 1993-1994 by Carnegie Mellon University
+ *	(C) Copyright 1993-1995 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -41,17 +41,18 @@ extern void fs_give( /* void ** */ );
  *   4) '*' eats all '*'s and '%'s connected by any wildcard
  *   5) '%' eats all adjacent '%'s
  */
-glob *glob_init(str, flags)
+glob *glob_init_suppress(str, flags, suppress)
     char *str;
     int flags;
+    char *suppress;
 {
     glob *g;
     char *dst;
-    int len, newglob;
+    int slen = 0, newglob;
 
     newglob = flags & GLOB_HIERARCHY;
-    len = strlen(str);
-    g = (glob *) fs_get(sizeof (glob) + len);
+    if (suppress) slen = strlen(suppress);
+    g = (glob *) fs_get(sizeof (glob) + slen + strlen(str) + 1);
     if (g != NULL) {
 	g->sep_char = '.';
 	dst = g->str;
@@ -104,9 +105,28 @@ glob *glob_init(str, flags)
 	    if (newglob) while (dst[-1] == '%') --dst;
 	    *dst++ = '*';
 	}
-	*dst = '\0';
+	*dst++ = '\0';
 	if (flags & GLOB_ICASE) lcase(g->str);
 	g->flags = flags;
+
+	/* set suppress string if:
+	 *  1) the suppress string isn't a prefix of the glob pattern and
+	 *  2) the suppress string prefix matches the glob pattern
+	 */
+	g->suppress = NULL;
+	if (suppress) {
+	    strcpy(dst, suppress);
+	    str = g->str;
+	    if (strncmp(suppress, str, slen) ||
+		(str[slen] != '\0' && str[slen] != g->sep_char
+		     && str[slen] != '*' && str[slen] != '%')) {
+		while (*str && *str == *suppress) ++str, ++suppress;
+		if (*str == '*' || *str == '%' || *suppress == '\0') {
+		    g->suppress = dst;
+		    g->slen = slen;
+		}
+	    }
+	}
     }
 
     return (g);
@@ -140,8 +160,20 @@ int glob_test(g, ptr, len, min)
     char *start;		/* start of input string */
     int newglob;
 
+    /* check for remaining partial matches */
     if (min && *min < 0) return (-1);
+
+    /* get length */
     if (!len) len = strlen(ptr);
+
+    /* check for suppress string */
+    if (g->suppress && !strncmp(g->suppress, ptr, g->slen) &&
+	(ptr[g->slen] == '\0' || ptr[g->slen] == g->sep_char)) {
+	if (min) *min = -1;
+	return (-1);
+    }
+	
+    /* initialize globbing */
     gptr = g->str;
     start = ptr;
     pend = ptr + len;
@@ -270,7 +302,8 @@ main(argc, argv)
     int argc;
     char **argv;
 {
-    glob *g = glob_init(argv[1], GLOB_ICASE|GLOB_HIERARCHY);
+    glob *g = glob_init_suppress(argv[1], GLOB_ICASE|GLOB_HIERARCHY,
+				 "user.nifty");
     char text[1024];
     int len;
     long min;
