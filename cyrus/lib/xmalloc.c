@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 /*
- * $Id: xmalloc.c,v 1.27 2002/08/30 15:22:19 leg Exp $
+ * $Id: xmalloc.c,v 1.28 2002/09/20 16:57:29 rjs3 Exp $
  */
 #include <config.h>
 #include <stdio.h>
@@ -99,23 +99,6 @@ char *xstrndup(const char* str, unsigned len)
     strncpy(p, str, len);
     p[len] = '\0';
     return p;
-}
-
-/* Same as xmalloc() */
-void *fs_get(unsigned size)
-{
-    void *ret;
-
-    if ((ret = malloc(size)) != NULL)
-      return (void *)ret;
-
-    fatal("Virtual memory exhausted", EC_TEMPFAIL);
-}
-
-void fs_give(void** ptr)
-{
-    free((void *)*ptr);
-    *ptr = 0;
 }
 
 #ifndef HAVE_STRLCPY
