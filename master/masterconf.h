@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: masterconf.h,v 1.1 2000/02/18 06:42:05 leg Exp $
+ $Id: masterconf.h,v 1.2 2000/02/21 06:22:58 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -31,8 +31,20 @@
 #define INCLUDED_MASTERCONF_H
 
 extern int masterconf_init(const char *ident);
-extern const char *masterconf_getstring(const char *key, const char *def);
-extern int masterconf_getint(const char *key, int def);
-extern int masterconf_getswitch(const char *key, int def);
+
+struct entry;
+
+extern const char *masterconf_getstring(struct entry *e,
+					const char *key, const char *def);
+extern int masterconf_getint(struct entry *e,
+			     const char *key, int def);
+extern int masterconf_getswitch(struct entry *e,
+				const char *key, int def);
+
+/* entry values are good until the next call */
+typedef void masterconf_process(const char *name, struct entry *e, void *rock);
+
+extern void masterconf_getsection(const char *section, 
+				  masterconf_process *f, void *rock);
 
 #endif /* INCLUDED_MASTERCONF_H */

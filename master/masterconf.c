@@ -1,5 +1,5 @@
 /* masterconfig.c -- Configuration routines for master process
- $Id: masterconf.c,v 1.1 2000/02/18 06:42:05 leg Exp $
+ $Id: masterconf.c,v 1.2 2000/02/21 06:22:58 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -53,68 +53,137 @@ struct configlist {
     char *value;
 };
 
-static struct configlist *configlist;
-static int nconfiglist;
-
-static void masterconf_read(void);
 extern void fatal(const char *buf, int code);
 
 int masterconf_init(const char *ident)
 {
     openlog(ident, LOG_PID, LOG_LOCAL6);
 
-    masterconf_read();
-
     return 0;
 }
 
-const char *masterconf_getstring(const char *key, const char *def)
-{
-    int opt;
+struct entry {
+    char *line;
+    int lineno;
+};
 
-    for (opt = 0; opt < nconfiglist; opt++) {
-	if (*key == configlist[opt].key[0] &&
-	    !strcmp(key, configlist[opt].key))
-	  return configlist[opt].value;
+const char *masterconf_getstring(struct entry *e, const char *key, 
+				 const char *def)
+{
+    char k[256];
+    static char v[256];
+    int i;
+    char *p;
+
+    strcpy(k, key);
+    strcat(k, "=");
+
+    p = strstr(e->line, k);
+    if (p) {
+	p += strlen(k);
+	if (*p == '"') {
+	    p++;
+	    for (i = 0; i < 255; i++) {
+		if (*p == '"') break;
+		v[i] = *p++;
+	    }
+	    if (*p != '"') {
+		sprintf(k, "configuration file %s: missing \" on line %d",
+			CONFIG_FILENAME, e->lineno);
+		fatal(k, EX_CONFIG);
+	    }
+	} else {
+	    /* one word */
+	    for (i = 0; i < 255; i++) {
+		if (isspace(*p)) break;
+		v[i] = *p++;
+	    }
+	}
+	v[i] = '\0';
+	return v;
+    } else {
+	return def;
     }
-    return def;
 }
 
-int masterconf_getint(const char *key, int def)
+int masterconf_getint(struct entry *e, 
+		      const char *key, int def)
 {
-    const char *val = masterconf_getstring(key, (char *)0);
+    const char *val = masterconf_getstring(e, key, NULL);
 
     if (!val) return def;
-    if (!isdigit((int) *val) && (*val != '-' || !isdigit((int) val[1]))) return def;
+    if (!isdigit((int) *val) && 
+	(*val != '-' || !isdigit((int) val[1]))) return def;
     return atoi(val);
 }
 
-int masterconf_getswitch(const char *key, int def)
+int masterconf_getswitch(struct entry *e, const char *key, int def)
 {
-    const char *val = masterconf_getstring(key, (char *)0);
+    const char *val = masterconf_getstring(e, key, NULL);
 
     if (!val) return def;
 
-    if (*val == '0' || *val == 'n' ||
-	(*val == 'o' && val[1] == 'f') || *val == 'f') {
+    if (val[0] == '0' || val[0] == 'n' ||
+	(val[0] == 'o' && val[1] == 'f') || val[0] == 'f') {
 	return 0;
     }
-    else if (*val == '1' || *val == 'y' ||
-	     (*val == 'o' && val[1] == 'n') || *val == 't') {
+    else if (val[0] == '1' || val[0] == 'y' ||
+	     (val[0] == 'o' && val[1] == 'n') || val[0] == 't') {
 	return 1;
     }
     return def;
 }
 
-#define CONFIGLISTGROWSIZE 10 /* 100 */
-static void
-masterconf_read()
+static void process_section(FILE *f, int *lnptr, 
+			    masterconf_process *func, void *rock)
+{
+    struct entry e;
+    char buf[4096];
+    int lineno = *lnptr;
+
+    while (fgets(buf, sizeof(buf), f)) {
+	char *p, *q;
+
+	lineno++;
+
+	/* remove EOL character */
+	if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
+	/* remove starting whitespace */
+	for (p = buf; *p && isspace((int) *p); p++);
+	
+	/* remove comments */
+	q = strchr(p, '#');
+	if (q) *q = '\0';
+
+	/* skip empty lines or all comment lines */
+	if (!*p) continue;
+	if (*p == '}') break;
+
+	for (q = p; isalnum(*q); q++) ;
+	if (q) { *q = '\0'; q++; }
+	
+	if (q - p > 0) {
+	    /* there's a value on this line */
+	    e.line = q;
+	    e.lineno = lineno;
+	    func(p, &e, rock);
+	}
+
+	/* end of section? */
+	if (strchr(q, '}')) break;
+    }
+
+    *lnptr = lineno;
+}
+
+void masterconf_getsection(const char *section, masterconf_process *f,
+			   void *rock)
 {
     FILE *infile;
+    int seclen = strlen(section);
+    int level = 0;
     int lineno = 0;
-    int alloced = 0;
     char buf[4096];
-    char *p, *key;
 
     infile = fopen(CONFIG_FILENAME, "r");
     if (!infile) {
@@ -122,48 +191,42 @@ masterconf_read()
 		strerror(errno));
 	fatal(buf, EX_CONFIG);
     }
-    
+
     while (fgets(buf, sizeof(buf), infile)) {
+	char *p, *q;
+
 	lineno++;
 
 	if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
 	for (p = buf; *p && isspace((int) *p); p++);
-	if (!*p || *p == '#') continue;
-
-	key = p;
-	while (*p && (isalnum((int) *p) || *p == '-' || *p == '_')) {
-	    if (isupper((int) *p)) *p = tolower((int) *p);
-	    p++;
-	}
-	if (*p != ':') {
-	    sprintf(buf,
-		    "invalid option name on line %d of configuration file",
-		    lineno);
-	    fatal(buf, EX_CONFIG);
-	}
-	*p++ = '\0';
-
-	while (*p && isspace((int) *p)) p++;
 	
-	if (!*p) {
-	    sprintf(buf, "empty option value on line %d of configuration file",
-		    lineno);
-	    fatal(buf, EX_CONFIG);
+	/* remove comments */
+	q = strchr(p, '#');
+	if (q) *q = '\0';
+
+	/* skip empty lines or all comment lines */
+	if (!*p) continue;
+	
+	if (level == 0 &&
+	    *p == *section && !strncasecmp(p, section, seclen) &&
+	    !isalnum(p[seclen])) {
+	    for (p += seclen; *p; p++) {
+		if (*p == '{') level++;
+		if (*p == '}') level--;
+	    }
+
+	    /* valid opening; process the section */
+	    if (level == 1) process_section(infile, &lineno, f, rock);
+
+	    continue;
 	}
 
-	if (nconfiglist == alloced) {
-	    alloced += CONFIGLISTGROWSIZE;
-	    configlist = (struct configlist *)
-		realloc((char *)configlist, alloced*sizeof(struct configlist));
-	    if (configlist == NULL) goto abort;
+	for (; *p; p++) {
+	    if (*p == '{') level++;
+	    if (*p == '}') level--;
 	}
-
-	configlist[nconfiglist].key = strdup(key);
-	if (!configlist[nconfiglist].key) goto abort;
-	configlist[nconfiglist].value = strdup(p);
-	if (!configlist[nconfiglist].value) goto abort;
-	nconfiglist++;
     }
- abort:
-    fclose(infile);
+
 }
+
+

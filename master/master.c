@@ -25,12 +25,13 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: master.c,v 1.4 2000/02/19 04:41:11 leg Exp $ */
+/* $Id: master.c,v 1.5 2000/02/21 06:22:58 leg Exp $ */
 
 #include <config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -44,9 +45,12 @@
 #include <sys/stat.h>
 #include <syslog.h>
 #include <netdb.h>
+#include <ctype.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/un.h>
 #include <arpa/inet.h>
+#include <sysexits.h>
 #include <errno.h>
 
 #include "masterconf.h"
@@ -58,12 +62,12 @@
 #define SERVICE_PATH (CYRUS_PATH "/bin")
 
 static const int become_cyrus_early = 1;
-static const int dupelim = 1;
 
 static int verbose = 0;
 
 struct service {
     char *name;
+    char *listen;
     char *proto;
     char *const *exec;
 
@@ -75,36 +79,14 @@ struct service {
     int stat[2];
 };
 
-char *const imapd_exec[] = { "imapd", NULL };
-char *const pop3d_exec[] = { "pop3d", NULL };
-char *const deliver_exec[] = { "lmtpd", NULL };
-char *const timsieved_exec[] = { "timsieved", NULL };
-
-static struct service Services[] =
-{
-    { "pop3", "tcp", pop3d_exec, 0, 0, 0, 0, {0,0} },
-    { "imap", "tcp", imapd_exec, 0, 0, 0, 0, {0,0} },
-    { "lmtp", "tcp", deliver_exec, 0, 0, 0, 0, {0,0} },
-/*    { "sieve", "tcp", timsieved_exec, 0, 0, 0, 0, {0,0} }*/
-};
-
-static int nservices = 3;
+static struct service *Services = NULL;
+static int allocservices = 0;
+static int nservices = 0;
 
 struct recover {
     char *name;
     char *const *exec;
 };
-
-char *const mboxrecover_exec[] = { "ctl_mboxlist", "-r", NULL };
-char *const delrecover_exec[] = { "ctl_deliver", "-r", NULL };
-
-static struct recover Recovery[] =
-{
-    { "mboxlist", mboxrecover_exec },
-    { "deliver", delrecover_exec },
-};
-
-int nrecovery = 2;
 
 struct event {
     char *name;
@@ -115,25 +97,6 @@ struct event {
 };
 
 static struct event *schedule = NULL;
-
-char *const checkpoint_exec[] = { "ctl_mboxlist", "-c", NULL };
-char *const delprune_exec[] = { "ctl_deliver", "-E", "3", NULL };
-
-static struct event chkpoint_event = { 
-    "mboxlist checkpoint",
-    0,
-    CHKPOINT_INTERVAL,
-    checkpoint_exec,
-    NULL
-};
-
-static struct event prune_event = {
-    "deliver pruning",
-    0,
-    (60 * 60 * 24),
-    delprune_exec,
-    NULL
-};
 
 void fatal(char *msg, int code)
 {
@@ -187,28 +150,36 @@ void get_statsock(int filedes[2])
 void service_create(struct service *s)
 {
     struct sockaddr_in sin;
+    struct sockaddr_un sun;
+    struct sockaddr *sa;
     struct servent *serv;
-    int on = 1;
-    char buffer[128];
-
-    /* let people disable this service */
-    sprintf(buffer, "%s-service", s->name);
-    if (!masterconf_getswitch(buffer, 1)) return;
+    int on = 1, salen;
 
     memset(&sin, 0, sizeof(sin));
 
-    serv = getservbyname(s->name, s->proto);
-    if (serv == NULL) {
-	syslog(LOG_INFO, "no service '%s' in /etc/services, disabling it", 
-	       s->name);
-	s->exec = NULL;
-	return;
-    }
+    if (s->listen[0] == '/') { /* unix socket */
+	sun.sun_family = AF_UNIX;
+	strcpy(sun.sun_path, s->listen);
+	unlink(s->listen);
+	sa = (struct sockaddr *) &sun;
+	salen = sizeof(sun.sun_family) + strlen(sun.sun_path);
 
-    s->socket = socket(AF_INET, SOCK_STREAM, 0);
-    
-    sin.sin_family = AF_INET;
-    sin.sin_port = serv->s_port;
+	s->socket = socket(AF_UNIX, SOCK_STREAM, 0);
+    } else { /* inet socket */
+	serv = getservbyname(s->listen, s->proto);
+	if (serv == NULL) {
+	    syslog(LOG_INFO, "no service '%s' in /etc/services, disabling %s", 
+		   s->listen, s->name);
+	    s->exec = NULL;
+	    return;
+	}
+	sin.sin_family = AF_INET;
+	sin.sin_port = serv->s_port;
+	sa = (struct sockaddr *) &sin;
+	salen = sizeof(sin);
+
+	s->socket = socket(AF_INET, SOCK_STREAM, 0);
+    }
 
     if (s->socket < 0) {
 	syslog(LOG_ERR, "unable to create %s listener socket: %m", s->name);
@@ -219,7 +190,7 @@ void service_create(struct service *s)
     /* allow reuse of address */
     setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on));
 
-    if (bind(s->socket, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
+    if (bind(s->socket, sa, salen) < 0) {
 	syslog(LOG_ERR, "unable to bind %s socket: %m", s->name);
 	close(s->socket);
 	s->socket = 0;
@@ -236,41 +207,38 @@ void service_create(struct service *s)
     }
 
     s->ready_workers = 0;
-    sprintf(buffer, "%s-workers", s->name);
-    s->desired_workers = masterconf_getint(buffer, 0);
 
     get_statsock(s->stat);
 }
 
-void run_recovery(void)
+void run_startup(char **cmd)
 {
     pid_t p;
     int res;
     char path[1024];
-    int i;
 
-    for (i = 0; i < nrecovery; i++) {
-	switch (p = fork()) {
-	case -1:
-	    syslog(LOG_CRIT, "can't fork process to run recovery");
-	    fatal("can't run recovery", 1);
-	    break;
-
-	case 0:
-	    become_cyrus();
-	    sprintf(path, "%s/%s", SERVICE_PATH, Recovery[i].exec[0]);
-	    execv(path, Recovery[i].exec);
-	    syslog(LOG_ERR, "can't exec %s for recovery: %m", path);
-	    exit(1);
-
-	default:
-	    waitpid(p, &res, 0);
-	    if (res != 0) {
-		syslog(LOG_CRIT, "recovery process exited with code '%d'", 
-		       res);
-	    }
-	    break;
+    switch (p = fork()) {
+    case -1:
+	syslog(LOG_CRIT, "can't fork process to run recovery");
+	fatal("can't run recovery", 1);
+	break;
+	
+    case 0:
+	become_cyrus();
+	if (cmd[0] != "/") sprintf(path, "%s/%s", SERVICE_PATH, cmd[0]);
+	else strcpy(path, cmd[0]);
+	execv(path, cmd);
+	syslog(LOG_ERR, "can't exec %s for recovery: %m", path);
+	exit(1);
+	
+    default:
+	if (waitpid(p, &res, 0) < 0) {
+	    syslog(LOG_ERR, "waitpid(): %m");
+	} else if (res != 0) {
+	    syslog(LOG_CRIT, "recovery process exited with code '%d'", 
+		   res);
 	}
+	break;
     }
 }
 
@@ -293,7 +261,8 @@ void spawn_service(struct service *s)
 	    exit(1);
 	}
 
-	sprintf(path, "%s/%s", SERVICE_PATH, s->exec[0]);
+	if (s->exec[0][0] == '/') strcpy(path, s->exec[0]);
+	else sprintf(path, "%s/%s", SERVICE_PATH, s->exec[0]);
 	if (dup2(s->stat[1], STATUS_FD) < 0) {
 	    syslog(LOG_ERR, "can't duplicate status fd: %m");
 	    exit(1);
@@ -517,6 +486,110 @@ void process_msg(struct service *s, int msg)
 	       s->name, s->ready_workers);
 }
 
+static char **tokenize(char *p)
+{
+    char **tokens = NULL; /* allocated in increments of 10 */
+    int i = 0;
+
+    if (!p || !*p) return NULL; /* sanity check */
+    while (*p) {
+	while (*p && isspace(*p)) p++; /* skip whitespace */
+
+	if (!(i % 10)) tokens = realloc(tokens, (i+10) * sizeof(char *));
+	if (!tokens) return NULL;
+
+	/* got a token */
+	tokens[i++] = p;
+	while (*p && !isspace(*p)) p++;
+
+	/* p is whitespace or end of cmd */
+	if (*p) *p++ = '\0';
+    }
+    /* add a NULL on the end */
+    if (!(i % 10)) tokens = realloc(tokens, (i+1) * sizeof(char *));
+    if (!tokens) return NULL;
+    tokens[i] = NULL;
+
+    return tokens;
+}
+
+void add_start(const char *name, struct entry *e, void *rock)
+{
+    char *cmd = strdup(masterconf_getstring(e, "cmd", NULL));
+    char buf[256];
+    char **tok;
+
+    if (!cmd) {
+	snprintf(buf, sizeof(buf), "unable to find command for %s", name);
+	fatal(buf, EX_CONFIG);
+    }
+
+    tok = tokenize(cmd);
+    if (!tok) fatal("out of memory", EX_UNAVAILABLE);
+    run_startup(tok);
+    free(tok);
+    free(cmd);
+}
+
+void add_service(const char *name, struct entry *e, void *rock)
+{
+    char *cmd = strdup(masterconf_getstring(e, "cmd", NULL));
+    int prefork = masterconf_getint(e, "prefork", 0);
+    char *listen = strdup(masterconf_getstring(e, "listen", NULL));
+    char *proto = strdup(masterconf_getstring(e, "proto", "tcp"));
+
+    if (!cmd || !listen) {
+	char buf[256];
+	snprintf(buf, sizeof(buf), "unable to find command or port for %s", 
+		 name);
+	fatal(buf, EX_CONFIG);
+    }
+    if (!(allocservices % 5)) {
+	Services = realloc(Services, 
+			   (allocservices+=5) * sizeof(struct service));
+	if (!Services) fatal("out of memory", EX_UNAVAILABLE);
+    }
+
+    Services[nservices].name = strdup(name);
+    Services[nservices].listen = listen;
+    Services[nservices].proto = proto;
+    Services[nservices].exec = tokenize(cmd);
+    if (!Services[nservices].exec) fatal("out of memory", EX_UNAVAILABLE);
+
+    Services[nservices].socket = 0;
+    Services[nservices].saddr = NULL;
+
+    Services[nservices].ready_workers = 0;
+    Services[nservices].desired_workers = prefork;
+    memset(Services[nservices].stat, 0, sizeof(Services[nservices].stat));
+
+    nservices++;
+}
+
+void add_event(const char *name, struct entry *e, void *rock)
+{
+    char *cmd = strdup(masterconf_getstring(e, "cmd", NULL));
+    int period = 60 * masterconf_getint(e, "period", 0);
+    struct event *evt;
+
+    if (!cmd) {
+	char buf[256];
+	snprintf(buf, sizeof(buf), "unable to find command or port for %s", 
+		 name);
+	fatal(buf, EX_CONFIG);
+    }
+    
+    evt = (struct event *) malloc(sizeof(struct event));
+    if (!evt) fatal("out of memory", EX_UNAVAILABLE);
+    evt->name = strdup(name);
+    evt->mark = 0;
+    evt->period = period;
+    evt->exec = tokenize(cmd);
+    if (!evt->exec) fatal("out of memory", EX_UNAVAILABLE);
+    evt->next = schedule;
+    schedule = evt;
+}
+
 int main(int argc, char **argv, char **envp)
 {
     int i;
@@ -544,15 +617,9 @@ int main(int argc, char **argv, char **envp)
     masterconf_init("master");
     syslog(LOG_NOTICE, "process started");
 
-    /* schedule checkpointing */
-    schedule_event(&chkpoint_event);
-    if (dupelim) {
-	/* schedule duplicate delivery pruning */
-	schedule_event(&prune_event);
-    }
-    
-    /* run recovery on database environments */
-    run_recovery();
+    masterconf_getsection("START", &add_start, NULL);
+    masterconf_getsection("SERVICES", &add_service, NULL);
+    masterconf_getsection("EVENTS", &add_event, NULL);
 
     /* set signal handlers */
     sighandler_setup();
@@ -581,8 +648,8 @@ int main(int argc, char **argv, char **envp)
 
 	tvptr = NULL;
 	if (schedule) {
-	    if (now < schedule->mark) tv.tv_sec = 0;
-	    else tv.tv_sec = now - schedule->mark;
+	    if (now < schedule->mark) tv.tv_sec = schedule->mark - now;
+	    else tv.tv_sec = 0;
 	    tv.tv_usec = 0;
 	    tvptr = &tv;
 	}
