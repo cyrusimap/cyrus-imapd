@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.164.4.27 2003/05/12 23:52:28 ken3 Exp $
+# $Id: Makefile.in,v 1.164.4.28 2003/06/18 20:22:06 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -118,7 +118,8 @@ SERVICETHREAD=../master/service-thread.o
 PROGS = imapd lmtpd pop3d \
 	fud reconstruct quota mbpath ipurge \
 	cyrdump chk_cyrus cvt_cyrusdb deliver ctl_mboxlist \
-	ctl_deliver ctl_cyrusdb squatter mbexamine @IMAP_PROGS@
+	ctl_deliver ctl_cyrusdb squatter mbexamine cyr_expire \
+	@IMAP_PROGS@
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 	lmtpstats.c lmtpstats.h xversion.h mupdate_err.c mupdate_err.h \
@@ -283,6 +284,10 @@ ctl_mboxlist: ctl_mboxlist.o mupdate-client.o $(CLIOBJS) libimap.a $(DEPLIBS)
 ctl_cyrusdb: ctl_cyrusdb.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
 	 $@ ctl_cyrusdb.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+cyr_expire: cyr_expire.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ cyr_expire.o $(CLIOBJS) \
+	libimap.a $(DEPLIBS) $(LIBS)
 
 expirenews: expirenews.o netnews.o wildmat.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \

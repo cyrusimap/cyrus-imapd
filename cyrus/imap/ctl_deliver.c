@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- * $Id: ctl_deliver.c,v 1.14.4.7 2003/05/08 14:06:43 ken3 Exp $
+ * $Id: ctl_deliver.c,v 1.14.4.8 2003/06/18 20:22:06 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -135,7 +135,7 @@ main(argc, argv)
     }
     switch (op) {
     case PRUNE:
-	r = duplicate_prune(days);
+	r = duplicate_prune(days, NULL);
 	break;
 
     case DUMP:

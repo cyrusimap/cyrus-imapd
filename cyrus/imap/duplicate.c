@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.31.4.6 2003/06/15 18:10:42 ken3 Exp $ */
+/* $Id: duplicate.c,v 1.31.4.7 2003/06/18 20:22:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -204,7 +204,8 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
 
 struct prunerock {
     struct db *db;
-    time_t expmark;
+    time_t expmark; /* default expmark, if not overridden by table entry */
+    struct hash_table *expire_table;
     int count;
     int deletions;
 };
@@ -213,15 +214,22 @@ static int prune_p(void *rock, const char *id, int idlen,
 		  const char *data, int datalen)
 {
     struct prunerock *prock = (struct prunerock *) rock;
-    time_t mark;
+    const char *rcpt;
+    time_t mark, *expmark = NULL;
 
     prock->count++;
+
+    /* grab the rcpt, make sure its a mailbox and lookup its expire time */
+    rcpt = id + strlen(id) + 1;
+    if (prock->expire_table && rcpt[0] && rcpt[0] != '.') {
+	expmark = (time_t *) hash_lookup(rcpt, prock->expire_table);
+    }
 
     /* grab the mark */
     memcpy(&mark, data, sizeof(time_t));
 
     /* check if we should prune this entry */
-    return (mark < prock->expmark);
+    return (mark < (expmark ? *expmark : prock->expmark));
 }
 
 static int prune_cb(void *rock, const char *id, int idlen,
@@ -240,7 +248,7 @@ static int prune_cb(void *rock, const char *id, int idlen,
     return 0;
 }
 
-int duplicate_prune(int days)
+int duplicate_prune(int days, struct hash_table *expire_table)
 {
     struct prunerock prock;
 
@@ -248,6 +256,7 @@ int duplicate_prune(int days)
 
     prock.count = prock.deletions = 0;
     prock.expmark = time(NULL) - (days * 60 * 60 * 24);
+    prock.expire_table = expire_table;
     syslog(LOG_NOTICE, "duplicate_prune: pruning back %d days", days);
 
     /* check each entry in our database */

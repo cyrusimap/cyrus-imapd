@@ -38,10 +38,12 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: duplicate.h,v 1.11.4.3 2003/02/13 20:32:55 rjs3 Exp $ */
+/* $Id: duplicate.h,v 1.11.4.4 2003/06/18 20:22:06 ken3 Exp $ */
 
 #ifndef DUPLICATE_H
 #define DUPLICATE_H
+
+#include "hash.h"
 
 /* name of the duplicate delivery database */
 #define FNAME_DELIVERDB "/deliver.db"
@@ -52,7 +54,7 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen);
 void duplicate_log(char *msgid, char *name);
 void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark);
 
-int duplicate_prune(int days);
+int duplicate_prune(int days, struct hash_table *expire_table);
 int duplicate_dump(FILE *f);
 
 int duplicate_done(void);
