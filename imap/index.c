@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.113 2000/06/07 20:45:11 ken3 Exp $
+ * $Id: index.c,v 1.114 2000/06/07 20:56:04 leg Exp $
  */
 #include <config.h>
 
@@ -240,7 +240,7 @@ static index_sequenceproc_t index_copysetup;
 static int _index_search P((unsigned **msgno_list, struct mailbox *mailbox,
 			    struct searchargs *searchargs));
 
-static char *index_extract_subject P((const char *subj));
+static char *index_extract_subject(const char *subj);
 static struct msgdata *index_msgdata_load P((unsigned *msgno_list, int n,
 					     signed char *sortcrit));
 
@@ -2640,8 +2640,10 @@ struct mapfile *msgfile;
     int cachelen;
     struct searchsub *s;
 
-    if ((searchargs->flags & SEARCH_RECENT_SET) && msgno <= lastnotrecent) return 0;
-    if ((searchargs->flags & SEARCH_RECENT_UNSET) && msgno > lastnotrecent) return 0;
+    if ((searchargs->flags & SEARCH_RECENT_SET) && msgno <= lastnotrecent) 
+	return 0;
+    if ((searchargs->flags & SEARCH_RECENT_UNSET) && msgno > lastnotrecent) 
+	return 0;
     if ((searchargs->flags & SEARCH_SEEN_SET) && !seenflag[msgno]) return 0;
     if ((searchargs->flags & SEARCH_SEEN_UNSET) && seenflag[msgno]) return 0;
 
@@ -2686,35 +2688,40 @@ struct mapfile *msgfile;
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 	    
 	for (l = searchargs->from; l; l = l->next) {
-	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) return 0;
+	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen))
+		return 0;
 	}
 
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip from */
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->to; l; l = l->next) {
-	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) return 0;
+	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
+		return 0;
 	}
 
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip to */
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->cc; l; l = l->next) {
-	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) return 0;
+	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
+		return 0;
 	}
 
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip cc */
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->bcc; l; l = l->next) {
-	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) return 0;
+	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
+		return 0;
 	}
 
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bcc */
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->subject; l; l = l->next) {
-	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) return 0;
+	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) 
+		return 0;
 	}
     }
 
@@ -3087,7 +3094,7 @@ static struct msgdata *index_msgdata_load(unsigned *msgno_list, int n,
 }
 
 /* Extract base subject from subject header */
-char *index_extract_subject(char *subj)
+char *index_extract_subject(const char *subj)
 {
     char *s, *base, *ret, *x;
 
