@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.2.2.4 2004/07/16 12:31:13 ken3 Exp $";
+      "$Id: afskrb.c,v 1.2.2.5 2005/01/06 20:04:03 shadow Exp $";
 
 #include <config.h>
 
@@ -480,7 +480,16 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
     strcpy(newstate->userid.id, canon_id);
     newstate->userid.hash = strhash(canon_id);
 
-    newstate->mark = time(0);
+    /* If we get a permission error, assume it may be temporary 
+       authentication problem, and cache only for a minute.
+       Should negative cache time be configurable? */
+    if (rc == PRPERM) {
+	newstate->mark = time(0) + 60 - 
+	    (config_getint(IMAPOPT_PTSCACHE_TIMEOUT) > 60)?
+	    config_getint(IMAPOPT_PTSCACHE_TIMEOUT) : 60);
+    } else
+	newstate->mark = time(0);
+
     newstate->ngroups = groups.namelist_len;
     /* store group list in contiguous array for easy storage in the database */
     memset(newstate->groups, 0, newstate->ngroups * sizeof(struct auth_ident));
