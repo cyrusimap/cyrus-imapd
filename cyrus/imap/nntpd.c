@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.16 2004/02/19 15:45:54 ken3 Exp $
+ * $Id: nntpd.c,v 1.17 2004/02/19 17:09:52 ken3 Exp $
  */
 
 /*
@@ -622,6 +622,7 @@ int service_main(int argc, char **argv, char **envp)
     socklen_t salen;
     char localip[60], remoteip[60];
     char hbuf[NI_MAXHOST];
+    int niflags;
     int timeout;
     sasl_security_properties_t *secprops=NULL;
     char unavail[1024];
@@ -643,12 +644,15 @@ int service_main(int argc, char **argv, char **envp)
 	} else {
 	    nntp_clienthost[0] = '\0';
 	}
-	getnameinfo((struct sockaddr *)&nntp_remoteaddr, salen, hbuf,
-		    sizeof(hbuf), NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
 
-	strlcat(nntp_clienthost, "[", sizeof(nntp_clienthost));
-	strlcat(nntp_clienthost, hbuf, sizeof(nntp_clienthost));
-	strlcat(nntp_clienthost, "]", sizeof(nntp_clienthost));
+	niflags = NI_NUMERICHOST |
+		(nntp_remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
+	if (getnameinfo((struct sockaddr *)&nntp_remoteaddr, salen, hbuf,
+			sizeof(hbuf), NULL, 0, niflags) == 0) {
+	    strlcat(nntp_clienthost, "[", sizeof(nntp_clienthost));
+	    strlcat(nntp_clienthost, hbuf, sizeof(nntp_clienthost));
+	    strlcat(nntp_clienthost, "]", sizeof(nntp_clienthost));
+	}
 	salen = sizeof(nntp_localaddr);
 	if (getsockname(0, (struct sockaddr *)&nntp_localaddr, &salen) == 0) {
 	    nntp_haveaddr = 1;
