@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.304.2.1 2001/04/17 22:19:05 ken3 Exp $ */
+/* $Id: imapd.c,v 1.304.2.2 2001/04/28 00:54:01 ken3 Exp $ */
 
 #include <config.h>
 
@@ -190,13 +190,6 @@ int starttls_enabled(void);
 void cmd_netscrape(char* tag);
 #endif
 
-enum string_types { IMAP_ASTRING, IMAP_NSTRING, IMAP_STRING };
-#define getastring(buf)	getxstring((buf), IMAP_ASTRING)
-#define getnstring(buf)	getxstring((buf), IMAP_NSTRING)
-#define getstring(buf)	getxstring((buf), IMAP_STRING)
-
-int getword(struct buf *buf);
-int getxstring(struct buf *buf, int type);
 int getsearchprogram(char *tag, struct searchargs *searchargs,
 			int *charset, int parsecharset);
 int getsearchcriteria(char *tag, struct searchargs *searchargs,
@@ -205,7 +198,6 @@ int getsearchdate(time_t *start, time_t *end);
 int getsortcriteria(char *tag, struct sortcrit **sortcrit);
 int getdatetime(time_t *date);
 
-void eatline(int c);
 void printstring(const char *s);
 void printastring(const char *s);
 
@@ -682,7 +674,7 @@ cmdloop()
 	signals_poll();
 
 	/* Parse tag */
-	c = getword(&tag);
+	c = getword(imapd_in, &tag);
 	if (c == EOF) {
 	    if ((err = prot_error(imapd_in))!=NULL) {
 		syslog(LOG_WARNING, "%s, closing connection", err);
@@ -692,15 +684,15 @@ cmdloop()
 	}
 	if (c != ' ' || !imparse_isatom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
 	    prot_printf(imapd_out, "* BAD Invalid tag\r\n");
-	    eatline(c);
+	    eatline(imapd_in, c);
 	    continue;
 	}
 
 	/* Parse command name */
-	c = getword(&cmd);
+	c = getword(imapd_in, &cmd);
 	if (!cmd.s[0]) {
 	    prot_printf(imapd_out, "%s BAD Null command\r\n", tag.s);
-	    eatline(c);
+	    eatline(imapd_in, c);
 	    continue;
 	}
 	if (islower((unsigned char) cmd.s[0])) 
@@ -720,10 +712,10 @@ cmdloop()
 	case 'A':
 	    if (!strcmp(cmd.s, "Authenticate")) {
 		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
+		c = getword(imapd_in, &arg1);
 		if (!imparse_isatom(arg1.s)) {
 		    prot_printf(imapd_out, "%s BAD Invalid authenticate mechanism\r\n", tag.s);
-		    eatline(c);
+		    eatline(imapd_in, c);
 		    continue;
 		}
 		if (c == '\r') c = prot_getc(imapd_in);
@@ -740,7 +732,7 @@ cmdloop()
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Append")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
 
 		cmd_append(tag.s, arg1.s);
@@ -753,7 +745,7 @@ cmdloop()
 	case 'B':
 	    if (!strcmp(cmd.s, "Bboard")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -788,10 +780,10 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    copy:
-		c = getword(&arg1);
+		c = getword(imapd_in, &arg1);
 		if (c == '\r') goto missingargs;
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
-		c = getastring(&arg2);
+		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -803,11 +795,11 @@ cmdloop()
 	    else if (!strcmp(cmd.s, "Create")) {
 		havepartition = 0;
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == ' ') {
 		    havepartition = 1;
-		    c = getword(&arg2);
+		    c = getword(imapd_in, &arg2);
 		    if (!imparse_isatom(arg2.s)) goto badpartition;
 		}
 		if (c == '\r') c = prot_getc(imapd_in);
@@ -831,7 +823,7 @@ cmdloop()
 	case 'D':
 	    if (!strcmp(cmd.s, "Delete")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -841,13 +833,13 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Deleteacl")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (!strcasecmp(arg1.s, "mailbox")) {
 		    if (c != ' ') goto missingargs;
-		    c = getastring(&arg1);
+		    c = getastring(imapd_in, imapd_out, &arg1);
 		}
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -870,7 +862,7 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Examine")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -888,7 +880,7 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    fetch:
-		c = getword(&arg1);
+		c = getword(imapd_in, &arg1);
 		if (c == '\r') goto missingargs;
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
 
@@ -897,9 +889,9 @@ cmdloop()
 		snmp_increment(FETCH_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Find")) {
-		c = getword(&arg1);
+		c = getword(imapd_in, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -914,11 +906,11 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Getacl")) {
 		oldform = 0;
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (!strcasecmp(arg1.s, "mailbox")) {
 		    oldform = 1;
 		    if (c != ' ') goto missingargs;
-		    c = getastring(&arg1);
+		    c = getastring(imapd_in, imapd_out, &arg1);
 		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
@@ -929,7 +921,7 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Getquota")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -939,7 +931,7 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Getquotaroot")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -975,10 +967,10 @@ cmdloop()
 
 	case 'L':
 	    if (!strcmp(cmd.s, "Login")) {
-		if (c != ' ' || (c = getastring(&arg1)) != ' ') {
+		if (c != ' ' || (c = getastring(imapd_in, imapd_out, &arg1)) != ' ') {
 		    goto missingargs;
 		}
-		c = getastring(&arg2);
+		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -1005,9 +997,9 @@ cmdloop()
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "List")) {
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_list(tag.s, 0, arg1.s, arg2.s);
@@ -1015,9 +1007,9 @@ cmdloop()
 		snmp_increment(LIST_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Lsub")) {
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_list(tag.s, 1, arg1.s, arg2.s);
@@ -1025,9 +1017,9 @@ cmdloop()
 		snmp_increment(LSUB_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Listrights")) {
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_listrights(tag.s, arg1.s, arg2.s);
@@ -1041,11 +1033,11 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Myrights")) {
 		oldform = 0;
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (!strcasecmp(arg1.s, "mailbox")) {
 		    oldform = 1;
 		    if (c != ' ') goto missingargs;
-		    c = getastring(&arg1);
+		    c = getastring(imapd_in, imapd_out, &arg1);
 		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
@@ -1088,13 +1080,13 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Partial")) {
 		if (!imapd_mailbox) goto nomailbox;
 		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
+		c = getword(imapd_in, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getword(&arg2);
+		c = getword(imapd_in, &arg2);
 		if (c != ' ') goto missingargs;
-		c = getword(&arg3);
+		c = getword(imapd_in, &arg3);
 		if (c != ' ') goto missingargs;
-		c = getword(&arg4);
+		c = getword(imapd_in, &arg4);
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 
@@ -1109,13 +1101,13 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Rename")) {
 		havepartition = 0;
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == EOF) goto missingargs;
 		if (c == ' ') {
 		    havepartition = 1;
-		    c = getword(&arg3);
+		    c = getword(imapd_in, &arg3);
 		    if (!imparse_isatom(arg3.s)) goto badpartition;
 		}
 		if (c == '\r') c = prot_getc(imapd_in);
@@ -1163,9 +1155,9 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    store:
-		c = getword(&arg1);
+		c = getword(imapd_in, &arg1);
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
-		c = getword(&arg2);
+		c = getword(imapd_in, &arg2);
 		if (c != ' ') goto badsequence;
 
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
@@ -1174,7 +1166,7 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Select")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -1196,10 +1188,10 @@ cmdloop()
 	    else if (!strcmp(cmd.s, "Subscribe")) {
 		if (c != ' ') goto missingargs;
 		havenamespace = 0;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == ' ') {
 		    havenamespace = 1;
-		    c = getastring(&arg2);
+		    c = getastring(imapd_in, imapd_out, &arg2);
 		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
@@ -1214,15 +1206,15 @@ cmdloop()
 	    }		
 	    else if (!strcmp(cmd.s, "Setacl")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (!strcasecmp(arg1.s, "mailbox")) {
 		    if (c != ' ') goto missingargs;
-		    c = getastring(&arg1);
+		    c = getastring(imapd_in, imapd_out, &arg1);
 		}
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg3);
+		c = getastring(imapd_in, imapd_out, &arg3);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -1232,7 +1224,7 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Setquota")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		cmd_setquota(tag.s, arg1.s);
 
@@ -1249,7 +1241,7 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Status")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		cmd_status(tag.s, arg1.s);
 
@@ -1276,7 +1268,7 @@ cmdloop()
 		if (!imapd_mailbox) goto nomailbox;
 		usinguid = 1;
 		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
+		c = getword(imapd_in, &arg1);
 		if (c != ' ') goto missingargs;
 		lcase(arg1.s);
 		if (!strcmp(arg1.s, "fetch")) {
@@ -1298,7 +1290,7 @@ cmdloop()
 		    goto copy;
 		}
 		else if (!strcmp(arg1.s, "expunge")) {
-		    c = getword(&arg1);
+		    c = getword(imapd_in, &arg1);
 		    if (!imparse_issequence(arg1.s)) goto badsequence;
 		    if (c == '\r') c = prot_getc(imapd_in);
 		    if (c != '\n') goto extraargs;
@@ -1308,16 +1300,16 @@ cmdloop()
 		}
 		else {
 		    prot_printf(imapd_out, "%s BAD Unrecognized UID subcommand\r\n", tag.s);
-		    eatline(c);
+		    eatline(imapd_in, c);
 		}
 	    }
 	    else if (!strcmp(cmd.s, "Unsubscribe")) {
 		if (c != ' ') goto missingargs;
 		havenamespace = 0;
-		c = getastring(&arg1);
+		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == ' ') {
 		    havenamespace = 1;
-		    c = getastring(&arg2);
+		    c = getastring(imapd_in, imapd_out, &arg2);
 		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
@@ -1345,40 +1337,40 @@ cmdloop()
 	default:
 	badcmd:
 	    prot_printf(imapd_out, "%s BAD Unrecognized command\r\n", tag.s);
-	    eatline(c);
+	    eatline(imapd_in, c);
 	}
 
 	continue;
 
     nologin:
 	prot_printf(imapd_out, "%s BAD Please login first\r\n", tag.s);
-	eatline(c);
+	eatline(imapd_in, c);
 	continue;
 
     nomailbox:
 	prot_printf(imapd_out, "%s BAD Please select a mailbox first\r\n", tag.s);
-	eatline(c);
+	eatline(imapd_in, c);
 	continue;
 
     missingargs:
 	prot_printf(imapd_out, "%s BAD Missing required argument to %s\r\n", tag.s, cmd.s);
-	eatline(c);
+	eatline(imapd_in, c);
 	continue;
 
     extraargs:
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag.s, cmd.s);
-	eatline(c);
+	eatline(imapd_in, c);
 	continue;
 
     badsequence:
 	prot_printf(imapd_out, "%s BAD Invalid sequence in %s\r\n", tag.s, cmd.s);
-	eatline(c);
+	eatline(imapd_in, c);
 	continue;
 
     badpartition:
 	prot_printf(imapd_out, "%s BAD Invalid partition name in %s\r\n",
 	       tag.s, cmd.s);
-	eatline(c);
+	eatline(imapd_in, c);
 	continue;
     }
 }
@@ -1698,7 +1690,7 @@ void cmd_id(char *tag)
 	prot_printf(imapd_out,
 		    "%s NO Only one Id allowed in non-authenticated state\r\n",
 		    tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	return;
     }
 
@@ -1706,16 +1698,16 @@ void cmd_id(char *tag)
     if (failed_id >= MAXIDFAILED) {
 	prot_printf(imapd_out, "%s NO Too many (%u) invalid Id commands\r\n",
 		    tag, failed_id);
-	eatline(c);
+	eatline(imapd_in, c);
 	return;
     }
 
     /* ok, accept parameter list */
-    c = getword(&arg);
+    c = getword(imapd_in, &arg);
     /* check for "NIL" or start of parameter list */
     if (strcasecmp(arg.s, "NIL") && c != '(') {
 	prot_printf(imapd_out, "%s BAD Invalid parameter list in Id\r\n", tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	failed_id++;
 	return;
     }
@@ -1729,7 +1721,7 @@ void cmd_id(char *tag)
 	    }
 
 	    /* get field name */
-	    c = getstring(&field);
+	    c = getstring(imapd_in, imapd_out, &field);
 	    if (c != ' ') {
 		prot_printf(imapd_out,
 			    "%s BAD Invalid/missing field name in Id\r\n",
@@ -1739,7 +1731,7 @@ void cmd_id(char *tag)
 	    }
 
 	    /* get field value */
-	    c = getnstring(&arg);
+	    c = getnstring(imapd_in, imapd_out, &arg);
 	    if (c != ' ' && c != ')') {
 		prot_printf(imapd_out,
 			    "%s BAD Invalid/missing value in Id\r\n",
@@ -1777,7 +1769,7 @@ void cmd_id(char *tag)
 
 	if (error || c != ')') {
 	    /* erp! */
-	    eatline(c);
+	    eatline(imapd_in, c);
 	    id_freeparamlist(params);
 	    failed_id++;
 	    return;
@@ -1790,7 +1782,7 @@ void cmd_id(char *tag)
     if (c != '\n') {
 	prot_printf(imapd_out,
 		    "%s BAD Unexpected extra arguments to Id\r\n", tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	id_freeparamlist(params);
 	failed_id++;
 	return;
@@ -1942,7 +1934,7 @@ void cmd_idle(char *tag)
     prot_flush(imapd_out);
 
     /* Get continuation data */
-    c = getword(&arg);
+    c = getword(imapd_in, &arg);
     if (c != EOF) {
 	if (!strcasecmp(arg.s, "Done") &&
 	    (c = (c == '\r') ? prot_getc(imapd_in) : c) == '\n') {
@@ -1953,7 +1945,7 @@ void cmd_idle(char *tag)
 	else {
 	    prot_printf(imapd_out, 
 			"%s BAD Invalid Idle continuation\r\n", tag);
-	    eatline(c);
+	    eatline(imapd_in, c);
 	}
     }
 
@@ -2080,7 +2072,7 @@ cmd_append(char *tag, char *name)
 			 imapd_userid, imapd_authstate, ACL_INSERT, size);
     }
     if (r) {
-	eatline(' ');
+	eatline(imapd_in, ' ');
 	prot_printf(imapd_out, "%s NO %s%s\r\n",
 		    tag,
 		    (r == IMAP_MAILBOX_NONEXISTENT &&
@@ -2096,11 +2088,11 @@ cmd_append(char *tag, char *name)
     /* we loop, to support MULTIAPPEND */
     while (!r && c == ' ') {
 	/* Parse flags */
-	c = getword(&arg);
+	c = getword(imapd_in, &arg);
 	if  (c == '(' && !arg.s[0]) {
 	    nflags = 0;
 	    do {
-		c = getword(&arg);
+		c = getword(imapd_in, &arg);
 		if (!nflags && !arg.s[0] && c == ')') break; /* empty list */
 		if (!isokflag(arg.s)) {
 		    parseerr = "Invalid flag in Append command";
@@ -2126,7 +2118,7 @@ cmd_append(char *tag, char *name)
 		r = IMAP_PROTOCOL_ERROR;
 		goto done;
 	    }
-	    c = getword(&arg);
+	    c = getword(imapd_in, &arg);
 	}
 
 	/* Parse internaldate */
@@ -2138,7 +2130,7 @@ cmd_append(char *tag, char *name)
 		r = IMAP_PROTOCOL_ERROR;
 		goto done;
 	    }
-	    c = getword(&arg);
+	    c = getword(imapd_in, &arg);
 	} else {
 	    internaldate = time(NULL);
 	}
@@ -2196,14 +2188,14 @@ cmd_append(char *tag, char *name)
 
  done:
     if (r) {
-	eatline(c);
+	eatline(imapd_in, c);
     } else {
 	/* we should be looking at the end of the line */
 	if (c == '\r') c = prot_getc(imapd_in);
 	if (c != '\n') {
 	    parseerr = "junk after literal";
 	    r = IMAP_PROTOCOL_ERROR;
-	    eatline(c);
+	    eatline(imapd_in, c);
 	}
     }
 
@@ -2399,10 +2391,10 @@ int usinguid;
 
     memset(&fetchargs, 0, sizeof(struct fetchargs));
 
-    c = getword(&fetchatt);
+    c = getword(imapd_in, &fetchatt);
     if (c == '(' && !fetchatt.s[0]) {
 	inlist = 1;
-	c = getword(&fetchatt);
+	c = getword(imapd_in, &fetchatt);
     }
     for (;;) {
 	ucase(fetchatt.s);
@@ -2453,25 +2445,25 @@ int usinguid;
 			prot_printf(imapd_out,
 				    "%s BAD Missing required argument to %s %s\r\n",
 				    tag, cmd, fetchatt.s);
-			eatline(c);
+			eatline(imapd_in, c);
 			goto freeargs;
 		    }
 		    c = prot_getc(imapd_in);
 		    if (c != '(') {
 			prot_printf(imapd_out, "%s BAD Missing required open parenthesis in %s %s\r\n",
 				    tag, cmd, fetchatt.s);
-			eatline(c);
+			eatline(imapd_in, c);
 			goto freeargs;
 		    }
 		    do {
-			c = getastring(&fieldname);
+			c = getastring(imapd_in, imapd_out, &fieldname);
 			for (p = fieldname.s; *p; p++) {
 			    if (*p <= ' ' || *p & 0x80 || *p == ':') break;
 			}
 			if (*p || !*fieldname.s) {
 			    prot_printf(imapd_out, "%s BAD Invalid field-name in %s %s\r\n",
 					tag, cmd, fetchatt.s);
-			    eatline(c);
+			    eatline(imapd_in, c);
 			    goto freeargs;
 			}
 			appendstrlist(&newfields, fieldname.s);
@@ -2488,17 +2480,17 @@ int usinguid;
 		    if (c != ')') {
 			prot_printf(imapd_out, "%s BAD Missing required close parenthesis in %s %s\r\n",
 				    tag, cmd, fetchatt.s);
-			eatline(c);
+			eatline(imapd_in, c);
 			goto freeargs;
 		    }
 
 		    /* Grab/parse the ]<x.y> part */
-		    c = getword(&fieldname);
+		    c = getword(imapd_in, &fieldname);
 		    p = fieldname.s;
 		    if (*p++ != ']') {
 			prot_printf(imapd_out, "%s BAD Missing required close bracket after %s %s\r\n",
 				    tag, cmd, fetchatt.s);
-			eatline(c);
+			eatline(imapd_in, c);
 			goto freeargs;
 		    }
 		    if (*p == '<' && isdigit((int) p[1])) {
@@ -2513,14 +2505,14 @@ int usinguid;
 
 			if (*p != '>') {
 			    prot_printf(imapd_out, "%s BAD Invalid body partial\r\n", tag);
-			    eatline(c);
+			    eatline(imapd_in, c);
 			    goto freeargs;
 			}
 			p++;
 		    }
 		    if (*p) {
 			prot_printf(imapd_out, "%s BAD Junk after body section\r\n", tag);
-			eatline(c);
+			eatline(imapd_in, c);
 			goto freeargs;
 		    }
 		    appendfieldlist(&fetchargs.fsections,
@@ -2547,7 +2539,7 @@ int usinguid;
 
 		if (*p != ']') {
 		    prot_printf(imapd_out, "%s BAD Invalid body section\r\n", tag);
-		    eatline(c);
+		    eatline(imapd_in, c);
 		    goto freeargs;
 		}
 		p++;
@@ -2563,7 +2555,7 @@ int usinguid;
 
 		    if (*p != '>') {
 			prot_printf(imapd_out, "%s BAD Invalid body partial\r\n", tag);
-			eatline(c);
+			eatline(imapd_in, c);
 			goto freeargs;
 		    }
 		    p++;
@@ -2571,7 +2563,7 @@ int usinguid;
 
 		if (*p) {
 		    prot_printf(imapd_out, "%s BAD Junk after body section\r\n", tag);
-		    eatline(c);
+		    eatline(imapd_in, c);
 		    goto freeargs;
 		}
 		appendstrlist(&fetchargs.bodysections, section);
@@ -2630,25 +2622,25 @@ int usinguid;
 		if (c != ' ') {
 		    prot_printf(imapd_out, "%s BAD Missing required argument to %s %s\r\n",
 			   tag, cmd, fetchatt.s);
-		    eatline(c);
+		    eatline(imapd_in, c);
 		    goto freeargs;
 		}
 		c = prot_getc(imapd_in);
 		if (c != '(') {
 		    prot_printf(imapd_out, "%s BAD Missing required open parenthesis in %s %s\r\n",
 			   tag, cmd, fetchatt.s);
-		    eatline(c);
+		    eatline(imapd_in, c);
 		    goto freeargs;
 		}
 		do {
-		    c = getastring(&fieldname);
+		    c = getastring(imapd_in, imapd_out, &fieldname);
 		    for (p = fieldname.s; *p; p++) {
 			if (*p <= ' ' || *p & 0x80 || *p == ':') break;
 		    }
 		    if (*p || !*fieldname.s) {
 			prot_printf(imapd_out, "%s BAD Invalid field-name in %s %s\r\n",
 			       tag, cmd, fetchatt.s);
-			eatline(c);
+			eatline(imapd_in, c);
 			goto freeargs;
 		    }
 		    lcase(fieldname.s);;
@@ -2671,7 +2663,7 @@ int usinguid;
 		if (c != ')') {
 		    prot_printf(imapd_out, "%s BAD Missing required close parenthesis in %s %s\r\n",
 			   tag, cmd, fetchatt.s);
-		    eatline(c);
+		    eatline(imapd_in, c);
 		    goto freeargs;
 		}
 		c = prot_getc(imapd_in);
@@ -2689,11 +2681,11 @@ int usinguid;
 	default:
 	badatt:
 	    prot_printf(imapd_out, "%s BAD Invalid %s attribute %s\r\n", tag, cmd, fetchatt.s);
-	    eatline(c);
+	    eatline(imapd_in, c);
 	    goto freeargs;
 	}
 
-	if (inlist && c == ' ') c = getword(&fetchatt);
+	if (inlist && c == ' ') c = getword(imapd_in, &fetchatt);
 	else break;
     }
     
@@ -2703,13 +2695,13 @@ int usinguid;
     }
     if (inlist) {
 	prot_printf(imapd_out, "%s BAD Missing close parenthesis in %s\r\n", tag, cmd);
-	eatline(c);
+	eatline(imapd_in, c);
 	goto freeargs;
     }
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
-	eatline(c);
+	eatline(imapd_in, c);
 	goto freeargs;
     }
 
@@ -2892,12 +2884,12 @@ int usinguid;
     }
     else {
 	prot_printf(imapd_out, "%s BAD Invalid %s attribute\r\n", tag, cmd);
-	eatline(' ');
+	eatline(imapd_in, ' ');
 	return;
     }
 
     for (;;) {
-	c = getword(&flagname);
+	c = getword(imapd_in, &flagname);
 	if (c == '(' && !flagname.s[0] && !flagsparsed && !inlist) {
 	    inlist = 1;
 	    continue;
@@ -2923,14 +2915,14 @@ int usinguid;
 	    else {
 		prot_printf(imapd_out, "%s BAD Invalid system flag in %s command\r\n",
 		       tag, cmd);
-		eatline(c);
+		eatline(imapd_in, c);
 		goto freeflags;
 	    }
 	}
 	else if (!imparse_isatom(flagname.s)) {
 	    prot_printf(imapd_out, "%s BAD Invalid flag name %s in %s command\r\n",
 		   tag, flagname.s, cmd);
-	    eatline(c);
+	    eatline(imapd_in, c);
 	    goto freeflags;
 	}
 	else {
@@ -2952,13 +2944,13 @@ int usinguid;
     }
     if (inlist) {
 	prot_printf(imapd_out, "%s BAD Missing close parenthesis in %s\r\n", tag, cmd);
-	eatline(c);
+	eatline(imapd_in, c);
 	return;
     }
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
-	eatline(c);
+	eatline(imapd_in, c);
 	return;
     }
 
@@ -3002,7 +2994,7 @@ int usinguid;
 
     c = getsearchprogram(tag, searchargs, &charset, 1);
     if (c == EOF) {
-	eatline(' ');
+	eatline(imapd_in, ' ');
 	freesearchargs(searchargs);
 	return;
     }
@@ -3010,7 +3002,7 @@ int usinguid;
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to Search\r\n", tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	freesearchargs(searchargs);
 	return;
     }
@@ -3044,7 +3036,7 @@ int usinguid;
 
     c = getsortcriteria(tag, &sortcrit);
     if (c == EOF) {
-	eatline(' ');
+	eatline(imapd_in, ' ');
 	freesortcrit(sortcrit);
 	return;
     }
@@ -3053,16 +3045,16 @@ int usinguid;
     if (c != ' ') {
 	prot_printf(imapd_out, "%s BAD Missing charset in Sort\r\n",
 		    tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	freesortcrit(sortcrit);
 	return;
     }
 
-    c = getword(&arg);
+    c = getword(imapd_in, &arg);
     if (c != ' ') {
 	prot_printf(imapd_out, "%s BAD Missing search criteria in Sort\r\n",
 		    tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	freesortcrit(sortcrit);
 	return;
     }
@@ -3072,7 +3064,7 @@ int usinguid;
     if (charset == -1) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag,
 	       error_message(IMAP_UNRECOGNIZED_CHARSET));
-	eatline(c);
+	eatline(imapd_in, c);
 	freesortcrit(sortcrit);
 	return;
     }
@@ -3081,7 +3073,7 @@ int usinguid;
 
     c = getsearchprogram(tag, searchargs, &charset, 0);
     if (c == EOF) {
-	eatline(' ');
+	eatline(imapd_in, ' ');
 	freesearchargs(searchargs);
 	freesortcrit(sortcrit);
 	return;
@@ -3091,7 +3083,7 @@ int usinguid;
     if (c != '\n') {
 	prot_printf(imapd_out, 
 		    "%s BAD Unexpected extra arguments to Sort\r\n", tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	freesearchargs(searchargs);
 	freesortcrit(sortcrit);
 	return;
@@ -3121,26 +3113,26 @@ int usinguid;
     struct searchargs *searchargs;
 
     /* get algorithm */
-    c = getword(&arg);
+    c = getword(imapd_in, &arg);
     if (c != ' ') {
 	prot_printf(imapd_out, "%s BAD Missing algorithm in Thread\r\n", tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	return;
     }
 
     if ((alg = find_thread_algorithm(arg.s)) == -1) {
 	prot_printf(imapd_out, "%s BAD Invalid Thread algorithm %s\r\n",
 		    tag, arg.s);
-	eatline(c);
+	eatline(imapd_in, c);
 	return;
     }
 
     /* get charset */
-    c = getword(&arg);
+    c = getword(imapd_in, &arg);
     if (c != ' ') {
 	prot_printf(imapd_out, "%s BAD Missing charset in Thread\r\n",
 		    tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	return;
     }
     lcase(arg.s);
@@ -3149,7 +3141,7 @@ int usinguid;
     if (charset == -1) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag,
 	       error_message(IMAP_UNRECOGNIZED_CHARSET));
-	eatline(c);
+	eatline(imapd_in, c);
 	return;
     }
 
@@ -3157,7 +3149,7 @@ int usinguid;
 
     c = getsearchprogram(tag, searchargs, &charset, 0);
     if (c == EOF) {
-	eatline(' ');
+	eatline(imapd_in, ' ');
 	freesearchargs(searchargs);
 	return;
     }
@@ -3166,7 +3158,7 @@ int usinguid;
     if (c != '\n') {
 	prot_printf(imapd_out, 
 		    "%s BAD Unexpected extra arguments to Thread\r\n", tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	freesearchargs(searchargs);
 	return;
     }
@@ -4020,12 +4012,12 @@ char *quotaroot;
     c = prot_getc(imapd_in);
     if (c != '(') goto badlist;
 
-    c = getword(&arg);
+    c = getword(imapd_in, &arg);
     if (c != ')' || arg.s[0] != '\0') {
 	for (;;) {
 	    if (c != ' ') goto badlist;
 	    if (strcasecmp(arg.s, "storage") != 0) badresource = 1;
-	    c = getword(&arg);
+	    c = getword(imapd_in, &arg);
 	    if (c != ' ' && c != ')') goto badlist;
 	    if (arg.s[0] == '\0') goto badlist;
 	    newquota = 0;
@@ -4040,7 +4032,7 @@ char *quotaroot;
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to SETQUOTA\r\n", tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	return;
     }
 
@@ -4066,7 +4058,7 @@ char *quotaroot;
 
  badlist:
     prot_printf(imapd_out, "%s BAD Invalid quota list in Setquota\r\n", tag);
-    eatline(c);
+    eatline(imapd_in, c);
 }
 
 #ifdef HAVE_SSL
@@ -4199,7 +4191,7 @@ char *name;
     c = prot_getc(imapd_in);
     if (c != '(') goto badlist;
 
-    c = getword(&arg);
+    c = getword(imapd_in, &arg);
     if (arg.s[0] == '\0') goto badlist;
     for (;;) {
 	lcase(arg.s);
@@ -4221,18 +4213,18 @@ char *name;
 	else {
 	    prot_printf(imapd_out, "%s BAD Invalid Status attribute %s\r\n",
 			tag, arg.s);
-	    eatline(c);
+	    eatline(imapd_in, c);
 	    return;
 	}
 	    
-	if (c == ' ') c = getword(&arg);
+	if (c == ' ') c = getword(imapd_in, &arg);
 	else break;
     }
 
     if (c != ')') {
 	prot_printf(imapd_out,
 		    "%s BAD Missing close parenthesis in Status\r\n", tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	return;
     }
 
@@ -4241,7 +4233,7 @@ char *name;
     if (c != '\n') {
 	prot_printf(imapd_out,
 		    "%s BAD Unexpected extra arguments to Status\r\n", tag);
-	eatline(c);
+	eatline(imapd_in, c);
 	return;
     }
 
@@ -4285,7 +4277,7 @@ char *name;
 
  badlist:
     prot_printf(imapd_out, "%s BAD Invalid status list in Status\r\n", tag);
-    eatline(c);
+    eatline(imapd_in, c);
 }
 
 #ifdef ENABLE_X_NETSCAPE_HACK
@@ -4395,180 +4387,6 @@ void cmd_namespace(tag)
 }
 
 /*
- * Parse a word
- * (token not containing whitespace, parens, or double quotes)
- */
-#define BUFGROWSIZE 100
-int getword(struct buf *buf)
-{
-    int c;
-    int len = 0;
-
-    if (buf->alloc == 0) {
-	buf->alloc = BUFGROWSIZE;
-	buf->s = xmalloc(buf->alloc+1);
-    }
-	
-    for (;;) {
-	c = prot_getc(imapd_in);
-	if (c == EOF || isspace(c) || c == '(' || c == ')' || c == '\"') {
-	    buf->s[len] = '\0';
-	    return c;
-	}
-	if (len == buf->alloc) {
-	    buf->alloc += BUFGROWSIZE;
-	    buf->s = xrealloc(buf->s, buf->alloc+1);
-	}
-	buf->s[len++] = c;
-    }
-}
-
-/*
- * Parse an xstring
- * (astring, nstring or string based on type)
- */
-int getxstring(struct buf *buf, int type)
-{
-    int c;
-    int i, len = 0;
-    int sawdigit = 0;
-    int isnowait;
-
-    if (buf->alloc == 0) {
-	buf->alloc = BUFGROWSIZE;
-	buf->s = xmalloc(buf->alloc+1);
-    }
-	
-    c = prot_getc(imapd_in);
-    switch (c) {
-    case EOF:
-    case ' ':
-    case '(':
-    case ')':
-    case '\r':
-    case '\n':
-	/* Invalid starting character */
-	buf->s[0] = '\0';
-	if (c != EOF) prot_ungetc(c, imapd_in);
-	return EOF;
-
-    default:
-	switch (type) {
-	case IMAP_ASTRING:	 /* atom, quoted-string or literal */
-	    /*
-	     * Atom -- server is liberal in accepting specials other
-	     * than whitespace, parens, or double quotes
-	     */
-	    for (;;) {
-		if (c == EOF || isspace(c) || c == '(' || 
-		          c == ')' || c == '\"') {
-		    buf->s[len] = '\0';
-		    return c;
-		}
-		if (len == buf->alloc) {
-		    buf->alloc += BUFGROWSIZE;
-		    buf->s = xrealloc(buf->s, buf->alloc+1);
-		}
-		buf->s[len++] = c;
-		c = prot_getc(imapd_in);
-	    }
-	    break;
-
-	case IMAP_NSTRING:	 /* "NIL", quoted-string or literal */
-	    /*
-	     * Look for "NIL"
-	     */
-	    if (c == 'N') {
-		prot_ungetc(c, imapd_in);
-		c = getword(buf);
-		if (!strcmp(buf->s, "NIL"))
-		    return c;
-	    }
-	    if (c != EOF) prot_ungetc(c, imapd_in);
-	    return EOF;
-	    break;
-
-	case IMAP_STRING:	 /* quoted-string or literal */
-	    /*
-	     * Nothing to do here - fall through.
-	     */
-	    break;
-	}
-	
-    case '\"':
-	/*
-	 * Quoted-string.  Server is liberal in accepting qspecials
-	 * other than double-quote, CR, and LF.
-	 */
-	for (;;) {
-	    c = prot_getc(imapd_in);
-	    if (c == '\\') {
-		c = prot_getc(imapd_in);
-	    }
-	    else if (c == '\"') {
-		buf->s[len] = '\0';
-		return prot_getc(imapd_in);
-	    }
-	    else if (c == EOF || c == '\r' || c == '\n') {
-		buf->s[len] = '\0';
-		if (c != EOF) prot_ungetc(c, imapd_in);
-		return EOF;
-	    }
-	    if (len == buf->alloc) {
-		buf->alloc += BUFGROWSIZE;
-		buf->s = xrealloc(buf->s, buf->alloc+1);
-	    }
-	    buf->s[len++] = c;
-	}
-    case '{':
-	/* Literal */
-	isnowait = 0;
-	buf->s[0] = '\0';
-	while ((c = prot_getc(imapd_in)) != EOF && isdigit(c)) {
-	    sawdigit = 1;
-	    len = len*10 + c - '0';
-	}
-	if (c == '+') {
-	    isnowait++;
-	    c = prot_getc(imapd_in);
-	}
-	if (!sawdigit || c != '}') {
-	    if (c != EOF) prot_ungetc(c, imapd_in);
-	    return EOF;
-	}
-	c = prot_getc(imapd_in);
-	if (c != '\r') {
-	    if (c != EOF) prot_ungetc(c, imapd_in);
-	    return EOF;
-	}
-	c = prot_getc(imapd_in);
-	if (c != '\n') {
-	    if (c != EOF) prot_ungetc(c, imapd_in);
-	    return EOF;
-	}
-	if (len >= buf->alloc) {
-	    buf->alloc = len+1;
-	    buf->s = xrealloc(buf->s, buf->alloc+1);
-	}
-	if (!isnowait) {
-	    prot_printf(imapd_out, "+ go ahead\r\n");
-	    prot_flush(imapd_out);
-	}
-	for (i = 0; i < len; i++) {
-	    c = prot_getc(imapd_in);
-	    if (c == EOF) {
-		buf->s[len] = '\0';
-		return EOF;
-	    }
-	    buf->s[i] = c;
-	}
-	buf->s[len] = '\0';
-	if (strlen(buf->s) != len) return EOF; /* Disallow imbedded NUL */
-	return prot_getc(imapd_in);
-    }
-}
-
-/*
  * Parse a search program
  */
 int getsearchprogram(tag, searchargs, charset, parsecharset)
@@ -4601,7 +4419,7 @@ int parsecharset;
     int i, c, flag, size;
     time_t start, end;
 
-    c = getword(&criteria);
+    c = getword(imapd_in, &criteria);
     lcase(criteria.s);
     switch (criteria.s[0]) {
     case '\0':
@@ -4647,7 +4465,7 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "bcc")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getastring(&arg);
+	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
@@ -4660,7 +4478,7 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "body")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getastring(&arg);
+	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
@@ -4677,7 +4495,7 @@ int parsecharset;
     case 'c':
 	if (!strcmp(criteria.s, "cc")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getastring(&arg);
+	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
@@ -4690,7 +4508,7 @@ int parsecharset;
 	}
 	else if (parsecharset && !strcmp(criteria.s, "charset")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getastring(&arg);
+	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c != ' ') goto missingarg;
 	    lcase(arg.s);
 	    *charset = charset_lookupname(arg.s);
@@ -4714,7 +4532,7 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "from")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getastring(&arg);
+	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
@@ -4731,13 +4549,13 @@ int parsecharset;
     case 'h':
 	if (!strcmp(criteria.s, "header")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getastring(&arg);
+	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c != ' ') goto missingarg;
 	    lcase(arg.s);
 
 	    /* we look message-id up in the envelope */
 	    if (!strcmp(arg.s, "message-id")) {
-		c = getastring(&arg);
+		c = getastring(imapd_in, imapd_out, &arg);
 		if (c == EOF) goto missingarg;
 		str = charset_convert(arg.s, *charset, NULL, 0);
 		if (strchr(str, EMPTY)) {
@@ -4758,7 +4576,7 @@ int parsecharset;
 		}
 	    }
 	    appendstrlist(&searchargs->header_name, arg.s);
-	    c = getastring(&arg);
+	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
@@ -4775,7 +4593,7 @@ int parsecharset;
     case 'k':
 	if (!strcmp(criteria.s, "keyword")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getword(&arg);
+	    c = getword(imapd_in, &arg);
 	    if (!imparse_isatom(arg.s)) goto badflag;
 	    lcase(arg.s);
 	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
@@ -4795,7 +4613,7 @@ int parsecharset;
     case 'l':
 	if (!strcmp(criteria.s, "larger")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getword(&arg);
+	    c = getword(imapd_in, &arg);
 	    size = 0;
 	    for (p = arg.s; *p && isdigit((int) *p); p++) {
 		size = size * 10 + *p - '0';
@@ -4908,7 +4726,7 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "smaller")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getword(&arg);
+	    c = getword(imapd_in, &arg);
 	    size = 0;
 	    for (p = arg.s; *p && isdigit((int) *p); p++) {
 		size = size * 10 + *p - '0';
@@ -4920,7 +4738,7 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "subject")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getastring(&arg);
+	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
@@ -4937,7 +4755,7 @@ int parsecharset;
     case 't':
 	if (!strcmp(criteria.s, "to")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getastring(&arg);
+	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
@@ -4950,7 +4768,7 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "text")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getastring(&arg);
+	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
 	    if (strchr(str, EMPTY)) {
@@ -4967,7 +4785,7 @@ int parsecharset;
     case 'u':
 	if (!strcmp(criteria.s, "uid")) {
 	    if (c != ' ') goto missingarg;
-	    c = getword(&arg);
+	    c = getword(imapd_in, &arg);
 	    if (!imparse_issequence(arg.s)) goto badcri;
 	    appendstrlist(&searchargs->uidsequence, arg.s);
 	}
@@ -4988,7 +4806,7 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "unkeyword")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getword(&arg);
+	    c = getword(imapd_in, &arg);
 	    if (!imparse_isatom(arg.s)) goto badflag;
 	    lcase(arg.s);
 	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
@@ -5141,7 +4959,7 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
     c = prot_getc(imapd_in);
     if (c != '(') goto missingcrit;
 
-    c = getword(&criteria);
+    c = getword(imapd_in, &criteria);
     if (criteria.s[0] == '\0') goto missingcrit;
 
     nsort = 0;
@@ -5180,10 +4998,10 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 	else if (!strcmp(criteria.s, "annotation")) {
 	    (*sortcrit)[n].key = SORT_ANNOTATION;
 	    if (c != ' ') goto missingarg;
-	    c = getstring(&arg);
+	    c = getstring(imapd_in, &arg);
 	    if (c != ' ') goto missingarg;
 	    (*sortcrit)[n].args.annot.entry = strdup(arg.s);
-	    c = getstring(&arg);
+	    c = getstring(imapd_in, &arg);
 	    if (c == EOF) goto missingarg;
 	    (*sortcrit)[n].args.annot.attrib = strdup(arg.s);
 	}
@@ -5199,7 +5017,7 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 	n++;
 
  nextcrit:
-	if (c == ' ') c = getword(&criteria);
+	if (c == ' ') c = getword(imapd_in, &criteria);
 	else break;
     }
 
@@ -5422,41 +5240,6 @@ time_t *date;
  baddate:
     prot_ungetc(c, imapd_in);
     return EOF;
-}
-
-/*
- * Eat characters up to and including the next newline
- * Also look for and eat non-synchronizing literals.
- */
-void
-eatline(int c)
-{
-    int state = 0;
-    char *statediagram = " {+}\r";
-    int size = -1;
-
-    for (;;) {
-	if (c == '\n') return;
-	if (c == statediagram[state+1]) {
-	    state++;
-	    if (state == 1) size = 0;
-	    else if (c == '\r') {
-		/* Got a non-synchronizing literal */
-		c = prot_getc(imapd_in);/* Eat newline */
-		while (size--) {
-		    c = prot_getc(imapd_in); /* Eat contents */
-		}
-		state = 0;	/* Go back to scanning for eol */
-	    }
-	}
-	else if (state == 1 && isdigit(c)) {
-	    size = size * 10 + c - '0';
-	}
-	else state = 0;
-
-	c = prot_getc(imapd_in);
-	if (c == EOF) return;
-    }
 }
 
 /*

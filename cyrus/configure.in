@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.195 2001/03/28 16:11:49 ken3 Exp $
+dnl $Id: configure.in,v 1.195.2.1 2001/04/28 00:53:57 ken3 Exp $
 dnl
 
 
@@ -596,7 +596,7 @@ dnl
 AC_ARG_ENABLE(murder,
         [  --enable-murder         enable IMAP Murder support],
         if test "$enableval" != no; then
-	  IMAP_PROGS="$IMAP_PROGS proxyd pop3proxyd target-acap sendmail-map"
+	  IMAP_PROGS="$IMAP_PROGS proxyd pop3proxyd target-acap mupdate"
         fi) 
 
 AC_SUBST(IMAP_PROGS)

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.68 2001/03/14 20:44:26 leg Exp $ */
+/* $Id: proxyd.c,v 1.68.2.1 2001/04/28 00:54:06 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -224,15 +224,6 @@ int starttls_enabled(void);
 void cmd_netscape (char* tag);
 #endif
 
-enum string_types { IMAP_ASTRING, IMAP_NSTRING, IMAP_STRING };
-#define getastring(buf)	getxstring((buf), IMAP_ASTRING)
-#define getnstring(buf)	getxstring((buf), IMAP_NSTRING)
-#define getstring(buf)	getxstring((buf), IMAP_STRING)
-
-int getword (struct buf *buf);
-int getxstring (struct buf *buf, int type);
-
-void eatline (int c);
 void printstring (const char *s);
 void printastring (const char *s);
 
@@ -1260,7 +1251,7 @@ cmdloop()
 	signals_poll();
 
 	/* Parse tag */
-	c = getword(&tag);
+	c = getword(proxyd_in, &tag);
 	if (c == EOF) {
 	    err = prot_error(proxyd_in);
 	    if (err) {
@@ -1272,15 +1263,15 @@ cmdloop()
 	if (c != ' ' || !imparse_isatom(tag.s) || 
 	    (tag.s[0] == '*' && !tag.s[1])) {
 	    prot_printf(proxyd_out, "* BAD Invalid tag\r\n");
-	    eatline(c);
+	    eatline(proxyd_in, c);
 	    continue;
 	}
 
 	/* Parse command name */
-	c = getword(&cmd);
+	c = getword(proxyd_in, &cmd);
 	if (!cmd.s[0]) {
 	    prot_printf(proxyd_out, "%s BAD Null command\r\n", tag.s);
-	    eatline(c);
+	    eatline(proxyd_in, c);
 	    continue;
 	}
 	if (islower((unsigned char) cmd.s[0])) cmd.s[0] = toupper(cmd.s[0]);
@@ -1295,12 +1286,12 @@ cmdloop()
 	case 'A':
 	    if (!strcmp(cmd.s, "Authenticate")) {
 		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
+		c = getword(proxyd_in, &arg1);
 		if (!imparse_isatom(arg1.s)) {
 		    prot_printf(proxyd_out, 
 				"%s BAD Invalid authenticate mechanism\r\n", 
 				tag.s);
-		    eatline(c);
+		    eatline(proxyd_in, c);
 		    continue;
 		}
 		if (c == '\r') c = prot_getc(proxyd_in);
@@ -1316,7 +1307,7 @@ cmdloop()
 	    else if (!proxyd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Append")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
 
 		cmd_append(tag.s, arg1.s);
@@ -1327,7 +1318,7 @@ cmdloop()
 	case 'B':
 	    if (!strcmp(cmd.s, "Bboard")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
@@ -1355,10 +1346,10 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    copy:
-		c = getword(&arg1);
+		c = getword(proxyd_in, &arg1);
 		if (c == '\r') goto missingargs;
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
-		c = getastring(&arg2);
+		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
@@ -1368,11 +1359,11 @@ cmdloop()
 	    else if (!strcmp(cmd.s, "Create")) {
 		havepartition = 0;
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == ' ') {
 		    havepartition = 1;
-		    c = getword(&arg2);
+		    c = getword(proxyd_in, &arg2);
 		    if (!imparse_isatom(arg2.s)) goto badpartition;
 		}
 		if (c == '\r') c = prot_getc(proxyd_in);
@@ -1391,7 +1382,7 @@ cmdloop()
 	case 'D':
 	    if (!strcmp(cmd.s, "Delete")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
@@ -1399,13 +1390,13 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Deleteacl")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (!strcasecmp(arg1.s, "mailbox")) {
 		    if (c != ' ') goto missingargs;
-		    c = getastring(&arg1);
+		    c = getastring(proxyd_in, proxyd_out, &arg1);
 		}
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
@@ -1423,7 +1414,7 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Examine")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
@@ -1439,15 +1430,15 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    fetch:
-		c = getword(&arg1);
+		c = getword(proxyd_in, &arg1);
 		if (c == '\r') goto missingargs;
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
 		cmd_fetch(tag.s, arg1.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Find")) {
-		c = getword(&arg1);
+		c = getword(proxyd_in, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
@@ -1460,11 +1451,11 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Getacl")) {
 		oldform = 0;
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (!strcasecmp(arg1.s, "mailbox")) {
 		    oldform = 1;
 		    if (c != ' ') goto missingargs;
-		    c = getastring(&arg1);
+		    c = getastring(proxyd_in, proxyd_out, &arg1);
 		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
@@ -1473,7 +1464,7 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Getquota")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
@@ -1481,7 +1472,7 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Getquotaroot")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
@@ -1506,10 +1497,10 @@ cmdloop()
 
 	case 'L':
 	    if (!strcmp(cmd.s, "Login")) {
-		if (c != ' ' || (c = getastring(&arg1)) != ' ') {
+		if (c != ' ' || (c = getastring(proxyd_in, proxyd_out, &arg1)) != ' ') {
 		    goto missingargs;
 		}
-		c = getastring(&arg2);
+		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
@@ -1533,25 +1524,25 @@ cmdloop()
 	    }
 	    else if (!proxyd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "List")) {
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
 		cmd_list(tag.s, 0, arg1.s, arg2.s);
 	    }
 	    else if (!strcmp(cmd.s, "Lsub")) {
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
 		cmd_list(tag.s, 1, arg1.s, arg2.s);
 	    }
 	    else if (!strcmp(cmd.s, "Listrights")) {
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
 		cmd_listrights(tag.s, arg1.s, arg2.s);
@@ -1563,11 +1554,11 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Myrights")) {
 		oldform = 0;
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (!strcasecmp(arg1.s, "mailbox")) {
 		    oldform = 1;
 		    if (c != ' ') goto missingargs;
-		    c = getastring(&arg1);
+		    c = getastring(proxyd_in, proxyd_out, &arg1);
 		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
@@ -1603,13 +1594,13 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Partial")) {
 		if (!backend_current) goto nomailbox;
 		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
+		c = getword(proxyd_in, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getword(&arg2);
+		c = getword(proxyd_in, &arg2);
 		if (c != ' ') goto missingargs;
-		c = getword(&arg3);
+		c = getword(proxyd_in, &arg3);
 		if (c != ' ') goto missingargs;
-		c = getword(&arg4);
+		c = getword(proxyd_in, &arg4);
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
 		cmd_partial(tag.s, arg1.s, arg2.s, arg3.s, arg4.s);
@@ -1621,13 +1612,13 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Rename")) {
 		havepartition = 0;
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == EOF) goto missingargs;
 		if (c == ' ') {
 		    havepartition = 1;
-		    c = getword(&arg3);
+		    c = getword(proxyd_in, &arg3);
 		    if (!imparse_isatom(arg3.s)) goto badpartition;
 		}
 		if (c == '\r') c = prot_getc(proxyd_in);
@@ -1636,18 +1627,18 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Rlist")) {
 		supports_referrals = 1;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
 		cmd_list(tag.s, 0, arg1.s, arg2.s);
 	    }
 	    else if (!strcmp(cmd.s, "Rlsub")) {
 		supports_referrals = 1;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
 		cmd_list(tag.s, 1, arg1.s, arg2.s);
@@ -1691,15 +1682,15 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    store:
-		c = getword(&arg1);
+		c = getword(proxyd_in, &arg1);
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
-		c = getword(&arg2);
+		c = getword(proxyd_in, &arg2);
 		if (c != ' ') goto badsequence;
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Select")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
@@ -1716,10 +1707,10 @@ cmdloop()
 	    else if (!strcmp(cmd.s, "Subscribe")) {
 		if (c != ' ') goto missingargs;
 		havenamespace = 0;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c == ' ') {
 		    havenamespace = 1;
-		    c = getastring(&arg2);
+		    c = getastring(proxyd_in, proxyd_out, &arg2);
 		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
@@ -1733,15 +1724,15 @@ cmdloop()
 	    }		
 	    else if (!strcmp(cmd.s, "Setacl")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (!strcasecmp(arg1.s, "mailbox")) {
 		    if (c != ' ') goto missingargs;
-		    c = getastring(&arg1);
+		    c = getastring(proxyd_in, proxyd_out, &arg1);
 		}
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg3);
+		c = getastring(proxyd_in, proxyd_out, &arg3);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
@@ -1749,7 +1740,7 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Setquota")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		cmd_setquota(tag.s, arg1.s);
 	    }
@@ -1762,7 +1753,7 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Status")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		cmd_status(tag.s, arg1.s);
 	    }
@@ -1785,7 +1776,7 @@ cmdloop()
 		if (!backend_current) goto nomailbox;
 		usinguid = 1;
 		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
+		c = getword(proxyd_in, &arg1);
 		if (c != ' ') goto missingargs;
 		lcase(arg1.s);
 		if (!strcmp(arg1.s, "fetch")) {
@@ -1807,7 +1798,7 @@ cmdloop()
 		    goto copy;
 		}
 		else if (!strcmp(arg1.s, "expunge")) {
-		    c = getword(&arg1);
+		    c = getword(proxyd_in, &arg1);
 		    if (!imparse_issequence(arg1.s)) goto badsequence;
 		    if (c == '\r') c = prot_getc(proxyd_in);
 		    if (c != '\n') goto extraargs;
@@ -1817,16 +1808,16 @@ cmdloop()
 		    prot_printf(proxyd_out, 
 				"%s BAD Unrecognized UID subcommand\r\n", 
 				tag.s);
-		    eatline(c);
+		    eatline(proxyd_in, c);
 		}
 	    }
 	    else if (!strcmp(cmd.s, "Unsubscribe")) {
 		if (c != ' ') goto missingargs;
 		havenamespace = 0;
-		c = getastring(&arg1);
+		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c == ' ') {
 		    havenamespace = 1;
-		    c = getastring(&arg2);
+		    c = getastring(proxyd_in, proxyd_out, &arg2);
 		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
@@ -1850,44 +1841,44 @@ cmdloop()
 	default:
 	badcmd:
 	    prot_printf(proxyd_out, "%s BAD Unrecognized command\r\n", tag.s);
-	    eatline(c);
+	    eatline(proxyd_in, c);
 	}
 
 	continue;
 
     nologin:
 	prot_printf(proxyd_out, "%s BAD Please login first\r\n", tag.s);
-	eatline(c);
+	eatline(proxyd_in, c);
 	continue;
 
     nomailbox:
 	prot_printf(proxyd_out, "%s BAD Please select a mailbox first\r\n", 
 		    tag.s);
-	eatline(c);
+	eatline(proxyd_in, c);
 	continue;
 
     missingargs:
 	prot_printf(proxyd_out, "%s BAD Missing required argument to %s\r\n", 
 		    tag.s, cmd.s);
-	eatline(c);
+	eatline(proxyd_in, c);
 	continue;
 
     extraargs:
 	prot_printf(proxyd_out, "%s BAD Unexpected extra arguments to %s\r\n",
 		    tag.s, cmd.s);
-	eatline(c);
+	eatline(proxyd_in, c);
 	continue;
 
     badsequence:
 	prot_printf(proxyd_out, "%s BAD Invalid sequence in %s\r\n", 
 		    tag.s, cmd.s);
-	eatline(c);
+	eatline(proxyd_in, c);
 	continue;
 
     badpartition:
 	prot_printf(proxyd_out, "%s BAD Invalid partition name in %s\r\n",
 		    tag.s, cmd.s);
-	eatline(c);
+	eatline(proxyd_in, c);
 	continue;
     }
 }
@@ -2173,7 +2164,7 @@ void cmd_id(char *tag)
 	prot_printf(proxyd_out,
 		    "%s NO Only one Id allowed in non-authenticated state\r\n",
 		    tag);
-	eatline(c);
+	eatline(proxyd_in, c);
 	return;
     }
 
@@ -2181,16 +2172,16 @@ void cmd_id(char *tag)
     if (failed_id >= MAXIDFAILED) {
 	prot_printf(proxyd_out, "%s NO Too many (%u) invalid Id commands\r\n",
 		    tag, failed_id);
-	eatline(c);
+	eatline(proxyd_in, c);
 	return;
     }
 
     /* ok, accept parameter list */
-    c = getword(&arg);
+    c = getword(proxyd_in, &arg);
     /* check for "NIL" or start of parameter list */
     if (strcasecmp(arg.s, "NIL") && c != '(') {
 	prot_printf(proxyd_out, "%s BAD Invalid parameter list in Id\r\n", tag);
-	eatline(c);
+	eatline(proxyd_in, c);
 	failed_id++;
 	return;
     }
@@ -2204,7 +2195,7 @@ void cmd_id(char *tag)
 	    }
 
 	    /* get field name */
-	    c = getstring(&field);
+	    c = getstring(proxyd_in, proxyd_out, &field);
 	    if (c != ' ') {
 		prot_printf(proxyd_out,
 			    "%s BAD Invalid/missing field name in Id\r\n",
@@ -2214,7 +2205,7 @@ void cmd_id(char *tag)
 	    }
 
 	    /* get field value */
-	    c = getnstring(&arg);
+	    c = getnstring(proxyd_in, proxyd_out, &arg);
 	    if (c != ' ' && c != ')') {
 		prot_printf(proxyd_out,
 			    "%s BAD Invalid/missing value in Id\r\n",
@@ -2252,7 +2243,7 @@ void cmd_id(char *tag)
 
 	if (error || c != ')') {
 	    /* erp! */
-	    eatline(c);
+	    eatline(proxyd_in, c);
 	    id_freeparamlist(params);
 	    failed_id++;
 	    return;
@@ -2265,7 +2256,7 @@ void cmd_id(char *tag)
     if (c != '\n') {
 	prot_printf(proxyd_out,
 		    "%s BAD Unexpected extra arguments to Id\r\n", tag);
-	eatline(c);
+	eatline(proxyd_in, c);
 	id_freeparamlist(params);
 	failed_id++;
 	return;
@@ -2438,7 +2429,7 @@ void cmd_idle(char *tag)
 	else {
 	    prot_printf(proxyd_out, 
 			"%s BAD Invalid Idle continuation\r\n", tag);
-	    eatline(c);
+	    eatline(proxyd_in, c);
 	}
     }
 #else
@@ -2483,7 +2474,7 @@ char idle_nomailbox(char *tag, int idle_period, struct buf *arg)
 				   idle_getalerts, &idle_period);
 
     /* Get continuation data */
-    c = getword(arg);
+    c = getword(proxyd_in, arg);
 
     /* Remove the event function */
     prot_removewaitevent(proxyd_in, idle_event);
@@ -2546,7 +2537,7 @@ char idle_passthrough(char *tag, int idle_period, struct buf *arg)
 				   idle_getresp, &idle_period);
 
     /* Get continuation data */
-    c = getword(arg);
+    c = getword(proxyd_in, arg);
 
     /* Remove the event function */
     prot_removewaitevent(backend_current->in, idle_event);
@@ -2590,7 +2581,7 @@ char idle_simulate(char *tag, int idle_period, struct buf *arg)
 				   idle_poll, &idle_period);
 
     /* Get continuation data */
-    c = getword(arg);
+    c = getword(proxyd_in, arg);
 
     /* Remove the event function */
     prot_removewaitevent(proxyd_in, idle_event);
@@ -2678,7 +2669,7 @@ void cmd_append(char *tag, char *name)
 	    pipe_until_tag(s, tag);
 	}
     } else {
-	eatline(prot_getc(proxyd_in));
+	eatline(proxyd_in, prot_getc(proxyd_in));
     }
 
     if (backend_current && backend_current != s) {
@@ -3960,7 +3951,7 @@ void cmd_getquotaroot(char *tag, char *name)
 void cmd_setquota(char *tag, char *quotaroot)
 {
     prot_printf(proxyd_out, "%s NO not supported from proxy server\r\n", tag);
-    eatline(prot_getc(proxyd_in));
+    eatline(proxyd_in, prot_getc(proxyd_in));
 }
 
 #ifdef HAVE_SSL
@@ -4117,7 +4108,7 @@ void cmd_status(char *tag, char *name)
 	    pipe_until_tag(backend_current, mytag);
 	}
     } else {
-	eatline(prot_getc(proxyd_in));
+	eatline(proxyd_in, prot_getc(proxyd_in));
     }
 
     if (!r) {
@@ -4211,215 +4202,6 @@ void cmd_namespace(tag)
     prot_printf(proxyd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
     free(pattern);
-}
-
-/*
- * Parse a word
- * (token not containing whitespace, parens, or double quotes)
- */
-int getword(struct buf *buf)
-{
-    int c;
-    int len = 0;
-
-    if (buf->alloc == 0) {
-	buf->alloc = BUFGROWSIZE;
-	buf->s = xmalloc(buf->alloc+1);
-    }
-	
-    for (;;) {
-	c = prot_getc(proxyd_in);
-	if (c == EOF || isspace(c) || c == '(' || c == ')' || c == '\"') {
-	    buf->s[len] = '\0';
-	    return c;
-	}
-	if (len == buf->alloc) {
-	    buf->alloc += BUFGROWSIZE;
-	    buf->s = xrealloc(buf->s, buf->alloc+1);
-	}
-	buf->s[len++] = c;
-    }
-}
-
-/*
- * Parse an xstring
- * (astring, nstring or string based on type)
- */
-int getxstring(struct buf *buf, int type)
-{
-    int c;
-    int i, len = 0;
-    int sawdigit = 0;
-    int isnowait;
-
-    if (buf->alloc == 0) {
-	buf->alloc = BUFGROWSIZE;
-	buf->s = xmalloc(buf->alloc+1);
-    }
-	
-    c = prot_getc(proxyd_in);
-    switch (c) {
-    case EOF:
-    case ' ':
-    case '(':
-    case ')':
-    case '\r':
-    case '\n':
-	/* Invalid starting character */
-	buf->s[0] = '\0';
-	if (c != EOF) prot_ungetc(c, proxyd_in);
-	return EOF;
-
-    default:
-	switch (type) {
-	case IMAP_ASTRING:	 /* atom, quoted-string or literal */
-	    /*
-	     * Atom -- server is liberal in accepting specials other
-	     * than whitespace, parens, or double quotes
-	     */
-	    for (;;) {
-		if (c == EOF || isspace(c) || c == '(' || 
-		          c == ')' || c == '\"') {
-		    buf->s[len] = '\0';
-		    return c;
-		}
-		if (len == buf->alloc) {
-		    buf->alloc += BUFGROWSIZE;
-		    buf->s = xrealloc(buf->s, buf->alloc+1);
-		}
-		buf->s[len++] = c;
-		c = prot_getc(proxyd_in);
-	    }
-	    break;
-
-	case IMAP_NSTRING:	 /* "NIL", quoted-string or literal */
-	    /*
-	     * Look for "NIL"
-	     */
-	    if (c == 'N') {
-		prot_ungetc(c, proxyd_in);
-		c = getword(buf);
-		if (!strcmp(buf->s, "NIL"))
-		    return c;
-	    }
-	    if (c != EOF) prot_ungetc(c, proxyd_in);
-	    return EOF;
-	    break;
-
-	case IMAP_STRING:	 /* quoted-string or literal */
-	    /*
-	     * Nothing to do here - fall through.
-	     */
-	    break;
-	}
-	
-    case '\"':
-	/*
-	 * Quoted-string.  Server is liberal in accepting qspecials
-	 * other than double-quote, CR, and LF.
-	 */
-	for (;;) {
-	    c = prot_getc(proxyd_in);
-	    if (c == '\\') {
-		c = prot_getc(proxyd_in);
-	    }
-	    else if (c == '\"') {
-		buf->s[len] = '\0';
-		return prot_getc(proxyd_in);
-	    }
-	    else if (c == EOF || c == '\r' || c == '\n') {
-		buf->s[len] = '\0';
-		if (c != EOF) prot_ungetc(c, proxyd_in);
-		return EOF;
-	    }
-	    if (len == buf->alloc) {
-		buf->alloc += BUFGROWSIZE;
-		buf->s = xrealloc(buf->s, buf->alloc+1);
-	    }
-	    buf->s[len++] = c;
-	}
-    case '{':
-	/* Literal */
-	isnowait = 0;
-	buf->s[0] = '\0';
-	while ((c = prot_getc(proxyd_in)) != EOF && isdigit(c)) {
-	    sawdigit = 1;
-	    len = len*10 + c - '0';
-	}
-	if (c == '+') {
-	    isnowait++;
-	    c = prot_getc(proxyd_in);
-	}
-	if (!sawdigit || c != '}') {
-	    if (c != EOF) prot_ungetc(c, proxyd_in);
-	    return EOF;
-	}
-	c = prot_getc(proxyd_in);
-	if (c != '\r') {
-	    if (c != EOF) prot_ungetc(c, proxyd_in);
-	    return EOF;
-	}
-	c = prot_getc(proxyd_in);
-	if (c != '\n') {
-	    if (c != EOF) prot_ungetc(c, proxyd_in);
-	    return EOF;
-	}
-	if (len >= buf->alloc) {
-	    buf->alloc = len+1;
-	    buf->s = xrealloc(buf->s, buf->alloc+1);
-	}
-	if (!isnowait) {
-	    prot_printf(proxyd_out, "+ go ahead\r\n");
-	    prot_flush(proxyd_out);
-	}
-	for (i = 0; i < len; i++) {
-	    c = prot_getc(proxyd_in);
-	    if (c == EOF) {
-		buf->s[len] = '\0';
-		return EOF;
-	    }
-	    buf->s[i] = c;
-	}
-	buf->s[len] = '\0';
-	if (strlen(buf->s) != len) return EOF; /* Disallow imbedded NUL */
-	return prot_getc(proxyd_in);
-    }
-}
-
-/*
- * Eat characters up to and including the next newline
- * Also look for and eat non-synchronizing literals.
- */
-void
-eatline(c)
-int c;
-{
-    int state = 0;
-    char *statediagram = " {+}\r";
-    int size = -1;
-
-    for (;;) {
-	if (c == '\n') return;
-	if (c == statediagram[state+1]) {
-	    state++;
-	    if (state == 1) size = 0;
-	    else if (c == '\r') {
-		/* Got a non-synchronizing literal */
-		c = prot_getc(proxyd_in);/* Eat newline */
-		while (size--) {
-		    c = prot_getc(proxyd_in); /* Eat contents */
-		}
-		state = 0;	/* Go back to scanning for eol */
-	    }
-	}
-	else if (state == 1 && isdigit(c)) {
-	    size = size * 10 + c - '0';
-	}
-	else state = 0;
-
-	c = prot_getc(proxyd_in);
-	if (c == EOF) return;
-    }
 }
 
 /*

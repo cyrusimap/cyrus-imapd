@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.15 2001/04/03 20:11:12 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.15.2.1 2001/04/28 00:54:05 ken3 Exp $
  */
 #include <config.h>
 
@@ -127,7 +127,6 @@ static void cmd_pass();
 static void cmd_user();
 static void cmd_starttls(int pop3s);
 static int starttls_enabled(void);
-void eatline(void);
 static void cmdloop(void);
 static void kpop(void);
 static void usage(void);
@@ -1174,16 +1173,6 @@ static void openproxy(void)
 
     prot_printf(popd_out, "+OK Maildrop locked and ready\r\n");
     return;
-}
-
-/*
- * Eat characters up to and including the next newline
- */
-void eatline(void)
-{
-    int c;
-
-    while ((c = prot_getc(popd_in)) != EOF && c != '\n') ;
 }
 
 /* we've authenticated the client, we've connected to the backend.
