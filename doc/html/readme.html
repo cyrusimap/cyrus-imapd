@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <TITLE>Cyrus IMAP Server Release Information</TITLE>
-<!-- Changed by: John Gardiner Myers, 18-Oct-1995 -->
+<!-- Changed by: John Gardiner Myers, 13-Nov-1995 -->
 </HEAD><BODY>
 <H1>                Cyrus IMAP Server Release Information</H1>
 
@@ -31,17 +31,33 @@ have the option of managing quotas and access control lists.
 
 <ul>
 
-<LI> SunOS 4.1.3, gcc &amp; cc, Kerberos
+<LI> SunOS 5.4 (Solaris), gcc &amp; cc; unix_pwcheck, Kerberos.  If
+compiling with unix authentication, see the file
+"<TT>pwcheck/README</TT>" in the distribution.
 
-<LI> SunOS 5.4 (Solaris), gcc &amp; cc, passwd file
+<LI> SunOS 4.1.3, gcc &amp; cc; Kerberos
 
-<LI> Ultrix 4.2 (Decstation), gcc &amp; cc, Kerberos
+<LI> HP-UX 9.0.4, gcc 2.7.0; passwd, Kerberos.  Comments from testers:
+ <P> The C that ships with HP-UX is totally unsuited for use with unix
+packages.  Either the HP-UX ANSI C developers kit must be
+purchased separately from HP or GNU's gcc compiler (which can
+bootstrap itself from the basic HP C) must be built on the target
+system.
+ <P> The author further notes that the memory mapping support in HP-UX
+is lacking, as of 9.0.5.  It is recommended that large-scale sites
+consider using some other platform for IMAP servers.
 
-<LI> HPUX 9.05, gcc, Kerberos.  Some problems compiling with cc.
+</ul>
 
+<P> Older versions of this server has been successfully installed on
+the following systems.  Newer versions have not been checked
+
+<ul>
 <LI> RS/6000 AIX 3.2.5, xlc, Kerberos
 
 <LI> NeXTStep 3.2, gcc, Kerberos
+
+<LI> Ultrix 4.2 (Decstation), gcc &amp; cc; Kerberos
 
 </ul>
 
