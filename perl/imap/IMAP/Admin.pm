@@ -340,12 +340,12 @@ sub setquota {
   my ($self, $mbx, %quota) = @_;
   foreach my $id (keys %quota) {
     if ($id !~ /^[]!\#-[^-~]+$/) {
-      $@ = $id . ': not an atom';
-      return undef;
+	$self->{error} = $id . ': not an atom';
+	return undef;
     }
     if ($quota{$id} !~ /^\d+$/) {
-      $@ = $id . ': ' . $quota{$id} . ': not a number';
-      return undef;
+	$self->{error} = $id . ': ' . $quota{$id} . ': not a number';
+	return undef;
     }
   }
   my ($rc, $msg) = $self->send('', '', 'SETQUOTA %s (%v)', $mbx, \%quota);
