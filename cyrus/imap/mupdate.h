@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.7 2002/01/28 22:07:14 rjs3 Exp $
+ * $Id: mupdate.h,v 1.8 2002/01/29 17:41:47 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,15 @@
 
 #ifndef INCLUDED_MUPDATE_H
 #define INCLUDED_MUPDATE_H
+
+/* Quick reference to the mupdate files:
+ *
+ * mupdate.h: Internal header for mupdate modules.
+ * mupdate-client.h: Public header for mupdate clients.
+ * mupdate-client.c: Implementation of client functions
+ * mupdate.c: Implementation of server functions
+ * mupdate-slave.c: Slave listener thread functions.
+ */
 
 #include "mailbox.h"
 #include "mupdate-client.h"
