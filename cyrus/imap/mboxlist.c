@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.99 1999/10/18 02:21:40 leg Exp $
+ * $Id: mboxlist.c,v 1.100 1999/12/30 21:07:26 leg Exp $
  */
 
 #include <stdio.h>
@@ -165,6 +165,46 @@ int mboxlist_lookup(const char* name, char** pathp, char** aclp)
 	*aclp = aclresult;
     }
 
+    return 0;
+}
+
+int mboxlist_findstage(const char *name, char *stagedir) 
+{
+    unsigned long offset, len, partitionlen;
+    char optionbuf[MAX_MAILBOX_NAME+1];
+    char *partition;
+    const char *root;
+
+    assert(stagedir != NULL);
+
+    mboxlist_reopen();
+
+    /* Find mailbox */
+    offset = bsearch_mem(name, 1, list_base, list_size, 0, &len);
+    if (!len) {
+	return IMAP_MAILBOX_NONEXISTENT;
+    }
+	
+    /* Parse partition name, construct pathname if requested */
+    mboxlist_parseline(offset, len, NULL, NULL,
+		       &partition, &partitionlen, NULL, NULL);
+
+    if (partitionlen > sizeof(optionbuf)-11) {
+	return IMAP_PARTITION_UNKNOWN;
+    }
+    strcpy(optionbuf, "partition-");
+    memcpy(optionbuf + 10, partition, partitionlen);
+    optionbuf[10+partitionlen] = '\0';
+    
+    root = config_getstring(optionbuf, (char *)0);
+    if (!root) {
+	return IMAP_PARTITION_UNKNOWN;
+    }
+	
+    strcpy(stagedir, root);
+    strcat(stagedir, "/");
+    sprintf(stagedir, "%s/stage./", root);
+    
     return 0;
 }
 

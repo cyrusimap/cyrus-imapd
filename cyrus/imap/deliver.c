@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.118 1999/12/29 18:49:33 leg Exp $
+ * $Id: deliver.c,v 1.119 1999/12/30 21:07:25 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.118 1999/12/29 18:49:33 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.119 1999/12/30 21:07:25 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -115,6 +115,9 @@ typedef struct address_data {
 
 typedef struct message_data {
     struct protstream *data;	/* message in temp file */
+    struct stagemsg *stage;	/* staging location for single instance
+				   store */
+
     FILE *f;
     char *notifyheader;
     char *id;			/* message id */
@@ -1032,7 +1035,7 @@ int sieve_fileinto(char *mailbox, void *ic, void *sc, void *mc)
     if (!sd->authstate)
 	return SIEVE_FAIL;
 
-    ret = deliver_mailbox(md->data, md->size, 0, 0,
+    ret = deliver_mailbox(md->data, &md->stage, md->size, 0, 0,
 			  sd->username, sd->authstate, md->id,
 			  sd->username, md->notifyheader,
 			  mailbox, dop->quotaoverride, 0);
@@ -1066,7 +1069,7 @@ int sieve_keep(char *arg, void *ic, void *sc, void *mc)
 	strcpy(namebuf, "INBOX");
     }
 
-    ret = deliver_mailbox(md->data, md->size, 0, 0,
+    ret = deliver_mailbox(md->data, &md->stage, md->size, 0, 0,
 			  sd->username, sd->authstate, md->id,
 			  sd->username, md->notifyheader,
 			  namebuf, dop->quotaoverride, 1);
@@ -1428,6 +1431,7 @@ int msg_new(message_data_t **m)
 	return -1;
     }
     ret->data = NULL;
+    ret->stage = NULL;
     ret->f = NULL;
     ret->notifyheader = ret->id = NULL;
     ret->size = 0;
@@ -1453,6 +1457,9 @@ void msg_free(message_data_t *m)
     }
     if (m->f) {
 	fclose(m->f);
+    }
+    if (m->stage) {
+	append_removestage(m->stage);
     }
     if (m->notifyheader) {
 	free(m->notifyheader);
@@ -2125,25 +2132,25 @@ savemsg(message_data_t *m, int lmtpmode)
 
 /*"*/
 /* places msg in mailbox mailboxname.  
+ * if you wish to use single instance store, pass stage as non-NULL
  * if you want to deliver message regardless of duplicates, pass id as NULL
  * if you want to notify, pass user
  * if you want to force delivery (to force delivery to INBOX, for instance)
  * pass acloverride
  */
-deliver_mailbox(msg, size, flag, nflags, authuser, authstate, id, 
-		user, notifyheader, mailboxname, quotaoverride, acloverride)
-struct protstream *msg;
-unsigned size;
-char **flag;
-int nflags;
-char *authuser;
-struct auth_state *authstate;
-char *id;
-char *notifyheader;
-char *user;
-char *mailboxname;
-int quotaoverride;
-int acloverride;
+deliver_mailbox(struct protstream *msg,
+		struct stagemsg **stage,
+		unsigned size,
+		char **flag,
+		int nflags,
+		char *authuser,
+		struct auth_state *authstate,
+		char *id,
+		char *notifyheader,
+		char *user,
+		char *mailboxname,
+		int quotaoverride,
+		int acloverride)
 {
     int r;
     struct mailbox mailbox;
@@ -2175,8 +2182,13 @@ int acloverride;
 
     if (!r) {
 	prot_rewind(msg);
-	r = append_fromstream(&mailbox, msg, size, now, flag, nflags,
-			      user);
+	if (stage) {
+	    r = append_fromstage(&mailbox, msg, size, now, flag, nflags,
+				 user, stage);
+	} else {
+	    r = append_fromstream(&mailbox, msg, size, now, flag, nflags,
+				  user);
+	}
 	mailbox_close(&mailbox);
     }
 
@@ -2322,7 +2334,9 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 		strcpy(namebuf, "INBOX.");
 		strcat(namebuf, mailboxname);
 		
-		r = deliver_mailbox(msgdata->data, msgdata->size, 
+		r = deliver_mailbox(msgdata->data, 
+				    &msgdata->stage, 
+				    msgdata->size, 
 				    flag, nflags, 
 				    delopts->authuser, delopts->authstate,
 				    msgdata->id, user, msgdata->notifyheader,
@@ -2332,7 +2346,9 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 		strcpy(namebuf, "INBOX");
 		
 		/* ignore ACL's trying to deliver to INBOX */
-		r = deliver_mailbox(msgdata->data, msgdata->size, 
+		r = deliver_mailbox(msgdata->data, 
+				    &msgdata->stage,
+				    msgdata->size, 
 				    flag, nflags, 
 				    delopts->authuser, delopts->authstate,
 				    msgdata->id, user, msgdata->notifyheader,
@@ -2341,7 +2357,9 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	}
     }
     else if (mailboxname) {
-	r = deliver_mailbox(msgdata->data, msgdata->size, 
+	r = deliver_mailbox(msgdata->data, 
+			    &msgdata->stage,
+			    msgdata->size, 
 			    flag, nflags, 
 			    delopts->authuser, delopts->authstate,
 			    msgdata->id, user, msgdata->notifyheader,
