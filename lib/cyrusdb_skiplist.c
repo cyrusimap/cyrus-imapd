@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.18 2002/02/06 22:40:47 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.19 2002/02/12 20:07:18 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -784,7 +784,7 @@ int myforeach(struct db *db,
 {
     const char *ptr;
     struct txn t, *tp;
-    int r;
+    int r = 0;
 
     assert(db != NULL);
 
@@ -850,7 +850,7 @@ int myforeach(struct db *db,
 	}
     }
 
-    return 0;
+    return r;
 }
 
 int randlvl(struct db *db)
