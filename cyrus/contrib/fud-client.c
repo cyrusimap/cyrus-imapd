@@ -1,4 +1,9 @@
-/*  This is an example client for the experimental fud service. */
+/*  This is an example client for the experimental fud service. 
+    For this to work, the mailbox must have the local ACL bit 0 enabled
+    for user 'anonymous' ('anyone' will also work)
+    For example, from cyradm:  'sam <mailbox> anonymous 0'
+*/
+
 
 #include <sys/types.h>
 #include <sys/socket.h>
