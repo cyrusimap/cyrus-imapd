@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.7 2005/03/04 19:26:48 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.8 2005/03/04 20:51:08 ken3 Exp $
  */
 
 #include <config.h>
@@ -2727,7 +2727,7 @@ static int do_sync(const char *filename)
     sync_action_list_free(&sub_list);
     sync_action_list_free(&unsub_list);
     sync_folder_list_free(&folder_list);
-/*    prot_free(input);*/
+    prot_free(input);
     return(r);
 }
 
