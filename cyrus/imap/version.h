@@ -36,10 +36,10 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- * $Id: version.h,v 1.124 2003/05/01 19:05:29 rjs3 Exp $
+ * $Id: version.h,v 1.125 2003/07/02 16:42:32 rjs3 Exp $
  */
 
-#define _CYRUS_VERSION "v2.1.13"
+#define _CYRUS_VERSION "v2.1.14"
 
 /* EXTRA_IDENT is a hack to add some version information for which compile
  * was used to build this version (at CMU, but we don't care what you do with
