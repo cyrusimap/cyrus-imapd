@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.69 2003/02/05 19:09:43 ken3 Exp $
+ * $Id: mupdate.c,v 1.70 2003/02/05 19:14:19 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -78,6 +78,7 @@
 #include "imap_err.h"
 #include "version.h"
 #include "mpool.h"
+#include "util.h"
 
 static int masterp = 0;
 
