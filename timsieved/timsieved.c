@@ -133,38 +133,6 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   return ret;
 }
 
-/* this is a wrapper to call the cyrus configuration from SASL */
-static int mysasl_config(void *context, 
-			 const char *plugin_name,
-			 const char *option,
-			 const char **result,
-			 unsigned *len)
-{
-    char opt[1024];
-
-    if (strcmp(option, "srvtab")) { /* we don't transform srvtab! */
-	int sl = 5 + (plugin_name ? strlen(plugin_name) + 1 : 0);
-
-	strncpy(opt, "sasl_", 1024);
-	if (plugin_name) {
-	    strncat(opt, plugin_name, 1019);
-	    strncat(opt, "_", 1024 - sl);
-	}
- 	strncat(opt, option, 1024 - sl - 1);
-	opt[1023] = '\0';
-    } else {
-	strncpy(opt, option, 1024);
-    }
-
-    *result = (const char *) config_getstring(opt, NULL);
-    if (*result != NULL) {
-	if (len) { *len = strlen(*result); }
-	return SASL_OK;
-    }
-   
-    return SASL_FAIL;
-}
-
 /* returns true if imapd_authstate is in "item";
    expected: item = admins or proxyservers 
 */
@@ -193,10 +161,10 @@ static int authisa(const char *item)
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 static int mysasl_authproc(void *context,
-		       const char *auth_identity,
-		       const char *requested_user,
-		       const char **user,
-		       const char **errstr)
+			   const char *auth_identity,
+			   const char *requested_user,
+			   const char **user,
+			   const char **errstr)
 {
     const char *val;
     char *canon_authuser, *canon_requser;
@@ -261,22 +229,25 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-int main(int argc, char **argv, char **envp)
+int service_init(int argc, char **argv, char **envp)
+{
+
+
+    return 0;
+}
+
+int service_main(int argc, char **argv, char **envp)
 {
     int salen;
     struct hostent *hp;
     int timeout;
-    char hostname[MAXHOSTNAMELEN+1];
     sasl_security_properties_t *secprops = NULL;
-
-    if (gethostname(hostname, MAXHOSTNAMELEN)!=0)
-      fatal("gethostname failed\n",-5);
 
     /* set up the prot streams */
     sieved_in = prot_new(0, 0);
     sieved_out = prot_new(1, 1);
 
-    config_init("timsieved");
+    config_changeident("timsieved");
     timeout = config_getint("timeout", 10);
     if (timeout < 10) timeout = 10;
     prot_settimeout(sieved_in, timeout * 60);
@@ -318,14 +289,14 @@ int main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_init()", -1); 
 
     /* other params should be filled in */
-    if (sasl_server_new("imap", hostname, NULL, NULL, SASL_SECURITY_LAYER, 
-			&sieved_saslconn)
+    if (sasl_server_new("imap", NULL, NULL, 
+			NULL, SASL_SECURITY_LAYER, &sieved_saslconn)
 	   != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()", -1); 
 
     /* will always return something valid */
     /* should be configurable! */
-    secprops = make_secprops(0, 2000);
+    secprops = mysasl_secprops();
     sasl_setprop(sieved_saslconn, SASL_SEC_PROPS, secprops);
     
     sasl_setprop(sieved_saslconn, SASL_IP_REMOTE, &sieved_remoteaddr);  
@@ -337,7 +308,7 @@ int main(int argc, char **argv, char **envp)
     cmdloop();
 
     /* never reaches */
-    return -99;
+    exit(-99);
 }
 
 
