@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.16 2004/05/22 03:45:49 rjs3 Exp $ */
+/* $Id: global.c,v 1.17 2004/11/23 17:40:15 shadow Exp $ */
 
 #include <config.h>
 
@@ -427,12 +427,12 @@ int mysasl_canon_user(sasl_conn_t *conn,
 	return SASL_BADAUTH;
     }
     *out_ulen = strlen(canonuser);
-    if (*out_ulen > out_max) {
+    if (*out_ulen >= out_max) {
 	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
 	return SASL_BUFOVER;
     }
     
-    strncpy(out, canonuser, out_max);
+    strcpy(out, canonuser);
 
     return SASL_OK;
 }
