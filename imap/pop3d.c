@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.54 1999/12/29 19:20:55 leg Exp $
+ * $Id: pop3d.c,v 1.55 2000/01/28 22:09:49 leg Exp $
  */
 
 #ifndef __GNUC__
@@ -286,7 +286,8 @@ usage()
 /*
  * Cleanly shut down and exit
  */
-void shut_down(int code) __attribute__((noreturn));
+void shut_down(int code) __attribute__ ((noreturn));
+
 void shut_down(int code)
 {
     proc_cleanup();

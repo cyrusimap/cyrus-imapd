@@ -80,6 +80,14 @@ ec IMAP_MESSAGE_NOBLANKLINE,
 ec IMAP_QUOTAROOT_NONEXISTENT,
    "Quota root does not exist"
 
+# following used only proxy/db operations
+
+ec IMAP_SERVER_UNAVAILABLE,
+   "Server(s) unavailable to complete operation"
+
+ec IMAP_AGAIN,
+   "Retry operation"
+
 # Following only used for internationalization of error messages
 
 ec IMAP_UNRECOGNIZED_CHARSET,

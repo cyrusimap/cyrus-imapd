@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.198 2000/01/06 22:42:23 leg Exp $ */
+/* $Id: imapd.c,v 1.199 2000/01/28 22:09:44 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -179,10 +179,10 @@ void freesearchargs P((struct searchargs *s));
 
 void printauthready P((int len, unsigned char *data));
 
-/* XXX fix when proto-izing mboxlist.c */
+#include "mboxlist.h"
+
 static int mailboxdata(), listdata(), lsubdata();
-static void mstringdata P((char *cmd, char *name, int matchlen, int maycreate));
-void mboxlist_close P((void));
+static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
 
 /* This creates a structure that defines the allowable
  *   security properties 
@@ -273,7 +273,7 @@ const char *auth_identity;
     strcat(inboxname, user);
 
     if (!(authstate = auth_newstate(auth_identity, (char *)0)) ||
-	mboxlist_lookup(inboxname, (char **)0, &acl)) {
+	mboxlist_lookup(inboxname, (char **)0, &acl, NULL)) {
 	r = 0;  /* Failed so assume no proxy access */
     }
     else {
@@ -434,6 +434,10 @@ char **envp;
     setproctitle_init(argc, argv, envp);
     config_init("imapd");
 
+    mboxlist_init();
+
+    mboxlist_open(NULL);
+
     signal(SIGPIPE, SIG_IGN);
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
@@ -479,6 +483,7 @@ char **envp;
 			     config_getint("sasl_maximum_layer", 256));
 
     sasl_setprop(imapd_saslconn, SASL_SEC_PROPS, secprops);
+    free(secprops);
     if (extprops.ssf) {
 	sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops);
     }
@@ -557,6 +562,7 @@ void shut_down(int code)
 	index_closemailbox(imapd_mailbox);
 	mailbox_close(imapd_mailbox);
     }
+    mboxlist_done();
     prot_flush(imapd_out);
     exit(code);
 }
@@ -702,7 +708,7 @@ cmdloop()
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		mboxlist_close();	
+
 		cmd_noop(tag.s, cmd.s);
 	    }
 	    else if (!strcmp(cmd.s, "Copy")) {
@@ -738,7 +744,7 @@ cmdloop()
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		mboxlist_close();	
+
 		cmd_close(tag.s);
 	    }
 	    else goto badcmd;
@@ -775,7 +781,7 @@ cmdloop()
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		mboxlist_close();	
+
 		cmd_expunge(tag.s, 0);
 	    }
 	    else if (!strcmp(cmd.s, "Examine")) {
@@ -799,7 +805,7 @@ cmdloop()
 		c = getword(&arg1);
 		if (c == '\r') goto missingargs;
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
-		mboxlist_close();	
+
 		cmd_fetch(tag.s, arg1.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Find")) {
@@ -934,7 +940,7 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Noop")) {
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		mboxlist_close();	
+
 		cmd_noop(tag.s, cmd.s);
 	    }
 #ifdef ENABLE_X_NETSCAPE_HACK
@@ -966,7 +972,7 @@ cmdloop()
 		c = getword(&arg4);
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		mboxlist_close();	
+
 		cmd_partial(tag.s, arg1.s, arg2.s, arg3.s, arg4.s);
 	    }
 	    else goto badcmd;
@@ -1032,7 +1038,7 @@ cmdloop()
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
 		c = getword(&arg2);
 		if (c != ' ') goto badsequence;
-		mboxlist_close();	
+
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Select")) {
@@ -1049,7 +1055,7 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    search:
-		mboxlist_close();	
+
 		cmd_search(tag.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Subscribe")) {
@@ -1255,12 +1261,12 @@ char *passwd;
 	    return;
 	}
     }
-    else if ((result = sasl_checkpass(imapd_saslconn,
-				      canon_user,
-				      strlen(canon_user),
-				      passwd,
-				      strlen(passwd),
-				      &reply)) != SASL_OK) { 
+    else if ((result=sasl_checkpass(imapd_saslconn,
+				    canon_user,
+				    strlen(canon_user),
+				    passwd,
+				    strlen(passwd),
+				    (const char **) &reply)) != SASL_OK) {
 	if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   imapd_clienthost, canon_user, reply);
@@ -2593,15 +2599,17 @@ char *partition;
     }
 
     if (!r) {
-	r = mboxlist_createmailbox(mailboxname, MAILBOX_FORMAT_NORMAL, partition,
-				   imapd_userisadmin, imapd_userid, imapd_authstate);
+	r = mboxlist_createmailbox(mailboxname, 0, partition,
+				   imapd_userisadmin, 
+				   imapd_userid, imapd_authstate);
 
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
 	    (autocreatequota = config_getint("autocreatequota", 0))) {
 
 	    /* Auto create */
-	    r = mboxlist_createmailbox(mailboxname, MAILBOX_FORMAT_NORMAL,
-				       partition, 1, imapd_userid, imapd_authstate);
+	    r = mboxlist_createmailbox(mailboxname, 0,
+				       partition, 1, imapd_userid,
+				       imapd_authstate);
 	    
 	    if (!r && autocreatequota > 0) {
 		(void) mboxlist_setquota(mailboxname, autocreatequota);
@@ -2714,8 +2722,9 @@ char *pattern;
     }
 
     if (!strcmp(namespace, "mailboxes")) {
-	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid, imapd_authstate,
-			 mailboxdata);
+	mboxlist_findsub(pattern, imapd_userisadmin, 
+			 imapd_userid, imapd_authstate,
+			 mailboxdata, NULL);
     }
     else if (!strcmp(namespace, "all.mailboxes")) {
 	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
@@ -2860,7 +2869,7 @@ int oldform;
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, (char **)0, &acl);
+	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
     }
 
     if (!r) {
@@ -2942,7 +2951,7 @@ char *identifier;
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, (char **)0, &acl);
+	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
     }
 
     if (!r) {
@@ -3003,7 +3012,7 @@ int oldform;
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, (char **)0, &acl);
+	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
     }
 
     if (!r) {

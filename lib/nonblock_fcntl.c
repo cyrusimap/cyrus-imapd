@@ -1,5 +1,5 @@
 /* nonblock_fcntl.c -- Set nonblocking mode using fcntl()
- $Id: nonblock_fcntl.c,v 1.8 1999/10/30 23:07:40 leg Exp $
+ $Id: nonblock_fcntl.c,v 1.9 2000/01/28 22:09:55 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #

@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.150 2000/01/25 06:51:18 leg Exp $
+dnl $Id: configure.in,v 1.151 2000/01/28 22:09:39 leg Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -605,23 +605,11 @@ dnl because of snprintf problems, we have to do this before kerberos checks,
 dnl then put krb libs at front of line
 dnl
 
-AC_CHECK_FUNC(dbopen, [AC_DEFINE(HAVE_LIBDB)
-                       use_db=1], 
-  AC_CHECK_LIB(db,dbopen,[AC_DEFINE(HAVE_LIBDB)
-       	                  LIBS=" -ldb ${LIBS}"
-                	  use_db=1]))
-dnl if db_185.h is present, we're using db2 or 3 and should include db_185.h
-dnl instead of db.h; otherwise, include db.h.  this is handled in the code
-dnl itself.
-AC_CHECK_HEADER(db_185.h, [AC_DEFINE(HAVE_DB_185_H)
-			   AC_DEFINE(HAVE_LIBDB)
-                           LIBS="-ldb ${LIBS}"
-  		           use_db=1])
-
-if test -z "use_db"; then
-  AC_CHECK_LIB(ndbm, dbm_open)
-  AC_CHECK_LIB(dbm, dbm_open)
-fi
+AC_CHECK_LIB(db, db_create, [AC_DEFINE(HAVE_LIBDB)
+       	                     LIBS=" -ldb ${LIBS}"
+                	     use_db=1],
+AC_ERROR([this version required Berkeley DB 3.x.
+          (Get it from http://www.sleepycat.com/.)]))
 
 AC_ARG_ENABLE(static-libraries,
         [  --static-libraries      compile with avalible static libraries (EXPERIMENTAL)],
@@ -1154,4 +1142,4 @@ fi
 AC_SUBST(IMAP_COM_ERR_LIBS)
 AC_SUBST(IMAP_LIBS)
 
-AC_OUTPUT(Makefile man/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile $EXTRA_OUTPUT)
+AC_OUTPUT(Makefile man/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile $EXTRA_OUTPUT)

@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.45 1999/12/23 21:03:19 leg Exp $
+ $Id: imclient.c,v 1.46 2000/01/28 22:09:54 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -175,6 +175,8 @@ static int imclient_decodebase64 P((char *input));
 static sasl_callback_t callbacks[] = {
   {
     SASL_CB_USER, NULL, NULL
+  }, {
+    SASL_CB_GETREALM, NULL, NULL
   }, {
     SASL_CB_AUTHNAME, NULL, NULL
   }, {

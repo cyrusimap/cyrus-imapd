@@ -1,6 +1,6 @@
 /* interp.h -- interpretor definition
  * Larry Greenfield
- * $Id: interp.h,v 1.2 1999/10/04 18:23:06 leg Exp $
+ * $Id: interp.h,v 1.3 2000/01/28 22:09:55 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -33,6 +33,9 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 struct sieve_interp {
     /* standard callbacks for actions */
     sieve_callback *redirect, *discard, *reject, *fileinto, *keep;
+    sieve_callback *setflag, *addflag, *removeflag, *mark, *unmark;
+    sieve_callback *denotify;
+    sieve_notify_callback *notify;
     sieve_vacation_t *vacation;
 
     sieve_get_size *getsize;

@@ -1,6 +1,6 @@
 /* tree.c -- abstract syntax tree handling
  * Larry Greenfield
- * $Id: tree.c,v 1.5 1999/09/30 07:36:59 leg Exp $
+ * $Id: tree.c,v 1.6 2000/01/28 22:09:56 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -35,6 +35,14 @@ stringlist_t *new_sl(char *s, stringlist_t *n)
 {
     stringlist_t *p = (stringlist_t *) xmalloc(sizeof(stringlist_t));
     p->s = s;
+    p->next = n;
+    return p;
+}
+
+patternlist_t *new_pl(void *pat, patternlist_t *n)
+{
+    patternlist_t *p = (patternlist_t *) xmalloc(sizeof(patternlist_t));
+    p->p = pat;
     p->next = n;
     return p;
 }
@@ -103,6 +111,27 @@ void free_sl(stringlist_t *sl)
     }
 }
 
+void free_pl(patternlist_t *pl, int comptag) 
+{
+    patternlist_t *pl2;
+
+    while (pl != NULL) {
+	pl2 = pl->next;
+
+	if (pl->p) {
+#ifdef ENABLE_REGEX
+	    if (comptag == REGEX) {
+		regfree((regex_t *) pl->p);
+	    }
+#endif
+	    free(pl->p);
+	}
+
+	free(pl);
+	pl = pl2;
+    }
+}
+
 void free_test(test_t *t);
 
 void free_tl(testlist_t *tl)
@@ -139,13 +168,13 @@ void free_test(test_t *t)
 	break;
 
     case HEADER:
-	free_sl(t->u.h.s1);
-	free_sl(t->u.h.s2);
+	free_sl(t->u.h.sl);
+	free_pl(t->u.h.pl, t->u.h.comptag);
 	break;
 
     case ADDRESS:
-	free_sl(t->u.ae.s1);
-	free_sl(t->u.ae.s2);
+	free_sl(t->u.ae.sl);
+	free_pl(t->u.ae.pl, t->u.ae.comptag);
 	break;
 
     case NOT:
@@ -181,6 +210,9 @@ void free_tree(commandlist_t *cl)
 	    
 	case FILEINTO:
 	case FORWARD:
+	case SETFLAG:
+	case ADDFLAG:
+	case REMOVEFLAG:
 	    free_sl(cl->u.sl);
 	    break;
 

@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.43 2000/01/14 02:10:20 leg Exp $
+ * $Id: imtest.c,v 1.44 2000/01/28 22:09:52 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -675,7 +675,7 @@ void interaction (int id, const char *prompt,
 	int c;
 	
 	printf("%s: ",prompt);
-	fgets(result, 1023, stdin);
+	fgets(result, sizeof(result) - 1, stdin);
 	c = strlen(result);
 	result[c - 1] = '\0';
     }
@@ -700,20 +700,19 @@ void fillin_interactions(sasl_interact_t *tlist)
 
 static int waitfor(char *tag)
 {
-  char *str=malloc(301);
-  char *ptr;
+    char str[1024];
+    char *ptr;
 
-  do {
-      str=prot_fgets(str,300,pin);
-      if (str == NULL) {
-	  imtest_fatal("prot layer failure");
-      }
-      printf("%s", str);
-  } while (strncmp(str, tag, strlen(tag)));
+    do {
+	if (prot_fgets(str,sizeof(str),pin) == NULL) {
+	    imtest_fatal("prot layer failure");
+	}
+	printf("%s", str);
+    } while (strncmp(str, tag, strlen(tag)));
 
-  free(str);
+    free(str);
 
-  return 0;
+    return 0;
 }
 
 static int auth_login(void)
@@ -894,7 +893,7 @@ static char *parsemechlist(char *str)
 
 static char *ask_capability(int *supports_starttls)
 {
-  char *str=malloc(301);
+  char str[1024];
   char *ret;
 
   /* request capabilities of server */
@@ -904,9 +903,9 @@ static char *ask_capability(int *supports_starttls)
   printf("C: %s", CAPABILITY);
 
   do { /* look for the * CAPABILITY response */
-      str = prot_fgets(str,300,pin);
-      if (str == NULL) imtest_fatal("prot layer failure");
-  
+      if (prot_fgets(str,sizeof(str),pin) == NULL) {
+	  imtest_fatal("prot layer failure");
+      }
       printf("S: %s", str);
   } while (strncasecmp(str, "* CAPABILITY", 12));
 
@@ -919,8 +918,9 @@ static char *ask_capability(int *supports_starttls)
   ret=parsemechlist(str);
 
   do { /* look for TAG */
-      str = prot_fgets(str,300,pin);
-      if (str == NULL) imtest_fatal("prot layer failure");
+      if (prot_fgets(str, sizeof(str), pin) == NULL) {
+	  imtest_fatal("prot layer failure");
+      }
  
       printf("S: %s",str);
   } while (strncmp(str, CAPATAG, strlen(CAPATAG)));
@@ -1046,7 +1046,6 @@ void interactive(char *filename)
       }
 
       if ((FD_ISSET(0, &rset)) && (FD_ISSET(sock, &wset)))  {
-	  
 	  if (fgets(buf, sizeof (buf) - 1, stdin) == NULL) {
 	      printf(LOGOUT);
 	      prot_write(pout, LOGOUT, sizeof (LOGOUT));

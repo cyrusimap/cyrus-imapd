@@ -1,6 +1,6 @@
 /* script.h -- script definition
  * Larry Greenfield
- * $Id: script.h,v 1.3 1999/10/04 18:23:07 leg Exp $
+ * $Id: script.h,v 1.4 2000/01/28 22:09:56 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -37,10 +37,13 @@ struct sieve_script {
 
     /* was a "require" done for these? */
     struct sieve_support {
-	int fileinto : 1;
-	int reject : 1;
-	int envelope : 1;
-	int vacation : 1;
+	int fileinto  : 1;
+	int reject    : 1;
+	int envelope  : 1;
+	int vacation  : 1;
+	int imapflags : 1;
+	int notify    : 1;
+	int regex     : 1;
     } support;
 
     void *script_context;

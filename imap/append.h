@@ -1,5 +1,5 @@
 /* append.h -- Description of messages to be copied 
- $Id: append.h,v 1.13 1999/12/30 21:07:25 leg Exp $
+ $Id: append.h,v 1.14 2000/01/28 22:09:42 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 

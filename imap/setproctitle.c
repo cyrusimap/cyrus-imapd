@@ -1,5 +1,5 @@
 /* setproctitle -- set process title shown by ps(1)
- $Id: setproctitle.c,v 1.11 1999/10/02 00:43:07 leg Exp $
+ $Id: setproctitle.c,v 1.12 2000/01/28 22:09:52 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -62,32 +62,20 @@
 
 #include <stdio.h>
 #include "xmalloc.h"
-
-/*
-**  Arrange to use either varargs or stdargs
-*/
-
-# ifdef __STDC__
-
 # include <stdarg.h>
 
 # define VA_LOCAL_DECL	va_list ap;
 # define VA_START(f)	va_start(ap, f)
 # define VA_END		va_end(ap)
 
-# else
-
-# include <varargs.h>
-
-# define VA_LOCAL_DECL	va_list ap;
-# define VA_START(f)	va_start(ap)
-# define VA_END		va_end(ap)
-
-# endif
-
 # define MAXLINE 2048            /* max line length */
 
 extern char **environ;
+#ifdef USE_SETPROCTITLE
+int setproctitle_enable = 1;
+#else
+int setproctitle_enable = 0;
+#endif
 
 static char		**Argv = NULL;		/* pointer to argument vector */
 static char		*LastArgv = NULL;	/* end of argv */
@@ -95,11 +83,11 @@ static char		*LastArgv = NULL;	/* end of argv */
 /*
  * Sets up a process to be able to use setproctitle()
  */
-void setproctitle_init(argc, argv, envp)
-int argc;
-char **argv, **envp;
+void setproctitle_init(int argc, char **argv, char **envp)
 {
     int i;
+
+    if (!setproctitle_enable) return;
 
     /*
      * Move the environment so setproctitle can use the space at
@@ -204,13 +192,7 @@ typedef unsigned int	*pt_entry_t;
 
 /*VARARGS1*/
 void
-# ifdef __STDC__
 setproctitle(const char *fmt, ...)
-# else
-setproctitle(fmt, va_alist)
-	const char *fmt;
-	va_dcl
-# endif
 {
 # if SPT_TYPE != SPT_NONE
 	register char *p;
@@ -230,6 +212,8 @@ setproctitle(fmt, va_alist)
 	extern char **Argv;
 	extern char *LastArgv;
 #  endif
+
+	if (!setproctitle_enable) return;
 
 	p = buf;
 

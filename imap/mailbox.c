@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.81 1999/10/02 00:43:04 leg Exp $
+ $Id: mailbox.c,v 1.82 2000/01/28 22:09:46 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -70,6 +70,10 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
+#include "mboxlist.h"
+#include "acapmbox.h"
+
+extern acap_conn_t *acap_conn;
 
 static int mailbox_doing_reconstruct = 0;
 static struct mailbox zeromailbox = {-1, -1, -1};
@@ -205,7 +209,7 @@ struct mailbox *mailbox;
     char *path, *acl;
     int r;
 
-    r = mboxlist_lookup(name, &path, &acl);
+    r = mboxlist_lookup(name, &path, &acl, NULL);
     if (r) return r;
 
     return mailbox_open_header_path(name, path, acl, auth_state, mailbox, 0);
@@ -506,7 +510,7 @@ struct auth_state *auth_state;
     int r;
     char *acl;
 
-    r = mboxlist_lookup(mailbox->name, (char **)0, &acl);
+    r = mboxlist_lookup(mailbox->name, (char **)0, &acl, NULL);
     if (r) return r;
 
     free(mailbox->acl);
@@ -1422,8 +1426,20 @@ void *deciderock;
     }
 
     if (numdeleted) {
+	
+	if (mboxlist_acapinit() == 0)
+	{
+	    if (acap_conn != NULL)
+		acapmbox_setproperty(acap_conn,
+				     mailbox->name,
+				     ACAPMBOX_TOTAL,
+				     newexists);
+	    /* xxx what to do about errors? */
+	}
+	
+
 	toimsp(mailbox->name, mailbox->uidvalidity,
-	       "UIDNnn", mailbox->last_uid, newexists, 0);
+		"UIDNnn", mailbox->last_uid, newexists, 0);
     }
 
     mailbox_unlock_pop(mailbox);
@@ -1737,9 +1753,7 @@ struct mailbox *mailboxp;
  * Delete and close the mailbox 'mailbox'.  Closes 'mailbox' whether
  * or not the deletion was successful.
  */
-int mailbox_delete(mailbox, delete_quota_root)
-struct mailbox *mailbox;
-int delete_quota_root;
+int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 {
     int r;
     DIR *dirp;
@@ -1761,8 +1775,7 @@ int delete_quota_root;
 
     if (delete_quota_root) {
 	mailbox_delete_quota(&mailbox->quota);
-    }
-    else {
+    } else {
 	/* Free any quota being used by this mailbox */
 	if (mailbox->quota.used >= mailbox->quota_mailbox_used) {
 	    mailbox->quota.used -= mailbox->quota_mailbox_used;
@@ -1823,14 +1836,9 @@ char *indexbuf;
 }
 
 int
-mailbox_rename(oldname, newname, newpath, isinbox, olduidvalidityp,
-	       newuidvalidityp)
-const char *oldname;
-const char *newname;
-char *newpath;
-int isinbox;
-bit32 *olduidvalidityp;
-bit32 *newuidvalidityp;
+mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl, 
+	       const char *newname, char *newpath, int isinbox, 
+	       bit32 *olduidvalidityp, bit32 *newuidvalidityp)
 {
     int r, r2;
     struct mailbox oldmailbox, newmailbox;
@@ -1840,14 +1848,13 @@ bit32 *newuidvalidityp;
     char *oldfnametail, *newfnametail;
 
     /* Open old mailbox and lock */
-    r = mailbox_open_header(oldname, 0, &oldmailbox);
-    if (r) {
-	return r;
-    }
+    mailbox_open_header_path(oldname, oldpath, oldacl, 0, &oldmailbox, 0);
+
     if (oldmailbox.format == MAILBOX_FORMAT_NETNEWS) {
 	mailbox_close(&oldmailbox);
 	return IMAP_MAILBOX_NOTSUPPORTED;
     }
+
     r =  mailbox_lock_header(&oldmailbox);
     if (!r) r = mailbox_open_index(&oldmailbox);
     if (!r) r = mailbox_lock_index(&oldmailbox);
@@ -1868,8 +1875,8 @@ bit32 *newuidvalidityp;
 	newmailbox.uidvalidity = oldmailbox.uidvalidity;
     }
 
-    *olduidvalidityp = oldmailbox.uidvalidity;
-    *newuidvalidityp = newmailbox.uidvalidity;
+    if (olduidvalidityp) *olduidvalidityp = oldmailbox.uidvalidity;
+    if (newuidvalidityp) *newuidvalidityp = newmailbox.uidvalidity;
 
     /* Copy flag names */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
@@ -1927,7 +1934,6 @@ bit32 *newuidvalidityp;
     newmailbox.index_fd = dup(oldmailbox.index_fd);
     (void) mailbox_read_index_header(&newmailbox);
     newmailbox.generation_no = oldmailbox.generation_no;
-    newmailbox.uidvalidity = *newuidvalidityp;
     (void) mailbox_write_index_header(&newmailbox);
 
     /* Copy over message files */
@@ -1955,8 +1961,7 @@ bit32 *newuidvalidityp;
 	/* Expunge old mailbox */
 	r = mailbox_expunge(&oldmailbox, 0, expungeall, (char *)0);
 	mailbox_close(&oldmailbox);
-    }
-    else {
+    } else {
 	r = mailbox_delete(&oldmailbox, 0);
     }
 

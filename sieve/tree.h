@@ -1,6 +1,6 @@
 /* tree.h -- abstract syntax tree
  * Larry Greenfield
- * $Id: tree.h,v 1.1 1999/07/02 18:55:35 leg Exp $
+ * $Id: tree.h,v 1.2 2000/01/28 22:09:56 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -32,6 +32,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 /* abstract syntax tree for sieve */
 typedef struct Stringlist stringlist_t;
+typedef struct Patternlist patternlist_t;
 typedef struct Commandlist commandlist_t;
 typedef struct Test test_t;
 typedef struct Testlist testlist_t;
@@ -41,6 +42,11 @@ typedef struct Taglist taglist_t;
 struct Stringlist {
     char *s;
     stringlist_t *next;
+};
+
+struct Patternlist {
+    void *p;
+    patternlist_t *next;
 };
 
 struct Tag {
@@ -59,14 +65,16 @@ struct Test {
 	testlist_t *tl; /* anyof, allof */
 	stringlist_t *sl; /* exists */
 	struct { /* it's a header test */
+	    int comptag;
 	    comparator_t *comp;
-	    stringlist_t *s1;
-	    stringlist_t *s2;
+	    stringlist_t *sl;
+	    patternlist_t *pl;
 	} h;
 	struct { /* it's an address or envelope test */
+	    int comptag;
 	    comparator_t *comp;
-	    stringlist_t *s1;
-	    stringlist_t *s2;
+	    stringlist_t *sl;
+	    patternlist_t *pl;
             int addrpart;
 	} ae; 
 	test_t *t; /* not */
@@ -99,6 +107,12 @@ struct Commandlist {
 	    char *message;
 	    int mime;
 	} v;
+	struct { /* it's a notify action */
+	    char *priority;
+	    char *method;
+	    char *message;
+	    stringlist_t *headers_list;
+	} n;
     } u;
     struct Commandlist *next;
 };

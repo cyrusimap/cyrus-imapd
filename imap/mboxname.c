@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- $Id: mboxname.c,v 1.13 1999/04/08 21:04:26 tjs Exp $
+ $Id: mboxname.c,v 1.14 2000/01/28 22:09:49 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -39,6 +39,8 @@
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "xmalloc.h"
+
+#include "mboxname.h"
 
 /* Mailbox patterns which the design of the server prohibits */
 static char *badmboxpatterns[] = {
@@ -83,11 +85,7 @@ static const char index_mod64[256] = {
  * On success, results are placed in the buffer pointed to by
  * 'result', the buffer must be of size MAX_MAILBOX_LEN+1.
  */
-int
-mboxname_tointernal(name, userid, result)
-char *name;
-char *userid;
-char *result;
+int mboxname_tointernal(char *name, char *userid, char *result)
 {
     if ((name[0] == 'i' || name[0] == 'I') &&
 	!strncasecmp(name, "inbox", 5) &&
@@ -117,10 +115,7 @@ char *result;
 /*
  * Return nonzero if 'userid' owns the (internal) mailbox 'name'.
  */
-int
-mboxname_userownsmailbox(userid, name)
-char *userid;
-char *name;
+int mboxname_userownsmailbox(char *userid, char *name)
 {
     if (!strchr(userid, '.') && !strncmp(name, "user.", 5) &&
 	!strncmp(name+5, userid, strlen(userid)) &&
@@ -134,9 +129,7 @@ char *name;
  * Apply additional restrictions on netnews mailbox names.
  * Cannot have all-numeric name components.
  */
-int
-mboxname_netnewscheck(name)
-char *name;
+int mboxname_netnewscheck(char *name)
 {
     int c;
     int sawnonnumeric = 0;
@@ -175,9 +168,7 @@ char *name;
  * Restrictions are hardwired for now.
  */
 #define GOODCHARS " +,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"
-int
-mboxname_policycheck(name)
-char *name;
+int mboxname_policycheck(char *name)
 {
     int i;
     struct glob *g;

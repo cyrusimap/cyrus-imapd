@@ -1,5 +1,5 @@
 /* proc.c -- Server process registry
- $Id: proc.c,v 1.14 1999/10/02 00:43:07 leg Exp $
+ $Id: proc.c,v 1.15 2000/01/28 22:09:50 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -74,7 +74,8 @@ char *mailbox;
     fflush(procfile);
     ftruncate(fileno(procfile), ftell(procfile));
 
-    setproctitle("%s: %s %s %s", progname, clienthost, userid ? userid : "",
+    setproctitle("%s: %s %s %s", progname, clienthost, 
+		 userid ? userid : "",
 		 mailbox ? mailbox : "");
 
     return 0;

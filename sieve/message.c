@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.3 1999/12/23 18:44:49 leg Exp $
+ * $Id: message.c,v 1.4 2000/01/28 22:09:55 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -35,6 +35,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <string.h>
 
 #include "sieve_interface.h"
+#include "interp.h"
 #include "message.h"
 #include "parseaddr.h"
 #include "xmalloc.h"
@@ -54,7 +55,13 @@ int do_reject(action_list_t *a, char *msg)
 	    a->a == ACTION_KEEP ||
 	    a->a == ACTION_REDIRECT ||
 	    a->a == ACTION_REJECT ||
-	    a->a == ACTION_VACATION)
+	    a->a == ACTION_VACATION ||
+	    a->a == ACTION_SETFLAG ||
+	    a->a == ACTION_ADDFLAG ||
+	    a->a == ACTION_REMOVEFLAG ||
+	    a->a == ACTION_MARK ||
+	    a->a == ACTION_UNMARK
+	    )
 	    return -1;
 	a = a->next;
     }
@@ -210,6 +217,237 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
     b->next = a;
     return 0;
 }
+
+/* setflag f on message m
+ *
+ * incompatible with: reject
+ */
+int do_setflag(action_list_t *a, char *flag)
+{
+    action_list_t *b = NULL;
+ 
+    /* see if this conflicts with any previous actions taken on this message */
+    while (a != NULL) {
+	b = a;
+	if (a->a == ACTION_REJECT)
+	    return -1;
+	a = a->next;
+    }
+ 
+    /* add to the action list */
+    a = (action_list_t *) xmalloc(sizeof(action_list_t));
+    if (a == NULL)
+	return -1;
+    a->a = ACTION_SETFLAG;
+    a->u.fla.flag = flag;
+    b->next = a;
+    a->next = NULL;
+    return 0;
+}
+
+/* addflag f on message m
+ *
+ * incompatible with: reject
+ */
+int do_addflag(action_list_t *a, char *flag)
+{
+    action_list_t *b = NULL;
+ 
+    /* see if this conflicts with any previous actions taken on this message */
+    while (a != NULL) {
+	b = a;
+	if (a->a == ACTION_REJECT)
+	    return -1;
+	a = a->next;
+    }
+ 
+    /* add to the action list */
+    a = (action_list_t *) xmalloc(sizeof(action_list_t));
+    if (a == NULL)
+	return -1;
+    a->a = ACTION_ADDFLAG;
+    a->u.fla.flag = flag;
+    b->next = a;
+    a->next = NULL;
+    return 0;
+}
+
+/* removeflag f on message m
+ *
+ * incompatible with: reject
+ */
+int do_removeflag(action_list_t *a, char *flag)
+{
+    action_list_t *b = NULL;
+ 
+    /* see if this conflicts with any previous actions taken on this message */
+    while (a != NULL) {
+	b = a;
+	if (a->a == ACTION_REJECT)
+	    return -1;
+	a = a->next;
+    }
+ 
+    /* add to the action list */
+    a = (action_list_t *) xmalloc(sizeof(action_list_t));
+    if (a == NULL)
+	return -1;
+    a->a = ACTION_REMOVEFLAG;
+    a->u.fla.flag = flag;
+    b->next = a;
+    a->next = NULL;
+    return 0;
+}
+
+
+/* mark message m
+ *
+ * incompatible with: reject
+ */
+int do_mark(action_list_t *a)
+{
+    action_list_t *b = NULL;
+ 
+    /* see if this conflicts with any previous actions taken on this message */
+    while (a != NULL) {
+	b = a;
+	if (a->a == ACTION_REJECT)
+	    return -1;
+	a = a->next;
+    }
+ 
+    /* add to the action list */
+    a = (action_list_t *) xmalloc(sizeof(action_list_t));
+    if (a == NULL)
+	return -1;
+    a->a = ACTION_MARK;
+    b->next = a;
+    a->next = NULL;
+    return 0;
+}
+
+
+/* unmark message m
+ *
+ * incompatible with: reject
+ */
+int do_unmark(action_list_t *a)
+{
+    action_list_t *b = NULL;
+ 
+    /* see if this conflicts with any previous actions taken on this message */
+    while (a != NULL) {
+	b = a;
+	if (a->a == ACTION_REJECT)
+	    return -1;
+	a = a->next;
+    }
+ 
+    /* add to the action list */
+    a = (action_list_t *) xmalloc(sizeof(action_list_t));
+    if (a == NULL)
+	return -1;
+    a->a = ACTION_UNMARK;
+    b->next = a;
+    a->next = NULL;
+    return 0;
+}
+
+/* notify
+ *
+ * incomaptible with: none
+ */
+int do_notify(sieve_interp_t *i,void *m, action_list_t *a,
+	      char *priority, char *method, char *message, char **headers)
+{
+    action_list_t *b = NULL;
+    int oldnum = 0;
+    char **newheaders;
+    int lup;
+ 
+    /* just go to end */
+    while (a != NULL) {
+	b = a;
+	a = a->next;
+    }
+
+    /* add to the action list */
+    a = (action_list_t *) xmalloc(sizeof(action_list_t));
+    if (a == NULL)
+	return -1;
+    a->a = ACTION_NOTIFY;
+    a->u.not.priority = priority;
+    a->u.not.method   = method;
+    a->u.not.message  = message;
+
+    /* count number of headers */
+    if (headers)
+    {
+	while (headers[oldnum]!=NULL)
+	    oldnum++;
+    }
+    
+
+    newheaders = xmalloc(sizeof(char *)*(oldnum*2+1));
+
+    for (lup=0;lup<oldnum;lup++)
+    {
+	char **tmp;
+	newheaders[lup*2] = headers[lup];
+	i->getheader(m,headers[lup], &tmp);
+
+	if (tmp) newheaders[lup*2+1] = tmp[0];
+	else newheaders[lup*2+1] = NULL;
+    }
+
+    newheaders[oldnum*2]=NULL;
+
+    a->u.not.headers  = newheaders;
+    
+    a->next = NULL;
+    b->next = a;
+    return 0;
+}
+
+/* denotify
+ *
+ * incomaptible with: none
+ */
+int do_denotify(action_list_t **list)
+{
+    action_list_t *a = *list;
+    action_list_t *b = NULL;
+    action_list_t *elim = NULL;
+    action_list_t *prev = NULL;
+    action_list_t *next = NULL;
+
+    /* eliminate the last ACTION_NOTIFY we see */
+    while (a != NULL) {
+
+	if (a->a == ACTION_NOTIFY)
+	{
+	    prev = b;
+	    elim = a;
+	    next = a->next;
+	}
+	b = a;
+	a = a->next;
+    }
+    
+    /* if didn't find return */
+    if (elim == NULL) return 0;
+
+    if (prev != NULL)
+	prev->next = next;
+    else
+	*list = next;
+
+    free(elim);
+
+    return 0;
+}
+
+
 
 /* given a header, extract an address out of it.  if marker points to NULL,
    extract the first address.  otherwise, it's an index into the header to

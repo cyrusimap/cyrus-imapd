@@ -1,6 +1,6 @@
 /* lex.c -- lexers for command line script installer
  * Tim Martin
- * $Id: lex.c,v 1.7 1999/11/05 01:15:47 tmartin Exp $
+ * $Id: lex.c,v 1.8 2000/01/28 22:09:53 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University

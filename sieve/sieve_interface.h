@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.6 1999/12/23 18:44:49 leg Exp $
+ * $Id: sieve_interface.h,v 1.7 2000/01/28 22:09:56 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -55,6 +55,14 @@ typedef int sieve_get_header(void *message_context, char *header,
 typedef int sieve_get_envelope(void *message_context, char *field,
 			       char ***contents);
 
+typedef int sieve_notify_callback(char *priority, 
+				 char *method, 
+				 char *message, 
+				 char **headers,
+				 void *interp_context, 
+				 void *script_context,
+				 void *message_context);
+
 typedef struct sieve_vacation {
     int min_response;		/* 0 -> defaults to 3 */
     int max_response;		/* 0 -> defaults to 90 */
@@ -85,6 +93,11 @@ int sieve_register_reject(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_fileinto(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_keep(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v);
+int sieve_register_setflag(sieve_interp_t *interp, sieve_callback *f);
+int sieve_register_addflag(sieve_interp_t *interp, sieve_callback *f);
+int sieve_register_removeflag(sieve_interp_t *interp, sieve_callback *f);
+int sieve_register_mark(sieve_interp_t *interp, sieve_callback *f);
+int sieve_register_unmark(sieve_interp_t *interp, sieve_callback *f);
 
 /* add the callbacks for messages. again, undefined if used after
    sieve_script_parse */

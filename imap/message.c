@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.70 1999/10/27 21:04:18 leg Exp $
+ * $Id: message.c,v 1.71 2000/01/28 22:09:49 leg Exp $
  */
 
 #ifdef HAVE_UNISTD_H

@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.126 2000/01/25 06:51:47 leg Exp $
+ * $Id: deliver.c,v 1.127 2000/01/28 22:09:42 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.126 2000/01/25 06:51:47 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.127 2000/01/28 22:09:42 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -41,16 +41,6 @@ static char _rcsid[] = "$Id: deliver.c,v 1.126 2000/01/25 06:51:47 leg Exp $";
 #include <syslog.h>
 #include <com_err.h>
 #include <errno.h>
-#ifdef HAVE_LIBDB
-#  ifdef HAVE_DB_185_H
-#    define DB_LIBRARY_COMPATIBILITY_API
-#    include <db_185.h>
-#  else
-#    include <db.h>
-#  endif
-#else
-#include <ndbm.h>
-#endif
 
 #ifdef USE_SIEVE
 #include <sieve_interface.h>
@@ -85,6 +75,7 @@ static char _rcsid[] = "$Id: deliver.c,v 1.126 2000/01/25 06:51:47 leg Exp $";
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "version.h"
+#include "duplicate.h"
 
 struct protstream *deliver_out, *deliver_in;
 
@@ -114,13 +105,30 @@ typedef struct address_data {
     char *all;
 } address_data_t;
 
+typedef struct notify_data {
+
+    char *priority;
+    char *method;
+    char *message;
+    char **headers;
+
+} notify_data_t;
+
+typedef struct notify_list {
+
+    notify_data_t data;
+    
+    struct notify_list *next;
+} notify_list_t;
+
 typedef struct message_data {
     struct protstream *data;	/* message in temp file */
     struct stagemsg *stage;	/* staging location for single instance
 				   store */
 
     FILE *f;
-    char *notifyheader;
+    notify_list_t *notify_list; /* list of notifications to preform */
+    char actions_string[100];
     char *id;			/* message id */
     int size;			/* size of message */
 
@@ -141,6 +149,8 @@ typedef struct script_data {
     char *username;
     char *mailboxname;
     struct auth_state *authstate;
+    char **flag;
+    int nflags;
 } script_data_t;
 
 int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
@@ -155,11 +165,6 @@ void savemsg();
 char *convert_lmtp();
 void clean822space();
 
-static time_t checkdelivered();
-static void markdelivered(char *, int, char *, int, time_t);
-
-static char *_get_db_name();
-static int _lock_delivered_db();
 static void logdupelem();
 static void usage();
 static void setup_sieve();
@@ -414,7 +419,7 @@ char **argv;
 	    break;
 
 	case 'E':
-	    exit(prunedelivered(atoi(optarg)));
+	    exit(duplicate_prune(atoi(optarg)));
 
 	case 'l':
 	    lmtpflag = 1;
@@ -768,6 +773,8 @@ static int getheader(void *v, char *head, char ***body)
     int cl, clinit;
     char *h;
 
+    if (head==NULL) return SIEVE_FAIL;
+
     *body = NULL;
 
     h = head;
@@ -863,6 +870,7 @@ int open_sendmail(char *argv[], FILE **sm)
 
 int send_rejection(char *origid,
 		   char *rejto,
+		   char *origreceip, 
 		   char *mailreceip, 
 		   char *reason, 
 		   struct protstream *file)
@@ -891,7 +899,7 @@ int send_rejection(char *origid,
 	     global_outgoing_count++, hostname);
     
     namebuf = make_sieve_db(mailreceip);
-    markdelivered(buf, strlen(buf), namebuf, strlen(namebuf), t);
+    duplicate_mark(buf, strlen(buf), namebuf, strlen(namebuf), t);
     fprintf(sm, "Message-ID: %s\r\n", buf);
 
     tm = localtime(&t);
@@ -929,9 +937,8 @@ int send_rejection(char *origid,
 	    p, hostname);
     fprintf(sm, "Reporting-UA: %s; Cyrus %s/%s\r\n",
 	    hostname, CYRUS_VERSION, sieve_version);
-#if 0
-    fprintf(sm, "Original-Recipient: rfc822; %s\r\n", mailreceip);
-#endif
+    if (origreceip)
+	fprintf(sm, "Original-Recipient: rfc822; %s\r\n", origreceip);
     fprintf(sm, "Final-Recipient: rfc822; %s\r\n", mailreceip);
     fprintf(sm, "Original-Message-ID: %s\r\n", origid);
     fprintf(sm, "Disposition: "
@@ -991,6 +998,17 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
     return (i == 0 ? SIEVE_OK : SIEVE_FAIL); /* sendmail exit value */
 }
 
+static void append_string(char *str, message_data_t *m)
+{
+    int curlen = strlen(m->actions_string);
+    int newlen = strlen(str);
+
+    if ( curlen + newlen >= sizeof(m->actions_string))
+	return;
+    
+    strcat(m->actions_string, str);
+}
+
 static
 int sieve_redirect(char *addr, void *ic, void *sc, void *mc)
 {
@@ -998,8 +1016,10 @@ int sieve_redirect(char *addr, void *ic, void *sc, void *mc)
     message_data_t *m = (message_data_t *) mc;
 
     if (send_forward(addr, m->return_path, m->data) == 0) {
+	append_string("Redirected ",m);
 	return SIEVE_OK;
     } else {
+	append_string("Redirection failure ",m);
 	return SIEVE_FAIL;
     }
 }
@@ -1011,6 +1031,7 @@ int sieve_discard(char *arg, void *ic, void *sc, void *mc)
     message_data_t *m = (message_data_t *) mc;
 
     /* ok, we won't file it */
+    append_string("Discarded ",m);
     return SIEVE_OK;
 }
 
@@ -1019,16 +1040,29 @@ int sieve_reject(char *msg, void *ic, void *sc, void *mc)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *m = (message_data_t *) mc;
+    char buf[8192];
+    char **body;
+    char *origreceip;
 
     if (m->return_path == NULL) {
+	append_string("Reject failed because of no return path ",m);
 	/* return message to who?!? */
 	return SIEVE_FAIL;
     }
     
-    if (send_rejection(m->id, m->return_path, sd->username,
+    if (strcpy(buf, "original-recipient"),
+	getheader((void *) m, buf, &body) == SIEVE_OK) {
+	origreceip = xstrdup(body[0]);
+    } else {
+	origreceip = NULL;		/* no original-recipient */
+    }
+
+    if (send_rejection(m->id, m->return_path, origreceip, sd->username,
 		       msg, m->data) == 0) {
+	append_string("Rejected ",m);
 	return SIEVE_OK;
     } else {
+	append_string("Rejection failed ",m);
 	return SIEVE_FAIL;
     }
 }
@@ -1045,14 +1079,19 @@ int sieve_fileinto(char *mailbox, void *ic, void *sc, void *mc)
     if (!sd->authstate)
 	return SIEVE_FAIL;
 
-    ret = deliver_mailbox(md->data, &md->stage, md->size, 0, 0,
-			  sd->username, sd->authstate, md->id,
-			  sd->username, md->notifyheader,
-			  mailbox, dop->quotaoverride, 0);
+    ret = deliver_mailbox(md->data, &md->stage, md->size,
+			  sd->flag, sd->nflags,
+                          sd->username, sd->authstate, md->id,
+                          sd->username, md->notify_list,
+                          mailbox, dop->quotaoverride, 0);
 
     if (ret == 0) {
+	append_string("Filed into ",md);
+	append_string(mailbox,md);
+	append_string(" ",md);
 	return SIEVE_OK;
     } else {
+	append_string("Fileinto failed ",md);
 	return SIEVE_FAIL;
     }
 }
@@ -1064,32 +1103,170 @@ int sieve_keep(char *arg, void *ic, void *sc, void *mc)
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
     char namebuf[MAX_MAILBOX_PATH];
-    int ret;
-
-    /* we're now the user who owns the script */
-
-    if (!sd->authstate)
-	return SIEVE_FAIL;
+    int ret = 1;
 
     if (sd->mailboxname) {
 	strcpy(namebuf, "INBOX.");
 	strcat(namebuf, sd->mailboxname);
+
+	ret = deliver_mailbox(md->data, &md->stage, md->size,
+			      sd->flag, sd->nflags,
+			      dop->authuser, dop->authstate, md->id,
+			      sd->username, md->notify_list,
+			      namebuf, dop->quotaoverride, 0);
     }
-    else {
-	strcpy(namebuf, "INBOX");
+    if (ret) {
+	/* we're now the user who owns the script */
+	if (!sd->authstate)
+	    return SIEVE_FAIL;
+
+	ret = deliver_mailbox(md->data, &md->stage, md->size, sd->flag, sd->nflags,
+			      sd->username, sd->authstate, md->id,
+			      sd->username, md->notify_list,
+			      "INBOX", dop->quotaoverride, 1);
     }
 
-    ret = deliver_mailbox(md->data, &md->stage, md->size, 0, 0,
-			  sd->username, sd->authstate, md->id,
-			  sd->username, md->notifyheader,
-			  namebuf, dop->quotaoverride, 1);
-
-    if (ret == 0) {
+    if (ret == 0) {	
+	append_string("Kept ",md);
 	return SIEVE_OK;
     } else {
+	append_string("Keep failed ",md);
 	return SIEVE_FAIL;
     }
 }
+
+static
+void free_flags(char **flag, int nflags)
+{
+    int n;
+ 
+    for (n = 0; n < nflags; n++)
+	free(flag[n]);
+    free(flag);
+}
+
+static
+int sieve_addflag(char *flag, void *ic, void *sc, void *mc)
+{
+    script_data_t *sd = (script_data_t *) sc;
+    message_data_t *m = (message_data_t *) mc;
+    int n;
+ 
+    /* search for flag already in list */
+    for (n = 0; n < sd->nflags; n++) {
+	if (!strcmp(sd->flag[n], flag))
+	    break;
+    }
+ 
+    /* add flag to list, iff not in list */
+    if (n == sd->nflags) {
+	sd->nflags++;
+	sd->flag =
+	    (char **)xrealloc((char *)sd->flag, sd->nflags*sizeof(char *));
+	sd->flag[sd->nflags-1] = strdup(flag);
+    }
+ 
+    return SIEVE_OK;
+}
+
+
+static
+int sieve_setflag(char *flag, void *ic, void *sc, void *mc)
+{
+    script_data_t *sd = (script_data_t *) sc;
+    message_data_t *m = (message_data_t *) mc;
+ 
+    free_flags(sd->flag, sd->nflags);
+    sd->flag = NULL; sd->nflags = 0;
+ 
+    return sieve_addflag(flag, ic, sc, mc);
+}
+
+
+static
+int sieve_removeflag(char *flag, void *ic, void *sc, void *mc)
+{
+    script_data_t *sd = (script_data_t *) sc;
+    message_data_t *m = (message_data_t *) mc;
+    int n;
+ 
+    /* search for flag already in list */
+    for (n = 0; n < sd->nflags; n++) {
+	if (!strcmp(sd->flag[n], flag))
+	    break;
+    }
+ 
+    /* remove flag from list, iff in list */
+    if (n < sd->nflags) {
+	free(sd->flag[n]);
+	sd->nflags--;
+ 
+	for (; n < sd->nflags; n++)
+	    sd->flag[n] = sd->flag[n+1];
+ 
+	sd->flag =
+	    (char **)xrealloc((char *)sd->flag, sd->nflags*sizeof(char *));
+    }
+ 
+    return SIEVE_OK;
+}
+
+
+static
+int sieve_mark(char *arg, void *ic, void *sc, void *mc)
+{
+    script_data_t *sd = (script_data_t *) sc;
+    message_data_t *m = (message_data_t *) mc;
+ 
+    return sieve_addflag("\\flagged", ic, sc, mc);
+}
+ 
+static
+int sieve_unmark(char *arg, void *ic, void *sc, void *mc)
+{
+    script_data_t *sd = (script_data_t *) sc;
+    message_data_t *m = (message_data_t *) mc;
+ 
+    return sieve_removeflag("\\flagged", ic, sc, mc);
+}
+
+static int sieve_notify(char *priority, 
+			char *method, 
+			char *message, 
+			char **headers,
+			void *interp_context, 
+			void *script_context,
+			void *mc)
+{
+    message_data_t *m = (message_data_t *) mc;
+
+    notify_list_t *nlist = xmalloc(sizeof(notify_list_t));
+    
+    /* fill in data item */
+    nlist->data.priority = priority;
+    nlist->data.method   = method;
+    nlist->data.message  = message;
+    nlist->data.headers  = headers;
+
+    nlist->next = NULL;
+
+    /* add to the beggining of the list */
+    if (m->notify_list == NULL) {
+	m->notify_list = nlist;
+    } else {
+	nlist->next = m->notify_list;
+	m->notify_list = nlist;
+    }
+    
+    return SIEVE_OK;
+}
+
+static int sieve_denotify(char *arg, void *ic, void *sc, void *mc)
+{
+    /* xxx */
+    return SIEVE_OK;
+}
+ 
 
 int autorespond(unsigned char *hash, int len, int days,
 		void *ic, void *sc, void *mc)
@@ -1101,7 +1278,7 @@ int autorespond(unsigned char *hash, int len, int days,
     now = time(NULL);
 
     /* ok, let's see if we've responded before */
-    if (t = checkdelivered(hash, len, sd->username, strlen(sd->username))) {
+    if (t = duplicate_check(hash, len, sd->username, strlen(sd->username))) {
 	if (now >= t) {
 	    /* yay, we can respond again! */
 	    ret = SIEVE_OK;
@@ -1114,9 +1291,9 @@ int autorespond(unsigned char *hash, int len, int days,
     }
 
     if (ret == SIEVE_OK) {
-	markdelivered((char *) hash, len, 
-		      sd->username, strlen(sd->username), 
-		      now + days * (24 * 60 * 60));
+	duplicate_mark((char *) hash, len, 
+		       sd->username, strlen(sd->username), 
+		       now + days * (24 * 60 * 60));
     }
 
     return ret;
@@ -1198,7 +1375,8 @@ int send_response(char *addr, char *fromaddr,
     if (i == 0) { /* i is sendmail exit value */
 	sievedb = make_sieve_db(sdata->username);
 
-	markdelivered(outmsgid, strlen(outmsgid), sievedb, strlen(sievedb), t);
+	duplicate_mark(outmsgid, strlen(outmsgid), 
+		       sievedb, strlen(sievedb), t);
 	return SIEVE_OK;
     } else {
 	return SIEVE_FAIL;
@@ -1248,6 +1426,41 @@ setup_sieve(deliver_opts_t *delopts, int lmtpmode)
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_keep() returns %d\n", res);
 	fatal("sieve_register_keep()", EC_TEMPFAIL);
+    }
+    res = sieve_register_setflag(sieve_interp, &sieve_setflag);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_setflag() returns %d\n", res);
+	fatal("sieve_register_setflag()", EC_TEMPFAIL);
+    }
+    res = sieve_register_addflag(sieve_interp, &sieve_addflag);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_addflag() returns %d\n", res);
+	fatal("sieve_register_addflag()", EC_TEMPFAIL);
+    }
+    res = sieve_register_removeflag(sieve_interp, &sieve_removeflag);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_removeflag() returns %d\n", res);
+	fatal("sieve_register_removeflag()", EC_TEMPFAIL);
+    }
+    res = sieve_register_mark(sieve_interp, &sieve_mark);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_mark() returns %d\n", res);
+	fatal("sieve_register_mark()", EC_TEMPFAIL);
+    }
+    res = sieve_register_unmark(sieve_interp, &sieve_unmark);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_unmark() returns %d\n", res);
+	fatal("sieve_register_unmark()", EC_TEMPFAIL);
+    }
+    res = sieve_register_notify(sieve_interp, &sieve_notify);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_notify() returns %d\n", res);
+	fatal("sieve_register_notify()", EC_TEMPFAIL);
+    }
+    res = sieve_register_denotify(sieve_interp, &sieve_denotify);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_denotify() returns %d\n", res);
+	fatal("sieve_register_denotify()", EC_TEMPFAIL);
     }
     res = sieve_register_size(sieve_interp, &getsize);
     if (res != SIEVE_OK) {
@@ -1408,16 +1621,17 @@ address_data_t **ad;
     if (plus && (!dot || plus < dot)) dot = plus;
 
     if (dot) *dot = '\0';
+
     if (*user) {
 	if (strlen(user) > sizeof(buf)-10) {
 	    return convert_lmtp(IMAP_MAILBOX_NONEXISTENT);
 	}
 	strcpy(buf, "user.");
 	strcat(buf, user);
-	r = mboxlist_lookup(buf, (char **)0, (char **)0);
+	r = mboxlist_lookup(buf, (char **)0, (char **)0, NULL);
     }
     else {
-	r = mboxlist_lookup(user+1, (char **)0, (char **)0);
+	r = mboxlist_lookup(user+1, (char **)0, (char **)0, NULL);
     }
     if (r) {
 	return convert_lmtp(r);
@@ -1443,7 +1657,9 @@ int msg_new(message_data_t **m)
     ret->data = NULL;
     ret->stage = NULL;
     ret->f = NULL;
-    ret->notifyheader = ret->id = NULL;
+    ret->notify_list = NULL;
+    ret->actions_string[0]='\0';
+    ret->id = NULL;
     ret->size = 0;
     ret->return_path = NULL;
     ret->rcpt = NULL;
@@ -1471,8 +1687,9 @@ void msg_free(message_data_t *m)
     if (m->stage) {
 	append_removestage(m->stage);
     }
-    if (m->notifyheader) {
-	free(m->notifyheader);
+    if (m->notify_list) {
+	/* xxx */
+	free(m->notify_list);
     }
     if (m->id) {
 	free(m->id);
@@ -1586,9 +1803,12 @@ deliver_opts_t *delopts;
 	break;
     }
 
+    /* so we can do mboxlist operations */
+    mboxlist_init();
+    mboxlist_open(NULL);
+
     prot_printf(deliver_out,"220 %s LMTP Cyrus %s ready\r\n", myhostname,
 		CYRUS_VERSION);
-
     for (;;) {
       if (!prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
 	  msg_free(msg);
@@ -1954,7 +2174,7 @@ savemsg(message_data_t *m, int lmtpmode)
     if (tobody) for (i = 0; tobody[i] != NULL; i++) {
 	sl += strlen(tobody[i]) + 8;
     }
-    m->notifyheader = (char *) malloc(sizeof(char) * (sl + 50));
+    /*    m->notifyheader = (char *) malloc(sizeof(char) * (sl + 50));
     m->notifyheader[0] = '\0';
     if (frombody) for (i = 0; frombody[i] != NULL; i++) {
 	strcat(m->notifyheader, "From: ");
@@ -1970,7 +2190,7 @@ savemsg(message_data_t *m, int lmtpmode)
 	strcat(m->notifyheader, "To: ");
 	strcat(m->notifyheader, tobody[i]);
 	strcat(m->notifyheader, "\n");
-    }
+	}*/
 
     if (!m->return_path &&
 	(strcpy(buf, "return-path"),
@@ -2152,19 +2372,19 @@ savemsg(message_data_t *m, int lmtpmode)
  * if you want to force delivery (to force delivery to INBOX, for instance)
  * pass acloverride
  */
-deliver_mailbox(struct protstream *msg,
-		struct stagemsg **stage,
-		unsigned size,
-		char **flag,
-		int nflags,
-		char *authuser,
-		struct auth_state *authstate,
-		char *id,
-		char *user,
-		char *notifyheader,
-		char *mailboxname,
-		int quotaoverride,
-		int acloverride)
+int deliver_mailbox(struct protstream *msg,
+		    struct stagemsg **stage,
+		    unsigned size,
+		    char **flag,
+		    int nflags,
+		    char *authuser,
+		    struct auth_state *authstate,
+		    char *id,
+		    char *user,
+		    notify_list_t *notifyheader,
+		    char *mailboxname,
+		    int quotaoverride,
+		    int acloverride)
 {
     int r;
     struct mailbox mailbox;
@@ -2185,7 +2405,7 @@ deliver_mailbox(struct protstream *msg,
     }
 
     if (dupelim && id && 
-	checkdelivered(id, strlen(id), namebuf, strlen(namebuf))) {
+	duplicate_check(id, strlen(id), namebuf, strlen(namebuf))) {
 	/* duplicate message */
 	logdupelem(id, namebuf);
 	return 0;
@@ -2209,14 +2429,35 @@ deliver_mailbox(struct protstream *msg,
     if (!r && user) {
 	/* do we want to replace user.XXX with INBOX? */
 
-	notify(user, mailboxname, notifyheader ? notifyheader : "");
+	/*	notify(user, mailboxname, notifyheader ? notifyheader : ""); */
     }
 
-    if (!r && dupelim && id) markdelivered(id, strlen(id), 
-					   namebuf, strlen(namebuf),
-					   now);
-
+    if (!r && dupelim && id) duplicate_mark(id, strlen(id), 
+					    namebuf, strlen(namebuf),
+					    now);
+    
     return r;
+}
+
+int deliver_notifications(message_data_t *msgdata, script_data_t *sd)
+{
+    /* abcd */
+    notify_list_t *nlist = msgdata->notify_list;
+
+
+
+    while (nlist!=NULL)
+    {
+	if (strcmp(nlist->data.priority,"none")!=0)
+	    notify(nlist->data.priority,
+		   sd->username,
+		   nlist->data.message,
+		   nlist->data.headers,
+		   msgdata->actions_string);
+		   
+	
+	nlist=nlist->next;
+    }
 }
 
 #ifdef USE_SIEVE
@@ -2282,6 +2523,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    sdata->username = user;
 	    sdata->mailboxname = mailboxname;
 	    sdata->authstate = auth_newstate(user, (char *)0);
+	    sdata->flag = NULL; sdata->nflags = 0;
 	    
 	    /* slap the mailboxname back on so we hash the envelope & id
 	       when we figure out whether or not to keep the message */
@@ -2295,8 +2537,8 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    if (msgdata->id) {
 		char *sdb = make_sieve_db(namebuf);
 		
-		if (checkdelivered(msgdata->id, strlen(msgdata->id),
-				   sdb, strlen(sdb))) {
+		if (duplicate_check(msgdata->id, strlen(msgdata->id),
+				    sdb, strlen(sdb))) {
 		    logdupelem(msgdata->id, sdb);
 		    /* done it before ! */
 		    return 0;
@@ -2316,6 +2558,8 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 		if (r != SIEVE_OK) {
 		    syslog(LOG_INFO, "sieve runtime error for %s id %s",
 			   user, msgdata->id ? msgdata->id : "(null)");
+		} else {
+		    deliver_notifications(msgdata, sdata);
 		}
 	    }
 
@@ -2323,12 +2567,13 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 		/* ok, we've run the script */
 		char *sdb = make_sieve_db(namebuf);
 
-		markdelivered(msgdata->id, strlen(msgdata->id), 
-			      sdb, strlen(sdb), time(NULL));
+		duplicate_mark(msgdata->id, strlen(msgdata->id), 
+			       sdb, strlen(sdb), time(NULL));
 	    }
 
 	    /* free everything */
 	    if (sdata->authstate) auth_freestate(sdata->authstate);
+	    if (sdata->nflags) free_flags(sdata->flag, sdata->nflags);
 	    if (sdata) free(sdata);
 	    sieve_script_free(&s);
 
@@ -2353,7 +2598,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 				    msgdata->size, 
 				    flag, nflags, 
 				    delopts->authuser, delopts->authstate,
-				    msgdata->id, user, msgdata->notifyheader,
+				    msgdata->id, user, msgdata->notify_list,
 				    namebuf, delopts->quotaoverride, 0);
 	    }
 	    if (r) {
@@ -2365,7 +2610,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 				    msgdata->size, 
 				    flag, nflags, 
 				    delopts->authuser, delopts->authstate,
-				    msgdata->id, user, msgdata->notifyheader,
+				    msgdata->id, user, msgdata->notify_list,
 				    namebuf, delopts->quotaoverride, 1);
 	    }
 	}
@@ -2376,7 +2621,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 			    msgdata->size, 
 			    flag, nflags, 
 			    delopts->authuser, delopts->authstate,
-			    msgdata->id, user, msgdata->notifyheader,
+			    msgdata->id, user, msgdata->notify_list,
 			    mailboxname, delopts->quotaoverride, 0);
     }
     else {
@@ -2549,416 +2794,4 @@ char *buf;
 	    break;
 	}
     }
-}
-
-#ifdef HAVE_LIBDB
-static DB	*DeliveredDBptr;
-#else
-static DBM	*DeliveredDBptr;
-#endif
-
-
-
-/* too many processes are contending for single locks on delivered.db 
- * so we use this function to generate a specific delivered.db for a mailbox
- * First pass will be to just have 26 db files based on the first letter of 
- * the mailbox name. As distribution goes, this really blows but, hey, what do 
- * you expect from something quick and dirty?
- */
-static char *
-_get_db_name (mbox) 
-     char *mbox;
-{
-  static char buf[MAX_MAILBOX_PATH];
-  char *idx;
-  char c;
-  
-  idx = strchr(mbox,'.');   /* skip past user. */
-  if (idx == NULL) {         /* no '.' so just use mbox */
-      idx = mbox;
-  } else {
-      idx++;                   /* skip past '.' */
-  }
-  c = (char) tolower((int) *idx);
-  if (!islower(c)) {
-      c = 'q';
-  }
-
-  sprintf(buf, "%s/deliverdb/deliver-%c", config_dir, c);
-
-  return buf;
-}
-
-
-static int
-_lock_delivered_db(to, write_lock) 
-     char *to;
-     int write_lock;
-{
-  char buf[MAX_MAILBOX_PATH];
-  int lockfd;
-
-  (void)strcpy(buf, _get_db_name(to));
-  (void)strcat(buf, ".lock");
-  lockfd = open(buf, O_RDWR|O_CREAT, 0666);
-  if (lockfd < 0) {
-    syslog(LOG_ERR, "Unable to open lock file: %s: %m", buf);
-    return -1;
-  }
-  if (write_lock) {
-    if (lock_blocking(lockfd)) {
-      syslog(LOG_ERR, "Unable to write lock lock file: %s: %m", buf);
-      close(lockfd);
-      return -1;
-    }
-  } else {
-    if (lock_shared(lockfd)) {
-      syslog(LOG_ERR, "Unable to read lock lock file: %s: %m", buf);
-      close(lockfd);
-      return -1;
-    }
-  }
-  
-  return lockfd;
-}
-
-/* id: message id
- * to: name of mailbox
- * returns: 0 if not there
- *          time of delivery if there
- */
-static time_t
-checkdelivered(id, idlen, to, tolen)
-char *id, *to;
-int idlen, tolen;
-{
-#ifdef HAVE_LIBDB
-    char buf[MAX_MAILBOX_PATH];
-    char fname[MAX_MAILBOX_PATH];
-    DBT date, delivery;
-    HASHINFO info;
-    int i, lockfd;
-    time_t mark;
-
-    (void)memset(&info, 0, sizeof(info));
-    (void)memset(&date, 0, sizeof(date));
-    (void)memset(&delivery, 0, sizeof(delivery));
-
-    (void)strcpy(fname, _get_db_name(to));
-    (void)strcat(fname, ".db");
-
-    memcpy(buf, id, idlen);
-    buf[idlen] = '\0';
-    memcpy(buf + idlen + 1, to, tolen);
-    buf[idlen + tolen + 1] = '\0';
-    delivery.data = buf;
-    delivery.size = idlen + tolen + 2;
-          /* +2 b/c 1 for the center null; +1 for the terminating null */
-
-    if ((lockfd = _lock_delivered_db(to, 0)) < 0) {
-      return 0;
-    }
-
-    DeliveredDBptr = dbopen(fname, O_RDONLY, 0666, DB_HASH, &info);
-    if (!DeliveredDBptr) {
-      close(lockfd);
-      syslog(LOG_ERR,"checkdelivered: Unable to open delivered db: %s: %m", 
-	     fname);
-      return 0;
-    }
-
-    if ((i = DeliveredDBptr->get(DeliveredDBptr, &delivery, &date, 0)) < 0) {
-      syslog(LOG_ERR, "checkdelivered: error looking up %s/%d: %m", id, to);
-    }
-
-    if (logdebug) {
-      syslog(LOG_DEBUG, "checkdelivered: checking %s %s - result = %d", id, to, i);
-    }
-
-    if (i == 0) {
-	/* found the record */
-	memcpy(&mark, date.data, sizeof(time_t));
-    } else {
-	mark = 0;
-    }
-
-    if (DeliveredDBptr->close(DeliveredDBptr) < 0) {
-      syslog(LOG_ERR, "checkdelivered: error closing db: %m");
-    }
-    close(lockfd);
-
-    return mark;
-#else /* HAVE_LIBDB */
-    static int initialized = 0;
-    char buf[MAX_MAILBOX_PATH];
-    datum date, delivery;
-    int lockfd;
-    time_t mark;
-
-    /* The whole locking situation with dbm should be examined in some
-     * more detail (but since we are using db and not dbm I'm just going
-     * to leave this comment).
-     * The right thing to do (with db too) is to keep the write lock 
-     * active unless a duplicate is found. If a duplicate is found, then
-     * the lock can be released. Otherwise, the lock should probably be
-     * held until markdelivered() finishes updating the db.
-     * The performance impact of holding the lock for that length of
-     * time needs to also be examined.
-     */
-
-    if ((lockfd = _lock_delivered_db(to, 1)) <0)
-      return 0;
-	
-    if (!initialized) {
-      initialized++;
-
-      (void)strcpy(buf, _get_db_name(to));
-      (void)strcat(buf, ".db");
-
-      DeliveredDBptr = dbm_open(buf, O_RDWR|O_CREAT, 0666);
-      if (!DeliveredDBptr) {
-	syslog(LOG_ERR, "checkdelivered: error opening delivered database: %s: %m",
-	       buf);
-	close(lockfd);
-	return 0;
-      }
-    }
-    if (!DeliveredDBptr) {
-      close(lockfd);
-      return 0;
-    }
-
-    sprintf(buf, "%s%c%s", id, '\0', to);
-    delivery.dptr = buf;
-    delivery.dsize = strlen(id) + strlen(to) + 2;
-    date = dbm_fetch(DeliveredDBptr, delivery);
-    if (date.dptr == NULL) {
-	/* syslog(LOG_INFO, "unable to fetch entry for %s/%s: %m", id, to); */
-	close(lockfd);
-	return 0;
-    }
-    close(lockfd);
-    if (date.dptr != 0) {
-	/* found the record */
-	memcpy(&mark, date.dptr, sizeof(time_t));
-    } else {
-	mark = (time_t)0;
-    }
-    dbm_close(DeliveredDBptr);
-
-    return mark;
-#endif /* HAVE_LIBDB */
-}
-
-static void
-markdelivered(char *id, int idlen, char *to, int tolen, time_t mark)
-{
-  char buf[MAX_MAILBOX_PATH];
-  char fname[MAX_MAILBOX_PATH];
-  int lockfd;
-#ifdef HAVE_LIBDB
-  DBT date, delivery;
-  HASHINFO info;
-#else /* HAVE_LIBDB */
-  datum date, delivery;
-#endif
-
-  memcpy(buf, id, idlen);
-  buf[idlen] = '\0';
-  memcpy(buf + idlen + 1, to, tolen);
-  buf[idlen + tolen + 1] = '\0';
-  if (mark == 0) { mark = time(0); }
-    
-#ifdef HAVE_LIBDB
-  (void)memset(&info, 0, sizeof(info));
-  (void)memset(&date, 0, sizeof(date));
-  (void)memset(&delivery, 0, sizeof(delivery));
-
-  delivery.data = buf;
-  delivery.size = idlen + tolen + 2;
-          /* +2 b/c 1 for the center null; +1 for the terminating null */
-
-  date.data = &mark;
-  date.size = sizeof(mark);
-
-  (void)strcpy(fname, _get_db_name(to));
-  (void)strcat(fname, ".db");
-
-  if ((lockfd = _lock_delivered_db(to, 1)) < 0)
-    return;
-    
-  DeliveredDBptr = dbopen(fname, O_RDWR|O_CREAT, 0666, DB_HASH, &info);
-  if (!DeliveredDBptr) {
-    syslog(LOG_ERR, "markdelivered: error opening delivered.db: %s: %m", buf);
-    close(lockfd);
-    return;
-  }
-
-  if (DeliveredDBptr->put(DeliveredDBptr, &delivery, &date, 0) < 0) {
-    syslog(LOG_ERR, "markdelivered: error storing data: %m");
-  }
-  if (DeliveredDBptr->close(DeliveredDBptr) < 0) {
-    syslog(LOG_ERR, "markdelivered: closing database :m");
-  }
-  close(lockfd);
-#else /* don't HAVE_LIBDB */
-
-  delivery.dptr = buf;
-  delivery.dsize = idlen + tolen + 2;
-
-  date.dptr = &mark;
-  date.dsize = sizeof(mark);
-
-  /* dbm_open is called in checkdelivered. This assumes that checkdelivered
-     * gets called first */
-
-  if ((lockfd = _lock_delivered_db(to, 1)) < 0)
-    return;
-
-  if (dbm_store(DeliveredDBptr, delivery, date, DBM_REPLACE) < 0) {
-    syslog(LOG_ERR, "markdelivered: dbm_store: %m");
-  }
-  close(lockfd);
-#endif /* HAVE_LIBDB */
-
-  if (logdebug)
-    syslog(LOG_DEBUG, "deliver: delivered %s to %s at %d", id, to, mark);
-}
-
-static int
-_prune_actual_db(fname, mark) 
-     char *fname;
-     time_t mark;
-{
-  int rcode = 0;
-  int count = 1;
-
-#ifdef HAVE_LIBDB
-  int rc, mode;
-  DBT date, delivery;
-  DBT *deletions = 0;
-  HASHINFO info;
-  int num_deletions = 0, alloc_deletions = 0;
-#else /* HAVE_LIBDB */
-  datum date, delivery;
-#endif
-
-
-#ifdef HAVE_LIBDB
-  (void)memset(&info, 0, sizeof(info));
-  (void)memset(&date, 0, sizeof(date));
-  (void)memset(&delivery, 0, sizeof(delivery));
-
-  (void)memset(&info, 0, sizeof(info));
-  DeliveredDBptr = dbopen(fname, O_RDWR|O_CREAT, 0666, DB_HASH, &info);
-  if (!DeliveredDBptr) {
-    syslog(LOG_ERR,  "prunedelivered: error opening %s: %m");
-    return -1;
-  }
-    
-  mode = R_FIRST;
-  while ((rc = DeliveredDBptr->seq(DeliveredDBptr, &delivery, &date, mode)) == 0) {
-    mode = R_NEXT;
-    count++;
-    if ((date.size > 0) && ((*(time_t *)date.data) < mark)) {
-      if (num_deletions >= alloc_deletions) {
-	alloc_deletions += 1000;
-	deletions = (DBT *) xrealloc((char *)deletions,
-				     alloc_deletions * sizeof(DBT));
-      }
-      deletions[num_deletions].size = delivery.size;
-      deletions[num_deletions].data = xmalloc(delivery.size);
-      (void)memcpy(deletions[num_deletions].data, delivery.data, delivery.size);
-      num_deletions++;
-      if (logdebug) {
-	/* delivery.data should be a string the form of  "<msgid>\0<to>\0" 
-	 * but <msgid> and <to> may now be binary & contain nulls!!!
-	 * eh, you asked for debugging
-	 */
-	char *ptr;
-	      
-	ptr = ((char *)delivery.data + (strlen(delivery.data) + 1)); 
-	syslog(LOG_NOTICE, "prunedelivered: marking %s/%s at %d for deletion\n",
-	       delivery.data, ptr, *(time_t *)date.data);
-      }
-    }
-  }
-  if (rc < 0) {
-    syslog(LOG_ERR, "prunedelivered: error detected looking up %d entry: %m", count);
-    syslog(LOG_ERR, "prunedelivered: will try to purge %d entries", num_deletions);
-  }
-  if (logdebug)
-    syslog(LOG_DEBUG, "prunedelivered: will try to purge %d entries", num_deletions);
-      
-  while (num_deletions--) {
-    if (DeliveredDBptr->del(DeliveredDBptr, &deletions[num_deletions], 0) < 0) {
-      syslog(LOG_ERR, "prunedelivered: error deleting entry %d", num_deletions);
-    }
-  }
-
-  if (DeliveredDBptr->close(DeliveredDBptr) < 0) {
-    syslog(LOG_ERR, "prunedelivered: error closing database: %m");
-  }
-#else /* HAVE_LIBDB */
-
-  /* initialize database */
-  checkdelivered("", 0, "", 0);
-
-  if (!DeliveredDBptr) return 1;
-
-  for (delivery = dbm_firstkey(DeliveredDBptr); delivery.dptr;
-						delivery = dbm_nextkey(DeliveredDBptr)) {
-    date = dbm_fetch(DeliveredDBptr, delivery);
-    if (!date.dptr) continue;
-    if ((date.dsize > 0) && ((*(time_t *)date.dptr) < mark)) {
-      if (dbm_delete(DeliveredDBptr, delivery)) {
-	rcode = 1;
-      }
-    }
-  }
-  dbm_close(DeliveredDBptr);
-
-#endif /* HAVE_LIBDB */
-
-  return rcode;
-}
-
-
-int
-prunedelivered(age)
-int age;
-{
-  char c[2];
-  int lockfd;
-  int rc;
-  char fname[MAX_MAILBOX_PATH];
-  time_t mark;
-
-  /* we allow age == 0 to nuke all current entries */
-  if (age < 0)
-    fatal("must specify positive number of days", EC_USAGE);
-
-  mark = time(0) - (age*60*60*24);
-  syslog(LOG_NOTICE, "prunedelivered: pruning back %d days", age);
-  c[1] = '\0';
-  for (c[0] = 'a' ; c[0] <= 'z'; c[0]++) {
-      (void)strcpy(fname, _get_db_name(c));
-      (void)strcat(fname, ".db");
-      
-      if (logdebug) {
-	  syslog(LOG_DEBUG, "prunedelivered: pruning %s", fname);
-      }
-      
-      if ((lockfd = _lock_delivered_db(c, 1)) < 0) {
-	  return -1;
-      }
-      rc = _prune_actual_db(fname, mark);
-      close(lockfd);
-      if (rc < 0) {
-	  syslog(LOG_ERR, "prunedelivered: error exit", age);
-	  return(rc);
-      }
-  }
-  syslog(LOG_NOTICE, "prunedelivered: done");
-  return 0;
 }

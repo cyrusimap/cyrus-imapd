@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.13 1999/10/02 00:43:07 leg Exp $
+ * $Id: syncnews.c,v 1.14 2000/01/28 22:09:52 leg Exp $
  */
 
 #include <stdio.h>
@@ -45,6 +45,7 @@
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
+#include "mboxlist.h"
 
 extern int errno;
 extern int optind;
@@ -213,7 +214,7 @@ do_syncnews()
     for (i = 0; i < group_num; i++) {
 	if (!group_seen[i]) {
 	    r = mboxlist_createmailbox(group[i],
-				       MAILBOX_FORMAT_NETNEWS, "news",
+				       MBTYPE_NETNEWS, "news",
 				       1, "anonymous", 0);
 
 	    if (r == IMAP_MAILBOX_BADNAME) {

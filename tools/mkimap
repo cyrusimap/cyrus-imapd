@@ -1,7 +1,7 @@
 #!/bin/sh
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: mkimap,v 1.5 2000/01/04 20:52:22 leg Exp $
+# $Id: mkimap,v 1.6 2000/01/28 22:09:57 leg Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.

@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.12 1999/12/23 18:44:49 leg Exp $
+ * $Id: script.c,v 1.13 2000/01/28 22:09:56 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -70,6 +70,30 @@ int script_require(sieve_script_t *s, char *req)
 	} else {
 	    return 0;
 	}
+    } else if (!strcmp("imapflags", req)) {
+	if (s->interp.setflag &&
+	    s->interp.addflag &&
+	    s->interp.removeflag &&
+	    s->interp.mark &&
+	    s->interp.unmark) {
+	    s->support.imapflags = 1;
+	    return 1;
+	} else {
+	    return 0;
+	}
+    } else if (!strcmp("notify",req)) {
+	if (s->interp.notify &&
+	    s->interp.denotify) {
+	    s->support.notify = 1;
+	    return 1;
+	} else {
+	    return 0;
+	}
+#ifdef ENABLE_REGEX
+    } else if (!strcmp("regex", req)) {
+	s->support.regex = 1;
+	return 1;
+#endif
     } else if (!strcmp("comparator-i;octet", req)) {
 	return 1;
     } else if (!strcmp("comparator-i;ascii-casemap", req)) {
@@ -93,7 +117,8 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     s = (sieve_script_t *) xmalloc(sizeof(sieve_script_t));
     s->interp = *interp;
     s->script_context = script_context;
-    s->support.fileinto = s->support.reject = s->support.envelope = 0;
+    s->support.fileinto = s->support.reject = s->support.envelope = 
+	s->support.vacation = s->support.imapflags = s->support.regex = 0;
     s->err = 0;
 
     s->cmds = sieve_parse(s, script);
@@ -107,6 +132,46 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 
     *ret = s;
     return res;
+}
+
+char **stringlist_to_chararray(stringlist_t *list)
+{
+    int size = 0;
+    stringlist_t *tmp = list;
+    stringlist_t *tofree;
+    char **ret;
+    int lup;
+
+    while (tmp!=NULL)
+    {
+	size++;
+	tmp=tmp->next;
+    }
+
+    ret = malloc( sizeof(char *) * (size+1));
+    if (ret == NULL) return NULL;
+
+    tmp = list;
+
+    for (lup = 0;lup<size;lup++)
+    {
+	ret[lup] = tmp->s;
+	tmp=tmp->next;
+    }
+
+    ret[size]=NULL;
+
+    /* free element holders */
+    tmp = list;
+
+    while (tmp!=NULL)
+    {
+	tofree = tmp;
+	tmp=tmp->next;
+	free(tofree);
+    }
+        
+    return ret;
 }
 
 int sieve_script_free(sieve_script_t **s)
@@ -181,7 +246,8 @@ static int look_for_me(char *myaddr, stringlist_t *myaddrs, char **body)
 static int evaltest(sieve_interp_t *i, test_t *t, void *m)
 {
     testlist_t *tl;
-    stringlist_t *s1, *s2;
+    stringlist_t *sl;
+    patternlist_t *pl;
     int res = 0;
     int addrpart = 0;
 
@@ -194,17 +260,17 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
 	case LOCALPART: addrpart = ADDRESS_LOCALPART; break;
 	case DOMAIN: addrpart = ADDRESS_DOMAIN; break;
 	}
-	for (s1 = t->u.ae.s1; s1 != NULL && !res; s1 = s1->next) {
+	for (sl = t->u.ae.sl; sl != NULL && !res; sl = sl->next) {
 	    int l;
 	    char **body;
 
 	    /* use getheader for address, getenvelope for envelope */
 	    if (((t->type == ADDRESS) ? 
-		   i->getheader(m, s1->s, &body) :
-		   i->getenvelope(m, s1->s, &body)) != SIEVE_OK) {
+		   i->getheader(m, sl->s, &body) :
+		   i->getenvelope(m, sl->s, &body)) != SIEVE_OK) {
 		continue; /* try next header */
 	    }
-	    for (s2 = t->u.ae.s2; s2 != NULL && !res; s2 = s2->next) {
+	    for (pl = t->u.ae.pl; pl != NULL && !res; pl = pl->next) {
 		for (l = 0; body[l] != NULL && !res; l++) {
 		    /* loop through each header */
 		    void *data = NULL, *marker = NULL;
@@ -214,7 +280,7 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
                     val = get_address(addrpart, &data, &marker);
 		    while (val != NULL && !res) { 
 			/* loop through each address */
-			res |= t->u.ae.comp(s2->s, val);
+			res |= t->u.ae.comp(pl->p, val);
 			val = get_address(addrpart, &data, &marker);
        		    }
 		    free_address(&data, &marker);
@@ -236,9 +302,9 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
 	break;
     case EXISTS:
 	res = 1;
-	for (s1 = t->u.sl; s1 != NULL && res; s1 = s1->next) {
+	for (sl = t->u.sl; sl != NULL && res; sl = sl->next) {
 	    char **headbody = NULL;
-	    res &= (i->getheader(m, s1->s, &headbody) == SIEVE_OK);
+	    res &= (i->getheader(m, sl->s, &headbody) == SIEVE_OK);
 	}
 	break;
     case FALSE:
@@ -249,14 +315,14 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
 	break;
     case HEADER:
 	res = 0;
-	for (s1 = t->u.h.s1; s1 != NULL && !res; s1 = s1->next) {
+	for (sl = t->u.h.sl; sl != NULL && !res; sl = sl->next) {
 	    char **val;
 	    int l;
-	    if (i->getheader(m, s1->s, &val) != SIEVE_OK)
+	    if (i->getheader(m, sl->s, &val) != SIEVE_OK)
 		continue;
-	    for (s2 = t->u.h.s2; s2 != NULL && !res; s2 = s2->next) {
+	    for (pl = t->u.h.pl; pl != NULL && !res; pl = pl->next) {
 		for (l = 0; val[l] != NULL && !res; l++) {
-		    res |= t->u.h.comp(s2->s, val[l]);
+		    res |= t->u.h.comp(pl->p, val[l]);
 		}
 	    }
 	}
@@ -322,117 +388,148 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 	    res = do_keep(actions);
 	    break;
 	case VACATION:
-	{
-	    char **body, buf[128], myaddr[256], *fromaddr;
-	    char *reply_to = NULL;
-	    int l;
+	    {
+		char **body, buf[128], myaddr[256], *fromaddr;
+		char *reply_to = NULL;
+		int l;
 
-	    strcpy(buf, "to");
-	    l = i->getenvelope(m, buf, &body);
-	    if (body[0]) {
-		strncpy(myaddr, body[0], sizeof(myaddr) - 1);
-	    }
-	    if (l == SIEVE_OK) {
-		strcpy(buf, "from");
+		strcpy(buf, "to");
 		l = i->getenvelope(m, buf, &body);
-	    }
-	    if (l == SIEVE_OK && body[0]) {
-		/* we have to parse this address & decide whether we
-		   want to respond to it */
-		void *data = NULL, *marker = NULL;
-		char *tmp;
-		
-		parse_address(body[0], &data, &marker);
-		tmp = get_address(ADDRESS_ALL, &data, &marker);
-		reply_to = (tmp != NULL) ? xstrdup(tmp) : NULL;
-		free_address(&data, &marker);
-
-		/* first, is there a reply-to address? */
-		if (reply_to == NULL) {
-		    l = SIEVE_DONE;
+		if (body[0]) {
+		    strncpy(myaddr, body[0], sizeof(myaddr) - 1);
 		}
-
-		/* first, is it from me? really should use a
-		   compare_address function */
-		if (l == SIEVE_OK && !strcmp(myaddr, reply_to)) {
-		    l = SIEVE_DONE;
+		if (l == SIEVE_OK) {
+		    strcpy(buf, "from");
+		    l = i->getenvelope(m, buf, &body);
 		}
-
-		/* ok, is it any of the other addresses i've
-		   specified? */
-		if (l == SIEVE_OK)
-		    for (sl = c->u.v.addresses; sl != NULL; sl = sl->next)
-			if (!strcmp(sl->s, reply_to))
-			    l = SIEVE_DONE;
+		if (l == SIEVE_OK && body[0]) {
+		    /* we have to parse this address & decide whether we
+		       want to respond to it */
+		    void *data = NULL, *marker = NULL;
+		    char *tmp;
 		
-		/* ok, is it a system address? */
-		if (l == SIEVE_OK && sysaddr(reply_to)) {
-		    l = SIEVE_DONE;
-		}
-	    }
+		    parse_address(body[0], &data, &marker);
+		    tmp = get_address(ADDRESS_ALL, &data, &marker);
+		    reply_to = (tmp != NULL) ? xstrdup(tmp) : NULL;
+		    free_address(&data, &marker);
 
-	    if (l == SIEVE_OK) {
-		int found = 0;
-
-		/* ok, we're willing to respond to the sender.
-		   but is this message to me?  that is, is my address
-		   in the TO or CC fields? */
-		if (strcpy(buf, "to"), i->getheader(m, buf, &body) == SIEVE_OK)
-		    found = look_for_me(myaddr, c->u.v.addresses, body);
-
-		if (!found && (strcpy(buf, "cc"),
-			       (i->getheader(m, buf, &body) == SIEVE_OK)))
-		    found = look_for_me(myaddr, c->u.v.addresses, body);
-
-		if (!found)
-		    l = SIEVE_DONE;
-	    }
-
-	    if (l == SIEVE_OK) {
-		/* ok, ok, if we got here maybe we should reply */
-		
-		if (c->u.v.subject == NULL) {
-		    /* we have to generate a subject */
-		    char **s;
-		    
-		    strcpy(buf, "subject");
-		    if (i->getheader(m, buf, &s) != SIEVE_OK ||
-			s[0] == NULL) {
-			strcpy(buf, "Automated reply");
-		    } else {
-			/* s[0] contains the original subject */
-			while (!strncasecmp(s[0], "Re: ", 4)) {
-			    s[0] += 4;
-			}
-			snprintf(buf, sizeof(buf), "Re: %s", s[0]);
+		    /* first, is there a reply-to address? */
+		    if (reply_to == NULL) {
+			l = SIEVE_DONE;
 		    }
-		} else {
-		    /* user specified subject */
-		    strncpy(buf, c->u.v.subject, sizeof(buf));
+
+		    /* first, is it from me? really should use a
+		       compare_address function */
+		    if (l == SIEVE_OK && !strcmp(myaddr, reply_to)) {
+			l = SIEVE_DONE;
+		    }
+
+		    /* ok, is it any of the other addresses i've
+		       specified? */
+		    if (l == SIEVE_OK)
+			for (sl = c->u.v.addresses; sl != NULL; sl = sl->next)
+			    if (!strcmp(sl->s, reply_to))
+				l = SIEVE_DONE;
+		
+		    /* ok, is it a system address? */
+		    if (l == SIEVE_OK && sysaddr(reply_to)) {
+			l = SIEVE_DONE;
+		    }
 		}
 
-		/* who do we want the message coming from? */
-		if (c->u.v.addresses) {
-		    fromaddr = c->u.v.addresses->s;
-		} else {
-		    fromaddr = myaddr;
+		if (l == SIEVE_OK) {
+		    int found = 0;
+
+		    /* ok, we're willing to respond to the sender.
+		       but is this message to me?  that is, is my address
+		       in the TO or CC fields? */
+		    if (strcpy(buf, "to"), i->getheader(m, buf, &body) == SIEVE_OK)
+			found = look_for_me(myaddr, c->u.v.addresses, body);
+
+		    if (!found && (strcpy(buf, "cc"),
+				   (i->getheader(m, buf, &body) == SIEVE_OK)))
+			found = look_for_me(myaddr, c->u.v.addresses, body);
+
+		    if (!found)
+			l = SIEVE_DONE;
 		}
+
+		if (l == SIEVE_OK) {
+		    /* ok, ok, if we got here maybe we should reply */
 		
-		res = do_vacation(actions, reply_to, strdup(fromaddr),
-				  strdup(buf),
-				  c->u.v.message, c->u.v.days, c->u.v.mime);
+		    if (c->u.v.subject == NULL) {
+			/* we have to generate a subject */
+			char **s;
+		    
+			strcpy(buf, "subject");
+			if (i->getheader(m, buf, &s) != SIEVE_OK ||
+			    s[0] == NULL) {
+			    strcpy(buf, "Automated reply");
+			} else {
+			    /* s[0] contains the original subject */
+			    while (!strncasecmp(s[0], "Re: ", 4)) {
+				s[0] += 4;
+			    }
+			    snprintf(buf, sizeof(buf), "Re: %s", s[0]);
+			}
+		    } else {
+			/* user specified subject */
+			strncpy(buf, c->u.v.subject, sizeof(buf));
+		    }
+
+		    /* who do we want the message coming from? */
+		    if (c->u.v.addresses) {
+			fromaddr = c->u.v.addresses->s;
+		    } else {
+			fromaddr = myaddr;
+		    }
 		
-	    } else {
-		if (l != SIEVE_DONE) res = -1; /* something went wrong */
+		    res = do_vacation(actions, reply_to, strdup(fromaddr),
+				      strdup(buf),
+				      c->u.v.message, c->u.v.days, c->u.v.mime);
+		
+		} else {
+		    if (l != SIEVE_DONE) res = -1; /* something went wrong */
+		}
+		break;
 	    }
-	    break;
-	}
 	case STOP:
 	    res = 1;
 	    break;
 	case DISCARD:
 	    res = do_discard(actions);
 	    break;
+	case SETFLAG:
+	    sl = c->u.sl;
+	    res = do_setflag(actions, sl->s);
+	    for (sl = sl->next; res == 0 && sl != NULL; sl = sl->next) {
+		res = do_addflag(actions, sl->s);
+	    }
+	    break;
+	case ADDFLAG:
+	    for (sl = c->u.sl; res == 0 && sl != NULL; sl = sl->next) {
+		res = do_addflag(actions, sl->s);
+	    }
+	    break;
+	case REMOVEFLAG:
+	    for (sl = c->u.sl; res == 0 && sl != NULL; sl = sl->next) {
+		res = do_removeflag(actions, sl->s);
+	    }
+	    break;
+	case MARK:
+	    res = do_mark(actions);
+	    break;
+	case UNMARK:
+	    res = do_unmark(actions);
+	    break;
+	case NOTIFY:
+	    res = do_notify(i,m,actions, c->u.n.priority, c->u.n.method, c->u.n.message, 
+			    stringlist_to_chararray(c->u.n.headers_list));
+	    break;
+	case DENOTIFY:
+	    res = do_denotify(&actions);
+	    break;
+
 	}
 
 	if (res) /* we've either encountered an error or a stop */
@@ -521,33 +618,90 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	    break;
 
 	case ACTION_VACATION:
-	{
-	    unsigned char hash[HASHSIZE];
+	    {
+		unsigned char hash[HASHSIZE];
 
-	    if (!s->interp.vacation)
+		if (!s->interp.vacation)
+		    return SIEVE_INTERNAL_ERROR;
+
+		/* first, let's figure out if we should respond to this */
+		ret = makehash(hash, a->u.vac.addr, a->u.vac.msg);
+		if (ret == SIEVE_OK) {
+		    ret = s->interp.vacation->autorespond(hash, HASHSIZE, 
+							  a->u.vac.days, s->interp.interp_context,
+							  s->script_context, message_context);
+		}
+		if (ret == SIEVE_OK) {
+		    /* send the response */
+		    ret = s->interp.vacation->send_response(a->u.vac.addr, 
+							    a->u.vac.fromaddr,
+							    a->u.vac.subj,
+							    a->u.vac.msg, a->u.vac.mime,
+							    s->interp.interp_context, s->script_context, 
+							    message_context);
+		} else if (ret == SIEVE_DONE) {
+		    ret = SIEVE_OK;
+		}
+	    
+		break;
+	    }
+
+ 
+	case ACTION_SETFLAG:
+	    if (!s->interp.setflag)
+		return SIEVE_INTERNAL_ERROR;
+	    ret = s->interp.setflag(a->u.fla.flag, s->interp.interp_context,
+                                    s->script_context,
+                                    message_context);
+	    break;
+	case ACTION_ADDFLAG:
+	    if (!s->interp.addflag)
+		return SIEVE_INTERNAL_ERROR;
+	    ret = s->interp.addflag(a->u.fla.flag, s->interp.interp_context,
+                                    s->script_context,
+                                    message_context);
+	    break;
+	case ACTION_REMOVEFLAG:
+	    if (!s->interp.removeflag)
+		return SIEVE_INTERNAL_ERROR;
+	    ret = s->interp.removeflag(a->u.fla.flag, s->interp.interp_context,
+				       s->script_context,
+				       message_context);
+	    break;
+	case ACTION_MARK:
+	    if (!s->interp.mark)
+		return SIEVE_INTERNAL_ERROR;
+	    ret = s->interp.mark(NULL, s->interp.interp_context,
+				 s->script_context,
+				 message_context);
+	    break;
+	case ACTION_UNMARK:
+	    if (!s->interp.unmark)
+		return SIEVE_INTERNAL_ERROR;
+	    ret = s->interp.unmark(NULL, s->interp.interp_context,
+				   s->script_context,
+				   message_context);
+	    break;
+
+	case ACTION_NOTIFY:
+	    if (!s->interp.notify)
 		return SIEVE_INTERNAL_ERROR;
 
-	    /* first, let's figure out if we should respond to this */
-	    ret = makehash(hash, a->u.vac.addr, a->u.vac.msg);
-	    if (ret == SIEVE_OK) {
-		ret = s->interp.vacation->autorespond(hash, HASHSIZE, 
-			  a->u.vac.days, s->interp.interp_context,
-			  s->script_context, message_context);
-	    }
-	    if (ret == SIEVE_OK) {
-		/* send the response */
-		ret = s->interp.vacation->send_response(a->u.vac.addr, 
-							a->u.vac.fromaddr,
-							a->u.vac.subj,
-			          a->u.vac.msg, a->u.vac.mime,
-			          s->interp.interp_context, s->script_context, 
-			          message_context);
-	    } else if (ret == SIEVE_DONE) {
-		ret = SIEVE_OK;
-	    }
-	    
+	    ret = s->interp.notify(a->u.not.priority,
+				   a->u.not.method,
+				   a->u.not.message,
+				   a->u.not.headers,
+				   s->interp.interp_context,
+				   s->script_context,
+				   message_context);
 	    break;
-	}
+	case ACTION_DENOTIFY:
+	    if (!s->interp.denotify)
+		return SIEVE_INTERNAL_ERROR;
+	    ret = s->interp.denotify(NULL, s->interp.interp_context,
+				     s->script_context,
+				     message_context);
+	    break;
 
 	case ACTION_NONE:
 	    break;

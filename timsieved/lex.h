@@ -1,7 +1,7 @@
 /* lex.h -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.h,v 1.5 1999/11/15 20:43:00 leg Exp $
+ * $Id: lex.h,v 1.6 2000/01/28 22:09:56 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
