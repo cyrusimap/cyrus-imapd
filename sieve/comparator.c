@@ -1,6 +1,6 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
- * $Id: comparator.c,v 1.12 2002/07/01 15:54:30 ken3 Exp $
+ * $Id: comparator.c,v 1.12.2.1 2002/12/03 15:07:34 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -36,6 +36,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "comparator.h"
 #include "tree.h"
 #include "sieve.h"
+
+extern int strcasecmp(const char *, const char *);
 
 typedef int (*compare_t)(const void *, const void *);
 
@@ -140,7 +142,8 @@ int boyer_moore(char *text, char *pat)
 #endif
 
 /* we do a brute force attack */
-static int octet_contains(const char *text, const char *pat, void *rock)
+static int octet_contains(const char *text, const char *pat, 
+                          void *rock __attribute__((unused)))
 {
     return (strstr(text, pat) != NULL);
 }
@@ -206,13 +209,15 @@ static int octet_matches_(const char *text, const char *pat, int casemap)
     abort();
 }
 
-static int octet_matches(const char *text, const char *pat, void *rock)
+static int octet_matches(const char *text, const char *pat, 
+                         void *rock __attribute__((unused)))
 {
     return octet_matches_(text, pat, 0);
 }
 
 #ifdef ENABLE_REGEX
-static int octet_regex(const char *text, const char *pat, void *rock)
+static int octet_regex(const char *text, const char *pat, 
+                       void *rock __attribute__((unused)))
 {
     return (!regexec((regex_t *) pat, text, 0, NULL, 0));
 }
@@ -225,7 +230,7 @@ static int octet_regex(const char *text, const char *pat, void *rock)
 
 /* sheer brute force */
 static int ascii_casemap_contains(const char *text, const char *pat,
-				  void *rock)
+				  void *rock __attribute__((unused)))
 {
     int N = strlen(text);
     int M = strlen(pat);
@@ -243,7 +248,8 @@ static int ascii_casemap_contains(const char *text, const char *pat,
     return (j == M); /* we found a match! */
 }
 
-static int ascii_casemap_matches(const char *text, const char *pat, void *rock)
+static int ascii_casemap_matches(const char *text, const char *pat, 
+                                 void *rock __attribute__((unused)))
 {
     return octet_matches_(text, pat, 1);
 }
