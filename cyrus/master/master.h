@@ -13,6 +13,7 @@ struct service {
 
     int ready_workers;
     int desired_workers;
+    unsigned int max_workers;
     int stat[2];
 
     /* stats */

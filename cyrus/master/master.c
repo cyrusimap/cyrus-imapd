@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.35 2001/03/05 20:30:47 leg Exp $ */
+/* $Id: master.c,v 1.36 2001/04/26 21:12:26 leg Exp $ */
 
 #include <config.h>
 
@@ -789,6 +789,7 @@ void add_service(const char *name, struct entry *e, void *rock)
     int prefork = masterconf_getint(e, "prefork", 0);
     char *listen = mystrdup(masterconf_getstring(e, "listen", NULL));
     char *proto = mystrdup(masterconf_getstring(e, "proto", "tcp"));
+    char *max = mystrdup(masterconf_getstring(e, "maxchild", "-1"));
     int i;
 
     if (!cmd || !listen) {
@@ -811,6 +812,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 	Services[i].exec = tokenize(cmd);
 	if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
 	Services[i].desired_workers = prefork;
+	Services[i].max_workers = (unsigned int) atoi(max);
     }
     else {
 	/* either we don't have an existing entry or we are changing
@@ -833,6 +835,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 	Services[nservices].ready_workers = 0;
 	Services[nservices].desired_workers = prefork;
+	Services[i].max_workers = atoi(max);
 	memset(Services[nservices].stat, 0, sizeof(Services[nservices].stat));
 
 	Services[nservices].nforks = 0;
@@ -840,6 +843,8 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 	nservices++;
     }
+
+    free(max);
 }
 
 void add_event(const char *name, struct entry *e, void *rock)
@@ -1056,6 +1061,7 @@ int main(int argc, char **argv, char **envp)
 	/* do we have any services undermanned? */
 	for (i = 0; i < nservices; i++) {
 	    if (Services[i].exec /* enabled */ &&
+		(Services[i].nactive < Services[i].max_workers) &&
 		(Services[i].ready_workers < Services[i].desired_workers)) {
 		spawn_service(&Services[i]);
 	    }
@@ -1138,11 +1144,13 @@ int main(int argc, char **argv, char **envp)
 		process_msg(&Services[i], msg);
 	    }
 
-	    for (j = Services[i].ready_workers;
-		 j < Services[i].desired_workers; 
-		 j++)
-	    {
-		spawn_service(&Services[i]);
+	    if (Services[i].nactive < Services[i].max_workers) {
+		for (j = Services[i].ready_workers;
+		     j < Services[i].desired_workers; 
+		     j++)
+		{
+		    spawn_service(&Services[i]);
+		}
 	    }
 
 	    if (Services[i].ready_workers == 0 && 
