@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.31 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: mboxname.c,v 1.32 2004/02/26 22:04:04 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -619,7 +619,7 @@ int mboxname_netnewscheck(char *name)
 #define GOODCHARS " +,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"
 int mboxname_policycheck(char *name)
 {
-    int i;
+    unsigned i;
     struct glob *g;
     int sawutf7 = 0;
     unsigned c1, c2, c3, c4, c5, c6, c7, c8;
