@@ -39,20 +39,14 @@ Well, ok, it hangs.
 <li> cyradm doesn't handle BYE quite properly (especially a BYE right after
 connect).
 
-<li> Random krb4 problems (and no, we don't know why they happen):
-  <ul>
-  <li> It's possible to cause imtest/imapd to crash with <TT>Decoding
-  error: Incorrect network address (krb_rd_req)</TT> by sending a
-  large amount of information at once.  Possibly fixed?
-  </ul>
-</ul>
-
 <h1>                     Things we want to do</h1>
 
 <ul>
 <li> Implement the IMAP ID extension.
 
 <li> Implement the IMAP VIEW extension.
+
+<li> Implement the IMAP SORT and THREAD extensions.
 
 <li> The vacation action in Sieve shouldn't respond to messages that
 have an "Auto-Submitted" category anything but "No".
