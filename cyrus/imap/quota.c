@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.48.2.7 2004/08/09 18:51:20 ken3 Exp $ */
+/* $Id: quota.c,v 1.48.2.8 2004/12/23 18:14:38 ken3 Exp $ */
 
 
 #include <config.h>
@@ -422,7 +422,8 @@ int fixquota_finish(int thisquota, struct txn **tid, unsigned long *count)
 	(*count)++;
     }
     if (quota[thisquota].quota.used != quota[thisquota].newused) {
-	printf("%s: usage was " UQUOTA_T_FMT ", now " UQUOTA_T_FMT "\n", quota[thisquota].quota.root,
+	printf("%s: usage was " UQUOTA_T_FMT ", now " UQUOTA_T_FMT "\n",
+	       quota[thisquota].quota.root,
 	       quota[thisquota].quota.used, quota[thisquota].newused);
 	quota[thisquota].quota.used = quota[thisquota].newused;
 	r = quota_write(&quota[thisquota].quota, tid);
