@@ -821,6 +821,7 @@ char *authtype;
     if (!canon_user) {
 	syslog(LOG_NOTICE, "badlogin: %s %s %s bad userid",
 	       imapd_clienthost, authtype, beautify_string(user));
+	mech->free_state(state);
 	prot_printf(imapd_out, "%s NO %s\r\n", tag,
 		    error_message(IMAP_INVALID_USER));
 	return;
@@ -3268,7 +3269,7 @@ time_t *date;
  */
 eatline()
 {
-    char c;
+    int c;
 
     while ((c = prot_getc(imapd_in)) != EOF && c != '\n');
 }
