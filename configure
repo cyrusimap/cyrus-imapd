@@ -57,8 +57,8 @@ ac_help="$ac_help
 ac_help="$ac_help
   --enable-experiment       enable experimental code (gurus only)"
 ac_help="$ac_help
-  --enable-netscapehack     enable Netscape hack for Communcator's
-                            "Administrate Mail" menu option"
+  --enable-netscapehack     enable Netscape hack for the menu option
+                            in Communicator to Administrate Mail"
 
 # Initialize some variables set by options.
 # The variables have the same names as the options, with
