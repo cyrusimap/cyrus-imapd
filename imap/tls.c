@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.18 2001/08/10 19:29:08 ken3 Exp $ */
+/* $Id: tls.c,v 1.19 2001/08/15 01:41:35 ken3 Exp $ */
 
 #include <config.h>
 
@@ -550,39 +550,6 @@ SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
     *copy = 0;
     return sess;
 }
-
-/*
- * Delete expired sessions.
- */
-static int find_p(void *rock, const char *id, int idlen,
-		  const char *data, int datalen)
-{
-    time_t expire;
-
-    /* grab the expire time */
-    memcpy(&expire, data, sizeof(time_t));
-
-    /* check if the session has expired */
-    return (expire < time(0));
-}
-
-static int find_cb(void *rock, const char *id, int idlen,
-		   const char *data, int datalen)
-{
-    DB->delete((struct db *) rock, id, idlen, NULL);
-
-    /* log this transaction */
-    if (var_imapd_tls_loglevel > 0) {
-	int i;
-	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
-	for (i = 0; i < idlen; i++)
-	    sprintf(idstr+i*2, "%02X", id[i]);
-
-	syslog(LOG_DEBUG, "expiring TLS session: id=%s", idstr);
-    }
-
-    return 0;
-}
 #endif /* TLS_REUSE */
 
  /*
@@ -913,11 +880,60 @@ int tls_reuse_sessions(SSL **conn)
     return 0;
 }
 
+/*
+ * Delete expired sessions.
+ */
+static int find_p(void *rock, const char *id, int idlen,
+		  const char *data, int datalen)
+{
+    time_t expire;
+
+    /* grab the expire time */
+    memcpy(&expire, data, sizeof(time_t));
+
+    /* log this transaction */
+    if (var_imapd_tls_loglevel > 0) {
+	int i;
+	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
+	for (i = 0; i < idlen; i++)
+	    sprintf(idstr+i*2, "%02X", id[i]);
+
+	syslog(LOG_DEBUG, "found TLS session: id=%s, expire=%s",
+	       idstr, ctime(&expire));
+    }
+
+    /* check if the session has expired */
+    return (expire < time(0));
+}
+
+static int find_cb(void *rock, const char *id, int idlen,
+		   const char *data, int datalen)
+{
+    DB->delete((struct db *) rock, id, idlen, NULL);
+
+    /* log this transaction */
+    if (var_imapd_tls_loglevel > 0) {
+	int i;
+	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
+	for (i = 0; i < idlen; i++)
+	    sprintf(idstr+i*2, "%02X", id[i]);
+
+	syslog(LOG_DEBUG, "expiring TLS session: id=%s", idstr);
+    }
+
+    return 0;
+}
+
 int tls_expire_sessions(void)
 {
     char dbname[1024];
     struct db *sessdb = NULL;
     int ret;
+
+    /* initialize DB environment */
+    strcpy(dbname, config_dir);
+    strcat(dbname, FNAME_DBDIR);
+    DB->init(dbname, 0);
 
    /* create the name of the db file */
     strcpy(dbname, config_dir);
@@ -934,6 +950,8 @@ int tls_expire_sessions(void)
 	DB->foreach(sessdb, "", 0, &find_p, &find_cb, sessdb, NULL);
 	DB->close(sessdb);
     }
+
+    DB->done();
 
     return 0;
 }
