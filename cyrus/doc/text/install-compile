@@ -143,10 +143,6 @@ Options to configure
     --disable-server 
             Do not compile the IMAP server programs.
 
-    --enable-amssync 
-            Include AMS (Andrew Message System) to IMAP bboard
-            synchronization support. Requires the AMS libraries. 
-
     "configure" ignores any other arguments that you give it. 
 
     Some systems require unusual options for compilation or linking that

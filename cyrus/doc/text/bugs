@@ -7,6 +7,8 @@ imapd and core utilities
       * Particularly large quotas can wrap around. 
       * The RENAME command is not atomic. 
       * RENAMEing INBOX doesn't work correctly. (important!) 
+      * In general, renaming an mailbox to be a subset of itself should be
+        checked for and disallowed. 
       * append.c: doesn't set the \Seen flag if the client requests it. 
       * MULTIAPPEND: does it do the right thing with an aborted APPEND
         (literal length {0})? 
@@ -14,10 +16,12 @@ imapd and core utilities
       * deliver (wrapper) should fill in a more useful Return-Path when
         none is given. (not important) 
       * DELETE and deleting user mailboxes. 
+      * we should deal with having to reset UIDs 
 
 proxyd and Cyrus Murder
 
-      * proxyd doesn't support STARTTLS/imaps. 
+      * proxyd doesn't support ID. 
+      * proxyd doesn't advertise ACAP=. 
       * COPY across servers isn't tested and isn't robust. 
       * RENAME across servers isn't implemented (less severe). 
       * Tagged lines with literals can cause problems for proxyd. 
@@ -40,6 +44,7 @@ lmtpd, deliver, and sieve
       * duplicate.c could be much more efficient than repeatedly opening
         and closing databases. (Cache last N databases used?) 
       * Should duplicate.c use transactions? A single file? 
+      * does lmtpd correctly authenticate and authorize people? 
 
 authentication and authorization
 
@@ -51,13 +56,15 @@ authentication and authorization
 
 other utilities
 
-      * cyradm doesn't handle BYE quite properly (especially a BYE right
-        after connect). 
+      * cyradm may need to change authname/username stuff. Something to
+        check. 
       * imtest doesn't properly default to using the LOGIN command. also,
         it would be nice for the authorization name to default to the
         authentication name, except when specifically overridden. 
       * collectnews's routines in append.c are broken. either remove
         collectnews or fix it. 
+      * any utilities doing db operations should catch signals and poll for
+        them to see if it should exit. 
 
                      Things we want to do
 
@@ -70,6 +77,7 @@ other utilities
       * Add mailbox version numbers. 
       * Add mailbox tombstones (gives NEWNAME support). 
       * Design and implement ALIST, the advanced list command. 
+      * Change from the prot layer to using sfio. 
 
     Please refer to Sending Feedback if you would like to submit a bug,
     feature request or (best of all) patch. 

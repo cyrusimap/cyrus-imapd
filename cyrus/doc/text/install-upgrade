@@ -1,10 +1,42 @@
 Upgrading From Previous Versions
 
-Upgrading from 1.6
+Upgrading from 1.6.22
+
+    Warning: Cyrus imapd 2.0 will automatically convert on-disk file
+    formats as the server is used. It is not possible to run 1.6 after 2.0
+    has been used on a mail spool. 
+
+      * Convert mailboxes file to Berkeley DB: 
+
+           su cyrus
+           cd /var/imap
+           ctl_mboxlist -u < mailboxes
+           ctl_mboxlist -c
+
+        Please keep a backup of your mailboxes file. You can dump an
+        old-style mailboxes file by using ctl_mboxlist -d. 
+      * cyrus.seen conversion. The cyrus.seen file will be automatically
+        upgraded as users read mail. After some time, you might want to
+        delete the cyrus.seen file in each mailbox; it is superceded by the
+        user/joe.seen file. 
+      * cyrus.index conversion. The cyrus.index file will be automatically
+        upgraded the first time each mailbox is SELECTed. 
+      * Netnews conversion. The netnews programs are no longer built. If
+        you are using netnews, you will need to apply the diff in the
+        netnews/ directory to INN or see if INN is now distributing those
+        changes. You will also want to run remotepurge on a regular basis
+        to purge old netnews posts. 
+      * remove inetd.conf entries. The imap and popd3d lines need to be
+        removed from /etc/inetd.conf and inetd needs to be restarted. 
+      * sendmail configuration. You need to use a new cyrus mc file. See
+        doc/cyrusv2.mc for a sample mc file. 
+
+Upgrading from 1.6.13
 
       * Upgrading from the Cyrus IMAP server version 1.6.13 or earlier: if
         you use Sieve, you should run the "tools/upgradesieve" script, as
-        the format of the "/usr/sieve" directory has changed slightly.
+        the format of the "/usr/sieve" directory has changed slightly. 
+
         timsieved, included in this release, will handle maintenance of
         Sieve scripts. 
       * Upgrading from the Cyrus IMAP server version 1.6.10 or earlier: if
@@ -13,8 +45,9 @@ Upgrading from 1.6
 
         collectnews!:*:Tf,WR:collectnews
 
-        The format of the input to collectnews has changed. Duplicate
-        delivery suppression is now required for Sieve. 
+        The format of the input to collectnews has changed. 
+
+        Duplicate delivery suppression is now required for Sieve. 
       * Upgrading from the Cyrus IMAP server version 1.6.1 or earlier
         (including 1.5.x!): the quota and user directories are now hashed
         by the first character of the username. This is to reduce the

@@ -1,4 +1,4 @@
-<!-- $Id: install-auth.html,v 1.2 2000/05/13 03:39:59 leg Exp $ -->
+<!-- $Id: install-auth.html,v 1.3 2000/05/28 19:48:59 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Authenticating Users
@@ -37,6 +37,7 @@ PLAIN) will send your password in clear-text to the server.
 
 <h2>Authentication Recommendations</h2>
 
+<ul>
 <li>If you are running a mail server on a single machine, we recommend
 	that you configure the system to use CRAM-MD5 or
 	DIGEST-MD5. We have not provided utilities for you to let
@@ -70,6 +71,7 @@ to whether or not the password was correct.
 <p>Keep in mind that when you use PLAIN or LOGIN you should encrypt
 the stream so a user's password can not be trivially sniffed off of
 the network.
+</ul>
 
 <h2>Configuring Authentication</h2>
 
@@ -179,7 +181,7 @@ current ticket's held.  Override this with the <tt>-u</tt> option.</li>
 </ol>
 
 <P><HR>
-last modified: $Date: 2000/05/13 03:39:59 $
+last modified: $Date: 2000/05/28 19:48:59 $
 </BODY></HTML>
 
 

@@ -33,7 +33,7 @@ Testing the IMAP Server
 
         If your server is running, you'll get the following message: 
 
-           /usr/local/bin/imtest -m login -p imap foobar
+           % /usr/local/bin/imtest -m login foobar
            S: * OK mail1.andrew.cmu.edu Cyrus IMAP4 v2.0.0 server ready
            C: C01 CAPABILITY
            S: * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS 

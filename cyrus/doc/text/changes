@@ -7,7 +7,8 @@ Changes to the Cyrus IMAP Server in 2.0
       * The core delivery process has been moved to lmtpd. deliver is now a
         simple wrapper to create an LMTP transaction. 
       * master process, responsible for spawning services (imapd, lmtpd,
-        etc.) and for routine housekeeping. 
+        etc.) and for routine housekeeping. Optionally, it can use libwrap
+        to allow or deny connections. 
       * ACAP (Application Configuration Access Protocol) support for Cyrus
         Murder: IMAP Aggregator. 
       * Sieve enhancements: regular expressions, notifications,

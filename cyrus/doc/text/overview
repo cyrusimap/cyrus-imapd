@@ -81,6 +81,13 @@
           * "log" Directory 
           * "proc" Directory 
 
+      * Message Delivery 
+
+          * Local Mail Transfer Protocol 
+          * Single Instance Store 
+          * Duplicate Delivery Suppression 
+          * Sieve, a Mail Filtering Language 
+
 Mailbox Namespace
 
     The Cyrus IMAP server presents mailboxes using the netnews namespace
@@ -729,7 +736,7 @@ Single Instance Store
     Single instance store can be turned off by using the
     "singleinstancestore" flag in the configuration file. 
 
-Duplicate delivery suppression
+Duplicate Delivery Suppression
 
-Sieve
+Sieve, a Mail Filtering Language
 
