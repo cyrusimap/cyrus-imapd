@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.5 2002/05/16 19:44:42 ken3 Exp $
+ * $Id: annotate.c,v 1.6 2002/05/17 19:21:22 ken3 Exp $
  */
 
 #include <config.h>
@@ -310,8 +310,8 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 	    mailbox = e->s + 10;
 	    *cp++ = '\0';
 
-	    /* we only support "/vendor/cyrus/server" and
-	       "/vendor/cyrus/partition" right now */
+	    /* we only support "/mailbox/{mbox}/vendor/cyrus/server" and
+	       "/mailbox/{mbox}/vendor/cyrus/partition" right now */
 	    if (!strncmp(cp, "/vendor/cyrus/server",
 			 (wildcard = strchr(cp, '*')) ? wildcard - cp : 20)) {
 		fdata.entries |= ENTRY_SERVER;
@@ -336,6 +336,57 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 					       isadmin, userid,
 					       auth_state, fetch_cb,
 					       &fdata);
+	    }
+	}
+
+	if (!strncmp(e->s, "/server/", 8)) {
+	    FILE *f;
+	    char filename[1024], buf[1024], size[100], *p;
+	    struct attvaluelist *attvalues;
+
+	    cp = e->s + 8;
+
+	    if (!strncmp(cp, "motd", strcspn(cp, "*%"))) {
+		sprintf(filename, "%s/msg/motd", config_dir);
+		if ((f = fopen(filename, "r")) != NULL) {
+		    fgets(buf, sizeof(buf), f);
+		    fclose(f);
+
+		    if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
+		    if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+		    /* can't have [ be first char, sigh */
+		    for(p = buf; *p == '['; p++);
+
+		    attvalues = NULL;
+		    if (fdata.attribs & ATTRIB_VALUE)
+			appendattvalue(&attvalues, "value.shared", buf);
+		    if (fdata.attribs & ATTRIB_SIZE) {
+			sprintf(size, "%u", strlen(buf));
+			appendattvalue(&attvalues, "size.shared", size);
+		    }
+
+		    appendentryatt(l, "/server/motd", attvalues);
+		}
+	    }
+	    if (!strncmp(cp, "comment", strcspn(cp, "*%"))) {
+		sprintf(filename, "%s/msg/comment", config_dir);
+		if ((f = fopen(filename, "r")) != NULL) {
+		    fgets(buf, sizeof(buf), f);
+		    fclose(f);
+
+		    if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
+		    if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+
+		    attvalues = NULL;
+		    if (fdata.attribs & ATTRIB_VALUE)
+			appendattvalue(&attvalues, "value.shared", buf);
+		    if (fdata.attribs & ATTRIB_SIZE) {
+			sprintf(size, "%u", strlen(buf));
+			appendattvalue(&attvalues, "size.shared", size);
+		    }
+
+		    appendentryatt(l, "/server/comment", attvalues);
+		}
 	    }
 	}
 
