@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.20 2004/09/25 18:32:39 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.21 2004/12/22 20:22:01 ken3 Exp $
  *
  */
 
@@ -1872,6 +1872,8 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
     *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) =
 	htonll(ntohll(*((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64))) - *quotadeleted);
 #else
+    /* zero the unused 32bits */
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
     *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
 	htonl(ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED))) - *quotadeleted);
 #endif
@@ -2235,6 +2237,8 @@ int mailbox_expunge(struct mailbox *mailbox,
 	*((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) =
 	    htonll(ntohll(*((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)))+quotadeleted);
 #else
+	/* zero the unused 32bits */
+	*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
 	*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
 	    htonl(ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)))+quotadeleted);
 #endif
