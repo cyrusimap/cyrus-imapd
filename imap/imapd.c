@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.175 1999/07/08 03:56:52 leg Exp $ */
+/* $Id: imapd.c,v 1.176 1999/07/31 21:49:29 leg Exp $ */
 
 #ifndef __GNUC__
 /* can't use attributes... */
@@ -350,11 +350,13 @@ char **envp;
 	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL); 
 
     /* other params should be filled in */
-    if (sasl_server_new("imap", hostname, NULL, NULL, 2000, &imapd_saslconn)
+    if (sasl_server_new("imap", hostname, NULL, NULL, SASL_SECURITY_LAYER, 
+			&imapd_saslconn)
 	   != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
 
     /* will always return something valid */
+    /* should be configurable! */
     secprops = make_secprops(0, 2000);
     sasl_setprop(imapd_saslconn, SASL_SEC_PROPS, secprops);
     
@@ -473,11 +475,6 @@ cmdloop()
     const char *err;
 
     sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
-#if 0
-    if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
-	shutdown_file(fd);
-    }
-#endif
 
     gethostname(hostname, sizeof(hostname));
     prot_printf(imapd_out,
@@ -592,6 +589,7 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 	    copy:
 		c = getword(&arg1);
+		if (c == '\r') goto missingargs;
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
 		c = getastring(&arg2);
 		if (c == EOF) goto missingargs;
@@ -677,6 +675,7 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 	    fetch:
 		c = getword(&arg1);
+		if (c == '\r') goto missingargs;
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
 		mboxlist_close();	
 		cmd_fetch(tag.s, arg1.s, usinguid);
@@ -1004,7 +1003,7 @@ cmdloop()
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_close(tag.s);
+		cmd_unselect(tag.s);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1083,6 +1082,7 @@ char *passwd;
 	    syslog(LOG_NOTICE, "login: %s anonymous %s",
 		   imapd_clienthost, passwd);
 	    reply = "Anonymous access granted";
+	    imapd_userid = xstrdup("anonymous");
 	}
 	else {
 	    syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
@@ -1107,7 +1107,7 @@ char *passwd;
       return;
     }
     else {
-	imapd_userid = strdup(canon_user);
+	imapd_userid = xstrdup(canon_user);
 	syslog(LOG_NOTICE, "login: %s %s plaintext %s", imapd_clienthost,
 	       canon_user, reply ? reply : "");
 	if (plaintextloginpause = config_getint("plaintextloginpause", 0)) {
@@ -1300,7 +1300,8 @@ void
 cmd_capability(tag)
 char *tag;
 {
-  char *sasllist; /* the list of SASL mechanisms */
+    char *sasllist; /* the list of SASL mechanisms */
+    unsigned mechcount;
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
@@ -1311,15 +1312,14 @@ char *tag;
     prot_printf(imapd_out,
 		" X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME");
 
-    if (sasl_listmech(imapd_saslconn,
-			 "", /* should be id string */
-			 "AUTH="," AUTH=","",
-			 &sasllist,
-			 NULL,NULL)==SASL_OK)
-    {
-      prot_printf(imapd_out," %s",sasllist);      
+    if (sasl_listmech(imapd_saslconn, NULL, 
+		      "AUTH=", " AUTH=", "",
+		      &sasllist,
+		      NULL, &mechcount) == SASL_OK && mechcount > 0) {
+	prot_printf(imapd_out, " %s", sasllist);      
+	free(sasllist);
     } else {
-      /* else don't show anything */
+	/* else don't show anything */
     }
 
     prot_printf(imapd_out, " UNSELECT");
@@ -1328,10 +1328,6 @@ char *tag;
 #endif
     prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
-
-    prot_flush(imapd_out); /* we need to free the string so let's flush then
-			    we can safely free it */
-    free(sasllist);
 }
 
 /*
@@ -1640,7 +1636,6 @@ char *tag;
     }
 }    
 
-#ifdef ENABLE_EXPERIMENT
 /*
  * Perform an UNSELECT command -- for some support of IMAP proxy.
  * Just like close except no expunge.
@@ -1656,7 +1651,6 @@ char* tag;
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 }
-#endif
 
 /*
  * Parse and perform a FETCH/UID FETCH command
@@ -2010,8 +2004,14 @@ int usinguid;
     index_fetch(imapd_mailbox, sequence, usinguid, &fetchargs,
 		&fetchedsomething);
 
-    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		error_message(IMAP_OK_COMPLETED));
+    if (fetchedsomething || usinguid) {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    } else {
+	/* normal FETCH, nothing came back */
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+		    error_message(IMAP_NO_NOSUCHMSG));
+    }
 
  freeargs:
     freestrlist(newfields);
@@ -2344,11 +2344,15 @@ int usinguid;
 			copyuid, error_message(IMAP_OK_COMPLETED));
 	    free(copyuid);
 	}
-	else {
+	else if (usinguid) {
 	    prot_printf(imapd_out, "%s OK %s\r\n", tag,
 			error_message(IMAP_OK_COMPLETED));
 	}
-
+	else {
+	    /* normal COPY, message doesn't exist */
+	    prot_printf(imapd_out, "%s NO %s\r\n", tag,
+			error_message(IMAP_NO_NOSUCHMSG));
+	}
     }
 }    
 

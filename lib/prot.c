@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.37 1999/06/23 02:17:41 leg Exp $
+ * $Id: prot.c,v 1.38 1999/07/31 21:49:38 leg Exp $
  */
 
 #include <stdio.h>
@@ -601,7 +601,6 @@ struct protstream *s;
 	*p++ = c;
 	if (c == '\n') break;
     }
-    if (c==EOF) printf("EOF!!!!\n");
     if (p == buf) return 0;
     *p++ = '\0';
     return buf;

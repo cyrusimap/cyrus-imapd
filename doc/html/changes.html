@@ -1,9 +1,34 @@
-<!-- $Id: changes.html,v 1.74 1999/07/08 22:19:32 tmartin Exp $ -->
+<!-- $Id: changes.html,v 1.75 1999/07/31 21:49:26 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+    <h2> Changes to the Cyrus IMAP Server Since Version 1.6.1-BETA </h2>
+
+    <ul>
+      <li> cyradm should now work with all mechanisms (it now handles
+      empty challenges).
+
+      <li> fixed deliver to deal with arbitrarily long headers
+
+      <li> COPY for non-existent sequence numbers returns NO; this
+      contrasts to UID COPY, which always returns OK
+
+      <li> FETCH for non-existent sequence numbers returns NO; this
+      contrasts to UID FETCH, which always returns OK
+
+      <li> Fixed a misleading BAD responses to commands that take
+      sequences.
+
+      <li> Added UIDNEXT untagged response to a SELECT (from
+      <tt>draft-crispin-imapv-07.txt</tt>).
+
+      <li> pop3d now correctly passes SASL configuration options to libsasl.
+
+      <li> imtest now correctly flushes the server's output to the screen
+    </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.0-BETA </h2>
 
@@ -45,7 +70,7 @@
 	considers most not-EX_TEMPFAIL errors permanent; now, if it may not be 
 	permanent, EX_TEMPFAIL is returned.  (See lib/exitcodes.h.)
 
-      <li> Two bugs fixed: FETCH's with no messages in range now
+      <li> Two bugs fixed: UID FETCH's with no messages in range now
 	return OK, not BAD.  And an obscure bug in LIST case
 	sensitivity is fixed.
 

@@ -114,6 +114,9 @@ ec IMAP_NO_CHECKSEEN,
 ec IMAP_NO_CHECKPRESERVE,
    "Unable to preserve \\Seen state"
 
+ec IMAP_NO_NOSUCHMSG,
+   "No matching messages"
+
 # Following used for internationalization of untagged BYE response
 
 ec IMAP_BYE_LOGOUT,

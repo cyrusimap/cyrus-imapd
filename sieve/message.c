@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.1 1999/07/02 18:55:35 leg Exp $
+ * $Id: message.c,v 1.2 1999/07/31 21:49:40 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -36,7 +36,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "sieve_interface.h"
 #include "message.h"
-#include "../lib/parseaddr.h"
+#include "parseaddr.h"
+#include "xmalloc.h"
 
 /* reject message m with message msg
  *
@@ -59,7 +60,7 @@ int do_reject(action_list_t *a, char *msg)
     }
 
     /* add to the action list */
-    a = (action_list_t *) malloc(sizeof(action_list_t));
+    a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
 	return -1;
     a->a = ACTION_REJECT;
@@ -86,7 +87,7 @@ int do_fileinto(action_list_t *a, char *mbox)
     }
 
     /* add to the action list */
-    a = (action_list_t *) malloc(sizeof(action_list_t));
+    a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
 	return -1;
     a->a = ACTION_FILEINTO;
@@ -115,7 +116,7 @@ int do_forward(action_list_t *a, char *addr)
     }
 
     /* add to the action list */
-    a = (action_list_t *) malloc(sizeof(action_list_t));
+    a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
 	return -1;
     a->a = ACTION_REDIRECT;
@@ -144,7 +145,7 @@ int do_keep(action_list_t *a)
     }
 
     /* add to the action list */
-    a = (action_list_t *) malloc(sizeof(action_list_t));
+    a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
 	return -1;
     a->a = ACTION_KEEP;
@@ -170,7 +171,7 @@ int do_discard(action_list_t *a)
     }
 
     /* add to the action list */
-    a = (action_list_t *) malloc(sizeof(action_list_t));
+    a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
 	return -1;
     a->a = ACTION_DISCARD;
@@ -194,7 +195,7 @@ int do_vacation(action_list_t *a, char *addr, char *subj, char *msg, int days,
     }
 
     /* add to the action list */
-    a = (action_list_t *) malloc(sizeof(action_list_t));
+    a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
 	return -1;
     a->a = ACTION_VACATION;
@@ -221,7 +222,7 @@ int parse_address(char *header, void **data, void **marker)
     struct addr_marker *am = (struct addr_marker *) *marker;
 
     parseaddr_list(header, (struct address **) data);
-    am = (void *) malloc(sizeof(struct addr_marker));
+    am = (void *) xmalloc(sizeof(struct addr_marker));
     am->where = *data;
     am->freeme = NULL;
     *marker = am;
@@ -248,7 +249,7 @@ char *get_address(address_part_t addrpart, void **data, void **marker)
 #define U_DOMAIN "unspecified-domain"
 #define U_USER "unknown-user"
 	    if (a->mailbox && a->domain) {
-		am->freeme = (char *) malloc(strlen(a->mailbox) + 
+		am->freeme = (char *) xmalloc(strlen(a->mailbox) + 
 					     strlen(a->domain) +
 					     2);
 		strcpy(am->freeme, a->mailbox);
@@ -256,14 +257,14 @@ char *get_address(address_part_t addrpart, void **data, void **marker)
 		strcat(am->freeme, a->domain);
 		ret = am->freeme;
 	    } else if (a->mailbox) {
-		am->freeme = (char *) malloc(strlen(a->mailbox) +
+		am->freeme = (char *) xmalloc(strlen(a->mailbox) +
 					     strlen(U_DOMAIN) + 2);
 		strcpy(am->freeme, a->mailbox);
 		strcat(am->freeme, "@");
 		strcat(am->freeme, U_DOMAIN);
 		ret = am->freeme;
 	    } else if (a->domain) {
-		am->freeme = (char *) malloc(strlen(a->domain) +
+		am->freeme = (char *) xmalloc(strlen(a->domain) +
 					     strlen(U_USER) + 2);
 		strcpy(am->freeme, U_USER);
 		strcat(am->freeme, "@");
@@ -303,7 +304,7 @@ int free_address(void **data, void **marker)
 
 action_list_t *new_action_list(void)
 {
-    action_list_t *ret = malloc(sizeof(action_list_t));
+    action_list_t *ret = xmalloc(sizeof(action_list_t));
 
     if (ret != NULL) {
 	ret->a = ACTION_NONE;

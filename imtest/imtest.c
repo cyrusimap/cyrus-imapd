@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.26 1999/07/24 00:41:47 leg Exp $
+ * $Id: imtest.c,v 1.27 1999/07/31 21:49:36 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -582,50 +582,50 @@ void interactive(char *filename)
     }
   }
 
-  /* loop reading from network and from stdio if applicable */
-  while(1)
-  {
-
-    rset = read_set;
-    nfound = select(nfds, &rset, NULL, NULL, NULL);
-    if (nfound < 0) {
-      perror("select");
-      imtest_fatal("select");
-    }
-
-    if (FD_ISSET(0, &rset)) {
-
-	if (fgets(buf, sizeof (buf) - 1, stdin) == NULL) {
-	  printf(LOGOUT);
-	  prot_write(pout, LOGOUT, sizeof (LOGOUT));
-	  FD_CLR(0, &read_set);
-	} else {
-	  count = strlen(buf);
-	  buf[count - 1] = '\r';
-	  buf[count] = '\n';
-	  buf[count + 1] = '\0';
-	  prot_write(pout, buf, count + 1);
-	}
-	prot_flush(pout);
+  /* loop reading from network and from stdin if applicable */
+  while(1) {
+      rset = read_set;
+      nfound = select(nfds, &rset, NULL, NULL, NULL);
+      if (nfound < 0) {
+	  perror("select");
+	  imtest_fatal("select");
       }
 
-    if (FD_ISSET(sock, &rset)) {
-      count = prot_read(pin, buf, sizeof (buf) - 1);
-      if (count == 0) {
-	if (prot_error(pin)) {
-	  printf("Protection error: %s\n", prot_error(pin));
-	}
-	close(sock);
-	printf("Connection Closed.\n");
-	break;
+      if (FD_ISSET(0, &rset)) {
+	  
+	  if (fgets(buf, sizeof (buf) - 1, stdin) == NULL) {
+	      printf(LOGOUT);
+	      prot_write(pout, LOGOUT, sizeof (LOGOUT));
+	      FD_CLR(0, &read_set);
+	  } else {
+	      count = strlen(buf);
+	      buf[count - 1] = '\r';
+	      buf[count] = '\n';
+	      buf[count + 1] = '\0';
+	      prot_write(pout, buf, count + 1);
+	  }
+	  prot_flush(pout);
       }
-      if (count < 0) {
-	perror("read");
-	imtest_fatal("prot_read");
+      
+      if (FD_ISSET(sock, &rset)) {
+	  do {
+	      count = prot_read(pin, buf, sizeof (buf) - 1);
+	      if (count == 0) {
+		  if (prot_error(pin)) {
+		      printf("Protection error: %s\n", prot_error(pin));
+		  }
+		  close(sock);
+		  printf("Connection closed.\n");
+		  return;
+	      }
+	      if (count < 0) {
+		  perror("read");
+		  imtest_fatal("prot_read");
+	      }
+	      buf[count] = '\0';
+	      printf("%s", buf);
+	  } while (pin->cnt > 0);
       }
-      buf[count] = '\0';
-      printf("%s", buf);
-    }
   }
 }
 

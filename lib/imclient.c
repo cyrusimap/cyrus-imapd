@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.28 1999/07/02 01:06:18 leg Exp $
+ $Id: imclient.c,v 1.29 1999/07/31 21:49:37 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -655,26 +655,13 @@ int len;
 	for (;;) {
 	    /* Make sure we have an entire token */
 
-	  /*	    len = imclient->replycryptend - imclient->replycryptstart - 4;
-	    if (len < 0) break;
-	    memcpy(lenbuf, imclient->replybuf + imclient->replycryptstart, 4);
-	    toklen = ntohl(*(int *)lenbuf);
-	    if (toklen > IMCLIENT_BUFSIZE) {
-		
-		(void) shutdown(imclient->fd, 0);
-		break;
-	    }
-
-	    if (len < toklen) break; */
-
 	    if (sasl_decode(imclient->saslconn,
 			    imclient->replybuf + imclient->replycryptstart,
-			    imclient->replycryptend - imclient->replycryptstart,
-			    &plainptr, &plainlen)!=SASL_OK) 
+			   imclient->replycryptend - imclient->replycryptstart,
+			    &plainptr, &plainlen) != SASL_OK) 
 	      {
 		(void) shutdown(imclient->fd, 0);
 		break;
-	      
 	      }
 
 	    imclient->replycryptstart += imclient->replycryptend - imclient->replycryptstart;
@@ -1200,12 +1187,11 @@ int imclient_authenticate(struct imclient *imclient,
     /* stop looping on command completion */
     if (!imclient->readytxt) break;
 
-    inlen = imclient_decodebase64(imclient->readytxt);
-
-  /*  saslresult=sasl_decode64(imclient->readytxt,imclient->replylen-2,
-			     inbase64,&inbase64len);
-			     if (saslresult!=SASL_OK) return 1;*/
-    
+    if (isspace(*imclient->readytxt)) {
+	inlen = 0;
+    } else {
+	inlen = imclient_decodebase64(imclient->readytxt);
+    }
 
     /* perform a step */
     saslresult=SASL_INTERACT;

@@ -30,22 +30,10 @@
 
 extern int errno;
 
-/*#include "sasl.h"*/
 #include "imclient.h"
 #include "imparse.h"
 #include "tcl.h"
 #include "xmalloc.h"
-
-/*#ifdef HAVE_SASL_KRB
-extern struct sasl_client krb_sasl_client;
-#endif
-
-struct sasl_client *login_sasl_client[] = {
-#ifdef HAVE_SASL_KRB
-    &krb_sasl_client,
-#endif
-    NULL
-    };*/
 
 struct admconn {
     struct imclient *imclient;
@@ -470,7 +458,8 @@ char **argv;
 		    break;
 
 		case 'p':
-		  minssf=0; /* xxx should be 2 must be stronger than integity */
+                    /* should be 2 must be stronger than integity */
+		    minssf=2;
 		    /* leave max alone */
 		    break;
 

@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.45 1999/06/19 02:18:53 leg Exp $
+ * $Id: pop3d.c,v 1.46 1999/07/31 21:49:36 leg Exp $
  */
 
 #include <stdio.h>
@@ -123,6 +123,43 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   return ret;
 }
 
+/* this is a wrapper to call the cyrus configuration from SASL */
+static int mysasl_config(void *context __attribute__((unused)), 
+			 const char *plugin_name,
+			 const char *option,
+			 const char **result,
+			 unsigned *len)
+{
+    char opt[1024];
+
+    if (strcmp(option, "srvtab")) { /* we don't transform srvtab! */
+	int sl = 5 + (plugin_name ? strlen(plugin_name) + 1 : 0);
+
+	strncpy(opt, "sasl_", 1024);
+	if (plugin_name) {
+	    strncat(opt, plugin_name, 1019);
+	    strncat(opt, "_", 1024 - sl);
+	}
+ 	strncat(opt, option, 1024 - sl - 1);
+	opt[1023] = '\0';
+    } else {
+	strncpy(opt, option, 1024);
+    }
+
+    *result = config_getstring(opt, NULL);
+    if (*result != NULL) {
+	if (len) { *len = strlen(*result); }
+	return SASL_OK;
+    }
+   
+    return SASL_FAIL;
+}
+
+static struct sasl_callback mysasl_cb[] = {
+    { SASL_CB_GETOPT, &mysasl_config, NULL },
+    { SASL_CB_LIST_END, NULL, NULL }
+};
+
 main(argc, argv, envp)
 int argc;
 char **argv;
@@ -189,14 +226,13 @@ char **envp;
 
     /* Make a SASL connection and setup some properties for it */
 
-    if (sasl_server_init(NULL,"Cyrus")!=SASL_OK)
-      fatal("SASL failed initializing: sasl_server_init()",EC_USAGE); 
-    /* XXX different error code? */
+    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK)
+	fatal("SASL failed initializing: sasl_server_init()",EC_TEMPFAIL); 
 
     /* other params should be filled in */
-    if (sasl_server_new("pop", hostname, NULL, NULL, 2000, &popd_saslconn)!=SASL_OK)
-	fatal("SASL failed initializing: sasl_server_new()",EC_USAGE); 
-    /* XXX different error code? */
+    if (sasl_server_new("pop", hostname, NULL, 
+			NULL, 2000, &popd_saslconn)!=SASL_OK)
+	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
     /* will always return something valid */
     secprops=make_secprops(0,2000);        
@@ -204,7 +240,6 @@ char **envp;
     
     sasl_setprop(popd_saslconn,   SASL_IP_REMOTE, &popd_remoteaddr);  
     sasl_setprop(popd_saslconn,   SASL_IP_LOCAL, &popd_localaddr);  
-
 
     proc_register("pop3d", popd_clienthost, (char *)0, (char *)0);
 
