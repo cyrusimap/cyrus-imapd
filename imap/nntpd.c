@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.17 2004/02/19 17:09:52 ken3 Exp $
+ * $Id: nntpd.c,v 1.18 2004/02/25 17:10:44 ken3 Exp $
  */
 
 /*
@@ -2832,11 +2832,12 @@ void msg_free(message_data_t *m)
 
 static int parse_groups(const char *groups, message_data_t *msg)
 {
-    const char *p = groups;
+    const char *p;
     char *rcpt = NULL;
     size_t n;
 
-    for (;;) {
+    for (p = groups;; p += n) {
+	/* skip whitespace */
 	while (p && *p && (isspace((int) *p) || *p == ',')) p++;
 
 	if (!p || !*p) return 0;
@@ -2847,10 +2848,12 @@ static int parse_groups(const char *groups, message_data_t *msg)
 			 sizeof(char *));
 	}
 
+	/* find end of group name */
 	n = strcspn(p, ", \t");
 	rcpt = xrealloc(rcpt, strlen(newsprefix) + n + 1);
 	if (!rcpt) return -1;
 
+	/* construct the mailbox name */
 	sprintf(rcpt, "%s%.*s", newsprefix, n, p);
 	
 	/* Only add mailboxes that exist */
@@ -2859,8 +2862,6 @@ static int parse_groups(const char *groups, message_data_t *msg)
 	    msg->rcpt_num++;
 	    msg->rcpt[msg->rcpt_num] = rcpt = NULL;
 	}
-
-	p += n;
     }
 
     return NNTP_FAIL_NEWSGROUPS;
@@ -2875,7 +2876,7 @@ static int parse_groups(const char *groups, message_data_t *msg)
 static int savemsg(message_data_t *m, FILE *f)
 {
     struct stat sbuf;
-    const char **body;
+    const char **body, **groups;
     int r, i;
     time_t now = time(NULL);
     static int post_count = 0;
@@ -2948,9 +2949,9 @@ static int savemsg(message_data_t *m, FILE *f)
 	m->control = NULL;	/* no control */
 
 	/* get newsgroups */
-	if ((body = spool_getheader(m->hdrcache, "newsgroups")) != NULL) {
+	if ((groups = spool_getheader(m->hdrcache, "newsgroups")) != NULL) {
 	    /* parse newsgroups and create recipients */
-	    r = parse_groups(body[0], m);
+	    r = parse_groups(groups[0], m);
 	    if (!r && !m->rcpt_num) {
 		r = IMAP_MAILBOX_NONEXISTENT; /* no newsgroups that we serve */
 	    }
@@ -2974,11 +2975,27 @@ static int savemsg(message_data_t *m, FILE *f)
 
 		    /* add "post" email addresses based on newsgroup */
 		    if (newspostuser) {
-			int n;
-			for (n = 0; n < m->rcpt_num; n++) {
-			    fprintf(f, "%s%s+%s@%s", sep, newspostuser,
-				    m->rcpt[n]+strlen(newsprefix),
-				    config_servername);
+			const char *replyto, *p;
+			size_t n;
+
+			/* determine which groups header to use */
+			if (body = spool_getheader(m->hdrcache, "followup-to"))
+			    replyto = body[0];
+			else
+			    replyto = groups[0];
+
+			for (p = replyto;; p += n) {
+			    /* skip whitespace */
+			    while (p && *p &&
+				   (isspace((int) *p) || *p == ',')) p++;
+			    if (!p || !*p) break;
+
+			    /* find end of group name */
+			    n = strcspn(p, ", \t");
+
+			    /* add the post address */
+			    fprintf(f, "%s%s+%.*s", sep, newspostuser, n, p);
+
 			    sep = ", ";
 			}
 		    }
@@ -3317,6 +3334,46 @@ static int cancel(message_data_t *msg)
     return r;
 }
 
+/* strip any post addresses from a header body.
+ * returns 1 if a nonpost address was found, 0 otherwise.
+ */
+static int strip_post_addresses(char *body)
+{
+    const char *newspostuser = config_getstring(IMAPOPT_NEWSPOSTUSER);
+    char *p, *end;
+    size_t postlen, n;
+    int nonpost = 0;
+
+    if (!newspostuser) return 1;  /* we didn't add this header to leave it */
+    postlen = strlen(newspostuser);
+
+    for (p = body;; p += n) {
+	end = p;
+
+	/* skip whitespace */
+	while (p && *p && (isspace((int) *p) || *p == ',')) p++;
+
+	if (!p || !*p) break;
+
+	/* find end of address */
+	n = strcspn(p, ", \t\r\n");
+
+	if ((n > postlen + 1) &&  /* +1 for '+' */
+	    !strncmp(p, newspostuser, postlen) && p[postlen] == '+') {
+	    /* found a post address.  since we always add the post
+	     * addresses to the end of the header, truncate it right here.
+	     */
+	    strcpy(end, "\r\n");
+	    break;
+	}
+	
+	nonpost = 1;
+    }
+
+    return nonpost;
+}
+
+
 static void feedpeer(char *peer, message_data_t *msg)
 {
     char *user, *pass, *host, *port, *wild, *path, *s;
@@ -3327,6 +3384,7 @@ static void feedpeer(char *peer, message_data_t *msg)
     int sock = -1;
     struct protstream *pin, *pout;
     char buf[4096];
+    int body = 0, skip;
 
     /* parse the peer */
     user = pass = host = port = wild = NULL;
@@ -3491,9 +3549,22 @@ static void feedpeer(char *peer, message_data_t *msg)
     /* send the article */
     rewind(msg->f);
     while (fgets(buf, sizeof(buf), msg->f)) {
-	if (buf[0] == '.') prot_putc('.', pout);
+	if (!body && buf[0] == '\r' && buf[1] == '\n') {
+	    /* blank line between header and body */
+	    body = 1;
+	}
+
+	skip = 0;
+	if (!body) {
+	    if (!strncasecmp(buf, "Reply-To:", 9)) {
+		/* strip any post addresses, skip if becomes empty */
+		if (!strip_post_addresses(buf+9)) skip = 1;
+	    }
+	}
+
+	if (!skip && buf[0] == '.') prot_putc('.', pout);
 	do {
-	    prot_printf(pout, "%s", buf);
+	    if (!skip) prot_printf(pout, "%s", buf);
 	} while (buf[strlen(buf)-1] != '\n' &&
 		 fgets(buf, sizeof(buf), msg->f));
     }
@@ -3617,6 +3688,9 @@ static void news2mail(message_data_t *msg)
 			/* overwrite the original "To:" with spaces */
 			memset(buf, ' ', 3);
 			found_to = 1;
+		    } else if (!strncasecmp(buf, "Reply-To:", 9)) {
+			/* strip any post addresses, skip if becomes empty */
+			if (!strip_post_addresses(buf+9)) skip = 1;
 		    }
 		}
 
