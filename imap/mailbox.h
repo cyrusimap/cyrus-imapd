@@ -12,6 +12,8 @@ typedef unsigned bit32;
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
 
+#defien MAILBOX_MINOR_VERSION	0
+
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
 #define FNAME_CACHE "/cyrus.cache"
