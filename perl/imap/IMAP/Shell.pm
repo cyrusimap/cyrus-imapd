@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.34 2004/01/05 18:52:31 ken3 Exp $
+# $Id: Shell.pm,v 1.35 2004/01/15 14:35:35 ken3 Exp $
 #
 # A shell framework for Cyrus::IMAP::Admin
 #
@@ -143,7 +143,7 @@ my %builtins = (exit =>
 		setacl => 'setaclmailbox',
 		sam => 'setaclmailbox',
 		setinfo =>
-		  [\&_sc_setinfo, '[motd|comment] text',
+		  [\&_sc_setinfo, '[motd|comment|admin|shutdown|expire|squat] text',
 		   'set server metadata'],
 		setquota =>
 		  [\&_sc_setquota,
@@ -1353,7 +1353,7 @@ sub _sc_mboxcfg {
   if (!$cyrref || !$$cyrref) {
     die "mboxconfig: no connection to server\n";
   }
-  $$cyrref->mboxconfig(@nargv) || die "setinfo: " . $$cyrref->error . "\n";
+  $$cyrref->mboxconfig(@nargv) || die "mboxconfig: " . $$cyrref->error . "\n";
   0;
 }
 
@@ -1364,7 +1364,7 @@ sub _sc_setinfo {
   while (defined ($opt = shift(@argv))) {
     last if $opt eq '--';
     if ($opt =~ /^-/) {
-      die "usage: setinfo [motd|comment] text\n";
+      die "usage: setinfo [motd|comment|admin|shutdown|expire|squat] text\n";
     }
     else {
       push(@nargv, $opt);
@@ -1373,7 +1373,7 @@ sub _sc_setinfo {
   }
   push(@nargv, @argv);
   if (@nargv < 2) {
-    die "usage: setinfo [motd|comment] text\n";
+    die "usage: setinfo [motd|comment|admin|shutdown|expire|squat] text\n";
   }
   if (!$cyrref || !$$cyrref) {
     die "setinfo: no connection to server\n";
@@ -1570,7 +1570,8 @@ show quota roots and quotas for mailbox
 
 =item C<mboxcfg> I<mailbox> I<attribute> I<value>
 
-Set mailbox metadata.  The currently supported attributes are:
+Set mailbox metadata.  A value of "none" will remove the attribute.
+The currently supported attributes are: 
 
 =over 4
 
@@ -1676,7 +1677,8 @@ Administer (SETACL)
 
 =item C<setinfo> I<attribute> I<value>
 
-Set server metadata.  The currently supported attributes are:
+Set server metadata.  A value of "none" will remove the attribute.
+The currently supported attributes are:
 
 =over 4
 
@@ -1688,6 +1690,25 @@ authentication.
 =item C<comment>
 
 Sets a comment or description associated with the server.
+
+=item C<admin>
+
+Sets the administrator email address for the server.
+
+=item C<shutdown>
+
+Sets a shutdown message.  The message gets displayed as an ALERT and
+all users are disconnected from the server (subsequent logins are disallowed).
+
+=item C<expire>
+
+Sets the number of days after which messages will be expired from the
+server (unless overridden by a mailbox annotation).
+
+=item C<squat>
+
+Indicates that all mailboxes should have a squat indexes created for
+them (unless overridden by a mailbox annotation).
 
 =back 
 
