@@ -141,8 +141,7 @@ char **aclp;
 	
 	sprintf(pathresult, "%s/%s", root, name);
 	for (p = pathresult + strlen(root); *p; p++) {
-	    if (isupper(*p)) *p = tolower(*p);
-	    else if (*p == '.') *p = '/';
+	    if (*p == '.') *p = '/';
 	}
 
 	*pathp = pathresult;
@@ -425,8 +424,7 @@ char *userid;
     /* Create new mailbox and move new mailbox list file into place */
     sprintf(buf2, "%s/%s", root, name);
     for (p = buf2 + strlen(root); *p; p++) {
-	if (isupper(*p)) *p = tolower(*p);
-	else if (*p == '.') *p = '/';
+	if (*p == '.') *p = '/';
     }
     r = mailbox_create(name, buf2, acl, format, (struct mailbox *)0);
     free(acl);
@@ -737,8 +735,7 @@ char *userid;
     /* Rename the mailbox and move new mailbox list file into place */
     sprintf(buf2, "%s/%s", root, newname);
     for (p = buf2 + strlen(root); *p; p++) {
-	if (isupper(*p)) *p = tolower(*p);
-	else if (*p == '.') *p = '/';
+	if (*p == '.') *p = '/';
     }
     r = mailbox_rename(oldname, newname, buf2, isusermbox);
     if (r) {
