@@ -151,11 +151,11 @@ static void imclient_eof();
 static int imclient_decodebase64();
 
 /*
- * Connect to server on 'host'.  Optional 'port' specifies the service to
- * use [XXX not implemented yet].  On success, returns zero and fills in
- * the pointer pointed to by 'imclient' with a newly allocated connection
- * pointer. On failure, returns errno if a system call failed, -1 if
- * the hostname was not found, or -2 if the service name was not found.
+ * Connect to server on 'host'.  Optional 'port' specifies the service
+ * to use.  On success, returns zero and fills in the pointer pointed
+ * to by 'imclient' with a newly allocated connection pointer. On
+ * failure, returns errno if a system call failed, -1 if the hostname
+ * was not found, or -2 if the service name was not found.
  */
 int imclient_connect(imclient, host, port)
 struct imclient **imclient;
