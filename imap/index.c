@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.114 2000/06/07 20:56:04 leg Exp $
+ * $Id: index.c,v 1.115 2000/06/07 22:36:22 ken3 Exp $
  */
 #include <config.h>
 
@@ -73,31 +73,6 @@
 #include "lsort.h"
 #include "message.h"
 #include "parseaddr.h"
-
-#ifdef ENABLE_REGEX
-#ifdef HAVE_RX
-#include <rxposix.h>
-#else
-#include <regex.h>
-#endif
-
-/* Subject extraction grammar (SORT/THREAD).
- *
- * This grammar deviates from the one shown in the draft, but coupled
- * with the logic in extract_subject(), it is functionally equivalent.
- * Also note that we optionally allow the leading and trailing double-quotes
- * that are present in the cached subject header.
- */
-#define TRAILER		"(" "\\(fwd\\)" "|" WSP ")*" "\"?$"
-#define LEADER		"^\"?" "(" REFWD "|" BLOB "|" WSP ")*"
-#define REFWD		"(re|fwd?)" WSP "(" BLOB ")?" WSP ":"
-#define BLOB		"\\[" BLOBCHAR "*\\]"
-#define BLOBCHAR	"[^]]"
-#define WSP		"[\t\r\n ]*"
-
-/* Compiled regexes for subject extraction */
-static regex_t pleader, ptrailer, pblob;
-#endif /* ENABLE_REGEX */
 
 extern int errno;
 
@@ -3477,39 +3452,4 @@ int find_thread_algorithm(char *arg)
 	    return alg;
     }
     return -1;
-}
-
-/*
- * Compile regexes for subject extraction (SORT/THREAD)
- */
-int sort_thread_enabled()
-{
-    static int isenabled = 0;
-
-#ifdef ENABLE_REGEX
-    if (!isenabled) {
-	int ret;
-
-	ret = regcomp(&ptrailer, TRAILER, REG_ICASE | REG_EXTENDED);
-	ret |= regcomp(&pleader, LEADER, REG_ICASE | REG_EXTENDED);
-	if (ret |= regcomp(&pblob, BLOB, REG_EXTENDED))
-	    fatal("SORT/THREAD regexes failed to compile", EC_SOFTWARE);
-	else
-	    isenabled++;
-    }
-#endif
-
-    return isenabled;
-}
-
-/*
- * Cleanup regexes for subject extraction (SORT/THREAD)
- */
-void sort_thread_cleanup()
-{
-#ifdef ENABLE_REGEX
-    regfree(&ptrailer);
-    regfree(&pleader);
-    regfree(&pblob);
-#endif
 }

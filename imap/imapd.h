@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.36 2000/06/06 00:53:10 leg Exp $
+ * $Id: imapd.h,v 1.37 2000/06/07 22:36:22 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -219,8 +219,6 @@ extern int index_store(struct mailbox *mailbox, char *sequence,
 			  char **flag, int nflags);
 extern void index_search(struct mailbox *mailbox,
 			    struct searchargs *searchargs, int usinguid);
-extern int sort_thread_enabled(void);
-extern void sort_thread_cleanup(void);
 extern void list_thread_algorithms(void);
 extern int find_thread_algorithm(char *arg);
 extern void index_sort(struct mailbox *mailbox, signed char *sortcrit,
