@@ -36,7 +36,7 @@ AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
 AC_FUNC_VPRINTF
 dnl for et routines
-AC_FUNC_CHECK(strerror,AC_DEFINE(HAS_STRERROR))
+AC_FUNC_CHECK(strerror,AC_DEFINE(HAS_STRERROR),AC_DEFINE(NEED_SYS_ERRLIST))
 
 dnl Bunch of setproctitle stuff
 spt_type=""
