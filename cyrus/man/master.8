@@ -1,0 +1,53 @@
+.\" -*- nroff -*-
+.TH MASTER 8 "Project Cyrus" CMU
+.\" Copyright 1996-2000 Carnegie Mellon University
+.\" 
+.\" No warranties, either expressed or implied, are made regarding the
+.\" operation, use, or results of the software.
+.\"
+.\" Permission to use, copy, modify and distribute this software and its
+.\" documentation is hereby granted for non-commercial purposes only
+.\" provided that this copyright notice appears in all copies and in
+.\" supporting documentation.
+.\"
+.\" Permission is also granted to Internet Service Providers and others
+.\" entities to use the software for internal purposes.
+.\"
+.\" The distribution, modification or sale of a product which uses or is
+.\" based on the software, in whole or in part, for commercial purposes or
+.\" benefits requires specific, additional permission from:
+.\"
+.\"  Office of Technology Transfer
+.\"  Carnegie Mellon University
+.\"  5000 Forbes Avenue
+.\"  Pittsburgh, PA  15213-3890
+.\"  (412) 268-4387, fax: (412) 268-7395
+.\"  tech-transfer@andrew.cmu.edu
+.SH NAME
+master \- master Cyrus process
+.SH SYNOPSIS
+.B master
+[
+.B \-l
+.I listen queue
+]
+.SH DESCRIPTION
+.I master
+is the process that controls all of the Cyrus processes. This process is responsible 
+for creating all imap and lmtpd child processes. This process also initializes the
+Berkeley DB code. 
+.PP
+If this process dies, then no new sessions will be started.
+.SH OPTIONS
+.TP
+.BI \-l " listen queue backlog"
+Increase the listen queue backlog. By default, the listen queue is set to 10. 
+On systems with high load, it may be desirable to increase this value. refer to 
+\fBlisten(2)\fR for details.
+.SH NOTES
+The environment variable \fBCYRUS_VERBOSE\fR can be set to log additional
+debugging information. Setting the value to 1 results in base level logging. 
+Setting it higher results in more log messages being generated.
+.SH FILES
+.TP
+.B /etc/imapd.conf
