@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.380 2002/04/04 21:15:49 ken3 Exp $ */
+/* $Id: imapd.c,v 1.381 2002/04/04 21:21:41 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3968,9 +3968,9 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 		   struct auth_state *auth_state, int (*proc)(),
 		   void *rock);
     int (*findsub)(struct namespace *namespace, char *pattern,
-			    int isadmin, char *userid, 
-			    struct auth_state *auth_state, int (*proc)(),
-			    void *rock, int force);
+		   int isadmin, char *userid, 
+		   struct auth_state *auth_state, int (*proc)(),
+		   void *rock, int force);
 
     /* Ignore the reference argument?
        (the behavior in 1.5.10 & older) */
