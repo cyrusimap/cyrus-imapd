@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.65 2004/05/22 03:45:51 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.66 2004/10/27 16:53:36 shadow Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -305,7 +305,8 @@ static struct backend *proxyd_findserver(const char *server)
 	if (!strcmp(server, backend_cached[i]->hostname)) {
 	    ret = backend_cached[i];
 	    /* ping/noop the server */
-	    if (backend_ping(ret, &protocol[PROTOCOL_LMTP])) {
+	    if ((ret->sock > -1) && 
+		backend_ping(ret, &protocol[PROTOCOL_LMTP])) {
 		backend_disconnect(ret, &protocol[PROTOCOL_LMTP]);
 	    }
 	    break;
