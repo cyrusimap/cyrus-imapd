@@ -109,6 +109,7 @@ int timlex(YYSTYPE * lvalp, void * client)
 
     if (ch==-1)
     {
+      fatal("Error reading character",0);
       return TIMSIEVE_FAIL;
     }
 
