@@ -57,9 +57,9 @@ Web graphing also assumes that data is in /data/cyrus, so if this is
 different, edit $DDIR in all three cgi scripts.
 
 In addition, it assumes that apache document root is /usr/www/tree and
-there is a directory called current/tainted that nobody (or whomever
-httpd runs as) can write to.  $picdir and $hpicdir store the internal
-and external names for these directories.
+there is a directory called current/tainted that the "nobody" user (or
+whatever uid httpd runs as) can write to.  $picdir and $hpicdir store
+the internal and external names for these directories.
 
 Copy the cgi-bin's into your cgi-bin directory and the html into your
 html directory and you should be ready to go.
