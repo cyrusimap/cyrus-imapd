@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.4.6.6 2003/02/13 20:32:57 rjs3 Exp $
+ * $Id: index.h,v 1.4.6.7 2003/04/17 22:49:25 ken3 Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -83,6 +83,9 @@
 #define CACHE_ITEM_BIT32(ptr) (ntohl(*((bit32 *)(ptr))))
 #define CACHE_ITEM_LEN(ptr) CACHE_ITEM_BIT32(ptr)
 #define CACHE_ITEM_NEXT(ptr) ((ptr)+4+((3+CACHE_ITEM_LEN(ptr))&~3))
+
+/* Calculate the number of entries in a vector */
+#define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
 
 /* Cached envelope token positions */
 enum {
