@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.20.4.4 2003/02/06 22:41:05 rjs3 Exp $
+# $Id: Makefile.in,v 1.20.4.5 2003/02/07 23:35:00 rjs3 Exp $
 # 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -58,7 +58,7 @@ AFS_LIBS = @AFS_LIBS@
 LIBS = @LIBS@ @COM_ERR_LIBS@
 LIB_SASL = @LIB_SASL@
 LIB_WRAP = @LIB_WRAP@
-DEPLIBS = ../imap/libimap.a ../lib/libcyrus_min.a ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS = ../imap/libimap.a ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
 
 LDAP_LIBS=@LDAP_LIBS@
 LDAP_CPPFLAGS=@LDAP_CPPFLAGS@

@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_log.c,v 1.4.2.1 2003/01/08 22:18:21 rjs3 Exp $
+ * $Id: notify_log.c,v 1.4.2.2 2003/02/07 23:34:59 rjs3 Exp $
  */
 
 #include <config.h>
@@ -69,7 +69,9 @@ char* notify_log(const char *class, const char *priority,
 	strcat(opt_str, ")");
     }
 
-    openlog("notifyd", LOG_PID, SYSLOG_FACILITY);
+/*  Not needed, we opened the log file in cyrus_init */
+/*    openlog("notifyd", LOG_PID, SYSLOG_FACILITY); */
+
     syslog(LOG_INFO, "%s, %s, %s, %s, %s \"%s\"",
 	   class, priority, user, mailbox, opt_str, message);
     closelog();

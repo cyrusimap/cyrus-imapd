@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.6.4.4 2003/02/06 22:41:03 rjs3 Exp $ */
+/* $Id: service-thread.c,v 1.6.4.5 2003/02/07 23:34:53 rjs3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -66,6 +66,7 @@
 #include <string.h>
 
 #include "service.h"
+#include "xmalloc.h"
 
 extern int optind;
 extern char *optarg;
@@ -149,7 +150,7 @@ int main(int argc, char **argv, char **envp)
     char *alt_config = NULL;
     int call_debugger = 0;
     int newargc = 0;
-    char **newargv = (char **) malloc(ARGV_GROW * sizeof(char *));
+    char **newargv = (char **) xmalloc(ARGV_GROW * sizeof(char *));
 
     opterr = 0; /* disable error reporting,
 		   since we don't know about service-specific options */
@@ -166,8 +167,8 @@ int main(int argc, char **argv, char **envp)
 	    break;
 	default:
 	    if (!((newargc+1) % ARGV_GROW)) { /* time to alloc more */
-		newargv = (char **) realloc(newargv, (newargc + ARGV_GROW) * 
-					    sizeof(char *));
+		newargv = (char **) xrealloc(newargv, (newargc + ARGV_GROW) * 
+					     sizeof(char *));
 	    }
 	    newargv[newargc++] = argv[optind-1];
 
@@ -181,8 +182,8 @@ int main(int argc, char **argv, char **envp)
     /* grab the remaining arguments */
     for (; optind < argc; optind++) {
 	if (!(newargc % ARGV_GROW)) { /* time to alloc more */
-	    newargv = (char **) realloc(newargv, (newargc + ARGV_GROW) * 
-					sizeof(char *));
+	    newargv = (char **) xrealloc(newargv, (newargc + ARGV_GROW) * 
+					 sizeof(char *));
 	}
 	newargv[newargc++] = argv[optind];
     }
@@ -203,11 +204,8 @@ int main(int argc, char **argv, char **envp)
 	syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
 	exit(EX_SOFTWARE);
     }
-    service = strdup(p);
-    if (service == NULL) {
-	syslog(LOG_ERR, "couldn't strdup() service: %m");
-	exit(EX_OSERR);
-    }
+    service = xstrdup(p);
+
     cyrus_init(alt_config, service);
 
     if (call_debugger) {

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.12 2003/02/06 22:43:25 rjs3 Exp $ */
+/* $Id: master.c,v 1.67.4.13 2003/02/07 23:34:53 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -96,6 +96,8 @@
 
 #include "lock.h"
 
+#include "xmalloc.h"
+
 enum {
     become_cyrus_early = 1,
     child_table_size = 10000,
@@ -109,6 +111,9 @@ static int pidfd = -1;
 struct service *Services = NULL;
 int allocservices = 0;
 int nservices = 0;
+
+/* make libcyrus_min happy */
+int config_need_data = 0;
 
 struct recover {
     char *name;
@@ -134,12 +139,6 @@ static struct centry *cfreelist;
 
 void limit_fds(rlim_t);
 void schedule_event(struct event *a);
-
-static char *mystrdup(const char *s)
-{
-    if (!s) return NULL;
-    return strdup(s);
-}
 
 void fatal(const char *msg, int code)
 {
@@ -231,7 +230,7 @@ static struct centry *get_centry(void)
 	struct centry *n;
 	int i;
 
-	n = malloc(child_table_inc * sizeof(struct centry));
+	n = xmalloc(child_table_inc * sizeof(struct centry));
 	cfreelist = n;
 	for (i = 0; i < child_table_inc - 1; i++) {
 	    n[i].next = n + (i + 1);
@@ -367,7 +366,7 @@ void service_create(struct service *s)
 	/* parse_listen() and resolve_host() are destructive,
 	 * so make a work copy of s->listen
 	 */
-	listen = strdup(s->listen);
+	listen = xstrdup(s->listen);
 
         if ((port = parse_listen(listen)) == NULL) {
             /* listen IS the port */
@@ -544,8 +543,8 @@ void spawn_service(struct service *s)
     /* (We schedule a wakeup call for sometime soon though to be
      * sure that we don't wait to do the fork that is required forever! */
     if(s->maxforkrate && s->forkrate >= s->maxforkrate) {
-	struct event *evt = (struct event *) malloc(sizeof(struct event));
-	if (!evt) fatal("out of memory", EX_UNAVAILABLE);
+	struct event *evt = (struct event *) xmalloc(sizeof(struct event));
+
 	memset(evt, 0, sizeof(struct event));
 
 	evt->name = "forkrate wakeup call";
@@ -888,8 +887,7 @@ static char **tokenize(char *p)
     while (*p) {
 	while (*p && isspace((int) *p)) p++; /* skip whitespace */
 
-	if (!(i % 10)) tokens = realloc(tokens, (i+10) * sizeof(char *));
-	if (!tokens) return NULL;
+	if (!(i % 10)) tokens = xrealloc(tokens, (i+10) * sizeof(char *));
 
 	/* got a token */
 	tokens[i++] = p;
@@ -899,7 +897,7 @@ static char **tokenize(char *p)
 	if (*p) *p++ = '\0';
     }
     /* add a NULL on the end */
-    if (!(i % 10)) tokens = realloc(tokens, (i+1) * sizeof(char *));
+    if (!(i % 10)) tokens = xrealloc(tokens, (i+1) * sizeof(char *));
     if (!tokens) return NULL;
     tokens[i] = NULL;
 
@@ -909,7 +907,7 @@ static char **tokenize(char *p)
 void add_start(const char *name, struct entry *e,
 	       void *rock __attribute__((unused)))
 {
-    char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
+    char *cmd = xstrdup(masterconf_getstring(e, "cmd", NULL));
     char buf[256];
     char **tok;
 
@@ -928,13 +926,13 @@ void add_start(const char *name, struct entry *e,
 void add_service(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = (int) rock;
-    char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
+    char *cmd = xstrdup(masterconf_getstring(e, "cmd", NULL));
     int prefork = masterconf_getint(e, "prefork", 0);
     int babysit = masterconf_getswitch(e, "babysit", 0);
     int maxforkrate = masterconf_getint(e, "maxforkrate", 0);
-    char *listen = mystrdup(masterconf_getstring(e, "listen", NULL));
-    char *proto = mystrdup(masterconf_getstring(e, "proto", "tcp"));
-    char *max = mystrdup(masterconf_getstring(e, "maxchild", "-1"));
+    char *listen = xstrdup(masterconf_getstring(e, "listen", NULL));
+    char *proto = xstrdup(masterconf_getstring(e, "proto", "tcp"));
+    char *max = xstrdup(masterconf_getstring(e, "maxchild", "-1"));
     int i;
 
     if(babysit && prefork == 0) prefork = 1;
@@ -1017,12 +1015,11 @@ void add_service(const char *name, struct entry *e, void *rock)
 	 * the port parameters, so create a new service
 	 */
 	if (nservices == allocservices) {
-	    Services = realloc(Services, 
+	    Services = xrealloc(Services, 
 			       (allocservices+=5) * sizeof(struct service));
-	    if (!Services) fatal("out of memory", EX_UNAVAILABLE);
 	}
 
-	Services[nservices].name = strdup(name);
+	Services[nservices].name = xstrdup(name);
 	Services[nservices].listen = listen;
 	Services[nservices].proto = proto;
 	Services[nservices].exec = tokenize(cmd);
@@ -1084,7 +1081,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 void add_event(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = (int) rock;
-    char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
+    char *cmd = xstrdup(masterconf_getstring(e, "cmd", NULL));
     int period = 60 * masterconf_getint(e, "period", 0);
     int at = masterconf_getint(e, "at", -1), hour, min;
     time_t now = time(NULL);
@@ -1103,9 +1100,8 @@ void add_event(const char *name, struct entry *e, void *rock)
 	fatal(buf, EX_CONFIG);
     }
     
-    evt = (struct event *) malloc(sizeof(struct event));
-    if (!evt) fatal("out of memory", EX_UNAVAILABLE);
-    evt->name = strdup(name);
+    evt = (struct event *) xmalloc(sizeof(struct event));
+    evt->name = xstrdup(name);
 
     if (at >= 0 && ((hour = at / 100) <= 23) && ((min = at % 100) <= 59)) {
 	struct tm *tm = localtime(&now);
@@ -1253,6 +1249,9 @@ int main(int argc, char **argv)
     int i, opt, close_std = 1, daemon_mode = 0;
     extern int optind;
     extern char *optarg;
+
+    char *alt_config = NULL;
+    
     int fd;
     fd_set rfds;
     char *p = NULL;
@@ -1261,6 +1260,9 @@ int main(int argc, char **argv)
     if (p) verbose = atoi(p) + 1;
     while ((opt = getopt(argc, argv, "p:l:Dd")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt imapd.conf file */
+	    alt_config = optarg;
+	    break;
 	case 'l':
             /* user defined listen queue backlog */
 	    listen_queue_backlog = atoi(optarg);
@@ -1286,7 +1288,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    masterconf_init("master");
+    masterconf_init("master", alt_config);
 
     /* zero out the children table */
     memset(&ctable, 0, sizeof(struct centry *) * child_table_size);
@@ -1326,8 +1328,7 @@ int main(int argc, char **argv)
 	/* Daemonize */
 	pid_t pid = -1;
 
-	pidfile_lock = malloc(strlen(pidfile) + strlen(lock_suffix) + 1);
-	if(!pidfile_lock) fatal("out of memory", EX_TEMPFAIL);
+	pidfile_lock = xmalloc(strlen(pidfile) + strlen(lock_suffix) + 1);
 
 	strcpy(pidfile_lock, pidfile);
 	strcat(pidfile_lock, lock_suffix);

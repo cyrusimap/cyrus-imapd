@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.1.2.2 2003/02/07 01:39:51 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.1.2.3 2003/02/07 23:34:51 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -54,7 +54,6 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 
-#include "acl.h"
 #include "hash.h"
 #include "libconfig.h"
 #include "imapopts.h"
@@ -65,15 +64,14 @@
 static struct hash_table confighash;
 
 /* cached configuration variables accessible to the external world */
-const char *config_filename;      /* filename of configuration file */
-const char *config_dir;		  /* ie /var/imap */
-const char *config_defpartition;  /* /var/spool/imap */
-const char *config_servername;	  /* gethostname() */
-const char *config_mupdate_server;/* NULL */
-const char *config_defdomain;     /* NULL */
-const char *config_ident;         /* the service name */
+const char *config_filename= NULL;       /* filename of configuration file */
+const char *config_dir = NULL;		 /* ie /var/imap */
+const char *config_defpartition = NULL;  /* /var/spool/imap */
+const char *config_servername= NULL;	 /* gethostname() */
+const char *config_mupdate_server = NULL;/* NULL */
+const char *config_defdomain = NULL;     /* NULL */
+const char *config_ident = NULL;         /* the service name */
 int config_hashimapspool;	  /* f */
-int config_implicitrights;        /* "lca" */
 int config_virtdomains;	          /* f */
 
 /* declared in each binary that uses libconfig */
@@ -108,15 +106,17 @@ int config_getswitch(enum imapopt opt)
 const char *config_getoverflowstring(const char *key, const char *def)
 {
     char buf[256];
-    char *ret;
+    char *ret = NULL;
 
     /* First lookup <ident>_key, to see if we have a service-specific
      * override */
 
-    if(snprintf(buf,sizeof(buf),"%s_%s",config_ident,key) == -1)
-	fatal("key too long in config_getoverflowstring", EC_TEMPFAIL);
+    if(config_ident) {
+	if(snprintf(buf,sizeof(buf),"%s_%s",config_ident,key) == -1)
+	    fatal("key too long in config_getoverflowstring", EC_TEMPFAIL);
     
-    ret = hash_lookup(buf, &confighash);
+	ret = hash_lookup(buf, &confighash);
+    }
     
     /* No service-specific override, check the actual key */
     if(!ret)
@@ -145,7 +145,7 @@ void config_read(const char *alt_config)
     char buf[4096], errbuf[1024];
     char *p, *q, *key, *fullkey, *srvkey, *val, *newval;
     int service_specific;
-    int idlen = strlen(config_ident);
+    int idlen = (config_ident ? strlen(config_ident) : 0);
 
     if(!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
 	fatal("could not construct configuration hash table", EC_CONFIG);
@@ -205,8 +205,8 @@ void config_read(const char *alt_config)
 	
 	srvkey = NULL;
 
-	/* Find if there is a service_ prefix */
-	if(!strncasecmp(key, config_ident, idlen) 
+	/* Find if there is a <service>_ prefix */
+	if(config_ident && !strncasecmp(key, config_ident, idlen) 
 	   && key[idlen] == '_') {
 	    /* skip service_ prefix */
 	    srvkey = key + idlen + 1;
@@ -416,10 +416,6 @@ void config_read(const char *alt_config)
 	config_servername = xmalloc(sizeof(char) * 256);
 	gethostname((char *) config_servername, 256);
     }
-
-    /* look up and canonify the implicit rights of mailbox owners */
-    config_implicitrights =
-	cyrus_acl_strtomask(config_getstring(IMAPOPT_IMPLICIT_OWNER_RIGHTS));
 
     config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
 }

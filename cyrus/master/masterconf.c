@@ -1,5 +1,5 @@
 /* masterconfig.c -- Configuration routines for master process
- $Id: masterconf.c,v 1.6.6.4 2003/02/06 22:41:03 rjs3 Exp $
+ $Id: masterconf.c,v 1.6.6.5 2003/02/07 23:34:53 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -52,6 +52,8 @@
 #include <sys/stat.h>
 #include <sysexits.h>
 
+#include "libconfig.c"
+
 #if HAVE_UNISTD_H
 # include <unistd.h>
 #endif
@@ -65,9 +67,30 @@ struct configlist {
 
 extern void fatal(const char *buf, int code);
 
-int masterconf_init(const char *ident)
+int masterconf_init(const char *ident, const char *alt_config)
 {
-    openlog(ident, LOG_PID, SYSLOG_FACILITY);
+    char *buf;
+    const char *prefix;
+
+    config_ident = ident;
+    
+    config_read(alt_config);
+
+    prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
+    
+    if(prefix) {
+	int size = strlen(prefix) + 1 + strlen(ident) + 1;
+	buf = xmalloc(size);
+	strlcpy(buf, prefix, size);
+	strlcat(buf, "/", size);
+	strlcat(buf, ident, size);
+    } else {
+	buf = xstrdup(ident);
+    }
+
+    openlog(buf, LOG_PID, SYSLOG_FACILITY);
+
+    /* don't free the openlog() string! */
 
     return 0;
 }

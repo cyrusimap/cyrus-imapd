@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.164.4.21 2003/02/06 22:40:50 rjs3 Exp $
+# $Id: Makefile.in,v 1.164.4.22 2003/02/07 23:34:49 rjs3 Exp $
 # 
 # @configure_input@
 # 
@@ -68,7 +68,7 @@ SIEVE_LIBS = @SIEVE_LIBS@
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
 LIB_WRAP = @LIB_WRAP@
 LIBS = $(IMAP_LIBS) $(IMAP_COM_ERR_LIBS)
-DEPLIBS = ../lib/libcyrus_min.a ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
 
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@ @CFLAGS@ @COM_ERR_LDFLAGS@ 

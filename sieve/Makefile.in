@@ -1,6 +1,6 @@
 # Makefile.in - sieve makefile
 # @configure_input@
-# $Id: Makefile.in,v 1.27 2002/02/19 18:09:45 ken3 Exp $
+# $Id: Makefile.in,v 1.27.4.1 2003/02/07 23:35:01 rjs3 Exp $
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
 #
@@ -42,7 +42,7 @@ MAKEDEPEND = @MAKEDEPEND@
 
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
 LIBS = libsieve.a $(IMAP_COM_ERR_LIBS)
-DEPLIBS=../lib/libcyrus.a @DEPLIBS@
+DEPLIBS=../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
 
 BUILT_SOURCES = addr.c addr.h addr-lex.c \
 	sieve.c sieve.h sieve-lex.c \

@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.53.4.4 2003/02/07 01:39:50 ken3 Exp $
+# $Id: Makefile.in,v 1.53.4.5 2003/02/07 23:34:51 rjs3 Exp $
 
 # Authorization namespace.
 AUTH=auth_@WITH_AUTH@.o
@@ -83,7 +83,7 @@ LIBCYR_HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 	$(srcdir)/cyrusdb.h $(srcdir)/iptostring.h $(srcdir)/rfc822date.h \
 	$(srcdir)/libcyr_cfg.h
 
-LIBCYR_OBJS = acl.o assert.o bsearch.o charset.o glob.o retry.o util.o \
+LIBCYR_OBJS = acl.o bsearch.o charset.o glob.o retry.o util.o \
 	libcyr_cfg.o mkgmtime.o prot.o parseaddr.o imclient.o imparse.o \
 	lsort.o stristr.o rfc822date.o cyrusdb.o strhash.o \
 	chartable.o imapurl.o nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o \
@@ -92,8 +92,10 @@ LIBCYR_OBJS = acl.o assert.o bsearch.o charset.o glob.o retry.o util.o \
 	iptostring.o xmalloc.o
 
 LIBCYRM_HDRS = $(srcdir)/hash.h $(srcdir)/mpool.h $(srcdir)/xmalloc.h \
-	$(srcdir)/strhash.o $(srcdir)/libconfig.h imapopts.h
-LIBCYRM_OBJS = libconfig.o imapopts.o hash.o mpool.o xmalloc.o strhash.o
+	$(srcdir)/strhash.o $(srcdir)/libconfig.h $(srcdir)/assert.h \
+	imapopts.h
+LIBCYRM_OBJS = libconfig.o imapopts.o hash.o mpool.o xmalloc.o strhash.o \
+	assert.o
 
 all: $(BUILTSOURCES) libcyrus_min.a libcyrus.a
 

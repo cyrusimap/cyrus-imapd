@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.1.2.1 2003/02/06 22:40:52 rjs3 Exp $ */
+/* $Id: global.c,v 1.1.2.2 2003/02/07 23:34:49 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -79,12 +79,15 @@ static enum {
     DONE = 2
 } cyrus_init_run = NOT_RUNNING;
 
+int config_implicitrights;        /* "lca" */
+
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
 int cyrus_init(const char *alt_config, const char *ident)
 {
     char *p;
     const char *val;
+    const char *prefix;
     int umaskval = 0;
 
     if(cyrus_init_run != NOT_RUNNING) {
@@ -101,10 +104,29 @@ int cyrus_init(const char *alt_config, const char *ident)
 
     config_ident = ident;
     
+    /* xxx we lose here since we can't have the prefix until we load the
+     * config file */
     openlog(config_ident, LOG_PID, SYSLOG_FACILITY);
 
     /* Load configuration file.  This will set config_dir when it finds it */
     config_read(alt_config);
+
+    prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
+
+    /* Reopen the log with the new prefix, if needed  */    
+    if(prefix) {
+	int size = strlen(prefix) + 1 + strlen(ident) + 1;
+	char *ident_buf = xmalloc(size);
+	
+	strlcpy(ident_buf, prefix, size);
+	strlcat(ident_buf, "/", size);
+	strlcat(ident_buf, ident, size);
+
+	closelog();
+	openlog(ident_buf, LOG_PID, SYSLOG_FACILITY);
+
+	/* don't free the openlog() string! */
+    }
 
     /* Look up default partition */
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
@@ -122,6 +144,10 @@ int cyrus_init(const char *alt_config, const char *ident)
 	val++;
     }
     umask(umaskval);
+
+    /* look up and canonify the implicit rights of mailbox owners */
+    config_implicitrights =
+	cyrus_acl_strtomask(config_getstring(IMAPOPT_IMPLICIT_OWNER_RIGHTS));
 
     /* configure libcyrus as needed */
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
