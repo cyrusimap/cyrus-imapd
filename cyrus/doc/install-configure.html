@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.23.4.1 2002/08/11 16:53:22 ken3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.23.4.2 2002/08/13 20:20:27 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and configuring the IMAP Server
@@ -347,9 +347,53 @@ permitted to the Cyrus message store.
 <p>Additional examples are included in the Postfix 
 file "<tt>README_FILES/LMTP_README</tt>".
 
-<h4>Configuring <a href="http://www.exim.org/">Exim</a></h4>
+<h4>Configuring <a href="http://www.exim.org/">Exim 4</a></h4>
 
-[contributions welcome]
+Generate an Exim configuration file which delivers local mail to the
+IMAP server.  See the Exim documentation for information on how to
+create a complete configuration file.
+
+<p>Cyrus is designed to be used as a black-box server -- there
+are usually no local user accounts.  As a result, you must define the
+following "router":
+
+<ul>
+<pre>
+localuser:
+  driver = accept
+  transport = local_delivery
+</pre>
+</ul>
+
+<p>The following "transports" assume that you are using either the
+<tt>lmtpunix</tt> or <tt>lmtp</tt> service from one of the sample
+<tt>cyrus.conf</tt> files discussed above.
+
+<ul>
+<p><li> Using <tt>lmtpunix</tt> (UNIX socket):
+
+<pre>
+local_delivery:
+  driver = pipe
+  command = "/usr/cyrus/bin/deliver -l"
+  user = cyrus
+</pre>
+</li>
+
+<p><li> Using <tt>lmtp</tt> (TCP socket -- Exim and Cyrus on same host):
+
+<pre>
+local_delivery:
+  driver = smtp
+  protocol = lmtp
+  hosts = localhost
+  allow_localhost
+</pre>
+</li>
+</ul>
+
+<p>For more advanced configurations (such as address verification, etc),
+consult the Exim documentation and sample configurations.
 
 <h3>Exporting Netnews via IMAP</h3>
 
@@ -532,5 +576,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2002/08/11 16:53:22 $
+last modified: $Date: 2002/08/13 20:20:27 $
 </BODY></HTML>
