@@ -19,19 +19,26 @@
 #include "imap_err.h"
 #include "xmalloc.h"
 
+/* Many systems don't define EX_CONFIG */
+#ifndef EX_CONFIG
+#define EX_CONFIG 78
+#endif
+
 static char *listfname, *newlistfname;
+
+static long ensureOwnerRights();
 
 #define FNAME_MBOXLIST "/mailboxes"
 #define FNAME_USERDIR "/user/"
 #define FNAME_SUBSSUFFIX ".sub"
 
 /*
- * Maximum length of a mailbox name.  This, plus the partition name
+ * Maximum length of mailbox and partition names.  These together
  * must be at least 3 less than the size of the binary-search buffer
  * [512]
  */
-#define MAX_NAME_LEN 500
-#define MAX_NAME_PARTITION_LEN 509
+#define MAX_NAME_LEN 490
+#define MAX_PARTITION_LEN 10
 
 /* Mailbox patterns which the design of the server prohibits */
 static char *badmboxpatterns[] = {
@@ -73,19 +80,23 @@ char **acl;
 
     if (!listfname) mboxlist_getfname();
 
+    /* Open mailbox list file */
     listfile = fopen(listfname, "r");
     if (!listfile) {
 	fatal("can't read mailbox list", EX_OSFILE);
     }
 
+    /* Find mailbox */
     offset = n_binarySearchFD(fileno(listfile), name, 0, &buf, &buflen, 0, 0);
     if (!buflen) {
 	fclose(listfile);
 	return IMAP_MAILBOX_NONEXISTENT;
     }
 	
+    /* Canonify the case of the mailbox name */
     strncpy(name, buf, namelen);
 
+    /* Parse partition name, construct pathname if requested */
     partition = buf + namelen + 1;
     p = strchr(partition, '\t');
     /* XXX assuming \t before running past buflen */
@@ -107,6 +118,7 @@ char **acl;
 	*path = pathresult;
     }
 
+    /* Parse ACL if requested */
     if (acl) {
 	p = buf + strlen(buf) + 1;
 	buflen -= p - buf;
@@ -120,6 +132,10 @@ char **acl;
 	strncpy(aclresult, p, acllen+1);
 	p = aclresult + acllen;
 	if (*p != '\n') {
+	    /*
+	     * ACL is too long for buf.  we're going to have to read
+	     * the rest of it.
+	     */
 	    fseek(listfile, offset+buflen, 0);
 	}
 	while (*p != '\n' && fgets(buf2, sizeof(buf2), listfile)) {
@@ -166,10 +182,10 @@ char *userid;
 
     if (!listfname) mboxlist_getfname();
 
-    /* Check for invalid name */
+    /* Check for invalid name/partition */
     if (strlen(name) > MAX_NAME_LEN) return IMAP_MAILBOX_BADNAME;
-    if (partition && strlen(partition)+strlen(name) > MAX_NAME_PARTITION_LEN) {
-	return IMAP_MAILBOX_BADNAME;
+    if (partition && strlen(partition) > MAX_PARTITION_LEN) {
+	return IMAP_PARTITION_UNKNOWN;
     }
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
 	g = glob_init(badmboxpatterns[i], GLOB_ICASE);
@@ -221,6 +237,7 @@ char *userid;
     if (len) {
 	r = IMAP_MAILBOX_EXISTS;
 	
+	/* Lie about error if privacy demands */
 	if (!isadmin) {
 	    r = mboxlist_lookup(name, (char **)0, &acl);
 	    assert(r == 0);
@@ -228,6 +245,7 @@ char *userid;
 		r = IMAP_PERMISSION_DENIED;
 	    }
 	}
+
 	fclose(listfile);
 	return r;
     }
@@ -254,13 +272,17 @@ char *userid;
 	assert(r == 0);
 	if (!isadmin && !(acl_myrights(acl) & ACL_CREATE)) {
 	    fclose(listfile);
+	    free(acl);
+	    free(partition);
 	    return IMAP_PERMISSION_DENIED;
 	}
-	strncpy(name, parent, strlen(parent)); /* Canonify case */
+	/* Canonify case of parent prefix */
+	strncpy(name, parent, strlen(parent));
     }
     else {
 	if (!isadmin) {
 	    fclose(listfile);
+	    free(acl);
 	    return IMAP_PERMISSION_DENIED;
 	}
 	
@@ -280,16 +302,16 @@ char *userid;
 	    acl_set(&acl, "anybody", ACL_LOOKUP|ACL_READ|ACL_SEEN);
 	}
 
-	partition = strsave(config_defpartition);
+	if (!partition) {  
+	    partition = config_defpartition;
+	    if (strlen(partition) > MAX_PARTITION_LEN) {
+		/* Configuration error */
+		fatal("name of default partition is too long", EX_CONFIG);
+	    }
+	}
+	partition = strsave(partition);
     }	      
 
-    if (strlen(partition)+strlen(name) > MAX_NAME_PARTITION_LEN) {
-	fclose(listfile);
-	free(partition);
-	free(acl);
-	return IMAP_MAILBOX_BADNAME;
-    }
-    
     sprintf(buf2, "partition-%s", partition);
     root = config_getstring(buf2, (char *)0);
     if (!root) {
@@ -305,6 +327,7 @@ char *userid;
 	return IMAP_MAILBOX_BADNAME;
     }
     
+    /* Create new mailbox list */
     newlistfile = fopen(newlistfname, "w+");
     if (!newlistfile) {
 	fclose(listfile);
@@ -313,6 +336,7 @@ char *userid;
 	return IMAP_IOERROR;
     }
 
+    /* Copy mailbox list, adding new entry */
     left = offset;
     rewind(listfile);
     while (left) {
@@ -341,12 +365,12 @@ char *userid;
     }
     fclose(newlistfile);
 
+    /* Create new mailbox and move new mailbox list file into place */
     sprintf(buf2, "%s/%s", root, name);
     for (p = buf2 + strlen(root); *p; p++) {
 	if (isupper(*p)) *p = tolower(*p);
 	else if (*p == '.') *p = '/';
     }
-
     r = mailbox_create(name, buf2, format);
     if (r || rename(newlistfname, listfname) == -1) {
 	fclose(listfile);
@@ -685,6 +709,151 @@ int add;
     return 0;
 }
 
+int
+mboxlist_setacl(name, identifier, rights, isadmin, userid)
+char *name;
+char *identifier;
+char *rights;
+int isadmin;
+char *userid;
+{
+    FILE *listfile = 0;
+    struct stat sbuffd, sbuffile;
+    int r;
+    long access;
+    int isusermbox = 0;
+    char inboxname[MAX_NAME_LEN];
+    char *buf, *p;
+    char buf2[MAX_NAME_LEN];
+    unsigned offset, len, size, namepartlen;
+    char *acl, *newacl;
+    FILE *newlistfile;
+    int n, left;
+
+    if (!listfname) mboxlist_getfname();
+
+    /* Open and lock mailbox list file */
+    listfile = fopen(listfname, "r+");
+    for (;;) {
+	if (!listfile) {
+	    fatal("can't read mailbox list", EX_OSFILE);
+	}
+
+	r = flock(fileno(listfile), LOCK_EX);
+	if (r == -1) {
+	    if (errno == EINTR) continue;
+	    return IMAP_IOERROR;
+	}
+	
+	fstat(fileno(listfile), &sbuffd);
+	r = stat(listfname, &sbuffile);
+	if (r == -1) {
+	    return IMAP_IOERROR;
+	}
+
+	size = sbuffd.st_size;
+	if (sbuffd.st_ino == sbuffile.st_ino) break;
+
+	fclose(listfile);
+	listfile = fopen(listfname, "r+");
+    }
+
+    if (!strchr(userid, '.') &&
+	strlen(userid) + 6 <= MAX_MAILBOX_PATH) {
+	strcpy(inboxname, "user.");
+	strcat(inboxname, userid);
+	if (!strcasecmp(name, "inbox") ||
+	    strcasecmp(name, inboxname)) {
+	    name = inboxname;
+	    isusermbox = 1;
+	}
+	else if (!strncasecmp(name, inboxname, strlen(inboxname)) &&
+		 name[strlen(inboxname)] == '.') {
+	    isusermbox = 1;
+	}
+    }
+
+    r = mboxlist_lookup(name, (char **)0, &acl);
+    if (!r && !isadmin && !isusermbox) {
+	access = acl_myrights(acl);
+	if (!(access & ACL_ADMIN)) {
+	    r = (access & ACL_LOOKUP) ?
+	      IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	}
+    }
+
+    if (!r) {
+	newlistfile = fopen(newlistfname, "w+");
+	if (!newlistfile) {
+	    r = IMAP_IOERROR;
+	}
+    }
+
+    if (r) {
+	fclose(listfile);
+	return r;
+    }
+
+    newacl = strsave(acl);
+    if (rights) {
+	if (acl_set(&newacl, identifier, acl_strtomask(rights),
+		    isusermbox ? ensureOwnerRights : 0, userid)) {
+	    fclose(listfile);
+	    free(newacl);
+	    return IMAP_INVALID_IDENTIFIER;
+	}
+    }
+    else {
+	if (acl_delete(&newacl, identifier,
+		       isusermbox ? ensureOwnerRights : 0, userid)) {
+	    fclose(listfile);
+	    free(newacl);
+	    return IMAP_INVALID_IDENTIFIER;
+	}
+    }
+
+    buf = 0;
+    offset = n_binarySearchFD(fileno(listfile), name, 0, &buf, &len, 0, size);
+    if (!len) {
+	fclose(listfile);
+	fclose(newlistfile);
+	return IMAP_MAILBOX_NONEXISTENT;
+    }
+    p = strchr(buf, '\t')+1;
+    p = strchr(p, '\t')+1;
+    namepartlen = p - buf;
+
+    left = offset + namepartlen;
+    rewind(listfile);
+    while (left) {
+	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
+	if (!n) {
+	    fclose(listfile);
+	    fclose(newlistfile);
+	    free(newacl);
+	    return IMAP_IOERROR;
+	}
+	fwrite(buf2, 1, n, newlistfile);
+	left -= n;
+    }
+    fprintf(newlistfile, "%s", newacl);
+    fseek(listfile, strlen(acl), 1);
+    while (n = fread(buf2, 1, sizeof(buf2), listfile)) {
+	fwrite(buf2, 1, n, newlistfile);
+    }
+    fflush(newlistfile);
+    if (ferror(newlistfile) || fsync(fileno(newlistfile)) ||
+	rename(newlistfname, listfname) == -1) {
+	fclose(listfile);
+	fclose(newlistfile);
+	free(newacl);
+	return IMAP_IOERROR;
+    }
+    fclose(listfile);
+    fclose(newlistfile);
+    free(newacl);
+    return 0;
+}
     
 static int
 mboxlist_opensubs(userid, subsfile, fname, newfname)
@@ -786,4 +955,13 @@ char *name;
 	if (!strchr(GOODCHARS, *name++)) return IMAP_MAILBOX_BADNAME;
     }
     return 0;
+}
+
+static long ensureOwnerRights(owner, identifier, access)
+char *owner;
+char *identifier;
+long access;
+{
+    if (strcasecmp(identifier, owner) != 0) return access;
+    return access|ACL_LOOKUP|ACL_ADMIN|ACL_CREATE;
 }
