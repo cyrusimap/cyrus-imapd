@@ -1,5 +1,5 @@
 /* nonblock.h -- Set nonbolocking mode on file descriptor
- $Id: nonblock.h,v 1.4 2000/05/23 20:56:18 robeson Exp $
+ $Id: nonblock.h,v 1.5 2002/07/09 18:50:22 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -51,6 +51,8 @@
 #define P(x) ()
 #endif
 #endif
+
+extern const char *nonblock_method_desc;
 
 extern void nonblock P((int fd, int mode));
 

@@ -1,5 +1,5 @@
 /* nonblock_fcntl.c -- Set nonblocking mode using ioctl()
- $Id: nonblock_ioctl.c,v 1.7 2000/05/23 20:56:18 robeson Exp $
+ $Id: nonblock_ioctl.c,v 1.8 2002/07/09 18:50:22 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -45,6 +45,8 @@
 #include <sys/ioctl.h>
 
 #include "nonblock.h"
+
+const char *nonblock_method_desc = "ioctl";
 
 /*
  * Modifies the non-blocking mode on the file descriptor 'fd'.  If
