@@ -604,6 +604,7 @@ int isieve_get(isieve_t *obj,char *name, char **output, char **errstr)
 	ret = do_referral(obj, refer_to);
 	if(ret == STAT_OK) {
 	    ret = isieve_get(obj,name,output,errstr);
+	    return ret;
 	} else {
 	    *errstr = "referral failed";
 	}
