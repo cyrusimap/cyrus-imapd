@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.34 2002/02/27 21:20:39 ken3 Exp $ */
+/* $Id: tls.c,v 1.35 2002/03/01 17:53:25 ken3 Exp $ */
 
 #include <config.h>
 
@@ -352,7 +352,8 @@ static int tls_dump(const char *s, int len)
   * This function is taken from OpenSSL apps/s_cb.c
   */
 
-static int set_cert_stuff(SSL_CTX * ctx, char *cert_file, char *key_file)
+static int set_cert_stuff(SSL_CTX * ctx,
+			  const char *cert_file, const char *key_file)
 {
     if (cert_file != NULL) {
 	if (SSL_CTX_use_certificate_file(ctx, cert_file,
@@ -370,7 +371,8 @@ static int set_cert_stuff(SSL_CTX * ctx, char *cert_file, char *key_file)
 	/* Now we know that a key and cert have been set against
          * the SSL context */
 	if (!SSL_CTX_check_private_key(ctx)) {
-	    syslog(LOG_ERR, "Private key does not match the certificate public key");
+	    syslog(LOG_ERR,
+		   "Private key does not match the certificate public key");
 	    return (0);
 	}
     }
@@ -439,7 +441,7 @@ static int new_session_cb(SSL *ssl, SSL_SESSION *sess)
 }
 
 /*
- * Function for removing session from our database.
+ * Function for removing a session from our database.
  */
 static void remove_session(unsigned char *id, int idlen)
 {
@@ -567,10 +569,11 @@ int     tls_init_serverengine(const char *ident,
     int     off = 0;
     int     verify_flags = SSL_VERIFY_NONE;
     char    buf[50];
-    char   *CApath;
-    char   *CAfile;
-    char   *s_cert_file;
-    char   *s_key_file;
+    const char   *cipher_list;
+    const char   *CApath;
+    const char   *CAfile;
+    const char   *s_cert_file;
+    const char   *s_key_file;
     int    timeout;
 
     if (tls_serverengine)
@@ -579,8 +582,8 @@ int     tls_init_serverengine(const char *ident,
     if (var_imapd_tls_loglevel >= 2)
 	syslog(LOG_DEBUG, "starting TLS engine");
 
+    SSL_library_init();
     SSL_load_error_strings();
-    SSLeay_add_ssl_algorithms();
     if (tls_rand_init() == -1) {
 	syslog(LOG_ERR,"TLS engine: cannot seed PRNG");
 	return -1;
@@ -610,7 +613,7 @@ int     tls_init_serverengine(const char *ident,
     SSL_CTX_set_info_callback(ctx, apps_ssl_info_callback);
 
     /* Don't use an internal session cache */
-    SSL_CTX_sess_set_cache_size(ctx, 1);  /* 0 is unlimited */
+    SSL_CTX_sess_set_cache_size(ctx, 1);  /* 0 is unlimited, so use 1 */
     SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_SERVER |
 				   SSL_SESS_CACHE_NO_AUTO_CLEAR |
 				   SSL_SESS_CACHE_NO_INTERNAL_LOOKUP);
@@ -622,13 +625,11 @@ int     tls_init_serverengine(const char *ident,
 
     /* A timeout of zero disables session caching */
     if (timeout) {
-	char *session_id_context = "cyrus"; /* anything will do */
 	char dbdir[1024];
 	int r;
 
-	/* Set the context for session reuse */
-	SSL_CTX_set_session_id_context(ctx, (void*) &session_id_context,
-				       sizeof(session_id_context));
+	/* Set the context for session reuse -- use the service ident */
+	SSL_CTX_set_session_id_context(ctx, (void*) ident, strlen(ident));
 
 	/* Set the timeout for the internal/external cache (in seconds) */
 	SSL_CTX_set_timeout(ctx, timeout*60);
@@ -661,8 +662,15 @@ int     tls_init_serverengine(const char *ident,
 	}
     }
 
-    CAfile = (char *) config_getstring("tls_ca_file", NULL);
-    CApath = (char *) config_getstring("tls_ca_path", NULL);
+    cipher_list = config_getstring("tls_cipher_list", "DEFAULT");
+    if (!SSL_CTX_set_cipher_list(ctx, cipher_list)) {
+	syslog(LOG_ERR,"TLS engine: cannot load cipher list '%s'",
+	       cipher_list);
+	return (-1);
+    }
+
+    CAfile = config_getstring("tls_ca_file", NULL);
+    CApath = config_getstring("tls_ca_path", NULL);
 
     if ((!SSL_CTX_load_verify_locations(ctx, CAfile, CApath)) ||
 	(!SSL_CTX_set_default_verify_paths(ctx))) {
@@ -671,12 +679,12 @@ int     tls_init_serverengine(const char *ident,
     }
 
     sprintf(buf, "tls_%s_cert_file", ident);
-    s_cert_file = (char *) config_getstring(buf,
-					    config_getstring("tls_cert_file", NULL));
+    s_cert_file = config_getstring(buf,
+				   config_getstring("tls_cert_file", NULL));
 
     sprintf(buf, "tls_%s_key_file", ident);
-    s_key_file = (char *) config_getstring(buf,
-					   config_getstring("tls_key_file", NULL));
+    s_key_file = config_getstring(buf,
+				  config_getstring("tls_key_file", NULL));
 
     if (!set_cert_stuff(ctx, s_cert_file, s_key_file)) {
 	syslog(LOG_ERR,"TLS engine: cannot load cert/key data");
@@ -716,13 +724,15 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
 	return (ret);
 
     if (cmd == (BIO_CB_READ | BIO_CB_RETURN)) {
-	printf("read from %08X [%08lX] (%d bytes => %ld (0x%X))", (unsigned int) bio, (long unsigned int) argp,
-		 argi, ret, (unsigned int) ret);
+	printf("read from %08X [%08lX] (%d bytes => %ld (0x%X))",
+	       (unsigned int) bio, (long unsigned int) argp,
+	       argi, ret, (unsigned int) ret);
 	tls_dump(argp, (int) ret);
 	return (ret);
     } else if (cmd == (BIO_CB_WRITE | BIO_CB_RETURN)) {
-	printf("write to %08X [%08lX] (%d bytes => %ld (0x%X))", (unsigned int) bio, (long unsigned int)argp,
-		 argi, ret, (unsigned int) ret);
+	printf("write to %08X [%08lX] (%d bytes => %ld (0x%X))",
+	       (unsigned int) bio, (long unsigned int)argp,
+	       argi, ret, (unsigned int) ret);
 	tls_dump(argp, (int) ret);
     }
     return (ret);
@@ -747,7 +757,6 @@ int tls_start_servertls(int readfd, int writefd,
     int     sts;
     int     j;
     unsigned int n;
-    SSL_SESSION *session;
     SSL_CIPHER *cipher;
     X509   *peer;
     const char *tls_protocol = NULL;
@@ -797,8 +806,8 @@ int tls_start_servertls(int readfd, int writefd,
     if (var_imapd_tls_loglevel >= 3)
 	do_dump = 1;
 
-    if ((sts = SSL_accept(tls_conn)) < 0) { /* xxx <= 0 */
-	session = SSL_get_session(tls_conn);
+    if ((sts = SSL_accept(tls_conn)) <= 0) {
+	SSL_SESSION *session = SSL_get_session(tls_conn);
 	if (session) {
 	    SSL_CTX_remove_session(ctx, session);
 	}
