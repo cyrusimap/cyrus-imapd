@@ -309,8 +309,14 @@ static int deliver_msg(char *return_path, char *authuser,
 {
     int r;
     struct lmtp_conn *conn;
-    struct lmtp_txn *txn = LMTP_TXN_ALLOC(numusers);
+    struct lmtp_txn *txn = LMTP_TXN_ALLOC(numusers ? numusers : 1);
     int j;
+    int ml = 0;
+
+    /* must have either some users or a mailbox */
+    if (!numusers && !mailbox) {
+	usage();
+    }
 
     /* connect */
     r = lmtp_connect(sockaddr, NULL, &conn);
@@ -323,9 +329,25 @@ static int deliver_msg(char *return_path, char *authuser,
     txn->auth = authuser;
     txn->data = deliver_in;
     txn->isdotstuffed = 0;
-    txn->rcpt_num = numusers;
-    for (j = 0; j < numusers; j++) {
-	txn->rcpt[j].addr = users[j];
+    txn->rcpt_num = numusers ? numusers : 1;
+    if (mailbox) ml = strlen(mailbox);
+    if (numusers == 0) {
+	/* just deliver to mailbox 'mailbox' */
+	const char *BB = config_getstring("postuser", "");
+	txn->rcpt[0].addr = (char *) xmalloc(ml + strlen(BB) + 1); /* leaks! */
+	sprintf(txn->rcpt[0].addr, "%s+%s", BB, mailbox);
+    } else {
+	/* setup each recipient */
+	for (j = 0; j < numusers; j++) {
+	    if (mailbox) {
+		/* we let it leak ! */
+		txn->rcpt[j].addr = 
+		    (char *) xmalloc(strlen(users[j]) + ml + 1);
+		sprintf(txn->rcpt[j].addr, "%s+%s", users[j], mailbox);
+	    } else {
+		txn->rcpt[j].addr = users[j];
+	    }
+	}
     }
 
     /* run txn */
