@@ -1,11 +1,12 @@
-<!-- $Id: changes.html,v 1.60 1999/01/12 16:28:57 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.61 1999/02/16 03:20:38 wcw Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
-    <h2> Changes to the Cyrus IMAP Server Sice Version 1.5.19 </h2>
+
+    <h2> Changes to the Cyrus IMAP Server Since Version 1.5.19 </h2>
 
     <ul>
       <li> Content-Disposition lines were being parsed improperly.  If they
@@ -20,6 +21,20 @@
 
       <li> Uninitialized variable fixed in imapd.c with the shutdown file
 	code.
+
+      <li> Minor tweaks to purify build config
+
+      <li> Fix minor memory leak in proc.c where procfname wasn't
+	being free'd
+
+      <li> Fix brain fart in auth_krb_pts.c where a CLOSE() was done
+      to a DB handle BEFORE we access the data read from the DB
+      database. This means we were copying free'd memory into the
+      groups list.  Note this only affects people using DB, AFS and
+      ptloader.
+
+      <li>Committed minor syslog log level changes in ptloader and
+	deliver. 
 
     </ul>
 
