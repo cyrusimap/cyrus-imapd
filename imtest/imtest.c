@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.36 1999/11/05 01:00:37 tmartin Exp $
+ * $Id: imtest.c,v 1.37 1999/11/15 21:30:44 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -611,8 +611,8 @@ imt_stat getauthline(char **line, int *linelen)
   int saslresult;
   char *str=(char *) buf;
   
-  str=prot_fgets(str, BUFSIZE, pin);
-  if (str==NULL) imtest_fatal("prot layer failure");
+  str = prot_fgets(str, BUFSIZE, pin);
+  if (str == NULL) imtest_fatal("prot layer failure");
   printf("S: %s",str);
 
   if (!strncasecmp(str, "A01 OK ", 7)) { return STAT_OK; }
@@ -886,32 +886,26 @@ static char *parsemechlist(char *str)
   return ret;
 }
 
+#define CAPATAG "C01"
 #define CAPABILITY "C01 CAPABILITY\r\n"
 
-static char *ask_capability(int *supports_starttls, int getuntaged)
+static char *ask_capability(int *supports_starttls)
 {
   char *str=malloc(301);
   char *ret;
 
-  if (getuntaged==1)
-  {
-    str=prot_fgets(str,300,pin);
-    if (str == NULL) {
-      imtest_fatal("prot layer failure");
-    }
-    printf("S: %s",str);
-  }
-
   /* request capabilities of server */
-  prot_printf(pout, CAPABILITY);
+  prot_printf(pout, CAPATAG " CAPABILITY\r\n");
   prot_flush(pout);
 
-  printf("C: %s", CAPABILITY);
+  printf("C: " CAPATAG " CAPABILITY\r\n", CAPABILITY);
 
-  str=prot_fgets(str,300,pin);
-  if (str==NULL) imtest_fatal("prot layer failure");
+  do { /* look for the * CAPABILITY response */
+      str = prot_fgets(str,300,pin);
+      if (str == NULL) imtest_fatal("prot layer failure");
 
-  printf("S: %s", str);
+      printf("S: %s", str);
+  } while (strncasecmp(str, "* CAPABILITY", 12));
 
   /* check for starttls */
   if (strstr(str,"STARTTLS")!=NULL)
@@ -921,8 +915,12 @@ static char *ask_capability(int *supports_starttls, int getuntaged)
 
   ret=parsemechlist(str);
 
-  str=prot_fgets(str,300,pin);
-  printf("S: %s",str);
+  do { /* look for TAG */
+      str = prot_fgets(str,300,pin);
+      if (str == NULL) imtest_fatal("prot layer failure");
+
+      printf("S: %s",str);
+  } while (strncmp(str, CAPATAG, strlen(CAPATAG)));
 
   free(str);
 
@@ -1121,11 +1119,12 @@ int main(int argc, char **argv)
 {
   char *mechanism=NULL;
   char servername[1024];
+  char buf[1024];
   char *filename=NULL;
 
   char *mechlist;
   int *ssfp;
-  int ssf = 10000;
+  int ssf = 128;
   char c;
   int result;
   int errflg = 0;
@@ -1209,7 +1208,13 @@ int main(int argc, char **argv)
   pin = prot_new(sock, 0);
   pout = prot_new(sock, 1); 
 
-  mechlist=ask_capability(&server_supports_tls,1);   /* get the * line also */
+  /* get the greeting line */
+  if (prot_fgets(buf, sizeof(buf) - 1, pin) == NULL) {
+      imtest_fatal("prot layer failure");
+  }
+  printf("S: %s", buf);
+
+  mechlist = ask_capability(&server_supports_tls);
 
 #ifdef HAVE_SSL
   if ((dotls==1) && (server_supports_tls==1))
@@ -1245,8 +1250,10 @@ int main(int argc, char **argv)
     prot_settls (pout, tls_conn);
 
     /* ask for the capabilities again */
-    if (verbose==1) printf("Asking for capabilities again since they might have changed\n");
-    mechlist=ask_capability(&server_supports_tls, 0);
+    if (verbose==1) {
+	printf("Asking for capabilities again (they might have changed)\n");
+    }
+    mechlist=ask_capability(&server_supports_tls);
 
   } else if ((dotls==1) && (server_supports_tls!=1)) {
     imtest_fatal("STARTTLS not supported by the server!\n");
