@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.30.4.9 2003/06/24 15:48:46 ken3 Exp $
+ * $Id: actions.c,v 1.30.4.10 2003/06/25 18:57:48 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -182,7 +182,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
     /* Sieve capabilities */
     prot_printf(conn,"\"SIEVE\" \"%s\"\r\n",sieve_listextensions());
 
-    if (tls_enabled() && !starttls_done) {
+    if (tls_enabled() && !starttls_done && !authenticated) {
 	prot_printf(conn, "\"STARTTLS\"\r\n");
     }
 

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.86 2003/06/24 15:59:34 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.87 2003/06/25 18:57:44 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2065,10 +2065,11 @@ void cmd_capability(char *tag)
 	prot_printf(imapd_out, " IDLE");
     }
 
-    if (tls_enabled() && !imapd_starttls_done) {
+    if (tls_enabled() && !imapd_starttls_done && !imapd_authstate) {
 	prot_printf(imapd_out, " STARTTLS");
     }
-    if (!imapd_starttls_done && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+    if (imapd_authstate ||
+	(!imapd_starttls_done && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(imapd_out, " LOGINDISABLED");
     }
 
