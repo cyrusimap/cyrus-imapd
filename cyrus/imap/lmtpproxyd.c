@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42.4.2 2002/07/10 20:45:06 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.3 2002/08/02 15:20:56 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -431,6 +431,16 @@ static int adddest(struct mydata *mydata,
     int sl = strlen(BB);
     int r;
     char buf[MAX_MAILBOX_NAME];
+    char *domain = NULL;
+    int userlen = strlen(mailbox), domainlen = 0;
+
+    if (config_virtdomains && (domain = strchr(mailbox, '@'))) {
+	userlen = domain - mailbox;
+	domain++;
+	/* ignore default domain */
+	if (!(config_defdomain && !strcasecmp(config_defdomain, domain)))
+	    domainlen = strlen(domain)+1;
+    }
 
     strlcpy(new->mailbox, mailbox, MAX_MAILBOX_NAME);
     new->rcpt_num = mydata->cur_rcpt;
@@ -438,16 +448,24 @@ static int adddest(struct mydata *mydata,
     /* find what server we're sending this to */
     if (!strncmp(mailbox, BB, sl) && mailbox[sl] == '+') {
 	/* special shared folder address */
-	strcpy(buf, mailbox + sl + 1);
-	mboxname_hiersep_tointernal(&lmtpd_namespace, buf, 0);
+	if (domainlen)
+	    sprintf(buf, "%s!%.*s", domain, userlen - sl - 1, mailbox + sl + 1);
+	else
+	    sprintf(buf, "%.*s", userlen - sl - 1, mailbox + sl + 1);
+	/* Translate any separators in user */
+	mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen, 0);
 	r = mupdate_find(mhandle, buf, &mailboxdata);
     } else {
 	char *plus;
 
-	strlcpy(buf, "user.", sizeof buf);
-	strlcat(buf, mailbox, sizeof buf);
+	if (domainlen)
+	    sprintf(buf, "%s!user.%.*s", domain, userlen, mailbox);
+	else
+	    sprintf(buf, "user.%.*s", userlen, mailbox);
 	plus = strchr(buf, '+');
 	if (plus) *plus = '\0';
+	/* Translate any separators in user */
+	mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen+5, 0);
 
 	/* find where this user lives */
 	r = mupdate_find(mhandle, buf, &mailboxdata);
@@ -611,15 +629,20 @@ int deliver(message_data_t *msgdata, char *authuser,
     /* loop through each recipient, compiling list of destinations */
     for (n = 0; n < nrcpts; n++) {
 	char *rcpt = xstrdup(msg_getrcpt(msgdata, n));
-	char *plus;
+	char *plus, *domain = NULL;
 	int r = 0;
+
+	if (config_virtdomains && (domain = strchr(rcpt, '@'))) {
+	    *domain++ = '\0';
+	}
 
 	mydata.cur_rcpt = n;
 	plus = strchr(rcpt, '+');
 	if (plus) *plus++ = '\0';
 	/* case 1: shared mailbox request */
 	if (plus && !strcmp(rcpt, BB)) {
-	    *--plus = '+';	/* put that plus back */
+	    *--plus = '+';		/* put that plus back */
+	    if (domain) *--domain = '@'; /* put that ampersand back */
 	    r = adddest(&mydata, rcpt, mydata.authuser);
 	    
 	    if (r) {
@@ -635,6 +658,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	/* case 3: ordinary user, no Sieve script */
 	else {
 	    if (plus) *--plus = '+';
+	    if (domain) *--domain = '@';
 
 	    r = adddest(&mydata, rcpt, authuser);
 	    if (r) {
@@ -737,26 +761,43 @@ static int verify_user(const char *user,
     char buf[MAX_MAILBOX_PATH];
     int r = 0;
     int sl = strlen(BB);
+    char *domain = NULL;
+    int userlen = strlen(user), domainlen = 0;
+
+    if (config_virtdomains && (domain = strchr(user, '@'))) {
+	userlen = domain - user;
+	domain++;
+	/* ignore default domain */
+	if (!(config_defdomain && !strcasecmp(config_defdomain, domain)))
+	    domainlen = strlen(domain)+1;
+    }
+
 
     /* check to see if mailbox exists */
     if (!strncmp(user, BB, sl) && user[sl] == '+') {
 	/* special shared folder address */
-	strcpy(buf, user + sl + 1);
+	if (domainlen)
+	    sprintf(buf, "%s!%.*s", domain, userlen - sl - 1, user + sl + 1);
+	else
+	    sprintf(buf, "%.*s", userlen - sl - 1, user + sl + 1);
+	/* Translate any separators in user */
+	mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen, 0);
     } else {			/* ordinary user */
 	int l;
 	char *plus = strchr(user, '+');
 
 	if (plus) l = plus - user;
-	else l = strlen(user);
+	else l = userlen;
 
-	if (l >= MAX_MAILBOX_NAME) {
+	if ((l + domainlen) >= MAX_MAILBOX_NAME) {
 	    /* too long a name */
 	    r = IMAP_MAILBOX_NONEXISTENT;
 	} else {
 	    /* just copy before the plus */
-	    strcpy(buf, "user.");
-	    strncat(buf, user, l);
-	    buf[l + 5] = '\0';
+	    if (domainlen)
+		sprintf(buf, "%s!user.%.*s", domain, l, user);
+	    else
+		sprintf(buf, "user.%.*s", l, user);
 	}
     }
 
