@@ -1,10 +1,10 @@
 #!/bin/sh
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# script to translate sieve scripts to use altnamespace
+# script to translate sieve scripts to use unixhierarchysep and/or altnamespace
 # make sure you run it as the cyrus user
 #!/usr/bin/perl
-# $Id: translatesieve,v 1.2 2001/08/03 21:18:10 ken3 Exp $
+# translatesieve,v 1.2 2001/08/03 21:18:10 ken3 Exp
 # 
 # Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
 #
@@ -88,6 +88,7 @@ sub ouch {
 $imapdconf = shift || "/etc/imapd.conf";
 
 $sievedir = "/usr/sieve";
+$unixhierarchysep = "no";
 $altnamespace = "no";
 $userprefix = "Other Users";
 $sharedprefix = "Shared Folders";
@@ -98,8 +99,15 @@ while (<CONF>) {
 	$sievedir = $1;
 	print "you are using $sievedir as your sieve directory.\n";
     }
+    if (/^unixhierarchysep:\s*(.*)$/) {
+	$unixhierarchysep = $1;
+	# convert "on", "t", "1" to "yes" -- anything else is "no"
+	$unixhierarchysep =~ s/on|t|1/yes/;
+    }
     if (/^altnamespace:\s*(.*)$/) {
 	$altnamespace = $1;
+	# convert "on", "t", "1" to "yes" -- anything else is "no"
+	$altnamespace =~ s/on|t|1/yes/;
     }
     if (/^userprefix:\s*(.*)$/) {
 	$userprefix = $1;
@@ -112,8 +120,8 @@ while (<CONF>) {
 }
 close CONF;
 
-if ($altnamespace eq "no") {
-    ouch "you are not using the alternate namespace";
+if ($unixhierarchysep ne "yes" && $altnamespace ne "yes") {
+    ouch "you are not using the Unix hierarchy separator or the alternate namespace";
 }
 
 print "translating sievedir $sievedir... ";
@@ -157,21 +165,30 @@ foreach $i ("a".."z") {
 
 	    $inbox = "[Ii][Nn][Bb][Oo][Xx]";
 	    while (<IN>) {
-		# INBOX
-		if (/\s+fileinto\s+"$inbox"\s*;/) {
-		    # do nothing
+		# Alternate namespace
+		if ($altnamespace eq "yes") {
+		    # INBOX
+		    if (/\s+fileinto\s+"$inbox"\s*;/) {
+			# do nothing
+		    }
+		    # Personal namespace
+		    elsif (/\s+fileinto\s+"($inbox\.[^"]*)"\s*;/) {
+			substr($_, index($_, $1), 6) = "";
+		    }
+		    # Other Users namespace
+		    elsif (/\s+fileinto\s+"(user\.[^"]*)"\s*;/) {
+			substr($_, index($_, $1), 4) = $userprefix;
+		    }
+		    # Shared namespace
+		    elsif (/\s+fileinto\s+"([^"]*)"\s*;/) {
+			substr($_, index($_, $1), 0) = $sharedprefix . ".";
+		    }
 		}
-		# Personal namespace
-		elsif (/\s+fileinto\s+"($inbox\.[^"]*)"\s*;/) {
-		    substr($_, index($_, $1), 6) = "";
-		}
-		# Other Users namespace
-		elsif (/\s+fileinto\s+"(user\.[^"]*)"\s*;/) {
-		    substr($_, index($_, $1), 4) = $userprefix;
-		}
-		# Shared namespace
-		elsif (/\s+fileinto\s+"([^"]*)"\s*;/) {
-		    substr($_, index($_, $1), 0) = $sharedprefix . ".";
+		# Hierarchy separator
+		if ($unixhierarchysep eq "yes") {
+		    if (/\s+fileinto\s+"([^"]*)"\s*;/) {
+			substr($_, index($_, $1)) =~ s~\.~/~g;
+		    }
 		}
 		print OUT $_;
 	    }
