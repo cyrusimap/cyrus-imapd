@@ -1,0 +1,6 @@
+Makefile.PL		Build Makefile for Cyrus::sieve::managesieve
+managesieve.h		include file
+managesieve.pm		Cyrus::sieve::managesieve perl module
+managesieve.xs		Perl interface routines for calling C
+typemap			Typemap defining Perl "class"
+MANIFEST		This file
