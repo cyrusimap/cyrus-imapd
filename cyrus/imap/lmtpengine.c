@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.10 2000/06/28 00:42:31 leg Exp $
+ * $Id: lmtpengine.c,v 1.11 2000/07/11 00:45:02 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -315,13 +315,18 @@ void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r)
     m->rcpt[rcpt_num]->status = r;
 }
 
-/* return a malloc'd string representing the authorized user */
-static char *parseautheq(char *s)
+/* return a malloc'd string representing the authorized user.
+ advance 'strp' over the parameter */
+static char *parseautheq(char **strp)
 {
     char *ret;
     char *str;
+    char *s = *strp;
 
-    if (!strcmp(s, "<>")) return NULL;
+    if (!strcmp(s, "<>")) {
+	*strp = s + 2;
+	return NULL;
+    }
 
     ret = (char *) xmalloc(strlen(s)+1);
     ret[0]='\0';
@@ -345,6 +350,7 @@ static char *parseautheq(char *s)
 		    (*str) = (*str) & (*s - 'A' + 10);
 		else {
 		    free(ret);
+		    *strp = s;
 		    return NULL;
 		}
 		if (lup==0)
@@ -366,6 +372,7 @@ static char *parseautheq(char *s)
 	s++;
     }
 
+    *strp = s;
     if (*s && (*s!=' ')) { free(ret); return NULL; }
 
     *str = '\0';
@@ -1237,23 +1244,50 @@ void lmtpmode(struct lmtp_func *func,
 		tmp = buf+10+strlen(msg->return_path);
 
 		/* is any other whitespace allow seperating? */
-		if (*tmp == ' ') {
+		while (*tmp == ' ') {
 		    tmp++;
-		    if (strncasecmp(tmp, "auth=", 5) != 0) {
+		    switch (*tmp) {
+		    case 'a': case 'A':
+			if (strncasecmp(tmp, "auth=", 5) != 0) {
+			    goto badparam;
+			}
+			tmp += 5;
+			authuser = parseautheq(&tmp);
+			if (authuser) {
+			    authstate = auth_newstate(authuser, NULL);
+			} else {
+			    /* do we want to bounce mail because of this? */
+			    /* i guess not. accept with no auth user */
+			    authstate = NULL;
+			}
+			break;
+
+		    case 'b': case 'B':
+			if (strncasecmp(tmp, "body=", 5) != 0) {
+			    goto badparam;
+			}
+			tmp += 5;
+			/* just verify it's one of 
+			   body-value ::= "7BIT" / "8BITMIME" */
+			if (!strncasecmp(tmp, "7bit", 4)) {
+			    tmp += 4;
+			} else if (!strncasecmp(tmp, "8bitmime", 8)) {
+			    tmp += 8;
+			} else {
+			    prot_printf(pout, 
+			      "501 5.5.4 Unrecognized BODY type\r\n");
+			    goto nextcmd;
+			}
+			break;
+
+		    default: 
+		    badparam:
 			prot_printf(pout, 
 				    "501 5.5.4 Unrecognized parameters\r\n");
-			continue;
+			goto nextcmd;
 		    }
-		    tmp += 5;
-		    authuser = parseautheq(tmp);
-		    if (authuser) {
-			authstate = auth_newstate(authuser, NULL);
-		    } else {
-			/* do we want to bounce mail because of this? */
-			/* i guess not. accept with no auth user */
-			authstate = NULL;
-		    }
-		} else if (*tmp != '\0') {
+		} 
+		if (*tmp != '\0') {
 		    prot_printf(pout, 
 				"501 5.5.4 Syntax error in parameters\r\n");  
 		    continue;
