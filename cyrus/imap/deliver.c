@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.116 1999/12/23 02:33:21 leg Exp $
+ * $Id: deliver.c,v 1.117 1999/12/23 18:44:24 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.116 1999/12/23 02:33:21 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.117 1999/12/23 18:44:24 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -1099,7 +1099,8 @@ int autorespond(unsigned char *hash, int len, int days,
     return ret;
 }
 
-int send_response(char *addr, char *subj, char *msg, int mime, 
+int send_response(char *addr, char *fromaddr,
+		  char *subj, char *msg, int mime, 
 		  void *ic, void *sc, void *mc)
 {
     FILE *sm;
@@ -1142,7 +1143,7 @@ int send_response(char *addr, char *subj, char *msg, int mime,
             tz > 0 ? '-' : '+', tz / 60, tz % 60);
     
     fprintf(sm, "X-Sieve: %s\r\n", sieve_version);
-    fprintf(sm, "From: <%s>\r\n", m->rcpt[m->rcpt_num]->all);
+    fprintf(sm, "From: <%s>\r\n", fromaddr);
     fprintf(sm, "To: <%s>\r\n", addr);
     /* check that subject is sane */
     sl = strlen(subj);
@@ -2245,11 +2246,17 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    sdata->username = user;
 	    sdata->authstate = auth_newstate(user, (char *)0);
 	    
+	    /* slap the mailboxname back on so we hash the envelope & id
+	       when we figure out whether or not to keep the message */
+	    strcpy(namebuf, user);
+	    if (mailboxname) {
+		strcat(namebuf, "+");
+		strcat(namebuf, mailboxname);
+	    }
+
 	    /* is this the first time we've sieved the message? */
 	    if (msgdata->id) {
-		/* sigh; this should be hashing the envelope & id 
-		   to figure out whether or not to keep it */
-		char *sdb = make_sieve_db(user);
+		char *sdb = make_sieve_db(namebuf);
 		
 		if (checkdelivered(msgdata->id, strlen(msgdata->id),
 				   sdb, strlen(sdb))) {
@@ -2277,7 +2284,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 
 	    if ((r == SIEVE_OK) && (msgdata->id)) {
 		/* ok, we've run the script */
-		char *sdb = make_sieve_db(user);
+		char *sdb = make_sieve_db(namebuf);
 
 		markdelivered(msgdata->id, strlen(msgdata->id), 
 			      sdb, strlen(sdb), time(NULL));

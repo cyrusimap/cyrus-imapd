@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.11 1999/10/27 21:20:20 leg Exp $
+ * $Id: script.c,v 1.12 1999/12/23 18:44:49 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -323,14 +323,14 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 	    break;
 	case VACATION:
 	{
-	    char **body, buf[128], myaddr[256];
+	    char **body, buf[128], myaddr[256], *fromaddr;
 	    char *reply_to = NULL;
 	    int l;
 
 	    strcpy(buf, "to");
 	    l = i->getenvelope(m, buf, &body);
 	    if (body[0]) {
-		strncpy(myaddr, body[0], sizeof(myaddr));
+		strncpy(myaddr, body[0], sizeof(myaddr) - 1);
 	    }
 	    if (l == SIEVE_OK) {
 		strcpy(buf, "from");
@@ -410,8 +410,16 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		    /* user specified subject */
 		    strncpy(buf, c->u.v.subject, sizeof(buf));
 		}
+
+		/* who do we want the message coming from? */
+		if (c->u.v.addresses) {
+		    fromaddr = c->u.v.addresses->s;
+		} else {
+		    fromaddr = myaddr;
+		}
 		
-		res = do_vacation(actions, reply_to, strdup(buf),
+		res = do_vacation(actions, reply_to, strdup(fromaddr),
+				  strdup(buf),
 				  c->u.v.message, c->u.v.days, c->u.v.mime);
 		
 	    } else {
@@ -529,6 +537,7 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	    if (ret == SIEVE_OK) {
 		/* send the response */
 		ret = s->interp.vacation->send_response(a->u.vac.addr, 
+							a->u.vac.fromaddr,
 							a->u.vac.subj,
 			          a->u.vac.msg, a->u.vac.mime,
 			          s->interp.interp_context, s->script_context, 
