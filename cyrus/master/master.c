@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.16 2000/09/30 15:57:32 leg Exp $ */
+/* $Id: master.c,v 1.17 2000/11/05 22:11:28 leg Exp $ */
 
 #include <config.h>
 
@@ -67,11 +67,17 @@
 #include <sysexits.h>
 #include <errno.h>
 
+#ifdef HAVE_UCDSNMP
+#include <ucd-snmp/ucd-snmp-config.h>
+#include <ucd-snmp/ucd-snmp-includes.h>
+#include <ucd-snmp/ucd-snmp-agent-includes.h>
+#endif
+
 #include "masterconf.h"
 
+#include "master.h"
 #include "service.h"
 
-#define CHKPOINT_INTERVAL (30 * 60)
 #define SERVICE_PATH (CYRUS_PATH "/bin")
 
 static const int become_cyrus_early = 1;
@@ -79,23 +85,9 @@ static const int become_cyrus_early = 1;
 static int verbose = 0;
 static int listen_queue_backlog = 10;
 
-struct service {
-    char *name;
-    char *listen;
-    char *proto;
-    char *const *exec;
-
-    int socket;
-    struct sockaddr *saddr;
-
-    int ready_workers;
-    int desired_workers;
-    int stat[2];
-};
-
-static struct service *Services = NULL;
-static int allocservices = 0;
-static int nservices = 0;
+struct service *Services = NULL;
+int allocservices = 0;
+int nservices = 0;
 
 struct recover {
     char *name;
@@ -344,6 +336,7 @@ void spawn_service(struct service *s)
     default: 
 	/* parent */
 	s->ready_workers++;
+	s->nforks++;
 	break;
     }
 
@@ -614,6 +607,9 @@ void add_service(const char *name, struct entry *e, void *rock)
     Services[nservices].desired_workers = prefork;
     memset(Services[nservices].stat, 0, sizeof(Services[nservices].stat));
 
+    Services[nservices].nforks = 0;
+    Services[nservices].nactive = 0;
+
     nservices++;
 }
 
@@ -685,6 +681,20 @@ int main(int argc, char **argv, char **envp)
     /* set signal handlers */
     sighandler_setup();
 
+#ifdef HAVE_UCDSNMP
+    /* initialize SNMP agent */
+    
+    /* make us a agentx client. */
+    ds_set_boolean(DS_APPLICATION_ID, DS_AGENT_ROLE, 1);
+
+    /* initialize the agent library */
+    init_agent("cyrusMaster");
+
+    init_cyrusMasterMIB();
+
+    init_snmp("cyrusMaster"); 
+#endif
+
     /* initialize services */
     for (i = 0; i < nservices; i++) {
 	service_create(&Services[i]);
@@ -702,6 +712,7 @@ int main(int argc, char **argv, char **envp)
     for (;;) {
 	int r, i, msg, maxfd;
 	struct timeval tv, *tvptr;
+	int blockp = 0;
 	time_t now = time(NULL);
 
 	/* run any scheduled processes */
@@ -738,6 +749,7 @@ int main(int argc, char **argv, char **envp)
 	maxfd = 0;
 	for (i = 0; i < nservices; i++) {
 	    int x = Services[i].stat[0];
+
 	    int y = Services[i].socket;
 
 	    /* messages */
@@ -764,8 +776,13 @@ int main(int argc, char **argv, char **envp)
 		       Services[i].ready_workers);
 	    }
 	}
+	maxfd++;		/* need 1 greater than maxfd */
+#ifdef HAVE_UCDSNMP
+	if (tvptr == NULL) blockp = 1;
+	snmp_select_info(&maxfd, &rfds, tvptr, &blockp);
+#endif
 	errno = 0;
-	r = select(maxfd + 1, &rfds, NULL, NULL, tvptr);
+	r = select(maxfd, &rfds, NULL, NULL, tvptr);
 	if (r == -1 && errno == EAGAIN) continue;
 	if (r == -1 && errno == EINTR) continue;
 	if (r == -1) {
@@ -773,6 +790,11 @@ int main(int argc, char **argv, char **envp)
 	    fatal("select failed: %m", 1);
 	}
 
+#ifdef HAVE_UCDSNMP
+	/* check for SNMP queries */
+	snmp_read(&rfds);
+	snmp_timeout();
+#endif
 	for (i = 0; i < nservices; i++) {
 	    int x = Services[i].stat[0];
 	    int y = Services[i].socket;

@@ -107,10 +107,10 @@ int config_init(const char *ident)
     /* Look up default partition */
     config_defpartition = config_getstring("defaultpartition", "default");
     for (p = (char *)config_defpartition; *p; p++) {
-	if (!isalnum((int) *p))
+	if (!isalnum((unsigned char) *p))
 	  fatal("defaultpartition option contains non-alphanumeric character",
 		EC_CONFIG);
-	if (isupper((int) *p)) *p = tolower((int) *p);
+	if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
     }
     if (!config_partitiondir(config_defpartition)) {
 	sprintf(buf, "partition-%s option not specified in configuration file",
@@ -229,7 +229,7 @@ static void config_read(void)
 
 	key = p;
 	while (*p && (isalnum((int) *p) || *p == '-' || *p == '_')) {
-	    if (isupper((int) *p)) *p = tolower((int) *p);
+	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
 	    p++;
 	}
 	if (*p != ':') {
