@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.21 2003/12/15 20:00:38 ken3 Exp $
+ * $Id: annotate.c,v 1.22 2003/12/17 14:34:57 ken3 Exp $
  */
 
 #include <config.h>
@@ -1198,6 +1198,7 @@ int annotatemore_lookup(const char *mboxname, const char *entry,
     if (!r && data) {
 	r = split_attribs(data, datalen, attrib);
     }
+    else if (r == CYRUSDB_NOTFOUND) r = 0;
 
     return r;
 }
