@@ -12,4 +12,6 @@ dist:
 
 	rm -f groff-html-*.png pod2htm*
 
+	fig2dev -L png murder.fig murder.png
+
 	(cd text; make)
