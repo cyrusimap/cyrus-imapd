@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.27 1999/07/31 21:49:36 leg Exp $
+ * $Id: imtest.c,v 1.28 1999/08/16 01:56:59 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -195,22 +195,35 @@ imt_stat getauthline(char **line, int *linelen)
   if (str==NULL) imtest_fatal("prot layer failure");
   printf("S: %s",str);
 
-  if (strstr(str,"OK")!=NULL) return STAT_OK;
-  if (strstr(str,"NO")!=NULL) return STAT_NO;
+  if (!strncasecmp(str, "A01 OK ", 7)) { return STAT_OK; }
+  if (!strncasecmp(str, "A01 NO ", 7)) { return STAT_NO; }
 
-  str+=2; /* jump past the "+ " */
+  str += 2; /* jump past the "+ " */
 
-  *line=malloc(strlen(str)+1);
-  if ((*line)==NULL) return STAT_NO;
+  *line = malloc(strlen(str)+1);
+  if ((*line)==NULL) {
+      return STAT_NO;
+  }
 
-  saslresult=sasl_decode64(str,strlen(str),
-			   *line,(unsigned *) linelen);
-
+  if (*str != '\r') {
+      /* decode this line */
+      saslresult = sasl_decode64(str, strlen(str), 
+				 *line, (unsigned *) linelen);
+      if (saslresult != SASL_OK) {
+	  printf("base64 decoding error\n");
+	  return STAT_NO;
+      }
+  } else {
+      /* this is a blank */
+      *line = NULL;
+      *linelen = 0;
+  }
 
   return STAT_CONT;
 }
 
-void interaction (int id, const char *prompt, char **tresult,int *tlen)
+void interaction (int id, const char *prompt,
+		  char **tresult, unsigned int *tlen)
 {
     char result[1024];
     
@@ -252,12 +265,15 @@ void fillin_interactions(sasl_interact_t *tlist)
 static int waitfor(char *tag)
 {
   char *str=malloc(301);
+  char *ptr;
 
   do {
-    str=prot_fgets(str,300,pin);
-    if (str==NULL) imtest_fatal("prot layer failure");
-    printf("%s",str);
-  } while (strstr(str,tag)==NULL);
+      str=prot_fgets(str,300,pin);
+      if (str == NULL) {
+	  imtest_fatal("prot layer failure");
+      }
+      printf("%s", str);
+  } while (strncmp(str, tag, strlen(tag)));
 
   free(str);
 
@@ -268,9 +284,9 @@ static int auth_login(void)
 {
   /* we need username and password to do "login" */
   char *username;
-  int userlen;
+  unsigned int userlen;
   char *pass;
-  int passlen;
+  unsigned int passlen;
 
   interaction(SASL_CB_AUTHNAME,"Userid",&username,&userlen);
   interaction(SASL_CB_PASS,"Password",&pass,&passlen);
@@ -318,6 +334,7 @@ int auth_sasl(char *mechlist)
 
   prot_printf(pout,"A01 AUTHENTICATE %s\r\n",mechusing);
   prot_flush(pout);
+  printf("A01 AUTHENTICATE %s\r\n", mechusing);
 
   inlen = 0;
   status = getauthline(&in,&inlen);
@@ -436,21 +453,22 @@ static char *ask_capability(void)
   char *str=malloc(301);
   char *ret;
 
-  do {
   str=prot_fgets(str,300,pin);
-  if (str==NULL) imtest_fatal("prot layer failure");
+  if (str == NULL) {
+      imtest_fatal("prot layer failure");
+  }
   printf("S: %s",str);
-  } while (strstr(str,"*")==NULL);
 
   /* request capabilities of server */
   prot_printf(pout, CAPABILITY);
   prot_flush(pout);
 
+  printf("C: %s", CAPABILITY);
 
   str=prot_fgets(str,300,pin);
   if (str==NULL) imtest_fatal("prot layer failure");
 
-  printf("S: %s",str);
+  printf("S: %s", str);
 
   ret=parsemechlist(str);
 
@@ -633,9 +651,9 @@ void interactive(char *filename)
 void usage(void)
 {
   printf("Usage: imtest [options] hostname\n");
-  printf("  -p port : port to use      \n");
-  printf("  -z      : timing test      \n");
-  printf("  -l #    : max protection layer (0=none;1=intergrity;etc..)\n");
+  printf("  -p port : port to use\n");
+  printf("  -z      : timing test\n");
+  printf("  -l #    : max protection layer (0=none; 1=integrity; etc)\n");
   printf("  -u user : authentication name to use\n");
   printf("  -v      : verbose\n");
   printf("  -m mech : SASL mechanism to use (\"login\" for no authentication)\n");
@@ -653,7 +671,7 @@ int main(int argc, char **argv)
 
   char *mechlist;
   int *ssfp;
-  int ssf;
+  int ssf = 10000;
   char c;
   int result;
   int errflg = 0;
@@ -741,28 +759,27 @@ int main(int argc, char **argv)
 
   if (result == IMTEST_OK) {
       printf("Authenticated.\n");
+
+      /* turn on layer if need be */
+      prot_setsasl(pin,  conn);
+      prot_setsasl(pout, conn);
   } else {
       printf("Authentication failed.\n");
   }
 
   result = sasl_getprop(conn, SASL_SSF, (void **)&ssfp);
   if (result != SASL_OK) {
-      printf("SSF: unable to determine (SASL ERROR %d!)\n", result);
+      printf("SSF: unable to determine (SASL ERROR %d)\n", result);
   } else {
       printf("Security strength factor: %d\n", *ssfp);
   }
 
-  /* turn on layer if need be */
-  prot_setsasl(pin,  conn);
-  prot_setsasl(pout, conn);
-
-  if (run_stress_test==1)
-  {
-    send_recv_test();
+  if (run_stress_test == 1) {
+      send_recv_test();
   } else {
-    /* else run in interactive mode or 
-       pipe in a filename if applicable */
-    interactive(filename);
+      /* else run in interactive mode or 
+	 pipe in a filename if applicable */
+      interactive(filename);
   }
 
   exit(0);

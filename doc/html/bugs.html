@@ -1,5 +1,6 @@
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
+<!-- Changed by: Larry Greenfield 15-Aug-1999 -->
 <!-- Changed by: Larry Greenfield 01-Jul-1999 -->
 <!-- Changed by: Tim Showalter 16-Jun-1997 -->
 </HEAD><BODY>
@@ -31,7 +32,7 @@ Well, ok, it hangs.
 <li> cyradm doesn't handle BYE quite properly (especially a BYE right after
 connect).
 
-<li> Random kerberos problems (and no, we don't know why they happen):
+<li> Random krb4 problems (and no, we don't know why they happen):
   <ul>
   <li> It's possible to cause imtest/imapd to crash with <TT>Decoding
   error: Incorrect network address (krb_rd_req)</TT> by sending a
@@ -42,13 +43,12 @@ connect).
   around is to not use any layers (<tt>imtest -l 0</tt>).
   </ul>
 
+<li> imtest doesn't have a manpage.
 </ul>
 
 <h1>                     Things we want to do</h1>
 
 <ul>
-<li> Split the quota files into different directories.
-
 <li> Implement the IMAP ID extension.
 
 <li> Implement the IMAP VIEW extension.

@@ -20,3 +20,9 @@ then, as admin (suid binaries on AFS)
    smake -d install
 
 If you get the error 'can not find sources', make sure imap/imap.c is mode a+r.
+
+----
+To make a release:
+- make sure the version number is correct
+- make sure to include the C versions of the lex & yacc files in sieve
+- make sure to build configure

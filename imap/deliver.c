@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.99 1999/08/13 21:19:09 leg Exp $
+ * $Id: deliver.c,v 1.100 1999/08/16 01:56:55 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.99 1999/08/13 21:19:09 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.100 1999/08/16 01:56:55 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -121,11 +121,12 @@ typedef struct message_data {
 /* data per script */
 typedef struct script_data {
     char *username;
+    struct auth_state *authstate;
 } script_data_t;
 
 int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
-    char **flag, int nflags, char *authuser, struct auth_state *authstate,
-    char *user, char *mailboxname);
+	    char **flag, int nflags,
+	    char *user, char *mailboxname);
 
 int dupelim = 0;
 int logdebug = 0;
@@ -162,7 +163,6 @@ char **argv;
     char **flag = 0;
     int nflags = 0;
     char *authuser = 0;
-    struct auth_state *authstate = 0;
     deliver_opts_t *delopts =
 	(deliver_opts_t *) xmalloc(sizeof(deliver_opts_t));
     message_data_t *msgdata;
@@ -257,8 +257,11 @@ char **argv;
 
     if (authuser) {
 	delopts->authuser = auth_canonifyid(authuser);
-	if (authuser) 
-	    delopts->authstate = auth_newstate(authuser, (char *)0);
+	if (authuser) {
+	    delopts->authstate = auth_newstate(delopts->authuser, (char *)0);
+	} else {
+	    delopts->authstate = 0;
+	}
     }
 
     /* Copy message to temp file */
@@ -266,7 +269,7 @@ char **argv;
 
     if (optind == argc) {
 	/* deliver to global mailbox */
-	r = deliver(delopts, msgdata, flag, nflags, authuser, authstate,
+	r = deliver(delopts, msgdata, flag, nflags,
 		    (char *)0, mailboxname);
 	
 	if (r) {
@@ -278,7 +281,7 @@ char **argv;
 	exit(exitval);
     }
     while (optind < argc) {
-	r = deliver(delopts, msgdata, flag, nflags, authuser, authstate,
+	r = deliver(delopts, msgdata, flag, nflags,
 		    argv[optind], mailboxname);
 
 	if (r) {
@@ -833,20 +836,17 @@ int sieve_fileinto(char *mailbox, void *ic, void *sc, void *mc)
     deliver_opts_t *dop = (deliver_opts_t *) ic;
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
-    struct auth_state *authstate = 0;
     int ret;
 
     /* we're now the user who owns the script */
-    authstate = auth_newstate(sd->username, (char *)0);
-    if (authstate == 0)
+    if (!sd->authstate)
 	return SIEVE_FAIL;
 
     ret = deliver_mailbox(md->data, md->size, 0, 0,
-			  sd->username, authstate, md->id,
+			  sd->username, sd->authstate, md->id,
 			  sd->username, md->notifyheader,
 			  mailbox, dop->quotaoverride, 0);
 
-    auth_freestate(authstate);
     if (ret == 0) {
 	return SIEVE_OK;
     } else {
@@ -861,19 +861,17 @@ int sieve_keep(char *arg, void *ic, void *sc, void *mc)
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
     int ret;
-    struct auth_state *authstate = 0;
 
     /* we're now the user who owns the script */
-    authstate = auth_newstate(sd->username, (char *)0);
-    if (authstate == 0)
+
+    if (!sd->authstate)
 	return SIEVE_FAIL;
 
     ret = deliver_mailbox(md->data, md->size, 0, 0,
-			  sd->username, authstate, md->id,
+			  sd->username, sd->authstate, md->id,
 			  sd->username, md->notifyheader,
 			  "INBOX", dop->quotaoverride, 1);
 
-    auth_freestate(authstate);
     if (ret == 0) {
 	return SIEVE_OK;
     } else {
@@ -1291,11 +1289,13 @@ deliver_opts_t *delopts;
     char buf[4096];
     char *p;
     char *authuser = 0;
-    struct auth_state *authstate = 0;
     char myhostname[1024];
     int r;
     char *err;
     int i;
+
+    delopts->authuser = 0;
+    delopts->authstate = 0;
 
     gethostname(myhostname, sizeof(myhostname)-1);
     r = msg_new(&msg);
@@ -1330,7 +1330,7 @@ deliver_opts_t *delopts;
 		for (msg->rcpt_num = 0; msg->rcpt_num < i; msg->rcpt_num++) {
 		    int cur = msg->rcpt_num;
 
-		    r = deliver(delopts, msg, 0, 0, authuser, authstate, 
+		    r = deliver(delopts, msg, 0, 0,
 				msg->rcpt[cur]->mailbox[0] ? 
 				msg->rcpt[cur]->mailbox : (char *)0, 
 				msg->rcpt[cur]->detail);
@@ -1839,8 +1839,7 @@ FILE *sieve_find_script(char *user)
 #endif
 
 int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
-	    char **flag, int nflags, char *authuser, 
-	    struct auth_state *authstate, char *user, char *mailboxname)
+	    char **flag, int nflags, char *user, char *mailboxname)
 {
     int r;
     struct mailbox mailbox;
@@ -1861,24 +1860,25 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    sieve_script_t *s = NULL;
 
 	    sdata = (script_data_t *) xmalloc(sizeof(script_data_t));
-	    if (sdata) {
-		sdata->username = user;
 
-		/* is this the first time we've sieved the message? */
-		if (msgdata->id) {
-		    /* sigh; this should be hashing the envelope & id 
-		       to figure out whether or not to keep it */
-		    char *sdb = make_sieve_db(user);
-
-		    if (checkdelivered(msgdata->id, strlen(msgdata->id),
-				       sdb, strlen(sdb))) {
-			/* done it before ! */
-			return 0;
-		    }
-		} else {
-		    /* ah, screw it, we'll sieve it ! */
+	    sdata->username = user;
+	    sdata->authstate = auth_newstate(user, (char *)0);
+	    
+	    /* is this the first time we've sieved the message? */
+	    if (msgdata->id) {
+		/* sigh; this should be hashing the envelope & id 
+		   to figure out whether or not to keep it */
+		char *sdb = make_sieve_db(user);
+		
+		if (checkdelivered(msgdata->id, strlen(msgdata->id),
+				   sdb, strlen(sdb))) {
+		    /* done it before ! */
+		    return 0;
 		}
+	    } else {
+		/* ah, screw it, we'll sieve it ! */
 	    }
+
 	    r = sieve_script_parse(sieve_interp, f, (void *) sdata, &s);
 	    fclose(f);
 	    if (r == SIEVE_OK) {
@@ -1894,6 +1894,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    }
 
 	    /* free everything */
+	    if (sdata->authstate) auth_freestate(sdata->authstate);
 	    if (sdata) free(sdata);
 	    sieve_script_free(&s);
 
@@ -1914,7 +1915,8 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 		strcat(namebuf, mailboxname);
 		
 		r = deliver_mailbox(msgdata->data, msgdata->size, 
-				    flag, nflags, authuser, authstate,
+				    flag, nflags, 
+				    delopts->authuser, delopts->authstate,
 				    msgdata->id, user, msgdata->notifyheader,
 				    namebuf, delopts->quotaoverride, 0);
 	    }
@@ -1923,7 +1925,8 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 		
 		/* ignore ACL's trying to deliver to INBOX */
 		r = deliver_mailbox(msgdata->data, msgdata->size, 
-				    flag, nflags, authuser, authstate,
+				    flag, nflags, 
+				    delopts->authuser, delopts->authstate,
 				    msgdata->id, user, msgdata->notifyheader,
 				    namebuf, delopts->quotaoverride, 1);
 	    }
@@ -1931,7 +1934,8 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
     }
     else if (mailboxname) {
 	r = deliver_mailbox(msgdata->data, msgdata->size, 
-			    flag, nflags, authuser, authstate,
+			    flag, nflags, 
+			    delopts->authuser, delopts->authstate,
 			    msgdata->id, user, msgdata->notifyheader,
 			    mailboxname, delopts->quotaoverride, 0);
     }

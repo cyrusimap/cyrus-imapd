@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.40 1999/08/13 21:19:11 leg Exp $
+ * $Id: prot.c,v 1.41 1999/08/16 01:57:05 leg Exp $
  */
 
 #include <stdio.h>
@@ -131,8 +131,7 @@ sasl_conn_t *conn;
   if (result != SASL_OK)
     return 1;
 
-  s->saslssf=*ssfp;
-
+  s->saslssf = *ssfp;
 
   if (s->write) {
     int result;
