@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.90 2003/06/04 22:17:01 rjs3 Exp $
+ * $Id: imtest.c,v 1.91 2003/06/10 04:11:05 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -78,6 +78,7 @@
 
 #ifdef HAVE_SSL
 #include <openssl/ssl.h>
+#include <openssl/md5.h>
 
 static SSL_CTX *tls_ctx = NULL;
 static SSL *tls_conn = NULL;
