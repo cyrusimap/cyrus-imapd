@@ -35,11 +35,11 @@ while {$i < $argc} {
     switch -exact -- [lindex $argv $i] {
 	- {}
 	-- {}
-	-u {incr i; append auth_args -user [lindex $argv $i]}
-	-user {incr i; append auth_args -user [lindex $argv $i]}
-	-p {incr i; append auth_args -protection [lindex $argv $i]}
-	-protection {incr i; append auth_args -protection [lindex $argv $i]}
-	default {append conn_args [lindex $argv $i]}
+	-u {incr i; lappend auth_args -user [lindex $argv $i]}
+	-user {incr i; lappend auth_args -user [lindex $argv $i]}
+	-p {incr i; lappend auth_args -protection [lindex $argv $i]}
+	-protection {incr i; lappend auth_args -protection [lindex $argv $i]}
+	default {lappend conn_args [lindex $argv $i]}
     }
     incr i
 }
