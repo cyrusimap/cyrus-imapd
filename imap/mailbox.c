@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.95 2000/04/07 19:50:34 leg Exp $
+ $Id: mailbox.c,v 1.96 2000/04/10 00:35:39 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -118,18 +118,19 @@ int mailbox_initialize(void)
     if (config_getstring("acap_server", NULL)==NULL) return 0;
 
     if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
-	return errno;
+	return IMAP_IOERROR;
     }
 
     acappush_remote.sun_family = AF_UNIX;
-    strcpy(acappush_remote.sun_path, ACAPPUSH_PATH);
+    strcpy(acappush_remote.sun_path, config_dir);
+    strcat(acappush_remote.sun_path, FNAME_ACAPPUSH_SOCK);
     acappush_remote_len = strlen(acappush_remote.sun_path) + 
 	sizeof(acappush_remote.sun_family);
 
     /* put us in non-blocking mode */
     fdflags = fcntl(s, F_GETFD, 0);
     if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
-    if (fdflags == -1) { close(s); return -1; }
+    if (fdflags == -1) { close(s); return IMAP_IOERROR; }
 
     acappush_sock = s;
 
