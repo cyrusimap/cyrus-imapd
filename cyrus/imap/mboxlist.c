@@ -37,6 +37,8 @@
 #include <syslog.h>
 #include <com_err.h>
 
+extern int errno;
+
 #include "acl.h"
 #include "auth.h"
 #include "glob.h"
@@ -90,6 +92,28 @@ static char *badmboxpatterns[] = {
     "user",
 };
 #define NUM_BADMBOXPATTERNS (sizeof(badmboxpatterns)/sizeof(*badmboxpatterns))
+
+/*
+ * Check our configuration for consistency, die if there's a problem
+ */
+mboxlist_checkconfig()
+{
+    FILE *listfile;
+    char *msg;
+    
+    if (!listfname) mboxlist_getfname();
+
+    /* Open mailbox list file */
+    listfile = fopen(listfname, "r");
+    if (!listfile) {
+	msg = malloc(strlen(listfname)+300);
+	sprintf(msg, "cannot open %s: %s", listfname, error_message(errno));
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
+	fatal(msg, EX_OSFILE);
+    }
+    fclose(listfile);
+}
+
 
 /*
  * Lookup 'name' in the mailbox list.

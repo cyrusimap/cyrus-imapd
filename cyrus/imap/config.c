@@ -72,6 +72,8 @@ char *ident;
 	      EX_CONFIG);
     }
 
+    mboxlist_checkconfig();
+
     /* Look up default partition */
     config_defpartition = config_getstring("defaultpartition", "default");
     for (p = config_defpartition; *p; p++) {
