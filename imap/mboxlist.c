@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.130 2000/07/04 00:43:48 leg Exp $
+ * $Id: mboxlist.c,v 1.131 2000/07/06 17:19:31 leg Exp $
  */
 
 #include <config.h>
@@ -86,10 +86,25 @@ extern int errno;
 
 #include "mboxlist.h"
 
-#define SUBDB (&cyrusdb_flat)
+/* --- cut here --- */
+/*
+ * what berkeley db algorithm should we use for deadlock detection?
+ * 
+ * DB_LOCK_DEFAULT
+ *    Use the default policy as specified by db_deadlock. 
+ * DB_LOCK_OLDEST
+ *    Abort the oldest transaction. 
+ * DB_LOCK_RANDOM
+ *    Abort a random transaction involved in the deadlock. 
+ * DB_LOCK_YOUNGEST
+ *    Abort the youngest transaction. 
+ */
 
-/* this is a transitional thing to avoid warnings */
-struct mbox_txn;
+#define CONFIG_DEADLOCK_DETECTION DB_LOCK_YOUNGEST
+#define CONFIG_DB_SUBS (&cyrusdb_flat)
+/* -- cut here -- */
+
+#define SUBDB CONFIG_DB_SUBS
 
 acl_canonproc_t mboxlist_ensureOwnerRights;
 
@@ -512,10 +527,9 @@ mboxlist_createmailboxcheck(char *name, int mbtype, char *partition,
  *
  */
 
-int real_mboxlist_createmailbox(char *name, int mbtype, char *partition, 
+int mboxlist_createmailbox(char *name, int mbtype, char *partition, 
 				int isadmin, char *userid, 
-				struct auth_state *auth_state,
-				struct mbox_txn **rettid)
+				struct auth_state *auth_state)
 {
     int r;
     char *acl = NULL;
@@ -536,7 +550,6 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	if ((r = txn_abort(tid)) != 0) {
 	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
 		   db_strerror(r));
-	    if (rettid) *rettid = NULL;
 	    return IMAP_IOERROR;
 	}
     }
@@ -781,9 +794,8 @@ int mboxlist_insertremote(char *name, int mbtype, char *host, char *acl,
  * 7. delete from ACAP
  *
  */
-int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid, 
-				struct auth_state *auth_state, int checkacl,
-				struct mbox_txn **rettid)
+int mboxlist_deletemailbox(char *name, int isadmin, char *userid, 
+				struct auth_state *auth_state, int checkacl)
 {
     int r;
     char *acl;
@@ -1070,10 +1082,9 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
  * 10. delete old ACAP entry
  *
  */
-int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition, 
+int mboxlist_renamemailbox(char *oldname, char *newname, char *partition, 
 				int isadmin, char *userid, 
-				struct auth_state *auth_state, 
-				struct mbox_txn **rettid)
+				struct auth_state *auth_state)
 {
     int r;
     long access;
@@ -1098,7 +1109,6 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 
     /* we just can't rename if there isn't enough info */
     if (partition && !strcmp(partition, "news")) {
-	if (rettid) *rettid = NULL;
 	return IMAP_MAILBOX_NOTSUPPORTED;
     }
 
@@ -1108,7 +1118,6 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	if ((r = txn_abort(tid)) != 0) {
 	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
 		   db_strerror(r));
-	    if (rettid) *rettid = NULL;
 	    return IMAP_IOERROR;
 	}
     }
@@ -1116,7 +1125,6 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     /* begin transaction */
     if ((r = txn_begin(dbenv, NULL, &tid, 0)) != 0) {
 	syslog(LOG_ERR, "DBERROR: error beginning txn: %s", db_strerror(r));
-	if (rettid) *rettid = NULL;
 	return IMAP_IOERROR;
     }
 
@@ -1375,10 +1383,9 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
  * 7. Change ACAP entry 
  *
  */
-int real_mboxlist_setacl(char *name, char *identifier, char *rights, 
-			 int isadmin, char *userid, 
-			 struct auth_state *auth_state, 
-			 struct mbox_txn **rettid)
+int mboxlist_setacl(char *name, char *identifier, char *rights, 
+		    int isadmin, char *userid, 
+		    struct auth_state *auth_state)
 {
     int useridlen = strlen(userid);
     int r;
@@ -1407,7 +1414,6 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
 	if ((r = txn_abort(tid)) != 0) {
 	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
 		   db_strerror(r));
-	    if (rettid) *rettid = NULL;
 	    return IMAP_IOERROR;
 	}
     }
@@ -1417,7 +1423,6 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
     /* begin transaction */
     if ((r = txn_begin(dbenv, NULL, &tid, 0)) != 0) {
 	syslog(LOG_ERR, "DBERROR: error beginning txn: %s", db_strerror(r));
-	if (rettid) *rettid = NULL;
 	return IMAP_IOERROR;
     }
 
@@ -1545,7 +1550,6 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
 		   db_strerror(r));
 	    r = IMAP_IOERROR;
 	}
-	if (rettid) *rettid = NULL;
     } else {
 	/* commit now */
 	switch (r = txn_commit(tid, 0)) {
@@ -1566,39 +1570,6 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
     if (newacl) free(newacl);
     
     return r;
-}
-
-/* we just call the real routines */
-int mboxlist_createmailbox(char *name, int mbtype, char *partition, 
-			   int isadmin, char *userid, 
-			   struct auth_state *auth_state)
-{
-    return real_mboxlist_createmailbox(name, mbtype, partition,
-				       isadmin, userid, auth_state,
-				       NULL);
-}
-
-int mboxlist_deletemailbox(char *name, int isadmin, char *userid, 
-			   struct auth_state *auth_state, int checkacl)
-{
-    return real_mboxlist_deletemailbox(name, isadmin, userid, auth_state,
-				       checkacl, NULL);
-}
-
-
-int mboxlist_renamemailbox(char *oldname, char *newname, char *partition, 
-			   int isadmin, char *userid, 
-			   struct auth_state *auth_state)
-{
-    return real_mboxlist_renamemailbox(oldname, newname, partition,
-				       isadmin, userid, auth_state, NULL);
-}
-
-int mboxlist_setacl(char *name, char *identifier, char *rights, int isadmin, 
-		    char *userid, struct auth_state *auth_state)
-{
-    return real_mboxlist_setacl(name, identifier, rights, isadmin,
-				userid, auth_state, NULL);
 }
 
 /*
@@ -2488,7 +2459,7 @@ void mboxlist_init(int myflags)
     dbenv->set_verbose(dbenv, DB_VERB_CHKPOINT, 1);
     dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1);
     dbenv->set_errpfx(dbenv, "mbdb");
-    dbenv->set_lk_detect(dbenv, DB_LOCK_DEFAULT);
+    dbenv->set_lk_detect(dbenv, CONFIG_DEADLOCK_DETECTION);
     dbenv->set_lk_max(dbenv, 10000);
     dbenv->set_errcall(dbenv, db_err);
 
