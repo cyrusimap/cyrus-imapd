@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.66 2001/08/14 16:10:07 leg Exp $
+ * $Id: lmtpd.c,v 1.67 2001/08/16 20:52:06 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.66 2001/08/14 16:10:07 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.67 2001/08/16 20:52:06 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -96,7 +96,6 @@
 #include "mboxlist.h"
 #include "notify.h"
 #include "idle.h"
-#include "namespace.h"
 
 #include "lmtpengine.h"
 #include "lmtpstats.h"
@@ -297,9 +296,9 @@ int service_init(int argc, char **argv, char **envp)
     idle_enabled();
 
     /* Set namespace */
-    if (!namespace_init(&lmtpd_namespace, 0)) {
-	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
-	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    if ((r = mboxname_init_namespace(&lmtpd_namespace, 0)) != 0) {
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
     }
 
     /* create connection to the SNMP listener, if available. */
@@ -1116,10 +1115,10 @@ int deliver_mailbox(struct protstream *msg,
     char namebuf[MAX_MAILBOX_PATH];
     time_t now = time(NULL);
 
-    /* Translate user */
-    if (user) hier_sep_tointernal(user, &lmtpd_namespace);
+    /* Translate any separators in user */
+    if (user) mboxname_hiersep_tointernal(&lmtpd_namespace, user);
 
-    r = (*lmtpd_namespace.mboxname_tointernal)(mailboxname, &lmtpd_namespace,
+    r = (*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace, mailboxname,
 					       user, namebuf);
 
     if (dupelim && id && 
@@ -1356,8 +1355,8 @@ static int verify_user(const char *user)
     if (!strncmp(user, BB, sl) && user[sl] == '+') {
 	/* special shared folder address */
 	strcpy(buf, user + sl + 1);
-	/* Translate user */
-	hier_sep_tointernal(buf, &lmtpd_namespace);
+	/* Translate any separators in user */
+	mboxname_hiersep_tointernal(&lmtpd_namespace, buf);
 	r = mboxlist_lookup(buf, NULL, NULL, NULL);
     } else {
 	/* ordinary user */
@@ -1368,8 +1367,8 @@ static int verify_user(const char *user)
 	    strcat(buf, user);
 	    plus = strchr(buf, '+');
 	    if (plus) *plus = '\0';
-	    /* Translate user */
-	    hier_sep_tointernal(buf+5, &lmtpd_namespace);
+	    /* Translate any separators in user */
+	    mboxname_hiersep_tointernal(&lmtpd_namespace, buf+5);
 	    r = mboxlist_lookup(buf, NULL, NULL, NULL);
 	}
     }

@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.47 2001/08/03 21:18:06 ken3 Exp $
+ * $Id: imapd.h,v 1.48 2001/08/16 20:52:06 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -47,7 +47,6 @@
 #include "prot.h"
 #include "charset.h"
 #include "mailbox.h"
-#include "namespace.h"
 
 /* Userid client has logged in as */
 extern char *imapd_userid;

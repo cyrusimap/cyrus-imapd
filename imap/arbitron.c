@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.22 2001/02/22 19:27:15 ken3 Exp $ */
+/* $Id: arbitron.c,v 1.23 2001/08/16 20:52:05 ken3 Exp $ */
 
 #include <config.h>
 
@@ -75,6 +75,9 @@ int code = 0;
 
 time_t report_time, prune_time = 0;
 
+/* current namespace */
+static struct namespace arb_namespace;
+
 /* forward declarations */
 void usage(void);
 int do_mailbox();
@@ -87,7 +90,7 @@ struct arbitronargs {
 
 int main(int argc,char **argv)
 {
-    int opt;
+    int opt, r;
     int report_days = 30;
     int prune_months = 0;
     char pattern[MAX_MAILBOX_NAME+1];
@@ -120,6 +123,12 @@ int main(int argc,char **argv)
 
     config_init(alt_config, "arbitron");
 
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&arb_namespace, 1)) != 0) {
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
+    }
+
     if (optind != argc) strncpy(pattern, argv[optind], MAX_MAILBOX_NAME);
 
     report_time = time(0) - (report_days*60*60*24);
@@ -127,7 +136,11 @@ int main(int argc,char **argv)
 	prune_time = time(0) - (prune_months*60*60*24*31);
     }
 
-    mboxlist_findall(pattern, 1, 0, 0, do_mailbox, NULL);
+    /* Translate any separators in mailboxname */
+    mboxname_hiersep_tointernal(&arb_namespace, pattern);
+
+    (*arb_namespace.mboxlist_findall)(&arb_namespace, pattern, 1, 0, 0,
+				      do_mailbox, NULL);
 
     exit(code);
 
@@ -186,6 +199,7 @@ int arbitron(char *name)
     int r;
     struct mailbox mailbox;
     struct arbitronargs arbitronargs;
+    char buf[MAX_MAILBOX_PATH];
 
     /* Open/lock header */
     r = mailbox_open_header(name, 0, &mailbox);
@@ -209,7 +223,10 @@ int arbitron(char *name)
     if (!r) {
 	if (arbitronargs.read_count ||
 	    strncasecmp(name, "user.", 5) != 0) {
-	    printf("%u %s\n", arbitronargs.read_count, name);
+	    /* Convert internal name to external */
+	    (*arb_namespace.mboxname_toexternal)(&arb_namespace, name,
+						 "cyrus", buf);
+	    printf("%u %s\n", arbitronargs.read_count, buf);
 	}
     }
 

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.22 2001/08/13 17:11:57 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.23 2001/08/16 20:52:07 ken3 Exp $
  */
 #include <config.h>
 
@@ -56,6 +56,7 @@
 #include <sys/types.h>
 #include <sys/param.h>
 #include <syslog.h>
+#include <com_err.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -79,7 +80,6 @@
 #include "version.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
-#include "namespace.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -183,9 +183,9 @@ int service_init(int argc, char **argv, char **envp)
     mboxlist_open(NULL);
 
     /* Set namespace */
-    if (!namespace_init(&popd_namespace, 0)) {
-	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
-	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    if ((r = mboxname_init_namespace(&popd_namespace, 0)) != 0) {
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
     }
 
     return 0;
@@ -1169,9 +1169,9 @@ static void openproxy(void)
     strcpy(inboxname, "user.");
     strcat(inboxname, popd_userid);
 
-    /* Translate userid part of inboxname
+    /* Translate any separators in userid part of inboxname
        (we need the original userid for AUTH to backend) */
-    hier_sep_tointernal(inboxname+5, &popd_namespace);
+    mboxname_hiersep_tointernal(&popd_namespace, inboxname+5);
 
     r = mboxlist_lookup(inboxname, &server, NULL, NULL);
     if (!r) fatal("couldn't find backend server", EC_CONFIG);

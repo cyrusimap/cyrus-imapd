@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.6 2001/08/03 21:18:07 ken3 Exp $
+ * $Id: mboxname.h,v 1.7 2001/08/16 20:52:07 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,19 +44,61 @@
 #ifndef INCLUDED_MBOXNAME_H
 #define INCLUDED_MBOXNAME_H
 
-#include "namespace.h"
+#define MAX_NAMESPACE_PREFIX 40
 
-int mboxname_tointernal(const char *name, struct namespace *namespace,
-			const char *userid, char *result);
-int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
-			    const char *userid, char *result);
-int mboxname_toexternal(const char *name, struct namespace *namespace,
-			const char *userid, char *result);
-int mboxname_toexternal_alt(const char *name, struct namespace *namespace,
-			    const char *userid, char *result);
+/* placeholder character for '.' in mailboxnames */
+#define DOTCHAR '^'
+
+/* list of our namespaces */
+enum { NAMESPACE_INBOX, NAMESPACE_USER, NAMESPACE_SHARED };
+
+/* structure holding server namespace info */
+struct namespace {
+    int isalt;  /* are we using he alternate namespace? */
+    char prefix[3][MAX_NAMESPACE_PREFIX+1];
+    char hier_sep;
+    /* Convert the external mailbox 'name' to an internal name. */
+    int (*mboxname_tointernal)(struct namespace *namespace, const char *name,
+			       const char *userid, char *result);
+    /* Convert the internal mailbox 'name' to an external name. */
+    int (*mboxname_toexternal)(struct namespace *namespace, const char *name,
+			       const char *userid, char *result);
+    int (*mboxlist_findall)(struct namespace *namespace, char *pattern,
+			    int isadmin, char *userid, 
+			    struct auth_state *auth_state, int (*proc)(),
+			    void *rock);
+    int (*mboxlist_findsub)(struct namespace *namespace, char *pattern,
+			    int isadmin, char *userid, 
+			    struct auth_state *auth_state, int (*proc)(),
+			    void *rock, int force);
+};
+
+/* Create namespace based on config options. */
+int mboxname_init_namespace(struct namespace *namespace, int force_std);
+
+/*
+ * Translate separator charactors in a mailboxname from its external
+ * representation to its internal representation '.'.
+ * If using the unixhierarchysep '/', all '.'s get translated to DOTCHAR.
+ */
+char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name);
+
+/*
+ * Translate separator charactors in a mailboxname from its internal
+ * representation '.' to its external representation.
+ * If using the unixhierarchysep '/', all DOTCHAR get translated to '.'.
+ */
+char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name);
+
+/* Return nonzero if 'userid' owns the (internal) mailbox 'name'. */
 int mboxname_userownsmailbox(char *userid, char *name);
-int mboxname_netnewscheck(char *name);
+
+/*
+ * Return nonzero if (internal) mailbox 'name' consists of legal characters.
+ * If using the unixhierarchysep '/', DOTCHAR ('.' placeholder) is allowed.
+ */
 int mboxname_policycheck(char *name);
-int mboxname_userownsmailbox(char *userid, char *name);
+
+int mboxname_netnewscheck(char *name);
 
 #endif

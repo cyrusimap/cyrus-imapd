@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- $Id: mboxname.c,v 1.21 2001/08/03 21:18:07 ken3 Exp $
+ $Id: mboxname.c,v 1.22 2001/08/16 20:52:07 ken3 Exp $
 
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -58,6 +58,7 @@
 #include "xmalloc.h"
 
 #include "mboxname.h"
+#include "mboxlist.h"
 
 /* Mailbox patterns which the design of the server prohibits */
 static char *badmboxpatterns[] = {
@@ -96,14 +97,17 @@ static const char index_mod64[256] = {
 };
 #define CHARMOD64(c)  (index_mod64[(unsigned char)(c)])
 
+
 /*
  * Convert the external mailbox 'name' to an internal name.
  * If 'userid' is non-null, it is the name of the current user.
  * On success, results are placed in the buffer pointed to by
  * 'result', the buffer must be of size MAX_MAILBOX_NAME+1.
  */
-int mboxname_tointernal(const char *name, struct namespace *namespace,
-			const char *userid, char *result)
+
+/* Handle conversion from the standard namespace to the internal namespace */
+static int mboxname_tointernal(struct namespace *namespace, const char *name,
+			       const char *userid, char *result)
 {
     /* Personal (INBOX) namespace */
     if ((name[0] == 'i' || name[0] == 'I') &&
@@ -121,7 +125,9 @@ int mboxname_tointernal(const char *name, struct namespace *namespace,
 	strcpy(result, "user.");
 	strcat(result, userid);
 	strcat(result, name+5);
-	hier_sep_tointernal(result+5+strlen(userid), namespace);
+
+	/* Translate any separators in userid+mailbox */
+	mboxname_hiersep_tointernal(namespace, result+5+strlen(userid));
 	return 0;
     }
 
@@ -130,12 +136,15 @@ int mboxname_tointernal(const char *name, struct namespace *namespace,
 	return IMAP_MAILBOX_BADNAME;
     }
     strcpy(result, name);
-    hier_sep_tointernal(result, namespace);
+
+    /* Translate any separators in mailboxname */
+    mboxname_hiersep_tointernal(namespace, result);
     return 0;
 }
 
-int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
-			    const char *userid, char *result)
+/* Handle conversion from the alternate namespace to the internal namespace */
+static int mboxname_tointernal_alt(struct namespace *namespace, const char *name,
+				   const char *userid, char *result)
 {
     int prefixlen;
 
@@ -154,7 +163,9 @@ int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
 	}
 
 	strcpy(result, name+prefixlen);
-	hier_sep_tointernal(result, namespace);
+
+	/* Translate any separators in mailboxname */
+	mboxname_hiersep_tointernal(namespace, result);
 	return 0;
     }
 
@@ -174,7 +185,9 @@ int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
 
 	strcpy(result, "user.");
 	strcat(result, name+prefixlen);
-	hier_sep_tointernal(result+5, namespace);
+
+	/* Translate any separators in userid+mailbox */
+	mboxname_hiersep_tointernal(namespace, result+5);
 	return 0;
     }
 
@@ -209,7 +222,9 @@ int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
     }
     strcat(result, ".");
     strcat(result, name);
-    hier_sep_tointernal(result+6+strlen(userid), namespace);
+
+    /* Translate any separators in mailboxname */
+    mboxname_hiersep_tointernal(namespace, result+6+strlen(userid));
     return 0;
 }
 
@@ -219,16 +234,21 @@ int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
  * On success, results are placed in the buffer pointed to by
  * 'result', the buffer must be of size MAX_MAILBOX_NAME+1.
  */
-int mboxname_toexternal(const char *name, struct namespace *namespace,
-			const char *userid, char *result)
+
+/* Handle conversion from the internal namespace to the standard namespace */
+static int mboxname_toexternal(struct namespace *namespace, const char *name,
+			       const char *userid, char *result)
 {
     strcpy(result, name);
-    hier_sep_toexternal(result, namespace);
+
+    /* Translate any separators in mailboxname */
+    mboxname_hiersep_toexternal(namespace, result);
     return 0;
 }
 
-int mboxname_toexternal_alt(const char *name, struct namespace *namespace,
-			    const char *userid, char *result)
+/* Handle conversion from the internal namespace to the alternate namespace */
+static int mboxname_toexternal_alt(struct namespace *namespace, const char *name,
+				  const char *userid, char *result)
 {
     /* Personal (INBOX) namespace */
     if (!strncasecmp(name, "inbox", 5) &&
@@ -274,8 +294,111 @@ int mboxname_toexternal_alt(const char *name, struct namespace *namespace,
 	}
     }
 
-    hier_sep_toexternal(result, namespace);
+    /* Translate any separators in mailboxname */
+    mboxname_hiersep_toexternal(namespace, result);
     return 0;
+}
+
+/*
+ * Create namespace based on config options.
+ */
+int mboxname_init_namespace(struct namespace *namespace, int force_std)
+{
+    const char *prefix;
+
+    assert(namespace != NULL);
+
+    namespace->hier_sep = config_getswitch("unixhierarchysep", 0) ? '/' : '.';
+    namespace->isalt = !force_std && config_getswitch("altnamespace", 0);
+
+    if (namespace->isalt) {
+	/* alternate namespace */
+	strcpy(namespace->prefix[NAMESPACE_INBOX], "");
+
+	prefix = config_getstring("userprefix", "Other Users");
+	if (!prefix || strlen(prefix) == 0 ||
+	    strlen(prefix) >= MAX_NAMESPACE_PREFIX ||
+	    strchr(prefix,namespace->hier_sep) != NULL)
+	    return IMAP_NAMESPACE_BADPREFIX;
+	sprintf(namespace->prefix[NAMESPACE_USER], "%.*s%c",
+		MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep);
+
+	prefix = config_getstring("sharedprefix", "Shared Folders");
+	if (!prefix || strlen(prefix) == 0 ||
+	    strlen(prefix) >= MAX_NAMESPACE_PREFIX ||
+	    strchr(prefix, namespace->hier_sep) != NULL ||
+	    !strncmp(namespace->prefix[NAMESPACE_USER], prefix, strlen(prefix)))
+	    return IMAP_NAMESPACE_BADPREFIX;
+	sprintf(namespace->prefix[NAMESPACE_SHARED], "%.*s%c",
+		MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep); 
+
+	namespace->mboxname_tointernal = mboxname_tointernal_alt;
+	namespace->mboxname_toexternal = mboxname_toexternal_alt;
+	namespace->mboxlist_findall = mboxlist_findall_alt;
+	namespace->mboxlist_findsub = mboxlist_findsub_alt;
+    }
+
+    else {
+	/* standard namespace */
+	sprintf(namespace->prefix[NAMESPACE_INBOX], "%s%c",
+		"INBOX", namespace->hier_sep);
+	sprintf(namespace->prefix[NAMESPACE_USER], "%s%c",
+		"user", namespace->hier_sep);
+	strcpy(namespace->prefix[NAMESPACE_SHARED], "");
+
+	namespace->mboxname_tointernal = mboxname_tointernal;
+	namespace->mboxname_toexternal = mboxname_toexternal;
+	namespace->mboxlist_findall = mboxlist_findall;
+	namespace->mboxlist_findsub = mboxlist_findsub;
+    }
+
+    return 0;
+}
+
+/*
+ * Translate separator charactors in a mailboxname from its external
+ * representation to its internal representation '.'.
+ * If using the unixhierarchysep '/', all '.'s get translated to DOTCHAR.
+ */
+char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name)
+{
+    char *p;
+
+    assert(namespace != NULL);
+    assert(namespace->hier_sep == '.' || namespace->hier_sep == '/');
+
+    if (namespace->hier_sep == '/') {
+	/* change all '/'s to '.' and all '.'s to DOTCHAR */
+	for (p = name; *p; p++) {
+	    if (*p == '/') *p = '.';
+	    else if (*p == '.') *p = DOTCHAR;
+	}
+    }
+
+    return name;
+}
+
+/*
+ * Translate separator charactors in a mailboxname from its internal
+ * representation '.' to its external representation.
+ * If using the unixhierarchysep '/', all DOTCHAR get translated to '.'.
+ */
+char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name)
+{
+    char *p;
+
+    assert(namespace != NULL);
+    assert(namespace->hier_sep == '.' || namespace->hier_sep == '/');
+
+    if (namespace->hier_sep == '/') {
+	/* change all '.'s to '/' and all DOTCHARs to '.' */
+	for (p = name; *p; p++) {
+	    if (*p == '.') *p = '/';
+	    else if (*p == DOTCHAR) *p = '.';
+	}
+    }
+
+    return name;
 }
 
 /*

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.72 2001/08/12 03:31:06 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.73 2001/08/16 20:52:07 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -92,7 +92,6 @@
 #include "imapurl.h"
 #include "pushstats.h"
 #include "telemetry.h"
-#include "namespace.h"
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -1898,7 +1897,7 @@ void cmd_login(char *tag, char *user, char *passwd)
     char buf[MAX_MAILBOX_PATH];
     char *p;
     int plaintextloginpause;
-    int result;
+    int result, r;
 
     canon_user = auth_canonifyid(user);
 
@@ -1995,9 +1994,9 @@ void cmd_login(char *tag, char *user, char *passwd)
     telemetry_log(proxyd_userid, proxyd_in, proxyd_out);
 
     /* Set namespace */
-    if (!namespace_init(&proxyd_namespace, proxyd_userisadmin)) {
-	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
-	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    if ((r = mboxname_init_namespace(&proxyd_namespace, proxyd_userisadmin)) != 0) {
+	syslog(LOG_ERR, error_message(result));
+	fatal(error_message(result), EC_CONFIG);
     }
 
     return;
@@ -2020,6 +2019,8 @@ void cmd_authenticate(char *tag, char *authtype)
 
     int *ssfp;
     char *ssfmsg=NULL;
+
+    int r;
 
     sasl_result = sasl_server_start(proxyd_saslconn, authtype,
 				    NULL, 0,
@@ -2120,9 +2121,9 @@ void cmd_authenticate(char *tag, char *authtype)
     telemetry_log(proxyd_userid, proxyd_in, proxyd_out);
 
     /* Set namespace */
-    if (!namespace_init(&proxyd_namespace, proxyd_userisadmin)) {
-	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
-	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    if ((r = mboxname_init_namespace(&proxyd_namespace, proxyd_userisadmin)) != 0) {
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
     }
 
     return;
@@ -2667,7 +2668,7 @@ void cmd_append(char *tag, char *name)
 
     /* we want to pipeline this whole command through to the server that
        has name on it, and then do a noop on our current server */
-    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
 
     if (!r) {
@@ -2723,7 +2724,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 	r = IMAP_MAILBOX_NONEXISTENT;
     }
     else {
-	r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+	r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						    proxyd_userid, mailboxname);
     }
 
@@ -2961,7 +2962,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 
     assert(backend_current != NULL);
 
-    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r) s = proxyd_findserver(server);
@@ -3331,7 +3332,7 @@ void cmd_create(char *tag, char *name, char *server)
     }
 
     if (!r)
-	r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+	r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						    proxyd_userid, mailboxname);
 
     if (!r && !server) {
@@ -3406,7 +3407,7 @@ void cmd_delete(char *tag, char *name)
     struct backend *s = NULL;
     char mailboxname[MAX_MAILBOX_NAME+1];
 
-    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
 
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
@@ -3463,9 +3464,9 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	return;
     }
 
-    r = (*proxyd_namespace.mboxname_tointernal)(oldname, &proxyd_namespace,
+    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, oldname,
 						proxyd_userid, oldmailboxname);
-    if (!r) (*proxyd_namespace.mboxname_tointernal)(newname, &proxyd_namespace,
+    if (!r) (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, newname,
 						    proxyd_userid, newmailboxname);
     if (!r) r = mlookup(oldmailboxname, &server, &acl, NULL);
     if (!r) {
@@ -3540,25 +3541,19 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 	if (*p == '%') *p = '?';
     }
 
-    /* Translate pattern */
-    hier_sep_tointernal(pattern, &proxyd_namespace);
+    /* Translate any separators in pattern */
+    mboxname_hiersep_tointernal(&proxyd_namespace, pattern);
 
     if (!strcmp(namespace, "mailboxes")) {
-	if (proxyd_namespace.isalt)
-	    mboxlist_findsub_alt(pattern, &proxyd_namespace,
-				 proxyd_userisadmin, proxyd_userid,
-				 proxyd_authstate, mailboxdata, NULL, 1);
-	else
-	    mboxlist_findsub(pattern, proxyd_userisadmin, proxyd_userid,
-			     proxyd_authstate, mailboxdata, NULL, 1);
+	(*proxyd_namespace.mboxlist_findsub)(&proxyd_namespace, pattern,
+					     proxyd_userisadmin, proxyd_userid,
+					     proxyd_authstate, mailboxdata,
+					     NULL, 1);
     } else if (!strcmp(namespace, "all.mailboxes")) {
-	if (proxyd_namespace.isalt)
-	    mboxlist_findall_alt(pattern, &proxyd_namespace,
-				 proxyd_userisadmin, proxyd_userid,
-				 proxyd_authstate, mailboxdata, NULL);
-	else
-	    mboxlist_findall(pattern, proxyd_userisadmin, proxyd_userid,
-			     proxyd_authstate, mailboxdata, NULL);
+	(*proxyd_namespace.mboxlist_findall)(&proxyd_namespace, pattern,
+					     proxyd_userisadmin, proxyd_userid,
+					     proxyd_authstate, mailboxdata,
+					     NULL);
     } else if (!strcmp(namespace, "bboards")
 	       || !strcmp(namespace, "all.bboards")) {
 	;
@@ -3646,16 +3641,12 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	    pattern = buf;
 	}
 
-	/* Translate pattern */
-	hier_sep_tointernal(pattern, &proxyd_namespace);
+	/* Translate any separators in pattern */
+	mboxname_hiersep_tointernal(&proxyd_namespace, pattern);
 
-	if (proxyd_namespace.isalt)
-	    mboxlist_findall_alt(pattern, &proxyd_namespace,
-				 proxyd_userisadmin, proxyd_userid,
-				 proxyd_authstate, listdata, NULL);
-	else
-	    mboxlist_findall(pattern, proxyd_userisadmin, proxyd_userid,
-			     proxyd_authstate, listdata, NULL);
+	(*proxyd_namespace.mboxlist_findall)(&proxyd_namespace, pattern,
+					     proxyd_userisadmin, proxyd_userid,
+					     proxyd_authstate, listdata, NULL);
 	listdata((char *)0, 0, 0, 0);
 
 	if (buf) free(buf);
@@ -3719,7 +3710,7 @@ void cmd_getacl(char *tag, char *name, int oldform)
     char *acl;
     char *rights, *nextid;
 
-    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
 
     if (!r) r = mlookup(mailboxname, (char **)0, &acl, NULL);
@@ -3796,7 +3787,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
     char *acl;
     char *rightsdesc;
 
-    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
 
     if (!r) {
@@ -3854,7 +3845,7 @@ void cmd_myrights(char *tag, char *name, int oldform)
     char *acl;
     char str[ACL_MAXSTR];
 
-    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
 
     if (!r) {
@@ -3899,7 +3890,7 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
     struct backend *s = NULL;
     char *acl = NULL;
 
-    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
     if (!r) r = mlookup(mailboxname, &server, &acl, NULL);
     if (!r) {
@@ -3978,7 +3969,7 @@ void cmd_getquotaroot(char *tag, char *name)
     int r;
     struct backend *s = NULL;
 
-    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r) s = proxyd_findserver(server);
@@ -4137,7 +4128,7 @@ void cmd_status(char *tag, char *name)
     char *server;
     struct backend *s = NULL;
 
-    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
 
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
@@ -4241,8 +4232,10 @@ void cmd_namespace(tag)
     int sawone[3] = {0, 0, 0};
     char* pattern = xstrdup("%");
 
-    /* now find all the exciting toplevel namespaces */
-    mboxlist_findall(pattern, proxyd_userisadmin, proxyd_userid,
+    /* now find all the exciting toplevel namespaces -
+     * we're using internal names here
+     */
+    mboxlist_findall(NULL, pattern, proxyd_userisadmin, proxyd_userid,
 		     proxyd_authstate, namespacedata, (void*) sawone);
     free(pattern);
 
@@ -4338,7 +4331,7 @@ void* rock;
 {
     char mboxname[MAX_MAILBOX_PATH+1];
 
-    (*proxyd_namespace.mboxname_toexternal)(name, &proxyd_namespace,
+    (*proxyd_namespace.mboxname_toexternal)(&proxyd_namespace, name,
 					    proxyd_userid, mboxname);
     prot_printf(proxyd_out, "* MAILBOX %s\r\n", mboxname);
     return 0;
@@ -4378,7 +4371,7 @@ int maycreate;
 		    lastnamenoinferiors ? "\\Noinferiors" :
 		    lastnamehassub ? "\\HasChildren" : "\\HasNoChildren",
 		    proxyd_namespace.hier_sep);
-	(*proxyd_namespace.mboxname_toexternal)(lastname, &proxyd_namespace,
+	(*proxyd_namespace.mboxname_toexternal)(&proxyd_namespace, lastname,
 						proxyd_userid, mboxname);
 	printstring(mboxname);
 	prot_printf(proxyd_out, "\r\n");
@@ -4419,7 +4412,7 @@ int maycreate;
     prot_printf(proxyd_out, "* %s (%s) \"%c\" ", cmd,
 		c ? "\\HasChildren \\Noselect" : "",
 		proxyd_namespace.hier_sep);
-    (*proxyd_namespace.mboxname_toexternal)(name, &proxyd_namespace,
+    (*proxyd_namespace.mboxname_toexternal)(&proxyd_namespace, name,
 					    proxyd_userid, mboxname);
     printstring(mboxname);
     prot_printf(proxyd_out, "\r\n");

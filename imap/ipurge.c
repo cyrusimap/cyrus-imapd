@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.11 2001/07/07 19:37:26 leg Exp $
+ * $Id: ipurge.c,v 1.12 2001/08/16 20:52:06 ken3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -63,6 +63,7 @@
 /* cyrus includes */
 #include "imapconf.h"
 #include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
@@ -90,6 +91,9 @@ typedef struct mbox_stats_s {
 
 } mbox_stats_t;
 
+/* current namespace */
+static struct namespace purge_namespace;
+
 int verbose = 1;
 
 int purge_me(char *, int, int);
@@ -102,6 +106,7 @@ main (int argc, char *argv[]) {
   char option;
   char buf[MAX_MAILBOX_PATH];
   char *alt_config = NULL;
+  int r;
 
   if (geteuid() == 0) { /* don't run as root, changes permissions */
     usage(argv[0]);
@@ -152,16 +157,26 @@ main (int argc, char *argv[]) {
 
   if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
+  /* Set namespace -- force standard (internal) */
+  if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
+      syslog(LOG_ERR, error_message(r));
+      fatal(error_message(r), EC_CONFIG);
+  }
+
   mboxlist_init(0);
   mboxlist_open(NULL);
 
   if (optind == argc) { /* do the whole partition */
     strcpy(buf, "*");
-    mboxlist_findall(buf, 1, 0, 0, purge_me, NULL);
+    (*purge_namespace.mboxlist_findall)(&purge_namespace, buf, 1, 0, 0,
+					purge_me, NULL);
   } else {
     for (; optind < argc; optind++) {
       strncpy(buf, argv[optind], MAX_MAILBOX_NAME);
-      mboxlist_findall(buf, 1, 0, 0, purge_me, NULL);
+      /* Translate any separators in mailboxname */
+      mboxname_hiersep_tointernal(&purge_namespace, buf);
+      (*purge_namespace.mboxlist_findall)(&purge_namespace, buf, 1, 0, 0,
+					  purge_me, NULL);
     }
   }
   mboxlist_close();

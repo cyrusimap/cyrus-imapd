@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.26 2001/02/22 19:27:20 ken3 Exp $
+ * $Id: target-acap.c,v 1.27 2001/08/16 20:52:08 ken3 Exp $
  */
 
 #include <config.h>
@@ -74,6 +74,9 @@
 #include "acapmbox.h"
 
 static int debugmode = 0;
+
+/* current namespace */
+static struct namespace target_namespace;
 
 extern sasl_callback_t *mysasl_callbacks(const char *username,
 					 const char *authname,
@@ -387,7 +390,8 @@ int synchronize_mboxlist(void)
     syslog(LOG_NOTICE, "starting mailbox synchronization");
 
     strcpy(s, "*");
-    r = mboxlist_findall(s, 1, "", NULL, &mboxadd, mailboxes);
+    r = (*target_namespace.mboxlist_findall)(&target_namespace, s, 1, "",
+					     NULL, &mboxadd, mailboxes);
     if (r) {
 	skiplist_free(mailboxes);
 	return r;
@@ -578,6 +582,12 @@ int main(int argc, char *argv[], char *envp[])
 
     if (geteuid() == 0) {
 	fatal("must run as the Cyrus user", EC_USAGE);
+    }
+
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&target_namespace, 1)) != 0) {
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
     }
 
     acap_init();
