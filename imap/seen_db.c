@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.1 2000/04/06 15:15:06 leg Exp $
+   $Id: seen_db.c,v 1.2 2000/04/11 03:37:02 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -31,8 +31,10 @@
 
 #include <config.h>
 
+#include <stdlib.h>
 #include <assert.h>
 #include <syslog.h>
+#include <ctype.h>
 #include <db.h>
 
 #include "imapconf.h"
@@ -46,7 +48,7 @@ extern DB_ENV *dbenv;
 
 struct seen {
     const char *user;		/* what user is this for? */
-    const char *uniqueid;		/* what mailbox? */
+    const char *uniqueid;	/* what mailbox? */
     DB *db;
     DB_TXN *tid;		/* outstanding txn, if any */
 };
@@ -54,7 +56,7 @@ struct seen {
 /* indexed by unique id */
 struct seenentry {
     time_t lastread;
-    unsigned int lastuid;
+    unsigned long lastuid;
     time_t lastchange;
     char seenuids[1];
 };
@@ -94,7 +96,6 @@ int seen_open(struct mailbox *mailbox,
     struct seen *seendb = lastseen;
     char *fname = NULL;
     int r;
-    char c;
 
     /* if this is the db we've already opened, return it */
     if (seendb && !strcmp(seendb->user, user)) {
@@ -123,7 +124,7 @@ int seen_open(struct mailbox *mailbox,
 
     /* open the seendb corresponding to user */
     fname = getpath(user);
-    r = seendb->db->open(seendb->db, fname, NULL, DB_HASH, DB_CREATE, 0664);
+    r = seendb->db->open(seendb->db, fname, NULL, DB_BTREE, DB_CREATE, 0664);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, db_strerror(r));
 	r = IMAP_IOERROR;
@@ -136,12 +137,13 @@ int seen_open(struct mailbox *mailbox,
     seendb->user = user;
 
     *seendbptr = seendb;
+    lastseen = seendb;
     return r;
 }
 
-int seen_lockread(struct seen *seendb, 
-		  time_t *lastreadptr, unsigned int *lastuidptr, 
-		  time_t *lastchangeptr, char **seenuidsptr)
+static int seen_readit(struct seen *seendb, 
+		       time_t *lastreadptr, unsigned int *lastuidptr, 
+		       time_t *lastchangeptr, char **seenuidsptr)
 {
     int r;
     DBT key, data;
@@ -183,6 +185,35 @@ int seen_lockread(struct seen *seendb,
     *seenuidsptr = xstrdup(e->seenuids);
 
     return 0;
+}
+
+int seen_read(struct seen *seendb, 
+	      time_t *lastreadptr, unsigned int *lastuidptr, 
+	      time_t *lastchangeptr, char **seenuidsptr)
+{
+    return seen_readit(seendb, lastreadptr, lastuidptr, lastchangeptr,
+		       seenuidsptr);
+}
+
+int seen_lockread(struct seen *seendb, 
+		  time_t *lastreadptr, unsigned int *lastuidptr, 
+		  time_t *lastchangeptr, char **seenuidsptr)
+{
+    int r;
+
+    assert(seendb && seendb->uniqueid);
+
+    if (!seendb->tid) {
+	r = txn_begin(dbenv, NULL, &seendb->tid, 0);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: error beginning txn: %s", 
+		   db_strerror(r));
+	    return IMAP_IOERROR;
+	}
+    }
+
+    return seen_readit(seendb, lastreadptr, lastuidptr, lastchangeptr,
+		       seenuidsptr);
 }
 
 int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid, 
@@ -284,7 +315,7 @@ int seen_delete_user(const char *user)
 	r = IMAP_IOERROR;
     }
     if (!r) {
-	r = db->close(db, DB_NOSYNC);
+	r = db->close(db, 0);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing %s: %s", fname,
 		   db_strerror(r));
