@@ -56,7 +56,7 @@
 #define MAXSIZE 2048
 #define BBHASH_SIZE 30341 /* prime */
 
-#include "acte.h"
+#include "sasl.h"
 #include "imclient.h"
 #include "xmalloc.h"
 #include "amssync.h"
@@ -72,9 +72,9 @@ struct acldata {
     char *object;
 };
 
-extern struct acte_client krb_acte_client;
-struct acte_client *login_acte_client[] = {
-    &krb_acte_client,
+extern struct sasl_client krb_sasl_client;
+struct sasl_client *login_sasl_client[] = {
+    &krb_sasl_client,
     NULL
 };
 
@@ -671,7 +671,7 @@ void cyr_connect(void)
 	}
 	code = imclient_connect(&imclient,server,port);
     }
-    if (imclient_authenticate(imclient,login_acte_client,NULL,ACTE_PROT_ANY)) {
+    if (imclient_authenticate(imclient,login_sasl_client,"imap",NULL,SASL_PROT_ANY)) {
 	fprintf(stderr,"Couldn't authenticate to server!\n");
 	exit(1);
     }
