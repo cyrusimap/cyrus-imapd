@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.37 2001/05/03 18:49:41 wcw Exp $ */
+/* $Id: master.c,v 1.38 2001/05/03 19:00:47 wcw Exp $ */
 
 #include <config.h>
 
@@ -972,7 +972,7 @@ int main(int argc, char **argv, char **envp)
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
-    while ((opt = getopt(argc, argv, "l:")) != EOF) {
+    while ((opt = getopt(argc, argv, "l:D")) != EOF) {
 	switch (opt) {
 	case 'l': /* user defined listen queue backlog */
 	    listen_queue_backlog = atoi(optarg);
