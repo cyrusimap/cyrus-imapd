@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.35 2000/06/04 22:28:18 leg Exp $ */
+/* $Id: proxyd.c,v 1.36 2000/06/06 19:23:20 leg Exp $ */
 
 #include <config.h>
 
@@ -307,7 +307,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
 	    if (eol[i-1] == '\n' && eol[i-2] == '\r' && eol[i-3] == '}') {
 		/* possible literal */
 		i -= 4;
-		while (i > 0 && eol[i] != '{' && isdigit(eol[i])) {
+		while (i > 0 && eol[i] != '{' && isdigit((int) eol[i])) {
 		    i--;
 		}
 		if (eol[i] == '{') {
@@ -415,7 +415,7 @@ static int pipe_command(struct backend *s, int optimistic_literal)
 		    nonsynch = 1;
 		    i--;
 		}
-		while (i > 0 && eol[i] != '{' && isdigit(eol[i])) {
+		while (i > 0 && eol[i] != '{' && isdigit((int) eol[i])) {
 		    i--;
 		}
 		if (eol[i] == '{') {
@@ -866,12 +866,12 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 	val = config_getstring("loginrealms", "");
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
-		(!val[strlen(realm)] || isspace(val[strlen(realm)]))) {
+		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
 		break;
 	    }
 	    /* not this realm, try next one */
-	    while (*val && !isspace(*val)) val++;
-	    while (*val && isspace(*val)) val++;
+	    while (*val && !isspace((int) *val)) val++;
+	    while (*val && isspace((int) *val)) val++;
 	}
 	if (!*val) {
 	    snprintf(replybuf, 100, "cross-realm login %s denied", 
@@ -1251,9 +1251,9 @@ cmdloop()
 	    eatline(c);
 	    continue;
 	}
-	if (islower(cmd.s[0])) cmd.s[0] = toupper(cmd.s[0]);
+	if (islower((int) cmd.s[0])) cmd.s[0] = toupper(cmd.s[0]);
 	for (p = &cmd.s[1]; *p; p++) {
-	    if (isupper(*p)) *p = tolower(*p);
+	    if (isupper((int) *p)) *p = tolower(*p);
 	}
 
 	/* Only Authenticate/Login/Logout/Noop/Starttls 
@@ -1912,7 +1912,7 @@ void cmd_login(char *tag, char *user, char *passwd)
 
     val = config_getstring("admins", "");
     while (*val) {
-	for (p = (char *)val; *p && !isspace(*p); p++);
+	for (p = (char *)val; *p && !isspace((int) *p); p++);
 	strncpy(buf, val, p - val);
 	buf[p-val] = 0;
 	if (auth_memberof(proxyd_authstate, buf)) {
@@ -1920,7 +1920,7 @@ void cmd_login(char *tag, char *user, char *passwd)
 	    break;
 	}
 	val = p;
-	while (*val && isspace(*val)) val++;
+	while (*val && isspace((int) *val)) val++;
     }
 
     if (!reply) reply = "User logged in";
