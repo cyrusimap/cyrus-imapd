@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.53 1999/12/30 21:07:25 leg Exp $
+ $Id: append.c,v 1.54 1999/12/30 22:15:50 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -176,12 +176,12 @@ int append_fromstage(struct mailbox *mailbox,
 
     sp = 0;
     while (stage->parts[sp][0] != '\0') {
-	if (!strcmp(stagefile, stage->parts[i]))
+	if (!strcmp(stagefile, stage->parts[sp]))
 	    break;
 	sp++;
     }
     if (stage->parts[sp][0] == '\0') {
-	/* ok, create this file and add put it into stage->parts[i] */
+	/* ok, create this file and add put it into stage->parts[sp] */
 	f = fopen(stagefile, "w+");
 	if (!f) {
 	    syslog(LOG_ERR, "IOERROR: creating message file %s: %m", 
@@ -207,7 +207,7 @@ int append_fromstage(struct mailbox *mailbox,
 	stage->parts[sp+1][0] = '\0';
     }
 
-    /* stage->parts[i] contains the message and is on the same partition
+    /* stage->parts[sp] contains the message and is on the same partition
        as the mailbox we're looking at */
 
     /* Setup */
@@ -222,7 +222,7 @@ int append_fromstage(struct mailbox *mailbox,
     strcat(fname, "/");
     strcat(fname, mailbox_message_fname(mailbox, message_index.uid));
 
-    r = mailbox_copyfile(stage->parts[i], fname);
+    r = mailbox_copyfile(stage->parts[sp], fname);
     destfile = fopen(fname, "r");
     if (!r && destfile) {
 	r = message_parse_file(destfile, mailbox, &message_index);
