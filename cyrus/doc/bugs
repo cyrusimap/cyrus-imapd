@@ -32,6 +32,8 @@
 
       * Implement the IMAP ID extension. 
       * Implement the IMAP VIEW extension. 
+      * The vacation action in Sieve shouldn't respond to messages that
+        have an "Auto-Submitted" category anything but "No". 
 
     Please report bugs to cyrus-bugs@andrew.cmu.edu. Be sure to include (at
     least) system type, compiler used, and the options passed to configure,

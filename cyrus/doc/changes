@@ -1,5 +1,17 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server Since Version 1.6.19 
+
+      * Added STARTTLS support; requires OpenSSL. 
+      * Sieve now uses MDNs to reject messages instead of DSNs, conforming
+        to the latest Sieve specification. 
+      * The duplicate delivery database expiration (deliver -E) was
+        deleting all entries; fixed. 
+      * imtest is now a little smarter about parsing the protocol to avoid
+        synchronization errors prior to authentication. 
+      * timsieved's parser is now written in C; should be no noticeable
+        changes, but should make compiling it much easier. 
+
 Changes to the Cyrus IMAP Server Since Version 1.6.16 
 
       * Fix to enclosed message parsing (thanks to John Myers). 
