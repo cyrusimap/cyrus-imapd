@@ -119,9 +119,8 @@ AC_ARG_WITH(sasl-include,
 	  SASL_LIB_DIR=$ac_cv_sasl_where_lib
 	  SASL_INC_FLAGS="-I${SASL_INC_DIR}"
 	  SASL_LIB_FLAGS="-L${SASL_LIB_DIR} -lsasl"
-dnl next 4 lines are backward compat
 	  LIB_SASL="-L${SASL_LIB_DIR} -lsasl" 
- 	  SASLFLAGS=-I${SASL_INC_DIR}"
+ 	  SASLFLAGS="-I${SASL_INC_DIR}"
 	  AC_SUBST(LIB_SASL)
 	  AC_SUBST(SASLFLAGS)    
 	  if test "X$RPATH" = "X"; then

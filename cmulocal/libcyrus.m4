@@ -105,7 +105,7 @@ AC_ARG_WITH(libcyrus-include,
 	    ac_cv_libcyrus_where_inc=$with_libcyrus_include
 	  fi
 	  if test "X$ac_cv_libcyrus_where_inc" = "X"; then
-	    CMU_LIBCYRUS_INC_WHERE(/usr/cyrus/include /usr/local/include /usr/include)
+	    CMU_LIBCYRUS_INC_WHERE(/usr/cyrus/include /usr/local/include /usr/local/include/cyrus /usr/include/cyrus)
 	  fi
 	fi
 
