@@ -39,7 +39,7 @@
  *
  */
 /*
- * $Id: charset.h,v 1.15 2001/09/25 16:49:52 ken3 Exp $
+ * $Id: charset.h,v 1.16 2002/12/26 17:52:00 leg Exp $
  */
 
 #ifndef INCLUDED_CHARSET_H
@@ -54,20 +54,24 @@
 #define ENCODING_BASE64 2
 #define ENCODING_UNKNOWN 255
 
+#define CHARSET_UNKNOWN_CHARSET (-1)
+
 typedef int comp_pat;
+typedef int charset_index;
 
 /* ensure up to MAXTRANSLATION times expansion into buf */
-extern char *charset_convert(const char *s, int charset, char *buf,
+extern char *charset_convert(const char *s, charset_index charset, char *buf,
     int bufsz);
 extern char *charset_decode1522(const char *s, char *buf, int bufsz);
 
-extern int charset_lookupname(const char *name);
+extern charset_index charset_lookupname(const char *name);
 extern comp_pat *charset_compilepat(const char *s);
 extern void charset_freepat(comp_pat *pat);
 extern int charset_searchstring(const char *substr, comp_pat *pat,
     const char *s, int len);
 extern int charset_searchfile(const char *substr, comp_pat *pat,
-    const char *msg_base, int mapnl, int len, int charset, int encoding);
+                              const char *msg_base, int mapnl, int len, 
+                              charset_index charset, int encoding);
 
 /* Definitions for charset_extractfile */
 
@@ -99,20 +103,21 @@ extern int charset_searchfile(const char *substr, comp_pat *pat,
    BEGIN, APPEND and/or END operations on the same part may be combined into one call by
    ORing the 'cmds' flags.
 
-   The parts need not arrive in any particular order, but each part can only participate in
-   one BEGIN ... APPEND ... END sequence, and the sequences for different parts
-   cannot be interleaved.
+   The parts need not arrive in any particular order, but each part
+   can only participate in one BEGIN ... APPEND ... END sequence, and
+   the sequences for different parts cannot be interleaved.
 */
 typedef void index_search_text_receiver_t(int UID, int part, int cmds,
   char const* text, int text_len, void* rock);
 
-/* Extract the body text for the message denoted by 'uid', convert its text to the 
-   canonical form for searching, and pass the converted text down in a series of
-   invocations to the callback function with part=SEARCHINDEX_PART_BODY and
-   cmds=CMD_APPENDPART.
-   This is called by index_getsearchtextmsg to extract the MIME body parts. */ 
+/* Extract the body text for the message denoted by 'uid', convert its
+   text to the canonical form for searching, and pass the converted
+   text down in a series of invocations to the callback function with
+   part=SEARCHINDEX_PART_BODY and cmds=CMD_APPENDPART.  This is called
+   by index_getsearchtextmsg to extract the MIME body parts. */ 
 extern int charset_extractfile(index_search_text_receiver_t receiver,
-    void* rock, int uid, const char *msg_base, int mapnl, int len, int charset,
-    int encoding);
+                               void* rock, int uid, const char *msg_base, 
+                               int mapnl, int len, charset_index charset,
+                               int encoding);
 
 #endif /* INCLUDED_CHARSET_H */

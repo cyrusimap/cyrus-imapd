@@ -1,6 +1,6 @@
 /* mkchartable.c -- Generate character set mapping table
  *
- * $Id: mkchartable.c,v 1.22 2002/10/30 17:25:23 rjs3 Exp $
+ * $Id: mkchartable.c,v 1.23 2002/12/26 17:52:00 leg Exp $
  *
  * Copyright (c) 1996-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -187,7 +187,7 @@ main(int argc, char **argv)
     printf("    { \"iso-2022-kr\", chartables_iso_2022_kr },\n");
     printf("    { \"gb2312\", chartables_gb2312 },\n");
     printf("    { \"big5\", chartables_big5 },\n");
-    printf("    /* Compatiblilty names */\n");
+    printf("    /* Compatibility names */\n");
     printf("    { \"unicode-1-1-utf-7\", chartables_utf_7 },\n");
     printf("    { \"unicode-2-0-utf-7\", chartables_utf_7 },\n");
     printf("    { \"x-unicode-2-0-utf-7\", chartables_utf_7 },\n");
@@ -552,7 +552,12 @@ readcharfile(char *name)
 	if (i > 4) goto syntaxerr;	
 	if (i > 2) {
 	    if (EMPTYTCHAR(table[thisstate].ch[thischar>>8])) {
+                /* we create a new state (not in the input file) to
+                   deal with multibyte characters that start with the
+                   byte 'thischar >> 8'. */
+
 		char action[1024];
+
 		sprintf(action, ">%s_%02x <", table[thisstate].name,
 			thischar>>8);
 		table[thisstate].ch[thischar>>8].action = xstrdup(action);
@@ -562,12 +567,21 @@ readcharfile(char *name)
 	    }
 	    else if (!table[thisstate].ch[thischar>>8].action ||
 		     table[thisstate].ch[thischar>>8].action[0] != '>') {
+                /* either we think this byte isn't the start of a
+                   multibyte character, or the action associated with this
+                   byte isn't a state change. */
+
 		fprintf(stderr,
 			"%s: line %d: multibyte/single-byte conflict\n",
 			name, line);
 		exit(1);
 	    }
 	    else {
+                /* we find the already created state to deal with multibytes
+                   starting with 'thischar >> 8' and move to it so we
+                   insert the 2nd byte of this multibyte char in the right
+                   state. */
+
 		thisstate =
 		  findstate(table[thisstate].ch[thischar>>8].action+1);
 		if (thisstate == -1) {
@@ -695,7 +709,9 @@ static void mkutf8table(void)
 	table[thisstate].ch[thischar].action = "U83_3";
     }
 
-    /* Populate 2-char sequences */
+    /* Populate 2-char sequences---the first byte shifts to another
+     * state; the 2nd byte chooses the character, just like any other
+     * 2-byte encoding */
     for (prefix = 2; prefix <= 0x1f; prefix++) {
 	sprintf(buf, ">STATE-2-%02x", prefix);
 	table[start_state].ch[prefix+0xc0].action = xstrdup(buf);
@@ -706,7 +722,8 @@ static void mkutf8table(void)
 	}
     }
 
-    /* Populate 3-char sequences */
+    /* Populate 3-char sequences, which the decoder handles
+     * magically, outside of the state system. */
     for (thischar = 0xe0; thischar <= 0xef; thischar++) {
 	table[start_state].ch[thischar].action = "U83";
     }
