@@ -49,7 +49,7 @@ static char *monthname[] = {
     "jul", "aug", "sep", "oct", "nov", "dec"
 };
 
-
+static int mailboxdata();
 
 main(argc, argv, envp)
 int argc;
@@ -229,7 +229,15 @@ cmdloop()
 	    break;
 
 	case 'D':
-	    if (!strcmp(cmd.s, "Deleteacl")) {
+	    if (!strcmp(cmd.s, "Delete")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg1);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_delete(tag.s, arg1.s);
+	    }
+	    else if (!strcmp(cmd.s, "Deleteacl")) {
 		if (c != ' ') goto missingargs;
 		c = getword(&arg1);
 		if (c != ' ') goto missingargs;
@@ -1566,6 +1574,25 @@ char *partition;
 }	
 
 /*
+ * Perform a DELETE command
+ */
+cmd_delete(tag, name)
+char *tag;
+char *name;
+{
+    int r;
+
+    r = mboxlist_deletemailbox(name, imapd_userisadmin, imapd_userid, 1);
+
+    if (r) {
+	printf("%s NO Delete failed: %s\r\n", tag, error_message(r));
+    }
+    else {
+	printf("%s OK Delete completed\r\n", tag);
+    }
+}	
+
+/*
  * Perform a FIND command
  */
 cmd_find(tag, namespace, pattern)
@@ -1575,10 +1602,12 @@ char *pattern;
 {
     lcase(namespace);
     if (!strcmp(namespace, "mailboxes")) {
-	mboxlist_find(pattern, imapd_userisadmin, imapd_userid);
+	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid,
+			 mailboxdata);
     }
     else if (!strcmp(namespace, "all.mailboxes")) {
-	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid);
+	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
+			 mailboxdata);
     }
     else if (!strcmp(namespace, "bboards")
 	     || !strcmp(namespace, "all.bboards")) {
@@ -2328,4 +2357,12 @@ struct strlist *l;
     }
 }
 
-
+/*
+ * Issue a MAILBOX untagged response
+ */
+static int mailboxdata(name)
+char *name;
+{
+    printf("* MAILBOX %s\r\n", name);
+    return 0;
+}
