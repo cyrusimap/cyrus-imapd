@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.137 2002/08/29 14:21:37 ken3 Exp $
+ $Id: mailbox.c,v 1.138 2002/09/30 19:33:41 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2317,30 +2317,6 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	    (void) unlink(newfname);
 	}
     }
-
-    return r;
-}
-
-/* Requires a locked mailbox */
-int mailbox_rename_finish(struct mailbox *newmailbox) 
-{
-    int r = 0;
-
-    if (newmailbox->quota.root) {
-	r = mailbox_lock_quota(&(newmailbox->quota));
-	newmailbox->quota.used += newmailbox->quota_mailbox_used;
-	if (!r) {
-	    r = mailbox_write_quota(&(newmailbox->quota));
-	    mailbox_unlock_quota(&(newmailbox->quota));
-	}
-	if (r) {
-	    syslog(LOG_ERR,
-	      "LOSTQUOTA: unable to record use of %lu bytes in quota %s",
-		   newmailbox->quota_mailbox_used, newmailbox->quota.root);
-	}
-    }
-
-    /* Ugh, we'd have to back all the way out at this point. */
 
     return r;
 }
