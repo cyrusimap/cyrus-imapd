@@ -1711,7 +1711,12 @@ int usinguid;
     index_check(imapd_mailbox, usinguid, 0);
 
     if (r) {
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	prot_printf(imapd_out, "%s NO %s%s\r\n", tag,
+		    (r == IMAP_MAILBOX_NONEXISTENT &&
+		     mboxlist_createmailboxcheck(name, 0, imapd_userisadmin,
+						 imapd_userid, (char **)0,
+						 (char **)0) == 0)
+		    ? "[TRYCREATE] " : "", error_message(r));
     }
     else {
 	prot_printf(imapd_out, "%s OK %s completed\r\n", tag, cmd);
