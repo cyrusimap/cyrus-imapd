@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.165 2002/02/06 21:37:44 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.166 2002/02/12 20:27:21 rjs3 Exp $
  */
 
 #include <config.h>
@@ -1663,10 +1663,10 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
     }
     /* search for all remaining mailboxes.
        just bother looking at the ones that have the same pattern prefix. */
-    DB->foreach(mbdb,
-		pattern, prefixlen,
-		&find_p, &find_cb, &cbrock,
-		NULL);
+    r = DB->foreach(mbdb,
+		    pattern, prefixlen,
+		    &find_p, &find_cb, &cbrock,
+		    NULL);
 
   done:
     glob_free(&cbrock.g);
@@ -1856,7 +1856,7 @@ int mboxlist_setquota(const char *root, int newquota)
     char quota_path[MAX_MAILBOX_PATH];
     char pattern[MAX_MAILBOX_PATH];
     struct quota quota;
-    int r;
+    int r, t;
 
     if (!root[0] || root[0] == '.' || strchr(root, '/')
 	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
@@ -1885,9 +1885,13 @@ int mboxlist_setquota(const char *root, int newquota)
      * Have to create a new quota root
      */
     /* look for a top-level mailbox in the proposed quotaroot */
-    r = mboxlist_lookup(quota.root, NULL, NULL, NULL);
+    r = mboxlist_detail(quota.root, &t, NULL, NULL, NULL, NULL);
     if (r) {
 	return r;
+    }
+    /* Can't set quota on a remote mailbox */
+    if (t & MBTYPE_REMOTE) {
+	return IMAP_MAILBOX_NOTSUPPORTED;
     }
 
     /* perhaps create .NEW, lock, check if it got recreated, move in place */
