@@ -259,6 +259,7 @@ while(defined($_  = $term->readline('> '))){
 	    }
 	}
     } elsif (($words[0] eq "quit") || ($words[0] eq "q")) {
+        sieve_logout($obj);
 	exit 0;
     } elsif (($words[0] eq "help") || ($words[0] eq "?")) {
 	show_help();

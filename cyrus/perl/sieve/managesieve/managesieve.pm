@@ -60,6 +60,7 @@ require DynaLoader;
   sieve_list
   sieve_activate
   sieve_get
+  sieve_logout
 );
 $VERSION = '0.01';
 
