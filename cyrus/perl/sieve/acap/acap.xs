@@ -135,7 +135,7 @@ perlsieve_simple(context, id, result, len)
         tmp = POPp;
 
         /* copy result */
-        *result = malloc(strlen(tmp));
+        *result = malloc(strlen(tmp)+1);
         if (!*result) return SASL_NOMEM;
         strcpy(*result,tmp);
         if (len) *len = strlen(*result);
