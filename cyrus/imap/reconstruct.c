@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.11 2004/09/26 18:30:28 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.12 2004/10/11 20:48:04 ken3 Exp $ */
 
 #include <config.h>
 
@@ -686,7 +686,12 @@ int reconstruct(char *name, struct discovered *found)
 	
 	mailbox_message_get_fname(&mailbox, uid[msg], msgfname, sizeof(msgfname));
 	msgfile = fopen(msgfname, "r");
-	if (!msgfile) continue;
+	if (!msgfile) {
+	    fprintf(stderr, "reconstruct: fopen() failed for '%s' [error=%d] -- skipping.\n",
+		    msgfname, errno);
+	    continue;
+	}
+
 	if (fstat(fileno(msgfile), &sbuf)) {
 	    fclose(msgfile);
 	    continue;
