@@ -2,7 +2,7 @@
  * 
  * Copyright 1999 Carnegie Mellon University
  * 
- * $Id: mboxlist.h,v 1.5 2000/02/15 22:21:25 leg Exp $
+ * $Id: mboxlist.h,v 1.6 2000/04/11 20:52:29 leg Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -94,7 +94,8 @@ int mboxlist_foreach(foreach_proc *p, void *rock, int rw);
 int mboxlist_findsub(char *pattern, int isadmin, char *userid, 
 		     struct auth_state *auth_state, int (*proc)(), void *rock);
 
-/* xxx */
+/* given a mailbox 'name', where should we stage messages for it? 
+   'stagedir' should be MAX_MAILBOX_PATH. */
 int mboxlist_findstage(const char *name, char *stagedir);
 
 /* Change 'user's subscription status for mailbox 'name'. */
