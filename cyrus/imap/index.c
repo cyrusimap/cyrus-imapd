@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.117 2000/06/09 01:04:24 ken3 Exp $
+ * $Id: index.c,v 1.118 2000/06/09 02:44:44 leg Exp $
  */
 #include <config.h>
 
@@ -3077,7 +3077,7 @@ char *index_extract_subject(const char *subj)
      * resetting the end of the string as we go.
      */
     for (x = s + strlen(s) - 1; x >= s;) {
-	if (isspace(*x)) {				/* whitespace? */
+	if (isspace((int) *x)) {                        /* whitespace? */
 	    *x = '\0';					/* yes, trim it */
 	    x--;					/* skip past it */
 	}
@@ -3096,8 +3096,7 @@ char *index_extract_subject(const char *subj)
      * skipping over stuff we don't care about.
      */
     for (base = s; base;) {
-	if (isspace(*base))				/* whitespace? */
-	    base++;					/* yes, skip past it */
+	if (isspace((int) *base)) base++;		/* whitespace? */
 
 	/* possible refwd */
 	else if ((!strncasecmp(base, "re", 2) &&	/* "re"? */
@@ -3107,18 +3106,17 @@ char *index_extract_subject(const char *subj)
 		 (!strncasecmp(base, "fw", 2) &&	/* "fw"? */
 		  (x = base + 2))) {			/* yes, skip past it */
 	    
-	    while (isspace(*x))				/* whitespace? */
-		x++;					/* yes, skip past it */
+	    while (isspace((int) *x)) x++;		/* skip whitespace */
 
 	    if (*x == '[') {				/* start of blob? */
-		if (x = strchr(x, ']'))			/* yes, end of blob? */
+		x = strchr(x, ']');
+		if (x)			                /* yes, end of blob? */
 		    x++;				/* yes, skip past it */
 		else
 		    break;				/* no, we're done */
 	    }
 
-	    while (isspace(*x))				/* whitespace? */
-		x++;					/* yes, skip past it */
+	    while (isspace((int) *x)) x++;              /* skip whitespace */
 
 	    if (*x == ':')				/* ending colon? */
 		base = x + 1;				/* yes, skip past it */
