@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.13 2005/03/13 16:06:05 ken3 Exp $
+ * $Id: fetchnews.c,v 1.14 2005/03/23 00:40:11 shadow Exp $
  */
 
 #include <config.h>
@@ -125,7 +125,7 @@ int newsrc_done(void)
 void usage(void)
 {
     fprintf(stderr,
-	    "fetchnews [-C <altconfig>] [-s <server>] [-n] [-w <wildmat>] [-f <tstamp file>]\n"
+	    "fetchnews [-C <altconfig>] [-s <server>] [-n] [-y] [-w <wildmat>] [-f <tstamp file>]\n"
 	    "          [-a <authname> [-p <password>]] <peer>\n");
     exit(-1);
 }
@@ -264,10 +264,11 @@ int main(int argc, char *argv[])
     time_t stamp;
     char **resp = NULL;
     int newnews = 1;
+    char *datefmt = "%y%m%d %H%M%S";
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "C:s:w:f:a:p:n")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:s:w:f:a:p:n:y")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -299,6 +300,10 @@ int main(int argc, char *argv[])
 
 	case 'n': /* no newnews */
 	    newnews = 0;
+	    break;
+	
+	case 'y': /* newsserver is y2k compliant */
+	    datefmt = "%Y%m%d %H%M%S";
 	    break;
 
 	default:
@@ -412,7 +417,7 @@ int main(int argc, char *argv[])
 	/* ask for new articles */
 	if (stamp) stamp -= 180; /* adjust back 3 minutes */
 	ptime = gmtime(&stamp);
-	strftime(buf, sizeof(buf), "%Y%m%d %H%M%S", ptime);
+	strftime(buf, sizeof(buf), datefmt, ptime);
 	prot_printf(pout, "NEWNEWS %s %s GMT\r\n", wildmat, buf);
 	
 	if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("230", buf, 3)) {
