@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.34 2002/06/09 16:13:41 leg Exp $
+   $Id: seen_db.c,v 1.35 2002/07/24 18:10:31 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -390,7 +390,6 @@ int seen_close(struct seen *seendb)
 	if (r != CYRUSDB_OK) {
 	    syslog(LOG_ERR, "DBERROR: error committing seen txn; "
 		   "seen state lost: %s", cyrusdb_strerror(r));
-	    DB->abort(seendb->db, seendb->tid);
 	}
 	seendb->tid = NULL;
     }
@@ -505,7 +504,6 @@ int seen_unlock(struct seen *seendb)
     if (r != CYRUSDB_OK) {
 	syslog(LOG_ERR, "DBERROR: error committing seen txn; "
 	       "seen state lost: %s", cyrusdb_strerror(r));
-	DB->abort(seendb->db, seendb->tid);
     }
     seendb->tid = NULL;
 
