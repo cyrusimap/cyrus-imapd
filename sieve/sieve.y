@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.2 1999/07/31 21:49:41 leg Exp $
+ * $Id: sieve.y,v 1.3 1999/09/06 02:51:57 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
