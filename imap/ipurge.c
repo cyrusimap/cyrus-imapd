@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.17 2003/02/13 20:15:26 rjs3 Exp $
+ * $Id: ipurge.c,v 1.18 2003/04/22 17:39:41 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -104,10 +104,9 @@ int purge_check(struct mailbox *, void *, char *);
 int usage(char *name);
 void print_stats(mbox_stats_t *stats);
 
-int
-main (int argc, char *argv[]) {
+int main (int argc, char *argv[]) {
   char option;
-  char buf[MAX_MAILBOX_PATH];
+  char buf[MAX_MAILBOX_PATH+1];
   char *alt_config = NULL;
   int r;
 
