@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.10 2004/05/06 18:14:28 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.11 2004/05/06 19:08:06 ken3 Exp $
  */
 
 #include <config.h>
@@ -681,9 +681,9 @@ int pipe_lsub(struct backend *s, const char *tag,
 
 	    } else if(resp[0] == 'M' && !exist_r) {
 		/* Note that it has to exist for a find response */
-
-		/* xxx what happens if name.s isn't an atom? */
-		prot_printf(imapd_out, "* %s %s\r\n", resp, name.s);
+		prot_printf(imapd_out, "* %s ", resp);
+		printastring(name.s);
+		prot_printf(imapd_out, "\r\n");
 	    }
 	}
     } /* while(1) */
