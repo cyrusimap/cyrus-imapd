@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.126 2000/06/10 22:51:33 leg Exp $
+ * $Id: mboxlist.c,v 1.127 2000/06/28 05:48:51 leg Exp $
  */
 
 #include <config.h>
@@ -972,6 +972,7 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	    deletequotaroot = 1;
 	    break;
 	case DB_LOCK_DEADLOCK:
+	    cursor->c_close(cursor);
 	    goto retry;
 	    break;
 	default:
@@ -1629,15 +1630,47 @@ int mboxlist_setacl(char *name, char *identifier, char *rights, int isadmin,
  * Blame Larry if you don't like this solution.
  */
 
-typedef enum {
-  FINDALL_START,
-  FINDALL_INBOX,
-  FINDALL_PREFIX,
-  FINDALL_DOING_INBOXSTAR,
-  FINDALL_INBOXSTAR,
-  FINDALL_DOING_REST,
-  FINDALL_REST
-} findall_state;
+static int cursor_retryget(DBC *cursor, DBT *key, DBT *data, int operation)
+{
+    int r;
+
+    r = cursor->c_get(cursor, key, data, operation);
+    while (r == DB_LOCK_DEADLOCK) {
+	switch (r = cursor->c_close(cursor)) {
+	case 0:
+	    break;
+	default:
+	    syslog(LOG_ERR, "DBERROR: couldn't close cursor: %s",
+		   db_strerror(r));
+	    goto done;
+	}
+	switch (r = mbdb->cursor(mbdb, NULL, &cursor, 0)) {
+	case 0:
+	    break;
+	default:
+	    syslog(LOG_ERR, "DBERROR: couldn't recreate cursor: %s",
+		   db_strerror(r));
+	    goto done;
+	}
+	if ((operation | DB_RMW) == (DB_NEXT | DB_RMW)) {
+	    /* reset the cursor position */
+	    r = cursor->c_get(cursor, key, data, DB_SET);
+	    switch (r) {
+	    case 0:
+		break;
+	    case DB_LOCK_DEADLOCK:
+		continue;
+	    case DB_NOTFOUND:
+		r = cursor->c_get(cursor, key, data, DB_SET_RANGE);
+		if (r == DB_LOCK_DEADLOCK) continue;
+		break;
+	    }
+	}
+	r = cursor->c_get(cursor, key, data, operation);
+    }
+ done:
+    return r;
+}
 
 int mboxlist_findall(char *pattern, int isadmin, char *userid,
 		     struct auth_state *auth_state,
@@ -1650,15 +1683,12 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
     int r;
     struct glob *g = NULL;
     char *p;
-    findall_state state;
     DBT key, data;
     DBC *cursor = NULL;
     struct mbox_entry *mboxent;
 
     memset(&key, 0, sizeof(key));
     memset(&data, 0, sizeof(data));
-
-    state = FINDALL_START;
 
     g = glob_init(pattern, GLOB_HIERARCHY | GLOB_INBOXCASE);
     
@@ -1707,9 +1737,7 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 	key.size = strlen(usermboxname);
 	
 	/* find out if INBOX exists */
-	do {
-	    r = cursor->c_get(cursor, &key, &data, DB_SET);
-	} while (r == DB_LOCK_DEADLOCK);
+	r = cursor_retryget(cursor, &key, &data, DB_SET);
 	while (r != DB_NOTFOUND) {
 	    long minmatch;
 
@@ -1746,9 +1774,7 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 		if (r) goto done;
 	    }
 
-	    do {
-		r = cursor->c_get(cursor, &key, &data, DB_NEXT);
-	    } while (r == DB_LOCK_DEADLOCK);
+	    r = cursor_retryget(cursor, &key, &data, DB_NEXT);
 	}
     }
 
@@ -1758,13 +1784,9 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 	key.data = pattern;
 	key.size = prefixlen;
 	
-	do {
-	    r = cursor->c_get(cursor, &key, &data, DB_SET_RANGE);
-	} while (r == DB_LOCK_DEADLOCK);
+	r = cursor_retryget(cursor, &key, &data, DB_SET_RANGE);
     } else {
-	do {
-	    r = cursor->c_get(cursor, &key, &data, DB_FIRST);
-	} while (r == DB_LOCK_DEADLOCK);
+	r = cursor_retryget(cursor, &key, &data, DB_FIRST);
     }
 
     /* iterate over all mailboxes matching prefix */
@@ -1821,9 +1843,7 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 	    }
 	}
 	
-	do {
-	    r = cursor->c_get(cursor, &key, &data, DB_NEXT);
-	} while (r == DB_LOCK_DEADLOCK);
+	r = cursor_retryget(cursor, &key, &data, DB_NEXT);
     }
     /* normal case; DB_NOTFOUND or we stopped matching */
     r = 0;
@@ -2166,10 +2186,7 @@ int mboxlist_foreach(foreach_proc *p, void *rock, int rw)
 	goto done;
     }
 
-    do {
-	r = cursor->c_get(cursor, &key, &data, DB_FIRST | flags);
-    } while (r == DB_LOCK_DEADLOCK);
-
+    r = cursor_retryget(cursor, &key, &data, DB_FIRST | flags);
     while (r != DB_NOTFOUND) {
 	switch (r) {
 	case 0:
@@ -2201,9 +2218,7 @@ int mboxlist_foreach(foreach_proc *p, void *rock, int rw)
 	    if (rw) {
 		data.data = (char *) mboxent;
 		data.size = sizeof(struct mbox_entry) + strlen(mboxent->acls);
-		do {
-		    r = cursor->c_put(cursor, &key, &data, DB_CURRENT);
-		} while (r == DB_LOCK_DEADLOCK);
+		r = cursor->c_put(cursor, &key, &data, DB_CURRENT);
 	    } else {
 		r = IMAP_IOERROR;
 		goto done;
@@ -2225,9 +2240,7 @@ int mboxlist_foreach(foreach_proc *p, void *rock, int rw)
 	}
 	if (r) goto done;
 
-	do {
-	    r = cursor->c_get(cursor, &key, &data, DB_NEXT | flags);
-	} while (r == DB_LOCK_DEADLOCK);
+	r = cursor_retryget(cursor, &key, &data, DB_NEXT | flags);
     }
     if (r == DB_NOTFOUND) {
 	r = 0;
@@ -2419,7 +2432,8 @@ int mboxlist_setquota(const char *root, int newquota)
 	    break;
 	    
 	default:
-	    syslog(LOG_ERR, "DBERROR: error search for mbox: %s", db_strerror(r));
+	    syslog(LOG_ERR, "DBERROR: error search for mbox: %s", 
+		   db_strerror(r));
 	    r = IMAP_IOERROR;
 	    break;
 	}
@@ -2467,157 +2481,12 @@ int mboxlist_setquota(const char *root, int newquota)
 }
 
 /*
- * Resynchronize the news mailboxes with the 'num' groups in the
- * sorted array 'group'.  Mark the ones we have seen in the array
- * 'seen'
- */
-int mboxlist_syncnews(int num, char **group, int *seen)
-{
-    DB_TXN *tid;
-    DBC *cursor;
-    DBT key, keydel, data;
-    struct mbox_entry *mboxent;
-    int r;
-
-    int deletethis;
-    int low, high, mid;
-    struct mailbox mailbox;
-
-    /* restart transaction place */
-    if (0) {
-      retry:
-	if ((r = txn_abort(tid)) != 0) {
-	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
-		   db_strerror(r));
-	    return IMAP_IOERROR;
-	}
-    }
-
-    /* begin the transaction */
-    if ((r = txn_begin(dbenv, NULL, &tid, 0)) != 0) {
-	syslog(LOG_ERR, "DBERROR: error beginning txn: %s", db_strerror(r));
-	return IMAP_IOERROR;
-    }
-
-    mbdb->cursor(mbdb, tid, &cursor, 0);
-
-    r = cursor->c_get(cursor, &key, &data, DB_FIRST);
-    while (r != DB_NOTFOUND) {
-	switch (r) {
-	case 0:
-	    break;
-
-	case DB_LOCK_DEADLOCK:
-	    goto retry;
-	    break;
-
-	default:
-	    syslog(LOG_ERR, "DBERROR: error advancing: %s", db_strerror(r));
-	    r = IMAP_IOERROR;
-	    goto done;
-	}
-	
-	mboxent = (struct mbox_entry *) data.data;
-	deletethis = 0;
-	if (!strcasecmp(mboxent->partition, "news")) {
-	    deletethis = 1;
-
-	    /* Search for name in 'group' array */
-	    low = 0;
-	    high = num;
-	    while (low <= high) {
-		mid = (high - low)/2 + low;
-		r = strcmp(key.data, group[mid]);
-		if (r == 0) {
-		    deletethis = 0;
-		    seen[mid] = 1;
-		    break;
-		}
-		else if (r < 0) {
-		    high = mid - 1;
-		}
-		else {
-		    low = mid + 1;
-		}
-	    }
-	    if (deletethis) {
-		/* Remove the mailbox.  Don't care about errors */
-
-		/* if the transactions abort we can leave it in a
-		   inconsistant state the worst that can happen is that
-		   people get I/O Error's instead of Mailbox doesn't
-		   exist on selects */
-		r = mailbox_open_header(key.data, 0, &mailbox);
-		if (!r) {
-		    r = mailbox_delete(&mailbox, 0);
-		}
-	    }
-	}
-
-	keydel = key;
-	r = cursor->c_get(cursor, &key, &data, DB_NEXT);
-
-	if (deletethis) {
-	    switch (mbdb->del(mbdb, tid, &keydel, 0)) {
-	    case 0:
-		break;
-
-	    case DB_LOCK_DEADLOCK:
-		goto retry;
-		break;
-
-	    default:
-		syslog(LOG_ERR, "DBERROR: error deleting newsgroup");
-		r = IMAP_IOERROR;
-		goto done;
-	    }
-	}
-    }
-    r = 0;
-
-    switch (cursor->c_close(cursor)) {
-    case 0:
-	break;
-    case DB_LOCK_DEADLOCK:
-	goto retry;
-	break;
-    }
-
-  done:
-
-    if (!r) {
-	r = txn_commit(tid, 0);
-
-	switch (r) {
-	case 0:
-	    break;
-	case EINVAL:
-	    syslog(LOG_WARNING, 
-		   "tried to commit an already aborted transaction");
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
-		   db_strerror(r));
-	    r = IMAP_IOERROR;
-	    break;
-	}
-    } else {
-	int r2;
-
-	if ((r2 = txn_abort(tid)) != 0) {
-	    syslog(LOG_ERR, "DBERROR: error aborting txn %s", db_strerror(r2));
-	    r = IMAP_IOERROR;
-	}
-    }
-
-    return r;
-}
-
-/*
  * Retrieve internal information, for reconstructing mailboxes file
  */
-void mboxlist_getinternalstuff(const char **listfnamep,const char **newlistfnamep, 
-			       const char **basep,unsigned long * sizep)
+void mboxlist_getinternalstuff(const char **listfnamep,
+			       const char **newlistfnamep, 
+			       const char **basep,
+			       unsigned long * sizep)
 {
     printf("yikes! don't reconstruct me!\n");
     abort();
@@ -2637,14 +2506,13 @@ void mboxlist_getinternalstuff(const char **listfnamep,const char **newlistfname
  * On failure, returns an error code.
  */
 static int
-mboxlist_opensubs(userid, lock, subsfdp, basep, sizep, fname, newfname)
-const char *userid;
-int lock;
-int *subsfdp;
-const char **basep;
-unsigned long *sizep;
-const char **fname;
-const char **newfname;
+mboxlist_opensubs(const char *userid,
+		  int lock,
+		  int *subsfdp,
+		  const char **basep,
+		  unsigned long *sizep,
+		  const char **fname,
+		  const char **newfname)
 {
     int r;
     static char *subsfname, *newsubsfname;
@@ -2709,11 +2577,9 @@ const char **newfname;
 /*
  * Close a subscription file
  */
-static void
-mboxlist_closesubs(subsfd, base, size)
-int subsfd;
-const char *base;
-unsigned long size;
+static void mboxlist_closesubs(int subsfd,
+			       const char *base,
+			       unsigned long size)
 {
     map_free(&base, &size);
     close(subsfd);
@@ -2908,7 +2774,6 @@ void mboxlist_init(int myflags)
 
     dbenv->set_paniccall(dbenv, (void (*)(DB_ENV *, int)) &db_panic);
 
-    
     dbenv->set_verbose(dbenv, DB_VERB_DEADLOCK, 1);
     dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1);
     dbenv->set_verbose(dbenv, DB_VERB_CHKPOINT, 1);
