@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.8 2000/06/06 00:54:54 leg Exp $
+ * $Id: lmtpengine.c,v 1.9 2000/06/16 02:37:15 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -135,9 +135,15 @@ static char *convert_lmtp(int r)
     case IMAP_IOERROR:
 	return "451 4.3.0 System I/O error";
 
+    case IMAP_SERVER_UNAVAILABLE:
+	return "451 4.4.0 Remote server unavailable";
+
     case IMAP_NOSPACE:
 	return "451 4.3.1 cannot create file: out of space";
-	
+
+    case IMAP_AGAIN:
+	return "451 4.3.0 transient system error";
+		
     case IMAP_PERMISSION_DENIED:
 	return "550 5.7.1 Permission denied";
 
@@ -1376,6 +1382,49 @@ struct lmtp_conn {
 #define PERMFAIL(r) (((r) / 100) == 5)
 #define ISCONT(s) (s && (s[3] == '-'))
 
+static int revconvert_lmtp(const char *code)
+{
+    int c = atoi(code);
+    switch (c) {
+    case 250:
+    case 251:
+	return 0;
+    case 451:
+	if (code[4] == '4' && code[6] == '3') {
+	    if (code[8] == '0') {
+		return IMAP_IOERROR;
+	    } else if (code[8] == '1') {
+		return IMAP_NOSPACE;
+	    } else {
+		return IMAP_IOERROR;
+	    }
+	}
+	else if (code[4] == '4' && code [6] == '4') {
+	    return IMAP_SERVER_UNAVAILABLE;
+	}
+	else {
+	    return IMAP_IOERROR;
+	}
+    case 452:
+	return IMAP_QUOTA_EXCEEDED;
+    case 550:
+	if (code[4] == '5' && code[6] == '7') {
+	    return IMAP_PERMISSION_DENIED;
+	} else if (code[4] == '5' && code[6] == '1') {
+	    return IMAP_MAILBOX_NONEXISTENT;
+	}
+	return IMAP_PERMISSION_DENIED;
+    case 554:
+	return IMAP_MESSAGE_BADHEADER; /* sigh, pick one */
+
+    default:
+	if (ISGOOD(c)) return 0;
+	else if (TEMPFAIL(c)) return IMAP_AGAIN;
+	else if (PERMFAIL(c)) return IMAP_PROTOCOL_ERROR;
+	else return IMAP_AGAIN;
+    }
+}
+
 static int ask_code(const char *s)
 {
     int ret = 0;
@@ -1413,7 +1462,7 @@ static void chop(char *s)
 
 static int do_auth(struct lmtp_conn *conn)
 {
-    return 1;
+    return 0;
 }
 
 /* establish connection, LHLO, and AUTH if possible */
@@ -1692,6 +1741,7 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
 	    goto failall;
 	}
 	code = ask_code(buf);
+	txn->rcpt[j].r = revconvert_lmtp(buf);
 	if (ISGOOD(code)) {
 	    onegood = 1;
 	    txn->rcpt[j].result = RCPT_GOOD;
@@ -1738,6 +1788,7 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
 		goto failall;
 	    }
 	    code = ask_code(buf);
+	    txn->rcpt[j].r = revconvert_lmtp(buf);
 	    if (ISGOOD(code)) {
 		onegood = 1;
 		txn->rcpt[j].result = RCPT_GOOD;
@@ -1760,10 +1811,13 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
        'code' to all recipients and return */
     for (j = 0; j < txn->rcpt_num; j++) {
 	if (ISGOOD(code)) {
+	    txn->rcpt[j].r = 0;
 	    txn->rcpt[j].result = RCPT_GOOD;
 	} else if (TEMPFAIL(code)) {
+	    txn->rcpt[j].r = IMAP_AGAIN;
 	    txn->rcpt[j].result = RCPT_TEMPFAIL;
 	} else if (PERMFAIL(code)) {
+	    txn->rcpt[j].r = IMAP_PROTOCOL_ERROR;
 	    txn->rcpt[j].result = RCPT_PERMFAIL;
 	} else {
 	    /* code should have been a valid number */
@@ -1772,6 +1826,25 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
     }
 
     /* return overall error code already set */
+    return r;
+}
+
+/* send a NOOP to the conn to verify it's still ok */
+int lmtp_verify_conn(struct lmtp_conn *conn)
+{
+    char buf[8192];
+    int r = 0;
+
+    /* noop me */
+    prot_printf(conn->pout, "NOOP\r\n");
+    if (prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
+	int code = ask_code(buf);
+
+	if (!ISGOOD(code)) r = IMAP_SERVER_UNAVAILABLE;
+    } else {
+	r = IMAP_SERVER_UNAVAILABLE;
+    }
+    
     return r;
 }
 

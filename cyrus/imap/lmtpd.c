@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.36 2000/06/09 02:44:50 leg Exp $
+ * $Id: lmtpd.c,v 1.37 2000/06/16 02:37:15 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.36 2000/06/09 02:44:50 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.37 2000/06/16 02:37:15 leg Exp $";*/
 
 #include <config.h>
 
@@ -913,7 +913,6 @@ static void setup_sieve(void)
 	fatal("sieve_register_keep()", EC_TEMPFAIL);
     }
     res = sieve_register_imapflags(sieve_interp, &mark);
-
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_imapflags() returns %d\n", res);
 	fatal("sieve_register_imapflags()", EC_TEMPFAIL);
