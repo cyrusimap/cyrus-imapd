@@ -1,7 +1,7 @@
 /* prot.h -- stdio-like module that handles buffering, SASL, and TLS
  *           details for I/O over sockets
  *
- * $Id: prot.h,v 1.35.4.4 2002/08/05 17:07:07 rjs3 Exp $
+ * $Id: prot.h,v 1.35.4.5 2002/11/22 18:32:34 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -124,7 +124,7 @@ struct prot_waitevent {
     struct prot_waitevent *next;
 };
 
-/* Not for use by applications directly (but needed by macros) */
+/* Not for use by applications directly, but needed by the macros. */
 int prot_flush_internal(struct protstream *s, int force);
 
 #define PROTGROUP_SIZE_DEFAULT 32
@@ -136,7 +136,7 @@ extern int prot_putc(int c, struct protstream *s);
 
 #define prot_getc(s) ((s)->cnt-- > 0 ? (int)*(s)->ptr++ : prot_fill(s))
 #define prot_ungetc(c, s) ((s)->cnt++, (*--(s)->ptr = (c)))
-#define prot_putc(c, s) ((*(s)->ptr++ = (c)), --(s)->cnt == 0 ? prot_flush(s) : 0)
+#define prot_putc(c, s) ((*(s)->ptr++ = (c)), --(s)->cnt == 0 ? prot_flush_internal(s,0) : 0)
 
 /* The following two macros control the blocking nature of
  * the protstream.
@@ -158,16 +158,32 @@ extern int prot_putc(int c, struct protstream *s);
 #define prot_BLOCK(s) ((s)->dontblock = 0)
 #define prot_NONBLOCK(s) ((s)->dontblock = 1)
 
+/* Allocate/free the protstream structure */
 extern struct protstream *prot_new(int fd, int write);
 extern int prot_free(struct protstream *s);
+
+/* Set the telemetry logfile for a given protstream */
 extern int prot_setlog(struct protstream *s, int fd);
+
+/* Set the SASL options for a protstream (requires authentication to
+ * be complete for the given sasl_conn_t */
 extern int prot_setsasl(struct protstream *s, sasl_conn_t *conn);
+
 #ifdef HAVE_SSL
+/* Set TLS options for a given protstream (requires a completed tls
+ * negotiation */
 extern int prot_settls(struct protstream *s, SSL *tlsconn);
 #endif /* HAVE_SSL */
+
+/* Set a timeout for the connection (in seconds) */
 extern int prot_settimeout(struct protstream *s, int timeout);
+
+/* Connect two streams so that when you block on reading s, the layer
+ * will automaticly flush flushs */
 extern int prot_setflushonread(struct protstream *s,
 			       struct protstream *flushs);
+
+
 extern int prot_setreadcallback(struct protstream *s,
 				prot_readcallback_t *proc, void *rock);
 extern struct prot_waitevent *prot_addwaitevent(struct protstream *s,
@@ -176,10 +192,17 @@ extern struct prot_waitevent *prot_addwaitevent(struct protstream *s,
 						void *rock);
 extern void prot_removewaitevent(struct protstream *s,
 				 struct prot_waitevent *event);
+
 extern const char *prot_error(struct protstream *s);
 extern int prot_rewind(struct protstream *s);
+
+/* Fill the buffer for a read stream with waiting data (may block) */
 extern int prot_fill(struct protstream *s);
+
+/* Force a flush of an output stream */
 extern int prot_flush(struct protstream *s);
+
+/* These are protlayer versions of the specified functions */
 extern int prot_write(struct protstream *s, const char *buf, unsigned len);
 extern int prot_printf(struct protstream *, const char *, ...)
     __attribute__ ((format (printf, 2, 3)));

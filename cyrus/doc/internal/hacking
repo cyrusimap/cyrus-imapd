@@ -14,7 +14,25 @@ right now but hopefully that will improve with time ;)
     which are much faster, but will leak memory until you free the entire
     pool at once.
 
-- (ToDo) mmap and map_refresh, etc.
+- map_refresh and map_free
+
+  - In many cases, it is far more effective to read a file via the operating
+    system's mmap facility than it is to via the traditional read() and
+    lseek system calls.  To this end, Cyrus provides an operating system
+    independent wrapper around the mmap() services (or lack thereof) of the
+    operating system.
+
+  - Cyrus currently only supports read-only memory maps, all writes back
+    to a file need to be done via the more traditional facilities.  This is
+    to enable very low-performance support for operating systems which do not
+    provide an mmap() facility via a fake userspace mmap.
+
+  - To create a map, simply call map_refresh on the map (details are in
+    lib/map.h).  To free it, call map_free on the same map.
+
+  - Despite the fact that the maps are read-only, it is often useful to open
+    the file descriptors O_RDWR, espeically if the file decriptors could
+    possibly be used for writing elsewhere in the code.
 
 - Network Functions
   - Cyrus abstracts socket stream access to a concept we refer to as
