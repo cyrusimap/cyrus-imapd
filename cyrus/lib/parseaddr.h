@@ -1,15 +1,25 @@
 /* parseaddr.h -- RFC 822 address parser
- *
- * Copyright 1996, Carnegie Mellon University.  All Rights Reserved.
- * 
- * This software is made available for academic and research
- * purposes only.  No commercial license is hereby granted.
- * Copying and other reproduction is authorized only for research,
- * education, and other non-commercial purposes.  No warranties,
- * either expressed or implied, are made regarding the operation,
- * use, or results of the software.  Such a release does not permit
- * use of the code for commercial purposes or benefits by anyone
- * without specific, additional permission by the owner of the code.
+ $Id: parseaddr.h,v 1.6 1998/05/15 21:52:44 neplokh Exp $
+ 
+ #        Copyright 1998 by Carnegie Mellon University
+ #
+ #                      All Rights Reserved
+ #
+ # Permission to use, copy, modify, and distribute this software and its
+ # documentation for any purpose and without fee is hereby granted,
+ # provided that the above copyright notice appear in all copies and that
+ # both that copyright notice and this permission notice appear in
+ # supporting documentation, and that the name of CMU not be
+ # used in advertising or publicity pertaining to distribution of the
+ # software without specific, written prior permission.
+ #
+ # CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+ # ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+ # CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+ # ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+ # WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ # ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+ # SOFTWARE.
  *
  */
 

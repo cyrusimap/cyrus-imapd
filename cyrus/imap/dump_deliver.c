@@ -1,19 +1,33 @@
 /* dump_deliver.c -- Program to dump deliver db for debugging purposes
- *
- * Copyright 1998, Carnegie Mellon University.  All Rights Reserved.
- * 
- * This software is made available for academic and research
- * purposes only.  No commercial license is hereby granted.
- * Copying and other reproduction is authorized only for research,
- * education, and other non-commercial purposes.  No warranties,
- * either expressed or implied, are made regarding the operation,
- * use, or results of the software.  Such a release does not permit
- * use of the code for commercial purposes or benefits by anyone
- * without specific, additional permission by the owner of the code.
+ $Id: dump_deliver.c,v 1.4 1998/05/15 21:48:25 neplokh Exp $
+ 
+ # Copyright 1998 Carnegie Mellon University
+ # 
+ # No warranties, either expressed or implied, are made regarding the
+ # operation, use, or results of the software.
+ #
+ # Permission to use, copy, modify and distribute this software and its
+ # documentation is hereby granted for non-commercial purposes only
+ # provided that this copyright notice appears in all copies and in
+ # supporting documentation.
+ #
+ # Permission is also granted to Internet Service Providers and others
+ # entities to use the software for internal purposes.
+ #
+ # The distribution, modification or sale of a product which uses or is
+ # based on the software, in whole or in part, for commercial purposes or
+ # benefits requires specific, additional permission from:
+ #
+ #  Office of Technology Transfer
+ #  Carnegie Mellon University
+ #  5000 Forbes Avenue
+ #  Pittsburgh, PA  15213-3890
+ #  (412) 268-4387, fax: (412) 268-7395
+ #  tech-transfer@andrew.cmu.edu
  *
  */
 
-static char _rcsid[] = "$Id: dump_deliver.c,v 1.3 1998/05/12 22:35:07 wcw Exp $";
+static char _rcsid[] = "$Id: dump_deliver.c,v 1.4 1998/05/15 21:48:25 neplokh Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -144,5 +158,5 @@ int code;
     exit(code);
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.3 1998/05/12 22:35:07 wcw Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.4 1998/05/15 21:48:25 neplokh Exp $ */
 
