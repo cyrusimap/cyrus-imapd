@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.168 1999/04/01 21:22:45 tjs Exp $ */
+/* $Id: imapd.c,v 1.169 1999/04/01 21:41:53 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -1819,7 +1819,7 @@ int usinguid;
 	goto freeargs;
     }
 
-    if (!fetchitems && !fetchargs.bodysections &&
+    if (!fetchitems && !fetchargs.bodysections && !fetchargs.fsections &&
 	!fetchargs.headers && !fetchargs.headers_not) {
 	prot_printf(imapd_out, "%s BAD Missing required argument to %s\r\n", tag, cmd);
 	goto freeargs;
