@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.1.2.2 2003/06/18 20:40:12 ken3 Exp $
+ * $Id: cyr_expire.c,v 1.1.2.3 2003/06/20 15:21:35 ken3 Exp $
  */
 
 #include <config.h>
@@ -132,7 +132,7 @@ int build_table(char *name, int matchlen, int maycreate __attribute__((unused)),
 	unsigned long days = strtoul(attrib.value, NULL, 10);
 	time_t *expmark = (time_t *) xmalloc(sizeof(time_t));
 
-	*expmark = time(0) - (days * 60 * 60 * 24);
+	*expmark = days ? time(0) - (days * 60 * 60 * 24) : 0 /* never */ ;
 	hash_insert(name, (void *) expmark, expire_table);
     }
 
