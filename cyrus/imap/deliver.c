@@ -181,7 +181,7 @@ char *user;
 
     if (!r) {
 	rewind(f);
-	r = append_fromstream(&mailbox, f, 0, flag, nflags, authuser);
+	r = append_fromstream(&mailbox, f, 0, time(0), flag, nflags, authuser);
 	mailbox_close(&mailbox);
     }
 

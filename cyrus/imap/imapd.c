@@ -598,7 +598,8 @@ char *name;
     printf("+ go ahead\r\n");
     fflush(stdout);
 
-    r = append_fromstream(&mailbox, stdin, size, flag, nflags, imapd_userid);
+    r = append_fromstream(&mailbox, stdin, size, time(0), flag, nflags,
+			  imapd_userid);
     mailbox_close(&mailbox);
 
     if (imapd_mailbox) {
