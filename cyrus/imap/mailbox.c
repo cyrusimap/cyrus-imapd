@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.22 2005/01/11 19:18:44 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.23 2005/02/14 06:43:17 shadow Exp $
  *
  */
 
@@ -265,7 +265,7 @@ int mailbox_cached_header(const char *s)
     /* Generate lower case copy of string */
     /* xxx sometimes the caller has already generated this .. 
      * maybe we can just require callers to do it? */
-    for (i=0 ; *s && (i < MAX_CACHED_HEADER_SIZE) ; i++)
+    for (i=0 ; *s && (i < (MAX_CACHED_HEADER_SIZE - 1)) ; i++)
 	hdr[i] = tolower(*s++);
     
     if (*s) return BIT32_MAX;   /* Input too long for match */
@@ -283,7 +283,7 @@ int mailbox_cached_header_inline(const char *text)
     int i;
     
     /* Scan for header */
-    for (i=0; i < MAX_CACHED_HEADER_SIZE; i++) {
+    for (i=0; i < (MAX_CACHED_HEADER_SIZE - 1); i++) {
 	if (!text[i] || text[i] == '\r' || text[i] == '\n') break;
 	
 	if (text[i] == ':') {

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.51 2005/01/11 20:08:13 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.52 2005/02/14 06:43:14 shadow Exp $ */
 
 #include <config.h>
 
@@ -210,7 +210,7 @@ void cmd_thread(char *tag, int usinguid);
 void cmd_copy(char *tag, char *sequence, char *name, int usinguid);
 void cmd_expunge(char *tag, char *sequence);
 void cmd_create(char *tag, char *name, char *partition, int localonly);
-void cmd_delete(char *tag, char *name, int localonly);
+void cmd_delete(char *tag, char *name, int localonly, int force);
 void cmd_dump(char *tag, char *name, int uid_start);
 void cmd_undump(char *tag, char *name);
 void cmd_xfer(char *tag, char *name, char *toserver, char *topart);
@@ -1139,7 +1139,7 @@ void cmdloop()
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_delete(tag.s, arg1.s, 0);
+		cmd_delete(tag.s, arg1.s, 0, 0);
 
 		snmp_increment(DELETE_COUNT, 1);
 	    }
@@ -1384,7 +1384,7 @@ void cmdloop()
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_delete(tag.s, arg1.s, 1);
+		cmd_delete(tag.s, arg1.s, 1, 1);
 
 		/* xxxx snmp_increment(DELETE_COUNT, 1); */
 	    }
@@ -4301,7 +4301,7 @@ static int delmbox(char *name,
 /*
  * Perform a DELETE command
  */
-void cmd_delete(char *tag, char *name, int localonly)
+void cmd_delete(char *tag, char *name, int localonly, int force)
 {
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
@@ -4366,7 +4366,7 @@ void cmd_delete(char *tag, char *name, int localonly)
 	    domainlen = p - mailboxname + 1;
 
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
-				   imapd_userid, imapd_authstate, 1,
+				   imapd_userid, imapd_authstate, 1-force,
 				   localonly, 0);
     }
 
@@ -4389,12 +4389,16 @@ void cmd_delete(char *tag, char *name, int localonly)
 
 	/* take care of deleting ACLs, subscriptions, seen state and quotas */
 	*p = '\0'; /* clip off pattern */
-	if (domainlen) {
-	    /* fully qualify the userid */
-	    sprintf(p, "@%.*s", domainlen-1, mailboxname);
-	}
-	user_deletedata(mailboxname+domainlen+5, imapd_userid,
-			imapd_authstate, 1);
+	if ((!domainlen) || 
+	    (domainlen+1 < (sizeof(mailboxname) - mailboxname_len))) {
+	    if (domainlen) {
+		/* fully qualify the userid */
+               snprintf(p, (sizeof(mailboxname) - mailboxname_len), "@%.*s", 
+                        domainlen-1, mailboxname);
+	    }
+	    user_deletedata(mailboxname+domainlen+5, imapd_userid,
+			    imapd_authstate, 1);
+        }
     }
 
     imapd_check(NULL, 0, 0);
@@ -4430,8 +4434,8 @@ static int renmbox(char *name,
 		   int maycreate __attribute__((unused)),
 		   void *rock)
 {
-    char oldextname[MAX_MAILBOX_NAME];
-    char newextname[MAX_MAILBOX_NAME];
+    char oldextname[MAX_MAILBOX_NAME+1];
+    char newextname[MAX_MAILBOX_NAME+1];
     struct renrock *text = (struct renrock *)rock;
     int r;
 

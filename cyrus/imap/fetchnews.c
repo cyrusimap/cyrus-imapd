@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.2.2.8 2004/08/05 16:23:30 ken3 Exp $
+ * $Id: fetchnews.c,v 1.2.2.9 2005/02/14 06:43:14 shadow Exp $
  */
 
 #include <config.h>
@@ -247,6 +247,7 @@ int fetch(char *msgid, int bymsgid,
 }
 
 #define RESP_GROW 100
+#define BUFFERSIZE 4096
 
 int main(int argc, char *argv[])
 {
@@ -257,7 +258,7 @@ int main(int argc, char *argv[])
     char *authname = NULL, *password = NULL;
     int psock = -1, ssock = -1;
     struct protstream *pin, *pout, *sin, *sout;
-    char buf[4096];
+    char buf[BUFFERSIZE];
     char sfile[1024] = "";
     int fd = -1, i, n, offered, rejected, accepted, failed;
     time_t stamp;
@@ -470,7 +471,7 @@ int main(int argc, char *argv[])
 	close(fd);
     }
     else {
-	char group[1024], msgid[1024], lastbuf[50];
+	char group[BUFFERSIZE], msgid[BUFFERSIZE], lastbuf[50];
 	const char *data;
 	unsigned long low, high, last, cur;
 	int start;
