@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.41 1999/03/01 20:08:05 tjs Exp $
+# $Id: SMakefile,v 1.42 1999/03/05 20:10:14 wcw Exp $
 #
 
 MAKE=gmake
@@ -55,6 +55,7 @@ fi;
 if test "${WASH_CYRUS_DEBUG}" = "t"; then
    CFLAGS="-g"
    LDFLAGS="-L/usr/local/lib -R/usr/local/lib -xs -g"
+   STATIC="--enable-static-libraries"
 fi
 
 LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --with-cyrus-group=staff $STATIC"
