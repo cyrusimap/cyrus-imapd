@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: master.c,v 1.3 2000/02/18 22:24:19 leg Exp $ */
+/* $Id: master.c,v 1.4 2000/02/19 04:41:11 leg Exp $ */
 
 #include <config.h>
 
@@ -217,9 +217,9 @@ void service_create(struct service *s)
     }
 
     /* allow reuse of address */
-    setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on));
 
-    if (bind(s->socket, &sin, sizeof(sin)) < 0) {
+    if (bind(s->socket, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
 	syslog(LOG_ERR, "unable to bind %s socket: %m", s->name);
 	close(s->socket);
 	s->socket = 0;
@@ -357,9 +357,19 @@ void spawn_schedule(time_t now)
     char path[1024];
     pid_t p;
 
-    a = schedule;
+    a = NULL;
     /* update schedule accordingly */
-    while (schedule && schedule->mark <= now) schedule = schedule->next;
+    while (schedule && schedule->mark <= now) {
+	/* delete from schedule, insert into a */
+	struct event *ptr = schedule;
+
+	/* delete */
+	schedule = schedule->next;
+
+	/* insert */
+	ptr->next = a;
+	a = ptr;
+    }
 
     /* run all events */
     while (a && a != schedule) {
@@ -449,11 +459,8 @@ void sigterm_handler(int sig)
     exit(2);
 }
 
-static int do_chkpoint = 0;
-
 void sigalrm_handler(int sig)
 {
-    do_chkpoint = 1;
 }
 
 void sighandler_setup(void)
