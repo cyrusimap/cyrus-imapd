@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.268 2000/08/21 20:51:28 leg Exp $ */
+/* $Id: imapd.c,v 1.269 2000/09/15 03:37:35 leg Exp $ */
 
 #include <config.h>
 
@@ -3279,8 +3279,8 @@ void cmd_rename(const char *tag,
 					1, imapd_userid, imapd_authstate);
 	    if (r2) {
 		prot_printf(imapd_out, "* NO rename %s %s: %s\r\n",
-			    l->mb[i], newmailboxname, error_message(r));
-		break;
+			    l->mb[i], newmailboxname, error_message(r2));
+		if (RENAME_STOP_ON_ERROR) break;
 	    }
 	}
 
