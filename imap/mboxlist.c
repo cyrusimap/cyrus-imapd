@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.189 2002/05/08 16:28:24 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.190 2002/05/22 20:58:02 rjs3 Exp $
  */
 
 #include <config.h>
@@ -541,7 +541,6 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     char *acl = NULL;
     const char *root = NULL;
     char *newpartition = NULL;
-    struct mailbox newmailbox;
     struct txn *tid = NULL;
     mupdate_handle *mupdate_h = NULL;
     char *mboxent = NULL;
@@ -639,10 +638,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 			   ((mbtype & MBTYPE_NETNEWS) ?
 			    MAILBOX_FORMAT_NETNEWS :
 			    MAILBOX_FORMAT_NORMAL), 
-			   &newmailbox);
-	if (!r) {
-	    mailbox_close(&newmailbox);
-	}
+			   NULL);
     }
 
     if (r) { /* CREATE failed */ 
@@ -797,7 +793,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	if (!isadmin) { r = IMAP_PERMISSION_DENIED; goto done; }
     }
 
-    r = mboxlist_mylookup(name, &mbtype, &path, NULL, &acl, &tid, 1);
+    r = mboxlist_mylookup(name, &mbtype, &path, NULL, &acl, NULL, 1);
     switch (r) {
     case 0:
 	break;
@@ -836,8 +832,27 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	}
     }
 
-    /* remove from mupdate */
-    /* xxx this can lead to inconsistancies if the later stuff fails */
+    /* Lock the mailbox if it isn't a remote mailbox */
+    if(!r && !isremote) {
+	r = mailbox_open_locked(name, path, acl, 0, &mailbox, 0);
+	if(r) goto done;
+    }
+    
+    /* delete entry */
+    r = DB->delete(mbdb, name, strlen(name), &tid, 0);
+    switch (r) {
+    case CYRUSDB_OK: /* success */
+	break;
+    case CYRUSDB_AGAIN:
+	goto retry;
+    default:
+	syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
+	       name, cyrusdb_strerror(r));
+	r = IMAP_IOERROR;
+	goto done;
+    }
+
+    /* remove from mupdate - this can be wierd if the commit below fails */
     if (!r && !isremote && !local_only && config_mupdate_server) {
 	/* delete the mailbox in MUPDATE */
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
@@ -855,20 +870,6 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	mupdate_disconnect(&mupdate_h);
     }
 
-    /* delete entry */
-    r = DB->delete(mbdb, name, strlen(name), &tid, 0);
-    switch (r) {
-    case CYRUSDB_OK: /* success */
-	break;
-    case CYRUSDB_AGAIN:
-	goto retry;
-    default:
-	syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
-	       name, cyrusdb_strerror(r));
-	r = IMAP_IOERROR;
-	goto done;
-    }
-
     /* commit db operations */
     if (!r) {
 	r = DB->commit(mbdb, tid);
@@ -882,7 +883,6 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 
     if (r || isremote) goto done;
 
-    if (!r) r = mailbox_open_header_path(name, path, acl, 0, &mailbox, 0);
     if (!r) r = mailbox_delete(&mailbox, deletequotaroot);
 
     /*
