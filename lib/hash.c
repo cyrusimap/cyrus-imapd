@@ -1,5 +1,5 @@
 /* +++Date last modified: 05-Jul-1997 */
-/* $Id: hash.c,v 1.7 2002/06/17 17:29:31 rjs3 Exp $ */
+/* $Id: hash.c,v 1.8 2002/06/18 16:40:21 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -9,7 +9,9 @@
 #include <stdlib.h>
 
 #include "hash.h"
+#include "mpool.h"
 #include "xmalloc.h"
+#include "exitcodes.h"
 
 /*
 ** public domain code by Jerry Coffin, with improvements by HenkJan Wolthuis.
@@ -28,8 +30,9 @@
 ** Further modified by Rob Siemborski.
 **  - xmalloc can never return NULL, so don't worry about it
 **  - sort the buckets for faster searching
+**  - actually, we'll just use a memory pool for this sucker
+**    (atleast, in the cases where it is advantageous to do so)
 */
-
 
 /* Initialize the hash_table to the size asked for.  Allocates space
 ** for the correct number of pointers and sets them to NULL.  If it
@@ -37,17 +40,32 @@
 ** of the table to 0.
 */
 
-hash_table *construct_hash_table(hash_table *table, size_t size)
+hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
 {
-      size_t i;
-      bucket **temp;
+      if(!table)
+	  fatal("construct_hash_table called without a starting table",
+		EC_TEMPFAIL);
+      if(!size)
+	  fatal("construct_hash_table called without a size", EC_TEMPFAIL);
 
-      table -> size  = size;
-      table -> table = (bucket * *)xmalloc(sizeof(bucket *) * size);
-      temp = table -> table;
+      table->size  = size;
 
-      for (i=0;i<size;i++)
-            temp[i] = NULL;
+      /* Allocate the table -- different for using memory pools and not */
+      if(use_mpool) {
+	  /* Allocate an initial memory pool for 32 byte keys + the hash table
+	   * + the buckets themselves */
+	  table->pool =
+	      new_mpool(size * (32 + sizeof(bucket*) + sizeof(bucket)));
+	  table->table =
+	      (bucket **)mpool_malloc(table->pool,sizeof(bucket *) * size);
+      } else {
+	  table->pool = NULL;
+	  table->table = xmalloc(sizeof(bucket *) * size);
+      }
+       
+      /* Allocate the table and initilize it */
+      memset(table->table, 0, sizeof(bucket *) * size);
+
       return table;
 }
 
@@ -89,11 +107,16 @@ void *hash_insert(char *key, void *data, hash_table *table)
       ** allocate space for our new bucket and put our data there, with
       ** the table pointing at it.
       */
-
       if (!((table->table)[val]))
       {
+	  if(table->pool) {
+            (table->table)[val] =
+		(bucket *)mpool_malloc(table->pool, sizeof(bucket));
+            (table->table)[val] -> key = mpool_strdup(table->pool, key);
+	  } else {
             (table->table)[val] = (bucket *)xmalloc(sizeof(bucket));
             (table->table)[val] -> key = xstrdup(key);
+	  }
             (table->table)[val] -> next = NULL;
             (table->table)[val] -> data = data;
             return (table->table)[val] -> data;
@@ -117,8 +140,13 @@ void *hash_insert(char *key, void *data, hash_table *table)
 	  } else if (cmpresult < 0) {
 	      /* The new key is smaller than the current key--
 	       * insert a node and return this data */
-	      newptr = (bucket *)xmalloc(sizeof(bucket));
-	      newptr->key = xstrdup(key);
+	      if(table->pool) {
+		  newptr = (bucket *)mpool_malloc(table->pool, sizeof(bucket));
+		  newptr->key = mpool_strdup(table->pool, key);
+	      } else {
+		  newptr = (bucket *)xmalloc(sizeof(bucket));
+		  newptr->key = xstrdup(key);
+	      }
 	      newptr->data = data;
 	      newptr->next = ptr;
 	      *prev = newptr;
@@ -130,8 +158,13 @@ void *hash_insert(char *key, void *data, hash_table *table)
       ** This key is the largest one so far.  Add it to the end
       ** of the list (*prev should be correct)
       */
-      newptr=(bucket *)xmalloc(sizeof(bucket));
-      newptr->key = xstrdup(key);
+      if(table->pool) {
+	  newptr=(bucket *)mpool_malloc(table->pool,sizeof(bucket));
+	  newptr->key = mpool_strdup(table->pool,key);
+      } else {
+	  newptr=(bucket *)xmalloc(sizeof(bucket));
+	  newptr->key = xstrdup(key);
+      }
       newptr->data = data;
       newptr->next = NULL;
       *prev = newptr;
@@ -167,7 +200,8 @@ void *hash_lookup(const char *key, hash_table *table)
 ** Delete a key from the hash table and return associated
 ** data, or NULL if not present.
 */
-
+/* Warning: use this function judiciously if you are using memory pools,
+ * since it will leak memory until you get rid of the entire hash table */
 void *hash_del(char *key, hash_table *table)
 {
       unsigned val = hash(key) % table->size;
@@ -196,8 +230,10 @@ void *hash_del(char *key, hash_table *table)
 	      {
 		  data = ptr -> data;
 		  last -> next = ptr -> next;
-		  free(ptr->key);
-		  free(ptr);
+		  if(!table->pool) {
+		      free(ptr->key);
+		      free(ptr);
+		  }
 		  return data;
 	      }
 	      
@@ -213,8 +249,10 @@ void *hash_del(char *key, hash_table *table)
 	      {
 		  data = ptr->data;
 		  (table->table)[val] = ptr->next;
-		  free(ptr->key);
-		  free(ptr);
+		  if(!table->pool) {
+		      free(ptr->key);
+		      free(ptr);
+		  }
 		  return data;
 	      }
 	  } else if (cmpresult < 0) {
@@ -227,7 +265,6 @@ void *hash_del(char *key, hash_table *table)
       ** If we get here, it means we didn't find the item in the table.
       ** Signal this by returning NULL.
       */
-
       return NULL;
 }
 
@@ -244,21 +281,34 @@ void free_hash_table(hash_table *table, void (*func)(void *))
       unsigned i;
       bucket *ptr, *temp;
 
-      for (i=0;i<table->size; i++)
-      {
-	    ptr = (table->table)[i];
-	    while (ptr)
-	    {
+      /* If we have a function to free the data, apply it everywhere */
+      /* We also need to traverse this anyway if we aren't using a memory
+       * pool */
+      if(func || !table->pool) {
+	  for (i=0;i<table->size; i++)
+	  {
+	      ptr = (table->table)[i];
+	      while (ptr)
+	      {
 		  temp = ptr;
 		  ptr = ptr->next;
-		  free(temp->key);
 		  if (func)
-		        func(temp->data);
-		  free(temp);
-	    }
+		      func(temp->data);
+		  if(!table->pool) {
+		      free(temp->key);
+		      free(temp);
+		  }
+	      }
+	  }
       }
-
-      free(table->table);
+      
+      /* Free the main structures */
+      if(table->pool) {
+	  free_mpool(table->pool);
+	  table->pool = NULL;
+      } else {
+	  free(table->table);
+      }
       table->table = NULL;
       table->size = 0;
 }
@@ -325,7 +375,7 @@ int main(void)
       int i;
       void *j;
 
-      construct_hash_table(&table,200);
+      construct_hash_table(&table,200,1);
 
       for (i = 0; NULL != strings[i]; i++ )
 	  hash_insert(strings[i], junk[i], &table);

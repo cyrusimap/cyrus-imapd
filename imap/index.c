@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.179 2002/05/20 23:29:37 rjs3 Exp $
+ * $Id: index.c,v 1.180 2002/06/18 16:40:19 rjs3 Exp $
  */
 #include <config.h>
 
@@ -4201,7 +4201,7 @@ static void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
     /* Step 5.A: create a subj_table with one bucket for every possible
      * subject in the root set
      */
-    construct_hash_table(&subj_table, nroot);
+    construct_hash_table(&subj_table, nroot, 1);
 
     /* Step 5.B: populate the table with a container for each subject
      * at the root
@@ -4462,7 +4462,7 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
     /* Step 0: create an id_table with one bucket for every possible
      * message-id and reference (nmsg + tref)
      */
-    construct_hash_table(&id_table, nmsg + tref);
+    construct_hash_table(&id_table, nmsg + tref, 1);
 
     /* Step 1: link messages together */
     ref_link_messages(msgdata, &newnode, &id_table);
