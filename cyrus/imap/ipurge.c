@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.6 2000/06/01 01:10:58 wcw Exp $
+ * $Id: ipurge.c,v 1.7 2000/06/04 22:46:36 leg Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -160,6 +160,9 @@ main (int argc, char *argv[]) {
       mboxlist_findall(buf, 1, 0, 0, purge_me, NULL);
     }
   }
+  mboxlist_close();
+  mboxlist_done();
+
   return 0;
 }
 
