@@ -728,7 +728,7 @@ char *passwd;
     }
     
 
-    auth_setid(canon_user);
+    auth_setid(canon_user, (char *)0);
     imapd_userid = strsave(canon_user);
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
@@ -844,7 +844,7 @@ char *authtype;
 	return;
     }
 
-    auth_setid(canon_user);
+    auth_setid(canon_user, mech->get_cacheid(state));
     imapd_userid = strsave(canon_user);
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
