@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.3.6.4 2002/12/13 19:28:37 ken3 Exp $ */
+/* $Id: backend.h,v 1.3.6.5 2002/12/16 01:28:53 ken3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -54,7 +54,8 @@
 #define LAST_RESULT_LEN 1024
 
 struct capa_cmd_t {
-    const char *cmd;		/* capability command string */
+    const char *cmd;		/* [OPTIONAL] capability command string
+				   (NULL = capabilities in banner) */
     const char *resp;		/* end of capability response */
     const char *tls;		/* [OPTIONAL] TLS capability string */
     const char *auth;		/* AUTH capability string */
@@ -77,8 +78,8 @@ struct logout_cmd_t {
 };
 
 struct protocol_t {
-    unsigned short port;	/* protocol port */
-    const char *service;	/* SASL service name */
+    const char *service;	/* INET service name */
+    const char *sasl_service;	/* SASL service name */
     struct capa_cmd_t capa_cmd;
     struct tls_cmd_t tls_cmd;
     struct sasl_cmd_t sasl_cmd;
@@ -113,8 +114,18 @@ struct backend {
 struct backend *findserver(struct backend *cache, const char *server,
 			   struct protocol_t *prot, const char *userid,
 			   const char **auth_status);
-void downserver(struct backend *s, struct logout_cmd_t *logout);
+void downserver(struct backend *s, struct protocol_t *prot);
 
 #define CAPA(s, c) ((s)->capability & (c))
+
+extern struct protocol_t protocol[];
+
+enum {
+    PROTOCOL_IMAP = 0,
+    PROTOCOL_POP,
+    PROTOCOL_NNTP,
+    PROTOCOL_LMTP,
+    PROTOCOL_MUPDATE
+};
 
 #endif /* _INCLUDED_BACKEND_H */

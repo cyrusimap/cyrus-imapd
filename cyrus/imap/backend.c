@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7.6.7 2002/12/13 19:28:37 ken3 Exp $ */
+/* $Id: backend.c,v 1.7.6.8 2002/12/16 01:28:53 ken3 Exp $ */
 
 #include <config.h>
 
@@ -74,6 +74,34 @@
 #include "imapconf.h"
 #include "xmalloc.h"
 #include "iptostring.h"
+
+struct protocol_t protocol[] = {
+    { "imap", "imap",
+      { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parsemechlist },
+      { "S01 STARTTLS", "S01 OK", "S01 NO" },
+      { "A01 AUTHENTICATE", 0, NULL, "A01 OK", "A01 NO", "+ ", "*", NULL },
+      { "Q01 LOGOUT", "Q01 " } },
+    { "pop3", "pop",
+      { "CAPA", ".", "STLS", "SASL ", NULL },
+      { "STLS", "+OK", "-ERR" },
+      { "AUTH", 0, "", "+OK", "-ERR", "+ ", "*", NULL },
+      { "QUIT", "+OK" } },
+    { "nntp", "nntp",
+      { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
+      { "STARTTLS", "382", "580" },
+      { "AUTHINFO SASL", 0, "", "25", "452", "351 ", "*", NULL },
+      { "QUIT", "205" } },
+    { "lmtp", "lmtp",
+      { "LHLO murder", "250 ", "STARTTLS", "AUTH ", NULL },
+      { "STARTTLS", "220", "454" },
+      { "AUTH", 0, "=", "235", "5", "334 ", "*", NULL },
+      { "QUIT", "221" } },
+    { "mupdate", "mupdate",
+      { NULL, "* OK", NULL, "* AUTH ", NULL },
+      { NULL },
+      { "A01 AUTHENTICATE", 1, "", "A01 OK", "A01 NO", "", "*", NULL },
+      { "Q01 LOGOUT", "Q01 " } }
+};
 
 char *imap_parsemechlist(char *str)
 {
@@ -115,9 +143,11 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
     
     if (supports_starttls) *supports_starttls = 0;
 
-    /* request capabilities of server */
-    prot_printf(pout, "%s\r\n", capa_cmd->cmd);
-    prot_flush(pout);
+    if (capa_cmd->cmd) {
+	/* request capabilities of server */
+	prot_printf(pout, "%s\r\n", capa_cmd->cmd);
+	prot_flush(pout);
+    }
 
     do { /* look for the end of the capabilities */
 	if (prot_fgets(str, sizeof(str), pin) == NULL) {
@@ -221,8 +251,9 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	return SASL_FAIL;
 
     /* Require proxying if we have an "interesting" userid (authzid) */
-    r = sasl_client_new(prot->service, s->hostname, localip, remoteip,
-			cb, (userid  && *userid ? SASL_NEED_PROXY : 0),
+    r = sasl_client_new(prot->sasl_service, s->hostname, localip, remoteip, cb,
+			(userid  && *userid ? SASL_NEED_PROXY : 0) |
+			(prot->sasl_cmd.parse_success ? SASL_SUCCESS_DATA : 0),
 			&s->saslconn);
     if (r != SASL_OK) {
 	return r;
@@ -234,12 +265,14 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	return r;
     }
 
-    /* read the initial greeting */
-    if (!prot_fgets(buf, sizeof(buf), s->in)) {
-	syslog(LOG_ERR,
-	       "backend_authenticate(): couldn't read initial greeting: %s",
-	       s->in->error ? s->in->error : "(null)");
-	return SASL_FAIL;
+    if (prot->capa_cmd.cmd) {
+	/* read the initial greeting */
+	if (!prot_fgets(buf, sizeof(buf), s->in)) {
+	    syslog(LOG_ERR,
+		   "backend_authenticate(): couldn't read initial greeting: %s",
+		   s->in->error ? s->in->error : "(null)");
+	    return SASL_FAIL;
+	}
     }
 
     /* Get SASL mechanism list.  We can force a particular
@@ -297,6 +330,7 @@ struct backend *findserver(struct backend *ret, const char *server,
 
     if (!ret) {
 	struct hostent *hp;
+	struct servent *serv;
 
 	ret = xmalloc(sizeof(struct backend));
 	memset(ret, 0, sizeof(struct backend));
@@ -306,9 +340,14 @@ struct backend *findserver(struct backend *ret, const char *server,
 	    free(ret);
 	    return NULL;
 	}
+	if ((serv = getservbyname(prot->service, "tcp")) == NULL) {
+	    syslog(LOG_ERR, "getservbyname(%s) failed: %m", prot->service);
+	    free(ret);
+	    return NULL;
+	}
 	ret->addr.sin_family = AF_INET;
 	memcpy(&ret->addr.sin_addr, hp->h_addr, hp->h_length);
-	ret->addr.sin_port = htons(prot->port);
+	ret->addr.sin_port = serv->s_port;
 
 	ret->timeout = NULL;
     }
@@ -343,18 +382,19 @@ struct backend *findserver(struct backend *ret, const char *server,
     return ret;
 }
 
-void downserver(struct backend *s, struct logout_cmd_t *logout) 
+void downserver(struct backend *s, struct protocol_t *prot)
 {
     char buf[1024];
     if(!s) return;
     
-    if (logout) {
-	prot_printf(s->out, "%s\r\n", logout->cmd);
+    if (prot) {
+	prot_printf(s->out, "%s\r\n", prot->logout_cmd.cmd);
 	prot_flush(s->out);
     }
 
     while (prot_fgets(buf, sizeof(buf), s->in)) {
-	if (!strncmp(logout->resp, buf, strlen(logout->resp))) {
+	if (!strncmp(prot->logout_cmd.resp, buf,
+		     strlen(prot->logout_cmd.resp))) {
 	    break;
 	}
 #if 0 /* XXX do we care?  should we do a protocol specific check? */

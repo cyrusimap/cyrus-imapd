@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslclient.c,v 1.9.6.1 2002/12/12 20:24:32 ken3 Exp $ */
+/* $Id: saslclient.c,v 1.9.6.2 2002/12/16 01:28:56 ken3 Exp $ */
 
 #include <config.h>
 
@@ -204,7 +204,10 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 
     if (r == SASL_CONTINUE || r == SASL_OK) {
     /* send the auth command to the server */
-	prot_printf(pout, "%s %s", sasl_cmd->cmd, mech);
+	if (sasl_cmd->quote)
+	    prot_printf(pout, "%s \"%s\"", sasl_cmd->cmd, mech);
+	else
+	    prot_printf(pout, "%s %s", sasl_cmd->cmd, mech);
 
 	if (!clientout) {
 	    /* no initial response */
@@ -219,7 +222,15 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 	    base64 = buf;
 	    r = sasl_encode64(clientout, clientoutlen,
 			      base64, BASE64_BUF_SIZE, NULL);
-	    if (r == SASL_OK) prot_printf(pout, " %s\r\n", base64);
+	    if (r == SASL_OK) {
+		prot_printf(pout, " ");
+		if (sasl_cmd->quote) {
+		    /* send a literal */
+		    prot_printf(pout, "{%d+}\r\n", strlen(base64));
+		    prot_flush(pout);
+		}
+		prot_printf(pout, "%s\r\n", base64);
+	    }
 	}
     }
 
@@ -286,6 +297,11 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 			      base64, BASE64_BUF_SIZE, NULL);
 	    if (r != SASL_OK) break;
 
+	    if (!sasl_cmd->cont) {
+		/* send a literal */
+		prot_printf(pout, "{%d+}\r\n", strlen(base64));
+		prot_flush(pout);
+	    }
 	    prot_printf(pout, "%s\r\n", base64);
 	}
     }

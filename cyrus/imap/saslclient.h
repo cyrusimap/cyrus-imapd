@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslclient.h,v 1.1.2.1 2002/12/12 20:24:32 ken3 Exp $ */
+/* $Id: saslclient.h,v 1.1.2.2 2002/12/16 01:28:56 ken3 Exp $ */
 
 #ifndef SASLCLIENT_H
 #define SASLCLIENT_H
@@ -50,6 +50,7 @@
 
 struct sasl_cmd_t {
     const char *cmd;	/* auth command string */
+    int quote;		/* quote arguments (literal for base64 data) */
     const char *init;	/* string to send as empty initial-response,
 			   (NULL = initial response unsupported by protocol) */
     const char *ok;	/* success response string */

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.19 2002/12/12 20:24:31 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.20 2002/12/16 01:28:55 ken3 Exp $
  */
 #include <config.h>
 
@@ -124,14 +124,6 @@ struct backend *backend = NULL;
 /* the sasl proxy policy context */
 static struct proxy_context popd_proxyctx = {
     0, 0, NULL, NULL, NULL
-};
-
-static struct protocol_t protocol = {
-    110, "pop",
-    { "CAPA", ".", "STLS", "SASL ", NULL },
-    { "STLS", "+OK", "-ERR" },
-    { "AUTH", "", "+OK", "-ERR", "+ ", "*", NULL },
-    { "QUIT", "+OK" }
 };
 
 /* current namespace */
@@ -1056,7 +1048,8 @@ static void openproxy(void)
 	if(c) *c = '\0';
     }
 
-    backend = findserver(NULL, server, &protocol, popd_userid, &statusline);
+    backend = findserver(NULL, server, &protocol[PROTOCOL_POP],
+			 popd_userid, &statusline);
 
     if (!backend) {
 	syslog(LOG_ERR, "couldn't authenticate to backend server");

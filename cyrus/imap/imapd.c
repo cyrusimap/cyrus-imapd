@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.47 2002/12/12 20:24:25 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.48 2002/12/16 01:28:54 ken3 Exp $ */
 
 #include <config.h>
 
@@ -138,14 +138,6 @@ static struct namespace imapd_namespace;
 static const char *monthname[] = {
     "jan", "feb", "mar", "apr", "may", "jun",
     "jul", "aug", "sep", "oct", "nov", "dec"
-};
-
-static struct protocol_t protocol = {
-    143, "imap",
-    { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parsemechlist },
-    { "S01 STARTTLS", "S01 OK", "S01 NO" },
-    { "A01 AUTHENTICATE", NULL, "A01 OK", "A01 NO", "+ ", "*", NULL },
-    { "Q01 LOGOUT", "Q01 " }
 };
 
 void shutdown_file(int fd);
@@ -5923,7 +5915,7 @@ static int do_xfer_single(char *toserver, char *topart,
     /* Step 1: Connect to remote server */
     if(!r && !be_in) {
 	/* Just authorize as the IMAP server, so pass "" as our authzid */
-	be = findserver(NULL, toserver, &protocol, "", NULL);
+	be = findserver(NULL, toserver, &protocol[PROTOCOL_IMAP], "", NULL);
 	if(!be) r = IMAP_SERVER_UNAVAILABLE;
 	if(r) syslog(LOG_ERR,
 		     "Could not move mailbox: %s, Backend connect failed",
@@ -6095,7 +6087,7 @@ done:
     if(mupdate_h && !h_in)
 	mupdate_disconnect(&mupdate_h);
     if(be && !be_in)
-	downserver(be, &protocol.logout_cmd);
+	downserver(be, &protocol[PROTOCOL_IMAP]);
 
     return r;
 }
@@ -6239,7 +6231,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	}
 
 	/* Get a single connection to the remote backend */
-	be = findserver(NULL, toserver, &protocol, "", NULL);
+	be = findserver(NULL, toserver, &protocol[PROTOCOL_IMAP], "", NULL);
 	if(!be) {
 	    r = IMAP_SERVER_UNAVAILABLE;
 	    syslog(LOG_ERR,
@@ -6314,7 +6306,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	}
 
 	if(be) {
-	    downserver(be, &protocol.logout_cmd);
+	    downserver(be, &protocol[PROTOCOL_IMAP]);
 	    free(be);
 	}
 

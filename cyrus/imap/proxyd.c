@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.37 2002/12/12 20:24:31 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.38 2002/12/16 01:28:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -125,14 +125,6 @@ static int disable_referrals;
 
 /* has the client issued an RLIST or RLSUB? */
 static int supports_referrals;
-
-static struct protocol_t protocol = {
-    143, "imap",
-    { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parsemechlist },
-    { "S01 STARTTLS", "S01 OK", "S01 NO" },
-    { "A01 AUTHENTICATE", NULL, "A01 OK", "A01 NO", "+ ", "*", NULL },
-    { "Q01 LOGOUT", "Q01 " }
-};
 
 
 /* -------- from imapd ---------- */
@@ -885,7 +877,7 @@ void proxyd_downserver(struct backend *s)
     }
 
     /* need to logout of server */
-    downserver(s, &protocol.logout_cmd);
+    downserver(s, &protocol[PROTOCOL_IMAP]);
 
     if(s == backend_inbox) backend_inbox = NULL;
     if(s == backend_current) backend_current = NULL;
@@ -962,7 +954,8 @@ struct backend *proxyd_findserver(const char *server)
 
     if (!ret || !ret->timeout) {
 	/* need to (re)establish connection to server or create one */
-	ret = findserver(ret, server, &protocol, proxyd_userid, NULL);
+	ret = findserver(ret, server, &protocol[PROTOCOL_IMAP],
+			 proxyd_userid, NULL);
 	if(!ret) return NULL;
 
 	/* find the capabilities of the server */
