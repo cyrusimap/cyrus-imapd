@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.11 2000/05/23 20:52:31 robeson Exp $
+   $Id: seen_db.c,v 1.12 2000/06/28 05:49:18 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -50,7 +50,6 @@
 #include <ctype.h>
 #include <sys/types.h>
 #include <netinet/in.h>
-#include <db.h>
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -58,6 +57,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include "cyrusdb.h"
 #include "map.h"
 #include "bsearch.h"
 
@@ -69,34 +69,27 @@
 #define FNAME_SEENSUFFIX ".seen" /* per user seen state extension */
 #define FNAME_SEEN "/cyrus.seen" /* for legacy seen state */
 
-extern DB_ENV *dbenv;
+#define SEEN_VERSION (1)
 
 struct seen {
     const char *user;		/* what user is this for? */
     const char *uniqueid;	/* what mailbox? */
     const char *path;		/* where is this mailbox? */
-    DB *db;
-    DB_TXN *tid;		/* outstanding txn, if any */
-};
-
-/* indexed by unique id */
-struct seenentry {
-    int version;		/* currently must be 1 */
-    time_t lastread;
-    unsigned long lastuid;
-    time_t lastchange;
-    char seenuids[1];
+    struct db *db;
+    struct txn *tid;		/* outstanding txn, if any */
 };
 
 static struct seen *lastseen = NULL;
 
+#define DB (&cyrusdb_flat)
+
 static void abortcurrent(struct seen *s)
 {
     if (s && s->tid) {
-	int r = txn_abort(s->tid);
+	int r = DB->abort(s->db, s->tid);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
-		   db_strerror(r));
+		   strerror(r));
 	}
 	s->tid = NULL;
     }
@@ -134,26 +127,20 @@ int seen_open(struct mailbox *mailbox,
     /* otherwise, close the existing database */
     if (seendb) {
 	abortcurrent(seendb);
-	r = seendb->db->close(seendb->db, 0);
+	r = DB->close(seendb->db);
 	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing seendb: %s",
-		   db_strerror(r));
+	    syslog(LOG_ERR, "DBERROR: error closing seendb: %s", strerror(r));
 	}
     } else {
 	/* create seendb */
 	seendb = (struct seen *) xmalloc(sizeof(struct seen));
-	r = db_create(&seendb->db, dbenv, 0);
-	if (r) {
-	    syslog(LOG_ERR, "db_create() failed: %s", db_strerror(r));
-	    return IMAP_IOERROR;
-	}
     }
 
     /* open the seendb corresponding to user */
     fname = getpath(user);
-    r = seendb->db->open(seendb->db, fname, NULL, DB_BTREE, DB_CREATE, 0664);
+    r = DB->open(fname, &seendb->db);
     if (r != 0) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, db_strerror(r));
+	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, strerror(r));
 	r = IMAP_IOERROR;
     }
     syslog(LOG_DEBUG, "seen_db: user %s opened %s", user, fname);
@@ -233,44 +220,56 @@ static int seen_readold(struct seen *seendb,
 static int seen_readit(struct seen *seendb, 
 		       time_t *lastreadptr, unsigned int *lastuidptr, 
 		       time_t *lastchangeptr, char **seenuidsptr,
-		       int flags)
+		       int rw)
 {
     int r;
-    DBT key, data;
-    struct seenentry *e;
+    const char *data, *dstart;
+    char *p;
+    int datalen;
+    int version;
+    int uidlen;
 
     assert(seendb && seendb->uniqueid);
 
-    memset(&key, 0, sizeof(key));
-    memset(&data, 0, sizeof(data));
-
-    key.data = (char *) seendb->uniqueid;
-    key.size = strlen(seendb->uniqueid);
-    r = seendb->db->get(seendb->db, seendb->tid, &key, &data, flags);
+    if (rw) {
+	r = DB->fetchlock(seendb->db, 
+			  seendb->uniqueid, strlen(seendb->uniqueid),
+			  &data, &datalen, &seendb->tid);
+    } else {
+	r = DB->fetch(seendb->db, 
+		      seendb->uniqueid, strlen(seendb->uniqueid),
+		      &data, &datalen, NULL);
+    }
     switch (r) {
     case 0:
 	break;
-    case DB_NOTFOUND:
-	return seen_readold(seendb, lastreadptr, lastuidptr,
-			    lastchangeptr, seenuidsptr);
-	break;
-    case DB_LOCK_DEADLOCK:
+    case CYRUSDB_AGAIN:
 	syslog(LOG_DEBUG, "deadlock in seen database for '%s/%s'",
 	       seendb->user, seendb->uniqueid);
 	return IMAP_AGAIN;
 	break;
-    default:
-	syslog(LOG_ERR, "DBERROR: error fetching txn: %s", db_strerror(r));
+    case CYRUSDB_IOERROR:
+	syslog(LOG_ERR, "DBERROR: error fetching txn", strerror(r));
 	return IMAP_IOERROR;
 	break;
     }
+    if (data == NULL) {
+	return seen_readold(seendb, lastreadptr, lastuidptr,
+			    lastchangeptr, seenuidsptr);
+    }
 
-    e = (struct seenentry *) data.data;
-    assert(ntohl(e->version) == 1);
-    *lastreadptr = ntohl(e->lastread);
-    *lastuidptr = ntohl(e->lastuid);
-    *lastchangeptr = ntohl(e->lastchange);
-    *seenuidsptr = xstrdup(e->seenuids);
+    dstart = data;
+
+    version = strtol(data, &p, 10); data = p;
+    assert(version == SEEN_VERSION);
+    *lastreadptr = strtol(data, &p, 10); data = p;
+    *lastuidptr = strtol(data, &p, 10); data = p;
+    *lastchangeptr = strtol(data, &p, 10); data = p;
+    while (isspace((int) *p)) p++; data = p;
+    uidlen = datalen - (data - dstart);
+    *seenuidsptr = xmalloc(uidlen + 1);
+    memcpy(*seenuidsptr, data, uidlen);
+    (*seenuidsptr)[uidlen] = '\0';
 
     return 0;
 }
@@ -287,74 +286,42 @@ int seen_lockread(struct seen *seendb,
 		  time_t *lastreadptr, unsigned int *lastuidptr, 
 		  time_t *lastchangeptr, char **seenuidsptr)
 {
-    int r;
-
     assert(seendb && seendb->uniqueid);
 
-    if (!seendb->tid) {
-	r = txn_begin(dbenv, NULL, &seendb->tid, DB_TXN_NOSYNC);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error beginning txn: %s", 
-		   db_strerror(r));
-	    return IMAP_IOERROR;
-	}
-    }
-
     return seen_readit(seendb, lastreadptr, lastuidptr, lastchangeptr,
-		       seenuidsptr, DB_RMW);
+		       seenuidsptr, 1);
 }
 
 int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid, 
 	       time_t lastchange, char *seenuids)
 {
-    int sz = sizeof(struct seenentry) + strlen(seenuids);
-    struct seenentry *e = xmalloc(sz);
-    DBT key, data;
+    int sz = strlen(seenuids) + 50;
+    char *data = xmalloc(sz);
+    int datalen;
     int r;
 
     assert(seendb && seendb->uniqueid);
     assert(seendb->tid);
 
-    memset(&key, 0, sizeof(key));
-    memset(&data, 0, sizeof(data));
+    sprintf(data, "%d %d %d %d %s", SEEN_VERSION, 
+	    (int) lastread, lastuid, (int) lastchange, seenuids);
+    datalen = strlen(data);
 
-    key.data = (void *) seendb->uniqueid;
-    key.size = strlen(seendb->uniqueid);
-
-    e->version = htonl(1);
-    e->lastread = htonl(lastread);
-    e->lastuid = htonl(lastuid);
-    e->lastchange = htonl(lastchange);
-    strcpy(e->seenuids, seenuids);
-
-    data.data = e;
-    data.size = sz;
-
-    r = seendb->db->put(seendb->db, seendb->tid, &key, &data, 0);
+    r = DB->store(seendb->db, seendb->uniqueid, strlen(seendb->uniqueid),
+		  data, datalen, NULL);
     switch (r) {
-    case 0:
+    case CYRUSDB_OK:
 	break;
-    case DB_LOCK_DEADLOCK:
+    case CYRUSDB_IOERROR:
 	r = IMAP_AGAIN;
 	break;
     default:
-	syslog(LOG_ERR, "DBERROR: error updating database: %s",
-	       db_strerror(r));
+	syslog(LOG_ERR, "DBERROR: error updating database: %s", strerror(r));
 	r = IMAP_IOERROR;
 	break;
     }
-    if (!r) {
-	switch (r = txn_commit(seendb->tid, 0)) {
-	case 0:
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: failed on commit: %s", db_strerror(r));
-	    r = IMAP_IOERROR;
-	}
-	seendb->tid = NULL;
-    }
 
-    free(e);
+    free(data);
     return r;
 }
 
@@ -385,37 +352,21 @@ int seen_create_user(const char *user)
 
 int seen_delete_user(const char *user)
 {
-    DB *db = NULL;
     char *fname = getpath(user);
-    int r;
+    int r = 0;
 
     /* erp! */
-    r = db->open(db, fname, NULL, DB_HASH, 0, 0664);
-    free(fname);
-    if (!r) {
-	r = db->remove(db, fname, NULL, 0);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: removing %s: %s", fname,
-		   db_strerror(r));
-	    r = 0;
-	}
-    } else {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, db_strerror(r));
+    r = unlink(fname);
+    if (r < 0) {
+	syslog(LOG_ERR, "error unlinking %s: %m", fname);
 	r = IMAP_IOERROR;
     }
-    if (!r) {
-	r = db->close(db, 0);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing %s: %s", fname,
-		   db_strerror(r));
-	    r = IMAP_IOERROR;
-	}
-    }
+    free(fname);
     
     return r;
 }
 
-int seen_copy(struct mailbox *oldmailbox,struct mailbox *newmailbox)
+int seen_copy(struct mailbox *oldmailbox, struct mailbox *newmailbox)
 {
     /* noop */
     return 0;
@@ -437,10 +388,10 @@ int seen_done(void)
 
     if (seendb) {
 	abortcurrent(seendb);
-	r = seendb->db->close(seendb->db, 0);
+	r = DB->close(seendb->db);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing seendb: %s",
-		   db_strerror(r));
+		   strerror(r));
 	    r = IMAP_IOERROR;
 	}
     }
