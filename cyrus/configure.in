@@ -245,7 +245,9 @@ AC_ARG_WITH(login,[  --with-login=METHOD     use login module METHOD
 AC_SUBST(WITH_LOGIN)
 case "$WITH_LOGIN" in
 	unix|unix_*) AC_CHECK_LIB(crypt, crypt);;
+	krb|krb_*) login_progs=krbck;;
 esac
+AC_SUBST(login_progs)
 case "$WITH_LOGIN" in
 	*_pwcheck) EXTRA_SUBDIRS="${EXTRA_SUBDIRS} pwcheck"
 		EXTRA_OUTPUT="${EXTRA_OUTPUT} pwcheck/Makefile"

@@ -71,7 +71,7 @@ LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o \
 IMAPDOBJS= imapd.o index.o
 
 PROGS = collectnews syncnews imapd pop3d \
-	arbitron reconstruct quota updateimsp
+	arbitron reconstruct quota updateimsp @login_progs@
 SUIDPROGS = deliver
 
 
@@ -122,6 +122,10 @@ quota: quota.o libimap.a $(DEPLIBS)
 
 updateimsp: updateimsp.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o updateimsp updateimsp.o libimap.a \
+		$(DEPLIBS) $(LIBS)
+
+krbck: krbck.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o krbck krbck.o libimap.a \
 		$(DEPLIBS) $(LIBS)
 
 libimap.a: $(LOBJS)
