@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.23 2000/02/22 07:56:41 tmartin Exp $
+ * $Id: script.c,v 1.24 2000/02/22 08:08:12 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -769,13 +769,14 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     int implicit_keep;
     action_list_t *actions = NULL, *a;
     action_t lastaction = -1;
-    notify_action_t notify_action;
+    notify_action_t *notify_action;
     char actions_string[4096] = "";
     const char *errmsg = NULL;
-  
+    
+    notify_action = default_notify_action();
+    if (notify_action == NULL)
+	return SIEVE_NOMEM;
 
-    default_notify_action(&notify_action);
-  
     actions = new_action_list();
     if (actions == NULL) {
 	ret = SIEVE_NOMEM;
@@ -783,8 +784,8 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     }
  
     if ((ret = eval(&s->interp, s->cmds, message_context, actions,
-		    &notify_action, &errmsg)) != SIEVE_OK)
-	goto error;
+		    notify_action, &errmsg)) != SIEVE_OK)
+	return SIEVE_RUN_ERROR;
   
     strcpy(actions_string,"Action(s) taken:\n");
   
@@ -984,8 +985,8 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     }
  
     /* Process notify action if there is one */
-    if (s->interp.notify && notify_action.exists) {
-	ret |= send_notify_callback(s, message_context, &notify_action,
+    if (s->interp.notify && notify_action->exists) {
+	ret |= send_notify_callback(s, message_context, notify_action,
 				    actions_string, &errmsg);
     }
  

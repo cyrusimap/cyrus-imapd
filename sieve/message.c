@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.12 2000/02/22 07:56:41 tmartin Exp $
+ * $Id: message.c,v 1.13 2000/02/22 08:08:12 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -378,8 +378,10 @@ static int priority_compare(const char *old, const char *new)
 int do_notify(sieve_interp_t *i,void *m, notify_action_t *notify,
 	      const char *priority, char *message, stringlist_t *sl)
 {
-    /* if priority is < old priority then leave current one */
-    if ((notify->exists) && (priority_compare(notify->priority, priority)==1))
+    /* if non-default action exists, and
+     * priority is < old priority then leave current one
+     */
+    if ((notify->exists > 0) && (priority_compare(notify->priority, priority)==1))
 	return 0;
 
     /* free old stuff if exists */
@@ -535,13 +537,17 @@ int free_address(void **data, void **marker)
 
 #define NEWMAIL_MSG "You have new mail"
 
-void default_notify_action(notify_action_t *ret)
+notify_action_t *default_notify_action(void)    
 {
-    ret->exists   = 1;
+    notify_action_t *ret = xmalloc(sizeof(notify_action_t));
+    
+    ret->exists   = -1; /* flag as default action */
     ret->priority = "medium";
     ret->message  = xmalloc(strlen(NEWMAIL_MSG)+1);
     strcpy(ret->message, NEWMAIL_MSG); 
     ret->headers  = NULL; /* subject, to, from */
+
+    return ret;
 }
 
 action_list_t *new_action_list(void)
