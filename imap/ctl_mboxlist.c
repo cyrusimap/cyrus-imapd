@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.15 2000/10/07 19:04:45 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.16 2001/01/02 05:54:05 leg Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -79,7 +79,8 @@ struct dumprock {
 };
 
 static int dump_p(void *rockp,
-		  const char *key, int keylen)
+		  const char *key, int keylen,
+		  const char *data, int datalen)
 {
     return 1;
 }

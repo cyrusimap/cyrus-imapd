@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.3 2000/12/18 22:07:14 ken3 Exp $ */
+/* $Id: idled.c,v 1.4 2001/01/02 05:54:05 leg Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -87,7 +87,8 @@ void fatal(const char *msg, int err)
 }
 
 static int mbox_count_p(void *rockp,
-			const char *key, int keylen)
+			const char *key, int keylen,
+			const char *data, int datalen)
 {
     return 1;
 }
