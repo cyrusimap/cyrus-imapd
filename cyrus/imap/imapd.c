@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.17 2002/07/30 19:40:11 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.18 2002/08/04 13:56:11 ken3 Exp $ */
 
 #include <config.h>
 
@@ -265,9 +265,8 @@ static int acl_ok(const char *user,
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
 					       user, inboxname);
-    if (r) return r;
 
-    if (!authstate ||
+    if (r || !authstate ||
 	mboxlist_lookup(inboxname, NULL, &acl, NULL)) {
 	r = 0;  /* Failed so assume no proxy access */
     }

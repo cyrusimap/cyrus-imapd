@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.10 2002/08/02 17:22:14 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.11 2002/08/04 13:56:12 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1043,12 +1043,10 @@ static int acl_ok(const char *user, const char *auth_identity)
     int r;
     struct auth_state *authstate;
 
-    if (strchr(user, '.') || strlen(user)+6 >= sizeof(inboxname)) return 0;
+    r = (*imapd_namespace.mboxname_tointernal)(&proxyd_namespace, "INBOX",
+					       user, inboxname);
 
-    strcpy(inboxname, "user.");
-    strcat(inboxname, user);
-
-    if (!(authstate = auth_newstate(auth_identity, (char *)0)) ||
+    if (r || !(authstate = auth_newstate(auth_identity, (char *)0)) ||
 	mlookup(inboxname, (char **)0, &acl, NULL)) {
 	r = 0;  /* Failed so assume no proxy access */
     }
