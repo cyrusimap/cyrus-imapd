@@ -47,7 +47,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.23 2002/10/16 17:25:46 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.24 2002/10/17 16:58:36 ken3 Exp $
  */
 #include <config.h>
 
@@ -95,6 +95,7 @@
 #include "mboxlist.h"
 #include "telemetry.h"
 #include "index.h"
+#include "mkgmtime.h"
 
 extern int optind;
 extern char *optarg;
@@ -186,6 +187,9 @@ static void cmd_over();
 static void cmdloop(void);
 static int open_group();
 static int parsenum(char *str, char **rem);
+static time_t parse_datetime(char *datestr, char *timestr, char *gmt);
+static int do_newnews(char *msgid, char *mailbox, unsigned long uid,
+		      unsigned long lines, time_t tstamp, void *rock);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
@@ -492,7 +496,7 @@ void fatal(const char* s, int code)
 static void cmdloop(void)
 {
     int c, r, mode;
-    static struct buf cmd, arg1, arg2;
+    static struct buf cmd, arg1, arg2, arg3, arg4;
     char *p;
     const char *err;
     unsigned long uid;
@@ -745,7 +749,43 @@ static void cmdloop(void)
 	    break;
 
 	case 'N':
-	    if (!strcmp(cmd.s, "Next")) {
+	    if (!strcmp(cmd.s, "Newnews")) {
+		time_t tstamp;
+		char pattern[MAX_MAILBOX_NAME+1];
+
+		if (!config_getswitch(IMAPOPT_ALLOWNEWNEWS))
+		    goto cmddisabled;
+
+		arg4.len = 0;
+		if (c != ' ') goto missingargs;
+		c = getword(nntp_in, &arg1);
+		if (c == EOF) goto missingargs;
+		if (c != ' ') goto missingargs;
+		c = getword(nntp_in, &arg2);
+		if (c == EOF) goto missingargs;
+		if (c != ' ') goto missingargs;
+		c = getword(nntp_in, &arg3);
+		if (c == EOF) goto missingargs;
+		if (c == ' ') {
+		    c = getword(nntp_in, &arg4);
+		    if (c == EOF) goto missingargs;
+		}
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		if ((tstamp = parse_datetime(arg2.s, arg3.s,
+					     arg4.len ? arg4.s : NULL)) < 0)
+		    goto baddatetime;
+
+		prot_printf(nntp_out, "230 List of new articles follows\r\n");
+
+		strcpy(pattern, newsprefix);
+		strcat(pattern, arg1.s);
+		netnews_findall(pattern, tstamp, 1, do_newnews, NULL);
+
+		prot_printf(nntp_out, ".\r\n");
+	    }
+	    else if (!strcmp(cmd.s, "Next")) {
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 		if (!nntp_group) goto noopengroup;
@@ -858,6 +898,11 @@ static void cmdloop(void)
 
 	continue;
 
+      cmddisabled:
+	prot_printf(nntp_out, "500 \"%s\" disabled\r\n", cmd.s);
+	eatline(nntp_in, c);
+	continue;
+
       extraargs:
 	prot_printf(nntp_out, "501 Unexpected extra argument\r\n");
 	eatline(nntp_in, c);
@@ -865,6 +910,11 @@ static void cmdloop(void)
 
       missingargs:
 	prot_printf(nntp_out, "501 Missing argument\r\n");
+	eatline(nntp_in, c);
+	continue;
+
+      baddatetime:
+	prot_printf(nntp_out, "501 Bad date/time\r\n");
 	eatline(nntp_in, c);
 	continue;
 
@@ -1100,7 +1150,7 @@ void cmd_mode(char *arg)
 int do_list(char *name, int matchlen, int maycreate __attribute__((unused)),
 	    void *rock)
 {
-    static char lastname[MAX_MAILBOX_PATH] = "";
+    static char lastname[MAX_MAILBOX_NAME+1] = "";
     char *acl;
     int r, myrights;
 
@@ -1154,7 +1204,7 @@ void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, ".\r\n");
     }
     else if (!strcmp(arg1, "active")) {
-	char pattern[MAX_MAILBOX_PATH];
+	char pattern[MAX_MAILBOX_NAME+1];
 
 	if (arg2) {
 	    /* XXX do something with wildmat */
@@ -1755,4 +1805,83 @@ static void cmd_over(unsigned long uid, unsigned long last)
 	    prot_printf(nntp_out, "\t\r\n");
 	}
     }
+}
+
+static const int numdays[] = {
+    31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+};
+
+#define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
+
+/*
+ * Parse a date/time specification per draft-ietf-nntpext-base.
+ */
+static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
+{
+    int datelen = strlen(datestr), leapday;
+    unsigned long d, t;
+    char *p;
+    struct tm tm;
+
+    /* check format of strings */
+    if ((datelen != 6 && datelen != 8) ||
+	strlen(timestr) != 6 || (gmt && strcasecmp(gmt, "GMT")))
+	return -1;
+
+    /* convert datestr to ulong */
+    d = strtoul(datestr, &p, 10);
+    if (d < 0 || *p) return -1;
+
+    /* convert timestr to ulong */
+    t = strtoul(timestr, &p, 10);
+    if (t < 0 || *p) return -1;
+
+    /* populate the time struct */
+    tm.tm_year = d / 10000;
+    d %= 10000;
+    tm.tm_mon = d / 100 - 1;
+    tm.tm_mday = d % 100;
+
+    tm.tm_hour = t / 10000;
+    t %= 10000;
+    tm.tm_min = t / 100;
+    tm.tm_sec = t % 100;
+
+    /* massage the year to years since 1900 */
+    if (tm.tm_year > 99) tm.tm_year -= 1900;
+    else {
+	/*
+	 * guess century
+	 * if year > current year, use previous century
+	 * otherwise, use current century
+	 */
+	time_t now = time(NULL);
+	struct tm *current;
+	int century;
+
+        current = gmt ? gmtime(&now) : localtime(&now);
+        century = current->tm_year / 100;
+        if (tm.tm_year > current->tm_year % 100) century--;
+        tm.tm_year += century * 100;
+    }
+
+    /* sanity check the date/time (including leap day and leap second) */
+    leapday = tm.tm_mon == 1 && isleap(tm.tm_year + 1900);
+    if (tm.tm_year < 70 || tm.tm_mon < 0 || tm.tm_mon > 11 ||
+	tm.tm_mday < 1 || tm.tm_mday > (numdays[tm.tm_mon] + leapday) ||
+	tm.tm_hour > 23 || tm.tm_min > 59 || tm.tm_sec > 60)
+        return -1;
+
+    return (gmt ? mkgmtime(&tm) : mktime(&tm));
+}
+
+/*
+ * newnews_findall() callback function to list NEWNEWS
+ */
+static int do_newnews(char *msgid, char *mailbox, unsigned long uid,
+		      unsigned long lines, time_t tstamp, void *rock)
+{
+    prot_printf(nntp_out, "%s\r\n", msgid);
+
+    return 0;
 }
