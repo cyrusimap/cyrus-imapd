@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.36 1999/09/30 07:31:40 leg Exp $
+ $Id: imclient.c,v 1.37 1999/10/17 20:00:10 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -87,17 +87,12 @@ struct imclient {
     char *outptr;
     int outleft;
     char *outstart;
-    char outcryptbuf[IMCLIENT_BUFSIZE+4];
-    char *outcryptstart;
-    int outcryptlen;
 
     /* Replies being received from server */
     char *replybuf;
     char *replystart;
     int replyliteralleft;
     int replylen;
-    int replycryptstart;
-    int replycryptend;
     int alloc_replybuf;
     
     /* Protection mechanism data */
@@ -596,9 +591,22 @@ int len;
     int keywordlen;
     int keywordindex;
     struct imclient_cmdcallback **cmdcb, *cmdcbtemp;
+    char *plainbuf;
+    int plainlen;
+
+    if (imclient->saslcompleted == 1) {
+      /* decrypt what we have */
+      if (sasl_decode(imclient->saslconn, buf, len,
+		      &plainbuf, &plainlen) != SASL_OK) {
+	(void) shutdown(imclient->fd, 0);
+      }
+    } else {
+      plainbuf = buf;
+      plainlen = len;
+    }
 
     /* Ensure replybuf has enough space to take the input */
-    if (imclient->replycryptend + len >= imclient->alloc_replybuf) {
+    if (imclient->replylen + plainlen >= imclient->alloc_replybuf) {
 	/* If there is unused space at the front, move the plaintext there */
 	if (imclient->replystart != imclient->replybuf) {
 	    imclient->replylen -= imclient->replystart - imclient->replybuf;
@@ -606,78 +614,34 @@ int len;
 		    imclient->replylen);
 	    imclient->replystart = imclient->replybuf;
 	}
-	/* If unused space between plaintext and crypttext, move crypttext */
-	if (imclient->replycryptstart > imclient->replylen) {
-	    if (imclient->replycryptend - imclient->replycryptstart) {
-		memmove(imclient->replybuf + imclient->replylen,
-			imclient->replybuf + imclient->replycryptstart,
-			imclient->replycryptend - imclient->replycryptstart);
-	    }
-	    imclient->replycryptend -=
-	      imclient->replycryptstart - imclient->replylen;
-	    imclient->replycryptstart = imclient->replylen;
 
-	    /* Shrink the reply buffer if it's too large */
-	    if (imclient->replycryptend + len + REPLYSHRINK <
+	/* Shrink the reply buffer if it's too large */
+	if (imclient->replylen + plainlen + REPLYSHRINK <
 		imclient->alloc_replybuf) {
-		imclient->alloc_replybuf = imclient->replycryptend + len
+		imclient->alloc_replybuf = imclient->replylen + plainlen
 		  + REPLYSHRINK;
 		imclient->replybuf = xrealloc(imclient->replybuf,
 					      imclient->alloc_replybuf);
 		imclient->replystart = imclient->replybuf;
 	    }
-	}
 
 	/* If there still isn't enough room, grow the buffer */
-	if (imclient->replycryptend + len >= imclient->alloc_replybuf) {
+	if (imclient->replylen + plainlen >= imclient->alloc_replybuf) {
 	    imclient->alloc_replybuf =
-	      imclient->replycryptend + len + REPLYSLACK;
+	      imclient->replylen + plainlen + REPLYSLACK;
 	    imclient->replybuf = xrealloc(imclient->replybuf,
 					  imclient->alloc_replybuf);
 	    imclient->replystart = imclient->replybuf;
 	}
     }
-
-    /* Copy the data to the buffer and NUL-terminate it */
-    memcpy(imclient->replybuf + imclient->replycryptend, buf, len);
-    imclient->replycryptend += len;
+    
 
     /* Remember where new data starts */
     parsed = imclient->replylen;
 
-    /* Decrypt the data */
-    if (imclient->saslcompleted==1) {
-	char *plainptr;
-	unsigned int plainlen;
-
-	for (;;) {
-	    /* Make sure we have an entire token */
-
-	    if (sasl_decode(imclient->saslconn,
-			    imclient->replybuf + imclient->replycryptstart,
-			   imclient->replycryptend - imclient->replycryptstart,
-			    &plainptr, &plainlen) != SASL_OK) 
-	      {
-		(void) shutdown(imclient->fd, 0);
-		break;
-	      }
-
-	    imclient->replycryptstart += imclient->replycryptend - imclient->replycryptstart;
-	    if (plainlen==0) break; /* didn't get a whole token */
-
-	    /* Copy the plaintext out, done with crypttext */
-	    memcpy(imclient->replybuf + imclient->replylen,
-		    plainptr, plainlen);
-	    imclient->replylen += plainlen;
-
-	    free(plainptr);
-	}
-    }
-    else {
-	/* No decryption necessary */
-	imclient->replylen = imclient->replycryptstart =
-	  imclient->replycryptend;
-    }
+    /* Copy the data to the buffer and NUL-terminate it */
+    memcpy(imclient->replybuf + imclient->replylen, plainbuf, plainlen);
+    imclient->replylen += plainlen;
 
     /* Process the new data */
     while (parsed < imclient->replylen) {
@@ -917,8 +881,7 @@ int *fd;
 int *wanttowrite;
 {
     *fd = imclient->fd;
-    *wanttowrite = imclient->outcryptlen ||
-	imclient->outptr - imclient->outstart;
+    *wanttowrite = imclient->outptr - imclient->outstart;
 }
 
 /*
