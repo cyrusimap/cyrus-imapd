@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.318 2001/08/31 21:07:03 ken3 Exp $ */
+/* $Id: imapd.c,v 1.319 2001/08/31 21:17:24 ken3 Exp $ */
 
 #include <config.h>
 
@@ -5133,14 +5133,10 @@ int getlistopts(char *tag, int *listopts)
 
     *listopts = LIST_EXT;
 
-    c = getword(imapd_in, &arg);
-    if (arg.s[0] == '\0') {
-	if (c == ')') goto done;
-	prot_printf(imapd_out, "%s BAD Invalid options in List\r\n", tag);
-	return EOF;
-    }
-
     for (;;) {
+	c = getword(imapd_in, &arg);
+	if (!arg.s[0]) break;
+
 	lcase(arg.s);
 	if (!strcmp(arg.s, "subscribed")) {
 	    *listopts |= LIST_SUBSCRIBED;
@@ -5158,9 +5154,8 @@ int getlistopts(char *tag, int *listopts)
 			tag, arg.s);
 	    return EOF;
 	}
-	    
-	if (c == ' ') c = getword(imapd_in, &arg);
-	else break;
+
+	if (c != ' ') break;
     }
 
     if (c != ')') {
@@ -5169,7 +5164,6 @@ int getlistopts(char *tag, int *listopts)
 	return EOF;
     }
 
-  done:
     c = prot_getc(imapd_in);
 
     return c;
