@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.68 2002/04/02 17:16:15 leg Exp $
+ * $Id: prot.c,v 1.69 2002/04/08 20:01:57 leg Exp $
  */
 
 #include <config.h>
@@ -351,8 +351,15 @@ int prot_fill(struct protstream *s)
 	    timeout.tv_sec = timeout.tv_usec = 0;
 	    FD_ZERO(&rfds);
 	    FD_SET(s->fd, &rfds);
-	    if (select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
-		       &timeout) <= 0) {
+#ifdef HAVE_SSL
+	    /* maybe there's data stuck in the SSL buffer? */
+	    if (s->tls_conn != NULL) {
+		haveinput = SSL_pending(s->tls_conn);
+	    }
+#endif
+	    if (!haveinput &&
+		(select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
+			&timeout) <= 0)) {
 		if (s->readcallback_proc) {
 		    (*s->readcallback_proc)(s, s->readcallback_rock);
 		    s->readcallback_proc = 0;
