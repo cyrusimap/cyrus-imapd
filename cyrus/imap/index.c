@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.111 2000/06/06 04:11:35 leg Exp $
+ * $Id: index.c,v 1.112 2000/06/07 20:30:51 leg Exp $
  */
 #include <config.h>
 
@@ -3087,61 +3087,98 @@ static struct msgdata *index_msgdata_load(unsigned *msgno_list, int n,
 }
 
 /* Extract base subject from subject header */
-static char *index_extract_subject(const char *subj)
+char *index_extract_subject(char *subj)
 {
-    char *s, *base, *ret = NULL;
-#ifdef ENABLE_REGEX
-    regmatch_t pmatch[1];
-
-    /* If subj = "NIL", then it is an empty subject */
-    if (!strcmp(subj, "NIL"))
-	return xstrdup("");
+    char *s, *base, *ret, *x;
 
     /* make a working copy of subj */
     s = xstrdup(subj);
 
-    /* find trailer */
-    if (!regexec(&ptrailer, s, 1, pmatch, 0)) {
-	/* trim trailer */
-	s[pmatch[0].rm_so] = '\0';
+    /* trim trailer
+     *
+     * start at the end of the string and work towards the front,
+     * resetting the end of the string as we go.
+     */
+    for (x = s + strlen(s) - 1; x >= s;) {
+	if (isspace(*x)) {				/* whitespace? */
+	    *x = '\0';					/* yes, trim it */
+	    x--;					/* skip past it */
+	}
+	else if (x - s >= 4 &&
+		 !strncasecmp(x-4, "(fwd)", 5)) {	/* "(fwd)"? */
+	    *(x-4) = '\0';				/* yes, trim it */
+	    x -= 5;					/* skip past it */
+	}
+	else
+	    break;					/* we're done */
     }
 
-    /* find leader */
-    if (!regexec(&pleader, s, 1, pmatch, 0)) {
-	/* if we are left with an empty base, base is last blob */
-	if (pmatch[0].rm_eo == strlen(s) && s[strlen(s)-1] == ']') {
-	    char *blob;
+    /* trim leader
+     *
+     * start at the head of the string and work towards the end,
+     * skipping over stuff we don't care about.
+     */
+    for (base = s; base;) {
+	if (isspace(*base))				/* whitespace? */
+	    base++;					/* yes, skip past it */
 
-	    (void) regexec(&pblob, s, 1, pmatch, 0);
-	    base = s+pmatch[0].rm_so;
+	/* possible refwd */
+	else if ((!strncasecmp(base, "re", 2) &&	/* "re"? */
+		  (x = base + 2)) ||			/* yes, skip past it */
+		 (!strncasecmp(base, "fwd", 3) &&	/* "fwd"? */
+		  (x = base + 3)) ||			/* yes, skip past it */
+		 (!strncasecmp(base, "fw", 2) &&	/* "fw"? */
+		  (x = base + 2))) {			/* yes, skip past it */
+	    
+	    while (isspace(*x))				/* whitespace? */
+		x++;					/* yes, skip past it */
 
-	    /*
-	     * Try extracting a base from the contents of the blob.
-	     * This is a hack to catch Netscape's wacky
-	     * "[Fwd: message]" notation.
-	     * If the extracted base is different from
-	     * the actual contents, then use this as the base.
-	     */
-	    blob = xstrndup(base+1, strlen(base)-2);
-	    ret = index_extract_subject(blob);
-	    if (strcmp(blob, ret)) {
-		free(blob);
-		goto done;
+	    if (*x == '[') {				/* start of blob? */
+		if (x = strchr(x, ']'))			/* yes, end of blob? */
+		    x++;				/* yes, skip past it */
+		else
+		    break;				/* no, we're done */
 	    }
-	    free(blob);
-	    free(ret);
+
+	    while (isspace(*x))				/* whitespace? */
+		x++;					/* yes, skip past it */
+
+	    if (*x == ':')				/* ending colon? */
+		base = x + 1;				/* yes, skip past it */
+	    else
+		break;					/* no, we're done */
 	}
-	else { /* otherwise, trim leader */
-	    base = s+pmatch[0].rm_eo;
+	else if (*base == '[' &&			/* start of blob? */
+		 (x = strchr(base, ']'))) {		/* yes, end of blob? */
+	    if (*(x+1))					/* yes, end of string? */
+		base = x + 1;				/* no, skip blob */
+
+	    /* Hack to catch Netscape's wacky "[Fwd: message]" notation. */
+	    else if (!strncasecmp(base+1, "fwd:", 4)) {
+		char *blob;
+
+		/* make a working copy of blob contents */
+		blob = xstrndup(base+1, strlen(base) - 2);
+
+		ret = index_extract_subject(blob);	/* extract blob-base */
+
+		free(blob);
+		free(s);
+
+		return ret;				/* return blob-base */
+	    }
+	    else
+		break;					/* yes, return blob */
 	}
+	else
+	    break;					/* we're done */
     }
 
+    /* make a copy of the extracted base */
     ret = xstrdup(base);
 
- done:
     free(s);
 
-#endif /* ENABLE_REGEX */
     return ret;
 }
 
