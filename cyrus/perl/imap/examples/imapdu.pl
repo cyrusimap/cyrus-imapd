@@ -1,4 +1,6 @@
-#! /usr/bin/perl -w
+#! /usr/local/bin/perl -w
+#
+# $Id: imapdu.pl,v 1.8 2001/11/30 19:30:45 leg Exp $
 # 
 # Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
 #
@@ -39,37 +41,34 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+use strict;
 use Getopt::Long;
 use Cyrus::IMAP;
 use Cyrus::IMAP::Admin;
+use Pod::Usage;
 
-sub usage {
-  print "imapdu - Summarize disk usage of mailboxes recursively\n";
-  print "  usage:\n";
-  print "    imapdu [-u user] <server> <pattern>\n";
-  print "\n";
-  print "  example: \n";
-  print "    imapdu cyrus.andrew.cmu.edu inbox\n";
-  print "\n";
-  exit 0;
-}
+my $user;
+my $verbose = 0;
+my $server;
+my $where;
 
-GetOptions("u|user=s" => \$user);
+GetOptions("u|user=s" => \$user,
+	   "v|verbose!" => \$verbose) or pod2usage(2);
 
 if (@ARGV) {
     $server = shift(@ARGV);
 } else {
-  usage;
+    pod2usage("$0: too few arguments\n");
 }
 
 if (@ARGV) {
     $where = shift(@ARGV);
 } else {
-  usage;
+    pod2usage("$0: too few arguments\n");
 }
 
 if ((!defined $server) || (!defined $where)) {
-  usage;
+    pod2usage("$0: too few arguments\n");
 }
 
 my $cyrus = Cyrus::IMAP->new($server);
@@ -112,22 +111,20 @@ if ($rc eq 'OK') {
 my %mb_size;
 my %mb_msgs;
 
-foreach $a (@info) {
-  ($b, $c) = sizeofmailbox($a);
+foreach my $a (@info) {
+    my ($b, $c) = sizeofmailbox($a);
 
-  @z = split(/\./, $a);
-  
-  $str = "";
-  foreach $y (@z) {
-    if ($str ne "") {
-      $str=$str.".";
+    my @z = split(/\./, $a);
+    
+    my $str = "";
+    foreach my $y (@z) {
+	if ($str ne "") {
+	    $str=$str.".";
+	}
+	$str=$str.$y;
+	$mb_size{$str} += $b;
+	$mb_msgs{$str} += $c;
     }
-    $str=$str.$y;
-    $mb_size{$str} += $b;
-    $mb_msgs{$str} += $c;
-  }
-
-
 }
 
 foreach $a (sort keys %mb_size) {
@@ -147,15 +144,16 @@ sub sizeofmailbox {
 			 
 		       },
 		       -rock => \@info});
+  print STDERR "$mb...\n" if $verbose;
   my ($rc, $msg) = $cyrus->send('', '', "EXAMINE $mb");
   if ($rc eq 'OK') {
   } else {
-    print "Failure!\n";
+      print "failed: $mb: $msg\n";
   }
 
   #list size of all msgs
   my $totalsize = 0;
-  $flags = 1;
+  my $flags = 1;
   
   my %info = ();
   $info{'totalsize'} = 0;
@@ -188,7 +186,7 @@ sub showsize {
   my ($size,$msgs, $name) = @_;
 
   if ($size < 1024) {
-    printf "%9.2f byte%s\t", $size, $size == 1 ? "" : "s";
+    printf "%9.2f bytes\t", $size;
   } elsif ($size < 1024*1024) {
     $size = $size/1024;
     printf "%9.2f KB\t", $size;
@@ -201,3 +199,18 @@ sub showsize {
 
   print "\t$name\n";
 }
+
+
+__END__
+
+=head1 NAME
+
+imapdu - show mailbox usage stats
+
+=head1 SYNOPSIS
+
+imapdu [B<--user>=I<user>] [B<--verbose>] I<server> I<pattern>
+
+=head1 EXAMPLE
+
+   imapdu cyrus.andrew.cmu.edu inbox
