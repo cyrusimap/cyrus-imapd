@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.24 2002/08/18 00:45:59 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.25 2002/08/18 01:06:18 ken3 Exp $ */
 
 #include <config.h>
 
@@ -494,7 +494,7 @@ static void imapd_reset(void)
  */
 int service_init(int argc, char **argv, char **envp)
 {
-    int r, opt;
+    int opt;
     
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);

@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.9.4.3 2002/08/04 13:55:45 ken3 Exp $
+ * $Id: mboxname.h,v 1.9.4.4 2002/08/18 01:06:19 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -43,6 +43,8 @@
 
 #ifndef INCLUDED_MBOXNAME_H
 #define INCLUDED_MBOXNAME_H
+
+#include "auth.h"
 
 #define MAX_NAMESPACE_PREFIX 40
 

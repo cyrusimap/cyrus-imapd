@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.17 2002/08/16 22:00:53 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.18 2002/08/18 01:06:19 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1134,7 +1134,6 @@ extern void proc_cleanup(void);
 int service_init(int argc, char **argv, char **envp)
 {
     int opt;
-    int r;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);

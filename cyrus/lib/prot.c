@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.11 2002/08/06 15:22:37 rjs3 Exp $
+ * $Id: prot.c,v 1.72.4.12 2002/08/18 01:06:21 ken3 Exp $
  */
 
 #include <config.h>
@@ -772,7 +772,7 @@ int prot_flush_internal(struct protstream *s, int force)
 	    do {
 		n = write(s->big_buffer, ptr, left);
 		if (n == -1 && errno != EINTR) {
-		    syslog(LOG_ERR, "write to protstream buffer failed: %m",
+		    syslog(LOG_ERR, "write to protstream buffer failed: %s",
 			   strerror(errno));
 		    
 		    fatal("write to big buffer failed", EC_OSFILE);
