@@ -61,7 +61,7 @@ extern int errno;
 int dupelim = 0;
 
 struct protstream *savemsg();
-char *convert_smtp();
+char *convert_lmtp();
 
 main(argc, argv)
 int argc;
@@ -71,7 +71,7 @@ char **argv;
     int r;
     int exitval = 0;
     char *return_path = 0;
-    int smtpflag = 0;
+    int lmtpflag = 0;
     char *mailboxname = 0;
     struct protstream *prot_f;
     unsigned size;
@@ -128,8 +128,8 @@ char **argv;
 	case 'E':
 	    exit(prunedelivered(atoi(optarg)));
 
-	case 's':
-	    smtpflag = 1;
+	case 'l':
+	    lmtpflag = 1;
 	    break;
 
 	case 'q':
@@ -141,8 +141,8 @@ char **argv;
 	}
     }
 
-    if (smtpflag) {
-	smtpmode(quotaoverride);
+    if (lmtpflag) {
+	lmtpmode(quotaoverride);
 	exit(0);
     }
 
@@ -305,7 +305,7 @@ char *addr;
     if (dot) *dot = '\0';
     if (*user) {
 	if (strlen(user) > sizeof(buf)-10) {
-	    return convert_smtp(IMAP_MAILBOX_NONEXISTENT);
+	    return convert_lmtp(IMAP_MAILBOX_NONEXISTENT);
 	}
 	strcpy(buf, "user.");
 	strcat(buf, user);
@@ -315,7 +315,7 @@ char *addr;
 	r = mboxlist_lookup(user+1, (char **)0, (char **)0);
     }
     if (r) {
-	return convert_smtp(r);
+	return convert_lmtp(r);
     }
     if (dot) *dot = '.';
 
@@ -325,7 +325,7 @@ char *addr;
 
 #define RCPT_GROW 3 /* XXX 30 */
 
-smtpmode(quotaoverride)
+lmtpmode(quotaoverride)
 int quotaoverride;
 {
     char *return_path = 0;
@@ -349,7 +349,7 @@ int quotaoverride;
 
     gethostname(myhostname, sizeof(myhostname)-1);
     
-    printf("220 %s ESMTP ready\r\n", myhostname);
+    printf("220 %s LMTP ready\r\n", myhostname);
     for (;;) {
 	fflush(stdout);
 	if (!fgets(buf, sizeof(buf)-1, stdin)) {
@@ -380,10 +380,19 @@ int quotaoverride;
 				notifyheader,
 				rcpt_addr[i][0] ? rcpt_addr[i] : (char *)0, p,
 				quotaoverride);
-		    printf("%s\r\n", convert_smtp(r));
+		    printf("%s\r\n", convert_lmtp(r));
 		}
 		prot_free(prot_f);
 		goto rset;
+	    }
+	    goto syntaxerr;
+
+	case 'l':
+	case 'L':
+	    if (!strncasecmp(buf, "lhlo ", 5)) {
+		printf("250-%s\r\n250-8BITMIME\r\n250-ENHANCEDSTATUSCODES\r\n250 PIPELINING\r\n",
+		       myhostname);
+		continue;
 	    }
 	    goto syntaxerr;
 
@@ -400,11 +409,6 @@ int quotaoverride;
 		    continue;
 		}
 		printf("250 2.1.0 ok\r\n");
-		continue;
-	    }
-	    else if (!strncasecmp(buf, "mhlo ", 5)) {
-		printf("250-%s\r\n250-8BITMIME\r\n250-ENHANCEDSTATUSCODES\r\n250 PIPELINING\r\n",
-		       myhostname);
 		continue;
 	    }
 	    goto syntaxerr;
@@ -482,12 +486,12 @@ int quotaoverride;
 
 
 struct protstream *
-savemsg(return_path, idptr, notifyptr, sizeptr, smtpmode)
+savemsg(return_path, idptr, notifyptr, sizeptr, lmtpmode)
 char *return_path;
 char **idptr;
 char **notifyptr;
 unsigned *sizeptr;
-int smtpmode;
+int lmtpmode;
 {
     FILE *f;
     char *hostname = 0;
@@ -504,7 +508,7 @@ int smtpmode;
     /* Copy to temp file */
     f = tmpfile();
     if (!f) {
-	if (smtpmode) {
+	if (lmtpmode) {
 	    printf("451 4.3.%c cannot create temporary file: %s\r\n",
 		   (
 #ifdef EDQUOT
@@ -517,7 +521,7 @@ int smtpmode;
 	exit(EX_TEMPFAIL);
     }
 
-    if (smtpmode) {
+    if (lmtpmode) {
 	printf("354 go ahead\r\n");
 	fflush(stdout);
     }
@@ -561,10 +565,10 @@ int smtpmode;
 	    *p = '\0';
 	}
 
-	if (smtpmode && buf[0] == '.') {
+	if (lmtpmode && buf[0] == '.') {
 	    if (buf[1] == '\r' && buf[2] == '\n') {
 		/* End of message */
-		goto smtpdot;
+		goto lmtpdot;
 	    }
 	    /* Remove the dot-stuffing */
 	    fputs(buf+1, f);
@@ -629,19 +633,19 @@ int smtpmode;
 
     }
 
-    if (smtpmode) {
+    if (lmtpmode) {
 	/* Got a premature EOF -- toss message and exit */
 	exit(0);
     }
 
-  smtpdot:
+  lmtpdot:
     fflush(f);
     if (ferror(f)) {
-	if (!smtpmode) {
+	if (!lmtpmode) {
 	    perror("deliver: copying message");
 	    exit(EX_TEMPFAIL);
 	}
-	while (smtpmode--) {
+	while (lmtpmode--) {
 	    printf("451 4.3.%c cannot copy message to temporary file: %s\r\n",
 		   (
 #ifdef EDQUOT
@@ -654,11 +658,11 @@ int smtpmode;
 	return 0;
     }
     if (fstat(fileno(f), &sbuf) == -1) {
-	if (!smtpmode) {
+	if (!lmtpmode) {
 	    perror("deliver: stating message");
 	    exit(EX_TEMPFAIL);
 	}
-	while (smtpmode--) {
+	while (lmtpmode--) {
 	    printf("451 4.3.2 cannot stat message temporary file: %s\r\n",
 		   error_message(errno));
 	}
@@ -810,7 +814,7 @@ int r;
     return EX_SOFTWARE;
 }	
 
-char *convert_smtp(r)
+char *convert_lmtp(r)
 int r;
 {
     switch (r) {
