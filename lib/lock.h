@@ -1,5 +1,5 @@
 /* lock.h -- file locking primitives
- $Id: lock.h,v 1.5 2000/05/23 20:56:17 robeson Exp $
+ $Id: lock.h,v 1.6 2001/10/02 21:08:13 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,6 +52,8 @@
 #endif
 
 #include <sys/stat.h>
+
+extern const char *lock_method_desc;
 
 extern int lock_reopen P((int fd, const char *filename,
 			   struct stat *sbuf, const char **failaction));

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_poll.c,v 1.3 2001/01/17 17:39:22 ken3 Exp $ */
+/* $Id: idle_poll.c,v 1.4 2001/10/02 21:08:10 ken3 Exp $ */
 
 #include <syslog.h>
 #include <time.h>
@@ -49,6 +49,8 @@
 
 #include "idle.h"
 #include "imapconf.h"
+
+const char *idle_method_desc = "poll";
 
 /* function to report mailbox updates to the client */
 static idle_updateproc_t *idle_update = NULL;
@@ -69,7 +71,7 @@ int idle_enabled(void)
     return idle_period;
 }
 
-void idle_poll(int sig)
+static void idle_poll(int sig)
 {
     idle_update(IDLE_MAILBOX|IDLE_ALERT);
 

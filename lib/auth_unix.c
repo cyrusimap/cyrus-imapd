@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.27 2000/05/23 20:56:12 robeson Exp $
+ * $Id: auth_unix.c,v 1.28 2001/10/02 21:08:13 ken3 Exp $
  */
 
 #include <config.h>
@@ -52,6 +52,8 @@
 
 #include "auth.h"
 #include "xmalloc.h"
+
+const char *auth_method_desc = "unix";
 
 struct auth_state {
     char userid[81];

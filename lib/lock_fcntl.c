@@ -1,5 +1,5 @@
 /* lock_fcntl.c -- Lock files using fcntl()
- $Id: lock_fcntl.c,v 1.12 2000/06/27 21:47:53 leg Exp $
+ $Id: lock_fcntl.c,v 1.13 2001/10/02 21:08:13 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -49,6 +49,8 @@
 #include <errno.h>
 
 #include "lock.h"
+
+const char *lock_method_desc = "fcntl";
 
 extern int errno;
 

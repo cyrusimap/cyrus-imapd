@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to sieve and proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.20 2001/09/07 21:00:00 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.21 2001/10/02 21:08:10 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.20 2001/09/07 21:00:00 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.21 2001/10/02 21:08:10 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -270,7 +270,7 @@ int service_init(int argc, char **argv, char **envp)
 #ifdef USE_SIEVE
     sieve_dir = config_getstring("sievedir", "/usr/sieve");
     mylmtp.addheaders = xmalloc(80);
-    snprintf(mylmtp.addheaders, 80, "X-Sieve: %s\r\n", sieve_version);
+    snprintf(mylmtp.addheaders, 80, "X-Sieve: %s\r\n", SIEVE_VERSION);
 
     /* setup sieve support */
     setup_sieve();
@@ -532,7 +532,7 @@ int send_rejection(const char *origid,
 	    tm->tm_hour, tm->tm_min, tm->tm_sec,
             gmtnegative ? '-' : '+', gmtoff / 60, gmtoff % 60);
 
-    fprintf(sm, "X-Sieve: %s\r\n", sieve_version);
+    fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
     fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", POSTMASTER);
     fprintf(sm, "To: <%s>\r\n", rejto);
     fprintf(sm, "MIME-Version: 1.0\r\n");
@@ -554,7 +554,7 @@ int send_rejection(const char *origid,
 	    "Content-Type: message/disposition-notification\r\n\r\n",
 	    (int) p, config_servername);
     fprintf(sm, "Reporting-UA: %s; Cyrus %s/%s\r\n",
-	    config_servername, CYRUS_VERSION, sieve_version);
+	    config_servername, CYRUS_VERSION, SIEVE_VERSION);
     if (origreceip)
 	fprintf(sm, "Original-Recipient: rfc822; %s\r\n", origreceip);
     fprintf(sm, "Final-Recipient: rfc822; %s\r\n", mailreceip);
@@ -848,7 +848,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	    tm->tm_hour, tm->tm_min, tm->tm_sec,
             tznegative ? '-' : '+', tz / 60, tz % 60);
     
-    fprintf(sm, "X-Sieve: %s\r\n", sieve_version);
+    fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
     fprintf(sm, "From: <%s>\r\n", src->fromaddr);
     fprintf(sm, "To: <%s>\r\n", src->addr);
     /* check that subject is sane */

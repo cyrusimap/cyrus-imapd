@@ -1,5 +1,5 @@
 /* auth_krb.c -- Kerberos authorization
- $Id: auth_krb.c,v 1.34 2000/05/23 20:52:40 robeson Exp $
+ $Id: auth_krb.c,v 1.35 2001/10/02 21:08:13 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -63,6 +63,8 @@
 
 #include "xmalloc.h"
 #include "auth.h"
+
+const char *auth_method_desc = "krb";
 
 #ifndef KRB_MAPNAME
 #define KRB_MAPNAME "/etc/krb.equiv"

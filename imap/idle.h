@@ -38,12 +38,14 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle.h,v 1.2 2000/12/18 04:53:38 leg Exp $ */
+/* $Id: idle.h,v 1.3 2001/10/02 21:08:10 ken3 Exp $ */
 
 #ifndef IDLE_H
 #define IDLE_H
 
 #include "mailbox.h"
+
+extern const char *idle_method_desc;
 
 typedef enum {
     IDLE_MAILBOX =	0x1,
