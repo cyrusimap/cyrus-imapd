@@ -101,6 +101,8 @@ int iovcnt;
 	    iovcnt--;
 	}
 
+	if (!iovcnt) return written;
+
 	n = writev(fd, iov, iovcnt > iov_max ? iov_max : iovcnt);
 	if (n == -1) {
 	    if (errno == EINVAL && iov_max > 10) {
