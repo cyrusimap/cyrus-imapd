@@ -43,8 +43,7 @@ deliver \- deliver mail to an IMAP mailbox
 .I auth-id
 ]
 [
-.B \-i
-message-id
+.B \-e
 ]
 [
 .B \-F
@@ -56,7 +55,7 @@ flag
 ]...
 .br
 .B deliver
-.B \-I 
+.B \-E
 .I days
 .SH DESCRIPTION
 .I Deliver
@@ -74,12 +73,16 @@ Ignored for compatability with
 .B /bin/mail.
 .TP
 .BI \-r " address"
-Ignored for compatability with 
-.B /bin/mail.
+Insert a 
+.B Return-Path: 
+header containing
+.i address
 .TP
 .BI \-f " address"
-Ignored for compatability with 
-.B /bin/mail.
+Insert a 
+.B Return-Path: 
+header containing
+.i address
 .TP
 .BI \-m " mailbox"
 Deliver to 
@@ -109,20 +112,19 @@ does not grant the sender the "p" right, the delivery fails.
 .BI \-a " auth-id"
 Specify the authorization id of the sender.  Defaults to "anonymous".
 .TP
-.BI \-i " message-id"
-Enable duplicate delivery suppression, specifying the message-id of
-the message.  Will suppress delivery of the message to a mailbox if a
-message with the same message-id is recorded as having already been
-delivered to the mailbox.  Records the mailbox and message-id of all
+.B \-e
+Enable duplicate delivery suppression.  Will suppress delivery of the
+message to a mailbox if a message with the same message-id (or
+resent-message-id) is recorded as having already been delivered to the
+mailbox.  Records the mailbox and message-id/resent-message-id of all
 successful deliveries.
-.B The format of this option is subject to change.
 .TP
 .BI \-F " flag"
 Set the system flag or keyword
 .I flag
 on the delivered message.
 .TP
-.BI \-I " days"
+.BI \-E " days"
 Prune the duplicate delivery database of entries older than
 .IR days .
 .SH FILES
