@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.175 2002/03/15 20:20:25 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.176 2002/03/19 21:19:45 rjs3 Exp $
  */
 
 #include <config.h>
@@ -297,6 +297,19 @@ int mboxlist_findstage(const char *name, char *stagedir)
     
     return 0;
 }
+
+int mboxlist_update(char *name, int flags, const char *part, const char *acl)
+{
+    int r = 0;
+    char *mboxent = NULL;
+    
+    mboxent = mboxlist_makeentry(flags, part, acl);
+    r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), NULL);
+    free(mboxent);
+
+    return r;
+}
+
 
 /*
  * Check/set up for mailbox creation

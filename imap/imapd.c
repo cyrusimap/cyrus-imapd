@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.359 2002/03/19 17:44:20 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.360 2002/03/19 21:19:44 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -378,7 +378,7 @@ static void imapd_refer(const char *tag,
 /* ext_name is the external name of the mailbox */
 /* you can avoid referring the client by setting tag or ext_name to NULL. */
 static int mlookup(const char *tag, const char *ext_name,
-		   const char *name, char **pathp, char **partp,
+		   const char *name, int *flags, char **pathp, char **partp,
 		   char **aclp, void *tid) 
 {
     int r, mbtype;
@@ -387,6 +387,7 @@ static int mlookup(const char *tag, const char *ext_name,
     r = mboxlist_detail(name, &mbtype, &remote, partp, &acl, tid);
     if(pathp) *pathp = remote;
     if(aclp) *aclp = acl;
+    if(flags) *flags = mbtype;
     if(r) return r;
 
     if(mbtype & MBTYPE_REMOTE) {
@@ -2456,7 +2457,7 @@ void cmd_select(char *tag, char *cmd, char *name)
     }
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -3746,7 +3747,7 @@ cmd_reconstruct(const char *tag, const char *name, int recursive)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4039,7 +4040,7 @@ int oldform;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4123,7 +4124,7 @@ char *identifier;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4186,7 +4187,7 @@ int oldform;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4235,7 +4236,7 @@ char *rights;
 
     /* is it remote? */
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4327,7 +4328,7 @@ char *name;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4629,7 +4630,7 @@ char *name;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5600,7 +5601,7 @@ void cmd_dump(char *tag, char *name, int uid_start)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &path, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, &path, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5634,7 +5635,7 @@ void cmd_undump(char *tag, char *name)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &path, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, &path, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5748,7 +5749,6 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
 		break;
 	    }
 	    
-	    syslog(LOG_ERR, "got word: %s", tag.s);
 	    eatline(pin, c);
 	    
 	    if(!strncmp("ACL", tag.s, 3)) {
@@ -5843,12 +5843,14 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     int r = 0, rerr = 0;
     char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
     char mailboxname[MAX_MAILBOX_NAME+1];
-    char *path, *part;
-    char *acl;
+    char *inpath, *inpart, *inacl;
+    char *path = NULL, *part = NULL, *acl = NULL;
+    int mbflags;
     struct backend *be = NULL;
     mupdate_handle *mupdate_h = NULL;
     int backout_mupdate = 0;
     int backout_remotebox = 0;
+    int backout_remoteflag = 0;
     
     /* administrators only please */
     if (!imapd_userisadmin) {
@@ -5861,9 +5863,16 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &path, &part, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, &mbflags,
+		    &inpath, &inpart, &inacl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
+
+    if (!r) {
+	path = xstrdup(inpath);
+	part = xstrdup(inpart);
+	acl = xstrdup(inacl);
+    }
 
     /* Okay, we have the mailbox, now the order of steps is:
      *
@@ -5914,11 +5923,25 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 		     mailboxname);
 	else backout_remotebox = 1;
     }
-   
-    /* xxx Step 2.5: Set mailbox as REMOTE on local server */
- 
+
+    /* Step 2.5: Set mailbox as REMOTE on local server */
+    /* xxx NEED TO ALSO SET REMOTE HOST SO REFERRAL WORKS CORRECTLY */
+    if(!r) {
+#if 0
+	/* xxx Though this works, it seems to trigger a very strange
+	 * interaction with dump_mailbox */
+	r = mboxlist_update(mailboxname, mbflags|MBTYPE_REMOTE, part, acl);
+#endif
+	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, " \
+		     "mboxlist_update failed", mailboxname);
+	else syslog(LOG_ERR, "my path: %s", path);
+    }
+
+
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
     if(!r) {
+	backout_remoteflag = 1;
+
 	/* Note we are making the reservation on OUR host so that recovery
 	 * make sense */
 	snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
@@ -5937,9 +5960,11 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 
 	r = dump_mailbox(NULL, path, mailboxname, 0, be->in, be->out,
 			 imapd_authstate);
-	if(r) syslog(LOG_ERR,
-		     "Could not move mailbox: %s, dump_mailbox() failed",
-		     mailboxname);
+	/* xxx I think we need to eat the reply here on an error*/
+	if(r)
+	    syslog(LOG_ERR,
+		   "Could not move mailbox: %s, dump_mailbox() failed",
+		   mailboxname);
     }
 
     if(!r) {
@@ -5983,6 +6008,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     if(!r) {
 	backout_remotebox = 0;
 	backout_mupdate = 0;
+	backout_remoteflag = 0;
 
 	/* 6.5) Kick remote server to correct mupdate entry */
 	/* Note that we don't really care if this succeeds or not */
@@ -5997,7 +6023,8 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	}
     }
 
-    /* 7) local delete of mailbox */
+    /* 7) local delete of mailbox
+     * & remove local "remote" mailboxlist entry */
     if(!r) {
 	/* Note that we do not check the ACL, and we don't update MUPDATE */
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
@@ -6006,8 +6033,6 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 		     "Could not delete local mailbox during move of %s",
 		     mailboxname);
     }
-
-    /* 9) remove local remote mailbox entry?????? */
 
  done:
     if(r && backout_mupdate) {
@@ -6034,8 +6059,20 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 		   name, error_message(rerr));
 	}   
     }
+    if(r && backout_remoteflag) {
+	rerr = 0;
+
+	rerr = mboxlist_update(mailboxname, mbflags, part, acl);
+	if(rerr) syslog(LOG_ERR, "Could not unset remote flag on mailbox: %s",
+			mailboxname);
+    }
+
     if(mupdate_h) mupdate_disconnect(&mupdate_h);
     if(be) downserver(be);
+
+    if(part) free(part);
+    if(path) free(path);
+    if(acl) free(acl);
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n",
@@ -6045,6 +6082,8 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
     }
+
+    return;
 }
 
 /*
@@ -6934,7 +6973,7 @@ void cmd_mupdatepush(char *tag, char *name)
     }
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, &part, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, &part, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 

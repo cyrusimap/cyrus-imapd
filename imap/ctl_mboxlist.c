@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.28 2002/03/01 22:17:21 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.29 2002/03/19 21:19:44 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -179,6 +179,11 @@ static int dump_cb(void *rockp,
 	char *realpart = xmalloc(strlen(config_servername) + 1
 				 + strlen(part) + 1);
 	int skip_flag;
+
+	/* xxx If it is marked MBTYPE_REMOTE, and it DOES match the entry,
+	 * we need to unmark it.  If it does not match the entry in our
+	 * list, then we assume that it successfully made the move and
+	 * we delete it from the local disk */
 	
 	/* realpart is 'hostname!partition' */
 	sprintf(realpart, "%s!%s", config_servername, part);
