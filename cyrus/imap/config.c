@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.7 2002/07/30 19:40:10 ken3 Exp $ */
+/* $Id: config.c,v 1.55.4.8 2002/07/30 19:46:50 ken3 Exp $ */
 
 #include <config.h>
 
@@ -564,11 +564,11 @@ char *canonify_userid(char *user, char *loginid, int *domain_from_ip)
     }
 
     /* check for global identifiers */
-    if (strncasecmp(user, "anonymous", len) == 0) {
+    if (len == 9 && strncasecmp(user, "anonymous", len) == 0) {
 	return "anonymous";
     }
-    else if (strncasecmp(user, "anybody", len) == 0 ||
-	strncasecmp(user, "anyone", len) == 0) {
+    else if ((len == 7 && strncasecmp(user, "anybody", len) == 0) ||
+	     (len == 6 && strncasecmp(user, "anyone", len) == 0)) {
 	return "anyone";
     }
 
