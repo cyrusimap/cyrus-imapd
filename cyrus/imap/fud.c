@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32.4.4 2002/08/12 22:48:40 ken3 Exp $ */
+/* $Id: fud.c,v 1.32.4.5 2002/08/13 19:50:23 ken3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -126,15 +126,16 @@ int begin_handling(void)
 		return(errno);
 	    }
             for(off = 0; buf[off] != '|' && off < maxuserlen; off++);
-            if(off < maxuserlen) {
+            if(off > 0 && off < maxuserlen) {
 		strncpy(username,buf,off);
 		username[off] = '\0';
             } else {
 		continue;
             }
+
+	    /* Copy what is past the | to the mailbox name */
             q = buf + off + 1;
-            strlcpy(mbox,q,(r - off < MAX_MAILBOX_NAME) ? 
-		    r - off : MAX_MAILBOX_NAME);
+            strlcpy(mbox, q, sizeof(mbox));
 
             handle_request(username,mbox,sfrom);
         }
@@ -222,13 +223,12 @@ int do_proxy_request(const char *who, const char *name,
     int csoc = -1;
     struct sockaddr_in cin, cout;
     struct hostent *hp;
-    int backend_port = 4201; /* default fud udp port */
-    static struct servent *sp = NULL;
+    static int backend_port = 0; /* fud port in NETWORK BYTE ORDER */
 
     /* Open a UDP socket to the Cyrus mail server */
-    if(!sp) {
-	sp = getservbyname("fud", "udp");
-	if(sp) backend_port = sp->s_port;
+    if(!backend_port) {
+	struct servent *sp = getservbyname("fud", "udp");
+	backend_port = sp ? sp->s_port : htons(4201); /* default fud port */
     }
 
     hp = gethostbyname (backend_host);

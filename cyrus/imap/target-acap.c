@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.28 2001/11/27 02:25:00 ken3 Exp $
+ * $Id: target-acap.c,v 1.28.6.1 2002/08/13 19:50:29 ken3 Exp $
  */
 
 #include <config.h>
@@ -104,7 +104,7 @@ static int dissect_entry(acap_entry_t *e, acapmbox_data_t *data)
 
     if (!e || !data) return ACAP_BAD_PARAM;
 
-    strlcpy(data->name, acap_entry_getname(e), MAX_MAILBOX_NAME);
+    strlcpy(data->name, acap_entry_getname(e), sizeof(data->name));
     data->uidvalidity = getintattr(e, "mailbox.uidvalidity");
 
     v = acap_entry_getattr(e, "mailbox.status");

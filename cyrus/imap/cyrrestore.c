@@ -1,4 +1,4 @@
-/* $Id: cyrrestore.c,v 1.1 2001/03/20 19:59:10 leg Exp $
+/* $Id: cyrrestore.c,v 1.1.14.1 2002/08/13 19:50:23 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
     irec.incruid = 0;
     for (i = optind; i < argc; i++) {
 	/* specify argument multiple times to deal with incrementals */
-	strlcpy(buf, argv[optind], MAX_MAILBOX_NAME);
+	strlcpy(buf, argv[optind], sizeof(buf));
 	restore_me(buf);
     }
 

@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.9.4.1 2002/07/10 19:59:57 ken3 Exp $
+/* $Id: cyrdump.c,v 1.9.4.2 2002/08/13 19:50:23 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
 
     irec.incruid = 0;
     for (i = optind; i < argc; i++) {
-	strlcpy(buf, argv[optind], MAX_MAILBOX_NAME);
+	strlcpy(buf, argv[optind], sizeof(buf));
 	/* Translate any separators in mailboxname */
 	mboxname_hiersep_tointernal(&dump_namespace, buf, 0);
 	(*dump_namespace.mboxlist_findall)(&dump_namespace, buf, 1, 0, 0,

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.14 2002/08/12 21:30:08 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.15 2002/08/13 19:50:25 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -310,7 +310,7 @@ static int pipe_until_tag(struct backend *s, char *tag, int force_notfatal)
 	    return PROXY_NOCONNECTION;
 	}
 	if (!cont && buf[taglen] == ' ' && !strncmp(tag, buf, taglen)) {
-	    strlcpy(s->last_result, buf + taglen + 1, LAST_RESULT_LEN);
+	    strlcpy(s->last_result, buf + taglen + 1, sizeof(s->last_result));
 	    /* guarantee that 's->last_result' has \r\n\0 at the end */
 	    s->last_result[LAST_RESULT_LEN - 3] = '\r';
 	    s->last_result[LAST_RESULT_LEN - 2] = '\n';
@@ -686,7 +686,7 @@ static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
 		return PROXY_NOCONNECTION;
 	    }	
 	    /* Got the end of the response */
-	    strlcpy(s->last_result, buf, LAST_RESULT_LEN);
+	    strlcpy(s->last_result, buf, sizeof(s->last_result));
 	    /* guarantee that 's->last_result' has \r\n\0 at the end */
 	    s->last_result[LAST_RESULT_LEN - 3] = '\r';
 	    s->last_result[LAST_RESULT_LEN - 2] = '\n';

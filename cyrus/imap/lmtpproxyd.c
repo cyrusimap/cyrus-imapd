@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42.4.5 2002/08/02 18:24:11 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.6 2002/08/13 19:50:23 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -160,11 +160,13 @@ static struct namespace lmtpd_namespace;
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 static int mysasl_authproc(sasl_conn_t *conn,
-			   void *context,
-			   const char *requested_user, unsigned rlen,
+			   void *context __attribute__((unused)),
+			   const char *requested_user __attribute__((unused)),
+			   unsigned rlen __attribute__((unused)),
 			   const char *auth_identity, unsigned alen,
-			   const char *def_realm, unsigned urlen,
-			   struct propctx *propctx)
+			   const char *def_realm __attribute__((unused)),
+			   unsigned urlen __attribute__((unused)),
+			   struct propctx *propctx __attribute__((unused)))
 {
     const char *val;
     char *realm;
@@ -213,7 +215,9 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-int service_init(int argc, char **argv, char **envp)
+int service_init(int argc __attribute__((unused)),
+		 char **argv __attribute__((unused)),
+		 char **envp __attribute__((unused)))
 {
     int r;
 
@@ -266,7 +270,9 @@ static int mupdate_ignore_cb(struct mupdate_mailboxdata *mdata __attribute__((un
 /*
  * run for each accepted connection
  */
-int service_main(int argc, char **argv, char **envp)
+int service_main(int argc __attribute__((unused)),
+		 char **argv __attribute__((unused)),
+		 char **envp __attribute__((unused)))
 {
     int opt;
     int r;
@@ -417,7 +423,8 @@ static struct lmtp_conn *getconn(const char *server)
     return p->conn;
 }
 
-static void putconn(const char *server, struct lmtp_conn *c)
+static void putconn(const char *server __attribute__((unused)),
+		    struct lmtp_conn *c __attribute__((unused)))
 {
     return;
 }
@@ -425,7 +432,7 @@ static void putconn(const char *server, struct lmtp_conn *c)
 static int adddest(struct mydata *mydata, 
 		   const char *mailbox, const char *authas)
 {
-    struct rcpt *new = xmalloc(sizeof(struct rcpt));
+    struct rcpt *new_rcpt = xmalloc(sizeof(struct rcpt));
     struct dest *d;
     struct mupdate_mailboxdata *mailboxdata;
     int sl = strlen(BB);
@@ -442,8 +449,8 @@ static int adddest(struct mydata *mydata,
 	    domainlen = strlen(domain)+1;
     }
 
-    strlcpy(new->mailbox, mailbox, MAX_MAILBOX_NAME);
-    new->rcpt_num = mydata->cur_rcpt;
+    strlcpy(new_rcpt->mailbox, mailbox, sizeof(new_rcpt->mailbox));
+    new_rcpt->rcpt_num = mydata->cur_rcpt;
     
     /* find what server we're sending this to */
     if (!strncmp(mailbox, BB, sl) && mailbox[sl] == '+') {
@@ -480,7 +487,7 @@ static int adddest(struct mydata *mydata,
     }
 
     if (r) {
-	free(new);
+	free(new_rcpt);
 	return r;
     }
 
@@ -504,8 +511,8 @@ static int adddest(struct mydata *mydata,
     if (d == NULL) {
 	/* create a new one */
 	d = xmalloc(sizeof(struct dest));
-	strlcpy(d->server, mailboxdata->server, MAX_MAILBOX_NAME);
-	strlcpy(d->authas, authas ? authas : "", MAX_MAILBOX_NAME);
+	strlcpy(d->server, mailboxdata->server, sizeof(d->server));
+	strlcpy(d->authas, authas ? authas : "", sizeof(d->authas));
 	d->rnum = 0;
 	d->to = NULL;
 	d->next = mydata->dlist;
@@ -514,8 +521,8 @@ static int adddest(struct mydata *mydata,
 
     /* add rcpt to d */
     d->rnum++;
-    new->next = d->to;
-    d->to = new;
+    new_rcpt->next = d->to;
+    d->to = new_rcpt;
 
     /* don't need to free mailboxdata; it goes with the handle */
 
@@ -757,7 +764,7 @@ void shut_down(int code)
 }
 
 static int verify_user(const char *user,
-		       long quotacheck,
+		       long quotacheck __attribute__((unused)),
 		       struct auth_state *authstate)
 {
     char buf[MAX_MAILBOX_PATH];
