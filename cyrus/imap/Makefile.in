@@ -79,7 +79,10 @@ SUGIDPROGS = rmnews
 all: $(PROGS) $(SUIDPROGS) $(SUGIDPROGS)
 
 install:
-	$(INSTALL) -s -o $(CYRUS_USER) -m 755 $(PROGS) $(DESTDIR)$(cyrus_prefix)/bin
+	for file in $(PROGS); \
+	do \
+		$(INSTALL) -s -o $(CYRUS_USER) -m 755 $$file $(DESTDIR)$(cyrus_prefix)/bin || exit 1; \
+	done
 	$(INSTALL) -s -o $(CYRUS_USER) -m 4750 $(SUIDPROGS) $(DESTDIR)$(cyrus_prefix)/bin
 	$(INSTALL) -s -o $(CYRUS_USER) -g $(NEWS_GROUP) -m 6750 $(SUGIDPROGS) $(DESTDIR)$(cyrus_prefix)/bin
 	$(INSTALL) -o $(CYRUS_USER) -m 755 feedcyrus $(DESTDIR)$(cyrus_prefix)/bin
