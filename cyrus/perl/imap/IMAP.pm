@@ -243,7 +243,7 @@ sub authenticate {
 sub fromURL {
   my($self,$url) = @_;
 
-  $url =~ m|imap://([^/]+)/(.+)|;
+  $url =~ m|[iI][mM][aA][pP]://([^/]+)/(.+)|;
 
   return ($1, $2);
 }
