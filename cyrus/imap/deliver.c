@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.172 2004/02/19 16:54:58 rjs3 Exp $ */
+/* $Id: deliver.c,v 1.173 2004/04/22 17:32:04 ken3 Exp $ */
 
 #include <config.h>
 
@@ -368,10 +368,19 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 	/* setup each recipient */
 	for (j = 0; j < numusers; j++) {
 	    if (mailbox) {
+		size_t ulen;
+
 		/* we let it leak ! */
 		txn->rcpt[j].addr = 
 		    (char *) xmalloc(strlen(users[j]) + ml + 2);
-		sprintf(txn->rcpt[j].addr, "%s+%s", users[j], mailbox);
+
+		/* find the length of the userid minus the domain */
+		ulen = strcspn(users[j], "@");
+		sprintf(txn->rcpt[j].addr, "%.*s+%s", ulen, users[j], mailbox);
+
+		/* add the domain if we have one */
+		if (ulen < strlen(users[j]))
+		    strcat(txn->rcpt[j].addr, users[j]+ulen);
 	    } else {
 		txn->rcpt[j].addr = users[j];
 	    }
