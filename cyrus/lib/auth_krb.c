@@ -257,8 +257,9 @@ char *identifier;
 /*
  * Set the current user to 'identifier'
  */
-auth_setid(identifier)
+auth_setid(identifier, cacheid)
 char *identifier;
+char *cacheid;
 {
     identifier = auth_canonifyid(identifier);
     if (!identifier) return -1;
