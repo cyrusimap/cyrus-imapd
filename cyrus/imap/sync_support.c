@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.1 2005/02/21 19:25:49 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.2 2005/02/28 20:45:16 ken3 Exp $
  */
 
 #include <config.h>
@@ -200,6 +200,11 @@ sync_printastring(struct protstream *out, const char *s)
 {
     const char *p;
     int len = 0;
+
+    if (!s || !*s) {
+	prot_printf(out, "\"\"");
+	return;
+    }
 
     if (imparse_isatom(s)) {
 	prot_printf(out, "%s", s);
@@ -1641,31 +1646,31 @@ sync_action_list_create(void)
 }
 
 void
-sync_action_list_add(struct sync_action_list *l, char *name, char *seenuser)
+sync_action_list_add(struct sync_action_list *l, char *name, char *user)
 {
     struct sync_action *current;
 
     for (current = l->head ; current ; current = current->next) {
-        if (seenuser && current->seenuser) {
+        if (user && current->user) {
             if (!strcmp(current->name, name) &&
-                !strcmp(current->seenuser, seenuser)) {
+                !strcmp(current->user, user)) {
                 current->active = 1;  /* Make sure active */
                 return;
             }
-        } else if (!seenuser && !current->seenuser) {
+        } else if (!user && !current->user) {
             if (!strcmp(current->name, name)) {
                 current->active = 1;  /* Make sure active */
                 return;
             }
         } else {
-            /* seenuser doesn't match current->seenuser: no match possible */
+            /* user doesn't match current->user: no match possible */
         }
     }
 
     current           = xzmalloc(sizeof(struct sync_action));
     current->next     = NULL;
     current->name     = (name)      ? xstrdup(name)      : NULL;
-    current->seenuser = (seenuser)  ? xstrdup(seenuser)  : NULL;
+    current->user = (user)  ? xstrdup(user)  : NULL;
     current->active   = 1;
 
     if (l->tail)
@@ -1688,7 +1693,7 @@ sync_action_list_free(struct sync_action_list **lp)
         next = current->next;
 
         if (current->name) free(current->name);
-        if (current->seenuser) free(current->seenuser);
+        if (current->user) free(current->user);
 
         free(current);
         current = next;

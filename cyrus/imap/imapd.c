@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.53 2005/02/21 19:25:20 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.54 2005/02/28 20:44:59 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2478,11 +2478,14 @@ void cmd_capability(char *tag)
  * The command has been parsed up to and including
  * the mailbox name.
  */
-static int isokflag(char *s)
+static int isokflag(char *s, int *isseen)
 {
     if (s[0] == '\\') {
 	lcase(s);
-	if (!strcmp(s, "\\seen")) return 1;
+	if (!strcmp(s, "\\seen")) {
+	    *isseen = 1;
+	    return 1;
+	}
 	if (!strcmp(s, "\\answered")) return 1;
 	if (!strcmp(s, "\\flagged")) return 1;
 	if (!strcmp(s, "\\draft")) return 1;
@@ -2506,6 +2509,7 @@ void cmd_append(char *tag, char *name)
     unsigned size, totalsize = 0;
     int sawdigit = 0;
     int isnowait = 0;
+    int sync_seen = 0;
     int r, i;
     char mailboxname[MAX_MAILBOX_NAME+1];
     struct appendstate mailbox;
@@ -2597,7 +2601,7 @@ void cmd_append(char *tag, char *name)
 	    do {
 		c = getword(imapd_in, &arg);
 		if (!curstage->nflags && !arg.s[0] && c == ')') break; /* empty list */
-		if (!isokflag(arg.s)) {
+		if (!isokflag(arg.s, &sync_seen)) {
 		    parseerr = "Invalid flag in Append command";
 		    r = IMAP_PROTOCOL_ERROR;
 		    goto done;
@@ -2737,7 +2741,10 @@ void cmd_append(char *tag, char *name)
 
 	if (!r) {
 	    r = append_commit(&mailbox, totalsize, &uidvalidity, &firstuid, &num);
-            if (!r) sync_log_append(mailboxname);
+            if (!r) {
+		sync_log_append(mailboxname);
+		if (sync_seen) sync_log_seen(imapd_userid, mailboxname);
+	    }
 	} else {
 	    append_abort(&mailbox);
 	}
@@ -4287,6 +4294,8 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
+	char *userid = NULL;
+
 	if (config_mupdate_server &&
 	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
 	    kick_mupdate();
@@ -4294,7 +4303,11 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
-        sync_log_mailbox(mailboxname);
+
+	if ((userid = mboxname_isusermailbox(mailboxname, 1)))
+	    sync_log_user(userid);
+	else
+	    sync_log_mailbox(mailboxname);
     }
 }	
 
@@ -4443,7 +4456,8 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
-        sync_log_mailbox(mailboxname);
+	/* XXX should sent a RESET here to cleanup meta-data */
+	sync_log_mailbox(mailboxname);
     }
 }	
 
@@ -5248,7 +5262,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
     else {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
-        sync_log_meta(imapd_userid);
+        sync_log_subscribe(imapd_userid, mailboxname, add);
     }
 }
 
@@ -5548,7 +5562,7 @@ void cmd_setacl(char *tag, const char *name,
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
-	sync_log_mailbox(mailboxname);
+	sync_log_acl(mailboxname);
     }
 }
 
@@ -5854,6 +5868,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
     
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
+    sync_log_quota(mailboxname);
     return;
 
  badlist:

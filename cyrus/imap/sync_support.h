@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.1.2.1 2005/02/21 19:25:49 ken3 Exp $
+ * $Id: sync_support.h,v 1.1.2.2 2005/02/28 20:45:16 ken3 Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -412,7 +412,7 @@ struct sync_action {
     struct sync_action *next;
     int active;
     char *name;
-    char *seenuser;
+    char *user;
 };
 
 struct sync_action_list {
@@ -423,7 +423,7 @@ struct sync_action_list {
 struct sync_action_list *sync_action_list_create(void);
 
 void sync_action_list_add(struct sync_action_list *l, char *name,
-			  char *seenuser);
+			  char *user);
 
 void sync_action_list_free(struct sync_action_list **lp);
 

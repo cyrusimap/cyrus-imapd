@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_log.c,v 1.1.2.1 2005/02/21 19:25:47 ken3 Exp $
+ * $Id: sync_log.c,v 1.1.2.2 2005/02/28 20:45:15 ken3 Exp $
  */
 
 /* YYY Need better quoting for obscure filenames: use literals? */
@@ -241,15 +241,52 @@ void sync_log_append(const char *name)
 }
 
 
-void sync_log_seen(const char *name, const char *seenuser)
+void sync_log_acl(const char *name)
 {
     char buf[MAX_MAILBOX_NAME+64];
     int len;
 
-    if (!(sync_log_file && seenuser && seenuser[0])) return;
+    if (!sync_log_file) return;
+
+    len = snprintf(buf, sizeof(buf), "ACL %s\n", sync_quote_name(name));
+    sync_log_base(buf, len);
+}
+
+
+void sync_log_quota(const char *name)
+{
+    char buf[MAX_MAILBOX_NAME+64];
+    int len;
+
+    if (!sync_log_file) return;
+
+    len = snprintf(buf, sizeof(buf), "QUOTA %s\n", sync_quote_name(name));
+    sync_log_base(buf, len);
+}
+
+
+void sync_log_seen(const char *user, const char *name)
+{
+    char buf[MAX_MAILBOX_NAME+64];
+    int len;
+
+    if (!(sync_log_file && user && user[0])) return;
 
     len = snprintf(buf, sizeof(buf),
-                   "SEEN %s %s\n", sync_quote_name(name), seenuser);
+                   "SEEN %s %s\n", user, sync_quote_name(name));
+
+    sync_log_base(buf, len);
+}
+
+void sync_log_subscribe(const char *user, const char *name, int add)
+{
+    char buf[MAX_MAILBOX_NAME+64];
+    int len;
+
+    if (!(sync_log_file && user && user[0])) return;
+
+    len = snprintf(buf, sizeof(buf), "%s %s %s\n",
+		   add ? "SUB" : "UNSUB", user, sync_quote_name(name));
 
     sync_log_base(buf, len);
 }

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.1.2.2 2005/02/21 20:56:47 ken3 Exp $
+ * $Id: sync_commit.c,v 1.1.2.3 2005/02/28 20:45:14 ken3 Exp $
  */
 
 #include <config.h>
@@ -333,15 +333,20 @@ sync_combine_commit(struct mailbox *mailbox,
     }
 
     /* Record quota addition */
-    r = quota_read(&mailbox->quota, &tid, 1);
-    if (r) goto fail;
-    mailbox->quota.used += quota_add;
-    r = quota_write(&mailbox->quota, &tid);
-    if (!r) quota_commit(&tid);
-    if (r) {
-        syslog(LOG_ERR,
-               "LOSTQUOTA: unable to record add of %lu bytes in quota %s",
-               quota_add, mailbox->quota.root);
+    if (mailbox->quota.root) {
+	r = quota_read(&mailbox->quota, &tid, 1);
+	if (!r) {
+	    mailbox->quota.used += quota_add;
+	    r = quota_write(&mailbox->quota, &tid);
+	    if (!r) quota_commit(&tid);
+	}
+	else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
+
+	if (r) {
+	    syslog(LOG_ERR,
+		   "LOSTQUOTA: unable to record add of %lu bytes in quota %s",
+		   quota_add, mailbox->quota.root);
+	}
     }
 
     path = (mailbox->mpath &&
@@ -581,6 +586,7 @@ sync_append_commit(struct mailbox *mailbox,
     /* Fix up quota_mailbox_used */
     *((bit32 *)(hbuf+OFFSET_QUOTA_MAILBOX_USED)) =
         htonl(ntohl(*((bit32 *)(hbuf+OFFSET_QUOTA_MAILBOX_USED)))+quota_add);
+
     /* Fix up start offset if necessary */
     if (mailbox->start_offset < INDEX_HEADER_SIZE) {
         *((bit32 *)(hbuf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
@@ -606,17 +612,21 @@ sync_append_commit(struct mailbox *mailbox,
         goto fail;
     }
 
-    /* Record quota release */
-    r = quota_read(&mailbox->quota, &tid, 1);
-    if (r) goto fail;
-    mailbox->quota.used += quota_add;
-    r = quota_write(&mailbox->quota, &tid);
-    if (!r) quota_commit(&tid);
+    /* Record quota addition */
+    if (mailbox->quota.root) {
+	r = quota_read(&mailbox->quota, &tid, 1);
+	if (!r) {
+	    mailbox->quota.used += quota_add;
+	    r = quota_write(&mailbox->quota, &tid);
+	    if (!r) quota_commit(&tid);
+	}
+	else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
 
-    if (r) {
-        syslog(LOG_ERR,
-               "LOSTQUOTA: unable to record %lu bytes allocated in quota %s",
-               quota_add, mailbox->quota.root);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "LOSTQUOTA: unable to record add of %lu bytes in quota %s",
+		   quota_add, mailbox->quota.root);
+	}
     }
 
     free(hbuf);

@@ -486,9 +486,7 @@ md5_single(char *name, int matchlen, int maycreate, void *rock)
     }
 
     if (!r) r = mailbox_open_index(&m);
-#if 0
-    if (!r) r = mailbox_lock_expire(&m);
-#endif
+
     if (r) {
         syslog(LOG_NOTICE, "error opening %s: %s\n", name, error_message(r));
         goto bail;

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_log.h,v 1.1.2.1 2005/02/21 19:25:48 ken3 Exp $
+ * $Id: sync_log.h,v 1.1.2.2 2005/02/28 20:45:15 ken3 Exp $
  */
 
 #ifndef INCLUDED_SYNC_LOG_H
@@ -61,7 +61,13 @@ void sync_log_mailbox_double(const char *name1, const char *name2);
 
 void sync_log_append(const char *name);
 
-void sync_log_seen(const char *name, const char *seenuser);
+void sync_log_acl(const char *name);
+
+void sync_log_quota(const char *name);
+
+void sync_log_seen(const char *user, const char *name);
+
+void sync_log_subscribe(const char *user, const char *name, int add);
 
 int sync_log_lock(int *fdp, char *userid);
 

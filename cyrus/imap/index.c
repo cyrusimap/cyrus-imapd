@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.16 2005/02/21 19:25:30 ken3 Exp $
+ * $Id: index.c,v 1.199.2.17 2005/02/28 20:45:10 ken3 Exp $
  */
 #include <config.h>
 
@@ -758,7 +758,7 @@ int oldexists;
      * imapd.c doesn't have enough context to work out where seen flags set.
      * Downside: we have to link sync_client, sync_server with sync_log */
     if (!r && dosync) {
-        sync_log_seen(mailbox->name, imapd_userid);
+        sync_log_seen(imapd_userid, mailbox->name);
     }
 
 #if TOIMSP
