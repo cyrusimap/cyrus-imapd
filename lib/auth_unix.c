@@ -80,7 +80,10 @@ const char *identifier;
     
     if (strlen(identifier) >= sizeof(retbuf)) return 0;
     strcpy(retbuf, identifier);
-    lcase(retbuf);
+    
+    /* Removed this because some wacky sites actually have caps addresses
+       in ids. */
+    /* lcase(retbuf); */
 
     if (!strncmp(retbuf, "group:", 6)) {
 	grp = getgrnam(retbuf+6);
