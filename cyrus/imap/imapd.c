@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.77 2003/05/21 16:36:12 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.78 2003/05/24 14:50:24 ken3 Exp $ */
 
 #include <config.h>
 
@@ -5131,16 +5131,9 @@ void cmd_setannotation(char *tag, char *mboxpat)
 	goto freeargs;
     }
 
-    /* administrators only please */
-    if (!imapd_userisadmin) {
-	r = IMAP_PERMISSION_DENIED;
-    }
-
-    if (!r) {
-	r = annotatemore_store(mboxpat,
-			       entryatts, &imapd_namespace, imapd_userisadmin,
-			       imapd_userid, imapd_authstate);
-    }
+    r = annotatemore_store(mboxpat,
+			   entryatts, &imapd_namespace, imapd_userisadmin,
+			   imapd_userid, imapd_authstate);
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));

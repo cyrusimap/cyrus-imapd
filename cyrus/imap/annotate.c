@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.24 2003/05/22 18:59:39 rjs3 Exp $
+ * $Id: annotate.c,v 1.8.6.25 2003/05/24 14:50:24 ken3 Exp $
  */
 
 #include <config.h>
@@ -897,51 +897,58 @@ int annotatemore_store(char *mailbox,
 		       char *userid __attribute__((unused)),
 		       struct auth_state *auth_state __attribute__((unused)))
 {
-    struct entryattlist *e = l;
-    struct attvaluelist *av;
-    char *value = NULL, *motd = NULL, *comment = NULL;
-    char filename[1024];
-
     syslog(LOG_INFO, "annotatemore_store");
 
-    while (e) {
-	av = e->attvalues;
-	while (av) {
-	    if (!strcmp(av->attrib, "value.shared")) {
-		value = av->value;
-		break;
-	    }
-	    else
-		return IMAP_PERMISSION_DENIED;
+    if (!mailbox[0]) {
+	/* server annotations */
 
-	    av = av->next;
+	struct entryattlist *e = l;
+	struct attvaluelist *av;
+	char *value = NULL, *motd = NULL, *comment = NULL;
+	char filename[1024];
+
+	/* administrators only please */
+	if (!isadmin) {
+	    return IMAP_PERMISSION_DENIED;
 	}
 
-	if (!mailbox[0]) {
-	    /* server annotation */
+	while (e) {
+	    av = e->attvalues;
+	    while (av) {
+		if (!strcmp(av->attrib, "value.shared")) {
+		    value = av->value;
+		    break;
+		}
+		else
+		    return IMAP_PERMISSION_DENIED;
+
+		av = av->next;
+	    }
+
 	    if (value && !strcmp(e->entry, "/motd"))
 		motd = value;
 	    else if (value && !strcmp(e->entry, "/comment"))
 		comment = value;
 	    else
 		return IMAP_PERMISSION_DENIED;
-	}
-	else {
-	    /* mailbox annotation */
-	    return IMAP_PERMISSION_DENIED;
+
+	    e = e->next;
 	}
 
-	e = e->next;
+	/* XXX check for failures -- how to do this atomic? */
+	if (motd) {
+	    snprintf(filename, sizeof(filename), "%s/msg/motd", config_dir);
+	    server_store(filename, value);
+	}
+	if (comment) {
+	    snprintf(filename, sizeof(filename), "%s/msg/comment", config_dir);
+	    server_store(filename, value);
+	}
     }
+    else {
+	/* mailbox annotations */
 
-    /* XXX check for failures -- how to do this atomic? */
-    if (motd) {
-	snprintf(filename, sizeof(filename), "%s/msg/motd", config_dir);
-	server_store(filename, value);
-    }
-    if (comment) {
-	snprintf(filename, sizeof(filename), "%s/msg/comment", config_dir);
-	server_store(filename, value);
+	return IMAP_PERMISSION_DENIED;
     }
 
     return 0;
