@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- * $Id: ctl_deliver.c,v 1.14.4.8 2003/06/18 20:22:06 ken3 Exp $
+ * $Id: ctl_deliver.c,v 1.14.4.9 2003/06/20 01:43:52 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -70,23 +70,19 @@ const int config_need_data = 0;
 void usage(void)
 {
     fprintf(stderr,
-	    "ctl_deliver [-C <altconfig>] -d [-f <dbfile>]\n"
-	    "ctl_deliver [-C <altconfig>] -E <days>\n");
+	    "ctl_deliver [-C <altconfig>] -d [-f <dbfile>]\n");
     exit(-1);
 }
 
-int
-main(argc, argv)
-     int argc;
-     char *argv[];
+int main(int argc, char *argv[])
 {
     extern char *optarg;
     int opt, r = 0;
     char *alt_file = NULL;
     char *alt_config = NULL;
-    int days = 0;
+    char *days = NULL;
     int flag = 0;
-    enum { DUMP, PRUNE, RECOVER, NONE } op = NONE;
+    enum { DUMP, PRUNE, NONE } op = NONE;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
@@ -101,23 +97,16 @@ main(argc, argv)
 	    else usage();
 	    break;
 
-	case 'r':
-	    /* deprecated, but we still support it */
-	    fprintf(stderr, "ctl_deliver -r is deprecated: "
-		    "use ctl_cyrusdb -r instead\n");
-	    libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
-	    if (op == NONE) op = RECOVER;
-	    break;
-
         case 'f':
             if (alt_file == NULL) alt_file = optarg;
             else usage ();
             break;
 
 	case 'E':
-	    if (op == NONE || op == RECOVER) op = PRUNE;
+	    if (op == NONE) op = PRUNE;
 	    else usage();
-	    days = atoi(optarg);
+	    /* deprecated, but we still support it */
+	    days = optarg;
 	    break;
 	
 	default:
@@ -126,26 +115,42 @@ main(argc, argv)
 	}
     }
 
-    cyrus_init(alt_config, "ctl_deliver");
-
-    if (duplicate_init(alt_file, flag) != 0) {
-	fprintf(stderr, 
-		"ctl_deliver: unable to init duplicate delivery database\n");
-	exit(1);
-    }
     switch (op) {
-    case PRUNE:
-	r = duplicate_prune(days, NULL);
+    case PRUNE: {
+	char buf[4096];
+
+	fprintf(stderr, "ctl_deliver -E is deprecated: "
+		"using cyr_expire -E instead\n");
+
+	r = snprintf(buf, sizeof(buf), "%s/cyr_expire", SERVICE_PATH);
+	if(r < 0 || r >= sizeof(buf)) {
+	    fatal("cyr_expire command buffer not sufficiently big", EC_CONFIG);
+	}
+
+	if (alt_config)
+	    execl(buf, buf, "-C", alt_config, "-E", days, NULL);
+	else
+	    execl(buf, buf, "-E", days, NULL);
+
 	break;
+    }
 
     case DUMP:
+	cyrus_init(alt_config, "ctl_deliver");
+
+	if (duplicate_init(alt_file, flag) != 0) {
+	    fprintf(stderr, 
+		    "ctl_deliver: unable to init duplicate delivery database\n");
+	    exit(1);
+	}
+
 	printf("it is NOW: %d\n", (int) time(NULL));
 	printf("got %d entries\n", duplicate_dump(stdout));
 
 	r = 0;
-	break;
 
-    case RECOVER:
+	duplicate_done();
+	cyrus_done();
 	break;
 
     case NONE:
@@ -153,8 +158,6 @@ main(argc, argv)
 	usage();
 	break;
     }
-    duplicate_done();
-    cyrus_done();
 
     return r;
 }
