@@ -1,5 +1,4 @@
-/* backend.h -- IMAP server proxy for Cyrus Murder
- *
+/* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,55 +38,23 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.9 2003/10/22 20:05:10 ken3 Exp $ */
+/* $Id: idle_no.c,v 1.5 2003/10/22 20:05:11 ken3 Exp $ */
 
-#ifndef _INCLUDED_BACKEND_H
-#define _INCLUDED_BACKEND_H
+#include "idle.h"
 
-#include "mboxlist.h"
-#include "prot.h"
-#include "protocol.h"
-#include "tls.h"
 
-/* Functionality to bring up/down connections to backend servers */
+const char *idle_method_desc = (char *)0;
 
-#define LAST_RESULT_LEN 1024
+int idle_enabled(void)
+{
+    return 0;
+}
 
-struct backend {
-    char hostname[MAX_PARTITION_LEN];
-    struct sockaddr_storage addr;
-    int sock;
+int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc)
+{
+    return 0;
+}
 
-    /* service-specific context */
-    void *context;
-
-    /* only used by proxyd and nntpd */
-    struct prot_waitevent *timeout;
-
-    sasl_conn_t *saslconn;
-#ifdef HAVE_SSL
-    SSL *tlsconn;
-    SSL_SESSION *tlssess;
-#endif /* HAVE_SSL */
-
-    enum {
-	ACAP = 0x1, /* obsolete */
-	IDLE = 0x2,
-	MUPDATE = 0x4
-    } capability;
-
-    char last_result[LAST_RESULT_LEN];
-    struct protstream *in; /* from the be server to me, the proxy */
-    struct protstream *out; /* to the be server */
-};
-
-/* if cache is NULL, returns a new struct backend, otherwise returns
- * cache on success (and returns NULL on failure, but leaves cache alone) */
-struct backend *backend_connect(struct backend *cache, const char *server,
-				struct protocol_t *prot, const char *userid,
-				const char **auth_status);
-void backend_disconnect(struct backend *s, struct protocol_t *prot);
-
-#define CAPA(s, c) ((s)->capability & (c))
-
-#endif /* _INCLUDED_BACKEND_H */
+void idle_done(struct mailbox *mailbox)
+{
+}

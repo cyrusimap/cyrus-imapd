@@ -1,5 +1,4 @@
-/* backend.h -- IMAP server proxy for Cyrus Murder
- *
+/* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,55 +38,73 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.9 2003/10/22 20:05:10 ken3 Exp $ */
+/* $Id: idle_poll.c,v 1.10 2003/10/22 20:05:11 ken3 Exp $ */
 
-#ifndef _INCLUDED_BACKEND_H
-#define _INCLUDED_BACKEND_H
+#include <config.h>
 
-#include "mboxlist.h"
-#include "prot.h"
-#include "protocol.h"
-#include "tls.h"
+#include <syslog.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <signal.h>
 
-/* Functionality to bring up/down connections to backend servers */
+#include "idle.h"
+#include "global.h"
 
-#define LAST_RESULT_LEN 1024
+const char *idle_method_desc = "poll";
 
-struct backend {
-    char hostname[MAX_PARTITION_LEN];
-    struct sockaddr_storage addr;
-    int sock;
+/* function to report mailbox updates to the client */
+static idle_updateproc_t *idle_update = NULL;
 
-    /* service-specific context */
-    void *context;
+/* how often to poll the mailbox */
+static time_t idle_period = -1;
 
-    /* only used by proxyd and nntpd */
-    struct prot_waitevent *timeout;
+int idle_enabled(void)
+{
+    /* get polling period */
+    if (idle_period == -1) {
+      idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
+      if (idle_period < 0) idle_period = 0;
+    }
 
-    sasl_conn_t *saslconn;
-#ifdef HAVE_SSL
-    SSL *tlsconn;
-    SSL_SESSION *tlssess;
-#endif /* HAVE_SSL */
+    /* a period of zero disables IDLE */
+    return idle_period;
+}
 
-    enum {
-	ACAP = 0x1, /* obsolete */
-	IDLE = 0x2,
-	MUPDATE = 0x4
-    } capability;
+static void idle_poll(int sig __attribute__((unused)))
+{
+    idle_update(IDLE_MAILBOX|IDLE_ALERT);
 
-    char last_result[LAST_RESULT_LEN];
-    struct protstream *in; /* from the be server to me, the proxy */
-    struct protstream *out; /* to the be server */
-};
+    alarm(idle_period);
+}
 
-/* if cache is NULL, returns a new struct backend, otherwise returns
- * cache on success (and returns NULL on failure, but leaves cache alone) */
-struct backend *backend_connect(struct backend *cache, const char *server,
-				struct protocol_t *prot, const char *userid,
-				const char **auth_status);
-void backend_disconnect(struct backend *s, struct protocol_t *prot);
+int idle_init(struct mailbox *mailbox __attribute__((unused)),
+	      idle_updateproc_t *proc)
+{
+    struct sigaction action;
 
-#define CAPA(s, c) ((s)->capability & (c))
+    idle_update = proc;
 
-#endif /* _INCLUDED_BACKEND_H */
+    /* Setup the mailbox polling function to be called at 'idle_period'
+       seconds from now */
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = 0;
+#ifdef SA_RESTART
+    action.sa_flags |= SA_RESTART;
+#endif
+    action.sa_handler = idle_poll;
+    if (sigaction(SIGALRM, &action, NULL) < 0) {
+	syslog(LOG_ERR, "sigaction: %m");
+	return 0;
+    }
+
+    alarm(idle_period);
+
+    return 1;
+}
+
+void idle_done(struct mailbox *mailbox __attribute__((unused)))
+{
+    /* Remove the polling function */
+    signal(SIGALRM, SIG_IGN);
+}
