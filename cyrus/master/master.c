@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.85 2003/10/22 18:50:14 rjs3 Exp $ */
+/* $Id: master.c,v 1.86 2003/12/11 22:25:26 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -91,6 +91,10 @@
 #include <ucd-snmp/ucd-snmp-agent-includes.h>
 
 #include "cyrusMasterMIB.h"
+
+int allow_severity = LOG_DEBUG;
+int deny_severity = LOG_ERR;
+
 #endif
 
 #include "masterconf.h"
