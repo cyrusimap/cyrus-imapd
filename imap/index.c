@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.129 2000/06/21 15:44:56 ken3 Exp $
+ * $Id: index.c,v 1.130 2000/06/30 19:32:47 ken3 Exp $
  */
 #include <config.h>
 
@@ -263,14 +263,15 @@ static void index_thread_orderedsubj P((unsigned *msgno_list, int nmsg,
 static void index_thread_sort P((Thread *root, struct sortcrit *sortcrit));
 static void index_thread_print P((Thread *threads, int usinguid));
 #ifdef ENABLE_THREAD_JWZ
-static void index_thread_jwz P((unsigned *msgno_list, int nmsg,
+static void index_thread_ref P((unsigned *msgno_list, int nmsg,
 				int usinguid));
 #endif
 
 static struct thread_algorithm thread_algs[] = {
     { "ORDEREDSUBJECT", index_thread_orderedsubj },
 #ifdef ENABLE_THREAD_JWZ
-    { "X-JWZ", index_thread_jwz },
+    { "REFERENCES", index_thread_ref },
+    { "X-JWZ", index_thread_ref },
 #endif
     { NULL, NULL }
 };
@@ -1096,6 +1097,11 @@ void index_thread(struct mailbox *mailbox, int algorithm,
 
 	free(msgno_list);
     }
+
+#if 0 /* enable this if/when empty untagged responses are allowed */
+    else
+	index_thread_print(NULL, usinguid);
+#endif
 }
 
 /*
@@ -3171,6 +3177,7 @@ static char *index_extract_subject(const char *subj, int *is_refwd)
 		 !strncasecmp(x-4, "(fwd)", 5)) {	/* "(fwd)"? */
 	    *(x-4) = '\0';				/* yes, trim it */
 	    x -= 5;					/* skip past it */
+	    *is_refwd += 1;				/* inc refwd counter */
 	}
 	else
 	    break;					/* we're done */
@@ -3181,7 +3188,6 @@ static char *index_extract_subject(const char *subj, int *is_refwd)
      * start at the head of the string and work towards the end,
      * skipping over stuff we don't care about.
      */
-    *is_refwd = 0;
     for (base = s; base;) {
 	if (isspace((int) *base)) base++;		/* whitespace? */
 
@@ -3192,12 +3198,28 @@ static char *index_extract_subject(const char *subj, int *is_refwd)
 		  (x = base + 3)) ||			/* yes, skip past it */
 		 (!strncasecmp(base, "fw", 2) &&	/* "fw"? */
 		  (x = base + 2))) {			/* yes, skip past it */
+	    int count = 0;				/* init counter */
 	    
 	    while (isspace((int) *x)) x++;		/* skip whitespace */
 
 	    if (*x == '[') {				/* start of blob? */
-		x = strchr(x, ']');
-		if (x)			                /* yes, end of blob? */
+		for (x++; x;) {				/* yes, get count */
+		    if (!*x) {				/* end of subj, quit */
+			x = NULL;
+			break;
+		    }
+		    else if (*x == ']')			/* end of blob, done */
+			break;
+		    			/* if we have a digit, and we're still
+					   counting, keep building the count */
+		    else if (isdigit((int) *x) && count != -1)
+			count = count * 10 + *x - '0';
+		    else				/* no digit, */
+			count = -1;			/*  abort counting */
+		    x++;
+		}
+
+		if (x)					/* end of blob? */
 		    x++;				/* yes, skip past it */
 		else
 		    break;				/* no, we're done */
@@ -3207,15 +3229,40 @@ static char *index_extract_subject(const char *subj, int *is_refwd)
 
 	    if (*x == ':') {				/* ending colon? */
 		base = x + 1;				/* yes, skip past it */
-		*is_refwd = 1;
+		*is_refwd += (count > 0 ? count : 1);	/* inc refwd counter
+							   by count or 1 */
 	    }
 	    else
 		break;					/* no, we're done */
 	}
+
+#if 0 /* do nested blobs - wait for decision on this */
+	else if (*base == '[') {			/* start of blob? */
+	    int count = 1;				/* yes, */
+	    x = base + 1;				/*  find end of blob */
+	    while (count) {				/* find matching ']' */
+		if (!*x) {				/* end of subj, quit */
+		    x = NULL;
+		    break;
+		}
+		else if (*x == '[')			/* new open */
+		    count++;				/* inc counter */
+		else if (*x == ']')			/* close */
+		    count--;				/* dec counter */
+		x++;
+	    }
+
+	    if (!x)					/* blob didn't close */
+		break;					/*  so quit */
+
+	    else if (*x)				/* end of subj? */
+		base = x;				/* no, skip blob */
+#else
 	else if (*base == '[' &&			/* start of blob? */
 		 (x = strchr(base, ']'))) {		/* yes, end of blob? */
-	    if (*(x+1))					/* yes, end of string? */
+	    if (*(x+1))					/* yes, end of subj? */
 		base = x + 1;				/* no, skip blob */
+#endif
 
 	    /* Hack to catch Netscape's wacky "[Fwd: message]" notation. */
 	    else if (!strncasecmp(base+1, "fwd:", 4)) {
@@ -3613,7 +3660,7 @@ static void index_thread_print(Thread *thread, int usinguid)
 {
     prot_printf(imapd_out, "* THREAD ");
 
-    _index_thread_print(thread->child, usinguid);
+    if (thread) _index_thread_print(thread->child, usinguid);
 
     prot_printf(imapd_out, "\r\n");
 }
@@ -3711,7 +3758,7 @@ static void thread_orphan_child(Thread *child)
 /*
  * Link messages together using message-id and references.
  */
-void jwz_link_messages(MsgData *msgdata, Thread **newnode,
+void ref_link_messages(MsgData *msgdata, Thread **newnode,
 		       struct hash_table *id_table)
 {
     Thread *cur, *parent, *ref;
@@ -3797,7 +3844,7 @@ static unsigned nroot;
 /*
  * Gather orphan messages under the root node.
  */
-static void jwz_gather_orphans(char *key, Thread *node)
+static void ref_gather_orphans(char *key, Thread *node)
 {
     /* we only care about nodes without parents */
     if (!node->parent) {
@@ -3818,7 +3865,7 @@ static void jwz_gather_orphans(char *key, Thread *node)
 /*
  * Prune tree of empty containers.
  */
-static void jwz_prune_tree(Thread *parent)
+static void ref_prune_tree(Thread *parent)
 {
     Thread *cur, *prev, *next, *child;
 
@@ -3881,11 +3928,11 @@ static void jwz_prune_tree(Thread *parent)
 
 	/* if we have a message with children, prune it's children */
 	else if (cur->child)
-	    jwz_prune_tree(cur);
+	    ref_prune_tree(cur);
     }
 }
 
-void jwz_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
+void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 {
     Thread *cur, *old, *prev, *next, *child;
     struct hash_table subj_table;
@@ -3907,8 +3954,10 @@ void jwz_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 	else
 	    subj = cur->child->msgdata->xsubj;
 
+#if 0 /* part of JWZ but NOT part of current REFERENCES draft */
 	/* if subject is empty, skip it */
 	if (!strlen(subj)) continue;
+#endif
 
 	/* lookup this subject in the table */
 	old = (Thread *) hash_lookup(subj, &subj_table);
@@ -3939,14 +3988,16 @@ void jwz_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 	else
 	    subj = cur->child->msgdata->xsubj;
 
+#if 0 /* part of JWZ but NOT part of current REFERENCES draft */
 	/* if subject is empty, skip it */
 	if (!strlen(subj)) continue;
+#endif
 
 	/* lookup this subject in the table */
 	old = (Thread *) hash_lookup(subj, &subj_table);
 
-	/* if not found or we found ourselves, skip it */
-	if (!old || old == cur) continue;
+	/* if we found ourselves, skip it */
+	if (old == cur) continue;
 
 	/* ok, we already have a container which contains our current subject,
 	 * so pull this container out of the root set, because we are going to
@@ -4031,9 +4082,9 @@ void jwz_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 }
 
 /*
- * Thread a list of messages using the JWZ algorithm.
+ * Thread a list of messages using the REFERENCES algorithm.
  */
-void index_thread_jwz(unsigned *msgno_list, int nmsg, int usinguid)
+void index_thread_ref(unsigned *msgno_list, int nmsg, int usinguid)
 {
     MsgData *msgdata, *freeme, *md;
     struct sortcrit sortcrit[] = {{ LOAD_IDS,      {0,0} },
@@ -4081,20 +4132,20 @@ void index_thread_jwz(unsigned *msgno_list, int nmsg, int usinguid)
     construct_hash_table(&id_table, nmsg + tref);
 
     /* Step 1: link messages together */
-    jwz_link_messages(msgdata, &newnode, &id_table);
+    ref_link_messages(msgdata, &newnode, &id_table);
 
     /* Step 2: find the root set (gather all of the orphan messages) */
     nroot = 0;
-    hash_enumerate(&id_table, (void (*)(char*,void*)) jwz_gather_orphans);
+    hash_enumerate(&id_table, (void (*)(char*,void*)) ref_gather_orphans);
 
     /* Step 3: discard id_table */
     free_hash_table(&id_table, NULL);
 
     /* Step 4: prune tree of empty containers - get our deposit back :^) */
-    jwz_prune_tree(root);
+    ref_prune_tree(root);
 
     /* Step 5: group root set by subject */
-    jwz_group_subjects(root, nroot, &newnode);
+    ref_group_subjects(root, nroot, &newnode);
 
     /* Step 6: done threading */
 
