@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.368 2002/03/27 22:27:31 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.369 2002/03/27 23:40:04 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -6080,8 +6080,12 @@ done:
 void cmd_xfer(char *tag, char *toserver, char *name) 
 {
     int r = 0;
+    char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
     char mailboxname[MAX_MAILBOX_NAME+1];
     int mbflags;
+    int moving_user = 0;
+    int backout_mupdate = 0;
+    mupdate_handle *mupdate_h = NULL;
     char *inpath, *inpart, *inacl;
     char *path = NULL, *part = NULL, *acl = NULL;
     
@@ -6096,9 +6100,20 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	r = IMAP_SERVER_UNAVAILABLE;
     }
 
+    if(!strncmp(mailboxname, "user.", 5) && !strchr(mailboxname+5, '.')) {
+	if (!strcmp(mailboxname+5, imapd_userid)) {
+	    /* don't move your own inbox, that could be troublesome */
+	    r = IMAP_MAILBOX_NOTSUPPORTED;
+	} else {
+	    moving_user = 1;
+	}
+    }
+
     if (!r) {
-	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
-						   imapd_userid, mailboxname);
+	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
+						   name,
+						   imapd_userid,
+						   mailboxname);
     }
     
     if (!r) {
@@ -6106,30 +6121,68 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 		    &inpath, &inpart, &inacl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
-
+    
     if (!r) {
 	path = xstrdup(inpath);
 	part = xstrdup(inpart);
 	acl = xstrdup(inacl);
     }
 
-#if 0
-    /* Step 1b: Connect to mupdate */
-    /* (if we need to reserve a user mailbox */
-    if(!r) {
-	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
-	if(r) {
-	    syslog(LOG_ERR,
-		   "Could not move mailbox: %s, MUPDATE connect failed",
-		   mailboxname);
-	    goto done;
-	}
-    }
-#endif
-
-    if(!r) {
+    /* if we are not moving a user, just move the one mailbox */
+    if(!r && !moving_user) {
 	r = do_xfer_single(toserver, name, mailboxname, mbflags,
 			   path, part, acl, 0, NULL);
+    } else {
+	/* we need to reserve the users inbox - connect to mupdate */
+	if(!r) {
+	    r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	    if(r) {
+		syslog(LOG_ERR,
+		       "Could not move mailbox: %s, MUPDATE connect failed",
+		       mailboxname);
+		goto done;
+	    }
+	}
+
+	/* deactivate their inbox */
+	if(!r) {
+	    /* Note we are making the reservation on OUR host so that recovery
+	     * make sense */
+	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
+	    r = mupdate_deactivate(mupdate_h, mailboxname, buf);
+	    if(r) syslog(LOG_ERR,
+			 "Could deactivate mailbox: %s, during move",
+			 mailboxname);
+	    else backout_mupdate = 1;
+	}
+
+	/* recursively move all sub-mailboxes */
+
+	/* move this mailbox */
+	r = do_xfer_single(toserver, name, mailboxname, mbflags,
+			   path, part, acl, 0, mupdate_h);
+
+	/* also need to: */
+	/* move seen state */
+	/* move subscriptions */
+	/* move sieve script */
+
+	if(r && backout_mupdate) {
+	    int rerr = 0;
+	    /* xxx if the mupdate server is what failed, then this won't
+	       help any! */
+	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
+	    rerr = mupdate_activate(mupdate_h, name, buf, acl);
+	    if(rerr) {
+		syslog(LOG_ERR,
+		       "Could not back out mupdate during move of %s (%s)",
+		       name, error_message(rerr));
+	    }
+	}
+
+	if(!r && mupdate_h) {
+	    mupdate_disconnect(&mupdate_h);
+	}
     }
 
  done:
