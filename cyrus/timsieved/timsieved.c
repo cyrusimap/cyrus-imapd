@@ -74,7 +74,7 @@ void cmdloop()
   prot_printf(sieved_out,"\"CMU Experimental Sieved version %s\"", SIEVED_VERSION);
 
   if (sasl_listmech(sieved_saslconn, NULL, 
-		    " \"SASL=", ", ", "\"",
+		    " \"SASL={", ", ", "}\"",
 		    &sasllist,
 		    NULL, &mechcount) == SASL_OK && mechcount > 0)
     {

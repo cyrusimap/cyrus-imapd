@@ -1,3 +1,30 @@
+/* installscrip.c -- command line program to install sieve scripts
+ * Tim Martin
+ * 9/21/99
+ */
+/***********************************************************
+        Copyright 1999 by Carnegie Mellon University
+
+                      All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose and without fee is hereby granted,
+provided that the above copyright notice appear in all copies and that
+both that copyright notice and this permission notice appear in
+supporting documentation, and that the name of Carnegie Mellon
+University not be used in advertising or publicity pertaining to
+distribution of the software without specific, written prior
+permission.
+
+CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE FOR
+ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
+OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+******************************************************************/
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
@@ -28,14 +55,13 @@
 #define IMTEST_OK    0
 #define IMTEST_FAIL -1
 
-
 typedef enum {
     STAT_CONT = 0,
     STAT_NO = 1,
     STAT_OK = 2
 } imt_stat;
 
-char *authname;
+char *authname=NULL;
 char *realm=NULL;
 
 /* global vars */
@@ -43,6 +69,16 @@ sasl_conn_t *conn;
 int sock; /* socket descriptor */
 
 struct protstream *pout, *pin;
+
+void parseerror(char *str)
+{
+  printf("Parse error:\n");
+
+  printf("client expected %s\n",str);
+  printf("exiting\n");
+
+  exit(2);
+}
 
 void imtest_fatal(char *msg)
 {
@@ -231,23 +267,27 @@ int getauthline(char **line, int *linelen)
   res=yylex(&state, pin);
   if (res!=STRING)
   {
+    string_t *savestr;
+
     /* read string then eol */
     if (yylex(&state, pin)!=' ')
-      printf("expected sp\n");
+      parseerror("SPACE");
 
     if (yylex(&state, pin)!=STRING)
-      printf("expected str\n");
+      parseerror("STRING");
 
-    printf("str=%s\n",string_DATAPTR(state.str));
-    
+    savestr=state.str;
+
     if (yylex(&state, pin)!=EOL)
-      printf("expected eol\n");
+      parseerror("EOL");
 
 
     if (res==TOKEN_OK)
       return STAT_OK;
-    else
+    else { /* server said no */
+      printf("Authentication failed with: \"%s\"\n",string_DATAPTR(savestr));
       return STAT_NO;    
+    }
   }
 
   *line=(char *) malloc(state.str->len*2+1);
@@ -256,7 +296,7 @@ int getauthline(char **line, int *linelen)
 		*line, linelen);
 
   if (yylex(&state, pin)!=EOL)
-    printf("expected xxxxxxx\n");
+    parseerror("EOL");
 
   return STAT_CONT;
 }
@@ -371,31 +411,6 @@ static int waitfor(char *tag)
   return 0;
 }
 
-static int auth_login(void)
-{
-  /* we need username and password to do "login" */
-  char *username;
-  unsigned int userlen;
-  char *pass;
-  unsigned int passlen;
-
-  interaction(SASL_CB_AUTHNAME,"Userid",&username,&userlen);
-  interaction(SASL_CB_PASS,"Password",&pass,&passlen);
-
-  prot_printf(pout,"L01 LOGIN %s {%d}\r\n",username,passlen);
-  prot_flush(pout);
-
-  waitfor("+");
-
-  prot_printf(pout,"%s\r\n",pass);
-  prot_flush(pout);
-  waitfor("L01");
-
-
-  return IMTEST_OK;
-}
-
-
 
 /* initialize the network */
 int init_net(char *serverFQDN, int port)
@@ -461,27 +476,55 @@ static char *parsemechlist(char *str)
     str=end+1;
 
   }
-
+  
   return ret;
 }
 
-int read_capability(void)
+char *read_capability(void)
 {
   lexstate_t state;
+  char *cap;
+  char *data;
+  int res;
 
   if (yylex(&state, pin)!=STRING)
-    printf("expected string\n");  
+    parseerror("STRING");
 
-  if (yylex(&state, pin)!=' ')
-    printf("expected string\n");  
 
-  if (yylex(&state, pin)!=STRING)
-    printf("expected string\n");  
+  while (1) 
+  {
 
-  if (yylex(&state, pin)!=EOL)
-    printf("expected eol\n");  
+    res=yylex(&state, pin);
 
-  return 0;
+    if (res==EOL)
+    {
+      return cap;
+
+    } else if (res!=' ') {
+      parseerror("SPACE");
+    }
+
+    if (yylex(&state, pin)!=STRING)
+      parseerror("STRING");
+
+    data=string_DATAPTR(state.str);
+
+    if (strncmp(data, "SASL=",5)==0)
+    {
+	cap=(char *) malloc(strlen(data+6)+1);
+	strcpy(cap, data+6);
+	
+	/* eliminate trailing '}' */
+	cap[ strlen(cap) -1]='\0';
+	
+	printf("capability=[%s]",cap);
+	
+    }
+
+  }
+
+
+  return cap;
 }
 
 
@@ -498,6 +541,7 @@ void usage(void)
   printf("  -d <name>    Delete <name> script from server\n");
   printf("  -m <mech>    Mechanism to use for authentication\n");
   printf("  -g <name>    Get script <name> and save to disk\n");
+  printf("  -u <user>    Userid/Authname to use\n");
   exit(1);
 }
 
@@ -520,10 +564,12 @@ int main(int argc, char **argv)
   char *getscriptname=NULL;
   int ssf=0;
 
+  char *mechlist=NULL;
+
   int result;
 
   /* look at all the extra args */
-  while ((c = getopt(argc, argv, "a:d:g:lv:p:i:m:")) != EOF)
+  while ((c = getopt(argc, argv, "a:d:g:lv:p:i:m:u:")) != EOF)
     switch (c) 
     {
     case 'a':
@@ -549,6 +595,9 @@ int main(int argc, char **argv)
       break;
     case 'g':
       getscriptname=optarg;
+      break;
+    case 'u':
+      authname = optarg;
       break;
     default:
       usage();
@@ -580,12 +629,12 @@ int main(int argc, char **argv)
   pin = prot_new(sock, 0);
   pout = prot_new(sock, 1); 
 
-  read_capability();
+  mechlist=read_capability();
 
   if (mechanism!=NULL)
     result=auth_sasl(mechanism);
   else
-    result=auth_sasl("KERBEROS_V4");
+    result=auth_sasl(mechlist);
 
   if (result!=IMTEST_OK)
   {
