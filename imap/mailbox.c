@@ -819,7 +819,7 @@ int num;
 
     len = num * mailbox->record_size;
     buf = xmalloc(len);
-    bzero(buf, len);
+    memset(buf, 0, len);
 
     for (i = 0; i < num; i++) {
 	p = buf + i*mailbox->record_size;
