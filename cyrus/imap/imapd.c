@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.382 2002/04/05 18:51:54 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.383 2002/04/10 20:07:36 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -6043,17 +6043,6 @@ static int do_xfer_single(char *toserver, char *topart,
 	if(r) syslog(LOG_ERR, "Could not set remote acl on %s",
 		     mailboxname);
     }
-    
-    /* Step 5: Reconstruct remote */
-    if(!r) {
-	prot_printf(be->out, "RC1 RECONSTRUCT {%d+}\r\n%s\r\n",
-		    strlen(name),name);
-	r = getresult(be->in, "RC1");
-	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, RECONSTRUCT failed",
-		     mailboxname);
-    }
-    
-    /* xxx if the reconstruct failed we need to delete the remote mailbox */
 
     /* Step 6: mupdate.activate(mailbox, remote) */
     /* We do this from the local server first so that recovery is easier */
