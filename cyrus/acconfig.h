@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.17 2003/06/18 21:03:09 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.18 2003/06/19 20:49:41 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -150,7 +150,6 @@
 #undef CONFIG_DB_PTS
 #undef CONFIG_DB_SUBS
 #undef CONFIG_DB_TLS
-#undef CONFIG_DB_NETNEWS
 #undef CONFIG_DB_ANNOTATION
 
 /* Facility for syslog */

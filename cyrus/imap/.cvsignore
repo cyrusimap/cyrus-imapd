@@ -7,7 +7,6 @@ cvt_cyrusdb
 cyrdump
 cyr_expire
 deliver
-expirenews
 fetchnews
 fud
 idled

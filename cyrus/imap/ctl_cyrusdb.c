@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.14.4.11 2003/06/07 18:33:48 ken3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.14.4.12 2003/06/19 20:49:47 ken3 Exp $
  */
 
 #include <config.h>
@@ -80,7 +80,6 @@
 #include "exitcodes.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
-#include "netnews.h"
 #include "seen.h"
 #include "tls.h"
 #include "util.h"
@@ -100,7 +99,6 @@ struct cyrusdb {
     { FNAME_ANNOTATIONS,	CONFIG_DB_ANNOTATION,	1 },
     { FNAME_DELIVERDB,		CONFIG_DB_DUPLICATE,	0 },
     { FNAME_TLSSESSIONS,	CONFIG_DB_TLS,		0 },
-    { FNAME_NETNEWSDB,		CONFIG_DB_NETNEWS,	0 },
     { FNAME_PTSDB,              CONFIG_DB_PTS,          0 },
     { NULL,			NULL,			0 }
 };

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.31.4.9 2003/06/19 02:38:15 ken3 Exp $ */
+/* $Id: duplicate.c,v 1.31.4.10 2003/06/19 20:49:47 ken3 Exp $ */
 
 #include <config.h>
 
@@ -205,6 +205,62 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark,
 	   buf, buf+idlen+1, mark, uid);
 
     return;
+}
+
+struct findrock {
+    int (*proc)();
+    void *rock;
+};
+
+static int find_p(void *rock __attribute__((unused)),
+		  const char *id,
+		  int idlen __attribute__((unused)),
+		  const char *data __attribute__((unused)),
+		  int datalen __attribute__((unused)))
+{
+    const char *rcpt;
+
+    /* grab the rcpt and make sure its a mailbox */
+    rcpt = id + strlen(id) + 1;
+    return (rcpt[0] != '.');
+}
+
+static int find_cb(void *rock, const char *id,
+		   int idlen __attribute__((unused)),
+		   const char *data, int datalen)
+{
+    struct findrock *frock = (struct findrock *) rock;
+    const char *rcpt;
+    time_t mark;
+    unsigned long uid = 0;
+    int r;
+
+    /* grab the rcpt */
+    rcpt = id + strlen(id) + 1;
+
+    /* grab the mark and uid */
+    memcpy(&mark, data, sizeof(time_t));
+    if (datalen > sizeof(mark))
+	memcpy(&uid, data + sizeof(mark), sizeof(unsigned long));
+
+    r = (*frock->proc)(id, rcpt, mark, uid, frock->rock);
+
+    return r;
+}
+
+int duplicate_find(char *msgid, int (*proc)(), void *rock)
+{
+    struct findrock frock;
+
+    if (!msgid) msgid = "";
+
+    frock.proc = proc;
+    frock.rock = rock;
+
+    /* check each entry in our database */
+    DB->foreach(dupdb, msgid, strlen(msgid), &find_p, &find_cb, &frock, NULL);
+
+    return 0;
 }
 
 struct prunerock {

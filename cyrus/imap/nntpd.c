@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.87 2003/06/19 02:16:20 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.88 2003/06/19 20:49:48 ken3 Exp $
  */
 
 /*
@@ -90,7 +90,6 @@
 #include "mboxlist.h"
 #include "mkgmtime.h"
 #include "mupdate-client.h"
-#include "netnews.h"
 #include "nntp_err.h"
 #include "prot.h"
 #include "rfc822date.h"
@@ -99,6 +98,7 @@
 #include "tls.h"
 #include "util.h"
 #include "version.h"
+#include "wildmat.h"
 #include "xmalloc.h"
 
 extern int optind;
@@ -133,9 +133,6 @@ static SSL *tls_conn;
 
 sasl_conn_t *nntp_saslconn; /* the sasl connection context */
 
-static int have_newsdb = 1;	/* news db is initialized */
-static int dupelim = 1;		/* eliminate duplicate messages with
-				   same message-id */
 char newsprefix[100] = "";
 char *nntp_userid = 0;
 struct auth_state *nntp_authstate = 0;
@@ -200,6 +197,14 @@ struct {
 		   {  -1, 238, 438,  -1 },
 		   { 239,  -1,  -1, 439 } };
 
+struct wildmat {
+    char *pat;
+    int not;
+};
+
+static struct wildmat *split_wildmats(char *str);
+static void free_wildmats(struct wildmat *wild);
+
 static void cmdloop(void);
 static int open_group(char *name, int has_prefix,
 		      struct backend **ret, int *postable);
@@ -215,8 +220,7 @@ static void cmd_hdr(char *cmd, char *hdr, char *msgid,
 static void cmd_help(void);
 static void cmd_list(char *arg1, char *arg2);
 static void cmd_mode(char *arg);
-static int do_newnews(char *msgid, char *mailbox, unsigned long uid,
-		      time_t tstamp, void *rock);
+static void cmd_newnews(char *wild, time_t tstamp);
 static void cmd_over(unsigned long uid, unsigned long last);
 static void cmd_post(char *msgid, int mode);
 static void cmd_starttls(int nntps);
@@ -548,18 +552,11 @@ int service_init(int argc __attribute__((unused)),
     if ((prefix = config_getstring(IMAPOPT_NEWSPREFIX)))
 	snprintf(newsprefix, sizeof(newsprefix), "%s.", prefix);
 
-    /* initialize news database */
-    if (netnews_init(NULL, 0) != 0) {
-	syslog(LOG_ERR, "nntpd: unable to init news database\n");
-	have_newsdb = 0;
-    }
-
-    dupelim = config_getswitch(IMAPOPT_DUPLICATESUPPRESSION);
     /* initialize duplicate delivery database */
     if (duplicate_init(NULL, 0) != 0) {
 	syslog(LOG_ERR, 
-	       "nntpd: unable to init duplicate delivery database\n");
-	dupelim = 0;
+	       "unable to init duplicate delivery database\n");
+	fatal("unable to init duplicate delivery database", EC_SOFTWARE);
     }
 
     /* open the mboxlist, we'll need it for real work */
@@ -733,7 +730,6 @@ void shut_down(int code)
 	i++;
     }
 
-    netnews_done();
     duplicate_done();
 
     mboxlist_close();
@@ -1207,7 +1203,6 @@ static void cmdloop(void)
 	    }
 	    else if (!strcmp(cmd.s, "Newnews")) {
 		time_t tstamp;
-		struct wildmat *wild;
 
 		if (!config_getswitch(IMAPOPT_ALLOWNEWNEWS))
 		    goto cmddisabled;
@@ -1233,15 +1228,7 @@ static void cmdloop(void)
 					     arg4.len ? arg4.s : NULL)) < 0)
 		    goto baddatetime;
 
-		wild = split_wildmats(arg1.s);
-
-		prot_printf(nntp_out, "230 List of new articles follows\r\n");
-
-		netnews_findall(wild, tstamp, 1, do_newnews, NULL);
-
-		prot_printf(nntp_out, ".\r\n");
-
-		free_wildmats(wild);
+		cmd_newnews(arg1.s, tstamp);
 	    }
 	    else if (!strcmp(cmd.s, "Next")) {
 		if (c == '\r') c = prot_getc(nntp_in);
@@ -1432,6 +1419,51 @@ static void cmdloop(void)
     }
 }
 
+struct findrock {
+    const char *mailbox;
+    unsigned long uid;
+};
+
+/*
+ * duplicate_find() callback function to fetch a message by msgid
+ */
+static int find_cb(const char *msgid __attribute__((unused)),
+		   const char *mailbox,
+		   time_t mark __attribute__((unused)),
+		   unsigned long uid, void *rock)
+{
+    struct findrock *frock = (struct findrock *) rock;
+
+    /* make sure we a message in a mailbox that we're serving via NNTP */
+    if (!strncmp(mailbox, "user.", 5) ||
+	strncmp(mailbox, newsprefix, strlen(newsprefix))) return 0;
+
+    frock->mailbox = mailbox;
+    frock->uid = uid;
+
+    return CYRUSDB_DONE;
+}
+
+static int find_msgid(char *msgid, char **mailbox, unsigned long *uid)
+{
+    struct findrock frock = { NULL, 0 };
+
+    duplicate_find(msgid, &find_cb, &frock);
+
+    if (!frock.mailbox) return 0;
+
+    if (mailbox) {
+	if (!frock.mailbox[0]) return 0;
+	*mailbox = (char *) frock.mailbox;
+    }
+    if (uid) {
+	if (!frock.uid) return 0;
+	*uid = frock.uid;
+    }
+
+    return 1;
+}
+
 static int parsenum(char *str, char **rem)
 {
     char *p = str;
@@ -1478,7 +1510,7 @@ static int parserange(char *str, unsigned long *uid, unsigned long *last,
     else if (*str == '<') {
 	/* message-id, find server and/or mailbox */
 	if (!msgid) goto badrange;
-	if (!netnews_lookup(str, &mboxname, uid, NULL) ||
+	if (!find_msgid(str, &mboxname, uid) ||
 	    (r = open_group(mboxname, 1, ret, NULL)))
 	    goto nomsgid;
 	*msgid = str;
@@ -2012,13 +2044,21 @@ static void cmd_help(void)
 /*
  * mboxlist_findall() callback function to LIST an ACTIVE newsgroup
  */
-int do_active(char *name, int matchlen, int maycreate __attribute__((unused)),
-	    void *rock)
+int active_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
+	      void *rock)
 {
-    static char lastname[MAX_MAILBOX_NAME+1] = "";
+    static char lastname[MAX_MAILBOX_NAME+1];
     struct wildmat *wild = (struct wildmat *) rock;
     int r, postable;
     struct backend *be;
+
+    /* We have to reset the initial state.
+     * Handle it as a dirty hack.
+     */
+    if (!name) {
+	lastname[0] = '\0';
+	return 0;
+    }
 
     /* skip personal mailboxes */
     if ((!strncasecmp(name, "INBOX", 5) && (!name[5] || name[5] == '.')) ||
@@ -2092,8 +2132,9 @@ static void cmd_list(char *arg1, char *arg2)
 
 	strcpy(pattern, newsprefix);
 	strcat(pattern, "*");
+	active_cb(NULL, 0, 0, NULL);
 	mboxlist_findall(NULL, pattern, 0, nntp_userid, nntp_authstate,
-			 do_active, wild);
+			 active_cb, wild);
 
 	prot_printf(nntp_out, ".\r\n");
 
@@ -2218,15 +2259,64 @@ static void cmd_mode(char *arg)
     prot_flush(nntp_out);
 }
 
+struct newrock {
+    time_t tstamp;
+    struct wildmat *wild;
+};
+
 /*
- * newnews_findall() callback function to list NEWNEWS
+ * duplicate_find() callback function to list NEWNEWS
  */
-static int do_newnews(char *msgid, char *mailbox, unsigned long uid,
-		      time_t tstamp, void *rock)
+static int newnews_cb(const char *msgid, const char *rcpt, time_t mark,
+		      unsigned long uid, void *rock)
 {
-    prot_printf(nntp_out, "%s\r\n", msgid);
+    static char lastid[1024];
+    struct newrock *nrock = (struct newrock *) rock;
+
+    /* We have to reset the initial state.
+     * Handle it as a dirty hack.
+     */
+    if (!msgid) {
+	lastid[0] = '\0';
+	return 0;
+    }
+
+    /* Make sure we don't return duplicate msgids,
+     * the message is newer than the tstamp, and
+     * the message isn't in a personal mailbox.
+     */
+    if (strcmp(msgid, lastid) && mark >= nrock->tstamp &&
+	uid && rcpt[0] && strncmp(rcpt, "user.", 5)) {
+	struct wildmat *wild = nrock->wild;
+
+	strlcpy(lastid, msgid, sizeof(lastid));
+
+	/* see if the mailbox matches one of our wildmats */
+	while (wild->pat && wildmat(rcpt, wild->pat) != 1) wild++;
+
+	/* we have a match, and its not a negative match */
+	if (wild->pat && !wild->not)
+	    prot_printf(nntp_out, "%s\r\n", msgid);
+    }
 
     return 0;
+}
+
+static void cmd_newnews(char *wild, time_t tstamp)
+{
+    struct newrock nrock;
+
+    nrock.tstamp = tstamp;
+    nrock.wild = split_wildmats(wild);
+
+    prot_printf(nntp_out, "230 List of new articles follows\r\n");
+
+    newnews_cb(NULL, NULL, 0, 0, NULL);
+    duplicate_find("", &newnews_cb, &nrock);
+
+    prot_printf(nntp_out, ".\r\n");
+
+    free_wildmats(nrock.wild);
 }
 
 static void cmd_over(unsigned long uid, unsigned long last)
@@ -2509,7 +2599,7 @@ static int deliver(message_data_t *msg)
 	    /* local group */
 	    struct appendstate as;
 
-	    if (dupelim && msg->id && 
+	    if (msg->id && 
 		duplicate_check(msg->id, strlen(msg->id), rcpt, strlen(rcpt))) {
 		/* duplicate message */
 		duplicate_log(msg->id, rcpt);
@@ -2527,7 +2617,7 @@ static int deliver(message_data_t *msg)
 		else append_abort(&as);
 	    }
 
-	    if (!r && dupelim && msg->id)
+	    if (!r && msg->id)
 		duplicate_mark(msg->id, strlen(msg->id), rcpt, strlen(rcpt), now, uid);
 
 	    if (r) return r;
@@ -2582,14 +2672,6 @@ static int deliver(message_data_t *msg)
 		return NNTP_FAIL_TRANSFER;
 	    }
 	}
-    }
-
-    /* store msgid for IHAVE/CHECK/TAKETHIS and reader commands */
-    if (have_newsdb && msg->id) {
-	if (local_rcpt)
-	    netnews_store(msg->id, local_rcpt, uid, now);
-	else if (rcpt)
-	    netnews_store(msg->id, rcpt, 0, now);
     }
 
     return  0;
@@ -2690,7 +2772,7 @@ static int cancel(message_data_t *msg)
     p = strrchr(msgid, '>') + 1;
     *p = '\0';
 
-    if (netnews_lookup(msgid, &mailbox, &uid, NULL)) {
+    if (find_msgid(msgid, &mailbox, &uid)) {
 	struct mailbox mbox;
 	int doclose = 0;
 
@@ -2718,7 +2800,7 @@ static int cancel(message_data_t *msg)
     /* store msgid of cancelled message for IHAVE/CHECK/TAKETHIS
      * (in case we haven't received the message yet)
      */
-    if (have_newsdb) netnews_store(msgid, "", uid, now);
+    duplicate_mark(msgid, strlen(msgid), "", 0, 0, now);
 
     return r;
 }
@@ -2889,8 +2971,7 @@ static void cmd_post(char *msgid, int mode)
     int r = 0;
 
     /* check if we want this article */
-    if (have_newsdb && msgid &&
-	netnews_lookup(msgid, NULL, NULL, NULL)) {
+    if (msgid && find_msgid(msgid, NULL, NULL)) {
 	/* already have it */
 	r = NNTP_DONT_SEND;
     }
@@ -3055,3 +3136,52 @@ static void cmd_starttls(int nntps __attribute__((unused)))
     fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
 }
 #endif /* HAVE_SSL */
+
+static struct wildmat *split_wildmats(char *str)
+{
+    const char *prefix;
+    char pattern[MAX_MAILBOX_NAME+1] = "", *p, *c;
+    struct wildmat *wild = NULL;
+    int n = 0;
+
+    if ((prefix = config_getstring(IMAPOPT_NEWSPREFIX)))
+	snprintf(pattern, sizeof(pattern), "%s.", prefix);
+    p = pattern + strlen(pattern);
+
+    /*
+     * split the list of wildmats
+     *
+     * we split them right to left because this is the order in which
+     * we want to test them (per draft-ietf-nntpext-base 5.2)
+     */
+    do {
+	if ((c = strrchr(str, ',')))
+	    *c++ = '\0';
+	else
+	    c = str;
+
+	if (!(n % 10)) /* alloc some more */
+	    wild = xrealloc(wild, (n + 11) * sizeof(struct wildmat));
+
+	if (*c == '!') wild[n].not = 1;		/* not */
+	else if (*c == '@') wild[n].not = -1;	/* absolute not (feeding) */
+	else wild[n].not = 0;
+
+	strcpy(p, wild[n].not ? c + 1 : c);
+	wild[n++].pat = xstrdup(pattern);
+    } while (c != str);
+    wild[n].pat = NULL;
+
+    return wild;
+}
+
+static void free_wildmats(struct wildmat *wild)
+{
+    struct wildmat *w = wild;
+
+    while (w->pat) {
+	free(w->pat);
+	w++;
+    }
+    free(wild);
+}
