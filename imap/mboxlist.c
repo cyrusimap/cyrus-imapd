@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.107 2000/02/01 21:27:29 leg Exp $
+ * $Id: mboxlist.c,v 1.108 2000/02/01 22:42:38 leg Exp $
  */
 
 #include <stdio.h>
@@ -509,7 +509,7 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 {
     int r;
     char *acl = NULL;
-    char buf2[MAX_MAILBOX_PATH];
+    char buf2[MAX_PARTITION_LEN + 30];
     const char *root;
     char *newpartition = NULL;
     struct mailbox newmailbox;
@@ -629,6 +629,9 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 			    MAILBOX_FORMAT_NETNEWS :
 			    MAILBOX_FORMAT_NORMAL), 
 			   &newmailbox);
+	mboxdata.uidvalidity = newmailbox.uidvalidity;
+	mboxdata.acl = mboxent->acls;
+	mboxdata.total = newmailbox.exists;
 	if (!r) {
 	    mailbox_close(&newmailbox);
 	}
@@ -664,8 +667,6 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 
     /* 9. set ACAP entry as commited (CRASH: commited) */
     if (!r) {
-	mboxdata.uidvalidity = newmailbox.uidvalidity;
-	mboxdata.acl = mboxent->acls;
 	r = acapmbox_markactive(acaphandle, &mboxdata);
 	if (r) {
 	    syslog(LOG_ERR, "ACAP: unable to commit %s: %s\n", name, 
@@ -1304,6 +1305,9 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	
 	r = mailbox_rename(oldname, oldpath, newent->acls, newent->name, 
 			   newpath, isusermbox, NULL, NULL, &newmailbox);
+	mboxdata.uidvalidity = newmailbox.uidvalidity;
+	mboxdata.acl = newent->acls;
+	mboxdata.total = newmailbox.exists;
 	if (!r) {
 	    mailbox_close(&newmailbox);
 	}
@@ -1338,9 +1342,6 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 
     if (!r) {
 	/* 9. set new ACAP entry commited */
-	mboxdata.uidvalidity = newmailbox.uidvalidity;
-	mboxdata.acl = newent->acls;
-	mboxdata.total = newmailbox.exists;
 	r = acapmbox_markactive(acaphandle, &mboxdata);
 	if (r) syslog(LOG_ERR, "ACAP: can't commit %s: %d", newname, r);
     }
