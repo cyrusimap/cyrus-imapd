@@ -31,6 +31,7 @@
 #include "config.h"
 #include "mailbox.h"
 #include "sysexits.h"
+#include "util.h"
 #include "imap_err.h"
 #include "xmalloc.h"
 
@@ -159,7 +160,8 @@ time_t last_change;
       
 static char drop_basis_64[] =
    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+:";
-drop_to64(to, from, len)
+
+static drop_to64(to, from, len)
 char *to;
 unsigned char *from;
 int len;
