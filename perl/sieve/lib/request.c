@@ -137,24 +137,14 @@ int handle_response(int res,int version,struct protstream *pin,
       if (res == '(') {
 	  /* '(' string [SP string] ')' */
 
-	  /* We only 'support' the SASL response to NO right now */
-	  if (yylex(&state, pin)==TOKEN_SASL) {
-	      if (yylex(&state, pin)!=' ')
-		  parseerror("expected space");
-	      if (yylex(&state, pin)!=STRING)
-		  parseerror("expected string");
-	      if (yylex(&state, pin)!=')')
-		  parseerror("expected RPAREN");
-	  } else {
-	      res = 0;
-	      while(res != ')' && res != -1) {
-		  res = yylex(&state, pin);
-	      }
-	      if(res != ')') {
-		  parseerror("expected RPARAN");
-	      }
+	  res = 0;
+	  while(res != ')' && res != -1) {
+	      res = yylex(&state, pin);
 	  }
-
+	  if(res != ')') {
+	      parseerror("expected RPARAN");
+	  }
+	  
 	  res = yylex(&state, pin);
 	  if (res == ' ') res = yylex(&state, pin);
       }
@@ -168,10 +158,35 @@ int handle_response(int res,int version,struct protstream *pin,
 
       r = -1;
   } else {
-      /* ok? */
+      /* ok */
+      int res;
+      
+      /* SASL response */
+      res = yylex(&state, pin);
+      if(res == ' ') {
+	  if (yylex(&state, pin) != '(')
+	      parseerror("expected LPAREN");
+	  
+	  if (yylex(&state, pin)==TOKEN_SASL) {
+	      if (yylex(&state, pin)!=' ')
+		  parseerror("expected space");
+	      if (yylex(&state, pin)!=STRING)
+		  parseerror("expected string");
+
+	      *refer_to = xstrdup(string_DATAPTR(state.str));
+
+	      if (yylex(&state, pin)!=')')
+		  parseerror("expected RPAREN");
+	  } else {
+	      parseerror("unexpected response code with OK response");
+	  }
+      } else if (version != OLD_VERSION && res == EOL) {
+	  return r;
+      }
+
       /* old version of protocol had strings with ok responses too */
       if (version == OLD_VERSION) {
-	  if (yylex(&state, pin)!=' ')
+	  if (res !=' ')
 	      parseerror("expected sp");
 	  
 	  if (yylex(&state, pin)!=STRING)

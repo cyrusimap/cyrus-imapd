@@ -198,7 +198,7 @@ int init_sasl(isieve_t *obj,
 			     obj->serverFQDN,
 			     localip, remoteip,
 			     callbacks,
-			     0,
+			     SASL_SUCCESS_DATA,
 			     &obj->conn);
 
   if (saslresult!=SASL_OK) return -1;
@@ -276,16 +276,30 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
   int ret;
   size_t len;
   mystring_t *errstr;
-  char *refer_to;
+  char *last_send;
 
   /* now let's see what the server said */
   res=yylex(&state, obj->pin);
+  *line = NULL;
   if (res!=STRING)
   {
       ret = handle_response(res,obj->version,
-			    obj->pin, &refer_to, &errstr);
+			    obj->pin, &last_send, &errstr);
       
       if (res==TOKEN_OK) {
+	  /* Was there a last send from the server? */
+	  if(last_send) {
+	      /* it's base64 encoded */
+	      int last_send_len = strlen(last_send);
+
+	      len = last_send_len*2+1;
+	      *line = xmalloc(len);
+
+	      sasl_decode64(last_send, last_send_len,
+			    *line, len, linelen);
+
+	      free(last_send);
+	  }
 	  return STAT_OK;
       } else { /* server said no or bye*/
 	  /* xxx handle referrals */
@@ -296,7 +310,6 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
 
   len = state.str->len*2+1;
   *line=(char *) xmalloc(len);
-  if(!*line) return STAT_NO;
 
   sasl_decode64(string_DATAPTR(state.str), state.str->len,
 		*line, len, linelen);
@@ -363,11 +376,10 @@ int auth_sasl(char *mechlist, isieve_t *obj, char **errstr)
 				  in,
 				  inlen,
 				  &client_interact,
-				  &out,
-				  &outlen);
+				  &out,&outlen);
 
       if (saslresult==SASL_INTERACT)
-	fillin_interactions(client_interact); /* fill in prompts */      	
+	fillin_interactions(client_interact); /* fill in prompts */
     }
 
     /* check if sasl suceeded */
@@ -392,8 +404,26 @@ int auth_sasl(char *mechlist, isieve_t *obj, char **errstr)
     /* get reply */
     status=getauthline(obj,&in,&inlen, errstr);
   }
-  
-  return (status == STAT_OK) ? 0 : -1;
+
+  if(status == STAT_OK) {
+      /* do we have a last send? */
+      if(in) {
+	  saslresult=sasl_client_step(obj->conn,
+				      in,
+				      inlen,
+				      &client_interact,
+				      &out, &outlen);
+	  
+	  if(saslresult != SASL_OK)
+	      return -1;
+      }
+
+      /* There wasn't a last send, or we are already OK */
+      return 0;
+  } else {
+      /* Error */
+      return -1;
+  }
 }
 
 int do_referral(isieve_t *obj, char *refer_to) 
