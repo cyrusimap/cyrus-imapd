@@ -115,7 +115,7 @@ int iovcnt;
 
 	for (i = 0; i < iovcnt; i++) {
 	    if (iov[i].iov_len > n) {
-		iov[i].iov_base += n;
+		iov[i].iov_base = (char *)iov[i].iov_base + n;
 		iov[i].iov_len -= n;
 		break;
 	    }

@@ -452,7 +452,7 @@ struct mailbox *newmailbox;
 #define NEWIOV_GROW 3 /* 1000 */
 struct iovec *newiov;
 char *freenew;
-int newiov_num = 0;
+int newiov_num;
 int newiov_alloc = 0;
 int newiov_dirty;		/* set to 1 if something either
 				 * malloced or not in sort order
@@ -477,7 +477,7 @@ int freeit;
 	newiov_alloc += NEWIOV_GROW;
 	newiov = (struct iovec *)xrealloc((char *)newiov,
 					newiov_alloc * sizeof (struct iovec));
-	freenew = (char *)xrealloc(freenew, newiov_alloc);
+	freenew = xrealloc(freenew, newiov_alloc);
     }
 
     /* special-case -- appending to end */
@@ -582,6 +582,9 @@ void *report_rock;
     }
 
     map_refresh(fd, 1, &base, &size, sbuf.st_size, fnamebuf, 0);
+
+    newiov_dirty = 0;
+    newiov_num = 0;
 
     endline = base;
     while (endline = memchr(line=endline, '\n', size - (endline - base))) {
@@ -731,7 +734,7 @@ void *report_rock;
 
 	/* Simplify the iov by coalescing ajacent lines */
 	for (i = 0; i < newiov_num - 1; i++) {
-	    if (newiov[i].iov_base + newiov[i].iov_len == newiov[i+1].iov_base &&
+	    if ((char *)newiov[i].iov_base + newiov[i].iov_len == newiov[i+1].iov_base &&
 		!freenew[i] && !freenew[i]) {
 		newiov[i+1].iov_base = newiov[i].iov_base;
 		newiov[i+1].iov_len += newiov[i].iov_len;
