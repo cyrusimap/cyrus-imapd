@@ -26,6 +26,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <syslog.h>
 #include <com_err.h>
@@ -101,6 +102,12 @@ struct copyargs {
     struct copymsg *copymsg;
     int nummsg;
     int msgalloc;
+};
+
+struct mapfile {
+    int fd;
+    char *base;
+    unsigned long size;
 };
 
 /*
@@ -770,7 +777,11 @@ struct searchargs *searchargs;
 int usinguid;
 {
     unsigned msgno;
-    FILE *msgfile = 0;
+    struct mapfile msgfile;
+
+    msgfile.fd = -1;
+    msgfile.base = 0;
+    msgfile.size = 0;
 
     prot_printf(imapd_out, "* SEARCH");
 
@@ -778,9 +789,10 @@ int usinguid;
 	if (index_search_evaluate(mailbox, searchargs, msgno, &msgfile)) {
 	    prot_printf(imapd_out, " %u", usinguid ? UID(msgno) : msgno);
 	}
-	if (msgfile) {
-	    fclose(msgfile);
-	    msgfile = 0;
+	if (msgfile.fd != -1) {
+	    map_free(&msgfile.base, &msgfile.size);
+	    close(msgfile.fd);
+	    msgfile.fd = -1;
 	}
     }
     prot_printf(imapd_out, "\r\n");
@@ -1062,23 +1074,25 @@ int usinguid;
 }    
 
 /*
- * Helper function to fetch data from a message file.
- * Writes a quoted-string or literal containing data from
- * 'msgfile', which is of format 'format', starting at 'offset'
- * and containing 'size' octets.  If 'start_octet' is nonzero, the data
- * is further constrained by 'start_octet' and 'octet_count' as per
- * the IMAP command PARTIAL.
+ * Helper function to fetch data from a message file.  Writes a
+ * quoted-string or literal containing data from 'msg_base', which is
+ * of size 'msg_size' and format 'format', starting at 'offset' and
+ * containing 'size' octets.  If 'start_octet' is nonzero, the data is
+ * further constrained by 'start_octet' and 'octet_count' as per the
+ * IMAP command PARTIAL.
  */
 static
-index_fetchmsg(msgfile, format, offset, size, start_octet, octet_count)
-FILE *msgfile;
+index_fetchmsg(msg_base, msg_size, format, offset, size,
+	       start_octet, octet_count)
+char *msg_base;
+unsigned long msg_size;
 int format;
 unsigned offset;
 unsigned size;
 unsigned start_octet;
 unsigned octet_count;
 {
-    char buf[4096], *p;
+    char *line, *p;
     int n;
 
     /* partial fetch: adjust 'size', normalize 'start_octet' to be 0-based */
@@ -1094,7 +1108,7 @@ unsigned octet_count;
     }
 
     /* If no data, output null quoted string */
-    if (!msgfile || size == 0) {
+    if (!msg_base || size == 0) {
 	prot_printf(imapd_out, "\"\"");
 	return;
     }
@@ -1104,46 +1118,60 @@ unsigned octet_count;
 
     if (format == MAILBOX_FORMAT_NETNEWS) {
 	/* Have to fetch line-by-line, converting LF to CRLF */
-	fseek(msgfile, offset, 0);
 	while (size) {
-	    if (!fgets(buf, sizeof(buf)-1, msgfile)) {
-		/* Read error, resynch client */
-		while (size--) prot_putc(' ', imapd_out);
-		return;
+	    line = msg_base + offset;
+	    p = memchr(line, '\n', msg_size - offset);
+	    if (!p) {
+		p = msg_base + msg_size;
+		offset--;	/* hack to keep from going off end
+				 * of mapped region on next iteration */
+		if (p == line) {
+		    /* File too short, resynch client */
+		    while (size--) prot_putc(' ', imapd_out);
+		    return;
+		}
 	    }
-	    p = buf + strlen(buf);
-	    if (p[-1] == '\n') {
-		p[-1] = '\r';
-		*p++ = '\n';
-		*p = '\0';
-	    }
-	    n = p - buf;
+	    n = p - line;
+	    offset += n + 1;
 	    if (start_octet >= n) {
 		/* Skip over entire line */
 		start_octet -= n;
+		if (!start_octet--) {
+		    start_octet = 0;
+		    prot_putc('\r', imapd_out);
+		    if (--size == 0) return;
+		}
+		else if (!start_octet--) {
+		    start_octet = 0;
+		    prot_putc('\n', imapd_out);
+		    size--;
+		}
 	    }
 	    else {
 		/* Skip over (possibly zero) first part of line */
 		n -= start_octet;
-		prot_write(imapd_out, buf + start_octet, n);
+		if (n > size) n = size;
+		prot_write(imapd_out, line + start_octet, n);
 		start_octet = 0;
 		size -= n;
+		if (!size--) return;
+		prot_putc('\r', imapd_out);
+		if (!size--) return;
+		prot_putc('\n', imapd_out);
 	    }
 	}
     }
     else {
-	/* Seek over PARTIAL constraint, do fetch in buf-size chunks */
+	/* Seek over PARTIAL constraint */
 	offset += start_octet;
-	fseek(msgfile, offset, 0);
-	while (size) {
-	    n = fread(buf, 1, size>sizeof(buf) ? sizeof(buf) : size, msgfile);
-	    if (n == 0) {
-		/* Read error, resynch client */
-		while (size--) prot_putc(' ', imapd_out);
-		return;
-	    }
-	    prot_write(imapd_out, buf, n);
-	    size -= n;
+	n = size;
+	if (offset + size > msg_size) {
+	    n = msg_size - offset;
+	}
+	prot_write(imapd_out, msg_base + offset, n);
+	while (n++ < size) {
+	    /* File too short, resynch client */
+	    prot_putc(' ', imapd_out);
 	}
     }
 }
@@ -1152,9 +1180,10 @@ unsigned octet_count;
  * Helper function to fetch a body section
  */
 static
-index_fetchsection(msgfile, format, section, cacheitem,
+index_fetchsection(msg_base, msg_size, format, section, cacheitem,
 		   start_octet, octet_count)
-FILE *msgfile;
+char *msg_base;
+unsigned long msg_size;
 int format;
 char *section;
 char *cacheitem;
@@ -1192,7 +1221,7 @@ int octet_count;
     cacheitem += skip * 3 * 4 + 4;
     if (CACHE_ITEM_BIT32(cacheitem+4) == -1) goto badpart;
 	
-    index_fetchmsg(msgfile, format, CACHE_ITEM_BIT32(cacheitem),
+    index_fetchmsg(msg_base, msg_size, format, CACHE_ITEM_BIT32(cacheitem),
 		   CACHE_ITEM_BIT32(cacheitem+4),
 		   start_octet, octet_count);
     return;
@@ -1205,42 +1234,57 @@ int octet_count;
  * Helper function to read a header section into a static buffer
  */
 static char *
-index_readheader(msgfile, format, size)
-FILE *msgfile;
+index_readheader(msg_base, msg_size, format, offset, size)
+char *msg_base;
+unsigned long msg_size;
 int format;
+unsigned offset;
 unsigned size;
 {
     static char *buf;
     static int bufsize;
-    int n, left;
-    char *p;
+    int linelen, left;
+    char *p, *endline;
+
+    if (offset + size > msg_size) {
+	/* Message file is too short, truncate request */
+	if (offset < msg_size) {
+	    size = msg_size - offset;
+	}
+	else {
+	    size = 0;
+	}
+    }
 
     if (bufsize < size+2) {
 	bufsize = size+100;
 	buf = xrealloc(buf, bufsize);
     }
 
+    msg_base += offset;
+
     if (format == MAILBOX_FORMAT_NETNEWS) {
 	left = size;
 	p = buf;
-	while (left > 0) {
-	    if (!fgets(p, left+1, msgfile)) {
-		*p = '\0';
-		break;
-	    }
-	    left -= strlen(p);
-	    p = p + strlen(p);
-	    if (p[-1] == '\n') {
-		p[-1] = '\r';
-		*p++ = '\n';
-		*p = '\0';
-		left--;
-	    }
+	while (endline = memchr(msg_base, '\n', left)) {
+	    linelen = endline - msg_base;
+	    memcpy(p, msg_base, linelen);
+	    p += linelen;
+	    msg_base += linelen+1;
+	    *p++ = '\r';
+	    *p++ = '\n';
+	    left -= linelen + 1;
+	    if (left) left--;
 	}
+	if (left) {
+	    memcpy(p, msg_base, left);
+	    p += left;
+	}
+	*p = '\0';
     }
     else {
-	n = fread(buf, 1, size, msgfile);
-	buf[n] = '\0';
+	memcpy(buf, msg_base, size);
+	buf[size] = '\0';
     }
     return buf;
 }
@@ -1312,8 +1356,9 @@ struct strlist *headers_not;
  * that can't use the cacheheaders in cyrus.cache
  */
 static
-index_fetchheader(msgfile, format, size, headers, headers_not)
-FILE *msgfile;
+index_fetchheader(msg_base, msg_size, format, size, headers, headers_not)
+char *msg_base;
+unsigned long msg_size;
 int format;
 unsigned size;
 struct strlist *headers;
@@ -1322,13 +1367,12 @@ struct strlist *headers_not;
     char *buf;
 
     /* If no data, output null quoted string */
-    if (!msgfile) {
+    if (!msg_base) {
 	prot_printf(imapd_out, "\"\"");
 	return;
     }
 
-    rewind(msgfile);
-    buf = index_readheader(msgfile, format, size);
+    buf = index_readheader(msg_base, msg_size, format, 0, size);
 
     index_pruneheader(buf, headers, headers_not);
 
@@ -1496,7 +1540,10 @@ char *rock;
 {
     struct fetchargs *fetchargs = (struct fetchargs *)rock;    
     int fetchitems = fetchargs->fetchitems;
-    FILE *msgfile = 0;
+    int msgfd = -1;
+    char *msg_base = 0;
+    unsigned long msg_size = 0;
+    struct stat sbuf;
     int sepchar;
     int i;
     bit32 user_flags[MAX_USER_FLAGS/32];
@@ -1506,11 +1553,21 @@ char *rock;
     /* Open the message file if we're going to need it */
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822|FETCH_UNCACHEDHEADER)) ||
 	fetchargs->bodysections || fetchargs->headers_not) {
-	msgfile = fopen(mailbox_message_fname(mailbox, UID(msgno)), "r");
-	if (!msgfile) {
+	msgfd = open(mailbox_message_fname(mailbox, UID(msgno)), O_RDONLY,
+		     0666);
+	if (msgfd == -1) {
 	    prot_printf(imapd_out, "* OK ");
 	    prot_printf(imapd_out, error_message(IMAP_NO_MSGGONE), msgno);
 	    prot_printf(imapd_out, "\r\n");
+	}
+	else {
+	    if (fstat(msgfd, &sbuf) == -1) {
+		syslog(LOG_ERR, "IOERROR: fstat on %s: %m",
+		       mailbox_message_fname(mailbox, UID(msgno)));
+		fatal("can't fstat message file", EX_OSFILE);
+	    }
+	    map_refresh(msgfd, 1, &msg_base, &msg_size, sbuf.st_size,
+			"message file", mailbox->name);
 	}
     }
 
@@ -1593,13 +1650,15 @@ char *rock;
     if (fetchitems & FETCH_HEADER) {
 	prot_printf(imapd_out, "%cRFC822.HEADER ", sepchar);
 	sepchar = ' ';
-	index_fetchmsg(msgfile, mailbox->format, 0, HEADER_SIZE(msgno),
+	index_fetchmsg(msg_base, msg_size, mailbox->format, 0,
+		       HEADER_SIZE(msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
     else if ((fetchitems & FETCH_UNCACHEDHEADER) || fetchargs->headers_not) {
 	prot_printf(imapd_out, "%cRFC822.HEADER ", sepchar);
 	sepchar = ' ';
-	index_fetchheader(msgfile, mailbox->format, HEADER_SIZE(msgno),
+	index_fetchheader(msg_base, msg_size, mailbox->format,
+			  HEADER_SIZE(msgno),
 			  fetchargs->headers, fetchargs->headers_not);
     }
     else if (fetchargs->headers) {
@@ -1611,14 +1670,14 @@ char *rock;
     if (fetchitems & FETCH_TEXT) {
 	prot_printf(imapd_out, "%cRFC822.TEXT ", sepchar);
 	sepchar = ' ';
-	index_fetchmsg(msgfile, mailbox->format, CONTENT_OFFSET(msgno),
-		       SIZE(msgno) - HEADER_SIZE(msgno),
+	index_fetchmsg(msg_base, msg_size, mailbox->format,
+		       CONTENT_OFFSET(msgno), SIZE(msgno) - HEADER_SIZE(msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
     if (fetchitems & FETCH_RFC822) {
 	prot_printf(imapd_out, "%cRFC822 ", sepchar);
 	sepchar = ' ';
-	index_fetchmsg(msgfile, mailbox->format, 0, SIZE(msgno),
+	index_fetchmsg(msg_base, msg_size, mailbox->format, 0, SIZE(msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
     for (section = fetchargs->bodysections; section; section = section->next) {
@@ -1629,11 +1688,15 @@ char *rock;
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
 
-	index_fetchsection(msgfile, mailbox->format, section->s, cacheitem,
+	index_fetchsection(msg_base, msg_size, mailbox->format, section->s,
+			   cacheitem,
 			   fetchargs->start_octet, fetchargs->octet_count);
     }
     prot_printf(imapd_out, ")\r\n");
-    if (msgfile) fclose(msgfile);
+    if (msgfd != -1) {
+	map_free(&msg_base, &msg_size);
+	close(msgfd);
+    }
     return 0;
 }
 
@@ -1818,13 +1881,14 @@ index_search_evaluate(mailbox, searchargs, msgno, msgfile)
 struct mailbox *mailbox;
 struct searchargs *searchargs;
 int msgno;
-FILE **msgfile;
+struct mapfile *msgfile;
 {
     int i;
     struct strlist *l, *h;
     char *cacheitem;
     int cachelen;
     struct searchsub *s;
+    struct stat sbuf;
 
     if (searchargs->recent_set && msgno <= lastnotrecent) return 0;
     if (searchargs->recent_unset && msgno > lastnotrecent) return 0;
@@ -1916,14 +1980,19 @@ FILE **msgfile;
     }
 
     if (searchargs->body || searchargs->text || searchargs->header) {
-	if (!*msgfile) {
-	    *msgfile = fopen(mailbox_message_fname(mailbox, UID(msgno)), "r");
-	    if (!*msgfile) return 0;
+	if (msgfile->fd != -1) {
+	    msgfile->fd = open(mailbox_message_fname(mailbox, UID(msgno)),
+			       O_RDONLY, 0666);
+	    if (msgfile->fd == -1 || fstat(msgfile->fd, &sbuf) == -1) {
+		return 0;
+	    }
+	    map_refresh(msgfile->fd, 1, &msgfile->base, &msgfile->size,
+			sbuf.st_size, "message file", mailbox->name);
 	}
 
 	h = searchargs->header_name;
 	for (l = searchargs->header; l; (l = l->next), (h = h->next)) {
-	    if (!index_searchheader(h->s, l->s, l->p, *msgfile, mailbox->format,
+	    if (!index_searchheader(h->s, l->s, l->p, msgfile, mailbox->format,
 				    HEADER_SIZE(msgno))) return 0;
 	}
 
@@ -1933,11 +2002,11 @@ FILE **msgfile;
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
 
 	for (l = searchargs->body; l; l = l->next) {
-	    if (!index_searchmsg(l->s, l->p, *msgfile, mailbox->format, 1,
+	    if (!index_searchmsg(l->s, l->p, msgfile, mailbox->format, 1,
 				 cacheitem)) return 0;
 	}
 	for (l = searchargs->text; l; l = l->next) {
-	    if (!index_searchmsg(l->s, l->p, *msgfile, mailbox->format, 0,
+	    if (!index_searchmsg(l->s, l->p, msgfile, mailbox->format, 0,
 				  cacheitem)) return 0;
 	}
     }
@@ -1952,16 +2021,19 @@ static int
 index_searchmsg(substr, pat, msgfile, format, skipheader, cacheitem)
 char *substr;
 comp_pat *pat;
-FILE *msgfile;
+struct mapfile *msgfile;
 int format;
 int skipheader;
 char *cacheitem;
 {
     int partsleft = 1;
     int subparts;
-    int len, charset, encoding;
+    int start, len, charset, encoding;
     char *p;
     
+    /* Won't find anything in a truncated file */
+    if (msgfile->size == 0) return 0;
+
     cacheitem += 4;
     while (partsleft--) {
 	subparts = CACHE_ITEM_BIT32(cacheitem);
@@ -1975,8 +2047,9 @@ char *cacheitem;
 	    else {
 		len = CACHE_ITEM_BIT32(cacheitem+4);
 		if (len > 0) {
-		    fseek(msgfile, CACHE_ITEM_BIT32(cacheitem), 0);
-		    p = index_readheader(msgfile, format, len);
+		    p = index_readheader(msgfile->base, msgfile->size,
+					 format, CACHE_ITEM_BIT32(cacheitem),
+					 len);
 		    p = charset_decode1522(p);
 		    if (charset_searchstring(substr, pat, p, strlen(p))) {
 			return 1;
@@ -1986,12 +2059,15 @@ char *cacheitem;
 	    cacheitem += 3*4;
 
 	    while (--subparts) {
+		start = CACHE_ITEM_BIT32(cacheitem);
 		len = CACHE_ITEM_BIT32(cacheitem+4);
 		charset = CACHE_ITEM_BIT32(cacheitem+8) >> 16;
 		encoding = CACHE_ITEM_BIT32(cacheitem+8) & 0xff;
-		if (len > 0 && charset >= 0 && charset < 0xffff) {
-		    fseek(msgfile, CACHE_ITEM_BIT32(cacheitem), 0);
-		    if (charset_searchfile(substr, pat, msgfile,
+
+		if (start < msgfile->size && len > 0 &&
+		    charset >= 0 && charset < 0xffff) {
+		    if (charset_searchfile(substr, pat,
+					   msgfile->base + start,
 					   format == MAILBOX_FORMAT_NETNEWS,
 					   len, charset, encoding)) return 1;
 		}
@@ -2011,7 +2087,7 @@ index_searchheader(name, substr, pat, msgfile, format, size)
 char *name;
 char *substr;
 comp_pat *pat;
-FILE *msgfile;
+struct mapfile *msgfile;
 int format;
 int size;
 {
@@ -2020,8 +2096,7 @@ int size;
 
     header.s = name;
 
-    rewind(msgfile);
-    p = index_readheader(msgfile, format, size);
+    p = index_readheader(msgfile->base, msgfile->size, format, 0, size);
     index_pruneheader(p, &header, 0);
     p = charset_decode1522(p);
     return charset_searchstring(substr, pat, p, strlen(p));
