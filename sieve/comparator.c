@@ -1,6 +1,6 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
- * $Id: comparator.c,v 1.8 2002/01/07 04:58:27 leg Exp $
+ * $Id: comparator.c,v 1.9 2002/02/13 20:44:04 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -42,7 +42,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 /* just compare the two; these should be NULL terminated */
 static int octet_is(const char *pat, const char *text)
 {
-    int sl;
+    size_t sl;
     sl = strlen(pat);
 
     return (sl == strlen(text)) && !memcmp(pat, text, sl);
@@ -168,7 +168,7 @@ static int octet_regex(const char *pat, const char *text)
 
 static int ascii_casemap_is(const char *pat, const char *text)
 {
-    int sl;
+    size_t sl;
     sl = strlen(pat);
 
     return (sl == strlen(text)) && !strncasecmp(pat, text, sl);

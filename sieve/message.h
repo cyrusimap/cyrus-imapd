@@ -1,6 +1,6 @@
 /* message.h
  * Larry Greenfield
- * $Id: message.h,v 1.11 2000/11/17 19:31:35 ken3 Exp $
+ * $Id: message.h,v 1.12 2002/02/13 20:44:04 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -34,7 +34,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 typedef struct Action action_list_t;
 
 typedef enum {
-    ACTION_NONE,
+    ACTION_NULL = -1,
+    ACTION_NONE = 0,
     ACTION_REJECT,
     ACTION_FILEINTO,
     ACTION_KEEP,

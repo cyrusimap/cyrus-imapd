@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.22 2001/11/19 21:33:45 leg Exp $
+ * $Id: message.c,v 1.23 2002/02/13 20:44:04 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -391,8 +391,12 @@ static int priority_compare(const char *old, const char *new)
  *
  * incomaptible with: none
  */
-int do_notify(sieve_interp_t *i,void *m, notify_action_t *notify,
-	      const char *priority, char *message, stringlist_t *sl)
+int do_notify(sieve_interp_t *i __attribute__((unused)),
+	      void *m __attribute__((unused)),
+	      notify_action_t *notify,
+	      const char *priority,
+	      char *message,
+	      stringlist_t *sl)
 {
     /* if non-default action exists, and
      * priority is < old priority then leave current one
@@ -460,7 +464,9 @@ int parse_address(const char *header, void **data, void **marker)
     return SIEVE_OK;
 }
 
-char *get_address(address_part_t addrpart, void **data, void **marker,
+char *get_address(address_part_t addrpart,
+		  void **data __attribute__((unused)),
+		  void **marker,
 		  int canon_domain)
 {
     char *ret = NULL;

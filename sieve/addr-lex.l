@@ -53,7 +53,7 @@ static int ncom;	/* number of open comments */
 int addrinput(char *buf, int max_size)
 {
     extern char *addrptr;	/* current position in address string */
-    int n;			/* number of characters to read from string */
+    size_t n;			/* number of characters to read from string */
 
     n = strlen(addrptr) < max_size ? strlen(addrptr) : max_size;
     if (n > 0) {
