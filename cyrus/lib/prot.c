@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.35 1999/06/19 02:18:57 leg Exp $
+ * $Id: prot.c,v 1.36 1999/06/19 06:30:10 leg Exp $
  */
 
 #include <stdio.h>
@@ -141,11 +141,12 @@ sasl_conn_t *conn;
     max = *maxp;
     if (result != SASL_OK)
       return 1;
-    
-    /* can not be bigger than the prot buffersize since that's already allocated */
-    if (max>PROT_BUFSIZE)
-      max=PROT_BUFSIZE;
 
+    if (max == 0 || max > PROT_BUFSIZE) {
+	/* max = 0 means unlimited, and we can't go bigger */
+	max = PROT_BUFSIZE;
+    }
+    
     max-=50; /* account for extra foo incurred from layers */
 
     s->maxplain=max;
@@ -158,36 +159,6 @@ sasl_conn_t *conn;
   }
 
   return 0;
-}
-
-/*
- * Set the protection function for stream 's' to be 'func'.  The opaque
- * object 'state' is passed to 'func' whenever it is called.  If the
- * stream is for writing, 'maxplain' is the maximum number of plaintext
- * bytes that will be given to 'func' at one time.
- */
-int prot_setfunc(s, func, state, maxplain)
-struct protstream *s;
-const char *(*func)();
-void *state;
-int maxplain;
-{
-    if (s->write && s->ptr != s->buf) prot_flush(s);
-
-    s->func = func;
-    s->state = state;
-
-    if (s->write) {
-	s->maxplain = maxplain;
-	s->cnt = maxplain;
-    }
-    else if (s->cnt) {
-	s->leftptr = s->ptr;
-	s->leftcnt = s->cnt;
-	s->cnt = 0;
-    }
-
-    return 0;
 }
 
 /*
