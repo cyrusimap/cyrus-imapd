@@ -262,6 +262,7 @@ char **commentp;
     char *cdst;
     int comment;
 
+    if (commentp) *commentp = 0;
     SKIPWHITESPACE(src);
 
     *domainp = dst = src;
