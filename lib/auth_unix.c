@@ -48,10 +48,10 @@ char *identifier;
 
     if (strcmp(identifier, auth_userid) == 0) return 3;
 
-    if (!strncmp(identifier, "group:", 6)) return 0;
+    if (strncmp(identifier, "group:", 6) != 0) return 0;
 
     for (i=0; i<auth_ngroups; i++) {
-	if (!strcmp(identifier+6, auth_group[i])) return 2;
+	if (strcmp(identifier+6, auth_group[i]) == 0) return 2;
     }
     return 0;
 }
