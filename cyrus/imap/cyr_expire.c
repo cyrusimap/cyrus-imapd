@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.2.2.5 2004/04/03 18:44:51 ken3 Exp $
+ * $Id: cyr_expire.c,v 1.2.2.6 2004/04/05 14:50:10 ken3 Exp $
  */
 
 #include <config.h>
@@ -210,7 +210,7 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
 	    expunge_flags |= EXPUNGE_FORCE;
 	}
 
-	if (!r && erock->expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
+	if (erock->expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
 	    /* cleanup mailbox of expunged messages */
 	    expunge_flags |= EXPUNGE_CLEANUP;
 	}
