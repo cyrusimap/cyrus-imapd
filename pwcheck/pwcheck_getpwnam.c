@@ -1,4 +1,4 @@
-/* pwcheck_getpwname.c -- check passwords using getpwname()
+/* pwcheck_getpwnam.c -- check passwords using getpwname()
  *
  *      (C) Copyright 1996 by Carnegie Mellon University
  *
@@ -35,7 +35,7 @@ char *pwcheck(userid, password)
 char *userid;
 char *password;
 {
-    struct pwd *pwd;
+    struct passwd *pwd;
 
     pwd = getpwnam(userid);
     if (!pwd) {
