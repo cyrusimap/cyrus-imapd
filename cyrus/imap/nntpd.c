@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.66 2003/03/02 20:06:04 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.67 2003/03/03 18:13:46 ken3 Exp $
  */
 
 /*
@@ -1688,6 +1688,11 @@ static void cmd_authinfo_user(char *user)
 {
     char *p;
 
+    if (nntp_authstate) {
+	prot_printf(nntp_out, "501 Already authenticated\r\n");
+	return;
+    }
+
     /* possibly disallow USER */
     if (!(nntp_starttls_done || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(nntp_out,
@@ -1715,6 +1720,11 @@ static void cmd_authinfo_user(char *user)
 static void cmd_authinfo_pass(char *pass)
 {
     char *reply = 0;
+
+    if (nntp_authstate) {
+	prot_printf(nntp_out, "501 Already authenticated\r\n");
+	return;
+    }
 
     if (!nntp_userid) {
 	prot_printf(nntp_out, "480 Must give AUTHINFO USER command first\r\n");
@@ -1912,7 +1922,8 @@ static void cmd_help(void)
     prot_printf(nntp_out, "\tPOST\r\n");
     prot_printf(nntp_out, "\tQUIT\r\n");
     prot_printf(nntp_out, "\tSLAVE\r\n");
-    if (tls_enabled()) prot_printf(nntp_out, "\tSTARTTLS\r\n");
+    if (tls_enabled() && !nntp_starttls_done)
+	prot_printf(nntp_out, "\tSTARTTLS\r\n");
     prot_printf(nntp_out, "\tSTAT\r\n");
     prot_printf(nntp_out, "\tTAKETHIS\r\n");
     prot_printf(nntp_out, ".\r\n");
@@ -2040,7 +2051,8 @@ static void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, "HDR\r\n");
 	prot_printf(nntp_out, "LISTGROUP\r\n");
 	prot_printf(nntp_out, "OVER\r\n");
-	if (tls_enabled()) prot_printf(nntp_out, "STARTTLS\r\n");
+	if (tls_enabled() && !nntp_starttls_done)
+	    prot_printf(nntp_out, "STARTTLS\r\n");
 	prot_printf(nntp_out, ".\r\n");
 
 	did_extensions = 1;
@@ -2865,7 +2877,7 @@ static void cmd_starttls(int nntps)
     if (nntp_starttls_done == 1)
     {
 	prot_printf(nntp_out, "483 %s\r\n", 
-		    "Already successfully executed STLS");
+		    "Already successfully executed STARTTLS");
 	return;
     }
 
