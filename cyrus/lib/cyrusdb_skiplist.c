@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.30 2002/02/28 19:50:36 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.31 2002/04/02 00:15:49 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1105,7 +1105,7 @@ static int store(struct db *db,
 
 int mydelete(struct db *db, 
 	     const char *key, int keylen,
-	     struct txn **tid, int force)
+	     struct txn **tid, int force __attribute__((unused)))
 {
     const char *ptr;
     int delrectype = htonl(DELETE);
