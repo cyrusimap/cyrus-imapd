@@ -70,17 +70,23 @@ identities of these servers may login as any user in order to perform
 commands by proxy.
 .IP "\fBdefaultacl: anybody lcs\fR" 5
 The Access Control Llist (ACL) placed on a newly-created (non-user) 
-mailbox that does not have a parent mailbox.  See the document
-acl-extensions for more information.
+mailbox that does not have a parent mailbox.
+.IP "\fBnewsprefix: (none)\fR" 5
+Prefix to be prepended to newsgroup names to make the corresponding
+IMAP mailbox names.
 .IP "\fBsrvtab: /etc/srvtab\fR" 5
 The pathname of \fIsrvtab\fR file containing the server's private 
-key.  This option is only included when the server is compiled with
+key.  This option is only used when the server is compiled with
 Kerberos authentication.
 .IP "\fBloginrealms: (none)\fR" 5
 The list of remote realms whose users may log in using 
 cross-realm authentications.  Seperate each realm name
-by a space.  This value is only included when the servier is
+by a space.  This option is only used when the server is
 compiled with Kerberos authentication.
+.IP "\fBloginuseacl: no\fR" 5
+If enabled, any authentication identity which as \fBa\fR rights on a
+user's INBOX may log in as that user.  This option is only used when
+the server is compiled with Kerberos authentication.
 .SH SEE ALSO
 .PP
 \fBimapd(8)\fR
