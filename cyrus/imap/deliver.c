@@ -24,10 +24,12 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <syslog.h>
 #include <com_err.h>
+#include <errno.h>
 #ifdef NEWDB
 #include <db.h>
 #else
@@ -49,31 +51,34 @@ extern char *optarg;
 
 extern int errno;
 
-char *mailboxname = 0;
-char *authuser = 0;
-char *id = 0;
 int dupelim = 0;
-char **flag = 0;
-int nflags = 0;
-struct protstream *prot_f;
-unsigned size;
 
 struct protstream *savemsg();
+char *convert_smtp();
 
 main(argc, argv)
 int argc;
 char **argv;
 {
     int opt;
-    int exitval = 0, code;
+    int r;
+    int exitval = 0;
     int n;
     char buf[4096];
     char *msgid;
     char *return_path = 0;
+    int smtpflag = 0;
+    char *mailboxname = 0;
+    struct protstream *prot_f;
+    unsigned size;
+    char **flag = 0;
+    int nflags = 0;
+    char *authuser = 0;
+    char *id = 0;
 
     config_init("deliver");
 
-    while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:")) != EOF) {
+    while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:s")) != EOF) {
 	switch(opt) {
 	case 'd':
 	    /* Ignore -- /bin/mail compatibility flags */
@@ -114,9 +119,18 @@ char **argv;
 	case 'E':
 	    exit(prunedelivered(atoi(optarg)));
 
+	case 's':
+	    smtpflag = 1;
+	    break;
+
 	default:
 	    usage();
 	}
+    }
+
+    if (smtpflag) {
+	smtpmode();
+	exit(0);
     }
 
     if (authuser) {
@@ -125,33 +139,356 @@ char **argv;
     }
 
     /* Copy message to temp file */
-    prot_f = savemsg(return_path, dupelim ? &id : (char **)0, &size);
+    prot_f = savemsg(return_path, dupelim ? &id : (char **)0, &size, 0);
 
     if (optind == argc) {
 	/* Deliver to global mailbox */
-	exitval = deliver((char *)0);
+	r = deliver(prot_f, size, flag, nflags, authuser, id,
+		    (char *)0, mailboxname);
+	
+	if (r) {
+	    com_err(mailboxname, r,
+		    (r == IMAP_IOERROR) ? error_message(errno) : NULL);
+	}
+
+	exitval = convert_sysexit(r);
 	exit(exitval);
     }
     while (optind < argc) {
-	code = deliver(argv[optind++]);
-	if (code && exitval != EX_TEMPFAIL) exitval = code;
+	r = deliver(prot_f, size, flag, nflags, authuser, id,
+		       argv[optind], mailboxname);
+
+	if (r) {
+	    com_err(argv[optind], r,
+		    (r == IMAP_IOERROR) ? error_message(errno) : NULL);
+	}
+
+	if (r && exitval != EX_TEMPFAIL) exitval = convert_sysexit(r);
+
+	optind++;
     }
     exit(exitval);
 }
 
 usage()
 {
+/* XXX */
     fprintf(stderr, 
-"usage: deliver [-m mailbox] [-a auth] [-i] [-F flag]... [user]...\n");
+"421 4.3.0 usage: deliver [-m mailbox] [-a auth] [-i] [-F flag]... [user]...\r\n");
     fprintf(stderr, "       deliver -I age\n");
     exit(EX_USAGE);
 }
 
+char *parseaddr(s)
+char *s;
+{
+    char *p;
+    int len;
+
+    p = s;
+
+    if (*p++ != '<') return 0;
+
+    /* at-domain-list */
+    while (*p == '@') {
+	p++;
+	if (*p == '[') {
+	    p++;
+	    while (isdigit(*p) || *p == '.') p++;
+	    if (*p++ != ']') return 0;
+	}
+	else {
+	    while (isalnum(*p) || *p == '.' || *p == '-') p++;
+	}
+	if (*p == ',' && p[1] == '@') p++;
+	else if (*p == ':' && p[1] != '@') p++;
+	else return 0;
+    }
+    
+    /* local-part */
+    if (*p == '\"') {
+	p++;
+	while (*p && *p != '\"') {
+	    if (*p == '\\') {
+		if (!*++p) return 0;
+	    }
+	    p++;
+	}
+	if (!*p++) return 0;
+    }
+    else {
+	while (*p && *p != '@' && *p != '>') {
+	    if (*p == '\\') {
+		if (!*++p) return 0;
+	    }
+	    else {
+		if (*p <= ' ' || (*p & 128) ||
+		    strchr("<>()[]\\,;:\"", *p)) return 0;
+	    }
+	    p++;
+	}
+    }
+
+    /* @domain */
+    if (*p == '@') {
+	p++;
+	if (*p == '[') {
+	    p++;
+	    while (isdigit(*p) || *p == '.') p++;
+	    if (*p++ != ']') return 0;
+	}
+	else {
+	    while (isalnum(*p) || *p == '.' || *p == '-') p++;
+	}
+    }
+    
+    if (*p++ != '>') return 0;
+    if (*p && *p != ' ') return 0;
+    len = p - s;
+
+    s = strsave(s);
+    s[len] = '\0';
+    return s;
+}
+
+char *process_recipient(addr)
+char *addr;
+{
+    char *dest = addr;
+    char *user = addr;
+    char *plus, *dot;
+    char buf[1024];
+    int r;
+
+    if (*addr == '<') addr++;
+
+    /* Skip at-domain-list */
+    if (*addr == '@') {
+	addr = strchr(addr, ':');
+	if (!addr) return "501 5.5.4 Syntax error in parameters";
+	addr++;
+    }
+
+    if (*addr == '\"') {
+	addr++;
+	while (*addr && *addr != '\"') {
+	    if (*addr == '\\') addr++;
+	    *dest++ = *addr++;
+	}
+    }
+    else {
+	while (*addr != '@' && *addr != '>') {
+	    *dest++ = *addr++;
+	}
+    }
+    *dest = 0;
+
+    dot = strchr(user, '.');
+    plus = strchr (user, '+');
+    if (plus && (!dot || plus < dot)) dot = plus;
+
+    if (dot) *dot = '\0';
+    if (*user) {
+	if (strlen(user) > sizeof(buf)-10) {
+	    return convert_smtp(IMAP_MAILBOX_NONEXISTENT);
+	}
+	strcpy(buf, "user.");
+	strcat(buf, user);
+	r = mboxlist_lookup(buf, (char **)0, (char **)0);
+    }
+    else {
+	r = mboxlist_lookup(user+1, (char **)0, (char **)0);
+    }
+    if (r) {
+	return convert_smtp(r);
+    }
+    if (dot) *dot = '.';
+
+    return 0;
+}    
+
+
+#define RCPT_GROW 3 /* XXX 30 */
+
+smtpmode()
+{
+    char *return_path = 0;
+    char **rcpt_addr = 0;
+    int rcpt_num = 0;
+    int rcpt_alloc = 0;
+    int mult_mode = 0;
+    char myhostname[1024];
+    char buf[4096];
+    int r;
+    char *err;
+    struct protstream *prot_f;
+    unsigned size;
+    char **flag = 0;
+    int nflags = 0;
+    char *authuser = 0;
+    char *id = 0;
+    char *p;
+    int i;
+
+    gethostname(myhostname, sizeof(myhostname)-1);
+    
+    printf("220 %s ESMTP ready\r\n", myhostname);
+    for (;;) {
+	fflush(stdout);
+	if (!fgets(buf, sizeof(buf)-1, stdin)) {
+	    exit(0);
+	}
+	p = buf + strlen(buf) - 1;
+	if (p >= buf && *p == '\n') *p-- = '\0';
+	if (p >= buf && *p == '\r') *p-- = '\0';
+
+	switch (buf[0]) {
+
+	case 'd':
+	case 'D':
+	    if (!strcasecmp(buf, "data")) {
+		if (!rcpt_num) {
+		    printf("503 5.5.1 No recipients\r\n");
+		}
+		prot_f = savemsg(return_path, dupelim ? &id : (char **)0,
+				 &size, rcpt_num);
+		if (!prot_f) continue;
+
+		for (i = 0; i < rcpt_num; i++) {
+		    p = strchr(rcpt_addr[i], '.');
+		    if (p) *p++ = '\0';
+
+		    r = deliver(prot_f, size, flag, nflags, authuser, id,
+				rcpt_addr[i][0] ? rcpt_addr[i] : (char *)0, p);
+		    printf("%s\r\n", convert_smtp(r));
+		}
+		prot_free(prot_f);
+		goto rset;
+	    }
+	    goto syntaxerr;
+
+	case 'e':
+	case 'E':
+	    if (!strncasecmp(buf, "ehlo ", 5)) {
+		printf("250-%s\r\n250-8BITMIME\r\n250 PIPELINING\r\n",
+		       myhostname);
+		continue;
+	    }
+	    goto syntaxerr;
+
+	case 'h':
+	case 'H':
+	    if (!strncasecmp(buf, "helo ", 5)) {
+		printf("250 %s\r\n", myhostname);
+		continue;
+	    }
+	    goto syntaxerr;
+
+	case 'm':
+	case 'M':
+	    if (!strncasecmp(buf, "mail ", 5)) {
+		if (return_path) {
+		    printf("503 5.5.1 Nested MAIL command\r\n");
+		    continue;
+		}
+		if (strncasecmp(buf+5, "from:", 5) != 0 ||
+		    !(return_path = parseaddr(buf+10))) {
+		    printf("501 5.5.4 Syntax error in parameters\r\n");
+		    continue;
+		}
+		/* XXX 2.1.5 valid? */
+		printf("250 2.1.5 ok\r\n");
+		continue;
+	    }
+	    else if (!strcasecmp(buf, "mult")) {
+		mult_mode = 1;
+		printf("250 2.0.0 ok\r\n");
+		continue;
+	    }
+	    goto syntaxerr;
+
+	case 'n':
+	case 'N':
+	    if (!strcasecmp(buf, "noop")) {
+		printf("250 2.0.0 ok\r\n");
+		continue;
+	    }
+	    goto syntaxerr;
+
+	case 'q':
+	case 'Q':
+	    if (!strcasecmp(buf, "quit")) {
+		printf("221 2.0.0 bye\r\n");
+		exit(0);
+	    }
+	    goto syntaxerr;
+	    
+	case 'r':
+	case 'R':
+	    if (!strncasecmp(buf, "rcpt ", 5)) {
+		if (!return_path) {
+		    printf("503 5.5.1 Need MAIL command\r\n");
+		    continue;
+		}
+		if (!mult_mode && rcpt_num) {
+		    printf("450 4.5.3 Need MULT for multiple recipients\r\n");
+		    continue;
+		}
+		if (rcpt_num == rcpt_alloc) {
+		    rcpt_alloc += RCPT_GROW;
+		    rcpt_addr = (char **)
+			xrealloc((char *)rcpt_addr,
+				 rcpt_alloc * sizeof(char **));
+		}
+		if (strncasecmp(buf+5, "to:", 3) != 0 ||
+		    !(rcpt_addr[rcpt_num] = parseaddr(buf+8))) {
+		    printf("501 5.5.4 Syntax error in parameters\r\n");
+		    continue;
+		}
+		if (err = process_recipient(rcpt_addr[rcpt_num])) {
+		    printf("%s\r\n", err);
+		    continue;
+		}
+		rcpt_num++;
+		printf("250 2.1.5 ok\r\n");
+		continue;
+	    }
+	    else if (!strcasecmp(buf, "rset")) {
+		printf("250 2.0.0 ok\r\n");
+
+	      rset:
+		while (rcpt_num) {
+		    free(rcpt_addr[--rcpt_num]);
+		}
+		if (return_path) free(return_path);
+		return_path = 0;
+		continue;
+	    }
+	    goto syntaxerr;
+	    
+	case 'v':
+	case 'V':
+	    if (!strncasecmp(buf, "vrfy ", 5)) {
+		printf("252 2.3.3 try RCPT to attempt delivery\r\n");
+		continue;
+	    }
+	    goto syntaxerr;
+
+	default:
+	syntaxerr:
+	    printf("500 5.5.2 Syntax error\r\n");
+	    continue;
+	}
+    }
+}
+
+
 struct protstream *
-savemsg(return_path, idptr, sizeptr)
+savemsg(return_path, idptr, sizeptr, smtpmode)
 char *return_path;
 char **idptr;
 unsigned *sizeptr;
+int smtpmode;
 {
     FILE *f;
     char *hostname = 0;
@@ -166,7 +503,18 @@ unsigned *sizeptr;
     /* Copy to temp file */
     f = tmpfile();
     if (!f) {
+	if (smtpmode) {
+	    printf("451 4.3.%c cannot create temporary file: %s\r\n",
+		   (errno == EDQUOT || errno == ENOSPC) ? '1' : '2',
+		   error_message(errno));
+	    return 0;
+	}
 	exit(EX_TEMPFAIL);
+    }
+
+    if (smtpmode) {
+	printf("354 go ahead\r\n");
+	fflush(stdout);
     }
 
     if (return_path) {
@@ -207,7 +555,18 @@ unsigned *sizeptr;
 	    ungetc('\r', stdin);
 	    *p = '\0';
 	}
-	fputs(buf, f);
+
+	if (smtpmode && buf[0] == '.') {
+	    if (buf[1] == '\r' && buf[2] == '\n') {
+		/* End of message */
+		goto smtpdot;
+	    }
+	    /* Remove the dot-stuffing */
+	    fputs(buf+1, f);
+	}
+	else {
+	    fputs(buf, f);
+	}
 
 	/* Look for message-id or resent-message-id headers */
 	if (scanheader) {
@@ -241,14 +600,38 @@ unsigned *sizeptr;
 	}
 
     }
+
+    if (smtpmode) {
+	/* Got a premature EOF -- toss message and exit */
+	exit(0);
+    }
+
+  smtpdot:
     fflush(f);
     if (ferror(f)) {
-	perror("deliver: copying message");
-	exit(EX_TEMPFAIL);
+	if (!smtpmode) {
+	    perror("deliver: copying message");
+	    exit(EX_TEMPFAIL);
+	}
+	while (smtpmode--) {
+	    printf("451 4.3.%c cannot copy message to temporary file: %s\r\n",
+		   (errno == EDQUOT || errno == ENOSPC) ? '1' : '2',
+		   error_message(errno));
+	}
+	fclose(f);
+	return 0;
     }
     if (fstat(fileno(f), &sbuf) == -1) {
-	perror("deliver: stating message");
-	exit(EX_TEMPFAIL);
+	if (!smtpmode) {
+	    perror("deliver: stating message");
+	    exit(EX_TEMPFAIL);
+	}
+	while (smtpmode--) {
+	    printf("451 4.3.2 cannot stat message temporary file: %s\r\n",
+		   error_message(errno));
+	}
+	fclose(f);
+	return 0;
     }
     *sizeptr = sbuf.st_size;
 	
@@ -256,8 +639,15 @@ unsigned *sizeptr;
 }
 
 
-deliver(user)
+deliver(msg, size, flag, nflags, authuser, id, user, mailboxname)
+struct protstream *msg;
+unsigned size;
+char **flag;
+int nflags;
+char *authuser;
+char *id;
 char *user;
+char *mailboxname;
 {
     int r;
     struct mailbox mailbox;
@@ -315,15 +705,10 @@ char *user;
     }
 
     if (!r) {
-	prot_rewind(prot_f);
-	r = append_fromstream(&mailbox, prot_f, size, time(0), flag, nflags,
+	prot_rewind(msg);
+	r = append_fromstream(&mailbox, msg, size, time(0), flag, nflags,
 			      authuser);
 	mailbox_close(&mailbox);
-    }
-
-    if (r) {
-	com_err(user ? user : mailboxname,
-		r, (r == IMAP_IOERROR) ? error_message(errno) : NULL);
     }
 
     if (!r && user) {
@@ -332,7 +717,7 @@ char *user;
 
     if (!r && dupelim && id) markdelivered(id, user ? namebuf : mailboxname);
 
-    return convert_code(r);
+    return r;
 }
 
 logdupelem(msgid, name)
@@ -349,7 +734,7 @@ char *name;
     }	
 }
 
-int convert_code(r)
+int convert_sysexit(r)
 int r;
 {
     switch (r) {
@@ -377,11 +762,39 @@ int r;
     return EX_SOFTWARE;
 }	
 
+char *convert_smtp(r)
+int r;
+{
+    switch (r) {
+    case 0:
+	return "250 2.1.5 Ok";
+	
+    case IMAP_IOERROR:
+	return "451 4.3.0 System I/O error";
+	
+    case IMAP_PERMISSION_DENIED:
+	return "550 5.7.1 Permission denied";
+
+    case IMAP_QUOTA_EXCEEDED:
+	return "452 4.2.2 Over quota";
+
+    case IMAP_MAILBOX_NOTSUPPORTED:
+	return "553 5.2.0 Mailbox has an invalid format";
+
+    case IMAP_MAILBOX_NONEXISTENT:
+	/* XXX Might have been moved to other server */
+	return "550 5.1.1 User unknown";
+    }
+	
+    /* Some error we're not expecting. */
+    return "554 5.0.0 Unexpected internal error";
+}
+
 fatal(s, code)
 char *s;
 int code;
 {
-    fprintf(stderr, "deliver: %s\n", s);
+    printf("421 4.3.0 deliver: %s\r\n", s);
     exit(code);
 }
 
