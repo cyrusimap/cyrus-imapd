@@ -1,5 +1,5 @@
 /* parseaddr.c -- RFC 822 address parser
- * $Id: parseaddr.c,v 1.11 1999/03/02 03:10:26 tjs Exp $
+ * $Id: parseaddr.c,v 1.12 1999/03/02 04:01:47 tjs Exp $
  *
  *        Copyright 1998 by Carnegie Mellon University
  *
@@ -31,12 +31,12 @@
 
 static char parseaddr_unspecified_domain[] = "unspecified-domain";
 
-static void parseaddr_append P(struct address ***addrpp, char *name,
+static void parseaddr_append (struct address ***addrpp, char *name,
 				char *route, char *mailbox, char *domain,
 				char **freemep);
-static int parseaddr_phrase P(char **inp, char **phrasep, char *specials);
-static int parseaddr_domain P(char **inp, char **domainp, char **commmentp);
-static int parseaddr_route P(char **inp, char **routep);
+static int parseaddr_phrase (char **inp, char **phrasep, char *specials);
+static int parseaddr_domain (char **inp, char **domainp, char **commmentp);
+static int parseaddr_route (char **inp, char **routep);
 
 /*
  * Parse an address list in 's', appending address structures to
