@@ -436,6 +436,9 @@ struct mailbox *mailbox;
     return 0;
 }
 
+/*
+ * Copy the seen database from 'oldmailbox' to 'newmailbox'
+ */
 int seen_copy(oldmailbox, newmailbox)
 struct mailbox *oldmailbox;
 struct mailbox *newmailbox;
@@ -450,6 +453,10 @@ struct mailbox *newmailbox;
     return mailbox_copyfile(oldfname, newfname);
 }
 
+/*
+ * Reconstruct the seen database for 'mailbox'
+ * We just make sure the file exists.
+ */
 int seen_reconstruct(mailbox)
 struct mailbox *mailbox;
 {
@@ -468,6 +475,14 @@ struct mailbox *mailbox;
     return seen_create(mailbox);
 }
 
+/*
+ * Do usage counting and old entry pruning for the seen database
+ * of 'mailbox'.  Users who have opened the mailbox since
+ * 'report_time' are reported, users who have not opened the
+ * mailbox since 'prune_time' have their entries removed from
+ * the seen database.  Users are reported by calling 'proc' with
+ * 'rock' and the userid.
+ */
 int seen_arbitron(mailbox, report_time, prune_time, proc, rock)
 struct mailbox *mailbox;
 time_t report_time;
@@ -477,9 +492,12 @@ void *rock;
 {
     int r;
     char fnamebuf[MAX_MAILBOX_PATH];
+    char newfnamebuf[MAX_MAILBOX_PATH];
     struct stat sbuf;
     char *lockfailaction;
     FILE *seenfile;
+    FILE *writefile = 0;
+    unsigned n, left, skiplen;
     char buf[1024];
     char *p, *end_userid;
     time_t lastread;
@@ -506,31 +524,111 @@ void *rock;
 	/* Skip over username we know is there */
 	p = strchr(buf, '\t');
 	if (!p) {
-	    /* XXX remove bogus record */
-	    goto nextline;
+	    /* remove bogus record */
+	    goto removeline;
 	}
 	end_userid = p;
 	p++;
 
+	/* Parse the last selected time */
 	lastread = 0;
 	while (isdigit(*p)) {
 	    lastread = lastread * 10 + *p++ - '0';
 	}
 
+	/* Report user if read recently enough */
 	if (lastread > report_time) {
 	    *end_userid = '\0';
 	    (*proc)(rock, buf);
 	    *end_userid = '\t';
 	}
 
-	/* XXX deal with prune_time, if nonzero */
+	/* Remove record if it's too old */
+	if (lastread < prune_time) {
+	  removeline:
+	    if (!writefile) {
+		/*
+		 * This is the first record we have to prune from
+		 * the file.  Open 'writefile' and copy what we have
+		 * read so far into it.
+		 */
+		strcpy(newfnamebuf, fnamebuf);
+		strcat(newfnamebuf, ".NEW");
 
-      nextline:
+		writefile = fopen(newfnamebuf, "w+");
+		if (!writefile) {
+		    syslog(LOG_ERR, "IOERROR: creating %s: %m", newfnamebuf);
+		    fclose(seenfile);
+		    return IMAP_IOERROR;
+		}
+		
+		skiplen = strlen(buf);
+		left = ftell(seenfile) - skiplen;
+
+		rewind(seenfile);
+		while (left) {
+		    n = fread(buf, 1, left < sizeof(buf) ? left : sizeof(buf),
+			      seenfile);
+		    if (n == 0) {
+			syslog(LOG_ERR, "IOERROR: reading %s: end of file",
+			       fnamebuf);
+			fclose(writefile);
+			unlink(newfnamebuf);
+			fclose(seenfile);
+			return IMAP_IOERROR;
+		    }
+		    fwrite(buf, 1, n, writefile);
+		    left -= n;
+		}
+		n = fread(buf, 1, skiplen, seenfile);
+		if (n != skiplen) {
+		    syslog(LOG_ERR, "IOERROR: reading %s: end of file",
+			   fnamebuf);
+		    fclose(writefile);
+		    unlink(newfnamebuf);
+		    fclose(seenfile);
+		    return IMAP_IOERROR;
+		}
+	    }
+
+	    /* Skip over and ignore the rest of the record */
+	    if (buf[strlen(buf)-1] != '\n') {
+		do {
+		    c = getc(seenfile);
+		} while (c != EOF && c != '\n');
+	    }
+    
+	    continue;
+	}
+	
+	/*
+	 * If copying file, copy the current record
+	 * In any case, skip over rest of the record.
+	 */
+	if (writefile) fputs(buf, writefile);
 	if (buf[strlen(buf)-1] != '\n') {
 	    do {
 		c = getc(seenfile);
+		if (writefile && c != EOF) {
+		    putc(c, writefile);
+		}
 	    } while (c != EOF && c != '\n');
 	}
+    }
+
+    /* If copying file, rename it into place */
+    if (writefile) {
+	/* Flush and swap in the new file */
+	fflush(writefile);
+	if (ferror(writefile) || fsync(fileno(writefile)) ||
+	    rename(newfnamebuf, fnamebuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: writing %s: %m", newfnamebuf);
+	    fclose(writefile);
+	    unlink(newfnamebuf);
+	    fclose(seenfile);
+	    return IMAP_IOERROR;
+	}
+	fclose(writefile);
     }
 
     fclose(seenfile);
