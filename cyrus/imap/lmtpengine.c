@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.18 2001/01/31 00:59:57 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.19 2001/02/09 20:41:58 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1222,8 +1222,8 @@ void lmtpmode(struct lmtp_func *func,
 	      char *mechs;
 	      
 	      prot_printf(pout, "250-%s\r\n"
-			  "250-8BITMIME\r\n"
 			  "250-IGNOREQUOTA\r\n"
+			  "250-8BITMIME\r\n"
 			  "250-ENHANCEDSTATUSCODES\r\n",
 			  config_servername);
 	      if (sasl_listmech(conn, NULL, "AUTH ", " ", "", &mechs, 
