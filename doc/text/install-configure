@@ -67,25 +67,7 @@ Configuring the IMAP Server
         administrator. You should have separate accounts for reading mail
         and administrating. 
 
-     5. Decide how users are going to be authenticated. The easiest method
-        for authenticating users is to use the libsasl authentication
-        database and create users using the "saslpasswd" utility. Set
-        "sasl_pwcheck_method: sasldb". Make sure Cyrus can read
-        "/etc/sasldb": 
-
-           chown cyrus /etc/sasldb*
-
-        If you want to authenticate users from "/etc/shadow", things are
-        considerably more complicated, since the cyrus user cannot read the
-        shadow password file. It is suggested that you configure libsasl
-        with pwcheck support, and set "sasl_pwcheck_method: pwcheck". The
-        SASL library will then make calls to an external utility running as
-        root to authenticate users. 
-
-        If you are using Kerberos, see the section below on configuring
-        Kerberos. 
-
-     6. Create the configuration directory specified by the
+     5. Create the configuration directory specified by the
         "configdirectory" option in "imapd.conf." The configuration
         directory is similar in concept to the "/usr/lib/news" directory.
         It stores information about the IMAP server as a whole. 
@@ -100,7 +82,7 @@ Configuring the IMAP Server
            chgrp mail imap
            chmod 750 imap
 
-     7. Create the default partition directories specified in the
+     6. Create the default partition directories specified in the
         "/etc/imapd.conf" file. 
 
         This document uses a default partition directory of
@@ -116,7 +98,7 @@ Configuring the IMAP Server
         It is where the mailboxes are stored. Unlike most netnews systems,
         Cyrus allows you to have more than one partition. Do not use the
         string "news" as a partition name, as it is reserved for netnews. 
-     8. If you wish to use Sieve, and you didn't configure deliver to look
+     7. If you wish to use Sieve, and you didn't configure deliver to look
         in home directories (see the imapd.conf man page), create the Sieve
         directory: 
 
@@ -126,7 +108,7 @@ Configuring the IMAP Server
            chgrp mail sieve
            chmod 750 sieve
 
-     9. Change to the Cyrus user and use the tool "tools/mkimap" to create
+     8. Change to the Cyrus user and use the tool "tools/mkimap" to create
         the rest of the directories (subdirectories of the directories you
         just created). 
 
@@ -138,7 +120,7 @@ Configuring the IMAP Server
         If Perl is not available, it should be easy (but time consuming) to
         create these directories by hand. 
 
-    10. LINUX SYSTEMS ONLY: Set the user, quota, and partition directories
+     9. LINUX SYSTEMS ONLY: Set the user, quota, and partition directories
         to update synchronously. Failure to do this may lead to data
         corruption and/or loss of mail after a system crash. Unfortunately,
         doing so may result in a serious performance hit. Note this is for
@@ -154,9 +136,9 @@ Configuring the IMAP Server
 
            chattr +S /var/spool/mqueue
 
-    11. To enable STARTTLS support, see how to configure OpenSSL below. 
+    10. To enable STARTTLS support, see how to configure OpenSSL below. 
 
-    12. Add the following lines to the "/etc/services" file if they aren't
+    11. Add the following lines to the "/etc/services" file if they aren't
         already there. 
 
            pop3      110/tcp
@@ -200,7 +182,7 @@ Configuring the Master Process
            /usr/cyrus/bin/master &
 
      3. Monitor the progress of the master process by examining the
-        imapd.log file. It should never exit by itself, but if you can shut
+        imapd.log file. It should never exit by itself, but you can shut
         down the mail system by sending it a signal with kill. 
 
 Configuring the Mail Transfer Agent
@@ -208,15 +190,14 @@ Configuring the Mail Transfer Agent
     In order to deliver mail to the Cyrus system, you'll have to configure
     your MTA (usually Sendmail) appropriately. 
 
-        You can monitor the master processes's progress by looking at
-        /var/log/imapd.log or wherever you are logging LOCAL6 message. 
-
      1. Generate a sendmail configuration file which delivers local mail to
-        the IMAP server. See the files cf/README and cf/cf/cyrusproto.mc in
-        the Sendmail distribution for information on how to do this. It is
-        preferable to tell Sendmail to use LMTP to deliver messages, which
-        enables things such as single instance store. Be sure the sendmail
-        configuration file gets reloaded after you make the changes. 
+        the IMAP server. See the files cf/README in the Sendmail
+        distribution for information on how to do this. A suggested
+        "config.mc" file to create a Sendmail configuration file can be
+        found here. 
+
+        The interface between the MTA and Cyrus has changed in Cyrus
+        version 2, so take care when using older Sendmails. 
 
      2. Edit /etc/group and add user "daemon" to the "mail" group. This
         will permit sendmail to run the "deliver" program to deliver mail
@@ -256,79 +237,6 @@ Exporting Netnews via IMAP
         as the cyrus user. Also add a cron job to run
         "/usr/cyrus/bin/syncnews /var/news/active >/dev/null 2>&1" nightly.
         (Using the appropriate path to the active file.) 
-
-Kerberos
-
-Configuring Kerberos v4
-
-    Cyrus IMAP supports Kerberos v4 if the SASL library was compiled with
-    KERBEROS_V4 support. 
-
-    You'll have to create a Kerberos v4 identity for the server and add the
-    server's key to the "srvtab" file. The file must be readable by the
-    cyrus user. The server's Kerberos identity is "imap.HOST@REALM", where
-    "HOST" is the first component of the machine's host name and "REALM" is
-    the machine's Kerberos realm. 
-
-     1. Here is a sample session, creating a srvtab file for the host named
-        "foobar": 
-
-           ksrvutil -f /var/imap/srvtab add
-
-        Here is the information "ksrvutil" requests. Respond by filling in
-        values or by pressing RETURN. In this example, the host name is
-        "foobar" and the realm is "ANDREW.CMU.EDU". 
-
-           Name: imap
-           Instance: foobar
-           Realm: ANDREW.CMU.EDU
-           Version number: 
-           New principal: imap.foobar@ANDREW.CMU.EDU; version 0
-           Is this correct? (y,n) [y] 
-           Password: 
-           Verifying, please re-enter Password: 
-           Key successfully added.
-           Would you like to add another key? (y,n) [y] n
-
-     2. 
-        If you plan to install Kerberized POP, create the Kerberos identity
-        "pop.HOST@REALM" and add the key to the "srvtab" file. 
-     3. 
-
-        Make the "srvtab" file owned by the cyrus user: 
-
-           chown cyrus /var/imap/srvtab
-
-     4. Add the option srvtab option to /etc/imapd.conf: 
-
-           srvtab: /var/imap/srvtab
-
-     5. Test using imtest -m KERBEROS_V4. imtest will attempt to authorize
-        as the current Unix user regardless of the current ticket's held.
-        Override this with the -u option. 
-
-Troubleshooting Kerberos problems
-
-    Run the program "krbck" (found in the imap directory) as the cyrus user
-    on the IMAP server. This program will diagnose some common Kerberos v4
-    configuration errors. 
-
-Configuring Kerberos v5
-
-    Cyrus IMAP supports Kerberos v5 if the SASL library was compiled with
-    GSSAPI support. 
-
-    You'll have to create a Kerberos v5 identity for the server. Kerberos
-    v5 keys are generally stored in "/etc/krb5.keytab". 
-
-     1. Add the "imap/hostname" key using "kadmin". 
-     2. Let the cyrus user read "/etc/krb5.keytab": user: 
-
-           chown cyrus /etc/krb5.keytab
-
-     3. Test using imtest -m GSSAPI. imtest will attempt to authorize as
-        the current Unix user regardless of the current ticket's held.
-        Override this with the -u option. 
 
 SSL, TLS, and OpenSSL
 

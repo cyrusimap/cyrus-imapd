@@ -16,11 +16,10 @@ Cyrus IMAP: Anonymous CVS Access
 
     cvs -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs login 
     (enter "anonymous" as the password) 
-    cvs -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs co -d cyrus-imapd
-    src/cyrus
+    cvs -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs co -d cyrus-imapd cyrus
     (the first -d specifies the CVSROOT, in this case, our CVS server, and
     a path to the CVS repository; co says "check out", -d says "and stick
-    it in the directory cyrus", and "src/cyrus" specifies the "src/cyrus"
+    it in the directory cyrus-imapd", and "cyrus" specifies the "cyrus"
     collection). The password is "anonymous". 
 
     You will need autoconf (v2.12) to build CVS from the repository because
