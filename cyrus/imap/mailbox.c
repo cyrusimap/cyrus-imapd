@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.17 2004/08/09 18:51:19 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.18 2004/09/02 19:23:07 ken3 Exp $
  *
  */
 
@@ -127,7 +127,8 @@ static struct fnamebuf *mailbox_meta_get_fname(struct fnamepath *fpath,
     switch (metaflag) {
     case 0: /* initialize */
 	fpath->data.len = fpath->meta.len = 0;
-	return NULL;
+	filename = "";
+	break;
     case IMAP_ENUM_METAPARTITION_FILES_HEADER:
 	filename = FNAME_HEADER;
 	break;
