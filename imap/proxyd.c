@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.62 2001/01/13 03:19:39 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.63 2001/01/27 02:56:48 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -2185,7 +2185,6 @@ static char id_resp_command[MAXIDVALUELEN];
 static char id_resp_arguments[MAXIDVALUELEN] = "";
 #endif
 
-#if 0
 void cmd_id(char *tag)
 {
     static int did_id = 0;
@@ -2369,7 +2368,16 @@ void cmd_id(char *tag)
 		 "; TCP Wrappers");
 #endif
 	/* XXX  anything else? ACAP info perhaps? */
-	prot_printf(proxyd_out, " \"environment\" \"%s\")\r\n", env_buf);
+	prot_printf(proxyd_out, " \"environment\" \"%s\"", env_buf);
+
+	/* add info about the backend */
+	if (backend_current)
+	    prot_printf(proxyd_out, " \"backend-url\" \"imap://%s\"",
+			backend_current->hostname);
+	else
+	    prot_printf(proxyd_out, " \"backend-url\" NIL");
+
+	prot_printf(proxyd_out, ")\r\n");
     }
     else
 	prot_printf(proxyd_out, "* ID NIL\r\n");
@@ -2380,18 +2388,6 @@ void cmd_id(char *tag)
     failed_id = 0;
     did_id = 1;
 }
-#else
-void cmd_id(char *tag)
-{
-    eatline('a');
-    prot_printf(proxyd_out, "* ID NIL\r\n");
-
-    prot_printf(proxyd_out, "%s OK %s\r\n", tag,
-		error_message(IMAP_OK_COMPLETED));
-
-}
-
-#endif
 
 #ifdef ID_SAVE_CMDLINE
 /*
