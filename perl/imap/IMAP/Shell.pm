@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.25 2003/06/16 21:35:55 rjs3 Exp $
+# $Id: Shell.pm,v 1.26 2003/06/26 13:57:50 rjs3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -1562,8 +1562,9 @@ Administer (SETACL)
 =item C<sq> I<root> I<resource> I<value> [I<resource> I<value> ...]
 
 Set a quota on the specified root, which may or may not be an actual mailbox.
-The only I<resource> understood by B<Cyrus> is C<STORAGE>.  The I<value> may
-be the special string C<none> which will remove the quota.
+The only I<resource> understood by B<Cyrus> is C<STORAGE>.  The units
+are as defined in RFC 2087, groups of 1024 octets (i.e. Kilobytes).
+The I<value> may be the special string C<none> which will remove the quota.
 
 =item C<version>
 
