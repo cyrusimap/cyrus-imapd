@@ -1,30 +1,32 @@
 /* index.c -- Routines for dealing with the index file in the imapd
- $Id: index.c,v 1.80 1998/05/15 21:48:42 neplokh Exp $
- 
- # Copyright 1998 Carnegie Mellon University
- # 
- # No warranties, either expressed or implied, are made regarding the
- # operation, use, or results of the software.
- #
- # Permission to use, copy, modify and distribute this software and its
- # documentation is hereby granted for non-commercial purposes only
- # provided that this copyright notice appears in all copies and in
- # supporting documentation.
- #
- # Permission is also granted to Internet Service Providers and others
- # entities to use the software for internal purposes.
- #
- # The distribution, modification or sale of a product which uses or is
- # based on the software, in whole or in part, for commercial purposes or
- # benefits requires specific, additional permission from:
- #
- #  Office of Technology Transfer
- #  Carnegie Mellon University
- #  5000 Forbes Avenue
- #  Pittsburgh, PA  15213-3890
- #  (412) 268-4387, fax: (412) 268-7395
- #  tech-transfer@andrew.cmu.edu
  *
+ * Copyright 1998 Carnegie Mellon University
+ * 
+ * No warranties, either expressed or implied, are made regarding the
+ * operation, use, or results of the software.
+ *
+ * Permission to use, copy, modify and distribute this software and its
+ * documentation is hereby granted for non-commercial purposes only
+ * provided that this copyright notice appears in all copies and in
+ * supporting documentation.
+ *
+ * Permission is also granted to Internet Service Providers and others
+ * entities to use the software for internal purposes.
+ *
+ * The distribution, modification or sale of a product which uses or is
+ * based on the software, in whole or in part, for commercial purposes or
+ * benefits requires specific, additional permission from:
+ *
+ *  Office of Technology Transfer
+ *  Carnegie Mellon University
+ *  5000 Forbes Avenue
+ *  Pittsburgh, PA  15213-3890
+ *  (412) 268-4387, fax: (412) 268-7395
+ *  tech-transfer@andrew.cmu.edu
+ *
+ */
+/*
+ * $Id: index.c,v 1.81 1998/10/29 20:16:29 tjs Exp $
  */
 #include <stdio.h>
 #include <string.h>
@@ -836,12 +838,12 @@ int usinguid;
     unsigned msgno;
     struct mapfile msgfile;
 
-    msgfile.base = 0;
-    msgfile.size = 0;
-
     prot_printf(imapd_out, "* SEARCH");
 
     for (msgno = 1; msgno <= imapd_exists; msgno++) {
+	msgfile.base = 0;
+	msgfile.size = 0;
+
 	if (index_search_evaluate(mailbox, searchargs, msgno, &msgfile)) {
 	    prot_printf(imapd_out, " %u", usinguid ? UID(msgno) : msgno);
 	}
@@ -2358,6 +2360,8 @@ void *rock;
 
 /*
  * Evaluate a searchargs structure on a msgno
+ *
+ * Note: msgfile argument must be 0 if msg is not mapped in.
  */
 static int
 index_search_evaluate(mailbox, searchargs, msgno, msgfile)
@@ -2464,9 +2468,11 @@ struct mapfile *msgfile;
 
     if (searchargs->body || searchargs->text ||
 	(searchargs->flags & SEARCH_UNCACHEDHEADER)) {
-	if (mailbox_map_message(mailbox, 1, UID(msgno),
-				&msgfile->base, &msgfile->size)) {
-	    return 0;
+	if (! msgfile->size) { /* Map the message in if we haven't before */
+	    if (mailbox_map_message(mailbox, 1, UID(msgno),
+				    &msgfile->base, &msgfile->size)) {
+		return 0;
+	    }
 	}
 
 	h = searchargs->header_name;

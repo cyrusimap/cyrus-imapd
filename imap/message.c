@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.58 1998/07/31 22:22:38 tjs Exp $
+ * $Id: message.c,v 1.59 1998/10/29 20:16:31 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -151,7 +151,7 @@ static void message_parse_encoding P((char *hdr, char **hdrp));
 static void message_parse_string P((char *hdr, char **hdrp));
 static void message_parse_header P((char *hdr, struct ibuf *ibuf));
 static void message_parse_type P((char *hdr, struct body *body));
-static void message_parse_disposition P((char *hdr, struct body *body));
+/* static */ void message_parse_disposition P((char *hdr, struct body *body));
 static void message_parse_params P((char *hdr, struct param **paramp));
 static void message_fold_params P((struct param **paramp));
 static void message_parse_language P((char *hdr, struct param **paramp));
@@ -875,7 +875,7 @@ struct body *body;
 /*
  * Parse a Content-Disposition from a header.
  */
-static void
+/* static */ void
 message_parse_disposition(hdr, body)	    
 char *hdr;
 struct body *body;
