@@ -27,6 +27,7 @@
 #include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <com_err.h>
 
@@ -59,6 +60,7 @@ main(argc, argv)
 int argc;
 char **argv;
 {
+    int ruid;
     char lastgroup[4096];
     char buf[4096], *group, *nextgroup, *uid, *p;
     static struct uidlist uidlist;
@@ -73,6 +75,16 @@ char **argv;
     if (!newspartition) {
 	fatal("partition-news option not specified in configuration file",
 	      EX_CONFIG);
+    }
+
+    /* only allow setuid from news user */
+    ruid = getuid();
+    if (ruid != geteuid()) {
+	struct stat sbuf;
+	if (stat(newspartition, &sbuf) || sbuf.st_uid != ruid) {
+	    fprintf(stderr, "rmnews: renouncing set-uid\n");
+	    setuid(ruid);
+	}
     }
 
     lastgroup[0] = '\0';
