@@ -1,11 +1,15 @@
 ACL=acl_afs.o
 AUTH=auth_krb.o
-AUTHLIBS=/usr/local/lib/libkrb.a
+LOGIN=login_krb.o
+AUTHLIBS=/usr/local/lib/libkrb.a /usr/local/lib/libdes.a
 
-LOBJS= append.o mailbox.o message.o xmalloc.o \
+LOBJS= append.o mailbox.o mboxlist.o message.o \
 	parsel.o parsey.o parseadd.o parseutl.o \
-	imap_err.o assert.o \
-	$(ACL) $(AUTH)
+	config.o imap_err.o \
+	assert.o xmalloc.o \
+	$(ACL) $(AUTH) $(LOGIN)
+
+IMAPDOBJS= imapd.o index.o
 
 COMPILE_ET=compile_et
 
@@ -15,8 +19,13 @@ OPT=-g
 INCLUDES= -I../lib -I/usr/local/include -I/usr/local/include/afs
 LIBS=../lib/libcyrus.a /usr/local/lib/libcom_err.a $(AUTHLIBS)
 
+all: deliver imapd
+
 deliver: deliver.o libimap.a
 	$(CC) $(CFLAGS) -o deliver deliver.o libimap.a $(LIBS)
+
+imapd: $(IMAPDOBJS) libimap.a
+	$(CC) $(CFLAGS) -o imapd $(IMAPDOBJS) libimap.a $(LIBS)
 
 libimap.a: $(LOBJS)
 	ar cr libimap.a $(LOBJS)

@@ -18,8 +18,10 @@ extern int errno;
 main(argc, argv)
 {
     int opt;
-    char *dir = "/usr/user/cyrus/test";
+    char *name = "test";
     int touser = 0;
+
+    config_init("deliver");
 
     while ((opt = getopt(argc, argv, "df:r:")) != EOF) {
 	switch(opt) {
@@ -36,9 +38,9 @@ main(argc, argv)
 	    usage();
 	}
     }
-    /* XXX handle changing "dir" */
+    /* XXX handle changing "name" */
     /* XXX handle multiple users & multiple bboards -- copy to temp file */
-    deliver(dir);
+    deliver(name);
 }
 
 usage()
@@ -47,13 +49,13 @@ usage()
     exit(EX_USAGE);
 }
 
-deliver(path)
-char *path;
+deliver(name)
+char *name;
 {
     int r;
     struct mailbox mailbox;
     
-    r = append_setup(&mailbox, path, MAILBOX_FORMAT_NORMAL, ACL_POST, 0);
+    r = append_setup(&mailbox, name, MAILBOX_FORMAT_NORMAL, ACL_POST, 0);
 
     if (!r) {
 	r = append_fromstream(&mailbox, stdin);

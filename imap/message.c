@@ -143,12 +143,13 @@ struct index_record *message_index;
     message_parse_body(infile, mailbox->format, &body,
 		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
     
-    message_index->content_offset = body.content_offset;
     message_index->size = body.header_size + body.content_size;
+    message_index->header_size = body.header_size;
+    message_index->content_offset = body.content_offset;
 
     message_index->cache_offset = ftell(mailbox->cache);
-    message_write_cache(mailbox->cache, &body);
 
+    message_write_cache(mailbox->cache, &body);
     message_free_body(&body);
 
     if (ferror(mailbox->cache)) {
@@ -594,7 +595,7 @@ struct param **paramp;
     char *p;
 
     for (;;) {
-	/* Skip over leading whitespace
+	/* Skip over leading whitespace */
 	message_parse_rfc822space(&hdr);
 	if (!hdr) return;
 
@@ -907,9 +908,6 @@ struct body *body;
 {
     struct ibuf section, envelope, bodystructure, oldbody;
 
-    message_ibuf_init(&section);
-    message_write_section(&section, body);
-
     message_ibuf_init(&envelope);
     message_write_envelope(&envelope, body);
 
@@ -919,15 +917,18 @@ struct body *body;
     message_ibuf_init(&oldbody);
     message_write_body(&oldbody, body, 0);
 
-    message_ibuf_write(outfile, &section);
+    message_ibuf_init(&section);
+    message_write_section(&section, body);
+
     message_ibuf_write(outfile, &envelope);
     message_ibuf_write(outfile, &bodystructure);
     message_ibuf_write(outfile, &oldbody);
+    message_ibuf_write(outfile, &section);
 
-    message_ibuf_free(&section);
     message_ibuf_free(&envelope);
     message_ibuf_free(&bodystructure);
     message_ibuf_free(&oldbody);
+    message_ibuf_free(&section);
 }
 
 /* Append character 'c' to 'ibuf' */
@@ -1302,7 +1303,7 @@ struct body *body;
 	    message_write_section(ibuf, &body->subpart[part]);
 	}
     }
-    else if (strcmp(body.type, "MULTIPART") == 0) {
+    else if (strcmp(body->type, "MULTIPART") == 0) {
 	/*
 	 * 0-part multipart -- give hint so if we are top-level,
 	 * fetch body[1] will return 0-length string
@@ -1383,6 +1384,9 @@ struct ibuf *ibuf;
     s = ibuf->start - sizeof(bit32);
     *((bit32 *)s) = htonl(len);
     fwrite(s, 1, len+sizeof(bit32), outfile);
+    if (len & 3) {
+	fwrite("\0\0\0", 1, 4 - (len & 3), outfile);
+    }
 }
 
 /*

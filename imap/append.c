@@ -14,7 +14,7 @@
  * Open a mailbox for appending
  *
  * Arguments:
- *	path	   - pathname of mailbox directory
+ *	name	   - name of mailbox directory
  *	format     - mailbox must be of this format
  *	aclcheck   - user must have these rights on mailbox ACL
  *	quotacheck - mailbox must have this much quota left
@@ -23,16 +23,16 @@
  * On success, the struct pointed to by 'mailbox' is set up.
  *
  */
-int append_setup(mailbox, path, format, aclcheck, quotacheck)
+int append_setup(mailbox, name, format, aclcheck, quotacheck)
 struct mailbox *mailbox;
-char *path;
+char *name;
 int format;
 long aclcheck;
 long quotacheck;
 {
     int r;
 
-    r = mailbox_open_header(path, mailbox);
+    r = mailbox_open_header(name, mailbox);
     if (r) return r;
 
     if ((mailbox->my_acl & aclcheck) != aclcheck) {
