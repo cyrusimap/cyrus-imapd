@@ -29,9 +29,6 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/param.h>
-#if 0
-#include <sys/stat.h>
-#endif
 #include <syslog.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -159,7 +156,7 @@ cmdloop()
     char *p, *arg;
     int msg;
 
-    for (;fgets(inputbuf, sizeof(inputbuf), stdin);fflush(stdout)) {
+    while (fflush(stdout), fgets(inputbuf, sizeof(inputbuf), stdin)) {
 	p = inputbuf + strlen(inputbuf);
 	if (p > inputbuf && p[-1] == '\n') *--p = '\0';
 	if (p > inputbuf && p[-1] == '\r') *--p = '\0';
@@ -180,7 +177,26 @@ cmdloop()
 	lcase(inputbuf);
 
 	if (!strcmp(inputbuf, "quit")) {
-	    if (!arg) break;
+	    if (!arg) {
+		if (popd_mailbox) {
+		    if (!mailbox_lock_index(popd_mailbox)) {
+			popd_mailbox->pop3_last_uid = popd_highest ? 
+			  popd_msg[popd_highest].uid : 0;
+			mailbox_write_index_header(popd_mailbox);
+			mailbox_unlock_index(popd_mailbox);
+		    }
+
+		    for (msg = 1; msg <= popd_exists; msg++) {
+			if (popd_msg[msg].deleted) break;
+		    }
+
+		    if (msg <= popd_exists) {
+			(void) mailbox_expunge(popd_mailbox, 1, expungedeleted, 0);
+		    }
+		}
+		printf("+OK\r\n");
+		shutdown(0);
+	    }
 	    else fprintf(stdout, "-ERR Unexpected extra argument\r\n");
 	}
 	if (!popd_mailbox) {
@@ -339,17 +355,7 @@ cmdloop()
 	    fprintf(stdout, "-ERR Unrecognized command\r\n");
 	}
     }		
-		    
-    if (popd_mailbox) {
-	for (msg = 1; msg <= popd_exists; msg++) {
-	    if (popd_msg[msg].deleted) break;
-	}
 
-	if (msg <= popd_exists) {
-	    (void) mailbox_expunge(popd_mailbox, 1, expungedeleted, 0);
-	}
-    }
-    printf("+OK\r\n");
     shutdown(0);
 }
 
@@ -410,8 +416,9 @@ char *pass;
 	    if (r = mailbox_read_index_record(&mboxstruct, msg, &record))
 	      break;
 	    popd_msg[msg].uid = record.uid;
-	    popd_msg[msg].size = record.size + SLEN;
+	    popd_msg[msg].size = record.size /* XXX + SLEN */;
 	    popd_msg[msg].deleted = 0;
+	    if (record.uid <= mboxstruct.pop3_last_uid) popd_highest = msg;
 	}
     }
     if (r) {
