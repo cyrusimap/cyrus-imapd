@@ -87,6 +87,9 @@ IMAP mailbox names.
 If nonzero, normal users may create their own IMAP accounts by
 creating the mailbox INBOX.  The user's quota is set to the value if
 it is positive, otherwise the user has unlimited quota.
+.IP "\fBlogtimestamps:\fR no" 5
+Include notations in the protocol telemetry logs indicating the number of
+seconds since the last command or response.
 .IP "\fBsrvtab:\fR /etc/srvtab" 5
 The pathname of \fIsrvtab\fR file containing the server's private 
 key.  This option is only used when the server is compiled with
