@@ -40,7 +40,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: sieveshell.pl,v 1.21 2003/10/22 18:50:28 rjs3 Exp $
+# $Id: sieveshell.pl,v 1.22 2004/01/06 21:43:27 rjs3 Exp $
 #
 
 use Cyrus::SIEVE::managesieve;
@@ -70,7 +70,6 @@ my $ret;
 GetOptions("a|authname:s" => \$authname,
     "u|username:s" => \$username,
     "r|realm:s" => \$realm,
-    "e|exec:s" => \$ex,
     "help|?" => \$help,
     man => \$man) or pod2usage(2);
 pod2usage(1) if $help;
@@ -158,11 +157,6 @@ sub show_help {
   print $activatehelp;
   print $deactivatehelp;
   print "quit             - quit\n";
-}
-#no longer used, replaced by readline module
-sub getline {
-    print "> " if ($interactive);
-    return <$filehandle>;
 }
 
 # main code
@@ -290,7 +284,7 @@ sieveshell - remotely manipulate sieve scripts
 =head1 SYNOPSIS
 
 sieveshell [B<--user>=I<user>] [B<--authname>=I<authname>] 
-[B<--realm>=I<realm>] [B<--exec>=I<script>] I<server>[B<:>I<port>]
+[B<--realm>=I<realm>] I<server>[B<:>I<port>]
 
 sieveshell B<--help>
 
@@ -333,11 +327,6 @@ The user to use for authentication (defaults to current user).
 =item B<-r> I<realm>, B<--realm>=I<realm> 
 
 The realm to attempt authentication in.
-
-=item B<-e> I<script>, B<--exec>=I<script> 
-
-Instead of working interactively, run commands from I<script>, and
-exit when done.
 
 =back
 
