@@ -1,0 +1,631 @@
+           Installing and Configuring the Cyrus IMAP Server
+
+    The Internet Message Access Protocol (IMAP) is an Internet
+    standards-track protocol for accessing messages (mail, news, etc). The
+    IMAP server stores and provides access to messages. 
+
+    A list of answers to common installation problems is maintained in
+    http://andrew2.andrew.cmu.edu/cyrus/imapd/install-FAQ. 
+
+    Feedback on the software or on the document may be sent to
+    "cyrus-bugs@andrew.cmu.edu". The info-cyrus@andrew.cmu.edu mailing list
+    exists for the discussion of this server and other Cyrus software. Send
+    mail to info-cyrus-request@andrew.cmu.edu to subscribe. 
+
+    IMPORTANT: Upgrading from the Cyrus IMAP server version 1.4 or earlier
+    requires running "reconstruct -r" after installing this version of the
+    software. Upgrading from the Cyrus IMAP server version 1.3 or earlier
+    requires running "reconstruct -m" after installing this version of the
+    software. See the file doc/changes in the distribution for more
+    information. 
+
+Prerequisites and other notes
+
+    The following programs and/or packages are required: 
+
+      * makedepend. A version is included in the makedepend subdirectory of
+        the distribution. If all else fails, make a shell script that does
+        nothing, call it "makedepend", and make sure you always give the
+        command "make clean" before "make all". 
+      * Tcl, version 7.5. To obtain Tcl, see the comp.lang.tcl FAQ 
+      * If compiling with Kerberos support, the installed Kerberos must
+        include the DES library. Some vendor distributions of Kerberos,
+        including the one with Solaris, do not have this support and cannot
+        be used. Sites in the USA and Canada may obtain Kerberos by
+        following the instructions in
+        ftp://athena-dist.mit.edu/pub/kerberos/README.KRB4. The author is
+        unable to assist other sites in obtaining Kerberos. 
+      * It is recommended that sites install Sendmail version 8.7.1 or
+        later. Sendmail distributions may be obtained from
+        ftp://ftp.cs.berkely.edu/ucb/sendmail 
+      * If you want to export netnews newsgroups using IMAP, the IMAP
+        server must receive newsgroups with the INN news server. 
+
+Compiling the IMAP Server
+
+    Once you have unpacked the files (see the README file for more
+    information), "cd" to the "imapd-1.5" directory (This document assumes
+    that the version number is 1.5.). The configuration files and various
+    subdirectories are stored there. In the directory that the configure
+    file is in, type "./configure" to configure the software. 
+
+    The "configure" shell script attempts to guess correct values for
+    various system-dependent variables used during compilation. It uses
+    those values to create a "Makefile" in each directory of the package.
+    Finally, it creates a shell script "config.status" that you can run in
+    the future to recreate the current configuration, a file "config.cache"
+    that saves the results of its tests to speed up reconfiguring, and a
+    file "config.log" containing compiler output (useful mainly for
+    debugging "configure"). 
+
+    Running "configure" takes awhile. While running, it prints some
+    messages telling which features it is checking for. 
+
+    You can compile the package in a different directory from the one
+    containing the source code. Doing so allows you to compile it on more
+    than one kind of computer at the same time. To do this, you must use a
+    version of "make" that supports the "VPATH" variable, such as GNU
+    "make". "cd" to the directory where you want the object files and
+    executables to go and run the "configure" script. "configure"
+    automatically checks for the source code in the directory that
+    "configure" is in and in "..". 
+
+    By default, "make install" will install files (other than
+    server-specific programs) in "/usr/local/bin", "/usr/local/man", etc.
+    You can specify an installation prefix other than "/usr/local" by
+    giving "configure" the option "--prefix=PATH". 
+
+    You can specify separate installation prefixes for
+    architecture-specific files and architecture-independent files. If you
+    give "configure" the option "--exec-prefix=PATH", the package will use
+    PATH as the prefix for installing programs and libraries. Documentation
+    and other data files will still use the regular prefix. 
+
+    By default, "make install" will install the server-specific programs in
+    "/usr/cyrus/bin". You can specify a server-specific installation prefix
+    other than "/usr/cyrus" by giving "configure" the option
+    "--with-cyrus-prefix=PATH". 
+
+    Here are a list of switches that can be used with "configure". 
+
+    --cache-file=FILE 
+            Save the results of the tests in FILE instead of
+            "config.cache". Set FILE to "/dev/null" to disable caching, for
+            debugging "configure". 
+
+    --help  Print a summary of the options to "configure", and exit. 
+
+    --quiet 
+    --silent 
+    -q      Do not print messages saying which checks are being made. 
+
+    --srcdir=DIR 
+            Look for the package's source code in directory DIR. Usually
+            "configure" can determine that directory automatically. 
+
+    --version 
+            Print the version of Autoconf used to generate the "configure"
+            script, and exit. 
+
+    --with-cyrus-user=USER 
+            Specifies the userid used for installing setuid programs. By
+            default, configure uses "cyrus". 
+
+    --with-cyrus-group=USER 
+            Specifies the group used for installing setuid programs. By
+            default, configure uses "mail". 
+
+    --with-statedir=PATH 
+            Specifies the directory used for the pwcheck and/or ptclient
+            state directories. By default, configure uses "/var". 
+
+    --with-login=METHOD 
+            Specifies the login authentication module to use. Currently
+            implemented authentication modules are: 
+
+            unix    Unix /etc/passwd file 
+            unix_pwcheck 
+                    Unix shadow passwd file, accessed through pwcheck
+                    daemon 
+            krb     Kerberos version 4 
+            krb_pwcheck 
+                    Either Kerberos version 4 or the pwcheck daemon 
+
+            By default, configure uses "krb" if the file /etc/krb.conf
+            exists, "unix" otherwise. 
+
+    --with-pwcheck=METHOD 
+            Specifies the password checking module to use inside the
+            pwcheck daemon. This option is only used if the login module
+            has a name ending in "_pwcheck". Currently implemented
+            authentication modules are: 
+
+            getspnam 
+                    SVR4 style getspnam() shadow passwords 
+            getpwnam 
+                    NetBSD style shadow passwords 
+
+            By default, configure uses "getspnam" if the function getspnam
+            exists, "getpwnam" otherwise. 
+
+    --with-auth=METHOD 
+            Specifies the authorization module to use. Currently
+            implemented authorization modules are: 
+
+            unix    Unix /etc/passwd and /etc/group file 
+            krb     Kerberos principals 
+            krb_pts Kerberos principals with AFS PTserver groups 
+
+            The selected authorization module must be compatible with the
+            login module. By default, uses the authorization module with
+            the same name as the selected login module. 
+
+    --with-notify=METHOD 
+    --without-notify 
+            Specifies the new mail notification method to use. Currently
+            implemented notification methods are: 
+
+            zephyr  New mail notification through Zephyr 
+            no      No new mail notification 
+
+            By default, uses "zephyr" if the Zephyr libraries are
+            available, otherwise "no".
+
+    --with-inn=PATH 
+            Specifies the location of INN's NEWSLIB directory. By default,
+            looks for INN in a few common places. It is only necessary for
+            "configure" to find INN if you are going to export newsgroups
+            using IMAP. 
+
+    --with-krb=PATH 
+    --without-krb 
+            Specifies the path to the Kerberos v4 libraries and header
+            files (optional). By default, looks in "/usr/local" and then in
+            the compiler's default link path. 
+
+            IMPORTANT: The Kerberos v4 support requires the DES library,
+            even if the "--disable-privacy" configure option is given. Some
+            vendor distributions of Kerberos, including the one with
+            Solaris, do not have this support and cannot be used. 
+
+            Either "--without-krb" or "--with-krb=no" prevents Kerberos v4
+            support from being compiled in. 
+
+    --with-tcl=PATH 
+    --without-tcl 
+            Specifies the path to the Tcl (version 7.5) library and header
+            file (optional). By default, looks in "/usr/local" and then in
+            the compiler's default link path. The Tcl library is necessary
+            to compile "cyradm", the administrative client. If compiling
+            without Tcl, it is necessary to give configure the
+            "--disable-cyradm" switch. 
+
+    --with-zephyr=PATH 
+    --without-zephyr 
+            Specifies the path to the Zephyr library and header file
+            (optional). By default, looks in "/usr/local" and then in the
+            compiler's default link path. The Zephyr library is optional,
+            if found it may be used to notify users of new mail.
+
+    --with-lock=METHOD 
+            Specifies the locking method to use. Currently implemented
+            locking methods are: 
+
+            flock   flock() locking 
+            fcntl   fcntl() locking 
+
+            By default, uses "flock" if the "flock()" function exists,
+            "fcntl" otherwise. 
+
+    --disable-cyradm 
+            Do not compile the cyradm administrative client.
+
+    --disable-privacy 
+            Disables all network privacy support. Use this if you do not
+            have the appropriate routines in the authentication libraries
+            (for example, krb_rd_priv() and krb_mk_priv() for Kerberos v4)
+            or are compiling binaries subject to export control
+            restrictions. 
+
+    --enable-amssync 
+            Include AMS (Andrew Message System) to IMAP bboard
+            synchronization support. Requires the AMS libraries. 
+
+    --enable-cmulocal 
+            Include Carnegie Mellon's internal support features. 
+
+    "configure" ignores any other arguments that you give it. 
+
+    Some systems require unusual options for compilation or linking that
+    the "configure" script does not know about. You can give "configure"
+    initial values for variables by setting them in the environment. Using
+    a Bourne-compatible shell, you can do that on the command line like
+    this: 
+
+       CC=c89 CFLAGS=-O2 LIBS=-lposix ./configure
+
+    Or on systems that have the "env" program, you can do it like this: 
+
+       env CPPFLAGS=-I/usr/local/include LDFLAGS=-s ./configure
+
+    The "make" variables that you might want to override with environment
+    variables when running "configure" are: 
+
+    CC      C compiler program.
+            Default is "cc", or "gcc" if "gcc" is in your PATH.
+            (For "CC", any value given in the environment overrides the
+            value that "configure" would choose.) 
+    CFLAGS  Debugging and optimization options for the C compiler.
+    CPPFLAGS 
+            Header file search directory ("-IDIR") and any other
+            miscellaneous options for the C preprocessor and compiler. If
+            it is not set in the environment when "configure" runs, the
+            default value is empty.
+    LDFLAGS Stripping ("-s") and any other miscellaneous options for the
+            linker. If it is not set in the environment when "configure"
+            runs, the default value is empty. 
+    DEFS    Configuration options, in the form "-Dfoo -Dbar ..."
+    LIBS    Libraries to link with, in the form "-lfoo -lbar ..."
+            (For "DEFS" and "LIBS", any value given in the environment is
+            added to the value that "configure" chooses.) 
+
+    If you need to do unusual things to compile the package, we encourage
+    you to figure out how "configure" could check whether to do them, and
+    mail diffs or instructions to "cyrus-bugs@andrew.cmu.edu" so we can
+    include them in the next release. 
+
+    The file "configure.in" is used as a template to create "configure" by
+    a program called "autoconf". You will only need it if you want to
+    regenerate "configure" using a newer version of "autoconf". 
+
+    Once you have successfully run "configure", execute the following
+    commands: 
+
+       make depend
+       make all CFLAGS=-O
+
+    If you want, you can override the "make" variables CFLAGS and LDFLAGS
+    by entering the following: 
+
+       make all CFLAGS=-O2 LDFLAGS=-s
+
+Configuring the IMAP Server
+
+    This section describes the shell scripts to run and the configuration
+    files to modify once "configure" and "make" have run. 
+
+     1. Create a user and group for the Cyrus subsystem. The examples in
+        this document assume a user of "cyrus" and a group of "mail",
+        though any user and group name can be used. If a user other than
+        "cyrus" is to be used, it must have been previously specified in
+        the "--with-cyrus-user=" option to "configure". If a group other
+        than "mail" is to be used, it must have been previously specified
+        in the "--with-cyrus-group=" option to "configure". 
+
+     2. After you've logged in as "root", install the cyrus software. 
+
+           make install
+
+     3. The Cyrus IMAP server uses the 4.3BSD syslog that separates
+        messages into both levels and categories. Invoke "man syslog" to
+        see if "openlog()" takes three arguments. If it does not, replace
+        the system "syslogd" and "syslog.conf" with the files provided in
+        the imapd-1.5/syslog directory. 
+
+           mv syslogd /etc/syslogd
+           mv syslog.conf /etc/syslog.conf
+
+        If you do not copy the "syslog.conf" file in "imapd-1.5/syslog" to
+        the "/etc" directory, be sure to add support for "local6.debug".
+        The file should include a line like: 
+
+           local6.debug  /var/adm/imapd.log
+
+        Create the imapd.log file: 
+
+           touch /var/adm/imapd.log
+
+     4. Create the file "/etc/imapd.conf". Here is a sample "imapd.conf"
+        with a minimal number of values defined: 
+
+           configdirectory: /var/imap
+           partition-default: /var/spool/imap
+           admins: curtj abell
+           srvtab: /var/imap/srvtab
+
+        For a description of all the fields in this file, see the
+        imapd.conf(5) man page. 
+
+     5. Create the configuration directory specified by the
+        "configdirectory" option in "imapd.conf." The configuration
+        directory is similar in concept to the "/usr/lib/news" directory.
+        It stores information about the IMAP server as a whole. 
+
+        This document uses the configuration directory "/var/imap" in its
+        examples. This directory should be owned by the cyrus user and
+        group and should not permit access to other users. 
+
+           cd /var
+           mkdir imap
+           chown cyrus imap
+           chgrp mail imap
+           chmod 750 imap
+
+     6. In the configuration directory, create the empty file "mailboxes"
+        and a set of empty directories: 
+
+           cd imap
+           true >> mailboxes
+           mkdir user quota proc log
+           chown cyrus *
+           chgrp mail *
+
+     7. Create the default partition directory specified in the
+        "/etc/imapd.conf" file. 
+
+        This document uses a default partition directory of
+        "/var/spool/imap" in the following example: 
+
+           cd /var/spool
+           mkdir imap
+           chown cyrus imap
+           chgrp mail imap
+           chmod 750 imap
+
+        The partition directory is similar in concept to /var/spool/news.
+        It is where the mailboxes are stored. Unlike most netnews systems,
+        Cyrus allows you to have more than one partition. Do not use the
+        string "news" as a partition name, as it is reserved for netnews. 
+
+     8. LINUX SYSTEMS ONLY: Set the configuration, user, quota, and
+        partition directories to update synchronously. Failure to do this
+        may lead to data corruption and/or loss of mail after a system
+        crash. 
+
+           cd /var/imap
+           /sbin/chattr +S . user quota
+           /sbin/chattr +S /var/spool/imap
+
+        Also set the queue directory of the mail daemon to update
+        synchronously. The following example is for sendmail: 
+
+           /sbin/chattr +S /var/spool/mqueue
+
+     9. If the Cyrus IMAP server was configured to use the pwcheck daemon,
+        install pwcheck. The pwcheck daemon verifies passwords against the
+        shadow password database. Create the directory "/var/pwcheck" and
+        make it readable by only the cyrus user: 
+
+           mkdir /var/pwcheck
+           chown cyrus /var/pwcheck
+           chmod 700 /var/pwcheck
+
+        Upon system startup, arrange for the daemon /usr/cyrus/bin/pwcheck
+        to be run as root in the background. 
+
+    10. If the Cyrus IMAP server was compiled with Kerberos v4
+        authentication, create a Kerberos v4 identity for the server and
+        add the server's key to the "srvtab" file. The file must be
+        readable by the cyrus user. The server's Kerberos identity is
+        "imap.HOST@REALM", where "HOST" is the first component of the
+        machine's host name and "REALM" is the machine's Kerberos realm. 
+
+        Here is a sample session, creating a srvtab file for the host named
+        "foobar": 
+
+           ksrvutil -f /var/imap/srvtab add
+
+        Here is the information "ksrvutil" requests. Respond by filling in
+        values or by pressing RETURN. In this example, the host name is
+        "foobar" and the realm is "ANDREW.CMU.EDU". 
+
+           Name: imap
+           Instance: foobar
+           Realm: ANDREW.CMU.EDU
+           Version number: 
+           New principal: imap.foobar@ANDREW.CMU.EDU; version 0
+           Is this correct? (y,n) [y] 
+           Password: 
+           Verifying, please re-enter Password: 
+           Key successfully added.
+           Would you like to add another key? (y,n) [y] n
+
+        If you plan to install Kerberized POP, create the Kerberos identity
+        "pop.HOST@REALM" and add the key to the "srvtab" file. 
+
+        Make the "srvtab" file owned by the cyrus user: 
+
+           chown cyrus /var/imap/srvtab
+
+    11. Add the following lines to the "/etc/services" file if they aren't
+        already there. 
+
+           pop3      110/tcp
+           imap      143/tcp
+           imsp      406/tcp
+           kpop      1109/tcp
+
+    12. Add the following line to the "/etc/inetd.conf" file. 
+
+           imap  stream  tcp  nowait  cyrus  /usr/cyrus/bin/imapd  imapd
+
+        If you want to run the POP3 protocol, add the following line. 
+
+           pop3  stream  tcp  nowait  cyrus  /usr/cyrus/bin/pop3d  pop3d
+
+        If you want to run MIT's KPOP (Kerberized POP) protocol, add the
+        following line 
+
+           kpop  stream  tcp  nowait  cyrus  /usr/cyrus/bin/pop3d  pop3d -k
+
+        "cyrus" is the Cyrus user and "/usr/cyrus/bin/" is the path name to
+        the executable. 
+
+    13. Sendmail versions 8.7 and later include support for the Cyrus IMAP
+        server. If you are running a verson of Sendmail older than 8.7.1,
+        replace it with 8.7.1 or later. Sendmail distributions may be
+        obtained from ftp://ftp.cs.berkely.edu/ucb/sendmail 
+
+    14. Generate a sendmail configuration file which delivers local mail to
+        the IMAP server. See the files cf/README and cf/cf/cyrusproto.mc in
+        the Sendmail distribution for information on how to do this. 
+
+    15. Edit /etc/group and add user "daemon" to the "mail" group. This
+        will permit sendmail to run the "deliver" program to deliver mail
+        to the IMAP server. 
+
+    16. The Cyrus IMAP server support in Sendmail defaults to enabling
+        duplicate delivery suppression, by invoking the "deliver" program
+        with the "-e" switch. This prevents two messages with the same
+        Message-ID: (Resent-Message-ID: if it exits) from being delivered
+        to the same mailbox. Add a cron job to periodically prune the
+        database of deliveries by running "/usr/cyrus/bin/deliver -E 3"
+        daily as the cyrus user. 
+
+        If you want to export netnews newsgroups using IMAP do the
+        following: 
+
+         1. Create a directory for the "news" partition. This directory
+            should be different than the news spool directory. This
+            document uses a news partition directory of
+            "/var/spool/imap-news" in the following examples: 
+
+               cd /var/spool
+               mkdir imap-news
+               chown cyrus imap-news
+               chgrp mail imap-news
+               chmod 750 imap-news
+
+         2. Set the "partition-news" and "newsspool" options to appropriate
+            values: 
+
+               partition-news: /var/spool/imap-news
+               newsspool: /var/spool/news
+
+         3. The cyrus user must be able to write to the out.going
+            ("/var/spool/news/out.going") directory. This can be done by
+            putting the cyrus user into the news group and making the
+            oug.going directory group writable. 
+
+         4. Add the following line to the newsfeeds file 
+
+               collectnews!:*:Tf,WO:collectnews
+
+         5. Add a cron job to run "/usr/cyrus/bin/feedcyrus" every ten
+            minutes as the cyrus user. Also add a cron job to run
+            "/usr/cyrus/bin/syncnews /var/news/active >/dev/null 2>&1"
+            nightly. (Using the appropriate path to the active file.) 
+
+Testing the IMAP Server
+
+    To test the IMAP server, reboot and perform the following steps (all of
+    these samples use "foobar" as the IMAP server name): 
+
+     1. From your normal account, telnet to the IMAP port on the server
+        you're setting up: 
+
+           telnet foobar imap
+
+        If your server is running, you'll get the following message: 
+
+           Trying 128.2.44.20...
+           Connected to foobar.andrew.cmu.edu.
+           Escape character is '^]'.
+           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5 server ready
+
+        Any message other than one starting with "* OK" means there is a
+        problem. To terminate the connection, type ". logout". 
+
+     2. Use "imtest" to test logging in with plaintext passwords. 
+
+           /usr/local/bin/imtest -p foobar imap
+
+        If your server is running, you'll get the following message: 
+
+           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5 server ready
+           Password: <enter your password, imtest does not echo it>
+           . LOGIN smith X
+           . OK User logged in
+
+        Any message other than one starting with a ". OK" means there is a
+        problem. If the test fails, a more specific error message is
+        written through syslog to the server log. To terminate the
+        connection, type ". logout". 
+
+     3. If the server is compiled with Kerberos v4 authentication, test
+        Kerberos authentication by using the imtest command. Change to the
+        "cyrus-v1.5" directory and type the following: 
+
+           /usr/local/bin/imtest -k foobar imap
+           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5 server ready
+           . AUTHENTICATE KERBEROS_V4
+           + Ln8h6Q==
+           BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
+           BZSGgOy9ehHRj8NQjLjxDpib0D9uT0fo7QaXhLM6zCp9dQ1pX4FfNO2V39vBp
+           Q19QIK4S1410prvM2c45qeizecI7zAvA=
+           2cRhIC+aH70WHqYaW18YnQ==
+           . OK User logged in (no protection)
+           __No integrity protection__
+
+        Any message other than one starting with a ". OK" means there is a
+        problem. If the test fails, a more specific error message is
+        written through syslog to the server log. To terminate the
+        connection, type ". logout". 
+
+Administering Mailboxes
+
+    The "cyradm" command (see the cyradm(8) man page for complete
+    documentation) manages the creation of, deletion of, ACLs on, and
+    quotas on mailboxes. To get an overview of the command, type "cyradm
+    <host>". Once "cyradm" has started, the user prompt is replaced with
+    the name of the host followed by a ">". Type "help" at the new prompt.
+    The following information is displayed: 
+
+       createmailbox, cm        create a mailbox
+       deleteaclmailbox, dam    delete an ACL on a mailbox
+       deletemailbox, dm        delete a mailbox
+       help                     get help on commands
+       listaclmailbox, lam      list the ACL on a mailbox
+       listmailbox, lm          list mailboxes
+       listquota, lq            list quota on root
+       listquotaroot, lqr, lqm  list quota roots on mailbox
+       quit                     exit program
+       renamemailbox, renm      rename a mailbox
+       setaclmailbox, sam       set an ACL on a mailbox
+       setquota, sq             set quota limits
+
+    Note:If you run "cyradm" on a system where Kerberos v4 is not running,
+    you are prompted for your user name an password before you can issue
+    any "cyradm" commands. 
+
+    The mailbox naming convention requires that the primary mailbox (inbox)
+    for anyone must be named "user.<userid>". To create a mailbox, type: 
+
+       createmailbox user.<userid>
+
+    For example, to create a mailbox for the userid "smith", type: 
+
+       createmailbox user.smith
+
+    To limit "smith" to 10,000 kilobytes of mail, type: 
+
+       setquota user.smith 10000
+
+    Once the inbox is created, users can create their own additional
+    mailboxes from a mail program. If Smith created a work mailbox and a
+    play mailbox, the full names of the mailboxes would be: 
+
+       user.smith.work
+       user.smith.play
+
+    Access rights are discussed in detail in the cyradm(1) man pages. Note
+    that the administrator must grant herself delete access explicitly
+    before she can delete a mailbox: 
+
+       setaclmailbox <mail_box> <admin_userid> d
+       deletemailbox <mail_box>
+
+    Once you have created mailboxes, your IMAP server installation is done.
+    You must then configure a mail interface, such as Pine, to work with
+    the IMAP server. 
+
