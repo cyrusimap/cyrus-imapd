@@ -1,6 +1,6 @@
 /* mkchartable.c -- Generate character set mapping table
  *
- * $Id: mkchartable.c,v 1.21 2002/10/30 14:09:13 rjs3 Exp $
+ * $Id: mkchartable.c,v 1.22 2002/10/30 17:25:23 rjs3 Exp $
  *
  * Copyright (c) 1996-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -182,17 +182,19 @@ main(int argc, char **argv)
     printf("    { \"iso-8859-7\", chartables_iso_8859_7 },\n");
     printf("    { \"iso-8859-8\", chartables_iso_8859_8 },\n");
     printf("    { \"iso-8859-9\", chartables_iso_8859_9 },\n");
-    printf("    { \"iso-8859-15\", chartables_iso_8859_15 },\n");
     printf("    { \"koi8-r\", chartables_koi8_r },\n");
     printf("    { \"iso-2022-jp\", chartables_iso_2022_jp },\n");
     printf("    { \"iso-2022-kr\", chartables_iso_2022_kr },\n");
     printf("    { \"gb2312\", chartables_gb2312 },\n");
     printf("    { \"big5\", chartables_big5 },\n");
-    printf("    { \"windows-1252\", chartables_windows_1252 },\n");
     printf("    /* Compatiblilty names */\n");
     printf("    { \"unicode-1-1-utf-7\", chartables_utf_7 },\n");
     printf("    { \"unicode-2-0-utf-7\", chartables_utf_7 },\n");
     printf("    { \"x-unicode-2-0-utf-7\", chartables_utf_7 },\n");
+    printf("    /* New character sets should only be added to end so that\n");
+    printf("     * cache files stay with valid information */\n");
+    printf("    { \"iso-8859-15\", chartables_iso_8859_15 },\n");
+    printf("    { \"windows-1252\", chartables_windows_1252 },\n");
     printf("};\n");
     printf("const int chartables_num_charsets = (sizeof(chartables_charset_table)/sizeof(*chartables_charset_table));\n");
 
