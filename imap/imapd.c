@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.376 2002/04/01 23:10:59 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.377 2002/04/02 02:09:39 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2217,14 +2217,6 @@ void cmd_capability(char *tag)
     }
     prot_printf(imapd_out, "* CAPABILITY " CAPABILITY_STRING);
 
-#ifdef ENABLE_LISTEXT
-    prot_printf(imapd_out, " LISTEXT LIST-SUBSCRIBED");
-#endif /* ENABLE_LISTEXT */
-
-#ifdef ENABLE_ANNOTATEMORE
-    prot_printf(imapd_out, " ANNOTATEMORE");
-#endif
-
     if (idle_enabled()) {
 	prot_printf(imapd_out, " IDLE");
     }
@@ -2249,6 +2241,14 @@ void cmd_capability(char *tag)
     } else {
 	/* else don't show anything */
     }
+
+#ifdef ENABLE_LISTEXT
+    prot_printf(imapd_out, " LISTEXT LIST-SUBSCRIBED");
+#endif /* ENABLE_LISTEXT */
+
+#ifdef ENABLE_ANNOTATEMORE
+    prot_printf(imapd_out, " ANNOTATEMORE");
+#endif
 
 #ifdef ENABLE_X_NETSCAPE_HACK
     prot_printf(imapd_out, " X-NETSCAPE");
