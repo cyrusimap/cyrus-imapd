@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.6 2003/12/29 18:09:54 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.7 2003/12/29 20:22:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -72,7 +72,7 @@ const char *config_mupdate_server = NULL;/* NULL */
 const char *config_defdomain = NULL;     /* NULL */
 const char *config_ident = NULL;         /* the service name */
 int config_hashimapspool;	  /* f */
-int config_virtdomains;	          /* f */
+enum enum_value config_virtdomains;	          /* f */
 
 /* declared in each binary that uses libconfig */
 extern const int config_need_data;
@@ -451,7 +451,7 @@ void config_read(const char *alt_config)
     config_hashimapspool = config_getswitch(IMAPOPT_HASHIMAPSPOOL);
 
     /* are we supporting virtual domains?  */
-    config_virtdomains = config_getswitch(IMAPOPT_VIRTDOMAINS);
+    config_virtdomains = config_getenum(IMAPOPT_VIRTDOMAINS);
     config_defdomain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
 
     /* look up the hostname we should present to the user */
