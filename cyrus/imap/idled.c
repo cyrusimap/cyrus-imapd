@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.14 2003/02/13 20:15:24 rjs3 Exp $ */
+/* $Id: idled.c,v 1.15 2003/04/01 19:13:52 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -314,11 +314,11 @@ int main(int argc, char **argv)
     local.sun_family = AF_UNIX;
     idle_sock = config_getstring("idlesocket", NULL);
     if (idle_sock) {	
-	strcpy(local.sun_path, idle_sock);
+	strlcpy(local.sun_path, idle_sock, sizeof(local.sun_path));
     }
     else {
-	strcpy(local.sun_path, config_dir);
-	strcat(local.sun_path, FNAME_IDLE_SOCK);
+	strlcpy(local.sun_path, config_dir, sizeof(local.sun_path));
+	strlcat(local.sun_path, FNAME_IDLE_SOCK, sizeof(local.sun_path));
     }
     unlink(local.sun_path);
     len = sizeof(local.sun_family) + strlen(local.sun_path) + 1;
