@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* master.c,v 1.42 2001/07/16 18:23:11 leg Exp */
+/* $Id: master.c,v 1.44 2001/08/10 18:05:25 ken3 Exp $ */
 
 #include <config.h>
 
