@@ -59,7 +59,9 @@ libcyrus.a: $(OBJS)
 charset.c: chartables.h
 
 chartables.h : mkchartable 
-	mkchartable -m $(srcdir)/charset/unicode.map $(srcdir)/charset/*.t >chartables.h
+	rm -f chartables.h
+	mkchartable -m $(srcdir)/charset/unicode.map $(srcdir)/charset/*.t >x-chartables.h
+	mv x-chartables.h chartables.h
 
 mkchartable: mkchartable.o xmalloc.o assert.o
 	$(CC) $(LDFLAGS) -o mkchartable mkchartable.o xmalloc.o assert.o
