@@ -23,8 +23,8 @@
  */
 
 /* Marker to indicate characters that don't map to anything */
-#define EMPTY_CHAR '\201'
-#define EMPTY "\201"
+#define EMPTY 'X'
+#define EMPTY_STRING "X"
 
 #define ENCODING_NONE 0
 #define ENCODING_QP 1
