@@ -229,9 +229,8 @@ sub authenticate {
       $tty->print("\013\010");
       system "stty $ostty";
     }
-    my ($kw, $text) = $self->send(undef, undef, 'LOGIN %a {%d}\r\n%s',
-				  $opts{-user}, length($opts{-password}),
-				  $opts{-password});
+    my ($kw, $text) = $self->send(undef, undef, 'LOGIN %a %s',
+				  $opts{-user}, $opts{-password});
     $opts{-password} = "\0" x length($opts{-password});
     if ($kw eq 'OK') {
       $rc = 1;
