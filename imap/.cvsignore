@@ -1,4 +1,5 @@
 Makefile
+chk_cyrus
 ctl_cyrusdb
 ctl_deliver
 ctl_mboxlist
