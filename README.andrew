@@ -8,7 +8,7 @@
 #
 #
 
-smake init all
+smake init mf all
 
 echo run \"smake -d install\" as admin - suid binaries on AFS
 
