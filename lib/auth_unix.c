@@ -82,7 +82,7 @@ const char *identifier;
 {
     static char retbuf[81];
     struct group *grp;
-    const char *p;
+    char *p;
 
     if (strcasecmp(identifier, "anonymous") == 0) {
 	return "anonymous";
@@ -103,7 +103,7 @@ const char *identifier;
 	return retbuf;
     }
 
-    if (strlen(identifier) >= retbuf) return 0;
+    if (strlen(identifier) >= sizeof(retbuf)) return 0;
 
     p = retbuf;
     if (!isalpha(*identifier)) return 0;
@@ -149,7 +149,7 @@ const char *cacheid;
 	    if (!strcmp(*mem, identifier)) break;
 	}
 
-	if (*mem || (pw && pwd->pw_gid == grp->gr_gid)) {
+	if (*mem || (pwd && pwd->pw_gid == grp->gr_gid)) {
 	    newstate->ngroups++;
 	    newstate->group = (char **)xrealloc((char *)newstate->group,
 						newstate->ngroups * sizeof(char *));
