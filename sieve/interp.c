@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.12 2000/02/10 00:39:14 leg Exp $
+ * $Id: interp.c,v 1.13 2000/02/16 19:47:03 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -50,6 +50,7 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     i->getheader = NULL;
     i->getenvelope = NULL;
     i->vacation = NULL;
+    i->notify = NULL;
 
     i->curflags.flag = NULL; i->curflags.nflags = 0;
     i->markflags = NULL;

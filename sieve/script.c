@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.20 2000/02/14 20:05:41 tmartin Exp $
+ * $Id: script.c,v 1.21 2000/02/16 19:47:03 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -552,6 +552,9 @@ static void add_header(sieve_interp_t *i, char *header, void *message_context, c
     int addlen;
     /* get header value */
     i->getheader(message_context, header, &h);	
+
+    if (!h || !h[0])
+	return;
 
     addlen = strlen(header) + 2 + strlen(h[0]) + 1;
 
