@@ -1,6 +1,9 @@
 dnl Process this file with autoconf to produce a configure script.
 
-dnl $Id: configure.in,v 1.107 1998/06/05 04:55:57 tjs Exp $
+dnl
+dnl configure.in for the Cyrus imapd
+dnl $Id: configure.in,v 1.108 1998/06/05 17:52:22 tjs Exp $
+dnl
 
 AC_INIT(imap/imapd.c)
 
