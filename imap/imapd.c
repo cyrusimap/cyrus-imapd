@@ -24,7 +24,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  */
-/* $Id: imapd.c,v 1.149 1998/06/10 21:53:40 tjs Exp $ */
+/* $Id: imapd.c,v 1.150 1998/06/10 22:00:13 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -125,14 +125,11 @@ void cmd_getquotaroot P((char *tag, char *name));
 void cmd_setquota P((char *tag, char *quotaroot));
 void cmd_status P((char *tag, char *name));
 void cmd_getuids P((char *tag, char *startuid));
+void cmd_unselect P((char* tag));
+void cmd_namespace P((char* tag));
 
 #ifdef ENABLE_X_NETSCAPE_HACK
 void cmd_netscrape P((char* tag));
-#endif
-
-#ifdef ENABLE_EXPERIMENT
-void cmd_namespace P((char* tag));
-void cmd_unselect P((char* tag));
 #endif
 
 int getword P((struct buf *buf));
@@ -566,7 +563,9 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_getquotaroot(tag.s, arg1.s);
 	    }
-#ifdef ENABLE_EXPERIMENT
+#ifdef ENABLE_EXPERIMENT_OPTIMIZE_1
+	    /* This command is disabled because it was removed from the
+	       OPTIMIZE-1 extension, now known as UIDPLUS. */
 	    else if (!strcmp(cmd.s, "Getuids")) {
 		if (!imapd_mailbox) goto nomailbox;
 		if (c != ' ') goto missingargs;
@@ -575,7 +574,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_getuids(tag.s, arg1.s);
 	    }
-#endif /* ENABLE_EXPERIMENT */
+#endif /* ENABLE_EXPERIMENT_OPTIMIZE_1 */
 	    else goto badcmd;
 	    break;
 
@@ -658,20 +657,17 @@ cmdloop()
 	    }
 #ifdef ENABLE_X_NETSCAPE_HACK
 	    else if (!strcmp(cmd.s, "Netscape")) {
-		/* Cretins. */
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_netscrape(tag.s);
 	    }
 #endif
 	    else if (!imapd_userid) goto nologin;
-#ifdef ENABLE_EXPERIMENT
 	    else if (!strcmp(cmd.s, "Namespace")) {
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_namespace(tag.s);
 	    }
-#endif
 	    else goto badcmd;
 	    break;
 
@@ -1155,7 +1151,7 @@ char *tag;
 		" X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME");
     prot_printf(imapd_out, "%s", login_capabilities());
 #ifdef ENABLE_EXPERIMENT
-    prot_printf(imapd_out, " OPTIMIZE-1 UNSELECT");
+    prot_printf(imapd_out, " UIDPLUS UNSELECT");
 #endif
 #ifdef ENABLE_X_NETSCAPE_HACK
     prot_printf(imapd_out, " X-NETSCAPE");
@@ -2962,6 +2958,9 @@ char *name;
     eatline(c);
 }
 
+#ifdef ENABLE_EXPERIMENT_OPTIMIZE_1
+/* This extension has been superceded by UIDPLUS and therefore this code
+ * is not used. */
 /*
  * Perform a GETUIDS command
  */
@@ -2989,10 +2988,11 @@ char *startuid;
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 }
+#endif /* ENABLE_EXPERIMENT_OPTIMIZE_1 */
 
 #ifdef ENABLE_X_NETSCAPE_HACK
 /*
- * Netscape's crock hack with a crock  of my own
+ * Reply to Netscape's crock with a crock of my own
  */
 void
 cmd_netscrape(tag)
@@ -4441,4 +4441,3 @@ int maycreate;
 {
     return mstringdata("LSUB", name, matchlen, maycreate);
 }
-
