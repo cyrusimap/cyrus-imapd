@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.53 2003/04/01 19:16:33 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.54 2003/05/29 02:14:32 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -288,7 +288,7 @@ int service_main(int argc __attribute__((unused)),
     return 0;
 }
 
-/* called if 'service_init()' was called but not 'service_main()' */
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     exit(error);
