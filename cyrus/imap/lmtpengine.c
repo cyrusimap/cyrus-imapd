@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.97 2003/12/19 18:38:42 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.98 2004/01/02 20:34:10 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -652,9 +652,9 @@ static int savemsg(struct clientdata *cd,
     /* We are always atleast "with LMTPA" -- no unauth delivery */
     fprintf(f, "\r\n\tby %s (Cyrus %s) with LMTP%s%s",
 	    config_servername,
+	    CYRUS_VERSION,
 	    cd->starttls_done ? "S" : "",
-	    cd->authenticated == DIDAUTH ? "A" : "",
-	    CYRUS_VERSION);
+	    cd->authenticated == DIDAUTH ? "A" : "");
 
 #ifdef HAVE_SSL
     if (cd->tls_conn) {
