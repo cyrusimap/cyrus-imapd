@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.24 1999/06/30 18:34:41 leg Exp $
+ * $Id: imtest.c,v 1.25 1999/07/08 03:56:53 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -58,7 +58,7 @@ typedef enum {
     STAT_CONT = 0,
     STAT_NO = 1,
     STAT_OK = 2
-} stat;
+} imt_stat;
 
 /* global vars */
 sasl_conn_t *conn;
@@ -172,13 +172,15 @@ static int init_sasl(char *serverFQDN, int port, int ssf)
   return IMTEST_OK;
 }
 
-stat getauthline(char **line, int *linelen)
+#define BUFSIZE 16384
+
+imt_stat getauthline(char **line, int *linelen)
 {
-  char buf[2048];
+  char buf[BUFSIZE];
   int saslresult;
   char *str=(char *) buf;
   
-  str=prot_fgets(str,2048,pin);
+  str=prot_fgets(str, BUFSIZE, pin);
   if (str==NULL) imtest_fatal("prot layer failure");
   printf("S: %s",str);
 
@@ -284,7 +286,7 @@ int auth_sasl(char *mechlist)
   char inbase64[2048];
   int inbase64len;
 
-  stat status=STAT_CONT;
+  imt_stat status = STAT_CONT;
 
   /* call sasl client start */
   while (saslresult==SASL_INTERACT)
@@ -303,8 +305,8 @@ int auth_sasl(char *mechlist)
   prot_printf(pout,"A01 AUTHENTICATE %s\r\n",mechusing);
   prot_flush(pout);
 
-
-  status=getauthline(&in,&inlen);
+  inlen = 0;
+  status = getauthline(&in,&inlen);
 
   while (status==STAT_CONT)
   {

@@ -1,5 +1,11 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server Since Version 1.6.0-BETA 
+
+      * fixed stupid bug in imapd 
+      * fixed sasl/config.c interaction 
+      * fixed use of stat in imtest 
+
 Changes to the Cyrus IMAP Server Since Version 1.5.24 
 
       * ANSI C is now required. 

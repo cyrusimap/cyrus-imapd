@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.174 1999/06/30 18:34:40 leg Exp $ */
+/* $Id: imapd.c,v 1.175 1999/07/08 03:56:52 leg Exp $ */
 
 #ifndef __GNUC__
 /* can't use attributes... */
@@ -1107,6 +1107,7 @@ char *passwd;
       return;
     }
     else {
+	imapd_userid = strdup(canon_user);
 	syslog(LOG_NOTICE, "login: %s %s plaintext %s", imapd_clienthost,
 	       canon_user, reply ? reply : "");
 	if (plaintextloginpause = config_getint("plaintextloginpause", 0)) {

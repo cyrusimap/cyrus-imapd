@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.18 1999/04/08 21:03:22 tjs Exp $
+ $Id: config.c,v 1.19 1999/07/08 03:56:51 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -185,7 +185,7 @@ config_read()
 	if (!*p || *p == '#') continue;
 
 	key = p;
-	while (*p && (isalnum(*p) || *p == '-')) {
+	while (*p && (isalnum(*p) || *p == '-' || *p == '_')) {
 	    if (isupper(*p)) *p = tolower(*p);
 	    p++;
 	}
