@@ -21,10 +21,10 @@ while {$i < $argc} {
     switch -exact -- [lindex $argv $i] {
 	- {}
 	-- {}
-	-u {incr i; lappend auth_args -user [lindex $argv $i]}
-	-user {incr i; lappend auth_args -user [lindex $argv $i]}
-	-p {incr i; lappend auth_args -protection [lindex $argv $i]}
-	-protection {incr i; lappend auth_args -protection [lindex $argv $i]}
+	-u {incr i; lappend "auth_args -user [lindex $argv $i] "}
+	-user {incr i; lappend "auth_args -user [lindex $argv $i] "}
+	-p {incr i; lappend "auth_args -protection [lindex $argv $i] "}
+	-protection {incr i; lappend "auth_args -protection [lindex $argv $i]" }
 	default {lappend conn_args [lindex $argv $i]}
     }
     incr i
@@ -49,8 +49,10 @@ eval cyr_conn authenticate $auth_args -pwcommand {{
     exec stty -echo >@stdout
     puts -nonewline "$hostname password: "
     flush stdout
+    stty -echo
     gets stdin passwd
-    exec stty echo >@stdout
+    stty echo
+    #exec stty echo >@stdout
     puts ""
     list $userid $passwd
 }   }
@@ -60,6 +62,7 @@ unset auth_args
 set cyr_mailbox inbox
 set tcl_prompt1 {
     puts -nonewline stdout "[cyr_conn servername]> "
+#    stty echo
 }
 
 # createmailbox command
