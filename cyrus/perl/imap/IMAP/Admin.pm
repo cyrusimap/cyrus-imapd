@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.28.2.8 2002/12/19 18:33:52 ken3 Exp $
+# $Id: Admin.pm,v 1.28.2.9 2003/03/24 18:14:11 ken3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -76,6 +76,7 @@ sub new {
   if(defined($self)) {
     $self->{support_referrals} = 0;
     $self->{support_annotatatemore} = 0;
+    $self->{authopts} = [];
     $self->addcallback({-trigger => 'CAPABILITY',
 			-callback => sub {my %a = @_;
 					  map { $self->{support_referrals} = 1
@@ -111,6 +112,9 @@ sub AUTOLOAD {
 # send an rlist command if they support referrals 
 sub authenticate {
     my $self = shift;
+    if(@_) {
+      $self->{authopts} = \@_;
+    } 
     my $rc = $self->{cyrus}->authenticate(@_);
     if($rc && $self->{support_referrals}) {
       # Advertise our desire for referrals
@@ -123,6 +127,12 @@ sub authenticate {
       }
     }
     return $rc;
+}
+
+# Spit out a reference to the previous authentication options:
+sub _getauthopts { 
+    my $self = shift;
+    return $self->{authopts};
 }
 
 sub reconstruct {
@@ -153,7 +163,7 @@ sub reconstruct {
 	$cyradm->addcallback({-trigger => 'EOF',
 			      -callback => \&_cb_ref_eof,
 			      -rock => \$cyradm});
-	$cyradm->authenticate()
+	$cyradm->authenticate(@{$self->_getauthopts()})
 	  or die "cyradm: cannot authenticate to $refserver\n";
 	
 	my $ret = $cyradm->reconstruct($mailbox,$recurse);
@@ -190,7 +200,7 @@ sub createmailbox {
       $cyradm->addcallback({-trigger => 'EOF',
 			    -callback => \&_cb_ref_eof,
 			    -rock => \$cyradm});
-      $cyradm->authenticate()
+      $cyradm->authenticate(@{$self->_getauthopts()})
 	or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->createmailbox($box);
@@ -224,7 +234,7 @@ sub deletemailbox {
       $cyradm->addcallback({-trigger => 'EOF',
 			    -callback => \&_cb_ref_eof,
 			    -rock => \$cyradm});
-      $cyradm->authenticate()
+      $cyradm->authenticate(@{$self->_getauthopts()})
 	or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->deletemailbox($box);
@@ -407,7 +417,7 @@ sub listquota {
       $cyradm->addcallback({-trigger => 'EOF',
 			    -callback => \&_cb_ref_eof,
 			    -rock => \$cyradm});
-      $cyradm->authenticate()
+      $cyradm->authenticate(@{$self->_getauthopts()})
 	or die "cyradm: cannot authenticate to $refserver\n";
 
       my @ret = $cyradm->listquota($root);
@@ -461,7 +471,7 @@ sub listquotaroot {
       $cyradm->addcallback({-trigger => 'EOF',
 			    -callback => \&_cb_ref_eof,
 			    -rock => \$cyradm});
-      $cyradm->authenticate()
+      $cyradm->authenticate(@{$self->_getauthopts()})
 	or die "cyradm: cannot authenticate to $refserver\n";
       
       my @ret = $cyradm->listquotaroot($root);
@@ -515,7 +525,7 @@ sub renamemailbox {
       $cyradm->addcallback({-trigger => 'EOF',
 			    -callback => \&_cb_ref_eof,
 			    -rock => \$cyradm});
-      $cyradm->authenticate()
+      $cyradm->authenticate(@{$self->_getauthopts()})
 	or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->renamemailbox($box, $box, $nbox);
@@ -586,7 +596,7 @@ sub setaclmailbox {
 	$cyradm->addcallback({-trigger => 'EOF',
 			      -callback => \&_cb_ref_eof,
 			      -rock => \$cyradm});
-	$cyradm->authenticate()
+	$cyradm->authenticate(@{$self->_getauthopts()})
 	  or die "cyradm: cannot authenticate to $refserver\n";
 
 	my $ret = $cyradm->setaclmailbox($mbx, %acl);
@@ -644,7 +654,7 @@ sub setquota {
       $cyradm->addcallback({-trigger => 'EOF',
 			    -callback => \&_cb_ref_eof,
 			    -rock => \$cyradm});
-      $cyradm->authenticate()
+      $cyradm->authenticate(@{$self->_getauthopts()})
 	or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->setquota($mbx, %quota);
