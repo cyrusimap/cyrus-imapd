@@ -127,10 +127,12 @@ static char *cmd_resp = NULL;
 
 FILE *configstream;
 
-void spew(const char *fmt, ...)
+void spew(int level, const char *fmt, ...)
 {
     va_list ap;
     char buf[1024];
+
+    if (verbose < level) return;
 
     va_start(ap, fmt);
     vsnprintf(buf, sizeof buf, fmt, ap);
@@ -308,9 +310,6 @@ callback_search(struct imclient *imclient,
 	    s++;
 	}
 
-	uids->list[uids->size] = num;
-	uids->size++;
-
 	if (uids->size >= uids->allocsize)
 	{
 	    if (uids->allocsize) uids->allocsize *= 2;
@@ -319,6 +318,9 @@ callback_search(struct imclient *imclient,
 	    uids->list = xrealloc(uids->list, 
 				  sizeof(unsigned long) * uids->allocsize);
 	}
+
+	uids->list[uids->size] = num;
+	uids->size++;
 
 	if (*s == '\0') break;
 	s++;
@@ -418,12 +420,14 @@ int purge_me(char *name, time_t when)
 {
     mbox_stats_t   stats;
     char search_string[200];
-    uid_list_t *uidlist;
+    static uid_list_t uidlist;
     unsigned long       my_time;
+
+    if (when == 0) return 0;
 
     memset(&stats, '\0', sizeof(mbox_stats_t));
     
-    spew("working on %s", name);
+    spew(2, "%s selecting", name);
 
     /* select mailbox */
     imclient_addcallback(imclient_conn,
@@ -438,6 +442,8 @@ int purge_me(char *name, time_t when)
 	imclient_processoneevent(imclient_conn);
     }
 
+    spew(2, "%s selecting", name);
+
     if (cmd_done == IMAP_NO)
     {
 	syslog(LOG_ERR, "unable to select %s: %s", name, cmd_resp);
@@ -448,11 +454,10 @@ int purge_me(char *name, time_t when)
 
     stats.total = current_mbox_exists;
 
+    spew(1, "%s %d messages exists", name, current_mbox_exists);
+
     /* make out list of uids */
-    uidlist = (uid_list_t *) xmalloc(sizeof(uid_list_t));
-    uidlist->list = xmalloc (sizeof(unsigned long) * 500);
-    uidlist->allocsize = 500;
-    uidlist->size = 0;
+    uidlist.size = 0;		/* reset to 0 */
 
     {
 	struct tm *my_tm;
@@ -468,32 +473,27 @@ int purge_me(char *name, time_t when)
 		 1900+my_tm->tm_year);
     }	
 
-    spew("searching for messages %s", search_string);
+    spew(2, "%s searching for messages %s", name, search_string);
 
     imclient_addcallback(imclient_conn,
 			 "SEARCH", 0, callback_search,
-			 (void *)uidlist, (char *)0);
+			 (void *)&uidlist, (char *)0);
     imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
 		  "UID SEARCH %a", search_string);
     
 
     cmd_done = NOTFINISHED;
-
     while (cmd_done == NOTFINISHED) {
 	imclient_processoneevent(imclient_conn);
     }
-
     if (cmd_done != IMAP_OK) {
 	fatal("UID Search failed", EC_TEMPFAIL);
     }
 
-    if (uidlist->size > 0)
-    {
-
-	mark_all_deleted(uidlist, &stats);
-            	
+    if (uidlist.size > 0) {
+	mark_all_deleted(&uidlist, &stats);
     }
-    
+
     /* close mailbox */   
     imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
 		  "CLOSE");
@@ -507,6 +507,8 @@ int purge_me(char *name, time_t when)
     if (cmd_done != IMAP_OK) {
 	fatal("unable to CLOSE mailbox", EC_TEMPFAIL);
     }
+
+    spew(0, "%s deleted %d messages", name, uidlist.size);
 
     return 0;
 }
@@ -575,25 +577,22 @@ void remote_purge(char *configpath, char **matches)
 			 "LIST", 0, callback_list,
 			 (void *)0, (char *)0);
 
-    if (matches[0]==NULL)
-    {
+    if (matches[0]==NULL) {
 	syslog(LOG_WARNING, "matching all mailboxes for possible purge");
-	spew("matching all mailboxes");
+	spew(1, "matching all mailboxes");
 
 	do_list("*");
     } else {
-	while (matches[0]!=NULL)
-	{
-	    spew("matching %s", matches[0]);
+	while (matches[0]!=NULL) {
+	    spew(0, "matching %s", matches[0]);
 	    do_list(matches[0]);
 	    matches++;
 	}
     }
 
-    spew("completed list");
+    spew(1, "completed list");
 
-    if (configpath!=NULL)
-    {
+    if (configpath!=NULL) {
 	name = parseconfigpath(configpath);
 
 	configstream = fopen(name,"r");
@@ -604,23 +603,11 @@ void remote_purge(char *configpath, char **matches)
 	EXPreadfile(configstream);
 	/* ret val */
     } else {
-
 	artificial_matchall(days);
-
     }
 
     purge_all();
 }
-
-
-
-
-
-
-
-
-
-
 
 /* didn't give correct parameters; let's exit */
 void usage(void)
@@ -638,11 +625,8 @@ void usage(void)
 
   printf("  -d days  : purge all message <days> old\n");
 
-  exit(1);
+  exit(EC_USAGE);
 }
-
-
-
 
 int main(int argc, char **argv)
 {
@@ -670,7 +654,7 @@ int main(int argc, char **argv)
 	expirectlfile = optarg;
 	break;
     case 'v':
-	verbose=1;
+	verbose++;
 	break;
     case 'k':
 	minssf=atoi(optarg);      
@@ -718,7 +702,7 @@ int main(int argc, char **argv)
       fatal("imclient_connect()", EC_TEMPFAIL);
   }
 
-  spew("connected");
+  spew(0, "connected");
 
   /* get capabilities */
   imclient_addcallback(imclient_conn, "CAPABILITY", 0,
@@ -745,13 +729,13 @@ int main(int argc, char **argv)
       fatal("imclient_authenticate()\n", EC_CONFIG);
   }
 
-  spew("authenticated");
+  spew(0, "authenticated");
 
   readconfig_init();
 
   remote_purge(expirectlfile, argv+(optind+1));
 
-  spew("done");
+  spew(0, "done");
 
   exit(0);
 }
