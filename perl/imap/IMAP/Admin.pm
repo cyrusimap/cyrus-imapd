@@ -346,8 +346,30 @@ sub listquota {
     $self->{error} = undef;
     @info;
   } else {
-    $self->{error} = $msg;
-    ();
+    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+      my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+      my $port = 143;
+
+      if($refserver =~ /:/) {
+	$refserver =~ /([^:]+):(\d+)/;
+	$refserver = $1; $port = $2;
+      }
+
+      my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
+	or die "cyradm: cannot connect to $refserver\n";
+      $cyradm->addcallback({-trigger => 'EOF',
+			    -callback => \&_cb_ref_eof,
+			    -rock => \$cyradm});
+      $cyradm->authenticate()
+	or die "cyradm: cannot authenticate to $refserver\n";
+
+      my $ret = $cyradm->listquota($root);
+      $cyradm = undef;
+      return $ret;
+    } else {
+      $self->{error} = $msg;
+      ();
+    }
   }
 }
 *quota = *listquota;
@@ -377,8 +399,30 @@ sub listquotaroot {
     $self->{error} = undef;
     ($qr, @info);
   } else {
-    $self->{error} = $msg;
-    ();
+    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+      my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+      my $port = 143;
+
+      if($refserver =~ /:/) {
+	$refserver =~ /([^:]+):(\d+)/;
+	$refserver = $1; $port = $2;
+      }
+
+      my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
+	or die "cyradm: cannot connect to $refserver\n";
+      $cyradm->addcallback({-trigger => 'EOF',
+			    -callback => \&_cb_ref_eof,
+			    -rock => \$cyradm});
+      $cyradm->authenticate()
+	or die "cyradm: cannot authenticate to $refserver\n";
+      
+      my $ret = $cyradm->listquotaroot($root);
+      $cyradm = undef;
+      return $ret;
+    } else {
+      $self->{error} = $msg;
+      ();
+    }
   }
 }
 *quotaroot = *listquotaroot;
@@ -477,8 +521,30 @@ sub setquota {
     $self->{error} = undef;
     1;
   } else {
-    $self->{error} = $msg;
-    undef;
+    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+      my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+      my $port = 143;
+
+      if($refserver =~ /:/) {
+	$refserver =~ /([^:]+):(\d+)/;
+	$refserver = $1; $port = $2;
+      }
+
+      my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
+	or die "cyradm: cannot connect to $refserver\n";
+      $cyradm->addcallback({-trigger => 'EOF',
+			    -callback => \&_cb_ref_eof,
+			    -rock => \$cyradm});
+      $cyradm->authenticate()
+	or die "cyradm: cannot authenticate to $refserver\n";
+
+      my $ret = $cyradm->setquota($mbx, %quota);
+      $cyradm = undef;
+      return $ret;
+    } else {
+      $self->{error} = $msg;
+      undef;
+    }
   }
 }
 
