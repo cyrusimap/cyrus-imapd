@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- * $Id: auth_krb_pts.c,v 1.44 2002/02/25 16:52:42 rjs3 Exp $
+ * $Id: auth_krb_pts.c,v 1.45 2002/07/16 19:58:56 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -392,6 +392,7 @@ struct auth_state *auth_newstate(const char *identifier,
     }
     if (lock_shared(fd) < 0) {
         syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
+	close(fd);
         return newstate;
     }
     strcpy(fnamebuf, STATEDIR);
@@ -402,6 +403,7 @@ struct auth_state *auth_newstate(const char *identifier,
 
     if (r != 0) {
 	syslog(LOG_ERR, "auth_newstate: db_create: %s", db_strerror(r));
+	close(fd);
 	return newstate;
     }
     
@@ -414,6 +416,7 @@ struct auth_state *auth_newstate(const char *identifier,
     if (r != 0) {
 	syslog(LOG_ERR, "auth_newstate: opening %s: %s", fnamebuf, 
 	       db_strerror(r));
+	close(fd);
 	return newstate;
     }
 
