@@ -197,6 +197,9 @@ char *userid;
     mailbox->last_uid = message_index.uid;
     mailbox->last_internaldate = message_index.internaldate;
     mailbox->quota_mailbox_used += message_index.size;
+    if (mailbox->minor_version > MAILBOX_MINOR_VERSION) {
+	mailbox->minor_version = MAILBOX_MINOR_VERSION;
+    }
 
     r = mailbox_write_index_header(mailbox);
     if (r) {
