@@ -56,13 +56,14 @@ install:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 clean:
-	rm -f *.o Makefile.bak
+	rm -f *.o Makefile.bak makedepend.log
 
 distclean: clean
 	rm -f Makefile
 
 depend: 
-	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
+	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c \
+	1>makedepend.log 2>&1
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 
