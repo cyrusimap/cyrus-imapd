@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.3 2002/03/13 23:18:08 rjs3 Exp $
+ * $Id: mbdump.c,v 1.4 2002/03/15 19:54:27 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -178,28 +178,28 @@ int dump_mailbox(const char *tag, const char *mbpath, const char *mbname,
 
 	/* send filename, size, and contents */
 	if(first) {
-	    prot_printf(pout, "{%d}\n\r",
+	    prot_printf(pout, "{%d}\r\n",
 			strlen(name));
 
 	    if(!tag) {
 		/* synchronize */
 		c = prot_getc(pin);
+		eatline(pin, c); /* We eat it no matter what */
 		if(c != '+') {
 		    /* Synchronization Failure, Abort! */
+		    syslog(LOG_ERR, "Sync Error: expected '+' got '%c'",c);
 		    r = IMAP_SERVER_UNAVAILABLE;
 		    goto done;
-		} else {
-		    eatline(pin, c);
 		}
 	    }
 
-	    prot_printf(pout, "%s {%lu%s}\n\r",
+	    prot_printf(pout, "%s {%lu%s}\r\n",
 			name, len,
 			(!tag ? "+" : ""));
 
 	    first = 0;
 	} else {
-	    prot_printf(pout, " {%d%s}\n\r%s {%lu%s}\n\r",
+	    prot_printf(pout, " {%d%s}\r\n%s {%lu%s}\r\n",
 			strlen(name),
 			(!tag ? "+" : ""),
 			name, len,
@@ -234,7 +234,7 @@ int dump_mailbox(const char *tag, const char *mbpath, const char *mbname,
 
 	/* send filename, size, and contents */
 	if(first) {
-	    prot_printf(pout, "{%d}\n\r",
+	    prot_printf(pout, "{%d}\r\n",
 			strlen(data_files[i]));
 	    
 	    if(!tag) {
@@ -249,12 +249,12 @@ int dump_mailbox(const char *tag, const char *mbpath, const char *mbname,
 		}
 	    }
 
-	    prot_printf(pout, "%s {%lu%s}\n\r",
+	    prot_printf(pout, "%s {%lu%s}\r\n",
 			data_files[i], len,
 			(!tag ? "+" : ""));
 	    first = 0;
 	} else {
-	    prot_printf(pout, " {%d%s}\n\r%s {%lu%s}\n\r",
+	    prot_printf(pout, " {%d%s}\r\n%s {%lu%s}\r\n",
 			strlen(data_files[i]),
 			(!tag ? "+" : ""),
 			data_files[i], len,
@@ -265,7 +265,7 @@ int dump_mailbox(const char *tag, const char *mbpath, const char *mbname,
     }
 
  done:
-    prot_printf(pout,")\n\r");
+    prot_printf(pout,")\r\n");
     prot_flush(pout);
 
     mailbox_close(&mb);
@@ -338,7 +338,7 @@ int undump_mailbox(const char *mbpath, const char *mbname,
     }
     
  done:
-    /* eat the rest of the line, we have atleast a \n\r coming */
+    /* eat the rest of the line, we have atleast a \r\n coming */
     eatline(pin, c);
     freebuf(&file);
     freebuf(&data);
