@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.30 2000/04/06 15:14:31 leg Exp $
+ $Id: config.c,v 1.31 2000/04/09 22:01:55 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -275,22 +275,31 @@ int mysasl_config(void *context __attribute__((unused)),
 		  unsigned *len)
 {
     char opt[1024];
+    int sl = sizeof(opt);
 
-    if (strcmp(option, "srvtab")) { /* we don't transform srvtab! */
-	int sl = 5 + (plugin_name ? strlen(plugin_name) + 1 : 0);
-
-	strncpy(opt, "sasl_", 1024);
-	if (plugin_name) {
-	    strncat(opt, plugin_name, 1019);
-	    strncat(opt, "_", 1024 - sl);
-	}
- 	strncat(opt, option, 1024 - sl - 1);
-	opt[1023] = '\0';
+    if (!strcmp(option, "srvtab")) { 
+	/* we don't transform srvtab! */
+	*result = config_getstring(option, NULL);
     } else {
-	strncpy(opt, option, 1024);
+	*result = NULL;
+
+	if (plugin_name) {
+	    /* first try it with the plugin name */
+	    strlcpy(opt, "sasl_", sl);
+	    strlcat(opt, plugin_name, sl);
+	    strlcat(opt, "_", sl);
+	    strlcat(opt, option, sl);
+	    *result = config_getstring(option, NULL);
+	}
+
+	if (*result == NULL) {
+	    /* try without the plugin name */
+	    strlcpy(opt, "sasl_", sl);
+	    strlcat(opt, option, sl);
+	    *result = config_getstring(option, NULL);
+	}
     }
 
-    *result = config_getstring(opt, NULL);
     if (*result != NULL) {
 	if (len) { *len = strlen(*result); }
 	return SASL_OK;
