@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.105 2000/06/01 20:50:17 ken3 Exp $
+ * $Id: index.c,v 1.106 2000/06/01 22:22:14 leg Exp $
  */
 #include <config.h>
 
@@ -469,7 +469,7 @@ int checkseen;
     }
 
     for (msgno = 1; msgno <= oldexists; msgno++) {
-	if (flagreport[msgno] && flagreport[msgno] < LAST_UPDATED(msgno)) {
+	if (flagreport[msgno] < LAST_UPDATED(msgno)) {
 	    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
 		user_flags[i] = USER_FLAGS(msgno, i);
 	    }
