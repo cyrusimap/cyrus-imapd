@@ -1,9 +1,43 @@
-<!-- $Id: changes.html,v 1.9 2000/09/05 06:02:22 leg Exp $ -->
+<!-- $Id: changes.html,v 1.10 2000/12/20 21:31:01 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+<h2>Changes to the cyrus IMAP Server since 2.0.8</h2>
+<ul>
+<li> remembered to update this file
+
+<li> bug in <tt>Cyrus::IMAP</tt> perl module affecting cyradm's
+setquota fixed
+
+<li> portability fix with <tt>socklen_t</tt>
+</ul>
+
+<h2>Changes to the cyrus IMAP Server since 2.0.7</h2>
+<ul>
+<li> preliminary implementation of the IDLE extension (Ken Murchison,
+<tt>ken@oceana.com</tt>).
+
+<li> THREAD=REFERENCES now part of the normal build.
+
+<li> tweaks to the installation documentation and suggested Sendmail
+configuration
+
+<li> portability fixes and other small bugfixes
+
+<li> added "<tt>-a</tt>" flag to <tt>lmtpd</tt>
+
+<li> master process can now export statistics about running processes
+via UCD SNMP AgentX
+
+<li> many fixes to Cyrus Murder-related code
+
+<li> fixes to perl code, especially the Sieve interface. added an IMSP
+interface to the perl code, but it still needs work.
+
+</ul>
 
 <h2>Changes to the cyrus IMAP Server since 2.0.6</h2>
 <ul>
@@ -1112,7 +1146,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2000/09/05 06:02:22 $
+last modified: $Date: 2000/12/20 21:31:01 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
