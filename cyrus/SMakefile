@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.58 2000/05/07 19:53:36 leg Exp $
+# $Id: SMakefile,v 1.59 2000/05/15 20:49:06 leg Exp $
 #
 
 if test ! -x configure; then
@@ -38,7 +38,7 @@ case `uname` in
 	CC="gcc"
 	CFLAGS="${CFLAGS} -O3 -g -Wall"
 	LDFLAGS="${LDFLAGS}"
-	#LIBS="-ldbm"
+	LIBS="-lnsl" # for libwrap
 	export LIBS
 
         if test "${WASH_CYRUS_DEBUG}" = "t"; then

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.242 2000/05/15 17:29:40 leg Exp $ */
+/* $Id: imapd.c,v 1.243 2000/05/15 20:49:06 leg Exp $ */
 
 #include <config.h>
 
@@ -1542,7 +1542,7 @@ char *cmd;
 void cmd_id(char *tag)
 {
     static int did_id = 0;
-    int c, d, i, npair = 0;
+    int c, npair = 0;
     static struct buf arg, field;
     struct strlist *fields = 0, *values = 0;
     struct utsname os;

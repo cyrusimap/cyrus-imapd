@@ -105,98 +105,49 @@ AC_DEFUN(CMU_SASL_LIB_WHERE, [
 
 AC_DEFUN(CMU_SASL, [
 AC_ARG_WITH(sasl,
-	[  --with-sasl=PREFIX      Compile with Sasl support],
-	[if test "X$with_sasl" = "X"; then
-		with_sasl=yes
-	fi])
+            [  --with-sasl=DIR        Compile with libsasl in <DIR>],
+	    with_sasl="$withval",
+            with_sasl="yes")
 
-	if test "X$with_sasl" != "X"; then
-	  if test "$with_sasl" != "yes" -a "$with_sasl" != no; then
-	    ac_cv_sasl_where_lib=$with_sasl/lib
-	    ac_cv_sasl_where_inc=$with_sasl/include
-	  fi
+	SASLFLAGS=""
+	LIB_SASL=""
+
+	cmu_saved_CPPFLAGS=$CPPFLAGS
+	cmu_saved_LDFLAGS=$LDFLAGS
+	cmu_saved_LIBS=$LIBS
+	if test -d ${with_sasl}; then
+          ac_cv_sasl_where_lib=${with_sasl}/lib
+          ac_cv_sasl_where_inc=${with_sasl}/include
+
+	  SASLFLAGS="-I$ac_cv_sasl_where_lib"
+	  LIB_SASL"-L$ac_cv_sasl_where_inc"
+	  CPPFLAGS="${cmu_saved_CPPFLAGS} -I${ac_cv_sasl_where_inc}"
+	  LDFLAGS="${cmu_saved_LDFLAGS} -L${ac_cv_sasl_where_lib}"
 	fi
 
-	if test "$with_sasl" != "no"; then 
-	  if test "X$with_sasl_lib" != "X"; then
-	    ac_cv_sasl_where_lib=$with_sasl_lib
-	  fi
-	  if test "X$ac_cv_sasl_where_lib" = "X"; then
-	    CMU_SASL_LIB_WHERE(/usr/local/lib /usr/lib)
-	  fi
+	AC_CHECK_HEADER(sasl.h,
+	  AC_CHECK_LIB(sasl, sasl_getprop, 
+                       ac_cv_found_sasl=yes,
+		       ac_cv_found_sasl=no), ac_cv_found_sasl=no)
 
-	  if test "X$with_sasl_include" != "X"; then
-	    ac_cv_sasl_where_inc=$with_sasl_include
-	  fi
-	  if test "X$ac_cv_sasl_where_inc" = "X"; then
-	    CMU_SASL_INC_WHERE(/usr/local/include /usr/include)
-	  fi
-	fi
-
-	AC_MSG_CHECKING(whether to include sasl)
-	if test "X$ac_cv_sasl_where_lib" = "X" -a "X$ac_cv_sasl_where_inc" = "X"; then
-	  ac_cv_found_sasl=no
-	  AC_MSG_RESULT(no)
+	LIBS="$cmu_saved_LIBS"
+	LDFLAGS="$cmu_saved_LDFLAGS"
+	CPPFLAGS="$cmu_saved_CPPFLAGS"
+	if test "$ac_cv_found_sasl" = yes; then
+	  LIB_SASL="$LIB_SASL -lsasl"
 	else
-	  ac_cv_found_sasl=yes
-	  AC_MSG_RESULT(yes)
-	  SASL_INC_DIR=$ac_cv_sasl_where_inc
-	  SASL_LIB_DIR=$ac_cv_sasl_where_lib
-	  SASL_INC_FLAGS="-I${SASL_INC_DIR}"
-	  SASL_LIB_FLAGS="-L${SASL_LIB_DIR} -lsasl"
-	  LIB_SASL="-L${SASL_LIB_DIR} -lsasl" 
- 	  SASLFLAGS="-I${SASL_INC_DIR}"
-	  AC_SUBST(LIB_SASL)
-	  AC_SUBST(SASLFLAGS)    
-	  if test "X$RPATH" = "X"; then
-		RPATH=""
-	  fi
-	  case "${host}" in
-	    *-*-linux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${SASL_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${SASL_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-hpux*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,+b${SASL_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${SASL_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-irix*)
-	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,${SASL_LIB_DIR}"
-	      else 
-		RPATH="${RPATH}:${SASL_LIB_DIR}"
-	      fi
-	      ;;
-	    *-*-solaris2*)
-	      if test "$ac_cv_prog_gcc" = yes; then
-		if test "X$RPATH" = "X"; then
-		  RPATH="-Wl,-R${SASL_LIB_DIR}"
-		else 
-		  RPATH="${RPATH}:${SASL_LIB_DIR}"
-		fi
-	      else
-	        RPATH="${RPATH} -R${SASL_LIB_DIR}"
-	      fi
-	      ;;
-	  esac
-	  AC_SUBST(RPATH)
+	  LIB_SASL=""
+	  SASLFLAGS=""
 	fi
-	AC_SUBST(SASL_INC_DIR)
-	AC_SUBST(SASL_INC_FLAGS)
-	AC_SUBST(SASL_LIB_DIR)
-	AC_SUBST(SASL_LIB_FLAGS)
+	AC_SUBST(LIB_SASL)
+	AC_SUBST(SASLFLAGS)
 	])
 
-AC_DEFUN(CMU_NEEDS_SASL,
+AC_DEFUN(CMU_SASL_REQUIRED,
 [AC_REQUIRE([CMU_SASL])
 if test "$ac_cv_found_sasl" != "yes"; then
-        AC_ERROR([Cannot continue without sasl (Get it from <url:ftp://ftp.andrew.cmu.edu:/pub/cyrus-mail/>).])
+        AC_ERROR([Cannot continue without libsasl.
+Get it from ftp://ftp.andrew.cmu.edu:/pub/cyrus-mail/.])
 fi])
 
 AC_DEFUN(CMU_TEST_LIBPATH, [
@@ -323,4 +274,31 @@ AC_DEFUN(CMU_SOCKETS, [
 	)
 	AC_SUBST(LIB_SOCKET)
 	])
+
+dnl libwrap.m4 --- do we have libwrap, the access control library?
+
+AC_DEFUN(CMU_LIBWRAP, [
+  AC_ARG_WITH(libwrap, 
+              [  --with-libwrap=DIR      use libwrap (rooted in DIR) [yes] ],
+              with_libwrap=$withval, with_libwrap=yes)
+  if test "$with_libwrap" != no; then
+    if test -d "$with_libwrap"; then
+      CPPFLAGS="$CPPFLAGS -I${with_libwrap}/include"
+      LDFLAGS="$LDFLAGS -L${with_libwrap}/lib"
+    fi
+    cmu_save_LIBS="$LIBS"
+    AC_CHECK_LIB(wrap, request_init,
+		 AC_CHECK_HEADER(tcpd.h,, with_libwrap=no),
+		 with_libwrap=no)
+    LIBS="$cmu_save_LIBS"
+  fi
+  AC_MSG_CHECKING(libwrap support)
+  AC_MSG_RESULT($with_libwrap)
+  LIB_WRAP=""
+  if test "$with_libwrap" != no; then
+    AC_DEFINE(HAVE_LIBWRAP)
+    LIB_WRAP="-lwrap"
+  fi
+  AC_SUBST(LIB_WRAP)
+])
 

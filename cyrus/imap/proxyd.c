@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.26 2000/05/15 17:29:27 leg Exp $ */
+/* $Id: proxyd.c,v 1.27 2000/05/15 20:49:08 leg Exp $ */
 
 #include <config.h>
 
@@ -290,7 +290,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
 	    i = strlen(eol);
 	    if (eol[i-1] == '\n' && eol[i-2] == '\r' && eol[i-3] == '}') {
 		/* possible literal */
-		i -= 3;
+		i -= 4;
 		while (i > 0 && eol[i] != '{' && isdigit(eol[i])) {
 		    i--;
 		}
@@ -620,7 +620,7 @@ void proxyd_capability(struct backend *s)
     int st = 0;
 
     proxyd_gentag(tag);
-    prot_printf(s->out, "%s Capability\r\n");
+    prot_printf(s->out, "%s Capability\r\n", tag);
     do {
 	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
 	if (!strncasecmp(resp, "* Capability ", 13)) {
