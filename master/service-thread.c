@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.9 2003/02/13 20:15:45 rjs3 Exp $ */
+/* $Id: service-thread.c,v 1.10 2003/05/09 19:43:37 rjs3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -161,8 +161,6 @@ int main(int argc, char **argv, char **envp)
 	syslog(LOG_ERR, "couldn't strdup() service: %m");
 	exit(EX_OSERR);
     }
-    config_init(alt_config, service);
-
 
     opterr = 0; /* disable error reporting,
 		   since we don't know about service-specific options */
@@ -191,6 +189,9 @@ int main(int argc, char **argv, char **envp)
 	    break;
 	}
     }
+
+    config_init(alt_config, service);
+
     /* grab the remaining arguments */
     for (; optind < argc; optind++) {
 	if (!(newargc % ARGV_GROW)) { /* time to alloc more */
