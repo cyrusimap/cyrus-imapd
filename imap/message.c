@@ -462,8 +462,8 @@ struct boundary *boundaries;
 			if (!strncasecmp(next+10, "escription:", 11)) {
 			    message_parse_string(next+21, &body->description);
 			}
-			else if (!strncasecmp(next+10, "ispostion:", 10)) {
-			    message_parse_disposition(next+20, body);
+			else if (!strncasecmp(next+10, "isposition:", 11)) {
+			    message_parse_disposition(next+21, body);
 			}
 			break;
 
@@ -1435,8 +1435,7 @@ int newformat;
 	    else message_write_nstring(ibuf, (char *)0);
 	    PUTIBUF(ibuf, ' ');
 	    PUTIBUF(ibuf, '(');
-	    message_write_nstring(ibuf, body->disposition ? body->disposition :
-				  "INLINE");
+	    message_write_nstring(ibuf, body->disposition);
 	    PUTIBUF(ibuf, ' ');
 	    if (param = body->disposition_params) {
 		PUTIBUF(ibuf, '(');
@@ -1521,8 +1520,7 @@ int newformat;
 	message_write_nstring(ibuf, body->md5);
 	PUTIBUF(ibuf, ' ');
 	PUTIBUF(ibuf, '(');
-	message_write_nstring(ibuf, body->disposition ? body->disposition :
-			      "INLINE");
+	message_write_nstring(ibuf, body->disposition);
 	PUTIBUF(ibuf, ' ');
 	if (param = body->disposition_params) {
 	    PUTIBUF(ibuf, '(');
