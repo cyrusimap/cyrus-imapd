@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.9 2002/08/12 21:30:06 rjs3 Exp $
+ * $Id: annotate.c,v 1.8.6.10 2002/08/14 16:07:29 ken3 Exp $
  */
 
 #include <config.h>
@@ -172,7 +172,7 @@ void annotatemore_open(char *fname)
 enum {
     ENTRY_PARTITION =		(1<<0),
     ENTRY_SERVER =		(1<<1),
-    ENTRY_SIZE =                (1<<2)  /* xxx - notimplemented */
+    ENTRY_SIZE =                (1<<2)
 };
 
 enum {
@@ -283,6 +283,54 @@ static void annotation_get_partition(const char *mboxname,
     }
 }
 
+static void annotation_get_size(const char *mboxname,
+				int isadmin,
+				struct auth_state *auth_state,
+				struct annotation_result *result,
+				struct mailbox_annotation_rock *mbrock,
+				void *rock __attribute__((unused))) 
+{
+    struct mailbox mailbox;
+    struct index_record record;
+    int r = 0, msg;
+    unsigned long totsize = 0;
+    static char value[21];
+
+    if(!mboxname || !result || !mbrock)
+	fatal("annotation_get_partition called with bad parameters",
+	      EC_TEMPFAIL);
+    
+    get_mb_data(mboxname, mbrock);
+
+    /* Check ACL */
+    if(!isadmin &&
+       (!mbrock->acl ||
+        !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_LOOKUP) ||
+        !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_READ)))
+	return;
+
+    if (mailbox_open_header(mboxname, 0, &mailbox) != 0)
+	return;
+
+    if (!r) r = mailbox_open_index(&mailbox);
+
+    if (!r) {
+	for (msg = 1; msg <= mailbox.exists; msg++) {
+	    if ((r = mailbox_read_index_record(&mailbox, msg, &record))!=0)
+		break;
+	    totsize += record.size;
+	}
+    }
+
+    mailbox_close(&mailbox);
+
+    if (r || snprintf(value, sizeof(value), "%lu", totsize) == -1)
+	return;
+
+    result->value = value;
+    result->size = strlen(value);
+}
+
 struct annotate_entry
 {
     const char *name;
@@ -309,6 +357,8 @@ const struct annotate_entry mailbox_ro_entries[] =
 	  NULL, ENTRY_PARTITION, PROXY_AND_BACKEND },
     { "/vendor/cmu/cyrus-imapd/server", annotation_get_server,
 	  NULL, ENTRY_SERVER, PROXY_AND_BACKEND },
+    { "/vendor/cmu/cyrus-imapd/size", annotation_get_size,
+	  NULL, ENTRY_SIZE, BACKEND_ONLY },
     { NULL, NULL, NULL, 0, ANNOTATION_PROXY_T_INVALID }
 };
 
@@ -399,7 +449,7 @@ static int fetch_cb(char *name, int matchlen,
 	strcat(int_mboxname, lastname+5);
     }
     else
-	strcpy(int_mboxname, name);
+	strcpy(int_mboxname, lastname);
 
     c = name[matchlen];
     if (c) name[matchlen] = '\0';
@@ -543,7 +593,9 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		/* Reset state in fetch_cb */
 		fetch_cb(NULL, 0, 0, 0);
 
-		mboxname_hiersep_tointernal(namespace, mailbox, 0);
+		mboxname_hiersep_tointernal(namespace, mailbox,
+				    config_virtdomains ?
+				    strcspn(mailbox, "@") : 0);
 		fdata.namespace = namespace;
 		fdata.userid = userid;
 		fdata.isadmin = isadmin;
