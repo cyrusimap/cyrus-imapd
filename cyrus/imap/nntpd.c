@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.26 2004/09/04 13:23:27 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.27 2004/09/07 20:46:37 ken3 Exp $
  */
 
 /*
@@ -1168,7 +1168,6 @@ static void cmdloop(void)
 		    backend_current = NULL;
 
 		    nntp_exists = nntp_group->exists;
-		    /* XXX do we change this is we don't change the group? */
 		    nntp_current = nntp_exists > 0;
 
 		    prot_printf(nntp_out, "211 %u %lu %lu %s\r\n",
