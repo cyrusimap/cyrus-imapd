@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.33 2002/04/12 22:36:21 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.34 2002/04/23 18:25:48 rjs3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -192,7 +192,8 @@ static void getsyncfd(struct db *db, struct txn *t)
     }
 }
 
-static void closesyncfd(struct db *db, struct txn *t)
+static void closesyncfd(struct db *db __attribute__((unused)),
+			struct txn *t)
 {
     /* if we're using fsync, then we don't want to close the file */
     if (use_osync && (t->syncfd != -1)) {
@@ -876,8 +877,8 @@ int myforeach(struct db *db,
 {
     const char *ptr;
     char *savebuf = NULL;
-    int savebuflen = 0;
-    int savebufsize;
+    size_t savebuflen = 0;
+    size_t savebufsize;
     struct txn t, *tp;
     int r = 0, cb_r = 0;
 

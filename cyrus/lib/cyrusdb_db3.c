@@ -88,7 +88,8 @@ static DB_ENV *dbenv;
 static int commit_txn(struct db *db, struct txn *tid);
 static int abort_txn(struct db *db, struct txn *tid);
 
-static void db_panic(DB_ENV *dbenv, int errno)
+static void db_panic(DB_ENV *dbenv __attribute__((unused)),
+		     int errno __attribute__((unused)))
 {
     syslog(LOG_CRIT, "DBERROR: critical database situation");
     /* but don't bounce mail */
@@ -842,7 +843,8 @@ static int delete_nosync(struct db *db,
     return mydelete(db, key, keylen, tid, DB_TXN_NOSYNC, force);
 }
 
-static int mycommit(struct db *db, struct txn *tid, int txnflags)
+static int mycommit(struct db *db __attribute__((unused)),
+		    struct txn *tid, int txnflags)
 {
     int r;
     DB_TXN *t = (DB_TXN *) tid;
@@ -880,7 +882,8 @@ static int commit_nosync(struct db *db, struct txn *tid)
     return mycommit(db, tid, DB_TXN_NOSYNC);
 }
 
-static int abort_txn(struct db *db, struct txn *tid)
+static int abort_txn(struct db *db __attribute__((unused)),
+		     struct txn *tid)
 {
     int r;
     DB_TXN *t = (DB_TXN *) tid;
