@@ -1,5 +1,5 @@
 /* bsearch.c -- binary search newline-separated fields in memory
- $Id: bsearch.c,v 1.14 1999/03/02 01:20:51 tjs Exp $
+ $Id: bsearch.c,v 1.15 1999/09/30 07:29:27 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -91,8 +91,9 @@ unsigned long *linelenp;
 {
     int firstsearch = 1;
     unsigned long start = 0, end = len - 1, mid, offset;
-    unsigned long linelen, n;
-    int cmp;
+    unsigned long linelen;
+    long n;
+    int cmp = 0;
     const char *wordp, *p;
 
     while (start < end + 1) {
