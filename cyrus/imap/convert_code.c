@@ -37,8 +37,8 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
-
-/* $Id: convert_code.c,v 1.5 2000/05/23 20:52:13 robeson Exp $ */
+ *
+ * $Id: convert_code.c,v 1.6 2000/05/29 03:50:51 leg Exp $ */
 
 /* Same old convert_code function moved into one place instead of being
  * redundant in every file.
