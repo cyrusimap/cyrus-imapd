@@ -27,7 +27,7 @@
  *
  */
 
-/* $Id: fud.c,v 1.2 1998/06/23 23:07:06 dar Exp $ */
+/* $Id: fud.c,v 1.3 1998/06/24 00:26:43 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -56,7 +56,9 @@ extern int errno;
 extern int optind;
 extern char *optarg;
 
-void send_reply(struct sockaddr_in sfrom, int status, char *user, char *mbox, int numrecent, time_t lastread, time_t lastarrived);
+void send_reply P((struct sockaddr_in sfrom, int status,
+		   char *user, char *mbox, int numrecent, time_t lastread,
+		   time_t lastarrived));
 
 int code = 0;
 int soc;
