@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.87 2002/02/01 22:56:56 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.88 2002/02/06 16:57:37 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -156,8 +156,6 @@ int proxyd_starttls_done = 0; /* have we done a successful starttls yet? */
 char *proxyd_userid;
 struct auth_state *proxyd_authstate = 0;
 int proxyd_userisadmin;
-struct sockaddr_in proxyd_localaddr, proxyd_remoteaddr;
-int proxyd_haveaddr = 0;
 char proxyd_clienthost[250] = "[local]";
 struct protstream *proxyd_out = NULL;
 struct protstream *proxyd_in = NULL;
@@ -1074,14 +1072,86 @@ int service_init(int argc, char **argv, char **envp)
     return 0;
 }
 
+static void proxyd_reset(void) 
+{
+    int i;
+    
+    proc_cleanup();
+
+    /* Cleanup file descriptors */
+    if(proxyd_in) prot_free(proxyd_in);
+    if(proxyd_out) prot_free(proxyd_out);
+    proxyd_in = proxyd_out = NULL;
+    close(0);
+    close(1);
+    close(2);
+    
+    /* close backend connections */
+    for(i=0;backend_cached[i];i++) {
+	proxyd_downserver(backend_cached[i]);
+	free(backend_cached[i]);
+    }
+    free(backend_cached);
+    backend_cached = NULL;
+    backend_inbox = backend_current = NULL;
+
+    /* Cleanup Globals */
+    proxyd_cmdcnt = 0;
+    supports_referrals = 0;
+    proxyd_userisadmin = 0;
+    proxyd_starttls_done = 0;
+    proxyd_logtime = 0;
+
+    strcpy(proxyd_clienthost, "[local]");
+
+    if(proxyd_userid) {
+	free(proxyd_userid);
+	proxyd_userid = NULL;
+    }
+    if(proxyd_authstate) {
+	auth_freestate(proxyd_authstate);
+	proxyd_authstate = NULL;
+    }
+
+    /* Cleanup SASL */
+    if(proxyd_saslconn) {
+	sasl_dispose(&proxyd_saslconn);
+	proxyd_saslconn = NULL;
+    }
+    if(saslprops.iplocalport) {
+	free(saslprops.iplocalport);
+	saslprops.iplocalport = NULL;
+    }
+    if(saslprops.ipremoteport) {
+	free(saslprops.ipremoteport);
+	saslprops.ipremoteport = NULL;
+    }
+    if(saslprops.authid) {
+	free(saslprops.authid);
+	saslprops.authid = NULL;
+    }
+    saslprops.ssf = 0;
+
+#ifdef HAVE_SSL
+    if (tls_conn) {
+	if (tls_reset_servertls(&tls_conn) == -1) {
+	    fatal("tls_reset() failed", EC_TEMPFAIL);
+	}
+	tls_conn = NULL;
+    }
+#endif
+}
+
 int service_main(int argc, char **argv, char **envp)
 {
     int imaps = 0;
     int opt;
     socklen_t salen;
     struct hostent *hp;
+    struct sockaddr_in proxyd_localaddr, proxyd_remoteaddr;
     char localip[60], remoteip[60];
     int timeout;
+    int proxyd_haveaddr = 0;
     sasl_security_properties_t *secprops = NULL;
     sasl_ssf_t ssf;
     
@@ -1184,7 +1254,11 @@ int service_main(int argc, char **argv, char **envp)
 
     cmdloop();
     
-    /* should never reach */
+    /* cleanup */    
+    prot_flush(proxyd_out);
+    proxyd_reset();
+    
+    /* return to service another connection */
     return 0;
 }
 
@@ -1248,7 +1322,7 @@ void shut_down(int code)
     i = 0;
     while (backend_cached[i]) {
 	proxyd_downserver(backend_cached[i]);
-
+	free(backend_cached[i]);
 	i++;
     }
 
@@ -1322,7 +1396,7 @@ cmdloop()
 		syslog(LOG_WARNING, "PROTERR: %s", err);
 		prot_printf(proxyd_out, "* BYE %s\r\n", err);
 	    }
-	    shut_down(0);
+	    return;
 	}
 	if (c != ' ' || !imparse_isatom(tag.s) || 
 	    (tag.s[0] == '*' && !tag.s[1])) {
@@ -1585,8 +1659,7 @@ cmdloop()
 		prot_printf(proxyd_out, "%s OK %s\r\n", 
 			    tag.s, error_message(IMAP_OK_COMPLETED));
 
-		/* xxx enable process reuse */
-		shut_down(0);
+		return;
 	    }
 	    else if (!proxyd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "List")) {
