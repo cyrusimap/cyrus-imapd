@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.1.2.4 2002/12/20 18:38:46 rjs3 Exp $
+ * $Id: auth_pts.c,v 1.1.2.5 2002/12/20 22:10:00 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -160,7 +160,7 @@ char *auth_canonifyid(const char *identifier,
  */
 struct auth_state *auth_newstate(const char *identifier) 
 {
-    struct auth_state *output;
+    struct auth_state *output = NULL;
 
     if(canonuser_id &&
        (!strcmp(canonuser_id, identifier) ||
