@@ -40,7 +40,7 @@ typedef struct bbd_struct {
 } bboard;
 
 
-bboard *getams(char *, bboard *);
-bboard *getimap(struct imclient *,char *, bboard *);
-int cmpmsg(const message *, const message *);
+bboard *getams();
+bboard *getimap();
+int cmpmsg();
 
