@@ -1,5 +1,5 @@
 # Makefile.in - timsieved makefile
-# $Id: Makefile.in,v 1.8 2000/01/28 22:09:56 leg Exp $
+# $Id: Makefile.in,v 1.9 2000/02/17 08:26:10 leg Exp $
 # @configure_input@
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
@@ -57,7 +57,7 @@ PUREOPT=-best-effort
 all: timsieved
 
 install:
-	$(INSTALL) @STRIP@ -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 755 timsieved $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 755 timsieved $(DESTDIR)$(cyrus_prefix)/bin
 
 OBJS= actions.o lex.o mystring.o config.o scripttest.o \
 	timsieved.o parser.o
