@@ -65,7 +65,6 @@
 
 #include <prot.h>
 
-
 struct iseive_s {
     char *serverFQDN;
     int port;
@@ -80,6 +79,8 @@ struct iseive_s {
     struct protstream *pin;
     struct protstream *pout;
 };
+
+void fillin_interactions(sasl_interact_t *tlist);
 
 /* we need this separate from the free() call so that we can reuse
  * the same memory for referrals */
