@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslclient.c,v 1.12 2003/10/22 18:50:08 rjs3 Exp $ */
+/* $Id: saslclient.c,v 1.13 2004/07/07 19:49:05 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -206,6 +206,7 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 
     if (r != SASL_OK && r != SASL_CONTINUE) {
 	if (sasl_result) *sasl_result = r;
+	if (status) *status = sasl_errdetail(conn);	
 	return IMAP_SASL_FAIL;
     }
 
@@ -258,6 +259,7 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 	/* get challenge/reply from the server */
 	if (!prot_fgets(buf, AUTH_BUF_SIZE, pin)) {
 	    if (sasl_result) *sasl_result = SASL_FAIL;
+	    if (status) *status = "EOF from server";
 	    return IMAP_SASL_PROTERR;
 	}
 
