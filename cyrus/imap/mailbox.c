@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.14 2004/05/25 01:28:09 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.15 2004/05/31 15:06:58 rjs3 Exp $
  *
  */
 
@@ -1757,9 +1757,9 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 	    *quotadeleted += ntohl(*((bit32 *)(buf+OFFSET_SIZE)));
 
 	    /* Update system flag counts accordingly */
-	    if (sysflags & FLAG_ANSWERED) *numansweredflag++;
-	    if (sysflags & FLAG_DELETED) *numdeletedflag++;
-	    if (sysflags & FLAG_FLAGGED) *numflaggedflag++;
+	    if (sysflags & FLAG_ANSWERED) (*numansweredflag)++;
+	    if (sysflags & FLAG_DELETED) (*numdeletedflag)++;
+	    if (sysflags & FLAG_FLAGGED) (*numflaggedflag)++;
 
 	    if (expunge_fd != -1) {
 		/* Copy the index record to cyrus.expunge */
