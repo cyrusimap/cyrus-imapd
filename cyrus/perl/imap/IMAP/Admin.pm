@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.28.2.9 2003/03/24 18:14:11 ken3 Exp $
+# $Id: Admin.pm,v 1.28.2.10 2003/04/24 18:35:47 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -253,7 +253,7 @@ sub deleteaclmailbox {
   my $res = '';
   my ($rc, $msg);
   foreach my $acl (@acl) {
-    ($rc, $msg) = $self->send('', '', 'DELETEACL MAILBOX %s %s', $mbx, $acl);
+    ($rc, $msg) = $self->send('', '', 'DELETEACL %s %s', $mbx, $acl);
     if ($rc eq 'OK') {
       $cnt++;
     } else {
