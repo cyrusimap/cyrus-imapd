@@ -97,7 +97,7 @@ int installdata(struct protstream *pout, struct protstream *pin,
 		char *scriptname, char *data, int len)
 {
   int res;
-  string_t *str;
+  mystring_t *str;
   lexstate_t state;
 
   prot_printf(pout, "PUTSCRIPT \"%s\" ",scriptname);
@@ -170,7 +170,7 @@ int installafile(struct protstream *pout, struct protstream *pin,char *filename)
   int result;
   int cnt;
   int res;
-  string_t *str;
+  mystring_t *str;
   lexstate_t state;
   char *sievename;
 
@@ -300,7 +300,7 @@ int setscriptactive(struct protstream *pout, struct protstream *pin,char *name)
 {
   lexstate_t state;
   int res;
-  string_t *str;
+  mystring_t *str;
 
   /* tell server we want "name" to be the active script */
   prot_printf(pout, "SETACTIVE \"%s\"\r\n",name);
@@ -334,14 +334,14 @@ int setscriptactive(struct protstream *pout, struct protstream *pin,char *name)
   return 0;
 }
 
-static int viewafile(string_t *data, char *name)
+static int viewafile(mystring_t *data, char *name)
 {
   printf("%s\r\n", string_DATAPTR(data));
 
   return 0;
 }
 
-static int writefile(string_t *data, char *name)
+static int writefile(mystring_t *data, char *name)
 {
   FILE *stream;
 
@@ -369,7 +369,7 @@ static int writefile(string_t *data, char *name)
 int getscript(struct protstream *pout, struct protstream *pin,char *name, int save)
 {
   int res;
-  string_t *str;
+  mystring_t *str;
   lexstate_t state;
 
   prot_printf(pout,"GETSCRIPT \"%s\"\r\n",name);
@@ -417,10 +417,10 @@ int getscript(struct protstream *pout, struct protstream *pin,char *name, int sa
 }
 
 
-int getscriptvalue(struct protstream *pout, struct protstream *pin,char *name, string_t **data)
+int getscriptvalue(struct protstream *pout, struct protstream *pin,char *name, mystring_t **data)
 {
   int res;
-  string_t *str;
+  mystring_t *str;
   lexstate_t state;
 
   prot_printf(pout,"GETSCRIPT \"%s\"\r\n",name);

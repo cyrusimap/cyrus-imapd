@@ -28,33 +28,35 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <sasl.h> /* yay! sasl */
 
+#include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
-#include <time.h>
-#include <signal.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/param.h>
 #include <sys/stat.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <sys/param.h>
 #include <syslog.h>
+#include <dirent.h>
+#include <ctype.h>
 #include <com_err.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <ctype.h>
+#include <string.h>
 
+#include "prot.h"
 #include "config.h"
+#include "xmalloc.h"
+
+#include "codes.h"
 #include "actions.h"
 #include "parser.h"
 #include "lex.h"
 #include "mystring.h"
-#include "codes.h"
 
 #include "auth.h"
-#include "prot.h"
-#include "xmalloc.h"
 
 
 sasl_conn_t *sieved_saslconn; /* the sasl connection context */

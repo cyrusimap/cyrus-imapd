@@ -28,36 +28,36 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "codes.h"
 
 
-#ifndef _STRING_H_
-#define _STRING_H_
+#ifndef INCLUDED_MYSTRING_H
+#define INCLUDED_MYSTRING_H
 
 typedef struct {
   int        len;
   /* Data immediately following... */
-}  string_t;
+}  mystring_t;
 
 
 int string_allocate(int length,
 		    const char *buf,	/* NULL => no copy */
-		    string_t ** str);
+		    mystring_t ** str);
 
-int string_copy(string_t *oldstr,
-		string_t **newstr);
+int string_copy(mystring_t *oldstr,
+		mystring_t **newstr);
 
-void string_free(string_t **str);
+void string_free(mystring_t **str);
 
-int string_compare(string_t *str1, string_t *str2);
+int string_compare(mystring_t *str1, mystring_t *str2);
 
-int string_comparestr(string_t *str1, char *str2);
+int string_comparestr(mystring_t *str1, char *str2);
 
-int string_compare_with(string_t *str1, string_t *str2, string_t *comp);
+int string_compare_with(mystring_t *str1, mystring_t *str2, mystring_t *comp);
 
 /*eq_result_t
-  string_equal_cstr(const string_t * str, const char *cstr);*/
+  string_equal_cstr(const mystring_t * str, const char *cstr);*/
 
-#define string_DATAPTR(s) (((char *) s)+sizeof(string_t))
+#define string_DATAPTR(s) (((char *) s)+sizeof(mystring_t))
 
 int safe_to_use_quoted(char *str, int len);
 
 
-#endif /* _STRING__H */
+#endif /* INCLUDED_MYSTRING_H */

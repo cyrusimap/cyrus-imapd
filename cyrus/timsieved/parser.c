@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.1 1999/11/03 18:09:44 tmartin Exp $
+ * $Id: parser.c,v 1.2 1999/11/15 20:43:01 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -46,7 +46,7 @@ int authenticated = 0;
 /* forward declarations */
 static int cmd_logout(struct protstream *sieved_out, struct protstream *sieved_in);
 static int cmd_authenticate(struct protstream *sieved_out, struct protstream *sieved_in,
-			    string_t *mechanism_name, string_t *initial_challenge, const char **errmsg);
+			    mystring_t *mechanism_name, mystring_t *initial_challenge, const char **errmsg);
 
 
 
@@ -55,10 +55,10 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   int token;
   const char *error_msg = "Generic Error";
 
-  string_t *mechanism_name = NULL;
-  string_t *initial_challenge = NULL;
-  string_t *sieve_name = NULL;
-  string_t *sieve_data = NULL;
+  mystring_t *mechanism_name = NULL;
+  mystring_t *initial_challenge = NULL;
+  mystring_t *sieve_name = NULL;
+  mystring_t *sieve_data = NULL;
 
   /* get one token from the lexer */
   token = timlex(NULL, sieved_in);
@@ -294,14 +294,14 @@ static int cmd_logout(struct protstream *sieved_out, struct protstream *sieved_i
 }
 
 static int cmd_authenticate(struct protstream *sieved_out, struct protstream *sieved_in,
-			    string_t *mechanism_name, string_t *initial_challenge, const char **errmsg)
+			    mystring_t *mechanism_name, mystring_t *initial_challenge, const char **errmsg)
 {
 
   int sasl_result;
 
   char *mech = string_DATAPTR(mechanism_name);
 
-  string_t *clientinstr=NULL;
+  mystring_t *clientinstr=NULL;
   char *clientin = NULL;
   unsigned int clientinlen = 0;
 
@@ -337,7 +337,7 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
   {
     int token1;
     int token2;
-    string_t *str, *blahstr;
+    mystring_t *str, *blahstr;
     char *inbase64;
     unsigned int inbase64len;
 

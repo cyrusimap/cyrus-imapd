@@ -1,7 +1,7 @@
 /* lex.c -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.c,v 1.9 1999/11/03 18:09:43 tmartin Exp $
+ * $Id: lex.c,v 1.10 1999/11/15 20:43:00 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -116,7 +116,7 @@ int lex_init(void)
  * if outstr is NULL it isn't filled in
  */
 
-int timlex(string_t **outstr,   struct protstream *stream)
+int timlex(mystring_t **outstr,   struct protstream *stream)
 {
 
   int ch;
