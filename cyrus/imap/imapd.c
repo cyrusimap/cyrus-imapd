@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.312 2001/08/10 18:32:16 ken3 Exp $ */
+/* $Id: imapd.c,v 1.313 2001/08/10 19:29:07 ken3 Exp $ */
 
 #include <config.h>
 
@@ -386,11 +386,11 @@ static void imapd_reset(void)
     if (tls_conn) {
 #ifdef TLS_REUSE
 	/* make sure we re-use sessions */
-	SSL_set_shutdown(tls_conn,SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
+	tls_reuse_sessions(&tls_conn);
 #else
 	tls_free(&tls_conn);
 	tls_conn = NULL;
-#endif
+#endif /* TLS_REUSE */
     }
 #endif
 

@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.17 2001/08/10 18:31:25 ken3 Exp $ */
+/* $Id: tls.c,v 1.18 2001/08/10 19:29:08 ken3 Exp $ */
 
 #include <config.h>
 
@@ -131,7 +131,7 @@
 #define DB (&cyrusdb_db3)
 
 #define FNAME_SESSIONS "/tls_sessions.db"
-#endif
+#endif /* TLS_REUSE */
 
 /* We must keep some of the info available */
 static const char hexcodes[] = "0123456789ABCDEF";
@@ -583,31 +583,6 @@ static int find_cb(void *rock, const char *id, int idlen,
 
     return 0;
 }
-
-int tls_expire_sessions(void)
-{
-    char dbname[1024];
-    struct db *sessdb = NULL;
-    int ret;
-
-   /* create the name of the db file */
-    strcpy(dbname, config_dir);
-    strcat(dbname, FNAME_SESSIONS);
-
-    /* fetch the session from our database */
-    ret = DB->open(dbname, &sessdb);
-    if (ret != CYRUSDB_OK) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s",
-	       dbname, cyrusdb_strerror(ret));
-	return 1;
-    }
-    else {
-	DB->foreach(sessdb, "", 0, &find_p, &find_cb, sessdb, NULL);
-	DB->close(sessdb);
-    }
-
-    return 0;
-}
 #endif /* TLS_REUSE */
 
  /*
@@ -676,7 +651,7 @@ int     tls_init_serverengine(int verifydepth,
     SSL_CTX_sess_set_new_cb(ctx, new_session_cb);
     SSL_CTX_sess_set_remove_cb(ctx, remove_session_cb);
     SSL_CTX_sess_set_get_cb(ctx, get_session_cb);
-#endif
+#endif /* TLS_REUSE */
 
     if (strlen(var_imapd_tls_CAfile) == 0)
 	CAfile = NULL;
@@ -927,5 +902,41 @@ int tls_free(SSL **conn)
     
     return 0;
 }
+
+#ifdef TLS_REUSE
+int tls_reuse_sessions(SSL **conn)
+{
+    if (*conn) {
+	SSL_set_shutdown(*conn,SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
+    }
+
+    return 0;
+}
+
+int tls_expire_sessions(void)
+{
+    char dbname[1024];
+    struct db *sessdb = NULL;
+    int ret;
+
+   /* create the name of the db file */
+    strcpy(dbname, config_dir);
+    strcat(dbname, FNAME_SESSIONS);
+
+    /* fetch the session from our database */
+    ret = DB->open(dbname, &sessdb);
+    if (ret != CYRUSDB_OK) {
+	syslog(LOG_ERR, "DBERROR: opening %s: %s",
+	       dbname, cyrusdb_strerror(ret));
+	return 1;
+    }
+    else {
+	DB->foreach(sessdb, "", 0, &find_p, &find_cb, sessdb, NULL);
+	DB->close(sessdb);
+    }
+
+    return 0;
+}
+#endif /* TLS_REUSE */
 
 #endif /* HAVE_SSL */

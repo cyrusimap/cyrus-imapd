@@ -64,6 +64,14 @@ int tls_start_servertls(int readfd, int writefd,
 
 int tls_free(SSL **conn);
 
+#ifdef TLS_REUSE
+/* make sure we re-use sessions */
+int tls_reuse_sessions(SSL **conn);
+
+/* remove expired sessions from the DB */
+int tls_expire_sessions(void);
+#endif /* TLS_REUSE */
+
 #endif /* TLS_H */
 
 #endif /* HAVE_SSL */
