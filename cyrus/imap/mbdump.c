@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.26.2.6 2004/05/25 01:28:09 ken3 Exp $
+ * $Id: mbdump.c,v 1.26.2.7 2004/08/09 18:51:19 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -536,7 +536,7 @@ int undump_mailbox(const char *mbname, const char *mbpath,
 {
     struct buf file, data;
     char c;
-    int quotaused = 0;
+    uquota_t quotaused = 0;
     int r = 0;
     int curfile = -1;
     const char *userid = NULL;

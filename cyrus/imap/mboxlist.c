@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.17 2004/08/05 16:23:44 ken3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.18 2004/08/09 18:51:20 ken3 Exp $
  */
 
 #include <config.h>
@@ -2535,7 +2535,7 @@ static int mboxlist_changequota(const char *name,
 	r = quota_write(&mailbox.quota, tid);
 	if (r) {
 	    syslog(LOG_ERR,
-		   "LOSTQUOTA: unable to record free of %lu bytes in quota %s",
+		   "LOSTQUOTA: unable to record free of " UQUOTA_T_FMT " bytes in quota %s",
 		   mailbox.quota_mailbox_used, mailbox.quota.root);
 	}
 	free(mailbox.quota.root);

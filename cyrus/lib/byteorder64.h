@@ -1,6 +1,6 @@
-/* quota.h -- Quota format definitions
+/* byteorder64.h -- convert 64-bit values between host and network byte order
  *
- * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 2004 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,70 +38,28 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota.h,v 1.1.2.3 2004/08/09 18:51:21 ken3 Exp $
+ * $Id: byteorder64.h,v 1.1.2.1 2004/08/09 18:51:22 ken3 Exp $
  */
 
-#ifndef INCLUDED_QUOTA_H
-#define INCLUDED_QUOTA_H
+#ifndef _BYTEORDER64_H
+#define _BYTEORDER64_H
 
-#include "cyrusdb.h"
 #include <config.h>
 
-#define FNAME_QUOTADB "/quotas.db"
-
-#define QUOTA_UNITS (1024)
-
-/* Define the proper quota type, it should either be a
- * long or a long long int depending upon what the
- * the compiler supports.
- */
 #ifdef HAVE_LONG_LONG_INT
-typedef unsigned long long int uquota_t;
-typedef long long int quota_t;
-#define UQUOTA_T_FMT     "%llu"
-#define QUOTA_T_FMT      "%lld"
-#define QUOTA_REPORT_FMT "%8llu"
+
+/* 64-bit host/network byte-order swap macros */
+#ifdef WORDS_BIGENDIAN
+#define htonll(x) (x)
+#define ntohll(x) (x)
 #else
-typedef unsigned long uquota_t;
-typedef long quota_t;
-#define UQUOTA_T_FMT     "%lu"
-#define QUOTA_T_FMT      "%ld"
-#define QUOTA_REPORT_FMT "%8lu"
-#endif
+#define htonll(x) _htonll(x)
+#define ntohll(x) _ntohll(x)
 
-extern struct db *qdb;
+/* little-endian 64-bit host/network byte-order swap functions */
+unsigned long long _htonll(unsigned long long);
+unsigned long long _ntohll(unsigned long long);
 
-struct quota {
-    char *root;
-
-    /* Information in quota entry */
-    uquota_t used;
-    int limit;			/* in QUOTA_UNITS */
-};
-
-extern int quota_read(struct quota *quota, struct txn **tid, int wrlock);
-
-extern void quota_commit(struct txn **tid);
-
-extern void quota_abort(struct txn **tid);
-
-extern int quota_write(struct quota *quota, struct txn **tid);
-
-extern int quota_delete(struct quota *quota, struct txn **tid);
-
-extern int quota_findroot(char *ret, size_t retlen, const char *name);
-
-/* open the quotas db */
-void quotadb_open(char *name);
-
-/* close the database */
-void quotadb_close(void);
-
-/* initialize database structures */
-#define QUOTADB_SYNC 0x02
-void quotadb_init(int flags);
-
-/* done with database stuff */
-void quotadb_done(void);
-
-#endif /* INCLUDED_QUOTA_H */
+#endif /* WORDS_BIGENDIAN */
+#endif /* HAVE_LONG_LONG_INT */
+#endif /* _BYTEORDER64_H */

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.9 2004/08/05 16:23:47 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.10 2004/08/09 18:51:21 ken3 Exp $ */
 
 #include <config.h>
 
@@ -94,6 +94,7 @@
 #include "retry.h"
 #include "convert_code.h"
 #include "util.h"
+#include "byteorder64.h"
 
 extern int optind;
 extern char *optarg;
@@ -441,7 +442,7 @@ int reconstruct(char *name, struct discovered *found)
     char *list_acl, *list_part;
     int list_type;
 
-    unsigned long new_quota = 0;
+    uquota_t new_quota = 0;
 
     struct index_record message_index, old_index;
     static struct index_record zero_index;
@@ -774,7 +775,14 @@ int reconstruct(char *name, struct discovered *found)
     *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(new_exists);
     *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(mailbox.last_appenddate);
     *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(mailbox.last_uid);
-    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(new_quota);
+
+    /* quotas may be 64bit now */
+#ifdef HAVE_LONG_LONG_INT
+    *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonll(new_quota);
+#else
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED32)) = htonl(new_quota);
+#endif
+
     *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(mailbox.pop3_last_login);
     *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(mailbox.uidvalidity);
     *((bit32 *)(buf+OFFSET_DELETED)) = htonl(new_deleted);

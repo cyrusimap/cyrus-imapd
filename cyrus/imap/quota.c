@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.48.2.6 2004/06/30 19:41:21 ken3 Exp $ */
+/* $Id: quota.c,v 1.48.2.7 2004/08/09 18:51:20 ken3 Exp $ */
 
 
 #include <config.h>
@@ -120,7 +120,7 @@ struct quotaentry {
     struct quota quota;
     int refcount;
     int deleted;
-    unsigned long newused;
+    uquota_t newused;
 };
 
 #define QUOTAGROW 300
@@ -251,7 +251,7 @@ static int find_cb(void *rockp __attribute__((unused)),
     }
     memset(&quota[quota_num], 0, sizeof(struct quotaentry));
     quota[quota_num].quota.root = xstrndup(key, keylen);
-    sscanf(data, "%lu %d",
+    sscanf(data, UQUOTA_T_FMT " %d",
 	   &quota[quota_num].quota.used, &quota[quota_num].quota.limit);
   
     quota_num++;
@@ -422,7 +422,7 @@ int fixquota_finish(int thisquota, struct txn **tid, unsigned long *count)
 	(*count)++;
     }
     if (quota[thisquota].quota.used != quota[thisquota].newused) {
-	printf("%s: usage was %lu, now %lu\n", quota[thisquota].quota.root,
+	printf("%s: usage was " UQUOTA_T_FMT ", now " UQUOTA_T_FMT "\n", quota[thisquota].quota.root,
 	       quota[thisquota].quota.used, quota[thisquota].newused);
 	quota[thisquota].quota.used = quota[thisquota].newused;
 	r = quota_write(&quota[thisquota].quota, tid);
@@ -489,12 +489,12 @@ reportquota(void)
     int i;
     char buf[MAX_MAILBOX_PATH+1];
 
-    printf("   Quota  %% Used    Used Root\n");
+    printf("   Quota   %% Used     Used Root\n");
 
     for (i = 0; i < quota_num; i++) {
 	if (quota[i].deleted) continue;
 	if (quota[i].quota.limit > 0) {
-	    printf(" %7d %7ld", quota[i].quota.limit,
+	    printf(" %7d " QUOTA_REPORT_FMT , quota[i].quota.limit,
 		   ((quota[i].quota.used / QUOTA_UNITS) * 100) / quota[i].quota.limit);
 	}
 	else if (quota[i].quota.limit == 0) {
@@ -507,6 +507,6 @@ reportquota(void)
 	(*quota_namespace.mboxname_toexternal)(&quota_namespace,
 					       quota[i].quota.root,
 					       "cyrus", buf);
-	printf(" %7ld %s\n", quota[i].quota.used / QUOTA_UNITS, buf);
+	printf(" " QUOTA_REPORT_FMT " %s\n", quota[i].quota.used / QUOTA_UNITS, buf);
     }
 }

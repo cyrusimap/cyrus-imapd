@@ -1,6 +1,6 @@
-/* quota.h -- Quota format definitions
- *
- * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
+/* byteorder64.c -- convert 64-bit values between host and network byte order
+ * 
+ * Copyright (c) 2004 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,70 +38,58 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota.h,v 1.1.2.3 2004/08/09 18:51:21 ken3 Exp $
+ * $Id: byteorder64.c,v 1.1.2.1 2004/08/09 18:51:21 ken3 Exp $
  */
 
-#ifndef INCLUDED_QUOTA_H
-#define INCLUDED_QUOTA_H
-
-#include "cyrusdb.h"
 #include <config.h>
 
-#define FNAME_QUOTADB "/quotas.db"
+#if defined(HAVE_LONG_LONG_INT) && !defined(WORDS_BIGENDIAN)
 
-#define QUOTA_UNITS (1024)
+#include <netinet/in.h>
 
-/* Define the proper quota type, it should either be a
- * long or a long long int depending upon what the
- * the compiler supports.
- */
-#ifdef HAVE_LONG_LONG_INT
-typedef unsigned long long int uquota_t;
-typedef long long int quota_t;
-#define UQUOTA_T_FMT     "%llu"
-#define QUOTA_T_FMT      "%lld"
-#define QUOTA_REPORT_FMT "%8llu"
-#else
-typedef unsigned long uquota_t;
-typedef long quota_t;
-#define UQUOTA_T_FMT     "%lu"
-#define QUOTA_T_FMT      "%ld"
-#define QUOTA_REPORT_FMT "%8lu"
-#endif
-
-extern struct db *qdb;
-
-struct quota {
-    char *root;
-
-    /* Information in quota entry */
-    uquota_t used;
-    int limit;			/* in QUOTA_UNITS */
+/* Structure used to swap the bytes in a 64-bit unsigned long long. */
+union byteswap_64_u {
+    unsigned long long a;
+    uint32_t b[2];
 };
 
-extern int quota_read(struct quota *quota, struct txn **tid, int wrlock);
+/* Function to byteswap 64bit unsigned integers on
+ * little endian machines to big endian network order. 
+ * On big endian machines this will be a null macro.
+ * The macro htonll() is defined in byteorder64.h,
+ * and if needed refers to _htonll() here.
+ */
+unsigned long long _htonll(unsigned long long x)
+{
+    union byteswap_64_u u1;
+    union byteswap_64_u u2;
 
-extern void quota_commit(struct txn **tid);
+    u1.a = x;
 
-extern void quota_abort(struct txn **tid);
+    u2.b[0] = htonl(u1.b[1]);
+    u2.b[1] = htonl(u1.b[0]);
 
-extern int quota_write(struct quota *quota, struct txn **tid);
+    return u2.a;
+}
 
-extern int quota_delete(struct quota *quota, struct txn **tid);
 
-extern int quota_findroot(char *ret, size_t retlen, const char *name);
+/* Function to byteswap big endian 64bit unsigned integers
+ * back to little endian host order on little endian machines. 
+ * As above, on big endian machines this will be a null macro.
+ * The macro ntohll() is defined in byteorder64.h, and if needed,
+ * refers to _ntohll() here.
+ */
+unsigned long long _ntohll(unsigned long long x)
+{
+    union byteswap_64_u u1;
+    union byteswap_64_u u2;
 
-/* open the quotas db */
-void quotadb_open(char *name);
+    u1.a = x;
 
-/* close the database */
-void quotadb_close(void);
+    u2.b[1] = ntohl(u1.b[0]);
+    u2.b[0] = ntohl(u1.b[1]);
 
-/* initialize database structures */
-#define QUOTADB_SYNC 0x02
-void quotadb_init(int flags);
+    return u2.a;
+}
 
-/* done with database stuff */
-void quotadb_done(void);
-
-#endif /* INCLUDED_QUOTA_H */
+#endif /* defined(HAVE_LONG_LONG_INT) && !defined(WORDS_BIGENDIAN) */

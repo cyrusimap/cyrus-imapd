@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota_db.c,v 1.1.2.2 2004/05/25 01:28:13 ken3 Exp $
+ * $Id: quota_db.c,v 1.1.2.3 2004/08/09 18:51:21 ken3 Exp $
  *
  */
 
@@ -89,7 +89,7 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
 
     switch (r) {
     case CYRUSDB_OK:
-	sscanf(data, "%lu %d", &quota->used, &quota->limit);
+	sscanf(data, UQUOTA_T_FMT " %d", &quota->used, &quota->limit);
 	break;
 
     case CYRUSDB_AGAIN:
@@ -151,7 +151,7 @@ int quota_write(struct quota *quota, struct txn **tid)
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
 
     len = snprintf(buf, sizeof(buf) - 1,
-		   "%lu %d", quota->used, quota->limit);
+		   UQUOTA_T_FMT " %d", quota->used, quota->limit);
     r = QDB->store(qdb, quota->root, qrlen, buf, len, tid);
     
     switch (r) {
