@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.57 1999/08/09 21:07:46 leg Exp $ -->
+<!-- $Id: install.html,v 1.58 1999/08/12 19:27:36 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -52,10 +52,18 @@ delivered-db database and mkdir /var/imap/deliverdb.
 <li> Upgrading from the Cyrus IMAP server version 1.5 or earlier:
 libsasl is now required.  Configuring SASL to work may be a chore,
 especially if you use shadow passwords.  If you use shadow passwords,
-you must use PAM for authentication and configure PAM such that
-non-root users can verify passwords.  We believe pam_pwdb contains
-support for using a pwcheck-like program for checking shadow
-passwords.
+you must allow the cyrus user read access to /etc/shadow.
+
+<li> Upgrading from the Cyrus IMAP server version 1.6.1 or earlier:
+the quota and user directories are now hashed by the first character
+of the username.  Optionally, the data partitions can also be hashed
+by enabling the "hashimapspool" option.
+
+<p>You can automatically hash your directories using the
+"<tt>dohash</tt>" script in the tools subdirectory.  Be sure to set
+"hashimapspool" before running "<tt>dohash</tt>" if you want to
+hash your mail spool.  Be sure to run it as the Cyrus user and to stop
+mail service while converting.
 
 <li> An ANSI C compiler is now required.  You can acquire one from
 <TT>prep.ai.mit.edu</TT>.
@@ -101,12 +109,6 @@ Sendmail distributions may be obtained from
 
 <LI> If you want to export netnews newsgroups using IMAP, the IMAP
 server must receive newsgroups with the INN news server.
-
-<LI> If you want Sieve support (a server-side mail filtering
-language), cmu-sieve version 1.3 or higher is required.  cmu-sieve
-releases will most likely be made in conjunction with imapd releases.
-Unpack cmu-sieve-xxx.tar.gz inside the cyrus directory; Sieve will
-be built at the same time as imapd.
 </ul>
 <H2>Compiling the IMAP Server</H2>
 
@@ -194,9 +196,8 @@ configure uses "<TT>cyrus</TT>". <P>
 configure uses "<TT>mail</TT>". <P>
 
 <dt><tt>--with-statedir=PATH</tt> 
-<dd>Specifies the directory used for
-the <TT>pwcheck</TT> and/or <TT>ptclient</TT> state directories.  By
-default, configure uses "<TT>/var</TT>". <P>
+<dd>Specifies the directory used for the <TT>ptclient</TT> state
+directories.  By default, configure uses "<TT>/var</TT>". <P>
 
 <dt><tt>--with-auth=METHOD</tt>
 <dd>Specifies the authorization module to use.  Currently implemented
@@ -443,10 +444,9 @@ Create the <TT>imapd.log</TT> file:
 </pre>
 
 For a description of all the fields in this file, see the <A
-HREF="imapd.conf.5.html"><tt>imapd.conf</tt>(5)</A> man page.
-(Note that this file also exports values to libsasl; the srvtab
-setting here overrides the srvtab setting in the SASL configuration
-file.)
+HREF="imapd.conf.5.html"><tt>imapd.conf</tt>(5)</A> man page.  (Note
+that this file also exports values to libsasl; the srvtab setting here
+is in place of the srvtab setting in the SASL configuration file.)
  <P>
 
 Note that <b>everyday users should not be administrators</b>.  Admins
@@ -476,18 +476,7 @@ cyrus user and group and should not permit access to other users.
    chmod 750 imap
 </kbd></pre>
 
-<li>In the configuration directory, create the empty file "<tt>mailboxes</tt>"
-and a set of empty directories:
-
-<pre>
-<kbd>   cd imap
-   true &gt;&gt; mailboxes
-   mkdir user quota proc log msg deliverdb
-   chown cyrus *
-   chgrp mail *
-</kbd></pre>
-
-<li>Create the default partition directory specified in the
+<li>Create the default partition directories specified in the
 "<tt>/etc/imapd.conf</tt>" file.
 
 <p>This document uses a default partition directory of 
@@ -507,7 +496,30 @@ Unlike most netnews systems, Cyrus allows you to have more
 than one partition.  Do not use the string "<tt>news</tt>" as a
 partition name, as it is reserved for netnews.
 
- <P>
+<li>If you wish to use Sieve, and you didn't configure deliver to look
+in home directories (see the <tt>imapd.conf</tt> man page), create the
+Sieve directory:
+
+<pre>
+<kbd>   cd /usr
+   mkdir sieve
+   chown cyrus sieve
+   chown mail sieve
+   chmod 750 sieve
+</kbd></pre>
+
+<li>Change to the Cyrus user and use the tool
+"<tt>tools/mkimap</tt>" to create the rest of the directories
+(subdirectories of the directories you just created).
+
+<pre>
+<kbd>   su cyrus
+   tools/mkimap
+</kbd>
+</pre>
+
+If perl is not available, it should be easy to create these directories
+by hand. <P>
 
 <li>LINUX SYSTEMS ONLY: Set the configuration, user, quota, and
 partition directories to update synchronously.  Failure to do this may
@@ -525,22 +537,6 @@ synchronously.  The following example is for sendmail:
 <pre>
 <kbd>   /sbin/chattr +S /var/spool/mqueue
 </kbd></pre>
-
-[XXX is pwcheck used at all anymore?]
-<li>If the Cyrus IMAP server was configured to use the pwcheck
-daemon, install pwcheck.  The pwcheck daemon verifies passwords
-against the shadow password database.  Create the directory
-"<TT>/var/pwcheck</TT>" and make it readable by only the cyrus user:
-
-<pre>
-<kbd>   mkdir /var/pwcheck
-   chown cyrus /var/pwcheck
-   chmod 700 /var/pwcheck
-</kbd></pre>
-
-Upon system startup, arrange for the daemon
-<TT>/usr/cyrus/bin/pwcheck</TT> to be run as root in the background.
- <P>
 
 <li>If the Cyrus IMAP server was compiled with Kerberos v4 authentication,
 create a Kerberos v4 identity for the server and add the server's key to

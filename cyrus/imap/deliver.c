@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.97 1999/08/09 21:07:47 leg Exp $
+ * $Id: deliver.c,v 1.98 1999/08/12 19:27:36 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.97 1999/08/09 21:07:47 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.98 1999/08/12 19:27:36 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -2135,7 +2135,7 @@ _get_db_name (mbox)
       c = 'q';
   }
 
-  sprintf(buf, "%s/devilerdb/deliver-%c", config_dir, c);
+  sprintf(buf, "%s/deliverdb/deliver-%c", config_dir, c);
 
   return buf;
 }

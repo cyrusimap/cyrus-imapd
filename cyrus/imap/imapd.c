@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.177 1999/08/09 21:07:48 leg Exp $ */
+/* $Id: imapd.c,v 1.178 1999/08/12 19:27:38 leg Exp $ */
 
 #ifndef __GNUC__
 /* can't use attributes... */
@@ -229,6 +229,35 @@ static int mysasl_config(void *context __attribute__((unused)),
     return SASL_FAIL;
 }
 
+/*
+ * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
+ * right to the principal 'auth_identity'. Returns 1 if so, 0 if not.
+ */
+static int acl_ok(user, auth_identity)
+const char *user;
+const char *auth_identity;
+{
+    char *acl;
+    char inboxname[1024];
+    int r;
+    struct auth_state *authstate;
+
+    if (strchr(user, '.') || strlen(user)+6 >= sizeof(inboxname)) return 0;
+
+    strcpy(inboxname, "user.");
+    strcat(inboxname, user);
+
+    if (!(authstate = auth_newstate(auth_identity, (char *)0)) ||
+	mboxlist_lookup(inboxname, (char **)0, &acl)) {
+	r = 0;  /* Failed so assume no proxy access */
+    }
+    else {
+	r = (acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
+    }
+    if (authstate) auth_freestate(authstate);
+    return r;
+}
+
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 static mysasl_authproc(void *context __attribute__((unused)),
@@ -237,22 +266,49 @@ static mysasl_authproc(void *context __attribute__((unused)),
 		       const char **user,
 		       const char **errstr)
 {
-    const char *val;
     char *p;
-    char *canon_user;
-    char *username=NULL;
+    const char *val;
+    char *canon_authuser, *canon_requser;
+    char *username=NULL, *realm;
     char buf[MAX_MAILBOX_PATH];
+    static char replybuf[100];
 
-    canon_user = auth_canonifyid(auth_identity);
-    if (!canon_user) {
+    canon_authuser = auth_canonifyid(auth_identity);
+    if (!canon_authuser) {
 	*errstr = "bad userid authenticated";
 	return SASL_BADAUTH;
     }
+    canon_authuser = xstrdup(canon_authuser);
 
-    imapd_authstate = auth_newstate(canon_user, NULL);
+    canon_requser = auth_canonifyid(requested_user);
+    if (!canon_requser) {
+	*errstr = "bad userid requested";
+	return SASL_BADAUTH;
+    }
+    canon_requser = xstrdup(canon_requser);
 
-    *user = xstrdup(canon_user); 
-    *errstr = NULL;
+    /* check if remote realm */
+    if (realm = strchr(canon_authuser, '@')) {
+	realm++;
+	val = config_getstring("loginrealms", "");
+	while (*val) {
+	    if (!strncasecmp(val, realm, strlen(realm)) &&
+		(!val[strlen(realm)] || isspace(val[strlen(realm)]))) {
+		break;
+	    }
+	    /* not this realm, try next one */
+	    while (*val && !isspace(*val)) val++;
+	    while (*val && isspace(*val)) val++;
+	}
+	if (!*val) {
+	    snprintf(replybuf, 100, "cross-realm login %s denied", 
+		     canon_authuser);
+	    *errstr = replybuf;
+	    return SASL_BADAUTH;
+	}
+    }
+
+    imapd_authstate = auth_newstate(canon_authuser, NULL);
 
     /* ok, is auth_identity an admin? */
     val = config_getstring("admins", "");
@@ -269,22 +325,33 @@ static mysasl_authproc(void *context __attribute__((unused)),
 	while (*val && isspace(*val)) val++;
     }
 
-    if (strcmp(canon_user, requested_user)) {
+    if (strcmp(canon_authuser, canon_requser)) {
 	/* we want to authenticate as a different user; we'll allow this
-	   if we're an admin */
-	if (!imapd_userisadmin) {
+	   if we're an admin or if we've allowed ACL proxy logins */
+	int use_acl = config_getswitch("loginuseacl", 0);
+
+	if (imapd_userisadmin ||
+	    (use_acl && acl_ok(canon_requser, canon_authuser))) {
+	    /* proxy ok! */
+
+	    imapd_userisadmin = 0;	/* no longer admin */
+	    auth_freestate(imapd_authstate);
+	    
+	    imapd_authstate = auth_newstate(canon_requser, NULL);
+	} else {
 	    *errstr = "user is not allowed to proxy";
+	    
+	    free(canon_authuser);
+	    free(canon_requser);
+	    auth_freestate(imapd_authstate);
+	    
 	    return SASL_BADAUTH;
 	}
-	
-	imapd_userisadmin = 0;	/* no longer admin */
-	free((void *) *user);
-	*user = NULL;
-	auth_freestate(imapd_authstate);
-	auth_newstate(requested_user, NULL);
-
     }
 
+    free(canon_authuser);
+    *user = canon_requser;
+    *errstr = NULL;
     return SASL_OK;
 }
 

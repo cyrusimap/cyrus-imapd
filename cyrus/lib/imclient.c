@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.29 1999/07/31 21:49:37 leg Exp $
+ $Id: imclient.c,v 1.30 1999/08/12 19:27:42 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -1213,8 +1213,9 @@ int imclient_authenticate(struct imclient *imclient,
     if ((saslresult==SASL_OK) || (saslresult==SASL_CONTINUE))
       imclient_writebase64(imclient, out, outlen);
 
-    free(out);
-
+    if (outlen > 0) { 
+	free(out); 
+    }
   }
   
   imclient->saslcompleted=1;
