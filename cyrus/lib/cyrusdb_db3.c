@@ -112,12 +112,14 @@ static int init(const char *dbdir, int myflags)
     dbenv->set_errcall(dbenv, db_err);
     dbenv->set_errpfx(dbenv, "db3");
 
+#if 0
     if ((r = dbenv->set_cachesize(dbenv, 0, 64 * 1024, 0)) != 0) {
 	dbenv->err(dbenv, r, "set_cachesize");
 	dbenv->close(dbenv, 0);
 	syslog(LOG_ERR, "DBERROR: set_cachesize(): %s", db_strerror(r));
 	return CYRUSDB_IOERROR;
     }
+#endif
 
     /* what directory are we in? */
     flags |= DB_CREATE | DB_INIT_LOCK | DB_INIT_MPOOL | 
