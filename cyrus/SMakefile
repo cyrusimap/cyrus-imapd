@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.63 2000/09/05 04:05:11 leg Exp $
+# $Id: SMakefile,v 1.64 2000/10/31 22:54:31 leg Exp $
 #
 
 if test ! -x configure; then
@@ -62,7 +62,13 @@ if test "${CC-unset}" = "unset"; then
   CC=cc
 fi
 
-VER=`smake -D | sed 's;^.*\/;;'`
+if [ -e /.hostname ]; then
+  # probably an andrew machine
+  VER=`smake -D | sed 's;^.*\/;;'`
+else
+  # anonymous cvs?
+  VER="anoncvs"
+fi
 LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 
 # PERL CONFIGURATION
