@@ -39,7 +39,7 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 #
-# $Id: cyradm.sh,v 1.10 2002/05/25 19:57:49 leg Exp $
+# $Id: cyradm.sh,v 1.10.4.1 2002/08/19 14:54:06 ken3 Exp $
 case "x$BASH_VERSION" in
 x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
 *) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
@@ -292,6 +292,18 @@ be the special string C<none> which will remove the quota.
 =item C<ver>
 
 Display the version info of the current server.
+
+=item C<xfermailbox> [C<--partition> I<partition>] I<mailbox> I<server>
+
+=item C<xfer> [C<--partition> I<partition>] I<mailbox> I<server>
+
+=item C<xfermailbox> I<mailbox> I<server> [I<partition>]
+
+=item C<xfer> I<mailbox> I<server> [I<partition>]
+
+Transfer (relocate) the specified mailbox to a different server.
+Both old-style and getopt-style usages are accepted; combining them will
+produce an error.
 
 =back
 

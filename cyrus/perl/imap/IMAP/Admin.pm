@@ -37,14 +37,14 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.28.2.1 2002/07/25 17:21:53 ken3 Exp $
+# $Id: Admin.pm,v 1.28.2.2 2002/08/19 14:54:07 ken3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
 use Cyrus::IMAP;
 use vars qw($VERSION
 	    *create *delete *deleteacl *listacl *list *rename *setacl
-	    *subscribed *quota *quotaroot *info *setinfo);
+	    *subscribed *quota *quotaroot *info *setinfo *xfer);
 
 $VERSION = '1.00';
 
@@ -528,6 +528,29 @@ sub renamemailbox {
 }
 *rename = *renamemailbox;
 
+sub xfermailbox {
+  my ($self, $mbox, $server, $ptn) = @_;
+
+  $self->addcallback({-trigger => 'NO',
+		      -callback => sub {
+			print $_ . "\n";
+		      }});
+
+  my ($rc, $msg) = $self->send('', '', 'XFER %s %s%a%a', $mbox, $server,
+			       $ptn ? ' ' : $ptn, $ptn);
+
+  $self->addcallback({-trigger => 'NO'});
+		    
+  if ($rc eq 'OK') {
+    $self->{error} = undef;
+    1;
+  } else {
+    $self->{error} = $msg;
+    undef;
+  }
+}
+*xfer = *xfermailbox;
+
 # hm.  this list can't be confused with valid ACL values as of 1.6.19, except
 # for "all".  sigh.
 my %aclalias = (none => '',
@@ -745,6 +768,7 @@ Cyrus::IMAP::Admin - Cyrus administrative interface Perl module
   $rc = $client->rename($old, $new[, $partition]);
   $rc = $client->setacl($mailbox, $user =E<gt> $acl[, ...]);
   $rc = $client->setquota($mailbox, $resource =E<gt> $quota[, ...]);
+  $rc = $client->xfer($mailbox, $server[, $partition]);
 
 =head1 DESCRIPTION
 
@@ -895,6 +919,12 @@ Administer (SETACL)
 
 Set quotas on a mailbox.  Note that Cyrus currently only defines one resource,
 C<STORAGE>.
+
+=item xfermailbox($mailbox, $server[, $partition])
+
+=item xfer($mailbox, $server[, $partition])
+
+Transfers (relocates) the specified mailbox to a different server.
 
 =back
 

@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.18 2002/07/10 03:42:47 rjs3 Exp $
+# $Id: Shell.pm,v 1.18.2.1 2002/08/19 14:54:07 ken3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -150,6 +150,11 @@ my %builtins = (exit =>
 		  [\&_sc_version, '',
 		   'display version info of current server'],
 		ver => 'version',
+		xfermailbox =>
+		  [\&_sc_xfer,
+		   '[--partition partition] mailbox server [partition]',
+		   'transfer (relocate) a mailbox to a different server'],
+		xfer => 'xfermailbox',
 		#? alias
 		#? unalias
 		#? load
@@ -989,6 +994,44 @@ sub _sc_rename {
   0;
 }
 
+sub _sc_xfer {
+  my ($cyrref, $name, $fh, $lfh, @argv) = @_;
+  my (@nargv, $opt, $want, $part);
+  shift(@argv);
+  while (defined ($opt = shift(@argv))) {
+    if ($want) {
+      $part = $opt;
+      $want = undef;
+      next;
+    }
+    if ($opt ne '' && '-partition' =~ /^\Q$opt/ || $opt eq '--partition') {
+      $want = 1;
+      next;
+    }
+    last if $opt eq '--';
+    if ($opt =~ /^-/) {
+      die "usage: xfermailbox [--partition name] mailbox " .
+	  "server [partition]\n";
+    }
+    else {
+      push(@nargv, $opt);
+      last;
+    }
+  }
+  push(@nargv, @argv);
+  $part = pop(@nargv) if @nargv > 2 && !defined($part);
+  if (@nargv != 2) {
+    die "usage: xfermailbox [--partition name] mailbox " .
+	"server [partition]\n";
+  }
+  if (!$cyrref || !$$cyrref) {
+    die "xfermailbox: no connection to server\n";
+  }
+  $$cyrref->xfer($nargv[0], $nargv[1], $part) ||
+    die "xfermailbox: " . $$cyrref->error . "\n";
+  0;
+}
+
 sub _sc_deleteacl {
   my ($cyrref, $name, $fh, $lfh, @argv) = @_;
   my (@nargv, $opt);
@@ -1474,6 +1517,18 @@ be the special string C<none> which will remove the quota.
 =item C<ver>
 
 Display the version info of the current server.
+
+=item C<xfermailbox> [C<--partition> I<partition>] I<mailbox> I<server>
+
+=item C<xfer> [C<--partition> I<partition>] I<mailbox> I<server>
+
+=item C<xfermailbox> I<mailbox> I<server> [I<partition>]
+
+=item C<xfer> I<mailbox> I<server> [I<partition>]
+
+Transfer (relocate) the specified mailbox to a different server.
+Both old-style and getopt-style usages are accepted; combining them will
+produce an error.
 
 =back
 
