@@ -1,5 +1,5 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
- $Id: seen_local.c,v 1.26 1998/05/15 21:49:54 neplokh Exp $
+ $Id: seen_local.c,v 1.27 1999/10/02 00:43:07 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -28,6 +28,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <ctype.h>
 #include <string.h>
@@ -36,6 +37,7 @@
 #include <sys/uio.h>
 #include <fcntl.h>
 #include <syslog.h>
+#include <time.h>
 
 #include "assert.h"
 #include "map.h"
@@ -551,7 +553,6 @@ void *report_rock;
     const char *base = 0;
     unsigned long size = 0;
     const char *line, *endline;
-    unsigned long left;
     const char *tab, *p, *space;
     time_t lastread;
     unsigned lastuidread;

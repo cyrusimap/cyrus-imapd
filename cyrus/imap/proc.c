@@ -1,5 +1,5 @@
 /* proc.c -- Server process registry
- $Id: proc.c,v 1.13 1999/04/08 21:04:27 tjs Exp $
+ $Id: proc.c,v 1.14 1999/10/02 00:43:07 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -27,6 +27,9 @@
  *
  */
 #include <stdio.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 #include <syslog.h>
 
 #include "config.h"
@@ -38,7 +41,7 @@
 static char *procfname = 0;
 static FILE *procfile = 0;
 
-proc_register(progname, clienthost, userid, mailbox)
+int proc_register(progname, clienthost, userid, mailbox)
 char *progname;
 char *clienthost;
 char *userid;
@@ -77,7 +80,7 @@ char *mailbox;
     return 0;
 }
 
-proc_cleanup()
+void proc_cleanup()
 {
     if (procfname) {
 	fclose(procfile);

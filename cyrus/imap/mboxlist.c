@@ -26,16 +26,22 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.93 1999/08/09 21:07:50 leg Exp $
+ * $Id: mboxlist.c,v 1.94 1999/10/02 00:43:05 leg Exp $
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <fcntl.h>
+#include <ctype.h>
+#include <time.h>
 #include <syslog.h>
 #include <com_err.h>
 
@@ -93,7 +99,7 @@ static char *mboxlist_hash_usersubs(const char *userid);
 /*
  * Check our configuration for consistency, die if there's a problem
  */
-mboxlist_checkconfig()
+void mboxlist_checkconfig()
 {
     mboxlist_reopen();
 }
@@ -110,7 +116,7 @@ int mboxlist_lookup(const char* name, char** pathp, char** aclp)
 {
     unsigned long offset, len, partitionlen, acllen;
     char optionbuf[MAX_MAILBOX_NAME+1];
-    char *p, *partition, *acl;
+    char *partition, *acl;
     const char *root;
     static char pathresult[MAX_MAILBOX_PATH];
     static char *aclresult;
@@ -165,8 +171,8 @@ int mboxlist_lookup(const char* name, char** pathp, char** aclp)
 /*
  * Check/set up for mailbox creation
  */
-mboxlist_createmailboxcheck(name, format, partition, isadmin, userid,
-			    auth_state, newacl, newpartition)
+int mboxlist_createmailboxcheck(name, format, partition, isadmin, userid,
+				auth_state, newacl, newpartition)
 char *name;
 int format;
 char *partition;
@@ -324,7 +330,8 @@ char **newpartition;
 /*
  * Create a mailbox
  */
-mboxlist_createmailbox(name, format, partition, isadmin, userid, auth_state)
+int mboxlist_createmailbox(name, format, partition, isadmin, 
+			   userid, auth_state)
 char *name;
 int format;
 char *partition;
@@ -333,7 +340,6 @@ char *userid;
 struct auth_state *auth_state;
 {
     int r;
-    char *p;
     unsigned long offset, len;
     char *acl;
     char buf2[MAX_MAILBOX_PATH];
@@ -448,7 +454,7 @@ struct auth_state *auth_state;
  * performed by an admin.  The operation removes the user "FOO"'s 
  * subscriptions and all sub-mailboxes of user.FOO
  */
-mboxlist_deletemailbox(name, isadmin, userid, auth_state, checkacl)
+int mboxlist_deletemailbox(name, isadmin, userid, auth_state, checkacl)
 char *name;
 int isadmin;
 char *userid;
@@ -494,7 +500,6 @@ int checkacl;
 	/* Delete any subscription list file */
 	{
 	    char *fname;
-	    char c;
 
 	    fname = mboxlist_hash_usersubs(name + 5);
 
@@ -642,7 +647,6 @@ struct auth_state *auth_state;
     long access;
     int isusermbox = 0;
     char *oldpath;
-    char *p;
     unsigned long oldoffset, oldlen;
     unsigned long newoffset, newlen;
     bit32 olduidvalidity, newuidvalidity;
@@ -1806,7 +1810,7 @@ mboxlist_unlock()
 /*
  * Retrieve internal information, for reconstructing mailboxes file
  */
-mboxlist_getinternalstuff(listfnamep, newlistfnamep, basep, sizep)
+void mboxlist_getinternalstuff(listfnamep, newlistfnamep, basep, sizep)
 const char **listfnamep;
 const char **newlistfnamep;
 const char **basep;
@@ -1847,7 +1851,6 @@ const char **newfname;
     struct stat sbuf;
     const char *lockfailaction;
     char inboxname[MAX_MAILBOX_NAME+1];
-    char c;
 
     /* Users without INBOXes may not keep subscriptions */
     if (strchr(userid, '.') || strlen(userid) + 6 > MAX_MAILBOX_NAME) {

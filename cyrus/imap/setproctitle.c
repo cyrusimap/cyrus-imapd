@@ -1,5 +1,5 @@
 /* setproctitle -- set process title shown by ps(1)
- $Id: setproctitle.c,v 1.10 1998/05/15 21:49:58 neplokh Exp $
+ $Id: setproctitle.c,v 1.11 1999/10/02 00:43:07 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -95,7 +95,7 @@ static char		*LastArgv = NULL;	/* end of argv */
 /*
  * Sets up a process to be able to use setproctitle()
  */
-setproctitle_init(argc, argv, envp)
+void setproctitle_init(argc, argv, envp)
 int argc;
 char **argv, **envp;
 {
