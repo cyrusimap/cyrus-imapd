@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.42 1999/12/10 02:58:06 tmartin Exp $
+ $Id: imclient.c,v 1.43 1999/12/23 18:58:52 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -1853,7 +1853,7 @@ int imclient_starttls(struct imclient *imclient,
   /* turn non-blocking i/o back on */
 
 
-  /* TLS negotiation suceeded */
+  /* TLS negotiation succeeded */
 
   imclient->tls_on = 1;
 

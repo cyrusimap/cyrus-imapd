@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.44 1999/11/05 22:30:22 tmartin Exp $
+ * $Id: prot.c,v 1.45 1999/12/23 18:58:53 leg Exp $
  */
 
 #include <stdio.h>
@@ -72,6 +72,7 @@ int write;
     newstream->error = 0;
     newstream->eof = 0;
     newstream->read_timeout = 0;
+    newstream->dontblock = 0;
     newstream->flushonread = 0;
     newstream->readcallback_proc = 0;
     newstream->readcallback_rock = 0;
@@ -291,7 +292,7 @@ struct protstream *s;
 	    }
 	}
 
-	if (!haveinput && s->read_timeout) {
+	if (!haveinput && (s->read_timeout || s->dontblock)) {
 	    timeout.tv_sec = s->read_timeout;
 	    timeout.tv_usec = 0;
 	    FD_ZERO(&rfds);
@@ -301,8 +302,13 @@ struct protstream *s;
 			   &timeout);
 	    } while (r == -1 && errno == EINTR);
 	    if (r == 0) {
-		s->error = "idle for too long";
-		return EOF;
+		if (!s->dontblock) {
+		    s->error = "idle for too long";
+		    return EOF;
+		} else {
+		    errno = EAGAIN;
+		    return EOF;
+		}
 	    }
 	}
 	
@@ -345,8 +351,6 @@ struct protstream *s;
 		snprintf(s->buf, 200, "Decoding error: %s (%i)",
 			 sasl_errstring(result, NULL, NULL), result);
 		s->error = s->buf;
-		printf("%i\n",result);
-		printf("error %s\n",s->error);
 		return EOF;
 	    }
 	    
