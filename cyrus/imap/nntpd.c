@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.81 2003/05/09 02:11:38 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.82 2003/05/11 19:13:31 ken3 Exp $
  */
 
 /*
@@ -158,7 +158,7 @@ static struct mailbox mboxstruct;
 
 /* the sasl proxy policy context */
 static struct proxy_context nntp_proxyctx = {
-    0, 1, NULL, NULL, NULL
+    0, 1, &nntp_authstate, NULL, NULL
 };
 
 /* for config.c */
