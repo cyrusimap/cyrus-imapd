@@ -1,6 +1,6 @@
 /* login_unix.c -- Unix password file login authentication
  *
- *	(C) Copyright 1993 by Carnegie Mellon University
+ *	(C) Copyright 1994 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *

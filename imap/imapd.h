@@ -1,6 +1,6 @@
 /* imapd.h -- Common state for IMAP daemon
  *
- *	(C) Copyright 1993 by Carnegie Mellon University
+ *	(C) Copyright 1994 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
