@@ -236,7 +236,8 @@ static int gettid(struct txn **mytid, DB_TXN **tid)
 		       db_strerror(r));
 		return CYRUSDB_IOERROR;
 	    }
-	    syslog(LOG_DEBUG, "starting txn %lu", txn_id(*tid));
+	    if (CONFIG_DB_VERBOSE)
+		syslog(LOG_DEBUG, "starting txn %lu", txn_id(*tid));
 	}
 	*mytid = (struct txn *) *tid;
     }
@@ -465,7 +466,8 @@ static int mystore(struct db *mydb,
 		   db_strerror(r));
 	    return CYRUSDB_IOERROR;
 	}
-	syslog(LOG_DEBUG, "starting txn %lu", txn_id(tid));
+	if (CONFIG_DB_VERBOSE)
+	    syslog(LOG_DEBUG, "starting txn %lu", txn_id(tid));
     }
     r = db->put(db, tid, &k, &d, 0);
     if (!mytid) {
@@ -473,7 +475,8 @@ static int mystore(struct db *mydb,
 	if (r) {
 	    int r2;
 
-	    syslog(LOG_DEBUG, "aborting txn %lu", txn_id(tid));
+	    if (CONFIG_DB_VERBOSE)
+		syslog(LOG_DEBUG, "aborting txn %lu", txn_id(tid));
 	    r2 = txn_abort(tid);
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
@@ -485,7 +488,8 @@ static int mystore(struct db *mydb,
 		goto restart;
 	    }
 	} else {
-	    syslog(LOG_DEBUG, "committing txn %lu", txn_id(tid));
+	    if (CONFIG_DB_VERBOSE)
+		syslog(LOG_DEBUG, "committing txn %lu", txn_id(tid));
 	    r = txn_commit(tid, 0);
 	}
     }
@@ -549,14 +553,16 @@ static int delete(struct db *mydb,
 		   db_strerror(r));
 	    return CYRUSDB_IOERROR;
 	}
-	syslog(LOG_DEBUG, "starting txn %lu", txn_id(tid));
+	if (CONFIG_DB_VERBOSE)
+	    syslog(LOG_DEBUG, "starting txn %lu", txn_id(tid));
     }
     r = db->del(db, tid, &k, 0);
     if (!mytid) {
 	/* finish txn for the write */
 	if (r) {
 	    int r2;
-	    syslog(LOG_DEBUG, "aborting txn %lu", txn_id(tid));
+	    if (CONFIG_DB_VERBOSE)
+		syslog(LOG_DEBUG, "aborting txn %lu", txn_id(tid));
 	    r2 = txn_abort(tid);
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
@@ -568,7 +574,8 @@ static int delete(struct db *mydb,
 		goto restart;
 	    }
 	} else {
-	    syslog(LOG_DEBUG, "committing txn %lu", txn_id(tid));
+	    if (CONFIG_DB_VERBOSE)
+		syslog(LOG_DEBUG, "committing txn %lu", txn_id(tid));
 	    r = txn_commit(tid, 0);
 	}
     }
@@ -594,7 +601,8 @@ static int commit_txn(struct db *db, struct txn *tid)
 
     assert(dbinit && tid);
 
-    syslog(LOG_DEBUG, "committing txn %lu", txn_id(t));
+    if (CONFIG_DB_VERBOSE)
+	syslog(LOG_DEBUG, "committing txn %lu", txn_id(t));
     r = txn_commit(t, 0);
     switch (r) {
     case 0:
@@ -620,7 +628,8 @@ static int abort_txn(struct db *db, struct txn *tid)
 
     assert(dbinit && tid);
 
-    syslog(LOG_DEBUG, "aborting txn %lu", txn_id(t));
+    if (CONFIG_DB_VERBOSE)
+	syslog(LOG_DEBUG, "aborting txn %lu", txn_id(t));
     r = txn_abort(t);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: error aborting txn: %s", db_strerror(r));
