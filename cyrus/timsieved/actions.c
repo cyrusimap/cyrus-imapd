@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.20 2000/07/15 19:57:12 ken3 Exp $
+ * $Id: actions.c,v 1.21 2000/08/21 16:52:51 leg Exp $
  * 
  */
 /*
@@ -478,6 +478,7 @@ int setactive(struct protstream *conn, mystring_t *name)
 {
   int result;
   char filename[1024];
+  struct stat a, b;
 
   /* if string name is empty, disable active script */
   if (!strlen(string_DATAPTR(name))) {
@@ -508,31 +509,44 @@ int setactive(struct protstream *conn, mystring_t *name)
   }
 
   /* get the name of the active sieve script */
-  snprintf(filename, 1023, "%s.script", string_DATAPTR(name));
-
-
+  snprintf(filename, sizeof filename, "%s.script", string_DATAPTR(name));
 
   /* ok we want to do this atomically so let's
      - make <activesieve>.NEW as a hard link
      - rename it to <activesieve>
   */
-
   result = link(filename, "default.NEW");
-
-  if (result!=0) {
-      syslog(LOG_ERR, "Error creating link %m");
+  if (result) {
+      syslog(LOG_ERR, "Error creating link default.NEW: %m");
       prot_printf(conn, "NO \"Can't make link\"\r\n");    
       return TIMSIEVE_FAIL;
   }
 
-  result=rename("default.NEW", "default");
+  /* check that default != default.NEW */
+  a.st_ino = -1;
+  b.st_ino = -2;
+  result = stat("default", &a);
+  if (result && errno == ENOENT) {
+      a.st_ino = -1;
+      result = 0;
+  }
+  if (!result) {
+      result = stat("default.NEW", &b);
+  }
+  if (a.st_ino == b.st_ino) {
+      /* don't rename */
+      unlink("default.NEW");
+      prot_printf(conn, "OK \"already was active\"\r\n");
+      return TIMSIEVE_OK;
+  }
 
-  if (result!=0) {
-      syslog(LOG_ERR, "Error renaming default.NEW to default %m");
+  if (!result) result = rename("default.NEW", "default");
+  if (result) {
+      unlink("default.NEW");
+      syslog(LOG_ERR, "error renaming default.NEW to default: %m");
       prot_printf(conn,"NO \"Error renaming\"\r\n");
       return TIMSIEVE_FAIL;
   }
-
 
   prot_printf(conn,"OK\r\n");
   return TIMSIEVE_OK;
