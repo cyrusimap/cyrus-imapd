@@ -1,5 +1,5 @@
 /* masterconfig.c -- Configuration routines for master process
- $Id: masterconf.c,v 1.6 2001/09/03 19:36:07 wcw Exp $
+ $Id: masterconf.c,v 1.7 2002/07/24 19:30:53 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -200,8 +200,8 @@ void masterconf_getsection(const char *section, masterconf_process *f,
 
     infile = fopen(CONFIG_FILENAME, "r");
     if (!infile) {
-	sprintf(buf, "can't open configuration file %s: %s", CONFIG_FILENAME,
-		strerror(errno));
+	snprintf(buf, sizeof(buf), "can't open configuration file %s: %s",
+		CONFIG_FILENAME, strerror(errno));
 	fatal(buf, EX_CONFIG);
     }
 

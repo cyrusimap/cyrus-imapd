@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.76 2002/07/10 20:44:09 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.77 2002/07/24 19:30:35 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1230,7 +1230,8 @@ void lmtpmode(struct lmtp_func *func,
 #endif
     cd.starttls_done = 0;
 
-    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+    snprintf(shutdownfilename, sizeof(shutdownfilename), 
+	     "%s/msg/shutdown", config_dir);
     max_msgsize = config_getint("maxmessagesize", INT_MAX);
 
     msg_new(&msg);

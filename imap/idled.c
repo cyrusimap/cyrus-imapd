@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.10 2002/06/18 16:40:19 rjs3 Exp $ */
+/* $Id: idled.c,v 1.11 2002/07/24 19:30:32 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -284,7 +284,8 @@ int main(int argc, char **argv)
     config_init(alt_config, "idled");
 
     /* get name of shutdown file */
-    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+    snprintf(shutdownfilename, sizeof(shutdownfilename), "%s/msg/shutdown",
+	     config_dir);
 
     /* Set inactivity timer (convert from minutes to seconds) */
     idle_timeout = config_getint("timeout", 30);

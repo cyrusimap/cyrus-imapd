@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32 2002/06/03 18:22:24 rjs3 Exp $ */
+/* $Id: fud.c,v 1.33 2002/07/24 19:30:32 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -244,7 +244,7 @@ int do_proxy_request(const char *who, const char *name,
 
     /* Write a Cyrus query into *tmpbuf */
     memset (tmpbuf, '\0', sizeof(tmpbuf));
-    sprintf (tmpbuf, "%s|%s", who, name);
+    snprintf (tmpbuf, sizeof(tmpbuf), "%s|%s", who, name);
     x = sizeof (cin);
 
     /* Send the query and wait for a reply */
@@ -401,7 +401,7 @@ send_reply(struct sockaddr_in sfrom, int status,
             sendto(soc,"PERMDENY",9,0,(struct sockaddr *) &sfrom, sizeof(sfrom));       
             break;
         case REQ_OK:
-            siz = sprintf(buf,"%s|%s|%d|%d|%d",user,mbox,numrecent,(int) lastread,(int) lastarrived);
+            siz = snprintf(buf, sizeof(buf), "%s|%s|%d|%d|%d",user,mbox,numrecent,(int) lastread,(int) lastarrived);
             sendto(soc,buf,siz,0,(struct sockaddr *) &sfrom, sizeof(sfrom));       
             break;
         case REQ_UNK:

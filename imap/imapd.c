@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.399 2002/07/13 19:01:12 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.400 2002/07/24 19:30:32 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -532,7 +532,8 @@ int service_init(int argc, char **argv, char **envp)
     }
 #endif
 
-    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+    snprintf(shutdownfilename, sizeof(shutdownfilename), "%s/msg/shutdown",
+	     config_dir);
 
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
@@ -797,7 +798,7 @@ void cmdloop()
 		"* OK %s Cyrus IMAP4 %s server ready\r\n", config_servername,
 		CYRUS_VERSION);
 
-    sprintf(motdfilename, "%s/msg/motd", config_dir);
+    snprintf(motdfilename, sizeof(motdfilename), "%s/msg/motd", config_dir);
     if ((fd = open(motdfilename, O_RDONLY, 0)) != -1) {
 	motd_file(fd);
 	close(fd);
@@ -3278,7 +3279,8 @@ int usinguid;
     }
     else {
 	n = index_search(imapd_mailbox, searchargs, usinguid);
-	sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
+	snprintf(mytime, sizeof(mytime), "%2.3f", 
+		 (clock() - start) / (double) CLOCKS_PER_SEC);
 	prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED), n, mytime);
     }
@@ -3359,7 +3361,8 @@ int usinguid;
     }
 
     n = index_sort(imapd_mailbox, sortcrit, searchargs, usinguid);
-    sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
+    snprintf(mytime, sizeof(mytime), "%2.3f",
+	     (clock() - start) / (double) CLOCKS_PER_SEC);
     prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
 		error_message(IMAP_OK_COMPLETED), n, mytime);
 
@@ -3437,7 +3440,8 @@ int usinguid;
     }
 
     n = index_thread(imapd_mailbox, alg, searchargs, usinguid);
-    sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
+    snprintf(mytime, sizeof(mytime), "%2.3f", 
+	     (clock() - start) / (double) CLOCKS_PER_SEC);
     prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
 		error_message(IMAP_OK_COMPLETED), n, mytime);
 
@@ -4056,7 +4060,8 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 
 	if (buf) free(buf);
     }
-    sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
+    snprintf(mytime, sizeof(mytime), "%2.3f",
+	     (clock() - start) / (double) CLOCKS_PER_SEC);
     prot_printf(imapd_out, "%s OK %s (%s secs %d calls)\r\n", tag,
 		error_message(IMAP_OK_COMPLETED), mytime, mstringdatacalls);
 }
@@ -4825,7 +4830,7 @@ void cmd_namespace(tag)
 	if (strlen(imapd_userid) + 5 > MAX_MAILBOX_NAME)
 	    sawone[NAMESPACE_INBOX] = 0;
 	else {
-	    sprintf(inboxname, "user.%s", imapd_userid);
+	    snprintf(inboxname, sizeof(inboxname), "user.%s", imapd_userid);
 	    sawone[NAMESPACE_INBOX] = 
 		!mboxlist_lookup(inboxname, NULL, NULL, NULL);
 	}
@@ -7202,7 +7207,8 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
     /* Now we need to see if this mailbox exists */
     /* first convert "INBOX" to "user.<userid>" */
     if (!strncasecmp(lastname, "inbox", 5))
-	sprintf(mboxname, "user.%s%s", imapd_userid, lastname+5);
+	snprintf(mboxname, sizeof(mboxname), "user.%s%s", imapd_userid,
+		 lastname+5);
     else
 	strcpy(mboxname, lastname);
 
@@ -7340,7 +7346,7 @@ void cmd_mupdatepush(char *tag, char *name)
     }
 
     if (!r) {
-	sprintf(buf, "%s!%s", config_servername, part);
+	snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
 
 	r = mupdate_activate(mupdate_h, mailboxname, buf, acl);
     }

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: acapmbox.c,v 1.31 2002/05/25 19:57:43 leg Exp $ */
+/* $Id: acapmbox.c,v 1.32 2002/07/24 19:30:30 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -316,7 +316,7 @@ static acap_entry_t *nab_entry(acap_conn_t *conn, const char *entryname)
     assert(p != NULL);
 
     p++;
-    sprintf(ent, "EQUAL \"entry\" \"i;octet\" \"%s\"", p);
+    snprintf(ent, sizeof(ent), "EQUAL \"entry\" \"i;octet\" \"%s\"", p);
     *p = '\0';
 
     r = acap_search_dataset(conn, dset, ent, 1,

@@ -1,5 +1,5 @@
 /* notify.c -- Module to notify of new mail
- * $Id: notify.c,v 1.6 2002/05/07 18:50:21 leg Exp $ 
+ * $Id: notify.c,v 1.7 2002/07/24 19:30:37 rjs3 Exp $ 
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -121,7 +121,7 @@ void notify(const char *method,
     if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, user, &buflen);
     if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, mailbox, &buflen);
 
-    sprintf(noptstr, "%d", nopt);
+    snprintf(noptstr, sizeof(noptstr), "%d", nopt);
     if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, noptstr, &buflen);
 
     for (i = 0; !r && i < nopt; i++) {

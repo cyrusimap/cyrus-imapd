@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55 2002/06/18 16:40:19 rjs3 Exp $ */
+/* $Id: config.c,v 1.56 2002/07/24 19:30:31 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -118,7 +118,8 @@ int config_init(const char *alt_config, const char *ident)
 	if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
     }
     if (!config_partitiondir(config_defpartition)) {
-	sprintf(buf, "partition-%s option not specified in configuration file",
+	snprintf(buf, sizeof(buf),
+		"partition-%s option not specified in configuration file",
 		config_defpartition);
 	fatal(buf, EC_CONFIG);
     }
@@ -220,7 +221,7 @@ static void config_read(const char *alt_config)
 	infile = fopen(buf, "r");
     }
     if (!infile) {
-	sprintf(buf, "can't open configuration file %s: %s",
+	snprintf(buf, sizeof(buf), "can't open configuration file %s: %s",
 		alt_config ? alt_config : CONFIG_FILENAME,
 		error_message(errno));
 	fatal(buf, EC_CONFIG);
@@ -239,7 +240,7 @@ static void config_read(const char *alt_config)
 	    p++;
 	}
 	if (*p != ':') {
-	    sprintf(buf,
+	    snprintf(buf, sizeof(buf),
 		    "invalid option name on line %d of configuration file",
 		    lineno);
 	    fatal(buf, EC_CONFIG);
@@ -254,7 +255,8 @@ static void config_read(const char *alt_config)
 	}
 	
 	if (!*p) {
-	    sprintf(buf, "empty option value on line %d of configuration file",
+	    snprintf(buf, sizeof(buf),
+		    "empty option value on line %d of configuration file",
 		    lineno);
 	    fatal(buf, EC_CONFIG);
 	}
@@ -263,8 +265,8 @@ static void config_read(const char *alt_config)
 	val = hash_insert(key, newval, &confighash);
 	if(val != newval) {
 	    char errbuf[4096];
-	    sprintf(errbuf, "option '%s' was specified twice in config file",
-		    key);
+	    snprintf(errbuf, sizeof(errbuf), 
+		    "option '%s' was specified twice in config file", key);
 	    fatal(errbuf, EC_CONFIG);
 	}
     }

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42 2002/06/12 20:00:12 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.43 2002/07/24 19:30:37 rjs3 Exp $
  */
 #include <config.h>
 
@@ -449,7 +449,8 @@ void shutdown_file(void)
     static char shutdownfilename[1024];
     
     if (!shutdownfilename[0])
-	sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+	snprintf(shutdownfilename, sizeof(shutdownfilename), 
+		 "%s/msg/shutdown", config_dir);
     if ((fd = open(shutdownfilename, O_RDONLY, 0)) == -1) return;
 
     shutdown_in = prot_new(fd, 0);
@@ -739,7 +740,8 @@ static void cmd_apop(char *response)
     if(sasl_checkapop(popd_saslconn, NULL, 0, NULL, 0) != SASL_OK)
 	fatal("cmd_apop called without working sasl_checkapop", EC_SOFTWARE);
 
-    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+    snprintf(shutdownfilename, sizeof(shutdownfilename), 
+	     "%s/msg/shutdown", config_dir);
     if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
 	shutdown_in = prot_new(fd, 0);
 	prot_fgets(buf, sizeof(buf), shutdown_in);

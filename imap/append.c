@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.93 2002/06/14 18:20:25 rjs3 Exp $
+ * $Id: append.c,v 1.94 2002/07/24 19:30:31 rjs3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -399,7 +399,8 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
     stage->parts = xzmalloc(5 * MAX_MAILBOX_PATH * sizeof(char));
     stage->partend = stage->parts + 5 * MAX_MAILBOX_PATH * sizeof(char);
 
-    sprintf(stage->fname, "%d-%d",(int) getpid(), (int) internaldate);
+    snprintf(stage->fname, sizeof(stage->fname), "%d-%d",
+	     (int) getpid(), (int) internaldate);
 
     /* xxx check errors */
     mboxlist_findstage(mailboxname, stagedir);
