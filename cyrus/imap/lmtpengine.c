@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.50 2002/02/05 19:10:27 leg Exp $
+ * $Id: lmtpengine.c,v 1.51 2002/02/05 19:10:33 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1983,8 +1983,6 @@ static int do_auth(struct lmtp_conn *conn)
     if (r != SASL_OK) return r;
     r = sasl_setprop(conn->saslconn, SASL_IPREMOTEPORT, remoteip);
     if (r != SASL_OK) return r;
-
-    syslog(LOG_ERR, "mechs: %s", conn->mechs);
 
     /* we now do the actual SASL exchange */
     r = sasl_client_start(conn->saslconn, 
