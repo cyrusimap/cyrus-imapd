@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.TH POP3D 8
+.TH IMTEST 1
 .\" Copyright 1999 Carnegie Mellon University
 .\" 
 .\" No warranties, either expressed or implied, are made regarding the
@@ -24,43 +24,47 @@
 .\"  (412) 268-4387, fax: (412) 268-7395
 .\"  tech-transfer@andrew.cmu.edu
 .SH NAME
-imtest \- utility to authenticate to imapd
+imtest \- test interactive IMAP program
 .SH SYNOPSIS
 .B imtest
 .SH DESCRIPTION
 .I imtest
-is a utility that allows you to authenticate to the IMAP or IMSP
-server and issue commands to it. Once authenticated you may issue any
-IMAP or IMSP command by simply typing it in. Encryption layers are
-handled for you as well as all the headache of authenticating. This
-utility is often used for testing the operation of a imsp or imap
-server. Also those developing IMAP clients find it useful.
-
+is a utility that allows you to authenticate to a IMAP or IMSP server
+and interactively issue commands to it. Once authenticated you may
+issue any IMAP or IMSP command by simply typing it in. It is capable
+of multiple SASL authentication mechanisms and handles encryption
+layers transparently. This utility is often used for testing the
+operation of a imsp or imap server. Also those developing IMAP clients
+find it useful.
 
 .PP
 .SH OPTIONS
 
 .I -p <port>
 Port to connect to. If left off this defaults to "imap" as defined in
-/etc/services. This takes numerical or named arguements
+/etc/services. 
 
 .I -m <mechanism>
-Force installsieve to use <mechanism> for authentication. If not
-specified the strongest authentication mechanism is chosen.
+Force imtest to use <mechanism> for authentication. If not specified
+the strongest authentication mechanism supported by the server is
+chosen.
 
 .I -u <user>
-Userid/Authname to use for authentication.
+Username to use for authentication; defaults to the current user.
+
+.I -a <user>
+Authname to use for authentication; defaults to the current user.
 
 .I -l <num>
 Maximum protection layer to use (0=none; 1=integrity; etc). For
 example if you are using the KERBEROS_V4 authentication mechanism
 specifing 0 will force imtest to not use any layer and specifying 1
-will force it to use the integrity layer. By default the KERBEROS_V4
-protection layer will be used if the server supports it.
+will force it to use the integrity layer. By default the maximum
+supported protection layer will be used.
 
 .I -r realm
 Specify the realm to use. Certain authentication mechanisms
-(e.g. DIGEST-MD5) require one to specify the realm
+(e.g. DIGEST-MD5) may require one to specify the realm
 
 .I -f <file>
 Pipe file into connection after authentication

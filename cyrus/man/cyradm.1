@@ -223,14 +223,17 @@ Execute commands from \fIscript\fR.
 Log in to the server as \fIuser\fR.
 .IP "\fB\-u \fIuser\fR" 15
 Short form of \fB-user\fI user\fR.
-.IP "\fB\-protection \fIprot\fR" 15
-Specify allowable protection mechanisms for the connection.
-\fIprot\fR is one or more of the letters \fBn\fR (no protection),
-\fBi\fR (integrity protection), or \fBp\fR (privacy protection).
-The best available protection mechanism is used.
-Default is \fBnip\fR, allowing any available protection mechanism.
-.IP "\fB\-p \fIprot\fR" 15
-Short form of \fB-protection\fI prot\fR.
+.IP "\fB\-layers \fInumber\fR" 15
+Specify the maximum allowable protection layer for the connection.  0
+corresponds to no protection, 1 to integrity protection, and more for
+n bits of privacy protection.  Default is 10000, allowing virtually
+any protection mechanism.
+.IP "\fB\-l \fInumber\fR" 15
+Short form of \fB-layers\fI prot\fR.
+.IP "\fB\-mech \fImechanism\fR" 15
+Specify the SASL mechanism to use for authentication.
+.IP "\fB\-m \fImechanism\fR" 15
+Short form of \fB-mech\fI mechanism\fR.
 .SH DESCRIPTION
 .PP
 \fBCyradm\fR is a simple Tcl-based administrative client for the Cyrus IMAP
@@ -378,7 +381,7 @@ Authenticates the connection.  Switches are:
 .IP "\fB-user\fI user\fR"
 Log in to the server as \fIuser\fR.
 .IP "\fB-pwcommand\fI script\fR"
-Attempt a plaintext password login if strong authentication fails.
+Attempt a plaintext password login.
 The argument is a Tcl script which is executed to obtain the login
 information--the script must return a list with two elements,
 the username and the password.  Before executing the script, the
@@ -392,14 +395,10 @@ replaced with the hostname of the server
 replaced with the value of the \fB-user\fR switch, or the
 empty string if the \fB-user\fR switch was not given
 .RE
-.IP "\fB-protection\fI prot\fR"
-Specify allowable protection mechanisms for the connection.
-\fIprot\fR is one or more of the letters \fBn\fR (no protection),
-\fBi\fR (integrity protection), or \fBp\fR (privacy protection).
-The best available protection mechanism is used.
-Default is "\fBnip\fR", allowing any available protection mechanism.
-If ``no protection'' is not allowable, a plaintext password login will
-not be attempted, even if the \fB-pwcommand\fR switch is given.
+.IP "\fB-layers\fI number\fR"
+Specify allowable protection mechanisms for the connection; see above.
+.IP "\fB-mech\fI mechanism\fR"
+Specify the SASL mechanism to use, if not plaintext login.
 .RE
 .IP "\fIconnection\fB createmailbox \fImailbox\fR [\fIpartition\fR]" 5
 Creates a mailbox on \fIconnection\fR.  Arguments are the same as for

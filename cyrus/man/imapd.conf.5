@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.TH IMAPD.CONF 5
+.TH IMAPD.CONF 5 "Project Cyrus" CMU
 .\" Copyright 1998 Carnegie Mellon University
 .\" 
 .\" No warranties, either expressed or implied, are made regarding the
@@ -142,7 +142,7 @@ is a site at CMU with a hopefully informative message; administrators
 should set this to a local resource with some information of greater
 use.
 .IP "\fBsieveusehomedir:\fR false" 5
-If enabled, deliver wil look for Sieve scripts in user's home
+If enabled, deliver will look for Sieve scripts in user's home
 directories: ~user/.sieve.
 .IP "\fBsievedir:\fR /usr/sieve" 5
 If sieveusehomedir is false, this directory is searched for Sieve
@@ -151,6 +151,12 @@ scripts.
 If enabled, the partitions will also be hashed, in addition to the
 hashing done on configuration directories.  This is recommended if one
 partition has a very bushy mailbox tree.
+.IP "\fBsieve_maxscriptsize:\fR 32" 5
+Maximum size (in kilobytes) any sieve script can be, enforced at
+submission by timsieved(8).
+.IP "\fBsieve_maxscripts:\fR 5" 5
+Maximum number of sieve scripts any user may have, enforced at
+submission by timsieved(8).
 .IP "\fBsasl_pwcheck_method:\fR PAM" 5
 The mechanism used by the server to verify plaintext passwords.
 Possible values also include "kerberos_v4", "passwd", and "shadow".
@@ -160,14 +166,7 @@ secrets when given a plaintext password.  See the SASL documentation.
 .IP "\fBsasl_option\fR" 5
 Any other SASL option can be set by preceeding it with "sasl_".  This
 file overrides the SASL configuration file.
-.IP "\fBmaxscriptsize\fR" 5
-Maximum size any sieve script can be. This and maxscripts only apply
-if you are using timsieved
-.IP "\fBmaxscripts\fR" 5
-Maximum number of sieve scripts any user may have. This and
-maxscriptsize only apply if you are using timseved.
-
 
 .SH SEE ALSO
 .PP
-\fBimapd(8)\fR
+\fBimapd(8)\fR, \fBtimsieved(8)\fR, \fBdeliver(8)\fR
