@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslclient.c,v 1.9.6.2 2002/12/16 01:28:56 ken3 Exp $ */
+/* $Id: saslclient.c,v 1.9.6.3 2002/12/19 17:50:38 ken3 Exp $ */
 
 #include <config.h>
 
@@ -234,7 +234,7 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 	}
     }
 
-    while (r == SASL_CONTINUE || r == SASL_OK) {
+    while (r == SASL_CONTINUE || (r == SASL_OK && clientout)) {
 	char *p;
 
 	/* get challenge/reply from the server */
