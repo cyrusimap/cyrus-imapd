@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.72 2000/07/11 17:54:56 leg Exp $
+ * $Id: append.c,v 1.73 2000/08/04 18:38:25 leg Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -76,7 +76,8 @@ struct stagemsg {
 };
 
 static int append_addseen(struct mailbox *mailbox, const char *userid,
-			  unsigned start, unsigned end);
+			  const char *msgrange);
+static void addme(char **msgrange, int *alloced, long uid);
 static struct index_record zero_index;
 
 /*
@@ -93,7 +94,8 @@ static struct index_record zero_index;
  *
  */
 int append_setup(struct appendstate *as, const char *name,
-		 int format, struct auth_state *auth_state,
+		 int format, 
+		 const char *userid, struct auth_state *auth_state,
 		 long aclcheck, long quotacheck)
 {
     int r;
@@ -144,12 +146,20 @@ int append_setup(struct appendstate *as, const char *name,
 	return IMAP_QUOTA_EXCEEDED;
     }
 
+    if (userid) {
+	strcpy(as->userid, userid);
+    } else {
+	as->userid[0] = '\0';
+    }
+
     /* zero out metadata */
     as->orig_cache_len = as->m.cache_len;
     as->nummsg = as->numanswered = 
 	as->numdeleted = as->numflagged = 0;
     as->quota_used = 0;
     as->writeheader = 0;
+    as->seen_msgrange = NULL;
+    as->seen_alloced = 0;
 
     as->s = APPEND_READY;
     
@@ -226,7 +236,12 @@ int append_commit(struct appendstate *as,
     }
 
     /* set seen state */
-    /* erg, non-trivial */
+    if (as->seen_msgrange && as->userid[0]) {
+	append_addseen(&as->m, as->userid, as->seen_msgrange);
+    }
+    if (as->seen_msgrange) {
+	free(as->seen_msgrange);
+    }
 
     mailbox_unlock_quota(&as->m.quota);
     mailbox_unlock_index(&as->m);
@@ -268,6 +283,10 @@ int append_abort(struct appendstate *as)
     mailbox_unlock_header(&as->m);
     mailbox_close(&as->m);
 
+    if (as->seen_msgrange) {
+	free(as->seen_msgrange);
+    }
+
     return r;
 }
 
@@ -290,7 +309,6 @@ int append_fromstage(struct appendstate *as,
 		     struct protstream *messagefile,
 		     unsigned long size, time_t internaldate,
 		     const char **flag, int nflags,
-		     const char *userid,
 		     struct stagemsg **stagep)
 {
     struct mailbox *mailbox = &as->m;
@@ -298,7 +316,6 @@ int append_fromstage(struct appendstate *as,
     char fname[MAX_MAILBOX_PATH];
     FILE *destfile;
     int i, r;
-    int setseen = 0;
     int userflag, emptyflag;
 
     /* for staging */
@@ -395,7 +412,10 @@ int append_fromstage(struct appendstate *as,
 	/* ok, we've successfully created the file */
 	r = message_parse_file(destfile, mailbox, &message_index);
     }
-    if (destfile) fclose(destfile);
+    if (destfile) {
+	/* this will hopefully ensure that the link() actually happened */
+	fclose(destfile);
+    }
     if (r) {
 	append_abort(as);
 	return r;
@@ -403,7 +423,9 @@ int append_fromstage(struct appendstate *as,
 
     /* Handle flags the user wants to set in the message */
     for (i = 0; i < nflags; i++) {
-	if (!strcmp(flag[i], "\\seen")) setseen++;
+	if (!strcmp(flag[i], "\\seen")) {
+	    addme(&as->seen_msgrange, &as->seen_alloced, message_index.uid);
+	}
 	else if (!strcmp(flag[i], "\\deleted")) {
 	    if (mailbox->myrights & ACL_DELETE) {
 		message_index.system_flags |= FLAG_DELETED;
@@ -493,7 +515,7 @@ int append_removestage(struct stagemsg *stage)
  * 'internaldate' specifies the internaldate for the new message.
  * 'flags' contains the names of the 'nflags' flags that the
  * user wants to set in the message.  If the '\Seen' flag is
- * in 'flags', then 'userid' contains the name of the user whose
+ * in 'flags', then the 'userid' passed to append_setup controls whose
  * \Seen flag gets set.
  * 
  * The message is not committed to the mailbox (nor is the mailbox
@@ -505,15 +527,13 @@ int append_fromstream(struct appendstate *as,
 		      unsigned long size,
 		      time_t internaldate,
 		      const char **flag,
-		      int nflags,
-		      const char *userid)
+		      int nflags)
 {
     struct mailbox *mailbox = &as->m;
     struct index_record message_index = zero_index;
     char fname[MAX_MAILBOX_PATH];
     FILE *destfile;
     int i, r;
-    int setseen = 0;
     int userflag, emptyflag;
 
     assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
@@ -552,7 +572,9 @@ int append_fromstream(struct appendstate *as,
 
     /* Handle flags the user wants to set in the message */
     for (i = 0; i < nflags; i++) {
-	if (!strcmp(flag[i], "\\seen")) setseen++;
+	if (!strcmp(flag[i], "\\seen")) {
+	    addme(&as->seen_msgrange, &as->seen_alloced, message_index.uid);
+	}
 	else if (!strcmp(flag[i], "\\deleted")) {
 	    if (mailbox->myrights & ACL_DELETE) {
 		message_index.system_flags |= FLAG_DELETED;
@@ -616,17 +638,16 @@ int append_fromstream(struct appendstate *as,
 }
 
 /*
- * Append to 'append_mailbox' ('as') the 'nummsg' messages from the mailbox
- * 'mailbox' listed in the array pointed to by 'copymsg'.  'as'
- * must have been opened with append_setup().  If the '\Seen' flag is
- * to be set anywhere then 'userid' contains the name of the user
- * whose \Seen flag gets set.
+ * Append to 'append_mailbox' ('as') the 'nummsg' messages from the
+ * mailbox 'mailbox' listed in the array pointed to by 'copymsg'.
+ * 'as' must have been opened with append_setup().  If the '\Seen'
+ * flag is to be set anywhere then 'userid' passed to append_setup()
+ * contains the name of the user whose \Seen flag gets set.  
  */
 int append_copy(struct mailbox *mailbox, 
 		struct appendstate *as,
 		int nummsg, 
-		struct copymsg *copymsg, 
-		const char *userid)
+		struct copymsg *copymsg)
 {
     struct mailbox *append_mailbox = &as->m;
     int msg;
@@ -787,14 +808,61 @@ int append_copy(struct mailbox *mailbox,
     return r;
 }
 
+/* add 'uid' to 'msgrange'.  'uid' should be larger than anything in
+ * 'msgrange'.
+ */
+static void addme(char **msgrange, int *alloced, long uid)
+{
+    char *p;
+    int wasrange;
+    int len;
+
+    assert(msgrange != NULL);
+    len = *msgrange ? strlen(*msgrange) : 0;
+    if (*alloced < len + 40) {
+	*alloced += 40;
+	*msgrange = (char *) xrealloc(*msgrange, sizeof(char *) * (*alloced));
+    }
+
+    p = *msgrange;
+
+    if (!len) {
+	/* first time */
+	sprintf(*msgrange, "%ld", uid);
+    } else {
+	/* this is tricky if this is the second number we're adding */
+	wasrange = 0;
+
+	/* see what the last one is */
+	p = *msgrange + len - 1;
+	while (isdigit((int) *p) && p > *msgrange) p--;
+	/* second time, p == msgrange here */
+	if (*p == ':') wasrange = 1;
+	p++;
+	if (atoi(p) == uid - 1) {
+	    if (!wasrange) {
+		p = *msgrange + len;
+		*p++ = ':';
+	    } else {
+		/* we'll just overwrite the current number */
+	    }
+	} else {
+	    p = *msgrange + len;
+	    *p++ = ',';
+	}
+	sprintf(p, "%ld", uid);
+	return;
+    }
+}
+
 /*
  * Set the \Seen flag for 'userid' in 'mailbox' for the messages from
- * 'start' to 'end', inclusively.
+ * 'msgrange'.  the lowest msgrange must be larger than any previously
+ * seen message.
  */
 static int append_addseen(struct mailbox *mailbox,
 			  const char *userid,
-			  unsigned start,
-			  unsigned end)
+			  const char *msgrange)
 {
     int r;
     struct seen *seendb;
@@ -803,16 +871,22 @@ static int append_addseen(struct mailbox *mailbox,
     char *seenuids;
     int last_seen;
     char *tail, *p;
+    int oldlen;
+    int start;
     
+    /* what's the first uid in our new list? */
+    start = atoi(msgrange);
+
     r = seen_open(mailbox, userid, &seendb);
     if (r) return r;
     
     r = seen_lockread(seendb, &last_read, &last_uid, &last_change, &seenuids);
     if (r) return r;
     
-    seenuids = xrealloc(seenuids, strlen(seenuids)+40);
+    oldlen = strlen(seenuids);
+    seenuids = xrealloc(seenuids, oldlen+strlen(msgrange) +10);
 
-    tail = seenuids + strlen(seenuids);
+    tail = seenuids + oldlen;
     /* Scan back to last uid */
     while (tail > seenuids && isdigit((int) tail[-1])) tail--;
     for (p = tail, last_seen=0; *p; p++) last_seen = last_seen * 10 + *p - '0';
@@ -822,12 +896,8 @@ static int append_addseen(struct mailbox *mailbox,
     }
     else {
 	if (p > seenuids) *p++ = ',';
-	if (start != end) {
-	    sprintf(p, "%u:", start);
-	    p += strlen(p);
-	}
+	strcpy(p, msgrange);
     }
-    sprintf(p, "%u", end);
 
     r = seen_write(seendb, last_read, last_uid, time((time_t *)0), seenuids);
     seen_close(seendb);

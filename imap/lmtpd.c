@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.44 2000/07/14 13:38:25 ken3 Exp $
+ * $Id: lmtpd.c,v 1.45 2000/08/04 18:38:33 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.44 2000/07/14 13:38:25 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.45 2000/08/04 18:38:33 leg Exp $";*/
 
 #include <config.h>
 
@@ -385,6 +385,11 @@ int getenvelope(void *mc, const char *field, const char ***contents)
     } else if (!strcasecmp(field, "to")) {
 	*contents = mydata->temp;
 	mydata->temp[0] = msg_getrcptall(m, mydata->cur_rcpt);
+	mydata->temp[1] = NULL;
+	return SIEVE_OK;
+    } else if (!strcasecmp(field, "auth") && mydata->authuser) {
+	*contents = mydata->temp;
+	mydata->temp[0] = mydata->authuser;
 	mydata->temp[1] = NULL;
 	return SIEVE_OK;
     } else {
@@ -890,7 +895,7 @@ sieve_vacation_t vacation = {
 static char *markflags[] = { "\\flagged" };
 static sieve_imapflags_t mark = { markflags, 1 };
 
-int sieve_parse_error_handler(int lineno, char *msg, void *ic, void *sc)
+int sieve_parse_error_handler(int lineno, const char *msg, void *ic, void *sc)
 {
     script_data_t *sd = (script_data_t *) sc;
     
@@ -900,7 +905,7 @@ int sieve_parse_error_handler(int lineno, char *msg, void *ic, void *sc)
     return SIEVE_OK;
 }
 
-int sieve_execute_error_handler(char *msg, void *ic, void *sc, void *mc)
+int sieve_execute_error_handler(const char *msg, void *ic, void *sc, void *mc)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = ((mydata_t *) mc)->m;
@@ -1088,19 +1093,17 @@ int deliver_mailbox(struct protstream *msg,
 	return 0;
     }
     r = append_setup(&as, namebuf, MAILBOX_FORMAT_NORMAL,
-		     authstate, acloverride ? 0 : ACL_POST, 
+		     NULL, authstate, acloverride ? 0 : ACL_POST, 
 		     quotaoverride ? -1 : 0);
 
     if (!r) {
 	prot_rewind(msg);
 	if (singleinstance && stage) {
 	    r = append_fromstage(&as, msg, size, now, 
-				 (const char **) flag, nflags,
-				 user, stage);
+				 (const char **) flag, nflags, stage);
 	} else {
 	    r = append_fromstream(&as, msg, size, now, 
-				  (const char **) flag, nflags,
-				  user);
+				  (const char **) flag, nflags);
 	}
 	if (!r) append_commit(&as, NULL, NULL, NULL);
 	else append_abort(&as);
