@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.59 2001/03/06 20:05:48 ken3 Exp $
+ * $Id: prot.c,v 1.60 2001/03/07 01:52:52 ken3 Exp $
  */
 
 #include <config.h>
@@ -376,10 +376,9 @@ int prot_fill(struct protstream *s)
 	    do {
 		sleepfor = read_timeout - now;
 		/* execute each callback that has timed out */
-		for (event = s->waitevent, next = event->next;
-		     event;
-		     event = next, next = (event ? event->next : NULL))
+		for (event = s->waitevent; event; event = next)
 		{
+		    next = event->next;
 		    if (now >= event->mark) {
 			event = (*event->proc)(s, event, event->rock);
 		    }
