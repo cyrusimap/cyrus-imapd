@@ -347,7 +347,7 @@ time_t *lifetime;
 	krb_set_tkt_string(tktstring);
     }
 
-    if (krb_get_lrealm(realm) != KSUCCESS) {
+    if (krb_get_lrealm(realm,1) != KSUCCESS) {
 	return "cannot get local Kerberos realm";
     }
 
