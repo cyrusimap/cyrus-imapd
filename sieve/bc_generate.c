@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_generate.c,v 1.1.4.3 2003/03/05 17:53:01 rjs3 Exp $
+ * $Id: bc_generate.c,v 1.1.4.4 2003/06/23 16:31:42 jsmith2 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -696,3 +696,13 @@ int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s)
 
     return bc_action_generate(0, *retval, c);
 }
+
+
+void sieve_free_bytecode(bytecode_info_t **p) 
+{
+    if(!p || !*p) return;
+    if((*p)->data) free((*p)->data);
+    free(*p);
+    *p = NULL;
+}
+ 

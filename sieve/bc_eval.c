@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.10 2003/06/02 18:05:14 ken3 Exp $
+ * $Id: bc_eval.c,v 1.1.4.11 2003/06/23 16:31:42 jsmith2 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -74,9 +74,9 @@ int unwrap_string(bytecode_input_t *bc, int pos, const char **str, int *len)
 }
 
 
-/* this is used by notify to pass the options list */
-/* It needs a null-terminated (char *)[], generated from a stringlist,
- * the beginning of which is pointed at by pos */
+/* this is used by notify to pass the options list to do_notify
+ * do_notify needs null-terminated (char *)[],
+ *  we have a stringlist, the beginning of which is pointed at by pos */
 const char ** bc_makeArray(bytecode_input_t *bc, int *pos) 
 { 
     int i;
@@ -939,7 +939,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    
 	    if (comparator == B_ANY)
 	    { 
-		ip++; /* skip relat */
+		ip++; /* skip placeholder this has no comparator function */
 		comp=NULL;
 	    } else {
 		comp=lookup_comp(B_ASCIICASEMAP,comparator,

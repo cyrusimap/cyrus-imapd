@@ -1,7 +1,7 @@
 /* bc_emit.c -- sieve bytecode - pass 2 of the compiler
  * Rob Siemborski
  * Jen Smith
- * $Id: bc_emit.c,v 1.1.4.4 2003/06/23 13:33:37 rjs3 Exp $
+ * $Id: bc_emit.c,v 1.1.4.5 2003/06/23 16:31:42 jsmith2 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -596,16 +596,17 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 		}
 		
 	    }
+	    /* Days*/
 	    if(write(fd,&bc->data[codep].value, sizeof(int)) == -1)
 		return -1;
 	    codep++;
 	    filelen += sizeof(int);
-
+            /*Mime */
 	    if(write(fd,&bc->data[codep].value, sizeof(int)) == -1)
 		return -1;
 	    codep++;
 	    filelen += sizeof(int);
-
+	    
 	    break;
 	case B_NULL:
 	case B_STOP:
@@ -644,11 +645,3 @@ int sieve_emit_bytecode(int fd, bytecode_info_t *bc)
     return bc_action_emit(fd, 0, bc->scriptend, bc, sizeof(int) + BYTECODE_MAGIC_LEN);
 }
 
-void sieve_free_bytecode(bytecode_info_t **p) 
-{
-    if(!p || !*p) return;
-    if((*p)->data) free((*p)->data);
-    free(*p);
-    *p = NULL;
-}
- 
