@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.39 2004/12/17 16:32:17 ken3 Exp $
+ * $Id: nntpd.c,v 1.40 2005/01/03 16:35:49 ken3 Exp $
  */
 
 /*
@@ -1807,8 +1807,8 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
     prot_printf(nntp_out, "101 Capability list follows:\r\n");
     prot_printf(nntp_out, "VERSION 2\r\n");
     prot_printf(nntp_out,
-		"IMPLEMENTATION Cyrus NNTP%s server %s\r\n",
-		config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+		"IMPLEMENTATION Cyrus%s_%s\r\n",
+		config_mupdate_server ? "_Murder" : "", CYRUS_VERSION);
     if ((nntp_capa & MODE_READ) && (nntp_userid || allowanonymous))
 	prot_printf(nntp_out, "READER POST\r\n");
     if (nntp_capa & MODE_FEED) prot_printf(nntp_out, "TRANSIT\r\n");
