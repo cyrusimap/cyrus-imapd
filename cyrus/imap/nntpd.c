@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.42 2002/11/15 21:46:58 rjs3 Exp $
+ * $Id: nntpd.c,v 1.1.2.43 2002/11/17 03:45:35 ken3 Exp $
  */
 
 /*
@@ -1021,6 +1021,9 @@ static int parsenum(char *str, char **rem)
 
     while (*p && isdigit((int) *p)) {
 	result = result * 10 + *p++ - '0';
+	if (result < 0) {
+	    /* xxx overflow */
+	}
     }
 
     if (rem) {

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.16 2002/11/15 21:46:58 rjs3 Exp $
+ * $Id: pop3d.c,v 1.122.4.17 2002/11/17 03:48:03 ken3 Exp $
  */
 #include <config.h>
 
@@ -1387,6 +1387,9 @@ static int parsenum(char **ptr)
     }
     while (*p && isdigit((int) *p)) {
 	result = result * 10 + *p++ - '0';
+        if (result < 0) {
+            /* xxx overflow */
+        }
     }
 
     if (*p) {
