@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.8 2002/01/18 22:58:47 rjs3 Exp $
+/* $Id: cyrdump.c,v 1.9 2002/02/01 19:43:37 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -208,7 +208,7 @@ static int dump_me(char *name, int matchlen, int maycreate, void *rock)
     printf("\n");
 
     printf("<imapdump uniqueid=\"%s\">\n", m.uniqueid);
-    imapurl_toURL(imapurl, config_servername, m.name);
+    imapurl_toURL(imapurl, config_servername, m.name, NULL);
     printf("  <mailbox-url>%s</mailbox-url>\n", imapurl);
     printf("  <incremental-uid>%d</incremental-uid>\n", irec->incruid);
     printf("  <nextuid>%ld</nextuid>\n", m.last_uid + 1);

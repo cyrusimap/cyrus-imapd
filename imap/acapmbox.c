@@ -81,7 +81,7 @@ struct acapmbox_handle_s {
 static char *acapmbox_get_url(char *dst, const char *server, const char *name)
 {
     if (!server) server = config_servername;
-    imapurl_toURL(dst, server, name);
+    imapurl_toURL(dst, server, name, NULL);
 
     return dst;
 }
