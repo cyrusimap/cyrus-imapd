@@ -138,7 +138,8 @@ char *dir;
 struct uidlist *uidlist;
 {
     
-    int i, r;
+    unsigned i;
+    int r;
     struct mailbox mailbox;
     char namebuf[MAX_MAILBOX_PATH];
     char *p, buf[4096];
@@ -190,7 +191,7 @@ struct uidlist *uidlist;
 	    fatal("cannot change dir to newsgroup", EX_IOERR);
 	}
 	for (i = uidlist->first; i < uidlist->last; i++) {
-	    sprintf(buf, "%d", i);
+	    sprintf(buf, "%u", i);
 	    unlink(buf);
 	}
 	return;
@@ -215,7 +216,7 @@ struct uidlist *uidlist;
 
     /* Remove any remaining files that weren't in the index file */
     for (i = uidlist->first; i < uidlist->last; i++) {
-	sprintf(buf, "%d", i);
+	sprintf(buf, "%u", i);
 	unlink(buf);
     }
 }
@@ -238,7 +239,7 @@ char *index;
 	    return 1;
 	}
 	/* Article not in index file, just remove the file */
-	sprintf(buf, "%d", uid);
+	sprintf(buf, "%u", uid);
 	unlink(buf);
     }
     return 0;

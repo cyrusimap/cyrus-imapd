@@ -351,7 +351,7 @@ int thisquota;
     }
     
     if (quota[thisquota].quota.used != quota[thisquota].newused) {
-	printf("%s: usage was %d, now %d\n", quota[thisquota].quota.root,
+	printf("%s: usage was %u, now %u\n", quota[thisquota].quota.root,
 	       quota[thisquota].quota.used, quota[thisquota].newused);
 	quota[thisquota].quota.used = quota[thisquota].newused;
 	r = mailbox_write_quota(&quota[thisquota].quota);

@@ -738,7 +738,7 @@ char *passwd;
     if (!reply) reply = "User logged in";
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%d", config_dir, FNAME_LOGDIR, imapd_userid,
+    sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, imapd_userid,
 	    getpid());
     logfile = fopen(buf, "w");
     if (logfile) {
@@ -862,7 +862,7 @@ char *authtype;
     }
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%d", config_dir, FNAME_LOGDIR, imapd_userid,
+    sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, imapd_userid,
 	    getpid());
     logfile = fopen(buf, "w");
     if (logfile) {
@@ -2123,7 +2123,7 @@ char *name;
 	printastring(quota.root);
 	prot_printf(imapd_out, " (");
 	if (quota.limit >= 0) {
-	    prot_printf(imapd_out, "STORAGE %d %d",
+	    prot_printf(imapd_out, "STORAGE %u %d",
 			quota.used/QUOTA_UNITS, quota.limit);
 	}
 	prot_printf(imapd_out, ")\r\n");
@@ -2183,7 +2183,7 @@ char *name;
 		printastring(mailbox.quota.root);
 		prot_printf(imapd_out, " (");
 		if (mailbox.quota.limit >= 0) {
-		    prot_printf(imapd_out, "STORAGE %d %d",
+		    prot_printf(imapd_out, "STORAGE %u %d",
 				mailbox.quota.used/QUOTA_UNITS,
 				mailbox.quota.limit);
 		}
@@ -3299,7 +3299,7 @@ char *s;
     }
 
     if (*p) {
-	prot_printf(imapd_out, "{%d}\r\n%s", strlen(s), s);
+	prot_printf(imapd_out, "{%u}\r\n%s", strlen(s), s);
     }
     else {
 	prot_printf(imapd_out, "\"%s\"", s);

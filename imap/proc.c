@@ -39,13 +39,13 @@ char *clienthost;
 char *userid;
 char *mailbox;
 {
-    int pid;
+    unsigned pid;
 
     if (!procfname) {
 	pid = getpid();
     
 	procfname = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+10);
-	sprintf(procfname, "%s%s%d", config_dir, FNAME_PROCDIR, pid);
+	sprintf(procfname, "%s%s%u", config_dir, FNAME_PROCDIR, pid);
 
 	procfile = fopen(procfname, "w+");
 	if (!procfile) {
