@@ -65,6 +65,7 @@ int quota_num = 0, quota_alloc = 0;
 
 int firstquota;
 int redofix;
+int partial;
 
 main(argc, argv)
 int argc;
@@ -89,7 +90,7 @@ char **argv;
 
     r = buildquotalist(argv+optind, argc-optind);
 
-    if (!r && fflag) r = fixquota();
+    if (!r && fflag) r = fixquota(argc-optind);
 
     if (!r) reportquota();
 
@@ -226,7 +227,7 @@ int maycreate;
     if (r) return r;
 
     if (thisquota == -1) {
-	if (mailbox.quota.root) {
+	if (!partial && mailbox.quota.root) {
 	    r = fixquota_fixroot(&mailbox, (char *)0);
 	    if (r) {
 		mailbox_close(&mailbox);
@@ -356,7 +357,8 @@ int thisquota;
  * Fix all the quota roots
  */
 int
-fixquota()
+fixquota(ispartial)
+int ispartial;
 {
     FILE *listfile;
     int r;
@@ -373,6 +375,7 @@ fixquota()
     while (redofix) {
 	redofix = 0;
 	firstquota = 0;
+	partial = ispartial;
 
 	r = mboxlist_findall(pattern, 1, 0, fixquota_mailbox);
 	if (r) {
