@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.171 2003/12/29 17:08:01 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.172 2004/02/04 01:42:39 ken3 Exp $ */
 
 #include <config.h>
 
@@ -907,37 +907,6 @@ struct prot_waitevent *backend_timeout(struct protstream *s __attribute__((unuse
     }
 }
 
-static void get_capability(struct backend *s)
-{
-    static int cap_tag_num = 0;
-    char tag[64];
-    char resp[1024];
-    int st = 0;
-
-    cap_tag_num++;
-    snprintf(tag, sizeof(tag), "C%d", cap_tag_num);
-
-    prot_printf(s->out, "%s Capability\r\n",tag);
-    do {
-	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
-	if (!strncasecmp(resp, "* Capability ", 13)) {
-	    st++; /* increment state */
-	    if (strstr(resp, "IDLE")) s->capability |= IDLE;
-	    if (strstr(resp, "MUPDATE")) s->capability |= MUPDATE;
-	} else {
-	    /* line we weren't expecting. hmmm. */
-	}
-    } while (st == 0);
-    do {
-	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
-	if (!strncmp(resp, tag, strlen(tag))) {
-	    st++; /* increment state */
-	} else {
-	    /* line we weren't expecting. hmmm. */
-	}
-    } while (st == 1);
-}
-
 /* return the connection to the server */
 struct backend *proxyd_findserver(const char *server)
 {
@@ -967,9 +936,6 @@ struct backend *proxyd_findserver(const char *server)
 			      authid, NULL);
 	if(!ret) return NULL;
 
-	/* find the capabilities of the server */
-	get_capability(ret);
-    
 	/* add the timeout */
 	ret->timeout = prot_addwaitevent(proxyd_in, time(NULL) + IDLE_TIMEOUT,
 					 backend_timeout, ret);
@@ -2606,7 +2572,7 @@ void cmd_idle(char *tag)
     protgroup_reset(protin);
     protgroup_insert(protin, proxyd_in);
 
-    if (backend_current && CAPA(backend_current, IDLE)) {
+    if (backend_current && CAPA(backend_current, CAPA_IDLE)) {
 	/* Start IDLE on backend */
 	prot_printf(backend_current->out, "%s IDLE\r\n", tag);
 	if (!prot_fgets(buf, sizeof(buf), backend_current->in)) {
@@ -2677,7 +2643,7 @@ void cmd_idle(char *tag)
 	    shutdown = done = 1;
 	}
 
-	if (!done && backend_current && !CAPA(backend_current, IDLE)) {
+	if (!done && backend_current && !CAPA(backend_current, CAPA_IDLE)) {
 	    /* Simulate IDLE by polling the backend */
 	    char mytag[128];
 	
@@ -2688,7 +2654,7 @@ void cmd_idle(char *tag)
 	}
     }
 
-    if (backend_current && CAPA(backend_current, IDLE)) {
+    if (backend_current && CAPA(backend_current, CAPA_IDLE)) {
 	/* Either the client timed out, or gave us a continuation.
 	   In either case we're done, so terminate IDLE on backend */
 	prot_printf(backend_current->out, "DONE\r\n");
@@ -3488,7 +3454,7 @@ void cmd_create(char *tag, char *name, char *server)
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
     }
     if (!r) {
-	if (!CAPA(s, MUPDATE)) {
+	if (!CAPA(s, CAPA_MUPDATE)) {
 	    /* reserve mailbox on MUPDATE */
 	}
     }
@@ -3500,7 +3466,7 @@ void cmd_create(char *tag, char *name, char *server)
 	res = pipe_including_tag(s, tag, 0);
 	tag = "*";		/* can't send another tagged response */
 	
-	if (!CAPA(s, MUPDATE)) {
+	if (!CAPA(s, CAPA_MUPDATE)) {
 	    /* do MUPDATE create operations */
 	}
 	/* make sure we've seen the update */
@@ -3541,7 +3507,7 @@ void cmd_delete(char *tag, char *name)
 	res = pipe_including_tag(s, tag, 0);
 	tag = "*";		/* can't send another tagged response */
 
-	if (!CAPA(s, MUPDATE) && res == PROXY_OK) {
+	if (!CAPA(s, CAPA_MUPDATE) && res == PROXY_OK) {
 	    /* do MUPDATE delete operations */
 	}
 
@@ -3660,7 +3626,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     }
 
     if (!r) {
-	if (!CAPA(s, MUPDATE)) {
+	if (!CAPA(s, CAPA_MUPDATE)) {
 	    /* do MUPDATE create operations for new mailbox */
 	}
 
@@ -3670,7 +3636,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	res = pipe_including_tag(s, tag, 0);
 	tag = "*";		/* can't send another tagged response */
 	
-	if (!CAPA(s, MUPDATE)) {
+	if (!CAPA(s, CAPA_MUPDATE)) {
 	    /* Activate/abort new mailbox in MUPDATE*/
 	    /* delete old mailbox from MUPDATE */
 	}
@@ -4111,7 +4077,7 @@ void cmd_setacl(char *tag, const char *name,
 	}	    
 	res = pipe_including_tag(s, tag, 0);
 	tag = "*";		/* can't send another tagged response */
-	if (!CAPA(s, MUPDATE) && res == PROXY_OK) {
+	if (!CAPA(s, CAPA_MUPDATE) && res == PROXY_OK) {
 	    /* setup new ACL in MUPDATE */
 	}
 	/* make sure we've seen the update */
