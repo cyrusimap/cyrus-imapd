@@ -995,7 +995,8 @@ sub _sc_setquota {
   while (defined ($opt = shift(@argv))) {
     last if $opt eq '--';
     if ($opt =~ /^-/) {
-      die "usage: setquota mailbox limit num [limit num ...]\n";
+      die ("usage: setquota mailbox limit num [limit num ...]\n" .
+	   "       setquota mailbox num\n");
     }
     else {
       push(@nargv, $opt);
@@ -1003,8 +1004,13 @@ sub _sc_setquota {
     }
   }
   push(@nargv, @argv);
+  if (@nargv == 2) {
+      my ($mbox, $limit) = @nargv;
+      @nargv = ($mbox, "STORAGE", $limit);
+  }
   if (@nargv < 3 || (@nargv - 1) % 2) {
-    die "usage: setquota mailbox id rights [id rights ...]\n";
+    die ("usage: setquota mailbox limit num [limit num ...]\n" .
+	 "       setquota mailbox num\n");
   }
   if (!$cyrref || !$$cyrref) {
     die "setquota: no connection to server\n";
