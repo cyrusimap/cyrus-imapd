@@ -37,13 +37,16 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.16 2003/12/20 02:25:53 ken3 Exp $
+ * $Id: version.c,v 1.17 2004/01/03 20:12:32 ken3 Exp $
  */
 
 #include <config.h>
 
 #include <sasl/sasl.h>
 #include <sys/utsname.h>
+#ifdef HAVE_BDB
+#include <db.h>
+#endif
 #ifdef HAVE_KRB
 #include <krb.h>
 #endif
@@ -128,7 +131,9 @@ void id_response(struct protstream *pout)
     /* add the environment info */
 #ifdef DB_VERSION_STRING
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-	     "; %s", DB_VERSION_STRING);
+	     "; Built w/%s", DB_VERSION_STRING);
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; Running w/%s", db_version(NULL, NULL, NULL));
 #endif
 #ifdef HAVE_SSL
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),

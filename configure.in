@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.275 2003/12/19 22:14:32 rjs3 Exp $
+dnl $Id: configure.in,v 1.276 2004/01/03 20:12:31 ken3 Exp $
 dnl
 
 
@@ -214,7 +214,7 @@ if test "$use_berkeley" != "no"; then
   CPPFLAGS="${BDB_INCADD} ${CPPFLAGS}"
 
   CYRUSDB_OBJS="$CYRUSDB_OBJS cyrusdb_berkeley.o"
-  AC_DEFINE(WITH_BERKELEY,[],[Build in Berkeley DB support?])
+  AC_DEFINE(HAVE_BDB,[],[Build in Berkeley DB support?])
 fi
 
 dnl End Berkeley DB Detection
@@ -1001,7 +1001,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.275 2003/12/19 22:14:32 rjs3 Exp $ */
+/* $Id: configure.in,v 1.276 2004/01/03 20:12:31 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
