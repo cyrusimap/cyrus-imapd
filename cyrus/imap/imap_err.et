@@ -24,7 +24,7 @@
 #  (412) 268-4387, fax: (412) 268-7395
 #  tech-transfer@andrew.cmu.edu
 # 
-# $Id: imap_err.et,v 1.45.4.4 2003/02/27 18:10:34 rjs3 Exp $
+# $Id: imap_err.et,v 1.45.4.5 2003/07/16 16:42:14 ken3 Exp $
 
 error_table imap
 
@@ -114,6 +114,9 @@ ec IMAP_ANNOTATION_BADENTRY,
 
 ec IMAP_ANNOTATION_BADATTRIB,
    "Invalid annotation attribute"
+
+ec IMAP_ANNOTATION_BADVALUE,
+   "Invalid annotation value"
 
 # following used only proxy/db operations
 ec IMAP_BAD_SERVER,

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.43 2003/06/26 15:31:54 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.44 2003/07/16 16:42:14 ken3 Exp $
  */
 
 #include <config.h>
@@ -1259,8 +1259,17 @@ struct storedata {
     struct hash_table server_table;
 };
 
+enum {
+    ATTRIB_TYPE_CONTENTTYPE,
+    ATTRIB_TYPE_STRING,
+    ATTRIB_TYPE_BOOLEAN,
+    ATTRIB_TYPE_UINT,
+    ATTRIB_TYPE_INT
+};
+
 struct annotate_st_entry {
     const char *name;		/* entry name */
+    int type;			/* entry type */
     annotation_proxy_t proxytype; /* mask of allowed server types */
     int attribs;		/* mask of allowed attributes */
     int acl;			/* add'l required ACL for .shared */
@@ -1278,6 +1287,61 @@ struct annotate_st_entry_list
 
     struct annotate_st_entry_list *next;
 };
+
+static const char *annotate_canon_value(const char *value, int type)
+{
+    char *p = NULL;
+
+    /* check for "NIL" */
+    if (!strcasecmp(value, "NIL")) return "NIL";
+
+    switch (type) {
+    case ATTRIB_TYPE_CONTENTTYPE:
+	/* XXX how do we check this? */
+	break;
+
+    case ATTRIB_TYPE_STRING:
+	/* free form */
+	break;
+
+    case ATTRIB_TYPE_BOOLEAN:
+	/* make sure its "true" or "false" */
+	if (!strcasecmp(value, "true")) return "true";
+	else if (!strcasecmp(value, "false")) return "false";
+	else return NULL;
+	break;
+
+    case ATTRIB_TYPE_UINT:
+	/* make sure its a valid ulong ( >= 0 ) */
+	errno = 0;
+	strtoul(value, &p, 10);
+	if ((p == value)		/* no value */
+	    || (*p != '\0')		/* illegal char */
+	    || errno			/* overflow */
+	    || strchr(value, '-')) {	/* negative number */
+	    return NULL;
+	}
+	break;
+
+    case ATTRIB_TYPE_INT:
+	/* make sure its a valid long */
+	errno = 0;
+	strtol(value, &p, 10);
+	if ((p == value)		/* no value */
+	    || (*p != '\0')		/* illegal char */
+	    || errno) {			/* underflow/overflow */
+	    return NULL;
+	}
+	break;
+
+    default:
+	/* unknown type */
+	return NULL;
+	break;
+    }
+
+    return value;
+}
 
 static int store_cb(char *name, int matchlen,
 		    int maycreate __attribute__((unused)), void *rock)
@@ -1457,60 +1521,60 @@ static int annotation_set_todb(const char *int_mboxname,
 
 const struct annotate_st_entry server_entries[] =
 {
-    { "/comment", PROXY_AND_BACKEND,
+    { "/comment", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
       ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
       ACL_ADMIN, annotation_set_todb, NULL },
-    { "/motd", PROXY_AND_BACKEND,
+    { "/motd", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_tofile, "motd" },
-    { "/admin", PROXY_AND_BACKEND,
+    { "/admin", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
-    { "/vendor/cmu/cyrus-imapd/shutdown", PROXY_AND_BACKEND,
+    { "/vendor/cmu/cyrus-imapd/shutdown", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_tofile, "shutdown" },
-    { "/vendor/cmu/cyrus-imapd/squat", PROXY_AND_BACKEND,
+    { "/vendor/cmu/cyrus-imapd/squat", ATTRIB_TYPE_BOOLEAN, PROXY_AND_BACKEND,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
-    { "/vendor/cmu/cyrus-imapd/expire", PROXY_AND_BACKEND,
+    { "/vendor/cmu/cyrus-imapd/expire", ATTRIB_TYPE_UINT, PROXY_AND_BACKEND,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
-    { NULL, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
+    { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
 };
 
 const struct annotate_st_entry mailbox_rw_entries[] =
 {
-    { "/comment", BACKEND_ONLY,
+    { "/comment", ATTRIB_TYPE_STRING, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
       0, annotation_set_todb, NULL },
-    { "/sort", BACKEND_ONLY,
+    { "/sort", ATTRIB_TYPE_STRING, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
       0, annotation_set_todb, NULL },
-    { "/thread", BACKEND_ONLY,
+    { "/thread", ATTRIB_TYPE_STRING, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
       0, annotation_set_todb, NULL },
-    { "/check", BACKEND_ONLY,
+    { "/check", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
       0, annotation_set_todb, NULL },
-    { "/checkperiod", BACKEND_ONLY,
+    { "/checkperiod", ATTRIB_TYPE_UINT, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
       0, annotation_set_todb, NULL },
-    { "/vendor/cmu/cyrus-imapd/squat", BACKEND_ONLY,
+    { "/vendor/cmu/cyrus-imapd/squat", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
-    { "/vendor/cmu/cyrus-imapd/expire", BACKEND_ONLY,
+    { "/vendor/cmu/cyrus-imapd/expire", ATTRIB_TYPE_UINT, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
-    { "/vendor/cmu/cyrus-imapd/news2mail", BACKEND_ONLY,
+    { "/vendor/cmu/cyrus-imapd/news2mail", ATTRIB_TYPE_STRING, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
-    { NULL, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
+    { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
 };
 
 int annotatemore_store(char *mailbox,
@@ -1579,33 +1643,58 @@ int annotatemore_store(char *mailbox,
 	attribs = entries[entrycount].attribs;
 	av = e->attvalues;
 	while (av) {
+	    const char *value;
 	    if (!strcmp(av->attrib, "value.shared")) {
 		if (!(attribs & ATTRIB_VALUE_SHARED)) {
 		    r = IMAP_PERMISSION_DENIED;
 		    goto cleanup;
 		}
-		if (nentry) nentry->shared.value = av->value;
+		value = annotate_canon_value(av->value,
+					     entries[entrycount].type);
+		if (!value) {
+		    r = IMAP_ANNOTATION_BADVALUE;
+		    goto cleanup;
+		}
+		if (nentry) nentry->shared.value = value;
 	    }
 	    else if (!strcmp(av->attrib, "content-type.shared")) {
 		if (!(attribs & ATTRIB_CONTENTTYPE_SHARED)) {
 		    r = IMAP_PERMISSION_DENIED;
 		    goto cleanup;
 		}
-		if (nentry) nentry->shared.contenttype = av->value;
+		value = annotate_canon_value(av->value,
+					     ATTRIB_TYPE_CONTENTTYPE);
+		if (!value) {
+		    r = IMAP_ANNOTATION_BADVALUE;
+		    goto cleanup;
+		}
+		if (nentry) nentry->shared.contenttype = value;
 	    }
 	    else if (!strcmp(av->attrib, "value.priv")) {
 		if (!(attribs & ATTRIB_VALUE_PRIV)) {
 		    r = IMAP_PERMISSION_DENIED;
 		    goto cleanup;
 		}
-		if (nentry) nentry->priv.value = av->value;
+		value = annotate_canon_value(av->value,
+					     entries[entrycount].type);
+		if (!value) {
+		    r = IMAP_ANNOTATION_BADVALUE;
+		    goto cleanup;
+		}
+		if (nentry) nentry->priv.value = value;
 	    }
 	    else if (!strcmp(av->attrib, "content-type.priv")) {
 		if (!(attribs & ATTRIB_CONTENTTYPE_PRIV)) {
 		    r = IMAP_PERMISSION_DENIED;
 		    goto cleanup;
 		}
-		if (nentry) nentry->priv.contenttype = av->value;
+		value = annotate_canon_value(av->value,
+					     ATTRIB_TYPE_CONTENTTYPE);
+		if (!value) {
+		    r = IMAP_ANNOTATION_BADVALUE;
+		    goto cleanup;
+		}
+		if (nentry) nentry->priv.contenttype = value;
 	    }
 	    else {
 		r = IMAP_PERMISSION_DENIED;
