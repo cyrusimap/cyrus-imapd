@@ -4,7 +4,7 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.25 2003/06/20 15:11:43 ken3 Exp $ -->
+<!-- $Id: faq.html,v 1.26 2003/06/20 17:27:15 rjs3 Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
@@ -218,22 +218,28 @@ delete a message from a mailbox because they try to COPY it to the trash
 folder before deleting the message.  This operation will fail due to the
 mailbox being over quota.  This is separate from the fact that a specific 
 mailbox name is not interoperable between clients (one might call it 'trash',
-another 'Trash', another 'recycle bin', etc)
+another 'Trash', another 'Recycle Bin', etc)
 </p><p>
-This is solely a quality-of-implementation issue on the client side.  There
-are really only three options here: Contact your client vendor to have
-the broken client fixed.  Stop using the 'trash mailbox' feature of
-your client (if possible).  Set a separate quota root on the 'trash folders'
-of users.  This last option is significantly harder to do, since
+Given the lack of protocol support for a trash folder, this is mostly a
+quality-of-implementation issue on the client side.  There
+are a few options here:
+<ul>
+<li>Contact your client vendor to have
+the broken client fixed (one possibility is to have the client ask the user
+if they wish to permanantly delete the message if the COPY operation fails).</li>
+<li>Stop using the 'trash mailbox' feature of your client (if possible).</li>
+<li>Set a separate quota root on the 'trash folders'
+of users.  This last option is significantly harder to do correctly, since
 it assumes that all clients that make use of a trash folder do so with the
-same folder name.
+same folder name.</li>
+</ul>
 </p>
 </dd>
 
 </dl>
 
 <hr />
-last modified: $Date: 2003/06/20 15:11:43 $ <br />
+last modified: $Date: 2003/06/20 17:27:15 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
