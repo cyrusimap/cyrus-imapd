@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.31 2002/04/02 19:29:36 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.32 2002/04/05 19:52:27 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -87,7 +87,7 @@ static sasl_security_properties_t *make_secprops(int min, int max)
   sasl_security_properties_t *ret =
       (sasl_security_properties_t *) xzmalloc(sizeof(sasl_security_properties_t));
 
-  ret->maxbufsize = 4000; /* xxx */
+  ret->maxbufsize = PROT_BUFSIZE;
   ret->min_ssf = config_getint("sasl_minimum_layer", min);	
   ret->max_ssf = config_getint("sasl_maximum_layer", max);
 
