@@ -218,7 +218,7 @@ int dump2_test(bytecode_input_t * d, int i)
     case BC_ANYOF:/*5*/
 	printf("any of \n(");
 	l=ntohl(d[i+1].len);
-	i+=2;
+	i+=3;
 	
 	for (x=0; x<l; x++)
 	{
@@ -232,7 +232,7 @@ int dump2_test(bytecode_input_t * d, int i)
     case BC_ALLOF:/*6*/
 	printf("all of \n(");
 	l=ntohl(d[i+1].len);
-	i+=2;
+	i+=3;
 	
 	for (x=0; x<l; x++)
 	{
