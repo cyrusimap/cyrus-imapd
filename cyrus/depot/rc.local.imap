@@ -1,0 +1,8 @@
+#!/bin/sh
+if [ -d /tmpfs ]; then
+  mkdir /tmpfs/proc
+  chown cyrus /tmpfs/proc
+fi
+
+echo "starting Cyrus system..."
+/usr/cyrus/bin/master &
