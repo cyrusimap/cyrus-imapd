@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.3 2002/02/20 21:00:54 rjs3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.4 2002/02/23 01:32:05 rjs3 Exp $
  */
 
 #include <config.h>
@@ -202,7 +202,12 @@ int main(int argc, char *argv[])
 
     DB_OLD->foreach(odb, "", 0, converter_p, converter_cb, NULL, NULL);
 
-    DB_NEW->commit(ndb, tid);
+    /* we want to have done atleast one entry at this point */
+    if(tid)
+	DB_NEW->commit(ndb, tid);
+    else
+	fprintf(stderr, "Warning: apparently empty database converted.\n");
+    
 
     DB_OLD->close(odb);
     DB_NEW->close(ndb);
