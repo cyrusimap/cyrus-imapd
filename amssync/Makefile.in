@@ -34,7 +34,7 @@ INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
 DEFS = @DEFS@
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
+CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ @SASLFLAGS@
 LIBS = -lutil @IMAP_LIBS@ /usr/local/lib/afs/libsys.a
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 

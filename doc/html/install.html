@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.69 1999/10/13 16:40:01 leg Exp $ -->
+<!-- $Id: install.html,v 1.70 1999/10/30 23:07:37 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -248,6 +248,11 @@ configure uses "<TT>mail</TT>". <P>
 <dt><tt>--with-statedir=PATH</tt> 
 <dd>Specifies the directory used for the <TT>ptclient</TT> state
 directories.  By default, configure uses "<TT>/var</TT>". <P>
+
+<dt><tt>--with-sasldir=PATH</tt> 
+<dd>Specifies the path to the directories containing the library
+(<tt>.../lib</tt>) and include (<tt>.../include</tt>)
+files for libsasl. <P>
 
 <dt><tt>--with-auth=METHOD</tt>
 <dd>Specifies the authorization module to use.  Currently implemented

@@ -66,6 +66,12 @@ clean:
 	rm -f libcom_err.a
 	rm -f $(LIBOBJS)
 
+distclean: clean
+	rm -f compile_et compile_et.o error_table.o 
+	rm -f libcom_err.a
+	rm -f $(LIBOBJS)
+	rm Makefile
+
 depend: compile_et 
 
 #install:: com_err.h 

@@ -1,7 +1,7 @@
-dnl aclocal.m4 generated automatically by aclocal 1.3
+dnl aclocal.m4 generated automatically by aclocal 1.4
 
-dnl Copyright (C) 1994, 1995, 1996, 1997, 1998 Free Software Foundation, Inc.
-dnl This Makefile.in is free software; the Free Software Foundation
+dnl Copyright (C) 1994, 1995-8, 1999 Free Software Foundation, Inc.
+dnl This file is free software; the Free Software Foundation
 dnl gives unlimited permission to copy and/or distribute it,
 dnl with or without modifications, as long as this notice is preserved.
 
@@ -14,7 +14,7 @@ dnl
 dnl Additional macros for configure.in packaged up for easier theft.
 dnl tjs@andrew.cmu.edu 6-may-1998
 dnl
-dnl $Id: aclocal.m4,v 1.15 1999/10/04 18:23:04 leg Exp $
+dnl $Id: aclocal.m4,v 1.16 1999/10/30 23:07:36 leg Exp $
 dnl
 
 dnl It would be good if ANDREW_ADD_LIBPATH could detect if something was
@@ -59,19 +59,33 @@ AC_DEFUN(CMU_GUESS_RUNPATH_SWITCH, [
 
 dnl sasl.m4--sasl detection macro
 dnl Rob Earhart
+dnl $Id: aclocal.m4,v 1.16 1999/10/30 23:07:36 leg Exp $
 
 AC_DEFUN(CMU_SASL, [
-	cmu_need_sasl=no
-	AC_CHECK_HEADER(sasl.h,
-	  cmu_save_LIBS="$LIBS"
-	  AC_CHECK_LIB(sasl, sasl_getprop,,cmu_need_sasl=yes)
-	  LIBS="$cmu_save_LIBS"
-	,cmu_need_sasl=yes)
-	if test "$cmu_need_sasl" = yes; then
-	  AC_ERROR([Can't compile without libsasl
-                  (Get it from <url:ftp://ftp.andrew.cmu.edu:/pub/cyrus-mail/>).])
-	fi
-	LIB_SASL="-lsasl"
-	AC_SUBST(LIB_SASL)
+  AC_ARG_WITH(sasldir,[  --with-sasldir=PATH     PATH where the sasl library is installed], sasldir="$withval")
+
+  cmu_need_sasl=no
+  if test -z "$sasldir"; then
+    # look for it ourselves
+    AC_CHECK_HEADER(sasl.h,
+      cmu_save_LIBS="$LIBS"
+      AC_CHECK_LIB(sasl, sasl_getprop,,cmu_need_sasl=yes)
+      LIBS="$cmu_save_LIBS"
+     ,cmu_need_sasl=yes)
+    if test "$cmu_need_sasl" = yes; then
+    AC_ERROR([Can't compile without libsasl
+              (Get it from <url:ftp://ftp.andrew.cmu.edu:/pub/cyrus-mail/>).])
+    fi
+    LIB_SASL="-lsasl"
+    AC_SUBST(LIB_SASL)
+    SASLFLAGS=""
+    AC_SUBST(SASLFLAGS)
+  else
+    # try the user-specified path --- too lazy to test for it right now
+    LIB_SASL="-L$sasldir/lib -lsasl"
+    AC_SUBST(LIB_SASL)
+    SASLFLAGS="-I$sasldir/include"
+    AC_SUBST(SASLFLAGS)    
+  fi
 ])
 
