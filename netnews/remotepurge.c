@@ -463,8 +463,7 @@ int purge_me(char *name, time_t when)
 
     spew(2, "%s selecting", name);
 
-    if (cmd_done == IMAP_NO)
-    {
+    if (cmd_done == IMAP_NO) {
 	syslog(LOG_ERR, "unable to select %s: %s", name, cmd_resp);
 	return 0;
     } else if (cmd_done != IMAP_OK) {
