@@ -1,6 +1,6 @@
 /* mpool.c memory pool management
  *
- * $Id: mpool.c,v 1.4 2002/02/07 21:05:13 rjs3 Exp $
+ * $Id: mpool.c,v 1.5 2002/02/07 21:46:06 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -75,7 +75,7 @@ static struct mpool_blob *new_mpool_blob(size_t size)
 
     if(!size) size = DEFAULT_MPOOL_SIZE;
 
-    blob->base = blob->ptr = xzmalloc(size);
+    blob->base = blob->ptr = xmalloc(size);
     blob->size = size;
     blob->next = NULL;
 
@@ -138,6 +138,7 @@ void *mpool_malloc(struct mpool *pool, size_t size)
     p = pool->blob;
     
     remain = p->size - (p->ptr - p->base);
+
     if(remain < size) {
       	/* Need a new pool */
 	struct mpool_blob *new_pool;
@@ -150,6 +151,21 @@ void *mpool_malloc(struct mpool *pool, size_t size)
 
     ret = p->ptr;
     p->ptr = (void *)ROUNDUP((unsigned int)p->ptr + size);
+
+    return ret;
+}
+
+char *mpool_strdup(struct mpool *pool, const char *str) 
+{
+    char *ret;
+    size_t len;
+    
+    if(!str) return NULL;
+    
+    len = strlen(str);
+    
+    ret = mpool_malloc(pool, len+1);
+    strcpy(ret, str);
 
     return ret;
 }
