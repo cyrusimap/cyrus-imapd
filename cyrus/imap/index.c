@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.6 2004/04/08 21:13:02 ken3 Exp $
+ * $Id: index.c,v 1.199.2.7 2004/04/22 15:04:51 ken3 Exp $
  */
 #include <config.h>
 
@@ -168,7 +168,7 @@ static int _index_search(unsigned **msgno_list, struct mailbox *mailbox,
 static void parse_cached_envelope(char *env, char *tokens[], int tokens_size);
 static char *find_msgid(char *str, char **rem);
 static char *get_localpart_addr(const char *header);
-static char *index_extract_subject(const char *subj, int *is_refwd);
+static char *index_extract_subject(const char *subj, size_t len, int *is_refwd);
 static char *_index_extract_subject(char *s, int *is_refwd);
 static void index_get_ids(MsgData *msgdata,
 			  char *envtokens[], const char *headers);
@@ -3329,7 +3329,7 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 		/* +1 -> skip the leading paren */
 		/* -2 -> don't include the size of the outer parens */
 		tmpenv = xstrndup(env + CACHE_ITEM_SIZE_SKIP + 1,
-				  strlen(env+4) - 2);
+				  CACHE_ITEM_LEN(env) - 2);
 
 		/* parse envelope into tokens */
 		parse_cached_envelope(tmpenv, envtokens,
@@ -3340,21 +3340,23 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 
 	    switch (label) {
 	    case SORT_CC:
-		cur->cc = get_localpart_addr(cc+4);
+		cur->cc = get_localpart_addr(cc + CACHE_ITEM_SIZE_SKIP);
 		break;
 	    case SORT_DATE:
 		cur->date = message_parse_date(envtokens[ENV_DATE],
 					       PARSE_TIME | PARSE_ZONE);
 		break;
 	    case SORT_FROM:
-		cur->from = get_localpart_addr(from+4);
+		cur->from = get_localpart_addr(from + CACHE_ITEM_SIZE_SKIP);
 		break;
 	    case SORT_SUBJECT:
-		cur->xsubj = index_extract_subject(subj+4, &cur->is_refwd);
+		cur->xsubj = index_extract_subject(subj + CACHE_ITEM_SIZE_SKIP,
+						   CACHE_ITEM_LEN(subj),
+						   &cur->is_refwd);
 		cur->xsubj_hash = strhash(cur->xsubj);
 		break;
 	    case SORT_TO:
-		cur->to = get_localpart_addr(to+4);
+		cur->to = get_localpart_addr(to + CACHE_ITEM_SIZE_SKIP);
 		break;
  	    case SORT_ANNOTATION:
  		/* reallocate space for the annotation values if necessary */
@@ -3369,7 +3371,7 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
  		cur->nannot++;
  		break;
 	    case LOAD_IDS:
-		index_get_ids(cur, envtokens, headers+4);
+		index_get_ids(cur, envtokens, headers + CACHE_ITEM_SIZE_SKIP);
 		break;
 	    }
 	}
@@ -3482,18 +3484,19 @@ static char *get_localpart_addr(const char *header)
  * This is a wrapper around _index_extract_subject() which preps the
  * subj NSTRING and checks for Netscape "[Fwd: ]".
  */
-static char *index_extract_subject(const char *subj, int *is_refwd)
+static char *index_extract_subject(const char *subj, size_t len, int *is_refwd)
 {
     char *buf, *s, *base;
 
     /* parse the subj NSTRING and make a working copy */
-    if (!strcmp(subj, "NIL"))		       		/* NIL? */
-	return xstrdup("");				/* yes, return empty */
-
-    else
-	buf = (*subj == '"') ?				/* quoted? */
-	    xstrndup(subj + 1, strlen(subj) - 2) :	/* yes, strip quotes */
-	xstrdup(strchr(subj, '}') + 3);			/* literal, skip { } */
+    if (!strcmp(subj, "NIL")) {		       	/* NIL? */
+	return xstrdup("");			/* yes, return empty */
+    } else if (*subj == '"') {			/* quoted? */
+	buf = xstrndup(subj + 1, len - 2);	/* yes, strip quotes */
+    } else {
+	s = strchr(subj, '}') + 3;		/* literal, skip { }\r\n */
+	buf = xstrndup(s, len - (s - subj));
+    }
 
     for (s = buf;;) {
 	base = _index_extract_subject(s, is_refwd);

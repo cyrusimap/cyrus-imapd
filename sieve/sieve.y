@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.23.2.4 2004/03/24 19:53:20 ken3 Exp $
+ * $Id: sieve.y,v 1.23.2.5 2004/04/22 15:04:53 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -124,6 +124,7 @@ static int verify_utf8(char *s);
 
 int yyerror(char *msg);
 extern int yylex(void);
+extern void yyrestart(FILE *f);
 
 #define YYERROR_VERBOSE /* i want better error messages! */
 %}
@@ -546,10 +547,9 @@ tests: test                      { $$ = new_testlist($1, NULL); }
 commandlist_t *sieve_parse(sieve_script_t *script, FILE *f)
 {
     commandlist_t *t;
-    extern FILE *yyin;
 
-    yyin = f;
     parse_script = script;
+    yyrestart(f);
     if (yyparse()) {
 	t = NULL;
     } else {
@@ -871,13 +871,14 @@ static int verify_header(char *hdr)
 static int verify_addrheader(char *hdr)
 {
     const char **h, *hdrs[] = {
-	"from", "sender", "reply-to",		/* RFC2822 originator fields */
-	"to", "cc", "bcc",			/* RFC2822 destination fields */
-	"resent-from", "resent-sender",		/* RFC2822 resent fields */
+	"from", "sender", "reply-to",	/* RFC2822 originator fields */
+	"to", "cc", "bcc",		/* RFC2822 destination fields */
+	"resent-from", "resent-sender",	/* RFC2822 resent fields */
 	"resent-to", "resent-cc", "resent-bcc",
-	"return-path",				/* RFC2822 trace fields */
-	"disposition-notification-to",		/* RFC2298 MDN request fields */
-	"delivered-to",				/* non-standard (loop detection) */
+	"return-path",			/* RFC2822 trace fields */
+	"disposition-notification-to",	/* RFC2298 MDN request fields */
+	"delivered-to",			/* non-standard (loop detection) */
+	"approved",			/* RFC1036 moderator/control fields */
 	NULL
     };
     char errbuf[100];

@@ -1,7 +1,7 @@
 dnl kerberos_v5.m4--Kerberos 5 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: heimdal.m4,v 1.7 2003/10/08 20:35:24 rjs3 Exp $
+dnl $Id: heimdal.m4,v 1.7.4.1 2004/04/22 15:04:50 ken3 Exp $
 
 AC_DEFUN([CMU_LIBHEIMDAL_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -33,8 +33,9 @@ AC_DEFUN([CMU_LIBHEIMDAL_INC_WHERE], [
 #
 
 AC_DEFUN([CMU_LIBHEIMDAL_LIB_WHERE1], [
+AC_REQUIRE([CMU_SOCKETS])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lkadm5clnt -lkrb5 -lasn1 -lkadm5clnt -lroken -lresolv"
+LIBS="$saved_LIBS -L$1 -lkadm5clnt -lkrb5 -lasn1 -lkadm5clnt -lroken $LIB_SOCKET"
 AC_TRY_LINK(,
 [krb5_get_in_tkt();],
 [ac_cv_found_libheimdal_lib=yes],
@@ -57,10 +58,39 @@ AC_DEFUN([CMU_LIBHEIMDAL_LIB_WHERE], [
     done
 ])
 
+AC_DEFUN([CMU_LIBHEIMDAL_LIBDES], [
+  AC_REQUIRE([CMU_LIBSSL])
+  cmu_save_LIBS=$LIBS
+  AC_MSG_CHECKING([if libdes is needed])
+  AC_TRY_LINK([],[des_quad_cksum();],HEIM_DES_LIB="",HEIM_DES_LIB="maybe")
+  if test "X$HEIM_DES_LIB" != "X"; then
+      LIBS="$cmu_save_LIBS -L$1 -ldes"
+      AC_TRY_LINK([], [des_quad_cksum();],HEIM_DES_LIB="yes")
+      if test "X$HEIM_DES_LIB" = "Xyes"; then
+          AC_MSG_RESULT([yes])
+          HEIM_LIBDES="-ldes"
+          HEIM_LIBDESA="$1/libdes.a"
+      else
+          LIBS="$cmu_save_LIBS $LIBSSL_LIB_FLAGS"
+          AC_TRY_LINK([],
+          [des_quad_cksum();],HEIM_DES_LIB="libcrypto")
+          if test "X$HEIM_DES_LIB" = "Xlibcrypto"; then
+              AC_MSG_RESULT([libcrypto])
+              HEIM_LIBDES="$LIBSSL_LIB_FLAGS"
+              HEIM_LIBDESA="$LIBSSL_LIB_FLAGS"
+          else
+              AC_MSG_RESULT([unknown])
+              AC_MSG_ERROR([Could not use -ldes])
+          fi 
+      fi 
+  else
+     AC_MSG_RESULT([no])
+  fi
+])
+
 AC_DEFUN([CMU_LIBHEIMDAL], [
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_USE_COMERR])
-AC_REQUIRE([CMU_LIBSSL])
 AC_ARG_WITH(LIBHEIMDAL,
 	[  --with-libheimdal=PREFIX      Compile with Heimdal support],
 	[if test "X$with_libheimdal" = "X"; then
@@ -100,32 +130,6 @@ AC_ARG_WITH(libheimdal-include,
 	  fi
 	fi
 
-          AC_MSG_CHECKING([if libdes is needed])
-          AC_TRY_LINK([],[des_quad_cksum();],HEIM_DES_LIB="",HEIM_DES_LIB="maybe")
-          if test "X$HEIM_DES_LIB" != "X"; then
-              LIBS="$cmu_save_LIBS -ldes"
-              AC_TRY_LINK([], [des_quad_cksum();],HEIM_DES_LIB="yes")
-              if test "X$HEIM_DES_LIB" = "Xyes"; then
-                  AC_MSG_RESULT([yes])
-                  HEIM_LIBDES="-ldes"
-                  HEIM_LIBDESA="${LIBHEIMDAL_LIB_DIR}/libdes.a"
-              else
-                  LIBS="$cmu_save_LIBS $LIBSSL_LIB_FLAGS"
-                  AC_TRY_LINK([],
-                  [des_quad_cksum();],HEIM_DES_LIB="libcrypto")
-                  if test "X$HEIM_DES_LIB" = "Xlibcrypto"; then
-                      AC_MSG_RESULT([libcrypto])
-                      HEIM_LIBDES="$LIBSSL_LIB_FLAGS"
-                      HEIM_LIBDESA="$LIBSSL_LIB_FLAGS"
-                  else
-                      AC_MSG_RESULT([unknown])
-                      AC_MSG_ERROR([Could not use -ldes])
-                  fi 
-              fi 
-          else
-             AC_MSG_RESULT([no])
-          fi
-
 	AC_MSG_CHECKING(whether to include heimdal)
 	if test "X$ac_cv_libheimdal_where_lib" = "X" -a "X$ac_cv_libheimdal_where_inc" = "X"; then
 	  ac_cv_found_libheimdal=no
@@ -135,8 +139,9 @@ AC_ARG_WITH(libheimdal-include,
 	  AC_MSG_RESULT(yes)
 	  LIBHEIMDAL_INC_DIR=$ac_cv_libheimdal_where_inc
 	  LIBHEIMDAL_LIB_DIR=$ac_cv_libheimdal_where_lib
+	  CMU_LIBHEIMDAL_LIBDES($LIBHEIMDAL_LIB_DIR)
 	  LIBHEIMDAL_INC_FLAGS="-I${LIBHEIMDAL_INC_DIR}"
-	  LIBHEIMDAL_LIB_FLAGS="-L${LIBHEIMDAL_LIB_DIR} -lkadm5clnt -lkrb5 -lasn1 ${HEIM_LIBDES} -lroken -lresolv"
+	  LIBHEIMDAL_LIB_FLAGS="-L${LIBHEIMDAL_LIB_DIR} -lkadm5clnt -lkrb5 -lasn1 ${HEIM_LIBDES} -lroken $LIB_SOCKET"
 	  AC_SUBST(LIBHEIMDAL_INC_FLAGS)
 	  AC_SUBST(LIBHEIMDAL_LIB_FLAGS)
 	  if test "X$RPATH" = "X"; then
