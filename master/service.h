@@ -50,6 +50,7 @@
 
 extern int service_init(int argc, char **argv, char **envp);
 extern int service_main(int argc, char **argv, char **envp);
+extern int service_abort(void);
 
 #define MAX_USE 100
 

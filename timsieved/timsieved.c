@@ -213,8 +213,11 @@ static struct sasl_callback mysasl_cb[] = {
 
 int service_init(int argc, char **argv, char **envp)
 {
+    return 0;
+}
 
-
+void service_abort(void)
+{
     return 0;
 }
 

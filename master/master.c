@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.12 2000/06/05 21:34:23 leg Exp $ */
+/* $Id: master.c,v 1.13 2000/06/09 02:45:09 leg Exp $ */
 
 #include <config.h>
 
@@ -450,7 +450,7 @@ void sigterm_handler(int sig)
     }
 
     syslog(LOG_INFO, "exiting on SIGTERM");
-    exit(2);
+    exit(0);
 }
 
 void sigalrm_handler(int sig)
