@@ -198,11 +198,16 @@ int checkseen;
 	}
 	checkseen = 1;
 	imapd_exists = newexists;
-	printf("* %d EXISTS\r\n* %d RECENT\r\n", imapd_exists, imapd_exists-lastnotrecent);
+	printf("* %d EXISTS\r\n* %d RECENT\r\n", imapd_exists,
+	       imapd_exists-lastnotrecent);
     }
 
     /* Check Flags */
     if (checkseen) index_checkseen(mailbox, 0, usinguid, oldexists);
+    if (oldexists == -1 && imapd_exists) {
+	for (i = 1; i <= imapd_exists && seenflag[i]; i++);
+	if (i <= imapd_exists) printf("* OK [UNSEEN %d] \r\n", i);
+    }
     for (msgno = 1; msgno <= oldexists; msgno++) {
 	if (flagreport[msgno] && flagreport[msgno] < LAST_UPDATED(msgno)) {
 	    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
@@ -629,9 +634,10 @@ int nflags;
 /*
  * Performs a SEARCH command
  */
-index_search(mailbox, searchargs)
+index_search(mailbox, searchargs, usinguid)
 struct mailbox *mailbox;
 struct searchargs *searchargs;
+int usinguid;
 {
     int msgno, start=1, end=imapd_exists;
     int seen_matters = (searchargs->seen_state != SEARCH_DONTCARE);
@@ -768,7 +774,7 @@ struct searchargs *searchargs;
 	    if (l) continue;
 	}
 
-	printf(" %d", msgno);
+	printf(" %d", usinguid ? UID(msgno) : msgno);
     }
     printf("\r\n");
 }
@@ -1105,10 +1111,7 @@ struct mailbox *mailbox;
 {
     int i;
 
-    printf("* FLAGS (\\Answered \\Flagged \\Deleted");
-    if (keepingseen) {
-	printf(" \\Seen");
-    }
+    printf("* FLAGS (\\Answered \\Flagged \\Deleted \\Seen");
     for (i = 0; i < MAX_USER_FLAGS; i++) {
 	if (mailbox->flagname[i]) {
 	    printf(" %s", mailbox->flagname[i]);
@@ -1209,7 +1212,7 @@ char *rock;
     }
 
     /* set the \Seen flag if necessary */
-    if ((fetchitems & (FETCH_TEXT|FETCH_RFC822)) || fetchargs->bodysections) {
+    if (fetchitems & FETCH_SETSEEN) {
 	if (!seenflag[msgno] && (mailbox->myrights & ACL_SEEN)) {
 	    seenflag[msgno] = 1;
 	    fetchitems |= FETCH_FLAGS;
