@@ -51,6 +51,9 @@ deliver \- deliver mail to an IMAP mailbox
 .B \-e
 ]
 [
+.B \-q
+]
+[
 .B \-F
 flag
 ]...
@@ -123,6 +126,9 @@ message to a mailbox if a message with the same message-id (or
 resent-message-id) is recorded as having already been delivered to the
 mailbox.  Records the mailbox and message-id/resent-message-id of all
 successful deliveries.
+.TP
+.B \-q
+Deliver message even when receiving mailbox is over quota.
 .TP
 .BI \-F " flag"
 Set the system flag or keyword
