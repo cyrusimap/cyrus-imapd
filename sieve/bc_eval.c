@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.5 2004/07/12 15:50:11 ken3 Exp $
+ * $Id: bc_eval.c,v 1.6 2004/07/12 15:52:18 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -152,7 +152,7 @@ static char* look_for_me(char *myaddr, int numaddresses,
 	while (!found &&
 	       ((addr = get_address(ADDRESS_ALL,&data, &marker, 1))!= NULL)) {
 
-	    if (!strcmp(addr, myaddr)) {
+	    if (!strcasecmp(addr, myaddr)) {
 		found = xstrdup(myaddr);
 		break;
 	    }
