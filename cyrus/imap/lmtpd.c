@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.18 2004/04/17 18:47:29 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.19 2004/05/17 00:46:01 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -345,7 +345,7 @@ static int fuzzy_match_cb(char *name,
     return 0;
 }
 
-static int fuzzy_match(char *mboxname)
+int fuzzy_match(char *mboxname)
 {
     char name[MAX_MAILBOX_NAME+1], prefix[MAX_MAILBOX_NAME+1], *p = NULL;
     size_t prefixlen;
@@ -379,7 +379,7 @@ static int fuzzy_match(char *mboxname)
     frock.matchlen = 0;
 
     strlcat(prefix, "*", sizeof(prefix));
-    mboxlist_findall(NULL, prefix, 0, NULL, NULL, fuzzy_match_cb, &frock);
+    mboxlist_findall(NULL, prefix, 1, NULL, NULL, fuzzy_match_cb, &frock);
 
     return frock.matchlen;
 }

@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.1.2.4 2004/04/22 15:04:52 ken3 Exp $
+ * $Id: lmtp_sieve.c,v 1.1.2.5 2004/05/17 00:46:01 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,6 +62,7 @@
 #include "duplicate.h"
 #include "exitcodes.h"
 #include "global.h"
+#include "imap_err.h"
 #include "lmtp_sieve.h"
 #include "lmtpengine.h"
 #include "lmtpstats.h"
@@ -98,6 +99,8 @@ extern int deliver_mailbox(struct protstream *msg,
 			   const char *mailboxname,
 			   int quotaoverride,
 			   int acloverride);
+
+extern int fuzzy_match(char *mboxname);
 
 static char *make_sieve_db(const char *user)
 {
@@ -480,6 +483,16 @@ static int sieve_keep(void *ac,
 	    strlcat(namebuf, sd->mailboxname, sizeof(namebuf));
 
 	    ret2 = deliver_mailbox(md->data, mydata->stage, md->size,
+				   kc->imapflags->flag, kc->imapflags->nflags,
+				   mydata->authuser, mydata->authstate, md->id,
+				   sd->username, mydata->notifyheader,
+				   namebuf, quotaoverride, 0);
+	}
+	if (ret2 == IMAP_MAILBOX_NONEXISTENT && sd->mailboxname &&
+	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
+	    fuzzy_match(namebuf)) {
+	    /* try delivery to a fuzzy matched mailbox */
+	    ret2 = deliver_mailbox(md->data, mydata->stage,  md->size,
 				   kc->imapflags->flag, kc->imapflags->nflags,
 				   mydata->authuser, mydata->authstate, md->id,
 				   sd->username, mydata->notifyheader,
