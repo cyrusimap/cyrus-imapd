@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.34 2003/02/13 20:15:39 rjs3 Exp $
+ * $Id: auth_unix.c,v 1.35 2003/05/13 15:33:26 rjs3 Exp $
  */
 
 #include <config.h>
@@ -173,7 +173,7 @@ size_t len;
 	return "anyone";
     }
     
-    memcpy(retbuf, identifier, len);
+    memmove(retbuf, identifier, len);
     retbuf[len] = '\0';
 
     /* This used to be far more restrictive, but many sites seem to ignore the 
