@@ -14,6 +14,7 @@
 #include <syslog.h>
 #include <fcntl.h>
 #include "imapconf.h"
+#include "retry.h"
 #include "notify.h"
 
 const char *notify_method_desc = "unix";
@@ -34,6 +35,7 @@ void notify(const char *class,
     fd_set read_template, write_template; 
     struct timeval wait; 
 
+    int fdflags;
     struct iovec iov[20];
     int num_iov;
 
@@ -59,9 +61,9 @@ void notify(const char *class,
     if (fdflags != -1) fdflags = fcntl(sock, F_SETFL, O_NONBLOCK | fdflags);
     if (fdflags == -1) { 
 	syslog(LOG_ERR, 
-	       "notify_unix: setting socket to nonblocking: fcntl(): %m")
+	       "notify_unix: setting socket to nonblocking: fcntl(): %m");
 	close(sock); 
-	return -1; 
+	return; 
     }
 
     if (connect( sock, &myname, addrlen) < 0) {
@@ -73,15 +75,15 @@ void notify(const char *class,
 
     num_iov = 0;
 
-    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, class);
+    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) class);
     WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, "\n");
-    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, instance);
+    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) instance);
     WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, "\n");
-    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, user);
+    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) user);
     WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, "\n");
-    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, mailbox);
+    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) mailbox);
     WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, "\n");
-    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, message);
+    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) message);
     WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, "\n");
     cnt = retry_writev(sock, iov, num_iov);
 
