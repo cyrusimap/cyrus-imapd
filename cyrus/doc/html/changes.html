@@ -1,9 +1,21 @@
-<!-- $Id: changes.html,v 1.93 1999/12/18 07:58:30 leg Exp $ -->
+<!-- $Id: changes.html,v 1.94 1999/12/23 21:06:39 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+    <h2> Changes to the Cyrus IMAP Server Since Version 1.6.20 </h2>
+    <ul>
+    <li> Some fixes to the TLS support to gracefully degrade service.
+
+    <li> Sieve now correctly re-sieves messages that are received with
+    identical message-ids, but different envelopes.  (Fix by Ken
+    Murchison, <tt>ken@oceana.com</tt>.)
+
+    <li> The server wasn't correctly calculating the percentage of
+    quota used when deciding whether or not to issue a warning.
+    </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.19 </h2>
     <ul>
