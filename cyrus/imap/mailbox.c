@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.3 2002/07/12 18:45:01 ken3 Exp $
+ $Id: mailbox.c,v 1.134.4.4 2002/07/21 14:24:48 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1964,7 +1964,6 @@ int mailbox_findquota(char *start, const char *name)
     struct stat sbuf;
 
     strcpy(start, name);
-    lcase(start);
 
     mailbox_hash_quota(quota_path, start);
     while (stat(quota_path, &sbuf) == -1) {

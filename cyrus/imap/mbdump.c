@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.18.6.1 2002/07/10 20:45:06 rjs3 Exp $
+ * $Id: mbdump.c,v 1.18.6.2 2002/07/21 14:24:49 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -393,7 +393,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 			    /* map file */
 			    snprintf(filename, sizeof(filename), "%s/%s",
 				     sieve_path, next->d_name);
-			    syslog(LOG_ERR, "wanting to dump %s", filename);
+			    syslog(LOG_DEBUG, "wanting to dump %s", filename);
 			    filefd = open(filename, O_RDONLY, 0666);
 			    if (filefd == -1) {
 				/* non-fatal */

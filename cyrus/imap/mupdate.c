@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.1 2002/07/10 20:45:10 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.2 2002/07/21 14:24:49 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -757,8 +757,8 @@ void *start(void *rock)
     sasl_setprop(c->saslconn, SASL_SEC_PROPS, secprops);
 
     cmdloop(c);
-    
-    close(c->fd);
+
+    /* This will close c->fd also */
     conn_free(c);
 
     return NULL;

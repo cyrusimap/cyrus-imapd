@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232 2002/06/14 19:46:06 rjs3 Exp $
+dnl $Id: configure.in,v 1.232.4.1 2002/07/21 14:24:47 ken3 Exp $
 dnl
 
 
@@ -91,13 +91,18 @@ CMU_C___ATTRIBUTE__
 dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
 dnl let's just link against local.  otherwise we never find anything useful.
-CPPFLAGS="${CPPFLAGS} -I/usr/local/include"
+if test "$ac_cv_prog_gcc" = yes; then
+  dnl xxx we should add -W at some point (but that might scare people)
+  CFLAGS="-Wall ${CFLAGS}"
+  GCC_VERSION=`gcc -v 2>&1 | sed -n -e '/version/s/.*version \([[0-9]]\)\..*/\1/p'`
+  if test "$GCC_VERSION" != "3"; then
+    CPPFLAGS="${CPPFLAGS} -I/usr/local/include"
+  fi
+else
+  CPPFLAGS="${CPPFLAGS} -I/usr/local/include"
+fi 
 CMU_ADD_LIBPATH("/usr/local/lib")
 
-if test "$ac_cv_prog_gcc" = yes; then
-dnl xxx we should add -W at some point
-  CFLAGS="-Wall ${CFLAGS}"
-fi 
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror getaddrinfo getnameinfo)

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.7 2002/07/15 01:12:41 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.8 2002/07/21 14:24:49 ken3 Exp $
  */
 
 #include <config.h>
@@ -930,7 +930,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 {
     int r;
     long access;
-    int isusermbox = 0;
+    int isusermbox = 0; /* Are we renaming someone's inbox */
     int partitionmove = 0;
     int mbtype;
     char *oldpath = NULL;
@@ -1241,8 +1241,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    if (!r && !partitionmove && config_mupdate_server) {
-	/* delete the old mailbox in MUPDATE */
+    if (!r && !partitionmove && !isusermbox && config_mupdate_server) {
+	/* delete the old mailbox in MUPDATE..but only if not renaming
+	 * your inbox */
 	r = mupdate_delete(mupdate_h, oldname);
 	if(r > 0) {
 	    /* Disconnect, reconnect, and retry */

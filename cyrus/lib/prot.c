@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72 2002/06/06 00:11:56 rjs3 Exp $
+ * $Id: prot.c,v 1.72.4.1 2002/07/21 14:24:51 ken3 Exp $
  */
 
 #include <config.h>
@@ -405,7 +405,9 @@ int prot_fill(struct protstream *s)
 		now = time(NULL);
 	    } while ((r == 0 || (r == -1 && errno == EINTR)) &&
 		     (now < read_timeout));
-	    if (r == 0) {
+	    if ((r == 0) || 
+                /* ignore EINTR if we've timed out */
+                (r == -1 && errno == EINTR && now >= read_timeout)) {
 		if (!s->dontblock) {
 		    s->error = xstrdup("idle for too long");
 		    return EOF;
