@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.11 2002/10/03 18:21:08 ken3 Exp $
+ * $Id: mupdate.c,v 1.60.4.12 2002/10/03 19:12:31 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -189,8 +189,9 @@ static int reset_saslconn(struct conn *c);
 void database_init();
 void sendupdates(struct conn *C, int flushnow);
 
-/* --- prototypes in mupdate-client.c */
+/* --- prototypes in mupdate-slave.c */
 void *mupdate_client_start(void *rock);
+void *mupdate_placebo_kick_start(void *rock);
 
 /* --- main() for each thread */
 static void *thread_main(void *rock);
@@ -423,6 +424,16 @@ int service_init(int argc, char **argv,
 	    pthread_cond_wait(&synced_cond, &synced_mutex);
 	pthread_mutex_unlock(&synced_mutex);
     } else {
+	pthread_t t;
+	
+	r = pthread_create(&t, NULL, &mupdate_placebo_kick_start, NULL);
+	if(r == 0) {
+	    pthread_detach(t);
+	} else {
+	    syslog(LOG_ERR, "could not start placebo kick thread");
+	    return EC_SOFTWARE;
+	}
+
 	mupdate_ready();
     }
 
