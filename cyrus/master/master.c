@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.10 2002/12/27 13:49:00 ken3 Exp $ */
+/* $Id: master.c,v 1.67.4.11 2003/01/11 04:03:21 ken3 Exp $ */
 
 #include <config.h>
 
@@ -187,10 +187,13 @@ int become_cyrus(void)
     return result;
 }
 
-void get_prog(char *path, char *const *cmd)
+void get_prog(char *path, unsigned size, char *const *cmd)
 {
-    if (cmd[0][0] == '/') strcpy(path, cmd[0]);
-    else sprintf(path, "%s/%s", SERVICE_PATH, cmd[0]);
+    if (cmd[0][0] == '/') {
+	/* master lacks strlcpy, due to no libcyrus */
+	snprintf(path, size, "%s", cmd[0]);
+    }
+    else snprintf(path, size, "%s/%s", SERVICE_PATH, cmd[0]);
 }
 
 void get_statsock(int filedes[2])
@@ -321,6 +324,17 @@ int resolve_host(char *listen, struct sockaddr_in *sin)
     return 1;
 }
 
+int verify_service_file(char *const *filename)
+{
+    char path[PATH_MAX];
+    struct stat statbuf;
+    
+    get_prog(path, sizeof(path), filename);
+    if (stat(path, &statbuf)) return 0;
+    if (! S_ISREG(statbuf.st_mode)) return 0;
+    return statbuf.st_mode & S_IXUSR;
+}
+
 void service_create(struct service *s)
 {
     struct sockaddr_in sin;
@@ -435,7 +449,7 @@ void run_startup(char **cmd)
 {
     pid_t pid;
     int status;
-    char path[1024];
+    char path[PATH_MAX];
 
     switch (pid = fork()) {
     case -1:
@@ -454,7 +468,7 @@ void run_startup(char **cmd)
 
 	limit_fds(256);
 
-	get_prog(path, cmd);
+	get_prog(path, sizeof(path), cmd);
 	syslog(LOG_DEBUG, "about to exec %s", path);
 	execv(path, cmd);
 	syslog(LOG_ERR, "can't exec %s for startup: %m", path);
@@ -495,7 +509,7 @@ void spawn_service(struct service *s)
 
     pid_t p;
     int i;
-    char path[1024];
+    char path[PATH_MAX];
     static char name_env[100];
     struct centry *c;
     time_t now = time(NULL);
@@ -555,7 +569,7 @@ void spawn_service(struct service *s)
 	    exit(1);
 	}
 
-	get_prog(path, s->exec);
+	get_prog(path, sizeof(path), s->exec);
 	if (dup2(s->stat[1], STATUS_FD) < 0) {
 	    syslog(LOG_ERR, "can't duplicate status fd: %m");
 	    exit(1);
@@ -628,7 +642,7 @@ void spawn_schedule(time_t now)
 {
     struct event *a, *b;
     int i;
-    char path[1024];
+    char path[PATH_MAX];
     pid_t p;
     struct centry *c;
 
@@ -674,7 +688,7 @@ void spawn_schedule(time_t now)
 		}
 		limit_fds(256);
 		
-		get_prog(path, a->exec);
+		get_prog(path, sizeof(path), a->exec);
 		syslog(LOG_DEBUG, "about to exec %s", path);
 		execv(path, a->exec);
 		syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
@@ -965,6 +979,16 @@ void add_service(const char *name, struct entry *e, void *rock)
 	Services[i].exec = tokenize(cmd);
 	if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
 
+	/* is this service actually there? */
+	if (!verify_service_file(Services[i].exec)) {
+	    char buf[1024];
+	    snprintf(buf, sizeof(buf),
+		     "cannot find executable for service '%s'", name);
+
+	    /* if it is not, we're misconfigured, die. */
+	    fatal(buf, EX_CONFIG);
+	}
+
 	Services[i].maxforkrate = maxforkrate;
 
 	if (!strcmp(Services[i].proto, "tcp")) {
@@ -1003,6 +1027,16 @@ void add_service(const char *name, struct entry *e, void *rock)
 	Services[nservices].proto = proto;
 	Services[nservices].exec = tokenize(cmd);
 	if (!Services[nservices].exec) fatal("out of memory", EX_UNAVAILABLE);
+
+	/* is this service actually there? */
+	if (!verify_service_file(Services[i].exec)) {
+	    char buf[1024];
+	    snprintf(buf, sizeof(buf),
+		     "cannot find executable for service '%s'", name);
+
+	    /* if it is not, we're misconfigured, die. */
+	    fatal(buf, EX_CONFIG);
+	}
 
 	Services[nservices].socket = 0;
 	Services[nservices].saddr = NULL;
