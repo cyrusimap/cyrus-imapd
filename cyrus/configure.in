@@ -313,24 +313,19 @@ if test "$WITH_AUTH" = krb_pts; then
 		AFSLIBS="$AFSLIBS ${ld_runpath_switch}/usr/ucblib -L/usr/ucblib -lucb"
 	fi
 
-#dnl This is necessary because AFS wants sigvec, which may not be in
-#dnl the C library.
-#AC_CHECKING(for sigvec:)
-#AC_CACHE_VAL(cyrus_afs_bsdlibs,[AC_CHECK_FUNC(sigvec, [cyrus_afs_bsdlibs=""], [
-#	AC_CHECK_LIB(BSD, sigvec, cyrus_afs_bsdlibs="-lBSD",
-#	[ SAVE_CFLAGS="$CFLAGS"
-#	CFLAGS="-L/usr/ucblib -R/usr/ucblib $CFLAGS"
-#	AC_CHECK_LIB(ucb, sigvec, cyrus_afs_bsdlibs="-L/usr/ucblib -R/usr/ucblib -lucb",[
-#AC_MSG_WARN(Can't find a sigvec(), needed for AFS libs.)
-#AC_MSG_WARN(You will need to add it by hand.)
-#	]
-#	CFLAGS="$SAVE_CFLAGS")
-#	])])]
-#AC_MSG_RESULT(cyrus_afs_bsdlibs)
-#AFSLIBS="$AFSLIBS $cyrus_afs_bsdlibs"
-
-	# XXX
-	AFSLIBS="$AFSLIBS -lossup"
+	dnl This is necessary because AFS wants sigvec, which may not be in
+	dnl the C library.
+	AC_CACHE_VAL(cyrus_afs_bsdlibs,[
+	AC_CHECK_FUNC(sigvec, [cyrus_afs_bsdlibs=""], [
+	  AC_CHECK_LIB(BSD, sigvec, cyrus_afs_bsdlibs="-lBSD", [
+	    SAVE_CFLAGS="$CFLAGS"
+	    CFLAGS="-L/usr/ucblib -R/usr/ucblib $CFLAGS"
+	    AC_CHECK_LIB(ucb, sigvec, [
+	      cyrus_afs_bsdlibs="-L/usr/ucblib -R/usr/ucblib -lucb"],
+	      [AC_MSG_WARN(** Can't find a sigvec(), needed for AFS libs.)])
+	    CFLAGS="$SAVE_CFLAGS"])])])
+	dnl pick up AFS libs from the right place
+	AFSLIBS="$AFSLIBS $cyrus_afs_bsdlibs"
 	AC_SUBST(AFSLIBS)
 fi
 
