@@ -24,14 +24,6 @@
  * Start Date: 2/16/93
  */
 
-/*
- * Kludge until we get better way for autoconf to report supported
- * mechanisms.
- */
-#ifdef LOGIN_krb
-#define KERBEROS 1
-#endif
-
 #include <stdio.h>
 #include <ctype.h>
 #include <pwd.h>
@@ -53,7 +45,7 @@ char logout[] = ". LOGOUT\r\n";
 /* authstate which must be cleared before exit */
 static void *authstate;
 
-#ifdef KERBEROS
+#ifdef HAVE_ACTE_KRB
 char auth_kv4[] = ". AUTHENTICATE KERBEROS_V4\r\n";
 
 extern struct acte_client krb_acte_client;
@@ -141,7 +133,7 @@ int from64(out, in)
 
 void usage()
 {
-#ifdef KERBEROS
+#ifdef HAVE_ACTE_KRB
     fprintf(stderr, "usage: imtest [-k[p/i] / -p] <server> <port>\n");
 #else
     fprintf(stderr, "usage: imtest [-p] <server> <port>\n");
@@ -154,7 +146,7 @@ void fatal(str, level)
     int level;
 {
     if (str) fprintf(stderr, "%s\n", str);
-#ifdef KERBEROS
+#ifdef HAVE_ACTE_KRB
     if (authstate) client_free(authstate);
 #endif
     exit(1);
@@ -187,7 +179,7 @@ main(argc, argv)
 	dologin = 1;
 	prot_req = ACTE_PROT_NONE;
 	if (argv[1][1] == 'p') dopass = 1;
-#ifdef KERBEROS
+#ifdef HAVE_ACTE_KRB
 	else if (argv[1][1] == 'k') {
 	    if (argv[1][2] == 'p') {
 		prot_req |= ACTE_PROT_ANY;
@@ -267,7 +259,7 @@ main(argc, argv)
 	    }
 	    buf[count] = '\0';
 	    printf("%s", buf);
-#ifdef KERBEROS
+#ifdef HAVE_ACTE_KRB
 	    if (done == ACTE_DONE && strchr(buf, ' ')
 		&& !strncmp(" OK ", strchr(buf, ' '), 4)) {
 		done = 0;
@@ -301,7 +293,7 @@ main(argc, argv)
 		    bzero(buf, sizeof (buf));
 		    bzero(pass, 8);
 		} else if (dologin == 1) {
-#ifdef KERBEROS
+#ifdef HAVE_ACTE_KRB
 		    ++dologin;
 		    len = sizeof (laddr);
 		    if (getsockname(sock, &laddr, &len) < 0 ||
@@ -335,7 +327,7 @@ main(argc, argv)
 	    }
 	}
     }
-#ifdef KERBEROS
+#ifdef HAVE_ACTE_KRB
     if (authstate) client_free(authstate);
 #endif
 
