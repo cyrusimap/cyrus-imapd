@@ -1,7 +1,7 @@
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers, 16-May-1996 -->
+<!-- Changed by: John Gardiner Myers, 30-May-1996 -->
 </HEAD>
 <BODY>
 <h1>           Installing and Configuring the Cyrus IMAP Server</h1>
@@ -54,6 +54,9 @@ The author is unable to assist other sites in obtaining Kerberos.
 <LI> It is recommended that sites install Sendmail version 8.7.1 or later.  Sendmail distributions may
 be obtained from
 <A HREF="ftp://ftp.cs.berkeley.edu/ucb/sendmail">ftp://ftp.cs.berkely.edu/ucb/sendmail</A>
+
+<LI> If you want to export netnews newsgroups using IMAP, the IMAP
+server must receive newsgroups with the INN news server.
 
 </ul>
 <H2>Compiling the IMAP Server</H2>
@@ -137,11 +140,6 @@ script, and exit. <P>
 <dd>Specifies the userid used for installing setuid programs.  By default,
 configure uses "<TT>cyrus</TT>". <P>
 
-<dt><tt>--with-news-group=GROUP</tt> 
-<dd>Specifies the group used for
-installing the program "<TT>rmnews</TT>".  By default, configure uses
-"<TT>news</TT>". <P>
-
 <dt><tt>--with-login=METHOD</tt>
 <dd>Specifies the login authentication module to use.  Currently
 implemented authentication modules are:
@@ -203,8 +201,9 @@ otherwise "<TT>no</TT>".<P>
 
 <dt><tt>--with-inn=PATH</tt>
 <dd>Specifies the location of INN's <TT>NEWSLIB</TT> directory.  By
-default, looks for INN in a few common places.  It is not necessary
-for "<tt>configure</tt>" to find INN. <P>
+default, looks for INN in a few common places.  It is only necessary
+for "<tt>configure</tt>" to find INN if you are going to export newsgroups
+using IMAP. <P>
 
 <dt><tt>--with-krb=PATH</tt>
 <dt><tt>--without-krb</tt>
@@ -581,6 +580,52 @@ This prevents two messages with the same <TT>Message-ID:</TT>
 same mailbox.  Add a <TT>cron</TT> job to periodically prune the
 database of deliveries by running "<TT>/usr/cyrus/bin/deliver -E
 3</TT>" daily as the cyrus user.
+
+ <P>If you want to export netnews newsgroups using IMAP do the following:
+
+<ol>
+
+ <P><LI>Create a directory for the "news" partition.  This directory
+should be different than the news spool directory.  This document uses
+a news partition directory of "<TT>/var/spool/imap-news</TT>" in the
+following examples:
+
+<pre>
+<kbd>   cd /var/spool
+   mkdir imap-news
+   chown cyrus imap-news
+   chgrp mail imap-news
+   chmod 750 imap-news
+</kbd></pre>
+
+ <P>
+<LI> Set the "partition-news" and "newsspool" options to appropriate values:
+
+<pre>
+   partition-news: /var/spool/imap-news
+   newsspool: /var/spool/news
+</pre>
+
+ <P> <LI>The cyrus user must be able to write to the out.going
+("<TT>/var/spool/news/out.going</TT>") directory.  This can be done by
+putting the cyrus user into the news group and making the oug.going
+directory group writable.
+
+ <P>
+<LI> Add the following line to the <TT>newsfeeds</TT> file
+
+<pre>
+   collectnews!:*:Tf,WO:collectnews
+</pre>
+
+ <P> <LI> Add a <TT>cron</TT> job to run
+"<TT>/usr/cyrus/bin/feedcyrus</TT>" every ten minutes as the cyrus
+user.  Also add a <TT>cron</TT> job to run
+"<TT>/usr/cyrus/bin/syncnews /var/news/active &gt;/dev/null
+2&gt;&amp;1</TT>" nightly.  (Using the appropriate path to the
+<TT>active</TT> file.)
+
+</ol>
 
 </ol>
 
