@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.41 1998/06/24 15:39:12 dar Exp $ -->
+<!-- $Id: changes.html,v 1.42 1998/06/25 20:42:52 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -45,6 +45,9 @@ server requires anyway.  (All the previous checks to look for Tcl
 <h2>Changes to the Cyrus IMAP Server Since Version 1.5.2</h2>
 
 <ul>
+<li> Fixed a bug with word alignment on Solaris using Kerberos compiled
+	  with Sun's CC.  (Several patches were submitted; thanks to
+	  everyone who did so.)
 
 <li> Patches from John Myers, including more glob fixes.
 
@@ -59,6 +62,7 @@ server requires anyway.  (All the previous checks to look for Tcl
 	  reauthenticate on its own; added support perl wrapper; added
 	  bunch of debugging information/output; bunch of other cleanups
 
+>>>>>>> 1.41
 <li> The mailboxes file is now closed if it isn't likely to be referenced,
 	  hopefully preventing old mailboxes files from hanging around in
 	  memory as frequently.
@@ -79,6 +83,7 @@ server requires anyway.  (All the previous checks to look for Tcl
 	  "." as we got a report that it seriously breaks one file system
 	  (even as non-root).
 
+>>>>>>> 1.33
 <li> Added some support for Netscape's very misleading "Administrate My
 	  Mail" menu option in Communicator.  Allows for a URL to be set in
 	  imapd.conf for the page to refer users to; needs to be turned on
@@ -106,6 +111,9 @@ only create the defined flags.  The code to do this before was
 confused.
 
 <li> The configure scripts and makefiles have some random fixes.
+
+<li> Added a contrib directory for reasons of laziness in collecting
+	  patches, not all of which should be in the distribution.
 
 <li> ptloader can now renew its AFS authentication by reading from a srvtab
 	  file.
@@ -542,7 +550,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Wed Jun 10 18:03:47 1998
+last modified by tjs at Thu Jun 25 16:40:31 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
