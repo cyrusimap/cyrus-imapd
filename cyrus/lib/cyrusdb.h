@@ -72,13 +72,42 @@ typedef int foreach_cb(void *rock,
 struct cyrusdb_backend {
     const char *name;
 
+    /* init() should be called once per process; no calls are legal
+     * until init() returns */
     int (*init)(const char *dbdir, int myflags);
+
+    /* done() should be called once per process; no calls are legal
+     * once done() starts.  it is legal to call init() after done() returns
+     * to reset state */
     int (*done)(void);
+
+    /* checkpoints this database environment */
     int (*sync)(void);
 
+    /* open the specified database in the global environment */
     int (*open)(const char *fname, struct db **ret);
+
+    /* close the specified database */
     int (*close)(struct db *db);
-    
+
+    /* what are the overall specifications? */
+    /* 'mydb': the database to act on
+       'key': the key to fetch.  cyrusdb currently requires this to not have
+              any of [\t\n\0] in keys
+       'keylen': length of the key
+       'data': where to put the data (generally won't have [\n\0])
+       'datalen': how big is the data?
+       'mytid': may be NULL, in which case the fetch is not txn protected.
+                if mytid != NULL && *mytid == NULL, begins a new txn
+		if mytid != NULL && *mytid != NULL, continues an old txn
+
+		transactions may lock the entire database on some backends.
+		beware
+		
+       fetchlock() is identical to fetch() except gives a hint to the
+       underlying database that the key/data being fetched will be modified
+       soon. it is useless to use fetchlock() without a non-NULL mytid
+    */
     int (*fetch)(struct db *mydb, 
 		 const char *key, int keylen,
 		 const char **data, int *datalen,
