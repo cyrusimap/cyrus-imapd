@@ -30,6 +30,7 @@
 #include <netinet/in.h>
 #include <syslog.h>
 #include <com_err.h>
+#include <errno.h>
 
 #include "acl.h"
 #include "util.h"
@@ -40,6 +41,8 @@
 #include "append.h"
 #include "charset.h"
 #include "xmalloc.h"
+
+extern int errno;
 
 /* The index and cache files, mapped into memory */
 static char *index_base;
@@ -151,8 +154,22 @@ int checkseen;
     oldexists = imapd_exists;
 
     /* Check for expunge */
-    if (index_len && stat(FNAME_INDEX+1, &sbuf) == 0) {
-	if (sbuf.st_ino != mailbox->index_ino) {
+    if (index_len) {
+	if (stat(FNAME_INDEX+1, &sbuf) != 0) {
+	    if (errno == ENOENT) {
+		/* Mailbox has been deleted */
+		while (imapd_exists--) {
+		    prot_printf(imapd_out, "* 1 EXPUNGE\r\n");
+		}
+		mailbox->exists = 0;
+		imapd_exists = -1;
+		if (seendb) {
+		    seen_close(seendb);
+		    seendb = 0;
+		}
+	    }
+	}
+	else if (sbuf.st_ino != mailbox->index_ino) {
 	    if (mailbox_open_index(mailbox)) {
 		fatal("failed to reopen index file", EX_IOERR);
 	    }
