@@ -247,12 +247,16 @@ long *min;
 			    && ptr - start < *min))) {
 		    ++ptr;
 		}
-		if (ptr == pend) break;
+		if (ptr == pend) {
+		    gptr = ghier;
+		    break;
+		}
                 if (*ptr == g->sep_char && *ptr != *ghier) {
 		    if (!*ghier && min) {
 			*min = gstar ? ptr - start + 1 : -1;
 			return (ptr - start);
 		    }
+		    gptr = ghier;
 		    ghier = NULL;
 		} else {
 		    phier = ++ptr;
@@ -266,10 +270,23 @@ long *min;
 		}
 		/* look for a match with first char following '*' */
 		while (pstar != pend && *gstar != *pstar) ++pstar;
-		if (pstar == pend) break;
+		if (pstar == pend) {
+		    gptr = gstar;
+		    break;
+		}
 		ptr = ++pstar;
 		gptr = gstar + 1;
 	    }
+
+           if (*gptr == '\0' && min && *min < ptr - start
+	       && ptr != pend && *ptr == g->sep_char) {
+               /* The pattern ended on a hierarchy separator
+                * return a partial match */
+               *min = ptr - start + 1;
+               return ptr - start;
+           }
+ 
+
 	    /* continue if at wildcard or we passed an asterisk */
 	} while (*gptr == '*' || *gptr == '%' ||
 		 ((gstar || ghier) && (*gptr || ptr != pend)));
@@ -303,7 +320,10 @@ long *min;
 			    && ptr - start < *min))) {
 		    ++ptr;
 		}
-		if (ptr == pend) break;
+		if (ptr == pend) {
+		    gptr = ghier;
+		    break;
+		}
 		if (*ptr == g->sep_char) {
 		    if (!*ghier && min) {
 			*min = gstar ? ptr - start + 1 : -1;
@@ -322,10 +342,21 @@ long *min;
 		}
 		/* look for a match with first char following '*' */
 		while (pstar != pend && *gstar != TOLOWER(*pstar)) ++pstar;
-		if (pstar == pend) break;
+		if (pstar == pend) {
+		   gptr = gstar;
+		    break;
+		}
 		ptr = ++pstar;
 		gptr = gstar + 1;
 	    }
+           if (*gptr == '\0' && min && *min < ptr - start &&
+	       ptr != pend && *ptr == g->sep_char) {
+               /* The pattern ended on a hierarchy separator
+                * return a partial match */
+               *min = ptr - start + 1;
+               return ptr - start;
+           }
+ 
 	    /* continue if at wildcard or we passed an asterisk */
 	} while (*gptr == '*' || *gptr == '%' ||
 		 ((gstar || ghier) && (*gptr || ptr != pend)));
