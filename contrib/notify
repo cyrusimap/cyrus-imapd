@@ -1,0 +1,15 @@
+#!/bin/sh
+# description: Start/stop notify.pl (Cyrus Unix sockets notification handler)
+
+case "$1" in
+'start')
+	/usr/bin/notify.pl
+	;;
+'stop')
+	kill -INT `cat /tmp/notify_unix.pid`
+	;;
+*)
+	echo "Usage: $0 { start | stop }"
+	;;
+esac
+exit 0
