@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.5 2002/07/21 14:24:48 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.6 2002/07/31 22:25:12 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1450,6 +1450,8 @@ static int verify_user(const char *user, long quotacheck,
 			     0, quotacheck > 0 ? 0 : quotacheck);
 	}
     }
+
+    if (r) syslog(LOG_DEBUG, "append_check() of '%s' failed ", buf);
 
     return r;
 }
