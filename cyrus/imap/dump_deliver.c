@@ -1,5 +1,5 @@
 /* dump_deliver.c -- Program to dump deliver db for debugging purposes
- $Id: dump_deliver.c,v 1.5 1999/11/05 01:26:52 leg Exp $
+ $Id: dump_deliver.c,v 1.6 2000/01/25 06:51:58 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -27,7 +27,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: dump_deliver.c,v 1.5 1999/11/05 01:26:52 leg Exp $";
+static char _rcsid[] = "$Id: dump_deliver.c,v 1.6 2000/01/25 06:51:58 leg Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -39,6 +39,7 @@ static char _rcsid[] = "$Id: dump_deliver.c,v 1.5 1999/11/05 01:26:52 leg Exp $"
 #include <errno.h>
 #ifdef HAVE_LIBDB
 #ifdef HAVE_DB_185_H
+#    define DB_LIBRARY_COMPATIBILITY_API
 #include <db_185.h>
 #else
 #include <db.h>
@@ -161,5 +162,5 @@ int code;
     exit(code);
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.5 1999/11/05 01:26:52 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.6 2000/01/25 06:51:58 leg Exp $ */
 
