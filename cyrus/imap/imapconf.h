@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: imapconf.h,v 1.7 2001/04/26 17:17:14 leg Exp $
+ $Id: imapconf.h,v 1.8 2001/07/16 17:30:31 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -105,6 +105,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 #define getastring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_ASTRING)
 #define getnstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_NSTRING)
 #define getstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_STRING)
+void freebuf(struct buf *buf);
 
 void eatline(struct protstream *pin, int c);
 

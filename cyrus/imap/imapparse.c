@@ -6,6 +6,13 @@
 #include "xmalloc.h"
 #include "imapconf.h"
 
+void freebuf(struct buf *buf)
+{
+    free(buf->s);
+    buf->s = NULL;
+    buf->alloc = 0;
+}
+
 /*
  * Parse a word
  * (token not containing whitespace, parens, or double quotes)
