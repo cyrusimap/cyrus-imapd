@@ -48,7 +48,7 @@ char *mboxname;
     /* Need a larger buffer */
     if (*len < newlen) {
 	if (*len) free(*base);
-	*len = newlen + SLOP;
+	*len = newlen + onceonly ? 0 : SLOP;
 	*base = xmalloc(*len);
     }
 
