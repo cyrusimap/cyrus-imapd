@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.24 1999/02/09 02:46:24 tjs Exp $
+ $Id: auth_krb_pts.c,v 1.25 1999/02/09 19:13:07 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -29,6 +29,9 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
+/* XXX FOR DEBUGGING */
+#include <unistd.h>
+#include <sys/stat.h>
 
 #ifdef HAVE_DB_185_H
 #include <db_185.h>
@@ -316,7 +319,10 @@ const char *cacheid;
     struct iovec iov[10];
     static char response[1024];
     int start, n;
-    
+
+    memset(&dataheader, 0, sizeof(dataheader));
+    memset(&datalist, 0, sizeof(datalist));
+
     identifier = auth_canonifyid(identifier);
     if (!identifier) return 0;
 
@@ -555,6 +561,10 @@ const char *cacheid;
         syslog(LOG_ERR,
                "Database %s inconsistent: header record found, data record missing", fnamebuf);
         return newstate;
+    }
+    if (newstate->ngroups * PR_MAXNAMELEN < datalist.size) {
+	syslog(LOG_ERR,
+	       "Database %s inconsistent: not enough data for claimed number of groups", fnamebuf);
     }
     newstate->ngroups = us.ngroups;
     if (newstate->ngroups) {
