@@ -323,7 +323,6 @@ smtpmode()
     char **rcpt_addr = 0;
     int rcpt_num = 0;
     int rcpt_alloc = 0;
-    int mrep_mode = 0;
     char myhostname[1024];
     char buf[4096];
     int r;
@@ -377,23 +376,6 @@ smtpmode()
 	    }
 	    goto syntaxerr;
 
-	case 'e':
-	case 'E':
-	    if (!strncasecmp(buf, "ehlo ", 5)) {
-		printf("250-%s\r\n250-8BITMIME\r\n250 PIPELINING\r\n",
-		       myhostname);
-		continue;
-	    }
-	    goto syntaxerr;
-
-	case 'h':
-	case 'H':
-	    if (!strncasecmp(buf, "helo ", 5)) {
-		printf("250 %s\r\n", myhostname);
-		continue;
-	    }
-	    goto syntaxerr;
-
 	case 'm':
 	case 'M':
 	    if (!strncasecmp(buf, "mail ", 5)) {
@@ -410,9 +392,9 @@ smtpmode()
 		printf("250 2.1.5 ok\r\n");
 		continue;
 	    }
-	    else if (!strcasecmp(buf, "mrep")) {
-		mrep_mode = 1;
-		printf("250 2.0.0 ok\r\n");
+	    else if (!strncasecmp(buf, "mhlo ", 5)) {
+		printf("250-%s\r\n250-8BITMIME\r\n250 PIPELINING\r\n",
+		       myhostname);
 		continue;
 	    }
 	    goto syntaxerr;
@@ -438,10 +420,6 @@ smtpmode()
 	    if (!strncasecmp(buf, "rcpt ", 5)) {
 		if (!return_path) {
 		    printf("503 5.5.1 Need MAIL command\r\n");
-		    continue;
-		}
-		if (!mrep_mode && rcpt_num) {
-		    printf("450 4.5.3 Need MREP for multiple recipients\r\n");
 		    continue;
 		}
 		if (rcpt_num == rcpt_alloc) {
