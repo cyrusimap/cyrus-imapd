@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.26 2004/05/22 03:45:48 rjs3 Exp $ */
+/* $Id: backend.c,v 1.27 2004/06/04 13:28:31 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -366,6 +366,10 @@ int backend_ping(struct backend *s, struct protocol_t *prot)
     char buf[1024];
 
     if (!s || !prot || !prot->ping_cmd.cmd) return 0;
+    if (!s->out) {
+	syslog(LOG_ERR, "in backend_ping without valid s->out value");
+	return -1; /* Huh? */
+    }
     
     prot_printf(s->out, "%s\r\n", prot->ping_cmd.cmd);
     prot_flush(s->out);
