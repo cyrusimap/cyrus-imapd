@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.197 2002/06/20 16:36:13 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.198 2002/07/02 17:50:32 rjs3 Exp $
  */
 
 #include <config.h>
@@ -441,7 +441,8 @@ mboxlist_mycreatemailboxcheck(char *name,
 	
 	acl = xstrdup("");
 	if (!strncmp(name, "user.", 5)) {
-	    if (!force_user_create && strchr(name+5, '.')) {
+	    char *firstdot = strchr(name+5, '.');
+	    if (!force_user_create && firstdot) {
 		/* Disallow creating user.X.* when no user.X */
 		free(acl);
 		return IMAP_PERMISSION_DENIED;
@@ -450,11 +451,18 @@ mboxlist_mycreatemailboxcheck(char *name,
 	    if (strchr(name, '*') || strchr(name, '%') || strchr(name, '?')) {
 		return IMAP_MAILBOX_BADNAME;
 	    }
+
 	    /*
 	     * Users by default have all access to their personal mailbox(es),
 	     * Nobody else starts with any access to same.
+	     *
+	     * If this is a forced user create, we might have to avoid creating
+	     * an acl for the wrong user.
 	     */
+	    if(firstdot) *firstdot = '\0';
 	    identifier = xstrdup(name+5);
+	    if(firstdot) *firstdot = '.';
+
 	    if (config_getswitch("unixhierarchysep", 0)) {
 		/*
 		 * The mailboxname is now in the internal format,
