@@ -1,15 +1,43 @@
-<!-- $Id: changes.html,v 1.85 1999/09/27 17:24:41 tmartin Exp $ -->
+<!-- $Id: changes.html,v 1.86 1999/10/02 00:44:38 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
+    <h2> Changes to the Cyrus IMAP Server Since Version 1.6.13 </h2>
+    <ul>
+      <li> Added the sieve client (<tt>installsieve</tt>) and server
+      (<tt>timsieved</tt>) for getting sieve scripts onto the server.
+
+      <li> The default Sieve script layout has changed to
+      sievedir/u/user/default; this supports multiple Sieve scripts
+      per user with the ability to switch between them.
+ 
+      <li> Fixed the kerberos-to-local-host bug (patch by Greg Hudson,
+      <tt>ghudson@mit.edu</tt>).
+
+      <li> Started changes to deliver to support LMTP AUTH.
+
+      <li> Improved the error messages logged when authentication
+      fails.
+      
+      <li> Fixed a bug dealing with argument processing in the
+      arbitron program.
+
+      <li> pop3d now correctly supports SASL AUTH.
+
+      <li> imtest will no longer prompt for authentication or
+      authorization names; instead, it defaults to the current Unix
+      user.  Override on the command line.
+
+      <li> Likewise, cyradm will no longer prompt.  It now accepts
+      "-m" to specify what SASL mechanism to use, and the
+      pwcommand option to authenticate should once again work when
+      used non-interactively.
+
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.10 </h2>
     <ul>
-      <li> Added the sieve client and server for getting sieve scripts
-      onto the server
-
       <li> Changed the sieve option in the configure script to
       <tt>--disable-sieve</tt>.
 
@@ -27,7 +55,7 @@
       <li> The default format for reading information from INN has
       changed.  If you use INN to feed imapd news, you must change
       your "<tt>newsfeeds</tt>" file to contain
-      <pre>collectnews!:*:Tf,WR:collectnews</pre>
+      <pre>collectnews!:*:Tf,WO:collectnews</pre>
 
       <li> The dohash script now takes a "<tt>-i</tt>" option to run
       interactively and the "<tt>-f</tt>" option to issue warnings
