@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.24 2002/03/15 19:54:27 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.25 2002/03/15 20:20:25 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -102,8 +102,12 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 			   int localonly);
 
 /* Delete a mailbox. */
+/* setting local_only disables any communication with the mupdate server
+ * and deletes the mailbox from the filesystem regardless of if it is
+ * MBTYPE_REMOTE or not */
 int mboxlist_deletemailbox(const char *name, int isadmin, char *userid, 
-			   struct auth_state *auth_state, int checkacl);
+			   struct auth_state *auth_state, int checkacl,
+			   int local_only);
 
 /* Rename/move a mailbox (hierarchical) */
 int mboxlist_renamemailbox(char *oldname, char *newname, char *partition, 

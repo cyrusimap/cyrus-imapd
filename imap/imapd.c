@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.353 2002/03/15 19:54:25 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.354 2002/03/15 20:20:25 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -3544,7 +3544,7 @@ char *name;
 
     if (!r) {
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
-				   imapd_userid, imapd_authstate, 1);
+				   imapd_userid, imapd_authstate, 1, 0);
     }
 
     /* was it a top-level user mailbox? */
@@ -3566,7 +3566,7 @@ char *name;
 	/* foreach mailbox in list, remove it */
 	for (i = 0; i < l->num; i++) {
 	    r2 = mboxlist_deletemailbox(l->mb[i], imapd_userisadmin,
-					imapd_userid, imapd_authstate, 0);
+					imapd_userid, imapd_authstate, 0, 0);
 	    if (r2) {
 		prot_printf(imapd_out, "* NO delete %s: %s\r\n",
 			    l->mb[i], error_message(r2));
@@ -5688,6 +5688,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
      *
      * 1) Connect to remote server.
      * 2) LOCALCREATE on remote server
+     * 2.5) Set mailbox as REMOTE on local server
      * 3) mupdate.DEACTIVATE(mailbox, remoteserver) xxx what partition?
      * 4) undump mailbox from local to remote
      * 5) reconstruct remote mailbox
@@ -5727,7 +5728,9 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, LOCALCREATE failed",
 		     mailboxname);
     }
-    
+   
+    /* xxx Step 2.5: Set mailbox as REMOTE on local server */
+ 
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
     if(!r) {
 	/* xxx do we want it to be reserved on our host or on the remote
@@ -5761,7 +5764,6 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 		     mailboxname);
     }
     
-
     /* xxx Step 4.5: Set ACL on remote */
 
     /* Step 5: Reconstruct remote */
@@ -5784,8 +5786,14 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     
     /* MAILBOX NOW LIVES ON REMOTE */
 
-    /* 7) local delete of mailbox
-     * 8) remove local remote mailbox entry??????
+    /* 7) local delete of mailbox */
+    if(!r) {
+	/* Note that we do not check the ACL, and we don't update MUPDATE */
+	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
+				   imapd_userid, imapd_authstate, 0, 1);
+    }
+    
+    /* 8) remove local remote mailbox entry??????
      * 9) ??? kick remote server to do a push of the
      *    actual record w/correct partition to mupdate?
      */

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.174 2002/03/15 19:54:27 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.175 2002/03/15 20:20:25 rjs3 Exp $
  */
 
 #include <config.h>
@@ -733,7 +733,8 @@ int mboxlist_insertremote(const char *name, int mbtype, const char *host,
  *
  */
 int mboxlist_deletemailbox(const char *name, int isadmin, char *userid, 
-			   struct auth_state *auth_state, int checkacl)
+			   struct auth_state *auth_state, int checkacl,
+			   int local_only)
 {
     int r;
     char *acl;
@@ -823,7 +824,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 
     /* remove from mupdate */
     /* xxx this can lead to inconsistancies if the later stuff fails */
-    if (!r && mupdate_server) {
+    if (!r && !local_only && mupdate_server) {
 	/* delete the mailbox in MUPDATE */
 	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
@@ -864,7 +865,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	}
     }
 
-    if (r || isremote) goto done;
+    if (r || (isremote && !local_only)) goto done;
 
     if (!r) r = mailbox_open_header_path(name, path, acl, 0, &mailbox, 0);
     if (!r) r = mailbox_delete(&mailbox, deletequotaroot);
