@@ -65,11 +65,6 @@ extern char *		strcpy _ANSI_ARGS_((char *dst, CONST char *src));
 static Tcl_Interp *interp;	/* Interpreter for application. */
 static Tcl_DString command;	/* Used to buffer incomplete commands being
 				 * read from stdin. */
-char *tcl_RcFileName = NULL;	/* Name of a user-specific startup script
-				 * to source if the application is being run
-				 * interactively (e.g. "~/.tclshrc").  Set
-				 * by Tcl_AppInit.  NULL means don't source
-				 * anything ever. */
 #ifdef TCL_MEM_DEBUG
 static char dumpFile[100];	/* Records where to dump memory allocation
 				 * information. */
