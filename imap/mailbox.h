@@ -88,6 +88,7 @@ struct mailbox {
     time_t last_appenddate;
     unsigned long last_uid;
     unsigned long quota_mailbox_used;
+    unsigned long pop3_last_uid;
 
     struct quota quota;
 };
@@ -115,7 +116,7 @@ struct index_record {
 #define OFFSET_LAST_APPENDDATE 24
 #define OFFSET_LAST_UID 28
 #define OFFSET_QUOTA_MAILBOX_USED 32
-#define OFFSET_POP3_LAST 36
+#define OFFSET_POP3_LAST_UID 36
 
 /* Offsets of index_record fields in index file */
 #define OFFSET_UID 0
