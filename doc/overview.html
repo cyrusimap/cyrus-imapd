@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <title>Cyrus IMAP Server:  Overview and Concepts</title>
-<!-- Changed by: John Gardiner Myers, 16-May-1996 -->
+<!-- $Id: overview.html,v 1.7 2001/08/29 14:10:46 ken3 Exp $ -->
 </HEAD><BODY>
 <H1>              Cyrus IMAP Server:  Overview and Concepts</H1>
 
@@ -21,7 +21,7 @@ implementations in that it is run on "sealed" servers,
 where users are not normally permitted to log in.  The mailbox
 database is stored in parts of the filesystem that are private to the
 Cyrus IMAP system.  All user access to mail is through software
-using the IMAP, POP3, or KPOP protocols.
+using the IMAP, IMAPS, POP3, POP3S, or KPOP protocols.
 
 <p>The private mailbox database design gives the server large advantages
 in efficiency, scalability, and administratability.  Multiple
@@ -108,15 +108,16 @@ Mailboxes</A>
 
 <H2><a name="mboxname">Mailbox Namespace</a></H2>
 
-The Cyrus IMAP server presents mailboxes using the <TT>netnews</TT>
-namespace convention.  Mailbox names are case-sensitive.  A mailbox
-name may not start or end with a "." character, nor may it contain two
-"." characters in a row.
+By default, the Cyrus IMAP server presents mailboxes using the
+<TT>netnews</TT> namespace convention.  Mailbox names are
+case-sensitive.  A mailbox name may not start or end with a "."
+character, nor may it contain two "." characters in a row.
 
-<p>In the initial implementation, non-ASCII characters, shell
-metacharacters, and "/" are not permitted in mailbox names.  Later
-versions of the server may make the set of permissible characters
-configurable at each site.
+<p>In this implementation, non-ASCII characters and shell
+metacharacters are not permitted in mailbox names.
+
+<p>Optionally, the server can present mailboxes using the <a
+href=altnamespace.html#unixhiersep> UNIX hierarchy convention</a>.
 
 <H3><A NAME="mboxnamestd">Standard (Internal) Namespace</A></H3>
 
@@ -168,23 +169,10 @@ resolves to "<TT>comp.infosystems.www</TT>" and the name
 
 <H3><A NAME="mboxnamealt">Alternate Namespace</A></H3>
 
-The Cyrus IMAP server can also use an alternate namespace which allows
+The Cyrus IMAP server can also use an <a
+href=altnamespace.html#altname> alternate namespace</a> which allows
 a user's personal mailboxes to appear as if they reside at the same
 level as that user's <TT>INBOX</TT> as opposed to children of it.
-For example, if user "<TT>bovik</TT>" had a personal "<TT>work</TT>"
-mailbox, it would appear to user "<TT>bovik</TT>" as "<TT>work</TT>"
-instead of "<TT>INBOX.work</TT>" as it would in the standard namespace.
-
-<p>The alternate namespace does NOT change the behavior of mailboxes
-(as described elsewhere in this document) or how mailboxes are stored
-on the filesystem.  The mailboxes are always stored using their
-internal namespace names and the server simply translates mailbox
-names between the internal namespace names and the alternate namespace
-names when used by the client in the IMAP protocol and in Sieve
-scripts.
-
-<p>All tools for administering the server, including admins using cyradm,
-always use the internal namespace.
 
 <H2><A NAME="acl">Access Control Lists</A></H2>
 

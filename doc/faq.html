@@ -1,6 +1,6 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server FAQ</TITLE>
-    <!-- $Id: faq.html,v 1.13 2001/07/07 02:31:21 ken3 Exp $ -->
+    <!-- $Id: faq.html,v 1.14 2001/08/29 14:10:46 ken3 Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server FAQ</H1>
 
@@ -18,7 +18,9 @@ unless we get a set of complete patches.  If you want it, you'll need
 to do it yourself or use a commercial product. Check the list archives
 for more information.
 
-<li><b>dots in userids</b> - no you can't have a '.' in your username.
+<li><b>dots in userids</b> - you can have a '.' in your username IF,
+AND ONLY IF, you use the <a href=altnamespace.html#unixhiersep>UNIX
+hierarchy convention</a>.
 
 <li><b>renaming users</b> - nope, not supported.
 
@@ -109,7 +111,7 @@ previous question for details.
 </dl>
 
 <P><HR>
-last modified: $Date: 2001/07/07 02:31:21 $
+last modified: $Date: 2001/08/29 14:10:46 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
