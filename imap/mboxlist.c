@@ -26,6 +26,7 @@
 static char *listfname, *newlistfname;
 
 static long ensureOwnerRights();
+static int mboxlist_deletesubmailbox();
 
 #define FNAME_MBOXLIST "/mailboxes"
 #define FNAME_USERDIR "/user/"
@@ -201,9 +202,7 @@ char *userid;
     if (r) return r;
 
     /* User has admin rights over their own mailbox namespace */
-    if (!strchr(userid, '.') && !strncasecmp(name, "user.", 5) &&
-	!strncasecmp(name+5, userid, strlen(userid)) &&
-	name[5+strlen(userid)] == '.') {
+    if (mboxlist_userownsmailbox(userid, name)) {
 	isadmin = 1;
     }
 
@@ -274,17 +273,16 @@ char *userid;
 	assert(r == 0);
 	if (!isadmin && !(acl_myrights(acl) & ACL_CREATE)) {
 	    fclose(listfile);
-	    free(acl);
 	    free(partition);
 	    return IMAP_PERMISSION_DENIED;
 	}
-	/* Canonify case of parent prefix */
+	/* Copy acl, canonify case of parent prefix */
+	acl = strsave(acl);
 	strncpy(name, parent, strlen(parent));
     }
     else {
 	if (!isadmin) {
 	    fclose(listfile);
-	    free(acl);
 	    return IMAP_PERMISSION_DENIED;
 	}
 	
@@ -297,6 +295,20 @@ char *userid;
 		free(acl);
 		return IMAP_PERMISSION_DENIED;
 	    }
+	    /*
+	     * Disallow wildcards in userids with inboxes.
+	     * If we allowed them, then the delete-user code
+	     * in mboxlist_deletemailbox() could potentially
+	     * delete other user's personal mailboxes when applied
+	     * to this mailbox
+	     */	     
+	    if (strchr(name, '*') || strchr(name, '%') || strchr(name, '?')) {
+		return IMAP_MAILBOX_BADNAME;
+	    }
+	    /*
+	     * Users by default have all access to their personal mailbox(es),
+	     * Nobody else starts with any access to same.
+	     */
 	    acl_set(&acl, name+5, ACL_ALL, (long (*)())0, (char *)0);
 	}
 	else {
@@ -387,14 +399,185 @@ char *userid;
 }
 	
 /*
- * Perform a FIND ALL.MAILBOXES command on 'pattern'.
- * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
- * is the user's login id.
+ * Delete a mailbox.
+ * Deleting the mailbox user.FOO deletes the user "FOO".  It may only be
+ * performed by an admin.  The operation removes the user "FOO"'s 
+ * subscriptions and all sub-mailboxes of user.FOO
  */
-mboxlist_findall(pattern, isadmin, userid)
+mboxlist_deletemailbox(name, isadmin, userid, checkacl)
+char *name;
+int isadmin;
+char *userid;
+{
+    FILE *listfile = 0;
+    struct stat sbuffd, sbuffile;
+    int r;
+    char *acl;
+    long access;
+    unsigned offset, len, size;
+    char buf2[MAX_MAILBOX_PATH];
+    FILE *newlistfile;
+    char *buf;
+    int n, left;
+    char *p;
+
+    /* Can't DELETE INBOX */
+    if (!strcasecmp(name, "inbox")) {
+	return IMAP_MAILBOX_NOTSUPPORTED;
+    }
+
+    /* Check for request to delete a user */
+    if (!strncasecmp(name, "user.", 5) &&
+	!strchr(name+5, '.')) {
+	/* Only admins may delete user */
+	if (!isadmin) return IMAP_PERMISSION_DENIED;
+
+	r = mboxlist_lookup(name, (char **)0, &acl);
+	if (r) return r;
+	
+	/* Check ACL before doing anything stupid */
+	if (!(acl_myrights(acl) & ACL_DELETE)) return IMAP_PERMISSION_DENIED;
+	
+	/* Delete sub-mailboxes */
+	strcpy(buf2, name);
+	strcat(buf2, ".*");
+	r = mboxlist_findall(buf2, 1, userid, mboxlist_deletesubmailbox);
+	if (r) return r;
+
+	/* Delete any subscription list file */
+	{
+	    char *val, *fname;
+	    val = config_getstring("configdirectory", "");
+	    fname = xmalloc(strlen(val)+sizeof(FNAME_USERDIR)+
+				strlen(name)+sizeof(FNAME_SUBSSUFFIX));
+	    strcpy(fname, val);
+	    strcat(fname, FNAME_USERDIR);
+	    strcat(fname, name+5);
+	    strcat(fname, FNAME_SUBSSUFFIX);
+	    (void) unlink(fname);
+	    free(fname);
+	}
+    }
+
+    if (!listfname) mboxlist_getfname();
+
+    /* Open and lock mailbox list file */
+    listfile = fopen(listfname, "r+");
+    for (;;) {
+	if (!listfile) {
+	    fatal("can't read mailbox list", EX_OSFILE);
+	}
+
+	r = flock(fileno(listfile), LOCK_EX);
+	if (r == -1) {
+	    if (errno == EINTR) continue;
+	    fclose(listfile);
+	    return IMAP_IOERROR;
+	}
+	
+	fstat(fileno(listfile), &sbuffd);
+	r = stat(listfname, &sbuffile);
+	if (r == -1) {
+	    fclose(listfile);
+	    return IMAP_IOERROR;
+	}
+
+	size = sbuffd.st_size;
+	if (sbuffd.st_ino == sbuffile.st_ino) break;
+
+	fclose(listfile);
+	listfile = fopen(listfname, "r+");
+    }
+
+    r = mboxlist_lookup(name, (char **)0, &acl);
+    if (r) {
+	fclose(listfile);
+	return r;
+    }
+    access = acl_myrights(acl);
+    if (checkacl && !(access & ACL_DELETE)) {
+	fclose(listfile);
+
+	/* User has admin rights over their own mailbox namespace */
+	if (mboxlist_userownsmailbox(userid, name)) {
+	    isadmin = 1;
+	}
+
+	/* Lie about error if privacy demands */
+	return (isadmin || (access & ACL_SEEN)) ?
+	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+    }
+
+    buf = 0;
+    offset = n_binarySearchFD(fileno(listfile), name, 0, &buf, &len, 0, size);
+    assert(len > 0);
+
+    /* Calculate real length of entry */
+    p = strchr(buf, '\t')+1;
+    p = strchr(p, '\t')+1;
+    len = p - buf + strlen(acl) + 1;
+
+    /* Create new mailbox list */
+    newlistfile = fopen(newlistfname, "w+");
+    if (!newlistfile) {
+	fclose(listfile);
+	return IMAP_IOERROR;
+    }
+
+    /* Copy mailbox list, removing entry */
+    left = offset;
+    rewind(listfile);
+    while (left) {
+	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
+	if (!n) {
+	    fclose(listfile);
+	    fclose(newlistfile);
+	    return IMAP_IOERROR;
+	}
+	fwrite(buf2, 1, n, newlistfile);
+	left -= n;
+    }
+    fseek(listfile, len, 1);
+    while (n = fread(buf2, 1, sizeof(buf2), listfile)) {
+	fwrite(buf2, 1, n, newlistfile);
+    }
+    fflush(newlistfile);
+    if (ferror(newlistfile) || fsync(fileno(newlistfile))) {
+	fclose(listfile);
+	fclose(newlistfile);
+	return IMAP_IOERROR;
+    }
+    fclose(newlistfile);
+    
+    /* Remove the mailbox and move new mailbox list file into place */
+    r = mailbox_delete(name);
+    if (r) {
+	fclose(listfile);
+	return r;
+    }
+    if (rename(newlistfname, listfname) == -1) {
+	fclose(listfile);
+	/* XXX We're left in an inconsistent state here */
+	return IMAP_IOERROR;
+    }
+
+    fclose(listfile);
+    return 0;
+}
+
+/*
+ * Find all mailboxes that match 'pattern'.
+ * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
+ * is the user's login id.  For each matching mailbox, calls
+ * 'proc' with the name of the mailbox.  If 'proc' ever returns
+ * a nonzero value, mboxlist_findall immediately stops searching
+ * and returns that value.
+ */
+int mboxlist_findall(pattern, isadmin, userid, proc)
 char *pattern;
 int isadmin;
 char *userid;
+int (*proc)();
 {
     FILE *listfile;
     struct glob *g;
@@ -423,7 +606,14 @@ char *userid;
 	    buflen = sizeof(buf);
 	    (void) n_binarySearchFD(fileno(listfile), usermboxname, 0, &bufp,
 				    &buflen, 0, 0);
-	    if (buflen) printf("* MAILBOX INBOX\r\n");
+	    if (buflen) {
+		r = (*proc)("INBOX");
+		if (r) {
+		    fclose(listfile);
+		    glob_free(g);
+		    return r;
+		}
+	    }
 	}
 
 	strcat(usermboxname, ".");
@@ -454,7 +644,14 @@ char *userid;
 	    p = strchr(buf, '\t');
 	    *p = '\0';
 	    if (strncasecmp(buf, usermboxname, usermboxnamelen)) break;
-	    if (glob_test(g, buf, -1)) printf("* MAILBOX %s\r\n", buf);
+	    if (glob_test(g, buf, -1)) {
+		r = (*proc)(buf);
+		if (r) {
+		    fclose(listfile);
+		    glob_free(g);
+		    return r;
+		}
+	    }
 	    *p = '\t';
 	    while (buf[strlen(buf)-1] != '\n') {
 		if (!fgets(buf, sizeof(buf), listfile)) break;
@@ -478,7 +675,12 @@ char *userid;
 	    (strncasecmp(buf, usermboxname, usermboxnamelen) ||
 	     (buf[usermboxnamelen] != '\0' && buf[usermboxnamelen] != '.'))) {
 	    if (isadmin) {
-		printf("* MAILBOX %s\r\n", buf);
+		r = (*proc)(buf);
+		if (r) {
+		    fclose(listfile);
+		    glob_free(g);
+		    return r;
+		}
 	    }
 	    else {
 		/* XXX assuming \t before running past sizeof(buf) */
@@ -492,7 +694,12 @@ char *userid;
 		    assert(r == 0);
 		}
 		if (acl_myrights(acl) & ACL_LOOKUP) {
-		    printf("* MAILBOX %s\r\n", buf);
+		    r = (*proc)(buf);
+		    if (r) {
+			fclose(listfile);
+			glob_free(g);
+			return r;
+		    }
 		}
 		if (p) {
 		    *p = '\n';
@@ -507,18 +714,20 @@ char *userid;
 	
     fclose(listfile);
     glob_free(g);
-    return;
+    return 0;
 }
 
 /*
- * Perform a FIND ALL.MAILBOXES command on 'pattern'.
+ * Find subscribed mailboxes that match 'pattern'.
  * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
- * is the user's login id.
+ * is the user's login id.  For each matching mailbox, calls
+ * 'proc' with the name of the mailbox.
  */
-mboxlist_find(pattern, isadmin, userid)
+mboxlist_findsub(pattern, isadmin, userid, proc)
 char *pattern;
 int isadmin;
 char *userid;
+int (*proc)();
 {
     FILE *subsfile;
     char *subsfname, *newsubsfname;
@@ -527,6 +736,7 @@ char *userid;
     char usermboxname[MAX_NAME_LEN];
     int usermboxnamelen;
     char buf[512], *bufp = buf;
+    int r;
     unsigned offset, buflen, prefixlen;
     char *endname, *p;
 
@@ -553,7 +763,15 @@ char *userid;
 	    buflen = sizeof(buf);
 	    (void) n_binarySearchFD(fileno(subsfile), usermboxname, 0, &bufp,
 				    &buflen, 0, 0);
-	    if (buflen) printf("* MAILBOX INBOX\r\n");
+	    if (buflen) {
+		r = (*proc)("INBOX");
+		if (r) {
+		    fclose(subsfile);
+		    fclose(listfile);
+		    glob_free(g);
+		    return r;
+		}
+	    }
 	}
 
 	strcat(usermboxname, ".");
@@ -590,7 +808,13 @@ char *userid;
 		offset = n_binarySearchFD(fileno(listfile), buf,
 					  0, &bufp, &buflen, 0, 0);
 		if (buflen) {
-		    printf("* MAILBOX %s\r\n", buf);
+		    r = (*proc)(buf);
+		    if (r) {
+			fclose(subsfile);
+			fclose(listfile);
+			glob_free(g);
+			return r;
+		    }
 		}
 		else {
 		    mboxlist_changesub(buf, userid, 0);
@@ -619,7 +843,13 @@ char *userid;
 	    offset = n_binarySearchFD(fileno(listfile), buf,
 				      0, &bufp, &buflen, 0, 0);
 	    if (buflen) {
-		printf("* MAILBOX %s\r\n", buf);
+		r = (*proc)(buf);
+		if (r) {
+		    fclose(subsfile);
+		    fclose(listfile);
+		    glob_free(g);
+		    return r;
+		}
 	    }
 	    else {
 		mboxlist_changesub(buf, userid, 0);
@@ -630,7 +860,7 @@ char *userid;
     fclose(subsfile);
     fclose(listfile);
     glob_free(g);
-    return;
+    return 0;
 }
 
 /*
@@ -1003,6 +1233,21 @@ char *name;
 }
 
 /*
+ * Check whether user owns mailbox
+ */
+static int mboxlist_userownsmailbox(userid, name)
+char *userid;
+char *name;
+{
+    if (!strchr(userid, '.') && !strncasecmp(name, "user.", 5) &&
+	!strncasecmp(name+5, userid, strlen(userid)) &&
+	name[5+strlen(userid)] == '.') {
+	return 1;
+    }
+    return 0;
+}
+
+/*
  * ACL access canonification routine which ensures that 'owner'
  * retains lookup, administer, and create rights over a mailbox.
  */
@@ -1013,4 +1258,13 @@ long access;
 {
     if (strcasecmp(identifier, owner) != 0) return access;
     return access|ACL_LOOKUP|ACL_ADMIN|ACL_CREATE;
+}
+
+/*
+ * Helper function to delete a user's sub-mailbox when deleting that user
+ */
+static int mboxlist_deletesubmailbox(name)
+char *name;
+{
+    return mboxlist_deletemailbox(name, 1, "", 0);
 }
