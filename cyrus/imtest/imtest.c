@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.82.2.1 2002/07/21 14:24:50 ken3 Exp $
+ * $Id: imtest.c,v 1.82.2.2 2002/08/16 20:03:38 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2089,7 +2089,7 @@ static struct protocol_t protocols[] = {
       { 0, "+OK ", &pop3_parse_banner },
       { "CAPA", ".", "STLS", "SASL ", NULL },
       { "STLS", "+OK", "-ERR", 0 },
-      { "AUTH", 0, NULL, NULL, "+OK", "-ERR", "+ ", "*" },
+      { "AUTH", 0, "=", NULL, "+OK", "-ERR", "+ ", "*" },
       &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp",
