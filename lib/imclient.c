@@ -220,7 +220,7 @@ struct imclient *imclient;
     for (i = 0; i < imclient->callback_num; i++) {
 	free(imclient->callback[i].keyword);
     }
-    free((char *)imclient->callback);
+    if (imclient->callback) free((char *)imclient->callback);
     free((char *)imclient);
 }
 
