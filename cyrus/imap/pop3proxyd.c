@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.20 2001/08/03 21:18:08 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.21 2001/08/12 03:31:06 ken3 Exp $
  */
 #include <config.h>
 
@@ -530,13 +530,16 @@ static void cmdloop(void)
 #ifdef HAVE_SSL
 static int starttls_enabled(void)
 {
-    if (config_getstring("tls_cert_file", NULL) == NULL) return 0;
-    if (config_getstring("tls_key_file", NULL) == NULL) return 0;
+    if (!config_getstring("tls_pop3_cert_file",
+			 config_getstring("tls_cert_file", NULL))) return 0;
+    if (!config_getstring("tls_pop3_key_file",
+			  config_getstring("tls_key_file", NULL))) return 0;
     return 1;
 }
 
 static void cmd_starttls(int pop3s)
 {
+    char *tls_cert, *tls_key;
     int result;
     int *layerp;
     sasl_external_properties_t external;
@@ -552,14 +555,18 @@ static void cmd_starttls(int pop3s)
 	return;
     }
 
+    tls_cert = (char *)config_getstring("tls_pop3_cert_file",
+					config_getstring("tls_cert_file", ""));
+    tls_key = (char *)config_getstring("tls_pop3_key_file",
+				       config_getstring("tls_key_file", ""));
+
     result=tls_init_serverengine(5,        /* depth to verify */
 				 !pop3s,   /* can client auth? */
 				 0,        /* require client to auth? */
 				 !pop3s,   /* TLSv1 only? */
 				 (char *)config_getstring("tls_ca_file", ""),
 				 (char *)config_getstring("tls_ca_path", ""),
-				 (char *)config_getstring("tls_cert_file", ""),
-				 (char *)config_getstring("tls_key_file", ""));
+				 tls_cert, tls_key);
 
     if (result == -1) {
 
@@ -567,8 +574,7 @@ static void cmd_starttls(int pop3s)
 	       "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
 	       (char *) config_getstring("tls_ca_file", ""),
 	       (char *) config_getstring("tls_ca_path", ""),
-	       (char *) config_getstring("tls_cert_file", ""),
-	       (char *) config_getstring("tls_key_file", ""));
+	       tls_cert, tls_key);
 
 	if (pop3s == 0)
 	    prot_printf(popd_out, "-ERR %s\r\n", "Error initializing TLS");

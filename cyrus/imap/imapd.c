@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.313 2001/08/10 19:29:07 ken3 Exp $ */
+/* $Id: imapd.c,v 1.314 2001/08/12 03:31:05 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4173,14 +4173,17 @@ char *quotaroot;
  */
 int starttls_enabled(void)
 {
-    if (config_getstring("tls_cert_file", NULL) == NULL) return 0;
-    if (config_getstring("tls_key_file", NULL) == NULL) return 0;
+    if (!config_getstring("tls_imap_cert_file",
+			 config_getstring("tls_cert_file", NULL))) return 0;
+    if (!config_getstring("tls_imap_key_file",
+			  config_getstring("tls_key_file", NULL))) return 0;
     return 1;
 }
 
 /* imaps - whether this is an imaps transaction or not */
 void cmd_starttls(char *tag, int imaps)
 {
+    char *tls_cert, *tls_key;
     int result;
     int *layerp;
     sasl_external_properties_t external;
@@ -4194,14 +4197,18 @@ void cmd_starttls(char *tag, int imaps)
 	return;
     }
 
+    tls_cert = (char *)config_getstring("tls_imap_cert_file",
+					config_getstring("tls_cert_file", ""));
+    tls_key = (char *)config_getstring("tls_imap_key_file",
+				       config_getstring("tls_key_file", ""));
+
     result=tls_init_serverengine(5,        /* depth to verify */
 				 !imaps,   /* can client auth? */
 				 0,        /* require client to auth? */
 				 !imaps,   /* TLS only? */
 				 (char *)config_getstring("tls_ca_file", ""),
 				 (char *)config_getstring("tls_ca_path", ""),
-				 (char *)config_getstring("tls_cert_file", ""),
-				 (char *)config_getstring("tls_key_file", ""));
+				 tls_cert, tls_key);
 
     if (result == -1) {
 
@@ -4209,8 +4216,7 @@ void cmd_starttls(char *tag, int imaps)
 	       "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
 	       (char *) config_getstring("tls_ca_file", ""),
 	       (char *) config_getstring("tls_ca_path", ""),
-	       (char *) config_getstring("tls_cert_file", ""),
-	       (char *) config_getstring("tls_key_file", ""));
+	       tls_cert, tls_key);
 
 	if (imaps == 0) {
 	    prot_printf(imapd_out, "%s NO Error initializing TLS\r\n", tag);
