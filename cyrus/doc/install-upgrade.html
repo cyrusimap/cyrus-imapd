@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.24 2002/02/06 17:05:01 leg Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.25 2002/02/19 18:09:45 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -8,6 +8,15 @@
 </h1>
 
 <body>
+
+<h3>Upgrading from 2.1.2 or earlier</h3>
+
+<ul>
+<li> Sieve has been updated to be compliant with RFC 3028 and
+draft-martin-sieve-notify-01.  All <tt>notify</tt> actions and any
+<tt>fileinto</t> and/or <tt>redirect</tt> actions using stringlists
+will have to be updated/changed. </li>
+</ul>
 
 <h3>Upgrading from 2.1.1 or 2.1.0</h3>
 
@@ -214,7 +223,7 @@ worry about it.)
 </ul>
 
 <P><HR><P>
-last modified: $Date: 2002/02/06 17:05:01 $
+last modified: $Date: 2002/02/19 18:09:45 $
 </BODY></HTML>
 
 

@@ -44,6 +44,7 @@ extern int yyerror(char *);
 
 %option yylineno
 %option noyywrap
+%option nounput
 
 ws		[ \t]+
 ident		[a-zA-Z_][a-zA-Z_0-9]*
@@ -84,28 +85,32 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>exists		return EXISTS;
 <INITIAL>false		return SFALSE;
 <INITIAL>true		return STRUE;
-<INITIAL>address		return ADDRESS;
-<INITIAL>envelope        return ENVELOPE;
+<INITIAL>address	return ADDRESS;
+<INITIAL>envelope	return ENVELOPE;
 <INITIAL>header		return HEADER;
 <INITIAL>not		return NOT;
 <INITIAL>size		return SIZE;
 <INITIAL>reject		return REJCT;
 <INITIAL>fileinto	return FILEINTO;
-<INITIAL>redirect	return FORWARD;
+<INITIAL>redirect	return REDIRECT;
 <INITIAL>keep		return KEEP;
-<INITIAL>require         return REQUIRE;
+<INITIAL>require	return REQUIRE;
 <INITIAL>stop		return STOP;
-<INITIAL>discard		return DISCARD;
-<INITIAL>setflag      return SETFLAG;
-<INITIAL>addflag      return ADDFLAG;
-<INITIAL>removeflag   return REMOVEFLAG;
-<INITIAL>mark         return MARK;
-<INITIAL>unmark               return UNMARK;
-<INITIAL>notify       return NOTIFY;
-<INITIAL>denotify     return DENOTIFY;
-<INITIAL>:low         return LOW;
-<INITIAL>:medium      return MEDIUM;
-<INITIAL>:high        return HIGH;
+<INITIAL>discard	return DISCARD;
+<INITIAL>setflag	return SETFLAG;
+<INITIAL>addflag	return ADDFLAG;
+<INITIAL>removeflag	return REMOVEFLAG;
+<INITIAL>mark		return MARK;
+<INITIAL>unmark		return UNMARK;
+<INITIAL>notify		return NOTIFY;
+<INITIAL>denotify	return DENOTIFY;
+<INITIAL>:id		return ID;
+<INITIAL>:method	return METHOD;
+<INITIAL>:options	return OPTIONS;
+<INITIAL>:low		return LOW;
+<INITIAL>:normal	return NORMAL;
+<INITIAL>:high		return HIGH;
+<INITIAL>:message	return MESSAGE;
 <INITIAL>vacation	return VACATION;
 <INITIAL>:days		return DAYS;
 <INITIAL>:addresses	return ADDRESSES;
@@ -120,12 +125,12 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>:under		return UNDER;
 <INITIAL>:all		return ALL;
 <INITIAL>:localpart	return LOCALPART;
-<INITIAL>:domain		return DOMAIN;
+<INITIAL>:domain	return DOMAIN;
 <INITIAL>:user		return USER;
 <INITIAL>:detail	return DETAIL;
 <INITIAL>[ \t\n\r] ;	/* ignore whitespace */
 <INITIAL>#.* ;		/* ignore comments */
-.		return yytext[0];
+.			return yytext[0];
 
 %%
 /*  */

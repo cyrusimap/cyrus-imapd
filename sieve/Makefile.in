@@ -1,6 +1,6 @@
 # Makefile.in - sieve makefile
 # @configure_input@
-# $Id: Makefile.in,v 1.26 2002/02/13 05:58:04 rjs3 Exp $
+# $Id: Makefile.in,v 1.27 2002/02/19 18:09:45 ken3 Exp $
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
 #
@@ -62,23 +62,21 @@ OBJS = sieve_err.o \
         sieve.o sieve-lex.o comparator.o interp.o message.o script.o \
 	tree.o addr.o addr-lex.o @MD5OBJ@
 
+sieve-lex.c: sieve-lex.l sieve.h
+
 sieve.c sieve.h: sieve.y
 	$(YACC) $(YFLAGS) $(srcdir)/sieve.y
 	mv -f y.tab.c sieve.c
 	mv -f y.tab.h sieve.h
+
+addr-lex.c: addr-lex.l addr.h
 
 addr.c addr.h: addr.y
 	$(YACC) $(YFLAGS) -p addr $(srcdir)/addr.y
 	mv -f y.tab.c addr.c
 	mv -f y.tab.h addr.h
 
-# This is needed because 'makedepend' leaves it out
-addr.o: addr.h
-
-addr-lex.c: addr-lex.l addr.h
-	$(LEX) -t -Paddr $(srcdir)/addr-lex.l > $@
-
-libsieve.a: sieve.c sieve.h sieve_err.h sieve_err.c $(OBJS)
+libsieve.a: $(OBJS)
 	rm -f libsieve.a
 	ar cr libsieve.a $(OBJS)
 	$(RANLIB) libsieve.a

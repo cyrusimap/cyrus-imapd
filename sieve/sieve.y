@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.13 2002/02/13 20:44:04 rjs3 Exp $
+ * $Id: sieve.y,v 1.14 2002/02/19 18:09:46 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -63,6 +63,20 @@ struct aetags {
     int comptag;
 };
 
+struct ntags {
+    char *method;
+    char *id;
+    stringlist_t *options;
+    const char *priority;
+    char *message;
+};
+
+struct dtags {
+    int comptag;
+    void *pattern;
+    char *priority;
+};
+
 static commandlist_t *ret;
 static sieve_script_t *parse_script;
 static int check_reqs(stringlist_t *sl);
@@ -71,6 +85,8 @@ static test_t *build_address(int t, struct aetags *ae,
 static test_t *build_header(int t, struct htags *h,
 			    stringlist_t *sl, patternlist_t *pl);
 static commandlist_t *build_vacation(int t, struct vtags *h, char *s);
+static commandlist_t *build_notify(int t, struct ntags *n);
+static commandlist_t *build_denotify(int t, struct dtags *n);
 static struct aetags *new_aetags(void);
 static struct aetags *canon_aetags(struct aetags *ae);
 static void free_aetags(struct aetags *ae);
@@ -80,11 +96,18 @@ static void free_htags(struct htags *h);
 static struct vtags *new_vtags(void);
 static struct vtags *canon_vtags(struct vtags *v);
 static void free_vtags(struct vtags *v);
+static struct ntags *new_ntags(void);
+static struct ntags *canon_ntags(struct ntags *n);
+static void free_ntags(struct ntags *n);
+static struct dtags *new_dtags(void);
+static void free_dtags(struct dtags *d);
 
-static int verify_mailboxes(stringlist_t *sl);
+static int verify_mailbox(char *s);
+static int verify_address(char *s);
 static int verify_addresses(stringlist_t *sl);
 static int verify_flags(stringlist_t *sl);
 #ifdef ENABLE_REGEX
+static regex_t *verify_regex(char *s, int cflags);
 static patternlist_t *verify_regexs(stringlist_t *sl, char *comp);
 #endif
 static int ok_header(char *s);
@@ -105,19 +128,21 @@ extern int yylex(void);
     struct vtags *vtag;
     struct aetags *aetag;
     struct htags *htag;
+    struct ntags *ntag;
+    struct dtags *dtag;
 }
 
 %token <nval> NUMBER
 %token <sval> STRING
 %token IF ELSIF ELSE
-%token REJCT FILEINTO FORWARD KEEP STOP DISCARD VACATION REQUIRE
+%token REJCT FILEINTO REDIRECT KEEP STOP DISCARD VACATION REQUIRE
 %token SETFLAG ADDFLAG REMOVEFLAG MARK UNMARK
 %token NOTIFY DENOTIFY
 %token ANYOF ALLOF EXISTS SFALSE STRUE HEADER NOT SIZE ADDRESS ENVELOPE
 %token COMPARATOR IS CONTAINS MATCHES REGEX OVER UNDER
 %token ALL LOCALPART DOMAIN USER DETAIL
 %token DAYS ADDRESSES SUBJECT MIME
-%token LOW MEDIUM HIGH
+%token METHOD ID OPTIONS LOW NORMAL HIGH MESSAGE
 
 %type <cl> commands command action elsif block
 %type <sl> stringlist strings
@@ -127,7 +152,8 @@ extern int yylex(void);
 %type <htag> htags
 %type <aetag> aetags
 %type <vtag> vtags
-%type <sl> optional_headers
+%type <ntag> ntags
+%type <dtag> dtags
 %type <sval> priority
 
 %%
@@ -165,20 +191,20 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 				     YYERROR;
 				   }
 				   $$ = new_command(REJCT); $$->u.str = $2; }
-	| FILEINTO stringlist	 { if (!parse_script->support.fileinto) {
+	| FILEINTO STRING	 { if (!parse_script->support.fileinto) {
 				     yyerror("fileinto not required");
 	                             YYERROR;
                                    }
-				   if (!verify_mailboxes($2)) {
+				   if (!verify_mailbox($2)) {
 				     YYERROR; /* vm should call yyerror() */
 				   }
 	                           $$ = new_command(FILEINTO);
-				   $$->u.sl = $2; }
-	| FORWARD stringlist     { $$ = new_command(FORWARD);
-				   if (!verify_addresses($2)) {
+				   $$->u.str = $2; }
+	| REDIRECT STRING         { $$ = new_command(REDIRECT);
+				   if (!verify_address($2)) {
 				     YYERROR; /* va should call yyerror() */
 				   }
-				   $$->u.sl = $2; }
+				   $$->u.str = $2; }
 	| KEEP			 { $$ = new_command(KEEP); }
 	| STOP			 { $$ = new_command(STOP); }
 	| DISCARD		 { $$ = new_command(DISCARD); }
@@ -228,37 +254,67 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     }
                                   $$ = new_command(UNMARK); }
 
-         | NOTIFY priority STRING optional_headers
-                                    {
-					if (!parse_script->support.notify) {
-					    yyerror("notify not required");
-					    YYERROR;
-					}
-
-					$$ = new_command(NOTIFY); 
-					$$->u.n.priority = $2;
-					$$->u.n.message = $3;
-					$$->u.n.headers_list = $4;
-				    }
-         | DENOTIFY               { if (!parse_script->support.notify) {
-                                    yyerror("notify not required");
-                                    YYERROR;
-                                    }
-	                            $$ = new_command(DENOTIFY); }
-
+         | NOTIFY ntags           { if (!parse_script->support.notify) {
+				       yyerror("notify not required");
+				       $$ = new_command(NOTIFY); 
+				       YYERROR;
+	 			    } else {
+				      $$ = build_notify(NOTIFY,
+				             canon_ntags($2));
+				    } }
+         | DENOTIFY dtags         { if (!parse_script->support.notify) {
+                                       yyerror("notify not required");
+				       $$ = new_command(DENOTIFY);
+				       YYERROR;
+				    } else {
+					$$ = build_denotify(DENOTIFY, $2);
+				    } }
 	;
 
-priority: /* nothing */ { $$ = "medium"; }
-	| LOW    { $$ = "low"; }
-        | MEDIUM { $$ = "medium"; }
-        | HIGH { $$ = "high"; }
-        ;
+ntags: /* empty */		 { $$ = new_ntags(); }
+	| ntags ID STRING	 { if ($$->id != NULL) { 
+					yyerror("duplicate :method"); YYERROR; }
+				   else { $$->id = $3; } }
+	| ntags METHOD STRING	 { if ($$->method != NULL) { 
+					yyerror("duplicate :method"); YYERROR; }
+				   else { $$->method = $3; } }
+	| ntags OPTIONS stringlist { if ($$->options != NULL) { 
+					yyerror("duplicate :options"); YYERROR; }
+				     else { $$->options = $3; } }
+	| ntags priority	 { if ($$->priority != NULL) { 
+					yyerror("duplicate :priority"); YYERROR; }
+				   else { $$->priority = $2; } }
+	| ntags MESSAGE STRING	 { if ($$->message != NULL) { 
+					yyerror("duplicate :message"); YYERROR; }
+				   else { $$->message = $3; } }
+	;
 
-optional_headers: /* empty */ { 	                        
-				$$ = NULL;
-	                      }
-                 | stringlist { $$ = $1; }
-                 ;
+dtags: /* empty */		 { $$ = new_dtags(); }
+	| dtags priority	 { if ($$->priority != NULL) { 
+				yyerror("duplicate priority level"); YYERROR; }
+				   else { $$->priority = $2; } }
+	| dtags comptag STRING 	 { if ($$->comptag != -1) { 
+			yyerror("duplicate comparator type tag"); YYERROR;
+				   } else {
+				       $$->comptag = $2;
+#ifdef ENABLE_REGEX
+				       if ($$->comptag == REGEX) {
+					   int cflags = REG_EXTENDED |
+					       REG_NOSUB | REG_ICASE;
+					   $$->pattern =
+					       (void*) verify_regex($3, cflags);
+					   if (!$$->pattern) { YYERROR; }
+				       }
+				       else
+#endif
+					   $$->pattern = $3;
+				   } }
+	;
+
+priority: LOW    { $$ = "low"; }
+        | NORMAL { $$ = "normal"; }
+        | HIGH   { $$ = "high"; }
+        ;
 
 vtags: /* empty */		 { $$ = new_vtags(); }
 	| vtags DAYS NUMBER	 { if ($$->days != -1) { 
@@ -510,6 +566,39 @@ static commandlist_t *build_vacation(int t, struct vtags *v, char *reason)
     return ret;
 }
 
+static commandlist_t *build_notify(int t, struct ntags *n)
+{
+    commandlist_t *ret = new_command(t);
+
+    assert(t == NOTIFY);
+
+    if (ret) {
+	ret->u.n.method = n->method; n->method = NULL;
+	ret->u.n.id = n->id; n->id = NULL;
+	ret->u.n.options = n->options; n->options = NULL;
+	ret->u.n.priority = n->priority;
+	ret->u.n.message = n->message; n->message = NULL;
+	free_ntags(n);
+    }
+    return ret;
+}
+
+static commandlist_t *build_denotify(int t, struct dtags *d)
+{
+    commandlist_t *ret = new_command(t);
+
+    assert(t == DENOTIFY);
+
+    if (ret) {
+	ret->u.d.comptag = d->comptag;
+	ret->u.d.comp = lookup_comp("i;ascii-casemap", d->comptag);
+	ret->u.d.pattern = d->pattern; d->pattern = NULL;
+	ret->u.d.priority = d->priority;
+	free_dtags(d);
+    }
+    return ret;
+}
+
 static struct aetags *new_aetags(void)
 {
     struct aetags *r = (struct aetags *) xmalloc(sizeof(struct aetags));
@@ -590,6 +679,53 @@ static void free_vtags(struct vtags *v)
     free(v);
 }
 
+static struct ntags *new_ntags(void)
+{
+    struct ntags *r = (struct ntags *) xmalloc(sizeof(struct ntags));
+
+    r->method = NULL;
+    r->id = NULL;
+    r->options = NULL;
+    r->priority = NULL;
+    r->message = NULL;
+
+    return r;
+}
+
+static struct ntags *canon_ntags(struct ntags *n)
+{
+    if (n->priority == NULL) { n->priority = "normal"; }
+    if (n->message == NULL) { n->message = strdup("$from$: $subject$"); }
+
+    return n;
+}
+
+static void free_ntags(struct ntags *n)
+{
+    if (n->method) { free(n->method); }
+    if (n->id) { free(n->id); }
+    if (n->options) { free_sl(n->options); }
+    if (n->message) { free(n->message); }
+    free(n);
+}
+
+static struct dtags *new_dtags(void)
+{
+    struct dtags *r = (struct dtags *) xmalloc(sizeof(struct dtags));
+
+    r->comptag = -1;
+    r->pattern = NULL;
+    r->priority = NULL;
+
+    return r;
+}
+
+static void free_dtags(struct dtags *d)
+{
+    if (d->pattern) { free(d->pattern); }
+    free(d);
+}
+
 char *addrptr;		/* pointer to address string for address lexer */
 char addrerr[500];	/* buffer for address parser error messages */
 
@@ -617,12 +753,6 @@ static int verify_mailbox(char *s __attribute__((unused)))
 {
     /* xxx if not a mailbox, call yyerror */
     return 1;
-}
-
-static int verify_mailboxes(stringlist_t *sl)
-{
-    for (; sl != NULL && verify_mailbox(sl->s); sl = sl->next) ;
-    return (sl == NULL);
 }
 
 static int verify_flag(char *f)

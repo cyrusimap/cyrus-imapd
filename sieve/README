@@ -1,6 +1,6 @@
-$Id: README,v 1.3 2000/05/17 15:47:06 ken3 Exp $
+$Id: README,v 1.4 2002/02/19 18:09:46 ken3 Exp $
 
-CMU Sieve 2.0
+CMU Sieve 2.1
 -------------
 
 This code is typically distributed as part of Cyrus imapd 1.6 and higher.
@@ -36,19 +36,20 @@ Larry Greenfield (leg+sieve@andrew.cmu.edu)
 References:
 
 [SIEVE] Showalter, T., "Sieve: A Mail Filtering Language",
-draft-showalter-sieve-11.txt, May, 2000.
+RFC 3028, January, 2001.
 
 [VACATION] Showalter, T., "Sieve: Vacation Extension",
-draft-showalter-sieve-vacation-03.txt, May, 2000.
+draft-showalter-sieve-vacation-04.txt, August, 2000.
 
 [IMAPFLAGS] Melnikov, A., "Sieve -- IMAP flag extension",
-draft-melnikov-sieve-imapflags-02.txt, June, 1999.
+draft-melnikov-sieve-imapflags-03.txt, July, 2000.
 
-[NOTIFY] Martin, T., "Sieve -- An extension for providing instant
-notifications", draft-ietf-sieve-notify-00.txt, February, 2000.
+[NOTIFY] Martin, T., Segmuller, W.,
+"Sieve -- An extension for providing instant notifications",
+draft-martin-sieve-notify-01.txt, June, 2001.
 
 [REGEX] Murchison, K., "Sieve: Regular Expression Extension",
-draft-murchison-sieve-regex-01.txt, March, 2000.
+draft-murchison-sieve-regex-04.txt, August, 2001.
 
 [SUBADDR] Murchison, K., "Sieve: Subaddress Extension",
-draft-murchison-sieve-subaddress-00.txt, March, 2000.
+draft-murchison-sieve-subaddress-03.txt, August, 2001.

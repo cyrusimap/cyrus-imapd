@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.16 2002/01/07 04:56:55 leg Exp $
+ * $Id: test.c,v 1.17 2002/02/19 18:09:46 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -98,7 +98,7 @@ int parseheader(FILE *f, char **headname, char **contents) {
     /* there are two ways out of this loop, both via gotos:
        either we successfully read a character (got_header)
        or we hit an error (ph_error) */
-    while (c = getc(f)) {	/* examine each character */
+    while ((c = getc(f))) {	/* examine each character */
 	switch (s) {
 	case NAME_START:
 	    if (c == '\r' || c == '\n') {
@@ -318,7 +318,7 @@ int getenvelope(void *v, const char *head, const char ***body)
 
     if (buf[0] == NULL) { buf[0] = malloc(sizeof(char) * 256); buf[1] = NULL; }
     printf("Envelope body of '%s'? ", head);
-    scanf("%s", buf[0]);
+    scanf("%s", (char*) buf[0]);
     *body = buf;
 
     return SIEVE_OK;
@@ -386,8 +386,22 @@ int keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 int notify(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
+    int flag = 0;
 
-    printf("notify msg = '%s' with priority = %s\n",nc->message, nc->priority);
+    printf("notify ");
+    if (nc->method) {
+	char **opts = nc->options;
+
+	printf("%s(", nc->method);
+	while (opts && *opts) {
+	    if (flag) printf(", ");
+	    printf("%s", *opts);
+	    opts++;
+	    flag = 1;
+	}
+	printf("), ");
+    }
+    printf("msg = '%s' with priority = %s\n",nc->message, nc->priority);
 
     return SIEVE_OK;
 }

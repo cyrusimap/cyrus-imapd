@@ -1,6 +1,6 @@
 /* tree.c -- abstract syntax tree handling
  * Larry Greenfield
- * $Id: tree.c,v 1.8 2000/12/18 04:53:43 leg Exp $
+ * $Id: tree.c,v 1.9 2002/02/19 18:09:47 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -202,6 +202,8 @@ void free_tree(commandlist_t *cl)
 	    free_tree(cl->u.i.do_else);
 	    break;
 
+	case FILEINTO:
+	case REDIRECT:
 	case REJCT:
 	    if (cl->u.str) free(cl->u.str);
 	    break;
@@ -212,8 +214,6 @@ void free_tree(commandlist_t *cl)
 	    if (cl->u.v.message) free(cl->u.v.message);
 	    break;
 	    
-	case FILEINTO:
-	case FORWARD:
 	case SETFLAG:
 	case ADDFLAG:
 	case REMOVEFLAG:
@@ -223,6 +223,24 @@ void free_tree(commandlist_t *cl)
 	case KEEP:
 	case STOP:
 	case DISCARD:
+	    break;
+
+	case NOTIFY:
+	    if (cl->u.n.method) free(cl->u.n.method);
+	    if (cl->u.n.id) free(cl->u.n.id);
+	    if (cl->u.n.options) free_sl(cl->u.n.options);
+	    if (cl->u.n.message) free(cl->u.n.message);
+	    break;
+
+	case DENOTIFY:
+	    if (cl->u.d.pattern) {
+#ifdef ENABLE_REGEX
+		if (cl->u.d.comptag == REGEX) {
+		    regfree((regex_t *) cl->u.d.pattern);
+		}
+#endif
+		free(cl->u.d.pattern);
+	    }
 	    break;
 	}
 

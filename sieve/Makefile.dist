@@ -14,9 +14,6 @@ addr.c addr.h: addr.y
 	mv -f y.tab.c addr.c
 	mv -f y.tab.h addr.h
 
-addr-lex.c: addr-lex.l addr.h
-	$(LEX) -t -Paddr addr-lex.l > $@
-
 sieve.c sieve.h: sieve.y
 	$(YACC) $(YFLAGS) sieve.y
 	mv -f y.tab.c sieve.c
