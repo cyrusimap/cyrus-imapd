@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.163 2002/05/20 16:17:07 rjs3 Exp $
+# $Id: Makefile.in,v 1.164 2002/05/26 00:50:52 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -231,10 +231,6 @@ mupdate: mupdate.o mupdate-slave.o mupdate-client.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o mupdate \
 	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mupdate-client.o \
 	 libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
-
-mupdatetest: mupdatetest.o mupdate-client.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o mupdatetest \
-	mupdatetest.o mupdate-client.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 pop3d: pop3d.o tls.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o pop3d pop3d.o tls.o $(SERVICE) \
