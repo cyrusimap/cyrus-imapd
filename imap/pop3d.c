@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.49 1999/08/30 18:00:42 leg Exp $
+ * $Id: pop3d.c,v 1.50 1999/09/13 00:07:29 tmartin Exp $
  */
 
 #ifndef __GNUC__
@@ -753,137 +753,150 @@ cmd_capa()
     prot_flush(popd_out);
 }
 
+
+
+
 void
 cmd_auth(authtype)
 char *authtype;
 {
-    char *initial_response;
-    char *canon_user;
-    int r;
-    struct sasl_server *mech;
-    int (*authproc)();
-    int outputlen;
-    char *output;
-    int inputlen;
-    char *input;
-    void *state;
-    const char *reply = 0;
-    int protlevel;
-    char *user;
-    int maxplain;
-    char *val;
+    int sasl_result;
+    char * clientin;
+    int clientinlen=0;
+    
+    char *serverout;
+    unsigned int serveroutlen;
+    const char *errstr;
+    
+    const char *errorstring = NULL;
 
+    char buf[MAX_MAILBOX_PATH];
+    char *p;
+    FILE *logfile;
+
+    int *ssfp;
+    char *ssfmsg=NULL;
+
+   
+    /* if client didn't specify an auth mechanism we give them the list */
     if (!authtype) {
-	const char *capabilities, *next_capabilities;
+      char *sasllist;
+      int mechnum;
 
-	prot_printf(popd_out, "+OK List of supported mechanisms follows\r\n");
-	next_capabilities = "";
-	while (next_capabilities[0]) {
-	    capabilities = next_capabilities;
-	    next_capabilities = strchr(capabilities+1, ' ');
-	    if (!next_capabilities) {
-		next_capabilities = capabilities + strlen(capabilities);
-	    }
-	    if (!strncmp(capabilities, " AUTH=", 6)) {
-		capabilities += 6;
-		prot_write(popd_out, capabilities,
-			   next_capabilities - capabilities);
-		prot_printf(popd_out, "\r\n");
-	    }
+      prot_printf(popd_out, "+OK List of supported mechanisms follows\r\n");
+      
+      /* SASL special case: print SASL, then a list of supported capabilities
+	 (parsed from the IMAP-style login_capabilities function, then a CRLF */
+      if (sasl_listmech(popd_saslconn,
+			"", /* should be id string */
+			"","\r\n","\r\n",
+			&sasllist,
+			NULL,&mechnum)==SASL_OK)
+	{
+	  if (mechnum>0)
+	  {
+	    prot_printf(popd_out,"%s",sasllist);
+	  }
 	}
+      
 	prot_printf(popd_out, ".\r\n");
+
 	return;
     }
 
-#if 0
-    if ((initial_response = strchr(authtype, ' '))) {
-	*initial_response++ = '\0';
+    /* server did specify a command, so let's try to authenticate */
+
+    sasl_result = sasl_server_start(popd_saslconn, authtype,
+				    NULL, 0,
+				    &serverout, &serveroutlen,
+				    &errstr);    
+
+    /* sasl_server_start will return SASL_OK or SASL_CONTINUE on success */
+
+    while (sasl_result == SASL_CONTINUE)
+    {
+
+      /* print the message to the user */
+      printauthready(serveroutlen, (unsigned char *)serverout);
+      free(serverout);
+
+      /* get string from user */
+      clientinlen = readbase64string(&clientin);
+      if (clientinlen == -1) {
+	prot_printf(popd_out, "-ERR Invalid base64 string\r\n");
+	return;
+      }
+
+      sasl_result = sasl_server_step(popd_saslconn,
+				     clientin,
+				     clientinlen,
+				     &serverout, &serveroutlen,
+				     &errstr);
     }
-    lcase(authtype);
-    
-    r = login_authenticate(authtype, &mech, &authproc, &reply);
-    if (!r) {
-	r = mech->start(mech->rock, "pop", authproc,
-			SASL_PROT_ANY, PROT_BUFSIZE,
-			popd_haveaddr ? (struct sockaddr *)&popd_localaddr : 0,
-			popd_haveaddr ? (struct sockaddr *)&popd_remoteaddr : 0,
-			&outputlen, &output, &state, &reply);
-    }
-    if (r && r != SASL_DONE) {
-	if (reply) {
+
+
+    /* failed authentication */
+    if (sasl_result != SASL_OK)
+    {
+	syslog(LOG_NOTICE, "badlogin: %s %s %i",
+	       popd_clienthost, authtype, sasl_result);
+	
+	if (clientin) {
 	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
-		   popd_clienthost, authtype, reply);
+		   popd_clienthost, authtype, clientin);
+	} else {
+	    syslog(LOG_NOTICE, "badlogin: %s %s",
+		   popd_clienthost, authtype);
 	}
-	prot_printf(popd_out, "-ERR Invalid login\r\n");
+	
+	sleep(3);      
+	
+	/* convert the sasl error code to a string */
+	errorstring = sasl_errstring(sasl_result, NULL, NULL);
+      
+	if (errorstring)
+	    prot_printf(popd_out, "-ERR %s\r\n",errorstring);
+	else
+	    prot_printf(popd_out, "-ERR Error Authenticating\r\n");
+	
 	return;
     }
 
-    if (initial_response) {
-	if (outputlen != 0) {
-	    prot_printf(popd_out,
-		   "-ERR Cannot give initial response to this mechanism\r\n");
-	    mech->free_state(state);
-	    return;
-	}
+    /* successful authentication */
 
-	inputlen = parsebase64string(&input, initial_response);
-	if (inputlen == -1) {
-	    prot_printf(popd_out, "-ERR Invalid base64 string\r\n");
-	    mech->free_state(state);
-	    return;
-	}
-	r = mech->auth(state, inputlen, input, &outputlen, &output, &reply);
+    /* get the userid from SASL --- already canonicalized from
+     * mysasl_authproc()
+     */
+
+    sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME,
+			     (void **) &popd_userid);
+    if (sasl_result!=SASL_OK)
+    {
+      prot_printf(popd_out, "-ERR weird SASL error %d getting SASL_USERNAME\r\n", 
+		  sasl_result);
+      return;
     }
 
-    while (r == 0) {
-	printauthready(outputlen, output);
-	inputlen = readbase64string(&input);
-	if (inputlen == -1) {
-	    prot_printf(popd_out, "-ERR Invalid base64 string\r\n");
-	    mech->free_state(state);
-	    return;
-	}
-	r = mech->auth(state, inputlen, input, &outputlen, &output, &reply);
-    }
-    
-    if (r != SASL_DONE) {
-	mech->free_state(state);
-	if (reply) {
-	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
-		   popd_clienthost, authtype, reply);
-	}
-	sleep(3);
-	prot_printf(popd_out, "-ERR Invalid login\r\n");
-	return;
+    syslog(LOG_NOTICE, "login: %s %s %s sasl code=%d", popd_clienthost, popd_userid,
+	   authtype, sasl_result);
+
+    /* xxx here */
+    if (openinbox()==0)
+    {
+
+      proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);    
+
+      syslog(LOG_NOTICE, "login: %s %s %s %s", popd_clienthost, popd_userid,
+	     authtype, "User logged in");
+
+
+      prot_setsasl(popd_in,  popd_saslconn);
+      prot_setsasl(popd_out, popd_saslconn);
+
     }
 
-    mech->query_state(state, &user, &protlevel, &encodefunc, &decodefunc,
-		      &maxplain);
-
-    canon_user = auth_canonifyid(user);
-    if (!canon_user || strchr(canon_user, '.') ||
-	strlen(canon_user) + 6 > MAX_MAILBOX_PATH) {
-	syslog(LOG_NOTICE, "badlogin: %s %s %s bad userid",
-	       popd_clienthost, authtype, beautify_string(user));
-	mech->free_state(state);
-	prot_printf(popd_out, "-ERR Invalid user\r\n");
-	return;
-    }
-
-    popd_userid = xstrdup(canon_user);
-
-    syslog(LOG_NOTICE, "login: %s %s %s %s", popd_clienthost, canon_user,
-	   authtype, reply ? reply : "");
-
-    if (openinbox() == 0 && (encodefunc || decodefunc)) {
-	prot_setfunc(popd_in, decodefunc, state, 0);
-	prot_setfunc(popd_out, encodefunc, state, maxplain);
-    }
-    else {
-	mech->free_state(state);
-	}
-#endif
 }
+    
 
 /*
  * Complete the login process by opening and locking the user's inbox
