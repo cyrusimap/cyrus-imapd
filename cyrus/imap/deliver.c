@@ -716,7 +716,7 @@ char *mailboxname;
 	if (r) {
 	    strcpy(namebuf, "user.");
 	    strcat(namebuf, user);
-	    submailbox = "";
+	    submailbox = 0;
 	    
 	    if (id && checkdelivered(id, namebuf)) {
 		logdupelem(id, namebuf);
