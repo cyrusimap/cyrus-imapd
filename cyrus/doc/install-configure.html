@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.20 2002/05/06 17:30:16 rjs3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.21 2002/06/05 02:27:35 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -246,24 +246,36 @@ shut down the mail system by sending it a signal with <tt>kill</tt>.
 <a name="mta"><h3>Configuring the Mail Transfer Agent</h3></a>
 
 <p>In order to deliver mail to the Cyrus system, you'll have to
-configure your MTA (usually <a
-href="http://www.sendmail.org/">Sendmail</a>) appropriately.
+configure your MTA (Sendmail, Postfix, Exim, etc) appropriately.
 
-<ol>
-<li> Generate a sendmail configuration file which delivers local mail
-to the IMAP server.  See the files <TT>cf/README</TT> in the Sendmail
-distribution for information on how to do this.  A suggested
-"config.mc" file to create a Sendmail configuration file can be found
-<a href="cyrusv2.mc">here</a>. This requires Sendmail 8.10 or newer.
+<h4>Configuring <a href="http://www.sendmail.org/">Sendmail</a></h4>
 
-<p>The interface between the MTA and Cyrus has changed in Cyrus
-version 2, so take care when using older Sendmails.
+Generate a sendmail configuration file which delivers local mail
+to the IMAP server.  See the file <TT>cf/README</TT> in the Sendmail
+distribution for information on how to do this.
 
- <P> <LI> Edit <TT>/etc/group</TT> and add user "<TT>daemon</TT>" to
-the "<TT>mail</TT>" group.  This will permit sendmail to run the
-"<TT>deliver</TT>" program to deliver mail to the IMAP server.
+<ul>
+<li> For Sendmail 8.12.4 and higher, use the <tt>cyrusv2</tt> mailer
+definition in the Sendmail distribution.</li>
 
-</ol>
+<p><li> For Sendmail 8.10 - 8.12.3, use the <a
+href="cyrusv2.mc">cyrusv2.mc</a> file as a template to create a
+Sendmail configuration file.</li>
+
+<p><li> For Sendmail 8.9.x and earlier, use the <tt>cyrus</tt> mailer
+definition in the Sendmail distribution.  Edit <TT>/etc/group</TT> and
+add user "<TT>daemon</TT>" to the "<TT>mail</TT>" group.  This will
+permit sendmail to run the "<TT>deliver</TT>" program to deliver mail
+to the IMAP server.</li>
+</ul>
+
+<h4>Configuring <a href="http://www.postfix.org/">Postfix</a></h4>
+
+[expected contribution from Amos Gouaux]
+
+<h4>Configuring <a href="http://www.exim.org/">Exim</a></h4>
+
+[contributions welcome]
 
 <h3>Exporting Netnews via IMAP</h3>
 
@@ -446,5 +458,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2002/05/06 17:30:16 $
+last modified: $Date: 2002/06/05 02:27:35 $
 </BODY></HTML>
