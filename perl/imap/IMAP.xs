@@ -125,10 +125,10 @@ void imclient_xs_cb(struct imclient *client, struct xsccb *rock,
   XPUSHs(sv_2mortal(newSVpv("-text", 0)));
   XPUSHs(sv_2mortal(newSVpv(reply->text, 0)));
   if (reply->msgno != -1) {
+    char tmp[100];
     XPUSHs(sv_2mortal(newSVpv("-msgno", 0)));
-    printf("msg no = %d\n",reply->msgno);
-    XPUSHi(reply->msgno);
-    printf("msg no = %d\n",reply->msgno);
+    sprintf(tmp,"%d",reply->msgno);
+    XPUSHs(sv_2mortal(newSVpv(tmp, 0)));
   }
   PUTBACK;
   /* invoke Perl */
@@ -350,13 +350,10 @@ PPCODE:
 	  if ((((val = hv_fetch(cb, "-flags", 6, 0)) ||
 		 (val = hv_fetch(cb, "Flags", 5, 0)))))
 	  {	
-	    printf("here!!! %d\n",SvIV(*val));
 	    flags = SvIV(*val);
           } else {
             flags = 0;
           }
-
-          printf("<-> flags = %d\n",flags);
 
 	  if (((val = hv_fetch(cb, "-callback", 9, 0)) ||
 	       (val = hv_fetch(cb, "Callback", 8, 0))) &&
