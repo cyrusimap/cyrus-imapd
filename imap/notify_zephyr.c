@@ -1,5 +1,5 @@
 /* notify_zephyr.c -- Module to notify of new mail via zephyr
- $Id: notify_zephyr.c,v 1.23 2000/05/23 20:52:26 robeson Exp $ 
+ $Id: notify_zephyr.c,v 1.24 2001/01/01 21:21:17 leg Exp $ 
 
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -128,7 +128,7 @@ void notify(const char *class,
 
     memset((char *)&notice, 0, sizeof(notice));
     notice.z_kind = UNSAFE;
-    notice.z_class = MAIL_CLASS;
+    notice.z_class = class ? class : MAIL_CLASS;
     notice.z_class_inst = (char *) instance;
 
     notice.z_opcode = "";
