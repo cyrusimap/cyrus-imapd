@@ -48,22 +48,39 @@ master \- master Cyrus process
 .I listen queue
 ]
 .SH DESCRIPTION
-.I master
-is the process that controls all of the Cyrus processes. This process is responsible 
-for creating all imap and lmtpd child processes. This process also initializes the
-Berkeley DB code. 
+.I Master
+is the process that controls all of the Cyrus processes. This process
+is responsible for creating all imapd, pop3d, lmtpd and sieved child
+processes. This process also initializes the Berkeley DB code and
+performs scheduled cleanup/maintenance.
 .PP
 If this process dies, then no new sessions will be started.
 .SH OPTIONS
 .TP
 .BI \-l " listen queue backlog"
-Increase the listen queue backlog. By default, the listen queue is set to 10. 
-On systems with high load, it may be desirable to increase this value. refer to 
+Increase the listen queue backlog. By default, the listen queue is set
+to 10.   On systems with high load, it may be desirable to increase
+this value. refer to
 \fBlisten(2)\fR for details.
+.SH CONFIGURATION
+Upon execution,
+.I master
+reads its configuration information out of the
+.IR cyrus.conf (5)
+file.
+.PP
+.I Master
+rereads its configuration file when it receives a hangup signal,
+SIGHUP.  Services and events may be added, deleted or modified when the
+configuration file is reread.
 .SH NOTES
 The environment variable \fBCYRUS_VERBOSE\fR can be set to log additional
 debugging information. Setting the value to 1 results in base level logging. 
 Setting it higher results in more log messages being generated.
 .SH FILES
 .TP
-.B /etc/imapd.conf
+.B /etc/cyrus.conf, /etc/imapd.conf
+.SH SEE ALSO
+.PP
+\fBcyrus.conf(5)\fR, \fBimapd.conf(5)\fR, \fBimapd(8)\fR,
+\fBpop3d(8)\fR, \fBlmtpd(8)\fR, \fBtimsieved(8)\fR, \fBidled(8)\fR

@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.TH IMAPD 8
+.TH IMAPD 8 "Project Cyrus" CMU
 .\" 
 .\" Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
 .\"
@@ -44,6 +44,9 @@ imapd \- IMAP server process
 .SH SYNOPSIS
 .B imapd
 [
+.B \-s
+]
+[
 .B \-p
 .I ssf
 ]
@@ -51,8 +54,8 @@ imapd \- IMAP server process
 .I Imapd
 is an IMAP4rev1 server.
 It accepts commands on its standard input and responds on its standard output.
-It is normally invoked by
-.IR inetd (8)
+It MUST be invoked by
+.IR master (8)
 with those descriptors attached to a remote client connection.
 .PP
 .I Imapd
@@ -97,6 +100,11 @@ directory with a filename of the
 process-id.
 .SH OPTIONS
 .TP
+.BI \-s
+Serve IMAP over SSL (imaps).  All data to and from
+.I imapd
+is encrypted using the Secure Sockets Layer.
+.TP
 .BI \-p " ssf"
 Tell
 .I imapd
@@ -106,3 +114,6 @@ some form of privacy protection.
 .SH FILES
 .TP
 .B /etc/imapd.conf
+.SH SEE ALSO
+.PP
+\fBimapd.conf(5)\fR, \fBmaster(8)\fR

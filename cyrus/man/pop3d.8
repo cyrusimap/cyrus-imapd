@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.TH POP3D 8
+.TH POP3D 8 "Project Cyrus" CMU
 .\" 
 .\" Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
 .\"
@@ -44,14 +44,17 @@ pop3d \- POP3 server process
 .SH SYNOPSIS
 .B pop3d
 [
+.B \-s
+]
+[
 .B \-k
 ]
 .SH DESCRIPTION
 .I Pop3d
 is a POP3 server.
 It accepts commands on its standard input and responds on its standard output.
-It is normally invoked by
-.IR inetd (8)
+It MUST invoked by
+.IR master (8)
 with those descriptors attached to a remote client connection.
 .PP
 .I Pop3d
@@ -74,8 +77,16 @@ directory with a filename of the
 process-id.
 .SH OPTIONS
 .TP
+.BI \-s
+Serve POP3 over SSL (pop3s).  All data to and from
+.I pop3d
+is encrypted using the Secure Sockets Layer.
+.TP
 .B \-k
 Serve MIT's KPOP (Kerberized POP) protocol instead.
 .SH FILES
 .TP
 .B /etc/imapd.conf
+.SH SEE ALSO
+.PP
+\fBimapd.conf(5)\fR, \fBmaster(8)\fR

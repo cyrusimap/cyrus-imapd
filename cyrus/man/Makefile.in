@@ -63,11 +63,12 @@ cyrus_prefix = @cyrus_prefix@
 
 MAN1 = $(srcdir)/cyradm.1 $(srcdir)/imtest.1 $(srcdir)/installsieve.1
 MAN3 = $(srcdir)/imclient.3
-MAN5 = $(srcdir)/imapd.conf.5 $(srcdir)/krb.equiv.5
+MAN5 = $(srcdir)/imapd.conf.5 $(srcdir)/krb.equiv.5 $(srcdir)/cyrus.conf.5
 MAN8 = $(srcdir)/arbitron.8 $(srcdir)/collectnews.8 $(srcdir)/deliver.8 \
 	$(srcdir)/fud.8 $(srcdir)/imapd.8 $(srcdir)/pop3d.8 $(srcdir)/quota.8 \
 	$(srcdir)/reconstruct.8 $(srcdir)/rmnews.8 $(srcdir)/syncnews.8 \
-	$(srcdir)/mbpath.8 $(srcdir)/timsieved.8
+	$(srcdir)/mbpath.8 $(srcdir)/timsieved.8 $(srcdir)/master.8 \
+	$(srcdir)/lmtpd.8 $(srcdir)/idled.8
 
 
 all:

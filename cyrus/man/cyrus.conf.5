@@ -1,0 +1,141 @@
+.\" -*- nroff -*-
+.TH CYRUS.CONF 5 "Project Cyrus" CMU
+.\" 
+.\" Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\"
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer. 
+.\"
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in
+.\"    the documentation and/or other materials provided with the
+.\"    distribution.
+.\"
+.\" 3. The name "Carnegie Mellon University" must not be used to
+.\"    endorse or promote products derived from this software without
+.\"    prior written permission. For permission or any other legal
+.\"    details, please contact  
+.\"      Office of Technology Transfer
+.\"      Carnegie Mellon University
+.\"      5000 Forbes Avenue
+.\"      Pittsburgh, PA  15213-3890
+.\"      (412) 268-4387, fax: (412) 268-7395
+.\"      tech-transfer@andrew.cmu.edu
+.\"
+.\" 4. Redistributions of any form whatsoever must retain the following
+.\"    acknowledgment:
+.\"    "This product includes software developed by Computing Services
+.\"     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+.\"
+.\" CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+.\" THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+.\" AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+.\" FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+.\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+.\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\" 
+.SH NAME
+cyrus.conf \- Cyrus configuration file
+.SH DESCRIPTION
+\fB/etc/cyrus.conf\fR 
+is the configuration file for the Cyrus \fBmaster\fR process.  It
+defines the startup procedures, services and events to be spawned by
+\fBmaster\fR.
+.PP
+The \fB/etc/cyrus.conf\fR file consists of a series of entries divided
+into sections of the form
+.P
+.RS
+\fIsection\fR {
+.RS
+\fIentry arguments
+.br
+	.
+.br
+	.
+.br
+	.
+\fR
+.RE
+}
+.RE
+.PP
+where \fIsection\fR is the name of the section, \fIentry\fR is the name
+of the entry and \fIarguments\fR is the whitespace-separated list of
+arguments for the entry.
+.PP
+Blank lines and lines beginning with ``#'' are ignored.
+.SH SECTION DESCRIPTIONS
+The paragraphs below detail the three sections (\fBSTART\fR,
+\fBSERVICES\fR, \fBEVENTS\fR) that can be placed in the
+\fB/etc/cyrus.conf\fR file.  The arguments that are available for each
+entry within the section are described, and each argument's default
+value is shown.
+.PP
+Arguments can appear in any order.
+Some arguments have no default value, these are listed with
+``<no default>''.  For string arguments, the value MUST be enclosed in
+double quotes.
+.SS START
+This section lists the processes to run before any
+\fBSERVICES\fR are spawned.  This section is typically used to
+initialize databases and start long running daemons.
+.IP "\fBcmd=\fR<no default>" 5
+The command (with options) to spawn as a child process.  This string argument
+is required.
+.SS SERVICES
+This section is the heart of the \fB/etc/cyrus.conf\fR file.  It lists
+the processes that should be spawned to handle client connections made
+on certain Internet/UNIX sockets.
+.IP "\fBcmd=\fR<no default>" 5
+The command (with options) to spawn as a child process.  This string
+argument is required.
+.IP "\fBlisten=\fR<no default>" 5
+The service name, port number or UNIX socket to listen on.  This
+string field is required.
+.IP "\fBproto=\fRtcp" 5
+The protocol used for this service (\fItcp\fR, \fIudp\fR).  This
+string argument is optional.
+.IP "\fBprefork=\fR0" 5
+The number of instances of this service to always have running (for
+faster initial response time).  This integer values is optional.
+.SS EVENTS
+This section lists processes that should be run at specific intervals,
+similar to cron jobs.  This section is typically used to perform
+scheduled cleanup/maintenance.
+.IP "\fBcmd=\fR<no default>" 5
+The command (with options) to spawn as a child process.  This string
+argument is required.
+.IP "\fBperiod=\fR0" 5
+The interval (in minutes) at which to run the command.  This integer value is
+optional, but SHOULD be a positive integer > 10.
+.SH EXAMPLE
+# example cyrus.conf
+
+START {
+  mboxlist	cmd="ctl_mboxlist -r"
+  deliver		cmd="ctl_deliver -r"
+.br
+}
+
+SERVICES {
+  imap		cmd="imapd" listen="imap" prefork=0
+  pop3		cmd="pop3d" listen="pop3" prefork=0
+  lmtpunix	cmd="lmtpd" listen="/var/imap/socket/lmtp"
+.br
+}
+
+EVENTS {
+  checkpoint	cmd="ctl_mboxlist -c" period=30
+  delprune	cmd="ctl_deliver -E 3" period=1440
+.br
+}
+.SH SEE ALSO
+.PP
+\fBmaster(8)\fR, \fBimapd(8)\fR, \fBpop3d(8)\fR, \fBlmtpd(8)\fR,
+\fBtimsieved(8)\fR, \fBidled(8)\fR
