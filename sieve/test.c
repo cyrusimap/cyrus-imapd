@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.14 2000/12/18 04:53:43 leg Exp $
+ * $Id: test.c,v 1.15 2000/12/18 15:17:57 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -439,8 +439,8 @@ sieve_vacation_t vacation = {
     &send_response		/* send_response() */
 };
 
-char *markflags[] = { "\\flagged", "myflag" };
-sieve_imapflags_t mark = { markflags, 2 };
+char *markflags[] = { "\\flagged" };
+sieve_imapflags_t mark = { markflags, 1 };
 
 int main(int argc, char *argv[])
 {
