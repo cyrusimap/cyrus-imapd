@@ -1,5 +1,5 @@
 /* append.h -- Description of messages to be copied 
- $Id: append.h,v 1.21 2002/03/13 21:39:17 ken3 Exp $ 
+ $Id: append.h,v 1.21.4.1 2002/11/26 20:09:19 ken3 Exp $ 
 
  * Copyright (c) 1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -45,6 +45,7 @@
 #ifndef INCLUDED_APPEND_H
 #define INCLUDED_APPEND_H
 
+#include "mailbox.h"
 #include "prot.h"
 
 struct copymsg {
