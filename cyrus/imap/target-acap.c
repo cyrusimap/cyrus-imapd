@@ -2,7 +2,7 @@
  *                  communicates with ACAP server to learn state of world
  * Larry Greenfield
  * 
- * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.29 2002/08/13 16:46:33 rjs3 Exp $
+ * $Id: target-acap.c,v 1.30 2003/02/13 20:15:31 rjs3 Exp $
  */
 
 #include <config.h>

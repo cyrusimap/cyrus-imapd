@@ -2,7 +2,7 @@
  * Ken Murchison
  */
 /*
- * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_null.c,v 1.5 2002/07/03 14:57:44 rjs3 Exp $
+ * $Id: notify_null.c,v 1.6 2003/02/13 20:15:48 rjs3 Exp $
  */
 
 #include <config.h>

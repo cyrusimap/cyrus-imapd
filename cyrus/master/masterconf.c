@@ -1,7 +1,7 @@
 /* masterconfig.c -- Configuration routines for master process
- $Id: masterconf.c,v 1.8 2002/11/06 20:43:31 rjs3 Exp $
+ $Id: masterconf.c,v 1.9 2003/02/13 20:15:45 rjs3 Exp $
  
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

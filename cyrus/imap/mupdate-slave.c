@@ -1,7 +1,7 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.19 2002/10/03 19:05:32 ken3 Exp $
- * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
+ * $Id: mupdate-slave.c,v 1.20 2003/02/13 20:15:28 rjs3 Exp $
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

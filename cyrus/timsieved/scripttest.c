@@ -1,9 +1,9 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.18 2000/12/18 04:53:43 leg Exp $
+ * $Id: scripttest.c,v 1.19 2003/02/13 20:15:59 rjs3 Exp $
  */
 /*
- * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,11 +45,11 @@
  *
  */
 
-/* $Id: readconfig.c,v 1.5 2002/08/26 19:20:05 leg Exp $ */
+/* $Id: readconfig.c,v 1.6 2003/02/13 20:15:46 rjs3 Exp $ */
 
 /*     Copyright 1991 Rich Salz.
  *   All rights reserved.
- *   $Revision: 1.5 $
+ *   $Revision: 1.6 $
  *
  *    Redistribution and use in any form are permitted provided that the
  *    following restrictions are are met:

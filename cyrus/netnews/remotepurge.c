@@ -2,7 +2,7 @@
  * Remotely purge old/too big articles
  */
 /*
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,7 +42,7 @@
  *
  */
 
-/* $Id: remotepurge.c,v 1.17 2002/12/12 17:28:32 rjs3 Exp $ */
+/* $Id: remotepurge.c,v 1.18 2003/02/13 20:15:47 rjs3 Exp $ */
 
 #include <config.h>
 

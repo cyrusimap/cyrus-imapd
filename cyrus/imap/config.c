@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.63 2003/02/05 21:03:32 ken3 Exp $ */
+/* $Id: config.c,v 1.64 2003/02/13 20:15:23 rjs3 Exp $ */
 
 #include <config.h>
 

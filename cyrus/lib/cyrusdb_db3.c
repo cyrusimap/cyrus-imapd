@@ -1,6 +1,6 @@
 /*  cyrusdb_db3: berkeley db backend
  *
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_db3.c,v 1.47 2002/11/04 17:32:07 rjs3 Exp $ */
+/* $Id: cyrusdb_db3.c,v 1.48 2003/02/13 20:15:39 rjs3 Exp $ */
 
 #include <config.h>
 

@@ -1,7 +1,7 @@
 /* mboxlist.h -- Mailbox list manipulation routines
  * 
  * 
- * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.33 2002/05/29 16:49:16 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.34 2003/02/13 20:15:28 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H

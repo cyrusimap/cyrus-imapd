@@ -1,6 +1,6 @@
 /* dbcvt.c -- Convert between two database formats
  * 
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.7 2002/11/06 20:43:20 rjs3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.8 2003/02/13 20:15:24 rjs3 Exp $
  */
 
 #include <config.h>

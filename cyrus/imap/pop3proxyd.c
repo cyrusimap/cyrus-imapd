@@ -1,6 +1,6 @@
 /* pop3proxyd.c -- POP3 server protocol parsing (proxy)
  *
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.54 2003/02/05 19:09:44 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.55 2003/02/13 20:15:29 rjs3 Exp $
  */
 #include <config.h>
 

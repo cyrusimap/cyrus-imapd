@@ -1,7 +1,7 @@
 /* deliver.c -- deliver shell - just calls lmtpd
  * Tim Martin
  *
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.165 2002/08/02 16:54:48 ken3 Exp $ */
+/* $Id: deliver.c,v 1.166 2003/02/13 20:15:24 rjs3 Exp $ */
 
 #include <config.h>
 

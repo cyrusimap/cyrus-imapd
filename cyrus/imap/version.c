@@ -1,5 +1,5 @@
 /* version.c: versioning functions
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.9 2002/07/09 18:50:24 ken3 Exp $
+ * $Id: version.c,v 1.10 2003/02/13 20:15:32 rjs3 Exp $
  */
 
 #include <config.h>

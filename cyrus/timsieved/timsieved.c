@@ -1,10 +1,10 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.43 2003/02/05 19:09:45 ken3 Exp $
+ * $Id: timsieved.c,v 1.44 2003/02/13 20:15:59 rjs3 Exp $
  */
 /*
- * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

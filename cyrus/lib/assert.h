@@ -1,7 +1,7 @@
 /* assert.h -- assert() macro that can exit cleanly
- $Id: assert.h,v 1.9 2001/05/21 18:28:44 leg Exp $
+ $Id: assert.h,v 1.10 2003/02/13 20:15:38 rjs3 Exp $
 
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

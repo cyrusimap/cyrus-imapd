@@ -1,7 +1,7 @@
 /* parseaddr.c -- RFC 822 address parser
- * $Id: parseaddr.c,v 1.16 2003/02/13 03:16:14 leg Exp $
+ * $Id: parseaddr.c,v 1.17 2003/02/13 20:15:41 rjs3 Exp $
  *
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

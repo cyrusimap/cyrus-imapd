@@ -1,7 +1,7 @@
 /* 
  * cyrmain.c -- Main program for Cyradm
  
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -61,7 +61,7 @@
  * PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
  */
 
-/* $Id: cyrmain.c,v 1.12 2002/11/06 20:43:17 rjs3 Exp $ */
+/* $Id: cyrmain.c,v 1.13 2003/02/13 20:15:20 rjs3 Exp $ */
 
 #include <stdio.h>
 #include <tcl.h>

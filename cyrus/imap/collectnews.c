@@ -1,6 +1,6 @@
 /* collectnews.c -- program to add news articles to relevant header files
- $Id: collectnews.c,v 1.27 2002/11/06 20:43:20 rjs3 Exp $
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ $Id: collectnews.c,v 1.28 2003/02/13 20:15:23 rjs3 Exp $
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

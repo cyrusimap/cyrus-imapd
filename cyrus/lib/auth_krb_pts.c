@@ -1,6 +1,6 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- * $Id: auth_krb_pts.c,v 1.47 2002/12/12 16:28:13 rjs3 Exp $
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * $Id: auth_krb_pts.c,v 1.48 2003/02/13 20:15:39 rjs3 Exp $
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

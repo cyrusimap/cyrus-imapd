@@ -6,8 +6,8 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.16 2002/11/14 15:47:52 ken3 Exp $
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * $Id: ipurge.c,v 1.17 2003/02/13 20:15:26 rjs3 Exp $
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
