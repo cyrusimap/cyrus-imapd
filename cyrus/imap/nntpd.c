@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.92 2003/06/26 13:38:03 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.93 2003/07/06 03:36:24 ken3 Exp $
  */
 
 /*
@@ -2122,6 +2122,35 @@ int active_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
     return 0;
 }
 
+/*
+ * annotatemore_findall() callback function to LIST a NEWSGROUPS
+ */
+int newsgroups_cb(const char *mailbox, const char *entry, const char *userid,
+		  struct annotation_data *attrib, void *rock)
+{
+    struct wildmat *wild = (struct wildmat *) rock;
+
+    /* skip personal mailboxes */
+    if ((!strncasecmp(mailbox, "INBOX", 5) &&
+	 (!mailbox[5] || mailbox[5] == '.')) ||
+	!strncmp(mailbox, "user.", 5))
+	return 0;
+
+    /* see if the mailbox matches one of our wildmats */
+    while (wild->pat && wildmat(mailbox, wild->pat) != 1) wild++;
+
+    /* if we don't have a match, or its a negative match, skip it */
+    if (!wild->pat || wild->not) return 0;
+
+    /* we only care about shared /comment */
+    if (userid[0]) return 0;
+
+    prot_printf(nntp_out, "%s\t%s\r\n", mailbox+strlen(newsprefix),
+		attrib->value);
+
+    return 0;
+}
+
 static void cmd_list(char *arg1, char *arg2)
 {
     if (!arg1)
@@ -2210,6 +2239,27 @@ static void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, "480 Authentication required\r\n");
 	return;
     }
+    else if (!strcmp(arg1, "newsgroups")) {
+	char pattern[MAX_MAILBOX_NAME+1];
+	struct wildmat *wild;
+
+	if (!arg2) arg2 = "*";
+
+	/* split the list of wildmats */
+	wild = split_wildmats(arg2);
+
+	prot_printf(nntp_out, "215 list of newsgroups follows:\r\n");
+
+	strcpy(pattern, newsprefix);
+	strcat(pattern, "*");
+	annotatemore_findall(pattern, "/comment",
+			     newsgroups_cb, wild, NULL);
+
+	prot_printf(nntp_out, ".\r\n");
+
+	/* free the wildmats */
+	free_wildmats(wild);
+    }
     else if (!strcmp(arg1, "overview.fmt")) {
 	if (arg2) {
 	    prot_printf(nntp_out, "501 Unexpected extra argument\r\n");
@@ -2234,7 +2284,7 @@ static void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, ".\r\n");
     }
     else if (!strcmp(arg1, "active.times") || !strcmp(arg1, "distributions") ||
-	     !strcmp(arg1, "distrib.pats") || !strcmp(arg1, "newsgroups")) {
+	     !strcmp(arg1, "distrib.pats")) {
 	prot_printf(nntp_out, "503 Unsupported LIST command\r\n");
     }
     else {
