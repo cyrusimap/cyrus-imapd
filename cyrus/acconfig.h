@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.15 2003/06/07 16:43:00 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.16 2003/06/07 18:31:13 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -52,6 +52,9 @@
 
 /* do we have strerror()? */
 #undef HAS_STRERROR
+
+/* do we have a stdarg.h? */
+#undef HAS_STDARG_H
 
 /* do we have kerberos? */
 #undef HAVE_KRB

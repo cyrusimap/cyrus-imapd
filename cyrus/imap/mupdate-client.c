@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.32.4.12 2003/02/27 18:39:43 ken3 Exp $
+ * $Id: mupdate-client.c,v 1.32.4.13 2003/06/07 18:31:15 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,7 +49,7 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 #include <syslog.h>
-#ifdef __STDC__
+#ifdef HAVE_STDARG_H
 #include <stdarg.h>
 #else
 #include <varargs.h>

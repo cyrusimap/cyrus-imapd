@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.17 2003/03/31 21:48:25 rjs3 Exp $
+ * $Id: prot.c,v 1.72.4.18 2003/06/07 18:31:16 ken3 Exp $
  */
 
 #include <config.h>
@@ -50,7 +50,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <signal.h>
-#ifdef __STDC__
+#ifdef HAVE_STDARG_H
 #include <stdarg.h>
 #else
 #include <varargs.h>
