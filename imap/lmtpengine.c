@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.11 2000/07/11 00:45:02 leg Exp $
+ * $Id: lmtpengine.c,v 1.12 2000/07/21 18:59:13 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1749,7 +1749,7 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
     /* mail from */
     prot_printf(conn->pout, "MAIL FROM:<%s>", txn->from ? txn->from : "<>");
     if (conn->capability & CAPA_AUTH) {
-	prot_printf(conn->pout, "AUTH=%s", txn->auth ? txn->auth : "<>");
+	prot_printf(conn->pout, " AUTH=%s", txn->auth ? txn->auth : "<>");
     }
     prot_printf(conn->pout, "\r\n");
     if (!prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
