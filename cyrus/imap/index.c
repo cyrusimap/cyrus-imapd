@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.17 2002/11/07 15:11:16 ken3 Exp $
+ * $Id: index.c,v 1.180.4.18 2002/11/17 03:52:35 ken3 Exp $
  */
 #include <config.h>
 
@@ -1683,7 +1683,10 @@ unsigned octet_count;
 
     while (*p != ']' && *p != 'M') {
 	skip = 0;
-	while (isdigit((int) *p)) skip = skip * 10 + *p++ - '0';
+	while (isdigit((int) *p)) {
+            skip = skip * 10 + *p++ - '0';
+            /* xxx overflow */
+        }
 	if (*p == '.') p++;
 
 	/* section number too large */
@@ -1778,7 +1781,10 @@ const char *cacheitem;
 
     while (*p != 'H') {
 	skip = 0;
-	while (isdigit((int) *p)) skip = skip * 10 + *p++ - '0';
+	while (isdigit((int) *p)) {
+            skip = skip * 10 + *p++ - '0';
+            /* xxx overflow */
+        }
 	if (*p == '.') p++;
 
 	/* section number too large */
@@ -3387,14 +3393,18 @@ static char *_index_extract_subject(char *s, int *is_refwd)
 			x = NULL;
 			break;
 		    }
-		    else if (*x == ']')			/* end of blob, done */
+		    else if (*x == ']') {		/* end of blob, done */
 			break;
 		    			/* if we have a digit, and we're still
 					   counting, keep building the count */
-		    else if (isdigit((int) *x) && count != -1)
+		    } else if (isdigit((int) *x) && count != -1) {
 			count = count * 10 + *x - '0';
-		    else				/* no digit, */
+                        if (count < 0) {                /* overflow */
+                            count = -1; /* abort counting */
+                        }
+		    } else {				/* no digit, */
 			count = -1;			/*  abort counting */
+                    }
 		    x++;
 		}
 
