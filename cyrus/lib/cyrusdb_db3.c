@@ -1,3 +1,5 @@
+/* XXX why is tid getting to be 0? put some asserts in place? */
+
 /*  cyrusdb_db3: berkeley db backend
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
@@ -75,6 +77,7 @@ static int dbinit = 0;
 static DB_ENV *dbenv;
 
 /* other routines call this one when they fail */
+static int commit_txn(struct db *db, struct txn *tid);
 static int abort_txn(struct db *db, struct txn *tid);
 
 static void db_panic(DB_ENV *dbenv, int errno)
@@ -262,22 +265,24 @@ static int close(struct db *db)
     return r;
 }
 
-static int gettid(struct txn **mytid, DB_TXN **tid)
+static int gettid(struct txn **mytid, DB_TXN **tid, char *where)
 {
     int r;
 
     if (mytid) {
-	if (*mytid) {
+	if (*mytid && (txn_id((DB_TXN *)*mytid) != 0)) {
 	    *tid = (DB_TXN *) *mytid;
+	    if (CONFIG_DB_VERBOSE)
+		syslog(LOG_DEBUG, "%s: reusing txn %lu", where, txn_id(*tid));
 	} else {
 	    r = txn_begin(dbenv, NULL, tid, 0);
 	    if (r != 0) {
-		syslog(LOG_ERR, "DBERROR: error beginning txn: %s", 
+		syslog(LOG_ERR, "DBERROR: error beginning txn (%s): %s", where,
 		       db_strerror(r));
 		return CYRUSDB_IOERROR;
 	    }
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "starting txn %lu", txn_id(*tid));
+		syslog(LOG_DEBUG, "%s: starting txn %lu", where, txn_id(*tid));
 	}
 	*mytid = (struct txn *) *tid;
     }
@@ -297,7 +302,7 @@ static int myfetch(struct db *mydb,
 	
     assert(dbinit && db);
 
-    r = gettid(mytid, &tid);
+    r = gettid(mytid, &tid, "myfetch");
     if (r) return r;
 
     memset(&k, 0, sizeof(k));
@@ -318,7 +323,8 @@ static int myfetch(struct db *mydb,
 	r = 0;
 	break;
     case DB_LOCK_DEADLOCK:
-	if (mytid) abort_txn(mydb, *mytid);
+	if (mytid)
+	    abort_txn(mydb, *mytid);
 	r = CYRUSDB_AGAIN;
 	break;
     default:
@@ -391,7 +397,7 @@ static int foreach(struct db *mydb,
     /* k.flags |= DB_DBT_REALLOC;
        d.flags |= DB_DBT_REALLOC;*/
 
-    r = gettid(mytid, &tid);
+    r = gettid(mytid, &tid, "foreach");
     if (r) return r;
 
     if (0) {
@@ -521,7 +527,7 @@ static int mystore(struct db *mydb,
     assert(dbinit && db);
     assert(key && keylen);
 
-    r = gettid(mytid, &tid);
+    r = gettid(mytid, &tid, "mystore");
     if (r) return r;
 
     memset(&k, 0, sizeof(k));
@@ -537,12 +543,12 @@ static int mystore(struct db *mydb,
     restart:
 	r = txn_begin(dbenv, NULL, &tid, 0);
 	if (r != 0) {
-	    syslog(LOG_ERR, "DBERROR: error beginning txn: %s", 
+	    syslog(LOG_ERR, "DBERROR: mystore: error beginning txn: %s", 
 		   db_strerror(r));
 	    return CYRUSDB_IOERROR;
 	}
 	if (CONFIG_DB_VERBOSE)
-	    syslog(LOG_DEBUG, "starting txn %lu", txn_id(tid));
+	    syslog(LOG_DEBUG, "mystore: starting txn %lu", txn_id(tid));
     }
     r = db->put(db, tid, &k, &d, 0);
     if (!mytid) {
@@ -551,10 +557,10 @@ static int mystore(struct db *mydb,
 	    int r2;
 
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "aborting txn %lu", txn_id(tid));
+		syslog(LOG_DEBUG, "mystore: aborting txn %lu", txn_id(tid));
 	    r2 = txn_abort(tid);
 	    if (r2) {
-		syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
+		syslog(LOG_ERR, "DBERROR: mystore: error aborting txn: %s", 
 		       db_strerror(r));
 		return CYRUSDB_IOERROR;
 	    }
@@ -564,17 +570,17 @@ static int mystore(struct db *mydb,
 	    }
 	} else {
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "committing txn %lu", txn_id(tid));
+		syslog(LOG_DEBUG, "mystore: committing txn %lu", txn_id(tid));
 	    r = txn_commit(tid, 0);
 	}
     }
 
-    if (r != 0) {
+    if ( r != 0) {
 	if (mytid) abort_txn(mydb, *mytid);
 	if (r == DB_LOCK_DEADLOCK) {
 	    r = CYRUSDB_AGAIN;
 	} else {
-	    syslog(LOG_ERR, "DBERROR: error storing %s: %s",
+	    syslog(LOG_ERR, "DBERROR: mystore: error storing %s: %s",
 		   key, db_strerror(r));
 	    r = CYRUSDB_IOERROR;
 	}
@@ -611,7 +617,7 @@ static int delete(struct db *mydb,
     assert(dbinit && db);
     assert(key && keylen);
 
-    r = gettid(mytid, &tid);
+    r = gettid(mytid, &tid, "delete");
     if (r) return r;
 
     memset(&k, 0, sizeof(k));
@@ -624,12 +630,12 @@ static int delete(struct db *mydb,
 	/* start txn for the write */
 	r = txn_begin(dbenv, NULL, &tid, 0);
 	if (r != 0) {
-	    syslog(LOG_ERR, "DBERROR: error beginning txn: %s", 
+	    syslog(LOG_ERR, "DBERROR: delete: error beginning txn: %s", 
 		   db_strerror(r));
 	    return CYRUSDB_IOERROR;
 	}
 	if (CONFIG_DB_VERBOSE)
-	    syslog(LOG_DEBUG, "starting txn %lu", txn_id(tid));
+	    syslog(LOG_DEBUG, "delete: starting txn %lu", txn_id(tid));
     }
     r = db->del(db, tid, &k, 0);
     if (!mytid) {
@@ -637,10 +643,10 @@ static int delete(struct db *mydb,
 	if (r) {
 	    int r2;
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "aborting txn %lu", txn_id(tid));
+		syslog(LOG_DEBUG, "delete: aborting txn %lu", txn_id(tid));
 	    r2 = txn_abort(tid);
 	    if (r2) {
-		syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
+		syslog(LOG_ERR, "DBERROR: delete: error aborting txn: %s", 
 		       db_strerror(r));
 		return CYRUSDB_IOERROR;
 	    }
@@ -650,7 +656,7 @@ static int delete(struct db *mydb,
 	    }
 	} else {
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "committing txn %lu", txn_id(tid));
+		syslog(LOG_DEBUG, "delete: committing txn %lu", txn_id(tid));
 	    r = txn_commit(tid, 0);
 	}
     }
@@ -660,7 +666,7 @@ static int delete(struct db *mydb,
 	if (r == DB_LOCK_DEADLOCK) {
 	    r = CYRUSDB_AGAIN;
 	} else {
-	    syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
+	    syslog(LOG_ERR, "DBERROR: delete: error deleting %s: %s",
 		   key, db_strerror(r));
 	    r = CYRUSDB_IOERROR;
 	}
@@ -677,17 +683,17 @@ static int commit_txn(struct db *db, struct txn *tid)
     assert(dbinit && tid);
 
     if (CONFIG_DB_VERBOSE)
-	syslog(LOG_DEBUG, "committing txn %lu", txn_id(t));
+	syslog(LOG_DEBUG, "commit_txn: committing txn %lu", txn_id(t));
     r = txn_commit(t, 0);
     switch (r) {
     case 0:
 	break;
     case EINVAL:
-	syslog(LOG_WARNING, "tried to commit an already aborted transaction");
+	syslog(LOG_WARNING, "commit_txn: tried to commit an already aborted transaction");
 	r = CYRUSDB_IOERROR;
 	break;
     default:
-	syslog(LOG_ERR, "DBERROR: failed on commit: %s",
+	syslog(LOG_ERR, "DBERROR: commit_txn  failed on commit: %s",
 	       db_strerror(r));
 	r = CYRUSDB_IOERROR;
 	break;
@@ -704,10 +710,10 @@ static int abort_txn(struct db *db, struct txn *tid)
     assert(dbinit && tid);
 
     if (CONFIG_DB_VERBOSE)
-	syslog(LOG_DEBUG, "aborting txn %lu", txn_id(t));
+	syslog(LOG_DEBUG, "abort_txn: aborting txn %lu", txn_id(t));
     r = txn_abort(t);
     if (r != 0) {
-	syslog(LOG_ERR, "DBERROR: error aborting txn: %s", db_strerror(r));
+	syslog(LOG_ERR, "DBERROR: abort_txn: error aborting txn: %s", db_strerror(r));
 	return CYRUSDB_IOERROR;
     }
 
