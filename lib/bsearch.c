@@ -90,7 +90,7 @@ unsigned long *lenp;
     int cmp;
     unsigned char *wordp, *p;
 
-    while (start <= end) {
+    while (start < end + 1) {
 	if (firstsearch) {
 	    /* Use hint supplied by caller */
 	    firstsearch = 0;
