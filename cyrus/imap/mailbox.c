@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.10 2004/04/08 21:13:03 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.11 2004/04/09 14:24:14 ken3 Exp $
  *
  */
 
@@ -439,7 +439,6 @@ int mailbox_stat(const char *mbpath, const char *metapath,
 	    metapath : mbpath;
 	strlcpy(fnamebuf, path, sizeof(fnamebuf));
 	strlcat(fnamebuf, FNAME_CACHE, sizeof(fnamebuf));
-	snprintf(fnamebuf, sizeof(fnamebuf), "%s/cyrus.cache", mbpath);
 	r = stat(fnamebuf, cache);
 	if(r) ret |= 0x4;
     }
