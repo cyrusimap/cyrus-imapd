@@ -79,7 +79,7 @@ char **argv;
 
 	case 'm':
 	    if (mailboxname) {
-		printf(stderr, "deliver: multiple -m options");
+		fprintf(stderr, "deliver: multiple -m options");
 		usage();
 	    }
 	    mailboxname = optarg;
@@ -87,7 +87,7 @@ char **argv;
 
 	case 'a':
 	    if (authuser) {
-		printf(stderr, "deliver: multiple -a options");
+		fprintf(stderr, "deliver: multiple -a options");
 		usage();
 	    }
 	    authuser = optarg;
@@ -102,7 +102,7 @@ char **argv;
 
 	case 'i':
 	    if (id) {
-		printf(stderr, "deliver: multiple -i options");
+		fprintf(stderr, "deliver: multiple -i options");
 		usage();
 	    }
 	    if (*optarg) id = optarg;
@@ -195,7 +195,7 @@ char *user;
 			 ACL_POST, 0);
     }
     else {
-	printf(stderr, "deliver: either -m or user required\n");
+	fprintf(stderr, "deliver: either -m or user required\n");
 	usage();
     }
 
