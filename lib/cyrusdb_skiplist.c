@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.16 2002/02/06 16:37:57 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.17 2002/02/06 18:23:41 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1115,7 +1115,7 @@ int mycommit(struct db *db, struct txn *tid)
     assert(db && tid);
 
     /* fsync */
-    if (do_fsync && (fsync(db->fd) < 0)) {
+    if (do_fsync && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", db->fname);
 	return CYRUSDB_IOERROR;
     }
@@ -1125,7 +1125,7 @@ int mycommit(struct db *db, struct txn *tid)
     retry_write(db->fd, (char *) &commitrectype, 4);
 
     /* fsync */
-    if (do_fsync && (fsync(db->fd) < 0)) {
+    if (do_fsync && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", db->fname);
 	return CYRUSDB_IOERROR;
     }
@@ -1381,8 +1381,8 @@ static int mycheckpoint(struct db *db, int locked)
     r = write_header(db);
 
     /* sync new file */
-    if (!r && do_fsync && (fsync(db->fd) < 0)) {
-	syslog(LOG_ERR, "DBERROR: skiplist checkpoint: fsync(%s): %m", fname);
+    if (!r && do_fsync && (fdatasync(db->fd) < 0)) {
+	syslog(LOG_ERR, "DBERROR: skiplist checkpoint: fdatasync(%s): %m", fname);
 	r = CYRUSDB_IOERROR;
     }
     
@@ -1395,6 +1395,12 @@ static int mycheckpoint(struct db *db, int locked)
     if (!r && (rename(fname, db->fname) < 0)) {
 	syslog(LOG_ERR, "DBERROR: skiplist checkpoint: rename(%s, %s): %m", 
 	       fname, db->fname);
+	r = CYRUSDB_IOERROR;
+    }
+
+    /* force the new file name to disk */
+    if (!r && do_fsync && (fsync(db->fd) < 0)) {
+	syslog(LOG_ERR, "DBERROR: skiplist checkpoint: fsync(%s): %m", fname);
 	r = CYRUSDB_IOERROR;
     }
 
@@ -1799,9 +1805,9 @@ static int recovery(struct db *db)
     }
 
     /* fsync the recovered database */
-    if (!r && do_fsync && (fsync(db->fd) < 0)) {
+    if (!r && do_fsync && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR, 
-	       "DBERROR: skiplist recovery %s: fsync: %m", db->fname); 
+	       "DBERROR: skiplist recovery %s: fdatasync: %m", db->fname); 
 	r = CYRUSDB_IOERROR;
     }
 
@@ -1812,9 +1818,9 @@ static int recovery(struct db *db)
     }
 
     /* fsync the new header */
-    if (!r && do_fsync && (fsync(db->fd) < 0)) {
+    if (!r && do_fsync && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR,
-	       "DBERROR: skiplist recovery %s: fsync: %m", db->fname); 
+	       "DBERROR: skiplist recovery %s: fdatasync: %m", db->fname); 
 	r = CYRUSDB_IOERROR;
     }
 
