@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.187 2004/08/04 13:03:16 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.188 2004/08/27 06:56:09 shadow Exp $ */
 
 #include <config.h>
 
@@ -132,6 +132,7 @@ extern char *optarg;
 static char shutdownfilename[1024];
 static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
+static nosaslpasswdcheck = 0;
 
 /* per-user session state */
 struct protstream *proxyd_out = NULL;
@@ -1143,7 +1144,7 @@ int service_init(int argc, char **argv, char **envp)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    while ((opt = getopt(argc, argv, "sp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "sp:N")) != EOF) {
 	switch (opt) {
 	case 's': /* imaps (do starttls right away) */
 	    imaps = 1;
@@ -1156,6 +1157,11 @@ int service_init(int argc, char **argv, char **envp)
 	case 'p': /* external protection */
 	    extprops_ssf = atoi(optarg);
 	    break;
+	case 'N': /*bypass SASL password check.  Not recommended unless you know
+                   *what you're doing */
+            nosaslpasswdcheck = 1;
+	   syslog( LOG_NOTICE, "setting nosaslpasswdcheck to true" );
+            break;
 	default:
 	    break;
 	}
@@ -2213,6 +2219,11 @@ void cmd_login(char *tag, char *user)
 	    freebuf(&passwdbuf);
 	    return;
 	}
+    }
+    else if ( nosaslpasswdcheck ) {
+        /* bypassing sasl_checkpass() */
+        proxyd_userid = xstrdup(canon_user);
+        syslog( LOG_NOTICE, "bypassing sasl_checkpass()" );  
     }
     else if ((r = sasl_checkpass(proxyd_saslconn,
 				 canon_user,
