@@ -300,7 +300,7 @@ a group of "<tt>mail</tt>", though any user and group name can be used.
 <kbd>   make install
 </kbd></pre>
 
-<li> Log in as root to perform the rest of the configuration steps.
+<li> Log in as root to perform the rest of the configuration steps. <P>
 
 <li>The Cyrus IMAP server uses the 4.3BSD syslog that separates
 messages into both levels and categories.  Invoke "<kbd>man
@@ -333,10 +333,10 @@ Create the <TT>imapd.log</TT> file:
 "<tt>imapd.conf</tt>" with a minimal number of values defined:
 
 <pre>
-   configdirectory: /var/cyrus
-   partition-default: /var/spool/cyrus
+   configdirectory: /var/imap
+   partition-default: /var/spool/imap
    admins: curtj abell
-   srvtab: /var/cyrus/srvtab
+   srvtab: /var/imap/srvtab
 </pre>
 
 For a description of all the fields in this file, see the <A
@@ -349,23 +349,23 @@ configuration directory is similar in concept to the
 "<tt>/usr/lib/news</tt>" directory.  It stores information about the
 IMAP server as a whole.
 
-<p>This document uses the configuration directory "<tt>/var/cyrus</tt>"
+<p>This document uses the configuration directory "<tt>/var/imap</tt>"
 in its examples.  This directory should be owned by the
 cyrus user and group and should not permit access to other users.
 
 <pre>
 <kbd>   cd /var
-   mkdir cyrus
-   chown cyrus cyrus
-   chgrp mail cyrus
-   chmod 750 cyrus
+   mkdir imap
+   chown cyrus imap
+   chgrp mail imap
+   chmod 750 imap
 </kbd></pre>
 
 <li>In the configuration directory, create the empty file "<tt>mailboxes</tt>"
 and a set of empty directories:
 
 <pre>
-<kbd>   cd cyrus
+<kbd>   cd imap
    true &gt;&gt; mailboxes
    mkdir user
    mkdir quota
@@ -377,14 +377,14 @@ and a set of empty directories:
 "<tt>/etc/imapd.conf</tt>" file.
 
 <p>This document uses a default partition directory of 
-"<tt>/var/spool/cyrus</tt>" in the following example:
+"<tt>/var/spool/imap</tt>" in the following example:
 
 <pre>
 <kbd>   cd /var/spool
-   mkdir cyrus
-   chown cyrus cyrus
-   chgrp mail cyrus
-   chmod 750 cyrus
+   mkdir imap
+   chown cyrus imap
+   chgrp mail imap
+   chmod 750 imap
 </kbd></pre>
 
 The partition directory is similar in concept to
@@ -400,9 +400,9 @@ partition directories to update synchronously.  Failure to do this may
 lead to data corruption and/or loss of mail after a system crash.
 
 <pre>
-<kbd>   cd /var/cyrus
+<kbd>   cd /var/imap
    chattr +S . user quota
-   chattr +S /var/spool/cyrus
+   chattr +S /var/spool/imap
 </kbd></pre>
 
 Also set the queue directory of the mail daemon to update
@@ -423,7 +423,7 @@ name and "<tt>REALM</tt>" is the machine's Kerberos realm.
 host named "<tt>foobar</tt>":
 
 <pre>
-<kbd>   ksrvutil -f /var/cyrus/srvtab add  
+<kbd>   ksrvutil -f /var/imap/srvtab add  
 </kbd></pre>
 
 Here is the information "<tt>ksrvutil</tt>" requests.  Respond by
