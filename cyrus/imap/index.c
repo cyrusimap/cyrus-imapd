@@ -1980,7 +1980,7 @@ struct mapfile *msgfile;
     }
 
     if (searchargs->body || searchargs->text || searchargs->header) {
-	if (msgfile->fd != -1) {
+	if (msgfile->fd == -1) {
 	    msgfile->fd = open(mailbox_message_fname(mailbox, UID(msgno)),
 			       O_RDONLY, 0666);
 	    if (msgfile->fd == -1 || fstat(msgfile->fd, &sbuf) == -1) {
