@@ -663,6 +663,7 @@ char **reply;
     char realm[REALM_SZ];
     char cell[REALM_SZ];
     char hostname[MAXHOSTNAMELEN+1];
+    char phost[MAXHOSTNAMELEN+1];
     KTEXT_ST authent;
     char instance[INST_SZ];
     AUTH_DAT kdata;
@@ -698,7 +699,8 @@ char **reply;
 
     /* Check validity of returned ticket */
     gethostname(hostname, sizeof(hostname));
-    result = krb_mk_req(&authent, "imap", krb_get_phost(hostname), realm, 0);
+    strcpy(phost, krb_get_phost(hostname));
+    result = krb_mk_req(&authent, "imap", phost, realm, 0);
     if (result != 0) {
 	memset(&authent, 0, sizeof(authent));
 	dest_tkt();
