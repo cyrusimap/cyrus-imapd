@@ -1,5 +1,5 @@
 /* mkgmtime.c - make time corresponding to a GMT timeval struct
- $Id: mkgmtime.c,v 1.7 2003/04/07 16:45:05 rjs3 Exp $
+ $Id: mkgmtime.c,v 1.8 2003/04/07 16:52:45 rjs3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -133,6 +133,12 @@ struct tm * const	tmp;
 	** if time_t is unsigned, then 1 << bits is median.
 	*/
 	t = (t < 0) ? 0 : ((time_t) 1 << bits);
+
+	/* Some gmtime() implementations are broken and will return
+	 * NULL for time_ts larger than 40 bits even on 64-bit platforms
+	 * so we'll just cap it at 40 bits */
+	if(bits > 40) bits = 40;
+
 	for ( ; ; ) {
 		mytm = gmtime(&t);
 
