@@ -1,6 +1,6 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server FAQ</TITLE>
-    <!-- $Id: faq.html,v 1.8 2000/07/07 20:34:06 wcw Exp $ -->
+    <!-- $Id: faq.html,v 1.9 2000/07/21 18:47:38 leg Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server FAQ</H1>
 
@@ -53,10 +53,15 @@ href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">patches
 to Berkeley DB</a> available from <a
 href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">
 http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html</a>.</dd>
+
+<dt><b>Q:</b> I've used <tt>saslpasswd</tt> to create CRAM-MD5
+secrets, but imapd doesn't say <tt>AUTH=CRAM-MD5</tt>. Why?
+<dd>
+<p><b>A:</b> Make sure <tt>/etc/sasldb</tt> is readable by the Cyrus user.
 </dl>
 
 <P><HR>
-last modified: $Date: 2000/07/07 20:34:06 $
+last modified: $Date: 2000/07/21 18:47:38 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
