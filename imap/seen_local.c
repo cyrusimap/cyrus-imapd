@@ -28,6 +28,8 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/uio.h>
+#include <fcntl.h>
 #include <syslog.h>
 
 #include "assert.h"
@@ -40,10 +42,12 @@ extern int errno;
 #define FNAME_SEEN "/cyrus.seen"
 
 struct seen {
-    FILE *file;
+    int fd;
+    char *base;
+    unsigned long size;
+    long ino;
     long offset;
     long length;
-    long size;
     struct mailbox *mailbox;
     char *user;
 };
@@ -60,6 +64,7 @@ struct seen **seendbptr;
 {
     struct seen *seendb;
     char fnamebuf[MAX_MAILBOX_PATH];
+    struct stat sbuf;
     
     seendb = (struct seen *)xmalloc(sizeof(struct seen));
     seendb->mailbox = mailbox;
@@ -68,11 +73,27 @@ struct seen **seendbptr;
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_SEEN);
 
-    seendb->file = fopen(fnamebuf, "r+");
-    if (!seendb->file) {
+    seendb->fd = open(fnamebuf, O_RDWR, 0666);
+    if (seendb->fd == -1) {
 	syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
+	free(seendb->user);
+	free((char *)seendb);
 	return IMAP_IOERROR;
     }
+
+    if (fstat(seendb->fd, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", fnamebuf);
+	close(seendb->fd);
+	free(seendb->user);
+	free((char *)seendb);
+	return IMAP_IOERROR;
+    }
+    seendb->ino = sbuf.st_ino;
+
+    seendb->base = 0;
+    seendb->size = 0;
+    map_refresh(seendb->fd, 1, &seendb->base, &seendb->size, sbuf.st_size,
+		fnamebuf, 0);
 
     seendb->offset = 0;
     seendb->mailbox->seen_lock_count = 0;
@@ -100,58 +121,55 @@ char **seenuidsptr;
     char *lockfailaction;
     char *buf = 0, *p;
     unsigned long left;
-    int length;
+    unsigned long length, namelen;
     
     strcpy(fnamebuf, seendb->mailbox->path);
     strcat(fnamebuf, FNAME_SEEN);
 
     /* Lock the database */
     if (!seendb->mailbox->seen_lock_count) {
-	r = lock_reopen(fileno(seendb->file), fnamebuf, &sbuf,
-			&lockfailaction);
+	r = lock_reopen(seendb->fd, fnamebuf, &sbuf, &lockfailaction);
 	if (r == -1) {
 	    syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, fnamebuf);
 	    return IMAP_IOERROR;
 	}
 
 	seendb->mailbox->seen_lock_count = 1;
-	seendb->size = sbuf.st_size;
+
+	if (seendb->ino != sbuf.st_ino) {
+	    map_free(&seendb->base, &seendb->size);
+	    map_refresh(seendb->fd, 1, &seendb->base, &seendb->size,
+			sbuf.st_size, fnamebuf, 0);
+	}
     }
     
     /* Find record for user */
-    seendb->offset = n_binarySearchFD(fileno(seendb->file), seendb->user,
-				      0, &buf, &left,
-				      seendb->offset, seendb->size);
+    seendb->offset = bsearch_mem(seendb->user, 0, seendb->base, seendb->size,
+				 seendb->offset, &length);
 
-    if (seendb->offset == -1) {
-	syslog(LOG_ERR, "IOERROR: searching %s: %m", fnamebuf);
-	return IMAP_IOERROR;
-    }
+    seendb->length = length;
 
     *lastreadptr = 0;
     *lastuidptr = 0;
     *lastchangeptr = 0;
-    if (!left) {
+    if (!length) {
 	/* No record for user */
-	seendb->length = 0;
 	*seenuidsptr = strsave("");
 	return 0;
     }
 
     /* Skip over username we know is there */
-    length = strlen(seendb->user)+1;
-    buf += length;
-    left -= length;
+    namelen = strlen(seendb->user)+1;
+    buf = seendb->base + seendb->offset + namelen;
+    left = length - namelen;
 
     /* Parse last-read timestamp */
     while (left && isdigit(*buf)) {
 	*lastreadptr = *lastreadptr * 10 + *buf++ - '0';
 	left--;
-	length++;
     }
     if (left && *buf != '\n') {
 	left--;
-	length++;
 	buf++;
     }
 
@@ -159,11 +177,9 @@ char **seenuidsptr;
     while (left && isdigit(*buf)) {
 	*lastuidptr = *lastuidptr * 10 + *buf++ - '0';
 	left--;
-	length++;
     }
     if (left && *buf != '\n') {
 	left--;
-	length++;
 	buf++;
     }
 
@@ -172,7 +188,6 @@ char **seenuidsptr;
     while (left && !isspace(*p)) {
 	p++;
 	left--;
-	length++;
     }
 
     if (left > 1 && p[0] == ' ' && isdigit(p[1])) {
@@ -183,59 +198,19 @@ char **seenuidsptr;
 	buf++;
 	p++;
 	left--;
-	length++;
 
 	/* Scan for end of uids */
 	while (left && !isspace(*p)) {
 	    p++;
 	    left--;
-	    length++;
 	}
     }
 
-    /* Copy what we have so far into malloc'ed space */
+    /* Copy uids into malloc'ed space */
     *seenuidsptr = xmalloc(p - buf + 1);
     strncpy(*seenuidsptr, buf, p - buf);
     (*seenuidsptr)[p - buf] = '\0';
 
-    while (!left) {
-	/* Grow the malloc'ed space and read more data into it */
-	*seenuidsptr = xrealloc(*seenuidsptr, strlen(*seenuidsptr)+BUFGROW+1);
-	p = *seenuidsptr + strlen(*seenuidsptr);
-	fseek(seendb->file, seendb->offset + length, 0);
-	left = fread(p, 1, BUFGROW, seendb->file);
-
-	/* Keep scanning for the end of uids */
-	while (left && !isspace(*p)) {
-	    p++;
-	    left--;
-	    length++;
-	}
-	if (!left) *p = '\0';
-    }
-
-    /* Scan for terminating newline */
-    while (left && *p != '\n') {
-	*p++ = '\0';		/* In case we have to terminate *seenuidsptr */
-	left--;
-	length++;
-    }
-    if (!left) {
-	/* Read more data, keep scanning for terminating newline */
-	fseek(seendb->file, seendb->offset + length, 0);
-	left = fread(fnamebuf, 1, sizeof(fnamebuf), seendb->file);
-	p = fnamebuf;
-	
-	while (left && *p != '\n') {
-	    p++;
-	    left--;
-	    length++;
-	}
-    }
-    *p = '\0';			/* In case we have to terminate *seenuidsptr */
-
-    length++;			/* Count the terminating newline */
-    seendb->length = length;
     return 0;
 }
 
@@ -243,7 +218,6 @@ char **seenuidsptr;
  * Write out new data for the user
  */
 #define PADSIZE 30
-#define PRUNESIZE 100
 int seen_write(seendb, lastread, lastuid, lastchange, seenuids)
 struct seen *seendb;
 time_t lastread;
@@ -253,21 +227,38 @@ char *seenuids;
 {
     char timeuidbuf[80];
     int length;
-    FILE *writefile;
+    int writefd;
     int replace;
     char fnamebuf[MAX_MAILBOX_PATH];
     char newfnamebuf[MAX_MAILBOX_PATH];
-    int n, left;
-    char buf[4096];
-    
+    int n;
+    struct iovec iov[10];
+    int num_iov;
+    struct stat sbuf;
+    static const char padbuf[/* 100 */] = {
+	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
+	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
+	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
+	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
+	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
+	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
+	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
+	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
+	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
+	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
+    };
+#define PRUNESIZE sizeof(padbuf)
+
     assert(seendb->mailbox->seen_lock_count != 0);
 
-    sprintf(timeuidbuf, "%u %u %u", lastread, lastuid, lastchange);
+    sprintf(timeuidbuf, "\t%u %u %u ", lastread, lastuid, lastchange);
     
-    length = strlen(seendb->user)+1+strlen(timeuidbuf)+1+strlen(seenuids);
+    length = strlen(seendb->user)+strlen(timeuidbuf)+strlen(seenuids)+1;
 
     /* Replace the entire file if existing record too short or too long */
     replace = (length >= seendb->length || length+PRUNESIZE < seendb->length);
+
+    num_iov = 0;
 
     if (replace) {
 	strcpy(fnamebuf, seendb->mailbox->path);
@@ -275,72 +266,63 @@ char *seenuids;
 	strcpy(newfnamebuf, fnamebuf);
 	strcat(newfnamebuf, ".NEW");
 
-	writefile = fopen(newfnamebuf, "w+");
-	if (!writefile) {
+	writefd = open(newfnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
+	if (writefd == -1) {
 	    syslog(LOG_ERR, "IOERROR: creating %s: %m", newfnamebuf);
 	    return IMAP_IOERROR;
 	}
 
-	/* Copy the part of file before the user's entry */
-	fseek(seendb->file, 0, 0);
-	left = seendb->offset;
-	while (left) {
-	    n = fread(buf, 1, left < sizeof(buf) ? left : sizeof(buf),
-		      seendb->file);
-	    if (n == 0) {
-		syslog(LOG_ERR, "IOERROR: reading %s: end of file", fnamebuf);
-		fclose(writefile);
-		unlink(newfnamebuf);
-		return IMAP_IOERROR;
-	    }
-	    fwrite(buf, 1, n, writefile);
-	    left -= n;
-	}
+	iov[num_iov].iov_base = seendb->base;
+	iov[num_iov++].iov_len = seendb->offset;
+    }
+    iov[num_iov].iov_base = seendb->user;
+    iov[num_iov++].iov_len = strlen(seendb->user);
+    iov[num_iov].iov_base = timeuidbuf;
+    iov[num_iov++].iov_len = strlen(timeuidbuf);
+    iov[num_iov].iov_base = seenuids;
+    iov[num_iov++].iov_len = strlen(seenuids);
+    iov[num_iov].iov_base = padbuf;
+    if (replace) {
+	iov[num_iov++].iov_len = PADSIZE;
+	length += PADSIZE;
     }
     else {
-	/* Just seek to the user's old record */
-	writefile = seendb->file;
-	fseek(writefile, seendb->offset, 0);
+	iov[num_iov++].iov_len = seendb->length - length;
+    }
+    iov[num_iov].iov_base = "\n";
+    iov[num_iov++].iov_len = 1;
+    if (replace) {
+	iov[num_iov].iov_base = seendb->base + seendb->offset + seendb->length;
+	iov[num_iov++].iov_len =
+	    seendb->size - (seendb->offset + seendb->length);
     }
 
-    fprintf(writefile, "%s\t%s %s", seendb->user, timeuidbuf, seenuids);
-
     if (replace) {
-	/* Write out extra padding, newline, adjust length */
-	for (n = 0; n < PADSIZE; n++) {
-	    buf[n] = ' ';
-	}
-	buf[n] = '\n';
-	fwrite(buf, 1, PADSIZE+1, writefile);
-	length += PADSIZE+1;
-	
-	/* Skip over old record, Copy part of file after user's entry */
-	if (seendb->length) fseek(seendb->file, seendb->length, 1);
-	while (n = fread(buf, 1, sizeof(buf), seendb->file)) {
-	    fwrite(buf, 1, n, writefile);
-	}
+	n = retry_writev(writefd, iov, num_iov);
 
 	/* Flush and swap in the new file */
-	fflush(writefile);
-	if (ferror(writefile) || fsync(fileno(writefile)) ||
-	    lock_blocking(fileno(writefile)) == -1 ||
+	if (n == -1 || fsync(writefd) ||
+	    lock_blocking(writefd) == -1 ||
+	    fstat(seendb->fd, &sbuf) == -1 ||
 	    rename(newfnamebuf, fnamebuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: writing %s: %m", newfnamebuf);
-	    fclose(writefile);
+	    close(writefd);
 	    unlink(newfnamebuf);
 	    return IMAP_IOERROR;
 	}
-	fclose(seendb->file);
-	seendb->file = writefile;
+	close(seendb->fd);
+	seendb->fd = writefd;
 	seendb->length = length;
+	map_free(&seendb->base, &seendb->size);
+	map_refresh(seendb->fd, 1, &seendb->base, &seendb->size,
+		    sbuf.st_size, fnamebuf, 0);
     }
     else {
-	/* Write out extra padding */
-	while (++length < seendb->length) putc(' ', writefile);
+	lseek(seendb->fd, seendb->offset, 0);
+	n = retry_writev(seendb->fd, iov, num_iov);
 
-	fflush(writefile);
-	if (ferror(writefile) || fsync(fileno(writefile))) {
-	    syslog(LOG_ERR, "IOERROR: creating %s: %m", newfnamebuf);
+	if (n == -1 || fsync(seendb->fd)) {
+	    syslog(LOG_ERR, "IOERROR: writing %s: %m", fnamebuf);
 	    return IMAP_IOERROR;
 	}
     }
@@ -359,7 +341,7 @@ struct seen *seendb;
     if (seendb->mailbox->seen_lock_count == 0) return 0;
 
     seendb->mailbox->seen_lock_count = 0;
-    r = lock_unlock(fileno(seendb->file));
+    r = lock_unlock(seendb->fd);
 
     if (r == -1) {
 	syslog(LOG_ERR, "IOERROR: unlocking seen db for %s: %m",
@@ -375,7 +357,8 @@ struct seen *seendb;
 int seen_close(seendb)
 struct seen *seendb;
 {
-    fclose(seendb->file);
+    map_free(&seendb->base, &seendb->size);
+    close(seendb->fd);
     free(seendb->user);
     free((char *)seendb);
     return 0;
@@ -389,17 +372,17 @@ seen_create(mailbox)
 struct mailbox *mailbox;
 {
     char fnamebuf[MAX_MAILBOX_PATH];
-    FILE *f;
+    int fd;
 
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_SEEN);
     
-    f = fopen(fnamebuf, "w");
-    if (!f) {
+    fd = open(fnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (fd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
 	return IMAP_IOERROR;
     }
-    fclose(f);
+    close(fd);
     return 0;
 }
 
@@ -411,28 +394,28 @@ seen_delete(mailbox)
 struct mailbox *mailbox;
 {
     char fnamebuf[MAX_MAILBOX_PATH];
-    FILE *f;
+    int fd;
     int r;
     char *lockfailaction;
 
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_SEEN);
     
-    f = fopen(fnamebuf, "r+");
-    if (!f) {
+    fd = open(fnamebuf, O_RDWR, 0666);
+    if (fd == -1) {
 	syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
 	return IMAP_IOERROR;
     }
 
-    r = lock_reopen(fileno(f), fnamebuf, 0, &lockfailaction);
+    r = lock_reopen(fd, fnamebuf, 0, &lockfailaction);
     if (r == -1) {
 	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, fnamebuf);
-	fclose(f);
+	close(fd);
 	return IMAP_IOERROR;
     }
 
     unlink(fnamebuf);
-    fclose(f);
+    close(fd);
     return 0;
 }
 
@@ -461,14 +444,14 @@ int seen_reconstruct(mailbox)
 struct mailbox *mailbox;
 {
     char fnamebuf[MAX_MAILBOX_PATH];
-    FILE *file;
+    int fd;
     
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_SEEN);
 
-    file = fopen(fnamebuf, "r+");
-    if (file) {
-	fclose(file);
+    fd = open(fnamebuf, O_RDWR, 0666);
+    if (fd != -1) {
+	close(fd);
 	return 0;
     }
 

@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <syslog.h>
 #include <sys/types.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
 
@@ -1528,34 +1529,46 @@ int mailbox_copyfile(from, to)
 char *from;
 char *to;
 {
-    FILE *srcfile, *destfile;
-    char buf[4096];
+    int srcfd, destfd;
+    struct stat sbuf;
+    char *src_base;
+    unsigned long src_size;
     int n;
 
     if (link(from, to) == 0) return 0;
-    destfile = fopen(to, "w");
-    if (!destfile) {
+    destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (destfd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", to);
 	return IMAP_IOERROR;
     }
-    srcfile = fopen(from, "r");
-    if (!srcfile) {
+
+    srcfd = open(from, O_RDONLY, 0666);
+    if (srcfd == -1) {
 	syslog(LOG_ERR, "IOERROR: opening %s: %m", from);
-	fclose(destfile);
+	close(destfd);
 	return IMAP_IOERROR;
     }
 
-    while (n = fread(buf, 1, sizeof(buf), srcfile)) {
-	fwrite(buf, 1, n, destfile);
+
+    if (fstat(srcfd, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", from);
+	close(srcfd);
+	close(destfd);
+	return IMAP_IOERROR;
     }
-    fflush(destfile);
-    if (ferror(destfile) || fsync(fileno(destfile))) {
-	fclose(srcfile);
-	fclose(destfile);
+    map_refresh(srcfd, 1, &src_base, &src_size, sbuf.st_size, from, 0);
+    
+    n = retry_write(destfd, src_base, src_size);
+
+    if (n == -1 || fsync(destfd)) {
+	map_free(&src_base, &src_size);
+	close(srcfd);
+	close(destfd);
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", to);
 	return IMAP_IOERROR;
     }
-    fclose(srcfile);
-    fclose(destfile);
+    map_free(&src_base, &src_size);
+    close(srcfd);
+    close(destfd);
     return 0;
 }
