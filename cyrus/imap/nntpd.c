@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.11 2004/02/19 17:53:42 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.12 2004/02/20 21:17:25 ken3 Exp $
  */
 
 /*
@@ -2942,12 +2942,64 @@ static int savemsg(message_data_t *m, FILE *f)
     return 0;
 }
 
+static int deliver_remote(message_data_t *msg, struct dest *dlist)
+{
+    struct dest *d;
+
+    /* run the txns */
+    for (d = dlist; d; d = d->next) {
+	struct backend *be;
+	char buf[4096];
+
+	be = proxy_findserver(d->server, &protocol[PROTOCOL_NNTP],
+			      nntp_userid ? nntp_userid : "anonymous",
+			      &backend_cached, &backend_current,
+			      NULL, nntp_in);
+	if (!be) return IMAP_SERVER_UNAVAILABLE;
+
+	/* tell the backend about our new article */
+	prot_printf(be->out, "IHAVE %s\r\n", msg->id);
+	prot_flush(be->out);
+
+	if (!prot_fgets(buf, sizeof(buf), be->in) ||
+	    strncmp("335", buf, 3)) {
+	    syslog(LOG_NOTICE, "backend doesn't want article %s", msg->id);
+	    continue;
+	}
+
+	/* send the article */
+	rewind(msg->f);
+	while (fgets(buf, sizeof(buf), msg->f)) {
+	    if (buf[0] == '.') prot_putc('.', be->out);
+	    do {
+		prot_printf(be->out, "%s", buf);
+	    } while (buf[strlen(buf)-1] != '\n' &&
+		     fgets(buf, sizeof(buf), msg->f));
+	}
+
+	/* Protect against messages not ending in CRLF */
+	if (buf[strlen(buf)-1] != '\n') prot_printf(be->out, "\r\n");
+
+	prot_printf(be->out, ".\r\n");
+
+	if (!prot_fgets(buf, sizeof(buf), be->in) ||
+	    strncmp("235", buf, 3)) {
+	    syslog(LOG_WARNING, "article %s transfer to backend failed",
+		   msg->id);
+	    return NNTP_FAIL_TRANSFER;
+	}
+    }
+
+    return 0;
+}
+
 static int deliver(message_data_t *msg)
 {
-    int n, r, myrights;
+    int n, r = 0, myrights;
     char *rcpt = NULL, *local_rcpt = NULL, *server, *acl;
     time_t now = time(NULL);
     unsigned long uid, backend_mask = 0;
+    struct dest *dlist = NULL;
 
     /* check ACLs of all mailboxes */
     for (n = 0; n < msg->rcpt_num; n++) {
@@ -2963,55 +3015,7 @@ static int deliver(message_data_t *msg)
 
 	if (server) {
 	    /* remote group */
-	    struct backend *be = NULL;
-	    unsigned id;
-	    char buf[4096];
-
-	    be = proxy_findserver(server, &protocol[PROTOCOL_NNTP],
-				  nntp_userid ? nntp_userid : "anonymous",
-				  &backend_cached, &backend_current,
-				  NULL, nntp_in);
-	    if (!be) return IMAP_SERVER_UNAVAILABLE;
-
-	    /* check if we've already sent to this backend
-	     * XXX this only works for <= 32 backends
-	     */
-	    if ((id = *((unsigned *) be->context)) < 32) {
-		if (backend_mask & (1 << id)) continue;
-		backend_mask |= (1 << id);
-	    }
-
-	    /* tell the backend about our new article */
-	    prot_printf(be->out, "IHAVE %s\r\n", msg->id);
-	    prot_flush(be->out);
-
-	    if (!prot_fgets(buf, sizeof(buf), be->in) ||
-		strncmp("335", buf, 3)) {
-		syslog(LOG_NOTICE, "backend doesn't want article %s", msg->id);
-		continue;
-	    }
-
-	    /* send the article */
-	    rewind(msg->f);
-	    while (fgets(buf, sizeof(buf), msg->f)) {
-		if (buf[0] == '.') prot_putc('.', be->out);
-		do {
-		    prot_printf(be->out, "%s", buf);
-		} while (buf[strlen(buf)-1] != '\n' &&
-			 fgets(buf, sizeof(buf), msg->f));
-	    }
-
-	    /* Protect against messages not ending in CRLF */
-	    if (buf[strlen(buf)-1] != '\n') prot_printf(be->out, "\r\n");
-
-	    prot_printf(be->out, ".\r\n");
-
-	    if (!prot_fgets(buf, sizeof(buf), be->in) ||
-		strncmp("235", buf, 3)) {
-		syslog(LOG_WARNING, "article %s transfer to backend failed",
-		       msg->id);
-		return NNTP_FAIL_TRANSFER;
-	    }
+	    proxy_adddest(&dlist, NULL, 0, server, "");
 	}
 	else {
 	    /* local group */
@@ -3051,7 +3055,22 @@ static int deliver(message_data_t *msg)
 	}
     }
 
-    return  0;
+    if (dlist) {
+	struct dest *d;
+
+	/* run the txns */
+	r = deliver_remote(msg, dlist);
+
+	/* free the destination list */
+	d = dlist;
+	while (d) {
+	    struct dest *nextd = d->next;
+	    free(d);
+	    d = nextd;
+	}
+    }
+
+    return r;
 }
 
 static int newgroup(message_data_t *msg)
