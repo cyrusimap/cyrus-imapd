@@ -14,6 +14,7 @@ fi
 AC_HAVE_HEADERS(unistd.h)
 AC_REPLACE_FUNCS(bcopy strcasecmp ftruncate)
 AC_DIR_HEADER
+AC_CONST
 dnl AC_XENIX_DIR  Don't think Xenix handles long file names
 AC_SUBST(CPPFLAGS)
 AC_SUBST(EXTRA_SUBDIRS)
