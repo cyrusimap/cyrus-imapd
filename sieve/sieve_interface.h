@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.9 2000/02/03 20:14:23 tmartin Exp $
+ * $Id: sieve_interface.h,v 1.10 2000/02/10 00:39:14 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -46,7 +46,7 @@ typedef enum {
 typedef struct sieve_interp sieve_interp_t;
 typedef struct sieve_script sieve_script_t;
 
-typedef int sieve_callback(char *arg, void *interp_context, 
+typedef int sieve_callback(void *action_context, void *interp_context, 
 			   void *script_context,
 			   void *message_context);
 typedef int sieve_get_size(void *message_context, int *size);
@@ -55,12 +55,6 @@ typedef int sieve_get_header(void *message_context, char *header,
 typedef int sieve_get_envelope(void *message_context, char *field,
 			       char ***contents);
 
-typedef int sieve_notify_callback(const char *priority,
-				  char *message, 
-				  void *interp_context,
-				  void *script_context,
-				  void *message_context);
-
 typedef struct sieve_vacation {
     int min_response;		/* 0 -> defaults to 3 */
     int max_response;		/* 0 -> defaults to 90 */
@@ -68,16 +62,52 @@ typedef struct sieve_vacation {
     /* given a hash, say whether we've already responded to it in the last
        days days.  return SIEVE_OK if we SHOULD autorespond (have not already)
        or SIEVE_DONE if we SHOULD NOT. */
-    int (*autorespond)(unsigned char *hash, int len, int days, 
-		       void *interp_context, void *script_context, 
-		       void *message_context); 
+    sieve_callback *autorespond;
 
     /* mail the response */
-    int (*send_response)(char *addr, char *fromaddr,
-			 char *subj, char *msg, int mime,
-			 void *interp_context, void *script_context,
-			 void *message_context);
+    sieve_callback *send_response;
 } sieve_vacation_t;
+
+typedef struct sieve_imapflags {
+    char **flag;		/* NULL -> defaults to \flagged */
+    int nflags;
+} sieve_imapflags_t;
+
+typedef struct sieve_redirect_context {
+    char *addr;
+} sieve_redirect_context_t;
+
+typedef struct sieve_reject_context {
+    char *msg;
+} sieve_reject_context_t;
+
+typedef struct sieve_fileinto_context {
+    char *mailbox;
+    sieve_imapflags_t *imapflags;
+} sieve_fileinto_context_t;
+
+typedef struct sieve_keep_context {
+    sieve_imapflags_t *imapflags;
+} sieve_keep_context_t;
+
+typedef struct sieve_notify_context {
+    const char *priority;
+    char *message;
+} sieve_notify_context_t;
+
+typedef struct sieve_autorespond_context {
+    unsigned char *hash;
+    int len;
+    int days;
+} sieve_autorespond_context_t;
+
+typedef struct sieve_send_response_context {
+    char *addr;
+    char *fromaddr;
+    char *subj;
+    char *msg;
+    int mime;
+} sieve_send_response_context_t;
 
 /* build a sieve interpretor */
 int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context);
@@ -91,12 +121,8 @@ int sieve_register_reject(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_fileinto(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_keep(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v);
-int sieve_register_setflag(sieve_interp_t *interp, sieve_callback *f);
-int sieve_register_addflag(sieve_interp_t *interp, sieve_callback *f);
-int sieve_register_removeflag(sieve_interp_t *interp, sieve_callback *f);
-int sieve_register_mark(sieve_interp_t *interp, sieve_callback *f);
-int sieve_register_unmark(sieve_interp_t *interp, sieve_callback *f);
-int sieve_register_notify(sieve_interp_t *interp, sieve_notify_callback *f);
+int sieve_register_imapflags(sieve_interp_t *interp, sieve_imapflags_t *mark);
+int sieve_register_notify(sieve_interp_t *interp, sieve_callback *f);
 
 /* add the callbacks for messages. again, undefined if used after
    sieve_script_parse */

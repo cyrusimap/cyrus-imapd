@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.7 2000/02/07 23:25:38 tmartin Exp $
+ * $Id: test.c,v 1.8 2000/02/10 00:39:14 leg Exp $
  *
  * usage: "test message < script"
  */
@@ -55,14 +55,6 @@ typedef struct message_data {
     int cache_full;
     header_t *cache[HEADERCACHESIZE];
 } message_data_t;
-
-/* data per script */
-typedef struct script_data {
-    char **flag;
-    int nflags;
-    int quiet;
-} script_data_t;
- 
 
 int hashheader(char *header)
 {
@@ -325,184 +317,72 @@ int getenvelope(void *v, char *head, char ***body)
     return SIEVE_OK;
 }
 
-int redirect(char *addr, void *ic, void *sc, void *mc)
+int redirect(void *ac, void *ic, void *sc, void *mc)
 {
+    sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
-    printf("redirecting message '%s' to '%s'\n", m->name, addr);
+    printf("redirecting message '%s' to '%s'\n", m->name, rc->addr);
     return SIEVE_OK;
 }
 
-int discard(char *arg, void *ic, void *sc, void *mc)
+int discard(void *ac, void *ic, void *sc, void *mc)
 {
     message_data_t *m = (message_data_t *) mc;
     printf("discarding message '%s'\n", m->name);
     return SIEVE_OK;
 }
 
-int reject(char *msg, void *ic, void *sc, void *mc)
+int reject(void *ac, void *ic, void *sc, void *mc)
 {
+    sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
-    printf("rejecting message '%s' with '%s'\n", m->name, msg);
+    printf("rejecting message '%s' with '%s'\n", m->name, rc->msg);
     return SIEVE_OK;
 }
 
-int fileinto(char *folder, void *ic, void *sc, void *mc)
+int fileinto(void *ac, void *ic, void *sc, void *mc)
 {
-    script_data_t *sd = (script_data_t *) sc;
+    sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
 
-    printf("filing message '%s' into '%s'\n", m->name, folder);
+    printf("filing message '%s' into '%s'\n", m->name, fc->mailbox);
 
-    if (sd->nflags) {
+    if (fc->imapflags->flag) {
 	int n;
 	printf("\twith flags");
-	for (n = 0; n < sd->nflags; n++)
-	    printf(" '%s'", sd->flag[n]);
+	for (n = 0; n < fc->imapflags->nflags; n++)
+	    printf(" '%s'", fc->imapflags->flag[n]);
 	printf("\n");
     }
 
-
     return SIEVE_OK;
 }
 
-int keep(char *arg, void *ic, void *sc, void *mc)
+int keep(void *ac, void *ic, void *sc, void *mc)
 {
-    script_data_t *sd = (script_data_t *) sc;
+    sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
 
     printf("keeping message '%s'\n", m->name);
 
-    if (sd->nflags) {
+    if (kc->imapflags->flag) {
 	int n;
 	printf("\twith flags");
-	for (n = 0; n < sd->nflags; n++)
-	    printf(" '%s'", sd->flag[n]);
+	for (n = 0; n < kc->imapflags->nflags; n++)
+	    printf(" '%s'", kc->imapflags->flag[n]);
 	printf("\n");
     }
 
     return SIEVE_OK;
 }
 
-void free_flags(char **flag, int nflags)
+int notify(void *ac, void *ic, void *sc, void *mc)
 {
-    int n;
- 
-    for (n = 0; n < nflags; n++)
-	free(flag[n]);
-    free(flag);
-}
- 
-int setflag(char *flag, void *ic, void *sc, void *mc)
-{
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *m = (message_data_t *) mc;
- 
-    printf("setting flag '%s' on message '%s'\n", flag, m->name);
- 
-    free_flags(sd->flag, sd->nflags);
-    sd->flag = NULL; sd->nflags = 0;
-    sd->quiet = 1;
- 
-    return addflag(flag, ic, sc, mc);
-}
- 
-int addflag(char *flag, void *ic, void *sc, void *mc)
-{
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *m = (message_data_t *) mc;
-    int n;
- 
-    if (!sd->quiet)
-	printf("adding flag '%s' on message '%s'\n", flag, m->name);
- 
-    /* search for flag already in list */
-    for (n = 0; n < sd->nflags; n++) {
-	if (!strcmp(sd->flag[n], flag))
-	    break;
-    }
- 
-    /* add flag to list, iff not in list */
-    if (n == sd->nflags) {
-	sd->nflags++;
-	sd->flag =
-	    (char **)xrealloc((char *)sd->flag, sd->nflags*sizeof(char *));
-	sd->flag[sd->nflags-1] = strdup(flag);
-    }
- 
-    sd->quiet = 0;
- 
+    sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
+
+    printf("notify msg = '%s' with priority = %s\n",nc->message, nc->priority);
+
     return SIEVE_OK;
-}
-int removeflag(char *flag, void *ic, void *sc, void *mc)
-{
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *m = (message_data_t *) mc;
-    int n;
- 
-    if (!sd->quiet)
-	printf("removing flag '%s' on message '%s'\n", flag, m->name);
- 
-    /* search for flag already in list */
-    for (n = 0; n < sd->nflags; n++) {
-	if (!strcmp(sd->flag[n], flag))
-	    break;
-    }
- 
-    /* remove flag from list, iff in list */
-    if (n < sd->nflags) {
-	free(sd->flag[n]);
-	sd->nflags--;
- 
-	for (; n < sd->nflags; n++)
-	    sd->flag[n] = sd->flag[n+1];
- 
-	sd->flag =
-	    (char **)xrealloc((char *)sd->flag, sd->nflags*sizeof(char *));
-    }
- 
-    sd->quiet = 0;
- 
-    return SIEVE_OK;
-}
- 
-int mark(char *arg, void *ic, void *sc, void *mc)
-{
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *m = (message_data_t *) mc;
- 
-    printf("marking message '%s'\n", m->name);
-    sd->quiet = 1;
- 
-    return addflag("\\flagged", ic, sc, mc);
-}
- 
-int unmark(char *arg, void *ic, void *sc, void *mc)
-{
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *m = (message_data_t *) mc;
- 
-    printf("unmarking message '%s'\n", m->name);
-    sd->quiet = 1;
- 
-    return removeflag("\\flagged", ic, sc, mc);
-}
-
-int notify(char *priority, 
-	   char *method, 
-	   char *message, 
-	   char **headers,
-	   void *interp_context, 
-	   void *script_context,
-	   void *message_context)
-{
-    int lup;
-
-    printf("notify msg = '%s' with priority = %s for headers:\n",message, priority);
-
-    for (lup = 0; headers[lup]!=NULL;lup++)
-	printf("%s\n",headers[lup]);
-
-    return 1;
 }
  
 int mysieve_error(int lineno, char *msg,
@@ -513,17 +393,17 @@ int mysieve_error(int lineno, char *msg,
     return SIEVE_OK;
 }
 
-int autorespond(unsigned char *hash, int len, int days,
-		void *ic, void *sc, void *mc)
+int autorespond(void *ac, void *ic, void *sc, void *mc)
 {
+    sieve_autorespond_context_t *arc = (sieve_autorespond_context_t *) ac;
     char yn;
     int i;
 
     printf("Have I already responded to '");
-    for (i = 0; i < len; i++) {
-	printf("%x", hash[i]);
+    for (i = 0; i < arc->len; i++) {
+	printf("%x", arc->hash[i]);
     }
-    printf("' in %d days? ", days);
+    printf("' in %d days? ", arc->days);
     scanf(" %c", &yn);
 
     if (tolower(yn) == 'y') return SIEVE_DONE;
@@ -532,12 +412,12 @@ int autorespond(unsigned char *hash, int len, int days,
     return SIEVE_FAIL;
 }
 
-int send_response(char *addr, char *subj, char *msg, int mime,
-		  void *ic, void *sc, void *mc)
+int send_response(void *ac, void *ic, void *sc, void *mc)
 {
+    sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
     printf("echo '%s' | mail -s '%s' '%s' for message '%s'\n",
-	   msg, subj, addr, m->name);
+	   src->msg, src->subj, src->addr, m->name);
     return SIEVE_OK;
 }
 
@@ -548,27 +428,24 @@ sieve_vacation_t vacation = {
     &send_response		/* send_response() */
 };
 
+char *markflags[] = { "\\flagged", "myflag" };
+sieve_imapflags_t mark = { markflags, 2 };
+
 int main(int argc, char *argv[])
 {
     sieve_interp_t *i;
     sieve_script_t *s;
     message_data_t *m;
-    script_data_t *sdata = NULL;
+    FILE *f;
     int fd, res;
     struct stat sbuf;
 
-    if (argc != 2) {
+    if (argc != 3) {
 	fprintf(stderr, "usage:\n");
-	fprintf(stderr, "%s message < script\n", argv[0]);
-	fprintf(stderr, "%s -v < script\n", argv[0]);
+	fprintf(stderr, "%s message script\n", argv[0]);
+	fprintf(stderr, "%s -v script\n", argv[0]);
 	exit(1);
     }
-
-    sdata = (script_data_t *) xmalloc(sizeof(script_data_t));
-    
-    sdata->flag = 0;
-    sdata->nflags = 0;
-    sdata->quiet = 0;    
 
     res = sieve_interp_alloc(&i, NULL);
     if (res != SIEVE_OK) {
@@ -625,34 +502,10 @@ int main(int argc, char *argv[])
 	printf("sieve_register_vacation() returns %d\n", res);
 	exit(1);
     }
-    
-    res = sieve_register_setflag(i, &setflag);
+
+    res = sieve_register_imapflags(i, &mark);
     if (res != SIEVE_OK) {
-	printf("sieve_register_setflag() returns %d\n", res);
-	exit(1);
-    }
- 
-    res = sieve_register_addflag(i, &addflag);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_addflag() returns %d\n", res);
-	exit(1);
-    }
- 
-    res = sieve_register_removeflag(i, &removeflag);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_removeflag() returns %d\n", res);
-	exit(1);
-    }
- 
-    res = sieve_register_mark(i, &mark);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_mark() returns %d\n", res);
-	exit(1);
-    }
- 
-    res = sieve_register_unmark(i, &unmark);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_unmark() returns %d\n", res);
+	printf("sieve_register_imapflags() returns %d\n", res);
 	exit(1);
     }
 
@@ -668,10 +521,18 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
-    res = sieve_script_parse(i, stdin, (void *)sdata, &s);
+    f = fopen(argv[2], "r");
+    if (!f) {
+	printf("can not open script '$s'\n", argv[2]);
+	exit(1);
+    }
+
+    res = sieve_script_parse(i, f, NULL, &s);
     if (res != SIEVE_OK) {
 	exit(1);
     }
+
+    fclose(f);
 
     if (strcmp(argv[1], "-v") != 0) {
 	fd = open(argv[1], O_RDONLY);
@@ -685,7 +546,7 @@ int main(int argc, char *argv[])
 	    printf("sieve_msg_parse() returns %d\n", res);
 	    exit(1);
 	}
-	
+
 	res = sieve_execute_script(s, m);
 	if (res != SIEVE_OK) {
 	    printf("sieve_execute_script() returns %d\n", res);
@@ -695,9 +556,6 @@ int main(int argc, char *argv[])
 	close(fd);
     }
 
-    if (sdata->nflags) free_flags(sdata->flag, sdata->nflags);
-    if (sdata) free(sdata);
-	
     res = sieve_script_free(&s);
     if (res != SIEVE_OK) {
 	printf("sieve_script_free() returns %d\n", res);

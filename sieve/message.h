@@ -1,6 +1,6 @@
 /* message.h
  * Larry Greenfield
- * $Id: message.h,v 1.6 2000/02/07 23:25:37 tmartin Exp $
+ * $Id: message.h,v 1.7 2000/02/10 00:39:14 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -28,7 +28,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #ifndef MESSAGE_H
 #define MESSAGE_H
 
-#include "tree.h" /* for stringlist_t */
+#include "sieve_interface.h"	/* for action contexts */
+#include "tree.h"		/* for stringlist_t */
 
 typedef struct Action action_list_t;
 
@@ -60,22 +61,14 @@ void free_action_list(action_list_t *actions);
 struct Action {
     action_t a;
     union {
+	sieve_reject_context_t rej;
+	sieve_fileinto_context_t fil;
+	sieve_keep_context_t keep;
+	sieve_redirect_context_t red;
 	struct {
-	    char *msg;
-	} rej;
-	struct {
-	    char *mbox;
-	} fil;
-	struct {
-	    char *addr;
-	} red;
-	struct {
-	    char *addr;		/* freed! */
-	    char *fromaddr;     /* freed! */
-	    char *subj;		/* freed! */
-	    char *msg;
-	    int days;
-	    int mime;
+	    /* addr, fromaddr, subj - freed! */
+	    sieve_send_response_context_t send;
+	    sieve_autorespond_context_t autoresp;
 	} vac;
 	struct {
 	    char *flag;
@@ -102,7 +95,9 @@ typedef struct notify_action_s {
 typedef enum {
     ADDRESS_ALL,
     ADDRESS_LOCALPART,
-    ADDRESS_DOMAIN
+    ADDRESS_DOMAIN,
+    ADDRESS_USER,
+    ADDRESS_DETAIL
 } address_part_t;
 
 int parse_address(char *header, void **data, void **marker);
@@ -114,9 +109,9 @@ notify_action_t *default_notify_action(void);
  * these don't actually perform the actions, they just add it to the
  * action list */
 int do_reject(action_list_t *m, char *msg);
-int do_fileinto(action_list_t *m, char *mbox);
+int do_fileinto(action_list_t *m, char *mbox, sieve_imapflags_t *imapflags);
 int do_forward(action_list_t *m, char *addr);
-int do_keep(action_list_t *m);
+int do_keep(action_list_t *m, sieve_imapflags_t *imapflags);
 int do_discard(action_list_t *m);
 int do_vacation(action_list_t *m, char *addr, char *fromaddr,
 		char *subj, char *msg, 

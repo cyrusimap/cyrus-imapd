@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.11 2000/02/07 23:25:37 tmartin Exp $
+ * $Id: interp.c,v 1.12 2000/02/10 00:39:14 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -46,11 +46,13 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     }
 
     i->redirect = i->discard = i->reject = i->fileinto = i->keep = NULL;
-    i->setflag = i->addflag = i->removeflag = i->mark = i->unmark = NULL;
     i->getsize = NULL;
     i->getheader = NULL;
     i->getenvelope = NULL;
     i->vacation = NULL;
+
+    i->curflags.flag = NULL; i->curflags.nflags = 0;
+    i->markflags = NULL;
 
     i->interp_context = interp_context;
     i->err = NULL;
@@ -59,9 +61,9 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     return SIEVE_OK;
 }
 
-static char *sieve_extensions = "fileinto reject envelope vacation imapflags notify" 
+static char *sieve_extensions = "fileinto reject envelope vacation imapflags notify subaddress" 
 #ifdef ENABLE_REGEX
-"regex";
+" regex";
 #else
 "";
 #endif /* ENABLE_REGEX */
@@ -71,8 +73,18 @@ char *sieve_listextensions(void)
     return sieve_extensions;
 }
 
+void free_imapflags(sieve_imapflags_t *imapflags)
+{
+    while (imapflags->nflags)
+	free(imapflags->flag[--imapflags->nflags]);
+    free(imapflags->flag);
+    
+    imapflags->flag = NULL;
+}
+  
 int sieve_interp_free(sieve_interp_t **interp)
 {
+    free_imapflags(&(*interp)->curflags);
     free(*interp);
     
     return SIEVE_OK;
@@ -113,43 +125,19 @@ int sieve_register_keep(sieve_interp_t *interp, sieve_callback *f)
  
     return SIEVE_OK;
 }
- 
-int sieve_register_setflag(sieve_interp_t *interp, sieve_callback *f)
+
+static char *default_markflags[] = { "\\flagged" };
+static sieve_imapflags_t default_mark = { default_markflags, 1 };
+
+int sieve_register_imapflags(sieve_interp_t *interp, sieve_imapflags_t *mark)
 {
-    interp->setflag = f;
- 
-    return SIEVE_OK;
-}
- 
-int sieve_register_addflag(sieve_interp_t *interp, sieve_callback *f)
-{
-    interp->addflag = f;
- 
-    return SIEVE_OK;
-}
- 
-int sieve_register_removeflag(sieve_interp_t *interp, sieve_callback *f)
-{
-    interp->removeflag = f;
- 
-    return SIEVE_OK;
-}
- 
-int sieve_register_mark(sieve_interp_t *interp, sieve_callback *f)
-{
-    interp->mark = f;
- 
-    return SIEVE_OK;
-}
- 
-int sieve_register_unmark(sieve_interp_t *interp, sieve_callback *f)
-{
-    interp->unmark = f;
+    interp->markflags =
+	(mark && mark->flag && mark->nflags) ? mark : &default_mark;
 
     return SIEVE_OK;
 }
 
-int sieve_register_notify(sieve_interp_t *interp, sieve_notify_callback *f)
+int sieve_register_notify(sieve_interp_t *interp, sieve_callback *f)
 {
     interp->notify = f;
  

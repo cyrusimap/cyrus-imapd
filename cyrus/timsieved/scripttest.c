@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.9 2000/02/02 02:34:46 tmartin Exp $
+ * $Id: scripttest.c,v 1.10 2000/02/10 00:39:15 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -47,18 +47,11 @@ void foo(void)
 sieve_vacation_t vacation = {
     0,				/* min response */
     0,				/* max response */
-    (int (*)(unsigned char *, int, int, 
-	     void *, void *, 
-	     void *))    &foo,	/* autorespond() */
-    (int (*)(char *, char *, char *, int, int,
-	     void *, void *,
-	     void *) )   &foo   /* send_response() */
+    (sieve_callback *) &foo,	/* autorespond() */
+    (sieve_callback *) &foo	/* send_response() */
 };
 
-static int sieve_notify(char *priority, 
-			char *method, 
-			char *message, 
-			char **headers,
+static int sieve_notify(void *ac, 
 			void *interp_context, 
 			void *script_context,
 			void *mc)
@@ -120,32 +113,12 @@ int is_script_parsable(FILE *stream, char **errstr)
 	return TIMSIEVE_FAIL;
     }
 
-    res = sieve_register_setflag(i, (sieve_callback *) &foo);
+    res = sieve_register_imapflags(i, NULL);
     if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_setflag() returns %d\n", res);
+	syslog(LOG_ERR, "sieve_register_imapflags() returns %d\n", res);
 	return TIMSIEVE_FAIL;
     }
-    res = sieve_register_addflag(i, (sieve_callback *) &foo);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_addflag() returns %d\n", res);
-	return TIMSIEVE_FAIL;
-    }
-    res = sieve_register_removeflag(i, (sieve_callback *) &foo);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_removeflag() returns %d\n", res);
-	return TIMSIEVE_FAIL;
-    }
-    res = sieve_register_mark(i, (sieve_callback *) &foo);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_mark() returns %d\n", res);
-	return TIMSIEVE_FAIL;
-    }
-    res = sieve_register_unmark(i, (sieve_callback *) &foo);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_unmark() returns %d\n", res);
-	return TIMSIEVE_FAIL;
-    }
-  
+
     res = sieve_register_size(i, (sieve_get_size *) &foo);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_size() returns %d\n", res);
