@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.73 2003/04/03 21:51:21 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.74 2003/05/06 20:59:49 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -539,7 +539,7 @@ int reconstruct(char *name, struct discovered *found)
 	mailbox.uidvalidity = time(0);
     }
     free(uid);
-    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox.generation_no + 1;
+    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(mailbox.generation_no + 1);
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox.format);
     *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(MAILBOX_MINOR_VERSION);
     *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
