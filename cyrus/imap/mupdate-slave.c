@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.7 2002/01/25 19:51:55 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.8 2002/01/29 17:31:45 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,6 +80,9 @@ void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     fd_set read_set;
     int highest_fd;
 
+    /* xxx if we wanted to allow for kicks, we'd add a file descriptor 
+       to 'read_set' representing the local client wanting to kick */
+    
     if (!handle || !handle->saslcompleted) return;
 
     highest_fd = handle->sock + 1;
