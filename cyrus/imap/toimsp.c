@@ -121,6 +121,7 @@ va_dcl
 		iov[num_iov].iov_base = iovbuf[num_iov];
 		iov[num_iov].iov_len = strlen(iovbuf[num_iov]) + 1;
 		num_iov++;
+		break;
 
 	    default:
 		abort("Internal error: unrecognized toimsp type", EX_SOFTWARE);
