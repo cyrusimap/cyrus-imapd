@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.41 2001/08/01 16:34:06 leg Exp $
+ * $Id: script.c,v 1.42 2001/08/01 17:40:37 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -513,7 +513,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 			    /* s[0] contains the original subject */
 			    const char *origsubj = s[0];
 			    
-			    while (!strncasecmp(s[0], "Re: ", 4)) {
+			    while (!strncasecmp(origsubj, "Re: ", 4)) {
 				origsubj += 4;
 			    }
 			    snprintf(buf, sizeof(buf), "Re: %s", origsubj);
