@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.13 2002/08/11 16:53:23 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.14 2002/08/12 21:19:23 rjs3 Exp $
  */
 
 #include <config.h>
@@ -1748,7 +1748,6 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 
     if (domainpat[0] == '\0')
 	strcpy(domainpat, pattern);
-fprintf(stderr, "domainpat: '%s'\n", domainpat);
 
     cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
     cbrock.namespace = NULL;
