@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.73 1998/06/25 22:16:02 tjs Exp $
+ $Id: mailbox.c,v 1.74 1999/03/02 00:55:28 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -605,7 +605,7 @@ struct index_record *record;
 	return IMAP_IOERROR;
     }
 
-    buf = mailbox->index_base + offset;
+    buf = (unsigned char*) mailbox->index_base + offset;
 
     record->uid = htonl(*((bit32 *)(buf+OFFSET_UID)));
     record->internaldate = htonl(*((bit32 *)(buf+OFFSET_INTERNALDATE)));
