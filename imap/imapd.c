@@ -2991,18 +2991,13 @@ cmd_netscrape(tag)
 
     /* I only know of three things to reply with: */
     prot_printf(imapd_out,
-		"* OK [NETSCAPE] Carnegie Mellon Cyrus IMAP\r\n");
+"* OK [NETSCAPE] Carnegie Mellon Cyrus IMAP\r\n* VERSION %s\r\n",
+		CYRUS_VERSION);
     prot_printf(imapd_out,
-		"* VERSION " CYRUS_VERSION "\r\n");
-    if (url) {
-	prot_printf(imapd_out,
-		    "* ACCOUNT-URL %s\r\n", url);
-    }
-
-    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		error_message(IMAP_OK_COMPLETED));
+		"* ACCOUNT-URL %s\r\n%s OK %s\r\n",
+		url, tag, error_message(IMAP_OK_COMPLETED));
 }
-#endif
+#endif /* ENABLE_X_NETSCAPE_HACK */
 
 #ifdef ENABLE_EXPERIMENT
 /*
