@@ -805,7 +805,7 @@ Port: %s\n\
 			    BBHASH_SIZE /* size; a magic number */,
 			    sizeof(char*), /* size of member (useless,
 					      really */
-			    strcmp, /* compare fn */
+			    (int(*)(void*,void*))strcmp, /* compare fn */
 			    free /* free fn */);
 	
 	/* tjs: add list callback */
@@ -854,7 +854,9 @@ Port: %s\n\
 			  "LIST \"\" %s.*", rexp+(*rexp=='^'));
 	    cbwait();
 
-	    if (debug) { ht_foreach(bb_hash, (void*) puts); }
+#if 0
+	    if (debug) { ht_foreach(bb_hash, ((void*) puts); }
+#endif
 	}
 
 	sprintf(submap,"%s/.MESSAGES/.SubscriptionMap",dir);
@@ -902,14 +904,14 @@ Port: %s\n\
 
     if (debug && acl_mode) {
 	puts("The following bboards remain in hash table:");
-	ht_foreach(bb_hash, (void*) puts);
+	ht_foreach(bb_hash, (void(*)(void*)) puts);
     }
 
     /* tjs */
     /* for any bboard left in the hash table,
        blast it. */
     if (acl_mode) {
-	ht_foreach(bb_hash, (void*) bbdelete);
+	ht_foreach(bb_hash, (void(*)(void*)) bbdelete);
     }
 
     do_imap_noop(imclient);	/* Flush & wait for pending commands */
