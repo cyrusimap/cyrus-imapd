@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.45 2004/06/03 17:56:16 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.46 2004/06/03 17:58:48 rjs3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1951,8 +1951,8 @@ static int recovery(struct db *db)
 	/* make sure this is ADD or DELETE */
 	if (TYPE(ptr) != ADD && TYPE(ptr) != DELETE) {
 	    syslog(LOG_ERR, 
-		   "DBERROR: skiplist recovery: %04X should be ADD or DELETE",
-		   offset);
+		   "DBERROR: skiplist recovery %s: %04X should be ADD or DELETE",
+		   db->fname, offset);
 	    r = CYRUSDB_IOERROR;
 	    break;
 	}
@@ -2051,8 +2051,8 @@ static int recovery(struct db *db)
 	    lvl = LEVEL(ptr);
 	    if(lvl > SKIPLIST_MAXLEVEL) {
 		syslog(LOG_ERR,
-		       "DBERROR: skiplist node claims level %d (greater than maxlevel %d)",
-		       lvl, SKIPLIST_MAXLEVEL);
+		       "DBERROR: skiplist recovery %s: node claims level %d (greater than max %d)",
+		       db->fname, lvl, SKIPLIST_MAXLEVEL);
 		r = CYRUSDB_IOERROR;
 	    } else {
 		for (i = 0; i < lvl; i++) {
