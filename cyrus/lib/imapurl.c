@@ -39,7 +39,7 @@
  *
  * derived from chris newman's code */
 
-/* $Id: imapurl.c,v 1.7.4.1 2003/02/05 01:41:05 ken3 Exp $ */
+/* $Id: imapurl.c,v 1.7.4.2 2003/02/11 15:46:13 ken3 Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -180,9 +180,11 @@ static void URLtoMailbox(char *dst, char *src)
         if (isupper((unsigned char) hex[i])) hextab[tolower(hex[i])] = i;
     }
     
-    utf7mode = 0;
-    utf8total = 0;
-    bitstogo = 0;
+    utf7mode = 0; /* is the output UTF7 currently in base64 mode? */
+    utf8total = 0; /* how many octets is the current input UTF-8 char;
+                      0 == between characters */
+    bitstogo = 0; /* bits that need to be encoded into base64; if
+                     bitstogo != 0 then utf7mode == 1 */
     while ((c = (unsigned char)*src) != '\0') {
         ++src;
         /* undo hex-encoding */
@@ -190,6 +192,7 @@ static void URLtoMailbox(char *dst, char *src)
             c = (hextab[(int) src[0]] << 4) | hextab[(int) src[1]];
             src += 2;
         }
+
         /* normal character? */
         if (c >= ' ' && c <= '~') {
             /* switch out of UTF-7 mode */
@@ -207,22 +210,28 @@ static void URLtoMailbox(char *dst, char *src)
             }
             continue;
         }
+
         /* switch to UTF-7 mode */
         if (!utf7mode) {
             *dst++ = '&';
             utf7mode = 1;
         }
+
         /* Encode US-ASCII characters as themselves */
         if (c < 0x80) {
             ucs4 = c;
             utf8total = 1;
         } else if (utf8total) {
+            /* this is a subsequent octet of a multi-octet character */
+
             /* save UTF8 bits into UCS4 */
             ucs4 = (ucs4 << 6) | (c & 0x3FUL);
             if (++utf8pos < utf8total) {
                 continue;
             }
         } else {
+            /* this is the first octet of a multi-octet character */
+
             utf8pos = 1;
             if (c < 0xE0) {
                 utf8total = 2;
@@ -237,8 +246,21 @@ static void URLtoMailbox(char *dst, char *src)
             }
             continue;
         }
-        /* loop to split ucs4 into two utf16 chars if necessary */
+
+        /* finished with UTF-8 character. make sure it isn't an
+           overlong sequence. if it is, drop that character */
+        if ((ucs4 < 0x80 && utf8total > 1) || 
+            (ucs4 < 0x0800 && utf8total > 2) ||
+            (ucs4 < 0x00010000 && utf8total > 3) ||
+            (ucs4 < 0x00200000 && utf8total > 4) ||
+            (ucs4 < 0x04000000 && utf8total > 5) ||
+            (ucs4 < 0x80000000 && utf8total > 6)) {
+            utf8total = 0;
+            continue;
+        }
         utf8total = 0;
+
+        /* loop to split ucs4 into two utf16 chars if necessary */
         do {
             if (ucs4 >= UTF16BASE) {
                 ucs4 -= UTF16BASE;
@@ -260,6 +282,7 @@ static void URLtoMailbox(char *dst, char *src)
             }
         } while (utf16flag);
     }
+
     /* if in UTF-7 mode, finish in ASCII */
     if (utf7mode) {
         if (bitstogo) {
@@ -267,6 +290,7 @@ static void URLtoMailbox(char *dst, char *src)
         }
         *dst++ = '-';
     }
+
     /* tie off string */
     *dst = '\0';
 }
