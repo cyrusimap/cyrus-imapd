@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.5 1999/10/04 18:23:06 leg Exp $
+ * $Id: interp.c,v 1.6 1999/11/10 21:09:14 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -52,6 +52,7 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     i->vacation = NULL;
 
     i->interp_context = interp_context;
+    i->err = NULL;
 
     *interp = i;
     return SIEVE_OK;
