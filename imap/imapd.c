@@ -2398,7 +2398,8 @@ char *identifier;
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, rights;
-    int isowner = 0;
+    char *canon_identifier;
+    int canonidlen;
     char *acl;
 
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
@@ -2417,11 +2418,18 @@ char *identifier;
     }
 
     if (!r) {
-	if (!auth_canonifyid(identifier)) {
+	canon_identifier = auth_canonifyid(identifier);
+	if (canon_identifier) canonidlen = strlen(canon_identifier);
+
+	if (!canon_identifier) {
 	    prot_printf(imapd_out, "* LISTRIGHTS %s %s \"\"",
 			name, identifier);
 	}
-	else if (mboxname_userownsmailbox(imapd_userid, mailboxname)) {
+	else if (!strncmp(mailboxname, "user.", 5) &&
+		 !strchr(canon_identifier, '.') &&
+		 !strncmp(mailboxname+5, canon_identifier, canonidlen) &&
+		 (mailboxname[5+canonidlen] == '\0' ||
+		  mailboxname[5+canonidlen] == '.')) {
 	    prot_printf(imapd_out,
 			"* LISTRIGHTS %s %s lca r s w i p d 0 1 2 3 4 5 6 7 8 9",
 			name, identifier);
