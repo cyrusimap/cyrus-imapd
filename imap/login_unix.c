@@ -29,6 +29,8 @@
 #include "mailbox.h"
 #include "imapd.h"
 
+extern char *crypt();
+
 /*
  * Unix passwd-authenticated login
  */
