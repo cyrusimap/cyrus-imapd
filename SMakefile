@@ -1,0 +1,7 @@
+#
+# This file is specific to Carnegie Mellon University's
+# software build process
+#
+
+MAKE=gmake
+LNCOMMAND="${SRCDIR}/configure --with-tcl=/usr/contributed --enable-amssync --enable-cmulocal"
