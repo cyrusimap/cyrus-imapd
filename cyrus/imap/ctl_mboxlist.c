@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: ctl_mboxlist.c,v 1.6 2000/05/12 22:18:03 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.7 2000/05/15 17:29:40 leg Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -36,6 +36,7 @@
 #endif
 #include <syslog.h>
 #include <com_err.h>
+#include <assert.h>
 
 #include <db.h>
 #include "exitcodes.h"
@@ -50,7 +51,7 @@ extern int errno;
 extern DB *mbdb;
 extern DB_ENV *dbenv;
 
-enum mboxop { DUMP, POPULATE, RECOVER, CHECKPOINT, NONE };
+enum mboxop { DUMP, POPULATE, RECOVER, CHECKPOINT, UNDUMP, NONE };
 
 void fatal(const char *message, int code)
 {
@@ -67,6 +68,8 @@ void do_dump(enum mboxop op)
     int bufkey[MAX_MAILBOX_NAME * 2];
     struct mbox_entry *mboxent;
     struct mailbox mailbox;
+
+    assert(op == DUMP || op == POPULATE);
 
     memset(&key, 0, sizeof(key));
     key.flags = DB_DBT_USERMEM;
@@ -136,7 +139,6 @@ void do_dump(enum mboxop op)
 	    /* close index file for mailbox */
 	    mailbox_close(&mailbox);
 	    
-
 	    r = acapmbox_store(handle, &mboxdata, 1);
 	    if (r) {
 		fprintf(stderr, "problem storing '%s': %s\n", mboxent->name,
@@ -166,11 +168,95 @@ void do_dump(enum mboxop op)
     return;
 }
 
+void do_undump(void)
+{
+    int r;
+    char buf[16384];
+    DBT key, data;
+    int line = 0;
+    struct mbox_entry *mboxent = NULL;
+    
+    memset(&key, 0, sizeof(key));
+    memset(&data, 0, sizeof(data));
+
+    while (fgets(buf, sizeof(buf), stdin)) {
+	char *name, *partition, *acl;
+	char *p;
+	int tries = 0;
+	
+	line++;
+
+	name = buf;
+	for (p = buf; *p && *p != '\t'; p++) ;
+	if (!*p) {
+	    fprintf(stderr, "line %d: no partition found\n", line);
+	    continue;
+	}
+	*p++ = '\0';
+	partition = p;
+	for (p = buf; *p && *p != '\t'; p++) ;
+	if (!*p) {
+	    fprintf(stderr, "line %d: no acl found\n", line);
+	    continue;
+	}
+	*p++ = '\0';
+	acl = p;
+
+	if (strlen(name) >= MAX_MAILBOX_NAME) {
+	    fprintf(stderr, "line %d: mailbox name too long\n");
+	    continue;
+	}
+	if (strlen(partition) >= MAX_PARTITION_LEN) {
+	    fprintf(stderr, "line %d: partition name too long\n");
+	    continue;
+	}
+	
+	mboxent = (struct mbox_entry *) 
+	    xrealloc(mboxent, sizeof(struct mbox_entry) + strlen(acl));
+	strcpy(mboxent->name, name);
+	strcpy(mboxent->partition, partition);
+	strcpy(mboxent->acls, acl);
+
+	key.data = name;
+	key.size = strlen(name);
+
+	data.data = mboxent;
+	data.size = sizeof(struct mbox_entry) + strlen(mboxent->acls);
+
+	tries = 0;
+    retry:
+	r = mbdb->put(mbdb, NULL, &key, &data, 0);
+	switch (r) {
+	case 0:
+	    break;
+	case DB_LOCK_DEADLOCK:
+	    if (tries++ < 5) {
+		fprintf(stderr, "warning: DB_LOCK_DEADLOCK; retrying\n");
+		goto retry;
+	    }
+	    fprintf(stderr, "error: too many deadlocks, aborting\n");
+	    break;
+	default:
+	    break;
+	}
+
+	if (r) break;
+    }
+
+    if (r) {
+	fprintf(stderr, "db error: %s\n", db_strerror(r));
+    }
+    if (mboxent) free(mboxent);
+
+    return;
+}
+
 void usage(void)
 {
     fprintf(stderr, "ctl_mboxlist -c\n");
     fprintf(stderr, "ctl_mboxlist -r\n");
     fprintf(stderr, "ctl_mboxlist -d [-f filename]\n");
+    fprintf(stderr, "ctl_mboxlist -u [-f filename] [< mboxlist.dump]\n");
     fprintf(stderr, "ctl_mboxlist -a [-f filename]\n");
     exit(1);
 }
@@ -184,7 +270,7 @@ int main(int argc, char *argv[])
     config_init("ctl_mboxlist");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "adrcf:")) != EOF) {
+    while ((opt = getopt(argc, argv, "adurcf:")) != EOF) {
 	switch (opt) {
 	case 'r':
 	    if (op == NONE) op = RECOVER;
@@ -206,6 +292,11 @@ int main(int argc, char *argv[])
 
 	case 'd':
 	    if (op == NONE) op = DUMP;
+	    else usage();
+	    break;
+
+	case 'u':
+	    if (op == NONE) op = UNDUMP;
 	    else usage();
 	    break;
 
@@ -241,6 +332,16 @@ int main(int argc, char *argv[])
 	
 	do_dump(op);
 	
+	mboxlist_close();
+	mboxlist_done();
+	return 0;
+
+    case UNDUMP:
+	mboxlist_init(0);
+	mboxlist_open(mboxdb_fname);
+
+	do_undump();
+
 	mboxlist_close();
 	mboxlist_done();
 	return 0;
