@@ -327,7 +327,7 @@ int main(int argc, char **argv)
     strcpy(local.sun_path, config_dir);
     strcat(local.sun_path, FNAME_ACAPPUSH_SOCK);
     unlink(local.sun_path);
-    len = strlen(local.sun_path) + sizeof(local.sun_family);
+    len = sizeof(local.sun_family) + strlen(local.sun_path) + 1;
 
     oldumask = umask((mode_t) 0); /* for Linux */
 

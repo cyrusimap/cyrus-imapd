@@ -297,7 +297,7 @@ static int init_net(const char *unixpath)
   strcpy(addr.sun_path, unixpath);
 
   if (connect(lmtpdsock, (struct sockaddr *) &addr, 
-	      sizeof(addr.sun_family) + strlen(addr.sun_path)) < 0) {
+	      sizeof(addr.sun_family) + strlen(addr.sun_path) + 1) < 0) {
       just_exit("connect failed");
   }
 

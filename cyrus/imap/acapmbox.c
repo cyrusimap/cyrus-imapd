@@ -671,7 +671,7 @@ void acapmbox_kick_target(void)
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
     strcpy(srvaddr.sun_path, buf);
-    len = strlen(srvaddr.sun_path) + sizeof(srvaddr.sun_family);
+    len = sizeof(srvaddr.sun_family) + strlen(srvaddr.sun_path) + 1;
 
     r = connect(s, (struct sockaddr *)&srvaddr, len);
     if (r == -1) {
