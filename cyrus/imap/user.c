@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.6 2002/01/08 21:15:38 leg Exp $
+ * $Id: user.c,v 1.7 2002/01/18 22:58:48 rjs3 Exp $
  */
 
 #include <config.h>
@@ -51,6 +51,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <syslog.h>
@@ -77,6 +78,7 @@
 #include "mboxlist.h"
 #include "mailbox.h"
 #include "util.h"
+#include "seen.h"
 
 static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 {

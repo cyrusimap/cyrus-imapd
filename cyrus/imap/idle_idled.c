@@ -38,7 +38,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.8 2001/10/02 21:08:10 ken3 Exp $ */
+/* $Id: idle_idled.c,v 1.9 2002/01/18 22:58:47 rjs3 Exp $ */
+
+#include <config.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>

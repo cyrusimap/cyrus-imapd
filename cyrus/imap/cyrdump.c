@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.7 2001/11/19 21:32:44 leg Exp $
+/* $Id: cyrdump.c,v 1.8 2002/01/18 22:58:47 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -69,6 +69,11 @@ static int dump_me(char *name, int matchlen, int maycreate, void *rock);
 static void print_seq(const char *tag, const char *attrib, 
 		      unsigned *seq, int n);
 int usage(const char *name);
+
+/* available from elsewhere */
+int index_getuidsequence(struct mailbox *mailbox, 
+                        struct searchargs *searchargs,
+                        unsigned **uid_list);
 
 /* current namespace */
 static struct namespace dump_namespace;
