@@ -1,7 +1,7 @@
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers, 18-Oct-1995 -->
+<!-- Changed by: John Gardiner Myers,  3-Nov-1995 -->
 </HEAD>
 <BODY>
 <h1>           Installing and Configuring the Cyrus IMAP Server</h1>
@@ -173,12 +173,17 @@ for "<tt>configure</tt>" to find INN. <P>
 (optional).  By default, looks in "<tt>/usr/local</tt>" and then in the 
 compiler's default link path.
 
+<P><B>IMPORTANT:</B> The Kerberos v4 support requires the DES library,
+even if the "<TT>--disable-privacy</TT>" configure option is given.
+Some vendor distributions of Kerberos, including the one with Solaris,
+do not have this support and cannot be used.
+
 <p>Either "<tt>--without-krb</tt>" or "<tt>--with-krb=no</tt>" prevents
 Kerberos v4 support from being compiled in. <P>
 
 <dt><tt>--with-tcl=PATH</tt>
 <dt><tt>--without-tcl</tt>
-<dd>Specifies the path to the Tcl library and header file (optional).
+<dd>Specifies the path to the Tcl (version 7.4 or later) library and header file (optional).
 By default, looks in "<tt>/usr/local</tt>" and then in the compiler's
 default link path.  The Tcl library is needed to compile
 "<tt>cyradm</tt>", the administrative client.  Either
@@ -498,18 +503,27 @@ path name to the executable.
 
  <P>
 
-<li>Modify the "<tt>sendmail.cf</tt>" file to have the local mailer call
-"<tt>/usr/cyrus/bin/deliver</tt>" instead of "<tt>/bin/mail</tt>".  On the line
-beginning with "<tt>Mlocal</tt>", change the "<tt>P=/bin/mail,</tt>" to
-"<tt>P=/usr/cyrus/bin/deliver,</tt>" and add the "<tt>S</tt>" character to the
-"<tt>F=</tt>" field.
+<li> Sendmail versions 8.7 and later include support for the Cyrus
+IMAP server.  If you are running a verson of Sendmail older than
+8.7.1, replace it with 8.7.1 or later.  Sendmail distributions may
+be obtained from
+<A HREF="ftp://ftp.cs.berkeley.edu/ucb/sendmail">ftp://ftp.cs.berkely.edu/ucb/sendmail</A>
 
-<P>If you want to enable duplicate delivery suppression, add the
-"<TT>-e</TT>" switch to the "<TT>A=</TT>" field.  This will prevent
-two messages with the same <TT>Message-ID:</TT>
+ <P>
+<li> Generate a sendmail configuration file which delivers local mail
+to the IMAP server.  See the files <TT>cf/README</TT> and
+<TT>cf/cf/cyrusproto.mc</TT> in the Sendmail distribution for
+information on how to do this.
+
+ <P>
+<li>The Cyrus IMAP server support in Sendmail defaults to enabling
+duplicate delivery suppression, by invoking the "<TT>deliver</TT>"
+program with the "<TT>-e</TT>" switch.
+This prevents two messages with the same <TT>Message-ID:</TT>
 (<TT>Resent-Message-ID:</TT> if it exits) from being delivered to the
-same mailbox.  Periodically prune the database of deliveries by
-running "<TT>/usr/cyrus/bin/deliver -E 3</TT>" daily as the cyrus user.
+same mailbox.  Add a <TT>cron</TT> job to periodically prune the
+database of deliveries by running "<TT>/usr/cyrus/bin/deliver -E
+3</TT>" daily as the cyrus user.
 
 </ol>
 
