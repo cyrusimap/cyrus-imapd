@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.85 2004/03/09 18:08:40 rjs3 Exp $
+ * $Id: mupdate.c,v 1.86 2004/03/10 04:18:55 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -905,7 +905,8 @@ mupdate_docmd_result_t docmd(struct conn *c)
     {
 	const char *err;
 	
-	if ((err = prot_error(c->pin)) != NULL) {
+	if ((err = prot_error(c->pin)) != NULL
+	    && strcmp(err, PROT_EOF_STRING)) {
 	    syslog(LOG_WARNING, "%s, closing connection", err);
 	    prot_printf(c->pout, "* BYE \"%s\"\r\n", err);
 	}
