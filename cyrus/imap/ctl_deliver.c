@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.10 2001/09/07 18:31:58 ken3 Exp $
+ $Id: ctl_deliver.c,v 1.11 2001/09/07 19:47:23 leg Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -70,30 +70,41 @@ static int dump_p(void *rockp,
     return 1;
 }
 
+static const char hexcodes[] = "0123456789ABCDEF";
+
 static int dump_cb(void *rockp,
 		   const char *key, int keylen,
 		   const char *data, int datalen)
 {
     int *count = (int *) rockp;
     time_t mark;
-    char *id, *to, *freeme = NULL;
+    char *id, *to, *freeme;
+    int idlen, i;
 
     (*count)++;
 
     memcpy(&mark, data, sizeof(time_t));
     to = (char*) key + strlen(key) + 1;
     id = (char *) key;
-#if 0
-    if (*key != '<') {
-	int n;
-	char *p;
+    idlen = strlen(id);
 
-	id = freeme = (char *) xmalloc(2 * strlen(key) + 1);
-
-	for (n = 0, p = freeme; n < strlen(key); n++, p+=2)
-	    sprintf(p, "%02X", key[n]);
+    for (i = 0; i < idlen; i++) {
+	if (!isprint((unsigned char) id[i])) break;
     }
-#endif
+
+    if (i != idlen) {
+	/* change to hexadecimal */
+	freeme = (char *) xmalloc(sizeof(char) * idlen * 2 + 1);
+	for (i = 0; i < idlen; i++) {
+	    freeme[2 * i] = hexcodes[(id[i] >> 4) & 0xf];
+	    freeme[2 * i + 1] = hexcodes[id[i] & 0xf];
+	}
+	freeme[2 * idlen] = '\0';
+	id = freeme;
+    } else {
+	freeme = NULL;
+    }
+
     printf("id: %-40s\tto: %-20s\tat: %d\n", id, to, mark);
 
     if (freeme) free(freeme);
@@ -232,4 +243,4 @@ main(argc, argv)
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.10 2001/09/07 18:31:58 ken3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.11 2001/09/07 19:47:23 leg Exp $ */
