@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.6 2001/06/16 02:28:50 ken3 Exp $ */
+/* $Id: idle_idled.c,v 1.7 2001/06/16 02:30:17 ken3 Exp $ */
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -118,7 +118,7 @@ int idle_enabled(void)
     /* check that the socket exists */
     if (stat(idle_remote.sun_path, &sbuf) < 0) {
 	close(s);
-vv	return idle_period;
+	return idle_period;
     }
 
     /* put us in non-blocking mode */
