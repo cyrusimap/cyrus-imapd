@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapd.conf.5,v 1.65 2002/06/12 17:38:58 rjs3 Exp $
+.\" $Id: imapd.conf.5,v 1.66 2002/10/21 17:19:30 rjs3 Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -146,10 +146,31 @@ accounts should not receive mail.  That is, if user "jbRo" is a user reading
 mail, he should not also be in the admins line.  Some problems may occur
 otherwise, most notably  the ability of administrators to create top-level
 mailboxes visible to users, but not writable by users.
+.IP "\fBimap_admins:\fR <none>" 5
+A list of users that have imap admin rights, in addition to those listed
+in the admins: entry.
+.IP "\fBlmtp_admins:\fR <none>" 5
+A list of users that have LMTP admin rights, in addition to those listed
+in the admins: entry.  Only lmtp admins can deliver to lmtpd through
+TCP/IP sockets.
+.IP "\fBmupdate_admins:\fR <none>" 5
+A list of users that have mupdate admin rights, in addition to those listed
+in the admins: entry.  Only mupdate admins can connect to the mupdate master.
+.IP "\fBsieve_admins:\fR <none>" 5
+A list of users that have sieve admin rights, in addition to those listed
+in the admins: entry.
 .IP "\fBproxyservers:\fR <none>" 5
 A list of users and groups that are allowed to proxy for other users,
 seperated by spaces.  Any user listed in this will be allowed to login
 for any other user: use with caution.
+.IP "\fBimap_proxyservers\fR <none>" 5
+A list of users and groups that are allowed to proxy for other users for
+imap, seperated by spaces.  Any user listed in this will be allowed to login
+in imapd or pop3d for any other user: use with caution.
+.IP "\fBsieve_proxyservers\fR <none>" 5
+A list of users and groups that are allowed to proxy for other users for sieve,
+seperated by spaces.  Any user listed in this will be allowed to login in
+timsieved for any other user: use with caution.
 .IP "\fBdefaultacl:\fR anyone lrs" 5
 The Access Control List (ACL) placed on a newly-created (non-user) 
 mailbox that does not have a parent mailbox.
