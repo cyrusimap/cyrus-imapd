@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.6 2002/02/15 20:39:53 leg Exp $ -->
+<!-- $Id: install-murder.html,v 1.7 2002/02/18 21:13:24 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -182,9 +182,30 @@ install <tt>master</tt> and <tt>lmtpproxyd</tt> on your SMTP servers.
 <h2>Administration</h2>
 
 <h3>Keeping the database synced</h3>
+<p>Consistancy in the database is maintained by pushing the current status
+of the backends to the master, and having the frontends stay up to date with
+the master's database.  Since the frontends resync themselves entirely
+when they startup, downtime should not at all be a problem.  (While they
+are up they should be continously recieving database updates, as well as
+when they lose connection to the master, they will try to reconnect and
+resync their database upon reconnection)</p>
+<p>Provided that the namespace of the backend servers is kept discrete
+(with no mailboxes existing on the same server), it is not a big deal
+to resync the mupdate master using <tt>ctl_mboxlist -m</tt>.  If two servers
+do have the same mailbox, this will need to be resolved before database
+consistancy can be guranteed.</p>
 <h3>Moving Mailboxes between backends</h3>
+<p>xxx Currently a non-trivial problem.  There is no in-protocol way to do
+this, and even doing it manually can result in a loss of seen state.</p>
 <h3>Adding additional backend servers</h3>
+<p>This is very easy to do, simply configure an empty backend server
+and set its <tt>mupdate_server</tt> parameter to point at the mupdate
+master.  Then, issue mailbox creates to it as you would any other
+backend server.</p>
 <h3>Backups</h3>
+<p>xxx, need to write stuff.  You don't need to really backup the data on
+the mupdate master or slaves, since this data can all be generated directly
+from the backends quite easily.</p>
 
 <h3>&quot;Gotchyas&quot;</h3>
 <ul>
@@ -245,7 +266,7 @@ to ensure that the mupdate slave process is started, (is prefork=1)</li>
 <li><A HREF=http://asg.web.cmu.edu/cyrus/mupdate.html>MUPDATE Protocol Reference</A></li>
 
 <P><HR>
-last modified: $Date: 2002/02/15 20:39:53 $
+last modified: $Date: 2002/02/18 21:13:24 $
 </BODY></HTML>
 
 
