@@ -393,7 +393,7 @@ smtpmode()
 		continue;
 	    }
 	    else if (!strncasecmp(buf, "mhlo ", 5)) {
-		printf("250-%s\r\n250-8BITMIME\r\n250 PIPELINING\r\n",
+		printf("250-%s\r\n250-8BITMIME\r\n250-ENHANCEDSTATUSCODES\r\n250 PIPELINING\r\n",
 		       myhostname);
 		continue;
 	    }
