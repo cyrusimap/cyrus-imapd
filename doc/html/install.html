@@ -19,54 +19,60 @@ discussion of this server and other Cyrus software.  Send mail to
 
 Once you have unpacked the files (see the <A
 HREF="readme.html"><TT>README</TT></A> file for more information),
-change to the "<tt>cyrus-1.2</tt>" directory (This document assumes that
-the version number is 1.2.). The configuration files and various
-subdirectories are stored there.  In the directory that the configure
-file is in, type "<kbd>./configure</kbd>" to configure the software.
+"<TT>cd</TT>" to the "<tt>cyrus-1.2</tt>" directory (This document
+assumes that the version number is 1.2.). The configuration files and
+various subdirectories are stored there.  In the directory that the
+<TT>configure</TT> file is in, type "<kbd>./configure</kbd>" to
+configure the software.
 
-<P><B>Note for System V Administrators:</B> If you're using
-"<tt>csh</tt>" type "<kbd>sh configure</kbd>" instead to prevent
-"<tt>csh</tt>" from trying to execute "<tt>configure</tt>" itself.
+<P>The "<TT>configure</TT>" shell script attempts to guess correct
+values for various system-dependent variables used during compilation.
+It uses those values to create a "<TT>Makefile</TT>" in each directory
+of the package.  Finally, it creates a shell script
+"<TT>config.status</TT>" that you can run in the future to recreate
+the current configuration, a file "<TT>config.cache</TT>" that saves
+the results of its tests to speed up reconfiguring, and a file
+"<TT>config.log</TT>" containing compiler output (useful mainly for
+debugging "<TT>configure</TT>").
 
-<P><B>Note for Ultrix Administrators:</B> Type "<kbd>sh5
-configure</kbd>" to avoid bugs in /bin/sh.  "<kbd>sh -x
-configure</kbd>" may give different results than "<kbd>sh
-configure</kbd>" making it difficult to debug configure scripts.
+<P>Running "<tt>configure</tt>" takes awhile.  While running, it
+prints some messages telling which features it is checking for.
 
-<P>Running "<tt>configure</tt>" takes a minute or two and prints
-various process messages.
-
-<P>The "<tt>configure</tt>" shell script attempts to guess correct
-values for various system-dependent variables used during compilation,
-and creates the Makefile(s) (one in each subdirectory of the source
-directory).  It also creates a file "<tt>config.status</tt>" that you
-can run in the future to recreate the current configuration.
-
-<P>To compile the package in a different directory from the one
-containing the source code, you must use a version of make that
-supports the <tt>VPATH</tt> variable, such as GNU make.  Change to the
-destination directory for the object files and executables and run
-"<kbd>configure --srcdir=DIR</kbd>", where <TT>DIR</TT> is the directory that
-contains the source code.  Using this option is unnecessary if the
-source code is in the parent directory of the destination directory;
-"<tt>configure</tt>" automatically checks for the source code in
-"<tt>..</tt>" if it does not find it in the current directory.
-
-<p>You can tell "<tt>configure</tt>" to figure out the configuration for
-your system, and record it in "<tt>config.status</tt>", without actually
-configuring the package (creating "<TT>Makefile</TT>"'s and perhaps a
-configuration header file).  To do this, "<kbd>configure
---no-create</kbd>".  Later, you can run "<kbd>./config.status</kbd>" to
-configure the package.  This option is useful in "<tt>Makefile</tt>"
-rules for updating "<tt>config.status</tt>" and "<tt>Makefile</tt>".  You
-can also type "<kbd>config.status --recheck</kbd>" option, which reruns
-"<tt>configure</tt>" with the same arguments you used before.  This is
-useful if you change "<tt>configure</tt>".
+<P>You can compile the package in a different directory from the one
+containing the source code.  Doing so allows you to compile it on more
+than one kind of computer at the same time.  To do this, you must use
+a version of "<TT>make</TT>" that supports the "<tt>VPATH</tt>"
+variable, such as GNU "<TT>make</TT>".  "<TT>cd</TT>" to the directory
+where you want the object files and executables to go and run the
+"<tt>configure</tt>" script.  "<tt>configure</tt>" automatically
+checks for the source code in the directory that "<tt>configure</tt>"
+is in and in "<tt>..</tt>".
 
 <p>Here are a list of switches that can be used with "<A
 NAME="configure"><tt>configure</tt></A>".
 
 <dl>
+<dt><tt>--cache-file=FILE</tt>
+<dd>Save the results of the tests in FILE instead of "<tt>config.cache</tt>".
+Set FILE to "<tt>/dev/null</tt>" to disable caching, for debugging
+"<tt>configure</tt>". <P>
+
+<dt><tt>--help</tt>
+<dd>Print a summary of the options to "<tt>configure</tt>", and exit. <P>
+
+<dt><tt>--quiet</tt>
+<dt><tt>--silent</tt>
+<dt><tt>-q</tt>
+<dd>Do not print messages saying which checks are being made. <P>
+
+<dt><tt>--srcdir=DIR</tt>
+<dd>Look for the package's source code in directory DIR.  Usually
+"<tt>configure</tt>" can determine that directory automatically. <P>
+
+<dt><tt>--version</tt>
+<dd>Print the version of Autoconf used to generate the "<tt>configure</tt>"
+script, and exit. <P>
+
 <dt><tt>--with-login=METHOD</tt>
 <dd>Specifies the login authentication module to use.  Currently
 implemented authentication modules are:
@@ -149,15 +155,21 @@ are compiling binaries subject to export control restrictions.
 
 "<tt>configure</tt>" ignores any other arguments that you give it.
 
-<p>If your system requires unusual options for compilation or linking
-that "<tt>configure</tt>" doesn't know about, you can give
-"<tt>configure</tt>" initial values for some variables by setting them
-in the environment.  In Bourne-compatible shells, you can do that on
-the command line as follows:
+<P>Some systems require unusual options for compilation or linking
+that the "<TT>configure</TT>" script does not know about.  You can
+give "<TT>configure</TT>" initial values for variables by setting them
+in the environment.  Using a Bourne-compatible shell, you can do that
+on the command line like this:
 
 <pre>
-<KBD>   CC="gcc -traditional" DEFS=-D_POSIX_SOURCE ./configure
-</KBD></pre>
+   CC=c89 CFLAGS=-O2 LIBS=-lposix ./configure
+</pre>
+
+Or on systems that have the `env' program, you can do it like this:
+
+<pre>
+   env CPPFLAGS=-I/usr/local/include LDFLAGS=-s ./configure
+</pre>
 
 The "<tt>make</tt>" variables that you might want to override with
 environment variables when running "<tt>configure</tt>" are:
@@ -168,6 +180,20 @@ environment variables when running "<tt>configure</tt>" are:
 Default is "<tt>cc</tt>", or "<tt>gcc</tt>" if "<tt>gcc</tt>" is in your <tt>PATH</tt>.<br>
 (For "<tt>CC</tt>", any value given in the environment <strong>overrides</strong> the
 value that "<tt>configure</tt>" would choose.)
+
+<DT><TT>CFLAGS</TT>
+<DD>Debugging and optimization options for the C compiler.</tt>"<br>
+
+<DT><TT>CPPFLAGS</TT>
+<DD>Header file search directory ("<tt>-IDIR</tt>") and any other
+miscellaneous options for the C preprocessor and compiler.  If it is
+not set in the environment when "<tt>configure</tt>" runs, the default value is
+empty.<br>
+
+<DT><TT>LDFLAGS</TT>
+<DD>Stripping ("<TT>-s</TT>") and any other miscellaneous options for the
+linker.  If it is not set in the environment when "<tt>configure</tt>" runs,
+the default value is empty. 
 
 <DT><TT>DEFS</TT>
 <DD>Configuration options, in the form "<tt>-Dfoo -Dbar ...</tt>"<br>
@@ -319,7 +345,7 @@ The partition directory is similar in concept to
 <tt>/usr/spool/news</tt>.  It is where the mailboxes are stored.
 Unlike most netnews systems, Cyrus allows you to have more
 than one partition.  Do not use the string "<tt>news</tt>" as a
-partition name as it is reserved for netnews.
+partition name, as it is reserved for netnews.
 
  <P>
 
