@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.76 2003/04/22 15:55:15 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.77 2003/05/01 17:10:05 ken3 Exp $
  */
 
 /*
@@ -483,6 +483,10 @@ static void nntp_reset(void)
     if (nntp_userid != NULL) {
 	free(nntp_userid);
 	nntp_userid = NULL;
+    }
+    if (nntp_authstate) {
+	auth_freestate(nntp_authstate);
+	nntp_authstate = NULL;
     }
     if (nntp_saslconn) {
 	sasl_dispose(&nntp_saslconn);
