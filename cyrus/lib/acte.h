@@ -1,6 +1,6 @@
 /* acte.h -- Interface for IMAP AUTHENTICATE mechanisms 
  *
- *	(C) Copyright 1994 by Carnegie Mellon University
+ *	(C) Copyright 1994,1996 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -27,25 +27,86 @@
  *
  */
 
+#ifndef INCLUDED_ACTE_H
+#define INCLUDED_ACTE_H
+
+#ifndef P
+#ifdef __STDC__
+#define P(x) x
+#else
+#define P(x) ()
+#endif
+#endif
+
+#include <time.h>
+
+struct sockaddr;
+
+typedef const char *acte_encodefunc_t P((void *state,
+					  char *input, int inputlen,
+					  char *output, int *outputlen));
+typedef const char *acte_decodefunc_t P((void *state,
+					  char *input, int inputlen,
+					  char **output, int *outputlen));
+typedef int acte_authproc_t P((const char *user, const char *auth_identity,
+			       const char **reply));
+
 /* Client-side authentication mechanism */
 struct acte_client {
-    char *auth_type;		/* Name of authentication mechanism */
-    int (*start)();		/* Start a client->server authentication */
-    int (*auth)();		/* Do an authentication protocol exchange */
-    void (*query_state)();	/* Query an authentication state */
-    void (*free_state)();	/* Free an authentication state */
-    char *(*new_cred)();	/* Acquire daemon's credentials */
-    void (*free_cred)();	/* Free daemon's credentials */
+    /* Name of authentication mechanism */
+    char *auth_type;
+
+    /* Start a client->server authentication */
+    int (*start) P((const char *service, const char *host, const char *user,
+		    int protallowed, int maxbufsize,
+		    struct sockaddr *localaddr, struct sockaddr *remoteaddr,
+		    void **state));
+
+    /* Do an authentication protocol exchange */
+    int (*auth) P((void *state, int inputlen, char *input,
+		   int *outputlen, char **output));
+    
+    /* Query an authentication state */
+    void (*query_state) P((void *state, char **user, int *protlevel,
+			   acte_encodefunc_t **encodefunc,
+			   acte_decodefunc_t **decodefunc, int *maxplain));
+
+    /* Free an authentication state */
+    void (*free_state) P((void *state));
+    
+    /* Acquire daemon's credentials */
+    const char *(*new_cred) P((const char *service, time_t *lifetime));	
+
+    /* Free daemon's credentials */
+    void (*free_cred) P((void));
 };
 
 /* Server-side authentication mechanism */
 struct acte_server {
-    char *auth_type;		/* Name of authentication mechanism */
-    int (*start)();		/* Start an incoming authentication */
-    int (*auth)();		/* Do an authentication protocol exchange */
-    void (*query_state)();	/* Query an authentication state */
-    void (*free_state)();	/* Free an authentication state */
-    char *(*get_cacheid)();	/* Get a cacheid, if available */
+    /* Name of authentication mechanism */
+    char *auth_type;		
+
+    /* Start an incoming authentication */
+    int (*start) P((const char *service, acte_authproc_t *authproc,
+		    int protallowed, int maxbufsize,
+		    struct sockaddr *localaddr, struct sockaddr *remoteaddr,
+		    int *outputlen, char **output,
+		    void **state, const char ** reply));
+    
+    /* Do an authentication protocol exchange */
+    int (*auth) P((void *state, int inputlen, char *input,
+		   int *outputlen, char **output, const char **reply));
+
+    /* Query an authentication state */
+    void (*query_state) P((void *state, char **user, int *protlevel,
+			   acte_encodefunc_t **encodefunc,
+			   acte_decodefunc_t **decodefunc, int *maxplain));
+
+    /* Free an authentication state */
+    void (*free_state) P((void *state));
+    
+    /* Get a cacheid, if available */
+    char *(*get_cacheid) P((void *state));
 };
 
 /* Protection mechanisms */
@@ -58,4 +119,6 @@ struct acte_server {
 
 #define ACTE_DONE 3		/* Server has authenticated user */
 
-extern char *acte_prottostring();
+extern char *acte_prottostring P((int protlevel));
+
+#endif /* INCLUDED_ACTE_H */

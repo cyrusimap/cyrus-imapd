@@ -38,7 +38,7 @@ extern char *malloc(), *realloc();
 
 #define BEAUTYBUFSIZE 4096
 
-char convert_to_lowercase[256] = {
+const char convert_to_lowercase[256] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -73,7 +73,7 @@ char convert_to_lowercase[256] = {
     0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
 };
 
-char convert_to_uppercase[256] = {
+const char convert_to_uppercase[256] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -111,7 +111,7 @@ char convert_to_uppercase[256] = {
 /* convert string to all lower case
  */
 char *lcase(str)
-    char *str;
+char *str;
 {
     char *scan = str;
     
@@ -126,7 +126,7 @@ char *lcase(str)
 /* convert string to all upper case
  */
 char *ucase(str)
-    char *str;
+char *str;
 {
     char *scan = str;
     
@@ -143,7 +143,8 @@ char *ucase(str)
  *  dst must have twice the length of source
  */
 char *beautify_copy(dst, src)
-    char *dst, *src;
+char *dst;
+const char *src;
 {
     unsigned char c;
 
@@ -170,7 +171,7 @@ char *beautify_copy(dst, src)
  *  returns NULL on malloc() error
  */
 char *beautify_string(src)
-    char *src;
+const char *src;
 {
     static char *beautybuf = NULL;
     static int beautysize = 0;
@@ -202,10 +203,10 @@ char *beautify_string(src)
  *  returns NULL if not found, or key/value pair if found.
  */
 keyvalue *kv_bsearch(key, kv, nelem, cmpf)
-    char *key;
-    keyvalue *kv;
-    int nelem;
-    int (*cmpf)();
+const char *key;
+keyvalue *kv;
+int nelem;
+int (*cmpf) P((const char *s1, const char *s2));
 {
     int top, mid, bot, cmp;
 

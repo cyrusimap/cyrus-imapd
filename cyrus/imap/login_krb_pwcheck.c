@@ -1,4 +1,4 @@
-/* login_krb.c -- Kerberos login authentication, with pwcheck fallback
+/* login_krb_pwcheck.c -- Kerberos login authentication, with pwcheck fallback
  *
  *	(C) Copyright 1994 by Carnegie Mellon University
  *
@@ -54,7 +54,7 @@
 #include "mailbox.h"
 #include "acl.h"
 
-static login_authproc();
+static acte_authproc_t login_authproc;
 
 extern struct acte_server krb_acte_server;
 
@@ -87,9 +87,9 @@ login_init()
 
 int
 login_plaintext(user, pass, reply)
-char *user;
-char *pass;
-char **reply;
+const char *user;
+const char *pass;
+const char **reply;
 {
     int s;
     struct sockaddr_un srvaddr;
@@ -117,9 +117,9 @@ char **reply;
 	return 1;
     }
 
-    iov[0].iov_base = user;
+    iov[0].iov_base = (char *)user;
     iov[0].iov_len = strlen(user)+1;
-    iov[1].iov_base = pass;
+    iov[1].iov_base = (char *)pass;
     iov[1].iov_len = strlen(pass)+1;
 
     retry_writev(s, &iov, 2);
@@ -142,17 +142,17 @@ char **reply;
 
 int
 login_authenticate(authtype, mech, authproc, reply)
-char *authtype;
+const char *authtype;
 struct acte_server **mech;
-int (**authproc)();
-char **reply;
+acte_authproc_t **authproc;
+const char **reply;
 {
     if (strcmp(authtype, "kerberos_v4") != 0) return 1;
 
     if (!inited) login_init();
 
     if (!lrealm[0]) {
-	reply = "can't find local Kerberos realm";
+	*reply = "can't find local Kerberos realm";
 	return 1;
     }
 
@@ -161,7 +161,7 @@ char **reply;
     return 0;
 }
 
-char *
+const char *
 login_capabilities()
 {
     if (!inited) login_init();
@@ -177,10 +177,10 @@ login_capabilities()
  * not.
  */
 static int kequiv_ok(user, auth_aname, auth_inst, auth_realm)
-char *user;
-char *auth_aname;
-char *auth_inst;
-char *auth_realm;
+const char *user;
+const char *auth_aname;
+const char *auth_inst;
+const char *auth_realm;
 {
     char *mapped_user = auth_map_krbid(auth_aname, auth_inst, auth_realm);
 
@@ -193,8 +193,8 @@ char *auth_realm;
  * right to the principal 'auth_identity'. Returns 1 if so, 0 if not.
  */
 static int acl_ok(user, auth_identity)
-char *user;
-char *auth_identity;
+const char *user;
+const char *auth_identity;
 {
     char *acl;
     char inboxname[1024];
@@ -218,9 +218,9 @@ char *auth_identity;
 
 static int
 login_authproc(user, auth_identity, reply)
-char *user;
-char *auth_identity;
-char **reply;
+const char *user;
+const char *auth_identity;
+const char **reply;
 {
     char aname[ANAME_SZ];
     char inst[INST_SZ];

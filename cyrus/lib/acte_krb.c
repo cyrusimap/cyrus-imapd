@@ -37,8 +37,9 @@
 #include "acte.h"
 
 extern char *malloc();
-extern char *lcase();
-extern char *krb_get_phost(), *krb_realmofhost();
+
+extern char *lcase P((char *str));
+extern char *krb_get_phost P((char *)), *krb_realmofhost P((char *));
 
 static char *srvtab = "";	/* Srvtab filename */
 
@@ -78,10 +79,13 @@ void *state;
     free((char *) state);
 }
 
-static char *krb_en_integrity(), *krb_de_integrity();
+static acte_encodefunc_t krb_en_integrity;
+static acte_decodefunc_t krb_de_integrity;
 #ifndef NOPRIVACY
-static char *krb_en_privacy(), *krb_de_privacy();
+static acte_encodefunc_t krb_en_privacy;
+static acte_decodefunc_t krb_de_privacy;
 #endif
+
 /*
  * Query public values of the state pointer after authentiation
  * complete.  Fills in buffers pointed to by the following arguments:
@@ -100,8 +104,8 @@ krb_query_state(state, user, protlevel, encodefunc, decodefunc, maxplain)
 void *state;
 char **user;
 int *protlevel;
-char *(**encodefunc)();
-char *(**decodefunc)();
+acte_encodefunc_t **encodefunc;
+acte_decodefunc_t **decodefunc;
 int *maxplain;
 {
     struct krb_state *kstate = (struct krb_state *)state;
@@ -111,7 +115,8 @@ int *maxplain;
 
     switch (kstate->protallowed) {
     case ACTE_PROT_NONE:
-	*encodefunc = *decodefunc = 0;
+	*encodefunc = 0;
+	*decodefunc = 0;
 	*maxplain = 0;
 	return;
 
@@ -158,9 +163,9 @@ void *state;
  */
 static int krb_client_start(service, host, user, protallowed, maxbufsize,
 			    localaddr, remoteaddr, state)
-char *service;			/* Name of service */
-char *host;			/* Name of server host */
-char *user;			/* (optional) user to log in as */
+const char *service;		/* Name of service */
+const char *host;		/* Name of server host */
+const char *user;		/* (optional) user to log in as */
 int protallowed;		/* Protection mechanisms allowed */
 int maxbufsize;			/* Maximum ciphertext input buffer size */
 struct sockaddr *localaddr;	/* Network address of local side */
@@ -212,19 +217,19 @@ void **state;			/* On success, filled in with state ptr */
     }
     
     if (!user || !user[0]) {
-	user = userbuf;
-	if (krb_get_tf_fullname(TKT_FILE, user, uinst, urealm)) {
+	if (krb_get_tf_fullname(TKT_FILE, userbuf, uinst, urealm)) {
 	    memset(&cr, 0, sizeof(cr));
 	    return ACTE_FAIL;
 	}
 	if (uinst[0]) {
-	    strcat(user, ".");
-	    strcat(user, uinst);
+	    strcat(userbuf, ".");
+	    strcat(userbuf, uinst);
 	}
 	if (strcmp(urealm, realm) != 0) {
-	    strcat(user, "@");
-	    strcat(user, urealm);
+	    strcat(userbuf, "@");
+	    strcat(userbuf, urealm);
 	}
+	user = userbuf;
     }
     else if (strlen(user) > MAX_K_NAME_SZ) {
 	return ACTE_FAIL;
@@ -357,9 +362,9 @@ char **output;			/* Set to point to client reply data */
  * of credentials in seconds in the buffer pointed to by 'lifetime'
  * Returns error message on failure, NULL on success.
  */
-static char *
+static const char *
 krb_new_cred(service, lifetime)
-char *service;
+const char *service;
 time_t *lifetime;
 {
     static int inited = 0;
@@ -418,8 +423,8 @@ struct acte_client krb_acte_client = {
 static int
 krb_server_start(service, authproc, protallowed, maxbufsize,
 		 localaddr, remoteaddr, outputlen, output, state, reply)
-char *service;
-int (*authproc)();		/* (optional) function to decide
+const char *service;
+acte_authproc_t *authproc;	/* (optional) function to decide
 				 * authoriztion to log in as given user
 				 */
 int protallowed;		/* Protection mechanisms allowed */
@@ -429,7 +434,7 @@ struct sockaddr *remoteaddr;	/* Network address of remote side */
 int *outputlen;			/* Set to length of initial reply */
 char **output;			/* Set to point to initial reply data */
 void **state;			/* On success, filled in with state ptr */
-char **reply;			/* On failure, filled in with ptr to reason */
+const char **reply;		/* On failure, filled in with ptr to reason */
 {
     static char outputbuf[4];
     struct krb_state *kstate;
@@ -484,7 +489,7 @@ int inputlen;			/* Length of client response */
 char *input;			/* Client response data */
 int *outputlen;			/* Set to length of server reply */
 char **output;			/* Set to point to server reply data */
-char **reply;			/* On failure, filled in with ptr to reason */
+const char ** reply;		/* On failure, filled in with ptr to reason */
 {
     struct krb_state *kstate = (struct krb_state *)state;
     static char outputbuf[8];
@@ -636,7 +641,8 @@ struct acte_server krb_acte_server = {
  * using the state in 'state', placing the output data and length in the
  * buffers pointed to by 'output' and 'outputlen' respectively.
  */
-static char *krb_en_integrity(state, input, inputlen, output, outputlen)
+static const char *
+krb_en_integrity(state, input, inputlen, output, outputlen)
 void *state;
 char *input;
 int inputlen;
@@ -656,7 +662,8 @@ int *outputlen;
  * output data and length in the buffers pointed to by 'output' and
  * 'outputlen' respectively.
  */
-static char *krb_de_integrity(state, input, inputlen, output, outputlen)
+static const char *
+krb_de_integrity(state, input, inputlen, output, outputlen)
 void *state;
 char *input;
 int inputlen;
@@ -689,7 +696,8 @@ int *outputlen;
  * using the state in 'state', placing the output data and length in the
  * buffers pointed to by 'output' and 'outputlen' respectively.
  */
-static char *krb_en_privacy(state, input, inputlen, output, outputlen)
+static const char *
+krb_en_privacy(state, input, inputlen, output, outputlen)
 void *state;
 char *input;
 int inputlen;
@@ -710,7 +718,8 @@ int *outputlen;
  * output data and length in the buffers pointed to by 'output' and
  * 'outputlen' respectively.
  */
-static char *krb_de_privacy(state, input, inputlen, output, outputlen)
+static const char *
+krb_de_privacy(state, input, inputlen, output, outputlen)
 void *state;
 char *input;
 int inputlen;
@@ -738,7 +747,7 @@ int *outputlen;
 }
 #endif /* !NOPRIVACY */
 
-static afs_string_to_key();
+static afs_string_to_key P((char *str, des_cblock *key, char *cell));
 
 /*
  * Kerberos set srvtab filename
@@ -782,7 +791,7 @@ int kerberos_verify_password(user, passwd, service, reply)
 char *user;
 char *passwd;
 char *service;
-char **reply;
+const char **reply;
 {
     int result;
     des_cblock key;
@@ -810,7 +819,7 @@ char **reply;
 	/* Now try andrew string-to-key */
 	strcpy(cell, realm);
 	lcase(cell);
-	afs_string_to_key(passwd, key, cell);
+	afs_string_to_key(passwd, &key, cell);
     
 	result = krb_get_in_tkt(user, "", realm,
 				"krbtgt", realm, 1, use_key, NULL, key);
@@ -860,8 +869,8 @@ char **reply;
  */
 
 /* forward declarations */
-static afs_transarc_StringToKey();
-static afs_cmu_StringToKey();
+static afs_transarc_StringToKey P((char *str, char *cell, des_cblock *key));
+static afs_cmu_StringToKey P((char *str, char *cell, des_cblock *key));
 
 extern char *crypt();
 
@@ -873,9 +882,9 @@ extern char *crypt();
 
 static
 afs_cmu_StringToKey (str, cell, key)
-  char          *str;
-  char          *cell;                  /* cell for password */
-  des_cblock key;
+char *str;
+char *cell;                  /* cell for password */
+des_cblock *key;
 {   char  password[8+1];                /* crypt is limited to 8 chars anyway */
     int   i;
     int   passlen;
@@ -913,9 +922,9 @@ afs_cmu_StringToKey (str, cell, key)
 
 static
 afs_transarc_StringToKey (str, cell, key)
-  char          *str;
-  char          *cell;                  /* cell for password */
-  des_cblock *key;
+char *str;
+char *cell;                  /* cell for password */
+des_cblock *key;
 {   des_key_schedule schedule;
     char temp_key[8];
     char ivec[8];
@@ -942,13 +951,15 @@ afs_transarc_StringToKey (str, cell, key)
 }
 
 static afs_string_to_key(str, key, cell)
-  char          *str;
-  des_cblock	*key;
-  char          *cell;                  /* cell for password */
+char *str;
+des_cblock *key;
+char *cell;                  /* cell for password */
 {
-	if (strlen(str) > 8)
-		afs_transarc_StringToKey (str, cell, key);
-	else
-		afs_cmu_StringToKey (str, cell, key);
+    if (strlen(str) > 8) {
+	afs_transarc_StringToKey (str, cell, key);
+    }
+    else {
+	afs_cmu_StringToKey (str, cell, key);
+    }
 }
 

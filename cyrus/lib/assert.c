@@ -29,11 +29,12 @@
 #include <stdio.h>
 
 #include "sysexits.h"
+#include "assert.h"
 
-assertionfailed(file, line, expr)
-char *file;
+int assertionfailed(file, line, expr)
+const char *file;
 int line;
-char *expr;
+const char *expr;
 {
     char buf[1024];
 

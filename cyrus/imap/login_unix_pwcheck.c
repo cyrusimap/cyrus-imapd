@@ -46,9 +46,9 @@ extern int errno;
 
 int
 login_plaintext(user, pass, reply)
-char *user;
-char *pass;
-char **reply;
+const char *user;
+const char *pass;
+const char **reply;
 {
     int s;
     struct sockaddr_un srvaddr;
@@ -69,9 +69,9 @@ char **reply;
 	return 1;
     }
 
-    iov[0].iov_base = user;
+    iov[0].iov_base = (char *)user;
     iov[0].iov_len = strlen(user)+1;
-    iov[1].iov_base = pass;
+    iov[1].iov_base = (char *)pass;
     iov[1].iov_len = strlen(pass)+1;
 
     retry_writev(s, &iov, 2);
@@ -94,15 +94,15 @@ char **reply;
   
 int
 login_authenticate(authtype, mech, authproc, reply)
-char *authtype;
+const char *authtype;
 struct acte_server **mech;
-int (**authproc)();
-char **reply;
+acte_authproc_t **authproc;
+const char **reply;
 {
     return 1;
 }
   
-char *
+const char *
 login_capabilities()
 {
     return "";

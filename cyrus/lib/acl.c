@@ -1,6 +1,6 @@
 /* acl.c -- routines for access control lists
  *
- *	(C) Copyright 1993 by Carnegie Mellon University
+ *	(C) Copyright 1993,1996 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -35,7 +35,7 @@
 /* convert a string to an acl bit vector
  */
 long acl_strtomask(str)
-    char *str;
+const char *str;
 {
     long result = 0;
 
@@ -69,8 +69,8 @@ long acl_strtomask(str)
 /* convert an acl bit vector to a string
  */
 char *acl_masktostr(acl, str)
-    long acl;
-    char *str;
+int acl;
+char *str;
 {
     char *pos = str;
 

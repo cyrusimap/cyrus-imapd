@@ -47,7 +47,7 @@
  * Calculate the set of rights the user has in the ACL 'acl'.
  * 'acl' must be writable, but is restored to its original condition.
  */
-long acl_myrights(acl)
+int acl_myrights(acl)
 char *acl;
 {
     char *thisid, *rights, *nextid;
@@ -90,13 +90,14 @@ char *acl;
  * 'identifier' the set specified in the mask 'access'.  The pointer
  * pointed to by 'acl' must have been obtained from malloc().
  */
-acl_set(acl, identifier, access, canonproc, canonrock)
+int acl_set(acl, identifier, access, canonproc, canonrock)
 char **acl;
-char *identifier;
-long access;
-long (*canonproc)();
-char *canonrock;
+const char *identifier;
+int access;
+acl_canonproc_t *canonproc;
+void *canonrock;
 {
+    char *newidentifier = 0;
     char *newacl;
     char *thisid, *nextid;
     char *rights;
@@ -107,9 +108,10 @@ char *canonrock;
 	if (!canonid) {
 	    return -1;
 	}
-	identifier = xmalloc(strlen(canonid)+2);
-	identifier[0] = '-';
-	strcpy(identifier+1, canonid);
+	newidentifier = xmalloc(strlen(canonid)+2);
+	newidentifier[0] = '-';
+	strcpy(newidentifier+1, canonid);
+	identifier = newidentifier;
 	if (canonproc) {
 	    access = ~(canonproc(canonrock, canonid, ~access));
 	}
@@ -166,7 +168,7 @@ char *canonrock;
 	*acl = newacl;
     }
 
-    if (*identifier == '-') free(identifier);
+    if (newidentifier) free(newidentifier);
     return 0;
 }
 
@@ -176,9 +178,9 @@ char *canonrock;
  */
 acl_delete(acl, identifier, canonproc, canonrock)
 char **acl;
-char *identifier;
-long (*canonproc)();
-char *canonrock;
+const char *identifier;
+acl_canonproc_t canonproc;
+void *canonrock;
 {
-    return acl_set(acl, identifier, 0L, canonproc, canonrock);
+    return acl_set(acl, identifier, 0, canonproc, canonrock);
 }

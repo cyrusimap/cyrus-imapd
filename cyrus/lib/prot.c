@@ -121,7 +121,7 @@ time_t *ptr;
  */
 int prot_setfunc(s, func, state, maxplain)
 struct protstream *s;
-char *(*func)();
+const char *(*func)();
 void *state;
 int maxplain;
 {
@@ -195,6 +195,7 @@ struct protstream *s;
     int n, cnt = 0;
     unsigned inputlen = 0;
     char *ptr;
+    const char *err;
     int left;
     
     if (s->eof || s->error) return EOF;
@@ -268,10 +269,10 @@ struct protstream *s;
     } while (cnt < 4 || cnt-4 < inputlen);
 
     /* Decode the input token */
-    ptr = s->func(s->state, s->buf+4, inputlen, &s->ptr, &s->cnt);
-    if (ptr) {
+    err = s->func(s->state, s->buf+4, inputlen, &s->ptr, &s->cnt);
+    if (err) {
 	strcpy(s->buf, "Decoding error: ");
-	strcat(s->buf, ptr);
+	strcat(s->buf, err);
 	s->error = s->buf;
 	return EOF;
     }
@@ -392,8 +393,8 @@ struct protstream *s;
  */
 int prot_write(s, buf, len)
 struct protstream *s;
-char *buf;
-int len;
+const char *buf;
+unsigned len;
 {
     while (len >= s->cnt) {
 	memcpy(s->ptr, buf, s->cnt);
@@ -485,7 +486,7 @@ int
 prot_read(s, buf, size)
 struct protstream *s;
 char *buf;
-int size;
+unsigned size;
 {
     int c;
 
@@ -516,7 +517,7 @@ int size;
 char *
 prot_fgets(buf, size, s)
 char *buf;
-int size;
+unsigned size;
 struct protstream *s;
 {
     char *p = buf;

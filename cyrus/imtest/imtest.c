@@ -165,7 +165,9 @@ main(argc, argv)
     int sock, nfds, nfound, count, dologin, dopass;
     int len, done, maxplain;
     int prot_req, protlevel;
-    char *(*encodefunc)(), *(*decodefunc)();
+    
+    acte_encodefunc_t *encodefunc;
+    acte_decodefunc_t *decodefunc;
     char *host, *port, *pass, *outbuf, *user;
     fd_set read_set, rset;
     struct sockaddr_in addr, laddr;
@@ -176,7 +178,8 @@ main(argc, argv)
     
     if (argc < 2) usage();
     dologin = dopass = 0;
-    encodefunc = decodefunc = NULL;
+    encodefunc = 0;
+    decodefunc = 0;
     authstate = 0;
     done = 0;
     host = argv[1];
@@ -305,8 +308,10 @@ main(argc, argv)
 		    if (getsockname(sock, (struct sockaddr *)&laddr,
 				    &len) < 0 ||
 			client_start("imap", host, NULL, prot_req,
-				     sizeof (buf) - 4, &laddr,
-				     &addr, &authstate) != 0) {
+				     sizeof (buf) - 4,
+				     (struct sockaddr *)&laddr,
+				     (struct sockaddr *)&addr,
+				     &authstate) != 0) {
 			printf("__Kerberos initialization failed__\n");
 			dologin = 0;
 		    } else {

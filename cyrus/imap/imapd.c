@@ -843,11 +843,11 @@ char *authtype;
     int inputlen;
     static struct buf input;
     void *state;
-    char *reply = 0;
+    const char *reply = 0;
     int protlevel;
     char *user;
-    char *(*encodefunc)();
-    char *(*decodefunc)();
+    acte_encodefunc_t *encodefunc;
+    acte_decodefunc_t *decodefunc;
     int maxplain;
     char *val;
     char buf[MAX_MAILBOX_PATH];
@@ -858,8 +858,8 @@ char *authtype;
     r = login_authenticate(authtype, &mech, &authproc, &reply);
     if (!r) {
 	r = mech->start("imap", authproc, ACTE_PROT_ANY, PROT_BUFSIZE,
-			imapd_haveaddr ? &imapd_localaddr : 0,
-			imapd_haveaddr ? &imapd_remoteaddr : 0,
+			imapd_haveaddr ? (struct sockaddr *)&imapd_localaddr : 0,
+			imapd_haveaddr ? (struct sockaddr *)&imapd_remoteaddr : 0,
 			&outputlen, &output, &state, &reply);
     }
     if (r && r != ACTE_DONE) {

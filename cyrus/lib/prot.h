@@ -27,7 +27,18 @@
  *
  */
 
+#ifndef INCLUDED_PROT_H
+#define INCLUDED_PROT_H
+
 #include <time.h>
+
+#ifndef P
+#ifdef __STDC__
+#define P(x) x
+#else
+#define P(x) ()
+#endif
+#endif
 
 #define PROT_BUFSIZE 4096
 
@@ -41,7 +52,7 @@ struct protstream {
     int write;
     int logfd;
     time_t *log_timeptr;
-    char *(*func)();
+    const char *(*func)();
     void *state;
     int maxplain;
     char *error;
@@ -53,9 +64,21 @@ struct protstream {
 #define prot_ungetc(c, s) ((s)->cnt++, (*--(s)->ptr = (c)))
 #define prot_putc(c, s) ((*(s)->ptr++ = (c)), --(s)->cnt == 0 ? prot_flush(s) : 0)
 
-struct protstream *prot_new();
-char *prot_error();
-char *prot_fgets();
+struct protstream *prot_new P((int fd, int write));
+int prot_free P((struct protstream *s));
+int prot_setlog P((struct protstream *s, int fd));
+int prot_setlogtime P((struct protstream *s, time_t *ptr));
+int prot_setfunc P((struct protstream *s, const char *(*func)(), void *state, int maxplain));
+int prot_settimeout P((struct protstream *s, int timeout));
+char *prot_error P((struct protstream *s));
+int prot_rewind P((struct protstream *s));
+int prot_fill P((struct protstream *s));
+int prot_flush P((struct protstream *s));
+int prot_write P((struct protstream *s, const char *buf, unsigned len));
 #ifdef __STDC__
 int prot_printf(struct protstream *, const char *, ...);
 #endif
+int prot_read P((struct protstream *s, char *buf, unsigned size));
+char *prot_fgets P((char *buf, unsigned size, struct protstream *s));
+
+#endif /* INCLUDED_PROT_H */

@@ -1,6 +1,6 @@
 /* acl.h -- definitions for access control lists
  *
- *	(C) Copyright 1993-1994 by Carnegie Mellon University
+ *	(C) Copyright 1993-1996 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -29,6 +29,17 @@
  * Start Date: 6/28/93
  */
 
+#ifndef INCLUDED_ACL_H
+#define INCLUDED_ACL_H
+
+#ifndef P
+#ifdef __STDC__
+#define P(x) x
+#else
+#define P(x) ()
+#endif
+#endif
+
 /* max length of an acl string */
 #define ACL_MAXSTR 32
 
@@ -55,24 +66,24 @@
 #define ACL_USER9  0x40000L
 #define ACL_FULL   0xFFFFFL
 
-#ifdef __STDC__
-/* convert a string to an acl bit vector
- */
-extern long acl_strtomask(char *);
+typedef int acl_canonproc_t P((void *rock, const char *identifier, int rights));
+
+/* convert a string to an acl bit vector */
+extern long acl_strtomask P((const char *str));
 
 /*  acl_masktostr(acl, dst)
  * convert an acl bit vector to a string
  *  dst must have room for 32 characters (only 20 used currently)
  *  returns dst
  */
-extern char *acl_masktostr(long, char *);
+extern char *acl_masktostr P((int acl, char *str));
 
 /*  acl_myrights(acl)
  * Calculate the set of rights the user has in the ACL 'acl'.
  * 'acl' must be writable, but is restored to its original condition.
  * current user must have been set by auth_setid
  */
-extern long acl_myrights(char *);
+extern int acl_myrights P((char *acl));
 
 /*  acl_set(acl, identifier, access, canonproc, canonrock)
  * Modify the ACL pointed to by 'acl' to make the rights granted to
@@ -80,16 +91,16 @@ extern long acl_myrights(char *);
  * pointed to by 'acl' must have been obtained from malloc().
  *  returns -1 on error, 0 on success
  */
-extern int acl_set(char **, char *, long, long (*)(), char *);
+
+extern int acl_set P((char **acl, const char *identifier, int access,
+		      acl_canonproc_t *canonproc, void *canonrock));
 
 /*  acl_delete(acl, identifier, canonproc, canonrock)
  * Remove any entry for 'identifier' in the ACL pointed to by 'acl'.
  * The pointer pointed to by 'acl' must have been obtained from malloc().
  *  returns -1 on error, 0 on success
  */
-extern int acl_delete(char **, char *, long (*)(), char *);
-#else
-extern long acl_strtomask(), acl_myrights();
-extern char *acl_masktostr();
-extern int acl_set(), acl_delete();
-#endif
+extern int acl_delete P((char **acl, const char *identifier,
+			 acl_canonproc_t *canonproc, void *canonrock));
+
+#endif /* INCLUDED_ACL_H */

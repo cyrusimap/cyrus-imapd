@@ -33,11 +33,11 @@
 extern char *malloc(), *realloc();
 
 char *xmalloc (size)
-int size;
+unsigned size;
 {
     char *ret;
 
-    if (ret = malloc((unsigned) size))
+    if (ret = malloc(size))
       return ret;
 
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
@@ -46,12 +46,12 @@ int size;
 
 char *xrealloc (ptr, size)
 char *ptr;
-int size;
+unsigned size;
 {
     char *ret;
 
     /* xrealloc (NULL, size) behaves like xmalloc (size), as in ANSI C */
-    if (ret = !ptr ? malloc ((unsigned) size) : realloc (ptr, (unsigned) size))
+    if (ret = !ptr ? malloc (size) : realloc (ptr, size))
       return ret;
 
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
@@ -67,11 +67,11 @@ char *str;
 
 /* Same as xmalloc() */
 void *fs_get(size)
-int size;
+unsigned size;
 {
     char *ret;
 
-    if (ret = malloc((unsigned) size))
+    if (ret = malloc(size))
       return (void *)ret;
 
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
