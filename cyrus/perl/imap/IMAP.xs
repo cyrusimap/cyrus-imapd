@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: IMAP.xs,v 1.15.4.7 2003/04/25 17:37:49 ken3 Exp $ */
+/* $Id: IMAP.xs,v 1.15.4.8 2003/05/23 19:45:33 ken3 Exp $ */
 
 /*
  * Perl interface to the Cyrus imclient routines.  This enables the
@@ -143,6 +143,7 @@ void imclient_xs_cb(struct imclient *client, struct xsccb *rock,
   /* invoke Perl */
   perl_call_sv(rock->pcb, G_VOID|G_DISCARD);
   FREETMPS;
+  SPAGAIN;
   LEAVE;
   /* clean up */
   if (rock->autofree) imclient_xs_callback_free(rock);
@@ -592,8 +593,11 @@ PPCODE:
 	/* if there was no Perl callback, spin on events until finished */
 	if (!SvTRUE(pcb)) {
 	  AV *av;
-	  while (SvTYPE(SvRV(prock)) != SVt_PVAV)
+	  while (SvTYPE(SvRV(prock)) != SVt_PVAV) {
+	    PUTBACK;
 	    imclient_processoneevent(client->imclient);
+	    SPAGAIN;
+	  }
 	  /* push the result; if scalar, stuff text in $@ */
 	  av = (AV *) SvRV(prock);
 	  if (GIMME_V == G_SCALAR) {
