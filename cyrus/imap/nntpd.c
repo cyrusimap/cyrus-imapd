@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.60 2003/02/25 19:50:21 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.61 2003/02/25 21:38:50 ken3 Exp $
  */
 
 /*
@@ -463,6 +463,10 @@ static void nntp_reset(void)
     cyrus_close_sock(2);
 
     strcpy(nntp_clienthost, "[local]");
+    if (nntpd_logfd != -1) {
+	close(nntpd_logfd);
+	nntpd_logfd = -1;
+    }
     if (nntp_userid != NULL) {
 	free(nntp_userid);
 	nntp_userid = NULL;
@@ -1707,7 +1711,7 @@ static void cmd_authinfo_user(char *user)
     /* possibly disallow USER */
     if (!(nntp_starttls_done || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(nntp_out,
-		    "501 AUTHINFO USER command only available under a layer\r\n");
+		    "503 AUTHINFO USER command only available under a layer\r\n");
 	return;
     }
 
