@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.16 2002/02/16 20:56:56 rjs3 Exp $
+ * $Id: parser.c,v 1.17 2002/03/08 16:56:57 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -92,7 +92,7 @@ static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved
 /* Returns TRUE if we are done */
 int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 {
-  int token;
+  int token = EOL;
   const char *error_msg = "Generic Error";
 
   mystring_t *mechanism_name = NULL;
@@ -103,7 +103,8 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   int ret = FALSE;
 
   /* get one token from the lexer */
-  token = timlex(NULL, NULL, sieved_in);
+  while(token == EOL) 
+      token = timlex(NULL, NULL, sieved_in);
 
   /* If we have a referral host, no matter what the command is, we want
    * to send them there */
