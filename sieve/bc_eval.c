@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.2 2003/10/22 18:03:24 rjs3 Exp $
+ * $Id: bc_eval.c,v 1.3 2004/06/22 20:02:56 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -961,6 +961,8 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	  
 	    res = do_notify(notify_list, id, method, options,
 			    priority, message);
+
+	    free(options);
 	 	  
 	    break;
 	}
