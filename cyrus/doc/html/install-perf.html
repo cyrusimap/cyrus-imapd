@@ -1,4 +1,4 @@
-<!-- $Id: install-perf.html,v 1.1 2000/04/10 18:49:27 wcw Exp $ -->
+<!-- $Id: install-perf.html,v 1.2 2000/04/24 02:57:44 wcw Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Performance Notes
@@ -49,10 +49,16 @@ harsh on the spool partition. Having this on a separate disk is
 usually a good idea.  Consider using LMTP and delivering from a
 separate machine.
 
+<p><li>Unused SASL mechanisms - If you just build the SASL library 
+and copied all the mechanisms into /usr/lib/sasl, the <tt>imapd</tt>
+will try to use them and allocate some amount of memory. In general,
+the operating system will swap out those pages but you may be allocating
+more swap space than you need. So, look in /usr/lib/sasl and if you don't
+plan on using those mechanisms, don't leave them there. 
 </ul>
 
 <P><HR>
-last modified: $Date: 2000/04/10 18:49:27 $
+last modified: $Date: 2000/04/24 02:57:44 $
 </BODY></HTML>
 
 
