@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.19.4.6 2003/03/24 19:01:42 ken3 Exp $
+ * $Id: sieve.y,v 1.19.4.7 2003/06/28 22:14:01 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -858,12 +858,12 @@ static int verify_relat(char *r)
 {/* this really should have been a token to begin with.*/
     char errbuf[100];
 	lcase(r);
-	if (strcmp(r, "gt")) {return GT;}
-	else if (strcmp(r, "ge")) {return GE;}
-	else if (strcmp(r, "lt")) {return LT;}
-	else if (strcmp(r, "le")) {return LE;}
-	else if (strcmp(r, "ne")) {return NE;}
-	else if (strcmp(r, "eq")) {return EQ;}
+	if (!strcmp(r, "gt")) {return GT;}
+	else if (!strcmp(r, "ge")) {return GE;}
+	else if (!strcmp(r, "lt")) {return LT;}
+	else if (!strcmp(r, "le")) {return LE;}
+	else if (!strcmp(r, "ne")) {return NE;}
+	else if (!strcmp(r, "eq")) {return EQ;}
 	else{
 	  sprintf(errbuf, "flag '%s': not a valid relational operation", r);
 	  yyerror(errbuf);
