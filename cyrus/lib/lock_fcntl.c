@@ -1,5 +1,5 @@
 /* lock_fcntl.c -- Lock files using fcntl()
- $Id: lock_fcntl.c,v 1.13.6.1 2002/11/07 15:11:22 ken3 Exp $
+ $Id: lock_fcntl.c,v 1.13.6.2 2002/11/26 19:44:15 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -195,12 +195,19 @@ int fd;
 int lock_unlock(int fd)
 { 
     struct flock fl;
+    int r;
 
     fl.l_type= F_UNLCK;
     fl.l_whence = SEEK_SET;
     fl.l_start = 0;
     fl.l_len = 0;
-    fcntl(fd, F_SETLKW, &fl);
-    return 0;
+
+    for (;;) {
+        r = fcntl(fd, F_SETLKW, &fl);
+        if (r != -1) return 0;
+        if (errno == EINTR) continue;
+        /* xxx help! */
+        return -1;
+    }
 }
 

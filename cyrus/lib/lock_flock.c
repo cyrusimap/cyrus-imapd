@@ -1,5 +1,5 @@
 /* lock_flock.c -- Lock files using flock()
- $Id: lock_flock.c,v 1.12.6.1 2002/11/07 15:11:22 ken3 Exp $
+ $Id: lock_flock.c,v 1.12.6.2 2002/11/26 19:44:15 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -168,7 +168,14 @@ int fd;
  */
 int lock_unlock(int fd)
 {
-    flock(fd, LOCK_UN);
-    return 0;
+    int r;
+
+    for (;;) {
+        r = flock(fd, LOCK_UN);
+        if (r != -1) return 0;
+        if (errno == EINTR) continue;
+        /* xxx help! */
+        return -1;
+    }
 }
 
