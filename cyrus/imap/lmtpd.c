@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.137 2004/07/06 20:02:20 ken3 Exp $
+ * $Id: lmtpd.c,v 1.138 2004/09/08 19:45:22 shadow Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -207,6 +207,7 @@ int service_main(int argc, char **argv,
 		 char **envp __attribute__((unused)))
 {
     int opt;
+    int nullfd = -1;
 
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
@@ -239,9 +240,14 @@ int service_main(int argc, char **argv,
 	deliver_logfd = -1;
     }
 
-    cyrus_close_sock(0);
-    cyrus_close_sock(1);
-    cyrus_close_sock(2);
+    nullfd = open("/dev/null", O_RDONLY, 0);
+    if (nullfd < 0) {
+       fatal("open() failed", EC_TEMPFAIL);
+    }
+    cyrus_dup2_sock(nullfd, 0);
+    cyrus_dup2_sock(nullfd, 1);
+    cyrus_dup2_sock(nullfd, 2);
+    close(nullfd);
 
     return 0;
 }

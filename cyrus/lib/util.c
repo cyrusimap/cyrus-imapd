@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: util.c,v 1.28 2004/02/27 18:17:33 ken3 Exp $
+ * $Id: util.c,v 1.29 2004/09/08 19:45:32 shadow Exp $
  */
 
 #include <config.h>
@@ -283,6 +283,12 @@ int cyrus_close_sock(int fd)
 {
     shutdown(fd, SHUT_RD);
     return close(fd);
+}
+
+int cyrus_dup2_sock(int oldfd, int newfd) 
+{
+    shutdown(newfd, SHUT_RD);
+    return dup2(oldfd,newfd);
 }
 
 /* Given a mkstemp(3) pattern for a filename,
