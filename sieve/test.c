@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.19.4.1 2003/02/27 18:13:54 rjs3 Exp $
+ * $Id: test.c,v 1.19.4.2 2003/03/05 17:52:25 rjs3 Exp $
  *
  * usage: "test message script"
  */
@@ -458,8 +458,8 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     message_data_t *m = (message_data_t *) mc;
     int *force_fail = (int*) ic;
 
-    printf("echo '%s' | mail -s '%s' '%s' for message '%s'\n",
-	   src->msg, src->subj, src->addr, m->name);
+    printf("echo '%s' | mail -s '%s' '%s' for message '%s' (from: %s)\n",
+	   src->msg, src->subj, src->addr, m->name, src->fromaddr);
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
