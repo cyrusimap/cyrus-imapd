@@ -1,6 +1,6 @@
 /* map.h -- memory mapping functions
- $Id: map.h,v 1.9.2.3 2003/02/13 20:33:13 rjs3 Exp $
- 
+ * $Id: map.h,v 1.9.2.4 2003/02/27 18:12:12 rjs3 Exp $
+ *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

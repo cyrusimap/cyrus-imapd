@@ -1,5 +1,5 @@
 /* seen.h -- abstract interface for /Recent and /Seen information
-   $Id: seen.h,v 1.10.4.2 2003/02/13 20:33:01 rjs3 Exp $
+ * $Id: seen.h,v 1.10.4.3 2003/02/27 18:10:49 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

@@ -1,6 +1,6 @@
 /* nonblock_fcntl.c -- Set nonblocking mode using fcntl()
- $Id: nonblock_fcntl.c,v 1.12.2.1 2003/02/13 20:33:13 rjs3 Exp $
- 
+ * $Id: nonblock_fcntl.c,v 1.12.2.2 2003/02/27 18:12:13 rjs3 Exp $
+ *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

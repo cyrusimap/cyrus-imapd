@@ -1,6 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.18 2003/02/17 21:01:33 ken3 Exp $
- 
+ * $Id: mailbox.c,v 1.134.4.19 2003/02/27 18:10:42 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

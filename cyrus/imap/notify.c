@@ -1,5 +1,5 @@
 /* notify.c -- Module to notify of new mail
- * $Id: notify.c,v 1.6.6.5 2003/02/13 20:33:00 rjs3 Exp $ 
+ * $Id: notify.c,v 1.6.6.6 2003/02/27 18:10:47 rjs3 Exp $ 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -79,7 +79,7 @@ static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
 void notify(const char *method,
 	    const char *class, const char *priority,
 	    const char *user, const char *mailbox,
-	    int nopt, char **options,
+	    int nopt, const char **options,
 	    const char *message)
 {
     const char *notify_sock;

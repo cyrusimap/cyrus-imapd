@@ -1,5 +1,5 @@
 /* mutex.h - header for mutex functions
-
+ *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,8 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: mutex.h,v 1.1.2.2 2003/02/13 20:32:59 rjs3 Exp $ */
+
+/* $Id: mutex.h,v 1.1.2.3 2003/02/27 18:10:47 rjs3 Exp $ */
 
 #ifndef CYRUS_MUTEX_H
 #define CYRUS_MUTEX_H

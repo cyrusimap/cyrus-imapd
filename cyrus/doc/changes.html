@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.43.2.15 2003/02/22 14:10:27 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.43.2.16 2003/02/27 18:10:17 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -53,6 +53,11 @@ directly via NNTP, without the need for a local news server.  See ???
 for details.</li>
 
 <li>IPv6 support, provided by Hajimu UMEMOTO &lt;ume@mahoroba.org&gt;</li>
+
+<li> Sieve scripts are now compiled to bytecode to allow for faster
+execution (and lmtpd no longer needs lex or yacc).  See
+<a href=install-upgrade.html>install-upgrade.html</a> for more details.</li>
+
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.12</h2>
@@ -1765,7 +1770,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/02/22 14:10:27 $ <br />
+last modified: $Date: 2003/02/27 18:10:17 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

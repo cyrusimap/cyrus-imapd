@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.85.4.5 2002/12/13 17:10:30 rjs3 Exp $
+# $Id: SMakefile,v 1.85.4.6 2003/02/27 18:10:08 rjs3 Exp $
 #
 
 if test ! -x configure; then
@@ -113,8 +113,10 @@ DB_CONFIG=""
 # the following is for staticly linking SASL only
 SASL_CONFIG="--with-staticsasl=/usr/local --with-gssapi=/usr/local"
 KRB_CONFIG="--enable-statickrb --with-krb=/usr/local"
+FEATURE_CONFIG="--enable-murder --enable-annotatemore --enable-cmulocal"
+EXT_PACKAGE_CONFIG="--with-inn=/usr/news --with-ucdsnmp=/usr/local"
 
-MFCOMMAND="./configure $WITHAUTH $KRB_CONFIG $DB_CONFIG --with-inn=/usr/news --enable-experiment --enable-cmulocal --with-cyrus-group=staff --with-ucdsnmp=/usr/local --enable-murder --enable-annotatemore $SASL_CONFIG $DEBUG"
+MFCOMMAND="./configure $WITHAUTH $KRB_CONFIG $DB_CONFIG --enable-experiment --with-cyrus-group=staff $FEATURE_CONFIG $EXT_PACKAGE_CONFIG $SASL_CONFIG $DEBUG"
 
 export CFLAGS CC VER LNCOMMAND LOCALDEFS LDFLAGS
 export LIBS

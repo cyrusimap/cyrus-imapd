@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.18.16.1 2003/02/13 20:33:36 rjs3 Exp $
+ * $Id: scripttest.c,v 1.18.16.2 2003/02/27 18:14:16 rjs3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -97,7 +97,7 @@ int mysieve_error(int lineno, const char *msg,
 }
 
 /* returns TRUE or FALSE */
-int is_script_parsable(FILE *stream, char **errstr)
+int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 {
     sieve_interp_t *i;
     sieve_script_t *s;
@@ -185,7 +185,11 @@ int is_script_parsable(FILE *stream, char **errstr)
     res = sieve_script_parse(i, stream, errstr, &s);
 
     if (res == SIEVE_OK) {
-	sieve_script_free(&s);
+	if(ret) {
+	    *ret = s;
+	} else {
+	    sieve_script_free(&s);
+	}
 	free(*errstr);
 	*errstr = NULL;
     }

@@ -1,0 +1,15 @@
+there are four directories 
+
+action (sieve actions)
+test (the test cases for if)
+action extension (extensons to sieve that are actions)
+testExtension (extensions to sieve that are tests)
+
+inside these directories is:
+
+XXXXX.s (sieve script)
+XXXXX.key (what this script should do with thest messages
+serverm (dir of messages- for testing the script using lmtp server)
+testm (dir of messages- for testing the script using sieve test program)
+
+the redirected messages are all being sent to me@blah.com.  when using a lmpt server, change this to a real address first

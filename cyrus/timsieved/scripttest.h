@@ -1,6 +1,6 @@
 /* scripttest.h -- test whether the sieve script is valid
  * Tim Martin
- * $Id: scripttest.h,v 1.6.16.1 2003/02/13 20:33:36 rjs3 Exp $
+ * $Id: scripttest.h,v 1.6.16.2 2003/02/27 18:14:16 rjs3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -47,6 +47,6 @@
 #ifndef INCLUDE_SCRIPTTEST_H_
 #define INCLUDE_SCRIPTTEST_H_
 
-int is_script_parsable(FILE *f, char **errstr);
+int is_script_parsable(FILE *f, char **errstr, sieve_script_t **ret);
 
 #endif

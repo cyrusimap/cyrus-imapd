@@ -1,6 +1,6 @@
 /* tree.h -- abstract syntax tree
  * Larry Greenfield
- * $Id: tree.h,v 1.6 2002/05/14 16:51:51 ken3 Exp $
+ * $Id: tree.h,v 1.6.4.1 2003/02/27 18:13:55 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -32,7 +32,6 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 /* abstract syntax tree for sieve */
 typedef struct Stringlist stringlist_t;
-typedef struct Patternlist patternlist_t;
 typedef struct Commandlist commandlist_t;
 typedef struct Test test_t;
 typedef struct Testlist testlist_t;
@@ -44,11 +43,7 @@ struct Stringlist {
     stringlist_t *next;
 };
 
-struct Patternlist {
-    void *p;
-    patternlist_t *next;
-};
-
+ 
 struct Tag {
     int type;
     char *arg;
@@ -66,17 +61,19 @@ struct Test {
 	stringlist_t *sl; /* exists */
 	struct { /* it's a header test */
 	    int comptag;
-	    comparator_t *comp;
+	    char * comparator;
+	    int relation;
 	    void *comprock;
 	    stringlist_t *sl;
-	    patternlist_t *pl;
+	    stringlist_t *pl;
 	} h;
 	struct { /* it's an address or envelope test */
 	    int comptag;
-	    comparator_t *comp;
+	    int relation; 
+	    char * comparator;
 	    void *comprock;
 	    stringlist_t *sl;
-	    patternlist_t *pl;
+	    stringlist_t *pl;
             int addrpart;
 	} ae; 
 	test_t *t; /* not */
@@ -113,22 +110,21 @@ struct Commandlist {
 	    char *method;
 	    char *id;
 	    stringlist_t *options;
-	    const char *priority;
+	    int priority;
 	    char *message;
 	} n;
 	struct { /* it's a denotify action */
 	    int comptag;
-	    comparator_t *comp;
+	    int relation;
 	    void *comprock;
 	    void *pattern;
-	    const char *priority;
+	    int priority;
 	} d;
     } u;
     struct Commandlist *next;
 };
 
 stringlist_t *new_sl(char *s, stringlist_t *n);
-patternlist_t *new_pl(void *pat, patternlist_t *n);
 tag_t *new_tag(int type, char *s);
 taglist_t *new_taglist(tag_t *t, taglist_t *n);
 test_t *new_test(int type);
@@ -137,7 +133,6 @@ commandlist_t *new_command(int type);
 commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n);
 
 void free_sl(stringlist_t *sl);
-void free_pl(patternlist_t *pl, int comptag);
 void free_test(test_t *t);
 void free_tree(commandlist_t *cl);
 

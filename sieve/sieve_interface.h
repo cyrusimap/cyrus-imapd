@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.17 2002/05/14 16:51:51 ken3 Exp $
+ * $Id: sieve_interface.h,v 1.17.4.1 2003/02/27 18:13:54 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -34,11 +34,13 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 /* error codes */
 #define SIEVE_OK (0)
 
-#include <sieve_err.h>
+#include "sieve_err.h"
 
 /* external sieve types */
 typedef struct sieve_interp sieve_interp_t;
 typedef struct sieve_script sieve_script_t;
+typedef struct sieve_bytecode sieve_bytecode_t;
+typedef struct bytecode_info bytecode_info_t;
 
 typedef int sieve_callback(void *action_context, void *interp_context, 
 			   void *script_context,
@@ -70,15 +72,15 @@ typedef struct sieve_imapflags {
 } sieve_imapflags_t;
 
 typedef struct sieve_redirect_context {
-    char *addr;
+    const char *addr;
 } sieve_redirect_context_t;
 
 typedef struct sieve_reject_context {
-    char *msg;
+    const char *msg;
 } sieve_reject_context_t;
 
 typedef struct sieve_fileinto_context {
-    char *mailbox;
+    const char *mailbox;
     sieve_imapflags_t *imapflags;
 } sieve_fileinto_context_t;
 
@@ -87,10 +89,10 @@ typedef struct sieve_keep_context {
 } sieve_keep_context_t;
 
 typedef struct sieve_notify_context {
-    char *method;
-    char **options;
+    const char *method;
+    const char **options;
     const char *priority;
-    char *message;
+    const char *message;
 } sieve_notify_context_t;
 
 typedef struct sieve_autorespond_context {
@@ -100,10 +102,10 @@ typedef struct sieve_autorespond_context {
 } sieve_autorespond_context_t;
 
 typedef struct sieve_send_response_context {
-    char *addr;
-    char *fromaddr;
+    const char *addr;
+    const char *fromaddr;
+    const char *msg;
     char *subj;
-    char *msg;
     int mime;
 } sieve_send_response_context_t;
 
@@ -142,7 +144,19 @@ int sieve_register_execute_error(sieve_interp_t *interp,
 int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 		       void *script_context, sieve_script_t **ret);
 
+/* given a bytecode file descriptor, setup the sieve_bytecode_t */
+int sieve_script_load(sieve_interp_t *interp, int fd, const char *name,
+		      void *script_context, sieve_bytecode_t **ret);
+
+/* Unload a sieve_bytecode_t */
+int sieve_script_unload(sieve_bytecode_t **s);
+
+/* Free a sieve_script_t */
 int sieve_script_free(sieve_script_t **s);
+
+/* execute bytecode on a message */
+int sieve_execute_bytecode(sieve_bytecode_t *script, 
+			   void *message_context);
 
 /* execute a script on a message, producing side effects via callbacks */
 int sieve_execute_script(sieve_script_t *script, 
@@ -150,5 +164,14 @@ int sieve_execute_script(sieve_script_t *script,
 
 /* Get space separated list of extensions supported by the implementation */
 const char *sieve_listextensions(void);
+
+/* Create a bytecode structure given a parsed commandlist */
+int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s);
+
+/* Emit bytecode to a file descriptor */
+int sieve_emit_bytecode(int fd, bytecode_info_t *bc);
+
+/* Free a bytecode_info_t */
+void sieve_free_bytecode(bytecode_info_t **p);
 
 #endif

@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.40 2003/02/26 20:20:09 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.41 2003/02/27 18:10:10 rjs3 Exp $
 dnl
 
 
@@ -249,6 +249,7 @@ AC_ARG_WITH(news-db,
 	DB="$withval", DB="berkeley")
 CYRUS_SET_BACKEND("netnews db", CONFIG_DB_NETNEWS, $DB)
 
+SIEVE_SUBDIRS=""
 sievedir="sieve"
 AC_ARG_ENABLE(sieve,
         [  --disable-sieve         disable Sieve support],
@@ -273,9 +274,11 @@ if test "$sievedir" != "no"; then
 		 	AC_CHECK_HEADER(rxposix.h, AC_DEFINE(HAVE_RX))])
   		
 
-	PRE_SUBDIRS="${PRE_SUBDIRS} $sievedir"
+	SIEVE_SUBDIRS="${SIEVE_SUBDIRS} $sievedir"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} $sievedir/Makefile"
 fi
+
+AC_SUBST(SIEVE_SUBDIRS)
 
 dnl for et routines
 AC_FUNC_CHECK(strerror,AC_DEFINE(HAS_STRERROR),AC_DEFINE(NEED_SYS_ERRLIST))

@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.25.4.9 2003/02/13 20:33:31 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.25.4.10 2003/02/27 18:13:49 rjs3 Exp $";
 
 #include <config.h>
 
@@ -100,7 +100,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     signal(SIGPIPE, SIG_IGN);
 
     syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.25.4.9 2003/02/13 20:33:31 rjs3 Exp $ (%s)",
+	   "starting: $Id: ptloader.c,v 1.25.4.10 2003/02/27 18:13:49 rjs3 Exp $ (%s)",
 	   ptsmodule_name);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
@@ -219,4 +219,3 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(exitcode);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25.4.9 2003/02/13 20:33:31 rjs3 Exp $ */

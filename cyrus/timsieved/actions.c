@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.30.4.5 2003/02/13 20:33:36 rjs3 Exp $
+ * $Id: actions.c,v 1.30.4.6 2003/02/27 18:14:15 rjs3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -54,6 +54,8 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <sys/param.h>
+#include <sys/types.h>
+#include <fcntl.h>
 #include <syslog.h>
 #include <dirent.h>
 #include <ctype.h>
@@ -290,7 +292,9 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
   int lup;
   int result;
   char path[1024], p2[1024];
+  char bc_path[1024], bc_p2[1024];
   int maxscripts;
+  sieve_script_t *s;
 
   result = scriptname_valid(name);
   if (result!=TIMSIEVE_OK)
@@ -319,6 +323,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
       stream = fopen(path, "w+");
   }
 
+
   if (stream == NULL) {
       prot_printf(conn, "NO \"Unable to open script for writing (%s)\"\r\n",
 		  path);
@@ -341,7 +346,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
   /* let's make sure this is a valid script
      (no parse errors)
   */
-  result = is_script_parsable(stream, &errstr);
+  result = is_script_parsable(stream, &errstr, &s);
 
   if (result != TIMSIEVE_OK) {
       if (errstr && *errstr) { 
@@ -360,8 +365,50 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
   fclose(stream);
   
   if (!verify_only) {
+      int fd;
+      bytecode_info_t *bc;
+      
+      /* Now, generate the bytecode */
+      if(sieve_generate_bytecode(&bc, s) == -1) {
+	  unlink(path);
+	  sieve_script_free(&s);
+	  prot_printf(conn, "NO \"bytecode generate failed\"\r\n");
+	  return TIMSIEVE_FAIL;
+      }
+
+      /* Now, open the new file */
+      snprintf(bc_path, 1023, "%s.bc.NEW", string_DATAPTR(name));
+      fd = open(bc_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+      if(fd < 0) {
+	  unlink(path);
+	  sieve_free_bytecode(&bc);
+	  sieve_script_free(&s);
+	  prot_printf(conn, "NO \"couldn't open bytecode file\"\r\n");
+	  return TIMSIEVE_FAIL;
+      }
+	  
+      /* Now, emit the bytecode */
+      if(sieve_emit_bytecode(fd, bc) == -1) {
+	  close(fd);
+	  unlink(path);
+	  unlink(bc_path);
+	  sieve_free_bytecode(&bc);
+	  sieve_script_free(&s);
+	  prot_printf(conn, "NO \"bytecode emit failed\"\r\n");
+	  return TIMSIEVE_FAIL;
+      }
+
+      sieve_free_bytecode(&bc);
+      sieve_script_free(&s);
+
+      close(fd);
+
+      /* Now, rename! */
       snprintf(p2, 1023, "%s.script", string_DATAPTR(name));
+      snprintf(bc_p2, 1023, "%s.bc", string_DATAPTR(name));
       rename(path, p2);
+      rename(bc_path, bc_p2);
+
   }
 
   prot_printf(conn, "OK\r\n");
@@ -373,7 +420,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
 
 static int deleteactive(struct protstream *conn)
 {
-    if (unlink("default") != 0) {
+    if (unlink("default.bc") != 0) {
 	prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
 	return TIMSIEVE_FAIL;
     }
@@ -388,12 +435,12 @@ static int isactive(char *name)
     char filename[1024];
     char activelink[1024];
 
-    snprintf(filename, 1023, "%s.script", name);
+    snprintf(filename, 1023, "%s.bc", name);
     memset(activelink, 0, sizeof(activelink));
-    if ((readlink("default", activelink, sizeof(activelink)-1) < 0) && 
+    if ((readlink("default.bc", activelink, sizeof(activelink)-1) < 0) && 
 	(errno != ENOENT)) 
     {
-	syslog(LOG_ERR, "readlink(default): %m");
+	syslog(LOG_ERR, "readlink(default.bc): %m");
 	return FALSE;
     }
 
@@ -427,6 +474,15 @@ int deletescript(struct protstream *conn, mystring_t *name)
 
   if (result != 0) {
       prot_printf(conn,"NO \"Error deleting script\"\r\n");
+      return TIMSIEVE_FAIL;
+  }
+
+  snprintf(path, 1023, "%s.bc", string_DATAPTR(name));
+
+  result = unlink(path);
+
+  if (result != 0) {
+      prot_printf(conn,"NO \"Error deleting bytecode\"\r\n");
       return TIMSIEVE_FAIL;
   }
 
@@ -532,23 +588,23 @@ int setactive(struct protstream *conn, mystring_t *name)
     }
 
     /* get the name of the active sieve script */
-    snprintf(filename, sizeof filename, "%s.script", string_DATAPTR(name));
+    snprintf(filename, sizeof(filename), "%s.bc", string_DATAPTR(name));
 
     /* ok we want to do this atomically so let's
        - make <activesieve>.NEW as a hard link
        - rename it to <activesieve>
     */
-    result = symlink(filename, "default.NEW");
+    result = symlink(filename, "default.bc.NEW");
     if (result) {
-	syslog(LOG_ERR, "symlink(%s, default.NEW): %m", filename);
+	syslog(LOG_ERR, "symlink(%s, default.bc.NEW): %m", filename);
 	prot_printf(conn, "NO \"Can't make link\"\r\n");    
 	return TIMSIEVE_FAIL;
     }
 
-    result = rename("default.NEW", "default");
+    result = rename("default.bc.NEW", "default.bc");
     if (result) {
-	unlink("default.NEW");
-	syslog(LOG_ERR, "rename(default.NEW, default): %m");
+	unlink("default.bc.NEW");
+	syslog(LOG_ERR, "rename(default.bc.NEW, default.bc): %m");
 	prot_printf(conn,"NO \"Error renaming\"\r\n");
 	return TIMSIEVE_FAIL;
     }

@@ -1,6 +1,6 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
- * $Id: comparator.c,v 1.12.2.1 2002/12/03 15:07:34 ken3 Exp $
+ * $Id: comparator.c,v 1.12.2.2 2003/02/27 18:13:52 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -36,6 +36,9 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "comparator.h"
 #include "tree.h"
 #include "sieve.h"
+#include "bytecode.h"
+
+/*!!! uses B_CONTAINS not CONTAINS, etc, only works with bytecode*/
 
 extern int strcasecmp(const char *, const char *);
 
@@ -215,6 +218,7 @@ static int octet_matches(const char *text, const char *pat,
     return octet_matches_(text, pat, 0);
 }
 
+
 #ifdef ENABLE_REGEX
 static int octet_regex(const char *text, const char *pat, 
                        void *rock __attribute__((unused)))
@@ -225,6 +229,7 @@ static int octet_regex(const char *text, const char *pat,
 
 
 /* --- i;ascii-casemap comparators --- */
+
 
 /* use strcasecmp() as the compare function */
 
@@ -238,13 +243,14 @@ static int ascii_casemap_contains(const char *text, const char *pat,
 
     i = 0, j = 0;
     while ((j < M) && (i < N)) {
-	if (toupper(text[i]) == toupper(pat[j])) {
-	    i++; j++;
+              if (toupper(text[i]) == toupper(pat[j])) {
+	  	  i++; j++;
 	} else {
 	    i = i - j + 1;
 	    j = 0;
 	}
-    }
+    }    
+
     return (j == M); /* we found a match! */
 }
 
@@ -272,86 +278,108 @@ static int ascii_numeric_cmp(const char *text, const char *pat)
     else return 0; /* both not digits */
 }
 
-static comparator_t *lookup_rel(const char *relation)
+static comparator_t *lookup_rel(int relation)
 {
     comparator_t *ret;
 
     ret = NULL;
-    if (!strcmp(relation, "eq")) ret = &rel_eq;
-    else if (!strcmp(relation, "ne")) ret = &rel_ne;
-    else if (!strcmp(relation, "gt")) ret = &rel_gt;
-    else if (!strcmp(relation, "ge")) ret = &rel_ge;
-    else if (!strcmp(relation, "lt")) ret = &rel_lt;
-    else if (!strcmp(relation, "le")) ret = &rel_le;
+    switch (relation)
+      {
+      case B_EQ:
+	ret = &rel_eq;
+	break;
+      case B_NE:
+	ret = &rel_ne; 
+	break;
+      case B_GT: 
+	ret = &rel_gt; 
+	break;
+      case B_GE:
+         ret = &rel_ge; 
+	 break;
+      case B_LT:
+	ret = &rel_lt; 
+	break;
+      case B_LE:
+	ret = &rel_le; 
+      }
 
     return ret;
 }
 
-comparator_t *lookup_comp(const char *comp, int mode, const char *relation,
+comparator_t *lookup_comp(int comp, int mode, int relation,
 			  void **comprock)
 {
     comparator_t *ret;
 
     ret = NULL;
     *comprock = NULL;
-    if (!strcmp(comp, "i;octet")) {
-	switch (mode) {
-	case IS:
+#if VERBOSE
+    printf("comp%d mode%d relat%d     \n", comp, mode, relation); 
+#endif
+    switch (comp)
+      {
+      case B_OCTET:    
+ 	switch (mode) {
+	  case B_IS:
 	    ret = &rel_eq;
 	    *comprock = (void **) &octet_cmp;
 	    break;
-	case CONTAINS:
+	  case B_CONTAINS:
 	    ret = &octet_contains;
 	    break;
-	case MATCHES:
+	  case B_MATCHES:
 	    ret = &octet_matches;
 	    break;
 #ifdef ENABLE_REGEX
-	case REGEX:
+	  case B_REGEX:
 	    ret = &octet_regex;
 	    break;
 #endif
-	case VALUE:
+	  case B_VALUE:
 	    ret = lookup_rel(relation);
 	    *comprock = (void **) &octet_cmp;
 	    break;
 	}
-    } else if (!strcmp(comp, "i;ascii-casemap")) {
-	switch (mode) {
-	case IS:
+	break; /*end of octet */
+      case B_ASCIICASEMAP:
+     	switch (mode) {
+	case B_IS:
 	    ret = &rel_eq;
 	    *comprock = (void **) &strcasecmp;
 	    break;
-	case CONTAINS:
+	case B_CONTAINS:
 	    ret = &ascii_casemap_contains;
 	    break;
-	case MATCHES:
+	case B_MATCHES:
 	    ret = &ascii_casemap_matches;
 	    break;
 #ifdef ENABLE_REGEX
-	case REGEX:
+	case B_REGEX:
 	    /* the ascii-casemap destinction is made during
 	       the compilation of the regex in verify_regex() */
 	    ret = &octet_regex;
 	    break;
 #endif
-	case VALUE:
+	case B_VALUE:
 	    ret = lookup_rel(relation);
 	    *comprock = &strcasecmp;
 	    break;
 	}
-    } else if (!strcmp(comp, "i;ascii-numeric")) {
+	break;/*end of ascii casemap */
+      case B_ASCIINUMERIC:
 	switch (mode) {
-	case IS:
+	case B_IS:
 	    ret = &rel_eq;
 	    *comprock = (void **) &ascii_numeric_cmp;
 	    break;
-	case COUNT:
-	case VALUE:
+	case B_COUNT:
+	case B_VALUE:
 	    ret = lookup_rel(relation);
 	    *comprock = (void **) &ascii_numeric_cmp;
 	    break;
 	}
-    }
+	break;
+      }
     return ret;
 }

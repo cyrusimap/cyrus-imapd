@@ -1,5 +1,5 @@
 /* hmac-md5.h -- HMAC_MD5 functions
- * $Id: hmac-md5.h,v 1.2 2002/05/25 19:57:52 leg Exp $
+ * $Id: hmac-md5.h,v 1.2.6.1 2003/02/27 18:13:52 rjs3 Exp $
  */
 
 #ifndef HMAC_MD5_H

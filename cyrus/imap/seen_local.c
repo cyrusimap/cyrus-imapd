@@ -1,5 +1,5 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
- $Id: seen_local.c,v 1.33.4.5 2003/02/13 20:33:01 rjs3 Exp $
+ * $Id: seen_local.c,v 1.33.4.6 2003/02/27 18:10:51 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: snmpgen,v 1.14 2002/05/31 14:38:40 wcw Exp $
+# $Id: snmpgen,v 1.14.4.1 2003/02/27 18:14:13 rjs3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.

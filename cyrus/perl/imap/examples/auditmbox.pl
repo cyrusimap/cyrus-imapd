@@ -38,7 +38,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: auditmbox.pl,v 1.3 2002/05/25 19:57:49 leg Exp $
+# $Id: auditmbox.pl,v 1.3.4.1 2003/02/27 18:13:39 rjs3 Exp $
 #
 # This script WON'T work for you.  Guaranteed.
 # It checks CMU ECE policy, and your policy *will* be different.

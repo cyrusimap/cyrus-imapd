@@ -1,4 +1,4 @@
-$Id: inn.diffs,v 1.3 2002/05/25 19:57:49 leg Exp $
+$Id: inn.diffs,v 1.3.4.1 2003/02/27 18:13:13 rjs3 Exp $
 
 This is a patch against INN 2.2.1 for allowing INN to deliver directly
 to an IMAP server using LMTP and IMAP (to handle control messages)

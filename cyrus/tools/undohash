@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # script to downgrade from cyrus imapd 1.6.2+ to earlier.
 # do NOT run this script while imapd's are running
-# $Id: undohash,v 1.7 2002/05/25 19:57:53 leg Exp $
+# $Id: undohash,v 1.7.4.1 2003/02/27 18:14:20 rjs3 Exp $
 # 
 # Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
 #

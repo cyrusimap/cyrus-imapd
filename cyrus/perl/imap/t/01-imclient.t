@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: 01-imclient.t,v 1.4 2002/05/25 19:57:50 leg Exp $
+# $Id: 01-imclient.t,v 1.4.4.1 2003/02/27 18:13:44 rjs3 Exp $
 #
 # Before `make install' is performed this script should be runnable with
 # `make test'. After `make install' it should work as `perl test.pl'

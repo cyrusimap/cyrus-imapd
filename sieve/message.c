@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.25 2002/05/14 16:51:50 ken3 Exp $
+ * $Id: message.c,v 1.25.4.1 2003/02/27 18:13:52 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -49,7 +49,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * incompatible with: fileinto, redirect
  */
-int do_reject(action_list_t *a, char *msg)
+int do_reject(action_list_t *a, const char *msg)
 {
     action_list_t *b = NULL;
 
@@ -86,7 +86,8 @@ int do_reject(action_list_t *a, char *msg)
  *
  * incompatible with: reject
  */
-int do_fileinto(action_list_t *a, char *mbox, sieve_imapflags_t *imapflags)
+int do_fileinto(action_list_t *a, const char *mbox,
+		sieve_imapflags_t *imapflags)
 {
     action_list_t *b = NULL;
 
@@ -114,7 +115,7 @@ int do_fileinto(action_list_t *a, char *mbox, sieve_imapflags_t *imapflags)
  *
  * incompatible with: reject
  */
-int do_redirect(action_list_t *a, char *addr)
+int do_redirect(action_list_t *a, const char *addr)
 {
     action_list_t *b = NULL;
 
@@ -194,8 +195,8 @@ int do_discard(action_list_t *a)
     return 0;
 }
 
-int do_vacation(action_list_t *a, char *addr, char *fromaddr,
-		char *subj, char *msg, int days,
+int do_vacation(action_list_t *a, const char *addr, const char *fromaddr,
+		char *subj, const char *msg, int days,
 		int mime)
 {
     action_list_t *b = NULL;
@@ -229,7 +230,7 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
  *
  * incompatible with: reject
  */
-int do_setflag(action_list_t *a, char *flag)
+int do_setflag(action_list_t *a, const char *flag)
 {
     action_list_t *b = NULL;
  
@@ -256,7 +257,7 @@ int do_setflag(action_list_t *a, char *flag)
  *
  * incompatible with: reject
  */
-int do_addflag(action_list_t *a, char *flag)
+int do_addflag(action_list_t *a, const char *flag)
 {
     action_list_t *b = NULL;
  
@@ -283,7 +284,7 @@ int do_addflag(action_list_t *a, char *flag)
  *
  * incompatible with: reject
  */
-int do_removeflag(action_list_t *a, char *flag)
+int do_removeflag(action_list_t *a, const char *flag)
 {
     action_list_t *b = NULL;
  
@@ -340,8 +341,8 @@ int do_mark(action_list_t *a)
  */
 int do_unmark(action_list_t *a)
 {
+
     action_list_t *b = NULL;
- 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
 	b = a;
@@ -364,9 +365,9 @@ int do_unmark(action_list_t *a)
  *
  * incompatible with: none
  */
-int do_notify(notify_list_t *a, char *id,
-	      char *method, stringlist_t **options,
-	      const char *priority, char *message)
+int do_notify(notify_list_t *a, const char *id,
+	      const char *method, const char **options,
+	      const char *priority, const char *message)
 {
     notify_list_t *b = NULL;
 
@@ -396,7 +397,7 @@ int do_notify(notify_list_t *a, char *id,
  *
  * incomaptible with: none
  */
-int do_denotify(notify_list_t *n, comparator_t *comp, void *pat,
+int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
 		void *comprock, const char *priority)
 {
     while (n != NULL) {
@@ -493,10 +494,13 @@ char *get_address(address_part_t addrpart,
 	    break;
 
 	case ADDRESS_DETAIL:
-	    if (a->mailbox) {
+	    if (a->mailbox)
+	    {	    
 		char *p = strchr(a->mailbox, '+');
 		ret = (p ? p + 1 : NULL);
-	    } else {
+	    }
+	    else
+	    {
 		ret = NULL;
 	    }
 	    break;
@@ -562,16 +566,11 @@ void free_action_list(action_list_t *a)
 {
     while (a) {
 	action_list_t *b = a->next;
-	switch (a->a) {
-	case ACTION_VACATION:
-	    if (a->u.vac.send.addr) free(a->u.vac.send.addr);
-	    if (a->u.vac.send.fromaddr) free(a->u.vac.send.fromaddr);
-	    if (a->u.vac.send.subj) free(a->u.vac.send.subj);
-	    break;
 
-	default:
-	    break;
+	if(a->a == ACTION_VACATION) {
+	    if(a->u.vac.send.subj) free(a->u.vac.send.subj);
 	}
+
 	free(a);
 	a = b;
     }

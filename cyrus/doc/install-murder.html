@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.13.4.2 2003/01/16 19:50:34 ken3 Exp $ -->
+<!-- $Id: install-murder.html,v 1.13.4.3 2003/02/27 18:10:21 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -13,6 +13,9 @@ things, and if you choose to deploy you are doing so at your own risk.
 Many of the failure modes can be difficult to track without a detailed
 understanding of the mupdate protocol and IMAP in general, and thus even
 considering a deployment is not for the faint at heart.<p>
+Sites which think they need the Murder functionality but do not need
+a uniform namespace (no shared mailboxes) should consider other IMAP
+proxy solutions.<p>
 At the same time, we are using it successfully in production at Carnegie
 Mellon.
 </i></b><br>
@@ -340,7 +343,7 @@ to ensure that the mupdate slave process is started, (is prefork=1)</li>
 </ul>
 
 <P><HR>
-last modified: $Date: 2003/01/16 19:50:34 $
+last modified: $Date: 2003/02/27 18:10:21 $
 </BODY></HTML>
 
 

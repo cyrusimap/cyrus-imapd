@@ -1,6 +1,6 @@
 /* message.h
  * Larry Greenfield
- * $Id: message.h,v 1.14 2002/05/14 16:51:50 ken3 Exp $
+ * $Id: message.h,v 1.14.4.1 2003/02/27 18:13:52 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -72,7 +72,7 @@ struct Action {
 	    sieve_autorespond_context_t autoresp;
 	} vac;
 	struct {
-	    char *flag;
+	    const char *flag;
 	} fla;
     } u;
     char *param;		/* freed! */
@@ -84,13 +84,12 @@ struct Action {
 
 typedef struct notify_list_s {
     int isactive;
-    char *id;
-    char *method;
-    stringlist_t **options;
+    const char *id;
+    const char *method;
+    const char **options;
     const char *priority;
-    char *message;
+    const char *message;
     struct notify_list_s *next;
-
 } notify_list_t;
 
 /* header parsing */
@@ -112,23 +111,23 @@ void free_notify_list(notify_list_t *n);
 /* actions; return negative on failure.
  * these don't actually perform the actions, they just add it to the
  * action list */
-int do_reject(action_list_t *m, char *msg);
-int do_fileinto(action_list_t *m, char *mbox, sieve_imapflags_t *imapflags);
-int do_redirect(action_list_t *m, char *addr);
+int do_reject(action_list_t *m, const char *msg);
+int do_fileinto(action_list_t *m, const char *mbox,
+		sieve_imapflags_t *imapflags);
+int do_redirect(action_list_t *m, const char *addr);
 int do_keep(action_list_t *m, sieve_imapflags_t *imapflags);
 int do_discard(action_list_t *m);
-int do_vacation(action_list_t *m, char *addr, char *fromaddr,
-		char *subj, char *msg, 
-		int days, int mime);
-int do_setflag(action_list_t *m, char *flag);
-int do_addflag(action_list_t *m, char *flag);
-int do_removeflag(action_list_t *m, char *flag);
+int do_vacation(action_list_t *m, const char *addr, const char *fromaddr,
+		char *subj, const char *msg, int days, int mime);
+int do_setflag(action_list_t *m, const char *flag);
+int do_addflag(action_list_t *m, const char *flag);
+int do_removeflag(action_list_t *m, const char *flag);
 int do_mark(action_list_t *m);
 int do_unmark(action_list_t *m);
-int do_notify(notify_list_t *n, char *id,
-	      char *method, stringlist_t **options,
-	      const char *priority, char *message);
-int do_denotify(notify_list_t *n, comparator_t *comp, void *pat,
+int do_notify(notify_list_t *n, const char *id,
+	      const char *method, const char **options,
+	      const char *priority, const char *message);
+int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
 		void *comprock, const char *priority);
 
 

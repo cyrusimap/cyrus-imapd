@@ -42,7 +42,8 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32.4.15 2003/02/13 20:32:55 rjs3 Exp $ */
+/* $Id: fud.c,v 1.32.4.16 2003/02/27 18:10:34 rjs3 Exp $ */
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif

@@ -45,11 +45,10 @@
  *
  */
 
-/* $Id: readconfig.c,v 1.4.4.1 2003/02/13 20:33:22 rjs3 Exp $ */
+/* $Id: readconfig.c,v 1.4.4.2 2003/02/27 18:13:15 rjs3 Exp $ */
 
-/*     Copyright 1991 Rich Salz.
+/*   Copyright 1991 Rich Salz.
  *   All rights reserved.
- *   $Revision: 1.4.4.1 $
  *
  *    Redistribution and use in any form are permitted provided that the
  *    following restrictions are are met:

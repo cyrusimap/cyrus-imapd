@@ -1,0 +1,10 @@
+MAIL FROM:<jsmith2+testing@andrew.cmu.edu>
+RCPT TO:<jsmith2>
+DATA
+Date: Mon, 25 Feb 2002 08:51:06 -0500
+From: them
+To: you
+Subject:  zmark unmark
+
+blah
+.

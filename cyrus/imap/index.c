@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.23 2003/02/13 20:32:56 rjs3 Exp $
+ * $Id: index.c,v 1.180.4.24 2003/02/27 18:10:35 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1446,8 +1446,8 @@ unsigned uid;
  * Expunge decision procedure to get rid of articles
  * both \Deleted and listed in the sequence under 'rock'.
  */
-int index_expungeuidlist(struct mailbox *mailbox, void *rock,
-			 char *indexbuf)
+int index_expungeuidlist(struct mailbox *mailbox __attribute__((unused)),
+			 void *rock, char *indexbuf)
 {
     char *sequence = (char *)rock;
     unsigned uid = ntohl(*((bit32 *)(indexbuf+OFFSET_UID)));
@@ -4534,7 +4534,8 @@ static void index_thread_ref(unsigned *msgno_list, int nmsg, int usinguid)
 /*
  * NNTP specific stuff.
  */
-char *index_get_msgid(struct mailbox *mailbox, unsigned msgno)
+char *index_get_msgid(struct mailbox *mailbox __attribute__((unused)),
+		      unsigned msgno)
 {
     const char *cacheitem;
     int cachelen;
@@ -4622,7 +4623,7 @@ static void parse_env_address(char *str, struct address *addr)
     addr->domain = parse_nstring(&str);
 }
 
-extern struct nntp_overview *index_overview(struct mailbox *mailbox,
+extern struct nntp_overview *index_overview(struct mailbox *mailbox __attribute__((unused)),
 					    unsigned msgno)
 {
     static struct nntp_overview over;
@@ -4631,7 +4632,7 @@ extern struct nntp_overview *index_overview(struct mailbox *mailbox,
     const char *cacheitem;
     int size;
     char *envtokens[NUMENVTOKENS];
-    struct address addr = { NULL, NULL, NULL, NULL };
+    struct address addr = { NULL, NULL, NULL, NULL, NULL, NULL };
 
     cacheitem = cache_base + CACHE_OFFSET(msgno); /* envelope */
 

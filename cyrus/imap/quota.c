@@ -39,7 +39,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.41.4.8 2003/02/13 20:33:01 rjs3 Exp $ */
+
+/* $Id: quota.c,v 1.41.4.9 2003/02/27 18:10:49 rjs3 Exp $ */
 
 
 #include <config.h>
@@ -284,9 +285,9 @@ int buildquotalist(char **roots, int nroots)
  * Account for mailbox 'name' when fixing the quota roots
  */
 int fixquota_mailbox(char *name,
-		     int matchlen,
-		     int maycreate,
-		     void* rock)
+		     int matchlen __attribute__((unused)),
+		     int maycreate __attribute__((unused)),
+		     void* rock __attribute__((unused)))
 {
     int r;
     struct mailbox mailbox;

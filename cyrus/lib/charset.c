@@ -38,7 +38,8 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: charset.c,v 1.39.4.3 2003/02/13 20:33:11 rjs3 Exp $
+/*
+ * $Id: charset.c,v 1.39.4.4 2003/02/27 18:12:08 rjs3 Exp $
  */
 #include <config.h>
 #include <ctype.h>

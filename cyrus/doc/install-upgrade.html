@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28.4.7 2003/02/10 21:26:00 rjs3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28.4.8 2003/02/27 18:10:21 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -60,7 +60,9 @@ and UNIX socket.  In cyrus.conf, ptloader should be setup to listen on
 should now specify --with-auth=pts (instead of --with-auth=krb_pts).
 There is also a --with-pts= configure option that defaults to afskrb
 (Kerberos Canonicalization, AFS PTS Groups).  There is also an experimental
-ldap module</li>
+ldap module.  Note also that if ptloader fails the lookup, authorization
+(and therefore authentication) will now fail, as canonicalization
+is done inside of ptloader.</li>
 
 <li>The format of sieve referrals has changed to be more consistant with
 the current managesieve draft, this may cause interoperability problems
@@ -87,6 +89,18 @@ We do not know of any clients that have this problem currently.</li>
 
 <li>Any applications that link libcyrus.a now need to link libcyrus_min.a
 as well.</li>
+
+<li>Sieve scripts are now compiled into bytecode.  The program &quot;sievec&quot;
+is provide to do this process manually (timsieved will compile submitted
+sieve scripts as they are uploaded).  To upgrade existing scripts (outside
+of home directories), you can run the masssievec perl script in the tools/
+directory of the distribution.  It requires a path to your sievec
+binary.  For example:
+
+<pre>
+masssievec /usr/src/cyrus/sieve/sievec
+</pre>
+</li>
 
 </ul>
 
@@ -311,7 +325,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2003/02/10 21:26:00 $
+last modified: $Date: 2003/02/27 18:10:21 $
 </BODY></HTML>
 
 

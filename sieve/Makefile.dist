@@ -1,4 +1,4 @@
-# $Id: Makefile.dist,v 1.6 2002/05/25 19:57:52 leg Exp $
+# $Id: Makefile.dist,v 1.6.4.1 2003/02/27 18:13:50 rjs3 Exp $
 
 YACC = bison -y
 YFLAGS = -d

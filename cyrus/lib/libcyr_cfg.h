@@ -38,10 +38,9 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * Author: Chris Newman
- * Start Date: 4/6/93
  */
-/* $Id: libcyr_cfg.h,v 1.1.2.5 2003/02/13 20:33:13 rjs3 Exp $
+/*
+ * $Id: libcyr_cfg.h,v 1.1.2.6 2003/02/27 18:12:12 rjs3 Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H

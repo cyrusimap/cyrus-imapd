@@ -1,6 +1,5 @@
 /* message.c -- Message manipulation/parsing
  * 
- * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.88.16.6 2003/02/13 20:32:58 rjs3 Exp $
+ * $Id: message.c,v 1.88.16.7 2003/02/27 18:10:46 rjs3 Exp $
  */
 
 #include <config.h>
