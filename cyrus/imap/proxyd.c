@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.83 2002/01/30 01:20:24 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.84 2002/01/30 19:57:14 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -157,7 +157,8 @@ int proxyd_userisadmin;
 struct sockaddr_in proxyd_localaddr, proxyd_remoteaddr;
 int proxyd_haveaddr = 0;
 char proxyd_clienthost[250] = "[local]";
-struct protstream *proxyd_out, *proxyd_in;
+struct protstream *proxyd_out = NULL;
+struct protstream *proxyd_in = NULL;
 time_t proxyd_logtime;
 static char shutdownfilename[1024];
 
@@ -229,8 +230,9 @@ void cmd_netscape (char* tag);
 void printstring (const char *s);
 void printastring (const char *s);
 
-/* XXX fix when proto-izing mboxlist.c */
-static int mailboxdata(), listdata(), lsubdata();
+static int mailboxdata(char *name, int matchlen, int maycreate, void *rock);
+static int listdata(char *name, int matchlen, int maycreate, void *rock);
+static int lsubdata(char *name, int matchlen, int maycreate, void *rock);
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
 
 /* Enable the resetting of a sasl_conn_t */
@@ -1230,8 +1232,10 @@ void fatal(const char *s, int code)
 	exit(recurse_code);
     }
     recurse_code = code;
-    prot_printf(proxyd_out, "* BYE Fatal error: %s\r\n", s);
-    prot_flush(proxyd_out);
+    if (proxyd_out) {
+	prot_printf(proxyd_out, "* BYE Fatal error: %s\r\n", s);
+	prot_flush(proxyd_out);
+    }
     shut_down(code);
 }
 
@@ -1541,6 +1545,8 @@ cmdloop()
 			    "* BYE %s\r\n", error_message(IMAP_BYE_LOGOUT));
 		prot_printf(proxyd_out, "%s OK %s\r\n", 
 			    tag.s, error_message(IMAP_OK_COMPLETED));
+
+		/* xxx enable process reuse */
 		shut_down(0);
 	    }
 	    else if (!proxyd_userid) goto nologin;
@@ -4286,11 +4292,10 @@ void printastring(const char *s)
 /*
  * Issue a MAILBOX untagged response
  */
-static int mailboxdata(name, matchlen, maycreate, rock)
-char *name;
-int matchlen;
-int maycreate;
-void* rock;
+static int mailboxdata(char *name, 
+		       int matchlen, 
+		       int maycreate, 
+		       void* rock)
 {
     char mboxname[MAX_MAILBOX_PATH+1];
 
@@ -4386,11 +4391,7 @@ int maycreate;
 /*
  * Issue a LIST untagged response
  */
-static int listdata(name, matchlen, maycreate, rock)
-char *name;
-int matchlen;
-int maycreate;
-void* rock;
+static int listdata(char *name, int matchlen, int maycreate, void *rock)
 {
     mstringdata("LIST", name, matchlen, maycreate);
     return 0;
@@ -4399,11 +4400,7 @@ void* rock;
 /*
  * Issue a LSUB untagged response
  */
-static int lsubdata(name, matchlen, maycreate, rock)
-char *name;
-int matchlen;
-int maycreate;
-void* rock;
+static int lsubdata(char *name, int matchlen, int maycreate, void *rock)
 {
     mstringdata("LSUB", name, matchlen, maycreate);
     return 0;
