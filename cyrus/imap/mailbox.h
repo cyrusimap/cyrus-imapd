@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.77.2.4 2004/04/01 02:40:21 ken3 Exp $
+ * $Id: mailbox.h,v 1.77.2.5 2004/04/02 19:43:25 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -160,7 +160,7 @@ struct index_record {
     unsigned long cache_version;
 };
 
-/* Offsets of index header fields */
+/* Offsets of index/expunge header fields */
 #define OFFSET_GENERATION_NO 0
 #define OFFSET_FORMAT 4
 #define OFFSET_MINOR_VERSION 8
@@ -181,7 +181,7 @@ struct index_record {
 #define OFFSET_SPARE1 68
 #define OFFSET_SPARE2 72
 
-/* Offsets of index_record fields in index file */
+/* Offsets of index_record fields in index/expunge file */
 #define OFFSET_UID 0
 #define OFFSET_INTERNALDATE 4
 #define OFFSET_SENTDATE 8
