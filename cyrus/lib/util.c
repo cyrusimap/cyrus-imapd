@@ -1,28 +1,29 @@
 /* util.c -- general utility functions
- $Id: util.c,v 1.8 1998/05/15 21:53:30 neplokh Exp $
- 
- #        Copyright 1998 by Carnegie Mellon University
- #
- #                      All Rights Reserved
- #
- # Permission to use, copy, modify, and distribute this software and its
- # documentation for any purpose and without fee is hereby granted,
- # provided that the above copyright notice appear in all copies and that
- # both that copyright notice and this permission notice appear in
- # supporting documentation, and that the name of CMU not be
- # used in advertising or publicity pertaining to distribution of the
- # software without specific, written prior permission.
- #
- # CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
- # ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
- # CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
- # ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
- # WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
- # ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
- # SOFTWARE.
+ * 
+ *        Copyright 1998 by Carnegie Mellon University
+ *
+ *                      All Rights Reserved
+ *
+ * Permission to use, copy, modify, and distribute this software and its
+ * documentation for any purpose and without fee is hereby granted,
+ * provided that the above copyright notice appear in all copies and that
+ * both that copyright notice and this permission notice appear in
+ * supporting documentation, and that the name of CMU not be
+ * used in advertising or publicity pertaining to distribution of the
+ * software without specific, written prior permission.
+ *
+ * CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+ * ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+ * CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+ * ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+ * WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+ * SOFTWARE.
  *
  * Author: Chris Newman
  * Start Date: 4/6/93
+ */
+/* $Id: util.c,v 1.9 1999/03/02 01:31:15 tjs Exp $
  */
 
 #include <stdio.h>
@@ -34,7 +35,7 @@ extern char *malloc(), *realloc();
 
 #define BEAUTYBUFSIZE 4096
 
-const char convert_to_lowercase[256] = {
+const unsigned char convert_to_lowercase[256] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -69,7 +70,7 @@ const char convert_to_lowercase[256] = {
     0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
 };
 
-const char convert_to_uppercase[256] = {
+const unsigned char convert_to_uppercase[256] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -106,8 +107,7 @@ const char convert_to_uppercase[256] = {
 
 /* convert string to all lower case
  */
-char *lcase(str)
-char *str;
+char *lcase(char* str)
 {
     char *scan = str;
     
@@ -121,8 +121,7 @@ char *str;
 
 /* convert string to all upper case
  */
-char *ucase(str)
-char *str;
+char *ucase(char* str)
 {
     char *scan = str;
     
@@ -138,9 +137,7 @@ char *str;
  *  returns pointer to end of dst string.
  *  dst must have twice the length of source
  */
-char *beautify_copy(dst, src)
-char *dst;
-const char *src;
+char *beautify_copy(char* dst, const char* src)
 {
     unsigned char c;
 
@@ -166,8 +163,7 @@ const char *src;
  *  returns pointer to a static buffer containing the cleaned-up version
  *  returns NULL on malloc() error
  */
-char *beautify_string(src)
-const char *src;
+char *beautify_string(const char* src)
 {
     static char *beautybuf = NULL;
     static int beautysize = 0;
@@ -198,11 +194,8 @@ const char *src;
  *  cmpf is the comparison function (strcmp, strcasecmp, etc).
  *  returns NULL if not found, or key/value pair if found.
  */
-keyvalue *kv_bsearch(key, kv, nelem, cmpf)
-const char *key;
-keyvalue *kv;
-int nelem;
-int (*cmpf) P((const char *s1, const char *s2));
+keyvalue *kv_bsearch(const char* key, keyvalue* kv, int nelem,
+		     int (*cmpf) P((const char *s1, const char *s2)))
 {
     int top, mid, bot, cmp;
 
