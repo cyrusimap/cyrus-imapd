@@ -1,6 +1,6 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server FAQ</TITLE>
-    <!-- $Id: faq.html,v 1.9 2000/07/21 18:47:38 leg Exp $ -->
+    <!-- $Id: faq.html,v 1.10 2000/09/16 21:51:32 leg Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server FAQ</H1>
 
@@ -19,6 +19,10 @@ to do it yourself or use a commercial product. Check the list archives
 for more information.
 
 <li><b>dots in userids</b> - no you can't have a '.' in your username.
+
+<li><b>renaming users</b> - nope, not supported.
+
+<li><b>plus addressing</b>
 
 <li><b>Performance/Capacity/Scaling</b> - There is no good answer for
 this. It depends on your hardware, your operating system, and how your
@@ -48,8 +52,8 @@ look for his name.
 <dt><b>Q:</b> I'm getting syslog'd messages from the master process
 saying processes are "signaled to death by 10".  What's up?</dt>
 <dd>
-<p><b>A:</b> Try installing some <a
-href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">patches
+<p><b>A:</b> If you're using Berkeley DB 3.0.55, try installing some
+<a href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">patches
 to Berkeley DB</a> available from <a
 href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">
 http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html</a>.</dd>
@@ -61,7 +65,7 @@ secrets, but imapd doesn't say <tt>AUTH=CRAM-MD5</tt>. Why?
 </dl>
 
 <P><HR>
-last modified: $Date: 2000/07/21 18:47:38 $
+last modified: $Date: 2000/09/16 21:51:32 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
