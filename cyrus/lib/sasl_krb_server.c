@@ -80,7 +80,8 @@ char **output;			/* Set to point to initial reply data */
 void **state;			/* On success, filled in with state ptr */
 const char **reply;		/* On failure, filled in with ptr to reason */
 {
-    static char outputbuf[4];
+    static union { char buf[4]; int num; } outputbuf;
+    /* static char outputbuf[4]; */
     struct krb_state *kstate;
 
     protallowed &= SASL_PROT_NONE|SASL_PROT_INTEGRITY
@@ -114,8 +115,8 @@ const char **reply;		/* On failure, filled in with ptr to reason */
     }
     kstate->authproc = authproc;
 
-    *(int *)outputbuf = htonl(kstate->challenge);
-    *output = outputbuf;
+    *(int *)outputbuf.num = htonl(kstate->challenge);
+    *output = outputbuf.buf;
     *outputlen = 4;
     *state = (void *)kstate;
     
