@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.92 2004/01/22 16:25:13 rjs3 Exp $ */
+/* $Id: master.c,v 1.93 2004/02/04 21:46:39 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -479,6 +479,7 @@ void service_create(struct service *s)
 	
 	s->ready_workers = 0;
 	s->associate = nsocket;
+	s->family = res->ai_family;
 	
 	get_statsock(s->stat);
 	
