@@ -1,10 +1,9 @@
 dnl sasl.m4--sasl libraries and includes
 dnl Derrick Brashear
 dnl from KTH sasl and Arla
-dnl $Id: sasl.m4,v 1.20 2002/05/25 19:57:42 leg Exp $
+dnl $Id: sasl.m4,v 1.20.4.1 2003/02/14 16:14:51 ken3 Exp $
 
 AC_DEFUN(CMU_SASL_INC_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 CMU_CHECK_HEADER_NOCACHE(sasl.h,
@@ -25,7 +24,6 @@ AC_DEFUN(CMU_SASL_INC_WHERE, [
 ])
 
 AC_DEFUN(CMU_SASL_LIB_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lsasl"
 AC_TRY_LINK(,

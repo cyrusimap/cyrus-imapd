@@ -1,7 +1,6 @@
-dnl $Id: berkdb.m4,v 1.3.4.1 2002/12/10 20:57:06 rjs3 Exp $
+dnl $Id: berkdb.m4,v 1.3.4.2 2003/02/14 16:14:47 ken3 Exp $
 
 AC_DEFUN(CMU_DB_INC_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <db.h>],
@@ -33,7 +32,6 @@ AC_DEFUN(CMU_DB_INC_WHERE, [
 #
 
 AC_DEFUN(CMU_DB3_LIB_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 AC_REQUIRE([CMU_AFS])
 AC_REQUIRE([CMU_KRB4])
 saved_LIBS=$LIBS
@@ -45,7 +43,6 @@ ac_cv_found_db_3_lib=no)
 LIBS=$saved_LIBS
 ])
 AC_DEFUN(CMU_DB4_LIB_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 AC_REQUIRE([CMU_AFS])
 AC_REQUIRE([CMU_KRB4])
 saved_LIBS=$LIBS
@@ -208,8 +205,8 @@ AC_DEFUN(CYRUS_BERKELEY_DB_CHK_LIB,
 	BDB_SAVE_LIBS=$LIBS
 
 	if test -d $with_bdb_lib; then
-	    LIBS="$LIBS -L$with_bdb_lib"
-	    BDB_LIBADD="-L$with_bdb_lib -R $with_bdb_lib"
+	    CMU_ADD_LIBPATH_TO($with_bdb_lib, LIBS)
+	    CMU_ADD_LIBPATH_TO($with_bdb_lib, BDB_LIBADD)
 	else
 	    BDB_LIBADD=""
 	fi
@@ -244,7 +241,10 @@ AC_DEFUN(CYRUS_BERKELEY_DB_CHK,
 [
 	AC_REQUIRE([CYRUS_BERKELEY_DB_OPTS])
 
+	cmu_save_CPPFLAGS=$CPPFLAGS
+
 	if test -d $with_bdb_inc; then
+	    CPPFLAGS="$CPPFLAGS -I$with_bdb_inc"
 	    BDB_INCADD="-I$with_bdb_inc"
 	else
 	    BDB_INCADD=""
@@ -255,4 +255,6 @@ AC_DEFUN(CYRUS_BERKELEY_DB_CHK,
         AC_CHECK_HEADER(db.h,
                         CYRUS_BERKELEY_DB_CHK_LIB(),
                         dblib="no")
+
+	CPPFLAGS=$cmu_save_CPPFLAGS
 ])

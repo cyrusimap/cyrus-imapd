@@ -1,10 +1,9 @@
 dnl kerberos_v4.m4--Kafs libraries and includes
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
-dnl $Id: kafs.m4,v 1.4 2002/05/25 19:57:42 leg Exp $
+dnl $Id: kafs.m4,v 1.4.4.1 2003/02/14 16:14:48 ken3 Exp $
 
 AC_DEFUN(CMU_KAFS_INC_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([
@@ -45,7 +44,6 @@ AC_DEFUN(CMU_KAFS_INC_WHERE, [
 ])
 
 AC_DEFUN(CMU_KAFS_LIB_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lkafs $KRB_LIB_FLAGS $KRB5_LIB_FLAGS"
 AC_TRY_LINK(,

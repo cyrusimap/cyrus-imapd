@@ -1,10 +1,9 @@
 dnl libcyrus.m4--Cyrus libraries and includes
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
-dnl $Id: libcyrus.m4,v 1.16.4.1 2002/07/25 17:21:38 ken3 Exp $
+dnl $Id: libcyrus.m4,v 1.16.4.2 2003/02/14 16:14:49 ken3 Exp $
 
 AC_DEFUN(CMU_LIBCYRUS_INC_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1 $SASLFLAGS"
 CMU_CHECK_HEADER_NOCACHE(cyrus/imclient.h,
@@ -29,7 +28,6 @@ AC_DEFUN(CMU_LIBCYRUS_INC_WHERE, [
 ])
 
 AC_DEFUN(CMU_LIBCYRUS_LIB_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lcyrus ${LIB_SASL} ${LIBSSL_LIB_FLAGS} ${LIB_SOCKET}"
 AC_TRY_LINK([void fatal(){}],

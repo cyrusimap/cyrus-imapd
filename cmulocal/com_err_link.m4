@@ -2,11 +2,10 @@ dnl damnit, i don't want to figure out if I need to build an integral com_err
 dnl library with the collection, I just want to know where it's installed,
 dnl so don't bitch, Rob...
 dnl Derrick Brashear
-dnl $Id: com_err_link.m4,v 1.5 2002/05/25 19:57:41 leg Exp $
+dnl $Id: com_err_link.m4,v 1.5.4.1 2003/02/14 16:14:47 ken3 Exp $
 
 
 AC_DEFUN(CMU_COMERR_INC_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <com_err.h>],
@@ -36,7 +35,6 @@ AC_DEFUN(CMU_COMERR_INC_WHERE, [
 #
 
 AC_DEFUN(CMU_COMERR_LIB_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lcom_err"
 AC_TRY_LINK(,

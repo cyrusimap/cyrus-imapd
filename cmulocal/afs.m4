@@ -1,12 +1,11 @@
 dnl afs.m4--AFS libraries, includes, and dependencies
-dnl $Id: afs.m4,v 1.20.4.1 2002/07/25 17:21:38 ken3 Exp $
+dnl $Id: afs.m4,v 1.20.4.2 2003/02/14 16:14:46 ken3 Exp $
 dnl Chaskiel Grundman
 dnl based on kerberos_v4.m4
 dnl Derrick Brashear
 dnl from KTH krb and Arla
 
 AC_DEFUN(CMU_AFS_INC_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 cmu_save_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$cmu_save_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <afs/param.h>],

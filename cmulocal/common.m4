@@ -1,8 +1,8 @@
-dnl $Id: common.m4,v 1.9 2002/05/25 19:57:42 leg Exp $
+dnl $Id: common.m4,v 1.9.4.1 2003/02/14 16:14:47 ken3 Exp $
 
 AC_DEFUN(CMU_TEST_LIBPATH, [
 changequote(<<, >>)
-define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_lib, [ *], [_p]))
+define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_lib, <<- *>>, <<__p>>))
 changequote([, ])
 if test "$CMU_AC_CV_FOUND" = "yes"; then
   if test \! -r "$1/lib$2.a" -a \! -r "$1/lib$2.so" -a \! -r "$1/lib$2.sl"; then

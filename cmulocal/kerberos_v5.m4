@@ -1,10 +1,9 @@
 dnl kerberos_v5.m4--Kerberos 5 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v5.m4,v 1.5 2002/05/25 19:57:42 leg Exp $
+dnl $Id: kerberos_v5.m4,v 1.5.4.1 2003/02/14 16:14:48 ken3 Exp $
 
 AC_DEFUN(CMU_KRB5_INC_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <krb5.h>],
@@ -34,7 +33,6 @@ AC_DEFUN(CMU_KRB5_INC_WHERE, [
 #
 
 AC_DEFUN(CMU_KRB5_LIB_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lkrb5 -lk5crypto"
 AC_TRY_LINK(,
@@ -45,7 +43,6 @@ LIBS=$saved_LIBS
 ])
 
 AC_DEFUN(CMU_KRB5_HLIB_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lkrb5 -ldes -lasn1"
 AC_TRY_LINK(,
@@ -126,7 +123,7 @@ AC_ARG_WITH(krb5-include,
 	    ac_cv_krb5_where_inc=$with_krb5_include
 	  fi
 	  if test "X$ac_cv_krb5_where_inc" = "X"; then
-	    CMU_KRB5_INC_WHERE(/usr/athena/include /usr/include/kerberos /usr/local/include)
+	    CMU_KRB5_INC_WHERE(/usr/athena/include /usr/include/kerberos /usr/local/include /usr/include)
 	  fi
 	fi
 
@@ -144,10 +141,12 @@ AC_ARG_WITH(krb5-include,
           else
 	    KRB5_LIB_DIR=$ac_cv_krb5_where_hlib
      	    KRB5_LIB_FLAGS="-L${KRB5_LIB_DIR} -lkrb5 -ldes -lasn1"
-	    AC_DEFINE(HEIMDAL)
+	    AC_DEFINE(HEIMDAL,,[we found heimdal krb5 and not MIT krb5])
           fi
 	  KRB5_INC_FLAGS="-I${KRB5_INC_DIR}"
-	  AC_DEFINE(KRB5)
+          AC_SUBST(KRB5_INC_FLAGS)
+          AC_SUBST(KRB5_LIB_FLAGS)
+	  AC_DEFINE(KRB5,,[Use Kerberos 5. (maybe find what needs this and nuke it)])
 	  if test "X$RPATH" = "X"; then
 		RPATH=""
 	  fi

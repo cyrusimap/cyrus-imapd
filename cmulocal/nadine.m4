@@ -1,10 +1,9 @@
 dnl nadine.m4--The nadine event library
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
-dnl $Id: nadine.m4,v 1.4 2002/05/25 19:57:42 leg Exp $
+dnl $Id: nadine.m4,v 1.4.4.1 2003/02/14 16:14:50 ken3 Exp $
 
 AC_DEFUN(CMU_NADINE_INC_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 CMU_CHECK_HEADER_NOCACHE(libevent/libevent.h,
@@ -35,7 +34,6 @@ dnl   CMU_TEST_INCPATH isn't very versatile
 ])
 
 AC_DEFUN(CMU_NADINE_LIB_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -levent"
 AC_TRY_LINK(,
