@@ -1,4 +1,4 @@
-package IMAP::Cyrus;
+package Cyrus::IMAP;
 
 use strict;
 use vars qw($VERSION @ISA);
@@ -8,7 +8,7 @@ require DynaLoader;
 @ISA = qw(DynaLoader);
 $VERSION = '1.00';
 
-bootstrap IMAP::Cyrus $VERSION;
+bootstrap Cyrus::IMAP $VERSION;
 
 use Carp;
 use IO::File;
@@ -208,20 +208,20 @@ __END__
 
 =head1 NAME
 
-IMAP::Cyrus - Interface to Cyrus imclient library
+Cyrus::IMAP - Interface to Cyrus imclient library
 
 =head1 SYNOPSIS
 
-  use IMAP::Cyrus;
+  use Cyrus::IMAP;
 
-  my $client = IMAP::Cyrus->new('mailhost'[, $flags]);
-  $flags = IMAP::Cyrus::CONN_NONSYNCLITERAL;
+  my $client = Cyrus::IMAP->new('mailhost'[, $flags]);
+  $flags = Cyrus::IMAP::CONN_NONSYNCLITERAL;
   $client->setflags($flags);
-  $client->clearflags(IMAP::Cyrus::CONN_INITIALRESPONSE);
+  $client->clearflags(Cyrus::IMAP::CONN_INITIALRESPONSE);
   $flags = $client->flags;
   $server = $client->servername;
   $client->authenticate;
-  $flags = IMAP::Cyrus::CALLBACK_NUMBERED || IMAP::Cyrus::CALLBACK_NOLITERAL;
+  $flags = Cyrus::IMAP::CALLBACK_NUMBERED || Cyrus::IMAP::CALLBACK_NOLITERAL;
   $client->addcallback({-trigger => $str, -flags => $flags,
 			-callback => \&cb, -rock => \$var}, ...);
   $client->send(\&callback, \&cbdata, $format, ...);
@@ -231,7 +231,7 @@ IMAP::Cyrus - Interface to Cyrus imclient library
 
 =head1 DESCRIPTION
 
-The IMAP::Cyrus module provides an interface to the Cyrus B<imclient>
+The Cyrus::IMAP module provides an interface to the Cyrus B<imclient>
 library.  These are primarily useful for implementing B<cyradm> operations
 within a Perl script; there are easier ways to implement general client
 operations, although they may be more limited in terms of authentication
@@ -240,7 +240,7 @@ options when talking to a Cyrus imapd.
 In the normal case, one will attach to a Cyrus server and authenticate
 using the best available method:
 
-	my $client = IMAP::Cyrus::new('imap');
+	my $client = Cyrus::IMAP::new('imap');
 	$client->authenticate;
 	if (!$client->send('', '', 'CREATE %s', 'user.' . $username)) {
 	  warn "createmailbox user.$username: $@";
@@ -262,7 +262,7 @@ For more information, consult the Cyrus documentation.
 
 =head1 NOTES
 
-C<send()> behaves as if the C<IMAP::Cyrus::CONN_NONSYNCLITERAL> flag is always
+C<send()> behaves as if the C<Cyrus::IMAP::CONN_NONSYNCLITERAL> flag is always
 set.  This is because it is a wrapper for the C version, which cannot be made
 directly available from Perl, and synchronous literals require interaction
 with the IMAP server while parsing the format string.  This is planned to be
@@ -270,9 +270,9 @@ fixed in the future.
 
 The C<'LOGIN'> mechanism can be used to authenticate with a plaintext username
 and password.  This is intended as a workaround for a bug in early SASL
-implementations; use of IMAP::Cyrus with non-Cyrus servers is not recommended,
+implementations; use of Cyrus::IMAP with non-Cyrus servers is not recommended,
 primarily because there are easier ways to implement IMAP client functionality
-in Perl.  (However, if you need SASL support, C<IMAP::Cyrus> is currently the
+in Perl.  (However, if you need SASL support, C<Cyrus::IMAP> is currently the
 only way to get it.)
 
 The file descriptor returned by C<getselectinfo()> should not be used for
@@ -294,7 +294,7 @@ Brandon S. Allbery, allbery@ece.cmu.edu
 
 =head1 SEE ALSO
 
-IMAP::Cyrus::Admin
+Cyrus::IMAP::Admin
 perl(1), cyradm(1), imclient(3), imapd(8).
 
 =cut

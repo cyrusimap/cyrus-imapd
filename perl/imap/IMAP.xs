@@ -10,7 +10,7 @@
 #include "imclient.h"
 #include "cyrperl.h"
 
-typedef struct xscyrus *IMAP_Cyrus;
+typedef struct xscyrus *Cyrus_IMAP;
 
 
 /*
@@ -118,7 +118,7 @@ void imclient_xs_fcmdcb(struct imclient *client, struct xsccb *rock,
 
 
 
-MODULE = IMAP::Cyrus	PACKAGE = IMAP::Cyrus	
+MODULE = Cyrus::IMAP	PACKAGE = Cyrus::IMAP
 PROTOTYPES: ENABLE
 
 int
@@ -141,7 +141,7 @@ CALLBACK_NOLITERAL()
 PPCODE:
 	RETVAL = CALLBACK_NOLITERAL;
 
-MODULE = IMAP::Cyrus	PACKAGE = IMAP::Cyrus	PREFIX=imclient_
+MODULE = Cyrus::IMAP	PACKAGE = Cyrus::IMAP	PREFIX=imclient_
 PROTOTYPES: ENABLE
 
 SV *
@@ -154,7 +154,7 @@ PREINIT:
 	struct imclient *client;
 	int rc;
 	SV *bang;
-	IMAP_Cyrus rv;
+	Cyrus_IMAP rv;
 CODE:
 	rc = imclient_connect(&client, host, port);
 	switch (rc) {
@@ -188,7 +188,7 @@ CODE:
 
 void
 imclient_DESTROY(client)
-	IMAP_Cyrus client
+	Cyrus_IMAP client
 PREINIT:
 	struct xscb *nx;
 CODE:
@@ -209,7 +209,7 @@ CODE:
 
 void
 imclient_setflags(client, flags)
-	IMAP_Cyrus client
+	Cyrus_IMAP client
 	int flags
 PPCODE:
 	imclient_setflags(client->imclient, flags);
@@ -217,7 +217,7 @@ PPCODE:
 
 void
 imclient_clearflags(client, flags)
-	IMAP_Cyrus client
+	Cyrus_IMAP client
 	int flags
 PPCODE:
 	imclient_clearflags(client->imclient, flags);
@@ -225,14 +225,14 @@ PPCODE:
 
 int
 imclient_flags(client)
-	IMAP_Cyrus client
+	Cyrus_IMAP client
 PPCODE:
 	/* why is there no way to query this? */
 	RETVAL = client->flags;
 
 char *
 imclient_servername(client)
-	IMAP_Cyrus client
+	Cyrus_IMAP client
 PREINIT:
 	char *cp;
 CODE:
@@ -243,13 +243,13 @@ OUTPUT:
 
 void
 imclient_processoneevent(client)
-	IMAP_Cyrus client
+	Cyrus_IMAP client
 PPCODE:
 	imclient_processoneevent(client->imclient);
 
 SV *
 imclient__authenticate(client, mechlist, service, user, minssf, maxssf)
-	IMAP_Cyrus client
+	Cyrus_IMAP client
 	char* mechlist
 	char* service
 	char* user
@@ -268,7 +268,7 @@ CODE:
 
 void
 imclient_addcallback(client, ...)
-	IMAP_Cyrus client
+	Cyrus_IMAP client
 PREINIT:
 	int arg;
 	HV *cb;
@@ -375,7 +375,7 @@ PPCODE:
 	
 void
 imclient__send(client, finishproc, finishrock, str)
-	IMAP_Cyrus client
+	Cyrus_IMAP client
 	SV *finishproc
 	SV *finishrock
 	char *str
@@ -477,7 +477,7 @@ PPCODE:
 
 void
 imclient_getselectinfo(client)
-	IMAP_Cyrus client
+	Cyrus_IMAP client
 PREINIT:
 	int fd, writep;
 PPCODE:
