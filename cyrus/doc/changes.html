@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.16 2004/06/24 15:16:21 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.17 2004/06/29 14:18:32 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -10,13 +10,15 @@
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.x</h1>
 <ul>
-<li>Added support for "unified" Murders.  A Murder no longer has to have
-discrete frontend and backend servers; any one server can both proxy
-and serve local mailboxes (proxy functionality in <tt>proxyd</tt> and
-<tt>lmtpproxyd</tt> has been merged with <tt>imapd</tt> and
-<tt>lmtpd</tt> respectively).  The new <tt>mupdate_config</tt> option
-in <tt>imapd.conf</tt> is used to determine whether a Murder is using
-a "traditional" or "unified" configuration.</li>
+<li>Added support for "unified" and "replicated" Murders.  A Murder no
+longer has to have discrete frontend and backend servers; any one
+"unified" server can both proxy and serve local mailboxes (proxy
+functionality in <tt>proxyd</tt> and <tt>lmtpproxyd</tt> has been
+merged with <tt>imapd</tt> and <tt>lmtpd</tt> respectively), or all
+"replicated" servers can serve the same mailboxes from a shared
+filesystem.  The new <tt>mupdate_config</tt> option in
+<tt>imapd.conf</tt> is used to determine whether a Murder is using a
+"traditional", "unified" or "replicated" configuration.</li> 
 <li>Added support for "delayed" expunge, in which messages are
 removed from the mailbox index at the time of the EXPUNGE (hiding them
 from the client), but the message files and cache entries are left
@@ -1995,7 +1997,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2004/06/24 15:16:21 $ <br />
+last modified: $Date: 2004/06/29 14:18:32 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
