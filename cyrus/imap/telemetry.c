@@ -1,5 +1,5 @@
 /* telemetry.c -- common server telemetry
- * $Id: telemetry.c,v 1.3 2001/03/15 22:31:11 leg Exp $
+ * $Id: telemetry.c,v 1.4 2001/04/04 01:16:46 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -65,7 +65,7 @@ int telemetry_log(const char *userid, struct protstream *pin,
 
     snprintf(buf, sizeof(buf), "%s%s%s/%lu", 
 	     config_dir, FNAME_LOGDIR, userid, (unsigned long) getpid());
-    fd = open(buf, O_APPEND | O_WRONLY, 0644);
+    fd = open(buf, O_CREAT | O_APPEND | O_WRONLY, 0644);
 
     if (fd != -1) {
 	now = time(NULL);
