@@ -24,11 +24,15 @@
     
     <p>
       To get to the repository, get a version of CVS with client-server support
-      (anything remotely recent has this, I think) and do
-      
+      (anything remotely recent has this, I think) and do this:
+
+    <p>
       <tt>
+	cvs -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs login <br>
+        <i>(enter "anonymous" as the password)</i> <br>
 	cvs -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs co -d cyrus-imapd
-	src/cyrus
+	src/cyrus<br>
+
       </tt>
 
       (the first -d specifies the CVSROOT, in this case, our CVS server, and a
@@ -79,9 +83,9 @@
 
     <hr>
     <p>
-      $Id: anoncvs.html,v 1.2 1998/09/29 04:04:59 tjs Exp $ <br>
+      $Id: anoncvs.html,v 1.3 1998/09/30 19:07:31 tjs Exp $ <br>
     <!-- hhmts start -->
-last modified by tjs at Tue Sep 29 00:04:54 1998
+last modified by tjs at Wed Sep 30 15:07:24 1998
 <!-- hhmts end -->
     </p>
   </body>
