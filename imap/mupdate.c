@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.35 2002/01/28 22:07:14 rjs3 Exp $
+ * $Id: mupdate.c,v 1.36 2002/01/29 19:11:11 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -112,6 +112,10 @@ struct conn {
     struct pending *plist;
     struct conn *updatelist_next;
 
+    /* Prefix for list commands */
+    const char *list_prefix;
+    size_t list_prefix_len;
+
     struct conn *next;
 };
 
@@ -135,7 +139,7 @@ void cmd_set(struct conn *C,
 	     const char *server, const char *acl, enum settype t);
 void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 	      int dook);
-void cmd_list(struct conn *C, const char *tag);
+void cmd_list(struct conn *C, const char *tag, const char *host_prefix);
 void cmd_startupdate(struct conn *C, const char *tag);
 void shut_down(int code);
 static int reset_saslconn(struct conn *c);
@@ -454,7 +458,7 @@ void cmdloop(struct conn *c)
 	case 'A':
 	    if (!strcmp(cmd.s, "Authenticate")) {
 		int opt = 0;
-
+		
 		if (ch != ' ') goto missingargs;
 		ch = getstring(c->pin, c->pout, &arg1);
 		if (ch == ' ') {
@@ -470,7 +474,7 @@ void cmdloop(struct conn *c)
 		    continue;
 		}
 
-		cmd_authenticate(c, tag.s, arg1.s, arg2.s);
+		cmd_authenticate(c, tag.s, arg1.s, opt ? arg2.s : NULL);
 	    }
 	    else if (!c->userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Activate")) {
@@ -521,11 +525,18 @@ void cmdloop(struct conn *c)
 
 	case 'L':
 	    if (!strcmp(cmd.s, "List")) {
+		int opt = 0;
+		
+		if (ch == ' ') {
+		    /* Optional partition/host prefix parameter */
+		    ch = getstring(c->pin, c->pout, &arg1);
+		    opt = 1;
+		}
 		CHECKNEWLINE(c, ch);
 
 		if (c->streaming) goto notwhenstreaming;
 
-		cmd_list(c, tag.s);
+		cmd_list(c, tag.s, opt ? arg1.s : NULL);
 		
 		prot_printf(c->pout, "%s OK \"list complete\"\r\n", tag.s);
 	    } else if (!strcmp(cmd.s, "Logout")) {
@@ -1028,31 +1039,37 @@ static int sendupdate(char *name, int matchlen, int maycreate, void *rock)
     
     m = database_lookup(name);
     if(!m) return -1;
+
+    if(!C->list_prefix ||
+       !strncmp(m->server, C->list_prefix, C->list_prefix_len)) {
+	/* Either there is not a prefix to test, or we matched it */
     
-    switch (m->t) {
-    case SET_ACTIVE:
-	prot_printf(C->pout, "%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
-		    C->streaming,
-		    strlen(m->mailbox), m->mailbox,
-		    strlen(m->server), m->server,
-		    strlen(m->acl), m->acl);
-	break;
-    case SET_RESERVE:
-	prot_printf(C->pout, "%s RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
-		    C->streaming,
-		    strlen(m->mailbox), m->mailbox,
-		    strlen(m->server), m->server);
-	break;
-    case SET_DELETE:
-	/* deleted item in the list !?! */
-	abort();
+	switch (m->t) {
+	case SET_ACTIVE:
+	    prot_printf(C->pout,
+			"%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
+			C->streaming,
+			strlen(m->mailbox), m->mailbox,
+			strlen(m->server), m->server,
+			strlen(m->acl), m->acl);
+	    break;
+	case SET_RESERVE:
+	    prot_printf(C->pout, "%s RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
+			C->streaming,
+			strlen(m->mailbox), m->mailbox,
+			strlen(m->server), m->server);
+	    break;
+	case SET_DELETE:
+	    /* deleted item in the list !?! */
+	    abort();
+	}
     }
     
     free(m);
     return 0;
 }
 
-void cmd_list(struct conn *C, const char *tag) 
+void cmd_list(struct conn *C, const char *tag, const char *host_prefix) 
 {
     char pattern[2] = {'%','\0'};
 
@@ -1061,6 +1078,9 @@ void cmd_list(struct conn *C, const char *tag)
 
     /* since this isn't valid when streaming, just use the same callback */
     C->streaming = tag;
+    C->list_prefix = host_prefix;
+    if(C->list_prefix) C->list_prefix_len = strlen(C->list_prefix);
+    else C->list_prefix_len = 0;
     
     mboxlist_findall(NULL, pattern, 1, NULL,
 		     NULL, sendupdate, (void*)C);
