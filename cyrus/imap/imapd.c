@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.195 2000/01/04 20:58:53 leg Exp $ */
+/* $Id: imapd.c,v 1.196 2000/01/04 21:09:24 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -3285,6 +3285,8 @@ void cmd_starttls(char *tag)
 	       (char *) config_getstring("tls_CA_path", ""),
 	       (char *) config_getstring("tls_cert_file", ""),
 	       (char *) config_getstring("tls_key_file", ""));
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
+		    error_message(IMAP_IOERROR));
 	return;
     }
 
@@ -3297,6 +3299,7 @@ void cmd_starttls(char *tag)
 			       layerp,
 			       &(external.auth_id));
     if (result==-1) {
+	prot_printf(imapd_out, "%s NO Starttls failed\r\n", tag);
 	syslog(LOG_NOTICE, "STARTTLS failed: %s", imapd_clienthost);
 	return;
     }
