@@ -578,10 +578,6 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  if (deflist) {
-      printf("Authentication succeeded.\n");
-  }
-
   if (viewfile!=NULL)
   {
     getscript(pout,pin, viewfile,0);
