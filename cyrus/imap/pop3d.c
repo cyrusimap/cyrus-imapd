@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.17 2002/11/17 03:48:03 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.18 2002/12/06 04:47:05 ken3 Exp $
  */
 #include <config.h>
 
@@ -1065,10 +1065,8 @@ char *pass;
 			    strlen(popd_userid),
 			    pass,
 			    strlen(pass))!=SASL_OK) { 
-	if (reply) {
-	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
-		   popd_clienthost, popd_userid, reply);
-	}
+	syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
+	       popd_clienthost, popd_userid, sasl_errdetail(popd_saslconn));
 	sleep(3);
 	prot_printf(popd_out, "-ERR [AUTH] Invalid login\r\n");
 	free(popd_userid);
