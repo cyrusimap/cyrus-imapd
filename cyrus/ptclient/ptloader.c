@@ -45,6 +45,7 @@ main()
     struct sockaddr_un clientaddr;
     int r;
     int len;
+    char fnamebuf[1024];
 
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL6);
     
@@ -54,13 +55,16 @@ main()
 	exit(1);
     }
 
-    (void) unlink(DBSOCKET);
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, PTS_DBSOCKET);
+
+    (void) unlink(fnamebuf);
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
-    strcpy(srvaddr.sun_path, DBSOCKET);
+    strcpy(srvaddr.sun_path, fnamebuf);
     r = bind(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
     if (r == -1) {
-	printf("bind: %s ", DBSOCKET);
+	printf("bind: %s ", fnamebuf);
         perror("");
         exit(1);
     }
