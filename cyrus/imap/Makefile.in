@@ -1,8 +1,7 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.158 2002/03/06 20:49:02 ken3 Exp $
+# $Id: Makefile.in,v 1.159 2002/03/12 21:00:10 rjs3 Exp $
 # 
 # @configure_input@
-#
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
 #
@@ -103,7 +102,7 @@ cyrus_prefix = @cyrus_prefix@
 LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	config.o imap_err.o mupdate_err.o proc.o setproctitle.o convert_code.o \
 	duplicate.o saslclient.o acapmbox.o signals.o annotate.o \
-	search_engines.o squat.o squat_internal.o \
+	search_engines.o squat.o squat_internal.o mbdump.o \
 	base64.o imapparse.o telemetry.o user.o $(SEEN) $(NOTIFY) $(IDLE)
 
 IMAPDOBJS=pushstats.o imapd.o index.o tls.o version.o

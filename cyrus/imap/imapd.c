@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.346 2002/03/07 22:01:44 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.347 2002/03/12 21:00:10 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -80,6 +80,7 @@
 #include "mailbox.h"
 #include "mboxname.h"
 #include "mboxlist.h"
+#include "mbdump.h"
 #include "mkgmtime.h"
 #include "telemetry.h"
 #include "tls.h"
@@ -153,6 +154,8 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid);
 void cmd_expunge(char *tag, char *sequence);
 void cmd_create(char *tag, char *name, char *partition);
 void cmd_delete(char *tag, char *name);
+void cmd_dump(char *tag, char *name, int uid_start);
+void cmd_undump(char *tag, char *name);
 void cmd_rename(const char *tag, char *oldname, 
 		char *newname, char *partition);
 void cmd_reconstruct(const char *tag, const char *name, int recursive);
@@ -938,9 +941,26 @@ cmdloop()
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_setacl(tag.s, arg1.s, arg2.s, (char *)0);
+		cmd_setacl(tag.s, arg1.s, arg2.s, NULL);
 
 		snmp_increment(DELETEACL_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Dump")) {
+		int uid_start = 0;
+		
+		if(c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if(c == ' ') {
+		    c = getastring(imapd_in, imapd_out, &arg2);
+		    if(!imparse_isnumber(arg2.s)) goto extraargs;
+		    uid_start = atoi(arg2.s);
+		}
+		
+		if(c == '\r') c = prot_getc(imapd_in);
+		if(c != '\n') goto extraargs;
+		
+		cmd_dump(tag.s, arg1.s, uid_start);
+	    /*	snmp_increment(DUMP_COUNT, 1);*/
 	    }
 	    else goto badcmd;
 	    break;
@@ -1477,6 +1497,17 @@ cmdloop()
 
 		snmp_increment(UNSELECT_COUNT, 1);
 	    }
+	    else if (!strcmp(cmd.s, "Undump")) {
+		if(c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+
+		/* we want to get a list at this point */
+		if(c != ' ') goto missingargs;
+		
+		cmd_undump(tag.s, arg1.s);
+	    /*	snmp_increment(UNDUMP_COUNT, 1);*/
+	    }
+
 	    else goto badcmd;
 	    break;
 
@@ -5474,6 +5505,81 @@ int parsecharset;
     prot_printf(imapd_out, "%s BAD Invalid number in Search command\r\n", tag);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
+}
+
+void cmd_dump(char *tag, char *name, int uid_start) 
+{
+    int r = 0;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+    char *path;
+
+    /* administrators only please */
+    if (!imapd_userisadmin) {
+	r = IMAP_PERMISSION_DENIED;
+    }
+
+    if (!r) {
+	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
+						   imapd_userid, mailboxname);
+    }
+    
+    if (!r) {
+	r = mlookup(tag, name, mailboxname, &path, NULL, NULL);
+    }
+    if (r == IMAP_MAILBOX_MOVED) return;
+
+    if(!r) {
+	r = dump_mailbox(tag, path, mailboxname, uid_start, imapd_in,
+			 imapd_out, imapd_authstate);
+    }
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    } else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    }
+}
+
+void cmd_undump(char *tag, char *name) 
+{
+    int r = 0;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+    char *path;
+
+    /* administrators only please */
+    if (!imapd_userisadmin) {
+	r = IMAP_PERMISSION_DENIED;
+    }
+
+    if (!r) {
+	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
+						   imapd_userid, mailboxname);
+    }
+    
+    if (!r) {
+	r = mlookup(tag, name, mailboxname, &path, NULL, NULL);
+    }
+    if (r == IMAP_MAILBOX_MOVED) return;
+
+    if(!r) {
+	r = undump_mailbox(path, mailboxname, imapd_in, imapd_out,
+			   imapd_authstate);
+    }
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s%s\r\n",
+		    tag,
+		    (r == IMAP_MAILBOX_NONEXISTENT &&
+		     mboxlist_createmailboxcheck(mailboxname, 0, 0,
+						 imapd_userisadmin,
+						 imapd_userid, imapd_authstate,
+						 NULL, NULL) == 0)
+		    ? "[TRYCREATE] " : "", error_message(r));
+    } else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    }
 }
 
 /*
