@@ -14,15 +14,16 @@ else
 fi
 AC_TRY_COMPILE([#include <com_err.h>],
 [int foo;],
-ac_cv_found_comerr_inc=yes,
-ac_cv_found_comerr_inc=no)
+ac_cv_found_com_err_inc=yes,
+ac_cv_found_com_err_inc=no)
+CPPFLAGS=$saved_CPPFLAGS
 ])
 
 AC_DEFUN(CMU_COMERR_INC_WHERE, [
    for i in $1; do
       AC_MSG_CHECKING(for com_err headers in $i)
       CMU_COMERR_INC_WHERE1($i)
-      if test "$ac_cv_found_comerr_inc" = "yes"; then
+      if test "$ac_cv_found_com_err_inc" = "yes"; then
         ac_cv_comerr_where_inc=$i
         AC_MSG_RESULT(found)
         break
@@ -42,16 +43,17 @@ saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lcom_err"
 AC_TRY_LINK(,
 [com_err();],
-[ac_cv_found_comerr_lib=yes],
-ac_cv_found_comerr_lib=no)
+[ac_cv_found_com_err_lib=yes],
+ac_cv_found_com_err_lib=no)
 LIBS=$saved_LIBS
 ])
 
 AC_DEFUN(CMU_COMERR_LIB_WHERE, [
    for i in $1; do
-      AC_MSG_CHECKING(for comerr libraries in $i)
+      AC_MSG_CHECKING(for com_err libraries in $i)
       CMU_COMERR_LIB_WHERE1($i)
-      if test "$ac_cv_found_comerr_lib" = "yes" ; then
+      CMU_TEST_LIBPATH($i, com_err)
+      if test "$ac_cv_found_com_err_lib" = "yes" ; then
         ac_cv_comerr_where_lib=$i
         AC_MSG_RESULT(found)
         break
@@ -101,10 +103,10 @@ AC_ARG_WITH(comerr-include,
 
 	AC_MSG_CHECKING(whether to include com_err)
 	if test "X$ac_cv_comerr_where_lib" = "X" -a "X$ac_cv_comerr_where_inc" = "X"; then
-	  ac_cv_found_comerr=no
+	  ac_cv_found_com_err=no
 	  AC_MSG_RESULT(no)
 	else
-	  ac_cv_found_comerr=yes
+	  ac_cv_found_com_err=yes
 	  AC_MSG_RESULT(yes)
 	  COMERR_INC_DIR=$ac_cv_comerr_where_inc
 	  COMERR_LIB_DIR=$ac_cv_comerr_where_lib

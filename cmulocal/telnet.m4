@@ -5,7 +5,15 @@ AC_DEFUN(CMU_TELNET_CC_T, [
 AC_MSG_CHECKING(for cc_t definition)
 AC_CACHE_VAL(ac_cv_cc_t_definition, [
 AC_TRY_COMPILE(
-[#include <sys/termio.h>],
+[
+#ifdef HAVE_SYS_TERMIO_H
+#include <sys/termio.h>
+#else
+#ifdef HAVE_SYS_TERMIOS_H
+#include <sys/termios.h>
+#endif
+#endif
+],
 [cc_t foo;],
 ac_cv_cc_t_definition=no,
 ac_cv_cc_t_definition=yes)

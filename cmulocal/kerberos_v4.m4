@@ -61,6 +61,8 @@ AC_DEFUN(CMU_KRB_LIB_WHERE, [
    for i in $1; do
       AC_MSG_CHECKING(for kerberos libraries in $i)
       CMU_KRB_LIB_WHERE1($i)
+      dnl deal with false positives from implicit link paths
+      CMU_TEST_LIBPATH($i, krb)
       if test "$ac_cv_found_krb_lib" = "yes" ; then
         ac_cv_krb_where_lib=$i
         AC_MSG_RESULT(found)
@@ -72,6 +74,7 @@ AC_DEFUN(CMU_KRB_LIB_WHERE, [
 ])
 
 AC_DEFUN(CMU_KRB4, [
+AC_REQUIRE([CMU_SOCKETS])
 AC_ARG_WITH(krb4,
 	[  --with-krb4=PREFIX      Compile with Kerberos 4 support],
 	[if test "X$with_krb4" = "X"; then
@@ -99,7 +102,7 @@ AC_ARG_WITH(krb4-include,
 	  ac_cv_krb_where_lib=$with_krb4_lib
 	fi
 	if test "X$ac_cv_krb_where_lib" = "X"; then
-	  CMU_KRB_LIB_WHERE(/usr/athena/lib /usr/lib /usr/local/lib)
+	  CMU_KRB_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
 	fi
 
 	if test "X$with_krb4_include" != "X"; then

@@ -14,17 +14,6 @@ AC_TRY_COMPILE([#include <krb5.h>],
 [krb5_keyblock foo;],
 ac_cv_found_krb5_inc=yes,
 ac_cv_found_krb5_inc=no)
-if test "$ac_cv_found_krb5_inc" = "no"; then
-  if test "$ac_cv_prog_gcc" = "yes" ; then
-    CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I/usr/include"
-  else
-    CPPFLAGS="$saved_CPPFLAGS -I$1"
-  fi
-  AC_TRY_COMPILE([#include <krb.h>],
-  [krb5_keyblock foo;],
-  [ac_cv_found_krb5_inc=yes],
-  ac_cv_found_krb5_inc=no)
-fi
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
@@ -61,6 +50,7 @@ AC_DEFUN(CMU_KRB5_LIB_WHERE, [
    for i in $1; do
       AC_MSG_CHECKING(for krb5 libraries in $i)
       CMU_KRB5_LIB_WHERE1($i)
+      CMU_TEST_LIBPATH($i, krb5)
       if test "$ac_cv_found_krb5_lib" = "yes" ; then
         ac_cv_krb5_where_lib=$i
         AC_MSG_RESULT(found)
@@ -72,6 +62,8 @@ AC_DEFUN(CMU_KRB5_LIB_WHERE, [
 ])
 
 AC_DEFUN(CMU_KRB5, [
+AC_REQUIRE([CMU_SOCKETS])
+AC_REQUIRE([CMU_USE_COMERR])
 AC_ARG_WITH(krb5,
 	[  --with-krb5=PREFIX      Compile with Kerberos 5 support],
 	[if test "X$with_krb5" = "X"; then
