@@ -1,4 +1,4 @@
-<!-- $Id: install-auth.html,v 1.4 2000/06/04 22:43:58 leg Exp $ -->
+<!-- $Id: install-auth.html,v 1.5 2001/12/06 18:01:50 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Authenticating Users
@@ -48,8 +48,19 @@ PLAIN) will send your password in clear-text to the server.
 	configure the system to use GSSAPI and Kerberos5. 
 
 <li>If you have some other authentication mechanism that requires the
-clear text password, your two choices are to use PAM or use
-<tt>pwcheck</tt>. 
+clear text password, you should use <tt>saslauthd</tt>.
+
+<p><tt>saslauthd</tt> is something specific to the Cyrus SASL
+libraries. While it is less generic than PAM, it is much simplier. The
+IMAP server simply sends a userid and a corresponding password down a
+Unix domain pipe. The <tt>saslauthd</tt> then takes that userid and
+password and tries to authenticate with it -- using whatever
+authentication you use -- and simply returns "yes" or "no" as to
+whether or not the password was correct.
+
+<p>It is possible to configure <tt>saslauthd</tt> to check these
+passwords via a PAM mechanism, <tt>/etc/passwd</tt>, or other
+possibilities.
 
 <p>PAM stands for pluggable authentication modules and the purpose is
 to provide a common API which applications can use to obtain
@@ -59,14 +70,6 @@ href="http://www.kernel.org/pub/linux/libs/pam/FAQ">
 http://www.kernel.org/pub/linux/libs/pam/FAQ</a> for more information
 on PAM.  By using a PAM module, all the other applications on your
 system can take advantage of it -- for example, login, xlock, etc. 
-
-<p><tt>pwcheck</tt>, on the other hand, is something specific to the
-Cyrus SASL libraries. While it is less generic than PAM, it is much
-simplier. The IMAP server simply sends a userid and a corresponding
-password down a Unix domain pipe. The <tt>pwcheck</tt> then takes that
-userid and password and tries to authenticate with it -- using
-whatever authentication you use -- and simply returns "yes" or "no" as 
-to whether or not the password was correct.  
 
 <p>Keep in mind that when you use PLAIN or LOGIN you should encrypt
 the stream so a user's password can not be trivially sniffed off of
@@ -90,8 +93,8 @@ sasldb</tt>".  Make sure Cyrus can read "<tt>/etc/sasldb</tt>":
 <p>If you want to authenticate users from "<tt>/etc/shadow</tt>",
 things are considerably more complicated, since the cyrus user cannot
 read the shadow password file.  It is suggested that you configure
-libsasl with <tt>pwcheck</tt> support, and set
-"<tt>sasl_pwcheck_method: pwcheck</tt>".  The SASL library will then
+libsasl with <tt>saslauthd</tt> support, and set
+"<tt>sasl_pwcheck_method: saslauthd</tt>".  The SASL library will then
 make calls to an external utility running as root to authenticate
 users.
 
@@ -183,7 +186,7 @@ current ticket's held.  Override this with the <tt>-u</tt> option.</li>
 </ol>
 
 <P><HR>
-last modified: $Date: 2000/06/04 22:43:58 $
+last modified: $Date: 2001/12/06 18:01:50 $
 </BODY></HTML>
 
 
