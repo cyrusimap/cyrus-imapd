@@ -50,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.6 2002/09/24 20:53:22 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.7 2002/09/24 23:00:50 ken3 Exp $
  */
 #include <config.h>
 
@@ -1733,33 +1733,35 @@ static int deliver(message_data_t *msg)
 
 static void cmd_post(char *msgid, int mode)
 {
-    int want = 1;
     FILE *f = NULL;
     message_data_t *msg;
-    int r;
+    int r = 0;
 
     /* check if we want this article */
     if (dupelim && msgid && 
 	duplicate_check(msgid, strlen(msgid), "", 0)) {
 	/* duplicate message */
-	want = 0;
+	r = NNTP_DONT_SEND;
     }
 
     if (mode != POST_TAKETHIS) {
-	if (want) {
-	    prot_printf(nntp_out, "%u Send article %s\r\n",
-			post_codes[mode].cont, msgid ? msgid : "");
-	    if (mode == POST_CHECK) return;
-	}
-	else {
+	if (r) {
 	    prot_printf(nntp_out, "%u Do not send article %s\r\n",
 			post_codes[mode].no, msgid ? msgid : "");
 	    return;
 	}
+	else {
+	    prot_printf(nntp_out, "%u Send article %s\r\n",
+			post_codes[mode].cont, msgid ? msgid : "");
+	    if (mode == POST_CHECK) return;
+	}
     }
 
     /* get a spool file if needed */
-    if (want) f = tmpfile();
+    if (!r) {
+	f = tmpfile();
+	if (!f) r = IMAP_IOERROR;
+    }
 
     if (f) {
 	/* spool the article */
@@ -1778,6 +1780,9 @@ static void cmd_post(char *msgid, int mode)
 	    if (mode == POST_POST) {
 		/* XXX send the article upstream */
 	    }
+
+	    prot_printf(nntp_out, "%u Article %s received ok\r\n",
+			post_codes[mode].ok, msg->id ? msg->id : "");
 	}
 
 	msg_free(msg); /* does fclose() */
@@ -1785,18 +1790,12 @@ static void cmd_post(char *msgid, int mode)
     else {
 	/* flush the article from the stream */
 	copy_msg(nntp_in, NULL);
-
-	r = IMAP_IOERROR;
     }
 
     if (r) {
 	prot_printf(nntp_out, "%u Failed receiving article %s (%s)\r\n",
 		    post_codes[mode].fail, msgid ? msgid : "",
 		    error_message(r));
-    }
-    else {
-	prot_printf(nntp_out, "%u Article %s received ok\r\n",
-		    post_codes[mode].ok, msg->id ? msg->id : "");
     }
 
     prot_flush(nntp_out);
