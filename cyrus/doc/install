@@ -34,6 +34,15 @@ Upgrading From Previous Versions
         server. (If you don't have IMSP, or AFS, don't worry about it.) 
       * If you are upgrading from 1.5.14 (or earlier) you should remove the
         delivered-db database and mkdir /var/imap/deliverdb. 
+      * Upgrading from the Cyrus IMAP server version 1.5 or earlier:
+        libsasl is now required. Configuring SASL to work may be a chore,
+        especially if you use shadow passwords. If you use shadow
+        passwords, you must use PAM for authentication and configure PAM
+        such that non-root users can verify passwords. We believe pam_pwdb
+        contains support for using a pwcheck-like program for checking
+        shadow passwords. 
+      * An ANSI C compiler is now required. You can acquire one from
+        prep.ai.mit.edu. 
 
     See the file doc/changes in the distribution for more information. 
 
@@ -50,26 +59,30 @@ Prerequisites and other notes
         comp.lang.tcl FAQ. Other versions of Tcl might work, but it must be
         at least Tcl 7.5. (Tcl 7.4 ships with some Unix variants, and it is
         not sufficient.) 
-      * If compiling with Kerberos support, the installed Kerberos must
-        include the DES library. Some vendor distributions of Kerberos,
-        including the one with Solaris, do not have this support and cannot
-        be used. Sites in the USA and Canada may obtain Kerberos by
-        following the instructions in
-        ftp://athena-dist.mit.edu/pub/kerberos/README.KRB4. Sites worldwide
-        may wish to use the KTH Kerberos distribution; information is
-        avalible from http://www.pdc.kth.se/kth-krb/. We are not able to
-        assist other sites in obtaining Kerberos. 
+      * libsasl, version 1.5.0 or higher. To obtain libsasl, ftp it from
+        ftp.andrew.cmu.edu. Earlier versions of SASL will not work; please
+        get the latest one. Configure SASL so that it supports whatever
+        authentication method your site uses. It is recommended that if you
+        have PAM, you configure SASL to use PAM. 
+      * Note that Cyrus still depends on Kerberos and AFS if you use AFS
+        PTS support for groups. If you successfully compiled SASL with your
+        Kerberos library, it's likely that it will work well with Cyrus. 
       * It is recommended that sites install Sendmail version 8.7.1 or
         later. Sendmail distributions may be obtained from
         ftp://ftp.sendmail.org/ucb/sendmail 
       * If you want to export netnews newsgroups using IMAP, the IMAP
         server must receive newsgroups with the INN news server. 
+      * If you want Sieve support (a server-side mail filtering language),
+        cmu-sieve version 1.3 or higher is required. cmu-sieve releases
+        will most likely be made in conjunction with imapd releases. Unpack
+        cmu-sieve-xxx.tar.gz inside the cyrus directory; Sieve will bill
+        built at the same time as imapd. 
 
 Compiling the IMAP Server
 
     Once you have unpacked the files (see the README file for more
-    information), "cd" to the "cyrus-imapd-1.5.14" directory (assuming the
-    version number is 1.5.14). The configuration files and various
+    information), "cd" to the "cyrus-imapd-1.6.0" directory (assuming the
+    version number is 1.6.0). The configuration files and various
     subdirectories are stored there. In the directory that the configure
     file is in, type "./configure" to configure the software. 
 
@@ -143,40 +156,6 @@ Compiling the IMAP Server
             Specifies the directory used for the pwcheck and/or ptclient
             state directories. By default, configure uses "/var". 
 
-    --with-login=METHOD 
-            Specifies the login authentication module to use. Currently
-            implemented authentication modules are: 
-
-            unix    Unix /etc/passwd file 
-            unix_pwcheck 
-                    Unix shadow passwd file, accessed through pwcheck
-                    daemon 
-            krb     Kerberos version 4 
-            krb_pwcheck 
-                    Either Kerberos version 4 or the pwcheck daemon 
-
-            By default, configure uses "krb" if the file /etc/krb.conf
-            exists, "unix" otherwise. 
-
-            If you use shadow passwords, you should use
-            --with-login=unix_pwcheck, not just unix. The Cyrus imapd does
-            not run as root, and the pwcheck daemon is required for
-            authentication if you use shadow passwords. 
-
-    --with-pwcheck=METHOD 
-            Specifies the password checking module to use inside the
-            pwcheck daemon. This option is only used if the login module
-            has a name ending in "_pwcheck". Currently implemented
-            authentication modules are: 
-
-            getspnam 
-                    SVR4 style getspnam() shadow passwords 
-            getpwnam 
-                    NetBSD style shadow passwords 
-
-            By default, configure uses "getspnam" if the function getspnam
-            exists, "getpwnam" otherwise. 
-
     --with-auth=METHOD 
             Specifies the authorization module to use. Currently
             implemented authorization modules are: 
@@ -185,9 +164,10 @@ Compiling the IMAP Server
             krb     Kerberos principals 
             krb_pts Kerberos principals with AFS PTserver groups 
 
-            The selected authorization module must be compatible with the
-            login module. By default, uses the authorization module with
-            the same name as the selected login module. 
+            Since the login module is now SASL, this is much more
+            confusing. We are considering adding group support to libsasl,
+            thus solving this ambiguity. Make sure you select an
+            authorization module compatible with your system. 
 
     --with-notify=METHOD 
     --without-notify 
@@ -245,6 +225,13 @@ Compiling the IMAP Server
 
             By default, uses "flock" if the "flock()" function exists,
             "fcntl" otherwise. 
+
+    --with-sieve=DIR 
+            Specifies which version of Sieve is used, relative to the top
+            level source directory. By default, configure searches for a
+            sieve directory under the top level source directory and uses
+            it if it finds one. Use --with-sieve=no to disable Sieve
+            support
 
     --disable-cyradm 
             Do not compile the cyradm administrative client.
@@ -364,7 +351,9 @@ Configuring the IMAP Server
            srvtab: /var/imap/srvtab
 
         For a description of all the fields in this file, see the
-        imapd.conf(5) man page. 
+        imapd.conf(5) man page. (Note that this file also exports values to
+        libsasl; the srvtab setting here overrides the srvtab setting in
+        the SASL configuration file.) 
 
         Note that everyday users should not be administrators. Admins have
         powers not granted to regular users and while the server allows
@@ -593,14 +582,14 @@ Testing the IMAP Server
            Trying 128.2.232.95...
            Connected to foobar.andrew.cmu.edu.
            Escape character is '^]'.
-           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
+           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.6.0 server ready
 
         Any message other than one starting with "* OK" means there is a
         problem. To terminate the connection, type ". logout". 
 
      3. Use "imtest" to test logging in with plaintext passwords. 
 
-           /usr/local/bin/imtest -p foobar imap
+           /usr/local/bin/imtest -m login foobar
 
         If your server is running, you'll get the following message: 
 
@@ -616,21 +605,26 @@ Testing the IMAP Server
 
      4. If the server is compiled with Kerberos v4 authentication, test
         Kerberos authentication by using the imtest command. Change to the
-        "cyrus-v1.5.14" directory and type the following: 
+        "cyrus-v1.6.0" directory and type the following: 
 
-           /usr/local/bin/imtest -k foobar imap
-           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
-           . AUTHENTICATE KERBEROS_V4
-           + Ln8h6Q==
-           BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
-           BZSGgOy9ehHRj8NQjLjxDpib0D9uT0fo7QaXhLM6zCp9dQ1pX4FfNO2V39vBp
-           Q19QIK4S1410prvM2c45qeizecI7zAvA=
-           2cRhIC+aH70WHqYaW18YnQ==
-           . OK User logged in (no protection)
-           __No integrity protection__
+           /usr/local/bin/imtest -l 0 foobar
+           S: * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.6.0 server ready
+           S: * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE
+           UIDPLUS X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=PLAIN
+           AUTH=ANONYMOUS AUTH=KERBEROS_V4 AUTH=DIGEST-MD5 AUTH=CRAM-MD5
+           UNSELECT
+           S: C01 OK Completed
+           S: + Ln8h6Q==
+           C: BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
+           BZSGgOy9ehHRj8NQjLjxDpib0D9uT0fo7QaXhLM6zCp9dQ1pX4FfNO2V39vBpJ4
+           S: + bnjMDt4VXhw=
+           C: Qf7eymxrhqJ58IW/PzznVQ==
+           S: A01 OK User logged in (no protection)
+           Authenticated.
+           Security strength factor: 0
 
-        Any message other than one starting with a ". OK" means there is a
-        problem. If the test fails, a more specific error message is
+        Any message other than one starting with a "A01 OK" means there is
+        a problem. If the test fails, a more specific error message is
         written through syslog to the server log. To terminate the
         connection, type ". logout". 
 
