@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.21 2003/10/22 18:50:30 rjs3 Exp $
+ * $Id: test.c,v 1.22 2004/01/25 16:48:18 rjs3 Exp $
  *
  * usage: "test message script"
  */
@@ -669,6 +669,8 @@ static int test_comparator(void)
     }
 }
 
+int config_need_data = 0;
+
 int main(int argc, char *argv[])
 {
     sieve_interp_t *i;
@@ -797,6 +799,7 @@ int main(int argc, char *argv[])
 
     res = sieve_script_load(argv[2], &bc);
     if (res != SIEVE_OK) {
+	printf("sieve_script_load() returns %d\n", res);
 	exit(1);
     }
 
