@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.24 2000/02/22 08:08:12 tmartin Exp $
+ * $Id: script.c,v 1.25 2000/02/22 20:16:57 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -998,8 +998,8 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	    sprintf(buf, "%s: %s", action_to_string(lastaction),
 		    errmsg ? errmsg : sieve_errstr(ret));
  
-	ret |= s->interp.err(buf, s->interp.interp_context,
-				s->script_context, message_context);
+	ret |= s->interp.execute_err(buf, s->interp.interp_context,
+				     s->script_context, message_context);
     }
   
     if (actions)
