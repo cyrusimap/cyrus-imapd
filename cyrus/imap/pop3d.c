@@ -59,6 +59,8 @@ extern int errno;
 #ifdef HAVE_ACTE_KRB
 #include <krb.h>
 
+extern char *kerberos_get_srvtab();
+
 /* MIT's kpop authentication kludge */
 int kflag = 0;
 char klrealm[REALM_SZ];
@@ -222,7 +224,7 @@ kpop()
     strcpy(instance, "*");
     r = krb_recvauth(0L, 0, &ticket, "pop", instance,
 		     &popd_remoteaddr, (struct sockaddr_in *) NULL,
-		     &kdata, "", schedule, version);
+		     &kdata, kerberos_get_srvtab(), schedule, version);
     
     if (r) {
 	prot_printf(popd_out, "-ERR Kerberos authentication failure: %s\r\n",
