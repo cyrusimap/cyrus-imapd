@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: reconstruct.8,v 1.14 2002/07/01 20:56:24 ken3 Exp $
+.\" $Id: reconstruct.8,v 1.15 2003/08/12 17:55:27 rjs3 Exp $
 .SH NAME
 reconstruct \- reconstruct mailboxes
 .SH SYNOPSIS
@@ -47,6 +47,10 @@ reconstruct \- reconstruct mailboxes
 [
 .B \-C
 .I config-file
+]
+[
+.B \-p
+.I partition
 ]
 [
 .B \-r
@@ -102,6 +106,11 @@ switch in order to fix the quota root files.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-p " partition"
+Search for the listed (non-existant) mailboxes on the indicated partition.
+Create the mailboxes in the database in addition to reconstructing them.
+(not compatible with the use of wildcards)
 .TP
 .B \-r
 Recursively reconstruct all sub-mailboxes of the mailboxes or mailbox
