@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.52 2000/12/18 04:53:41 leg Exp $ */
+/* $Id: proxyd.c,v 1.53 2000/12/18 20:08:17 ken3 Exp $ */
 
 #define NEW_BACKEND_TIMEOUT
 
@@ -2286,11 +2286,6 @@ void cmd_capability(char *tag)
     prot_printf(proxyd_out, "* CAPABILITY ");
     prot_printf(proxyd_out, CAPABILITY_STRING);
     prot_printf(proxyd_out, " MAILBOX-REFERRALS");
-
-#if 0
-    /* add the thread algorithms */
-    list_thread_algorithms();
-#endif
 
     if (starttls_enabled())
 	prot_printf(proxyd_out, " STARTTLS");
