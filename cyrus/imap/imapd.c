@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.30 2004/06/24 15:16:23 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.31 2004/06/24 16:28:14 ken3 Exp $ */
 
 #include <config.h>
 
@@ -420,7 +420,8 @@ int mlookup(const char *tag, const char *ext_name,
     char *remote, *acl;
 
     r = mboxlist_detail(name, &mbtype, pathp, mpathp, &remote, &acl, tid);
-    if (r == IMAP_MAILBOX_NONEXISTENT || (mbtype & MBTYPE_RESERVE)) {
+    if ((r == IMAP_MAILBOX_NONEXISTENT || (mbtype & MBTYPE_RESERVE)) &&
+	config_mupdate_server) {
 	/* It is not currently active, make sure we have the most recent
 	 * copy of the database */
 	kick_mupdate();
