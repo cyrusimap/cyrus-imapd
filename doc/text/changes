@@ -1,6 +1,13 @@
                    Changes to the Cyrus IMAP Server
 
-Changes to the Cyrus IMAP Server since 2.0.15
+Changes to the Cyrus IMAP Server since 2.0.16
+
+      * Fixed some potential buffer overflows in the sieve code, as well as
+        a pre-login buffer overflow in the IMAP parsing code. 
+      * Backport of a fix for an (unrelated) problem with the strlcpy
+        implementation 
+
+Changes to the Cyrus IMAP Server since 2.0.14
 
       * fixed a longstanding bug in quota that would affect people with
         unusual top-level hierarchy, fix by John Darrow,
