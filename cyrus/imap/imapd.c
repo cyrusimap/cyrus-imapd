@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.371 2002/03/29 20:34:50 leg Exp $ */
+/* $Id: imapd.c,v 1.372 2002/03/29 21:14:32 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -2221,8 +2221,6 @@ void cmd_capability(char *tag)
 	prot_printf(imapd_out, " MUPDATE=mupdate://%s/", mupdate_server);
     }
 
-    prot_printf(imapd_out, " MAILBOX-REFERRALS");
-    
     /* add the SASL mechs */
     if (sasl_listmech(imapd_saslconn, NULL, 
 		      "AUTH=", " AUTH=", "",
