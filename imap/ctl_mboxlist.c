@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.11 2000/05/29 03:54:23 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.12 2000/06/20 18:11:37 leg Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -51,13 +51,14 @@
 #endif
 #include <syslog.h>
 #include <com_err.h>
-#include <assert.h>
+#include <stdlib.h>
 
 #include <db.h>
 #include "exitcodes.h"
 #include "mboxlist.h"
 #include "acapmbox.h"
 #include "imapconf.h"
+#include "assert.h"
 #include "xmalloc.h"
 
 extern int optind;
