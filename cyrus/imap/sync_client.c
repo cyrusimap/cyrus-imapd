@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.9 2005/03/13 00:41:55 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.10 2005/03/14 19:37:17 ken3 Exp $
  */
 
 #include <config.h>
@@ -149,32 +149,30 @@ void fatal(const char *s, int code)
 }
 
 /* ====================================================================== */
-#if 0
-static int send_user(char *user)
+
+static int send_lock()
 {
-    prot_printf(toserver, "USER "); 
-    sync_printastring(toserver, user);
-    prot_printf(toserver, "\r\n"); 
+    prot_printf(toserver, "LOCK\r\n"); 
     prot_flush(toserver);
 
-    return(sync_parse_code("USER", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
+    return(sync_parse_code("LOCK", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
-static int send_enduser()
+static int send_unlock()
 {
     int r = 0;
     int c = ' ';
     static struct buf token;   /* BSS */
 
-    prot_printf(toserver, "ENDUSER\r\n"); 
+    prot_printf(toserver, "UNLOCK\r\n"); 
     prot_flush(toserver);
 
-    r = sync_parse_code("ENDUSER", fromserver, SYNC_PARSE_NOEAT_OKLINE, NULL);
+    r = sync_parse_code("UNLOCK", fromserver, SYNC_PARSE_NOEAT_OKLINE, NULL);
     if (r) return(r);
 
     if ((c = getword(fromserver, &token)) != ' ') {
         eatline(fromserver, c);
-        syslog(LOG_ERR, "Garbage on Enduser response");
+        syslog(LOG_ERR, "Garbage on Unlock response");
         return(IMAP_PROTOCOL_ERROR);
     }
     eatline(fromserver, c);
@@ -189,7 +187,7 @@ static int send_enduser()
 
     return(0);
 }
-#endif
+
 /* ====================================================================== */
 
 /* Routines relevant to reserve operation */
@@ -585,8 +583,7 @@ static int user_reset(char *user)
 static int folder_select(char *name, char *myuniqueid,
 			 unsigned long *lastuidp)
 {
-    int r, c, unsolicited;
-    static struct buf token;
+    int r, c
     static struct buf uniqueid;
     static struct buf lastuid;
 
@@ -595,32 +592,7 @@ static int folder_select(char *name, char *myuniqueid,
     prot_printf(toserver, "\r\n"); 
     prot_flush(toserver);
 
-    r = sync_parse_code("SELECT", fromserver, SYNC_PARSE_NOEAT_OKLINE,
-			&unsolicited);
-
-    while (!r && unsolicited) {
-	if ((c = getword(fromserver, &token)) == EOF) {
-	    eatline(fromserver, c);
-	    syslog(LOG_ERR, "Garbage on unsolicited SELECT response");
-	    return(IMAP_PROTOCOL_ERROR);
-	}
-	eatline(fromserver, c);
-
-	/* Clear out msgid_on_server list if server restarted */
-	if (!strcmp(token.s, "[RESTART]")) {
-	    int hash_size = msgid_onserver->hash_size;
-
-	    sync_msgid_list_free(&msgid_onserver);
-	    msgid_onserver = sync_msgid_list_create(hash_size);
-	}
-	else {
-	    syslog(LOG_ERR, "Unknown unsolicited SELECT response");
-	    return(IMAP_PROTOCOL_ERROR);
-	}
-
-	r = sync_parse_code("SELECT", fromserver, SYNC_PARSE_NOEAT_OKLINE,
-			    &unsolicited);
-    }
+    r = sync_parse_code("SELECT", fromserver, SYNC_PARSE_NOEAT_OKLINE, NULL);
     if (r) return(r);
     
     if ((c = getword(fromserver, &uniqueid)) != ' ') {
@@ -2057,19 +2029,19 @@ int do_user_sieve(char *user, struct sync_sieve_list *server_list)
     return(r);
 }
 
-/* do_user_all() separated into two parts so that we can start process
+/* do_user() separated into two parts so that we can start process
  * asynchronously, come back and parse result when local list generated */
 
-int do_user_all_start(char *user)
+int do_user_start(char *user)
 {
-    prot_printf(toserver, "USER_ALL "); 
+    prot_printf(toserver, "USER "); 
     sync_printastring(toserver, user);
     prot_printf(toserver, "\r\n"); 
     prot_flush(toserver);
     return(0);
 }
 
-int do_user_all_parse(char *user,
+int do_user_parse(char *user,
 		      struct sync_folder_list *server_list,
 		      struct sync_folder_list *server_sub_list,
 		      struct sync_sieve_list  *server_sieve_list)
@@ -2089,7 +2061,7 @@ int do_user_all_parse(char *user,
     struct sync_msg    *msg    = NULL;
     struct quota quota, *quotap;
 
-    r = sync_parse_code("USER_ALL", fromserver,
+    r = sync_parse_code("USER", fromserver,
                         SYNC_PARSE_NOEAT_OKLINE, &unsolicited_type);
 
     /* Unpleasant: translate remote access error into "please reset me" */
@@ -2171,14 +2143,14 @@ int do_user_all_parse(char *user,
             goto parse_err;
         }
 
-        r = sync_parse_code("USER_ALL", fromserver,
+        r = sync_parse_code("USER", fromserver,
                             SYNC_PARSE_EAT_OKLINE, &unsolicited_type);
     }
 
     return(r);
 
  parse_err:
-    syslog(LOG_ERR, "USER_ALL: Invalid type %d response from server",
+    syslog(LOG_ERR, "USER: Invalid type %d response from server",
            unsolicited_type);
     sync_eatlines_unsolicited(fromserver, c);
     return(IMAP_PROTOCOL_ERROR);
@@ -2201,13 +2173,12 @@ int do_user_work(char *user, int *vanishedp)
         syslog(LOG_INFO, "USER %s", user);
 
     /* Get server started */
-    do_user_all_start(user);
+    do_user_start(user);
 
     /* Preload data at client end while server is working */
     do_user_preload(user);
 
-    r = do_user_all_parse(user,
-                          server_list, server_sub_list, server_sieve_list);
+    r = do_user_parse(user, server_list, server_sub_list, server_sieve_list);
 
     if (r) {
         sync_folder_list_free(&server_list);
@@ -2260,7 +2231,7 @@ int do_user_work(char *user, int *vanishedp)
 
 static int do_user(char *user)
 {
-    struct sync_user_lock user_lock;
+    struct sync_lock lock;
     int r = 0;
     int vanished = 0;
 
@@ -2277,7 +2248,7 @@ static int do_user(char *user)
      * condition which imapd just ignores (presumably on the principle that
      * rapid rename+create+select would be very rare in normal use).
      *
-     * We could solve this problem by putting a sync_user_lock() around
+     * We could solve this problem by putting a sync_lock() around
      * _every_ single replication operation, but this is tedious and would
      * probably involve quite a lot of overhead. As an experiment
      * catch IMAP_MAILBOX_BADFORMAT and have another go while locking out
@@ -2295,10 +2266,10 @@ static int do_user(char *user)
          * Following just protects us against folder rename smack in the
          * middle of night or manual sys. admin inspired sync run */
 
-        sync_user_lock_reset(&user_lock);
-        sync_user_lock(&user_lock, user);
+        sync_lock_reset(&lock);
+        sync_lock(&lock);
         r = do_user_work(user, &vanished);
-        sync_user_unlock(&user_lock);
+        sync_unlock(&lock);
     }
     return(r);
 }
@@ -2589,6 +2560,7 @@ static int do_sync(const char *filename)
 
     /* And then run tasks. Folder mismatch => fall through to
      * do_user to try and clean things up */
+    if ((r = send_lock())) goto bail;
 
     for (action = append_list->head ; action ; action = action->next) {
         if (!action->active)
@@ -2709,6 +2681,7 @@ static int do_sync(const char *filename)
     }
 
  bail:
+    send_unlock();
     if (r) {
 	if (verbose)
 	    fprintf(stderr, "Error in do_sync(): bailing out!\n");
@@ -3038,7 +3011,14 @@ int main(int argc, char **argv)
     toserver = be->out;
 
     if (user) {
-        if (input_filename) {
+	if ((r = send_lock())) {
+	    if (verbose) {
+		fprintf(stderr,
+			"Error from send_lock(): bailing out!\n");
+	    }
+	    syslog(LOG_ERR, "Error in send_lock(): bailing out!");
+	    exit_rc = 1;
+	} else if (input_filename) {
             if ((file=fopen(input_filename, "r")) == NULL) {
                 syslog(LOG_NOTICE, "Unable to open %s: %m", input_filename);
                 shut_down(1);
@@ -3055,21 +3035,24 @@ int main(int argc, char **argv)
                     if (verbose)
                         fprintf(stderr,
                                 "Error from do_user(): bailing out!\n");
-                    syslog(LOG_ERR, "Error in do_sync(%s): bailing out!", buf);
+                    syslog(LOG_ERR, "Error in do_user(%s): bailing out!", buf);
                     exit_rc = 1;
                     break;
                 }
             }
             fclose(file);
         } else for (i = optind; i < argc; i++) {
-            if (do_user(argv[i])) {
-                if (verbose)
-                    fprintf(stderr, "Error from do_user(): bailing out!\n");
-                syslog(LOG_ERR, "Error in do_sync(%s): bailing out!", argv[i]);
-                exit_rc = 1;
-                break;
-            }
-        }
+	    if (do_user(argv[i])) {
+		if (verbose)
+		    fprintf(stderr, "Error from do_user(%s): bailing out!\n",
+			    argv[1]);
+		syslog(LOG_ERR, "Error in do_user(%s): bailing out!", argv[i]);
+		exit_rc = 1;
+		break;
+	    }
+	}
+
+	send_unlock();
     } else if (mailbox) {
         struct sync_folder_list *folder_list = sync_folder_list_create();
         struct sync_user   *user;
@@ -3099,7 +3082,14 @@ int main(int argc, char **argv)
                 sync_folder_list_add(folder_list, NULL, argv[i], NULL, NULL);
         }
 
-	if (do_mailboxes(folder_list)) {
+	if ((r = send_lock())) {
+	    if (verbose) {
+		fprintf(stderr,
+			"Error from send_lock(): bailing out!\n");
+	    }
+	    syslog(LOG_ERR, "Error in send_lock(): bailing out!");
+	    exit_rc = 1;
+	} else if (do_mailboxes(folder_list)) {
 	    if (verbose) {
 		fprintf(stderr,
 			"Error from do_mailboxes(): bailing out!\n");
@@ -3107,10 +3097,19 @@ int main(int argc, char **argv)
 	    syslog(LOG_ERR, "Error in do_mailboxes(): bailing out!");
 	    exit_rc = 1;
 	}
+	send_unlock();
 
         sync_folder_list_free(&folder_list);
     } else if (sieve) {
-        for (i = optind; i < argc; i++) {
+	if ((r = send_lock())) {
+	    if (verbose) {
+		fprintf(stderr,
+			"Error from send_lock(): bailing out!\n");
+	    }
+	    syslog(LOG_ERR, "Error in send_lock(): bailing out!");
+	    exit_rc = 1;
+	}
+        for (i = optind; !r && i < argc; i++) {
             if (do_user_seen(argv[i])/*do_sieve(argv[i])*/) {
                 if (verbose) {
                     fprintf(stderr,
@@ -3122,6 +3121,7 @@ int main(int argc, char **argv)
                 break;
             }
         }
+	send_unlock();
     } else if (repeat)
         do_daemon(sync_log_file, sync_shutdown_file, timeout, min_delta, be, cb);
     else if (verbose)

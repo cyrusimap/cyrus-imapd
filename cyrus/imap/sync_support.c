@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.4 2005/03/04 02:59:57 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.5 2005/03/14 19:37:18 ken3 Exp $
  */
 
 #include <config.h>
@@ -1652,37 +1652,36 @@ void sync_action_list_free(struct sync_action_list **lp)
 
 /* ====================================================================== */
 
-void sync_user_lock_reset(struct sync_user_lock *user_lock)
+void sync_lock_reset(struct sync_lock *lock)
 {
-    user_lock->fd = -1;
+    lock->fd = -1;
 }
 
-int sync_user_unlock(struct sync_user_lock *user_lock)
+int sync_unlock(struct sync_lock *lock)
 {
-    if (user_lock->fd >= 0) {
-        lock_unlock(user_lock->fd);
-        close(user_lock->fd);
-        user_lock->fd = -1;
+    if (lock->fd >= 0) {
+        lock_unlock(lock->fd);
+        close(lock->fd);
+        lock->fd = -1;
     }
     return(0);
 }
 
-int sync_user_lock(struct sync_user_lock *user_lock, char *account)
+int sync_lock(struct sync_lock *lock)
 {
     char buf[MAX_MAILBOX_PATH];
     const char *dir = config_getstring(IMAPOPT_SYNC_DIR);
     int r = 0;
 
-    if (user_lock->fd >= 0)
-        sync_user_unlock(user_lock);
+    if (lock->fd >= 0) sync_unlock(lock);
 
-    snprintf(buf, sizeof(buf), "%s/locks/%s", dir, account);
+    snprintf(buf, sizeof(buf), "%s/lock", dir);
 
-    if ((user_lock->fd = open(buf, O_WRONLY|O_CREAT, 0777)) < 0) {
+    if ((lock->fd = open(buf, O_WRONLY|O_CREAT, 0640)) < 0) {
         syslog(LOG_ERR, "Unable to create file %s: %s", buf, strerror(errno));
         return(IMAP_IOERROR);
     }
 
-    r = lock_blocking(user_lock->fd);
+    r = lock_blocking(lock->fd);
     return(r);
 }

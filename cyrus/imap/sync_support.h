@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.1.2.3 2005/03/04 02:59:57 ken3 Exp $
+ * $Id: sync_support.h,v 1.1.2.4 2005/03/14 19:37:19 ken3 Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -427,14 +427,14 @@ void sync_action_list_free(struct sync_action_list **lp);
 
 /* ====================================================================== */
 
-struct sync_user_lock {
+struct sync_lock {
     int fd;
 };
 
-void sync_user_lock_reset(struct sync_user_lock *sync_lock);
+void sync_lock_reset(struct sync_lock *sync_lock);
 
-int sync_user_lock(struct sync_user_lock *user_lock, char *account);
+int sync_lock(struct sync_lock *lock);
 
-int sync_user_unlock(struct sync_user_lock *user_lock);
+int sync_user_unlock(struct sync_lock *lock);
 
 #endif /* INCLUDED_SYNC_SUPPORT_H */

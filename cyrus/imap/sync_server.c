@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.6 2005/03/04 20:44:37 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.7 2005/03/14 19:37:18 ken3 Exp $
  */
 
 #include <config.h>
@@ -140,12 +140,9 @@ int sync_starttls_done = 0;
 static void cmdloop(void);
 static void cmd_authenticate(char *mech, char *resp);
 static void cmd_starttls(void);
-#if 0
-static void cmd_user(struct sync_user_lock *user_lock, char *user);
-static void cmd_enduser(struct sync_user_lock *user_lock,
-			struct mailbox **mailboxp, int restart);
-#endif
-static void cmd_select(struct mailbox **mailboxp, char *name, int restart);
+static void cmd_lock(struct sync_lock *lock);
+static void cmd_unlock(struct sync_lock *lock, int restart);
+static void cmd_select(struct mailbox **mailboxp, char *name);
 static void cmd_reserve(char *mailbox_name,
 			struct sync_message_list *message_list);
 static void cmd_quota_work(char *quotaroot);
@@ -173,7 +170,7 @@ static void cmd_expunge(struct mailbox *mailbox);
 static void cmd_list();
 #endif
 static void cmd_mailboxes();
-static void cmd_user_all(char *userid);
+static void cmd_user(char *userid);
 static void cmd_create(char *mailboxname, char *uniqueid, char *acl,
 		       int mbtype, unsigned long uidvalidity);
 static void cmd_delete(char *name);
@@ -570,9 +567,7 @@ static void cmdloop(void)
 {
     struct sync_message_list *message_list;
     struct mailbox *mailbox = NULL;
-#if 0
-    struct sync_user_lock user_lock;
-#endif
+    struct sync_lock sync_lock;
     static struct buf cmd;
     static struct buf arg1, arg2, arg3, arg4, arg5, arg6;
     int c;
@@ -586,9 +581,9 @@ static void cmdloop(void)
     if (message_list == NULL) {
         fatal("* [BYE] Unable to start up server", EC_TEMPFAIL);
     }
-#if 0    
-    sync_user_lock_reset(&user_lock);
-#endif
+
+    sync_lock_reset(&sync_lock);
+
     for (;;) {
         prot_flush(sync_out);
 
@@ -744,26 +739,6 @@ static void cmdloop(void)
 		if (c != ' ') goto missingargs;
                 cmd_expunge(mailbox);
                 continue;
-#if 0
-            } else if (!strcmp(cmd.s, "Enduser")) {
-		if (c == '\r') c = prot_getc(sync_in);
-		if (c != '\n') goto extraargs;
-
-                if (sync_message_list_need_restart(message_list)) {
-                    int hash_size = message_list->hash_size;
-                    int file_max  = message_list->file_max;
-
-                    /* Reset message list */
-                    sync_message_list_free(&message_list);
-                    message_list
-                        = sync_message_list_create(hash_size, file_max);
-
-                    cmd_enduser(&user_lock, &mailbox, 1);
-                } else
-                    cmd_enduser(&user_lock, &mailbox, 0);
-
-                continue;
-#endif
             }
 
             break;
@@ -812,6 +787,11 @@ static void cmdloop(void)
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
                 cmd_list_sieve(arg1.s);
+                continue;
+            } else if (!strcmp(cmd.s, "Lock")) {
+		if (c == '\r') c = prot_getc(sync_in);
+		if (c != '\n') goto extraargs;
+                cmd_lock(&sync_lock);
                 continue;
             }
             break;
@@ -907,20 +887,7 @@ static void cmdloop(void)
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
-
-                if (sync_message_list_need_restart(message_list)) {
-                    int hash_size = message_list->hash_size;
-                    int file_max  = message_list->file_max;
-
-                    /* Reset message list */
-                    sync_message_list_free(&message_list);
-                    message_list
-                        = sync_message_list_create(hash_size, file_max);
-
-		    cmd_select(&mailbox, arg1.s, 1);
-		} else {
-		    cmd_select(&mailbox, arg1.s, 0);
-		}
+		cmd_select(&mailbox, arg1.s);
                 continue;
             } else if (!strcmp(cmd.s, "Status")) {
 		if (c == '\r') c = prot_getc(sync_in);
@@ -1020,22 +987,12 @@ static void cmdloop(void)
 
                 cmd_uidlast(mailbox, sync_atoul(arg1.s), sync_atoul(arg2.s));
                 continue;
-#if 0
             } else if (!strcmp(cmd.s, "User")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(sync_in, sync_out, &arg1);
-		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
-                cmd_user(&user_lock, arg1.s);
-                continue;
-#endif
-            } else if (!strcmp(cmd.s, "User_all")) {
-		if (c != ' ') goto missingargs;
-		c = getastring(sync_in, sync_out, &arg1);
-		if (c == '\r') c = prot_getc(sync_in);
-		if (c != '\n') goto extraargs;
-                cmd_user_all(arg1.s);
+                cmd_user(arg1.s);
                 continue;
             } else if (!strcmp(cmd.s, "Upload_sieve")) {
 		if (c != ' ') goto missingargs;
@@ -1048,6 +1005,24 @@ static void cmdloop(void)
                 if (!imparse_isnumber(arg3.s))
                     goto invalidargs;
                 cmd_upload_sieve(arg1.s, arg2.s, sync_atoul(arg3.s));
+                continue;
+            } else if (!strcmp(cmd.s, "Unlock")) {
+		int restart;
+
+		if (c == '\r') c = prot_getc(sync_in);
+		if (c != '\n') goto extraargs;
+
+                if ((restart = sync_message_list_need_restart(message_list))) {
+                    int hash_size = message_list->hash_size;
+                    int file_max  = message_list->file_max;
+
+                    /* Reset message list */
+                    sync_message_list_free(&message_list);
+                    message_list
+                        = sync_message_list_create(hash_size, file_max);
+		}
+
+		cmd_unlock(&sync_lock, restart);
                 continue;
             }
 
@@ -1091,9 +1066,9 @@ static void cmdloop(void)
         mailbox_close(mailbox);
         mailbox = 0;
     }
-#if 0
-    sync_user_unlock(&user_lock);
 
+    sync_unlock(&sync_lock);
+#if 0
     if (sync_userid) free(sync_userid);
     if (sync_authstate) auth_freestate(sync_authstate);
 
@@ -1313,73 +1288,46 @@ user_master_is_local(char *user)
 /* ====================================================================== */
 
 /* Routines implementing individual commands for server */
-#if 0
-static void cmd_user(struct sync_user_lock *user_lock, char *user)
+static void cmd_lock(struct sync_lock *lock)
 {
     int r;
-
+#if 0
     if (user_master_is_local(user)) {
         prot_printf(sync_out,
                  "NO IMAP_INVALID_USER Attempt to update master for %s\r\n",
                  user);
         return;
     }
-
-    r = sync_user_lock(user_lock, user);    
-    if (r) {
-        prot_printf(sync_out, "NO Failed to lock %s: %s\r\n",
-                 user, error_message(r));
-        return;
-    }
-#if 0
-    if (sync_userid)    free(sync_userid);
-    if (sync_authstate) auth_freestate(sync_authstate);
-
-    sync_userid    = xstrdup(user);
-    sync_authstate = auth_newstate(sync_userid);
 #endif
-    prot_printf(sync_out, "OK Locked %s\r\n", sync_userid);
+    r = sync_lock(lock);    
+    if (r) {
+        prot_printf(sync_out, "NO Failed to lock: %s\r\n", error_message(r));
+    } else {
+	prot_printf(sync_out, "OK Locked\r\n");
+    }
 }
 
-static void cmd_enduser(struct sync_user_lock *user_lock,
-			struct mailbox **mailboxp, int restart)
+static void cmd_unlock(struct sync_lock *lock, int restart)
 {
     int r = 0;
 
-    if (*mailboxp) {
-        mailbox_close(*mailboxp);
-        mailboxp = NULL;
-    }
-
-    if ((r = sync_user_unlock(user_lock))) {
-        prot_printf(sync_out, "NO Failed to unlock %s: %s\r\n",
-                 sync_userid, error_message(r));
+    if ((r = sync_unlock(lock))) {
+        prot_printf(sync_out, "NO Failed to unlock: %s\r\n",
+		    error_message(r));
     } else if (restart) {
-        prot_printf(sync_out, "OK [RESTART] Unlocked %s\r\n", sync_userid);
-        syslog(LOG_INFO, "Finished with %s [RESTART]", sync_userid);
+        prot_printf(sync_out, "OK [RESTART] Unlocked\r\n");
+        syslog(LOG_INFO, "Unlocked [RESTART]");
     } else {
-        prot_printf(sync_out, "OK [CONTINUE] Unlocked %s\r\n", sync_userid);
-        syslog(LOG_INFO, "Finished with %s", sync_userid);
+        prot_printf(sync_out, "OK [CONTINUE] Unlocked\r\n");
+        syslog(LOG_INFO, "Unlocked");
     }
-#if 0
-    if (sync_userid)    free(sync_userid);
-    if (sync_authstate) auth_freestate(sync_authstate);
-
-    sync_userid    = NULL;
-    sync_authstate = NULL;
-#endif
 }
-#endif
-static void cmd_select(struct mailbox **mailboxp, char *name, int restart)
+
+static void cmd_select(struct mailbox **mailboxp, char *name)
 {
     static struct mailbox select_mailbox;
     struct mailbox *mailbox = *mailboxp;
     int r = 0;
-
-    if (restart) {
-	syslog(LOG_INFO, "[RESTART]");
-	prot_printf(sync_out, "* [RESTART]\r\n");
-    }
 
     if (mailbox) {
         mailbox_close(mailbox);
@@ -2628,7 +2576,7 @@ static void cmd_mailboxes()
     free(folder_name);
 }
 
-static void cmd_user_all(char *userid)
+static void cmd_user(char *userid)
 {
     char buf[MAX_MAILBOX_PATH];
     int r; 

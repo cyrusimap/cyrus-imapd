@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_reset.c,v 1.1.2.2 2005/03/04 15:06:00 ken3 Exp $
+ * $Id: sync_reset.c,v 1.1.2.3 2005/03/14 19:37:18 ken3 Exp $
  */
 
 #include <config.h>
@@ -199,7 +199,7 @@ addmbox_sub(char *name,
 /* ====================================================================== */
 
 static int
-reset_single(struct sync_user_lock *user_lock, char *user)
+reset_single(struct sync_lock *lock, char *user)
 {
     struct sync_folder_list *list = NULL;
     struct sync_folder *item;
@@ -221,8 +221,8 @@ reset_single(struct sync_user_lock *user_lock, char *user)
         return(IMAP_INVALID_USER);
     }
 
-    if ((r = sync_user_lock(user_lock, user))) {
-        fprintf(stderr, "Failed to lock %s: %s\n", user, error_message(r));
+    if ((r = sync_lock(lock))) {
+        fprintf(stderr, "Failed to lock: %s\n", error_message(r));
         return(r);
     }
     if (sync_userid)    free(sync_userid);
@@ -244,7 +244,7 @@ reset_single(struct sync_user_lock *user_lock, char *user)
         if (r) goto fail;
     }
     sync_folder_list_free(&list);
-
+#if 0
     /* Nuke DELETED folders */
     list = sync_folder_list_create();
 
@@ -260,7 +260,7 @@ reset_single(struct sync_user_lock *user_lock, char *user)
         if (r) goto fail;
     }
     sync_folder_list_free(&list);
-
+#endif
     /* Nuke normal folders */
     list = sync_folder_list_create();
 
@@ -291,9 +291,12 @@ reset_single(struct sync_user_lock *user_lock, char *user)
         unlink(buf);
     }
 
+    sync_unlock(lock);
+
     return(0);
 
  fail:
+    sync_unlock(lock);
     if (list)
         sync_folder_list_free(&list);
     fprintf(stderr, "Failed to reset account %s: %s\n",
@@ -311,10 +314,10 @@ main(int argc, char **argv)
     char *alt_config = NULL;
     int r = 0;
     int force = 0;
-    struct sync_user_lock user_lock;
+    struct sync_lock lock;
     int i;
 
-    sync_user_lock_reset(&user_lock);
+    sync_lock_reset(&lock);
 
     if(geteuid() == 0)
         fatal("must run as the Cyrus user", EC_USAGE);
@@ -364,7 +367,7 @@ main(int argc, char **argv)
     }
 
     for (i = optind; i < argc; i++) {
-        if (reset_single(&user_lock, argv[i])) {
+        if (reset_single(&lock, argv[i])) {
             fprintf(stderr, "Bailing out!\n");
             break;
         }
