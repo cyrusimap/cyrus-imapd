@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.58 2004/06/22 17:04:49 rjs3 Exp $
+ * $Id: imapd.h,v 1.59 2004/06/22 18:58:12 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -55,9 +55,6 @@ extern char *imapd_userid;
 /* Authorization state for logged in userid */
 extern struct auth_state *imapd_authstate;
 
-/* Currently open mailbox */
-extern struct mailbox *imapd_mailbox;
-
 /* Number of messages in currently open mailbox */
 extern int imapd_exists;
 
@@ -78,8 +75,6 @@ struct fetchargs {
     struct fieldlist *fsections;  /* BODY[xHEADER.FIELDSx]<x> values */
     struct strlist *headers;	/* RFC822.HEADER.LINES */
     struct strlist *headers_not; /* RFC822.HEADER.LINES.NOT */
-    int start_octet;		/* start_octet for partial fetch */
-    int octet_count;		/* octet_count for partial fetch, or 0 */
 
     bit32 cache_atleast;          /* to do headers we need atleast this
 				   * cache version */
