@@ -39,6 +39,19 @@
 #include "xmalloc.h"
 
 /*
+ * Names of the headers we cache in the cyrus.cache file.
+ * Any changes to this list require corresponding changes to
+ * message_parse_headers() in message.c
+ */
+char *mailbox_cache_header_name[] = {
+/*    "in-reply-to", in ENVELOPE */
+    "priority",
+    "references",
+};
+int mailbox_num_cache_header =
+  sizeof(mailbox_cache_header_name)/sizeof(char *);
+
+/*
  * Calculate relative filename for the message with UID 'uid'
  * in 'mailbox'.  Returns pointer to static buffer.
  */

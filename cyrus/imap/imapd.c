@@ -871,7 +871,7 @@ int usinguid;
 {
     char *cmd = usinguid ? "UID Fetch" : "Fetch";
     static struct buf fetchatt, fieldname;
-    int c;
+    int c, i;
     int inlist = 0;
     int fetchitems = 0;
     struct fetchargs fetchargs;
@@ -1000,6 +1000,16 @@ int usinguid;
 		    appendstrlist(strlen(fetchatt.s) == 19 ?
 				  &fetchargs.headers : &fetchargs.headers_not,
 				  fieldname.s);
+		    if (strlen(fetchatt.s) == 19 &&
+			!(fetchitems & FETCH_UNCACHEDHEADER)) {
+			for (i=0; i<mailbox_num_cache_header; i++) {
+			    if (!strcasecmp(mailbox_cache_header_name[i],
+					    fieldname.s)) break;
+			}
+			if (i == mailbox_num_cache_header) {
+			    fetchitems |= FETCH_UNCACHEDHEADER;
+			}
+		   }
 		} while (c == ' ');
 		if (c != ')') {
 		    printf("%s BAD Missing required close parenthesis in %s %s\r\n",

@@ -36,6 +36,12 @@
 
 extern PARSED_ADDRESS *AppendAddresses();
 
+/* cyrus.cache file item buffer */
+struct ibuf {
+    char *start, *end;
+    int left;
+};
+    
 /*
  * Parsed form of a body-part
  */
@@ -77,6 +83,11 @@ struct body {
     PARSED_ADDRESS *bcc;
     char *in_reply_to;
     char *message_id;
+
+    /*
+     * Cached headers.  Only filled in at top-level
+     */
+    struct ibuf cacheheaders;
 };
 
 /* List of Content-type parameters */
@@ -93,12 +104,6 @@ struct boundary {
     int alloc;
 };
 
-/* cyrus.cache file item buffer */
-struct ibuf {
-    char *start, *end;
-    int left;
-};
-    
 /* (draft standard) MIME tspecials */
 #define TSPECIALS "()<>@,;:\\\"/[]?="
 
@@ -261,6 +266,8 @@ struct boundary *boundaries;
     if (!boundaries) {
 	boundaries = &newboundaries;
 	boundaries->alloc = boundaries->count = 0;
+	/* We're at top-level--set up to store cached headers */
+	message_ibuf_init(&body->cacheheaders);
     }
 
     message_parse_headers(infile, format, body,
@@ -451,10 +458,22 @@ struct boundary *boundaries;
 		}
 		break;
 
+	    case 'p':
+	    case 'P':
+		if (body->cacheheaders.start &&
+		    !strncasecmp(next+2, "riority:", 8)) {
+		    message_parse_header(next+1, &body->cacheheaders);
+		}
+		break;
+
 	    case 'r':
 	    case 'R':
 		if (!strncasecmp(next+2, "eply-to:", 8)) {
 		    message_parse_address(next+10, &body->reply_to);
+		}
+		else if (body->cacheheaders.start &&
+			 !strncasecmp(next+2, "eferences:", 10)) {
+		    message_parse_header(next+1, &body->cacheheaders);
 		}
 		break;
 
@@ -591,6 +610,38 @@ char **hdrp;
     *hdrp = xmalloc(len + 1);
     strncpy(*hdrp, hdr, len);
     (*hdrp)[len] = '\0';
+}
+
+/*
+ * Cache a header
+ */
+static 
+message_parse_header(hdr, ibuf)
+char *hdr;
+struct ibuf *ibuf;
+{
+    int len;
+    char *hdrend;
+
+    /* Find end of header */
+    hdrend = hdr;
+    do {
+	hdrend = strchr(hdrend+1, '\n');
+    } while (hdrend && (hdrend[1] == ' ' || hdrend[1] == '\t'));
+    if (hdrend) {
+	if (hdrend > hdr && hdrend[-1] == '\r') hdrend--;
+    }
+    else {
+	hdrend = hdr + strlen(hdr);
+    }
+
+    /* Save header value */
+    len = hdrend - hdr;
+    message_ibuf_ensure(ibuf, len+2);
+    strncpy(ibuf->end, hdr, len);
+    ibuf->end += len;
+    *(ibuf->end)++ = '\r';
+    *(ibuf->end)++ = '\n';
 }
 
 /*
@@ -1114,6 +1165,7 @@ struct body *body;
     message_ibuf_write(outfile, &bodystructure);
     message_ibuf_write(outfile, &oldbody);
     message_ibuf_write(outfile, &section);
+    message_ibuf_write(outfile, &body->cacheheaders);
     message_ibuf_write(outfile, &from);
     message_ibuf_write(outfile, &to);
     message_ibuf_write(outfile, &cc);
@@ -1850,5 +1902,8 @@ struct body *body;
 	    message_free_body(body->subpart);
 	}
 	free(body->subpart);
+    }
+    if (body->cacheheaders.start) {
+	message_ibuf_free(&body->cacheheaders);
     }
 }

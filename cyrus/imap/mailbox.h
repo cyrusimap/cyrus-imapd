@@ -117,5 +117,8 @@ struct index_record {
 #define FLAG_FLAGGED (1<<1)
 #define FLAG_DELETED (1<<2)
 
+extern char *mailbox_cache_header_name[];
+extern int mailbox_num_cache_header;
+
 extern char *mailbox_message_fname();
 
