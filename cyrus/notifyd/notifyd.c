@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.6 2002/04/07 04:58:10 ken3 Exp $
+ * $Id: notifyd.c,v 1.7 2002/04/08 20:49:26 rjs3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -93,8 +93,8 @@ char *fetch_arg(char *head, char* tail)
 
 int do_notify()
 {
-    struct sockaddr_un sun;
-    socklen_t sunlen = sizeof(sun);
+    struct sockaddr_un sun_data;
+    socklen_t sunlen = sizeof(sun_data);
     char buf[NOTIFY_MAXSIZE+1], *cp, *tail;
     int r, i;
     char *method, *class, *priority, *user, *mailbox, *message;
@@ -108,7 +108,7 @@ int do_notify()
 
 	signals_poll();
 	r = recvfrom(soc, buf, NOTIFY_MAXSIZE, 0,
-		     (struct sockaddr *) &sun, &sunlen);
+		     (struct sockaddr *) &sun_data, &sunlen);
 	if (r == -1) {
 	    return (errno);
 	}
