@@ -577,11 +577,11 @@ char *authtype;
     int inputlen;
     char *input;
     void *state;
-    char *reply = 0;
+    const char *reply = 0;
     int protlevel;
     char *user;
-    char *(*encodefunc)();
-    char *(*decodefunc)();
+    acte_encodefunc_t *encodefunc;
+    acte_decodefunc_t *decodefunc;
     int maxplain;
     char *val;
 
@@ -590,8 +590,8 @@ char *authtype;
     r = login_authenticate(authtype, &mech, &authproc, &reply);
     if (!r) {
 	r = mech->start("pop", authproc, ACTE_PROT_ANY, PROT_BUFSIZE,
-			popd_haveaddr ? &popd_localaddr : 0,
-			popd_haveaddr ? &popd_remoteaddr : 0,
+			popd_haveaddr ? (struct sockaddr *)&popd_localaddr : 0,
+			popd_haveaddr ? (struct sockaddr *)&popd_remoteaddr : 0,
 			&outputlen, &output, &state, &reply);
     }
     if (r && r != ACTE_DONE) {

@@ -63,13 +63,13 @@ int
 login_authenticate(authtype, mech, authproc, reply)
 char *authtype;
 struct acte_server **mech;
-int (**authproc)();
+acte_authproc_t **authproc;
 char **reply;
 {
     return 1;
 }
   
-char *
+const char *
 login_capabilities()
 {
     return "";

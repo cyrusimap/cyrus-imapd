@@ -65,8 +65,8 @@ extern int errno;
 extern int optind;
 extern char *optarg;
 
-extern char *mailbox_findquota();
-extern long mboxlist_ensureOwnerRights();
+extern char *mailbox_findquota P((const char *name));
+extern acl_canonproc_t mboxlist_ensureOwnerRights;
 
 int code = 0;
 
@@ -589,7 +589,7 @@ char *acl;
 char *mboxname;
 {
     char owner[MAX_MAILBOX_NAME+1];
-    long (*aclcanonproc)() = 0;
+    acl_canonproc_t *aclcanonproc = 0;
     char *p;
     char *newacl;
     char *identifier;
@@ -604,7 +604,7 @@ char *mboxname;
     }
     newacl = strsave("");
     if (aclcanonproc) {
-	acl_set(&newacl, owner, ACL_ALL, (long (*)())0, (char *)0);
+	acl_set(&newacl, owner, ACL_ALL, (acl_canonproc_t *)0, (void *)0);
     }
     for (;;) {
 	identifier = acl;
@@ -616,7 +616,7 @@ char *mboxname;
 	*acl++ = '\0';
 
 	acl_set(&newacl, identifier, acl_strtomask(rights),
-		aclcanonproc, owner);
+		aclcanonproc, (void *)owner);
     }
 
     return newacl;

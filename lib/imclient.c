@@ -58,7 +58,7 @@ typedef void (*proc_t)();
 struct imclient_cmdcallback {
     struct imclient_cmdcallback *next;
     long tag;			/* Command tag # */
-    void (*proc)();		/* Callback function */
+    imclient_proc_t *proc;		/* Callback function */
     void *rock;			/* Callback rock */
 };
 
@@ -66,7 +66,7 @@ struct imclient_cmdcallback {
 struct imclient_callback {
     int flags;			/* Information about untagged data */
     char *keyword;		/* Untagged data protocol keyword */
-    void (*proc)();		/* Callback function */
+    imclient_proc_t *proc;		/* Callback function */
     void *rock;			/* Callback rock */
 };
 
@@ -98,8 +98,8 @@ struct imclient {
     
     /* Protection mechanism data */
     struct acte_client *mech;
-    char *(*encodefunc)();
-    char *(*decodefunc)();
+    acte_encodefunc_t *encodefunc;
+    acte_decodefunc_t *decodefunc;
     void *state;
     int maxplain;
     
@@ -146,9 +146,14 @@ static char charclass[256] = {
 static struct imclient_cmdcallback *cmdcallback_freelist;
 
 /* Forward declarations */
-static void imclient_write(), imclient_writeastring(), imclient_writebase64();
-static void imclient_eof();
-static int imclient_decodebase64();
+static void imclient_write P((struct imclient *imclient,
+			      const char *s, unsigned len));
+static void imclient_writeastring P((struct imclient *imclient,
+				     const char *str));
+static void imclient_writebase64 P((struct imclient *imclient,
+				    const char *output, unsigned len));
+static void imclient_eof P((struct imclient *imclient));
+static int imclient_decodebase64 P((char *input));
 
 /*
  * Connect to server on 'host'.  Optional 'port' specifies the service
@@ -159,8 +164,8 @@ static int imclient_decodebase64();
  */
 int imclient_connect(imclient, host, port)
 struct imclient **imclient;
-char *host;
-char *port;
+const char *host;
+const char *port;
 {
     int s;
     struct hostent *hp;
@@ -277,7 +282,7 @@ va_dcl
     va_list pvar;
     char *keyword;
     int flags;
-    void (*proc)();
+    imclient_proc_t *proc;
     void *rock;
     int i;
 #ifdef __STDC__
@@ -346,7 +351,7 @@ va_dcl
 #ifdef __STDC__
 void
 imclient_send(struct imclient *imclient, void (*finishproc)(),
-	      void *finishrock, char *fmt, ...)
+	      void *finishrock, const char *fmt, ...)
 #else
 void
 imclient_send(va_alist)
@@ -363,7 +368,7 @@ va_dcl
     va_start(pvar, fmt);
 #else
     struct imclient *imclient;
-    void (*finishproc)();
+    imclient_proc_t *finishproc;
     void *finishrock;
     char *fmt;
 
@@ -453,9 +458,9 @@ va_dcl
 static void
 imclient_writeastring(imclient, str)
 struct imclient *imclient;
-char *str;
+const char *str;
 {
-    char *p;
+    const char *p;
     unsigned len = 0;
     int class = 2;
     char buf[30];
@@ -502,8 +507,8 @@ char *str;
 static void
 imclient_write(imclient, s, len)
 struct imclient *imclient;
-char *s;
-int len;
+const char *s;
+unsigned len;
 {
     /* If no data pending for output, reset the buffer */
     if (imclient->outptr == imclient->outstart) {
@@ -985,7 +990,7 @@ int
 imclient_authenticate(imclient, availmech, user, protallowed)
 struct imclient *imclient;
 struct acte_client **availmech;
-char *user;
+const char *user;
 int protallowed;
 {
     struct acte_client **mech;
@@ -1139,8 +1144,8 @@ char *input;
 static void
 imclient_writebase64(imclient, output, len)
 struct imclient *imclient;
-char *output;
-int len;
+const char *output;
+unsigned len;
 {
     char buf[1024];
     int buflen = 0;

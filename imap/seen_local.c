@@ -286,7 +286,7 @@ char *seenuids;
     iov[num_iov++].iov_len = strlen(timeuidbuf);
     iov[num_iov].iov_base = seenuids;
     iov[num_iov++].iov_len = strlen(seenuids);
-    iov[num_iov].iov_base = padbuf;
+    iov[num_iov].iov_base = (char *)padbuf;
     if (replace) {
 	iov[num_iov++].iov_len = PADSIZE;
 	length += PADSIZE;

@@ -50,7 +50,7 @@ extern int errno;
 #include "imap_err.h"
 #include "xmalloc.h"
 
-long mboxlist_ensureOwnerRights();
+acl_canonproc_t mboxlist_ensureOwnerRights;
 
 static char *listfname, *newlistfname;
 static int listfd = -1;
@@ -267,7 +267,7 @@ char **newpartition;
 	     * Users by default have all access to their personal mailbox(es),
 	     * Nobody else starts with any access to same.
 	     */
-	    acl_set(&acl, name+5, ACL_ALL, (long (*)())0, (char *)0);
+	    acl_set(&acl, name+5, ACL_ALL, (acl_canonproc_t *)0, (void *)0);
 	}
 	else {
 	    defaultacl = identifier = 
@@ -284,7 +284,7 @@ char **newpartition;
 		while (*p && !isspace(*p)) p++;
 		if (*p) *p++ = '\0';
 		acl_set(&acl, identifier, acl_strtomask(rights),
-			(long (*)())0, (char *)0);
+			(acl_canonproc_t *)0, (void *)0);
 		identifier = p;
 	    }
 	    free(defaultacl);
@@ -873,7 +873,8 @@ char *userid;
     newacl = strsave(acl);
     if (rights) {
 	if (acl_set(&newacl, identifier, acl_strtomask(rights),
-		    isusermbox ? mboxlist_ensureOwnerRights : 0, userid)) {
+		    isusermbox ? mboxlist_ensureOwnerRights : 0,
+		    (void *)userid)) {
 	    mailbox_close(&mailbox);
 	    mboxlist_unlock();
 	    free(newacl);
@@ -882,7 +883,8 @@ char *userid;
     }
     else {
 	if (acl_delete(&newacl, identifier,
-		       isusermbox ? mboxlist_ensureOwnerRights : 0, userid)) {
+		       isusermbox ? mboxlist_ensureOwnerRights : 0,
+		       (void *)userid)) {
 	    mailbox_close(&mailbox);
 	    mboxlist_unlock();
 	    free(newacl);
@@ -1946,11 +1948,12 @@ unsigned long *acllenp;
  * ACL access canonicalization routine which ensures that 'owner'
  * retains lookup, administer, and create rights over a mailbox.
  */
-long mboxlist_ensureOwnerRights(owner, identifier, access)
-char *owner;
-char *identifier;
-long access;
+int mboxlist_ensureOwnerRights(rock, identifier, access)
+void *rock;
+const char *identifier;
+int access;
 {
+    char *owner = (char *)rock;
     if (strcmp(identifier, owner) != 0) return access;
     return access|ACL_LOOKUP|ACL_ADMIN|ACL_CREATE;
 }

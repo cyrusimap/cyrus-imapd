@@ -51,9 +51,9 @@ extern void fs_give( /* void ** */ );
  *   5) '%' eats all adjacent '%'s
  */
 glob *glob_init_suppress(str, flags, suppress)
-    char *str;
-    int flags;
-    char *suppress;
+const char *str;
+int flags;
+const char *suppress;
 {
     glob *g;
     char *dst;
@@ -171,7 +171,7 @@ glob *glob_init_suppress(str, flags, suppress)
 /* free a glob structure
  */
 void glob_free(g)
-    glob **g;
+glob **g;
 {
     fs_give((void **) g);
 }
@@ -185,15 +185,15 @@ void glob_free(g)
  *            if NULL, partial matches not allowed
  */
 int glob_test(g, ptr, len, min)
-    glob *g;
-    char *ptr;
-    long len;
-    long *min;
+glob *g;
+const char *ptr;
+long len;
+long *min;
 {
-    char *gptr, *pend;		/* glob pointer, end of ptr string */
-    char *gstar, *pstar;	/* pointers for '*' patterns */
-    char *ghier, *phier;	/* pointers for '%' patterns */
-    char *start;		/* start of input string */
+    const char *gptr, *pend;	/* glob pointer, end of ptr string */
+    const char *gstar, *pstar;	/* pointers for '*' patterns */
+    const char *ghier, *phier;	/* pointers for '%' patterns */
+    const char *start;		/* start of input string */
     int newglob;
 
     /* check for remaining partial matches */

@@ -50,7 +50,7 @@
 #include "mailbox.h"
 #include "acl.h"
 
-static login_authproc();
+static acte_authproc_t login_authproc;
 
 extern struct acte_server krb_acte_server;
 
@@ -65,9 +65,9 @@ static int use_acl = 0;
 
 int
 login_plaintext(user, pass, reply)
-char *user;
-char *pass;
-char **reply;
+const char *user;
+const char *pass;
+const char **reply;
 {
     char *val;
 
@@ -90,10 +90,10 @@ char **reply;
 
 int
 login_authenticate(authtype, mech, authproc, reply)
-char *authtype;
+const char *authtype;
 struct acte_server **mech;
-int (**authproc)();
-char **reply;
+acte_authproc_t **authproc;
+const char **reply;
 {
     char *val;
 
@@ -114,7 +114,7 @@ char **reply;
     return 0;
 }
 
-char *
+const char *
 login_capabilities()
 {
     return " AUTH=KERBEROS_V4";
@@ -126,10 +126,10 @@ login_capabilities()
  * not.
  */
 static int kequiv_ok(user, auth_aname, auth_inst, auth_realm)
-char *user;
-char *auth_aname;
-char *auth_inst;
-char *auth_realm;
+const char *user;
+const char *auth_aname;
+const char *auth_inst;
+const char *auth_realm;
 {
     char *mapped_user = auth_map_krbid(auth_aname, auth_inst, auth_realm);
 
@@ -142,8 +142,8 @@ char *auth_realm;
  * right to the principal 'auth_identity'. Returns 1 if so, 0 if not.
  */
 static int acl_ok(user, auth_identity)
-char *user;
-char *auth_identity;
+const char *user;
+const char *auth_identity;
 {
     char *acl;
     char inboxname[1024];
@@ -167,9 +167,9 @@ char *auth_identity;
 
 static int
 login_authproc(user, auth_identity, reply)
-char *user;
-char *auth_identity;
-char **reply;
+const char *user;
+const char *auth_identity;
+const char **reply;
 {
     char aname[ANAME_SZ];
     char inst[INST_SZ];

@@ -1,6 +1,6 @@
 /* xmalloc.h -- Allocation package that calls fatal() when out of memory
  *
- *	(C) Copyright 1994 by Carnegie Mellon University
+ *	(C) Copyright 1994,1996 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -26,8 +26,22 @@
  * SOFTWARE.
  *
  */
-extern char *xmalloc();
-extern char *xrealloc();
-extern char *strsave();
-extern void *fs_get();
-extern void fs_give();
+
+#ifndef INCLUDED_XMALLOC_H
+#define INCLUDED_XMALLOC_H
+
+#ifndef P
+#ifdef __STDC__
+#define P(x) x
+#else
+#define P(x) ()
+#endif
+#endif
+
+extern char *xmalloc P((unsigned size));
+extern char *xrealloc P((char *ptr, unsigned size));
+extern char *strsave P((char *str));
+extern void *fs_get P((unsigned size));
+extern void fs_give P((void **ptr));
+
+#endif /* INCLUDED_XMALLOC_H */

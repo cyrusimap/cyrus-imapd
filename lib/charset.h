@@ -1,6 +1,6 @@
 /* 
  *
- *	(C) Copyright 1994 by Carnegie Mellon University
+ *	(C) Copyright 1994-1996 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -27,8 +27,16 @@
  *
  */
 
-#ifndef INC_CHARSET
-#define INC_CHARSET
+#ifndef INCLUDED_CHARSET_H
+#define INCLUDED_CHARSET_H
+
+#ifndef P
+#ifdef __STDC__
+#define P(x) x
+#else
+#define P(x) ()
+#endif
+#endif
 
 /* Marker to indicate characters that don't map to anything */
 #define EMPTY 'X'
@@ -41,15 +49,15 @@
 
 typedef int comp_pat;
 
-int charset_lookupname(/* char *name */);
-char *charset_convert(/* char *s, int charset */);
-char *charset_decode1522(/* char *s */);
-comp_pat *charset_compilepat(/* char *s */);
-void charset_freepat(/* comp_pat *pat */);
-int charset_searchstring(/* char *substr, comp_pat *pat,
-			    char *s, int len */);
-int charset_searchfile(/* char *substr, comp_pat *pat,
-			  FILE *msgfile, int mapnl,
-			  int len, int charset, int encoding */);
+int charset_lookupname P((const char *name));
+char *charset_convert P((const char *s, int charset));
+char *charset_decode1522 P((const char *s));
+comp_pat *charset_compilepat P((const char *s));
+void charset_freepat P((comp_pat *pat));
+int charset_searchstring P((const char *substr, comp_pat *pat,
+			    const char *s, int len));
+int charset_searchfile P((const char *substr, comp_pat *pat,
+			  const char *msg_base, int mapnl,
+			  int len, int charset, int encoding));
 
-#endif INC_CHARSET
+#endif /* INCLUDED_CHARSET_H */

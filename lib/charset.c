@@ -163,7 +163,7 @@ static const char index_64[256] = {
  * or -1 if there is no matching character set.
  */
 int charset_lookupname(name)
-char *name;
+const char *name;
 {
     int i;
 
@@ -179,7 +179,7 @@ char *name;
  * buffer containing 's' in canonical searching form.
  */
 char *charset_convert(s, charset)
-char *s;
+const char *s;
 int charset;
 {
     static char *retval = 0;
@@ -216,11 +216,11 @@ int charset;
  * contining 's' in canonical searching form.
  */
 char *charset_decode1522(s)
-char *s;
+const char *s;
 {
     int eatspace = 0;
-    char *start, *encoding, *end;
-    char *p;
+    const char *start, *encoding, *end;
+    const char *p;
     int i, c, c1, c2, c3, c4;
     struct state state;
     static char *retval = 0;
@@ -360,7 +360,7 @@ char *s;
  */
 comp_pat *
 charset_compilepat(s)
-char *s;
+const char *s;
 {
     comp_pat *pat;
     int i, c, len;
@@ -401,9 +401,9 @@ comp_pat *pat;
  */
 int
 charset_searchstring(substr, pat, s, len)
-char *substr;
+const char *substr;
 comp_pat *pat;
-char *s;
+const char *s;
 int len;
 {
     int i, j, large;
@@ -441,18 +441,19 @@ int len;
 /*
  * The various charset_searchfile() helper functions
  */
-static int charset_readconvert();
-static int charset_readplain();
-static int charset_readmapnl();
-static int charset_readqp();
-static int charset_readqpmapnl();
-static int charset_readbase64();
+typedef int rawproc_t P((char *buf, int size));
+static int charset_readconvert P((char *buf, int size));
+static rawproc_t charset_readplain;
+static rawproc_t charset_readmapnl;
+static rawproc_t charset_readqp;
+static rawproc_t charset_readqpmapnl;
+static rawproc_t charset_readbase64;
 
 /*
  * State for the various charset_searchfile() helper functions
  */
 static int (*rawproc)();	/* Function to read and transfer-decode data */
-static char *rawbase;		/* Location in mapped file of raw data */
+static const char *rawbase;	/* Location in mapped file of raw data */
 static int rawlen;		/* # bytes raw data left to read from file */
 static char decodebuf[4096];	/* Buffer of data deocded, but not converted
 				 * into canonical searching form */
@@ -471,9 +472,9 @@ static struct state decodestate; /* Charset state to convert decoded data
 int
 charset_searchfile(substr, pat, msg_base, mapnl, len,
 		   charset, encoding)
-char *substr;
+const char *substr;
 comp_pat *pat;
-char *msg_base;
+const char *msg_base;
 int mapnl;
 int len;
 int charset;
@@ -741,7 +742,7 @@ int size;
 {
     int retval = 0;
     int c, c1, c2;
-    char *nextline, *endline;
+    const char *nextline, *endline;
 
     nextline = endline = rawbase;
 
@@ -803,7 +804,7 @@ int size;
 {
     int retval = 0;
     int c, c1, c2;
-    char *nextline, *endline;
+    const char *nextline, *endline;
 
     nextline = endline = rawbase;
 

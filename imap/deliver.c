@@ -284,6 +284,7 @@ char *addr;
     }
     else {
 	while (*addr != '@' && *addr != '>') {
+	    if (*addr == '\\') addr++;
 	    *dest++ = *addr++;
 	}
     }
@@ -1081,8 +1082,8 @@ int age;
 	    (date.size == len && memcmp(date.data, datebuf, len) < 0)) {
 	    if (num_deletions >= alloc_deletions) {
 		alloc_deletions += 1000;
-		deletions = (DBT *) xrealloc(deletions,
-					       alloc_deletions * sizeof(DBT));
+		deletions = (DBT *) xrealloc((char *)deletions,
+					     alloc_deletions * sizeof(DBT));
 	    }
 	    deletions[num_deletions].size = delivery.size;
 	    deletions[num_deletions].data = xmalloc(delivery.size);
