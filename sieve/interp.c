@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.1 1999/07/02 18:55:35 leg Exp $
+ * $Id: interp.c,v 1.2 1999/07/02 22:22:25 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -30,7 +30,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "sieve_interface.h"
 #include "interp.h"
 
-const char *sieve_version = "cmu-sieve 1.2";
+const char *sieve_version = "cmu-sieve 1.3";
 
 /* build a sieve interpretor */
 int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
