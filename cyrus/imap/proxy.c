@@ -39,12 +39,14 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.c,v 1.1.2.3 2004/03/24 19:53:10 ken3 Exp $
+ * $Id: proxy.c,v 1.1.2.4 2004/09/03 20:12:37 ken3 Exp $
  */
 
 #include <config.h>
 
 #include <assert.h>
+#include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
@@ -196,6 +198,90 @@ proxy_findserver(const char *server,		/* hostname of backend */
 	    xrealloc(*cache, (i + 2) * sizeof(struct backend *));
 	(*cache)[i] = ret;
 	(*cache)[i + 1] = NULL;
+    }
+
+    return ret;
+}
+
+/*
+ * Check a protgroup for input.
+ *
+ * Input from serverin is sent to clientout.
+ * If serverout is non-NULL:
+ *   - input from clientin is sent to serverout.
+ *   - returns -1 if clientin or serverin closed, otherwise returns 0.
+ * If serverout is NULL:
+ *   - returns 1 if input from clientin is pending, 1, otherwise returns 0.
+ */
+inline int proxy_check_input(struct protgroup *protin,
+			     struct protstream *clientin,
+			     struct protstream *clientout,
+			     struct protstream *serverin,
+			     struct protstream *serverout,
+			     long timeout_sec)
+{
+    struct protgroup *protout = NULL;
+    struct timeval timeout = { timeout_sec, 0 };
+    int n, ret = 0;
+
+    n = prot_select(protin, PROT_NO_FD, &protout, NULL, &timeout);
+    if (n == -1 && errno != EINTR) {
+	syslog(LOG_ERR, "prot_select() failed in proxy_check_input(): %m");
+	fatal("prot_select() failed in proxy_check_input()", EC_TEMPFAIL);
+    }
+
+    if (n && protout) {
+	/* see who has input */
+	for (; n; n--) {
+	    struct protstream *pin = protgroup_getelement(protout, n-1);
+	    struct protstream *pout = NULL;
+
+	    if (pin == clientin) {
+		/* input from client */
+		if (serverout) {
+		    /* stream it to server */
+		    pout = serverout;
+		} else {
+		    /* notify the caller */
+		    ret = 1;
+		}
+	    }
+	    else if (pin == serverin) {
+		/* input from server, stream it to client */
+		pout = clientout;
+	    }
+	    else {
+		/* XXX shouldn't get here !!! */
+		fatal("unknown protstream returned by prot_select in proxy_check_input()",
+		      EC_SOFTWARE);
+	    }
+
+	    if (pout) {
+		const char *err;
+
+		do {
+		    char buf[4096];
+		    int c = prot_read(pin, buf, sizeof(buf));
+
+		    if (c == 0 || c < 0) break;
+		    prot_write(pout, buf, c);
+		} while (pin->cnt > 0);
+
+		if ((err = prot_error(pin)) != NULL) {
+		    if (serverout && !strcmp(err, PROT_EOF_STRING)) {
+			/* we're pipelining, and the connection closed */
+			ret = -1;
+		    }
+		    else {
+			/* uh oh, we're not happy */
+			fatal("Lost connection to input stream",
+			      EC_UNAVAILABLE);
+		    }
+		}
+	    }
+	}
+
+	protgroup_free(protout);
     }
 
     return ret;

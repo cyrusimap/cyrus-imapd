@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.41 2004/09/03 18:18:16 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.42 2004/09/03 20:12:33 ken3 Exp $ */
 
 #include <config.h>
 
@@ -912,64 +912,6 @@ static void imapd_check(struct backend *be, int usinguid, int checkseen)
 }
 
 /*
- * Check our protgroup for input.
- *
- * If input from the client is pending, returns 1, otherwise returns 0.
- * Input from the backend is sent to the client immediately.
- */
-static inline int check_input(long timeout_sec)
-{
-    struct protgroup *protout = NULL;
-    struct timeval timeout = { timeout_sec, 0 };
-    int n, clientin = 0;
-
-    n = prot_select(protin, PROT_NO_FD, &protout, NULL, &timeout);
-    if (n == -1 && errno != EINTR) {
-	syslog(LOG_ERR, "prot_select() failed in check_input(): %m");
-	fatal("prot_select() failed in check_input()", EC_TEMPFAIL);
-    }
-
-    if (n && protout) {
-	struct protstream *ptmp;
-
-	/* see who has input */
-	for (; n; n--) {
-	    ptmp = protgroup_getelement(protout, n-1);
-
-	    if (ptmp == imapd_in) {
-		/* input from client */
-		clientin = 1;
-	    }
-	    else if (backend_current && ptmp == backend_current->in){
-		/* input from selected backend, stream it to client */
-		do {
-		    char buf[4096];
-		    int c = prot_read(ptmp, buf, sizeof(buf));
-
-		    if (c == 0 || c < 0) break;
-		    prot_write(imapd_out, buf, c);
-		} while (ptmp->cnt > 0);
-
-		if (prot_error(ptmp)) {
-		    /* uh oh, we're not happy */
-		    fatal("Lost connection to selected backend",
-			  EC_UNAVAILABLE);
-		}
-	    }
-	    else {
-		/* XXX shouldn't get here !!! */
-		fatal("unknown protstream returned by prot_select in check_input()",
-		      EC_SOFTWARE);
-	    }
-	}
-
-	protgroup_free(protout);
-    }
-
-    return clientin;
-}
-
-/*
  * Top-level command loop parsing
  */
 void cmdloop()
@@ -1017,7 +959,12 @@ void cmdloop()
 
 	signals_poll();
 
-	if (!check_input(60)) continue;  /* No input from client */
+	if (!proxy_check_input(protin, imapd_in, imapd_out,
+			       backend_current ? backend_current->in : NULL,
+			       NULL, 60)) {
+	    /* No input from client */
+	    continue;
+	}
 
 	/* Parse tag */
 	c = getword(imapd_in, &tag);
@@ -2417,7 +2364,9 @@ void cmd_idle(char *tag)
 	    goto done;
 	}
 
-	done = check_input(idle_period);
+	done = proxy_check_input(protin, imapd_in, imapd_out,
+				 backend_current ? backend_current->in : NULL,
+				 NULL, idle_period);
 
 	/* If not running IDLE on backend, check the mailbox for updates */
 	if (!backend_current || !CAPA(backend_current, CAPA_IDLE)) {

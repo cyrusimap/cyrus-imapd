@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.26 2004/08/05 16:23:46 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.27 2004/09/03 20:12:36 ken3 Exp $
  */
 #include <config.h>
 
@@ -83,6 +83,7 @@
 #include "idle.h"
 #include "telemetry.h"
 #include "backend.h"
+#include "proxy.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -1771,71 +1772,28 @@ static int reset_saslconn(sasl_conn_t **conn)
 static void bitpipe(void)
 {
     struct protgroup *protin = protgroup_new(2);
-    struct protgroup *protout = NULL;
-    struct timeval timeout;
-    int n, shutdown = 0;
+    int shutdown = 0;
     char buf[4096];
 
-    /* Reset protin to all zeros (to preserve memory allocation) */
-    protgroup_reset(protin);
     protgroup_insert(protin, popd_in);
     protgroup_insert(protin, backend->in);
 
-    for (;;) {
+    do {
+	/* Flush any buffered output */
+	prot_flush(popd_out);
+	if (backend) prot_flush(backend->out);
+
 	/* check for shutdown file */
 	if (shutdown_file(buf, sizeof(buf))) {
 	    shutdown = 1;
 	    goto done;
 	}
-
-	/* Clear protout if needed */
-	protgroup_free(protout);
-	protout = NULL;
-
-	timeout.tv_sec = 60;
-	timeout.tv_usec = 0;
-
-	n = prot_select(protin, PROT_NO_FD, &protout, NULL, &timeout);
-	if (n == -1) {
-	    syslog(LOG_ERR, "prot_select() failed in bitpipe(): %m");
-	    fatal("prot_select() failed in bitpipe()", EC_TEMPFAIL);
-	}
-	if (n && protout) {
-	    struct protstream *ptmp;
-
-	    for (; n; n--) {
-		ptmp = protgroup_getelement(protout, n-1);
-
-		if (ptmp == popd_in) {
-		    do {
-			int c = prot_read(popd_in, buf, sizeof(buf));
-			if (c == 0 || c < 0) goto done;
-			prot_write(backend->out, buf, c);
-		    } while (popd_in->cnt > 0);
-		    prot_flush(backend->out);
-		}
-		else if (ptmp == backend->in) {
-		    do {
-			int c = prot_read(backend->in, buf, sizeof(buf));
-			if (c == 0 || c < 0) goto done;
-			prot_write(popd_out, buf, c);
-		    } while (backend->in->cnt > 0);
-		    prot_flush(popd_out);
-		}
-		else {
-		    /* XXX shouldn't get here !!! */
-		    fatal("unknown protstream returned by prot_select in bitpipe()",
-			  EC_SOFTWARE);
-		}
-	    }
-	}
-    }
-
+    } while (!proxy_check_input(protin, popd_in, popd_out,
+				backend->in, backend->out, 60));
 
  done:
     /* ok, we're done. */
     protgroup_free(protin);
-    protgroup_free(protout);
 
     if (shutdown) {
 	char *p;
