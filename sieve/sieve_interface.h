@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.4 1999/10/27 21:20:20 leg Exp $
+ * $Id: sieve_interface.h,v 1.5 1999/11/03 18:06:57 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -91,7 +91,7 @@ int sieve_register_size(sieve_interp_t *interp, sieve_get_size *f);
 int sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
 int sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
 
-typedef sieve_parse_error(int lineno, char *msg, void *interp_context,
+typedef int sieve_parse_error(int lineno, char *msg, void *interp_context,
 			  void *script_context);
 int sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f);
 
