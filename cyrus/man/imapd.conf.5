@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapd.conf.5,v 1.63 2002/06/08 01:00:03 ken3 Exp $
+.\" $Id: imapd.conf.5,v 1.64 2002/06/10 18:35:12 ken3 Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -200,6 +200,11 @@ non-ASCII characters in headers is offered by RFC 2047 and its predecessors.)
 Maximum incoming LMTP message size.  If set, lmtpd will
 reject messages larger than \fImaxmessagesize\fR bytes.  The default
 is to allow messages of any size.
+.IP "\fBlmtp_overquota_perm_failure:\fR no" 5
+If enabled, lmtpd returns a permanent failure code when a user's
+mailbox is over quota.  By default, the failure is temporary.
+.IP "\fBlmtp_allowplaintext:\fR <setting of \fIallowplaintext\fR>" 5
+Allow the use of the SASL PLAIN mechanism for LMTP.
 .IP "\fBpostuser:\fR <none>" 5
 Userid used to deliver messages to shared folders.  For example, if
 set to "bb", email sent to "bb+shared.blah" would be delivered to the
