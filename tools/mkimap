@@ -1,4 +1,7 @@
-#!/usr/local/bin/perl5
+#!/bin/sh
+exec perl $0 $*;
+
+require 5;
 
 $imapdconf = shift || "/etc/imapd.conf";
 $sievedir = "/usr/sieve";
@@ -6,25 +9,28 @@ $nosievedir = 0;
 $hashispool = 0;
 
 open CONF, $imapdconf;
-print "reading configure file:\n";
+print "reading configure file...\n";
 while (<CONF>) {
     if (/^#/) { 
 	next; 
     }
-    print;
     if (/^configdirectory:\s(.*)$/) {
 	$conf = $1;
+	print "i will configure directory $conf.\n";
     }
     if (/^sieveuserhomedir:\s(1|t|yes|on)/) {
 	$nosievedir = 1;
+	print "you are storing sieve scripts in user's home directories.\n";
     }
     if (/^sievedir:\s(.*)$/) {
 	$sievedir = $1;
+	print "you are using $sievedir as your sieve directory.\n";
     }
     if (/^partition-.*:\s(.*)$/) {
 	if (grep /$1/, @parts) {
 	    next;
 	}
+	print "i saw partition $1.\n";
 	push @parts, $1;
     }
     if (/^hashimapspool:\s(1|t|yes|on)/) {
@@ -32,7 +38,7 @@ while (<CONF>) {
 	print "i will also hash partitions.\n";
     }
 }
-print "--- done ---\n";
+print "done\n";
 close CONF;
 
 $d = $conf;
@@ -64,7 +70,7 @@ if (!$nosievedir) {
 }
 
 $flag = 0;
-while ($part = shift @parts) {
+while ($hashispool && ($part = shift @parts)) {
     $flag = 1;
 
     print "creating $part...\n";
@@ -73,13 +79,4 @@ while ($part = shift @parts) {
     if ($hashispool) { foreach $i ("a".."z") { mkdir $i, 0755; } }
 }
 
-if (!$flag) {
-    print "creating /var/spool/imap...\n";
-    mkdir "/var/spool/imap", 0755;
-    chdir "/var/spool/imap";
-    if ($hashispool) { foreach $i ("a".."z") { mkdir $i, 0755; } }
-}
-
 print "done\n";
-
-print "\nremember to chown all created directories!\n";
