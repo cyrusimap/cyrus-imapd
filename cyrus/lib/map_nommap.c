@@ -48,7 +48,7 @@ char *mboxname;
     /* Need a larger buffer */
     if (*len < newlen) {
 	if (*len) free(*base);
-	*len = newlen + onceonly ? 0 : SLOP;
+	*len = newlen + (onceonly ? 0 : SLOP);
 	*base = xmalloc(*len);
     }
 
@@ -73,6 +73,7 @@ char *mboxname;
 	    sprintf(buf, "failed to read %s file", name);
 	    fatal(buf, EX_IOERR);
 	}
+	p += left;
 	left -= n;
     }
 }
