@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.38 2002/05/31 18:35:36 rjs3 Exp $ -->
+<!-- $Id: changes.html,v 1.39 2002/05/31 19:31:56 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -14,12 +14,17 @@
 <ul>
 <li> Sieve is no longer dependent on duplicate delivery suppression
 (it still uses the duplicate delivery database however). </li>
+
 <li> <tt>imtest</tt> now includes all the functionality previously
-kept in lmtptest, smtptest, and mupdatetest.  imtest will notice if it
-is invoked with one of these names and do the right thing.  The -P
-flag can be used to force a particular protocol.  As part of this, the
-default install location for mupdatetest has changed to be the same
-as the other test utilities</li>
+kept in pop3test, lmtptest, smtptest, and mupdatetest.  imtest will
+notice if it is invoked with one of these names and do the right
+thing.  The -P  flag can be used to force a particular protocol.  As
+part of this, the default install location for mupdatetest has changed
+to be the same as the other test utilities.  <tt>imtest</tt> also
+includes new MANAGESIEVE functionality (sivtest) as well as the
+ability to make reconnections to the same server (useful for testing
+SSL/TLS session caching and DIGEST-MD5 fast reauth.</li> 
+
 <li>snmpgen generates stubbed out code so we don't waste resources on
 something that just doesn't work. At some point in time, we'll make it
 work again as it would be useful to gather aggregate statistics on
@@ -1598,7 +1603,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/05/31 18:35:36 $ <br />
+last modified: $Date: 2002/05/31 19:31:56 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
