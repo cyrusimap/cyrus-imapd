@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapd.8,v 1.13 2002/05/25 19:57:48 leg Exp $
+.\" $Id: imapd.8,v 1.14 2002/06/03 18:22:32 rjs3 Exp $
 .SH NAME
 imapd \- IMAP server process
 .SH SYNOPSIS
@@ -47,6 +47,9 @@ imapd \- IMAP server process
 [
 .B \-C
 .I config-file
+]
+[
+.B \-D
 ]
 [
 .B \-s
@@ -107,6 +110,9 @@ process-id.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-D
+Run external debugger specified in debug_command.
 .TP
 .BI \-s
 Serve IMAP over SSL (imaps).  All data to and from

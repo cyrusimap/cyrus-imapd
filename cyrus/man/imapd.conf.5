@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapd.conf.5,v 1.60 2002/06/02 15:25:43 ken3 Exp $
+.\" $Id: imapd.conf.5,v 1.61 2002/06/03 18:22:32 rjs3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -323,6 +323,11 @@ Unix domain socket that lmtpd listens on, used by deliver(8).
 Unix domain socket that idled listens on.
 .IP "\fBnotifysocket:\fR /var/imap/socket/notify" 5
 Unix domain socket that the new mail notification daemon listens on.
+.IP "\fBdebug_command:\fR <none>" 5
+Debug command to be used by processes started with -D option.  The string
+is a C format string that gets 3 options: the first is the name of the
+executable (without path).  The second is the pid (integer) and the third
+is the service ID.  Example: /usr/local/bin/gdb /usr/cyrus/bin/%s %d
 .SH SEE ALSO
 .PP
 \fBimapd(8)\fR, \fBpop3d(8)\fR, \fBlmtpd(8)\fR, \fBtimsieved(8)\fR,

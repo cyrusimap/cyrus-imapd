@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.31 2002/05/01 15:17:55 rjs3 Exp $ */
+/* $Id: fud.c,v 1.32 2002/06/03 18:22:24 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -164,10 +164,12 @@ int service_init(int argc, char **argv, char **envp)
 
     setproctitle_init(argc, argv, envp);
 
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:D")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file - handled by service::main() */
 	    break;
+	case 'D': /* external debugger - handled by service::main() */
+ 	    break;
 	default:
 	    break;
 	}

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.32 2002/03/08 19:26:17 leg Exp $ */
+/* $Id: service.c,v 1.33 2002/06/03 18:22:34 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -257,13 +257,17 @@ int main(int argc, char **argv, char **envp)
     struct request_info request;
     int opt;
     char *alt_config = NULL;
+    int call_debugger = 0;
     int soctype;
     int typelen = sizeof(soctype);
 
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:D")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
+	    break;
+	case 'D':
+	    call_debugger = 1;
 	    break;
 	default:
 	    break;
@@ -291,6 +295,18 @@ int main(int argc, char **argv, char **envp)
     }
     config_init(alt_config, service);
 
+    if (call_debugger) {
+	char debugbuf[1024];
+	int ret;
+	const char *debugger = config_getstring("debug_command", NULL);
+	if (debugger) {
+	    snprintf(debugbuf, sizeof(debugbuf), debugger, 
+		     argv[0], getpid(), service);
+	    syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
+	    ret = system(debugbuf); /* run debugger */
+	    syslog(LOG_DEBUG, "debugger returned exit status: %d", ret);
+	}
+    }
     syslog(LOG_DEBUG, "executed");
 
     /* set close on exec */

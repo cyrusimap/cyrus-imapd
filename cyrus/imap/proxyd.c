@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.124 2002/06/02 15:25:42 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.125 2002/06/03 18:22:27 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -944,10 +944,12 @@ int service_init(int argc, char **argv, char **envp)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    while ((opt = getopt(argc, argv, "C:sp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:Dsp:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file - handled by service::main() */
 	    break;
+	case 'D': /* ext. debugger - handled by service::main() */
+ 	    break;
 	case 's': /* imaps (do starttls right away) */
 	    imaps = 1;
 	    if (!tls_enabled("imap")) {
