@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.68.4.11 2003/05/08 20:56:53 ken3 Exp $
+ * $Id: mailbox.h,v 1.68.4.12 2003/05/20 14:56:45 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -148,9 +148,10 @@ struct mailbox {
     int dirty;
 
     int pop3_new_uidl;
+    unsigned long leaked_cache_records;
 
     /* future expansion -- won't need expand the header */
-    unsigned long spares[4];
+    unsigned long spares[3];
 
     struct quota quota;
 };
@@ -185,7 +186,7 @@ struct index_record {
 #define OFFSET_ANSWERED 48
 #define OFFSET_FLAGGED 52
 #define OFFSET_POP3_NEW_UIDL 56	/* added for Outlook stupidity */
-#define OFFSET_SPARE0 60
+#define OFFSET_LEAKED_CACHE 60 /* Number of leaked records in cache file */
 #define OFFSET_SPARE1 64
 #define OFFSET_SPARE2 68
 #define OFFSET_SPARE3 72
@@ -203,8 +204,11 @@ struct index_record {
 #define OFFSET_USER_FLAGS 36
 #define OFFSET_CONTENT_LINES (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8) /* added for nntpd */
 
-#define INDEX_HEADER_SIZE (OFFSET_SPARE3+4)
-#define INDEX_RECORD_SIZE (OFFSET_CONTENT_LINES+4)
+#define INDEX_HEADER_SIZE (OFFSET_SPARE3+sizeof(bit32))
+#define INDEX_RECORD_SIZE (OFFSET_CONTENT_LINES+sizeof(bit32))
+
+/* Number of fields in an individual message's cache record */
+#define NUM_CACHE_FIELDS 10
 
 #define FLAG_ANSWERED (1<<0)
 #define FLAG_FLAGGED (1<<1)

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68.4.14 2003/05/08 21:07:40 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.15 2003/05/20 14:56:45 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -546,6 +546,7 @@ int reconstruct(char *name, struct discovered *found)
     *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(new_answered);
     *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(new_flagged);
     *((bit32 *)(buf+OFFSET_POP3_NEW_UIDL)) = htonl(mailbox.pop3_new_uidl);
+    *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(0);
 
     n = fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
     fflush(newindex);
