@@ -25,13 +25,12 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.239 2000/05/11 18:42:08 leg Exp $ */
+/* $Id: imapd.c,v 1.198.2.1 2000/05/13 03:54:40 leg Exp $ */
 
-#include <config.h>
-
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#ifndef __GNUC__
+#define __attribute__(foo)
 #endif
+
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -47,14 +46,14 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <sys/utsname.h>
 
 #include <sasl.h>
 
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
-#include "imapconf.h"
+#include "map.h"
+#include "config.h"
 #include "version.h"
 #include "charset.h"
 #include "imparse.h"
@@ -64,25 +63,25 @@
 #include "mailbox.h"
 #include "imapd.h"
 #include "xmalloc.h"
-#include "mboxname.h"
-#include "append.h"
-#include "mboxlist.h"
-#include "acapmbox.h"
-
-#include "pushstats.h"		/* SNMP interface */
 
 #ifdef HAVE_SSL
 #include "tls.h"
-
-extern SSL *tls_conn;
 #endif /* HAVE_SSL */
 
 extern int optind;
 extern char *optarg;
+
 extern int errno;
 
+extern char *login_capabilities();
+
+struct buf {
+    char *s;
+    int alloc;
+};
+
 sasl_conn_t *imapd_saslconn; /* the sasl connection context */
-int imapd_starttls_done = 0; /* have we done a successful starttls yet? */
+int imapd_starttls_done = 0; /* have we done a sucessful starttls yet? */
 
 char *imapd_userid;
 struct auth_state *imapd_authstate = 0;
@@ -95,7 +94,12 @@ char imapd_clienthost[250] = "[local]";
 struct protstream *imapd_out, *imapd_in;
 time_t imapd_logtime;
 
+#ifdef HAVE_SSL
+extern SSL *tls_conn;
+#endif /* HAVE_SSL */
+
 static struct mailbox mboxstruct;
+
 static struct fetchargs zerofetchargs;
 
 static char *monthname[] = {
@@ -103,90 +107,152 @@ static char *monthname[] = {
     "jul", "aug", "sep", "oct", "nov", "dec"
 };
 
-void shutdown_file(int fd);
-void motd_file(int fd);
-void shut_down(int code);
-void fatal(const char *s, int code);
+void usage P((void));
+void shutdown_file P((int fd));
+void motd_file P((int fd));
+void shut_down P((int code));
+void fatal P((const char *s, int code));
 
-void cmdloop(void);
-void cmd_login(char *tag, char *user, char *passwd);
-void cmd_authenticate(char *tag, char *authtype);
-void cmd_noop(char *tag, char *cmd);
-void cmd_capability(char *tag);
-void cmd_append(char *tag, char *name);
-void cmd_select(char *tag, char *cmd, char *name);
-void cmd_close(char *tag);
-void cmd_fetch(char *tag, char *sequence, int usinguid);
-void cmd_partial(char *tag, char *msgno, char *data,
-		 char *start, char *count);
-void cmd_store(char *tag, char *sequence, char *operation, int usinguid);
-void cmd_search(char *tag, int usinguid);
-void cmd_copy(char *tag, char *sequence, char *name, int usinguid);
-void cmd_expunge(char *tag, char *sequence);
-void cmd_create(char *tag, char *name, char *partition);
-void cmd_delete(char *tag, char *name);
-void cmd_rename(const char *tag, char *oldname, 
-		char *newname, char *partition);
-void cmd_find(char *tag, char *namespace, char *pattern);
-void cmd_list(char *tag, int subscribed, char *reference, char *pattern);
-void cmd_changesub(char *tag, char *namespace, char *name, int add);
-void cmd_getacl(char *tag, char *name, int oldform);
-void cmd_listrights(char *tag, char *name, char *identifier);
-void cmd_myrights(char *tag, char *name, int oldform);
-void cmd_setacl(char *tag, char *name, char *identifier, char *rights);
-void cmd_getquota(char *tag, char *name);
-void cmd_getquotaroot(char *tag, char *name);
-void cmd_setquota(char *tag, char *quotaroot);
-void cmd_status(char *tag, char *name);
-void cmd_getuids(char *tag, char *startuid);
-void cmd_unselect(char* tag);
-void cmd_namespace(char* tag);
-void cmd_id(char* tag);
+void cmdloop P((void));
+void cmd_login P((char *tag, char *user, char *passwd));
+void cmd_authenticate P((char *tag, char *authtype));
+void cmd_noop P((char *tag, char *cmd));
+void cmd_capability P((char *tag));
+void cmd_append P((char *tag, char *name));
+void cmd_select P((char *tag, char *cmd, char *name));
+void cmd_close P((char *tag));
+void cmd_fetch P((char *tag, char *sequence, int usinguid));
+void cmd_partial P((char *tag, char *msgno, char *data,
+		    char *start, char *count));
+void cmd_store P((char *tag, char *sequence, char *operation, int usinguid));
+void cmd_search P((char *tag, int usinguid));
+void cmd_copy P((char *tag, char *sequence, char *name, int usinguid));
+void cmd_expunge P((char *tag, char *sequence));
+void cmd_create P((char *tag, char *name, char *partition));
+void cmd_delete P((char *tag, char *name));
+void cmd_rename P((char *tag, char *oldname, char *newname, char *partition));
+void cmd_find P((char *tag, char *namespace, char *pattern));
+void cmd_list P((char *tag, int subscribed, char *reference, char *pattern));
+void cmd_changesub P((char *tag, char *namespace, char *name, int add));
+void cmd_getacl P((char *tag, char *name, int oldform));
+void cmd_listrights P((char *tag, char *name, char *identifier));
+void cmd_myrights P((char *tag, char *name, int oldform));
+void cmd_setacl P((char *tag, char *name, char *identifier, char *rights));
+void cmd_getquota P((char *tag, char *name));
+void cmd_getquotaroot P((char *tag, char *name));
+void cmd_setquota P((char *tag, char *quotaroot));
+void cmd_status P((char *tag, char *name));
+void cmd_getuids P((char *tag, char *startuid));
+void cmd_unselect P((char* tag));
+void cmd_namespace P((char* tag));
 
-void cmd_starttls(char *tag, int imaps);
+void cmd_starttls(char *tag);
 int starttls_enabled(void);
 
 #ifdef ENABLE_X_NETSCAPE_HACK
-void cmd_netscrape(char* tag);
+void cmd_netscrape P((char* tag));
 #endif
 
-enum string_types { IMAP_ASTRING, IMAP_NSTRING, IMAP_STRING };
-#define getastring(buf)	getxstring((buf), IMAP_ASTRING)
-#define getnstring(buf)	getxstring((buf), IMAP_NSTRING)
-#define getstring(buf)	getxstring((buf), IMAP_STRING)
+int getword P((struct buf *buf));
+int getastring P((struct buf *buf));
+int getbase64string P((struct buf *buf));
+int getsearchprogram P((char *tag, struct searchargs *searchargs,
+			int *charset, int parsecharset));
+int getsearchcriteria P((char *tag, struct searchargs *searchargs,
+			 int *charset, int parsecharset));
+int getsearchdate P((time_t *start, time_t *end));
+int getdatetime P((time_t *date));
 
-int getword(struct buf *buf);
-int getxstring(struct buf *buf, int type);
-int getsearchprogram(char *tag, struct searchargs *searchargs,
-			int *charset, int parsecharset);
-int getsearchcriteria(char *tag, struct searchargs *searchargs,
-			 int *charset, int parsecharset);
-int getsearchdate(time_t *start, time_t *end);
-int getdatetime(time_t *date);
+void eatline P((int c));
+void printstring P((const char *s));
+void printastring P((const char *s));
 
-void eatline(int c);
-void printstring(const char *s);
-void printastring(const char *s);
+void appendfieldlist P((struct fieldlist **l, char *section,
+			struct strlist *fields, char *trail));
+void appendstrlist P((struct strlist **l, char *s));
+void appendstrlistpat P((struct strlist **l, char *s));
+void freefieldlist P((struct fieldlist *l));
+void freestrlist P((struct strlist *l));
+void appendsearchargs P((struct searchargs *s, struct searchargs *s1,
+			 struct searchargs *s2));
+void freesearchargs P((struct searchargs *s));
 
-void appendfieldlist(struct fieldlist **l, char *section,
-			struct strlist *fields, char *trail);
-void appendstrlist(struct strlist **l, char *s);
-void appendstrlistpat(struct strlist **l, char *s);
-void freefieldlist(struct fieldlist *l);
-void freestrlist(struct strlist *l);
-void appendsearchargs(struct searchargs *s, struct searchargs *s1,
-			 struct searchargs *s2);
-void freesearchargs(struct searchargs *s);
+void printauthready P((int len, unsigned char *data));
 
+/* XXX fix when proto-izing mboxlist.c */
 static int mailboxdata(), listdata(), lsubdata();
-static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
+static void mstringdata P((char *cmd, char *name, int matchlen, int maycreate));
+void mboxlist_close P((void));
 
-extern void setproctitle_init(int argc, char **argv, char **envp);
-extern int proc_register(char *progname, char *clienthost, 
-			 char *userid, char *mailbox);
-extern void proc_cleanup(void);
+/* This creates a structure that defines the allowable
+ *   security properties 
+ */
+static sasl_security_properties_t *make_secprops(int min, int max)
+{
+  sasl_security_properties_t *ret =
+    (sasl_security_properties_t *) xmalloc(sizeof(sasl_security_properties_t));
 
-static int hash_simple (const char *str);
+  ret->maxbufsize = 4000;
+  ret->min_ssf = min;		/* minimum allowable security strength */
+  ret->max_ssf = max;		/* maximum allowable security strength */
+
+  ret->security_flags = 0;
+
+  ret->security_flags |= SASL_SEC_NOPLAINTEXT;
+
+  if (!config_getswitch("allowanonymouslogin", 0)) {
+      ret->security_flags |= SASL_SEC_NOANONYMOUS;
+  }
+  ret->property_names = NULL;
+  ret->property_values = NULL;
+
+  return ret;
+}
+
+/* this is a wrapper to call the cyrus configuration from SASL */
+static int mysasl_config(void *context __attribute__((unused)), 
+			 const char *plugin_name,
+			 const char *option,
+			 const char **result,
+			 unsigned *len)
+{
+    char opt[1024];
+
+    if (strcmp(option, "srvtab")) { /* we don't transform srvtab! */
+	int sl = 5 + (plugin_name ? strlen(plugin_name) + 1 : 0);
+
+	strncpy(opt, "sasl_", 1024);
+	if (plugin_name) {
+	    int i = 5;
+
+	    for (i = 0; i < strlen(plugin_name); i++) {
+		opt[i + 5] = tolower(plugin_name[i]);
+	    }
+	    opt[i] = '_';
+	}
+ 	strncat(opt, option, 1024 - sl - 1);
+    } else {
+	strncpy(opt, option, 1024);
+    }
+    opt[1023] = '\0';		/* paranoia */
+
+    *result = config_getstring(opt, NULL);
+    if (*result == NULL && plugin_name) {
+	/* try again without plugin name */
+
+	strncpy(opt, "sasl_", 1024);
+ 	strncat(opt, option, 1024 - 6);
+	opt[1023] = '\0';	/* paranoia */
+	*result = config_getstring(opt, NULL);
+    }
+
+    if (*result) {
+	if (len) { *len = strlen(*result); }
+	return SASL_OK;
+    } else {
+	return SASL_FAIL;
+    }
+}
 
 /*
  * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
@@ -207,7 +273,7 @@ const char *auth_identity;
     strcat(inboxname, user);
 
     if (!(authstate = auth_newstate(auth_identity, (char *)0)) ||
-	mboxlist_lookup(inboxname, (char **)0, &acl, NULL)) {
+	mboxlist_lookup(inboxname, (char **)0, &acl)) {
 	r = 0;  /* Failed so assume no proxy access */
     }
     else {
@@ -227,7 +293,7 @@ static int authisa(const char *item)
     while (*val) {
 	char *p;
 	
-	for (p = (char *) val; *p && !isspace((int) *p); p++);
+	for (p = (char *) val; *p && !isspace(*p); p++);
 	strncpy(buf, val, p-val);
 	buf[p-val] = 0;
 
@@ -235,22 +301,24 @@ static int authisa(const char *item)
 	    return 1;
 	}
 	val = p;
-	while (*val && isspace((int) *val)) val++;
+	while (*val && isspace(*val)) val++;
     }
     return 0;
 }
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
-static int mysasl_authproc(void *context __attribute__((unused)),
+static mysasl_authproc(void *context __attribute__((unused)),
 		       const char *auth_identity,
 		       const char *requested_user,
 		       const char **user,
 		       const char **errstr)
 {
+    char *p;
     const char *val;
     char *canon_authuser, *canon_requser;
-    char *realm;
+    char *username=NULL, *realm;
+    char buf[MAX_MAILBOX_PATH];
     static char replybuf[100];
 
     canon_authuser = auth_canonifyid(auth_identity);
@@ -268,17 +336,17 @@ static int mysasl_authproc(void *context __attribute__((unused)),
     canon_requser = xstrdup(canon_requser);
 
     /* check if remote realm */
-    if ((realm = strchr(canon_authuser, '@'))!=NULL) {
+    if (realm = strchr(canon_authuser, '@')) {
 	realm++;
 	val = config_getstring("loginrealms", "");
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
-		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
+		(!val[strlen(realm)] || isspace(val[strlen(realm)]))) {
 		break;
 	    }
 	    /* not this realm, try next one */
-	    while (*val && !isspace((int) *val)) val++;
-	    while (*val && isspace((int) *val)) val++;
+	    while (*val && !isspace(*val)) val++;
+	    while (*val && isspace(*val)) val++;
 	}
 	if (!*val) {
 	    snprintf(replybuf, 100, "cross-realm login %s denied", 
@@ -330,77 +398,31 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-/*
- * run once when process is forked;
- * MUST NOT exit directly; must return with non-zero error code
- */
-int service_init(int argc, char **argv, char **envp)
+main(argc, argv, envp)
+int argc;
+char **argv;
+char **envp;
 {
-    int r;
-
-    config_changeident("imapd");
-    
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
-    setproctitle_init(argc, argv, envp);
-
-    /* open the mboxlist, we'll need it for real work */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-    mailbox_initialize();
-
-    signals_set_shutdown(&shut_down);
-    signals_add_handlers();
-    signal(SIGPIPE, SIG_IGN);
-
-    /* set the SASL allocation functions */
-    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
-		   (sasl_calloc_t *) &calloc, 
-		   (sasl_realloc_t *) &xrealloc, 
-		   (sasl_free_t *) &free);
-
-    /* load the SASL plugins */
-    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
-	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
-	       sasl_errstring(r, NULL, NULL));
-	return 2;
-    }
-
-    /* syslog(LOG_DEBUG, "finished initializiting libsasl"); */
-
-    /* create connection to the SNMP listener, if available. */
-    snmp_connect(); /* ignore return code */
-    snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
-
-    return 0;
-}
-
-/*
- * run for each accepted connection
- */
-int service_main(int argc, char **argv, char **envp)
-{
-    int imaps = 0;
     int opt;
     int salen;
     struct hostent *hp;
     int timeout;
+    char hostname[MAXHOSTNAMELEN+1];
     sasl_security_properties_t *secprops = NULL;
     sasl_external_properties_t extprops;
 
     memset(&extprops, 0, sizeof(sasl_external_properties_t));
-    while ((opt = getopt(argc, argv, "sp:")) != EOF) {
+
+    if (gethostname(hostname, MAXHOSTNAMELEN) != 0) {
+	fatal("gethostname failed\n",EC_USAGE);
+    }
+
+    while ((opt = getopt(argc, argv, "p:")) != EOF) {
 	switch (opt) {
-	case 's': /* imaps (do starttls right away) */
-	    imaps = 1;
-	    if (!starttls_enabled()) {
-		syslog(LOG_ERR, "imaps: required OpenSSL options not present");
-		fatal("imaps: required OpenSSL options not present",
-		      EC_CONFIG);
-	    }
-	    break;
 	case 'p': /* external protection */
 	    extprops.ssf = atoi(optarg);
 	    break;
+
 	default:
 	    break;
 	}
@@ -409,16 +431,23 @@ int service_main(int argc, char **argv, char **envp)
     imapd_in = prot_new(0, 0);
     imapd_out = prot_new(1, 1);
 
+    setproctitle_init(argc, argv, envp);
+    config_init("imapd");
+
+    signal(SIGPIPE, SIG_IGN);
+
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+
     /* Find out name of client host */
     salen = sizeof(imapd_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&imapd_remoteaddr, &salen) == 0 &&
 	imapd_remoteaddr.sin_family == AF_INET) {
-	hp = gethostbyaddr((char *)&imapd_remoteaddr.sin_addr,
-			   sizeof(imapd_remoteaddr.sin_addr), AF_INET);
-	if (hp != NULL) {
+	if (hp = gethostbyaddr((char *)&imapd_remoteaddr.sin_addr,
+			       sizeof(imapd_remoteaddr.sin_addr), AF_INET)) {
 	    strncpy(imapd_clienthost, hp->h_name, sizeof(imapd_clienthost)-30);
 	    imapd_clienthost[sizeof(imapd_clienthost)-30] = '\0';
-	} else {
+	}
+	else {
 	    imapd_clienthost[0] = '\0';
 	}
 	strcat(imapd_clienthost, "[");
@@ -430,24 +459,33 @@ int service_main(int argc, char **argv, char **envp)
 	}
     }
 
-    /* create the SASL connection */
-    if (sasl_server_new("imap", config_servername, 
-			NULL, NULL, SASL_SECURITY_LAYER, 
-			&imapd_saslconn) != SASL_OK) {
-	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
-    }
+    /* set the SASL allocation functions */
+    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
+		   (sasl_calloc_t *) &calloc, 
+		   (sasl_realloc_t *) &xrealloc, 
+		   (sasl_free_t *) &free);
 
-    secprops = mysasl_secprops();
+    /* Make a SASL connection and setup some properties for it */
+    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK)
+	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL); 
+
+    /* other params should be filled in */
+    if (sasl_server_new("imap", hostname, NULL, NULL, SASL_SECURITY_LAYER, 
+			&imapd_saslconn)
+	   != SASL_OK)
+	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
+
+    secprops = make_secprops(config_getint("sasl_minimum_layer", 0),
+			     config_getint("sasl_maximum_layer", 256));
+
     sasl_setprop(imapd_saslconn, SASL_SEC_PROPS, secprops);
     if (extprops.ssf) {
 	sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops);
     }
-    if (imapd_haveaddr) {
-	sasl_setprop(imapd_saslconn, SASL_IP_REMOTE, &imapd_remoteaddr);
-	sasl_setprop(imapd_saslconn, SASL_IP_LOCAL, &imapd_localaddr);
-    }
+    sasl_setprop(imapd_saslconn, SASL_IP_REMOTE, &imapd_remoteaddr);
+    sasl_setprop(imapd_saslconn, SASL_IP_LOCAL, &imapd_localaddr);
 
-    proc_register("imapd", imapd_clienthost, NULL, NULL);
+    proc_register("imapd", imapd_clienthost, (char *)0, (char *)0);
 
     /* Set inactivity timer */
     timeout = config_getint("timeout", 30);
@@ -455,17 +493,15 @@ int service_main(int argc, char **argv, char **envp)
     prot_settimeout(imapd_in, timeout*60);
     prot_setflushonread(imapd_in, imapd_out);
 
-    /* we were connected on imaps port so we should do 
-       TLS negotiation immediately */
-    if (imaps == 1) cmd_starttls(NULL, 1);
-
-    snmp_increment(TOTAL_CONNECTIONS, 1);
-    snmp_increment(ACTIVE_CONNECTIONS, 1);
-
     cmdloop();
+}
 
-    /* never reaches! */
-    return 1;
+void
+usage()
+{
+    prot_printf(imapd_out, "* BYE usage: imapd\r\n");
+    prot_flush(imapd_out);
+    exit(EC_USAGE);
 }
 
 /*
@@ -481,8 +517,8 @@ int fd;
     motd_in = prot_new(fd, 0);
 
     prot_fgets(buf, sizeof(buf), motd_in);
-    if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-    if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+    if (p = strchr(buf, '\r')) *p = 0;
+    if (p = strchr(buf, '\n')) *p = 0;
 
     for(p = buf; *p == '['; p++); /* can't have [ be first char, sigh */
     prot_printf(imapd_out, "* OK [ALERT] %s\r\n", p);
@@ -501,8 +537,8 @@ int fd;
     shutdown_in = prot_new(fd, 0);
 
     prot_fgets(buf, sizeof(buf), shutdown_in);
-    if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-    if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+    if (p = strchr(buf, '\r')) *p = 0;
+    if (p = strchr(buf, '\n')) *p = 0;
 
     for(p = buf; *p == '['; p++); /* can't have [ be first char, sigh */
     prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
@@ -521,23 +557,20 @@ void shut_down(int code)
 	index_closemailbox(imapd_mailbox);
 	mailbox_close(imapd_mailbox);
     }
-    seen_done();
-    mboxlist_close();
-    mboxlist_done();
     prot_flush(imapd_out);
-    /* one less active connection */
-    snmp_increment(ACTIVE_CONNECTIONS, -1);
     exit(code);
 }
 
-void fatal(const char *s, int code)
+void
+fatal(s, code)
+const char *s;
+int code;
 {
     static int recurse_code = 0;
 
     if (recurse_code) {
 	/* We were called recursively. Just give up */
 	proc_cleanup();
-	snmp_increment(ACTIVE_CONNECTIONS, -1);
 	exit(recurse_code);
     }
     recurse_code = code;
@@ -582,12 +615,10 @@ cmdloop()
 	    shutdown_file(fd);
 	}
 
-	signals_poll();
-
 	/* Parse tag */
 	c = getword(&tag);
 	if (c == EOF) {
-	    if ((err = prot_error(imapd_in))!=NULL) {
+	    if (err = prot_error(imapd_in)) {
 		syslog(LOG_WARNING, "PROTERR: %s", err);
 		prot_printf(imapd_out, "* BYE %s\r\n", err);
 	    }
@@ -606,14 +637,13 @@ cmdloop()
 	    eatline(c);
 	    continue;
 	}
-	if (islower((int) cmd.s[0])) cmd.s[0] = toupper((int) cmd.s[0]);
+	if (islower(cmd.s[0])) cmd.s[0] = toupper(cmd.s[0]);
 	for (p = &cmd.s[1]; *p; p++) {
-	    if (isupper((int) *p)) *p = tolower((int) *p);
+	    if (isupper(*p)) *p = tolower(*p);
 	}
 
-	/* Only Authenticate/Login/Logout/Noop/Capability/Id/Starttls
-	   allowed when not logged in */
-	if (!imapd_userid && !strchr("ALNCIS", cmd.s[0])) goto nologin;
+	/* Only Authenticate/Login/Logout/Noop/Starttls allowed when not logged in */
+	if (!imapd_userid && !strchr("ALNCS", cmd.s[0])) goto nologin;
     
 	/* note that about half the commands (the common ones that don't
 	   hit the mailboxes file) now close the mailboxes file just in
@@ -636,8 +666,6 @@ cmdloop()
 		    continue;
 		}
 		cmd_authenticate(tag.s, arg1.s);
-
-		snmp_increment(AUTHENTICATE_COUNT, 1);
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Append")) {
@@ -646,8 +674,6 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 
 		cmd_append(tag.s, arg1.s);
-
-		snmp_increment(APPEND_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -661,8 +687,6 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 
 		cmd_select(tag.s, cmd.s, arg1.s);
-
-		snmp_increment(BBOARD_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -672,18 +696,14 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_capability(tag.s);
-
-		snmp_increment(CAPABILITY_COUNT, 1);
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Check")) {
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-
+		mboxlist_close();	
 		cmd_noop(tag.s, cmd.s);
-
-		snmp_increment(CHECK_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Copy")) {
 		if (!imapd_mailbox) goto nomailbox;
@@ -699,8 +719,6 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 
 		cmd_copy(tag.s, arg1.s, arg2.s, usinguid);
-
-		snmp_increment(COPY_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Create")) {
 		havepartition = 0;
@@ -715,17 +733,13 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : 0);
-
-		snmp_increment(CREATE_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Close")) {
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-
+		mboxlist_close();	
 		cmd_close(tag.s);
-
-		snmp_increment(CLOSE_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -738,8 +752,6 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_delete(tag.s, arg1.s);
-
-		snmp_increment(DELETE_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Deleteacl")) {
 		if (c != ' ') goto missingargs;
@@ -754,8 +766,6 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_setacl(tag.s, arg1.s, arg2.s, (char *)0);
-
-		snmp_increment(DELETEACL_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -765,10 +775,8 @@ cmdloop()
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-
+		mboxlist_close();	
 		cmd_expunge(tag.s, 0);
-
-		snmp_increment(EXPUNGE_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Examine")) {
 		if (c != ' ') goto missingargs;
@@ -778,8 +786,6 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 
 		cmd_select(tag.s, cmd.s, arg1.s);
-
-		snmp_increment(EXAMINE_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -793,10 +799,8 @@ cmdloop()
 		c = getword(&arg1);
 		if (c == '\r') goto missingargs;
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
-
+		mboxlist_close();	
 		cmd_fetch(tag.s, arg1.s, usinguid);
-
-		snmp_increment(FETCH_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Find")) {
 		c = getword(&arg1);
@@ -806,8 +810,6 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_find(tag.s, arg1.s, arg2.s);
-
-		snmp_increment(FIND_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -826,8 +828,6 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_getacl(tag.s, arg1.s, oldform);
-
-		snmp_increment(GETACL_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Getquota")) {
 		if (c != ' ') goto missingargs;
@@ -836,8 +836,6 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_getquota(tag.s, arg1.s);
-
-		snmp_increment(GETQUOTA_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Getquotaroot")) {
 		if (c != ' ') goto missingargs;
@@ -846,17 +844,19 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_getquotaroot(tag.s, arg1.s);
-
-		snmp_increment(GETQUOTAROOT_COUNT, 1);
 	    }
-	    else goto badcmd;
-	    break;
-
-	case 'I':
-	    if (!strcmp(cmd.s, "Id")) {
+#ifdef ENABLE_EXPERIMENT_OPTIMIZE_1
+	    /* This command is disabled because it was removed from the
+	       OPTIMIZE-1 extension, now known as UIDPLUS. */
+	    else if (!strcmp(cmd.s, "Getuids")) {
+		if (!imapd_mailbox) goto nomailbox;
 		if (c != ' ') goto missingargs;
-		cmd_id(tag.s);
+		c = getword(&arg1);
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_getuids(tag.s, arg1.s);
 	    }
+#endif /* ENABLE_EXPERIMENT_OPTIMIZE_1 */
 	    else goto badcmd;
 	    break;
 
@@ -875,15 +875,11 @@ cmdloop()
 		    continue;
 		}
 		cmd_login(tag.s, arg1.s, arg2.s);
-
-		snmp_increment(LOGIN_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Logout")) {
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-
-		snmp_increment(LOGOUT_COUNT, 1);		
-
+		
 		prot_printf(imapd_out, "* BYE %s\r\n", error_message(IMAP_BYE_LOGOUT));
 		prot_printf(imapd_out, "%s OK %s\r\n", tag.s, error_message(IMAP_OK_COMPLETED));
 		shut_down(0);
@@ -896,8 +892,6 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_list(tag.s, 0, arg1.s, arg2.s);
-
-		snmp_increment(LIST_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Lsub")) {
 		c = getastring(&arg1);
@@ -906,8 +900,6 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_list(tag.s, 1, arg1.s, arg2.s);
-
-		snmp_increment(LSUB_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Listrights")) {
 		c = getastring(&arg1);
@@ -916,8 +908,6 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_listrights(tag.s, arg1.s, arg2.s);
-
-		snmp_increment(LISTRIGHTS_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -936,8 +926,6 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_myrights(tag.s, arg1.s, oldform);
-
-		snmp_increment(MYRIGHTS_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -946,10 +934,8 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Noop")) {
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-
+		mboxlist_close();	
 		cmd_noop(tag.s, cmd.s);
-
-		snmp_increment(NOOP_COUNT, 1);
 	    }
 #ifdef ENABLE_X_NETSCAPE_HACK
 	    else if (!strcmp(cmd.s, "Netscape")) {
@@ -963,8 +949,6 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_namespace(tag.s);
-
-		snmp_increment(NAMESPACE_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -982,10 +966,8 @@ cmdloop()
 		c = getword(&arg4);
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-
+		mboxlist_close();	
 		cmd_partial(tag.s, arg1.s, arg2.s, arg3.s, arg4.s);
-
-		snmp_increment(PARTIAL_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1006,8 +988,6 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0);
-
-		snmp_increment(RENAME_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1036,10 +1016,10 @@ cmdloop()
 				tag.s);
 		    continue;
 		}
-		cmd_starttls(tag.s, 0);	
-
-		snmp_increment(STARTTLS_COUNT, 1);      
+		cmd_starttls(tag.s);	      
 		continue;
+	    } else if (!imapd_userid) {
+		goto nologin;
 	    }
 	    if (!imapd_userid) {
 		goto nologin;
@@ -1052,10 +1032,8 @@ cmdloop()
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
 		c = getword(&arg2);
 		if (c != ' ') goto badsequence;
-
+		mboxlist_close();	
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
-
-		snmp_increment(STORE_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Select")) {
 		if (c != ' ') goto missingargs;
@@ -1065,18 +1043,14 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 
 		cmd_select(tag.s, cmd.s, arg1.s);
-
-		snmp_increment(SELECT_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Search")) {
 		if (!imapd_mailbox) goto nomailbox;
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    search:
-
+		mboxlist_close();	
 		cmd_search(tag.s, usinguid);
-
-		snmp_increment(SEARCH_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Subscribe")) {
 		if (c != ' ') goto missingargs;
@@ -1095,7 +1069,6 @@ cmdloop()
 		else {
 		    cmd_changesub(tag.s, (char *)0, arg1.s, 1);
 		}
-		snmp_increment(SUBSCRIBE_COUNT, 1);
 	    }		
 	    else if (!strcmp(cmd.s, "Setacl")) {
 		if (c != ' ') goto missingargs;
@@ -1112,24 +1085,18 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s);
-
-		snmp_increment(SETACL_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Setquota")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg1);
 		if (c != ' ') goto missingargs;
 		cmd_setquota(tag.s, arg1.s);
-
-		snmp_increment(SETQUOTA_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Status")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg1);
 		if (c != ' ') goto missingargs;
 		cmd_status(tag.s, arg1.s);
-
-		snmp_increment(STATUS_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1160,8 +1127,6 @@ cmdloop()
 		    if (c == '\r') c = prot_getc(imapd_in);
 		    if (c != '\n') goto extraargs;
 		    cmd_expunge(tag.s, arg1.s);
-
-		    snmp_increment(EXPUNGE_COUNT, 1);
 		}
 		else {
 		    prot_printf(imapd_out, "%s BAD Unrecognized UID subcommand\r\n", tag.s);
@@ -1185,16 +1150,12 @@ cmdloop()
 		else {
 		    cmd_changesub(tag.s, (char *)0, arg1.s, 0);
 		}
-
-		snmp_increment(UNSUBSCRIBE_COUNT, 1);
 	    }		
 	    else if (!strcmp(cmd.s, "Unselect")) {
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_unselect(tag.s);
-
-		snmp_increment(UNSELECT_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1265,7 +1226,7 @@ char *passwd;
 	(config_getswitch("allowplaintext", 1) == 0) &&
 	strcmp(canon_user, "anonymous") != 0) {
 	prot_printf(imapd_out, "%s NO Login only available under a layer\r\n",
-		    tag);
+		    tag, result);
 	return;
     }
 
@@ -1294,40 +1255,33 @@ char *passwd;
 	    return;
 	}
     }
-    else if ((result=sasl_checkpass(imapd_saslconn,
-				    canon_user,
-				    strlen(canon_user),
-				    passwd,
-				    strlen(passwd),
-				    (const char **) &reply)) != SASL_OK) {
+    else if ((result = sasl_checkpass(imapd_saslconn,
+				      canon_user,
+				      strlen(canon_user),
+				      passwd,
+				      strlen(passwd),
+				      &reply)) != SASL_OK) { 
 	if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   imapd_clienthost, canon_user, reply);
 	}
-	/* Apply penalty only if not under layer */
-	if (imapd_starttls_done == 0)
-	    sleep(3);
+	sleep(3);
 
 	if (reply) {
 	    prot_printf(imapd_out, "%s NO Login failed: %s\r\n", tag, reply);
-	} else if ((reply = sasl_errstring(result, NULL, NULL))!=NULL) {
+	} else if (reply = sasl_errstring(result, NULL, NULL)) {
 	    prot_printf(imapd_out, "%s NO Login failed: %s\r\n", tag, reply);
 	} else {
 	    prot_printf(imapd_out, "%s NO Login failed: %d\r\n", tag, result);
 	}
-	snmp_increment_args(AUTHENTICATION_NO,1,VARIABLE_AUTH,hash_simple("LOGIN"), VARIABLE_LISTEND);
 	return;
     }
     else {
 	imapd_userid = xstrdup(canon_user);
-	snmp_increment_args(AUTHENTICATION_YES,1,VARIABLE_AUTH,hash_simple("LOGIN"), VARIABLE_LISTEND);
 	syslog(LOG_NOTICE, "login: %s %s plaintext %s", imapd_clienthost,
 	       canon_user, reply ? reply : "");
-	if ((plaintextloginpause = config_getint("plaintextloginpause", 0))!=0) {
-
-	    /* Apply penalty only if not under layer */
-	    if (imapd_starttls_done == 0)
-		sleep(plaintextloginpause);
+	if (plaintextloginpause = config_getint("plaintextloginpause", 0)) {
+	    sleep(plaintextloginpause);
 	}
     }
     
@@ -1336,7 +1290,7 @@ char *passwd;
 
     val = config_getstring("admins", "");
     while (*val) {
-	for (p = (char *)val; *p && !isspace((int) *p); p++);
+	for (p = (char *)val; *p && !isspace(*p); p++);
 	strncpy(buf, val, p - val);
 	buf[p-val] = 0;
 	if (auth_memberof(imapd_authstate, buf)) {
@@ -1344,14 +1298,14 @@ char *passwd;
 	    break;
 	}
 	val = p;
-	while (*val && isspace((int) *val)) val++;
+	while (*val && isspace(*val)) val++;
     }
 
     if (!reply) reply = "User logged in";
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, imapd_userid,
-	    (unsigned long) getpid());
+    sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, imapd_userid,
+	    getpid());
     logfile = fopen(buf, "w");
     if (logfile) {
 	prot_setlog(imapd_in, fileno(logfile));
@@ -1366,25 +1320,13 @@ char *passwd;
     return;
 }
 
-static int hash_simple (const char *str)
-{
-    int     value = 0;
-    int     i;
-
-    if (!str)
-	return 0;
-    for (i = 0; *str; i++)
-    {
-	value ^= (*str++ << ((i & 3)*8));
-    }
-    return value;
-}
-
 /*
  * Perform an AUTHENTICATE command
  */
 void
-cmd_authenticate(char *tag,char *authtype)
+cmd_authenticate(tag, authtype)
+char *tag;
+char *authtype;
 {
     int sasl_result;
     static struct buf clientin;
@@ -1413,11 +1355,11 @@ cmd_authenticate(char *tag,char *authtype)
     {
 
       /* print the message to the user */
-      printauthready(imapd_out, serveroutlen, (unsigned char *)serverout);
+      printauthready(serveroutlen, (unsigned char *)serverout);
       free(serverout);
 
       /* get string from user */
-      clientinlen = getbase64string(imapd_in, &clientin);
+      clientinlen = getbase64string(&clientin);
       if (clientinlen == -1) {
 	prot_printf(imapd_out, "%s BAD Invalid base64 string\r\n", tag);
 	return;
@@ -1435,7 +1377,7 @@ cmd_authenticate(char *tag,char *authtype)
     if (sasl_result != SASL_OK)
     {
 	/* convert the sasl error code to a string */
-	errorstring = sasl_errstring(sasl_usererr(sasl_result), NULL, NULL);
+	errorstring = sasl_errstring(sasl_result, NULL, NULL);
       
 	syslog(LOG_NOTICE, "badlogin: %s %s %s",
 	       imapd_clienthost, authtype, errorstring);
@@ -1444,9 +1386,7 @@ cmd_authenticate(char *tag,char *authtype)
 	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
 		   imapd_clienthost, authtype, errstr);
 	}
-
-	snmp_increment_args(AUTHENTICATION_NO, 1,VARIABLE_AUTH, hash_simple(authtype), VARIABLE_LISTEND);
-
+	
 	sleep(3);
 	
 	if (errorstring) {
@@ -1488,16 +1428,14 @@ cmd_authenticate(char *tag,char *authtype)
       default: ssfmsg="privacy protection";break;
       }
 
-    snmp_increment_args(AUTHENTICATION_YES,1,VARIABLE_AUTH, hash_simple(authtype), VARIABLE_LISTEND);
-
     prot_printf(imapd_out, "%s OK Success (%s)\r\n", tag,ssfmsg);
 
     prot_setsasl(imapd_in,  imapd_saslconn);
     prot_setsasl(imapd_out, imapd_saslconn);
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, imapd_userid,
-	    (unsigned long) getpid());
+    sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, imapd_userid,
+	    getpid());
     logfile = fopen(buf, "w");
     if (logfile) {
 	prot_setlog(imapd_in, fileno(logfile));
@@ -1527,181 +1465,31 @@ char *cmd;
 }
 
 /*
- * Parse and perform an ID command.
- *
- * the command has been parsed up to the parameter list.
- *
- * we only record one ID response from a given client.
- *
- * the ID specification (draft-showalter-imap-id-03.txt) that i'm
- * working from says one thing and does another.  i'll do what i think
- * it means, which means that this is subject to change.  
- */
-void cmd_id(char *tag)
-{
-    static int did_id = 0;
-    int c, d, i, npair = 0;
-    static struct buf arg, field;
-    struct strlist *fields = 0, *values = 0;
-    struct utsname os;
-
-    c = getword(&arg);
-    /* check for "NIL" or start of parameter list */
-    if (strcmp(arg.s, "NIL") && c != '(') {
-	prot_printf(imapd_out, "%s BAD Invalid parameter list in Id\r\n", tag);
-	eatline(c);
-	return;
-    }
-
-    /* parse parameter list */
-    if (c == '(') {
-	for (;;) {
-	    /* get field name */
-	    c = getstring(&field);
-
-	    /* if field is legal length and followed by a space, continue */
-	    if (c == ' ' && strlen(field.s) <= 30) {
-		/* get field value */
-		d = getnstring(&arg);
-
-		/* if value is legal length, and is followed by a space
-		   or close paren, and we have not exceeded max num of
-		   field-value pairs, continue */
-		if ((d == ' ' || d == ')') && strlen(arg.s) <= 1024 &&
-		    ++npair <= 30) {
-		    appendstrlist(&fields, field.s);
-		    appendstrlist(&values, arg.s);
-
-		    /* if value is followed by a close paren, we're done */
-		    if (d == ')') {
-			c = prot_getc(imapd_in);
-			break;
-		    }
-		    /* otherwise, get next pair */
-		    continue;
-		}
-	    }
-
-	    /* print error message, cleanup and exit */
-	    if (c == EOF)
-		prot_printf(imapd_out,
-			    "%s BAD Invalid/missing field name in Id\r\n",
-			    tag);
-	    else if (strlen(field.s) > 30)
-		prot_printf(imapd_out,
-			    "%s BAD Field \"%s\" longer than 30 octets in Id\r\n",
-			    tag, field.s);
-	    else if (c != ' ' || d == EOF)
-		prot_printf(imapd_out,
-			    "%s BAD Invalid/missing value for field \"%s\" in Id\r\n",
-			    tag, field.s);
-	    else if (strlen(arg.s) > 1024)
-		prot_printf(imapd_out,
-			    "%s BAD Value \"%s\" longer than 1024 octets in Id\r\n",
-			    tag, arg.s);
-	    else if (npair > 30)
-		prot_printf(imapd_out,
-			    "%s BAD More than 30 field-value pairs in Id\r\n",
-			    tag);
-	    else
-		prot_printf(imapd_out,
-			    "%s BAD Missing required close parenthesis in Id\r\n",
-			    tag);
-	    eatline(c);
-	    freestrlist(fields);
-	    freestrlist(values);
-	    return;
-	}
-    }
-
-    /* check for CRLF */
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
-	prot_printf(imapd_out,
-		    "%s BAD Unexpected extra arguments to Id\r\n", tag);
-	eatline(c);
-	if (npair) {
-	    freestrlist(fields);
-	    freestrlist(values);
-	}
-	return;
-    }
-
-    /* log the client's ID string.
-       eventually this should be a callback or something. */
-    if (npair && !did_id) {
-	char logbuf[32768];
-	struct strlist *fptr, *vptr;
-
-	sprintf(logbuf, "client id:");
-	for (i = 0, fptr = fields, vptr = values; i < npair;
-	     i++, fptr = fptr->next, vptr = vptr->next) {
-	    /* should we check for an format literals here ??? */
-	    sprintf(logbuf+strlen(logbuf), " \"%s\" ", fptr->s);
-	    if (!strcmp(vptr->s, "NIL"))
-		sprintf(logbuf+strlen(logbuf), "NIL");
-	    else
-		sprintf(logbuf+strlen(logbuf), "\"%s\"", vptr->s);
-	}
-
-	syslog(LOG_INFO, "%s", logbuf);
-
-	freestrlist(fields);
-	freestrlist(values);
-
-	did_id = 1;
-    }
-
-    /* spit out our ID string.
-       eventually this might be configurable. */
-    prot_printf(imapd_out, "* ID ("
-		"\"name\" \"Cyrus\""
-		" \"version\" \"%s\""
-		" \"vendor\" \"Project Cyrus <http://asg.web.cmu.edu/cyrus>\"",
-		CYRUS_VERSION);
-    /* add the os info */
-    if (!uname(&os))
-	prot_printf(imapd_out,
-		    " \"os\" \"%s\""
-		    " \"os-version\" \"%s\"",
-		    os.sysname, os.release);
-    /* add the environment info */
-    prot_printf(imapd_out,
-		" \"environment\" \"Cyrus SASL %d.%d.%d; %s",
-		SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
-		DB_VERSION_STRING);
-#ifdef HAVE_SSL
-    prot_printf(imapd_out, "; %s", OPENSSL_VERSION_TEXT);
-#endif
-    prot_printf(imapd_out, "\")\r\n%s OK %s\r\n", tag,
-		error_message(IMAP_OK_COMPLETED));
-}
-
-/*
  * Perform a CAPABILITY command
  */
-void cmd_capability(char *tag)
+void
+cmd_capability(tag)
+char *tag;
 {
     char *sasllist; /* the list of SASL mechanisms */
     unsigned mechcount;
-    const char *acapserver;
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
-    prot_printf(imapd_out, "* CAPABILITY " CAPABILITY_STRING);
+    prot_printf(imapd_out,
+     "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS");
+    /* XXX */
+    prot_printf(imapd_out,
+		" X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME");
     if (starttls_enabled()) {
 	prot_printf(imapd_out, " STARTTLS");
     }
-    if (!imapd_starttls_done && !config_getswitch("allowplaintext", 1)) {
-	prot_printf(imapd_out, " LOGINDISABLED");
-    }
-    acapserver = config_getstring("acap_server", NULL);
-    if (acapserver != NULL) {
-	prot_printf(imapd_out, " ACAP=acap://%s%s/", 
-		    acapserver, global_dataset);
-    }
-
+    if ((imapd_starttls_done == 0) &&
+	(config_getswitch("allowplaintext", 1)==0))
+    {
+      prot_printf(imapd_out, " LOGINDISABLED");	
+    }      
     /* add the SASL mechs */
     if (sasl_listmech(imapd_saslconn, NULL, 
 		      "AUTH=", " AUTH=", "",
@@ -1713,6 +1501,7 @@ void cmd_capability(char *tag)
 	/* else don't show anything */
     }
 
+    prot_printf(imapd_out, " UNSELECT");
 #ifdef ENABLE_X_NETSCAPE_HACK
     prot_printf(imapd_out, " X-NETSCAPE");
 #endif
@@ -1725,44 +1514,120 @@ void cmd_capability(char *tag)
  * The command has been parsed up to and including
  * the mailbox name.
  */
-static int isokflag(char *s)
-{
-    if (s[0] == '\\') {
-	lcase(s);
-	if (!strcmp(s, "\\seen")) return 0;
-	if (!strcmp(s, "\\answered")) return 0;
-	if (!strcmp(s, "\\flagged")) return 0;
-	if (!strcmp(s, "\\draft")) return 0;
-	if (!strcmp(s, "\\deleted")) return 0;
-	
-	/* uh oh, system flag i don't recognize */
-	return 1;
-    } else {
-	/* valid user flag? */
-	return imparse_isatom(s);
-    }
-}
-
 #define FLAGGROW 10
 void
-cmd_append(char *tag, char *name)
-
+cmd_append(tag, name)
+char *tag;
+char *name;
 {
     int c;
-    char **flag = NULL;
+    char **flag = 0;
     int nflags = 0, flagalloc = 0;
     static struct buf arg;
     char *p;
-    time_t internaldate;
+    time_t internaldate = time(0);
     unsigned size = 0;
     int sawdigit = 0;
     int isnowait = 0;
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
-    struct appendstate mailbox;
-    unsigned long uidvalidity;
-    unsigned long firstuid, num;
-    const char *parseerr = NULL;
+    struct mailbox mailbox;
+    unsigned long uidvalidity, newuid;
+
+    /* Parse flags */
+    c = getword(&arg);
+    if  (c == '(' && !arg.s[0]) {
+	do {
+	    c = getword(&arg);
+	    if (arg.s[0] == '\\') {
+		lcase(arg.s);
+		if (strcmp(arg.s, "\\seen") && strcmp(arg.s, "\\answered") &&
+		    strcmp(arg.s, "\\flagged") && strcmp(arg.s, "\\draft") &&
+		    strcmp(arg.s, "\\deleted")) {
+		    prot_printf(imapd_out, "%s BAD Invalid system flag in Append command\r\n",tag);
+		    eatline(c);
+		    goto freeflags;
+		}
+	    }
+	    else if (!imparse_isatom(arg.s)) {
+		if (!nflags && !arg.s[0] && c == ')') break; /* empty list */
+		prot_printf(imapd_out, "%s BAD Invalid flag name %s in Append command\r\n",
+			    tag, arg.s);
+		eatline(c);
+		goto freeflags;
+	    }
+	    if (nflags == flagalloc) {
+		flagalloc += FLAGGROW;
+		flag = (char **)xrealloc((char *)flag, flagalloc*sizeof(char *));
+	    }
+	    flag[nflags++] = xstrdup(arg.s);
+	} while (c == ' ');
+	if (c != ')') {
+	    prot_printf(imapd_out,
+	    "%s BAD Missing space or ) after flag name in Append command\r\n",
+			tag);
+	    eatline(c);
+	    goto freeflags;
+	}
+	c = prot_getc(imapd_in);
+	if (c != ' ') {
+	    prot_printf(imapd_out,
+		  "%s BAD Missing space after flag list in Append command\r\n",
+			tag);
+	    eatline(c);
+	    goto freeflags;
+	}
+	c = getword(&arg);
+    }
+
+    /* Parse internaldate */
+    if (c == '\"' && !arg.s[0]) {
+	prot_ungetc(c, imapd_in);
+	c = getdatetime(&internaldate);
+	if (c != ' ') {
+	    prot_printf(imapd_out, "%s BAD Invalid date-time in Append command\r\n", tag);
+	    eatline(c);
+	    goto freeflags;
+	}
+	c = getword(&arg);
+    }
+
+    if (arg.s[0] != '{') {
+	prot_printf(imapd_out, "%s BAD Missing required argument to Append command\r\n",
+	       tag);
+	eatline(c);
+	goto freeflags;
+    }
+
+    /* Read size from literal */
+    for (p = arg.s + 1; *p && isdigit(*p); p++) {
+	sawdigit++;
+	size = size*10 + *p - '0';
+    }
+    if (*p == '+') {
+	isnowait++;
+	p++;
+    }
+
+    if (c == '\r') {
+	c = prot_getc(imapd_in);
+    }
+    else {
+	prot_ungetc(c, imapd_in);
+	c = ' ';		/* Force a syntax error */
+    }
+
+    if (*p != '}' || p[1] || c != '\n' || !sawdigit) {
+	prot_printf(imapd_out, "%s BAD Invalid literal in Append command\r\n", tag);
+	eatline(c);
+	goto freeflags;
+    }
+    if (size < 2) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+		    error_message(IMAP_MESSAGE_NOBLANKLINE));
+	eatline(c);
+	goto freeflags;
+    }
 
     /* Set up the append */
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
@@ -1771,166 +1636,59 @@ cmd_append(char *tag, char *name)
 			 imapd_authstate, ACL_INSERT, size);
     }
     if (r) {
-	eatline(' ');
+	if (isnowait) {
+	    /* Eat message and trailing newline */
+	    while (size--) c = prot_getc(imapd_in);
+	    eatline(' ');
+	}
+	    
 	prot_printf(imapd_out, "%s NO %s%s\r\n",
-		    tag,
-		    (r == IMAP_MAILBOX_NONEXISTENT &&
-		     mboxlist_createmailboxcheck(mailboxname, 0, 0,
-						 imapd_userisadmin,
-						 imapd_userid, imapd_authstate,
-						 (char **)0, (char **)0) == 0)
-		    ? "[TRYCREATE] " : "", error_message(r));
-	return;
+	       tag,
+	       (r == IMAP_MAILBOX_NONEXISTENT &&
+		mboxlist_createmailboxcheck(mailboxname, 0, 0,
+					    imapd_userisadmin,
+					    imapd_userid, imapd_authstate,
+					    (char **)0, (char **)0) == 0)
+	       ? "[TRYCREATE] " : "", error_message(r));
+	goto freeflags;
     }
 
-    c = ' '; /* just parsed a space */
-    /* we loop, to support MULTIAPPEND */
-    while (!r && c == ' ') {
-	/* Parse flags */
-	c = getword(&arg);
-	if  (c == '(' && !arg.s[0]) {
-	    do {
-		c = getword(&arg);
-		if (!nflags && !arg.s[0] && c == ')') break; /* empty list */
-		if (!isokflag(arg.s)) {
-		    parseerr = "Invalid flag in Append command";
-		    r = IMAP_PROTOCOL_ERROR;
-		    goto done;
-		}
-		if (nflags == flagalloc) {
-		    flagalloc += FLAGGROW;
-		    flag = (char **)xrealloc((char *)flag, 
-					     flagalloc * sizeof(char *));
-		}
-		flag[nflags++] = xstrdup(arg.s);
-	    } while (c == ' ');
-	    if (c != ')') {
-		parseerr = 
-		    "Missing space or ) after flag name in Append command";
-		r = IMAP_PROTOCOL_ERROR;
-		goto done;
-	    }
-	    c = prot_getc(imapd_in);
-	    if (c != ' ') {
-		parseerr = "Missing space after flag list in Append command";
-		r = IMAP_PROTOCOL_ERROR;
-		goto done;
-	    }
-	    c = getword(&arg);
-	}
-
-	/* Parse internaldate */
-	if (c == '\"' && !arg.s[0]) {
-	    prot_ungetc(c, imapd_in);
-	    c = getdatetime(&internaldate);
-	    if (c != ' ') {
-		parseerr = "Invalid date-time in Append command";
-		r = IMAP_PROTOCOL_ERROR;
-		goto done;
-	    }
-	    c = getword(&arg);
-	} else {
-	    internaldate = time(NULL);
-	}
-
-	if (arg.s[0] != '{') {
-	    parseerr = "Missing required argument to Append command";
-	    r = IMAP_PROTOCOL_ERROR;
-	    goto done;
-	}
-	
-	/* Read size from literal */
-	size = 0;
-	for (p = arg.s + 1; *p && isdigit((int) *p); p++) {
-	    sawdigit++;
-	    size = size*10 + *p - '0';
-	}
-	if (*p == '+') {
-	    isnowait++;
-	    p++;
-	}
-	
-	if (c == '\r') {
-	    c = prot_getc(imapd_in);
-	}
-	else {
-	    prot_ungetc(c, imapd_in);
-	    c = ' ';		/* Force a syntax error */
-	}
-	
-	if (*p != '}' || p[1] || c != '\n' || !sawdigit) {
-	    parseerr = "Invalid literal in Append command";
-	    r = IMAP_PROTOCOL_ERROR;
-	    goto done;
-	}
-	if (size < 2) {
-	    r = IMAP_MESSAGE_NOBLANKLINE;
-	    goto done;
-	}
-
-	if (!isnowait) {
-	    /* Tell client to send the message */
-	    prot_printf(imapd_out, "+ go ahead\r\n");
-	    prot_flush(imapd_out);
-	}
-	
-	/* Perform the rest of the append */
-	if (!r) r = append_fromstream(&mailbox, imapd_in, size, internaldate, 
-				      (const char **) flag, nflags,
-				      imapd_userid);
-
-	/* if we see a SP, we're trying to append more than one message */
-
-	/* Parse newline terminating command */
-	c = prot_getc(imapd_in);
+    if (!isnowait) {
+	/* Tell client to send the message */
+	prot_printf(imapd_out, "+ go ahead\r\n");
+	prot_flush(imapd_out);
     }
 
- done:
-    if (r) {
+    /* Perform the rest of the append */
+    r = append_fromstream(&mailbox, imapd_in, size, internaldate, flag, nflags,
+			  imapd_userid);
+    uidvalidity = mailbox.uidvalidity;
+    newuid = mailbox.last_uid;
+    mailbox_close(&mailbox);
+
+    /* Parse newline terminating command */
+    c = prot_getc(imapd_in);
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	if (c == EOF) return;
+	prot_printf(imapd_out, "* BAD Junk after literal in APPEND command\r\n");
 	eatline(c);
-    } else {
-	/* we should be looking at the end of the line */
-	if (c == '\r') c = prot_getc(imapd_in);
-	if (c != '\n') {
-	    parseerr = "junk after literal";
-	    r = IMAP_PROTOCOL_ERROR;
-	    eatline(c);
-	}
-    }
-
-    if (!r) {
-	r = append_commit(&mailbox, &uidvalidity, &firstuid, &num);
-    } else {
-	append_abort(&mailbox);
     }
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
 
-    if (r == IMAP_PROTOCOL_ERROR && parseerr) {
-	prot_printf(imapd_out, "%s BAD %s\r\n", tag, parseerr);
-    } else if (r) {
-	prot_printf(imapd_out, "%s NO %s%s\r\n",
-		    tag,
-		    (r == IMAP_MAILBOX_NONEXISTENT &&
-		     mboxlist_createmailboxcheck(mailboxname, 0, 0,
-						 imapd_userisadmin,
-						 imapd_userid, imapd_authstate,
-						 (char **)0, (char **)0) == 0)
-		    ? "[TRYCREATE] " : "", error_message(r));
-    } else {
-	/* is this a space seperated list or sequence list? */
-	prot_printf(imapd_out, "%s OK [APPENDUID %u", tag, uidvalidity);
-	if (num == 1) {
-	    prot_printf(imapd_out, " %u", firstuid);
-	} else {
-	    prot_printf(imapd_out, " %u:%u", firstuid, firstuid + num - 1);
-	}
-	prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    }
+    else {
+	prot_printf(imapd_out, "%s OK [APPENDUID %u %u] %s\r\n", tag,
+		    uidvalidity, newuid,
+		    error_message(IMAP_OK_COMPLETED));
     }
 
-    /* free memory */
+ freeflags:
     while (nflags--) {
 	free(flag[nflags]);
     }
@@ -1940,7 +1698,11 @@ cmd_append(char *tag, char *name)
 /*
  * Perform a SELECT/EXAMINE/BBOARD command
  */
-void cmd_select(char *tag, char *cmd, char *name)
+void
+cmd_select(tag, cmd, name)
+char *tag;
+char *cmd;
+char *name;
 {
     struct mailbox mailbox;
     char mailboxname[MAX_MAILBOX_NAME+1];
@@ -2124,10 +1886,10 @@ int usinguid;
 		else {
 		    fetchitems |= FETCH_SETSEEN;
 		}
-		while (isdigit((int) *p) || *p == '.') {
-		    if (*p == '.' && !isdigit((int) p[-1])) break;
+		while (isdigit(*p) || *p == '.') {
+		    if (*p == '.' && !isdigit(p[-1])) break;
 		    /* Obsolete section 0 can only occur before close brace */
-		    if (*p == '0' && !isdigit((int) p[-1]) && p[1] != ']') break;
+		    if (*p == '0' && !isdigit(p[-1]) && p[1] != ']') break;
 		    p++;
 		}
 
@@ -2195,13 +1957,13 @@ int usinguid;
 			eatline(c);
 			goto freeargs;
 		    }
-		    if (*p == '<' && isdigit((int) p[1])) {
+		    if (*p == '<' && isdigit(p[1])) {
 			p += 2;
-			while (isdigit((int) *p)) p++;
+			while (isdigit(*p)) p++;
 
 			if (*p == '.' && p[1] >= '1' && p[1] <= '9') {
 			    p += 2;
-			    while (isdigit((int) *p)) p++;
+			    while (isdigit(*p)) p++;
 			}
 			else p--;
 
@@ -2245,13 +2007,13 @@ int usinguid;
 		    goto freeargs;
 		}
 		p++;
-		if (*p == '<' && isdigit((int) p[1])) {
+		if (*p == '<' && isdigit(p[1])) {
 		    p += 2;
-		    while (isdigit((int) *p)) p++;
+		    while (isdigit(*p)) p++;
 
 		    if (*p == '.' && p[1] >= '1' && p[1] <= '9') {
 			p += 2;
-			while (isdigit((int) *p)) p++;
+			while (isdigit(*p)) p++;
 		    }
 		    else p--;
 
@@ -2458,7 +2220,7 @@ char *count;
     fetchargs = zerofetchargs;
 
     for (p = msgno; *p; p++) {
-	if (!isdigit((int) *p)) break;
+	if (!isdigit(*p)) break;
     }
     if (*p || !*msgno) {
 	prot_printf(imapd_out, "%s BAD Invalid message number\r\n", tag);
@@ -2490,8 +2252,8 @@ char *count;
 	else {
 	    fetchargs.fetchitems = FETCH_SETSEEN;
 	}
-	while (isdigit((int) *p) || *p == '.') {
-	    if (*p == '.' && (p == section || !isdigit((int) p[1]))) break;
+	while (isdigit(*p) || *p == '.') {
+	    if (*p == '.' && (p == section || !isdigit(p[1]))) break;
 	    p++;
 	}
 	if (p == section || *p != ']' || p[1]) {
@@ -2509,7 +2271,7 @@ char *count;
     }
 
     for (p = start; *p; p++) {
-	if (!isdigit((int) *p)) break;
+	if (!isdigit(*p)) break;
 	fetchargs.start_octet = fetchargs.start_octet*10 + *p - '0';
     }
     if (*p || !fetchargs.start_octet) {
@@ -2519,7 +2281,7 @@ char *count;
     }
     
     for (p = count; *p; p++) {
-	if (!isdigit((int) *p)) break;
+	if (!isdigit(*p)) break;
 	fetchargs.octet_count = fetchargs.octet_count*10 + *p - '0';
     }
     if (*p || !*count) {
@@ -2831,17 +2593,15 @@ char *partition;
     }
 
     if (!r) {
-	r = mboxlist_createmailbox(mailboxname, 0, partition,
-				   imapd_userisadmin, 
-				   imapd_userid, imapd_authstate);
+	r = mboxlist_createmailbox(mailboxname, MAILBOX_FORMAT_NORMAL, partition,
+				   imapd_userisadmin, imapd_userid, imapd_authstate);
 
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
 	    (autocreatequota = config_getint("autocreatequota", 0))) {
 
 	    /* Auto create */
-	    r = mboxlist_createmailbox(mailboxname, 0,
-				       partition, 1, imapd_userid,
-				       imapd_authstate);
+	    r = mboxlist_createmailbox(mailboxname, MAILBOX_FORMAT_NORMAL,
+				       partition, 1, imapd_userid, imapd_authstate);
 	    
 	    if (!r && autocreatequota > 0) {
 		(void) mboxlist_setquota(mailboxname, autocreatequota);
@@ -2893,98 +2653,35 @@ char *name;
     }
 }	
 
-struct tmplist {
-    int alloc;
-    int num;
-    char mb[1][MAX_MAILBOX_NAME];
-};
-
-#define TMPLIST_INC 50
-
-static int addmbox(char *name, int matchlen, int maycreate, void *rock)
-{
-    struct tmplist **lptr = (struct tmplist **) rock;
-    struct tmplist *l = *lptr;
-    
-    if (l->alloc == l->num) {
-	l->alloc += TMPLIST_INC;
-	l = xrealloc(l, sizeof(struct tmplist) + 
-		     l->alloc * MAX_MAILBOX_NAME * (sizeof(char)));
-	*lptr = l;
-    }
-    
-    strcpy(l->mb[l->num++], name);
-    
-    return 0;
-}
-
 /*
  * Perform a RENAME command
  */
-void cmd_rename(const char *tag, 
-		char *oldname, char *newname, char *partition)
+void
+cmd_rename(tag, oldname, newname, partition)
+char *tag;
+char *oldname;
+char *newname;
+char *partition;
 {
-    int r = 0;
-    char oldmailboxname[MAX_MAILBOX_NAME+3];
-    char newmailboxname[MAX_MAILBOX_NAME+2];
-    char *p;
-    int isinbox;
+    int r;
+    char oldmailboxname[MAX_MAILBOX_NAME+1];
+    char newmailboxname[MAX_MAILBOX_NAME+1];
 
-    /* canonicalize names */
+
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
     }
-
-    isinbox = !strcasecmp(oldname, "inbox");
-    if (!r) r = mboxname_tointernal(oldname, imapd_userid, oldmailboxname);
-    if (!r) r = mboxname_tointernal(newname, imapd_userid, newmailboxname);
-
-    /* verify that the mailbox doesn't have a wildcard in it */
-    for (p = oldmailboxname; !r && *p; p++) {
-	if (*p == '*' || *p == '%') r = IMAP_MAILBOX_BADNAME;
+    else {
+	r = mboxname_tointernal(oldname, imapd_userid, oldmailboxname);
     }
 
-    /* attempt to rename the base mailbox */
+    if (!r) {
+	r = mboxname_tointernal(newname, imapd_userid, newmailboxname);
+    }
+
     if (!r) {
 	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
-				   imapd_userisadmin, 
-				   imapd_userid, imapd_authstate);
-    }
-
-    /* rename all mailboxes matching this */
-    if (!r && !isinbox) {
-	struct tmplist *l = xmalloc(sizeof(struct tmplist));
-	int ol = strlen(oldmailboxname) + 1;
-	int nl = strlen(newmailboxname) + 1;
-	int i;
-
-	l->alloc = 0;
-	l->num = 0;
-
-	strcat(oldmailboxname, ".*");
-	strcat(newmailboxname, ".");
-
-	/* add submailboxes; we pretend we're an admin since we successfully
-	 renamed the parent */
-	mboxlist_findall(oldmailboxname, 1, imapd_userid,
-			 imapd_authstate, addmbox, &l);
-
-	/* foreach mailbox in list, rename it, pretending we're admin */
-	for (i = 0; i < l->num; i++) {
-	    int r2 = 0;
-
-	    if (nl + strlen(l->mb[i] + ol) > MAX_MAILBOX_NAME) {
-		/* this mailbox name is too long */
-		continue;
-	    }
-	    strcpy(newmailboxname + nl, l->mb[i] + ol);
-	    r2 = mboxlist_renamemailbox(l->mb[i], newmailboxname,
-					partition,
-					1, imapd_userid, imapd_authstate);
-	    if (r2) break;
-	}
-
-	free(l);
+				   imapd_userisadmin, imapd_userid, imapd_authstate);
     }
 
     if (imapd_mailbox) {
@@ -2993,7 +2690,8 @@ void cmd_rename(const char *tag,
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-    } else {
+    }
+    else {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
     }
@@ -3016,9 +2714,8 @@ char *pattern;
     }
 
     if (!strcmp(namespace, "mailboxes")) {
-	mboxlist_findsub(pattern, imapd_userisadmin, 
-			 imapd_userid, imapd_authstate,
-			 mailboxdata, NULL);
+	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid, imapd_authstate,
+			 mailboxdata);
     }
     else if (!strcmp(namespace, "all.mailboxes")) {
 	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
@@ -3163,7 +2860,7 @@ int oldform;
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
+	r = mboxlist_lookup(mailboxname, (char **)0, &acl);
     }
 
     if (!r) {
@@ -3238,14 +2935,14 @@ char *identifier;
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, rights;
     char *canon_identifier;
-    int canonidlen = 0;
+    int canonidlen;
     char *acl;
     char *rightsdesc;
 
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
+	r = mboxlist_lookup(mailboxname, (char **)0, &acl);
     }
 
     if (!r) {
@@ -3299,14 +2996,14 @@ char *name;
 int oldform;
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
-    int r, rights = 0;
+    int r, rights;
     char *acl;
     char str[ACL_MAXSTR];
 
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
+	r = mboxlist_lookup(mailboxname, (char **)0, &acl);
     }
 
     if (!r) {
@@ -3506,7 +3203,7 @@ char *quotaroot;
 	    if (arg.s[0] == '\0') goto badlist;
 	    newquota = 0;
 	    for (p = arg.s; *p; p++) {
-		if (!isdigit((int) *p)) goto badlist;
+		if (!isdigit(*p)) goto badlist;
 		newquota = newquota * 10 + *p - '0';
 	    }
 	    if (c == ')') break;
@@ -3550,77 +3247,60 @@ char *quotaroot;
  */
 int starttls_enabled(void)
 {
-    if (config_getstring("tls_cert_file", NULL) == NULL) return 0;
-    if (config_getstring("tls_key_file", NULL) == NULL) return 0;
+    if (config_getstring("tls_ca_file", NULL) == NULL) return 0;
+    if (config_getstring("tls_ca_path", NULL) == NULL) return 0;
     return 1;
 }
 
-/* imaps - weather this is an imaps transaction or not */
-void cmd_starttls(char *tag, int imaps)
+void cmd_starttls(char *tag)
 {
     int result;
     int *layerp;
     sasl_external_properties_t external;
-
 
     /* SASL and openssl have different ideas about whether ssf is signed */
     layerp = (int *) &(external.ssf);
 
     if (imapd_starttls_done == 1)
     {
-	prot_printf(imapd_out, "%s NO TLS already active\r\n", tag);
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
+		    "Already successfully executed STARTTLS");
 	return;
     }
 
     result=tls_init_serverengine(5,        /* depth to verify */
-				 !imaps,   /* can client auth? */
-				 0,        /* require client to auth? */
+				 1,        /* can client auth? */
+				 0,        /* required client to auth? */
 				 (char *)config_getstring("tls_ca_file", ""),
 				 (char *)config_getstring("tls_ca_path", ""),
 				 (char *)config_getstring("tls_cert_file", ""),
 				 (char *)config_getstring("tls_key_file", ""));
 
     if (result == -1) {
-
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, "Error initializing TLS");
 	syslog(LOG_ERR, "error initializing TLS: "
 	       "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
-	       (char *) config_getstring("tls_ca_file", ""),
-	       (char *) config_getstring("tls_ca_path", ""),
+	       (char *) config_getstring("tls_CA_file", ""),
+	       (char *) config_getstring("tls_CA_path", ""),
 	       (char *) config_getstring("tls_cert_file", ""),
 	       (char *) config_getstring("tls_key_file", ""));
-
-	if (imaps == 0) {
-	    prot_printf(imapd_out, "%s NO Error initializing TLS\r\n", tag);
- 	} else {
-	    fatal("tls_init() failed", EC_CONFIG);
-	}
-
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
+		    error_message(IMAP_IOERROR));
 	return;
     }
 
-    if (imaps == 0)
-    {
-	prot_printf(imapd_out, "%s OK Begin TLS negotiation now\r\n", tag);
-	/* must flush our buffers before starting tls */
-	prot_flush(imapd_out);
-    }
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,	"Begin TLS negotiation now");
+    /* must flush our buffers before starting tls */
+    prot_flush(imapd_out);
   
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
 			       layerp,
 			       &(external.auth_id));
-
-    /* if error */
     if (result==-1) {
-	if (imaps == 0)	{
-	    prot_printf(imapd_out, "%s NO Starttls failed\r\n", tag);
-	    syslog(LOG_NOTICE, "STARTTLS failed: %s", imapd_clienthost);
-	    return;
-	} else {
-	    syslog(LOG_NOTICE, "imaps failed: %s", imapd_clienthost);
-	    fatal("tls_start_servertls() failed", EC_TEMPFAIL);
-	    return;
-	}
+	prot_printf(imapd_out, "%s NO Starttls failed\r\n", tag);
+	syslog(LOG_NOTICE, "STARTTLS failed: %s", imapd_clienthost);
+	return;
     }
 
     /* tell SASL about the negotiated layer */
@@ -3647,7 +3327,7 @@ int starttls_enabled(void)
     return 0;
 }
 
-void cmd_starttls(char *tag, int imaps)
+void cmd_starttls(char *tag)
 {
     fatal("cmd_starttls() executed, but starttls isn't implemented!",
 	  EC_SOFTWARE);
@@ -3763,6 +3443,38 @@ char *name;
     eatline(c);
 }
 
+#ifdef ENABLE_EXPERIMENT_OPTIMIZE_1
+/* This extension has been superceded by UIDPLUS and therefore this code
+ * is not used. */
+/*
+ * Perform a GETUIDS command
+ */
+void
+cmd_getuids(tag, startuid)
+char *tag;
+char *startuid;
+{
+    char *p;
+    unsigned uid = 0;
+
+    for (p = startuid; *p; p++) {
+	if (!isdigit(*p)) break;
+	uid = uid * 10 + *p - '0';
+    }
+    if (*p || !uid) {
+	prot_printf(imapd_out, "%s BAD Invalid UID\r\n", tag);
+	return;
+    }
+
+    index_check(imapd_mailbox, 0, 0);
+
+    index_getuids(imapd_mailbox, uid);
+
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
+}
+#endif /* ENABLE_EXPERIMENT_OPTIMIZE_1 */
+
 #ifdef ENABLE_X_NETSCAPE_HACK
 /*
  * Reply to Netscape's crock with a crock of my own
@@ -3771,7 +3483,7 @@ void
 cmd_netscrape(tag)
     char *tag;
 {
-    const char *url;
+    char *url;
     /* so tempting, and yet ... */
     /* url = "http://random.yahoo.com/ryl/"; */
     url = config_getstring("netscapeurl",
@@ -3878,10 +3590,11 @@ struct buf *buf;
 }
 
 /*
- * Parse an xstring
- * (astring, nstring or string based on type)
+ * Parse an astring
+ * (atom, quoted-string, or literal)
  */
-int getxstring(struct buf *buf, int type)
+int getastring(buf)
+struct buf *buf;
 {
     int c;
     int i, len = 0;
@@ -3907,45 +3620,21 @@ int getxstring(struct buf *buf, int type)
 	return EOF;
 
     default:
-	switch (type) {
-	case IMAP_ASTRING:	 /* atom, quoted-string or literal */
-	    /*
-	     * Atom -- server is liberal in accepting specials other
-	     * than whitespace, parens, or double quotes
-	     */
-	    for (;;) {
-		if (c == EOF || isspace(c) || c == '(' || 
-		          c == ')' || c == '\"') {
-		    buf->s[len] = '\0';
-		    return c;
-		}
-		if (len == buf->alloc) {
-		    buf->alloc += BUFGROWSIZE;
-		    buf->s = xrealloc(buf->s, buf->alloc+1);
-		}
-		buf->s[len++] = c;
-		c = prot_getc(imapd_in);
+	/*
+	 * Atom -- server is liberal in accepting specials other
+	 * than whitespace, parens, or double quotes
+	 */
+	for (;;) {
+	    if (c == EOF || isspace(c) || c == '(' || c == ')' || c == '\"') {
+		buf->s[len] = '\0';
+		return c;
 	    }
-	    break;
-
-	case IMAP_NSTRING:	 /* "NIL", quoted-string or literal */
-	    /*
-	     * Look for "NIL"
-	     */
-	    if (c == 'N') {
-		prot_ungetc(c, imapd_in);
-		c = getword(buf);
-		if (!strcmp(buf->s, "NIL"))
-		    return c;
+	    if (len == buf->alloc) {
+		buf->alloc += BUFGROWSIZE;
+		buf->s = xrealloc(buf->s, buf->alloc+1);
 	    }
-	    if (c != EOF) prot_ungetc(c, imapd_in);
-	    return EOF;
-	    break;
-
-	case IMAP_STRING:	 /* quoted-string or literal */
-	    /*
-	     * Nothing to do here - fall through.
-	     */
+	    buf->s[len++] = c;
+	    c = prot_getc(imapd_in);
 	}
 	
     case '\"':
@@ -4018,6 +3707,109 @@ int getxstring(struct buf *buf, int type)
 	buf->s[len] = '\0';
 	if (strlen(buf->s) != len) return EOF; /* Disallow imbedded NUL */
 	return prot_getc(imapd_in);
+    }
+}
+
+#define XX 127
+/*
+ * Table for decoding base64
+ */
+static const char index_64[256] = {
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, XX,XX,XX,63,
+    52,53,54,55, 56,57,58,59, 60,61,XX,XX, XX,XX,XX,XX,
+    XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
+    15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,XX,
+    XX,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
+    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+};
+#define CHAR64(c)  (index_64[(unsigned char)(c)])
+
+/*
+ * Parse a base64_string
+ */
+int getbase64string(buf)
+struct buf *buf;
+{
+    int c1, c2, c3, c4;
+    int len = 0;
+
+    if (buf->alloc == 0) {
+	buf->alloc = BUFGROWSIZE;
+	buf->s = xmalloc(buf->alloc+1);
+    }
+	
+    for (;;) {
+	c1 = prot_getc(imapd_in);
+	if (c1 == '\r') {
+	    c1 = prot_getc(imapd_in);
+	    if (c1 != '\n') {
+		eatline(c1);
+		return -1;
+	    }
+	    return len;
+	}
+	else if (c1 == '\n') return len;
+
+	if (CHAR64(c1) == XX) {
+	    eatline(c1);
+	    return -1;
+	}
+	
+	c2 = prot_getc(imapd_in);
+	if (CHAR64(c2) == XX) {
+	    eatline(c2);
+	    return -1;
+	}
+
+	c3 = prot_getc(imapd_in);
+	if (c3 != '=' && CHAR64(c3) == XX) {
+	    eatline(c3);
+	    return -1;
+	}
+
+	c4 = prot_getc(imapd_in);
+	if (c4 != '=' && CHAR64(c4) == XX) {
+	    eatline(c4);
+	    return -1;
+	}
+
+	if (len+3 >= buf->alloc) {
+	    buf->alloc = len+BUFGROWSIZE;
+	    buf->s = xrealloc(buf->s, buf->alloc+1);
+	}
+
+	buf->s[len++] = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+	if (c3 == '=') {
+	    c1 = prot_getc(imapd_in);
+	    if (c1 == '\r') c1 = prot_getc(imapd_in);
+	    if (c1 != '\n') {
+		eatline(c1);
+		return -1;
+	    }
+	    if (c4 != '=') return -1;
+	    return len;
+	}
+	buf->s[len++] = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
+	if (c4 == '=') {
+	    c1 = prot_getc(imapd_in);
+	    if (c1 == '\r') c1 = prot_getc(imapd_in);
+	    if (c1 != '\n') {
+		eatline(c1);
+		return -1;
+	    }
+	    return len;
+	}
+	buf->s[len++] = (((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
     }
 }
 
@@ -4236,7 +4028,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getword(&arg);
 	    size = 0;
-	    for (p = arg.s; *p && isdigit((int) *p); p++) {
+	    for (p = arg.s; *p && isdigit(*p); p++) {
 		size = size * 10 + *p - '0';
 	    }
 	    if (!arg.s || *p) goto badnumber;
@@ -4352,7 +4144,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getword(&arg);
 	    size = 0;
-	    for (p = arg.s; *p && isdigit((int) *p); p++) {
+	    for (p = arg.s; *p && isdigit(*p); p++) {
 		size = size * 10 + *p - '0';
 	    }
 	    if (!arg.s || *p) goto badnumber;
@@ -4762,7 +4554,8 @@ time_t *date;
  * Also look for and eat non-synchronizing literals.
  */
 void
-eatline(int c)
+eatline(c)
+int c;
 {
     int state = 0;
     char *statediagram = " {+}\r";
@@ -4803,16 +4596,16 @@ const char *s;
     int len = 0;
 
     /* Look for any non-QCHAR characters */
-    for (p = s; *p && len < 1024; p++) {
+    for (p = s; *p; p++) {
 	len++;
 	if (*p & 0x80 || *p == '\r' || *p == '\n'
 	    || *p == '\"' || *p == '%' || *p == '\\') break;
     }
 
-    /* if it's too long, literal it */
     if (*p || len >= 1024) {
 	prot_printf(imapd_out, "{%u}\r\n%s", strlen(s), s);
-    } else {
+    }
+    else {
 	prot_printf(imapd_out, "\"%s\"", s);
     }
 }
@@ -4833,16 +4626,16 @@ const char *s;
     }
 
     /* Look for any non-QCHAR characters */
-    for (p = s; *p && len < 1024; p++) {
+    for (p = s; *p; p++) {
 	len++;
 	if (*p & 0x80 || *p == '\r' || *p == '\n'
 	    || *p == '\"' || *p == '%' || *p == '\\') break;
     }
 
-    /* if it's too long, literal it */
     if (*p || len >= 1024) {
 	prot_printf(imapd_out, "{%u}\r\n%s", strlen(s), s);
-    } else {
+    }
+    else {
 	prot_printf(imapd_out, "\"%s\"", s);
     }
 }
@@ -4993,6 +4786,49 @@ struct searchargs *s;
 }
 
 /*
+ * Print an authentication ready response
+ */
+static char basis_64[] =
+   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+void
+printauthready(len, data)
+int len;
+unsigned char *data;
+{
+    int c1, c2, c3;
+
+    prot_putc('+', imapd_out);
+    prot_putc(' ', imapd_out);
+    while (len) {
+	c1 = *data++;
+	len--;
+	prot_putc(basis_64[c1>>2], imapd_out);
+	if (len == 0) c2 = 0;
+	else c2 = *data++;
+	prot_putc(basis_64[((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4)], imapd_out);
+	if (len == 0) {
+	    prot_putc('=', imapd_out);
+	    prot_putc('=', imapd_out);
+	    break;
+	}
+
+	if (--len == 0) c3 = 0;
+	else c3 = *data++;
+        prot_putc(basis_64[((c2 & 0xF) << 2) | ((c3 & 0xC0) >>6)], imapd_out);
+	if (len == 0) {
+	    prot_putc('=', imapd_out);
+	    break;
+	}
+	
+	--len;
+        prot_putc(basis_64[c3 & 0x3F], imapd_out);
+    }
+    prot_putc('\r', imapd_out);
+    prot_putc('\n', imapd_out);
+    prot_flush(imapd_out);
+}
+
+/*
  * Issue a MAILBOX untagged response
  */
 static int mailboxdata(name, matchlen, maycreate, rock)
@@ -5008,11 +4844,15 @@ void* rock;
 /*
  * Issue a LIST or LSUB untagged response
  */
-static void mstringdata(char *cmd, char *name, int matchlen, int maycreate)
+static void mstringdata(cmd, name, matchlen, maycreate)
+char *cmd;
+char *name;
+int matchlen;
+int maycreate;
 {
     static char lastname[MAX_MAILBOX_PATH];
     static int lastnamedelayed;
-    static int sawuser = 0;
+    static sawuser = 0;
     int lastnamehassub = 0;
     int c;
 
