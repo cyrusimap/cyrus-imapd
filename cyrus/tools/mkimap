@@ -1,5 +1,6 @@
-#!/bin/sh
-exec perl $0 $*;
+#!/bin/sh -- # -*- perl -*-
+eval 'exec perl5 $0 ${1+"$@"}'
+    if $running_under_some_shell;
 
 require 5;
 
@@ -8,7 +9,7 @@ $sievedir = "/usr/sieve";
 $nosievedir = 0;
 $hashispool = 0;
 
-open CONF, $imapdconf;
+open CONF, $imapdconf or die "can't open $imapdconf";
 print "reading configure file...\n";
 while (<CONF>) {
     if (/^#/) { 
@@ -46,7 +47,7 @@ $d = $conf;
 print "creating $d...\n";
 mkdir $d, 0755;
 
-chdir $d;
+chdir $d or die "couldn't change to $d";
 open FOO, ">mailboxes"; close FOO;
 
 mkdir "user", 0755;
@@ -65,8 +66,9 @@ if (!$nosievedir) {
     print "creating $sievedir...\n";
 
     mkdir $sievedir, 0755;
-    chdir $sievedir;
-    foreach $i ("a".."z") { mkdir "$i", 0755; }
+    if (chdir $sievedir) {
+	foreach $i ("a".."z") { mkdir "$i", 0755; }
+    }
 }
 
 $flag = 0;
@@ -75,7 +77,7 @@ while ($hashispool && ($part = shift @parts)) {
 
     print "creating $part...\n";
     mkdir $part, 0755;
-    chdir $part;
+    chdir $part or die "couldn't change to partition $part";
     if ($hashispool) { foreach $i ("a".."z") { mkdir $i, 0755; } }
 }
 
