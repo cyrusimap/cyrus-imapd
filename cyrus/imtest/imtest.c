@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.82.2.11 2003/02/12 19:12:40 rjs3 Exp $
+ * $Id: imtest.c,v 1.82.2.12 2003/02/13 16:15:09 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1107,7 +1107,7 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 }
 
 /* initialize the network */
-static int init_net(char *serverFQDN, int port)
+static int init_net(char *serverFQDN, char *port)
 {
     struct addrinfo hints, *res0 = NULL, *res;
     int err;
