@@ -1,6 +1,8 @@
+#include <config.h>
+
 #include "auth_krb_pts.h"
 
-static char rcsid[] = "$Id: ptdump.c,v 1.3 1999/02/16 01:59:03 wcw Exp $";
+static char rcsid[] = "$Id: ptdump.c,v 1.4 2000/02/10 21:25:42 leg Exp $";
 
 int 
 main(argc, argv)

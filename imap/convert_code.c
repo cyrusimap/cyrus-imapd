@@ -24,12 +24,14 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: convert_code.c,v 1.3 2000/02/10 05:10:33 tmartin Exp $ */
+/* $Id: convert_code.c,v 1.4 2000/02/10 21:25:24 leg Exp $ */
 
 /* Same old convert_code function moved into one place instead of being
  * redundant in every file.
  * tjs 23-jul-1998
  */
+
+#include <config.h>
 
 #include "imap_err.h"
 #include "exitcodes.h"

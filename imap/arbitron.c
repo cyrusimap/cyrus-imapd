@@ -26,7 +26,9 @@
  *
  */
 
-/* $Id: arbitron.c,v 1.18 2000/02/10 08:00:20 leg Exp $ */
+/* $Id: arbitron.c,v 1.19 2000/02/10 21:25:24 leg Exp $ */
+
+#include <config.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

@@ -9,6 +9,8 @@
  *       to make the code easier to read.
  */
 
+#include <config.h>
+
 #include <sys/param.h>
 #ifndef MAXPATHLEN
 #define MAXPATHLEN MAXPATHNAMELEN
@@ -25,7 +27,7 @@
 #include "auth_krb_pts.h"
 
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.8 2000/02/10 07:58:32 leg Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.9 2000/02/10 21:25:43 leg Exp $";
 
 int main(int argc, char *argv[])
 {

@@ -25,7 +25,10 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.45 2000/02/10 08:00:27 leg Exp $ */
+/* $Id: reconstruct.c,v 1.46 2000/02/10 21:25:33 leg Exp $ */
+
+#include <config.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -525,8 +528,10 @@ int reconstruct(char *name)
 	return IMAP_IOERROR;
     }
     
+#if TOIMSP
     toimsp(mailbox.name, mailbox.uidvalidity,
 	   "UIDNnn", mailbox.last_uid, new_exists, 0);
+#endif
 
     fclose(newindex);
     r = seen_reconstruct(&mailbox, (time_t)0, (time_t)0, (int (*)())0, (void *)0);

@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.62 2000/02/10 08:00:19 leg Exp $
+ $Id: append.c,v 1.63 2000/02/10 21:25:23 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -26,6 +26,7 @@
  #  tech-transfer@andrew.cmu.edu
  *
  */
+#include <config.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

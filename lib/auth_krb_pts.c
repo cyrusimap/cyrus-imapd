@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.32 2000/02/10 07:59:10 leg Exp $
+ $Id: auth_krb_pts.c,v 1.33 2000/02/10 21:25:38 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -23,6 +23,7 @@
  *
  */
 
+#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

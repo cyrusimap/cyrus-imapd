@@ -1,4 +1,4 @@
-/* prot.c -- stdio-like module that handles IMAP protection mechanisms
+/* prot.c -- stdio-like module that handles SASL protection mechanisms
  *
  *        Copyright 1998 by Carnegie Mellon University
  *
@@ -22,9 +22,10 @@
  *
  */
 /*
- * $Id: prot.c,v 1.48 2000/01/25 06:52:42 leg Exp $
+ * $Id: prot.c,v 1.49 2000/02/10 21:25:42 leg Exp $
  */
 
+#include <config.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>

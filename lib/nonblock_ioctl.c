@@ -1,5 +1,5 @@
 /* nonblock_fcntl.c -- Set nonblocking mode using ioctl()
- $Id: nonblock_ioctl.c,v 1.5 1998/05/15 21:52:37 neplokh Exp $
+ $Id: nonblock_ioctl.c,v 1.6 2000/02/10 21:25:41 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -22,6 +22,7 @@
  # SOFTWARE.
  *
  */
+#include <config.h>
 #include <sys/ioctl.h>
 
 #include "nonblock.h"

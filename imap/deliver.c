@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.134 2000/02/10 07:59:55 leg Exp $
+ * $Id: deliver.c,v 1.135 2000/02/10 21:25:24 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,8 +26,9 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: deliver.c,v 1.134 2000/02/10 07:59:55 leg Exp $";*/
+/*static char _rcsid[] = "$Id: deliver.c,v 1.135 2000/02/10 21:25:24 leg Exp $";*/
 
+#include <config.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -867,7 +868,7 @@ static char *wday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 
 static int global_outgoing_count = 0;
 
-int open_sendmail(char *argv[], FILE **sm)
+pid_t open_sendmail(char *argv[], FILE **sm)
 {
     int fds[2];
     FILE *ret;
@@ -907,12 +908,12 @@ int send_rejection(char *origid,
     struct tm *tm;
     int tz;
     time_t t;
-    unsigned long p;
+    pid_t p;
 
     smbuf[0] = "sendmail";
     smbuf[1] = rejto;
     smbuf[2] = NULL;
-    p = (unsigned long) open_sendmail(smbuf, &sm);
+    p = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
 	return -1;
     }
@@ -920,7 +921,7 @@ int send_rejection(char *origid,
     gethostname(hostname, 1024);
     t = time(NULL);
     p = getpid();
-    snprintf(buf, sizeof(buf), "<cmu-sieve-%d-%d-%d@%s>", p, t, 
+    snprintf(buf, sizeof(buf), "<cmu-sieve-%d-%d-%d@%s>", p, (int) t, 
 	     global_outgoing_count++, hostname);
     
     namebuf = make_sieve_db(mailreceip);
@@ -945,21 +946,21 @@ int send_rejection(char *origid,
     fprintf(sm, "MIME-Version: 1.0\r\n");
     fprintf(sm, "Content-Type: "
 	    "multipart/report; report-type=disposition-notification;"
-	    "\r\n\tboundary=\"%ld/%s\"\r\n", p, hostname);
+	    "\r\n\tboundary=\"%d/%s\"\r\n", (int) p, hostname);
     fprintf(sm, "Subject: Automatically rejected mail\r\n");
     fprintf(sm, "Auto-Submitted: auto-replied (rejected)\r\n");
     fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
 
     /* this is the human readable status report */
-    fprintf(sm, "--%ld/%s\r\n\r\n", p, hostname);
+    fprintf(sm, "--%d/%s\r\n\r\n", (int) p, hostname);
     fprintf(sm, "Your message was automatically rejected by Sieve, a mail\r\n"
 	    "filtering language.\r\n\r\n");
     fprintf(sm, "The following reason was given:\r\n%s\r\n\r\n", reason);
 
     /* this is the MDN status report */
-    fprintf(sm, "--%ld/%s\r\n"
+    fprintf(sm, "--%d/%s\r\n"
 	    "Content-Type: message/disposition-notification\r\n\r\n",
-	    p, hostname);
+	    (int) p, hostname);
     fprintf(sm, "Reporting-UA: %s; Cyrus %s/%s\r\n",
 	    hostname, CYRUS_VERSION, sieve_version);
     if (origreceip)
@@ -971,14 +972,14 @@ int send_rejection(char *origid,
     fprintf(sm, "\r\n");
 
     /* this is the original message */
-    fprintf(sm, "--%ld/%s\r\nContent-Type: message/rfc822\r\n\r\n",
-	    p, hostname);
+    fprintf(sm, "--%d/%s\r\nContent-Type: message/rfc822\r\n\r\n",
+	    (int) p, hostname);
     prot_rewind(file);
     while ((i = prot_read(file, buf, sizeof(buf))) > 0) {
 	fwrite(buf, i, 1, sm);
     }
     fprintf(sm, "\r\n\r\n");
-    fprintf(sm, "--%ld/%s\r\n", p, hostname);
+    fprintf(sm, "--%d/%s\r\n", (int) p, hostname);
 
     fclose(sm);
     waitpid(p, &i, 0);
@@ -1202,14 +1203,14 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
     struct tm *tm;
     int tz;
     time_t t;
-    unsigned long p;
+    pid_t p;
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     script_data_t *sdata = (script_data_t *) sc;
 
     smbuf[0] = "sendmail";
     smbuf[1] = src->addr;
     smbuf[2] = NULL;
-    p = (unsigned long) open_sendmail(smbuf, &sm);
+    p = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
 	return -1;
     }
@@ -1217,8 +1218,8 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
     gethostname(hostname, 1024);
     t = time(NULL);
     p = getpid();
-    snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-%d-%d@%s>", p, t, 
-	     global_outgoing_count++, hostname);
+    snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-%d-%d@%s>", 
+	     (int) p, (int) t, global_outgoing_count++, hostname);
     
     fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
@@ -1249,9 +1250,9 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
     if (src->mime) {
 	fprintf(sm, "MIME-Version: 1.0\r\n");
 	fprintf(sm, "Content-Type: multipart/mixed;"
-		"\r\n\tboundary=\"%ld/%s\"\r\n", p, hostname);
+		"\r\n\tboundary=\"%d/%s\"\r\n", (int) p, hostname);
 	fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
-	fprintf(sm, "--%ld/%s\r\n", p, hostname);
+	fprintf(sm, "--%d/%s\r\n", (int) p, hostname);
     } else {
 	fprintf(sm, "\r\n");
     }
@@ -1259,7 +1260,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
     fprintf(sm, "%s\r\n", src->msg);
 
     if (src->mime) {
-	fprintf(sm, "\r\n--%ld/%s\r\n", p, hostname);
+	fprintf(sm, "\r\n--%d/%s\r\n", (int) p, hostname);
     }
     fclose(sm);
     waitpid(p, &i, 0);

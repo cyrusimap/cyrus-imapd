@@ -13,7 +13,10 @@
  *
  */
 
-static char rcsid[] = "$Id: ptloader.c,v 1.16 2000/02/10 07:58:32 leg Exp $";
+static char rcsid[] = "$Id: ptloader.c,v 1.17 2000/02/10 21:25:43 leg Exp $";
+
+#include <config.h>
+
 #include <string.h>
 #include "auth_krb_pts.h"
 #include <stdio.h>
@@ -85,7 +88,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.16 2000/02/10 07:58:32 leg Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.17 2000/02/10 21:25:43 leg Exp $");
 
     while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
 	switch (opt) {
@@ -515,4 +518,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.16 2000/02/10 07:58:32 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.17 2000/02/10 21:25:43 leg Exp $ */

@@ -1,5 +1,5 @@
 /* auth_krb_pts.h -- Kerberos authorization with AFS PTServer groups
-   $Id: auth_krb_pts.h,v 1.18 2000/02/10 07:59:11 leg Exp $
+   $Id: auth_krb_pts.h,v 1.19 2000/02/10 21:25:38 leg Exp $
 	
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -26,14 +26,6 @@
 
 #ifndef INCLUDED_AUTH_KRB_PTS_H
 #define INCLUDED_AUTH_KRB_PTS_H
-
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

@@ -27,7 +27,9 @@
  *
  */
 
-/* $Id: fud.c,v 1.11 2000/02/10 08:00:20 leg Exp $ */
+#include <config.h>
+
+/* $Id: fud.c,v 1.12 2000/02/10 21:25:25 leg Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif

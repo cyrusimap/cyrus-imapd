@@ -140,25 +140,6 @@ void fillin_interactions(sasl_interact_t *tlist)
 
 }
 
-#if 0
-static int show(char *tag)
-{
-  char *str=malloc(301);
-
-  do {
-      str=prot_fgets(str,300,pin);
-      if (str == NULL) {
-	  imtest_fatal("prot layer failure");
-      }
-      printf("%s", str);
-  } while (strncmp(str, tag, strlen(tag)));
-
-  free(str);
-
-  return 0;
-}
-#endif /* 0 */
-
 /* callbacks we support */
 static sasl_callback_t callbacks[] = {
   {

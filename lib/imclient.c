@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.47 2000/02/10 05:10:49 tmartin Exp $
+ $Id: imclient.c,v 1.48 2000/02/10 21:25:39 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -22,6 +22,7 @@
  # SOFTWARE.
  *
  */
+#include <config.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>

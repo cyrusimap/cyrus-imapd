@@ -1,5 +1,5 @@
 /* retry.c -- keep trying write system calls
- $Id: retry.c,v 1.10 1998/05/15 21:52:55 neplokh Exp $
+ $Id: retry.c,v 1.11 2000/02/10 21:25:42 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -23,6 +23,7 @@
  *
  */
 
+#include <config.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/uio.h>

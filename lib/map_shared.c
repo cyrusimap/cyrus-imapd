@@ -1,5 +1,5 @@
 /* map_shared.c -- memory-mapping routines.
- $Id: map_shared.c,v 1.14 1999/09/30 07:32:00 leg Exp $
+ $Id: map_shared.c,v 1.15 2000/02/10 21:25:41 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -22,6 +22,7 @@
  # SOFTWARE.
  *
  */
+#include <config.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/mman.h>

@@ -2,10 +2,12 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.53 2000/02/10 05:10:27 tmartin Exp $
+# $Id: SMakefile,v 1.54 2000/02/10 21:25:21 leg Exp $
 #
 
 if test ! -x configure; then
+  echo autoheader
+  autoheader
   echo aclocal -I cmulocal
   aclocal -I cmulocal
   echo autoconf
@@ -18,8 +20,8 @@ MAKE=gmake
 AMSSYNC=--enable-amssync
 STATIC=""
 DEBUG=""
-# WITHAUTH="--with-auth=krb_pts"
-WITHAUTH="" # until the db stuff is fixed
+WITHAUTH="--with-auth=krb_pts"
+# WITHAUTH="" # until the db stuff is fixed
 
 if test "${CC-unset}" = "unset"; then
   CC=cc

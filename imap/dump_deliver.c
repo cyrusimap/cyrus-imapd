@@ -1,5 +1,5 @@
 /* dump_deliver.c -- Program to dump deliver db for debugging purposes
- $Id: dump_deliver.c,v 1.8 2000/02/10 05:10:35 tmartin Exp $
+ $Id: dump_deliver.c,v 1.9 2000/02/10 21:25:25 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -27,7 +27,9 @@
  *
  */
 
-/* static char _rcsid[] = "$Id: dump_deliver.c,v 1.8 2000/02/10 05:10:35 tmartin Exp $"; */
+/* static char _rcsid[] = "$Id: dump_deliver.c,v 1.9 2000/02/10 21:25:25 leg Exp $"; */
+
+#include <config.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -154,4 +156,4 @@ void fatal(char *s,
     exit(code);
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.8 2000/02/10 05:10:35 tmartin Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.9 2000/02/10 21:25:25 leg Exp $ */

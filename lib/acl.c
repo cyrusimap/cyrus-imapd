@@ -1,5 +1,5 @@
 /* acl.c -- routines for access control lists
- $Id: acl.c,v 1.6 1998/05/15 21:50:23 neplokh Exp $
+ $Id: acl.c,v 1.7 2000/02/10 21:25:37 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -25,6 +25,7 @@
  * Start Date: 6/28/93
  */
 
+#include <config.h>
 #include <stdio.h>
 #include "acl.h"
 

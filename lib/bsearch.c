@@ -1,5 +1,5 @@
 /* bsearch.c -- binary search newline-separated fields in memory
- $Id: bsearch.c,v 1.15 1999/09/30 07:29:27 leg Exp $
+ $Id: bsearch.c,v 1.16 2000/02/10 21:25:38 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -23,6 +23,7 @@
  *
  */
 
+#include <config.h>
 #include <string.h>
 
 #include "bsearch.h"

@@ -1,5 +1,5 @@
 /* krbck.c -- Test KERBEROS_V4 server configuration
- * $Id: krbck.c,v 1.9 1999/03/02 03:03:28 tjs Exp $
+ * $Id: krbck.c,v 1.10 2000/02/10 21:25:28 leg Exp $
  
  * Copyright 1998 Carnegie Mellon University
  * 
@@ -25,6 +25,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  */
+#include <config.h>
 
 #include <stdio.h>
 #include <errno.h>

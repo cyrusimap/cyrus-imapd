@@ -1,5 +1,5 @@
 /* map_private.c -- memory-mapping routines using MAP_PRIVATE.
- $Id: map_private.c,v 1.11 1999/04/08 21:00:48 tjs Exp $
+ $Id: map_private.c,v 1.12 2000/02/10 21:25:41 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -22,6 +22,7 @@
  # SOFTWARE.
  *
  */
+#include <config.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/mman.h>

@@ -1,5 +1,5 @@
 /* imparse.c -- IMxP client-side parsing routines
- $Id: imparse.c,v 1.9 2000/02/10 05:10:49 tmartin Exp $
+ $Id: imparse.c,v 1.10 2000/02/10 21:25:40 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -22,6 +22,7 @@
  # SOFTWARE.
  *
  */
+#include <config.h>
 #include <stdio.h>
 #include <ctype.h>
 

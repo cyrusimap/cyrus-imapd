@@ -1,5 +1,5 @@
 /* gmtoff_tm.c - Get offset from GMT from the tm_gmtoff struct member
- $Id: gmtoff_tm.c,v 1.4 1998/05/15 21:51:32 neplokh Exp $
+ $Id: gmtoff_tm.c,v 1.5 2000/02/10 21:25:39 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -22,6 +22,7 @@
  # SOFTWARE.
  *
  */
+#include <config.h>
 #include <time.h>
 
 /*

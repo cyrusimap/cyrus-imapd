@@ -1,3 +1,5 @@
+#include <config.h>
+
 #include <db.h>
 #include "mboxlist.h"
 
