@@ -56,14 +56,8 @@ clean:
 distclean: clean
 	rm -f Makefile
 
-#
-# We explicitly list all the source files in order to avoid
-# running makedepend on cyrinit.c.  Running makedepend on
-# cyrinit.c makes it spew copious spurious warnings
-#
-depend: 
-	makedepend $(CPPFLAGS) $(DEFS) $(CFLAGS) \
-		$(srcdir)/cyradm.c $(srcdir)/cyradmapp.c
+depend:
+	makedepend $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 
