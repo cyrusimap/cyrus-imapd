@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.23 2001/01/02 00:00:24 leg Exp $";
+      "$Id: ptloader.c,v 1.24 2001/07/15 18:08:16 leg Exp $";
 
 #include <config.h>
 
@@ -118,7 +118,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.23 2001/01/02 00:00:24 leg Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.24 2001/07/15 18:08:16 leg Exp $");
 
     while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
 	switch (opt) {
@@ -221,6 +221,11 @@ main(argc, argv)
 	if (ptclient_debug > 10) {
 	    syslog(LOG_DEBUG, "Authenticated as %s; next reauth at %d", 
 		   user, next_auth_time);
+	}
+    } else {
+	r = pr_Initialize (1L, AFSCONF_CLIENTNAME, 0);
+        if (r) {
+            syslog(LOG_DEBUG, "pr_Initialize failed: %d", r);
 	}
     }
 
@@ -549,4 +554,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.23 2001/01/02 00:00:24 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.24 2001/07/15 18:08:16 leg Exp $ */
