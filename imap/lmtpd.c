@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.113 2003/05/29 02:14:31 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.114 2003/06/19 14:20:57 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1312,9 +1312,9 @@ void fatal(const char* s, int code)
     if(deliver_out) {
 	prot_printf(deliver_out,"421 4.3.0 lmtpd: %s\r\n", s);
 	prot_flush(deliver_out);
-    } else {
-	syslog(LOG_ERR, "FATAL: %s", s);
     }
+
+    syslog(LOG_ERR, "FATAL: %s", s);
     
     /* shouldn't return */
     shut_down(code);
