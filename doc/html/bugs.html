@@ -14,6 +14,12 @@ We plan to have this fixed in the next release.
 groups may be granted access to mailboes if ptclient has died.  We plan
 to have this fixed in the next release.
 
+<li> COPY of a nonexistant sequence of messages results in OK, but should
+result in NO.
+
+<li> 8-bit set characters are coerced to 'X', but not before the notify_zephyr 
+code (if used) has had a chance to send them out.
+
 <li> imtest cheats and sends a non-synchronizing literal if you try to
 LOGIN (cleartext passwords).
 
@@ -33,8 +39,8 @@ along with a detailed report.  Additional information is welcome, and
 naturally, patches are deeply appreciated.
 
 <p>
-If you submit a patch, please send context diffs or unified diffs, not the
-default.
+If you submit a patch, please send unified diffs (-u) if your diff program
+supports them, or context diffs (-c) if it doesn't.
 
 <P><HR><P>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
