@@ -111,7 +111,12 @@ static int init(const char *dbdir, int myflags)
 	dbenv->set_verbose(dbenv, DB_VERB_CHKPOINT, 1);
     }
     dbenv->set_lk_detect(dbenv, CONFIG_DEADLOCK_DETECTION);
-    dbenv->set_lk_max(dbenv, 10000);
+    r = dbenv->set_lk_max(dbenv, 50000);
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: set_lk_max(): %s", db_strerror(r));
+	abort();
+    }
+    /*    dbenv->set_lk_max(dbenv, 10000);*/
     dbenv->set_errcall(dbenv, db_err);
     dbenv->set_errpfx(dbenv, "db3");
 
@@ -351,8 +356,8 @@ static int foreach(struct db *mydb,
     memset(&k, 0, sizeof(k));
     memset(&d, 0, sizeof(d));
 
-    k.flags |= DB_DBT_REALLOC;
-    d.flags |= DB_DBT_REALLOC;
+    /* k.flags |= DB_DBT_REALLOC;
+       d.flags |= DB_DBT_REALLOC;*/
 
     r = gettid(mytid, &tid);
     if (r) return r;
@@ -367,8 +372,8 @@ static int foreach(struct db *mydb,
 
     /* find first record */
     if (prefix && *prefix) {
-	if (k.data) free(k.data);
-	k.data = xstrdup(prefix);
+	/* if (k.data) free(k.data); */
+	k.data = prefix;
 	k.size = prefixlen;
 
 	r = cursor->c_get(cursor, &k, &d, DB_SET_RANGE);
@@ -382,7 +387,7 @@ static int foreach(struct db *mydb,
 	/* does this match our prefix? */
 	if (prefixlen && memcmp(k.data, prefix, prefixlen)) break;
 
-	if (goodp(rock, k.data, k.size)) {
+	if (goodp(rock, k.data, k.size, d.data, d.size)) {
 	    /* we have a winner! */
 
 	    /* close the cursor, so we're not holding locks 
@@ -465,8 +470,8 @@ static int foreach(struct db *mydb,
 	break;
     }
 
-    if (k.data) free(k.data);
-    if (d.data) free(d.data);
+/*     if (k.data) free(k.data);
+       if (d.data) free(d.data);*/
 
     return r;
 }

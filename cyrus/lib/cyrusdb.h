@@ -62,7 +62,8 @@ enum cyrusdb_dbflags {
 };
 
 typedef int foreach_p(void *rock,
-		      const char *key, int keylen);
+		      const char *key, int keylen,
+		      const char *data, int datalen);
 
 typedef int foreach_cb(void *rock,
 		       const char *key, int keylen,
