@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.13 2000/05/23 20:56:51 robeson Exp $
+ * $Id: scripttest.c,v 1.14 2000/06/22 01:47:12 leg Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -73,7 +73,7 @@ static int sieve_notify(void *ac,
 			void *interp_context, 
 			void *script_context,
 			void *message_context,
-			char **errmsg)
+			const char **errmsg)
 {
     fatal("stub function called", 0);
     return SIEVE_FAIL;
