@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.225 2003/12/05 21:30:16 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.226 2003/12/15 16:04:33 ken3 Exp $
  */
 
 #include <config.h>
@@ -172,11 +172,6 @@ static int mboxlist_mylookup(const char *name, int *typep,
     }
     switch (r) {
     case CYRUSDB_OK:
-	if (data == NULL) {
-	    return IMAP_MAILBOX_NONEXISTENT;
-	    break;
-	}
-
 	/* copy out interesting parts */
 	mbtype = strtol(data, &p, 10);
 	if (typep) *typep = mbtype;
@@ -227,6 +222,10 @@ static int mboxlist_mylookup(const char *name, int *typep,
 
     case CYRUSDB_AGAIN:
 	return IMAP_AGAIN;
+	break;
+
+    case CYRUSDB_NOTFOUND:
+	return IMAP_MAILBOX_NONEXISTENT;
 	break;
 
     default:
@@ -1950,6 +1949,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 	    if (!r && data) {
 		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
 	    }
+	    else if (r == CYRUSDB_NOTFOUND) r = 0;
 	}
 	else if (!strncmp(pattern,
 			  usermboxname+domainlen, usermboxnamelen-domainlen) &&
@@ -1959,6 +1959,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 	    if (!r && data) {
 		r = (*proc)(usermboxname, usermboxnamelen, 1, rock);
 	    }
+	    else if (r == CYRUSDB_NOTFOUND) r = 0;
 	}
 	strlcat(usermboxname, ".", sizeof(usermboxname));
 	usermboxnamelen++;
@@ -2089,6 +2090,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
 	    if (!r && data) {
 		r = (*proc)(cbrock.inboxcase, 5, 0, rock);
 	    }
+	    else if (r == CYRUSDB_NOTFOUND) r = 0;
 	}
 
 	strlcat(usermboxname, ".", sizeof(usermboxname));
@@ -2706,6 +2708,7 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
 	    if (!r && data) {
 		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
 	    }
+	    else if (r == CYRUSDB_NOTFOUND) r = 0;
 	}
 	else if (!strncmp(pattern,
 			  usermboxname+domainlen, usermboxnamelen-domainlen) &&
@@ -2715,6 +2718,7 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
 	    if (!r && data) {
 		r = (*proc)(usermboxname, usermboxnamelen, 1, rock);
 	    }
+	    else if (r == CYRUSDB_NOTFOUND) r = 0;
 	}
 	strlcat(usermboxname, ".", sizeof(usermboxname));
 	usermboxnamelen++;
@@ -2850,6 +2854,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 	    if (!r && data) {
 		r = (*proc)(cbrock.inboxcase, 5, 0, rock);
 	    }
+	    else if (r == CYRUSDB_NOTFOUND) r = 0;
 	}
 	strlcat(usermboxname, ".", sizeof(usermboxname));
 	usermboxnamelen++;

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.h,v 1.25 2003/10/22 18:50:12 rjs3 Exp $ */
+/* $Id: cyrusdb.h,v 1.26 2003/12/15 16:04:34 ken3 Exp $ */
 
 #ifndef INCLUDED_CYRUSDB_H
 #define INCLUDED_CYRUSDB_H
@@ -52,7 +52,8 @@ enum cyrusdb_ret {
     CYRUSDB_IOERROR = -1,
     CYRUSDB_AGAIN = -2,
     CYRUSDB_EXISTS = -3,
-    CYRUSDB_INTERNAL = -4
+    CYRUSDB_INTERNAL = -4,
+    CYRUSDB_NOTFOUND = -5
 };
 
 #define cyrusdb_strerror(c) ("cyrusdb error")

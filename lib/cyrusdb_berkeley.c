@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.3 2003/12/11 22:12:24 rjs3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.4 2003/12/15 16:04:34 ken3 Exp $ */
 
 #include <config.h>
 
@@ -436,6 +436,9 @@ static int myfetch(struct db *mydb,
 	
     assert(dbinit && db);
 
+    if (data) *data = NULL;
+    if (datalen) *datalen = 0;
+
     r = gettid(mytid, &tid, "myfetch");
     if (r) return r;
 
@@ -452,9 +455,7 @@ static int myfetch(struct db *mydb,
 	if (datalen) *datalen = d.size;
 	break;
     case DB_NOTFOUND:
-	*data = NULL;
-	*datalen = 0;
-	r = 0;
+	r = CYRUSDB_NOTFOUND;
 	break;
     case DB_LOCK_DEADLOCK:
 	if (mytid) {

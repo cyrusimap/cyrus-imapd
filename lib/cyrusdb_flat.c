@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.31 2003/10/22 18:50:12 rjs3 Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.32 2003/12/15 16:04:34 ken3 Exp $ */
 
 #include <config.h>
 
@@ -310,17 +310,19 @@ static int myfetch(struct db *db,
 
     assert(db);
 
+    if (data) *data = NULL;
+    if (datalen) *datalen = 0;
+
     r = starttxn_or_refetch(db, mytid);
     if (r) return r;
 
     offset = bsearch_mem(key, 1, db->base, db->size, 0, &len);
     if (len) {
-	*data = db->base + offset + keylen + 1;
+	if (data) *data = db->base + offset + keylen + 1;
 	/* subtract one for \t, and one for the \n */
-	*datalen = len - keylen - 2;
+	if (data) *datalen = len - keylen - 2;
     } else {
-	*data = NULL;
-	*datalen = 0;
+	r = CYRUSDB_NOTFOUND;
     }
 
     return r;
@@ -446,6 +448,7 @@ static int foreach(struct db *db,
 		    savebuf = xrealloc(savebuf, savebuflen);
 		}
 		memcpy(savebuf, key, keylen);
+		savebuf[keylen] = '\0';
 		savebufsize = keylen;
 	    }
 	    

@@ -1,5 +1,5 @@
 /* seen_bigdb.c -- implementation of seen database using one big cyrusdb
- * $Id: seen_bigdb.c,v 1.9 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: seen_bigdb.c,v 1.10 2003/12/15 16:04:33 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -188,13 +188,13 @@ static int seen_readit(struct seen *seendb,
 	syslog(LOG_ERR, "DBERROR: error fetching txn", cyrusdb_strerror(r));
 	return IMAP_IOERROR;
 	break;
-    }
-    if (data == NULL) {
+    case CYRUSDB_NOTFOUND:
 	*lastreadptr = 0;
 	*lastuidptr = 0;
 	*lastchangeptr = 0;
 	*seenuidsptr = xstrdup("");
 	return 0;
+	break;
     }
 
     /* remember that 'data' may not be null terminated ! */

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.35 2003/10/22 18:50:07 rjs3 Exp $ */
+/* $Id: duplicate.c,v 1.36 2003/12/15 16:04:32 ken3 Exp $ */
 
 #include <config.h>
 
@@ -143,16 +143,18 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
 		      &data, &len, NULL);
     } while (r == CYRUSDB_AGAIN);
 
-    if (data) {
+    if (!r && data) {
 	assert((len == sizeof(time_t)) ||
 	       (len == sizeof(time_t) + sizeof(unsigned long)));
 
 	/* found the record */
 	memcpy(&mark, data, sizeof(time_t));
     } else if (r != CYRUSDB_OK) {
-	syslog(LOG_ERR, "duplicate_check: error looking up %s/%s: %s",
-	       id, to,
-	       cyrusdb_strerror(r));
+	if (r != CYRUSDB_NOTFOUND) {
+	    syslog(LOG_ERR, "duplicate_check: error looking up %s/%s: %s",
+		   id, to,
+		   cyrusdb_strerror(r));
+	}
 	mark = 0;
     }
 
