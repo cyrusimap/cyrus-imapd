@@ -6,6 +6,14 @@
 #include <syslog.h>
 #include <com_err.h>
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/stat.h>
+
 #include <acap.h>
 #include "acapmbox.h"
 #include "mailbox.h"
@@ -451,29 +459,6 @@ acapmbox_status mboxdata_convert_status(acap_value_t *v)
     else return ACAPMBOX_UNKNOWN;
 }
 
-#if 0
-static void myacap_copy_entry(acap_entry_t *entry, void *rock)
-{
-    acapmbox_data_t *mboxdata = (acapmbox_data_t *) rock;
-    skipnode *node;
-    acap_attribute_t *attr;
-
-    printf("\tentry = %s\n", entry->name);
-    attr = sfirst(entry->attrs, &node);
-    while (attr) {
-	printf("\t\t%s = %s\n", attr->name, attr->v->data);
-
-	if (strcmp(attr->name,"mailbox.status")==0) {
-	    mboxdata->status = mboxdata_convert_status(attr->v);
-	} else if (strcmp(attr->name,"mailbox.total")==0) {
-	    mboxdata->total = atoi(attr->v->data);
-	}
-
-	attr = snext(&node);
-    }
-}
-#endif /* 0 */
-
 static void myacap_copy_modtime(char *modtime, void *rock)
 {
     printf("\tmodtime = %s\n", modtime);
@@ -523,3 +508,42 @@ int acapmbox_deleteall(acapmbox_handle_t *AC)
     return r;
 }
 
+void acapmbox_kick_target(void)
+{
+    char buf[1024];
+    struct sockaddr_un srvaddr;
+    int s, r;
+    int len;
+    
+    s = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (s == -1) {
+	syslog(LOG_ERR, "socket: %m");
+	return;
+    }
+
+    strcpy(buf, config_dir);
+    strcat(buf, FNAME_TARGET_SOCK);
+    memset((char *)&srvaddr, 0, sizeof(srvaddr));
+    srvaddr.sun_family = AF_UNIX;
+    strcpy(srvaddr.sun_path, buf);
+    len = strlen(srvaddr.sun_path) + sizeof(srvaddr.sun_family);
+
+    r = connect(s, (struct sockaddr *)&srvaddr, len);
+    if (r == -1) {
+	syslog(LOG_ERR, "acapmbox_kick_target: can't connect to target: %m");
+	close(s);
+	return;
+    }
+
+    r = read(s, &buf, sizeof(buf));
+    if (r <= 0) {
+	syslog(LOG_ERR, "acapmbox_kick_target: can't read from target: %m");
+	close(s);
+	return;
+    }
+
+    /* if we got here, it's been kicked */
+
+    close(s);
+    return;
+}
