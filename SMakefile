@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.26 1998/06/10 22:04:44 tjs Exp $
+# $Id: SMakefile,v 1.27 1998/06/10 22:07:14 tjs Exp $
 #
 
 MAKE=gmake
@@ -36,7 +36,8 @@ case `uname` in
 	;;
   SunOS)   
     # -xs: generate debugging information that gdb likes
-        CFLAGS="${CFLAGS} -xO4 -xdepend -xs"
+        CFLAGS="${CFLAGS} -xO4 -xdepend"
+	LDFLAGS="${LDFLAGS} -xs"
         ;;
   ULTRIX)  
 	CC=gcc # cheat -- Ultrix cc is aged
@@ -51,4 +52,5 @@ esac
 
 LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-group=staff"
 
-export CFLAGS CC VER LNCOMMAND LOCALDEFS
+export CFLAGS CC VER LNCOMMAND LOCALDEFS LDFLAGS
+
