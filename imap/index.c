@@ -1840,8 +1840,6 @@ char *cacheitem;
     int subparts;
     int len, charset, encoding;
     char *p;
-    int n;
-    int substrlen = strlen(substr);
     
     cacheitem += 4;
     while (partsleft--) {
@@ -1859,12 +1857,8 @@ char *cacheitem;
 		    fseek(msgfile, CACHE_ITEM_BIT32(cacheitem), 0);
 		    p = index_readheader(msgfile, format, len);
 		    p = charset_decode1522(p);
-		    n = strlen(p) - substrlen + 1;
-		    while (n-- > 0) {
-			if (*substr == *p && !strncmp(substr, p, substrlen)) {
-			    return 1;
-			}
-			p++;
+		    if (charset_searchstring(substr, pat, p, strlen(p))) {
+			return 1;
 		    }
 		}
 	    }
