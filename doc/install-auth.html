@@ -1,4 +1,4 @@
-<!-- $Id: install-auth.html,v 1.9 2002/11/18 04:04:53 rjs3 Exp $ -->
+<!-- $Id: install-auth.html,v 1.10 2003/07/25 20:54:53 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Authenticating Users
@@ -30,9 +30,11 @@ also becomes available. This is because one should not pass a clear
 text password over the wire unless the connection is encrypted.
 
 <p>The IMAP protocol also supports a way for users to authenticate
-without using SASL. This is via the 'LOGIN' command (not to be
+without using SASL (the protocol). This is via the 'LOGIN' command (not to be
 confused by the LOGIN SASL mechanism). The IMAP LOGIN command (as with
-PLAIN) will send your password in clear-text to the server.
+PLAIN) will send your password in clear-text to the server.  In this case,
+the password is still verified through the Cyrus SASL library, though no
+SASL mechanism actually performs a negotiation.
 
 <p>The POP server is capable of APOP authentication, but this requries that
 SASL be compiled <tt>--with-checkapop</tt>, and also that you are using
@@ -188,5 +190,5 @@ current ticket's held.  Override this with the <tt>-u</tt> option.</li>
 </ol>
 
 <HR>
-last modified: $Date: 2002/11/18 04:04:53 $
+last modified: $Date: 2003/07/25 20:54:53 $
 </BODY></HTML>
