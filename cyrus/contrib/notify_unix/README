@@ -1,0 +1,17 @@
+This directory contains two simple examples of UNIX notification daemons
+written in Perl.  Both daemons require installing the
+Net::Server::Prefork module, located in this directory.
+
+The Perl script 'simple_notify.pl' simply logs mail notifications--it
+shows the simplest possible handler.
+
+The Perl script 'mysql_notify.pl' also logs the notification, but in
+addition it looks up the username in a DB table in order to get additional
+information about the user. This could be used, for example, to get a
+user's instant messaging address from a database in order to send a
+notification message.  'mysql_notify.pl' requires a file /etc/notify
+that contains three lines: the DSN, username, and password to connect
+to the database.
+
+The shell script 'notify' is a sample init.d script for
+starting/stopping the perl daemon.
