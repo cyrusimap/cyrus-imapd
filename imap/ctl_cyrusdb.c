@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.11 2002/05/06 21:27:07 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.12 2002/05/07 15:06:24 rjs3 Exp $
  */
 
 #include <config.h>
@@ -129,37 +129,12 @@ static int fixmbox(char *name,
     int mbtype;
     int r;
     char *path, *part, *acl;
-    struct mailbox mb;
 
     /* Do an mboxlist_detail on the mailbox */
     r = mboxlist_detail(name, &mbtype, &path, &part, &acl, NULL);
 
     /* if it is MBTYPE_RESERVED, unset it & call mboxlist_delete */
     if(!r && (mbtype & MBTYPE_RESERVE)) {
-	/* Okay, since this needs to be able to run on a live server, locking
-	   is a bit tricky:  We want to lock the mailbox, then
-	   re-check that the flag is still valid */
-
-	r = mailbox_open_locked(name, path, acl, NULL, &mb, 0);
-	if(r) {
-	    syslog(LOG_ERR,
-		   "could not lock mailbox '%s' to clear reservation: %s",
-		   name, error_message(r));
-	    return 0;
-	}
-
-	/* Do an mboxlist_detail on the mailbox */
-	r = mboxlist_detail(name, &mbtype, &path, &part, &acl, NULL);
-	
-	if(r || !(mbtype & MBTYPE_RESERVE)) {
-	    syslog(LOG_ERR,
-		   "mailbox '%s' is no longer reserved, skipping recovery.",
-		   name);
-	    return 0;
-	}
-
-	r = mboxlist_update(name, (mbtype & ~MBTYPE_RESERVE), part, acl);
-
 	if(!r) {
 	    r = mboxlist_deletemailbox(name, 1, NULL, NULL, 0, 0);
 	    if(r) {
