@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.55 2004/06/22 16:59:17 rjs3 Exp $ */
+/* $Id: quota.c,v 1.56 2004/06/30 17:30:21 ken3 Exp $ */
 
 
 #include <config.h>
@@ -108,11 +108,12 @@ int fixquota_mailbox(char *name,
 int fixquota(char *domain, int ispartial);
 int fixquota_fixroot(struct mailbox *mailbox,
 		     char *root);
-int fixquota_finish(int thisquota, struct txn **tid);
+int fixquota_finish(int thisquota, struct txn **tid, unsigned long *count);
 
 struct fix_rock {
     char *domain;
     struct txn **tid;
+    unsigned long change_count;
 };
 
 struct quotaentry {
@@ -306,7 +307,6 @@ int fixquota_mailbox(char *name,
     int i, len, thisquota, thisquotalen;
     struct fix_rock *frock = (struct fix_rock *) rock;
     char *p, *domain = frock->domain;
-    struct txn **tid = frock->tid;
 
     /* make sure the domains match */
     if ((p = strchr(name, '!')) != NULL) {
@@ -320,7 +320,7 @@ int fixquota_mailbox(char *name,
     while (firstquota < quota_num &&
 	   strncmp(name, quota[firstquota].quota.root,
 		       strlen(quota[firstquota].quota.root)) > 0) {
-	r = fixquota_finish(firstquota++, tid);
+	r = fixquota_finish(firstquota++, frock->tid, &frock->change_count);
 	if (r) return r;
     }
 
@@ -343,39 +343,32 @@ int fixquota_mailbox(char *name,
     if (partial && thisquota == -1) return 0;
 
     r = mailbox_open_header(name, 0, &mailbox);
-    if (r) return r;
-
-    if (thisquota == -1) {
-	if (mailbox.quota.root) {
-	    r = fixquota_fixroot(&mailbox, (char *)0);
-	    if (r) {
-		mailbox_close(&mailbox);
-		return r;
+    if (!r) {
+	if (thisquota == -1) {
+	    if (mailbox.quota.root) {
+		r = fixquota_fixroot(&mailbox, (char *)0);
 	    }
 	}
-	mailbox_close(&mailbox);
-	return 0;
-    }
-
-    if (!mailbox.quota.root ||
-	strcmp(mailbox.quota.root, quota[thisquota].quota.root) != 0) {
-	r = fixquota_fixroot(&mailbox, quota[thisquota].quota.root);
-	if (r) {
-	    mailbox_close(&mailbox);
-	    return r;
+	else {
+	    if (!mailbox.quota.root ||
+		strcmp(mailbox.quota.root, quota[thisquota].quota.root) != 0) {
+		r = fixquota_fixroot(&mailbox, quota[thisquota].quota.root);
+	    }
+	    if (!r) r = mailbox_open_index(&mailbox);
+   
+	    if (!r) quota[thisquota].newused += mailbox.quota_mailbox_used;
 	}
-    }
-    
-    r = mailbox_open_index(&mailbox);
-    if (r) {
+
 	mailbox_close(&mailbox);
-	return r;
     }
 
-    quota[thisquota].newused += mailbox.quota_mailbox_used;
-    mailbox_close(&mailbox);
+    if (r) {
+	/* mailbox error of some type, commit what we have */
+	quota_commit(frock->tid);
+	*(frock->tid) = NULL;
+    }
 
-    return 0;
+    return r;
 }
 	
 int fixquota_fixroot(struct mailbox *mailbox,
@@ -408,7 +401,7 @@ int fixquota_fixroot(struct mailbox *mailbox,
 /*
  * Finish fixing up a quota root
  */
-int fixquota_finish(int thisquota, struct txn **tid)
+int fixquota_finish(int thisquota, struct txn **tid, unsigned long *count)
 {
     int r;
 
@@ -417,6 +410,7 @@ int fixquota_finish(int thisquota, struct txn **tid)
 	    printf("%s: removed\n", quota[thisquota].quota.root);
 	    r = quota_delete(&quota[thisquota].quota, tid);
 	    if (r) return r;
+	    (*count)++;
 	    free(quota[thisquota].quota.root);
 	    quota[thisquota].quota.root = NULL;
 	}
@@ -424,11 +418,24 @@ int fixquota_finish(int thisquota, struct txn **tid)
     }
 
     if (quota[thisquota].quota.used != quota[thisquota].newused) {
+	/* re-read the quota with the record locked */
+	r = quota_read(&quota[thisquota].quota, tid, 1);
+	if (r) return r;
+	(*count)++;
+    }
+    if (quota[thisquota].quota.used != quota[thisquota].newused) {
 	printf("%s: usage was %lu, now %lu\n", quota[thisquota].quota.root,
 	       quota[thisquota].quota.used, quota[thisquota].newused);
 	quota[thisquota].quota.used = quota[thisquota].newused;
 	r = quota_write(&quota[thisquota].quota, tid);
 	if (r) return r;
+	(*count)++;
+    }
+
+    /* commit the transaction every 100 changes */
+    if (*count && !(*count % 100)) {
+	quota_commit(tid);
+	*tid = NULL;
     }
 
     return 0;
@@ -453,32 +460,25 @@ int fixquota(char *domain, int ispartial)
 
     frock.domain = domain;
     frock.tid = &tid;
+    frock.change_count = 0;
 
     redofix = 1;
-    while (redofix) {
+    while (!r && redofix) {
 	redofix = 0;
 	firstquota = 0;
 	partial = ispartial;
 
 	r = (*quota_namespace.mboxlist_findall)(&quota_namespace, pattern, 1,
 						0, 0, fixquota_mailbox, &frock);
-	if (r) {
-	    mboxlist_close();
-	    return r;
-	}
-
-	while (firstquota < quota_num) {
-	    r = fixquota_finish(firstquota++, &tid);
-	    if (r) {
-		mboxlist_close();
-		return r;
-	    }
+	while (!r && firstquota < quota_num) {
+	    r = fixquota_finish(firstquota++, &tid, &frock.change_count);
 	}
     }
 
-    if (!r) quota_commit(&tid);
+    if (!r && tid) quota_commit(&tid);
     
     mboxlist_close();
+
     return 0;
 }
     
