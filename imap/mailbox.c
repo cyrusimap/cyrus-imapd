@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.110 2001/02/23 22:01:49 leg Exp $
+ $Id: mailbox.c,v 1.111 2001/03/05 22:27:05 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1839,12 +1839,14 @@ void *deciderock;
     return IMAP_IOERROR;
 }
 
-char *
-mailbox_findquota(name)
-const char *name;
+/* find the mailbox 'name' 's quotaroot, and return it in 'start'.
+   'start' must be at least MAX_MAILBOX_PATH. 
+
+   returns true if a quotaroot is found, 0 otherwise. 
+*/
+int mailbox_findquota(char *start, const char *name)
 {
-    static char quota_path[MAX_MAILBOX_PATH]; /* XXX memory */
-    static char start[MAX_MAILBOX_PATH];
+    char quota_path[MAX_MAILBOX_PATH];
     char *tail;
     struct stat sbuf;
 
@@ -1858,7 +1860,7 @@ const char *name;
 	*tail = '\0';
 	mailbox_hash_quota(quota_path, start);
     }
-    return start;
+    return 1;
 }
 
 
@@ -1871,9 +1873,10 @@ int mailbox_create(const char *name,
 {
     int r;
     char *p=path;
-    char *quota_root;
+    char quota_root[MAX_MAILBOX_PATH];
+    int hasquota;
     char fnamebuf[MAX_MAILBOX_PATH];
-    static struct mailbox mailbox;
+    struct mailbox mailbox;
     int save_errno;
     int n;
     struct stat sbuf;
@@ -1902,7 +1905,7 @@ int mailbox_create(const char *name,
     zeromailbox(mailbox);
     mailbox.quota.fd = -1;
 
-    quota_root = mailbox_findquota(name);
+    hasquota = mailbox_findquota(quota_root, name);
 
     strcpy(fnamebuf, path);
     p = fnamebuf + strlen(fnamebuf);
@@ -1936,7 +1939,7 @@ int mailbox_create(const char *name,
     mailbox.header_lock_count = 1;
     mailbox.index_lock_count = 1;
 
-    if (quota_root) mailbox.quota.root = xstrdup(quota_root);
+    if (hasquota) mailbox.quota.root = xstrdup(quota_root);
     mailbox.generation_no = 0;
     mailbox.format = format;
     mailbox.minor_version = MAILBOX_MINOR_VERSION;

@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.59 2001/02/23 22:01:49 leg Exp $
+ $Id: mailbox.h,v 1.60 2001/03/05 22:27:15 leg Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -275,7 +275,9 @@ extern int mailbox_expunge(struct mailbox *mailbox,
 			   void *deciderock);
 extern int mailbox_expungenews(struct mailbox *mailbox);
 
-extern char *mailbox_findquota(const char *name);
+extern int mailbox_findquota(char *ret, const char *name);
+extern void mailbox_make_uniqueid(char *name, unsigned long uidvalidity,
+				  char *uniqueid);
 
 extern int mailbox_create(const char *name, char *path,
 			  const char *acl, const char *uniqueid, int format,
