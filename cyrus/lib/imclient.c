@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.27 1999/06/19 02:18:56 leg Exp $
+ $Id: imclient.c,v 1.28 1999/07/02 01:06:18 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -650,7 +650,7 @@ int len;
 	char lenbuf[4];
 	int toklen, len;
 	char *plainptr;
-	int plainlen;
+	unsigned int plainlen;
 
 	for (;;) {
 	    /* Make sure we have an entire token */
@@ -952,19 +952,19 @@ struct imclient *imclient;
 	writelen = imclient->outptr - imclient->outstart;
 
 	if ((imclient->saslcompleted==1) && (writelen>0)) {
-	  int cryptlen=0;
-	  char *cryptptr=NULL;
+	    unsigned int cryptlen=0;
+	    char *cryptptr=NULL;
 
 	  if (sasl_encode(imclient->saslconn, imclient->outstart, writelen,
 			  &cryptptr,&cryptlen)!=SASL_OK)
-	    {
+	  {
 	      /* XXX encoding error */
 	      n=0;
-	    }
+	  }
 	  
 	  n = write(imclient->fd, cryptptr,
 		    cryptlen);
-
+	  
 	  if (n > 0) {	    
 	    free(cryptptr);
 	    imclient->outstart += writelen;
@@ -1099,8 +1099,12 @@ static sasl_callback_t callbacks[] = {
  *  2 - severe failure?
  */
 
-int timclient_authenticate(struct imclient *imclient, char *mechlist, char *service, char *user, 
-		       int minssf, int maxssf)
+int imclient_authenticate(struct imclient *imclient, 
+			  char *mechlist, 
+			  char *service, 
+			  char *user, 
+			  int minssf, 
+			  int maxssf)
 {
   int saslresult;
   sasl_security_properties_t *secprops=NULL;
@@ -1151,7 +1155,8 @@ int timclient_authenticate(struct imclient *imclient, char *mechlist, char *serv
   if (getsockname(imclient->fd,(struct sockaddr *)saddr_l,&addrsize)!=0)
     return 1;
 
-  saddr_l->sin_port = saddr_r->sin_port; /* b/c getsockname is dumb and doesn't set it */
+  saddr_l->sin_port = saddr_r->sin_port; 
+                    /* b/c getsockname is dumb and doesn't set it */
 
   /*  saddr_l->sin_port=htons(saddr_l->sin_port);	*/
   saslresult=sasl_setprop(imclient->saslconn,   SASL_IP_LOCAL, saddr_l);
@@ -1207,8 +1212,6 @@ int timclient_authenticate(struct imclient *imclient, char *mechlist, char *serv
     while (saslresult==SASL_INTERACT)
     {
       saslresult=sasl_client_step(imclient->saslconn,
-				  /*				  inbase64,
-								  inbase64len,*/
 				  imclient->readytxt,
 				  inlen, 
 				  &client_interact,
@@ -1216,7 +1219,7 @@ int timclient_authenticate(struct imclient *imclient, char *mechlist, char *serv
 				  &outlen);
 
       if (saslresult==SASL_INTERACT)
-	fillin_interactions(client_interact); /* fill in prompts */      	
+	  fillin_interactions(client_interact); /* fill in prompts */
     }
 
     /* send to server */

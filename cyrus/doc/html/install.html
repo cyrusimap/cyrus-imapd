@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.52 1999/07/01 20:14:53 leg Exp $ -->
+<!-- $Id: install.html,v 1.53 1999/07/02 01:06:16 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -55,6 +55,9 @@ you must use PAM for authentication and configure PAM such that
 non-root users can verify passwords.  We believe pam_pwdb contains
 support for using a pwcheck-like program for checking shadow
 passwords.
+
+<li> An ANSI C compiler is now required.  You can acquire one from
+<TT>prep.ai.mit.edu</TT>.
 </ul>
 <p>
 See the file <a
@@ -99,7 +102,7 @@ Sendmail distributions may be obtained from
 server must receive newsgroups with the INN news server.
 
 <LI> If you want Sieve support (a server-side mail filtering
-language), cmu-sieve version 1.4 or higher is required.  cmu-sieve
+language), cmu-sieve version 1.3 or higher is required.  cmu-sieve
 releases will most likely be made in conjunction with imapd releases.
 Unpack cmu-sieve-xxx.tar.gz inside the cyrus directory; Sieve will
 bill built at the same time as imapd.
