@@ -12,7 +12,7 @@
 #include "lex.h"
 #include "request.h"
 
-#include <cyrus/prot.h>
+#include <prot.h>
 
 
 struct iseive_s {

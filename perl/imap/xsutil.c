@@ -4,7 +4,7 @@
 
 #include "EXTERN.h"
 #include "perl.h"
-#include "cyrus/imclient.h"
+#include <imclient.h>
 #define CYRPERL_INTERNAL
 #include "cyrperl.h"
 
