@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.120 1998/09/29 19:42:29 tjs Exp $
+dnl $Id: configure.in,v 1.121 1998/09/29 21:12:37 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -689,7 +689,7 @@ case "$with_krb" in
     AC_CACHE_CHECK(for Kerberos includes, cyrus_krbinclude, [
       # I know I"m going to get bug reports about this because someone
       # cleverly hid the Kerberos includes somewhere.  Oh, well.
-      for krbhloc in include include/kerberosIV
+      for krbhloc in include/kerberosIV include
       do
 	if test -f ${with_krb}/${krbhloc}/krb.h ; then
 	  cyrus_krbinclude=${with_krb}/${krbhloc}
