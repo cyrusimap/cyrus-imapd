@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.38.2.6 2004/03/24 19:53:08 ken3 Exp $
+ * $Id: mupdate-client.c,v 1.38.2.7 2004/04/03 19:53:44 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -295,36 +295,22 @@ void mupdate_disconnect(mupdate_handle **hp)
     *hp = NULL;
 }
 
-/* We're really only looking for an OK or NO or BAD here */
+/* We're really only looking for an OK or NO or BAD here -- and the callback
+ * is never called in those cases.  So if the callback is called, we have
+ * an error! */
 static int mupdate_scarf_one(struct mupdate_mailboxdata *mdata __attribute__((unused)),
 			     const char *cmd,
-			     void *context) 
+			     void *context __attribute__((unused))) 
 {
-    int *called = context;
-    
-    if(*called) {
-	/* Only want to be called once per command */
-	return -1;
-    }
-    *called = 1;
-
-    /*only accept OK, NO and BAD */
-    if(strncmp(cmd, "OK", 2)) {
-	return 0;
-    } else if (strncmp(cmd, "NO", 2) || strncmp(cmd, "BAD", 3)) {
-	return -1;
-    } else {
-	return 1;
-    }
+    syslog(LOG_ERR, "mupdate_scarf_one was called, but shouldn't be.  Command recieved was %s", cmd);
+    return -1;
 }
-
 
 int mupdate_activate(mupdate_handle *handle, 
 		     const char *mailbox, const char *server,
 		     const char *acl)
 {
     int ret;
-    int called = 0;
     enum mupdate_cmd_response response;
     
     if (!handle) return MUPDATE_BADPARAM;
@@ -343,7 +329,7 @@ int mupdate_activate(mupdate_handle *handle,
 		handle->tagn++, strlen(mailbox), mailbox, 
 		strlen(server), server, strlen(acl), acl);
 
-    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1, &response);
+    ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
     if (ret) {
 	return ret;
     } else if (response != MUPDATE_OK) {
@@ -357,7 +343,6 @@ int mupdate_reserve(mupdate_handle *handle,
 		    const char *mailbox, const char *server)
 {
     int ret;
-    int called = 0;
     enum mupdate_cmd_response response;
     
     if (!handle) return MUPDATE_BADPARAM;
@@ -376,7 +361,7 @@ int mupdate_reserve(mupdate_handle *handle,
 		handle->tagn++, strlen(mailbox), mailbox, 
 		strlen(server), server);
 
-    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1, &response);
+    ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
     if (ret) {
 	return ret;
     } else if (response != MUPDATE_OK) {
@@ -390,7 +375,6 @@ int mupdate_deactivate(mupdate_handle *handle,
 		       const char *mailbox, const char *server)
 {
     int ret;
-    int called = 0;
     enum mupdate_cmd_response response;
     
     if (!handle) return MUPDATE_BADPARAM;
@@ -409,7 +393,7 @@ int mupdate_deactivate(mupdate_handle *handle,
 		handle->tagn++, strlen(mailbox), mailbox, 
 		strlen(server), server);
 
-    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1, &response);
+    ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
     if (ret) {
 	return ret;
     } else if (response != MUPDATE_OK) {
@@ -423,7 +407,6 @@ int mupdate_delete(mupdate_handle *handle,
 		   const char *mailbox)
 {
     int ret;
-    int called = 0;
     enum mupdate_cmd_response response;
     
     if (!handle) return MUPDATE_BADPARAM;
@@ -434,7 +417,7 @@ int mupdate_delete(mupdate_handle *handle,
 		"X%u DELETE {%d+}\r\n%s\r\n", handle->tagn++, 
 		strlen(mailbox), mailbox);
 
-    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1, &response);
+    ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
     if (ret) {
 	return ret;
     } else if (response != MUPDATE_OK) {

@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102.2.2 2004/02/27 21:17:25 ken3 Exp $
+ * $Id: append.c,v 1.102.2.3 2004/04/03 19:53:43 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -266,17 +266,21 @@ int append_commit(struct appendstate *as,
 	return r;
     }
 
-    /* flush the new index records */
-    if (fsync(as->m.index_fd)) {
-	syslog(LOG_ERR, "IOERROR: writing index records for %s: %m",
+    /* Here we flush the cache file first, since we do not update
+     * the generation number on append, and it is safe to have an
+     * extra cache record (with no associated index record) */
+
+    /* Flush out the cache file data */
+    if (fsync(as->m.cache_fd)) {
+	syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
 	       as->m.name);
 	append_abort(as);
 	return IMAP_IOERROR;
     }
 
-    /* Flush out the cache file data */
-    if (fsync(as->m.cache_fd)) {
-	syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
+    /* flush the new index records */
+    if (fsync(as->m.index_fd)) {
+	syslog(LOG_ERR, "IOERROR: writing index records for %s: %m",
 	       as->m.name);
 	append_abort(as);
 	return IMAP_IOERROR;
