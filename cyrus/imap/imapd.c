@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.449 2003/12/29 17:07:59 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.450 2004/01/20 01:10:56 ken3 Exp $ */
 
 #include <config.h>
 
@@ -84,6 +84,7 @@
 #include "mbdump.h"
 #include "mkgmtime.h"
 #include "mupdate-client.h"
+#include "quota.h"
 #include "telemetry.h"
 #include "tls.h"
 #include "user.h"
@@ -443,6 +444,10 @@ int service_init(int argc, char **argv, char **envp)
     mboxlist_open(NULL);
     mailbox_initialize();
 
+    /* open the quota db, we'll need it for real work */
+    quotadb_init(0);
+    quotadb_open(NULL);
+
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
 
@@ -619,6 +624,9 @@ void shut_down(int code)
     seen_done();
     mboxlist_close();
     mboxlist_done();
+
+    quotadb_close();
+    quotadb_done();
 
     annotatemore_close();
     annotatemore_done();
@@ -2303,7 +2311,7 @@ cmd_append(char *tag, char *name)
     }
 
     if (!r) {
-	r = append_commit(&mailbox, &uidvalidity, &firstuid, &num);
+	r = append_commit(&mailbox, size, &uidvalidity, &firstuid, &num);
     } else {
 	append_abort(&mailbox);
     }
@@ -2407,8 +2415,8 @@ void cmd_select(char *tag, char *cmd, char *name)
 
     if (imapd_mailbox->myrights & ACL_DELETE) {
 	/* Warn if mailbox is close to or over quota */
-	mailbox_read_quota(&imapd_mailbox->quota);
-	if (imapd_mailbox->quota.limit > 0) {
+	r = quota_read(&imapd_mailbox->quota, NULL, 0);
+	if (!r && imapd_mailbox->quota.limit > 0) {
  	    /* Warn if the following possibilities occur:
  	     * - quotawarnkb not set + quotawarn hit
 	     * - quotawarnkb set larger than mailbox + quotawarn hit
@@ -4394,22 +4402,13 @@ char *name;
     char buf[MAX_MAILBOX_PATH+1];
     char mailboxname[MAX_MAILBOX_NAME+1];
 
-    quota.fd = -1;
-
     if (!imapd_userisadmin) r = IMAP_PERMISSION_DENIED;
     else {
 	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 						   imapd_userid, mailboxname);
 	if (!r) {
 	    quota.root = mailboxname;
-	    mailbox_hash_quota(buf, sizeof(buf), quota.root);
-	    quota.fd = open(buf, O_RDWR, 0);
-	    if (quota.fd == -1) {
-		r = IMAP_QUOTAROOT_NONEXISTENT;
-	    }
-	    else {
-		r = mailbox_read_quota(&quota);
-	    }
+	    r = quota_read(&quota, NULL, 0);
 	}
     }
     
@@ -4422,10 +4421,6 @@ char *name;
 			quota.used/QUOTA_UNITS, quota.limit);
 	}
 	prot_printf(imapd_out, ")\r\n");
-    }
-
-    if (quota.fd != -1) {
-	close(quota.fd);
     }
 
     if (r) {
@@ -4480,7 +4475,7 @@ char *name;
 						   imapd_userid, mailboxname);
 	    prot_printf(imapd_out, " ");
 	    printastring(mailboxname);
-	    r = mailbox_read_quota(&mailbox.quota);
+	    r = quota_read(&mailbox.quota, NULL, 0);
 	    if (!r) {
 		prot_printf(imapd_out, "\r\n* QUOTA ");
 		printastring(mailboxname);
@@ -6428,27 +6423,22 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    char buf[MAX_MAILBOX_PATH+1];
 	    struct quota quota;
 	    
-	    quota.fd = -1;
 	    quota.root = mailboxname;
-	    mailbox_hash_quota(buf,sizeof(buf),quota.root);
-	    quota.fd = open(buf, O_RDWR, 0);
-	    if(quota.fd != -1) {	    
-		r = mailbox_read_quota(&quota);
-		close(quota.fd);
+	    r = quota_read(&quota, NULL, 0);
 	    
-		if(!r) {
-		    /* note use of + to force the setting of a nonexistant
-		     * quotaroot */
-		    prot_printf(be->out, "Q01 SETQUOTA {%d+}\r\n" \
-				         "+%s (STORAGE %d)\r\n",
-				strlen(name)+1, name, quota.limit);
-		    r = getresult(be->in, "Q01");
-		    if(r) syslog(LOG_ERR,
-				 "Could not move mailbox: %s, " \
-				 "failed setting initial quota root\r\n",
-				 mailboxname);
-		}
+	    if(!r) {
+		/* note use of + to force the setting of a nonexistant
+		 * quotaroot */
+		prot_printf(be->out, "Q01 SETQUOTA {%d+}\r\n" \
+			    "+%s (STORAGE %d)\r\n",
+			    strlen(name)+1, name, quota.limit);
+		r = getresult(be->in, "Q01");
+		if(r) syslog(LOG_ERR,
+			     "Could not move mailbox: %s, " \
+			     "failed setting initial quota root\r\n",
+			     mailboxname);
 	    }
+	    else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
 	}
 
 

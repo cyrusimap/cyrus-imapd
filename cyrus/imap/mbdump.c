@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.27 2003/10/24 17:31:49 rjs3 Exp $
+ * $Id: mbdump.c,v 1.28 2004/01/20 01:11:00 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,6 +71,7 @@
 #include "mbdump.h"
 #include "mboxlist.h"
 #include "prot.h"
+#include "quota.h"
 #include "seen.h"
 #include "xmalloc.h"
 #include "util.h"
@@ -216,21 +217,11 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     /* The first member is either a number (if it is a quota root), or NIL
      * (if it isn't) */
     {
-	char buf[MAX_MAILBOX_PATH+1];
 	struct quota quota;
 
-	quota.fd = -1;
 	quota.root = (char *)mbname; /* xxx */
-	mailbox_hash_quota(buf,sizeof(buf),quota.root);
-	quota.fd = open(buf, O_RDWR, 0);
-	if(quota.fd == -1) {
-	    prot_printf(pout, "NIL ");
-	    goto dump_files;
-	}
 
-	r = mailbox_read_quota(&quota);
-	close(quota.fd);
-
+	r = quota_read(&quota, NULL, 0);
 	if(r) {
 	    prot_printf(pout, "NIL ");
 	    goto dump_files; 
@@ -792,17 +783,17 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
     if(!r && quotaused) {
 	struct quota quota;
 	char quota_root[MAX_MAILBOX_PATH+1];
+	struct txn *tid = NULL;
 	
-	if(mailbox_findquota(quota_root, sizeof(quota_root), mbname)) {
+	if (quota_findroot(quota_root, sizeof(quota_root), mbname)) {
 	    /* update the quota file */
 	    memset(&quota, 0, sizeof(quota));
 	    quota.root = quota_root;
-	    quota.fd = -1;
-	    r = mailbox_lock_quota(&quota);
+	    r = quota_read(&quota, &tid, 1);
 	    if(!r) {
 		quota.used += quotaused;
-		r = mailbox_write_quota(&quota);
-		close(quota.fd);
+		r = quota_write(&quota, &tid);
+		if (!r) quota_commit(&tid);
 	    } else {
 		syslog(LOG_ERR, "could not lock quota file for %s (%s)",
 		       quota_root, error_message(r));

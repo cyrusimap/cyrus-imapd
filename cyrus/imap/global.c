@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.6 2004/01/08 14:51:02 rjs3 Exp $ */
+/* $Id: global.c,v 1.7 2004/01/20 01:10:56 ken3 Exp $ */
 
 #include <config.h>
 
@@ -82,6 +82,7 @@ static enum {
 
 int config_implicitrights;        /* "lca" */
 struct cyrusdb_backend *config_mboxlist_db;
+struct cyrusdb_backend *config_quota_db;
 struct cyrusdb_backend *config_subscription_db;
 struct cyrusdb_backend *config_annotation_db;
 struct cyrusdb_backend *config_seenstate_db;
@@ -162,6 +163,8 @@ int cyrus_init(const char *alt_config, const char *ident)
     /* lookup the database backends */
     config_mboxlist_db =
 	cyrusdb_fromname(config_getstring(IMAPOPT_MBOXLIST_DB));
+    config_quota_db =
+	cyrusdb_fromname(config_getstring(IMAPOPT_QUOTA_DB));
     config_subscription_db =
 	cyrusdb_fromname(config_getstring(IMAPOPT_SUBSCRIPTION_DB));
     config_annotation_db =
@@ -193,6 +196,8 @@ int cyrus_init(const char *alt_config, const char *ident)
 			      config_getswitch(IMAPOPT_FULLDIRHASH));
     libcyrus_config_setstring(CYRUSOPT_PTSCACHE_DB,
 			      config_getstring(IMAPOPT_PTSCACHE_DB));
+    libcyrus_config_setswitch(CYRUSOPT_VIRTDOMAINS,
+			      config_getenum(IMAPOPT_VIRTDOMAINS));
 
     /* Not until all configuration parameters are set! */
     libcyrus_init();

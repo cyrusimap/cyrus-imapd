@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.17 2003/10/22 18:50:09 rjs3 Exp $
+ * $Id: user.c,v 1.18 2004/01/20 01:11:02 ken3 Exp $
  */
 
 #include <config.h>
@@ -79,6 +79,7 @@
 #include "mailbox.h"
 #include "util.h"
 #include "seen.h"
+#include "quota.h"
 
 #if 0
 static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
@@ -392,29 +393,50 @@ int user_copyquotaroot(char *oldname, char *newname)
 {
     int r = 0;
     struct quota quota;
-    char buf[MAX_MAILBOX_PATH+1];
 
     quota.root = oldname;
-    quota.fd = -1;
 
-    mailbox_hash_quota(buf, sizeof(buf), quota.root);
-    quota.fd = open(buf, O_RDWR, 0);
-    if (quota.fd > 0) {
-	r = mailbox_read_quota(&quota);
-	if (!r) mboxlist_setquota(newname, quota.limit, 0);
-    }
+    r = quota_read(&quota, NULL, 0);
+    if (!r) mboxlist_setquota(newname, quota.limit, 0);
 
+    return r;
+}
+
+struct find_rock {
+    char *inboxname;
+    struct txn **tid;
+};
+
+static int find_p(void *rockp,
+		  const char *key, int keylen,
+		  const char *data, int datalen)
+{
+    char *inboxname = ((struct find_rock *) rockp)->inboxname;
+
+    return (!strncmp(key, inboxname, strlen(inboxname)) &&
+	    (keylen == strlen(inboxname) || key[strlen(inboxname)] == '.'));
+}
+
+static int find_cb(void *rockp,
+		  const char *key, int keylen,
+		  const char *data, int datalen)
+{
+    struct quota quota_root;
+    struct txn **tid = ((struct find_rock *) rockp)->tid;
+    int r;
+
+    quota_root.root = (char *) xstrndup(key, keylen);
+    r = quota_delete(&quota_root, tid);
+    free(quota_root.root); 
     return r;
 }
 
 int user_deletequotaroots(const char *user)
 {
     struct namespace namespace;
-    char inboxname[1024];
+    char buf[MAX_MAILBOX_NAME+1], *inboxname = buf;
+    struct txn *tid = NULL;
     int r;
-    char dir[MAX_MAILBOX_NAME+1], *fname, qpath[MAX_MAILBOX_NAME];
-    DIR *dirp;
-    struct dirent *f;
 
     /* set namespace */
     r = mboxname_init_namespace(&namespace, 0);
@@ -422,30 +444,15 @@ int user_deletequotaroots(const char *user)
     /* get user's toplevel quotaroot (INBOX) */
     if (!r)
 	r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
-					     user, inboxname);
+						 user, inboxname);
 
     if (!r) {
-	/* get path to toplevel quotaroot */
-	mailbox_hash_quota(dir, sizeof(dir), inboxname);
-
-	/* split directory and filename */
-	fname = strrchr(dir, '/');
-	*fname++ = '\0';
-
-	dirp = opendir(dir);
-	if (dirp) {
-	    while ((f = readdir(dirp)) != NULL) {
-		if (!strncmp(f->d_name, fname, strlen(fname)) &&
-		    (f->d_name[strlen(fname)] == '\0'||
-		     f->d_name[strlen(fname)] == '.')) {
-
-		    snprintf(qpath, sizeof(qpath), "%s/%s", dir, f->d_name);
-		    unlink(qpath);
-		}
-	    }
-	    closedir(dirp);
-	}
+	struct find_rock frock = { inboxname, &tid };
+	r = config_quota_db->foreach(qdb, inboxname, strlen(inboxname),
+				     &find_p, &find_cb, &frock, &tid);
     }
+
+    if (!r) quota_commit(&tid);
 
     return r;
 }

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.125 2003/12/16 20:36:55 ken3 Exp $
+ * $Id: lmtpd.c,v 1.126 2004/01/20 01:10:58 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -229,6 +229,10 @@ int service_init(int argc __attribute__((unused)),
     /* so we can do mboxlist operations */
     mboxlist_init(0);
     mboxlist_open(NULL);
+
+    /* so we can do quota operations */
+    quotadb_init(0);
+    quotadb_open(NULL);
 
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
@@ -1076,7 +1080,7 @@ int deliver_mailbox(struct protstream *msg,
 	    r = append_fromstream(&as, msg, size, now, 
 				  (const char **) flag, nflags);
 	}
-	if (!r) append_commit(&as, NULL, &uid, NULL);
+	if (!r) append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
 	else append_abort(&as);
     }
 
@@ -1275,6 +1279,9 @@ void shut_down(int code)
 
     mboxlist_close();
     mboxlist_done();
+
+    quotadb_close();
+    quotadb_done();
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif

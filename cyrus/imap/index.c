@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.201 2003/10/22 20:05:12 ken3 Exp $
+ * $Id: index.c,v 1.202 2004/01/20 01:10:57 ken3 Exp $
  */
 #include <config.h>
 
@@ -1177,7 +1177,8 @@ index_copy(struct mailbox *mailbox,
 
     r = append_copy(mailbox, &append_mailbox, copyargs.nummsg,
 		    copyargs.copymsg);
-    if (!r) append_commit(&append_mailbox, &uidvalidity, &startuid, &num);
+    if (!r) append_commit(&append_mailbox, totalsize,
+			  &uidvalidity, &startuid, &num);
     if (!r) {
 	copyuid_size = 1024;
 	copyuid = xmalloc(copyuid_size);

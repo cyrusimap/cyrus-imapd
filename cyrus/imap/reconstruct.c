@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81 2003/10/22 18:50:08 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.82 2004/01/20 01:11:02 ken3 Exp $ */
 
 #include <config.h>
 
@@ -89,6 +89,7 @@
 #include "global.h"
 #include "mboxname.h"
 #include "mboxlist.h"
+#include "quota.h"
 #include "seen.h"
 #include "retry.h"
 #include "convert_code.h"
@@ -448,7 +449,7 @@ int reconstruct(char *name, struct discovered *found)
     }
 
     /* Fix quota root */
-    hasquota = mailbox_findquota(quota_root, sizeof(quota_root), mailbox.name);
+    hasquota = quota_findroot(quota_root, sizeof(quota_root), mailbox.name);
     if (mailbox.quota.root) free(mailbox.quota.root);
     if (hasquota) {
 	mailbox.quota.root = xstrdup(quota_root);

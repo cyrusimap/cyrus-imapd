@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.10 2004/01/12 15:41:56 ken3 Exp $
+ * $Id: nntpd.c,v 1.11 2004/01/20 01:11:01 ken3 Exp $
  */
 
 /*
@@ -574,6 +574,10 @@ int service_init(int argc __attribute__((unused)),
     mboxlist_init(0);
     mboxlist_open(NULL);
 
+    /* open the quota db, we'll need it for expunge */
+    quotadb_init(0);
+    quotadb_open(NULL);
+
     while ((opt = getopt(argc, argv, "srf")) != EOF) {
 	switch(opt) {
 	case 's': /* nntps (do starttls right away) */
@@ -757,6 +761,9 @@ void shut_down(int code)
 
     mboxlist_close();
     mboxlist_done();
+
+    quotadb_close();
+    quotadb_done();
 
     annotatemore_close();
     annotatemore_done();
@@ -3110,12 +3117,13 @@ static int deliver(message_data_t *msg)
 		else
 		    r = append_fromstream(&as, msg->data, msg->size, now,
 					  (const char **) NULL, 0);
-		if (!r) append_commit(&as, NULL, &uid, NULL);
+		if (!r) append_commit(&as, 0, NULL, &uid, NULL);
 		else append_abort(&as);
 	    }
 
 	    if (!r && msg->id)
-		duplicate_mark(msg->id, strlen(msg->id), rcpt, strlen(rcpt), now, uid);
+		duplicate_mark(msg->id, strlen(msg->id), rcpt, strlen(rcpt),
+			       now, uid);
 
 	    if (r) return r;
 

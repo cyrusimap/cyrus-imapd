@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.h,v 1.27 2003/12/15 22:42:38 rjs3 Exp $ */
+/* $Id: cyrusdb.h,v 1.28 2004/01/20 01:11:03 ken3 Exp $ */
 
 #ifndef INCLUDED_CYRUSDB_H
 #define INCLUDED_CYRUSDB_H
@@ -185,6 +185,7 @@ extern struct cyrusdb_backend cyrusdb_berkeley;
 extern struct cyrusdb_backend cyrusdb_berkeley_nosync;
 extern struct cyrusdb_backend cyrusdb_flat;
 extern struct cyrusdb_backend cyrusdb_skiplist;
+extern struct cyrusdb_backend cyrusdb_quotalegacy;
 
 extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
 

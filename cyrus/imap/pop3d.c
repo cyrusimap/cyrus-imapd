@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.147 2003/10/24 18:24:07 rjs3 Exp $
+ * $Id: pop3d.c,v 1.148 2004/01/20 01:11:01 ken3 Exp $
  */
 #include <config.h>
 
@@ -294,6 +294,10 @@ int service_init(int argc __attribute__((unused)),
     mboxlist_init(0);
     mboxlist_open(NULL);
 
+    /* open the quota db, we'll need it for expunge */
+    quotadb_init(0);
+    quotadb_open(NULL);
+
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
 
@@ -458,6 +462,9 @@ void shut_down(int code)
 
     mboxlist_close();
     mboxlist_done();
+
+    quotadb_close();
+    quotadb_done();
 
     if (popd_in) {
 	prot_NONBLOCK(popd_in);
