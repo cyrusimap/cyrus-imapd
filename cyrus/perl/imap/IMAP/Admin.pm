@@ -380,7 +380,7 @@ Cyrus::IMAP::Admin - Cyrus administrative interface Perl module
   $rc = $client->deleteacl('user.buser', 'user1', 'user2');
   %acls = $client->listacl('user.buser');
   @mailboxes = $client->list('*');
-  @mailboxes = $client->list('user.', '%');
+  @mailboxes = $client->list('%', 'user.');
   @mailboxes = $client->subscribed('*');
   %quota = $client->quota($root);
   ($root, %quota) = $client->quotaroot($mailbox);
