@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.35 2000/05/30 21:02:06 ken3 Exp $
+ * $Id: imapd.h,v 1.36 2000/06/06 00:53:10 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -178,16 +178,19 @@ struct searchargs {
 };
 
 /* Values for sort criteria */
-#define SORT_REVERSE	-1
-#define SORT_SEQUENCE	0
-#define SORT_ARRIVAL	1
-#define SORT_CC		2
-#define SORT_DATE	3
-#define SORT_FROM	4
-#define SORT_SIZE	5
-#define SORT_SUBJECT	6
-#define	SORT_TO		7
-#define NUMSORTCRIT	8
+#define SORT_REVERSE (-1)
+
+enum {
+    SORT_SEQUENCE = 0,
+    SORT_ARRIVAL,
+    SORT_CC,
+    SORT_DATE,
+    SORT_FROM,
+    SORT_SIZE,
+    SORT_SUBJECT,
+    SORT_TO
+};
+#define NUMSORTCRIT (8)
 
 /* Bitmask for status queries */
 enum {
