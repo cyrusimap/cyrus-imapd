@@ -1,14 +1,63 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the cyrus IMAP Server since 2.0.6
+
+      * some number of random static variables eliminated, to save on
+        memory footprint 
+      * recursive RENAME was a little to eager; fixed. RENAME will also
+        give the client a hint that a sub-RENAME failed. (mostly probably
+        useful for cyradm, but cyradm doesn't take advantage of it yet.) 
+      * THREAD=X-JWZ has turned into THREAD=REFERENCES (Ken Murchison) 
+      * DELETE wasn't failing cleanly in database code; fixed. 
+      * off-by-one bug in seen_db fixed. 
+      * starting/committing/aborting transactions now logged more correctly
+        in cyrsudb_db3 
+      * master will now accept port numbers instead of just service names
+        in cyrus.conf. also logs even more verbosely (see bug #115.) 
+      * libwrap_init() is now inside the loop, since i don't quite
+        understand the semantics of libwrap calls. 
+      * setquota in cyradm now behaves more sanely (and gives correct usage
+        message). 
+      * bugfixes to the managesieve client perl api. (still needs work.) 
+      * small fixes in timsieved. 
+      * added a "make dist" target so i won't dread releases as much. 
+
+Changes to the cyrus IMAP Server since 2.0.5
+
+      * APPEND now honors the \Seen flag. 
+      * mailboxes file can once again be a flat text file. (compile-time
+        choice) 
+      * subscriptions file can be flat text or berkeley db. likewise for
+        seen state. 
+      * unfortunately, the format of the mailboxes file has changed. 
+      * implementation of "JWZ" threading, a first pass on the forthcoming
+        THREAD=REFERENCES. 
+      * bugfixes in libacap. 
+      * bugfixes in other Murder related functionality. 
+      * removal of dead code. 
+      * will now look in CYRUS_PREFIX/etc/imapd.conf if there's no
+        /etc/imapd.conf. 
+      * more paranoid implementation of ID. 
+      * more descriptive lmtp errors. 
+      * finished implementation of LMTP 8BITMIME. 
+      * fixed minor bugs in pop3d. 
+      * small test suite for cyrusdb backends added in lib/test/. 
+      * added -DPERL_POLLUTE to the perl compilation to deal with Perl 5.6. 
+      * small additions to the Sieve library. 
+      * As usual, owe lots of thanks to Ken Murchison for his hard work and
+        awesome implementations. 
+
 Changes to the cyrus IMAP Server SINCE 2.0.4
 
       * Now should work with Berkeley DB 3.1, but does not auto-upgrade 3.0
         databases (and, in fact, I haven't written any upgrade software
         yet). 
+      * SORT and THREAD should now function correctly. 
       * Some configure fixes. 
       * Some fixes for possible race conditions in initializing services
         and database structures. 
-      * SORT and THREAD should now function correctly. 
+      * Some non-gcc compile fixes with structure initialization. 
+      * Some non gcc compile fixes with structure initialization. 
 
 Changes to the cyrus IMAP Server SINCE 2.0.3
 

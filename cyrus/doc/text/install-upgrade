@@ -1,6 +1,27 @@
 Upgrading From Previous Versions
 
-Upgrading from 1.6.22
+Upgrading from 2.0.6
+
+    nothing known. 
+
+Upgrading from a previous 2.0 version to 2.0.6
+
+    Warning: You do not need to follow these instructions if you're
+    upgrading from version 1.6. 
+
+      * You can now pick whether to use Berkeley db to store seen state,
+        the subscription files, and the mailboxes file or a flat text file,
+        at compile time only. (Look in imap/seen_db.c and imap/mboxlist.h.) 
+      * The format of the mailboxes file and seen state has changed. It is
+        not possible to preserve seen state, but upgrade the mailboxes file
+        as follows: 
+
+         1. Run ctl_mboxlist -d > mboxlist.temp to dump existing mailboxes. 
+         2. Remove old database files: rm mailboxes.db db/* user/*/*.seen 
+         3. With the new version of ctl_mboxlist, run ctl_mboxlist -u <
+            mboxlist.temp. 
+
+Upgrading from 1.6.22 or 1.6.24
 
     Warning: Cyrus imapd 2.0 will automatically convert on-disk file
     formats as the server is used. It is not possible to run 1.6 after 2.0
