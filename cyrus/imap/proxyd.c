@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.84 2002/01/30 19:57:14 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.85 2002/01/31 17:46:49 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -57,6 +57,7 @@
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 #include <syslog.h>
 #include <com_err.h>
 #include <netdb.h>
@@ -87,6 +88,7 @@
 #include "imap_err.h"
 #include "mboxname.h"
 #include "mailbox.h"
+#include "mupdate-client.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "imapurl.h"
@@ -831,6 +833,40 @@ struct backend *proxyd_findserver(char *server)
 
 static void kick_mupdate(void)
 {
+    char buf[2048];
+    struct sockaddr_un srvaddr;
+    int s, r;
+    int len;
+    
+    s = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (s == -1) {
+	syslog(LOG_ERR, "socket: %m");
+	return;
+    }
+
+    strncpy(buf, config_dir, sizeof(buf));
+    strncat(buf, FNAME_MUPDATE_TARGET_SOCK, sizeof(buf));
+    memset((char *)&srvaddr, 0, sizeof(srvaddr));
+    srvaddr.sun_family = AF_UNIX;
+    strcpy(srvaddr.sun_path, buf);
+    len = sizeof(srvaddr.sun_family) + strlen(srvaddr.sun_path) + 1;
+
+    r = connect(s, (struct sockaddr *)&srvaddr, len);
+    if (r == -1) {
+	syslog(LOG_ERR, "kick_mupdate: can't connect to target: %m");
+	close(s);
+	return;
+    }
+
+    r = read(s, &buf, sizeof(buf));
+    if (r <= 0) {
+	syslog(LOG_ERR, "kick_mupdate: can't read from target: %m");
+	close(s);
+	return;
+    }
+
+    /* if we got here, it's been kicked */
+    close(s);
     return;
 }
 
@@ -846,8 +882,6 @@ static int mlookup(const char *name, char **pathp,
 
     r = mboxlist_lookup(name, pathp, aclp, tid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-	/* xxx stub function for requiring a round-trip to the mupdate
-	   server */
 	kick_mupdate();
 	r = mboxlist_lookup(name, pathp, aclp, tid);
     }
