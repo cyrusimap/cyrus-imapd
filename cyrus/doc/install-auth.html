@@ -1,4 +1,4 @@
-<!-- $Id: install-auth.html,v 1.5 2001/12/06 18:01:50 leg Exp $ -->
+<!-- $Id: install-auth.html,v 1.6 2002/04/23 19:38:58 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Authenticating Users
@@ -11,20 +11,19 @@
 <h2>Introduction</h2>
 
 The Cyrus IMAP Server uses the Cyrus SASL library to authenticate
-      users. Please refer to the Cyrus SASL documentation for specific 
-      details on SASL. This section focuses specifically on the IMAP
-      server.
+users. Please refer to the Cyrus SASL documentation for specific 
+details on SASL. This section focuses specifically on the IMAP server.
 
 <h2>Authentication Mechanisms</h2>
 
-At this writing, the underlying Cyrus SASL library supports the
-following SASL mechanisms: CRAM-MD5, DIGEST-MD5, KERBEROS_V4,
+At this writing, the underlying Cyrus SASL library supports a
+variety of SASL mechanisms, including CRAM-MD5, DIGEST-MD5, KERBEROS_V4,
 and GSSAPI.  The Cyrus IMAP, POP, and LMTP servers also support
 STARTTLS using client-side certificates and the EXTERNAL
 authentication method.
 
-<p>GSSAPI is specific to Kerberos version 5. STARTTLS client 
-side certificates have not really been tested.
+<p>GSSAPI is specific to Kerberos version 5. Additionally, STARTTLS client 
+side certificates have not been extensively tested.
 
 <p>When STARTTLS is enabled, the PLAIN SASL mechanism (if installed)
 also becomes available. This is because one should not pass a clear
@@ -39,22 +38,21 @@ PLAIN) will send your password in clear-text to the server.
 
 <ul>
 <li>If you are running a mail server on a single machine, we recommend
-	that you configure the system to use CRAM-MD5 or
-	DIGEST-MD5. We have not provided utilities for you to let
-	users change their passwords but either we or someone else
-	might provide that feature soon.
+that you configure the system to use CRAM-MD5 or DIGEST-MD5. We have not
+provided utilities for you to let users change their passwords but either
+we or someone else might provide that feature.
 
 <li>If you have more than one mail server, we recommend that  you
-	configure the system to use GSSAPI and Kerberos5. 
+configure the system to use GSSAPI and Kerberos5. 
 
 <li>If you have some other authentication mechanism that requires the
 clear text password, you should use <tt>saslauthd</tt>.
 
 <p><tt>saslauthd</tt> is something specific to the Cyrus SASL
-libraries. While it is less generic than PAM, it is much simplier. The
-IMAP server simply sends a userid and a corresponding password down a
-Unix domain pipe. The <tt>saslauthd</tt> then takes that userid and
-password and tries to authenticate with it -- using whatever
+libraries. While it is less generic than PAM, it is much simpler
+to configure. The IMAP server simply sends a userid and a corresponding
+password down a Unix domain pipe. Then, <tt>saslauthd</tt> takes that
+userid and password and tries to authenticate with it -- using whatever
 authentication you use -- and simply returns "yes" or "no" as to
 whether or not the password was correct.
 
@@ -78,15 +76,15 @@ the network.
 
 <h2>Configuring Authentication</h2>
 
-<h3>/etc/sasldb</h3>
+<h3>/etc/sasldb2</h3>
 	
 <p>The easiest method for authenticating users is to use the libsasl
 authentication database and create users using the
 "<tt>saslpasswd</tt>" utility.  Set "<tt>sasl_pwcheck_method:
-sasldb</tt>".  Make sure Cyrus can read "<tt>/etc/sasldb</tt>":
-
+auxprop</tt>", and be sure that the SASL sasldb auxprop module is
+installed (it is, by default). Make sure Cyrus can read "<tt>/etc/sasldb2</tt>":
 <pre>
-<kbd>   chown cyrus /etc/sasldb*
+<kbd>   chown cyrus /etc/sasldb2*
 </kbd></pre>
 
 <h3>Shadow Passwords</h3>
@@ -186,7 +184,5 @@ current ticket's held.  Override this with the <tt>-u</tt> option.</li>
 </ol>
 
 <P><HR>
-last modified: $Date: 2001/12/06 18:01:50 $
+last modified: $Date: 2002/04/23 19:38:58 $
 </BODY></HTML>
-
-
