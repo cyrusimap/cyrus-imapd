@@ -30,7 +30,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <netdb.h>
+#ifdef HAVE_ACTE_KRB
 #include <krb.h>
+#endif
 #include <zephyr/zephyr.h>
 #include <syslog.h>
 
@@ -61,7 +63,8 @@ char *header;
     register int i;
     char *whoami,myhost[256],mysender[BUFSIZ];
     char *msgbody;
-    char *lines[2],*mykrbhost;
+    char *lines[2];
+    char *mykrbhost = 0;
   
     if ((retval = ZInitialize()) != ZERR_NONE) {
 	syslog(LOG_ERR, "IOERROR: cannot initialize zephyr: %m");
@@ -74,7 +77,9 @@ char *header;
     }
     myhost[sizeof(myhost)-1] = '\0';
   
+#ifdef HAVE_ACTE_KRB
     mykrbhost = krb_get_phost(myhost);
+#endif
   
     lines[0] = myhost;
     msgbody = xmalloc(1000 + strlen(header));
@@ -88,7 +93,10 @@ char *header;
     }
     strcat(msgbody, header);
 
-    (void) sprintf(mysender,"imap.%s@%s", mykrbhost, ZGetRealm());
+    (void) sprintf(mysender, "imap%s%s@%s",
+		   mykrbhost ? "." : "",
+		   mykrbhost ? mykrbhost : "",
+		   ZGetRealm());
 
     memset((char *)&notice, 0, sizeof(notice));
     notice.z_kind = UNSAFE;
