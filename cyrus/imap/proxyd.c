@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.139 2002/10/21 15:29:25 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.140 2002/10/21 17:17:43 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -2325,7 +2325,7 @@ void cmd_authenticate(char *tag, char *authtype)
     r = saslserver(proxyd_saslconn, authtype, NULL, "+ ",
 		   proxyd_in, proxyd_out, &sasl_result, NULL);
 
-    if (r != IMAP_SASL_OK) {
+    if (r) {
 	const char *errorstring = NULL;
 
 	switch (r) {

@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.82 2002/10/21 15:29:25 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.83 2002/10/21 17:17:41 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1399,7 +1399,7 @@ void lmtpmode(struct lmtp_func *func,
 	      r = saslserver(cd.conn, mech, p, "334 ",
 			     pin, pout, &sasl_result, NULL);
 
-	      if (r != IMAP_SASL_OK) {
+	      if (r) {
 		  const char *errorstring = NULL;
 
 		  switch (r) {

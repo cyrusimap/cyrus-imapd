@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslserver.c,v 1.2 2002/10/21 15:29:26 rjs3 Exp $ */
+/* $Id: saslserver.c,v 1.3 2002/10/21 17:17:43 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -99,7 +99,7 @@ int saslserver(sasl_conn_t *conn, const char *mech,
 
 	/* get response from the client */
 	if (!prot_fgets(base64, BASE64_BUF_SIZE, pin)) {
-	    *sasl_result = SASL_FAIL;
+	    if(sasl_result) *sasl_result = SASL_FAIL;
 	    return IMAP_SASL_PROTERR;
 	}
 
@@ -110,7 +110,7 @@ int saslserver(sasl_conn_t *conn, const char *mech,
 
 	/* check if client cancelled */
 	if (base64[0] == '*') {
-	    *sasl_result = SASL_BADPROT;
+	    if(sasl_result) *sasl_result = SASL_BADPROT;
 	    return IMAP_SASL_CANCEL;
 	}
 
@@ -133,6 +133,6 @@ int saslserver(sasl_conn_t *conn, const char *mech,
 	    *success_data = base64;
     }
 
-    *sasl_result = r;
-    return (r == SASL_OK ? IMAP_SASL_OK : IMAP_SASL_FAIL);
+    if(sasl_result) *sasl_result = r;
+    return (r == SASL_OK ? 0 : IMAP_SASL_FAIL);
 }

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.50 2002/10/21 15:29:25 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.51 2002/10/21 17:17:42 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1022,7 +1022,7 @@ void cmd_auth(char *arg)
     r = saslserver(popd_saslconn, authtype, arg, "+ ", popd_in, popd_out,
 		   &sasl_result, NULL);
 
-    if (r != IMAP_SASL_OK) {
+    if (r) {
 	const char *errorstring = NULL;
 
 	switch (r) {
