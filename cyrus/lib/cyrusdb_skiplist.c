@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.49 2004/06/04 18:06:56 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.50 2004/06/08 19:55:17 rjs3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -153,7 +153,6 @@ struct db {
     int listsize;
     int logstart;		/* where the log starts from last chkpnt */
     time_t last_recovery;
-
 };
 
 struct txn {
@@ -333,7 +332,18 @@ static int mycommit(struct db *db, struct txn *tid);
 static int myabort(struct db *db, struct txn *tid);
 static int mycheckpoint(struct db *db, int locked);
 static int myconsistent(struct db *db, struct txn *tid, int locked);
-static int recovery(struct db *db);
+static int recovery(struct db *db, int flags);
+
+enum {
+    /* Force recovery regardless of timestamp on database */
+    RECOVERY_FORCE = 1,
+    /* Caller already has a write lock on the database.  In the case
+     * of successful recovery, the database will still be locked on return.
+     *
+     * If the recovery fails, then the database will be unlocked an an
+     * error will be returned */
+    RECOVERY_CALLER_LOCKED = 2    
+};
 
 /* file looks like:
    struct header {
@@ -409,6 +419,22 @@ static int RECSIZE(const char *ptr)
     return ret;
 }
 
+/* Determine if it is safe to append to this skiplist database.
+ *  e.g. does it end in 4 bytes of -1 followed by a commit record? 
+ * *or* is this the beginning of the log, in which case we only need
+ * the padding from the last INORDER (or DUMMY) record
+ */
+static int SAFE_TO_APPEND(struct db *db)
+{
+    return (db->map_size % 4
+	    || (db->map_size == db->logstart &&
+		*((bit32 *)(db->map_base + db->map_size - 4)) != htonl(-1))
+	    || (db->map_size != db->logstart &&
+		*((bit32 *)(db->map_base + db->map_size - 8)) != htonl(-1) &&
+		*((bit32 *)(db->map_base + db->map_size - 4)) != htonl(COMMIT)));
+}
+
+
 #define PADDING(ptr) (ntohl(*((bit32 *)((ptr) + RECSIZE(ptr) - 4))))
 
 /* given an open, mapped db, read in the header information */
@@ -447,6 +473,14 @@ static int read_header(struct db *db)
     }
 
     db->curlevel = ntohl(*((bit32 *)(db->map_base + OFFSET_CURLEVEL)));
+
+    if(db->curlevel > db->maxlevel) {
+	syslog(LOG_ERR,
+	       "skiplist %s: CURLEVEL %d in database beyond maximum %d\n",
+	       db->fname, db->curlevel, db->maxlevel);
+	return CYRUSDB_IOERROR;
+    }
+
     db->listsize = ntohl(*((bit32 *)(db->map_base + OFFSET_LISTSIZE)));
     db->logstart = ntohl(*((bit32 *)(db->map_base + OFFSET_LOGSTART)));
     db->last_recovery = 
@@ -737,7 +771,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     if (!global_recovery || db->last_recovery < global_recovery) {
 	/* run recovery; we rebooted since the last time recovery
 	   was run */
-	r = recovery(db);
+	r = recovery(db, 0);
 	if (r) {
 	    dispose_db(db);
 	    return r;
@@ -1055,6 +1089,15 @@ int mystore(struct db *db,
 	    return r;
 	}
 
+	/* is this file safe to append to?
+	 * 
+	 * If it isn't, we need to run recovery. */
+	if(SAFE_TO_APPEND(db))
+	{
+	    if((r = recovery(db, RECOVERY_FORCE | RECOVERY_CALLER_LOCKED)) < 0)
+		return r;
+	}
+
 	/* fill in t */
 	newtxn(db, &t);
 
@@ -1213,6 +1256,15 @@ int mydelete(struct db *db,
 	/* grab a r/w lock */
 	if ((r = write_lock(db, NULL)) < 0) {
 	    return r;
+	}
+
+	/* is this file safe to append to?
+	 * 
+	 * If it isn't, we need to run recovery. */
+	if(SAFE_TO_APPEND(db))
+	{
+	    if((r = recovery(db, RECOVERY_FORCE | RECOVERY_CALLER_LOCKED)) < 0)
+		return r;
 	}
 
 	/* fill in t */
@@ -1795,7 +1847,7 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
 }
 
 /* run recovery on this file */
-static int recovery(struct db *db)
+static int recovery(struct db *db, int flags)
 {
     const char *ptr, *keyptr;
     int updateoffsets[SKIPLIST_MAXLEVEL];
@@ -1804,7 +1856,7 @@ static int recovery(struct db *db)
     time_t start = time(NULL);
     int i;
 
-    if ((r = write_lock(db, NULL)) < 0) {
+    if (!(flags & RECOVERY_CALLER_LOCKED) && (r = write_lock(db, NULL)) < 0) {
 	return r;
     }
 
@@ -1813,11 +1865,14 @@ static int recovery(struct db *db)
 	return r;
     }
 
-    if (global_recovery && db->last_recovery >= global_recovery) {
+    if (!(flags & RECOVERY_FORCE)
+	&& global_recovery
+	&& db->last_recovery >= global_recovery) {
 	/* someone beat us to it */
 	unlock(db);
 	return 0;
     }
+
     db->listsize = 0;
 
     ptr = DUMMY_PTR(db);
@@ -2117,7 +2172,9 @@ static int recovery(struct db *db)
 	       db->map_size, diff, diff == 1 ? "" : "s"); 
     }
 
-    unlock(db);
+    if(r || !(flags & RECOVERY_CALLER_LOCKED)) {
+	unlock(db);
+    }
     
     return r;
 }
