@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.70 2001/08/31 18:42:48 ken3 Exp $
+ * $Id: lmtpd.c,v 1.71 2001/09/04 21:36:55 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.70 2001/08/31 18:42:48 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.71 2001/09/04 21:36:55 leg Exp $";*/
 
 #include <config.h>
 
@@ -494,7 +494,7 @@ int send_rejection(const char *origid,
 		   struct protstream *file)
 {
     FILE *sm;
-    const char *smbuf[6];
+    const char *smbuf[10];
     char buf[8192], *namebuf;
     int i, sm_stat;
     time_t t;
@@ -502,11 +502,12 @@ int send_rejection(const char *origid,
     pid_t sm_pid, p;
 
     smbuf[0] = "sendmail";
-    smbuf[1] = "-f";
-    smbuf[2] = "<>";
-    smbuf[3] = "--";
-    smbuf[4] = rejto;
-    smbuf[5] = NULL;
+    smbuf[1] = "-i";		/* ignore dots */
+    smbuf[2] = "-f";
+    smbuf[3] = "<>";
+    smbuf[4] = "--";
+    smbuf[5] = rejto;
+    smbuf[6] = NULL;
     sm_pid = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
 	return -1;
@@ -574,22 +575,23 @@ int send_rejection(const char *origid,
 int send_forward(char *forwardto, char *return_path, struct protstream *file)
 {
     FILE *sm;
-    const char *smbuf[6];
+    const char *smbuf[10];
     int i, sm_stat;
     char buf[1024];
     pid_t sm_pid;
 
     smbuf[0] = "sendmail";
+    smbuf[1] = "-";		/* ignore dots */
     if (return_path != NULL) {
-	smbuf[1] = "-f";
-	smbuf[2] = return_path;
+	smbuf[2] = "-f";
+	smbuf[3] = return_path;
     } else {
-	smbuf[1] = "-f";
-	smbuf[2] = "<>";
+	smbuf[2] = "-f";
+	smbuf[3] = "<>";
     }
-    smbuf[3] = "--";
-    smbuf[4] = forwardto;
-    smbuf[5] = NULL;
+    smbuf[4] = "--";
+    smbuf[5] = forwardto;
+    smbuf[6] = NULL;
     sm_pid = open_sendmail(smbuf, &sm);
 	
     if (sm == NULL) {
