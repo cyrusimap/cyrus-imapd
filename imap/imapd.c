@@ -1560,7 +1560,7 @@ char *pattern;
 			 listdata);
 	listdata((char *)0, 0, 0);
     }
-    printf("%s OK %s completed\r\n", tag, subscribed ? "LIST" : "LSUB");
+    printf("%s OK %s completed\r\n", tag, subscribed ? "LSUB" : "LIST");
 }
   
 /*
