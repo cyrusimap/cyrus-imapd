@@ -1,0 +1,15 @@
+$Id: README,v 1.1 2000/05/07 20:00:26 wcw Exp $
+
+This is the Carnegie Mellon University Cyrus IMAP Server.
+
+For the real README file, please see doc/readme.html.
+
+To install the software, please read doc/install.html.
+
+To obtain the software, visit the web page
+http://asg.web.cmu.edu/cyrus or ftp directly from
+ftp://ftp.andrew.cmu.edu/pub/cyrus-mail.
+
+
+
+
