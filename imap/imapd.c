@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.409 2002/10/21 15:29:24 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.410 2002/10/21 17:17:39 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1825,7 +1825,7 @@ cmd_authenticate(char *tag,char *authtype)
     r = saslserver(imapd_saslconn, authtype, NULL, "+ ", imapd_in, imapd_out,
 		   &sasl_result, NULL);
 
-    if (r != IMAP_SASL_OK) {
+    if (r) {
 	const char *errorstring = NULL;
 
 	switch (r) {
