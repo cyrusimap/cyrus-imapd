@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.2 2003/11/04 19:53:04 ken3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.3 2003/11/05 00:54:05 ken3 Exp $
  */
 
 #include <config.h>
@@ -983,8 +983,18 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	if(!force) goto done;
     }
 
-    /* remove from mupdate - this can be weird if the commit below fails */
-    /* xxx this is network I/O being done while holding a mboxlist lock */
+    /* commit local db operations */
+    if (!r || force) {
+	r = DB->commit(mbdb, tid);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
+		   cyrusdb_strerror(r));
+	    r = IMAP_IOERROR;
+	}
+	tid = NULL;
+    }
+
+    /* remove from mupdate */
     if ((!r || force)
 	&& !isremote && !local_only && config_mupdate_server) {
 	/* delete the mailbox in MUPDATE */
@@ -1001,17 +1011,6 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 		   "MUPDATE: can't delete mailbox entry '%s'", name);
 	}
 	mupdate_disconnect(&mupdate_h);
-    }
-
-    /* commit db operations */
-    if (!r || force) {
-	r = DB->commit(mbdb, tid);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
-		   cyrusdb_strerror(r));
-	    r = IMAP_IOERROR;
-	}
-	tid = NULL;
     }
 
     if ((r && !force) || isremote) goto done;
