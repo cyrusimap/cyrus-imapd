@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.10 2000/05/23 20:52:14 robeson Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.11 2000/05/29 03:54:23 leg Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -58,6 +58,7 @@
 #include "mboxlist.h"
 #include "acapmbox.h"
 #include "imapconf.h"
+#include "xmalloc.h"
 
 extern int optind;
 extern char *optarg;
