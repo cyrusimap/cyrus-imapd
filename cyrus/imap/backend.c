@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7.6.8 2002/12/16 01:28:53 ken3 Exp $ */
+/* $Id: backend.c,v 1.7.6.9 2002/12/16 16:15:01 ken3 Exp $ */
 
 #include <config.h>
 
@@ -74,65 +74,6 @@
 #include "imapconf.h"
 #include "xmalloc.h"
 #include "iptostring.h"
-
-struct protocol_t protocol[] = {
-    { "imap", "imap",
-      { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parsemechlist },
-      { "S01 STARTTLS", "S01 OK", "S01 NO" },
-      { "A01 AUTHENTICATE", 0, NULL, "A01 OK", "A01 NO", "+ ", "*", NULL },
-      { "Q01 LOGOUT", "Q01 " } },
-    { "pop3", "pop",
-      { "CAPA", ".", "STLS", "SASL ", NULL },
-      { "STLS", "+OK", "-ERR" },
-      { "AUTH", 0, "", "+OK", "-ERR", "+ ", "*", NULL },
-      { "QUIT", "+OK" } },
-    { "nntp", "nntp",
-      { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
-      { "STARTTLS", "382", "580" },
-      { "AUTHINFO SASL", 0, "", "25", "452", "351 ", "*", NULL },
-      { "QUIT", "205" } },
-    { "lmtp", "lmtp",
-      { "LHLO murder", "250 ", "STARTTLS", "AUTH ", NULL },
-      { "STARTTLS", "220", "454" },
-      { "AUTH", 0, "=", "235", "5", "334 ", "*", NULL },
-      { "QUIT", "221" } },
-    { "mupdate", "mupdate",
-      { NULL, "* OK", NULL, "* AUTH ", NULL },
-      { NULL },
-      { "A01 AUTHENTICATE", 1, "", "A01 OK", "A01 NO", "", "*", NULL },
-      { "Q01 LOGOUT", "Q01 " } }
-};
-
-char *imap_parsemechlist(char *str)
-{
-    char *tmp;
-    int num=0;
-    char *ret=xmalloc(strlen(str)+1);
-    
-    ret[0] = '\0';
-    
-    while ((tmp=strstr(str,"AUTH="))!=NULL)
-    {
-	char *end=tmp+5;
-	tmp+=5;
-	
-	while(((*end)!=' ') && ((*end)!='\0'))
-	    end++;
-	
-	(*end)='\0';
-	
-	/* add entry to list */
-	if (num>0)
-	    strcat(ret," ");
-	strcat(ret, tmp);
-	num++;
-	
-	/* reset the string */
-	str=end+1;
-    }
-    
-    return ret;
-}
 
 static char *ask_capability(struct protstream *pout, struct protstream *pin,
 			    struct capa_cmd_t *capa_cmd,

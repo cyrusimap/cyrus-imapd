@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.32.4.4 2002/11/19 22:05:17 ken3 Exp $
+ * $Id: mupdate-client.c,v 1.32.4.5 2002/12/16 16:15:02 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,14 +73,9 @@
 #include "mupdate.h"
 #include "mupdate_err.h"
 #include "exitcodes.h"
+#include "protocol.h"
 
 const char service_name[] = "mupdate";
-
-extern sasl_callback_t *mysasl_callbacks(const char *username,
-                                         const char *authname,
-                                         const char *realm,
-                                         const char *password);
-extern void free_callbacks(sasl_callback_t *in);
 
 static sasl_security_properties_t *make_secprops(void)
 {
@@ -92,147 +87,6 @@ static sasl_security_properties_t *make_secprops(void)
   ret->max_ssf = config_getint(IMAPOPT_SASL_MAXIMUM_LAYER);
 
   return ret;
-}
-
-static int mupdate_authenticate(mupdate_handle *h,
-				const char *mechlist)
-{
-    int saslresult;
-    sasl_security_properties_t *secprops=NULL;
-    socklen_t addrsize;
-    struct sockaddr_in saddr_l;
-    struct sockaddr_in saddr_r;
-    char localip[60], remoteip[60];
-    const char *out;
-    unsigned int outlen;
-    const char *mechusing;
-    int ch;
-    char buf[4096];
-
-    /* Why do this again? */
-    if (h->saslcompleted) {
-	return 1;
-    }
-
-    secprops = make_secprops();
-    if(!secprops) return 1;
-    
-    saslresult=sasl_setprop(h->saslconn, SASL_SEC_PROPS, secprops);
-    if(saslresult != SASL_OK) return 1;
-    free(secprops);
-    
-    addrsize=sizeof(struct sockaddr_in);
-    if (getpeername(h->sock,(struct sockaddr *)&saddr_r,&addrsize)!=0)
-	return 1;
-
-    addrsize=sizeof(struct sockaddr_in);
-    if (getsockname(h->sock,(struct sockaddr *)&saddr_l,&addrsize)!=0)
-	return 1;
-
-    if(iptostring((const struct sockaddr *)&saddr_l, sizeof(struct sockaddr_in),
-		  localip, 60) != 0)
-	return 1;
-    
-    if(iptostring((const struct sockaddr *)&saddr_r, sizeof(struct sockaddr_in),
-		  remoteip, 60) != 0)
-	return 1;
-
-    saslresult=sasl_setprop(h->saslconn, SASL_IPREMOTEPORT, remoteip);
-    if (saslresult!=SASL_OK) return 1;
-
-    saslresult=sasl_setprop(h->saslconn, SASL_IPLOCALPORT, localip);
-    if (saslresult!=SASL_OK) return 1;
-
-    /* We shouldn't get sasl_interact's,
-     * because we provide explicit callbacks */
-    saslresult = sasl_client_start(h->saslconn, mechlist,
-				   NULL, &out, &outlen, &mechusing);
-
-    if(saslresult != SASL_OK && saslresult != SASL_CONTINUE) return 1;
-
-    if(out) {
-	int r = sasl_encode64(out, outlen,
-			      buf, sizeof(buf), NULL);
-	if(r != SASL_OK) return 1;
-	
-	/* it's always ok to send the mechname quoted */
-	prot_printf(h->pout, "A01 AUTHENTICATE \"%s\" {%d+}\r\n%s\r\n",
-		    mechusing, strlen(buf), buf);
-    } else {
-        prot_printf(h->pout, "A01 AUTHENTICATE \"%s\"\r\n", mechusing);
-    }
-
-    while(saslresult == SASL_CONTINUE) {
-	char *p, *in;
-	unsigned int len, inlen;
-	
-	if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
-	    /* Connection Dropped */
-	    return 1;
-	}
-
-	p = buf + strlen(buf) - 1;
-	if(p >= buf && *p == '\n') *p-- = '\0';
-	if(p >= buf && *p == '\r') *p-- = '\0';
-
-	len = strlen(buf);
-	in = xmalloc(len);
-	saslresult = sasl_decode64(buf, len, in, len, &inlen);
-	if(saslresult != SASL_OK) {
-	    free(in);
-
-	    /* CANCEL */
-	    syslog(LOG_ERR, "couldn't base64 decode: aborted authentication");
-
-	    /* If we haven't already canceled due to bad authentication,
-	     * then we should */
-	    if(strncmp(buf, "A01 NO ", 7)) prot_printf(h->pout, "*");
-	    else {
-		syslog(LOG_ERR,
-		       "Authentication to master failed (%s)", buf+7);
-	    }
-	    return 1;
-	}
-
-	saslresult = sasl_client_step(h->saslconn, in, inlen, NULL,
-				      &out, &outlen);
-	free(in);
-
-	if((saslresult == SASL_OK || saslresult == SASL_CONTINUE)) {
-	    int r = sasl_encode64(out, outlen,
-				  buf, sizeof(buf), NULL);
-	    if(r != SASL_OK) return 1;
-	    
-	    prot_printf(h->pout, "%s\r\n", buf);
-	}
-    }
-
-    if(saslresult != SASL_OK) {
-	syslog(LOG_ERR, "bad authentication: %s",
-	       sasl_errdetail(h->saslconn));
-	
-	prot_printf(h->pout, "*");
-	return 1;
-    }
-
-    /* Check Result */
-    ch = getword(h->pin, &(h->tag));
-    if(ch != ' ') return 1; /* need an OK or NO */
-
-    ch = getword(h->pin, &(h->cmd));
-    if(!strncmp(h->cmd.s, "NO", 2)) {
-	if(ch != ' ') return 1; /* no reason really necessary, but we failed */
-	ch = getstring(h->pin, h->pout, &(h->arg1));
-	syslog(LOG_ERR, "authentication failed: %s", h->arg1.s);
-	return 1;
-    }
-
-    prot_setsasl(h->pin, h->saslconn);
-    prot_setsasl(h->pout, h->saslconn);
-
-    h->saslcompleted = 1;
-
-    return 0; /* SUCCESS */
 }
 
 int mupdate_connect(const char *server, const char *port,
@@ -247,6 +101,12 @@ int mupdate_connect(const char *server, const char *port,
     int s, saslresult;
     char buf[4096];
     char *mechlist = NULL;
+    sasl_security_properties_t *secprops = NULL;
+    socklen_t addrsize;
+    struct sockaddr_in saddr_l;
+    struct sockaddr_in saddr_r;
+    char localip[60], remoteip[60];
+    const char *sasl_status = NULL;
     
     if(!handle)
 	return MUPDATE_BADPARAM;
@@ -306,12 +166,37 @@ int mupdate_connect(const char *server, const char *port,
 			       config_getstring(IMAPOPT_MUPDATE_PASSWORD));
     }
 
+    /* set the IP addresses */
+    addrsize=sizeof(struct sockaddr_in);
+    if (getpeername(h->sock,(struct sockaddr *)&saddr_r,&addrsize)!=0)
+	goto noconn;
+
+    addrsize=sizeof(struct sockaddr_in);
+    if (getsockname(h->sock,(struct sockaddr *)&saddr_l,&addrsize)!=0)
+	goto noconn;
+
+    if(iptostring((const struct sockaddr *)&saddr_l, sizeof(struct sockaddr_in),
+		  localip, 60) != 0)
+	goto noconn;
+    
+    if(iptostring((const struct sockaddr *)&saddr_r, sizeof(struct sockaddr_in),
+		  remoteip, 60) != 0)
+	goto noconn;
+
     saslresult = sasl_client_new(service_name,
 				 server,
-				 NULL, NULL,
+				 localip, remoteip,
 				 cbs,
 				 0,
 				 &(h->saslconn));
+    if(saslresult != SASL_OK) goto noconn;
+
+    secprops = make_secprops();
+    if(!secprops) goto noconn;
+    
+    saslresult=sasl_setprop(h->saslconn, SASL_SEC_PROPS, secprops);
+    if(saslresult != SASL_OK) goto noconn;
+    free(secprops);
 
     /* create protstream */
     h->pin = prot_new(h->sock, 0);
@@ -340,8 +225,11 @@ int mupdate_connect(const char *server, const char *port,
 	return MUPDATE_NOAUTH;
     }
     
-    if (mupdate_authenticate(h, mechlist)) {
-	syslog(LOG_ERR, "authentication to remote mupdate server failed");
+    if (h->saslcompleted || 
+	saslclient(h->saslconn, &protocol[PROTOCOL_MUPDATE].sasl_cmd,
+		   mechlist, h->pin, h->pout, NULL, &sasl_status) != SASL_OK) {
+	syslog(LOG_ERR, "authentication to remote mupdate server failed: %s",
+	       sasl_status ? sasl_status : "already authenticated");
 	free(mechlist);
 	mupdate_disconnect(handle);
 	free_callbacks(cbs);
@@ -353,11 +241,17 @@ int mupdate_connect(const char *server, const char *port,
     /* xxx unclear that this is correct, but it prevents a memory leak */
     if(local_cbs) free_callbacks(cbs);
     
+    prot_setsasl(h->pin, h->saslconn);
+    prot_setsasl(h->pout, h->saslconn);
+
+    h->saslcompleted = 1;
+
     /* SUCCESS */
     return 0;
 
  noconn:
     if(mechlist) free(mechlist);
+    if(secprops) free(secprops);
     syslog(LOG_ERR, "mupdate-client: connection to server closed: %s",
 	   prot_error(h->pin));
     mupdate_disconnect(handle);

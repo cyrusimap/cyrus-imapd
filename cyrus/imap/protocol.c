@@ -1,4 +1,4 @@
-/* backend.h -- IMAP server proxy for Cyrus Murder
+/* protocol.c -- client-side protocol abstraction
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,50 +39,68 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.3.6.6 2002/12/16 16:15:02 ken3 Exp $ */
+/* $Id: protocol.c,v 1.1.2.1 2002/12/16 16:15:03 ken3 Exp $ */
 
-#ifndef _INCLUDED_BACKEND_H
-#define _INCLUDED_BACKEND_H
+#include <string.h>
 
-#include "mboxlist.h"
-#include "prot.h"
 #include "protocol.h"
-#include "tls.h"
+#include "xmalloc.h"
 
-/* Functionality to bring up/down connections to backend servers */
+static char *imap_parsemechlist(char *str)
+{
+    char *tmp;
+    int num=0;
+    char *ret=xmalloc(strlen(str)+1);
+    
+    ret[0] = '\0';
+    
+    while ((tmp=strstr(str,"AUTH="))!=NULL)
+    {
+	char *end=tmp+5;
+	tmp+=5;
+	
+	while(((*end)!=' ') && ((*end)!='\0'))
+	    end++;
+	
+	(*end)='\0';
+	
+	/* add entry to list */
+	if (num>0)
+	    strcat(ret," ");
+	strcat(ret, tmp);
+	num++;
+	
+	/* reset the string */
+	str=end+1;
+    }
+    
+    return ret;
+}
 
-#define LAST_RESULT_LEN 1024
-
-struct backend {
-    char hostname[MAX_PARTITION_LEN];
-    struct sockaddr_in addr;
-    int sock;
-
-    /* only used by proxyd */
-    struct prot_waitevent *timeout;
-
-    sasl_conn_t *saslconn;
-    SSL *tlsconn;
-    SSL_SESSION *tlssess;
-
-    enum {
-	ACAP = 0x1, /* obsolete */
-	IDLE = 0x2,
-	MUPDATE = 0x4
-    } capability;
-
-    char last_result[LAST_RESULT_LEN];
-    struct protstream *in; /* from the be server to me, the proxy */
-    struct protstream *out; /* to the be server */
+struct protocol_t protocol[] = {
+    { "imap", "imap",
+      { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parsemechlist },
+      { "S01 STARTTLS", "S01 OK", "S01 NO" },
+      { "A01 AUTHENTICATE", 0, NULL, "A01 OK", "A01 NO", "+ ", "*", NULL },
+      { "Q01 LOGOUT", "Q01 " } },
+    { "pop3", "pop",
+      { "CAPA", ".", "STLS", "SASL ", NULL },
+      { "STLS", "+OK", "-ERR" },
+      { "AUTH", 0, "", "+OK", "-ERR", "+ ", "*", NULL },
+      { "QUIT", "+OK" } },
+    { "nntp", "nntp",
+      { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
+      { "STARTTLS", "382", "580" },
+      { "AUTHINFO SASL", 0, "", "25", "452", "351 ", "*", NULL },
+      { "QUIT", "205" } },
+    { "lmtp", "lmtp",
+      { "LHLO murder", "250 ", "STARTTLS", "AUTH ", NULL },
+      { "STARTTLS", "220", "454" },
+      { "AUTH", 0, "=", "235", "5", "334 ", "*", NULL },
+      { "QUIT", "221" } },
+    { "mupdate", "mupdate",
+      { NULL, "* OK", NULL, "* AUTH ", NULL },
+      { NULL },
+      { "A01 AUTHENTICATE", 1, "", "A01 OK", "A01 NO", "", "*", NULL },
+      { "Q01 LOGOUT", "Q01 " } }
 };
-
-/* if cache is NULL, returns a new struct backend, otherwise returns
- * cache on success (and returns NULL on failure, but leaves cache alone) */
-struct backend *findserver(struct backend *cache, const char *server,
-			   struct protocol_t *prot, const char *userid,
-			   const char **auth_status);
-void downserver(struct backend *s, struct protocol_t *prot);
-
-#define CAPA(s, c) ((s)->capability & (c))
-
-#endif /* _INCLUDED_BACKEND_H */

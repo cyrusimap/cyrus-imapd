@@ -1,4 +1,4 @@
-/* backend.h -- IMAP server proxy for Cyrus Murder
+/* protocol.h -- client-side protocol abstraction
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,50 +39,52 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.3.6.6 2002/12/16 16:15:02 ken3 Exp $ */
+/* $Id: protocol.h,v 1.1.2.1 2002/12/16 16:15:03 ken3 Exp $ */
 
-#ifndef _INCLUDED_BACKEND_H
-#define _INCLUDED_BACKEND_H
+#ifndef _INCLUDED_PROTOCOL_H
+#define _INCLUDED_PROTOCOL_H
 
-#include "mboxlist.h"
-#include "prot.h"
-#include "protocol.h"
-#include "tls.h"
+#include "saslclient.h"
 
-/* Functionality to bring up/down connections to backend servers */
-
-#define LAST_RESULT_LEN 1024
-
-struct backend {
-    char hostname[MAX_PARTITION_LEN];
-    struct sockaddr_in addr;
-    int sock;
-
-    /* only used by proxyd */
-    struct prot_waitevent *timeout;
-
-    sasl_conn_t *saslconn;
-    SSL *tlsconn;
-    SSL_SESSION *tlssess;
-
-    enum {
-	ACAP = 0x1, /* obsolete */
-	IDLE = 0x2,
-	MUPDATE = 0x4
-    } capability;
-
-    char last_result[LAST_RESULT_LEN];
-    struct protstream *in; /* from the be server to me, the proxy */
-    struct protstream *out; /* to the be server */
+struct capa_cmd_t {
+    const char *cmd;		/* [OPTIONAL] capability command string
+				   (NULL = capabilities in banner) */
+    const char *resp;		/* end of capability response */
+    const char *tls;		/* [OPTIONAL] TLS capability string */
+    const char *auth;		/* AUTH capability string */
+    char *(*parse_mechlist)(char *str);
+				/* [OPTIONAL] parse capability string,
+				   returns space-separated list of mechs */
 };
 
-/* if cache is NULL, returns a new struct backend, otherwise returns
- * cache on success (and returns NULL on failure, but leaves cache alone) */
-struct backend *findserver(struct backend *cache, const char *server,
-			   struct protocol_t *prot, const char *userid,
-			   const char **auth_status);
-void downserver(struct backend *s, struct protocol_t *prot);
+struct tls_cmd_t {
+    const char *cmd;		/* tls command string */
+    const char *ok;		/* start tls prompt */
+    const char *fail;		/* failure response */
+};
 
-#define CAPA(s, c) ((s)->capability & (c))
+struct logout_cmd_t {
+    const char *cmd;		/* logout command string */
+    const char *resp;		/* logout response */
+};
 
-#endif /* _INCLUDED_BACKEND_H */
+struct protocol_t {
+    const char *service;	/* INET service name */
+    const char *sasl_service;	/* SASL service name */
+    struct capa_cmd_t capa_cmd;
+    struct tls_cmd_t tls_cmd;
+    struct sasl_cmd_t sasl_cmd;
+    struct logout_cmd_t logout_cmd;
+};
+
+extern struct protocol_t protocol[];
+
+enum {
+    PROTOCOL_IMAP = 0,
+    PROTOCOL_POP3,
+    PROTOCOL_NNTP,
+    PROTOCOL_LMTP,
+    PROTOCOL_MUPDATE
+};
+
+#endif /* _INCLUDED_PROTOCOL_H */

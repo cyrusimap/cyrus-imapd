@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.20 2002/12/16 01:28:55 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.21 2002/12/16 16:15:02 ken3 Exp $
  */
 #include <config.h>
 
@@ -1048,7 +1048,7 @@ static void openproxy(void)
 	if(c) *c = '\0';
     }
 
-    backend = findserver(NULL, server, &protocol[PROTOCOL_POP],
+    backend = findserver(NULL, server, &protocol[PROTOCOL_POP3],
 			 popd_userid, &statusline);
 
     if (!backend) {
