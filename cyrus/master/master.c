@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.100 2004/12/17 16:32:24 ken3 Exp $ */
+/* $Id: master.c,v 1.101 2005/03/07 04:38:41 shadow Exp $ */
 
 #include <config.h>
 
@@ -1305,11 +1305,11 @@ void add_start(const char *name, struct entry *e,
 void add_service(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = (int) rock;
-    char *cmd = xstrdup(masterconf_getstring(e, "cmd", NULL));
+    char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
     int prefork = masterconf_getint(e, "prefork", 0);
     int babysit = masterconf_getswitch(e, "babysit", 0);
     int maxforkrate = masterconf_getint(e, "maxforkrate", 0);
-    char *listen = xstrdup(masterconf_getstring(e, "listen", NULL));
+    char *listen = xstrdup(masterconf_getstring(e, "listen", ""));
     char *proto = xstrdup(masterconf_getstring(e, "proto", "tcp"));
     char *max = xstrdup(masterconf_getstring(e, "maxchild", "-1"));
     rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 256);
@@ -1319,7 +1319,7 @@ void add_service(const char *name, struct entry *e, void *rock)
     if(babysit && prefork == 0) prefork = 1;
     if(babysit && maxforkrate == 0) maxforkrate = 10; /* reasonable safety */
 
-    if (!cmd || !listen) {
+    if (!strcmp(cmd,"") || !strcmp(listen,"")) {
 	char buf[256];
 	snprintf(buf, sizeof(buf),
 		 "unable to find command or port for service '%s'", name);
@@ -1439,13 +1439,13 @@ void add_service(const char *name, struct entry *e, void *rock)
 void add_event(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = (int) rock;
-    char *cmd = xstrdup(masterconf_getstring(e, "cmd", NULL));
+    char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
     int period = 60 * masterconf_getint(e, "period", 0);
     int at = masterconf_getint(e, "at", -1), hour, min;
     time_t now = time(NULL);
     struct event *evt;
 
-    if (!cmd) {
+    if (!strdup(cmd,"")) {
 	char buf[256];
 	snprintf(buf, sizeof(buf),
 		 "unable to find command or port for event '%s'", name);
