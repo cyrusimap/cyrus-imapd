@@ -23,12 +23,14 @@ response. (can't reproduce?)
 <li> MULTIAPPEND: does it do the right thing with an aborted APPEND
 (literal length {0})?
 
-<li> seen_db: doesn't use network byte order. also, need to close the
-database before exiting and before the environment is closed down.
-doesn't transition information from seen_local databases.
+<li> seen_db: needs to close the database before exiting and before
+the environment is closed down.  doesn't transition information from
+seen_local databases.
 
 <li> does <tt>reconstruct</tt> correctly deal with the new header and
 index summary information?
+
+<li> <tt>reconstruct</tt> doesn't deal with the <tt>mailboxes.db</tt> file.
 
 <li> <tt>deliver</tt> (wrapper) should fill in a more useful
 Return-Path when none is given. (not important)
@@ -125,7 +127,7 @@ efficient and easier to use than Amanda on the filesystem.
 would like to submit a bug, feature request or (best of all) patch.
 
 <P><HR>
-Last update: $Date: 2000/04/10 18:49:26 $ 
+Last update: $Date: 2000/04/18 01:00:12 $ 
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>

@@ -1,5 +1,5 @@
 /* tugowar.c -- Listens on unix domain udp socket and keeps track of oids
- * $Id: tugowar.c,v 1.4 2000/04/06 22:53:38 tmartin Exp $
+ * $Id: tugowar.c,v 1.5 2000/04/18 01:00:22 leg Exp $
  *
  *        Copyright 2000 by Carnegie Mellon University
  *
@@ -547,12 +547,28 @@ int main(int argc, char **argv)
 	    debugmode = 1;
 	    break;
 	default:
-	    printf("Invalid arguement\n");
+	    fprintf(stderr, "invalid argument\n");
 	    exit(1);
 	    break;
 	}
     }
 
+    /* fork unless we were given the -d option */
+    
+    if (debugmode == 0) {
+	pid = fork();
+	
+	if (pid == -1) {
+	    perror("fork");
+	    exit(1);
+	}
+	
+	if (pid != 0) { /* parent */
+	    exit(0);
+	}
+    }
+    /* child */
+    
     /* start up agentx */
     if ( !agentx_init( NULL ) ) {
 	printf("Error starting AgentX\n");
@@ -566,7 +582,7 @@ int main(int argc, char **argv)
 				       "CMU IMAP Commands MIB");
     if (agentx_session == AGENTX_NOTRUNNING)
     {
-	printf("AgentX not running\n");
+	fprintf(stderr, "AgentX not running\n");
 	exit (1);
     }
 
@@ -591,23 +607,6 @@ int main(int argc, char **argv)
     umask(oldumask); /* for Linux */
     chmod(SOCK_PATH, 0777); /* for DUX */
 
-    /* fork unless we were given the -d option */
-    
-    if (debugmode == 0) {
-	pid = fork();
-	
-	if (pid == -1) {
-	    perror("fork");
-	    exit(1);
-	}
-	
-	if (pid != 0) { /* parent */
-	    
-	    exit(0);
-	}
-    }
-    /* child */
-    
     trie_top = new_leaf(1, NULL, agentx_Null);
 
     registeredalloc = 100;

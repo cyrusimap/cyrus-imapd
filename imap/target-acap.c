@@ -26,7 +26,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  *
- * $Id: target-acap.c,v 1.10 2000/04/11 03:37:22 leg Exp $
+ * $Id: target-acap.c,v 1.11 2000/04/18 01:00:20 leg Exp $
  */
 
 #include <config.h>
@@ -321,7 +321,7 @@ void synchronize_mboxlist(void)
     r = mboxlist_findall(s, 1, "", NULL, &mboxadd, mailboxes);
 
     r = acap_search_dataset(acap_conn, global_dataset "/", 
-		      "EQUAL \"mailbox.status\" \"i;octet\" \"committed\"", 1,
+		      "EQUAL \"mailbox.status\" \"i;octet\" \"committed\"", 0,
 			    &myacap_request, NULL,
 			    NULL,
 			    &myacap_search_cb,

@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.52 2000/04/06 15:14:42 leg Exp $
+ $Id: mailbox.h,v 1.53 2000/04/18 01:00:18 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -43,7 +43,7 @@ typedef unsigned long bit32;
 #elif USHRT_MAX == BIT32_MAX
 typedef unsigned short bit32;
 #else
-dont know what to use for bit32
+#error dont know what to use for bit32
 #endif
 
 #define MAX_MAILBOX_NAME 490

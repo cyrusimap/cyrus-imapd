@@ -23,8 +23,9 @@
 #include "acapmbox.h"
 #include "acappush.h"
 
-/* if disconnected and can't reconnect right away how long to wait until retrying */
-#define RECONNECT_TIME (10*60)
+/* if disconnected and can't reconnect right away how long to wait
+   until retrying */
+#define RECONNECT_TIME (60)
 
 static int debugmode = 0;
 
@@ -105,17 +106,6 @@ void queueitem(acapmbdata_t *item)
     }
 }
 
-char *local_create_full_dataset_name(char *mailbox_name)
-{
-    static char fullname[MAX_MAILBOX_PATH];
-
-    /* needs to convert from mUTF7 to UTF-8 */
-    snprintf(fullname, sizeof(fullname), "%s/%s", 
-	     global_dataset, mailbox_name);
-
-    return fullname;
-}
-
 void send_completed_cb(acap_result_t res, void *rock)
 {
     acapmbdata_t *item = (acapmbdata_t *)rock;
@@ -132,32 +122,32 @@ void send_completed_cb(acap_result_t res, void *rock)
 int senditem(acap_conn_t *acapconn, acapmbdata_t *item)
 {
     int result;
-    char *fullname;
+    char fullname[MAX_MAILBOX_PATH];
     acap_cmd_t *cmd;
     acap_entry_t *newentry;
     char tmpstr[30];
 
     /* get the entry path */
-    fullname = local_create_full_dataset_name(item->name);
-    if (fullname == NULL) return ACAP_NOMEM;
+    result = acapmbox_dataset_name(item->name, fullname);
+    if (result) return result;
 
     newentry = acap_entry_new(fullname);
     if (newentry == NULL) return ACAP_NOMEM;
 
     /* make and insert all our attributes */
-    snprintf(tmpstr, sizeof(tmpstr), "%d", item->uidvalidity);
+    snprintf(tmpstr, sizeof(tmpstr), "%lu", item->uidvalidity);
     add_attr(newentry->attrs, "mailbox.uidvalidity", tmpstr);
 
-    snprintf(tmpstr, sizeof(tmpstr), "%d", item->answered);
+    snprintf(tmpstr, sizeof(tmpstr), "%lu", item->answered);
     add_attr(newentry->attrs, "mailbox.answered", tmpstr);
 
-    snprintf(tmpstr, sizeof(tmpstr), "%d", item->flagged);
+    snprintf(tmpstr, sizeof(tmpstr), "%lu", item->flagged);
     add_attr(newentry->attrs, "mailbox.flagged", tmpstr);
 
-    snprintf(tmpstr, sizeof(tmpstr), "%d", item->deleted);
+    snprintf(tmpstr, sizeof(tmpstr), "%lu", item->deleted);
     add_attr(newentry->attrs, "mailbox.deleted", tmpstr);
 
-    snprintf(tmpstr, sizeof(tmpstr), "%d", item->exists);
+    snprintf(tmpstr, sizeof(tmpstr), "%lu", item->exists);
     add_attr(newentry->attrs, "mailbox.total", tmpstr);
 
     /* store data to server */

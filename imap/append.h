@@ -1,5 +1,5 @@
 /* append.h -- Description of messages to be copied 
- $Id: append.h,v 1.15 2000/04/06 15:14:30 leg Exp $
+ $Id: append.h,v 1.16 2000/04/18 01:00:14 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -79,7 +79,9 @@ extern int append_setup(struct appendstate *mailbox, const char *name,
 			long aclcheck, long quotacheck);
 
 extern int append_commit(struct appendstate *mailbox,
-			 int *uidvalidity, int *startuid, int *num);
+			 unsigned long *uidvalidity, 
+			 unsigned long *startuid, 
+			 unsigned long *num);
 extern int append_abort(struct appendstate *mailbox);
 
 /* adds a new mailbox to the stage. creates the stage if *stagep == NULL. */

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.228 2000/04/12 18:41:08 tmartin Exp $ */
+/* $Id: imapd.c,v 1.229 2000/04/18 01:00:15 leg Exp $ */
 
 #include <config.h>
 
@@ -1618,8 +1618,8 @@ cmd_append(char *tag, char *name)
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
     struct appendstate mailbox;
-    unsigned uidvalidity;
-    int firstuid, num;
+    unsigned long uidvalidity;
+    unsigned long firstuid, num;
     const char *parseerr = NULL;
 
     /* Set up the append */
@@ -1777,11 +1777,11 @@ cmd_append(char *tag, char *name)
 		    ? "[TRYCREATE] " : "", error_message(r));
     } else {
 	/* is this a space seperated list or sequence list? */
-	prot_printf(imapd_out, "%s OK [APPENDUID %u", tag, uidvalidity);
+	prot_printf(imapd_out, "%s OK [APPENDUID %lu", tag, uidvalidity);
 	if (num == 1) {
-	    prot_printf(imapd_out, " %u", firstuid);
+	    prot_printf(imapd_out, " %lu", firstuid);
 	} else {
-	    prot_printf(imapd_out, " %u:%u", firstuid, firstuid + num - 1);
+	    prot_printf(imapd_out, " %lu:%lu", firstuid, firstuid + num - 1);
 	}
 	prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
     }

@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.6 2000/04/15 19:20:47 tmartin Exp $
+   $Id: seen_db.c,v 1.7 2000/04/18 01:00:20 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -342,7 +342,7 @@ int seen_unlock(struct seen *seendb)
 int seen_done(void)
 {
     struct seen *seendb = lastseen;
-    int r;
+    int r = 0;
 
     if (seendb) {
 	abortcurrent(seendb);

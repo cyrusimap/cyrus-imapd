@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.101 2000/04/10 18:49:26 wcw Exp $ -->
+<!-- $Id: changes.html,v 1.102 2000/04/18 01:00:12 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -22,7 +22,9 @@ Cyrus Murder: IMAP Aggregator.
 <li> Sieve enhancements: regular expressions, notifications,
 automatically setting IMAP flags.
 
-<li> SNMP (Simple Network Management Protocol) support.
+<li> SNMP (Simple Network Management Protocol) support for monitoring
+usage (e.g. number of users logged in) as well as for instrumenting
+protocol usage (e.g. number of times CREATE has been called).
 
 <li> Perl version of <tt>cyradm</tt> contributed by Brandon Allbery
 (<tt>allbery@ece.cmu.edu</tt>).  Eventually we expect to transition to
@@ -37,6 +39,9 @@ Bugfix in <tt>index_searchcacheheader()</tt>.
 
 <li>The right that controls whether a mailbox may be deleted is now
 "c".  (It used to be "d".)
+
+<li>An additional backend for seen state has been created,
+<tt>seen_db</tt>.  It stores seen state in a per-user database.
 </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.20 </h2>
@@ -965,7 +970,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2000/04/10 18:49:26 $
+last modified: $Date: 2000/04/18 01:00:12 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
