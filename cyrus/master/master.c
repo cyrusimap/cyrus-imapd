@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.17 2003/02/22 14:10:29 ken3 Exp $ */
+/* $Id: master.c,v 1.67.4.18 2003/02/23 22:55:30 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1092,6 +1092,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 	Services[nservices].ready_workers = 0;
 
+ 	Services[nservices].maxfds = maxfds;
 	Services[nservices].maxforkrate = maxforkrate;
 
 	if(!strcmp(Services[nservices].proto, "tcp") ||
