@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.27 2004/09/03 20:12:36 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.28 2004/09/05 19:55:36 ken3 Exp $
  */
 #include <config.h>
 
@@ -1781,7 +1781,7 @@ static void bitpipe(void)
     do {
 	/* Flush any buffered output */
 	prot_flush(popd_out);
-	if (backend) prot_flush(backend->out);
+	prot_flush(backend->out);
 
 	/* check for shutdown file */
 	if (shutdown_file(buf, sizeof(buf))) {
