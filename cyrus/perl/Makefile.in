@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.9 2000/12/18 04:53:42 leg Exp $
+# $Id: Makefile.in,v 1.10 2001/12/10 17:45:43 rjs3 Exp $
 #
 # @configure_input@
 # 
@@ -50,8 +50,11 @@ srcdir = @srcdir@
 VPATH = @srcdir@
 
 INSTALL = @INSTALL@
-SASL_LIB=@LIB_SASL@
-SASL_INC=@SASLFLAGS@
+
+# Note that we use the *dynamic* sasl libraries
+SASL_LIB=@LIB_DYN_SASL@
+SASL_INC=@DYNSASLFLAGS@
+
 PERL=@PERL@
 
 SHELL = /bin/sh
