@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.186 2002/05/06 19:22:16 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.187 2002/05/07 15:06:25 rjs3 Exp $
  */
 
 #include <config.h>
@@ -786,7 +786,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
        user.<x> with no dots after it */
     if (!strncmp(name, "user.", 5) && !strchr(name+5, '.')) {
 	/* Can't DELETE INBOX (your own inbox) */
-	if (!strcmp(name+5, userid)) {
+	if (userid && !strcmp(name+5, userid)) {
 	    r = IMAP_MAILBOX_NOTSUPPORTED;
 	    goto done;
 	}
@@ -809,10 +809,11 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	goto done;
     }
 
-    /* are we reserved ? */
-    if(mbtype & MBTYPE_RESERVE) return IMAP_MAILBOX_RESERVED;
-
     isremote = mbtype & MBTYPE_REMOTE;
+
+    /* are we reserved? (but for remote mailboxes this is okay, since
+     * we don't touch their data files at all) */
+    if(!isremote && (mbtype & MBTYPE_RESERVE)) return IMAP_MAILBOX_RESERVED;
 
     /* check if user has Delete right (we've already excluded non-admins
      * from deleting a user mailbox) */
@@ -875,7 +876,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	}
     }
 
-    if (r || (isremote && !local_only)) goto done;
+    if (r || isremote) goto done;
 
     if (!r) r = mailbox_open_header_path(name, path, acl, 0, &mailbox, 0);
     if (!r) r = mailbox_delete(&mailbox, deletequotaroot);
