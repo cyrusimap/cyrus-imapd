@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.78 2003/05/24 14:50:24 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.79 2003/05/27 00:36:47 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4947,11 +4947,26 @@ int getannotatefetchdata(char *tag,
 
 int getannotatestoredata(char *tag, struct entryattlist **entryatts)
 {
-    int c;
+    int c, islist = 0;
     static struct buf entry, attrib, value;
     struct attvaluelist *attvalues = NULL;
 
     *entryatts = NULL;
+
+    c = prot_getc(imapd_in);
+    if (c == EOF) {
+	prot_printf(imapd_out,
+		    "%s BAD Missing annotation entry\r\n", tag);
+	goto baddata;
+    }
+    else if (c == '(') {
+	/* entry list */
+	islist = 1;
+    }
+    else {
+	/* single entry -- put the char back */
+	prot_ungetc(c, imapd_in);
+    }
 
     do {
 	/* get entry */
@@ -5006,6 +5021,17 @@ int getannotatestoredata(char *tag, struct entryattlist **entryatts)
 	c = prot_getc(imapd_in);
 
     } while (c == ' ');
+
+    if (islist) {
+	if (c != ')') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing close paren in annotation entry list \r\n",
+			tag);
+	    goto baddata;
+	}
+
+	c = prot_getc(imapd_in);
+    }
 
     return c;
 
