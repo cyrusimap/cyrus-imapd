@@ -1,6 +1,6 @@
-<HTML>
+<HTML><HEAD>
 <title>Cyrus IMAP Server:  Overview and Concepts</title>
-<BODY>
+</HEAD><BODY>
 <H1>              Cyrus IMAP Server:  Overview and Concepts</H1>
 
 This document gives an overview of the Cyrus IMAP server.  The
@@ -575,11 +575,24 @@ set-uid to the <tt>cyrus</tt> user and set-gid to the <tt>news</tt> group.
 
 <h3><a name="newssync"><TT>syncnews</TT></a></h3>
 
-[[Removes the entry in mailboxes for removed newsgroups.  Not written yet.]]
+The "<tt>syncnews</tt>" program takes as an argument the name of the
+news active file.  It
+compares the list of IMAP news mailboxes with the news active file.
+News mailboxes which are not listed in the active file are removed.
+Newsgroups listed in the active file but not in the IMAP mailboxes
+file have IMAP mailboxes created.
+
+<p>A newsgroup must have a status of ``y'', ``m'', or ``n'' to be
+considered listed in the active file.
+
+The "<tt>syncnews</tt>" program should be invoked by the
+<tt>cyrus</tt> user at least daily from cron.
 
 <h2><a name="imsp">IMSP Integration</a></h2>
 
-[[defer until implemented]]
+Integration with the Cyrus IMSP server, to allow transparent location
+of mailboxes on multiple servers, is not completed as of version
+1.2beta.
 
 <h2><a name="pop3">POP3 Server</a></h2>
 
@@ -757,10 +770,12 @@ IMAP:
 
 <ul>
 <li><a href="http://andrew2.andrew.cmu.edu/cyrus/cyrus.html">Project Cyrus Home Page</a><br>
-<li><a href="ftp://ds.internic.net/rfc/rfc1730.txt">Internet Message Access Protocol - Version 4</a><br>
+<li><a href="http://www.es.net/pub/rfcs/rfc1730.txt">Internet Message Access Protocol - Version 4</a><br>
 <li><a href="http://www.es.net/pub/rfcs/rfc1732.txt">IMAP4 Compatibility With IMAP2 and IMAP2BIS</a><br>
 <li><a href="ftp://ds.internic.net/internet-drafts/draft-ietf-imap-model-00.txt">Distributed Electronic Mail Models in IMAP4</a><br>
 <li><a href="http://www.cac.washington.edu:1180/pine/user-guide/info/imap.syntax.html">Syntax for IMAP Folders and Collections</a><br>
 </ul>
 
+<P><HR><P>
+<A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
