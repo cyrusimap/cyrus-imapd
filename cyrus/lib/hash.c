@@ -18,6 +18,7 @@
 **  - make hash() a public function
 **  - use xmalloc() and xstrdup()
 **  - cleaned up free_hash_table(), doesn't use enumerate anymore
+**  - added 'rock' to hash_enumerate()
 */
 
 
@@ -251,10 +252,11 @@ void free_hash_table(hash_table *table, void (*func)(void *))
 
 /*
 ** Simply invokes the function given as the second parameter for each
-** node in the table, passing it the key and the associated data.
+** node in the table, passing it the key, the associated data and 'rock'.
 */
 
-void hash_enumerate( hash_table *table, void (*func)(char *, void *))
+void hash_enumerate(hash_table *table, void (*func)(char *, void *, void *),
+		    void *rock)
 {
       unsigned i;
       bucket *temp;
@@ -267,7 +269,7 @@ void hash_enumerate( hash_table *table, void (*func)(char *, void *))
                         NULL != temp;
                         temp = temp -> next)
                   {
-                        func(temp -> key, temp->data);
+                        func(temp -> key, temp->data, rock);
                   }
             }
       }

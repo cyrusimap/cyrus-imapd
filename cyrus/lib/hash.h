@@ -52,14 +52,14 @@ hash_table *construct_hash_table(hash_table *table,size_t size);
 ** associated data.
 */
 
-void *hash_insert(char *key,void *data,struct hash_table *table);
+void *hash_insert(char *key,void *data,hash_table *table);
 
 /*
 ** Returns a pointer to the data associated with a key.  If the key has
 ** not been inserted in the table, returns NULL.
 */
 
-void *hash_lookup(char *key,struct hash_table *table);
+void *hash_lookup(char *key,hash_table *table);
 
 /*
 ** Deletes an entry from the table.  Returns a pointer to the data that
@@ -67,16 +67,17 @@ void *hash_lookup(char *key,struct hash_table *table);
 ** properly.
 */
 
-void *hash_del(char *key,struct hash_table *table);
+void *hash_del(char *key,hash_table *table);
 
 /*
 ** Goes through a hash table and calls the function passed to it
 ** for each node that has been inserted.  The function is passed
-** a pointer to the key, and a pointer to the data associated
-** with it.
+** a pointer to the key, a pointer to the data associated
+** with it and 'rock'.
 */
 
-void hash_enumerate(struct hash_table *table,void (*func)(char *,void *));
+void hash_enumerate(hash_table *table,void (*func)(char *,void *,void *),
+		    void *rock);
 
 /*
 ** Frees a hash table.  For each node that was inserted in the table,
