@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.102 2002/03/05 20:06:40 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.103 2002/03/07 21:59:29 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1021,7 +1021,9 @@ static struct backend *proxyd_findinboxserver(void)
 }
 
 /* proxyd_refer() issues a referral to the client. */
-static void proxyd_refer(char *tag, char *server, char *mailbox)
+static void proxyd_refer(const char *tag,
+			 const char *server,
+			 const char *mailbox)
 {
     char url[MAX_MAILBOX_PATH];
 
