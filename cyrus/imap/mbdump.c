@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.20 2002/07/21 17:20:26 ken3 Exp $
+ * $Id: mbdump.c,v 1.21 2003/01/08 17:40:17 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -175,12 +175,12 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     /* The first member is either a number (if it is a quota root), or NIL
      * (if it isn't) */
     {
-	char buf[MAX_MAILBOX_PATH];
+	char buf[MAX_MAILBOX_PATH+1];
 	struct quota quota;
 
 	quota.fd = -1;
 	quota.root = (char *)mbname; /* xxx */
-	mailbox_hash_quota(buf,quota.root);
+	mailbox_hash_quota(buf,sizeof(buf),quota.root);
 	quota.fd = open(buf, O_RDWR, 0);
 	if(quota.fd == -1) {
 	    prot_printf(pout, "NIL ");
