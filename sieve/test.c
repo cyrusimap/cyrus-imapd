@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.3 1999/10/27 21:20:11 leg Exp $
+ * $Id: test.c,v 1.4 1999/12/02 21:07:12 leg Exp $
  *
  * usage: "test message < script"
  */
@@ -203,7 +203,7 @@ void fill_cache(message_data_t *m)
 		/* increase the size */
 		m->cache[cl] = (header_t *)
 		    realloc(m->cache[cl],sizeof(header_t) +
-			    (8 + m->cache[cl]->ncontents * sizeof(char *)));
+			    ((8 + m->cache[cl]->ncontents) * sizeof(char *)));
 		if (m->cache[cl] == NULL) {
 		    fprintf(stderr, "realloc() returned NULL\n");
 		    exit(1);
