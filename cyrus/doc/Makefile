@@ -49,6 +49,9 @@ changes: html/changes.html htmlstrip
 bugs: html/bugs.html htmlstrip
 	./htmlstrip html/bugs.html > bugs
 
+anoncvs: html/anoncvs.html htmlstrip
+	./htmlstrip html/anoncvs.html > anoncvs
+
 clean:
 	rm -f *.o *~ Makefile.bak htmlstrip
 
