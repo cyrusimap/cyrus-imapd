@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.52 2003/03/28 21:48:38 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.53 2003/04/01 19:16:33 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -700,7 +700,7 @@ static int verify_user(const char *user,
     /* check to see if mailbox exists */
     if (!strncmp(user, BB, sl) && user[sl] == '+') {
 	/* special shared folder address */
-	strcpy(buf, user + sl + 1);
+	strlcpy(buf, user + sl + 1, sizeof(buf));
     } else {			/* ordinary user */
 	int l;
 	char *plus = strchr(user, '+');
