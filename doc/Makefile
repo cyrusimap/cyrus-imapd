@@ -27,7 +27,7 @@
 
 all: htmlstrip docs clean
 
-DOCS= README install overview changes bugs
+DOCS= README install overview changes bugs anoncvs mailing-list
 
 docs: $(DOCS)
 
@@ -51,6 +51,9 @@ bugs: html/bugs.html htmlstrip
 
 anoncvs: html/anoncvs.html htmlstrip
 	./htmlstrip html/anoncvs.html > anoncvs
+
+mailinglist: html/mailing-list.html htmlstrip
+	./htmlstrip html/mailing-list.html > mailing-list
 
 clean:
 	rm -f *.o *~ Makefile.bak htmlstrip
