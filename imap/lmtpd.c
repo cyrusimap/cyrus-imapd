@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.85 2002/02/21 15:20:05 ken3 Exp $
+ * $Id: lmtpd.c,v 1.86 2002/02/25 17:18:06 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -324,6 +324,7 @@ int service_main(int argc, char **argv, char **envp)
     /* free session state */
     if (deliver_in) prot_free(deliver_in);
     if (deliver_out) prot_free(deliver_out);
+    deliver_in = deliver_out = NULL;
     close(0);
     close(1);
     close(2);
