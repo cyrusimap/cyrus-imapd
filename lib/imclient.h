@@ -1,5 +1,5 @@
 /* imclient.h -- Streaming IMxP client library
- $Id: imclient.h,v 1.15 1999/07/02 01:06:19 leg Exp $
+ $Id: imclient.h,v 1.16 1999/11/05 01:00:40 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -79,5 +79,16 @@ extern int imclient_authenticate(struct imclient *imclient,
 				 char *user, 
 				 int minssf, 
 				 int maxssf);
+
+
+#ifdef HAVE_SSL
+extern int imclient_starttls(struct imclient *imclient,
+			     int verifydepth,
+			     char *var_tls_cert_file, 
+			     char *var_tls_key_file,
+			     int *layer);
+#endif /* HAVE_SSL */
+
+
 
 #endif /* INCLUDED_IMCLIENT_H */

@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.39 1999/10/30 23:14:53 leg Exp $
+ $Id: imclient.c,v 1.40 1999/11/05 01:00:38 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -46,7 +46,15 @@
 
 #include <sasl.h>
 
-/*#include "sasl.h"*/
+#ifdef HAVE_SSL
+#include <openssl/lhash.h>
+#include <openssl/bn.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
+#include <openssl/ssl.h>
+#endif /* HAVE_SSL */
+
 #include "exitcodes.h"
 #include "xmalloc.h"
 #include "imparse.h"
@@ -119,6 +127,12 @@ struct imclient {
 
   sasl_conn_t *saslconn;
   int saslcompleted;
+
+#ifdef HAVE_SSL
+  SSL_CTX *tls_ctx;
+  SSL *tls_conn;
+  int tls_on; /* wheather we are under a layer or not */
+#endif /* HAVE_SSL */
 };
 
 /*
@@ -157,6 +171,19 @@ static void imclient_writebase64 P((struct imclient *imclient,
 static void imclient_eof P((struct imclient *imclient));
 static int imclient_decodebase64 P((char *input));
 
+/* callbacks we support */
+static sasl_callback_t callbacks[] = {
+  {
+    SASL_CB_USER, NULL, NULL
+  }, {
+    SASL_CB_AUTHNAME, NULL, NULL
+  }, {
+    SASL_CB_PASS, NULL, NULL    
+  }, {
+    SASL_CB_LIST_END, NULL, NULL
+  }
+};
+
 /*
  * Connect to server on 'host'.  Optional 'port' specifies the service
  * to use.  On success, returns zero and fills in the pointer pointed
@@ -174,6 +201,7 @@ const char *port;
     struct servent *sp;
     struct sockaddr_in addr;
     static struct imclient zeroimclient;
+    int saslresult;
 
     hp = gethostbyname(host);
     if (!hp) return -1;
@@ -197,7 +225,7 @@ const char *port;
     if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
 	return errno;
     }
-    nonblock(s, 1);
+    /*    nonblock(s, 1); */
     *imclient = (struct imclient *)xmalloc(sizeof(struct imclient));
     **imclient = zeroimclient;
     (*imclient)->fd = s;
@@ -213,6 +241,25 @@ const char *port;
 		 "BAD", CALLBACK_NOLITERAL, (imclient_proc_t *)0, (void *)0,
 		 "BYE", CALLBACK_NOLITERAL, (imclient_proc_t *)0, (void *)0,
 		 (char *)0);
+
+#ifdef HAVE_SSL
+    (*imclient)->tls_ctx=NULL;
+    (*imclient)->tls_conn=NULL;
+    (*imclient)->tls_on=0;
+#endif /* HAVE_SSL */
+
+
+  /* attempt to start sasl */
+  saslresult=sasl_client_init(callbacks);
+  if (saslresult!=SASL_OK) return 1;
+
+  /* client new connection */
+  saslresult=sasl_client_new("imap", /* xxx ideally this should be configurable */
+			     (*imclient)->servername,
+			     NULL,
+			     0,
+			     &((*imclient)->saslconn));
+  if (saslresult!=SASL_OK) return 1;
 
     return 0;
 }
@@ -684,6 +731,7 @@ int len;
 	    if (imclient->readytag) {
 		imclient->readytag = 0;
 		imclient->readytxt = p+2;
+		*(endreply-1) = '\0';
 	    }
 	    else {
 		/* XXX Got junk from the server */
@@ -916,10 +964,19 @@ struct imclient *imclient;
 	      /* XXX encoding error */
 	      n=0;
 	  }
-	  
+
+#ifdef HAVE_SSL
+	  if (imclient->tls_on==1)
+	  {
+	    n = SSL_write(imclient->tls_conn, cryptptr, cryptlen);
+	  } else {
+	    n = write(imclient->fd, cryptptr, cryptlen);
+	  }
+#else  /* HAVE_SSL */
 	  n = write(imclient->fd, cryptptr,
 		    cryptlen);
-	  
+#endif /* HAVE_SSL */
+	  	  
 	  if (n > 0) {	    
 	    free(cryptptr);
 	    imclient->outstart += writelen;
@@ -932,8 +989,21 @@ struct imclient *imclient;
 
 	}
 	else if (writelen) {
-	    /* No protection mechanism, just write the plaintext */
+
+	  /* No protection mechanism, just write the plaintext */
+
+#ifdef HAVE_SSL
+	  if (imclient->tls_on==1)
+	  {
+	    n = SSL_write(imclient->tls_conn, imclient->outstart, writelen);
+	  } else {
 	    n = write(imclient->fd, imclient->outstart, writelen);
+	  }
+#else  /* HAVE_SSL */
+	  n = write(imclient->fd, imclient->outstart, writelen);
+#endif /* HAVE_SSL */
+
+
 	    if (n > 0) {
 		imclient->outstart += n;
 		return;
@@ -941,15 +1011,31 @@ struct imclient *imclient;
 	    /* XXX Also EPIPE & the like? */
 	}
 
-	n = read(imclient->fd, buf, sizeof(buf));
-	if (n >= 0) {
+	if (FD_ISSET(imclient->fd, &rfds))
+	{
+#ifdef HAVE_SSL	  
+	  /* just do a SSL read instead if we're under a tls layer */
+	  if (imclient->tls_on==1)
+	  {
+	    n = SSL_read(imclient->tls_conn, buf, sizeof(buf));
+
+	  } else {
+	    n = read(imclient->fd, buf, sizeof(buf));
+	  }
+
+#else  /* HAVE_SSL */
+	  n = read(imclient->fd, buf, sizeof(buf));
+#endif /* HAVE_SSL */
+
+	  if (n >= 0) {
 	    if (n == 0) {
-		imclient_eof(imclient);
+	      imclient_eof(imclient);
 	    }
 	    else {
-		imclient_input(imclient, buf, n);
+	      imclient_input(imclient, buf, n);
 	    }
 	    return;
+	  }
 	}
 
 	FD_ZERO(&rfds);
@@ -986,7 +1072,23 @@ struct imclient_reply *reply;
     else result->replytype = replytype_bad;
 }
 
+/* Command completion for starttls */
+static void 
+tlsresult(imclient, rock, reply)
+struct imclient *imclient;
+void *rock;
+struct imclient_reply *reply;
+{
+    struct authresult *result = (struct authresult *)rock;
 
+    if (!strcmp(reply->keyword, "OK")) {
+      result->replytype = replytype_ok;
+    }
+    else if (!strcmp(reply->keyword, "NO")) {
+	result->replytype = replytype_no;
+    }
+    else result->replytype = replytype_bad;
+}
 
 
 static sasl_security_properties_t *make_secprops(int min,int max)
@@ -1040,18 +1142,7 @@ void fillin_interactions(sasl_interact_t *tlist, char *user)
 
 }
 
-/* callbacks we support */
-static sasl_callback_t callbacks[] = {
-  {
-    SASL_CB_USER, NULL, NULL
-  }, {
-    SASL_CB_AUTHNAME, NULL, NULL
-  }, {
-    SASL_CB_PASS, NULL, NULL    
-  }, {
-    SASL_CB_LIST_END, NULL, NULL
-  }
-};
+
 
 /*
  * Params:
@@ -1082,17 +1173,7 @@ int imclient_authenticate(struct imclient *imclient,
   const char *mechusing;
   struct authresult result;
 
-  /* attempt to start sasl */
-  saslresult=sasl_client_init(callbacks);
-  if (saslresult!=SASL_OK) return 1;
 
-  /* client new connection */
-  saslresult=sasl_client_new(service,
-			     imclient->servername,
-			     NULL,
-			     0,
-			     &(imclient->saslconn));
-  if (saslresult!=SASL_OK) return 1;
 
   /*******
    * Now set the SASL properties
@@ -1238,9 +1319,7 @@ static const char index_64[256] = {
  * Decode in-place the base64 data in 'input'.  Returns the length
  * of the decoded data, or -1 if there was an error.
  */
-static int 
-imclient_decodebase64(input)
-char *input;
+static int imclient_decodebase64(char *input)
 {
     int len = 0;
     unsigned char *output = (unsigned char *)input;
@@ -1323,3 +1402,470 @@ unsigned len;
     imclient_write(imclient, buf, buflen);
 }
 
+
+/*************** All these functions help do the starttls; these are copied from imtest.c ********/
+#ifdef HAVE_SSL
+
+static int verify_depth;
+static int verify_error = X509_V_OK;
+static int do_dump = 1;
+
+#define CCERT_BUFSIZ 256
+static char peer_subject[CCERT_BUFSIZ];
+static char peer_issuer[CCERT_BUFSIZ];
+static char peer_CN[CCERT_BUFSIZ];
+static char issuer_CN[CCERT_BUFSIZ];
+static unsigned char md[EVP_MAX_MD_SIZE];
+static char fingerprint[EVP_MAX_MD_SIZE * 3];
+
+char   *tls_peer_CN = "";
+char   *tls_issuer_CN = NULL;
+
+char   *tls_protocol = NULL;
+const char   *tls_cipher_name = NULL;
+int	tls_cipher_usebits = 0;
+int	tls_cipher_algbits = 0;
+
+/*
+  * Set up the cert things on the server side. We do need both the
+  * private key (in key_file) and the cert (in cert_file).
+  * Both files may be identical.
+  *
+  * This function is taken from OpenSSL apps/s_cb.c
+  */
+
+static int set_cert_stuff(SSL_CTX * ctx, char *cert_file, char *key_file)
+{
+    if (cert_file != NULL) {
+	if (SSL_CTX_use_certificate_file(ctx, cert_file,
+					 SSL_FILETYPE_PEM) <= 0) {
+	  printf("unable to get certificate from '%s'\n", cert_file);
+	  return (0);
+	}
+	if (key_file == NULL)
+	    key_file = cert_file;
+	if (SSL_CTX_use_PrivateKey_file(ctx, key_file,
+					SSL_FILETYPE_PEM) <= 0) {
+	  printf("unable to get private key from '%s'\n", key_file);
+	  return (0);
+	}
+	/* Now we know that a key and cert have been set against
+         * the SSL context */
+	if (!SSL_CTX_check_private_key(ctx)) {
+	  printf("Private key does not match the certificate public key\n");
+	  return (0);
+	}
+    }
+    return (1);
+}
+
+/* taken from OpenSSL apps/s_cb.c */
+
+static int verify_callback(int ok, X509_STORE_CTX * ctx)
+{
+    char    buf[256];
+    X509   *err_cert;
+    int     err;
+    int     depth;
+
+    err_cert = X509_STORE_CTX_get_current_cert(ctx);
+    err = X509_STORE_CTX_get_error(ctx);
+    depth = X509_STORE_CTX_get_error_depth(ctx);
+
+    X509_NAME_oneline(X509_get_subject_name(err_cert), buf, 256);
+
+    /*    if (verbose==1)
+	  printf("Peer cert verify depth=%d %s\n", depth, buf);*/
+
+    if (!ok) {
+      printf("verify error:num=%d:%s\n", err,
+	     X509_verify_cert_error_string(err));
+	if (verify_depth >= depth) {
+	    ok = 1;
+	    verify_error = X509_V_OK;
+	} else {
+	    ok = 0;
+	    verify_error = X509_V_ERR_CERT_CHAIN_TOO_LONG;
+	}
+    }
+    switch (ctx->error) {
+    case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
+	X509_NAME_oneline(X509_get_issuer_name(ctx->current_cert), buf, 256);
+	printf("issuer= %s\n", buf);
+	break;
+    case X509_V_ERR_CERT_NOT_YET_VALID:
+    case X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD:
+      printf("cert not yet valid\n");
+      break;
+    case X509_V_ERR_CERT_HAS_EXPIRED:
+    case X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD:
+      printf("cert has expired\n");
+      break;
+    }
+
+    /*    if (verbose==1)
+	  printf("verify return:%d\n", ok);*/
+
+    return (ok);
+}
+
+
+/* taken from OpenSSL apps/s_cb.c */
+
+static RSA *tmp_rsa_cb(SSL * s, int export, int keylength)
+{
+    static RSA *rsa_tmp = NULL;
+
+    if (rsa_tmp == NULL) {
+	rsa_tmp = RSA_generate_key(keylength, RSA_F4, NULL, NULL);
+    }
+    return (rsa_tmp);
+}
+
+/* taken from OpenSSL apps/s_cb.c 
+ * tim - this seems to just be giving logging messages
+ */
+
+static void apps_ssl_info_callback(SSL * s, int where, int ret)
+{
+    char   *str;
+    int     w;
+
+    /*    return; */ /* only useful for debugging */
+
+    w = where & ~SSL_ST_MASK;
+
+    if (w & SSL_ST_CONNECT)
+	str = "SSL_connect";
+    else if (w & SSL_ST_ACCEPT)
+	str = "SSL_accept";
+    else
+	str = "undefined";
+
+    if (where & SSL_CB_LOOP) {
+      printf("%s:%s\n", str, SSL_state_string_long(s));
+    } else if (where & SSL_CB_ALERT) {
+	str = (where & SSL_CB_READ) ? "read" : "write";
+	if ((ret & 0xff) != SSL3_AD_CLOSE_NOTIFY)
+	  printf("SSL3 alert %s:%s:%s\n", str,
+		   SSL_alert_type_string_long(ret),
+		   SSL_alert_desc_string_long(ret));
+    } else if (where & SSL_CB_EXIT) {
+	if (ret == 0)
+	    printf("%s:failed in %s\n",
+		     str, SSL_state_string_long(s));
+	else if (ret < 0) {
+	    printf("%s:error in %s %i\n",
+		     str, SSL_state_string_long(s),ret);
+	}
+    }
+}
+
+
+char *var_tls_CAfile="";
+char *var_tls_CApath="";
+ /*
+  * This is the setup routine for the SSL client. 
+  *
+  * The skeleton of this function is taken from OpenSSL apps/s_client.c.
+  */
+
+static int tls_init_clientengine(struct imclient *imclient,
+				 int verifydepth, char *var_tls_cert_file, char *var_tls_key_file)
+{
+    int     off = 0;
+    int     verify_flags = SSL_VERIFY_NONE;
+    char   *CApath;
+    char   *CAfile;
+    char   *c_cert_file;
+    char   *c_key_file;
+
+
+    SSL_load_error_strings();
+    SSLeay_add_ssl_algorithms();
+
+    imclient->tls_ctx = SSL_CTX_new(SSLv23_client_method());
+    if (imclient->tls_ctx == NULL) {
+	return -1;
+    };
+
+    off |= SSL_OP_ALL;		/* Work around all known bugs */
+    SSL_CTX_set_options(imclient->tls_ctx, off);
+    
+    /* debugging   SSL_CTX_set_info_callback(imclient->tls_ctx, apps_ssl_info_callback); */
+
+    if (strlen(var_tls_CAfile) == 0)
+	CAfile = NULL;
+    else
+	CAfile = var_tls_CAfile;
+    if (strlen(var_tls_CApath) == 0)
+	CApath = NULL;
+    else
+	CApath = var_tls_CApath;
+
+    if (CAfile || CApath)
+	if ((!SSL_CTX_load_verify_locations(imclient->tls_ctx, CAfile, CApath)) ||
+	    (!SSL_CTX_set_default_verify_paths(imclient->tls_ctx))) {
+	    printf("TLS engine: cannot load CA data\n");
+	    return -1;
+	}
+    if (strlen(var_tls_cert_file) == 0)
+	c_cert_file = NULL;
+    else
+	c_cert_file = var_tls_cert_file;
+    if (strlen(var_tls_key_file) == 0)
+	c_key_file = NULL;
+    else
+	c_key_file = var_tls_key_file;
+
+    if (c_cert_file || c_key_file)
+	if (!set_cert_stuff(imclient->tls_ctx, c_cert_file, c_key_file)) {
+	    printf("TLS engine: cannot load cert/key data\n");
+	    return -1;
+	}
+    SSL_CTX_set_tmp_rsa_callback(imclient->tls_ctx, tmp_rsa_cb);
+
+    verify_depth = verifydepth;
+    SSL_CTX_set_verify(imclient->tls_ctx, verify_flags, verify_callback);
+
+    return 0;
+}
+
+/*
+ * taken from OpenSSL crypto/bio/b_dump.c, modified to save a lot of strcpy
+ * and strcat by Matti Aarnio.
+ */
+
+#define TRUNCATE
+#define DUMP_WIDTH	16
+
+static int tls_dump(const char *s, int len)
+{
+    int     ret = 0;
+    char    buf[160 + 1];
+    char    *ss;
+    int     i;
+    int     j;
+    int     rows;
+    int     trunc;
+    unsigned char ch;
+
+    trunc = 0;
+
+#ifdef TRUNCATE
+    for (; (len > 0) && ((s[len - 1] == ' ') || (s[len - 1] == '\0')); len--)
+	trunc++;
+#endif
+
+    rows = (len / DUMP_WIDTH);
+    if ((rows * DUMP_WIDTH) < len)
+	rows++;
+
+    for (i = 0; i < rows; i++) {
+	buf[0] = '\0';				/* start with empty string */
+	ss = buf;
+
+	sprintf(ss, "%04x ", i * DUMP_WIDTH);
+	ss += strlen(ss);
+	for (j = 0; j < DUMP_WIDTH; j++) {
+	    if (((i * DUMP_WIDTH) + j) >= len) {
+		strcpy(ss, "   ");
+	    } else {
+		ch = ((unsigned char) *((char *) (s) + i * DUMP_WIDTH + j))
+		    & 0xff;
+		sprintf(ss, "%02x[%c]%c", ch, ch, j == 7 ? '|' : ' ');
+		ss += 6;
+	    }
+	}
+	ss += strlen(ss);
+	*ss+= ' ';
+	for (j = 0; j < DUMP_WIDTH; j++) {
+	    if (((i * DUMP_WIDTH) + j) >= len)
+		break;
+	    ch = ((unsigned char) *((char *) (s) + i * DUMP_WIDTH + j)) & 0xff;
+	    *ss+= (((ch >= ' ') && (ch <= '~')) ? ch : '.');
+	    if (j == 7) *ss+= ' ';
+	}
+	*ss = 0;
+	/* 
+	 * if this is the last call then update the ddt_dump thing so that
+         * we will move the selection point in the debug window
+         */
+	printf("%s\n", buf);
+	ret += strlen(buf);
+    }
+#ifdef TRUNCATE
+    if (trunc > 0) {
+	sprintf(buf, "%04x - <SPACES/NULS>\n", len+ trunc);
+	printf("%s\n", buf);
+	ret += strlen(buf);
+    }
+#endif
+    return (ret);
+}
+
+
+/* taken from OpenSSL apps/s_cb.c */
+
+static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
+			long argl, long ret)
+{
+    if (!do_dump)
+	return (ret);
+
+    if (cmd == (BIO_CB_READ | BIO_CB_RETURN)) {
+	printf("read from %08X [%08lX] (%d bytes => %ld (0x%X))\n", bio, argp,
+		 argi, ret, ret);
+	tls_dump(argp, (int) ret);
+	return (ret);
+    } else if (cmd == (BIO_CB_WRITE | BIO_CB_RETURN)) {
+	printf("write to %08X [%08lX] (%d bytes => %ld (0x%X))\n", bio, argp,
+		 argi, ret, ret);
+	tls_dump(argp, (int) ret);
+    }
+    return (ret);
+}
+
+int tls_start_clienttls(struct imclient *imclient,
+			int *layer, char **authid, int fd)
+{
+    int     sts;
+    int     j;
+    unsigned int n;
+    SSL_SESSION *session;
+    SSL_CIPHER *cipher;
+    X509   *peer;
+
+    if (imclient->tls_conn == NULL) {
+	imclient->tls_conn = (SSL *) SSL_new(imclient->tls_ctx);
+    }
+    if (imclient->tls_conn == NULL) {
+	printf("Could not allocate 'con' with SSL_new()\n");
+	return -1;
+    }
+    SSL_clear(imclient->tls_conn);
+
+    if (!SSL_set_fd(imclient->tls_conn, fd)) {
+      printf("SSL_set_fd failed\n");
+      return -1;
+    }
+
+    /*SSL_set_read_ahead(imclient->tls_conn, 1);*/
+
+    /*
+     * This is the actual handshake routine. It will do all the negotiations
+     * and will check the client cert etc.
+     */
+    SSL_set_connect_state(imclient->tls_conn);
+
+
+    /*
+     * We do have an SSL_set_fd() and now suddenly a BIO_ routine is called?
+     * Well there is a BIO below the SSL routines that is automatically
+     * created for us, so we can use it for debugging purposes.
+     */
+    /*    if (verbose==1) */
+    /*    BIO_set_callback(SSL_get_rbio(imclient->tls_conn), bio_dump_cb);*/
+
+    /* Dump the negotiation for loglevels 3 and 4 */
+
+    if ((sts = SSL_connect(imclient->tls_conn)) <= 0) {
+	printf("SSL_connect error %d\n", sts);
+	session = SSL_get_session(imclient->tls_conn);
+	if (session) {
+	    SSL_CTX_remove_session(imclient->tls_ctx, session);
+	    printf("SSL session removed\n");
+	}
+	if (imclient->tls_conn!=NULL)
+	    SSL_free(imclient->tls_conn);
+	imclient->tls_conn = NULL;
+	return -1;
+    }
+
+    /*
+     * Lets see, whether a peer certificate is availabe and what is
+     * the actual information. We want to save it for later use.
+     */
+    peer = SSL_get_peer_certificate(imclient->tls_conn);
+    if (peer != NULL) {
+	X509_NAME_get_text_by_NID(X509_get_subject_name(peer),
+			  NID_commonName, peer_CN, CCERT_BUFSIZ);
+	tls_peer_CN = peer_CN;
+	X509_NAME_get_text_by_NID(X509_get_issuer_name(peer),
+			  NID_commonName, issuer_CN, CCERT_BUFSIZ);
+	/*	if (verbose==1)
+		printf("subject_CN=%s, issuer_CN=%s\n", peer_CN, issuer_CN);*/
+	tls_issuer_CN = issuer_CN;
+
+    }
+    tls_protocol = SSL_get_version(imclient->tls_conn);
+    cipher = SSL_get_current_cipher(imclient->tls_conn);
+    tls_cipher_name = SSL_CIPHER_get_name(cipher);
+    tls_cipher_usebits = SSL_CIPHER_get_bits(cipher,
+						 &tls_cipher_algbits);
+
+    if (layer!=NULL)
+      *layer = tls_cipher_usebits;
+
+    if (authid!=NULL)
+      *authid = tls_peer_CN;
+
+    /*    printf("TLS connection established: %s with cipher %s (%d/%d bits)\n",
+	   tls_protocol, tls_cipher_name,
+	   tls_cipher_usebits, tls_cipher_algbits);*/
+    return 0;
+}
+
+int imclient_starttls(struct imclient *imclient,
+			     int verifydepth,
+			     char *var_tls_cert_file, 
+			     char *var_tls_key_file,
+			     int *layer)
+{
+  int result;
+  struct authresult theresult;
+
+  sasl_external_properties_t externalprop;
+
+  imclient_send(imclient, tlsresult, (void *)&theresult,
+		"STARTTLS");
+
+  /* Wait for ready response or command completion */
+  imclient->readytag = imclient->gensym;
+  while (imclient->readytag) {
+    imclient_processoneevent(imclient);
+  }
+
+  result=tls_init_clientengine(imclient, 10, var_tls_cert_file, var_tls_key_file);
+  if (result!=0)
+  {
+    printf("Start TLS engine failed\n");
+  } else {
+    result=tls_start_clienttls(imclient, &externalprop.ssf, &externalprop.auth_id, imclient->fd);
+    
+    if (result!=0)
+      printf("TLS negotiation failed!\n");
+  }
+
+  /* turn non-blocking i/o back on */
+
+
+  /* TLS negotiation suceeded */
+
+  imclient->tls_on = 1;
+
+  externalprop.auth_id="foo";
+
+  /* tell SASL about the negotiated layer */
+  result=sasl_setprop(imclient->saslconn,
+		      SASL_SSF_EXTERNAL,
+		      &externalprop);
+  
+  if (result!=SASL_OK) return 1;
+
+  
+  /* ask for the capabilities again */
+
+  return 0;
+}
+#endif /* HAVE_SSL */

@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.42 1999/09/30 07:32:26 leg Exp $
+ * $Id: prot.c,v 1.43 1999/11/05 01:00:40 tmartin Exp $
  */
 
 #include <stdio.h>
@@ -43,6 +43,8 @@
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
+
+#define HAVE_SSL 1
 
 #include "prot.h"
 #include "xmalloc.h"
@@ -77,6 +79,11 @@ int write;
     newstream->readcallback_rock = 0;
     newstream->conn = NULL;
     newstream->saslssf=0;
+
+#ifdef HAVE_SSL
+    newstream->tls_conn=NULL;
+#endif /* HAVE_SSL */
+
     return newstream;
 }
 
@@ -113,6 +120,21 @@ time_t *ptr;
     time(s->log_timeptr);
     return 0;
 }
+
+#ifdef HAVE_SSL
+
+/*
+ * Turn on TLS for this connection
+ */
+
+int prot_settls(struct protstream *s, SSL *tlsconn)
+{
+  s->tls_conn = tlsconn;
+
+  return 0;
+}
+
+#endif /* HAVE_SSL */
 
 /*
  * Turn on SASL for this connection
@@ -287,7 +309,22 @@ struct protstream *s;
 	}
 	
 	do {
+#ifdef HAVE_SSL	  
+
+	  /* just do a SSL read instead if we're under a tls layer */
+	  if (s->tls_conn!=NULL)
+	  {
+	    n = SSL_read(s->tls_conn, s->buf, PROT_BUFSIZE);
+	  } else {
 	    n = read(s->fd, s->buf, PROT_BUFSIZE);
+	  }
+
+#else  /* HAVE_SSL */
+	  n = read(s->fd, s->buf, PROT_BUFSIZE);
+#endif /* HAVE_SSL */
+
+
+	    
 	} while (n == -1 && errno == EINTR);
 	
 	
@@ -433,7 +470,16 @@ struct protstream *s;
 
     /* Write out the data */
     do {
+#ifdef HAVE_SSL
+      if (s->tls_conn!=NULL)
+      {
+        n = SSL_write(s->tls_conn, ptr, left);
+      } else {
 	n = write(s->fd, ptr, left);
+      }
+#else  /* HAVE_SSL */
+	n = write(s->fd, ptr, left);
+#endif /* HAVE_SSL */
 	if (n == -1 && errno != EINTR) {
 	    s->error = strerror(errno);
 	    if (s->log_timeptr) time(s->log_timeptr);
