@@ -3,7 +3,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
 # script to upgrade from versions of imapd previous to 1.6.2
 # make sure you run it as the cyrus user
-# $Id: dohash,v 1.5 1999/10/12 03:17:16 leg Exp $
+# $Id: dohash,v 1.6 2000/01/04 20:52:22 leg Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -156,7 +156,7 @@ if ($yn =~ /^y/) {
 }
 
 # *** now for each data partition
-while ($hashispool && ($part = shift @parts)) {
+while ($part = shift @parts) {
     if ($interactive) {
 	print "upgrade $part? ";
 	$yn = <STDIN>;
@@ -164,62 +164,68 @@ while ($hashispool && ($part = shift @parts)) {
     if ($yn =~ /^y/) {
 	print "upgrading data partition $part...";
 	chdir $part or die "couldn't chdir to $part";
-    
-	foreach $i ("a".."z") {
-	    mkdir (".$i", 0755) or ouch "couldn't create .$i";
-	}
-	
-	opendir PART, ".";
-	while ($dir = readdir PART) {
-	    if ($dir =~ /^\./s) { next; }
-	    if ($dir eq "lost+found") { next; }
+
+        if ($hashispool) {
+	    foreach $i ("a".."z") {
+		mkdir (".$i", 0755) or ouch "couldn't create .$i";
+	    }
 	    
-	    # process $dir
-	    print "$dir ";
-	    opendir DIR, $dir;
-	    $ismbox = 0;
-	    while ($sub = readdir DIR) {
-		if ($sub =~ /^\./s) { next; }
-		# if there's a dot in this, we're a mbox and this isn't a child
-		if ($sub =~ /(.*)\.(.*)/) { $ismbox = 1; next; }
+	    opendir PART, ".";
+	    while ($dir = readdir PART) {
+		if ($dir =~ /^\./s) { next; }
+		if ($dir eq "lost+found") { next; }
 		
-		if ($sub =~ /^(.).*$/s) {
+		# process $dir
+		print "$dir ";
+		opendir DIR, $dir;
+		$ismbox = 0;
+		while ($sub = readdir DIR) {
+		    if ($sub =~ /^\./s) { next; }
+		    # if there's a dot in this, we're a mbox and 
+		    # this isn't a child
+		    if ($sub =~ /(.*)\.(.*)/) { $ismbox = 1; next; }
+		    
+		    if ($sub =~ /^(.).*$/s) {
+			$h = lc($1);
+			if (!($h =~ /[a-z]/)) {
+			    $h = 'q';
+			}
+			mkdir (".$h/$dir", 0755); # might already be there
+			rename("$dir/$sub", ".$h/$dir/$sub") or
+			    ouch "couldn't move $dir/$sub into $h";
+		    } else {
+			print "weird mailbox '$dir/$sub'?\n";
+		    }
+		}
+		closedir DIR;
+		# if $ismbox is set, then $dir is a mailbox of it's own right
+		if ($ismbox && $dir =~ /^(.).*/s) {
 		    $h = lc($1);
 		    if (!($h =~ /[a-z]/)) {
 			$h = 'q';
 		    }
 		    mkdir (".$h/$dir", 0755); # might already be there
-		    rename("$dir/$sub", ".$h/$dir/$sub") or
-			ouch "couldn't move $dir/$sub into $h";
-		} else {
-		    print "weird mailbox '$dir/$sub'?\n";
+		    opendir DIR, $dir;
+		    while ($sub = readdir DIR) {
+			if ($sub =~ /^\./s) { next; }
+			rename("$dir/$sub", ".$h/$dir/$sub") or 
+			    ouch "couldn't move $dir into $h";
+		    }
+		    closedir DIR;
 		}
-	    }
-	    closedir DIR;
-	    # if $ismbox is set, then $dir is a mailbox of it's own right
-	    if ($ismbox && $dir =~ /^(.).*/s) {
-		$h = lc($1);
-		if (!($h =~ /[a-z]/)) {
-		    $h = 'q';
-		}
-		mkdir (".$h/$dir", 0755); # might already be there
-		opendir DIR, $dir;
-		while ($sub = readdir DIR) {
-		    if ($sub =~ /^\./s) { next; }
-		    rename("$dir/$sub", ".$h/$dir/$sub") or 
-			ouch "couldn't move $dir into $h";
-		}
-		closedir DIR;
-	    }
 	    
-	    rmdir $dir or print "\ncouldn't remove '$dir'??\n";
+		rmdir $dir or print "\ncouldn't remove '$dir'??\n";
+	    }
+	    closedir PART;
+	    
+	    foreach $i ("a".."z") {
+		rename (".$i", $i) or ouch "couldn't rename .$i to $i";
+	    }
 	}
-	closedir PART;
-	
-	foreach $i ("a".."z") {
-	    rename (".$i", $i) or ouch "couldn't rename .$i to $i";
-	}
-	
+
+	chdir $part or die "couldn't chdir to $part";
+	mkdir "stage.", 0755;
+    
 	print "done\n";
     }
 }

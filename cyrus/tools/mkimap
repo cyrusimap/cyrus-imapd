@@ -1,7 +1,7 @@
 #!/bin/sh
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: mkimap,v 1.4 1999/10/12 03:17:17 leg Exp $
+# $Id: mkimap,v 1.5 2000/01/04 20:52:22 leg Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -88,12 +88,13 @@ if (!$nosievedir) {
 }
 
 $flag = 0;
-while ($hashispool && ($part = shift @parts)) {
+while ($part = shift @parts) {
     $flag = 1;
 
     print "creating $part...\n";
     mkdir $part, 0755;
     chdir $part or die "couldn't change to partition $part";
+    mkdir "stage.", 0755;
     if ($hashispool) { foreach $i ("a".."z") { mkdir $i, 0755; } }
 }
 
