@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.93 2004/02/04 21:46:39 rjs3 Exp $ */
+/* $Id: master.c,v 1.94 2004/02/11 19:25:23 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -912,15 +912,12 @@ void init_janitor(void)
     schedule_event(evt);
 }
 
-void child_janitor(void)
+void child_janitor(time_t now)
 {
     int i;
     struct centry **p;
     struct centry *c;
     struct timeval rightnow;
-    time_t now;
-    
-    now = time(NULL);
     
     /* Estimate the number of entries to clean up in this sweep */
     gettimeofday(&rightnow, NULL);
@@ -1654,6 +1651,8 @@ int main(int argc, char **argv)
     fd_set rfds;
     char *p = NULL;
 
+    time_t now;
+
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
     while ((opt = getopt(argc, argv, "C:M:p:l:Ddj:")) != EOF) {
@@ -1912,10 +1911,10 @@ int main(int argc, char **argv)
     /* ok, we're going to start spawning like mad now */
     syslog(LOG_NOTICE, "ready for work");
 
+    now = time(NULL);
     for (;;) {
 	int r, i, maxfd;
 	struct timeval tv, *tvptr;
-	time_t now = time(NULL);
 	struct notify_message msg;
 #if HAVE_UCDSNMP
 	int blockp = 0;
@@ -2048,6 +2047,7 @@ int main(int argc, char **argv)
 		}
 	    }
 	}
-	child_janitor();
+	now = time(NULL);
+	child_janitor(now);
     }
 }
