@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.89 2001/03/28 15:29:47 ken3 Exp $
+ * $Id: pop3d.c,v 1.90 2001/04/03 20:11:12 ken3 Exp $
  */
 #include <config.h>
 
@@ -467,7 +467,8 @@ static void cmdloop(void)
 	    }
 	}
 	else if (!popd_mailbox) {
-	    if (!strcmp(inputbuf, "user")) {
+	    if (!strcmp(inputbuf, "user") &&
+		(popd_starttls_done || config_getswitch("allowplaintext", 1))) {
 		if (!arg) {
 		    prot_printf(popd_out, "-ERR Missing argument\r\n");
 		}
@@ -475,7 +476,8 @@ static void cmdloop(void)
 		    cmd_user(arg);
 		}
 	    }
-	    else if (!strcmp(inputbuf, "pass")) {
+	    else if (!strcmp(inputbuf, "pass") &&
+		     (popd_starttls_done || config_getswitch("allowplaintext", 1))) {
 		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 		else cmd_pass(arg);
 	    }
@@ -998,8 +1000,11 @@ cmd_capa()
     prot_printf(popd_out, "TOP\r\n");
     prot_printf(popd_out, "UIDL\r\n");
     prot_printf(popd_out, "PIPELINING\r\n");
-    prot_printf(popd_out, "USER\r\n");
     prot_printf(popd_out, "RESP-CODES\r\n");
+
+    if (popd_starttls_done || config_getswitch("allowplaintext", 1)) {
+	prot_printf(popd_out, "USER\r\n");
+    }
     
     prot_printf(popd_out,
 		"IMPLEMENTATION Cyrus POP3 server %s\r\n",
