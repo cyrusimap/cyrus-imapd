@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.30.4.1 2002/07/10 20:45:40 rjs3 Exp $
+ * $Id: actions.c,v 1.30.4.2 2002/07/12 15:17:59 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -96,15 +96,26 @@ int actions_init(void)
 
 int actions_setuser(const char *userid)
 {
-  char hash;
+  char hash, *domain;
   char *foo=sieve_dir;
   int result;  
 
   sieve_dir=(char *) xmalloc(1024);
   
-  hash = (char) dir_hash_c(userid);
+  if (config_virtdomains && (domain = strchr(userid, '@'))) {
+      char d = (char) dir_hash_c(domain+1);
+      *domain = '\0';  /* split user@domain */
+      hash = (char) dir_hash_c(userid);
+      snprintf(sieve_dir, 1023, "%s%s%c/%s/%c/%s",
+	       foo, FNAME_DOMAINDIR, d, domain+1,
+	       hash, userid);
+      *domain = '@';  /* reassemble user@domain */
+  }
+  else {
+      hash = (char) dir_hash_c(userid);
     
-  snprintf(sieve_dir, 1023, "%s/%c/%s", foo, hash,userid);
+      snprintf(sieve_dir, 1023, "%s/%c/%s", foo, hash,userid);
+  }
 
   result = chdir(sieve_dir);
   if (result != 0) {
