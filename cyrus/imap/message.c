@@ -111,6 +111,23 @@ struct boundary {
 /* Default MIME Content-type */
 #define DEFAULT_CONTENT_TYPE "TEXT/PLAIN; CHARSET=us-ascii"
 
+static int message_parse_body(), message_parse_headers();
+static int message_parse_address(), message_parse_encoding();
+static int message_parse_string(), message_parse_header();
+static int message_parse_type(), message_parse_params();
+static int message_parse_rfc822space(), message_parse_multipart();
+static int message_parse_content();
+static time_t message_parse_date();
+static PendingBoundary();
+static int message_write_cache(), message_write_envelope();
+static int message_write_body(), message_write_address();
+static int message_write_singleaddress(), message_write_nstring();
+static int message_write_number(), message_write_section();
+static int message_write_charset(), message_write_bit32();
+static int message_write_searchaddr(), message_write_singlesearchaddr();
+static int message_ibuf_init(), message_ibuf_ensure();
+static int message_ibuf_write(), message_ibuf_free(), message_free_body();
+
 /*
  * Copy a message from 'from' to 'to', converting bare LF characters to CRLF.
  */

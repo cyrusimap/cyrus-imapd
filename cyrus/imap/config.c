@@ -50,6 +50,8 @@ static int nconfiglist;
 char *config_dir;
 char *config_defpartition;
 
+static int config_read();
+
 config_init(ident)
 char *ident;
 {
