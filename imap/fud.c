@@ -29,7 +29,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.13 2000/04/06 15:14:34 leg Exp $ */
+/* $Id: fud.c,v 1.14 2000/04/11 03:46:39 leg Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -192,7 +192,7 @@ int handle_request(char *who,char *name,struct sockaddr_in sfrom)
 
     r = seen_open(&mailbox, who, &seendb);
     if (r) return r;
-    r = seen_lockread(seendb, &lastread, &lastuid, &lastarrived, &seenuids);
+    r = seen_read(seendb, &lastread, &lastuid, &lastarrived, &seenuids);
     seen_close(seendb);
     if (r) return r;
     
