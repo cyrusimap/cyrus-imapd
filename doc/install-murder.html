@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.3 2002/02/14 19:06:50 rjs3 Exp $ -->
+<!-- $Id: install-murder.html,v 1.4 2002/02/15 16:49:58 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -12,7 +12,7 @@
 development, and if you choose to deploy you are doing so at your own risk.
 Many of the failure modes can be difficult to track without a detailed
 understanding of the mupdate protocol and IMAP in general, and thus even
-consdering a deplyoment is not for the faint at heart.
+considering a deployment is not for the faint at heart.
 </i></b></font><br>
 
 <h3>Introduction & Assumptions</h3>
@@ -27,9 +27,9 @@ It also assumes that you are familliar with the administration and day
 to day operations of the Cyrus IMAP server and the SASL authentication library.
 If you feel uncomfortable with this, please refer to the rest of the
 documentation first.<p>
-There is a <A HREF=murder.fig>xfig picture</A> that shows the interactions of
+There is a <A HREF=murder.png>diagram</A> that shows the interactions of
 the various components of the Cyrus Murder which may be helpful in
-understanding the &quot;big picture&quot;<p>
+understanding the &quot;big picture&quot;.<p>
 
 <h2>Installation</h2>
 You will need to build Cyrus IMAPd with the <tt>--enable-murder</tt> configure
@@ -239,7 +239,7 @@ to ensure that the mupdate slave process is started, (is prefork=1)</li>
 <li><A HREF=http://asg.web.cmu.edu/cyrus/mupdate.html>MUPDATE Protocol Reference</A></li>
 
 <P><HR>
-last modified: $Date: 2002/02/14 19:06:50 $
+last modified: $Date: 2002/02/15 16:49:58 $
 </BODY></HTML>
 
 
