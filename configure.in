@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.177 2000/06/07 18:42:02 leg Exp $
+dnl $Id: configure.in,v 1.178 2000/06/09 19:12:50 leg Exp $
 dnl
 
 
@@ -528,15 +528,25 @@ AC_ARG_WITH(zephyr,[  --with-zephyr=PATH      use Zephyr from PATH],
 if test -z "$with_zephyr"; then
      if test -f /usr/local/lib/libzephyr.a; then
 	with_zephyr="/usr/local"
+     elif test -f /usr/lib/libzephyr.a; then
+        with_zephyr="/usr"
      fi
 fi
+ZEPHYR_LIBS=""
+ZEPHYR_CPPFLAGS=""
 case "$with_zephyr" in
 	no) true;;
-	""|yes) AC_CHECK_LIB(zephyr,ZInitialize,LIBS=" -lzephyr ${LIBS}",
+	""|yes) AC_CHECK_LIB(zephyr,ZInitialize,ZEPHYR_LIBS="-lzephyr",
 		with_zephyr="no",);;
-	*)  CPPFLAGS="${CPPFLAGS} -I${with_zephyr}/include"
-	    LIBS="-lzephyr ${LIBS}";;
+       *)  if test -d ${with_zephyr}/include/zephyr; then
+               ZEPHYR_CPPFLAGS="-I${with_zephyr}/include/zephyr"
+           else
+               ZEPHYR_CPPFLAGS="-I${with_zephyr}/include"
+           fi
+           ZEPHYR_LIBS="-lzephyr";;
 esac
+AC_SUBST(ZEPHYR_LIBS)
+AC_SUBST(ZEPHYR_CPPFLAGS)
 AC_ARG_WITH(notify,[  --with-notify=METHOD    use mail notification METHOD
                           METHOD is zephyr or no],WITH_NOTIFY="${withval}",
 	if test "$with_zephyr" = "no"; then
