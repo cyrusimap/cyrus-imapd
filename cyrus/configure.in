@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.159 2000/02/21 20:51:27 tmartin Exp $
+dnl $Id: configure.in,v 1.160 2000/03/07 00:56:02 tmartin Exp $
 dnl
 
 
@@ -857,10 +857,10 @@ CMU_SASL
 
 CMU_AGENTX
 
-dnl if test "$found_agentx" = yes; then
-dnl   CMU_PTHREADS
-dnl  SNMP_SUBDIRS="snmp"
-dnl fi
+if test "$found_agentx" = yes; then
+  CMU_PTHREADS
+  SNMP_SUBDIRS="snmp"
+fi
 
 AC_SUBST(SNMP_SUBDIRS)
 

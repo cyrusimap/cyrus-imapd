@@ -26,10 +26,10 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.65 2000/02/22 20:21:15 leg Exp $
+ * $Id: pop3d.c,v 1.66 2000/03/07 00:56:12 tmartin Exp $
  */
-
 #include <config.h>
+
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -47,6 +47,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <ctype.h>
+#include "prot.h"
 
 #include <sasl.h>
 #include <saslutil.h>
@@ -57,7 +58,7 @@
 #include "config.h"
 #include "tls.h"
 
-#include "prot.h"
+
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -65,23 +66,25 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 
+#ifdef HAVE_KRB
+/* kerberos des is purported to conflict with OpenSSL DES */
+#define DES_DEFS
+#include <krb.h>
+
+/* MIT's kpop authentication kludge */
+int kflag = 0;
+char klrealm[REALM_SZ];
+AUTH_DAT kdata;
+#endif /* HAVE_KRB */
+
+
 extern int optind;
 extern char *optarg;
 extern int opterr;
 
 extern int errno;
 
-#ifdef HAVE_KRB
-/* kerberos des is purported to conflict with OpenSSL DES */
-#define des des_krb
-#include <krb.h>
-#undef des
 
-/* MIT's kpop authentication kludge */
-int kflag = 0;
-char klrealm[REALM_SZ];
-AUTH_DAT kdata;
-#endif
 
 #ifdef HAVE_SSL
 extern SSL *tls_conn;

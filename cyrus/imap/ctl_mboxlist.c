@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: ctl_mboxlist.c,v 1.2 2000/02/25 04:47:59 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.3 2000/03/07 00:56:04 tmartin Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -42,6 +42,9 @@
 #include "mboxlist.h"
 #include "acapmbox.h"
 #include "config.h"
+
+/* xxx copied from imapd.h. shouldn't all that index_*() crap be in a index.h??? */
+extern void index_closemailbox(struct mailbox *mailbox);
 
 extern int optind;
 extern char *optarg;
@@ -66,6 +69,7 @@ void do_dump(enum mboxop op)
     int buf[16384];
     int bufkey[MAX_MAILBOX_NAME * 2];
     struct mbox_entry *mboxent;
+    struct mailbox mailbox;
 
     memset(&key, 0, sizeof(key));
     key.flags = DB_DBT_USERMEM;
@@ -111,17 +115,34 @@ void do_dump(enum mboxop op)
 		goto error;
 	    }
 	    mboxdata.name = mboxent->name;
-	    mboxdata.uidvalidity = 1;
 
 	    mboxdata.status = ACAPMBOX_COMMITTED;
 	    mboxdata.post = acapmbox_get_postaddr(mboxent->name);
 	    mboxdata.url = acapmbox_get_url(mboxent->name);
 	    mboxdata.acl = mboxent->acls;
 
-	    mboxdata.answered = 0;
-	    mboxdata.flagged = 0;
-	    mboxdata.deleted = 0;
-	    mboxdata.total = 0;
+	    /* open index file for mailbox */
+	    r = mailbox_open_header(mboxent->name,NULL,&mailbox);
+	    if (r) {
+		fprintf(stderr, "Error opening header for %s\n",mboxent->name);
+		goto error;
+	    }
+	    r = mailbox_open_index(&mailbox);
+	    if (r) {
+		fprintf(stderr, "Error opening index for %s\n",mboxent->name);
+		goto error;
+	    }
+
+	    mboxdata.uidvalidity = mailbox->uidvalidity;
+
+	    mboxdata.answered = mailbox.answered;
+	    mboxdata.flagged = mailbox.flagged;
+	    mboxdata.deleted = mailbox.deleted;
+	    mboxdata.total = mailbox.exists;
+
+	    /* close index file for mailbox */
+	    mailbox_close(&mailbox);
+	    
 
 	    r = acapmbox_store(handle, &mboxdata, 1);
 	    if (r) {

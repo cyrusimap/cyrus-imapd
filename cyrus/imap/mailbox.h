@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.49 2000/02/01 20:17:19 leg Exp $
+ $Id: mailbox.h,v 1.50 2000/03/07 00:56:09 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -72,7 +72,7 @@ dont know what to use for bit32
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
 
-#define MAILBOX_MINOR_VERSION	2
+#define MAILBOX_MINOR_VERSION	3
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
@@ -137,6 +137,11 @@ struct mailbox {
     unsigned long pop3_last_login;
     unsigned long uidvalidity;
 
+    unsigned long deleted;
+    unsigned long answered;
+    unsigned long flagged;
+    int dirty;
+
     struct quota quota;
 };
 
@@ -166,6 +171,11 @@ struct index_record {
 #define OFFSET_POP3_LAST_LOGIN 36
 #define OFFSET_UIDVALIDITY 40
 
+/* added for ACAP */
+#define OFFSET_DELETED 44
+#define OFFSET_ANSWERED 48
+#define OFFSET_FLAGGED 52
+
 /* Offsets of index_record fields in index file */
 #define OFFSET_UID 0
 #define OFFSET_INTERNALDATE 4
@@ -178,7 +188,7 @@ struct index_record {
 #define OFFSET_SYSTEM_FLAGS 32
 #define OFFSET_USER_FLAGS 36
 
-#define INDEX_HEADER_SIZE (OFFSET_UIDVALIDITY+4)
+#define INDEX_HEADER_SIZE (OFFSET_FLAGGED+4)
 #define INDEX_RECORD_SIZE (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8)
 
 #define FLAG_ANSWERED (1<<0)

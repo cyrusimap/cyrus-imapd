@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.219 2000/02/25 00:30:58 tmartin Exp $ */
+/* $Id: imapd.c,v 1.220 2000/03/07 00:56:05 tmartin Exp $ */
 
 #include <config.h>
 
@@ -191,6 +191,8 @@ extern void setproctitle_init(int argc, char **argv, char **envp);
 extern int proc_register(char *progname, char *clienthost, 
 			 char *userid, char *mailbox);
 extern void proc_cleanup(void);
+
+static int hash_simple (const char *str);
 
 /*
  * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
@@ -370,6 +372,7 @@ int service_init(int argc, char **argv, char **envp)
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
+    snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
 
     return 0;
 }
@@ -1305,10 +1308,12 @@ char *passwd;
 	} else {
 	    prot_printf(imapd_out, "%s NO Login failed: %d\r\n", tag, result);
 	}
+	snmp_increment_args(AUTHENTICATION_NO,1,VARIABLE_AUTH,hash_simple("LOGIN"), VARIABLE_LISTEND);
 	return;
     }
     else {
 	imapd_userid = xstrdup(canon_user);
+	snmp_increment_args(AUTHENTICATION_YES,1,VARIABLE_AUTH,hash_simple("LOGIN"), VARIABLE_LISTEND);
 	syslog(LOG_NOTICE, "login: %s %s plaintext %s", imapd_clienthost,
 	       canon_user, reply ? reply : "");
 	if ((plaintextloginpause = config_getint("plaintextloginpause", 0))!=0) {
@@ -1349,6 +1354,20 @@ char *passwd;
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
     return;
+}
+
+static int hash_simple (const char *str)
+{
+    int     value = 0;
+    int     i;
+
+    if (!str)
+	return 0;
+    for (i = 0; *str; i++)
+    {
+	value ^= (*str++ << ((i & 3)*8));
+    }
+    return value;
 }
 
 /*
@@ -1416,7 +1435,7 @@ cmd_authenticate(char *tag,char *authtype)
 		   imapd_clienthost, authtype, errstr);
 	}
 
-	snmp_increment_str(AUTHENTICATION_NO,authtype, 1);
+	snmp_increment_args(AUTHENTICATION_NO, 1,VARIABLE_AUTH, hash_simple(authtype), VARIABLE_LISTEND);
 
 	sleep(3);
 	
@@ -1459,7 +1478,7 @@ cmd_authenticate(char *tag,char *authtype)
       default: ssfmsg="privacy protection";break;
       }
 
-    snmp_increment_str(AUTHENTICATION_YES,authtype, 1);
+    snmp_increment_args(AUTHENTICATION_YES,1,VARIABLE_AUTH, hash_simple(authtype), VARIABLE_LISTEND);
 
     prot_printf(imapd_out, "%s OK Success (%s)\r\n", tag,ssfmsg);
 

@@ -14,7 +14,7 @@ dnl
 dnl Additional macros for configure.in packaged up for easier theft.
 dnl tjs@andrew.cmu.edu 6-may-1998
 dnl
-dnl $Id: aclocal.m4,v 1.28 2000/02/21 20:51:27 tmartin Exp $
+dnl $Id: aclocal.m4,v 1.29 2000/03/07 00:56:02 tmartin Exp $
 dnl
 
 dnl It would be good if ANDREW_ADD_LIBPATH could detect if something was
@@ -59,7 +59,7 @@ AC_DEFUN(CMU_GUESS_RUNPATH_SWITCH, [
 
 dnl sasl.m4--sasl detection macro
 dnl Rob Earhart
-dnl $Id: aclocal.m4,v 1.28 2000/02/21 20:51:27 tmartin Exp $
+dnl $Id: aclocal.m4,v 1.29 2000/03/07 00:56:02 tmartin Exp $
 
 AC_DEFUN(CMU_SASL, [
   AC_ARG_WITH(sasldir,[  --with-sasldir=PATH     PATH where the sasl library is installed], sasldir="$withval")
@@ -134,6 +134,35 @@ AC_DEFUN(CMU_AGENTX, [
 
 
 ])
+dnl pthreads.m4--pthreads setup macro
+dnl Rob Earhart
+
+AC_DEFUN(CMU_PTHREADS, [
+
+
+  AC_MSG_CHECKING([for pthreads])
+
+   AC_REQUIRE([AC_CANONICAL_HOST])
+   cmu_save_LIBS="$LIBS"
+   AC_CHECK_LIB(pthread, pthread_create,LIB_PTHREAD="-lpthread",
+     AC_CHECK_LIB(c_r, pthread_create,LIB_PTHREAD="-lc_r",
+       AC_ERROR([Can't compile without pthreads])))
+  LIBS="$cmu_save_LIBS"
+   AC_SUBST(LIB_PTHREAD)
+   AC_DEFINE(_REENTRANT)
+   case "$host_os" in
+   solaris2*)
+ 	AC_DEFINE(_POSIX_PTHREAD_SEMANTICS)
+ 	AC_DEFINE(__EXTENSIONS__)
+ 	;;
+   irix6*)
+ 	AC_DEFINE(_SGI_REENTRANT_FUNCTIONS)
+ 	;;
+   esac
+
+  AC_MSG_RESULT([found])
+])
+
 dnl bsd_sockets.m4--which socket libraries do we need? 
 dnl Derrick Brashear
 dnl from Zephyr

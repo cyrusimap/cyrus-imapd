@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.63 2000/02/10 21:25:23 leg Exp $
+ $Id: append.c,v 1.64 2000/03/07 00:56:03 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -268,6 +268,7 @@ int append_fromstage(struct mailbox *mailbox,
 	else if (!strcmp(flag[i], "\\deleted")) {
 	    if (mailbox->myrights & ACL_DELETE) {
 		message_index.system_flags |= FLAG_DELETED;
+		mailbox->deleted++;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\draft")) {
@@ -278,11 +279,13 @@ int append_fromstage(struct mailbox *mailbox,
 	else if (!strcmp(flag[i], "\\flagged")) {
 	    if (mailbox->myrights & ACL_WRITE) {
 		message_index.system_flags |= FLAG_FLAGGED;
+		mailbox->flagged++;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\answered")) {
 	    if (mailbox->myrights & ACL_WRITE) {
 		message_index.system_flags |= FLAG_ANSWERED;
+		mailbox->answered++;
 	    }
 	}
 	else if (mailbox->myrights & ACL_WRITE) {
@@ -769,6 +772,14 @@ const char *userid;
 	    message_index[msg].system_flags |=
 	      copymsg[msg].system_flags & FLAG_DELETED;
 	}
+
+	if (message_index[msg].system_flags & FLAG_DELETED)
+	    append_mailbox->deleted++;
+	if (message_index[msg].system_flags & FLAG_ANSWERED)
+	    append_mailbox->answered++;
+	if (message_index[msg].system_flags & FLAG_FLAGGED)
+	    append_mailbox->flagged++;
+
     }
 
     /* Flush out the cache file data */
