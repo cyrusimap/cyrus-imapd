@@ -1,7 +1,7 @@
 dnl kerberos_v5.m4--Kerberos 5 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: heimdal.m4,v 1.4 2002/07/22 20:19:12 shadow Exp $
+dnl $Id: heimdal.m4,v 1.5 2002/07/22 20:26:02 shadow Exp $
 
 AC_DEFUN(CMU_LIBHEIMDAL_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
@@ -36,7 +36,7 @@ AC_DEFUN(CMU_LIBHEIMDAL_INC_WHERE, [
 AC_DEFUN(CMU_LIBHEIMDAL_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lkadm5clnt -lkrb5 -lasn1 -lkadm5clnt -ldes -lroken -lresolv"
+LIBS="$saved_LIBS -L$1 -lkadm5clnt -lkrb5 -lasn1 -lkadm5clnt -lroken -lresolv"
 AC_TRY_LINK(,
 [krb5_get_in_tkt();],
 [ac_cv_found_libheimdal_lib=yes],
