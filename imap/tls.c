@@ -52,10 +52,9 @@
 * DESCRIPTION
 *	This module is the interface between Cyrus Imapd and the OpenSSL library.
 *	As of now only one filedescriptor can be handled, so only one
-*	TLS channel can be open at a time. This can be accpted, as smtpd
-*	and smtp are seperate services run by seperate programs.
+*       TLS channel can be open at a time.
 *
-*	tls_init_serverengine() is called once when smtpd is started
+*       tls_init_serverengine() is called once when the client is started
 *	in order to initialize as much of the TLS stuff as possible.
 *	The certificate handling is also decided during the setup phase,
 *	so that a peer specific handling is not possible.
@@ -94,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.35 2002/03/01 17:53:25 ken3 Exp $ */
+/* $Id: tls.c,v 1.36 2002/05/20 20:33:46 rjs3 Exp $ */
 
 #include <config.h>
 
