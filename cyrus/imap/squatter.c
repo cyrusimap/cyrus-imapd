@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.2 2001/09/26 16:04:27 ken3 Exp $
+ * $Id: squatter.c,v 1.3 2001/09/27 01:07:49 ken3 Exp $
  */
 
 /*
@@ -79,6 +79,7 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <com_err.h>
+#include <syslog.h>
 
 #include "assert.h"
 #include "mboxlist.h"
@@ -323,6 +324,7 @@ static int index_me(char *name, int matchlen, int maycreate, void *rock) {
         return 1;
     }
 
+    syslog(LOG_INFO, "indexing mailbox %s... ", name);
     if (verbose > 0) {
       printf("Indexing mailbox %s... ", name);
     }
@@ -430,6 +432,8 @@ int main(int argc, char **argv)
 
     config_init(alt_config, "squatter");
 
+    syslog(LOG_NOTICE, "indexing mailboxes");
+
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&squat_namespace, 1)) != 0) {
 	fatal(error_message(r), EC_CONFIG);
@@ -472,6 +476,8 @@ int main(int argc, char **argv)
       printf("Total over all mailboxes: ");
       print_stats(stdout, &total_stats);
     }
+
+    syslog(LOG_NOTICE, "done indexing mailboxes");
 
     shut_down(0);
 }
