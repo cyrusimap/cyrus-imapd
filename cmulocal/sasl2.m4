@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.38 2003/11/07 17:10:19 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.39 2003/11/12 21:16:56 rjs3 Exp $
 
 AC_DEFUN([SASL_GSSAPI_CHK],[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -33,7 +33,7 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
         platform=__aix
         ;;
       *)
-        AC_WARN([The system type is not recognize. If you believe that CyberSafe GSSAPI works on this platform, please update the configure script])
+        AC_WARN([The system type is not recognized. If you believe that CyberSafe GSSAPI works on this platform, please update the configure script])
         ;;
     esac
 
