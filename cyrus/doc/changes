@@ -8,6 +8,23 @@ Changes to the Cyrus IMAP Server Since Version 1.5.14
         ASCII characters when it shouldn't have. (Thanks to John Myers for
         providing a fix and to Per Steinar Iversen for telling me that I
         didn't do it before.) 
+      * More cleanup the ptloader/auth_krb_pts code. If you use Kerberos
+        and IMSP, you *MUST* pick up cyrus-imspd-v1.5a6 (or newer). 
+      * Duplicate delivery changes: 
+
+          * Split out duplicate delivery elimination to multiple files.
+            This should help reduce the lock contention that normally
+            occurs with this file. To not clutter config_dir, the files
+            will be located in a subdirectory named deliverdb, for example
+            /var/imap/deliverdb. If you don't make this directory, nothing
+            bad will happen (other than duplicate delivery elimination will
+            not work). 
+          * The time value is now stored as an integer in native byte order
+            as opposed to converting it to a string before it is stored in
+            the database. 
+          * checkdelivered() now obtains a read lock instead of a write
+            lock when trying to check for duplicates. Only markdelivered()
+            grabs a write lock. 
 
 Changes to the Cyrus IMAP Server Since Version 1.5.11
 

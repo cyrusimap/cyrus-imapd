@@ -365,6 +365,11 @@ Configuring the IMAP Server
         For a description of all the fields in this file, see the
         imapd.conf(5) man page. 
 
+        Note that everyday users should not be administrators. Admins have
+        powers not granted to regular users and while the server allows
+        them to receive mail, some problems will occur if admins are used
+        as regular users. 
+
      5. Create the configuration directory specified by the
         "configdirectory" option in "imapd.conf." The configuration
         directory is similar in concept to the "/usr/lib/news" directory.
@@ -506,26 +511,31 @@ Configuring the IMAP Server
 
                fud  dgram  udp  wait  cyrus  /usr/cyrus/bin/fud   fud
 
-    14. Sendmail versions 8.7 and later include support for the Cyrus IMAP
+    14. Restart inetd. Many systems provide an easy way to do this, but the
+        generic method is to find the process id of inetd (use /bin/ps -elf
+        on most systems), then kill -HUP pid. 
+    15. Sendmail versions 8.7 and later include support for the Cyrus IMAP
         server. If you are running a verson of Sendmail older than 8.7.1,
         replace it with 8.7.1 or later. Sendmail distributions may be
         obtained from ftp://ftp.cs.berkely.edu/ucb/sendmail 
 
-    15. Generate a sendmail configuration file which delivers local mail to
+    16. Generate a sendmail configuration file which delivers local mail to
         the IMAP server. See the files cf/README and cf/cf/cyrusproto.mc in
         the Sendmail distribution for information on how to do this. 
 
-    16. Edit /etc/group and add user "daemon" to the "mail" group. This
+    17. Edit /etc/group and add user "daemon" to the "mail" group. This
         will permit sendmail to run the "deliver" program to deliver mail
         to the IMAP server. 
 
-    17. The Cyrus IMAP server support in Sendmail defaults to enabling
+    18. The Cyrus IMAP server support in Sendmail defaults to enabling
         duplicate delivery suppression, by invoking the "deliver" program
         with the "-e" switch. This prevents two messages with the same
         Message-ID: (Resent-Message-ID: if it exits) from being delivered
         to the same mailbox. Add a cron job to periodically prune the
         database of deliveries by running "/usr/cyrus/bin/deliver -E 3"
-        daily as the cyrus user. 
+        daily as the cyrus user. You must also create the directory
+        "deliverdb" to store the database files in the configuration
+        directory, such as "mkdir /var/imap/deliverdb". 
 
         If you want to export netnews newsgroups using IMAP do the
         following: 
