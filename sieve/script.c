@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.46 2002/02/13 20:44:04 rjs3 Exp $
+ * $Id: script.c,v 1.47 2002/02/19 18:09:46 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -140,10 +140,10 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     return res;
 }
 
-char **stringlist_to_chararray(stringlist_t *list)
+char **stringlist_to_chararray(stringlist_t **list)
 {
     int size = 0;
-    stringlist_t *tmp = list;
+    stringlist_t *tmp = *list;
     stringlist_t *tofree;
     char **ret;
     int lup;
@@ -157,7 +157,7 @@ char **stringlist_to_chararray(stringlist_t *list)
     ret = malloc( sizeof(char *) * (size+1));
     if (ret == NULL) return NULL;
 
-    tmp = list;
+    tmp = *list;
 
     for (lup = 0;lup<size;lup++)
     {
@@ -168,7 +168,7 @@ char **stringlist_to_chararray(stringlist_t *list)
     ret[size]=NULL;
 
     /* free element holders */
-    tmp = list;
+    tmp = *list;
 
     while (tmp!=NULL)
     {
@@ -176,7 +176,9 @@ char **stringlist_to_chararray(stringlist_t *list)
 	tmp=tmp->next;
 	free(tofree);
     }
-        
+
+    *list = NULL;
+
     return ret;
 }
 
@@ -369,7 +371,7 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
    the naivest way.  if we implement some sort of depth limit, we'll
    be ok here; otherwise we'd want to transform it a little smarter */
 static int eval(sieve_interp_t *i, commandlist_t *c, 
-		void *m, action_list_t *actions, notify_action_t *notify_action,
+		void *m, action_list_t *actions, notify_list_t *notify_list,
 		const char **errmsg)
 {
     int res = 0;
@@ -379,9 +381,9 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 	switch (c->type) {
 	case IF:
 	    if (evaltest(i, c->u.i.t, m))
-		res = eval(i, c->u.i.do_then, m, actions, notify_action, errmsg);
+		res = eval(i, c->u.i.do_then, m, actions, notify_list, errmsg);
 	    else
-		res = eval(i, c->u.i.do_else, m, actions, notify_action, errmsg);
+		res = eval(i, c->u.i.do_else, m, actions, notify_list, errmsg);
 	    break;
 	case REJCT:
 	    res = do_reject(actions, c->u.str);
@@ -389,19 +391,14 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		*errmsg = "Reject can not be used with any other action";
 	    break;
 	case FILEINTO:
-	    for (sl = c->u.sl; res == 0 && sl != NULL; sl = sl->next) {
-		res = do_fileinto(actions, sl->s, &i->curflags);
-		if (res == SIEVE_RUN_ERROR)
-		    *errmsg = "Fileinto can not be used with Reject";
-
-	    }
+	    res = do_fileinto(actions, c->u.str, &i->curflags);
+	    if (res == SIEVE_RUN_ERROR)
+		*errmsg = "Fileinto can not be used with Reject";
 	    break;
-	case FORWARD:
-	    for (sl = c->u.sl; res == 0 && sl != NULL; sl = sl->next) {
-		res = do_forward(actions, sl->s);
-		if (res == SIEVE_RUN_ERROR)
-		    *errmsg = "Redirect can not be used with Reject";
-	    }
+	case REDIRECT:
+	    res = do_redirect(actions, c->u.str);
+	    if (res == SIEVE_RUN_ERROR)
+		*errmsg = "Redirect can not be used with Reject";
 	    break;
 	case KEEP:
 	    res = do_keep(actions, &i->curflags);
@@ -590,11 +587,13 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		*errmsg = "Unmark can not be used with Reject";
 	    break;
 	case NOTIFY:
-	    res = do_notify(i,m,notify_action, c->u.n.priority, c->u.n.message, 
-			    c->u.n.headers_list);
+	    res = do_notify(notify_list, c->u.n.id, c->u.n.method,
+			    &c->u.n.options, c->u.n.priority, c->u.n.message);
+			    
 	    break;
 	case DENOTIFY:
-	    res = do_denotify(notify_action);
+	    res = do_denotify(notify_list, c->u.d.comp, c->u.d.pattern,
+			      c->u.d.priority);
 	    break;
 
 	}
@@ -611,19 +610,22 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 
 #define GROW_AMOUNT 100
 
-static void add_header(sieve_interp_t *i, char *header, 
+static void add_header(sieve_interp_t *i, int isenv, char *header, 
 		       void *message_context, char **out, 
 		       int *outlen, int *outalloc)
 {
     const char **h;
     int addlen;
     /* get header value */
-    i->getheader(message_context, header, &h);	
+    if (isenv)
+	i->getenvelope(message_context, header, &h);	
+    else
+	i->getheader(message_context, header, &h);	
 
     if (!h || !h[0])
 	return;
 
-    addlen = strlen(header) + 2 + strlen(h[0]) + 1;
+    addlen = strlen(h[0]) + 1;
 
     /* realloc if necessary */
     if ( (*outlen) + addlen >= *outalloc)
@@ -632,36 +634,55 @@ static void add_header(sieve_interp_t *i, char *header,
 	*out = xrealloc(*out, *outalloc);
     }
 
-    /* add header name and value */
-    strcat(*out,header);
-    strcat(*out,": ");
+    /* add header value */
     strcat(*out,h[0]);
-    strcat(*out,"\n");
 
     *outlen += addlen;
 }
 
-static int fillin_headers(sieve_interp_t *i, stringlist_t *sl, 
+static int fillin_headers(sieve_interp_t *i, char *msg, 
 			  void *message_context, char **out, int *outlen)
 {
     int allocsize = GROW_AMOUNT;
+    char *c;
+    int n;
+
     *out = xmalloc(GROW_AMOUNT);
     *outlen = 0;
-
     (*out)[0]='\0';
 
-    if (sl == NULL)
-    {
-	add_header(i,"To", message_context, out, outlen, &allocsize);
-	add_header(i,"From", message_context, out, outlen, &allocsize);
-	add_header(i,"Subject", message_context, out, outlen, &allocsize);
-    } else {
-	
-	while (sl!=NULL)
-	{
-	    add_header(i,sl->s,message_context, out, outlen, &allocsize);
+    if (msg == NULL) return SIEVE_OK;
 
-	    sl=sl->next;
+    /* construct the message */
+    c = msg;
+    while (*c) {
+	/* expand variables */
+	if (!strncasecmp(c, "$from$", 6)) {
+	    add_header(i, 0 ,"From", message_context, out, outlen, &allocsize);
+	    c += 6;
+	}
+	else if (!strncasecmp(c, "$env-from$", 10)) {
+	    add_header(i, 1, "From", message_context, out, outlen, &allocsize);
+	    c += 10;
+	}
+	else if (!strncasecmp(c, "$subject$", 9)) {
+	    add_header(i, 0, "Subject", message_context, out, outlen, &allocsize);
+	    c += 9;
+	}
+	/* XXX need to do $text$ variables */
+	else {
+	    /* find length of plaintext up to next potential variable */
+	    n = strcspn(c+1, "$") + 1; /* skip opening '$' */
+	    /* realloc if necessary */
+	    if ( (*outlen) + n+1 >= allocsize) {
+		allocsize = (*outlen) + n+1 + GROW_AMOUNT;
+		*out = xrealloc(*out, allocsize);
+	    }
+	    /* copy the plaintext */
+	    strncat(*out, c, n);
+	    (*out)[*outlen+n]='\0';
+	    (*outlen) += n;
+	    c += n;
 	}
     }
 
@@ -717,30 +738,29 @@ static int sieve_removeflag(sieve_imapflags_t *imapflags, char *flag)
 }
 
 static int send_notify_callback(sieve_script_t *s, void *message_context, 
-				notify_action_t *notify, char *actions_string,
+				notify_list_t *notify, char *actions_string,
 				const char **errmsg)
 {
-    char *headers;
-    int headerslen;    
+    char *out_msg;
+    int out_msglen;    
     int ret;
 
     sieve_notify_context_t nc;
 
-    fillin_headers(&(s->interp), notify->headers, message_context, 
-		   &headers, &headerslen);
+    nc.method = notify->method;
+    nc.options = stringlist_to_chararray(notify->options);
+    nc.priority = notify->priority;
 
-    nc.message = xmalloc(strlen(notify->message) + headerslen + 
-			 strlen(actions_string) + 30);
+    fillin_headers(&(s->interp), notify->message, message_context, 
+		   &out_msg, &out_msglen);
 
-    strcpy(nc.message,notify->message);
-    strcat(nc.message,"\n\n");
-    
-    strcat(nc.message,headers);
-    strcat(nc.message,"\n");
-    free(headers);
+    nc.message = xmalloc(out_msglen + strlen(actions_string) + 30);
+
+    strcpy(nc.message, out_msg);
+    strcat(nc.message, "\n\n");
+    free(out_msg);
 
     strcat(nc.message,actions_string);
-    nc.priority = notify->priority;
 
     ret =  s->interp.notify(&nc,
 			    s->interp.interp_context,
@@ -748,6 +768,14 @@ static int send_notify_callback(sieve_script_t *s, void *message_context,
 			    message_context,
 			    errmsg);    
 
+    if (nc.options) {
+	char **opts = nc.options;
+	while (opts && *opts) {
+	    free(*opts);
+	    opts++;
+	}
+	free(nc.options);
+    }
     free(nc.message);
 
     return ret;
@@ -815,13 +843,15 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     int implicit_keep = 0;
     action_list_t *actions = NULL, *a;
     action_t lastaction = ACTION_NULL;
-    notify_action_t *notify_action;
+    notify_list_t *notify_list = NULL;
     char actions_string[4096] = "";
     const char *errmsg = NULL;
-    
-    notify_action = default_notify_action();
-    if (notify_action == NULL)
-	return SIEVE_NOMEM;
+
+    if (s->interp.notify) {
+	notify_list = new_notify_list();
+	if (notify_list == NULL)
+	    return SIEVE_NOMEM;
+    }
 
     actions = new_action_list();
     if (actions == NULL) {
@@ -830,7 +860,7 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     }
  
     if (eval(&s->interp, s->cmds, message_context, actions,
-	     notify_action, &errmsg) < 0)
+	     notify_list, &errmsg) < 0)
 	return SIEVE_RUN_ERROR;
   
     strcpy(actions_string,"Action(s) taken:\n");
@@ -1024,10 +1054,18 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 		     errmsg ? errmsg : sieve_errstr(ret));
     }
  
-    /* Process notify action if there is one */
-    if (s->interp.notify && notify_action->exists) {
-	ret |= send_notify_callback(s, message_context, notify_action,
-				    actions_string, &errmsg);
+    /* Process notify actions */
+    if (s->interp.notify) {
+	notify_list_t *n = notify_list;
+	while (n != NULL) {
+	    if (n->isactive) {
+		ret |= send_notify_callback(s, message_context, n,
+					    actions_string, &errmsg);
+	    }
+	    n = n->next;
+	}
+
+	free_notify_list(notify_list);
     }
  
     if ((ret != SIEVE_OK) && s->interp.err) {

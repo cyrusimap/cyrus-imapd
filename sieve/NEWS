@@ -1,4 +1,13 @@
-$Id: NEWS,v 1.4 2000/05/17 15:47:06 ken3 Exp $
+$Id: NEWS,v 1.5 2002/02/19 18:09:46 ken3 Exp $
+
+CMU Sieve 2.1
+-------------
+
+- Compliant with RFC 3028.  As a result, fileinto and redirect only
+  accept a single string and NOT a string-list.
+
+- Compliant with draft-martin-sieve-notify-01.  As a result, notify
+  actions will need to be updated to the new syntax.
 
 CMU Sieve 2.0
 -------------
