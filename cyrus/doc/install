@@ -37,15 +37,15 @@ Prerequisites and other notes
         unable to assist other sites in obtaining Kerberos. 
       * It is recommended that sites install Sendmail version 8.7.1 or
         later. Sendmail distributions may be obtained from
-        ftp://ftp.cs.berkely.edu/ucb/sendmail 
+        ftp://ftp.sendmail.org/ucb/sendmail 
       * If you want to export netnews newsgroups using IMAP, the IMAP
         server must receive newsgroups with the INN news server. 
 
 Compiling the IMAP Server
 
     Once you have unpacked the files (see the README file for more
-    information), "cd" to the "imapd-1.5" directory (This document assumes
-    that the version number is 1.5.). The configuration files and various
+    information), "cd" to the "cyrus-imapd-1.5" directory (assuming the
+    version number is 1.5). The configuration files and various
     subdirectories are stored there. In the directory that the configure
     file is in, type "./configure" to configure the software. 
 
@@ -310,14 +310,14 @@ Configuring the IMAP Server
         messages into both levels and categories. Invoke "man syslog" to
         see if "openlog()" takes three arguments. If it does not, replace
         the system "syslogd" and "syslog.conf" with the files provided in
-        the imapd-1.5/syslog directory. 
+        the cyrus-imapd-1.5/syslog directory. 
 
            mv syslogd /etc/syslogd
            mv syslog.conf /etc/syslog.conf
 
-        If you do not copy the "syslog.conf" file in "imapd-1.5/syslog" to
-        the "/etc" directory, be sure to add support for "local6.debug".
-        The file should include a line like: 
+        If you do not copy the "syslog.conf" file in
+        "cyrus-imapd-1.5/syslog" to the "/etc" directory, be sure to add
+        support for "local6.debug". The file should include a line like: 
 
            local6.debug  /var/adm/imapd.log
 

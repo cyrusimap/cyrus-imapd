@@ -1,5 +1,31 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server Since Version 1.5.2
+
+      * Added some support for Netscape's very misleading "Administrate My
+        Mail" menu option in Communicator. Allows for a URL to be set in
+        imapd.conf for the page to refer users to; needs to be turned on
+        with --enable-netscapehack at compile time to enable it. 
+      * Bug swap: imtest quotes password with a non-synchronizing literal
+        in order to allow weird characters like ) in passwords. But it
+        doesn't look to see if the server supports non-synchronizing
+        literals. 
+      * If the file "msg/motd" exists, the first line is sent to clients
+        upon login. 
+      * Bug fix: to handle BODY[] properly when fetching news articles
+        (truncation no longer occurs). (thanks to John Prevost) 
+      * The makedepend supplied should now run on Solaris Intel. (thanks to
+        Chris Newman) 
+      * Added some hacks to pwcheck.c for Linux and Digital Unix where the
+        default protections on the socket don't allow the cyrus user to
+        read it. (thanks to Lyndon Nerenberg) 
+      * Bug fix: Flags beginning with \ are system flags and users can only
+        create the defined flags. The code to do this before was confused.
+        This should also prevent imapd from getting confused with
+        user-defined flags. 
+      * The configure scripts and makefiles have some random fixes. 
+      * Other small bug fixes. 
+
 Changes to the Cyrus IMAP Server Since Version 1.5
 
       * Bug fix: RENAME corrupted mailboxes if they had been EXPUNGEd. (may
