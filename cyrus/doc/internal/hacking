@@ -31,8 +31,10 @@ right now but hopefully that will improve with time ;)
     lib/map.h).  To free it, call map_free on the same map.
 
   - Despite the fact that the maps are read-only, it is often useful to open
-    the file descriptors O_RDWR, espeically if the file decriptors could
-    possibly be used for writing elsewhere in the code.
+    the file descriptors O_RDWR, especially if the file decriptors could
+    possibly be used for writing elsewhere in the code. Some operating
+    systems REQUIRE file descriptors that are mmap()ed to be opened
+    O_RDWR, so just do it.
 
 - Network Functions
   - Cyrus abstracts socket stream access to a concept we refer to as
