@@ -159,7 +159,8 @@ char *name;
     while (*name) {
 	if (*name == '&') {
 	    /* Modified UTF-7 */
-	    while (*++name != '-') {
+	    name++;
+	    while (*name != '-') {
 		if (sawutf7) {
 		    /* Two adjacent utf7 sequences */
 		    return IMAP_MAILBOX_BADNAME;
