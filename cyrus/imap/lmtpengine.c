@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.54 2002/02/11 16:25:03 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.55 2002/02/13 21:41:32 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1258,7 +1258,8 @@ void lmtpmode(struct lmtp_func *func,
 
 	  prot_printf(pout, "421 4.3.2 %s\r\n", buf);
 	  prot_flush(pout);
-	  goto cleanup;
+
+	  func->shutdown(0);
       }
 
       switch (buf[0]) {
@@ -1795,8 +1796,6 @@ void lmtpmode(struct lmtp_func *func,
 	cd.tls_conn = NULL;
     }
 #endif
-
-    if (shutdown_fd != -1) func->shutdown(0);
 }
 
 /************** client-side LMTP ****************/
