@@ -1,5 +1,28 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the cyrus IMAP Server since 2.0.9
+
+      * some small memory savings 
+      * the "fud" daemon once again works correctly 
+      * the IDLE extension now uses signals correctly 
+      * problems with libwrap have been resolved 
+      * imapd and pop3d now log connections protected via TLS. 
+      * efficiency improvements when searching for a particular message-id 
+      * fixed an envelope-parsing bug affecting SORT and THREAD 
+      * made RENAME keep the same mailbox uniqueid, preserving seen state
+        across renames 
+      * STOREing flags to multiple messages in one command is now more
+        efficient 
+      * RENAME now preserves the ACL 
+      * LIST is now as efficient as Cyrus v1.6, modulo Berkeley DB issues. 
+      * Sieve zephyr notifications are now correct. 
+      * crash in reconstruct now fixed. 
+      * man pages added for cyrus.conf, master, lmtpd, idled, ctl_mboxlist,
+        and ctl_deliver. 
+      * master can now listen on specific interfaces 
+      * master can now reread /etc/cyrus.conf on SIGHUP. 
+      * timsieved now uses symlinks instead of hard links. 
+
 Changes to the cyrus IMAP Server since 2.0.8
 
       * remembered to update this file 

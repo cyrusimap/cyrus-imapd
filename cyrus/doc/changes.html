@@ -1,9 +1,54 @@
-<!-- $Id: changes.html,v 1.10 2000/12/20 21:31:01 leg Exp $ -->
+<!-- $Id: changes.html,v 1.11 2001/01/31 18:41:34 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+<h2>Changes to the cyrus IMAP Server since 2.0.9</h2>
+<ul>
+<li> some small memory savings</li>
+
+<li> the "fud" daemon once again works correctly</li>
+
+<li> the IDLE extension now uses signals correctly</li>
+
+<li> problems with libwrap have been resolved</li>
+
+<li> <tt>imapd</tt> and <tt>pop3d</tt> now log connections protected
+via TLS.</li>
+
+<li> efficiency improvements when searching for a particular
+message-id</li>
+
+<li> fixed an envelope-parsing bug affecting SORT and THREAD</li>
+
+<li> made RENAME keep the same mailbox uniqueid, preserving seen state
+across renames</li>
+
+<li> STOREing flags to multiple messages in one command is now more
+efficient </li>
+
+<li> RENAME now preserves the ACL</li>
+
+<li> LIST is now as efficient as Cyrus v1.6, modulo Berkeley DB
+issues.</li>
+
+<li> Sieve zephyr notifications are now correct.</li>
+
+<li> crash in <tt>reconstruct</tt> now fixed. </li>
+
+<li> man pages added for <tt>cyrus.conf</tt>, <tt>master</tt>,
+<tt>lmtpd</tt>, <tt>idled</tt>, <tt>ctl_mboxlist</tt>, and
+<tt>ctl_deliver</tt>.</li>
+
+<li> <tt>master</tt> can now listen on specific interfaces</li>
+
+<li> <tt>master</tt> can now reread <tt>/etc/cyrus.conf</tt> on SIGHUP.
+
+<li> <tt>timsieved</tt> now uses symlinks instead of hard links.
+
+</ul>
 
 <h2>Changes to the cyrus IMAP Server since 2.0.8</h2>
 <ul>
@@ -1146,7 +1191,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2000/12/20 21:31:01 $
+last modified: $Date: 2001/01/31 18:41:34 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>

@@ -1,6 +1,6 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server FAQ</TITLE>
-    <!-- $Id: faq.html,v 1.10 2000/09/16 21:51:32 leg Exp $ -->
+    <!-- $Id: faq.html,v 1.11 2001/01/31 18:41:34 leg Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server FAQ</H1>
 
@@ -62,10 +62,26 @@ http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html</a>.</dd>
 secrets, but imapd doesn't say <tt>AUTH=CRAM-MD5</tt>. Why?
 <dd>
 <p><b>A:</b> Make sure <tt>/etc/sasldb</tt> is readable by the Cyrus user.
+
+<dt><b>Q:</b> I'm getting messages like:
+<pre>
+Jan 14 13:46:24 grant ctl_deliver[9060]: duplicate_prune: opening
+/var/imap/deliverdb/deliver-x.db: No such file or directory
+Jan 14 13:46:24 grant ctl_deliver[9060]: duplicate_prune: opening
+  /var/imap/deliverdb/deliver-y.db: No such file or directory
+Jan 14 13:46:24 grant ctl_deliver[9060]: duplicate_prune: opening
+  /var/imap/deliverdb/deliver-z.db: No such file or directory
+</pre>
+in my <tt>cyrus.log</tt> file.  What's wrong?
+<dd>
+<p><b>A:</b> These messages are normal; one file is maintained for
+each user beginning with "x", "y", "z", etc.  If you're first starting
+or you have no users beginning with these letters, these messages are
+completely normal and can be ignored.
 </dl>
 
 <P><HR>
-last modified: $Date: 2000/09/16 21:51:32 $
+last modified: $Date: 2001/01/31 18:41:34 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>

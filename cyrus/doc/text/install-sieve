@@ -71,12 +71,12 @@ Testing the sieve server
 
      4. Next you should attempt to place a sieve script on the server. To
         do this create a file named "myscript.script" with the following
-        lines. Replace "foo@bar.org" with an email address you can send
+        lines. Replace "foo@example.org" with an email address you can send
         mail from, but that is not the one you are working on now. 
 
           require ["reject","fileinto"];
 
-          if address :is :all "From" "foo@bar.org"
+          if address :is :all "From" "foo@example.org"
           {
             reject "testing";
           }

@@ -60,7 +60,7 @@ Installation Overview
     A detailed overview of the server is available in overview.html. 
 
     This server has been successfully installed on a number of Unix
-    systems. We run the software under SPARC Solaris 2.6. Please refer to
+    systems. We run the software under SPARC Solaris 2.7. Please refer to
     os.html for operating system specific issues. 
 
 Server Notes
@@ -82,30 +82,7 @@ Server Notes
 
 Licensing Information
 
-    The Cyrus IMAP distribution is covered by the following copyright until
-    July 1, 2000: 
-
-            Copyright 1994-2000 by Carnegie Mellon University
-
-                          All Rights Reserved
-
-     Permission to use, copy, modify, and distribute this software and its
-     documentation for any purpose and without fee is hereby granted,
-     provided that the above copyright notice appear in all copies and that
-     both that copyright notice and this permission notice appear in
-     supporting documentation, and that the name of CMU not be
-     used in advertising or publicity pertaining to distribution of the
-     software without specific, written prior permission.
-
-     CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
-     ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
-     CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
-     ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
-     WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
-     ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
-     SOFTWARE.
-
-    After July 1, 2000, the following copyright applies to the code: 
+    The following copyright applies to the code: 
 
      * Copyright (c) 1994-2000 Carnegie Mellon University.  All rights reserved.
      *
@@ -175,4 +152,9 @@ Summary
     There is a mailing list. See the mailing list document for details. 
 
     A list of known problems can be found in the bugs file. 
+
+    O'Reilly has a book out namedManaging IMAP. While the book does not
+    directly talk about the 2.0 code base, it provides very good
+    information on the configuration and setup that can be applied to the
+    newer code. 
 
