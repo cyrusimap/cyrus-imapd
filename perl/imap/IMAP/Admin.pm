@@ -505,7 +505,9 @@ sub setaclmailbox {
   my $res = '';
   my ($rc, $msg);
   foreach my $id (keys %acl) {
+    # this does the aliasing (read -> lrs, etc.)
     $acl{$id} = $aclalias{$acl{$id}} if defined $aclalias{$acl{$id}};
+
     ($rc, $msg) = $self->send('', '', 'SETACL %s %s %s', $mbx, $id, $acl{$id});
     if ($rc eq 'OK') {
       $cnt++;
