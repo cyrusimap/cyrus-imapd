@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.128 1999/01/12 16:22:51 tjs Exp $
+dnl $Id: configure.in,v 1.129 1999/03/01 20:09:12 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -639,6 +639,104 @@ if test -z "use_db"; then
   AC_CHECK_LIB(dbm, dbm_open)
 fi
 
+AC_ARG_ENABLE(static-libraries,
+        [  --static-libraries      compile with avalible static libraries (EXPERIMENTAL)],
+	[if test "$enableval" = yes; then
+		cmu_compile_with_static_libs=yes
+
+echo "WARNING: You have enabled the --enable-static-libraries switch."
+echo "         This is very experimental and may only work for certain"
+echo "         system types at CMU.  We do not expect this to be portable"
+echo "         (yet).  This switch affects only some binaries."
+
+	fi], [	cmu_compile_with_static_libs=no ]
+)
+
+dnl Libraries Kerberos may depend on.  Some of these may be implicit
+dnl dependancies if shared libraries are involved, but we detect them anyway
+dnl in case --enable-static-libraries is given and we have to use static libs.
+
+save_LIBS="${LIBS}" # avoid shared library dependancies.
+LIBS=""
+
+AC_CHECK_FUNC(gethostbyname,,
+  AC_CHECK_LIB(nsl, gethostbyname, [
+	
+	# worked...
+    	EXTRA_LIBS="-lnsl"
+
+        # Solaris 2.5 needs this for nsl, so if it's there we'll link it in
+	# if we're linking statically.  Otherwise things go wrong on some
+	# systems where GNU versions of these libraries get used
+	# unintentionally, and stuff doesn't compile.
+	if test "$cmu_compile_with_static_libs" = yes ; then
+          AC_CHECK_LIB(intl, dgettext, EXTRA_LIBS="${EXTRA_LIBS} -lintl",
+
+	[
+
+### begin macro
+
+### this started out as
+### AC_CHECK_LIB(/usr/lib/libintl.a, dgettext,
+### EXTRA_LIBS="${EXTRA_LIBS} /usr/lib/libintl.a")
+### but has been hacked so the first argument is valid
+
+
+echo $ac_n "checking for dgettext in /usr/lib/libintl.a""... $ac_c" 1>&6
+echo "configure:3351: checking for dgettext in /usr/lib/libintl.a" >&5
+ac_lib_var=`echo /usr/lib/libintl.a'_'dgettext | sed 'y%./+-%__p_%'`
+if eval "test \"`echo '$''{'ac_cv_lib_$ac_lib_var'+set}'`\" = set"; then
+  echo $ac_n "(cached) $ac_c" 1>&6
+else
+  ac_save_LIBS="$LIBS"
+LIBS="/usr/lib/libintl.a  $LIBS"
+cat > conftest.$ac_ext <<EOF
+#line 3359 "configure"
+#include "confdefs.h"
+/* Override any gcc2 internal prototype to avoid an error.  */
+/* We use char because int might match the return type of a gcc2
+    builtin and then its argument prototype would still apply.  */
+char dgettext();
+
+int main() {
+dgettext()
+; return 0; }
+EOF
+if { (eval echo configure:3370: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest; then
+  rm -rf conftest*
+  eval "ac_cv_lib_$ac_lib_var=yes"
+else
+  echo "configure: failed program was:" >&5
+  cat conftest.$ac_ext >&5
+  rm -rf conftest*
+  eval "ac_cv_lib_$ac_lib_var=no"
+fi
+rm -f conftest*
+LIBS="$ac_save_LIBS"
+
+fi
+if eval "test \"`echo '$ac_cv_lib_'$ac_lib_var`\" = yes"; then
+  echo "$ac_t""yes" 1>&6
+  EXTRA_LIBS="${EXTRA_LIBS} /usr/lib/libintl.a"
+else
+  echo "$ac_t""no" 1>&6
+fi
+
+### end macro
+
+	])
+
+	fi
+
+	]))
+
+AC_CHECK_FUNC(connect)
+if test $ac_cv_func_connect = no; then
+  AC_CHECK_LIB(socket, connect, EXTRA_LIBS="-lsocket $EXTRA_LIBS", ,
+    $EXTRA_LIBS)
+fi
+LIBS="${save_LIBS} ${EXTRA_LIBS}"
+
 dnl
 dnl Try like crazy to locate Kerberos (4) libraries.
 dnl This used to be easier, but with all the locations the BSD variants
@@ -755,7 +853,7 @@ case "$with_zephyr" in
 	""|yes) AC_CHECK_LIB(zephyr,ZInitialize,LIBS=" -lzephyr ${LIBS}",
 		with_zephyr="no",);;
 	*)  CPPFLAGS="${CPPFLAGS} -I${with_zephyr}/include"
-	    LIBS="${with_zephyr}/lib/libzephyr.a ${LIBS}";;
+	    LIBS="-lzephyr ${LIBS}";;
 esac
 AC_ARG_WITH(notify,[  --with-notify=METHOD    use mail notification METHOD
                           METHOD is zephyr or no],WITH_NOTIFY="${withval}",
@@ -912,19 +1010,127 @@ AC_ARG_ENABLE(netscapehack,
 	if test "$enableval" = yes; then
 		AC_DEFINE(ENABLE_X_NETSCAPE_HACK)
 	fi)
-dnl
-dnl Random other libraries
-dnl
 
-AC_CHECK_FUNC(gethostbyname)
-if test $ac_cv_func_gethostbyname = no; then
-  AC_CHECK_LIB(nsl, gethostbyname, EXTRA_LIBS="-lnsl")
+AC_CHECK_FUNC(dlopen,,AC_CHECK_LIB(dl,dlopen))
+
+AC_DEFUN(CMU_STATICALLY_LINK_WHAT_YOU_CAN, [
+
+libraries=$1
+cflags=$2
+ldflags=$3
+
+outlibs=""
+
+# Where did IRIX hide the libraries?
+default_ldflags="-L/usr/lib"
+for flag in ${cflags} ; do
+  case $flag in
+    -n32) default_ldflags="-L/usr/lib32"
+	  ;;
+    -n64) default_ldflags="-L/usr/lib64"
+	  ;;
+    *) true
+       ;;
+  esac
+done
+
+# Figure out what directories we're linking against.
+# Lots of fun for the whole family.
+# This probably chokes on anything with spaces in it.
+# All we want is the list of -L directories, and -L may or may not be
+# followed by a space.
+isdir=no
+libpath=""
+#echo "debug ldflags: << ${ldflags} >>"
+#echo "debug default_ldflags: << ${default_ldflags} >>"
+for flag in ${ldflags} ${default_ldflags}; do
+  case $flag in
+    -L)
+      # it's a split -L option, we'll mark the next option as a dir.
+      isdir=yes
+      ;;
+
+    -L*) 
+      # attached -L option: split off the directory
+      larg=`echo $flag | sed -e 's:-L\(..*\):\1:'`
+      libpath="${libpath} ${larg}"
+      ;;
+
+    *)
+      if test $isdir = yes ; then
+	libpath="${libpath} ${flag}"
+	isdir=no
+      fi
+  esac
+done
+#echo "debug libpath: << $libpath >>"
+
+#echo "debug libraries: $libraries"
+
+for lib in $libraries ; do
+  # aieeeee
+  libmatches=`echo ${lib} | sed -e 's:^-l.*$:/:'`
+  libfilename=`echo ${lib}.a | sed -e 's/^-l/lib/'`
+
+  #echo -n "debug looking at $lib ($libmatches) ($libfilename)..."
+
+  if test "$libmatches" = "/" ; then
+    #echo "searching [$libpath]"
+    found=""
+    for libdir in $libpath ; do
+      if test -z "$found"; then
+        # See if a static version of the library exists.
+	#echo -n "checking for ${libdir}/${libfilename}... "
+        if test -f ${libdir}/${libfilename}; then
+ 	  #echo "yes"
+	  found="${libdir}/${libfilename}"
+        else
+	  #echo "no"
+	  true
+        fi
+      fi
+    done
+  else 
+    found="$lib"
+  fi
+      
+  # Sanity check this library: XXX
+
+  if test "${found}" != "" ; then
+    lib="$found"
+  fi
+  
+  outlibs="${outlibs} ${lib}"
+
+done
+
+# canonicalize excess whitespace: all spaces/tabs become one single space
+outlibs=`echo $outlibs | sed -e 's/[ 	][ 	]*/ /g'`
+
+STATIC_LIBS="$outlibs"
+])
+
+### staticify
+
+IMAP_COM_ERR_LIBS="${COM_ERR_LIBS}"
+IMAP_LIBS="${LIBS}"
+
+if test "$cmu_compile_with_static_libs" = yes ; then
+
+  AC_MSG_CHECKING(which libraries can be statically linked)
+
+  CMU_STATICALLY_LINK_WHAT_YOU_CAN("$LIBS", "$CFLAGS", "$LDFLAGS")
+  IMAP_LIBS="$STATIC_LIBS"
+
+  CMU_STATICALLY_LINK_WHAT_YOU_CAN("$COM_ERR_LIBS",
+	"$CFLAGS", "$LDFLAGS $COM_ERR_LDFLAGS")
+  IMAP_COM_ERR_LIBS="$STATIC_LIBS"
+
+  AC_MSG_RESULT(ok)
+
 fi
-AC_CHECK_FUNC(connect)
-if test $ac_cv_func_connect = no; then
-  AC_CHECK_LIB(socket, connect, EXTRA_LIBS="-lsocket $EXTRA_LIBS", ,
-    $EXTRA_LIBS)
-fi
-LIBS="${LIBS} ${EXTRA_LIBS}"
+
+AC_SUBST(IMAP_COM_ERR_LIBS)
+AC_SUBST(IMAP_LIBS)
 
 AC_OUTPUT(Makefile man/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile $EXTRA_OUTPUT)
