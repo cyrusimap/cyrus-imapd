@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.5.4.1 2001/04/17 22:19:08 ken3 Exp $
+ * $Id: mboxname.h,v 1.5.4.2 2001/05/31 04:40:47 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -48,8 +48,12 @@
 
 int mboxname_tointernal(const char *name, struct namespace *namespace,
 			const char *userid, char *result);
+int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
+			    const char *userid, char *result);
 int mboxname_toexternal(const char *name, struct namespace *namespace,
 			const char *userid, char *result);
+int mboxname_toexternal_alt(const char *name, struct namespace *namespace,
+			    const char *userid, char *result);
 int mboxname_userownsmailbox(char *userid, char *name);
 int mboxname_netnewscheck(char *name);
 int mboxname_policycheck(char *name);

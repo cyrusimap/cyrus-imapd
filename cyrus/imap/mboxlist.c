@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.147 2001/01/17 21:21:19 leg Exp $
+ * $Id: mboxlist.c,v 1.147.2.1 2001/05/31 04:40:45 ken3 Exp $
  */
 
 #include <config.h>
@@ -81,6 +81,7 @@ extern int errno;
 #include "acap.h"
 #include "acapmbox.h"
 #include "mboxname.h"
+#include "namespace.h"
 
 #include "mboxlist.h"
 
@@ -1237,7 +1238,8 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 
 struct find_rock {
     struct glob *g;
-    int inbox;
+    struct namespace *namespace;
+    int find_namespace;
     int inboxoffset;
     const char *inboxcase;
     const char *usermboxname;
@@ -1281,7 +1283,8 @@ static int find_p(void *rockp,
     }
     if (matchlen == -1) return 0;
 
-    if (!rock->inbox && rock->usermboxname &&
+    if (rock->find_namespace != NAMESPACE_INBOX &&
+	rock->usermboxname &&
 	keylen >= rock->usermboxnamelen &&
 	(keylen == rock->usermboxnamelen || 
 	 key[rock->usermboxnamelen] == '.') &&
@@ -1289,7 +1292,15 @@ static int find_p(void *rockp,
 	/* this would've been output with the inbox stuff, so skip it */
 	return 0;
     }
-    
+
+    if (rock->find_namespace == NAMESPACE_SHARED &&
+	rock->namespace && rock->namespace->isalt &&
+	!strncmp(key, "user", 4) &&
+	(key[4] == '\0' || key[4] == '.')) {
+	/* this would've been output with the user stuff, so skip it */
+	return 0;
+    }
+
     /* check acl */
     if (!rock->isadmin) {
 	/* check the acls */
@@ -1348,7 +1359,8 @@ static int find_cb(void *rockp,
 	memcpy(namebuf, key, keylen);
 	namebuf[keylen] = '\0';
 	
-	if (!rock->inbox && rock->usermboxname &&
+	if (rock->find_namespace != NAMESPACE_INBOX &&
+	    rock->usermboxname &&
 	    !strncmp(namebuf, rock->usermboxname, rock->usermboxnamelen)
 	    && (keylen == rock->usermboxnamelen || 
 		namebuf[rock->usermboxnamelen] == '.')) {
@@ -1420,6 +1432,7 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
     int prefixlen;
 
     cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
+    cbrock.namespace = NULL;
     cbrock.inboxcase = glob_inboxcase(cbrock.g);
     cbrock.isadmin = isadmin;
     cbrock.auth_state = auth_state;
@@ -1489,7 +1502,7 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 	    cbrock.inboxoffset = strlen(userid);
 	}
 
-	cbrock.inbox = 1;
+	cbrock.find_namespace = NAMESPACE_INBOX;
 	/* iterate through prefixes matching usermboxname */
 	DB->foreach(mbdb,
 		    usermboxname, usermboxnamelen,
@@ -1497,7 +1510,7 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 		    NULL);
     }
 
-    cbrock.inbox = 0;
+    cbrock.find_namespace = NAMESPACE_USER;
     cbrock.inboxoffset = 0;
     if (usermboxnamelen) {
 	usermboxname[--usermboxnamelen] = '\0';
@@ -1510,6 +1523,181 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 		pattern, prefixlen,
 		&find_p, &find_cb, &cbrock,
 		NULL);
+
+  done:
+    glob_free(&cbrock.g);
+
+    return r;
+}
+
+int mboxlist_findall_alt(char *pattern, struct namespace *namespace,
+			 int isadmin, char *userid,
+			 struct auth_state *auth_state, int (*proc)(),
+			 void *rock)
+{
+    struct find_rock cbrock;
+    char usermboxname[MAX_MAILBOX_NAME+1], patbuf[MAX_MAILBOX_NAME+1];
+    int usermboxnamelen = 0;
+    const char *data;
+    int datalen;
+    int r = 0;
+    char *p;
+    int prefixlen, len;
+
+    cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
+    cbrock.namespace = namespace;
+    cbrock.inboxcase = glob_inboxcase(cbrock.g);
+    cbrock.isadmin = isadmin;
+    cbrock.auth_state = auth_state;
+    cbrock.checkmboxlist = 0;	/* don't duplicate work */
+    cbrock.proc = proc;
+    cbrock.procrock = rock;
+
+    /* Build usermboxname */
+    if (userid && !strchr(userid, '.') &&
+	strlen(userid)+5 < MAX_MAILBOX_NAME) {
+	strcpy(usermboxname, "user.");
+	strcat(usermboxname, userid);
+	usermboxnamelen = strlen(usermboxname);
+    }
+    else {
+	userid = 0;
+    }
+
+    /* Check for INBOX first of all */
+    if (userid) {
+	if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
+	    r = DB->fetch(mbdb, usermboxname, usermboxnamelen,
+			  &data, &datalen, NULL);
+	    if (!r && data) {
+		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
+	    }
+	}
+	strcpy(usermboxname+usermboxnamelen, ".");
+	usermboxnamelen++;
+
+	cbrock.usermboxname = usermboxname;
+	cbrock.usermboxnamelen = usermboxnamelen;
+    } else {
+	cbrock.usermboxname = NULL;
+	cbrock.usermboxnamelen = 0;
+    }
+
+    if (r) goto done;
+
+    glob_free(&cbrock.g);
+
+    /* Find fixed-string pattern prefix */
+    for (p = pattern; *p; p++) {
+	if (*p == '*' || *p == '%' || *p == '?') break;
+    }
+    prefixlen = p - pattern;
+
+    /*
+     * Personal (INBOX) namespace
+     *
+     * Append pattern to "INBOX.", search for those mailboxes next
+     */
+    if (userid) {
+	strcpy(patbuf, "INBOX.");
+	strcat(patbuf, pattern);
+	cbrock.g = glob_init(patbuf, GLOB_HIERARCHY|GLOB_INBOXCASE);
+	cbrock.inboxcase = glob_inboxcase(cbrock.g);
+	cbrock.inboxoffset = strlen(userid);
+	cbrock.find_namespace = NAMESPACE_INBOX;
+
+	/* iterate through prefixes matching usermboxname */
+	DB->foreach(mbdb,
+		    usermboxname, usermboxnamelen,
+		    &find_p, &find_cb, &cbrock,
+		    NULL);
+
+	glob_free(&cbrock.g);
+    }
+
+    if (usermboxnamelen) {
+	usermboxname[--usermboxnamelen] = '\0';
+	cbrock.usermboxname = usermboxname;
+	cbrock.usermboxnamelen = usermboxnamelen;
+    }
+
+    /*
+     * Other Users namespace
+     *
+     * If "Other Users*" can match pattern, search for those mailboxes next
+     */
+    len = strlen(namespace->prefix[NAMESPACE_USER])-1;
+    if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
+		 prefixlen < len ? prefixlen : len)) {
+
+	if (prefixlen < len)
+	    cbrock.g = glob_init(pattern+prefixlen, GLOB_HIERARCHY);
+	else {
+	    strcpy(patbuf, "user");
+	    strcat(patbuf, pattern+len);
+	    cbrock.g = glob_init(patbuf, GLOB_HIERARCHY);
+	}
+	cbrock.find_namespace = NAMESPACE_USER;
+	cbrock.inboxoffset = 0;
+	
+	/* iterate through prefixes matching usermboxname */
+	DB->foreach(mbdb,
+		    "user", 4,
+		    &find_p, &find_cb, &cbrock,
+		    NULL);
+
+	glob_free(&cbrock.g);
+    }
+
+    /*
+     * Shared namespace
+     *
+     * search for all remaining mailboxes.
+     * just bother looking at the ones that have the same pattern prefix.
+     */
+    len = strlen(namespace->prefix[NAMESPACE_SHARED]);
+    if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
+		 prefixlen < len ? prefixlen : len)) {
+
+	cbrock.find_namespace = NAMESPACE_SHARED;
+	cbrock.inboxoffset = 0;
+
+	if (prefixlen < len) {
+	    /* Find pattern which matches shared namespace prefix */
+	    for (p = pattern+prefixlen; *p; p++) {
+		if (*p == '%') continue;
+		else if (*p == '.') p++;
+		break;
+	    }
+
+	    cbrock.g = glob_init(p, GLOB_HIERARCHY);
+		
+	    /* special case:  LIST "" % */
+	    if (!*p) {
+		strcpy(patbuf, namespace->prefix[NAMESPACE_SHARED]);
+		r = (*proc)(patbuf,
+			    strlen(namespace->prefix[NAMESPACE_SHARED])-1,
+			    0, rock);
+	    }
+	    else {
+		DB->foreach(mbdb,
+			    "", 0,
+			    &find_p, &find_cb, &cbrock,
+			    NULL);
+	    }
+	}
+	else {
+	    strcpy(patbuf, "");
+	    strcat(patbuf, pattern+len);
+	    cbrock.g = glob_init(patbuf, GLOB_HIERARCHY);
+
+	    pattern[prefixlen] = '\0';
+	    DB->foreach(mbdb,
+			pattern+len, prefixlen-len,
+			&find_p, &find_cb, &cbrock,
+			NULL);
+	}
+    }
 
   done:
     glob_free(&cbrock.g);
@@ -1840,6 +2028,7 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
     int prefixlen;
 
     cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
+    cbrock.namespace = NULL;
     cbrock.inboxcase = glob_inboxcase(cbrock.g);
     cbrock.isadmin = 1;		/* user can always see their subs */
     cbrock.auth_state = auth_state;
@@ -1912,7 +2101,7 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
 	    cbrock.inboxoffset = strlen(userid);
 	}
 
-	cbrock.inbox = 1;
+	cbrock.find_namespace = NAMESPACE_INBOX;
 	/* iterate through prefixes matching usermboxname */
 	SUBDB->foreach(subs,
 		       usermboxname, usermboxnamelen,
@@ -1926,7 +2115,7 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
 	cbrock.usermboxnamelen = 0;
     }
 
-    cbrock.inbox = 0;
+    cbrock.find_namespace = NAMESPACE_USER;
     cbrock.inboxoffset = 0;
     if (usermboxnamelen) {
 	usermboxname[--usermboxnamelen] = '\0';
@@ -1937,6 +2126,192 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
        just bother looking at the ones that have the same pattern prefix. */
     SUBDB->foreach(subs, pattern, prefixlen, 
 		   &find_p, &find_cb, &cbrock, NULL);
+
+  done:
+    if (subs) mboxlist_closesubs(subs);
+    glob_free(&cbrock.g);
+
+    return r;
+}
+
+int mboxlist_findsub_alt(char *pattern, struct namespace *namespace,
+			 int isadmin, char *userid, 
+			 struct auth_state *auth_state, 
+			 int (*proc)(), void *rock, int force)
+{
+    struct db *subs = NULL;
+    struct find_rock cbrock;
+    char usermboxname[MAX_MAILBOX_NAME+1], patbuf[MAX_MAILBOX_NAME+1];
+    int usermboxnamelen = 0;
+    const char *data;
+    int datalen;
+    int r = 0;
+    char *p;
+    int prefixlen, len;
+
+    cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
+    cbrock.namespace = namespace;
+    cbrock.inboxcase = glob_inboxcase(cbrock.g);
+    cbrock.isadmin = 1;		/* user can always see their subs */
+    cbrock.auth_state = auth_state;
+    cbrock.checkmboxlist = !force;
+    cbrock.proc = proc;
+    cbrock.procrock = rock;
+
+    /* open the subscription file that contains the mailboxes the 
+       user is subscribed to */
+    if ((r = mboxlist_opensubs(userid, &subs)) != 0) {
+	goto done;
+    }
+
+    /* Build usermboxname */
+    if (userid && !strchr(userid, '.') &&
+	strlen(userid)+5 < MAX_MAILBOX_NAME) {
+	strcpy(usermboxname, "user.");
+	strcat(usermboxname, userid);
+	usermboxnamelen = strlen(usermboxname);
+    }
+    else {
+	userid = 0;
+    }
+
+    /* Check for INBOX first of all */
+    if (userid) {
+	if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
+	    r = SUBDB->fetch(subs, usermboxname, usermboxnamelen,
+			     &data, &datalen, NULL);
+	    if (!r && data) {
+		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
+	    }
+	}
+	strcpy(usermboxname+usermboxnamelen, ".");
+	usermboxnamelen++;
+
+	cbrock.usermboxname = usermboxname;
+	cbrock.usermboxnamelen = usermboxnamelen;
+    }
+
+    if (r) goto done;
+
+    glob_free(&cbrock.g);
+
+    /* Find fixed-string pattern prefix */
+    for (p = pattern; *p; p++) {
+	if (*p == '*' || *p == '%' || *p == '?') break;
+    }
+    prefixlen = p - pattern;
+
+    /*
+     * Personal (INBOX) namespace
+     *
+     * Append pattern to "INBOX.", search for those subscriptions next
+     */
+    if (userid) {
+	strcpy(patbuf, "INBOX.");
+	strcat(patbuf, pattern);
+	cbrock.g = glob_init(patbuf, GLOB_HIERARCHY|GLOB_INBOXCASE);
+	cbrock.inboxcase = glob_inboxcase(cbrock.g);
+	cbrock.inboxoffset = strlen(userid);
+	cbrock.find_namespace = NAMESPACE_INBOX;
+
+	/* iterate through prefixes matching usermboxname */
+	SUBDB->foreach(subs,
+		       usermboxname, usermboxnamelen,
+		       &find_p, &find_cb, &cbrock,
+		       NULL);
+
+	glob_free(&cbrock.g);
+
+	cbrock.usermboxname = usermboxname;
+	cbrock.usermboxnamelen = usermboxnamelen;
+    } else {
+	cbrock.usermboxname = NULL;
+	cbrock.usermboxnamelen = 0;
+    }
+
+    if (usermboxnamelen) {
+	usermboxname[--usermboxnamelen] = '\0';
+	cbrock.usermboxname = usermboxname;
+	cbrock.usermboxnamelen = usermboxnamelen;
+    }
+
+    /*
+     * Other Users namespace
+     *
+     * If "Other Users*" can match pattern, search for those subscriptions next
+     */
+    len = strlen(namespace->prefix[NAMESPACE_USER])-1;
+    if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
+		 prefixlen < len ? prefixlen : len)) {
+
+	if (prefixlen < len)
+	    cbrock.g = glob_init(pattern+prefixlen, GLOB_HIERARCHY);
+	else {
+	    strcpy(patbuf, "user");
+	    strcat(patbuf, pattern+len);
+	    cbrock.g = glob_init(patbuf, GLOB_HIERARCHY);
+	}
+	cbrock.find_namespace = NAMESPACE_USER;
+	cbrock.inboxoffset = 0;
+	
+	/* iterate through prefixes matching usermboxname */
+	SUBDB->foreach(subs,
+		       "user", 4,
+		       &find_p, &find_cb, &cbrock,
+		       NULL);
+
+	glob_free(&cbrock.g);
+    }
+
+    /*
+     * Shared namespace
+     *
+     * search for all remaining subscriptions.
+     * just bother looking at the ones that have the same pattern prefix.
+     */
+    len = strlen(namespace->prefix[NAMESPACE_SHARED]);
+    if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
+		 prefixlen < len ? prefixlen : len)) {
+
+	cbrock.find_namespace = NAMESPACE_SHARED;
+	cbrock.inboxoffset = 0;
+
+	if (prefixlen < len) {
+	    /* Find pattern which matches shared namespace prefix */
+	    for (p = pattern+prefixlen; *p; p++) {
+		if (*p == '%') continue;
+		else if (*p == '.') p++;
+		break;
+	    }
+
+	    cbrock.g = glob_init(p, GLOB_HIERARCHY);
+		
+	    /* special case:  LSUB "" % */
+	    if (!*p) {
+		strcpy(patbuf, namespace->prefix[NAMESPACE_SHARED]);
+		r = (*proc)(patbuf,
+			    strlen(namespace->prefix[NAMESPACE_SHARED])-1,
+			    0, rock);
+	    }
+	    else {
+		SUBDB->foreach(subs,
+			       "", 0,
+			       &find_p, &find_cb, &cbrock,
+			       NULL);
+	    }
+	}
+	else {
+	    strcpy(patbuf, "");
+	    strcat(patbuf, pattern+len);
+	    cbrock.g = glob_init(patbuf, GLOB_HIERARCHY);
+
+	    pattern[prefixlen] = '\0';
+	    SUBDB->foreach(subs,
+			   pattern+len, prefixlen-len,
+			   &find_p, &find_cb, &cbrock,
+			   NULL);
+	}
+    }
 
   done:
     if (subs) mboxlist_closesubs(subs);

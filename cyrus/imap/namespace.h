@@ -1,5 +1,5 @@
 /* namespace.h -- Namespace manipulation routines
- * $Id: namespace.h,v 1.1.2.1 2001/04/17 22:21:35 ken3 Exp $
+ * $Id: namespace.h,v 1.1.2.2 2001/05/31 04:40:48 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -52,8 +52,13 @@ struct namespace {
     int isalt;
     char prefix[3][MAX_NAMESPACE_PREFIX+1];
     char hier_sep;
+    int (*mboxname_tointernal)(const char *name, struct namespace *namespace,
+			       const char *userid, char *result);
+    int (*mboxname_toexternal)(const char *name, struct namespace *namespace,
+			       const char *userid, char *result);
 };
 
+/* Initialize namespace (prefixes & hierarchy separator from imapd.conf) */
 int namespace_init(struct namespace *namespace);
 
 #endif

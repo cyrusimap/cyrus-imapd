@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- $Id: mboxname.c,v 1.20.4.1 2001/04/17 22:19:08 ken3 Exp $
+ $Id: mboxname.c,v 1.20.4.2 2001/05/31 04:40:47 ken3 Exp $
 
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -105,100 +105,107 @@ static const char index_mod64[256] = {
 int mboxname_tointernal(const char *name, struct namespace *namespace,
 			const char *userid, char *result)
 {
-    if (namespace->isalt) {
-	int prefixlen;
+    /* Personal (INBOX) namespace */
+    if ((name[0] == 'i' || name[0] == 'I') &&
+	!strncasecmp(name, "inbox", 5) &&
+	(name[5] == '\0' || name[5] == namespace->hier_sep)) {
 
-	/* Shared namespace */
-	if (!strncmp(name, namespace->prefix[NAMESPACE_SHARED],
-		     (prefixlen = strlen(namespace->prefix[NAMESPACE_SHARED])))) {
-	    if (strlen(name+prefixlen) > MAX_MAILBOX_NAME) {
-		return IMAP_MAILBOX_BADNAME;
-	    }
-
-	    strcpy(result, name+prefixlen);
-	    return 0;
-	}
-
-	/* Other Users namespace */
-	if (!strncmp(name, namespace->prefix[NAMESPACE_USER],
-		     (prefixlen = strlen(namespace->prefix[NAMESPACE_USER])))) {
-	    if (strlen(name+prefixlen)+5 > MAX_MAILBOX_NAME) {
-		return IMAP_MAILBOX_BADNAME;
-	    }
-
-	    strcpy(result, "user.");
-	    strcat(result, name+prefixlen);
-	    return 0;
-	}
-
-	/* Personal (INBOX) namespace */
 	if (!userid || strchr(userid, namespace->hier_sep)) {
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
-	if (strlen(userid)+5 > MAX_MAILBOX_NAME) {
+	if (strlen(name+5)+strlen(userid)+5 > MAX_MAILBOX_NAME) {
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
 	strcpy(result, "user.");
 	strcat(result, userid);
-
-	/* INBOX */
-	if ((name[0] == 'i' || name[0] == 'I') &&
-	    !strncasecmp(name, "inbox", 5) &&
-	    (name[5] == '\0' || name[5] == namespace->hier_sep ||
-	     /* HACK??? */
-	     name[5] == '*' || name[5] == '%')) {
-
-	    if (name[5] == namespace->hier_sep) {
-		/* can't create folders under INBOX */
-		return IMAP_MAILBOX_BADNAME;
-	    }
-
-	    /* HACK??? */
-	    if (name[5] == '*' || name[5] == '%') {
-		strcat(result, name+5);
-	    }
-
-	    return 0;
-	}
-
-	/* other personal folder */
-	if (strlen(result)+6 > MAX_MAILBOX_NAME) {
-	    return IMAP_MAILBOX_BADNAME;
-	}
-	strcat(result, ".");
-	strcat(result, name);
+	strcat(result, name+5);
 	return 0;
     }
 
-    else {
-	/* Personal (INBOX) namespace */
-	if ((name[0] == 'i' || name[0] == 'I') &&
-	    !strncasecmp(name, "inbox", 5) &&
-	    (name[5] == '\0' || name[5] == namespace->hier_sep)) {
+    /* Other Users & Shared namespace */
+    if (strlen(name) > MAX_MAILBOX_NAME) {
+	return IMAP_MAILBOX_BADNAME;
+    }
+    strcpy(result, name);
+    return 0;
+}
 
-	    if (!userid || strchr(userid, namespace->hier_sep)) {
-		return IMAP_MAILBOX_BADNAME;
-	    }
+int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
+			    const char *userid, char *result)
+{
+    int prefixlen;
 
-	    if (strlen(name+5)+strlen(userid)+5 > MAX_MAILBOX_NAME) {
-		return IMAP_MAILBOX_BADNAME;
-	    }
+    /* Shared namespace */
+    prefixlen = strlen(namespace->prefix[NAMESPACE_SHARED]);
+    if (!strncmp(name, namespace->prefix[NAMESPACE_SHARED], prefixlen-1) &&
+	(name[prefixlen-1] == '\0' || name[prefixlen-1] == namespace->hier_sep)) {
 
-	    strcpy(result, "user.");
-	    strcat(result, userid);
-	    strcat(result, name+5);
-	    return 0;
-	}
-
-	/* Other Users & Shared namespace */
-	if (strlen(name) > MAX_MAILBOX_NAME) {
+	if (name[prefixlen-1] == '\0') {
+	    /* can't create folders using undelimited prefix */
 	    return IMAP_MAILBOX_BADNAME;
 	}
-	strcpy(result, name);
+
+	if (strlen(name+prefixlen) > MAX_MAILBOX_NAME) {
+	    return IMAP_MAILBOX_BADNAME;
+	}
+
+	strcpy(result, name+prefixlen);
 	return 0;
     }
+
+    /* Other Users namespace */
+    prefixlen = strlen(namespace->prefix[NAMESPACE_USER]);
+    if (!strncmp(name, namespace->prefix[NAMESPACE_USER], prefixlen-1) &&
+	(name[prefixlen-1] == '\0' || name[prefixlen-1] == namespace->hier_sep)) {
+
+	if (name[prefixlen-1] == '\0') {
+	    /* can't create folders using undelimited prefix */
+	    return IMAP_MAILBOX_BADNAME;
+	}
+
+	if (strlen(name+prefixlen)+5 > MAX_MAILBOX_NAME) {
+	    return IMAP_MAILBOX_BADNAME;
+	}
+
+	strcpy(result, "user.");
+	strcat(result, name+prefixlen);
+	return 0;
+    }
+
+    /* Personal (INBOX) namespace */
+    if (!userid || strchr(userid, namespace->hier_sep)) {
+	return IMAP_MAILBOX_BADNAME;
+    }
+
+    if (strlen(userid)+5 > MAX_MAILBOX_NAME) {
+	return IMAP_MAILBOX_BADNAME;
+    }
+
+    strcpy(result, "user.");
+    strcat(result, userid);
+
+    /* INBOX */
+    if ((name[0] == 'i' || name[0] == 'I') &&
+	!strncasecmp(name, "inbox", 5) &&
+	(name[5] == '\0' || name[5] == namespace->hier_sep)) {
+
+	if (name[5] == namespace->hier_sep) {
+	    /* can't create folders under INBOX */
+	    return IMAP_MAILBOX_BADNAME;
+	}
+
+	return 0;
+    }
+
+    /* other personal folder */
+    if (strlen(result)+6 > MAX_MAILBOX_NAME) {
+	return IMAP_MAILBOX_BADNAME;
+    }
+    strcat(result, ".");
+    strcat(result, name);
+    return 0;
 }
 
 /*
@@ -210,48 +217,56 @@ int mboxname_tointernal(const char *name, struct namespace *namespace,
 int mboxname_toexternal(const char *name, struct namespace *namespace,
 			const char *userid, char *result)
 {
-    if (namespace->isalt) {
-	/* Personal (INBOX) namespace */
-	if (!strncasecmp(name, "inbox", 5) &&
-	    (name[5] == '\0' || name[5] == '.')) {
-	    if (name[5] == '\0')
-		strcpy(result, name);
-	    else
-		strcpy(result, name+6);
-	}
-	else if (!strncmp(name, "user.", 5) &&
-		 !strncmp(name+5, userid, strlen(userid)) &&
-		 (name[5+strlen(userid)] == '\0' ||
-		  name[5+strlen(userid)] == '.')) {
-	    if (name[5+strlen(userid)] == '\0')
-		strcpy(result, "INBOX");
-	    else
-		strcpy(result, name+5+strlen(userid)+1);
-	}
+    strcpy(result, name);
 
+    return 0;
+}
 
-	/* Other Users namespace */
-	else if (!strncmp(name, "user", 4) &&
-		 /* HACK - mboxlist_findall() returns "user" without hier_sep */
-		 (name[4] == '\0' || name[4] == '.')) {
-	    sprintf(result, "%.*s",
-		    strlen(namespace->prefix[NAMESPACE_USER])-1,
-		    namespace->prefix[NAMESPACE_USER]);
-	    if (name[4] == '.') {
-		sprintf(result+strlen(result), "%c%s",
-			namespace->hier_sep, name+5);
-	    }
+int mboxname_toexternal_alt(const char *name, struct namespace *namespace,
+			    const char *userid, char *result)
+{
+    /* Personal (INBOX) namespace */
+    if (!strncasecmp(name, "inbox", 5) &&
+	(name[5] == '\0' || name[5] == '.')) {
+	if (name[5] == '\0')
+	    strcpy(result, name);
+	else
+	    strcpy(result, name+6);
+    }
+    /* paranoia - this shouldn't be needed */
+    else if (!strncmp(name, "user.", 5) &&
+	     !strncmp(name+5, userid, strlen(userid)) &&
+	     (name[5+strlen(userid)] == '\0' ||
+	      name[5+strlen(userid)] == '.')) {
+	if (name[5+strlen(userid)] == '\0')
+	    strcpy(result, "INBOX");
+	else
+	    strcpy(result, name+5+strlen(userid)+1);
+    }
+
+    /* Other Users namespace */
+    else if (!strncmp(name, "user", 4) &&
+	     (name[4] == '\0' || name[4] == '.')) {
+	sprintf(result, "%.*s",
+		strlen(namespace->prefix[NAMESPACE_USER])-1,
+		namespace->prefix[NAMESPACE_USER]);
+	if (name[4] == '.') {
+	    sprintf(result+strlen(result), "%c%s",
+		    namespace->hier_sep, name+5);
 	}
+    }
 
-	/* Shared namespace */
+    /* Shared namespace */
+    else {
+	/* special case:  LIST/LSUB "" % */
+	if (!strncmp(name, namespace->prefix[NAMESPACE_SHARED],
+		     strlen(namespace->prefix[NAMESPACE_SHARED])-1)) {
+	    strcpy(result, name);
+	}
 	else {
 	    strcpy(result, namespace->prefix[NAMESPACE_SHARED]);
 	    strcat(result, name);
 	}
-    }
-
-    else {
-	strcpy(result, name);
     }
 
     return 0;

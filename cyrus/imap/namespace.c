@@ -1,5 +1,5 @@
 /* namespace.c -- Namespace manipulation routines
- * $Id: namespace.c,v 1.1.2.1 2001/04/17 22:21:34 ken3 Exp $
+ * $Id: namespace.c,v 1.1.2.2 2001/05/31 04:40:48 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -65,13 +65,21 @@ int namespace_init(struct namespace *namespace)
 		MAX_NAMESPACE_PREFIX-1,
 		config_getstring("sharedprefix", "Shared Folders"),
 		namespace->hier_sep); 
-    } else {
+
+	namespace->mboxname_tointernal = mboxname_tointernal_alt;
+	namespace->mboxname_toexternal = mboxname_toexternal_alt;
+    }
+
+    else {
 	/* standard namespace */
 	sprintf(namespace->prefix[NAMESPACE_INBOX], "%s%c",
 		"INBOX", namespace->hier_sep);
 	sprintf(namespace->prefix[NAMESPACE_USER], "%s%c",
 		"user", namespace->hier_sep);
 	strcpy(namespace->prefix[NAMESPACE_SHARED], "");
+
+	namespace->mboxname_tointernal = mboxname_tointernal;
+	namespace->mboxname_toexternal = mboxname_toexternal;
     }
 
     return 0;
