@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.8 1999/09/30 07:36:59 leg Exp $
+ * $Id: script.c,v 1.9 1999/09/30 21:44:13 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -592,7 +592,7 @@ void script_push_error(sieve_script_t *s, char *msg, int lineno)
 	(struct sieve_errorlist *) xmalloc(sizeof(struct sieve_errorlist));
 
     e->lineno = lineno;
-    e->msg = msg;
+    e->msg = strdup(msg);
 
     e->next = s->err;
     s->err = e;
