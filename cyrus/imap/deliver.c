@@ -63,9 +63,6 @@ char **argv;
     int opt;
     int r;
     int exitval = 0;
-    int n;
-    char buf[4096];
-    char *msgid;
     char *return_path = 0;
     int smtpflag = 0;
     char *mailboxname = 0;
@@ -494,7 +491,6 @@ int smtpmode;
     char *hostname = 0;
     int scanheader = 1;
     int sawidhdr = 0, sawresentidhdr = 0;
-    int n;
     char buf[4096], *p;
     struct stat sbuf;
 
@@ -1004,7 +1000,7 @@ not written
 	fprintf(stderr,
 		"deliver: can't open delivered.lock file: %s\n",
 		error_message(errno));
-	return;
+	return 1;
     }
 
     if (lock_blocking(lockfd)) {
@@ -1012,7 +1008,7 @@ not written
 		"deliver: can't lock delivered.lock file: %s\n",
 		error_message(errno));
 	close(lockfd);
-	return;
+	return 1;
     }
 
 #ifdef NEWDB
