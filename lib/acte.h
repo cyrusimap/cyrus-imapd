@@ -29,8 +29,8 @@ struct acte_client {
     int (*auth)();		/* Do an authentication protocol exchange */
     void (*query_state)();	/* Query an authentication state */
     void (*free_state)();	/* Free an authentication state */
-    int (*new_cred)();		/* Acquire daemon's credentials */
-    int (*free_cred)();		/* Free daemon's credentials */
+    char *(*new_cred)();	/* Acquire daemon's credentials */
+    void (*free_cred)();	/* Free daemon's credentials */
 };
 
 /* Server-side authentication mechanism */
