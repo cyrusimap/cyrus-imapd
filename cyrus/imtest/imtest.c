@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.82.2.13 2003/02/13 20:33:08 rjs3 Exp $
+ * $Id: imtest.c,v 1.82.2.14 2003/02/15 15:17:53 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1968,7 +1968,7 @@ static int auth_nntp(void)
     
     printf("S: %s", str);
     
-    if (strncmp(str, "350", 3)) return IMTEST_FAIL;
+    if (strncmp(str, "381", 3)) return IMTEST_FAIL;
     
     printf("C: AUTHINFO PASS <omitted>\r\n");
     prot_printf(pout,"AUTHINFO PASS %s\r\n",pass);
@@ -1980,7 +1980,7 @@ static int auth_nntp(void)
     
     printf("S: %s", str);
     
-    if (!strncmp(str, "250", 3)) {
+    if (!strncmp(str, "281", 3)) {
 	return IMTEST_OK;
     } else {
 	return IMTEST_FAIL;
@@ -2014,7 +2014,7 @@ static char *nntp_parse_success(char *str)
 {
     char *success = NULL;
 
-    if (!strncmp(str, "251 ", 4)) {
+    if (!strncmp(str, "282 ", 4)) {
 	success = str+4;
     }
 
@@ -2182,7 +2182,7 @@ static struct protocol_t protocols[] = {
       { 0, "20", NULL },
       { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
       { "STARTTLS", "382", "580" },
-      { "AUTHINFO SASL", 0, "", &nntp_parse_success, "25", "452", "351 ", "*" },
+      { "AUTHINFO SASL", 0, "", &nntp_parse_success, "28", "482", "381 ", "*" },
       &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp",

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpproxyd.c,v 1.1.2.8 2003/02/14 19:47:08 ken3 Exp $
+ * $Id: nntpproxyd.c,v 1.1.2.9 2003/02/15 15:17:52 ken3 Exp $
  */
 
 /*
@@ -126,7 +126,6 @@ char nntp_clienthost[NI_MAXHOST*2+1] = "[local]";
 struct protstream *nntp_out = NULL;
 struct protstream *nntp_in = NULL;
 static int nntp_logfd = -1;
-unsigned did_extensions = 0;
 int config_allowanonymous;
 
 static int nntps = 0;
@@ -1023,8 +1022,7 @@ static void cmdloop(void)
 	continue;
 
       nologin:
-	prot_printf(nntp_out, "%u Authentication required\r\n",
-		    did_extensions ? 450 : 480);
+	prot_printf(nntp_out, "480 Authentication required\r\n");
 	eatline(nntp_in, c);
 	continue;
 
@@ -1331,8 +1329,7 @@ void cmd_authinfo_user(char *user)
     }
 
     if (nntp_userid) {
-	prot_printf(nntp_out, "%u Must give AUTHINFO PASS command\r\n",
-		    did_extensions ? 350 : 381);
+	prot_printf(nntp_out, "381 Must give AUTHINFO PASS command\r\n");
 	return;
     }
 
@@ -1350,16 +1347,14 @@ void cmd_authinfo_user(char *user)
 	shut_down(0);
     }
     else if (!(p = canonify_userid(user, NULL, NULL))) {
-	prot_printf(nntp_out, "%u Invalid user\r\n",
-		    did_extensions ? 452 : 482);
+	prot_printf(nntp_out, "482 Invalid user\r\n");
 	syslog(LOG_NOTICE,
 	       "badlogin: %s plaintext %s invalid user",
 	       nntp_clienthost, beautify_string(user));
     }
     else {
 	nntp_userid = xstrdup(p);
-	prot_printf(nntp_out, "%u Give AUTHINFO PASS command\r\n",
-		    did_extensions ? 350 : 381);
+	prot_printf(nntp_out, "381 Give AUTHINFO PASS command\r\n");
     }
 }
 
@@ -1368,8 +1363,7 @@ void cmd_authinfo_pass(char *pass)
     char *reply = 0;
 
     if (!nntp_userid) {
-	prot_printf(nntp_out, "%u Must give AUTHINFO USER command first\r\n",
-		    did_extensions ? 450 : 480);
+	prot_printf(nntp_out, "480 Must give AUTHINFO USER command first\r\n");
 	return;
     }
 
@@ -1383,8 +1377,7 @@ void cmd_authinfo_pass(char *pass)
 	else {
 	    syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
 		   nntp_clienthost);
-	    prot_printf(nntp_out, "%u Invalid login\r\n",
-			did_extensions ? 452 : 482);
+	    prot_printf(nntp_out, "482 Invalid login\r\n");
 	    return;
 	}
     }
@@ -1397,8 +1390,7 @@ void cmd_authinfo_pass(char *pass)
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   nntp_clienthost, nntp_userid, reply);
 	}
-	prot_printf(nntp_out, "%u Invalid login\r\n",
-		    did_extensions ? 452 : 482);
+	prot_printf(nntp_out, "482 Invalid login\r\n");
 	free(nntp_userid);
 	nntp_userid = 0;
 
@@ -1409,8 +1401,7 @@ void cmd_authinfo_pass(char *pass)
 	       nntp_userid, nntp_starttls_done ? "+TLS" : "", 
 	       reply ? reply : "");
 
-	prot_printf(nntp_out, "%u User logged in\r\n",
-		    did_extensions ? 250 : 281);
+	prot_printf(nntp_out, "281 User logged in\r\n");
 
 	nntp_authstate = auth_newstate(nntp_userid);
 
@@ -1432,7 +1423,7 @@ void cmd_authinfo_sasl(char *mech, char *resp)
 	return;
     }
 
-    r = saslserver(nntp_saslconn, mech, resp, "351 ", nntp_in, nntp_out,
+    r = saslserver(nntp_saslconn, mech, resp, "381 ", nntp_in, nntp_out,
 		   &sasl_result, &success_data);
 
     if (r) {
@@ -1460,9 +1451,9 @@ void cmd_authinfo_sasl(char *mech, char *resp)
 	    sleep(3);
 
 	    if (errorstring) {
-		prot_printf(nntp_out, "452 %s\r\n", errorstring);
+		prot_printf(nntp_out, "482 %s\r\n", errorstring);
 	    } else {
-		prot_printf(nntp_out, "452 Error authenticating\r\n");
+		prot_printf(nntp_out, "482 Error authenticating\r\n");
 	    }
 	}
 
@@ -1479,7 +1470,7 @@ void cmd_authinfo_sasl(char *mech, char *resp)
 			       (const void **) &canon_user);
     nntp_userid = xstrdup(canon_user);
     if (sasl_result != SASL_OK) {
-	prot_printf(nntp_out, "452 weird SASL error %d SASL_USERNAME\r\n", 
+	prot_printf(nntp_out, "482 weird SASL error %d SASL_USERNAME\r\n", 
 		    sasl_result);
 	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", 
 	       sasl_result);
@@ -1511,9 +1502,9 @@ void cmd_authinfo_sasl(char *mech, char *resp)
     }
 
     if (success_data)
-	prot_printf(nntp_out, "251 %s\r\n", success_data);
+	prot_printf(nntp_out, "282 %s\r\n", success_data);
     else
-	prot_printf(nntp_out, "250 Success (%s)\r\n", ssfmsg);
+	prot_printf(nntp_out, "281 Success (%s)\r\n", ssfmsg);
 
     prot_setsasl(nntp_in,  nntp_saslconn);
     prot_setsasl(nntp_out, nntp_saslconn);
@@ -1659,12 +1650,9 @@ void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, "OVER\r\n");
 	if (tls_enabled()) prot_printf(nntp_out, "STARTTLS\r\n");
 	prot_printf(nntp_out, ".\r\n");
-
-	did_extensions = 1;
     }
     else if (!nntp_userid && !config_allowanonymous) {
-	prot_printf(nntp_out, "%u Authentication required\r\n",
-		    did_extensions ? 450 : 480);
+	prot_printf(nntp_out, "480 Authentication required\r\n");
 	return;
     }
     else if (!strcmp(arg1, "overview.fmt")) {
