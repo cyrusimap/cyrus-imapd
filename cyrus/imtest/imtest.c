@@ -1,417 +1,674 @@
-/* imtest.c -- IMAP/IMSP test client
- *
- # Copyright 1998 Carnegie Mellon University
- # 
- # No warranties, either expressed or implied, are made regarding the
- # operation, use, or results of the software.
- #
- # Permission to use, copy, modify and distribute this software and its
- # documentation is hereby granted for non-commercial purposes only
- # provided that this copyright notice appears in all copies and in
- # supporting documentation.
- #
- # Permission is also granted to Internet Service Providers and others
- # entities to use the software for internal purposes.
- #
- # The distribution, modification or sale of a product which uses or is
- # based on the software, in whole or in part, for commercial purposes or
- # benefits requires specific, additional permission from:
- #
- #  Office of Technology Transfer
- #  Carnegie Mellon University
- #  5000 Forbes Avenue
- #  Pittsburgh, PA  15213-3890
- #  (412) 268-4387, fax: (412) 268-7395
- #  tech-transfer@andrew.cmu.edu
- *
- * Author: Chris Newman <chrisn+@cmu.edu>
- * Start Date: 2/16/93
- */
-
-/* kludge: send a non-synchronizing literal with password instead of
-   unquoted password; should not do this, as it is not compatible with
-   base-line IMAP4rev1 servers.
-   */
-
-#include <stdio.h>
-#include <ctype.h>
-#include <pwd.h>
 #include <sys/types.h>
-#include <sys/time.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+#include <netinet/in.h>
+#include <netdb.h>
 #include <sys/socket.h>
 #include <sys/file.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
-#endif
 
-#include "sasl.h"
+#include <sasl.h>
+#include <saslutil.h>
+
 #include "prot.h"
 
-int main(void)
-{
-    fprintf(stderr, "I NEED TO BE UPDATED FOR SASL!!!\n");
-    exit(33);
-}
+#define IMTEST_OK    0
+#define IMTEST_FAIL -1
 
-#if 0 /* NOT UPDATED FOR SASL!!! */
+#define STAT_CONT 0
+#define STAT_NO 1
+#define STAT_OK 2
 
-/* from OS: */
-extern char *getpass();
-extern struct hostent *gethostbyname();
+/* global vars */
+sasl_conn_t *conn;
+int sock; /* socket descriptor */
 
-/* constant commands */
-char logout[] = ". LOGOUT\r\n";
+struct protstream *pout, *pin;
 
-/* authstate which must be cleared before exit */
-static void *authstate;
+char *authname;
 
-#ifdef HAVE_SASL_KRB
-char auth_kv4[] = ". AUTHENTICATE KERBEROS_V4\r\n";
+extern int _sasl_debug;
 
-extern struct sasl_client krb_sasl_client;
-#define client_start krb_sasl_client.start
-#define client_auth  krb_sasl_client.auth
-#define client_query krb_sasl_client.query_state
-#define client_free  krb_sasl_client.free_state
+extern char *optarg;
 
-/* base64 tables
- */
-static char basis_64[] =
-   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-static char index_64[128] = {
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,62, -1,-1,-1,63,
-    52,53,54,55, 56,57,58,59, 60,61,-1,-1, -1,-1,-1,-1,
-    -1, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
-    15,16,17,18, 19,20,21,22, 23,24,25,-1, -1,-1,-1,-1,
-    -1,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
-    41,42,43,44, 45,46,47,48, 49,50,51,-1, -1,-1,-1,-1
+/* callbacks we support */
+static sasl_callback_t callbacks[] = {
+  {
+    SASL_CB_USER, NULL, NULL
+  }, {
+    SASL_CB_AUTHNAME, NULL, NULL
+  }, {
+    SASL_CB_PASS, NULL, NULL    
+  }, {
+    SASL_CB_LIST_END, NULL, NULL
+  }
 };
-#define CHAR64(c)  (((c) < 0 || (c) > 127) ? -1 : index_64[(c)])
 
-void to64(out, in, inlen)
-    unsigned char *out, *in;
-    int inlen;
+void imtest_fatal(char *msg)
 {
-    unsigned char oval;
+  if (msg!=NULL)
+    printf("failure: %s\r\n",msg);
+  exit(1);
+}
+
+/* libcyrus makes us define this */
+void fatal(void)
+{
+  exit(1);
+}
+
+static sasl_security_properties_t *make_secprops(int min,int max)
+{
+  sasl_security_properties_t *ret=(sasl_security_properties_t *)
+    malloc(sizeof(sasl_security_properties_t));
+
+  ret->maxbufsize=1024;
+  ret->min_ssf=min;
+  ret->max_ssf=max;
+
+  ret->security_flags=0;
+  ret->property_names=NULL;
+  ret->property_values=NULL;
+
+  return ret;
+}
+
+int init_sasl(char *serverFQDN, int port, int ssf)
+{
+  int saslresult;
+  sasl_security_properties_t *secprops=NULL;
+  int addrsize=sizeof(struct sockaddr_in);
+  struct sockaddr_in *saddr_l=malloc(sizeof(struct sockaddr_in));
+  struct sockaddr_in *saddr_r=malloc(sizeof(struct sockaddr_in));
+
+  /* attempt to start sasl */
+  saslresult=sasl_client_init(callbacks);
+
+  if (saslresult!=SASL_OK) return IMTEST_FAIL;
+
+  /* client new connection */
+  saslresult=sasl_client_new("imap",
+			     serverFQDN,
+			     NULL,
+			     0,
+			     &conn);
+
+  if (saslresult!=SASL_OK) return IMTEST_FAIL;
+
+
+  secprops=make_secprops(0,ssf);
+  if (secprops!=NULL)
+  {
+    sasl_setprop(conn, SASL_SEC_PROPS, secprops);
+    free(secprops);
+  }
+
+  if (getpeername(sock,(struct sockaddr *)saddr_r,&addrsize)!=0)
+    return IMTEST_FAIL;
+
+  /*  saddr_r->sin_port = port;  */
+
+  /*  saddr_r->sin_port=htons(saddr_r->sin_port);	*/
+  if (sasl_setprop(conn,   SASL_IP_REMOTE, saddr_r)!=SASL_OK)
+    return IMTEST_FAIL;
+  
+  addrsize=sizeof(struct sockaddr_in);
+  if (getsockname(sock,(struct sockaddr *)saddr_l,&addrsize)!=0)
+    return IMTEST_FAIL;
+
+  /* set the port manually since getsockname is stupid and doesn't */
+  saddr_l->sin_port = htons(port);
+
+  /*  saddr_l->sin_port=htons(saddr_l->sin_port);	*/
+  if (sasl_setprop(conn,   SASL_IP_LOCAL, saddr_l)!=SASL_OK)
+    return IMTEST_FAIL;
+
+
+  /* should be freed */
+  free(saddr_l);
+  free(saddr_r);
+  
+  return IMTEST_OK;
+}
+
+int getauthline(char **line, int *linelen)
+{
+  char buf[2048];
+  int saslresult;
+  char *str=(char *) buf;
+  
+  str=prot_fgets(str,2048,pin);
+  if (str==NULL) imtest_fatal("prot layer failure");
+  printf("S: %s",str);
+
+  if (strstr(str,"OK")!=NULL) return STAT_OK;
+  if (strstr(str,"NO")!=NULL) return STAT_NO;
+
+  str+=2; /* jump past the "+ " */
+
+  *line=malloc(strlen(str)+1);
+  if ((*line)==NULL) return STAT_NO;
+
+  saslresult=sasl_decode64(str,strlen(str),
+			   *line,(unsigned *) linelen);
+
+
+  return STAT_CONT;
+}
+
+void interaction (sasl_interact_t *t)
+{
+  char result[1024];
+
+  if (authname!=NULL)
+    printf("authname=%s\n",authname);
+
+  if (((t->id==SASL_CB_USER) || (t->id==SASL_CB_AUTHNAME)) && (authname!=NULL))
+  {
+    strcpy(result,authname);
+  } else {
+    printf("%s:",t->prompt);
+    scanf("%s",&result);
+  }
+  t->len=strlen(result);
+  t->result=(char *) malloc(t->len+1);
+  memset(t->result, 0, t->len+1);
+  memcpy((char *) t->result, result, t->len);
+
+}
+
+void fillin_interactions(sasl_interact_t *tlist)
+{
+  while (tlist->id!=SASL_CB_LIST_END)
+  {
+    interaction(tlist);
+    tlist++;
+  }
+
+}
+
+int auth_sasl(char *mechlist)
+{
+  sasl_interact_t *client_interact=NULL;
+  int saslresult=SASL_INTERACT;
+  char *out;
+  unsigned int outlen;
+  char *in;
+  int inlen;
+  const char *mechusing;
+  char inbase64[2048];
+  int inbase64len;
+
+  int status=STAT_CONT;
+
+  /* call sasl client start */
+  while (saslresult==SASL_INTERACT)
+  {
+    saslresult=sasl_client_start(conn, mechlist,
+				 NULL, &client_interact,
+				 &out, &outlen,
+				 &mechusing);
+    if (saslresult==SASL_INTERACT)
+      fillin_interactions(client_interact); /* fill in prompts */      
+
+  }
+
+  if ((saslresult!=SASL_OK) && (saslresult!=SASL_CONTINUE)) return saslresult;
+
+  printf("mechusing: %s\n",mechusing);
+
+  prot_printf(pout,"A01 AUTHENTICATE %s\r\n",mechusing);
+  prot_flush(pout);
+
+
+  status=getauthline(&in,&inlen);
+
+  while (status==STAT_CONT)
+  {
+
     
-    while (inlen >= 3) {
-	*out++ = basis_64[in[0] >> 2];
-	*out++ = basis_64[((in[0] << 4) & 0x30) | (in[1] >> 4)];
-	*out++ = basis_64[((in[1] << 2) & 0x3c) | (in[2] >> 6)];
-	*out++ = basis_64[in[2] & 0x3f];
-	in += 3;
-	inlen -= 3;
+
+    saslresult=SASL_INTERACT;
+    while (saslresult==SASL_INTERACT)
+    {
+      saslresult=sasl_client_step(conn,
+				  in,
+				  inlen,
+				  &client_interact,
+				  &out,
+				  &outlen);
+
+      if (saslresult==SASL_INTERACT)
+	fillin_interactions(client_interact); /* fill in prompts */      	
     }
-    if (inlen > 0) {
-	*out++ = basis_64[in[0] >> 2];
-	oval = (in[0] << 4) & 0x30;
-	if (inlen > 1) oval |= in[1] >> 4;
-	*out++ = basis_64[oval];
-	*out++ = (inlen < 2) ? '=' : basis_64[(in[1] << 2) & 0x3c];
-	*out++ = '=';
-    }
-    *out++ = '\r';
-    *out++ = '\n';
-    *out = '\0';
+
+
+
+    /* convert to base64 */
+    saslresult=sasl_encode64(out,outlen,
+			     inbase64,2048,(unsigned *) &inbase64len);
+    if (saslresult!=SASL_OK) return saslresult;
+
+    free(in);
+    free(out);
+
+    /* send to server */
+    printf("C: %s\n",inbase64);
+    prot_write(pout, inbase64,inbase64len);
+    prot_printf(pout,"\r\n");
+    prot_flush(pout);
+
+    /* get reply */
+    status=getauthline(&in,&inlen);
+  }
+  
+  return IMTEST_OK;
 }
 
-int from64(out, in)
-    char *out, *in;
+/* initialize the network */
+int init_net(char *serverFQDN,int port)
 {
-    int len = 0;
-    int c1, c2, c3, c4;
+  struct sockaddr_in addr;
+  struct hostent *hp;
 
-    if (in[0] == '+' && in[1] == ' ') in += 2;
-    if (*in == '\r') return (0);
-    do {
-	c1 = in[0];
-	if (CHAR64(c1) == -1) return (-1);
-	c2 = in[1];
-	if (CHAR64(c2) == -1) return (-1);
-	c3 = in[2];
-	if (c3 != '=' && CHAR64(c3) == -1) return (-1); 
-	c4 = in[3];
-	if (c4 != '=' && CHAR64(c4) == -1) return (-1);
-	in += 4;
-	*out++ = (CHAR64(c1) << 2) | (CHAR64(c2) >> 4);
-	++len;
-	if (c3 != '=') {
-	    *out++ = ((CHAR64(c2) << 4) & 0xf0) | (CHAR64(c3) >> 2);
-	    ++len;
-	    if (c4 != '=') {
-		*out++ = ((CHAR64(c3) << 6) & 0xc0) | CHAR64(c4);
-		++len;
-	    }
-	}
-    } while (*in != '\r' && c4 != '=');
+  if ((hp = gethostbyname(serverFQDN)) == NULL) {
+    perror("gethostbyname");
+    return IMTEST_FAIL;
+  }
 
-    return (len);
-}
-#endif
+  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    perror("socket");
+    return IMTEST_FAIL;	
+  }
 
-void usage()
-{
-#ifdef HAVE_SASL_KRB
-    fprintf(stderr, "usage: imtest [-k[p/i] / -p] <server> <port> [input file]\n");
-#else
-    fprintf(stderr, "usage: imtest [-p] <server> <port> [input file]\n");
-#endif
-    exit(1);
+  addr.sin_family = AF_INET;
+  memcpy(&addr.sin_addr, hp->h_addr, hp->h_length);
+  addr.sin_port = htons(143);
+
+
+
+  if (connect(sock, (struct sockaddr *) &addr, sizeof (addr)) < 0) {
+    perror("connect");
+    return IMTEST_FAIL;
+  }
+
+  return IMTEST_OK;
 }
 
-void fatal(str, level)
-    char *str;
-    int level;
+/***********************
+ * Parse a mech list of the form: ... AUTH=foo AUTH=bar ...
+ *
+ * Return: string with mechs seperated by spaces
+ *
+ ***********************/
+
+static char *parsemechlist(char *str)
 {
-    if (str) fprintf(stderr, "%s\n", str);
-#ifdef HAVE_SASL_KRB
-    if (authstate) client_free(authstate);
-#endif
-    exit(1);
+  char *tmp;
+  int num=0;
+  char *ret=malloc(strlen(str)+1);
+  if (ret==NULL) return NULL;
+
+  strcpy(ret,"");
+
+  while ((tmp=strstr(str,"AUTH="))!=NULL)
+  {
+    char *end=tmp+5;
+    tmp+=5;
+
+    while(((*end)!=' ') && ((*end)!='\0'))
+      end++;
+
+    (*end)='\0';
+
+    /* add entry to list */
+    if (num>0)
+      strcat(ret," ");
+    strcat(ret, tmp);
+    num++;
+
+    /* reset the string */
+    str=end+1;
+
+  }
+
+  return ret;
 }
 
-int
-main(argc, argv)
-    int argc;
-    char **argv;
+#define CAPABILITY "C01 CAPABILITY\r\n"
+
+static char *ask_capability(void)
 {
-    int sock, nfds, nfound, count, dologin, dopass;
-    int len, done, maxplain, file_start = 0;
-    int prot_req, protlevel;
+  char *str=malloc(301);
+  char *ret;
+
+  do {
+  str=prot_fgets(str,300,pin);
+  if (str==NULL) imtest_fatal("prot layer failure");
+  printf("S: %s",str);
+  } while (strstr(str,"*")==NULL);
+
+  /* request capabilities of server */
+  /*  prot_write(pout, CAPABILITY, sizeof (CAPABILITY));*/
+  prot_printf(pout,"C01 CAPABILITY\n");
+  prot_flush(pout);
+
+
+  str=prot_fgets(str,300,pin);
+  if (str==NULL) imtest_fatal("prot layer failure");
+
+  printf("S: %s",str);
+
+  ret=parsemechlist(str);
+
+  str=prot_fgets(str,300,pin);
+  printf("S: %s",str);
+
+  free(str);
+
+  return ret;
+}
+
+static int waitfor(char *tag)
+{
+  char *str=malloc(301);
+
+  do {
+    str=prot_fgets(str,300,pin);
+    if (str==NULL) imtest_fatal("prot layer failure");
+    printf("%s",str);
+  } while (strstr(str,tag)==NULL);
+
+  free(str);
+
+  return 0;
+}
+
+#define HEADERS "Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)\r\n \
+From: Fred Foobar <foobar@Blurdybloop.COM>\r\n \
+Subject: afternoon meeting\r\n \
+To: mooch@owatagu.siam.edu\r\n \
+Message-Id: <B27397-0100000@Blurdybloop.COM>\r\n \
+MIME-Version: 1.0\r\n \
+Content-Type: TEXT/PLAIN; CHARSET=US-ASCII\r\n\r\n"
+
+static int append_msg(char *mbox, int size)
+{
+  int lup;
+
+  prot_printf(pout,"A003 APPEND %s (\\Seen) {%u}\r\n",mbox,size+strlen(HEADERS));
+  /* do normal header foo */
+  prot_printf(pout,HEADERS);
+
+  for (lup=0;lup<size/10;lup++)
+    prot_printf(pout,"0123456789");
+  prot_printf(pout,"\r\n");
+
+  prot_flush(pout);
+
+  waitfor("A003");
+
+  return IMTEST_OK;
+}
+
+/**************
+ *
+ * This tests throughput of IMAP server
+ *
+ * Steps:
+ *  Creat mailbox
+ *  Append message of 200 bytes, 2000 bytes, 20k, 200k, 2M
+ *  Delete mailbox
+ *  
+ *************/
+
+
+static void send_recv_test(void)
+{
+  char *mboxname="inbox.imtest";
+  time_t start, end;
+  int lup;
+
+  start=time(NULL);
+
+  for (lup=0;lup<10;lup++)
+  {
+    prot_printf(pout,"C01 CREATE %s\r\n",mboxname);
+    prot_flush(pout);  
+    waitfor("C01");
     
-    sasl_encodefunc_t *encodefunc;
-    sasl_decodefunc_t *decodefunc;
-    char *host, *port, *pass, *outbuf, *user;
-    fd_set read_set, rset;
-    struct sockaddr_in addr, laddr;
-    struct hostent *hp;
-    struct servent *serv;
-    struct protstream *pout, *pin;
-    char buf[4096];
-    char *filename = NULL; 
-    /* NOTE: we use filename to determine whether or not we are 
-     *       reading from a file or stdin. If filename == NULL then stdin 
-     */
-    FILE *fp;
-    
-    if (argc < 3) usage();
-    dologin = dopass = 0;
-    encodefunc = 0;
-    decodefunc = 0;
-    authstate = 0;
-    done = 0;
-    host = argv[1];
-    port = argv[2];
-    filename = argv[3];
-    if (*argv[1] == '-') {
-	dologin = 1;
-	prot_req = SASL_PROT_NONE;
-	if (argv[1][1] == 'p') dopass = 1;
-#ifdef HAVE_SASL_KRB
-	else if (argv[1][1] == 'k') {
-	    if (argv[1][2] == 'p') {
-		prot_req |= SASL_PROT_ANY;
-	    } else if (argv[1][2] == 'i') {
-		prot_req |= SASL_PROT_INTEGRITY;
-	    }
-	}
-#endif
-	else usage();
-	host = argv[2];
-	port = argv[3];
-	filename = argv[4];
-    }
+    append_msg(mboxname,200);
+    append_msg(mboxname,2000);
+    append_msg(mboxname,20000);
+    append_msg(mboxname,200000);
+    append_msg(mboxname,2000000);
 
-    if (filename != NULL) {
-      if ((fp = fopen(filename, "r")) == NULL) {
-	fprintf(stderr,"Unable to open file: %s:", filename);
-	perror("");
-	exit(1);
+    prot_printf(pout,"D01 DELETE %s\r\n",mboxname);
+    prot_flush(pout);  
+    waitfor("D01");
+  }
+
+  end=time(NULL);
+
+  printf("Took: %i seconds\n",(int) end-start);
+}
+
+#define LOGOUT "L01 LOGOUT\r\n"
+
+void interactive(char *filename)
+{
+  char buf[4096];
+  fd_set read_set, rset;
+  int nfds;
+  int nfound;
+  int count;
+  FILE *fp;
+  int atend=0;
+
+  /* open the file if available */
+  if (filename != NULL) {
+    if ((fp = fopen(filename, "r")) == NULL) {
+      fprintf(stderr,"Unable to open file: %s:", filename);
+      perror("");
+      exit(1);
+    }
+  }
+  
+  FD_ZERO(&read_set);
+  if (filename==NULL)
+    FD_SET(0, &read_set);  
+  
+  FD_SET(sock, &read_set);
+  nfds = getdtablesize();
+
+  /* let's send the whole file. IMAP is smart. it'll handle everything
+     in order*/
+  if (filename!=NULL)
+  {
+
+    while (atend==0)
+    {
+      printf("getting line from file\n");
+      if (fgets(buf, sizeof (buf) - 1, fp) == NULL) {
+	printf(LOGOUT);
+	prot_write(pout, LOGOUT, sizeof (LOGOUT));
+	atend=1;
+      } else {
+	count = strlen(buf);
+	buf[count - 1] = '\r';
+	buf[count] = '\n';
+	buf[count + 1] = '\0';
+	printf("%s", buf);
+	prot_write(pout, buf, count + 1);
       }
+      prot_flush(pout);
+    }
+  }
+
+  /* loop reading from network and from stdio if applicable */
+  while(1)
+  {
+
+    rset = read_set;
+    nfound = select(nfds, &rset, NULL, NULL, NULL);
+    if (nfound < 0) {
+      perror("select");
+      imtest_fatal("select");
     }
 
-    if (!port) usage();
-    if ((hp = gethostbyname(host)) == NULL) {
-	herror("gethostbyname");
-	exit(1);
-    }
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-	perror("socket");
-	exit(1);
-    }
-    addr.sin_family = AF_INET;
-    memcpy(&addr.sin_addr, hp->h_addr, hp->h_length);
-    addr.sin_port = htons(atoi(port));
-    if (!isdigit(*port)) {
-	if (!(serv = getservbyname(port, "tcp"))) {
-	    fprintf(stderr, "%s not found in servtab\n", port);
-	    exit(1);
-	} else {
-	    addr.sin_port = serv->s_port;
-	}
-    }
-    if (connect(sock, (struct sockaddr *) &addr, sizeof (addr)) < 0) {
-	perror("connect");
-	exit(1);
-    }
-    FD_ZERO(&read_set);
-    if (filename == NULL) {
-      FD_SET(0, &read_set);
-    }
-    FD_SET(sock, &read_set);
-    nfds = getdtablesize();
-    pin = prot_new(sock, 0);
-    pout = prot_new(sock, 1);
+    if (FD_ISSET(0, &rset)) {
 
-
-    for (;;) {
-
-      if ((filename != NULL) && (file_start)) {
-	/* rather than iterating here and waiting for the write
-	 * we could just pipeline all the commands and shove it to the
-	 * imapd. However, this is marginally easier and cleaner to do it
-	 * this way -- especially the way authentication is handled below
-	 */
-	if (fgets(buf, sizeof (buf) - 1, fp) == NULL) {
-	  printf(logout);
-	  prot_write(pout, logout, sizeof (logout));
+	if (fgets(buf, sizeof (buf) - 1, stdin) == NULL) {
+	  printf(LOGOUT);
+	  prot_write(pout, LOGOUT, sizeof (LOGOUT));
+	  FD_CLR(0, &read_set);
 	} else {
 	  count = strlen(buf);
 	  buf[count - 1] = '\r';
 	  buf[count] = '\n';
 	  buf[count + 1] = '\0';
-	  printf("%s", buf);
 	  prot_write(pout, buf, count + 1);
 	}
 	prot_flush(pout);
       }
-	
-	rset = read_set;
-	nfound = select(nfds, &rset, NULL, NULL, NULL);
-	if (nfound < 0) {
-	    perror("select");
-	    fatal(NULL, 0);
+
+    if (FD_ISSET(sock, &rset)) {
+      count = prot_read(pin, buf, sizeof (buf) - 1);
+      if (count == 0) {
+	if (prot_error(pin)) {
+	  printf("Protection error: %s\n", prot_error(pin));
 	}
-	if ((filename == NULL) && FD_ISSET(0, &rset)) {
-	    if (fgets(buf, sizeof (buf) - 1, stdin) == NULL) {
-		printf(logout);
-		prot_write(pout, logout, sizeof (logout));
-		FD_CLR(0, &read_set);
-	    } else {
-		count = strlen(buf);
-		buf[count - 1] = '\r';
-		buf[count] = '\n';
-		buf[count + 1] = '\0';
-		prot_write(pout, buf, count + 1);
-	    }
-	    prot_flush(pout);
-	}
-	if (FD_ISSET(sock, &rset)) {
-	    count = prot_read(pin, buf, sizeof (buf) - 1);
-	    if (count == 0) {
-		if (prot_error(pin)) {
-		    printf("Protection error: %s\n", prot_error(pin));
-		}
-		close(sock);
-		printf("Connection Closed.\n");
-		break;
-	    }
-	    if (count < 0) {
-		perror("read");
-		fatal(NULL, 0);
-	    }
-	    buf[count] = '\0';
-	    printf("%s", buf);
-#ifdef HAVE_SASL_KRB
-	    if (done == SASL_DONE && strchr(buf, ' ')
-		&& !strncmp(" OK ", strchr(buf, ' '), 4)) {
-		done = 0;
-		client_query(authstate, &user, &protlevel,
-			     &encodefunc, &decodefunc, &maxplain);
-		switch (protlevel) {
-		    case SASL_PROT_NONE:
-			printf("__No integrity protection__\n");
-			break;
-		    case SASL_PROT_INTEGRITY:
-			printf("__Integrity protection only__\n");
-			break;
-		    case SASL_PROT_PRIVACY:
-			printf("__Full privacy protection__\n");
-			break;
-		}
-		if (encodefunc || decodefunc) {
-		    prot_setfunc(pin, decodefunc, authstate, 0);
-		    prot_setfunc(pout, encodefunc, authstate, maxplain);
-		}
-		file_start=1;
-	    }
-#endif
-	    if (dologin) {
-		if (dopass) {
-		    dologin = 0;
-		    pass = getpass("Password: ");
-		    /* XXX kludge!  we just send a non-synchronizing
-		       literal instead of dealing with this
-		       appropriately. */
-		    printf(". LOGIN %s {L+}\r\nX\r\n",
-			   getpwuid(getuid())->pw_name);
-		    sprintf(buf, ". LOGIN %s {%d+}\r\n%s\r\n",
-			    getpwuid(getuid())->pw_name, strlen(pass),
-			    pass);
-		    prot_write(pout, buf, strlen(buf));
-		    memset(buf, 0, sizeof (buf));
-		    memset(pass, 0, 8);
-		    file_start = 1;
-		} else if (dologin == 1) {
-#ifdef HAVE_SASL_KRB
-		    ++dologin;
-		    len = sizeof (laddr);
-		    if (getsockname(sock, (struct sockaddr *)&laddr,
-				    &len) < 0 ||
-			client_start(krb_sasl_client.rock,
-				     "imap", host, NULL, prot_req,
-				     sizeof (buf) - 4,
-				     (struct sockaddr *)&laddr,
-				     (struct sockaddr *)&addr,
-				     &authstate) != 0) {
-			printf("__Kerberos initialization failed__\n");
-			dologin = 0;
-		    } else {
-			printf(auth_kv4);
-			prot_write(pout, auth_kv4,
-				   sizeof (auth_kv4) - 1);
-		    }
-		} else if ((len = from64(buf, buf)) < 0 ||
-			   (done = client_auth(authstate, len, buf, &len,
-					       &outbuf)) == SASL_FAIL) {
-		    printf("__Authentication failed__\n");
-		    prot_write(pout, "*\r\n", 3);
-		    client_free(authstate);
-		    authstate = 0;
-		    dologin = 0;
-		} else {
-		    to64(buf, outbuf, len);
-		    printf(buf);
-		    prot_write(pout, buf, strlen(buf));
-		    if (done)
-#endif
-			dologin = 0;
-		}
-		prot_flush(pout);
-	    }
-	}
+	close(sock);
+	printf("Connection Closed.\n");
+	break;
+      }
+      if (count < 0) {
+	perror("read");
+	imtest_fatal("prot_read");
+      }
+      buf[count] = '\0';
+      printf("%s", buf);
     }
-#ifdef HAVE_SASL_KRB
-    if (authstate) client_free(authstate);
-#endif
-    if (filename != NULL) {
-      fclose(fp);
-    }
-    exit(0);
+  }
 }
 
-#endif
+/* didn't give correct parameters; let's exit */
+void usage(void)
+{
+  printf("Usage: imtest [options] hostname\n");
+  printf("  -p #    : port to use      \n");
+  printf("  -z      : timing test      \n");
+  printf("  -l #    : max protection layer (0=none;1=intergrity;etc..)\n");
+  printf("  -u user : authentication name to use\n");
+  printf("  -v      : verbose\n");
+  printf("  -m mech : SASL mechanism to use\n");
+  printf("  -f file : pipe file into connection after authentication\n");
+
+  exit(1);
+}
+
+
+int main(int argc, char **argv)
+{
+  char *mechanism=NULL;
+  char *servername=NULL;
+  char *filename=NULL;
+
+  char *mechlist;
+  int *ssfp;
+  int ssf;
+  char c;
+  int result;
+
+  int port=143;
+  int run_stress_test=0;
+  int verbose=0;
+
+  /* must at least provide hostname */
+  if (argc<2) usage();
+
+
+  /* look at all the extra args */
+  while ((c = getopt(argc-1, argv, "zvl:p:u:m:f:")) != EOF)
+    switch (c) {
+
+    case 'z':
+      run_stress_test=1;
+      break;
+    case 'v':
+      verbose=1;
+      break;
+    case 'l':
+      ssf=atoi(optarg);      
+      break;
+    case 'p':
+      port=atoi(optarg);      
+      break;
+    case 'u':
+      authname=optarg;
+      break;
+    case 'm':
+      mechanism=optarg;
+      break;
+    case 'f':
+      filename=optarg;
+      break;
+    case '?':
+      printf("Error: Unrecognized arguement\n");
+      usage();
+    }
+
+  /* last arg is server name */
+  servername=argv[argc-1];
+
+
+
+  if (init_net(servername,port)!=IMTEST_OK)
+    imtest_fatal("Network initializion");
+  
+  if (init_sasl(servername,port,ssf)!=IMTEST_OK)
+    imtest_fatal("SASL initialization");
+
+
+  /* set up the prot layer */
+  pin = prot_new(sock, 0);
+  pout = prot_new(sock, 1); 
+
+  mechlist=ask_capability();   /* get the * line also */
+
+  if (mechanism)
+    result=auth_sasl(mechanism);
+  else
+    result=auth_sasl(mechlist);
+
+  printf("result=%i\n",result);
+
+  result = sasl_getprop(conn, SASL_SSF, (void **)&ssfp);
+  if (result != SASL_OK)
+    printf("error!!!\n");
+  else
+    printf("SSF: %d\n", *ssfp);
+
+  /*sasl_getprop(conn, SASL_SSF, &foo);
+    printf("ssf=%i\n",foo[0]);*/
+
+  /* turn on layer if need be */
+  prot_setsasl(pin,  conn);
+  prot_setsasl(pout, conn);
+
+
+  if (run_stress_test==1)
+  {
+    send_recv_test();
+  } else {
+    interactive(filename);
+  }
+
+  exit(0);
+}
