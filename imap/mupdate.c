@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.42 2002/02/03 14:58:06 leg Exp $
+ * $Id: mupdate.c,v 1.43 2002/02/04 04:53:32 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -79,7 +79,8 @@
 static int masterp = 0;
 
 enum {
-    poll_interval = 1
+    poll_interval = 1,
+    update_wait = 5
 };
 
 struct pending {
@@ -111,6 +112,8 @@ struct conn {
 
     struct pending *plist;
     struct conn *updatelist_next;
+    struct prot_waitevent *ev; /* invoked every 'update_wait' seconds
+				  to send out updates */
 
     /* Prefix for list commands */
     const char *list_prefix;
@@ -144,7 +147,7 @@ void cmd_startupdate(struct conn *C, const char *tag);
 void shut_down(int code);
 static int reset_saslconn(struct conn *c);
 void database_init();
-void sendupdates(struct conn *C);
+void sendupdates(struct conn *C, int flushnow);
 
 /* --- prototypes in mupdate-client.c */
 void *mupdate_client_start(void *rock);
@@ -225,6 +228,7 @@ static void conn_free(struct conn *C)
 
     pthread_mutex_unlock(&connlist_mutex); /* UNLOCK */
 
+    if (C->ev) prot_removewaitevent(C->pin, C->ev);
     if (C->pin) prot_free(C->pin);
     if (C->pout) prot_free(C->pout);
     close(C->fd);
@@ -413,11 +417,6 @@ void cmdloop(struct conn *c)
 
 	signals_poll();
 	
-	if (c->streaming) {
-	    /* if streaming updates, check if i have data to send */
-	    sendupdates(c);
-	}
-
 	ch = getword(c->pin, &tag);
 	if (ch == EOF && errno == EAGAIN) {
 	    /* streaming and no input from client */
@@ -431,6 +430,11 @@ void cmdloop(struct conn *c)
 		prot_printf(c->pout, "* BYE %s\r\n", err);
 	    }
 	    goto done;
+	}
+
+	/* send out any updates we have pending */
+	if (c->streaming) {
+	    sendupdates(c, 0); /* don't flush pout though */
 	}
 
 	if (ch != ' ') {
@@ -1094,6 +1098,22 @@ void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
 }
 
 
+/* 
+ * we've registered this connection for streaming, and every X seconds
+ * this will be invoked.  note that we always send out updates as soon
+ * as we get a noop: that resets this counter back */
+struct prot_waitevent *sendupdates_evt(struct protstream *s, 
+				       struct prot_waitevent *ev,
+				       void *rock)
+{
+    struct conn *C = (struct conn *) rock;
+
+    sendupdates(C, 1);
+
+    /* 'sendupdates()' will update when we next trigger */
+    return ev;
+}
+
 void cmd_startupdate(struct conn *C, const char *tag)
 {
     char pattern[2] = {'*','\0'};
@@ -1115,31 +1135,15 @@ void cmd_startupdate(struct conn *C, const char *tag)
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     prot_printf(C->pout, "%s OK \"streaming starts\"\r\n", tag);
-    prot_flush(C->pout);
 
-    prot_NONBLOCK(C->pin);
+    /* schedule our first update */
+    C->ev = prot_addwaitevent(C->pin, time(NULL) + update_wait, 
+			      sendupdates_evt, C);
 }
 
-/* 
- * we've registered this connection for streaming, and every X seconds
- * this will be invoked.  note that we always send out updates as soon
- * as we get a noop: that resets this counter back */
-struct prot_waitevent *sendupdates_evt(struct protstream *s, 
-				       struct prot_waitevent *ev,
-				       void *rock)
-{
-    struct conn *C = (struct conn *) rock;
-
-    
-
-    /* reschedule event for 15 seconds */
-
-}
-
-/* this will return after 'poll_interval' seconds if
- * no updates.  regardless, after sending out a batch of updates, this
- * returns to the caller.  */
-void sendupdates(struct conn *C)
+/* send out any pending updates.
+   if 'flushnow' is set, flush the output buffer */
+void sendupdates(struct conn *C, int flushnow)
 {
     struct pending *p, *q;
     struct timeval now;
@@ -1147,6 +1151,9 @@ void sendupdates(struct conn *C)
     int r;
 
     pthread_mutex_lock(&C->m);
+
+#if 0
+    /* don't bother waiting for a signal; we'll only be called occasionally */
 
     gettimeofday(&now, NULL);
     timeout.tv_sec = now.tv_sec + poll_interval;
@@ -1156,6 +1163,7 @@ void sendupdates(struct conn *C)
     while (r != ETIMEDOUT) {
 	r = pthread_cond_timedwait(&C->cond, &C->m, &timeout);
     }
+#endif
 
     /* just grab the update list and release the lock */
     p = C->plist;
@@ -1177,7 +1185,12 @@ void sendupdates(struct conn *C)
 	free(q);
     }
 
-    prot_flush(C->pout);
+    /* reschedule event for 'update_wait' seconds */
+    C->ev->mark = time(NULL) + update_wait;
+
+    if (flushnow) {
+	prot_flush(C->pout);
+    }
 }
 
 void shut_down(int code) __attribute__((noreturn));
