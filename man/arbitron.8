@@ -44,13 +44,18 @@ arbitron \- arbitron mailboxes
 .SH SYNOPSIS
 .B arbitron
 [
+.B \-C
+.I config-file
+]
+[
 .B \-d
 days
 ] [
 .B \-p
 months
 ]
-.IR mailbox ...
+.br
+         \fImailbox\fR...
 .SH DESCRIPTION
 .I Arbitron
 collects and reports readership statistics for mailboxes on the
@@ -70,7 +75,15 @@ days.
 Users are not counted as reading their own personal mailboxes.
 Personal mailboxes are not reported unless there is at least one
 reader other than the mailboxes owner.
+.PP
+.I Arbitron
+reads its configuration options out of the
+.IR imapd.conf (5)
+file unless specified otherwise by \fB-C\fR.
 .SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .TP
 .BI "\-d " days
 Count as a reader an authentication identity which has SELECTed the

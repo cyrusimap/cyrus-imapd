@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: imapconf.h,v 1.4 2000/05/29 03:02:58 leg Exp $
+ $Id: imapconf.h,v 1.5 2001/02/22 19:27:17 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -47,7 +47,7 @@
 #include <sasl.h>
 #include "auth.h"
 
-extern int config_init(const char *ident);
+extern int config_init(const char *alt_config, const char *ident);
 extern const char *config_getstring(const char *key, const char *def);
 extern int config_getint(const char *key, int def);
 extern int config_getswitch(const char *key, int def);

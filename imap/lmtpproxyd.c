@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to sieve and proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.14 2000/12/19 19:31:41 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.15 2001/02/22 19:27:18 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.14 2000/12/19 19:31:41 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.15 2001/02/22 19:27:18 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -312,8 +312,11 @@ int service_main(int argc, char **argv, char **envp)
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
 
-    while ((opt = getopt(argc, argv, "q")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:q")) != EOF) {
 	switch(opt) {
+	case 'C': /* alt config file - handled by service::main() */
+	    break;
+
 	case 'q':
 	    quotaoverride = 1;
 	    break;
@@ -1014,7 +1017,7 @@ static FILE *sieve_find_script(const char *user)
 
 static void usage()
 {
-    fprintf(stderr, "421-4.3.0 usage: lmtpproxyd\r\n");
+    fprintf(stderr, "421-4.3.0 usage: lmtpproxyd [-C <alt_config>]\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
     exit(EC_USAGE);
 }

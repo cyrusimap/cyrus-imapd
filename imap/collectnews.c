@@ -1,5 +1,5 @@
 /* collectnews.c -- program to add news articles to relevant header files
- $Id: collectnews.c,v 1.25 2000/08/04 18:38:27 leg Exp $
+ $Id: collectnews.c,v 1.26 2001/02/22 19:27:16 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,8 @@
 #include "convert_code.h"
 
 extern int errno;
+extern int optind;
+extern char *optarg;
 
 struct newsgroup {
     unsigned long last_uid;
@@ -81,8 +83,20 @@ int main(int argc, char **argv)
 {
     char buf[4096], *group, *nextgroup, *uid, *p;
     int c;
+    int opt;
+    char *alt_config = NULL;
 
-    config_init("collectnews");
+    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+	default:
+	    break;
+	}
+    }
+
+    config_init(alt_config, "collectnews");
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 

@@ -43,6 +43,10 @@
 timsieved \- CMU hack for getting sieve scripts onto the server
 .SH SYNOPSIS
 .B timsieved
+[
+.B \-C
+.I config-file
+]
 .SH DESCRIPTION
 .I timsieved
 is a server that allows users to remotly manage their sieve scripts kept on the server.
@@ -51,13 +55,15 @@ It MUST be invoked by
 .IR master (8)
 with those descriptors attached to a remote client connection.
 .PP
-.I timsieved
+.I Timsieved
 reads its configuration options out of the
 .IR imapd.conf (5)
-file.
+file unless specified otherwise by \fB-C\fR.
 .PP
 .SH OPTIONS
 .TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .SH FILES
 .TP
 .B /etc/imapd.conf

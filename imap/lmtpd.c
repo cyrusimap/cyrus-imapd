@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.60 2001/02/16 16:06:38 ken3 Exp $
+ * $Id: lmtpd.c,v 1.61 2001/02/22 19:27:18 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.60 2001/02/16 16:06:38 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.61 2001/02/22 19:27:18 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -311,8 +311,11 @@ int service_main(int argc, char **argv, char **envp)
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 360);
 
-    while ((opt = getopt(argc, argv, "a")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:a")) != EOF) {
 	switch(opt) {
+	case 'C': /* alt config file - handled by service::main() */
+	    break;
+
 	case 'a':
 	    mylmtp.preauth = 1;
 	    break;
@@ -1067,7 +1070,7 @@ static FILE *sieve_find_script(const char *user)
 static void
 usage()
 {
-    fprintf(stderr, "421-4.3.0 usage: lmtpd [-a] [-q]\r\n");
+    fprintf(stderr, "421-4.3.0 usage: lmtpd [-C <alt_config>] [-a]\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
     exit(EC_USAGE);
 }

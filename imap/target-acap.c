@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.25 2000/12/26 03:31:04 leg Exp $
+ * $Id: target-acap.c,v 1.26 2001/02/22 19:27:20 ken3 Exp $
  */
 
 #include <config.h>
@@ -556,9 +556,13 @@ int main(int argc, char *argv[], char *envp[])
     const char *server;
     int opt;
     int r;
+    char *alt_config = NULL;
 
-    while ((opt = getopt(argc, argv, "d")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:d")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
 	case 'd': /* don't fork. debugging mode */
 	    debugmode++;
 	    break;
@@ -570,7 +574,7 @@ int main(int argc, char *argv[], char *envp[])
     }
 
 
-    config_init("target");
+    config_init(alt_config, "target");
 
     if (geteuid() == 0) {
 	fatal("must run as the Cyrus user", EC_USAGE);

@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.16 2001/01/02 05:54:05 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.17 2001/02/22 19:27:16 ken3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -264,11 +264,13 @@ void do_undump(void)
 
 void usage(void)
 {
-    fprintf(stderr, "ctl_mboxlist -c\n");
-    fprintf(stderr, "ctl_mboxlist -r\n");
-    fprintf(stderr, "ctl_mboxlist -d [-f filename]\n");
-    fprintf(stderr, "ctl_mboxlist -u [-f filename] [< mboxlist.dump]\n");
-    fprintf(stderr, "ctl_mboxlist -a [-f filename]\n");
+    fprintf(stderr, "ctl_mboxlist [-C <alt_config>] -c\n");
+    fprintf(stderr, "ctl_mboxlist [-C <alt_config>] -r\n");
+    fprintf(stderr, "ctl_mboxlist [-C <alt_config>] -d [-f filename]\n");
+    fprintf(stderr,
+	    "ctl_mboxlist [-C <alt_config>] -u [-f filename]"
+	    " [< mboxlist.dump]\n");
+    fprintf(stderr, "ctl_mboxlist [-C <alt_config>] -a [-f filename]\n");
     exit(1);
 }
 
@@ -277,12 +279,16 @@ int main(int argc, char *argv[])
     char *mboxdb_fname = NULL;
     int opt;
     enum mboxop op = NONE;
+    char *alt_config = NULL;
 
-    config_init("ctl_mboxlist");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "adurcf:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:adurcf:")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+
 	case 'r':
 	    if (op == NONE) op = RECOVER;
 	    else usage();
@@ -321,6 +327,8 @@ int main(int argc, char *argv[])
 	    break;
 	}
     }
+
+    config_init(alt_config, "ctl_mboxlist");
 
     switch (op) {
     case RECOVER:

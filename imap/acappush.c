@@ -287,9 +287,13 @@ int main(int argc, char **argv)
     time_t when_disconnected = 0;
     pid_t pid;
     int opt;
+    char *alt_config = NULL;
     
-    while ((opt = getopt(argc, argv, "d")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:d")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
 	case 'd': /* don't fork. debugging mode */
 	    debugmode = 1;
 	    break;
@@ -308,7 +312,7 @@ int main(int argc, char **argv)
     timeout.tv_sec = 60;
     timeout.tv_usec = 0;
 
-    config_init("acappush");
+    config_init(alt_config, "acappush");
     acap_init();
 
     /* initialize the hash table */

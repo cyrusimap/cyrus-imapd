@@ -42,16 +42,36 @@
 .SH NAME
 ctl_mboxlist \- perform operations on the mailbox list database
 .SH SYNOPSIS
-.B ctl_mboxlist \-r
+.B ctl_mboxlist
+[
+.B \-C
+.I config-file
+]
+.B \-r
 .br
-.B ctl_mboxlist \-c
+.B ctl_mboxlist
+[
+.B \-C
+.I config-file
+]
+.B \-c
 .br
-.B ctl_mboxlist \-d
+.B ctl_mboxlist
+[
+.B \-C
+.I config-file
+]
+.B \-d
 [
 \fB\-f \fIfilename\fR
 ]
 .br
-.B ctl_mboxlist \-u
+.B ctl_mboxlist
+[
+.B \-C
+.I config-file
+]
+.B \-u
 [
 \fB\-f \fIfilename\fR
 ]
@@ -61,12 +81,16 @@ is used to perform various administrative operations on the mailbox
 list database.
 .PP
 .I Ctl_mboxlist
-determines the default location of the mailbox list database by reading the 
-.I configdirectory
-option out of the
+reads its configuration options out of the
 .IR imapd.conf (5)
-file.
+file unless specified otherwise by \fB-C\fR.
+The
+.I configdirectory
+option is used to determine the default location of the mailbox list database.
 .SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .TP
 .B \-r
 Recover the database after an application or system failure.

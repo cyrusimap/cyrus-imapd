@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.18 2000/05/23 20:52:32 robeson Exp $
+ * $Id: syncnews.c,v 1.19 2001/02/22 19:27:20 ken3 Exp $
  */
 #include <config.h>
 
@@ -87,24 +87,28 @@ void readactive(char *active);
 
 void usage(void)
 {
-    fprintf(stderr, "usage: syncnews active\n");
+    fprintf(stderr, "usage: syncnews [-C <alt_config>] active\n");
     exit(EC_USAGE);
 }    
 
 int main(int argc, char **argv)
 {
     int opt;
-
-    config_init("syncnews");
+    char *alt_config = NULL;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
 	default:
 	    usage();
 	}
     }
+
+    config_init(alt_config, "syncnews");
 
     if (!argv[optind] || argv[optind+1]) usage();
 

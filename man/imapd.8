@@ -44,6 +44,10 @@ imapd \- IMAP server process
 .SH SYNOPSIS
 .B imapd
 [
+.B \-C
+.I config-file
+]
+[
 .B \-s
 ]
 [
@@ -61,7 +65,7 @@ with those descriptors attached to a remote client connection.
 .I Imapd
 reads its configuration options out of the
 .IR imapd.conf (5)
-file.
+file unless specified otherwise by \fB-C\fR.
 .PP
 If the file
 msg/shutdown
@@ -99,6 +103,9 @@ directory with a filename of the
 .I imapd
 process-id.
 .SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .TP
 .BI \-s
 Serve IMAP over SSL (imaps).  All data to and from

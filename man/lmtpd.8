@@ -44,6 +44,10 @@ lmtpd \- LMTP server process
 .SH SYNOPSIS
 .B lmtpd
 [
+.B \-C
+.I config-file
+]
+[
 .B \-a
 ]
 .SH DESCRIPTION
@@ -57,8 +61,11 @@ with those descriptors attached to a remote client connection.
 .I Lmtpd
 reads its configuration options out of the
 .IR imapd.conf (5)
-file.
+file unless specified otherwise by \fB-C\fR.
 .SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .TP
 .BI \-a
 Preauthorize connections initiated on an internet socket, instead of

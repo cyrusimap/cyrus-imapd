@@ -43,6 +43,10 @@
 syncnews \- synchronize IMAP news mailboxes with active file
 .SH SYNOPSIS
 .B syncnews
+[
+.B \-C
+.I config-file
+]
 .I active-file
 .SH DESCRIPTION
 .I Syncnews
@@ -53,6 +57,15 @@ file have IMAP mailboxes created.
 .PP
 A newsgroup must have a status of ``y'', ``m'', or ``n'' to be
 considered listed in the active file.
+.PP
+.I Syncnews
+reads its configuration options out of the
+.IR imapd.conf (5)
+file unless specified otherwise by \fB-C\fR.
+.SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .SH FILES
 .TP
 .B /etc/imapd.conf

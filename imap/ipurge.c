@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.8 2000/12/18 04:53:39 leg Exp $
+ * $Id: ipurge.c,v 1.9 2001/02/22 19:27:18 ken3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -101,13 +101,17 @@ int
 main (int argc, char *argv[]) {
   char option;
   char buf[MAX_MAILBOX_PATH];
+  char *alt_config = NULL;
 
   if (geteuid() == 0) { /* don't run as root, changes permissions */
     usage(argv[0]);
   }
 
-  while ((option = getopt(argc, argv, "hxd:b:k:m:")) != EOF) {
+  while ((option = getopt(argc, argv, "C:hxd:b:k:m:")) != EOF) {
     switch (option) {
+    case 'C': /* alt config file */
+      alt_config = optarg;
+      break;
     case 'd': {
       if (optarg == 0) {
 	usage(argv[0]);
@@ -144,7 +148,7 @@ main (int argc, char *argv[]) {
     usage(argv[0]);
   }
 
-  config_init("ipurge");
+  config_init(alt_config, "ipurge");
 
   if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
@@ -168,7 +172,7 @@ main (int argc, char *argv[]) {
 
 int
 usage(char *name) {
-  printf("usage: %s [-x] {-d days &| -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
+  printf("usage: %s [-C <alt_config>] [-x] {-d days &| -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
   printf("\tthere are no defaults and at least one of -d, -b, -k, -m\n\tmust be specified\n");
   printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
   printf("\t -x specifies an exact match for days or size\n");

@@ -43,11 +43,24 @@
 fud \- provide information about user mailboxes
 .SH SYNOPSIS
 .B fud
+[
+.B \-C
+.I config-file
+]
 .SH DESCRIPTION
-.I FUD
+.I Fud
 is a long lived datagram daemon started from inetd that provides information about when a user last
 read their mail, when mail last arrived in a user's mailbox, and how
 many messages are recent for that user.
+.PP
+.I Fud
+reads its configuration options out of the
+.IR imapd.conf (5)
+file unless specified otherwise by \fB-C\fR.
+.SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .SH FILES
 .TP
 .B /etc/imapd.conf

@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.8 2001/01/27 02:49:44 ken3 Exp $
+ $Id: ctl_deliver.c,v 1.9 2001/02/22 19:27:16 ken3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -136,8 +136,9 @@ void fatal(const char *message, int code)
 
 void usage(void)
 {
-    fprintf(stderr, "ctl_deliver -d -f <dbfile>\n"
-	    "ctl_deliver [-r] -E <days>\n");
+    fprintf(stderr,
+	    "ctl_deliver [-C <altconfig>] -d -f <dbfile>\n"
+	    "ctl_deliver [-C <altconfig>] [-r] -E <days>\n");
     exit(-1);
 }
 
@@ -150,15 +151,19 @@ main(argc, argv)
     extern char *optarg;
     int opt, r = 0;
     char *alt_file = NULL;
+    char *alt_config = NULL;
     int days = 0;
     int flag = 0;
     enum { DUMP, PRUNE, RECOVER, NONE } op = NONE;
 
-    config_init("ctl_deliver");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "drE:f:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:drE:f:")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+
 	case 'd':
 	    if (op == NONE) op = DUMP;
 	    else usage();
@@ -185,6 +190,8 @@ main(argc, argv)
 	    break;
 	}
     }
+
+    config_init(alt_config, "ctl_deliver");
 
     if (duplicate_init(flag) != 0) {
 	fprintf(stderr, 
@@ -220,4 +227,4 @@ main(argc, argv)
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.8 2001/01/27 02:49:44 ken3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.9 2001/02/22 19:27:16 ken3 Exp $ */

@@ -1,6 +1,6 @@
 /* mbpath.c -- help the sysadmin to find the path matching the mailbox
  *
- * $Id: mbpath.c,v 1.8 2000/06/04 22:47:54 leg Exp $
+ * $Id: mbpath.c,v 1.9 2001/02/22 19:27:18 ken3 Exp $
  * 
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -42,7 +42,7 @@
  *
  */
 
-/* static char _rcsid[] = "$Id: mbpath.c,v 1.8 2000/06/04 22:47:54 leg Exp $"; */
+/* static char _rcsid[] = "$Id: mbpath.c,v 1.9 2001/02/22 19:27:18 ken3 Exp $"; */
 
 #include <config.h>
 
@@ -87,7 +87,7 @@ fatal(const char *s, int code)
 
 static int 
 usage(void) {
-  fprintf(stderr,"usage: cdmb [-q] <mailbox name>...\n");
+  fprintf(stderr,"usage: cdmb [-C <alt_config>] [-q] <mailbox name>...\n");
   fprintf(stderr,"\t-q\tquietly drop any error messages\n");
   fatal(NULL, -1);
 }
@@ -98,12 +98,13 @@ main(int argc, char **argv)
   char *path;
   int rc, i, quiet = 0, stop_on_error=0;
   char opt;
+  char *alt_config = NULL;
 
-
-  config_init("mbpath");
-
-  while ((opt = getopt(argc, argv, "qs")) != EOF) {
+  while ((opt = getopt(argc, argv, "C:qs")) != EOF) {
     switch(opt) {
+    case 'C': /* alt config file */
+      alt_config = optarg;
+      break;
     case 'q':
       quiet = 1;
       break;
@@ -115,6 +116,8 @@ main(int argc, char **argv)
       usage();
     }
   }
+
+  config_init(alt_config, "mbpath");
 
   mboxlist_init(0);
   mboxlist_open(NULL);
@@ -143,5 +146,5 @@ main(int argc, char **argv)
   exit(0);
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.8 2000/06/04 22:47:54 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.9 2001/02/22 19:27:18 ken3 Exp $ */
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.16 2001/02/21 01:09:40 ken3 Exp $ */
+/* $Id: service.c,v 1.17 2001/02/22 19:27:23 ken3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -63,6 +63,9 @@
 #include <sysexits.h>
 
 #include "service.h"
+
+extern int optind;
+extern char *optarg;
 
 /* number of times this service has been used */
 static int use_count = 0;
@@ -128,7 +131,7 @@ static int libwrap_ask(struct request_info *r, int fd)
 
 #endif
 
-extern void config_init(const char *);
+extern void config_init(const char *, const char *);
 
 int main(int argc, char **argv, char **envp)
 {
@@ -137,6 +140,19 @@ int main(int argc, char **argv, char **envp)
     int fd;
     char *p = NULL;
     struct request_info request;
+    int opt;
+    char *alt_config = NULL;
+
+    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+	default:
+	    break;
+	}
+    }
+    optind = 0;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
@@ -147,7 +163,7 @@ int main(int argc, char **argv, char **envp)
     }
 
     snprintf(name, sizeof(name) - 1, "service-%s", getenv("CYRUS_SERVICE"));
-    config_init(name);
+    config_init(alt_config, name);
 
     syslog(LOG_DEBUG, "executed");
 

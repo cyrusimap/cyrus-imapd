@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.297 2001/02/16 18:55:10 leg Exp $ */
+/* $Id: imapd.c,v 1.298 2001/02/22 19:27:17 ken3 Exp $ */
 
 #include <config.h>
 
@@ -415,8 +415,10 @@ int service_main(int argc, char **argv, char **envp)
 #endif
 
     memset(&extprops, 0, sizeof(sasl_external_properties_t));
-    while ((opt = getopt(argc, argv, "sp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:sp:")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt config file - handled by service::main() */
+	    break;
 	case 's': /* imaps (do starttls right away) */
 	    imaps = 1;
 	    if (!starttls_enabled()) {
