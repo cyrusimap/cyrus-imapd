@@ -1,5 +1,8 @@
                    Changes to the Cyrus IMAP Server
 
+      * Fixed the Kerberos V4 bug in imtest that caused you not to be able to
+	use layers to the same machine.
+
 Changes to the Cyrus IMAP Server Since Version 1.6.10 
 
       * Changed the sieve option in the configure script to

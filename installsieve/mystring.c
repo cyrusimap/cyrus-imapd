@@ -14,13 +14,13 @@ int string_allocate(int length,
 
   (*str)->len=length;
 
-  if (buf==NULL) return TIMSIEVE_OK;
+  if (buf==NULL) return SIEVE_OK;
 
   /* copy the data into the string object */
   memcpy(((char *)(*str))+sizeof(string_t), buf, length);
   ((char *) (*str))[sizeof(string_t)+length]='\0';
 
-  return TIMSIEVE_OK;
+  return SIEVE_OK;
 }
 
 
@@ -50,16 +50,16 @@ int string_compare(string_t *str1, string_t *str2)
   char *data2;
   int lup;
 
-  if (str1->len!=str2->len) return TIMSIEVE_FAIL;
+  if (str1->len!=str2->len) return SIEVE_FAIL;
 
   data1=string_DATAPTR(str1);
   data2=string_DATAPTR(str2);
 
   for (lup=0;lup<str1->len;lup++)
     if (data1[lup]!=data2[lup])
-      return TIMSIEVE_FAIL;
+      return SIEVE_FAIL;
 
-  return TIMSIEVE_OK;
+  return SIEVE_OK;
 }
 
 int string_compare_with(string_t *str1, string_t *str2, string_t *comp)
@@ -106,17 +106,37 @@ int string_comparestr(string_t *str1, char *str2)
   char *data2;
   int lup;
 
-  if (str1->len!=str2len) return TIMSIEVE_FAIL;
+  if (str1->len!=str2len) return SIEVE_FAIL;
 
   data1=string_DATAPTR(str1);
   data2=str2;
 
   for (lup=0;lup<str1->len;lup++)
     if (data1[lup]!=data2[lup])
-      return TIMSIEVE_FAIL;
+      return SIEVE_FAIL;
 
-  return TIMSIEVE_OK;
+  return SIEVE_OK;
 }
+/*
+eq_result_t
+string_equal_cstr(const string_t * str, const char *cstr)
+{
+  int        len;
+
+  I(str);
+  I(cstr);
+
+  len = strlen(cstr);
+  if (len != str->len)
+    return EQ_NOT_EQUAL;
+
+  if (memcmp(string_DATAPTR(str), cstr, len)==0)
+    return EQ_IS_EQUAL;
+
+
+  return EQ_NOT_EQUAL; 
+}
+*/
 
 int safe_to_use_quoted(char *str, int len)
 {

@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.144 1999/09/13 00:11:18 tmartin Exp $
+dnl $Id: configure.in,v 1.145 1999/09/21 23:15:56 tmartin Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -91,8 +91,11 @@ fi
 
 dnl for timsieved
 if test "$sievedir" != "no"; then
-	PRE_SUBDIRS="${PRE_SUBDIRS} timsieved"
+	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} timsieved"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} timsieved/Makefile"
+
+	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} installsieve"
+	EXTRA_OUTPUT="${EXTRA_OUTPUT} installsieve/Makefile"
 fi
 
 dnl for et routines

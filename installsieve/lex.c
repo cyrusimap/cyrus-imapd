@@ -1,31 +1,3 @@
-/* lex.c -- lexer for timsieved
- * Tim Martin
- * 9/21/99
- */
-/***********************************************************
-        Copyright 1999 by Carnegie Mellon University
-
-                      All Rights Reserved
-
-Permission to use, copy, modify, and distribute this software and its
-documentation for any purpose and without fee is hereby granted,
-provided that the above copyright notice appear in all copies and that
-both that copyright notice and this permission notice appear in
-supporting documentation, and that the name of Carnegie Mellon
-University not be used in advertising or publicity pertaining to
-distribution of the software without specific, written prior
-permission.
-
-CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
-THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE FOR
-ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
-OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-******************************************************************/
-
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -36,17 +8,14 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "codes.h"
 
-
-#include "y.tab.h"
-
 /* current state the lexer is in */
 int lexer_state = LEXER_STATE_NORMAL;
 
-extern struct protstream *sieved_out;
+#define ACAP_MAX_QSTR_LEN 4096
 
 #define ERR() {								\
 		lexer_state=LEXER_STATE_RECOVER;                        \
-		return TIMSIEVE_FAIL;                                   \
+		return SIEVE_FAIL;                                       \
                 /*  (result == DAEMON_ERR_EOF ? EOF : ERROR);*/	        \
   	      }
 
@@ -55,47 +24,32 @@ extern struct protstream *sieved_out;
 		ERR();					\
   	      }
 
-int lex_reset(void)
+int token_lookup(char *str, int len)
 {
-  lexer_state = LEXER_STATE_NORMAL;
+  printf("Foo=%s\n",str);
 
-  return 0;
+  if (strcmp(str,"ok")==0) return TOKEN_OK;
+  if (strcmp(str,"no")==0) return TOKEN_NO;
+
+  return -1;
 }
 
-
-int maxscriptsize=0;
-char *buffer;
-
-int lex_init(void)
+int yylex(lexstate_t * lvalp, void * client)
 {
-  maxscriptsize = config_getint("maxscriptsize",32000);
-
-  buffer = (char *) xmalloc(maxscriptsize);
-
-  return 0;
-}
-
-int timlex(YYSTYPE * lvalp, void * client)
-{
-
   int ch;
+  char buffer[ACAP_MAX_QSTR_LEN];	/* big enough for everything */
 
-  char *buff_ptr;
-  char *buff_end;
+  char *buff_ptr = buffer; /* ptr into the buffer */
+  char *buff_end = buffer + ACAP_MAX_QSTR_LEN -1;
 
   unsigned long count;
 
   int result;
 
-  int synchronizing=TRUE;  /* wheather we are in the process of reading a
-			      synchronizing string or not */
-
+  int synchronizing;  /* wheather we are in the process of reading a
+			 synchronizing string or not */
 
   struct protstream *stream=(struct protstream *) client;
-
-  buff_ptr = buffer; /* ptr into the buffer */
-  buff_end = buffer + maxscriptsize -1; /* ptr to end of buffer */
-
   
   while (1)
   {
@@ -106,11 +60,7 @@ int timlex(YYSTYPE * lvalp, void * client)
 
     ch=prot_getc(stream);
 
-    if (ch==-1)
-    {
-      return TIMSIEVE_FAIL;
-    }
-
+    if (ch==-1) return SIEVE_FAIL;
 
     switch (lexer_state)
     {
@@ -137,28 +87,24 @@ int timlex(YYSTYPE * lvalp, void * client)
 	lvalp->str = NULL;
 	/*	if (! client->recovering) { */
 	  result = string_allocate(buff_ptr - buffer, buffer, &lvalp->str);
-	  if (result != TIMSIEVE_OK)
+	  if (result != SIEVE_OK)
 	    ERR_PUSHBACK();
 	  /*} */
 	lexer_state=LEXER_STATE_NORMAL;
 	return STRING;
       }
-      /* illegal character */
       if (ch == '\0'
 	  || ch == '\r'
 	  || ch == '\n'
 	  || 0x7F < ((unsigned char)ch))
-      {
 	ERR_PUSHBACK();
-      }
-
       /* Otherwise, we're appending a character */
       if (buff_end <= buff_ptr)
 	ERR_PUSHBACK();		/* too long! */
       if (ch == '\\') {
 	ch=prot_getc(stream);
 
-	if (result != TIMSIEVE_OK)
+	if (result != SIEVE_OK)
 	  ERR();
 	if (ch != '\"' && ch != '\\')
 	  ERR_PUSHBACK();
@@ -196,19 +142,20 @@ int timlex(YYSTYPE * lvalp, void * client)
 	ERR();
       if (ch != '\n')
 	ERR_PUSHBACK();
-      if (synchronizing==TRUE) {
-	static const char sync_reply[] = "\"Ready for data\"\r\n";
+      if (synchronizing) {
+	/*	static const char sync_reply[] = "+ \"Ready for data\"\r\n";*/
 
-	prot_printf(sieved_out, sync_reply);
-	prot_flush(sieved_out);
+	/* xxx	if (client->recovering)
+		return EOL;*/
+	/*	pthread_mutex_lock(client_OUTPUT_MUTEX(client));
+	conn_write(client_CONN(client), sync_reply, sizeof(sync_reply) - 1);
+	conn_flush(client_CONN(client));
+	pthread_mutex_unlock(client_OUTPUT_MUTEX(client));*/
       }
-
-      if (count > config_getint("maxscriptsize",32000))
-	ERR();
 
       lvalp->str = NULL;
       result = string_allocate(count, NULL, &lvalp->str);
-      if (result != TIMSIEVE_OK)
+      if (result != SIEVE_OK)
 	ERR_PUSHBACK();
 
       /* there is a literal string on the wire. let's read it */
@@ -223,6 +170,20 @@ int timlex(YYSTYPE * lvalp, void * client)
       }
       lexer_state=LEXER_STATE_NORMAL;
       return STRING;
+    case LEXER_STATE_NUMBER:
+      if (('0' <= ch) && (ch <= '9')) {
+	unsigned long   newcount = count * 10 + (ch - '0');
+
+	if (newcount < count)
+	  ERR_PUSHBACK();	/* overflow */
+	count = newcount;
+      } else {
+	lvalp->number = count;
+	lexer_state=LEXER_STATE_NORMAL;
+	prot_ungetc(ch, stream);
+	return NUMBER;
+      }
+      break;
     case LEXER_STATE_NORMAL:
       if (isalpha((unsigned char) ch)) {
 	lexer_state=LEXER_STATE_ATOM;
@@ -241,6 +202,19 @@ int timlex(YYSTYPE * lvalp, void * client)
 	break;
       case '*':
 	return '*';
+      case '0': /* fall through all numbers */
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+	count = ch - '0';
+	lexer_state=LEXER_STATE_NUMBER;
+	break;
       case '{':
 	count = 0;
 	synchronizing = TRUE;
