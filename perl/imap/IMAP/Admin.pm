@@ -454,8 +454,17 @@ sub listquotaroot {
 
 sub renamemailbox {
   my ($self, $src, $dest, $ptn) = @_;
+
+  $self->addcallback({-trigger => 'NO',
+		      -callback => sub {
+			print $_ . "\n";
+		      }});
+
   my ($rc, $msg) = $self->send('', '', 'RENAME %s %s%a%a', $src, $dest,
 			       $ptn ? ' ' : $ptn, $ptn);
+
+  $self->addcallback({-trigger => 'NO'});
+		    
   if ($rc eq 'OK') {
     $self->{error} = undef;
     1;
