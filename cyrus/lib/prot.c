@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <strings.h>
 #include <signal.h>
+#include <setjmp.h>
 #ifdef __STDC__
 #include <stdarg.h>
 #else
@@ -40,11 +41,11 @@ extern void fs_give( /* void ** */ );
 extern char *sys_errlist[];
 
 /* Signal handler used for read timeouts */
-static int timedout = 0;
+static jmp_buf timeoutbuf;
 static int
 alarmhandler()
 {
-    timedout = 1;
+    longjmp(timeoutbuf, 1);
 }
 
 /*
@@ -176,16 +177,14 @@ struct protstream *s;
 	}
 	else {
 	    if (s->read_timeout) {
-		/* Set up inactivity timer */
-		timedout = 0;
+		if (setjmp(timeoutbuf)) {
+		    s->error = "idle for too long";
+		    return EOF;
+		}
 		alarm(s->read_timeout);
 	    }
 	    do {
 		n = read(s->fd, s->buf+cnt, sizeof(s->buf)-cnt);
-		if (s->read_timeout && timedout) {
-		    s->error = "Timeout expired";
-		    return EOF;
-		}
 	    } while (n == -1 && errno == EINTR);
 	    if (s->read_timeout) alarm(0);
 	}
