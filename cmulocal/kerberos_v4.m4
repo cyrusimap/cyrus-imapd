@@ -1,7 +1,7 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.6 1998/11/10 23:11:12 shadow Exp $
+dnl $Id: kerberos_v4.m4,v 1.7 1998/12/01 22:10:42 shadow Exp $
 
 AC_DEFUN(CMU_KRB_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
@@ -89,8 +89,10 @@ AC_ARG_WITH(krb4-include,
 	fi])
 
 	if test "X$with_krb4" != "X"; then
-	  ac_cv_krb_where_lib=$with_krb4/lib
-	  ac_cv_krb_where_inc=$with_krb4/include
+	  if test "$with_krb4" != "yes"; then
+	    ac_cv_krb_where_lib=$with_krb4/lib
+	    ac_cv_krb_where_inc=$with_krb4/include
+	  fi
 	fi
 
 	if test "X$with_krb4_lib" != "X"; then
