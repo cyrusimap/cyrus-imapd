@@ -8,8 +8,10 @@
 
 void freebuf(struct buf *buf)
 {
-    free(buf->s);
-    buf->s = NULL;
+    if (buf->s) {
+	free(buf->s);
+	buf->s = NULL;
+    }
     buf->alloc = 0;
 }
 
