@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.37 2000/12/26 21:35:42 leg Exp $
+ $Id: auth_krb_pts.c,v 1.38 2001/01/02 00:01:10 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -62,22 +62,16 @@
 #include "lock.h"
 #include "retry.h"
 #include "xmalloc.h"
+#include "hash.h"
 
 #ifndef KRB_MAPNAME
 #define KRB_MAPNAME "/etc/krb.equiv"
 #endif
 
-static const struct auth_state auth_anonymous = {
-    "anonymous", "anonymous", "", "", 
-    (time_t) 0, (int) 0,
-    { "" }
-};
-
-
-static int parse_krbequiv_line P((const char *src,
-				  char *principal, char *localuser));
-char *auth_map_krbid P((const char *real_aname, const char *real_inst,
-			const char *real_realm));
+static int parse_krbequiv_line(const char *src,
+			       char *principal, char *localuser);
+char *auth_map_krbid(const char *real_aname, const char *real_inst,
+		     const char *real_realm);
 
 /*
  * Determine if the user is a member of 'identifier'
@@ -87,23 +81,36 @@ char *auth_map_krbid P((const char *real_aname, const char *real_inst,
  *      2       User is in the group that is identifier
  *      3       User is identifer
  */
-int auth_memberof(auth_state, identifier)
-struct auth_state *auth_state;
-const char *identifier;
+int auth_memberof(struct auth_state *auth_state,
+		  const char *identifier)
 {
     int i;
-    
-    if (!auth_state) auth_state = &auth_anonymous;
+    unsigned idhash = hash(identifier);
+    static unsigned anyonehash = 0;
 
-    if (strcmp(identifier, "anyone") == 0) return 1;
+    anyonehash = !anyonehash ? hash("anyone") : anyonehash;
     
-    if (strcmp(identifier, auth_state->userid) == 0) return 3;
+    if (!auth_state) {
+	/* special case anonymous */
+	if (!strcmp(identifier, "anyone")) return 1;
+	else if (!strcmp(identifier, "anonymous")) return 3;
+
+	/* "anonymous" is not a member of any group */
+	else return 0;
+    }
+
+    /* is 'identifier' "anyone"? */
+    if (idhash == anyonehash &&
+	!strcmp(identifier, "anyone")) return 1;
     
-    /* "anonymous" is not a member of any group */
-    if (strcmp(auth_state->userid, "anonymous") == 0) return 0;
+    /* is 'identifier' me? */
+    if (idhash == auth_state->userid.hash &&
+	!strcmp(identifier, auth_state->userid.id)) return 3;
     
+    /* is it a group i'm a member of ? */
     for (i=0; i < auth_state->ngroups; i++)
-        if (!strcmp(identifier,auth_state->groups[i]))
+        if (idhash == auth_state->groups[i].hash &&
+	    !strcmp(identifier, auth_state->groups[i].id))
             return 2;
   
     return 0;
@@ -117,10 +124,9 @@ const char *identifier;
  * be the local user.  Both buffers must be of size one larger than
  * MAX_K_NAME_SZ.  Returns 1 on success, 0 on failure.
  */
-static int parse_krbequiv_line(src, principal, localuser)
-const char *src;
-char *principal;
-char *localuser;
+static int parse_krbequiv_line(const char *src, 
+			       char *principal, 
+			       char *localuser)
 {
     int i;
     
@@ -151,10 +157,9 @@ char *localuser;
  * a NULL pointer is returned.
  * Eventually, this may be more sophisticated than a simple file scan.
  */
-char *auth_map_krbid(real_aname, real_inst, real_realm)
-const char *real_aname;
-const char *real_inst;
-const char *real_realm;
+char *auth_map_krbid(const char *real_aname,
+		     const char *real_inst,
+		     const char *real_realm)
 {
     static char localuser[MAX_K_NAME_SZ + 1];
     char principal[MAX_K_NAME_SZ + 1];
@@ -226,8 +231,7 @@ const char *real_realm;
  * Returns a pointer to a static buffer containing the canonical form
  * or NULL if 'identifier' is invalid.
  */
-char *auth_canonifyid(identifier)
-const char *identifier;
+char *auth_canonifyid(const char *identifier)
 {
     static char retbuf[MAX_K_NAME_SZ+1];
     char aname[ANAME_SZ];
@@ -334,7 +338,8 @@ struct auth_state *auth_newstate(const char *identifier,
 
     kname_parse(newstate->aname, newstate->inst, newstate->realm, 
 		(char *) identifier);
-    strcpy(newstate->userid, identifier);
+    strcpy(newstate->userid.id, identifier);
+    newstate->userid.hash = hash(identifier);
 
     if (!strcmp(identifier, "anyone")) return newstate;
 
@@ -358,6 +363,10 @@ struct auth_state *auth_newstate(const char *identifier,
         memset(keydata, 0, key.size);
         strncpy(keydata, identifier, PR_MAXNAMELEN);
     }
+
+#ifdef RUNNING_QUANTIFY
+    return newstate;
+#endif
 
     strcpy(fnamebuf, STATEDIR);
     strcat(fnamebuf, PTS_DBLOCK);
