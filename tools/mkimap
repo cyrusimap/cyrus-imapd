@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: mkimap,v 1.15 2003/10/22 18:50:32 rjs3 Exp $
+# $Id: mkimap,v 1.16 2004/06/29 18:16:54 rjs3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -88,18 +88,18 @@ print "configuring $d...\n";
 
 chdir $d or die "couldn't change to $d";
 
-mkdir "proc", 0755;
-mkdir "db", 0755;
-mkdir "socket", 0755;
-mkdir "log", 0755;
-mkdir "msg", 0755;
-mkdir "ptclient", 0755;
+mkdir "proc", 0755 || warn "can't create $d/proc: $!";
+mkdir "db", 0755 || warn "can't create $d/db: $!";
+mkdir "socket", 0755 || warn "can't create $d/socket: $!";
+mkdir "log", 0755 || warn "can't create $d/log: $!";
+mkdir "msg", 0755 || warn "can't create $d/msg: $!";
+mkdir "ptclient", 0755 || warn "can't create $d/ptclient: $!";
 
 while ($part = shift @parts) {
     print "creating $part...\n";
-    mkdir $part, 0755;
+    mkdir $part, 0755 || warn "can't create $part: $!";
     chdir $part or die "couldn't change to partition $part";
-    mkdir "stage.", 0755;
+    mkdir "stage.", 0755 || warn "can't create $part/stage.: $!";
 }
 
 print "done\n";
