@@ -164,10 +164,8 @@ char *real_realm;
             }
             
             if (*realm) {
-                if (krb_get_lrealm(lrealm,1)) {
-                    return 0;           /* configuration error */
-                }
-                if (strcmp(lrealm, realm) == 0) {
+                if (krb_get_lrealm(lrealm,1) == 0 &&
+		    strcmp(lrealm, realm) == 0) {
                     *realm = 0;
                 }
                 else if (krb_get_krbhst(krbhst, realm, 0)) {
@@ -228,10 +226,8 @@ char *identifier;
     }
     
     if (*realm) {
-        if (krb_get_lrealm(lrealm,1)) {
-            return 0;           /* configuration error */
-        }
-        if (strcmp(lrealm, realm) == 0) {
+        if (krb_get_lrealm(lrealm,1) == 0 &&
+	    strcmp(lrealm, realm) == 0) {
             *realm = 0;
         }
         else if (krb_get_krbhst(krbhst, realm, 0)) {
