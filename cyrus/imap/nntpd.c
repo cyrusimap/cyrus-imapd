@@ -47,7 +47,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.25 2002/10/18 21:01:16 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.26 2002/10/21 17:59:10 ken3 Exp $
  */
 #include <config.h>
 
@@ -1194,7 +1194,7 @@ void cmd_sasl(char *mech, char *resp)
     const char *canon_user;
 
     if (nntp_userid) {
-	prot_printf(nntp_out, "452 Already authenticated\r\n");
+	prot_printf(nntp_out, "501 Already authenticated\r\n");
 	return;
     }
 
@@ -1207,13 +1207,13 @@ void cmd_sasl(char *mech, char *resp)
 	switch (r) {
 	case IMAP_SASL_CANCEL:
 	    prot_printf(nntp_out,
-			"452 Client canceled authentication\r\n");
+			"501 Client canceled authentication\r\n");
 	    break;
 	case IMAP_SASL_PROTERR:
 	    errorstring = prot_error(nntp_in);
 
 	    prot_printf(nntp_out,
-			"452 Error reading client response: %s\r\n",
+			"503 Error reading client response: %s\r\n",
 			errorstring ? errorstring : "");
 	    break;
 	default: 
