@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.16 2000/06/23 16:11:35 ken3 Exp $
+ * $Id: message.c,v 1.17 2000/10/26 23:09:27 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -463,32 +463,18 @@ char *get_address(address_part_t addrpart, void **data, void **marker)
 	case ADDRESS_ALL:
 #define U_DOMAIN "unspecified-domain"
 #define U_USER "unknown-user"
-	    if (a->mailbox && a->domain) {
-		am->freeme = (char *) xmalloc(strlen(a->mailbox) + 
-					     strlen(a->domain) +
-					     2);
-		strcpy(am->freeme, a->mailbox);
-		strcat(am->freeme, "@");
-		strcat(am->freeme, a->domain);
-		ret = am->freeme;
-	    } else if (a->mailbox) {
-		am->freeme = (char *) xmalloc(strlen(a->mailbox) +
-					     strlen(U_DOMAIN) + 2);
-		strcpy(am->freeme, a->mailbox);
-		strcat(am->freeme, "@");
-		strcat(am->freeme, U_DOMAIN);
-		ret = am->freeme;
-	    } else if (a->domain) {
-		am->freeme = (char *) xmalloc(strlen(a->domain) +
-					     strlen(U_USER) + 2);
-		strcpy(am->freeme, U_USER);
-		strcat(am->freeme, "@");
-		strcat(am->freeme, a->domain);
+	    if (a->mailbox || a->domain) {
+		char *m = a->mailbox ? a->mailbox ? U_USER;
+		char *d = a->domain ? a->domain ? U_DOMAIN;
+		am->freeme = (char *) xmalloc(strlen(m) + strlen(d) + 2);
+
+		sprintf(am->freeme, "%s@%s", m, d);
 		ret = am->freeme;
 	    } else {
 		ret = NULL;
 	    }
 	    break;
+
 	case ADDRESS_LOCALPART:
 	    ret = a->mailbox;
 	    break;
