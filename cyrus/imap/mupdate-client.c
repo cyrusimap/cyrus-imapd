@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.30 2002/03/20 23:03:06 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.31 2002/04/02 19:29:36 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,6 +80,7 @@ extern sasl_callback_t *mysasl_callbacks(const char *username,
                                          const char *authname,
                                          const char *realm,
                                          const char *password);
+extern void free_callbacks(sasl_callback_t *in);
 
 static sasl_security_properties_t *make_secprops(int min, int max)
 {
@@ -239,6 +240,7 @@ int mupdate_connect(const char *server, const char *port,
 		    sasl_callback_t *cbs)
 {
     mupdate_handle *h = NULL;
+    int local_cbs = 0;
     struct hostent *hp;
     struct servent *sp;
     struct sockaddr_in addr;
@@ -300,6 +302,7 @@ int mupdate_connect(const char *server, const char *port,
     h->sock = s;
 
     if(!cbs) {
+	local_cbs = 1;
 	cbs = mysasl_callbacks(config_getstring("mupdate_username",""),
 			       config_getstring("mupdate_authname",NULL),
 			       config_getstring("mupdate_realm",NULL),
@@ -336,6 +339,7 @@ int mupdate_connect(const char *server, const char *port,
     if(!mechlist) {
 	syslog(LOG_ERR, "no AUTH banner from remote");
 	mupdate_disconnect(handle);
+	free_callbacks(cbs);
 	return MUPDATE_NOAUTH;
     }
     
@@ -343,10 +347,15 @@ int mupdate_connect(const char *server, const char *port,
 	syslog(LOG_ERR, "authentication to remote mupdate server failed");
 	free(mechlist);
 	mupdate_disconnect(handle);
+	free_callbacks(cbs);
 	return MUPDATE_NOAUTH;
     }
 
     free(mechlist);
+
+    /* xxx unclear that this is correct, but it prevents a memory leak */
+    if(local_cbs) free_callbacks(cbs);
+    
     /* SUCCESS */
     return 0;
 
