@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.41 1999/12/23 20:51:25 tmartin Exp $
+ * $Id: imtest.c,v 1.42 2000/01/04 20:52:02 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -1009,9 +1009,9 @@ void interactive(char *filename)
   int nfds;
   int nfound;
   int count;
-  int fd;
-  int atend=0;
-  int donewritingfile = 1;
+  int fd = 0;
+  int atend = 0;
+  int donewritingfile = 0;
 
   /* open the file if available */
   if (filename != NULL) {
@@ -1023,21 +1023,18 @@ void interactive(char *filename)
   }
   
   FD_ZERO(&read_set);
-  if (filename==NULL)
-    FD_SET(0, &read_set);  
-  
+  FD_SET(fd, &read_set);  
   FD_SET(sock, &read_set);
 
   FD_ZERO(&write_set);
   FD_SET(sock, &write_set);
-  if (filename != NULL) 
-      FD_SET(fd, &read_set);  
 
   nfds = getdtablesize();
 
-  if (filename != NULL)
+  if (filename != NULL) {
       donewritingfile = 0;
-  
+  }
+
   /* loop reading from network and from stdin if applicable */
   while(1) {
       rset = read_set;
