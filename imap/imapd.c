@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.332 2002/01/10 19:33:11 leg Exp $ */
+/* $Id: imapd.c,v 1.333 2002/01/11 20:22:15 leg Exp $ */
 
 #include <config.h>
 
@@ -256,7 +256,6 @@ static int acl_ok(const char *user,
     else {
 	r = (cyrus_acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
     }
-    if (authstate) auth_freestate(authstate);
     return r;
 }
 
