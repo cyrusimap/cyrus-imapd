@@ -459,7 +459,7 @@ char *name;
 /*
  * List of mailboxes in reconstructed mailbox list
  */
-#define NEWMBOX_GROW 30 /* XXX 1000 */
+#define NEWMBOX_GROW 1000
 char **newmbox_name = 0;
 char **newmbox_partition = 0;
 char **newmbox_acl = 0;
