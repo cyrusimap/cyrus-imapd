@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.67 1998/09/29 03:12:22 tjs Exp $
+# $Id: Makefile.in,v 1.68 1998/11/03 21:08:56 tjs Exp $
 # 
 # @configure_input@
 #
@@ -84,6 +84,7 @@ SUIDPROGS = deliver
 all: $(PROGS) $(SUIDPROGS) $(SUGIDPROGS)
 
 install:
+	$(srcdir)/install-sh -d ${DESTDIR}$(cyrus_prefix)/bin
 	for file in $(PROGS); \
 	do \
 		$(INSTALL) @STRIP@ -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 755 $$file $(DESTDIR)$(cyrus_prefix)/bin || exit 1; \
