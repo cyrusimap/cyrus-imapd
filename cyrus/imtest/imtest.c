@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.32 1999/09/13 00:07:34 tmartin Exp $
+ * $Id: imtest.c,v 1.33 1999/09/21 23:15:59 tmartin Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -173,9 +173,6 @@ static int init_sasl(char *serverFQDN, int port, int ssf)
   addrsize=sizeof(struct sockaddr_in);
   if (getsockname(sock,(struct sockaddr *)saddr_l,&addrsize)!=0)
     return IMTEST_FAIL;
-
-  /* set the port manually since getsockname is stupid and doesn't */
-  saddr_l->sin_port = htons(port);
 
   if (sasl_setprop(conn, SASL_IP_LOCAL, saddr_l)!=SASL_OK)
     return IMTEST_FAIL;

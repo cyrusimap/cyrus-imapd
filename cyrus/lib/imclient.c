@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.34 1999/08/30 19:40:49 leg Exp $
+ $Id: imclient.c,v 1.35 1999/09/21 23:16:13 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -1151,9 +1151,6 @@ int imclient_authenticate(struct imclient *imclient,
   addrsize=sizeof(struct sockaddr_in);
   if (getsockname(imclient->fd,(struct sockaddr *)saddr_l,&addrsize)!=0)
     return 1;
-
-  saddr_l->sin_port = saddr_r->sin_port; 
-                    /* b/c getsockname is dumb and doesn't set it */
 
   /*  saddr_l->sin_port=htons(saddr_l->sin_port);	*/
   saslresult=sasl_setprop(imclient->saslconn,   SASL_IP_LOCAL, saddr_l);

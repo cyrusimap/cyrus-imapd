@@ -1,4 +1,4 @@
-# Makefile.in - timsieved makefile
+# Makefile.in - installsieve makefile
 # @configure_input@
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
@@ -26,41 +26,26 @@ srcdir = @srcdir@
 VPATH = @srcdir@
 
 CC = @CC@
-YACC = @YACC@
-YFLAGS = -d
-LEX = @LEX@
-RANLIB = @RANLIB@
-
-INSTALL = @INSTALL@
-CYRUS_USER=@cyrus_user@
-CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib @CPPFLAGS@
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
 
-prefix = @prefix@
-exec_prefix = @exec_prefix@
-cyrus_prefix = @cyrus_prefix@
-
 MAKEDEPEND = @MAKEDEPEND@
-
-TIMSIEVED_LIBS = @TIMSIEVED_LIBS@
 
 IMAP_LIBS = @IMAP_LIBS@
 LIBS = 
-DEPLIBS=../sieve/libsieve.a ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS=../lib/libcyrus.a @DEPLIBS@
 
-all: timsieved
+all: installsieve
 
 install:
-	$(INSTALL) @STRIP@ -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 755 timsieved $(DESTDIR)$(cyrus_prefix)/bin
 
-OBJS=y.tab.o actions.o config.o lex.o mystring.o scripttest.o token.o timsieved.o
+OBJS=installscript.o lex.o mystring.o request.o
 
-timsieved: y.tab.c $(OBJS)
-	$(CC) $(LDFLAGS) -o timsieved $(OBJS) $(DEPLIBS) $(IMAP_LIBS)
+installsieve: $(OBJS) 
+	$(CC) $(LDFLAGS) -o installsieve $(OBJS) $(DEPLIBS) $(IMAP_LIBS)
 
 clean:
 	rm -f *.o *.a Makefile.bak makedepend.log
@@ -71,14 +56,9 @@ distclean: clean
 depend:
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
 
-y.tab.c: parse.y
-	$(YACC) $(YFLAGS) parse.y
-
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) \
 	$<
 
-#%-yacc.c %.tab.h: %.y
-#	$(BISON) -y -d $< && mv y.tab.c $*-yacc.c && mv y.tab.h $*.tab.h
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
