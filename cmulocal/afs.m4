@@ -1,5 +1,5 @@
 dnl afs.m4--AFS libraries, includes, and dependencies
-dnl $Id: afs.m4,v 1.21 2002/07/22 19:30:44 shadow Exp $
+dnl $Id: afs.m4,v 1.22 2002/07/22 20:07:08 shadow Exp $
 dnl Chaskiel Grundman
 dnl based on kerberos_v4.m4
 dnl Derrick Brashear
@@ -287,6 +287,8 @@ ac_cv_afs_int32=yes, ac_cv_afs_int32=no)])
           AC_SUBST(AFS_INC_FLAGS)
           AC_SUBST(AFS_LIB_FLAGS)
 	  AC_SUBST(AFS_TOP_DIR)
+	  AC_SUBST(AFS_LIBDES)
+          AC_SUBST(AFS_LIBDESA)
        	fi
 	])
 
