@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.76 2000/06/20 18:11:38 leg Exp $
+ * $Id: pop3d.c,v 1.77 2000/07/06 16:13:35 leg Exp $
  */
 #include <config.h>
 
@@ -215,6 +215,8 @@ int service_main(int argc, char **argv, char **envp)
 		fatal("pop3s: required OpenSSL options not present",
 		      EC_CONFIG);
 	    }
+	    break;
+
 	case 'k':
 	    kflag++;
 	    break;
