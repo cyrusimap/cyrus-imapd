@@ -18,6 +18,8 @@
       * Deliver does not handle messages containing NUL properly due to
         stdio problems (the characters between the NUL and the LF will be
         lost.) 
+      * Depending on how getpwnam/getspnam make their calls, pwcheck may
+        "cache" users undesirably. This has not yet been fixed. 
 
     Please report bugs to cyrus-bugs@andrew.cmu.edu. Be sure to include (at
     least) system type, compiler used, and the options passed to configure,
