@@ -2,6 +2,19 @@
 
 Changes to the Cyrus IMAP Server Since Version 1.5.2
 
+      * Added a patch from Eric Haberg to work around a possible deadlock
+        condition in mboxlist.c where rename isn't atomic. 
+      * Updated db code to use db 2.0 where possible. 
+      * Fixes to ptloader including the removal of some core leaks. 
+      * Patch from John Myers to get rid of cyrus.seen corruption in
+        bsearch_mem. 
+      * Patch from John Myers and to allow ISO-8859-1 characters in mailbox
+        names. 
+      * Makedepend still runs, and still generates warnings, but these are
+        squirrled away in makedepend.log. 
+      * On mailbox delete, the server will no longer try and unlink ".."
+        and "." as we got a report that it seriously breaks one file system
+        (even as non-root). 
       * Added some support for Netscape's very misleading "Administrate My
         Mail" menu option in Communicator. Allows for a URL to be set in
         imapd.conf for the page to refer users to; needs to be turned on
@@ -20,9 +33,7 @@ Changes to the Cyrus IMAP Server Since Version 1.5.2
         default protections on the socket don't allow the cyrus user to
         read it. (thanks to Lyndon Nerenberg) 
       * Bug fix: Flags beginning with \ are system flags and users can only
-        create the defined flags. The code to do this before was confused.
-        This should also prevent imapd from getting confused with
-        user-defined flags. 
+        create the defined flags. The code to do this before was confused. 
       * The configure scripts and makefiles have some random fixes. 
       * Other small bug fixes. 
 

@@ -17,6 +17,9 @@
         LOGIN (cleartext passwords). 
       * In some failures of the krbck program, the error messages printed
         out bear no resemblance to what actually went wrong. 
+      * Deliver does not handle messages containing NUL properly due to
+        stdio problems (the characters between the NUL and the LF will be
+        lost.) 
 
     Please report bugs to cyrus-bugs@andrew.cmu.edu. Be sure to include (at
     least) system type, compiler used, and the options passed to configure,
@@ -24,5 +27,5 @@
     naturally, patches are deeply appreciated. 
 
     If you submit a patch, please send context diffs or unified diffs, not
-    the default unreadable diff. 
+    the default. 
 
