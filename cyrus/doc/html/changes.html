@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.28 1998/05/01 20:16:09 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.29 1998/05/01 20:18:11 tjs Exp $ -->
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
@@ -22,7 +22,8 @@
 	  squirrled away in makedepend.log.
 
 <li> On mailbox delete, the server will no longer try and unlink ".." and
-	  "." as we got a report that it confuses one Unix file system.
+	  "." as we got a report that it seriously breaks one file system
+	  (even as non-root).
 
 <li> Added some support for Netscape's very misleading "Administrate My
 	  Mail" menu option in Communicator.  Allows for a URL to be set in
@@ -48,8 +49,7 @@ default protections on the socket don't allow the cyrus user to read it.
 
 <li> Bug fix: Flags beginning with \ are system flags and users can
 only create the defined flags.  The code to do this before was
-confused.  This should also prevent imapd from getting confused with
-user-defined flags. 
+confused.
 
 <li> The configure scripts and makefiles have some random fixes.
 
@@ -482,7 +482,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-Last modified: Thu Apr 16 11:45:19 EDT 
+last modified by tjs at Fri May  1 16:17:35 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
