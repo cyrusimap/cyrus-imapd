@@ -1,5 +1,5 @@
-/* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_bigdb.c,v 1.5 2003/02/13 20:15:30 rjs3 Exp $
+/* seen_bigdb.c -- implementation of seen database using one big cyrusdb
+   $Id: seen_bigdb.c,v 1.6 2003/04/08 18:27:21 rjs3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
