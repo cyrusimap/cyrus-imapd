@@ -38,7 +38,10 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-all: ptloader ptexpire ptdump # ptextract pttest
+EXTRA_PROGS = # ptextract pttest
+PROGS = ptexpire ptloader ptdump $(EXTRA_PROGS)
+
+all: $(PROGS)
 
 install:
 	$(INSTALL) @STRIP@ -m 755 ptloader $(DESTDIR)$(cyrus_prefix)/bin
@@ -69,14 +72,15 @@ ptexpire.pure: ptexpire.o $(DEPLIBS)
 
 #pttest: pttest.o auth_krb_pts.o  $(DEPLIBS)
 #        $(CC) $(LDFLAGS) -o $@ pttest.o auth_krb_pts.o $(OBJS) $(DEPLIBS) $(LIBS)
+
 clean:
-	rm -f *.o Makefile.bak ptexpire ptloader
+	rm -f *.o Makefile.bak $(PROGS) makedepend.log
 
 distclean: clean
 	rm -f Makefile
 
 depend: 
-	@MAKEDEPEND@ $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
+	$(MAKEDEPEND) $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c \
+	1>makedepend.log 2>&1
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
-
