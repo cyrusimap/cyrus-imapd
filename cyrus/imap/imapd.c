@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.436 2003/08/05 14:55:03 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.437 2003/08/08 23:08:51 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -3564,7 +3564,7 @@ cmd_create(char *tag, char *name, char *partition, int localonly)
 	r = mboxlist_createmailbox(mailboxname, 0, partition,
 				   imapd_userisadmin, 
 				   imapd_userid, imapd_authstate,
-				   localonly, localonly);
+				   localonly, localonly, 0);
 
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
 	    (autocreatequota = config_getint("autocreatequota", 0))) {
@@ -3572,7 +3572,7 @@ cmd_create(char *tag, char *name, char *partition, int localonly)
 	    /* Auto create */
 	    r = mboxlist_createmailbox(mailboxname, 0,
 				       partition, 1, imapd_userid,
-				       imapd_authstate, 0, 0);
+				       imapd_authstate, 0, 0, 0);
 	    
 	    if (!r && autocreatequota > 0) {
 		(void) mboxlist_setquota(mailboxname, autocreatequota, 0);
@@ -6109,7 +6109,7 @@ static int do_xfer_single(char *toserver, char *topart,
     /* Step 2.5: Set mailbox as REMOTE on local server */
     if(!r) {
 	snprintf(buf, sizeof(buf), "%s!%s", toserver, part);
-	r = mboxlist_update(mailboxname, mbflags|MBTYPE_MOVING, buf, acl);
+	r = mboxlist_update(mailboxname, mbflags|MBTYPE_MOVING, buf, acl, 1);
 	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, " \
 		     "mboxlist_update failed", mailboxname);
     }
@@ -6228,7 +6228,7 @@ done:
     if(r && backout_remoteflag) {
 	rerr = 0;
 
-	rerr = mboxlist_update(mailboxname, mbflags, part, acl);
+	rerr = mboxlist_update(mailboxname, mbflags, part, acl, 1);
 	if(rerr) syslog(LOG_ERR, "Could not unset remote flag on mailbox: %s",
 			mailboxname);
     }

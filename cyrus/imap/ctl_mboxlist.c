@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.40 2003/05/07 13:17:32 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.41 2003/08/08 23:08:51 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -442,7 +442,7 @@ void do_dump(enum mboxop op, const char *part, int purge)
 	    else newpart++;
 
 	    ret = mboxlist_update(me->mailbox, type & ~MBTYPE_MOVING,
-				  newpart, acl);
+				  newpart, acl, 1);
 	    if(ret) {
 		fprintf(stderr,
 			"couldn't perform update to un-remote-flag %s\n",

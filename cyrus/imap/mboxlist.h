@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.35 2003/04/09 17:49:23 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.36 2003/08/08 23:08:52 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -94,7 +94,8 @@ int mboxlist_insertremote(const char *name, int mbtype, const char *host,
 			  const char *acl, void **rettid);
 
 /* Update a mailbox's entry */
-int mboxlist_update(char *name, int flags, const char *part, const char *acl);
+int mboxlist_update(char *name, int flags, const char *part, const char *acl,
+		    int localonly);
 
 /* check user's ability to create mailbox */
 int mboxlist_createmailboxcheck(char *name, int mbtype, char *partition, 
@@ -105,10 +106,11 @@ int mboxlist_createmailboxcheck(char *name, int mbtype, char *partition,
 /* create mailbox */
 /* localonly creates the local mailbox without touching mupdate */
 /* forceuser allows the creation of user.x.<name> without a user.x */
+/* dbonly skips filesystem operations (e.g. reconstruct) */
 int mboxlist_createmailbox(char *name, int mbtype, char *partition, 
 			   int isadmin, char *userid, 
 			   struct auth_state *auth_state,
-			   int localonly, int forceuser);
+			   int localonly, int forceuser, int dbonly);
 
 /* Delete a mailbox. */
 /* setting local_only disables any communication with the mupdate server
