@@ -1,6 +1,6 @@
 /* tree.h -- abstract syntax tree
  * Larry Greenfield
- * $Id: tree.h,v 1.8 2003/10/22 18:50:30 rjs3 Exp $
+ * $Id: tree.h,v 1.8.2.1 2004/06/23 20:15:20 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -76,6 +76,16 @@ struct Test {
 	    stringlist_t *pl;
             int addrpart;
 	} ae; 
+	struct { /* it's a body test */
+	    int comptag;
+	    int relation; 
+	    char * comparator;
+	    void *comprock;
+	    int transform;
+	    int offset;
+	    stringlist_t *content_types;
+	    stringlist_t *pl;
+	} b; 
 	test_t *t; /* not */
 	struct { /* size */
 	    int t; /* tag */

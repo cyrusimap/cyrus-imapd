@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_dump.c,v 1.2 2003/10/22 18:03:23 rjs3 Exp $
+ * $Id: bc_dump.c,v 1.2.2.1 2004/06/23 20:15:17 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -162,6 +162,26 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 		   d->data[ip].value,d->data[ip+1].value,d->data[ip+3].value);
 	}
 	ip+=4;
+	ip = dump_sl(d,ip,level); ip++;
+	print_spaces(level*4);
+	printf("      DATA:\n");
+	ip = dump_sl(d,ip,level);
+	break;
+
+    case BC_BODY:
+	printf("%d: BODY (\n",ip++);
+	print_spaces(level*4);
+	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
+	{
+	    printf("      MATCH:%d RELATION: %d COMP: %d TRANSFORM: %d OFFSET: %d CONTENT-TYPES:\n", 
+		   d->data[ip].value,d->data[ip+1].value,d->data[ip+2].value,
+		   d->data[ip+3].value,d->data[ip+4].value);
+	} else {
+	    printf("      MATCH:%d COMP:%d TRANSFORM:%d OFFSET: %d CONTENT-TYPES:\n",
+		   d->data[ip].value,d->data[ip+1].value,d->data[ip+3].value,
+		   d->data[ip+4].value);
+	}
+	ip+=5;
 	ip = dump_sl(d,ip,level); ip++;
 	print_spaces(level*4);
 	printf("      DATA:\n");

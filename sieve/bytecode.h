@@ -85,23 +85,23 @@ enum bytecode {
 
     B_KEEP,
     B_DISCARD,
-    B_REJECT,/* require reject*/
-    B_FILEINTO,/*require fileinto*/
+    B_REJECT,		/* require reject */
+    B_FILEINTO,		/* require fileinto */
     B_REDIRECT,
 
     B_IF,
   
-    B_MARK,/* require imapflags */
-    B_UNMARK,/* require imapflags */
+    B_MARK,		/* require imapflags */
+    B_UNMARK,		/* require imapflags */
 
-    B_ADDFLAG,/* require imapflags */
-    B_SETFLAG,/* require imapflags */
-    B_REMOVEFLAG,/* require imapflags */
+    B_ADDFLAG,		/* require imapflags */
+    B_SETFLAG,		/* require imapflags */
+    B_REMOVEFLAG,	/* require imapflags */
 
-    B_NOTIFY,/* require notify */
-    B_DENOTIFY,/* require notify */
+    B_NOTIFY,		/* require notify */
+    B_DENOTIFY,		/* require notify */
 
-    B_VACATION,/* require vacation*/
+    B_VACATION,		/* require vacation */
     B_NULL,
     B_JUMP
 };
@@ -115,48 +115,49 @@ enum bytecode_comps {
     BC_ANYOF,
     BC_ALLOF,
     BC_ADDRESS,
-    BC_ENVELOPE,  /* require envelope*/
-    BC_HEADER    
+    BC_ENVELOPE,	/* require envelope */
+    BC_HEADER,
+    BC_BODY		/* require body */
 };
 
 /* currently one enum so as to help determine where values are being misused.
  * we have left placeholders incase we need to add more later to the middle */
 enum bytecode_tags {
-    /* Sizes */
+    /* Size Tests */
     B_OVER,
     B_UNDER,
 
     B_SIZE_PLACEHOLDER_1,
     B_SIZE_PLACEHOLDER_2,
      
-    /* sizes, pt 2 */
-    B_GT, /* require relational*/
-    B_GE,  /* require relational*/
-    B_LT,  /* require relational*/
-    B_LE,  /* require relational*/
-    B_EQ,  /* require relational*/
-    B_NE,  /* require relational*/
+    /* Relational Match Types */
+    B_GT,		/* require relational */
+    B_GE,		/* require relational */
+    B_LT,		/* require relational */
+    B_LE,		/* require relational */
+    B_EQ,		/* require relational */
+    B_NE,		/* require relational */
  
     B_RELATIONAL_PLACEHOLDER_1,
     B_RELATIONAL_PLACEHOLDER_2,
    
-    /* priorities */
-    B_LOW,
-    B_NORMAL,
-    B_HIGH,
-    B_ANY,
+    /* Priorities */
+    B_LOW,		/* require notify */
+    B_NORMAL,		/* require notify */
+    B_HIGH,		/* require notify */
+    B_ANY,		/* require notify */
 
     B_PRIORITY_PLACEHOLDER_1,
     B_PRIORITY_PLACEHOLDER_2,
     B_PRIORITY_PLACEHOLDER_3,
     B_PRIORITY_PLACEHOLDER_4,
     
-    /* Address Part Tags */
+    /* Address Parts */
     B_ALL,
     B_LOCALPART,
     B_DOMAIN,
-    B_USER,  /* require subaddress */
-    B_DETAIL, /* require subaddress */
+    B_USER,		/* require subaddress */
+    B_DETAIL,		/* require subaddress */
     
     B_ADDRESS_PLACEHOLDER_1,
     B_ADDRESS_PLACEHOLDER_2,
@@ -166,25 +167,36 @@ enum bytecode_tags {
     /* Comparators */
     B_ASCIICASEMAP,
     B_OCTET,
-    B_ASCIINUMERIC, /* require comparator-i;ascii-numeric */
+    B_ASCIINUMERIC,	/* require comparator-i;ascii-numeric */
     
     B_COMPARATOR_PLACEHOLDER_1,
     B_COMPARATOR_PLACEHOLDER_2,
     B_COMPARATOR_PLACEHOLDER_3,
     B_COMPARATOR_PLACEHOLDER_4,
  
-    /* match types */
+    /* Match Types */
     B_IS,
     B_CONTAINS,
     B_MATCHES,
-    B_REGEX,/* require regex*/
-    B_COUNT,/* require relational*/
-    B_VALUE,/* require relational*/
+    B_REGEX,		/* require regex */
+    B_COUNT,		/* require relational */
+    B_VALUE,		/* require relational */
 
     B_MATCH_PLACEHOLDER_1,
     B_MATCH_PLACEHOLDER_2,
     B_MATCH_PLACEHOLDER_3,
     B_MATCH_PLACEHOLDER_4,
+
+    /* Body Transforms */
+    B_RAW,		/* require body */
+    B_TEXT,		/* require body */
+    B_CONTENT,		/* require body */
+    B_BINARY,		/* require body */
+
+    B_TRANSFORM_PLACEHOLDER_1,
+    B_TRANSFORM_PLACEHOLDER_2,
+    B_TRANSFORM_PLACEHOLDER_3,
+    B_TRANSFORM_PLACEHOLDER_4
   
 };
 

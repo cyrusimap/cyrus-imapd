@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.97.2.3 2004/06/18 16:13:39 ken3 Exp $
+ * $Id: message.c,v 1.97.2.4 2004/06/23 20:15:15 ken3 Exp $
  */
 
 #include <config.h>
@@ -374,13 +374,25 @@ int message_parse_mapped(const char *msg_base, unsigned long msg_len,
     return 0;
 }
 
-static void message_find_part(struct body *body,
-			      const char *type, const char *subtype,
+static void message_find_part(struct body *body, const char **content_types,
 			      const char *msg_base, unsigned long msg_len,
 			      struct bodypart ***parts, int *n)
 {
-    if ((!type || !*type || !strcmp(body->type, type)) &&
-	(!subtype || !*subtype || !strcmp(body->subtype, subtype))) {
+    int match;
+    const char **type;
+
+    for (match = 0, type = content_types; !match && *type; type++) {
+	const char *subtype = strchr(*type, '/');
+	size_t tlen = subtype ? (subtype++ - *type) : strlen(*type);
+
+	if ((!(*type)[0] || (tlen == strlen(body->type) &&
+			     !strncasecmp(body->type, *type, tlen))) &&
+	    (!subtype || !subtype[0] || !strcasecmp(body->subtype, subtype))) {
+	    match = 1;
+	}
+    }
+
+    if (match) {
 	/* matching part, sanity check the size against the mmap'd file */
 	if (body->content_offset + body->content_size > msg_len) {
 	    syslog(LOG_ERR, "IOERROR: body part exceeds size of message file");
@@ -399,13 +411,13 @@ static void message_find_part(struct body *body,
 	int i;
 
 	for (i = 0; i < body->numparts; i++) {
-	    message_find_part(&body->subpart[i], type, subtype,
+	    message_find_part(&body->subpart[i], content_types,
 			      msg_base, msg_len, parts, n);
 	}
     }
     else if (!strcmp(body->type, "MESSAGE") &&
 	     !strcmp(body->subtype, "RFC822")) {
-	message_find_part(body->subpart, type, subtype,
+	message_find_part(body->subpart, content_types,
 			  msg_base, msg_len, parts, n);
     }
 }
@@ -417,23 +429,13 @@ static void message_find_part(struct body *body,
  * The caller MUST free the array of allocated bodypart(s).
  */
 void message_fetch_part(struct message_content *msg,
-			const char *content_type,
+			const char **content_types,
 			struct bodypart ***parts)
 {
-    char *type = NULL, *subtype = NULL;
-    int n;
-
-    /* split the content_type into type/subtype */
-    if (content_type) {
-	type = ucase(xstrdup(content_type));
-	if ((subtype = strchr(type, '/'))) *subtype++ = '\0';
-    }
+    int n = 0;  /* running count of the number of matching parts */
 
     *parts = NULL;
-    n = 0;  /* running count of the number of matching parts */
-    message_find_part(msg->body, type, subtype, msg->base, msg->len, parts, &n);
-
-    if (type) free(type);
+    message_find_part(msg->body, content_types, msg->base, msg->len, parts, &n);
 }
 
 /*

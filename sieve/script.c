@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.59.2.3 2004/06/18 16:13:41 ken3 Exp $
+ * $Id: script.c,v 1.59.2.4 2004/06/23 20:15:18 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -50,6 +50,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "sieve.h"
 #include "message.h"
 #include "bytecode.h"
+#include "libconfig.h"
 
 /* does this interpretor support this requirement? */
 int script_require(sieve_script_t *s, char *req)
@@ -71,6 +72,13 @@ int script_require(sieve_script_t *s, char *req)
     } else if (!strcmp("envelope", req)) {
 	if (s->interp.getenvelope) {
 	    s->support.envelope = 1;
+	    return 1;
+	} else {
+	    return 0;
+	}
+    } else if (!strcmp("body", req)) {
+	if (s->interp.getbody && config_getswitch(IMAPOPT_SIEVE_ALLOWBODY)) {
+	    s->support.body = 1;
 	    return 1;
 	} else {
 	    return 0;
@@ -97,7 +105,8 @@ int script_require(sieve_script_t *s, char *req)
 	    return 0;
 	}
 #ifdef ENABLE_REGEX
-    } else if (!strcmp("regex", req)) {
+    } else if (!strcmp("regex", req) &&
+	       config_getswitch(IMAPOPT_SIEVE_ALLOWREGEX)) {
 	s->support.regex = 1;
 	return 1;
 #endif
@@ -235,7 +244,9 @@ static int fillin_headers(sieve_interp_t *i, const char *msg,
 	    add_header(i, 0, "Subject", message_context, out, outlen, &allocsize);
 	    c += 9;
 	}
-	else if (!strncasecmp(c, "$text", 5) && (c[5] == '[' || c[5] == '$')) {
+	else if (i->getbody &&
+		 !strncasecmp(c, "$text", 5) && (c[5] == '[' || c[5] == '$')) {
+	    const char *content_types[] = { "text", NULL };
 	    sieve_bodypart_t **parts = NULL;
 
 	    c += 5;
@@ -245,7 +256,7 @@ static int fillin_headers(sieve_interp_t *i, const char *msg,
 		c += 2; /* skip ]$ */
 	    }
 
-	    i->getbody(message_context, "text", &parts);
+	    i->getbody(message_context, content_types, &parts);
 
 	    /* we only use the first text part */
 	    if (parts && *parts) {

@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.21.2.2 2004/06/16 14:37:04 ken3 Exp $
+ * $Id: test.c,v 1.21.2.3 2004/06/23 20:15:19 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -48,6 +48,10 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "comparator.h"
 #include "tree.h"
 #include "sieve.h"
+#include "imap/message.h"
+
+/* XXX so we can link against imap/message.o */
+int mailbox_cached_header_inline(const char *text) { return BIT32_MAX; }
 
 #define HEADERCACHESIZE 1019
 
@@ -61,6 +65,7 @@ typedef struct message_data {
     char *name;
     FILE *data;
     int size;
+    struct message_content content;
 
     int cache_full;
     header_t *cache[HEADERCACHESIZE];
@@ -84,18 +89,18 @@ int hashheader(char *header)
 
    returns 0 on success, negative on failure */
 typedef enum {
-    NAME_START,
-    NAME,
+    HDR_NAME_START,
+    HDR_NAME,
     COLON,
-    BODY_START,
-    BODY
+    HDR_CONTENT_START,
+    HDR_CONTENT
 } state;
 
 int parseheader(FILE *f, char **headname, char **contents) {
     char c;
     char name[80], body[1024];
     int off = 0;
-    state s = NAME_START;
+    state s = HDR_NAME_START;
 
 
     /* there are two ways out of this loop, both via gotos:
@@ -103,7 +108,7 @@ int parseheader(FILE *f, char **headname, char **contents) {
        or we hit an error (ph_error) */
     while ((c = getc(f))) {	/* examine each character */
 	switch (s) {
-	case NAME_START:
+	case HDR_NAME_START:
 	    if (c == '\r' || c == '\n') {
 		/* no header here! */
 		goto ph_error;
@@ -112,13 +117,13 @@ int parseheader(FILE *f, char **headname, char **contents) {
 		goto ph_error;
 	    name[0] = tolower(c);
 	    off = 1;
-	    s = NAME;
+	    s = HDR_NAME;
 	    break;
 
-	case NAME:
+	case HDR_NAME:
 	    if (c == ' ' || c == '\t' || c == ':') {
 		name[off] = '\0';
-		s = (c == ':' ? BODY_START : COLON);
+		s = (c == ':' ? HDR_CONTENT_START : COLON);
 		break;
 	    }
 	    if (iscntrl(c)) {
@@ -129,19 +134,19 @@ int parseheader(FILE *f, char **headname, char **contents) {
 	
 	case COLON:
 	    if (c == ':') {
-		s = BODY_START;
+		s = HDR_CONTENT_START;
 	    } else if (c != ' ' && c != '\t') {
 		goto ph_error;
 	    }
 	    break;
 
-	case BODY_START:
+	case HDR_CONTENT_START:
 	    if (c == ' ' || c == '\t') /* eat the whitespace */
 		break;
 	    off = 0;
-	    s = BODY;
+	    s = HDR_CONTENT;
 	    /* falls through! */
-	case BODY:
+	case HDR_CONTENT:
 	    if (c == '\r' || c == '\n') {
 		int peek = getc(f);
 
@@ -298,6 +303,9 @@ message_data_t *new_msg(FILE *msg, int size, char *name)
     m->data = msg;
     m->size = size;
     m->name = name;
+    m->content.base = NULL;
+    m->content.len = 0;
+    m->content.body = NULL;
     for (i = 0; i < HEADERCACHESIZE; i++) {
 	m->cache[i] = NULL;
     }
@@ -324,6 +332,24 @@ int getenvelope(void *v, const char *head, const char ***body)
     *body = buf;
 
     return SIEVE_OK;
+}
+
+int getbody(void *mc, const char **content_types, sieve_bodypart_t ***parts)
+{
+    message_data_t *m = (message_data_t *) mc;
+    int r = 0;
+
+    if (!m->content.body) {
+	/* parse the message body if we haven't already */
+	r = message_parse_file(m->data, &m->content.base,
+			       &m->content.len, &m->content.body);
+    }
+
+    /* XXX currently struct bodypart as defined in message.h is the same as
+       sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
+    if (!r) message_fetch_part(&m->content, content_types,
+			       (struct bodypart ***) parts);
+    return (!r ? SIEVE_OK : SIEVE_FAIL);
 }
 
 int redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
@@ -631,6 +657,13 @@ struct testcase tc[] =
   { B_ASCIICASEMAP, B_MATCHES, "a*b", "ACB", 1 },
   { B_ASCIICASEMAP, B_MATCHES, "a*b", "ACBC", 0 },
 
+  { B_ASCIINUMERIC, B_IS, "123", "123", 1 },
+  { B_ASCIINUMERIC, B_IS, "123", "00123", 1 },
+  { B_ASCIINUMERIC, B_IS, "123", "456", 0 },
+  { B_ASCIINUMERIC, B_IS, "123", "-123", 0 },
+  { B_ASCIINUMERIC, B_IS, "abc", "123", 0 },
+  { B_ASCIINUMERIC, B_IS, "abc", "abc", 1 },
+
   { 0, 0, NULL, NULL, 0 } };
 
 static int test_comparator(void)
@@ -661,7 +694,7 @@ static int test_comparator(void)
 	    didfail++;
 	    continue;
 	}
-	res = c(t->text, t->pat, comprock);
+	res = c(t->text, strlen(t->text), t->pat, comprock);
 	if (res != t->result) {
 	    printf("FAIL: %s/%s(%s, %s) = %d, not %d\n", 
 		   comp, mode, t->pat, t->text, res, t->result);
@@ -770,6 +803,12 @@ int main(int argc, char *argv[])
     res = sieve_register_envelope(i, &getenvelope);
     if (res != SIEVE_OK) {
 	printf("sieve_register_envelope() returns %d\n", res);
+	exit(1);
+    }
+
+    res = sieve_register_body(i, &getbody);
+    if (res != SIEVE_OK) {
+	printf("sieve_register_body() returns %d\n", res);
 	exit(1);
     }
 

@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.22.8.1 2004/06/18 16:13:41 ken3 Exp $
+ * $Id: interp.c,v 1.22.8.2 2004/06/23 20:15:18 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -35,6 +35,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "sieve_interface.h"
 #include "interp.h"
+#include "libconfig.h"
 
 /* build a sieve interpretor */
 int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
@@ -57,6 +58,7 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     i->getsize = NULL;
     i->getheader = NULL;
     i->getenvelope = NULL;
+    i->getbody = NULL;
     i->vacation = NULL;
     i->notify = NULL;
 
@@ -69,17 +71,45 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     return SIEVE_OK;
 }
 
-static const char *sieve_extensions = "fileinto reject envelope vacation"
-                                      " imapflags notify subaddress relational"
-#ifdef ENABLE_REGEX
-" regex";
-#else
-"";
-#endif /* ENABLE_REGEX */
-
-const char *sieve_listextensions(void)
+const char *sieve_listextensions(sieve_interp_t *i)
 {
-    return sieve_extensions;
+    static int done = 0;
+    static char extensions[4096] = "";
+
+    if (!done++) {
+	/* add comparators */
+	strlcat(extensions, "comparator-i;ascii-numeric", sizeof(extensions));
+
+	/* add actions */
+	if (i->fileinto)
+	    strlcat(extensions, " fileinto", sizeof(extensions));
+	if (i->reject)
+	    strlcat(extensions, " reject", sizeof(extensions));
+	if (i->vacation)
+	    strlcat(extensions, " vacation", sizeof(extensions));
+	if (i->markflags)
+	    strlcat(extensions, " imapflags", sizeof(extensions));
+	if (i->notify)
+	    strlcat(extensions, " notify", sizeof(extensions));
+
+	/* add tests */
+	if (i->getenvelope)
+	    strlcat(extensions, " envelope", sizeof(extensions));
+	if (i->getbody && config_getswitch(IMAPOPT_SIEVE_ALLOWBODY))
+	    strlcat(extensions, " body", sizeof(extensions));
+
+	/* add match-types */
+	strlcat(extensions, " relational", sizeof(extensions));
+#ifdef ENABLE_REGEX
+	if (config_getswitch(IMAPOPT_SIEVE_ALLOWREGEX))
+	    strlcat(extensions, " regex", sizeof(extensions));
+#endif
+
+	/* add misc extensions */
+	strlcat(extensions, " subaddress", sizeof(extensions));
+    }
+
+    return extensions;
 }
 
 int sieve_interp_free(sieve_interp_t **interp)

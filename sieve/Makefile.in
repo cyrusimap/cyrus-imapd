@@ -1,6 +1,6 @@
 # Makefile.in - sieve makefile
 # @configure_input@
-# $Id: Makefile.in,v 1.30.2.4 2004/05/31 18:23:02 ken3 Exp $
+# $Id: Makefile.in,v 1.30.2.5 2004/06/23 20:15:17 ken3 Exp $
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
 #
@@ -37,7 +37,7 @@ LEX = @LEX@
 RANLIB = @RANLIB@
 COMPILE_ET = @COMPILE_ET@
 
-DEFS = @DEFS@
+DEFS = @DEFS@ @LOCALDEFS@
 CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 MAKEDEPEND_CFLAGS = @CFLAGS@
 CFLAGS = @CFLAGS@ @PERL_CCCDLFLAGS@
@@ -63,8 +63,9 @@ install: sievec
 	$(srcdir)/../install-sh -d ${DESTDIR}$(service_path)
 	$(srcdir)/../install-sh -c -m 755 sievec $(DESTDIR)$(service_path) || exit
 
-test: $(DEPLIBS) libsieve.a test.o
-	$(CC) $(LDFLAGS) -o test test.o libsieve.a $(DEPLIBS) $(LIBS)
+test: $(DEPLIBS) libsieve.a test.o ../imap/message.o
+	$(CC) $(LDFLAGS) -o test test.o ../imap/message.o \
+	libsieve.a $(DEPLIBS) $(LIBS)
 
 OBJS = sieve_err.o \
        sieve.o sieve-lex.o comparator.o interp.o message.o \

@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.27 2003/10/22 18:50:30 rjs3 Exp $
+ * $Id: message.c,v 1.27.2.1 2004/06/23 20:15:18 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -403,7 +403,7 @@ int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
     while (n != NULL) {
 	if (n->isactive && 
 	    (!priority || !strcasecmp(n->priority, priority)) &&
-	    (!comp || (n->id && comp(n->id, pat, comprock)))) {
+	    (!comp || (n->id && comp(n->id, strlen(n->id), pat, comprock)))) {
 	    n->isactive = 0;
 	}
 	n = n->next;

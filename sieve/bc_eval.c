@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.2 2003/10/22 18:03:24 rjs3 Exp $
+ * $Id: bc_eval.c,v 1.2.2.1 2004/06/23 20:15:17 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -34,6 +34,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "bytecode.h"
 
+#include "charset.h"
 #include "xmalloc.h"
 
 #include <string.h>
@@ -537,15 +538,16 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 				    goto alldone;
 				}
 
-				res |= comp(val[y], (const char *)reg,
-					    comprock);
+				res |= comp(val[y], strlen(val[y]),
+					    (const char *)reg, comprock);
 				free(reg);
 			    } else {
 #if VERBOSE
 				printf("%s compared to %s(from script)\n",
 				       addr, data_val);
 #endif 
-				res |= comp(addr, data_val, comprock);
+				res |= comp(addr, strlen(addr),
+					    data_val, comprock);
 			    }
 			} /* For each data */
 		    }
@@ -570,7 +572,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 		
 		currd = unwrap_string(bc, currd, &data_val, NULL);
 
-		res |= comp(scount, data_val, comprock);
+		res |= comp(scount, strlen(scount), data_val, comprock);
 	    }
 	}
 
@@ -663,11 +665,12 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 				goto alldone;
 			    }
 			    
-			    res |= comp(val[y], (const char *)reg,
-					comprock);
+			    res |= comp(val[y], strlen(val[y]),
+					(const char *)reg, comprock);
 			    free(reg);
 			} else {
-			    res |= comp(val[y], data_val, comprock);
+			    res |= comp(val[y], strlen(val[y]),
+					data_val, comprock);
 			}
 		    }
 		}
@@ -687,9 +690,159 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 #if VERBOSE
 		printf("%d, %s \n", count, data_val);
 #endif
-		res |= comp(scount, data_val, comprock);
+		res |= comp(scount, strlen(scount), data_val, comprock);
 	    }
 	      
+	}
+
+	/* Update IP */
+	i=(ntohl(bc[datai+1].value)/4);
+	
+	break;
+    }
+    case BC_BODY:/*10*/
+    {
+	sieve_bodypart_t ** val;
+	const char **content_types = NULL;
+	char *decbuf = NULL;
+	int alloced = 0;
+
+	int typesi=i+6;/* the i value for the begining of the content-types */
+ 	int datai=(ntohl(bc[typesi+1].value)/4);
+
+	int numdata=ntohl(bc[datai].len);
+
+	int currd; /* current data */
+
+	int match=ntohl(bc[i+1].value);
+	int relation=ntohl(bc[i+2].value);
+	int comparator=ntohl(bc[i+3].value);
+	int transform=ntohl(bc[i+4].value);
+	int offset=ntohl(bc[i+5].value);
+	int count=0;
+	char scount[3];
+	int isReg = (match==B_REGEX);
+	int ctag = 0;
+	regex_t *reg;
+	char errbuf[100]; /* Basically unused, as regexps are tested at compile */
+
+	/* set up variables needed for compiling regex */
+	if (isReg)
+	{
+	    if (comparator== B_ASCIICASEMAP)
+	    {
+		ctag = REG_EXTENDED | REG_NOSUB | REG_ICASE;
+	    }
+	    else
+	    {
+		ctag = REG_EXTENDED | REG_NOSUB;
+	    }
+	}
+
+	/*find the correct comparator fcn*/
+	comp = lookup_comp(comparator, match, relation, &comprock);
+
+	if(!comp) {
+	    res = SIEVE_RUN_ERROR;
+	    break;
+	}
+	
+	/*find the part(s) of the body that we want*/
+	content_types = bc_makeArray(bc, &typesi);
+	if(interp->getbody(m, content_types, &val) != SIEVE_OK) {
+	    res = SIEVE_RUN_ERROR;
+	    break;
+	}
+	free(content_types);
+	
+	/* bodypart(s) exist, now to test them */
+	    
+	for (y=0; val && val[y]!=NULL && !res; y++) {
+
+	    if (match == B_COUNT) {
+		count++;
+	    } else {
+		const char *content;
+		int size;
+
+		if (transform == B_RAW) {
+		    content = val[y]->content;
+		    size = val[y]->size;
+		}
+		else {
+		    int encoding;
+
+		    /* XXX currently unknown encodings are processed as raw */
+		    if (!val[y]->encoding)
+			encoding = ENCODING_NONE;
+		    else if (!strcmp(val[y]->encoding, "BASE64"))
+			encoding = ENCODING_BASE64;
+		    else if (!strcmp(val[y]->encoding, "QUOTED-PRINTABLE"))
+			encoding = ENCODING_QP;
+		    else
+			encoding = ENCODING_NONE;
+
+		    content = charset_decode_mimebody(val[y]->content,
+						      val[y]->size, encoding,
+						      &decbuf, alloced, &size);
+		    if (content != val[y]->content && val[y]->size > alloced) {
+			/* (re)alloced decbuf, so adjust alloced */
+			alloced = val[y]->size;
+		    }
+
+		    if (transform == B_BINARY) {
+			content += offset;
+			size -= offset;
+
+			/* XXX convert content to ascii-hex */
+		    }
+		    else {
+			/* XXX convert charset */
+		    }
+		}
+
+		/* search through all the data */ 
+		currd=datai+2;
+		for (z=0; z<numdata && !res; z++)
+		{
+		    const char *data_val;
+			    
+		    currd = unwrap_string(bc, currd, &data_val, NULL);
+
+		    if (isReg) {
+			reg = bc_compile_regex(data_val, ctag,
+					       errbuf, sizeof(errbuf));
+			if (!reg) {
+			    /* Oops */
+			    res=-1;
+			    goto alldone;
+			}
+
+			res |= comp(content, size, (const char *)reg, comprock);
+			free(reg);
+		    } else {
+			res |= comp(content, size, data_val, comprock);
+		    }
+		} /* For each data */
+	    }
+	} /* For each body part */
+
+	/* free the decode buffer */
+	if (decbuf) free(decbuf);
+     
+	if  (match == B_COUNT)
+	{
+	    sprintf(scount, "%u", count);
+	    /* search through all the data */ 
+	    currd=datai+2;
+	    for (z=0; z<numdata && !res; z++)
+	    {
+		const char *data_val;
+		
+		currd = unwrap_string(bc, currd, &data_val, NULL);
+
+		res |= comp(scount, strlen(scount), data_val, comprock);
+	    }
 	}
 
 	/* Update IP */

@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.19.2.1 2004/06/18 16:13:41 ken3 Exp $
+ * $Id: sieve_interface.h,v 1.19.2.2 2004/06/23 20:15:19 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -29,7 +29,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <stdio.h>
 
-#define SIEVE_VERSION "CMU Sieve 2.2"
+#define SIEVE_VERSION "CMU Sieve 2.3"
 
 /* error codes */
 #define SIEVE_OK (0)
@@ -59,7 +59,7 @@ typedef struct sieve_bodypart {
     unsigned long size;
 } sieve_bodypart_t;
 
-typedef int sieve_get_body(void *message_context, const char *content_type,
+typedef int sieve_get_body(void *message_context, const char **content_types,
 			   sieve_bodypart_t ***parts);
 
 typedef struct sieve_vacation {
@@ -138,6 +138,7 @@ int sieve_register_notify(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_size(sieve_interp_t *interp, sieve_get_size *f);
 int sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
 int sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
+int sieve_register_body(sieve_interp_t *interp, sieve_get_body *f);
 
 typedef int sieve_parse_error(int lineno, const char *msg, 
 			      void *interp_context,
@@ -167,7 +168,7 @@ int sieve_execute_bytecode(sieve_bytecode_t *script, sieve_interp_t *interp,
 			   void *script_context, void *message_context);
 
 /* Get space separated list of extensions supported by the implementation */
-const char *sieve_listextensions(void);
+const char *sieve_listextensions(sieve_interp_t *i);
 
 /* Create a bytecode structure given a parsed commandlist */
 int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s);

@@ -244,7 +244,7 @@ int dump2_test(bytecode_input_t * d, int i)
 	printf(")\n");
 	break;
     case BC_ADDRESS:/*7*/
-	printf("Address (");
+	printf("Address [");
 	i=printComparison(d, i+1);
 	printf("               type: ");
 	switch(ntohl(d[i++].value))
@@ -262,7 +262,7 @@ int dump2_test(bytecode_input_t * d, int i)
 	printf("             ]\n");
 	break;
     case BC_ENVELOPE:/*8*/
-	printf("Envelope (");
+	printf("Envelope [");
 	i=printComparison(d, i+1);
 	printf("                type: ");
 	switch(ntohl(d[i++].value))
@@ -285,6 +285,24 @@ int dump2_test(bytecode_input_t * d, int i)
 	printf("              Headers: ");
 	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("              Data: ");
+	i=write_list(ntohl(d[i].len), i+1, d);
+	printf("             ]\n");
+	break;
+    case BC_BODY:/*10*/
+	printf("Body [");
+	i=printComparison(d, i+1);
+	printf("              Transform: ");
+	switch(ntohl(d[i++].value))
+	{
+	case B_RAW: printf("raw"); break;
+	case B_TEXT:printf("text"); break;
+	case B_CONTENT:printf("content"); break;
+	case B_BINARY:printf("binary"); break;
+	}
+	printf("\tOffset: %d\n", ntohl(d[i++].value));
+	printf("              Content-Types:");
+	i=write_list(ntohl(d[i].len), i+1, d);
+	printf("              Data:");
 	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("             ]\n");
 	break;

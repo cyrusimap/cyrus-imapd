@@ -1,6 +1,6 @@
 /* sievec.c -- compile a sieve script to bytecode manually
  * Rob Siemborski
- * $Id: sievec.c,v 1.2.2.3 2004/03/24 19:53:20 ken3 Exp $
+ * $Id: sievec.c,v 1.2.2.4 2004/06/23 20:15:19 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -120,6 +120,8 @@ int main(int argc, char **argv)
 	printf("bytecode generate failed\n");
 	exit(1);
     }
+
+    sieve_script_free(&s);
 
     /* Now, open the new file */
     fd = open(argv[optind], O_CREAT | O_TRUNC | O_WRONLY, 0644);
@@ -243,6 +245,12 @@ int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
     res = sieve_register_envelope(i, (sieve_get_envelope *) &foo);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_envelope() returns %d\n", res);
+	return TIMSIEVE_FAIL;
+    }
+  
+    res = sieve_register_body(i, (sieve_get_body *) &foo);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_body() returns %d\n", res);
 	return TIMSIEVE_FAIL;
     }
   

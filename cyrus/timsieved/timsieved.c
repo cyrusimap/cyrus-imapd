@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.48.2.5 2004/05/25 01:28:22 ken3 Exp $
+ * $Id: timsieved.c,v 1.48.2.6 2004/06/23 20:15:21 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -68,6 +68,8 @@
 #include <signal.h>
 #include <string.h>
 
+#include "sieve_interface.h"
+
 #include "prot.h"
 #include "libconfig.h"
 #include "xmalloc.h"
@@ -87,6 +89,8 @@
 
 /* global state */
 const int config_need_data = 0;
+
+sieve_interp_t *interp = NULL;
 
 static struct 
 {
@@ -123,6 +127,9 @@ static struct proxy_context sieved_proxyctx = {
 void shut_down(int code) __attribute__ ((noreturn));
 void shut_down(int code)
 {
+    /* free interpreter */
+    if (interp) sieve_interp_free(&interp);
+
     /* close mailboxes */
     mboxlist_close();
     mboxlist_done();
@@ -205,6 +212,8 @@ int service_init(int argc __attribute__((unused)),
     /* open mailboxes */
     mboxlist_init(0);
     mboxlist_open(NULL);
+
+    if (build_sieve_interp() != TIMSIEVE_OK) shut_down(EX_SOFTWARE);
 
     return 0;
 }

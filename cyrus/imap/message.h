@@ -1,5 +1,5 @@
 /* message.h -- Message parsing
- $Id: message.h,v 1.6.4.2 2004/06/18 16:13:39 ken3 Exp $
+ $Id: message.h,v 1.6.4.3 2004/06/23 20:15:16 ken3 Exp $
 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -86,7 +86,7 @@ extern int message_parse_file P((FILE *infile,
 				 const char **msg_base, unsigned long *msg_len,
 				 struct body **body));
 extern void message_fetch_part P((struct message_content *msg,
-				  const char *content_type,
+				  const char **content_types,
 				  struct bodypart ***parts));
 extern int message_create_record P((struct mailbox *mailbox,
 				    struct index_record *message_index,

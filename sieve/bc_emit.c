@@ -1,7 +1,7 @@
 /* bc_emit.c -- sieve bytecode - pass 2 of the compiler
  * Rob Siemborski
  * Jen Smith
- * $Id: bc_emit.c,v 1.2 2003/10/22 18:03:24 rjs3 Exp $
+ * $Id: bc_emit.c,v 1.2.2.1 2004/06/23 20:15:17 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -289,6 +289,45 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 	wrote += sizeof(int);
 	(*codep)++;
 	/* Now drop headers */
+	ret = bc_stringlist_emit(fd, codep, bc);
+	if(ret < 0) return -1;
+	wrote+=ret;
+	/* Now drop data */
+	ret = bc_stringlist_emit(fd, codep, bc);
+	if(ret < 0) return -1;
+	wrote+=ret;
+	break;
+    }
+    
+    case BC_BODY:
+    {
+	int ret;
+	/* Drop match type */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/*drop comparator */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/*now drop relation*/
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/*now drop transform*/
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/*now drop offset*/
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/*now drop content-types*/
 	ret = bc_stringlist_emit(fd, codep, bc);
 	if(ret < 0) return -1;
 	wrote+=ret;

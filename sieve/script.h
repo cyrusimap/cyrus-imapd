@@ -1,6 +1,6 @@
 /* script.h -- script definition
  * Larry Greenfield
- * $Id: script.h,v 1.11 2003/10/22 18:50:30 rjs3 Exp $
+ * $Id: script.h,v 1.11.2.1 2004/06/23 20:15:19 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -42,6 +42,7 @@ struct sieve_script {
 	int fileinto       : 1;
 	int reject         : 1;
 	int envelope       : 1;
+	int body           : 1;
 	int vacation       : 1;
 	int imapflags      : 1;
 	int notify         : 1;

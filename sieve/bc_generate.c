@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_generate.c,v 1.2 2003/10/22 18:03:24 rjs3 Exp $
+ * $Id: bc_generate.c,v 1.2.2.1 2004/06/23 20:15:17 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -352,6 +352,53 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
 	/*patterns*/
 	codep = bc_stringlist_generate(codep, retval, t->u.h.pl);
+	if (codep == -1) return -1;
+     
+	break;
+    case BODY:
+	/* BC_BODY {c : comparator} (B_RAW | B_TEXT | ...)
+	   { content-types : stringlist }
+	   { offset : int }
+	   { pattern : string list } */
+      
+	if(!atleast(retval,codep+1)) return -1;
+      
+	retval->data[codep++].op = BC_BODY;
+            
+	codep = bc_comparator_generate(codep, retval,t->u.b.comptag,
+				       t->u.b.relation, 
+				       t->u.b.comparator);
+	if (codep == -1) return -1;
+
+	if(!atleast(retval,codep+2)) return -1;
+
+	/*transform*/
+	switch(t->u.b.transform) {
+	case RAW:
+	    retval->data[codep++].value = B_RAW;
+	    break;
+	case TEXT:
+	    retval->data[codep++].value = B_TEXT;
+	    break;
+	case CONTENT:
+	    retval->data[codep++].value = B_CONTENT;
+	    break;
+	case BINARY:
+	    retval->data[codep++].value = B_BINARY;
+	    break;
+	default:
+	    return -1;
+	}
+
+	/*offset*/
+	retval->data[codep++].value = t->u.b.offset;
+
+	/*content-types*/
+	codep = bc_stringlist_generate(codep, retval, t->u.b.content_types);
+	if (codep == -1) return -1;
+
+	/*patterns*/
+	codep = bc_stringlist_generate(codep, retval, t->u.b.pl);
 	if (codep == -1) return -1;
      
 	break;
