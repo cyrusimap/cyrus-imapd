@@ -77,7 +77,7 @@ char *header;
 	strcpy(msgbody, "You have new mail.\n\n");
     }
     else {
-	sprintf(msgbody, "%s has new mail.\n\n", mailbox);
+	sprintf(msgbody, "You have new mail in %s.\n\n", mailbox);
     }
     strcat(msgbody, header);
 
