@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.72 2003/03/10 19:00:20 rjs3 Exp $
+ * $Id: mupdate.c,v 1.73 2003/04/01 19:34:37 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -90,7 +90,7 @@ enum {
 struct pending {
     struct pending *next;
 
-    char mailbox[MAX_MAILBOX_NAME];
+    char mailbox[MAX_MAILBOX_NAME+1];
 };
 
 struct conn {
@@ -323,7 +323,8 @@ int service_init(int argc, char **argv,
     if(!masterp && config_getswitch("mupdate_slave_fast_resync",0)) {
 	char fname[4096];
 	
-	if(snprintf(fname,4096,"%s%s",config_dir,FNAME_MBOXLIST) == -1)
+	if(snprintf(fname,sizeof(fname),"%s%s",
+		    config_dir,FNAME_MBOXLIST) == -1)
 	    fatal("mboxlist database filename too large",EC_TEMPFAIL);
 
 	putenv("CYRUS_SKIPLIST_UNSAFE=1");
@@ -708,9 +709,10 @@ void *start(void *rock)
 	} else {
 	    clienthost[0] = '\0';
 	}
-	strcat(clienthost, "[");
-	strcat(clienthost, inet_ntoa(remoteaddr.sin_addr));
-	strcat(clienthost, "]");
+	strlcat(clienthost, "[", sizeof(clienthost));
+	strlcat(clienthost, inet_ntoa(remoteaddr.sin_addr),
+		sizeof(clienthost));
+	strlcat(clienthost, "]", sizeof(clienthost));
 	salen = sizeof(localaddr);
 	if (getsockname(c->fd, (struct sockaddr *)&localaddr, &salen) == 0
 	    && iptostring((struct sockaddr *)&remoteaddr,
@@ -977,7 +979,7 @@ void cmd_set(struct conn *C,
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
 	/* for each connection, add to pending list */
 	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
-	strcpy(p->mailbox, mailbox);
+	strlcpy(p->mailbox, mailbox, sizeof(p->mailbox));
 	
 	pthread_mutex_lock(&upc->m);
 	p->next = upc->plist;
@@ -1309,7 +1311,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	/* for each connection, add to pending list */
 
 	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
-	strcpy(p->mailbox, mdata->mailbox);
+	strlcpy(p->mailbox, mdata->mailbox, sizeof(p->mailbox));
 	
 	pthread_mutex_lock(&upc->m);
 	p->next = upc->plist;
