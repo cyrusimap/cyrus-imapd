@@ -1,0 +1,156 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="revision" content="$Id: database-formats.html,v 1.2 2004/04/22 14:49:39 ken3 Exp $" />
+<meta name="author" content="Ken Murchison" />
+
+<title>Database Formats</title>
+</head>
+
+<body>
+<h1>Database Formats</h1>
+
+<h2>Introduction</h2>
+
+<p>
+This is an attempt to document the cyrus database formats.  It should not
+be considered authoritative and is subject to change.</p>
+
+<p> No external tools should make use of this information.  The only
+supported method of access to the databases is via the API specific to
+the database and the underlying cyrusdb interface.</p>
+
+<h2>Mailbox List (mailboxes.db)</h2>
+
+<p>
+This database contains the master list of all mailboxes on the
+system.  The database is indexed by mailbox name and each data record
+contains the mailbox type, the partition on which the mailbox resides
+and the ACL on the mailbox.  The format of each record is as follows:</p>
+
+<pre>
+Key: &lt;Mailbox Name&gt;
+
+Data: &lt;Type Number&gt;SP&lt;Partition&gt;SP&lt;ACL (space-separated userid/rights pairs)&gt;
+</pre>
+
+<h2>Annotations (annotations.db)</h2>
+
+<p>This database contains mailbox and server annotations.  The
+database is indexed by mailbox name (empty for server annotations) +
+annotation name + userid (empty for shared annotations) and each data
+record contains the value size, value data, content-type of the data
+and timestamp of the record.  The format is each record is as follows:</p>
+
+<pre>
+Key: &lt;Mailbox Name&gt;\0&lt;Annotation Name&gt;\0&lt;Userid&gt;\0
+
+Data: &lt;Value Size (4 bytes)&gt;&lt;Value&gt;\0&lt;Content-Type&gt;\0&lt;Timestamp (4 bytes)&gt;
+</pre>
+
+<h2>Quotas (quotas.db)</h2>
+
+<p>This database contains the master list of quotaroots on the
+system.  The database is indexed by quota root and each data record
+contains the current usage of all mailboxes under the quota root and
+the limit of the quota root.  The format of each record is as
+follows:</p>
+
+<pre>
+Key: &lt;Quota Root&gt;
+
+Data: &lt;Usage (in bytes)&gt;SP&lt;Limit (in Kbytes)&gt;
+</pre>
+
+<h3>Legacy Quotas</h3>
+
+<p>The legacy quota database uses a distributed system in which each
+quota root is stored in a separate file named by quota root and the
+contents has the following format:</p>
+
+<pre>
+&lt;Usage (in bytes)&gt;\n
+&lt;Limit (in Kbytes)&gt;\n
+</pre>
+
+<p>The translation to/from this data record format is handled by the
+quota_legacy cyrusdb backend.<p>
+
+<h2>Duplicate Delivery (deliver.db)</h2>
+
+<p>This database is used for duplicate delivery suppression, retrieving
+usenet articles by message-id, and tracking Sieve redirects and
+vacation responses. The database is indexed by message-id +
+recipient (either mailbox or email address) and each data record
+contains the timestamp of the record and the UID of the message within
+the mailbox (if delivered locally). The format of each record is as
+follows:</p>
+
+<pre>
+Key: &lt;Message-ID&gt\0&lt;Recipient&gt;\0
+
+Data: &lt;Timestamp (4 bytes)&gt;&lt;Message UID (4 bytes)&gt;
+</pre>
+
+<h2>TLS cache (tls_sessions.db)</h2>
+
+<p>This database caches SSL/TLS sessions so that subsequent
+connections using the same session-id can bypass the SSL/TLS
+handshaking, resulting is shorter connection times.  The database is
+indexed by session-id and each data record contains the timestamp of
+the record and the ASN1 representation of the session data.  The
+format of each record is as follows:</p>
+
+<pre>
+Key: &lt;Session-ID (multi-byte)&gt;
+
+Data: &lt;Timestamp (4 bytes)&gt;&lt;Session Data (multi-byte)&gt;
+</pre>
+
+<h2>PTS cache (ptscache.db)</h2>
+
+<p>This database caches authentication state records, resulting in
+shorter authentication/canonicalization times.  The database is
+indexed by userid and each data record contains an authentication
+state for the userid.  The format of each record is as follows:</p>
+
+<pre>
+Key: &lt;Userid&gt;
+
+Data: &lt;Auth State (multi-byte)&gt;
+</pre>
+
+<h2>Seen State (&lt;userid&gt;.seen)</h2>
+
+This database is a per-user database and maintains the list of
+messages that the user has read in each mailbox.  The database is
+indexed by mailbox unique-id and each data record contains the
+database version number, the timestamp of when a message was last
+read, the message unique-id of the last read message, the timestamp of
+the last record change and a list of message unique-ids which have
+been read.  The format of each record is as follows:</p>
+
+<pre>
+Key: &lt;Mailbox UID&gt;
+
+Data: &lt;Version&gt;SP&lt;Last Read Time&gt;SP&lt;Last Read UID&gt;SP&lt;Last Change Time&gt;SP&lt;List of Read UIDs&gt;
+</pre>
+
+<h2>Subscriptions (&lt;userid&gt;.sub)</h2>
+
+<p>This database is a per-user database and contains the list of
+mailboxes to which the user has subscribed.  The database is indexed
+by mailbox name and each data record contains no data.  The format of
+each record is follows:</p>
+
+<pre>
+Key: &lt;Mailbox Name&gt;
+
+Data: None
+</pre>
+
+</body>
+</html>
