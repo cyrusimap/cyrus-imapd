@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.17 2002/02/19 18:09:46 ken3 Exp $
+ * $Id: test.c,v 1.18 2002/02/26 22:05:34 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -328,29 +328,39 @@ int redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
+    int *force_fail = (int*) ic;
+
     printf("redirecting message '%s' to '%s'\n", m->name, rc->addr);
-    return SIEVE_OK;
+
+    return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
 int discard(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     message_data_t *m = (message_data_t *) mc;
+    int *force_fail = (int*) ic;
+
     printf("discarding message '%s'\n", m->name);
-    return SIEVE_OK;
+
+    return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
 int reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
+    int *force_fail = (int*) ic;
+
     printf("rejecting message '%s' with '%s'\n", m->name, rc->msg);
-    return SIEVE_OK;
+
+    return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
 int fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
+    int *force_fail = (int*) ic;
 
     printf("filing message '%s' into '%s'\n", m->name, fc->mailbox);
 
@@ -362,13 +372,14 @@ int fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	printf("\n");
     }
 
-    return SIEVE_OK;
+    return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
 int keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
+    int *force_fail = (int*) ic;
 
     printf("keeping message '%s'\n", m->name);
 
@@ -380,12 +391,13 @@ int keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	printf("\n");
     }
 
-    return SIEVE_OK;
+    return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
 int notify(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
+    int *force_fail = (int*) ic;
     int flag = 0;
 
     printf("notify ");
@@ -403,7 +415,7 @@ int notify(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     }
     printf("msg = '%s' with priority = %s\n",nc->message, nc->priority);
 
-    return SIEVE_OK;
+    return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
  
 int mysieve_error(int lineno, const char *msg, void *i, void *s)
@@ -444,9 +456,12 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
+    int *force_fail = (int*) ic;
+
     printf("echo '%s' | mail -s '%s' '%s' for message '%s'\n",
 	   src->msg, src->subj, src->addr, m->name);
-    return SIEVE_OK;
+
+    return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
 sieve_vacation_t vacation = {
@@ -659,20 +674,46 @@ int main(int argc, char *argv[])
     sieve_interp_t *i;
     sieve_script_t *s;
     message_data_t *m;
+    char *script = NULL, *message = NULL;
+    int c, force_fail = 0, usage_error = 0;
     FILE *f;
     int fd, res;
     struct stat sbuf;
 
-    if (argc == 2 && !strcmp(argv[1], "-c")) test_comparator();
+    while ((c = getopt(argc, argv, "v:cf")) != EOF)
+	switch (c) {
+	case 'v':
+	    script = optarg;
+	    break;
+	case 'c':
+	    test_comparator();
+	    /* test_comparator exits for us */
+	    break;
+	case 'f':
+	    force_fail = 1;
+	    break;
+	default:
+	    usage_error = 1;
+	    break;
+	}
 
-    if (argc != 3) {
+    if (!script) {
+	if ((argc - optind) < 2)
+	    usage_error = 1;
+	else {
+	    message = argv[optind];
+	    script = argv[optind+1];
+	}
+    }
+
+    if (usage_error) {
 	fprintf(stderr, "usage:\n");
 	fprintf(stderr, "%s message script\n", argv[0]);
 	fprintf(stderr, "%s -v script\n", argv[0]);
 	exit(1);
     }
 
-    res = sieve_interp_alloc(&i, NULL);
+    res = sieve_interp_alloc(&i, &force_fail);
     if (res != SIEVE_OK) {
 	printf("sieve_interp_alloc() returns %d\n", res);
 	exit(1);
@@ -754,9 +795,9 @@ int main(int argc, char *argv[])
     }
 
 
-    f = fopen(argv[2], "r");
+    f = fopen(script, "r");
     if (!f) {
-	printf("can not open script '%s'\n", argv[2]);
+	printf("can not open script '%s'\n", script);
 	exit(1);
     }
 
@@ -767,14 +808,14 @@ int main(int argc, char *argv[])
 
     fclose(f);
 
-    if (strcmp(argv[1], "-v") != 0) {
-	fd = open(argv[1], O_RDONLY);
+    if (message) {
+	fd = open(message, O_RDONLY);
 	res = fstat(fd, &sbuf);
 	if (res != 0) {
 	    perror("fstat");
 	}
 
-	m = new_msg(fdopen(fd, "r"), sbuf.st_size, argv[1]);
+	m = new_msg(fdopen(fd, "r"), sbuf.st_size, message);
 	if (res != SIEVE_OK) {
 	    printf("sieve_msg_parse() returns %d\n", res);
 	    exit(1);
