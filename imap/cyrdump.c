@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.1 2001/02/23 17:35:52 leg Exp $
+/* $Id: cyrdump.c,v 1.2 2001/02/23 17:52:18 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,12 +61,14 @@
 #include "mboxlist.h"
 #include "imapd.h"
 #include "exitcodes.h"
+#include "imapurl.h"
 
 int verbose = 0;
 
 static int dump_me(char *name, int matchlen, int maycreate, void *rock);
 static void print_seq(const char *tag, const char *attrib, 
 		      unsigned *seq, int n);
+int usage(const char *name);
 
 int imapd_exists;
 struct protstream *imapd_out = NULL;
@@ -78,6 +80,7 @@ int main(int argc, char *argv[])
     int option;
     char buf[MAX_MAILBOX_PATH];
     int i;
+    char *alt_config = NULL;
 
     if (geteuid() == 0) {
 	usage(argv[0]);
@@ -89,6 +92,10 @@ int main(int argc, char *argv[])
 	    verbose++;
 	    break;
 
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+
 	default:
 	    usage(argv[0]);
 	    break;
@@ -96,10 +103,10 @@ int main(int argc, char *argv[])
     }
 
     if (optind == argc) {
-	usage();
+	usage(argv[0]);
     }
 
-    config_init("dump");
+    config_init(alt_config, "dump");
     mboxlist_init(0);
     mboxlist_open(NULL);
 
@@ -149,7 +156,6 @@ static int dump_me(char *name, int matchlen, int maycreate, void *rock)
     unsigned *uids;
     unsigned *uidseq;
     int i, n, numuids;
-    char *s;
 
     memset(&m, 0, sizeof(struct mailbox));
     r = mailbox_open_header(name, 0, &m);
@@ -182,7 +188,7 @@ static int dump_me(char *name, int matchlen, int maycreate, void *rock)
     imapurl_toURL(imapurl, config_servername, m.name);
     printf("  <mailbox-url>%s</mailbox-url>\n", imapurl);
     printf("  <incremental-uid>%d</incremental-uid>\n", irec->incruid);
-    printf("  <nextuid>%d</nextuid>\n", m.last_uid + 1);
+    printf("  <nextuid>%ld</nextuid>\n", m.last_uid + 1);
     printf("\n");
 
     memset(&searchargs, 0, sizeof(struct searchargs));
@@ -242,6 +248,8 @@ static int dump_me(char *name, int matchlen, int maycreate, void *rock)
     }
 
     printf("\n--%s--\n", boundary);
+
+    return 0;
 }
 
 static void print_seq(const char *tag, const char *attrib,
