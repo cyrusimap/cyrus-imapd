@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.218 2000/02/24 20:11:28 tmartin Exp $ */
+/* $Id: imapd.c,v 1.219 2000/02/25 00:30:58 tmartin Exp $ */
 
 #include <config.h>
 
@@ -1355,9 +1355,7 @@ char *passwd;
  * Perform an AUTHENTICATE command
  */
 void
-cmd_authenticate(tag, authtype)
-char *tag;
-char *authtype;
+cmd_authenticate(char *tag,char *authtype)
 {
     int sasl_result;
     static struct buf clientin;
@@ -1417,7 +1415,9 @@ char *authtype;
 	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
 		   imapd_clienthost, authtype, errstr);
 	}
-	
+
+	snmp_increment_str(AUTHENTICATION_NO,authtype, 1);
+
 	sleep(3);
 	
 	if (errorstring) {
@@ -1458,6 +1458,8 @@ char *authtype;
       case 1: ssfmsg="integrity protection";break;
       default: ssfmsg="privacy protection";break;
       }
+
+    snmp_increment_str(AUTHENTICATION_YES,authtype, 1);
 
     prot_printf(imapd_out, "%s OK Success (%s)\r\n", tag,ssfmsg);
 
