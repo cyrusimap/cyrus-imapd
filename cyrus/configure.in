@@ -2,13 +2,10 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.171 2000/05/10 15:19:27 leg Exp $
+dnl $Id: configure.in,v 1.149.2.1 2000/05/16 14:50:40 ken3 Exp $
 dnl
 
-
 AC_INIT(imap/imapd.c)
-AC_CONFIG_HEADER(config.h)
-AC_CANONICAL_HOST
 
 AC_CHECK_PROG(MAKEDEPEND,makedepend,makedepend,[`cd ${srcdir};pwd`/tools/not-mkdep])
 if test "$MAKEDEPEND" != "makedepend"; then
@@ -21,7 +18,6 @@ Configure SASL appropriately instead.]))
 AC_ARG_WITH(cyrus-prefix,[  --with-cyrus-prefix=DIR    use DIR as cyrus install directory],
 	cyrus_prefix="$withval",cyrus_prefix="/usr/cyrus")
 AC_SUBST(cyrus_prefix)
-AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix")
 AC_ARG_WITH(cyrus-user,[  --with-cyrus-user=USERID   use USERID cyrus userid],
 	cyrus_user="$withval",cyrus_user="cyrus")
 AC_SUBST(cyrus_user)
@@ -52,7 +48,10 @@ dnl let's just link against local.  otherwise we never find anything useful.
 CPPFLAGS="-I/usr/local/include ${CPPFLAGS}"
 CMU_ADD_LIBPATH("/usr/local/lib")
 
-AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h)
+dnl if db_185.h is present, we're using db2.0 and should include db_185.h
+dnl instead of db.h; otherwise, include db.h.  this is handled in the code
+dnl itself.
+AC_CHECK_HEADERS(unistd.h sys/select.h db_185.h sys/param.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
 AC_HEADER_DIRENT
 
@@ -66,17 +65,6 @@ AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
-
-AC_ARG_WITH(dbdir,[  --with-dbdir=DIR       Berkeley DB in <DIR>],
-  LDFLAGS="-L$withval/lib $LDFLAGS"
-  CMU_ADD_LIBPATH($withval/lib)
-  CPPFLAGS="-I$withval/include $CPPFLAGS")
-AC_CHECK_LIB(db-3, db_create, [AC_DEFINE(HAVE_LIBDB)
-       	                       LIBS=" -ldb-3 ${LIBS}"],
-  AC_CHECK_LIB(db, db_create, [AC_DEFINE(HAVE_LIBDB)
-			       LIBS="-ldb ${LIBS}"],
-    AC_ERROR([this version requires Berkeley DB 3.x.
-(Get it from http://www.sleepycat.com/.)])))
 
 sievedir="sieve"
 AC_ARG_ENABLE(sieve,
@@ -96,28 +84,12 @@ if test "$sievedir" != "no"; then
 	AC_PROG_YACC
 	AC_PROG_LEX
 	AC_CHECK_LIB(fl,main)
-
- 	AC_SEARCH_LIBS(regcomp, rx regex,
- 			AC_DEFINE(ENABLE_REGEX)
-		 	AC_CHECK_HEADER(rxposix.h, AC_DEFINE(HAVE_RX)))
-  		
+	AC_SEARCH_LIBS(regcomp, rx regex,
+		AC_DEFINE(ENABLE_REGEX)
+		AC_CHECK_HEADER(rxposix.h, AC_DEFINE(HAVE_RX)))
 
 	PRE_SUBDIRS="${PRE_SUBDIRS} $sievedir"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} $sievedir/Makefile"
-fi
-
-AC_ARG_WITH(perl,       [  --with-perl=PERL           use PERL for perl],
-	with_perl="$withval", with_perl="perl5")
-if test "${with_perl}" != no; then
-    AC_CHECK_PROGS(PERL, ${with_perl} perl, with_perl=no)
-fi
-if test "$with_perl" = "no"; then
-    AC_MSG_WARN(No Perl found: administrative tools won't be available)
-else
-dnl compile perl stuff
-    EXTRA_SUBDIRS="${EXTRA_SUBDIRS} perl"
-dnl and compile perl/cyradm
-    PERL_SUBDIRS="imap"
 fi
 
 dnl for timsieved
@@ -125,8 +97,8 @@ if test "$sievedir" != "no"; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} timsieved"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} timsieved/Makefile"
 
-	PERL_SUBDIRS="${PERL_SUBDIRS} sieve"
-	EXTRA_OUTPUT="${EXTRA_OUTPUT} perl/sieve/Makefile perl/sieve/lib/Makefile"
+	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} installsieve"
+	EXTRA_OUTPUT="${EXTRA_OUTPUT} installsieve/Makefile"
 fi
 
 dnl for et routines
@@ -417,6 +389,16 @@ AC_ARG_WITH(afs,[  --with-afs=PATH         use AFS libraries from PATH],
 	[with_afs="${withval}"
 	CFLAGS="${CFLAGS} -I${withval}/include"],with_afs="/usr/local")
 
+AC_MSG_CHECKING(for Kerberos)
+AC_CACHE_VAL(cyrus_cv_lib_kerberos,
+  dnl /etc/kerberosIV/krb.conf is FreeBSD's fault.
+  if test -f /etc/krb.conf -o -f /etc/kerberosIV/krb.conf ; then
+	cyrus_cv_lib_kerberos=yes
+else
+	cyrus_cv_lib_kerberos=no
+fi)
+AC_MSG_RESULT($cyrus_cv_lib_kerberos)
+
 AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
                           METHOD is unix or krb],WITH_AUTH="$withval",
 	if test -f /etc/krb.conf -o -f /etc/kerberosIV/krb.conf ; then
@@ -428,6 +410,7 @@ AC_SUBST(WITH_AUTH)
 if test "$WITH_AUTH" = krb_pts; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
+	AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix")
 	AFS_LIBS="${with_afs}/lib/afs/libkauth.a ${with_afs}/lib/afs/libprot.a  ${with_afs}/lib/afs/libauth.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/librxkad.a ${with_afs}/lib/librx.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/libubik.a  ${with_afs}/lib/liblwp.a ${with_afs}/lib/afs/util.a"
 	if test -f ${with_afs}/lib/afs/libaudit.a; then
 		AFS_LIBS="$AFS_LIBS ${with_afs}/lib/afs/libaudit.a"
@@ -488,7 +471,18 @@ if test "$WITH_AUTH" = krb_pts; then
 	AC_SUBST(AFS_LDFLAGS)
 fi
 
-SERVER_SUBDIRS="master imap"
+TCL_SUBDIRS="cyradm"
+AC_ARG_ENABLE(cyradm,
+	[  --disable-cyradm        disable compling cyradm],
+	if test "$enableval" = no; then
+		TCL_SUBDIRS=""
+	fi)		
+if test -n "$TCL_SUBDIRS"; then	
+	EXTRA_OUTPUT="${EXTRA_OUTPUT} cyradm/Makefile"
+fi
+AC_SUBST(TCL_SUBDIRS)
+
+SERVER_SUBDIRS="imap"
 AC_ARG_ENABLE(server,
 	[  --disable-server        disable compiling servers],
 	if test "$enableval" = no; then
@@ -497,56 +491,329 @@ AC_ARG_ENABLE(server,
 AC_SUBST(SERVER_SUBDIRS)
 # We always output a server makefile (just because we can)
 
-dnl this is the new simple check for kerberos; since the person had to
-dnl compile SASL, we might as well use the same checks.
-AC_ARG_WITH(krb,[  --with-krb=PATH         use Kerberos from PATH],
-	with_krb="$withval", with_krb="yes")
+dnl To link against Tcl, configure does several things to make my life
+dnl "easier".
+dnl
+dnl * maybe ask the user where they think Tcl lives, and try to find it
+dnl * maybe ask the user what "tclsh" is called this week (i.e., "tclsh8.0")
+dnl * run tclsh, ask it for a path, then run that path through sed
+dnl * sanity check its result (many installs are a little broken)
+dnl * try to figure out where Tcl is based on this result
+dnl * try to guess where the Tcl include files are
+dnl
+dnl XXX MUST CHECK FOR TCL BEFORE KERBEROS V4 XXX
+dnl This is because some genius at MIT named one of the Kerberos v4
+dnl library functions log().  This of course conflicts with the
+dnl logarithm function in the standard math library, used by Tcl.
+dnl
+dnl Checking for Tcl first puts -lm before -lkrb on the library list.
+dnl
+dnl Check for some information from the user
+AC_ARG_WITH(tclconfig,[  --with-tclconfig=PATH   use tclConfig.sh from PATH
+                          (configure gets Tcl configuration from here)],
+        dnl trim tclConfig.sh off the end so we can add it back on later.
+	TclLibBase=`echo ${withval} | sed s/tclConfig.sh\$//`)
+AC_ARG_WITH(tcl,      [  --with-tcl=PATH         use Tcl from PATH],
+	TclLibBase="${withval}/lib")
+AC_ARG_WITH(tclsh,    [  --with-tclsh=TCLSH      use TCLSH as the tclsh program
+                          (let configure find Tcl using this program)],
+	TCLSH="${withval}")
+dnl $TCL_SUBDIRS is nonempty if we are using Tcl.
+if test "$TCL_SUBDIRS" != ""; then
 
-if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" ; then
-  dnl In order to compile kerberos4, we need libkrb and libdes.
+  if test -z "$TclLibBase"; then # do we already know?
+    # No? Run tclsh and ask it where it lives.
 
-  dnl we might need -lresolv for kerberos
-  AC_CHECK_LIB(resolv,res_search)
+    # Do we know where a tclsh lives?
+    if test -z "$TCLSH"; then
+      # Try and find tclsh.  Any tclsh.
+      # If a new version of tcl comes out and unfortunately adds another
+      # filename, it should be safe to add it (to the front of the line --
+      # somef vendors have older, badly installed tclshs that we want to avoid
+      # if we can)
+      AC_PATH_PROGS(TCLSH, [tclsh8.1 tclsh8.0 tclsh], "unknown")
+    fi
 
-  AC_CHECK_LIB(des,des_ecb_encrypt, LIBS="${LIBS} -ldes",
- AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.]))
-
-  dnl if we were ambitious, we'd look more aggressively for the
-  dnl krb4 install
-  if test -d ${with_krb}; then
-     AC_CACHE_CHECK(for Kerberos includes, cyrus_krbinclude, [
-       for krbhloc in include/kerberosIV include
-       do
-         if test -f ${with_krb}/${krbhloc}/krb.h ; then
-           cyrus_krbinclude=${with_krb}/${krbhloc}
-           break
-         fi
-       done
-       ])
-
-     if test -n "${cyrus_krbinclude}"; then
-       CPPFLAGS="$CPPFLAGS -I${cyrus_krbinclude}"
-     fi
-     LDFLAGS="$LDFLAGS -L${with_krb}/lib"
+    # Do we know where to get a tclsh?
+    if test "${TCLSH}" != "unknown"; then
+      AC_MSG_CHECKING([where Tcl says it lives])
+      TclLibBase=`echo puts \\\$tcl_library | ${TCLSH} | sed -e 's,[^/]*$,,'`
+      AC_MSG_RESULT($TclLibBase)
+    fi
   fi
 
-  if test "$with_des" != no; then
-    AC_CHECK_HEADER(krb.h,
-      AC_CHECK_LIB(krb, krb_mk_priv,,
-                   AC_WARN(No Kerberos V4 found); krb4=no,
-		   -ldes),
-      AC_WARN(No Kerberos V4 found); krb4=no)
-  else
-    AC_WARN(No DES library found for Kerberos V4 support)
-    krb4=no
-  fi
+  if test -z "$TclLibBase" ; then
 
-  if test "${krb4}" != no; then
-    AC_DEFINE(HAVE_KRB)
+    AC_MSG_RESULT([can't find tclsh])
+
+    AC_MSG_WARN([The "tclsh" program could not be found in your PATH.])
+    AC_MSG_WARN([Tcl is required for building cyradm.])
+    AC_MSG_WARN([You should use --with-tclsh (or one of the other switches])
+    AC_MSG_WARN([configure has for specifying the location of Tcl)])
+    AC_MSG_WARN([or configure with --disable-cyradm to not build it.])
+
+    AC_MSG_ERROR([Help configure find Tcl or use --disable-cyradm.])
+
   else
-    AC_ERROR([Kerberos not found for authorization module])
+    AC_MSG_CHECKING([for tclConfig.sh])
+    # Check a list of places where the tclConfig.sh file might be.
+    for tcldir in "${TclLibBase}" \
+                  "${TclLibBase}/.." \
+		  "${TclLibBase}"`echo ${TCLSH} | sed s/sh//` ; do
+      if test -f "${tcldir}/tclConfig.sh"; then
+        TclLibBase="${tcldir}"
+        break
+      fi
+    done
+    AC_MSG_RESULT(${TclLibBase}/)
+
+    if test -z "${TclLibBase}" ; then
+      AC_MSG_RESULT("unknown")
+      AC_MSG_WARN([tclsh was found, but tclConfig.sh could not be located.])
+      AC_MSG_WARN([See the --with-tclconfig option if your Tcl is ver >=7.5])
+      AC_MSG_WARN([(This means your tclConfig.sh is probably in a weird])
+      AC_MSG_WARN([place.)])
+      AC_MSG_ERROR([Can't find tclConfig.sh; use --with-tclconfig])
+    fi
+
+    AC_MSG_CHECKING([with Tcl on how it says it should be compiled])
+    . ${TclLibBase}/tclConfig.sh
+    AC_MSG_RESULT(ok)
+    dnl no TK stuff for us.
+    dnl . ${TclLibBase}/tkConfig.sh
+
+    dnl Now, hunt for the Tcl include files, since we don't strictly
+    dnl know where they are; some folks put them (properly) in the 
+    dnl default include path, or maybe in /usr/local; the *BSD folks
+    dnl put them in other places.
+    AC_MSG_CHECKING([where Tcl includes are])
+    for tclinclude in "${TCL_PREFIX}/include/tcl${TCL_VERSION}" \
+                      "${TCL_PREFIX}/include/tcl" \
+                      "${TCL_PREFIX}/include" ; do
+      if test -r "${tclinclude}/tcl.h" ; then
+        TCL_CPPFLAGS="-I${tclinclude}"
+        break
+      fi
+    done
+    AC_MSG_RESULT(${TCL_CPPFLAGS})
+
+    dnl TCL_LIBS="${TK_LIB_SPEC} ${TK_XLIBSW} ${TCL_LD_SEARCH_FLAGS} ${TCL_LIB_SPEC}"
+    TCL_LIBS="${TCL_LD_SEARCH_FLAGS} ${TCL_LIB_SPEC} ${TCL_LIBS}"
+
+    AC_SUBST(TCL_DEFS)dnl
+    AC_SUBST(TCL_LIBS)dnl
+    AC_SUBST(TCL_CPPFLAGS)dnl
   fi
 fi
+
+dnl
+dnl because of snprintf problems, we have to do this before kerberos checks,
+dnl then put krb libs at front of line
+dnl
+
+AC_CHECK_FUNC(dbopen, [AC_DEFINE(HAVE_LIBDB)
+                       use_db=1], 
+  AC_CHECK_LIB(db,dbopen,[AC_DEFINE(HAVE_LIBDB)
+       	                  LIBS=" -ldb ${LIBS}"
+                	  use_db=1]))
+
+if test -z "use_db"; then
+  AC_CHECK_LIB(ndbm, dbm_open)
+  AC_CHECK_LIB(dbm, dbm_open)
+fi
+
+AC_ARG_ENABLE(static-libraries,
+        [  --static-libraries      compile with avalible static libraries (EXPERIMENTAL)],
+	[if test "$enableval" = yes; then
+		cmu_compile_with_static_libs=yes
+
+echo "WARNING: You have enabled the --enable-static-libraries switch."
+echo "         This is very experimental and may only work for certain"
+echo "         system types at CMU.  We do not expect this to be portable"
+echo "         (yet).  This switch affects only some binaries."
+
+	fi], [	cmu_compile_with_static_libs=no ]
+)
+
+dnl Libraries Kerberos may depend on.  Some of these may be implicit
+dnl dependancies if shared libraries are involved, but we detect them anyway
+dnl in case --enable-static-libraries is given and we have to use static libs.
+
+save_LIBS="${LIBS}" # avoid shared library dependancies.
+LIBS=""
+
+AC_CHECK_FUNC(gethostbyname,,
+  AC_CHECK_LIB(nsl, gethostbyname, [
+	
+	# worked...
+    	EXTRA_LIBS="-lnsl"
+
+        # Solaris 2.5 needs this for nsl, so if it's there we'll link it in
+	# if we're linking statically.  Otherwise things go wrong on some
+	# systems where GNU versions of these libraries get used
+	# unintentionally, and stuff doesn't compile.
+	if test "$cmu_compile_with_static_libs" = yes ; then
+          AC_CHECK_LIB(intl, dgettext, EXTRA_LIBS="${EXTRA_LIBS} -lintl",
+
+	[
+
+### begin macro
+
+### this started out as
+### AC_CHECK_LIB(/usr/lib/libintl.a, dgettext,
+### EXTRA_LIBS="${EXTRA_LIBS} /usr/lib/libintl.a")
+### but has been hacked so the first argument can be a full library name.
+
+
+echo $ac_n "checking for dgettext in /usr/lib/libintl.a""... $ac_c" 1>&6
+echo "configure:3351: checking for dgettext in /usr/lib/libintl.a" >&5
+ac_lib_var=`echo /usr/lib/libintl.a'_'dgettext | sed 'y%./+-%__p_%'`
+if eval "test \"`echo '$''{'ac_cv_lib_$ac_lib_var'+set}'`\" = set"; then
+  echo $ac_n "(cached) $ac_c" 1>&6
+else
+  ac_save_LIBS="$LIBS"
+LIBS="/usr/lib/libintl.a  $LIBS"
+cat > conftest.$ac_ext <<EOF
+#line 3359 "configure"
+#include "confdefs.h"
+/* Override any gcc2 internal prototype to avoid an error.  */
+/* We use char because int might match the return type of a gcc2
+    builtin and then its argument prototype would still apply.  */
+char dgettext();
+
+int main() {
+dgettext()
+; return 0; }
+EOF
+if { (eval echo configure:3370: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest; then
+  rm -rf conftest*
+  eval "ac_cv_lib_$ac_lib_var=yes"
+else
+  echo "configure: failed program was:" >&5
+  cat conftest.$ac_ext >&5
+  rm -rf conftest*
+  eval "ac_cv_lib_$ac_lib_var=no"
+fi
+rm -f conftest*
+LIBS="$ac_save_LIBS"
+
+fi
+if eval "test \"`echo '$ac_cv_lib_'$ac_lib_var`\" = yes"; then
+  echo "$ac_t""yes" 1>&6
+  EXTRA_LIBS="${EXTRA_LIBS} /usr/lib/libintl.a"
+else
+  echo "$ac_t""no" 1>&6
+fi
+
+### end macro
+
+	])
+
+	fi
+
+	]))
+
+AC_CHECK_FUNC(connect)
+if test $ac_cv_func_connect = no; then
+  AC_CHECK_LIB(socket, connect, EXTRA_LIBS="-lsocket $EXTRA_LIBS", ,
+    $EXTRA_LIBS)
+fi
+LIBS="${save_LIBS} ${EXTRA_LIBS}"
+
+dnl
+dnl Try like crazy to locate Kerberos (4) libraries.
+dnl This used to be easier, but with all the locations the BSD variants
+dnl are using for Kerberos these days, + k5, it's harder.
+dnl
+dnl This might satisfy everyone, but I doubt it.  It should work if
+dnl the code is in /usr/(athena|kerberos|local|.), it should detect if
+dnl some include files are in a kerberosIV subdir, and it should work
+dnl if there's a library called "krb4" instead of krb.  It should also
+dnl correctly deal with crippled Kerberos libraries and refuse to use them,
+dnl but only if the user doesn't specify --with-krb=no.
+dnl
+AC_ARG_WITH(krb,[  --with-krb=PATH         use Kerberos from PATH])
+dnl This may not be the best way to do this, but I like it.
+if test -z "${with_krb}" -o "${with_krb}" = yes; then
+  AC_CACHE_CHECK(for location of Kerberos install, cyrus_krblocation, [
+
+    # Check for Kerberos libraries in likely places.
+    for checkloc in /usr/local /usr/kerberos /usr/athena /usr
+    do
+      libdir=${checkloc}/lib
+      for checklib in ${libdir}/libkrb4.* ${libdir}/libkrb.*
+      do
+        if test -f ${checklib} ; then
+          cyrus_krblocation=${checkloc}
+          break
+        fi
+      done
+      if test \! -z "${cyrus_krblocation}" ; then
+        break
+      fi
+    done
+    if test -z "${cyrus_krblocation}"; then
+      cyrus_krblocation=no
+    fi
+    ])
+else
+  cyrus_krblocation="${with_krb}"
+fi
+
+if test "${with_krb}" != no ; then
+  if test -z "${cyrus_krblocation}" ; then
+    if -a "${with_krb}" = yes; then
+     AC_MSG_ERROR([Couldn't find Kerberos.  Use --with-krb to specify a path.])
+    else
+      with_krb=no
+    fi
+  else
+    with_krb=${cyrus_krblocation}
+  fi
+fi
+
+case "$with_krb" in
+  no) true;;
+  *)
+    CMU_ADD_LIBPATH(${with_krb}/lib)
+
+    dnl Kerberos wants this so we might as well check on it first
+    AC_CHECK_FUNC(res_search,,AC_CHECK_LIB(resolv,res_search))
+
+    dnl gotta do this: crypt is used by sasl_krb_server.c
+    AC_CHECK_FUNC(crypt,,AC_CHECK_LIB(crypt, crypt))
+
+    AC_CHECK_LIB(des,des_ecb_encrypt, LIBS="${LIBS} -ldes",
+ AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.]))
+      
+    dnl We've replaced your regular Kerberos libraries with K5 compatibility
+    dnl versions.  Let's see if configure can tell the difference.
+    dnl on second thought, let's not do that just until we can be
+    dnl sure what we're doing.
+    AC_CHECK_LIB(krb, krb_get_phost,,
+     AC_MSG_ERROR([Can't find Kerberos libraries!]))
+
+    AC_CACHE_CHECK(for Kerberos includes, cyrus_krbinclude, [
+      # I know I"m going to get bug reports about this because someone
+      # cleverly hid the Kerberos includes somewhere.  Oh, well.
+      for krbhloc in include/kerberosIV include
+      do
+	if test -f ${with_krb}/${krbhloc}/krb.h ; then
+	  cyrus_krbinclude=${with_krb}/${krbhloc}
+	  break
+	fi
+      done
+      ])
+    if test -z "${cyrus_krbinclude}"; then
+      AC_MSG_ERROR([Can't find Kerberos include files.])
+    fi
+
+    CPPFLAGS="${CPPFLAGS} -I${cyrus_krbinclude}"
+
+    AC_CHECK_FUNC(basename,,AC_CHECK_LIB(iberty,basename))
+    AC_DEFINE(HAVE_KRB)
+    ;;
+esac
 
 dnl
 dnl Test for OpenSSL
@@ -613,8 +880,6 @@ if test "$with_zephyr" = "no"; then
 	AC_MSG_ERROR(Unable to find Zephyr libraries)
      fi
 fi     
-
-
 
 dnl
 dnl Try and find a system version of com_err.
@@ -711,6 +976,12 @@ AC_MSG_RESULT($INNSHELLVARS)
 
 AC_SUBST(INNSHELLVARS)
 
+AC_ARG_ENABLE(privacy,
+	[  --disable-privacy       disable network privacy support],
+	if test "$enableval" = no; then
+		AC_DEFINE(NOPRIVACY)
+	fi)		
+
 AC_MSG_CHECKING(for modern syslog)
 AC_CACHE_VAL(cyrus_cv_lib_syslog, AC_TRY_CPP([#include <syslog.h>
 #ifndef LOG_LOCAL6
@@ -724,6 +995,14 @@ if test $cyrus_cv_lib_syslog = no; then
 fi
 AC_MSG_RESULT($cyrus_cv_lib_syslog)
 
+AC_ARG_ENABLE(amssync,
+	[  --enable-amssync        enable AMS bboard sync support],
+	if test "$enableval" = yes; then
+		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} amssync"
+		EXTRA_OUTPUT="${EXTRA_OUTPUT} amssync/Makefile"
+# strchr in ossup?
+#		AC_CHECK_LIB(ossup, strchr, LIBS="${LIBS} -lossup")
+	fi)			
 dnl Have to check getdtabalesize after adding ossup, as some ossups define it
 AC_REPLACE_FUNCS(getdtablesize)
 AC_ARG_ENABLE(cmulocal,
@@ -732,7 +1011,18 @@ AC_ARG_ENABLE(cmulocal,
 		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} depot"
 		EXTRA_OUTPUT="${EXTRA_OUTPUT} depot/Makefile"
 	fi)			
-
+STRIP="-s"
+AC_ARG_ENABLE(debug,
+[  --enable-debug          do not strip binaries on the install],
+	if test "$enableval" = yes; then
+		STRIP=""
+	fi)
+AC_SUBST(STRIP)
+AC_ARG_ENABLE(experiment,
+	[  --enable-experiment     enable experimental code (gurus only)],
+	if test "$enableval" = yes; then
+		AC_DEFINE(ENABLE_EXPERIMENT)
+	fi)			
 AC_ARG_ENABLE(netscapehack,
 	[  --enable-netscapehack   enable Netscape hack for the menu option
                           in Communicator to Administrate Mail],
@@ -741,20 +1031,28 @@ AC_ARG_ENABLE(netscapehack,
 	fi)
 
 AC_CHECK_FUNC(dlopen,,AC_CHECK_LIB(dl,dlopen))
-CMU_NEEDS_SASL
+CMU_SASL
 
-CMU_AGENTX
+AC_DEFUN(CMU_STATICALLY_LINK_WHAT_YOU_CAN, [
 
-if test "$found_agentx" = yes; then
-  CMU_PTHREADS
-  SNMP_SUBDIRS="snmp"
-fi
+libraries=$1
+cflags=$2
+ldflags=$3
 
-AC_SUBST(SNMP_SUBDIRS)
+outlibs=""
 
-CMU_SOCKETS
-CMU_LIBWRAP
-LIBS="$LIBS ${LIB_WRAP} ${LIB_SOCKET}"
+# Where did IRIX hide the libraries?
+default_ldflags="-L/usr/lib"
+for flag in ${cflags} ; do
+  case $flag in
+    -n32) default_ldflags="-L/usr/lib32"
+	  ;;
+    -n64) default_ldflags="-L/usr/lib64"
+	  ;;
+    *) true
+       ;;
+  esac
+done
 
 # Figure out what directories we're linking against.
 # Lots of fun for the whole family.
@@ -785,21 +1083,74 @@ for flag in ${ldflags} ${default_ldflags}; do
       fi
   esac
 done
+#echo "debug libpath: << $libpath >>"
+
+#echo "debug libraries: $libraries"
+
+for lib in $libraries ; do
+  # aieeeee
+  libmatches=`echo ${lib} | sed -e 's:^-l.*$:/:'`
+  libfilename=`echo ${lib}.a | sed -e 's/^-l/lib/'`
+
+  #echo -n "debug looking at $lib ($libmatches) ($libfilename)..."
+
+  if test "$libmatches" = "/" ; then
+    #echo "searching [$libpath]"
+    found=""
+    for libdir in $libpath ; do
+      if test -z "$found"; then
+        # See if a static version of the library exists.
+	#echo -n "checking for ${libdir}/${libfilename}... "
+        if test -f ${libdir}/${libfilename}; then
+ 	  #echo "yes"
+	  found="${libdir}/${libfilename}"
+        else
+	  #echo "no"
+	  true
+        fi
+      fi
+    done
+  else 
+    found="$lib"
+  fi
+      
+  # Sanity check this library: XXX
+
+  if test "${found}" != "" ; then
+    lib="$found"
+  fi
+  
+  outlibs="${outlibs} ${lib}"
+
+done
+
+# canonicalize excess whitespace: all spaces/tabs become one single space
+outlibs=`echo $outlibs | sed -e 's/[ 	][ 	]*/ /g'`
+
+STATIC_LIBS="$outlibs"
+])
+
+### staticify
 
 IMAP_COM_ERR_LIBS="${COM_ERR_LIBS}"
 IMAP_LIBS="${LIB_SASL} ${LIBS}"
 
+if test "$cmu_compile_with_static_libs" = yes ; then
+
+  AC_MSG_CHECKING(which libraries can be statically linked)
+
+  CMU_STATICALLY_LINK_WHAT_YOU_CAN("$LIBS", "$CFLAGS", "$LDFLAGS")
+  IMAP_LIBS="$STATIC_LIBS"
+
+  CMU_STATICALLY_LINK_WHAT_YOU_CAN("$COM_ERR_LIBS",
+	"$CFLAGS", "$LDFLAGS $COM_ERR_LDFLAGS")
+  IMAP_COM_ERR_LIBS="$STATIC_LIBS"
+
+  AC_MSG_RESULT(ok)
+
+fi
+
 AC_SUBST(IMAP_COM_ERR_LIBS)
 AC_SUBST(IMAP_LIBS)
 
-AC_OUTPUT_COMMANDS([
-  if test "$with_perl" != "no"; then
-    (cd perl/sieve/acap; $perl Makefile.PL)
-    (cd perl/sieve/managesieve; $perl Makefile.PL)
-    (cd perl/imap; $perl Makefile.PL)
-  fi
-], perl=$PERL; with_perl=$with_perl)
-AC_SUBST(PERL_SUBDIRS)
-
-dnl make sure that Makefile is the last thing output
-AC_OUTPUT(man/Makefile master/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile snmp/Makefile perl/Makefile $EXTRA_OUTPUT Makefile)
+AC_OUTPUT(Makefile man/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile $EXTRA_OUTPUT)

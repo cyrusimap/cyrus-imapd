@@ -1,9 +1,9 @@
 /* version.h: the version number
  *
- * $Id: version.h,v 1.87 2000/05/11 18:42:18 leg Exp $
+ * $Id: version.h,v 1.79.2.1 2000/05/16 14:50:43 ken3 Exp $
  */
 
-#define _CYRUS_VERSION "v2.0.2"
+#define _CYRUS_VERSION "v1.6.23-BETA"
 
 /* EXTRA_IDENT is a hack to add some version information for which compile
  * was used to build this version (at CMU, but we don't care what you do with
@@ -15,7 +15,3 @@
 #else
 #define CYRUS_VERSION _CYRUS_VERSION
 #endif
-
-/* CAPABILITIES are now defined here, not including sasl ones */
-#define CAPABILITY_STRING "IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE " \
-	"UIDPLUS NO_ATOMIC_RENAME UNSELECT MULTIAPPEND ID"
