@@ -1,7 +1,7 @@
 -*- text -*-
 
 		       Cyrus IMAP server design
-			     Oct 10, 1993
+			     Feb 17, 1994
 
 * Introduction
 
@@ -28,7 +28,7 @@ versions of the server may make the set of permissible characters
 site-policy configurable.
 
 The personal mailboxes for user "bovik" are named with "user.bovik."
-prepended.  The mailbox "user.bovik.INBOX" is handled as a special
+prepended.  The mailbox "user.bovik" is handled as a special
 case and is presented to the user "bovik" as if it were named "INBOX".
 
 FIND replies are returned in the following order: "INBOX", user's
@@ -100,7 +100,6 @@ cyrus.header	Contains variable-length information about the mailbox itself.
 - magic-number
 - Filename of cyrus.quota for this mailbox
 - The names of the user-defined flags
-- The mailbox's ACL
 
 
 cyrus.index	Contains a header and a sequence of fixed-length
@@ -111,9 +110,9 @@ cyrus.index	Contains a header and a sequence of fixed-length
 				rewritten by an expunge operation
 - format	4 bytes		nonzero if mailbox in netnews format
 - minor-version 4 bytes		mailbox format minor version number
-				will not append to mailbox if nonzero 
 - start-offset	4 bytes		offset of first per-message record
 - record-size	4 bytes		size of per-message records
+- exists	4 bytes		number of messages in mailbox
 - last-date	4 bytes		INTERNALDATE of the last message
 				appended to the mailbox
 - last-uid	4 bytes		UID of the last message	appended to
@@ -124,6 +123,7 @@ cyrus.index	Contains a header and a sequence of fixed-length
 
 - uid		4 bytes		UID
 - internaldate	4 bytes		(in unix date format)
+- sentdate	4 bytes		parsed Date: header, in unix date format
 - rfc822.size	4 bytes
 - header-size	4 bytes		size of message header
 - body-offset	4 bytes		offset in file of message body
@@ -135,6 +135,13 @@ cyrus.index	Contains a header and a sequence of fixed-length
 - user-flags	16 bytes	bit-vector of user-defined flags
 
 
+The minor-version is used to allow backwards-compatbile changes to the
+mailbox format.  If a later version of the software adds additional
+information to the cache file, it could detect an out-of-date
+minor-version on open/check and know to rebuild the cache file.  On
+append/expunge, the minor-version is set down to the level that the
+appending software supports.
+
 
 cyrus.cache	Contains a header and a sequence of variable-length
 		records, one record per message in the mailbox.  The
@@ -144,7 +151,8 @@ cyrus.cache	Contains a header and a sequence of variable-length
 - IMAP "envelope", in format suitable for use in FETCH reply
 - IMAP "bodystructure", in format suitable for use in FETCH reply
 - IMAP "body", in format suitable for use in FETCH reply
-- sizes and file offsets of the various MIME body parts
+- sizes and file offsets of the various MIME body sections
+- From, To, Cc, and BCC strings for searching
 
 Each field contains a 4 byte length in network byte order, the data,
 and padding to a 4 byte boundary.
@@ -178,7 +186,7 @@ cyrus.quota	Contains hierarchy-wide quota limits and usage.
 In order to update information in a mailbox, the implementation must
 follow set locking procedures in order to prevent concurrency errors.
 
-The locking order is: cyrus.header cyrus.index cyrus.seen cyrus.quota
+The locking order is: cyrus.header cyrus.index cyrus.quota cyrus.seen
 To prevent deadlocks, an implementation may not lock a given file while
 holding a lock on a later file.
 
@@ -262,7 +270,7 @@ update recent/seen info:
 		rename cyrus.seen.NEW to cyrus.seen
 	release lock
 
-[need to deal with backout on failure.]
+[delete/rename]
 
 [dump/restore, to implement IMSP MOVE]
 
@@ -271,7 +279,7 @@ update recent/seen info:
 In order to avoid presenting stale data, the following operations
 should be performed when implementing the following IMAP commands.
 
-Select/Bboard/Examine:
+Select/Examine:
 	open cyrus.header, check ACL
 	open cyrus.index and cyrus.cache, repeat if generation-no doesn't match
 	open cyrus.seen
@@ -289,21 +297,25 @@ Search:
 
 	The search criteria order in the following categoreis:
 
-	- INTERNALDATE based -- binary search in cyrus.index
-		ALL, BEFORE, ON, SINCE
-
-	- cyrus.seen based -- binary search uid, internaldate in cyrus.index
+	- cyrus.seen based
 		NEW, OLD, RECENT, SEEN, UNSEEN
 
-	- cyrus.header based
-		ANSWERED, DELETED, FLAGGED, KEYWORD,
+	- cyrus.index based
+		ANSWERED, BEFORE, DELETED, FLAGGED, KEYWORD, LARGER,
+		ON, SENTBEFORE, SENTON, SENTSINCE, SINCE, SMALLER,
 		UNANSWERED, UNDELETED, UNFLAGGED, UNKEYWORD
+
+	- sequence based
+		sequence, UID sequence
 
 	- cyrus.cache based
 		BCC, CC, FROM, SUBJECT, TO
 
+	- recursive criteria
+		NOT search_criteria, OR search_criteria search_criteria
+
 	- must serch message file contents
-		BODY, TEXT
+		BODY, HEADER, TEXT
 
 status update:
 	if newer cyrus.index
@@ -311,7 +323,7 @@ status update:
 		send EXPUNGE notifications
 	scan for changed flags (using last-updated), send
 		unsolicited FETCH FLAGS replies
-	calculate EXISTS by size of cyrus.index
+	read EXISTS from cyrus.index header
 	calculate RECENT by info in cyrus.seen and binary search of
 		cyrus.index 
 
@@ -325,17 +337,19 @@ the server configuration.  The files are:
 Specifies site configuration and policy options, such as:
 
 	Location of configuration directory
+	The umask to set
 	The partition names and their corresponding directory roots.
 	Threshold for quota warning messages
 	The hostnames of any IMSP servers
 	Which Kerberos realms to allow logins from
+	The location of the Kerberos srvtab file
 	Whether to allow anonymous logins
 	Whether to automatically create INBOX mailboxes for users
 	Whether to support the SUBSCRIBE/UNSUBSCRIBE IMAP commands
 
 - mailboxes
 
-Lists the names and partitions of all the common mailboxes.
+Lists the names, partitions, and ACLs of all the mailboxes.
 
 - delivered.dir & delivered.pag
 
@@ -346,16 +360,25 @@ is used for purging the database of old entries.
 
 * User directory:
 
-There is a directory to contain files with per-user information.
-For each user, it contains one or more of the following files.  In the
-filename, "USER" stands for the login name of the user.
+The subdirectory "user" under the configuration directory contains
+files with per-user information.  For each user "USER" with an INBOX, it
+may contain the file "USER.sub".  The file contains a list of the
+user's subscribed mailboxes.
 
-- USER.mailbox		Lists the names and partitions of the user's mailboxes.
+* Process registration directory:
 
-- USER.mailboxsubs	Lists the user's subscribed mailboxes
+The subdirectory "proc" under the configuration directory contains one
+file per active server process.  The filename is the ASCII
+representation of the process id and the file contains the following
+tab-separated fields:
 
-- USER.bboardsubs	Lists the user's subscribed bboards.
+- hostname of client
+- login name of user, if logged in
+- selected mailbox, if mailbox selected
 
+When a mailbox is deleted or renamed, this directory is scanned for
+processes reading the mailbox.  Those processes are sent a signal
+causing them to shut down.
 
 * IMSP dropoff directory:
 
@@ -364,8 +387,8 @@ to an IMSP server.
 
 Filename is one of:
 
-- last.mailbox.MAILBOX-NAME.UID
-- seen.mailbox.USER.MAILBOX-NAME.UID
+- last.MAILBOX-NAME.UID
+- seen.USER.MAILBOX-NAME.UID
 
 With the following definitions:
 
@@ -388,17 +411,6 @@ The order of operations for the update daemon is:
 	sleep, repeat
 
 
-* Reader registry directory
-
-Contains one file for each server process reading a mailbox.  Filename
-is process-id of server, contents of file is name of mailbox being
-read.
-
-When a mailbox is deleted or renamed, this directory is scanned for
-processes reading the mailbox.  Those processes are sent a signal
-causing them to shut down.
-
-
 * Programs:
 
 The following programs will be written
@@ -419,9 +431,15 @@ The following programs will be written
 	Called by the netnews system to build cyrus header files in
 	the news spool area.
 
+- docancel
+	Scans the cancel log of the netnews system and removes
+	the canceled messages from the cyrus header files in the news
+	spool area.
+
 - expire
 	Expires old mailbox posts
-	Has mode where it will clean up after a news system expire
+	Has mode to clean up after a news system expire
+	Has mode to process the cancel log of the netnews system
 
 - arbitron
 	Reports readership statistics
@@ -443,7 +461,7 @@ The following things need to be monitored.
 In real time:
 
 - the number of connections
-	Can use existing tools to count files in reader registry
+	Can use existing tools to count files in process registry
 - disk usage, load average
 	Already have programs to do this
 
@@ -468,52 +486,33 @@ On periodic basis:
 
 Implementation order is as follows:
 
-- Basic functionality
 
-  + append message (ex. cyrus.cache), check quotas, check ACLs
+- Full IMAP2bis (implementation completed, details removed from this document)
 
-  + append cyrus.cache, minimal deliver
+- Full IMAP4
 
-  + login/logout/select/examine/bboard/noop/check, minimal imapd
+  + Extended SEARCH - SENTBEFORE, CHARSET, HEADER
 
-  + fetch/partial/uid-fetch/uid-after (ex. MIME parts, header.matches)
+  + LIST, LSUB
 
-- Flags/Search
+  + \Junked
 
-  + store/uid-store flags/recent/seen
-
-  + search internaldate/flags
-
-  + search cyrus.cache/body
-
-- Users/mailbox manipulation
-
-  + MIME&hdr fetch, full-fledged deliver
-
-  + create
-
-  + subscribe/unsubscribe/find/acl
-
-- Full IMAP2bis
-
-  + expunge
-
-  + copy/uid-copy
-
-  + rename/delete, etc.  Alpha release
+  + Alpha release
 
 - Everything else
-
-  + IMSP seen/last, updateimsp
 
   + quota
 
   + builddir, minimal expire
 
-  + IMSP move
+  + IMSP seen/last, updateimsp
 
   + quota-usage reporter, full expire
 
-  + arbitron, pop2d, pop3d
+  + pop3d, pop2d, arbitron; Beta release
 
-  + site-configurable mailbox namespace; Beta release
+  + IMSP move
+
+  + site-configurable mailbox namespace
+
+  + internationalization of error strings, "user."
