@@ -68,7 +68,7 @@ CRLF		(\r\n|\r|\n)
 <QSTRING>\\.      { if (mlcur == mlbufsz) 
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
 		    mlbuf[mlcur++] = yytext[1]; }
-<QSTRING>.        { if (mlcur == mlbufsz) 
+<QSTRING>(.|\n)   { if (mlcur == mlbufsz) 
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
 		    mlbuf[mlcur++] = yytext[0]; }
 <INITIAL>text:{ws}?(#.*)?{CRLF}	{ BEGIN MULTILINE;
