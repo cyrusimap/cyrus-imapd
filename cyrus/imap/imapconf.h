@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.10 2001/12/04 02:23:04 rjs3 Exp $
+ * $Id: imapconf.h,v 1.11 2001/12/09 16:52:57 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,16 +61,29 @@ extern int mysasl_config(void *context,
 			 unsigned *len);
 extern sasl_security_properties_t *mysasl_secprops(int flags);
 
+#define HAS_SASL_2_1 ((SASL_VERSION_MAJOR > 2) || \
+	((SASL_VERSION_MAJOR == 2) && (SASL_VERSION_MINOR >= 1)))
+
+#if HAS_SASL_2_1
 extern int mysasl_canon_user(sasl_conn_t *conn,
 		             void *context,
 		             const char *user, unsigned ulen,
-		             const char *authid, unsigned alen,
 		             unsigned flags,
 		             const char *user_realm,
 		             char *out_user,
-		             unsigned out_max, unsigned *out_ulen,
-		             char *out_authid,
-		             unsigned out_amax, unsigned *out_alen);
+		             unsigned out_max, unsigned *out_ulen);
+#else /* SASL 2.0 */
+extern int mysasl_canon_user(sasl_conn_t *conn,
+                             void *context,
+                             const char *user, unsigned ulen,
+                             const char *authid, unsigned alen,
+                             unsigned flags,
+                             const char *user_realm,
+                             char *out_user,
+                             unsigned out_max, unsigned *out_ulen,
+                             char *out_authid,
+                             unsigned out_amax, unsigned *out_alen);
+#endif
 
 /* check if `authstate' is a valid member of class */
 extern int authisa(struct auth_state *authstate, 
