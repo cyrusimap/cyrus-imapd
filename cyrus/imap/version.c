@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.9.2.7 2003/06/19 20:49:49 ken3 Exp $
+ * $Id: version.c,v 1.9.2.8 2003/06/20 15:38:27 ken3 Exp $
  */
 
 #include <config.h>
@@ -173,19 +173,19 @@ void id_response(struct protstream *pout)
 	     "; dirhash = full");
 #endif
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-	     "; mboxlist.db = %s", CONFIG_DB_MBOX->name);
+	     "; mailboxes.db = %s", CONFIG_DB_MBOX->name);
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-	     "; subs.db = %s", CONFIG_DB_SUBS->name);
+	     "; annotations.db = %s", CONFIG_DB_ANNOTATION->name);
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; seen.db = %s", CONFIG_DB_SEEN->name);
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-	     "; duplicate.db = %s", CONFIG_DB_DUPLICATE->name);
+	     "; subs.db = %s", CONFIG_DB_SUBS->name);
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; deliver.db = %s", CONFIG_DB_DUPLICATE->name);
 #ifdef HAVE_SSL
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-	     "; tls.db = %s", CONFIG_DB_TLS->name);
+	     "; tls_sessions.db = %s", CONFIG_DB_TLS->name);
 #endif
-    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-	     "; annotation.db = %s", CONFIG_DB_ANNOTATION->name);
 
     prot_printf(pout, " \"environment\" \"%s\"", env_buf);
 }
