@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.181 2004/05/05 20:46:34 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.182 2004/05/05 20:53:49 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -860,9 +860,9 @@ static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
 
 	    } else if(resp[0] == 'M' && !exist_r) {
 		/* Note that it has to exist for a find response */
-
-		/* xxx what happens if name.s isn't an atom? */
-		prot_printf(proxyd_out, "* %s %s\r\n", resp, name.s);
+		prot_printf(proxyd_out, "* %s ", resp);
+		printastring(name.s);
+		prot_printf(proxyd_out, "\r\n");
 	    }
 	}
     } /* while(1) */
