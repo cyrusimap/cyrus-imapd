@@ -1,0 +1,247 @@
+-*- text -*-
+
+Mailbox/Bboard storage format:
+
+Each message is stored in its own file in RFC 822 format.  By default,
+lines are terminated by CRLF, though for compatibilty with netnews
+systems, lines may be separated by just LF.  As is the case with
+netnews systems, the filenames of the message files are
+sequentially-assigned internal numbers.  Once a message is appended to
+a folder, its internal sequence number never changes.
+
+The directory contains the additional files: 
+
+imap.header	Contains information about the folder itself.
+
+	Integer INTERNALDATE of last message appended to folder
+	Sequence number of last message appended to folder	
+	quota usage this folder
+	pointer to header having quota limits
+	The names of the user-defined flags
+	The folder's ACL
+
+
+imap.index	Contains a header and a sequence of fixed-length
+		records, one record per message in the folder.  The
+		header contains a "generation number" which is
+		incremented each time imap.index is rewritten by an
+		expunge operation and a record size to allow future
+		expansion.  Each record contains:
+
+	sequence-no	4 bytes		internal sequence number
+	internaldate	4 bytes		(unix date format)
+	rfc822.size	4 bytes
+	body-offset	4 bytes		offset in file of message body
+	cache-offset	4 bytes		offset in imap.cache
+	last-updated	4 bytes		unix date of last modification
+					of flags
+	system-flags	4 bytes?	bit-vector of system and
+					internal flags:
+					\answered \flagged \deleted
+					lines-are-LF-separated
+	user-flags	4 bytes?	User-defined flags
+
+[Limiting user-flags to 4 bytes limits the number of user-defined
+flags to 32.  We may want to either pick a higher limit or make the
+size vary between directories.]
+[A possible internal (or system) flag would be message-is-compressed]
+
+imap.cache	Contains a header and asequence of variable-length
+		records, one record per message in the folder.  The
+		header contains a "generation number" corresponding to
+		the one in imap.index.  Each record contains:
+
+	envelope
+	body		(as defined in imap2bis)
+	file offsets of the various body parts
+
+imap.seen	Contains the \seen and \recent information of users.
+		One record per user, each record contains
+
+	username
+	Time last opened (for \RECENT)
+        List of sequence numbers of read messages, in ".newsrc" format.
+
+imap.quota	Contains hierarchy-wide quota limits and usage, if quota is rooted here.
+
+[define specific formats]
+
+
+Locking semantics:
+
+To append a message:
+	lock imap.header
+	Lock appropriate imap.quota
+	check ACL and quota
+	open imap.index if not already reading it
+	lock already-open imap.index file
+	if imap.index has been replaced since last opened, open and
+		lock it too.
+	assign sequence number as one plus sequence number in imap.header
+	write message file
+	append info to imap.cache
+	ensure new internaldate is later than last one.
+	append info to imap.index
+	if have two index files open, append info to other imap.index
+	update sequence number and internaldate in imap.header
+	release locks
+
+To add or remove flags:
+	if adding new user flag, lock imap.dir, update, release lock
+	lock already-open imap.index file
+	if imap.index has been replaced since last opened, open and
+		lock it too.
+	read and update flags, last-updated in first imap.index file
+	if have two index files, locate record in other index file,
+		read and update flags, last-updated
+	release locks
+
+To expunge:
+	Lock imap.header
+	Lock appropriate imap.quota
+	lock already-open imap.index file
+	if imap.index has been replaced since last opened, close,
+		reopen, send EXPUNGE notifications(?), and repeat.
+	if reopened imap.index file, reopen imap.cache file.
+	create files imap.index.NEW and imap.cache.NEW, increment generation
+	Copy non-\DELETED records to new files, remember seqnos and sizes
+	[remove unused user flags from imap.header?]
+	rename imap.index.NEW to imap.index
+	rename imap.cache.NEW to imap.cache
+	write new quota
+	release locks
+	remove message files
+	lock imap.seen
+	rewrite imap.seen, removing users who haven't read recently
+	release locks
+
+update seen info:
+	lock imap.seen
+	create imap.seen.NEW
+	copy data, updating record
+	rename imap.seen.NEW to imap.seen
+	release lock
+
+update recent info
+	lock imap.header
+	write info
+	release locks
+
+[need to deal with backout on failure.  To implement COPY, append
+needs to be able to append multiple files, backing out all the way if
+failure]
+
+[dump/restore, to implement IMSP MOVE]
+
+Reading operations:
+
+Select/Bboard:
+
+	open imap.header, check acl
+	open imap.index and imap.cache, if generation nos don't match, repeat
+	open imap.seen
+	find FLAGS from imap.header
+	calculate EXISTS by size of imap.index
+	calculate RECENT by info in imap.seen and binary search of
+		imap.index 
+
+
+Fetch/Partial:
+
+	calculate offset into imap.index
+	follow pointers to imap.cache and/or message file
+
+Check:
+
+	check for newer imap.index.
+	if newer imap.index
+		open imap.index and imap.cache
+		send EXPUNGE notifications
+	scan for changed flags (using last-updated), send
+		unsolicited FETCH FLAGS replies
+	calculate EXISTS and RECENT
+
+Search:
+
+	order the search criterea in cheapest-to-most-expensive order
+	perform searches, narrowing return set
+	send SEARCH reply
+
+	The search criteria order in the following categoreis:
+
+	* INTERNALDATE based -- can set boundaries on search using
+	  binary search of imap.index
+		ALL, BEFORE, ON, SINCE
+
+	* imap.seen based -- binary search seqno, internaldate in imap.index
+		NEW, OLD, RECENT, SEEN, UNSEEN
+
+	* imap.header based
+		ANSWERED, DELETED, FLAGGED, KEYWORD,
+		UNANSWERED, UNDELETED, UNFLAGGED, UNKEYWORD
+
+	* imap.cache based
+		BCC, CC, FROM, SUBJECT, TO
+
+	* must serch message file contents
+		BODY, TEXT
+
+Global layout:
+
+configuration directory:
+
+partition list
+	lists partition names and corresponding directory roots.
+	first-listed partition is default for creations with no
+		pre-existing parent folder.
+
+bboard list
+	list of all bboard names and reference to which partition they
+	are stored in.
+
+[user mailboxes can be done using the reserved user.* bboard
+convention, or can provide separate indexing mechanism]
+
+site policy options
+	auto-create-user-inbox
+	hostnames and kerberos ids of IMSP servers
+	handle-subscriptions
+
+password file (optional, if using cleartext non-kerberos passwords)
+
+
+IMSP dropoff directory:
+
+one file for each SEEN or LAST command that needs to be sent to the
+IMSP server.  Need to deal with locking issues.
+
+
+User directory (one per user):
+
+mailbox list
+mailbox subscription list
+bboard subscription list
+
+
+Programs:
+
+imap-server: serves IMAP protocol to connecting client.  Called by
+	inetd. 
+
+imap-deliver: called by mail system to deliver message to user.
+	could also cll imap-rmail
+
+imap-update: daemon to monitor dropoff directory and gives SEEN/LAST
+	commands to IMSP server.
+
+imap-builddir: called by news system to build imap header files in
+	news spool area
+
+imap-expire: expire bboard posts
+	has mode where it will clean up after a news system expire
+
+imap-arbitron: report readership statistics
+
+pop2-server pop3-server: compatibility programs
+
+[probably also need a reconstruct-folder]
