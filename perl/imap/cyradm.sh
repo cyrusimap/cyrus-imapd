@@ -150,11 +150,15 @@ last command will be used if one is not specified.
 
 Show help for C<command> or all commands.
 
-=item listaclmailbox I<mailbox>
+=item C<info> [I<mailbox>]
 
-=item listacl I<mailbox>
+Display the mailbox/server metadata.
 
-=item lam I<mailbox>
+=item C<listaclmailbox> I<mailbox>
+
+=item C<listacl> I<mailbox>
+
+=item C<lam> I<mailbox>
 
 List ACLs on the specified mailbox.
 
