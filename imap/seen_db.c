@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.17 2000/10/12 19:18:30 leg Exp $
+   $Id: seen_db.c,v 1.18 2000/12/26 03:31:41 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -316,8 +316,6 @@ int seen_lockread(struct seen *seendb,
 		  time_t *lastreadptr, unsigned int *lastuidptr, 
 		  time_t *lastchangeptr, char **seenuidsptr)
 {
-    assert(seendb && seendb->uniqueid);
-
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_lockread(%s, %s)", 
 	       seendb->uniqueid, seendb->user);
@@ -348,7 +346,7 @@ int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid,
     datalen = strlen(data);
 
     r = DB->store(seendb->db, seendb->uniqueid, strlen(seendb->uniqueid),
-		  data, datalen, NULL);
+		  data, datalen, &seendb->tid);
     switch (r) {
     case CYRUSDB_OK:
 	break;
@@ -368,12 +366,23 @@ int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid,
 
 int seen_close(struct seen *seendb)
 {
+    int r;
+
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_close(%s, %s)", 
 	       seendb->uniqueid, seendb->user);
     }
 
-    abortcurrent(seendb);
+    if (seendb->tid) {
+	r = DB->commit(seendb->db, seendb->tid);
+	if (r != CYRUSDB_OK) {
+	    syslog(LOG_ERR, "DBERROR: error committing seen txn; "
+		   "seen state lost: %s", cyrusdb_strerror(r));
+	    DB->abort(seendb->db, seendb->tid);
+	}
+	seendb->tid = NULL;
+    }
+
     seendb->uniqueid = NULL;
 
     if (lastseen) {
@@ -461,17 +470,26 @@ int seen_copy(struct mailbox *oldmailbox, struct mailbox *newmailbox)
     return 0;
 }
 
+/* database better have been locked before this ! */
 int seen_unlock(struct seen *seendb)
 {
-    assert(seendb);
+    int r;
+
+    assert(seendb && seendb->tid);
 
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_unlock(%s, %s)",
 	       seendb->uniqueid, seendb->user);
     }
 
-    abortcurrent(seendb);
-    /* we lazily close the database */
+    r = DB->commit(seendb->db, seendb->tid);
+    if (r != CYRUSDB_OK) {
+	syslog(LOG_ERR, "DBERROR: error committing seen txn; "
+	       "seen state lost: %s", cyrusdb_strerror(r));
+	DB->abort(seendb->db, seendb->tid);
+    }
+    seendb->tid = NULL;
+
     return 0;
 }
 
