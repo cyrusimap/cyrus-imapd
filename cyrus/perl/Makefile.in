@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.11 2002/07/22 16:16:05 rjs3 Exp $
+# $Id: Makefile.in,v 1.12 2003/01/02 17:27:35 rjs3 Exp $
 #
 # @configure_input@
 # 
@@ -44,7 +44,7 @@
 
 SUBDIRS = @PERL_SUBDIRS@
 
-DEPSUBDIRS = sieve
+DEPSUBDIRS = @PERL_DEPSUBDIRS@
 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -107,11 +107,13 @@ distclean::
 	rm -f Makefile Makefile.bak config.status config.log config.cache
 
 depend::
-	@for d in  $(DEPSUBDIRS); \
-	do \
-		(cd $$d; echo "### Making" depend "in" `pwd`;	\
-			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) depend) || exit 1; \
-	done
+	@if test "$(DEPSUBDIRS)" != "none"; then \
+		for d in  $(DEPSUBDIRS); \
+		do \
+			(cd $$d; echo "### Making" depend "in" `pwd`;	\
+				$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) depend) || exit 1; \
+		done; \
+	fi
 
 checkdepend::
 

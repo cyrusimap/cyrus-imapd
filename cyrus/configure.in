@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.250 2002/12/19 16:58:30 rjs3 Exp $
+dnl $Id: configure.in,v 1.251 2003/01/02 17:27:32 rjs3 Exp $
 dnl
 
 
@@ -872,7 +872,10 @@ if test "$sievedir" != "no"; then
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} timsieved/Makefile notifyd/Makefile"
 
 	PERL_SUBDIRS="${PERL_SUBDIRS} sieve"
+	PERL_DEPSUBDIRS="sieve"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} perl/sieve/Makefile perl/sieve/lib/Makefile"
+else
+	PERL_DEPSUBDIRS="none"
 fi
 
 dnl Check for MD5 functions
@@ -942,6 +945,7 @@ dnl     (cd perl/imap; $perl Makefile.PL PREFIX=$prefix)
 dnl   fi
 dnl ], perl=$PERL; with_perl=$with_perl; prefix=$prefix; SASL_LIB="$LIB_SASL"; SASL_INC="$SASLFLAGS"; export SASL_LIB SASL_INC)
 AC_SUBST(PERL_SUBDIRS)
+AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 dnl make sure that Makefile is the last thing output
