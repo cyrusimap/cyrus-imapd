@@ -211,6 +211,7 @@ static int gettid(struct txn **mytid, DB_TXN **tid)
 		       db_strerror(r));
 		return CYRUSDB_IOERROR;
 	    }
+	    syslog(LOG_DEBUG, "starting txn %d", txn_id(*tid));
 	}
 	*mytid = (struct txn *) *tid;
     }
@@ -299,6 +300,16 @@ static int foreach(struct db *mydb,
     r = gettid(mytid, &tid);
     if (r) return r;
 
+    if (0) {
+    restart:
+	r = cursor->c_close(cursor);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: error closing cursor: %s",
+		   db_strerror(r));
+	}
+	return r;
+    }
+
     /* create cursor */
     r = db->cursor(db, tid, &cursor, 0);
     if (r != 0) { 
@@ -311,15 +322,12 @@ static int foreach(struct db *mydb,
 	k.data = prefix;
 	k.size = prefixlen;
 
-	do {
-	    r = cursor->c_get(cursor, &k, &d, DB_SET_RANGE);
-	} while (!tid && r == DB_LOCK_DEADLOCK);
+	r = cursor->c_get(cursor, &k, &d, DB_SET_RANGE);
     } else {
-	do {
-	    r = cursor->c_get(cursor, &k, &d, DB_FIRST);
-	} while (!tid && r == DB_LOCK_DEADLOCK);
+	r = cursor->c_get(cursor, &k, &d, DB_FIRST);
     }
-
+    if (!tid && r == DB_LOCK_DEADLOCK) goto restart;
+	
     /* iterate over all mailboxes matching prefix */
     while (!r) {
 	/* does this match our prefix? */
@@ -328,11 +336,46 @@ static int foreach(struct db *mydb,
 	r = cb(rock, k.data, k.size, d.data, d.size);
 	if (r != 0) break;
 
-	do {
+	r = cursor->c_get(cursor, &k, &d, DB_NEXT);
+	if (r == DB_LOCK_DEADLOCK && tid) {
+	    break;		/* don't autoretry txn-protected */
+	}
+
+	while (r == DB_LOCK_DEADLOCK) {
+	    /* if we deadlock, close and reopen the cursor, and
+	       reposition it */
+	    switch (r = cursor->c_close(cursor)) {
+	    case 0:
+		break;
+	    default:
+		syslog(LOG_ERR, "DBERROR: couldn't close cursor: %s",
+		       db_strerror(r));
+		goto done;
+	    }
+	    switch (r = db->cursor(db, NULL, &cursor, 0)) {
+	    case 0:
+		break;
+	    default:
+		syslog(LOG_ERR, "DBERROR: couldn't recreate cursor: %s",
+		       db_strerror(r));
+		goto done;
+	    }
+	    r = cursor->c_get(cursor, &k, &d, DB_SET);
+	    switch (r) {
+	    case 0:
+		break;
+	    case DB_LOCK_DEADLOCK:
+		continue;
+	    case DB_NOTFOUND:
+		r = cursor->c_get(cursor, &k, &d, DB_SET_RANGE);
+		if (r == DB_LOCK_DEADLOCK) continue;
+		break;
+	    }
 	    r = cursor->c_get(cursor, &k, &d, DB_NEXT);
-	} while (!tid && r == DB_LOCK_DEADLOCK);
+	}
     }
 
+ done:
     r2 = cursor->c_close(cursor);
     if (r2 != 0) {
 	syslog(LOG_ERR, "DBERROR: error closing cursor: %s", db_strerror(r2));
@@ -345,10 +388,15 @@ static int foreach(struct db *mydb,
 	r = 0;
 	break;
     case DB_LOCK_DEADLOCK:	/* erg, we're in a txn! */
-	abort_txn(mydb, *mytid);
+	if (mytid) {
+	    abort_txn(mydb, *mytid);
+	}
 	r = CYRUSDB_AGAIN;
 	break;
     default:
+	if (mytid) {
+	    abort_txn(mydb, *mytid);
+	}
 	syslog(LOG_ERR, "DBERROR: error advancing: %s",  db_strerror(r));
 	r = CYRUSDB_IOERROR;
 	break;
@@ -381,9 +429,35 @@ static int mystore(struct db *mydb,
     d.data = (char *) data;
     d.size = datalen;
 
-    do {
-	r = db->put(db, tid, &k, &d, 0);
-    } while (!tid && r == DB_LOCK_DEADLOCK);
+    if (!mytid) {
+	/* start a transaction for the write */
+    restart:
+	r = txn_begin(dbenv, NULL, &tid, 0);
+	if (r != 0) {
+	    syslog(LOG_ERR, "DBERROR: error beginning txn: %s", 
+		   db_strerror(r));
+	    return CYRUSDB_IOERROR;
+	}
+	syslog(LOG_DEBUG, "starting txn %d", txn_id(tid));
+    }
+    r = db->put(db, tid, &k, &d, 0);
+    if (!mytid) {
+	/* finish once-off txn */
+	if (r) {
+	    int r2 = txn_abort(tid);
+	    if (r2) {
+		syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
+		       db_strerror(r));
+		return CYRUSDB_IOERROR;
+	    }
+
+	    if (r == DB_LOCK_DEADLOCK) {
+		goto restart;
+	    }
+	} else {
+	    r = txn_commit(tid, 0);
+	}
+    }
 
     if (r != 0) {
 	if (mytid) abort_txn(mydb, *mytid);
@@ -435,9 +509,35 @@ static int delete(struct db *mydb,
     k.data = (char *) key;
     k.size = keylen;
 
-    do {
-	r = db->del(db, tid, &k, 0);
-    } while (!tid && r == DB_LOCK_DEADLOCK);
+    if (!mytid) {
+    restart:
+	/* start txn for the write */
+	r = txn_begin(dbenv, NULL, &tid, 0);
+	if (r != 0) {
+	    syslog(LOG_ERR, "DBERROR: error beginning txn: %s", 
+		   db_strerror(r));
+	    return CYRUSDB_IOERROR;
+	}
+	syslog(LOG_DEBUG, "starting txn %d", txn_id(tid));
+    }
+    r = db->del(db, tid, &k, 0);
+    if (!mytid) {
+	/* finish txn for the write */
+	if (r) {
+	    int r2 = txn_abort(tid);
+	    if (r2) {
+		syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
+		       db_strerror(r));
+		return CYRUSDB_IOERROR;
+	    }
+
+	    if (r == DB_LOCK_DEADLOCK) {
+		goto restart;
+	    }
+	} else {
+	    r = txn_commit(tid, 0);
+	}
+    }
 
     if (r != 0) {
 	if (mytid) abort_txn(mydb, *mytid);
