@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.157 1998/09/17 21:38:33 tjs Exp $ */
+/* $Id: imapd.c,v 1.158 1998/11/03 19:59:31 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -315,10 +315,13 @@ cmdloop()
     char *p;
     const char *err;
 
+#if 0
+    /* why do this check twice? */
     sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
     if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
 	shutdown_file(fd);
     }
+#endif
 
     gethostname(hostname, sizeof(hostname));
     prot_printf(imapd_out,
