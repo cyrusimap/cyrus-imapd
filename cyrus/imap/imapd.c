@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.338 2002/02/11 17:41:42 ken3 Exp $ */
+/* $Id: imapd.c,v 1.339 2002/02/13 21:30:44 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -238,8 +238,9 @@ static struct
  * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
  * right to the principal 'auth_identity'. Returns 1 if so, 0 if not.
  */
+/* xxx is auth_identity really needed here? */
 static int acl_ok(const char *user, 
-		  const char *auth_identity,
+		  const char *auth_identity __attribute__((unused)),
 		  struct auth_state *authstate)
 {
     char *acl;
@@ -264,11 +265,12 @@ static int acl_ok(const char *user,
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 static int mysasl_authproc(sasl_conn_t *conn,
-			   void *context,
+			   void *context __attribute__((unused)),
 			   const char *requested_user, unsigned rlen,
 			   const char *auth_identity, unsigned alen,
-			   const char *def_realm, unsigned urlen,
-			   struct propctx *propctx)
+			   const char *def_realm __attribute__((unused)),
+			   unsigned urlen __attribute__((unused)),
+			   struct propctx *propctx __attribute__((unused)))
 {
     const char *val;
     char *realm;
@@ -298,7 +300,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
     /* ok, is auth_identity an admin? */
     imapd_userisadmin = authisa(imapd_authstate, "imap", "admins");
 
-    if (strcmp(auth_identity, requested_user)) {
+    if (alen != rlen || strncmp(auth_identity, requested_user, alen)) {
 	/* we want to authenticate as a different user; we'll allow this
 	   if we're an admin or if we've allowed ACL proxy logins */
 	int use_acl = config_getswitch("loginuseacl", 0);
@@ -476,7 +478,13 @@ int service_init(int argc, char **argv, char **envp)
 /*
  * run for each accepted connection
  */
-int service_main(int argc, char **argv, char **envp)
+#ifdef ID_SAVE_CMDLINE
+int service_main(int argc, char **argv, char **envp __attribute__((unused)))
+#else
+int service_main(int argc __attribute__((unused)),
+		 char **argv __attribute__((unused)),
+		 char **envp __attribute__((unused)))
+#endif
 {
     socklen_t salen;
     struct hostent *hp;
@@ -1694,9 +1702,7 @@ cmd_authenticate(char *tag,char *authtype)
  * Perform a NOOP command
  */
 void
-cmd_noop(tag, cmd)
-char *tag;
-char *cmd;
+cmd_noop(char *tag, char *cmd __attribute__((unused)))
 {
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 1);
@@ -3321,7 +3327,11 @@ struct tmplist {
 
 #define TMPLIST_INC 50
 
-static int addmbox(char *name, int matchlen, int maycreate, void *rock)
+/* Callback for use by cmd_delete */
+static int addmbox(char *name,
+		   int matchlen __attribute__((unused)),
+		   int maycreate __attribute__((unused)),
+		   void *rock)
 {
     struct tmplist **lptr = (struct tmplist **) rock;
     struct tmplist *l = *lptr;
@@ -4342,11 +4352,10 @@ cmd_netscrape(tag)
  * order to ensure the namespace response is correct on a server with
  * no shared namespace.
  */
-static int namespacedata(name, matchlen, maycreate, rock)
-    char* name;
-    int matchlen;
-    int maycreate;
-    void* rock;
+static int namespacedata(char *name,
+			 int matchlen __attribute__((unused)),
+			 int maycreate __attribute__((unused)),
+			 void *rock)
 {
     int* sawone = (int*) rock;
 
@@ -5065,7 +5074,6 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 	}
 #endif
 	else {
- badcrit:
 	    prot_printf(imapd_out, "%s BAD Invalid Sort criterion %s\r\n",
 			tag, criteria.s);
 	    if (c != EOF) prot_ungetc(c, imapd_in);
@@ -5104,12 +5112,13 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
     prot_printf(imapd_out, "%s BAD Missing Sort criteria\r\n", tag);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
-
+#if 0 /* For annotations stuff above */
  missingarg:
     prot_printf(imapd_out, "%s BAD Missing argument to Sort criterion %s\r\n",
 		tag, criteria.s);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
+#endif
 }
 
 #ifdef ENABLE_LISTEXT
@@ -5572,7 +5581,10 @@ static void freesortcrit(struct sortcrit *s)
 /*
  * Issue a MAILBOX untagged response
  */
-static int mailboxdata(char *name, int matchlen, int maycreate, void *rock)
+static int mailboxdata(char *name,
+		       int matchlen __attribute__((unused)),
+		       int maycreate __attribute__((unused)),
+		       void *rock __attribute__((unused)))
 {
     char mboxname[MAX_MAILBOX_PATH+1];
 
