@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.356 2002/03/18 22:03:43 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.357 2002/03/18 22:30:49 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -157,7 +157,7 @@ void cmd_thread(char *tag, int usinguid);
 void cmd_copy(char *tag, char *sequence, char *name, int usinguid);
 void cmd_expunge(char *tag, char *sequence);
 void cmd_create(char *tag, char *name, char *partition, int localonly);
-void cmd_delete(char *tag, char *name);
+void cmd_delete(char *tag, char *name, int localonly);
 void cmd_dump(char *tag, char *name, int uid_start);
 void cmd_undump(char *tag, char *name);
 void cmd_xfer(char *tag, char *toserver, char *name);
@@ -933,7 +933,7 @@ void cmdloop()
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_delete(tag.s, arg1.s);
+		cmd_delete(tag.s, arg1.s, 0);
 
 		snmp_increment(DELETE_COUNT, 1);
 	    }
@@ -1188,6 +1188,17 @@ void cmdloop()
 		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : 0, 1);
 
 		/* xxxx snmp_increment(CREATE_COUNT, 1); */
+	    }
+	    else if (!strcmp(cmd.s, "Localdelete")) {
+		/* delete a mailbox locally only */
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_delete(tag.s, arg1.s, 1);
+
+		/* xxxx snmp_increment(DELETE_COUNT, 1); */
 	    }
 	    else goto badcmd;
 	    break;
@@ -3531,10 +3542,7 @@ static int addmbox(char *name,
 /*
  * Perform a DELETE command
  */
-void
-cmd_delete(tag, name)
-char *tag;
-char *name;
+void cmd_delete(char *tag, char *name, int localonly)
 {
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
@@ -3544,11 +3552,13 @@ char *name;
 
     if (!r) {
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
-				   imapd_userid, imapd_authstate, 1, 0);
+				   imapd_userid, imapd_authstate, 1,
+				   localonly);
     }
 
     /* was it a top-level user mailbox? */
-    if (!r &&
+    /* localonly deletes are only per-mailbox */
+    if (!r && !localonly &&
 	!strncmp(mailboxname, "user.", 5) && !strchr(mailboxname+5, '.')) {
 	struct tmplist *l = xmalloc(sizeof(struct tmplist));
 	char *p;
