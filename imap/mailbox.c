@@ -393,7 +393,7 @@ struct mailbox *mailbox;
     rewind(mailbox->index);
     n = fread(buf, 1, INDEX_HEADER_SIZE, mailbox->index);
     if (n != INDEX_HEADER_SIZE &&
-	(n < OFFSET_POP3_LAST_UID || n < ntohl(*((bit32 *)(buf+OFFSET_START_OFFSET))))) {
+	(n < OFFSET_POP3_LAST_LOGIN || n < ntohl(*((bit32 *)(buf+OFFSET_START_OFFSET))))) {
 	return IMAP_MAILBOX_BADFORMAT;
     }
 
