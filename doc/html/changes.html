@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers, 10-Jun-1996 -->
+<!-- Changed by: John Gardiner Myers, 17-Jun-1996 -->
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
@@ -35,6 +35,11 @@ RFC 822 addresses without the "@domain" part.
 
 <LI> The configrue script now defaults to using unix_pwcheck instead
 of unix if the file /etc/shadow exists.
+
+<LI> The location of the pwcheck socket directory now defaults to
+"<TT>/var/ptclient/".  It is controlled by the
+"<TT>--with-statedir=DIR</TT>" option, which defaults to
+"<TT>/var</TT>".
 
 <LI> Bug fix: un-fold header lines when parsing for the ENVELOPE.
 
