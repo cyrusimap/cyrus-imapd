@@ -294,6 +294,7 @@ static int fetchlock(struct db *db,
 
 static int foreach(struct db *db,
 		   char *prefix, int prefixlen,
+		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **mytid)
 {
@@ -334,9 +335,11 @@ static int foreach(struct db *db,
 	if (keylen < prefixlen) break;
 	if (prefixlen && memcmp(key, prefix, prefixlen)) break;
 
-	/* make callback */
-	r = cb(rock, key, keylen, data, datalen);
-	if (r) break;
+	if (goodp(rock, key, keylen)) {
+	    /* make callback */
+	    r = cb(rock, key, keylen, data, datalen);
+	    if (r) break;
+	}
 
 	p = dataend + 1;
     }
