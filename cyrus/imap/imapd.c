@@ -24,7 +24,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  */
-/* d$Id: imapd.c,v 1.153 1998/07/10 20:28:46 tjs Exp $ */
+/* d$Id: imapd.c,v 1.154 1998/07/10 20:34:35 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -809,7 +809,6 @@ cmdloop()
 		else if (!strcmp(arg1.s, "copy")) {
 		    goto copy;
 		}
-#ifdef ENABLE_EXPERIMENT
 		else if (!strcmp(arg1.s, "expunge")) {
 		    c = getword(&arg1);
 		    if (!imparse_issequence(arg1.s)) goto badsequence;
@@ -817,7 +816,6 @@ cmdloop()
 		    if (c != '\n') goto extraargs;
 		    cmd_expunge(tag.s, arg1.s);
 		}
-#endif
 		else {
 		    prot_printf(imapd_out, "%s BAD Unrecognized UID subcommand\r\n", tag.s);
 		    eatline(c);
@@ -841,14 +839,12 @@ cmdloop()
 		    cmd_changesub(tag.s, (char *)0, arg1.s, 0);
 		}
 	    }		
-#ifdef ENABLE_EXPERIMENT
 	    else if (!strcmp(cmd.s, "Unselect")) {
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_close(tag.s);
 	    }
-#endif
 	    else goto badcmd;
 	    break;
 
@@ -1145,14 +1141,12 @@ char *tag;
 	index_check(imapd_mailbox, 0, 0);
     }
     prot_printf(imapd_out,
-     "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE");
+     "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS");
     /* XXX */
     prot_printf(imapd_out,
 		" X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME");
     prot_printf(imapd_out, "%s", login_capabilities());
-#ifdef ENABLE_EXPERIMENT
-    prot_printf(imapd_out, " UIDPLUS UNSELECT");
-#endif
+    prot_printf(imapd_out, " UNSELECT");
 #ifdef ENABLE_X_NETSCAPE_HACK
     prot_printf(imapd_out, " X-NETSCAPE");
 #endif
@@ -1334,14 +1328,9 @@ char *name;
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-#ifdef ENABLE_EXPERIMENT
 	prot_printf(imapd_out, "%s OK [APPENDUID %u %u] %s\r\n", tag,
 		    uidvalidity, newuid,
 		    error_message(IMAP_OK_COMPLETED));
-#else
-	prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		    error_message(IMAP_OK_COMPLETED));
-#endif
     }
 
  freeflags:
@@ -2161,7 +2150,6 @@ int usinguid;
 		    ? "[TRYCREATE] " : "", error_message(r));
     }
     else {
-#ifdef ENABLE_EXPERIMENT
 	if (copyuid) {
 	    prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
 			copyuid, error_message(IMAP_OK_COMPLETED));
@@ -2171,11 +2159,6 @@ int usinguid;
 	    prot_printf(imapd_out, "%s OK %s\r\n", tag,
 			error_message(IMAP_OK_COMPLETED));
 	}
-#else
-	prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		    error_message(IMAP_OK_COMPLETED));
-	if (copyuid) free(copyuid);
-#endif
 
     }
 }    
