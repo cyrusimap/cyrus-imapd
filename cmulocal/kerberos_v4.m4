@@ -2,6 +2,25 @@ dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
 
+AC_DEFUN(CMU_KRB_SENDAUTH_PROTO, [
+AC_MSG_CHECKING(for krb_sendauth prototype)
+AC_TRY_COMPILE(
+[#include <krb.h>
+int krb_sendauth (long options, int fd, KTEXT ktext, char *service,
+                  char *inst, char *realm, u_long checksum,
+                  MSG_DAT *msg_data, CREDENTIALS *cred,
+                  Key_schedule schedule, struct sockaddr_in *laddr,
+                  struct sockaddr_in *faddr, char *version);],
+[int foo = krb_sendauth(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); ],
+ac_cv_krb_sendauth_proto=no,
+ac_cv_krb_sendauth_proto=yes)
+AC_MSG_RESULT($ac_cv_krb_sendauth_proto)
+if test "$ac_cv_krb_sendauth_proto" = yes; then
+        AC_DEFINE(HAVE_KRB_SENDAUTH_PROTO)dnl
+fi
+AC_MSG_RESULT($ac_cv_krb_sendauth_proto)
+])
+
 AC_DEFUN(CMU_KRB_SET_KEY_PROTO, [
 AC_MSG_CHECKING(for krb_set_key prototype)
 AC_CACHE_VAL(ac_cv_krb_set_key_proto, [
