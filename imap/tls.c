@@ -168,21 +168,21 @@ static void apps_ssl_info_callback(SSL * s, int where, int ret)
 
     if (where & SSL_CB_LOOP) {
 	if (tls_serverengine && (var_imapd_tls_loglevel >= 2))
-	    printf("%s:%s", str, SSL_state_string_long(s));
+	    syslog(LOG_DEBUG, "%s:%s", str, SSL_state_string_long(s));
     } else if (where & SSL_CB_ALERT) {
 	str = (where & SSL_CB_READ) ? "read" : "write";
 	if ((tls_serverengine && (var_imapd_tls_loglevel >= 2)) ||
 	    ((ret & 0xff) != SSL3_AD_CLOSE_NOTIFY))
-	  printf("SSL3 alert %s:%s:%s", str,
-		 SSL_alert_type_string_long(ret),
-		 SSL_alert_desc_string_long(ret));
+	    syslog(LOG_DEBUG, "SSL3 alert %s:%s:%s", str,
+		   SSL_alert_type_string_long(ret),
+		   SSL_alert_desc_string_long(ret));
     } else if (where & SSL_CB_EXIT) {
 	if (ret == 0)
-	    printf("%s:failed in %s",
-		     str, SSL_state_string_long(s));
+	    syslog(LOG_DEBUG, "%s:failed in %s",
+		   str, SSL_state_string_long(s));
 	else if (ret < 0) {
-	    printf("%s:error in %s",
-		     str, SSL_state_string_long(s));
+	    syslog(LOG_DEBUG, "%s:error in %s",
+		   str, SSL_state_string_long(s));
 	}
     }
 }
@@ -216,7 +216,7 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
 
     X509_NAME_oneline(X509_get_subject_name(err_cert), buf, 256);
     if ((tls_serveractive) && (var_imapd_tls_loglevel >= 1))
-      printf("Peer cert verify depth=%d %s", depth, buf);
+	syslog(LOG_DEBUG, "Peer cert verify depth=%d %s", depth, buf);
     if (ok==0)
     {
       syslog(LOG_ERR, "verify error:num=%d:%s", err,
@@ -245,7 +245,7 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
 	break;
     }
     if ((tls_serveractive) && (var_imapd_tls_loglevel >= 1))
-      printf("verify return:%d", ok);
+	syslog(LOG_DEBUG, "verify return:%d", ok);
 
     return (ok);
 }
@@ -390,7 +390,7 @@ int     tls_init_serverengine(int verifydepth,
 	return (0);				/* already running */
 
     if (var_imapd_tls_loglevel >= 2)
-	printf("starting TLS engine");
+	syslog(LOG_DEBUG, "starting TLS engine");
 
     SSL_load_error_strings();
     SSLeay_add_ssl_algorithms();
@@ -503,7 +503,7 @@ int tls_start_servertls(int readfd, int writefd, int *layerbits, char **authid)
       return (-1);
     }
     if (var_imapd_tls_loglevel >= 1)
-	printf("setting up TLS connection");
+	syslog(LOG_DEBUG, "setting up TLS connection");
 
     if (tls_conn == NULL)
     {
@@ -547,7 +547,7 @@ int tls_start_servertls(int readfd, int writefd, int *layerbits, char **authid)
     if (var_imapd_tls_loglevel >= 3)
 	do_dump = 1;
 
-    if ((sts = SSL_accept(tls_conn)) <= 0) { /* xxx <= 0 */
+    if ((sts = SSL_accept(tls_conn)) < 0) { /* xxx <= 0 */
 	session = SSL_get_session(tls_conn);
 	if (session) {
 	    SSL_CTX_remove_session(ctx, session);
