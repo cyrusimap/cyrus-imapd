@@ -1,6 +1,6 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
- * $Id: comparator.c,v 1.9 2002/02/13 20:44:04 rjs3 Exp $
+ * $Id: comparator.c,v 1.10 2002/05/14 16:51:49 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -37,21 +37,74 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "tree.h"
 #include "sieve.h"
 
+/* --- relational comparators --- */
+
+/* these are generic wrappers in which 'rock' is the compare function */
+
+static int rel_eq(const char *text, const char *pat, void *rock)
+{
+    int (*compar)(const void *, const void *) = rock;
+
+    return (compar(text, pat) == 0);
+}
+
+static int rel_ne(const char *text, const char *pat, void *rock)
+{
+    int (*compar)(const void *, const void *) = rock;
+
+    return (compar(text, pat) != 0);
+}
+
+static int rel_gt(const char *text, const char *pat, void *rock)
+{
+    int (*compar)(const void *, const void *) = rock;
+
+    return (compar(text, pat) > 0);
+}
+
+static int rel_ge(const char *text, const char *pat, void *rock)
+{
+    int (*compar)(const void *, const void *) = rock;
+
+    return (compar(text, pat) >= 0);
+}
+
+static int rel_lt(const char *text, const char *pat, void *rock)
+{
+    int (*compar)(const void *, const void *) = rock;
+
+    return (compar(text, pat) < 0);
+}
+
+static int rel_le(const char *text, const char *pat, void *rock)
+{
+    int (*compar)(const void *, const void *) = rock;
+
+    return (compar(text, pat) <= 0);
+}
+
 /* --- i;octet comparators --- */
 
 /* just compare the two; these should be NULL terminated */
-static int octet_is(const char *pat, const char *text)
+static int octet_cmp(const char *text, const char *pat)
 {
     size_t sl;
-    sl = strlen(pat);
+    int r;
 
-    return (sl == strlen(text)) && !memcmp(pat, text, sl);
+    sl = strlen(text) < strlen(pat) ? strlen(text) : strlen(pat);
+
+    r = memcmp(text, pat, sl);
+
+    if (r == 0)
+	return (strlen(text) - strlen(pat));
+    else 
+	return r;
 }
 
 /* we implement boyer-moore for hell of it, since this is probably
  not very useful for sieve */
 #if 0
-int boyer_moore(char *pat, char *text)
+int boyer_moore(char *text, char *pat)
 {
     int i, j; /* indexes */
     int M = strlen(pat); /* length of pattern */
@@ -85,12 +138,12 @@ int boyer_moore(char *pat, char *text)
 #endif
 
 /* we do a brute force attack */
-static int octet_contains(const char *pat, const char *text)
+static int octet_contains(const char *text, const char *pat, void *rock)
 {
     return (strstr(text, pat) != NULL);
 }
 
-static int octet_matches_(const char *pat, const char *text, int casemap)
+static int octet_matches_(const char *text, const char *pat, int casemap)
 {
     const char *p;
     const char *t;
@@ -151,13 +204,13 @@ static int octet_matches_(const char *pat, const char *text, int casemap)
     abort();
 }
 
-static int octet_matches(const char *pat, const char *text)
+static int octet_matches(const char *text, const char *pat, void *rock)
 {
-    return octet_matches_(pat, text, 0);
+    return octet_matches_(text, pat, 0);
 }
 
 #ifdef ENABLE_REGEX
-static int octet_regex(const char *pat, const char *text)
+static int octet_regex(const char *text, const char *pat, void *rock)
 {
     return (!regexec((regex_t *) pat, text, 0, NULL, 0));
 }
@@ -166,16 +219,11 @@ static int octet_regex(const char *pat, const char *text)
 
 /* --- i;ascii-casemap comparators --- */
 
-static int ascii_casemap_is(const char *pat, const char *text)
-{
-    size_t sl;
-    sl = strlen(pat);
-
-    return (sl == strlen(text)) && !strncasecmp(pat, text, sl);
-}
+/* use strcasecmp() as the compare function */
 
 /* sheer brute force */
-static int ascii_casemap_contains(const char *pat, const char *text)
+static int ascii_casemap_contains(const char *text, const char *pat,
+				  void *rock)
 {
     int N = strlen(text);
     int M = strlen(pat);
@@ -193,34 +241,56 @@ static int ascii_casemap_contains(const char *pat, const char *text)
     return (j == M); /* we found a match! */
 }
 
-static int ascii_casemap_matches(const char *pat, const char *text)
+static int ascii_casemap_matches(const char *text, const char *pat, void *rock)
 {
-    return octet_matches_(pat, text, 1);
+    return octet_matches_(text, pat, 1);
 }
 
-/* i;ascii-numeric; only supports "is"
- equality: numerically equal, or both not numbers */
-static int ascii_numeric_is(const char *pat, const char *text)
+/* i;ascii-numeric; only supports relational tests
+ *
+ *  A \ B    number   not-num 
+ *  number   A ? B    B > A 
+ *  not-num  A > B    A == B
+ */
+static int ascii_numeric_cmp(const char *text, const char *pat)
 {
     if (isdigit((int) *pat)) {
 	if (isdigit((int) *text)) {
-	    return (atoi(pat) == atoi(text));
+	    return (atoi(text) - atoi(pat));
 	} else {
-	    return 0;
+	    return 1;
 	}
-    } else if (isdigit((int) *text)) return 0;
-    else return 1; /* both not digits */
+    } else if (isdigit((int) *text)) return -1;
+    else return 0; /* both not digits */
 }
 
-comparator_t *lookup_comp(const char *comp, int mode)
+static comparator_t *lookup_rel(const char *relation)
 {
     comparator_t *ret;
 
     ret = NULL;
+    if (!strcmp(relation, "eq")) ret = &rel_eq;
+    else if (!strcmp(relation, "ne")) ret = &rel_ne;
+    else if (!strcmp(relation, "gt")) ret = &rel_gt;
+    else if (!strcmp(relation, "ge")) ret = &rel_ge;
+    else if (!strcmp(relation, "lt")) ret = &rel_lt;
+    else if (!strcmp(relation, "le")) ret = &rel_le;
+
+    return ret;
+}
+
+comparator_t *lookup_comp(const char *comp, int mode, const char *relation,
+			  void **comprock)
+{
+    comparator_t *ret;
+
+    ret = NULL;
+    *comprock = NULL;
     if (!strcmp(comp, "i;octet")) {
 	switch (mode) {
 	case IS:
-	    ret = &octet_is;
+	    ret = &rel_eq;
+	    *comprock = &octet_cmp;
 	    break;
 	case CONTAINS:
 	    ret = &octet_contains;
@@ -233,11 +303,16 @@ comparator_t *lookup_comp(const char *comp, int mode)
 	    ret = &octet_regex;
 	    break;
 #endif
+	case VALUE:
+	    ret = lookup_rel(relation);
+	    *comprock = &octet_cmp;
+	    break;
 	}
     } else if (!strcmp(comp, "i;ascii-casemap")) {
 	switch (mode) {
 	case IS:
-	    ret = &ascii_casemap_is;
+	    ret = &rel_eq;
+	    *comprock = &strcasecmp;
 	    break;
 	case CONTAINS:
 	    ret = &ascii_casemap_contains;
@@ -252,11 +327,21 @@ comparator_t *lookup_comp(const char *comp, int mode)
 	    ret = &octet_regex;
 	    break;
 #endif
+	case VALUE:
+	    ret = lookup_rel(relation);
+	    *comprock = &strcasecmp;
+	    break;
 	}
     } else if (!strcmp(comp, "i;ascii-numeric")) {
 	switch (mode) {
 	case IS:
-	    ret = &ascii_numeric_is;
+	    ret = &rel_eq;
+	    *comprock = &ascii_numeric_cmp;
+	    break;
+	case COUNT:
+	case VALUE:
+	    ret = lookup_rel(relation);
+	    *comprock = &ascii_numeric_cmp;
 	    break;
 	}
     }

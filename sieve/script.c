@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.53 2002/03/10 02:58:09 ken3 Exp $
+ * $Id: script.c,v 1.54 2002/05/14 16:51:50 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -98,9 +98,15 @@ int script_require(sieve_script_t *s, char *req)
     } else if (!strcmp("subaddress", req)) {
 	s->support.subaddress = 1;
 	return 1;
+    } else if (!strcmp("relational", req)) {
+	s->support.relational = 1;
+	return 1;
     } else if (!strcmp("comparator-i;octet", req)) {
 	return 1;
     } else if (!strcmp("comparator-i;ascii-casemap", req)) {
+	return 1;
+    } else if (!strcmp("comparator-i;ascii-numeric", req)) {
+	s->support.i_ascii_numeric = 1;
 	return 1;
     }
     return 0;
@@ -282,37 +288,75 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
     case ADDRESS:
     case ENVELOPE:
 	res = 0;
-	switch (t->u.ae.addrpart) {
-	case ALL: addrpart = ADDRESS_ALL; break;
-	case LOCALPART: addrpart = ADDRESS_LOCALPART; break;
-	case DOMAIN: addrpart = ADDRESS_DOMAIN; break;
-	case USER: addrpart = ADDRESS_USER; break;
-	case DETAIL: addrpart = ADDRESS_DETAIL; break;
-	}
-	for (sl = t->u.ae.sl; sl != NULL && !res; sl = sl->next) {
-	    int l;
-	    const char **body;
+	if (t->u.h.comptag == COUNT) {
+	    unsigned count = 0;
+	    char cbuf[20];
 
-	    /* use getheader for address, getenvelope for envelope */
-	    if (((t->type == ADDRESS) ? 
-		   i->getheader(m, sl->s, &body) :
-		   i->getenvelope(m, sl->s, &body)) != SIEVE_OK) {
-		continue; /* try next header */
-	    }
-	    for (pl = t->u.ae.pl; pl != NULL && !res; pl = pl->next) {
+	    /* count the headers */
+	    for (sl = t->u.ae.sl; sl != NULL && !res; sl = sl->next) {
+		int l;
+		const char **body;
+
+		/* use getheader for address, getenvelope for envelope */
+		if (((t->type == ADDRESS) ? 
+		     i->getheader(m, sl->s, &body) :
+		     i->getenvelope(m, sl->s, &body)) != SIEVE_OK) {
+		    continue; /* try next header */
+		}
 		for (l = 0; body[l] != NULL && !res; l++) {
 		    /* loop through each header */
 		    void *data = NULL, *marker = NULL;
 		    char *val;
 
 		    parse_address(body[l], &data, &marker);
-                    val = get_address(addrpart, &data, &marker, 0);
-		    while (val != NULL && !res) { 
+		    val = get_address(ADDRESS_ALL, &data, &marker, 0);
+		    while (val != NULL) { 
 			/* loop through each address */
-			res |= t->u.ae.comp(pl->p, val);
-			val = get_address(addrpart, &data, &marker, 0);
-       		    }
+			count++;
+			val = get_address(ADDRESS_ALL, &data, &marker, 0);
+		    }
 		    free_address(&data, &marker);
+		}
+	    }
+	    /* compare the patterns against our count */
+	    sprintf(cbuf, "%u", count);
+	    for (pl = t->u.ae.pl; pl != NULL && !res; pl = pl->next) {
+		res |= t->u.ae.comp(cbuf, pl->p, t->u.ae.comprock);
+	    }
+	}
+	else {
+	    switch (t->u.ae.addrpart) {
+	    case ALL: addrpart = ADDRESS_ALL; break;
+	    case LOCALPART: addrpart = ADDRESS_LOCALPART; break;
+	    case DOMAIN: addrpart = ADDRESS_DOMAIN; break;
+	    case USER: addrpart = ADDRESS_USER; break;
+	    case DETAIL: addrpart = ADDRESS_DETAIL; break;
+	    }
+	    for (sl = t->u.ae.sl; sl != NULL && !res; sl = sl->next) {
+		int l;
+		const char **body;
+
+		/* use getheader for address, getenvelope for envelope */
+		if (((t->type == ADDRESS) ? 
+		     i->getheader(m, sl->s, &body) :
+		     i->getenvelope(m, sl->s, &body)) != SIEVE_OK) {
+		    continue; /* try next header */
+		}
+		for (pl = t->u.ae.pl; pl != NULL && !res; pl = pl->next) {
+		    for (l = 0; body[l] != NULL && !res; l++) {
+			/* loop through each header */
+			void *data = NULL, *marker = NULL;
+			char *val;
+
+			parse_address(body[l], &data, &marker);
+			val = get_address(addrpart, &data, &marker, 0);
+			while (val != NULL && !res) { 
+			    /* loop through each address */
+			    res |= t->u.ae.comp(val, pl->p, t->u.ae.comprock);
+			    val = get_address(addrpart, &data, &marker, 0);
+			}
+			free_address(&data, &marker);
+		    }
 		}
 	    }
 	}
@@ -344,14 +388,34 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
 	break;
     case HEADER:
 	res = 0;
-	for (sl = t->u.h.sl; sl != NULL && !res; sl = sl->next) {
-	    const char **val;
-	    int l;
-	    if (i->getheader(m, sl->s, &val) != SIEVE_OK)
-		continue;
+	if (t->u.h.comptag == COUNT) {
+	    unsigned count = 0;
+	    char cbuf[20];
+
+	    /* count the headers */
+	    for (sl = t->u.h.sl; sl != NULL && !res; sl = sl->next) {
+		const char **val;
+		int l;
+		if (i->getheader(m, sl->s, &val) != SIEVE_OK)
+		    continue;
+		for (l = 0; val[l] != NULL; l++) count++;
+	    }
+	    /* compare the patterns against our count */
+	    sprintf(cbuf, "%u", count);
 	    for (pl = t->u.h.pl; pl != NULL && !res; pl = pl->next) {
-		for (l = 0; val[l] != NULL && !res; l++) {
-		    res |= t->u.h.comp(pl->p, val[l]);
+		res |= t->u.h.comp(cbuf, pl->p, t->u.h.comprock);
+	    }
+	}
+    	else {
+	    for (sl = t->u.h.sl; sl != NULL && !res; sl = sl->next) {
+		const char **val;
+		int l;
+		if (i->getheader(m, sl->s, &val) != SIEVE_OK)
+		    continue;
+		for (pl = t->u.h.pl; pl != NULL && !res; pl = pl->next) {
+		    for (l = 0; val[l] != NULL && !res; l++) {
+			res |= t->u.h.comp(val[l], pl->p, t->u.h.comprock);
+		    }
 		}
 	    }
 	}
@@ -610,7 +674,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 	    break;
 	case DENOTIFY:
 	    res = do_denotify(notify_list, c->u.d.comp, c->u.d.pattern,
-			      c->u.d.priority);
+			      c->u.d.comprock, c->u.d.priority);
 	    break;
 
 	}

@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.21 2002/03/10 02:58:09 ken3 Exp $
+ * $Id: interp.c,v 1.22 2002/05/14 16:51:50 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -70,7 +70,7 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
 }
 
 static const char *sieve_extensions = "fileinto reject envelope vacation"
-                                      " imapflags notify subaddress" 
+                                      " imapflags notify subaddress relational"
 #ifdef ENABLE_REGEX
 " regex";
 #else
