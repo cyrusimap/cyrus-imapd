@@ -75,7 +75,10 @@ char *lcase(str)
 {
     char *scan = str;
     
-    while (*scan) *scan++ = TOLOWER(*scan);
+    while (*scan) {
+	*scan = TOLOWER(*scan);
+	scan++;
+    }
 
     return (str);
 }
