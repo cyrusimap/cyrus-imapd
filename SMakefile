@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.47 1999/08/24 18:13:36 leg Exp $
+# $Id: SMakefile,v 1.48 1999/09/30 21:45:09 leg Exp $
 #
 
 if test ! -x configure; then
@@ -31,7 +31,8 @@ LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 # Ryan's aggressive optimizations
 if test "${OVERRIDE-nil}" != "t" ; then
   case `uname` in	
-    Linux) CFLAGS="${CFLAGS} -O3 -g"
+    Linux) CC="gcc"
+	   CFLAGS="${CFLAGS} -O3 -g"
 	   LDFLAGS="${LDFLAGS}"
 	   LIBS="-ldbm"
 	   export LIBS
