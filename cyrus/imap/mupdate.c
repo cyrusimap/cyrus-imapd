@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.3 2003/11/05 16:02:13 ken3 Exp $
+ * $Id: mupdate.c,v 1.77.2.4 2003/11/05 16:33:59 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1334,9 +1334,12 @@ void cmd_set(struct conn *C,
 
     m = database_lookup(mailbox, NULL);
     if (m && t == SET_RESERVE) {
-	/* failed; mailbox already exists */
-	msg = EXISTS;
-	goto done;
+	if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) {
+	    /* failed; mailbox already exists */
+	    msg = EXISTS;
+	    goto done;
+	}
+	/* otherwise do nothing (local create on master) */
     }
 
     if ((!m || m->t != SET_ACTIVE) && t == SET_DEACTIVATE) {
