@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.47 2000/01/17 22:39:36 leg Exp $
+ * $Id: prot.c,v 1.48 2000/01/25 06:52:42 leg Exp $
  */
 
 #include <stdio.h>
@@ -46,6 +46,7 @@
 
 #include "prot.h"
 #include "xmalloc.h"
+#include "assert.h"
 
 /*
  * Create a new protection stream for file descriptor 'fd'.  Stream
@@ -58,7 +59,8 @@ int write;
     struct protstream *newstream;
 
     newstream = (struct protstream *) xmalloc(sizeof(struct protstream));
-    newstream->buf = (char *) xmalloc(sizeof(char) * (PROT_BUFSIZE + 4));
+    newstream->buf = (unsigned char *) 
+	xmalloc(sizeof(char) * (PROT_BUFSIZE + 4));
     newstream->buf_size = PROT_BUFSIZE;
     newstream->ptr = newstream->buf;
     newstream->cnt = write ? PROT_BUFSIZE : 0;
@@ -89,8 +91,7 @@ int write;
 /*
  * Free a protection stream
  */
-int prot_free(s)
-struct protstream *s;
+int prot_free(struct protstream *s)
 {
     free(s->buf);
     free((char*)s);
@@ -192,6 +193,8 @@ int prot_settimeout(s, timeout)
 struct protstream *s;
 int timeout;
 {
+    assert(!s->write);
+
     s->read_timeout = timeout;
     return 0;
 }
@@ -205,6 +208,8 @@ int prot_setflushonread(s, flushs)
 struct protstream *s;
 struct protstream *flushs;
 {
+    assert(!s->write);
+
     s->flushonread = flushs;
     return 0;
 }
@@ -218,6 +223,8 @@ struct protstream *s;
 prot_readcallback_t *proc;
 void *rock;
 {
+    assert(!s->write);
+
     s->readcallback_proc = proc;
     s->readcallback_rock = rock;
     return 0;
@@ -241,6 +248,8 @@ int
 prot_rewind(s)
 struct protstream *s;
 {
+    assert(!s->write);
+
     if (lseek(s->fd, 0L, 0) == -1) {
 	s->error = strerror(errno);
 	return EOF;
@@ -260,13 +269,15 @@ prot_fill(s)
 struct protstream *s;
 {
     int n;
-    char *ptr;
+    unsigned char *ptr;
     int left;
     int r;
     struct timeval timeout;
     fd_set rfds;
     int haveinput; 
    
+    assert(!s->write);
+
     if (s->eof || s->error) return EOF;
 
     do {
@@ -316,7 +327,7 @@ struct protstream *s;
 #ifdef HAVE_SSL	  
 	    /* just do a SSL read instead if we're under a tls layer */
 	    if (s->tls_conn != NULL) {
-		n = SSL_read(s->tls_conn, s->buf, PROT_BUFSIZE);
+		n = SSL_read(s->tls_conn, (char *) s->buf, PROT_BUFSIZE);
 	    } else {
 		n = read(s->fd, s->buf, PROT_BUFSIZE);
 	    }
@@ -335,22 +346,23 @@ struct protstream *s;
 	    int result;
 	    char *out;
 	    unsigned outlen;
+	    static char errbuf[256];
 	    
 	    /* Decode the input token */
 	    result = sasl_decode(s->conn, (const char *) s->buf, n, 
 				 &out, &outlen);
 	    
 	    if (result != SASL_OK) {
-		snprintf(s->buf, 200, "Decoding error: %s (%i)",
+		snprintf(errbuf, 256, "Decoding error: %s (%i)",
 			 sasl_errstring(result, NULL, NULL), result);
-		s->error = s->buf;
+		s->error = errbuf;
 		return EOF;
 	    }
 	    
 	    if (outlen > 0) {
 		if (outlen > s->buf_size) {
-		    s->buf = (char *) xrealloc(s->buf, 
-					       sizeof(char) * (outlen + 4));
+		    s->buf = (unsigned char *) 
+			xrealloc(s->buf, sizeof(char) * (outlen + 4));
 		    s->buf_size = outlen;
 		}
 		memcpy(s->buf, out, outlen);
@@ -406,10 +418,13 @@ struct protstream *s;
 int prot_flush(s)
 struct protstream *s;
 {
-    char *ptr = s->buf;
+    unsigned char *ptr = s->buf;
     int left = s->ptr - s->buf;
     int n;
     char *encoded_output;
+
+    assert(s->write);
+    assert(s->cnt >= 0);
 
     if (s->eof || s->error) {
 	s->ptr = s->buf;
@@ -447,7 +462,8 @@ struct protstream *s;
       unsigned int outlen;
       int result;
 
-      result=sasl_encode(s->conn, ptr, left, &encoded_output, &outlen);
+      result = sasl_encode(s->conn, (char *) ptr, left, 
+			   &encoded_output, &outlen);
       if (result!=SASL_OK)
       {
 	s->error = "Encoding error";
@@ -455,7 +471,7 @@ struct protstream *s;
 	return EOF;
       }
 
-      ptr = encoded_output;
+      ptr = (unsigned char *) encoded_output;
       left = outlen;
     }
 
@@ -463,7 +479,7 @@ struct protstream *s;
     do {
 #ifdef HAVE_SSL
 	if (s->tls_conn != NULL) {
-	    n = SSL_write(s->tls_conn, ptr, left);
+	    n = SSL_write(s->tls_conn, (char *) ptr, left);
 	} else {
 	    n = write(s->fd, ptr, left);
 	}
@@ -504,6 +520,7 @@ const char *buf;
 unsigned len;
 {
     assert(len >= 0);
+    assert(s->write);
 
     while (len >= s->cnt) {
 	memcpy(s->ptr, buf, s->cnt);
@@ -517,6 +534,8 @@ unsigned len;
     s->ptr += len;
     s->cnt -= len;
     if (s->error || s->eof) return EOF;
+
+    assert(s->cnt > 0);
     return 0;
 }
 
@@ -532,6 +551,8 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
     unsigned u;
     char buf[30];
     va_start(pvar, fmt);
+
+    assert(s->write);
 
     while ((percent = strchr(fmt, '%')) != 0) {
 	prot_write(s, fmt, percent-fmt);
@@ -585,6 +606,8 @@ unsigned size;
 {
     int c;
 
+    assert(!s->write);
+
     if (!size) return 0;
 
     if (s->cnt) {
@@ -618,6 +641,8 @@ struct protstream *s;
     char *p = buf;
     int c;
 
+    assert(!s->write);
+
     if (size < 2) return 0;
     size -= 2;
 
@@ -630,3 +655,44 @@ struct protstream *s;
     *p++ = '\0';
     return buf;
 }
+
+/* function versions of the macros */
+#undef prot_getc
+#undef prot_ungetc
+#undef prot_putc
+
+int prot_getc(struct protstream *s)
+{
+    assert(!s->write);
+
+    if (s->cnt-- > 0) {
+	return *(s->ptr)++;
+    } else {
+	return prot_fill(s);
+    }
+}
+
+int prot_ungetc(int c, struct protstream *s)
+{
+    assert(!s->write);
+
+    s->cnt++;
+    *--(s->ptr) = c;
+
+    return c;
+}
+
+int prot_putc(int c, struct protstream *s)
+{
+    assert(s->write);
+    assert(s->cnt > 0);
+
+    *s->ptr++ = c;
+    if (--s->cnt == 0) {
+	return prot_flush(s);
+    } else {
+	return 0;
+    }
+}
+
+
