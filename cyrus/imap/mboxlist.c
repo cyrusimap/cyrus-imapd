@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.6 2002/07/14 19:45:03 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.7 2002/07/15 01:12:41 ken3 Exp $
  */
 
 #include <config.h>
@@ -1315,7 +1315,8 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	}
 
 	/* canonify identifier so it is fully qualified,
-	   except for "anonymous", "anyone" and users in the default domain */
+	   except for "anonymous", "anyone", the global admin
+	   and users in the default domain */
 	if ((cp = strchr(identifier, '@'))) {
 	    if (!domain || strncasecmp(cp+1, domain, strlen(cp+1))) {
 		/* can't have cross-domain ACLs */
@@ -1330,7 +1331,7 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	    }
 	} else {
 	    strcpy(ident, identifier);
-	    if (domain &&
+	    if (domain && !isadmin &&
 		strcmp(ident, "anonymous") && strcmp(ident, "anyone")) {
 		sprintf(ident+strlen(ident), "@%.*s",
 			domainlen ? domainlen-1 : (int) strlen(domain), domain);
