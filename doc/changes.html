@@ -1,104 +1,120 @@
-<!-- $Id: changes.html,v 1.21 2001/10/26 14:23:05 ken3 Exp $ -->
-
-<HTML><HEAD>
-<TITLE>Changes to the Cyrus IMAP Server</TITLE>
-</HEAD><BODY>
-<H1>                   Changes to the Cyrus IMAP Server</H1>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!-- $Id: changes.html,v 1.22 2001/11/18 19:47:50 leg Exp $ -->
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta name="generator" content="HTML Tidy, see www.w3.org" />
+<title>Changes to the Cyrus IMAP Server</title>
+</head>
+<body>
+<h1>Changes to the Cyrus IMAP Server</h1>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.16</h2>
+
 <ul>
-<li> altnamespace: it is now possible to display user mailboxes as
-siblings to the INBOX at the top-level (Ken Murchison)
+<li>altnamespace: it is now possible to display user mailboxes as
+siblings to the INBOX at the top-level (Ken Murchison)</li>
 
-<li> unixhierarchysep: it is now possible possible to use slash as the
-hierarchy seperator, instead of a period. (Ken Murchison, inspired by
-David Fuchs <dfuchs@uniserve.com>)
+<li>unixhierarchysep: it is now possible possible to use slash as
+the hierarchy seperator, instead of a period. (Ken Murchison,
+inspired by David Fuchs, <tt>dfuchs@uniserve.com</tt>)</li>
 
-<li> SSL/TLS session caching (Ken Murchison)
+<li>SSL/TLS session caching (Ken Murchison)</li>
 
-<li> support for IMAP CHILDREN & LISTEXT extensions (Ken Murchison,
-work in progress)
+<li>support for IMAP CHILDREN &amp; LISTEXT extensions (Ken
+Murchison, work in progress)</li>
 
-<li> check recipient quota & ACL at time of RCPT TO: in <tt>lmtpd</tt>
-(Ken Murchison)
+<li>check recipient quota &amp; ACL at time of RCPT TO: in
+<tt>lmtpd</tt> (Ken Murchison)</li>
 
-<li> support for LMTP STARTTLS & SIZE extensions (Ken Murchison)
+<li>support for LMTP STARTTLS &amp; SIZE extensions (Ken
+Murchison)</li>
 
-<li> unified deliver.db, using cyrusdb interface, hopefully improving
-concurrency and performance (Ken Murchison)
+<li>unified deliver.db, using cyrusdb interface, hopefully
+improving concurrency and performance (Ken Murchison)</li>
 
-<li> fixed STORE FLAGS () bug (Ken Murchison)
+<li>fixed STORE FLAGS () bug (Ken Murchison)</li>
 
-<li> fixed SEARCH SUBJECT vs. SEARCH HEADER SUBJECT bug (Ken Murchison)
+<li>fixed SEARCH SUBJECT vs. SEARCH HEADER SUBJECT bug (Ken
+Murchison)</li>
 
-<li> users without an INBOX can have subscriptions (Ken Murchison;
-noticing a trend here?)
+<li>users without an INBOX can have subscriptions (Ken Murchison;
+noticing a trend here?)</li>
 
-<li> added cyrusdb_db3_nosync backend, used for duplicatedb and
-session cache, to postpone non-critical writes. (Ken Murchison)
+<li>added cyrusdb_db3_nosync backend, used for duplicatedb and
+session cache, to postpone non-critical writes. (Ken
+Murchison)</li>
 
-<li> support for STARTTLS and AUTH=ANONYMOUS for timsieved (Ken Murchison)
+<li>support for STARTTLS and AUTH=ANONYMOUS for timsieved (Ken
+Murchison)</li>
 
-<li> do setgid and initgroups in master (as urged by several people)
+<li>do setgid and initgroups in master (as urged by several
+people)</li>
 
-<li> added more config info to IMAP ID (in a vain attempt to improve debugging)
+<li>added more config info to IMAP ID (in a vain attempt to improve
+debugging)</li>
 
-<li> configure now checks for DB3.3
+<li>configure now checks for DB3.3</li>
 
-<li> SQUAT (Rob O'Callahan <roc@cs.cmu.edu>)
+<li>SQUAT (Rob O'Callahan, <tt>roc@cs.cmu.edu</tt>)</li>
 
-<li> change SEARCH HEADER <x> to SEARCH <x> utilizing internal cache
-where possible (Rob O'Callahan <roc@cs.cmu.edu>)
+<li>change SEARCH HEADER <i>x</i> to SEARCH <i>x</i> utilizing
+internal cache where possible (Rob O'Callahan,
+<tt>roc@cs.cmu.edu</tt>)</li>
 
-<li> an improved directory hashing option (Gary Mills
-<mills@cc.UManitoba.CA>)
+<li>an improved directory hashing option (Gary Mills,
+<tt>mills@cc.UManitoba.CA</tt>)</li>
 
-<li> use of EGD for SSL/TLS (Amos Gouaux <amos@utdallas.edu>)
+<li>use of EGD for SSL/TLS (Amos Gouaux,
+<tt>amos@utdallas.edu</tt>)</li>
 
-<li> separate certs/keys for services (Henning P. Schmiedehausen
-<hps@intermeta.de>)
+<li>separate certs/keys for services (Henning P. Schmiedehausen,
+<tt>hps@intermeta.de</tt>)</li>
 
-<li> ability to force ipurge to traverse personal folders (Carsten
-Hoeger <choeger@suse.de>)
+<li>ability to force ipurge to traverse personal folders (Carsten
+Hoeger, <tt>choeger@suse.de</tt>)</li>
 
-<li> fixed zero quota bugs in cyradm (Leena Heino <liinu@uta.fi>)
+<li>fixed zero quota bugs in cyradm (Leena Heino,
+<tt>liinu@uta.fi</tt>)</li>
 
-<li> ignore trailing whitespace in imapd.conf
+<li>ignore trailing whitespace in imapd.conf</li>
 
-<li> Received: header (with TLS and AUTH info)
+<li>Received: header (with TLS and AUTH info)</li>
 
-<li> added '-i' switch to sendmail command line for SIEVE reject,
-redirect and vacation
+<li>added '-i' switch to sendmail command line for SIEVE reject,
+redirect and vacation</li>
 
-<li> reconstruct -m works again???
+<li>reconstruct -m works again???</li>
 
-<li> small fixes to notify_unix
+<li>small fixes to notify_unix</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.15</h2>
+
 <ul>
-<li> fixed a longstanding bug in <tt>quota</tt> that would affect
+<li>fixed a longstanding bug in <tt>quota</tt> that would affect
 people with unusual top-level hierarchy, fix by John Darrow,
-<tt>John.P.Darrow@wheaton.edu</tt>.
+<tt>John.P.Darrow@wheaton.edu</tt>.</li>
 
-<li> some important fixes to db3 interface code, by Walter Wong
+<li>some important fixes to db3 interface code, by Walter Wong
 <tt>wcw@cmu.edu</tt>, prompted by complaints from Scott Adkins
-<tt>adkinss@ohio.edu</tt>.
+<tt>adkinss@ohio.edu</tt>.</li>
 
-<li> fixed some memory leaks in imclient and in the Perl IMAP module,
-prompted by Toni Andjelkovic <tt>toni@soth.at</tt>.
+<li>fixed some memory leaks in imclient and in the Perl IMAP
+module, prompted by Toni Andjelkovic <tt>toni@soth.at</tt>.</li>
 
-<li> fixed a longstanding authentication error in the Perl IMAP
-module, should remove pesky extra Password: prompt.
+<li>fixed a longstanding authentication error in the Perl IMAP
+module, should remove pesky extra Password: prompt.</li>
 
-<li> fixed some allocation bugs in the managesieve perl module.
+<li>fixed some allocation bugs in the managesieve perl module.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.14</h2>
+
 <ul>
-<li>fixed memory management bugs in <tt>imapd</tt>, <tt>lmtpd</tt> that
-were being hit due to the connection reuse code and causing subtle and
-annoying problems.</li>
+<li>fixed memory management bugs in <tt>imapd</tt>, <tt>lmtpd</tt>
+that were being hit due to the connection reuse code and causing
+subtle and annoying problems.</li>
 
 <li>we now clean up better when deleting a user</li>
 
@@ -107,1254 +123,1330 @@ annoying problems.</li>
 <li><tt>pop3d</tt> now can also reuse processes.</li>
 
 <li>fix a bug in <tt>imclient</tt> that would strike when
-<tt>cyradm</tt> specifies a mechanism on the command-line.  (SASL
+<tt>cyradm</tt> specifies a mechanism on the command-line. (SASL
 mechanism names aren't case sensitive.)</li>
 
 <li>fix some bugs in handling SIGHUP in <tt>master</tt></li>
 
 <li>fix a couple of goofs in <tt>Admin.pm</tt></li>
-
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.13</h2>
-<ul>
-<li> fixed a silly bug with reusing SSL connections</li>
 
-<li> <tt>lmtpd</tt> can now service multiple clients in sequence,
+<ul>
+<li>fixed a silly bug with reusing SSL connections</li>
+
+<li><tt>lmtpd</tt> can now service multiple clients in sequence,
 hopefully improving performance</li>
 
-<li> changed how Berkeley db databases are opened, hopefully lessening
-the chance of deadlock and improving performance</li>
+<li>changed how Berkeley db databases are opened, hopefully
+lessening the chance of deadlock and improving performance</li>
 
-<li> fixed a couple of memory leaks</li>
+<li>fixed a couple of memory leaks</li>
 
-<li> lessened the chance of a race condition during <tt>index_check()</tt></li>
+<li>lessened the chance of a race condition during
+<tt>index_check()</tt></li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.12</h2>
+
 <ul>
-<li> refactored code so less duplication</li>
+<li>refactored code so less duplication</li>
 
-<li> added alternate config file for partial virtual domain support</li>
+<li>added alternate config file for partial virtual domain
+support</li>
 
-<li> <tt>pop3d</tt> can now disable USER/PASS commands.</li>
+<li><tt>pop3d</tt> can now disable USER/PASS commands.</li>
 
-<li> STARTTLS now accepts a SSLv23 hello but doesn't allow SSLv23 to
+<li>STARTTLS now accepts a SSLv23 hello but doesn't allow SSLv23 to
 be negotiated.</li>
 
-<li> <tt>imtest</tt> no longer buffers to aid use as an automated
+<li><tt>imtest</tt> no longer buffers to aid use as an automated
 layer.</li>
 
-<li> <tt>master</tt> now supports maximum number of service processes
-via the "maxchild" modifier.</li>
+<li><tt>master</tt> now supports maximum number of service
+processes via the "maxchild" modifier.</li>
 
-<li> fixed a bug in the Sieve string lexer.</li>
+<li>fixed a bug in the Sieve string lexer.</li>
 
-<li> one <tt>imapd</tt> process can now service multiple clients in
+<li>one <tt>imapd</tt> process can now service multiple clients in
 sequence, eliminating a large number of forks.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.11</h2>
+
 <ul>
-<li> portability fixes involving <tt>setrlimit()</tt></li>
+<li>portability fixes involving <tt>setrlimit()</tt></li>
 
-<li> fixed compiler warnings</li>
+<li>fixed compiler warnings</li>
 
-<li> the STARTTLS command will only accept TLSv1 now, not SSLv2/v3.
+<li>the STARTTLS command will only accept TLSv1 now, not SSLv2/v3.
 The <tt>imaps</tt> port is unaffected by this change.</li>
 
-<li> <tt>timsieved</tt> no longer returns garbage strings.</li>
-
+<li><tt>timsieved</tt> no longer returns garbage strings.</li>
 </ul>
 
-
 <h2>Changes to the Cyrus IMAP Server since 2.0.9</h2>
+
 <ul>
-<li> some small memory savings</li>
+<li>some small memory savings</li>
 
-<li> the "fud" daemon once again works correctly</li>
+<li>the "fud" daemon once again works correctly</li>
 
-<li> the IDLE extension now uses signals correctly</li>
+<li>the IDLE extension now uses signals correctly</li>
 
-<li> problems with libwrap have been resolved</li>
+<li>problems with libwrap have been resolved</li>
 
-<li> <tt>imapd</tt> and <tt>pop3d</tt> now log connections protected
+<li><tt>imapd</tt> and <tt>pop3d</tt> now log connections protected
 via TLS.</li>
 
-<li> efficiency improvements when searching for a particular
+<li>efficiency improvements when searching for a particular
 message-id</li>
 
-<li> fixed an envelope-parsing bug affecting SORT and THREAD</li>
+<li>fixed an envelope-parsing bug affecting SORT and THREAD</li>
 
-<li> made RENAME keep the same mailbox uniqueid, preserving seen state
-across renames</li>
+<li>made RENAME keep the same mailbox uniqueid, preserving seen
+state across renames</li>
 
-<li> STOREing flags to multiple messages in one command is now more
-efficient </li>
+<li>STOREing flags to multiple messages in one command is now more
+efficient</li>
 
-<li> RENAME now preserves the ACL</li>
+<li>RENAME now preserves the ACL</li>
 
-<li> LIST is now as efficient as Cyrus v1.6, modulo Berkeley DB
+<li>LIST is now as efficient as Cyrus v1.6, modulo Berkeley DB
 issues.</li>
 
-<li> Sieve zephyr notifications are now correct.</li>
+<li>Sieve zephyr notifications are now correct.</li>
 
-<li> crash in <tt>reconstruct</tt> now fixed. </li>
+<li>crash in <tt>reconstruct</tt> now fixed.</li>
 
-<li> man pages added for <tt>cyrus.conf</tt>, <tt>master</tt>,
+<li>man pages added for <tt>cyrus.conf</tt>, <tt>master</tt>,
 <tt>lmtpd</tt>, <tt>idled</tt>, <tt>ctl_mboxlist</tt>, and
 <tt>ctl_deliver</tt>.</li>
 
-<li> <tt>master</tt> can now listen on specific interfaces</li>
+<li><tt>master</tt> can now listen on specific interfaces</li>
 
-<li> <tt>master</tt> can now reread <tt>/etc/cyrus.conf</tt> on SIGHUP.
+<li><tt>master</tt> can now reread <tt>/etc/cyrus.conf</tt> on
+SIGHUP.</li>
 
-<li> <tt>timsieved</tt> now uses symlinks instead of hard links.
-
+<li><tt>timsieved</tt> now uses symlinks instead of hard
+links.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.8</h2>
+
 <ul>
-<li> remembered to update this file
+<li>remembered to update this file</li>
 
-<li> bug in <tt>Cyrus::IMAP</tt> perl module affecting cyradm's
-setquota fixed
+<li>bug in <tt>Cyrus::IMAP</tt> perl module affecting cyradm's
+setquota fixed</li>
 
-<li> portability fix with <tt>socklen_t</tt>
+<li>portability fix with <tt>socklen_t</tt></li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.7</h2>
+
 <ul>
-<li> preliminary implementation of the IDLE extension (Ken Murchison,
-<tt>ken@oceana.com</tt>).
+<li>preliminary implementation of the IDLE extension (Ken
+Murchison, <tt>ken@oceana.com</tt>).</li>
 
-<li> THREAD=REFERENCES now part of the normal build.
+<li>THREAD=REFERENCES now part of the normal build.</li>
 
-<li> tweaks to the installation documentation and suggested Sendmail
-configuration
+<li>tweaks to the installation documentation and suggested Sendmail
+configuration</li>
 
-<li> portability fixes and other small bugfixes
+<li>portability fixes and other small bugfixes</li>
 
-<li> added "<tt>-a</tt>" flag to <tt>lmtpd</tt>
+<li>added "<tt>-a</tt>" flag to <tt>lmtpd</tt></li>
 
-<li> master process can now export statistics about running processes
-via UCD SNMP AgentX
+<li>master process can now export statistics about running
+processes via UCD SNMP AgentX</li>
 
-<li> many fixes to Cyrus Murder-related code
+<li>many fixes to Cyrus Murder-related code</li>
 
-<li> fixes to perl code, especially the Sieve interface. added an IMSP
-interface to the perl code, but it still needs work.
-
+<li>fixes to perl code, especially the Sieve interface. added an
+IMSP interface to the perl code, but it still needs work.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.6</h2>
+
 <ul>
-<li> some number of random static variables eliminated, to save on
-memory footprint
+<li>some number of random static variables eliminated, to save on
+memory footprint</li>
 
-<li> recursive RENAME was a little to eager; fixed.  RENAME will also
-give the client a hint that a sub-RENAME failed.  (mostly probably
-useful for cyradm, but cyradm doesn't take advantage of it yet.)
+<li>recursive RENAME was a little to eager; fixed. RENAME will also
+give the client a hint that a sub-RENAME failed. (mostly probably
+useful for cyradm, but cyradm doesn't take advantage of it
+yet.)</li>
 
-<li> THREAD=X-JWZ has turned into THREAD=REFERENCES (Ken Murchison)
+<li>THREAD=X-JWZ has turned into THREAD=REFERENCES (Ken
+Murchison)</li>
 
-<li> DELETE wasn't failing cleanly in database code; fixed.
+<li>DELETE wasn't failing cleanly in database code; fixed.</li>
 
-<li> off-by-one bug in seen_db fixed.
+<li>off-by-one bug in seen_db fixed.</li>
 
-<li> starting/committing/aborting transactions now logged more
-correctly in cyrsudb_db3
+<li>starting/committing/aborting transactions now logged more
+correctly in cyrsudb_db3</li>
 
-<li> master will now accept port numbers instead of just service names
-in cyrus.conf.  also logs even more verbosely (see bug #115.)
+<li>master will now accept port numbers instead of just service
+names in cyrus.conf. also logs even more verbosely (see bug
+#115.)</li>
 
-<li> libwrap_init() is now inside the loop, since i don't quite
-understand the semantics of libwrap calls.
+<li>libwrap_init() is now inside the loop, since i don't quite
+understand the semantics of libwrap calls.</li>
 
-<li> setquota in cyradm now behaves more sanely (and gives correct
-usage message).
+<li>setquota in cyradm now behaves more sanely (and gives correct
+usage message).</li>
 
-<li> bugfixes to the managesieve client perl api. (still needs work.)
+<li>bugfixes to the managesieve client perl api. (still needs
+work.)</li>
 
-<li> small fixes in timsieved.
+<li>small fixes in timsieved.</li>
 
-<li> added a "make dist" target so i won't dread releases as much.
+<li>added a "make dist" target so i won't dread releases as
+much.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.5</h2>
+
 <ul>
-<li> APPEND now honors the \Seen flag.
+<li>APPEND now honors the \Seen flag.</li>
 
-<li> mailboxes file can once again be a flat text file. (compile-time choice)
+<li>mailboxes file can once again be a flat text file.
+(compile-time choice)</li>
 
-<li> subscriptions file can be flat text or berkeley db.  likewise for
-seen state.
+<li>subscriptions file can be flat text or berkeley db. likewise
+for seen state.</li>
 
-<li> unfortunately, the format of the mailboxes file has changed.
+<li>unfortunately, the format of the mailboxes file has
+changed.</li>
 
-<li> implementation of "JWZ" threading, a first pass on the
-forthcoming THREAD=REFERENCES.
+<li>implementation of "JWZ" threading, a first pass on the
+forthcoming THREAD=REFERENCES.</li>
 
-<li> bugfixes in libacap.
+<li>bugfixes in libacap.</li>
 
-<li> bugfixes in other Murder related functionality.
+<li>bugfixes in other Murder related functionality.</li>
 
-<li> removal of dead code.
+<li>removal of dead code.</li>
 
-<li> will now look in CYRUS_PREFIX/etc/imapd.conf if there's no
-/etc/imapd.conf.
+<li>will now look in CYRUS_PREFIX/etc/imapd.conf if there's no
+/etc/imapd.conf.</li>
 
-<li> more paranoid implementation of ID.
+<li>more paranoid implementation of ID.</li>
 
-<li> more descriptive lmtp errors.
+<li>more descriptive lmtp errors.</li>
 
-<li> finished implementation of LMTP 8BITMIME.
+<li>finished implementation of LMTP 8BITMIME.</li>
 
-<li> fixed minor bugs in pop3d.
+<li>fixed minor bugs in pop3d.</li>
 
-<li> small test suite for cyrusdb backends added in
-<tt>lib/test/</tt>.
+<li>small test suite for cyrusdb backends added in
+<tt>lib/test/</tt>.</li>
 
-<li> added <tt>-DPERL_POLLUTE</tt> to the perl compilation to deal
-with Perl 5.6.
+<li>added <tt>-DPERL_POLLUTE</tt> to the perl compilation to deal
+with Perl 5.6.</li>
 
-<li> small additions to the Sieve library.
+<li>small additions to the Sieve library.</li>
 
-<li> As usual, owe lots of thanks to Ken Murchison for his hard work
-and awesome implementations.
-
+<li>As usual, owe lots of thanks to Ken Murchison for his hard work
+and awesome implementations.</li>
 </ul>
 
-
 <h2>Changes to the Cyrus IMAP Server SINCE 2.0.4</h2>
+
 <ul>
-<li> Now should work with Berkeley DB 3.1, but does <b>not</b>
+<li>Now should work with Berkeley DB 3.1, but does <b>not</b>
 auto-upgrade 3.0 databases (and, in fact, I haven't written any
-upgrade software yet).
+upgrade software yet).</li>
 
-<li> SORT and THREAD should now function correctly.
+<li>SORT and THREAD should now function correctly.</li>
 
-<li> Some configure fixes.
+<li>Some configure fixes.</li>
 
-<li> Some fixes for possible race conditions in initializing services
-and database structures.
+<li>Some fixes for possible race conditions in initializing
+services and database structures.</li>
 
-<li> Some non-gcc compile fixes with structure initialization.
+<li>Some non-gcc compile fixes with structure initialization.</li>
 
-<li> Some non gcc compile fixes with structure initialization.
+<li>Some non gcc compile fixes with structure initialization.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server SINCE 2.0.3</h2>
+
 <ul>
-<li>fixed <tt>mbpath</tt> and <tt>ipurge</tt>. Thanks to Alain Turbide
-for the bug report.
+<li>fixed <tt>mbpath</tt> and <tt>ipurge</tt>. Thanks to Alain
+Turbide for the bug report.</li>
 
-<li> configure: removed <tt>mmap_private.c</tt>; it was buggy, and not worth
-supporting.
+<li>configure: removed <tt>mmap_private.c</tt>; it was buggy, and
+not worth supporting.</li>
 
-<li> configure: improvements in detecting libwrap, typos fixed in
-detecting libsasl.
+<li>configure: improvements in detecting libwrap, typos fixed in
+detecting libsasl.</li>
 
-<li> Merged the acapsieve library into libacap.
+<li>Merged the acapsieve library into libacap.</li>
 
-<li> improvements to the ACAP API.
+<li>improvements to the ACAP API.</li>
 
-<li> invariant checks added to the skiplist code.
+<li>invariant checks added to the skiplist code.</li>
 
-<li> bugfix in TCL cyradm.
+<li>bugfix in TCL cyradm.</li>
 
-<li> acapmbox.c: bugfixes in handling acap connections.
+<li>acapmbox.c: bugfixes in handling acap connections.</li>
 
-<li> fix the size given for a unix socket address (changes throughout
-the code), patch thanks to Vladimir Kravchenko, <tt>jimson@null.ru</tt>.
+<li>fix the size given for a unix socket address (changes
+throughout the code), patch thanks to Vladimir Kravchenko,
+<tt>jimson@null.ru</tt>.</li>
 
-<li> rewrote <tt>deliver</tt> to use the generic LMTP API in
-lmtpengine.c.  Likewise, implemented the client-side API in
-lmtpengine.c. (Still need to implement AUTH.)
+<li>rewrote <tt>deliver</tt> to use the generic LMTP API in
+lmtpengine.c. Likewise, implemented the client-side API in
+lmtpengine.c. (Still need to implement AUTH.)</li>
 
-<li> added SORT and THREAD support (Ken Murchison,
-<tt>ken@oceana.com</tt>.)
+<li>added SORT and THREAD support (Ken Murchison,
+<tt>ken@oceana.com</tt>.)</li>
 
-<li> In checking an APPEND command, we were rejecting valid system
-flags and accepting invalid ones.
+<li>In checking an APPEND command, we were rejecting valid system
+flags and accepting invalid ones.</li>
 
-<li> minor bug fixes to <tt>proxyd</tt>.
+<li>minor bug fixes to <tt>proxyd</tt>.</li>
 
-<li> large amount of debugging code added to <tt>target-acap</tt>.
+<li>large amount of debugging code added to
+<tt>target-acap</tt>.</li>
 
-<li> build fixes to Perl programs.
+<li>build fixes to Perl programs.</li>
 
-<li> allow plaintext authentication to <tt>timsieved</tt>.
-
+<li>allow plaintext authentication to <tt>timsieved</tt>.</li>
 </ul>
 
-<h2> Changes to the Cyrus IMAP Server in 2.0 </h2>
+<h2>Changes to the Cyrus IMAP Server in 2.0</h2>
+
 <ul>
-<li> The mailboxes file is now a transaction-protected Berkeley
-database.
+<li>The mailboxes file is now a transaction-protected Berkeley
+database.</li>
 
-<li> The core delivery process has been moved to <tt>lmtpd</tt>.
-<tt>deliver</tt> is now a simple wrapper to create an LMTP transaction.
+<li>The core delivery process has been moved to <tt>lmtpd</tt>.
+<tt>deliver</tt> is now a simple wrapper to create an LMTP
+transaction.</li>
 
-<li> master process, responsible for spawning services (<tt>imapd</tt>,
-<tt>lmtpd</tt>, etc.) and for routine housekeeping.  Optionally, it
-can use <tt>libwrap</tt> to allow or deny connections.
+<li>master process, responsible for spawning services
+(<tt>imapd</tt>, <tt>lmtpd</tt>, etc.) and for routine
+housekeeping. Optionally, it can use <tt>libwrap</tt> to allow or
+deny connections.</li>
 
-<li> ACAP (Application Configuration Access Protocol) support for
-Cyrus Murder: IMAP Aggregator.
+<li>ACAP (Application Configuration Access Protocol) support for
+Cyrus Murder: IMAP Aggregator.</li>
 
-<li> Sieve enhancements: regular expressions, notifications,
-automatically setting IMAP flags.
+<li>Sieve enhancements: regular expressions, notifications,
+automatically setting IMAP flags.</li>
 
-<li> SNMP (Simple Network Management Protocol) support for monitoring
-usage (e.g. number of users logged in) as well as for instrumenting
-protocol usage (e.g. number of times CREATE has been called).
+<li>SNMP (Simple Network Management Protocol) support for
+monitoring usage (e.g. number of users logged in) as well as for
+instrumenting protocol usage (e.g. number of times CREATE has been
+called).</li>
 
-<li> Perl version of <tt>cyradm</tt> contributed by Brandon Allbery
-(<tt>allbery@ece.cmu.edu</tt>).  Eventually we expect to transition to
-the Perl version away from the TCL version.
+<li>Perl version of <tt>cyradm</tt> contributed by Brandon Allbery
+(<tt>allbery@ece.cmu.edu</tt>). Eventually we expect to transition
+to the Perl version away from the TCL version.</li>
 
-<li>Bugfix in modified UTF-7 processing (for mailbox names).
-Bugfix in <tt>index_searchcacheheader()</tt>.
+<li>Bugfix in modified UTF-7 processing (for mailbox names). Bugfix
+in <tt>index_searchcacheheader()</tt>.</li>
 
-<li>Implemented the extension MULTIAPPEND.
+<li>Implemented the extension MULTIAPPEND.</li>
 
-<li>RENAME is now hierarchical.
+<li>RENAME is now hierarchical.</li>
 
 <li>The right that controls whether a mailbox may be deleted is now
-"c".  (It used to be "d".)
+"c". (It used to be "d".)</li>
 
 <li>An additional backend for seen state has been created,
-<tt>seen_db</tt>.  It stores seen state in a per-user database.
+<tt>seen_db</tt>. It stores seen state in a per-user database.</li>
 </ul>
 
-    <h2> Changes to the Cyrus IMAP Server Since Version 1.6.20 </h2>
-    <ul>
-    <li> Some fixes to the TLS support to gracefully degrade service.
-
-    <li> Sieve now correctly re-sieves messages that are received with
-    identical message-ids, but different envelopes.  It also obeys
-    plus-addressing on keep actions.  (Fixes by Ken
-    Murchison, <tt>ken@oceana.com</tt>.)
-
-    <li> The server wasn't correctly calculating the percentage of
-    quota used when deciding whether or not to issue a warning.
-
-    <li> Implemented single-instance store: deliver, when using LMTP,
-    will only store one copy of a message per partition, and hard link
-    it among multiple users.  Sites with a large number of partitions
-    could see a performance decrease.
-
-    </ul>
-
-    <h2> Changes to the Cyrus IMAP Server Since Version 1.6.19 </h2>
-    <ul>
-    <li> Added STARTTLS support; requires OpenSSL.
-
-    <li> Sieve now uses MDNs to reject messages instead of DSNs,
-    conforming to the latest Sieve specification. (Ken Murchison)
-
-    <li> The duplicate delivery database expiration (deliver -E) was
-    deleting all entries; fixed.
-
-    <li> imtest is now a little smarter about parsing the protocol to
-    avoid synchronization errors prior to authentication.
-
-    <li> timsieved's parser is now written in C; should be no
-    noticeable changes, but should make compiling it much easier.
-    </ul>
-
-    <h2> Changes to the Cyrus IMAP Server Since Version 1.6.16 </h2>
-    <ul>
-      <li> Fix to enclosed message parsing (thanks to John Myers).
-
-      <li> When trying to skip over non-synchronizing literals during
-      error recovery, the IMAP server never stopped eating.  Fixed.
-
-      <li> Added <tt>with-sasldir</tt> as a configure option.
-
-      <li> Fixed a bug in cyradm when it got the CAPABILITY list.
-
-      <li> Fixed bugs relating to the incomplete SASLfication of
-      deliver.
-
-      <li> Fixed bugs in deliver relating to duplicate delivery
-      suppression and Sieve vacation functionality.
-
-      <li> Fixed a memory leak in deliver.
-
-      <li> When looking for SASL options, imapd wasn't defaulting to
-      the option without the plugin name requesting it.  This caused
-      PLAIN authentications to incorrectly fail.
-
-      <li> Changed the expiration time of pts entries to 3 hours; only
-      affects sites using krb_pts as the authorization method.
-
-      <li> Fixed some bugs in imclient; mostly affects cyradm.
-
-      <li> Fixed a bug in the Sieve lexer and improved the usefulness
-      of the Sieve test program.
-    </ul>
-
-    <h2> Changes to the Cyrus IMAP Server Since Version 1.6.13 </h2>
-    <ul>
-      <li> An annoying memory management bug in imclient was fixed and
-      it's efficiency was improved somewhat.
-
-      <li> Added the sieve client (<tt>installsieve</tt>) and server
-      (<tt>timsieved</tt>) for getting sieve scripts onto the server
-      and managing them once they are there.
-
-      <li> The default Sieve script layout has changed to
-      sievedir/u/user/default; this supports multiple Sieve scripts
-      per user with the ability to switch between them.
- 
-      <li> Fixed the kerberos-to-local-host bug (patch by Greg Hudson,
-      <tt>ghudson@mit.edu</tt>).
-
-      <li> Started changes to deliver to support LMTP AUTH.
-
-      <li> Improved the error messages logged when authentication
-      fails.
-      
-      <li> Fixed a bug dealing with argument processing in the
-      arbitron program.
-
-      <li> pop3d now correctly supports SASL AUTH.
-
-      <li> imtest will no longer prompt for authentication or
-      authorization names; instead, it defaults to the current Unix
-      user.  Override on the command line.
-
-      <li> Likewise, cyradm will no longer prompt.  It now accepts
-      "-m" to specify what SASL mechanism to use, and the
-      pwcommand option to authenticate should once again work when
-      used non-interactively.
-    </ul>
-
-    <h2> Changes to the Cyrus IMAP Server Since Version 1.6.10 </h2>
-    <ul>
-      <li> Changed the sieve option in the configure script to
-      <tt>--disable-sieve</tt>.
-
-      <li> Updated reconstruct and quota to check for hashed imap
-      spool directories correctly.
-
-      <li> deliver now will not use Sieve if duplicate delivery
-      suppression is disabled.  There was also a bug that caused the
-      duplicate delivery database to be checked even if dupelim was
-      disabled.
-
-      <li> deliver now uses tm_gmtoff if available to check for the
-      local timezone.
-
-      <li> The default format for reading information from INN has
-      changed.  If you use INN to feed imapd news, you must change
-      your "<tt>newsfeeds</tt>" file to contain
-      <pre>collectnews!:*:Tf,WO:collectnews</pre>
-
-      <li> The dohash script now takes a "<tt>-i</tt>" option to run
-      interactively and the "<tt>-f</tt>" option to issue warnings
-      instead of fatal errors.
-    </ul>
-
-    <h2> Changes to the Cyrus IMAP Server Since Version 1.6.1-BETA </h2>
-
-    <ul>
-      <li> cyradm should now work with all mechanisms (it now handles
-      empty challenges and responses).
-
-      <li> Fixed deliver to deal with arbitrarily long headers
-
-      <li> COPY for non-existent sequence numbers returns NO; this
-      contrasts to UID COPY, which always returns OK.
-
-      <li> FETCH for non-existent sequence numbers returns NO; this
-      contrasts to UID FETCH, which always returns OK.
-
-      <li> Fixed a misleading BAD responses to commands that take
-      sequences.
-
-      <li> Added UIDNEXT untagged response to a SELECT (from
-      <tt>draft-crispin-imapv-07.txt</tt>).
-
-      <li> pop3d now correctly passes SASL configuration options to libsasl.
-
-      <li> imtest now correctly flushes the server's output to the
-      screen.
-
-      <li> Added more hashing using a simple but stupid algorithm.
-      Now whenever there is a mailbox access, quota access, or
-      subscription access, it goes through a hash function. this is
-      done to help reduce the number of files/directories in any given
-      directory.
-
-      <li>Added the binary <tt>mbpath</tt>. Given a mailbox name, this
-      binary will print the filesystem path to that mailbox. This way
-      if you have multiple partitions and hashing turned out, you
-      don't have to spend as many mental cycles figuring out where the
-      actual directory is.
-
-      <li> deliver now checks <tt>sieveusehomedir</tt> and
-      <tt>sievedir</tt> in the config file to determine where to look
-      for sieve scripts.
-
-      <li> ptloader now has a workaround for afs 3.5.
-
-      <li> clarified an error message in message.c when an unexpected
-      end of file is encountered.
-
-      <li> fixed some random memory leaks in deliver.
-
-      <li> fixed a fairly major bug in prot_fill.  it was performing
-      incorrectly when reading only a single character.
-
-      <li> fixed a bug in how imtest looked for OK or NO.
-
-      <li> fixed a memory leak in imapd.
-
-      <li> imapd now allows any user (or member of a group) listed in
-      "proxyservers" to proxy.
-    </ul>
-
-    <h2> Changes to the Cyrus IMAP Server Since Version 1.6.0-BETA </h2>
-
-    <ul>
-      <li> fixed stupid bug in imapd
-
-      <li> fixed sasl/config.c interaction
-
-      <li> fixed use of stat in imtest
-
-    </ul>
-
-    <h2> Changes to the Cyrus IMAP Server Since Version 1.5.24 </h2>
-
-    <ul>
-      <li> ANSI C is now required.
-
-      <li> imtest's interface has changed, to allow for SASL
-        authentication.  Sorry, but it had to happen.  It now also
-	includes a timing test (-z) which we use to test the SASL layers.
-
-      <li> imtest no longer uses a non-synchronizing literal with
-	LOGIN, so it should work against all IMAP servers.
-
-      <li> The prot layer now uses SASL for encryption and
-        authentication.  This changed a large amount of code, and some
-	build procedures.
-
-      <li> As a side effect of SASL, --enable-static-libraries now 
-        doesn't do anything.  We are considering compiling cyrus with
-	libtool to change this.
-
-      <li> Error codes returned by programs have changed, and programs return
-	EX_TEMPFAIL far more than they used to.  This is because Sendmail
-	considers most not-EX_TEMPFAIL errors permanent; now, if it may not be 
-	permanent, EX_TEMPFAIL is returned.  (See lib/exitcodes.h.)
-
-      <li> Two bugs fixed: UID FETCH's with no messages in range now
-	return OK, not BAD.  And an obscure bug in LIST case
-	sensitivity is fixed.
-
-    </ul>
-
-    <h2> Changes to the Cyrus IMAP Server Since Version 1.5.19 </h2>
-
-    <ul>
-      <li> Most of the charset.c code (and mkchartable.c code) has been
-	replaced thanks to John Myers).
-
-      <li> Bug fix in message.c to look up headers in the cache when they're
-	in the cache correctly; thanks to Chris Newman for the fix.
-
-      <li> Code cleanup here and there (thanks to Bruce Balden).
-
-      <li> Annoying (and confusing) lines in syslog every time a message was
-	delivered if deliver was compiled using dbm saying that deliver was
-	"unable to fetch entry" have been removed.
-
-      <li> Content-Disposition lines were being parsed improperly.  If they
-	had no optional arguments, they were being ignored as if they were
-	syntactically incorrect.  This is fixed, but imapd will continue to
-	serve wrong information unless cyrus.caches are rebuilt (with
-	reconstruct) for any message that was added to the mailbox before this 
-	bug was fixed.
-
-      <li> The arbitron program now takes a mailbox pattern argument for the
-	mailbox to run on. The manpage always said it did anyway. 
-
-      <li> Uninitialized variable fixed in imapd.c with the shutdown file
-	code.
-
-      <li> Minor tweaks to purify build config.
-
-      <li> Fix minor memory leak in proc.c where procfname wasn't
-	being free'd.
-
-      <li> Fix brain fart in auth_krb_pts.c where a CLOSE() was done
-      to a DB handle BEFORE we access the data read from the DB
-      database. This means we were copying free'd memory into the
-      groups list.  Note this only affects people using DB, AFS and
-      ptloader.
-
-      <li>Committed minor syslog log level changes in ptloader and
-	deliver. 
-
-      <li>make distclean now does what it's supposed to.
-
-      <li>Possibly misnamed experimental --enable-static-libraries switch that
-	tries to do a good job of building binaries with whatever static
-	libraries are availible.  If you use this, you do so at your own risk,
-	and if it fails, we will disavow all knowledge of you and your team.
-	Good luck, Jim.
-
-      <li>Add optional third argument to imtest for it to take input
-	from a file. This is a gross hack.
-
-    </ul>
-
-    <h2> Changes to the Cyrus IMAP Server Since Version 1.5.14</h2>
-
-    <ul>
-      <li>
-	LIST now honors the reference argument.
-
-	<p>
-	  This behavior can be turned off by a configuration option
-	  imapd.conf--which may be desirable because of certain clients that
-	  ask for a "mail directory" setting for IMAP which will now cause
-	  problems when it was ignored before.  (The default is for the
-	  reference argument to be honored.)
-
-      <li>
-	The <tt>arbitron</tt> program now takes a mailbox pattern argument for
-	the mailbox to run on.  The manpage always said it did anyway.
-
-      <li>
-	Added --disable-server switch to optionally prevent compilation of
-	server to help sites that just want client libraries (so cyradm and
-	libcyrus can be compiled on remote systems without installing stuff
-	into /usr/cyrus/bin, etc.)  For now, the server is still configured in
-	this case, and a Makefile is generated.  This could change in future
-	versions.
-
-      <li> Fixed a mmap leak in index.c in index_search_evaluate
-	that caused problems on complex searches.  Thanks to Jeff Schiller
-	for pointing this out.  Fixed a potential leak in mboxlist.c that
-	happened if a rename went awry.  Thanks to Chris Newman for pointing
-	this out.
-
-      <li> Fixed a bug in LIST and LSUB code so that user.* mailboxes will be
-	printed on every LIST instead of just the first one.
-
-      <li> Implemented the <i>POP3 Extension Mechanism</i>, RFC 2449,
-	in order to advertise the capabilities already supported.
-
-      <li> Fixed a bug in mailbox.c that disallowed MUTF-7 representations of
-        ASCII characters when it shouldn't have.  (Thanks to John Myers for
-	providing a fix and to Per Steinar Iversen for telling me that I
-	didn't do it before.)
-
-      <li> More cleanup the ptloader/auth_krb_pts code. If you use Kerberos
-	and IMSP, you *MUST* pick up cyrus-imspd-v1.5a6 (or newer).
-
-      <li> A few configure tweaks.
-
-      <li> Duplicate delivery changes:
-	<ul>
-	  <li>
-	    Split out duplicate delivery elimination to multiple
-	    files. This should help reduce the lock contention that normally
-	    occurs with this file. To not clutter <i>config_dir</i>, the files
-	    will be located in a subdirectory named <tt>deliverdb</tt>, for
-	    example <tt>/var/imap/deliverdb</tt>. If you don't make this
-	    directory, nothing bad will happen (other than duplicate delivery
-	    elimination will not work).
-	    
-	  <li> The time value is now stored as an integer in native byte order
-	    as opposed to converting it to a string before it is stored in the
-	    database.
-	    
-	  <li> checkdelivered() now obtains a read lock instead of a write
-	    lock when trying to check for duplicates. Only markdelivered()
-	    grabs a write lock.
-	</ul>
-
-      <li> Added logic to cause cyradm to abort more cleanly if not given
-        command line arguments in an interactive session.  This gets
-        rid of the dreaded <tt>application-specific intialization failed</tt>
-        messages.
-    </ul>
-
-    
-
-<h2> Changes to the Cyrus IMAP Server Since Version 1.5.11</h2>
+<h2>Changes to the Cyrus IMAP Server Since Version 1.6.20</h2>
 
 <ul>
+<li>Some fixes to the TLS support to gracefully degrade
+service.</li>
 
-<li> The CREATE command now ignores a trailing hierarchy delimiter instead of
-ignoring the CREATE command.
+<li>Sieve now correctly re-sieves messages that are received with
+identical message-ids, but different envelopes. It also obeys
+plus-addressing on keep actions. (Fixes by Ken Murchison,
+<tt>ken@oceana.com</tt>.)</li>
 
-<li> UIDPLUS is now always advertised in CAPABILITY and is always availible.
-The UIDPLUS extension is a set of optimizations using UID values instead of
-sequence numbers and is described in RFC 2359.
+<li>The server wasn't correctly calculating the percentage of quota
+used when deciding whether or not to issue a warning.</li>
 
-<li> Cyrus no longer rejects messages with 8-bit characters in the headers.
-Rather than reject the message, characters with the 8th bit set are changed to 
-'X'.  Internationalization in headers is supported by the mechanism specified
-in RFC 2047 (and RFC 1342).
+<li>Implemented single-instance store: deliver, when using LMTP,
+will only store one copy of a message per partition, and hard link
+it among multiple users. Sites with a large number of partitions
+could see a performance decrease.</li>
 </ul>
 
-<h2> Changes to the Cyrus IMAP Server Since Version 1.5.10</h2>
+<h2>Changes to the Cyrus IMAP Server Since Version 1.6.19</h2>
 
 <ul>
+<li>Added STARTTLS support; requires OpenSSL.</li>
 
-<li> If ENABLE_EXPERIMENT is set, the server no longer claims to support
-OPTIMIZE-1; instead, it claims to support UIDPLUS.  The Getuids command has
-been removed since it is not in the UIDPLUS document
-(draft-myers-imap-optimize-03.txt).
+<li>Sieve now uses MDNs to reject messages instead of DSNs,
+conforming to the latest Sieve specification. (Ken Murchison)</li>
 
-<li> The checks for Tcl in configure are much smarter.  The configure script
-asks tclsh where its configuration lives, then consults the shell scripts that 
-have that information.  This should work with 7.5 or better, which is what the 
-server requires anyway.  (All the previous checks to look for Tcl
-	libraries are gone; now, configure runs tclsh and asks it where
-	the Tcl libraries are, then runs the shell scripts that are in
-	that directory.  Since the tclConfig.sh script may not be in that
-	directory, it looks in .. as well.)
+<li>The duplicate delivery database expiration (deliver -E) was
+deleting all entries; fixed.</li>
 
-<li> The checks for com_err in configure are a little smarter and look
-	to see if all the pieces are there before trying to use them.
+<li>imtest is now a little smarter about parsing the protocol to
+avoid synchronization errors prior to authentication.</li>
 
-<li> Added support for the NAMESPACE extension (if --enable-experiment is
-	supplied).
+<li>timsieved's parser is now written in C; should be no noticeable
+changes, but should make compiling it much easier.</li>
+</ul>
 
-<li> Added a "reject8bit" switch to imapd.conf.  If set to "true", messages
-	containing 8-bit-set characters in the headers are rejected (the
-	previous behavior); if set to "false" or left to the default value,
-	messages containing 8-bit-set characters have these characters changed 
-	to a constant character ('X').
+<h2>Changes to the Cyrus IMAP Server Since Version 1.6.16</h2>
 
-<li> Added the "fud" program.   This is an interm hack designed to allow
-	allow finger information to be retrieved for cyrus users.  This
-	is experimental and it is not recommend that services be built
-	arround this feature, since it is likely to be removed in a
-	future release of the IMAP server.
+<ul>
+<li>Fix to enclosed message parsing (thanks to John Myers).</li>
 
-<li> Bug fix: User defined flags now work properly.
+<li>When trying to skip over non-synchronizing literals during
+error recovery, the IMAP server never stopped eating. Fixed.</li>
 
+<li>Added <tt>with-sasldir</tt> as a configure option.</li>
+
+<li>Fixed a bug in cyradm when it got the CAPABILITY list.</li>
+
+<li>Fixed bugs relating to the incomplete SASLfication of
+deliver.</li>
+
+<li>Fixed bugs in deliver relating to duplicate delivery
+suppression and Sieve vacation functionality.</li>
+
+<li>Fixed a memory leak in deliver.</li>
+
+<li>When looking for SASL options, imapd wasn't defaulting to the
+option without the plugin name requesting it. This caused PLAIN
+authentications to incorrectly fail.</li>
+
+<li>Changed the expiration time of pts entries to 3 hours; only
+affects sites using krb_pts as the authorization method.</li>
+
+<li>Fixed some bugs in imclient; mostly affects cyradm.</li>
+
+<li>Fixed a bug in the Sieve lexer and improved the usefulness of
+the Sieve test program.</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.6.13</h2>
+
+<ul>
+<li>An annoying memory management bug in imclient was fixed and
+it's efficiency was improved somewhat.</li>
+
+<li>Added the sieve client (<tt>installsieve</tt>) and server
+(<tt>timsieved</tt>) for getting sieve scripts onto the server and
+managing them once they are there.</li>
+
+<li>The default Sieve script layout has changed to
+sievedir/u/user/default; this supports multiple Sieve scripts per
+user with the ability to switch between them.</li>
+
+<li>Fixed the kerberos-to-local-host bug (patch by Greg Hudson,
+<tt>ghudson@mit.edu</tt>).</li>
+
+<li>Started changes to deliver to support LMTP AUTH.</li>
+
+<li>Improved the error messages logged when authentication
+fails.</li>
+
+<li>Fixed a bug dealing with argument processing in the arbitron
+program.</li>
+
+<li>pop3d now correctly supports SASL AUTH.</li>
+
+<li>imtest will no longer prompt for authentication or
+authorization names; instead, it defaults to the current Unix user.
+Override on the command line.</li>
+
+<li>Likewise, cyradm will no longer prompt. It now accepts "-m" to
+specify what SASL mechanism to use, and the pwcommand option to
+authenticate should once again work when used
+non-interactively.</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.6.10</h2>
+
+<ul>
+<li>Changed the sieve option in the configure script to
+<tt>--disable-sieve</tt>.</li>
+
+<li>Updated reconstruct and quota to check for hashed imap spool
+directories correctly.</li>
+
+<li>deliver now will not use Sieve if duplicate delivery
+suppression is disabled. There was also a bug that caused the
+duplicate delivery database to be checked even if dupelim was
+disabled.</li>
+
+<li>deliver now uses tm_gmtoff if available to check for the local
+timezone.</li>
+
+<li>The default format for reading information from INN has
+changed. If you use INN to feed imapd news, you must change your
+"<tt>newsfeeds</tt>" file to contain 
+
+<pre>
+collectnews!:*:Tf,WO:collectnews
+</pre>
+</li>
+
+<li>The dohash script now takes a "<tt>-i</tt>" option to run
+interactively and the "<tt>-f</tt>" option to issue warnings
+instead of fatal errors.</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.6.1-BETA</h2>
+
+<ul>
+<li>cyradm should now work with all mechanisms (it now handles
+empty challenges and responses).</li>
+
+<li>Fixed deliver to deal with arbitrarily long headers</li>
+
+<li>COPY for non-existent sequence numbers returns NO; this
+contrasts to UID COPY, which always returns OK.</li>
+
+<li>FETCH for non-existent sequence numbers returns NO; this
+contrasts to UID FETCH, which always returns OK.</li>
+
+<li>Fixed a misleading BAD responses to commands that take
+sequences.</li>
+
+<li>Added UIDNEXT untagged response to a SELECT (from
+<tt>draft-crispin-imapv-07.txt</tt>).</li>
+
+<li>pop3d now correctly passes SASL configuration options to
+libsasl.</li>
+
+<li>imtest now correctly flushes the server's output to the
+screen.</li>
+
+<li>Added more hashing using a simple but stupid algorithm. Now
+whenever there is a mailbox access, quota access, or subscription
+access, it goes through a hash function. this is done to help
+reduce the number of files/directories in any given directory.</li>
+
+<li>Added the binary <tt>mbpath</tt>. Given a mailbox name, this
+binary will print the filesystem path to that mailbox. This way if
+you have multiple partitions and hashing turned out, you don't have
+to spend as many mental cycles figuring out where the actual
+directory is.</li>
+
+<li>deliver now checks <tt>sieveusehomedir</tt> and
+<tt>sievedir</tt> in the config file to determine where to look for
+sieve scripts.</li>
+
+<li>ptloader now has a workaround for afs 3.5.</li>
+
+<li>clarified an error message in message.c when an unexpected end
+of file is encountered.</li>
+
+<li>fixed some random memory leaks in deliver.</li>
+
+<li>fixed a fairly major bug in prot_fill. it was performing
+incorrectly when reading only a single character.</li>
+
+<li>fixed a bug in how imtest looked for OK or NO.</li>
+
+<li>fixed a memory leak in imapd.</li>
+
+<li>imapd now allows any user (or member of a group) listed in
+"proxyservers" to proxy.</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.6.0-BETA</h2>
+
+<ul>
+<li>fixed stupid bug in imapd</li>
+
+<li>fixed sasl/config.c interaction</li>
+
+<li>fixed use of stat in imtest</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.5.24</h2>
+
+<ul>
+<li>ANSI C is now required.</li>
+
+<li>imtest's interface has changed, to allow for SASL
+authentication. Sorry, but it had to happen. It now also includes a
+timing test (-z) which we use to test the SASL layers.</li>
+
+<li>imtest no longer uses a non-synchronizing literal with LOGIN,
+so it should work against all IMAP servers.</li>
+
+<li>The prot layer now uses SASL for encryption and authentication.
+This changed a large amount of code, and some build
+procedures.</li>
+
+<li>As a side effect of SASL, --enable-static-libraries now doesn't
+do anything. We are considering compiling cyrus with libtool to
+change this.</li>
+
+<li>Error codes returned by programs have changed, and programs
+return EX_TEMPFAIL far more than they used to. This is because
+Sendmail considers most not-EX_TEMPFAIL errors permanent; now, if
+it may not be permanent, EX_TEMPFAIL is returned. (See
+lib/exitcodes.h.)</li>
+
+<li>Two bugs fixed: UID FETCH's with no messages in range now
+return OK, not BAD. And an obscure bug in LIST case sensitivity is
+fixed.</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.5.19</h2>
+
+<ul>
+<li>Most of the charset.c code (and mkchartable.c code) has been
+replaced thanks to John Myers).</li>
+
+<li>Bug fix in message.c to look up headers in the cache when
+they're in the cache correctly; thanks to Chris Newman for the
+fix.</li>
+
+<li>Code cleanup here and there (thanks to Bruce Balden).</li>
+
+<li>Annoying (and confusing) lines in syslog every time a message
+was delivered if deliver was compiled using dbm saying that deliver
+was "unable to fetch entry" have been removed.</li>
+
+<li>Content-Disposition lines were being parsed improperly. If they
+had no optional arguments, they were being ignored as if they were
+syntactically incorrect. This is fixed, but imapd will continue to
+serve wrong information unless cyrus.caches are rebuilt (with
+reconstruct) for any message that was added to the mailbox before
+this bug was fixed.</li>
+
+<li>The arbitron program now takes a mailbox pattern argument for
+the mailbox to run on. The manpage always said it did anyway.</li>
+
+<li>Uninitialized variable fixed in imapd.c with the shutdown file
+code.</li>
+
+<li>Minor tweaks to purify build config.</li>
+
+<li>Fix minor memory leak in proc.c where procfname wasn't being
+free'd.</li>
+
+<li>Fix brain fart in auth_krb_pts.c where a CLOSE() was done to a
+DB handle BEFORE we access the data read from the DB database. This
+means we were copying free'd memory into the groups list. Note this
+only affects people using DB, AFS and ptloader.</li>
+
+<li>Committed minor syslog log level changes in ptloader and
+deliver.</li>
+
+<li>make distclean now does what it's supposed to.</li>
+
+<li>Possibly misnamed experimental --enable-static-libraries switch
+that tries to do a good job of building binaries with whatever
+static libraries are availible. If you use this, you do so at your
+own risk, and if it fails, we will disavow all knowledge of you and
+your team. Good luck, Jim.</li>
+
+<li>Add optional third argument to imtest for it to take input from
+a file. This is a gross hack.</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.5.14</h2>
+
+<ul>
+<li>LIST now honors the reference argument. 
+
+<p>This behavior can be turned off by a configuration option
+imapd.conf--which may be desirable because of certain clients that
+ask for a "mail directory" setting for IMAP which will now cause
+problems when it was ignored before. (The default is for the
+reference argument to be honored.)</p>
+</li>
+
+<li>The <tt>arbitron</tt> program now takes a mailbox pattern
+argument for the mailbox to run on. The manpage always said it did
+anyway.</li>
+
+<li>Added --disable-server switch to optionally prevent compilation
+of server to help sites that just want client libraries (so cyradm
+and libcyrus can be compiled on remote systems without installing
+stuff into /usr/cyrus/bin, etc.) For now, the server is still
+configured in this case, and a Makefile is generated. This could
+change in future versions.</li>
+
+<li>Fixed a mmap leak in index.c in index_search_evaluate that
+caused problems on complex searches. Thanks to Jeff Schiller for
+pointing this out. Fixed a potential leak in mboxlist.c that
+happened if a rename went awry. Thanks to Chris Newman for pointing
+this out.</li>
+
+<li>Fixed a bug in LIST and LSUB code so that user.* mailboxes will
+be printed on every LIST instead of just the first one.</li>
+
+<li>Implemented the <i>POP3 Extension Mechanism</i>, RFC 2449, in
+order to advertise the capabilities already supported.</li>
+
+<li>Fixed a bug in mailbox.c that disallowed MUTF-7 representations
+of ASCII characters when it shouldn't have. (Thanks to John Myers
+for providing a fix and to Per Steinar Iversen for telling me that
+I didn't do it before.)</li>
+
+<li>More cleanup the ptloader/auth_krb_pts code. If you use
+Kerberos and IMSP, you *MUST* pick up cyrus-imspd-v1.5a6 (or
+newer).</li>
+
+<li>A few configure tweaks.</li>
+
+<li>Duplicate delivery changes: 
+
+<ul>
+<li>Split out duplicate delivery elimination to multiple files.
+This should help reduce the lock contention that normally occurs
+with this file. To not clutter <i>config_dir</i>, the files will be
+located in a subdirectory named <tt>deliverdb</tt>, for example
+<tt>/var/imap/deliverdb</tt>. If you don't make this directory,
+nothing bad will happen (other than duplicate delivery elimination
+will not work).</li>
+
+<li>The time value is now stored as an integer in native byte order
+as opposed to converting it to a string before it is stored in the
+database.</li>
+
+<li>checkdelivered() now obtains a read lock instead of a write
+lock when trying to check for duplicates. Only markdelivered()
+grabs a write lock.</li>
+</ul>
+</li>
+
+<li>Added logic to cause cyradm to abort more cleanly if not given
+command line arguments in an interactive session. This gets rid of
+the dreaded <tt>application-specific intialization failed</tt>
+messages.</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.5.11</h2>
+
+<ul>
+<li>The CREATE command now ignores a trailing hierarchy delimiter
+instead of ignoring the CREATE command.</li>
+
+<li>UIDPLUS is now always advertised in CAPABILITY and is always
+availible. The UIDPLUS extension is a set of optimizations using
+UID values instead of sequence numbers and is described in RFC
+2359.</li>
+
+<li>Cyrus no longer rejects messages with 8-bit characters in the
+headers. Rather than reject the message, characters with the 8th
+bit set are changed to 'X'. Internationalization in headers is
+supported by the mechanism specified in RFC 2047 (and RFC
+1342).</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.5.10</h2>
+
+<ul>
+<li>If ENABLE_EXPERIMENT is set, the server no longer claims to
+support OPTIMIZE-1; instead, it claims to support UIDPLUS. The
+Getuids command has been removed since it is not in the UIDPLUS
+document (draft-myers-imap-optimize-03.txt).</li>
+
+<li>The checks for Tcl in configure are much smarter. The configure
+script asks tclsh where its configuration lives, then consults the
+shell scripts that have that information. This should work with 7.5
+or better, which is what the server requires anyway. (All the
+previous checks to look for Tcl libraries are gone; now, configure
+runs tclsh and asks it where the Tcl libraries are, then runs the
+shell scripts that are in that directory. Since the tclConfig.sh
+script may not be in that directory, it looks in .. as well.)</li>
+
+<li>The checks for com_err in configure are a little smarter and
+look to see if all the pieces are there before trying to use
+them.</li>
+
+<li>Added support for the NAMESPACE extension (if
+--enable-experiment is supplied).</li>
+
+<li>Added a "reject8bit" switch to imapd.conf. If set to "true",
+messages containing 8-bit-set characters in the headers are
+rejected (the previous behavior); if set to "false" or left to the
+default value, messages containing 8-bit-set characters have these
+characters changed to a constant character ('X').</li>
+
+<li>Added the "fud" program. This is an interm hack designed to
+allow allow finger information to be retrieved for cyrus users.
+This is experimental and it is not recommend that services be built
+arround this feature, since it is likely to be removed in a future
+release of the IMAP server.</li>
+
+<li>Bug fix: User defined flags now work properly.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server Since Version 1.5.2</h2>
 
 <ul>
-<li> Fixed a bug with word alignment on Solaris using Kerberos compiled
-	  with Sun's CC.  (Several patches were submitted; thanks to
-	  everyone who did so.)
+<li>Fixed a bug with word alignment on Solaris using Kerberos
+compiled with Sun's CC. (Several patches were submitted; thanks to
+everyone who did so.)</li>
 
-<li> Patches from John Myers, including more glob fixes.
+<li>Patches from John Myers, including more glob fixes.</li>
 
-<li> Use the default hash function from DB. Note that this means that
-	  the existing <tt>delivered.db</tt> and <tt>ptscache.db</tt>
-	  is <b>NOT</b> compatible with this release.  These files should be
-	  removed.
+<li>Use the default hash function from DB. Note that this means
+that the existing <tt>delivered.db</tt> and <tt>ptscache.db</tt> is
+<b>NOT</b> compatible with this release. These files should be
+removed.</li>
 
-<li> Provide two debugging programs that dump the databases:
-	  <tt>ptdump</tt> and <tt>dump_deliverdb</tt>.
+<li>Provide two debugging programs that dump the databases:
+<tt>ptdump</tt> and <tt>dump_deliverdb</tt>.</li>
 
-<li> Multiple changes to ptloader. added a bunch of flags; let it
-	  reauthenticate on its own; added support perl wrapper; added
-	  bunch of debugging information/output; bunch of other cleanups
+<li>Multiple changes to ptloader. added a bunch of flags; let it
+reauthenticate on its own; added support perl wrapper; added bunch
+of debugging information/output; bunch of other cleanups</li>
 
-<li> The mailboxes file is now closed if it isn't likely to be referenced,
-	  hopefully preventing old mailboxes files from hanging around in
-	  memory as frequently.
+<li>The mailboxes file is now closed if it isn't likely to be
+referenced, hopefully preventing old mailboxes files from hanging
+around in memory as frequently.</li>
 
-<li> Added a patch from Eric Hagberg to work around a possible deadlock
-	  condition in mboxlist.c where rename isn't atomic.
+<li>Added a patch from Eric Hagberg to work around a possible
+deadlock condition in mboxlist.c where rename isn't atomic.</li>
 
-<li> Patch from John Myers to get rid of cyrus.seen corruption in
-	  bsearch_mem.
+<li>Patch from John Myers to get rid of cyrus.seen corruption in
+bsearch_mem.</li>
 
-<li> Patch from John Myers and to allow ISO-8859-1 characters in
-	  mailbox names.
+<li>Patch from John Myers and to allow ISO-8859-1 characters in
+mailbox names.</li>
 
-<li> Makedepend still runs, and still generates warnings, but these are
-	  squirrled away in makedepend.log.
+<li>Makedepend still runs, and still generates warnings, but these
+are squirrled away in makedepend.log.</li>
 
-<li> On mailbox delete, the server will no longer try and unlink ".." and
-	  "." as we got a report that it seriously breaks one file system
-	  (even as non-root).
+<li>On mailbox delete, the server will no longer try and unlink
+".." and "." as we got a report that it seriously breaks one file
+system (even as non-root).</li>
 
-<li> Added some support for Netscape's very misleading "Administrate My
-	  Mail" menu option in Communicator.  Allows for a URL to be set in
-	  imapd.conf for the page to refer users to; needs to be turned on
-	  with --enable-netscapehack at compile time to enable it.
+<li>Added some support for Netscape's very misleading "Administrate
+My Mail" menu option in Communicator. Allows for a URL to be set in
+imapd.conf for the page to refer users to; needs to be turned on
+with --enable-netscapehack at compile time to enable it.</li>
 
-<li> Bug swap: imtest quotes password with a non-synchronizing literal in
-order to allow weird characters like ) in passwords.  But it doesn't
-look to see if the server supports non-synchronizing literals.
+<li>Bug swap: imtest quotes password with a non-synchronizing
+literal in order to allow weird characters like ) in passwords. But
+it doesn't look to see if the server supports non-synchronizing
+literals.</li>
 
-<li> If the file "<TT>msg/motd</TT>" exists, the first line is now sent to
-clients upon login.
+<li>If the file "<tt>msg/motd</tt>" exists, the first line is now
+sent to clients upon login.</li>
 
-<li> Bug fix: to handle BODY[] properly when fetching news articles
-(truncation no longer occurs). (thanks to John Prevost)
+<li>Bug fix: to handle BODY[] properly when fetching news articles
+(truncation no longer occurs). (thanks to John Prevost)</li>
 
-<li> The makedepend supplied should now run on Solaris Intel.  (thanks to
-Chris Newman)
+<li>The makedepend supplied should now run on Solaris Intel.
+(thanks to Chris Newman)</li>
 
-<li> Added some hacks to pwcheck.c for Linux and Digital Unix where the
-default protections on the socket don't allow the cyrus user to read it.
-(thanks to Lyndon Nerenberg)
+<li>Added some hacks to pwcheck.c for Linux and Digital Unix where
+the default protections on the socket don't allow the cyrus user to
+read it. (thanks to Lyndon Nerenberg)</li>
 
-<li> Bug fix: Flags beginning with \ are system flags and users can
-only create the defined flags.  The code to do this before was
-confused.
+<li>Bug fix: Flags beginning with \ are system flags and users can
+only create the defined flags. The code to do this before was
+confused.</li>
 
-<li> The configure scripts and makefiles have some random fixes.
+<li>The configure scripts and makefiles have some random
+fixes.</li>
 
-<li> Added a contrib directory for reasons of laziness in collecting
-	  patches, not all of which should be in the distribution.
+<li>Added a contrib directory for reasons of laziness in collecting
+patches, not all of which should be in the distribution.</li>
 
-<li> ptloader can now renew its AFS authentication by reading from a srvtab
-	  file.
+<li>ptloader can now renew its AFS authentication by reading from a
+srvtab file.</li>
 
-<li> The configure script now looks for a libcom_err and can use an
-	  installed one if one exists.
+<li>The configure script now looks for a libcom_err and can use an
+installed one if one exists.</li>
 
-<li> Other small bug fixes.
-
+<li>Other small bug fixes.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server Since Version 1.5</h2>
 
 <ul>
+<li>Bug fix: RENAME corrupted mailboxes if they had been EXPUNGEd.
+(may have only happened with INBOX, which Pine tickles once a
+month.)</li>
 
-<li>Bug fix: RENAME corrupted mailboxes if they had been EXPUNGEd.  (may
-have only happened with INBOX, which Pine tickles once a month.)
+<li>Bug fix: auth_newstate now initializes its structures.</li>
 
-<li>Bug fix: auth_newstate now initializes its structures.
+<li>Bug fix: pop3d.c, a printf was changed to prot_printf.</li>
 
-<li>Bug fix: pop3d.c, a printf was changed to prot_printf.
+<li>Cyrus now sends X-NON-HIERARCHICAL-RENAME to alert clients that
+it is not handling RENAME in an IMAP4rev1 compliant manner. This
+will be fixed in a subsequent release.</li>
 
-<li>Cyrus now sends X-NON-HIERARCHICAL-RENAME to alert clients that it is
-not handling RENAME in an IMAP4rev1 compliant manner.  This will be fixed
-in a subsequent release.
+<li>Bug fix: imclient_autenticate now does resolution on the
+hostname before authenticating to it. This caused problems when
+authenticating to an address that was a CNAME.</li>
 
-<li>Bug fix: imclient_autenticate now does resolution on the hostname
-before authenticating to it.  This caused problems when
-authenticating to an address that was a CNAME.
+<li>Bug fix: LIST %.% (and other multiple hierarchy delimiter
+matches) works properly. Several other glob.c fixes are included as
+well.</li>
 
-<li>Bug fix: LIST %.% (and other multiple hierarchy delimiter matches)
-works properly.  Several other glob.c fixes are included as well.
+<li>Bug fix: a fetch of exclusively BODY[HEADER.FIELDS...] should
+now work properly.</li>
 
-<li>Bug fix: a fetch of exclusively BODY[HEADER.FIELDS...] should now
-work properly.
+<li>Bug fix: reconstruct now considers a nonexistant INN news
+directory to be empty; this makes reconstruct fix the cyrus.* files
+in the imap news partition.</li>
 
-<li> Bug fix: reconstruct now considers a nonexistant INN news directory
-        to be empty; this makes reconstruct fix the cyrus.* files in the
-        imap news partition.
+<li>Added a manpage for imclient.</li>
 
-<li> Added a manpage for imclient.
-
-<li> Fixed a few other minor bugs.
-
+<li>Fixed a few other minor bugs.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server Since Version 1.4</h2>
 
 <ul>
+<li>Implemented the "<tt>IMAP4rev1</tt>" protocol commands. (The
+hierarchical behavior of RENAME, which was added late to the
+IMAP4rev1 specification, is not implemented.) Changes the minor
+version number of the cyrus mailbox database format to 1.
+<b>IMPORTANT:</b> it is necessary to run the command
+"<tt>reconstruct -r</tt>" as the cyrus user after upgrading the
+Cyrus IMAP software from version 1.4 or earlier.</li>
 
-<LI> Implemented the "<TT>IMAP4rev1</TT>" protocol commands.  
-(The hierarchical behavior of RENAME, which was added late to the
-IMAP4rev1 specification, is not implemented.)
-Changes
-the minor version number of the cyrus mailbox database format to 1.
-<B>IMPORTANT:</B> it is necessary to run the command "<TT>reconstruct
--r</TT>" as the cyrus user after upgrading the Cyrus IMAP software
-from version 1.4 or earlier.
+<li>If the file "<tt>msg/shutdown</tt>" exits in the configuration
+directory, the IMAP server will issue the first line in the file in
+an untagged BYE message and shut down.</li>
 
-<LI> If the file "<TT>msg/shutdown</TT>" exits in
-the configuration directory, the IMAP server will issue the first line
-in the file in an untagged BYE message and shut down.
+<li>Permit SPACE in mailbox names.</li>
 
-<LI> Permit SPACE in mailbox names.
+<li>Permit the "modified UTF-7" internationalized mailbox name
+convention.</li>
 
-<LI> Permit the "modified UTF-7" internationalized mailbox name convention.
+<li>"User opened mailbox" messages are now logged at the DEBUG
+level instead of the INFO level.</li>
 
-<LI> "User opened mailbox" messages are now logged at the DEBUG level
-instead of the INFO level.
+<li>Added <tt>-q</tt> (ignore quota) switch to
+<tt>deliver</tt>.</li>
 
-<LI> Added <tt>-q</tt> (ignore quota) switch to <tt>deliver</tt>.
+<li>New "<tt>krbck</tt>" program for diagnosing common kerberos
+problems.</li>
 
-<LI> New "<TT>krbck</TT>" program for diagnosing common kerberos problems.
+<li>auth_unix no longer requires users to be in the passwd
+file.</li>
 
-<LI> auth_unix no longer requires users to be in the passwd file.
+<li>AUTHENTICATE command now reports the protection mechanism in
+use in the text of the tagged OK response</li>
 
-<LI> AUTHENTICATE command now reports the protection mechanism in use
-in the text of the tagged OK response
+<li>Make MAILBOX_BADFORMAT and MAILBOX_NOTSUPPORTED temporary
+errors.</li>
 
-<LI> Make MAILBOX_BADFORMAT and MAILBOX_NOTSUPPORTED temporary errors.
+<li>Use the header cache for SEARCH HEADER</li>
 
-<LI> Use the header cache for SEARCH HEADER
+<li>Use "unspecified-domain" instead of server's hostname to fill
+out RFC 822 addresses without the "@domain" part.</li>
 
-<LI> Use "unspecified-domain" instead of server's hostname to fill out
-RFC 822 addresses without the "@domain" part.
+<li>Make "reconstruct -r" with no args reconstruct every
+mailbox.</li>
 
-<LI> Make "reconstruct -r" with no args reconstruct every mailbox.
+<li>The configure script now defaults to using unix_pwcheck instead
+of unix if the file /etc/shadow exists.</li>
 
-<LI> The configure script now defaults to using unix_pwcheck instead
-of unix if the file /etc/shadow exists.
+<li>The location of the pwcheck socket directory now defaults to
+"<tt>/var/ptclient/</tt>". It is controlled by the
+"<tt>--with-statedir=DIR</tt>" option, which defaults to
+"<tt>/var</tt>".</li>
 
-<LI> The location of the pwcheck socket directory now defaults to
-"<TT>/var/ptclient/</TT>".  It is controlled by the
-"<TT>--with-statedir=DIR</TT>" option, which defaults to
-"<TT>/var</TT>".
+<li>Bug fix: by using an certain address form, one could deliver to
+a user's mailbox bypassing the ACL's.</li>
 
-<LI> Bug fix: by using an certain address form, one could deliver to a
-user's mailbox bypassing the ACL's.
+<li>Bug fix: un-fold header lines when parsing for the
+ENVELOPE.</li>
 
-<LI> Bug fix: un-fold header lines when parsing for the ENVELOPE.
+<li>Delete quota roots when deleting the last mailbox that uses
+them. Doesn't catch all cases, but should get over 99% of
+them.</li>
 
-<LI> Delete quota roots when deleting the last mailbox that uses them.
-Doesn't catch all cases, but should get over 99% of them.
+<li>Implement plaintextloginpause configuration option, imposes
+artificial delay on plaintext password logins.</li>
 
-<LI> Implement plaintextloginpause configuration option, imposes
-artificial delay on plaintext password logins.
+<li>Implement popminpoll configuration option, limits frequency of
+POP3 logins.</li>
 
-<LI> Implement popminpoll configuration option, limits frequency of
-POP3 logins.
+<li>Implement AFS PT server group support.</li>
 
-<LI> Implement AFS PT server group support.
+<li>Remove persistence of POP3 LAST value and remove Status:
+hack</li>
 
-<LI> Remove persistence of POP3 LAST value and remove Status: hack
+<li>Support the new ACL command set in the IMAP server.</li>
 
-<LI> Support the new ACL command set in the IMAP server.
+<li>Bug fix: Have to initialize reply to 0 in pop3d. Was causing
+POP3 server to occasionally drop the connection during
+authentication.</li>
 
-<LI> Bug fix: Have to initialize reply to 0 in pop3d.  Was causing
-POP3 server to occasionally drop the connection during authentication.
+<li>Bug fix: The COPY command wasn't issuing a [TRYCREATE] when
+appropriate for sub-mailboxes of INBOX.</li>
 
-<LI> Bug fix: The COPY command wasn't issuing a [TRYCREATE] when
-appropriate for sub-mailboxes of INBOX.
+<li>Bug fix: Renaming a mailbox wasn't correctly changing its
+UIDVALIDITY.</li>
 
-<li> Bug fix: Renaming a mailbox wasn't correctly changing its
-UIDVALIDITY.
+<li>Bug fix: Renaming a mailbox to itself, in order to move it to a
+different partition, was not working correctly.</li>
 
-<li> Bug fix: Renaming a mailbox to itself, in order to move it to a
-different partition, was not working correctly.
+<li>Update the AUTH support in pop3d to conform to the latest draft
+specification.</li>
 
-<li> Update the AUTH support in pop3d to conform to the latest draft
-specification.
+<li>Update cyradm to use Tcl 7.5 instead of Tcl 7.4</li>
 
-<LI> Update cyradm to use Tcl 7.5 instead of Tcl 7.4
+<li>Re-implement large sections of the netnews support. It no
+longer requires modifications to INN, as it now expunges the index
+entries for expired/canceled articles upon select of the
+newsgroup.</li>
 
-<LI> Re-implement large sections of the netnews support.  It no longer
-requires modifications to INN, as it now expunges the index entries
-for expired/canceled articles upon select of the newsgroup.
-
-<LI> Implement newsspool configuration option, for separating the
+<li>Implement newsspool configuration option, for separating the
 directories for the news spool and the various cyrus.* IMAP server
-index files.
+index files.</li>
 
-<LI> Bug fix: permit empty flag list in APPEND command
+<li>Bug fix: permit empty flag list in APPEND command</li>
 
-<LI> Bug fix: deal with truncated Date: header values.
+<li>Bug fix: deal with truncated Date: header values.</li>
 
-<LI> Bug fix: memory mapping code, deal better with 0-length maps, since
-mmap() appears to crap out on that boundary condition.
+<li>Bug fix: memory mapping code, deal better with 0-length maps,
+since mmap() appears to crap out on that boundary condition.</li>
 
-<LI> Portability fix: if no strerror, have to define NEED_SYS_ERRLIST.
+<li>Portability fix: if no strerror, have to define
+NEED_SYS_ERRLIST.</li>
 
-<LI> Bug fix: used append instead of lappend in cyradmin, preventing
-use of any port other than IMAP.
+<li>Bug fix: used append instead of lappend in cyradmin, preventing
+use of any port other than IMAP.</li>
 
-<LI> When the client is streaming its commands, the IMAP server attempts
-to stream its tagged responses.
+<li>When the client is streaming its commands, the IMAP server
+attempts to stream its tagged responses.</li>
 
-<LI> Modify zephyr support to compile without Kerberos support.
+<li>Modify zephyr support to compile without Kerberos support.</li>
 
-<LI> Add a bunch of prototype declararations to the code.
+<li>Add a bunch of prototype declararations to the code.</li>
 
-<LI> In deliver, change the MULT support to instead use the LMTP syntax.
+<li>In deliver, change the MULT support to instead use the LMTP
+syntax.</li>
 
-<li> imclient: support tagged intermediate replies and a default
-callback.
+<li>imclient: support tagged intermediate replies and a default
+callback.</li>
 
-<LI> Implement some experimental protocol extensions for optimizing
-disconnected use resynchronization.  Most extensions are disabled by
-default.  Client authors should contact info-cyrus@andrew.cmu.edu if
-they wish to experiment with these.
+<li>Implement some experimental protocol extensions for optimizing
+disconnected use resynchronization. Most extensions are disabled by
+default. Client authors should contact info-cyrus@andrew.cmu.edu if
+they wish to experiment with these.</li>
 
-<LI> In Makefiles, change $(AR) to ar -- HPUX make is defective.
+<li>In Makefiles, change $(AR) to ar -- HPUX make is
+defective.</li>
 
-<LI> In deliver, use HAVE_LIBDB to select use of db over dbm
+<li>In deliver, use HAVE_LIBDB to select use of db over dbm</li>
 
-<LI> Add map_stupidshared mapping module for older versions of Digital
-Unix.  It's not quite as bad as HPUX, but...
+<li>Add map_stupidshared mapping module for older versions of
+Digital Unix. It's not quite as bad as HPUX, but...</li>
 
-<LI> Bug fix: in imclient.c, don't free NULL pointers and don't call
-htons() on the output of getservbyname().  Have to abort sending
-the command if you get a tagged response when sending a literal.
+<li>Bug fix: in imclient.c, don't free NULL pointers and don't call
+htons() on the output of getservbyname(). Have to abort sending the
+command if you get a tagged response when sending a literal.</li>
 
-<LI> The auth_xxx routines now create/take a state argument instead of
-maintaining internal static state.
+<li>The auth_xxx routines now create/take a state argument instead
+of maintaining internal static state.</li>
 
-<LI> Solaris mktime() is buggy in some releases.  Create and use
-mkgmtime() for parsing date strings.
+<li>Solaris mktime() is buggy in some releases. Create and use
+mkgmtime() for parsing date strings.</li>
 
-<LI> Message parsing routines now use memory mapping, though they
-still copy data around in line-sized buffers.
-
+<li>Message parsing routines now use memory mapping, though they
+still copy data around in line-sized buffers.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server Since Version 1.3</h2>
 
 <ul>
-
-<LI> Implemented the "<TT>reconstruct -m</TT>" command, for
-reconstructing the <TT>mailboxes</TT> file.  <B>IMPORTANT:</B> it is
-necessary to run the command "<TT>reconstruct -m</TT>" as the cyrus
+<li>Implemented the "<tt>reconstruct -m</tt>" command, for
+reconstructing the <tt>mailboxes</tt> file. <b>IMPORTANT:</b> it is
+necessary to run the command "<tt>reconstruct -m</tt>" as the cyrus
 user after upgrading the Cyrus IMAP software from version 1.3 or
-earlier.  We recommend you make a backup copy of the
-<TT>mailboxes</TT> file in the configuration directory before
-performing the conversion.
+earlier. We recommend you make a backup copy of the
+<tt>mailboxes</tt> file in the configuration directory before
+performing the conversion.</li>
 
-<LI>Mailbox names are now case
-sensitive, not case insensitive.  "<TT>INBOX</TT>" is the exception, and is treated as being case-insensitive.
+<li>Mailbox names are now case sensitive, not case insensitive.
+"<tt>INBOX</tt>" is the exception, and is treated as being
+case-insensitive.</li>
 
-<LI> Personal mailboxes now appear to their owners as being under the
-"<TT>INBOX.</TT>" hierarchy.  For example, the mailbox
-"<TT>user.bovik.work</TT>" appears to the user "<TT>bovik</TT>" as
-"<TT>INBOX.work</TT>".  The user may still refer to the mailbox with the name
-"<TT>user.bovik.work</TT>".
+<li>Personal mailboxes now appear to their owners as being under
+the "<tt>INBOX.</tt>" hierarchy. For example, the mailbox
+"<tt>user.bovik.work</tt>" appears to the user "<tt>bovik</tt>" as
+"<tt>INBOX.work</tt>". The user may still refer to the mailbox with
+the name "<tt>user.bovik.work</tt>".</li>
 
-<LI> Previously, the code used "<TT>anybody</TT>" as the name of the
+<li>Previously, the code used "<tt>anybody</tt>" as the name of the
 group that all users are in, but the documentation used the name
-"<TT>anyone</TT>".  Changed the code to match the documentation.
-The name "<TT>anybody</TT>" will be canonicalized to the name
-"<TT>anyone</TT>".
+"<tt>anyone</tt>". Changed the code to match the documentation. The
+name "<tt>anybody</tt>" will be canonicalized to the name
+"<tt>anyone</tt>".</li>
 
-<LI> The install document now gives different recommended locations
-for the server databases.  The recommended location of the
-configuration directory changed from "<TT>/usr/cyrus</TT>" to
-"<TT>/var/imap</TT>" and the recommended location of the default
-partition directory changed from "<TT>/usr/spool/cyrus</TT>" to
-"<TT>/var/spool/imap</TT>".  It is <B>NOT</B> necessary to change the
-locations of these directories when upgrading from version 1.3 or
-earlier of the Cyrus IMAP server software.  If you do wish to change
-the locations of these directories to match the new recommendations,
-simply rename the directories and change the appropriate values in
-your <TT>/etc/imapd.conf</TT> file.
+<li>The install document now gives different recommended locations
+for the server databases. The recommended location of the
+configuration directory changed from "<tt>/usr/cyrus</tt>" to
+"<tt>/var/imap</tt>" and the recommended location of the default
+partition directory changed from "<tt>/usr/spool/cyrus</tt>" to
+"<tt>/var/spool/imap</tt>". It is <b>NOT</b> necessary to change
+the locations of these directories when upgrading from version 1.3
+or earlier of the Cyrus IMAP server software. If you do wish to
+change the locations of these directories to match the new
+recommendations, simply rename the directories and change the
+appropriate values in your <tt>/etc/imapd.conf</tt> file.</li>
 
-<LI>Created a "<TT>make install</TT>" rule.  See the <a
+<li>Created a "<tt>make install</tt>" rule. See the <a
 href="install.html">installation</a> document for all the new
-corresponding <TT>configure</TT> options.  Note the recommended
-location of the "<TT>imapd</TT>", "<TT>pop3d</TT>", and
-"<TT>deliver</TT>" programs has changed, this change needs to be
-reflected in the "<TT>inetd.conf</TT>" and "<TT>sendmail.cf</TT>"
-files.
+corresponding <tt>configure</tt> options. Note the recommended
+location of the "<tt>imapd</tt>", "<tt>pop3d</tt>", and
+"<tt>deliver</tt>" programs has changed, this change needs to be
+reflected in the "<tt>inetd.conf</tt>" and "<tt>sendmail.cf</tt>"
+files.</li>
 
-<LI>New "<TT>login_unix_pwcheck</TT>" module and "<TT>pwcheck</TT>"
-daemon, for improved shadow password support.   See the
-"<TT>pwcheck/README.pwcheck</TT>" file in the distribution for details.
+<li>New "<tt>login_unix_pwcheck</tt>" module and "<tt>pwcheck</tt>"
+daemon, for improved shadow password support. See the
+"<tt>pwcheck/README.pwcheck</tt>" file in the distribution for
+details.</li>
 
-<LI>Renamed the "<TT>login_unix_shadow</TT>" module to
-"<TT>login_unix_getspnam</TT>".
+<li>Renamed the "<tt>login_unix_shadow</tt>" module to
+"<tt>login_unix_getspnam</tt>".</li>
 
-<LI>Added a mail notification mechanism, using Zephyr.
+<li>Added a mail notification mechanism, using Zephyr.</li>
 
-<LI>Added a feature to automatically create user IMAP accounts.
-Controlled by the "<TT>autocreatequota</TT>" config option.
+<li>Added a feature to automatically create user IMAP accounts.
+Controlled by the "<tt>autocreatequota</tt>" config option.</li>
 
-<LI>Added the "<TT>logtimestamps</TT>" config option, for putting
-timestamp information into protocol telemetry logs.
+<li>Added the "<tt>logtimestamps</tt>" config option, for putting
+timestamp information into protocol telemetry logs.</li>
 
-<LI>Beefed up the Kerberos checks in Configure to ensure the DES library
-routines exist.
+<li>Beefed up the Kerberos checks in Configure to ensure the DES
+library routines exist.</li>
 
-<LI>On some systems, the "<TT>echo</TT>" command with no arguments
-emits a newline.  Changed the installation document to instead use the
-"<TT>true</TT>" command to create the "<TT>mailboxes</TT>" file.
+<li>On some systems, the "<tt>echo</tt>" command with no arguments
+emits a newline. Changed the installation document to instead use
+the "<tt>true</tt>" command to create the "<tt>mailboxes</tt>"
+file.</li>
 
-<LI>Store a redundant copy of a mailbox's ACL in the <TT>cyrus.header</TT>
-file, so "<TT>reconstruct -m</TT>" may later use it as a backup.
+<li>Store a redundant copy of a mailbox's ACL in the
+<tt>cyrus.header</tt> file, so "<tt>reconstruct -m</tt>" may later
+use it as a backup.</li>
 
-<LI>Had to remove the declaration of <TT>tcl_RcFileName</TT> for
-the latest version of Tcl.
+<li>Had to remove the declaration of <tt>tcl_RcFileName</tt> for
+the latest version of Tcl.</li>
 
-<LI>Make much more extensive use of memory mapping.  Replace the
-binary search module with one that searches a memory mapped area.
+<li>Make much more extensive use of memory mapping. Replace the
+binary search module with one that searches a memory mapped
+area.</li>
 
-<LI>Replaced the yacc-based RFC822 address parser with a hand-coded one.
+<li>Replaced the yacc-based RFC822 address parser with a hand-coded
+one.</li>
 
-<LI>Replaced the et (error table) libary with a version that doesn't
-require lex or yacc.  Remove the lex/yacc checking from Configure.
+<li>Replaced the et (error table) libary with a version that
+doesn't require lex or yacc. Remove the lex/yacc checking from
+Configure.</li>
 
-<LI>Safety feature: most programs now refuse to run as root.
+<li>Safety feature: most programs now refuse to run as root.</li>
 
-<LI>Bug fix: Issue [TRYCREATE] tag on COPY command when appropriate.
+<li>Bug fix: Issue [TRYCREATE] tag on COPY command when
+appropriate.</li>
 
-<LI>Bug fix: The quoted-printable decoder wasn't ignoring trailing
-whitespace, as required by MIME.
+<li>Bug fix: The quoted-printable decoder wasn't ignoring trailing
+whitespace, as required by MIME.</li>
 
-<LI>Bug fix: Don't spew cascade errors if the server gets an EOF
-during/after reading an APPEND literal.
+<li>Bug fix: Don't spew cascade errors if the server gets an EOF
+during/after reading an APPEND literal.</li>
 
-<LI>Bug fix: gmtmoff_gmtime.c was returning results with the wrong sign.
+<li>Bug fix: gmtmoff_gmtime.c was returning results with the wrong
+sign.</li>
 
-<LI>Bug fix: imclient_send was appending spaces to %d and %u and the
-response parser was not handling responses that did not contain a
-space after the keyword.
+<li>Bug fix: imclient_send was appending spaces to %d and %u and
+the response parser was not handling responses that did not contain
+a space after the keyword.</li>
 
-<LI>Bug fix: rmnews wasn't removing some (un-indexed) article files
-correctly.
+<li>Bug fix: rmnews wasn't removing some (un-indexed) article files
+correctly.</li>
 
-<LI>Completely disabled the dropoff code for now.  It will be
-completely replaced when IMSP integration is implemented
+<li>Completely disabled the dropoff code for now. It will be
+completely replaced when IMSP integration is implemented</li>
 
-<LI>Added workaround for the Linux mkdir() problem.
+<li>Added workaround for the Linux mkdir() problem.</li>
 
-<LI>In Configure, use a more direct test for a working shared-memory mmap
+<li>In Configure, use a more direct test for a working
+shared-memory mmap</li>
 
-<LI>In collectnews, avoid O(n**2) behavior when processing articles
-that have already expired.
+<li>In collectnews, avoid O(n**2) behavior when processing articles
+that have already expired.</li>
 
-<LI>Bug fix: append_addseen() would screw up if no messages were
-previously seen.
+<li>Bug fix: append_addseen() would screw up if no messages were
+previously seen.</li>
 
-<LI>Added the CMU-specific amssync and cmulocal directories.
+<li>Added the CMU-specific amssync and cmulocal directories.</li>
 
-<LI>Use memmove instead of bcopy.
+<li>Use memmove instead of bcopy.</li>
 
-<LI>Implemented the first pass of SMTP/MULT support in deliver.
+<li>Implemented the first pass of SMTP/MULT support in
+deliver.</li>
 
-<LI>Added cacheid parameter to auth_setid(), for AFS PT server support.
-
+<li>Added cacheid parameter to auth_setid(), for AFS PT server
+support.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server Since Version 1.2</h2>
 
 <ul>
-
-<li>Fixed bug in character set code that broke text searches.  Sites
-which care about searching headers need to reconstruct their existing
-mailboxes.
-
+<li>Fixed bug in character set code that broke text searches. Sites
+which care about searching headers need to reconstruct their
+existing mailboxes.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server Since Version 1.1-Beta</h2>
 
 <ul>
+<li>Add support for <tt>UIDVALIDITY</tt> special information
+token.</li>
 
-<li>Add support for <tt>UIDVALIDITY</tt> special information token.
+<li>Add <tt>syncnews</tt> and <tt>arbitron</tt> programs.</li>
 
-<li>Add <tt>syncnews</tt> and <TT>arbitron</TT> programs.
+<li>Redo duplicate delivery elimination in <tt>deliver</tt>.</li>
 
-<li>Redo duplicate delivery elimination in <tt>deliver</tt>.
-
-<li>Bug fixed: Must re-read files after acquiring a lock.  Cannot
+<li>Bug fixed: Must re-read files after acquiring a lock. Cannot
 trust the mtime of a file to increment when writing the file--file
-could be written to multiple times in the same second.
+could be written to multiple times in the same second.</li>
 
 <li>Bug fixed: <tt>EXAMINE</tt> command should not affect
-<tt>\Recent</tt> status.
+<tt>\Recent</tt> status.</li>
 
-<li>Update the user's <tt>\Recent</tt> high-water-mark when we report
-new messages.
+<li>Update the user's <tt>\Recent</tt> high-water-mark when we
+report new messages.</li>
 
-<li>Portability changes
+<li>Portability changes</li>
 
-<li>Upgrade to autoconf 2.1
+<li>Upgrade to autoconf 2.1</li>
 
 <li>Allow privacy to be turned off at compile-time with
-<TT>--disable-privacy</TT> configure switch.
+<tt>--disable-privacy</tt> configure switch.</li>
 
-<li>Fix typo in <tt>cyradm</tt> preventing "<tt>all</tt>" from being
-recognized.
+<li>Fix typo in <tt>cyradm</tt> preventing "<tt>all</tt>" from
+being recognized.</li>
 
-<li>Include <TT>map_private.c</TT> memory mapping module for systems like HPUX
-which have half-working <TT>mmap()</TT> implementations.
+<li>Include <tt>map_private.c</tt> memory mapping module for
+systems like HPUX which have half-working <tt>mmap()</tt>
+implementations.</li>
 
-<li>Switch to using UTF-8 for internal search format.  Sites which
-care about internationalized searching of headers need to reconstruct
-all their existing mailboxes.
+<li>Switch to using UTF-8 for internal search format. Sites which
+care about internationalized searching of headers need to
+reconstruct all their existing mailboxes.</li>
 
-<li>Fix some errors in the iso-8859-* tables.
+<li>Fix some errors in the iso-8859-* tables.</li>
 
 <li>Add and correct a bunch of case-independence mappings in the
-character tables.
+character tables.</li>
 
-<li>First pass at implementing the <TT>STATUS</TT> extension; disabled for
-release.
+<li>First pass at implementing the <tt>STATUS</tt> extension;
+disabled for release.</li>
 
-<li> First pass at implementing IMAP/IMSP server integration.  Not
-ready for general use.
+<li>First pass at implementing IMAP/IMSP server integration. Not
+ready for general use.</li>
 
-<li>Add <TT>new_cred</TT> and <TT>free_cred</TT> mechanisms to
-authentication modules.
+<li>Add <tt>new_cred</tt> and <tt>free_cred</tt> mechanisms to
+authentication modules.</li>
 
 <li>Don't complain when doing "<tt>reconstruct -r foo</tt>" and
-<tt>foo</tt> isn't a mailbox.
+<tt>foo</tt> isn't a mailbox.</li>
 
-<li>Add <tt>IMAP_QUOTAROOT_NONEXISTENT</tt> error code.
+<li>Add <tt>IMAP_QUOTAROOT_NONEXISTENT</tt> error code.</li>
 
-<li>Bug fix: Avoid divide by zero when quota is zero
+<li>Bug fix: Avoid divide by zero when quota is zero</li>
 
 <li>Bug fix: In an error case of the ACL handling code, we have to
-restore tab before breaking out of loop.
+restore tab before breaking out of loop.</li>
 
-<li>Fix file descriptor leak in quota system.
+<li>Fix file descriptor leak in quota system.</li>
 
-<li>Change a bunch of int variables to unsigned.
+<li>Change a bunch of int variables to unsigned.</li>
 
-<li>Better error reporting on reads that end up short.
+<li>Better error reporting on reads that end up short.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server Since Version 1.0-Beta</h2>
-<p>
-<ul> 
-<li>Improved <a href="install.html">installation</a> document.
-<li>New "<a href="cyradm.1.html"><tt>cyradm</tt></a>" administrative client.
-<li>Changed the syslog facility from "<a href="install.html#syslog"><tt>local4</tt></a>" to "<tt>local6</tt>".
-<li>Removed the <tt>renounce setuid</tt> check in "<a href="install.html#deliver"><tt>deliver</tt>"</a>.  The "<tt>deliver</tt>" program
-  must now be <b>non</b>-executable by <tt>other</tt>.
-<li>Fixed a typo in the parsing of <tt>SEARCH DELETED</tt>.
-  (This bug constantly got tripped by newer C-clients.)
-<li>Redesigned the implementation of <tt>SEARCH CHARSET</tt>.<br>
-  Sites that wish to search for non-ASCII characters
-  in the headers of existing mailboxes must run <tt>reconstruct</tt>
-  on all their mailboxes after upgrading to this version.
-<li>Added AUTH and KPOP support to the POP3 server.
-<li>Added search support for the ISO-2022-JP character set.
-<li>Replaced the search engine with a partial Boyer-Moore algorithm.
-<li>Special-case optimized searching US-ASCII text.
+
+<ul>
+<li>Improved <a href="install.html">installation</a> document.</li>
+
+<li>New "<a href="cyradm.1.html"><tt>cyradm</tt></a>"
+administrative client.</li>
+
+<li>Changed the syslog facility from "<a
+href="install.html#syslog"><tt>local4</tt></a>" to
+"<tt>local6</tt>".</li>
+
+<li>Removed the <tt>renounce setuid</tt> check in "<a
+href="install.html#deliver"><tt>deliver</tt>"</a>. The
+"<tt>deliver</tt>" program must now be <b>non</b>-executable by
+<tt>other</tt>.</li>
+
+<li>Fixed a typo in the parsing of <tt>SEARCH DELETED</tt>. (This
+bug constantly got tripped by newer C-clients.)</li>
+
+<li>Redesigned the implementation of <tt>SEARCH CHARSET</tt>.<br />
+ Sites that wish to search for non-ASCII characters in the headers
+of existing mailboxes must run <tt>reconstruct</tt> on all their
+mailboxes after upgrading to this version.</li>
+
+<li>Added AUTH and KPOP support to the POP3 server.</li>
+
+<li>Added search support for the ISO-2022-JP character set.</li>
+
+<li>Replaced the search engine with a partial Boyer-Moore
+algorithm.</li>
+
+<li>Special-case optimized searching US-ASCII text.</li>
+
 <li>Fixed a bug which caused the message parser to spin-loop on a
-  particular degenerate invalid-MIME case.
-<li>Fixed a performance bug in the message parser.
-<li>Tracked last-minute changes to the IMAP4 protocol.
-<li>Fixed a bug in <tt>UNSUBSCRIBE</tt> which caused too many subscriptions to
-  be removed.
-<li>Added a bunch more "<a href="install.html#configure"><tt>configure</tt></a>" options.
-<li>Ported to HPUX.
-<li>Fixed a bug in the <tt>LIST/LSUB \Noselect</tt> code.
-<li>Fixed bug in the globbing code which caused the "<tt>*%</tt>" pattern to work
-  incorrectly.
+particular degenerate invalid-MIME case.</li>
+
+<li>Fixed a performance bug in the message parser.</li>
+
+<li>Tracked last-minute changes to the IMAP4 protocol.</li>
+
+<li>Fixed a bug in <tt>UNSUBSCRIBE</tt> which caused too many
+subscriptions to be removed.</li>
+
+<li>Added a bunch more "<a
+href="install.html#configure"><tt>configure</tt></a>" options.</li>
+
+<li>Ported to HPUX.</li>
+
+<li>Fixed a bug in the <tt>LIST/LSUB \Noselect</tt> code.</li>
+
+<li>Fixed bug in the globbing code which caused the "<tt>*%</tt>"
+pattern to work incorrectly.</li>
+
 <li>Client-side Kerberos support is now conditionalized on
-  <tt>HAVE_ACTE_KRB</tt>, which is set by configure.
-<li>Fixed some invalid buffer-alignment assumptions in the Kerberos code.
-<li>Made the lexers compatible with flex.  Configure now looks for and
-  prefers to use <tt>flex</tt> and <tt>bison</tt>/<tt>byacc</tt>.
-<li>Made the IMAP server check for the existence of the mailboxes file
-  upon startup, in order to give a more informative error message for
-  this common configuration error.
-<li>Fixed other minor bugs.
+<tt>HAVE_ACTE_KRB</tt>, which is set by configure.</li>
+
+<li>Fixed some invalid buffer-alignment assumptions in the Kerberos
+code.</li>
+
+<li>Made the lexers compatible with flex. Configure now looks for
+and prefers to use <tt>flex</tt> and
+<tt>bison</tt>/<tt>byacc</tt>.</li>
+
+<li>Made the IMAP server check for the existence of the mailboxes
+file upon startup, in order to give a more informative error
+message for this common configuration error.</li>
+
+<li>Fixed other minor bugs.</li>
 </ul>
 
+<hr />
+last modified: $Date: 2001/11/18 19:47:50 $ <br />
+<a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
+</body>
+</html>
 
-<P><HR>
-last modified: $Date: 2001/10/26 14:23:05 $
-<br>
-<A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
-</BODY></HTML>
