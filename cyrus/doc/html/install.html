@@ -1,415 +1,475 @@
+<HTML>
+<HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
+</HEAD>
+<BODY>
 <h1>Installing and Configuring the Cyrus IMAP Server</h1>
-<P> 
-The Internet Message Access Protocol (IMAP) is an Internet
+
+<P>The Internet Message Access Protocol (IMAP) is an Internet
 standards-track protocol for accessing messages (mail, news, etc).
 The IMAP server stores and provides access to messages.
- <P>
-Feedback on the software or on the document may be 
-sent to <tt>cyrus-bugs@andrew.cmu.edu</tt>.  The <tt>info-cyrus@andrew.cmu.edu</tt>
-mailing list exists for the discussion of this server and other Cyrus
-software.  Send mail to <TT>info-cyrus-request@andrew.cmu.edu</TT> to
-subscribe.
- <P>
+
+<P>Feedback on the software or on the document may be sent to
+"<tt>cyrus-bugs@andrew.cmu.edu</tt>".  The
+<tt>info-cyrus@andrew.cmu.edu</tt> mailing list exists for the
+discussion of this server and other Cyrus software.  Send mail to
+<TT>info-cyrus-request@andrew.cmu.edu</TT> to subscribe.
+
 <H2>Compiling the IMAP Server</H2>
- <P>  
-Once you have unpacked the files (see the <A HREF="readme.html"><TT>readme</TT></A> 
-file for more
-information), change to the <tt>cyrus-1.1</tt> directory (This document,
-assumes that the version number is 1.1.). The configuration files and
-various subdirectories are stored there.  In the directory that the
-configure file is in, type <tt>./configure</tt> to configure the software.
- <P>
-<B>Note for System V Administrators:</B>  If you're using <tt>csh</tt> type 
-<tt>sh configure</tt> instead to prevent <tt>csh</tt> from trying to execute 
-<tt>configure</tt> itself. 
- <P>
-<B>Note for Ultrix Administrators:</B>  Type <tt>sh5 configure</tt> to avoid bugs in 
-/bin/sh.  <tt>sh -x configure</tt> may give different results than <tt>sh configure</tt> 
-making it difficult to debug configure scripts.
- <P>
-Running <tt>configure</tt> takes a minute or two and prints various process messages. 
- <P>
-The <tt>configure</tt> shell script attempts to guess correct values for various 
-system-dependent variables used during compilation, and creates the 
-Makefile(s) (one in each subdirectory of the source directory).  
-It also creates a file <tt>config.status</tt> that you can run in the future 
-to recreate the current configuration.
- <P>
-To compile the package in a different directory from the one containing 
-the source code, you must use a version of make that supports the <tt>VPATH</tt>
-variable, such as GNU make.  Change to the destination directory for
-the object files and executables and run <tt>configure --srcdir=DIR</tt>, 
-where DIR is the directory that contains the source code.  Using this 
-option is unnecessary if the source code is in the parent directory of
-the destination directory; <tt>configure</tt> automatically checks for the
-source code in <tt>..</tt> if it does not find it in the current directory.
-<p>
-You can tell <tt>configure</tt> to figure out the configuration for your
-system, and record it in <tt>config.status</tt>, without actually configuring
-the package (creating Makefile's and perhaps a configuration header
-file).  To do this, <tt>configure --no-create</tt>.  Later, you can run 
-<tt>./config.status</tt> to configure the package.  This option is useful
-in <tt>Makefile</tt> rules for updating <tt>config.status</tt> and <tt>Makefile</tt>.  
-You can also type <tt>config.status --recheck</tt> option, which reruns
-<tt>configure</tt> with the same arguments you used before.  This is useful 
-if you change <tt>configure</tt>.
-<p>
-Here are a list of switches that can be used with <A NAME="configure"><tt>configure</tt></A>.
+
+Once you have unpacked the files (see the <A
+HREF="readme.html"><TT>README</TT></A> file for more information),
+change to the "<tt>cyrus-1.2</tt>" directory (This document assumes that
+the version number is 1.2.). The configuration files and various
+subdirectories are stored there.  In the directory that the configure
+file is in, type "<kbd>./configure</kbd>" to configure the software.
+
+<P><B>Note for System V Administrators:</B> If you're using
+"<tt>csh</tt>" type "<kbd>sh configure</kbd>" instead to prevent
+"<tt>csh</tt>" from trying to execute "<tt>configure</tt>" itself.
+
+<P><B>Note for Ultrix Administrators:</B> Type "<kbd>sh5
+configure</kbd>" to avoid bugs in /bin/sh.  "<kbd>sh -x
+configure</kbd>" may give different results than "<kbd>sh
+configure</kbd>" making it difficult to debug configure scripts.
+
+<P>Running "<tt>configure</tt>" takes a minute or two and prints
+various process messages.
+
+<P>The "<tt>configure</tt>" shell script attempts to guess correct
+values for various system-dependent variables used during compilation,
+and creates the Makefile(s) (one in each subdirectory of the source
+directory).  It also creates a file "<tt>config.status</tt>" that you
+can run in the future to recreate the current configuration.
+
+<P>To compile the package in a different directory from the one
+containing the source code, you must use a version of make that
+supports the <tt>VPATH</tt> variable, such as GNU make.  Change to the
+destination directory for the object files and executables and run
+"<kbd>configure --srcdir=DIR</kbd>", where <TT>DIR</TT> is the directory that
+contains the source code.  Using this option is unnecessary if the
+source code is in the parent directory of the destination directory;
+"<tt>configure</tt>" automatically checks for the source code in
+"<tt>..</tt>" if it does not find it in the current directory.
+
+<p>You can tell "<tt>configure</tt>" to figure out the configuration for
+your system, and record it in "<tt>config.status</tt>", without actually
+configuring the package (creating "<TT>Makefile</TT>"'s and perhaps a
+configuration header file).  To do this, "<kbd>configure
+--no-create</kbd>".  Later, you can run "<kbd>./config.status</kbd>" to
+configure the package.  This option is useful in "<tt>Makefile</tt>"
+rules for updating "<tt>config.status</tt>" and "<tt>Makefile</tt>".  You
+can also type "<kbd>config.status --recheck</kbd>" option, which reruns
+"<tt>configure</tt>" with the same arguments you used before.  This is
+useful if you change "<tt>configure</tt>".
+
+<p>Here are a list of switches that can be used with "<A
+NAME="configure"><tt>configure</tt></A>".
+
 <dl>
 <dt><tt>--with-login=METHOD</tt>
 <dd>Specifies the login authentication module to use.  Currently
-    implemented authentication modules are:
-<p>
-<dd><pre>   unix  </tt>Unix <tt>/etc/passwd</tt> file
-<dd><pre>   krb   </tt>Kerberos version 4
-<p>
-<dd>By default, configure uses <tt>krb</tt> if the file /etc/krb.conf exists, 
-    <tt>unix</tt> otherwise.
-<p>
+implemented authentication modules are:
+
+<dl compact>
+
+<DT><TT>unix</TT>
+<DD>Unix <tt>/etc/passwd</tt> file
+<DT><TT>krb</TT>
+<DD>Kerberos version 4
+
+</dl>
+
+By default, configure uses "<tt>krb</tt>" if the file <TT>/etc/krb.conf</TT>
+exists, "<tt>unix</tt>" otherwise.
+
 <dt><tt>--with-auth=METHOD</tt>
 <dd>Specifies the authorization module to use.  Currently implemented
-    authorization modules are:
-<p> 
-<dd><pre>   unix   </tt>Unix <tt>/etc/passwd</tt> and <tt>/etc/group</tt> file
-<dd><pre>   krb    </tt>Kerberos principals 
-<p>
-<dd>The selected authorization module must be compatible with the 
-    login module.  By default, uses the authorization module with 
-    the same name as the selected login module.
-<p>
+authorization modules are:
+
+<dl compact> 
+
+<DT><tt>unix</tt>
+<DD>Unix <tt>/etc/passwd</tt> and <tt>/etc/group</tt> file
+
+<DT><tt>krb</tt>
+<DD>Kerberos principals 
+
+</dl>
+
+The selected authorization module must be compatible with the 
+login module.  By default, uses the authorization module with 
+the same name as the selected login module.
+
 <dt><tt>--with-inn=PATH</tt>
-<dd>Specifies the location of INN's NEWSLIB directory.  By default, 
-    looks for INN in a few common places.  It is not necessary for 
-    <tt>configure</tt> to find INN.
-<p>
+<dd>Specifies the location of INN's <TT>NEWSLIB</TT> directory.  By
+default, looks for INN in a few common places.  It is not necessary
+for "<tt>configure</tt>" to find INN.
+
 <dt><tt>--with-krb=PATH</tt>
 <dt><tt>--without-krb</tt>
 <dd>Specifies the path to the Kerberos libraries and header files 
-    (optional).  By default, looks in <tt>/usr/local</tt> and then in the 
-    compiler's default link path.
-<p>
-<dd>Both <tt>--without-krb</tt> and <tt>--with-krb=no</tt> prevent Kerberos support 
-    from being compiled in.
-<p>
+(optional).  By default, looks in "<tt>/usr/local</tt>" and then in the 
+compiler's default link path.
+
+<p>Either "<tt>--without-krb</tt>" or "<tt>--with-krb=no</tt>" prevents
+Kerberos support from being compiled in.
+
 <dt><tt>--with-tcl=PATH</tt>
 <dt><tt>--without-tcl</tt>
-<dd>Specifies the path to the Tcl library and header file (optional).  
-    By default, looks in <tt>/usr/local</tt> and then in the compiler's 
-    default link path.  The Tcl libraries are needed to compile <tt>cyradm</tt>, 
-    the administrative client.  Both <tt>--without-tcl</tt> and <tt>--with-tcl=no</tt> 
-    prevent cyradm from being compiled.
-<p>
+<dd>Specifies the path to the Tcl library and header file (optional).
+By default, looks in "<tt>/usr/local</tt>" and then in the compiler's
+default link path.  The Tcl libraries are needed to compile
+"<tt>cyradm</tt>", the administrative client.  Either
+"<tt>--without-tcl</tt>" or "<tt>--with-tcl=no</tt>" prevents cyradm from
+being compiled.
+
 <dt><tt>--with-lock=METHOD</tt>
 <dd>Specifies the locking method to use.  Currently implemented locking
-    methods are:
-<p>
-<pre>
-     flock   flock() locking
-     fcntl   fcntl() locking
-</pre>
-<dd>By default, uses <tt>flock</tt> if the <tt>flock()</tt> function exists,
-    <tt>fcntl</tt> otherwise.
+methods are:
+
+<DL compact>
+
+<DT><TT>flock</TT>
+<DD><TT>flock()</TT> locking
+<DT><TT>fcntl</TT>
+<DD><TT>fcntl()</TT> locking
+</DL>
+
+By default, uses "<tt>flock</tt>" if the "<tt>flock()</tt>"
+function exists, "<tt>fcntl</tt>" otherwise.
+
 </dl>
-<tt>configure</tt> ignores any other arguments that you give it.
-<p>
-If your system requires unusual options for compilation or linking
-that <tt>configure</tt> doesn't know about, you can give <tt>configure</tt> initial
-values for some variables by setting them in the environment.  In
-Bourne-compatible shells, you can do that on the command as follows:
-<p>
+
+"<tt>configure</tt>" ignores any other arguments that you give it.
+
+<p>If your system requires unusual options for compilation or linking
+that "<tt>configure</tt>" doesn't know about, you can give
+"<tt>configure</tt>" initial values for some variables by setting them
+in the environment.  In Bourne-compatible shells, you can do that on
+the command line as follows:
+
 <pre>
-   CC=gcc -traditional DEFS=-D_POSIX_SOURCE ./configure
-</pre>
-<p>
-The <tt>make</tt> variables that you might want to override with environment
-variables when running <tt>configure</tt> are:
-<p>
-<pre>   CC       </tt>C compiler program.<br>
-<pre>            </tt>Default is <tt>cc</tt>, or <tt>gcc</tt> if <tt>gcc</tt> is in your <tt>PATH</tt>.<br>
-       (For <tt>CC</tt>, any value given in the environment <b>overrides</b> the
-       value that <tt>configure</tt> would choose.)
-<p>
-<pre>   DEFS      </tt>Configuration options, in the form <tt>-Dfoo -Dbar ...</tt><br>
-<pre>   LIBS      </tt>Libraries to link with, in the form <tt>-lfoo -lbar ...</tt><br>
-      (For <tt>DEFS</tt> and <tt>LIBS</tt>, any value given in the environment is 
-      <b>added</b> to the value that <tt>configure</tt> chooses.)
-<p>
+<KBD>   CC="gcc -traditional" DEFS=-D_POSIX_SOURCE ./configure
+</KBD></pre>
+
+The "<tt>make</tt>" variables that you might want to override with
+environment variables when running "<tt>configure</tt>" are:
+
+<DL compact>
+<DT><TT>CC</TT>
+<DD>C compiler program.<br>
+Default is "<tt>cc</tt>", or "<tt>gcc</tt>" if "<tt>gcc</tt>" is in your <tt>PATH</tt>.<br>
+(For "<tt>CC</tt>", any value given in the environment <strong>overrides</strong> the
+value that "<tt>configure</tt>" would choose.)
+
+<DT><TT>DEFS</TT>
+<DD>Configuration options, in the form "<tt>-Dfoo -Dbar ...</tt>"<br>
+
+<DT><TT>LIBS</TT>
+<DD>Libraries to link with, in the form "<tt>-lfoo -lbar ...</tt>"<br>
+(For "<tt>DEFS</tt>" and "<tt>LIBS</tt>", any value given in the
+environment is <strong>added</strong> to the value that
+"<tt>configure</tt>" chooses.)  </DL>
+
 If you need to do unusual things to compile the package, we encourage
-you to figure out how <tt>configure</tt> could check whether to do them, and
-mail diffs or instructions to <tt>cyrus-bugs@andrew.cmu.edu</tt> so we
+you to figure out how "<tt>configure</tt>" could check whether to do them, and
+mail diffs or instructions to "<tt>cyrus-bugs@andrew.cmu.edu</tt>" so we
 can include them in the next release.
-<p>
-The file <tt>configure.in</tt> is used as a template to create <tt>configure</tt> by
-a program called <tt>autoconf</tt>.  You will only need it if you want to
-regenerate <tt>configure</tt> using a newer version of <tt>autoconf</tt>.
-<p>   
-Once you have successfully run <tt>configure</tt>, execute the following commands:
-<p>
+
+<p>The file "<tt>configure.in</tt>" is used as a template to create 
+"<tt>configure</tt>" by
+a program called "<tt>autoconf</tt>".  You will only need it if you want to
+regenerate "<tt>configure</tt>" using a newer version of "<tt>autoconf</tt>".
+
+<p>Once you have successfully run "<tt>configure</tt>", execute the
+following commands:
+
 <pre>
-   make depend
+<kbd>   make depend
    make all CFLAGS=-O
-</pre>
-<p>
-If you want, you can override the <tt>make</tt> variables <tt>CFLAGS</tt> and 
-<tt>LDFLAGS</tt> by entering the following:
-<p>
+<kbd></pre>
+
+If you want, you can override the "<tt>make</tt>" variables
+<tt>CFLAGS</tt> and <tt>LDFLAGS</tt> by entering the following:
+
 <pre>
-   make all CFLAGS=-O2 LDFLAGS=-s
-</pre>
-<p>
+<kbd>   make all CFLAGS=-O2 LDFLAGS=-s
+</kbd></pre>
+
 <h2>Configuring the IMAP Server</h2>
-<p>
+
 This section describes the shell scripts to run and the configuration 
-files to modify once <tt>configure</tt> and <tt>make</tt> have run.
-<p>        
+files to modify once "<tt>configure</tt>" and "<tt>make</tt>" have run.
+
 <ol>
-<li> Create a user and group for the Cyrus subsystem.  The
-     examples in this document assume a user of <tt>cyrus</tt> and
-     a group of <tt>mail</tt>, though any user and group name can be used.
-<p>
-<li>After you've logged in as <tt>root</tt>, install the <A HREF="deliver.8.html"><tt>deliver</tt></A>,
- <A HREF="imapd.8.html"><tt>imapd</tt></A>, and <A HREF="pop3d.8.html"><tt>pop3d</tt></A>
-    programs. We recommend installing them in 
-    the <tt>/usr/etc</tt> directory.  Change directory to <tt>imap</tt>, a
-    subdirectory of <tt>cyrus-1.1</tt>.  Make <A NAME="deliver"><tt>deliver</tt> setuid to 
-    the Cyrus user:
-<p>
-<pre>
-    install -s deliver /usr/etc/deliver
-    install -s imapd /usr/etc/imapd
-    install -s pop3d /usr/etc/pop3d
-    chown cyrus /usr/etc/deliver
-    chgrp mail /usr/etc/deliver   
-    chmod 4750 /usr/etc/deliver
-</pre>
-<li>The Cyrus IMAP server uses the 4.3BSD syslog that separates 
-    messages into both levels and categories.  Invoke <tt>man syslog</tt>
-    to see if <tt>openlog</tt> takes three arguments. If it does not, 
-    replace the system <tt>syslogd</tt> and <tt>syslog.conf</tt> with the files 
-    provided in the <A NAME="syslog"><tt>cyrus-1.1/syslog</tt></A> directory.
-<p>        
-<pre>        
-    mv syslogd  /etc/syslogd
-    mv syslog.conf /etc/syslog.conf
-</pre>
-<dd>If you do not copy the latest <tt>syslog.conf</tt> file to the <tt>/etc</tt> 
-    directory, be sure to add support for <tt>local6.debug</tt>.  The
-    file should include a line like:
-<p>
-<pre>  
-    local6.debug  /usr/adm/imapd.log
-</pre>
-<p>
-<dd>Create the imapd.log file:
-<p>
-<pre>
-    touch /usr/adm/imapd.log
-</pre>
-<p>          
-<li>Create the file <tt>/etc/imapd.conf</tt>. Here is a sample <tt>imapd.conf</tt> 
-    with a minimal number of values defined:
-<p>          
-<pre>
-    configdirectory: /usr/cyrus
-    partition-default: /usr/spool/cyrus
-    admins: curtj abell
-    srvtab: /usr/cyrus/srvtab
-</pre>
-<p>
-<dd>For a description of all the fields in this file, see the <A HREF="imapd.conf.5.html"><tt>imapd.conf</tt>(5)</A> man page.
-<p>
-<li>Create the configuration directory specified by the <tt>configdirectory</tt> 
-    option in <tt>imapd.conf.</tt> The configuration directory is similar in concept 
-    to the <tt>/usr/lib/news</tt> directory.  It stores information about the IMAP 
-    server as a whole.
+<li>Create a user and group for the Cyrus subsystem.  The
+examples in this document assume a user of "<tt>cyrus</tt>" and
+a group of "<tt>mail</tt>", though any user and group name can be used.
 
-<dd>This document uses the configuration directory <tt>/usr/cyrus</tt> 
-    in its examples.  This directory should be owned by the
-    cyrus user and group and should not permit access to other users.
-<p>
-<pre>
-    cd /usr
-    mkdir cyrus
-    chown cyrus cyrus  
-    chgrp mail cyrus 
-    chmod 750 cyrus
-</pre>
-<p>
-<li>In the configuration directory, create the empty file <tt>mailboxes</tt> 
-    and a set of empty directories:
-<p>
-<pre>                  
-    cd cyrus 
-    echo &gt; mailboxes   
-    mkdir user
-    mkdir quota
-    mkdir proc
-    mkdir log
-</pre>
-<p>
-<li>Create the default partition directory specified in the <tt>/etc/imapd.conf</tt> file.
-<p>
-    This document uses a default partition directory of <tt>/usr/spool/cyrus</tt> in the following example:
-<p>
-<pre>
-    cd /usr/spool
-    mkdir cyrus
-    chown cyrus cyrus
-    chgrp mail cyrus 
-    chmod 750 cyrus 
-</pre>
-<p>
-<dd>The partition directory is similar in concept to
-     /usr/spool/news.  It is where the mailboxes are stored.
-     Unlike most netnews systems, Cyrus allows you to have more
-     than one partition.  Do not use the string <tt>news</tt> as a
-     partition name as it is reserved for netnews.
-<p>
+<li>After you've logged in as "<tt>root</tt>", install the "<A
+HREF="deliver.8.html"><tt>deliver</tt></A>", "<A
+HREF="imapd.8.html"><tt>imapd</tt></A>", and "<A
+HREF="pop3d.8.html"><tt>pop3d</tt></A>" programs. We recommend
+installing them in the "<tt>/usr/etc</tt>" directory.  Change directory
+to "<tt>imap</tt>", a subdirectory of <tt>cyrus-1.2</tt>.  Make "<A
+NAME="deliver"><tt>deliver</tt></A>" setuid to the Cyrus user:
 
-<li>If the Cyrus IMAP server was compiled with Kerbero authentication, create a 
-    Kerberos identity for the server and add the server's key to the <tt>srvtab</tt> 
-    file.  The file
-    must be readable by the cyrus user. The server's Kerberos
-          identity is <tt>imap.HOST@REALM</tt>, where <tt>HOST</tt> is the first
-          component of the machine's host name and REALM is the
-          machine's Kerberos realm.
-
-<dd>Here is a sample session, creating a srvtab file for the
-          host named <tt>foobar</tt>:
-<p>
 <pre>
-    ksrvutil -f /usr/cyrus/srvtab add  
+<kbd>   install -s deliver /usr/etc/deliver
+   install -s imapd /usr/etc/imapd
+   install -s pop3d /usr/etc/pop3d
+   chown cyrus /usr/etc/deliver
+   chgrp mail /usr/etc/deliver
+   chmod 4750 /usr/etc/deliver
+</kbd></pre>
+
+<li>The Cyrus IMAP server uses the 4.3BSD syslog that separates
+messages into both levels and categories.  Invoke "<kbd>man
+syslog</kbd>" to see if "<tt>openlog()</tt>" takes three arguments. If
+it does not, replace the system "<tt>syslogd</tt>" and
+"<tt>syslog.conf</tt>" with the files provided in the <A
+NAME="syslog"><tt>cyrus-1.2/syslog</tt></A> directory.
+
+<pre>
+<kbd>   mv syslogd /etc/syslogd
+   mv syslog.conf /etc/syslog.conf
+</kbd></pre>
+
+If you do not copy the latest "<tt>syslog.conf</tt>" file to the 
+"<tt>/etc</tt>" directory, be sure to add support for
+"<tt>local6.debug</tt>".  The file should include a line like:
+
+<pre>
+   local6.debug  /usr/adm/imapd.log
 </pre>
-<p>
-<dd>Here is the information <tt>ksrvutil</tt> requests.  Respond by
-    filling in values or by pressing RETURN.  In this example,
-          the host name is <tt>foobar</tt> and the realm is <tt>ANDREW.CMU.EDU</tt>.
-<p>
-<pre>         
-   Name: imap
-   Instance: foobar
-   Realm: ANDREW.CMU.EDU
+
+Create the <TT>imapd.log</TT> file:
+
+<pre>
+<kbd>   touch /usr/adm/imapd.log
+</kbd></pre>
+
+<li>Create the file "<tt>/etc/imapd.conf</tt>". Here is a sample
+"<tt>imapd.conf</tt>" with a minimal number of values defined:
+
+<pre>
+   configdirectory: /usr/cyrus
+   partition-default: /usr/spool/cyrus
+   admins: curtj abell
+   srvtab: /usr/cyrus/srvtab
+</pre>
+
+For a description of all the fields in this file, see the <A
+HREF="imapd.conf.5.html"><tt>imapd.conf</tt>(5)</A> man page.
+
+<li>Create the configuration directory specified by the
+"<tt>configdirectory</tt>" option in "<tt>imapd.conf.</tt>" The
+configuration directory is similar in concept to the
+"<tt>/usr/lib/news</tt>" directory.  It stores information about the
+IMAP server as a whole.
+
+<p>This document uses the configuration directory "<tt>/usr/cyrus</tt>"
+in its examples.  This directory should be owned by the
+cyrus user and group and should not permit access to other users.
+
+<pre>
+<kbd>   cd /usr
+   mkdir cyrus
+   chown cyrus cyrus
+   chgrp mail cyrus
+   chmod 750 cyrus
+</kbd></pre>
+
+<li>In the configuration directory, create the empty file "<tt>mailboxes</tt>"
+and a set of empty directories:
+
+<pre>
+<kbd>   cd cyrus
+   echo &gt;&gt; mailboxes
+   mkdir user
+   mkdir quota
+   mkdir proc
+   mkdir log
+</kbd></pre>
+
+<li>Create the default partition directory specified in the
+"<tt>/etc/imapd.conf</tt>" file.
+
+<p>This document uses a default partition directory of 
+"<tt>/usr/spool/cyrus</tt>" in the following example:
+
+<pre>
+<kbd>   cd /usr/spool
+   mkdir cyrus
+   chown cyrus cyrus
+   chgrp mail cyrus
+   chmod 750 cyrus
+</kbd></pre>
+
+The partition directory is similar in concept to
+<tt>/usr/spool/news</tt>.  It is where the mailboxes are stored.
+Unlike most netnews systems, Cyrus allows you to have more
+than one partition.  Do not use the string "<tt>news</tt>" as a
+partition name as it is reserved for netnews.
+
+<li>If the Cyrus IMAP server was compiled with Kerberos authentication,
+create a Kerberos identity for the server and add the server's key to
+the "<tt>srvtab</tt>" file.  The file must be readable by the cyrus
+user. The server's Kerberos identity is "<tt>imap.HOST@REALM</tt>",
+where "<tt>HOST</tt>" is the first component of the machine's host
+name and "<tt>REALM</tt>" is the machine's Kerberos realm.
+
+<p>Here is a sample session, creating a srvtab file for the
+host named "<tt>foobar</tt>":
+
+<pre>
+<kbd>   ksrvutil -f /usr/cyrus/srvtab add  
+</kbd></pre>
+
+Here is the information "<tt>ksrvutil</tt>" requests.  Respond by
+filling in values or by pressing <KBD>RETURN</KBD>.  In this example,
+the host name is "<tt>foobar</tt>" and the realm is 
+"<tt>ANDREW.CMU.EDU</tt>".
+
+<pre>
+   Name: <kbd>imap</kbd>
+   Instance: <KBD>foobar</KBD>
+   Realm: <KBD>ANDREW.CMU.EDU</KBD>
    Version number: 
    New principal: imap.foobar@ANDREW.CMU.EDU; version 0
    Is this correct? (y,n) [y] 
    Password: 
    Verifying, please re-enter Password: 
    Key successfully added.
-   Would you like to add another key? (y,n) [y] n
+   Would you like to add another key? (y,n) [y] <KBD>n</KBD>
 </pre>
-<p>
-<dd>If you plan to install Kerberized POP, create the Kerberos
-    identity <tt>pop.HOST@REALM</tt> and add the key to the <tt>srvtab</tt> file.
-<p>                
-<li>Add the following lines to the <tt>/etc/services</tt> file if they 
-          aren't already there.
-<p>
+
+If you plan to install Kerberized POP, create the Kerberos
+identity "<tt>pop.HOST@REALM</tt>" and add the key to the "<tt>srvtab</tt>"
+file.
+
+<li>Add the following lines to the "<tt>/etc/services</tt>" file if they 
+aren't already there.
+
 <pre>
-    pop3            110/tcp
-    imap            143/tcp
-    imsp            406/tcp
-    kpop            1109/tcp
+   pop3      110/tcp
+   imap      143/tcp
+   imsp      406/tcp
+   kpop      1109/tcp
 </pre>
-<p>
-<li>Add the following line to the <tt>/etc/inetd.conf</tt> file.
-<p>
+
+<li>Add the following line to the "<tt>/etc/inetd.conf</tt>" file.
+
 <pre>
-    imap  stream  tcp  nowait  cyrus  /usr/etc/imapd  imapd
+   imap  stream  tcp  nowait  cyrus  /usr/etc/imapd  imapd
 </pre>
-<dd>If you want to run the POP3 protocol, add the following POP3
-    line.  If you want to run MIT's KPOP (Kerberized POP)
-    protocol, add the kpop line as well.
-<p>
+
+If you want to run the POP3 protocol, add the following line.
+
 <pre>
-    pop3  stream  tcp  nowait  cyrus  /usr/etc/pop3d  pop3d
-    kpop  stream  tcp  nowait  cyrus  /usr/etc/pop3d  pop3d -k
+   pop3  stream  tcp  nowait  cyrus  /usr/etc/pop3d  pop3d
 </pre>
-<dd><tt>cyrus</tt> is the Cyrus user and <tt>/usr/etc/</tt> is the path name 
-    to the executable.
-<p>
-<li>Modify the <tt>sendmail.cf</tt> file to have the local mailer call
-    <tt>/usr/etc/deliver</tt> instead of <tt>/bin/mail</tt>.  On the line
-    beginning with <tt>Mlocal</tt>, change the <tt>P=/bin/mail,</tt> to
-    <tt>P=/usr/etc/deliver,</tt> and add the <tt>S</tt> character to the <tt>F=</tt>
-          field.
+
+If you want to run MIT's KPOP (Kerberized POP)
+protocol, add the following line
+
+<pre>
+   kpop  stream  tcp  nowait  cyrus  /usr/etc/pop3d  pop3d -k
+</pre>
+
+"<tt>cyrus</tt>" is the Cyrus user and "<tt>/usr/etc/</tt>" is the
+path name to the executable.
+
+<li>Modify the "<tt>sendmail.cf</tt>" file to have the local mailer call
+"<tt>/usr/etc/deliver</tt>" instead of "<tt>/bin/mail</tt>".  On the line
+beginning with "<tt>Mlocal</tt>", change the "<tt>P=/bin/mail,</tt>" to
+"<tt>P=/usr/etc/deliver,</tt>" and add the "<tt>S</tt>" character to the
+"<tt>F=</tt>" field.
+
 </ol>
-<p>
+
 <h2>Testing the IMAP Server</h2>
-<p>
+
 To test the IMAP server, reboot and perform the following steps (all
-of these samples use <tt>foobar</tt> as the IMAP server name):
-<p>
+of these samples use "<tt>foobar</tt>" as the IMAP server name):
+
 <ol>
+
 <li>From your normal account, telnet to the IMAP port on the
-    server you're setting up:
-<p>
+server you're setting up:
+
 <pre>
-    telnet foobar imap
-</pre>
-<dd>If your server is running, you'll get the following message:
-<p>
+<kbd>   telnet foobar imap
+</kbd></pre>
+
+If your server is running, you'll get the following message:
+
 <pre>
-    Trying 128.2.44.20...
-    Connected to foobar.andrew.cmu.edu.
-    Escape character is '^]'.
-    * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.1-Beta server ready
+   Trying 128.2.44.20...
+   Connected to foobar.andrew.cmu.edu.
+   Escape character is '^]'.
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.2-Beta server ready
 </pre>
-<dd>Any message other than one starting with <tt>* OK</tt> means there
-    is a problem.  To terminate the connection, type </tt>. logout</tt>.
-<p>
-<li>Use <tt>imtest</tt> to test logging in with plaintext passwords.  Change
-    to the <tt>cyrus-1.1</tt> directory and type the following.
-<p>
+
+Any message other than one starting with "<tt>* OK</tt>" means there
+is a problem.  To terminate the connection, type "</kbd>. logout</kbd>".
+
+<li>Use "<tt>imtest</tt>" to test logging in with plaintext passwords.  Change
+to the "<tt>cyrus-1.2</tt>" directory and type the following.
+
 <pre>
-    imtest/imtest -p foobar imap
-</pre>
-<dd>If your server is running, you'll get the following message:
-<p>
+<kbd>   imtest/imtest -p foobar imap
+</kbd></pre>
+
+If your server is running, you'll get the following message:
+
 <pre>
-    * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.1-Beta server ready
-    Password:  &lt;enter your password, imtest does not echo it&gt;
-    . LOGIN smith X
-    . OK User logged in
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.2-Beta server ready
+   Password: <kbd>&lt;enter your password, imtest does not echo it&gt;</kbd>
+   . LOGIN smith X
+   . OK User logged in
 </pre>
-<p>
-<dd>Any message other than a <tt>. OK</tt> means there is a problem.
-    If the test fails, a more specific error message is written
-    through syslog to the server log.  To terminate the
-    connection, type <tt>. logout</tt>.
-<p>
+
+Any message other than one starting with a "<tt>. OK</tt>" means there is
+a problem.  If the test fails, a more specific error message is written
+through <tt>syslog</tt> to the server log.  To terminate the
+connection, type "<kbd>. logout</kbd>".
+
 <li>If the server is compiled with Kerberos authentication, test
-    Kerberos authentication by using the imtest command.  Change
-    to the <tt>cyrus-v1.1</tt> directory and type the following.
-<p>
-<pre>   
-    imtest/imtest -k foobar imap
-    * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.1-Beta server ready
-    . AUTHENTICATE KERBEROS_V4
-    + Ln8h6Q==
-    BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
-    BZSGgOy9ehHRj8NQjLjxDpib0D9uT0fo7QaXhLM6zCp9dQ1pX4FfNO2V39vBp
-    Q19QIK4S1410prvM2c45qeizecI7zAvA=
-    2cRhIC+aH70WHqYaW18YnQ==
-    . OK User logged in
-    __No integrity protection__
+Kerberos authentication by using the imtest command.  Change
+to the "<tt>cyrus-v1.2</tt>" directory and type the following:
+
+<pre>
+   <kbd>imtest/imtest -k foobar imap</kbd>
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.2-Beta server ready
+   . AUTHENTICATE KERBEROS_V4
+   + Ln8h6Q==
+   BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
+   BZSGgOy9ehHRj8NQjLjxDpib0D9uT0fo7QaXhLM6zCp9dQ1pX4FfNO2V39vBp
+   Q19QIK4S1410prvM2c45qeizecI7zAvA=
+   2cRhIC+aH70WHqYaW18YnQ==
+   . OK User logged in
+   __No integrity protection__
 </pre>
-<p>
-Any message other than <tt>. OK</tt> means there is a problem. If the
-test fails, a more specific error message is written
-through syslog to the server log.  To terminate the
-connection, type <tt>. logout</tt>.
+
+Any message other than one starting with a "<tt>. OK</tt>" means there is
+a problem. If the test fails, a more specific error message is written
+through <TT>syslog</TT> to the server log.  To terminate the
+connection, type "<kbd>. logout</kbd>".
+
 </ol>
-<p>
+
 <h2>Administering Mailboxes</h2>
-<p>
-The <tt>cyradm</tt> command (see the <tt>cyradm</tt>(8) man page for complete
-documentation) manages the creation of, deletion of, ACLs on, and
-quotas on mailboxes.  To get an overview of the command, type <tt>cyradm
-&lt;host&gt;</tt>.  Once <tt>cyradm</tt> has started, the user prompt is replaced with
-the name of the host followed by a <tt>&gt;</tt>.  Type <tt>help</tt> at the new
-prompt.  The following information is displayed:
-<p>
+
+The "<tt>cyradm</tt>" command (see the <tt>cyradm</tt>(8) man page for
+complete documentation) manages the creation of, deletion of, ACLs on,
+and quotas on mailboxes.  To get an overview of the command, type
+"<kbd>cyradm &lt;host&gt;</kbd>".  Once "<tt>cyradm</tt>" has started,
+the user prompt is replaced with the name of the host followed by a
+"<tt>&gt;</tt>".  Type "<kbd>help</kbd>" at the new prompt.  The
+following information is displayed:
+
 <pre>
    createmailbox, cm        create a mailbox
    deleteaclmailbox, dam    delete an ACL on a mailbox
@@ -424,48 +484,54 @@ prompt.  The following information is displayed:
    setaclmailbox, sam       set an ACL on a mailbox
    setquota, sq             set quota limits
 </pre>
-<p>
-<b>Note:</b>If you run <tt>cyradm</tt> on a system where Kerberos is not running, 
-you are prompted for your user name an password before you can issue any 
-<tt>cyradm</tt> commands.
-<p>
-The mailbox naming convention requires that the primary mailbox (inbox)
-for anyone must be named <tt>user.&lt;userid&gt;</tt>.  To create a mailbox, type:
-<p>
+
+<b>Note:</b>If you run "<tt>cyradm</tt>" on a system where Kerberos is
+not running, you are prompted for your user name an password before
+you can issue any "<tt>cyradm</tt>" commands.
+
+<p>The mailbox naming convention requires that the primary mailbox (inbox)
+for anyone must be named "<tt>user.&lt;userid&gt;</tt>".
+To create a mailbox, type:
+
 <pre>
-   createmailbox user.&lt;userid&gt;
-</pre>
-<p>
-For example, to create a mailbox for the userid <tt>smith</tt>, type:
-<pre> 
-   createmailbox user.smith
-</pre>
-<p>
-To limit <tt>smith</tt> to 10,000 kilobytes of mail, type:
-<p>
+<kbd>   createmailbox user.&lt;userid&gt;
+</kbd></pre>
+
+For example, to create a mailbox for the userid "<tt>smith</tt>", type:
+
 <pre>
-   setquota user.smith 10000
-</pre>
-<p>
+<kbd>   createmailbox user.smith
+</kbd></pre>
+
+To limit "<tt>smith</tt>" to 10,000 kilobytes of mail, type:
+
+<pre>
+<kbd>   setquota user.smith 10000
+</kbd></pre>
+
 Once the inbox is created, users can create their own additional mailboxes 
 from a mail program.  If Smith created a work mailbox and a play mailbox, 
 the full names of the mailboxes would be:
-<p>
+
 <pre>
    user.smith.work
    user.smith.play
 </pre>
-<p>
-Access rights are discussed in detail in the <tt>cyradm</tt>(1) man pages.
+
+<p>Access rights are discussed in detail in the <tt>cyradm</tt>(1) man pages.
 Note that the administrator must grant herself delete access
 explicitly before she can delete a mailbox:
-<p>
+
 <pre>
-   setaclmailbox &lt;mail_box&gt; &lt;admin_userid&gt; d
+<kbd>   setaclmailbox &lt;mail_box&gt; &lt;admin_userid&gt; d
    deletemailbox &lt;mail_box&gt;
-</pre>
+</kbd></pre>
+
 Once you have created mailboxes, your IMAP server installation
 is done.  You must then configure a mail interface, such as Pine,
 to work with the IMAP server.
-<P><HR><P>
-<A HREF="imapre1.1.html">Return</A> to the Cyrus IMAP Server Home Page
+
+<HR>
+<A HREF="imapre1.2.html">Return</A> to the Cyrus IMAP Server Home Page
+</BODY>
+</HTML>
