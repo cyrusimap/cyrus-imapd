@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.30 2002/02/05 17:46:06 leg Exp $
+ * $Id: lmtpproxyd.c,v 1.31 2002/02/06 16:38:41 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -144,7 +144,7 @@ static int verify_user(const char *user, long quotacheck,
 void shut_down(int code);
 static void usage();
 
-struct lmtp_func mylmtp = { &deliver, &verify_user, 0, 0 };
+struct lmtp_func mylmtp = { &deliver, &verify_user, 0, 0, 0 };
 
 /* globals */
 static int quotaoverride = 0;		/* should i override quota? */
@@ -323,6 +323,20 @@ struct connlist {
     struct connlist *next;
 } *chead = NULL;
 
+static int usercb(void *context, int id,
+		  const char **result, unsigned *len)
+{
+    assert(id == SASL_CB_USER);
+    *result = "";
+    if (len) *len = 0;
+    return 0;
+}
+
+static sasl_callback_t callbacks[] = {
+    { SASL_CB_USER, &usercb, NULL },
+    { SASL_CB_LIST_END, NULL, NULL }
+};
+
 static struct lmtp_conn *getconn(const char *server)
 {
     int r;
@@ -335,7 +349,7 @@ static struct lmtp_conn *getconn(const char *server)
 	/* create a new one */
 	p = xmalloc(sizeof(struct connlist));
 	p->host = xstrdup(server);
-	r = lmtp_connect(p->host, NULL, &p->conn);
+	r = lmtp_connect(p->host, callbacks, &p->conn);
 	if (r) {
 	    fatal("can't connect to backend lmtp server", EC_TEMPFAIL);
 	}
@@ -469,10 +483,9 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
 	lt->data = msgdata->data;
 	lt->rcpt_num = d->rnum;
 	rc = d->to;
-	while (rc) {
+	for (rc = d->to; rc != NULL; rc = rc->next) {
 	    assert(i < d->rnum);
 	    lt->rcpt[i++].addr = rc->mailbox;
-	    rc = rc->next;
 	}
 	assert(i == d->rnum);
 	
@@ -482,20 +495,22 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
 	    putconn(d->server, remote);
 	} else {
 	    /* remote server not available; tempfail all deliveries */
-	    for (i = 0; i < d->rnum; i++) {
+	    for (rc = d->to, i = 0; i < d->rnum; i++) {
 		lt->rcpt[i].result = RCPT_TEMPFAIL;
+		lt->rcpt[i].r = IMAP_SERVER_UNAVAILABLE;
 	    }
 	}
 
 	/* process results of the txn, propogating error state to the
 	   recipients */
 	for (rc = d->to, i = 0; rc != NULL; rc = rc->next, i++) {
-	    switch (mydata->pend[i]) {
+	    int j = rc->rcpt_num;
+	    switch (mydata->pend[j]) {
 	    case s_wait:
 		/* hmmm, if something fails we'll want to try an 
 		   error delivery */
 		if (lt->rcpt[i].result != RCPT_GOOD) {
-		    mydata->pend[i] = s_err;
+		    mydata->pend[j] = s_err;
 		}
 		break;
 	    case s_err:
@@ -504,8 +519,8 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
 		break;
 	    case nosieve:
 		/* this is the only delivery we're attempting for this rcpt */
-		msg_setrcpt_status(msgdata, i, lt->rcpt[i].r);
-		mydata->pend[i] = done;
+		msg_setrcpt_status(msgdata, j, lt->rcpt[i].r);
+		mydata->pend[j] = done;
 		break;
 	    case done:
 	    case s_done:
@@ -616,10 +631,15 @@ int deliver(message_data_t *msgdata, char *authuser,
 	case s_wait:
 	case s_err:
 	case s_done:
-	case nosieve:
 	    /* yikes, we haven't implemented sieve ! */
 	    syslog(LOG_CRIT, 
 		   "sieve states reached, but we don't implement sieve");
+	    abort();
+	    break;
+	case nosieve:
+	    /* yikes, we never got an answer on this one */
+	    syslog(LOG_CRIT, "still waiting for response to rcpt %d",
+		   n);
 	    abort();
 	    break;
 	case done:
