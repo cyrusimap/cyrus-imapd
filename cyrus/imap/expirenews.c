@@ -41,7 +41,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: expirenews.c,v 1.1.2.6 2003/02/13 20:32:55 rjs3 Exp $ */
+/* $Id: expirenews.c,v 1.1.2.7 2003/02/28 21:56:12 ken3 Exp $ */
 
 #include <config.h>
 
@@ -55,11 +55,21 @@
 
 #include "exitcodes.h"
 #include "global.h"
+#include "mailbox.h"
+#include "mboxlist.h"
 #include "netnews.h"
 #include "xmalloc.h"
 
 /* global state */
 const int config_need_data = 0;
+
+struct purge_rock {
+    struct wildmat *wild;
+    time_t expire;
+    unsigned long deleted;
+    unsigned long messages;
+    unsigned long mailboxes;
+};
 
 void usage(void)
 {
@@ -67,14 +77,90 @@ void usage(void)
     exit(-1);
 }
 
+/*
+ * netnews_findall() callback to purge expired entries.
+ */
 int prune_cb(char *msgid, char *mailbox, unsigned long uid,
 	     unsigned long lines, time_t tstamp, void *rock)
 {
-    int *deletions = (int *) rock;
+    unsigned long *deletions = (unsigned long *) rock;
 
     (*deletions)++;
 
     netnews_delete(msgid);
+
+    return 0;
+}
+
+/*
+ * mailbox_expunge() callback to expunge expired articles.
+ */
+static int expunge_cb(struct mailbox *mailbox, void *rock, char *index)
+{
+    struct purge_rock *prock = (struct purge_rock *) rock;
+    bit32 senttime = ntohl(*((bit32 *)(index+OFFSET_SENTDATE)));
+
+    prock->messages++;
+
+    if (senttime < prock->expire) {
+	prock->deleted++;
+	return 1;
+    }
+
+    return 0;
+}
+
+/*
+ * mboxlist_findall() callback function to expire articles from mailboxes
+ * which match the wildmat.
+ */
+int purge_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
+	     void *rock)
+{
+    static char lastname[MAX_MAILBOX_NAME+1] = "";
+    struct purge_rock *prock = (struct purge_rock *) rock;
+    struct wildmat *wild = prock->wild;
+    struct mailbox mailbox;
+    int r;
+
+    /* skip personal mailboxes */
+    if ((!strncasecmp(name, "INBOX", 5) && (!name[5] || name[5] == '.')) ||
+	!strncmp(name, "user.", 5))
+	return 0;
+
+    /* don't repeat */
+    if (matchlen == strlen(lastname) &&
+	!strncmp(name, lastname, matchlen)) return 0;
+
+    strncpy(lastname, name, matchlen);
+    lastname[matchlen] = '\0';
+
+    /* see if the mailbox matches one of our wildmats */
+    while (wild->pat && wildmat(name, wild->pat) != 1) wild++;
+
+    /* if we don't have a match, or its a negative match, skip it */
+    if (!wild->pat || wild->not) return 0;
+
+    prock->mailboxes++;
+
+    /* Open/lock header */
+    r = mailbox_open_header(name, 0, &mailbox);
+    if (!r && mailbox.header_fd != -1) {
+	(void) mailbox_lock_header(&mailbox);
+	mailbox.header_lock_count = 1;
+    }
+
+    if (!r) r = chdir(mailbox.path);
+
+    /* Attempt to open/lock index */
+    if (!r) r = mailbox_open_index(&mailbox);
+    if (!r) {
+	(void) mailbox_lock_index(&mailbox);
+	mailbox.index_lock_count = 1;
+    }
+
+    if (!r) mailbox_expunge(&mailbox, 1, expunge_cb, prock);
+    mailbox_close(&mailbox);
 
     return 0;
 }
@@ -85,10 +171,12 @@ int main(int argc, char *argv[])
     extern int optind;
     int opt;
     char *alt_config = NULL;
-    int days = 0, count = 0, deleted = 0;
+    unsigned long days = 0, count = 0, deleted = 0;
     time_t expmark;
-    char *p;
+    const char *prefix;
+    char pattern[MAX_MAILBOX_NAME+1] = "", *p;
     struct wildmat *wild;
+    struct purge_rock prock;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
@@ -99,7 +187,7 @@ int main(int argc, char *argv[])
 	    break;
 
 	case 'E':
-	    days = atoi(optarg);
+	    days = atol(optarg);
 	    if (days < 0)
 		fatal("must specify positive number of days", EC_USAGE);
 	    break;
@@ -112,6 +200,10 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "expirenews");
 
+    /* initialize and open mailbox database */
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+
     /* initialize news database */
     if (netnews_init(NULL, 0) != 0) {
 	fprintf(stderr, "expirenews: unable to init news database\n");
@@ -120,7 +212,7 @@ int main(int argc, char *argv[])
 	exit(-1);
     }
 
-    syslog(LOG_NOTICE, "expirenews: pruning back %d days", days);
+    syslog(LOG_NOTICE, "pruning back %lu days", days);
 
     expmark = time(NULL) - (days * 60 * 60 * 24);
 
@@ -133,12 +225,26 @@ int main(int argc, char *argv[])
 
     count = netnews_findall(wild, expmark, 0, prune_cb, &deleted);
 
-    syslog(LOG_NOTICE, "expirenews: purged %d out of %d entries",
+    syslog(LOG_NOTICE, "purged %lu out of %lu entries from database",
 	   deleted, count);
+
+    if ((prefix = config_getstring(IMAPOPT_NEWSPREFIX)))
+	snprintf(pattern, sizeof(pattern), "%s.", prefix);
+    strcat(pattern, "*");
+    prock.wild = wild;
+    prock.expire = expmark;
+    prock.deleted = prock.messages = prock.mailboxes = 0;
+    mboxlist_findall(NULL, pattern, 1, 0, 0, purge_cb, &prock);
+
+    syslog(LOG_NOTICE, "expunged %lu out of %lu message%s from %lu mailbox%s",
+	   prock.deleted, prock.messages, prock.messages == 1 ? "" : "s",
+	   prock.mailboxes, prock.mailboxes == 1 ? "" : "es");
 
     free_wildmats(wild);
 
     netnews_done();
+    mboxlist_close();
+    mboxlist_done();
     cyrus_done();
 
     return 0;
