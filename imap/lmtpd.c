@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.42 2000/07/10 20:03:41 ken3 Exp $
+ * $Id: lmtpd.c,v 1.43 2000/07/10 20:08:05 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.42 2000/07/10 20:03:41 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.43 2000/07/10 20:08:05 leg Exp $";*/
 
 #include <config.h>
 
@@ -641,7 +641,7 @@ int sieve_reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     }
     
     body = msg_getheader(md, "original-recipient");
-    origreceip = body[0];
+    origreceip = body ? body[0] : NULL;
     if ((res = send_rejection(md->id, md->return_path, 
 			      origreceip, sd->username,
 			      rc->msg, md->data)) == 0) {
