@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.211 2002/01/25 17:59:20 rjs3 Exp $
+dnl $Id: configure.in,v 1.212 2002/01/25 19:35:12 rjs3 Exp $
 dnl
 
 
@@ -612,17 +612,13 @@ fi
 dnl
 dnl see if we're compiling the Murder support programs
 dnl
-MUPDATE_CLIENT_OBJS=""
-
 AC_ARG_ENABLE(murder,
         [  --enable-murder         enable IMAP Murder support],
         if test "$enableval" != no; then
 	  IMAP_PROGS="$IMAP_PROGS proxyd pop3proxyd target-acap mupdate mupdatetest"
-	  MUPDATE_CLIENT_OBJS="mupdate-client.o"
         fi) 
 
 AC_SUBST(IMAP_PROGS)
-AC_SUBST(MUPDATE_CLIENT_OBJS)
 
 dnl
 dnl Try and find a system version of com_err.
