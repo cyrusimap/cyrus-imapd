@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.2 2003/10/22 18:03:04 rjs3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.3 2003/12/11 22:12:24 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -79,6 +79,9 @@ extern void fatal(const char *, int);
 #define txn_checkpoint(xx1,xx2,xx3,xx4) (xx1)->txn_checkpoint(xx1,xx2,xx3,xx4)
 #define txn_id(xx1) (xx1)->id(xx1)
 #define log_archive(xx1,xx2,xx3,xx4) (xx1)->log_archive(xx1,xx2,xx3)
+#define txn_begin(xx1,xx2,xx3,xx4) (xx1)->txn_begin(xx1,xx2,xx3,xx4)
+#define txn_commit(xx1,xx2) (xx1)->commit(xx1,xx2)
+#define txn_abort(xx1) (xx1)->abort(xx1)
 #elif DB_VERSION_MINOR == 3
 #define log_archive(xx1,xx2,xx3,xx4) log_archive(xx1,xx2,xx3)
 #endif
