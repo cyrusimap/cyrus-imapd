@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.18.2.4 2004/03/24 19:53:06 ken3 Exp $
+ * $Id: lmtpengine.h,v 1.18.2.5 2004/04/17 18:47:30 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -106,7 +106,7 @@ struct addheader {
 struct lmtp_func {
     int (*deliver)(message_data_t *m, 
 		   char *authuser, struct auth_state *authstate);
-    int (*verify_user)(const char *user, const char *domain, const char *mailbox,
+    int (*verify_user)(const char *user, const char *domain, char *mailbox,
 		       long quotacheck, /* user must have this much quota left
 					   (-1 means don't care about quota) */
 		       struct auth_state *authstate);

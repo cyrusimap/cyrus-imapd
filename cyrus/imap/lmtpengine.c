@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.93.2.11 2004/03/24 19:53:06 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.93.2.12 2004/04/17 18:47:30 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -808,7 +808,7 @@ static int savemsg(struct clientdata *cd,
 static int process_recipient(char *addr, struct namespace *namespace,
 			     int ignorequota,
 			     int (*verify_user)(const char *, const char *,
-						const char *, long,
+						char *, long,
 						struct auth_state *),
 			     message_data_t *msg)
 {

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.17 2004/04/17 01:52:46 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.18 2004/04/17 18:47:29 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -101,9 +101,8 @@ static sieve_interp_t *sieve_interp = NULL;
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
-static int verify_user(const char *user, const char *domain, const char *mailhox,
-		       long quotacheck,
-		       struct auth_state *authstate);
+static int verify_user(const char *user, const char *domain, char *mailhox,
+		       long quotacheck, struct auth_state *authstate);
 static char *generate_notify(message_data_t *m);
 
 void shut_down(int code);
@@ -388,7 +387,7 @@ static int fuzzy_match(char *mboxname)
 /* proxy mboxlist_lookup; on misses, it asks the listener for this
    machine to make a roundtrip to the master mailbox server to make
    sure it's up to date */
-static int mlookup(char *name, char **server, char **aclp, void *tid)
+static int mlookup(const char *name, char **server, char **aclp, void *tid)
 {
     int r, type;
 
@@ -418,11 +417,6 @@ static int mlookup(char *name, char **server, char **aclp, void *tid)
 	r = mboxlist_detail(name, &type, NULL, NULL, server, aclp, tid);
 	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
 	    kick_mupdate();
-	    r = mboxlist_detail(name, &type, NULL, NULL, server, aclp, tid);
-	}
-	if (r == IMAP_MAILBOX_NONEXISTENT &&
-	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
-	    fuzzy_match(name)) {
 	    r = mboxlist_detail(name, &type, NULL, NULL, server, aclp, tid);
 	}
     }
@@ -879,7 +873,7 @@ void shut_down(int code)
     exit(code);
 }
 
-static int verify_user(const char *user, const char *domain, const char *mailbox,
+static int verify_user(const char *user, const char *domain, char *mailbox,
 		       long quotacheck, struct auth_state *authstate)
 {
     char namebuf[MAX_MAILBOX_NAME+1] = "";
@@ -921,6 +915,20 @@ static int verify_user(const char *user, const char *domain, const char *mailbox
 	 * - don't care about message size (1 msg over quota allowed)
 	 */
 	r = mlookup(namebuf, &server, &acl, NULL);
+
+	if (r == IMAP_MAILBOX_NONEXISTENT && !user &&
+	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
+	    /* see if we have a mailbox whose name is close */
+	    fuzzy_match(namebuf)) {
+
+	    /* We are guaranteed that the mailbox returned by fuzzy_match()
+	       will be no longer than the original, so we can copy over
+	       the existing mailbox.  The keeps us from having to do the
+	       fuzzy match multiple times. */
+	    strcpy(mailbox, domain ? namebuf+strlen(domain)+1 : namebuf);
+
+	    r = mlookup(namebuf, &server, &acl, NULL);
+	}
 
 	if (!r && server) {
 	    int access = cyrus_acl_myrights(authstate, acl);
