@@ -175,7 +175,7 @@ acap_conn_t *acapmbox_get_acapconn(acapmbox_handle_t *AC);
 int acapmbox_dataset_name(const char *mailbox, char *ret);
 
 /* helper function */
-int add_attr(skiplist *sl, char *name, char *value)
+int add_attr(skiplist *sl, char *name, char *value);
 
 /**************** proxy use *****************/
 #define FNAME_TARGET_SOCK "/socket/target"
