@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.36 1999/02/09 01:16:49 tjs Exp $
+# $Id: SMakefile,v 1.37 1999/02/15 09:58:26 tjs Exp $
 #
 
 MAKE=gmake
@@ -17,7 +17,8 @@ fi
 
 # CFLAGS="${CFLAGS} -g"
 
-VER=`smake -D | sed 's;^.*\/;;'`
+#VER=`smake -D | sed 's;^.*\/;;'`
+VER="XXX"
 LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 
 # Ryan's aggressive optimizations
@@ -38,7 +39,7 @@ if test "${OVERRIDE-nil}" != "t" ; then
       ;;
     SunOS)
       CFLAGS="${CFLAGS} -xO3 "
-      LDFLAGS="${LDFLAGS} -xs -xO3"
+      LDFLAGS="${LDFLAGS} -xs -xO3 -xdepend"
       ;;
     ULTRIX)
       CC=gcc # cheat -- Ultrix cc is aged
