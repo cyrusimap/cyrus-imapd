@@ -604,7 +604,7 @@ not written
 	date = dbm_fetch(DeliveredDBptr, delivery);
 	if (!date.dptr) continue;
 	if (date.dsize < len ||
-	    (date.dsize == len  && bcmp(date.dptr, datebuf, len) < 0)) {
+	    (date.dsize == len  && memcmp(date.dptr, datebuf, len) < 0)) {
 	    if (dbm_delete(DeliveredDBptr, delivery)) {
 		rcode = 1;
 	    }
