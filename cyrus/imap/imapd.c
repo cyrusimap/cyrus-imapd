@@ -187,7 +187,7 @@ int code;
 cmdloop()
 {
     int c;
-    int usinguid, havepartition, havenamespace;
+    int usinguid, havepartition, havenamespace, oldform;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
     char *p;
 
@@ -328,15 +328,17 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Deleteacl")) {
 		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
+		c = getastring(&arg1);
+		if (!strcasecmp(arg1, "mailbox")) {
+		    if (c != ' ') goto missingargs;
+		    c = getastring(&arg1);
+		}
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg2);
-		if (c != ' ') goto missingargs;
-		c = getastring(&arg3);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s, (char *)0);
+		cmd_setacl(tag.s, arg1.s, arg2.s, (char *)0);
 	    }
 	    else goto badcmd;
 	    break;
@@ -384,14 +386,18 @@ cmdloop()
 
 	case 'G':
 	    if (!strcmp(cmd.s, "Getacl")) {
+		oldform = 0;
 		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
-		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(&arg1);
+		if (!strcasecmp(arg1, "mailbox")) {
+		    oldform = 1;
+		    if (c != ' ') goto missingargs;
+		    c = getastring(&arg1);
+		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_getacl(tag.s, arg1.s, arg2.s);
+		cmd_getacl(tag.s, arg1.s, oldform);
 	    }
 	    else if (!strcmp(cmd.s, "Getquota")) {
 		if (c != ' ') goto missingargs;
@@ -458,14 +464,18 @@ cmdloop()
 
 	case 'M':
 	    if (!strcmp(cmd.s, "Myrights")) {
+		oldform = 0;
 		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
-		if (c != ' ') goto missingargs;
-		c = getastring(&arg2);
+		c = getastring(&arg1);
+		if (!strcasecmp(arg1, "mailbox")) {
+		    oldform = 1;
+		    if (c != ' ') goto missingargs;
+		    c = getastring(&arg1);
+		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_myrights(tag.s, arg1.s, arg2.s);
+		cmd_myrights(tag.s, arg1.s, oldform);
 	    }
 	    else goto badcmd;
 	    break;
@@ -566,17 +576,19 @@ cmdloop()
 	    }		
 	    else if (!strcmp(cmd.s, "Setacl")) {
 		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
+		c = getastring(&arg1);
+		if (!strcasecmp(arg1, "mailbox")) {
+		    if (c != ' ') goto missingargs;
+		    c = getastring(&arg1);
+		}
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg2);
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg3);
-		if (c != ' ') goto missingargs;
-		c = getastring(&arg4);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s, arg4.s);
+		cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s);
 	    }
 	    else if (!strcmp(cmd.s, "Setquota")) {
 		if (c != ' ') goto missingargs;
@@ -1979,27 +1991,17 @@ int add;
 /*
  * Perform a GETACL command
  */
-cmd_getacl(tag, namespace, name)
+cmd_getacl(tag, name, oldform)
 char *tag;
-char *namespace;
 char *name;
+int oldform;
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, access;
     char *acl;
     char *rights, *nextid;
 
-    lcase(namespace);
-    if (!strcmp(namespace, "bboard")) {
-	r = IMAP_MAILBOX_NONEXISTENT;
-    }
-    else if (!strcmp(namespace, "mailbox")) {
-	r = mboxname_tointernal(name, imapd_userid, mailboxname);
-    }
-    else {
-	prot_printf(imapd_out, "%s BAD Invalid Getacl subcommand\r\n", tag);
-	return;
-    }
+    r = mboxname_tointernal(name, imapd_userid, mailboxname);
 
     if (!r) {
 	r = mboxlist_lookup(mailboxname, (char **)0, &acl);
@@ -2020,23 +2022,46 @@ char *name;
 	return;
     }
     
-    while (acl) {
-	rights = strchr(acl, '\t');
-	if (!rights) break;
-	*rights++ = '\0';
+    if (oldform) {
+	while (acl) {
+	    rights = strchr(acl, '\t');
+	    if (!rights) break;
+	    *rights++ = '\0';
 
-	nextid = strchr(rights, '\t');
-	if (!nextid) break;
-	*nextid++ = '\0';
+	    nextid = strchr(rights, '\t');
+	    if (!nextid) break;
+	    *nextid++ = '\0';
 
-	prot_printf(imapd_out, "* ACL MAILBOX ");
+	    prot_printf(imapd_out, "* ACL MAILBOX ");
+	    printastring(name);
+	    prot_printf(imapd_out, " ");
+	    printastring(acl);
+	    prot_printf(imapd_out, " ");
+	    printastring(rights);
+	    prot_printf(imapd_out, "\r\n");
+	    acl = nextid;
+	}
+    }
+    else {
+	prot_printf(imapd_out, "* ACL ");
 	printastring(name);
-	prot_printf(imapd_out, " ");
-	printastring(acl);
-	prot_printf(imapd_out, " ");
-	printastring(rights);
+	
+	while (acl) {
+	    rights = strchr(acl, '\t');
+	    if (!rights) break;
+	    *rights++ = '\0';
+
+	    nextid = strchr(rights, '\t');
+	    if (!nextid) break;
+	    *nextid++ = '\0';
+
+	    prot_printf(imapd_out, " ");
+	    printastring(acl);
+	    prot_printf(imapd_out, " ");
+	    printastring(rights);
+	    acl = nextid;
+	}
 	prot_printf(imapd_out, "\r\n");
-	acl = nextid;
     }
     prot_printf(imapd_out, "%s OK Getacl completed\r\n", tag);
 }
@@ -2044,27 +2069,17 @@ char *name;
 /*
  * Perform a MYRIGHTS command
  */
-cmd_myrights(tag, namespace, name)
+cmd_myrights(tag, name, oldform)
 char *tag;
-char *namespace;
 char *name;
+int oldform;
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, rights;
     char *acl;
     char str[ACL_MAXSTR];
 
-    lcase(namespace);
-    if (!strcmp(namespace, "bboard")) {
-	r = IMAP_MAILBOX_NONEXISTENT;
-    }
-    else if (!strcmp(namespace, "mailbox")) {
-	r = mboxname_tointernal(name, imapd_userid, mailboxname);
-    }
-    else {
-	prot_printf(imapd_out, "%s BAD Invalid Myrights subcommand\r\n", tag);
-	return;
-    }
+    r = mboxname_tointernal(name, imapd_userid, mailboxname);
 
     if (!r) {
 	r = mboxlist_lookup(mailboxname, (char **)0, &acl);
@@ -2088,7 +2103,8 @@ char *name;
 	return;
     }
     
-    prot_printf(imapd_out, "* MYRIGHTS MAILBOX ");
+    prot_printf(imapd_out, "* MYRIGHTS ");
+    if (oldform) prot_printf(imapd_out, "MAILBOX ");
     printastring(name);
     prot_printf(imapd_out, " ");
     printastring(acl_masktostr(rights, str));
@@ -2098,9 +2114,8 @@ char *name;
 /*
  * Perform a SETACL command
  */
-cmd_setacl(tag, namespace, name, identifier, rights)
+cmd_setacl(tag, name, identifier, rights)
 char *tag;
-char *namespace;
 char *name;
 char *identifier;
 char *rights;
@@ -2109,17 +2124,7 @@ char *rights;
     char *cmd = rights ? "Setacl" : "Deleteacl";
     char mailboxname[MAX_MAILBOX_NAME+1];
 
-    lcase(namespace);
-    if (!strcmp(namespace, "bboard")) {
-	r = IMAP_MAILBOX_NONEXISTENT;
-    }
-    else if (!strcmp(namespace, "mailbox")) {
-	r = mboxname_tointernal(name, imapd_userid, mailboxname);
-    }
-    else {
-	prot_printf(imapd_out, "%s BAD Invalid %s subcommand\r\n", tag, cmd);
-	return;
-    }
+    r = mboxname_tointernal(name, imapd_userid, mailboxname);
 
     if (!r) {
 	r = mboxlist_setacl(mailboxname, identifier, rights,
