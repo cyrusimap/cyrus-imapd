@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.1.2.1 2005/02/21 19:25:46 ken3 Exp $
+ * $Id: sync_commit.c,v 1.1.2.2 2005/02/21 20:56:47 ken3 Exp $
  */
 
 #include <config.h>
@@ -215,8 +215,8 @@ sync_combine_commit(struct mailbox *mailbox,
                 *((bit32 *)(buf+OFFSET_USER_FLAGS+4*n))
                     = htonl(record.user_flags[n]);
             }
-            *((bit32 *)(buf+OFFSET_CONTENT_LINES))= htonl(record.content_lines);
-            *((bit32 *)(buf+OFFSET_CACHE_VERSION))= htonl(record.cache_version);
+            *((bit32 *)(buf+OFFSET_CONTENT_LINES))=htonl(record.content_lines);
+            *((bit32 *)(buf+OFFSET_CACHE_VERSION))=htonl(record.cache_version);
             message_uuid_pack(&record.uuid, buf+OFFSET_MESSAGE_UUID);
 #else
 	    mailbox_index_record_to_buf(&record, buf);
@@ -240,7 +240,7 @@ sync_combine_commit(struct mailbox *mailbox,
             *((bit32 *)(buf+OFFSET_SENTDATE))     = htonl(item->sentdate);
             *((bit32 *)(buf+OFFSET_SIZE))         = htonl(message->msg_size);
             *((bit32 *)(buf+OFFSET_HEADER_SIZE))  = htonl(message->hdr_size);
-            *((bit32 *)(buf+OFFSET_CONTENT_OFFSET))= htonl(message->hdr_size);
+            *((bit32 *)(buf+OFFSET_CONTENT_OFFSET)) = htonl(message->hdr_size);
             *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(item->last_updated);
             *((bit32 *)(buf+OFFSET_SYSTEM_FLAGS))
                 = htonl(item->flags.system_flags);
@@ -249,11 +249,12 @@ sync_combine_commit(struct mailbox *mailbox,
                 *((bit32 *)(buf+OFFSET_USER_FLAGS+4*n))
                     = htonl(item->flags.user_flags[n]);
             }
-            *((bit32 *)(buf+OFFSET_CONTENT_LINES))= htonl(message->content_lines);
-            *((bit32 *)(buf+OFFSET_CACHE_VERSION))= htonl(message->cache_version);
+            *((bit32 *)(buf+OFFSET_CONTENT_LINES))
+		= htonl(message->content_lines);
+            *((bit32 *)(buf+OFFSET_CACHE_VERSION))
+		= htonl(message->cache_version);
 
             message_uuid_pack(&item->uuid, buf+OFFSET_MESSAGE_UUID);
-
             quota_add  += message->msg_size;
 
             if (item->flags.system_flags & FLAG_ANSWERED) numansweredflag++;
@@ -442,73 +443,6 @@ uid_array_free(struct uid_array *uid_array)
     free(uid_array);
 }
 
-static int
-sync_combine_check_cb(struct mailbox *mailbox __attribute__((unused)),
-		      void *rock, char *indexbuf,
-		      int expunge_flags __attribute__((unused)))
-{
-    struct uid_array *uid_array = (struct uid_array *)rock;
-    unsigned long *array = &uid_array->array[0];
-    unsigned long first, last, middle;
-    unsigned long uid = ntohl(*((bit32 *)(indexbuf+OFFSET_UID)));
-
-    first = 0;
-    last  = uid_array->size;
-
-    while (first < last) {             /* Binary chop */
-        middle = (first + last) / 2;
-
-        if (array[middle] == uid)
-            return (1);
-        else if (array[middle] < uid)
-            first = middle + 1;
-        else
-            last = middle;
-    }
-    return (0);
-}
-
-/* YYY This function is hangover from HERMES_TWO_PHASE_EXPUNGE.
- *     Is it correct in vanilla Cyrus system?
- */
-
-static int
-sync_combine_expunge_duplicates(struct mailbox *live_mailbox,
-                               struct sync_upload_list *upload_list)
-{
-    struct mailbox m;
-    char   buf[MAX_MAILBOX_PATH+1];
-    int r = 0;
-    unsigned long count = 0;
-    unsigned long size = 0;
-    int mailbox_open = 0;
-    struct uid_array *uid_array = NULL;
-
-    if (upload_list->count == 0)  /* Nothing to do: no possible conflicts */
-        return(0);
-
-    if (!r) r = mailbox_open_header(live_mailbox->name, 0, &m);
-    if (!r) mailbox_open = 1;
-    if (!r) r = mailbox_open_index(&m);
-
-    if (r) {
-        syslog(LOG_NOTICE, "error opening %s: %s\n",
-               live_mailbox->name, error_message(r));
-        return(r);
-    }
-
-    if ((uid_array=uid_array_create(upload_list)) == NULL)
-        return(IMAP_IOERROR);
-
-    /* NB: this should be mailbox_expire with two phase expunge */
-    r = mailbox_expunge(&m, sync_combine_check_cb, uid_array, 0);
-
-    uid_array_free(uid_array);
-
-    if (mailbox_open) mailbox_close(&m);
-    return(r);
-}
-
 /* ====================================================================== */
 
 static int
@@ -570,8 +504,10 @@ sync_append_commit(struct mailbox *mailbox,
             *((bit32 *)(record+OFFSET_USER_FLAGS+4*n))
                 = htonl(item->flags.user_flags[n]);
         }
-        *((bit32 *)(record+OFFSET_CONTENT_LINES)) = htonl(message->content_lines);
-        *((bit32 *)(record+OFFSET_CACHE_VERSION)) = htonl(message->cache_version);
+        *((bit32 *)(record+OFFSET_CONTENT_LINES))
+	    = htonl(message->content_lines);
+        *((bit32 *)(record+OFFSET_CACHE_VERSION))
+	    = htonl(message->cache_version);
         message_uuid_pack(&item->uuid, record+OFFSET_MESSAGE_UUID);
 
         cache_size += message->cache_size;
@@ -676,6 +612,7 @@ sync_append_commit(struct mailbox *mailbox,
     mailbox->quota.used += quota_add;
     r = quota_write(&mailbox->quota, &tid);
     if (!r) quota_commit(&tid);
+
     if (r) {
         syslog(LOG_ERR,
                "LOSTQUOTA: unable to record %lu bytes allocated in quota %s",
@@ -730,24 +667,23 @@ sync_upload_commit(struct mailbox *mailbox,
     if ((r=mailbox_lock_header(mailbox)))
         return(r);
 
-    if ((r=mailbox_lock_index(mailbox)))
+    if ((r=mailbox_lock_index(mailbox))) {
+	mailbox_unlock_header(mailbox);
         return(r);
+    }
 
     if (mailbox->last_uid >= head->uid) {
-        /* Release mailbox lock for a second */
-        mailbox_unlock_index(mailbox);
-        mailbox_unlock_header(mailbox);
-
-        /* Check for messages that we want to upload which have previously
-           been uploaded, expunged. Remove messages so we can upload again */
-        r = sync_combine_expunge_duplicates(mailbox, upload_list);
-
-        /* Reacquire mailbox lock */
-        if (!r) r = mailbox_lock_header(mailbox);
-        if (!r) r = mailbox_lock_index(mailbox);
-
-        if (!r) r = sync_combine_commit(mailbox, last_appenddate,
-                                        upload_list, message_list);
+	/* Note for Ken:
+	 *
+	 * HERMES_TWO_PHASE_EXPUNGE has some code here to expire messages
+	 * which have been expunged but not expired before uploading them
+	 * again. This is to make sure that a message with a given UID
+	 * never ends up in both the live and expunged version of a given
+	 * mailbox. Something similar might be needed with the lazy
+	 * expunge code in Cyrus 2.3
+	 */
+	r = sync_combine_commit(mailbox, last_appenddate,
+				upload_list, message_list);
     } else
         r = sync_append_commit(mailbox, last_appenddate,
                                upload_list, message_list);
@@ -919,20 +855,7 @@ sync_create_commit(char *name, char *uniqueid, char *acl,
     r = mboxlist_createmailboxcheck(name, 0, partition, 1,
                                     imapd_userid, imapd_authstate,
                                     NULL, &newpartition);
-
-    /* Get partition's path */
-    root = config_partitiondir(newpartition);
-    if (!root) {
-        r = IMAP_PARTITION_UNKNOWN;
-        syslog(LOG_ERR,
-               "Could not find partition-%s in config file during create",
-               newpartition);
-        goto done;
-    }
-    if (strlen(root)+strlen(name)+20 > MAX_MAILBOX_PATH) {
-        r = IMAP_MAILBOX_BADNAME;
-        goto done;
-    }
+    if (r) goto done;
 
     mboxent = mboxlist_makeentry(mbtype | MBTYPE_RESERVE, newpartition, acl);
     r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), NULL);
@@ -949,14 +872,8 @@ sync_create_commit(char *name, char *uniqueid, char *acl,
 
  done: /* All checks compete.  Time to fish or cut bait. */
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
-	/* Filesystem Operations */
-	char mbbuf[MAX_MAILBOX_PATH+1];
-#if 0  /* XXX  what is this? */
 	/* Create new mailbox in the filesystem */
-	mailbox_hash_mbox(mbbuf, sizeof(mbbuf), root, name);
-#endif
-	/* Create new mailbox in the filesystem */
-	r = mailbox_create(name, newpartition/*mbbuf*/, acl, uniqueid,
+	r = mailbox_create(name, newpartition, acl, uniqueid,
 			   ((mbtype & MBTYPE_NETNEWS) ?
 			    MAILBOX_FORMAT_NETNEWS :
 			    MAILBOX_FORMAT_NORMAL), 
@@ -1008,4 +925,3 @@ sync_create_commit(char *name, char *uniqueid, char *acl,
 
     return(r);
 }
-
