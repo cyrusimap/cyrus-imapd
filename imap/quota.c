@@ -370,7 +370,6 @@ int
 fixquota(ispartial)
 int ispartial;
 {
-    FILE *listfile;
     int r;
     static char pattern[2] = "*";
 
@@ -378,7 +377,7 @@ int ispartial;
      * Lock mailbox list to prevent mailbox creation/deletion
      * during the fix
      */
-    r = mboxlist_openlock(&listfile, (unsigned *)0);
+    r = mboxlist_openlock();
     if (r) return r;
 
     redofix = 1;
@@ -389,20 +388,20 @@ int ispartial;
 
 	r = mboxlist_findall(pattern, 1, 0, fixquota_mailbox);
 	if (r) {
-	    fclose(listfile);
+	    mboxlist_unlock();
 	    return r;
 	}
 
 	while (firstquota < quota_num) {
 	    r = fixquota_finish(firstquota++);
 	    if (r) {
-		fclose(listfile);
+		mboxlist_unlock();
 		return r;
 	    }
 	}
     }
     
-    fclose(listfile);
+    mboxlist_unlock();
     return 0;
 }
     
