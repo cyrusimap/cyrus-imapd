@@ -94,6 +94,8 @@
 *
 */
 
+/* $Id: tls.c,v 1.17 2001/08/10 18:31:25 ken3 Exp $ */
+
 #include <config.h>
 
 #ifdef HAVE_SSL
@@ -552,7 +554,8 @@ SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
 /*
  * Delete expired sessions.
  */
-int find_p(void *rock, const char *id, int idlen, const char *data, int len)
+static int find_p(void *rock, const char *id, int idlen,
+		  const char *data, int datalen)
 {
     time_t expire;
 
@@ -563,7 +566,8 @@ int find_p(void *rock, const char *id, int idlen, const char *data, int len)
     return (expire < time(0));
 }
 
-int find_cb(void *rock, const char *id, int idlen, const char *data, int len)
+static int find_cb(void *rock, const char *id, int idlen,
+		   const char *data, int datalen)
 {
     DB->delete((struct db *) rock, id, idlen, NULL);
 
