@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.126 2002/06/06 19:39:54 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.127 2002/06/07 02:05:33 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -3668,18 +3668,18 @@ void cmd_find(char *tag, char *namespace, char *pattern)
     /* Translate any separators in pattern */
     mboxname_hiersep_tointernal(&proxyd_namespace, pattern);
 
-    if (!strcmp(namespace, "mailboxes")) {
+    if (!strcasecmp(namespace, "mailboxes")) {
 	(*proxyd_namespace.mboxlist_findsub)(&proxyd_namespace, pattern,
 					     proxyd_userisadmin, proxyd_userid,
 					     proxyd_authstate, mailboxdata,
 					     NULL, 1);
-    } else if (!strcmp(namespace, "all.mailboxes")) {
+    } else if (!strcasecmp(namespace, "all.mailboxes")) {
 	(*proxyd_namespace.mboxlist_findall)(&proxyd_namespace, pattern,
 					     proxyd_userisadmin, proxyd_userid,
 					     proxyd_authstate, mailboxdata,
 					     NULL);
-    } else if (!strcmp(namespace, "bboards")
-	       || !strcmp(namespace, "all.bboards")) {
+    } else if (!strcasecmp(namespace, "bboards")
+	       || !strcasecmp(namespace, "all.bboards")) {
 	;
     } else {
 	prot_printf(proxyd_out, "%s BAD Invalid FIND subcommand\r\n", tag);
