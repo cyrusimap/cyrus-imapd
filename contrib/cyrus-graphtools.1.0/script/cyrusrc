@@ -1,0 +1,13 @@
+$MASTER=".1.3.6.1.4.1.3.6.1.2.1"; 		#snmp root for data
+$RRD="/usr/local/bin/rrdtool";			#rrdtool program
+$DPTH="/data/cyrus";				#data root
+$PROG_PATH="/data/prog/cyrus";			#program root
+%HOSTS=("mail-fe2.andrew.cmu.edu" => "public",	
+        "mail-fe3.andrew.cmu.edu" => "public",
+        "mail-fe4.andrew.cmu.edu" => "public",
+        "mail1.andrew.cmu.edu" => "public",
+        "mail2.andrew.cmu.edu" => "public",
+        "mail3.andrew.cmu.edu" => "public",
+        "mail4.andrew.cmu.edu" => "public",
+);						#host => read-community string
+

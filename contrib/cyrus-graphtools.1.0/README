@@ -1,0 +1,65 @@
+
+cyrus-graphtools v1.0
+Alison Greenwald <alison@andrew.cmu.edu>
+
+
+This archive contains the scripts necessary for collecting data from
+CMU cyrus server with UCD SNMP support.  It contains:
+
+script/cyrus.pl - script for retreiving data from the server and
+		  dumping it into an rrdtool database
+script/cyrusrc  - configuration options for rrdtool database
+script/run      - a shell script to automatically run cyrus.pl every
+                  4 minutes.  Due to rrdtool excentricities, a cron
+                  job that runs every 5 minutes is not sufficient.
+
+cgi-bin/cyrus_master.pl	   - a cgi script that determines what rrdtool
+			     are available and provides links to them
+cgi-bin/graph_cyrus_db.pl  - a cgi script that graphs the rrdtool db
+			     passed to it
+
+html/index.html		   - sample html script that links to
+			     cyrus_master.pl and graph_cyrus_db-sum.pl
+
+--------
+
+cyrus-graphtools requires that you have rrdtool version 1.0.28 or
+better installed.  It may work with other 1.0+ versions, but I have
+not tested it.  It is available here:
+http://ee-staff.ethz.ch/~oetiker/webtools/rrdtool/pub  
+
+
+Also required is net-snmp 4.2 (formerly ucd-snmp), however this is
+required for the cyrus snmp functionality as well.  It is available at
+http://sourceforge.net/project/showfiles.php?group_id=12694
+
+ 
+-------
+
+Data collection:
+
+For data collection you must create a program directory and a data
+directory.  The scripts assume /data/prog/cyrus and /data/cyrus,
+respectively.  This can be changed by editing script/cyrusrc.
+
+Move the contents of script/ to your data directory and run "run" and
+your data is being collected.
+
+-------
+
+Web Display:
+
+Web graphing also assumes that data is in /data/cyrus, so if this is
+different, edit $DDIR in all three cgi scripts.
+
+In addition, it assumes that apache document root is /usr/www/tree and
+there is a directory called current/tainted that nobody (or whomever
+httpd runs as) can write to.  $picdir and $hpicdir store the internal
+and external names for these directories.
+
+Copy the cgi-bin's into your cgi-bin directory and the html into your
+html directory and you should be ready to go.
+
+-------
+
+any comments or suggestions can be sent to alison@andrew.cmu.edu
