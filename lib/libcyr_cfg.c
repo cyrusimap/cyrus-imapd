@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.8 2004/02/26 18:03:07 ken3 Exp $
+ * $Id: libcyr_cfg.c,v 1.9 2004/02/26 22:41:32 rjs3 Exp $
  */
 
 #include <config.h>
@@ -99,7 +99,7 @@ struct cyrusopt_s cyrus_options[] = {
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_PTLOADER_SOCK,
-      CFGVAL(const char *, "/ptclient/ptsock"),
+      CFGVAL(const char *, NULL),
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_VIRTDOMAINS,
