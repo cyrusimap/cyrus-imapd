@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.396 2002/06/06 00:12:33 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.397 2002/06/07 02:05:32 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -3936,19 +3936,21 @@ char *pattern;
     /* Translate any separators in pattern */
     mboxname_hiersep_tointernal(&imapd_namespace, pattern);
 
-    if (!strcmp(namespace, "mailboxes")) {
+    if (!strcasecmp(namespace, "mailboxes")) {
+	int force = config_getswitch("allowallsubscribe", 0);
+
 	(*imapd_namespace.mboxlist_findsub)(&imapd_namespace, pattern,
 					    imapd_userisadmin, imapd_userid,
 					    imapd_authstate, mailboxdata,
-					    NULL, 0);
+					    NULL, force);
     }
-    else if (!strcmp(namespace, "all.mailboxes")) {
+    else if (!strcasecmp(namespace, "all.mailboxes")) {
 	(*imapd_namespace.mboxlist_findall)(&imapd_namespace, pattern,
 					    imapd_userisadmin, imapd_userid,
 					    imapd_authstate, mailboxdata, NULL);
     }
-    else if (!strcmp(namespace, "bboards")
-	     || !strcmp(namespace, "all.bboards")) {
+    else if (!strcasecmp(namespace, "bboards")
+	     || !strcasecmp(namespace, "all.bboards")) {
 	;
     }
     else {
