@@ -26,12 +26,30 @@
 #include <string.h>
 #include <ctype.h>
 #include <sysexits.h>
-#include <dirent.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <com_err.h>
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+/* unistd.h defines _POSIX_VERSION on POSIX.1 systems. */
+#if defined(DIRENT) || defined(_POSIX_VERSION)
+#include <dirent.h>
+#else /* not (DIRENT or _POSIX_VERSION) */
+#define dirent direct
+#ifdef SYSNDIR
+#include <sys/ndir.h>
+#endif /* SYSNDIR */
+#ifdef SYSDIR
+#include <sys/dir.h>
+#endif /* SYSDIR */
+#ifdef NDIR
+#include <ndir.n>
+#endif /* NDIR */
+#endif /* not (DIRENT or _POSIX_VERSION) */
 
 #include "assert.h"
 #include "config.h"
