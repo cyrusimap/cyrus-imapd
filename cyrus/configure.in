@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.208 2001/12/12 22:22:27 rjs3 Exp $
+dnl $Id: configure.in,v 1.209 2001/12/13 15:27:25 rjs3 Exp $
 dnl
 
 
@@ -485,7 +485,7 @@ if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" ; then
 	if test "$with_statickrb" = "yes"; then
 	    KRB_LIBS="$KRB_LIBS $with_krb/lib/libkrb.a"
 	else
-	    KRB_LIBS="-lkrb"
+	    KRB_LIBS="$KRB_LIBS -lkrb"
 	fi,
                    AC_WARN(No Kerberos V4 found); krb4=no,
 		   $KRB_LIBS),
