@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.14 2000/12/27 16:31:49 ken3 Exp $ */
+/* $Id: service.c,v 1.15 2001/01/29 20:50:33 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -90,7 +90,16 @@ static void libwrap_init(struct request_info *r, char *service)
 static int libwrap_ask(struct request_info *r, int fd)
 {
     int a;
-
+    struct sockaddr_in sin;
+    socklen_t len = sizeof(sin);
+    
+    /* is this a connection from the local host? */
+    if (getpeername(fd, (struct sockaddr *) &sin, &len) == 0) {
+	if (sin.sin_family == AF_UNIX) {
+	    return 1;
+	}
+    }
+    
     /* i hope using the sock_* functions are legal; it certainly makes
        this code very easy! */
     request_set(r, RQ_FILE, fd, 0);
