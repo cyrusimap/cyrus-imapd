@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.1.2.5 2003/04/10 17:55:18 ken3 Exp $
+ * $Id: spool.c,v 1.1.2.6 2003/05/09 02:11:39 ken3 Exp $
  */
 
 #include <config.h>
@@ -404,13 +404,11 @@ void spool_free_hdrcache(hdrcache_t cache)
    . "." terminates 
    . embedded NULs are rejected
    . bare \r are removed
-   . number of lines copied are counted
 */
-int spool_copy_msg(struct protstream *fin, FILE *fout, unsigned long *lines)
+int spool_copy_msg(struct protstream *fin, FILE *fout)
 {
     char buf[8192], *p;
     int r = 0;
-    unsigned long n = 0;
 
     /* -2: Might need room to add a \r\n\0 set */
     while (prot_fgets(buf, sizeof(buf)-2, fin)) {
@@ -462,14 +460,11 @@ int spool_copy_msg(struct protstream *fin, FILE *fout, unsigned long *lines)
 	} else {
 	    if (fout) fputs(buf, fout);
 	}
-
-	n++;
     }
 
     /* wow, serious error---got a premature EOF. */
     return IMAP_IOERROR;
 
   dot:
-    if (lines) *lines = n;
     return r;
 }

@@ -41,7 +41,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: expirenews.c,v 1.1.2.7 2003/02/28 21:56:12 ken3 Exp $ */
+/* $Id: expirenews.c,v 1.1.2.8 2003/05/09 02:11:37 ken3 Exp $ */
 
 #include <config.h>
 
@@ -81,7 +81,7 @@ void usage(void)
  * netnews_findall() callback to purge expired entries.
  */
 int prune_cb(char *msgid, char *mailbox, unsigned long uid,
-	     unsigned long lines, time_t tstamp, void *rock)
+	     time_t tstamp, void *rock)
 {
     unsigned long *deletions = (unsigned long *) rock;
 

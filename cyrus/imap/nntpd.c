@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.80 2003/05/08 20:56:53 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.81 2003/05/09 02:11:38 ken3 Exp $
  */
 
 /*
@@ -207,7 +207,7 @@ static void cmd_help(void);
 static void cmd_list(char *arg1, char *arg2);
 static void cmd_mode(char *arg);
 static int do_newnews(char *msgid, char *mailbox, unsigned long uid,
-		      unsigned long lines, time_t tstamp, void *rock);
+		      time_t tstamp, void *rock);
 static void cmd_over(unsigned long uid, unsigned long last);
 static void cmd_post(char *msgid, int mode);
 static void cmd_starttls(int nntps);
@@ -1440,7 +1440,7 @@ static int parserange(char *str, unsigned long *uid, unsigned long *last,
     else if (*str == '<') {
 	/* message-id, find server and/or mailbox */
 	if (!msgid) goto badrange;
-	if (!netnews_lookup(str, &mboxname, uid, NULL, NULL) ||
+	if (!netnews_lookup(str, &mboxname, uid, NULL) ||
 	    (r = open_group(mboxname, 1, ret, NULL)))
 	    goto nomsgid;
 	*msgid = str;
@@ -2132,7 +2132,7 @@ static void cmd_mode(char *arg)
  * newnews_findall() callback function to list NEWNEWS
  */
 static int do_newnews(char *msgid, char *mailbox, unsigned long uid,
-		      unsigned long lines, time_t tstamp, void *rock)
+		      time_t tstamp, void *rock)
 {
     prot_printf(nntp_out, "%s\r\n", msgid);
 
@@ -2183,7 +2183,6 @@ struct message_data {
     char *path;			/* path */
     char *control;		/* control message */
     unsigned long size;		/* size of message in bytes */
-    unsigned long lines;	/* number of lines in body of message */
 
     char **rcpt;		/* mailboxes to post message */
     int rcpt_num;		/* number of groups */
@@ -2202,7 +2201,6 @@ int msg_new(message_data_t **m)
     ret->path = NULL;
     ret->control = NULL;
     ret->size = 0;
-    ret->lines = 0;
     ret->rcpt = NULL;
     ret->rcpt_num = 0;
 
@@ -2296,7 +2294,7 @@ static int savemsg(message_data_t *m, FILE *f)
 	/* got a bad header */
 
 	/* flush the remaining output */
-	spool_copy_msg(nntp_in, f, NULL);
+	spool_copy_msg(nntp_in, f);
 	return r;
     }
 
@@ -2379,7 +2377,7 @@ static int savemsg(message_data_t *m, FILE *f)
 	}
     }
 
-    r |= spool_copy_msg(nntp_in, f, &m->lines);
+    r |= spool_copy_msg(nntp_in, f);
 
     if (r) return r;
 
@@ -2392,7 +2390,6 @@ static int savemsg(message_data_t *m, FILE *f)
 	return IMAP_IOERROR;
     }
     m->size = sbuf.st_size;
-    m->lines--; /* don't count header/body separator */
     m->f = f;
     m->data = prot_new(fileno(f), 0);
 
@@ -2500,9 +2497,9 @@ static int deliver(message_data_t *msg)
     /* store msgid for IHAVE/CHECK/TAKETHIS and reader commands */
     if (have_newsdb && msg->id) {
 	if (local_rcpt)
-	    netnews_store(msg->id, local_rcpt, uid, msg->lines, now);
+	    netnews_store(msg->id, local_rcpt, uid, now);
 	else if (rcpt)
-	    netnews_store(msg->id, rcpt, 0, 0, now);
+	    netnews_store(msg->id, rcpt, 0, now);
     }
 
     return  0;
@@ -2603,7 +2600,7 @@ static int cancel(message_data_t *msg)
     p = strrchr(msgid, '>') + 1;
     *p = '\0';
 
-    if (netnews_lookup(msgid, &mailbox, &uid, NULL, NULL)) {
+    if (netnews_lookup(msgid, &mailbox, &uid, NULL)) {
 	struct mailbox mbox;
 	int doclose = 0;
 
@@ -2631,7 +2628,7 @@ static int cancel(message_data_t *msg)
     /* store msgid of cancelled message for IHAVE/CHECK/TAKETHIS
      * (in case we haven't received the message yet)
      */
-    if (have_newsdb) netnews_store(msgid, "", uid, 0, now);
+    if (have_newsdb) netnews_store(msgid, "", uid, now);
 
     return r;
 }
@@ -2803,7 +2800,7 @@ static void cmd_post(char *msgid, int mode)
 
     /* check if we want this article */
     if (have_newsdb && msgid &&
-	netnews_lookup(msgid, NULL, NULL, NULL, NULL)) {
+	netnews_lookup(msgid, NULL, NULL, NULL)) {
 	/* already have it */
 	r = NNTP_DONT_SEND;
     }
@@ -2867,7 +2864,7 @@ static void cmd_post(char *msgid, int mode)
     }
     else {
 	/* flush the article from the stream */
-	spool_copy_msg(nntp_in, NULL, NULL);
+	spool_copy_msg(nntp_in, NULL);
     }
 
     if (r) {

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: netnews.c,v 1.1.2.10 2003/03/02 19:59:16 ken3 Exp $ */
+/* $Id: netnews.c,v 1.1.2.11 2003/05/09 02:11:38 ken3 Exp $ */
 
 #include <config.h>
 
@@ -124,7 +124,7 @@ int netnews_init(char *fname, int myflags)
 struct netnews_entry {
     char *mailbox;
     unsigned long uid;
-    unsigned long lines;
+    unsigned long lines; /* deprecated */
     time_t tstamp;
 };
 
@@ -141,7 +141,7 @@ static void parse_entry(const char *data, struct netnews_entry *entry)
 }
 
 int netnews_lookup(char *msgid, char **mailbox, unsigned long *uid,
-		   unsigned long *lines, time_t *tstamp)
+		   time_t *tstamp)
 {
     int r;
     const char *data = NULL;
@@ -161,7 +161,6 @@ int netnews_lookup(char *msgid, char **mailbox, unsigned long *uid,
 
 	if (mailbox) *mailbox = entry.mailbox;
 	if (uid) *uid = entry.uid;
-	if (lines) *lines = entry.lines;
 	if (tstamp) *tstamp = entry.tstamp;
 
 	return 1;
@@ -174,7 +173,7 @@ int netnews_lookup(char *msgid, char **mailbox, unsigned long *uid,
 }
 
 void netnews_store(char *msgid, char *mailbox, unsigned long uid,
-		   unsigned long lines, time_t tstamp)
+		   time_t tstamp)
 {
     char buf[1024];
     int n, r;
@@ -184,15 +183,15 @@ void netnews_store(char *msgid, char *mailbox, unsigned long uid,
     strcpy(buf, mailbox);
     n = strlen(mailbox) + 1;
     n += sprintf(buf+n, "%lu", uid) + 1;
-    n += sprintf(buf+n, "%lu", lines) + 1;
+    n += sprintf(buf+n, "%lu", 0L) + 1;
     n += sprintf(buf+n, "%ld", tstamp) + 1;
 
     do {
 	r = DB->store(newsdb, msgid, strlen(msgid), buf, n, NULL);
     } while (r == CYRUSDB_AGAIN);
 
-    syslog(LOG_DEBUG, "netnews_store: %s %s %lu %lu %ld",
-	   msgid, mailbox, uid, lines, tstamp);
+    syslog(LOG_DEBUG, "netnews_store: %s %s %lu %ld",
+	   msgid, mailbox, uid, tstamp);
 
     return;
 }
@@ -261,7 +260,7 @@ static int find_cb(void *rock, const char *id, int idlen,
 
     parse_entry(data, &entry);
 
-    r = (*frock->proc)(msgid, entry.mailbox, entry.uid, entry.lines,
+    r = (*frock->proc)(msgid, entry.mailbox, entry.uid,
 		       entry.tstamp, frock->rock);
 
     return r;
