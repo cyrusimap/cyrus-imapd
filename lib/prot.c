@@ -212,7 +212,7 @@ struct protstream *s;
 	    s->cnt = n-1;
 	    s->ptr = s->buf+1;
 	    if (s->logfd != -1) {
-		left = s->cnt;
+		left = s->cnt+1;
 		ptr = s->buf;
 		do {
 		    n = write(s->logfd, ptr, left);
