@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.101 2004/02/06 17:07:38 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.102 2004/02/12 02:32:23 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -99,8 +99,11 @@ struct Header {
 };
 
 struct address_data {
-    char *user;
-    char *all;
+    char *all;		/* storage for entire RCPT TO addr -- MUST be freed */
+    char *rcpt;		/* storage for user[+mbox][@domain] -- MUST be freed */
+    char *user;		/* pointer to user part of rcpt -- DO NOT be free */
+    char *domain;	/* pointer to domain part of rcpt -- DO NOT be free */
+    char *mailbox;	/* pointer to mailbox part of rcpt -- DO NOT be free */
     int ignorequota;
     int status;
 };
@@ -320,7 +323,7 @@ void msg_free(message_data_t *m)
     if (m->rcpt) {
 	for (i = 0; i < m->rcpt_num; i++) {
 	    if (m->rcpt[i]->all) free(m->rcpt[i]->all);
-	    if (m->rcpt[i]->user) free(m->rcpt[i]->user);
+	    if (m->rcpt[i]->rcpt) free(m->rcpt[i]->rcpt);
 	    free(m->rcpt[i]);
 	}
 	free(m->rcpt);
@@ -353,10 +356,13 @@ int msg_getnumrcpt(message_data_t *m)
     return m->rcpt_num;
 }
 
-const char *msg_getrcpt(message_data_t *m, int rcpt_num)
+void msg_getrcpt(message_data_t *m, int rcpt_num,
+		 const char **user, const char **domain, const char **mailbox)
 {
     assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
-    return m->rcpt[rcpt_num]->user;
+    if (user) *user =  m->rcpt[rcpt_num]->user;
+    if (domain) *domain =  m->rcpt[rcpt_num]->domain;
+    if (mailbox) *mailbox =  m->rcpt[rcpt_num]->mailbox;
 }
 
 const char *msg_getrcptall(message_data_t *m, int rcpt_num)
@@ -749,14 +755,15 @@ static int savemsg(struct clientdata *cd,
 /* see if 'addr' exists. if so, fill in 'ad' appropriately.
    on success, return NULL.
    on failure, return the error. */
-static int process_recipient(char *addr,
+static int process_recipient(char *addr, struct namespace *namespace,
 			     int ignorequota,
-			     int (*verify_user)(const char *, long,
+			     int (*verify_user)(const char *, const char *,
+						const char *, long,
 						struct auth_state *),
 			     message_data_t *msg)
 {
     char *dest;
-    char *user;
+    char *rcpt;
     int r, sl;
     address_data_t *ret = (address_data_t *) xmalloc(sizeof(address_data_t));
     int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
@@ -765,7 +772,7 @@ static int process_recipient(char *addr,
     assert(addr != NULL && msg != NULL);
 
     if (*addr == '<') addr++;
-    dest = user = addr;
+    dest = rcpt = addr;
     
     /* preserve the entire address */
     ret->all = xstrdup(addr);
@@ -817,15 +824,37 @@ static int process_recipient(char *addr,
     }
     *dest = '\0';
 	
-    r = verify_user(user, ignorequota ? -1 : msg->size, msg->authstate);
+    /* make a working copy of rcpt */
+    ret->user = ret->rcpt = xstrdup(rcpt);
+
+    /* find domain */
+    ret->domain = NULL;
+    if (config_virtdomains && (ret->domain = strrchr(ret->rcpt, '@'))) {
+	*(ret->domain)++ = '\0';
+	/* ignore default domain */
+	if (config_defdomain && !strcasecmp(config_defdomain, ret->domain))
+	    ret->domain = NULL;
+    }
+
+    /* translate any separators in user & mailbox */
+    mboxname_hiersep_tointernal(namespace, ret->rcpt, 0);
+
+    /* find mailbox */
+    if (ret->mailbox = strchr(ret->rcpt, '+')) *(ret->mailbox)++ = '\0';
+
+    /* see if its a shared mailbox address */
+    if (!strcmp(ret->user, config_getstring(IMAPOPT_POSTUSER)))
+	ret->user = NULL;
+
+    r = verify_user(ret->user, ret->domain, ret->mailbox,
+		    ignorequota ? -1 : msg->size, msg->authstate);
     if (r) {
 	/* we lost */
 	free(ret->all);
+	free(ret->rcpt);
 	free(ret);
 	return r;
     }
-    ret->user = xstrdup(user);
-
     ret->ignorequota = ignorequota;
 
     msg->rcpt[msg->rcpt_num] = ret;
@@ -1432,6 +1461,7 @@ void lmtpmode(struct lmtp_func *func,
 		}
 
 		r = process_recipient(rcpt,
+				      func->namespace,
 				      ignorequota,
 				      func->verify_user,
 				      msg);

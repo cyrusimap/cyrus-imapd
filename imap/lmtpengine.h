@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.19 2004/02/04 18:05:31 ken3 Exp $
+ * $Id: lmtpengine.h,v 1.20 2004/02/12 02:32:23 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -46,6 +46,7 @@
 /***************** server-side LMTP *******************/
 
 #include "spool.h"
+#include "mboxname.h"
 
 typedef struct message_data message_data_t;
 typedef struct address_data address_data_t;
@@ -81,7 +82,8 @@ int msg_getsize(message_data_t *m);
 int msg_getnumrcpt(message_data_t *m);
 
 /* return delivery destination of recipient 'rcpt_num' */
-const char *msg_getrcpt(message_data_t *m, int rcpt_num);
+void msg_getrcpt(message_data_t *m, int rcpt_num,
+		 const char **user, const char **domain, const char **mailbox);
 
 /* return entire recipient of 'rcpt_num' */
 const char *msg_getrcptall(message_data_t *m, int rcpt_num);
@@ -99,13 +101,14 @@ void msg_setrock(message_data_t *m, void *rock);
 struct lmtp_func {
     int (*deliver)(message_data_t *m, 
 		   char *authuser, struct auth_state *authstate);
-    int (*verify_user)(const char *user,
+    int (*verify_user)(const char *user, const char *domain, const char *mailbox,
 		       long quotacheck, /* user must have this much quota left
 					   (-1 means don't care about quota) */
 		       struct auth_state *authstate);
     void (*shutdown)(int code);
     FILE *(*spoolfile)(message_data_t *m);
     void (*removespool)(message_data_t *m);
+    struct namespace *namespace; /* mailbox namespace that we're working in */
     char *addheaders;		/* add these headers to all messages */
     int addretpath;		/* should i add a return-path header? */
     int preauth;		/* preauth connection? */

@@ -1,6 +1,6 @@
 /* lmtp_sieve.h -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.h,v 1.1 2004/02/08 18:31:14 ken3 Exp $
+ * $Id: lmtp_sieve.h,v 1.2 2004/02/12 02:32:23 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -69,7 +69,7 @@ typedef struct sieve_msgdata {
 } sieve_msgdata_t;
 
 sieve_interp_t *setup_sieve(void);
-int run_sieve(char *user, char *mailbox, sieve_interp_t *interp,
-	     sieve_msgdata_t *mydata);
+int run_sieve(const char *user, const char *domain, const char *mailbox,
+	      sieve_interp_t *interp, sieve_msgdata_t *mydata);
 
 #endif /* LMTP_SIEVE_H */
