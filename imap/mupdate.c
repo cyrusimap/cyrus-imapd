@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.37 2002/01/29 22:16:46 rjs3 Exp $
+ * $Id: mupdate.c,v 1.38 2002/01/30 01:20:23 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -196,14 +196,14 @@ static void conn_free(struct conn *C)
 	    updatelist = C->updatelist_next;
 	} else {
 	    /* find in update list */
-	    for (upc = updatelist; upc->next != NULL; 
+	    for (upc = updatelist; upc->updatelist_next != NULL; 
 		 upc = upc->updatelist_next) {
 		if (upc->updatelist_next == C) break;
 	    }
 	    /* must find it ! */
 	    assert(upc->updatelist_next == C);
 
-	    upc->next = C->updatelist_next;
+	    upc->updatelist_next = C->updatelist_next;
 	}
 
 	pthread_mutex_unlock(&mailboxes_mutex);
