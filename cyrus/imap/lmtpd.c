@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.133 2004/03/04 16:09:30 ken3 Exp $
+ * $Id: lmtpd.c,v 1.134 2004/03/11 14:59:12 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -88,7 +88,11 @@
 
 #include "lmtpengine.h"
 #include "lmtpstats.h"
+#ifdef USE_SIEVE
 #include "lmtp_sieve.h"
+
+static sieve_interp_t *sieve_interp = NULL;
+#endif
 
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
@@ -121,10 +125,6 @@ static int dupelim = 1;		/* eliminate duplicate messages with
 				   same message-id */
 static int singleinstance = 1;	/* attempt single instance store */
 const char *BB = "";
-
-#ifdef USE_SIEVE
-static sieve_interp_t *sieve_interp = NULL;
-#endif
 
 /* per-user/session state */
 static struct protstream *deliver_out, *deliver_in;
@@ -350,19 +350,28 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    struct auth_state *authstate)
 {
     int n, nrcpts;
+    struct stagemsg *stage;
+    char *notifyheader;
+#ifdef USE_SIEVE
     sieve_msgdata_t mydata;
+#endif
     
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
     assert(nrcpts);
 
+    stage = (struct stagemsg *) msg_getrock(msgdata);
+    notifyheader = generate_notify(msgdata);
+
+#ifdef USE_SIEVE
     /* create 'mydata', our per-delivery data */
     mydata.m = msgdata;
-    mydata.stage = (struct stagemsg *) msg_getrock(msgdata);
-    mydata.notifyheader = generate_notify(msgdata);
+    mydata.stage = stage;
+    mydata.notifyheader = notifyheader;
     mydata.namespace = &lmtpd_namespace;
     mydata.authuser = authuser;
     mydata.authstate = authstate;
+#endif
     
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
@@ -372,7 +381,6 @@ int deliver(message_data_t *msgdata, char *authuser,
 	int r = 0;
 
 	msg_getrcpt(msgdata, n, &user, &domain, &mailbox);
-	mydata.cur_rcpt = n;
 
 	if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
 
@@ -380,12 +388,9 @@ int deliver(message_data_t *msgdata, char *authuser,
 	if (!user) {
 	    strlcat(namebuf, mailbox, sizeof(namebuf));
 
-	    r = deliver_mailbox(msgdata->data, 
-				mydata.stage,
-				msgdata->size, 
-				NULL, 0,
-				mydata.authuser, mydata.authstate,
-				msgdata->id, NULL, mydata.notifyheader,
+	    r = deliver_mailbox(msgdata->data, stage, msgdata->size, 
+				NULL, 0, authuser, authstate,
+				msgdata->id, NULL, notifyheader,
 				namebuf, quotaoverride, 0);
 	}
 
@@ -405,6 +410,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    }
 
 #ifdef USE_SIEVE
+	    mydata.cur_rcpt = n;
 	    r = run_sieve(user, domain, mailbox, sieve_interp, &mydata);
 	    /* if there was no sieve script, or an error during execution,
 	       r is non-zero and we'll do normal delivery */
@@ -417,12 +423,9 @@ int deliver(message_data_t *msgdata, char *authuser,
 		strlcat(namebuf, ".", sizeof(namebuf));
 		strlcat(namebuf, mailbox, sizeof(namebuf));
 		
-		r = deliver_mailbox(msgdata->data, 
-				    mydata.stage, 
-				    msgdata->size, 
-				    NULL, 0, 
-				    mydata.authuser, mydata.authstate,
-				    msgdata->id, userbuf, mydata.notifyheader,
+		r = deliver_mailbox(msgdata->data, stage, msgdata->size, 
+				    NULL, 0, authuser, authstate,
+				    msgdata->id, userbuf, notifyheader,
 				    namebuf, quotaoverride, 0);
 	    }
 
@@ -431,12 +434,9 @@ int deliver(message_data_t *msgdata, char *authuser,
 		*tail = '\0';
 		
 		/* ignore ACL's trying to deliver to INBOX */
-		r = deliver_mailbox(msgdata->data, 
-				    mydata.stage,
-				    msgdata->size, 
-				    NULL, 0, 
-				    mydata.authuser, mydata.authstate,
-				    msgdata->id, userbuf, mydata.notifyheader,
+		r = deliver_mailbox(msgdata->data, stage, msgdata->size, 
+				    NULL, 0, authuser, authstate,
+				    msgdata->id, userbuf, notifyheader,
 				    namebuf, quotaoverride, 1);
 	    }
 	}
@@ -444,8 +444,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 	msg_setrcpt_status(msgdata, n, r);
     }
 
-    append_removestage(mydata.stage);
-    if (mydata.notifyheader) free(mydata.notifyheader);
+    append_removestage(stage);
+    if (notifyheader) free(notifyheader);
 
     return 0;
 }
