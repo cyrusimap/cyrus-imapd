@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.58 2000/01/28 23:27:56 leg Exp $
+ $Id: append.c,v 1.59 2000/01/29 21:30:20 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -48,8 +48,6 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "acapmbox.h"
-
-extern acap_conn_t *acap_conn;
 
 struct stagemsg {
     unsigned long size;
@@ -149,6 +147,7 @@ int append_fromstage(struct mailbox *mailbox,
     long last_cacheoffset;
     int setseen = 0, writeheader = 0;
     int userflag, emptyflag;
+    acapmbox_handle_t *acaphandle = NULL;
 
     /* for staging */
     struct stagemsg *stage;
@@ -366,16 +365,16 @@ int append_fromstage(struct mailbox *mailbox,
 	append_addseen(mailbox, userid, message_index.uid, message_index.uid);
     }
 
-    if (mboxlist_acapinit() == 0)
-    {
-	if (acap_conn != NULL)
-	    acapmbox_setproperty(acap_conn,
-				 mailbox->name,
-				 ACAPMBOX_TOTAL,
-				 mailbox->exists);
-	/* xxx what to do about errors? */
-    }
     
+
+
+    acaphandle = acapmbox_get_handle();
+
+    acapmbox_setproperty(acaphandle,
+			 mailbox->name,
+			 ACAPMBOX_TOTAL,
+			 mailbox->exists);
+    /* xxx what to do about errors? */
 
     toimsp(mailbox->name, mailbox->uidvalidity,
 	   "UIDNnn", message_index.uid, mailbox->exists, 0);
@@ -439,6 +438,7 @@ const char *userid;
     long last_cacheoffset;
     int setseen = 0, writeheader = 0;
     int userflag, emptyflag;
+    acapmbox_handle_t *acaphandle = NULL;
 
     assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
     assert(size != 0);
@@ -592,15 +592,13 @@ const char *userid;
 	append_addseen(mailbox, userid, message_index.uid, message_index.uid);
     }
 
-    if (mboxlist_acapinit() == 0)
-    {
-	if (acap_conn != NULL)
-	    acapmbox_setproperty(acap_conn,
-				 mailbox->name,
-				 ACAPMBOX_TOTAL,
-				 mailbox->exists);
-	/* xxx what to do about errors? */
-    }    
+    acaphandle = acapmbox_get_handle();
+
+    acapmbox_setproperty(acaphandle,
+			 mailbox->name,
+			 ACAPMBOX_TOTAL,
+			 mailbox->exists);
+    /* xxx what to do about errors? */
 
     toimsp(mailbox->name, mailbox->uidvalidity,
 	   "UIDNnn", message_index.uid, mailbox->exists, 0);
@@ -640,6 +638,7 @@ const char *userid;
     int writeheader = 0;
     int flag, userflag, emptyflag;
     int seenbegin;
+    acapmbox_handle_t *acaphandle = NULL;
     
     assert(append_mailbox->format == MAILBOX_FORMAT_NORMAL);
 
@@ -840,15 +839,14 @@ const char *userid;
 		       message_index[nummsg-1].uid);
     }
 
-    if (mboxlist_acapinit() == 0)
-    {
-	if (acap_conn != NULL)
-	    acapmbox_setproperty(acap_conn,
-				 mailbox->name,
-				 ACAPMBOX_TOTAL,
-				 mailbox->exists);
-	/* xxx what to do about errors? */
-    }
+
+    acaphandle = acapmbox_get_handle();
+
+    acapmbox_setproperty(acaphandle,
+			 mailbox->name,
+			 ACAPMBOX_TOTAL,
+			 mailbox->exists);
+    /* xxx what to do about errors? */
 
     toimsp(mailbox->name, mailbox->uidvalidity,
 	   "UIDNnn", message_index[nummsg-1].uid, append_mailbox->exists, 0);
@@ -902,6 +900,7 @@ unsigned long feeduid;
     int r;
     long last_cacheoffset;
     struct stat sbuf;
+    acapmbox_handle_t *acaphandle = NULL;
     
     assert(mailbox->format == MAILBOX_FORMAT_NETNEWS);
 
@@ -1025,15 +1024,13 @@ unsigned long feeduid;
     
     free(message_index);
 
-    if (mboxlist_acapinit() == 0)
-    {	
-	if (acap_conn != NULL)
-	    acapmbox_setproperty(acap_conn,
-				 mailbox->name,
-				 ACAPMBOX_TOTAL,
-				 mailbox->exists);
-	/* xxx what to do about errors? */
-    }
+    acaphandle = acapmbox_get_handle();
+
+    acapmbox_setproperty(acaphandle,
+			 mailbox->name,
+			 ACAPMBOX_TOTAL,
+			 mailbox->exists);
+    /* xxx what to do about errors? */
 
     toimsp(mailbox->name, mailbox->uidvalidity,
 	   "UIDNnn", uid-1, mailbox->exists, 0);

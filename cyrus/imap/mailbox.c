@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.82 2000/01/28 22:09:46 leg Exp $
+ $Id: mailbox.c,v 1.83 2000/01/29 21:30:21 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -72,8 +72,6 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "acapmbox.h"
-
-extern acap_conn_t *acap_conn;
 
 static int mailbox_doing_reconstruct = 0;
 static struct mailbox zeromailbox = {-1, -1, -1};
@@ -1225,6 +1223,7 @@ void *deciderock;
     unsigned long cache_offset;
     struct stat sbuf;
     char *fnametail;
+    acapmbox_handle_t *acaphandle = NULL;
 
     /* Lock files and open new index/cache files */
     r = mailbox_lock_header(mailbox);
@@ -1426,17 +1425,14 @@ void *deciderock;
     }
 
     if (numdeleted) {
-	
-	if (mboxlist_acapinit() == 0)
-	{
-	    if (acap_conn != NULL)
-		acapmbox_setproperty(acap_conn,
-				     mailbox->name,
-				     ACAPMBOX_TOTAL,
-				     newexists);
-	    /* xxx what to do about errors? */
-	}
-	
+
+	acaphandle = acapmbox_get_handle();
+
+	acapmbox_setproperty(acaphandle,
+			     mailbox->name,
+			     ACAPMBOX_TOTAL,
+			     newexists);
+	/* xxx what to do about errors? */
 
 	toimsp(mailbox->name, mailbox->uidvalidity,
 		"UIDNnn", mailbox->last_uid, newexists, 0);

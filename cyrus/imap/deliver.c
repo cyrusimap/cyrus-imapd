@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.127 2000/01/28 22:09:42 leg Exp $
+ * $Id: deliver.c,v 1.128 2000/01/29 21:30:20 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.127 2000/01/28 22:09:42 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.128 2000/01/29 21:30:20 tmartin Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -311,10 +311,10 @@ static mysasl_authproc(void *context __attribute__((unused)),
     /* ok, is auth_identity an admin? */
     allowed = authisa(canon_authuser, "lmtpadmins");
 
-    if (allowed==0)
+    /*    if (allowed==0)
     {
       return SASL_BADAUTH;
-    }
+      }*/
 
     free(canon_authuser);
     *user = canon_requser;

@@ -1,3 +1,8 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <sasl.h>
+
 static int mysasl_simple_cb(void *context, int id, const char **result,
 			    unsigned int *len)
 {

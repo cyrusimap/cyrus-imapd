@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.102 2000/01/28 23:27:58 leg Exp $
+ * $Id: mboxlist.c,v 1.103 2000/01/29 21:30:22 tmartin Exp $
  */
 
 #include <stdio.h>
@@ -69,8 +69,6 @@ extern int errno;
 
 #include "acap.h"
 #include "acapmbox.h"
-
-#include "gun.h"
 
 #include "mboxlist.h"
 
@@ -129,9 +127,7 @@ static char *mboxlist_hash_usersubs(const char *userid);
 #define FNAME_USERDIR "/user/"
 #define FNAME_SUBSSUFFIX ".sub"
 
-acap_conn_t *acap_conn = NULL;
 
-int using_acap = 0; /* whether acap support is turned on */
 
 const char *acap_authname = NULL;
 const char *acap_realm = NULL;
@@ -650,6 +646,7 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
     struct mbox_txn_create *mtxn = NULL;
     acapmbox_data_t mboxdata;
     int madereserved = 0; /* if we made the acap entry (so we can know to roll back) */
+    acapmbox_handle_t *acaphandle = NULL;
 
     if (rettid && *rettid) {
 	/* two phase commit */
@@ -694,9 +691,7 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
     }
 
     /* 3. open ACAP connection if necessary */
-    r = mboxlist_acapinit();
-    if (r != 0) goto done;
-
+    acaphandle = acapmbox_get_handle();
 
     if (!(mbtype & MBTYPE_REMOTE)) {
 	/* Get partition's path */
@@ -713,7 +708,6 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
     }
 
     /* 5. create ACAP entry and set as reserved (CRASH: ACAP inconsistant) */
-    if (acap_conn != NULL)
     {
 	char *postaddr = NULL;
 	char *url = NULL;
@@ -732,7 +726,7 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	mboxdata.url = url;
 	/* all other are initialized to zero */
 	
-	r = acapmbox_create(acap_conn, 
+	r = acapmbox_create(acaphandle,
 			    name,
 			    &mboxdata);
 
@@ -838,9 +832,9 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	int r2;
 
 	/* delete ACAP entry if we made it */
-	if ((madereserved == 1) && (acap_conn != NULL))
+	if (madereserved == 1)
 	{
-	    r = acapmbox_delete(acap_conn,
+	    r = acapmbox_delete(acaphandle,
 				name);
 	    /* xxx Can we deal with this failure? */
 	}
@@ -867,15 +861,12 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
     /* 9. set ACAP entry as commited (CRASH: commited) */
     if (r == 0)
     {
-	if (acap_conn != NULL)
+	r = acapmbox_markactive(acaphandle,
+				name);
+	if (r!=0)
 	{
-	    r = acapmbox_markactive(acap_conn,
-				    name);
-	    if (r!=0)
-	    {
-		syslog(LOG_ERR,"ACAP probably in inconsistant state for %s\n",name);
-		r = convert_acap_errorcode(r);
-	    }
+	    syslog(LOG_ERR,"ACAP probably in inconsistant state for %s\n",name);
+	    r = convert_acap_errorcode(r);
 	}
 
     }
@@ -1011,6 +1002,7 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     DBC *cursor = NULL;
     struct mbox_entry *mboxent = NULL;
     struct mbox_txn_delete *mtxn = NULL;
+    acapmbox_handle_t *acaphandle = NULL;
 
     if (rettid && *rettid) {
 	/* two phase commit */
@@ -1085,19 +1077,15 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     }
 
     /* 3. open ACAP connection if necessary */
-    r = mboxlist_acapinit();
-    if (r != 0) goto done;
+    acaphandle = acapmbox_get_handle();
 
     /* 4. ACAP mark entry reserved */
-    if (acap_conn != NULL)
+    r = acapmbox_markreserved(acaphandle,
+			      name);
+    if ( r != ACAP_OK)
     {
-	r = acapmbox_markreserved(acap_conn,
-				  name);
-	if ( r != ACAP_OK)
-	{
-	    r = convert_acap_errorcode(r);
-	    goto done;
-	}
+	r = convert_acap_errorcode(r);
+	goto done;
     }
 
 
@@ -1290,14 +1278,11 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 
     if (r != 0) {
 
-	if (acap_conn != NULL)
+	r = acapmbox_markactive(acaphandle,
+				name);
+	if ( r != ACAP_OK)
 	{
-	    r = acapmbox_markactive(acap_conn,
-				    name);
-	    if ( r != ACAP_OK)
-	    {
-		r = convert_acap_errorcode(r);
-	    }
+	    r = convert_acap_errorcode(r);
 	}
 
 	switch (r = txn_abort(tid)) {
@@ -1321,15 +1306,12 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     }
 
     /* 8. delete from ACAP */
-    if (acap_conn != NULL)
+    r = acapmbox_delete(acaphandle,
+			name);
+    if (r!=0)
     {
-	r = acapmbox_delete(acap_conn,
-			    name);
-	if (r!=0)
-	{
-	    syslog(LOG_ERR,"Error deleting mailbox entry on ACAP server for %s\n",name);
-	    r = convert_acap_errorcode(r);
-	}
+	syslog(LOG_ERR,"Error deleting mailbox entry on ACAP server for %s\n",name);
+	r = convert_acap_errorcode(r);
     }
 
     return r;
@@ -1375,6 +1357,7 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     int acap_madenew = 0;
     int acap_markedold = 0;
     char *oldname_tofree = NULL;
+    acapmbox_handle_t *acaphandle = NULL;
 
     memset(&key, 0, sizeof(key));
     memset(&data, 0, sizeof(data));
@@ -1531,9 +1514,7 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 
 
     /* 3. open ACAP connection if necessary */
-    r = mboxlist_acapinit();
-    if (r != 0) goto done;
-
+    acaphandle = acapmbox_get_handle();
 
     /* 4. Delete entry from berkeley db */
     key.data = oldname;
@@ -1618,31 +1599,25 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     }
 
     /* 5. ACAP make the new entry */
-    if (acap_conn != NULL)
+    r = acapmbox_copy(acaphandle,
+		      oldname,
+		      newname);
+    if (r != ACAP_OK)
     {
-	r = acapmbox_copy(acap_conn,
-			  oldname,
-			  newname);
-	if (r != ACAP_OK)
-	{
-	    r = convert_acap_errorcode(r);
-	    goto done;
-	}
-	acap_madenew = 1;
+	r = convert_acap_errorcode(r);
+	goto done;
     }
+    acap_madenew = 1;
 
     /* 6. set old ACAP entry as reserved */
-    if (acap_conn != NULL)
+    r =  acapmbox_markreserved(acaphandle,
+			       oldname);
+    if (r != ACAP_OK)
     {
-	r =  acapmbox_markreserved(acap_conn,
-				   oldname);
-	if (r != ACAP_OK)
-	{
-	    r = convert_acap_errorcode(r);
-	    goto done;
-	}
-	acap_markedold = 1;
+	r = convert_acap_errorcode(r);
+	goto done;
     }
+    acap_markedold = 1;
 
  done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
     if (!r) {
@@ -1666,16 +1641,16 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	int r2;
 	
 	/* unroll acap operations if necessary */
-	if ((acap_madenew == 1) && (acap_conn != NULL))
+	if (acap_madenew == 1)
 	{
-	    r2 = acapmbox_delete(acap_conn,
+	    r2 = acapmbox_delete(acaphandle,
 				 newname);
 	    if (r2 != 0) syslog(LOG_ERR,"Error cleaning up %s\n",newname);
 	}
 
-	if ((acap_markedold == 1) && (acap_conn != NULL))
+	if (acap_markedold == 1)
 	{
-	    r2 = acapmbox_markactive(acap_conn,
+	    r2 = acapmbox_markactive(acaphandle,
 				     oldname);
 	    if (r2 != 0) syslog(LOG_ERR,"Error setting %s as active in rollback\n",oldname);
 	}
@@ -1687,27 +1662,21 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	switch (r = txn_commit(tid, 0)) {
 	case 0: 
 	    /* 9. set new ACAP entry commited */
-	    if (acap_conn != NULL)
-	    {
-		r = acapmbox_markactive(acap_conn,
-					newname);
-	    }
+	    r = acapmbox_markactive(acaphandle,
+				    newname);
 	    
 
 	    /* 10. delete old ACAP entry */
-	    if (acap_conn != NULL)
+	    if (r == ACAP_OK)
 	    {
-		if (r == ACAP_OK)
-		{
-		    r = acapmbox_delete(acap_conn,
-					oldname);
-		}
+		r = acapmbox_delete(acaphandle,
+				    oldname);
+	    }
 
-		if (r != ACAP_OK)
-		{
-		    r = convert_acap_errorcode(r);
-		    goto done;
-		}
+	    if (r != ACAP_OK)
+	    {
+		r = convert_acap_errorcode(r);
+		goto done;
 	    }
 
 	    break;
@@ -1763,6 +1732,7 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
     DBT key, data;
     struct mbox_entry *oldent, *newent=NULL;
     struct mbox_txn_setacl *mtxn = NULL;
+    acapmbox_handle_t *acaphandle = NULL;
 
     if (rettid && *rettid) {
 	/* two phase commit */
@@ -1836,9 +1806,7 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
     }
 
     /* 3. Open ACAP connection if necessary */
-    r = mboxlist_acapinit();
-    if (r != 0) goto done;
-    
+    acaphandle = acapmbox_get_handle();
 
     /* Make change to ACL */
     newacl = xstrdup(oldent->acls);
@@ -1962,13 +1930,10 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
     }
 
     /* 7. Change ACAP entry  */
-    if (acap_conn != NULL)
-    {
-	r = acapmbox_setproperty_acl(acap_conn,
-				     name,
-				     newacl);
-	if (r != 0) r = convert_acap_errorcode(r);
-    }
+    r = acapmbox_setproperty_acl(acaphandle,
+				 name,
+				 newacl);
+    if (r != 0) r = convert_acap_errorcode(r);
 
 
 
@@ -3617,7 +3582,6 @@ void mboxlist_init(void)
     r = acap_init();
     if (r != ACAP_OK) {
 	syslog(LOG_ERR,"acap_init failed()");
-	return IMAP_SERVER_UNAVAILABLE;
     }
 }
 
