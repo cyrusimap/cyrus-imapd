@@ -24,20 +24,22 @@
 
 /* Client-side authentication mechanism */
 struct acte_client {
-    char *auth_type;
-    int (*start)();
-    int (*auth)();
-    void (*query_state)();
-    void (*free_state)();
+    char *auth_type;		/* Name of authentication mechanism */
+    int (*start)();		/* Start a client->server authentication */
+    int (*auth)();		/* Do an authentication protocol exchange */
+    void (*query_state)();	/* Query an authentication state */
+    void (*free_state)();	/* Free an authentication state */
+    int (*newcred)();		/* Acquire daemon's credentials */
+    int (*freecred)();		/* Free daemon's credentials */
 };
 
 /* Server-side authentication mechanism */
 struct acte_server {
-    char *auth_type;
-    int (*start)();
-    int (*auth)();
-    void (*query_state)();
-    void (*free_state)();
+    char *auth_type;		/* Name of authentication mechanism */
+    int (*start)();		/* Start an incoming authentication */
+    int (*auth)();		/* Do an authentication protocol exchange */
+    void (*query_state)();	/* Query an authentication state */
+    void (*free_state)();	/* Free an authentication state */
 };
 
 /* Protection mechanisms */
