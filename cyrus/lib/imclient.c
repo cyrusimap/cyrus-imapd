@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.71 2002/04/23 20:47:44 rjs3 Exp $
+ * $Id: imclient.c,v 1.72 2002/05/28 21:05:24 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -238,9 +238,6 @@ int imclient_connect(struct imclient **imclient,
     hp = gethostbyname(host);
     if (!hp) return -1;
 
-    s = socket(AF_INET, SOCK_STREAM, 0);
-    if (s == -1) return errno;
-
     addr.sin_family = AF_INET;
     memcpy(&addr.sin_addr, hp->h_addr, sizeof(addr.sin_addr));
     if (port && imparse_isnumber(port)) {
@@ -254,7 +251,12 @@ int imclient_connect(struct imclient **imclient,
     else {
 	addr.sin_port = htons(143);
     }
+
+    s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s == -1) return errno;
+
     if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+	close(s);
 	return errno;
     }
     /*    nonblock(s, 1); */
