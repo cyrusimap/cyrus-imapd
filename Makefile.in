@@ -45,6 +45,7 @@ all:: checkdepend
 
 install::
 	- mkdir ${DESTDIR}$(exec_prefix)/bin
+	- mkdir ${DESTDIR}$(exec_prefix)/lib
 	- mkdir ${DESTDIR}$(cyrus_prefix)/bin
 	- mkdir ${DESTDIR}$(prefix)/man
 	- mkdir ${DESTDIR}$(prefix)/man/man1
