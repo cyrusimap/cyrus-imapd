@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.30 2002/08/21 20:14:03 rjs3 Exp $
+# $Id: Admin.pm,v 1.31 2002/09/12 15:39:50 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -792,7 +792,7 @@ Create a new mailbox on the specified or default partition.
 
 =item delete($mailbox)
 
-Delete a mailbox.  As with B<cyradm>, you will probably need to add the B<d>
+Delete a mailbox.  As with B<cyradm>, you will probably need to add the B<c>
 ACL for yourself to the mailbox with C<setaclmailbox> first.
 
 =item deleteaclmailbox($mailbox, $user[, ...])
