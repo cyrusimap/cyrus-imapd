@@ -1,0 +1,61 @@
+.\" -*- nroff -*-
+.TH RMNEWS 8
+.\" 	(C) Copyright 1994 by Carnegie Mellon University
+.\" 
+.\"                      All Rights Reserved
+.\" 
+.\" Permission to use, copy, modify, and distribute this software and its 
+.\" documentation for any purpose and without fee is hereby granted, 
+.\" provided that the above copyright notice appear in all copies and that
+.\" both that copyright notice and this permission notice appear in 
+.\" supporting documentation, and that the name of CMU not be
+.\" used in advertising or publicity pertaining to distribution of the
+.\" software without specific, written prior permission.  
+.\" 
+.\" CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+.\" ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+.\" CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+.\" ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+.\" WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+.\" ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+.\" SOFTWARE.
+.SH NAME
+rmnews \- expunge and remove news articles
+.SH SYNOPSIS
+.B rmnews
+.SH DESCRIPTION
+.I Rmnews
+reads article data from the standard input.
+It then expunges and removes the listed articles.
+.I Rmnews
+is designed to be used by InterNetNews to remove canceled, superseded,
+and expired news articles.
+.PP
+The input is processed as an INN 
+.I expirerm
+file listing or an INN cancel
+stream written as a ``WC'' entry in the
+.IR newsfeeds (5)
+file.  This data consists of lines of text, each containing a list of
+relative article pathnames, with a single space between entries.  If
+a listed file is contained in an IMAP news mailbox, it is expunged out
+of that mailbox.  In any case, each listed file is unlinked.
+.PP
+.I Rmnews
+reads its configuration options out of the
+.IR imapd.conf (5)
+file.  The optional
+.I newsprefix
+option specifies a prefix to be prepended to newsgroup names to make
+the corresponding IMAP mailbox names.
+The required
+.I partition-news
+option specifies the pathname prefix to the IMAP news mailboxes.  The
+value of
+.I partition-news
+concatenated with the dots-to-slashes-converted value of
+.I newsprefix
+must be the pathname of the news spool directory.
+.SH FILES
+.TP
+.B /etc/imapd.conf
