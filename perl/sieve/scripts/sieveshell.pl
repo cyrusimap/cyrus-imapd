@@ -1,3 +1,4 @@
+#!/usr/local/bin/perl -w
 # 
 # Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
 #
@@ -37,13 +38,18 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
+
 use Cyrus::SIEVE::managesieve;
 use Getopt::Long;
 
-$ret = GetOptions("a|authname:s",
-                  "u|username:s",
-		  "r|realm:s",
-		  "e|exec:s"
+$username = "";
+$authname = "";
+$realm = "";
+$ex = "";
+$ret = GetOptions("a|authname:s" => \$username,
+                  "u|username:s" => \$authname,
+		  "r|realm:s" => \$realm,
+		  "e|exec:s" => \$ex
                   );
 if (!$ret || $#ARGV != 0) { 
     show_help();
@@ -52,19 +58,15 @@ if (!$ret || $#ARGV != 0) {
 
 $acapserver = $ARGV[0];
 
-$username = $opt_u;
-$authname = $opt_a;
-$realm    = $opt_r;
-$exec     = $opt_e;
-
-if (defined $exec) {
+if (! $ex eq "") {
   $tmpfile = "/tmp/sieveshell.tmp";
   open (TMP,">$tmpfile") || die "Unable to open tmp file";
-  print TMP $exec;
+  print TMP $ex;
   close(TMP);
   open (TMP,"<$tmpfile") || die "Unable to open tmp file";
   unlink($tmpfile);
   $filehandle = *TMP;
+  $interactive = 0;
 } else {
   $filehandle = *STDIN;
   $interactive = 1;
@@ -90,14 +92,11 @@ sub prompt {
   my($type, $prompt) = @_ ;
 
   if (($type eq "username") && (defined $username)) {
-    $username;
-    return;
+      return $username;
   } elsif (($type eq "authname") && (defined $authname)) {
-    $authname;
-    return;
+      return $authname;
   } elsif (($type eq "realm") && (defined $realm)) {
-    $realm;
-    return;
+      return $realm;
   }
 
   print "$prompt: ";
@@ -105,7 +104,7 @@ sub prompt {
   $b = <STDIN>;
   chop($b);
   
-  $b;
+  return $b;
 }
 
 sub show_help {
@@ -123,67 +122,68 @@ sub show_help {
 
 # main code
 
-my $obj = sieve_get_handle($acapserver,"prompt","prompt","prompt","prompt");
+print "connecting to $acapserver\n";
+
+my $obj = sieve_get_handle($acapserver,
+			   "prompt", "prompt", "prompt", "prompt");
 
 if (!defined $obj) {
   die "Unable to connect to server";
 }
 
-if ($interactive == 1) {
-  print "> ";
-}
+print "> " if ($interactive);
 
 while(<$filehandle>) {
-
-  @words = split ' ',$_;
-
-  if (($words[0] eq "put") || ($words[0] eq "p")) {
-
-    $ret = sieve_put_file($obj, $words[1]);
-    
-    if ($ret != 0) { print "Upload failed\n"; }
-
-  } elsif (($words[0] eq "list") || ($words[0] eq "l") || ($words[0] eq "ls")) {
-    
-    $ret = sieve_list($obj, "list_cb");
-
-    if ($ret != 0) { print "List command failed\n"; }
-
-  } elsif (($words[0] eq "activate") || ($words[0] eq "a")) {
-
-    $ret = sieve_activate($obj, $words[1]);
-    if ($ret != 0) { print "Activate failed\n"; }
-
-  } elsif (($words[0] eq "delete") || ($words[0] eq "d")) {    
-
-    $ret = sieve_delete($obj, $words[1]);
-    if ($ret != 0) { print "Delete failed\n"; }
-
-  } elsif (($words[0] eq "get") || ($words[0] eq "g")) {
-
-    $ret = sieve_get($obj, $words[1], $str);
-    if ($ret != 0) { 
-      print "get failed\n"; 
-    } else {
-      if ($words[2]) {
-	open (OUTPUT,">$words[2]") || die "Unable to open $words[2]";
-	print OUTPUT $str;
-	close(OUTPUT);
-      } else {
-	print $str;
-      }
+    @words = split ' ',$_;
+    if ($#words < 0) {
+	print "> " if ($interactive);
+	next;
     }
 
-  } elsif (($words[0] eq "quit") || ($words[0] eq "q")) {
-    exit 0;
+    if (($words[0] eq "put") || 
+	($words[0] eq "p")) {
 
-  } elsif (($words[0] eq "help") || ($words[0] eq "?")) {
-    show_help();
-  } else {
-    print "Invalid command: $words[0]\n";
-  } 
-
-  if ($interactive == 1) {
-    print "> ";
-  }
+	$ret = sieve_put_file($obj, $words[1]);
+	if ($ret != 0) { print "Upload failed\n"; }
+    } elsif (($words[0] eq "list") || 
+	     ($words[0] eq "l") || 
+	     ($words[0] eq "ls")) {
+	
+	$ret = sieve_list($obj, "list_cb");
+	if ($ret != 0) { print "List command failed\n"; }
+	
+    } elsif (($words[0] eq "activate") || 
+	     ($words[0] eq "a")) {
+	
+	$ret = sieve_activate($obj, $words[1]);
+	if ($ret != 0) { print "Activate failed\n"; }
+    } elsif (($words[0] eq "delete") || 
+	     ($words[0] eq "d")) {    
+	
+	$ret = sieve_delete($obj, $words[1]);
+	if ($ret != 0) { print "Delete failed\n"; }
+    } elsif (($words[0] eq "get") || 
+	     ($words[0] eq "g")) {
+	
+	$ret = sieve_get($obj, $words[1], $str);
+	if ($ret != 0) { 
+	    print "get failed\n"; 
+	} else {
+	    if ($words[2]) {
+		open (OUTPUT,">$words[2]") || die "Unable to open $words[2]";
+		print OUTPUT $str;
+		close(OUTPUT);
+	    } else {
+		print $str;
+	    }
+	}
+    } elsif (($words[0] eq "quit") || ($words[0] eq "q")) {
+	exit 0;
+    } elsif (($words[0] eq "help") || ($words[0] eq "?")) {
+	show_help();
+    } else {
+	print "Invalid command: $words[0]\n";
+    } 
+    
+    print "> " if ($interactive);
 }
