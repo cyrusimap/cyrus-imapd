@@ -5,6 +5,8 @@
 #include <pwd.h>
 #include <grp.h>
 
+#include "xmalloc.h"
+
 static char auth_userid[30] = "anonymous";
 static char **auth_group;
 static int auth_ngroups;
@@ -66,7 +68,7 @@ char *identifier;
 
     pwd = getpwnam(retbuf);
     if (!pwd) return 0;
-    strcpy(retbuf, pw->pw_name);
+    strcpy(retbuf, pwd->pw_name);
     return retbuf;
 }
 
@@ -91,7 +93,7 @@ char *identifier;
     auth_ngroups = 0;
 
     setgrent();
-    while (grpgetgrent()) {
+    while (getgrent()) {
 	for (mem = grp->gr_mem; *mem; mem++) {
 	    if (!strcmp(*mem, identifier)) break;
 	}
