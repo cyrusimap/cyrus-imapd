@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.23 2004/07/12 20:25:27 ken3 Exp $
+.\" $Id: imapoptions,v 1.2.2.24 2004/07/16 12:31:13 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -697,6 +697,11 @@ are listed with ``<none>''.
 /* When using the AFSKRB ptloader module with Kerberos 5 canonicalization,
    do the final 524 conversion to get a n AFS style name (using '.' instead
    of '/', and using short names */
+
+{ "ptskrb5_strip_default_realm", 1, SWITCH }
+/* When using the AFSKRB ptloader module with Kerberos 5 canonicalization,
+   strip the default realm from the userid (this does not affect the stripping
+   of realms specified by the afspts_localrealms option) */
 
 { "quota_db", "quotalegacy", STRINGLIST("flat", "berkeley", "skiplist", "quotalegacy") }
 /* The cyrusdb backend to use for quotas. */

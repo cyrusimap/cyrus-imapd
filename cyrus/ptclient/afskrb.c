@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.2.2.3 2004/05/25 01:28:20 ken3 Exp $";
+      "$Id: afskrb.c,v 1.2.2.4 2004/07/16 12:31:13 ken3 Exp $";
 
 #include <config.h>
 
@@ -154,33 +154,35 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
 	return NULL;
     }
 
-    /* get local realm */
-    if (krb5_get_default_realm(context,&realm))
-    {
-	krb5_free_principal(context,princ);
-	krb5_free_context(context);
-	return NULL;
-    }
-
-    /* build dummy princ to compare realms */
-    if (krb5_build_principal(context,&princ_dummy,
-			     strlen(realm),realm,"dummy",0))
-    {
-	krb5_free_principal(context,princ);
-	krb5_free_context(context);
+    if(config_getswitch(IMAPOPT_PTSKRB5_STRIP_DEFAULT_REALM)) {
+	/* get local realm */
+	if (krb5_get_default_realm(context,&realm))
+	{
+	    krb5_free_principal(context,princ);
+	    krb5_free_context(context);
+	    return NULL;
+	}
+	
+	/* build dummy princ to compare realms */
+	if (krb5_build_principal(context,&princ_dummy,
+				 strlen(realm),realm,"dummy",0))
+	{
+	    krb5_free_principal(context,princ);
+	    krb5_free_context(context);
+	    free(realm);
+	    return NULL;
+	}
+	
+	/* is this principal local ? */
+	if (krb5_realm_compare(context,princ,princ_dummy))
+	{
+	    striprealm = 1;
+	}
+	
+	/* done w/ dummy princ free it & realm */
+	krb5_free_principal(context,princ_dummy);
 	free(realm);
-	return NULL;
     }
-
-    /* is this principal local ? */
-    if (krb5_realm_compare(context,princ,princ_dummy))
-    {
-	striprealm = 1;
-    }
-
-    /* done w/ dummy princ free it & realm */
-    krb5_free_principal(context,princ_dummy);
-    free(realm);
 
     if (config_getswitch(IMAPOPT_PTSKRB5_CONVERT524)) {
 	char nbuf[64], ibuf[64], rbuf[64];
