@@ -1,32 +1,40 @@
 -*- text -*-
 
 		       Cyrus IMAP server design
-			     Sep 15, 1993
+			     Oct 10, 1993
 
 * Introduction
 
 This document describes the preliminary design of the Cyrus IMAP
-server.  The Cyrus IMAP server will provide access to mail and bboards
-through the IMAP protocol.  It differs from other IMAP server
-implementations in that it is intended to be run on "sealed" servers,
-where normal users are not normally permitted to log in.  It will
-support extensions to allow administrative functions such as ACL's and
-quota control and will cooperate with the Cyrus IMSP server.
+server.  The Cyrus IMAP server will provide access to personal mail
+and system-wide bboards through the IMAP protocol.  It differs from
+other IMAP server implementations in that it is intended to be run on
+"sealed" servers, where normal users are not normally permitted to log
+in.  It will support extensions to allow administrative functions such
+as ACL's and quota control and will cooperate with the Cyrus IMSP
+server.
 
-The server can be compiled with or without Kerberos support.
+* Mailbox namespace
 
-* Mailbox/Bboard namespace
-
-The Cyrus IMAP server presents folders using the "netnews" namespace
-convention.  Folder names match in a case-insensitive manner.  The
-case used when creating a folder is preserved.  A folder name may not
+The Cyrus IMAP server presents mailboxes using the "netnews" namespace
+convention.  Mailbox names match in a case-insensitive manner.  The
+case used when creating a mailbox is preserved.  A mailbox name may not
 start or end with a "."  character, nor may it contain two "."
 characters in a row.
 
 In the initial implementation, non-ASCII characters, shell
-metacharacters, and "/" are not permitted in folder names.  Later
+metacharacters, and "/" are not permitted in mailbox names.  Later
 versions of the server may make the set of permissible characters
-site-policy configurable
+site-policy configurable.
+
+The personal mailboxes for user "bovik" are named with "user.bovik."
+prepended.  The mailbox "user.bovik.INBOX" is handled as a special
+case and is presented to the user "bovik" as if it were named "INBOX".
+
+FIND replies are returned in the following order: "INBOX", user's
+personal mailboxes sorted in a case-insensitive manner, other
+mailboxes sorted in a case-insensitive manner.
+
 
 * IMAP protocol extensions and implementation decisions
 
@@ -35,118 +43,139 @@ The Cyrus IMAP server supports the following protocol extensions:
 	QUOTA (STORAGE only)
 	ACL
 	partitions on CREATE
-	CREATE.BBOARD/RENAME.BBOARD/DELETE.BBOARD
 	DUMP/RESTORE		[to be defined]
 
-The CHECK command will scan for flags that have changed since the
-client was notified about them, issuing unsolicited FETCH replies to
-update the client's state.
-
 The EXPUNGE operation is allowed at any time, even when other server
-processes are reading the folder.  To avoid sending unsolicited
-EXPUNGE replies at inopportune times, servers keep an open file handle
-on the folder header files that are replaced by the EXPUNGE operation.
-The server may send unsolicited EXPUNGE commands during the execution
-of the APPEND, CHECK, and EXPUNGE commands.
+processes are reading the mailbox.  If some other process performs an
+EXPUNGE operation on a mailbox, the server will continue to use the
+data in the old index and cache files until it is permitted to send
+unsolicited EXPUNGE replies.
 
-The PURGE command is implemented as a NOOP.  The server always acts as
-if PURGE ALWAYS is in effect.
+When executing commands other than FETCH, STORE, and SEARCH, the
+server will check to see if the index file has been replaced or
+modified since the last status update.  If the index file was
+replaced, the server will read the new index file and issue any
+necessary unsolicited EXPUNGE replies.  If the index file was replaced
+or modified, the server will scan for flags that have changed since
+the client was notified about them and issue any necessary unsolicited
+FETCH replies.  If any EXPUNGE replies were sent or if new messages
+have been appended, the server will issue unsolicited EXISTS and
+RECENT replies.
 
+The server has compile-time-selctable plug-compatible modules which
+determine the site's methods for:
 
-* Mailbox/Bboard storage format
+	ACL interpretation (afs or posix)
+	Authorization namespace (kerberos, unix, or trivial)
+	Authentication mechanism (kerberos, unix-passwd, or trivial)
+	Storage of \Seen state (local-file or remote-database)
 
-It is presumed that users will only be able to access folders
-(mailboxes and bboards) through the use of network protocols.  The
-Cyrus server implementation is given the freedom to store folders on
-disk in a format best suited to its needs.
+Posix ACL interpretatin and remote database storage of \Seen state
+may not be implemented in the first versions of the server.
 
-Each folder is represented by a directory in the filesystem.  Within
+* Mailbox storage format
+
+It is presumed that users will only be able to access mailboxes
+through the use of network protocols.  The Cyrus server implementation
+is given the freedom to store mailboxes on disk in a format best
+suited to its needs.
+
+Each mailbox is represented by a directory in the filesystem.  Within
 the directory, each message is stored in its own file in RFC 822
 format.  The filenames of the message files are the
 sequentially-assigned UID's, with a period appended.  Lines are
 terminated by CRLF.
 
 In order to allow the server to export netnews spool directories,
-there is a per-folder netnews compatability mode.  Folders in this
+there is a per-mailbox netnews compatability mode.  Mailboxes in this
 mode have message files named without an appended period.  Lines in
 message files are terminated by just LF.  Messages may not be appended
-to or copied into these folders in the normal manner.
+to or copied into these mailboxes in the normal manner.
 
 The directory contains the following additional files.  All binary
 values are in network byte order:
 
-cyrus.header	Contains variable-length information about the folder itself.
+cyrus.header	Contains variable-length information about the mailbox itself.
 
 - magic-number
-- Filename of cyrus.quota for this folder
+- Filename of cyrus.quota for this mailbox
 - The names of the user-defined flags
-- The folder's ACL
+- The mailbox's ACL
 
 
 cyrus.index	Contains a header and a sequence of fixed-length
-		records, one record per message in the folder.  The
+		records, one record per message in the mailbox.  The
 		header contains:
 
 - generation-no	4 bytes		incremented each time cyrus.index is
 				rewritten by an expunge operation
-- folder-format	4 bytes		nonzero if folder in netnews format
+- format	4 bytes		nonzero if mailbox in netnews format
+- minor-version 4 bytes		mailbox format minor version number
+				will not append to mailbox if nonzero 
 - start-offset	4 bytes		offset of first per-message record
 - record-size	4 bytes		size of per-message records
 - last-date	4 bytes		INTERNALDATE of the last message
-				appended to the folder
+				appended to the mailbox
 - last-uid	4 bytes		UID of the last message	appended to
-				the folder
-- quota-used	4 bytes		size quota usage this folder
+				the mailbox
+- quota-used	4 bytes		size quota usage this mailbox
 
 		Each per-message record contains:
 
 - uid		4 bytes		UID
 - internaldate	4 bytes		(in unix date format)
 - rfc822.size	4 bytes
+- header-size	4 bytes		size of message header
 - body-offset	4 bytes		offset in file of message body
 - cache-offset	4 bytes		offset in cyrus.cache
 - last-updated	4 bytes		unix date of last modification
 				of flags
 - system-flags	4 bytes		bit-vector of system and internal flags:
-				\answered \flagged \deleted
-- user-flags	16 bytes	User-defined flags
+				\Answered \Flagged \Deleted
+- user-flags	16 bytes	bit-vector of user-defined flags
 
 
 
-cyrus.cache	Contains a header and asequence of variable-length
-		records, one record per message in the folder.  The
+cyrus.cache	Contains a header and a sequence of variable-length
+		records, one record per message in the mailbox.  The
 		header contains a "generation number" corresponding to
 		the one in cyrus.index.  Each record contains:
 
 - IMAP "envelope", in format suitable for use in FETCH reply
+- IMAP "bodystructure", in format suitable for use in FETCH reply
 - IMAP "body", in format suitable for use in FETCH reply
 - sizes and file offsets of the various MIME body parts
+
+Each field contains a 4 byte length in network byte order, the data,
+and padding to a 4 byte boundary.
+
 
 cyrus.seen	Contains the \seen and \recent information of users.
 		One record per user, sorted by user, each record contains:
 
 - Userid
-- Time last opened (for \RECENT)
+- Time when mailbox last opened (for arbitron)
+- UID of last message when mailbox last opened (for \RECENT)
 - SEQUENCE of UID's of read messages
 - Optional space character padding, to avoid having to rewrite file on updates
 
-In order to support replicated folders in a future implementation,
+In order to support replicated mailboxes in a future implementation,
 access to cyrus.seen will be through an interface which can later be
 replaced by a distributed database.
 
 
 * Quota information storage format
 
-Each directory, whether it corresponds to folder or not, can act as
-the quota "root" of a hierarchy of folders.  Such roots contain the
+Each directory, whether it corresponds to mailbox or not, can act as
+the quota "root" of a hierarchy of mailboxes.  Such roots contain the
 file:
 
 cyrus.quota	Contains hierarchy-wide quota limits and usage.
 
 
-* Folder locking semantics
+* Mailbox locking semantics
 
-In order to update information in a folder, the implementation must
+In order to update information in a mailbox, the implementation must
 follow set locking procedures in order to prevent concurrency errors.
 
 The locking order is: cyrus.header cyrus.index cyrus.seen cyrus.quota
@@ -158,7 +187,7 @@ double-check to make sure the file wasn't rewritten.
 
 It is necessary to lock cyrus.header before locking cyrus.quota in
 order to guard against the possibility of another process changing the
-cyrus.quota for the folder.
+cyrus.quota for the mailbox.
 
 The order of the specific update operations is:
 
@@ -168,6 +197,7 @@ To append one or more messages:
 	open/lock cyrus.index and cyrus.cache
 	open/lock appropriate cyrus.quota
 	check quota
+	write cyrus.header if creating new user flags
 	assign uid as one plus last-uid
 	ensure new internaldate is later than last-date
 	write or hard-link message file(s)
@@ -176,7 +206,7 @@ To append one or more messages:
 	update last-date, last-uid, and quota-used
 	update cyrus.quota
 	release locks
-	if appending to currently-open folder, do check
+	perform status update if permitted
 
 To add or remove flags:
 	if adding new user flag, lock cyrus.header, update, release lock
@@ -184,11 +214,10 @@ To add or remove flags:
 	if cyrus.index has been replaced since last opened
 		open and lock the newer cyrus.index file.
 		locate the record
-		read previous flags
-	if didn't read previous flags, read them from older cyrus.index
+	read previous flags
 	calculate changes to flags
 	update flags and last-updated
-	update flags and last-updated in other cyrus.index
+	notify client
 	release locks
 
 To expunge:
@@ -196,7 +225,7 @@ To expunge:
 	open cyrus.index and cyrus.cache if not already reading them
 	lock already-open cyrus.index file
 	if cyrus.index has been replaced since last opened, close,
-		reopen, send EXPUNGE notifications, and repeat.
+		reopen, lock, and repeat.
 	if reopened cyrus.index file, reopen cyrus.cache file.
 	create files cyrus.index.NEW and cyrus.cache.NEW
 	copy header, incrementing generation-no
@@ -214,6 +243,7 @@ To expunge:
 	copy data, removing users who haven't read recently
 	rename cyrus.seen.NEW to cyrus.seen
 	release locks
+	perform status update
 
 update recent/seen info:
 	lock cyrus.seen
@@ -241,26 +271,16 @@ update recent/seen info:
 In order to avoid presenting stale data, the following operations
 should be performed when implementing the following IMAP commands.
 
-Select/Bboard:
+Select/Bboard/Examine:
 	open cyrus.header, check ACL
 	open cyrus.index and cyrus.cache, repeat if generation-no doesn't match
 	open cyrus.seen
 	calculate FLAGS from information in cyrus.header
-	calculate EXISTS by size of cyrus.index
-	calculate RECENT by info in cyrus.seen and binary search of
-		cyrus.index 
+	perform status update
 
 Fetch/Partial:
 	calculate offset into cyrus.index
 	follow pointers to cyrus.cache and/or message file
-
-Check:
-	if newer cyrus.index
-		open cyrus.index and cyrus.cache
-		send EXPUNGE notifications
-	scan for changed flags (using last-updated), send
-		unsolicited FETCH FLAGS replies
-	calculate EXISTS and RECENT
 
 Search:
 	order the search criterea in cheapest-to-most-expensive order
@@ -285,53 +305,43 @@ Search:
 	- must serch message file contents
 		BODY, TEXT
 
+status update:
+	if newer cyrus.index
+		open cyrus.index and cyrus.cache
+		send EXPUNGE notifications
+	scan for changed flags (using last-updated), send
+		unsolicited FETCH FLAGS replies
+	calculate EXISTS by size of cyrus.index
+	calculate RECENT by info in cyrus.seen and binary search of
+		cyrus.index 
+
 * Configuration directory
 
 On each server, there is a directory which contains files specifiying
 the server configuration.  The files are:
 
-- policy
+- /etc/imapd.conf
 
-Specifies site policy options, such as:
+Specifies site configuration and policy options, such as:
 
-	Whether to automatcally create INBOX mailboxes for users
-	The hostnames and Kerberos identifications of the IMSP servers
-	Whether to support the SUBSCRIBE/UNSUBSCRIBE IMAP commands
-	Which Kerberos realms to allow logins from [?]
-	Whether to allow logins based on system password file
+	Location of configuration directory
+	The partition names and their corresponding directory roots.
+	Threshold for quota warning messages
+	The hostnames of any IMSP servers
+	Which Kerberos realms to allow logins from
 	Whether to allow anonymous logins
+	Whether to automatically create INBOX mailboxes for users
+	Whether to support the SUBSCRIBE/UNSUBSCRIBE IMAP commands
 
-- bboard.partitions
+- mailboxes
 
-Lists the bboard partition names and their corresponding directory
-roots.  If a bboard exists in a given partition, the path to the
-bboard is found by taking the bboard name, changing "." characters to
-"/", and prepending the partition's directory root.
-
-- mailbox.partitions	[or user.partitions]
-
-Lists the mailbox partition names and their corresponding directory
-roots.  If a mailbox exists in a given partition, the path to the
-bboard is found by taking the bboard name, changing "." characters to
-"/", and prepending the partition's directory root and the mailbox's
-user.
-
-
-When creating a new folder, the default partition is determined as
-follows: If there exists a folder or quota root in some higher part of
-the hierarchy, the default partition is that of the longest such
-folder or quota root.  Otherwise, the default partition is the one
-listed first in the appropriate partiton file.
-
-- bboard
-
-Lists the names and partitions of all the bboards.
+Lists the names and partitions of all the common mailboxes.
 
 - delivered.dir & delivered.pag
 
 Database of delivered messages, for duplicate delivery elimination.
-Stores folder name (bboard or user/mailbox), message-id, and delivery
-time.  The delivery time is used for purging the database of old entries.
+Stores mailbox name, message-id, and delivery time.  The delivery time
+is used for purging the database of old entries.
 
 
 * User directory:
@@ -354,19 +364,16 @@ to an IMSP server.
 
 Filename is one of:
 
-- last.mailbox.USER.MAILBOX-NAME.UID
-- last.bboard.BBOARD-NAME.UID
+- last.mailbox.MAILBOX-NAME.UID
 - seen.mailbox.USER.MAILBOX-NAME.UID
-- seen.bboard.USER.BBOARD-NAME.UID
 
 With the following definitions:
 
 	USER - Name of user owning/reading
 	MAILBOX-NAME - Name of relevant mailbox
-	BBOARD-NAME - Name of relevant bboard
 	UID - UID of last message posted/read
 		A UID of "0" for seen means user no longer
-		read everything in folder.
+		read everything in mailbox.
 
 The order of operations for the update daemon is:
 
@@ -383,12 +390,12 @@ The order of operations for the update daemon is:
 
 * Reader registry directory
 
-Contains one file for each server process reading a folder.  Filename
-is process-id of server, contents of file is name of mailbox/bboard
-being read.
+Contains one file for each server process reading a mailbox.  Filename
+is process-id of server, contents of file is name of mailbox being
+read.
 
-When a folder is deleted or renamed, this directory is scanned for
-processes reading the folder.  Those processes are sent a signal
+When a mailbox is deleted or renamed, this directory is scanned for
+processes reading the mailbox.  Those processes are sent a signal
 causing them to shut down.
 
 
@@ -396,37 +403,37 @@ causing them to shut down.
 
 The following programs will be written
 
-- cyrus-imapd
+- imapd
 	Exports the IMAP protocol to a connecting client.
 	Called by inetd or equivalent. 
 
-- cyrus-deliver
-	Called by the mail system to deliver message to mailbox or bboard.
+- deliver
+	Called by the mail system to deliver message to mailbox.
 	Will be backwards-interface-compatable with rmail.
 
-- cyrus-update
+- updateimsp
 	Daemon to monitor the dropoff directory and give SEEN/LAST
 	commands to an IMSP server.
 
-- cyrus-builddir
+- builddir
 	Called by the netnews system to build cyrus header files in
 	the news spool area.
 
-- cyrus-expire
-	Expires old bboard posts
+- expire
+	Expires old mailbox posts
 	Has mode where it will clean up after a news system expire
 
-- cyrus-arbitron
+- arbitron
 	Reports readership statistics
 
-- cyrus-pop2d
-- cyrus-pop3d
+- pop2d
+- pop3d
 	Exports the POP2 or POP3 protocol to a connecting client.
 
-- cyrus-reconstruct
-	Reconstructs/rebuilds a corrupted set of folder
+- reconstruct
+	Reconstructs/rebuilds a corrupted set of mailbox
 	header/index/cache/seen files.  Might be the same program as
-	cyrus-builddir.
+	builddir.
 
 
 * Monitoring
@@ -436,7 +443,7 @@ The following things need to be monitored.
 In real time:
 
 - the number of connections
-	Can be done with an inetd-equivalent that keeps a count
+	Can use existing tools to count files in reader registry
 - disk usage, load average
 	Already have programs to do this
 
@@ -448,7 +455,7 @@ In log files:
 - logins
 
 - feature usage (count) and timing (total/min/max)
-	Can log on close of folder, with user and folder name
+	Can log on close of mailbox, with user and mailbox name
 
 
 On periodic basis:
@@ -465,25 +472,25 @@ Implementation order is as follows:
 
   + append message (ex. cyrus.cache), check quotas, check ACLs
 
-  + append cyrus.cache, minimal cyrus-deliver
+  + append cyrus.cache, minimal deliver
 
-  + bboard/noop/logout, minimal cyrus-imapd
+  + login/logout/select/examine/bboard/noop/check, minimal imapd
 
-  + fetch/partial (ex. MIME parts, header.matches)
+  + fetch/partial/uid-fetch/uid-after (ex. MIME parts, header.matches)
 
 - Flags/Search
 
-  + store flags/recent/seen
+  + store/uid-store flags/recent/seen
 
   + search internaldate/flags
 
   + search cyrus.cache/body
 
-- Users
+- Users/mailbox manipulation
 
-  + login/select/MIME&hdr fetch, full-fledged cyrus-deliver
+  + MIME&hdr fetch, full-fledged deliver
 
-  + create/rename/delete/create.bboard/rename.bboard/delete.bboard
+  + create/rename/delete
 
   + subscribe/unsubscribe/find/acl
 
@@ -491,24 +498,20 @@ Implementation order is as follows:
 
   + expunge
 
-  + check
-
-  + copy, etc.  Alpha release
+  + copy/uid-copy, etc.  Alpha release
 
 - Everything else
 
-  + IMSP seen/last, cyrus-update
+  + IMSP seen/last, updateimsp
 
   + quota
 
-  + cyrus-builddir, minimal cyrus-expire
+  + builddir, minimal expire
 
   + IMSP move
 
-  + quota-usage reporter, full cyrus-expire
+  + quota-usage reporter, full expire
 
-  + cyrus-arbitron, cyrus-pop2d, cyrus-pop3d
+  + arbitron, pop2d, pop3d
 
-  + site-configurable folder namespace
-
-  + connection-counting inetd;  Beta release
+  + site-configurable mailbox namespace; Beta release
