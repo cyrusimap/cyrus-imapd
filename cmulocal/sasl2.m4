@@ -2,7 +2,7 @@ dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
- AC_ARG_ENABLE(gssapi, [  --with-gssapi=<DIR>	  enable GSSAPI authentication [yes] ],
+ AC_ARG_WITH(gssapi, [  --with-gssapi=<DIR>	  enable GSSAPI authentication [yes] ],
     gssapi=$enableval,
     gssapi=yes)
 
