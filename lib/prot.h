@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
-   $Id: prot.h,v 1.22 1999/12/23 18:58:53 leg Exp $
+   $Id: prot.h,v 1.23 2000/01/25 06:52:35 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -45,6 +45,7 @@
 #endif
 
 #define PROT_BUFSIZE 4096
+/* #define PROT_BUFSIZE 8192 */
 
 struct protstream;
 
@@ -77,32 +78,36 @@ struct protstream {
 #endif /* HAVE_SSL */
 };
 
+extern int prot_getc(struct protstream *s);
+extern int prot_ungetc(int c, struct protstream *s);
+extern int prot_putc(int c, struct protstream *s);
+
+#if 0
 #define prot_getc(s) ((s)->cnt-- > 0 ? (int)*(s)->ptr++ : prot_fill(s))
 #define prot_ungetc(c, s) ((s)->cnt++, (*--(s)->ptr = (c)))
 #define prot_putc(c, s) ((*(s)->ptr++ = (c)), --(s)->cnt == 0 ? prot_flush(s) : 0)
-
-extern struct protstream *prot_new P((int fd, int write));
-extern int prot_free P((struct protstream *s));
-extern int prot_setlog P((struct protstream *s, int fd));
-extern int prot_setlogtime P((struct protstream *s, time_t *ptr));
-extern int prot_setsasl P((struct protstream *s, sasl_conn_t *conn));
-#ifdef HAVE_SSL
-extern int prot_settls P((struct protstream *s, SSL *tlsconn));
-#endif /* HAVE_SSL */
-extern int prot_settimeout P((struct protstream *s, int timeout));
-extern int prot_setflushonread P((struct protstream *s,
-				  struct protstream *flushs));
-extern int prot_setreadcallback P((struct protstream *s,
-				   prot_readcallback_t *proc, void *rock));
-extern const char *prot_error P((struct protstream *s));
-extern int prot_rewind P((struct protstream *s));
-extern int prot_fill P((struct protstream *s));
-extern int prot_flush P((struct protstream *s));
-extern int prot_write P((struct protstream *s, const char *buf, unsigned len));
-#ifdef __STDC__
-extern int prot_printf(struct protstream *, const char *, ...);
 #endif
-extern int prot_read P((struct protstream *s, char *buf, unsigned size));
-extern char *prot_fgets P((char *buf, unsigned size, struct protstream *s));
+
+extern struct protstream *prot_new(int fd, int write);
+extern int prot_free(struct protstream *s);
+extern int prot_setlog(struct protstream *s, int fd);
+extern int prot_setlogtime(struct protstream *s, time_t *ptr);
+extern int prot_setsasl(struct protstream *s, sasl_conn_t *conn);
+#ifdef HAVE_SSL
+extern int prot_settls(struct protstream *s, SSL *tlsconn);
+#endif /* HAVE_SSL */
+extern int prot_settimeout(struct protstream *s, int timeout);
+extern int prot_setflushonread(struct protstream *s,
+			       struct protstream *flushs);
+extern int prot_setreadcallback(struct protstream *s,
+				prot_readcallback_t *proc, void *rock);
+extern const char *prot_error(struct protstream *s);
+extern int prot_rewind(struct protstream *s);
+extern int prot_fill(struct protstream *s);
+extern int prot_flush(struct protstream *s);
+extern int prot_write(struct protstream *s, const char *buf, unsigned len);
+extern int prot_printf(struct protstream *, const char *, ...);
+extern int prot_read(struct protstream *s, char *buf, unsigned size);
+extern char *prot_fgets(char *buf, unsigned size, struct protstream *s);
 
 #endif /* INCLUDED_PROT_H */
