@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.153 2001/01/18 17:42:31 ken3 Exp $
+ * $Id: index.c,v 1.154 2001/01/22 02:21:49 ken3 Exp $
  */
 #include <config.h>
 
@@ -3121,13 +3121,18 @@ static void parse_cached_envelope(char *env, char *tokens[])
 	    c++;
 	    break;
 	case 'N':			/* "NIL" */
-	    if (!ncom) tokens[i++] = NULL; /* empty token */
+	case 'n':
+	    if (!ncom)
+		tokens[i++] = NULL;	/* empty token */
 	    c += 3;			/* skip "NIL" */
 	    break;
 	case '"':			/* quoted string */
 	    c++;			/* skip open quote */
 	    if (!ncom) tokens[i++] = c;	/* start of string */
-	    c = strchr(c, '"');		/* find close quote */
+	    while (*c != '"') {		/* find close quote */
+		if (*c == '\\') c++;	/* skip quoted-specials */
+		c++;
+	    }
 	    if (!ncom) *c = '\0';	/* end of string */
 	    c++;			/* skip close quote */
 	    break;
