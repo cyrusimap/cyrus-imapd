@@ -1,0 +1,462 @@
+From bob@nas.com Thu May  9 18:00:16 2002
+Date: Thu, 25 Apr 2002 11:01:11 -0700
+From: Bob Finch <bob@nas.com>
+To: info-cyrus@lists.andrew.cmu.edu
+Subject: "spam" sieve extension
+
+I've gotten a handful of requests for the "spam" sieve extension I
+mentioned yesterday.  The diffs aren't too big, so I'll post them to
+the list.
+
+The diffs add a test to sieve that passes the message to SpamAssassin.
+If SpamAssassin scores the messages as spam, the test fails, otherwise
+the test succeeds.  Here's a simple sieve script using the spam
+extension:
+
+  require [ "spam", "fileinto" ];
+  if spam {
+      fileinto "spamfolder";
+  }
+
+The diffs are based on cyrus-imapd-2.1.3 -- I haven't tried them with
+other versions.  You'll also need to install SpamAssassin (see
+http://www.spamassassin.org/) and have spamd running.  I'm currently
+running SpamAssassin 2.11.  I've been running it for about a month on
+several mailboxes that typically get about 500 messages a day.
+
+The extension adds three new imapd.conf parameters:
+
+  max_size: 256000
+      The spam test will always return false for messages larger than
+      max_size.  Messages larger than max_size will not be passed to
+      spamd.
+
+  spam_spamd_host: 127.0.0.1
+      The IP addresses or hostname of the spamd server.
+
+  spam_spamd_port: 783
+      The port number of the spamd server.
+
+When sieve evaluates the spam test, it calls a callback in
+imap/lmptd.c that opens a connection to spamd.  It then sends a CHECK
+command writes the message to spamd.  It parses the response from
+spamd and returns the result of the test to sieve.
+
+Things on my to-do list:
+
+  * Add a configure option and ifdefs to conditionally include the
+    spam extension
+
+  * Provide a way for users to get more information about how
+    SpamAssassin scores messages.  This will require help from spamd,
+    since it currently just returns the score and threshold.
+
+  * Documentation
+
+-- Bob
+
+
+diff -cr cyrus-imapd-2.1.3-orig/imap/lmtpd.c cyrus-imapd-2.1.3/imap/lmtpd.c
+*** cyrus-imapd-2.1.3-orig/imap/lmtpd.c	Thu Mar  7 09:55:28 2002
+--- cyrus-imapd-2.1.3/imap/lmtpd.c	Thu Apr 18 21:14:10 2002
+***************
+*** 111,116 ****
+--- 111,124 ----
+  
+      char *authuser;		/* user who submitted message */
+      struct auth_state *authstate;
++ 
++     /* spam stuff */
++ 
++     /* This is in script_data, but the spam callback can't get to it */
++     /* so we put a copy here */
++     char *username;		/* Username of mailbox */
++     int spam_result_valid;	/* != 0 iff spam result is valid */
++     int spam_result;		/* != iff message is spam */
+  } mydata_t;
+  
+  /* data per script */
+***************
+*** 910,915 ****
+--- 918,1087 ----
+  static char *markflags[] = { "\\flagged" };
+  static sieve_imapflags_t mark = { markflags, 1 };
+  
++ /* spam support */
++ 
++ static int
++ getline (int s, char *buf, int len)
++ {
++     char *bp = buf;
++     int ret = 1;
++     char ch;
++ 
++     while ((ret = read (s, &ch, 1)) == 1 && ch != '\n') {
++ 	if (len > 0) {
++ 	    *bp++ = ch;
++ 	    len--;
++ 	}
++     }
++     if (len > 0)
++ 	*bp = '\0';
++     return (buf != bp);
++ }
++ 
++ 
++ static int
++ full_write (int s, char *buf, int len)
++ {
++     int total;
++     int ret;
++ 
++     for (total = 0; total < len; total += ret) {
++ 	ret = write (s, buf + total, len - total);
++ 	if (ret < 0)
++ 	    return 0;
++     }
++     return total == len;
++ }
++ 
++ 
++ static int
++ read_response (int s, int *result)
++ {
++     char is_spam[6];
++     char buf[1024];
++     int major;
++     int minor;
++     int response;
++     int score;
++     int threshold;
++ 
++     if (! getline (s, buf, sizeof (buf))) {
++ 	syslog (LOG_ERR, "read_response: response getline failed");
++ 	return SIEVE_FAIL;
++     }
++     if (sscanf (buf, "SPAMD/%d.%d %d %*s", &major, &minor, &response) != 3) {
++ 	syslog (LOG_ERR, "read_response: response sscanf failed, buf: %s",
++ 		buf);
++ 	return SIEVE_FAIL;
++     }
++     if (major < 1 || (major == 1 && minor < 1)) {
++ 	syslog (LOG_ERR, "read_response: bad spamd version: %d.%d",
++ 		major, minor);
++ 	return SIEVE_FAIL;
++     }
++     if (! getline (s, buf, sizeof (buf))) {
++ 	syslog (LOG_ERR, "read_response: header getline failed");
++ 	return SIEVE_FAIL;
++     }
++     if (sscanf (buf, "Spam: %5s ; %d / %d", is_spam, &score, &threshold) != 3) {
++ 	syslog (LOG_ERR, "read_response: header sscanf failed, buf: %s",
++ 		buf);
++ 	return SIEVE_FAIL;
++     }
++ 
++     *result = ! strcmp(is_spam, "True");
++     return SIEVE_OK;
++ }
++     
++ 
++ int spam (void *mc, int *is_spam)
++ {
++     mydata_t *d = (mydata_t *) mc;
++     message_data_t *m = d->m;
++     int s;
++     struct sockaddr_in addr;
++     struct hostent *host;
++     char header[128];
++     int max_size = config_getint ("spam_max_size", 250 * 1024);
++     const char *hostname = config_getstring ("spam_spamd_host", "127.0.0.1");
++     int port = config_getint ("spam_spamd_port", 783);
++     char *msg_buf;
++     int ret;
++ 
++     /* Assume message isn't spam if it is larger than max_size */
++     if (m->size > max_size) {
++ 	syslog (LOG_INFO, "spam: skipping message bigger than %d", max_size);
++ 	return SIEVE_FAIL;
++     }
++ 
++     memset (&addr, 0, sizeof(addr));
++     addr.sin_family = AF_INET;
++     addr.sin_port = htons(port);
++ 
++     if ((host = gethostbyname (hostname)) == NULL) {
++ 	syslog (LOG_ERR, "spam: gethostbyname failed");
++ 	return SIEVE_FAIL;
++     }
++     memcpy (&addr.sin_addr, host->h_addr, sizeof (addr.sin_addr));
++ 
++     if((s = socket (PF_INET, SOCK_STREAM, 0)) < 0) {
++ 	syslog (LOG_ERR, "spam: socket failed");
++ 	return SIEVE_FAIL;
++     }
++ 
++     if (connect (s, (const struct sockaddr *) &addr, sizeof (addr)) < 0) {
++ 	syslog (LOG_ERR, "spam: connect failed");
++ 	close (s);
++ 	return SIEVE_FAIL;
++     }
++ 
++     if ((msg_buf = malloc (m->size)) == NULL) {
++ 	syslog (LOG_ERR, "spam: malloc(%d) failed", m->size);
++ 	close (s);
++ 	return SIEVE_FAIL;
++     }
++     rewind (m->f);
++     if (fread (msg_buf, 1, m->size, m->f) != m->size || ferror (m->f)) {
++ 	syslog (LOG_ERR, "spam: read message failed");
++ 	free (msg_buf);
++ 	close (s);
++ 	return SIEVE_FAIL;
++     }
++ 
++     if (d->username) {
++ 	snprintf (header, sizeof (header),
++ 		  "CHECK SPAMC/1.2\r\nUser: %s\r\nContent-length: %d\r\n\r\n",
++ 		  d->username, m->size);
++     }
++     else {
++ 	snprintf (header, sizeof (header),
++ 		  "CHECK SPAMC/1.2\r\nContent-length: %d\r\n\r\n", m->size);
++     }
++     if (! full_write (s, header, strlen (header))) {
++ 	syslog (LOG_ERR, "spam: write header failed");
++ 	free (msg_buf);
++ 	close (s);
++ 	return SIEVE_FAIL;
++     }
++     if (! full_write (s, msg_buf, m->size)) {
++ 	syslog (LOG_ERR, "spam: write message failed");
++ 	free (msg_buf);
++ 	close (s);
++ 	return SIEVE_FAIL;
++     }
++ 
++     shutdown (s, SHUT_WR);
++     ret = read_response (s, is_spam);
++     shutdown (s, SHUT_RD);
++ 
++     free (msg_buf);
++     close (s);
++ 
++     syslog(LOG_DEBUG, "spam result: %d\n", ret);
++     return ret;
++ }
++  
++ 
+  int sieve_parse_error_handler(int lineno, const char *msg, void *ic, void *sc)
+  {
+      script_data_t *sd = (script_data_t *) sc;
+***************
+*** 999,1004 ****
+--- 1171,1182 ----
+  	fatal("sieve_register_vacation()", EC_SOFTWARE);
+      }
+  
++     res = sieve_register_spam(sieve_interp, &spam);
++     if (res != SIEVE_OK) {
++ 	syslog(LOG_ERR, "sieve_register_spam() returns %d\n", res);
++ 	fatal("sieve_register_spam()", EC_SOFTWARE);
++     }
++  
+      res = sieve_register_parse_error(sieve_interp, &sieve_parse_error_handler);
+      if (res != SIEVE_OK) {
+  	syslog(LOG_ERR, "sieve_register_parse_error() returns %d\n", res);
+***************
+*** 1148,1154 ****
+      mydata.notifyheader = generate_notify(msgdata);
+      mydata.authuser = authuser;
+      mydata.authstate = authstate;
+!     
+      /* loop through each recipient, attempting delivery for each */
+      for (n = 0; n < nrcpts; n++) {
+  	char *rcpt = xstrdup(msg_getrcpt(msgdata, n));
+--- 1326,1335 ----
+      mydata.notifyheader = generate_notify(msgdata);
+      mydata.authuser = authuser;
+      mydata.authstate = authstate;
+!     mydata.username = NULL;
+!     mydata.spam_result = 0;
+!     mydata.spam_result_valid = 0;
+! 
+      /* loop through each recipient, attempting delivery for each */
+      for (n = 0; n < nrcpts; n++) {
+  	char *rcpt = xstrdup(msg_getrcpt(msgdata, n));
+***************
+*** 1187,1192 ****
+--- 1368,1376 ----
+  		sdata->username = rcpt;
+  		sdata->mailboxname = plus;
+  		sdata->authstate = auth_newstate(rcpt, (char *)0);
++ 
++ 		/* Make a copy of mailbox username for spam stuff */
++ 		mydata.username = sdata->username;
+  
+  		/* slap the mailboxname back on so we hash the envelope & id
+  		   when we figure out whether or not to keep the message */
+diff -cr cyrus-imapd-2.1.3-orig/sieve/interp.c cyrus-imapd-2.1.3/sieve/interp.c
+*** cyrus-imapd-2.1.3-orig/sieve/interp.c	Tue Oct  2 14:08:13 2001
+--- cyrus-imapd-2.1.3/sieve/interp.c	Sun Mar 24 11:39:14 2002
+***************
+*** 154,159 ****
+--- 154,166 ----
+      return SIEVE_OK;
+  }
+  
++ int sieve_register_spam(sieve_interp_t *interp, sieve_spam *f)
++ {
++     interp->spam = f;
++  
++     return SIEVE_OK;
++ }
++ 
+  /* add the callbacks for messages. again, undefined if used after
+     sieve_script_parse */
+  int sieve_register_size(sieve_interp_t *interp, sieve_get_size *f)
+diff -cr cyrus-imapd-2.1.3-orig/sieve/interp.h cyrus-imapd-2.1.3/sieve/interp.h
+*** cyrus-imapd-2.1.3-orig/sieve/interp.h	Mon Feb 21 23:56:40 2000
+--- cyrus-imapd-2.1.3/sieve/interp.h	Sun Mar 24 11:40:53 2002
+***************
+*** 35,40 ****
+--- 35,41 ----
+      sieve_callback *redirect, *discard, *reject, *fileinto, *keep;
+      sieve_callback *notify;
+      sieve_vacation_t *vacation;
++     sieve_spam *spam;
+  
+      sieve_get_size *getsize;
+      sieve_get_header *getheader;
+diff -cr cyrus-imapd-2.1.3-orig/sieve/script.c cyrus-imapd-2.1.3/sieve/script.c
+*** cyrus-imapd-2.1.3-orig/sieve/script.c	Wed Feb 27 13:05:13 2002
+--- cyrus-imapd-2.1.3/sieve/script.c	Thu Apr 18 21:02:51 2002
+***************
+*** 102,107 ****
+--- 102,114 ----
+  	return 1;
+      } else if (!strcmp("comparator-i;ascii-casemap", req)) {
+  	return 1;
++     } else if (!strcmp("spam",req)) {
++ 	if (s->interp.spam) {
++ 	    s->support.spam = 1;
++ 	    return 1;
++ 	} else {
++ 	    return 0;
++ 	}
+      }
+      return 0;
+  }
+***************
+*** 361,366 ****
+--- 368,381 ----
+  	    res = (sz < t->u.sz.n);
+  	}
+  	break;
++     }
++     case SPAM:
++     {
++ 	int is_spam;
++ 
++ 	if (i->spam == NULL || i->spam (m, &is_spam) != SIEVE_OK)
++ 	    break;
++ 	res = is_spam;
+      }
+      }
+  
+diff -cr cyrus-imapd-2.1.3-orig/sieve/script.h cyrus-imapd-2.1.3/sieve/script.h
+*** cyrus-imapd-2.1.3-orig/sieve/script.h	Wed Feb  9 16:39:14 2000
+--- cyrus-imapd-2.1.3/sieve/script.h	Sun Mar 24 11:39:13 2002
+***************
+*** 45,50 ****
+--- 45,51 ----
+  	int notify    : 1;
+  	int regex     : 1;
+  	int subaddress: 1;
++ 	int spam      : 1;
+      } support;
+  
+      void *script_context;
+diff -cr cyrus-imapd-2.1.3-orig/sieve/sieve-lex.l cyrus-imapd-2.1.3/sieve/sieve-lex.l
+*** cyrus-imapd-2.1.3-orig/sieve/sieve-lex.l	Tue Feb 19 10:09:46 2002
+--- cyrus-imapd-2.1.3/sieve/sieve-lex.l	Sat Mar 23 18:43:22 2002
+***************
+*** 90,95 ****
+--- 90,96 ----
+  <INITIAL>header		return HEADER;
+  <INITIAL>not		return NOT;
+  <INITIAL>size		return SIZE;
++ <INITIAL>spam		return SPAM;
+  <INITIAL>reject		return REJCT;
+  <INITIAL>fileinto	return FILEINTO;
+  <INITIAL>redirect	return REDIRECT;
+diff -cr cyrus-imapd-2.1.3-orig/sieve/sieve.y cyrus-imapd-2.1.3/sieve/sieve.y
+*** cyrus-imapd-2.1.3-orig/sieve/sieve.y	Tue Mar  5 08:15:01 2002
+--- cyrus-imapd-2.1.3/sieve/sieve.y	Sun Mar 24 11:36:18 2002
+***************
+*** 141,146 ****
+--- 141,147 ----
+  %token SETFLAG ADDFLAG REMOVEFLAG MARK UNMARK
+  %token NOTIFY DENOTIFY
+  %token ANYOF ALLOF EXISTS SFALSE STRUE HEADER NOT SIZE ADDRESS ENVELOPE
++ %token SPAM
+  %token COMPARATOR IS CONTAINS MATCHES REGEX OVER UNDER
+  %token ALL LOCALPART DOMAIN USER DETAIL
+  %token DAYS ADDRESSES SUBJECT MIME
+***************
+*** 398,403 ****
+--- 399,409 ----
+  	| NOT test		 { $$ = new_test(NOT); $$->u.t = $2; }
+  	| SIZE sizetag NUMBER    { $$ = new_test(SIZE); $$->u.sz.t = $2;
+  		                   $$->u.sz.n = $3; }
++ 	| SPAM			 { if (!parse_script->support.spam) {
++ 				     yyerror("spam not required");
++ 				     YYERROR;
++ 				   }
++ 				   $$ = new_test(SPAM); }
+  	| error			 { $$ = NULL; }
+  	;
+  
+diff -cr cyrus-imapd-2.1.3-orig/sieve/sieve_interface.h cyrus-imapd-2.1.3/sieve/sieve_interface.h
+*** cyrus-imapd-2.1.3-orig/sieve/sieve_interface.h	Tue Feb 19 10:09:46 2002
+--- cyrus-imapd-2.1.3/sieve/sieve_interface.h	Sun Mar 24 19:46:44 2002
+***************
+*** 50,55 ****
+--- 50,57 ----
+  typedef int sieve_get_envelope(void *message_context, 
+  			       const char *field,
+  			       const char ***contents);
++ typedef int sieve_spam(void *message_context, int *is_spam);
++ 
+  
+  typedef struct sieve_vacation {
+      int min_response;		/* 0 -> defaults to 3 */
+***************
+*** 121,126 ****
+--- 123,129 ----
+  int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v);
+  int sieve_register_imapflags(sieve_interp_t *interp, sieve_imapflags_t *mark);
+  int sieve_register_notify(sieve_interp_t *interp, sieve_callback *f);
++ int sieve_register_spam(sieve_interp_t *interp, sieve_spam *f);
+  
+  /* add the callbacks for messages. again, undefined if used after
+     sieve_script_parse */
+diff -cr cyrus-imapd-2.1.3-orig/timsieved/scripttest.c cyrus-imapd-2.1.3/timsieved/scripttest.c
+*** cyrus-imapd-2.1.3-orig/timsieved/scripttest.c	Sun Dec 17 20:53:43 2000
+--- cyrus-imapd-2.1.3/timsieved/scripttest.c	Sun Mar 24 13:12:06 2002
+***************
+*** 171,176 ****
+--- 171,182 ----
+  	return TIMSIEVE_FAIL;
+      }
+  
++     res = sieve_register_spam(i, (sieve_spam *) &foo);
++     if (res != SIEVE_OK) {
++ 	syslog (LOG_ERR, "sieve_register_spam() returns %d\n", res);
++ 	return TIMSIEVE_FAIL;
++     }
++  
+      res = sieve_register_parse_error(i, &mysieve_error);
+      if (res != SIEVE_OK) {
+  	syslog(LOG_ERR, "sieve_register_parse_error() returns %d\n", res);
+ 
