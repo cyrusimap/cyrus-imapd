@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.117 2002/04/12 20:24:41 leg Exp $ */
+/* $Id: proxyd.c,v 1.118 2002/04/24 16:35:41 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -3485,6 +3485,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
     /* Cross Server Rename */
     if (!r && partition) {
+	char *destpart;
+	
 	if(strcmp(oldname, newname)) {
 	    prot_printf(s->out,
 			"%s NO Cross-server move w/rename not supported\r\n",
@@ -3492,11 +3494,26 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	    return;
 	}
 
-	/* xxx dest partition? 
-	 * <tag> XFER <name> <dest server> (dest partition) */
-	prot_printf(s->out, "%s XFER {%d+}\r\n%s {%d+}\r\n%s\r\n", 
-		    tag, strlen(oldname), oldname,
-		    strlen(partition), partition);
+	/* dest partition? */
+
+	destpart = strchr(partition,'!');
+	if(destpart) {
+	    strcpy(newmailboxname,partition);
+	    newmailboxname[destpart-partition]='\0';
+	    destpart++;
+	    /* <tag> XFER <name> <dest server> <dest partition> */
+	    prot_printf(s->out,
+			"%s XFER {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n", 
+			tag, strlen(oldname), oldname,
+			strlen(newmailboxname), newmailboxname,
+			strlen(destpart), destpart);
+	} else {
+	    /* <tag> XFER <name> <dest server> */
+	    prot_printf(s->out, "%s XFER {%d+}\r\n%s {%d+}\r\n%s\r\n", 
+			tag, strlen(oldname), oldname,
+			strlen(partition), partition);
+	}
+	
 	res = pipe_including_tag(s, tag, 0);
 
 	/* make sure we've seen the update */
