@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.20 2001/01/05 05:59:55 leg Exp $ */
+/* $Id: fud.c,v 1.21 2001/01/08 17:19:03 wcw Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -209,21 +209,21 @@ int handle_request(const char *who, const char *name,
 
     r = mailbox_open_index(&mailbox);
     if (r) {
-        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
 	mailbox_close(&mailbox);
+        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
 	return r;
     }
 
     if(!(strncmp(mboxname,"user.",5)) && !(mailbox.myrights & ACL_USER0)) {
+	mailbox_close(&mailbox);
         send_reply(sfrom, REQ_DENY, who, name, 0, 0, 0);
 	return 0;
     }
    
-
     r = seen_open(&mailbox, who, &seendb);
     if (r) {
-        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
 	mailbox_close(&mailbox);
+        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
 	return r;
     }
 
@@ -232,8 +232,8 @@ int handle_request(const char *who, const char *name,
     if (seenuids) free(seenuids);
     seen_close(seendb);
     if (r) {
-        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
 	mailbox_close(&mailbox);
+        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
 	return r;
     }
     
