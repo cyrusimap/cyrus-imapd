@@ -1,6 +1,6 @@
 /* version.h: the version number
  *
- * $Id: version.h,v 1.86 2000/05/05 19:58:49 leg Exp $
+ * $Id: version.h,v 1.87 2000/05/11 18:42:18 leg Exp $
  */
 
 #define _CYRUS_VERSION "v2.0.2"
@@ -18,4 +18,4 @@
 
 /* CAPABILITIES are now defined here, not including sasl ones */
 #define CAPABILITY_STRING "IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE " \
-	"UIDPLUS NO_ATOMIC_RENAME UNSELECT MULTIAPPEND"
+	"UIDPLUS NO_ATOMIC_RENAME UNSELECT MULTIAPPEND ID"
