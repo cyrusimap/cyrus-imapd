@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.322 2001/09/18 14:39:47 ken3 Exp $ */
+/* $Id: imapd.c,v 1.323 2001/09/21 16:02:32 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3039,6 +3039,8 @@ int usinguid;
     int c;
     int charset = 0;
     struct searchargs *searchargs;
+    clock_t start = clock();
+    char mytime[100];
 
     searchargs = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
 
@@ -3063,8 +3065,9 @@ int usinguid;
     }
     else {
 	index_search(imapd_mailbox, searchargs, usinguid);
-	prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		    error_message(IMAP_OK_COMPLETED));
+	sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
+	prot_printf(imapd_out, "%s OK %s (%s secs)\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED), mytime);
     }
 
     freesearchargs(searchargs);
