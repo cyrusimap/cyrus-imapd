@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.126 2000/06/20 17:26:52 ken3 Exp $
+ * $Id: index.c,v 1.127 2000/06/20 18:08:39 leg Exp $
  */
 #include <config.h>
 
@@ -242,7 +242,7 @@ static int _index_search P((unsigned **msgno_list, struct mailbox *mailbox,
 
 static void parse_cached_envelope P((char *env, char *tokens[]));
 static char *get_localpart_addr P((const char *header));
-static char *index_extract_subject P((const char *subj, int *is_refwd));
+static char *index_extract_subject(const char *subj, int *is_refwd);
 static void index_get_ids P((MsgData *msgdata,
 			     char *envtokens[], const char *headers));
 static MsgData *index_msgdata_load P((unsigned *msgno_list, int n,
@@ -3613,12 +3613,12 @@ static void index_thread_print(Thread *thread, int usinguid)
 /*
  * List threading algorithms for CAPABILITY.
  */
-void list_thread_algorithms()
+void list_thread_algorithms(struct protstream *out)
 {
     struct thread_algorithm *thr_alg;
 
     for (thr_alg = thread_algs; thr_alg->alg_name; thr_alg++)
-	prot_printf(imapd_out, " THREAD=%s", thr_alg->alg_name);
+	prot_printf(out, " THREAD=%s", thr_alg->alg_name);
 }
 
 /*
