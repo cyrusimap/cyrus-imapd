@@ -30,6 +30,8 @@
 
 #include "chartables.h"
 
+#define MAXTRANSLATION 3
+
 struct charset {
     char *name;
     const unsigned char (*table)[256][4];
@@ -62,7 +64,7 @@ static const struct charset charset_table[] = {
 /*
  * Table for decoding hexadecimal in quoted-printable
  */
-static const char index_hex[128] = {
+static const signed char index_hex[256] = {
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
@@ -71,13 +73,21 @@ static const char index_hex[128] = {
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,10,11,12, 13,14,15,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
 };
-#define HEXCHAR(c)  (((c) < 0 || (c) > 127) ? -1 : index_hex[(c)])
+#define HEXCHAR(c)  (index_hex[(unsigned char)(c)])
 
 /*
  * Table for decoding base64
  */
-static const char index_64[128] = {
+static const signed char index_64[256] = {
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,62, -1,-1,-1,63,
@@ -86,8 +96,16 @@ static const char index_64[128] = {
     15,16,17,18, 19,20,21,22, 23,24,25,-1, -1,-1,-1,-1,
     -1,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
     41,42,43,44, 45,46,47,48, 49,50,51,-1, -1,-1,-1,-1
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
+    -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
 };
-#define CHAR64(c)  (((c) < 0 || (c) > 127) ? -1 : index_64[(c)])
+#define CHAR64(c)  (index_64[(unsigned char)(c)])
 
 #define USASCII(c) (us_ascii[0][(unsigned char)(c)][0])
 
@@ -120,7 +138,6 @@ int charset;
     int pos = 0;
     const unsigned char (*table)[4];
     const unsigned char *translation;
-    int len;
 
     if (!s) return 0;
     if (charset < 0 || charset >= NUM_CHARSETS) return EMPTY_STRING;
@@ -134,17 +151,18 @@ int charset;
     *retval = '\0';
 
     while (*s) {
-	translation = table[(unsigned char)*s];
-	len = strlen(translation);
-	if (pos + len >= alloced) {
-	    alloced += len + GROWSIZE;
+	if (pos + MAXTRANSLATION >= alloced) {
+	    alloced += GROWSIZE;
 	    retval = xrealloc(retval, alloced);
 	}
-	strcpy(retval+pos, translation);
-	pos += len;
+	translation = table[(unsigned char)*s];
+	while (*translation) {
+	    retval[pos++] = *translation++;
+	}
 	s++;
     }
 
+    retval[pos] = '\0';
     return retval;
 }
 
@@ -241,54 +259,46 @@ char *s;
 		}
 		else if (c == '_') c = ' ';
 
-		translation = table[(unsigned char)c];
-		len = strlen(translation);
-		if (pos + len >= alloced) {
-		    alloced += len + GROWSIZE;
+		if (pos + MAXTRANSLATION >= alloced) {
+		    alloced += GROWSIZE;
 		    retval = xrealloc(retval, alloced);
 		}
-		strcpy(retval+pos, translation);
-		pos += len;
+		translation = table[(unsigned char)c];
+		while (*translation) {
+		    retval[pos++] = *translation++;
+		}
 	    }
 	}
 	else {
 	    /* Decode 'B' encoding */
 	    p = encoding+3;
 	    while (p < end) {
+		if (pos + MAXTRANSLATION*3 >= alloced) {
+		    alloced += GROWSIZE;
+		    retval = xrealloc(retval, alloced);
+		}
 		c1 = CHAR64(p[0]);
 		if (c1 == -1) break;
 		c2 = CHAR64(p[1]);
 		if (c2 == -1) break;
 		translation = table[(unsigned char)((c1<<2) | ((c2&0x30)>>4))];
-		len = strlen(translation);
-		if (pos + len >= alloced) {
-		    alloced += len + GROWSIZE;
-		    retval = xrealloc(retval, alloced);
+		while (*translation) {
+		    retval[pos++] = *translation++;
 		}
-		strcpy(retval+pos, translation);
-		pos += len;
 
 		c3 = CHAR64(p[2]);
 		if (c3 == -1) break;
 		translation = table[(unsigned char)(((c2&0XF) << 4) | ((c3&0x3C) >> 2))];
-		len = strlen(translation);
-		if (pos + len >= alloced) {
-		    alloced += len + GROWSIZE;
-		    retval = xrealloc(retval, alloced);
+		while (*translation) {
+		    retval[pos++] = *translation++;
 		}
-		strcpy(retval+pos, translation);
-		pos += len;
 
 		c4 = CHAR64(p[3]);
 		if (c4 == -1) break;
 		translation = table[(unsigned char)(((c3&0x03) <<6) | c4)];
-		len = strlen(translation);
-		if (pos + len >= alloced) {
-		    alloced += len + GROWSIZE;
-		    retval = xrealloc(retval, alloced);
+		while (*translation) {
+		    retval[pos++] = *translation++;
 		}
-		strcpy(retval+pos, translation);
-		pos += len;
 
 		p += 4;
 	    }
@@ -309,7 +319,7 @@ char *s;
 	retval[pos++] = USASCII(*s);
 	s++;
     }
-    retval[pos++] = '\0';
+    retval[pos] = '\0';
     return retval;
 }
 
@@ -557,14 +567,13 @@ int size;
     decodeleft += (*rawproc)(decodebuf+decodeleft, sizeof(decodebuf)-decodeleft);
 
     while (decodeleft) {
-	translation = decodetable[(unsigned char)(decodebuf[decodestart])];
-	len = strlen(translation);
-	if (len > size) {
+	if (MAXTRANSLATION > size) {
 	    return retval;
 	}
+	translation = decodetable[(unsigned char)(decodebuf[decodestart])];
 	decodestart++;
 	decodeleft--;
-	while (len--) {
+	while (*translation) {
 	    *buf++ = *translation++;
 	    retval++;
 	    size--;
