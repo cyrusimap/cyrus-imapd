@@ -374,7 +374,7 @@ va_dcl
 
     va_start(pvar);
     imclient = va_arg(pvar, struct imclient *);
-    finishproc = va_arg(pvar, imclient_proc_t);
+    finishproc = va_arg(pvar, imclient_proc_t *);
     finishrock = va_arg(pvar, void *);
     fmt = va_arg(pvar, char *);
 #endif
