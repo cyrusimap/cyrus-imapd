@@ -24,7 +24,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  */
-/* $Id: imapd.c,v 1.148 1998/06/09 22:21:17 tjs Exp $ */
+/* $Id: imapd.c,v 1.149 1998/06/10 21:53:40 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -1149,13 +1149,13 @@ char *tag;
 	index_check(imapd_mailbox, 0, 0);
     }
     prot_printf(imapd_out,
-"* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+");
+     "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE");
     /* XXX */
     prot_printf(imapd_out,
 		" X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME");
     prot_printf(imapd_out, "%s", login_capabilities());
 #ifdef ENABLE_EXPERIMENT
-    prot_printf(imapd_out, " OPTIMIZE-1 UNSELECT NAMESPACE");
+    prot_printf(imapd_out, " OPTIMIZE-1 UNSELECT");
 #endif
 #ifdef ENABLE_X_NETSCAPE_HACK
     prot_printf(imapd_out, " X-NETSCAPE");
@@ -3020,10 +3020,10 @@ cmd_netscrape(tag)
  * order to ensure the namespace response is correct on a server with
  * no shared namespace.
  */
-/* bits to set if the user can see a given namespace */
-#define NAMESPACE_INBOX  1
-#define NAMESPACE_USER   2
-#define NAMESPACE_SHARED 4
+/* locations to set if the user can see a given namespace */
+#define NAMESPACE_INBOX  0
+#define NAMESPACE_USER   1
+#define NAMESPACE_SHARED 2
 static int namespacedata(name, matchlen, maycreate, rock)
     char* name;
     int matchlen;
@@ -3038,13 +3038,13 @@ static int namespacedata(name, matchlen, maycreate, rock)
     
     if (!(strncmp(name, "INBOX.", 6))) {
 	/* The user has a "personal" namespace. */
-	*sawone |= NAMESPACE_INBOX;
+	sawone[NAMESPACE_INBOX] = 1;
     } else if (!(strncmp(name, "user.", 5))) {
 	/* The user can see the "other users" namespace. */
-	*sawone |= NAMESPACE_USER;
+	sawone[NAMESPACE_USER] = 1;
     } else {
 	/* The user can see the "shared" namespace. */
-	*sawone |= NAMESPACE_SHARED;
+	sawone[NAMESPACE_SHARED] = 1;
     }
 
     return 0;
@@ -3057,17 +3057,17 @@ static int namespacedata(name, matchlen, maycreate, rock)
 void cmd_namespace(tag)
     char* tag;
 {
-    int sawone = 0;
+    int sawone[3] = {0, 0, 0};
     char* pattern = xstrdup("%");
 
     /* now find all the exciting toplevel namespaces */
     mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
-		     imapd_authstate, namespacedata, (void*) &sawone);
+		     imapd_authstate, namespacedata, (void*) sawone);
 
     prot_printf(imapd_out, "* NAMESPACE %s %s %s\r\n",
-		(sawone & NAMESPACE_INBOX) ? "((\"INBOX.\" \".\"))" : "NIL",
-		(sawone & NAMESPACE_USER) ? "((\"user.\" \".\"))" : "NIL",
-		(sawone & NAMESPACE_SHARED) ? "((\"\" \".\"))" : "NIL");
+		(sawone[NAMESPACE_INBOX]) ? "((\"INBOX.\" \".\"))" : "NIL",
+		(sawone[NAMESPACE_USER]) ? "((\"user.\" \".\"))" : "NIL",
+		(sawone[NAMESPACE_SHARED]) ? "((\"\" \".\"))" : "NIL");
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
