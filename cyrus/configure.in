@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.268.2.14 2004/08/09 18:51:15 ken3 Exp $
+dnl $Id: configure.in,v 1.268.2.15 2004/09/13 19:59:19 shadow Exp $
 dnl
 
 
@@ -500,42 +500,7 @@ if test "$WITH_AUTH" = "pts"; then
 	LDAP_LIBS=""
 
   	if test "$WITH_PTS" = "afskrb"; then
-	    AFS_LIBS="${with_afs}/lib/afs/libkauth.a ${with_afs}/lib/afs/libprot.a  ${with_afs}/lib/afs/libauth.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/librxkad.a ${with_afs}/lib/librx.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/libubik.a  ${with_afs}/lib/liblwp.a ${with_afs}/lib/afs/util.a"
-	    if test -f ${with_afs}/lib/afs/libaudit.a; then
-		AFS_LIBS="$AFS_LIBS ${with_afs}/lib/afs/libaudit.a"
-	    fi
-	    if test -f /usr/ucblib/libucb.a; then
-		CMU_ADD_LIBPATH_TO(/usr/ucblib, AFS_LDFLAGS)
-		AFS_LIBS="$AFS_LIBS -lc -lucb"
-	    fi
-
-	    AC_CACHE_VAL(cyrus_afs_sigvec,[
-		SAVE_LIBS="$LIBS"
-		LIBS="${with_afs}/lib/liblwp.a"
-		AC_MSG_CHECKING(if AFS libraries need sigvec)
-		dnl Does AFS need sigvec?  We have to link against lwp and see
-		dnl if IOMGR_Initialize wants it
-		AC_TRY_LINK([IOMGR_Initialize();],
-			[IOMGR_Initialize()],
-			[
-				dnl it linked; don't need it
-				AC_MSG_RESULT(no)
-				cyrus_afs_sigvec="no"
-			], [
-				dnl didn't link; pick up sigvec
-				AC_MSG_RESULT(yes)
-				cyrus_afs_sigvec="yes"
-			])
-		])
-	    if test "$cyrus_afs_sigvec" = yes; then
-	      if test "$cant_find_sigvec" = yes; then
-                AC_MSG_WARN([Can't find a sigvec for AFS libraries which seem])
-	        AC_MSG_WARN([to need one; ptloader may not build.])
-              else
-	        AFS_LIBS="${AFS_LIBS} $cyrus_sigveclib"
-	      fi
-	    fi
-	    LIBS="$SAVE_LIBS"
+	    AFS_LIBS="${with_afs}/lib/libafsauthent.a ${with_afs}/lib/libafsrpc.a -lpthread"
 	    AC_SUBST(AFS_LIBS)
 	    AC_SUBST(AFS_LDFLAGS)
 	elif test "$WITH_PTS" = "ldap"; then
@@ -1034,7 +999,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.268.2.14 2004/08/09 18:51:15 ken3 Exp $ */
+/* $Id: configure.in,v 1.268.2.15 2004/09/13 19:59:19 shadow Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
