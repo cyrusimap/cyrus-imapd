@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.34 2002/08/31 01:48:35 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.35 2002/08/31 02:03:47 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1552,9 +1552,6 @@ void cmd_login(char *tag, char *user)
     char *passwd;
     char *canon_user;
     const char *reply = 0;
-    const char *val;
-    char buf[MAX_MAILBOX_PATH];
-    char *p;
     int plaintextloginpause;
     int r;
     
@@ -1658,19 +1655,7 @@ void cmd_login(char *tag, char *user)
     
     imapd_authstate = auth_newstate(imapd_userid, NULL);
 
-    /* xxx why aren't we using authisa() */
-    val = config_getstring(IMAPOPT_ADMINS);
-    while (*val) {
-	for (p = (char *)val; *p && !isspace((int) *p); p++);
-	strncpy(buf, val, p - val);
-	buf[p-val] = 0;
-	if (auth_memberof(imapd_authstate, buf)) {
-	    imapd_userisadmin = 1;
-	    break;
-	}
-	val = p;
-	while (*val && isspace((int) *val)) val++;
-    }
+    imapd_userisadmin = config_authisa(imapd_authstate, IMAPOPT_ADMINS);
 
     if (!reply) reply = "User logged in";
 

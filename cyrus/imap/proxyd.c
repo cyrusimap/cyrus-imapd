@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.26 2002/08/31 01:46:00 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.27 2002/08/31 02:03:48 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2068,9 +2068,6 @@ void cmd_login(char *tag, char *user)
     struct buf passwdbuf;
     char *passwd;
     char *reply = 0;
-    const char *val;
-    char buf[MAX_MAILBOX_PATH];
-    char *p;
     int plaintextloginpause;
     int r;
 
@@ -2174,19 +2171,7 @@ void cmd_login(char *tag, char *user)
 
     proxyd_authstate = auth_newstate(proxyd_userid, (char *)0);
 
-    /* xxx why aren't we using authisa() */
-    val = config_getstring(IMAPOPT_ADMINS);
-    while (*val) {
-	for (p = (char *)val; *p && !isspace((int) *p); p++);
-	strncpy(buf, val, p - val);
-	buf[p-val] = 0;
-	if (auth_memberof(proxyd_authstate, buf)) {
-	    proxyd_userisadmin = 1;
-	    break;
-	}
-	val = p;
-	while (*val && isspace((int) *val)) val++;
-    }
+    proxyd_userisadmin = config_authisa(proxyd_authstate, IMAPOPT_ADMINS);
 
     if (!reply) reply = "User logged in";
 
