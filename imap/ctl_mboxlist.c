@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.24 2002/01/29 20:01:32 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.25 2002/01/30 01:29:24 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -57,7 +57,6 @@
 
 #include "exitcodes.h"
 #include "mboxlist.h"
-#include "acapmbox.h"
 #include "imapconf.h"
 #include "assert.h"
 #include "xmalloc.h"
@@ -68,7 +67,7 @@ extern int optind;
 extern char *optarg;
 extern int errno;
 
-enum mboxop { DUMP, POPULATE, M_POPULATE, RECOVER, CHECKPOINT, UNDUMP, NONE };
+enum mboxop { DUMP, M_POPULATE, RECOVER, CHECKPOINT, UNDUMP, NONE };
 
 void fatal(const char *message, int code)
 {
@@ -131,7 +130,6 @@ static int dump_cb(void *rockp,
 {
     struct dumprock *d = (struct dumprock *) rockp;
     int r;
-    struct mailbox mailbox;
     char *p;
     char *name, *part, *acl;
 
@@ -158,48 +156,6 @@ static int dump_cb(void *rockp,
     case DUMP:
 	printf("%s\t%s\t%s\n", name, part, acl);
 	break;
-
-    case POPULATE:
-    {
-	acapmbox_handle_t *handle = acapmbox_get_handle();
-	acapmbox_data_t mboxdata;
-
-	if (!handle) {
-	    fprintf(stderr, "can't contact ACAP server\n");
-	    return IMAP_SERVER_UNAVAILABLE;
-	}
-	acapmbox_new(&mboxdata, NULL, name);
-	mboxdata.status = ACAPMBOX_COMMITTED;
-	mboxdata.acl = acl;
-
-	/* open index file for mailbox */
-	r = mailbox_open_header(name, NULL, &mailbox);
-	if (!r) {
-	    r = mailbox_open_index(&mailbox);
-	    if (r) {
-		fprintf(stderr, "Error opening index for %s\n", name);
-		return IMAP_SERVER_UNAVAILABLE;
-	    }
-		
-	    mboxdata.uidvalidity = mailbox.uidvalidity;
-	    mboxdata.answered = mailbox.answered;
-	    mboxdata.flagged = mailbox.flagged;
-	    mboxdata.deleted = mailbox.deleted;
-	    mboxdata.total = mailbox.exists;
-		
-	    /* close index file for mailbox */
-	    mailbox_close(&mailbox);
-	}
-
-	r = acapmbox_store(handle, &mboxdata, 1);
-	if (r) {
-	    fprintf(stderr, "problem storing '%s': %s\n", name,
-		    error_message(r));
-	    r = 0; /* not a database error, though */
-	    return IMAP_IOERROR;
-	}
-	break;
-    }
 
     case M_POPULATE: 
     {
@@ -241,7 +197,7 @@ void do_dump(enum mboxop op)
 {
     struct dumprock d;
 
-    assert(op == DUMP || op == POPULATE || op == M_POPULATE);
+    assert(op == DUMP || op == M_POPULATE);
 
     d.op = op;
 
@@ -377,8 +333,6 @@ void usage(void)
     fprintf(stderr,
 	    "  ctl_mboxlist [-C <alt_config>] -u [-f filename]"
 	    "    [< mboxlist.dump]\n");
-    fprintf(stderr, "ACAP populate:\n");
-    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -a [-f filename]\n");
     fprintf(stderr, "MUPDATE populate:\n");
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -m [-f filename]\n");
     exit(1);
@@ -437,11 +391,6 @@ int main(int argc, char *argv[])
 	    else usage();
 	    break;
 
-	case 'a':
-	    if (op == NONE) op = POPULATE;
-	    else usage();
-	    break;
-
 	case 'm':
 	    if (op == NONE) op = M_POPULATE;
 	    else usage();
@@ -470,7 +419,6 @@ int main(int argc, char *argv[])
 	return 0;
 
     case DUMP:
-    case POPULATE:
     case M_POPULATE:
 	mboxlist_init(0);
 	mboxlist_open(mboxdb_fname);

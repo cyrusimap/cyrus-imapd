@@ -1,6 +1,6 @@
 /* mupdatetest.c -- cyrus murder database test client
  *
- * $Id: mupdatetest.c,v 1.1 2002/01/22 22:31:53 rjs3 Exp $
+ * $Id: mupdatetest.c,v 1.2 2002/01/30 01:29:24 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -167,6 +167,7 @@ int main(int argc, char **argv)
     while((c = getopt(argc, argv, "s:p:")) != EOF) {
 	switch(c) {
 	case 's':
+	    /* backwards compatible */
 	    server = optarg;
 	    break;
 	case 'p':
@@ -178,8 +179,13 @@ int main(int argc, char **argv)
 	}
     }
 
+    if(!server) {
+	/* last arg is servername */
+	server = argv[optind];
+    }
+    
     if(!server || flag_fail) {
-	printf("Usage: %s -s server [-p port]\n", argv[0]);
+	printf("Usage: %s [-p port] server\n", argv[0]);
 	return 1;
     }
     
