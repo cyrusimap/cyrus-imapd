@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.462 2004/05/05 18:53:06 ken3 Exp $ */
+/* $Id: imapd.c,v 1.463 2004/05/05 20:46:33 ken3 Exp $ */
 
 #include <config.h>
 
@@ -276,9 +276,10 @@ static int imapd_canon_user(sasl_conn_t *conn, void *context,
     size_t n;
     int r;
 
+    if (!ulen) ulen = strlen(user);
+
     if (config_getswitch(IMAPOPT_IMAPMAGICPLUS)) {
 	/* make a working copy of the auth[z]id */
-	if (!ulen) ulen = strlen(user);
 	memcpy(userbuf, user, ulen);
 	userbuf[ulen] = '\0';
 	user = userbuf;
