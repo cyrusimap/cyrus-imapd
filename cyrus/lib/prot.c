@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.14 2002/12/20 18:38:52 rjs3 Exp $
+ * $Id: prot.c,v 1.72.4.15 2003/01/07 04:09:41 rjs3 Exp $
  */
 
 #include <config.h>
@@ -166,7 +166,8 @@ sasl_conn_t *conn;
 
     if (s->write && s->ptr != s->buf) {
 	/* flush any pending output */
-	prot_flush_internal(s,0);
+	if(prot_flush_internal(s,0) == EOF)
+	    return EOF;
     }
    
     s->conn = conn;
@@ -225,6 +226,7 @@ int prot_settimeout(struct protstream *s, int timeout)
 int prot_setflushonread(struct protstream *s, struct protstream *flushs)
 {
     assert(!s->write);
+    if(flushs) assert(flushs->write);
 
     s->flushonread = flushs;
     return 0;
@@ -614,7 +616,7 @@ static int prot_flush_writebuffer(struct protstream *s,
 
 int prot_flush_internal(struct protstream *s, int force)
 {
-    int n, ret = 0;
+    int n;
     int save_dontblock = s->dontblock;
 
     const char *ptr = s->buf; /* Memory buffer info */
@@ -652,7 +654,6 @@ int prot_flush_internal(struct protstream *s, int force)
 					   s->bigbuf_len - s->bigbuf_pos);
 		if(n == -1) {
 		    s->error = xstrdup(strerror(errno));
-		    ret = EOF;
 		    goto done;
 		} else if (n > 0) {
 		    s->bigbuf_pos += n;
@@ -668,7 +669,6 @@ int prot_flush_internal(struct protstream *s, int force)
 
 	/* Is there anything in the memory buffer? */
 	if(!left) {
-	    ret = 0;
 	    goto done;
 	}
 
@@ -678,7 +678,7 @@ int prot_flush_internal(struct protstream *s, int force)
 	prot_flush_log(s);
 
 	if(prot_flush_encode(s, &ptr, &left) == EOF) {
-	    ret = EOF;
+	    /* s->error set by prot_flush_encode */
 	    goto done;
 	}
 
@@ -687,7 +687,6 @@ int prot_flush_internal(struct protstream *s, int force)
 	    n = prot_flush_writebuffer(s, ptr, left);
 	    if(n == -1) {
 		s->error = xstrdup(strerror(errno));
-		ret = EOF;
 		goto done;
 	    } else if (n > 0) {
 		ptr += n;
@@ -707,7 +706,6 @@ int prot_flush_internal(struct protstream *s, int force)
 		n = 0;
 	    } else if(n == -1) {
 		s->error = xstrdup(strerror(errno));
-		ret = EOF;
 		goto done;
 	    }
 
@@ -718,7 +716,6 @@ int prot_flush_internal(struct protstream *s, int force)
 
 	/* If there isn't anything in the memory buffer, we're done now */
 	if(!left) {
-	    ret = 0;
 	    goto done;
 	}
 
@@ -727,7 +724,7 @@ int prot_flush_internal(struct protstream *s, int force)
 	
 	/* Encode it */
 	if(prot_flush_encode(s, &ptr, &left) == EOF) {
-	    ret = EOF;
+	    /* prot_flush_encode set s->error */
 	    goto done;
 	}
 
@@ -742,7 +739,6 @@ int prot_flush_internal(struct protstream *s, int force)
 		n = 0;
 	    } else if(n == -1) {
 		s->error = xstrdup(strerror(errno));
-		ret = EOF;
 		goto done;
 	    }
 
@@ -761,7 +757,6 @@ int prot_flush_internal(struct protstream *s, int force)
 		int fd = create_tempfile();
 		if(fd == -1) {
 		    s->error = xstrdup(strerror(errno));
-		    ret = EOF;
 		    goto done;
 		}
 
@@ -795,14 +790,16 @@ int prot_flush_internal(struct protstream *s, int force)
 	}
 	
     } /* end of blocking/nonblocking if statment */
-    
-    /* Reset the memory buffer */
+
+    /* Reset the memory buffer -- should be done on EOF or on success. */
     s->ptr = s->buf;
     s->cnt = s->maxplain;
-    
+        
  done:
-    /* are we done with the big buffer? If so, free it. */
-    if(s->big_buffer != PROT_NO_FD && s->bigbuf_pos == s->bigbuf_len) {
+    /* are we done with the big buffer? If so, free it. This includes
+     * when we exit with error */
+    if(s->big_buffer != PROT_NO_FD &&
+       (s->bigbuf_pos == s->bigbuf_len || s->error)) {
 	map_free(&(s->bigbuf_base), &(s->bigbuf_siz));
 	close(s->big_buffer);
 	s->bigbuf_len = s->bigbuf_pos = 0;
@@ -815,6 +812,14 @@ int prot_flush_internal(struct protstream *s, int force)
 	s->dontblock = save_dontblock;
     }
     
+    /* If we are exiting with an error, we should clear our memory buffer 
+     * and set our return code */
+    if(s->error) {
+        s->ptr = s->buf;
+        s->cnt = s->maxplain;
+	return EOF;
+    }
+
     return 0;
 }
 
