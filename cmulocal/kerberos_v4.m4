@@ -1,7 +1,7 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.24 2002/12/21 18:44:24 cg2v Exp $
+dnl $Id: kerberos_v4.m4,v 1.25 2002/12/29 05:13:02 cg2v Exp $
 
 AC_DEFUN(CMU_KRB_SENDAUTH_PROTO, [
 AC_MSG_CHECKING(for krb_sendauth prototype)
@@ -205,6 +205,7 @@ AC_ARG_WITH(krb4-include,
           else
              AC_MSG_RESULT([no])
           fi
+	  LIBS="${cmu_save_LIBS}"
 
 	  if test "X$ac_cv_krb_where_lib" = "X"; then
 	    CMU_KRB_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
@@ -221,8 +222,7 @@ AC_ARG_WITH(krb4-include,
 	  KRB_LIB_DIR=$ac_cv_krb_where_lib
 	  KRB_INC_FLAGS="-I${KRB_INC_DIR}"
 	  KRB_LIB_FLAGS="-L${KRB_LIB_DIR} -lkrb ${KRB_LIBDES}"
-	  cmu_save_LIBS="$LIBS"
-	  LIBS="${LIBS} ${KRB_LIB_FLAGS}"
+	  LIBS="${cmu_save_LIBS} ${KRB_LIB_FLAGS}"
 	  AC_CHECK_LIB(resolv, dns_lookup, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lresolv",,"${KRB_LIB_FLAGS}")
 	  AC_CHECK_LIB(crypt, crypt, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lcrypt",,"${KRB_LIB_FLAGS}")
 	  AC_CHECK_FUNCS(krb_get_int krb_life_to_time)
