@@ -50,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.16 2002/10/08 20:50:12 rjs3 Exp $
+ * $Id: nntpd.c,v 1.1.2.17 2002/10/11 13:34:13 ken3 Exp $
  */
 #include <config.h>
 
@@ -117,6 +117,7 @@ void printastring(const char *s)
 extern void index_operatemailbox(struct mailbox *mailbox);
 extern int index_finduid(unsigned uid);
 extern int index_getuid(unsigned msgno);
+extern char *index_get_msgid(struct mailbox *mailbox, unsigned msgno);
 
 
 #ifdef HAVE_SSL
@@ -618,8 +619,11 @@ static void cmdloop(void)
 		prot_printf(nntp_out,
 			    "422 No previous article in this group\r\n");
 	    } else {
+		char *msgid = index_get_msgid(nntp_group, --nntp_current);
+
 		prot_printf(nntp_out, "223 %u %s\r\n",
-			    index_getuid(--nntp_current), "<0>");
+			    index_getuid(nntp_current),
+			    msgid ? msgid : "<0>");
 	    }
 	}
 	else if (!strcmp(cmd.s, "next")) {
@@ -629,8 +633,11 @@ static void cmdloop(void)
 	    if (nntp_current == nntp_exists) {
 		prot_printf(nntp_out, "422 No next article in this group\r\n");
 	    } else {
+		char *msgid = index_get_msgid(nntp_group, ++nntp_current);
+
 		prot_printf(nntp_out, "223 %u %s\r\n",
-			    index_getuid(++nntp_current), "<0>");
+			    index_getuid(nntp_current),
+			    msgid ? msgid : "<0>");
 	    }
 	}
 	else if (!strcmp(cmd.s, "article") || !strcmp(cmd.s, "head") ||
@@ -1073,6 +1080,7 @@ static void cmd_article(unsigned long uid, int part)
     FILE *msgfile;
     char buf[4096];
     char fnamebuf[MAILBOX_FNAME_LEN];
+    char *msgid = index_get_msgid(nntp_group, index_finduid(uid));
 
     mailbox_message_get_fname(nntp_group, uid, fnamebuf);
     msgfile = fopen(fnamebuf, "r");
@@ -1080,7 +1088,8 @@ static void cmd_article(unsigned long uid, int part)
 	prot_printf(nntp_out, "502 Could not read message file\r\n");
 	return;
     }
-    prot_printf(nntp_out, "%u %lu %s\r\n", 220 + part, uid, "<0>");
+    prot_printf(nntp_out, "%u %lu %s\r\n", 220 + part, uid,
+		msgid ? msgid : "<0>");
 
     if (part != ARTICLE_STAT) {
 	while (fgets(buf, sizeof(buf), msgfile)) {

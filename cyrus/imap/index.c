@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.9 2002/10/09 18:43:44 ken3 Exp $
+ * $Id: index.c,v 1.180.4.10 2002/10/11 13:34:13 ken3 Exp $
  */
 #include <config.h>
 
@@ -4522,4 +4522,33 @@ static void index_thread_ref(unsigned *msgno_list, int nmsg, int usinguid)
 				  { SORT_SEQUENCE, 0, {{NULL,NULL}} }};
 
     _index_thread_ref(msgno_list, nmsg, loadcrit, NULL, sortcrit, usinguid);
+}
+
+/*
+ * NNTP specific stuff.
+ */
+char *index_get_msgid(struct mailbox *mailbox, unsigned msgno)
+{
+    const char *cacheitem;
+    int cachelen;
+    char *tmpenv;
+    char *envtokens[NUMENVTOKENS];
+    char *msgid;
+
+    cacheitem = cache_base + CACHE_OFFSET(msgno);
+    cachelen = CACHE_ITEM_LEN(cacheitem);
+
+    /* get msgid out of the envelope
+     *
+     * get a working copy; strip outer ()'s
+     */
+    tmpenv = xstrndup(cacheitem + 5, cachelen - 2);
+    parse_cached_envelope(tmpenv, envtokens);
+
+    msgid = envtokens[ENV_MSGID] ? xstrdup(envtokens[ENV_MSGID]) : NULL;
+
+    /* free stuff */
+    free(tmpenv);
+
+    return msgid;
 }
