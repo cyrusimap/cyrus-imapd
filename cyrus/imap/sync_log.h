@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_log.h,v 1.1.2.4 2005/03/22 18:49:35 ken3 Exp $
+ * $Id: sync_log.h,v 1.1.2.5 2005/03/31 18:51:26 ken3 Exp $
  */
 
 #ifndef INCLUDED_SYNC_LOG_H
@@ -51,26 +51,40 @@
 
 void sync_log_init(void);
 
-void sync_log_user(const char *user);
+void sync_log(char *fmt, ...);
 
-void sync_log_sieve(const char *user);
+#define sync_log_user(user) \
+    sync_log("USER %s\n", user)
 
-void sync_log_meta(const char *user);
+#define sync_log_META(user) \
+    sync_log("META %s\n", user)
 
-void sync_log_mailbox(const char *name);
+#define sync_log_sieve(user) \
+    sync_log("META %s\n", user)
 
-void sync_log_mailbox_double(const char *name1, const char *name2);
+#define sync_log_mailbox(name) \
+    sync_log("MAILBOX %s\n", name)
 
-void sync_log_append(const char *name);
+#define sync_log_mailbox_double(name1, name2) \
+    sync_log("MAILBOX %s\nMAILBOX %s\n", name1, name2)
 
-void sync_log_acl(const char *name);
+#define sync_log_append(name) \
+    sync_log("APPEND %s\n", name)
 
-void sync_log_quota(const char *name);
+#define sync_log_acl(name) \
+    sync_log("ACL %s\n", name)
 
-void sync_log_annotation(const char *name);
+#define sync_log_quota(name) \
+    sync_log("QUOTA %s\n", name)
 
-void sync_log_seen(const char *user, const char *name);
+#define sync_log_annotation(name) \
+    sync_log("ANNOTATION %s\n", name)
 
-void sync_log_subscribe(const char *user, const char *name, int add);
+#define sync_log_seen(user, name) \
+    sync_log("SEEN %s %s\n", user, name)
+
+#define sync_log_subscribe(user, name, add) \
+    if (add) sync_log("SUB %s %s\n", user, name); \
+    else sync_log("UNSUB %s %s\n", user, name)
 
 #endif /* INCLUDED_SYNC_LOG_H */

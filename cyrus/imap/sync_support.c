@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.7 2005/03/27 17:56:20 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.8 2005/03/31 18:51:26 ken3 Exp $
  */
 
 #include <config.h>
@@ -1700,15 +1700,8 @@ int sync_lock(struct sync_lock *lock)
     if (lock->count++) return 0;
 
     if (!*lockfile) {
-	const char *sync_dir = config_getstring(IMAPOPT_SYNC_DIR);
-
-	if (sync_dir) {
-	    strlcpy(lockfile, sync_dir, sizeof(lockfile));
-	} else {
-	    strlcpy(lockfile, config_dir, sizeof(lockfile));
-	    strlcat(lockfile, "/sync", sizeof(lockfile));
-	}
-	strlcat(lockfile, "/lock", sizeof(lockfile));
+	strlcpy(lockfile, config_dir, sizeof(lockfile));
+	strlcat(lockfile, "/sync/lock", sizeof(lockfile));
     }
 
     lock->fd = open(lockfile, O_WRONLY|O_CREAT, 0640);

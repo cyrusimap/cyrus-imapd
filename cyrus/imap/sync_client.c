@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.15 2005/03/27 17:56:19 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.16 2005/03/31 18:51:25 ken3 Exp $
  */
 
 #include <config.h>
@@ -3023,15 +3023,8 @@ int main(int argc, char **argv)
     }
 
     if (!*sync_log_file) {
-	const char *sync_dir = config_getstring(IMAPOPT_SYNC_DIR);
-
-	if (sync_dir) {
-	    strlcpy(sync_log_file, sync_dir, sizeof(sync_log_file));
-	} else {
-	    strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
-	    strlcat(sync_log_file, "/sync", sizeof(sync_log_file));
-	}
-	strlcat(sync_log_file, "/log", sizeof(sync_log_file));
+	strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
+	strlcat(sync_log_file, "/sync/log", sizeof(sync_log_file));
     }
 
     if (!sync_shutdown_file)

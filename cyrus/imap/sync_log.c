@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_log.c,v 1.1.2.5 2005/03/27 17:56:19 ken3 Exp $
+ * $Id: sync_log.c,v 1.1.2.6 2005/03/31 18:51:26 ken3 Exp $
  */
 
 /* YYY Need better quoting for obscure filenames: use literals? */
@@ -51,56 +51,31 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#ifdef HAVE_STDARG_H
+#include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
-#include <time.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <com_err.h>
 #include <syslog.h>
-#include <string.h>
-#include <sys/wait.h>
 #include <errno.h>
-#include <ctype.h>
 
-#include "global.h"
-#include "assert.h"
-#include "mboxlist.h"
-#include "exitcodes.h"
-#include "imap_err.h"
-#include "mailbox.h"
-#include "xmalloc.h"
-#include "acl.h"
-#include "seen.h"
-#include "mboxname.h"
-#include "map.h"
-#include "imapd.h"
-#include "imparse.h"
-#include "util.h"
-#include "retry.h"
-#include "append.h"
 #include "sync_log.h"
+#include "global.h"
 #include "lock.h"
+#include "mailbox.h"
+#include "retry.h"
 
-static const char *sync_host = NULL;
+static int sync_log_enabled = 0;
 static char sync_log_file[MAX_MAILBOX_PATH+1];
 
 void sync_log_init(void)
 {
-    const char *sync_dir;
+    sync_log_enabled = config_getswitch(IMAPOPT_SYNC_LOG);
 
-    sync_host = config_getstring(IMAPOPT_SYNC_HOST);
-    if (!sync_host) return;
-
-    sync_dir = config_getstring(IMAPOPT_SYNC_DIR);
-    if (sync_dir) {
-	strlcpy(sync_log_file, sync_dir, sizeof(sync_log_file));
-    } else {
-	strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
-	strlcat(sync_log_file, "/sync", sizeof(sync_log_file));
-    }
-    strlcat(sync_log_file, "/log", sizeof(sync_log_file));
+    strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
+    strlcat(sync_log_file, "/sync/log", sizeof(sync_log_file));
 }
 
 static void sync_log_base(const char *string, int len)
@@ -109,10 +84,16 @@ static void sync_log_base(const char *string, int len)
     struct stat sbuffile, sbuffd;
     int retries = 0;
 
-    if (!sync_host) return;
+    if (!sync_log_enabled) return;
 
     while (retries++ < SYNC_LOG_RETRIES) {
-        if ((fd = open(sync_log_file, O_WRONLY|O_APPEND|O_CREAT, 0640)) < 0) {
+        fd = open(sync_log_file, O_WRONLY|O_APPEND|O_CREAT, 0640);
+        if (fd < 0 && errno == ENOENT) {
+	    if (!cyrus_mkdir(sync_log_file, 0755)) {
+		fd = open(sync_log_file, O_WRONLY|O_APPEND|O_CREAT, 0640);
+	    }
+	}
+        if (fd < 0) {
             syslog(LOG_ERR, "sync_log(): Unable to write to log file %s: %s",
                    sync_log_file, strerror(errno));
             return;
@@ -152,42 +133,6 @@ static void sync_log_base(const char *string, int len)
     close(fd);
 }
 
-void sync_log_user(const char *user)
-{
-    char buf[64];
-    int len;
-
-    if (!sync_host) return;
-
-    len = snprintf(buf, sizeof(buf), "USER %s\n", user);
-
-    sync_log_base(buf, len);
-}
-
-void sync_log_meta(const char *user)
-{
-    char buf[64];
-    int len;
-
-    if (!sync_host) return;
-
-    len = snprintf(buf, sizeof(buf), "META %s\n", user);
-
-    sync_log_base(buf, len);
-}
-
-void sync_log_sieve(const char *user)
-{
-    char buf[64];
-    int len;
-
-    if (!sync_host) return;
-
-    len = snprintf(buf, sizeof(buf), "SIEVE %s\n", user);
-
-    sync_log_base(buf, len);
-}
-
 static const char *sync_quote_name(const char *name)
 {
     static char buf[(2*MAX_MAILBOX_NAME)+3];
@@ -195,6 +140,8 @@ static const char *sync_quote_name(const char *name)
     char *p = buf;
     char c;
     int  need_quote = 0;
+
+    if (!name || !*name) return "\"\"";
 
     s = name;
     while ((c=*s++)) {
@@ -224,101 +171,43 @@ static const char *sync_quote_name(const char *name)
     return(buf);
 }
 
-void sync_log_mailbox(const char *name)
+#define BUFSIZE 4096
+
+void sync_log(char *fmt, ...)
 {
-    char buf[MAX_MAILBOX_NAME+64];
-    int len;
+    va_list ap;
+    char buf[BUFSIZE+1], *p;
+    size_t len;
+    int ival;
+    const char *sval;
 
-    if (!sync_host) return;
+    if (!sync_log_enabled) return;
 
-    len = snprintf(buf, sizeof(buf), "MAILBOX %s\n", sync_quote_name(name));
-    sync_log_base(buf, len);
-}
+    va_start(ap, fmt);
+    for (len = 0, p = fmt; *p && len < BUFSIZE; p++) {
+	if (*p != '%') {
+	    buf[len++] = *p;
+	    continue;
+	}
+	switch (*++p) {
+	case 'd':
+	    ival = va_arg(ap, int);
+	    len += snprintf(buf+len, BUFSIZE-len, "%d", ival);
+	case 's':
+	    sval = va_arg(ap, const char *);
+	    sval = sync_quote_name(sval);
+	    strlcpy(buf+len, sval, BUFSIZE-len);
+	    len += strlen(sval);
+	    break;
+	default:
+	    buf[len++] = *p;
+	    break;
+	}
+    }
+    va_end(ap);
 
-/* Log two mailbox names as a single write() so they won't get separated
-   by sync_client runner */
-
-void sync_log_mailbox_double(const char *name1, const char *name2)
-{
-    char buf[(2*MAX_MAILBOX_NAME)+128];
-    int len1, len2;
-
-    if (!sync_host) return;
-
-    len1 = snprintf(buf, sizeof(buf), "MAILBOX %s\n", sync_quote_name(name1));
-    len2 = snprintf(buf+len1,
-                    sizeof(buf)-len1, "MAILBOX %s\n", sync_quote_name(name2));
-
-    sync_log_base(buf, len1+len2);
-}
-
-void sync_log_append(const char *name)
-{
-    char buf[MAX_MAILBOX_NAME+64];
-    int len;
-
-    if (!sync_host) return;
-
-    len = snprintf(buf, sizeof(buf), "APPEND %s\n", sync_quote_name(name));
-    sync_log_base(buf, len);
-}
-
-void sync_log_acl(const char *name)
-{
-    char buf[MAX_MAILBOX_NAME+64];
-    int len;
-
-    if (!sync_host) return;
-
-    len = snprintf(buf, sizeof(buf), "ACL %s\n", sync_quote_name(name));
-    sync_log_base(buf, len);
-}
-
-void sync_log_quota(const char *name)
-{
-    char buf[MAX_MAILBOX_NAME+64];
-    int len;
-
-    if (!sync_host) return;
-
-    len = snprintf(buf, sizeof(buf), "QUOTA %s\n", sync_quote_name(name));
-    sync_log_base(buf, len);
-}
-
-void sync_log_annotation(const char *name)
-{
-    char buf[MAX_MAILBOX_NAME+64];
-    int len;
-
-    if (!sync_host) return;
-
-    len = snprintf(buf, sizeof(buf), "ANNOTATION %s\n",
-		   *name ? sync_quote_name(name) : "\"\"");
-    sync_log_base(buf, len);
-}
-
-void sync_log_seen(const char *user, const char *name)
-{
-    char buf[MAX_MAILBOX_NAME+64];
-    int len;
-
-    if (!(sync_host && user && user[0])) return;
-
-    len = snprintf(buf, sizeof(buf),
-                   "SEEN %s %s\n", user, sync_quote_name(name));
-
-    sync_log_base(buf, len);
-}
-
-void sync_log_subscribe(const char *user, const char *name, int add)
-{
-    char buf[MAX_MAILBOX_NAME+64];
-    int len;
-
-    if (!(sync_host && user && user[0])) return;
-
-    len = snprintf(buf, sizeof(buf), "%s %s %s\n",
-		   add ? "SUB" : "UNSUB", user, sync_quote_name(name));
+    if (buf[len-1] != '\n') buf[len++] = '\n';
+    buf[len] = '\0';
 
     sync_log_base(buf, len);
 }

@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.31 2005/03/27 17:56:21 ken3 Exp $
+.\" $Id: imapoptions,v 1.2.2.32 2005/03/31 18:51:29 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -856,14 +856,12 @@ are listed with ``<none>''.
 
 { "sync_host", NULL, STRING }
 /* Name of the host (replica running sync_server(8)) to which
-   replication actions will be sent by sync_client(8).  The presence
-   of this option enables replication actions to be logged by
-   lmtpd(8), imapd(8), pop3d(8), and nntpd(8). */
+   replication actions will be sent by sync_client(8). */
 
-{ "sync_dir", "{configdirectory}/sync", STRING }
-/* Location of log file used by lmtpd(8), imapd(8), pop3d(8), and nntpd(8) to
-   record actions which would lead to replication.  Also the location
-   of lock file used by sync_client(8) and sync_server(8). */
+{ "sync_log", 0, SWITCH }
+/* Enable replication action logging by lmtpd(8), imapd(8), pop3d(8),
+   and nntpd(8).  The log {configdirectory}/sync/log is used by
+   sync_client(8) for "rolling" replication. */ 
 
 { "sync_password", NULL, STRING }
 /* The default password to use when authenticating to a sync server. */
