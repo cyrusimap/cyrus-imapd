@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.46 2002/02/07 21:43:45 rjs3 Exp $
+ * $Id: mupdate.c,v 1.47 2002/02/11 20:07:02 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -689,7 +689,7 @@ void *start(void *rock)
     c->clienthost = clienthost;
 
     prot_setflushonread(c->pin, c->pout);
-    prot_settimeout(c->pin, 30*60);
+    prot_settimeout(c->pin, 180*60);
 
     /* Find out name of client host */
     salen = sizeof(remoteaddr);
