@@ -1,5 +1,5 @@
 /* retry.c -- keep trying write system calls
- $Id: retry.c,v 1.14 2002/04/02 03:54:32 leg Exp $
+ $Id: retry.c,v 1.15 2002/04/02 17:16:15 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -90,11 +90,7 @@ int retry_read(int fd, void *buf, unsigned nbyte)
  * Keep calling the write() system call with 'fd', 'buf', and 'nbyte'
  * until all the data is written out or an error occurs.
  */
-int 
-retry_write(fd, buf, nbyte)
-int fd;
-const char *buf;
-unsigned nbyte;
+int retry_write(int fd, const char *buf, size_t nbyte)
 {
     int n;
     int written = 0;
@@ -110,7 +106,7 @@ unsigned nbyte;
 
 	written += n;
 
-	if (n >= nbyte) return written;
+	if (((size_t) n) >= nbyte) return written;
 
 	buf += n;
 	nbyte -= n;
@@ -164,7 +160,7 @@ int iovcnt;
 	written += n;
 
 	for (i = 0; i < iovcnt; i++) {
-	    if (iov[i].iov_len > n) {
+	    if (iov[i].iov_len > (size_t) n) {
 		iov[i].iov_base = (char *)iov[i].iov_base + n;
 		iov[i].iov_len -= n;
 		break;
