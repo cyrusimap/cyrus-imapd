@@ -978,6 +978,11 @@ FILE *outfile;
 struct body *body;
 {
     struct ibuf section, envelope, bodystructure, oldbody;
+    struct body toplevel;
+
+    toplevel.type = "MESSAGE";
+    toplevel.subtype = "RFC822";
+    toplevel.subpart = body;
 
     message_ibuf_init(&envelope);
     message_write_envelope(&envelope, body);
@@ -989,7 +994,7 @@ struct body *body;
     message_write_body(&oldbody, body, 0);
 
     message_ibuf_init(&section);
-    message_write_section(&section, body);
+    message_write_section(&section, &toplevel);
 
     message_ibuf_write(outfile, &envelope);
     message_ibuf_write(outfile, &bodystructure);
@@ -1373,13 +1378,6 @@ struct body *body;
 	for (part = 0; part < body->numparts; part++) {
 	    message_write_section(ibuf, &body->subpart[part]);
 	}
-    }
-    else if (strcmp(body->type, "MULTIPART") == 0) {
-	/*
-	 * 0-part multipart -- give hint so if we are top-level,
-	 * fetch body[1] will return 0-length string
-	 */
-	message_write_bit32(ibuf, -1);
     }
     else {
 	/*
