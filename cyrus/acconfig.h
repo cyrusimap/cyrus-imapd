@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.43 2003/07/25 16:59:22 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.44 2003/08/12 15:22:53 rjs3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -238,6 +238,13 @@ typedef int rlim_t;
 #ifndef HAVE_SHUTDOWN
 #define shutdown(fd, mode) 0
 #endif
+
+/* sendmail configuration parameters */
+#define DEFAULT_SENDMAIL ("/usr/lib/sendmail")
+#define DEFAULT_POSTMASTER ("postmaster")
+
+#define SENDMAIL (config_getstring("sendmail", DEFAULT_SENDMAIL))
+#define POSTMASTER (config_getstring("postmaster", DEFAULT_POSTMASTER))
 
 /* compile time options; think carefully before modifying */
 enum {
