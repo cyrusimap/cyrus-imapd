@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.35 1999/09/21 23:16:13 tmartin Exp $
+ $Id: imclient.c,v 1.36 1999/09/30 07:31:40 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -647,8 +647,6 @@ int len;
 
     /* Decrypt the data */
     if (imclient->saslcompleted==1) {
-	char lenbuf[4];
-	int toklen, len;
 	char *plainptr;
 	unsigned int plainlen;
 
@@ -1007,8 +1005,6 @@ struct imclient *imclient;
 void *rock;
 struct imclient_reply *reply;
 {
-    char *userid;
-    int protlevel;
     struct authresult *result = (struct authresult *)rock;
 
     if (!strcmp(reply->keyword, "OK")) {
@@ -1043,7 +1039,8 @@ void interaction (sasl_interact_t *t, char *user)
 {
   char result[1024];
 
-  if (t->id == SASL_CB_USER && user && user[0]) {
+  if ((t->id == SASL_CB_USER || t->id == SASL_CB_AUTHNAME) 
+            && user && user[0]) {
       t->len = strlen(user);
       t->result = xstrdup(user);
   } else {
@@ -1111,11 +1108,8 @@ int imclient_authenticate(struct imclient *imclient,
   sasl_interact_t *client_interact=NULL;
   char *out;
   unsigned int outlen;
-  char *in;
   int inlen;
   const char *mechusing;
-  char inbase64[2048];
-  int inbase64len;
   struct authresult result;
 
   /* attempt to start sasl */
@@ -1231,10 +1225,10 @@ int imclient_authenticate(struct imclient *imclient,
     }
     outlen = 0;
   }
-  
-  imclient->saslcompleted=1;
 
-  return 0;
+  imclient->saslcompleted = 1;
+
+  return (result.replytype != replytype_ok);
 }
 
 
