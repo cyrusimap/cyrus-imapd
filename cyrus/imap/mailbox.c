@@ -1146,13 +1146,20 @@ char *deciderock;
     strcpy(fnametail, FNAME_INDEX);
     strcpy(fnamebufnew, fnamebuf);
     strcat(fnamebufnew, ".NEW");
-    rename(fnamebufnew, fnamebuf);
+    if (rename(fnamebufnew, fnamebuf)) {
+	syslog(LOG_ERR, "IOERROR: renaming index file for %s: %m",
+	       mailbox->name);
+	goto fail;
+    }
 
     strcpy(fnametail, FNAME_CACHE);
     strcpy(fnamebufnew, fnamebuf);
     strcat(fnamebufnew, ".NEW");
     if (rename(fnamebufnew, fnamebuf)) {
-	/* XXX in serious trouble */
+	syslog(LOG_CRIT,
+	       "CRITICAL IOERROR: renaming cache file for %s, need to reconstruct: %m",
+	       mailbox->name);
+	/* Fall through and delete message files anyway */
     }
     mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
