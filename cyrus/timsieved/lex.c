@@ -1,7 +1,7 @@
 /* lex.c -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.c,v 1.12 2000/02/03 06:51:12 tmartin Exp $
+ * $Id: lex.c,v 1.13 2000/02/03 20:14:23 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -130,7 +130,7 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
 
   char *buff_ptr;
   char *buff_end;
-
+  unsigned long tmpnum = 0;
   unsigned long count=0;
 
   int result = TIMSIEVE_OK;
@@ -224,7 +224,9 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
 	count = newcount;
 	break;
       }
-
+      if (ch != '+')
+	ERR_PUSHBACK();
+      ch=prot_getc(stream);
       if (ch != '}')
 	ERR_PUSHBACK();
       ch=prot_getc(stream);
@@ -271,14 +273,16 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
     case LEXER_STATE_NUMBER:
 
 	if (isdigit((unsigned char) ch)) {
-	    unsigned long   newcount = (*outnum) * 10 + (ch - '0');
+	    unsigned long   newcount = tmpnum * 10 + (ch - '0');
 
-	    if (newcount < (*outnum))
+	    if (newcount < tmpnum)
 		ERR_PUSHBACK();	/* overflow */
-	    *outnum = newcount;
+	    tmpnum = newcount;
 	} else {
 	    lexer_state=LEXER_STATE_NORMAL;
 	    prot_ungetc(ch, stream);
+
+	    if (outnum) *outnum = tmpnum;
 
 	    return NUMBER;
 	}
@@ -292,7 +296,7 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
       }
       if (isdigit((unsigned char) ch)) {
 	lexer_state=LEXER_STATE_NUMBER;
-	*outnum = ch -'0';
+	tmpnum = ch -'0';
       }
       switch (ch) {
       case '(':
@@ -308,7 +312,6 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
 	return '*';
       case '{':
 	count = 0;
-	synchronizing = TRUE;
 	lexer_state=LEXER_STATE_LITERAL;
 	break;
       case '\r':

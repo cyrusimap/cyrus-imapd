@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.8 2000/02/03 06:51:11 tmartin Exp $
+ * $Id: sieve_interface.h,v 1.9 2000/02/03 20:14:23 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -119,6 +119,6 @@ int sieve_execute_script(sieve_script_t *script,
 			 void *message_context);
 
 /* Get space seperated list of extensions supported by the implementation */
-const char *sieve_listextensions(void);
+char *sieve_listextensions(void);
 
 #endif

@@ -328,7 +328,7 @@ int auth_sasl(char *mechlist)
   }
 
   if ((saslresult!=SASL_OK) && (saslresult!=SASL_CONTINUE)) return saslresult;
-  
+
   if (out!=NULL)
   {
     prot_printf(pout,"AUTHENTICATE \"%s\" ",mechusing);
@@ -421,37 +421,47 @@ int init_net(char *serverFQDN, int port)
 char *read_capability(void)
 {
   lexstate_t state;
-  char *cap;
+  char *cap = NULL;
   char *data;
   int res;
 
-  if (yylex(&state, pin)!=STRING)
-    parseerror("STRING");
+  while (yylex(&state,pin)==STRING)
+  {
+      char *attr = string_DATAPTR(state.str);
+      char *val = NULL;
 
-  while (1) {
-    res = yylex(&state, pin);
 
-    if (res == EOL) {
-	break;
-    } else if (res!=' ') {
-	parseerror("SPACE");
-    }
+      if (yylex(&state,pin)==' ')
+      {
+	  if (yylex(&state,pin)!=STRING)
+	  {
+	      parseerror("STRING");
+	  }
+	  val = string_DATAPTR(state.str);
+	  if (yylex(&state,pin)!=EOL)
+	  {
+	      parseerror("EOL1");
+	  }
+      }
 
-    if (yylex(&state, pin)!=STRING) {
-	parseerror("STRING");
-    }
+      if (strcasecmp(attr,"SASL")==0)
+      {
+	cap = val;
+      } else if (strcasecmp(attr,"SIEVE")==0) {
 
-    data=string_DATAPTR(state.str);
-    if (strncmp(data, "SASL=",5)==0) {
-	cap = (char *) malloc(strlen(data+6)+1);
+      } else if (strcasecmp(attr,"IMPLEMENTATION")==0) {
 
-	strcpy(cap, data+6);
-	/* eliminate trailing '}' */
-	cap[ strlen(cap) -1]='\0';
-    }
+      } else {
+	  /* unkown capability */
+      }
+
   }
 
-
+  if (yylex(&state,pin)!=EOL)
+  {
+      parseerror("EOL2");
+  }
+  
   return cap;
 }
 

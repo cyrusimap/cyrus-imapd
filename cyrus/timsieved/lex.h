@@ -1,7 +1,7 @@
 /* lex.h -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.h,v 1.7 2000/02/03 06:51:12 tmartin Exp $
+ * $Id: lex.h,v 1.8 2000/02/03 20:14:24 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -66,7 +66,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 int lex_init(void);
 
-int timlex(mystring_t **outstr,   struct protstream *stream);
+int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *stream);
 
 void lex_setrecovering(void);
 

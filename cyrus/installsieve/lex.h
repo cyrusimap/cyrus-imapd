@@ -46,6 +46,8 @@ int yylex(lexstate_t * lvalp, void * client);
 
 #define TOKEN_OK      280
 #define TOKEN_NO      281
+#define TOKEN_ACTIVE  282
+
 
 #define LEXER_STATE_TAG         60
 #define LEXER_STATE_RECOVER     61

@@ -1,6 +1,6 @@
 /* lex.c -- lexers for command line script installer
  * Tim Martin
- * $Id: lex.c,v 1.8 2000/01/28 22:09:53 leg Exp $
+ * $Id: lex.c,v 1.9 2000/02/03 20:14:21 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -55,6 +55,7 @@ int token_lookup(char *str, int len)
 {
   if (strcmp(str,"ok")==0) return TOKEN_OK;
   if (strcmp(str,"no")==0) return TOKEN_NO;
+  if (strcmp(str,"active")==0) return TOKEN_ACTIVE;
 
   return -1;
 }
