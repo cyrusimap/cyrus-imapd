@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.20 2001/10/23 20:15:18 leg Exp $ -->
+<!-- $Id: changes.html,v 1.21 2001/10/26 14:23:05 ken3 Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -36,6 +36,8 @@ noticing a trend here?)
 
 <li> added cyrusdb_db3_nosync backend, used for duplicatedb and
 session cache, to postpone non-critical writes. (Ken Murchison)
+
+<li> support for STARTTLS and AUTH=ANONYMOUS for timsieved (Ken Murchison)
 
 <li> do setgid and initgroups in master (as urged by several people)
 
@@ -1352,7 +1354,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2001/10/23 20:15:18 $
+last modified: $Date: 2001/10/26 14:23:05 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
