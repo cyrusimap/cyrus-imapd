@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.1 2000/05/28 23:19:40 leg Exp $
+ * $Id: lmtpengine.c,v 1.2 2000/05/29 00:37:12 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -349,9 +349,8 @@ static char *parseautheq(char *s)
 	    *str = *s;
 	    str++;
 	} else {
-	    /* bad char */
-	    free(ret);
-	    return NULL;
+	    /* bad char or end-of-line */
+	    break;
 	}
 	s++;
     }
@@ -767,9 +766,7 @@ static int savemsg(struct protstream *pin,
 {
     FILE *f;
     struct stat sbuf;
-    char buf[128];
     const char **body;
-    int sl, i;
     int r;
     int nrcpts = m->rcpt_num;
 
@@ -810,17 +807,20 @@ static int savemsg(struct protstream *pin,
 
     /* fill the cache */
     r = fill_cache(pin, f, m);
-    if (!r) {
+    if (r) {
 	fclose(f);
+	while (nrcpts--) {
+	    prot_printf(pout, "%s\r\n", convert_lmtp(r));
+	}
 	return r;
     }
 
     /* now, using our header cache, fill in the data that we want */
 
     /* first check resent-message-id */
-    if (body = msg_getheader(m, "resent-message-id")) {
+    if ((body = msg_getheader(m, "resent-message-id")) != NULL) {
 	m->id = xstrdup(body[0]);
-    } else if (body = msg_getheader(m, "message-id")) {
+    } else if ((body = msg_getheader(m, "message-id")) != NULL) {
 	m->id = xstrdup(body[0]);
     } else {
 	m->id = NULL;		/* no message-id */
@@ -847,7 +847,7 @@ static int savemsg(struct protstream *pin,
 		   error_message(errno));
 	}
 	fclose(f);
-	return;
+	return IMAP_IOERROR;
     }
 
     if (fstat(fileno(f), &sbuf) == -1) {
@@ -941,7 +941,6 @@ void lmtpmode(struct lmtp_func *func,
     char *p;
     int r;
     char *err;
-    int i;
 
     struct sockaddr_in localaddr, remoteaddr;
     int salen;
@@ -1071,7 +1070,7 @@ void lmtpmode(struct lmtp_func *func,
 		  
 		  r = sasl_encode64(out, outlen, 
 				    inbase64, sizeof(inbase64), NULL);
-		  if (r != SASL_OK) break;
+	  if (r != SASL_OK) break;
 
 		  /* send out */
 		  prot_printf(pout,"334 %s\r\n", inbase64);
@@ -1163,7 +1162,7 @@ void lmtpmode(struct lmtp_func *func,
 		}
 		/* copy message from input to msg structure */
 		r = savemsg(pin, pout, func->addheaders, msg);
-		if (!r) continue;
+		if (r) continue;
 
 		snmp_increment(mtaReceivedMessages, 1);
 		snmp_increment(mtaReceivedVolume, roundToK(msg->size));

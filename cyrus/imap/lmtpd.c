@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.29 2000/05/28 23:19:39 leg Exp $
+ * $Id: lmtpd.c,v 1.30 2000/05/29 00:37:10 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.29 2000/05/28 23:19:39 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.30 2000/05/29 00:37:10 leg Exp $";*/
 
 #include <config.h>
 
@@ -294,7 +294,6 @@ int service_init(int argc, char **argv, char **envp)
  */
 int service_main(int argc, char **argv, char **envp)
 {
-    int lmtpflag = 0;
     int opt;
 
     deliver_in = prot_new(0, 0);
@@ -588,7 +587,6 @@ int sieve_reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = ((mydata_t *) mc)->m;
-    char buf[8192];
     const char **body;
     const char *origreceip;
     int res;
@@ -785,7 +783,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	tznegative = 1;
     }
     tz /= 60;
-    fprintf(sm, "Date: %s, %02d %s %4d %02d:%02d:%02d %c%02d%02d\r\n",
+    fprintf(sm, "Date: %s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu\r\n",
 	    wday[tm->tm_wday], 
 	    tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
 	    tm->tm_hour, tm->tm_min, tm->tm_sec,
@@ -1080,9 +1078,6 @@ int deliver_mailbox(struct protstream *msg,
 int deliver(message_data_t *msgdata, char *authuser,
 	    struct auth_state *authstate)
 {
-    int r;
-    char namebuf[MAX_MAILBOX_PATH];
-    FILE *f;
     int n, nrcpts;
     mydata_t mydata;
     
