@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.115 2003/06/19 20:38:38 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.116 2003/08/13 13:56:13 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -570,8 +570,10 @@ int sieve_redirect(void *ac,
 	sievedb = make_sieve_db(sd->username);
 
 	/* ok, let's see if we've redirected this message before */
-	if (duplicate_check(buf, strlen(buf), sievedb, strlen(sievedb)))
+	if (duplicate_check(buf, strlen(buf), sievedb, strlen(sievedb))) {
+	    logdupelem(m->id, sd->username, "redirect");
 	    return SIEVE_OK;
+	}
     }
 
     if ((res = send_forward(rc->addr, m->return_path, m->data)) == 0) {
@@ -1106,7 +1108,7 @@ int deliver_mailbox(struct protstream *msg,
     if (dupelim && id && 
 	duplicate_check(id, strlen(id), namebuf, strlen(namebuf))) {
 	/* duplicate message */
-	logdupelem(id, namebuf);
+	logdupelem(id, namebuf, "delivery");
 	return 0;
     }
 
@@ -1280,20 +1282,17 @@ int deliver(message_data_t *msgdata, char *authuser,
 /*
  */
 static void
-logdupelem(msgid, name)
-char *msgid;
-char *name;
+logdupelem(char *msgid, char *name, char *action)
 {
     if (strlen(msgid) < 80) {
 	char pretty[160];
 
 	beautify_copy(pretty, msgid);
-	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s",
-	       name, msgid);
-    }
-    else {
-	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s",
-	       name);
+	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s (%s)",
+	       name, msgid, action);
+    } else {
+	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s (%s)",
+	       name, action);
     }	
 }
 
