@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.385 2002/05/06 17:18:49 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.386 2002/05/16 21:54:37 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -5074,8 +5074,9 @@ void annotate_response(struct entryattlist *l)
 
     islist = (l->next != NULL);
 
+    if (islist) prot_printf(imapd_out, "(");
+
     while (l) {
-	if (islist) prot_printf(imapd_out, "(");
 	prot_printf(imapd_out, "\"%s\"", l->entry);
 
 	/* do we have attributes?  solicited vs. unsolicited */
@@ -5096,11 +5097,12 @@ void annotate_response(struct entryattlist *l)
 		    prot_printf(imapd_out, " ");
 	    }
 	}
-	if (islist) prot_printf(imapd_out, ")");
 
 	if ((l = l->next) != NULL)
 	    prot_printf(imapd_out, " ");
     }
+
+    if (islist) prot_printf(imapd_out, ")");
 }
 
 /*
