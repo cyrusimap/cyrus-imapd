@@ -39,6 +39,7 @@
 #include "auth.h"
 #include "acte.h"
 #include "config.h"
+#include "prot.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "version.h"
@@ -56,6 +57,7 @@ extern int errno;
 char *popd_userid = 0;
 struct mailbox *popd_mailbox = 0;
 char popd_clienthost[250] = "[local]";
+struct protstream *popd_out, *popd_in;
 int popd_exists = 0;
 int popd_highest;
 int popd_initialhighest;
@@ -78,6 +80,10 @@ char **envp;
     int salen;
     struct hostent *hp;
     struct sockaddr_in sa;
+    int timeout;
+
+    popd_in = prot_new(0, 0);
+    popd_out = prot_new(1, 1);
 
     setproctitle_init(argc, argv, envp);
     config_init("pop3d");
@@ -106,15 +112,20 @@ char **envp;
 
     proc_register("pop3d", popd_clienthost, (char *)0, (char *)0);
 
-    fprintf(stdout,"+OK %s Cyrus POP3 %s server ready\r\n", hostname,
-	    CYRUS_VERSION);
+    /* Set inactivity timer */
+    timeout = config_getint("poptimeout", 10);
+    if (timeout < 10) timeout = 10;
+    prot_settimeout(popd_in, timeout*60);
+
+    prot_printf(popd_out,"+OK %s Cyrus POP3 %s server ready\r\n",
+		hostname, CYRUS_VERSION);
     cmdloop();
 }
 
 usage()
 {
-    fprintf(stdout, "-ERR usage: pop3d\r\n");
-    fflush(stdout);
+    prot_printf(popd_out, "-ERR usage: pop3d\r\n");
+    prot_flush(popd_out);
     exit(EX_USAGE);
 }
 
@@ -128,7 +139,7 @@ int code;
     if (popd_mailbox) {
 	mailbox_close(popd_mailbox);
     }
-    fflush(stdout);
+    prot_flush(popd_out);
     exit(code);
 }
 
@@ -143,8 +154,8 @@ int code;
 	exit(recurse_code);
     }
     recurse_code = code;
-    fprintf(stdout, "-ERR Fatal error: %s\r\n", s);
-    fflush(stdout);
+    prot_printf(popd_out, "-ERR Fatal error: %s\r\n", s);
+    prot_flush(popd_out);
     shutdown(code);
 }
 
@@ -157,7 +168,12 @@ cmdloop()
     char *p, *arg;
     int msg;
 
-    while (fflush(stdout), fgets(inputbuf, sizeof(inputbuf), stdin)) {
+    for (;;) {
+	prot_flush(popd_out);
+	if (!prot_fgets(inputbuf, sizeof(inputbuf), popd_in)) {
+	    shutdown(0);
+	}
+
 	p = inputbuf + strlen(inputbuf);
 	if (p > inputbuf && p[-1] == '\n') *--p = '\0';
 	if (p > inputbuf && p[-1] == '\r') *--p = '\0';
@@ -168,7 +184,7 @@ cmdloop()
 	    *p++ = '\0';
 	    for (arg=p; *arg && isspace(*arg); arg++);
 	    if (!*arg) {
-		fprintf(stdout, "-ERR Syntax error\r\n");
+		prot_printf(popd_out, "-ERR Syntax error\r\n");
 		continue;
 	    }
 	}
@@ -198,40 +214,40 @@ cmdloop()
 		printf("+OK\r\n");
 		shutdown(0);
 	    }
-	    else fprintf(stdout, "-ERR Unexpected extra argument\r\n");
+	    else prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	}
 	if (!popd_mailbox) {
 	    if (!strcmp(inputbuf, "user")) {
 		if (popd_userid) {
-		    fprintf(stdout, "-ERR Must give PASS command\r\n");
+		    prot_printf(popd_out, "-ERR Must give PASS command\r\n");
 		}
 		else if (!arg) {
-		    fprintf(stdout, "-ERR Missing argument\r\n");
+		    prot_printf(popd_out, "-ERR Missing argument\r\n");
 		}
 		else if (!(p = auth_canonifyid(arg)) ||
 			 strchr(p, '.') || strlen(p) + 6 > MAX_MAILBOX_PATH) {
-		    fprintf(stdout, "-ERR Invalid user\r\n");
+		    prot_printf(popd_out, "-ERR Invalid user\r\n");
 		    syslog(LOG_NOTICE,
 			   "badlogin: %s plaintext %s invalid user",
 			   popd_clienthost, beautify_string(arg));
 		}
 		else {
 		    popd_userid = strsave(p);
-		    fprintf(stdout, "+OK Name is a valid mailbox\r\n");
+		    prot_printf(popd_out, "+OK Name is a valid mailbox\r\n");
 		}
 	    }
 	    else if (!strcmp(inputbuf, "pass")) {
-		if (!arg) fprintf(stdout, "-ERR Missing argument\r\n");
+		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 		else cmd_pass(arg);
 	    }
 	    else {
-		fprintf(stdout, "-ERR Unrecognized command\r\n");
+		prot_printf(popd_out, "-ERR Unrecognized command\r\n");
 	    }
 	}
 	else if (!strcmp(inputbuf, "stat")) {
 	    int nmsgs = 0, totsize = 0;
 	    if (arg) {
-		fprintf(stdout, "-ERR Unexpected extra argument\r\n");
+		prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	    }
 	    else {
 		for (msg = 1; msg <= popd_exists; msg++) {
@@ -240,43 +256,43 @@ cmdloop()
 			totsize += popd_msg[msg].size;
 		    }
 		}
-		fprintf(stdout, "+OK %d %d\r\n", nmsgs, totsize);
+		prot_printf(popd_out, "+OK %d %d\r\n", nmsgs, totsize);
 	    }
 	}
 	else if (!strcmp(inputbuf, "list")) {
 	    if (arg) {
 		msg = parsenum(&arg);
 		if (arg) {
-		    fprintf(stdout, "-ERR Unexpected extra argument\r\n");
+		    prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 		}
 		else if (msg < 1 || msg > popd_exists ||
 			 popd_msg[msg].deleted) {
-		    fprintf(stdout, "-ERR No such message\r\n");
+		    prot_printf(popd_out, "-ERR No such message\r\n");
 		}
 		else {
-		    fprintf(stdout, "+OK %d %d\r\n", msg, popd_msg[msg].size);
+		    prot_printf(popd_out, "+OK %d %d\r\n", msg, popd_msg[msg].size);
 		}
 	    }
 	    else {
-		fprintf(stdout, "+OK scan listing follows\r\n");
+		prot_printf(popd_out, "+OK scan listing follows\r\n");
 		for (msg = 1; msg <= popd_exists; msg++) {
 		    if (!popd_msg[msg].deleted) {
-			fprintf(stdout, "%d %d\r\n", msg, popd_msg[msg].size);
+			prot_printf(popd_out, "%d %d\r\n", msg, popd_msg[msg].size);
 		    }
 		}
-		fprintf(stdout, ".\r\n");
+		prot_printf(popd_out, ".\r\n");
 	    }
 	}
 	else if (!strcmp(inputbuf, "retr")) {
-	    if (!arg) fprintf(stdout, "-ERR Missing argument\r\n");
+	    if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 	    else {
 		msg = parsenum(&arg);
 		if (arg) {
-		    fprintf(stdout, "-ERR Unexpected extra argument\r\n");
+		    prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 		}
 		else if (msg < 1 || msg > popd_exists ||
 			 popd_msg[msg].deleted) {
-		    fprintf(stdout, "-ERR No such message\r\n");
+		    prot_printf(popd_out, "-ERR No such message\r\n");
 		}
 		else {
 		    if (msg > popd_highest) popd_highest = msg;
@@ -285,67 +301,67 @@ cmdloop()
 	    }
 	}
 	else if (!strcmp(inputbuf, "dele")) {
-	    if (!arg) fprintf(stdout, "-ERR Missing argument\r\n");
+	    if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 	    else {
 		msg = parsenum(&arg);
 		if (arg) {
-		    fprintf(stdout, "-ERR Unexpected extra argument\r\n");
+		    prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 		}
 		else if (msg < 1 || msg > popd_exists ||
 			 popd_msg[msg].deleted) {
-		    fprintf(stdout, "-ERR No such message\r\n");
+		    prot_printf(popd_out, "-ERR No such message\r\n");
 		}
 		else {
 		    popd_msg[msg].deleted = 1;
 		    if (msg > popd_highest) popd_highest = msg;
-		    fprintf(stdout, "+OK message deleted\r\n");
+		    prot_printf(popd_out, "+OK message deleted\r\n");
 		}
 	    }
 	}
 	else if (!strcmp(inputbuf, "noop")) {
 	    if (arg) {
-		fprintf(stdout, "-ERR Unexpected extra argument\r\n");
+		prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	    }
 	    else {
-		fprintf(stdout, "+OK\r\n");
+		prot_printf(popd_out, "+OK\r\n");
 	    }
 	}
 	else if (!strcmp(inputbuf, "last")) {
 	    if (arg) {
-		fprintf(stdout, "-ERR Unexpected extra argument\r\n");
+		prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	    }
 	    else {
-		fprintf(stdout, "+OK %d\r\n", popd_highest);
+		prot_printf(popd_out, "+OK %d\r\n", popd_highest);
 	    }
 	}
 	else if (!strcmp(inputbuf, "rset")) {
 	    if (arg) {
-		fprintf(stdout, "-ERR Unexpected extra argument\r\n");
+		prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	    }
 	    else {
 		popd_highest = 0;
 		for (msg = 1; msg <= popd_exists; msg++) {
 		    popd_msg[msg].deleted = 0;
 		}
-		fprintf(stdout, "+OK\r\n");
+		prot_printf(popd_out, "+OK\r\n");
 	    }
 	}
 	else if (!strcmp(inputbuf, "top")) {
 	    int lines;
 
 	    if (arg) msg = parsenum(&arg);
-	    if (!arg) fprintf(stdout, "-ERR Missing argument\r\n");
+	    if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 	    else {
 		lines = parsenum(&arg);
 		if (arg) {
-		    fprintf(stdout, "-ERR Unexpected extra argument\r\n");
+		    prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 		}
 		else if (msg < 1 || msg > popd_exists ||
 			 popd_msg[msg].deleted) {
-		    fprintf(stdout, "-ERR No such message\r\n");
+		    prot_printf(popd_out, "-ERR No such message\r\n");
 		}
 		else if (lines < 0) {
-		    fprintf(stdout, "-ERR Invalid number of lines\r\n");
+		    prot_printf(popd_out, "-ERR Invalid number of lines\r\n");
 		}
 		else {
 		    blat(msg, lines);
@@ -356,32 +372,30 @@ cmdloop()
 	    if (arg) {
 		msg = parsenum(&arg);
 		if (arg) {
-		    fprintf(stdout, "-ERR Unexpected extra argument\r\n");
+		    prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 		}
 		else if (msg < 1 || msg > popd_exists ||
 			 popd_msg[msg].deleted) {
-		    fprintf(stdout, "-ERR No such message\r\n");
+		    prot_printf(popd_out, "-ERR No such message\r\n");
 		}
 		else {
-		    fprintf(stdout, "+OK %d %d\r\n", msg, popd_msg[msg].uid);
+		    prot_printf(popd_out, "+OK %d %d\r\n", msg, popd_msg[msg].uid);
 		}
 	    }
 	    else {
-		fprintf(stdout, "+OK unique-id listing follows\r\n");
+		prot_printf(popd_out, "+OK unique-id listing follows\r\n");
 		for (msg = 1; msg <= popd_exists; msg++) {
 		    if (!popd_msg[msg].deleted) {
-			fprintf(stdout, "%d %d\r\n", msg, popd_msg[msg].uid);
+			prot_printf(popd_out, "%d %d\r\n", msg, popd_msg[msg].uid);
 		    }
 		}
-		fprintf(stdout, ".\r\n");
+		prot_printf(popd_out, ".\r\n");
 	    }
 	}
 	else {
-	    fprintf(stdout, "-ERR Unrecognized command\r\n");
+	    prot_printf(popd_out, "-ERR Unrecognized command\r\n");
 	}
     }		
-
-    shutdown(0);
 }
 
 cmd_pass(pass)
@@ -393,7 +407,7 @@ char *pass;
     struct index_record record;
 
     if (!popd_userid) {
-	fprintf(stdout, "-ERR Must give USER command\r\n");
+	prot_printf(popd_out, "-ERR Must give USER command\r\n");
 	return;
     }
 
@@ -407,7 +421,7 @@ char *pass;
 	else {
 	    syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
 		   popd_clienthost);
-	    fprintf(stdout, "-ERR Invalid login\r\n");
+	    prot_printf(popd_out, "-ERR Invalid login\r\n");
 	    return;
 	}
     }
@@ -418,7 +432,7 @@ char *pass;
 	}
 	free(popd_userid);
 	popd_userid = 0;
-	fprintf(stdout, "-ERR Invalid login\r\n");
+	prot_printf(popd_out, "-ERR Invalid login\r\n");
 	return;
     }
 
@@ -428,7 +442,7 @@ char *pass;
     if (r) {
 	free(popd_userid);
 	popd_userid = 0;
-	fprintf(stdout, "-ERR Invalid login\r\n");
+	prot_printf(popd_out, "-ERR Invalid login\r\n");
 	return;
     }
 
@@ -438,7 +452,7 @@ char *pass;
 	mailbox_close(&mboxstruct);
 	free(popd_userid);
 	popd_userid = 0;
-	fprintf(stdout, "-ERR Unable to lock maildrop\r\n");
+	prot_printf(popd_out, "-ERR Unable to lock maildrop\r\n");
 	return;
     }
 
@@ -468,12 +482,12 @@ char *pass;
 	free(popd_msg);
 	popd_msg = 0;
 	popd_exists = 0;
-	fprintf(stdout, "-ERR Unable to read maildrop\r\n");
+	prot_printf(popd_out, "-ERR Unable to read maildrop\r\n");
 	return;
     }
     popd_mailbox = &mboxstruct;
     proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
-    fprintf(stdout, "+OK Maildrop locked and ready\r\n");
+    prot_printf(popd_out, "+OK Maildrop locked and ready\r\n");
 }
 
 blat(msg, lines)
@@ -487,10 +501,10 @@ int lines;
     msgfile = fopen(mailbox_message_fname(popd_mailbox, popd_msg[msg].uid),
 		    "r");
     if (!msgfile) {
-	fprintf(stdout, "-ERR Could not read message file\r\n");
+	prot_printf(popd_out, "-ERR Could not read message file\r\n");
 	return;
     }
-    fprintf(stdout, "+OK Message follows\r\n");
+    prot_printf(popd_out, "+OK Message follows\r\n");
     printf("%s%c\r\n", STATUS, msg <= popd_initialhighest ? 'R' : 'U');
     while (lines != thisline) {
 	if (!fgets(buf, sizeof(buf), msgfile)) break;
@@ -500,14 +514,14 @@ int lines;
 	}
 	else thisline++;
 
-	if (buf[0] == '.') putc('.', stdout);
+	if (buf[0] == '.') prot_putc('.', popd_out);
 	do {
-	    fputs(buf, stdout);
+	    prot_printf(popd_out, "%s", buf);
 	}
 	while (buf[strlen(buf)-1] != '\n' && fgets(buf, sizeof(buf), msgfile));
     }
     fclose(msgfile);
-    fprintf(stdout, ".\r\n");
+    prot_printf(popd_out, ".\r\n");
 }
 
 int parsenum(ptr)
