@@ -1,4 +1,4 @@
-v/* imapd.c -- IMAP server protocol parsing
+/* imapd.c -- IMAP server protocol parsing
  *
  *	(C) Copyright 1994 by Carnegie Mellon University
  *
