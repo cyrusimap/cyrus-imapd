@@ -1,4 +1,4 @@
-<!-- $Id: install-netnews.html,v 1.1.2.6 2003/05/01 20:24:38 ken3 Exp $ -->
+<!-- $Id: install-netnews.html,v 1.1.2.7 2003/06/20 15:58:36 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus and Netnews
@@ -156,8 +156,27 @@ documentation and your MTA documentation.
 use its "feed" operation mode.
 
 <h3>Expiring articles</h3>
-To expire usenet articles on a regular basis, you should use the <tt>expirenews</tt> utility.  This utility both expunges articles from their mailboxes and prunes message-ids from <tt>netnews.db</tt>.  The <tt>master/conf/normal.conf</tt> and <tt>master/conf/prefork.conf</tt> sample configs both include EVENT entries for <tt>expirenews</tt> (disabled by default).
+Expiration of articles is done by the <tt>cyr_expire</tt> utility.
+Control over when articles are expunged is accomplished with the
+<tt>/vendor/cmu/cyrus-imapd/expire</tt> mailbox annotation.  This
+annotation sets the number of days that messages should be kept in the
+mailbox before they expire.  All entries in the duplicate deliver
+database that correspond to these messages are also kept for the same
+number of days before they are purged (overriding the
+<tt>cyr_expire -E</tt> option).
+
+<p>Setting the expire time to 0 (zero) for a mailbox will ensure that
+neither the messages nor the corresponding database entries will ever
+be expired.  This can be useful for shared mailboxes (e.g. mailing
+list archives) which are being exported via NNTP. <i>Note that this
+will cause the duplicate delivery database to consistently grow in
+proportion to the number of messages in such mailboxes.</i>
+
+<p>If a mailbox does not have an expire time set on it, then the
+messages will never be expunged, but the corresponding database
+entries WILL be expired after the default number of days
+(<tt>cyr_expire -E</tt> option).
 
 <P><HR>
-last modified: $Date: 2003/05/01 20:24:38 $
+last modified: $Date: 2003/06/20 15:58:36 $
 </BODY></HTML>
