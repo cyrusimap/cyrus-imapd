@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.93.2.4 2004/03/24 19:53:12 ken3 Exp $
+ * $Id: imtest.c,v 1.93.2.5 2004/05/02 00:27:06 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -2036,7 +2036,7 @@ static char *nntp_parse_success(char *str)
 {
     char *success = NULL;
 
-    if (!strncmp(str, "282 ", 4)) {
+    if (!strncmp(str, "283 ", 4)) {
 	success = str+4;
     }
 

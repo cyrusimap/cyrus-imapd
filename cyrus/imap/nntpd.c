@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.17 2004/04/08 21:13:07 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.18 2004/05/02 00:27:05 ken3 Exp $
  */
 
 /*
@@ -1959,13 +1959,13 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	switch (r) {
 	case IMAP_SASL_CANCEL:
 	    prot_printf(nntp_out,
-			"484 Client canceled authentication\r\n");
+			"501 Client canceled authentication\r\n");
 	    break;
 	case IMAP_SASL_PROTERR:
 	    errorstring = prot_error(nntp_in);
 
 	    prot_printf(nntp_out,
-			"502 Error reading client response: %s\r\n",
+			"501 Error reading client response: %s\r\n",
 			errorstring ? errorstring : "");
 	    break;
 	default: 
@@ -1997,7 +1997,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 			       (const void **) &canon_user);
     nntp_userid = xstrdup(canon_user);
     if (sasl_result != SASL_OK) {
-	prot_printf(nntp_out, "482 weird SASL error %d SASL_USERNAME\r\n", 
+	prot_printf(nntp_out, "502 weird SASL error %d SASL_USERNAME\r\n", 
 		    sasl_result);
 	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", 
 	       sasl_result);
@@ -2029,7 +2029,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     }
 
     if (success_data)
-	prot_printf(nntp_out, "282 %s\r\n", success_data);
+	prot_printf(nntp_out, "283 %s\r\n", success_data);
     else
 	prot_printf(nntp_out, "281 Success (%s)\r\n", ssfmsg);
 
@@ -2380,22 +2380,22 @@ static void cmd_list(char *arg1, char *arg2)
 
 	prot_printf(nntp_out, "202 Extension list follows:\r\n");
 
-	if (!nntp_authstate) {
-	    /* check for SASL mechs */
-	    sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
-			  &mechlist, NULL, &mechcount);
+	/* check for SASL mechs */
+	sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
+		      &mechlist, NULL, &mechcount);
 
-	    if (mechcount || nntp_starttls_done ||
-		config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
-		prot_printf(nntp_out, "AUTHINFO%s\r\n",
-			    (nntp_starttls_done ||
-			     config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
-			    " USER" : "");
+	if (mechcount || nntp_starttls_done ||
+	    config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+	    prot_printf(nntp_out, "AUTHINFO%s%s\r\n",
+			!nntp_authstate &&
+			(nntp_starttls_done ||
+			 config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
+			" USER" : "",
+			!nntp_authstate && mechcount ? " SASL" : "");
 
-		/* add the SASL mechs */
-		if (mechcount)
-		    prot_write(nntp_out, mechlist, strlen(mechlist));
-	    }
+	    /* add the SASL mechs */
+	    if (mechcount)
+		prot_write(nntp_out, mechlist, strlen(mechlist));
 	}
 
 	if ((nntp_capa & MODE_READ) &&
