@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.253 2000/06/07 22:36:20 ken3 Exp $ */
+/* $Id: imapd.c,v 1.254 2000/06/08 19:46:45 leg Exp $ */
 
 #include <config.h>
 
@@ -1129,7 +1129,6 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    sort:
-		mboxlist_close();	
 		cmd_sort(tag.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Status")) {
@@ -1149,7 +1148,6 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    thread:
-		mboxlist_close();	
 		cmd_thread(tag.s, usinguid);
 	    }
 	    else goto badcmd;
