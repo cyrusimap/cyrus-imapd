@@ -7,6 +7,7 @@ Character: +
   - (LMTP) Separation of username and submailbox for delivery
   - (IMAP) Flag at end of login name that indicates that LIST should
     return LSUB results (when imapmagicplus is set)
+  - (POP3) POP a subfolder directly (e.g. rjs3+foo POPs user.rjs3.foo)
 
 Character: . /
   - [mailbox names] Hierarchy separators
@@ -21,7 +22,6 @@ Characters: @ %
 --- Future Uses ---
 
 Character: +
-  - POP a subfolder directly (e.g. rjs3+foo POPs user.rjs3.foo)
   - IMAP LIST filters (e.g. rjs3+foo will only list folders that match foo*)
     -- possibly other interpretations here:
      - rjs3+foo will do an effective chroot(foo.)
