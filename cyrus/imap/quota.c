@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  *
  */
-/* $Id: quota.c,v 1.23 1998/06/04 20:23:30 tjs Exp $ /
+/* $Id: quota.c,v 1.24 1998/06/07 23:21:15 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
