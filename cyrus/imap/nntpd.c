@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.95 2003/07/07 18:04:29 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.96 2003/07/08 19:30:20 ken3 Exp $
  */
 
 /*
@@ -2034,7 +2034,8 @@ static void cmd_help(void)
     prot_printf(nntp_out, "\tHELP\r\n");
 
     prot_printf(nntp_out, "\tLIST [ ACTIVE | EXTENSIONS");
-    if (nntp_capa & MODE_READ) prot_printf(nntp_out, " | OVERVIEW.FMT");
+    if (nntp_capa & MODE_READ)
+	prot_printf(nntp_out, " | NEWSGROUPS | OVERVIEW.FMT");
     prot_printf(nntp_out, " ]\r\n");
 
     prot_printf(nntp_out, "\tMODE");
