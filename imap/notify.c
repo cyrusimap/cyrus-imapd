@@ -1,5 +1,5 @@
 /* notify.c -- Module to notify of new mail
- $Id: notify.c,v 1.2 2002/04/02 04:15:00 leg Exp $
+ $Id: notify.c,v 1.3 2002/04/07 04:58:07 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -48,7 +48,6 @@
 #include <stdio.h>
 #include <errno.h>
 #include <syslog.h>
-#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -58,14 +57,26 @@
 #endif
 
 #include "imapconf.h"
-#include "retry.h"
 #include "notify.h"
 
 extern int errno;
 
 #define FNAME_NOTIFY_SOCK "/socket/notify"
 
-#define NOTIFY_MAXOPT 10
+#define NOTIFY_MAXSIZE 8192
+
+static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
+{
+    const char *myarg = (arg ? arg : "");
+    int len = strlen(myarg) + 1;
+
+    if (*buflen + len > max_size) return -1;
+
+    strcat(buf+*buflen, myarg);
+    *buflen += len;
+
+    return 0;
+}
 
 void notify(const char *method,
 	    const char *class, const char *priority,
@@ -74,138 +85,61 @@ void notify(const char *method,
 	    const char *message)
 {
     const char *notify_sock;
-    static char response[1024];
-    int s;
-    struct sockaddr_un srvaddr;
-    int fdflags;
-    int r;
-    unsigned short count;
+    int soc;
+    struct sockaddr_un sun;
+    char buf[NOTIFY_MAXSIZE] = "", noptstr[20];
+    int buflen = 0;
+    int i, r = 0;
 
-    s = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (s == -1) {
+    soc = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (soc == -1) {
 	syslog(LOG_ERR, "unable to open notify socket(): %m");
 	return;
     }
 
-    memset((char *)&srvaddr, 0, sizeof(srvaddr));
-    srvaddr.sun_family = AF_UNIX;
+    memset((char *)&sun, 0, sizeof(sun));
+    sun.sun_family = AF_UNIX;
     notify_sock = config_getstring("notifysocket", NULL);
     if (notify_sock) {	
-	strcpy(srvaddr.sun_path, notify_sock);
+	strcpy(sun.sun_path, notify_sock);
     }
     else {
-	strcpy(srvaddr.sun_path, config_dir);
-	strcat(srvaddr.sun_path, FNAME_NOTIFY_SOCK);
+	strcpy(sun.sun_path, config_dir);
+	strcat(sun.sun_path, FNAME_NOTIFY_SOCK);
     }
-
-    /* put us in non-blocking mode so we don't wait for a connection */
-    fdflags = fcntl(s, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
-    if (fdflags == -1) { 
-	syslog(LOG_ERR, 
-	       "error setting notify socket to nonblocking: fcntl(): %m");
-	close(s); 
-	return; 
-    }
-
-    r = connect(s, (struct sockaddr *) &srvaddr, sizeof(srvaddr));
-    if (r == -1) {
-	syslog(LOG_ERR, "unable to connect to notify socket(): %m");
-	close(s);
-	return;
-    }
-
-    /* now we block because we don't want to send just a partial notification
-       packet to notifyd */
-    fdflags = fcntl(s, F_SETFL, ~O_NONBLOCK & fdflags);
-    if (fdflags == -1) { 
-	syslog(LOG_ERR, 
-	       "error setting notify socket to blocking: fcntl(): %m");
-	close(s);
-	return; 
-    }
-
 
     /*
      * build request of the form:
      *
-     * count method count class count priority count user count mailbox
-     *   nopt N(count option) count message
+     * method NUL class NUL priority NUL user NUL mailbox NUL
+     *   nopt NUL N(option NUL) message NUL
      */
-    {
-	unsigned short n_len, c_len, p_len, u_len, m_len,
-	    o_len[NOTIFY_MAXOPT], t_len;
- 	struct iovec iov[13 + 2*NOTIFY_MAXOPT];
-	int num_iov = 0;
-	int i;
 
- 	n_len = method ? htons(strlen(method)) : 0;
- 	c_len = class ? htons(strlen(class)) : 0;
- 	p_len = priority ? htons(strlen(priority)) : 0;
- 	u_len = user ? htons(strlen(user)) : 0;
- 	m_len = mailbox ? htons(strlen(mailbox)) : 0;
-	count = htons((unsigned short) nopt);
-	t_len = message ? htons(strlen(message)) : 0;
+    r = add_arg(buf, NOTIFY_MAXSIZE, method, &buflen);
+    if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, class, &buflen);
+    if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, priority, &buflen);
+    if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, user, &buflen);
+    if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, mailbox, &buflen);
 
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &n_len, sizeof(n_len));
-	if (method) WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) method);
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &c_len, sizeof(c_len));
-	if (class) WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) class);
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &p_len, sizeof(p_len));
-	if (priority) WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) priority);
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &u_len, sizeof(u_len));
-	if (user) WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) user);
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &m_len, sizeof(m_len));
-	if (mailbox) WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) mailbox);
+    sprintf(noptstr, "%d", nopt);
+    if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, noptstr, &buflen);
 
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &count, sizeof(count));
-
-	for (i = 0; i < nopt; i++) {
-	    o_len[i] = options[i] ? htons(strlen(options[i])) : 0;
-	    WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &o_len[i],
-				sizeof(o_len[i]));
-	    if (options[i]) WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, options[i]);
-	}	    
-
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &t_len, sizeof(t_len));
-	if (message) WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) message);
-
-	if (retry_writev(s, iov, num_iov) == -1) {
-            syslog(LOG_ERR, "write to notifyd failed");
-	    close(s);
-  	    return;
-  	}
+    for (i = 0; !r && i < nopt; i++) {
+	r = add_arg(buf, NOTIFY_MAXSIZE, options[i], &buflen);
     }
 
-    /*
-     * read response of the form:
-     *
-     * count result
-     */
-    if (retry_read(s, &count, sizeof(count)) < (int) sizeof(count)) {
-        syslog(LOG_ERR, "read size from notifyd\n");
-	close(s);
+    if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, message, &buflen);
+
+    if (r) {
+        syslog(LOG_ERR, "notify datagram too large");
 	return;
     }
-  
-    count = ntohs(count);
-    if (count < 2) { /* MUST have at least "OK" or "NO" */
-        syslog(LOG_ERR, "bad response from notifyd");
-	close(s);
-	return;
-    }
-  
-    count = (int)sizeof(response) < count ? sizeof(response) : count;
-    if (retry_read(s, response, count) < count) {
-        syslog(LOG_ERR, "read from notifyd failed");
-	close(s);
-	return;
-    }
-    response[count] = '\0';
 
-    close(s);
-  
-    if (!strncmp(response, "NO", 2)) {
-	syslog(LOG_ERR, "%s", response);
+    r = sendto(soc, buf, buflen, 0, (struct sockaddr *) &sun, sizeof(sun));
+    if (r < buflen) {
+	syslog(LOG_ERR, "unable to sendto() notify socket: %m");
+	return;
     }
+
+    return;
 }

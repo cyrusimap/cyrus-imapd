@@ -20,7 +20,7 @@ SERVICES {
 #  lmtpunix	cmd="lmtpd" listen="/lmtp" prefork=0
 
   # this is only necessary if using notifications
-#  notify	cmd="notifyd" listen="/notify" prefork=0
+#  notify	cmd="notifyd" listen="/notify" proto="udp" prefork=1
 }
 
 EVENTS {
