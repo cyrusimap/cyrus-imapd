@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.5 2005/03/14 19:37:18 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.6 2005/03/15 18:24:24 ken3 Exp $
  */
 
 #include <config.h>
@@ -1655,15 +1655,20 @@ void sync_action_list_free(struct sync_action_list **lp)
 void sync_lock_reset(struct sync_lock *lock)
 {
     lock->fd = -1;
+    lock->count = 0;
 }
 
 int sync_unlock(struct sync_lock *lock)
 {
-    if (lock->fd >= 0) {
-        lock_unlock(lock->fd);
-        close(lock->fd);
-        lock->fd = -1;
+    assert(lock->fd >= 0);
+    assert(lock->count != 0);
+
+    if (--lock->count == 0) {
+	lock_unlock(lock->fd);
+	close(lock->fd);
+	lock->fd = -1;
     }
+
     return(0);
 }
 
@@ -1673,7 +1678,7 @@ int sync_lock(struct sync_lock *lock)
     const char *dir = config_getstring(IMAPOPT_SYNC_DIR);
     int r = 0;
 
-    if (lock->fd >= 0) sync_unlock(lock);
+    if (lock->count++) return 0;
 
     snprintf(buf, sizeof(buf), "%s/lock", dir);
 
@@ -1683,5 +1688,10 @@ int sync_lock(struct sync_lock *lock)
     }
 
     r = lock_blocking(lock->fd);
+    if (r) {
+	lock->count--;
+	syslog(LOG_ERR, "Unable to lock %s: %s", buf, strerror(errno));
+    }
+
     return(r);
 }

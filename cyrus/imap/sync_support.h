@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.1.2.4 2005/03/14 19:37:19 ken3 Exp $
+ * $Id: sync_support.h,v 1.1.2.5 2005/03/15 18:24:24 ken3 Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -429,6 +429,7 @@ void sync_action_list_free(struct sync_action_list **lp);
 
 struct sync_lock {
     int fd;
+    int count;
 };
 
 void sync_lock_reset(struct sync_lock *sync_lock);
