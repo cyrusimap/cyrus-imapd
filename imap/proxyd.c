@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.93 2002/02/12 21:33:51 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.94 2002/02/15 20:38:52 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -757,7 +757,7 @@ struct backend *proxyd_findserver(char *server)
     int i = 0;
     struct backend *ret = NULL;
 
-    while (backend_cached[i]) {
+    while (backend_cached && backend_cached[i]) {
 	if (!strcmp(server, backend_cached[i]->hostname)) {
 	    ret = backend_cached[i];
 	    break;
