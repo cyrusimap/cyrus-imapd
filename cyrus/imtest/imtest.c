@@ -1,7 +1,7 @@
-/* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE test client
+/* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/SIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.71 2002/05/23 19:18:01 ken3 Exp $
+ * $Id: imtest.c,v 1.72 2002/05/24 17:46:52 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -143,18 +143,14 @@ static sasl_callback_t callbacks[] = {
 };
 
 struct banner_t {
+    int is_capa;	/* banner is capability response */
     char *resp;		/* end of banner response */
     void *(*parse_banner)(char *str);
 			/* [OPTIONAL] parse banner, returns 'rock' */
 };
 
-struct cmd_t {
-    char *cmd;		/* command string */
-    char *resp;		/* end of command response */
-};
-
 struct capa_cmd_t {
-    char *cmd;		/* capability command string (NULL = unsupported) */
+    char *cmd;		/* capability command string (NULL = no capa cmd) */
     char *resp;		/* end of capability response */
     char *tls;		/* [OPTIONAL] TLS capability string */
     char *auth;		/* [OPTIONAL] AUTH capability string */
@@ -163,13 +159,29 @@ struct capa_cmd_t {
 			   returns space-separated list of mechs */
 };
 
+struct tls_cmd_t {
+    char *cmd;		/* tls command string */
+    char *start;	/* start tls prompt */
+    int auto_capa;	/* capa response given automatically after TLS */
+};
+
 struct sasl_cmd_t {
     char *cmd;		/* auth command string */
-    char *empty_init;	/* empty init-resp string, (NULL = unsupported) */
+    int quote;		/* quote arguments (literal for base64 data) */
+    char *empty_init;	/* string to send as empty initial-response,
+			   (NULL = initial response unsupported by protocol) */
+    char *(*parse_success)(char *str);
+			/* [OPTIONAL] parse response for success data */
     char *ok;		/* success response string */
     char *fail;		/* failure response string */
-    char *cont;		/* continue response string */
+    char *cont;		/* continue response string
+			   (NULL = send/receive literals) */
     char *cancel;	/* cancel auth string */
+};
+
+struct logout_cmd_t {
+    char *cmd;		/* logout command string */
+    char *resp;		/* logout response */
 };
 
 struct protocol_t {
@@ -178,13 +190,13 @@ struct protocol_t {
     char *service;	/* SASL service name */
     struct banner_t banner;
     struct capa_cmd_t capa_cmd;
-    struct cmd_t tls_cmd;
+    struct tls_cmd_t tls_cmd;
     struct sasl_cmd_t sasl_cmd;
     int (*do_auth)(struct sasl_cmd_t *sasl_cmd, void *rock,
 		   char *mech, char *mechlist);
-			/* perform protocol-specific authentication,
-			   based on rock, mech, mechlist */
-    struct cmd_t logout_cmd;
+			/* [OPTIONAL] perform protocol-specific
+			   authentication; based on rock, mech, mechlist */
+    struct logout_cmd_t logout_cmd;
 };
 
 
@@ -694,7 +706,8 @@ static sasl_security_properties_t *make_secprops(int min,int max)
 /*
  * Initialize SASL and set necessary options
  */
-static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf)
+static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf,
+		     unsigned flags)
 {
     int saslresult;
     sasl_security_properties_t *secprops=NULL;
@@ -726,7 +739,7 @@ static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf)
 			       localip,
 			       remoteip,
 			       NULL,
-			       0,
+			       flags,
 			       &conn);
     
     if (saslresult!=SASL_OK) return IMTEST_FAIL;
@@ -750,6 +763,7 @@ imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linelen)
     int saslresult;
     unsigned len;
     char *str=(char *) buf;
+    int ret = STAT_CONT;
     
     do {
 	str = prot_fgets(str, BUFSIZE, pin);
@@ -758,13 +772,28 @@ imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linelen)
     } while(str[0] == '*');      /* Ignore potential untagged responses */
     
     if (!strncasecmp(str, sasl_cmd->ok, strlen(sasl_cmd->ok))) {
-	return STAT_OK;
+	if (sasl_cmd->parse_success) {
+	    str = sasl_cmd->parse_success(str);
+	    if (!str) return STAT_OK;
+
+	    ret = STAT_OK;
+	}
     }
-    if (!strncasecmp(str, sasl_cmd->fail, strlen(sasl_cmd->fail))) {
+    else if (!strncasecmp(str, sasl_cmd->fail, strlen(sasl_cmd->fail))) {
 	return STAT_NO;
     }
-    
-    str += strlen(sasl_cmd->cont); /* jump past the continuation */
+    else if (sasl_cmd->cont) {
+	str += strlen(sasl_cmd->cont); /* jump past the continuation */
+    }
+    else {
+	/* literal */
+	len = atoi(str+1);
+
+	str = prot_fgets(str, BUFSIZE, pin);
+	if (str == NULL || strlen(str) < len)
+	    imtest_fatal("prot layer failure");
+	printf("S: %s", str);
+    }
     
     len = strlen(str) + 1;
     *line = malloc(len);
@@ -786,7 +815,7 @@ imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linelen)
 	*linelen = 0;
     }
     
-    return STAT_CONT;
+    return ret;
 }
 
 void interaction (int id, const char *challenge, const char *prompt,
@@ -915,8 +944,8 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 	    outlen = 0;
 	}
 	    
-	    if (saslresult==SASL_INTERACT)
-		fillin_interactions(client_interact); /* fill in prompts */      
+	if (saslresult==SASL_INTERACT)
+	    fillin_interactions(client_interact); /* fill in prompts */      
 	}
     
     if ((saslresult != SASL_OK) && 
@@ -924,19 +953,24 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 	return saslresult;
     }
     
+    if (sasl_cmd->quote) {
+	printf("C: %s \"%s\"", sasl_cmd->cmd, mechusing);
+	prot_printf(pout, "%s \"%s\"", sasl_cmd->cmd, mechusing);
+    }
+    else {
+	printf("C: %s %s", sasl_cmd->cmd, mechusing);
+	prot_printf(pout, "%s %s", sasl_cmd->cmd, mechusing);
+    }
+
     if (!out) {
 	/* no initial client response */
-	printf("C: %s %s\r\n", sasl_cmd->cmd, mechusing);
-	prot_printf(pout,"%s %s\r\n", sasl_cmd->cmd, mechusing);
-	prot_flush(pout);
+	printf("\r\n");
+	prot_printf(pout, "\r\n");
     }
     else if (!outlen) {
 	/* empty initial client response */
-	printf("C: %s %s %s\r\n",
-	       sasl_cmd->cmd, mechusing, sasl_cmd->empty_init);
-	prot_printf(pout,"%s %s %s\r\n",
-		    sasl_cmd->cmd, mechusing, sasl_cmd->empty_init);
-	prot_flush(pout);
+	printf(" %s\r\n", sasl_cmd->empty_init);
+	prot_printf(pout," %s\r\n", sasl_cmd->empty_init);
     }
     else {
 	/* initial client response - convert to base64 */
@@ -944,12 +978,21 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 				   inbase64, 2048, (unsigned *) &inbase64len);
 	if (saslresult != SASL_OK) return saslresult;
 	
-	printf("C: %s %s %s\r\n", sasl_cmd->cmd, mechusing, inbase64);
-	prot_printf(pout,"%s %s ", sasl_cmd->cmd, mechusing);
+	if (sasl_cmd->quote) {
+	    /* send a literal */
+	    printf(" {%d+}\r\n%s\r\n", inbase64len, inbase64);
+	    prot_printf(pout, " {%d+}\r\n", inbase64len);
+	    prot_flush(pout);
+	}
+	else {
+	    printf(" %s\r\n", inbase64);
+	    prot_printf(pout, " ");
+	}
+
 	prot_write(pout, inbase64, inbase64len);
-	prot_printf(pout,"\r\n");
-	prot_flush(pout);
+	prot_printf(pout, "\r\n");
     }
+    prot_flush(pout);
 
     inlen = 0;
     status = getauthline(sasl_cmd, &in, &inlen);
@@ -983,19 +1026,42 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 				   inbase64, 2048, (unsigned *) &inbase64len);
 	if (saslresult != SASL_OK) return saslresult;
 	
-	free(in);
+	free(in); in = NULL;
 	
 	/* send to server */
-	printf("C: %s\n", inbase64);
+	if (!sasl_cmd->cont) {
+	    /* send a literal */
+	    printf("C: {%d+}\r\n%s\n", inbase64len, inbase64);
+	    prot_printf(pout, "{%d+}\r\n", inbase64len);
+	    prot_flush(pout);
+	}
+	else {
+	    printf("C: %s\n", inbase64);
+	}
+
 	prot_write(pout, inbase64, inbase64len);
 	prot_printf(pout,"\r\n");
 	prot_flush(pout);
-	    
+   
 	/* get reply */
 	status = getauthline(sasl_cmd, &in, &inlen);
     }
-    
-    return (status == STAT_OK) ? IMTEST_OK : IMTEST_FAIL;
+
+    if (status == STAT_OK) {
+	if (in) {
+	    printf("success: '%s'\n", in);
+	    saslresult=sasl_client_step(conn,
+					in,
+					inlen,
+					&client_interact,
+					&out,
+					&outlen);
+	    if (saslresult != SASL_OK) return saslresult;
+	}
+	return IMTEST_OK;
+    } else {
+	return IMTEST_FAIL;
+    }
 }
 
 /* initialize the network */
@@ -1027,7 +1093,7 @@ static int init_net(char *serverFQDN, int port)
     return IMTEST_OK;
 }
 
-static void logout(struct cmd_t *logout_cmd)
+static void logout(struct logout_cmd_t *logout_cmd)
 {
     printf("C: %s\r\n", logout_cmd->cmd);
     prot_printf(pout, "%s\r\n", logout_cmd->cmd);
@@ -1166,23 +1232,25 @@ static void interactive(struct protocol_t *protocol, char *filename)
 }
 
 static char *ask_capability(struct capa_cmd_t *capa_cmd,
-			    int *supports_starttls)
+			    int *supports_starttls, int automatic)
 {
     char str[1024];
     char *ret = NULL, *tmp;
     
     *supports_starttls = 0;
 
-    /* no capability command */
-    if (!capa_cmd->cmd) return NULL;
-
-    /* request capabilities of server */
-    printf("C: %s\r\n", capa_cmd->cmd);
-    prot_printf(pout, "%s\r\n", capa_cmd->cmd);
-    prot_flush(pout);
+    if (!automatic) {
+	/* no capability command */
+	if (!capa_cmd->cmd) return NULL;
+	
+	/* request capabilities of server */
+	printf("C: %s\r\n", capa_cmd->cmd);
+	prot_printf(pout, "%s\r\n", capa_cmd->cmd);
+	prot_flush(pout);
+    }
 
     do { /* look for the end of the capabilities */
-	if (prot_fgets(str,sizeof(str),pin) == NULL) {
+	if (prot_fgets(str, sizeof(str), pin) == NULL) {
 	    imtest_fatal("prot layer failure");
 	}
 	printf("S: %s", str);
@@ -1533,35 +1601,23 @@ static int xmtp_do_auth(struct sasl_cmd_t *sasl_cmd,
     return result;
 }
 
-/*********************************** POP3 ************************************/
+/******************************** MUPDATE ************************************/
 
-static void *mupdate_parse_banner(char *str)
+
+/********************************* SIEVE *************************************/
+
+static char *sieve_parse_success(char *str)
 {
-    char *mechlist = NULL;
+    char *success = NULL, *tmp;
 
-    if (!strncasecmp(str, "* AUTH ", 7)) {
-	mechlist = strdup(str+7);
+    if (!strncmp(str, "OK (", 4) &&
+	(tmp = strstr(str+4, "SASL \"")) != NULL) {
+	success = tmp+6; /* skip SASL " */
+	tmp = strstr(success, "\"");
+	*tmp = '\0'; /* clip " */
     }
 
-    return mechlist;
-}
-
-static int mupdate_do_auth(struct sasl_cmd_t *sasl_cmd,
-			   void *rock,
-			   char *mech, char *mechlist)
-{
-    int result = IMTEST_FAIL;
-
-    /* mechlist is actually 'rock' from the banner (no CAPA command) */
-    mechlist = (char *) rock;
-
-    if (mech) {
-	result = auth_sasl(sasl_cmd, mech);
-    } else if (mechlist) {
-	result = auth_sasl(sasl_cmd, mechlist);
-    }
-
-    return result;
+    return success;
 }
 
 /*****************************************************************************/
@@ -1586,7 +1642,8 @@ void usage(char *prog, char *prot)
     printf("  -f file  : pipe file into connection after authentication\n");
     printf("  -r realm : realm\n");
 #ifdef HAVE_SSL
-    if (strcasecmp(prot, "lmtp"))
+    if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "pop3") ||
+	!strcasecmp(prot, "smtp"))
 	printf("  -s       : Enable %s over SSL (%ss)\n", prot, prot);
     if (strcasecmp(prot, "mupdate"))
 	printf("  -t file  : Enable TLS. file has the TLS public and private keys\n"
@@ -1602,39 +1659,50 @@ void usage(char *prog, char *prot)
 
 static struct protocol_t protocols[] = {
     { "imap", "imaps", "imap",
-      { "* OK", NULL },
+      { 0, "* OK", NULL },
       { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parse_mechlist },
-      { "S01 STARTTLS", "S01 " },
-      { "A01 AUTHENTICATE", NULL, "A01 OK", "A01 NO", "+ ", "*" },
+      { "S01 STARTTLS", "S01 ", 0 },
+      { "A01 AUTHENTICATE", 0, NULL, NULL, "A01 OK", "A01 NO", "+ ", "*" },
       &imap_do_auth, { "Q01 LOGOUT", "Q01 " }
     },
     { "pop3", "pop3s", "pop",
-      { "+OK ", &pop3_parse_banner },
+      { 0, "+OK ", &pop3_parse_banner },
       { "CAPA", ".", "STLS", "SASL ", NULL },
-      { "STLS", "+OK" },
-      { "AUTH", NULL, "+OK", "-ERR", "+ ", "*" },
+      { "STLS", "+OK", 0 },
+      { "AUTH", 0, NULL, NULL, "+OK", "-ERR", "+ ", "*" },
       &pop3_do_auth, { "QUIT", "+OK" }
     },
     { "lmtp", NULL, "lmtp",
-      { "220 ", NULL },
+      { 0, "220 ", NULL },
       { "LHLO example.com", "250 ", "STARTTLS", "AUTH ", NULL },
-      { "STARTTLS", "220" }, { "AUTH", "=", "235", "5", "334 ", "*" },
+      { "STARTTLS", "220", 0 },
+      { "AUTH", 0, "=", NULL, "235", "5", "334 ", "*" },
       &xmtp_do_auth,
       { "QUIT", "221" }
     },
     { "smtp", "smtps", "smtp",
-      { "220 ", NULL },
+      { 0, "220 ", NULL },
       { "EHLO example.com", "250 ", "STARTTLS", "AUTH ", NULL },
-      { "STARTTLS", "220" }, { "AUTH", "=", "235", "5", "334 ", "*" },
+      { "STARTTLS", "220", 0 },
+      { "AUTH", 0, "=", NULL, "235", "5", "334 ", "*" },
       &xmtp_do_auth,
       { "QUIT", "221" }
     },
     { "mupdate", NULL, "mupdate",
-      { "* OK", &mupdate_parse_banner },
+      { 1, "* OK", NULL },
+      { NULL , "* OK", NULL, "* AUTH ", NULL},
       { NULL },
-      { NULL },
-      { "A01 AUTHENTICATE", "=", "A01 OK", "A01 NO", "+ ", "*" },
-      &mupdate_do_auth, { "Q01 LOGOUT", "Q01 " }
+      { "A01 AUTHENTICATE", 1, "=", NULL, "A01 OK", "A01 NO", "", "*" },
+      NULL,
+      { "Q01 LOGOUT", "Q01 " }
+    },
+    { "sieve", NULL, SIEVE_SERVICE_NAME,
+      { 1, "OK", NULL },
+      { "CAPABILITY", "OK", "\"STARTTLS\"", "\"SASL\" ", NULL },
+      { "STARTTLS", "OK", 1 },
+      { "AUTHENTICATE", 1, "=", &sieve_parse_success, "OK", "NO", NULL, "*" },
+      NULL,
+      { "LOGOUT", "OK" }
     },
     { NULL }
 };
@@ -1757,10 +1825,8 @@ int main(int argc, char **argv)
 	    prot = "smtp";
 	else if (!strcasecmp(prog, "mupdatetest"))
 	    prot = "mupdate";
-#if 0
 	else if (!strcasecmp(prog, "sivtest"))
 	    prot = "sieve";
-#endif
     }
 
     protocol = protocols;
@@ -1823,8 +1889,9 @@ int main(int argc, char **argv)
 	    imtest_fatal("Network initialization");
 	}
     
-	if (init_sasl(protocol->service, servername,
-		      minssf, maxssf) != IMTEST_OK) {
+	if (init_sasl(protocol->service, servername, minssf, maxssf,
+		      protocol->sasl_cmd.parse_success ?
+		      SASL_SUCCESS_DATA : 0) != IMTEST_OK) {
 	    imtest_fatal("SASL initialization");
 	}
 	
@@ -1837,20 +1904,27 @@ int main(int argc, char **argv)
 	    do_starttls(1, "", &ext_ssf);
 	}
 #endif /* HAVE_SSL */
+
+	if (protocol->banner.is_capa) {
+	    mechlist = ask_capability(&protocol->capa_cmd,
+				      &server_supports_tls, 1);
+	}
+	else {
+	    do { /* look for the banner response */
+		if (prot_fgets(str, sizeof(str), pin) == NULL) {
+		    imtest_fatal("prot layer failure");
+		}
+		printf("S: %s", str);
+		
+		/* parse it if need be */
+		if (protocol->banner.parse_banner)
+		    rock = protocol->banner.parse_banner(str);
+	    } while (strncasecmp(str, protocol->banner.resp,
+				 strlen(protocol->banner.resp)));
 	
-	do { /* look for the banner response */
-	    if (prot_fgets(str, sizeof(str), pin) == NULL) {
-		imtest_fatal("prot layer failure");
-	    }
-	    printf("S: %s", str);
-	    
-	    /* parse it if need be */
-	    if (protocol->banner.parse_banner)
-		rock = protocol->banner.parse_banner(str);
-	} while (strncasecmp(str, protocol->banner.resp,
-			     strlen(protocol->banner.resp)));
-	
-	mechlist = ask_capability(&protocol->capa_cmd, &server_supports_tls);
+	    mechlist = ask_capability(&protocol->capa_cmd,
+				      &server_supports_tls, 0);
+	}
 	
 #ifdef HAVE_SSL
 	if ((dossl==0) && (dotls==1) && (server_supports_tls==1)) {
@@ -1858,7 +1932,7 @@ int main(int argc, char **argv)
 	    prot_printf(pout, "%s\r\n", protocol->tls_cmd.cmd);
 	    prot_flush(pout);
 	    
-	    waitfor(protocol->tls_cmd.resp, NULL);
+	    waitfor(protocol->tls_cmd.start, NULL);
 	    
 	    do_starttls(0, tls_keyfile, &ext_ssf);
 	    
@@ -1866,14 +1940,27 @@ int main(int argc, char **argv)
 	    if (verbose==1)
 		printf("Asking for capabilities again since they might have changed\n");
 	    if (mechlist) free(mechlist);
-	    mechlist = ask_capability(&protocol->capa_cmd, &server_supports_tls);
+	    mechlist = ask_capability(&protocol->capa_cmd,
+				      &server_supports_tls,
+				      protocol->tls_cmd.auto_capa);
 	    
 	} else if ((dotls==1) && (server_supports_tls!=1)) {
 	    imtest_fatal("STARTTLS not supported by the server!\n");
 	}
 #endif /* HAVE_SSL */
-	
-	result = protocol->do_auth(&protocol->sasl_cmd, rock, mechanism, mechlist);
+
+	if (protocol->do_auth)
+	    result = protocol->do_auth(&protocol->sasl_cmd, rock,
+				       mechanism, mechlist);
+	else {
+	    if (mechanism) {
+		result = auth_sasl(&protocol->sasl_cmd, mechanism);
+	    } else if (mechlist) {
+		result = auth_sasl(&protocol->sasl_cmd, mechlist);
+	    } else {
+		result = IMTEST_FAIL;
+	    }
+	}
 	
 	if (rock) free(rock);
 	if (mechlist) free(mechlist);
