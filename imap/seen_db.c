@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.14 2000/08/06 20:35:47 leg Exp $
+   $Id: seen_db.c,v 1.15 2000/08/08 17:30:51 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -69,7 +69,10 @@
 #define FNAME_SEENSUFFIX ".seen" /* per user seen state extension */
 #define FNAME_SEEN "/cyrus.seen" /* for legacy seen state */
 
-#define SEEN_VERSION (1)
+enum {
+    SEEN_VERSION = 1,
+    SEEN_DEBUG = 0
+};
 
 struct seen {
     const char *user;		/* what user is this for? */
@@ -114,12 +117,21 @@ int seen_open(struct mailbox *mailbox,
 	      const char *user, 
 	      struct seen **seendbptr)
 {
-    struct seen *seendb = lastseen;
+    struct seen *seendb;
     char *fname = NULL;
     int r;
 
+    /* try to reuse the last db handle */
+    seendb = lastseen;
+    lastseen = NULL;
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_open(%s, %s)", 
+	       mailbox->uniqueid, user);
+    }
+
     /* if this is the db we've already opened, return it */
     if (seendb && !strcmp(seendb->user, user)) {
+	abortcurrent(seendb);
 	seendb->uniqueid = mailbox->uniqueid;
 	*seendbptr = seendb;
 	return 0;
@@ -159,7 +171,6 @@ int seen_open(struct mailbox *mailbox,
     seendb->user = user;
 
     *seendbptr = seendb;
-    lastseen = seendb;
     return r;
 }
 
@@ -174,6 +185,11 @@ static int seen_readold(struct seen *seendb,
     const char *buf = 0, *p;
     unsigned long len = 0, linelen;
     unsigned long offset = 0;
+
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_readold(%s, %s)", 
+	       seendb->path, seendb->user);
+    }
 
     strcpy(fnamebuf, seendb->path);
     strcat(fnamebuf, FNAME_SEEN);
@@ -285,6 +301,11 @@ int seen_read(struct seen *seendb,
 	      time_t *lastreadptr, unsigned int *lastuidptr, 
 	      time_t *lastchangeptr, char **seenuidsptr)
 {
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_read(%s, %s)", 
+	       seendb->uniqueid, seendb->user);
+    }
+
     return seen_readit(seendb, lastreadptr, lastuidptr, lastchangeptr,
 		       seenuidsptr, 0);
 }
@@ -294,6 +315,11 @@ int seen_lockread(struct seen *seendb,
 		  time_t *lastchangeptr, char **seenuidsptr)
 {
     assert(seendb && seendb->uniqueid);
+
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_lockread(%s, %s)", 
+	       seendb->uniqueid, seendb->user);
+    }
 
     return seen_readit(seendb, lastreadptr, lastuidptr, lastchangeptr,
 		       seenuidsptr, 1);
@@ -309,6 +335,11 @@ int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid,
 
     assert(seendb && seendb->uniqueid);
     assert(seendb->tid);
+
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_write(%s, %s)", 
+	       seendb->uniqueid, seendb->user);
+    }
 
     sprintf(data, "%d %d %d %d %s", SEEN_VERSION, 
 	    (int) lastread, lastuid, (int) lastchange, seenuids);
@@ -335,25 +366,63 @@ int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid,
 
 int seen_close(struct seen *seendb)
 {
-    abortcurrent(seendb);
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_close(%s, %s)", 
+	       seendb->uniqueid, seendb->user);
+    }
 
+    abortcurrent(seendb);
+    seendb->uniqueid = NULL;
+
+    if (lastseen) {
+	int r;
+
+	/* free the old database hanging around */
+	abortcurrent(lastseen);
+	r = DB->close(lastseen->db);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: error closing lastseen: %s",
+		   cyrusdb_strerror(r));
+	    r = IMAP_IOERROR;
+	}
+
+	free(lastseen);
+    }
+
+    /* this database can now be reused */
+    lastseen = seendb;
     return 0;
 }
 
 int seen_create_mailbox(struct mailbox *mailbox)
 {
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_create_mailbox(%s)", 
+	       mailbox->uniqueid);
+    }
+
     /* noop */
     return 0;
 }
 
 int seen_delete_mailbox(struct mailbox *mailbox)
 {
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_delete_mailbox(%s)", 
+	       mailbox->uniqueid);
+    }
+
     /* noop */
     return 0;
 }
 
 int seen_create_user(const char *user)
 {
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_create_user(%s)", 
+	       user);
+    }
+
     /* we'll be lazy here and create this when needed */
     return 0;
 }
@@ -362,6 +431,11 @@ int seen_delete_user(const char *user)
 {
     char *fname = getpath(user);
     int r = 0;
+
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_delete_user(%s)", 
+	       user);
+    }
 
     /* erp! */
     r = unlink(fname);
@@ -376,6 +450,11 @@ int seen_delete_user(const char *user)
 
 int seen_copy(struct mailbox *oldmailbox, struct mailbox *newmailbox)
 {
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_copy(%s, %s)",
+	       oldmailbox->uniqueid, newmailbox->uniqueid);
+    }
+
     /* noop */
     return 0;
 }
@@ -384,6 +463,11 @@ int seen_unlock(struct seen *seendb)
 {
     assert(seendb);
 
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_unlock(%s, %s)",
+	       seendb->uniqueid, seendb->user);
+    }
+
     abortcurrent(seendb);
     /* we lazily close the database */
     return 0;
@@ -391,17 +475,21 @@ int seen_unlock(struct seen *seendb)
 
 int seen_done(void)
 {
-    struct seen *seendb = lastseen;
     int r = 0;
 
-    if (seendb) {
-	abortcurrent(seendb);
-	r = DB->close(seendb->db);
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_done()");
+    }
+
+    if (lastseen) {
+	abortcurrent(lastseen);
+	r = DB->close(lastseen->db);
 	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing seendb: %s",
+	    syslog(LOG_ERR, "DBERROR: error closing lastseen: %s",
 		   cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
 	}
+	free(lastseen);
     }
 
     return r;
@@ -413,6 +501,10 @@ int seen_reconstruct(struct mailbox *mailbox,
 		     int (*report_proc)(),
 		     void *report_rock)
 {
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_reconstruct()");
+    }
+
     /* not supported */
     return 0;
 }
