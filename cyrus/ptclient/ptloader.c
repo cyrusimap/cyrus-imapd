@@ -13,7 +13,7 @@
  *
  */
 
-static char rcsid[] = "$Id: ptloader.c,v 1.14 1999/02/16 01:55:21 wcw Exp $";
+static char rcsid[] = "$Id: ptloader.c,v 1.15 1999/08/09 21:07:54 leg Exp $";
 #include <string.h>
 #include "auth_krb_pts.h"
 #include <stdio.h>
@@ -27,6 +27,11 @@ static char rcsid[] = "$Id: ptloader.c,v 1.14 1999/02/16 01:55:21 wcw Exp $";
 #include <afs/auth.h>
 #include <com_err.h>
 
+/* blame transarc i've been told */
+#ifndef AFSCONF_CLIENTNAME
+#include <afs/dirpath.h>
+#define AFSCONF_CLIENTNAME AFSDIR_CLIENT_ETC_DIRPATH
+#endif
 
 static char ptclient_debug = 0;
 
@@ -71,7 +76,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.14 1999/02/16 01:55:21 wcw Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.15 1999/08/09 21:07:54 leg Exp $");
 
     while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
       switch (opt) {
@@ -522,4 +527,4 @@ int exitcode;
   syslog(LOG_ERR, "%s", msg);
   exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.14 1999/02/16 01:55:21 wcw Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.15 1999/08/09 21:07:54 leg Exp $ */

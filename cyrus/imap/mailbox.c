@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.75 1999/04/08 21:04:26 tjs Exp $
+ $Id: mailbox.c,v 1.76 1999/08/09 21:07:49 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -38,6 +38,7 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
+#include <ctype.h>
 
 #if HAVE_DIRENT_H
 # include <dirent.h>
@@ -642,8 +643,7 @@ struct quota *quota;
     }
 
     if (quota->fd == -1) {
-	sprintf(buf, "%s%s%s", config_dir, FNAME_QUOTADIR,
-		quota->root);
+	mailbox_hash_quota(buf, quota->root);
 	quota->fd = open(buf, O_RDWR, 0);
 	if (quota->fd == -1) {
 	    syslog(LOG_ERR, "IOERROR: opening quota file %s: %m", buf);
@@ -819,7 +819,7 @@ struct quota *quota;
 	quota->limit = -1;
 	return 0;
     }
-    sprintf(quota_path, "%s%s%s", config_dir, FNAME_QUOTADIR, quota->root);
+    mailbox_hash_quota(quota_path, quota->root);
     if (quota->fd == -1) {
 	quota->fd = open(quota_path, O_RDWR, 0);
 	if (quota->fd == -1) {
@@ -1116,8 +1116,7 @@ struct quota *quota;
 
     if (!quota->root) return 0;
 
-    sprintf(quota_path, "%s%s%s", config_dir, FNAME_QUOTADIR,
-	    quota->root);
+    mailbox_hash_quota(quota_path, quota->root);
     strcpy(new_quota_path, quota_path);
     strcat(new_quota_path, ".NEW");
 
@@ -1180,8 +1179,7 @@ struct quota *quota;
 
     if (!quota->root) return 0;
 
-    sprintf(quota_path, "%s%s%s", config_dir, FNAME_QUOTADIR,
-	    quota->root);
+    mailbox_hash_quota(quota_path, quota->root);
 
     unlink(quota_path);
 
@@ -1611,19 +1609,19 @@ mailbox_findquota(name)
 const char *name;
 {
     static char quota_path[MAX_MAILBOX_PATH];
-    char *start, *tail;
+    char start[MAX_MAILBOX_PATH];
+    char *tail;
     struct stat sbuf;
 
-    strcpy(quota_path, config_dir);
-    strcat(quota_path, FNAME_QUOTADIR);
-    start = quota_path + strlen(quota_path);
     strcpy(start, name);
     lcase(start);
 
+    mailbox_hash_quota(quota_path, start);
     while (stat(quota_path, &sbuf) == -1) {
 	tail = strrchr(start, '.');
 	if (!tail) return 0;
 	*tail = '\0';
+	mailbox_hash_quota(quota_path, start);
     }
     return start;
 }
@@ -2009,6 +2007,7 @@ const char *to;
     int n;
 
     if (link(from, to) == 0) return 0;
+
     destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (destfd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", to);
@@ -2044,4 +2043,49 @@ const char *to;
     close(srcfd);
     close(destfd);
     return 0;
+}
+
+void mailbox_hash_mbox(char *buf, 
+			const char *root,
+			const char *name)
+{
+    char *idx, *p;
+    char c;
+
+    idx = strchr(name, '.');
+    if (idx == NULL) {
+	c = *name;
+    } else {
+	c = *(idx + 1);
+    }
+    c = (char) tolower((int) c);
+    if (!islower(c))
+	c = 'q';
+
+    sprintf(buf, "%s/%c/%s", root, c, name);
+
+    /* change all '.'s to '/' */
+    for (p = buf + strlen(root) + 3; *p; p++) {
+	if (*p == '.') *p = '/';
+    }
+}
+
+/* simple hash so it's easy to find these things in the filesystem;
+   our human time is worth more than efficiency */
+void mailbox_hash_quota(char *buf, const char *qr)
+{
+    char *idx;
+    char c;
+
+    idx = strchr(qr, '.'); /* skip past user. */
+    if (idx == NULL) {
+	c = *qr;
+    } else {
+	c = *(idx + 1);
+    }
+    c = (char) tolower((int) c);
+    if (!islower(c))
+	c = 'q';
+
+    sprintf(buf, "%s%s%c/%s", config_dir, FNAME_QUOTADIR, c, qr);
 }

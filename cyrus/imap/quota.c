@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  *
  */
-/* $Id: quota.c,v 1.27 1999/04/08 21:04:27 tjs Exp $ */
+/* $Id: quota.c,v 1.28 1999/08/09 21:07:51 leg Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -148,58 +148,67 @@ int nroots;
     char quota_path[MAX_MAILBOX_PATH];
     int i;
     DIR *dirp;
+    DIR *topp;
     struct dirent *dirent;
 
     sprintf(quota_path, "%s%s", config_dir, FNAME_QUOTADIR);
     if (chdir(quota_path)) {
 	return IMAP_IOERROR;
     }
-
-    dirp = opendir(".");
-    if (!dirp) {
+    
+    topp = opendir(".");
+    if (!topp) {
 	return IMAP_IOERROR;
     }
-    while (dirent = readdir(dirp)) {
+    while (dirent = readdir(topp)) {
 	if (dirent->d_name[0] == '.') continue;
 	
-	/* If restricting our list, see if this quota file matches */
-	if (nroots) {
-	    for (i = 0; i < nroots; i++) {
-		if (!strcasecmp(dirent->d_name, roots[i]) ||
-		    (!strncasecmp(dirent->d_name, roots[i], strlen(roots[i])) &&
-		     dirent->d_name[strlen(roots[i])] == '.')) break;
+	dirp = opendir(dirent->d_name);
+	if (!dirp) continue;
+
+	while (dirent = readdir(dirp)) {
+	    /* If restricting our list, see if this quota file matches */
+	    if (nroots) {
+		for (i = 0; i < nroots; i++) {
+		    if (!strcasecmp(dirent->d_name, roots[i]) ||
+			(!strncasecmp(dirent->d_name, roots[i], strlen(roots[i])) &&
+			 dirent->d_name[strlen(roots[i])] == '.')) break;
+		}
+		if (i == nroots) continue;
 	    }
-	    if (i == nroots) continue;
-	}
-
-	/* Ignore .NEW files */
-	i = strlen(dirent->d_name);
-	if (i > 4 && !strcmp(dirent->d_name+i-4, ".NEW")) continue;
-
-	if (quota_num == quota_alloc) {
-	    quota_alloc += QUOTAGROW;
-	    quota = (struct quotaentry *)
-	      xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
-	}
-	quota[quota_num] = zeroquotaentry;
-	quota[quota_num].quota.fd = -1;
-	quota[quota_num].quota.root = xstrdup(dirent->d_name);
-	
-	r = mailbox_read_quota(&quota[quota_num].quota);
-	if (quota[quota_num].quota.fd != -1) {
-	    close(quota[quota_num].quota.fd);
+	    
+	    /* Ignore .NEW files */
+	    i = strlen(dirent->d_name);
+	    if (i > 4 && !strcmp(dirent->d_name+i-4, ".NEW")) continue;
+	    
+	    if (quota_num == quota_alloc) {
+		quota_alloc += QUOTAGROW;
+		quota = (struct quotaentry *)
+		    xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
+	    }
+	    quota[quota_num] = zeroquotaentry;
 	    quota[quota_num].quota.fd = -1;
+	    quota[quota_num].quota.root = xstrdup(dirent->d_name);
+	    
+	    r = mailbox_read_quota(&quota[quota_num].quota);
+	    if (quota[quota_num].quota.fd != -1) {
+		close(quota[quota_num].quota.fd);
+		quota[quota_num].quota.fd = -1;
+	    }
+	    if (r) {
+		com_err(dirent->d_name, r,
+			(r == EC_IOERR) ? error_message(errno) : NULL);
+		quota[quota_num].quota.used = 0;
+		quota[quota_num].quota.limit = -1;
+	    }
+	    
+	    quota_num++;
 	}
-	if (r) {
-	    com_err(dirent->d_name, r,
-		    (r == EC_IOERR) ? error_message(errno) : NULL);
-	    quota[quota_num].quota.used = 0;
-	    quota[quota_num].quota.limit = -1;
-	}
-
-	quota_num++;
+	
+	/* close this subdirectory */
+	closedir(dirp);
     }
-    closedir(dirp);
+    closedir(topp);
     qsort((char *)quota, quota_num, sizeof(*quota), compare_quota);
 
     return 0;

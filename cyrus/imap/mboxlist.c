@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.92 1999/07/31 21:49:34 leg Exp $
+ * $Id: mboxlist.c,v 1.93 1999/08/09 21:07:50 leg Exp $
  */
 
 #include <stdio.h>
@@ -76,6 +76,9 @@ static int mboxlist_safe_rename();
 static struct quota *mboxlist_newquota;
 static int mboxlist_changequota();
 static int mboxlist_safe_rename();
+
+static char *mboxlist_hash_usersubs(const char *userid);
+
 
 #define FNAME_MBOXLIST "/mailboxes"
 #define FNAME_USERDIR "/user/"
@@ -138,10 +141,7 @@ int mboxlist_lookup(const char* name, char** pathp, char** aclp)
 	    return IMAP_PARTITION_UNKNOWN;
 	}
 	
-	sprintf(pathresult, "%s/%s", root, name);
-	for (p = pathresult + strlen(root); *p; p++) {
-	    if (*p == '.') *p = '/';
-	}
+	mailbox_hash_mbox(pathresult, root, name);
 
 	*pathp = pathresult;
     }
@@ -416,10 +416,7 @@ struct auth_state *auth_state;
     }
 
     /* Create new mailbox and move new mailbox list file into place */
-    sprintf(buf2, "%s/%s", root, name);
-    for (p = buf2 + strlen(root); *p; p++) {
-	if (*p == '.') *p = '/';
-    }
+    mailbox_hash_mbox(buf2, root, name);
     r = mailbox_create(name, buf2, acl, format, &newmailbox);
     free(acl);
 
@@ -497,13 +494,10 @@ int checkacl;
 	/* Delete any subscription list file */
 	{
 	    char *fname;
+	    char c;
 
-	    fname = xmalloc(strlen(config_dir)+sizeof(FNAME_USERDIR)+
-				strlen(name)+sizeof(FNAME_SUBSSUFFIX));
-	    strcpy(fname, config_dir);
-	    strcat(fname, FNAME_USERDIR);
-	    strcat(fname, name+5);
-	    strcat(fname, FNAME_SUBSSUFFIX);
+	    fname = mboxlist_hash_usersubs(name + 5);
+
 	    (void) unlink(fname);
 	    free(fname);
 	}
@@ -817,10 +811,8 @@ struct auth_state *auth_state;
     }
 
     /* Rename the mailbox and move new mailbox list file into place */
-    sprintf(buf2, "%s/%s", root, newname);
-    for (p = buf2 + strlen(root); *p; p++) {
-	if (*p == '.') *p = '/';
-    }
+    mailbox_hash_mbox(buf2, root, newname);
+
     r = mailbox_rename(oldname, newname, buf2, isusermbox,
 		       &olduidvalidity, &newuidvalidity);
     if (r) {
@@ -1561,10 +1553,8 @@ int newquota;
     
     quota = zeroquota;
 
-    strcpy(quota_path, config_dir);
-    strcat(quota_path, FNAME_QUOTADIR);
-    quota.root = quota_path + strlen(quota_path);
-    strcpy(quota.root, root);
+    quota.root = (char *) root;
+    mailbox_hash_quota(quota_path, root);
 
     if ((quota.fd = open(quota_path, O_RDWR, 0)) != -1) {
 	/* Just lock and change it */
@@ -1857,6 +1847,7 @@ const char **newfname;
     struct stat sbuf;
     const char *lockfailaction;
     char inboxname[MAX_MAILBOX_NAME+1];
+    char c;
 
     /* Users without INBOXes may not keep subscriptions */
     if (strchr(userid, '.') || strlen(userid) + 6 > MAX_MAILBOX_NAME) {
@@ -1874,12 +1865,8 @@ const char **newfname;
     }
 
     /* Build subscription list filename */
-    subsfname = xmalloc(strlen(config_dir)+sizeof(FNAME_USERDIR)+
-			strlen(userid)+sizeof(FNAME_SUBSSUFFIX));
-    strcpy(subsfname, config_dir);
-    strcat(subsfname, FNAME_USERDIR);
-    strcat(subsfname, userid);
-    strcat(subsfname, FNAME_SUBSSUFFIX);
+    subsfname = mboxlist_hash_usersubs(userid);
+
     newsubsfname = xmalloc(strlen(subsfname)+5);
     strcpy(newsubsfname, subsfname);
     strcat(newsubsfname, ".NEW");
@@ -2178,4 +2165,20 @@ int fd;
     }
     lock_unlock(fd);
     return 0;
+}
+
+static char *mboxlist_hash_usersubs(const char *userid)
+{
+    char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_USERDIR) +
+			  strlen(userid) + sizeof(FNAME_SUBSSUFFIX) + 10);
+    char c;
+
+    c = (char) tolower((int) *userid);
+    if (!islower(c)) {
+	c = 'q';
+    }
+    sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
+	    FNAME_SUBSSUFFIX);
+
+    return fname;
 }

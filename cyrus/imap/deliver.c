@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.96 1999/07/31 21:49:27 leg Exp $
+ * $Id: deliver.c,v 1.97 1999/08/09 21:07:47 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.96 1999/07/31 21:49:27 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.97 1999/08/09 21:07:47 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -145,6 +145,8 @@ static void setup_sieve();
 
 #ifdef USE_SIEVE
 static sieve_interp_t *sieve_interp;
+static int sieve_usehomedir = 0;
+static const char *sieve_dir = NULL;
 #endif
 
 int
@@ -166,6 +168,15 @@ char **argv;
     message_data_t *msgdata;
 
     config_init("deliver");
+
+#ifdef USE_SIEVE
+    sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
+    if (!sieve_usehomedir) {
+	sieve_dir = config_getstring("sievedir", "/usr/sieve");
+    } else {
+	sieve_dir = NULL;
+    }
+#endif USE_SIEVE
 
     msg_new(&msgdata);
     memset((void *) delopts, 0, sizeof(deliver_opts_t));
@@ -1797,29 +1808,29 @@ int acloverride;
 FILE *sieve_find_script(char *user)
 {
     char buf[1024];
-    FILE *f;
-    struct passwd *pent;
 
     if (strlen(user) > 900)
 	return NULL;
     
-    pent = getpwnam(user);
+    if (sieve_usehomedir) { /* look in homedir */
+	struct passwd *pent = getpwnam(user);
 
-    if (pent == NULL) {
-	return NULL;
+	if (pent == NULL) {
+	    return NULL;
+	}
+
+	/* check ~USERNAME/.sieve */
+	snprintf(buf, sizeof(buf), "%s/%s", pent->pw_dir, ".sieve");
+    } else { /* look in sieve_dir */
+	char hash;
+
+	hash = (char) tolower((int) *user);
+	if (!islower(hash)) { hash = 'q'; }
+
+	snprintf(buf, sizeof(buf), "%s/%c/%s", sieve_dir, hash, user);
     }
-
-    /* check /afs/andrew/usr/USERNAME/.sieve
-       and /afs/andrew/usr/USERNAME/public/.sieve */
-    snprintf(buf, sizeof(buf), "%s/%s", pent->pw_dir, ".sieve");
-
-    if ((f = fopen(buf, "r")) == NULL) {
-	/* let's try public */
-	snprintf(buf, sizeof(buf), "%s/public/%s", pent->pw_dir, ".sieve");
-	f = fopen(buf, "r");
-    }
-    
-    return f;
+	
+    return (fopen(buf, "r"));
 }
 #endif
 
@@ -2111,17 +2122,20 @@ _get_db_name (mbox)
 {
   static char buf[MAX_MAILBOX_PATH];
   char *idx;
+  char c;
   
-  (void)strcpy(buf, config_dir);
-  (void)strcat(buf, "/deliverdb/deliver-");
   idx = strchr(mbox,'.');   /* skip past user. */
   if (idx == NULL) {         /* no '.' so just use mbox */
-    idx = mbox;
+      idx = mbox;
   } else {
-    idx++;                   /* skip past '.' */
+      idx++;                   /* skip past '.' */
+  }
+  c = (char) tolower((int) *idx);
+  if (!islower(c)) {
+      c = 'q';
   }
 
-  (void)strncat(buf, idx, 1);
+  sprintf(buf, "%s/devilerdb/deliver-%c", config_dir, c);
 
   return buf;
 }

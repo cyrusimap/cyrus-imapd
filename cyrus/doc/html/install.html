@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.56 1999/07/31 21:49:26 leg Exp $ -->
+<!-- $Id: install.html,v 1.57 1999/08/09 21:07:46 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -482,7 +482,7 @@ and a set of empty directories:
 <pre>
 <kbd>   cd imap
    true &gt;&gt; mailboxes
-   mkdir user quota proc log msg
+   mkdir user quota proc log msg deliverdb
    chown cyrus *
    chgrp mail *
 </kbd></pre>
@@ -667,10 +667,7 @@ program with the "<TT>-e</TT>" switch.  This prevents two messages
 with the same <TT>Message-ID:</TT> (<TT>Resent-Message-ID:</TT> if it
 exits) from being delivered to the same mailbox.  Add a <TT>cron</TT>
 job to periodically prune the database of deliveries by running
-"<TT>/usr/cyrus/bin/deliver -E 3</TT>" daily as the cyrus user. You
-must also create the directory "<tt>deliverdb</tt>" to store the
-database files in the configuration directory, such as "<tt>mkdir
-/var/imap/deliverdb</tt>".
+"<TT>/usr/cyrus/bin/deliver -E 3</TT>" daily as the cyrus user.
 
  <P>If you want to export netnews newsgroups using IMAP do the following:
 

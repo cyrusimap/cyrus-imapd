@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.39 1999/04/08 21:04:27 tjs Exp $ */
+/* $Id: reconstruct.c,v 1.40 1999/08/09 21:07:52 leg Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -753,19 +753,13 @@ do_mboxlist()
 	}
 	
 	/* Check mailbox exists */
-	sprintf(pathresult, "%s/%s", root, mboxname);
-	for (p = pathresult + strlen(root); *p; p++) {
-	    if (*p == '.') *p = '/';
-	}
+	mailbox_hash_mbox(pathresult, root, mboxname);
 	r = mailbox_open_header_path(mboxname, pathresult, "", 0,
 				     &mailbox, 1);
 	if (r) {
 	    /* Try lowercasing mailbox name */
 	    lcase(mboxname);
-	    sprintf(pathresult, "%s/%s", root, mboxname);
-	    for (p = pathresult + strlen(root); *p; p++) {
-		if (*p == '.') *p = '/';
-	    }
+	    mailbox_hash_mbox(pathresult, root, mboxname);
 
 	    r = mailbox_open_header_path(mboxname, pathresult, "", 0,
 					 &mailbox, 1);

@@ -26,8 +26,13 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.46 1999/07/31 21:49:36 leg Exp $
+ * $Id: pop3d.c,v 1.47 1999/08/09 21:07:50 leg Exp $
  */
+
+#ifndef __GNUC__
+/* can't use attributes... */
+#define __attribute__(foo)
+#endif
 
 #include <stdio.h>
 #include <string.h>
