@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.7 2004/01/20 01:10:56 ken3 Exp $ */
+/* $Id: global.c,v 1.8 2004/01/26 17:46:56 ken3 Exp $ */
 
 #include <config.h>
 
@@ -80,6 +80,8 @@ static enum {
     DONE = 2
 } cyrus_init_run = NOT_RUNNING;
 
+static int cyrus_init_nodb = 0;
+
 int config_implicitrights;        /* "lca" */
 struct cyrusdb_backend *config_mboxlist_db;
 struct cyrusdb_backend *config_quota_db;
@@ -94,7 +96,7 @@ struct cyrusdb_backend *config_ptscache_db;
 
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
-int cyrus_init(const char *alt_config, const char *ident)
+int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 {
     char *p;
     const char *val;
@@ -106,6 +108,8 @@ int cyrus_init(const char *alt_config, const char *ident)
     } else {
 	cyrus_init_run = RUNNING;
     }
+
+    cyrus_init_nodb = (flags & CYRUSINIT_NODB);
 
     initialize_imap_error_table();
     initialize_mupd_error_table();
@@ -160,47 +164,49 @@ int cyrus_init(const char *alt_config, const char *ident)
     config_implicitrights =
 	cyrus_acl_strtomask(config_getstring(IMAPOPT_IMPLICIT_OWNER_RIGHTS));
 
-    /* lookup the database backends */
-    config_mboxlist_db =
-	cyrusdb_fromname(config_getstring(IMAPOPT_MBOXLIST_DB));
-    config_quota_db =
-	cyrusdb_fromname(config_getstring(IMAPOPT_QUOTA_DB));
-    config_subscription_db =
-	cyrusdb_fromname(config_getstring(IMAPOPT_SUBSCRIPTION_DB));
-    config_annotation_db =
-	cyrusdb_fromname(config_getstring(IMAPOPT_ANNOTATION_DB));
-    config_seenstate_db =
-	cyrusdb_fromname(config_getstring(IMAPOPT_SEENSTATE_DB));
-    config_duplicate_db =
-	cyrusdb_fromname(config_getstring(IMAPOPT_DUPLICATE_DB));
-    config_tlscache_db =
-	cyrusdb_fromname(config_getstring(IMAPOPT_TLSCACHE_DB));
+    if (!cyrus_init_nodb) {
+	/* lookup the database backends */
+	config_mboxlist_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_MBOXLIST_DB));
+	config_quota_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_QUOTA_DB));
+	config_subscription_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_SUBSCRIPTION_DB));
+	config_annotation_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_ANNOTATION_DB));
+	config_seenstate_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_SEENSTATE_DB));
+	config_duplicate_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_DUPLICATE_DB));
+	config_tlscache_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_TLSCACHE_DB));
 #ifdef WITH_PTS
-    config_ptscache_db =
-	cyrusdb_fromname(config_getstring(IMAPOPT_PTSCACHE_DB));
+	config_ptscache_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_PTSCACHE_DB));
 #endif
 
-    /* configure libcyrus as needed */
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
-    libcyrus_config_setswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
-			      config_getswitch(IMAPOPT_UNIX_GROUP_ENABLE));
-    libcyrus_config_setswitch(CYRUSOPT_USERNAME_TOLOWER,
-			      config_getswitch(IMAPOPT_USERNAME_TOLOWER));
-    libcyrus_config_setswitch(CYRUSOPT_SKIPLIST_UNSAFE,
-			      config_getswitch(IMAPOPT_SKIPLIST_UNSAFE));
-    libcyrus_config_setstring(CYRUSOPT_TEMP_PATH,
-			      config_getstring(IMAPOPT_TEMP_PATH));
-    libcyrus_config_setint(CYRUSOPT_PTS_CACHE_TIMEOUT,
-			   config_getint(IMAPOPT_PTSCACHE_TIMEOUT));
-    libcyrus_config_setswitch(CYRUSOPT_FULLDIRHASH,
-			      config_getswitch(IMAPOPT_FULLDIRHASH));
-    libcyrus_config_setstring(CYRUSOPT_PTSCACHE_DB,
-			      config_getstring(IMAPOPT_PTSCACHE_DB));
-    libcyrus_config_setswitch(CYRUSOPT_VIRTDOMAINS,
-			      config_getenum(IMAPOPT_VIRTDOMAINS));
+	/* configure libcyrus as needed */
+	libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
+	libcyrus_config_setswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
+				  config_getswitch(IMAPOPT_UNIX_GROUP_ENABLE));
+	libcyrus_config_setswitch(CYRUSOPT_USERNAME_TOLOWER,
+				  config_getswitch(IMAPOPT_USERNAME_TOLOWER));
+	libcyrus_config_setswitch(CYRUSOPT_SKIPLIST_UNSAFE,
+				  config_getswitch(IMAPOPT_SKIPLIST_UNSAFE));
+	libcyrus_config_setstring(CYRUSOPT_TEMP_PATH,
+				  config_getstring(IMAPOPT_TEMP_PATH));
+	libcyrus_config_setint(CYRUSOPT_PTS_CACHE_TIMEOUT,
+			       config_getint(IMAPOPT_PTSCACHE_TIMEOUT));
+	libcyrus_config_setswitch(CYRUSOPT_FULLDIRHASH,
+				  config_getswitch(IMAPOPT_FULLDIRHASH));
+	libcyrus_config_setstring(CYRUSOPT_PTSCACHE_DB,
+				  config_getstring(IMAPOPT_PTSCACHE_DB));
+	libcyrus_config_setswitch(CYRUSOPT_VIRTDOMAINS,
+				  config_getenum(IMAPOPT_VIRTDOMAINS));
 
-    /* Not until all configuration parameters are set! */
-    libcyrus_init();
+	/* Not until all configuration parameters are set! */
+	libcyrus_init();
+    }
     
     return 0;
 }
@@ -610,7 +616,7 @@ void cyrus_done()
     if(cyrus_init_run != RUNNING) return;
     cyrus_init_run = DONE;
     
-    libcyrus_done();
+    if (!cyrus_init_nodb) libcyrus_done();
 }
 
 /*

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.19 2003/12/15 20:00:40 ken3 Exp $ */
+/* $Id: idled.c,v 1.20 2004/01/26 17:46:57 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -281,7 +281,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "idled");
+    cyrus_init(alt_config, "idled", 0);
 
     /* get name of shutdown file */
     snprintf(shutdownfilename, sizeof(shutdownfilename), "%s/msg/shutdown",

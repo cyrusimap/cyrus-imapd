@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: tls_prune.c,v 1.5 2003/10/22 18:50:09 rjs3 Exp $ */
+/* $Id: tls_prune.c,v 1.6 2004/01/26 17:46:58 ken3 Exp $ */
 
 #include <config.h>
 
@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    cyrus_init(alt_config, "tls_prune");
+    cyrus_init(alt_config, "tls_prune", 0);
 
     r = tls_prune_sessions();
 

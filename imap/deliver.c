@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.169 2003/10/22 18:50:07 rjs3 Exp $ */
+/* $Id: deliver.c,v 1.170 2004/01/26 17:46:56 ken3 Exp $ */
 
 #include <config.h>
 
@@ -271,7 +271,7 @@ int main(int argc, char **argv)
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
 
-    cyrus_init(alt_config, "deliver");
+    cyrus_init(alt_config, "deliver", CYRUSINIT_NODB);
 
     sockaddr = config_getstring(IMAPOPT_LMTPSOCKET);
     if (!sockaddr) {	

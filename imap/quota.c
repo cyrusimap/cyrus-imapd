@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.49 2004/01/20 01:11:02 ken3 Exp $ */
+/* $Id: quota.c,v 1.50 2004/01/26 17:46:57 ken3 Exp $ */
 
 
 #include <config.h>
@@ -160,7 +160,7 @@ int main(int argc,char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "quota");
+    cyrus_init(alt_config, "quota", 0);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&quota_namespace, 1)) != 0) {

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.4 2004/01/04 02:42:28 ken3 Exp $
+ * $Id: fetchnews.c,v 1.5 2004/01/26 17:46:56 ken3 Exp $
  */
 
 #include <config.h>
@@ -293,7 +293,7 @@ int main(int argc, char *argv[])
 
     peer = argv[optind++];
 
-    cyrus_init(alt_config, "fetchnews");
+    cyrus_init(alt_config, "fetchnews", 0);
 
     /* connect to the peer */
     /* xxx configurable port number? */
