@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.12 2000/07/21 18:59:13 leg Exp $
+ * $Id: lmtpengine.c,v 1.13 2000/08/05 05:33:32 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1384,7 +1384,6 @@ void lmtpmode(struct lmtp_func *func,
 
     /* security */
     if (conn) sasl_dispose(&conn);
-    if (secprops) free(secprops);
     if (extprops) free(extprops);
     if (authuser) free(authuser);
     if (authstate) auth_freestate(authstate);
