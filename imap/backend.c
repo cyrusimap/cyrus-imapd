@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.36 2005/02/17 19:53:40 ken3 Exp $ */
+/* $Id: backend.c,v 1.37 2005/02/25 06:47:09 shadow Exp $ */
 
 #include <config.h>
 
@@ -272,7 +272,7 @@ struct backend *backend_connect(struct backend *ret, const char *server,
     int sock = -1;
     int r;
     int err;
-    struct addrinfo hints, *res0 = NULL, *res;
+    struct addrinfo hints, *res0 = NULL, *res1 = NULL, *res;
     struct sockaddr_un sunsock;
     char buf[2048], *mechlist = NULL;
     struct sigaction action;
@@ -315,6 +315,12 @@ struct backend *backend_connect(struct backend *ret, const char *server,
 	    free(ret);
 	    return NULL;
 	}
+        /* Get addrinfo struct for local interface. */
+        err = getaddrinfo(config_servername, NULL, &hints, &res1);
+        if(err) {
+            syslog(LOG_ERR, "getaddrinfo(%s) failed: %s",
+                   config_servername, gai_strerror(err));
+        }
     }
 
     /* Setup timeout */
@@ -331,6 +337,15 @@ struct backend *backend_connect(struct backend *ret, const char *server,
 	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	if (sock < 0)
 	    continue;
+        /* Bind to local interface. */
+        if (!err) {
+            if (bind(sock, res1->ai_addr, res1->ai_addrlen) < 0) {
+                struct sockaddr_in *local_sockaddr = (struct sockaddr_in *) res1->ai_addr;
+                syslog(LOG_ERR, "failed to bind to address %s: %s",
+                       inet_ntoa(local_sockaddr->sin_addr), strerror(errno));
+            }
+            freeaddrinfo(res1);
+        }
 	alarm(config_getint(IMAPOPT_CLIENT_TIMEOUT));
 	if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
 	    break;

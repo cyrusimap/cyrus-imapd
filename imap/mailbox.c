@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.156 2005/02/14 06:39:57 shadow Exp $
+ * $Id: mailbox.c,v 1.157 2005/02/25 06:47:10 shadow Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -567,12 +567,14 @@ void mailbox_close(struct mailbox *mailbox)
 
     if (mailbox->index_fd != -1) {
 	close(mailbox->index_fd);
-	map_free(&mailbox->index_base, &mailbox->index_len);
+	if (mailbox->index_base)
+	    map_free(&mailbox->index_base, &mailbox->index_len);
     }
-
+    
     if (mailbox->cache_fd != -1) {
-	close(mailbox->cache_fd);
-	map_free(&mailbox->cache_base, &mailbox->cache_len);
+        close(mailbox->cache_fd);
+	if (mailbox->cache_base)
+	    map_free(&mailbox->cache_base, &mailbox->cache_len);
     }
 
     free(mailbox->name);
