@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.334 2002/01/29 19:10:57 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.335 2002/01/29 19:25:53 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1955,6 +1955,7 @@ void cmd_capability(char *tag)
 {
     const char *sasllist; /* the list of SASL mechanisms */
     unsigned mechcount;
+    const char *mupdate_server;
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
@@ -1976,6 +1977,11 @@ void cmd_capability(char *tag)
 	prot_printf(imapd_out, " LOGINDISABLED");
     }
 
+    mupdate_server = config_getstring("mupdate_server", NULL);
+    if(mupdate_server) {
+	prot_printf(imapd_out, " MUPDATE=mupdate://%s/", mupdate_server);
+    }
+    
     /* add the SASL mechs */
     if (sasl_listmech(imapd_saslconn, NULL, 
 		      "AUTH=", " AUTH=", "",
