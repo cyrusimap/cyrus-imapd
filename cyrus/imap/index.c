@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.115 2000/06/07 22:36:22 ken3 Exp $
+ * $Id: index.c,v 1.116 2000/06/08 22:07:08 leg Exp $
  */
 #include <config.h>
 
@@ -282,11 +282,7 @@ int examine_mode;
 /*
  * Check for and report updates
  */
-void
-index_check(mailbox, usinguid, checkseen)
-struct mailbox *mailbox;
-int usinguid;
-int checkseen;
+void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 {
     struct stat sbuf;
     int newexists, oldexists, oldmsgno, msgno, nexpunge, i, r;
@@ -548,7 +544,7 @@ int oldexists;
 	if (oldseen != newseen) {
 	    if (seenflag[msgno] != newseen) {
 		seenflag[msgno] = newseen;
-		if (!quiet && msgno <= oldexists) {
+		if (!quiet && msgno <= oldexists && oldexists != -1) {
 		    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
 			user_flags[i] = USER_FLAGS(msgno, i);
 		    }
@@ -2083,9 +2079,7 @@ char *trail;
 /*
  * Send a * FLAGS response.
  */
-static void
-index_listflags(mailbox)
-struct mailbox *mailbox;
+static void index_listflags(struct mailbox *mailbox)
 {
     int i;
     int cancreate = 0;
