@@ -38,6 +38,7 @@
 #include "charset/iso-8859-7.h"
 #include "charset/iso-8859-8.h"
 #include "charset/iso-8859-9.h"
+#include "charset/koi8-r.h"
 
 struct charset {
     char *name;
@@ -58,6 +59,7 @@ static struct charset charset_table[] = {
     { "iso-8859-7", iso_8859_7 },
     { "iso-8859-8", iso_8859_8 },
     { "iso-8859-9", iso_8859_9 },
+    { "koi8-r", koi8_r },
 };
 #define NUM_CHARSETS (sizeof(charset_table)/sizeof(*charset_table))
 
