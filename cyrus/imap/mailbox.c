@@ -470,13 +470,11 @@ struct mailbox *mailbox;
 	return IMAP_IOERROR;
     }
 
-    if (sbuf.st_mtime != mailbox->header_mtime) {
-	rewind(mailbox->header);
-	r = mailbox_read_header(mailbox);
-	if (r && !mailbox_doing_reconstruct) {
-	    mailbox_unlock_header(mailbox);
-	    return r;
-	}
+    rewind(mailbox->header);
+    r = mailbox_read_header(mailbox);
+    if (r && !mailbox_doing_reconstruct) {
+	mailbox_unlock_header(mailbox);
+	return r;
     }
 
     return 0;
@@ -527,13 +525,11 @@ struct mailbox *mailbox;
 	}
     }
 
-    if (sbuffd.st_mtime != mailbox->index_mtime) {
-	rewind(mailbox->index);
-	r = mailbox_read_index_header(mailbox);
-	if (r && !mailbox_doing_reconstruct) {
-	    mailbox_unlock_index(mailbox);
-	    return r;
-	}
+    rewind(mailbox->index);
+    r = mailbox_read_index_header(mailbox);
+    if (r && !mailbox_doing_reconstruct) {
+	mailbox_unlock_index(mailbox);
+	return r;
     }
 
     return 0;
@@ -1017,6 +1013,14 @@ char *deciderock;
 		   msgno, mailbox->name, n, mailbox->record_size);
 	    goto fail;
 	}
+	
+	/* XXX Sanity check */
+	if (*((bit32 *)(buf+OFFSET_UID)) == 0) {
+	    syslog(LOG_ERR, "IOERROR: %s zero index record %u/%u",
+		   mailbox->name, msgno, mailbox->exists);
+	    goto fail;
+	}
+
 	if (decideproc ? decideproc(deciderock, buf) :
 	    (ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS))) & FLAG_DELETED)) {
 
@@ -1080,6 +1084,7 @@ char *deciderock;
 	goto fail;
     }
     /* Fix up exists */
+/*XXX use mailbox->exists - numdeleted*/
     newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)))-numdeleted;
     *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
     /* Fix up quota_mailbox_used */
