@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.62 1999/08/18 19:37:00 leg Exp $ -->
+<!-- $Id: install.html,v 1.63 1999/08/24 18:11:35 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -324,11 +324,10 @@ methods are:
 By default, uses "<tt>flock</tt>" if the "<tt>flock()</tt>"
 function exists, "<tt>fcntl</tt>" otherwise. <P>
 
-<dt><tt>--with-sieve=DIR</tt>
-<dd>Specifies which version of Sieve is used, relative to the
-top level source directory.  By default, configure searches for a
-sieve directory under the top level source directory and uses it if it
-finds one.  Use <tt>--with-sieve=no</tt> to disable Sieve support<p>
+<dt><tt>--disable-sieve</tt>
+<dd>By default, Sieve support is enabled.  Note that you need
+duplicate delivery suppression enabled if you're going to use Sieve.
+Use <tt>--disable-sieve=no</tt> to disable Sieve support<p>
 
 <dt><tt>--disable-cyradm</tt>
 <dd>Do not compile the <TT>cyradm</TT> administrative client.<P>
@@ -543,19 +542,6 @@ Sieve directory:
    chmod 750 sieve
 </kbd></pre>
 
-<li>Change to the Cyrus user and use the tool
-"<tt>tools/mkimap</tt>" to create the rest of the directories
-(subdirectories of the directories you just created).
-
-<pre>
-<kbd>   su cyrus
-   tools/mkimap
-</kbd>
-</pre>
-
-If perl is not available, it should be easy to create these directories
-by hand. <P>
-
 <li><b>LINUX SYSTEMS ONLY</b>: Set the configuration, user, quota, and
 partition directories to update synchronously.  Failure to do this may
 lead to data corruption and/or loss of mail after a system crash.
@@ -572,6 +558,19 @@ synchronously.  The following example is for sendmail:
 <pre>
 <kbd>   /sbin/chattr +S /var/spool/mqueue
 </kbd></pre>
+
+<li>Change to the Cyrus user and use the tool
+"<tt>tools/mkimap</tt>" to create the rest of the directories
+(subdirectories of the directories you just created).
+
+<pre>
+<kbd>   su cyrus
+   tools/mkimap
+</kbd>
+</pre>
+
+If perl is not available, it should be easy to create these directories
+by hand. <P>
 
 <li>If the Cyrus IMAP server was compiled with Kerberos v4 authentication,
 create a Kerberos v4 identity for the server and add the server's key to
@@ -702,6 +701,8 @@ with the same <TT>Message-ID:</TT> (<TT>Resent-Message-ID:</TT> if it
 exits) from being delivered to the same mailbox.  Add a <TT>cron</TT>
 job to periodically prune the database of deliveries by running
 "<TT>/usr/cyrus/bin/deliver -E 3</TT>" daily as the cyrus user.
+
+ <P>Duplicate delivery suppression is required if you are using Sieve.
 
  <P>If you want to export netnews newsgroups using IMAP do the following:
 
@@ -974,10 +975,11 @@ filesystem (specifically Solaris' tmpfs). If you use a tmpfs type
 filesystem, make sure that you have sufficient memory/swap to do this.
 
 <p><li><tt><b>/var/imap/deliverdb</b></tt> - If you enable <a
-href="#dup-deliv"> duplicate delivery suprression</a>, each time a
+href="#dup-deliv"> duplicate delivery suppression</a>, each time a
 mail message is delivered it needs to lock the database and check to
 see if the message-id has been seen already. If you require really
-high throughput delivery, you may want to disable this feature. 
+high throughput delivery, you may want to disable this feature.
+However, disabling this feature also disables Sieve support.
 
 <p>We run with it enabled and it doesn't significantly impact our
 performance.
@@ -992,7 +994,7 @@ disk, there really isn't a good short term solution to this.
 database. If you are interested in doing this work, send mail to <a
 href="mailto:cyrus-bugs+@andrew.cmu.edu">cyrus-bugs+@andrew.cmu.edu</a>.
 
-<p>(at this moment in time)We have 95105 entries in our mailboxes file
+<p>(at this moment in time) We have 95105 entries in our mailboxes file
 (4.4MB). It resides on a Seagate 7200rpm Fast/Wide disk off of a Sun
 QLGC Fast-Wide sbus card. We haven't experienced any significant
 problem as a result of this though there have been other reports.
@@ -1006,6 +1008,6 @@ usually a good idea.
 
 <P><HR><P>
 <!-- hhmts start -->
-Last modified: $Date: 1999/08/18 19:37:00 $
+Last modified: $Date: 1999/08/24 18:11:35 $
 <!-- hhmts end -->
 </BODY></HTML>
