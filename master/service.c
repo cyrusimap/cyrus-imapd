@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.26 2001/11/27 02:25:04 ken3 Exp $ */
+/* $Id: service.c,v 1.27 2002/01/15 18:55:46 leg Exp $ */
 
 #include <config.h>
 
@@ -64,6 +64,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <sysexits.h>
+#include <string.h>
 
 #include "service.h"
 
@@ -135,16 +136,48 @@ static int libwrap_ask(struct request_info *r, int fd)
 #endif
 
 extern void config_init(const char *, const char *);
+extern const char *config_dir;
+
+static int getlockfd(char *service)
+{
+    char lockfile[1024];
+    int fd;
+
+    snprintf(lockfile, sizeof(lockfile), "%s/socket/%s.lock", 
+	     config_dir, service);
+    fd = open(lockfile, O_CREAT, 0600);
+    if (fd < 0) {
+	syslog(LOG_ERR, 
+	       "locking disabled: couldn't open socket lockfile %s: %m",
+	       lockfile);
+	return -1;
+    } else {
+	/* dup it to LOCK_FD so we don't have to worry about whether
+	   this is 0, 1, or 2 */
+	if (dup2(fd, LOCK_FD) < 0) {
+	    syslog(LOG_ERR, 
+	       "locking disabled: can't duplicate lock file descriptor: %m");
+	    close(fd);
+	    return -1;
+	}
+	close(fd);
+	return LOCK_FD;
+    }
+}
 
 int main(int argc, char **argv, char **envp)
 {
-    char name[64];
     int fdflags;
     int fd;
-    char *p = NULL;
+    char *p = NULL, *service;
     struct request_info request;
     int opt;
     char *alt_config = NULL;
+
+    /* accept locking */
+    int lockfd;
+    struct flock alockinfo;
+    int rc;
 
     while ((opt = getopt(argc, argv, "C:")) != EOF) {
 	switch (opt) {
@@ -170,9 +203,12 @@ int main(int argc, char **argv, char **envp)
 	syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
 	exit(EX_SOFTWARE);
     }
-    
-    snprintf(name, sizeof(name) - 1, "service-%s", p);
-    config_init(alt_config, name);
+    service = strdup(p);
+    if (service == NULL) {
+	syslog(LOG_ERR, "couldn't strdup() service: %m");
+	exit(EX_OSERR);
+    }
+    config_init(alt_config, service);
 
     syslog(LOG_DEBUG, "executed");
 
@@ -199,10 +235,32 @@ int main(int argc, char **argv, char **envp)
 	return 1;
     }
 
+    lockfd = getlockfd(service);
+    /* setup the alockinfo structure */
+    alockinfo.l_start = 0;
+    alockinfo.l_len = 0;
+    alockinfo.l_whence = SEEK_SET;
+
     for (;;) {
 	/* ok, listen to this socket until someone talks to us */
+
+	/* lock */
+	if (lockfd != -1) {
+	    alockinfo.l_type = F_WRLCK;
+	    while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 && 
+		   errno == EINTR)
+		/* noop */;
+	    if (rc < 0) {
+		syslog(LOG_ERR, 
+		       "fcntl: F_SETLKW: error getting accept lock: %m");
+		notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+		return 1;
+	    }
+	}
+
 	fd = -1;
 	while (fd < 0) { /* loop until we succeed */
+
 	    /* we should probably do a select() here and time out */
 	    if (use_count > 0) {
 		fd_set rfds;
@@ -245,15 +303,24 @@ int main(int argc, char **argv, char **envp)
 		    exit(EX_OSERR);
 		}
 	    }
+
 	}
 
-	p = getenv("CYRUS_SERVICE");
-	if (p == NULL) {
-	    syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE) (2); exiting");
-	    exit(EX_SOFTWARE);
+	/* unlock */
+	if (lockfd != -1) {
+	    alockinfo.l_type = F_UNLCK;
+	    while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 && 
+		   errno == EINTR)
+		/* noop */;
+	    if (rc < 0) {
+		syslog(LOG_ERR, 
+		       "fcntl: F_SETLKW: error releasing accept lock: %m");
+		notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+		return 1;
+	    }
 	}
 
-	libwrap_init(&request, p);
+	libwrap_init(&request, service);
 
 	if (!libwrap_ask(&request, fd)) {
 	    /* connection denied! */
