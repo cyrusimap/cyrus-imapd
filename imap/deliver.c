@@ -653,7 +653,7 @@ char *mailboxname;
     if (user) {
 	if (strchr(user, '.') ||
 	    strlen(user) + 30 > MAX_MAILBOX_PATH) {
-	    return EX_NOUSER;
+	    r = IMAP_MAILBOX_NONEXISTENT;
 	}
 	if (!mailboxname ||
 	    strlen(user) + strlen(mailboxname) + 30 > MAX_MAILBOX_PATH) {
