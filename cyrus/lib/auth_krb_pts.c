@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.31 2000/01/28 22:09:53 leg Exp $
+ $Id: auth_krb_pts.c,v 1.32 2000/02/10 07:59:10 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -28,13 +28,14 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
 
-#define DB_LIBRARY_COMPATIBILITY_API
-#include <db_185.h>
 #include <krb.h>
+#include <db.h>
 
 #include "auth_krb_pts.h"
 #include "auth.h"
@@ -46,18 +47,10 @@
 #define KRB_MAPNAME "/etc/krb.equiv"
 #endif
 
-struct auth_state {
-    char userid[PR_MAXNAMELEN];
-    char name[PR_MAXNAMELEN];
-    char aname[ANAME_SZ];
-    char inst[INST_SZ];
-    char realm[REALM_SZ];
-    int ngroups;
-    char (*groups)[PR_MAXNAMELEN];
-};
-
 static struct auth_state auth_anonymous = {
-    "anonymous", "anonymous", "anonymous", "", "", 0, 0
+    "anonymous", "anonymous", "", "", 
+    (time_t) 0, (int) 0,
+    { "" }
 };
 
 
@@ -254,7 +247,8 @@ const char *identifier;
     
 
     /* Check for krb.equiv remappings. */
-    if (p = auth_map_krbid(aname, inst, realm)) {
+    p = auth_map_krbid(aname, inst, realm);
+    if (p) {
         strcpy(retbuf, p);
         return retbuf;
     }
@@ -295,44 +289,58 @@ const char *identifier;
  * this object is formed by appending a 'D' and 3 nulls to the base key.
  */
 
-struct auth_state *
-auth_newstate(identifier, cacheid)
-const char *identifier;
-const char *cacheid;
+struct auth_state *auth_newstate(const char *identifier, 
+				 const char *cacheid)
 {
     struct auth_state *newstate;
-    DBT key, dataheader,datalist;
+    struct auth_state *fetched;
+    DBT key, data;
     char keydata[PTS_DB_KEYSIZE];
     char fnamebuf[1024];
     DB *ptdb;
-    HASHINFO info;
-    ptluser us;
     int s;
     struct sockaddr_un srvaddr;
     int r;
-    int fd, rc;
-    struct iovec iov[10];
+    int fd;
     static char response[1024];
+    struct iovec iov[10];
     int start, n;
 
     identifier = auth_canonifyid(identifier);
     if (!identifier) return 0;
 
     newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
-    (void)memset(newstate, 0, sizeof(struct auth_state));
+    memset(newstate, 0, sizeof(struct auth_state));
 
     kname_parse(newstate->aname, newstate->inst, newstate->realm, 
 		(char *) identifier);
-    (void)strcpy(newstate->userid, identifier);
+    strcpy(newstate->userid, identifier);
 
-    if (strcmp(identifier, "anyone") == 0) return newstate;
+    if (!strcmp(identifier, "anyone")) return newstate;
 
-    (void)memset(&info, 0, sizeof(info));
-    (void)memset(&key, 0, sizeof(key));
+    memset(&key, 0, sizeof(key));
+    memset(&data, 0, sizeof(data));
     key.data = keydata;
     key.size = PTS_DB_KEYSIZE;
-    (void)strcpy(fnamebuf, STATEDIR);
-    (void)strcat(fnamebuf, PTS_DBLOCK);
+
+    if (cacheid) {
+	/* this should be the session key + the userid */
+        memset(keydata, 0, key.size);
+        memcpy(keydata, cacheid, 16); /* why 16? see sasl_krb_server.c */
+	/* toss on userid to further uniquify */
+	if ((strlen(identifier) + 16)  < PTS_DB_KEYSIZE) {
+	    memcpy(keydata+16, identifier, strlen(identifier)); 
+	} else {
+	    memcpy(keydata+16, identifier, PTS_DB_KEYSIZE-16);
+	}
+    } else {
+	/* this is just the userid */
+        memset(keydata, 0, key.size);
+        strncpy(keydata, identifier, PR_MAXNAMELEN);
+    }
+
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, PTS_DBLOCK);
     fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0664);
     if (fd == -1) {
         syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
@@ -342,241 +350,149 @@ const char *cacheid;
         syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
         return newstate;
     }
-    (void)strcpy(fnamebuf, STATEDIR);
-    (void)strcat(fnamebuf, PTS_DBFIL);
-    ptdb = dbopen(fnamebuf, O_RDONLY, 0, DB_HASH, &info);
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, PTS_DBFIL);
 
-    (void)memset(&dataheader, 0, sizeof(dataheader));
-    (void)memset(&datalist, 0, sizeof(datalist));
+    /* open PTS database */
+    r = db_create(&ptdb, NULL, 0);
+    if (r != 0) {
+	syslog(LOG_ERR, "auth_newstate: db_create: %s", db_strerror(r));
+	return newstate;
+    }
+    
+    r = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_CREATE | DB_EXCL, 0664);
+    if (r != 0) {
+	syslog(LOG_ERR, "auth_newstate: opening %s: %s", fnamebuf, 
+	       db_strerror(r));
+	return newstate;
+    }
 
-    if (!ptdb) {
-	if (errno == ENOENT) {
-	    /*
-	     * Hopefully, this should prevent two different processes from
-	     * trying to create the database at the same time
-	     */
-	    ptdb = dbopen(fnamebuf, O_CREAT|O_RDWR|O_EXCL, 0664, DB_HASH, &info);
-	    if (!ptdb && errno == EEXIST) {
-		ptdb = dbopen(fnamebuf, O_RDONLY, 0, DB_HASH, &info);
-		if (!ptdb) {
-		    syslog(LOG_ERR, "IOERROR:(1) opening database %s: %m", fnamebuf);
-		    close(fd);
-		    return newstate;
-		}
-	    }
-	    else if (!ptdb) {
-		syslog(LOG_ERR, "IOERROR: creating database %s: %m", fnamebuf);
-		CLOSE(ptdb);
-		close(fd);
-		return newstate;
-	    }
-	    else {
-		/*
-		 * Write a record to the database, so that the database
-		 * header will be written out
-		 */
-	        (void)memset(key.data, 0, key.size);
-		(void)strcpy(key.data, "DUMMYREC");
-		dataheader.size = 5;
-		dataheader.data = "NULL";
-		if (PUT(ptdb, &key, &dataheader, 0) < 0) {
-		    syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
-			   fnamebuf); 
-		    CLOSE(ptdb);
-		    close(fd);
-		    return newstate;
-		}
-		/* close and reopen the database in read-only mode */
-		if (CLOSE(ptdb) < 0) {
-		    syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
-			   fnamebuf); 
-		    close(fd);
-		    return newstate;
-		}
-		ptdb = dbopen(fnamebuf, O_RDONLY, 0664, DB_HASH, &info);
-		if (!ptdb) {
-		    syslog(LOG_ERR, "IOERROR: reopening new database %s: %m",
-			   fnamebuf); 
-		    close(fd);
-		    return newstate;
-		}
-	    }          
-	}
-	else {
-	    syslog(LOG_ERR, "IOERROR:(2) opening database %s: %m", fnamebuf);
+    /* fetch the current record for the user */
+    r = ptdb->get(ptdb, NULL, &key, &data, 0);
+
+    if (r != 0 && r != DB_NOTFOUND) {
+	/* close and unlock the database */
+	ptdb->close(ptdb, 0);
+	close(fd);
+	
+	syslog(LOG_ERR, "auth_newstate: error fetching record: %s", 
+	       db_strerror(r));
+	return newstate;
+    }
+
+    /* if it's expired, ask the ptloader to reload it and reread it */
+    if (!r) {
+	fetched = (struct auth_state *) data.data;
+
+	if (fetched->mark > time(0) - EXPIRE_TIME) {
+	    /* not expired; let's return it */
+	    newstate = (struct auth_state *) xrealloc(newstate, data.size);
+	    memcpy(newstate, fetched, data.size);
+
+	    /* close and unlock the database */
+	    ptdb->close(ptdb, 0);
 	    close(fd);
+
 	    return newstate;
 	}
     }
-    if (cacheid) {
-      /* this should be the session key + the userid */
-        (void)memset(keydata, 0, key.size);
-        (void)memcpy(keydata, cacheid, 16); /* why 16? see sasl_krb_server.c */
-	/* toss on userid to further uniquify */
-	if ((strlen(identifier) + 16)  < PTS_DB_KEYSIZE) {
-	  (void)memcpy(keydata+16, identifier, strlen(identifier)); 
-	} else {
-	  (void)memcpy(keydata+16, identifier, PTS_DB_KEYSIZE-16);
-	}
-    } /* cacheid */
-    else {
-      /* this is just the userid */
-        (void)memset(keydata, 0, key.size);
-        (void)strncpy(keydata, identifier, PR_MAXNAMELEN);
-    }
-    /* Fetch and process the header record for the user, if any */
-    keydata[PTS_DB_HOFFSET] = 'H';
-    rc = GET(ptdb, &key, &dataheader, 0);
-    keydata[PTS_DB_HOFFSET] = 0;
-    if (rc < 0) {
-        syslog(LOG_ERR, "IOERROR: reading database %s: %m", fnamebuf);
-        CLOSE(ptdb);
-        close(fd);
-        return newstate;
-    }
-    if (!rc) {
-        if (dataheader.size != sizeof(ptluser)) {
-            syslog(LOG_ERR, "IOERROR: Database %s probably corrupt (%d != %d) ", 
-		   fnamebuf, dataheader.size, sizeof(ptluser));
-            CLOSE(ptdb);
-            close(fd);
-            return newstate;
-        }
-        /* make sure the record is aligned */
-        (void)memcpy(&us, dataheader.data, sizeof(ptluser));
-    }
-    if (rc || (!cacheid && us.cached < time(0) - EXPIRE_TIME)) {
-        CLOSE(ptdb);
-        close(fd);
-        
-        s = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (s == -1) return newstate;
-        
-	(void)strcpy(fnamebuf, STATEDIR);
-	(void)strcat(fnamebuf, PTS_DBSOCKET);
 
-        (void)memset((char *)&srvaddr, 0, sizeof(srvaddr));
-        srvaddr.sun_family = AF_UNIX;
-        (void)strcpy(srvaddr.sun_path, fnamebuf);
-        r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
-        if (r == -1) {
-	    /* *reply = "cannot connect to ptloader server";*/
-            return newstate;
-        }
-        
-        iov[0].iov_base = (char *)&key.size;
-        iov[0].iov_len = sizeof(key.size);
-        iov[1].iov_base = key.data;
-        iov[1].iov_len = key.size;
-        iov[2].iov_base = (char *)identifier;
-        iov[2].iov_len = PR_MAXNAMELEN;
-        retry_writev(s, iov, 3);
-        
-        start = 0;
-        while (start < sizeof(response) - 1) {
-            n = read(s, response+start, sizeof(response) - 1 - start);
-            if (n < 1) break;
-            start += n;
-        }
-        
-        close(s);
-        
-        if (start <= 1 || strncmp(response, "OK", 2)) return newstate;
-        /*  response[start] = '\0';
-         *reply = response; */
-
-        /* The database must be re-opened after external modifications, at
-           least in db 1.1.85 */
-	(void)strcpy(fnamebuf, STATEDIR);
-	(void)strcat(fnamebuf, PTS_DBLOCK);
-        fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0664);
-        if (fd == -1) {
-            syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
-            return newstate;
-        }
-        if (lock_shared(fd) < 0) {
-            syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
-            return newstate;
-        }
-	(void)strcpy(fnamebuf, STATEDIR);
-	(void)strcat(fnamebuf, PTS_DBFIL);
-        ptdb = dbopen(fnamebuf, O_RDONLY, 0, DB_HASH, &info);
-        if (!ptdb) {
-            syslog(LOG_ERR, "IOERROR: opening database %s: %m", fnamebuf);
-            close(fd);
-            return newstate;
-        }
-
-        /* fetch the new header record and process it */
-        keydata[PTS_DB_HOFFSET] = 'H';
-        rc = GET(ptdb, &key, &dataheader, 0);
-        keydata[PTS_DB_HOFFSET] = 0;
-        if (rc < 0) {
-            syslog(LOG_ERR, "IOERROR: reading database: %m");             
-	    goto done;
-        }
-        /* The record still isn't there, even though the child claimed sucess
-         */ 
-        if (rc) {
-            syslog(LOG_ERR, "ptloader did not add database record for %s",
-                   identifier);
-	    goto done;
-
-        }
-        (void)memcpy(&us, dataheader.data, dataheader.size);
-    }
-    /*
-     * We assume cache keys will be unique. This will catch duplicates if they
-     * occur
-     */
-    if (strcasecmp(identifier, us.user)) {
-        syslog(LOG_ERR,
-               "Internal error: Fetched record for user %s was for user %s: key not unique",
-               identifier, us.user);
-	goto done;
-    }
-    /*
-     * now get the actual data from the database. this will be a contiguous
-     * char[][] of size PR_MAXNAMELEN * us.ngroups
-     */
-    keydata[PTS_DB_HOFFSET] = 'D';
-    rc = GET(ptdb, &key, &datalist, 0);
-    if (rc < 0) {
-        syslog(LOG_ERR, "IOERROR: reading database %s: %m", fnamebuf);
-	goto done;
-    }
-    if (rc) {
-        syslog(LOG_ERR,
-               "Database %s inconsistent: header record found, data record missing", fnamebuf);
-	goto done;
-    }
-
-    newstate->ngroups = us.ngroups;
-
-#if 0
-    if (newstate->ngroups * PR_MAXNAMELEN < datalist.size) {
-	syslog(LOG_ERR,
-	       "Database %s inconsistent: ngroups(%d) * PR_MAXNAMELEN(%d) < datalist.size(%d)",
-	       fnamebuf, newstate->ngroups, PR_MAXNAMELEN, datalist.size);
-    }
-#endif
-
-    if (newstate->ngroups) {
-      newstate->groups = (char (*)[PR_MAXNAMELEN])xmalloc(newstate->ngroups *
-							  PR_MAXNAMELEN); 
-      (void)memcpy(newstate->groups, datalist.data, newstate->ngroups*PR_MAXNAMELEN);
-    }
-
- done:
-    CLOSE(ptdb);    
+    /* close and unlock the database */
+    ptdb->close(ptdb, 0);
     close(fd);
+
+    s = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (s == -1) return newstate;
+        
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, PTS_DBSOCKET);
+
+    memset((char *)&srvaddr, 0, sizeof(srvaddr));
+    srvaddr.sun_family = AF_UNIX;
+    strcpy(srvaddr.sun_path, fnamebuf);
+    r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
+    if (r == -1) {
+	syslog(LOG_ERR, "auth_newstate: cannot connect to ptloader server");
+	return newstate;
+    }
+        
+    iov[0].iov_base = (char *)&key.size;
+    iov[0].iov_len = sizeof(key.size);
+    iov[1].iov_base = key.data;
+    iov[1].iov_len = key.size;
+    iov[2].iov_base = (char *)identifier;
+    iov[2].iov_len = PR_MAXNAMELEN;
+    retry_writev(s, iov, 3);
+        
+    start = 0;
+    while (start < sizeof(response) - 1) {
+	n = read(s, response+start, sizeof(response) - 1 - start);
+	if (n < 1) break;
+	start += n;
+    }
+        
+    close(s);
+        
+    if (start <= 1 || strncmp(response, "OK", 2)) return newstate;
+
+    /* re-opened database after external modifications; it would be
+     significantly faster to use the berkeley db routines here, but then
+     we'd have to create an environment */
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, PTS_DBLOCK);
+    fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0664);
+    if (fd == -1) {
+	syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
+	return newstate;
+    }
+    if (lock_shared(fd) < 0) {
+	syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
+	return newstate;
+    }
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, PTS_DBFIL);
+    r = db_create(&ptdb, NULL, 0);
+    if (r != 0) {
+	syslog(LOG_ERR, "auth_newstate: db_create: %s", db_strerror(r));
+	return newstate;
+    }
+    
+    r = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_CREATE | DB_EXCL, 0664);
+    if (r != 0) {
+	syslog(LOG_ERR, "auth_newstate: opening %s: %s", fnamebuf, 
+	       db_strerror(r));
+	return newstate;
+    }
+
+    /* fetch the current record for the user */
+    r = ptdb->get(ptdb, NULL, &key, &data, 0);
+
+    if (r != 0) {
+        /* The record still isn't there, even though the child claimed success
+         */ 
+	/* close and unlock the database */
+	ptdb->close(ptdb, 0);
+	close(fd);
+	syslog(LOG_ERR, "auth_newstate: error fetching record: %s "
+	       "(did ptloader add the record?)", 
+	       db_strerror(r));
+	return newstate;
+    }
+
+    fetched = (struct auth_state *) data.data;
+
+    /* copy it into our structure */
+    newstate = (struct auth_state *) xrealloc(newstate, data.size);
+    memcpy(newstate, fetched, data.size);
+
+    /* close and unlock the database */
+    ptdb->close(ptdb, 0);
+    close(fd);
+
     return newstate;
 }
 
-void
-auth_freestate(auth_state)
-struct auth_state *auth_state;
+void auth_freestate(struct auth_state *auth_state)
 {
-    if (auth_state->groups) free((char *)auth_state->groups);
-    free((char *)auth_state);
+    free(auth_state);
 }
