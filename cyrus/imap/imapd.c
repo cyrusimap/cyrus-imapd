@@ -24,7 +24,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  */
-/* d$Id: imapd.c,v 1.154 1998/07/10 20:34:35 tjs Exp $ */
+/* $Id: imapd.c,v 1.155 1998/07/27 20:37:24 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -2202,7 +2202,7 @@ char *tag;
 char *name;
 char *partition;
 {
-    int r;
+    int r = 0;
     char mailboxname[MAX_MAILBOX_NAME+1];
     int autocreatequota;
 
