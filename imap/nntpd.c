@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.9 2004/01/05 19:56:37 ken3 Exp $
+ * $Id: nntpd.c,v 1.10 2004/01/12 15:41:56 ken3 Exp $
  */
 
 /*
@@ -1739,8 +1739,8 @@ static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
     return (gmt ? mkgmtime(&tm) : mktime(&tm));
 }
 
-static int open_group(char *name, int has_prefix,
-		      struct backend **ret, int *postable)
+static int open_group(char *name, int has_prefix, struct backend **ret,
+		      int *postable /* used for LIST ACTIVE only */)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r = 0;
@@ -1764,7 +1764,8 @@ static int open_group(char *name, int has_prefix,
 	int myrights = cyrus_acl_myrights(nntp_authstate, acl);
 
 	if (postable) *postable = myrights & ACL_POST;
-	if (!(myrights & ACL_READ)) {
+	if (!postable && /* allow limited 'r' for LIST ACTIVE */
+	    !(myrights & ACL_READ)) {
 	    r = (myrights & ACL_LOOKUP) ?
 		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	}
@@ -2370,7 +2371,7 @@ int do_newsgroups(char *name, void *rock)
 
     r = mlookup(name, &server, &acl, NULL);
 
-    if (r || !acl || !(cyrus_acl_myrights(nntp_authstate, acl) && ACL_READ))
+    if (r || !acl || !(cyrus_acl_myrights(nntp_authstate, acl) && ACL_LOOKUP))
 	return 0;
 
     if (server) {
