@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.48 2001/08/16 20:52:06 ken3 Exp $
+ * $Id: imapd.h,v 1.49 2001/09/24 18:27:35 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -242,13 +242,13 @@ extern void index_fetch(struct mailbox *mailbox, char *sequence,
 extern int index_store(struct mailbox *mailbox, char *sequence,
 			  int usinguid, struct storeargs *storeargs,
 			  char **flag, int nflags);
-extern void index_search(struct mailbox *mailbox,
-			    struct searchargs *searchargs, int usinguid);
+extern int index_search(struct mailbox *mailbox,
+			struct searchargs *searchargs, int usinguid);
 extern int find_thread_algorithm(char *arg);
-extern void index_sort(struct mailbox *mailbox, struct sortcrit *sortcrit,
-		       struct searchargs *searchargs, int usinguid);
-extern void index_thread(struct mailbox *mailbox, int algorithm,
-			 struct searchargs *searchargs, int usinguid);
+extern int index_sort(struct mailbox *mailbox, struct sortcrit *sortcrit,
+		      struct searchargs *searchargs, int usinguid);
+extern int index_thread(struct mailbox *mailbox, int algorithm,
+			struct searchargs *searchargs, int usinguid);
 extern int index_copy(struct mailbox *mailbox, char *sequence,
 			 int usinguid, char *name, char **copyuidp);
 extern int index_status(struct mailbox *mailbox, char *name,
