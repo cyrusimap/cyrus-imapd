@@ -345,10 +345,16 @@ struct mailbox *mailbox;
     mailbox->quota_mailbox_used = ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)));
 
     for (n = mailbox->start_offset; n < INDEX_HEADER_SIZE; n++) {
-	buf[n] = 0;
+	if (n == OFFSET_UIDVALIDITY+3) {
+	    buf[n] = 1;
+	}
+	else {
+	    buf[n] = 0;
+	}
     }
 
     mailbox->pop3_last_uid = ntohl(*((bit32 *)(buf+OFFSET_POP3_LAST_UID)));
+    mailbox->uidvalidity = ntohl(*((bit32 *)(buf+OFFSET_UIDVALIDITY)));
 
     return 0;
 }
@@ -359,7 +365,7 @@ struct mailbox *mailbox;
 int
 mailbox_read_index_record(mailbox, msgno, record)
 struct mailbox *mailbox;
-int msgno;
+unsigned msgno;
 struct index_record *record;
 {
     int n;
@@ -369,14 +375,14 @@ struct index_record *record;
 	      mailbox->start_offset + (msgno-1) * mailbox->record_size,
 	      0);
     if (n == -1) {
-	syslog(LOG_ERR, "IOERROR: seeking index record %d for %s: %m",
+	syslog(LOG_ERR, "IOERROR: seeking index record %u for %s: %m",
 	       msgno, mailbox->name);
 	return IMAP_IOERROR;
     }
 
     n = fread(buf, 1, INDEX_RECORD_SIZE, mailbox->index);
     if (n != INDEX_RECORD_SIZE) {
-	syslog(LOG_ERR, "IOERROR: reading index record %d for %s: %m",
+	syslog(LOG_ERR, "IOERROR: reading index record %u for %s: %m",
 	       msgno, mailbox->name);
 	return IMAP_IOERROR;
     }
@@ -727,6 +733,7 @@ struct mailbox *mailbox;
     *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(mailbox->last_uid);
     *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(mailbox->quota_mailbox_used);
     *((bit32 *)(buf+OFFSET_POP3_LAST_UID)) = htonl(mailbox->pop3_last_uid);
+    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(mailbox->uidvalidity);
 
     if (mailbox->start_offset < header_size) header_size = mailbox->start_offset;
 
@@ -751,7 +758,7 @@ struct mailbox *mailbox;
 int
 mailbox_write_index_record(mailbox, msgno, record)
 struct mailbox *mailbox;
-int msgno;
+unsigned msgno;
 struct index_record *record;
 {
     int n;
@@ -774,20 +781,20 @@ struct index_record *record;
 	      mailbox->start_offset + (msgno-1) * mailbox->record_size,
 	      0);
     if (n == -1) {
-	syslog(LOG_ERR, "IOERROR: seeking index record %d for %s: %m",
+	syslog(LOG_ERR, "IOERROR: seeking index record %u for %s: %m",
 	       msgno, mailbox->name);
 	return IMAP_IOERROR;
     }
 
     n = fwrite(buf, 1, INDEX_RECORD_SIZE, mailbox->index);
     if (n != INDEX_RECORD_SIZE) {
-	syslog(LOG_ERR, "IOERROR: writing index record %d for %s: %m",
+	syslog(LOG_ERR, "IOERROR: writing index record %u for %s: %m",
 	       msgno, mailbox->name);
 	return IMAP_IOERROR;
     }
     fflush(mailbox->index);
     if (ferror(mailbox->index) || fsync(fileno(mailbox->index))) {
-	syslog(LOG_ERR, "IOERROR: writing index record %d for %s: %m",
+	syslog(LOG_ERR, "IOERROR: writing index record %u for %s: %m",
 	       msgno, mailbox->name);
 	return IMAP_IOERROR;
     }
@@ -920,9 +927,9 @@ char *deciderock;
     char fnamebuf[MAX_MAILBOX_PATH], fnamebufnew[MAX_MAILBOX_PATH];
     FILE *newindex, *newcache;
     unsigned long *deleted;
-    int numdeleted = 0, quotadeleted = 0;
+    unsigned numdeleted = 0, quotadeleted = 0;
     char *buf;
-    int msgno;
+    unsigned msgno;
     int lastmsgdeleted = 1;
     unsigned long cachediff = 0;
     unsigned long cachestart = sizeof(bit32);
@@ -989,7 +996,12 @@ char *deciderock;
     fwrite(buf, 1, mailbox->start_offset, newindex);
     /* Grow the index header if necessary */
     for (n = mailbox->start_offset; n < INDEX_HEADER_SIZE; n++) {
-	putc(0, newindex);
+	if (n == OFFSET_UIDVALIDITY+3) {
+	    putc(1, newindex);
+	}
+	else {
+	    putc(0, newindex);
+	}
     }
     fwrite(buf, 1, sizeof(bit32), newcache);
 
@@ -1093,7 +1105,7 @@ char *deciderock;
     r = mailbox_write_quota(&mailbox->quota);
     if (r) {
 	syslog(LOG_ERR,
-	       "LOSTQUOTA: unable to record free of %d bytes in quota %s",
+	       "LOSTQUOTA: unable to record free of %u bytes in quota %s",
 	       quotadeleted, mailbox->quota.root);
     }
     mailbox_unlock_quota(&mailbox->quota);
@@ -1248,6 +1260,7 @@ struct mailbox *mailboxp;
     mailbox.last_uid = 0;
     mailbox.quota_mailbox_used = 0;
     mailbox.pop3_last_uid = 0;
+    mailbox.uidvalidity = time(0);
 
     r = mailbox_write_header(&mailbox);
     if (!r) r = mailbox_write_index_header(&mailbox);
@@ -1306,7 +1319,7 @@ struct mailbox *mailbox;
     r = mailbox_write_quota(&mailbox->quota);
     if (r) {
 	syslog(LOG_ERR,
-	       "LOSTQUOTA: unable to record free of %d bytes in quota %s",
+	       "LOSTQUOTA: unable to record free of %u bytes in quota %s",
 	       mailbox->quota_mailbox_used, mailbox->quota.root);
     }
     mailbox_unlock_quota(&mailbox->quota);
@@ -1469,7 +1482,7 @@ int isinbox;
 	}
 	if (r2) {
 	    syslog(LOG_ERR,
-	      "LOSTQUOTA: unable to record use of %d bytes in quota %s",
+	      "LOSTQUOTA: unable to record use of %u bytes in quota %s",
 		   newmailbox.quota_mailbox_used, newmailbox.quota.root);
 	}
     }

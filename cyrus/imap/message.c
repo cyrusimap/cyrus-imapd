@@ -1518,7 +1518,7 @@ char *s;
     if (*p) {
 	/* Write out as literal */
 	char buf[100];
-	sprintf(buf, "{%d}\r\n", strlen(s));
+	sprintf(buf, "{%u}\r\n", strlen(s));
 	message_ibuf_ensure(ibuf, strlen(s)+strlen(buf));
 	for (p = buf; *p; p++) *(ibuf->end)++ = *p;
 	for (p = s; *p; p++) *(ibuf->end)++ = *p;
@@ -1552,11 +1552,11 @@ char *s;
 static 
 message_write_number(ibuf, n)
 struct ibuf *ibuf;
-int n;
+unsigned n;
 {
     char buf[100], *p;
 
-    sprintf(buf, "%d", n);
+    sprintf(buf, "%u", n);
 
     message_ibuf_ensure(ibuf, strlen(buf));
     for (p = buf; *p; p++) *(ibuf->end)++ = *p;

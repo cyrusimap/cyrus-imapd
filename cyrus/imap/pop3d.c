@@ -71,12 +71,12 @@ struct sockaddr_in popd_localaddr, popd_remoteaddr;
 int popd_haveaddr = 0;
 char popd_clienthost[250] = "[local]";
 struct protstream *popd_out, *popd_in;
-int popd_exists = 0;
-int popd_highest;
-int popd_initialhighest;
+unsigned popd_exists = 0;
+unsigned popd_highest;
+unsigned popd_initialhighest;
 struct msg {
-    int uid;
-    int size;
+    unsigned uid;
+    unsigned size;
     int deleted;
 } *popd_msg;
 
@@ -259,7 +259,7 @@ cmdloop()
 {
     char inputbuf[8192];
     char *p, *arg;
-    int msg;
+    unsigned msg;
 
     for (;;) {
 	prot_flush(popd_out);
@@ -342,7 +342,7 @@ cmdloop()
 	    }
 	}
 	else if (!strcmp(inputbuf, "stat")) {
-	    int nmsgs = 0, totsize = 0;
+	    unsigned nmsgs = 0, totsize = 0;
 	    if (arg) {
 		prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	    }
@@ -353,7 +353,7 @@ cmdloop()
 			totsize += popd_msg[msg].size;
 		    }
 		}
-		prot_printf(popd_out, "+OK %d %d\r\n", nmsgs, totsize);
+		prot_printf(popd_out, "+OK %u %u\r\n", nmsgs, totsize);
 	    }
 	}
 	else if (!strcmp(inputbuf, "list")) {
@@ -367,14 +367,14 @@ cmdloop()
 		    prot_printf(popd_out, "-ERR No such message\r\n");
 		}
 		else {
-		    prot_printf(popd_out, "+OK %d %d\r\n", msg, popd_msg[msg].size);
+		    prot_printf(popd_out, "+OK %u %u\r\n", msg, popd_msg[msg].size);
 		}
 	    }
 	    else {
 		prot_printf(popd_out, "+OK scan listing follows\r\n");
 		for (msg = 1; msg <= popd_exists; msg++) {
 		    if (!popd_msg[msg].deleted) {
-			prot_printf(popd_out, "%d %d\r\n", msg, popd_msg[msg].size);
+			prot_printf(popd_out, "%u %u\r\n", msg, popd_msg[msg].size);
 		    }
 		}
 		prot_printf(popd_out, ".\r\n");
@@ -428,7 +428,7 @@ cmdloop()
 		prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	    }
 	    else {
-		prot_printf(popd_out, "+OK %d\r\n", popd_highest);
+		prot_printf(popd_out, "+OK %u\r\n", popd_highest);
 	    }
 	}
 	else if (!strcmp(inputbuf, "rset")) {
@@ -476,14 +476,14 @@ cmdloop()
 		    prot_printf(popd_out, "-ERR No such message\r\n");
 		}
 		else {
-		    prot_printf(popd_out, "+OK %d %d\r\n", msg, popd_msg[msg].uid);
+		    prot_printf(popd_out, "+OK %u %u\r\n", msg, popd_msg[msg].uid);
 		}
 	    }
 	    else {
 		prot_printf(popd_out, "+OK unique-id listing follows\r\n");
 		for (msg = 1; msg <= popd_exists; msg++) {
 		    if (!popd_msg[msg].deleted) {
-			prot_printf(popd_out, "%d %d\r\n", msg, popd_msg[msg].uid);
+			prot_printf(popd_out, "%u %u\r\n", msg, popd_msg[msg].uid);
 		    }
 		}
 		prot_printf(popd_out, ".\r\n");
@@ -710,7 +710,7 @@ int openinbox()
     proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%d", config_dir, FNAME_LOGDIR, popd_userid,
+    sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, popd_userid,
 	    getpid());
     logfile = fopen(buf, "w");
     if (logfile) {

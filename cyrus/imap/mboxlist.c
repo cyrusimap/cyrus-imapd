@@ -1738,7 +1738,7 @@ int maycreate;
 	r = mailbox_write_quota(&mailbox.quota);
 	if (r) {
 	    syslog(LOG_ERR,
-		   "LOSTQUOTA: unable to record free of %d bytes in quota %s",
+		   "LOSTQUOTA: unable to record free of %u bytes in quota %s",
 		   mailbox.quota_mailbox_used, mailbox.quota.root);
 	}
 	mailbox_unlock_quota(&mailbox.quota);

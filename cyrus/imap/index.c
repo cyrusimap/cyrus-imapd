@@ -195,7 +195,7 @@ int checkseen;
 			  (oldexists-msgno-nexpunge+1)*sizeof(*seenflag));
 		    oldexists -= nexpunge;
 		    while (nexpunge--) {
-			prot_printf(imapd_out, "* %d EXPUNGE\r\n", msgno);
+			prot_printf(imapd_out, "* %u EXPUNGE\r\n", msgno);
 		    }
 		}
 	    }
@@ -282,7 +282,7 @@ int checkseen;
 
 	checkseen = 1;
 	imapd_exists = newexists;
-	prot_printf(imapd_out, "* %d EXISTS\r\n* %d RECENT\r\n", imapd_exists,
+	prot_printf(imapd_out, "* %u EXISTS\r\n* %u RECENT\r\n", imapd_exists,
 	       imapd_exists-lastnotrecent);
     }
 
@@ -290,8 +290,12 @@ int checkseen;
     if (checkseen) index_checkseen(mailbox, 0, usinguid, oldexists);
     for (i = 1; i <= imapd_exists && seenflag[i]; i++);
     if (i == imapd_exists + 1) allseen = mailbox->last_uid;
-    if (oldexists == -1 && imapd_exists && i <= imapd_exists) {
-	prot_printf(imapd_out, "* OK [UNSEEN %d] \r\n", i);
+    if (oldexists == -1) {
+	if (imapd_exists && i <= imapd_exists) {
+	    prot_printf(imapd_out, "* OK [UNSEEN %u] \r\n", i);
+	}
+        prot_printf(imapd_out, "* OK [UIDVALIDITY %u] \r\n",
+		    mailbox->uidvalidity);
     }
 
     for (msgno = 1; msgno <= oldexists; msgno++) {
@@ -301,7 +305,7 @@ int checkseen;
 	    }
 	    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
 			     LAST_UPDATED(msgno));
-	    if (usinguid) prot_printf(imapd_out, " UID %d", UID(msgno));
+	    if (usinguid) prot_printf(imapd_out, " UID %u", UID(msgno));
 	    prot_printf(imapd_out, ")\r\n");
 	}
     }
@@ -322,15 +326,15 @@ int oldexists;
     unsigned last_uid;
     char *newseenuids;
     char *old, *new;
-    int oldnext = 0, oldseen = 0;
-    int newnext = 0, newseen = 0;
+    unsigned oldnext = 0, oldseen = 0;
+    unsigned newnext = 0, newseen = 0;
     int neweof = 0;
-    int msgno, uid, dirty = 0;
+    unsigned msgno, uid, dirty = 0;
     int i;
     bit32 user_flags[MAX_USER_FLAGS/32];
     char *saveseenuids, *save;
     int savealloced;
-    int start, newallseen, inrange, usecomma;
+    unsigned start, newallseen, inrange, usecomma;
 
     if (!keepingseen || !seendb) return;
     if (imapd_exists == 0) {
@@ -398,7 +402,7 @@ int oldexists;
 		    }
 		    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
 				     LAST_UPDATED(msgno));
-		    if (usinguid) prot_printf(imapd_out, " UID %d", UID(msgno));
+		    if (usinguid) prot_printf(imapd_out, " UID %u", UID(msgno));
 		    prot_printf(imapd_out, ")\r\n");
 		}
 	    }
@@ -440,14 +444,14 @@ int oldexists;
 	    if (inrange) {
 		if (start == uid-1) {
 		    if (usecomma++) *save++ = ',';
-		    sprintf(save, "%d", start);
+		    sprintf(save, "%u", start);
 		    save += strlen(save);
 		}
 		else if (uid > 1) {
 		    if (usecomma++) *save++ = ',';
-		    sprintf(save, "%d:", start);
+		    sprintf(save, "%u:", start);
 		    save += strlen(save);
-		    sprintf(save, "%d", uid-1);
+		    sprintf(save, "%u", uid-1);
 		    save += strlen(save);
 		}
 		inrange = 0;
@@ -508,16 +512,16 @@ int oldexists;
 	if (!start && uid > 1) start = 1;
 	if (usecomma++) *save++ = ',';
 	if (start && start != uid) {
-	    sprintf(save, "%d:", start);
+	    sprintf(save, "%u:", start);
 	    save += strlen(save);
 	}
-	sprintf(save, "%d", uid);
+	sprintf(save, "%u", uid);
 	save += strlen(save);
 
 	if (!neweof && !newseen) {
 	    /* Parsed a lone number */
 	    if (usecomma++) *save++ = ',';
-	    sprintf(save, "%d", newnext);
+	    sprintf(save, "%u", newnext);
 	    save += strlen(save);
 	}
     }
@@ -525,22 +529,22 @@ int oldexists;
 	/* We parsed a range which went past uid.  Include it in output */
 	if (usecomma++) *save++ = ',';
 	if (newnext > uid+2) {
-	    sprintf(save, "%d:", uid+1);
+	    sprintf(save, "%u:", uid+1);
 	    save += strlen(save);
 	}
-	sprintf(save, "%d", newnext-1);
+	sprintf(save, "%u", newnext-1);
 	save += strlen(save);
     }
     else if (*new == ':') {
 	/* Parsed first half of a range.  Write it out */
 	if (usecomma++) *save++ = ',';
-	sprintf(save, "%d", uid+1);
+	sprintf(save, "%u", uid+1);
 	save += strlen(save);
     }
     else if (!neweof && !newseen) {
 	/* Parsed a lone number */
 	if (usecomma++) *save++ = ',';
-	sprintf(save, "%d", newnext);
+	sprintf(save, "%u", newnext);
 	save += strlen(save);
     }
 
@@ -747,14 +751,14 @@ struct mailbox *mailbox;
 struct searchargs *searchargs;
 int usinguid;
 {
-    int msgno;
+    unsigned msgno;
     FILE *msgfile = 0;
 
     prot_printf(imapd_out, "* SEARCH");
 
     for (msgno = 1; msgno <= imapd_exists; msgno++) {
 	if (index_search_evaluate(mailbox, searchargs, msgno, &msgfile)) {
-	    prot_printf(imapd_out, " %d", usinguid ? UID(msgno) : msgno);
+	    prot_printf(imapd_out, " %u", usinguid ? UID(msgno) : msgno);
 	}
 	if (msgfile) {
 	    fclose(msgfile);
@@ -959,10 +963,10 @@ static
 index_fetchmsg(msgfile, format, offset, size, start_octet, octet_count)
 FILE *msgfile;
 int format;
-int offset;
-int size;
-int start_octet;
-int octet_count;
+unsigned offset;
+unsigned size;
+unsigned start_octet;
+unsigned octet_count;
 {
     char buf[4096], *p;
     int n;
@@ -986,7 +990,7 @@ int octet_count;
     }
 
     /* Write size of literal */
-    prot_printf(imapd_out, "{%d}\r\n", size);
+    prot_printf(imapd_out, "{%u}\r\n", size);
 
     if (format == MAILBOX_FORMAT_NETNEWS) {
 	/* Have to fetch line-by-line, converting LF to CRLF */
@@ -1094,7 +1098,7 @@ static char *
 index_readheader(msgfile, format, size)
 FILE *msgfile;
 int format;
-int size;
+unsigned size;
 {
     static char *buf;
     static int bufsize;
@@ -1201,7 +1205,7 @@ static
 index_fetchheader(msgfile, format, size, headers, headers_not)
 FILE *msgfile;
 int format;
-int size;
+unsigned size;
 struct strlist *headers;
 struct strlist *headers_not;
 {
@@ -1219,7 +1223,7 @@ struct strlist *headers_not;
     index_pruneheader(buf, headers, headers_not);
 
     size = strlen(buf);
-    prot_printf(imapd_out, "{%d}\r\n%s\r\n", size+2, buf);
+    prot_printf(imapd_out, "{%u}\r\n%s\r\n", size+2, buf);
 }
 
 /*
@@ -1228,13 +1232,13 @@ struct strlist *headers_not;
  */
 static
 index_fetchcacheheader(msgno, headers)
-int msgno;
+unsigned msgno;
 struct strlist *headers;
 {
     static char *buf;
     static int bufsize;
     char *cacheitem;
-    int size;
+    unsigned size;
 
     cacheitem = cache_base + CACHE_OFFSET(msgno);
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
@@ -1254,7 +1258,7 @@ struct strlist *headers;
     index_pruneheader(buf, headers, 0);
 
     size = strlen(buf);
-    prot_printf(imapd_out, "{%d}\r\n%s\r\n", size+2, buf);
+    prot_printf(imapd_out, "{%u}\r\n%s\r\n", size+2, buf);
 }
 
 /*
@@ -1310,7 +1314,7 @@ struct mailbox *mailbox;
 static int
 index_fetchflags(mailbox, msgno, system_flags, user_flags, last_updated)
 struct mailbox *mailbox;
-int msgno;
+unsigned msgno;
 bit32 system_flags;
 bit32 user_flags[MAX_USER_FLAGS/32];
 time_t last_updated;
@@ -1330,7 +1334,7 @@ time_t last_updated;
 	}
     }
 
-    prot_printf(imapd_out, "* %d FETCH (FLAGS ", msgno);
+    prot_printf(imapd_out, "* %u FETCH (FLAGS ", msgno);
 
     if (msgno > lastnotrecent) {
 	prot_printf(imapd_out, "%c\\Recent", sepchar);
@@ -1417,11 +1421,11 @@ char *rock;
 	sepchar = ' ';
     }
     else {
-	prot_printf(imapd_out, "* %d FETCH ", msgno);
+	prot_printf(imapd_out, "* %u FETCH ", msgno);
 	sepchar = '(';
     }
     if (fetchitems & FETCH_UID) {
-	prot_printf(imapd_out, "%cUID %d", sepchar, UID(msgno));
+	prot_printf(imapd_out, "%cUID %u", sepchar, UID(msgno));
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_INTERNALDATE) {
@@ -1442,7 +1446,7 @@ char *rock;
 	    gmtnegative = 1;
 	}
 	gmtoff /= 60;
-	sprintf(datebuf, "%2d-%s-%d %.2d:%.2d:%.2d %c%.2d%.2d",
+	sprintf(datebuf, "%2u-%s-%u %.2u:%.2u:%.2u %c%.2u%.2u",
 		tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
 		tm->tm_hour, tm->tm_min, tm->tm_sec,
 		gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
@@ -1451,7 +1455,7 @@ char *rock;
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_SIZE) {
-	prot_printf(imapd_out, "%cRFC822.SIZE %d", sepchar, SIZE(msgno));
+	prot_printf(imapd_out, "%cRFC822.SIZE %u", sepchar, SIZE(msgno));
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_ENVELOPE) {
@@ -1549,7 +1553,7 @@ char *rock;
     index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
 		     LAST_UPDATED(msgno));
     if (storeargs->usinguid) {
-	prot_printf(imapd_out, " UID %d", UID(msgno));
+	prot_printf(imapd_out, " UID %u", UID(msgno));
     }
     prot_printf(imapd_out, ")\r\n");
 
@@ -1683,7 +1687,7 @@ char *rock;
 	    index_fetchflags(mailbox, msgno, record.system_flags,
 			     record.user_flags, record.last_updated);
 	    if (storeargs->usinguid) {
-		prot_printf(imapd_out, " UID %d", UID(msgno));
+		prot_printf(imapd_out, " UID %u", UID(msgno));
 	    }
 	    prot_printf(imapd_out, ")\r\n");
 	}

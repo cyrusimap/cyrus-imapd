@@ -270,7 +270,7 @@ char *userid;
     r = mailbox_write_quota(&mailbox->quota);
     if (r) {
 	syslog(LOG_ERR,
-	       "LOSTQUOTA: unable to record use of %d bytes in quota file %s",
+	       "LOSTQUOTA: unable to record use of %u bytes in quota file %s",
 	       message_index.size, mailbox->quota.root);
     }
 
@@ -456,7 +456,7 @@ char *userid;
     r = mailbox_write_quota(&append_mailbox->quota);
     if (r) {
 	syslog(LOG_ERR,
-	       "LOSTQUOTA: unable to record use of %d bytes in quota file %s",
+	       "LOSTQUOTA: unable to record use of %u bytes in quota file %s",
 	       quota_usage, append_mailbox->quota.root);
     }
     
@@ -606,7 +606,7 @@ unsigned long feeduid;
     r = mailbox_write_quota(&mailbox->quota);
     if (r) {
 	syslog(LOG_ERR,
-	       "LOSTQUOTA: unable to record use of %d bytes in quota file %s",
+	       "LOSTQUOTA: unable to record use of %u bytes in quota file %s",
 	       quota_usage, mailbox->quota.root);
     }
     
@@ -630,8 +630,8 @@ unsigned long feeduid;
 static int append_addseen(mailbox, userid, start, end)
 struct mailbox *mailbox;
 char *userid;
-int start;
-int end;
+unsigned start;
+unsigned end;
 {
     int r;
     struct seen *seendb;
@@ -660,11 +660,11 @@ int end;
     else {
 	if (p > seenuids) *p++ = ',';
 	if (start != end) {
-	    sprintf(p, "%d:", start);
+	    sprintf(p, "%u:", start);
 	    p += strlen(p);
 	}
     }
-    sprintf(p, "%d", end);
+    sprintf(p, "%u", end);
 
     r = seen_write(seendb, last_time, last_uid, seenuids);
     seen_close(seendb);

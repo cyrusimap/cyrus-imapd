@@ -143,7 +143,7 @@ char *auth_identity;
     strcat(inboxname, user);
 
     if (auth_setid(auth_identity) ||
-	mboxlist_lookup(inboxname, (char *)0, &acl)) {
+	mboxlist_lookup(inboxname, (char **)0, &acl)) {
 	r = 0;  /* Failed so assume no proxy access */
     }
     else {

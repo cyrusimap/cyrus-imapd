@@ -241,7 +241,7 @@ char *seenuids;
     
     assert(seendb->mailbox->seen_lock_count != 0);
 
-    sprintf(timeuidbuf, "%d %u", lasttime, lastuid);
+    sprintf(timeuidbuf, "%u %u", lasttime, lastuid);
     
     length = strlen(seendb->user)+1+strlen(timeuidbuf)+1+strlen(seenuids);
 
@@ -403,7 +403,7 @@ struct mailbox *mailbox;
 	return IMAP_IOERROR;
     }
 
-    r = lock_reopen(fileno(f), fnamebuf, 0, lockfailaction);
+    r = lock_reopen(fileno(f), fnamebuf, 0, &lockfailaction);
     if (r == -1) {
 	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, fnamebuf);
 	fclose(f);
