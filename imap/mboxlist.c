@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.215 2003/05/29 01:47:23 ken3 Exp $
+ * $Id: mboxlist.c,v 1.216 2003/08/08 23:08:52 rjs3 Exp $
  */
 
 #include <config.h>
@@ -302,18 +302,55 @@ int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
     return 0;
 }
 
-int mboxlist_update(char *name, int flags, const char *part, const char *acl)
+int mboxlist_update(char *name, int flags, const char *part, const char *acl,
+		    int localonly)
 {
-    int r = 0;
+    int r = 0, r2 = 0;
     char *mboxent = NULL;
+    struct txn *tid = NULL;
     
     mboxent = mboxlist_makeentry(flags, part, acl);
-    r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), NULL);
+    r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), &tid);
     free(mboxent);
+
+    if(!r && !localonly && config_mupdate_server) {
+        mupdate_handle *mupdate_h = NULL;
+	/* commit the update to MUPDATE */
+	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
+	
+	snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
+	
+	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "can not connect to mupdate server for update of '%s'",
+		   name);
+	} else {
+	    r = mupdate_activate(mupdate_h, name, buf, acl);
+	    if(r) {
+		syslog(LOG_ERR,
+		       "MUPDATE: can't update mailbox entry for '%s'",
+		       name);
+	    }
+	}
+	mupdate_disconnect(&mupdate_h);
+    }
+
+    if(tid) {
+	if(r) {
+	    r2 = DB->abort(mbdb, tid);
+	} else {
+	    r2 = DB->commit(mbdb, tid);
+	}
+    }
+
+    if(r2) {
+	syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_update: %s",
+	       r ? "aborting" : "commiting", cyrusdb_strerror(r2));
+    }
 
     return r;
 }
-
 
 /*
  * Check/set up for mailbox creation
@@ -541,7 +578,7 @@ mboxlist_createmailboxcheck(char *name, int mbtype, char *partition,
 int mboxlist_createmailbox(char *name, int mbtype, char *partition, 
 			   int isadmin, char *userid, 
 			   struct auth_state *auth_state,
-			   int localonly, int forceuser)
+			   int localonly, int forceuser, int dbonly)
 {
     int r;
     char *acl = NULL;
@@ -635,7 +672,8 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     madereserved = 1; /* so we can roll back on failure */
 
  done: /* All checks compete.  Time to fish or cut bait. */
-    if (!r && !(mbtype & MBTYPE_REMOTE)) {
+    if (!r && !dbonly && !(mbtype & MBTYPE_REMOTE)) {
+	/* Filesystem Operations */
 	char mbbuf[MAX_MAILBOX_PATH+1];
 
 	/* Create new mailbox in the filesystem */

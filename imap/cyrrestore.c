@@ -1,4 +1,4 @@
-/* $Id: cyrrestore.c,v 1.4 2003/04/24 17:27:56 rjs3 Exp $
+/* $Id: cyrrestore.c,v 1.5 2003/08/08 23:08:51 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -199,7 +199,7 @@ static int restore_me(char *mailboxname)
 
     /* create mailbox */
     r = mboxlist_createmailbox(mailboxname, 0, NULL /* : partition */,
-			       1 : /* isadmin */, "anonymous", NULL);
+			       1 : /* isadmin */, "anonymous", NULL, 0, 0, 0);
     if (r && r != IMAP_MAILBOX_EXISTS) {
 	fatal("can't create mailbox", EC_SOFTWARE);
     }

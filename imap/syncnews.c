@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.21 2003/02/13 20:15:31 rjs3 Exp $
+ * $Id: syncnews.c,v 1.22 2003/08/08 23:08:53 rjs3 Exp $
  */
 #include <config.h>
 
@@ -241,7 +241,7 @@ void do_syncnews(void)
 	if (!group_seen[i]) {
 	    r = mboxlist_createmailbox(group[i],
 				       MBTYPE_NETNEWS, "news",
-				       1, "anonymous", 0);
+				       1, "anonymous", NULL, 0, 0, 0);
 
 	    if (r == IMAP_MAILBOX_BADNAME) {
 		printf("ignored %s\n", group[i]);
