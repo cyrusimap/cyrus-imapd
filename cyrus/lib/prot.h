@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- * $Id: prot.h,v 1.34 2001/11/27 02:25:03 ken3 Exp $
+ * $Id: prot.h,v 1.35 2002/04/02 03:59:04 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -71,7 +71,7 @@ struct protstream {
     sasl_conn_t *conn;
     int saslssf;
     int maxplain;
-    const char *error;
+    char *error;
     int eof;
     int dontblock;
     int read_timeout;
