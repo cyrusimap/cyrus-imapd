@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.1.2.4 2003/02/15 15:17:52 ken3 Exp $ */
+/* $Id: protocol.c,v 1.1.2.5 2003/07/08 16:55:05 ken3 Exp $ */
 
 #include <string.h>
 
@@ -81,7 +81,7 @@ static char *nntp_parsesuccess(char *str, const char **status)
 {
     char *success = NULL;
 
-    if (!strncmp(str, "251 ", 4)) {
+    if (!strncmp(str, "282 ", 4)) {
 	success = str+4;
     }
 
@@ -100,7 +100,7 @@ struct protocol_t protocol[] = {
       { "STLS", "+OK", "-ERR" },
       { "AUTH", 0, "", "+OK", "-ERR", "+ ", "*", NULL },
       { "QUIT", "+OK" } },
-    { "nntp", "nntp",
+    { "nntp", "news",
       { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
       { "STARTTLS", "382", "580" },
       { "AUTHINFO SASL", 0, "", "28", "482", "381 ", "*", &nntp_parsesuccess },
