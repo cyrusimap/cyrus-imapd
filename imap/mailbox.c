@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.77 1999/08/09 21:43:36 leg Exp $
+ $Id: mailbox.c,v 1.78 1999/08/15 23:52:58 wcw Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -2064,15 +2064,15 @@ void mailbox_hash_mbox(char *buf,
 	    c = 'q';
 	
 	sprintf(buf, "%s/%c/%s", root, c, name);
-	
-	/* change all '.'s to '/' */
-	for (p = buf + strlen(root) + 3; *p; p++) {
-	    if (*p == '.') *p = '/';
-	}
     } else {
 	/* standard mailbox placement */
 	sprintf(buf, "%s/%s", root, name);
     }
+	/* change all '.'s to '/' */
+	for (p = buf + strlen(root) + 3; *p; p++) {
+	    if (*p == '.') *p = '/';
+	}
+
 }
 
 /* simple hash so it's easy to find these things in the filesystem;
