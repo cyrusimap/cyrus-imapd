@@ -1,5 +1,5 @@
 /* proc.c -- Server process registry
- $Id: proc.c,v 1.20 2000/05/23 20:52:28 robeson Exp $
+ $Id: proc.c,v 1.21 2001/03/15 22:31:11 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -48,6 +48,7 @@
 #include <unistd.h>
 #endif
 #include <syslog.h>
+#include <string.h>
 
 #include "imapconf.h"
 #include "exitcodes.h"

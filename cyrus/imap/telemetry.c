@@ -1,5 +1,5 @@
 /* telemetry.c -- common server telemetry
- * $Id: telemetry.c,v 1.2 2001/03/14 20:44:26 leg Exp $
+ * $Id: telemetry.c,v 1.3 2001/03/15 22:31:11 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -50,6 +50,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <time.h>
+#include <string.h>
 
 #include "prot.h"
 #include "imapconf.h"

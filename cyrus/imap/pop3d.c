@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.87 2001/03/15 19:08:08 ken3 Exp $
+ * $Id: pop3d.c,v 1.88 2001/03/15 22:31:11 leg Exp $
  */
 #include <config.h>
 
@@ -1044,8 +1044,6 @@ int openinbox(void)
     char inboxname[MAX_MAILBOX_PATH];
     int r, msg;
     struct index_record record;
-    char buf[MAX_MAILBOX_PATH];
-    FILE *logfile;
     int minpoll;
 
     popd_login_time = time(0);

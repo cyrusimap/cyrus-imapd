@@ -39,12 +39,13 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslclient.c,v 1.6 2000/05/23 20:52:31 robeson Exp $ */
+/* $Id: saslclient.c,v 1.7 2001/03/15 22:31:11 leg Exp $ */
 
 #include <config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sasl.h>
 
 #include "xmalloc.h"
