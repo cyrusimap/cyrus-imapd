@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.2.2.6 2004/05/31 18:22:49 ken3 Exp $
+ * $Id: fetchnews.c,v 1.2.2.7 2004/07/16 18:40:20 ken3 Exp $
  */
 
 #include <config.h>
@@ -172,15 +172,15 @@ int fetch(char *msgid, int bymsgid,
 	  struct protstream *sin, struct protstream *sout,
 	  int *rejected, int *accepted, int *failed)
 {
-    char buf[4096], sbuf[4096];
+    char buf[4096];
 
     /* see if we want this article */
     prot_printf(sout, "IHAVE %s\r\n", msgid);
-    if (!prot_fgets(sbuf, sizeof(sbuf), sin)) {
+    if (!prot_fgets(buf, sizeof(buf), sin)) {
 	syslog(LOG_ERR, "IHAVE terminated abnormally");
 	return -1;
     }
-    else if (strncmp("335", sbuf, 3)) {
+    else if (strncmp("335", buf, 3)) {
 	/* don't want it */
 	(*rejected)++;
 	return 0;
@@ -216,6 +216,12 @@ int fetch(char *msgid, int bymsgid,
 	    }
 
 	    do {
+		/* look for malformed lines with NUL CR LF */
+		if (buf[strlen(buf)-1] != '\n' &&
+		    strlen(buf)+2 < sizeof(buf)-1 &&
+		    buf[strlen(buf)+2] == '\n') {
+		    strlcat(buf, "\r\n", sizeof(buf));
+		}
 		prot_printf(sout, "%s", buf);
 	    } while (buf[strlen(buf)-1] != '\n' &&
 		     prot_fgets(buf, sizeof(buf), pin));
