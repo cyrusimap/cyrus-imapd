@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: imapconf.h,v 1.6 2001/03/14 06:02:11 leg Exp $
+ $Id: imapconf.h,v 1.7 2001/04/26 17:17:14 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,8 +41,8 @@
  *
  */
 
-#ifndef INCLUDED_CONFIG_H
-#define INCLUDED_CONFIG_H
+#ifndef INCLUDED_IMAPCONF_H
+#define INCLUDED_IMAPCONF_H
 
 #include <sasl.h>
 #include "auth.h"
@@ -96,8 +96,21 @@ void printauthready(struct protstream *out, int len, unsigned char *data);
 int getbase64string(struct protstream *in, struct buf *buf);
 int parsebase64string(char **ptr, const char *s);
 
+/* imap parsing functions (imapparse.c) */
+int getword(struct protstream *in, struct buf *buf);
+
+enum string_types { IMAP_ASTRING, IMAP_NSTRING, IMAP_STRING };
+int getxstring(struct protstream *pin, struct protstream *pout,
+	       struct buf *buf, int type);
+#define getastring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_ASTRING)
+#define getnstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_NSTRING)
+#define getstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_STRING)
+
+void eatline(struct protstream *pin, int c);
+
+/* filenames */
 #define FNAME_DBDIR "/db"
 #define FNAME_USERDIR "/user/"
 #define FNAME_LOGDIR "/log/"
 
-#endif /* INCLUDED_CONFIG_H */
+#endif /* INCLUDED_IMAPCONF_H */

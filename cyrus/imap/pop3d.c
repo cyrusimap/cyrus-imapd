@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.90 2001/04/03 20:11:12 ken3 Exp $
+ * $Id: pop3d.c,v 1.91 2001/04/26 17:18:10 leg Exp $
  */
 #include <config.h>
 
@@ -138,7 +138,6 @@ static void cmd_pass();
 static void cmd_user();
 static void cmd_starttls(int pop3s);
 static int starttls_enabled(void);
-void eatline(void);
 static void blat(int msg,int lines);
 int openinbox(void);
 static void cmdloop(void);
@@ -1302,15 +1301,4 @@ static int expungedeleted(struct mailbox *mailbox, void *rock, char *index)
 	}
     }
     return 0;
-}
-
-/*
- * Eat characters up to and including the next newline
- */
-void eatline(void)
-{
-    int c;
-
-    while ((c = prot_getc(popd_in)) != EOF && c != '\n')
-    { }
 }
