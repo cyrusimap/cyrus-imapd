@@ -205,7 +205,7 @@ char *charset_decode1522(s)
 const char *s;
 {
     int eatspace = 0;
-    const char *start, *encoding, *end;
+    const char *start, *endcharset, *encoding, *end;
     const char *p;
     int i, c, c1, c2, c3, c4;
     struct state state;
@@ -222,6 +222,8 @@ const char *s;
 	if (*start != '?') continue;
 	encoding = strchr(start+1, '?');
 	if (!encoding) continue;
+	endcharset = strchr(start+1, '*'); /* Language code delimiter */
+	if (!endcharset || endcharset > encoding) endcharset = encoding;
 	if (encoding[1] != 'b' && encoding[1] != 'B' &&
 	    encoding[1] != 'q' && encoding[1] != 'Q') continue;
 	if (encoding[2] != '?') continue;
@@ -254,8 +256,9 @@ const char *s;
 	 */
 	start++;
 	for (i=0; i<NUM_CHARSETS; i++) {
-	    if (strlen(charset_table[i].name) == encoding-start &&
-		!strncasecmp(start, charset_table[i].name, encoding-start)) {
+	    if ((int)strlen(charset_table[i].name) == endcharset-start &&
+		!strncasecmp(start, charset_table[i].name,
+			     endcharset - start)) {
 		START(state,charset_table[i].table);
 		break;
 	    }
