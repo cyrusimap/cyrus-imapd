@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.121 2002/05/16 18:15:08 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.122 2002/05/16 21:54:38 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -5074,8 +5074,9 @@ void annotate_response(struct entryattlist *l)
 
     islist = (l->next != NULL);
 
+    if (islist) prot_printf(proxyd_out, "(");
+
     while (l) {
-	if (islist) prot_printf(proxyd_out, "(");
 	prot_printf(proxyd_out, "\"%s\"", l->entry);
 
 	/* do we have attributes?  solicited vs. unsolicited */
@@ -5096,11 +5097,11 @@ void annotate_response(struct entryattlist *l)
 		    prot_printf(proxyd_out, " ");
 	    }
 	}
-	if (islist) prot_printf(proxyd_out, ")");
-
 	if ((l = l->next) != NULL)
 	    prot_printf(proxyd_out, " ");
     }
+
+    if (islist) prot_printf(proxyd_out, ")");
 }
 
 /*
