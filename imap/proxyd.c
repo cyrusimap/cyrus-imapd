@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.25 2000/05/13 03:40:19 leg Exp $ */
+/* $Id: proxyd.c,v 1.26 2000/05/15 17:29:27 leg Exp $ */
 
 #include <config.h>
 
@@ -2827,7 +2827,7 @@ void cmd_delete(char *tag, char *name)
 	    r = acapmbox_delete(acaphandle, mailboxname);
 	    if (r) {
 		syslog(LOG_ERR, 
-		       "ACAP: can't delete mailbox entry '%s': %s",
+		       "ACAP: can't delete mailbox entry %s: %s",
 		       name, error_message(r));
 	    }
 	}
@@ -3312,6 +3312,10 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 	    
 	    /* change the ACAP server */
 	    r = acapmbox_setproperty_acl(acaphandle, mailboxname, acl);
+	    if (r) {
+		syslog(LOG_ERR, "ACAP: unable to change ACL on %s: %s\n", 
+		       mailboxname, error_message(r));
+	    }
 	}
     }
 
