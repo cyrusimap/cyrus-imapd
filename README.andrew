@@ -41,7 +41,7 @@ To make a release:
 - announce to:
     info-cyrus
     comp.mail.imap
-    comp.os.linux.announce
+    cyrus-announce
     freshmeat.net
 
 - update asg.web links to new version
