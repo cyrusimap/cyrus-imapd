@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.78 2003/05/01 20:24:39 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.79 2003/05/03 02:05:20 ken3 Exp $
  */
 
 /*
@@ -1449,7 +1449,7 @@ static int parserange(char *str, unsigned long *uid, unsigned long *last,
 	*ret = backend_current;
     else if (!nntp_group) goto noopengroup;
     else if (!nntp_exists) goto noarticle;
-    else if ((*uid = parsenum(str, &p)) == -1) goto badrange;
+    else if ((*uid = parsenum(str, &p)) <= 0) goto badrange;
     else if (p && *p) {
 	/* extra stuff, check for range */
 	if (!last || (*p != '-')) goto badrange;
@@ -1457,7 +1457,7 @@ static int parserange(char *str, unsigned long *uid, unsigned long *last,
 	    *last = parsenum(p, NULL);
 	else
 	    *last = index_getuid(nntp_exists);
-	if (*last == -1) goto badrange;
+	if (*last <= 0 || *last < *uid) goto badrange;
     }
 
     if (last && !*last) *last = *uid;
@@ -1631,7 +1631,7 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
     char buf[4096];
 
     msgno = index_finduid(uid);
-    if (index_getuid(msgno) != uid) {
+    if (!msgno || index_getuid(msgno) != uid) {
 	prot_printf(nntp_out, "423 No such article in this newsgroup\r\n");
 	return;
     }
@@ -1893,7 +1893,7 @@ static void cmd_hdr(char *cmd, char *hdr, char *msgid,
 	char *body;
 	int msgno = index_finduid(uid);
 
-	if (index_getuid(msgno) != uid) continue;
+	if (!msgno || index_getuid(msgno) != uid) continue;
 
 	if ((body = index_getheader(nntp_group, msgno, hdr))) {
 	    prot_printf(nntp_out, "%lu %s\r\n", msgid ? 0 : uid, body);
@@ -2136,7 +2136,7 @@ static void cmd_over(unsigned long uid, unsigned long last)
 
     for (; uid <= last; uid++) {
 	msgno = index_finduid(uid);
-	if (index_getuid(msgno) != uid) continue;
+	if (!msgno || index_getuid(msgno) != uid) continue;
 
 	if ((over = index_overview(nntp_group, msgno))) {
 	    if (!found++)
