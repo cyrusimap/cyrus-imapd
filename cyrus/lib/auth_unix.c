@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.32 2002/07/05 14:41:53 rjs3 Exp $
+ * $Id: auth_unix.c,v 1.33 2002/07/05 15:27:27 rjs3 Exp $
  */
 
 #include <config.h>
@@ -240,8 +240,6 @@ const char *cacheid;
     strcpy(newstate->userid, identifier);
     newstate->ngroups = 0;
     newstate->group = (char **) 0;
-
-    if(!config_getswitch("unixgrouplookups", 1)) return newstate;
 
     setgrent();
     while ((grp = getgrent())) {
