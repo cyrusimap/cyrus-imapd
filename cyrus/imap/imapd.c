@@ -35,6 +35,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "acl.h"
 #include "util.h"
@@ -143,7 +144,7 @@ usage()
 /*
  * Cleanly shut down and exit
  */
-shutdown(code)
+shut_down(code)
 int code;
 {
     proc_cleanup();
@@ -168,7 +169,7 @@ int code;
     recurse_code = code;
     prot_printf(imapd_out, "* BYE Fatal error: %s\r\n", s);
     prot_flush(imapd_out);
-    shutdown(code);
+    shut_down(code);
 }
 
 /*
@@ -191,7 +192,7 @@ cmdloop()
 		syslog(LOG_WARNING, "PROTERR: %s", p);
 		prot_printf(imapd_out, "* BYE %s\r\n", p);
 	    }
-	    shutdown(0);
+	    shut_down(0);
 	}
 	if (c != ' ' || !is_atom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
 	    prot_printf(imapd_out, "* BAD Invalid tag\r\n");
@@ -424,7 +425,7 @@ cmdloop()
 		
 		prot_printf(imapd_out, "* BYE Server terminating connection\r\n");
 		prot_printf(imapd_out, "%s OK Logout completed\r\n", tag.s);
-		shutdown(0);
+		shut_down(0);
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "List")) {
@@ -2573,7 +2574,7 @@ int parsecharset;
     case 'b':
 	if (!strcmp(criteria.s, "before")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getdate(&start, &end);
+	    c = getsearchdate(&start, &end);
 	    if (c == EOF) goto baddate;
 	    if (!searchargs->before || searchargs->before > start) {
 		searchargs->before = start;
@@ -2799,7 +2800,7 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "on")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getdate(&start, &end);
+	    c = getsearchdate(&start, &end);
 	    if (c == EOF) goto baddate;
 	    if (!searchargs->before || searchargs->before > end) {
 		searchargs->before = end;
@@ -2824,7 +2825,7 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "sentbefore")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getdate(&start, &end);
+	    c = getsearchdate(&start, &end);
 	    if (c == EOF) goto baddate;
 	    if (!searchargs->sentbefore || searchargs->sentbefore > start) {
 		searchargs->sentbefore = start;
@@ -2832,7 +2833,7 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "senton")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getdate(&start, &end);
+	    c = getsearchdate(&start, &end);
 	    if (c == EOF) goto baddate;
 	    if (!searchargs->sentbefore || searchargs->sentbefore > end) {
 		searchargs->sentbefore = end;
@@ -2843,7 +2844,7 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "sentsince")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getdate(&start, &end);
+	    c = getsearchdate(&start, &end);
 	    if (c == EOF) goto baddate;
 	    if (!searchargs->sentafter || searchargs->sentafter < start) {
 		searchargs->sentafter = start;
@@ -2851,7 +2852,7 @@ int parsecharset;
 	}
 	else if (!strcmp(criteria.s, "since")) {
 	    if (c != ' ') goto missingarg;		
-	    c = getdate(&start, &end);
+	    c = getsearchdate(&start, &end);
 	    if (c == EOF) goto baddate;
 	    if (!searchargs->after || searchargs->after < start) {
 		searchargs->after = start;
@@ -2987,7 +2988,7 @@ int parsecharset;
  * The time_t's pointed to by 'start' and 'end' are set to the
  * times of the start and end of the parsed date.
  */
-int getdate(start, end)
+int getsearchdate(start, end)
 time_t *start, *end;
 {
     int c;
@@ -3255,7 +3256,7 @@ time_t *date;
     tm.tm_isdst = -1;
     *date = mktime(&tm);
     ltm = localtime(date);
-    *date += ltm->tm_gmtoff - zone_off*60;
+    *date += gmtoff_of(ltm, *date) - zone_off*60;
 
     return c;
 

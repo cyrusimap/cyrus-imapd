@@ -1427,18 +1427,25 @@ char *rock;
     if (fetchitems & FETCH_INTERNALDATE) {
 	time_t msgdate = INTERNALDATE(msgno);
 	struct tm *tm = localtime(&msgdate);
-	long gmtoff = tm->tm_gmtoff;
+	long gmtoff = gmtoff_of(tm, msgdate);
+	int gmtnegative = 0;
 	static char *monthname[] = {
 	    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
 	    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 	char datebuf[30];
 
-	if (gmtoff < 0) gmtoff = -gmtoff;
+	if (tm->tm_year < 80) {
+	    abort();
+	}
+	if (gmtoff < 0) {
+	    gmtoff = -gmtoff;
+	    gmtnegative = 1;
+	}
 	gmtoff /= 60;
 	sprintf(datebuf, "%2d-%s-%d %.2d:%.2d:%.2d %c%.2d%.2d",
 		tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
 		tm->tm_hour, tm->tm_min, tm->tm_sec,
-		tm->tm_gmtoff < 0 ? '-' : '+', gmtoff/60, gmtoff%60);
+		gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
 	prot_printf(imapd_out, "%cINTERNALDATE \"%s\"",
 		    sepchar, datebuf);
 	sepchar = ' ';

@@ -27,6 +27,8 @@
 #include <string.h>
 #include <time.h>
 #include <syslog.h>
+#include <sys/types.h>
+#include <netinet/in.h>
 
 #include "imap_err.h"
 #include "prot.h"
