@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.238 2002/08/15 22:24:01 ken3 Exp $
+dnl $Id: configure.in,v 1.239 2002/08/21 17:07:44 rjs3 Exp $
 dnl
 
 
@@ -395,7 +395,7 @@ AC_SUBST(WITH_MAP)
 AC_ARG_WITH(lock,
   [  --with-lock=METHOD      force use of METHOD for locking (flock or fcntl)],
   WITH_LOCK="$withval", [
-  AC_CHECK_FUNC(flock,WITH_LOCK="flock",WITH_LOCK="fcntl")])
+  AC_CHECK_FUNC(fcntl,WITH_LOCK="fcntl",WITH_LOCK="flock")])
 AC_SUBST(WITH_LOCK)
 
 dnl check for fdatasync (used by cyrusdb_skiplist)
