@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.2.2.2 2003/05/15 18:28:24 ken3 Exp $ */
+/* $Id: mbexamine.c,v 1.2.2.3 2003/05/16 22:06:53 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -307,6 +307,7 @@ int do_examine(char *name,
 	    printf("   LINES:%-6d", CONTENT_LINES(i));
 	printf("\n");
 
+	printf("      > USERFLAGS:");
 	for(j=(MAX_USER_FLAGS/32)-1; j>=0; j--) {
 	    printf(" %08X", USER_FLAGS(i,j));
 	}
