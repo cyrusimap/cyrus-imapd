@@ -84,7 +84,7 @@ register char *xnum;
  * into account. This assumes that the passed parameter string will
  * not be freed/out of scope until this structure is freed
  */
-bboard * getams(char *dname,bboard * amsbbd)
+int getams(char *dname,bboard * amsbbd)
 {
     char buf[1024];
     DIR *dirp;
@@ -100,7 +100,7 @@ bboard * getams(char *dname,bboard * amsbbd)
     if (!dirp) {
 	fprintf(stderr, "Bboard does not exist!\n");
 	perror(dname);
-	exit(EX_NOINPUT);
+	return 1;
     }
     amsbbd->msgs=(message *)xmalloc((amsbbd->alloced + 1) * sizeof (message));
     memset(buf, 0, sizeof(buf));
@@ -130,26 +130,9 @@ bboard * getams(char *dname,bboard * amsbbd)
                 dname); 
     }
     amsbbd->msgs[amsbbd->inuse+1].stamp=0x7fffffff;
-    return amsbbd;
+    return 0;
   
 }
 
-/*
- * Return the name of the file that contains the given message. User
- * should free value when done
- */
-/*char *getfilename(bboard *bbd, message *msg)
-{
-    char *result;
-    int slen;
- 
-    slen=strlen((char *)bbd->internaldata)+ strlen(msg->name) + 2;
-    if (!slen) {
-	return NULL;
-    }
-    result=xmalloc(slen);
-    sprintf(result, "%s/%s", (char *)bbd->internaldata, msg->name);
-    return result;
-}*/
 
   
