@@ -30,6 +30,7 @@ typedef struct glob {
     int flags;			/* glob flags, see below */
     int slen;			/* suppress string length */
     char *suppress;		/* suppress string pointer */
+    char *gstar, *ghier, *gptr;	/* INBOX prefix comparison state */
     char sep_char;		/* separator character */
     char str[3];		/* glob string & suppress string */
 } glob;
@@ -38,6 +39,7 @@ typedef struct glob {
 #define GLOB_ICASE        0x01	/* case insensitive */
 #define GLOB_SUBSTRING    0x02	/* match a substring */
 #define GLOB_HIERARCHY    0x04	/* use '%' as hierarchy matching and no '?' */
+#define GLOB_INBOXCASE    0x08  /* match "inbox" prefix case insensitive */
 
 /* initialize globbing structure
  *  str      -- globbing string
