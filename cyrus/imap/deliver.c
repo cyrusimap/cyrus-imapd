@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.106 1999/10/13 16:40:34 leg Exp $
+ * $Id: deliver.c,v 1.107 1999/10/27 21:04:44 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.106 1999/10/13 16:40:34 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.107 1999/10/27 21:04:44 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -513,8 +513,8 @@ typedef enum {
 
 /* we don't have to worry about dotstuffing here, since it's illegal
    for a header to begin with a dot! */
-static int parseheader(FILE *fin, FILE *fout, int lmtpmode,
-		       char **headname, char **contents) {
+static int parseheader(struct protstream *fin, struct protstream *fout, 
+		       int lmtpmode, char **headname, char **contents) {
     int c;
     static char *name = NULL, *body = NULL;
     static int namelen = 0, bodylen = 0;
@@ -533,7 +533,7 @@ static int parseheader(FILE *fin, FILE *fout, int lmtpmode,
     /* there are two ways out of this loop, both via gotos:
        either we successfully read a character (got_header)
        or we hit an error (ph_error) */
-    while ((c = getc(fin)) != EOF) { /* examine each character */
+    while ((c = prot_getc(fin)) != EOF) { /* examine each character */
 	switch (s) {
 	case NAME_START:
 	    if (c == '\r' || c == '\n') {
@@ -571,8 +571,8 @@ static int parseheader(FILE *fin, FILE *fout, int lmtpmode,
 	    } else if (c != ' ' && c != '\t') {
 		/* i want to avoid confusing dot-stuffing later */
 		while (c == '.') {
-		    putc(c, fout);
-		    c = getc(fin);
+		    prot_putc(c, fout);
+		    c = prot_getc(fin);
 		}
 		goto ph_error;
 	    }
@@ -589,20 +589,20 @@ static int parseheader(FILE *fin, FILE *fout, int lmtpmode,
 	    if (c == '\r' || c == '\n') {
 		int peek;
 
-		peek = getc(fin);
-
-		putc('\r', fout);
-		putc('\n', fout);
+		peek = prot_getc(fin);
+		
+		prot_putc('\r', fout);
+		prot_putc('\n', fout);
 		/* we should peek ahead to see if it's folded whitespace */
 		if (c == '\r' && peek == '\n') {
-		    c = getc(fin);
+		    c = prot_getc(fin);
 		} else {
 		    c = peek; /* single newline seperator */
 		}
 		if (c != ' ' && c != '\t') {
 		    /* this is the end of the header */
 		    body[off] = '\0';
-		    ungetc(c, fin);
+		    prot_ungetc(c, fin);
 		    goto got_header;
 		}
 		/* ignore this whitespace, but we'll copy all the rest in */
@@ -618,7 +618,7 @@ static int parseheader(FILE *fin, FILE *fout, int lmtpmode,
 	}
 
 	/* copy this to the output */
-	putc(c, fout);
+	prot_putc(c, fout);
     }
 
     /* if we fall off the end of the loop, we hit some sort of error
@@ -626,7 +626,7 @@ static int parseheader(FILE *fin, FILE *fout, int lmtpmode,
 
  ph_error:
     /* put the last character back; we'll copy it later */
-    ungetc(c, fin);
+    prot_ungetc(c, fin);
 
     /* and we didn't get a header */
     if (headname != NULL) *headname = NULL;
@@ -643,11 +643,12 @@ static int parseheader(FILE *fin, FILE *fout, int lmtpmode,
 /* copies the message from fin to fout, massaging accordingly: mostly
  * newlines are fiddled. in lmtpmode, "." terminates; otherwise, EOF
  * does it.  */
-static void copy_msg(FILE *fin, FILE *fout, int lmtpmode)
+static void copy_msg(struct protstream *fin, struct protstream *fout, 
+		     int lmtpmode)
 {
     char buf[8192], *p;
 
-    while (fgets(buf, sizeof(buf)-1, fin)) {
+    while (prot_fgets(buf, sizeof(buf)-1, fin)) {
 	p = buf + strlen(buf) - 1;
 	if (p == buf || p[-1] != '\r') {
 	    p[0] = '\r';
@@ -663,7 +664,7 @@ static void copy_msg(FILE *fin, FILE *fout, int lmtpmode)
 		 * We were unlucky enough to get a CR just before we ran
 		 * out of buffer--put it back.
 		 */
-		ungetc('\r', fin);
+		prot_ungetc('\r', fin);
 		*p = '\0';
 	    }
 	}
@@ -678,9 +679,9 @@ static void copy_msg(FILE *fin, FILE *fout, int lmtpmode)
 		goto lmtpdot;
 	    }
 	    /* Remove the dot-stuffing */
-	    fputs(buf+1, fout);
+	    prot_write(fout, buf+1, strlen(buf+1));
 	} else {
-	    fputs(buf, fout);
+	    prot_write(fout, buf, strlen(buf));
 	}
     }
 
@@ -693,7 +694,8 @@ lmtpdot:
     return;
 }
 
-static void fill_cache(FILE *fin, FILE *fout, int lmtpmode, message_data_t *m)
+static void fill_cache(struct protstream *fin, struct protstream *fout, 
+		       int lmtpmode, message_data_t *m)
 {
     /* let's fill that header cache */
     for (;;) {
@@ -1078,7 +1080,8 @@ int autorespond(unsigned char *hash, int len, int days,
 
     if (ret == SIEVE_OK) {
 	markdelivered((char *) hash, len, 
-		      sd->username, strlen(sd->username), now);
+		      sd->username, strlen(sd->username), 
+		      now + days * (24 * 60 * 60));
     }
 
     return ret;
@@ -1159,8 +1162,7 @@ int send_response(char *addr, char *subj, char *msg, int mime, int days,
     if (i == 0) { /* i is sendmail exit value */
 	sievedb = make_sieve_db(sdata->username);
 
-	markdelivered(outmsgid, strlen(outmsgid), sievedb, strlen(sievedb), 
-		      t + days * (24 * 60 * 60));
+	markdelivered(outmsgid, strlen(outmsgid), sievedb, strlen(sievedb), t);
 	return SIEVE_OK;
     } else {
 	return SIEVE_FAIL;
@@ -1837,7 +1839,8 @@ savemsg(message_data_t *m, int lmtpmode)
     f = tmpfile();
     if (!f) {
 	if (lmtpmode) {
-	    prot_printf(deliver_out,"451 4.3.%c cannot create temporary file: %s\r\n",
+	    prot_printf(deliver_out,
+			"451 4.3.%c cannot create temporary file: %s\r\n",
 		   (
 #ifdef EDQUOT
 		    errno == EDQUOT ||
@@ -1849,6 +1852,7 @@ savemsg(message_data_t *m, int lmtpmode)
 	exit(EC_TEMPFAIL);
     }
 
+    m->data = prot_new(fileno(f), 1);
     if (lmtpmode) {
 	prot_printf(deliver_out,"354 go ahead\r\n");
     }
@@ -1865,18 +1869,16 @@ savemsg(message_data_t *m, int lmtpmode)
 	    hostname = buf;
 	}
 
-	fprintf(f, "Return-Path: <%s%s%s>\r\n",
-		rpath,
-		hostname ? "@" : "",
-		hostname ? hostname : "");
+	prot_printf(m->data, "Return-Path: <%s%s%s>\r\n",
+		    rpath, hostname ? "@" : "", hostname ? hostname : "");
     }
 
 #ifdef USE_SIEVE
     /* add the Sieve header */
-    fprintf(f, "X-Sieve: %s\r\n", sieve_version);
+    prot_printf(m->data, "X-Sieve: %s\r\n", sieve_version);
 
     /* fill the cache */
-    fill_cache(stdin, f, lmtpmode, m);
+    fill_cache(deliver_in, m->data, lmtpmode, m);
 
     /* now, using our header cache, fill in the data that we want */
 
@@ -1934,7 +1936,7 @@ savemsg(message_data_t *m, int lmtpmode)
     }
 
 #else
-    while (fgets(buf, sizeof(buf)-1, stdin)) {
+    while (prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
 	p = buf + strlen(buf) - 1;
 	if (*p == '\n') {
 	    if (p == buf || p[-1] != '\r') {
@@ -1953,7 +1955,7 @@ savemsg(message_data_t *m, int lmtpmode)
 		 * We were unlucky enough to get a CR just before we ran
 		 * out of buffer--put it back.
 		 */
-		ungetc('\r', stdin);
+		prot_ungetc('\r', deliver_in);
 		*p = '\0';
 	    }
 	}
@@ -1968,10 +1970,10 @@ savemsg(message_data_t *m, int lmtpmode)
 		goto lmtpdot;
 	    }
 	    /* Remove the dot-stuffing */
-	    fputs(buf+1, f);
+	    prot_write(m->data, buf+1, strlen(buf+1));
 	}
 	else {
-	    fputs(buf, f);
+	    prot_write(m->data, buf, strlen(buf));
 	}
 
 	/* Look for message-id or resent-message-id headers */
@@ -2092,7 +2094,7 @@ savemsg(message_data_t *m, int lmtpmode)
     }
     m->size = sbuf.st_size;
     m->f = f;
-    m->data = prot_new(fileno(f), 0);
+    prot_rewind(m->data);
 }
 
 
@@ -2855,7 +2857,7 @@ int
 prunedelivered(age)
 int age;
 {
-  char c;
+  char c[2];
   int lockfd;
   int rc;
   char fname[MAX_MAILBOX_PATH];
@@ -2867,21 +2869,24 @@ int age;
 
   mark = time(0) - (age*60*60*24);
   syslog(LOG_NOTICE, "prunedelivered: pruning back %d days", age);
-  for (c = 'a' ; c <= 'z'; c++) {
-    (void)strcpy(fname, _get_db_name(&c));
-    (void)strcat(fname, ".db");
-
-    if (logdebug)
-      syslog(LOG_DEBUG, "prunedelivered: pruning %s", fname);
-
-    if ((lockfd = _lock_delivered_db(&c, 1)) < 0)
-      return -1;
-    rc = _prune_actual_db(fname, mark);
-    close(lockfd);
-    if (rc < 0) {
-      syslog(LOG_ERR, "prunedelivered: error exit", age);
-      return(rc);
-    }
+  c[1] = '\0';
+  for (c[0] = 'a' ; c[0] <= 'z'; c[0]++) {
+      (void)strcpy(fname, _get_db_name(c));
+      (void)strcat(fname, ".db");
+      
+      if (logdebug) {
+	  syslog(LOG_DEBUG, "prunedelivered: pruning %s", fname);
+      }
+      
+      if ((lockfd = _lock_delivered_db(c, 1)) < 0) {
+	  return -1;
+      }
+      rc = _prune_actual_db(fname, mark);
+      close(lockfd);
+      if (rc < 0) {
+	  syslog(LOG_ERR, "prunedelivered: error exit", age);
+	  return(rc);
+      }
   }
   syslog(LOG_NOTICE, "prunedelivered: done");
   return 0;
