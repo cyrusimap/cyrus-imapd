@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.14 2000/12/26 21:35:40 leg Exp $ */
+/* $Id: acconfig.h,v 1.15 2001/01/02 05:58:10 leg Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -138,5 +138,8 @@ enum {
     CONFIG_DB_VERBOSE = 1,
 
     /* log timing information to LOG_DEBUG */
-    CONFIG_TIMING_VERBOSE = 0
+    CONFIG_TIMING_VERBOSE = 0,
+
+    /* should we be pedantic about namespace or sleezy? */
+    SLEEZY_NAMESPACE = 1
 };
