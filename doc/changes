@@ -1,14 +1,49 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server Since Version 1.5.10
+
+      * If ENABLE_EXPERIMENT is set, the server no longer claims to support
+        OPTIMIZE-1; instead, it claims to support UIDPLUS. The Getuids
+        command has been removed since it is not in the UIDPLUS document
+        (draft-myers-imap-optimize-03.txt). 
+      * The checks for Tcl in configure are much smarter. The configure
+        script asks tclsh where its configuration lives, then consults the
+        shell scripts that have that information. This should work with 7.5
+        or better, which is what the server requires anyway. (All the
+        previous checks to look for Tcl libraries are gone; now, configure
+        runs tclsh and asks it where the Tcl libraries are, then runs the
+        shell scripts that are in that directory.) 
+      * The checks for com_err in configure are a little smarter and look
+        to see if all the pieces are there before trying to use them. 
+      * Added support for the NAMESPACE extension (if --enable-experiment
+        is supplied). 
+      * Added a "reject8bit" switch to imapd.conf. If set to "true",
+        messages containing 8-bit-set characters in the headers are
+        rejected (the previous behavior); if set to "false" or left to the
+        default value, messages containing 8-bit-set characters have these
+        characters changed to a constant character ('X'). 
+      * Added the "fud" program. This is an interm hack designed to allow
+        allow finger information to be retrieved for cyrus users. This is
+        experimental and it is not recommend that services be built arround
+        this feature, since it is likely to be removed in a future release
+        of the IMAP server. 
+
 Changes to the Cyrus IMAP Server Since Version 1.5.2
 
+      * Patches from John Myers, including more glob fixes. 
+      * Use the default hash function from DB. Note that this means that
+        the existing delivered.db and ptscache.db is NOT compatible with
+        this release. 
+      * Provide two debugging programs that dump the databases: ptdump and
+        dump_deliverdb. 
+      * Multiple changes to ptloader. added a bunch of flags; let it
+        reauthenticate on its own; added support perl wrapper; added bunch
+        of debugging information/output; bunch of other cleanups 
       * The mailboxes file is now closed if it isn't likely to be
         referenced, hopefully preventing old mailboxes files from hanging
         around in memory as frequently. 
-      * Added a patch from Eric Haberg to work around a possible deadlock
+      * Added a patch from Eric Hagberg to work around a possible deadlock
         condition in mboxlist.c where rename isn't atomic. 
-      * Updated db code to use db 2.0 where possible. 
-      * Fixes to ptloader including the removal of some core leaks. 
       * Patch from John Myers to get rid of cyrus.seen corruption in
         bsearch_mem. 
       * Patch from John Myers and to allow ISO-8859-1 characters in mailbox
