@@ -239,6 +239,15 @@ sub authenticate {
   $rc;
 }
 
+# xxx should use imapurl_fromURL libcyrus calls!!!
+sub fromURL {
+  my($self,$url) = @_;
+
+  $url =~ m|imap://([^/]+)/(.+)|;
+
+  return ($1, $2);
+}
+
 1;
 __END__
 
@@ -252,6 +261,7 @@ Cyrus::IMAP - Interface to Cyrus imclient library
 
   my $client = Cyrus::IMAP->new('mailhost'[, $flags]);
   $flags = Cyrus::IMAP::CONN_NONSYNCLITERAL;
+  ($server, $mailbox) = Cyrus::IMAP->fromURL($url);
   $client->setflags($flags);
   $client->clearflags(Cyrus::IMAP::CONN_INITIALRESPONSE);
   $flags = $client->flags;
