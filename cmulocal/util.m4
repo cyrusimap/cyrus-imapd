@@ -1,6 +1,6 @@
 dnl util.m4--robutil macro
 dnl Rob Earhart
-dnl $Id: util.m4,v 1.2 1998/10/15 21:59:47 rob Exp $
+dnl $Id: util.m4,v 1.3 1998/10/21 20:17:14 rob Exp $
 
 dnl robutil is a collection of stuff I (Rob Earhart) have found useful
 dnl to have around when writing code; it's the stuff I wind up rewriting
@@ -20,4 +20,11 @@ AC_DEFUN(CMU_UTIL, [
   AC_CHECK_TYPE(ssize_t, signed)
   AC_CHECK_TYPE(int32_t, signed)
   AC_CHECK_TYPE(uint32_t, unsigned)
+  THREADED_UTIL_CODE=""
+  AC_SUBST(THREADED_UTIL_CODE)
 ])
+
+AC_DEFUN(CMU_THREAD_UTIL, [
+  AC_REQUIRE([CMU_UTIL]
+  THREADED_UTIL_CODE="refcache.c rselock.c"
+]
