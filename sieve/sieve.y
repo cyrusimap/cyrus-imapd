@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.19.4.1 2002/12/03 15:00:16 ken3 Exp $
+ * $Id: sieve.y,v 1.19.4.2 2002/12/03 18:59:20 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -678,7 +678,9 @@ static struct aetags *new_aetags(void)
 static struct aetags *canon_aetags(struct aetags *ae)
 {
     if (ae->addrtag == -1) { ae->addrtag = ALL; }
-    if (ae->comparator == NULL) { ae->comparator = strdup("i;ascii-casemap"); }
+    if (ae->comparator == NULL) {
+        ae->comparator = xstrdup("i;ascii-casemap");
+    }
     if (ae->comptag == -1) { ae->comptag = IS; }
     return ae;
 }
@@ -702,7 +704,9 @@ static struct htags *new_htags(void)
 
 static struct htags *canon_htags(struct htags *h)
 {
-    if (h->comparator == NULL) { h->comparator = strdup("i;ascii-casemap"); }
+    if (h->comparator == NULL) {
+	h->comparator = xstrdup("i;ascii-casemap");
+    }
     if (h->comptag == -1) { h->comptag = IS; }
     return h;
 }
@@ -763,7 +767,7 @@ static struct ntags *new_ntags(void)
 static struct ntags *canon_ntags(struct ntags *n)
 {
     if (n->priority == NULL) { n->priority = "normal"; }
-    if (n->message == NULL) { n->message = strdup("$from$: $subject$"); }
+    if (n->message == NULL) { n->message = xstrdup("$from$: $subject$"); }
 
     return n;
 }
@@ -835,7 +839,8 @@ static int verify_header(char *hdr)
 	   ;  controls, SP, and
 	   ;  ":". */
 	if (!((*h >= 33 && *h <= 57) || (*h >= 59 && *h <= 126))) {
-	    snprintf(errbuf, sizeof(errbuf), "header '%s': not a valid header", hdr);
+	    snprintf(errbuf, sizeof(errbuf),
+		     "header '%s': not a valid header", hdr);
 	    yyerror(errbuf);
 	    return 0;
 	}
@@ -853,7 +858,8 @@ static int verify_flag(char *f)
 	if (strcmp(f, "\\seen") && strcmp(f, "\\answered") &&
 	    strcmp(f, "\\flagged") && strcmp(f, "\\draft") &&
 	    strcmp(f, "\\deleted")) {
-	    snprintf(errbuf, sizeof(errbuf), "flag '%s': not a system flag", f);
+	    snprintf(errbuf, sizeof(errbuf),
+		     "flag '%s': not a system flag", f);
 	    yyerror(errbuf);
 	    return 0;
 	}

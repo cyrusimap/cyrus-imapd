@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.54 2002/05/14 16:51:50 ken3 Exp $
+ * $Id: script.c,v 1.54.4.1 2002/12/03 18:59:20 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -609,20 +609,25 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 			}
 		    } else {
 			/* user specified subject */
-			strncpy(buf, c->u.v.subject, sizeof(buf));
+			strlcpy(buf, c->u.v.subject, sizeof(buf));
 		    }
 
 		    /* who do we want the message coming from? */
 		    fromaddr = found;
 		
-		    res = do_vacation(actions, reply_to, strdup(fromaddr),
-				      strdup(buf),
-				      c->u.v.message, c->u.v.days, c->u.v.mime);
-		
-		     if (res == SIEVE_RUN_ERROR)
-			 *errmsg = "Vacation can not be used with Reject or Vacation";
+		    res = do_vacation(actions, reply_to, xstrdup(fromaddr),
+				      xstrdup(buf), c->u.v.message,
+				      c->u.v.days, c->u.v.mime);
+
+		    if (res && reply_to) free(reply_to);
+
+		    if (res == SIEVE_RUN_ERROR) {
+			*errmsg =
+			    "Vacation can not be used with Reject or Vacation";
+		    }
 
 		} else {
+		    if (reply_to) free(reply_to);
 		    if (l != SIEVE_DONE) res = -1; /* something went wrong */
 		}
 		if (myaddr) free(myaddr);
@@ -786,7 +791,7 @@ static int sieve_addflag(sieve_imapflags_t *imapflags, char *flag)
 	imapflags->flag =
 	    (char **) xrealloc((char *)imapflags->flag,
 			       imapflags->nflags*sizeof(char *));
-	imapflags->flag[imapflags->nflags-1] = strdup(flag);
+	imapflags->flag[imapflags->nflags-1] = xstrdup(flag);
     }
  
     return SIEVE_OK;
@@ -1140,9 +1145,10 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     if ((ret != SIEVE_OK) && s->interp.err) {
 	char buf[1024];
 	if (lastaction == -1) /* we never executed an action */
-	    sprintf(buf, "%s", errmsg ? errmsg : sieve_errstr(ret));
+	    snprintf(buf, sizeof(buf), "%s",
+		     errmsg ? errmsg : sieve_errstr(ret));
 	else
-	    sprintf(buf, "%s: %s", action_to_string(lastaction),
+	    snprintf(buf, sizeof(buf), "%s: %s", action_to_string(lastaction),
 		    errmsg ? errmsg : sieve_errstr(ret));
  
 	ret |= s->interp.execute_err(buf, s->interp.interp_context,
