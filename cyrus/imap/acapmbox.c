@@ -162,9 +162,9 @@ int add_attr(skiplist *sl, char *name, char *value)
     return 0;
 }
 
-static int acapmbox_store(acapmbox_handle_t *AC,
-			  acapmbox_data_t *mboxdata,
-			  int commit)
+int acapmbox_store(acapmbox_handle_t *AC,
+		   acapmbox_data_t *mboxdata,
+		   int commit)
 {
     int result;
     acap_entry_t *newentry;
@@ -230,7 +230,6 @@ static int acapmbox_store(acapmbox_handle_t *AC,
 	}
     }
 
-    /* xxx free memory */
     return result;
 }
 
