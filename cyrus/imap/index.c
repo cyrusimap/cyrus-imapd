@@ -41,13 +41,12 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.18 2002/11/17 03:52:35 ken3 Exp $
+ * $Id: index.c,v 1.180.4.19 2002/12/20 18:32:02 rjs3 Exp $
  */
 #include <config.h>
 
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -56,7 +55,6 @@
 #include <com_err.h>
 #include <errno.h>
 #include <ctype.h>
-#include <time.h>
 
 #include "acl.h"
 #include "annotate.h"

@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.13 2002/12/11 20:40:26 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.14 2002/12/20 18:32:03 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -63,7 +63,6 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <time.h>
 
 #include <netdb.h>
 #include <sys/socket.h>

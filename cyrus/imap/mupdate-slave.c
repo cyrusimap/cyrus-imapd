@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.16.6.2 2002/10/03 19:12:45 ken3 Exp $
+ * $Id: mupdate-slave.c,v 1.16.6.3 2002/12/20 18:32:05 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,7 +61,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
-#include <sys/time.h>
 #include <netinet/in.h>
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>

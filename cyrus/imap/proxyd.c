@@ -39,19 +39,17 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.39 2002/12/16 17:22:46 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.40 2002/12/20 18:32:07 rjs3 Exp $ */
 
 #include <config.h>
 
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
 #include <signal.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <fcntl.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/stat.h>

@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.38.4.4 2002/12/13 19:28:37 ken3 Exp $ */
+/* $Id: tls.c,v 1.38.4.5 2002/12/20 18:32:08 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -123,7 +123,6 @@
 
 /* Session caching/reuse stuff */
 #include "imapconf.h"
-#include "time.h"
 #include "cyrusdb.h"
 
 #define DB (CONFIG_DB_TLS) /* sessions are binary -> MUST use DB3 */

@@ -38,12 +38,11 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_poll.c,v 1.5.6.1 2002/07/10 20:45:03 rjs3 Exp $ */
+/* $Id: idle_poll.c,v 1.5.6.2 2002/12/20 18:32:00 rjs3 Exp $ */
 
 #include <config.h>
 
 #include <syslog.h>
-#include <time.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -59,7 +58,6 @@ static idle_updateproc_t *idle_update = NULL;
 
 /* how often to poll the mailbox */
 static time_t idle_period = -1;
-
 
 int idle_enabled(void)
 {

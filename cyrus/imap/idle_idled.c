@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.9.4.1 2002/07/11 16:33:45 ken3 Exp $ */
+/* $Id: idle_idled.c,v 1.9.4.2 2002/12/20 18:32:00 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -49,7 +49,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <syslog.h>
-#include <time.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif

@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.12 2002/12/02 19:02:13 ken3 Exp $
+ $Id: mailbox.c,v 1.134.4.13 2002/12/20 18:32:03 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -61,7 +61,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <ctype.h>
-#include <time.h>
 #include <com_err.h>
 
 #ifdef HAVE_DIRENT_H

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.50 2002/12/19 01:01:59 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.51 2002/12/20 18:32:06 rjs3 Exp $
  */
 
 /*
@@ -57,7 +57,6 @@
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
-#include <time.h>
 #include <signal.h>
 #include <assert.h>
 #include <sys/types.h>

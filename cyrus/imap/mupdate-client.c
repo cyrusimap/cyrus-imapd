@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.32.4.5 2002/12/16 16:15:02 ken3 Exp $
+ * $Id: mupdate-client.c,v 1.32.4.6 2002/12/20 18:32:05 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -58,7 +58,6 @@
 #include <unistd.h>
 #endif
 #include <sys/types.h>
-#include <sys/time.h>
 #include <netinet/in.h>
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>

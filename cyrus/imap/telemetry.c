@@ -1,5 +1,5 @@
 /* telemetry.c -- common server telemetry
- * $Id: telemetry.c,v 1.4 2001/04/04 01:16:46 ken3 Exp $
+ * $Id: telemetry.c,v 1.4.14.1 2002/12/20 18:32:08 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -49,7 +49,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <time.h>
 #include <string.h>
 
 #include "prot.h"

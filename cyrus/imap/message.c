@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.88.16.3 2002/08/13 19:50:23 ken3 Exp $
+ * $Id: message.c,v 1.88.16.4 2002/12/20 18:32:04 rjs3 Exp $
  */
 
 #include <config.h>
@@ -53,7 +53,6 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
-#include <time.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/uio.h>

@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.6.6.3 2002/11/15 21:46:55 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.6.6.4 2002/12/20 18:31:59 rjs3 Exp $
  */
 
 #include <config.h>
@@ -48,7 +48,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -58,7 +57,6 @@
 #include <com_err.h>
 #include <errno.h>
 #include <ctype.h>
-#include <time.h>
 #include <limits.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

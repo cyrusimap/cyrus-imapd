@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.22 2002/12/16 17:22:45 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.23 2002/12/20 18:32:06 rjs3 Exp $
  */
 #include <config.h>
 
@@ -52,7 +52,6 @@
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
-#include <time.h>
 #include <signal.h>
 #include <assert.h>
 #include <sys/types.h>

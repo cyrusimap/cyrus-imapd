@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.31.4.2 2002/11/15 21:46:56 rjs3 Exp $ */
+/* $Id: duplicate.c,v 1.31.4.3 2002/12/20 18:32:00 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -49,7 +49,6 @@
 #include <syslog.h>
 #include <assert.h>
 #include <ctype.h>
-#include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>

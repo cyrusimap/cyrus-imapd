@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: netnews.c,v 1.1.2.6 2002/11/17 16:01:42 ken3 Exp $ */
+/* $Id: netnews.c,v 1.1.2.7 2002/12/20 18:32:06 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -49,7 +49,6 @@
 #include <syslog.h>
 #include <assert.h>
 #include <ctype.h>
-#include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>

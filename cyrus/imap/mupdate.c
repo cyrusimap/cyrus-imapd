@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.16 2002/11/15 21:46:57 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.17 2002/12/20 18:32:05 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,6 @@
 
 #include <config.h>
 
-#include <sys/time.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -51,7 +50,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <signal.h>
-#include <time.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <syslog.h>

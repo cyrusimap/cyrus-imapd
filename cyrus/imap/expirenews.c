@@ -41,7 +41,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: expirenews.c,v 1.1.2.3 2002/11/15 21:46:56 rjs3 Exp $ */
+/* $Id: expirenews.c,v 1.1.2.4 2002/12/20 18:32:00 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -52,7 +52,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
-#include <time.h>
 
 #include "exitcodes.h"
 #include "imapconf.h"

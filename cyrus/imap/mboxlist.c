@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.27 2002/11/17 05:06:28 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.28 2002/12/20 18:32:03 rjs3 Exp $
  */
 
 #include <config.h>
@@ -57,7 +57,6 @@
 #include <sys/uio.h>
 #include <fcntl.h>
 #include <ctype.h>
-#include <time.h>
 #include <syslog.h>
 #include <com_err.h>
 
