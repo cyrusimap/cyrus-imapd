@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.477 2004/07/15 13:07:09 ken3 Exp $ */
+/* $Id: imapd.c,v 1.478 2004/07/15 13:10:43 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2458,8 +2458,7 @@ void cmd_append(char *tag, char *name)
 	}
 	
 	/* Stage the message */
-	f = append_newstage(mailboxname, now, numstage,
-			    &(curstage->stage));
+	f = append_newstage(mailboxname, now, numstage, &(curstage->stage));
 	if (f) {
 	    totalsize += size;
 	    r = message_copy_strict(imapd_in, f, size);
