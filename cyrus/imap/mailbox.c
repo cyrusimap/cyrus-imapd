@@ -20,15 +20,19 @@
  * Open and read the header of the mailbox with pathname 'path'.
  * The structure pointed to by 'mailbox' is initialized.
  */
-mailbox_open_header(path, mailbox)
-char *path;
+mailbox_open_header(name, mailbox)
+char *name;
 struct mailbox *mailbox;
 {
+    char *path;
     char fnamebuf[MAX_MAILBOX_PATH];
     int r;
     static struct mailbox zeromailbox;
 
     *mailbox = zeromailbox;
+
+    r = mboxlist_nametopath(name, &path);
+    if (r) return r;
 
     strcpy(fnamebuf, path);
     strcat(fnamebuf, FNAME_HEADER);
@@ -38,6 +42,7 @@ struct mailbox *mailbox;
 	return IMAP_IOERROR;
     }
 
+    mailbox->name = strsave(name);
     mailbox->path = strsave(path);
 
     r = mailbox_read_header(mailbox);
@@ -112,6 +117,7 @@ struct mailbox *mailbox;
     if (mailbox->cache) fclose(mailbox->cache);
     if (mailbox->seen) fclose(mailbox->seen);
     if (mailbox->quota) fclose(mailbox->quota);
+    free(mailbox->name);
     free(mailbox->path);
     if (mailbox->quota_path) free(mailbox->quota_path);
 
@@ -215,20 +221,22 @@ struct mailbox *mailbox;
 
     fstat(fileno(mailbox->index), &sbuf);
     mailbox->index_mtime = sbuf.st_mtime;
-    mailbox->index_blksize = sbuf.st_blksize;
+    mailbox->index_ino = sbuf.st_ino;
+    mailbox->index_size = sbuf.st_size;
 
     rewind(mailbox->index);
-    n = fread(buf, sizeof(bit32), 7, mailbox->index);
-    if (n != 7) {
+    n = fread(buf, sizeof(bit32), 8, mailbox->index);
+    if (n != 8) {
 	return IMAP_MAILBOX_BADFORMAT;
     }
 
     mailbox->format = ntohl(*((bit32 *)(buf+4)));
-    mailbox->start_offset = ntohl(*((bit32 *)(buf+8)));
-    mailbox->record_size = ntohl(*((bit32 *)(buf+12)));
-    mailbox->last_internaldate = ntohl(*((bit32 *)(buf+16)));
-    mailbox->last_uid = ntohl(*((bit32 *)(buf+20)));
-    mailbox->quota_mailbox_used = ntohl(*((bit32 *)(buf+24)));
+    mailbox->minor_version = ntohl(*((bit32 *)(buf+8)));
+    mailbox->start_offset = ntohl(*((bit32 *)(buf+12)));
+    mailbox->record_size = ntohl(*((bit32 *)(buf+16)));
+    mailbox->last_internaldate = ntohl(*((bit32 *)(buf+20)));
+    mailbox->last_uid = ntohl(*((bit32 *)(buf+24)));
+    mailbox->quota_mailbox_used = ntohl(*((bit32 *)(buf+28)));
 
     return 0;
 }
@@ -470,14 +478,15 @@ struct mailbox *mailbox;
     
     *((bit32 *)buf) = mailbox->generation_no;
     *((bit32 *)(buf+4)) = htonl(mailbox->format);
-    *((bit32 *)(buf+8)) = htonl(mailbox->start_offset);
-    *((bit32 *)(buf+12)) = htonl(mailbox->record_size);
-    *((bit32 *)(buf+16)) = htonl(mailbox->last_internaldate);
-    *((bit32 *)(buf+20)) = htonl(mailbox->last_uid);
-    *((bit32 *)(buf+24)) = htonl(mailbox->quota_mailbox_used);
+    *((bit32 *)(buf+8)) = htonl(mailbox->minor_version);
+    *((bit32 *)(buf+12)) = htonl(mailbox->start_offset);
+    *((bit32 *)(buf+16)) = htonl(mailbox->record_size);
+    *((bit32 *)(buf+20)) = htonl(mailbox->last_internaldate);
+    *((bit32 *)(buf+24)) = htonl(mailbox->last_uid);
+    *((bit32 *)(buf+28)) = htonl(mailbox->quota_mailbox_used);
 
-    n = fwrite(buf, sizeof(bit32), 7, mailbox->index);
-    if (n != 7) {
+    n = fwrite(buf, sizeof(bit32), 8, mailbox->index);
+    if (n != 8) {
 	return IMAP_IOERROR;
     }
     fflush(mailbox->index);
@@ -514,11 +523,12 @@ int num;
 	*((bit32 *)p) = htonl(record[i].uid);
 	*((bit32 *)(p+4)) = htonl(record[i].internaldate);
 	*((bit32 *)(p+8)) = htonl(record[i].size);
-	*((bit32 *)(p+12)) = htonl(record[i].content_offset);
-	*((bit32 *)(p+16)) = htonl(record[i].cache_offset);
-	*((bit32 *)(p+20)) = htonl(record[i].last_updated);
-	*((bit32 *)(p+24)) = htonl(record[i].system_flags);
-	p += 28;
+	*((bit32 *)(p+12)) = htonl(record[i].header_size);
+	*((bit32 *)(p+16)) = htonl(record[i].content_offset);
+	*((bit32 *)(p+20)) = htonl(record[i].cache_offset);
+	*((bit32 *)(p+24)) = htonl(record[i].last_updated);
+	*((bit32 *)(p+28)) = htonl(record[i].system_flags);
+	p += 32;
 	for (j = 0; j < MAX_USER_FLAGS/32; j++, p += 4) {
 	    *((bit32 *)p) = htonl(record[i].user_flags[j]);
 	}

@@ -1,11 +1,12 @@
 /*
  * Handle assertion failures
  */
+#include <stdio.h>
 #include <sysexits.h>
 
 assertionfailed(file, line, expr)
 char *file;
-char *line;
+int line;
 char *expr;
 {
     char buf[1024];

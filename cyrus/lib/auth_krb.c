@@ -32,6 +32,7 @@ char *identifier;
     /* "anonymous" is not a member of any group */
     if (strcmp(auth_userid, "anonymous")) return 0;
 
+    aname[0] = inst[0] = realm[0] = '\0';
     if (kname_parse(aname, inst, realm, identifier) != 0) {
 	return 0;
     }
@@ -71,6 +72,7 @@ char *identifier;
 	return "anybody";
     }
     
+    aname[0] = inst[0] = realm[0] = '\0';
     if (kname_parse(aname, inst, realm, identifier) != 0) {
 	return 0;
     }
@@ -115,6 +117,7 @@ char *identifier;
     if (!identifier) return 1;	/* XXX bad identifier */
 
     strcpy(auth_userid, identifier);
+    auth_aname[0] = auth_inst[0] = auth_realm[0] = '\0';
     kname_parse(auth_aname, auth_inst, auth_realm, identifier);
     return 0;
 }

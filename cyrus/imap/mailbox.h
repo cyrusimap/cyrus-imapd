@@ -1,6 +1,6 @@
 #include <sys/types.h>
 
-typedef unsigned long bit32;	/* TODO: different on 64bit machines */
+typedef unsigned bit32;
 
 #define MAX_MAILBOX_PATH 4096
 
@@ -37,7 +37,8 @@ struct mailbox {
 
     time_t header_mtime;
     time_t index_mtime;
-    long index_blksize;
+    long index_ino;
+    long index_size;
 
     /* Information in header */
     char *quota_path;
@@ -48,6 +49,7 @@ struct mailbox {
     /* Information in index file */
     unsigned long generation_no;
     int format;
+    int minor_version;
     unsigned long start_offset;
     unsigned long record_size;
     time_t last_internaldate;
@@ -63,6 +65,7 @@ struct index_record {
     unsigned long uid;
     time_t internaldate;
     unsigned long size;
+    unsigned long header_size;
     unsigned long content_offset;
     unsigned long cache_offset;
     time_t last_updated;
@@ -70,4 +73,8 @@ struct index_record {
     bit32 user_flags[MAX_USER_FLAGS/32];
 };
 
-    
+#define FLAG_ANSWERED (1<<0)
+#define FLAG_FLAGGED (1<<1)
+#define FLAG_DELETED (1<<2)
+
+

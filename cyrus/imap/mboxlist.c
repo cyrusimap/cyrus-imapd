@@ -26,7 +26,7 @@ char **path;
 
     if (!listfname) mboxlist_getfname();
 
-    listfile = fopen(listfile, "r");
+    listfile = fopen(listfname, "r");
     if (!listfile) {
 	fatal("can't read mailbox list", EX_OSFILE);
     }
@@ -38,8 +38,10 @@ char **path;
 	if (p - buf != len) continue;
 	if (strncasecmp(name, buf, len) != 0) continue;
 
+	strncpy(name, buf, len);
+
 	partition = ++p;
-	p = strchr(buf, ' ');
+	p = strchr(partition, ' ');
 	if (!p) {
 	    fclose(listfile);
 	    return IMAP_PARTITION_UNKNOWN;
@@ -60,7 +62,7 @@ char **path;
 
 	strcpy(result, root);
 	strcat(result, "/");
-	strcat(result, buf);
+	strcat(result, name);
 	
 	for (p = result + strlen(root); *p; p++) {
 	    if (isupper(*p)) *p = tolower(*p);
@@ -68,8 +70,10 @@ char **path;
 	}
 
 	*path = result;
+	fclose(listfile);
 	return 0;
     }
+    fclose(listfile);
     return IMAP_MAILBOX_NONEXISTENT;
 }
 
@@ -77,7 +81,7 @@ char **path;
 
 static mboxlist_getfname()
 {
-    char *val = config_getstring("configdirectory");
+    char *val = config_getstring("configdirectory", "");
     listfname = xmalloc(strlen(val)+sizeof(FNAME_MBOXLIST));
     strcpy(listfname, val);
     strcat(listfname, FNAME_MBOXLIST);
