@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.33 2000/06/04 22:46:25 leg Exp $
+ * $Id: lmtpd.c,v 1.34 2000/06/06 21:10:44 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.33 2000/06/04 22:46:25 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.34 2000/06/06 21:10:44 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -622,18 +622,18 @@ int sieve_fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
-    mydata_t *md = (mydata_t *) mc;
-    message_data_t *m = (message_data_t *) md->m;
+    mydata_t *mdata = (mydata_t *) mc;
+    message_data_t *md = mdata->m;
     int ret;
 
     /* we're now the user who owns the script */
     if (!sd->authstate)
 	return SIEVE_FAIL;
 
-    ret = deliver_mailbox(m->data, &md->stage, m->size,
+    ret = deliver_mailbox(md->data, &mdata->stage, md->size,
 			  fc->imapflags->flag, fc->imapflags->nflags,
-                          md->authuser, md->authstate, m->id,
-                          sd->username, md->notifyheader,
+                          sd->authuser, sd->authstate, md->id,
+                          sd->username, mdata->notifyheader,
                           fc->mailbox, quotaoverride, 0);
 
     if (ret == 0) {
