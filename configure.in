@@ -525,7 +525,7 @@ if test -z "$with_com_err"; then
 		# com_err is already in library path
 		# guess we're okay
 		# can use system com_err
-		with_com_err=""
+dnl		with_com_err=""
 	], [
 	if test -f /usr/local/include/com_err.h; then
 		with_com_err="/usr/local"
@@ -555,9 +555,9 @@ case "$with_com_err" in
 	COMPILE_ET="compile_et"
 	;;
   *) # use whatever they told us, or whatever we found
-     COM_ERR_LIBS="-lcom_err"
+     COM_ERR_LIBS="${with_comm_err}/lib/libcom_err.a"
      COM_ERR_CPPFLAGS="-I${with_com_err}/include"
-     ANDREW_ADD_LIBPATH_TO(${with_com_err}/lib, COM_ERR_LDFLAGS)
+dnl     ANDREW_ADD_LIBPATH_TO(${with_com_err}/lib, COM_ERR_LDFLAGS)
      COMPILE_ET="${with_com_err}/bin/compile_et"
 esac
 AC_SUBST(COMPILE_ET)
