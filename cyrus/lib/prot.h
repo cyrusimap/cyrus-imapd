@@ -1,7 +1,7 @@
 /* prot.h -- stdio-like module that handles buffering, SASL, and TLS
  *           details for I/O over sockets
  *
- * $Id: prot.h,v 1.40.2.2 2004/06/24 15:16:30 ken3 Exp $
+ * $Id: prot.h,v 1.40.2.3 2004/09/01 21:11:01 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -235,6 +235,9 @@ void protgroup_free(struct protgroup *group);
 
 /* Insert an element into a protgroup */
 void protgroup_insert(struct protgroup *group, struct protstream *item);
+
+/* Delete an element from a protgroup */
+void protgroup_delete(struct protgroup *group, struct protstream *item);
 
 /* Returns the protstream at that position in the protgroup, or NULL if
  * an invalid element is requested */

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.38 2004/08/19 19:02:12 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.39 2004/09/01 21:10:57 ken3 Exp $ */
 
 #include <config.h>
 
@@ -141,6 +141,7 @@ static int supports_referrals;
 /* per-user/session state */
 struct protstream *imapd_out = NULL;
 struct protstream *imapd_in = NULL;
+struct protgroup *protin = NULL;
 static char imapd_clienthost[NI_MAXHOST*2+1] = "[local]";
 static int imapd_logfd = -1;
 char *imapd_userid = NULL, *proxy_userid = NULL;
@@ -518,6 +519,8 @@ static void imapd_reset(void)
     
     imapd_in = imapd_out = NULL;
 
+    if (protin) protgroup_reset(protin);
+
 #ifdef HAVE_SSL
     if (tls_conn) {
 	if (tls_reset_servertls(&tls_conn) == -1) {
@@ -648,6 +651,9 @@ int service_init(int argc, char **argv, char **envp)
 	annotatemore_init(0, NULL, NULL);
     annotatemore_open(NULL);
 
+    /* Create a protgroup for input from the client and selected backend */
+    protin = protgroup_new(2);
+
     return 0;
 }
 
@@ -680,6 +686,7 @@ int service_main(int argc __attribute__((unused)),
 
     imapd_in = prot_new(0, 0);
     imapd_out = prot_new(1, 1);
+    protgroup_insert(protin, imapd_in);
 
     /* Find out name of client host */
     salen = sizeof(imapd_remoteaddr);
@@ -837,6 +844,8 @@ void shut_down(int code)
 	snmp_increment(ACTIVE_CONNECTIONS, -1);
     }
 
+    if (protin) protgroup_free(protin);
+
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
@@ -881,6 +890,86 @@ void fatal(const char *s, int code)
 }
 
 /*
+ * Check the currently selected mailbox for updates.
+ *
+ * 'be' is the backend (if any) that we just proxied a command to.
+ */
+static void imapd_check(struct backend *be, int usinguid, int checkseen)
+{
+    if (backend_current && backend_current != be) {
+	/* remote mailbox */
+	char mytag[128];
+
+	proxy_gentag(mytag, sizeof(mytag));
+	    
+	prot_printf(backend_current->out, "%s Noop\r\n", mytag);
+	pipe_until_tag(backend_current, mytag, 0);
+    }
+    else if (imapd_mailbox) {
+	/* local mailbox */
+	index_check(imapd_mailbox, usinguid, checkseen);
+    }
+}
+
+/*
+ * Check our protgroup for input.
+ *
+ * If input from the client is pending, returns 1, otherwise returns 0.
+ * Input from the backend is sent to the client immediately.
+ */
+int check_input(long timeout_sec)
+{
+    struct protgroup *protout = NULL;
+    struct timeval timeout = { timeout_sec, 0 };
+    int n, clientin = 0;
+
+    n = prot_select(protin, PROT_NO_FD, &protout, NULL, &timeout);
+    if (n == -1) {
+	syslog(LOG_ERR, "prot_select() failed in check_input(): %m");
+	fatal("prot_select() failed in check_input()", EC_TEMPFAIL);
+    }
+
+    if (n && protout) {
+	struct protstream *ptmp;
+
+	/* see who has input */
+	for (; n; n--) {
+	    ptmp = protgroup_getelement(protout, n-1);
+
+	    if (ptmp == imapd_in) {
+		/* input from client */
+		clientin = 1;
+	    }
+	    else if (backend_current && ptmp == backend_current->in){
+		/* input from selected backend, stream it to client */
+		do {
+		    char buf[4096];
+		    int c = prot_read(ptmp, buf, sizeof(buf));
+
+		    if (c == 0 || c < 0) break;
+		    prot_write(imapd_out, buf, c);
+		} while (ptmp->cnt > 0);
+
+		if (prot_error(ptmp)) {
+		    /* uh oh, we're not happy */
+		    fatal("Lost connection to selected backend",
+			  EC_UNAVAILABLE);
+		}
+	    }
+	    else {
+		/* XXX shouldn't get here !!! */
+		fatal("unknown protstream returned by prot_select in check_input()",
+		      EC_SOFTWARE);
+	    }
+	}
+
+	protgroup_free(protout);
+    }
+
+    return clientin;
+}
+
+/*
  * Top-level command loop parsing
  */
 void cmdloop()
@@ -914,6 +1003,11 @@ void cmdloop()
     }
 
     for (;;) {
+	/* Flush any buffered output */
+	prot_flush(imapd_out);
+	if (backend_current) prot_flush(backend_current->out);
+
+	/* Check for shutdown file */
 	if ( !imapd_userisadmin && imapd_userid
 	     && shutdown_file(shut, sizeof(shut))) {
 	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
@@ -922,6 +1016,8 @@ void cmdloop()
 	}
 
 	signals_poll();
+
+	if (!check_input(60)) continue;  /* No input from client */
 
 	/* Parse tag */
 	c = getword(imapd_in, &tag);
@@ -1256,6 +1352,9 @@ void cmdloop()
 		if (c != '\n') goto extraargs;
 
 		snmp_increment(LOGOUT_COUNT, 1);		
+
+		/* force any responses from our selected backend */
+		if (backend_current) imapd_check(NULL, 0, 0);
 
 		prot_printf(imapd_out, "* BYE %s\r\n", 
 			    error_message(IMAP_BYE_LOGOUT));
@@ -2084,28 +2183,6 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
 }
 
 /*
- * Check the currently selected mailbox for updates.
- *
- * 'be' is the backend (if any) that we just proxied a command to.
- */
-static void imapd_check(struct backend *be, int usinguid, int checkseen)
-{
-    if (backend_current && backend_current != be) {
-	/* remote mailbox */
-	char mytag[128];
-
-	proxy_gentag(mytag, sizeof(mytag));
-	    
-	prot_printf(backend_current->out, "%s Noop\r\n", mytag);
-	pipe_until_tag(backend_current, mytag, 0);
-    }
-    else if (imapd_mailbox) {
-	/* local mailbox */
-	index_check(imapd_mailbox, usinguid, checkseen);
-    }
-}
-
-/*
  * Perform a NOOP command
  */
 void cmd_noop(char *tag, char *cmd)
@@ -2113,7 +2190,6 @@ void cmd_noop(char *tag, char *cmd)
     if (backend_current) {
 	/* remote mailbox */
 	prot_printf(backend_current->out, "%s %s\r\n", tag, cmd);
-	pipe_including_tag(backend_current, tag, 0);
 
 	return;
     }
@@ -2297,24 +2373,18 @@ void cmd_idle(char *tag)
 {
     static int idle_period = -1;
     static struct buf arg;
-    struct protgroup *protin = protgroup_new(2);
-    struct protgroup *protout = NULL;
-    struct timeval timeout;
-    int c = EOF, n, done = 0, shutdown = 0;
-    char buf[2048], shut[1024];
+    int c = EOF, done = 0, shutdown = 0;
+    char shut[1024];
 
     /* get polling period */
     if (idle_period == -1) {
       idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
-      if (idle_period < 1) idle_period = 0;
     }
-
-    /* Reset protin to all zeros (to preserve memory allocation) */
-    protgroup_reset(protin);
-    protgroup_insert(protin, imapd_in);
 
     if (backend_current && CAPA(backend_current, CAPA_IDLE)) {
 	/* Start IDLE on backend */
+	char buf[2048];
+
 	prot_printf(backend_current->out, "%s IDLE\r\n", tag);
 	if (!prot_fgets(buf, sizeof(buf), backend_current->in)) {
 
@@ -2324,14 +2394,11 @@ void cmd_idle(char *tag)
 	    goto done;
 	}
 	if (buf[0] != '+') {
-
 	    /* If we received anything but a continuation response,
 	       spit out what we received and quit */
 	    prot_write(imapd_out, buf, strlen(buf));
 	    goto done;
 	}
-
-	protgroup_insert(protin, backend_current->in);
     }
 
     /* Start listening to idled */
@@ -2339,63 +2406,22 @@ void cmd_idle(char *tag)
 
     /* Tell client we are idling and waiting for end of command */
     prot_printf(imapd_out, "+ idling\r\n");
-    prot_flush(imapd_out);
 
     while (!done) {
-	/* check for shutdown file */
+	/* Flush any buffered output */
+	prot_flush(imapd_out);
+
+	/* Check for shutdown file */
 	if (!imapd_userisadmin && shutdown_file(shut, sizeof(shut))) {
 	    shutdown = done = 1;
 	    goto done;
 	}
 
+	done = check_input(idle_period);
+
+	/* If not running IDLE on backend, check the mailbox for updates */
 	if (!backend_current || !CAPA(backend_current, CAPA_IDLE)) {
-	    /* Check the mailbox for updates, unless we proxied IDLE */
 	    imapd_check(NULL, 0, 1);
-	    prot_flush(imapd_out);
-	}
-
-	/* Clear protout if needed */
-	protgroup_free(protout);
-	protout = NULL;
-
-	timeout.tv_sec = idle_period;
-	timeout.tv_usec = 0;
-
-	n = prot_select(protin, PROT_NO_FD, &protout, NULL, &timeout);
-	if (n == -1 && errno != EINTR) {
-	    syslog(LOG_ERR, "prot_select() failed in cmd_idle(): %m");
-	    fatal("prot_select() failed in cmd_idle()", EC_TEMPFAIL);
-	}
-	if (n > 0 && protout) {
-	    struct protstream *ptmp;
-
-	    for (; n; n--) {
-		ptmp = protgroup_getelement(protout, n-1);
-		if (ptmp == imapd_in) {
-		    /* The client sent us something, we're done */
-		    done = 1;
-		}
-		else if (backend_current && ptmp == backend_current->in) {
-		    /* Get unsolicited untagged responses from the backend */
-		    do {
-			int c = prot_read(backend_current->in, buf, sizeof(buf));
-			if (c == 0 || c < 0) break;
-			prot_write(imapd_out, buf, c);
-		    } while (backend_current->in->cnt > 0);
-		    prot_flush(imapd_out);
-
-		    if (prot_error(backend_current->in)) {
-			/* uh oh, we're not happy */
-			fatal("Lost connection to selected backend",
-			      EC_UNAVAILABLE);
-		    }
-		}
-		else {
-		    /* XXX shouldn't get here !!! */
-		    fatal("unknown protstream returned by prot_select in cmd_idle",
-			  EC_SOFTWARE);
-		}
-	    }
 	}
     }
 
@@ -2403,9 +2429,6 @@ void cmd_idle(char *tag)
     c = getword(imapd_in, &arg);
 
   done:
-    protgroup_free(protin);
-    protgroup_free(protout);
-
     if (done) {
 	/* Done listening to idled */
 	if (idle_init()) idle_done(imapd_mailbox);
@@ -2559,23 +2582,16 @@ void cmd_append(char *tag, char *name)
 			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
+	imapd_check(s, 0, 0);
+
 	if (!r) {
 	    prot_printf(s->out, "%s Append {%d+}\r\n%s ", tag, strlen(name), name);
 	    if (!pipe_command(s, 16384)) {
-		pipe_until_tag(s, tag, 0);
+		if (s != backend_current) pipe_including_tag(s, tag, 0);
 	    }
 	} else {
 	    eatline(imapd_in, prot_getc(imapd_in));
-	}
-
-	imapd_check(s, 0, 0);
-
-	if (r) {
 	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-	} else {
-	    /* we're allowed to reference last_result since the noop, if
-	       sent, went to a different server */
-	    prot_printf(imapd_out, "%s %s", tag, s->last_result);
 	}
 
 	return;
@@ -2855,6 +2871,9 @@ void cmd_select(char *tag, char *cmd, char *name)
 	if (backend_current && backend_current != backend_next) {
 	    char mytag[128];
 
+	    /* remove backend_current from the protgroup */
+	    protgroup_delete(protin, backend_current->in);
+
 	    /* switching servers; flush old server output */
 	    proxy_gentag(mytag, sizeof(mytag));
 	    prot_printf(backend_current->out, "%s Unselect\r\n", mytag);
@@ -2876,6 +2895,9 @@ void cmd_select(char *tag, char *cmd, char *name)
 	    proc_register("imapd", imapd_clienthost, imapd_userid, mailboxname);
 	    syslog(LOG_DEBUG, "open: user %s opened %s on %s",
 		   imapd_userid, name, newserver);
+
+	    /* add backend_current to the protgroup */
+	    protgroup_insert(protin, backend_current->in);
 	    break;
 	default:
 	    syslog(LOG_DEBUG, "open: user %s failed to open %s", imapd_userid,
@@ -2891,6 +2913,9 @@ void cmd_select(char *tag, char *cmd, char *name)
     /* local mailbox */
     if (backend_current) {
       char mytag[128];
+
+      /* remove backend_current from the protgroup */
+      protgroup_delete(protin, backend_current->in);
 
       /* switching servers; flush old server output */
       proxy_gentag(mytag, sizeof(mytag));
@@ -2982,6 +3007,9 @@ void cmd_close(char *tag)
 	 * saying NO is clearly wrong, hense the fatal request. */
 	pipe_including_tag(backend_current, tag, 0);
 	backend_current = NULL;
+
+	/* remove backend_current from the protgroup */
+	protgroup_delete(protin, backend_current->in);
 	return;
     }
 
@@ -3017,6 +3045,9 @@ void cmd_unselect(char *tag)
 	 * saying NO is clearly wrong, hense the fatal request. */
 	pipe_including_tag(backend_current, tag, 0);
 	backend_current = NULL;
+
+	/* remove backend_current from the protgroup */
+	protgroup_delete(protin, backend_current->in);
 	return;
     }
 
@@ -3087,9 +3118,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (backend_current) {
 	/* remote mailbox */
 	prot_printf(backend_current->out, "%s %s %s ", tag, cmd, sequence);
-	if (!pipe_command(backend_current, 65536)) {
-	    pipe_including_tag(backend_current, tag, 0);
-	}
+	pipe_command(backend_current, 65536);
 	return;
     }
 
@@ -3477,7 +3506,6 @@ void cmd_partial(const char *tag, const char *msgno, char *data,
 	/* remote mailbox */
 	prot_printf(backend_current->out, "%s Partial %s %s %s %s\r\n",
 		    tag, msgno, data, start, count);
-	pipe_including_tag(backend_current, tag, 0);
 	return;
     }
 
@@ -3605,9 +3633,7 @@ void cmd_store(char *tag, char *sequence, char *operation, int usinguid)
 	/* remote mailbox */
 	prot_printf(backend_current->out, "%s %s %s %s ",
 		    tag, cmd, sequence, operation);
-	if (!pipe_command(backend_current, 65536)) {
-	    pipe_including_tag(backend_current, tag, 0);
-	}
+	pipe_command(backend_current, 65536);
 	return;
     }
 
@@ -3746,9 +3772,7 @@ void cmd_search(char *tag, int usinguid)
 	const char *cmd = usinguid ? "UID Search" : "Search";
 
 	prot_printf(backend_current->out, "%s %s ", tag, cmd);
-	if (!pipe_command(backend_current, 65536)) {
-	    pipe_including_tag(backend_current, tag, 0);
-	}
+	pipe_command(backend_current, 65536);
 	return;
     }
 
@@ -3806,9 +3830,7 @@ void cmd_sort(char *tag, int usinguid)
 	char *cmd = usinguid ? "UID Sort" : "Sort";
 
 	prot_printf(backend_current->out, "%s %s ", tag, cmd);
-	if (!pipe_command(backend_current, 65536)) {
-	    pipe_including_tag(backend_current, tag, 0);
-	}
+	pipe_command(backend_current, 65536);
 	return;
     }
 
@@ -3900,9 +3922,7 @@ void cmd_thread(char *tag, int usinguid)
 	const char *cmd = usinguid ? "UID Thread" : "Thread";
 
 	prot_printf(backend_current->out, "%s %s ", tag, cmd);
-	if (!pipe_command(backend_current, 65536)) {
-	    pipe_including_tag(backend_current, tag, 0);
-	}
+	pipe_command(backend_current, 65536);
 	return;
     }
 
@@ -4017,7 +4037,6 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	prot_printf(backend_current->out, "%s %s %s {%d+}\r\n%s\r\n",
 		    tag, usinguid ? "UID Copy" : "Copy",
 		    sequence, strlen(name), name);
-	pipe_including_tag(backend_current, tag, 0);
 
 	return;
     }
@@ -4134,7 +4153,6 @@ void cmd_expunge(char *tag, char *sequence)
 	} else {
 	    prot_printf(backend_current->out, "%s Expunge\r\n", tag);
 	}
-	pipe_including_tag(backend_current, tag, 0);
 	return;
     }
 
@@ -5146,6 +5164,8 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 	    /* Doesn't exist on murder */
 	}
 
+	imapd_check(backend_inbox, 0, 0);
+
 	if (!r) {
 	    if (namespace) {
 		prot_printf(backend_inbox->out, 
@@ -5158,17 +5178,11 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 			    tag, cmd, 
 			    strlen(name), name);
 	    }
-	    pipe_until_tag(backend_inbox, tag, 0);
+	    if (backend_inbox != backend_current)
+		pipe_including_tag(backend_inbox, tag, 0);
 	}
-
-	imapd_check(backend_inbox, 0, 0);
-
-	if (r) {
+	else {
 	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-	} else {
-	    /* we're allowed to reference last_result since the noop, if
-	       sent, went to a different server */
-	    prot_printf(imapd_out, "%s %s", tag, backend_inbox->last_result);
 	}
 
 	return;
@@ -5546,6 +5560,8 @@ void cmd_getquota(const char *tag, const char *name)
     int mbtype;
     char *server_rock = NULL, *server_rock_tmp = NULL;
 
+    imapd_check(NULL, 0, 0);
+
     if (!imapd_userisadmin) r = IMAP_PERMISSION_DENIED;
     else {
 	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
@@ -5566,8 +5582,6 @@ void cmd_getquota(const char *tag, const char *name)
 	r = mboxlist_findall(&imapd_namespace, quotarootbuf,
 			     imapd_userisadmin, imapd_userid,
 			     imapd_authstate, quota_cb, server_rock);
-
-	imapd_check(NULL, 0, 0);
 
 	if (!r) {
 	    /* Do the referral */
@@ -5597,8 +5611,6 @@ void cmd_getquota(const char *tag, const char *name)
 	}
 	prot_printf(imapd_out, ")\r\n");
     }
-
-    imapd_check(NULL, 0, 0);
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -5632,36 +5644,29 @@ void cmd_getquotaroot(const char *tag, const char *name)
 
     if (!r && (mbtype & MBTYPE_REMOTE)) {
 	/* remote mailbox */
-	struct backend *s = NULL;
 
 	if (imapd_userisadmin) {
 	    /* If they are an admin, they won't retain that privledge if we
 	     * proxy for them, so we need to refer them -- even if they haven't
 	     * told us they're able to handle it. */
 	    imapd_refer(tag, server, name);
-	    return;
 	} else {
+	    struct backend *s;
+
 	    s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
 				 proxy_userid, &backend_cached,
 				 &backend_current, &backend_inbox, imapd_in);
+	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
-	    if (s) {
+	    imapd_check(s, 0, 0);
+
+	    if (!r) {
 		prot_printf(s->out, "%s Getquotaroot {%d+}\r\n%s\r\n",
 			    tag, strlen(name), name);
-		pipe_until_tag(s, tag, 0);
+		if (s != backend_current) pipe_including_tag(s, tag, 0);
 	    } else {
-		r = IMAP_SERVER_UNAVAILABLE;
+		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	    }
-	}
-
-	imapd_check(s, 0, 0);
-
-	if (r) {
-	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-	} else {
-	    /* we're allowed to reference last_result since the noop, if
-	       sent, went to a different server */
-	    prot_printf(imapd_out, "%s %s", tag, s->last_result);
 	}
 
 	return;
@@ -5966,38 +5971,33 @@ void cmd_status(char *tag, char *name)
 
     if (!r && (mbtype & MBTYPE_REMOTE)) {
 	/* remote mailbox */
-	struct backend *s = NULL;
 
 	if (supports_referrals
 	    && config_getswitch(IMAPOPT_PROXYD_ALLOW_STATUS_REFERRAL)) { 
 	    imapd_refer(tag, server, name);
 	    /* Eat the argument */
 	    eatline(imapd_in, prot_getc(imapd_in));
-	    return;
 	}
+	else {
+	    struct backend *s;
 
-	s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
-			     proxy_userid, &backend_cached,
-			     &backend_current, &backend_inbox, imapd_in);
-	if (!s) r = IMAP_SERVER_UNAVAILABLE;
-	if (!r) {
-	    prot_printf(s->out, "%s Status {%d+}\r\n%s ", tag,
-			strlen(name), name);
-	    if (!pipe_command(s, 65536)) {
-		pipe_until_tag(s, tag, 0);
+	    s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+				 proxy_userid, &backend_cached,
+				 &backend_current, &backend_inbox, imapd_in);
+	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
+
+	    imapd_check(s, 0, 0);
+
+	    if (!r) {
+		prot_printf(s->out, "%s Status {%d+}\r\n%s ", tag,
+			    strlen(name), name);
+		if (!pipe_command(s, 65536)) {
+		    if (s != backend_current) pipe_including_tag(s, tag, 0);
+		}
+	    } else {
+		eatline(imapd_in, prot_getc(imapd_in));
+		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	    }
-	} else {
-	    eatline(imapd_in, prot_getc(imapd_in));
-	}
-
-	imapd_check(s, 0, 0);
-
-	if (r) {
-	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-	} else {
-	    /* we're allowed to reference last_result since the noop, if
-	       sent, went to a different server */
-	    prot_printf(imapd_out, "%s %s", tag, s->last_result);
 	}
 
 	return;

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.82.2.6 2004/08/13 16:09:36 ken3 Exp $
+ * $Id: prot.c,v 1.82.2.7 2004/09/01 21:11:00 ken3 Exp $
  */
 
 #include <config.h>
@@ -1029,6 +1029,7 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	time_t this_timeout = 0;   /* this stream */
 	
 	s = readstreams->group[i];
+	if (!s) continue;
 
 	assert(!s->write);
 
@@ -1130,6 +1131,7 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	
 	for(i = 0; i<readstreams->next_element; i++) {
 	    s = readstreams->group[i];
+	    if (!s) continue;
 
 	    if(FD_ISSET(s->fd, &rfds)) {
 		found_fds++;
@@ -1223,16 +1225,41 @@ void protgroup_free(struct protgroup *group)
 
 void protgroup_insert(struct protgroup *group, struct protstream *item) 
 {
+    int i, empty;
+
     assert(group);
     assert(item);
-    /* Double size of the protgroup if we're at our limit */
-    if(group->next_element == group->nalloced) {
+
+    /* See if we already have this protstream */
+    for (i = 0, empty = group->next_element; i < group->next_element; i++) {
+	if (!group->group[i]) empty = i;
+	else if (group->group[i] == item) return;
+    }
+    /* Double size of the protgroup if we're at our limit */ 
+    if (empty == group->next_element &&
+	group->next_element++ == group->nalloced) {
 	group->nalloced *= 2;
 	group->group = xrealloc(group->group,
 				group->nalloced * sizeof(struct protstream *));
     }
-    /* Insert the item on the end of the group */
-    group->group[group->next_element++] = item;
+    /* Insert the item at the empty location */
+    group->group[empty] = item;
+}
+
+void protgroup_delete(struct protgroup *group, struct protstream *item) 
+{
+    int i;
+
+    assert(group);
+    assert(item);
+
+    /* find the protstream */
+    for (i = 0; i < group->next_element; i++) {
+	if (group->group[i] == item) {
+	    group->group[i] = NULL;
+	    return;
+	}
+    }
 }
 
 struct protstream *protgroup_getelement(struct protgroup *group,
