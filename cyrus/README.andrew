@@ -62,3 +62,12 @@ c) smtp server
     diskmon.conf
 - rerun package
 - run tools/mkimap
+
+----------------------------------------------------------------------
+
+To use Insure++
+ . uncomment appropriate lines from SMakefile
+ . copy psrc to /.psrc
+ . make sure environment variables HOME and (maybe) USER
+   are properly set
+ . mkdir /tmp/insure; chmod 777 /tmp/insure
