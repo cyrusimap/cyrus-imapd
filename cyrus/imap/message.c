@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.88.16.11 2003/06/30 19:21:17 ken3 Exp $
+ * $Id: message.c,v 1.88.16.12 2003/07/01 14:33:53 ken3 Exp $
  */
 
 #include <config.h>
@@ -1699,7 +1699,7 @@ char **boundaries;
 int *boundaryct;
 {
     int i, len;
-    int eudora_mime_hack = config_getswitch(IMAPOPT_EUDORA_MIME_HACK);
+    int rfc2046_strict = config_getswitch(IMAPOPT_RFC2046_STRICT);
 
     if (s[0] != '-' || s[1] != '-') return(0);
     s+=2;
@@ -1708,11 +1708,13 @@ int *boundaryct;
 	len = strlen(boundaries[i]);
         if (!strncmp(s, boundaries[i], len)) {
             if (s[len] == '-' && s[len+1] == '-') *boundaryct = i;
-	    else if (eudora_mime_hack && s[len] && !isspace((int) s[len])) {
-		/* Eudora hack: skip substring matches in the boundary
-		 * (supposedly fixed in v5.2).
+	    else if (!rfc2046_strict && s[len] && !isspace((int) s[len])) {
+		/* Allow substring matches in the boundary.
 		 *
-		 * This breaks compliance with RFC 2046 section 5.1.1
+		 * If rfc2046_strict is enabled, boundaries containing
+		 * other boundaries as substrings will be treated as identical
+		 * (per RFC 2046 section 5.1.1).  Note that this will
+		 * break some messages created by Eudora 5.1 (and earlier).
 		 */
 		continue;
 	    }
