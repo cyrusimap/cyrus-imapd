@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7.6.15 2003/02/13 20:32:54 rjs3 Exp $ */
+/* $Id: backend.c,v 1.7.6.16 2003/02/19 17:09:47 ken3 Exp $ */
 
 #include <config.h>
 
@@ -115,6 +115,9 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 
 static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
 {
+#ifndef HAVE_SSL
+    return -1;
+#else
     char buf[2048];
     int r;
     int *layerp;
@@ -149,6 +152,7 @@ static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
     prot_settls(s->out, s->tlsconn);
 
     return 0;
+#endif /* HAVE_SSL */
 }
 
 static int backend_authenticate(struct backend *s, struct protocol_t *prot,
@@ -349,11 +353,13 @@ void backend_disconnect(struct backend *s, struct protocol_t *prot)
     prot_NONBLOCK(s->in);
     prot_fill(s->in);
 
+#ifdef HAVE_SSL
     /* Free tlsconn */
     if (s->tlsconn) {
 	tls_reset_servertls(&s->tlsconn);
 	s->tlsconn = NULL;
     }
+#endif /* HAVE_SSL */
 
     /* close/free socket & prot layer */
     cyrus_close_sock(s->sock);
