@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.115 2000/02/15 22:21:23 leg Exp $
+ * $Id: mboxlist.c,v 1.116 2000/02/22 05:06:45 leg Exp $
  */
 
 #include <config.h>
@@ -1169,7 +1169,7 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	goto done;
     } else {
 	access = acl_myrights(auth_state, oldacl);
-	if (!(access & ACL_DELETE)) {
+	if (!(access & ACL_DELETE) && !isadmin) {
 	    r = (isadmin || (access & ACL_LOOKUP)) ?
 		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	    goto done;
@@ -1210,8 +1210,6 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-
-
     /* 3. open ACAP connection if necessary */
     acaphandle = acapmbox_get_handle();
 
@@ -1242,7 +1240,6 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 
     /* create new entry */
     newent = xmalloc(sizeof(struct mbox_entry) + strlen(oldacl));
-
     strcpy(newent->name, newname);
     strcpy(newent->partition, newpartition);
     newent->mbtype = mbtype;
