@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.1.2.9 2004/06/18 16:13:38 ken3 Exp $
+ * $Id: lmtp_sieve.c,v 1.1.2.10 2004/06/24 15:16:27 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -165,7 +165,7 @@ static int getenvelope(void *mc, const char *field, const char ***contents)
     }
 }
 
-static int getbody(void *mc, const char *content_type,
+static int getbody(void *mc, const char **content_types,
 		   sieve_bodypart_t ***parts)
 {
     sieve_msgdata_t *mydata = (sieve_msgdata_t *) mc;
@@ -180,7 +180,7 @@ static int getbody(void *mc, const char *content_type,
 
     /* XXX currently struct bodypart as defined in message.h is the same as
        sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
-    if (!r) message_fetch_part(mydata->content, content_type,
+    if (!r) message_fetch_part(mydata->content, content_types,
 			       (struct bodypart ***) parts);
     return (!r ? SIEVE_OK : SIEVE_FAIL);
 }

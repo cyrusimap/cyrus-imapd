@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.29 2004/06/15 17:13:26 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.30 2004/06/24 15:16:23 ken3 Exp $ */
 
 #include <config.h>
 
@@ -190,7 +190,7 @@ void cmd_append(char *tag, char *name);
 void cmd_select(char *tag, char *cmd, char *name);
 void cmd_close(char *tag);
 void cmd_fetch(char *tag, char *sequence, int usinguid);
-void cmd_partial(char *tag, const char *msgno, char *data,
+void cmd_partial(const char *tag, const char *msgno, char *data,
 		 const char *start, const char *count);
 void cmd_store(char *tag, char *sequence, char *operation, int usinguid);
 void cmd_search(char *tag, int usinguid);
@@ -257,9 +257,8 @@ void printstring(const char *s);
 void printastring(const char *s);
 
 void appendfieldlist(struct fieldlist **l, char *section,
-			struct strlist *fields, char *trail);
-void appendstrlist(struct strlist **l, char *s);
-void appendstrlistpat(struct strlist **l, char *s);
+		     struct strlist *fields, char *trail,
+		     void *d, size_t size);
 void freefieldlist(struct fieldlist *l);
 void freestrlist(struct strlist *l);
 void appendsearchargs(struct searchargs *s, struct searchargs *s1,
@@ -3004,23 +3003,24 @@ void cmd_unselect(char *tag)
  * Parse the syntax for a partial fetch:
  *   "<" number "." nz-number ">"
  */
-#define parse_partial()							\
+#define PARSE_PARTIAL(start_octet, octet_count)			        \
+    (start_octet) = (octet_count) = 0;                                  \
     if (*p == '<' && isdigit((int) p[1])) {				\
-	fetchargs.start_octet = p[1] - '0';				\
+	(start_octet) = p[1] - '0';				\
 	p += 2;								\
 	while (isdigit((int) *p)) {					\
-	    fetchargs.start_octet =					\
-		fetchargs.start_octet * 10 + *p++ - '0';		\
+	    (start_octet) =					\
+		(start_octet) * 10 + *p++ - '0';		\
 	}								\
 									\
 	if (*p == '.' && p[1] >= '1' && p[1] <= '9') {			\
-	    fetchargs.octet_count = p[1] - '0';				\
+	    (octet_count) = p[1] - '0';				\
 	    p[0] = '>'; p[1] = '\0'; /* clip off the octet count 	\
 					(its not used in the reply) */	\
 	    p += 2;							\
 	    while (isdigit((int) *p)) {					\
-		fetchargs.octet_count =					\
-		    fetchargs.octet_count * 10 + *p++ - '0';		\
+		(octet_count) =					\
+		    (octet_count) * 10 + *p++ - '0';		\
 	    }								\
 	}								\
 	else p--;							\
@@ -3047,6 +3047,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     int inlist = 0;
     int fetchitems = 0;
     struct fetchargs fetchargs;
+    struct octetinfo oi;
     struct strlist *newfields = 0;
     char *p, *section;
     int fetchedsomething, r;
@@ -3109,7 +3110,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		}
 		p++;
 
-		if (!binsize) parse_partial();
+		if (!binsize) PARSE_PARTIAL(oi.start_octet, oi.octet_count);
 
 		if (*p) {
 		    prot_printf(imapd_out, "%s BAD Junk after body section\r\n", tag);
@@ -3117,9 +3118,9 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		    goto freeargs;
 		}
 		if (binsize)
-		    appendstrlist(&fetchargs.sizesections, section);
+		    appendstrlist_withdata(&fetchargs.sizesections, section, &oi, sizeof(oi));
 		else
-		    appendstrlist(&fetchargs.binsections, section);
+		    appendstrlist_withdata(&fetchargs.binsections, section, &oi, sizeof(oi));
 	    }
 	    else if (!strcmp(fetchatt.s, "BODY")) {
 		fetchitems |= FETCH_BODY;
@@ -3205,7 +3206,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 			goto freeargs;
 		    }
 
-		    parse_partial();
+		    PARSE_PARTIAL(oi.start_octet, oi.octet_count);
 
 		    if (*p) {
 			prot_printf(imapd_out, "%s BAD Junk after body section\r\n", tag);
@@ -3213,7 +3214,8 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 			goto freeargs;
 		    }
 		    appendfieldlist(&fetchargs.fsections,
-				    section, newfields, fieldname.s);
+				    section, newfields, fieldname.s,
+				    &oi, sizeof(oi));
 		    newfields = 0;
 		    break;
 		}
@@ -3241,14 +3243,15 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		}
 		p++;
 
-		parse_partial();
+		PARSE_PARTIAL(oi.start_octet, oi.octet_count);
 
 		if (*p) {
 		    prot_printf(imapd_out, "%s BAD Junk after body section\r\n", tag);
 		    eatline(imapd_in, c);
 		    goto freeargs;
 		}
-		appendstrlist(&fetchargs.bodysections, section);
+		appendstrlist_withdata(&fetchargs.bodysections, section,
+				       &oi, sizeof(oi));
 	    }
 	    else goto badatt;
 	    break;
@@ -3425,10 +3428,12 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     freestrlist(fetchargs.headers_not);
 }
 
+#undef PARSE_PARTIAL /* cleanup */
+
 /*
  * Perform a PARTIAL command
  */
-void cmd_partial(char *tag, const char *msgno, char *data,
+void cmd_partial(const char *tag, const char *msgno, char *data,
 		 const char *start, const char *count)
 {
     const char *pc;
@@ -3491,7 +3496,7 @@ void cmd_partial(char *tag, const char *msgno, char *data,
 	    freestrlist(fetchargs.bodysections);
 	    return;
 	}
-	*p = '\0';
+	*(p+1) = '\0'; /* Keep the closing bracket in place */
 	appendstrlist(&fetchargs.bodysections, section);
     }
     else {
@@ -8290,11 +8295,9 @@ const char *s;
  * Append 'section', 'fields', 'trail' to the fieldlist 'l'.
  */
 void
-appendfieldlist(l, section, fields, trail)
-struct fieldlist **l;
-char *section;
-struct strlist *fields;
-char *trail;
+appendfieldlist(struct fieldlist **l, char *section,
+		struct strlist *fields, char *trail,
+		void *d, size_t size)
 {
     struct fieldlist **tail = l;
 
@@ -8304,6 +8307,12 @@ char *trail;
     (*tail)->section = xstrdup(section);
     (*tail)->fields = fields;
     (*tail)->trail = xstrdup(trail);
+    if(d && size) {
+	(*tail)->rock = xmalloc(size);
+	memcpy((*tail)->rock, d, size);
+    } else {
+	(*tail)->rock = NULL;
+    }
     (*tail)->next = 0;
 }
 
@@ -8311,9 +8320,7 @@ char *trail;
 /*
  * Free the fieldlist 'l'
  */
-void
-freefieldlist(l)
-struct fieldlist *l;
+void freefieldlist(struct fieldlist *l)
 {
     struct fieldlist *n;
 
@@ -8322,6 +8329,7 @@ struct fieldlist *l;
 	free(l->section);
 	freestrlist(l->fields);
 	free(l->trail);
+	if (l->rock) free(l->rock);
 	free((char *)l);
 	l = n;
     }

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.85.2.7 2004/05/25 01:28:18 ken3 Exp $ */
+/* $Id: master.c,v 1.85.2.8 2004/06/24 15:16:31 ken3 Exp $ */
 
 #include <config.h>
 
@@ -378,18 +378,22 @@ void service_create(struct service *s)
  	} else if (!strcmp(s->proto, "tcp4")) {
  	    hints.ai_family = PF_INET;
  	    hints.ai_socktype = SOCK_STREAM;
+#ifdef PF_INET6
  	} else if (!strcmp(s->proto, "tcp6")) {
  	    hints.ai_family = PF_INET6;
  	    hints.ai_socktype = SOCK_STREAM;
+#endif
  	} else if (!strcmp(s->proto, "udp")) {
  	    hints.ai_family = PF_UNSPEC;
  	    hints.ai_socktype = SOCK_DGRAM;
  	} else if (!strcmp(s->proto, "udp4")) {
  	    hints.ai_family = PF_INET;
  	    hints.ai_socktype = SOCK_DGRAM;
- 	} else if (!strcmp(s->proto, "udp6")) {
+#ifdef PF_INET6 
+	} else if (!strcmp(s->proto, "udp6")) {
  	    hints.ai_family = PF_INET6;
  	    hints.ai_socktype = SOCK_DGRAM;
+#endif
  	} else {
   	    syslog(LOG_INFO, "invalid proto '%s', disabling %s",
 		   s->proto, s->name);

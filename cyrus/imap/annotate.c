@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.16.2.7 2004/05/25 01:28:01 ken3 Exp $
+ * $Id: annotate.c,v 1.16.2.8 2004/06/24 15:16:22 ken3 Exp $
  */
 
 #include <config.h>
@@ -91,12 +91,9 @@ int (*proxy_store_func)(const char *server, const char *mbox_pat,
 
 /* String List Management */
 /*
- * Append 's' to the strlist 'l'.
+ * Append 's' to the strlist 'l'.  Possibly include metadata.
  */
-void
-appendstrlist(l, s)
-struct strlist **l;
-char *s;
+void appendstrlist_withdata(struct strlist **l, char *s, void *d, size_t size)
 {
     struct strlist **tail = l;
 
@@ -105,17 +102,28 @@ char *s;
     *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
     (*tail)->s = xstrdup(s);
     (*tail)->p = 0;
+    if(d && size) {
+	(*tail)->rock = xmalloc(size);
+	memcpy((*tail)->rock, d, size);
+    } else {
+	(*tail)->rock = NULL;
+    }
     (*tail)->next = 0;
+}
+
+/*
+ * Append 's' to the strlist 'l'.
+ */
+void appendstrlist(struct strlist **l, char *s) 
+{
+    appendstrlist_withdata(l, s, NULL, 0);
 }
 
 /*
  * Append 's' to the strlist 'l', compiling it as a pattern.
  * Caller must pass in memory that is freed when the strlist is freed.
  */
-void
-appendstrlistpat(l, s)
-struct strlist **l;
-char *s;
+void appendstrlistpat(struct strlist **l, char *s)
 {
     struct strlist **tail = l;
 
@@ -123,6 +131,7 @@ char *s;
 
     *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
     (*tail)->s = s;
+    (*tail)->rock = NULL;
     (*tail)->p = charset_compilepat(s);
     (*tail)->next = 0;
 }
@@ -130,9 +139,7 @@ char *s;
 /*
  * Free the strlist 'l'
  */
-void
-freestrlist(l)
-struct strlist *l;
+void freestrlist(struct strlist *l)
 {
     struct strlist *n;
 
@@ -140,6 +147,7 @@ struct strlist *l;
 	n = l->next;
 	free(l->s);
 	if (l->p) charset_freepat(l->p);
+	if (l->rock) free(l->rock);
 	free((char *)l);
 	l = n;
     }
@@ -1788,7 +1796,9 @@ int annotatemore_store(char *mailbox,
 	if (proxy_store_func) {
 	    if (!r) {
 		/* proxy command to backends */
-		struct proxy_rock prock = { mailbox, l };
+		struct proxy_rock prock = { NULL, NULL };
+		prock.mbox_pat = mailbox;
+		prock.entryatts = l;
 		hash_enumerate(&sdata.server_table, store_proxy, &prock);
 	    }
 	    free_hash_table(&sdata.server_table, NULL);

@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.55.2.1 2004/05/25 01:28:07 ken3 Exp $
+ * $Id: imapd.h,v 1.55.2.2 2004/06/24 15:16:25 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -55,23 +55,15 @@ extern char *imapd_userid;
 /* Authorization state for logged in userid */
 extern struct auth_state *imapd_authstate;
 
-/* True if user is an admin */
-extern int imapd_userisadmin;
-
-/* Currently open mailbox */
-extern struct mailbox *imapd_mailbox;
-
 /* Number of messages in currently open mailbox */
 extern int imapd_exists;
-
-/* Name of client host */
-extern char imapd_clienthost[];
 
 /* List of HEADER.FIELDS[.NOT] fetch specifications */
 struct fieldlist {
     char *section;		/* First part of BODY[x] value */
     struct strlist *fields;	/* List of field-names */
     char *trail;		/* Last part of BODY[x] value */
+    void *rock;
     struct fieldlist *next;
 };
 
@@ -84,11 +76,17 @@ struct fetchargs {
     struct fieldlist *fsections;  /* BODY[xHEADER.FIELDSx]<x> values */
     struct strlist *headers;	/* RFC822.HEADER.LINES */
     struct strlist *headers_not; /* RFC822.HEADER.LINES.NOT */
-    int start_octet;		/* start_octet for partial fetch */
-    int octet_count;		/* octet_count for partial fetch, or 0 */
+    int start_octet;           /* start_octet for partial fetch */
+    int octet_count;           /* octet_count for partial fetch, or 0 */
 
     bit32 cache_atleast;          /* to do headers we need atleast this
 				   * cache version */
+};
+
+struct octetinfo 
+{
+    int start_octet;
+    int octet_count;
 };
 
 /* Bitmasks for fetchitems */
@@ -105,7 +103,7 @@ enum {
     FETCH_RFC822 =              (1<<9),
     FETCH_SETSEEN =             (1<<10),
 /*     FETCH_UNCACHEDHEADER =      (1<<11) -- obsolete */
-    FETCH_IS_PARTIAL =          (1<<12), /* this is the PARTIAL command */
+    FETCH_IS_PARTIAL =          (1<<12) /* this is the PARTIAL command */
 };
 
 enum {
@@ -150,7 +148,7 @@ enum {
     SEARCH_RECENT_SET =         (1<<0),
     SEARCH_RECENT_UNSET	=       (1<<1),
     SEARCH_SEEN_SET =           (1<<2),
-    SEARCH_SEEN_UNSET =	        (1<<3),
+    SEARCH_SEEN_UNSET =	        (1<<3)
 /*    SEARCH_UNCACHEDHEADER =	(1<<4) -- obsolete */
 };
 

@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.14.2.3 2004/01/15 20:24:32 ken3 Exp $
+ * $Id: version.c,v 1.14.2.4 2004/06/24 15:16:29 ken3 Exp $
  */
 
 #include <config.h>
@@ -63,8 +63,10 @@
 #include "lock.h"
 #include "nonblock.h"
 #include "idle.h"
-#include "sieve_interface.h"
 
+#ifdef USE_SIEVE
+#include "sieve_interface.h"
+#endif
 
 static char id_resp_command[MAXIDVALUELEN];
 static char id_resp_arguments[MAXIDVALUELEN] = "";

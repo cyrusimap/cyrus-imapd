@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.8 2004/05/25 01:28:07 ken3 Exp $
+ * $Id: index.c,v 1.199.2.9 2004/06/24 15:16:26 ken3 Exp $
  */
 #include <config.h>
 
@@ -356,6 +356,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	r = seen_open(mailbox, imapd_userid, SEEN_CREATE, &seendb);
 	if (!r) {
 	    free(seenuids);
+	    seenuids = NULL;
 	    r = seen_lockread(seendb, &last_read, &recentuid,
 			      &seen_last_change, &seenuids);
 	    if (r) seen_close(seendb);
@@ -1863,7 +1864,7 @@ static int index_fetchsection(const char *resp,
 	else if (p[6] == '.') {
 	    /* BINARY.SIZE */
 	    prot_printf(imapd_out, "%s%u", resp, size);
-
+	    
 	    if (decbuf) free(decbuf);
 	    return 0;
 	}
@@ -2320,7 +2321,9 @@ static int index_fetchreply(struct mailbox *mailbox,
     int fetchitems = fetchargs->fetchitems;
     const char *msg_base = 0;
     unsigned long msg_size = 0;
+    struct octetinfo *oi = NULL;
     int sepchar = '(';
+    int started = 0;
     int i;
     bit32 user_flags[MAX_USER_FLAGS/32];
     const char *cacheitem;
@@ -2361,6 +2364,7 @@ static int index_fetchreply(struct mailbox *mailbox,
 	     fetchargs->headers || fetchargs->headers_not) {
 	/* these fetch items will always succeed, so start the response */
 	prot_printf(imapd_out, "* %u FETCH ", msgno);
+	started = 1;
     }
     if (fetchitems & FETCH_UID) {
 	prot_printf(imapd_out, "%cUID %u", sepchar, UID(msgno));
@@ -2460,6 +2464,8 @@ static int index_fetchreply(struct mailbox *mailbox,
 	prot_putc(')', imapd_out);
 	sepchar = ' ';
 
+	oi = (struct octetinfo *)fsection->rock;
+
 	prot_printf(imapd_out, "%s ", fsection->trail);
 
 	if(fetchargs->cache_atleast > CACHE_VERSION(msgno)) {
@@ -2470,16 +2476,22 @@ static int index_fetchreply(struct mailbox *mailbox,
 	    
 	    index_fetchfsection(msg_base, msg_size, mailbox->format, fsection,
 				cacheitem,
-				fetchargs->start_octet, fetchargs->octet_count);
+				(fetchitems & FETCH_IS_PARTIAL) ?
+				  fetchargs->start_octet : oi->start_octet,
+				(fetchitems & FETCH_IS_PARTIAL) ?
+				  fetchargs->octet_count : oi->octet_count);
 	}
 	else {
 	    index_fetchcacheheader(msgno, fsection->fields,
-				   fetchargs->start_octet, fetchargs->octet_count);
+				   (fetchitems & FETCH_IS_PARTIAL) ?
+				     fetchargs->start_octet : oi->start_octet,
+				   (fetchitems & FETCH_IS_PARTIAL) ?
+				     fetchargs->octet_count : oi->octet_count);
 	}
     }
     for (section = fetchargs->bodysections; section; section = section->next) {
 	respbuf[0] = 0;
-	if (sepchar == '(') {
+	if (sepchar == '(' && !started) {
 	    /* we haven't output a fetch item yet, so start the response */
 	    snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
 	}
@@ -2491,14 +2503,19 @@ static int index_fetchreply(struct mailbox *mailbox,
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
 
+	oi = section->rock;
+
 	r = index_fetchsection(respbuf, msg_base, msg_size, mailbox->format,
 			       section->s, cacheitem, SIZE(msgno),
-			       fetchargs->start_octet, fetchargs->octet_count);
+			       (fetchitems & FETCH_IS_PARTIAL) ?
+				 fetchargs->start_octet : oi->start_octet,
+			       (fetchitems & FETCH_IS_PARTIAL) ?
+			         fetchargs->octet_count : oi->octet_count);
 	if (!r)	sepchar = ' ';
     }
     for (section = fetchargs->binsections; section; section = section->next) {
 	respbuf[0] = 0;
-	if (sepchar == '(') {
+	if (sepchar == '(' && !started) {
 	    /* we haven't output a fetch item yet, so start the response */
 	    snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
 	}
@@ -2510,14 +2527,19 @@ static int index_fetchreply(struct mailbox *mailbox,
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
 
+	oi = section->rock;
+
 	r = index_fetchsection(respbuf, msg_base, msg_size, mailbox->format,
 			       section->s, cacheitem, SIZE(msgno),
-			       fetchargs->start_octet, fetchargs->octet_count);
+			       (fetchitems & FETCH_IS_PARTIAL) ?
+				 fetchargs->start_octet : oi->start_octet,
+			       (fetchitems & FETCH_IS_PARTIAL) ?
+			         fetchargs->octet_count : oi->octet_count);
 	if (!r)	sepchar = ' ';
     }
     for (section = fetchargs->sizesections; section; section = section->next) {
 	respbuf[0] = 0;
-	if (sepchar == '(') {
+	if (sepchar == '(' && !started) {
 	    /* we haven't output a fetch item yet, so start the response */
 	    snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
 	}
@@ -4907,12 +4929,14 @@ extern char *index_getheader(struct mailbox *mailbox, unsigned msgno,
 {
     static const char *msg_base = 0;
     static unsigned long msg_size = 0;
-    struct strlist headers = { hdr, NULL, NULL };
+    struct strlist headers = { NULL, NULL, NULL };
     static char *alloc = NULL;
     static int allocsize = 0;
     const char *cacheitem;
     unsigned size;
     char *buf;
+
+    headers.s = hdr;
 
     if (msg_base) {
 	mailbox_unmap_message(NULL, 0, &msg_base, &msg_size);
