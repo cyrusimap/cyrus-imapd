@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.193 2003/05/09 19:30:24 rjs3 Exp $
+ * $Id: index.c,v 1.194 2003/05/10 15:56:02 rjs3 Exp $
  */
 #include <config.h>
 
@@ -376,7 +376,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     if (newexists != imapd_exists) {
 	/* Re-size flagreport and seenflag arrays if necessary */
 	if (newexists > flagalloced) {
-	    flagalloced *= 2; /* Reallocate by powers of 2 */
+	    flagalloced = newexists * 2;
 	    flagreport = (time_t *)
 	      xrealloc((char *)flagreport, (flagalloced+1) * sizeof(time_t));
 	    seenflag = xrealloc(seenflag, flagalloced+1);
