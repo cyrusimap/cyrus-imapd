@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.215 2002/02/07 17:45:49 rjs3 Exp $
+dnl $Id: configure.in,v 1.216 2002/02/13 05:58:02 rjs3 Exp $
 dnl
 
 
@@ -780,6 +780,12 @@ if test "$sievedir" != "no"; then
 	PERL_SUBDIRS="${PERL_SUBDIRS} sieve"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} perl/sieve/Makefile perl/sieve/lib/Makefile"
 fi
+
+dnl Check for MD5 functions
+AC_FUNC_CHECK(MD5Init,,
+       AC_CHECK_LIB(md, MD5Init, LIBS="${LIBS} -lmd",
+                    MD5OBJ="md5.o"))
+AC_SUBST(MD5OBJ)
 
 dnl
 dnl Check for sasl_checkapop()
