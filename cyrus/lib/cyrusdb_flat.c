@@ -1,4 +1,4 @@
-/*  cyrusdb_flat: flat file backend
+/*  cyrusdb_flat: a sorted flat textfile backend
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.19.4.7 2002/11/25 20:59:27 ken3 Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.19.4.8 2003/02/11 15:45:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -71,7 +71,7 @@ struct db {
     char *fname;
 
     int fd;			/* current file open */
-    unsigned long ino;
+    ino_t ino;
 
     const char *base;		/* contents of file */
     unsigned long size;		/* actual size */

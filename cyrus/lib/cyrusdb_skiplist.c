@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.34.6.3 2002/12/20 18:38:52 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.34.6.4 2003/02/11 15:45:07 ken3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -141,7 +141,7 @@ struct db {
     const char *map_base;
     unsigned long map_len;	/* mapped size */
     unsigned long map_size;	/* actual size */
-    unsigned long map_ino;
+    ino_t map_ino;
 
     /* header info */
     int version;
@@ -913,7 +913,7 @@ int myforeach(struct db *db,
 	if (prefixlen && compare(KEY(ptr), prefixlen, prefix, prefixlen)) break;
 
 	if (goodp(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr))) {
-	    unsigned long ino = db->map_ino;
+	    ino_t ino = db->map_ino;
 	    unsigned long sz = db->map_size;
 
 	    if (!tid) {
@@ -1285,6 +1285,11 @@ int mycommit(struct db *db, struct txn *tid)
         goto done;
     }
 
+    /* xxx consider unlocking the database here: the transaction isn't
+       yet durable but the file is in a form that is consistent for
+       other transactions to use. releasing the lock here would give
+       ACI properties. */
+    
     /* write a commit record */
     assert(tid->syncfd != -1);
     lseek(tid->syncfd, tid->logend, SEEK_SET);

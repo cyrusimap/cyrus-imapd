@@ -1,5 +1,5 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
- $Id: seen_local.c,v 1.33.4.3 2002/12/20 18:32:08 rjs3 Exp $
+ $Id: seen_local.c,v 1.33.4.4 2003/02/11 15:45:05 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,7 +73,7 @@ struct seen {
     int fd;
     const char *base;
     unsigned long size;
-    long ino;
+    ino_t ino;
     long offset;
     long length;
     struct mailbox *mailbox;
