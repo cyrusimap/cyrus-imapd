@@ -1220,7 +1220,9 @@ void *deciderock;
     int lastmsgdeleted = 1;
     unsigned long cachediff = 0;
     unsigned long cachestart = sizeof(bit32);
+    unsigned long cache_len;
     unsigned long cache_offset;
+    struct stat sbuf;
     long left;
     char *fnametail;
 
@@ -1240,8 +1242,13 @@ void *deciderock;
 	return r;
     }
 
+    if (fstat(mailbox->cache_fd, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstating %s: %m", fnamebuf);
+	fatal("can't fstat cache file", EX_OSFILE);
+    }
+    cache_len = sbuf.st_size;
     map_refresh(mailbox->cache_fd, 0, &mailbox->cache_base,
-		&mailbox->cache_len, MAP_UNKNOWN_LEN, "cache", mailbox->name);
+		&mailbox->cache_len, cache_len, "cache", mailbox->name);
 
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_INDEX);
@@ -1338,7 +1345,7 @@ void *deciderock;
     /* Copy over any remaining cache file data */
     if (!lastmsgdeleted) {
 	fwrite(mailbox->cache_base + cachestart, 1,
-	       mailbox->cache_len - cachestart, newcache);
+	       cache_len - cachestart, newcache);
     }
 
     /* Fix up information in index header */
