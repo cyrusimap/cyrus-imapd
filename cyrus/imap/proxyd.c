@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.39 2000/06/20 18:10:36 leg Exp $ */
+/* $Id: proxyd.c,v 1.40 2000/07/03 20:16:09 leg Exp $ */
 
 #include <config.h>
 
@@ -3005,7 +3005,7 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 
     if (!strcmp(namespace, "mailboxes")) {
 	mboxlist_findsub(pattern, proxyd_userisadmin, proxyd_userid,
-			 proxyd_authstate, mailboxdata, NULL);
+			 proxyd_authstate, mailboxdata, NULL, 1);
     } else if (!strcmp(namespace, "all.mailboxes")) {
 	mboxlist_findall(pattern, proxyd_userisadmin, proxyd_userid,
 			 proxyd_authstate, mailboxdata, NULL);
