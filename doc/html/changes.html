@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.38 1998/06/04 20:14:44 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.39 1998/06/07 23:36:51 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -8,6 +8,15 @@
 <h2> Changes to the Cyrus IMAP Server Since Version 1.5.2</h2>
 
 <ul>
+
+<li> The checks for Tcl in configure are much smarter.  If tclsh is in your
+	path, it should work.  (All the previous checks to look for Tcl
+	libraries are gone; now, configure runs tclsh and asks it where
+	the Tcl libraries are, then runs the shell scripts that are in
+	that directory.)
+
+<li> The checks for com_err in configure are a little smarter and look
+	to see if all the pieces are there before trying to use them.
 
 <li> Added support for the NAMESPACE extension (if --enable-experiment is
 	supplied).
@@ -21,6 +30,8 @@
 <h2>Changes to the Cyrus IMAP Server Since Version 1.5.2</h2>
 
 <ul>
+
+<li> Patches from John Myers, including more glob fixes.
 
 <li> Use the default hash function from DB. Note that this means that
 	  the existing <tt>delivered.db</tt> and <tt>ptscache.db</tt>
@@ -516,7 +527,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Thu Jun  4 16:14:16 1998
+last modified by tjs at Sun Jun  7 19:34:06 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
