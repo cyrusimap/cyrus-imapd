@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.164.4.31 2003/06/19 20:49:46 ken3 Exp $
+# $Id: Makefile.in,v 1.164.4.32 2003/06/20 00:51:33 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -136,6 +136,7 @@ install:
 	do \
 		$(INSTALL) -m 755 $$file $(DESTDIR)$(cyrus_prefix)/bin || exit 1; \
 	done
+	ln -f $(DESTDIR)$(cyrus_prefix)/bin/pop3d $(DESTDIR)$(cyrus_prefix)/bin/pop3proxyd
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
