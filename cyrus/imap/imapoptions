@@ -40,7 +40,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.1.4.10 2002/10/07 16:18:30 rjs3 Exp $
+.\" $Id: imapoptions,v 1.1.4.11 2002/10/09 20:58:29 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -262,7 +262,8 @@ are listed with ``<none>''.
    some information of greater use. */
 
 { "newspeer", NULL, STRING }
-/* The upstream news server to which articles are fed. */
+/* The fully qualified hostname of the upstream news server to which
+   articles should be fed. */
 
 { "newspostuser", "post", STRING }
 /* Userid used to deliver usenet articles to newsgroup folders.  For
@@ -270,7 +271,7 @@ are listed with ``<none>''.
    would be delivered to the "comp.mail.imap" folder.  By default, an
    email address of "post+comp.mail.imap" would be used. */ 
 
-{ "newsprefix", 0, STRING }
+{ "newsprefix", NULL, STRING }
 /* Prefix to be prepended to newsgroup names to make the corresponding
    IMAP mailbox names. */
 
