@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.123 2000/06/17 04:20:22 ken3 Exp $
+ * $Id: index.c,v 1.124 2000/06/18 19:02:49 ken3 Exp $
  */
 #include <config.h>
 
@@ -270,7 +270,7 @@ static void index_thread_jwz P((unsigned *msgno_list, int nmsg,
 static struct thread_algorithm thread_algs[] = {
     { "ORDEREDSUBJECT", index_thread_orderedsubj },
 #ifdef ENABLE_THREAD_JWZ
-    { "JWZ", index_thread_jwz },
+    { "X-JWZ", index_thread_jwz },
 #endif
     { NULL, NULL }
 };
@@ -3635,11 +3635,11 @@ int find_thread_algorithm(char *arg)
  */
 
 /*
- * Determines if child is related to parent (is child a descendent of parent?).
+ * Determines if child is a descendent of parent.
  *
  * Returns 1 if yes, 0 otherwise.
  */
-static int thread_is_related(Thread *parent, Thread *child)
+static int thread_is_descendent(Thread *parent, Thread *child)
 {
     Thread *kid;
 
@@ -3648,10 +3648,9 @@ static int thread_is_related(Thread *parent, Thread *child)
 	return 1;
 
     /* search each child's decendents */
-    kid = parent->child;
-    while (kid) {
-	if (thread_is_related(kid, child)) return 1;
-	kid = kid->next;
+    for (kid = parent->child; kid; kid = kid->next) {
+	if (thread_is_descendent(kid, child))
+	    return 1;
     }
     return 0;
 }
@@ -3685,11 +3684,10 @@ static void thread_orphan_child(Thread *child)
     }
 
     /* unlink child */
-    if (!prev)	/* we're at the root */
+    if (!prev)	/* first child */
 	child->parent->child = child->next;
     else
 	prev->next = child->next;
-
     child->parent = child->next = NULL;
 }
 
@@ -3702,6 +3700,7 @@ void jwz_link_messages(MsgData *msgdata, Thread **newnode,
     Thread *cur, *parent, *ref;
     int i;
 
+    /* for each message... */
     while (msgdata) {
 	/* Step 1A: fill the containers with msgdata
 	 *
@@ -3735,7 +3734,7 @@ void jwz_link_messages(MsgData *msgdata, Thread **newnode,
 	     * - we won't create a loop
 	     */
 	    if (!ref->parent &&
-		parent && !thread_is_related(ref, parent)) {
+		parent && !thread_is_descendent(ref, parent)) {
 		thread_adopt_child(parent, ref);
 	    }
 
@@ -3753,7 +3752,7 @@ void jwz_link_messages(MsgData *msgdata, Thread **newnode,
 	/* make the last reference the parent of our message iff:
 	 * - we won't create a loop
 	 */
-	if (parent && !thread_is_related(cur, parent))
+	if (parent && !thread_is_descendent(cur, parent))
 	    thread_adopt_child(parent, cur);
 
 	msgdata = msgdata->next;
@@ -3800,7 +3799,7 @@ static void jwz_prune_tree(Thread *parent)
 
 	/* if we have an empty container with no children, delete it */
 	if (!cur->msgdata && !cur->child) {
-	    if (!prev)	/* we're at the root */
+	    if (!prev)	/* first child */
 		parent->child = cur->next;
 	    else
 		prev->next = cur->next;
@@ -3819,7 +3818,7 @@ static void jwz_prune_tree(Thread *parent)
 	else if (!cur->msgdata && cur->child &&
 		 (cur->parent || !cur->child->next)) {
 	    /* move cur's children into cur's place (start the splice) */
-	    if (!prev)	/* we're at the root */
+	    if (!prev)	/* first child */
 		parent->child = cur->child;
 	    else
 		prev->next = cur->child;
@@ -3827,9 +3826,10 @@ static void jwz_prune_tree(Thread *parent)
 	    /* make cur's parent the new parent of cur's children
 	     * (they're moving in with grandma!)
 	     */
-	    for (child = cur->child; child->next; child = child->next)
+	    child = cur->child;
+	    do {
 		child->parent = cur->parent;
-	    child->parent = cur->parent;
+	    } while (child->next && (child = child->next));
 
 	    /* make the cur's last child point to cur's next sibling
 	     * (finish the splice)
@@ -3842,7 +3842,7 @@ static void jwz_prune_tree(Thread *parent)
 	    next = cur->child;
 
 	    /* make cur childless and siblingless */
-	    cur->child = cur->next = NULL
+	    cur->child = cur->next = NULL;
 
 	    /* we just removed cur from our list,
 	     * so we need to keep the same prev for the next pass
@@ -3867,7 +3867,9 @@ void jwz_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
      */
     construct_hash_table(&subj_table, nroot);
 
-    /* Step 5B: populate the table with a container for-empty subject */
+    /* Step 5B: populate the table with a container for each subject
+     * at the root
+     */
     for (cur = root->child; cur; cur = cur->next) {	
 	/* if the container is not empty, use it's subject */
 	if (cur->msgdata)
@@ -3919,7 +3921,7 @@ void jwz_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 
 	/* ok, we already have a container which contains our current subject,
 	 * so pull this container out of the root set, because we are going to
-	 * merge this with something else
+	 * merge this node with another one
 	 */
 	if (!prev)	/* we're at the root */
 	    root->child = cur->next;
@@ -3930,7 +3932,7 @@ void jwz_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 	/* if both containers are dummies, append cur's children to old's */
 	if (!old->msgdata && !cur->msgdata) {
 	    /* find old's last child */
-	    for (child = old->child; child && child->next; child = child->next);
+	    for (child = old->child; child->next; child = child->next);
 
 	    /* append cur's children to old's children list */
 	    child->next = cur->child;
@@ -3957,13 +3959,12 @@ void jwz_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 	    thread_adopt_child(old, cur);
 	}
 
-	/* perhaps we can create a parent-child relationship
-	 * between re/fwds by counting the number of re/fwds
-	 */
-
 	/* if both messages are re/fwds OR neither are re/fwds,
 	 * then make them both children of a new dummy container
 	 * (we don't want to assume any parent-child relationship between them)
+	 *
+	 * perhaps we can create a parent-child relationship
+	 * between re/fwds by counting the number of re/fwds
 	 *
 	 * Note: we need the hash table to still point to old,
 	 * so we must make old the dummy and make the contents of the
