@@ -1,7 +1,129 @@
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
+<!-- Changed by: John Gardiner Myers, 18-Oct-1995 -->
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.3</h2>
+
+<ul>
+
+<LI> Implemented the "<TT>reconstruct -m</TT>" command, for
+reconstructing the <TT>mailboxes</TT> file.  <B>IMPORTANT:</B> it is
+necessary to run the command "<TT>reconstruct -m</TT>" as the cyrus
+user after upgrading the Cyrus IMAP software from version 1.3 or
+earlier.  We recommend you make a backup copy of the
+<TT>mailboxes</TT> file in the configuration directory before
+performing the conversion.
+
+<LI>Mailbox names are now case
+sensitive, not case insensitive.  "<TT>INBOX</TT>" is the exception, and is treated as being case-insensitive.
+
+<LI> Personal mailboxes now appear to their owners as being under the
+"<TT>INBOX.</TT>" hierarchy.  For example, the mailbox
+"<TT>user.bovik.work</TT>" appears to the user "<TT>bovik</TT>" as
+"<TT>INBOX.work</TT>".  The user may still refer to the mailbox with the name
+"<TT>user.bovik.work</TT>".
+
+<LI> Previously, the code used "<TT>anybody</TT>" as the name of the
+group that all users are in, but the documentation used the name
+"<TT>anyone</TT>".  Changed the code to match the documentation.
+The name "<TT>anybody</TT>" will be canonicalized to the name
+"<TT>anyone</TT>".
+
+<LI> The install document now gives different recommended locations
+for the server databases.  The recommended location of the
+configuration directory changed from "<TT>/usr/cyrus</TT>" to
+"<TT>/var/imap</TT>" and the recommended location of the default
+partition directory changed from "<TT>/usr/spool/cyrus</TT>" to
+"<TT>/var/spool/imap</TT>".  It is <B>NOT</B> necessary to change the
+locations of these directories when upgrading from version 1.3 or
+earlier of the Cyrus IMAP server software.  If you do wish to change
+the locations of these directories to match the new recommendations,
+simply rename the directories and change the appropriate values in
+your <TT>/etc/imapd.conf</TT> file.
+
+<LI>Created a "<TT>make install</TT>" rule.  See the <a
+href="install.html">installation</a> document for all the new
+corresponding <TT>configure</TT> options.  Note the recommended
+location of the "<TT>imapd</TT>", "<TT>pop3d</TT>", and
+"<TT>deliver</TT>" programs has changed, this change needs to be
+reflected in the "<TT>inetd.conf</TT>" and "<TT>sendmail.cf</TT>"
+files.
+
+<LI>New "<TT>login_unix_pwcheck</TT>" module and "<TT>pwcheck</TT>"
+daemon, for improved shadow password support.   See the
+"<TT>pwcheck/README.pwcheck</TT>" file in the distribution for details.
+
+<LI>Renamed the "<TT>login_unix_shadow</TT>" module to
+"<TT>login_unix_getspnam</TT>".
+
+<LI>Added a mail notification mechanism, using Zephyr.
+
+<LI>Added a feature to automatically create user IMAP accounts.
+Controlled by the "<TT>autocreatequota</TT>" config option.
+
+<LI>Added the "<TT>logtimestamps</TT>" config option, for putting
+timestamp information into protocol telemetry logs.
+
+<LI>Beefed up the Kerberos checks in Configure to ensure the DES library
+routines exist.
+
+<LI>On some systems, the "<TT>echo</TT>" command with no arguments
+emits a newline.  Changed the installation document to instead use the
+"<TT>true</TT>" command to create the "<TT>mailboxes</TT>" file.
+
+<LI>Store a redundant copy of a mailbox's ACL in the <TT>cyrus.header</TT>
+file, so "<TT>reconstruct -m</TT>" may later use it as a backup.
+
+<LI>Had to remove the declaration of <TT>tcl_RcFileName</TT> for
+the latest version of Tcl.
+
+<LI>Make much more extensive use of memory mapping.  Replace the
+binary search module with one that searches a memory mapped area.
+
+<LI>Replaced the yacc-based RFC822 address parser with a hand-coded one.
+
+<LI>Replaced the et (error table) libary with a version that doesn't
+require lex or yacc.  Remove the lex/yacc checking from Configure.
+
+<LI>Bug fix: Issue [TRYCREATE] tag on COPY command when appropriate.
+
+<LI>Bug fix: The quoted-printable decoder wasn't ignoring trailing
+whitespace, as required by MIME.
+
+<LI>Bug fix: Don't spew cascade errors if the server gets an EOF
+during/after reading an APPEND literal.
+
+<LI>Bug fix: imclient_send was appending spaces to %d and %u and the
+response parser was not handling responses that did not contain a
+space after the keyword.
+
+<LI>Bug fix: rmnews wasn't removing some (un-indexed) article files
+correctly.
+
+<LI>Completely disabled the dropoff code for now.  It will be
+completely replaced when IMSP integration is implemented
+
+<LI>Added workaround for the Linux mkdir() problem.
+
+<LI>In Configure, use a more direct test for a working shared-memory mmap
+
+<LI>In collectnews, avoid O(n**2) behavior when processing articles
+that have already expired.
+
+<LI>Bug fix: append_addseen() would screw up if no messages were
+previously seen.
+
+<LI>Added the CMU-specific amssync and cmulocal directories.
+
+<LI>Use memmove instead of bcopy.
+
+<LI>Implemented the first pass of SMTP/MULT support in deliver.
+
+<LI>Added cacheid parameter to auth_setid(), for AFS PT server support.
+
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server Since Version 1.2</h2>
 
