@@ -1,5 +1,5 @@
 /* namespace.c -- Namespace manipulation routines
- * $Id: namespace.c,v 1.3 2001/08/14 16:10:08 leg Exp $
+ * $Id: namespace.c,v 1.4 2001/08/15 00:55:01 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -48,6 +48,7 @@
 #include "imapconf.h"
 #include "mboxname.h"
 #include "namespace.h"
+#include "assert.h"
 
 /*
  * Create namespace based on config options.
