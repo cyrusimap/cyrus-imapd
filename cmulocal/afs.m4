@@ -87,6 +87,7 @@ AC_ARG_WITH(AFS,
                         
           AC_CHECK_HEADER(afs/stds.h)
 	  AFS_CLIENT_LIBS="-lvolser -lvldb -lkauth -lprot -lubik -lauth -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a"
+	  AFS_RX_LIBS="-lauth -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a"
           AFS_KTC_LIBS="-lauth ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcom_err ${AFS_LIB_DIR}/afs/util.a"
           LIBS="$cmu_save_LIBS"
           AC_CHECK_FUNC(flock)
@@ -152,6 +153,7 @@ extern int UV_SetSecurity();],
           fi
           if test "X$AFS_BSD_LIB" != "X" ; then
                 AFS_CLIENT_LIBS="$AFS_CLIENT_LIBS $AFS_BSD_LIB"
+                AFS_RX_LIBS="$AFS_CLIENT_LIBS $AFS_BSD_LIB"
                 AFS_KTC_LIBS="$AFS_KTC_LIBS $AFS_BSD_LIB"
           fi
           LIBS="$cmu_save_LIBS $AFS_CLIENT_LIBS ${LIB_SOCKET}"
@@ -201,6 +203,7 @@ extern int UV_SetSecurity();],
              if test "X$AFS_AUDIT_LIB" = "Xyes"; then
                  AC_MSG_RESULT([yes])
                  AFS_CLIENT_LIBS="-lvolser -lvldb -lkauth -lprot -lubik -lauth -laudit -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a $AFS_BSD_LIB $AFS_DESCOMPAT_LIB"
+                 AFS_RX_LIBS="-lauth -laudit -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a $AFS_BSD_LIB $AFS_DESCOMPAT_LIB"
              else
                  AC_MSG_RESULT([unknown])
                  AC_MSG_ERROR([Could not use -lauth while testing for -laudit])
@@ -215,6 +218,7 @@ extern int UV_SetSecurity();],
 	  AC_DEFINE(AFS_ENV)
           AC_DEFINE(AFS)
           AC_SUBST(AFS_CLIENT_LIBS)
+          AC_SUBST(AFS_RX_LIBS)
           AC_SUBST(AFS_KTC_LIBS)
           AC_SUBST(AFS_INC_FLAGS)
           AC_SUBST(AFS_LIB_FLAGS)
