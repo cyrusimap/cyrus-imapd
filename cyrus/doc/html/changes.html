@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.56 1998/11/30 20:23:59 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.57 1998/12/04 17:55:19 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -8,6 +8,12 @@
 <h2> Changes to the Cyrus IMAP Server Since Version 1.5.14</h2>
 
     <ul>
+      <li>
+	LIST now honors the reference argument.  This behavior can be turned
+	off by a configuration option imapd.conf--which may be desirable
+	because of certain clients that ask for a "mail directory" setting for
+	IMAP which will now cause problems when it was ignored before.
+
       <li>
 	The <tt>arbitron</tt> program now takes a mailbox pattern argument for
 	the mailbox to run on.  The manpage always said it did anyway.
@@ -36,6 +42,8 @@
 
       <li> More cleanup the ptloader/auth_krb_pts code. If you use Kerberos
 	and IMSP, you *MUST* pick up cyrus-imspd-v1.5a6 (or newer).
+
+      <li> A few configure tweaks.
 
       <li> Duplicate delivery changes:
 	<ul>
@@ -623,7 +631,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Mon Nov 30 15:23:44 1998
+last modified by tjs at Fri Dec  4 12:56:48 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
