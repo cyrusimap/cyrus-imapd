@@ -53,9 +53,9 @@ MAN8 = $(srcdir)/arbitron.8 $(srcdir)/collectnews.8 $(srcdir)/deliver.8 \
 all:
 
 install:
-	$(INSTALL) -m 644 $(MAN1) $(DESTDIR)$(prefix)/man/man1/
-	$(INSTALL) -m 644 $(MAN5) $(DESTDIR)$(prefix)/man/man5/
-	$(INSTALL) -m 644 $(MAN8) $(DESTDIR)$(prefix)/man/man8/
+	$(INSTALL) -m 644 $(MAN1) $(DESTDIR)$(prefix)/man/man1
+	$(INSTALL) -m 644 $(MAN5) $(DESTDIR)$(prefix)/man/man5
+	$(INSTALL) -m 644 $(MAN8) $(DESTDIR)$(prefix)/man/man8
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
