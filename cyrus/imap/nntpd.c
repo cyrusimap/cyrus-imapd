@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.72 2003/03/17 17:59:22 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.73 2003/03/17 21:37:41 ken3 Exp $
  */
 
 /*
@@ -1295,7 +1295,7 @@ static void cmdloop(void)
 	    break;
 
 	case 'S':
-	    if (!strcmp(cmd.s, "Starttls")) {
+	    if (!nntp_starttls_done && !strcmp(cmd.s, "Starttls")) {
 		if (!tls_enabled()) {
 		    /* we don't support starttls */
 		    goto badcmd;
@@ -1697,7 +1697,7 @@ static void cmd_authinfo_user(char *user)
     /* possibly disallow USER */
     if (!(nntp_starttls_done || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(nntp_out,
-		    "503 AUTHINFO USER command only available under a layer\r\n");
+		    "483 AUTHINFO USER command only available under a layer\r\n");
 	return;
     }
 
@@ -2877,13 +2877,6 @@ static void cmd_starttls(int nntps)
 
     /* SASL and openssl have different ideas about whether ssf is signed */
     layerp = (int *) &ssf;
-
-    if (nntp_starttls_done == 1)
-    {
-	prot_printf(nntp_out, "483 %s\r\n", 
-		    "Already successfully executed STARTTLS");
-	return;
-    }
 
     result=tls_init_serverengine("nntp",
 				 5,        /* depth to verify */
