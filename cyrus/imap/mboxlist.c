@@ -22,6 +22,11 @@
  *
  */
 
+/*
+ * This module could stand an almost complete rewrite.
+ * Perhaps something that mmap()s in the 'mailboxes' file.
+ */
+
 #include <stdio.h>
 #include <sysexits.h>
 #include <string.h>
