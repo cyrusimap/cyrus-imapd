@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.165 2005/01/03 16:35:48 ken3 Exp $
+ * $Id: pop3d.c,v 1.166 2005/01/04 15:06:13 ken3 Exp $
  */
 #include <config.h>
 
@@ -1204,8 +1204,8 @@ void cmd_capa()
     }
     
     prot_printf(popd_out,
-		"IMPLEMENTATION Cyrus%s_%s\r\n",
-		config_mupdate_server ? "_Murder" : "", CYRUS_VERSION);
+		"IMPLEMENTATION Cyrus POP3%s server %s\r\n",
+		config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
 
     prot_printf(popd_out, ".\r\n");
     prot_flush(popd_out);
