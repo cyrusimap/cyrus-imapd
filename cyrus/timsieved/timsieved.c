@@ -160,22 +160,35 @@ static int mysasl_config(void *context,
 
 	strncpy(opt, "sasl_", 1024);
 	if (plugin_name) {
-	    strncat(opt, plugin_name, 1019);
-	    strncat(opt, "_", 1024 - sl);
+	    int i = 5;
+
+	    for (i = 0; i < strlen(plugin_name); i++) {
+		opt[i + 5] = tolower(plugin_name[i]);
+	    }
+	    opt[i] = '_';
 	}
  	strncat(opt, option, 1024 - sl - 1);
-	opt[1023] = '\0';
     } else {
 	strncpy(opt, option, 1024);
     }
+    opt[1023] = '\0';		/* paranoia */
 
-    *result = (const char *) config_getstring(opt, NULL);
-    if (*result != NULL) {
+    *result = config_getstring(opt, NULL);
+    if (*result == NULL && plugin_name) {
+	/* try again without plugin name */
+
+	strncpy(opt, "sasl_", 1024);
+ 	strncat(opt, option, 1024 - 6);
+	opt[1023] = '\0';	/* paranoia */
+	*result = config_getstring(opt, NULL);
+    }
+
+    if (*result) {
 	if (len) { *len = strlen(*result); }
 	return SASL_OK;
+    } else {
+	return SASL_FAIL;
     }
-   
-    return SASL_FAIL;
 }
 
 /* returns true if imapd_authstate is in "item";
