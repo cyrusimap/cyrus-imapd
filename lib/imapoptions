@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.20 2004/04/23 15:37:06 rjs3 Exp $
+.\" $Id: imapoptions,v 1.21 2004/04/26 19:27:29 rjs3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -192,6 +192,12 @@ are listed with ``<none>''.
 { "foolstupidclients", 0, SWITCH }
 /* If enabled, only list the personal namespace when a LIST "*" is performed.
    (it changes the request to a LIST "INBOX*" */
+
+{ "force_sasl_client_mech", NULL, STRING }
+/* Force preference of a given SASL mechanism for client side operations
+   (e.g. murder enviornments).  This is separate from (and overridden by)
+   the ability to use the <host shortname>_mechs option to set prefered
+   mechanisms for a specific host */
 
 { "fulldirhash", 0, SWITCH }
 /* If enabled, uses an improved directory hashing scheme which hashes

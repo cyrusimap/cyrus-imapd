@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.24 2004/03/04 18:42:31 rjs3 Exp $ */
+/* $Id: backend.c,v 1.25 2004/04/26 19:27:30 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -214,6 +214,10 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     if (p) *p = '\0';
     strcat(buf, "_mechs");
     mech_conf = config_getoverflowstring(buf, NULL);
+
+    if(!mech_conf) {
+	mech_conf = config_getstring(IMAPOPT_FORCE_SASL_CLIENT_MECH);
+    }
 
     do {
 	/* If we have a mech_conf, use it */
