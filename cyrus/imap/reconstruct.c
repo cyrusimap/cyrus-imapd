@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.7 2004/06/18 16:13:40 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.8 2004/07/02 14:10:02 ken3 Exp $ */
 
 #include <config.h>
 
@@ -722,8 +722,8 @@ int reconstruct(char *name, struct discovered *found)
 	}
 	message_index.last_updated = time(0);
 	
-	if ((r = message_parse_file(msgfile, NULL, NULL, &body)) != 0) {
-	    r = message_create_record(&mailbox, &message_index, body);
+	if (((r = message_parse_file(msgfile, NULL, NULL, &body)) != 0) ||
+	    ((r = message_create_record(&mailbox, &message_index, body)) != 0)) {
 	    fclose(msgfile);
 	    fclose(newindex);
 	    mailbox_close(&mailbox);
