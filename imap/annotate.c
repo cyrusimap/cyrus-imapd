@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.2 2002/04/11 18:27:33 ken3 Exp $
+ * $Id: annotate.c,v 1.3 2002/05/16 16:02:43 ken3 Exp $
  */
 
 #include <config.h>
@@ -247,7 +247,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 {
     struct strlist *e = entries;
     struct strlist *a = attribs;
-    char *mailbox, *cp;
+    char *mailbox, *cp, *wildcard;
     struct fetchdata fdata;
 
     *l = NULL;
@@ -275,7 +275,11 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 	    ((cp = strchr(e->s + 10, '}')) != NULL)) {
 	    mailbox = e->s + 10;
 	    *cp++ = '\0';
-	    if (!strcmp(cp, "/vendor/cyrus/partition")) {
+
+	    /* we only support "/vendor/cyrus/partition" right now */
+	    if (!strncmp(cp, "/vendor/cyrus/partition",
+			 (wildcard = strchr(cp, '*')) ? wildcard - cp : 23) ||
+		!strcmp(cp, "/vendor/cyrus/%")) {
 		/* Reset state in fetch_cb */
 		fetch_cb(NULL, 0, 0, 0);
 
