@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.31 2002/03/18 15:14:16 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.32 2002/04/05 19:12:54 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -173,6 +173,7 @@ typedef int rlim_t;
 
 /* getaddrinfo things */
 #include <netdb.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 
 #ifndef HAVE_GETADDRINFO
