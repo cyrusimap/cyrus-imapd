@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.82.2.9 2002/11/04 16:18:10 ken3 Exp $
+ * $Id: imtest.c,v 1.82.2.10 2002/12/17 16:15:31 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1963,7 +1963,7 @@ static int auth_nntp(void)
     
     printf("S: %s", str);
     
-    if (strncmp(str, "381", 3)) return IMTEST_FAIL;
+    if (strncmp(str, "350", 3)) return IMTEST_FAIL;
     
     printf("C: AUTHINFO PASS <omitted>\r\n");
     prot_printf(pout,"AUTHINFO PASS %s\r\n",pass);
@@ -1975,7 +1975,7 @@ static int auth_nntp(void)
     
     printf("S: %s", str);
     
-    if (!strncmp(str, "281", 3)) {
+    if (!strncmp(str, "250", 3)) {
 	return IMTEST_OK;
     } else {
 	return IMTEST_FAIL;
