@@ -1,8 +1,43 @@
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers, 17-Jun-1996 -->
+<!-- Changed by: Tim Showalter 19-Mar-1997 -->
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.5</h2>
+
+<ul>
+
+<li>Bug fix: RENAME corrupted mailboxes if they had been EXPUNGEd.  (may
+have only happened with INBOX, which Pine tickles once a month.)
+
+<li>Bug fix: auth_newstate now initializes its structures.
+
+<li>Bug fix: pop3d.c, a printf was changed to prot_printf.
+
+<li>Cyrus now sends X-NON-HIERARCHICAL-RENAME to alert clients that it is
+not handling RENAME in an IMAP4rev1 compliant manner.  This will be fixed
+in a subsequent release.
+
+<li>Bug fix: imclient_autenticate now does resolution on the hostname
+before authenticating to it.  This caused problems when
+authenticating to an address that was a CNAME.
+
+<li>Bug fix: LIST %.% (and other multiple hierarchy delimiter matches)
+works properly.  Several other glob.c fixes are included as well.
+
+<li>Bug fix: a fetch of exclusively BODY[HEADER.FIELDS...] should now
+work properly.
+
+<li> Bug fix: reconstruct now considers a nonexistant INN news directory
+        to be empty; this makes reconstruct fix the cyrus.* files in the
+        imap news partition.
+
+<li> Added a manpage for imclient.
+
+<li> Fixed a few other minor bugs.
+
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server Since Version 1.4</h2>
 

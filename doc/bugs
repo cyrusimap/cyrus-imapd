@@ -1,29 +1,25 @@
                      Known bugs in the Cyrus IMAP Server
 
-The RENAME command does not have the hierarchical behavior required by the
-IMAP4rev1 specification.  The CAPABILITY command now returns
-X-NON-HIERARCHICAL-RENAME in its response in order to advertise this bug.
-We plan to have this fixed in the next release.
+      * The RENAME command does not have the hierarchical behavior required
+        by the IMAP4rev1 specification. The CAPABILITY command now returns
+        X-NON-HIERARCHICAL-RENAME in its response in order to advertise
+        this bug. We plan to have this fixed in the next release. 
+      * If a client tries to FETCH or UID FETCH a BODY[] attribute from a
+        netnews-format mailbox, the server truncates the message by one
+        character for each line in the message (due to LF/CRLF conversion)
+        We plan to have this fixed in the next release. 
+      * Using AFS groups with ptclient, users with negative rights as part
+        of groups may be granted access to mailboes if ptclient has failed.
+        We plan to have this fixed in the next release. 
+      * LIST NIL *.% causes the current imapd process to hang. We plan to
+        have this fixed in the next release. 
+      * We are aware that cyrus.seen files are occasionally corrupted, but
+        we are not sure why this is happening. It seems to happen most with
+        mailboxes with a large number of users. We hope to have this fixed
+        in a future release. 
 
-If a client tries to FETCH or UID FETCH a BODY[] attribute from a
-netnews-format mailbox, the server truncates the message by one character
-for each line in the message (due to LF/CRLF conversion)  We plan to have
-this fixed in the next release.
+    Please report bugs to cyrus-bugs@andrew.cmu.edu. Be sure to include (at
+    least) system type, compiler used, and the options passed to configure,
+    along with a detailed report. Additional information is welcome, and
+    naturally, patches are deeply appreciated. 
 
-Using AFS groups with ptclient, users with negative rights as part of
-groups may be granted access to mailboes if ptclient has failed.  We plan
-to have this fixed in the next release.
-
-LIST NIL *.% causes the current imapd process to hang.  We plan to have
-this fixed in the next release.
-
-We are aware that cyrus.seen files are occasionally corrupted, but we are
-not sure why this is happening.  It seems to happen most with mailboxes
-with a large number of users.  We hope to have this fixed in a future
-release.
-
-
-Please report bugs to cyrus-bugs@andrew.cmu.edu.  Be sure to include
-system type, compiler used, and the options passed to configure.
-Additional information is welcome, and naturally, patches are deeply
-appreciated as well.
