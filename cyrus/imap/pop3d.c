@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.20 2004/05/05 15:02:35 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.21 2004/05/05 15:44:26 ken3 Exp $
  */
 #include <config.h>
 
@@ -207,7 +207,7 @@ static int popd_canon_user(sasl_conn_t *conn, void *context,
 	if (p = strchr(userbuf, '+')) {
 	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
 
-	    if (n > 1 && flags & SASL_CU_AUTHZID) {
+	    if (flags & SASL_CU_AUTHZID) {
 		/* make a copy of the subfolder */
 		if (popd_subfolder) free(popd_subfolder);
 		popd_subfolder = xstrndup(p, n);
@@ -1470,7 +1470,7 @@ int openinbox(void)
 				strcspn(userid, "@") : 0);
 
     /* Create the mailbox that we're trying to access */
-    if (popd_subfolder) {
+    if (popd_subfolder && popd_subfolder[1]) {
 	snprintf(extname+5, sizeof(extname)-5, "%c%s",
 		 popd_namespace.hier_sep, popd_subfolder+1);
     }
