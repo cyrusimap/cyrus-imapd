@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.2 2002/01/24 21:03:22 rjs3 Exp $
+ * $Id: mupdate.h,v 1.3 2002/01/24 22:42:03 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -102,5 +102,8 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 
 /* Given an mbent_queue, will synchronize the local database to it */
 int mupdate_synchronize(mupdate_handle *handle);
+
+/* Signal that we are ready to accept connections */
+void mupdate_ready(void);
 
 #endif /* MUPDATE_H */
