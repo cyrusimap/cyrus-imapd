@@ -132,7 +132,7 @@ a user's INBOX.
 
 * When a mailbox is created, it inherits its ACL from the closest
 parent mailbox.  If no such mailbox exists, it gets an ACL of 
-"anybody rls".  If the created mailbox is a user's INBOX, it gets an
+"anyone rls".  If the created mailbox is a user's INBOX, it gets an
 ACL that assigns all rights to the user and no rights to anyone else.
 
 The identifiers that are usable in ACL's depend on whether the Cyrus
