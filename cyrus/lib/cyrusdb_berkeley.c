@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.2.2.3 2004/03/24 19:53:14 ken3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.2.2.4 2004/11/17 15:40:43 shadow Exp $ */
 
 #include <config.h>
 
@@ -144,7 +144,9 @@ static int init(const char *dbdir, int myflags)
 	dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1);
     }
     if (CONFIG_DB_VERBOSE > 1) {
+#ifdef DB_VERB_CHKPOINT
 	dbenv->set_verbose(dbenv, DB_VERB_CHKPOINT, 1);
+#endif
     }
 
     dbenv->set_errcall(dbenv, db_err);
