@@ -215,8 +215,8 @@ int checkseen;
 	}
 	if (r) {
 	    seendb = 0;
-	    printf("* NO Unable to preserve \\Seen information: %s\r\n",
-		   error_message(r));
+	    printf("* NO %s: %s\r\n",
+		   error_message(IMAP_NO_CHECKPRESERVE), error_message(r));
 	}
 	else {
 	    /* Record our reading the mailbox */
@@ -312,8 +312,8 @@ int oldexists;
     /* Lock \Seen database and read current values */
     r = seen_lockread(seendb, &last_time, &last_uid, &newseenuids);
     if (r) {
-	printf("* NO Unable to checkpoint \\Seen state: %s\r\n",
-	       error_message(r));
+	printf("* NO %s: %s\r\n",
+	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
 	return;
     }
 
@@ -518,8 +518,8 @@ int oldexists;
     seen_unlock(seendb);
     free(seenuids);
     if (r) {
-	printf("* NO Unable to checkpoint \\Seen state: %s\r\n",
-	       error_message(r));
+	printf("* NO %s: %s\r\n",
+	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
 	free(saveseenuids);
 	seenuids = newseenuids;
 	return;
@@ -1348,7 +1348,11 @@ char *rock;
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822|FETCH_UNCACHEDHEADER)) ||
 	fetchargs->bodysections || fetchargs->headers_not) {
 	msgfile = fopen(mailbox_message_fname(mailbox, UID(msgno)), "r");
-	if (!msgfile) printf("* NO Message %d no longer exists\r\n", msgno);
+	if (!msgfile) {
+	    printf("* NO ");
+	    printf(error_code(IMAP_NO_MSGGONE), msgno);
+	    printf("\r\n");
+	}
     }
 
     /* set the \Seen flag if necessary */

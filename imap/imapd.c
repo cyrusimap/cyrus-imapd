@@ -339,7 +339,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		
 		if (imapd_userid) {
-		    printf("%s NO Already logged in\r\n", tag.s);
+		    printf("%s BAD Already logged in\r\n", tag.s);
 		    continue;
 		}
 		cmd_login(tag.s, arg1.s, arg2.s);
@@ -583,7 +583,7 @@ char *passwd;
     if (!canon_user) {
 	syslog(LOG_NOTICE, "badlogin: %s bad userid %s",
 	       imapd_clienthost, beautify_string(user));
-	printf("%s NO Invalid user %s\r\n", tag, beautify_string(user));
+	printf("%s NO %s\r\n", tag, error_message(IMAP_INVALID_USER));
 	return;
     }
 
@@ -598,7 +598,8 @@ char *passwd;
 	else {
 	    syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
 		   imapd_clienthost);
-	    printf("%s NO Anonymous login not permitted\r\n", tag);
+	    printf("%s NO %s\r\n", tag,
+		   error_message(IMAP_ANONYMOUS_NOT_PERMITTED));
 	    return;
 	}
     }
@@ -725,14 +726,13 @@ char *name;
 			 ACL_INSERT, size);
     }
     if (r) {
-	printf("%s NO %sAppend to %s failed: %s\r\n",
+	printf("%s NO %s%s\r\n",
 	       tag,
 	       (r == IMAP_MAILBOX_NONEXISTENT &&
 		mboxlist_createmailboxcheck(name, 0, imapd_userisadmin,
 					    imapd_userid, (char **)0,
 					    (char **)0) == 0)
-	       ? "[TRYCREATE] " : "",
-	       beautify_string(name), error_message(r));
+	       ? "[TRYCREATE] " : "", error_message(r));
 	goto freeflags;
     }
 
@@ -763,8 +763,7 @@ char *name;
     }
 
     if (r) {
-	printf("%s NO Append to %s failed: %s\r\n",
-	       tag, beautify_string(name), error_message(r));
+	printf("%s NO %s\r\n", tag, error_message(r));
     }
     else {
 	printf("%s OK Append completed\r\n", tag);
@@ -823,8 +822,7 @@ char *name;
     }
 
     if (r) {
-	printf("%s NO %s of %s failed: %s\r\n", tag, cmd,
-	       beautify_string(name), error_message(r));
+	printf("%s NO %s\r\n", tag, error_message(r));
 	if (doclose) mailbox_close(&mailbox);
 	return;
     }
@@ -851,11 +849,14 @@ char *name;
 	    usage = imapd_mailbox->quota_used * 100 /
 	      (imapd_mailbox->quota_limit * QUOTA_UNITS);
 	    if (usage >= 100) {
-		printf("* NO Mailbox %s is over quota\r\n", name);
+		printf("* NO ");
+		printf(error_message(IMAP_NO_OVERQUOTA), name);
+		printf("\r\n");
 	    }
 	    else if (usage > config_getint("quotawarn", 90)) {
-		printf("* NO Mailbox %s is at %d%% of quota\r\n",
-		       name, usage);
+		printf("* NO ");
+		printf(error_message(IMAP_NO_CLOSEQUOTA), name, usage);
+		printf("\r\n");
 	    }
 	}
     }
@@ -1298,7 +1299,7 @@ int usinguid;
     }
 
     if (r) {
-	printf("%s NO %s failed: %s\r\n", tag, cmd, error_message(r));
+	printf("%s NO %s\r\n", tag, error_message(r));
     }
     else {
 	printf("%s OK %s completed\r\n", tag, cmd);
@@ -1339,7 +1340,7 @@ int usinguid;
     }
 
     if (charset == -1) {
-	printf("%s NO Search failed: %s\r\n", tag,
+	printf("%s NO %s\r\n", tag,
 	       error_message(IMAP_UNRECOGNIZED_CHARSET));
     }
     else {
@@ -1377,7 +1378,7 @@ int usinguid;
     index_check(imapd_mailbox, usinguid, 0);
 
     if (r) {
-	printf("%s NO %s failed: %s\r\n", tag, cmd, error_message(r));
+	printf("%s NO %s\r\n", tag, error_message(r));
     }
     else {
 	printf("%s OK %s completed\r\n", tag, cmd);
@@ -1400,7 +1401,7 @@ char *tag;
     index_check(imapd_mailbox, 0, 0);
 
     if (r) {
-	printf("%s NO Expunge failed: %s\r\n", tag, error_message(r));
+	printf("%s NO %s\r\n", tag, error_message(r));
     }
     else {
 	printf("%s OK Expunge completed\r\n", tag);
@@ -1418,11 +1419,9 @@ char *partition;
     int r;
 
     if (partition && !imapd_userisadmin) {
-	printf("%s NO Only administrators may specify partition\r\n", tag);
-	return;
+	r = IMAP_PERMISSION_DENIED;
     }
-
-    if (name[0] && name[strlen(name)-1] == '.') {
+    else if (name[0] && name[strlen(name)-1] == '.') {
 	printf("%s OK Create of non-terminal names is unnecessary\r\n", tag);
 	return;
     }
@@ -1436,7 +1435,7 @@ char *partition;
     }
 
     if (r) {
-	printf("%s NO Create failed: %s\r\n", tag, error_message(r));
+	printf("%s NO %s\r\n", tag, error_message(r));
     }
     else {
 	printf("%s OK Create completed\r\n", tag);
@@ -1459,7 +1458,7 @@ char *name;
     }
 
     if (r) {
-	printf("%s NO Delete failed: %s\r\n", tag, error_message(r));
+	printf("%s NO %s\r\n", tag, error_message(r));
     }
     else {
 	printf("%s OK Delete completed\r\n", tag);
@@ -1478,19 +1477,19 @@ char *partition;
     int r;
 
     if (partition && !imapd_userisadmin) {
-	printf("%s NO Only administrators may specify partition\r\n", tag);
-	return;
+	r = IMAP_PERMISSION_DENIED;
     }
-
-    r = mboxlist_renamemailbox(oldname, newname, partition,
-			       imapd_userisadmin, imapd_userid);
+    else {
+	r = mboxlist_renamemailbox(oldname, newname, partition,
+				   imapd_userisadmin, imapd_userid);
+    }
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
 
     if (r) {
-	printf("%s NO Rename failed: %s\r\n", tag, error_message(r));
+	printf("%s NO %s\r\n", tag, error_message(r));
     }
     else {
 	printf("%s OK Rename completed\r\n", tag);
@@ -1551,7 +1550,7 @@ int add;
     }
 
     if (r) {
-	printf("%s NO %s failed: %s\r\n", tag,
+	printf("%s NO %s\r\n", tag,
 	       add ? "Subscribe" : "Unsubscribe", error_message(r));
     }
     else {
@@ -1612,7 +1611,7 @@ char *name;
 	}
     }
     if (r) {
-	printf("%s NO Getacl failed: %s\r\n", tag, error_message(r));
+	printf("%s NO %s\r\n", tag, error_message(r));
 	return;
     }
     
@@ -1690,7 +1689,7 @@ char *name;
 	}
     }
     if (r) {
-	printf("%s NO Myrights failed: %s\r\n", tag, error_message(r));
+	printf("%s NO %s\r\n", tag, error_message(r));
 	return;
     }
     
@@ -1728,7 +1727,7 @@ char *rights;
     }
 
     if (r) {
-	printf("%s NO %s failed: %s\r\n", tag, cmd, error_message(r));
+	printf("%s NO %s\r\n", tag, error_message(r));
 	return;
     }
     
