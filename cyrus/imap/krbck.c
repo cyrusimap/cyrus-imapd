@@ -323,9 +323,11 @@ char **argv;
 	case INTK_PROT:
 	    printf("\terror code indicates wrong protocol version (INTK_PROT)\n.");
 	    break;
+#ifdef INTK_PW_NULL
 	case INTK_PW_NULL:
 	    printf("\terror code indicates password was NULL\n");
 	    break;
+#endif
 	case INTK_BADPW:
 	    printf("\terror code indicates bad password -- imap.%s@%s passwd in srvtab doesn't match kerberos database (INTK_BADPW)\n",
 		   phost, realm);
