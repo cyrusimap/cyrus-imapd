@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.9 2003/03/24 17:07:08 rjs3 Exp $
+dnl $Id: berkdb.m4,v 1.10 2003/03/24 17:49:59 rjs3 Exp $
 
 AC_DEFUN(CMU_DB_INC_WHERE1, [
 saved_CPPFLAGS=$CPPFLAGS
@@ -230,11 +230,11 @@ AC_DEFUN(CYRUS_BERKELEY_DB_OPTS,
 AC_ARG_WITH(bdb-libdir,
 	[  --with-bdb-libdir=DIR   Berkeley DB lib files are in DIR],
 	with_bdb_lib=$withval,
-	test "${with_bdb_lib+set}" = set || with_bdb_lib=none
+	[ test "${with_bdb_lib+set}" = set || with_bdb_lib=none])
 AC_ARG_WITH(bdb-incdir,
 	[  --with-bdb-incdir=DIR   Berkeley DB include files are in DIR],
 	with_bdb_inc=$withval,
-	test "${with_bdb_inc+set}" = set || with_bdb_inc=none)
+	[ test "${with_bdb_inc+set}" = set || with_bdb_inc=none ])
 ])
 
 AC_DEFUN(CYRUS_BERKELEY_DB_CHK,
