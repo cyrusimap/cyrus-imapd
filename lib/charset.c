@@ -1,4 +1,4 @@
-/* 
+/* charset.c -- International character set support
  *
  *	(C) Copyright 1994 by Carnegie Mellon University
  *
@@ -44,8 +44,11 @@ struct charset {
     char **table;
 };
 
+/*
+ * Mapping of character sets to tables
+ */
 static struct charset charset_table[] = {
-    { "us-ascii", us_ascii },
+    { "us-ascii", us_ascii },	/* US-ASCII must be charset number 0 */
     { "iso-8859-1", iso_8859_1 },
     { "iso-8859-2", iso_8859_2 },
     { "iso-8859-3", iso_8859_3 },
@@ -56,11 +59,13 @@ static struct charset charset_table[] = {
     { "iso-8859-8", iso_8859_8 },
     { "iso-8859-9", iso_8859_9 },
 };
-
 #define NUM_CHARSETS (sizeof(charset_table)/sizeof(*charset_table))
 
 #define GROWSIZE 100
 
+/*
+ * Table for decoding hexadecimal in quoted-printable
+ */
 static char index_hex[128] = {
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
@@ -71,9 +76,11 @@ static char index_hex[128] = {
     -1,10,11,12, 13,14,15,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1
 };
-
 #define HEXCHAR(c)  (((c) < 0 || (c) > 127) ? -1 : index_hex[(c)])
 
+/*
+ * Table for decoding base64
+ */
 static char index_64[128] = {
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
@@ -84,9 +91,12 @@ static char index_64[128] = {
     -1,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
     41,42,43,44, 45,46,47,48, 49,50,51,-1, -1,-1,-1,-1
 };
-
 #define CHAR64(c)  (((c) < 0 || (c) > 127) ? -1 : index_64[(c)])
 
+/*
+ * "Short-form" character mapping table for converting
+ * US-ASCII to canonical searching form.
+ */
 static char usascii_lcase[256] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
@@ -137,7 +147,6 @@ static char usascii_lcase[256] = {
     EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
     EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
 };
-
 #define USASCII(c) (usascii_lcase[(unsigned char)(c)])
 
 /*
@@ -157,7 +166,8 @@ char *name;
 
 /*
  * Convert the string 's' in the character set numbered 'charset'
- * into canonical searching form.
+ * into canonical searching form.  Returns a pointer to a static
+ * buffer containing 's' in canonical searching form.
  */
 char *charset_convert(s, charset)
 char *s;
@@ -196,7 +206,8 @@ int charset;
 }
 
 /*
- * Decode 1522-strings in 's', converting it into canonical searching form.
+ * Decode 1522-strings in 's'.  Returns a pointer to a static buffer
+ * contining 's' in canonical searching form.
  */
 char *charset_decode1522(s)
 char *s;
@@ -225,8 +236,9 @@ char *s;
 	if (!end || end[1] != '=') continue;
 
 	/*
-	 * Have recognized a valid 1522-word
-	 * Copy over leading text, unless its whitespace between two 1522-words
+	 * We have recognized a valid 1522-word.
+	 * Copy over leading text, unless it consists entirely of 
+	 * whitespace and is between two 1522-words.
 	 */
 	if (eatspace) {
 	    for (p = s; p < (start-1) && isspace(*p); p++);
@@ -245,7 +257,7 @@ char *s;
 	}
 
 	/*
-	 * Get character set
+	 * Get the 1522-word's character set
 	 */
 	start++;
 	for (i=0; i<NUM_CHARSETS; i++) {
@@ -266,6 +278,7 @@ char *s;
 	    pos += 1;
 	}
 	else if (encoding[1] == 'q' || encoding[1] == 'Q') {
+	    /* Decode 'Q' encoding */
 	    p = encoding+3;
 	    while (p < end) {
 		c = *p++;
@@ -297,7 +310,7 @@ char *s;
 	    }
 	}
 	else {
-	    /* BASE64 encoding */
+	    /* Decode 'B' encoding */
 	    p = encoding+3;
 	    while (p < end) {
 		c1 = CHAR64(p[0]);
@@ -339,7 +352,7 @@ char *s;
 	    }
 	}
 
-	/* Prepare for next iteration */
+	/* Prepare for the next iteration */
 	s = start = end+2;
 	eatspace = 1;
     }
@@ -358,21 +371,38 @@ char *s;
     return retval;
 }
 
+/*
+ * The various charset_searchfile() helper functions
+ */
 static int charset_readconvert();
-static char decodebuf[4096];
-static int decodestart, decodeleft;
-static char **decodetable;
-static int (*rawproc)();
-static FILE *rawfile;
-static int rawlen;
-static char rawbuf[4096];
-static int rawstart, rawleft;
 static int charset_readplain();
 static int charset_readmapnl();
 static int charset_readqp();
 static int charset_readqpmapnl();
 static int charset_readbase64();
 
+/*
+ * State for the various charset_searchfile() helper functions
+ */
+static int (*rawproc)();	/* Function to read and transfer-decode data */
+static FILE *rawfile;		/* File to read raw data from */
+static int rawlen;		/* # bytes raw data left to read from file */
+static char rawbuf[4096];	/* Buffer of data read, but not decoded */
+static int rawstart, rawleft;	/* Location/count of unprocessed raw data */
+static char decodebuf[4096];	/* Buffer of data deocded, but not converted
+				 * into canonical searching form */
+static int decodestart, decodeleft; /* Location/count of decoded data */
+static char **decodetable;	/* Charset table to convert decoded data
+				 * into canonical searching form */
+
+/*
+ * Search for the string 'substr' in the next 'len' bytes of 
+ * 'msgfile'.  If 'mapnl' is nonzero, then LF characters in the file
+ * map to CR LF and count as 2 bytes w.r.t. the value of 'len'.
+ * 'charset' and 'encoding' specify the character set and 
+ * content transfer encoding of the data, respectively.
+ * Returns nonzero iff the string was found.
+ */
 int
 charset_searchfile(substr, msgfile, mapnl, len, charset, encoding)
 char *substr;
@@ -388,13 +418,15 @@ int encoding;
     char *p;
     int n;
     
+    /* Initialize character set mapping */
     if (charset < 0 || charset >= NUM_CHARSETS) return 0;
     decodetable = charset_table[charset].table;
+    decodeleft = 0;
 
+    /* Initialize transfer-decoding */
     rawfile = msgfile;
     rawlen = len;
-    rawleft = decodeleft = 0;
-
+    rawleft = 0;
     switch (encoding) {
     case ENCODING_NONE:
 	if (mapnl && !strchr(substr, '\n') && !strchr(substr, '\r')) {
@@ -410,6 +442,9 @@ int encoding;
 
     case ENCODING_BASE64:
 	rawproc = charset_readbase64;
+	/* XXX have to have nl-mapping base64 in order to
+	 * properly count \n as 2 raw characters
+	 */
 	break;
 
     default:
@@ -417,6 +452,10 @@ int encoding;
 	return 0;
     }
 
+    /*
+     * Select buffer to hold canonical searching fomat data to
+     * search
+     */
     if (substrlen < sizeof(smallbuf)/2) {
 	bufsize = sizeof(smallbuf);
 	buf = smallbuf;
@@ -426,6 +465,7 @@ int encoding;
 	buf = xmalloc(bufsize);
     }
 
+    /* Do the search */
     n = charset_readconvert(buf, bufsize);
     if (n < substrlen) {
 	if (buf != smallbuf) free(buf);
@@ -448,6 +488,11 @@ int encoding;
     return 0;
 }
 
+/*
+ * Helper function to read at most 'size' bytes of converted
+ * (into canonical searching format) data into 'buf'.  Returns
+ * the number of converted bytes, or 0 for end-of-data.
+ */
 static int
 charset_readconvert(buf, size)
 char *buf;
@@ -481,6 +526,11 @@ int size;
     return retval;
 }
     
+/*
+ * Helper function to read at most 'size' bytes of trivial
+ * transfer-decoded data into 'buf'.  Returns the number of decoded
+ * bytes, or 0 for end-of-data.
+ */
 static int
 charset_readplain(buf, size)
 char *buf;
@@ -497,6 +547,11 @@ int size;
     return n;
 }
 
+/*
+ * Helper function to read at most 'size' bytes of trivial newline-mapped
+ * transfer-decoded data into 'buf'.  Returns the number of decoded
+ * bytes, or 0 for end-of-data.
+ */
 static int
 charset_readmapnl(buf, size)
 char *buf;
@@ -517,12 +572,13 @@ int size;
     rawlen -= n;
     rawleft += n;
 
-    while (size && rawleft) {
+    while (size && rawleft > 0) {
 	c = rawbuf[rawstart];
 	if (c == '\n') {
 	    if (size < 2) {
 		return retval;
 	    }
+	    rawleft--;
 	    *buf++ = '\r';
 	    retval++;
 	    size--;
@@ -536,6 +592,11 @@ int size;
     return retval;
 }
 
+/*
+ * Helper function to read at most 'size' bytes of quoted-printable
+ * transfer-decoded data into 'buf'.  Returns the number of decoded
+ * bytes, or 0 for end-of-data.
+ */
 static int
 charset_readqp(buf, size)
 char *buf;
@@ -585,6 +646,11 @@ int size;
     return retval;
 }
 
+/*
+ * Helper function to read at most 'size' bytes of QP newline-mapped
+ * transfer-decoded data into 'buf'.  Returns the number of decoded
+ * bytes, or 0 for end-of-data.
+ */
 static int
 charset_readqpmapnl(buf, size)
 char *buf;
@@ -605,7 +671,7 @@ int size;
     rawlen -= n;
     rawleft += n;
 
-    while (size && rawleft) {
+    while (size && rawleft > 0) {
 	c = rawbuf[rawstart];
 	if (c == '=') {
 	    if (rawleft < 2) {
@@ -614,7 +680,7 @@ int size;
 	    c1 = rawbuf[rawstart+1];
 	    if (c1 == '\n') {
 		rawstart += 2;
-		rawleft -= 2;
+		rawleft -= 3;
 		continue;
 	    }
 	    if (rawleft < 3) {
@@ -635,7 +701,7 @@ int size;
 		return retval;
 	    }
 	    rawstart++;
-	    rawleft--;
+	    rawleft -= 2;
 	    *buf++ = '\r';
 	    *buf++ = '\n';
 	    retval += 2;
@@ -652,6 +718,11 @@ int size;
     return retval;
 }
 
+/*
+ * Helper function to read at most 'size' bytes of base64
+ * transfer-decoded data into 'buf'.  Returns the number of decoded
+ * bytes, or 0 for end-of-data.
+ */
 static int
 charset_readbase64(buf, size)
 char *buf;
