@@ -53,8 +53,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 
 #include <netinet/in.h>
 #include <netdb.h>
@@ -62,6 +65,7 @@
 #include <sys/file.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <syslog.h>
 
 #include <sasl.h>
 #include <saslutil.h>
@@ -73,6 +77,7 @@
 #include "imparse.h"
 #include "imclient.h"
 #include "xmalloc.h"
+#include "exitcodes.h"
 
 #include "readconfig.h"
 
@@ -117,15 +122,37 @@ char *realm = NULL;
 
 struct imclient *imclient_conn;
 
-int cmd_done;
+static int cmd_done;
+static char *cmd_resp = NULL;
 
 FILE *configstream;
+
+void spew(const char *fmt, ...)
+{
+    va_list ap;
+    char buf[1024];
+
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof buf, fmt, ap);
+    va_end(ap);
+
+    if (verbose) {
+	printf("%s\n", buf);
+    }
+    syslog(LOG_DEBUG, "%s", buf);
+}
 
 /* libcyrus makes us define this */
 void fatal(const char *s, int code)
 {
-    printf("Error: %s\n",s);
-    exit(1);
+    if (cmd_resp) {
+	syslog(LOG_ERR, "fatal error: %s (%s)", s, cmd_resp);
+	fprintf(stderr, "fatal error: %s (%s)\n", s, cmd_resp);
+    } else {
+	syslog(LOG_ERR, "fatal error: %s", s);
+	fprintf(stderr, "fatal error: %s\n", s);
+    }
+    exit(code);
 }
 
 /***********************
@@ -149,49 +176,45 @@ typedef struct capabilies_s {
 
 static capabilities_t *parsecapabilitylist(char *str)
 {
-  char *tmp;
-  int num=0;
-  capabilities_t *ret=(capabilities_t *) xmalloc(sizeof(capabilities_t));
-  ret->mechs = (char *)xmalloc(strlen(str)+1);
-  ret->starttls=0;
-  ret->logindisabled=0;
+    char *tmp;
+    int num=0;
+    capabilities_t *ret=(capabilities_t *) xmalloc(sizeof(capabilities_t));
+    ret->mechs = (char *)xmalloc(strlen(str)+1);
+    ret->starttls=0;
+    ret->logindisabled=0;
 
-  /* check for stattls */
-  if (strstr(str,"STARTTLS")!=NULL)
-  {
-    ret->starttls=1;
-  }
+    /* check for stattls */
+    if (strstr(str,"STARTTLS")!=NULL) {
+	ret->starttls=1;
+    }
 
-  /* check for login being disabled */
-  if (strstr(str,"LOGINDISABLED")!=NULL)
-  {
-    ret->logindisabled=1;
-  }
+    /* check for login being disabled */
+    if (strstr(str,"LOGINDISABLED")!=NULL) {
+	ret->logindisabled=1;
+    }
 
-  strcpy(ret->mechs,"");
+    strcpy(ret->mechs,"");
 
-  while ((tmp=strstr(str,"AUTH="))!=NULL)
-  {
-    char *end=tmp+5;
-    tmp+=5;
+    while ((tmp=strstr(str,"AUTH="))!=NULL) {
+	char *end=tmp+5;
+	tmp+=5;
 
-    while(((*end)!=' ') && ((*end)!='\0'))
-      end++;
+	while(((*end)!=' ') && ((*end)!='\0'))
+	    end++;
 
-    (*end)='\0';
+	(*end)='\0';
 
-    /* add entry to list */
-    if (num>0)
-      strcat(ret->mechs," ");
-    strcat(ret->mechs, tmp);
-    num++;
+	/* add entry to list */
+	if (num>0)
+	    strcat(ret->mechs," ");
+	strcat(ret->mechs, tmp);
+	num++;
 
-    /* reset the string */
-    str=end+1;
+	/* reset the string */
+	str=end+1;
+    }
 
-  }
-
-  return ret;
+    return ret;
 }
 
 /*
@@ -206,7 +229,7 @@ static void callback_capability(struct imclient *imclient,
     capabilities_t **caps = (capabilities_t **) rock;
     
     s = reply->text;
- 
+
     *caps = parsecapabilitylist(s);
 }
 
@@ -222,16 +245,15 @@ callback_finish(struct imclient *imclient,
     if (!strcmp(reply->keyword, "OK")) {
 	cmd_done = IMAP_OK;
     } else if (!strcmp(reply->keyword, "NO")) {
-	printf("NO %s\n", reply->text);
+	cmd_resp = reply->text;
 	cmd_done = IMAP_NO;
     }
     else if (!strcmp(reply->keyword, "BAD")) {
-	printf("BAD %s\n",reply->text);
+	cmd_resp = reply->text;
 	cmd_done = IMAP_BAD;
-
     }
     else if (!strcmp(reply->keyword, "EOF")) {
-	printf("Connection closed\n");
+	syslog(LOG_ERR, "connection closed prematurely");
 	cmd_done = IMAP_EOF;
     }
     else {
@@ -251,9 +273,11 @@ callback_list(struct imclient *imclient,
 
 void print_stats(mbox_stats_t *stats)
 {
+    syslog(LOG_INFO, "total messages considered %d deleted %d",
+	   stats->total, stats->deleted);
     printf("total messages    \t\t %d\n",stats->total);
-    printf("Deleted messages  \t\t %d\n",stats->deleted);
-    printf("Remaining messages\t\t %d\n\n",stats->total - stats->deleted);
+    printf("deleted messages  \t\t %d\n",stats->deleted);
+    printf("remaining messages\t\t %d\n\n",stats->total - stats->deleted);
 }
 
 static void
@@ -261,9 +285,7 @@ callback_exists(struct imclient *imclient,
 	       void *rock,
 	       struct imclient_reply *reply)
 {
-
     current_mbox_exists = reply->msgno;
-
 }
 
 static void
@@ -277,7 +299,7 @@ callback_search(struct imclient *imclient,
 
     s = reply->text;
 
-    while (isdigit(*s)) {
+    while (isdigit((int) *s)) {
 	num = 0;
 	
 	while ((*s!='\0') && (*s!=' '))
@@ -291,10 +313,12 @@ callback_search(struct imclient *imclient,
 
 	if (uids->size >= uids->allocsize)
 	{
-	    uids->list = realloc(uids->list, sizeof(unsigned long) * (uids->allocsize+250));
-	    uids->allocsize+=250;
-	}
+	    if (uids->allocsize) uids->allocsize *= 2;
+	    else uids->allocsize = 250;
 
+	    uids->list = xrealloc(uids->list, 
+				  sizeof(unsigned long) * uids->allocsize);
+	}
 
 	if (*s == '\0') break;
 	s++;
@@ -302,29 +326,71 @@ callback_search(struct imclient *imclient,
    
 }
 
+static void send_delete(char *uidlist)
+{
+    imclient_send(imclient_conn, callback_finish, imclient_conn,
+		  "UID STORE %a +FLAGS.SILENT (\\Deleted)", uidlist);
+    cmd_done = NOTFINISHED;
+    while (cmd_done == NOTFINISHED) {
+	imclient_processoneevent(imclient_conn);
+    }
+    if (cmd_done != IMAP_OK) {
+	fatal("marking message deleted", EC_TEMPFAIL);
+    }
+}
 
 void mark_all_deleted(uid_list_t *list, mbox_stats_t *stats)
 {
-    int lup;
+    int i;
+    char buf[1024];
+    int pos;
+    unsigned long run_start;
+    int first_time;
+    unsigned long *A = list->list;
+    
+    if (list->size == 0) return;
 
-    for (lup=0;lup<list->size;lup++)
-    {
-	imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
-		      "%a %d +FLAGS.SILENT (\\Deleted)", "UID STORE",list->list[lup]);
+    /* we send blocks of 500 or so characters */
+    i = 0;
 
-	cmd_done = NOTFINISHED;
-	
-	while (cmd_done == NOTFINISHED) {
-	    imclient_processoneevent(imclient_conn);
+    pos = 0; first_time = 1;
+    run_start = A[i++];
+    for (; i < list->size; i++) {
+	if (A[i] == A[i-1] + 1)
+	    continue; /* continue this run */
+	if (first_time) {
+	    first_time = 0;
+	} else {
+	    buf[pos++] = ',';
 	}
-
-	if (cmd_done != IMAP_OK)
-	    fatal("Error marking message deleted",0);
-
-	stats->deleted++;
-       	
+	if (run_start != A[i-1]) {
+	    /* run contains more than one entry */
+	    pos += sprintf(buf + pos, "%lu:%lu", run_start, A[i-1]);
+	} else {
+	    /* singleton */
+	    pos += sprintf(buf + pos, "%lu", A[i-1]);
+	}
+	if (pos > 500) {
+	    send_delete(buf);
+	    pos = 0; first_time = 1;
+	}
+	run_start = A[i];
     }
 
+    /* handle the last entry */
+    if (!first_time) {
+	buf[pos++] = ',';
+    }
+    if (run_start != A[i-1]) {
+	sprintf(buf + pos, "%lu:%lu", run_start, A[i-1]);
+    } else {
+	sprintf(buf + pos, "%lu", A[i-1]);
+    }
+
+    /* send out the last one */
+    send_delete(buf);
+
+    stats->deleted += list->size;
 }
 
 static char *month_string(int mon)
@@ -357,8 +423,7 @@ int purge_me(char *name, time_t when)
 
     memset(&stats, '\0', sizeof(mbox_stats_t));
     
-    if (verbose)
-	printf("Working on %s...\n",name);
+    spew("working on %s", name);
 
     /* select mailbox */
     imclient_addcallback(imclient_conn,
@@ -375,17 +440,17 @@ int purge_me(char *name, time_t when)
 
     if (cmd_done == IMAP_NO)
     {
-	printf("Unable to select %s mailbox\n",name);
+	syslog(LOG_ERR, "unable to select %s: %s", name, cmd_resp);
 	return 0;
     } else if (cmd_done != IMAP_OK) {
-	fatal("Error Selecting mailbox",0);
+	fatal("selecting mailbox", EC_TEMPFAIL);
     }
 
     stats.total = current_mbox_exists;
 
     /* make out list of uids */
-    uidlist = (uid_list_t *) malloc(sizeof(uid_list_t));
-    uidlist->list = malloc (sizeof(unsigned long) * 500);
+    uidlist = (uid_list_t *) xmalloc(sizeof(uid_list_t));
+    uidlist->list = xmalloc (sizeof(unsigned long) * 500);
     uidlist->allocsize = 500;
     uidlist->size = 0;
 
@@ -398,16 +463,18 @@ int purge_me(char *name, time_t when)
 	
 	snprintf(search_string,sizeof(search_string),
 		 "BEFORE %d-%s-%d",
-		 my_tm->tm_mday,month_string(my_tm->tm_mon),1900+my_tm->tm_year);
+		 my_tm->tm_mday,
+		 month_string(my_tm->tm_mon),
+		 1900+my_tm->tm_year);
     }	
 
-    if (verbose) printf("Searching for messages %s\n",search_string);
+    spew("searching for messages %s", search_string);
 
     imclient_addcallback(imclient_conn,
 			 "SEARCH", 0, callback_search,
 			 (void *)uidlist, (char *)0);
     imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
-		  "%a %a", "UID SEARCH",search_string);
+		  "UID SEARCH %a", search_string);
     
 
     cmd_done = NOTFINISHED;
@@ -416,8 +483,9 @@ int purge_me(char *name, time_t when)
 	imclient_processoneevent(imclient_conn);
     }
 
-    if (cmd_done!=IMAP_OK)
-	fatal("UID Search failed",0);
+    if (cmd_done != IMAP_OK) {
+	fatal("UID Search failed", EC_TEMPFAIL);
+    }
 
     if (uidlist->size > 0)
     {
@@ -426,13 +494,9 @@ int purge_me(char *name, time_t when)
             	
     }
     
-    if (verbose)
-	print_stats(&stats);
-
- 
     /* close mailbox */   
     imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
-		  "%a", "CLOSE");
+		  "CLOSE");
 
     cmd_done = NOTFINISHED;
 
@@ -440,8 +504,9 @@ int purge_me(char *name, time_t when)
 	imclient_processoneevent(imclient_conn);
     }
 
-    if (cmd_done != IMAP_OK)
-	fatal("Unable to CLOSE mailbox",0);
+    if (cmd_done != IMAP_OK) {
+	fatal("unable to CLOSE mailbox", EC_TEMPFAIL);
+    }
 
     return 0;
 }
@@ -453,8 +518,7 @@ int purge_all(void)
     int num = 0;
     int ret = 0;
 
-    while (ret == 0)
-    {
+    while (ret == 0) {
 	ret = ExpireExists(num);
 	
 	if (ret == 0)
@@ -478,7 +542,7 @@ void do_list(char *matchstr)
 	imclient_processoneevent(imclient_conn);
     }
 
-    if (cmd_done!=IMAP_OK) fatal("List failed",0);
+    if (cmd_done!=IMAP_OK) fatal("unable to LIST mailboxes", EC_TEMPFAIL);
 }
 
 /*
@@ -513,25 +577,20 @@ void remote_purge(char *configpath, char **matches)
 
     if (matches[0]==NULL)
     {
-	if (verbose)
-	    printf("Matching all\n");
+	syslog(LOG_WARNING, "matching all mailboxes for possible purge");
+	spew("matching all mailboxes");
 
 	do_list("*");
-	
     } else {
 	while (matches[0]!=NULL)
 	{
-	    if (verbose)
-		printf("Matching %s\n",matches[0]);
-
+	    spew("matching %s", matches[0]);
 	    do_list(matches[0]);
 	    matches++;
 	}
     }
 
-    if (verbose) printf("Completed list command\n");
-
-
+    spew("completed list");
 
     if (configpath!=NULL)
     {
@@ -539,7 +598,8 @@ void remote_purge(char *configpath, char **matches)
 
 	configstream = fopen(name,"r");
 
-	if (configstream == NULL) fatal("Unable to open config file\n",0);
+	if (configstream == NULL) 
+	    fatal("unable to open config file", EC_CONFIG);
 
 	EXPreadfile(configstream);
 	/* ret val */
@@ -570,7 +630,6 @@ void usage(void)
   printf("  -k #     : minimum protection layer required\n");
   printf("  -l #     : max protection layer (0=none; 1=integrity; etc)\n");
   printf("  -u user  : authorization name to use\n");
-  printf("  -a user  : authentication name to use\n");
   printf("  -v       : verbose\n");
   printf("  -m mech  : SASL mechanism to use (\"login\" for LOGIN)\n");
   printf("  -r realm : realm\n");
@@ -625,9 +684,6 @@ int main(int argc, char **argv)
     case 'u':
 	username = optarg;
 	break;
-    case 'a':
-	authname = optarg;
-	break;
     case 'm':
 	mechanism=optarg;
 	break;
@@ -656,16 +712,13 @@ int main(int argc, char **argv)
   /* next to last arg is server name */
   strncpy(servername, argv[optind], 1023);
 
-  r = imclient_connect (&imclient_conn, servername,
-			port);
+  r = imclient_connect (&imclient_conn, servername, port);
   
-  if (r!=0)
-  {
-      fatal("imclient_connect()",r);
+  if (r!=0) {
+      fatal("imclient_connect()", EC_TEMPFAIL);
   }
 
-  if (verbose)
-      printf("Connected\n");
+  spew("connected");
 
   /* get capabilities */
   imclient_addcallback(imclient_conn, "CAPABILITY", 0,
@@ -684,21 +737,21 @@ int main(int argc, char **argv)
   r = imclient_authenticate(imclient_conn,
 			    capabilitylist->mechs,
 			    "imap",
-			    authname,
+			    username,
 			    minssf,
 			    maxssf);
 
-  if (r!=0)
-  {
-      fatal("imclient_authenticate()\n",r);
+  if (r!=0) {
+      fatal("imclient_authenticate()\n", EC_CONFIG);
   }
 
-  if (verbose)
-      printf("Authenticated\n");
+  spew("authenticated");
 
   readconfig_init();
 
   remote_purge(expirectlfile, argv+(optind+1));
+
+  spew("done");
 
   exit(0);
 }
