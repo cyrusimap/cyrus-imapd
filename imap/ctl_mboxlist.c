@@ -25,8 +25,9 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: ctl_mboxlist.c,v 1.1 2000/02/15 22:21:18 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.2 2000/02/25 04:47:59 leg Exp $ */
 
+/* currently doesn't catch signals; probably SHOULD */
 
 #include <config.h>
 #include <sys/types.h>
@@ -34,10 +35,12 @@
 #include <unistd.h>
 #endif
 #include <syslog.h>
+#include <com_err.h>
 
 #include <db.h>
 #include "exitcodes.h"
 #include "mboxlist.h"
+#include "acapmbox.h"
 #include "config.h"
 
 extern int optind;
@@ -47,13 +50,15 @@ extern int errno;
 extern DB *mbdb;
 extern DB_ENV *dbenv;
 
+enum mboxop { DUMP, POPULATE, RECOVER, CHECKPOINT, NONE };
+
 void fatal(const char *message, int code)
 {
     fprintf(stderr, "fatal error: %s\n", message);
     exit(code);
 }
 
-void do_dump(void)
+void do_dump(enum mboxop op)
 {
     int r;
     DBC *cursor = NULL;
@@ -90,9 +95,48 @@ void do_dump(void)
 	}
 
 	mboxent = (struct mbox_entry *) data.data;
-	printf("%s\t%s\t%s\n", mboxent->name, 
-	       mboxent->partition, mboxent->acls);
-	
+	switch (op) {
+	case DUMP:
+	    printf("%s\t%s\t%s\n", mboxent->name, 
+		   mboxent->partition, mboxent->acls);
+	    break;
+
+	case POPULATE:
+	{
+	    acapmbox_handle_t *handle = acapmbox_get_handle();
+	    acapmbox_data_t mboxdata;
+
+	    if (!handle) {
+		fprintf(stderr, "can't contact ACAP server\n");
+		goto error;
+	    }
+	    mboxdata.name = mboxent->name;
+	    mboxdata.uidvalidity = 1;
+
+	    mboxdata.status = ACAPMBOX_COMMITTED;
+	    mboxdata.post = acapmbox_get_postaddr(mboxent->name);
+	    mboxdata.url = acapmbox_get_url(mboxent->name);
+	    mboxdata.acl = mboxent->acls;
+
+	    mboxdata.answered = 0;
+	    mboxdata.flagged = 0;
+	    mboxdata.deleted = 0;
+	    mboxdata.total = 0;
+
+	    r = acapmbox_store(handle, &mboxdata, 1);
+	    if (r) {
+		fprintf(stderr, "problem storing '%s': %s\n", mboxent->name,
+			error_message(r));
+		r = 0; /* not a database error, though */
+		goto error;
+	    }
+	    break;
+	}
+
+	default: /* yikes ! */
+	    abort();
+	    break;
+	}
 	r = cursor->c_get(cursor, &key, &data, DB_NEXT);
     }
 
@@ -113,6 +157,7 @@ void usage(void)
     fprintf(stderr, "ctl_mboxlist -c\n");
     fprintf(stderr, "ctl_mboxlist -r\n");
     fprintf(stderr, "ctl_mboxlist -d [-f filename]\n");
+    fprintf(stderr, "ctl_mboxlist -a [-f filename]\n");
     exit(1);
 }
 
@@ -120,12 +165,12 @@ int main(int argc, char *argv[])
 {
     char *mboxdb_fname = NULL;
     int opt;
-    enum { DUMP, RECOVER, CHECKPOINT, NONE } op = NONE;
+    enum mboxop op = NONE;
 
     config_init("ctl_mboxlist");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "drcf:")) != EOF) {
+    while ((opt = getopt(argc, argv, "adrcf:")) != EOF) {
 	switch (opt) {
 	case 'r':
 	    if (op == NONE) op = RECOVER;
@@ -138,7 +183,6 @@ int main(int argc, char *argv[])
 	    break;
 
 	case 'f':
-	    if (op != NONE && op != DUMP) usage();
 	    if (!mboxdb_fname) {
 		mboxdb_fname = optarg;
 	    } else {
@@ -148,6 +192,11 @@ int main(int argc, char *argv[])
 
 	case 'd':
 	    if (op == NONE) op = DUMP;
+	    else usage();
+	    break;
+
+	case 'a':
+	    if (op == NONE) op = POPULATE;
 	    else usage();
 	    break;
 
@@ -172,10 +221,11 @@ int main(int argc, char *argv[])
 	return 0;
 	
     case DUMP:
+    case POPULATE:
 	mboxlist_init(0);
 	mboxlist_open(mboxdb_fname);
 	
-	do_dump();
+	do_dump(op);
 	
 	mboxlist_close();
 	mboxlist_done();

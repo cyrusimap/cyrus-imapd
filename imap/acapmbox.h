@@ -52,7 +52,12 @@ void acapmbox_release_handle(acapmbox_handle_t *handle);
  */
 int acapmbox_create(acapmbox_handle_t *AC,
 		    acapmbox_data_t *mboxdata);
-		
+
+/* likewise, but you can mark it active immediately; use with caution */
+int acapmbox_store(acapmbox_handle_t *AC,
+		   acapmbox_data_t *mboxdata,
+		   int commit);
+
 /*
  * Commit the entry 
  */
@@ -87,9 +92,8 @@ typedef enum {
 } acapmbox_property_t;
 
 /*
- *
- *  properties are hints that the ACAP server stores about various mailboxes
- *
+ * properties are hints that the ACAP server stores about various mailboxes
+ * used to provide a master update service
  */
 int acapmbox_setproperty_acl(acapmbox_handle_t *AC,
 			     char *mailbox_name,
