@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: cyr_expire.8,v 1.2.2.1 2004/04/01 02:40:22 ken3 Exp $
+.\" $Id: cyr_expire.8,v 1.2.2.2 2004/04/03 18:44:55 ken3 Exp $
 .SH NAME
 cyr_expire \- expire messages and duplicate delivery database entries
 .SH SYNOPSIS
@@ -48,7 +48,10 @@ cyr_expire \- expire messages and duplicate delivery database entries
 .B \-C
 .I config-file
 ]
-.BI \-E " days"
+.BI \-E " expire-days"
+[
+.BI \-X " expunge-days"
+]
 [
 .B \-v
 ]
@@ -81,10 +84,15 @@ file unless specified otherwise by \fB-C\fR.
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
 .TP
-\fB\-E \fIdays\fR
-Prune the duplicate database of entries older than \fIdays\fR.  This
+\fB\-E \fIexpire-days\fR
+Prune the duplicate database of entries older than \fIexpire-days\fR.  This
 value is only used for entries which do not have a corresponding
 \fB/vendor/cmu/cyrus-imapd/expire\fR mailbox annotation.
+.TP
+\fB\-X \fIexpunge-days\fR
+Expunge previously deleted messages older than \fIexpunge-days\fR
+(when using the "delayed" expunge mode).  The default is 0 (zero)
+days, which will expunge \fBall\fR previously deleted messages.
 .TP
 .B \-v
 Enable verbose output.

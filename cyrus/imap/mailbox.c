@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.7 2004/04/02 20:53:21 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.8 2004/04/03 18:44:52 ken3 Exp $
  *
  */
 
@@ -1586,16 +1586,27 @@ static int mailbox_calculate_flagcounts(struct mailbox *mailbox)
     return 0;
 }
 
-static int alwaysfalse(struct mailbox *mailbox __attribute__((unused)),
+/*
+ * Expunge decision proc used by mailbox_expunge() (in cleanup mode) 
+ * to avoid expunging any messages from cyrus.index
+ */
+static int expungenone(struct mailbox *mailbox __attribute__((unused)),
 		       void *rock __attribute__((unused)),
-		       char *index __attribute__((unused)))
+		       char *index __attribute__((unused)),
+		       int expunge_flags __attribute__((unused)))
 {
     return 0;
 }
 
-static int alwaystrue(struct mailbox *mailbox __attribute__((unused)),
+/*
+ * Expunge decision proc used by mailbox_expunge() (in cleanup mode) 
+ * to expunge all messages in cyrus.expunge
+ * Also used by mailbox_rename() to expunge all messages in INBOX
+ */
+static int expungeall(struct mailbox *mailbox __attribute__((unused)),
 		      void *rock __attribute__((unused)),
-		      char *index __attribute__((unused)))
+		      char *indexbuf __attribute__((unused)),
+		      int expunge_flags __attribute__((unused)))
 {
     return 1;
 }
@@ -1607,7 +1618,8 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 			   unsigned *numdeletedflag, unsigned *numflaggedflag,
 			   FILE *newcache, size_t *new_cache_total_size,
 			   int expunge_fd, long last_offset,
-			   mailbox_decideproc_t *decideproc, void *deciderock)
+			   mailbox_decideproc_t *decideproc, void *deciderock,
+			   int expunge_flags)
 {
     char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
 	     INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
@@ -1635,7 +1647,7 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 	}
 
 	/* Should we delete the message from the index file? */
-	if (decideproc ? decideproc(mailbox, deciderock, buf) :
+	if (decideproc ? decideproc(mailbox, deciderock, buf, expunge_flags) :
 	    (ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS))) & FLAG_DELETED)) {
 
 	    bit32 sysflags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
@@ -1984,24 +1996,24 @@ int mailbox_expunge(struct mailbox *mailbox, int iscurrentdir,
         /* XXX kludge: not all mallocs return a valid pointer to 0 bytes;
            some have the good sense to return 0 */
         deleted = (unsigned long *)
-            xmalloc((mailbox->exists > expunge_exists ?
-		     mailbox->exists : expunge_exists) * sizeof(unsigned long));
+            xmalloc((mailbox->exists + expunge_exists) * sizeof(unsigned long));
     }
 
-    /* If we're doing a cleanup w/o a decideproc, use alwaysfalse()
+    /* If we're doing a cleanup w/o a decideproc, use expungenone()
        so we don't delete any records from cyrus.index. */
-    if ((flags & EXPUNGE_CLEANUP) && !decideproc) decideproc = alwaysfalse;
+    if ((flags & EXPUNGE_CLEANUP) && !decideproc) decideproc = expungenone;
 
     /* Copy over records for nondeleted messages */
     r = process_records(mailbox, newindex, mailbox->index_base,
 			mailbox->exists, deleted, &numdeleted,
 			&quotadeleted, &numansweredflag, &numdeletedflag,
 			&numflaggedflag, newcache, &new_cache_total_size,
-			expunge_fd, last_offset,
-			decideproc, deciderock);
+			expunge_fd, last_offset, decideproc, deciderock, 0);
     if (r) goto fail;
 
     if (flags & EXPUNGE_CLEANUP) {
+	unsigned new_deleted = numdeleted;
+
 	if (newexpungeindex) {
 	    /* Copy over expunge index header */
 	    memcpy(buf, expunge_index_base, mailbox->start_offset);
@@ -2013,17 +2025,18 @@ int mailbox_expunge(struct mailbox *mailbox, int iscurrentdir,
 	    fwrite(buf, 1, mailbox->start_offset, newexpungeindex);
 	}
 
-	/* If we're doing a cleanup w/o a decideproc, use alwaystrue()
+	/* If we're doing a cleanup w/o a decideproc, use expungeall()
 	   so we delete all records from cyrus.expunge. */
-	if (decideproc == alwaysfalse) decideproc = alwaystrue;
+	if (decideproc == expungenone) decideproc = expungeall;
 
 	/* Copy over records for nonpurged messages */
 	r = process_records(mailbox, newexpungeindex, expunge_index_base,
 			    expunge_exists, deleted, &numdeleted,
 			    &quotadeleted, &numansweredflag, &numdeletedflag,
 			    &numflaggedflag, newcache, &new_cache_total_size,
-			    -1, 0, decideproc, deciderock);
+			    -1, 0, decideproc, deciderock, EXPUNGE_CLEANUP);
 	if (r) goto fail;
+	expunge_exists -= (numdeleted - new_deleted);
     }
     else {
 	if (config_expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
@@ -2154,7 +2167,8 @@ int mailbox_expunge(struct mailbox *mailbox, int iscurrentdir,
 
 	    fclose(newexpungeindex);
 	}
-	else {
+
+	if (!expunge_exists) {
 	    /* We deleted all cyrus.expunge records, so delete the file */
 	    unlink(fnamebuf);
 	}
@@ -2460,17 +2474,6 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 
     mailbox_close(mailbox);
     return 0;
-}
-
-/*
- * Expunge decision proc used by mailbox_rename() to expunge all messages
- * in INBOX
- */
-static int expungeall(struct mailbox *mailbox __attribute__((unused)),
-		      void *rock __attribute__((unused)),
-		      char *indexbuf __attribute__((unused)))
-{
-    return 1;
 }
 
 /* if 'isinbox' is set, we perform the funky RENAME INBOX INBOX.old

@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.77.2.5 2004/04/02 19:43:25 ken3 Exp $
+ * $Id: mailbox.h,v 1.77.2.6 2004/04/03 18:44:53 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -215,7 +215,7 @@ struct mailbox_header_cache {
 extern const struct mailbox_header_cache mailbox_cache_headers[];
 extern const int MAILBOX_NUM_CACHE_HEADERS;
 
-/* Bitmasks for fetchitems */
+/* Bitmasks for expunging */
 enum {
     EXPUNGE_FORCE =		(1<<0),
     EXPUNGE_CLEANUP =		(1<<1)
@@ -224,8 +224,8 @@ enum {
 int mailbox_cached_header(const char *s);
 int mailbox_cached_header_inline(const char *text);
 
-typedef int mailbox_decideproc_t(struct mailbox *mailbox, 
-				 void *rock, char *indexbuf);
+typedef int mailbox_decideproc_t(struct mailbox *mailbox, void *rock,
+				 char *indexbuf, int expunge_flags);
 
 typedef void mailbox_notifyproc_t(struct mailbox *mailbox);
 

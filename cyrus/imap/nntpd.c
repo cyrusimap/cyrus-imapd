@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.15 2004/04/01 02:40:21 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.16 2004/04/03 18:44:53 ken3 Exp $
  */
 
 /*
@@ -3217,7 +3217,8 @@ static int mvgroup(message_data_t *msg)
  * mailbox_exchange() callback function to delete cancelled articles
  */
 static int expunge_cancelled(struct mailbox *mailbox __attribute__((unused)),
-			     void *rock, char *index)
+			     void *rock, char *index,
+			     int expunge_flags __attribute__((unused)))
 {
     int uid = ntohl(*((bit32 *)(index+OFFSET_UID)));
 

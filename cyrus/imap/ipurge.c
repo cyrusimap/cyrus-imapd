@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.20.2.3 2004/04/01 02:40:18 ken3 Exp $
+ * $Id: ipurge.c,v 1.20.2.4 2004/04/03 18:44:52 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -104,7 +104,7 @@ int verbose = 1;
 int forceall = 0;
 
 int purge_me(char *, int, int);
-int purge_check(struct mailbox *, void *, char *);
+int purge_check(struct mailbox *, void *, char *, int);
 int usage(char *name);
 void print_stats(mbox_stats_t *stats);
 
@@ -288,7 +288,9 @@ void deleteit(bit32 msgsize, mbox_stats_t *stats)
 /* thumbs up routine, checks date & size and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
 int purge_check(struct mailbox *mailbox __attribute__((unused)),
-		void *deciderock, char *buf) {
+		void *deciderock, char *buf,
+		int expunge_flags __attribute__((unused)))
+{
   time_t my_time;
   mbox_stats_t *stats = (mbox_stats_t *) deciderock;
   bit32 senttime;

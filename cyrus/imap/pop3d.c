@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.11 2004/04/01 02:40:21 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.12 2004/04/03 18:44:54 ken3 Exp $
  */
 #include <config.h>
 
@@ -1516,7 +1516,8 @@ static int parsenum(char **ptr)
 }
 
 static int expungedeleted(struct mailbox *mailbox __attribute__((unused)),
-			  void *rock __attribute__((unused)), char *index)
+			  void *rock __attribute__((unused)), char *index,
+			  int expunge_flags __attribute__((unused)))
 {
     int msg;
     int uid = ntohl(*((bit32 *)(index+OFFSET_UID)));

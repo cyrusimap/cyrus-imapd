@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.4 2004/02/27 21:17:29 ken3 Exp $
+ * $Id: index.c,v 1.199.2.5 2004/04/03 18:44:51 ken3 Exp $
  */
 #include <config.h>
 
@@ -1543,7 +1543,8 @@ unsigned uid;
  * both \Deleted and listed in the sequence under 'rock'.
  */
 int index_expungeuidlist(struct mailbox *mailbox __attribute__((unused)),
-			 void *rock, char *indexbuf)
+			 void *rock, char *indexbuf,
+			 int expunge_flags __attribute__((unused)))
 {
     char *sequence = (char *)rock;
     unsigned uid = ntohl(*((bit32 *)(indexbuf+OFFSET_UID)));
