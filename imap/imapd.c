@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.363 2002/03/21 17:32:13 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.364 2002/03/24 18:31:11 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -5890,7 +5890,6 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     if (!r) {
 	path = xstrdup(inpath);
 	part = xstrdup(inpart);
-	syslog(LOG_ERR, "%s", part, inpart);
 	acl = xstrdup(inacl);
     }
 
