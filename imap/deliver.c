@@ -26,6 +26,8 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
+/* should look for LMTP AUTH declaration instead of assuming it */
+
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
@@ -437,7 +439,7 @@ static void say_whofrom(char *from, char *authuser)
     if (authuser) {
 	r = prot_printf(lmtpd_out,"MAIL FROM:<%s> AUTH=%s\r\n",who,authuser);
     } else {
-	r = prot_printf(lmtpd_out,"MAIL FROM:<%s>\r\n",who);
+	r = prot_printf(lmtpd_out,"MAIL FROM:<%s> AUTH=<>\r\n",who);
     }
     if (r) close_and_exit(EC_IOERR, "Error writing mail from");
 
