@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.65 2002/02/19 18:48:10 rjs3 Exp $
+ * $Id: prot.c,v 1.66 2002/04/01 02:06:01 leg Exp $
  */
 
 #include <config.h>
@@ -80,7 +80,7 @@ int write;
 
     newstream = (struct protstream *) xmalloc(sizeof(struct protstream));
     newstream->buf = (unsigned char *) 
-	xmalloc(sizeof(char) * (PROT_BUFSIZE + 4));
+	xmalloc(sizeof(char) * (PROT_BUFSIZE));
     newstream->buf_size = PROT_BUFSIZE;
     newstream->ptr = newstream->buf;
     newstream->cnt = write ? PROT_BUFSIZE : 0;
@@ -119,9 +119,7 @@ int prot_free(struct protstream *s)
 /*
  * Set the logging file descriptor for stream 's' to be 'fd'.
  */
-int prot_setlog(s, fd)
-struct protstream *s;
-int fd;
+int prot_setlog(struct protstream *s, int fd)
 {
     s->logfd = fd;
     return 0;
@@ -135,9 +133,9 @@ int fd;
 
 int prot_settls(struct protstream *s, SSL *tlsconn)
 {
-  s->tls_conn = tlsconn;
+    s->tls_conn = tlsconn;
 
-  return 0;
+    return 0;
 }
 
 #endif /* HAVE_SSL */
@@ -150,46 +148,48 @@ int prot_setsasl(s, conn)
 struct protstream *s;
 sasl_conn_t *conn;
 {
-  const int *ssfp;
-  int result;
-
-  /* flush first if need be */
-  if (s->write && s->ptr != s->buf) prot_flush(s);
-
-  s->conn=conn;
-
-  result = sasl_getprop(conn, SASL_SSF, (const void **) &ssfp);
-  if (result != SASL_OK)
-    return 1;
-
-  s->saslssf = *ssfp;
-
-  if (s->write) {
+    const int *ssfp;
     int result;
-    const int *maxp;
-    int max;
 
-    /* ask SASL for layer max */
-    result = sasl_getprop(conn, SASL_MAXOUTBUF, (const void **) &maxp);
-    max = *maxp;
-    if (result != SASL_OK)
-      return 1;
-
-    if (max == 0 || max > PROT_BUFSIZE) {
-	/* max = 0 means unlimited, and we can't go bigger */
-	max = PROT_BUFSIZE;
+    if (s->write && s->ptr != s->buf) {
+	/* flush any pending output */
+	prot_flush(s);
     }
+   
+    s->conn = conn;
+
+    result = sasl_getprop(conn, SASL_SSF, (const void **) &ssfp);
+    if (result != SASL_OK) {
+	return -1;
+    }
+    s->saslssf = *ssfp;
+
+    if (s->write) {
+	int result;
+	const int *maxp;
+	int max;
+
+	/* ask SASL for layer max */
+	result = sasl_getprop(conn, SASL_MAXOUTBUF, (const void **) &maxp);
+	max = *maxp;
+	if (result != SASL_OK) {
+	    return -1;
+	}
+
+	if (max == 0 || max > PROT_BUFSIZE) {
+	    /* max = 0 means unlimited, and we can't go bigger */
+	    max = PROT_BUFSIZE;
+	}
     
-    max-=50; /* account for extra foo incurred from layers */
+	s->maxplain = max;
+	s->cnt = max;
+    }
+    else if (s->cnt) {  
+	/* flush any pending input */
+	s->cnt = 0;
+    }
 
-    s->maxplain=max;
-    s->cnt=max;
-  }
-  else if (s->cnt) {  /* XXX what does this do? */
-    s->cnt = 0;
-  }
-
-  return 0;
+    return 0;
 }
 
 /*
@@ -428,13 +428,14 @@ int prot_fill(struct protstream *s)
 	    int result;
 	    const char *out;
 	    unsigned outlen;
-	    static char errbuf[256];
+	    static char errbuf[256]; /* XXX not thread-safe */
 	    
 	    /* Decode the input token */
 	    result = sasl_decode(s->conn, (const char *) s->buf, n, 
 				 &out, &outlen);
 	    
 	    if (result != SASL_OK) {
+		/* XX why not sasl_errdetail ? */
 		snprintf(errbuf, 256, "Decoding error: %s (%i)",
 			 sasl_errstring(result, NULL, NULL), result);
 		s->error = errbuf;
@@ -442,6 +443,8 @@ int prot_fill(struct protstream *s)
 	    }
 	    
 	    if (outlen > 0) {
+		/* XXX can we just serve data from 'out' without copying
+		   it to s->buf ? */
 		if (outlen > s->buf_size) {
 		    s->buf = (unsigned char *) 
 			xrealloc(s->buf, sizeof(char) * (outlen + 4));
@@ -585,6 +588,8 @@ int prot_write(struct protstream *s, const char *buf, unsigned len)
     assert(s->write);
 
     while (len >= s->cnt) {
+	/* XXX can we manage to write data from 'buf' without copying it
+	   to s->ptr ? */
 	memcpy(s->ptr, buf, s->cnt);
 	s->ptr += s->cnt;
 	buf += s->cnt;
