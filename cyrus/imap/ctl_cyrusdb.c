@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.9 2002/02/24 04:42:15 ken3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.10 2002/05/06 19:22:28 rjs3 Exp $
  */
 
 #include <config.h>
@@ -118,6 +118,79 @@ void usage(void)
     fprintf(stderr, "ctl_cyrusdb [-C <altconfig>] -c\n");
     fprintf(stderr, "ctl_cyrusdb [-C <altconfig>] -r\n");
     exit(-1);
+}
+
+/* Callback for use by recover_reserved */
+static int fixmbox(char *name,
+		   int matchlen __attribute__((unused)),
+		   int maycreate __attribute__((unused)),
+		   void *rock __attribute__((unused)))
+{
+    int mbtype;
+    int r;
+    char *path, *part, *acl;
+    struct mailbox mb;
+
+    /* Do an mboxlist_detail on the mailbox */
+    r = mboxlist_detail(name, &mbtype, &path, &part, &acl, NULL);
+
+    /* if it is MBTYPE_RESERVED, unset it & call mboxlist_delete */
+    if(!r && (mbtype & MBTYPE_RESERVE)) {
+	/* Okay, since this needs to be able to run on a live server, locking
+	   is a bit tricky:  We want to lock the mailbox, then
+	   re-check that the flag is still valid */
+
+	r = mailbox_open_locked(name, path, acl, NULL, &mb, 0);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "could not lock mailbox '%s' to clear reservation: %s",
+		   name, error_message(r));
+	    return 0;
+	}
+
+	/* Do an mboxlist_detail on the mailbox */
+	r = mboxlist_detail(name, &mbtype, &path, &part, &acl, NULL);
+	
+	if(r || !(mbtype & MBTYPE_RESERVE)) {
+	    syslog(LOG_ERR,
+		   "mailbox '%s' is no longer reserved, skipping recovery.",
+		   name);
+	    return 0;
+	}
+
+	r = mboxlist_update(name, (mbtype & ~MBTYPE_RESERVE), part, acl);
+
+	if(!r) {
+	    r = mboxlist_deletemailbox(name, 1, NULL, NULL, 0, 0);
+	    if(r) {
+		/* put it back, log the error */
+		mboxlist_update(name, mbtype, part, acl);
+		syslog(LOG_ERR,
+		       "could not remove mailbox '%s' after unreserving: %s",
+		       name, error_message(r));
+	    } else {
+		syslog(LOG_ERR,
+		       "removed reserved mailbox '%s'",
+		       name);
+	    }
+	}
+    }
+
+    return 0;
+}
+void recover_reserved() 
+{
+    char pattern[2] = { '*', '\0' };
+    
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+
+    /* build a list of mailboxes - we're using internal names here */
+    mboxlist_findall(NULL, pattern, 1, NULL,
+		     NULL, fixmbox, NULL);
+
+    mboxlist_close();
+    mboxlist_done();
 }
 
 
@@ -288,6 +361,9 @@ int main(int argc, char *argv[])
 	    syslog(LOG_ERR, "DBERROR: done: %s", cyrusdb_strerror(r));
 	}
     }
+
+    if(op == RECOVER)
+	recover_reserved();
 
     syslog(LOG_NOTICE, "done %s", msg);
     exit(r || r2);
