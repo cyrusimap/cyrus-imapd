@@ -1,0 +1,357 @@
+#!/usr/bin/perl
+
+#---------------------------------------------------------------------
+# This script was designed to ease adding Cyrus-IMAP users for
+# a very specific kind of configuration: Postfix+Cyrus, where
+#
+#	mailbox_transport = default (mailbox delivery), 
+#	fallback_transport = cyrus
+#
+# in such a configuration, an IMAP-user without a local account
+# will requires no additional Postfix configuration, but an
+# IMAP-user who is also a local user requires that a user-specific
+# line be added to the transports file to force the use of the
+# 'cyrus' transport.  The Postfix-specific configuration can be
+# suppressed with the "-no_mta_cfg" flag.
+#
+# In order for the script to be able to edit the two Postfix config
+# files correctly, the files must have 'tag-lines' in them which
+# the script uses to orient itself when inserting the new lines.
+# The tag-lines are:
+#
+# /etc/postfix/transport:
+#	"# add-cyrus-user tag (don't remove this line)"
+#
+# /etc/postfix/virtual:
+#	"# Cyrus IMAP users (do not remove this line)"
+#
+# Without these tag-lines the script will fail.
+#
+# This script assumes the use of 'sasldb2' authentication.
+#
+# USAGE:
+#
+#	add-cyrus-user -u <IMAP-username> -p <IMAP-password [options]
+#
+#	options are:
+#		-q[uota]		set quota for mailbox (in KB)
+#		-part[ition]	specify a partition (default = "default")
+#		-no_mta_cfg		do not perform Postfix-specific steps
+#
+# yes, I know, specifying the password on the command-line is
+# insecure.  The script will prompt you for the cyrus username
+# and password if you do not specify them on the command line.
+#
+# AUTHOR
+#
+#	Robert Urban <urban@tru64.org>
+#
+#---------------------------------------------------------------------
+
+use Cyrus::IMAP::Admin;
+use FileHandle;
+use File::Basename;
+use Fcntl ':flock'; # import LOCK_* constants
+
+my $DEBUG = 0;
+my $VERBOSE = 1;
+my $mta_cfg = 1;
+
+my $TRANSPORT_FILE = '/etc/postfix/transport';
+my $VIRTUAL_FILE = '/etc/postfix/virtual';
+
+my $user = '';
+my $pass = '';
+my $quota = '';
+my $partition = 'default';
+
+#--------------------------------------------------------------------
+# parse arguments
+#--------------------------------------------------------------------
+while ($_ = shift) {
+	if (/^-h/) {
+		usage();
+		exit;
+	} elsif (/^-u(ser)?$/) {
+		$user = shift;
+	} elsif (/^-p(ass)?$/) {
+		$pass = shift;
+	} elsif (/^-part(ition)?/) {
+		$partition = shift;
+	} elsif (/^-q(uota)?/) {
+		$quota = shift;
+		if ($quota =~ /^(\d+)m/i) {
+			$quota *= 1024;
+		}
+	} elsif (/^-no_mta_cfg/) {
+		$mta_cfg = 0;
+	} else {
+		print "unknown param [$_]\n\n";
+		usage();
+		exit;
+	}
+}
+
+#--------------------------------------------------------------------
+# main(), if you like
+#--------------------------------------------------------------------
+
+if (!$user) {
+	$user = query('Enter new Cyrus user');
+}
+
+if (!$pass) {
+	$pass = query('Enter password for new Cyrus user', 1);
+}
+
+if ($DEBUG) {
+	print "USERNAME: $user, PASSWORD: $pass\n";
+	print "PARTITION = [$partition]\n";
+	print "QUOTA = [$quota]\n";
+	print "MTA_CFG = [$mta_cfg]\n";
+}
+
+$unix_user = (getpwnam($user)) ? 1 : 0;
+$VERBOSE && print "$user is".($unix_user ? '' : ' NOT')." a unix user\n";
+
+$client = Cyrus::IMAP::Admin->new('localhost');
+defined($client) || die "failed to get Admin obj.";
+
+#--------------------------------------------------------------------
+# authenticate administrator
+#--------------------------------------------------------------------
+while (1) {
+	$cp = getCyrusPassword();
+	$ret = $client->authenticate(
+		User => 'cyrus',
+		Password => $cp,
+	);
+	if ($ret) { last; }
+	print "Cyrus password incorrect.\n";
+}
+
+#--------------------------------------------------------------------
+# create IMAP mailbox
+#--------------------------------------------------------------------
+
+$mbox = "user.$user";
+
+$VERBOSE && print "adding CYRUS user [$mbox]\n";
+if (!$DEBUG) {
+	if (!$client->create($mbox, $partition)) {
+		die "failed to create mailbox [$mbox]";
+	}
+
+	#----------------------------------------------------------------
+	# give user "cyrus" all permissions on mailbox
+	#----------------------------------------------------------------
+	if (!$client->setacl($mbox, cyrus => 'all')) {
+		die "failed to give cyrus user permissions for [$mbox]";
+	}
+}
+
+#--------------------------------------------------------------------
+# set quota for mailbox
+#--------------------------------------------------------------------
+if ($quota && !$DEBUG) {
+	$VERBOSE && print "setting quota for [$mbox] to $quota\n";
+	if (!$client->setquota($mbox, STORAGE => $quota)) {
+		#die "failed to set quota for [$mbox]";
+		# does not necessarily need to be fatal
+		print "failed to set quota for [$mbox]\n";
+	}
+}
+
+#--------------------------------------------------------------------
+# create SASL entry
+#--------------------------------------------------------------------
+setSaslPassword($user, $pass);
+
+#--------------------------------------------------------------------
+# the following code is Postfix-specific
+#--------------------------------------------------------------------
+if ($unix_user && $mta_cfg) {
+	addTransportLine($user);
+	addVirtualLine($user);
+	$VERBOSE && print "generating new postfix maps\n";
+	myExec("postmap $TRANSPORT_FILE");
+	myExec("postmap $VIRTUAL_FILE");
+}
+
+exit;
+
+sub usage
+{
+	print <<_EOF_;
+usage: $0 -u NEWUSER -p NEWPASSWORD [options]
+  options:
+    -q[uota] <quota>     quota for mailbox in KB, or MB, if suffixed with 'm'
+    -part[ition] <part>  partition on which to create mailbox. none = 'default'
+    -no_mta_cfg          do not perform MTA-specific steps (Postfix)
+
+  If "-u USER" or "-p PASS" is not specified on command line, script
+  will prompt for it/them.
+_EOF_
+
+}
+
+sub query
+{
+	my $prompt = shift;
+	my $echo_off = shift;
+
+	print "${prompt}? ";
+	my $ans;
+	do {
+		if ($echo_off) { system("stty -echo"); }
+		chomp($ans = <STDIN>);
+		if ($echo_off) { system("stty echo"); }
+		if (!$ans) { print "you must enter something here\n"; }
+	} while(!length($ans));
+
+	$ans;
+}
+
+sub setSaslPassword
+{
+	my ($user, $pass) = @_;
+
+	my $fh = FileHandle->new;
+
+	open($fh, "|saslpasswd2 -p $user") || die "popen to saslpasswd2 failed";
+	print $fh "$pass\n";
+	close($fh);
+}
+
+sub getCyrusPassword
+{
+	print "Please Enter Cyrus administration password: ";
+	system('stty -echo');
+	my $p;
+	chomp($p = <STDIN>);
+	system('stty echo');
+	print "\n";
+
+	$p;
+}
+
+sub addTransportLine
+{
+	my $user = shift;
+
+	my $line = "${user}\@y42.org\tcyrus:";
+
+	editFile($TRANSPORT_FILE, 'add-cyrus-user', $line);
+}
+
+sub addVirtualLine
+{
+	my $user = shift;
+
+	my $line = "${user}\t${user}\@y42.org";
+
+	editFile($VIRTUAL_FILE, 'Cyrus IMAP users', $line);
+}
+
+#-----------------------------------------------------------------
+# editFile()
+#
+# in order to work with flock(), the contents must be kept in
+# memory and written back to input file.
+#-----------------------------------------------------------------
+sub editFile
+{
+	my ($file, $tag, $line) = @_;
+
+	my (@contents);
+
+	$VERBOSE && print "editing [$file]\n";
+
+	my $dn = dirname($file);
+	my $bn = basename($file);
+
+	my $fh = FileHandle->new("+<$file");
+	defined($fh) || die "open $file for reading";
+	lockFile($fh);
+
+	my $state = 'looking';
+	while(<$fh>) {
+		if ($state eq 'found') {
+			if (/^\s*#/) {
+				push(@contents, $_);
+				next;
+			}
+			push(@contents, "$line\n");
+			push(@contents, $_);
+			$state = 'copyrest';
+		} elsif ($state eq 'looking') {
+			push(@contents, $_);
+			if (/$tag/) {
+				$state = 'found';
+			}
+		} else {
+			# state = copyrest
+			push(@contents, $_);
+		}
+	}
+
+	if ($state eq 'looking') {
+		die "tag [$tag] not found in file [$file]";
+	}
+
+	if ($DEBUG) {
+		unlockFile($fh);
+		return;
+	}
+
+	# rewind file-pointer
+	seek($fh, 0, 0) || die "seek";
+	truncate($fh, 0) || die "truncate";
+
+	# write new contents
+	foreach (@contents) {
+		print $fh $_;
+	}
+
+	unlockFile($fh);
+	$fh->close;
+}
+
+sub myRename
+{
+	my ($old, $new) = @_;
+
+	($VERBOSE > 1) && print "rename: $old --> $new\n";
+	$DEBUG && return;
+
+	if (!rename($old, $new)) {
+		die "rename of $old to $new failed";
+	}
+}
+
+sub myExec
+{
+	my $cmd = shift;
+
+	($VERBOSE > 1) && print "CMD: $cmd\n";
+
+	$DEBUG && return;
+
+	return !system($cmd);
+}
+
+sub unlockFile
+{
+	my $fh = shift;
+
+    $DEBUG && print "unlocking file\n";
+    flock($fh, LOCK_UN) || die "flock lock_un ($!)";
+}
+
+sub lockFile
+{
+	my $fh = shift;
+
+	$DEBUG && print "locking file\n";
+	flock($fh, LOCK_EX) || die "flock lock_ex ($!)";
+}
