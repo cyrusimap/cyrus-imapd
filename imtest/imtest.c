@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.45 2000/02/01 04:05:56 leg Exp $
+ * $Id: imtest.c,v 1.46 2000/02/22 01:20:53 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -709,8 +709,6 @@ static int waitfor(char *tag)
 	}
 	printf("%s", str);
     } while (strncmp(str, tag, strlen(tag)));
-
-    free(str);
 
     return 0;
 }
