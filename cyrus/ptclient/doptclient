@@ -2,7 +2,7 @@
 #
 # Wrapper for ptclient to restart it if it dies.
 #
-# $Id: doptclient,v 1.1 1998/05/13 15:34:42 wcw Exp $
+# $Id: doptclient,v 1.2 1998/07/24 01:04:43 tjs Exp $
 #
 # NOTE: This script does not create a new pag for ptclient
 #       so do NOT run this directly from the rc without
@@ -11,9 +11,11 @@
 #
 
 $coredir = "/usr/tmp/ptloader-cores";
-$ptloader = '/usr/cyrus/bin/ptloader -s -f /.postman.srvtab';
 
-$ptscache = "/var/ptclient/ptscache.db";
+# $ptloader = '/usr/cyrus/bin/ptloader -s -f /.postman.srvtab';
+$ptloader = '/usr/cyrus/bin/ptloader -f /.Password';
+
+# $ptscache = "/var/ptclient/ptscache.db";
 
 use Sys::Syslog;
 
@@ -48,11 +50,11 @@ while(1) {
 	     "starting a new one");
   }
 
-  system "/usr/local/bin/tokens > /tmp/doptclient.log";
-  system "/usr/local/bin/klist >> /tmp/doptclient.log";
+  system "/usr/local/bin/tokens > /tmp/doptclient.log 2>&1";
+  system "/usr/local/bin/klist >> /tmp/doptclient.log 2>&1";
 
   sleep(5);
 }
 
-# $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/Attic/doptclient,v 1.1 1998/05/13 15:34:42 wcw Exp $
+# $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/Attic/doptclient,v 1.2 1998/07/24 01:04:43 tjs Exp $
 
