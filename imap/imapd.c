@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.355 2002/03/18 21:21:19 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.356 2002/03/18 22:03:43 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -5748,6 +5748,77 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
     return r;
 }
 
+static int dumpacl(struct protstream *pin, struct protstream *pout,
+		   char *mailbox, char *acl_in) 
+{
+    int r = 0;
+    char c;
+    char tag[128];
+    int tagnum = 1;
+    char *rights, *nextid;
+    int mailboxlen = strlen(mailbox);
+    char *acl_safe = acl_in ? xstrdup(acl_in) : NULL;
+    char *acl = acl_safe;
+    struct buf inbuf;
+    
+    memset(&inbuf, 0, sizeof(struct buf));
+
+    while (acl) {
+	rights = strchr(acl, '\t');
+	if (!rights) break;
+	*rights++ = '\0';
+	
+	nextid = strchr(rights, '\t');
+	if (!nextid) break;
+	*nextid++ = '\0';
+
+	snprintf(tag, sizeof(tag), "SACL%d", tagnum++);
+	
+	prot_printf(pout, "%s SETACL {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
+		    tag,
+		    mailboxlen, mailbox,
+		    strlen(acl), acl,
+		    strlen(rights), rights);
+
+	while(1) {
+	    c = getword(pin, &inbuf);
+	    if (c == EOF) {
+		r = IMAP_SERVER_UNAVAILABLE;
+		break;
+	    }
+	    if(strncmp(tag, inbuf.s, strlen(tag))) {
+		eatline(pin, c);
+		continue;
+	    } else {
+		/* this is our line */
+		break;
+	    }
+	}
+
+	/* Are we OK? */
+
+	c = getword(pin, &inbuf);
+	if (c == EOF) {
+	    r = IMAP_SERVER_UNAVAILABLE;
+	    break;
+	}
+
+	if(strncmp("OK", inbuf.s, 2)) {
+	    r = IMAP_REMOTE_DENIED;
+	    break;
+	}
+
+	/* Eat the line and get the next one */
+	eatline(pin, c);
+	acl = nextid;
+    }
+
+    freebuf(&inbuf);
+    if(acl_safe) free(acl_safe);
+
+    return r;
+}
+
 void cmd_xfer(char *tag, char *toserver, char *name) 
 {
     int r = 0;
@@ -5854,10 +5925,15 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 		     mailboxname);
     }
     
-    /* xxx Step 4.5: Set ACL on remote */
+    /* Step 4.5: Set ACL on remote */
     if(!r) {
 	r = trashacl(be->in, be->out, mailboxname);
 	if(r) syslog(LOG_ERR, "Could not clear remote acl on %s",
+		     mailboxname);
+    }
+    if(!r) {
+	r = dumpacl(be->in, be->out, mailboxname, acl);
+	if(r) syslog(LOG_ERR, "Could not set remote acl on %s",
 		     mailboxname);
     }
     
