@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.21 2002/02/19 18:50:14 ken3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.22 2002/02/20 19:32:11 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -139,7 +139,7 @@ struct db {
     const char *map_base;
     unsigned long map_len;	/* mapped size */
     unsigned long map_size;	/* actual size */
-    long map_ino;
+    unsigned long map_ino;
 
     /* header info */
     int version;
@@ -228,7 +228,7 @@ static int mysync(void)
     return 0;
 }
 
-static int myarchive(const char *dirname)
+static int myarchive(const char *dirname __attribute__((unused)))
 {
     return 0;
 }
@@ -317,7 +317,7 @@ static int LEVEL(const char *ptr)
 
     assert(TYPE(ptr) == DUMMY || TYPE(ptr) == INORDER || TYPE(ptr) == ADD);
     p = q = (bit32 *) FIRSTPTR(ptr);
-    while (*p != -1) p++;
+    while (*p != (bit32)-1) p++;
     return (p - q);
 }
 
@@ -456,6 +456,16 @@ static int dispose_db(struct db *db)
 
     free(db);
 
+    return 0;
+}
+
+/* make sure our mmap() is big enough */
+static int update_lock(struct db *db, struct txn *txn) 
+{
+    /* txn->logend is the current size of the file */
+    map_refresh(db->fd, 0, &db->map_base, &db->map_len, txn->logend,
+		db->fname, 0);
+    
     return 0;
 }
 
@@ -730,6 +740,7 @@ int myfetch(struct db *db,
 	tp = &t;
     } else {
 	tp = *mytid;
+	update_lock(db, tp);
     }
 
     ptr = find_node(db, key, keylen, 0);
@@ -788,6 +799,7 @@ int myforeach(struct db *db,
     int r = 0, cb_r = 0;
 
     assert(db != NULL);
+    assert(prefixlen >= 0);
 
     if (!tid) {
 	/* grab a r lock */
@@ -812,15 +824,14 @@ int myforeach(struct db *db,
 	tp = &t;
     } else {
 	tp = *tid;
+	update_lock(db, tp);
     }
 
     ptr = find_node(db, prefix, prefixlen, 0);
 
     while (ptr != db->map_base) {
-	int r;
-
 	/* does it match prefix? */
-	if (KEYLEN(ptr) < prefixlen) break;
+	if (KEYLEN(ptr) < (bit32) prefixlen) break;
 	if (prefixlen && compare(KEY(ptr), prefixlen, prefix, prefixlen)) break;
 
 	if (goodp(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr))) {
@@ -907,6 +918,7 @@ int mystore(struct db *db,
 	tp = &t;
     } else {
 	tp = *tid;
+	update_lock(db, tp);
     }
 
     num_iov = 0;
@@ -1039,7 +1051,7 @@ int mydelete(struct db *db,
     const char *ptr;
     int delrectype = htonl(DELETE);
     int updateoffsets[SKIPLIST_MAXLEVEL];
-    int offset;
+    bit32 offset;
     bit32 writebuf[2];
     struct txn t, *tp;
     int i;
@@ -1061,6 +1073,7 @@ int mydelete(struct db *db,
 	tp = &t;
     } else {
 	tp = *tid;
+	update_lock(db, tp);
     }
 
     ptr = find_node(db, key, keylen, updateoffsets);
@@ -1153,7 +1166,7 @@ int myabort(struct db *db, struct txn *tid) /* xxx */
 {
     const char *ptr;
     int updateoffsets[SKIPLIST_MAXLEVEL];
-    int offset;
+    bit32 offset;
     int i;
     int r = 0;
 
@@ -1163,7 +1176,7 @@ int myabort(struct db *db, struct txn *tid) /* xxx */
     while (tid->logstart != tid->logend) {
 	/* find the last log entry */
 	for (offset = tid->logstart, ptr = db->map_base + offset; 
-	     offset + RECSIZE(ptr) != tid->logend;
+	     offset + RECSIZE(ptr) != (bit32) tid->logend;
 	     offset += RECSIZE(ptr), ptr = db->map_base + offset) ;
 	
 	offset = ptr - db->map_base;
@@ -1451,7 +1464,7 @@ static int mycheckpoint(struct db *db, int locked)
    if detail == 2, also dump pointers for active records.
    if detail == 3, dump all records/all pointers.
 */
-static int dump(struct db *db, int detail)
+static int dump(struct db *db, int detail __attribute__((unused)))
 {
     const char *ptr, *end;
     int i;
@@ -1536,7 +1549,7 @@ static int recovery(struct db *db)
 {
     const char *ptr, *keyptr;
     int updateoffsets[SKIPLIST_MAXLEVEL];
-    int offset, offsetnet, myoff = 0;
+    bit32 offset, offsetnet, myoff = 0;
     int r = 0;
     time_t start = time(NULL);
     int i;
@@ -1594,7 +1607,7 @@ static int recovery(struct db *db)
     
     /* reset the data that was written INORDER by the last checkpoint */
     offset = DUMMY_OFFSET(db) + DUMMY_SIZE(db);
-    while (!r && (offset < db->logstart)) {
+    while (!r && (offset < (bit32) db->logstart)) {
 	ptr = db->map_base + offset;
 	offsetnet = htonl(offset);
 
@@ -1637,7 +1650,7 @@ static int recovery(struct db *db)
 	}
 
 	/* check padding */
-	if (!r && PADDING(ptr) != -1) {
+	if (!r && PADDING(ptr) != (bit32) -1) {
 	    syslog(LOG_ERR, "DBERROR: %s: offset %04X padding not -1",
 		   db->fname, offset);
 	    r = CYRUSDB_IOERROR;
