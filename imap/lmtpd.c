@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.63.2.1 2001/08/17 21:04:16 leg Exp $
+ * $Id: lmtpd.c,v 1.63.2.2 2001/08/21 17:50:12 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.63.2.1 2001/08/17 21:04:16 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.63.2.2 2001/08/21 17:50:12 leg Exp $";*/
 
 #include <config.h>
 
@@ -511,7 +511,7 @@ int send_rejection(const char *origid,
     duplicate_mark(buf, strlen(buf), namebuf, strlen(namebuf), t);
     fprintf(sm, "Message-ID: %s\r\n", buf);
 
-    rfc822date_gen(datestr, t);
+    rfc822date_gen(datestr, sizeof(datestr), t);
     fprintf(sm, "Date: %s\r\n", datestr);
 
     fprintf(sm, "X-Sieve: %s\r\n", sieve_version);
@@ -839,7 +839,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     
     fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
-    rfc822date_gen(datestr, t);
+    rfc822date_gen(datestr, sizeof(datestr), t);
     fprintf(sm, "Date: %s\r\n", datestr);
     
     fprintf(sm, "X-Sieve: %s\r\n", sieve_version);
