@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.16 2003/10/22 18:50:07 rjs3 Exp $ */
+/* $Id: backend.c,v 1.17 2004/02/03 20:59:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -325,20 +325,38 @@ struct backend *backend_connect(struct backend *ret, const char *server,
     return ret;
 }
 
+int backend_ping(struct backend *s, struct protocol_t *prot)
+{
+    char buf[1024];
+
+    if (!s || !prot || !prot->ping_cmd.cmd) return 0;
+    
+    prot_printf(s->out, "%s\r\n", prot->ping_cmd.cmd);
+    prot_flush(s->out);
+
+    if (!prot_fgets(buf, sizeof(buf), s->in) ||
+	strncmp(prot->ping_cmd.resp, buf, strlen(prot->ping_cmd.resp))) {
+	return -1; /* ping failed */
+    }
+
+    return 0;
+}
+
 void backend_disconnect(struct backend *s, struct protocol_t *prot)
 {
     char buf[1024];
-    if(!s) return;
+
+    if (!s) return;
     
-    if (prot) {
+    if (prot && prot->logout_cmd.cmd) {
 	prot_printf(s->out, "%s\r\n", prot->logout_cmd.cmd);
 	prot_flush(s->out);
-    }
 
-    while (prot_fgets(buf, sizeof(buf), s->in)) {
-	if (!strncmp(prot->logout_cmd.resp, buf,
-		     strlen(prot->logout_cmd.resp))) {
-	    break;
+	while (prot_fgets(buf, sizeof(buf), s->in)) {
+	    if (!strncmp(prot->logout_cmd.resp, buf,
+			 strlen(prot->logout_cmd.resp))) {
+		break;
+	    }
 	}
     }
 
