@@ -10,6 +10,7 @@
 #define YY_INPUT(b, r, ms) (r = addrinput(b, ms))
 
 int addrinput(char *buf, int max_size);
+void addrerror(const char *);
 
 static int ncom;	/* number of open comments */
 %}
