@@ -7,10 +7,114 @@
 #include "perl.h"
 #include "XSUB.h"
 #include <pwd.h>
-#include "cyrus/imclient.h"
+#include "imclient.h"
 #include "cyrperl.h"
 
 typedef struct xscyrus *IMAP_Cyrus;
+
+
+/*
+ * This is the code from xsutil.c
+ */
+
+/* hack, since libcyrus apparently expects fatal() to exist */
+void
+fatal(char *s, int exit)
+{
+  croak(s);
+}
+
+/*
+ * Invoke a Perl callback on behalf of a Cyrus callback.  This requires some
+ * silliness to adapt what we're passed to Perl conventions; specifically,
+ * the reply struct becomes a hash (passed as a list).
+ */
+
+void imclient_xs_cb(struct imclient *client, struct xsccb *rock,
+		    struct imclient_reply *reply)
+{
+  dSP;
+  dTARG;
+  SV* rv;
+
+  /* push our args onto Perl's stack */
+  ENTER;
+  SAVETMPS;
+  PUSHMARK(SP);
+  XPUSHs(sv_2mortal(newSVpv("-client", 0)));
+  rv = newSVsv(&sv_undef);
+  sv_setref_pv(rv, rock->client->class, (void *) rock->client);
+  rock->client->cnt++;
+  XPUSHs(rv);
+  if (rock->prock != &sv_undef) {
+    XPUSHs(sv_2mortal(newSVpv("-rock", 0)));
+    XPUSHs(sv_mortalcopy(rock->prock));
+  }
+  XPUSHs(sv_2mortal(newSVpv("-keyword", 0)));
+  XPUSHs(sv_2mortal(newSVpv(reply->keyword, 0)));
+  XPUSHs(sv_2mortal(newSVpv("-text", 0)));
+  XPUSHs(sv_2mortal(newSVpv(reply->text, 0)));
+  if (reply->msgno != -1) {
+    XPUSHs(sv_2mortal(newSVpv("-msgno", 0)));
+    XPUSHi(reply->msgno);
+  }
+  PUTBACK;
+  /* invoke Perl */
+  perl_call_sv(rock->pcb, G_VOID|G_DISCARD);
+  FREETMPS;
+  LEAVE;
+  /* clean up */
+  if (rock->autofree) imclient_xs_callback_free(rock);
+}
+
+/*
+ * Callback used when ::_send is invoked without a callback.  The "prock" is an
+ * AV, which is set to the contents of the imclient_reply; this is detected in
+ * ::_send, which is calling imclient_processoneevent() repeatedly.  (This
+ * simulates a non-callback-based invocation, for trivial clients.)
+ */
+void imclient_xs_fcmdcb(struct imclient *client, struct xsccb *rock,
+			struct imclient_reply *reply)
+{
+  AV *av;
+
+  SvREFCNT_dec(SvRV(rock->prock));
+  SvRV(rock->prock) = (SV *) av = newAV();
+  av_push(av, newSVpv(reply->keyword, 0));
+  av_push(av, newSVpv(reply->text, 0));
+  if (reply->msgno != -1) av_push(av, newSViv(reply->msgno));
+  /* clean up */
+  if (rock->autofree) imclient_xs_callback_free(rock);
+}
+
+/*
+ * Decrement the refcounts of the Perl SV's in the passed rock, then free the
+ * rock.  This cleans up a callback.
+ */
+
+void imclient_xs_callback_free(struct xsccb *rock)
+{
+  struct xscb *xcb;
+
+  if (rock) {
+    /* find the destructor-cleanup version and nuke its record */
+    for (xcb = rock->client->cb; xcb; xcb = xcb->next) {
+      if (xcb->rock == rock) break;
+    }
+    if (xcb) {
+      if (xcb->prev)
+	xcb->prev->next = xcb->next;
+      else
+	rock->client->cb = xcb->next;
+      if (xcb->next) xcb->next->prev = xcb->prev;
+      if (xcb->name) safefree(xcb->name);
+      safefree(xcb);
+    }
+    if (rock->pcb) SvREFCNT_dec(rock->pcb);
+    if (rock->prock) SvREFCNT_dec(rock->prock);
+    safefree(rock);
+  }
+}
 
 MODULE = IMAP::Cyrus	PACKAGE = IMAP::Cyrus	
 PROTOTYPES: ENABLE

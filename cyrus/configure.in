@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.163 2000/05/03 17:37:11 tmartin Exp $
+dnl $Id: configure.in,v 1.164 2000/05/03 19:05:55 tmartin Exp $
 dnl
 
 
@@ -104,8 +104,8 @@ if test "$sievedir" != "no"; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} timsieved"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} timsieved/Makefile"
 
-	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} installsieve"
-	EXTRA_OUTPUT="${EXTRA_OUTPUT} installsieve/Makefile"
+	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} perl/sieve/ perl/sieve/lib"
+	EXTRA_OUTPUT="${EXTRA_OUTPUT} perl/sieve/Makefile perl/sieve/lib/Makefile"
 fi
 
 dnl for et routines
@@ -828,4 +828,4 @@ AC_OUTPUT_COMMANDS([cd perl/sieve/acap; perl Makefile.PL; cd ../../../])
 AC_OUTPUT_COMMANDS([cd perl/sieve/managesieve; perl Makefile.PL; cd ../../../])
 AC_OUTPUT_COMMANDS([cd perl/imap; perl Makefile.PL; cd ../../])
 
-AC_OUTPUT(man/Makefile master/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile snmp/Makefile perl/Makefile perl/sieve/Makefile perl/sieve/lib/Makefile $EXTRA_OUTPUT Makefile)
+AC_OUTPUT(man/Makefile master/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile snmp/Makefile perl/Makefile $EXTRA_OUTPUT Makefile)
