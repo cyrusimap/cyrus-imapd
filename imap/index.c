@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: index.c,v 1.200 2003/10/22 19:42:55 ken3 Exp $
  */
 #include <config.h>
 
@@ -119,9 +119,10 @@ static int index_forsequence(struct mailbox *mailbox, const char *sequence,
 			     int* fetchedsomething);
 static int index_insequence(int num, char *sequence, int usinguid);
 
-static void index_fetchmsg(const char *msg_base, unsigned long msg_size,
-			   int format, unsigned offset, unsigned size,
-			   unsigned start_octet, unsigned octet_count);
+void index_fetchmsg(const char *msg_base, unsigned long msg_size,
+		    int format, unsigned offset, unsigned size,
+		    unsigned start_octet, unsigned octet_count,
+		    struct protstream *pout);
 static int index_fetchsection(const char *resp,
 			      const char *msg_base, unsigned long msg_size,
 			      int format, char *section,
@@ -1219,6 +1220,93 @@ index_copy(struct mailbox *mailbox,
 }
 
 /*
+ * Helper function to multiappend a message to remote mailbox
+ */
+static int index_appendremote(struct mailbox *mailbox,
+			      unsigned msgno, void *rock)
+{
+    struct protstream *pout = (struct protstream *) rock;
+    const char *msg_base = 0;
+    unsigned long msg_size = 0;
+    bit32 system_flags;
+    bit32 user_flags[MAX_USER_FLAGS/32];
+    unsigned flag;
+    bit32 flagmask = 0;
+    char datebuf[30];
+    char sepchar = '(';
+
+    /* Open the message file */
+    if (mailbox_map_message(mailbox, 1, UID(msgno), &msg_base, &msg_size)) {
+	return IMAP_NO_MSGGONE;
+    }
+
+    /* start the individual append */
+    prot_printf(pout, " ");
+
+    /* add system flags */
+    system_flags = SYSTEM_FLAGS(msgno);
+    if (system_flags & FLAG_ANSWERED) {
+	prot_printf(pout, "%c\\Answered", sepchar);
+	sepchar = ' ';
+    }
+    if (system_flags & FLAG_FLAGGED) {
+	prot_printf(pout, "%c\\Flagged", sepchar);
+	sepchar = ' ';
+    }
+    if (system_flags & FLAG_DRAFT) {
+	prot_printf(pout, "%c\\Draft", sepchar);
+	sepchar = ' ';
+    }
+    if (system_flags & FLAG_DELETED) {
+	prot_printf(pout, "%c\\Deleted", sepchar);
+	sepchar = ' ';
+    }
+    if (seenflag[msgno]) {
+	prot_printf(pout, "%c\\Seen", sepchar);
+	sepchar = ' ';
+    }
+
+    /* add user flags */
+    for (flag = 0; flag < VECTOR_SIZE(user_flags); flag++) {
+	user_flags[flag] = USER_FLAGS(msgno, flag);
+    }
+    for (flag = 0; flag < VECTOR_SIZE(mailbox->flagname); flag++) {
+	if ((flag & 31) == 0) {
+	    flagmask = user_flags[flag/32];
+	}
+	if (mailbox->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
+	    prot_printf(pout, "%c%s", sepchar, mailbox->flagname[flag]);
+	    sepchar = ' ';
+	}
+    }
+
+    /* add internal date */
+    cyrus_ctime(INTERNALDATE(msgno), datebuf);
+    prot_printf(pout, ") \"%s\" ", datebuf);
+
+    /* message literal */
+    index_fetchmsg(msg_base, msg_size, mailbox->format, 0, SIZE(msgno),
+		   0, 0, pout);
+
+    /* close the message file */
+    if (msg_base) {
+	mailbox_unmap_message(mailbox, UID(msgno), &msg_base, &msg_size);
+    }
+
+    return 0;
+}
+
+/*
+ * Performs a COPY command from a local mailbox to a remote mailbox
+ */
+int index_copy_remote(struct mailbox *mailbox, char *sequence, 
+		      int usinguid, struct protstream *pout)
+{
+    return index_forsequence(mailbox, sequence, usinguid, index_appendremote,
+			     (void *) pout, NULL);
+}
+
+/*
  * Performs a STATUS command
  */
 int
@@ -1600,9 +1688,9 @@ int usinguid;
  * further constrained by 'start_octet' and 'octet_count' as per the
  * IMAP command PARTIAL.
  */
-static void
+void
 index_fetchmsg(msg_base, msg_size, format, offset, size,
-	       start_octet, octet_count)
+	       start_octet, octet_count, pout)
 const char *msg_base;
 unsigned long msg_size;
 int format;
@@ -1611,6 +1699,7 @@ unsigned size;     /* this is the correct size for a news message after
 		      having LF translated to CRLF */
 unsigned start_octet;
 unsigned octet_count;
+struct protstream *pout;
 {
     int n;
 
@@ -1627,7 +1716,7 @@ unsigned octet_count;
 
     /* If no data, output null quoted string */
     if (!msg_base || size == 0) {
-	prot_printf(imapd_out, "\"\"");
+	prot_printf(pout, "\"\"");
 	return;
     }
 
@@ -1641,20 +1730,20 @@ unsigned octet_count;
     /* Look for a NUL in the data */
     if (memchr(msg_base + offset, 0, n)) {
 	/* Write size of literal8 */
-	prot_printf(imapd_out, "~{%u}\r\n", size);
+	prot_printf(pout, "~{%u}\r\n", size);
     } else {
 	/* Write size of literal */
-	prot_printf(imapd_out, "{%u}\r\n", size);
+	prot_printf(pout, "{%u}\r\n", size);
     }
 
-    prot_write(imapd_out, msg_base + offset, n);
+    prot_write(pout, msg_base + offset, n);
     while (n++ < size) {
 	/* File too short, resynch client.
 	 *
 	 * This can only happen if the reported size of the part
 	 * is incorrect and would push us past EOF.
 	 */
-	prot_putc(' ', imapd_out);
+	prot_putc(' ', pout);
     }
 }
 
@@ -1683,7 +1772,7 @@ static int index_fetchsection(const char *resp,
 	} else {
 	    prot_printf(imapd_out, "%s", resp);
 	    index_fetchmsg(msg_base, msg_size, format, 0, size,
-			   start_octet, octet_count);
+			   start_octet, octet_count, imapd_out);
 	}
 	return 0;
     }
@@ -1778,7 +1867,7 @@ static int index_fetchsection(const char *resp,
     /* Output body part */
     prot_printf(imapd_out, "%s", resp);
     index_fetchmsg(msg_base, msg_size, format, offset, size,
-		   start_octet, octet_count);
+		   start_octet, octet_count, imapd_out);
 
     if (decbuf) free(decbuf);
     return 0;
@@ -2311,7 +2400,8 @@ static int index_fetchreply(struct mailbox *mailbox,
 	sepchar = ' ';
 	index_fetchmsg(msg_base, msg_size, mailbox->format, 0,
 		       HEADER_SIZE(msgno),
-		       fetchargs->start_octet, fetchargs->octet_count);
+		       fetchargs->start_octet, fetchargs->octet_count,
+		       imapd_out);
     }
     else if (fetchargs->headers || fetchargs->headers_not) {
 	prot_printf(imapd_out, "%cRFC822.HEADER ", sepchar);
@@ -2330,13 +2420,15 @@ static int index_fetchreply(struct mailbox *mailbox,
 	sepchar = ' ';
 	index_fetchmsg(msg_base, msg_size, mailbox->format,
 		       CONTENT_OFFSET(msgno), SIZE(msgno) - HEADER_SIZE(msgno),
-		       fetchargs->start_octet, fetchargs->octet_count);
+		       fetchargs->start_octet, fetchargs->octet_count,
+		       imapd_out);
     }
     if (fetchitems & FETCH_RFC822) {
 	prot_printf(imapd_out, "%cRFC822 ", sepchar);
 	sepchar = ' ';
 	index_fetchmsg(msg_base, msg_size, mailbox->format, 0, SIZE(msgno),
-		       fetchargs->start_octet, fetchargs->octet_count);
+		       fetchargs->start_octet, fetchargs->octet_count,
+		       imapd_out);
     }
     for (fsection = fetchargs->fsections; fsection; fsection = fsection->next) {
 	prot_printf(imapd_out, "%cBODY[%s ", sepchar, fsection->section);

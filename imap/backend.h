@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.7 2003/10/22 18:50:07 rjs3 Exp $ */
+/* $Id: backend.h,v 1.8 2003/10/22 19:42:52 ken3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -73,7 +73,8 @@ struct backend {
     enum {
 	ACAP = 0x1, /* obsolete */
 	IDLE = 0x2,
-	MUPDATE = 0x4
+	MUPDATE = 0x4,
+	MULTIAPPEND = 0x8
     } capability;
 
     char last_result[LAST_RESULT_LEN];

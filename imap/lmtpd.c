@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.122 2003/10/22 19:42:56 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -226,7 +226,9 @@ int service_init(int argc __attribute__((unused)),
     mboxlist_open(NULL);
 
     /* setup for sending IMAP IDLE notifications */
-    idle_enabled();
+    if (config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
+	idle_init();
+    }
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&lmtpd_namespace, 0)) != 0) {

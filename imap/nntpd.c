@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2 2003/10/22 18:02:58 rjs3 Exp $
+ * $Id: nntpd.c,v 1.3 2003/10/22 19:42:56 ken3 Exp $
  */
 
 /*
@@ -84,6 +84,7 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "hash.h"
+#include "idle.h"
 #include "imap_err.h"
 #include "index.h"
 #include "iptostring.h"
@@ -573,6 +574,11 @@ int service_init(int argc __attribute__((unused)),
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
     mboxlist_open(NULL);
+
+    /* setup for sending IMAP IDLE notifications */
+    if (config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
+	idle_init();
+    }
 
     while ((opt = getopt(argc, argv, "srf")) != EOF) {
 	switch(opt) {
