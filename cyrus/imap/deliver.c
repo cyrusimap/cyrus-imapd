@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.101 1999/08/24 18:12:29 leg Exp $
+ * $Id: deliver.c,v 1.102 1999/08/28 12:01:46 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.101 1999/08/24 18:12:29 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.102 1999/08/28 12:01:46 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -556,7 +556,7 @@ static void fill_cache(FILE *fin, FILE *fout, int lmtpmode, message_data_t *m)
 		/* increase the size */
 		m->cache[cl] = (header_t *)
 		    xrealloc(m->cache[cl],sizeof(header_t) +
-			     (8 + m->cache[cl]->ncontents * sizeof(char *)));
+			     ((8 + m->cache[cl]->ncontents) * sizeof(char *)));
 	    }
 
 	    /* have no need of this */
