@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.45 2003/03/10 19:00:22 rjs3 Exp $
+ * $Id: timsieved.c,v 1.46 2003/06/24 15:34:00 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -146,7 +146,7 @@ void cmdloop()
     
     chdir("/tmp/");
 
-    capabilities(sieved_out, sieved_saslconn);
+    capabilities(sieved_out, sieved_saslconn, 0, 0);
 
     /* initialize lexer */
     lex_init();
