@@ -25,6 +25,10 @@ typedef struct acapmbox_data_s {
     unsigned int total;
 } acapmbox_data_t;
 
+/* helper functions to create an acapmbox_data_t */
+char *acapmbox_get_url(char *mbox);
+char *acapmbox_get_postaddr(char *mbox);
+
 typedef struct acapmbox_handle_s acapmbox_handle_t;
 
 int acapmbox_init(void);
@@ -45,20 +49,13 @@ void acapmbox_release_handle(acapmbox_handle_t *handle);
  * sets the status of the entry on success to reserved
  */
 int acapmbox_create(acapmbox_handle_t *AC,
-		    char *mailbox_name,
 		    acapmbox_data_t *mboxdata);
 		
 /*
  * Commit the entry 
  */
 int acapmbox_markactive(acapmbox_handle_t *AC,
-			char *mailbox_name);
-
-/*
- * Uncommit the entry 
- */
-int acapmbox_markreserved(acapmbox_handle_t *AC,
-			  char *mailbox_name);
+			acapmbox_data_t *mboxdata);
 
 /*
  * Remove an entry
@@ -78,14 +75,6 @@ int acapmbox_deleteall(acapmbox_handle_t *AC);
  */
 int acapmbox_entryexists(acapmbox_handle_t *AC,
 			 char *mailbox_name);
-
-/*
- * Copy a mailbox entry preserving all value except the new
- * entry's status will be "reserved"
- */
-int acapmbox_copy(acapmbox_handle_t *AC,
-		  char *old_mailbox,
-		  char *new_mailbox);
 
 typedef enum {
     ACAPMBOX_ANSWERED,

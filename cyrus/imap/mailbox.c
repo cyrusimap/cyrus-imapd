@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.84 2000/02/01 04:05:52 leg Exp $
+ $Id: mailbox.c,v 1.85 2000/02/01 20:17:18 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -1829,7 +1829,8 @@ char *indexbuf;
 int
 mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl, 
 	       const char *newname, char *newpath, int isinbox, 
-	       bit32 *olduidvalidityp, bit32 *newuidvalidityp)
+	       bit32 *olduidvalidityp, bit32 *newuidvalidityp,
+	       struct mailbox *mailboxp)
 {
     int r, r2;
     struct mailbox oldmailbox, newmailbox;
@@ -1971,7 +1972,11 @@ mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl,
     }
     if (r) goto fail;
 
-    mailbox_close(&newmailbox);
+    if (mailboxp) {
+	*mailboxp = newmailbox;
+    } else {
+	mailbox_close(&newmailbox);
+    }
     return 0;
 
  fail:

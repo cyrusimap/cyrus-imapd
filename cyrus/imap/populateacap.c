@@ -57,9 +57,10 @@ acap_conn_t *acap_conn;
 int cmd_done;
 
 /* libcyrus makes us define this */
-void fatal(void)
+void fatal(char *s, int c)
 {
-  exit(1);
+    fprintf(stderr, "fatal: %s\n", s);
+    exit(c);
 }
 
 /***********************
@@ -251,7 +252,10 @@ int create_all(void)
     while (item != NULL)
     {
 	printf("Creating %s\n",item->mb.name);
-	r = acapmbox_create(acap_conn,item->mb.name,NULL);
+	if (0) {
+	    r = acapmbox_create(NULL, NULL);
+	}
+	fatal("fix me", 0);
 	printf("c r = %d\n",r);
        
 	item = item->next;

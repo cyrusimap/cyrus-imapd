@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.105 2000/02/01 04:08:00 leg Exp $
+ * $Id: mboxlist.c,v 1.106 2000/02/01 20:17:19 leg Exp $
  */
 
 #include <stdio.h>
@@ -508,14 +508,10 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 				struct mbox_txn **rettid)
 {
     int r;
-    unsigned long offset, len;
     char *acl = NULL;
     char buf2[MAX_MAILBOX_PATH];
     const char *root;
     char *newpartition = NULL;
-    int newlistfd;
-    struct iovec iov[10];
-    int n;
     struct mailbox newmailbox;
     DB_TXN *tid;
     DBT key, keydel, data;
@@ -569,47 +565,24 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
     }
 
     /* 5. create ACAP entry and set as reserved (CRASH: ACAP inconsistant) */
-    {
-	char postaddr[MAX_MAILBOX_PATH];
-	char url[MAX_MAILBOX_PATH];
-	const char *postspec;
-
-	/* xxx
-	   this should probably vary depending on whether it's a private
-	   mailbox or a bboard, and it should default to 
-	   "bb+bboard.name@server.name" */
-	postspec = config_getstring("postspec", NULL);
-	if (postspec) {
-	    snprintf(postaddr, sizeof(postaddr), postspec, name);
-	} else {
-	    snprintf(postaddr, sizeof(postaddr), "bb+%s@%s", 
-		     name, config_servername);
-	}
-	snprintf(url, sizeof(postaddr), "imap://%s/%s",
-		 config_servername, name);
-
-	memset(&mboxdata, '\0', sizeof(acapmbox_data_t));
-
-	mboxdata.name = name;	
-	mboxdata.post = postaddr;
-	mboxdata.haschildren = 0; /* xxx */
-	mboxdata.url = url;
-	/* all other are initialized to zero */
-	
-	/* 3. open ACAP connection if necessary */
-	acaphandle = acapmbox_get_handle();
-
-	r = acapmbox_create(acaphandle,
-			    name,
-			    &mboxdata);
-	if (r) {
-	    syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n", name,
-		   error_message(r));
-	    goto done;
-	}
-	madereserved = 1; /* so we can roll back on failure */
+    memset(&mboxdata, 0, sizeof(acapmbox_data_t));
+    
+    mboxdata.name = name;	
+    mboxdata.post = acapmbox_get_postaddr(name);
+    mboxdata.url = acapmbox_get_url(name);
+    /* all other are initialized to zero */
+    
+    /* 3. open ACAP connection if necessary */
+    acaphandle = acapmbox_get_handle();
+    
+    r = acapmbox_create(acaphandle,
+			&mboxdata);
+    if (r) {
+	syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n", name,
+	       error_message(r));
+	goto done;
     }
-
+    madereserved = 1; /* so we can roll back on failure */
     
     /* add the new entry */
     mboxent = (struct mbox_entry *) xmalloc(sizeof(struct mbox_entry) +
@@ -670,13 +643,7 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	}
     }
 
-    if (acl) free(acl);
-    if (newpartition) free(newpartition);
-    if (mboxent) free(mboxent);
-
-    if (rettid) *rettid = NULL;
-    
-    if (r != 0) {
+    if (!r) { /* CREATE failed */ 
 	int r2;
 
 	/* delete ACAP entry if we made it */
@@ -706,15 +673,20 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
     }
 
     /* 9. set ACAP entry as commited (CRASH: commited) */
-    if (!r)
-    {
-	r = acapmbox_markactive(acaphandle, name);
+    if (!r) {
+	mboxdata.uidvalidity = newmailbox.uidvalidity;
+	mboxdata.acl = mboxent->acls;
+	r = acapmbox_markactive(acaphandle, &mboxdata);
 	if (r) {
 	    syslog(LOG_ERR, "ACAP: unable to commit %s: %s\n", name, 
 		   error_message(r));
 	}
     }
     acapmbox_release_handle(acaphandle);
+
+    if (acl) free(acl);
+    if (newpartition) free(newpartition);
+    if (mboxent) free(mboxent);
    
     return r;
 }
@@ -908,7 +880,12 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     case DB_LOCK_DEADLOCK:
 	goto retry;
 	break;
+    case DB_NOTFOUND:
+	r = IMAP_MAILBOX_NONEXISTENT;
+	goto done;
     default:
+	syslog(LOG_ERR, "DBERROR: error fetching entry: %s", db_strerror(r));
+	r = IMAP_IOERROR;
 	goto done;
     }
 
@@ -939,6 +916,7 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     default:
 	syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
 	       name, db_strerror(r));
+	r = IMAP_IOERROR;
 	goto done;
 	break;
     }
@@ -1107,9 +1085,10 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     int isusermbox = 0;
     int mbtype;
     char *oldpath = NULL;
-    char *oldpath_alloc = NULL;
     char newpath[MAX_MAILBOX_PATH];
-    char buf2[MAX_MAILBOX_PATH];
+    struct mailbox newmailbox;
+    acapmbox_data_t mboxdata;
+    char buf2[MAX_PARTITION_LEN + 30];
     char *oldacl;
     const char *root;
     DB_TXN *tid;
@@ -1117,7 +1096,6 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     struct mbox_entry *mboxent = NULL, *newent = NULL;
     char *newpartition = NULL;
     int acap_madenew = 0;
-    char *oldname_tofree = NULL;
     acapmbox_handle_t *acaphandle = NULL;
 
     memset(&key, 0, sizeof(key));
@@ -1128,9 +1106,6 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	if (rettid) *rettid = NULL;
 	return IMAP_MAILBOX_NOTSUPPORTED;
     }
-
-    oldname = xstrdup(oldname);	/* we need a persistant copy of this */
-    oldname_tofree = oldname;
 
     /* place to retry transaction */
     if (0) {
@@ -1159,8 +1134,6 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	mboxent = (struct mbox_entry *) data.data;
 	oldacl = mboxent->acls;
 	mbtype = mboxent->mbtype;
-	oldpath = (char *) xmalloc(MAX_MAILBOX_PATH);
-	oldpath_alloc = oldpath; /* save for freeing later */
 	r = mboxlist_getpath(mboxent->partition, mboxent->name, &oldpath);
 	if (r) {
 	    goto done;
@@ -1319,10 +1292,12 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	goto done;
     }
 
-    /* 5. ACAP make the new entry */
-    r = acapmbox_copy(acaphandle,
-		      oldname,
-		      newname);
+    /* 5. ACAP make the new entry, set as reserved */
+    memset(&mboxdata, 0, sizeof(acapmbox_data_t));
+    mboxdata.name = newname;
+    mboxdata.post = acapmbox_get_postaddr(newname);
+    mboxdata.url = acapmbox_get_url(newname);
+    r = acapmbox_create(acaphandle, &mboxdata);
     if (r != ACAP_OK) {
 	goto done;
     }
@@ -1338,7 +1313,10 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	mailbox_hash_mbox(newpath, root, newname);
 	
 	r = mailbox_rename(oldname, oldpath, newent->acls, newent->name, 
-			   newpath, isusermbox, NULL, NULL);
+			   newpath, isusermbox, NULL, NULL, &newmailbox);
+	if (!r) {
+	    mailbox_close(&newmailbox);
+	}
     }
 
     if (r != 0) {
@@ -1346,8 +1324,7 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	
 	/* unroll acap operations if necessary */
 	if (acap_madenew == 1) {
-	    r2 = acapmbox_delete(acaphandle,
-				 newname);
+	    r2 = acapmbox_delete(acaphandle, newname);
 	    if (r2 != 0) {
 		syslog(LOG_ERR, "ACAP: can't rollback %s: %s", newname, 
 		       error_message(r));
@@ -1355,22 +1332,10 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
 
 	txn_abort(tid);
-	if (rettid) *rettid = NULL;
     } else {
 	/* commit now */
 	switch (r = txn_commit(tid, 0)) {
 	case 0: 
-	    /* 9. set new ACAP entry commited */
-	    r = acapmbox_markactive(acaphandle, newname);
-	    if (!r) {
-		syslog(LOG_ERR, "ACAP: can't commit %s: %d", newname, r);
-	    }
-	    
-	    /* 10. delete old ACAP entry */
-	    r = acapmbox_delete(acaphandle, oldname);
-	    if (!r) {
-		syslog(LOG_ERR, "ACAP: can't delete %s: %d", newname, r);
-	    }
 	    break;
 
 	default:
@@ -1381,10 +1346,23 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
+    if (!r) {
+	/* 9. set new ACAP entry commited */
+	mboxdata.uidvalidity = newmailbox.uidvalidity;
+	mboxdata.acl = newent->acls;
+	mboxdata.total = newmailbox.exists;
+	r = acapmbox_markactive(acaphandle, &mboxdata);
+	if (r) syslog(LOG_ERR, "ACAP: can't commit %s: %d", newname, r);
+    }
+
+    if (!r) {
+	/* 10. delete old ACAP entry */
+	r = acapmbox_delete(acaphandle, oldname);
+	if (r) syslog(LOG_ERR, "ACAP: can't delete %s: %d", oldname, r);
+    }
+
     /* free memory */
     if (newpartition) free(newpartition);
-    if (oldpath_alloc) free(oldpath_alloc);
-    if (oldname_tofree) free(oldname_tofree);
     if (newent) free(newent);
     
     return r;
