@@ -689,6 +689,7 @@ struct mailbox *mailbox;
 	}
     }
     fprintf(newheader, "\n");
+    fprintf(newheader, "%s\n", mailbox->acl);
 
     fflush(newheader);
     if (ferror(newheader) || fsync(fileno(newheader)) ||

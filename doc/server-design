@@ -101,6 +101,7 @@ cyrus.header	Contains variable-length information about the mailbox itself.
 - magic-number
 - Name of the quota root for this mailbox
 - The names of the user-defined flags
+- Redunant copy of ACL
 
 
 cyrus.index	Contains a header and a sequence of fixed-length
