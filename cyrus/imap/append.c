@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.93.4.4 2003/02/06 22:40:51 rjs3 Exp $
+ * $Id: append.c,v 1.93.4.5 2003/03/12 16:38:13 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -339,12 +339,13 @@ int append_abort(struct appendstate *as)
 
     /* unlink message files that were created */
     for (uid = as->m.last_uid + 1; uid <= as->m.last_uid + as->nummsg; uid++) {
-	char fname[MAX_MAILBOX_PATH];
+	char fname[MAX_MAILBOX_PATH+1];
 
 	/* Create message file */
 	strcpy(fname, as->m.path);
 	strcat(fname, "/");
-	mailbox_message_get_fname(&as->m, uid, fname + strlen(fname));
+	mailbox_message_get_fname(&as->m, uid, fname + strlen(fname),
+				  sizeof(fname) - strlen(fname));
 	if (unlink(fname) < 0) {
 	    /* hmmm, never got appended? */
 	    /* r = IMAP_IOERROR; */
@@ -445,13 +446,13 @@ int append_fromstage(struct appendstate *as,
 {
     struct mailbox *mailbox = &as->m;
     struct index_record message_index;
-    char fname[MAX_MAILBOX_PATH];
+    char fname[MAX_MAILBOX_PATH+1];
     FILE *destfile;
     int i, r;
     int userflag, emptyflag;
 
     /* for staging */
-    char stagefile[MAX_MAILBOX_PATH];
+    char stagefile[MAX_MAILBOX_PATH+1];
     int sflen;
     char *p;
 
@@ -540,7 +541,8 @@ int append_fromstage(struct appendstate *as,
     strcpy(fname, mailbox->path);
     strcat(fname, "/");
     mailbox_message_get_fname(mailbox, message_index.uid, 
-			      fname + strlen(fname));
+			      fname + strlen(fname),
+			      sizeof(fname) - strlen(fname));
 
     r = mailbox_copyfile(p, fname);
     destfile = fopen(fname, "r");
@@ -668,7 +670,7 @@ int append_fromstream(struct appendstate *as,
 {
     struct mailbox *mailbox = &as->m;
     struct index_record message_index;
-    char fname[MAX_MAILBOX_PATH];
+    char fname[MAX_MAILBOX_PATH+1];
     FILE *destfile;
     int i, r;
     int userflag, emptyflag;
@@ -687,7 +689,8 @@ int append_fromstream(struct appendstate *as,
     strcpy(fname, mailbox->path);
     strcat(fname, "/");
     mailbox_message_get_fname(mailbox, message_index.uid, 
-			      fname + strlen(fname));
+			      fname + strlen(fname),
+			      sizeof(fname) - strlen(fname));
     as->nummsg++;
 
     unlink(fname);
@@ -791,7 +794,7 @@ int append_copy(struct mailbox *mailbox,
     struct mailbox *append_mailbox = &as->m;
     int msg;
     struct index_record *message_index;
-    char fname[MAX_MAILBOX_PATH];
+    char fname[MAX_MAILBOX_PATH+1];
     const char *src_base;
     unsigned long src_size;
     const char *startline, *endline;
@@ -821,12 +824,14 @@ int append_copy(struct mailbox *mailbox,
 	strcpy(fname, append_mailbox->path);
 	strcat(fname, "/");
 	mailbox_message_get_fname(append_mailbox, message_index[msg].uid, 
-				  fname + strlen(fname));
+				  fname + strlen(fname),
+				  sizeof(fname) - strlen(fname));
 
 	if (copymsg[msg].cache_len) {
 	    char fnamebuf[MAILBOX_FNAME_LEN];
 
-	    mailbox_message_get_fname(mailbox, copymsg[msg].uid, fnamebuf);
+	    mailbox_message_get_fname(mailbox, copymsg[msg].uid, fnamebuf,
+				      sizeof(fnamebuf));
 	    /* Link/copy message file */
 	    r = mailbox_copyfile(fnamebuf, fname);
 	    if (r) goto fail;

@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.18.6.7 2003/02/13 20:32:58 rjs3 Exp $
+ * $Id: mbdump.c,v 1.18.6.8 2003/03/12 16:38:14 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -671,9 +671,9 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
     
     if(!r && quotaused) {
 	struct quota quota;
-	char quota_root[MAX_MAILBOX_PATH];
+	char quota_root[MAX_MAILBOX_PATH+1];
 	
-	if(mailbox_findquota(quota_root, mbname)) {
+	if(mailbox_findquota(quota_root, sizeof(quota_root), mbname)) {
 	    /* update the quota file */
 	    memset(&quota, 0, sizeof(quota));
 	    quota.root = quota_root;

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.69 2003/03/06 17:30:39 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.70 2003/03/12 16:38:16 ken3 Exp $
  */
 
 /*
@@ -1634,7 +1634,8 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 
     strlcpy(fname, nntp_group->path, sizeof(fname));
     strlcat(fname, "/", sizeof(fname));
-    mailbox_message_get_fname(nntp_group, uid, fname + strlen(fname));
+    mailbox_message_get_fname(nntp_group, uid, fname + strlen(fname),
+			      sizeof(fname) - strlen(fname));
 
     msgfile = fopen(fname, "r");
     if (!msgfile) {
