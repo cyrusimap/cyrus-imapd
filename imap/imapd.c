@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.370 2002/03/29 00:03:53 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.371 2002/03/29 20:34:50 leg Exp $ */
 
 #include <config.h>
 
@@ -6038,7 +6038,7 @@ static int do_xfer_single(char *toserver, char *name, char *mailboxname,
 	if(r) syslog(LOG_ERR,
 		     "Could not delete local mailbox during move of %s",
 		     mailboxname);
-    }
+     }
 
 done:
     if(r && backout_mupdate) {
@@ -6247,6 +6247,9 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 		       name, error_message(rerr));
 	    }
 	}
+
+	/* xxx this was a user delete, and we need to delete certain user
+	   meta-data */
 
 	if(!r && mupdate_h) {
 	    mupdate_disconnect(&mupdate_h);
