@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.18 2003/10/22 20:05:10 ken3 Exp $
+ * $Id: annotate.c,v 1.16.2.1 2003/10/22 20:13:06 ken3 Exp $
  */
 
 #include <config.h>
@@ -636,6 +636,9 @@ static void annotation_get_server(const char *int_mboxname,
     
     get_mb_data(int_mboxname, mbrock);
 
+    /* Make sure its a remote mailbox */
+    if (!mbrock->server) return;
+
     /* Check ACL */
     if(!fdata->isadmin &&
        (!mbrock->acl ||
@@ -667,6 +670,9 @@ static void annotation_get_partition(const char *int_mboxname,
 	      EC_TEMPFAIL);
     
     get_mb_data(int_mboxname, mbrock);
+
+    /* Make sure its a local mailbox */
+    if (mbrock->server) return;
 
     /* Check ACL */
     if(!fdata->isadmin &&
@@ -704,6 +710,9 @@ static void annotation_get_size(const char *int_mboxname,
 	      EC_TEMPFAIL);
     
     get_mb_data(int_mboxname, mbrock);
+
+    /* Make sure its a local mailbox */
+    if (mbrock->server) return;
 
     /* Check ACL */
     if(!fdata->isadmin &&
@@ -756,6 +765,9 @@ static void annotation_get_lastupdate(const char *int_mboxname,
 	      EC_TEMPFAIL);
     
     get_mb_data(int_mboxname, mbrock);
+
+    /* Make sure its a local mailbox */
+    if (mbrock->server) return;
 
     /* Check ACL */
     if(!fdata->isadmin &&
@@ -822,6 +834,9 @@ static void annotation_get_fromdb(const char *int_mboxname,
     else {
 	/* mailbox annotation */
 	get_mb_data(int_mboxname, mbrock);
+
+	/* Make sure its a local mailbox */
+	if (mbrock->server) return;
 
 	/* Check ACL */
 	if(!fdata->isadmin &&
@@ -974,8 +989,8 @@ static int fetch_cb(char *name, int matchlen,
 					  (void*) entries_ptr->entrypat));
     }
 
-    if (proxy_fetch_func && fdata->orig_entry
-	&& !hash_lookup(mbrock.server, &(fdata->server_table))) {
+    if (proxy_fetch_func && fdata->orig_entry && mbrock.server &&
+	!hash_lookup(mbrock.server, &(fdata->server_table))) {
 	/* xxx ignoring result */
 	proxy_fetch_func(mbrock.server, fdata->orig_mailbox,
 			 fdata->orig_entry, fdata->orig_attribute);
@@ -1054,19 +1069,10 @@ int annotatemore_fetch(char *mailbox,
 	     entrycount++) {
 
 	    if (GLOB_TEST(g, non_db_entries[entrycount].name) != -1) {
-		if (strcmp(e->s, non_db_entries[entrycount].name)) {
-		    /* not an exact match */
-		    fdata.orig_entry = entries;  /* proxy it */
-		    check_db = 1;
-		}
-
 		/* Add this entry to our list only if it
 		   applies to our particular server type */
-		if (non_db_entries[entrycount].proxytype == PROXY_AND_BACKEND
-		    || (proxy_fetch_func &&
-			non_db_entries[entrycount].proxytype == PROXY_ONLY)
-		    || (!proxy_fetch_func &&
-			non_db_entries[entrycount].proxytype == BACKEND_ONLY)) {
+		if ((non_db_entries[entrycount].proxytype != PROXY_ONLY)
+		    || proxy_fetch_func) {
 		    struct annotate_f_entry_list *nentry =
 			xmalloc(sizeof(struct annotate_f_entry_list));
 
@@ -1075,19 +1081,26 @@ int annotatemore_fetch(char *mailbox,
 		    fdata.entry_list = nentry;
 		}
 	    }
-	    else {
-		/* no match */
-		fdata.orig_entry = entries;  /* proxy it */
-		check_db = 1;
+
+	    if (!strcmp(e->s, non_db_entries[entrycount].name)) {
+		/* exact match */
+		if (non_db_entries[entrycount].proxytype != PROXY_ONLY) {
+		    fdata.orig_entry = entries;  /* proxy it */
+		}
+		break;
 	    }
 	}
 		
+	if (!non_db_entries[entrycount].name) {
+	    /* no [exact] match */
+	    fdata.orig_entry = entries;  /* proxy it */
+	    check_db = 1;
+	}
+
 	/* Add the db entry to our list if only if it
 	   applies to our particular server type */
 	if (check_db &&
-	    (db_entry->proxytype == PROXY_AND_BACKEND
-	     || (proxy_fetch_func && db_entry->proxytype == PROXY_ONLY)
-	     || (!proxy_fetch_func && db_entry->proxytype == BACKEND_ONLY))) {
+	    ((db_entry->proxytype != PROXY_ONLY) || proxy_fetch_func)) {
 	    /* Add the db entry to our list */
 	    struct annotate_f_entry_list *nentry =
 		xmalloc(sizeof(struct annotate_f_entry_list));
@@ -1404,7 +1417,7 @@ static int store_cb(char *name, int matchlen,
 
     sdata->count++;
 
-    if (proxy_store_func &&
+    if (proxy_store_func && mbrock.server &&
 	!hash_lookup(mbrock.server, &(sdata->server_table))) {
 	hash_insert(mbrock.server, (void *)0xDEADBEEF, &(sdata->server_table));
     }
@@ -1477,7 +1490,8 @@ static int annotation_set_todb(const char *int_mboxname,
 	    return IMAP_PERMISSION_DENIED;
 	}
 
-	if (!int_mboxname[0] || !proxy_store_func) {
+	/* Make sure its a server or local mailbox annotation */
+	if (!int_mboxname[0] || !mbrock->server) {
 	    /* if we don't have a value, retrieve the existing entry */
 	    if (!entry->shared.value) {
 		struct annotation_data shared;
@@ -1502,7 +1516,8 @@ static int annotation_set_todb(const char *int_mboxname,
 	 * and we wouldn't be in this callback without it.
 	 */
 
-	if (!int_mboxname[0] || !proxy_store_func) {
+	/* Make sure its a server or local mailbox annotation */
+	if (!int_mboxname[0] || !mbrock->server) {
 	    /* if we don't have a value, retrieve the existing entry */
 	    if (!entry->priv.value) {
 		struct annotation_data priv;
@@ -1629,11 +1644,8 @@ int annotatemore_store(char *mailbox,
 
 	/* Add this entry to our list only if it
 	   applies to our particular server type */
-	if (entries[entrycount].proxytype == PROXY_AND_BACKEND
-	    || (proxy_store_func &&
-		entries[entrycount].proxytype == PROXY_ONLY)
-	    || (!proxy_store_func &&
-		entries[entrycount].proxytype == BACKEND_ONLY)) {
+	if ((entries[entrycount].proxytype != PROXY_ONLY)
+	    || proxy_store_func) {
 	    nentry = xzmalloc(sizeof(struct annotate_st_entry_list));
 	    nentry->next = sdata.entry_list;
 	    nentry->entry = &(entries[entrycount]);

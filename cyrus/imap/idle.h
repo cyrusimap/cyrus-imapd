@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle.h,v 1.6 2003/10/22 20:05:10 ken3 Exp $ */
+/* $Id: idle.h,v 1.4.4.1 2003/10/22 20:13:07 ken3 Exp $ */
 
 #ifndef IDLE_H
 #define IDLE_H
@@ -47,24 +47,13 @@
 
 extern const char *idle_method_desc;
 
-typedef enum {
-    IDLE_MAILBOX =	0x1,
-    IDLE_ALERT =	0x2
-} idle_flags_t;
+/* Initialize connection to idled */
+int idle_init(void);
 
-typedef void idle_updateproc_t(idle_flags_t flags);
-
-
-/* Is IDLE enabled?  Can also do initial setup, if necessary */
-int idle_enabled(void);
-
-/* Setup for IDLE on 'mailbox'.
- * Accepts pointer to a function which reports mailbox updates and/or
- * ALERTs to the client.
- */
-int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc);
+/* Start IDLE on 'mailbox'. */
+void idle_start(struct mailbox *mailbox);
 
 /* Cleanup when IDLE is completed. */
 void idle_done(struct mailbox *mailbox);
 
-#endif
+#endif /* IDLE_H */
