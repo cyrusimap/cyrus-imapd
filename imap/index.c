@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.98 2000/04/06 15:14:37 leg Exp $
+ * $Id: index.c,v 1.99 2000/04/07 17:33:47 leg Exp $
  */
 #include <config.h>
 
@@ -361,11 +361,11 @@ int checkseen;
     if (i == imapd_exists + 1) allseen = mailbox->last_uid;
     if (oldexists == -1) {
 	if (imapd_exists && i <= imapd_exists) {
-	    prot_printf(imapd_out, "* OK [UNSEEN %u] \r\n", i);
+	    prot_printf(imapd_out, "* OK [UNSEEN %u]  \r\n", i);
 	}
-        prot_printf(imapd_out, "* OK [UIDVALIDITY %u] \r\n",
+        prot_printf(imapd_out, "* OK [UIDVALIDITY %u]  \r\n",
 		    mailbox->uidvalidity);
-	prot_printf(imapd_out, "* OK [UIDNEXT %u] \r\n",
+	prot_printf(imapd_out, "* OK [UIDNEXT %u]  \r\n",
 		    mailbox->last_uid + 1);
     }
 
