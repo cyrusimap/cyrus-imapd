@@ -39,11 +39,12 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.3 2002/03/15 00:49:57 ken3 Exp $ */
+/* $Id: backend.h,v 1.4 2002/07/26 18:30:53 rjs3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
 
+#include "mboxlist.h"
 #include "prot.h"
 
 /* Functionality to bring up/down connections to backend servers */
@@ -51,7 +52,7 @@
 #define LAST_RESULT_LEN 1024
 
 struct backend {
-    char *hostname;
+    char hostname[MAX_PARTITION_LEN];
     struct sockaddr_in addr;
     int sock;
 
