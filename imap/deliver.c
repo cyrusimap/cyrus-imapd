@@ -17,7 +17,7 @@ main(argc, argv)
     char *dir = "/usr/user/cyrus/test";
     int touser = 0;
 
-    while (opt = getopt(argc, argv, "df:r:")) {
+    while ((opt = getopt(argc, argv, "df:r:")) != EOF) {
 	switch(opt) {
 	case 'd':
 	    touser = 1;
