@@ -1,0 +1,126 @@
+#ifndef ACAPMBOX_H_
+#define ACAPMBOX_H_
+
+/* all functions return IMAP error codes */
+
+typedef enum {
+    ACAPMBOX_UNKNOWN,
+    ACAPMBOX_RESERVED,
+    ACAPMBOX_COMMITTED
+} acapmbox_status;
+
+typedef struct acapmbox_data_s {
+    char *name;			/* name of the mailbox */
+    unsigned int uidvalidity;
+
+    acapmbox_status status;	/* reserved | committed */
+    char *post;			/* where a post to this mailbox should go */
+    int haschildren;		/* yes | no */
+    char *url;			/* where mailbox is located */
+    char *acl;			/* acl */
+
+    unsigned int answered;      /* number of messages with attribute */
+    unsigned int flagged;       /* etc */
+    unsigned int deleted;
+    unsigned int total;
+} acapmbox_data_t;
+
+typedef struct acapmbox_handle_s acapmbox_handle_t;
+
+int acapmbox_init(void);
+
+/*
+ * get a handle.  all returns (including NULL) are valid!
+ * may be a noop for non-acap-enabled installs.
+ */
+acapmbox_handle_t *acapmbox_get_handle(void);
+
+/*
+ * Create a new entry for mailbox_name
+ * 
+ * mboxdata is initial value for it (may be NULL)
+ *
+ * sets the status of the entry on success to reserved
+ */
+int acapmbox_create(acapmbox_handle_t *AC,
+		    char *mailbox_name,
+		    acapmbox_data_t *mboxdata);
+		
+/*
+ * Commit the entry 
+ */
+
+int acapmbox_markactive(acapmbox_handle_t *AC,
+			char *mailbox_name);
+
+/*
+ * Uncommit the entry 
+ */
+
+int acapmbox_markreserved(acapmbox_handle_t *AC,
+			  char *mailbox_name);
+
+/*
+ * Remove an entry
+ */
+
+int acapmbox_delete(acapmbox_handle_t *AC,
+		    char *mailbox_name);
+
+
+/*
+ * Delete all entries (the whole dataset)
+ */
+
+int acapmbox_deleteall(acapmbox_handle_t *AC);
+
+/* 
+ * does a mailbox exist? 
+ * return ACAP_OK if it does; ACAP_FAIL if it doesn't
+ */
+
+int acapmbox_entryexists(acapmbox_handle_t *AC,
+			 char *mailbox_name);
+
+/*
+ * Copy a mailbox entry preserving all value except the new
+ * entry's status will be "reserved"
+ */
+
+int acapmbox_copy(acapmbox_handle_t *AC,
+		  char *old_mailbox,
+		  char *new_mailbox);
+
+typedef enum {
+    ACAPMBOX_ANSWERED,
+    ACAPMBOX_FLAGGED,
+    ACAPMBOX_DELETED,
+    ACAPMBOX_TOTAL
+} acapmbox_property_t;
+
+/*
+ *
+ *  change - change to make to property (i.e. +1,-1)
+ *
+ */
+int acapmbox_setproperty_acl(acapmbox_handle_t *AC,
+			     char *mailbox_name,
+			     char *newvalue);
+
+int acapmbox_setproperty(acapmbox_handle_t *AC,
+			 char *mailbox_name,
+			 acapmbox_property_t prop,
+			 int value);
+
+#if 0
+/*
+ * listening functions
+ */
+
+/* acapmbox_dissect() fills in an (already allocated) acapmbox_data_t
+   with pointers into the acap_entry_t *e.  it is valid only as long
+   as acap_entry_t is valid. */
+int acapmbox_dissect(acap_entry_t *e, acapmbox_data_t *data);
+#endif
+
+#endif /* ACAP_MBOX_H_ */
