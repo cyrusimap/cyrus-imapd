@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.13 2000/08/05 05:33:32 leg Exp $
+ * $Id: lmtpengine.c,v 1.14 2000/11/11 04:12:46 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -993,19 +993,23 @@ void lmtpmode(struct lmtp_func *func,
 	    fatal("can't get local addr", EC_SOFTWARE);
 	}
 
-	syslog(LOG_DEBUG, "connection from [%s]", 
-	       inet_ntoa(remoteaddr.sin_addr));
+	syslog(LOG_DEBUG, "connection from [%s]%s", 
+	       inet_ntoa(remoteaddr.sin_addr),
+	       func->preauth ? " preauth'd as postman" : "");
     } else {
 	/* we're not connected to a internet socket! */
+	func->preauth = 1;
+	syslog(LOG_DEBUG, "lmtp connection preauth'd as postman");
+    }
+
+    if (func->preauth) {
+	authenticated = -1;	/* we'll allow commands, 
+				   but we still accept the AUTH command */
 	extprops = (sasl_external_properties_t *) 
 	    xmalloc(sizeof(sasl_external_properties_t));
 	extprops->ssf = 2;
 	extprops->auth_id = "postman";
 	sasl_setprop(conn, SASL_SSF_EXTERNAL, extprops);
-	authenticated = -1;	/* we'll allow commands, 
-				   but we still accept the AUTH command */
-
-	syslog(LOG_DEBUG, "lmtp connection preauth'd as postman");
     }
 
     prot_printf(pout, "220 %s LMTP Cyrus %s ready\r\n", 
