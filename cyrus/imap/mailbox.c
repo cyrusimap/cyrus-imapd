@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.122 2002/04/04 18:22:45 rjs3 Exp $
+ $Id: mailbox.c,v 1.123 2002/04/04 22:22:38 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2053,7 +2053,7 @@ int mailbox_create(const char *name,
  */
 int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 {
-    int r, rquota;
+    int r, rquota = 0;
     DIR *dirp;
     struct dirent *f;
     char buf[MAX_MAILBOX_PATH];
