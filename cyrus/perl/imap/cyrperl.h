@@ -74,12 +74,19 @@ struct xscb {
   struct xscb *next;
 };
 
+#define NUM_SUPPORTED_CALLBACKS 4
+
 struct xscyrus {
   struct imclient *imclient;
   char *class;
   struct xscb *cb;
   int flags;
   int cnt;			/* hack */
+  /* For holding per-connection information during authentication */
+  /* We need to initialize this when we create a new connection */  
+  sasl_callback_t callbacks[NUM_SUPPORTED_CALLBACKS];
+  const char *username, *authname;
+  sasl_secret_t *password;
 };
 
 /* C callback to invoke a Perl callback on behalf of imclient */

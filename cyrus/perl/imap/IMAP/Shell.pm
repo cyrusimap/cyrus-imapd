@@ -406,10 +406,11 @@ sub run {
 # (It's not as trivial as run() because it does things expected of standalone
 # programs, as opposed to things expected from within a program.)
 sub shell {
-  my ($server, $port, $user, $systemrc, $userrc, $dorc, $mech) =
-    ('', 143, $ENV{USER} || $ENV{LOGNAME}, '/usr/local/etc/cyradmrc.pl',
+  my ($server, $port, $authz, $auth, $systemrc, $userrc, $dorc, $mech) =
+    ('', 143, undef, $ENV{USER} || $ENV{LOGNAME}, '/usr/local/etc/cyradmrc.pl',
      "$ENV{HOME}/.cyradmrc.pl", 1, undef);
-  GetOptions('user|u=s' => \$user,
+  GetOptions('user|u=s' => \$auth,
+	     'authz|u=s' => \$authz,
 	     'rc|r!' => \$dorc,
 	     'systemrc|S=s' => \$systemrc,
 	     'userrc=s' => \$userrc,
@@ -432,9 +433,8 @@ sub shell {
     $cyradm->addcallback({-trigger => 'EOF',
 			  -callback => \&_cb_eof,
 			  -rock => \$cyradm});
-#    print "trying to auth as [$user].\n";
-    $cyradm->authenticate(-user => $user, -mechanism => $mech)
-      or die "cyradm: cannot authenticate to server with $mech as $user\n";
+    $cyradm->authenticate(-authz => $authz, -user => $auth, -mechanism => $mech)
+      or die "cyradm: cannot authenticate to server with $mech as $auth\n";
   }
   my $fstk = [*STDIN, *STDOUT, *STDERR];
   if ($dorc && $systemrc ne '' && -f $systemrc) {
