@@ -31,14 +31,47 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <ctype.h>
 
 #include "prot.h"
-
 #include "lex.h"
-
 #include "codes.h"
-
 #include "mystring.h"
-
 #include "y.tab.h"
+
+int token_lookup (char *str, int len)
+{
+    switch (*str) {
+    case 'a':
+	if (strcmp(str, "authenticate")==0) return AUTHENTICATE;
+	break;
+
+    case 'd':
+	if (strcmp(str, "deletescript")==0) return DELETESCRIPT;
+	break;
+
+    case 'g':
+	if (strcmp(str, "getscript")==0) return GETSCRIPT;
+	break;
+
+    case 'l':
+	if (strcmp(str, "logout")==0) return LOGOUT;
+	if (strcmp(str, "listscripts")==0) return LISTSCRIPTS;
+	break;
+
+    case 'n':
+	if (strcmp(str, "noop")==0) return NOOP;
+	break;
+
+    case 'p':
+	if (strcmp(str, "putscript")==0) return PUTSCRIPT;
+	break;
+
+    case 's':
+	if (strcmp(str, "setactive")==0) return SETACTIVE;
+	break;
+    }
+
+    /* error, nothing matched */
+    return -1;
+}
 
 /* current state the lexer is in */
 int lexer_state = LEXER_STATE_NORMAL;
@@ -202,7 +235,6 @@ int timlex(YYSTYPE * lvalp, void * client)
 	static const char sync_reply[] = "\"Ready for data\"\r\n";
 
 	prot_printf(sieved_out, sync_reply);
-	prot_flush(sieved_out);
       }
 
       if (count > config_getint("maxscriptsize",32000))
