@@ -27,7 +27,7 @@ Prerequisites and other notes
         the distribution. If all else fails, make a shell script that does
         nothing, call it "makedepend", and make sure you always give the
         command "make clean" before "make all". 
-      * Tcl, version 7.5. To obtain Tcl, see the comp.lang.tcl FAQ 
+      * Tcl, version 7.5 or 7.6. To obtain Tcl, see the comp.lang.tcl FAQ 
       * If compiling with Kerberos support, the installed Kerberos must
         include the DES library. Some vendor distributions of Kerberos,
         including the one with Solaris, do not have this support and cannot
@@ -193,11 +193,11 @@ Compiling the IMAP Server
 
     --with-tcl=PATH 
     --without-tcl 
-            Specifies the path to the Tcl (version 7.5) library and header
-            file (optional). By default, looks in "/usr/local" and then in
-            the compiler's default link path. The Tcl library is necessary
-            to compile "cyradm", the administrative client. If compiling
-            without Tcl, it is necessary to give configure the
+            Specifies the path to the Tcl (version 7.5 or 7.6) library and
+            header file (optional). By default, looks in "/usr/local" and
+            then in the compiler's default link path. The Tcl library is
+            necessary to compile "cyradm", the administrative client. If
+            compiling without Tcl, it is necessary to give configure the
             "--disable-cyradm" switch. 
 
     --with-zephyr=PATH 
@@ -356,7 +356,7 @@ Configuring the IMAP Server
 
            cd imap
            true >> mailboxes
-           mkdir user quota proc log
+           mkdir user quota proc log msg
            chown cyrus *
            chgrp mail *
 
@@ -383,8 +383,8 @@ Configuring the IMAP Server
         crash. 
 
            cd /var/imap
-           /sbin/chattr +S . user quota
-           /sbin/chattr +S /var/spool/imap
+           chattr +S . user quota
+           chattr +S /var/spool/imap
 
         Also set the queue directory of the mail daemon to update
         synchronously. The following example is for sendmail: 
@@ -519,9 +519,15 @@ Configuring the IMAP Server
 Testing the IMAP Server
 
     To test the IMAP server, reboot and perform the following steps (all of
-    these samples use "foobar" as the IMAP server name): 
+    these samples use "foobar" as the IMAP server name). A list of answers
+    to common installation problems is maintained in
+    http://andrew2.andrew.cmu.edu/cyrus/imapd/install-FAQ. 
 
-     1. From your normal account, telnet to the IMAP port on the server
+     1. If the server is compiled with Kerberos v4 authentication, run the
+        program "krbck" as the cyrus user on the IMAP server. This program
+        will diagnose some common Kerberos configuration errors. 
+
+     2. From your normal account, telnet to the IMAP port on the server
         you're setting up: 
 
            telnet foobar imap
@@ -536,7 +542,7 @@ Testing the IMAP Server
         Any message other than one starting with "* OK" means there is a
         problem. To terminate the connection, type ". logout". 
 
-     2. Use "imtest" to test logging in with plaintext passwords. 
+     3. Use "imtest" to test logging in with plaintext passwords. 
 
            /usr/local/bin/imtest -p foobar imap
 
@@ -552,7 +558,7 @@ Testing the IMAP Server
         written through syslog to the server log. To terminate the
         connection, type ". logout". 
 
-     3. If the server is compiled with Kerberos v4 authentication, test
+     4. If the server is compiled with Kerberos v4 authentication, test
         Kerberos authentication by using the imtest command. Change to the
         "cyrus-v1.5" directory and type the following: 
 

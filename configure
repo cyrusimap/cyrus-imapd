@@ -2449,10 +2449,10 @@ if test "$with_krb" = "no"; then
      fi
 else
      cat >> confdefs.h <<\EOF
-#define HAVE_ACTE_KRB 1
+#define HAVE_SASL_KRB 1
 EOF
 
-     LIBOBJS="${LIBOBJS} acte_krb.o";
+     LIBOBJS="${LIBOBJS} sasl_krb.o sasl_krb_client.o sasl_krb_server.o";
 fi     
 # Check whether --with-inn or --without-inn was given.
 if test "${with_inn+set}" = set; then

@@ -33,7 +33,7 @@
 #include <sys/un.h>
 #include <sys/uio.h>
 
-#include "acte.h"
+#include "sasl.h"
 #include "retry.h"
 #include "config.h"
 #include "sysexits.h"
@@ -98,8 +98,8 @@ const char **reply;
 int
 login_authenticate(authtype, mech, authproc, reply)
 const char *authtype;
-struct acte_server **mech;
-acte_authproc_t **authproc;
+struct sasl_server **mech;
+sasl_authproc_t **authproc;
 const char **reply;
 {
     return 1;

@@ -1852,6 +1852,10 @@ bit32 *newuidvalidityp;
 	mailbox_close(&oldmailbox);
 	return r;
     }
+    if (strcmp(oldname, newname) == 0) {
+	/* Just moving mailboxes between partitions */
+	newmailbox.uidvalidity = oldmailbox.uidvalidity;
+    }
 
     *olduidvalidityp = oldmailbox.uidvalidity;
     *newuidvalidityp = newmailbox.uidvalidity;
@@ -1907,6 +1911,13 @@ bit32 *newuidvalidityp;
 	return r;
     }
 
+    /* Re-open index file and store new uidvalidity  */
+    close(newmailbox.index_fd);
+    newmailbox.index_fd = dup(oldmailbox.index_fd);
+    (void) mailbox_read_index_header(&newmailbox);
+    newmailbox.uidvalidity = *newuidvalidityp;
+    (void) mailbox_write_index_header(&newmailbox);
+
     /* Copy over message files */
     oldfnametail++;
     newfnametail++;
@@ -1922,7 +1933,6 @@ bit32 *newuidvalidityp;
 
     /* Record new quota usage */
     if (!r && newmailbox.quota.root) {
-	newmailbox.quota_mailbox_used = oldmailbox.quota_mailbox_used;
 	newmailbox.quota.used += oldmailbox.quota_mailbox_used;
 	r = mailbox_write_quota(&newmailbox.quota);
 	mailbox_unlock_quota(&newmailbox.quota);

@@ -44,15 +44,15 @@
 #include <pwd.h>
 #include <sys/param.h>
 
-#include "acte.h"
+#include "sasl.h"
 #include "config.h"
 #include "sysexits.h"
 #include "mailbox.h"
 #include "acl.h"
 
-static acte_authproc_t login_authproc;
+static sasl_authproc_t login_authproc;
 
-extern struct acte_server krb_acte_server;
+extern struct sasl_server krb_sasl_server;
 
 extern char *auth_map_krbid P((const char *real_aname, const char *real_inst,
 			       const char *real_realm));
@@ -92,8 +92,8 @@ const char **reply;
 int
 login_authenticate(authtype, mech, authproc, reply)
 const char *authtype;
-struct acte_server **mech;
-acte_authproc_t **authproc;
+struct sasl_server **mech;
+sasl_authproc_t **authproc;
 const char **reply;
 {
     const char *val;
@@ -110,7 +110,7 @@ const char **reply;
 	use_acl = config_getswitch("loginUseAcl", 0);
     }
 
-    *mech = &krb_acte_server;
+    *mech = &krb_sasl_server;
     *authproc = login_authproc;
     return 0;
 }

@@ -42,7 +42,7 @@
 #include <sys/select.h>
 #endif
 
-#include "acte.h"
+#include "sasl.h"
 #include "prot.h"
 
 /* from OS: */
@@ -55,14 +55,14 @@ char logout[] = ". LOGOUT\r\n";
 /* authstate which must be cleared before exit */
 static void *authstate;
 
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
 char auth_kv4[] = ". AUTHENTICATE KERBEROS_V4\r\n";
 
-extern struct acte_client krb_acte_client;
-#define client_start krb_acte_client.start
-#define client_auth  krb_acte_client.auth
-#define client_query krb_acte_client.query_state
-#define client_free  krb_acte_client.free_state
+extern struct sasl_client krb_sasl_client;
+#define client_start krb_sasl_client.start
+#define client_auth  krb_sasl_client.auth
+#define client_query krb_sasl_client.query_state
+#define client_free  krb_sasl_client.free_state
 
 /* base64 tables
  */
@@ -143,7 +143,7 @@ int from64(out, in)
 
 void usage()
 {
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
     fprintf(stderr, "usage: imtest [-k[p/i] / -p] <server> <port>\n");
 #else
     fprintf(stderr, "usage: imtest [-p] <server> <port>\n");
@@ -156,7 +156,7 @@ void fatal(str, level)
     int level;
 {
     if (str) fprintf(stderr, "%s\n", str);
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
     if (authstate) client_free(authstate);
 #endif
     exit(1);
@@ -170,8 +170,8 @@ main(argc, argv)
     int len, done, maxplain;
     int prot_req, protlevel;
     
-    acte_encodefunc_t *encodefunc;
-    acte_decodefunc_t *decodefunc;
+    sasl_encodefunc_t *encodefunc;
+    sasl_decodefunc_t *decodefunc;
     char *host, *port, *pass, *outbuf, *user;
     fd_set read_set, rset;
     struct sockaddr_in addr, laddr;
@@ -190,14 +190,14 @@ main(argc, argv)
     port = argv[2];
     if (*argv[1] == '-') {
 	dologin = 1;
-	prot_req = ACTE_PROT_NONE;
+	prot_req = SASL_PROT_NONE;
 	if (argv[1][1] == 'p') dopass = 1;
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
 	else if (argv[1][1] == 'k') {
 	    if (argv[1][2] == 'p') {
-		prot_req |= ACTE_PROT_ANY;
+		prot_req |= SASL_PROT_ANY;
 	    } else if (argv[1][2] == 'i') {
-		prot_req |= ACTE_PROT_INTEGRITY;
+		prot_req |= SASL_PROT_INTEGRITY;
 	    }
 	}
 #endif
@@ -272,20 +272,20 @@ main(argc, argv)
 	    }
 	    buf[count] = '\0';
 	    printf("%s", buf);
-#ifdef HAVE_ACTE_KRB
-	    if (done == ACTE_DONE && strchr(buf, ' ')
+#ifdef HAVE_SASL_KRB
+	    if (done == SASL_DONE && strchr(buf, ' ')
 		&& !strncmp(" OK ", strchr(buf, ' '), 4)) {
 		done = 0;
 		client_query(authstate, &user, &protlevel,
 			     &encodefunc, &decodefunc, &maxplain);
 		switch (protlevel) {
-		    case ACTE_PROT_NONE:
+		    case SASL_PROT_NONE:
 			printf("__No integrity protection__\n");
 			break;
-		    case ACTE_PROT_INTEGRITY:
+		    case SASL_PROT_INTEGRITY:
 			printf("__Integrity protection only__\n");
 			break;
-		    case ACTE_PROT_PRIVACY:
+		    case SASL_PROT_PRIVACY:
 			printf("__Full privacy protection__\n");
 			break;
 		}
@@ -306,12 +306,13 @@ main(argc, argv)
 		    memset(buf, 0, sizeof (buf));
 		    memset(pass, 0, 8);
 		} else if (dologin == 1) {
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
 		    ++dologin;
 		    len = sizeof (laddr);
 		    if (getsockname(sock, (struct sockaddr *)&laddr,
 				    &len) < 0 ||
-			client_start("imap", host, NULL, prot_req,
+			client_start(krb_sasl_client.rock,
+				     "imap", host, NULL, prot_req,
 				     sizeof (buf) - 4,
 				     (struct sockaddr *)&laddr,
 				     (struct sockaddr *)&addr,
@@ -325,7 +326,7 @@ main(argc, argv)
 		    }
 		} else if ((len = from64(buf, buf)) < 0 ||
 			   (done = client_auth(authstate, len, buf, &len,
-					       &outbuf)) == ACTE_FAIL) {
+					       &outbuf)) == SASL_FAIL) {
 		    printf("__Authentication failed__\n");
 		    prot_write(pout, "*\r\n", 3);
 		    client_free(authstate);
@@ -343,7 +344,7 @@ main(argc, argv)
 	    }
 	}
     }
-#ifdef HAVE_ACTE_KRB
+#ifdef HAVE_SASL_KRB
     if (authstate) client_free(authstate);
 #endif
 

@@ -52,6 +52,7 @@ struct imclient_reply {
 
 /* Connection flags */
 #define IMCLIENT_CONN_NONSYNCLITERAL 1 /* Server supports non-synchronizing literals */
+#define IMCLIENT_CONN_INITIALRESPONSE 1 /* Server supports SASL initial response */
 
 typedef void imclient_proc_t P((struct imclient *imclient, void *rock,
 				struct imclient_reply *reply));
@@ -75,7 +76,8 @@ extern void imclient_processoneevent P((struct imclient *imclient));
 extern void imclient_getselectinfo P((struct imclient *imclient,
 				      int *fd, int *wanttowrite));
 extern int imclient_authenticate P((struct imclient *imclient,
-				    struct acte_client **availmech,
+				    struct sasl_client **availmech,
+				    const char *service,
 				    const char *user, int protallowed));
 
 #endif /* INCLUDED_IMCLIENT_H */

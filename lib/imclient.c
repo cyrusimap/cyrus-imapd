@@ -26,10 +26,14 @@
  * SOFTWARE.
  *
  */
+#include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
 #include <errno.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 #ifdef __STDC__
 #include <stdarg.h>
 #else
@@ -44,7 +48,7 @@
 #include <sys/select.h>
 #endif
 
-#include "acte.h"
+#include "sasl.h"
 #include "sysexits.h"
 #include "xmalloc.h"
 #include "imparse.h"
@@ -55,9 +59,6 @@ extern int errno;
 
 /* I/O buffer size */
 #define IMCLIENT_BUFSIZE 4096
-
-/* Type of callback functions */
-typedef void (*proc_t)();
 
 /* Command completion callback record */
 struct imclient_cmdcallback {
@@ -102,9 +103,9 @@ struct imclient {
     int alloc_replybuf;
     
     /* Protection mechanism data */
-    struct acte_client *mech;
-    acte_encodefunc_t *encodefunc;
-    acte_decodefunc_t *decodefunc;
+    struct sasl_client *mech;
+    sasl_encodefunc_t *encodefunc;
+    sasl_decodefunc_t *decodefunc;
     void *state;
     int maxplain;
     
@@ -153,7 +154,7 @@ static struct imclient_cmdcallback *cmdcallback_freelist;
 /* Forward declarations */
 static void imclient_write P((struct imclient *imclient,
 			      const char *s, unsigned len));
-static void imclient_writeastring P((struct imclient *imclient,
+static int imclient_writeastring P((struct imclient *imclient,
 				     const char *str));
 static void imclient_writebase64 P((struct imclient *imclient,
 				    const char *output, unsigned len));
@@ -207,8 +208,14 @@ const char *port;
     (*imclient)->servername = xstrdup(hp->h_name);
     (*imclient)->outptr = (*imclient)->outstart = (*imclient)->outbuf;
     (*imclient)->outleft = (*imclient)->maxplain = sizeof((*imclient)->outbuf);
-    
-    /* XXX get greeting */
+    imclient_addcallback(*imclient,
+		 "", 0, (imclient_proc_t *) 0, (void *)0,
+		 "OK", CALLBACK_NOLITERAL, (imclient_proc_t *)0, (void *)0,
+		 "NO", CALLBACK_NOLITERAL, (imclient_proc_t *)0, (void *)0,
+		 "BAD", CALLBACK_NOLITERAL, (imclient_proc_t *)0, (void *)0,
+		 "BYE", CALLBACK_NOLITERAL, (imclient_proc_t *)0, (void *)0,
+		 (char *)0);
+
     return 0;
 }
 
@@ -299,9 +306,9 @@ va_dcl
     imclient = va_arg(pvar, struct imclient *);
 #endif
 
-    while (keyword = va_arg(pvar, char *)) {
+    while ((keyword = va_arg(pvar, char *))) {
 	flags = va_arg(pvar, int);
-	proc = va_arg(pvar, proc_t);
+	proc = va_arg(pvar, imclient_proc_t *);
 	rock = va_arg(pvar, void *);
 	
 	/* Search for existing callback matching keyword and flags */
@@ -352,6 +359,7 @@ va_dcl
  *   %u -- unsigned decimal
  *   %v -- #astring (arg is an null-terminated array of (char *)
  *         which are written as space separated astrings)
+ *   %B -- (internal use only) base64-encoded data at end of command line
  */ 
 #ifdef __STDC__
 void
@@ -369,6 +377,7 @@ va_dcl
     char *percent, *str, **v;
     int num;
     unsigned unum;
+    int abortcommand = 0;
 #ifdef __STDC__
     va_start(pvar, fmt);
 #else
@@ -379,7 +388,7 @@ va_dcl
 
     va_start(pvar);
     imclient = va_arg(pvar, struct imclient *);
-    finishproc = va_arg(pvar, proc_t);
+    finishproc = va_arg(pvar, imclient_proc_t);
     finishrock = va_arg(pvar, void *);
     fmt = va_arg(pvar, char *);
 #endif
@@ -389,7 +398,8 @@ va_dcl
 
     /*
      * If there is a command completion callback, add it to the
-     * command callback list of the imclient struct. */
+     * command callback list of the imclient struct.
+     */
     if (finishproc) {
 	if (cmdcallback_freelist) {
 	    newcmdcallback = cmdcallback_freelist;
@@ -411,7 +421,7 @@ va_dcl
     imclient_write(imclient, buf, strlen(buf));
 
     /* Process the command format */
-    while (percent = strchr(fmt, '%')) {
+    while ((percent = strchr(fmt, '%'))) {
 	imclient_write(imclient, fmt, percent-fmt);
 	switch (*++percent) {
 	case '%':
@@ -425,12 +435,13 @@ va_dcl
 
 	case 's':
 	    str = va_arg(pvar, char *);
-	    imclient_writeastring(imclient, str);
+	    abortcommand = imclient_writeastring(imclient, str);
+	    if (abortcommand) goto fail;
 	    break;
 	    
 	case 'd':
 	    num = va_arg(pvar, int);
-	    sprintf(buf, "%ld", num);
+	    sprintf(buf, "%d", num);
 	    imclient_write(imclient, buf, strlen(buf));
 	    break;
 
@@ -444,9 +455,20 @@ va_dcl
 	    v = va_arg(pvar, char **);
 	    for (num = 0; v[num]; num++) {
 		if (num) imclient_write(imclient, " ", 1);
-		imclient_writeastring(imclient, v[num]);
+		abortcommand = imclient_writeastring(imclient, v[num]);
+		if (abortcommand) goto fail;
 	    }
 	    break;
+
+	case 'B':
+	    num = va_arg(pvar, int);
+	    str = va_arg(pvar, char *);
+	    imclient_writebase64(imclient, str, num);
+	    /* KLUDGE ALERT: imclientwritebase64() spit out a CRLF
+	     * so fake things up to prevent our spitting out a second CRLF.
+	     */
+	    abortcommand = 1;
+	    goto fail;
 
 	default:
 	    fatal("internal error: invalid format specifier in imclient_send",
@@ -454,13 +476,16 @@ va_dcl
 	}
 	fmt = percent + 1;
     }
+fail:
     va_end(pvar);
 
-    imclient_write(imclient, fmt, strlen(fmt));
-    imclient_write(imclient, "\r\n", 2);
+    if (!abortcommand) {
+	imclient_write(imclient, fmt, strlen(fmt));
+	imclient_write(imclient, "\r\n", 2);
+    }
 }
 
-static void
+static int
 imclient_writeastring(imclient, str)
 struct imclient *imclient;
 const char *str;
@@ -500,10 +525,11 @@ const char *str;
 	    while (imclient->readytag) {
 		imclient_processoneevent(imclient);
 	    }
-	    if (!imclient->readytxt) return;
+	    if (!imclient->readytxt) return 1;
 	}
 	imclient_write(imclient, str, len);
     }
+    return 0;
 }
 
 /*
@@ -660,11 +686,10 @@ int len;
 
     /* Process the new data */
     while (parsed < imclient->replylen) {
-        len = imclient->replylen - parsed;
-
 	/* If we're reading a literal, skip over it. */
 	if (imclient->replyliteralleft) {
 	    if (len > imclient->replyliteralleft) {
+		len -= imclient->replyliteralleft;
 		parsed += imclient->replyliteralleft;
 		imclient->replyliteralleft = 0;
 		continue;
@@ -746,6 +771,32 @@ int len;
 
 	/* Handle tagged replies */
 	if (replytag != 0) {
+	    int iscompletion = 
+		((keywordlen == 3 && reply.keyword[0] == 'B' &&
+		     reply.keyword[1] == 'A' && reply.keyword[2] == 'D') ||
+		    (keywordlen == 2 &&
+		     ((reply.keyword[0] == 'O' && reply.keyword[1] == 'K') ||
+		      (reply.keyword[0] == 'N' && reply.keyword[1] == 'O'))));
+
+
+	    /* Scan back and see if the end of the line introduces a literal */
+	    if (!iscompletion && endreply[-1] == '\r' && endreply[-2] == '}' &&
+		isdigit(endreply[-3])) {
+		p = endreply - 4;
+		while (p > imclient->replystart && isdigit(*p)) p--;
+		if (p > imclient->replystart + 2 && *p == '{' &&
+		    charclass[(unsigned char)p[-1]] != 2) {
+
+		    /* Parse the size of the literal */
+		    literallen = 0;
+		    p++;
+		    while (isdigit(*p)) literallen = literallen*10 + *p++ -'0';
+
+		    /* Do a continue to read literal & following line */
+		    imclient->replyliteralleft = literallen;
+		    continue;
+		}
+	    }
 
 	    /* Start parsing the next reply */
 	    imclient->replystart = endreply + 1;
@@ -759,12 +810,14 @@ int len;
 	    while (*cmdcb && (*cmdcb)->tag != replytag) {
 		cmdcb = &(*cmdcb)->next;
 	    }
-	    if (cmdcbtemp = *cmdcb) {
-		/* Move callback struct to the freelist */
-		*cmdcb = cmdcbtemp->next;
-		cmdcbtemp->next = cmdcallback_freelist;
-		cmdcallback_freelist = cmdcbtemp;
-
+	    if ((cmdcbtemp = *cmdcb)) {
+		if (iscompletion) {
+		    /* Move callback struct to the freelist */
+		    *cmdcb = cmdcbtemp->next;
+		    cmdcbtemp->next = cmdcallback_freelist;
+		    cmdcallback_freelist = cmdcbtemp;
+		}
+		
 		/* Do the callback */
 		endreply[-1] = '\0';
 		reply.keyword[keywordlen] = '\0';
@@ -775,7 +828,7 @@ int len;
 	}
 
 	/* Must be an untagged reply, look up the keyword */
-	for (keywordindex = 0; keywordindex < imclient->callback_num;
+	for (keywordindex = 1; keywordindex < imclient->callback_num;
 	     keywordindex++) {
 	    if (imclient->callback[keywordindex].flags & CALLBACK_NUMBERED) {
 		if (reply.msgno == -1) continue;
@@ -788,12 +841,9 @@ int len;
 		imclient->callback[keywordindex].keyword[keywordlen] == '\0')
 	      break;
 	}
-	if (keywordindex == imclient->callback_num) {
-	    /* XXX Got junk from the server */
-	    /* Start parsing the next reply */
-	    imclient->replystart = endreply + 1;
-	    continue;
-	}
+
+	/* Keyword index 0 is the default callback */
+	if (keywordindex == imclient->callback_num) keywordindex = 0;
 
 	/* Scan back and see if the end of the line introduces a literal */
 	if (!(imclient->callback[keywordindex].flags & CALLBACK_NOLITERAL)) {
@@ -973,7 +1023,7 @@ struct imclient_reply *reply;
 
     if (!strcmp(reply->keyword, "OK")) {
 	/* Check for premature command completion */
-	if (result->r != ACTE_DONE) {
+	if (result->r != SASL_DONE) {
 	    result->replytype = replytype_prematureok;
 	    return;
 	}
@@ -1010,13 +1060,14 @@ struct imclient_reply *reply;
  * as.  'protallowed' is a bitmask of permissible protection mechanisms.
  */
 int
-imclient_authenticate(imclient, availmech, user, protallowed)
+imclient_authenticate(imclient, availmech, service, user, protallowed)
 struct imclient *imclient;
-struct acte_client **availmech;
+const char *service;
+struct sasl_client **availmech;
 const char *user;
 int protallowed;
 {
-    struct acte_client **mech;
+    struct sasl_client **mech;
     struct sockaddr localaddr, remoteaddr;
     int localaddrlen, remoteaddrlen;
     int gotaddr = 1;
@@ -1038,16 +1089,32 @@ int protallowed;
 
     /* Try each mechanism in turn */
     for (mech = availmech; *mech; mech++) {
-	if ((*mech)->start("imap", imclient->servername, user, protallowed,
+	if ((*mech)->start((*mech)->rock, service, imclient->servername,
+			   user, protallowed,
 			   IMCLIENT_BUFSIZE, gotaddr ? &localaddr : 0,
 			   gotaddr ? &remoteaddr : 0, &imclient->state)) {
 	    continue;
 	}
+
 	imclient->mech = *mech;
 	result.r = 0;
 	result.replytype = replytype_inprogress;
-	imclient_send(imclient, authresult, (void *)&result,
-		      "AUTHENTICATE %a", (*mech)->auth_type);
+
+	if ((*mech)->can_send_initial_response &&
+	    (imclient->flags & IMCLIENT_CONN_INITIALRESPONSE)) {
+	    if ((*mech)->auth(imclient->state,
+			      0, 0,
+			      &outputlen, &output) == SASL_FAIL) {
+		continue;
+	    }
+	    imclient_send(imclient, authresult, (void *)&result,
+			  "AUTHENTICATE %a %B", (*mech)->auth_type,
+			  outputlen, output);
+	}
+	else {
+	    imclient_send(imclient, authresult, (void *)&result,
+			  "AUTHENTICATE %a", (*mech)->auth_type);
+	}
 
 	for (;;) {
 	    /* Wait for ready response or command completion */
@@ -1069,7 +1136,7 @@ int protallowed;
 					 inputlen, imclient->readytxt,
 					 &outputlen, &output);
 	    }
-	    if (inputlen == -1 || result.r == ACTE_FAIL) {
+	    if (inputlen == -1 || result.r == SASL_FAIL) {
 		/* Abort this authentication exchange */
 		imclient_write(imclient, "*\r\n", 3);
 		continue;
