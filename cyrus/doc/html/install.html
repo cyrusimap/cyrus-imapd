@@ -1,7 +1,7 @@
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers, 10-Jun-1996 -->
+<!-- Changed by: John Gardiner Myers, 11-Jun-1996 -->
 </HEAD>
 <BODY>
 <h1>           Installing and Configuring the Cyrus IMAP Server</h1>
@@ -163,6 +163,23 @@ implemented authentication modules are:
 
 By default, configure uses "<tt>krb</tt>" if the file <TT>/etc/krb.conf</TT>
 exists, "<tt>unix</tt>" otherwise. <P>
+
+<dt><tt>--with-pwcheck=METHOD</tt>
+<dd>Specifies the password checking module to use inside the pwcheck daemon.
+This option is only used if the login module has a name ending in 
+"<TT>_pwcheck</TT>".  Currently implemented authentication modules are:
+
+<dl compact>
+
+<DT><TT>getspnam</TT>
+<DD>SVR4 style <tt>getspnam()</tt> shadow passwords
+<DT><TT>getpwname</TT>
+<DD>NetBSD style shadow passwords
+
+</dl>
+
+By default, configure uses "<tt>getspnam</tt>" if the function
+<TT>getspnam</TT> exists, "<tt>getpwname</tt>" otherwise. <P>
 
 <dt><tt>--with-auth=METHOD</tt>
 <dd>Specifies the authorization module to use.  Currently implemented
