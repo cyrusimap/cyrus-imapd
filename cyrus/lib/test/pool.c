@@ -20,7 +20,7 @@ int main(void) {
 		if(s[0]) fatal("error!\n",0);
 
 		memset(s,(char)i + 'a',i);
-		printf("(%d)%d: %s\n", s, i, s);
+		printf("(0x%x)%d: %s\n", s, i, s);
 	}
 	free_mpool(p);
 }
