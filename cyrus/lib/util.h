@@ -1,5 +1,5 @@
 /* util.h -- general utility functions
- * $Id: util.h,v 1.13.6.5 2003/03/06 01:17:51 ken3 Exp $
+ * $Id: util.h,v 1.13.6.6 2003/07/14 16:40:12 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -83,15 +83,6 @@ extern char *beautify_string (const char *src);
  */
 extern keyvalue *kv_bsearch (const char *key, keyvalue *kv, int nelem,
 			       int (*cmpf)(const char *s1, const char *s2));
-
-#ifdef USE_DIR_FULL
-enum {
-    DIR_X = 3,
-    DIR_Y = 5,
-    DIR_P = 23,
-    DIR_A = 'A'
-};
-#endif
 
 /* Examine the name of a file, and return a single character
  *  (as an int) that can be used as the name of a hash

@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.54 2003/06/25 23:36:49 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.55 2003/07/14 16:40:07 ken3 Exp $
 dnl
 
 
@@ -898,13 +898,6 @@ AC_ARG_ENABLE(cmulocal,
 	if test "$enableval" = yes; then
 		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} netnews depot"
 		EXTRA_OUTPUT="${EXTRA_OUTPUT} depot/Makefile"
-	fi)
-
-AC_ARG_ENABLE(fulldirhash,
-	[  --enable-fulldirhash    enable improved directory hashing -- hashes full
-                          username instead of using just the first letter],
-	if test "$enableval" = yes; then
-		AC_DEFINE(USE_DIR_FULL)
 	fi)
 
 AC_MSG_CHECKING(to use old sieve service name)

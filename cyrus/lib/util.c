@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: util.c,v 1.19.6.9 2003/05/30 15:40:22 ken3 Exp $
+ * $Id: util.c,v 1.19.6.10 2003/07/14 16:40:12 ken3 Exp $
  */
 
 #include <config.h>
@@ -252,21 +252,30 @@ keyvalue *kv_bsearch(const char* key, keyvalue* kv, int nelem,
 int dir_hash_c(const char *name)
 {
     int c;
-#ifdef USE_DIR_FULL
-    unsigned char *pt;
-    unsigned int n;
 
-    n = 0;
-    pt = (unsigned char *)name;
-    while (*pt && *pt != '.') {
-	n = ((n << DIR_X) ^ (n >> DIR_Y)) ^ *pt;
-	++pt;
+    if (libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH)) {
+	unsigned char *pt;
+	unsigned int n;
+	enum {
+	    DIR_X = 3,
+	    DIR_Y = 5,
+	    DIR_P = 23,
+	    DIR_A = 'A'
+	};
+
+	n = 0;
+	pt = (unsigned char *)name;
+	while (*pt && *pt != '.') {
+	    n = ((n << DIR_X) ^ (n >> DIR_Y)) ^ *pt;
+	    ++pt;
+	}
+	c = DIR_A + (n % DIR_P);
     }
-    c = DIR_A + (n % DIR_P);
-#else
-    c = tolower(*name);
-    if (!isascii(c) || !islower(c)) c = 'q';
-#endif
+    else {
+	c = tolower(*name);
+	if (!isascii(c) || !islower(c)) c = 'q';
+    }
+
     return c;
 }
 

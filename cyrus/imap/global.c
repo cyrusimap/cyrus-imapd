@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.1.2.9 2003/05/29 20:18:58 rjs3 Exp $ */
+/* $Id: global.c,v 1.1.2.10 2003/07/14 16:40:10 ken3 Exp $ */
 
 #include <config.h>
 
@@ -161,6 +161,8 @@ int cyrus_init(const char *alt_config, const char *ident)
 			      config_getstring(IMAPOPT_TEMP_PATH));
     libcyrus_config_setint(CYRUSOPT_PTS_CACHE_TIMEOUT,
 			   config_getint(IMAPOPT_PTSCACHE_TIMEOUT));
+    libcyrus_config_setswitch(CYRUSOPT_FULLDIRHASH,
+			      config_getswitch(IMAPOPT_FULLDIRHASH));
 
     /* Not until all configuration parameters are set! */
     libcyrus_init();

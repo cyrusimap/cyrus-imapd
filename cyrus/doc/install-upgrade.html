@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28.4.17 2003/07/02 23:21:47 ken3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28.4.18 2003/07/14 16:40:09 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -11,6 +11,11 @@
 <h2>Upgrading from 2.2.0 or earlier</h2>
 
 <ul>
+<li>The improved directory hashing (fulldirhash) is now a runtime
+configuration option.  If you are currently using this feature, then
+make sure that you enable the <tt>fulldirhash</tt> option in
+<tt>imapd.conf</tt>.</li>
+
 <li>The format of mailbox index files has changed.  They are upgraded on
 the fly, so you need to do nothing to upgrade.  However, to downgrade them
 you will need to remove the cyrus.index files, and reconstruct the mailboxes,
@@ -388,7 +393,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2003/07/02 23:21:47 $
+last modified: $Date: 2003/07/14 16:40:09 $
 </BODY></HTML>
 
 

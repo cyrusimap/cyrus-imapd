@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.1.2.7 2003/03/19 19:00:39 rjs3 Exp $
+ * $Id: libcyr_cfg.c,v 1.1.2.8 2003/07/14 16:40:11 ken3 Exp $
  */
 
 #include <config.h>
@@ -83,6 +83,10 @@ struct cyrusopt_s cyrus_options[] = {
       (union cyrus_config_value)((int)0),
       CYRUS_OPT_INT },
    
+    { CYRUSOPT_FULLDIRHASH,
+      (union cyrus_config_value)((int)0),
+      CYRUS_OPT_SWITCH },
+
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }
 };
 

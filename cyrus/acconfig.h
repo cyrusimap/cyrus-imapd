@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.19 2003/07/02 14:24:56 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.20 2003/07/14 16:40:07 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -115,9 +115,6 @@
 
 /* is Sieve enabled? */
 #undef USE_SIEVE
-
-/* use full directory hashing? */
-#undef USE_DIR_FULL
 
 /* do we have the UCD SNMP libraries? */
 #undef HAVE_UCDSNMP

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.h,v 1.1.2.7 2003/03/19 19:00:39 rjs3 Exp $
+ * $Id: libcyr_cfg.h,v 1.1.2.8 2003/07/14 16:40:12 ken3 Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -83,6 +83,8 @@ enum cyrus_opt {
     CYRUSOPT_CONFIG_DIR,
     /* CyrusDB INIT flags */
     CYRUSOPT_DB_INIT_FLAGS,
+    /* Full directory hashing (OFF) */
+    CYRUSOPT_FULLDIRHASH,
 
     CYRUSOPT_LAST
     
