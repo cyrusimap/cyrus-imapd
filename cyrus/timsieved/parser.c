@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.17 2002/03/08 16:56:57 rjs3 Exp $
+ * $Id: parser.c,v 1.18 2002/04/05 21:55:42 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -425,8 +425,15 @@ void cmd_logout(struct protstream *sieved_out,
     prot_flush(sieved_out);
 }
 
-static int cmd_authenticate(struct protstream *sieved_out, struct protstream *sieved_in,
-			    mystring_t *mechanism_name, mystring_t *initial_challenge, 
+static sasl_ssf_t ssf = 0;
+static char *authid = NULL;
+
+extern int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid);
+
+static int cmd_authenticate(struct protstream *sieved_out,
+			    struct protstream *sieved_in,
+			    mystring_t *mechanism_name,
+			    mystring_t *initial_challenge, 
 			    const char **errmsg)
 {
 
@@ -463,6 +470,11 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
 	*errmsg="error base64 decoding string";
 	syslog(LOG_NOTICE, "badlogin: %s %s %s",
 	       sieved_clienthost, mech, "error base64 decoding string");
+
+      if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
+	  fatal("could not reset the sasl_conn_t after failure",
+		EC_TEMPFAIL);
+
 	return FALSE;
       }
   }
@@ -503,11 +515,21 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
 	*errmsg="error base64 decoding string";
 	syslog(LOG_NOTICE, "badlogin: %s %s %s",
 	       sieved_clienthost, mech, "error base64 decoding string");
+
+      if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
+	  fatal("could not reset the sasl_conn_t after failure",
+		EC_TEMPFAIL);
+
 	return FALSE;
       }      
       
     } else {
       *errmsg="Expected STRING-xxx1";
+
+      if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
+	  fatal("could not reset the sasl_conn_t after failure",
+		EC_TEMPFAIL);
+
       return FALSE;
     }
 
@@ -524,6 +546,11 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
       *errmsg = "expected a STRING followed by an EOL";
       syslog(LOG_NOTICE, "badlogin: %s %s %s",
 	     sieved_clienthost, mech, "expected string");
+
+      if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
+	  fatal("could not reset the sasl_conn_t after failure",
+		EC_TEMPFAIL);
+
       return FALSE;
     }
 
@@ -543,6 +570,11 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
 		 sieved_clienthost, mech, 
 		 sasl_errstring(sasl_result, NULL, NULL));
       }
+
+      if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
+	  fatal("could not reset the sasl_conn_t after failure",
+		EC_TEMPFAIL);
+
       return FALSE;
   }
 
@@ -554,6 +586,11 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
     *errmsg = "Internal SASL error";
     syslog(LOG_ERR, "SASL: sasl_getprop SASL_USERNAME: %s",
 	   sasl_errstring(sasl_result, NULL, NULL));
+
+    if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
+	fatal("could not reset the sasl_conn_t after failure",
+	      EC_TEMPFAIL);
+
     return FALSE;
   }
 
@@ -576,6 +613,11 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
       } else if (actions_setuser(username) != TIMSIEVE_OK) {
 	  *errmsg = "internal error";
 	  syslog(LOG_ERR, "error in actions_setuser()");
+
+	  if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
+	      fatal("could not reset the sasl_conn_t after failure",
+		    EC_TEMPFAIL);
+
 	  return FALSE;
       }
   }
@@ -611,8 +653,6 @@ static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved
 {
     int result;
     int *layerp;
-    char *auth_id;
-    sasl_ssf_t ssf;
 
     /* SASL and openssl have different ideas about whether ssf is signed */
     layerp = (int *) &ssf;
@@ -645,7 +685,7 @@ static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
 			       layerp,
-			       &auth_id,
+			       &authid,
 			       &tls_conn);
 
     /* if error */
@@ -662,7 +702,7 @@ static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved
         fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
     }
             
-    result = sasl_setprop(sieved_saslconn, SASL_AUTH_EXTERNAL, auth_id);
+    result = sasl_setprop(sieved_saslconn, SASL_AUTH_EXTERNAL, authid);
 
     if (result != SASL_OK) {
 	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
