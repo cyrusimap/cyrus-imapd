@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.52 2001/09/13 20:17:34 leg Exp $ */
+/* $Id: master.c,v 1.53 2001/09/14 16:46:52 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1160,7 +1160,8 @@ int main(int argc, char **argv, char **envp)
 	    if (x > maxfd) maxfd = x;
 
 	    /* connections */
-	    if (y > 0 && Services[i].ready_workers == 0) {
+	    if (y > 0 && Services[i].ready_workers == 0 &&
+		Services[i].nactive < Services[i].max_workers) {
 		if (verbose > 2)
 		    syslog(LOG_DEBUG, "listening for connections for %s", 
 			   Services[i].name);
