@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.36 2000/09/05 04:15:35 leg Exp $
+ * $Id: script.c,v 1.37 2000/11/17 16:50:05 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -472,7 +472,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 
 		    /* ok, we're willing to respond to the sender.
 		       but is this message to me?  that is, is my address
-		       in the TO or CC fields? */
+		       in the TO, CC or BCC fields? */
 		    if (strcpy(buf, "to"), 
 			i->getheader(m, buf, &body) == SIEVE_OK)
 			found = look_for_me(myaddr, c->u.v.addresses, body);
@@ -929,10 +929,9 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 				 "Sent vacation reply\n");
 
 		} else if (ret == SIEVE_DONE) {
-		    if (ret == SIEVE_OK)
-			snprintf(actions_string+strlen(actions_string),
-				 sizeof(actions_string)-strlen(actions_string),
-				 "Vacation reply suppressed\n");
+		    snprintf(actions_string+strlen(actions_string),
+			     sizeof(actions_string)-strlen(actions_string),
+			     "Vacation reply suppressed\n");
 
 		    ret = SIEVE_OK;
 		}
