@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.9 2003/03/29 01:26:44 ken3 Exp $
+ * $Id: bc_eval.c,v 1.1.4.10 2003/06/02 18:05:14 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -992,7 +992,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 		    /* we have to generate a subject */
 		    const char **s;	    
 		    strlcpy(buf, "subject", sizeof(buf));
-		    if (i->getheader(m, subject, &s) != SIEVE_OK ||
+		    if (i->getheader(m, buf, &s) != SIEVE_OK ||
 			s[0] == NULL) {
 			strlcpy(subject, "Automated reply", sizeof(subject));
 		    } else {
@@ -1006,13 +1006,13 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 		    }
 		} else {
 		    /* user specified subject */
-		    strlcpy(subject, data, sizeof(buf));
+		    strlcpy(subject, data, sizeof(subject));
 		}
 		
 		ip = unwrap_string(bc, ip, &message, NULL);
 
 		res = do_vacation(actions, toaddr, fromaddr,
-				  xstrdup(buf), message,
+				  xstrdup(subject), message,
 				  bc[ip].value, bc[ip+1].value);
 
 		ip+=2;		
