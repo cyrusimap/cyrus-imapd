@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: snmpgen,v 1.14 2002/05/31 14:38:40 wcw Exp $
+# $Id: snmpgen,v 1.15 2003/04/23 20:38:21 rjs3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -331,6 +331,7 @@ print OUTPUT_C <<EOF
 #include <fcntl.h>
 #include <stdarg.h>
 
+#include "index.h"
 #include "$outheader"
 
 extern int close(int);
@@ -421,7 +422,7 @@ int snmp_connect(void)
         variable_tmpvalue[lup] = -1;
 
     remote.sun_family = AF_UNIX;
-    strcpy(remote.sun_path, SOCK_PATH);
+    strlcpy(remote.sun_path, SOCK_PATH, sizeof(remote.sun_path));
     sockaddr_len = strlen(remote.sun_path) + sizeof(remote.sun_family);
 
     /* put us in non-blocking mode */
