@@ -229,6 +229,7 @@ sub authenticate {
       $tty->print("\013\010");
       system "stty $ostty";
     }
+    # according to send(), password will be quoted or literalized as needed
     my ($kw, $text) = $self->send(undef, undef, 'LOGIN %a %s',
 				  $opts{-user}, $opts{-password});
     $opts{-password} = "\0" x length($opts{-password});
