@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.16 2004/02/27 18:36:21 ken3 Exp $
+ * $Id: notifyd.c,v 1.17 2004/05/22 03:45:56 rjs3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -51,7 +51,6 @@
 #include <stdio.h>
 #include <errno.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.15 2004/01/26 17:46:56 ken3 Exp $
+/* $Id: cyrdump.c,v 1.16 2004/05/22 03:45:48 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,7 +48,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <string.h>
 
 /* cyrus includes */

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.86 2004/01/29 20:02:47 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.87 2004/05/22 03:45:52 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -56,7 +56,6 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
-#include <com_err.h>
 #include <stdlib.h>
 
 #if HAVE_DIRENT_H

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.466 2004/05/18 18:11:07 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.467 2004/05/22 03:45:49 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -55,7 +55,6 @@
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/wait.h>

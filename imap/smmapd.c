@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.7 2004/03/13 04:10:49 ken3 Exp $
+ * $Id: smmapd.c,v 1.8 2004/05/22 03:45:52 rjs3 Exp $
  */
 
 #include <config.h>
@@ -84,7 +84,6 @@
 #include <string.h>
 #include <syslog.h>
 #include <signal.h>
-#include <com_err.h>
 #include <ctype.h>
 
 #include "acl.h"

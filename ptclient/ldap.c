@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ldap.c,v 1.5 2004/02/25 16:36:31 rjs3 Exp $";
+      "$Id: ldap.c,v 1.6 2004/05/22 03:45:57 rjs3 Exp $";
 
 #include <config.h>
 
@@ -56,7 +56,6 @@ static char rcsid[] __attribute__((unused)) =
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
-#include <com_err.h>
 
 #include <ldap.h>
 #include <lber.h>

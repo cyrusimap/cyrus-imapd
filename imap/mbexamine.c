@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.6 2004/01/26 17:46:57 ken3 Exp $ */
+/* $Id: mbexamine.c,v 1.7 2004/05/22 03:45:51 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -56,7 +56,6 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
-#include <com_err.h>
 #include <stdlib.h>
 
 #if HAVE_DIRENT_H

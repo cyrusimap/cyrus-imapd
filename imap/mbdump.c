@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.29 2004/03/17 17:27:03 rjs3 Exp $
+ * $Id: mbdump.c,v 1.30 2004/05/22 03:45:51 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,7 +59,6 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <assert.h>
-#include <com_err.h>
 
 #include "annotate.h"
 #include "exitcodes.h"
