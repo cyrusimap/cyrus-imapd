@@ -486,7 +486,7 @@ const char *str;
     }
     else {
 	/* Literal */
-	if (imclient->flags & IMCLIENT_CONN_NOWAITLITERAL) {
+	if (imclient->flags & IMCLIENT_CONN_NONSYNCLITERAL) {
 	    sprintf(buf, "{%u+}\r\n", len);
 	    imclient_write(imclient, buf, strlen(buf));
 	}

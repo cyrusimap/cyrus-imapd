@@ -51,7 +51,7 @@ struct imclient_reply {
 #define CALLBACK_NOLITERAL 2	/* Data cannot contain a literal */
 
 /* Connection flags */
-#define IMCLIENT_CONN_NOWAITLITERAL 1 /* Server supports no-wait literals */
+#define IMCLIENT_CONN_NONSYNCLITERAL 1 /* Server supports non-synchronizing literals */
 
 typedef void imclient_proc_t P((struct imclient *imclient, void *rock,
 				struct imclient_reply *reply));
