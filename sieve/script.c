@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.45 2002/01/18 16:50:47 ken3 Exp $
+ * $Id: script.c,v 1.46 2002/02/13 20:44:04 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -814,7 +814,7 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     int ret = 0;
     int implicit_keep = 0;
     action_list_t *actions = NULL, *a;
-    action_t lastaction = -1;
+    action_t lastaction = ACTION_NULL;
     notify_action_t *notify_action;
     char actions_string[4096] = "";
     const char *errmsg = NULL;
@@ -1011,7 +1011,7 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
  error: /* report run-time errors */
  
     if (ret != SIEVE_OK) {
-	if (lastaction == -1) /* we never executed an action */
+	if (lastaction == ACTION_NULL) /* we never executed an action */
 	    snprintf(actions_string+strlen(actions_string),
 		     sizeof(actions_string)-strlen(actions_string),
 		     "script execution failed: %s\n",

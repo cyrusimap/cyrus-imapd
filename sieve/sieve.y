@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.12 2001/10/03 13:43:46 ken3 Exp $
+ * $Id: sieve.y,v 1.13 2002/02/13 20:44:04 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -613,9 +613,9 @@ static int verify_addresses(stringlist_t *sl)
     return (sl == NULL);
 }
 
-static int verify_mailbox(char *s)
+static int verify_mailbox(char *s __attribute__((unused)))
 {
-    /* if not a mailbox, call yyerror */
+    /* xxx if not a mailbox, call yyerror */
     return 1;
 }
 
@@ -697,8 +697,8 @@ static patternlist_t *verify_regexs(stringlist_t *sl, char *comp)
 }
 #endif
 
-/* is it ok to put this in an RFC822 header body? */
-static int ok_header(char *s)
+/* xxx is it ok to put this in an RFC822 header body? */
+static int ok_header(char *s __attribute__((unused)))
 {
     return 1;
 }
