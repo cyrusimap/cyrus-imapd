@@ -1,4 +1,4 @@
-$Id: drac_auth.patch,v 1.7 2001/06/01 19:26:16 ken3 Exp $
+$Id: drac_auth.patch,v 1.8 2001/06/02 02:41:43 ken3 Exp $
 
 Patch to add support for Dynamic Relay Authorization Control
 
@@ -70,7 +70,7 @@ RCS file: /afs/andrew/system/cvs/src/cyrus/acconfig.h,v
 retrieving revision 1.17
 diff -c -r1.17 acconfig.h
 *** acconfig.h	2001/03/28 16:11:49	1.17
---- acconfig.h	2001/06/01 19:14:46
+--- acconfig.h	2001/06/02 02:33:50
 ***************
 *** 81,86 ****
 --- 81,89 ----
@@ -89,7 +89,7 @@ RCS file: /afs/andrew/system/cvs/src/cyrus/configure.in,v
 retrieving revision 1.197
 diff -c -r1.197 configure.in
 *** configure.in	2001/05/17 17:33:29	1.197
---- configure.in	2001/06/01 19:14:46
+--- configure.in	2001/06/02 02:33:51
 ***************
 *** 730,735 ****
 --- 730,750 ----
@@ -120,16 +120,19 @@ RCS file: /afs/andrew/system/cvs/src/cyrus/imap/imapd.c,v
 retrieving revision 1.307
 diff -c -r1.307 imapd.c
 *** imap/imapd.c	2001/05/21 18:27:10	1.307
---- imap/imapd.c	2001/06/01 19:14:50
+--- imap/imapd.c	2001/06/02 02:33:54
 ***************
 *** 117,122 ****
---- 117,127 ----
+--- 117,130 ----
   static SSL *tls_conn = NULL;
   #endif /* HAVE_SSL */
   
 + #ifdef DRAC_AUTH
-+ static int drac_interval; /* dracd "ping" interval; 0 = disabled */
-+ static unsigned long drac_clientip;
++ static struct {
++     int interval;		/* dracd "ping" interval; 0 = disabled */
++     unsigned long clientaddr;
++     struct prot_waitevent *event;
++ } drac;
 + #endif /* DRAC_AUTH */
 + 
   /* current sub-user state */
@@ -137,22 +140,24 @@ diff -c -r1.307 imapd.c
   static struct mailbox *imapd_mailbox;
 ***************
 *** 436,441 ****
---- 441,462 ----
+--- 444,467 ----
       /* setup for sending IMAP IDLE notifications */
       idle_enabled();
   
 + #ifdef DRAC_AUTH
 +     /* setup for sending DRAC "pings" */
-+     drac_interval = config_getint("dracinterval", 5);
-+     if (drac_interval < 0) drac_interval = 0;
++     drac.event = NULL;
++     drac.interval = config_getint("dracinterval", 5);
++     if (drac.interval < 0) drac.interval = 0;
 + 
-+     if (drac_interval) {
++     if (drac.interval) {
 + 	char *err;
 + 
 + 	if (dracconn(config_getstring("drachost", "localhost"), &err) != 0) {
 + 	    /* disable DRAC */
-+ 	    drac_interval = 0;
-+ 	    syslog(LOG_NOTICE, "dracconn: %s (DISABLED)", err);
++ 	    drac.interval = 0;
++ 	    syslog(LOG_NOTICE, "dracconn: %s", err);
++ 	    syslog(LOG_NOTICE, "DRAC DISABLED");
 + 	}
 +     }
 + #endif /* DRAC_AUTH */
@@ -162,128 +167,120 @@ diff -c -r1.307 imapd.c
       snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
 ***************
 *** 508,513 ****
---- 529,540 ----
+--- 534,545 ----
   	if (getsockname(0, (struct sockaddr *)&imapd_localaddr, &salen) == 0) {
   	    imapd_haveaddr = 1;
   	}
 + 
 + #ifdef DRAC_AUTH
-+ 	drac_clientip = imapd_remoteaddr.sin_addr.s_addr;
++ 	drac.clientaddr = imapd_remoteaddr.sin_addr.s_addr;
 +     } else {
-+ 	drac_clientip = 0;
++ 	drac.clientaddr = 0;
 + #endif /* DRAC_AUTH */
       }
   
       /* create the SASL connection */
 ***************
+*** 548,553 ****
+--- 580,590 ----
+      prot_flush(imapd_out);
+      snmp_increment(ACTIVE_CONNECTIONS, -1);
+  
++ #ifdef DRAC_AUTH
++     if (drac.event) prot_removewaitevent(imapd_in, drac.event);
++     drac.event = NULL;
++ #endif /* DRAC_AUTH */
++ 
+      /* cleanup */
+      imapd_reset();
+  
+***************
 *** 620,625 ****
---- 647,657 ----
+--- 657,667 ----
       prot_flush(imapd_out);
       /* one less active connection */
       snmp_increment(ACTIVE_CONNECTIONS, -1);
 + 
 + #ifdef DRAC_AUTH
-+     if (drac_interval) (void) dracdisc((char **)NULL);
++     if (drac.interval) (void) dracdisc((char **)NULL);
 + #endif /* DRAC_AUTH */
 + 
       exit(code);
   }
   
 ***************
-*** 640,646 ****
---- 672,700 ----
+*** 640,645 ****
+--- 682,716 ----
   
   }
   
 + #ifdef DRAC_AUTH
-  /*
-+  * Ping dracd every 'drac_interval' minutes
++ /*
++  * Ping dracd every 'drac.interval' minutes
 +  * to let it know that we are still connected
 +  */
 + struct prot_waitevent *drac_ping(struct protstream *s,
 + 				 struct prot_waitevent *ev, void *rock)
 + {
 +     char *err;
++     static int nfailure = 0;
 + 
-+     if (dracsend(drac_clientip, &err) != 0) {
-+ 	/* disable DRAC */
-+ 	prot_removewaitevent(s, ev);
-+ 	syslog(LOG_NOTICE, "dracsend: %s (DISABLED)", err);
-+ 	return NULL;
++     if (dracsend(drac.clientaddr, &err) != 0) {
++ 	syslog(LOG_NOTICE, "dracsend: %s", err);
++ 	if (++nfailure >= 3) {
++ 	    /* can't contact dracd for 3 consecutive tries - disable DRAC */
++ 	    prot_removewaitevent(s, ev);
++ 	    drac.event = NULL;
++ 	    syslog(LOG_NOTICE, "DRAC DISABLED");
++ 	    return NULL;
++ 	}
 +     }
++     else
++ 	nfailure = 0;
 + 
-+     ev->mark = time(NULL) + (drac_interval * 60);
++     ev->mark = time(NULL) + (drac.interval * 60);
 +     return ev;
 + }
 + #endif /* DRAC_AUTH */
 + 
-+ /*
+  /*
    * Top-level command loop parsing
    */
-  void
 ***************
-*** 653,658 ****
---- 707,715 ----
-      static struct buf tag, cmd, arg1, arg2, arg3, arg4;
-      char *p;
-      const char *err;
+*** 1485,1490 ****
+--- 1556,1566 ----
+  
+      if (!reply) reply = "User logged in";
+  
 + #ifdef DRAC_AUTH
-+     struct prot_waitevent *drac_event;
++     if (drac.interval && drac.clientaddr)
++ 	drac.event = prot_addwaitevent(imapd_in, 0 /* now */, drac_ping, NULL);
++ #endif /* DRAC_AUTH */
++ 
+      /* Create telemetry log */
+      imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
+  
+***************
+*** 1628,1633 ****
+--- 1704,1714 ----
+  
+      prot_setsasl(imapd_in,  imapd_saslconn);
+      prot_setsasl(imapd_out, imapd_saslconn);
++ 
++ #ifdef DRAC_AUTH
++     if (drac.interval && drac.clientaddr)
++ 	drac.event = prot_addwaitevent(imapd_in, 0 /* now */, drac_ping, NULL);
 + #endif /* DRAC_AUTH */
   
-      prot_printf(imapd_out,
-  		"* OK %s Cyrus IMAP4 %s server ready\r\n", config_servername,
-***************
-*** 727,732 ****
---- 784,795 ----
-  		cmd_authenticate(tag.s, arg1.s);
-  
-  		snmp_increment(AUTHENTICATE_COUNT, 1);
-+ 
-+ #ifdef DRAC_AUTH
-+ 		if (imapd_userid && drac_interval && drac_clientip)
-+ 		    drac_event = prot_addwaitevent(imapd_in, 0 /* ping now */,
-+ 						   drac_ping, NULL);
-+ #endif /* DRAC_AUTH */
-  	    }
-  	    else if (!imapd_userid) goto nologin;
-  	    else if (!strcmp(cmd.s, "Append")) {
-***************
-*** 981,986 ****
---- 1044,1055 ----
-  		cmd_login(tag.s, arg1.s, arg2.s);
-  
-  		snmp_increment(LOGIN_COUNT, 1);
-+ 
-+ #ifdef DRAC_AUTH
-+ 		if (imapd_userid && drac_interval && drac_clientip)
-+ 		    drac_event = prot_addwaitevent(imapd_in, 0 /* ping now */,
-+ 						   drac_ping, NULL);
-+ #endif /* DRAC_AUTH */
-  	    }
-  	    else if (!strcmp(cmd.s, "Logout")) {
-  		if (c == '\r') c = prot_getc(imapd_in);
-***************
-*** 992,997 ****
---- 1061,1071 ----
-  			    error_message(IMAP_BYE_LOGOUT));
-  		prot_printf(imapd_out, "%s OK %s\r\n", tag.s, 
-  			    error_message(IMAP_OK_COMPLETED));
-+ 
-+ #ifdef DRAC_AUTH
-+ 		prot_removewaitevent(imapd_in, drac_event);
-+ #endif /* DRAC_AUTH */
-+ 
-  		return;
-  	    }
-  	    else if (!imapd_userid) goto nologin;
+      /* Create telemetry log */
+      imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
 Index: imap/pop3d.c
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/pop3d.c,v
 retrieving revision 1.94
 diff -c -r1.94 pop3d.c
 *** imap/pop3d.c	2001/06/01 02:59:02	1.94
---- imap/pop3d.c	2001/06/01 19:14:50
+--- imap/pop3d.c	2001/06/02 02:33:55
 ***************
 *** 100,105 ****
 --- 100,108 ----
@@ -337,7 +334,7 @@ RCS file: /afs/andrew/system/cvs/src/cyrus/man/imapd.conf.5,v
 retrieving revision 1.41
 diff -c -r1.41 imapd.conf.5
 *** man/imapd.conf.5	2001/03/07 15:52:59	1.41
---- man/imapd.conf.5	2001/06/01 19:14:51
+--- man/imapd.conf.5	2001/06/02 02:33:55
 ***************
 *** 224,230 ****
   Unix domain socket that lmtpd listens on.
