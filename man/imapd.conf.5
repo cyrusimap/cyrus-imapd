@@ -185,6 +185,16 @@ user's INBOX may log in as that user.
 If enabled, lmtpd attempts to only write one copy of a message per
 partition and create hard links, resulting in a potentially large disk
 savings.
+.IP "\fBduplicatesuppression:\fR yes" 5
+If enabled, lmtpd will suppress delivery of a message to a mailbox if
+a message with the same message-id (or resent-message-id) is recorded
+as having already been delivered to the mailbox.  Records the mailbox
+and message-id/resent-message-id of all successful deliveries.
+.br
+.sp
+Note that duplicate delivery suppression is required for Sieve.
+Disabling duplicate delivery suppression will also disable Sieve, and
+as such should only be disabled for performance reasons.
 .IP "\fBreject8bit:\fR no" 5
 If enabled, lmtpd rejects messages with 8-bit characters in the headers.
 Otherwise, 8-bit characters are changed to `X'.  (A proper soultion to
