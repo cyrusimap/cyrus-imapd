@@ -78,6 +78,7 @@ static char *monthname[] = {
 
 void usage P((void));
 void shutdown_file P((int fd));
+void motd_file P((int fd));
 void shut_down P((int code));
 void fatal P((const char *s, int code));
 
@@ -202,6 +203,25 @@ usage()
 }
 
 /*
+ * found a motd file; spit out message and return
+ */
+void motd_file(fd)
+int fd;
+{
+    struct protstream *motd_in;
+    char buf[1024];
+    char *p;
+
+    motd_in = prot_new(fd, 0);
+
+    prot_fgets(buf, sizeof(buf), motd_in);
+    if (p = strchr(buf, '\r')) *p = 0;
+    if (p = strchr(buf, '\n')) *p = 0;
+
+    prot_printf(imapd_out, "* OK [ALERT] %s\r\n", buf);
+}
+
+/*
  * Found a shutdown file: Spit out an untagged BYE and shut down
  */
 void shutdown_file(fd)
@@ -263,6 +283,7 @@ cmdloop()
 {
     int fd;
     char shutdownfilename[1024];
+    char motdfilename[1024];
     char hostname[MAXHOSTNAMELEN+1];
     int c;
     int usinguid, havepartition, havenamespace, oldform;
@@ -279,6 +300,12 @@ cmdloop()
     prot_printf(imapd_out,
 		"* OK %s Cyrus IMAP4 %s server ready\r\n", hostname,
 		CYRUS_VERSION);
+
+    sprintf(motdfilename, "%s/msg/motd", config_dir);
+    if ((fd = open(motdfilename, O_RDONLY, 0)) != -1) {
+	motd_file(fd);
+	close(fd);
+    }
 
     for (;;) {
 	if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
