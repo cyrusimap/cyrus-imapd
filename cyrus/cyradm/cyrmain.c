@@ -156,6 +156,7 @@ main(argc, argv)
                     "application-specific initialization failed: ", -1);
             Tcl_Write(errChannel, interp->result, -1);
             Tcl_Write(errChannel, "\n", 1);
+	    exit(1);
         }
     }
 
