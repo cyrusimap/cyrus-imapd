@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.25 1999/07/08 03:56:53 leg Exp $
+ * $Id: imtest.c,v 1.26 1999/07/24 00:41:47 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -114,6 +114,17 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   return ret;
 }
 
+static char *getrealname(char *name)
+{
+    static char ret[1024];
+    struct hostent *he;
+
+    he = gethostbyname(name);
+    strncpy(ret, he->h_name, 1023);
+    return ret;
+}
+
+
 /*
  * Initialize SASL and set necessary options
  */
@@ -199,29 +210,31 @@ imt_stat getauthline(char **line, int *linelen)
   return STAT_CONT;
 }
 
-void interaction (int id, char *prompt, char **tresult,int *tlen)
+void interaction (int id, const char *prompt, char **tresult,int *tlen)
 {
-  char result[1024];
+    char result[1024];
+    
+    if (id==SASL_CB_PASS) {
+	printf("%s: ", prompt);
+	*tresult=strdup(getpass(""));
+	*tlen=strlen(*tresult);
+	return;
+    } else if (((id==SASL_CB_USER) || 
+		(id==SASL_CB_AUTHNAME)) && (authname!=NULL)) {
+	strcpy(result, authname);
+    } else {
+	int c;
+	
+	printf("%s: ",prompt);
+	fgets(result, 1023, stdin);
+	c = strlen(result);
+	result[c - 1] = '\0';
+    }
 
-  if (id==SASL_CB_PASS)
-  {
-      printf("%s: ", prompt);
-      *tresult=strdup(getpass(""));
-      *tlen=strlen(*tresult);
-      return;
-
-  } else if (((id==SASL_CB_USER) || (id==SASL_CB_AUTHNAME)) && (authname!=NULL))
-  {
-    strcpy(result,authname);
-  } else {
-    printf("%s: ",prompt);
-    scanf("%s",&result);
-  }
-  *tlen=strlen(result);
-  *tresult=(char *) malloc(*tlen+1);
-  memset(*tresult, 0, *tlen+1);
-  memcpy((char *) *tresult, result, *tlen);
-
+    *tlen = strlen(result);
+    *tresult = (char *) malloc(*tlen+1);
+    memset(*tresult, 0, *tlen+1);
+    memcpy((char *) *tresult, result, *tlen);
 }
 
 void fillin_interactions(sasl_interact_t *tlist)
@@ -229,7 +242,8 @@ void fillin_interactions(sasl_interact_t *tlist)
   while (tlist->id!=SASL_CB_LIST_END)
   {
     interaction(tlist->id, tlist->prompt,
-		&(tlist->result),&(tlist->len));
+		(void *) &(tlist->result), 
+		&(tlist->len));
     tlist++;
   }
 
@@ -332,7 +346,7 @@ int auth_sasl(char *mechlist)
     if (saslresult!=SASL_OK) return saslresult;
 
     free(in);
-    free(out);
+    if (outlen > 0) free(out);
 
     /* send to server */
     printf("C: %s\n",inbase64);
@@ -690,6 +704,9 @@ int main(int argc, char **argv)
 
   /* last arg is server name */
   servername = argv[optind];
+
+  /* sigh, find the real name of this guy */
+  servername = getrealname(servername);
 
   /* map port -> num */
   serv = getservbyname(port, "tcp");
