@@ -40,7 +40,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: sieveshell.pl,v 1.16.4.1 2002/08/05 17:34:36 ken3 Exp $
+# $Id: sieveshell.pl,v 1.16.4.2 2002/09/12 20:33:35 ken3 Exp $
 #
 
 use Cyrus::SIEVE::managesieve;
@@ -173,8 +173,7 @@ my $obj = sieve_get_handle($acapserver,
 			   "prompt", "prompt", "prompt", "prompt");
 
 if (!defined $obj) {
-    my $err = sieve_get_global_error();
-    die "unable to connect to server: $err";
+    die "unable to connect to server";
 }
 
 my $term = Term::ReadLine->new("sieveshell");
