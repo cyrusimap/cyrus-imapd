@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.59 2003/01/11 20:24:40 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.60 2003/01/21 20:50:09 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4171,7 +4171,7 @@ char *identifier;
 	if (!canon_identifier) {
 	    rightsdesc = "\"\"";
 	}
-	else if (mboxname_userownsmailbox("INBOX", mailboxname)) {
+	else if (mboxname_userownsmailbox(canon_identifier, mailboxname)) {
 	    /* identifier's personal mailbox */
 	    rightsdesc = "lca r s w i p d 0 1 2 3 4 5 6 7 8 9";
 	}
@@ -4186,7 +4186,7 @@ char *identifier;
 	prot_printf(imapd_out, "* LISTRIGHTS ");
 	printastring(name);
 	prot_putc(' ', imapd_out);
-	printastring(canon_identifier);
+	printastring(identifier);
 	prot_printf(imapd_out, " %s", rightsdesc);
 
 	prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
