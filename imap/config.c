@@ -79,12 +79,13 @@ static int nconfiglist;
 /* variables accessible to the external world */
 const char *config_filename;     /* filename of configuration file */
 
-const char *config_dir;		 /* ie /var/imap */
-const char *config_defpartition; /* /var/spool/imap */
-const char *config_newsspool;	 /* /var/spool/news */
-const char *config_servername;	 /* gethostname() */
-int config_hashimapspool;	 /* f */
+const char *config_dir;		           /* ie /var/imap */
+const char *config_defpartition;           /* /var/spool/imap */
+const char *config_newsspool;	           /* /var/spool/news */
+const char *config_servername;	           /* gethostname() */
+const char *config_mupdate_server = NULL;  /* NULL */
 
+int config_hashimapspool;	           /* f */
 
 static void config_read(const char *alt_config);
 
@@ -143,6 +144,8 @@ int config_init(const char *alt_config, const char *ident)
 	config_servername = xmalloc(sizeof(char) * 256);
 	gethostname((char *) config_servername, 256);
     }
+
+    config_mupdate_server = config_getstring("mupdate_server", NULL);
 
     return 0;
 }

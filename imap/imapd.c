@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.381 2002/04/04 21:21:41 ken3 Exp $ */
+/* $Id: imapd.c,v 1.382 2002/04/05 18:51:54 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -103,8 +103,6 @@ extern int errno;
 static char shutdownfilename[1024];
 static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
-/* xxx this is duplicated in mboxlist.c, they should probably share */
-static const char *mupdate_server = NULL;
 
 /* per-user/session state */
 struct protstream *imapd_out = NULL;
@@ -407,7 +405,7 @@ static int mlookup(const char *tag, const char *ext_name,
 	    if(c) *c = '\0';
 	    imapd_refer(tag, remote, ext_name);
 	    r = IMAP_MAILBOX_MOVED;
-	} else if(mupdate_server) {
+	} else if(config_mupdate_server) {
 	    r = IMAP_SERVER_UNAVAILABLE;
 	} else {
 	    r = IMAP_MAILBOX_NOTSUPPORTED;
@@ -520,9 +518,6 @@ int service_init(int argc, char **argv, char **envp)
 	return EC_SOFTWARE;
     }
 #endif
-
-    /* get the mupdate server */
-    mupdate_server = config_getstring("mupdate_server", NULL);
 
     sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
 
@@ -2238,8 +2233,8 @@ void cmd_capability(char *tag)
 	prot_printf(imapd_out, " LOGINDISABLED");
     }
 
-    if(mupdate_server) {
-	prot_printf(imapd_out, " MUPDATE=mupdate://%s/", mupdate_server);
+    if(config_mupdate_server) {
+	prot_printf(imapd_out, " MUPDATE=mupdate://%s/", config_mupdate_server);
     }
 
     /* add the SASL mechs */
@@ -5967,7 +5962,7 @@ static int do_xfer_single(char *toserver, char *topart,
     if(h_in) {
 	mupdate_h = h_in;
     } else {
-	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
 		   "Could not move mailbox: %s, MUPDATE connect failed",
@@ -6024,7 +6019,7 @@ static int do_xfer_single(char *toserver, char *topart,
 
 	r = dump_mailbox(NULL, mailboxname, path, acl, 0, be->in, be->out,
 			 imapd_authstate);
-	/* xxx I think we need to eat the reply here on an error*/
+
 	if(r)
 	    syslog(LOG_ERR,
 		   "Could not move mailbox: %s, dump_mailbox() failed",
@@ -6215,7 +6210,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     }
 
     /* if we're not in a murder this [currently] makes no sense */
-    if (!mupdate_server) {
+    if (!config_mupdate_server) {
 	r = IMAP_SERVER_UNAVAILABLE;
     }
 
@@ -6254,7 +6249,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     } else {
 	/* we need to reserve the users inbox - connect to mupdate */
 	if(!r) {
-	    r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	    r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	    if(r) {
 		syslog(LOG_ERR,
 		       "Could not move mailbox: %s, MUPDATE connect failed",
@@ -7207,7 +7202,7 @@ void cmd_mupdatepush(char *tag, char *name)
     if (!imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
     }
-    if (!mupdate_server) {
+    if (!config_mupdate_server) {
 	r = IMAP_SERVER_UNAVAILABLE;
     }
 
@@ -7223,7 +7218,7 @@ void cmd_mupdatepush(char *tag, char *name)
 
     /* Push mailbox to mupdate server */
     if (!r) {
-	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);	
+	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
     }
 
     if (!r) {

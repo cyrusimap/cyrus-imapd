@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.12 2002/04/04 22:22:39 rjs3 Exp $
+ * $Id: mbdump.c,v 1.13 2002/04/05 18:51:56 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -556,8 +556,11 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	    strcpy(fnamebuf, s);
 	    free(s);
 	} else if (userid && !strcmp(file.s, "SEEN")) {
-	    /* xxx we want to merge this one, in an ideal world... */
 	    char *s = seen_getpath(userid);
+
+	    /* xxx lock current seen state */
+	    /* xxx set fname buf to <seen state>.NEW */
+
 	    strcpy(fnamebuf, s);
 	    free(s);
 	} else if (userid && !strncmp(file.s, "SIEVE", 5)) {
@@ -634,6 +637,10 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	}
 
 	close(curfile);
+
+	/* xxx if this was seen state, perform a merge,
+	   and remove the <seen state>.new file,
+	   and unlock the seen state */
 	
 	if(c == ')') break;
     }

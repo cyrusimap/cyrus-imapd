@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.181 2002/04/04 22:22:39 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.182 2002/04/05 18:51:56 rjs3 Exp $
  */
 
 #include <config.h>
@@ -91,8 +91,6 @@ cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 struct db *mbdb;
 
 static int mboxlist_dbopen = 0;
-
-static const char *mupdate_server = NULL;
 
 static int mboxlist_opensubs();
 static void mboxlist_closesubs();
@@ -582,8 +580,8 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     }
 
     /* 4. Create mupdate reservation */
-    if (mupdate_server && !localonly) {
-	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+    if (config_mupdate_server && !localonly) {
+	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
 		   "can not connect to mupdate server for reservation on '%s'",
@@ -652,14 +650,14 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	}
 
 	/* delete mupdate entry if we made it */
-	if (madereserved == 1 && mupdate_server) {
+	if (madereserved == 1 && config_mupdate_server) {
 	    r2 = mupdate_delete(mupdate_h, name);
 	    if(r2 > 0) {
 		/* Disconnect, reconnect, and retry */
 		syslog(LOG_WARNING,
 		       "MUPDATE: lost connection, retrying");
 		mupdate_disconnect(&mupdate_h);
-		r2 = mupdate_connect(mupdate_server, NULL,
+		r2 = mupdate_connect(config_mupdate_server, NULL,
 				     &mupdate_h, NULL);
 		if(!r2) {
 		    r2 = mupdate_delete(mupdate_h, name);
@@ -684,7 +682,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 
     /* 9. set MUPDATE entry as commited (CRASH: commited) */
     /* xxx maybe we should roll back if this fails? */
-    if (!r && mupdate_server && !localonly) {
+    if (!r && config_mupdate_server && !localonly) {
 	/* commit the mailbox in MUPDATE */
 	sprintf(buf, "%s!%s", config_servername, newpartition);
 	    
@@ -694,7 +692,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	    syslog(LOG_WARNING,
 		   "MUPDATE: lost connection, retrying");
 	    mupdate_disconnect(&mupdate_h);
-	    r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	    r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	    if(!r) {
 		r = mupdate_activate(mupdate_h, name, buf, acl);
 	    }
@@ -705,7 +703,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	}
     }
 
-    if(mupdate_server && mupdate_h) mupdate_disconnect(&mupdate_h);
+    if(config_mupdate_server && mupdate_h) mupdate_disconnect(&mupdate_h);
 
     if (acl) free(acl);
     if (newpartition) free(newpartition);
@@ -824,9 +822,9 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 
     /* remove from mupdate */
     /* xxx this can lead to inconsistancies if the later stuff fails */
-    if (!r && !local_only && mupdate_server) {
+    if (!r && !local_only && config_mupdate_server) {
 	/* delete the mailbox in MUPDATE */
-	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
 		   "can not connect to mupdate server for delete of '%s'",
@@ -1020,12 +1018,12 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    if (!r && !partitionmove && mupdate_server) {
+    if (!r && !partitionmove && config_mupdate_server) {
 	/* Reserve new name in MUPDATE */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
 	sprintf(buf, "%s!%s", config_servername, newpartition);
 	
-	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
 		   "can not connect to mupdate server for reservation on '%s'",
@@ -1043,12 +1041,12 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
 	
 	madenew = 1;
-    } else if(!r && partitionmove && mupdate_server) {
+    } else if(!r && partitionmove && config_mupdate_server) {
 	/* commit the update to MUPDATE */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
 	sprintf(buf, "%s!%s", config_servername, newpartition);
 
-	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
 		   "can not connect to mupdate server for reservation on '%s'",
@@ -1123,14 +1121,14 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
 	
 	/* unroll mupdate operations if necessary */
-	if (madenew && mupdate_server) {
+	if (madenew && config_mupdate_server) {
 	    r2 = mupdate_delete(mupdate_h, newname);
 	    if(r2 > 0) {
 		/* Disconnect, reconnect, and retry */
 		syslog(LOG_WARNING,
 		       "MUPDATE: lost connection, retrying");
 		mupdate_disconnect(&mupdate_h);
-		r2 = mupdate_connect(mupdate_server, NULL,
+		r2 = mupdate_connect(config_mupdate_server, NULL,
 				     &mupdate_h, NULL);
 		if(!r2) {
 		    r2 = mupdate_delete(mupdate_h, newname);
@@ -1156,7 +1154,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    if (!r && !partitionmove && mupdate_server) {
+    if (!r && !partitionmove && config_mupdate_server) {
 	/* commit the mailbox in MUPDATE */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
 	sprintf(buf, "%s!%s", config_servername, newpartition);
@@ -1167,7 +1165,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	    syslog(LOG_WARNING,
 		   "MUPDATE: lost connection, retrying");
 	    mupdate_disconnect(&mupdate_h);
-	    r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	    r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	    if(!r) {
 		r = mupdate_activate(mupdate_h, newname, buf, newacl);
 	    }
@@ -1179,7 +1177,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    if (!r && !partitionmove && mupdate_server) {
+    if (!r && !partitionmove && config_mupdate_server) {
 	/* delete the old mailbox in MUPDATE */
 	r = mupdate_delete(mupdate_h, oldname);
 	if(r > 0) {
@@ -1187,7 +1185,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	    syslog(LOG_WARNING,
 		   "MUPDATE: lost connection, retrying");
 	    mupdate_disconnect(&mupdate_h);
-	    r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	    r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	    if(!r) {
 		r = mupdate_delete(mupdate_h, oldname);
 	    }
@@ -1198,7 +1196,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    if(mupdate_server) mupdate_disconnect(&mupdate_h);
+    if(config_mupdate_server) mupdate_disconnect(&mupdate_h);
 
     /* free memory */
     if (newacl) free(newacl);	/* we're done with the new ACL */
@@ -1358,13 +1356,13 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
     }
 
     /* 7. Change mupdate entry  */
-    if (!r && mupdate_server) {
+    if (!r && config_mupdate_server) {
         mupdate_handle *mupdate_h = NULL;
 	/* commit the update to MUPDATE */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
 	sprintf(buf, "%s!%s", config_servername, partition);
 
-	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
 		   "can not connect to mupdate server for reservation on '%s'",
@@ -2155,8 +2153,7 @@ void mboxlist_init(int myflags)
 	r = DB->sync();
     }
 
-    mupdate_server = config_getstring("mupdate_server", NULL);
-    if(mupdate_server) {
+    if(config_mupdate_server) {
 	/* We're going to need SASL */
 	r = sasl_client_init(NULL);
 	if(r != 0) {
