@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.110 1998/06/07 23:36:26 tjs Exp $
+dnl $Id: configure.in,v 1.111 1998/06/08 00:44:16 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -444,11 +444,14 @@ dnl
 dnl because of snprintf problems, we have to do this before kerberos checks,
 dnl then put krb libs at front of line
 dnl
-AC_CHECK_LIB(db,dbopen,[AC_DEFINE(HAVE_LIBDB)
-                        LIBS=" -ldb ${LIBS}"
-                        USEDB=1])
 
-if test -z "USEDB"; then
+AC_CHECK_FUNC(dbopen, [AC_DEFINE(HAVE_LIBDB)
+use_db=1], [
+  AC_CHECK_LIB(db,dbopen,[AC_DEFINE(HAVE_LIBDB)
+        	                LIBS=" -ldb ${LIBS}"
+                	        use_db=1])])
+
+if test -z "use_db"; then
   AC_CHECK_LIB(ndbm, dbm_open)
   AC_CHECK_LIB(dbm, dbm_open)
 fi
@@ -527,20 +530,21 @@ if test "$with_zephyr" = "no"; then
 fi     
 
 dnl
-dnl System version of com_err
+dnl Try and find a system version of com_err.
 dnl
 AC_ARG_WITH(com_err,[  --with-com_err=PATH use com_err from PATH])
 if test -z "$with_com_err"; then
+	# no value supplied
 	AC_CHECK_LIB(com_err, com_err, [
 		# com_err is already in library path
 		# guess we're okay
 		# can use system com_err
 		with_com_err=""
-		AC_PATH_PROG(COMPILE_ET, compile_et, "no_compile_et")
+		AC_PATH_PROG(COMPILE_ET, compile_et, [no compile et])
 	], [
 	if test -f /usr/local/include/com_err.h; then
 		with_com_err="/usr/local"
-		AC_PATH_PROG(COMPILE_ET, compile_et, "no_compile_et")
+		AC_PATH_PROG(COMPILE_ET, /usr/local/bin/compile_et, [no compile et])
 	else
 		# use ours
 		with_com_err=yes
@@ -548,14 +552,15 @@ if test -z "$with_com_err"; then
 	])
 	
 fi
+
 if test "${with_com_err}" = "no"; then
-	AC_MSG_WARN([com_err is required; included version will be used.])
-	with_com_err="yes"
+  AC_MSG_WARN([com_err is required; included version will be used.])
+  with_com_err="yes"
 fi
-if test "${compile_et}" = "no_compile_et"; then
-	AC_MSG_WARN([Parts of com_err were found, but not compile_et.])
-	AC_MSG_WARN([Included version will be used.])
-	with_com_err="yes"
+if test "${COMPILE_ET}" = "no compile et" -o "${COMPILE_ET}" = ""; then
+  AC_MSG_WARN([Parts of com_err distribuion were found, but not compile_et.])
+  AC_MSG_WARN([Will build com_err from included sources.])
+  with_com_err="yes"
 fi
 
 case "$with_com_err" in
@@ -569,12 +574,19 @@ case "$with_com_err" in
 	  EXTRA_OUTPUT="${EXTRA_OUTPUT} et/Makefile"
 	  ;;
   "") # no problem, it's in /usr/bin or something
-	COM_ERR_LIBS="-lcom_err"
-	# COMPILE_ET="compile_et" # we found it earlier.
+	COM_ERR_LIBS="-lcom_err" # hope it's not shared
+	COM_ERR_CPPFLAGS="${with_com_err}/include"
+	# Ever get the feeling people hide this stuff on purpose?
+	if test -d "${with_com_err}/include/et" ; then
+	  COM_ERR_CPPFLAGS="${with_com_err}/include/et"
+	fi
+	# we already set COMPILE_ET, or we didn't get here
 	;;
   *) # use whatever they told us, or whatever we found
      COM_ERR_LIBS="${with_com_err}/lib/libcom_err.a"
-     COM_ERR_CPPFLAGS="-I${with_com_err}/include"
+     if -d "${with_com_err}/include/et" ; then
+       COM_ERR_CPPFLAGS="-I${with_com_err}/include"
+     fi
 dnl     ANDREW_ADD_LIBPATH_TO(${with_com_err}/lib, COM_ERR_LDFLAGS)
      COMPILE_ET="${with_com_err}/bin/compile_et"
 esac
