@@ -37,6 +37,7 @@
 
 #include "auth.h"
 #include "auth_krb_pts.h"
+#include "retry.h"
 #include "xmalloc.h"
 
 #ifndef KRB_MAPNAME
@@ -454,7 +455,7 @@ const char *cacheid;
         iov[1].iov_len = key.size;
         iov[2].iov_base = (char *)identifier;
         iov[2].iov_len = PR_MAXNAMELEN;
-        retry_writev(s, &iov, 3);
+        retry_writev(s, iov, 3);
         
         start = 0;
         while (start < sizeof(response) - 1) {

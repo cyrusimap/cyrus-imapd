@@ -184,8 +184,8 @@ callback_finish(struct imclient *imclient, void *rock,
     if (!strcmp(reply -> keyword,"OK")) {
 	return; /* success */
     }
-    cb->error = strsave(reply->keyword);
-    cb->text = strsave(reply->text);
+    cb->error = xstrdup(reply->keyword);
+    cb->text = xstrdup(reply->text);
 } /* callback_finish */
 
 /* Callback for untagged ACL data */
@@ -206,8 +206,8 @@ callback_acl(struct imclient *imclient, void *rock,
     if (c != ' ') { return; }
     c = imparse_astring(&s,&rights);
     if (c != '\0') { return; }
-    imapkey[n_imap_acl] = strsave(identifier);
-    imapval[n_imap_acl] = strsave(rights);
+    imapkey[n_imap_acl] = xstrdup(identifier);
+    imapval[n_imap_acl] = xstrdup(rights);
     n_imap_acl++;
 } /* callback_acl */
 
@@ -406,7 +406,7 @@ do_acl(char *amsdir, char *bbd)
     p = strchr(p,'\n') + 1;
     for (i = 0; i < pos; i++) {
 	*(q = strchr(p,'\n')) = 0;
-	posacl[i] = strsave(p);
+	posacl[i] = xstrdup(p);
 	p = q + 1;
 	q = strchr(posacl[i],'\t') + 1;
 	posval[i] = atoi(q);
@@ -415,7 +415,7 @@ do_acl(char *amsdir, char *bbd)
     }
     for (i = 0; i < neg; i++) {
 	*(q = strchr(p,'\n')) = 0;
-	negacl[i] = strsave(p);
+	negacl[i] = xstrdup(p);
 	p = q + 1;
 	q = strchr(negacl[i],'\t') + 1;
 	negval[i] = atoi(q);
@@ -429,7 +429,7 @@ do_acl(char *amsdir, char *bbd)
     /* merge system:anyuser, system:authuser,
        system:campusnet, and system:friendlynet */
     for (k = 0; k < 4; k++) {
-	p = dirs[k];
+	p = (char *) (dirs[k]);
 	if ((i = findpos(p)) != -1) {
 	    if ((j = findpos("anyone")) != -1) {
 		posval[j] |= posval[i];
@@ -624,7 +624,7 @@ int main(int argc, char **argv)
 	    acl_mode = 1;
 	} else if (!strcmp(*argv,"-c")) {
 	    if (argc <= 1) { usage(); }
-	    cfgname = strsave(*++argv);
+	    cfgname = xstrdup(*++argv);
 	    if (!(--argc)) { break; }
 	} else if (!strcmp(*argv,"-d")) {
 	    debug = 1;
@@ -636,14 +636,14 @@ int main(int argc, char **argv)
 	    noncommit = 1;
 	} else if (!strcmp(*argv,"-u")) {
 	    if (argc <= 1) { usage(); }
-	    principal = strsave(*++argv);
+	    principal = xstrdup(*++argv);
 	    if (!(--argc)) { break; }
 	} else if (!strcmp(*argv,"-v")) {
 	    verbose = 1;
 	} else if (!server) {
-	    server = strsave(*argv);
+	    server = xstrdup(*argv);
 	} else if (!port) {
-	    port = strsave(*argv);
+	    port = xstrdup(*argv);
 	} else {
 	    usage();
 	}

@@ -46,7 +46,7 @@ extern char *sys_errlist[];
 
 /* Signal handler used for read timeouts */
 static jmp_buf timeoutbuf;
-static int
+static void
 alarmhandler()
 {
     longjmp(timeoutbuf, 1);

@@ -30,6 +30,8 @@
 #include <sys/file.h>
 #include <fcntl.h>
 
+#include "nonblock.h"
+
 #ifndef	FNDELAY
 #define FNDELAY		O_NDELAY
 #endif
@@ -45,6 +47,7 @@
  * 'mode' is nonzero, sets non-blocking mode, if 'mode' is zero
  * clears non-blocking mode.
  */
+void
 nonblock(fd, mode)
 int fd;
 int mode;

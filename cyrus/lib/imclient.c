@@ -44,7 +44,9 @@
 #include "acte.h"
 #include "sysexits.h"
 #include "xmalloc.h"
+#include "imparse.h"
 #include "imclient.h"
+#include "nonblock.h"
 
 extern int errno;
 
@@ -181,7 +183,7 @@ const char *port;
 
     addr.sin_family = AF_INET;
     memcpy(&addr.sin_addr, hp->h_addr, sizeof(addr.sin_addr));
-    if (port && is_number(port)) {
+    if (port && imparse_isnumber(port)) {
 	addr.sin_port = htons(atoi(port));
     }
     else if (port) {
@@ -199,7 +201,7 @@ const char *port;
     *imclient = (struct imclient *)xmalloc(sizeof(struct imclient));
     **imclient = zeroimclient;
     (*imclient)->fd = s;
-    (*imclient)->servername = strsave(hp->h_name);
+    (*imclient)->servername = xstrdup(hp->h_name);
     (*imclient)->outptr = (*imclient)->outstart = (*imclient)->outbuf;
     (*imclient)->outleft = (*imclient)->maxplain = sizeof((*imclient)->outbuf);
     
@@ -314,7 +316,7 @@ va_dcl
 		   imclient->callback_alloc*sizeof (struct imclient_callback));
 	    }
 	    imclient->callback_num++;
-	    imclient->callback[i].keyword = strsave(keyword);
+	    imclient->callback[i].keyword = xstrdup(keyword);
 	    imclient->callback[i].flags = flags;
 	}
 

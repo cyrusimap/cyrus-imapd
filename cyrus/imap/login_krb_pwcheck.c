@@ -49,6 +49,7 @@
 #include <sys/uio.h>
 
 #include "acte.h"
+#include "retry.h"
 #include "config.h"
 #include "sysexits.h"
 #include "mailbox.h"
@@ -67,7 +68,7 @@ static int use_acl = 0;
 static void
 login_init()
 {
-    char *val;
+    const char *val;
 
     if (krb_get_lrealm(lrealm,1)) {
 	lrealm[0] == '\0';
@@ -228,7 +229,7 @@ const char **reply;
     char auth_aname[ANAME_SZ];
     char auth_inst[INST_SZ];
     char auth_realm[REALM_SZ];
-    char *val;
+    const char *val;
     static char replybuf[100];
 
     aname[0] = inst[0] = realm[0] = '\0';

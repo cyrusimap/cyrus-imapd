@@ -28,11 +28,14 @@
  */
 #include <sys/ioctl.h>
 
+#include "nonblock.h"
+
 /*
  * Modifies the non-blocking mode on the file descriptor 'fd'.  If
  * 'mode' is nonzero, sets non-blocking mode, if 'mode' is zero
  * clears non-blocking mode.
  */
+void
 nonblock(fd, mode)
 int fd;
 int mode;

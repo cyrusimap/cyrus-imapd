@@ -32,6 +32,8 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include "lock.h"
+
 extern int errno;
 
 /*
@@ -50,9 +52,9 @@ extern int errno;
  */
 int lock_reopen(fd, filename, sbuf, failaction)
 int fd;
-char *filename;
+const char *filename;
 struct stat *sbuf;
-char **failaction;
+const char **failaction;
 {
     int r;
     struct flock fl;

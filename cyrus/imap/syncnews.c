@@ -107,7 +107,7 @@ char *active;
     FILE *active_file;
     char buf[1024];
     char *p;
-    char *newsprefix;
+    const char *newsprefix;
     int newsprefixlen = 0;
     int lineno = 0;
 
@@ -154,7 +154,7 @@ char *active;
 		strcpy(group[group_num]+newsprefixlen+1, buf);
 	    }
 	    else {
-		group[group_num] = strsave(buf);
+		group[group_num] = xstrdup(buf);
 	    }
 	    group_seen[group_num] = 0;
 	    group_num++;

@@ -217,7 +217,7 @@ kpop()
     KTEXT_ST ticket;
     char instance[INST_SZ];  
     char version[9];
-    char *srvtab;
+    const char *srvtab;
     int r;
 
     if (!popd_haveaddr) {
@@ -328,7 +328,7 @@ cmdloop()
 			   popd_clienthost, beautify_string(arg));
 		}
 		else {
-		    popd_userid = strsave(p);
+		    popd_userid = xstrdup(p);
 		    prot_printf(popd_out, "+OK Name is a valid mailbox\r\n");
 		}
 	    }
@@ -638,7 +638,7 @@ char *authtype;
 	return;
     }
 
-    popd_userid = strsave(canon_user);
+    popd_userid = xstrdup(canon_user);
 
     syslog(LOG_NOTICE, "login: %s %s %s %s", popd_clienthost, canon_user,
 	   authtype, reply ? reply : "");

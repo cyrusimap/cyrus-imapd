@@ -41,6 +41,9 @@
 #include "imclient.h"
 #include "sysexits.h"
 #include "xmalloc.h"
+#include "map.h"
+#include "lock.h"
+#include "retry.h"
 #include "imap_err.h"
 #include "config.h"
 #include "mailbox.h"
@@ -64,7 +67,7 @@ struct imclient *connecttoimsp();
 
 main()
 {
-    char *val;
+    const char *val;
 
     config_init("updateimsp");
 
@@ -89,13 +92,13 @@ main()
 
 doupdate()
 {
-    char *imsphost;
+    const char *imsphost;
     char hostbuf[256];
     char *p;
     struct imclient *imspconn;
     int workfd, retryfd, newfd;
-    char *work_base, *retry_base;
-    unsigned long work_size = 0, *retry_size = 0;
+    const char *work_base, *retry_base;
+    unsigned long work_size = 0, retry_size = 0;
     struct stat work_sbuf, retry_sbuf;
     char *failaction;
 

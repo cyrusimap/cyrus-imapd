@@ -53,10 +53,14 @@
 # endif
 #endif
 
+#include "assert.h"
 #include "config.h"
 #include "acl.h"
-#include "assert.h"
+#include "map.h"
+#include "retry.h"
 #include "util.h"
+#include "lock.h"
+#include "sysexits.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
@@ -79,26 +83,81 @@ int mailbox_num_cache_header =
 
 /*
  * Calculate relative filename for the message with UID 'uid'
- * in 'mailbox'.  Returns pointer to static buffer.
+ * in 'mailbox'. Returns pointer to static buffer.
  */
 char *mailbox_message_fname(mailbox, uid)
 struct mailbox *mailbox;
 unsigned long uid;
 {
-    static char buf[64];
+    static char buf[256];
+    char *p = buf;
+    
+    assert(mailbox->format != MAILBOX_FORMAT_NETNEWS);
 
-    sprintf(buf, "%lu%s", uid, mailbox->format == MAILBOX_FORMAT_NETNEWS ? "" : ".");
+    sprintf(p, "%lu.", uid);
     return buf;
+}
+
+/*
+ * Maps in the content for the message with UID 'uid' in 'mailbox'.
+ * Returns map in 'basep' and 'lenp'
+ */
+int
+mailbox_map_message(mailbox, uid, basep, lenp)
+struct mailbox *mailbox;
+unsigned long uid;
+const char **basep;
+unsigned long *lenp;
+{
+    int msgfd;
+    static char buf[256];
+    char *p = buf;
+    struct stat sbuf;
+
+    if (mailbox->format == MAILBOX_FORMAT_NETNEWS && config_newsspool) {
+	strcpy(buf, config_newsspool);
+	p = buf + strlen(buf);
+	if (p[-1] != '/') *p++ = '/';
+    }
+
+    sprintf(p, "%lu%s", uid,
+	    mailbox->format == MAILBOX_FORMAT_NETNEWS ? "" : ".");
+
+    msgfd = open(buf, O_RDONLY, 0666);
+    if (msgfd == -1) return errno;
+    
+    if (fstat(msgfd, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", buf);
+	fatal("can't fstat message file", EX_OSFILE);
+    }
+    *basep = 0;
+    *lenp = 0;
+    map_refresh(msgfd, 1, basep, lenp, sbuf.st_size, buf, mailbox->name);
+    close(msgfd);
+
+    return 0;
+}
+
+/*
+ * Releases the buffer obtained from mailbox_map_message()
+ */
+void
+mailbox_unmap_message(mailbox, uid, basep, lenp)
+struct mailbox *mailbox;
+unsigned long uid;
+const char **basep;
+unsigned long *lenp;
+{
+    map_free(basep, lenp);
 }
 
 /*
  * Set the "reconstruct" mode.  Causes most errors to be ignored.
  */
-int
+void
 mailbox_reconstructmode()
 {
     mailbox_doing_reconstruct = 1;
-    return 0;
 }
 
 /*
@@ -107,7 +166,7 @@ mailbox_reconstructmode()
  */
 int
 mailbox_open_header(name, mailbox)
-char *name;
+const char *name;
 struct mailbox *mailbox;
 {
     char *path, *acl;
@@ -126,9 +185,9 @@ struct mailbox *mailbox;
  */
 int
 mailbox_open_header_path (name, path, acl, mailbox, suppresslog)
-char *name;
-char *path;
-char *acl;
+const char *name;
+const char *path;
+const char *acl;
 struct mailbox *mailbox;
 int suppresslog;
 {
@@ -149,9 +208,9 @@ int suppresslog;
 	return IMAP_IOERROR;
     }
 
-    mailbox->name = strsave(name);
-    mailbox->path = strsave(path);
-    mailbox->acl = strsave(acl);
+    mailbox->name = xstrdup(name);
+    mailbox->path = xstrdup(path);
+    mailbox->acl = xstrdup(acl);
     mailbox->myrights = acl_myrights(mailbox->acl);
 
     if (!mailbox->header) return 0;
@@ -225,6 +284,7 @@ struct mailbox *mailbox;
 /*
  * Close the mailbox 'mailbox', freeing all associated resources.
  */
+void
 mailbox_close(mailbox)
 struct mailbox *mailbox;
 {
@@ -245,7 +305,6 @@ struct mailbox *mailbox;
     }
 
     *mailbox = zeromailbox;
-    return 0;
 }
 
 /*
@@ -285,7 +344,7 @@ struct mailbox *mailbox;
 	free(mailbox->quota.root);
     }
     if (buf[0]) {
-	mailbox->quota.root = strsave(buf);
+	mailbox->quota.root = xstrdup(buf);
     }
     else {
 	mailbox->quota.root = 0;
@@ -302,7 +361,7 @@ struct mailbox *mailbox;
 	p = strchr(name, ' ');
 	if (p) *p++ = '\0';
 	if (mailbox->flagname[flag]) free(mailbox->flagname[flag]);
-	mailbox->flagname[flag++] = *name ? strsave(name) : NULL;
+	mailbox->flagname[flag++] = *name ? xstrdup(name) : NULL;
 	name = p;
     }
     while (flag < MAX_USER_FLAGS) {
@@ -349,7 +408,7 @@ struct mailbox *mailbox;
     
     buf[strlen(buf)-1] = '\0';
     free(mailbox->acl);
-    mailbox->acl = strsave(buf);
+    mailbox->acl = xstrdup(buf);
 
     return 0;
 }
@@ -368,7 +427,7 @@ struct mailbox *mailbox;
     if (r) return r;
 
     free(mailbox->acl);
-    mailbox->acl = strsave(acl);
+    mailbox->acl = xstrdup(acl);
     mailbox->myrights = acl_myrights(mailbox->acl);
 
     return 0;
@@ -521,7 +580,7 @@ struct mailbox *mailbox;
 {
     char fnamebuf[MAX_MAILBOX_PATH];
     struct stat sbuf;
-    char *lockfailaction;
+    const char *lockfailaction;
     int r;
 
     if (mailbox->header_lock_count++) return 0;
@@ -638,7 +697,7 @@ mailbox_lock_quota(quota)
 struct quota *quota;
 {
     char quota_path[MAX_MAILBOX_PATH];
-    char *lockfailaction;
+    const char *lockfailaction;
     int r;
 
     /* assert(mailbox->header_lock_count != 0); */
@@ -675,6 +734,7 @@ struct quota *quota;
 /*
  * Release lock on the header for 'mailbox'
  */
+void
 mailbox_unlock_header(mailbox)
 struct mailbox *mailbox;
 {
@@ -683,12 +743,12 @@ struct mailbox *mailbox;
     if (--mailbox->header_lock_count == 0) {
 	lock_unlock(fileno(mailbox->header));
     }
-    return 0;
 }
 
 /*
  * Release lock on the index file for 'mailbox'
  */
+void
 mailbox_unlock_index(mailbox)
 struct mailbox *mailbox;
 {
@@ -697,12 +757,12 @@ struct mailbox *mailbox;
     if (--mailbox->index_lock_count == 0) {
 	lock_unlock(fileno(mailbox->index));
     }
-    return 0;
 }
 
 /*
  * Release POP lock for 'mailbox'
  */
+void
 mailbox_unlock_pop(mailbox)
 struct mailbox *mailbox;
 {
@@ -711,12 +771,12 @@ struct mailbox *mailbox;
     if (--mailbox->pop_lock_count == 0) {
 	lock_unlock(fileno(mailbox->cache));
     }
-    return 0;
 }
 
 /*
  * Release lock on the quota file 'quota'
  */
+void
 mailbox_unlock_quota(quota)
 struct quota *quota;
 {
@@ -725,7 +785,6 @@ struct quota *quota;
     if (--quota->lock_count == 0 && quota->root) {
 	lock_unlock(fileno(quota->file));
     }
-    return 0;
 }
 
 /*
@@ -878,8 +937,8 @@ int
 mailbox_append_index(mailbox, record, start, num)
 struct mailbox *mailbox;
 struct index_record *record;
-int start;
-int num;
+unsigned start;
+unsigned num;
 {
     int i, j, len;
     char *buf, *p;
@@ -1015,11 +1074,12 @@ struct quota *quota;
  * determine which messages to expunge.  If 'decideproc' is a null pointer,
  * then messages with the \Deleted flag are expunged.
  */
+int
 mailbox_expunge(mailbox, iscurrentdir, decideproc, deciderock)
 struct mailbox *mailbox;
 int iscurrentdir;
-int (*decideproc)();
-char *deciderock;
+mailbox_decideproc_t *decideproc;
+void *deciderock;
 {
     int r, n;
     char fnamebuf[MAX_MAILBOX_PATH], fnamebufnew[MAX_MAILBOX_PATH];
@@ -1258,14 +1318,16 @@ char *deciderock;
     fclose(newcache);
 
     /* Delete message files */
-    *fnametail++ = '/';
-    for (msgno = 0; msgno < numdeleted; msgno++) {
-	if (iscurrentdir) {
-	    unlink(mailbox_message_fname(mailbox, deleted[msgno]));
-	}
-	else {
-	    strcpy(fnametail, mailbox_message_fname(mailbox, deleted[msgno]));
-	    unlink(fnamebuf);
+    if (mailbox->format != MAILBOX_FORMAT_NETNEWS) {
+	*fnametail++ = '/';
+	for (msgno = 0; msgno < numdeleted; msgno++) {
+	    if (iscurrentdir) {
+		unlink(mailbox_message_fname(mailbox, deleted[msgno]));
+	    }
+	    else {
+		strcpy(fnametail, mailbox_message_fname(mailbox, deleted[msgno]));
+		unlink(fnamebuf);
+	    }
 	}
     }
 
@@ -1285,9 +1347,156 @@ char *deciderock;
     return IMAP_IOERROR;
 }
 
+struct newsexpunge {
+    int ctr;
+    char *msg_seen;
+};
+
+/*
+ * Expunge decision proc which removes news articles not in msg_seen array
+ */
+static int
+expunge_expired(rock, indexbuf)
+void *rock;
+char *indexbuf;
+{
+    struct newsexpunge *newsexpunge = (struct newsexpunge *)rock;
+
+    return !newsexpunge->msg_seen[newsexpunge->ctr++];
+}
+
+/*
+ * Expunge the expired news articles out of the netnews mailbox 'mailbox'
+ */
+int
+mailbox_expungenews(mailbox)
+struct mailbox *mailbox;
+{
+    int r;
+    const char *index_base = 0;
+    unsigned long index_len = 0;
+    struct newsexpunge newsexpunge;
+    DIR *dirp;
+    struct dirent *dirent;
+    char newspath[4096], *end_newspath;
+    const char *group;
+    int newsprefixlen;
+    unsigned long uid, miduid;
+    char *p;
+    int i;
+    int low, high, mid;
+
+    assert(mailbox->format == MAILBOX_FORMAT_NETNEWS);
+    assert(mailbox->index_lock_count == 0);
+
+    /* Lock files and open new index/cache files */
+    r = mailbox_lock_header(mailbox);
+    if (r) return r;
+    r = mailbox_lock_index(mailbox);
+    if (r) {
+	mailbox_unlock_header(mailbox);
+	return r;
+    }
+
+    map_refresh(fileno(mailbox->index), 1, &index_base, &index_len,
+		mailbox->start_offset + mailbox->exists * mailbox->record_size,
+		"index", mailbox->name);
+
+    newsexpunge.msg_seen = xmalloc(mailbox->exists);
+    memset(newsexpunge.msg_seen, 0, mailbox->exists);
+
+    if (config_newsspool) {
+	strcpy(newspath, config_newsspool);
+	end_newspath = newspath + strlen(newspath);
+	if (end_newspath == newspath || end_newspath[-1] != '/') {
+	    *end_newspath++ = '/';
+	}
+
+	group = mailbox->name;
+	if (newsprefixlen = strlen(config_getstring("newsprefix", ""))) {
+	    group += newsprefixlen;
+	    if (*group == '.') group++;
+	}
+	strcpy(end_newspath, group);
+
+	while (*end_newspath) {
+	    if (*end_newspath == '.') *end_newspath = '/';
+	    end_newspath++;
+	}
+	dirp = opendir(newspath);
+    }
+    else {
+	dirp = opendir(mailbox->path);
+    }
+    if (!dirp) {
+	free(newsexpunge.msg_seen);
+	map_free(&index_base, &index_len);
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
+	return IMAP_IOERROR;
+    }
+    
+    /* For each article in directory, mark it in msg_seen */
+    while (dirent = readdir(dirp)) {
+	if (!isdigit(dirent->d_name[0]) || dirent->d_name[0] == '0') continue;
+	uid = 0;
+	p = dirent->d_name;
+	while (isdigit(*p)) {
+	    uid = uid * 10 + *p++ - '0';
+	}
+	if (*p) continue;
+
+	/* Search for uid in index file */
+	low = 0;
+	high = mailbox->exists-1;
+	while (low <= high) {
+	    mid = (high - low)/2 + low;
+	    miduid = ntohl(*((bit32 *)(index_base + mailbox->start_offset + 
+					  (mid * mailbox->record_size) +
+					  OFFSET_UID)));
+
+	    if (uid == miduid) break;
+
+	    if (uid < miduid) {
+		high = mid - 1;
+	    }
+	    else {
+		low = mid + 1;
+	    }
+	}
+
+	if (low <= high) {
+	    newsexpunge.msg_seen[mid] = 1;
+	}
+    }
+    closedir(dirp);
+
+    /* see if there's anything to expunge */
+    for (i = 0; i < mailbox->exists; i++) {
+	if (!newsexpunge.msg_seen[i]) break;
+    }
+    if (i == mailbox->exists) {
+	free(newsexpunge.msg_seen);
+	map_free(&index_base, &index_len);
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
+	return 0;
+    }
+
+    newsexpunge.ctr = 0;
+    r = mailbox_expunge(mailbox, 0, expunge_expired, &newsexpunge);
+
+    free(newsexpunge.msg_seen);
+    map_free(&index_base, &index_len);
+    mailbox_unlock_index(mailbox);
+    mailbox_unlock_header(mailbox);
+    (void) mailbox_open_index(mailbox);
+    return r;
+}
+
 char *
 mailbox_findquota(name)
-char *name;
+const char *name;
 {
     static char quota_path[MAX_MAILBOX_PATH];
     char *start, *tail;
@@ -1310,9 +1519,9 @@ char *name;
 
 int 
 mailbox_create(name, path, acl, format, mailboxp)
-char *name;
+const char *name;
 char *path;
-char *acl;
+const char *acl;
 int format;
 struct mailbox *mailboxp;
 {
@@ -1358,9 +1567,9 @@ struct mailbox *mailboxp;
 	return IMAP_IOERROR;
     }
 
-    mailbox.name = strsave(name);
-    mailbox.path = strsave(path);
-    mailbox.acl = strsave(acl);
+    mailbox.name = xstrdup(name);
+    mailbox.path = xstrdup(path);
+    mailbox.acl = xstrdup(acl);
 
     strcpy(p, FNAME_INDEX);
     mailbox.index = fopen(fnamebuf, "w");
@@ -1381,7 +1590,7 @@ struct mailbox *mailboxp;
     mailbox.header_lock_count = 1;
     mailbox.index_lock_count = 1;
 
-    if (quota_root) mailbox.quota.root = strsave(quota_root);
+    if (quota_root) mailbox.quota.root = xstrdup(quota_root);
     mailbox.generation_no = 0;
     mailbox.format = format;
     mailbox.minor_version = MAILBOX_MINOR_VERSION;
@@ -1489,17 +1698,18 @@ int delete_quota_root;
  * Expunge decision proc used by mailbox_rename() to expunge all messages
  * in INBOX
  */
-static int expungeall(rock, index)
-char *rock;
-char *index;
+static int expungeall(rock, indexbuf)
+void *rock;
+char *indexbuf;
 {
     return 1;
 }
 
+int
 mailbox_rename(oldname, newname, newpath, isinbox, olduidvalidityp,
 	       newuidvalidityp)
-char *oldname;
-char *newname;
+const char *oldname;
+const char *newname;
 char *newpath;
 int isinbox;
 bit32 *olduidvalidityp;
@@ -1539,7 +1749,7 @@ bit32 *newuidvalidityp;
     /* Copy flag names */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
 	if (oldmailbox.flagname[flag]) {
-	    newmailbox.flagname[flag] = strsave(oldmailbox.flagname[flag]);
+	    newmailbox.flagname[flag] = xstrdup(oldmailbox.flagname[flag]);
 	}
     }
     r = mailbox_write_header(&newmailbox);
@@ -1652,12 +1862,12 @@ bit32 *newuidvalidityp;
  * Copy (or link) the file 'from' to the file 'to'
  */
 int mailbox_copyfile(from, to)
-char *from;
-char *to;
+const char *from;
+const char *to;
 {
     int srcfd, destfd;
     struct stat sbuf;
-    char *src_base = 0;
+    const char *src_base = 0;
     unsigned long src_size = 0;
     int n;
 

@@ -109,7 +109,7 @@ char **argv, **envp;
 	continue;
     environ = (char **) xmalloc(sizeof (char *) * (i + 1));
     for (i = 0; envp[i] != NULL; i++)
-	environ[i] = strsave(envp[i]);
+	environ[i] = xstrdup(envp[i]);
     environ[i] = NULL;
 
     /*

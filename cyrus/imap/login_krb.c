@@ -70,7 +70,7 @@ const char *user;
 const char *pass;
 const char **reply;
 {
-    char *val;
+    const char *val;
 
     if (!lrealm[0]) {
 	if (krb_get_lrealm(lrealm,1)) {
@@ -96,7 +96,7 @@ struct acte_server **mech;
 acte_authproc_t **authproc;
 const char **reply;
 {
-    char *val;
+    const char *val;
 
     if (strcmp(authtype, "kerberos_v4") != 0) return 1;
 
@@ -178,7 +178,7 @@ const char **reply;
     char auth_aname[ANAME_SZ];
     char auth_inst[INST_SZ];
     char auth_realm[REALM_SZ];
-    char *val;
+    const char *val;
     static char replybuf[100];
 
     aname[0] = inst[0] = realm[0] = '\0';

@@ -57,8 +57,8 @@ unsigned size;
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
 }
 
-char *strsave(str)
-char *str;
+char *xstrdup(str)
+const char *str;
 {
     char *p = xmalloc(strlen(str)+1);
     strcpy(p, str);

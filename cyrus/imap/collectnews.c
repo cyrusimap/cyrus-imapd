@@ -50,7 +50,7 @@ int num_newsgroup = 0;
 int size_newsgroup = 0;
 struct newsgroup *getnewsgroup();
 
-char *newsprefix;
+const char *newsprefix;
 int newsprefixlen;
 
 
@@ -181,7 +181,7 @@ unsigned long feeduid;
      */
     if (mailbox.last_uid < ng->last_uid) mailbox.last_uid = ng->last_uid;
 
-    r = append_collectnews(&mailbox, feeduid);
+    r = append_collectnews(&mailbox, group, feeduid);
 
     if (r) {
 	syslog(LOG_CRIT, "cannot append to %s: %s",
@@ -193,6 +193,7 @@ unsigned long feeduid;
     ng->last_uid = mailbox.last_uid; 
     if (ng->last_uid < feeduid) ng->last_uid = feeduid;
 
+    mailbox_expungenews(&mailbox);
     mailbox_close(&mailbox);
 }
 

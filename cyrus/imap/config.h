@@ -27,13 +27,26 @@
  *
  */
 
-extern int config_init();
-extern char *config_getstring();
-extern int config_getint();
-extern int config_getswitch();
-extern char *config_partitiondir();
+#ifndef INCLUDED_CONFIG_H
+#define INCLUDED_CONFIG_H
+
+#ifndef P
+#ifdef __STDC__
+#define P(x) x
+#else
+#define P(x) ()
+#endif
+#endif
+
+extern int config_init P((const char *ident));
+extern const char *config_getstring P((const char *key, const char *def));
+extern int config_getint P((const char *key, int def));
+extern int config_getswitch P((const char *key, int def));
+extern const char *config_partitiondir P((const char *partition));
 
 /* Values of mandatory options */
-extern char *config_dir;
-extern char *config_defpartition;
+extern const char *config_dir;
+extern const char *config_defpartition;
+extern const char *config_newsspool;
 
+#endif /* INCLUDED_CONFIG_H */

@@ -543,15 +543,15 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
     
     msgf=fopen(amsfile,"r");
     if (!msgf) {
+        fprintf(stderr, "Couldn't open message file ");
 	perror(amsfile);
-        fprintf(stderr, "Couldn't open message\n");
         return 1;
         
     }
     if (fstat(fileno(msgf), &statbuf) == -1) {
-	perror(amsfile);
 	fclose(msgf);
-        fprintf(stderr, "Couldn't stat message\n");
+        fprintf(stderr, "Couldn't stat message file ");
+	perror(amsfile);
         return 1;        
     }
     allmsg=xmalloc(statbuf.st_size+1);
@@ -615,10 +615,10 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
 	/* Read the formatted body into the buffer. It will fit. */
 	rc=fread(allmsg,1, statbuf.st_size - len+1, msgf);
 	if (rc == -1) {
+	    fprintf(stderr, "Couldn't read message file ");
 	    perror(amsfile);
 	    fclose(msgf);
 	    fclose(tmpf);
-	    fprintf(stderr, "Couldn't read message\n");
 	    return 1;
 	}      
 	if (rc < statbuf.st_size - len) {
@@ -737,11 +737,10 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
     gmtoff = gmtoff_of((tm=localtime(&msg->stamp)), msg->stamp);
     gmtnegative = 0;
     if (tm->tm_year < 80) {
-	fprintf(stderr, "Invalid time stamp %ld in message %s\n",
-		msg->stamp, msg->name);
+	fprintf(stderr, "Invalid time stamp %ld in message %s of %s\n",
+		msg->stamp, msg->name, name);
 	free(withcrnl);
 	free(allmsg);
-	free(amsfile);
 	return 0;
     }
     if (gmtoff < 0) {

@@ -55,10 +55,13 @@
 
 #include "acl.h"
 #include "assert.h"
+#include "bsearch.h"
+#include "imparse.h"
 #include "config.h"
 #include "sysexits.h"
 #include "imap_err.h"
 #include "mailbox.h"
+#include "message.h"
 #include "xmalloc.h"
 
 extern int errno;
@@ -182,6 +185,7 @@ char *name;
     char *quota_root;
     int i, flag;
     char *p;
+    const char *val;
     int format = MAILBOX_FORMAT_NORMAL;
     bit32 valid_user_flags[MAX_USER_FLAGS/32];
     char fnamebuf[MAX_MAILBOX_PATH];
@@ -196,6 +200,9 @@ char *name;
     unsigned long new_quota = 0;
     struct index_record message_index, old_index;
     static struct index_record zero_index;
+    char newspath[4096], *end_newspath;
+    const char *group;
+    int newsprefixlen;
     FILE *msgfile;
     struct stat sbuf;
     int n;
@@ -210,9 +217,9 @@ char *name;
     }
     mailbox.header_lock_count = 1;
 
-    if ((p = config_getstring("partition-news", 0)) &&
-	!strncmp(p, mailbox.path, strlen(p)) &&
-	mailbox.path[strlen(p)] == '/') {
+    if ((val = config_getstring("partition-news", 0)) &&
+	!strncmp(val, mailbox.path, strlen(val)) &&
+	mailbox.path[strlen(val)] == '/') {
 	format = MAILBOX_FORMAT_NETNEWS;
     }
 
@@ -224,7 +231,7 @@ char *name;
     quota_root = mailbox_findquota(mailbox.name);
     if (mailbox.quota.root) free(mailbox.quota.root);
     if (quota_root) {
-	mailbox.quota.root = strsave(quota_root);
+	mailbox.quota.root = xstrdup(quota_root);
     }
     else {
 	mailbox.quota.root = 0;
@@ -237,7 +244,7 @@ char *name;
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
 	if (!mailbox.flagname[flag]) continue;
 	if ((flag && !mailbox.flagname[flag-1]) ||
-	    !is_atom(mailbox.flagname[flag])) {
+	    !imparse_isatom(mailbox.flagname[flag])) {
 	    free(mailbox.flagname[flag]);
 	    mailbox.flagname[flag] = 0;
 	}
@@ -292,7 +299,32 @@ char *name;
     uid = (unsigned long *) xmalloc(UIDGROW * sizeof(unsigned long));
     uid_num = 0;
     uid_alloc = UIDGROW;
-    dirp = opendir(".");
+    if (format == MAILBOX_FORMAT_NETNEWS && config_newsspool) {
+	/* Articles are over in the news spool directory, open it */
+	strcpy(newspath, config_newsspool);
+	end_newspath = newspath + strlen(newspath);
+	if (end_newspath == newspath || end_newspath[-1] != '/') {
+	    *end_newspath++ = '/';
+	}
+
+	group = mailbox.name;
+	if (newsprefixlen = strlen(config_getstring("newsprefix", ""))) {
+	    group += newsprefixlen;
+	    if (*group == '.') group++;
+	}
+	strcpy(end_newspath, group);
+
+	while (*end_newspath) {
+	    if (*end_newspath == '.') *end_newspath = '/';
+	    end_newspath++;
+	}
+	dirp = opendir(newspath);
+	*end_newspath++ = '/';
+    }
+    else {
+	dirp = opendir(".");
+	end_newspath = newspath;
+    }
     if (!dirp) {
 	fclose(newindex);
 	fclose(newcache);
@@ -332,7 +364,13 @@ char *name;
 	message_index = zero_index;
 	message_index.uid = uid[msg];
 	
-	msgfile = fopen(mailbox_message_fname(&mailbox, uid[msg]), "r");
+	if (format == MAILBOX_FORMAT_NETNEWS) {
+	    sprintf(end_newspath, "%u", uid[msg]);
+	    msgfile = fopen(newspath, "r");
+	}
+	else {
+	    msgfile = fopen(mailbox_message_fname(&mailbox, uid[msg]), "r");
+	}
 	if (!msgfile) continue;
 	if (fstat(fileno(msgfile), &sbuf)) {
 	    fclose(msgfile);
@@ -341,7 +379,9 @@ char *name;
 	if (sbuf.st_size == 0) {
 	    /* Zero-length message file--blow it away */
 	    fclose(msgfile);
-	    unlink(mailbox_message_fname(&mailbox, uid[msg]));
+	    if (format != MAILBOX_FORMAT_NETNEWS) {
+		unlink(mailbox_message_fname(&mailbox, uid[msg]));
+	    }
 	    continue;
 	}
 
@@ -368,7 +408,7 @@ char *name;
 	}
 	message_index.last_updated = time(0);
 	
-	if (r = message_parse(msgfile, &mailbox, &message_index)) {
+	if (r = message_parse_file(msgfile, &mailbox, &message_index)) {
 	    fclose(msgfile);
 	    fclose(newindex);
 	    mailbox_close(&mailbox);
@@ -499,7 +539,7 @@ char *acl;
     }
 
     /* special-case -- appending to end */
-    if (newmbox_num == 0 || strcmp(name, newmbox_name[newmbox_num-1]) > 0) {
+    if (newmbox_num == 0 || bsearch_compare(name, newmbox_name[newmbox_num-1]) > 0) {
 	newmbox_name[newmbox_num] = name;
 	newmbox_partition[newmbox_num] = partition;
 	newmbox_acl[newmbox_num] = acl;
@@ -510,7 +550,7 @@ char *acl;
     /* Binary-search for location */
     while (low <= high) {
 	mid = (high - low)/2 + low;
-	cmp = strcmp(name, newmbox_name[mid]);
+	cmp = bsearch_compare(name, newmbox_name[mid]);
 
 	if (cmp == 0) return;
 
@@ -545,7 +585,7 @@ char *name;
     /* Binary-search for location */
     while (low <= high) {
 	mid = (high - low)/2 + low;
-	cmp = strcmp(name, newmbox_name[mid]);
+	cmp = bsearch_compare(name, newmbox_name[mid]);
 
 	if (cmp == 0) return 1;
 
@@ -602,7 +642,7 @@ char *mboxname;
 	if (p) *p = '\0';
 	aclcanonproc = mboxlist_ensureOwnerRights;
     }
-    newacl = strsave("");
+    newacl = xstrdup("");
     if (aclcanonproc) {
 	acl_set(&newacl, owner, ACL_ALL, (acl_canonproc_t *)0, (void *)0);
     }
@@ -628,16 +668,16 @@ char *mboxname;
 do_mboxlist()
 {
     int r;
-    char *listfname, *newlistfname;
-    char *startline;
+    const char *listfname, *newlistfname;
+    const char *startline;
     unsigned long left;
-    char *endline;
+    const char *endline;
     char *p;
     char *mboxname;
     char *partition;
     char *acl;
     char optionbuf[MAX_MAILBOX_NAME+1];
-    char *root;
+    const char *root;
     static char pathresult[MAX_MAILBOX_PATH];
     struct mailbox mailbox;
     char *newacl;
@@ -717,7 +757,7 @@ do_mboxlist()
 	r = mailbox_lock_header(&mailbox);
 	if (!r) {
 	    free(mailbox.acl);
-	    mailbox.acl = strsave(newacl);
+	    mailbox.acl = xstrdup(newacl);
 	    (void) mailbox_write_header(&mailbox);
 	}
 

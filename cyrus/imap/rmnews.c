@@ -43,9 +43,9 @@
 
 extern int errno;
 
-char *newsprefix;
+const char *newsprefix;
 int newsprefixlen;
-char *newspartition;
+const char *newspartition;
 
 struct uidlist {
     unsigned int *list;

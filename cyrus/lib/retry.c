@@ -31,15 +31,18 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 
+#include "retry.h"
+
 extern int errno;
 
 /*
  * Keep calling the write() system call with 'fd', 'buf', and 'nbyte'
  * until all the data is written out or an error occurs.
  */
+int 
 retry_write(fd, buf, nbyte)
 int fd;
-char *buf;
+const char *buf;
 unsigned nbyte;
 {
     int n;
@@ -68,6 +71,7 @@ unsigned nbyte;
  * Keep calling the writev() system call with 'fd', 'iov', and 'iovcnt'
  * until all the data is written out or an error occurs.
  */
+int
 retry_writev(fd, iov, iovcnt)
 int fd;
 struct iovec *iov;

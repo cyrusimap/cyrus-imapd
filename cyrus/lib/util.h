@@ -50,30 +50,30 @@ extern const char convert_to_lowercase[256];
 
 /* convert string to all lower case
  */
-char *lcase P((char *str));
+extern char *lcase P((char *str));
 
 /* convert string to all upper case
  */
-char *ucase P((char *str));
+extern char *ucase P((char *str));
 
 /* clean up control characters in a string while copying it
  *  returns pointer to end of dst string.
  *  dst must have twice the length of source
  */
-char *beautify_copy P((char *dst, const char *src));
+extern char *beautify_copy P((char *dst, const char *src));
 
 /* clean up control characters in a string while copying it
  *  returns pointer to a static buffer containing the cleaned-up version
  *  returns NULL on malloc() error
  */
-char *beautify_string P((const char *src));
+extern char *beautify_string P((const char *src));
 
 /* do a binary search in a keyvalue array
  *  nelem is the number of keyvalue elements in the kv array
  *  cmpf is the comparison function (strcmp, stricmp, etc).
  *  returns NULL if not found, or key/value pair if found.
  */
-keyvalue *kv_bsearch P((const char *key, keyvalue *kv, int nelem,
-			int (*cmpf)(const char *s1, const char *s2)));
+extern keyvalue *kv_bsearch P((const char *key, keyvalue *kv, int nelem,
+			       int (*cmpf)(const char *s1, const char *s2)));
 
 #endif /* INCLUDED_UTIL_H */

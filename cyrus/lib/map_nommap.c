@@ -29,8 +29,9 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <syslog.h>
-#include "xmalloc.h"
 
+#include "xmalloc.h"
+#include "map.h"
 #include "sysexits.h"
 
 #define SLOP (4*1024)
@@ -38,21 +39,22 @@
 /*
  * Create/refresh mapping of file
  */
+void
 map_refresh(fd, onceonly, base, len, newlen, name, mboxname)
 int fd;
 int onceonly;
-char **base;
+const char **base;
 unsigned long *len;
 unsigned long newlen;
-char *name;
-char *mboxname;
+const char *name;
+const char *mboxname;
 {
     char *p;
     int n, left;
 
     /* Need a larger buffer */
     if (*len < newlen) {
-	if (*len) free(*base);
+	if (*len) free((char *)*base);
 	*len = newlen + (onceonly ? 0 : SLOP);
 	*base = xmalloc(*len);
     }
@@ -86,11 +88,12 @@ char *mboxname;
 /*
  * Destroy mapping of file
  */
+void
 map_free(base, len)
-char **base;
+const char **base;
 unsigned long *len;
 {
-    if (*len) free(*base);
+    if (*len) free((char *)*base);
     *base = 0;
     *len = 0;
 }

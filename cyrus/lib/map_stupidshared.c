@@ -35,24 +35,26 @@
 #include <sys/mman.h>
 #include <syslog.h>
 
+#include "map.h"
 #include "sysexits.h"
 
 /*
  * Create/refresh mapping of file
  */
+void
 map_refresh(fd, onceonly, base, len, newlen, name, mboxname)
 int fd;
 int onceonly;
-char **base;
+const char **base;
 unsigned long *len;
 unsigned long newlen;
-char *name;
-char *mboxname;
+const char *name;
+const char *mboxname;
 {
     /* Already mapped in */
     if (*len >= newlen) return;
 
-    if (*len) munmap(*base, *len);
+    if (*len) munmap((char *)*base, *len);
 
     *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, MAP_SHARED
 #ifdef MAP_FILE
@@ -75,11 +77,12 @@ char *mboxname;
 /*
  * Destroy mapping of file
  */
+void
 map_free(base, len)
-char **base;
+const char **base;
 unsigned long *len;
 {
-    if (*len) munmap(*base, *len);
+    if (*len) munmap((char *)*base, *len);
     *base = 0;
     *len = 0;
 }

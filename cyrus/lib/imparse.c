@@ -29,6 +29,8 @@
 #include <stdio.h>
 #include <ctype.h>
 
+#include "imparse.h"
+
 /*
  * Parse a word from the string starting at the pointer pointed to by 's'.
  * Places a pointer to the parsed word in the pointer at 'retval',
@@ -124,4 +126,72 @@ char **retval;
 	(*s)[len] = '\0';
 	return c;
     }
+}
+
+/*
+ * Return nonzero if 's' matches the grammar for an atom
+ */
+int imparse_isatom(s)
+const char *s;
+{
+    int len = 0;
+
+    if (!*s) return 0;
+    for (; *s; s++) {
+	len++;
+	if (*s & 0x80 || *s < 0x1f || *s == 0x7f ||
+	    *s == ' ' || *s == '{' || *s == '(' || *s == ')' ||
+	    *s == '\"' || *s == '%' || *s == '*' || *s == '\\') return 0;
+    }
+    if (len >= 1024) return 0;
+    return 1;
+}
+
+/*
+ * Return nonzero if 's' matches the grammar for a sequence
+ */
+int imparse_issequence(s)
+const char *s;
+{
+    int c;
+    int len = 0;
+    int sawcolon = 0;
+
+    while (c = *s) {
+	if (c == ',') {
+	    if (!len) return 0;
+	    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
+	    sawcolon = 0;
+	}
+	else if (c == ':') {
+	    if (sawcolon || !len) return 0;
+	    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
+	    sawcolon = 1;
+	}
+	else if (c == '*') {
+	    if (len && s[-1] != ',' && s[-1] != ':') return 0;
+	    if (isdigit(s[1])) return 0;
+	}
+	else if (!isdigit(c)) {
+	    return 0;
+	}
+	s++;
+	len++;
+    }
+    if (len == 0) return 0;
+    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
+    return 1;
+}
+
+/*
+ * Return nonzero if 's' matches the grammar for a number
+ */
+int imparse_isnumber(s)
+const char *s;
+{
+    if (!*s) return 0;
+    for (; *s; s++) {
+	if (!isdigit(*s)) return 0;
+    }
+    return 1;
 }

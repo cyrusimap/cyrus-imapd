@@ -182,7 +182,7 @@ int nroots;
 	      xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
 	}
 	quota[quota_num] = zeroquotaentry;
-	quota[quota_num].quota.root = strsave(dirent->d_name);
+	quota[quota_num].quota.root = xstrdup(dirent->d_name);
 	
 	r = mailbox_read_quota(&quota[quota_num].quota);
 	if (quota[quota_num].quota.file) {
@@ -317,7 +317,7 @@ char *root;
 
     if (mailbox->quota.root) free(mailbox->quota.root);
     if (root) {
-	mailbox->quota.root = strsave(root);
+	mailbox->quota.root = xstrdup(root);
     }
     else {
 	mailbox->quota.root = 0;
