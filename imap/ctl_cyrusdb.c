@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.10 2002/05/06 19:22:28 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.11 2002/05/06 21:27:07 rjs3 Exp $
  */
 
 #include <config.h>
@@ -116,7 +116,7 @@ void fatal(const char *message, int code)
 void usage(void)
 {
     fprintf(stderr, "ctl_cyrusdb [-C <altconfig>] -c\n");
-    fprintf(stderr, "ctl_cyrusdb [-C <altconfig>] -r\n");
+    fprintf(stderr, "ctl_cyrusdb [-C <altconfig>] -r [-x]\n");
     exit(-1);
 }
 
@@ -200,6 +200,7 @@ int main(int argc, char *argv[])
     int opt, r, r2;
     char *alt_config = NULL;
     int flag = 0;
+    int reserve_flag = 1;
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
     char dirname[1024], backup1[1024], backup2[1024];
     char *archive_files[N(dblist)];
@@ -209,7 +210,7 @@ int main(int argc, char *argv[])
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     r = r2 = 0;
 
-    while ((opt = getopt(argc, argv, "C:rc")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:rxc")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -228,6 +229,10 @@ int main(int argc, char *argv[])
 	    else usage();
 	    break;
 
+	case 'x':
+	    reserve_flag = 0;
+	    break;
+
 	default:
 	    usage();
 	    break;
@@ -235,6 +240,11 @@ int main(int argc, char *argv[])
     }
 
     if (op == NONE) {
+	usage();
+	exit(1);
+    }
+
+    if(op != RECOVER && !reserve_flag) {
 	usage();
 	exit(1);
     }
@@ -362,7 +372,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    if(op == RECOVER)
+    if(op == RECOVER && reserve_flag)
 	recover_reserved();
 
     syslog(LOG_NOTICE, "done %s", msg);
