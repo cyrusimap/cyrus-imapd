@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.21 2001/09/19 18:53:30 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.22 2001/09/25 16:49:49 ken3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -160,5 +160,8 @@ enum {
     SLEEZY_NAMESPACE = 1,
 
     /* should we do a fast TLS session shutdown? */
-    TLS_FAST_SHUTDOWN = 1
+    TLS_FAST_SHUTDOWN = 1,
+
+    /* should we use the SQUAT engine to accelerate SEARCH? */
+    SQUAT_ENGINE = 1
 };

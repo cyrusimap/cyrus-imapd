@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: charset.c,v 1.35 2000/05/23 20:56:13 robeson Exp $
+/* $Id: charset.c,v 1.36 2001/09/25 16:49:51 ken3 Exp $
  */
 #include <config.h>
 #include <ctype.h>
@@ -711,6 +711,56 @@ int charset_searchfile(const char *substr, comp_pat *pat,
 	    i += pat[(unsigned char)buf[i]];
 	}
     }
+}
+
+/* This is based on charset_searchfile above. */
+int charset_extractfile(index_search_text_receiver_t receiver,
+    void* rock, int uid, const char *msg_base, int mapnl, int len, int charset,
+    int encoding) {
+    char buf[2048];
+    int n;
+    struct input_state state;
+    
+    /* Initialize character set mapping */
+    if (charset < 0 || charset >= chartables_num_charsets) return 0;
+    START(state.decodestate, chartables_charset_table[charset].table);
+    state.decodeleft = 0;
+
+    /* Initialize transfer-decoding */
+    state.rawbase = msg_base;
+    state.rawlen = len;
+    switch (encoding) {
+    case ENCODING_NONE:
+	state.rawproc = mapnl ? charset_readmapnl : charset_readplain;
+	break;
+
+    case ENCODING_QP:
+	state.rawproc = mapnl ? charset_readqpmapnl : charset_readqp;
+	break;
+
+    case ENCODING_BASE64:
+	state.rawproc = charset_readbase64;
+	/* XXX have to have nl-mapping base64 in order to
+	 * properly count \n as 2 raw characters
+	 */
+	break;
+
+    default:
+	/* Don't know encoding--nothing can match */
+	return 0;
+    }
+
+    /* We don't need to do anything tricky. Just read and convert each block of the
+       text, then hand the converted text down to the receiver. */
+    do {
+      n = charset_readconvert(&state, buf, sizeof(buf));
+      if (n > 0) {
+        receiver(uid, SEARCHINDEX_PART_BODY,
+                 SEARCHINDEX_CMD_APPENDPART, buf, n, rock);
+      }
+    } while (n > 0);
+
+    return 1;
 }
 
 /*

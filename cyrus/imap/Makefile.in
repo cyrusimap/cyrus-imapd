@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.142 2001/09/18 14:05:06 ken3 Exp $
+# $Id: Makefile.in,v 1.143 2001/09/25 16:49:50 ken3 Exp $
 # 
 # @configure_input@
 #
@@ -102,6 +102,7 @@ cyrus_prefix = @cyrus_prefix@
 LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o \
 	config.o imap_err.o proc.o setproctitle.o convert_code.o \
 	duplicate.o saslclient.o acapmbox.o signals.o \
+	search_engines.o squat.o squat_internal.o \
 	base64.o imapparse.o telemetry.o user.o $(SEEN) $(NOTIFY) $(IDLE)
 
 IMAPDOBJS=pushstats.o imapd.o index.o tls.o
@@ -114,7 +115,8 @@ SERVICETHREAD=../master/service-thread.o
 PROGS = imapd lmtpd pop3d \
 	fud reconstruct quota \
 	mbpath ipurge cyrdump deliver \
-	ctl_mboxlist ctl_deliver ctl_cyrusdb @IMAP_PROGS@
+	ctl_mboxlist ctl_deliver ctl_cyrusdb squatter \
+	@IMAP_PROGS@
 
 BUILTSOURCES = imap_err.h pushstats.h lmtpstats.h
 
@@ -232,6 +234,9 @@ populateacap: populateacap.o libimap.a $(DEPLIBS)
 
 fud: fud.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o fud fud.o libimap.a $(DEPLIBS) $(LIBS)
+
+squatter: squatter.o index.o squat_build.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o squatter squatter.o index.o squat_build.o libimap.a $(DEPLIBS) $(LIBS)
 
 mbpath: mbpath.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o mbpath mbpath.o libimap.a $(DEPLIBS) $(LIBS)

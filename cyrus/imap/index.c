@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.168 2001/09/24 18:27:35 ken3 Exp $
+ * $Id: index.c,v 1.169 2001/09/25 16:49:50 ken3 Exp $
  */
 #include <config.h>
 
@@ -76,6 +76,7 @@
 #include "parseaddr.h"
 #include "hash.h"
 #include "stristr.h"
+#include "search_engines.h"
 
 extern int errno;
 
@@ -1003,12 +1004,22 @@ struct searchargs *searchargs;
     unsigned msgno;
     struct mapfile msgfile;
     int n = 0;
+    int listindex;
+    int listcount;
 
     if (imapd_exists <= 0) return 0;
 
     *msgno_list = (unsigned *) xmalloc(imapd_exists * sizeof(unsigned));
 
-    for (msgno = 1; msgno <= imapd_exists; msgno++) {
+    /* OK, so I'm being a bit clever here. We fill the msgno list with
+       a list of message IDs returned by the search engine. Then we
+       scan through the list and store matching message IDs back into the
+       list. This is OK because we only overwrite message IDs that we've
+       already looked at. */
+    listcount = search_prefilter_messages(*msgno_list, mailbox, searchargs);
+
+    for (listindex = 0; listindex < listcount; listindex++) {
+        msgno = (*msgno_list)[listindex];
 	msgfile.base = 0;
 	msgfile.size = 0;
 
@@ -1028,6 +1039,10 @@ struct searchargs *searchargs;
     }
 
     return n;
+}
+
+int index_getuid(unsigned msgno) {
+  return UID(msgno);
 }
 
 /* 'uid_list' is malloc'd string representing the hits from searchargs;
@@ -2838,7 +2853,8 @@ static int index_search_evaluate(struct mailbox *mailbox,
 }
 
 /*
- * Search part of a message for a substring
+ * Search part of a message for a substring.
+ * Keep this in sync with index_getsearchtextmsg!
  */
 static int
 index_searchmsg(char *substr,
@@ -2974,6 +2990,124 @@ comp_pat *pat;
     r = charset_searchstring(substr, pat, q, strlen(q));
     free(q);
     return r;
+}
+
+
+/* This code was cribbed from index_searchmsg. Instead of checking for matches,
+   we call charset_extractfile to send the entire text out to 'receiver'.
+   Keep this in sync with index_searchmsg! */
+static void index_getsearchtextmsg(struct mailbox* mailbox,
+                                  int uid,
+                                  index_search_text_receiver_t receiver,
+                                  void* rock,
+                                  char const* cacheitem) {
+  struct mapfile msgfile;
+  int partsleft = 1;
+  int subparts;
+  int start, len, charset, encoding;
+  int partcount = 0;
+  char *p, *q;
+  int format = mailbox->format;
+  
+  if (mailbox_map_message(mailbox, 0, uid, &msgfile.base, &msgfile.size)) {
+    return;
+  }
+
+  /* Won't find anything in a truncated file */
+  if (msgfile.size > 0) {
+    cacheitem += 4;
+    while (partsleft--) {
+	subparts = CACHE_ITEM_BIT32(cacheitem);
+	cacheitem += 4;
+	if (subparts) {
+	    partsleft += subparts-1;
+
+            partcount++;
+
+            len = CACHE_ITEM_BIT32(cacheitem+4);
+            if (len > 0) {
+              p = index_readheader(msgfile.base, msgfile.size,
+                                   format, CACHE_ITEM_BIT32(cacheitem),
+                                   len);
+              q = charset_decode1522(p, NULL, 0);
+              if (partcount == 1) {
+                receiver(uid, SEARCHINDEX_PART_HEADERS,
+                         SEARCHINDEX_CMD_STUFFPART, q, strlen(q), rock);
+                receiver(uid, SEARCHINDEX_PART_BODY,
+                         SEARCHINDEX_CMD_BEGINPART, NULL, 0, rock);
+              } else {
+                receiver(uid, SEARCHINDEX_PART_BODY,
+                         SEARCHINDEX_CMD_APPENDPART, q, strlen(q), rock);
+              }
+              free(q);
+            }
+	    cacheitem += 5*4;
+
+	    while (--subparts) {
+		start = CACHE_ITEM_BIT32(cacheitem+2*4);
+		len = CACHE_ITEM_BIT32(cacheitem+3*4);
+		charset = CACHE_ITEM_BIT32(cacheitem+4*4) >> 16;
+		encoding = CACHE_ITEM_BIT32(cacheitem+4*4) & 0xff;
+
+		if (start < msgfile.size && len > 0 &&
+		    charset >= 0 && charset < 0xffff) {
+                  charset_extractfile(receiver, rock, uid,
+                                      msgfile.base + start,
+                                      format == MAILBOX_FORMAT_NETNEWS,
+                                      len, charset, encoding);
+		}
+		cacheitem += 5*4;
+	    }
+	}
+    }
+
+    receiver(uid, SEARCHINDEX_PART_BODY,
+             SEARCHINDEX_CMD_ENDPART, NULL, 0, rock);
+  }
+  
+  mailbox_unmap_message(mailbox, uid, &msgfile.base, &msgfile.size);
+}
+
+void index_getsearchtext(struct mailbox* mailbox,
+                         index_search_text_receiver_t receiver,
+                         void* rock) {
+  int i;
+
+  /* Send the converted text of every message out to the receiver. */
+  for (i = 1; i <= imapd_exists; i++) {
+    const char *cacheitem;
+    int uid = UID(i);
+
+    cacheitem = cache_base + CACHE_OFFSET(i);
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
+
+    index_getsearchtextmsg(mailbox, uid, receiver, rock, cacheitem);
+    
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip section */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip cacheheaders */
+
+    receiver(uid, SEARCHINDEX_PART_FROM, SEARCHINDEX_CMD_STUFFPART,
+             cacheitem + 4, CACHE_ITEM_LEN(cacheitem), rock);
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip from */
+
+    receiver(uid, SEARCHINDEX_PART_TO, SEARCHINDEX_CMD_STUFFPART,
+             cacheitem + 4, CACHE_ITEM_LEN(cacheitem), rock);
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip to */
+
+    receiver(uid, SEARCHINDEX_PART_CC, SEARCHINDEX_CMD_STUFFPART,
+             cacheitem + 4, CACHE_ITEM_LEN(cacheitem), rock);
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip cc */
+
+    receiver(uid, SEARCHINDEX_PART_BCC, SEARCHINDEX_CMD_STUFFPART,
+             cacheitem + 4, CACHE_ITEM_LEN(cacheitem), rock);
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bcc */
+
+    receiver(uid, SEARCHINDEX_PART_SUBJECT, SEARCHINDEX_CMD_STUFFPART,
+             cacheitem + 4, CACHE_ITEM_LEN(cacheitem), rock);
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip subject */
+  }
 }
 
 /*

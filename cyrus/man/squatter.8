@@ -1,0 +1,100 @@
+.\" -*- nroff -*-
+.TH SQUATTER 8
+.\" 
+.\" Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\"
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer. 
+.\"
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in
+.\"    the documentation and/or other materials provided with the
+.\"    distribution.
+.\"
+.\" 3. The name "Carnegie Mellon University" must not be used to
+.\"    endorse or promote products derived from this software without
+.\"    prior written permission. For permission or any other legal
+.\"    details, please contact  
+.\"      Office of Technology Transfer
+.\"      Carnegie Mellon University
+.\"      5000 Forbes Avenue
+.\"      Pittsburgh, PA  15213-3890
+.\"      (412) 268-4387, fax: (412) 268-7395
+.\"      tech-transfer@andrew.cmu.edu
+.\"
+.\" 4. Redistributions of any form whatsoever must retain the following
+.\"    acknowledgment:
+.\"    "This product includes software developed by Computing Services
+.\"     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+.\"
+.\" CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+.\" THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+.\" AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+.\" FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+.\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+.\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\" 
+.SH NAME
+squatter \- create SQUAT indexes for mailboxes
+.SH SYNOPSIS
+.B squatter
+[
+.B \-C
+.I config-file
+]
+[
+.B \-r
+]
+[
+.B \-v
+]
+.IR mailbox ...
+.SH DESCRIPTION
+.I Squatter
+creates a new SQUAT index for one or more IMAP mailboxes.  The SQUAT
+index a unified index of all of the header and body text of each
+message a given mailbox.  This index is used to significantly reduce
+IMAP SEARCH times on a mailbox.
+.PP
+.I Squatter
+creates an index of ALL messages in the mailbox, not just those since
+the last time that it was run (i.e., it does NOT do incremental
+updates).  Any messages appended to the mailbox after
+.I squatter
+is run, will NOT be included in the index.  To include new messages in
+the index,
+.I squatter
+must be run again.
+For large and active mailboxes, it is recommended to run
+.I squatter
+periodically as an EVENT in
+.IR cyrus.conf (5)
+.
+.PP
+.B NOTE:
+Messages and mailboxes that have not been indexed CAN still be
+SEARCHed, just not as quickly as those with a SQUAT index.
+.PP
+.I Squatter
+reads its configuration options out of the
+.IR imapd.conf (5)
+file unless specified otherwise by \fB-C\fR.
+.SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
+.TP
+.B \-r
+Recursively create indexes for all sub-mailboxes of the mailboxes or
+mailbox prefixes given as arguments.
+.TP
+.B \-v
+Increase the verbosity of progress/status messages.
+.SH FILES
+.TP
+.B /etc/imapd.conf /etc/cyrus.conf
