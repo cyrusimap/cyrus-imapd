@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.194 2003/05/10 15:56:02 rjs3 Exp $
+ * $Id: index.c,v 1.195 2003/05/15 22:20:13 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1658,6 +1658,7 @@ static void index_fetchsection(const char *msg_base, unsigned long msg_size,
     if (*p == ']') {
 	p++;
 	if (*p == '<') {
+	    /* Partial fetch */
 	    p++;
 	    start_octet = octet_count = 0;
 	    while (isdigit((int) *p)) start_octet = start_octet * 10 + *p++ - '0';
@@ -1672,6 +1673,7 @@ static void index_fetchsection(const char *msg_base, unsigned long msg_size,
     }
 
     while (*p != ']' && *p != 'M') {
+	/* Generate the actual part number */
 	skip = 0;
 	while (isdigit((int) *p)) {
             skip = skip * 10 + *p++ - '0';
@@ -1684,6 +1686,7 @@ static void index_fetchsection(const char *msg_base, unsigned long msg_size,
 
 	/* Handle .0, .HEADER, and .TEXT */
 	if (!skip) {
+	    /* We don't have any digits, so its a string */
 	    switch (*p) {
 	    case 'H':
 		p += 6;
@@ -1701,10 +1704,18 @@ static void index_fetchsection(const char *msg_base, unsigned long msg_size,
 	}
 	
 	if (*p != ']' && *p != 'M') {
+	    /* We are NOT at the end of a part specification, so there's
+	     * a subpart being requested.  Find the subpart in the tree. */
+
+	    /* Skip the headers for this part, along with the number of
+	     * sub parts */
 	    cacheitem +=
 		CACHE_ITEM_BIT32(cacheitem) * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
+
+	    /* Skip to the correct part */
 	    while (--skip) {
 		if (CACHE_ITEM_BIT32(cacheitem) > 0) {
+		    /* Skip each part at this level */
 		    skip += CACHE_ITEM_BIT32(cacheitem)-1;
 		    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4;
 		}
