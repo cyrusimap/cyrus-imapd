@@ -136,7 +136,7 @@ char **acl;
 	     * ACL is too long for buf.  we're going to have to read
 	     * the rest of it.
 	     */
-	    fseek(listfile, offset+buflen, 0);
+	    fseek(listfile, offset+strlen(buf)+1+buflen, 0);
 	}
 	while (*p != '\n' && fgets(buf2, sizeof(buf2), listfile)) {
 	    acllen += strlen(buf2);
@@ -159,6 +159,9 @@ char **acl;
     return 0;
 }
 
+/*
+ * Create a mailbox
+ */
 mboxlist_createmailbox(name, format, partition, isadmin, userid)
 char *name;
 char *partition;
@@ -383,6 +386,11 @@ char *userid;
     return 0;
 }
 	
+/*
+ * Perform a FIND ALL.MAILBOXES command on 'pattern'.
+ * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
+ * is the user's login id.
+ */
 mboxlist_findall(pattern, isadmin, userid)
 char *pattern;
 int isadmin;
@@ -406,6 +414,7 @@ char *userid;
 
     g = glob_init(pattern, GLOB_ICASE);
 
+    /* Check for INBOX first of all */
     if (!strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
@@ -431,7 +440,7 @@ char *userid;
     prefixlen = p - pattern;
     *p = '\0';
 
-    /* If user.X can match pattern, search for those mailboxes first */
+    /* If user.X can match pattern, search for those mailboxes next */
     if (userid && !strncasecmp(usermboxname, pattern,
 	    prefixlen < usermboxnamelen ? prefixlen : usermboxnamelen)) {
 
@@ -453,6 +462,7 @@ char *userid;
 	}
     }
 
+    /* Search for all remaining mailboxes */
     buflen = sizeof(buf);
     offset = n_binarySearchFD(fileno(listfile), pattern, 0, &bufp,
 			      &buflen, 0, 0);
@@ -500,6 +510,11 @@ char *userid;
     return;
 }
 
+/*
+ * Perform a FIND ALL.MAILBOXES command on 'pattern'.
+ * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
+ * is the user's login id.
+ */
 mboxlist_find(pattern, isadmin, userid)
 char *pattern;
 int isadmin;
@@ -529,6 +544,7 @@ char *userid;
 
     g = glob_init(pattern, GLOB_ICASE);
 
+    /* Check for INBOX first of all */
     if (!strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
@@ -554,7 +570,7 @@ char *userid;
     prefixlen = p - pattern;
     *p = '\0';
 
-    /* If user.X can match pattern, search for those mailboxes first */
+    /* If user.X can match pattern, search for those mailboxes next */
     if (userid && !strncasecmp(usermboxname, pattern,
 	    prefixlen < usermboxnamelen ? prefixlen : usermboxnamelen)) {
 
@@ -583,6 +599,7 @@ char *userid;
 	}
     }
 
+    /* Search for all remaining mailboxes */
     buflen = sizeof(buf);
     offset = n_binarySearchFD(fileno(subsfile), pattern, 0, &bufp,
 			      &buflen, 0, 0);
@@ -616,7 +633,12 @@ char *userid;
     return;
 }
 
-int mboxlist_changesub(name, userid, add)
+/*
+ * Change 'user's subscription status for mailbox 'name'.
+ * Subscribes if 'add' is nonzero, unsubscribes otherwise.
+ */
+int 
+mboxlist_changesub(name, userid, add)
 char *name;
 char *userid;
 int add;
@@ -635,6 +657,7 @@ int add;
 	return r;
     }
 
+    /* Convert "inbox" to user.USERID */
     if (!strcasecmp(name, "inbox")) {
 	strcpy(inbox, "user.");
 	strcat(inbox, userid);
@@ -642,7 +665,7 @@ int add;
     }
 
     if (add) {
-	/* Ensure mailbox exists and can be either seen or read */
+	/* Ensure mailbox exists and can be either seen or read by user */
 	if (r = mboxlist_lookup(name, (char **)0, &acl)) {
 	    fclose(subsfile);
 	    return r;
@@ -653,6 +676,7 @@ int add;
 	}
     }
 
+    /* Find where mailbox is/would go in subscription list */
     offset = n_binarySearchFD(fileno(subsfile), name, 0, &buf, &len, 0, 0);
     if (add) {
 	if (len) {
@@ -674,6 +698,7 @@ int add;
 	return IMAP_IOERROR;
     }
 
+    /* Copy over subscription list, making change */
     while (offset) {
 	n = fread(copybuf, 1,
 		  offset < sizeof(copybuf) ? offset : sizeof(copybuf),
@@ -709,6 +734,12 @@ int add;
     return 0;
 }
 
+/*
+ * Change the ACL for mailbox 'name' so that 'identifier' has the
+ * rights enumerated in the string 'rights'.  If 'rights' is the null
+ * pointer, removes the ACL entry for 'identifier'.   'isadmin' is
+ * nonzero if user is a mailbox admin.  'userid' is the user's login id.
+ */
 int
 mboxlist_setacl(name, identifier, rights, isadmin, userid)
 char *name;
@@ -763,7 +794,7 @@ char *userid;
 	strcpy(inboxname, "user.");
 	strcat(inboxname, userid);
 	if (!strcasecmp(name, "inbox") ||
-	    strcasecmp(name, inboxname)) {
+	    !strcasecmp(name, inboxname)) {
 	    name = inboxname;
 	    isusermbox = 1;
 	}
@@ -773,6 +804,7 @@ char *userid;
 	}
     }
 
+    /* Get old ACL */
     r = mboxlist_lookup(name, (char **)0, &acl);
     if (!r && !isadmin && !isusermbox) {
 	access = acl_myrights(acl);
@@ -794,6 +826,7 @@ char *userid;
 	return r;
     }
 
+    /* Make change to ACL */
     newacl = strsave(acl);
     if (rights) {
 	if (acl_set(&newacl, identifier, acl_strtomask(rights),
@@ -812,6 +845,7 @@ char *userid;
 	}
     }
 
+    /* Copy over mailbox list, making change */
     buf = 0;
     offset = n_binarySearchFD(fileno(listfile), name, 0, &buf, &len, 0, size);
     if (!len) {
@@ -855,6 +889,13 @@ char *userid;
     return 0;
 }
     
+/*
+ * Open and lock the subscription list for 'userid'.
+ * The FILE pointer pointed to by 'subsfile' is set to the open,
+ * locked file.  The character pointers pointed to by 'fname' and
+ * 'newfname' are set to the filenames of the old and new subscription
+ * files, respectively.
+ */
 static int
 mboxlist_opensubs(userid, subsfile, fname, newfname)
 char *userid;
@@ -930,6 +971,10 @@ char **newfname;
     return 0;
 }
 
+/*
+ * Get the filenames of the mailbox list and the temporary file to
+ * use when updating the mailbox list.
+ */
 static mboxlist_getfname()
 {
     char *val = config_getstring("configdirectory", "");
@@ -957,6 +1002,10 @@ char *name;
     return 0;
 }
 
+/*
+ * ACL access canonification routine which ensures that 'owner'
+ * retains lookup, administer, and create rights over a mailbox.
+ */
 static long ensureOwnerRights(owner, identifier, access)
 char *owner;
 char *identifier;
