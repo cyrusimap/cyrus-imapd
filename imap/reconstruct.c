@@ -285,7 +285,7 @@ char *name;
 
     strcpy(fnamebuf, FNAME_CACHE+1);
     strcat(fnamebuf, ".NEW");
-    newcache_fd = open(fnamebuf, O_RDWR|O_TRUNC, 0666);
+    newcache_fd = open(fnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (newcache_fd == -1) {
 	fclose(newindex);
 	mailbox_close(&mailbox);
@@ -362,7 +362,6 @@ char *name;
     mailbox.format = format;
     if (mailbox.cache_fd) close(mailbox.cache_fd);
     mailbox.cache_fd = newcache_fd;
-    /* Don't care about mailbox.cache_base and mailbox.cache_len */
 
     for (msg = 0; msg < uid_num; msg++) {
 	message_index = zero_index;
