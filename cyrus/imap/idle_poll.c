@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_poll.c,v 1.1 2000/12/14 19:26:48 ken3 Exp $ */
+/* $Id: idle_poll.c,v 1.2 2001/01/16 16:54:26 ken3 Exp $ */
 
 #include <time.h>
 #include <unistd.h>
@@ -88,5 +88,5 @@ int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc)
 void idle_done(struct mailbox *mailbox)
 {
     /* Remove the polling function */
-    signal(SIGALRM, SIG_DFL);
+    signal(SIGALRM, SIG_IGN);
 }
