@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.226 2002/03/18 15:14:16 ken3 Exp $
+dnl $Id: configure.in,v 1.227 2002/03/21 21:09:59 ken3 Exp $
 dnl
 
 
@@ -648,26 +648,11 @@ case "$with_zephyr" in
            fi
            ZEPHYR_LIBS="-lzephyr";;
 esac
-AC_SUBST(ZEPHYR_LIBS)
-AC_SUBST(ZEPHYR_CPPFLAGS)
 if test "$with_zephyr" != "no"; then
 	AC_DEFINE(HAVE_ZEPHYR)
+	AC_SUBST(ZEPHYR_LIBS)
+	AC_SUBST(ZEPHYR_CPPFLAGS)
 fi
-
-AC_ARG_WITH(notify,[  --with-notify=METHOD    use mail notification METHOD
-                          METHOD is zephyr, unix or no],
-	WITH_NOTIFY="${withval}",
-	if test "$with_zephyr" = "no"; then
-		WITH_NOTIFY=no
-	else
-		WITH_NOTIFY=zephyr
-	fi)
-AC_SUBST(WITH_NOTIFY)
-if test "$with_zephyr" = "no"; then
-     if test "$WITH_NOTIFY" = "zephyr"; then
-	AC_MSG_ERROR(Unable to find Zephyr libraries)
-     fi
-fi     
 
 
 

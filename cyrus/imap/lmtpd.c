@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.90 2002/03/15 00:47:47 ken3 Exp $
+ * $Id: lmtpd.c,v 1.91 2002/03/21 21:10:02 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -770,16 +770,22 @@ static int sieve_notify(void *ac,
 			void *mc,
 			const char **errmsg)
 {
-    sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
-    script_data_t *sd = (script_data_t *) script_context;
+    const char *notifier = config_getstring("sievenotifier", NULL);
 
-    snmp_increment(SIEVE_NOTIFY, 1);
+    if (notifier) {
+	sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
+	script_data_t *sd = (script_data_t *) script_context;
+	int nopt = 0;
 
-    notify("SIEVE",
-	   nc->priority,
-	   sd->username,
-	   NULL,
-	   nc->message);
+	snmp_increment(SIEVE_NOTIFY, 1);
+
+	/* count options */
+	while (nc->options[nopt]) nopt++;
+
+	notify(nc->method ? nc->method : notifier,
+	       "SIEVE", nc->priority, sd->username, NULL,
+	       nopt, nc->options, nc->message);
+    }
     
     return SIEVE_OK;
 }
@@ -1123,9 +1129,13 @@ int deliver_mailbox(struct protstream *msg,
     }
 
     if (!r && user) {
-	/* do we want to replace user.XXX with INBOX? */
-	notify("MAIL", mailboxname, user, mailboxname, 
-	       notifyheader ? notifyheader : "");
+	const char *notifier = config_getstring("mailnotifier", NULL);
+
+	if (notifier) {
+	    /* do we want to replace user.XXX with INBOX? */
+	    notify(notifier, "MAIL", NULL, user, mailboxname, 0, NULL,
+		   notifyheader ? notifyheader : "");
+	}
     }
 
     if (!r && dupelim && id) duplicate_mark(id, strlen(id), 

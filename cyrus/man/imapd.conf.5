@@ -214,6 +214,15 @@ asks the server where the mail administration HTTP server is.  The default
 is a site at CMU with a hopefully informative message; administrators
 should set this to a local resource with some information of greater
 use.
+.IP "\fBmailnotifier:\fR <no default>" 5
+Notifyd(8) method to use for "MAIL" notifications.  If not set, "MAIL"
+notifications are disabled.
+.IP "\fBsievenotifier:\fR <no default>" 5
+Notifyd(8) method to use for "SIEVE" notifications.  If not set, "SIEVE"
+notifications are disabled.
+.br
+.sp
+This method is only used when no method is specified in the script.
 .IP "\fBsieveusehomedir:\fR false" 5
 If enabled, lmtpd will look for Sieve scripts in user's home
 directories: ~user/.sieve.
@@ -309,9 +318,8 @@ Unix domain socket that lmtpd listens on, used by deliver(8).
 Unix domain socket that idled listens on.
 .IP "\fBnotifysocket:\fR /var/imap/socket/notify" 5
 Unix domain socket that the new mail notification daemon listens on.
-.IP "\fBnotifysocket:\fR /var/imap/socket/notify" 5
-Unix domain socket that the new mail notification daemon listens on.
 .SH SEE ALSO
 .PP
 \fBimapd(8)\fR, \fBpop3d(8)\fR, \fBlmtpd(8)\fR, \fBtimsieved(8)\fR,
-\fBidled(8)\fR, \fBdeliver(8)\fR, \fBmaster(8)\fR, \fBciphers(1)\fR
+\fBidled(8)\fR, \fBnotifyd(8)\fR, \fBdeliver(8)\fR, \fBmaster(8)\fR, 
+\fBciphers(1)\fR

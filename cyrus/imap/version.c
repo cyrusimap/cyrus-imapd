@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.6 2002/03/01 14:52:52 ken3 Exp $
+ * $Id: version.c,v 1.7 2002/03/21 21:10:04 ken3 Exp $
  */
 
 #include <config.h>
@@ -58,7 +58,6 @@
 #include "prot.h"
 #include "cyrusdb.h"
 #include "lock.h"
-#include "notify.h"
 #include "idle.h"
 #include "sieve_interface.h"
 
@@ -150,9 +149,6 @@ void id_response(struct protstream *pout)
     if (idle_method_desc)
 	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 		 "; idle = %s", idle_method_desc);
-    if (notify_method_desc)
-	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-		 "; notify = %s", notify_method_desc);
 #ifdef USE_DIR_FULL
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; dirhash = full");
