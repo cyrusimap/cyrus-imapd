@@ -7,6 +7,7 @@
  *
  */
 
+#include <config.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -102,6 +103,10 @@ typedef struct message_data {
 /* forward declarations */
 
 void clean_retpath(char *rpath);
+int msg_new(message_data_t **m);
+void savemsg(message_data_t *m);
+void deliver_msg(message_data_t *m, char **users, int numusers, char *mailbox);
+
 
 static void
 usage()
@@ -132,7 +137,7 @@ clean822space(char *buf)
     int c;
     int commentlevel = 0;
 
-    while (c = *from++) {
+    while ((c = *from++)!=NULL) {
 	switch (c) {
 	case '\r':
 	case '\n':
@@ -169,7 +174,6 @@ int main(int argc, char **argv)
     char *mailboxname = NULL;
     char *authuser = NULL;
     message_data_t *msgdata;
-    int r;
 
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
@@ -239,47 +243,33 @@ int main(int argc, char **argv)
     /* Copy message to temp file */
     savemsg(msgdata);
 
-    if (optind == argc) {
-	/* deliver to global mailbox */
-	r = deliver_msg(msgdata, NULL, mailboxname);
-	
-	if (r) {
-	    com_err(mailboxname, r,
-		    (r == IMAP_IOERROR) ? error_message(errno) : NULL);
-	}
 
-	/*	exitval = convert_sysexit(r); */
-    }
-    while (optind < argc) {
-	/* deliver to users */
-	r = deliver_msg(msgdata, argv[optind], mailboxname);
+    /* deliver to users or global mailbox */
+    deliver_msg(msgdata, argv+optind, argc - optind, mailboxname);
+    
+    /* if we got here there were no errors */
+    exit(0);
+}
 
-	if (r) {
-	    com_err(argv[optind], r,
-		    (r == IMAP_IOERROR) ? error_message(errno) : NULL);
-	}
+void just_exit(const char *msg)
+{
+    com_err(msg, 0, error_message(errno));
 
-	/*	if (r && exitval != EC_TEMPFAIL) exitval = convert_sysexit(r); */
-
-	optind++;
-    }
-
+    fatal(msg,0);
 }
 
 /* initialize the network */
-int init_net(char *serverFQDN, int port)
+static void init_net(char *serverFQDN, int port)
 {
   struct sockaddr_in addr;
   struct hostent *hp;
 
   if ((hp = gethostbyname(serverFQDN)) == NULL) {
-    perror("gethostbyname");
-    return 0;
+      just_exit("gethostbyname failed");
   }
 
   if ((lmtpdsock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    perror("socket");
-    return 0;	
+      just_exit("socket failed");
   }
 
   addr.sin_family = AF_INET;
@@ -287,11 +277,33 @@ int init_net(char *serverFQDN, int port)
   addr.sin_port = htons(port);
 
   if (connect(lmtpdsock, (struct sockaddr *) &addr, sizeof (addr)) < 0) {
-    perror("connect");
-    return 0;
+      just_exit("connect failed");
   }
 
-  return 1;
+}
+
+static void close_net(void)
+{
+    prot_printf(lmtpd_out,"QUIT\r\n");
+    prot_flush(lmtpd_out);
+
+    close(lmtpdsock);    
+}
+
+/*
+ * Close the connection and exit with the desired error code
+ */
+
+void close_and_exit(int code, const char *msg)
+{    
+
+    
+    com_err(msg, code,
+	    (code == EC_IOERR) ? error_message(errno) : NULL);
+
+    close(lmtpdsock);
+
+    fatal(msg, code);
 }
 
 /* Return the response code for this line
@@ -306,9 +318,9 @@ static int ask_code(char *str)
     if (strlen(str) < 3) return -1;
 
     /* check to make sure 0-2 are digits */
-    if ((isdigit(str[0])==0) ||
-	(isdigit(str[1])==0) ||
-	(isdigit(str[2])==0))
+    if ((isdigit((int) str[0])==0) ||
+	(isdigit((int) str[1])==0) ||
+	(isdigit((int) str[2])==0))
     {
 	return -1;
     }
@@ -321,88 +333,106 @@ static int ask_code(char *str)
     return ret;
 }
 
-int read_initial(void)
+static void read_initial(void)
 {
     char buf[4096];
 
     do {
 
-	prot_fgets(buf, sizeof(buf)-1, lmtpd_in);
+	if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
+	    close_and_exit (EC_IOERR, "Error reading initial");
 
-	printf("buf = %s\n",buf);
-    
     } while ((ask_code(buf)==220) && (buf[3]=='-'));
 
-    if (ask_code(buf)!=220) return 0;
+    if (ask_code(buf)!=220) close_and_exit (EC_DATAERR, "Received wrong initial code");
 
-    return 1;
 }
 
-void say_hello(void)
+static void say_hello(void)
 {
     char buf[4096];
+    int r;
 
-    prot_printf(lmtpd_out,"LHLO cmu.edu\r\n"); /* xxx */
+
+    r = prot_printf(lmtpd_out,"LHLO localhost\r\n");
+    if (r) close_and_exit(EC_IOERR, "Error writing LHLO");
 
     do {
 
-	prot_fgets(buf, sizeof(buf)-1, lmtpd_in);
+	if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
+	    close_and_exit (EC_IOERR, "Error reading LHLO response");
 
-	printf("buf = %s\n",buf);
-    
     } while ((ask_code(buf)==250) && (buf[3]=='-'));
+
+    if (ask_code(buf)!=250) close_and_exit (EC_DATAERR, "Didn't get 250 response from lhlo");
 }
 
-int say_whofrom(void)
+static void say_whofrom(void)
 {
     char buf[4096];
+    int r;
 
-    prot_printf(lmtpd_out,"MAIL FROM:<tmartin@andrew.cmu.edu>\r\n"); /* xxx */
+    /* leave blank so we don't get any bounces */
+    r = prot_printf(lmtpd_out,"MAIL FROM:<>\r\n");
+    if (r) close_and_exit(EC_IOERR, "Error writing mail from");
 
-    prot_fgets(buf, sizeof(buf)-1, lmtpd_in);
-
-    printf("buf = %s\n",buf);
+    if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
+	close_and_exit(EC_IOERR, "Error reading mail from response");
     
-    if (ask_code(buf)!=250) return 0;
+    if (ask_code(buf)!=250) close_and_exit (EC_DATAERR, "Bad mail from response code");
 
-    return 1;
 }
 
-int say_rcpt(char *user, char *mailbox)
+static void say_rcpt(char **users, int numusers, char *mailbox)
 {
-    int lup;
     char buf[4096];
+    int r;
 
-    if ((user == NULL) && (mailbox==NULL))
+    if ((numusers == 0) && (mailbox==NULL))
     {
-	return 0;
+	close_and_exit(EC_TEMPFAIL,"No mailbox or users specified");
     }
 
     /* deliver to bboard */
-    if (user == NULL)
+    if (numusers == 0)
     {
-	prot_printf(lmtpd_out,"RCPT TO:<bb+%s>\r\n",mailbox);
-    } else if (mailbox == NULL) {
-	prot_printf(lmtpd_out,"RCPT TO:<%s>\r\n",user);
+	r = prot_printf(lmtpd_out,"RCPT TO:<bb+%s>\r\n",mailbox);	
+	if (r) close_and_exit(EC_IOERR, "Error writing rcpt to");
+
+	if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
+	    close_and_exit(EC_IOERR, "Error reading rcpt to response");
+	
+	if (ask_code(buf)!=250) close_and_exit(EC_DATAERR, "Bad rcpt to response");
+
     } else {
-	prot_printf(lmtpd_out,"RCPT TO:<%s+%s>\r\n",user,mailbox);
-    }
-    
-    prot_fgets(buf, sizeof(buf)-1, lmtpd_in);    
+	int lup;
 
-    printf("buf = %s\n",buf);
-    
-    if (ask_code(buf)!=250) return 0;
+	for (lup=0;lup<numusers;lup++)
+	{
+	    if (mailbox == NULL) {
+		r = prot_printf(lmtpd_out,"RCPT TO:<%s>\r\n",users[lup]);		
+	    } else {
+		r = prot_printf(lmtpd_out,"RCPT TO:<%s+%s>\r\n",users[lup],mailbox);		
+	    }
 
-    return 1;
+	    if (r) close_and_exit(EC_IOERR, "Error writing rcpt to");
+
+
+	    if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
+		close_and_exit(EC_IOERR, "Error reading rcpt to response");
+	    
+	    if (ask_code(buf)!=250) close_and_exit(EC_DATAERR, "Bad rcpt to response");	    
+	}	
+    } 
+
 }
 
-int dot_stuff(char *in, int inlen, char **out)
+static int dot_stuff(char *in, int inlen, char **out)
 {
     if (in[0]=='.')
     {
 	*out = in-1;
-	out[0]='.';
+	(*out)[0]='.';
 	return inlen+1;
     }
 
@@ -410,47 +440,45 @@ int dot_stuff(char *in, int inlen, char **out)
     return inlen;
 }
 
-int pump_data(struct protstream *f)
+static void pump_data(struct protstream *f)
 {
     char buf[4096];
     char *tosend;
     int len;
+    int r;
 
-    prot_printf(lmtpd_out, "DATA\r\n");
-
-    prot_fgets(buf, sizeof(buf)-1, lmtpd_in);
-
-    printf("%s\n",buf);
+    r = prot_printf(lmtpd_out, "DATA\r\n");
+    if (r) close_and_exit(EC_IOERR, "Error writing DATA");
     
-    if (ask_code(buf)!=354) return 0; 
+    if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
+	close_and_exit(EC_IOERR, "Error reading after DATA");
 
-    while ((len = prot_fgets(buf+1, sizeof(buf)-1, f))>0)
+    if (ask_code(buf)!=354) close_and_exit(EC_DATAERR, "Bad response to DATA command");	    
+
+    while ((prot_fgets(buf+1, sizeof(buf)-1, f)!=NULL)>0)
     {
-	len = dot_stuff(buf, len, &tosend);
+	len = dot_stuff(buf, strlen(buf), &tosend);
 	
-	prot_write(lmtpd_out, tosend, len);
+	r = prot_write(lmtpd_out, tosend, len);
+	if (r) close_and_exit(EC_IOERR, "Error writing message data");
+
+	r = prot_printf(lmtpd_out, "\r\n");
+	if (r) close_and_exit(EC_IOERR, "Error writing message data");
     }
 
-    prot_printf(lmtpd_out, "\r\n.\r\n");
+    r = prot_printf(lmtpd_out, "\r\n.\r\n");
+    if (r) close_and_exit(EC_IOERR, "Error writing message data");
 
-    prot_fgets(buf, sizeof(buf)-1, lmtpd_in);
+    if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
+	close_and_exit(EC_IOERR, "Error reading after message data");
 
-    printf("%s\n",buf);
-    
-    if (ask_code(buf)!=250) return 0; 
-
-    return 1;
+    if (ask_code(buf)!=250) close_and_exit(EC_DATAERR, "Bad response to message data");
 }
  
-void deliver_msg(message_data_t *m, char *user, char *mailbox)
+void deliver_msg(message_data_t *m, char **users, int numusers, char *mailbox)
 {
-    printf("init network\n");
     /* connect */
-    if (!init_net("cyrus-dev.andrew.cmu.edu",2003)) /* xxx */
-    {
-	printf("network init failed\n");
-	/* xxx */
-    }
+    init_net("localhost",2003);
 
     lmtpd_in = prot_new(lmtpdsock, 0);
     lmtpd_out = prot_new(lmtpdsock, 1);
@@ -467,11 +495,12 @@ void deliver_msg(message_data_t *m, char *user, char *mailbox)
     say_whofrom();
     
     /* rcpt to */
-    say_rcpt(user, mailbox);
+    say_rcpt(users,numusers, mailbox);
 
     /* data */
     pump_data(m->data);
 
+    close_net();
 }
 
 
@@ -486,8 +515,6 @@ void savemsg(message_data_t *m)
     char buf[8192], *p;
     int retpathclean = 0;
     struct stat sbuf;
-    char **body, **frombody, **subjbody, **tobody;
-    int sl, i;
 
     /* Copy to temp file */
     f = tmpfile();
@@ -628,6 +655,7 @@ void savemsg(message_data_t *m)
 	exit(EC_TEMPFAIL);
     }
     m->size = sbuf.st_size;
+    fseek(f, 0, SEEK_SET);
     m->f = f;
     m->data = prot_new(fileno(f), 0);
 }
