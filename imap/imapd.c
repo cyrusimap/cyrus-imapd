@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.467 2004/05/22 03:45:49 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.468 2004/05/26 15:32:09 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -6017,7 +6017,7 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
 {
     int i=0, j=0;
     char tagbuf[128];
-    char c;
+    int c;		/* getword() returns an int */
     struct buf tag, cmd, tmp, user;
     int r = 0;
 
@@ -6132,7 +6132,7 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
 		   char *mailbox, char *acl_in) 
 {
     int r = 0;
-    char c;
+    int c;		/* getword() returns an int */
     char tag[128];
     int tagnum = 1;
     char *rights, *nextid;
