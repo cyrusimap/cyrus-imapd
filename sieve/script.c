@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.34 2000/07/24 18:20:19 ken3 Exp $
+ * $Id: script.c,v 1.35 2000/07/25 17:00:45 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -357,7 +357,7 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
 }
 
 /* evaluate the script c.  returns negative if error was encountered,
-   0 if it exited off the end, or if a stop action was encountered.
+   0 if it exited off the end, or positive if a stop action was encountered.
 
    note that this is very stack hungry; we just evaluate the AST in
    the naivest way.  if we implement some sort of depth limit, we'll
@@ -529,9 +529,8 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		}
 		break;
 	    }
-	case STOP: /* we're done, exit */
+	case STOP:
 	    res = 1;
-	    return 0;
 	    break;
 	case DISCARD:
 	    res = do_discard(actions);
@@ -579,7 +578,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 
 	}
 
-	if (res) /* we've either encountered an error */
+	if (res) /* we've either encountered an error or a stop */
 	    break;
 
 	/* execute next command */
@@ -809,8 +808,8 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	goto error;
     }
  
-    if ((ret = eval(&s->interp, s->cmds, message_context, actions,
-		    notify_action, &errmsg)) != SIEVE_OK)
+    if (eval(&s->interp, s->cmds, message_context, actions,
+	     notify_action, &errmsg) < 0)
 	return SIEVE_RUN_ERROR;
   
     strcpy(actions_string,"Action(s) taken:\n");
