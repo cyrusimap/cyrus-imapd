@@ -40,7 +40,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.1.4.12 2002/10/17 16:58:36 ken3 Exp $
+.\" $Id: imapoptions,v 1.1.4.13 2002/11/20 04:14:43 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -84,7 +84,12 @@ are listed with ``<none>''.
    but not writable by users. */
 
 { "allowallsubscribe", 0, SWITCH }
-/* Allow subscription to nonexistant mailboxes. */
+/* Allow subscription to nonexistent mailboxes.  This option is
+   typically used on backend servers in a Murder so that users can
+   subscribe to mailboxes that don't reside on their "home" server.
+   This option can also be used as a workaround for IMAP clients which
+   don't play well with nonexistent or unselectable mailboxes (eg.
+   Microsoft Outlook). */
 
 { "allowanonymouslogin", 0, SWITCH }
 /* Permit logins by the user "anonymous" using any password.  Also
