@@ -1,6 +1,6 @@
 /* mpool.c memory pool management
  *
- * $Id: mpool.c,v 1.7 2002/06/18 16:07:51 rjs3 Exp $
+ * $Id: mpool.c,v 1.8 2002/07/26 23:12:26 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -72,7 +72,6 @@ struct mpool_blob
     void *base; /* Base of allocated section */
     void *ptr; /* End of allocated section */
     struct mpool_blob *next; /* Next Pool */
-    /* xxx char data[1] ; */
 };
 
 static struct mpool_blob *new_mpool_blob(size_t size) 
@@ -113,6 +112,7 @@ void free_mpool(struct mpool *pool)
 
     while(p) {
 	p_next = p->next;
+	free(p->base);
 	free(p);
 	p = p_next;
     }
@@ -124,8 +124,8 @@ void free_mpool(struct mpool *pool)
 #undef ROUNDUP
 #endif
 
-/* bump to the next multiple of 4 bytes */
-#define ROUNDUP(num) (((num) + 3) & 0xFFFFFFFC)
+/* bump to the next multiple of 8 bytes */
+#define ROUNDUP(num) (((num) + 15) & 0xFFFFFFF0)
 
 /* Allocate from a pool */
 void *mpool_malloc(struct mpool *pool, size_t size) 
@@ -143,10 +143,14 @@ void *mpool_malloc(struct mpool *pool, size_t size)
     }
 
     p = pool->blob;
+
+    /* This is a bit tricky, not only do we have to make sure that the current
+     * pool has enough room, we need to be sure that we haven't rounded p->ptr outside
+     * of the current pool anyway */
     
     remain = p->size - (p->ptr - p->base);
 
-    if(remain < size) {
+    if(remain < size || p->ptr > (p->size + p->base)) {
       	/* Need a new pool */
 	struct mpool_blob *new_pool;
        	size_t new_pool_size = 2 * ((size > p->size) ? size : p->size);
