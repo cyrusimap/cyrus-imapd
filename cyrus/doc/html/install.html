@@ -666,10 +666,18 @@ user.  Also add a <TT>cron</TT> job to run
 <h2>Testing the IMAP Server</h2>
 
 To test the IMAP server, reboot and perform the following steps (all
-of these samples use "<tt>foobar</tt>" as the IMAP server name):
+of these samples use "<tt>foobar</tt>" as the IMAP server name).  A
+list of answers to common installation problems is maintained in <A
+HREF="http://andrew2.andrew.cmu.edu/cyrus/imapd/install-FAQ">http://andrew2.andrew.cmu.edu/cyrus/imapd/install-FAQ</A>.
 
 <ol>
 
+<P> 
+<li>If the server is compiled with Kerberos v4 authentication, run
+the program "<tt>krbck</tt>" as the cyrus user on the IMAP server.
+This program will diagnose some common Kerberos configuration errors.
+
+<p>
 <li>From your normal account, telnet to the IMAP port on the
 server you're setting up:
 
