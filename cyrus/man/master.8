@@ -55,6 +55,9 @@ processes. This process also initializes the Berkeley DB code and
 performs scheduled cleanup/maintenance.
 .PP
 If this process dies, then no new sessions will be started.
+.PP
+It kills itself and all child processes
+when it receives a SIGTERM.
 .SH OPTIONS
 .TP
 .BI \-l " listen queue backlog"
@@ -72,7 +75,8 @@ file.
 .I Master
 rereads its configuration file when it receives a hangup signal,
 SIGHUP.  Services and events may be added, deleted or modified when the
-configuration file is reread.
+configuration file is reread.  Any active services removed from the
+configuration file will be allowed to run until completion.
 .SH NOTES
 The environment variable \fBCYRUS_VERBOSE\fR can be set to log additional
 debugging information. Setting the value to 1 results in base level logging. 
