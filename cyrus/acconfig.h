@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.22 2001/09/25 16:49:49 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.23 2001/11/08 23:17:53 leg Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -145,8 +145,7 @@ enum {
     /* should a hierarchical rename stop on error? */
     RENAME_STOP_ON_ERROR = 1,
 
-    /* should we call fsync() to maybe help with softupdates?
-     * (that is, i'm not sure this solves the problem.) */
+    /* should we call fsync() to maybe help with softupdates? (it should) */
     APPEND_ULTRA_PARANOID = 1,
 
     /* should we log extra information at the DEBUG level for DB stuff? 
@@ -163,5 +162,8 @@ enum {
     TLS_FAST_SHUTDOWN = 1,
 
     /* should we use the SQUAT engine to accelerate SEARCH? */
-    SQUAT_ENGINE = 1
+    SQUAT_ENGINE = 1,
+
+    /* should we have long LMTP error messages? */
+    LMTP_LONG_ERROR_MSGS = 1
 };
