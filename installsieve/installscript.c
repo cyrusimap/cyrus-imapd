@@ -51,6 +51,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "prot.h"
 #include "lex.h"
 #include "request.h"
+#include "acapsieve.h"
 
 #define IMTEST_OK    0
 #define IMTEST_FAIL -1
@@ -79,6 +80,84 @@ void imtest_fatal(char *msg)
   if (msg!=NULL)
     printf("failure: %s\n",msg);
   exit(1);
+}
+
+static int
+getsecret(sasl_conn_t *conn,
+	  void *context __attribute__((unused)),
+	  int id,
+	  sasl_secret_t **psecret)
+{
+  char *password;
+  size_t len;
+
+  if (! conn || ! psecret || id != SASL_CB_PASS)
+    return SASL_BADPARAM;
+
+  printf("xxx todo\n");
+  return -1;
+
+  /*  printf("Password: ", prompt);
+  *tresult=strdup(getpass(""));
+  *tlen=strlen(*tresult);
+  if (! password)
+  return SASL_FAIL; */
+
+  len = strlen(password);
+
+  *psecret = (sasl_secret_t *) malloc(sizeof(sasl_secret_t) + len);
+  
+  if (! *psecret) {
+    memset(password, 0, len);
+    return SASL_NOMEM;
+  }
+
+  (*psecret)->len = len;
+  strcpy((*psecret)->data, password);
+  memset(password, 0, len);
+    
+  return SASL_OK;
+}
+
+static int
+simple(void *context,
+       int id,
+       const char **result,
+       unsigned *len)
+{
+  const char *value = (const char *)context;
+  int l;
+
+  /* xxx */
+  printf("asking for %d\n",id);
+
+  if (! result)
+    return SASL_BADPARAM;
+
+  switch (id) {
+  case SASL_CB_USER:
+      printf("Username: ");
+      *result = xmalloc(1025);
+      fgets(*result, 1024, stdin);
+      l = strlen(*result);
+      (*result)[l - 1] = '\0';
+      if (len)
+	  *len = strlen(*result);
+    break;
+  case SASL_CB_AUTHNAME:
+    *result = value;
+    if (len)
+      *len = value ? strlen(value) : 0;
+    break;
+  case SASL_CB_LANGUAGE:
+    *result = NULL;
+    if (len)
+      *len = 0;
+    break;
+  default:
+    return SASL_BADPARAM;
+  }
+  return SASL_OK;
 }
 
 void interaction (int id, const char *prompt,
@@ -145,15 +224,13 @@ void fillin_interactions(sasl_interact_t *tlist)
 /* callbacks we support */
 static sasl_callback_t callbacks[] = {
   {
-#ifdef SASL_CB_GETREALM
-    SASL_CB_GETREALM, NULL, NULL
+    SASL_CB_GETREALM, &simple, NULL
   }, {
-#endif
-    SASL_CB_USER, NULL, NULL
+    SASL_CB_USER, &simple, NULL
   }, {
-    SASL_CB_AUTHNAME, NULL, NULL
+    SASL_CB_AUTHNAME, &simple, NULL
   }, {
-    SASL_CB_PASS, NULL, NULL    
+    SASL_CB_PASS, &getsecret, NULL    
   }, {
     SASL_CB_LIST_END, NULL, NULL
   }
@@ -446,6 +523,10 @@ char *read_capability(int *version)
   return cap;
 }
 
+void list_cb(char *name, int isactive)
+{
+    printf("name = %s active = %d\n",name,isactive);
+}
 
 
 void usage(void)
@@ -463,6 +544,7 @@ void usage(void)
   printf("  -u <user>    Userid/Authname to use\n");
   printf("  -t <user>    Userid to use (for proxying)\n");
   printf("  -w <passwd>  Specify password (Should only be used for automated scripts)\n");
+  printf("  -z           Use ACAP\n");
   exit(1);
 }
 
@@ -491,7 +573,7 @@ int main(int argc, char **argv)
   int result;
 
   /* look at all the extra args */
-  while ((c = getopt(argc, argv, "a:d:g:lv:p:i:m:u:w:t:")) != EOF)
+  while ((c = getopt(argc, argv, "a:d:g:lv:p:i:m:u:w:t:z")) != EOF)
     switch (c) 
     {
     case 'a':
@@ -532,6 +614,10 @@ int main(int argc, char **argv)
     case 'w':
       password = optarg;
       break;
+    case 'z':
+	portstr = "acap";
+	version = ACAP_VERSION;
+	break;
     default:
       usage();
       break;
@@ -551,62 +637,106 @@ int main(int argc, char **argv)
   } else {
       port = ntohs(serv->s_port);
   }
-  
-  if (init_net(servername, port) != IMTEST_OK) {
-      imtest_fatal("Network initialization");
-  }
-  
-  if (init_sasl(servername, port, ssf) != IMTEST_OK) {
-      imtest_fatal("SASL initialization");
-  }
-   
-  /* set up the prot layer */
-  pin = prot_new(sock, 0);
-  pout = prot_new(sock, 1); 
 
-  mechlist=read_capability(&version);
+  if (version == ACAP_VERSION) {
+      acapsieve_handle_t *handle;
 
-  if (mechanism!=NULL) {
-    result=auth_sasl(version,mechanism);
-  } else if (mechlist==NULL) {
-    printf("Error reading mechanism list from server\n");
-    exit(1);
+      handle = acapsieve_get_handle(servername, callbacks);
+
+      if (viewfile!=NULL)
+      {
+	  acapsieve_get(handle, viewfile, stdout);
+      }
+      
+      if (installfile!=NULL)
+      {
+	  result = acapsieve_put_file(handle,
+				      installfile);
+
+	  printf("put result = %d\n",result);
+
+	  acapsieve_activate(handle, getsievename(installfile));
+			     
+      }
+
+      if (setactive!=NULL)
+      {
+	  acapsieve_activate(handle,setactive);
+      }
+
+      if (deletescript!=NULL)
+      {
+	  acapsieve_delete(handle,deletescript);
+      }
+
+      if (getscriptname!=NULL)
+      {
+	  getscript(version,pout,pin, getscriptname,1);
+      }
+      
+      if (dolist || deflist) {
+	  acapsieve_list(handle,
+			 &list_cb);
+      }      
+      
   } else {
-    result=auth_sasl(version,mechlist);
-  }
 
-  if (result!=IMTEST_OK) {
-    printf("Authentication failed.\n");
-    exit(1);
-  }
+      if (init_net(servername, port) != IMTEST_OK) {
+	  imtest_fatal("Network initialization");
+      }
+  
+      if (init_sasl(servername, port, ssf) != IMTEST_OK) {
+	  imtest_fatal("SASL initialization");
+      }
+   
+      /* set up the prot layer */
+      pin = prot_new(sock, 0);
+      pout = prot_new(sock, 1); 
 
-  if (viewfile!=NULL)
-  {
-    getscript(version,pout,pin, viewfile,0);
-  }
+      mechlist=read_capability(&version);
+      
+      if (mechanism!=NULL) {
+	  result=auth_sasl(version,mechanism);
+      } else if (mechlist==NULL) {
+	  printf("Error reading mechanism list from server\n");
+	  exit(1);
+      } else {
+	  result=auth_sasl(version,mechlist);
+      }
 
-  if (installfile!=NULL)
-  {
-    installafile(version,pout,pin,installfile);
-  }
+      if (result!=IMTEST_OK) {
+	  printf("Authentication failed.\n");
+	  exit(1);
+      }
 
-  if (setactive!=NULL)
-  {
-    setscriptactive(version,pout,pin,setactive);
-  }
+      if (viewfile!=NULL)
+      {
+	  getscript(version,pout,pin, viewfile,0);
+      }
+      
+      if (installfile!=NULL)
+      {
+	  installafile(version,pout,pin,installfile);
+      }
 
-  if (deletescript!=NULL)
-  {
-    deleteascript(version,pout, pin, deletescript);
-  }
+      if (setactive!=NULL)
+      {
+	  setscriptactive(version,pout,pin,setactive);
+      }
 
-  if (getscriptname!=NULL)
-  {
-    getscript(version,pout,pin, getscriptname,1);
-  }
+      if (deletescript!=NULL)
+      {
+	  deleteascript(version,pout, pin, deletescript);
+      }
 
-  if (dolist || deflist) {
-      showlist(version,pout,pin);
+      if (getscriptname!=NULL)
+      {
+	  getscript(version,pout,pin, getscriptname,1);
+      }
+      
+      if (dolist || deflist) {
+	  showlist(version,pout,pin);
+      }
   }
 
   return 0;

@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.19 2000/04/20 16:57:52 leg Exp $
+ * $Id: lmtpd.c,v 1.20 2000/04/21 21:10:50 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.19 2000/04/20 16:57:52 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.20 2000/04/21 21:10:50 tmartin Exp $";*/
 
 #include <config.h>
 
@@ -266,6 +266,8 @@ static int mysasl_authproc(void *context __attribute__((unused)),
     allowed = authisa(canon_authuser, "admins");
 
     if (allowed==0) {
+	if (errstr)
+	    *errstr = "only admins may authenticate";
 	return SASL_BADAUTH;
     }
 
@@ -1774,8 +1776,16 @@ void lmtpmode(deliver_opts_t *delopts)
 	      }
 	      
 	      if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
+
+		  if (errstr)
+		      syslog(LOG_ERR, "sasl_server_step error: %s:%s",
+			     sasl_errstring(r,NULL,NULL),errstr);		  
+		      else
+			  syslog(LOG_ERR, "sasl_server_step error: %s",
+				 sasl_errstring(r,NULL,NULL));		  
+
 		  prot_printf(deliver_out, "501 5.5.4 %s\r\n",
-			      sasl_errstring(r, NULL, NULL));
+			      sasl_errstring(sasl_usererr(r), NULL, NULL));
 		  continue;
 	      }
 	      

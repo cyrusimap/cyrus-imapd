@@ -28,7 +28,7 @@ VPATH = @srcdir@
 CC = @CC@
 
 DEFS = @DEFS@
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../acap @CPPFLAGS@ @SASLFLAGS@
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
 
@@ -38,7 +38,7 @@ MAKEDEPEND = @MAKEDEPEND@
 
 IMAP_LIBS = @IMAP_LIBS@
 LIBS = 
-DEPLIBS=../lib/libcyrus.a @DEPLIBS@
+DEPLIBS=../acap/libacap.a ../lib/libcyrus.a @DEPLIBS@
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -49,9 +49,9 @@ all: installsieve
 install:
 	$(INSTALL) -s -m 755 installsieve $(DESTDIR)$(exec_prefix)/bin
 
-OBJS=installscript.o lex.o mystring.o request.o
+OBJS=installscript.o lex.o mystring.o request.o acapsieve.o
 
-installsieve: $(OBJS) 
+installsieve: $(OBJS) $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o installsieve $(OBJS) $(DEPLIBS) $(IMAP_LIBS)
 
 clean:

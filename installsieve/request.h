@@ -32,8 +32,9 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "mystring.h"
 
 /* old and new versions of the protocol */
-#define OLD_VERSION 4
-#define NEW_VERSION 5
+#define OLD_VERSION  4
+#define NEW_VERSION  5
+#define ACAP_VERSION 6
 
 int handle_response(int res,int version,struct protstream *pin, mystring_t **errstr);
 
