@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.61 2003/02/05 19:09:42 ken3 Exp $ */
+/* $Id: config.c,v 1.62 2003/02/05 20:43:00 ken3 Exp $ */
 
 #include <config.h>
 
@@ -427,7 +427,12 @@ static int acl_ok(const char *user, struct auth_state *authstate)
     int r;
 
     /* Set namespace */
-    r = mboxname_init_namespace(&namespace, 0);
+    if ((r = mboxname_init_namespace(&namespace, 0)) != 0) {
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
+    }
+    
+    mboxname_hiersep_tointernal(&namespace, user);
 
     if (!r)
 	r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
