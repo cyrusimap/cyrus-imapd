@@ -104,6 +104,22 @@ char **envp;
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
 
+    {
+	/* XXX temp hack to find auth problems */
+	char buf[MAX_MAILBOX_PATH];
+	FILE *logfile;
+
+	/* Create telemetry log */
+	sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, "pop3-auth",
+		getpid());
+	logfile = fopen(buf, "w");
+	if (logfile) {
+	    prot_setlog(popd_in, fileno(logfile));
+	    prot_setlog(popd_out, fileno(logfile));
+	}
+    }
+
+
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
     opterr = 0;
