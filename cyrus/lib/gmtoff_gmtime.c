@@ -44,7 +44,7 @@ time_t time;
     gmt = *gtm;
 
     /* Assume we are never more than 24 hours away. */
-    offset = gmt.tm_yday - local.tm_yday;
+    offset = local.tm_yday - gmt.tm_yday;
     if (offset > 1) {
 	offset = -24;
     } else if (offset < -1) {
@@ -54,9 +54,9 @@ time_t time;
     }
 
     /* Scale in the hours and minutes; ignore seconds. */
-    offset += gmt.tm_hour - local.tm_hour;
+    offset += local.tm_hour - gmt.tm_hour;
     offset *= 60;
-    offset += gmt.tm_min - local.tm_min;
+    offset += local.tm_min - gmt.tm_min;
 
     /* Restore the data in the struct 'tm' points to */
     *tm = local;
