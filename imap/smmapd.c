@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.9 2004/09/08 19:45:22 shadow Exp $
+ * $Id: smmapd.c,v 1.10 2004/09/09 16:21:28 shadow Exp $
  */
 
 #include <config.h>
@@ -116,19 +116,10 @@ int begin_handling(void);
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
-    int nullfd = -1;
-
     if (map_in) prot_free(map_in);
     if (map_out) prot_free(map_out);
 
-    nullfd = open("/dev/null", O_RDONLY, 0);
-    if (nullfd < 0) {
-       fatal("open() failed", EC_TEMPFAIL);
-    }
-    cyrus_dup2_sock(nullfd, 0);
-    cyrus_dup2_sock(nullfd, 1);
-    cyrus_dup2_sock(nullfd, 2);
-    close(nullfd);
+    cyrus_reset_stdio(); 
 
     mboxlist_close();
     mboxlist_done();

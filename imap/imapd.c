@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.483 2004/09/08 19:45:21 shadow Exp $ */
+/* $Id: imapd.c,v 1.484 2004/09/09 16:21:25 shadow Exp $ */
 
 #include <config.h>
 
@@ -433,8 +433,6 @@ static int mlookup(const char *tag, const char *ext_name,
 
 static void imapd_reset(void)
 {
-    int nullfd = -1;
-
     proc_cleanup();
 
     if (imapd_mailbox) {
@@ -469,14 +467,7 @@ static void imapd_reset(void)
     }
 #endif
 
-    nullfd = open("/dev/null", O_RDONLY, 0);
-    if (nullfd < 0) {
-	fatal("open() failed", EC_TEMPFAIL);
-    }
-    cyrus_dup2_sock(nullfd, 0);
-    cyrus_dup2_sock(nullfd, 1);
-    cyrus_dup2_sock(nullfd, 2);
-    close(nullfd);
+    cyrus_reset_stdio(); 
 
     strcpy(imapd_clienthost, "[local]");
     if (imapd_logfd != -1) {

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.189 2004/09/08 19:45:22 shadow Exp $ */
+/* $Id: proxyd.c,v 1.190 2004/09/09 16:21:26 shadow Exp $ */
 
 #include <config.h>
 
@@ -1177,7 +1177,6 @@ int service_init(int argc, char **argv, char **envp)
 static void proxyd_reset(void) 
 {
     int i;
-    int nullfd = -1;
     
     proc_cleanup();
 
@@ -1215,14 +1214,7 @@ static void proxyd_reset(void)
     }
 #endif
 
-    nullfd = open("/dev/null", O_RDONLY, 0);
-    if (nullfd < 0) {
-       fatal("open() failed", EC_TEMPFAIL);
-    }
-    cyrus_dup2_sock(nullfd, 0);
-    cyrus_dup2_sock(nullfd, 1);
-    cyrus_dup2_sock(nullfd, 2);
-    close(nullfd);
+    cyrus_reset_stdio(); 
     
     /* Cleanup Globals */
     proxyd_cmdcnt = 0;
