@@ -1616,6 +1616,7 @@ struct ibuf *ibuf;
 char *s;
 {
     char *p;
+    int len = 0;
 
     /* Write null pointer as NIL */
     if (!s) {
@@ -1628,11 +1629,12 @@ char *s;
 
     /* Look for any non-QCHAR characters */
     for (p = s; *p; p++) {
+	len++;
 	if (*p & 0x80 || *p == '\r' || *p == '\n'
 	    || *p == '\"' || *p == '%' || *p == '\\') break;
     }
 
-    if (*p) {
+    if (*p || len >= 1024) {
 	/* Write out as literal */
 	char buf[100];
 	sprintf(buf, "{%u}\r\n", strlen(s));

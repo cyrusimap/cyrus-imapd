@@ -3738,6 +3738,7 @@ printastring(s)
 char *s;
 {
     char *p;
+    int len = 0;
 
     if (is_atom(s)) {
 	prot_printf(imapd_out, "%s", s);
@@ -3746,11 +3747,12 @@ char *s;
 
     /* Look for any non-QCHAR characters */
     for (p = s; *p; p++) {
+	len++;
 	if (*p & 0x80 || *p == '\r' || *p == '\n'
 	    || *p == '\"' || *p == '%' || *p == '\\') break;
     }
 
-    if (*p) {
+    if (*p || len >= 1024) {
 	prot_printf(imapd_out, "{%u}\r\n%s", strlen(s), s);
     }
     else {

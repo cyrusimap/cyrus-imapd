@@ -466,6 +466,7 @@ char *str;
 	    class = charclass[(unsigned char)*p];
 	}
     }
+    if (len >= 1024) class = 0;
     if (len && class == 2) {
 	/* Atom */
 	imclient_write(imclient, str, len);
