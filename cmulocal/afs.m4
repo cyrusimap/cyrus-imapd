@@ -8,7 +8,15 @@ AC_DEFUN(CMU_AFS_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 if test "$ac_cv_prog_gcc" = "yes" ; then
-  CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I/usr/include"
+  cmu_gcc_inc_dir=`gcc --print-file-name=include`
+  if test "$cmu_gcc_inc_dir" = "include"  ; then
+     cmu_gcc_inc_dir=""
+  fi
+  if test "$cmu_gcc_inc_dir" != ""  ; then
+     CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I${cmu_gcc_inc_dir} -I/usr/include"
+  else
+     CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I/usr/include"
+  fi
 else
   CPPFLAGS="$saved_CPPFLAGS -I$1"
 fi
@@ -62,7 +70,7 @@ AC_ARG_WITH(AFS,
 	  AFS_LIB_DIR="$ac_cv_afs_where/lib"
 	  AFS_TOP_DIR="$ac_cv_afs_where"
 	  AFS_INC_FLAGS="-I${AFS_INC_DIR}"
-	  AFS_LIB_FLAGS="-L${AFS_LIB_DIR}/afs -L${AFS_LIB_DIR}"
+	  AFS_LIB_FLAGS="-L${AFS_LIB_DIR} -L${AFS_LIB_DIR}/afs"
           cmu_save_LIBS="$LIBS"
           cmu_save_CPPFLAGS="$CPPFLAGS"
           CPPFLAGS="$CPPFLAGS ${AFS_INC_FLAGS}"
@@ -88,7 +96,7 @@ AC_ARG_WITH(AFS,
 struct ubik_client * cstruct;
 int sigvec() {return 0;}
 extern int UV_SetSecurity();],
-             [vsu_ClientInit(1,AFSCONF_CLIENTNAME,"",0,
+             [vsu_ClientInit(1,"","",0,
                              &cstruct,UV_SetSecurity)],
              AFS_FLOCK=no,AFS_FLOCK=yes)
              if test $AFS_FLOCK = "no"; then
@@ -115,7 +123,7 @@ extern int UV_SetSecurity();],
 struct ubik_client * cstruct;
 int flock() {return 0;}
 extern int UV_SetSecurity();],
-             [vsu_ClientInit(1,AFSCONF_CLIENTNAME,"",0,
+             [vsu_ClientInit(1,"","",0,
                              &cstruct,UV_SetSecurity)],
              AFS_SIGVEC=no,AFS_SIGVEC=yes)
              if test $AFS_SIGVEC = "no"; then
