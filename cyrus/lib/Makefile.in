@@ -61,9 +61,9 @@ OBJS= acl.o assert.o bsearch.o charset.o glob.o is.o retry.o util.o prot.o \
 all: libcyrus.a
 
 install:
-	$(INSTALL) -m 644 libcyrus.a $(DESTDIR)$(exec_prefix)/lib/
-	$(INSTALL) -m 644 $(HDRS) $(DESTDIR)$(prefix)/include/cyrus/
+	$(INSTALL) -m 644 libcyrus.a $(DESTDIR)$(exec_prefix)/lib
 	$(RANLIB) $(DESTDIR)$(exec_prefix)/lib/libcyrus.a
+	$(INSTALL) -m 644 $(HDRS) $(DESTDIR)$(prefix)/include/cyrus
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) $<

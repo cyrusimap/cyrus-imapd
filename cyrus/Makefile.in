@@ -28,6 +28,8 @@ SUBDIRS = man @PRE_SUBDIRS@ et lib imap imtest @TCL_SUBDIRS@ @EXTRA_SUBDIRS@
 srcdir = @srcdir@
 VPATH = @srcdir@
 
+INSTALL = @INSTALL@
+
 SHELL = /bin/sh
 @SET_MAKE@
 
@@ -44,13 +46,13 @@ all:: checkdepend
 	done
 
 install::
-	- mkdir ${DESTDIR}$(exec_prefix)/bin
-	- mkdir ${DESTDIR}$(exec_prefix)/lib
-	- mkdir ${DESTDIR}$(cyrus_prefix)/bin
-	- mkdir ${DESTDIR}$(prefix)/man
-	- mkdir ${DESTDIR}$(prefix)/man/man1
-	- mkdir ${DESTDIR}$(prefix)/man/man5
-	- mkdir ${DESTDIR}$(prefix)/man/man8
+	$(INSTALL) -d ${DESTDIR}$(exec_prefix)/bin
+	$(INSTALL) -d ${DESTDIR}$(exec_prefix)/lib
+	$(INSTALL) -d ${DESTDIR}$(cyrus_prefix)/bin
+	$(INSTALL) -d ${DESTDIR}$(prefix)/include/cyrus
+	$(INSTALL) -d ${DESTDIR}$(prefix)/man/man1
+	$(INSTALL) -d ${DESTDIR}$(prefix)/man/man5
+	$(INSTALL) -d ${DESTDIR}$(prefix)/man/man8
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" install "in" `pwd`;	\
