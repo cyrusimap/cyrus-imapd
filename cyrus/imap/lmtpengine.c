@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.39 2001/11/13 21:52:31 leg Exp $
+ * $Id: lmtpengine.c,v 1.40 2001/11/15 17:57:53 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -897,6 +897,7 @@ static int savemsg(struct clientdata *cd,
     fprintf(f, "\r\n\tby %s (Cyrus %s) with LMTP",
 		config_servername, CYRUS_VERSION);
 
+#ifdef HAVE_SSL
     if (cd->tls_conn) {
 	char tls_info[250];
 
@@ -905,6 +906,7 @@ static int savemsg(struct clientdata *cd,
 	tls_get_info(cd->tls_conn, tls_info, sizeof(tls_info));
 	if (*tls_info) fprintf(f, " (%s)", tls_info);
     }
+#endif /* HAVE_SSL */
 
     fprintf(f, "; %s\r\n", datestr);
 
@@ -1074,7 +1076,9 @@ void lmtpmode(struct lmtp_func *func,
     cd.fd = fd;
     cd.clienthost[0] = '\0';
     cd.lhlo_param[0] = '\0';
+#ifdef HAVE_SSL
     cd.tls_conn = NULL;
+#endif
     cd.starttls_done = 0;
 
     max_msgsize = config_getint("maxmessagesize", INT_MAX);
