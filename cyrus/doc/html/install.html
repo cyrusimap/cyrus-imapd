@@ -525,11 +525,10 @@ Any message other than one starting with "<tt>* OK</tt>" means there
 is a problem.  To terminate the connection, type "<kbd>. logout</kbd>".
 
 <P>
-<li>Use "<tt>imtest</tt>" to test logging in with plaintext passwords.  Change
-to the "<tt>imapd-1.4</tt>" directory and type the following.
+<li>Use "<tt>imtest</tt>" to test logging in with plaintext passwords.
 
 <pre>
-<kbd>   imtest/imtest -p foobar imap
+<kbd>   /usr/local/bin/imtest -p foobar imap
 </kbd></pre>
 
 If your server is running, you'll get the following message:
@@ -552,7 +551,7 @@ Kerberos authentication by using the imtest command.  Change
 to the "<tt>cyrus-v1.4</tt>" directory and type the following:
 
 <pre>
-   <kbd>imtest/imtest -k foobar imap</kbd>
+   <kbd>/usr/local/bin/imtest -k foobar imap</kbd>
    * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.4 server ready
    . AUTHENTICATE KERBEROS_V4
    + Ln8h6Q==
