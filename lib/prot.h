@@ -1,7 +1,7 @@
 /* prot.h -- stdio-like module that handles buffering, SASL, and TLS
  *           details for I/O over sockets
  *
- * $Id: prot.h,v 1.41 2004/02/27 22:08:57 rjs3 Exp $
+ * $Id: prot.h,v 1.42 2004/06/22 17:07:02 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -207,7 +207,11 @@ extern int prot_flush(struct protstream *s);
 /* These are protlayer versions of the specified functions */
 extern int prot_write(struct protstream *s, const char *buf, unsigned len);
 extern int prot_printf(struct protstream *, const char *, ...)
+#ifdef __GNUC__
     __attribute__ ((format (printf, 2, 3)));
+#else
+    ;
+#endif
 extern int prot_read(struct protstream *s, char *buf, unsigned size);
 extern char *prot_fgets(char *buf, unsigned size, struct protstream *s);
 
