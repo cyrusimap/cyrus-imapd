@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.150 2004/01/30 15:56:37 ken3 Exp $
+ * $Id: pop3d.c,v 1.151 2004/02/17 01:21:47 ken3 Exp $
  */
 #include <config.h>
 
@@ -1329,6 +1329,7 @@ int openinbox(void)
     if (!r) r = mboxlist_detail(inboxname, &type, NULL, &server, NULL, NULL);
     if (r) {
 	sleep(3);
+	syslog(LOG_ERR, "Unable to locate maildrop for %s", popd_userid);
 	prot_printf(popd_out, "-ERR [SYS/PERM] Unable to locate maildrop\r\n");
 	goto fail;
     }
@@ -1367,6 +1368,7 @@ int openinbox(void)
 	r = mailbox_open_header(inboxname, 0, &mboxstruct);
 	if (r) {
 	    sleep(3);
+	    syslog(LOG_ERR, "Unable to open maildrop for %s", popd_userid);
 	    prot_printf(popd_out, "-ERR [SYS/PERM] Unable to open maildrop\r\n");
 	    goto fail;
 	}
@@ -1375,6 +1377,7 @@ int openinbox(void)
 	if (!r) r = mailbox_lock_pop(&mboxstruct);
 	if (r) {
 	    mailbox_close(&mboxstruct);
+	    syslog(LOG_ERR, "Unable to lock maildrop for %s", popd_userid);
 	    prot_printf(popd_out, "-ERR [IN-USE] Unable to lock maildrop\r\n");
 	    goto fail;
 	}
@@ -1414,6 +1417,7 @@ int openinbox(void)
 	    free(popd_msg);
 	    popd_msg = 0;
 	    popd_exists = 0;
+	    syslog(LOG_ERR, "Unable to read maildrop for %s", popd_userid);
 	    prot_printf(popd_out,
 			"-ERR [SYS/PERM] Unable to read maildrop\r\n");
 	    goto fail;
