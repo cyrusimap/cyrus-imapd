@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.99 2000/04/07 17:33:47 leg Exp $
+ * $Id: index.c,v 1.100 2000/04/07 19:49:43 leg Exp $
  */
 #include <config.h>
 
@@ -1938,7 +1938,7 @@ struct mailbox *mailbox;
 	}
     }
     if (sepchar == '(') prot_printf(imapd_out, "(");
-    prot_printf(imapd_out, ")] \r\n");
+    prot_printf(imapd_out, ")]  \r\n");
 }
 
 /*
