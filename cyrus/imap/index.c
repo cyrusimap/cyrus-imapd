@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.215 2005/02/25 06:49:41 shadow Exp $
+ * $Id: index.c,v 1.216 2005/02/25 07:16:36 shadow Exp $
  */
 #include <config.h>
 
@@ -84,9 +84,11 @@ extern void printastring (const char *s);
 /* The index and cache files, mapped into memory */
 static const char *index_base;
 static unsigned long index_len;
+static unsigned long index_dirty;
 static const char *cache_base;
 static unsigned long cache_len;
 static unsigned long cache_end;
+static unsigned long cache_dirty;
 
 /* Attributes of memory-mapped index file */
 static ino_t index_ino;
@@ -207,9 +209,12 @@ void index_closemailbox(struct mailbox *mailbox)
 	seendb = 0;
     }
     if (index_len) {
-	map_free(&index_base, &index_len);
-	map_free(&cache_base, &cache_len);
-	index_len = cache_end = 0;
+        /* So what happens if these weren't cloned from this mailbox? */
+	if (index_dirty)
+	    map_free(&index_base, &index_len); 
+	if (cache_dirty)
+	    map_free(&cache_base, &cache_len); 
+	index_dirty = cache_dirty = index_len = cache_end = 0;
     }
 }
 
@@ -234,6 +239,7 @@ void index_operatemailbox(struct mailbox *mailbox)
     examining = 1;
     allseen = 0;
     recentuid = 0;
+    index_dirty = cache_dirty = 0;
     index_base = mailbox->index_base;
     index_len = mailbox->index_len;
     cache_base = mailbox->cache_base;
@@ -311,6 +317,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	    map_free(&index_base, &index_len);
 	    map_free(&cache_base, &cache_len);
 	    cache_end = 0;
+	    index_dirty = cache_dirty = 0;
 
 	    /* Force a * n EXISTS message */
 	    imapd_exists = -1;
@@ -330,6 +337,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     map_refresh(mailbox->index_fd, 0, &index_base, &index_len,
 		start_offset + newexists * record_size,
 		"index", mailbox->name);
+    index_dirty = 1;
     if (fstat(mailbox->cache_fd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: stating cache file for %s: %m",
 	       mailbox->name);
@@ -339,6 +347,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	cache_end = sbuf.st_size;
 	map_refresh(mailbox->cache_fd, 0, &cache_base, &cache_len,
 		    cache_end, "cache", mailbox->name);
+	cache_dirty = 1;
     }
 
     /* If opening mailbox, get \Recent info */
@@ -907,6 +916,7 @@ int nflags;
     map_refresh(mailbox->index_fd, 0, &index_base, &index_len,
 		start_offset + imapd_exists * record_size,
 		"index", mailbox->name);
+    index_dirty = 1;
 
     return r;
 }
