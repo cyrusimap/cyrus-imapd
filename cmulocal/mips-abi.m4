@@ -2,7 +2,7 @@ dnl mips-abi.m4--Check for MIPS/IRIX ABI flags. Sets $abi and $abilibdirext
 dnl to some value
 dnl Derrick Brashear
 dnl from KTH krb (from CMU)
-dnl $Id: mips-abi.m4,v 1.1 1998/10/05 18:21:41 shadow Exp $
+dnl $Id: mips-abi.m4,v 1.2 1998/10/07 21:27:33 rob Exp $
 
 AC_DEFUN(AC_MIPS_ABI, [
 AC_ARG_WITH(mips_abi,
@@ -84,4 +84,10 @@ esac
 fi #if test -n "$GCC"; then
 ;;
 esac
+
+dnl And then we munge variables to make things work
+CFLAGS="${CFLAGS} $abi"
+libdir=`echo $libdir | sed 's,/*$,$abilibdirext,'`
+LDFLAGS=`echo $LDFLAGS | sed -e "s,/lib$,/lib$abilibdirext," -e "s,\\\(/lib[^a-zA-Z]\\\),\\\1$abilibdirext,g"`
+
 ])
