@@ -97,14 +97,14 @@ AC_ARG_WITH(sasl-include,
 	    ac_cv_sasl_where_lib=$with_sasl_lib
 	  fi
 	  if test "X$ac_cv_sasl_where_lib" = "X"; then
-	    CMU_SASL_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
+	    CMU_SASL_LIB_WHERE(/usr/sasl/lib /usr/local/lib /usr/lib)
 	  fi
 
 	  if test "X$with_sasl_include" != "X"; then
 	    ac_cv_sasl_where_inc=$with_sasl_include
 	  fi
 	  if test "X$ac_cv_sasl_where_inc" = "X"; then
-	    CMU_SASL_INC_WHERE(/usr/athena/include /usr/include/kerberosIV /usr/local/include /usr/include/kerberos)
+	    CMU_SASL_INC_WHERE(/usr/sasl/include /usr/include/sasl /usr/local/include /usr/include)
 	  fi
 	fi
 
