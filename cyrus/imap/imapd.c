@@ -184,7 +184,7 @@ cmdloop()
 	}
 
 	/* Only Login/Logout/Noop allowed when not logged in */
-	if (!imapd_userid && cmd.s[0] != 'L' && cmd.s[0] != 'N') goto nologin;
+	if (!imapd_userid && !strchr("LNC", cmd.s[0])) goto nologin;
     
 	switch (cmd.s[0]) {
 	case 'A':
@@ -212,7 +212,13 @@ cmdloop()
 	    break;
 
 	case 'C':
-	    if (!strcmp(cmd.s, "Check")) {
+	    if (!strcmp(cmd.s, "Capability")) {
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_capability(tag.s);
+	    }
+	    else if (!imapd_userid) goto nologin;
+	    else if (!strcmp(cmd.s, "Check")) {
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = getc(stdin);
 		if (c != '\n') goto extraargs;
@@ -646,6 +652,18 @@ char *cmd;
 	index_check(imapd_mailbox, 0, 1);
     }
     printf("%s OK %s completed\r\n", tag, cmd);
+};
+
+/*
+ * Perform a CAPABILITY command
+ */
+cmd_capability(tag)
+char *tag;
+{
+    if (imapd_mailbox) {
+	index_check(imapd_mailbox, 0, 0);
+    }
+    printf("* CAPABILITY IMAP4\r\n%s OK Capability completed\r\n", tag);
 };
 
 /*
