@@ -1078,7 +1078,7 @@ char *name;
 	c = prot_getc(imapd_in);
     }
     else {
-	ungetc(c);
+	prot_ungetc(c, imapd_in);
 	c = ' ';		/* Force a syntax error */
     }
 
