@@ -321,6 +321,7 @@ static int deliver_msg(char *return_path, char *authuser,
     /* setup txn */
     txn->from = return_path;
     txn->auth = authuser;
+    txn->data = deliver_in;
     txn->isdotstuffed = 0;
     txn->rcpt_num = numusers;
     for (j = 0; j < numusers; j++) {
