@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.70 2003/03/12 16:38:16 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.71 2003/03/17 17:34:17 ken3 Exp $
  */
 
 /*
@@ -1975,15 +1975,15 @@ int do_active(char *name, int matchlen, int maycreate __attribute__((unused)),
 
 	    sscanf(result, "211 %u %u %u %s", &count, &first, &last, name);
 	    prot_printf(nntp_out, "%s %u %u %c\r\n",
-			name, first, last, postable & ACL_POST ? 'y' : 'n');
+			name, last, first, postable & ACL_POST ? 'y' : 'n');
 	}
     }
     else {
 	prot_printf(nntp_out, "%s %lu %lu %c\r\n", name+strlen(newsprefix),
-		    nntp_group->exists ? index_getuid(1) :
-		    nntp_group->last_uid+1,
 		    nntp_group->exists ? index_getuid(nntp_group->exists) :
 		    nntp_group->last_uid,
+		    nntp_group->exists ? index_getuid(1) :
+		    nntp_group->last_uid+1,
 		    postable ? 'y' : 'n');
 
 	mailbox_close(nntp_group);
