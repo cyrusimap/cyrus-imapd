@@ -7,8 +7,8 @@ AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1 $SASLFLAGS"
 CMU_CHECK_HEADER_NOCACHE(imclient.h,
-ac_cv_found_libcyrus_inc=yes,
-ac_cv_found_libcyrus_inc=no)
+ac_cv_found_cyrus_inc=yes,
+ac_cv_found_cyrus_inc=no)
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
@@ -17,8 +17,8 @@ AC_DEFUN(CMU_LIBCYRUS_INC_WHERE, [
       AC_MSG_CHECKING(for libcyrus headers in $i)
       CMU_LIBCYRUS_INC_WHERE1($i)
       CMU_TEST_INCPATH($i, imclient)
-      if test "$ac_cv_found_libcyrus_inc" = "yes"; then
-        ac_cv_libcyrus_where_inc=$i
+      if test "$ac_cv_found_cyrus_inc" = "yes"; then
+        ac_cv_cyrus_where_inc=$i
         AC_MSG_RESULT(found)
         break
       else
@@ -33,8 +33,8 @@ saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lcyrus ${LIB_SASL} ${LIBSSL_LIB_FLAGS} ${LIB_SOCKET}"
 AC_TRY_LINK([void fatal(){}],
 [imclient_authenticate();],
-[ac_cv_found_libcyrus_lib=yes],
-ac_cv_found_libcyrus_lib=no)
+[ac_cv_found_cyrus_lib=yes],
+ac_cv_found_cyrus_lib=no)
 LIBS=$saved_LIBS
 ])
 
@@ -45,7 +45,7 @@ AC_DEFUN(CMU_LIBCYRUS_LIB_WHERE, [
       dnl deal with false positives from implicit link paths
       CMU_TEST_LIBPATH($i, cyrus)
       if test "$ac_cv_found_cyrus_lib" = "yes" ; then
-        ac_cv_libcyrus_where_lib=$i
+        ac_cv_cyrus_where_lib=$i
         AC_MSG_RESULT(found)
         break
       else
@@ -76,36 +76,36 @@ AC_ARG_WITH(libcyrus-include,
 
 	if test "X$with_libcyrus" != "X"; then
 	  if test "$with_libcyrus" != "yes" -a "$with_libcyrus" != no; then
-	    ac_cv_libcyrus_where_lib=$with_libcyrus/lib
-	    ac_cv_libcyrus_where_inc=$with_libcyrus/include
+	    ac_cv_cyrus_where_lib=$with_libcyrus/lib
+	    ac_cv_cyrus_where_inc=$with_libcyrus/include
 	  fi
 	fi
 
 	if test "$with_libcyrus" != "no"; then 
 	  if test "X$with_libcyrus_lib" != "X"; then
-	    ac_cv_libcyrus_where_lib=$with_libcyrus_lib
+	    ac_cv_cyrus_where_lib=$with_libcyrus_lib
 	  fi
-	  if test "X$ac_cv_libcyrus_where_lib" = "X"; then
+	  if test "X$ac_cv_cyrus_where_lib" = "X"; then
 	    CMU_LIBCYRUS_LIB_WHERE(/usr/cyrus/lib /usr/local/lib /usr/lib)
 	  fi
 
 	  if test "X$with_libcyrus_include" != "X"; then
-	    ac_cv_libcyrus_where_inc=$with_libcyrus_include
+	    ac_cv_cyrus_where_inc=$with_libcyrus_include
 	  fi
-	  if test "X$ac_cv_libcyrus_where_inc" = "X"; then
+	  if test "X$ac_cv_cyrus_where_inc" = "X"; then
 	    CMU_LIBCYRUS_INC_WHERE(/usr/cyrus/include /usr/local/include /usr/local/include/cyrus /usr/include/cyrus)
 	  fi
 	fi
 
 	AC_MSG_CHECKING(whether to include libcyrus)
-	if test "X$ac_cv_libcyrus_where_lib" = "X" -o "X$ac_cv_libcyrus_where_inc" = "X"; then
-	  ac_cv_found_libcyrus=no
+	if test "X$ac_cv_cyrus_where_lib" = "X" -o "X$ac_cv_cyrus_where_inc" = "X"; then
+	  ac_cv_found_cyrus=no
 	  AC_MSG_RESULT(no)
 	else
-	  ac_cv_found_libcyrus=yes
+	  ac_cv_found_cyrus=yes
 	  AC_MSG_RESULT(yes)
-	  LIBCYRUS_INC_DIR=$ac_cv_libcyrus_where_inc
-	  LIBCYRUS_LIB_DIR=$ac_cv_libcyrus_where_lib
+	  LIBCYRUS_INC_DIR=$ac_cv_cyrus_where_inc
+	  LIBCYRUS_LIB_DIR=$ac_cv_cyrus_where_lib
 	  LIBCYRUS_INC_FLAGS="-I${LIBCYRUS_INC_DIR}"
 	  LIBCYRUS_LIB_FLAGS="-L${LIBCYRUS_LIB_DIR} -lcyrus"
 	  if test "X$RPATH" = "X"; then
