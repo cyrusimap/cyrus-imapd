@@ -72,7 +72,7 @@ char **argv;
 
     config_init("deliver");
 
-    while ((opt = getopt(argc, argv, "df:r:m:a:iF:I:")) != EOF) {
+    while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:")) != EOF) {
 	switch(opt) {
 	case 'd':
 	    /* Ignore -- /bin/mail compatibility flags */
@@ -106,11 +106,11 @@ char **argv;
 	    flag[nflags-1] = optarg;
 	    break;
 
-	case 'i':
+	case 'e':
 	    dupelim = 1;
 	    break;
 
-	case 'I':
+	case 'E':
 	    exit(prunedelivered(atoi(optarg)));
 
 	default:
