@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.24 2004/03/09 18:08:40 rjs3 Exp $
+ * $Id: nntpd.c,v 1.25 2004/03/10 04:18:55 rjs3 Exp $
  */
 
 /*
@@ -839,7 +839,8 @@ static void cmdloop(void)
 	/* Parse command name */
 	c = getword(nntp_in, &cmd);
 	if (c == EOF) {
-	    if ((err = prot_error(nntp_in)) != NULL) {
+	    if ((err = prot_error(nntp_in)) != NULL
+		 && strcmp(err, PROT_EOF_STRING)) {
 		syslog(LOG_WARNING, "%s, closing connection", err);
 		prot_printf(nntp_out, "400 %s\r\n", err);
 	    }

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.459 2004/03/09 18:08:39 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.460 2004/03/10 04:18:53 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -728,7 +728,8 @@ void cmdloop()
 	/* Parse tag */
 	c = getword(imapd_in, &tag);
 	if (c == EOF) {
-	    if ((err = prot_error(imapd_in))!=NULL) {
+	    if ((err = prot_error(imapd_in))!=NULL
+		&& strcmp(err, PROT_EOF_STRING)) {
 		syslog(LOG_WARNING, "%s, closing connection", err);
 		prot_printf(imapd_out, "* BYE %s\r\n", err);
 	    }
