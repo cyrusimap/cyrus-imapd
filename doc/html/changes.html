@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.75 1999/07/31 21:49:26 leg Exp $ -->
+<!-- $Id: changes.html,v 1.76 1999/08/09 21:07:46 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -11,7 +11,7 @@
       <li> cyradm should now work with all mechanisms (it now handles
       empty challenges).
 
-      <li> fixed deliver to deal with arbitrarily long headers
+      <li> Fixed deliver to deal with arbitrarily long headers
 
       <li> COPY for non-existent sequence numbers returns NO; this
       contrasts to UID COPY, which always returns OK
@@ -27,7 +27,16 @@
 
       <li> pop3d now correctly passes SASL configuration options to libsasl.
 
-      <li> imtest now correctly flushes the server's output to the screen
+      <li> imtest now correctly flushes the server's output to the
+      screen
+
+      <li> Added more stupid hashing.  Now whenever there is a mailbox
+      access, it goes through a hash function.
+
+      <li> deliver now checks sieveusehomedir and sievedir to see
+      where to look for sieve scripts
+
+      <li> ptloader now has a workaround for afs 3.5
     </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.0-BETA </h2>
@@ -83,7 +92,7 @@
 	replaced thanks to John Myers).
 
       <li> Bug fix in message.c to look up headers in the cache when they're
-	in the cache correctly; thanks to Chris Newman for the fix.	
+	in the cache correctly; thanks to Chris Newman for the fix.
 
       <li> Code cleanup here and there (thanks to Bruce Balden).
 

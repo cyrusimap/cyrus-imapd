@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.176 1999/07/31 21:49:29 leg Exp $ */
+/* $Id: imapd.c,v 1.177 1999/08/09 21:07:48 leg Exp $ */
 
 #ifndef __GNUC__
 /* can't use attributes... */
@@ -1239,7 +1239,8 @@ char *authtype;
 			     (void **) &imapd_userid);
     if (sasl_result!=SASL_OK)
     {
-      prot_printf(imapd_out, "%s NO weird SASL error SASL_USERNAME\r\n", tag);
+      prot_printf(imapd_out, "%s NO weird SASL error %d SASL_USERNAME\r\n", 
+		  tag, sasl_result);
       return;
     }
 
@@ -2899,7 +2900,7 @@ char *name;
 
     if (!imapd_userisadmin) r = IMAP_PERMISSION_DENIED;
     else {
-	sprintf(buf, "%s%s%s", config_dir, FNAME_QUOTADIR, quota.root);
+	mailbox_hash_quota(buf, quota.root);
 	quota.fd = open(buf, O_RDWR, 0);
 	if (quota.fd == -1) {
 	    r = IMAP_QUOTAROOT_NONEXISTENT;

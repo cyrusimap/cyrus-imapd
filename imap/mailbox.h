@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.46 1998/08/07 06:49:03 tjs Exp $
+ $Id: mailbox.h,v 1.47 1999/08/09 21:07:50 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -218,7 +218,8 @@ extern int mailbox_read_index_header P((struct mailbox *mailbox));
 extern int mailbox_read_index_record P((struct mailbox *mailbox,
 					unsigned msgno,
 					struct index_record *record));
-extern int mailbox_read_quota P((struct quota *quota));
+extern int mailbox_read_quota(struct quota *quota);
+extern void mailbox_hash_quota(char *buf, const char *quotaroot);
 
 extern int mailbox_lock_header P((struct mailbox *mailbox));
 extern int mailbox_lock_index P((struct mailbox *mailbox));
@@ -259,5 +260,6 @@ extern int mailbox_rename P((const char *oldname, const char *newname,
 			     bit32 *olduidvalidityp, bit32 *newuidvalidtyp));
 
 extern int mailbox_copyfile P((const char *from, const char *to));
+extern void mailbox_hash_mbox(char *buf, const char *root, const char *name);
 
 #endif /* INCLUDED_MAILBOX_H */
