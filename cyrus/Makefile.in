@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.37 2000/09/05 04:35:29 leg Exp $
+# $Id: Makefile.in,v 1.38 2000/09/05 06:03:09 leg Exp $
 #
 # @configure_input@
 # 
@@ -57,6 +57,8 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
+VERSION = 2.0.7
+
 all:: checkdepend
 	@for d in  $(SUBDIRS); \
 	do \
@@ -64,19 +66,29 @@ all:: checkdepend
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all) || exit 1; \
 	done
 
-dist:: checkdepend
-	mkdir dist ; \
-	echo "checking out the distribution" ; \
-	cd dist ; cvs -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs \
-		co -d cyrus-imapd-$(VERSION) cyrus ; \
-	cd cyrus-imapd-$(VERSION) ; \
+dist:: distcvs
+	@echo "creating configure"
+	@cd dist/cyrus-imapd-$(VERSION) ; sh SMakefile
 	@for d in $(SUBDIRS); \
 	do \
-		(cd $$d; echo "### Making" dist "in" `pwd`;	\
-		  if [ -f Makefile.dist ]; then ; \
+		(cd dist/cyrus-imapd-$(VERSION)/$$d; \
+		  if [ -f Makefile.dist ]; then \
+		    echo "### Making" dist "in" `pwd`;	\
 		    $(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) -f Makefile.dist dist ; \
 		  fi) || exit 1; \
 	done
+	@echo "creating tarfile"
+	@cd dist ; tar cf - cyrus-imapd-$(VERSION) | \
+	  gzip -9 > ../cyrus-imapd-$(VERSION).tar.gz
+	rm -f distcvs
+	rm -rf dist
+
+distcvs:
+	if [ \! -d dist ]; then mkdir dist ; fi
+	@echo "checking out the distribution"
+	@cd dist ; cvs -Q -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs \
+		co -d cyrus-imapd-$(VERSION) cyrus
+	touch distcvs
 
 install::
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/bin
