@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.32.2.2 2004/01/15 20:24:24 ken3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.32.2.3 2004/04/14 16:24:56 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -7,6 +7,29 @@
 <body>
 
 <h1>Upgrading From Previous Versions</h1>
+
+<h2>Upgrading from 2.2.x or earlier</h2>
+<ul>
+<li>If you wish to use separate metadata partition(s), you <b>MUST</b>
+first shut down Cyrus and then perform the following:
+<ol>
+<li>Set the <tt>metapartition-*</tt> and <tt>metapartition_files</tt>
+options to suit your configuration.  For a full description of these
+options, see the <tt>imapd.conf(5)</tt> man page.</li>
+<li>Create the metadata partition directory(s) listed in the
+<tt>metapartition-*</tt> option(s), setting the ownership and
+permissions in same fashion as step 6 of <a
+href="install-configure.html">install-configure</a>.</li>
+<li>Run the <tt>tools/migrate-metadata</tt> script (as the cyrus user)
+to move the metadata files listed in the
+<tt>metapartition_files</tt> option from the spool partition(s) to the
+new metadata partition(s).  This script may take a long time to run
+depending on the number of mailboxes on the server, but presumably the
+metadata partitions are located on high speed storage, so the writes
+should be relatively fast.</li>
+<li>Restart Cyrus.</li>
+</ol>
+</ul>
 
 <h2>Upgrading from 2.2.2 or earlier</h2>
 <ul>
@@ -424,7 +447,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2004/01/15 20:24:24 $
+last modified: $Date: 2004/04/14 16:24:56 $
 </BODY></HTML>
 
 
