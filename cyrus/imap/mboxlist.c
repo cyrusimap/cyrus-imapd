@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.187 2002/05/07 15:06:25 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.188 2002/05/07 15:13:32 rjs3 Exp $
  */
 
 #include <config.h>
@@ -364,13 +364,17 @@ mboxlist_mycreatemailboxcheck(char *name,
     r = mboxlist_mylookup(name, &mbtype, &path, NULL, &acl, tid, RMW);
     switch (r) {
     case 0:
-	r = IMAP_MAILBOX_EXISTS;
+	if(mbtype & MBTYPE_RESERVE)
+	    r = IMAP_MAILBOX_RESERVED;
+	else
+	    r = IMAP_MAILBOX_EXISTS;
 	
 	/* Lie about error if privacy demands */
 	if (!isadmin && 
 	    !(cyrus_acl_myrights(auth_state, acl) & ACL_LOOKUP)) {
 	    r = IMAP_PERMISSION_DENIED;
 	}
+
 	return r;       
 	break;
     case IMAP_MAILBOX_NONEXISTENT:
@@ -380,8 +384,6 @@ mboxlist_mycreatemailboxcheck(char *name,
 	return r;
 	break;
     }
-
-    if(mbtype & MBTYPE_RESERVE) return IMAP_MAILBOX_RESERVED;
 
     /* Search for a parent */
     strcpy(parent, name);
@@ -1309,14 +1311,11 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	DB->abort(mbdb, tid);
 	tid = NULL;
 
-	syslog(LOG_ERR, "dropped lock on mboxlist");
-
 	/* open & lock mailbox header */
         r = mailbox_open_header_path(name, path, acl, NULL, &mailbox, 0);
 	if(!r) r = mailbox_lock_header(&mailbox);
 
 	if(!r) {
-	syslog(LOG_ERR, "opened header");
 	relock_retry:
 	    /* lookup the mailbox to make sure it exists and get its acl */
 	    r = mboxlist_mylookup(name, &mbtype, &path,
