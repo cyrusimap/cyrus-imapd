@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.18 2001/09/18 21:04:54 ken3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.19 2001/09/27 16:02:34 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -23,8 +23,8 @@ existing directories.
 
 <li> The hashed deliver databases (used for duplicate delivery suppression
 and Sieve) have been merged into a single <tt>deliver.db</tt> database.
-You can remove the entire <tt>/var/imap/deliverdb</tt> directory structure 
-after shutting down the server.
+You can safely remove the entire <tt>/var/imap/deliverdb</tt>
+directory structure after shutting down the server.
 
 <li>All of the Cyrus databases have been unified under a single DB3 
 environment.  A new <tt>ctl_cyrusdb</tt> tool is now used for database 
@@ -92,7 +92,7 @@ database:
 <kbd>   mkdir /var/imap/db
    mkdir /var/imap/socket
    chown cyrus /var/imap/db /var/imap/socket
-   rm /var/imap/deliverdb/*
+   rm -rf /var/imap/deliverdb
 </kbd></pre>
 
 <li>Convert mailboxes file to Berkeley DB:
@@ -100,7 +100,7 @@ database:
 <kbd>   su cyrus
    cd /var/imap
    ctl_mboxlist -u &lt; mailboxes
-   ctl_mboxlist -c
+   ctl_cyrusdb -c
 </kbd></pre>
 
 Please keep a backup of your mailboxes file.  You can dump an
@@ -201,7 +201,7 @@ worry about it.)
 </ul>
 
 <P><HR><P>
-last modified: $Date: 2001/09/18 21:04:54 $
+last modified: $Date: 2001/09/27 16:02:34 $
 </BODY></HTML>
 
 
