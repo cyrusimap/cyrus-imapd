@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.17 2000/04/18 01:00:19 leg Exp $ */
+/* $Id: proxyd.c,v 1.18 2000/04/18 03:07:00 leg Exp $ */
 
 #include <config.h>
 
@@ -3320,7 +3320,7 @@ void cmd_status(char *tag, char *name)
     if (!r) s = proxyd_findserver(server);
     if (!r && !s) r = IMAP_SERVER_UNAVAILABLE;
     if (!r) {
-	prot_printf(s->out, "%s Status {%d}\r\n%s ", tag,
+	prot_printf(s->out, "%s Status {%d+}\r\n%s ", tag,
 		    strlen(name), name);
 	if (!pipe_command(s, 65536)) {
 	    pipe_until_tag(s, tag);
