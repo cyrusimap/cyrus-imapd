@@ -666,6 +666,7 @@ des_cblock returned_key;
 int kerberos_verify_password(user, passwd, service, reply)
 char *user;
 char *passwd;
+char *service;
 char **reply;
 {
     int result;
