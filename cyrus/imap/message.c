@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.61 1999/03/02 01:02:34 tjs Exp $
+ * $Id: message.c,v 1.62 1999/03/02 20:55:24 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -1621,7 +1621,7 @@ struct body *body;
     message_write_searchaddr(&bcc, body->bcc);
 
     message_ibuf_init(&subject);
-    charset_decode1522(body->subject, t, 0);
+    t = charset_decode1522(body->subject, NULL, 0);
     message_write_nstring(&subject, t);
     free(t);
 
@@ -2176,7 +2176,7 @@ struct address *addrlist;
 	    if (addrlist->mailbox) {
 		if (prevaddr) PUTIBUF(ibuf, ',');
 		
-		charset_decode1522(addrlist->mailbox, tmp, 0);
+		tmp = charset_decode1522(addrlist->mailbox, NULL, 0);
 		message_write_text(ibuf, tmp);
 		free(tmp);
 		tmp = NULL;
@@ -2194,7 +2194,7 @@ struct address *addrlist;
 	    if (prevaddr) PUTIBUF(ibuf, ',');
 
 	    if (addrlist->name) {
-		charset_decode1522(addrlist->name, tmp, 0);
+		tmp = charset_decode1522(addrlist->name, NULL, 0);
 		message_write_text(ibuf, tmp);
 		free(tmp); tmp = NULL;
 		PUTIBUF(ibuf, ' ');
