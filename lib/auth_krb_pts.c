@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- * $Id: auth_krb_pts.c,v 1.43 2002/02/19 16:56:03 rjs3 Exp $
+ * $Id: auth_krb_pts.c,v 1.44 2002/02/25 16:52:42 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -522,16 +522,17 @@ struct auth_state *auth_newstate(const char *identifier,
     /* fetch the current record for the user */
     r = ptdb->get(ptdb, NULL, &key, &data, 0);
 
-    /* close and unlock the database */
-    ptdb->close(ptdb, 0);
-    close(fd);
-
     if (r != 0) {
         /* The record still isn't there, even though the child claimed success
          */ 
 	syslog(LOG_ERR, "auth_newstate: error fetching record: %s "
 	       "(did ptloader add the record?)", 
 	       db_strerror(r));
+
+	/* close and unlock the database */
+	ptdb->close(ptdb, 0);
+	close(fd);
+
 	return newstate;
     }
 
@@ -540,6 +541,10 @@ struct auth_state *auth_newstate(const char *identifier,
     /* copy it into our structure */
     newstate = (struct auth_state *) xrealloc(newstate, data.size);
     memcpy(newstate, fetched, data.size);
+
+    /* close and unlock the database */
+    ptdb->close(ptdb, 0);
+    close(fd);
 
     return newstate;
 }
