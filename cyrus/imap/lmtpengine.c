@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.21 2001/02/19 18:05:37 leg Exp $
+ * $Id: lmtpengine.c,v 1.22 2001/03/14 22:24:00 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -535,7 +535,8 @@ static int copy_msg(struct protstream *fin, FILE *fout)
 
     while (prot_fgets(buf, sizeof(buf)-1, fin)) {
 	p = buf + strlen(buf) - 1;
-	if (p == buf || p[-1] != '\r') {
+	if (p == buf || (p[0] == '\n' && p[-1] != '\r')) {
+	    /* either a \0 by itself or a \n without a \r */
 	    p[0] = '\r';
 	    p[1] = '\n';
 	    p[2] = '\0';
