@@ -308,7 +308,7 @@ char **newpartition;
 	}
 	else {
 	    defaultacl = identifier = 
-	      strsave(config_getstring("defaultacl", "anybody lrs"));
+	      strsave(config_getstring("defaultacl", "anyone lrs"));
 	    for (;;) {
 		while (*identifier && isspace(*identifier)) identifier++;
 		rights = identifier;
