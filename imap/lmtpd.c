@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.68 2001/08/18 00:46:47 ken3 Exp $
+ * $Id: lmtpd.c,v 1.69 2001/08/22 14:51:36 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.68 2001/08/18 00:46:47 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.69 2001/08/22 14:51:36 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -82,7 +82,6 @@
 #include "util.h"
 #include "auth.h"
 #include "prot.h"
-#include "gmtoff.h"
 #include "imparse.h"
 #include "lock.h"
 #include "imapconf.h"
@@ -96,6 +95,7 @@
 #include "mboxlist.h"
 #include "notify.h"
 #include "idle.h"
+#include "rfc822date.h"
 
 #include "lmtpengine.h"
 #include "lmtpstats.h"
@@ -426,11 +426,6 @@ int getenvelope(void *mc, const char *field, const char ***contents)
 #define SENDMAIL (config_getstring("sendmail", DEFAULT_SENDMAIL))
 #define POSTMASTER (config_getstring("postmaster", DEFAULT_POSTMASTER))
 
-static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-
-static char *wday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-
 static int global_outgoing_count = 0;
 
 pid_t open_sendmail(const char *argv[], FILE **sm)
@@ -502,9 +497,7 @@ int send_rejection(const char *origid,
     char buf[8192], *namebuf;
     int i, sm_stat;
     time_t t;
-    struct tm *tm;
-    long gmtoff;
-    int gmtnegative = 0;
+    char datestr[80];
     pid_t sm_pid, p;
 
     smbuf[0] = "sendmail";
@@ -527,18 +520,8 @@ int send_rejection(const char *origid,
     duplicate_mark(buf, strlen(buf), namebuf, strlen(namebuf), t);
     fprintf(sm, "Message-ID: %s\r\n", buf);
 
-    tm = localtime(&t);
-    gmtoff = gmtoff_of(tm, t);
-    if (gmtoff < 0) {
-	gmtoff = -gmtoff;
-	gmtnegative = 1;
-    }
-    gmtoff /= 60;
-    fprintf(sm, "Date: %s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu\r\n",
-	    wday[tm->tm_wday], 
-	    tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
-	    tm->tm_hour, tm->tm_min, tm->tm_sec,
-            gmtnegative ? '-' : '+', gmtoff / 60, gmtoff % 60);
+    rfc822date_gen(datestr, sizeof(datestr), t);
+    fprintf(sm, "Date: %s\r\n", datestr);
 
     fprintf(sm, "X-Sieve: %s\r\n", sieve_version);
     fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", POSTMASTER);
@@ -839,10 +822,8 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     const char *smbuf[6];
     char outmsgid[8192], *sievedb;
     int i, sl, sm_stat;
-    struct tm *tm;
-    long tz;
-    int tznegative = 0;
     time_t t;
+    char datestr[80];
     pid_t sm_pid, p;
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *md = ((mydata_t *) mc)->m;
@@ -867,18 +848,8 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     
     fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
-    tm = localtime(&t);
-    tz = gmtoff_of(tm, t);
-    if (tz < 0) {
-	tz = -tz;
-	tznegative = 1;
-    }
-    tz /= 60;
-    fprintf(sm, "Date: %s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu\r\n",
-	    wday[tm->tm_wday], 
-	    tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
-	    tm->tm_hour, tm->tm_min, tm->tm_sec,
-            tznegative ? '-' : '+', tz / 60, tz % 60);
+    rfc822date_gen(datestr, sizeof(datestr), t);
+    fprintf(sm, "Date: %s\r\n", datestr);
     
     fprintf(sm, "X-Sieve: %s\r\n", sieve_version);
     fprintf(sm, "From: <%s>\r\n", src->fromaddr);
