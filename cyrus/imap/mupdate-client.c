@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.32.4.6 2002/12/20 18:32:05 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.32.4.7 2003/01/31 20:55:23 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -569,21 +569,32 @@ int mupdate_scarf(mupdate_handle *handle,
 	if (wait_for_ok) {
 	    prot_BLOCK(handle->pin);
 	} else {
+	    /* check for input */
 	    prot_NONBLOCK(handle->pin);
+	    ch = prot_getc(handle->pin);
+
+	    if(ch == EOF && errno == EAGAIN) {
+		/* this was just "no input" we return 0 */
+		goto done;
+	    } else if(ch == EOF) {
+		/* this was a fatal error */
+		r = MUPDATE_NOCONN;
+		goto done;
+	    } else {
+		/* there's input waiting, put back our character */
+		prot_ungetc(ch, handle->pin);
+	    }
+
+	    /* Set it back to blocking so we don't get half a word */
+	    prot_BLOCK(handle->pin);
 	}
 
 	ch = getword(handle->pin, &(handle->tag));
-	if (ch == EOF && errno == EAGAIN) {
-	    /* this was just "no input" we return 0 */
-	    goto done;
-	} else if (ch == EOF) {
+	if (ch == EOF) {
 	    /* this was a fatal error */
 	    r = MUPDATE_NOCONN;
 	    goto done;
 	}
-
-	/* set it blocking so we don't get half a line */
-	prot_BLOCK(handle->pin);
 
 	if(ch != ' ') {
 	    /* We always have a command */
