@@ -31,6 +31,11 @@
 #include <string.h>
 #include <syslog.h>
 #include <errno.h>
+#ifdef __STDC__
+#include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <netinet/in.h>
@@ -45,159 +50,82 @@
 
 #define FNAME_TOIMSPFILE "/toimsp"
 
-static char toimsp_nul[] = {0, 0, 0, 0};
-
-#define MKTAG(a,b,size) htonl((a)<<24|(b)<<16|(size))
+#define VECSIZE 15
 
 /*
  * Drop off a request to send an IMSP LAST command stating the highest
  * uid for mailbox 'name' is 'uid' and has 'exists' messages.
  */
 int
-toimsp_mboxinfo(name, uidvalidity, uid_next, acl, acl_time, renameto)
-char *name;
-bit32 uidvalidity;
-bit32 uid_next;
-char *acl;
-bit32 acl_time;
-char *renameto;
+#ifdef __STDC__
+toimsp(char *name, bit32 uidvalidity, ...)
+#else
+toimsp(va_alist)
+va_dcl
+#endif
 {
+    va_list pvar;
     int fd;
-    struct iovec iov[15];
+    struct iovec iov[VECSIZE];
+    char iovbuf[VECSIZE][15];
     int num_iov = 0;
-    bit32 untag, actag, rntag;
+    char *tag;
+    char *sval;
+    bit32 *nval;
+
+#ifdef __STDC__
+    va_start(pvar, uidvalidity);
+#else
+    char *name;
+    bit32 uidvalidity;
+
+    va_start(pvar);
+    name = va_arg(pvar, char *);
+    uidvalidity = va_arg(pvar, bit32);
+#endif
     
     fd = toimsp_open();
     if (fd == -1) return;
 
-    /* Start with 4 nuls */
-    iov[num_iov].iov_base = toimsp_nul;
-    iov[num_iov++].iov_len = 4;
+    /* Start with newline */
+    iov[num_iov].iov_base = '\n';
+    iov[num_iov++].iov_len = 1;
 
     iov[num_iov].iov_base = name;
-    iov[num_iov].iov_len = strlen(name) + 1;
-    /* Pad to 4-octet boundary */
-    iov[num_iov+1].iov_base = toimsp_nul;
-    iov[num_iov+1].iov_len = (-iov[num_iov].iov_len) & 3;
-    num_iov += 2;
+    iov[num_iov++].iov_len = strlen(name) + 1;
 
-    uidvalidity = htonl(uidvalidity);
-    iov[num_iov].iov_base = (char *)&uidvalidity;
-    iov[num_iov++].iov_len = 4;
+    sprintf(iovbuf[num_iov], "%lu", (unsigned long)uidvalidity);
+    iov[num_iov].iov_base = iovbuf[num_iov];
+    iov[num_iov].iov_len = strlen(iovbuf[num_iov]) + 1;
+    num_iov++;
 
-    if (uid_next) {
-	untag = MKTAG('U', 'N', 4);
-	iov[num_iov].iov_base = (char *)&untag;
-	iov[num_iov++].iov_len = 4;
+    while (tag = va_arg(pvar, char *)) {
+	iov[num_iov].iov_base = tag;
+	iov[num_iov++].iov_len = strlen(tag) + 1;
 
-	uid_next = htonl(uid_next);
-	iov[num_iov].iov_base = (char *)&uid_next;
-	iov[num_iov++].iov_len = 4;
-    }	
+	while (*tag && isupper(*tag)) tag++;
+	while (*tag) {
+	    switch(*tag++) {
+	    case 's':
+		sval = va_arg(pvar, char *);
+		iov[num_iov].iov_base = sval;
+		iov[num_iov++].iov_len = strlen(sval) + 1;
+		break;
 
-    if (acl) {
-	iov[num_iov+1].iov_base = acl;
-	iov[num_iov+1].iov_len = strlen(acl) + 1;
-	/* Pad to 4-octet boundary */
-	iov[num_iov+2].iov_base = toimsp_nul;
-	iov[num_iov+2].iov_len = (-iov[num_iov+1].iov_len) & 3;
-	acl_time = htonl(acl_time);
-	iov[num_iov+3].iov_base = (char *)&acl_time;
-	iov[num_iov+3].iov_len = 4;
-	actag = MKTAG('A', 'C', iov[num_iov+1].iov_len +
-		      iov[num_iov+2].iov_len + 4);
-	iov[num_iov].iov_base = (char *)&actag;
-	iov[num_iov].iov_len = 4;
-	num_iov += 4;
+	    case 'n':
+		nval = va_arg(pvar, bit32);
+		sprintf(iovbuf[num_iov], "%lu", (unsigned long)nval);
+		iov[num_iov].iov_base = iovbuf[num_iov];
+		iov[num_iov].iov_len = strlen(iovbuf[num_iov]) + 1;
+		num_iov++;
+
+	    default:
+		abort("Internal error: unrecognized toimsp type", EX_SOFTWARE);
+	    }
+	}
     }
 
-    if (renameto) {
-	iov[num_iov+1].iov_base = renameto;
-	iov[num_iov+1].iov_len = strlen(renameto) + 1;
-	/* Pad to 4-octet boundary */
-	iov[num_iov+2].iov_base = toimsp_nul;
-	iov[num_iov+2].iov_len = (-iov[num_iov+1].iov_len) & 3;
-	rntag = MKTAG('R', 'N', iov[num_iov+1].iov_len +
-		      iov[num_iov+2].iov_len);
-	iov[num_iov].iov_base = (char *)&rntag;
-	iov[num_iov].iov_len = 4;
-	num_iov += 3;
-    }
-
-    n = retry_writev(fd, iov, num_iov);
-    fclose(fd);
-    
-    return 0;
-}
-      
-/*
- * Drop off a request to send an IMSP SEEN command stating that
- * mailbox 'name' has been seen by 'user' up to and including the
- * message 'uid'.
- */
-int
-toimsp_seen(name, uidvalidity, userid, uid, last_change)
-char *name;
-bit32 uidvalidity;
-char *userid;
-bit32 uid;
-bit32 last_change;
-{
-    int fd;
-    struct iovec iov[15];
-    int num_iov = 0;
-    bit32 sntag;
-    
-    fd = toimsp_open();
-    if (fd == -1) return;
-
-    /* Start with 4 nuls */
-    iov[num_iov].iov_base = toimsp_nul;
-    iov[num_iov++].iov_len = 4;
-
-    iov[num_iov].iov_base = name;
-    iov[num_iov].iov_len = strlen(name) + 1;
-    /* Pad to 4-octet boundary */
-    iov[num_iov+1].iov_base = toimsp_nul;
-    iov[num_iov+1].iov_len = (-iov[num_iov].iov_len) & 3;
-    num_iov += 2;
-
-    uidvalidity = htonl(uidvalidity);
-    iov[num_iov].iov_base = (char *)&uidvalidity;
-    iov[num_iov++].iov_len = 4;
-
-    untag = MKTAG('S', 'N', 4);
-    iov[num_iov].iov_base = (char *)&untag;
-    iov[num_iov].iov_len = 4;
-
-    iov[num_iov+1].iov_base = userid;
-    iov[num_iov+1].iov_len = strlen(userid) + 1;
-    /* Pad to 4-octet boundary */
-    iov[num_iov+2].iov_base = toimsp_nul;
-    iov[num_iov+2].iov_len = (-iov[num_iov+1].iov_len) & 3;
-    last_change = htonl(last_change);
-    iov[num_iov+3].iov_base = (char *)&last_change;
-    iov[num_iov+3].iov_len = 4;
-    sntag = MKTAG('S', 'N', iov[num_iov+1].iov_len +
-		  iov[num_iov+2].iov_len+4);
-    iov[num_iov].iov_base = (char *)&sntag;
-    iov[num_iov].iov_len = 4;
-    num_iov += 4;
-
-    if (renameto) {
-	iov[num_iov+1].iov_base = acl;
-	iov[num_iov+1].iov_len = strlen(renameto) + 1;
-	/* Pad to 4-octet boundary */
-	iov[num_iov+2].iov_base = toimsp_nul;
-	iov[num_iov+2].iov_len = (-iov[num_iov+1].iov_len) & 3;
-	iov[num_iov].iov_base = MKTAG('R', 'N', iov[num_iov+1].iov_len+
-				                iov[num_iov+2].iov_len);
-	iov[num_iov].iov_len = 4;
-    }
-
-    /* Terminate with 4 nuls */
-    iov[num_iov].iov_base = toimsp_nul;
-    iov[num_iov++].iov_len = 4;
+    va_end(pvar);
 
     n = retry_writev(fd, iov, num_iov);
     fclose(fd);
