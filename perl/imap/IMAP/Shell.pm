@@ -120,6 +120,8 @@ my %builtins = (exit =>
 		  [\&_sc_delete, 'mailbox [host]', 'delete mailbox'],
 		delete => 'deletemailbox',
 		dm => 'deletemailbox',
+		reconstruct =>
+		  [\&_sc_reconstruct, 'mailbox', 'reconstruct mailbox (if supported'],
 		renamemailbox =>
 		  [\&_sc_rename,
 		   '[--partition partition] oldname newname [partition]',
@@ -909,6 +911,31 @@ sub _sc_delete {
     die "deletemailbox: no connection to server\n";
   }
   $$cyrref->delete(@nargv) || die "deletemailbox: " . $$cyrref->error . "\n";
+  0;
+}
+
+sub _sc_reconstruct {
+  my ($cyrref, $name, $fh, $lfh, @argv) = @_;
+  my (@nargv, $opt);
+  shift(@argv);
+  while (defined ($opt = shift(@argv))) {
+    last if $opt eq '--';
+    if ($opt =~ /^-/) {
+      die "usage: reconstruct mailbox\n";
+    }
+    else {
+      push(@nargv, $opt);
+      last;
+    }
+  }
+  push(@nargv, @argv);
+  if (!@nargv || @nargv > 1) {
+    die "usage: reconstruct mailbox\n";
+  }
+  if (!$cyrref || !$$cyrref) {
+    die "reconstruct: no connection to server\n";
+  }
+  $$cyrref->reconstruct(@nargv) || die "reconstruct: " .$$cyrref->error. "\n";
   0;
 }
 
