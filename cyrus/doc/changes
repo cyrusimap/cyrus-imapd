@@ -1,10 +1,24 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server Since Version 1.6.20 
+
+      * Some fixes to the TLS support to gracefully degrade service. 
+      * Sieve now correctly re-sieves messages that are received with
+        identical message-ids, but different envelopes. It also obeys
+        plus-addressing on keep actions. (Fixes by Ken Murchison,
+        ken@oceana.com.) 
+      * The server wasn't correctly calculating the percentage of quota
+        used when deciding whether or not to issue a warning. 
+      * Implemented single-instance store: deliver, when using LMTP, will
+        only store one copy of a message per partition, and hard link it
+        among multiple users. Sites with a large number of partitions could
+        see a performance decrease. 
+
 Changes to the Cyrus IMAP Server Since Version 1.6.19 
 
       * Added STARTTLS support; requires OpenSSL. 
       * Sieve now uses MDNs to reject messages instead of DSNs, conforming
-        to the latest Sieve specification. 
+        to the latest Sieve specification. (Ken Murchison) 
       * The duplicate delivery database expiration (deliver -E) was
         deleting all entries; fixed. 
       * imtest is now a little smarter about parsing the protocol to avoid
@@ -27,7 +41,7 @@ Changes to the Cyrus IMAP Server Since Version 1.6.16
         option without the plugin name requesting it. This caused PLAIN
         authentications to incorrectly fail. 
       * Changed the expiration time of pts entries to 3 hours; only affects
-        sites using krb_pts as the authentication method. 
+        sites using krb_pts as the authorization method. 
       * Fixed some bugs in imclient; mostly affects cyradm. 
       * Fixed a bug in the Sieve lexer and improved the usefulness of the
         Sieve test program. 
