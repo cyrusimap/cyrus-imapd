@@ -511,9 +511,10 @@ void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
                *msg)  
 {
     FILE *msgf, *tmpf;
-    char *allmsg, *withcrnl, buf[1025],amsfile[MAXPATHLEN], *descbuf, *tmpfil,
-        *p, *q, *r; 
+    char *allmsg, *withcrnl, buf[1025],amsfile[MAXPATHLEN], *descbuf, *tmpfil;
+    char *startline, *p, *q, *r; 
     int withcrnllen, withcrnlsize;
+    int inheaders;
     int len, rc, gmtnegative, scribeval, done, unscribe;
     int gmtoff;
     struct tm *tm;
@@ -702,32 +703,47 @@ void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
     withcrnlsize = statbuf.st_size + ALLOCSLOP;
     withcrnllen = 0;
     withcrnl = xmalloc(withcrnlsize);
-    q=allmsg;
-    while ((p=strchr(q,'\n'))) {
-	if (withcrnllen + (int)(p-q) + 3 > withcrnlsize) {
-	    withcrnlsize += (int)(p-q) + ALLOCSLOP;
+    startline = allmsg;
+    inheaders = 1;
+    while ((p = strchr(startline,'\n'))) {
+	if (withcrnllen + (int)(p-startline) + 4 > withcrnlsize) {
+	    withcrnlsize += (int)(p-startline) + ALLOCSLOP;
 	    withcrnl = xrealloc(withcrnl, withcrnlsize);
 	}
-	strncpy(withcrnl+withcrnllen, q, (int)(p-q));
-	withcrnllen += (int)(p-q);
+	if (*startline == '\n') inheaders = 0;
+	if (inheaders) {
+	    /* Strip 8-bit data */
+	    for (q = startline; q < p; q++) {
+		if (*q & 0x80) *q &= 0x7f;
+	    }
+
+	    /* If not a valid header, make a header continuation line */
+	    if (*startline == ':') withcrnl[withcrnllen++] = ' ';
+	    else if (*startline != ' ' && *startline != '\t') {
+		for (q = startline; *q != ':'; q++) {
+		    if (*q <= ' ') break;
+		}
+		if (*q != ':') withcrnl[withcrnllen++] = ' ';
+	    }
+	}
+
+	strncpy(withcrnl+withcrnllen, startline, (int)(p-startline));
+	withcrnllen += (int)(p-startline);
 	if (withcrnllen && withcrnl[withcrnllen-1] == '\r') withcrnllen--;
 	withcrnl[withcrnllen++] = '\r';
 	withcrnl[withcrnllen++] = '\n';
-	q=p+1;
+	startline = p+1;
     }
+    if (inheaders) {
+	/* Add delimiting blank line */
+	if (withcrnllen + 4 > withcrnlsize) {
+	    withcrnlsize += (int)(p-startline) + ALLOCSLOP;
+	    withcrnl = xrealloc(withcrnl, withcrnlsize);
+	}
+	withcrnl[withcrnllen++] = '\r';
+	withcrnl[withcrnllen++] = '\n';
+    }	
     withcrnl[withcrnllen++] = '\0';
-#if 0                           /* this code sucks. It's supposed to */
-                                /* deal with an all-header no body */
-                                /* message without a trailing LF, but */
-                                /* it doesn't work. purify is cool or */
-                                /* something. */
-    if (q && *q){
-	p=&q[strlen(q)];
-	withcrnl=xrealloc(withcrnl, (int)(p-q) +3);
-	strcat(withcrnl,q);
-	strcat(withcrnl,"\r\n");
-    }
-#endif
     /* Generate timestamp string for IMAP internaldate */
     gmtoff = gmtoff_of((tm=localtime(&msg->stamp)), msg->stamp);
     gmtnegative = 0;
