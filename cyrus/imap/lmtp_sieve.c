@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.1 2004/02/08 18:31:14 ken3 Exp $
+ * $Id: lmtp_sieve.c,v 1.2 2004/02/12 02:32:22 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,8 +80,8 @@ static const char *sieve_dir = NULL;
 
 /* data per script */
 typedef struct script_data {
-    char *username;
-    char *mailboxname;
+    const char *username;
+    const char *mailboxname;
     struct auth_state *authstate;
 } script_data_t;
 
@@ -94,7 +94,7 @@ extern int deliver_mailbox(struct protstream *msg,
 			   char *authuser,
 			   struct auth_state *authstate,
 			   char *id,
-			   char *user,
+			   const char *user,
 			   char *notifyheader,
 			   const char *mailboxname,
 			   int quotaoverride,
@@ -414,22 +414,25 @@ static int sieve_fileinto(void *ac,
     sieve_msgdata_t *mdata = (sieve_msgdata_t *) mc;
     message_data_t *md = mdata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
+    char namebuf[MAX_MAILBOX_NAME+1];
     int ret;
 
     /* we're now the user who owns the script */
-    if (!sd->authstate)
-	return SIEVE_FAIL;
+    if (!sd->authstate) return SIEVE_FAIL;
 
-    ret = deliver_mailbox(md->data, mdata->stage, md->size,
-			  fc->imapflags->flag, fc->imapflags->nflags,
-                          sd->username, sd->authstate, md->id,
-                          sd->username, mdata->notifyheader,
-                          fc->mailbox, quotaoverride, 0);
+    ret = (*mdata->namespace->mboxname_tointernal)(mdata->namespace,
+						   fc->mailbox,
+						   sd->username, namebuf);
+    if (!ret) {
+	ret = deliver_mailbox(md->data, mdata->stage, md->size,
+			      fc->imapflags->flag, fc->imapflags->nflags,
+			      (char *) sd->username, sd->authstate, md->id,
+			      sd->username, mdata->notifyheader,
+			      namebuf, quotaoverride, 0);
+    }
 
-    if (ret == 0) {
-
+    if (!ret) {
 	snmp_increment(SIEVE_FILEINTO, 1);
-
 	return SIEVE_OK;
     } else {
 	*errmsg = error_message(ret);
@@ -446,35 +449,43 @@ static int sieve_keep(void *ac,
     sieve_msgdata_t *mydata = (sieve_msgdata_t *) mc;
     message_data_t *md = mydata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
-    char namebuf[MAX_MAILBOX_PATH+1];
-    int ret = 1;
+    char namebuf[MAX_MAILBOX_NAME+1], *tail;
+    int ret;
 
-    if (sd->mailboxname) {
-	strlcpy(namebuf, mydata->namespace->prefix[NAMESPACE_INBOX],
-		sizeof(namebuf));
-	strlcat(namebuf, sd->mailboxname, sizeof(namebuf));
+    ret = (*mydata->namespace->mboxname_tointernal)(mydata->namespace,
+						    "INBOX",
+						    sd->username, namebuf);
 
-	ret = deliver_mailbox(md->data, mydata->stage, md->size,
-			      kc->imapflags->flag, kc->imapflags->nflags,
-			      mydata->authuser, mydata->authstate, md->id,
-			      sd->username, mydata->notifyheader,
-			      namebuf, quotaoverride, 0);
+    if (!ret) {
+	int ret2 = 1;
+
+	tail = namebuf + strlen(namebuf);
+	if (sd->mailboxname) {
+	    strlcat(namebuf, ".", sizeof(namebuf));
+	    strlcat(namebuf, sd->mailboxname, sizeof(namebuf));
+
+	    ret2 = deliver_mailbox(md->data, mydata->stage, md->size,
+				   kc->imapflags->flag, kc->imapflags->nflags,
+				   mydata->authuser, mydata->authstate, md->id,
+				   sd->username, mydata->notifyheader,
+				   namebuf, quotaoverride, 0);
+	}
+	if (ret2) {
+	    /* we're now the user who owns the script */
+	    if (!sd->authstate) return SIEVE_FAIL;
+
+	    /* normal delivery to INBOX */
+	    *tail = '\0';
+
+	    ret = deliver_mailbox(md->data, mydata->stage, md->size,
+				  kc->imapflags->flag, kc->imapflags->nflags,
+				  (char *) sd->username, sd->authstate, md->id,
+				  sd->username, mydata->notifyheader,
+				  namebuf, quotaoverride, 1);
+	}
     }
-    if (ret) {
-	/* we're now the user who owns the script */
-	if (!sd->authstate)
-	    return SIEVE_FAIL;
 
-	strlcpy(namebuf, "INBOX", sizeof(namebuf));
-
-	ret = deliver_mailbox(md->data, mydata->stage, md->size,
-			      kc->imapflags->flag, kc->imapflags->nflags,
-			      sd->username, sd->authstate, md->id,
-			      sd->username, mydata->notifyheader,
-			      namebuf, quotaoverride, 1);
-    }
-
-    if (ret == 0) {	
+    if (!ret) {
 	snmp_increment(SIEVE_KEEP, 1);
 	return SIEVE_OK;
     } else {
@@ -764,8 +775,8 @@ sieve_interp_t *setup_sieve(void)
     return interp;
 }
 
-static int sieve_find_script(const char *user, struct namespace *namespace,
-		      char *fname, size_t size)
+static int sieve_find_script(const char *user, const char *domain,
+			     char *fname, size_t size)
 {
     if (strlen(user) > 900) {
 	return -1;
@@ -781,62 +792,42 @@ static int sieve_find_script(const char *user, struct namespace *namespace,
 	/* check ~USERNAME/.sieve */
 	snprintf(fname, size, "%s/%s", pent->pw_dir, ".sieve");
     } else { /* look in sieve_dir */
-	char hash, *domain = NULL;
-	char bufuser[MAX_MAILBOX_NAME+1];
+	char hash = (char) dir_hash_c(user);
 
-	strlcpy(bufuser, user, sizeof(bufuser));
-
-	mboxname_hiersep_tointernal(namespace, bufuser,
-				    config_virtdomains ?
-				    strcspn(bufuser, "@") : 0);
-
-	if (config_virtdomains && (domain = strchr(bufuser, '@'))) {
-	    *domain++ = '\0';  /* split user@domain */
-	}
-
-	hash = (char) dir_hash_c(bufuser);
-	if (domain &&
-	    !(config_defdomain && !strcasecmp(config_defdomain, domain))) {
-	    char d = (char) dir_hash_c(domain);
+	if (domain) {
+	    char dhash = (char) dir_hash_c(domain);
 	    snprintf(fname, size, "%s%s%c/%s/%c/%s/defaultbc",
-		     sieve_dir, FNAME_DOMAINDIR, d, domain,
-		     hash, bufuser);
-	}
-	else {
-	    snprintf(fname, size, "%s/%c/%s/defaultbc",
-		     sieve_dir, hash, bufuser);
+		     sieve_dir, FNAME_DOMAINDIR, dhash, domain, hash, user);
+	} else {
+	    snprintf(fname, size, "%s/%c/%s/defaultbc", sieve_dir, hash, user);
 	}
     }
 	
     return 0;
 }
 
-int run_sieve(char *user, char *mailbox, sieve_interp_t *interp,
-	      sieve_msgdata_t *msgdata)
+int run_sieve(const char *user, const char *domain, const char *mailbox,
+	      sieve_interp_t *interp, sieve_msgdata_t *msgdata)
 {
     char fname[MAX_MAILBOX_PATH+1];
     int r = 0;
 
-    if (sieve_find_script(user, msgdata->namespace,
-			  fname, sizeof(fname)) != -1) {
+    if (sieve_find_script(user, domain, fname, sizeof(fname)) != -1) {
 	script_data_t *sdata = NULL;
 	sieve_bytecode_t *bc = NULL;
-	char namebuf[MAX_MAILBOX_PATH+1];
-	char *domain = strchr(user, '@');
+	char userbuf[MAX_MAILBOX_NAME+1];
 
 	sdata = (script_data_t *) xmalloc(sizeof(script_data_t));
 
-	sdata->username = user;
+	strlcpy(userbuf, user, sizeof(userbuf));
+	if (domain) {
+	    strlcat(userbuf, "@", sizeof(userbuf));
+	    strlcat(userbuf, domain, sizeof(userbuf));
+	}
+	sdata->username = userbuf;
 	sdata->mailboxname = mailbox;
-	sdata->authstate = auth_newstate(user);
+	sdata->authstate = auth_newstate(userbuf);
 
-	/* slap the mailbox back on so we hash the envelope & id
-	   when we figure out whether or not to keep the message */
-	snprintf(namebuf, sizeof(namebuf), "%.*s+%s%s",
-		 strcspn(user, "@"), user,
-		 mailbox ? mailbox : "",
-		 domain ? domain : "");
-		
 	r = sieve_script_load(fname, &bc);
 	if (r == SIEVE_OK) {
 	    r = sieve_execute_bytecode(bc, interp,
@@ -844,8 +835,15 @@ int run_sieve(char *user, char *mailbox, sieve_interp_t *interp,
 	}
 	if ((r == SIEVE_OK) && (msgdata->m->id)) {
 	    /* ok, we've run the script */
-	    char *sdb = make_sieve_db(namebuf);
+	    char namebuf[MAX_MAILBOX_NAME+1];
+	    char *sdb;
 		    
+	    /* slap the mailbox back on so we hash the envelope & id
+	       when we figure out whether or not to keep the message */
+	    snprintf(namebuf, sizeof(namebuf), "%s+%s@%s",
+		     user, mailbox ? mailbox : "", domain ? domain : "");
+	    sdb = make_sieve_db(namebuf);
+		
 	    duplicate_mark(msgdata->m->id, strlen(msgdata->m->id), 
 			   sdb, strlen(sdb), time(NULL), 0);
 	}
@@ -864,4 +862,3 @@ int run_sieve(char *user, char *mailbox, sieve_interp_t *interp,
 
     return r;
 }
-

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.129 2004/02/08 18:44:28 ken3 Exp $
+ * $Id: lmtpd.c,v 1.130 2004/02/12 02:32:23 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -93,7 +93,8 @@
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
-static int verify_user(const char *user, long quotacheck,
+static int verify_user(const char *user, const char *domain, const char *mailhox,
+		       long quotacheck,
 		       struct auth_state *authstate);
 static char *generate_notify(message_data_t *m);
 
@@ -102,8 +103,12 @@ void shut_down(int code);
 static FILE *spoolfile(message_data_t *msgdata);
 static void removespool(message_data_t *msgdata);
 
+/* current namespace */
+static struct namespace lmtpd_namespace;
+
 struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
-			    &spoolfile, &removespool, 0, 1, 0 };
+			    &spoolfile, &removespool, &lmtpd_namespace,
+			    0, 1, 0 };
 
 static void usage();
 
@@ -124,9 +129,6 @@ static sieve_interp_t *sieve_interp = NULL;
 /* per-user/session state */
 static struct protstream *deliver_out, *deliver_in;
 int deliver_logfd = -1; /* used in lmtpengine.c */
-
-/* current namespace */
-static struct namespace lmtpd_namespace;
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
@@ -271,7 +273,7 @@ int deliver_mailbox(struct protstream *msg,
 		    char *authuser,
 		    struct auth_state *authstate,
 		    char *id,
-		    char *user,
+		    const char *user,
 		    char *notifyheader,
 		    const char *mailboxname,
 		    int quotaoverride,
@@ -279,31 +281,20 @@ int deliver_mailbox(struct protstream *msg,
 {
     int r;
     struct appendstate as;
-    char namebuf[MAX_MAILBOX_PATH+1];
     time_t now = time(NULL);
     unsigned long uid;
-
-    /* Translate any separators in user */
-    if (user && *user != '@')
-	mboxname_hiersep_tointernal(&lmtpd_namespace, user,
-				    config_virtdomains ?
-				    strcspn(user, "@") : 0);
-
-    r = (*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace, mailboxname,
-					       user, namebuf);
+    const char *notifier;
 
     if (dupelim && id && 
-	duplicate_check(id, strlen(id), namebuf, strlen(namebuf))) {
+	duplicate_check(id, strlen(id), mailboxname, strlen(mailboxname))) {
 	/* duplicate message */
-	duplicate_log(id, namebuf, "delivery");
+	duplicate_log(id, mailboxname, "delivery");
 	return 0;
     }
 
-    if (!r) {
-	r = append_setup(&as, namebuf, MAILBOX_FORMAT_NORMAL,
-			 authuser, authstate, acloverride ? 0 : ACL_POST, 
-			 quotaoverride ? -1 : 0);
-    }
+    r = append_setup(&as, mailboxname, MAILBOX_FORMAT_NORMAL,
+		     authuser, authstate, acloverride ? 0 : ACL_POST, 
+		     quotaoverride ? -1 : 0);
 
     if (!r) {
 	prot_rewind(msg);
@@ -313,18 +304,28 @@ int deliver_mailbox(struct protstream *msg,
 	else append_abort(&as);
     }
 
-    if (!r && user && strcspn(user, "@")) {
-	const char *notifier = config_getstring(IMAPOPT_MAILNOTIFIER);
+    if (!r && user && (notifier = config_getstring(IMAPOPT_MAILNOTIFIER))) {
+	char namebuf[MAX_MAILBOX_NAME+1];
+	char userbuf[MAX_MAILBOX_NAME+1];
+	int r2;
 
-	if (notifier) {
-	    /* do we want to replace user.XXX with INBOX? */
-	    notify(notifier, "MAIL", NULL, user, mailboxname, 0, NULL,
+	/* translate mailboxname */
+	r2 = (*lmtpd_namespace.mboxname_toexternal)(&lmtpd_namespace,
+						    mailboxname,
+						    user, namebuf);
+	if (!r2) {
+	    strlcpy(userbuf, user, sizeof(userbuf));
+	    /* translate any separators in user */
+	    mboxname_hiersep_toexternal(&lmtpd_namespace, userbuf,
+					config_virtdomains ?
+					strcspn(userbuf, "@") : 0);
+	    notify(notifier, "MAIL", NULL, userbuf, namebuf, 0, NULL,
 		   notifyheader ? notifyheader : "");
 	}
     }
 
     if (!r && dupelim && id) duplicate_mark(id, strlen(id), 
-					    namebuf, strlen(namebuf),
+					    mailboxname, strlen(mailboxname),
 					    now, uid);
     return r;
 }
@@ -334,7 +335,6 @@ int deliver(message_data_t *msgdata, char *authuser,
 {
     int n, nrcpts;
     sieve_msgdata_t mydata;
-    char namebuf[MAX_MAILBOX_PATH+1];
     
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
@@ -350,70 +350,69 @@ int deliver(message_data_t *msgdata, char *authuser,
     
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
-	char *rcpt = xstrdup(msg_getrcpt(msgdata, n));
-	char *plus, *domain = NULL, user[MAX_MAILBOX_NAME+1];
+	char namebuf[MAX_MAILBOX_NAME+1] = "";
+	const char *user, *domain, *mailbox;
 	int quotaoverride = msg_getrcpt_ignorequota(msgdata, n);
 	int r = 0;
 
-	if (config_virtdomains && (domain = strchr(rcpt, '@'))) {
-	    *domain++ = '\0';
-	    if (config_defdomain && !strcasecmp(config_defdomain, domain))
-		domain = NULL;
-	}
-
+	msg_getrcpt(msgdata, n, &user, &domain, &mailbox);
 	mydata.cur_rcpt = n;
-	plus = strchr(rcpt, '+');
-	if (plus) *plus++ = '\0';
+
+	if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
+
 	/* case 1: shared mailbox request */
-	if (plus && !strcmp(rcpt, BB)) {
-	    strcpy(user, "");
-	    if (domain) sprintf(user+strlen(user), "@%s", domain);
-	    strlcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_SHARED],
-		    sizeof(namebuf));
-	    strlcat(namebuf, plus, sizeof(namebuf));
+	if (!user) {
+	    strlcat(namebuf, mailbox, sizeof(namebuf));
+
 	    r = deliver_mailbox(msgdata->data, 
 				mydata.stage,
 				msgdata->size, 
 				NULL, 0,
 				mydata.authuser, mydata.authstate,
-				msgdata->id, user, mydata.notifyheader,
+				msgdata->id, NULL, mydata.notifyheader,
 				namebuf, quotaoverride, 0);
 	}
 
 	/* case 2: ordinary user, might have Sieve script */
-	else if (!strchr(rcpt, lmtpd_namespace.hier_sep) &&
-	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
+	else {
+	    char userbuf[MAX_MAILBOX_NAME+1];
+	    char *tail;
 
-	    strlcpy(user, rcpt, sizeof(user));
-	    if (domain) sprintf(user+strlen(user), "@%s", domain);
+	    strlcat(namebuf, "user.", sizeof(namebuf));
+	    strlcat(namebuf, user, sizeof(namebuf));
+	    tail = namebuf + strlen(namebuf);
+
+	    strlcpy(userbuf, user, sizeof(userbuf));
+	    if (domain) {
+		strlcat(userbuf, "@", sizeof(userbuf));
+		strlcat(userbuf, domain, sizeof(userbuf));
+	    }
 
 #ifdef USE_SIEVE
-	    r = run_sieve(user, plus, sieve_interp, &mydata);
+	    r = run_sieve(user, domain, mailbox, sieve_interp, &mydata);
 	    /* if there was no sieve script, or an error during execution,
 	       r is non-zero and we'll do normal delivery */
 #else
 	    r = 1;		/* normal delivery */
 #endif
 
-	    if (r && plus &&
-		strlen(user) + strlen(plus) + 30 <= MAX_MAILBOX_PATH) {
+	    if (r && mailbox) {
 		/* normal delivery to + mailbox */
-		strlcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_INBOX],
-			sizeof(namebuf));
-		strlcat(namebuf, plus, sizeof(namebuf));
+		strlcat(namebuf, ".", sizeof(namebuf));
+		strlcat(namebuf, mailbox, sizeof(namebuf));
 		
 		r = deliver_mailbox(msgdata->data, 
 				    mydata.stage, 
 				    msgdata->size, 
 				    NULL, 0, 
 				    mydata.authuser, mydata.authstate,
-				    msgdata->id, user, mydata.notifyheader,
+				    msgdata->id, userbuf, mydata.notifyheader,
 				    namebuf, quotaoverride, 0);
 	    }
 
 	    if (r) {
 		/* normal delivery to INBOX */
-		strlcpy(namebuf, "INBOX", sizeof(namebuf));
+		*tail = '\0';
 		
 		/* ignore ACL's trying to deliver to INBOX */
 		r = deliver_mailbox(msgdata->data, 
@@ -421,12 +420,11 @@ int deliver(message_data_t *msgdata, char *authuser,
 				    msgdata->size, 
 				    NULL, 0, 
 				    mydata.authuser, mydata.authstate,
-				    msgdata->id, user, mydata.notifyheader,
+				    msgdata->id, userbuf, mydata.notifyheader,
 				    namebuf, quotaoverride, 1);
 	    }
 	}
 
-	free(rcpt);
 	msg_setrcpt_status(msgdata, n, r);
     }
 
@@ -492,61 +490,50 @@ void shut_down(int code)
     exit(code);
 }
 
-static int verify_user(const char *user, long quotacheck,
-		       struct auth_state *authstate)
+static int verify_user(const char *user, const char *domain, const char *mailbox,
+		       long quotacheck, struct auth_state *authstate)
 {
-    char buf[MAX_MAILBOX_NAME+1];
-    char *plus;
+    char namebuf[MAX_MAILBOX_NAME+1] = "";
     int r = 0;
-    int sl = strlen(BB);
-    char *domain = NULL;
-    int userlen = strlen(user), domainlen = 0;
 
-    if (config_virtdomains && (domain = strchr(user, '@'))) {
-	userlen = domain - user;
-	domain++;
-	/* ignore default domain */
-	if (!(config_defdomain && !strcasecmp(config_defdomain, domain)))
-	    domainlen = strlen(domain)+1;
-    }
-
-    /* check to see if mailbox exists and we can append to it */
-    if (!strncmp(user, BB, sl) && user[sl] == '+') {
-	/* special shared folder address */
-	if (domainlen)
-	    snprintf(buf, sizeof(buf),
-		     "%s!%.*s", domain, userlen - sl - 1, user + sl + 1);
-	else
-	    snprintf(buf, sizeof(buf),
-		     "%.*s", userlen - sl - 1, user + sl + 1);
-	/* Translate any separators in user */
-	mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen, 0);
-	/* - must have posting privileges on shared folders
-	   - don't care about message size (1 msg over quota allowed) */
-	r = append_check(buf, MAILBOX_FORMAT_NORMAL, authstate,
-			 ACL_POST, quotacheck > 0 ? 0 : quotacheck);
+    if ((!user && !mailbox) ||
+	(domain && (strlen(domain) + 1 > sizeof(namebuf)))) {
+	r = IMAP_MAILBOX_NONEXISTENT;
     } else {
-	/* ordinary user */
-	if (userlen > sizeof(buf)-10) {
-	    r = IMAP_MAILBOX_NONEXISTENT;
+	/* construct the mailbox that we will verify */
+	if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
+
+	if (!user) {
+	    /* shared folder */
+	    if (strlen(namebuf) + strlen(mailbox) > sizeof(namebuf)) {
+		r = IMAP_MAILBOX_NONEXISTENT;
+	    } else {
+		strlcat(namebuf, mailbox, sizeof(namebuf));
+	    }
 	} else {
-	    if (domainlen)
-		snprintf(buf, sizeof(buf),
-			 "%s!user.%.*s", domain, userlen, user);
-	    else
-		snprintf(buf, sizeof(buf), "user.%.*s", userlen, user);
-	    plus = strchr(buf, '+');
-	    if (plus) *plus = '\0';
-	    /* Translate any separators in user */
-	    mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen+5, 0);
-	    /* - don't care about ACL on INBOX (always allow post)
-	       - don't care about message size (1 msg over quota allowed) */
-	    r = append_check(buf, MAILBOX_FORMAT_NORMAL, authstate,
-			     0, quotacheck > 0 ? 0 : quotacheck);
+	    /* ordinary user -- check INBOX */
+	    if (strlen(namebuf) + 5 + strlen(user) > sizeof(namebuf)) {
+		r = IMAP_MAILBOX_NONEXISTENT;
+	    } else {
+		strlcat(namebuf, "user.", sizeof(namebuf));
+		strlcat(namebuf, user, sizeof(namebuf));
+	    }
 	}
     }
 
-    if (r) syslog(LOG_DEBUG, "append_check() of '%s' failed (%s)", buf,
+    if (!r) {
+	/*
+	 * check to see if mailbox exists and we can append to it:
+	 *
+	 * - must have posting privileges on shared folders
+	 * - don't care about ACL on INBOX (always allow post)
+	 * - don't care about message size (1 msg over quota allowed)
+	 */
+	r = append_check(namebuf, MAILBOX_FORMAT_NORMAL, authstate,
+			 !user ? ACL_POST : 0, quotacheck > 0 ? 0 : quotacheck);
+    }
+
+    if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,
 		  error_message(r));
 
     return r;
@@ -601,66 +588,37 @@ FILE *spoolfile(message_data_t *msgdata)
     n = msg_getnumrcpt(msgdata);
     for (i = 0; !f && (i < n); i++) {
 	int r = 0;
-	char *rcpt, *plus, *user = NULL, *domain = NULL;
-	char namebuf[MAX_MAILBOX_PATH+1], mailboxname[MAX_MAILBOX_PATH+1];
+	char namebuf[MAX_MAILBOX_NAME+1] = "";
+	const char *user, *domain, *mailbox;
 
 	/* build the mailboxname from the recipient address */
-	user = rcpt = xstrdup(msg_getrcpt(msgdata, i));
-	if (config_virtdomains && (domain = strchr(rcpt, '@'))) {
-	    *domain = '\0';
-	}
+	msg_getrcpt(msgdata, i, &user, &domain, &mailbox);
 
-	plus = strchr(rcpt, '+');
-	if (plus) *plus++ = '\0';
+	if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
 
 	/* case 1: shared mailbox request */
-	if (plus && !strcmp(rcpt, BB)) {
-	    strlcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_SHARED],
-		    sizeof(namebuf));
-	    strlcat(namebuf, plus, sizeof(namebuf));
-	    user += strlen(BB);
+	if (!user) {
+	    strlcat(namebuf, mailbox, sizeof(namebuf));
 	}
 
 	/* case 2: ordinary user */
-	else if (!strchr(rcpt, lmtpd_namespace.hier_sep) &&
-	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
-
+	else {
 	    /* assume delivery to INBOX for now */
-	    strlcpy(namebuf, "INBOX", sizeof(namebuf));
+	    strlcat(namebuf, "user.", sizeof(namebuf));
+	    strlcat(namebuf, user, sizeof(namebuf));
 	}
-
+#if 0
 	/* case 3: unable to handle rcpt */
 	else {
 	    /* force error and we'll fallback to using /tmp */
 	    r = 1;
 	}
-
-	/* reassemble the user and domain */
-	if (domain) {
-	    *domain = '@';
-	    /* slide the domain up to the user */
-	    if (plus) memmove(plus-1, domain, strlen(domain)+1);
-	}
-
-	if (!r) {
-	    /* Translate any separators in user */
-	    if (user && *user != '@')
-		mboxname_hiersep_tointernal(&lmtpd_namespace, user,
-					    config_virtdomains ?
-					    strcspn(user, "@") : 0);
-
-	    r = (*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace,
-						       namebuf,
-						       user, mailboxname);
-	}
-
-	free(rcpt);
-
+#endif
 	if (!r) {
 	    struct stagemsg *stage = NULL;
 
 	    /* setup stage for later use by deliver() */
-	    f = append_newstage(mailboxname, now, 0, &stage);
+	    f = append_newstage(namebuf, now, 0, &stage);
 	    msg_setrock(msgdata, (void*) stage);
 	}
     }
@@ -674,4 +632,3 @@ void removespool(message_data_t *msgdata)
 
     append_removestage(stage);
 }
-

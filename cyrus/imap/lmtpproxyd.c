@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.60 2004/02/04 18:05:31 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.61 2004/02/12 02:32:23 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -97,7 +97,7 @@ struct backend **backend_cached = NULL;
 
 /* a final destination for a message */
 struct rcpt {
-    char mailbox[MAX_MAILBOX_NAME+1]; /* where? */
+    char rcpt[MAX_MAILBOX_NAME+1]; /* where? */
     int rcpt_num;		    /* credit this to who? */
     struct rcpt *next;
 };
@@ -132,8 +132,8 @@ struct mydata {
 
 typedef struct mydata mydata_t;
 
-static int adddest(struct mydata *mydata, 
-		   const char *mailbox, const char *authas);
+static int adddest(struct mydata *mydata, const char *rcpt,
+		   char *mailbox, const char *authas);
 
 /* data per script */
 typedef struct script_data {
@@ -144,23 +144,24 @@ typedef struct script_data {
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
-static int verify_user(const char *user, long quotacheck,
-		       struct auth_state *authstate);
+static int verify_user(const char *user, const char *domain, const char *mailbox,
+		       long quotacheck, struct auth_state *authstate);
 FILE *proxy_spoolfile(message_data_t *msgdata);
 void shut_down(int code);
 static void usage();
 
+/* current namespace */
+static struct namespace lmtpd_namespace;
+
 struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
-			    &proxy_spoolfile, NULL, 0, 0, 0 };
+			    &proxy_spoolfile, NULL, &lmtpd_namespace,
+			    0, 0, 0 };
 
 /* globals */
 static int quotaoverride = 0;		/* should i override quota? */
 const char *BB = "";
 static mupdate_handle *mhandle = NULL;
 int deliver_logfd = -1; /* used in lmtpengine.c */
-
-/* current namespace */
-static struct namespace lmtpd_namespace;
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
@@ -329,59 +330,19 @@ static struct backend *proxyd_findserver(const char *server)
     return ret;
 }
 
-static int adddest(struct mydata *mydata, 
-		   const char *mailbox, const char *authas)
+static int adddest(struct mydata *mydata, const char *rcpt,
+		   char *mailbox, const char *authas)
 {
     struct rcpt *new_rcpt = xmalloc(sizeof(struct rcpt));
     struct dest *d;
     struct mupdate_mailboxdata *mailboxdata;
-    int sl = strlen(BB);
     int r;
-    char buf[MAX_MAILBOX_NAME+1];
-    char *domain = NULL;
-    int userlen = strlen(mailbox), domainlen = 0;
 
-    if (config_virtdomains && (domain = strchr(mailbox, '@'))) {
-	userlen = domain - mailbox;
-	domain++;
-	/* ignore default domain */
-	if (!(config_defdomain && !strcasecmp(config_defdomain, domain)))
-	    domainlen = strlen(domain)+1;
-    }
-
-    strlcpy(new_rcpt->mailbox, mailbox, sizeof(new_rcpt->mailbox));
+    strlcpy(new_rcpt->rcpt, rcpt, sizeof(new_rcpt->rcpt));
     new_rcpt->rcpt_num = mydata->cur_rcpt;
     
     /* find what server we're sending this to */
-    if (sl < strlen(mailbox) &&
-	!strncmp(mailbox, BB, sl) &&
-	mailbox[sl] == '+') {
-	/* special shared folder address */
-	if (domainlen)
-	    snprintf(buf, sizeof(buf),
-		     "%s!%.*s", domain, userlen - sl - 1, mailbox + sl + 1);
-	else
-	    snprintf(buf, sizeof(buf),
-		     "%.*s", userlen - sl - 1, mailbox + sl + 1);
-	/* Translate any separators in user */
-	mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen, 0);
-	r = mupdate_find(mhandle, buf, &mailboxdata);
-    } else {
-	char *plus;
-
-	if (domainlen)
-	    snprintf(buf, sizeof(buf),
-		     "%s!user.%.*s", domain, userlen, mailbox);
-	else
-	    snprintf(buf, sizeof(buf), "user.%.*s", userlen, mailbox);
-	plus = strchr(buf, '+');
-	if (plus) *plus = '\0';
-	/* Translate any separators in user */
-	mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen+5, 0);
-
-	/* find where this user lives */
-	r = mupdate_find(mhandle, buf, &mailboxdata);
-    }
+    r = mupdate_find(mhandle, mailbox, &mailboxdata);
 
     if (r == MUPDATE_MAILBOX_UNKNOWN) {
 	r = IMAP_MAILBOX_NONEXISTENT;
@@ -459,7 +420,7 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
 	rc = d->to;
 	for (rc = d->to; rc != NULL; rc = rc->next, i++) {
 	    assert(i < d->rnum);
-	    lt->rcpt[i].addr = rc->mailbox;
+	    lt->rcpt[i].addr = rc->rcpt;
 	    lt->rcpt[i].ignorequota =
 		msg_getrcpt_ignorequota(msgdata, rc->rcpt_num);
 	}
@@ -542,23 +503,21 @@ int deliver(message_data_t *msgdata, char *authuser,
 
     /* loop through each recipient, compiling list of destinations */
     for (n = 0; n < nrcpts; n++) {
-	char *rcpt = xstrdup(msg_getrcpt(msgdata, n));
-	char *plus, *domain = NULL;
+	char namebuf[MAX_MAILBOX_NAME+1] = "";
+	const char *rcpt, *user, *domain, *mailbox;
 	int r = 0;
 
-	if (config_virtdomains && (domain = strchr(rcpt, '@'))) {
-	    *domain++ = '\0';
-	}
-
+	rcpt = msg_getrcptall(msgdata, n);
+	msg_getrcpt(msgdata, n, &user, &domain, &mailbox);
 	mydata.cur_rcpt = n;
-	plus = strchr(rcpt, '+');
-	if (plus) *plus++ = '\0';
+
+	if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
+
 	/* case 1: shared mailbox request */
-	if (plus && !strcmp(rcpt, BB)) {
-	    *--plus = '+';		/* put that plus back */
-	    if (domain) *--domain = '@'; /* put that at-sign back */
-	    r = adddest(&mydata, rcpt, mydata.authuser);
-	    
+	if (!user) {
+	    strlcat(namebuf, mailbox, sizeof(namebuf));
+
+	    r = adddest(&mydata, rcpt, namebuf, mydata.authuser);
 	    if (r) {
 		msg_setrcpt_status(msgdata, n, r);
 		mydata.pend[n] = done;
@@ -569,12 +528,12 @@ int deliver(message_data_t *msgdata, char *authuser,
 
 	/* case 2: ordinary user, Sieve script---naaah, not here */
 
-	/* case 3: ordinary user, no Sieve script */
+	/* case 3: ordinary user, no Sieve script -- assume INBOX for now */
 	else {
-	    if (plus) *--plus = '+';
-	    if (domain) *--domain = '@';
+	    strlcat(namebuf, "user.", sizeof(namebuf));
+	    strlcat(namebuf, user, sizeof(namebuf));
 
-	    r = adddest(&mydata, rcpt, authuser);
+	    r = adddest(&mydata, rcpt, namebuf, authuser);
 	    if (r) {
 		msg_setrcpt_status(msgdata, n, r);
 		mydata.pend[n] = done;
@@ -582,8 +541,6 @@ int deliver(message_data_t *msgdata, char *authuser,
 		mydata.pend[n] = nosieve;
 	    }
 	}
-
-	free(rcpt);
     }
 
     /* run the txns */
@@ -681,65 +638,48 @@ void shut_down(int code)
     exit(code);
 }
 
-static int verify_user(const char *user,
+static int verify_user(const char *user, const char *domain, const char *mailbox,
 		       long quotacheck __attribute__((unused)),
 		       struct auth_state *authstate)
 {
-    char buf[MAX_MAILBOX_NAME+1];
+    char namebuf[MAX_MAILBOX_NAME+1] = "";
     int r = 0;
-    int sl = strlen(BB);
-    char *domain = NULL;
-    int userlen = strlen(user), domainlen = 0;
 
-    if (config_virtdomains && (domain = strchr(user, '@'))) {
-	userlen = domain - user;
-	domain++;
-	/* ignore default domain */
-	if (!(config_defdomain && !strcasecmp(config_defdomain, domain)))
-	    domainlen = strlen(domain)+1;
-    }
+    if ((!user && !mailbox) ||
+	(domain && (strlen(domain) + 1 > sizeof(namebuf)))) {
+	r = IMAP_MAILBOX_NONEXISTENT;
+    } else {
+	/* construct the mailbox that we will verify */
+	if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
 
-
-    /* check to see if mailbox exists */
-    if (!strncmp(user, BB, sl) && user[sl] == '+') {
-	/* special shared folder address */
-	if (domainlen)
-	    snprintf(buf, sizeof(buf),
-		     "%s!%.*s", domain, userlen - sl - 1, user + sl + 1);
-	else
-	    snprintf(buf, sizeof(buf),
-		     "%.*s", userlen - sl - 1, user + sl + 1);
-	/* Translate any separators in user */
-	mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen, 0);
-    } else {			/* ordinary user */
-	int l;
-	char *plus = strchr(user, '+');
-
-	if (plus) l = plus - user;
-	else l = userlen;
-
-	if ((l + domainlen) >= MAX_MAILBOX_NAME - 5) {
-	    /* too long a name */
-	    r = IMAP_MAILBOX_NONEXISTENT;
+	if (!user) {
+	    /* shared folder */
+	    if (strlen(namebuf) + strlen(mailbox) > sizeof(namebuf)) {
+		r = IMAP_MAILBOX_NONEXISTENT;
+	    } else {
+		strlcat(namebuf, mailbox, sizeof(namebuf));
+	    }
 	} else {
-	    /* just copy before the plus */
-	    if (domainlen)
-		snprintf(buf, sizeof(buf), "%s!user.%.*s", domain, l, user);
-	    else
-		snprintf(buf, sizeof(buf), "user.%.*s", l, user);
+	    /* ordinary user -- check INBOX */
+	    if (strlen(namebuf) + 5 + strlen(user) > sizeof(namebuf)) {
+		r = IMAP_MAILBOX_NONEXISTENT;
+	    } else {
+		strlcat(namebuf, "user.", sizeof(namebuf));
+		strlcat(namebuf, user, sizeof(namebuf));
+	    }
 	}
     }
 
 #ifdef CHECK_MUPDATE_EARLY
-    /* Translate any separators */
-    if (!r) mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen, 0);
     if (!r) {
-	r = mupdate_find(mhandle, buf, &mailboxdata);
+	struct mupdate_mailboxdata *mailboxdata;
+	r = mupdate_find(mhandle, namebuf, &mailboxdata);
 	if (r == MUPDATE_NOCONN) {
 	    /* yuck; our error handling for now will be to exit;
 	       this txn will be retried later */
 	    
 	}
+    }
     if (!r) {
 	/* xxx check ACL */
 
@@ -750,6 +690,9 @@ static int verify_user(const char *user,
        
     }
 #endif
+
+    if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,
+		  error_message(r));
 
     return r;
 }
