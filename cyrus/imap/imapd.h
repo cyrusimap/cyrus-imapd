@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.34 2000/05/23 20:52:17 robeson Exp $
+ * $Id: imapd.h,v 1.35 2000/05/30 21:02:06 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -177,6 +177,18 @@ struct searchargs {
     struct searchsub *sublist;
 };
 
+/* Values for sort criteria */
+#define SORT_REVERSE	-1
+#define SORT_SEQUENCE	0
+#define SORT_ARRIVAL	1
+#define SORT_CC		2
+#define SORT_DATE	3
+#define SORT_FROM	4
+#define SORT_SIZE	5
+#define SORT_SUBJECT	6
+#define	SORT_TO		7
+#define NUMSORTCRIT	8
+
 /* Bitmask for status queries */
 enum {
     STATUS_MESSAGES =	        (1<<0),
@@ -204,6 +216,14 @@ extern int index_store(struct mailbox *mailbox, char *sequence,
 			  char **flag, int nflags);
 extern void index_search(struct mailbox *mailbox,
 			    struct searchargs *searchargs, int usinguid);
+extern int sort_thread_enabled(void);
+extern void sort_thread_cleanup(void);
+extern void list_thread_algorithms(void);
+extern int find_thread_algorithm(char *arg);
+extern void index_sort(struct mailbox *mailbox, signed char *sortcrit,
+		       struct searchargs *searchargs, int usinguid);
+extern void index_thread(struct mailbox *mailbox, int algorithm,
+			 struct searchargs *searchargs, int usinguid);
 extern int index_copy(struct mailbox *mailbox, char *sequence,
 			 int usinguid, char *name, char **copyuidp);
 extern int index_status(struct mailbox *mailbox, char *name,

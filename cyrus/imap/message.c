@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.77 2000/05/23 20:52:25 robeson Exp $
+ * $Id: message.c,v 1.78 2000/05/30 21:02:05 ken3 Exp $
  */
 
 #include <config.h>
@@ -175,7 +175,6 @@ static void message_parse_type P((char *hdr, struct body *body));
 static void message_parse_params P((char *hdr, struct param **paramp));
 static void message_fold_params P((struct param **paramp));
 static void message_parse_language P((char *hdr, struct param **paramp));
-static time_t message_parse_date P((char *hdr));
 static void message_parse_rfc822space P((char **s));
 
 static void message_parse_multipart P((struct msg *msg,
@@ -364,7 +363,7 @@ struct index_record *message_index;
     message_parse_body(&msg, mailbox->format, &body,
 		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
     
-    message_index->sentdate = message_parse_date(body.date);
+    message_index->sentdate = message_parse_date(body.date, 0);
     message_index->size = body.header_size + body.content_size;
     message_index->header_size = body.header_size;
     message_index->content_offset = body.content_offset;
@@ -1282,9 +1281,10 @@ struct param **paramp;
  * Parse a RFC-822 date from a header.
  * Only parses to day granularity--ignores the time of day.
  */
-static time_t
-message_parse_date(hdr)
+time_t
+message_parse_date(hdr, flags)
 char *hdr;
+unsigned flags;
 {
     struct tm tm;
     time_t t;
@@ -1363,7 +1363,93 @@ char *hdr;
      }
 
     tm.tm_isdst = -1;
-    tm.tm_hour = 12;
+
+    if (flags & PARSE_TIME) {
+	/* Parse hour */
+	message_parse_rfc822space(&hdr);
+	if (!hdr || !isdigit(*hdr)) goto baddate;
+	tm.tm_hour = *hdr++ - '0';
+	if (!isdigit(*hdr)) goto baddate;
+	tm.tm_hour = tm.tm_hour * 10 + *hdr++ - '0';
+	if (!hdr || *hdr++ != ':') goto baddate;
+
+	/* Parse min */
+	if (!hdr || !isdigit(*hdr)) goto baddate;
+	tm.tm_min = *hdr++ - '0';
+	if (!isdigit(*hdr)) goto baddate;
+	tm.tm_min = tm.tm_min * 10 + *hdr++ - '0';
+
+	if (*hdr == ':') {
+	    /* Parse sec */
+	    if (!++hdr || !isdigit(*hdr)) goto baddate;
+	    tm.tm_sec = *hdr++ - '0';
+	    if (!isdigit(*hdr)) goto baddate;
+	    tm.tm_sec = tm.tm_sec * 10 + *hdr++ - '0';
+	}
+
+	if (flags & PARSE_ZONE) {
+	    /* Parse timezone offset */
+	    time_t tim;
+	    int offset;
+
+	    message_parse_rfc822space(&hdr);
+	    if (*hdr == '+' || *hdr == '-') {
+		/* Parse numeric offset */
+		int east = 1;
+
+		if (*hdr++ == '-')
+		    east = -1;
+		if (!hdr || !isdigit(*hdr)) goto baddate;
+		offset = 10 * (*hdr++ - '0');
+		if (!hdr || !isdigit(*hdr)) goto baddate;
+		offset = 60 * (offset + (*hdr++ - '0'));
+		if (!hdr || !isdigit(*hdr)) goto baddate;
+		offset = offset + 10 * (*hdr++ - '0');
+		if (!hdr || !isdigit(*hdr)) goto baddate;
+		offset = east * 60 * (offset + (*hdr++ - '0'));
+	    }
+	    else if (isalpha(*hdr)) {
+		/* Parse zone */
+		int zone;
+		char zonestr[4];
+		static char *zonename[] = {
+		    "z", "a", "m", "n", "y", "ut", "gmt",
+		    "est", "edt", "cst", "cdt", "mst", "mdt", "pst", "pdt"
+		};
+		static short zoneoff[] = {
+		    0, -1, -12, 1, 12, 0, 0, -5, -4, -6, -5, -7, -6, -8, -7
+		};
+
+		zonestr[0] = *hdr++;
+		if (!isalpha(*hdr))
+		    zonestr[1] = '\0';
+		else {
+		    zonestr[1] = *hdr++;
+		    if (!isalpha(*hdr))
+			zonestr[2] = '\0';
+		    else {
+			zonestr[2] = *hdr;
+			zonestr[3] = '\0';
+		    }
+		}
+		lcase(zonestr);
+		for (zone = 0; zone < 15; zone++) {
+		    if (!strcmp(zonestr, zonename[zone])) break;
+		}
+		if (zone == 15) goto baddate;
+
+		offset = 3600 * zoneoff[zone];
+	    }
+	    else
+		goto baddate;
+
+	    tim = mktime(&tm);
+	    tim -= offset;
+	    return tim;
+	}
+    }
+    else
+	tm.tm_hour = 12;
 
     t = mktime(&tm);
     /* Don't return -1; it's never right.  Return the current time instead.

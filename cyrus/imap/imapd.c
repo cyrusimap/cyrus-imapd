@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.248 2000/05/29 03:02:58 leg Exp $ */
+/* $Id: imapd.c,v 1.249 2000/05/30 21:02:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -134,6 +134,8 @@ void cmd_partial(char *tag, char *msgno, char *data,
 		 char *start, char *count);
 void cmd_store(char *tag, char *sequence, char *operation, int usinguid);
 void cmd_search(char *tag, int usinguid);
+void cmd_sort(char *tag, int usinguid);
+void cmd_thread(char *tag, int usinguid);
 void cmd_copy(char *tag, char *sequence, char *name, int usinguid);
 void cmd_expunge(char *tag, char *sequence);
 void cmd_create(char *tag, char *name, char *partition);
@@ -175,6 +177,7 @@ int getsearchprogram(char *tag, struct searchargs *searchargs,
 int getsearchcriteria(char *tag, struct searchargs *searchargs,
 			 int *charset, int parsecharset);
 int getsearchdate(time_t *start, time_t *end);
+int getsortcriteria(char *tag, signed char **sortcrit);
 int getdatetime(time_t *date);
 
 void eatline(int c);
@@ -517,6 +520,7 @@ void shut_down(int code)
     prot_flush(imapd_out);
     /* one less active connection */
     snmp_increment(ACTIVE_CONNECTIONS, -1);
+    sort_thread_cleanup();
     exit(code);
 }
 
@@ -1115,6 +1119,18 @@ cmdloop()
 
 		snmp_increment(SETQUOTA_COUNT, 1);
 	    }
+	    else if (!strcmp(cmd.s, "Sort")) {
+		if (!sort_thread_enabled()) {
+		    /* we don't support Sort/Thread */
+		    goto badcmd;
+		}
+		if (!imapd_mailbox) goto nomailbox;
+		usinguid = 0;
+		if (c != ' ') goto missingargs;
+	    sort:
+		mboxlist_close();	
+		cmd_sort(tag.s, usinguid);
+	    }
 	    else if (!strcmp(cmd.s, "Status")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg1);
@@ -1122,6 +1138,22 @@ cmdloop()
 		cmd_status(tag.s, arg1.s);
 
 		snmp_increment(STATUS_COUNT, 1);
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'T':
+	    if (!strcmp(cmd.s, "Thread")) {
+		if (!sort_thread_enabled()) {
+		    /* we don't support Sort/Thread */
+		    goto badcmd;
+		}
+		if (!imapd_mailbox) goto nomailbox;
+		usinguid = 0;
+		if (c != ' ') goto missingargs;
+	    thread:
+		mboxlist_close();	
+		cmd_thread(tag.s, usinguid);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1142,6 +1174,14 @@ cmdloop()
 		}
 		else if (!strcmp(arg1.s, "search")) {
 		    goto search;
+		}
+		else if (!strcmp(arg1.s, "sort") &&
+			 sort_thread_enabled()) {
+		    goto sort;
+		}
+		else if (!strcmp(arg1.s, "thread") &&
+			 sort_thread_enabled()) {
+		    goto thread;
 		}
 		else if (!strcmp(arg1.s, "copy")) {
 		    goto copy;
@@ -1701,6 +1741,11 @@ void cmd_capability(char *tag)
 	free(sasllist);
     } else {
 	/* else don't show anything */
+    }
+
+    if (sort_thread_enabled()) {
+	prot_printf(imapd_out, " SORT");
+	list_thread_algorithms();
     }
 
 #ifdef ENABLE_X_NETSCAPE_HACK
@@ -2713,6 +2758,159 @@ int usinguid;
     }
 
     freesearchargs(searchargs);
+}
+
+/*
+ * Perform a SORT/UID SORT command
+ */    
+void
+cmd_sort(tag, usinguid)
+char *tag;
+int usinguid;
+{
+    int c;
+    signed char *sortcrit;
+    static struct buf arg;
+    int charset = 0;
+    struct searchargs *searchargs;
+    static struct searchargs zerosearchargs;
+
+    c = getsortcriteria(tag, &sortcrit);
+    if (c == EOF) {
+	eatline(' ');
+	free(sortcrit);
+	return;
+    }
+
+    /* get charset */
+    if (c != ' ') {
+	prot_printf(imapd_out, "%s BAD Missing charset in Sort\r\n",
+		    tag);
+	eatline(c);
+	free(sortcrit);
+	return;
+    }
+
+    c = getword(&arg);
+    if (c != ' ') {
+	prot_printf(imapd_out, "%s BAD Missing search criteria in Sort\r\n",
+		    tag);
+	eatline(c);
+	free(sortcrit);
+	return;
+    }
+    lcase(arg.s);
+    charset = charset_lookupname(arg.s);
+
+    if (charset == -1) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+	       error_message(IMAP_UNRECOGNIZED_CHARSET));
+	eatline(c);
+	free(sortcrit);
+	return;
+    }
+
+    searchargs = (struct searchargs *)xmalloc(sizeof(struct searchargs));
+    *searchargs = zerosearchargs;
+
+    c = getsearchprogram(tag, searchargs, &charset, 0);
+    if (c == EOF) {
+	eatline(' ');
+	freesearchargs(searchargs);
+	free(sortcrit);
+	return;
+    }
+
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to Sort\r\n", tag);
+	eatline(c);
+	freesearchargs(searchargs);
+	free(sortcrit);
+	return;
+    }
+
+    index_sort(imapd_mailbox, sortcrit, searchargs, usinguid);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
+
+    free(sortcrit);
+    freesearchargs(searchargs);
+    return;
+}
+
+/*
+ * Perform a THREAD/UID THREAD command
+ */    
+void
+cmd_thread(tag, usinguid)
+char *tag;
+int usinguid;
+{
+    static struct buf arg;
+    int c;
+    int charset = 0;
+    int alg;
+    struct searchargs *searchargs;
+    static struct searchargs zerosearchargs;
+
+    /* get algorithm */
+    c = getword(&arg);
+    if (c != ' ') {
+	prot_printf(imapd_out, "%s BAD Missing charset in Thread\r\n", tag);
+	eatline(c);
+	return;
+    }
+
+    if ((alg = find_thread_algorithm(arg.s)) == -1) {
+	prot_printf(imapd_out, "%s BAD Invalid Thread algorithm %s\r\n",
+		    tag, arg.s);
+	eatline(c);
+	return;
+    }
+
+    /* get charset */
+    c = getword(&arg);
+    if (c != ' ') {
+	prot_printf(imapd_out, "%s BAD Missing search criteria in Thread\r\n",
+		    tag);
+	eatline(c);
+	return;
+    }
+    lcase(arg.s);
+    charset = charset_lookupname(arg.s);
+
+    if (charset == -1) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+	       error_message(IMAP_UNRECOGNIZED_CHARSET));
+	eatline(c);
+	return;
+    }
+
+    searchargs = (struct searchargs *)xmalloc(sizeof(struct searchargs));
+    *searchargs = zerosearchargs;
+
+    c = getsearchprogram(tag, searchargs, &charset, 0);
+    if (c == EOF) {
+	eatline(' ');
+	freesearchargs(searchargs);
+	return;
+    }
+
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to Thread\r\n", tag);
+	eatline(c);
+	freesearchargs(searchargs);
+	return;
+    }
+
+    index_thread(imapd_mailbox, alg, searchargs, usinguid);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
+
+    freesearchargs(searchargs);
+    return;
 }
 
 /*
@@ -4555,6 +4753,93 @@ time_t *start, *end;
 
  baddate:
     prot_ungetc(c, imapd_in);
+    return EOF;
+}
+
+/*
+ * Parse a sort criteria
+ */
+int getsortcriteria(tag, sortcrit)
+char *tag;
+signed char **sortcrit;
+{
+    int c;
+    static struct buf arg;
+    unsigned long sortcrit_mask = 0;
+    int n = 0;
+
+    /* Allocate and set the sort order for all sort criteria to forward */
+    *sortcrit = memset(xmalloc(NUMSORTCRIT), 1, NUMSORTCRIT);
+
+    c = prot_getc(imapd_in);
+    if (c != '(') goto missingcrit;
+
+    c = getword(&arg);
+    if (arg.s[0] == '\0') goto missingcrit;
+
+    for (;;) {
+	lcase(arg.s);
+	if (!strcmp(arg.s, "reverse")) {
+	    (*sortcrit)[n] = SORT_REVERSE;
+	    goto nextcrit;
+	}
+	else if (!strcmp(arg.s, "arrival"))
+	    (*sortcrit)[n] *= SORT_ARRIVAL;
+	else if (!strcmp(arg.s, "cc"))
+	    (*sortcrit)[n] *= SORT_CC;
+	else if (!strcmp(arg.s, "date"))
+	    (*sortcrit)[n] *= SORT_DATE;
+	else if (!strcmp(arg.s, "from"))
+	    (*sortcrit)[n] *= SORT_FROM;
+	else if (!strcmp(arg.s, "size"))
+	    (*sortcrit)[n] *= SORT_SIZE;
+	else if (!strcmp(arg.s, "subject"))
+	    (*sortcrit)[n] *= SORT_SUBJECT;
+	else if (!strcmp(arg.s, "to"))
+	    (*sortcrit)[n] *= SORT_TO;
+	else {
+	    prot_printf(imapd_out, "%s BAD Invalid Sort criterion %s\r\n",
+			tag, arg.s);
+	    if (c != EOF) prot_ungetc(c, imapd_in);
+	    return EOF;
+	}
+
+	/* If we haven't seen this criterion before, set it's mask bit
+	   so we ignore it the next time, and increment the counter */
+	if (!(sortcrit_mask & (1 << abs((*sortcrit)[n]))))
+	    sortcrit_mask |= (1 << abs((*sortcrit)[n++]));
+	else  /* otherwise ignore it and reset the order to forward */
+	    (*sortcrit)[n] = 1;
+
+nextcrit:
+	if (c == ' ') c = getword(&arg);
+	else break;
+    }
+
+    if ((*sortcrit)[n] == SORT_REVERSE) {
+	prot_printf(imapd_out,
+		    "%s BAD Missing Sort criterion to reverse\r\n", tag);
+	if (c != EOF) prot_ungetc(c, imapd_in);
+	return EOF;
+    }
+
+    if (c != ')') {
+	prot_printf(imapd_out,
+		    "%s BAD Missing close parenthesis in Sort\r\n", tag);
+	if (c != EOF) prot_ungetc(c, imapd_in);
+	return EOF;
+    }
+
+    /* Terminate the list with the implicit sort criterion */
+    (*sortcrit)[n++] = SORT_SEQUENCE;
+
+    c = prot_getc(imapd_in);
+
+    return c;
+
+ missingcrit:
+    prot_printf(imapd_out, "%s BAD Missing Sort criteria\r\n", tag);
+    if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
 }
 

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.102 2000/05/23 20:52:17 robeson Exp $
+ * $Id: index.c,v 1.103 2000/05/30 21:02:07 ken3 Exp $
  */
 #include <config.h>
 
@@ -70,6 +70,34 @@
 #include "charset.h"
 #include "xmalloc.h"
 #include "seen.h"
+#include "lsort.h"
+#include "message.h"
+#include "parseaddr.h"
+
+#ifdef ENABLE_REGEX
+#ifdef HAVE_RX
+#include <rxposix.h>
+#else
+#include <regex.h>
+#endif
+
+/* Subject extraction grammar (SORT/THREAD).
+ *
+ * This grammar deviates from the one shown in the draft, but coupled
+ * with the logic in extract_subject(), it is functionally equivalent.
+ * Also note that we optionally allow the leading and trailing double-quotes
+ * that are present in the cached subject header.
+ */
+#define TRAILER		"(" "\\(fwd\\)" "|" WSP ")*" "\"?$"
+#define LEADER		"^\"?" "(" REFWD "|" BLOB "|" WSP ")*"
+#define REFWD		"(re|fwd?)" WSP "(" BLOB ")?" WSP ":"
+#define BLOB		"\\[" BLOBCHAR "*\\]"
+#define BLOBCHAR	"[^]]"
+#define WSP		"[\t\r\n ]*"
+
+/* Compiled regexes for subject extraction */
+static regex_t pleader, ptrailer, pblob;
+#endif /* ENABLE_REGEX */
 
 extern int errno;
 
@@ -87,7 +115,7 @@ static long index_ino;
 static unsigned long start_offset;
 static unsigned long record_size;
 
-static unsigned recentuid;		/* UID of last non-\Recent message */
+static unsigned recentuid;	/* UID of last non-\Recent message */
 static unsigned lastnotrecent;	/* Msgno of last non-\Recent message */
 
 static time_t *flagreport;	/* Array for each msgno of last_updated when
@@ -129,6 +157,34 @@ struct copyargs {
 struct mapfile {
     const char *base;
     unsigned long size;
+};
+
+struct msgdata {
+    unsigned msgno;		/* message number */
+    unsigned msgid;		/* hash of message ID */
+    unsigned *ref;		/* hash of references */
+    time_t arrival;		/* internal arrival date & time of message */
+    time_t date;		/* sent date & time of message
+				   from Date: header (adjusted by time zone) */
+    char *cc;			/* local-part of first "cc" address */
+    char *from;			/* local-part of first "from" address */
+    char *to;			/* local-part of first "to" address */
+    char *xsubj;		/* extracted subject text */
+    unsigned xsubj_hash;	/* hash of extracted subject text */
+    unsigned size;		/* size of message */
+    struct msgdata *next;
+};
+
+struct thread {
+    struct msgdata *msgdata;	/* message data */
+    struct thread *parent;	/* parent message */
+    struct thread *child;	/* first child message */
+    struct thread *next;	/* next sibling message */
+};
+
+struct thread_algorithm {
+    char *alg_name;
+    struct thread *(*threader)(unsigned *msgno_list, int nmsg);
 };
 
 /* Forward declarations */
@@ -181,6 +237,33 @@ static int index_searchheader P((char *name, char *substr, comp_pat *pat,
 static int index_searchcacheheader P((unsigned msgno, char *name, char *substr,
 				      comp_pat *pat));
 static index_sequenceproc_t index_copysetup;
+static int _index_search P((unsigned **msgno_list, struct mailbox *mailbox,
+			    struct searchargs *searchargs));
+
+static char *index_extract_subject P((const char *subj));
+static struct msgdata *index_msgdata_load P((unsigned *msgno_list, int n,
+					     signed char *sortcrit));
+
+static void *index_sort_getnext P((struct msgdata *node));
+static void index_sort_setnext P((struct msgdata *node, struct msgdata *next));
+static int index_sort_compare P((struct msgdata *md1, struct msgdata *md2,
+				 signed char *call_data));
+static void index_sort_free P((struct msgdata *list));
+
+static void *index_thread_getnext P((struct thread *thread));
+static void index_thread_setnext P((struct thread *thread,
+				    struct thread *next));
+static int index_thread_compare P((struct thread *t1, struct thread *t2,
+				   signed char *call_data));
+static struct thread *index_thread_orderedsubj P((unsigned *msgno_list,
+						  int nmsg));
+static void index_thread_print P((struct thread *threads, int usinguid));
+static void index_thread_free P((struct thread *threads));
+
+static struct thread_algorithm thread_algs[] = {
+    { "ORDEREDSUBJECT", index_thread_orderedsubj },
+    { NULL, NULL }
+};
 
 /*
  * A mailbox is about to be closed.
@@ -869,7 +952,41 @@ int nflags;
 }
 
 /*
- * Performs a SEARCH command
+ * Guts of the SEARCH command.
+ * 
+ * Returns message numbers in an array.  This function is used by
+ * SEARCH, SORT and THREAD.
+ */
+static int
+_index_search(msgno_list, mailbox, searchargs)
+unsigned **msgno_list;
+struct mailbox *mailbox;
+struct searchargs *searchargs;
+{
+    unsigned msgno;
+    struct mapfile msgfile;
+    int n = 0;
+
+    *msgno_list = (unsigned *) xmalloc(imapd_exists * sizeof(unsigned));
+
+    for (msgno = 1; msgno <= imapd_exists; msgno++) {
+	msgfile.base = 0;
+	msgfile.size = 0;
+
+	if (index_search_evaluate(mailbox, searchargs, msgno, &msgfile)) {
+	    (*msgno_list)[n++] = msgno;
+	}
+	if (msgfile.base) {
+	    mailbox_unmap_message(mailbox, UID(msgno),
+				  &msgfile.base, &msgfile.size);
+	}
+    }
+    return n;
+}
+
+/*
+ * Performs a SEARCH command.
+ * This is a wrapper around _index_search() which simply prints the results.
  */
 void
 index_search(mailbox, searchargs, usinguid)
@@ -877,24 +994,96 @@ struct mailbox *mailbox;
 struct searchargs *searchargs;
 int usinguid;
 {
-    unsigned msgno;
-    struct mapfile msgfile;
+    unsigned *msgno_list;
+    int i, n;
+
+    n = _index_search(&msgno_list, mailbox, searchargs);
 
     prot_printf(imapd_out, "* SEARCH");
 
-    for (msgno = 1; msgno <= imapd_exists; msgno++) {
-	msgfile.base = 0;
-	msgfile.size = 0;
+    for (i = 0; i < n; i++)
+	prot_printf(imapd_out, " %u",
+		    usinguid ? UID(msgno_list[i]) : msgno_list[i]);
 
-	if (index_search_evaluate(mailbox, searchargs, msgno, &msgfile)) {
-	    prot_printf(imapd_out, " %u", usinguid ? UID(msgno) : msgno);
-	}
-	if (msgfile.base) {
-	    mailbox_unmap_message(mailbox, UID(msgno),
-				  &msgfile.base, &msgfile.size);
-	}
-    }
     prot_printf(imapd_out, "\r\n");
+
+    free(msgno_list);
+}
+
+/*
+ * Performs a SORT command
+ */
+void
+index_sort(mailbox, sortcrit, searchargs, usinguid)
+struct mailbox *mailbox;
+signed char *sortcrit;
+struct searchargs *searchargs;
+int usinguid;
+{
+    unsigned *msgno_list;
+    struct msgdata *msgdata, *cur;
+    int i, n;
+
+    /* Search for messages based on the given criteria */
+    n = _index_search(&msgno_list, mailbox, searchargs);
+
+    if (n) {
+	/* Create/load the msgdata array */
+	msgdata = index_msgdata_load(msgno_list, n, sortcrit);
+
+	free(msgno_list);
+
+	/* Sort the messages based on the given criteria */
+	msgdata = lsort(msgdata,
+			(void * (*)(void*)) index_sort_getnext,
+			(void (*)(void*,void*)) index_sort_setnext,
+			(int (*)(void*,void*,void*)) index_sort_compare,
+			sortcrit);
+    }
+
+    prot_printf(imapd_out, "* SORT");
+
+    /* Output the sorted messages */ 
+    cur = msgdata;
+    while (cur) {
+	prot_printf(imapd_out, " %u",
+		    usinguid ? UID(cur->msgno) : cur->msgno);
+	cur = cur->next;
+    }
+
+    prot_printf(imapd_out, "\r\n");
+
+    index_sort_free(msgdata);
+}
+
+/*
+ * Performs a THREAD command
+ */
+void index_thread(struct mailbox *mailbox, int algorithm,
+		  struct searchargs *searchargs, int usinguid)
+{
+    struct thread *threads;
+    unsigned *msgno_list;
+    int nmsg;
+
+    /* Search for messages based on the given criteria */
+    nmsg = _index_search(&msgno_list, mailbox, searchargs);
+
+    if (nmsg) {
+	/* Thread messages using given algorithm. */
+	threads = (*thread_algs[algorithm].threader)(msgno_list, nmsg);
+
+	/* Output the threaded messages */ 
+	prot_printf(imapd_out, "* THREAD ");
+
+	index_thread_print(threads, usinguid);
+
+	prot_printf(imapd_out, "\r\n");
+
+	free(msgno_list);
+
+	index_thread_free(threads);
+    }
 }
 
 /*
@@ -2516,7 +2705,7 @@ struct mapfile *msgfile;
 	    if (!charset_searchstring(l->s, l->p, cacheitem+4, cachelen)) return 0;
 	}
 
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip subject */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bcc */
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	for (l = searchargs->subject; l; l = l->next) {
@@ -2780,4 +2969,483 @@ void *rock;
     copyargs->nummsg++;
 
     return 0;
+}
+
+/*
+ * Hashes a string to produce an unsigned short, which should be
+ * sufficient for most purposes.
+ *
+ * public domain code by Jerry Coffin, with improvements by HenkJan Wolthuis.
+ */
+
+static unsigned hash(char *string)
+{
+    unsigned ret_val = 0;
+    int i;
+
+    while (*string) {
+	i = *(int *) string;
+	ret_val ^= i;
+	ret_val <<= 1;
+	string ++;
+    }
+    return ret_val;
+}
+
+/*
+ * Creates a list of msgdata.
+ *
+ * We fill these structs with the info that will be needed
+ * by the specified sort criteria.
+ */
+
+#define NEWMSGDATA \
+    (struct msgdata *) memset(xmalloc(sizeof(struct msgdata)), 0, \
+			      sizeof(struct msgdata))
+#define GETADDR(header)					\
+    parseaddr_list(header+4, &addr);			\
+    if (addr) {						\
+	sprintf(buf, "%s@%s",				\
+		addr->mailbox ? addr->mailbox : "",	\
+		addr->domain ? addr->domain : "");	\
+    }							\
+    cur->header = xstrdup(buf);				\
+    parseaddr_free(addr)
+
+static struct msgdata *index_msgdata_load(unsigned *msgno_list, int n,
+					  signed char *sortcrit)
+{
+    struct msgdata *md, *cur;
+    unsigned sortcrit_mask = 0;
+    const char *cacheitem, *env, *from, *to, *cc, *subj;
+    struct address *addr;
+    char buf[1024];
+    int i, j;
+
+    if (!n)
+	return NULL;
+
+    cur = md = NEWMSGDATA;
+
+    i = 0;
+    do {
+	/* set msgno */
+	cur->msgno = msgno_list[i++];
+
+	/* fetch cached info */
+	env = cache_base + CACHE_OFFSET(cur->msgno);
+	cacheitem = CACHE_ITEM_NEXT(env); /* bodystructure */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* body */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* section */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* cacheheaders */
+	from = CACHE_ITEM_NEXT(cacheitem);
+	to = CACHE_ITEM_NEXT(from);
+	cc = CACHE_ITEM_NEXT(to);
+	cacheitem = CACHE_ITEM_NEXT(cc); /* bcc */
+	subj = CACHE_ITEM_NEXT(cacheitem);
+
+	j = 0;
+	while (sortcrit[j]) {
+	    buf[0] = '\0';
+
+	    switch (abs(sortcrit[j++])) {
+	    case SORT_ARRIVAL:
+		cur->arrival = INTERNALDATE(cur->msgno);
+		break;
+	    case SORT_CC:
+		GETADDR(cc);
+		break;
+	    case SORT_DATE:
+		/* skip open paren and double-quote */
+		cur->date = message_parse_date((char*) env+6,
+					      PARSE_TIME | PARSE_ZONE);
+		break;
+	    case SORT_FROM:
+		GETADDR(from);
+		break;
+	    case SORT_SIZE:
+		cur->size = SIZE(cur->msgno);
+		break;
+	    case SORT_SUBJECT:
+		cur->xsubj = index_extract_subject(subj+4);
+		cur->xsubj_hash = hash(cur->xsubj);
+		break;
+	    case SORT_TO:
+		GETADDR(to);
+		break;
+	    }
+	}
+    } while (i < n && (cur = cur->next = NEWMSGDATA));
+
+    return md;
+}
+
+/* Extract base subject from subject header */
+static char *index_extract_subject(const char *subj)
+{
+    char *s, *base, *ret, *blob;
+#ifdef ENABLE_REGEX
+    regmatch_t pmatch[1];
+
+    /* If subj = "NIL", then it is an empty subject */
+    if (!strcmp(subj, "NIL"))
+	return xstrdup("");
+
+    /* make a working copy of subj */
+    s = xstrdup(subj);
+
+    /* find trailer */
+    if (!regexec(&ptrailer, s, 1, pmatch, 0)) {
+	/* trim trailer */
+	s[pmatch[0].rm_so] = '\0';
+    }
+
+    /* find leader */
+    if (!regexec(&pleader, s, 1, pmatch, 0)) {
+	/* if we are left with an empty base, base is last blob */
+	if (pmatch[0].rm_eo == strlen(s) && s[strlen(s)-1] == ']') {
+	    char *blob;
+
+	    (void) regexec(&pblob, s, 1, pmatch, 0);
+	    base = s+pmatch[0].rm_so;
+
+	    /*
+	     * Try extracting a base from the contents of the blob.
+	     * This is a hack to catch Netscape's wacky
+	     * "[Fwd: message]" notation.
+	     * If the extracted base is different from
+	     * the actual contents, then use this as the base.
+	     */
+	    blob = xstrndup(base+1, strlen(base)-2);
+	    ret = index_extract_subject(blob);
+	    if (strcmp(blob, ret)) {
+		free(blob);
+		goto done;
+	    }
+	    free(blob);
+	    free(ret);
+	}
+
+	/* otherwise, trim leader */
+	else
+	    base = s+pmatch[0].rm_eo;
+    }
+
+    ret = xstrdup(base);
+
+ done:
+    free(s);
+
+#endif /* ENABLE_REGEX */
+    return ret;
+}
+
+/*
+ * Getnext function for sorting message lists.
+ */
+static void *index_sort_getnext(struct msgdata *node)
+{
+    return node->next;
+}
+
+/*
+ * Setnext function for sorting message lists.
+ */
+static void index_sort_setnext(struct msgdata *node, struct msgdata *next)
+{
+    node->next = next;
+}
+
+/*
+ * Comparison function for sorting message lists.
+ */
+#define NUMCMP(x, y)	((x < y) ? -1 : (x > y) ? 1 : 0)
+
+static int index_sort_compare(struct msgdata *md1, struct msgdata *md2,
+			      signed char *sortcrit)
+{
+    int reverse, ret, i = 0;
+
+    do {
+	/* determine sort order from sign of criterion */
+	reverse = (sortcrit[i] < 0);
+
+	switch (abs(sortcrit[i])) {
+	case SORT_SEQUENCE:
+	    ret = NUMCMP(md1->msgno, md2->msgno);
+	    break;
+	case SORT_ARRIVAL:
+	    ret = NUMCMP(md1->arrival, md2->arrival);
+	    break;
+	case SORT_CC:
+	    ret = strcmp(md1->cc, md2->cc);
+	    break;
+	case SORT_DATE:
+	    ret = NUMCMP(md1->date, md2->date);
+	    break;
+	case SORT_FROM:
+	    ret = strcmp(md1->from, md2->from);
+	    break;
+	case SORT_SIZE:
+	    ret = NUMCMP(md1->size, md2->size);
+	    break;
+	case SORT_SUBJECT:
+	    ret = strcmp(md1->xsubj, md2->xsubj);
+	    break;
+	case SORT_TO:
+	    ret = strcmp(md1->to, md2->to);
+	    break;
+	}
+    } while (!ret && sortcrit[i++] != SORT_SEQUENCE);
+
+    return (reverse ? -ret : ret);
+}
+
+/*
+ * Free a msgdata node.
+ */
+static void index_msgdata_free(struct msgdata *md)
+{
+#define FREE(x)	if (x) free(x)
+
+    FREE(md->cc);
+    FREE(md->from);
+    FREE(md->to);
+    FREE(md->xsubj);
+    free(md);
+}
+
+/*
+ * Free a list of sorted messages.
+ */
+static void index_sort_free(struct msgdata *list)
+{
+
+    struct msgdata *tmp;
+
+    while (list) {
+	tmp = list;
+	list = list->next;
+	index_msgdata_free(tmp);
+    }
+}
+
+/*
+ * Getnext function for sorting thread lists.
+ */
+static void *index_thread_getnext(struct thread *thread)
+{
+    return thread->next;
+}
+
+/*
+ * Setnext function for sorting thread lists.
+ */
+static void index_thread_setnext(struct thread *thread, struct thread *next)
+{
+    thread->next = next;
+}
+
+/*
+ * Comparison function for sorting threads.
+ */
+static int index_thread_compare(struct thread *t1, struct thread *t2,
+				signed char *call_data)
+{
+  return index_sort_compare(t1->msgdata, t2->msgdata, call_data);
+}
+
+/*
+ * Thread a list of messages using the ORDEREDSUBJECT algorithm.
+ */
+#define NEWTHREAD \
+    (struct thread *) memset(xmalloc(sizeof(struct thread)), 0, \
+			     sizeof(struct thread))
+
+static struct thread *index_thread_orderedsubj(unsigned *msgno_list, int nmsg)
+{
+    struct msgdata *msgdata;
+    signed char sortcrit[] = { SORT_SUBJECT, SORT_DATE, SORT_SEQUENCE };
+    int i, n = 0;
+    const char *cacheitem;
+    unsigned psubj;
+    struct thread *threads, *tmp, *cur, *parent;
+
+    /* Create/load the msgdata array */
+    msgdata = index_msgdata_load(msgno_list, nmsg, sortcrit);
+
+    /* Sort messages by subject and date */
+    msgdata = lsort(msgdata,
+		    (void * (*)(void*)) index_sort_getnext,
+		    (void (*)(void*,void*)) index_sort_setnext,
+		    (int (*)(void*,void*,void*)) index_sort_compare,
+		    sortcrit);
+
+    /* build threads under a dummy head */
+    tmp = cur = NEWTHREAD;
+    while (msgdata) {
+	/* if this is the first message or current subj != previous subj,
+	 * then create a new thread
+	 */
+	if ((cur == tmp) || (msgdata->xsubj_hash != psubj)) {
+	    parent = cur = cur->next = NEWTHREAD;
+	    cur->msgdata = msgdata;
+	}
+
+	/* otherwise, add message to current thread */
+	else {
+	    parent = parent->child = NEWTHREAD;
+	    parent->msgdata = msgdata;
+	}
+
+	psubj = msgdata->xsubj_hash;
+	msgdata = msgdata->next;
+    }
+
+    /* Sort threads by date */
+    threads = lsort(tmp->next,
+		    (void * (*)(void*)) index_thread_getnext,
+		    (void (*)(void*,void*)) index_thread_setnext,
+		    (int (*)(void*,void*,void*)) index_thread_compare,
+		    sortcrit+1);
+
+    /* free the dummy head */
+    free(tmp);
+
+    return threads;
+
+}
+
+/*
+ * Print a list of threads.
+ */
+static void index_thread_print(struct thread *thread, int usinguid)
+{
+    struct thread *child;
+
+    /* for each thread... */
+    while (thread) {
+	prot_printf(imapd_out, "(");
+
+	prot_printf(imapd_out, "%u",
+		    usinguid ? UID(thread->msgdata->msgno) :
+		    thread->msgdata->msgno);
+
+	/* for each child, grandchild, etc... */
+	child = thread->child;
+	while (child) {
+	    prot_printf(imapd_out, " ");
+
+	    /* if the child has siblings, print new branch and break */
+	    if (child->next) {
+		prot_printf(imapd_out, "siblings\r\n");
+		index_thread_print(child, usinguid);
+		break;
+	    }
+	    /* otherwise print the only child */
+	    else {
+		prot_printf(imapd_out, "%u",
+			    usinguid ? UID(child->msgdata->msgno) :
+			    child->msgdata->msgno);
+		child = child->child;
+	    }
+	}
+	prot_printf(imapd_out, ")");
+
+	thread = thread->next;
+    }
+}
+
+/*
+ * Free a list of threads.
+ */
+static void index_thread_free(struct thread *threads)
+{
+    struct thread *child, *tmp;
+
+    /* for each thread... */
+    while (threads) {
+
+	/* for each child, grandchild, etc... */
+	child = threads->child;
+	while (child) {
+
+	    /* if the child has siblings, free new branch and break */
+	    if (child->next) {
+		index_thread_free(child);
+		break;
+	    }
+	    /* otherwise free the only child */
+	    else {
+		tmp = child;
+		child = child->child;
+		index_msgdata_free(tmp->msgdata);
+	    }
+	}
+	tmp = threads;
+	threads = threads->next;
+	index_msgdata_free(tmp->msgdata);
+    }
+}
+
+/*
+ * List threading algorithms for CAPABILITY.
+ */
+void list_thread_algorithms()
+{
+    struct thread_algorithm *thr_alg;
+
+    for (thr_alg = thread_algs; thr_alg->alg_name; thr_alg++)
+	prot_printf(imapd_out, " THREAD=%s", thr_alg->alg_name);
+}
+
+/*
+ * Find threading algorithm for given arg.
+ * Returns index into thread_algs[], or -1 if not found.
+ */
+int find_thread_algorithm(char *arg)
+{
+    int alg;
+
+    ucase(arg);
+    for (alg = 0; thread_algs[alg].alg_name; alg++) {
+	if (!strcmp(arg, thread_algs[alg].alg_name))
+	    return alg;
+    }
+    return -1;
+}
+
+/*
+ * Compile regexes for subject extraction (SORT/THREAD)
+ */
+int sort_thread_enabled()
+{
+    static int isenabled = 0;
+
+#ifdef ENABLE_REGEX
+    if (!isenabled) {
+	int ret;
+
+	ret = regcomp(&ptrailer, TRAILER, REG_ICASE | REG_EXTENDED);
+	ret |= regcomp(&pleader, LEADER, REG_ICASE | REG_EXTENDED);
+	if (ret |= regcomp(&pblob, BLOB, REG_EXTENDED))
+	    fatal("SORT/THREAD regexes failed to compile", EC_TEMPFAIL);
+	else
+	    isenabled++;
+    }
+#endif
+
+    return isenabled;
+}
+
+/*
+ * Cleanup regexes for subject extraction (SORT/THREAD)
+ */
+void sort_thread_cleanup()
+{
+#ifdef ENABLE_REGEX
+    regfree(&ptrailer);
+    regfree(&pleader);
+    regfree(&pblob);
+#endif
 }
