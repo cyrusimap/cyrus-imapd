@@ -19,7 +19,7 @@ static const char copyright[] =
 
 static char buffer[25];
 
-struct et_list * _et_list = (struct et_list *) NULL;
+extern struct et_list * _et_list;
 
 const char * INTERFACE error_message (code)
 long code;

@@ -37,14 +37,16 @@ CYRUS_GROUP=@cyrus_group@
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
 LIBS = @LIBS@ 
-DEPLIBS = ../et/libcom_err.a ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
 
 SHELL = /bin/sh
 
-COMPILE_ET=../et/compile_et
+COMPILE_ET=@COMPILE_ET@
+
+PURIFY=/usr/local/bin/purify
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -86,13 +88,22 @@ deliver: deliver.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o deliver deliver.o libimap.a \
 		$(DEPLIBS) $(LIBS)
 
+deliver.pure: deliver.o libimap.a $(DEPLIBS)
+	$(PURIFY) -windows=no -logfile=/tmp/deliver.log.%p \
+	$(CC) $(LDFLAGS) -o deliver deliver.o libimap.a \
+		$(DEPLIBS) $(LIBS)
+
+dump_deliver: dump_deliver.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ dump_deliver.o libimap.a \
+		$(DEPLIBS) $(LIBS)
+
 imapd: $(IMAPDOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o imapd $(IMAPDOBJS) libimap.a \
 		$(DEPLIBS) $(LIBS)
 
 pop3d: pop3d.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o pop3d pop3d.o libimap.a \
-		$(DEPLIBS) $(LIBS)
+		$(DEPLIBS) $(LIBS) 
 
 arbitron: arbitron.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o arbitron arbitron.o libimap.a \

@@ -18,6 +18,8 @@
 #include "error_table.h"
 #include "internal.h"
 
+struct et_list * _et_list = (struct et_list *) NULL;
+
 #ifdef notdef
 /*
  * Protect us from header version (externally visible) of com_err, so
