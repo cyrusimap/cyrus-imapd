@@ -111,7 +111,7 @@ static int abort_txn(struct db *db, struct txn *tid)
 	}
 	if (!r) {
 	    map_free(&db->base, &db->size);
-	    map_refresh(db->fd, 1, &db->base, &db->size, sbuf.st_size,
+	    map_refresh(db->fd, 0, &db->base, &db->size, sbuf.st_size,
 			db->fname, 0);
 	}
     }
@@ -176,7 +176,7 @@ static int myopen(const char *fname, struct db **ret)
 
     db->base = 0;
     db->size = 0;
-    map_refresh(db->fd, 1, &db->base, &db->size, sbuf.st_size,
+    map_refresh(db->fd, 0, &db->base, &db->size, sbuf.st_size,
 		fname, 0);
 
     db->fname = xstrdup(fname);
@@ -218,7 +218,7 @@ static int starttxn_or_refetch(struct db *db, struct txn **mytid)
 	if (db->ino != sbuf.st_ino) {
 	    map_free(&db->base, &db->size);
 	}
-	map_refresh(db->fd, 1, &db->base, &db->size, sbuf.st_size,
+	map_refresh(db->fd, 0, &db->base, &db->size, sbuf.st_size,
 		    db->fname, 0);
     }
 
@@ -249,7 +249,7 @@ static int starttxn_or_refetch(struct db *db, struct txn **mytid)
 	    db->ino = sbuf.st_ino;
 	    map_free(&db->base, &db->size);
 	}
-	map_refresh(db->fd, 1, &db->base, &db->size,
+	map_refresh(db->fd, 0, &db->base, &db->size,
 		    sbuf.st_size, db->fname, 0);
     }
 
@@ -313,8 +313,12 @@ static int foreach(struct db *db,
 
     r = starttxn_or_refetch(db, mytid);
     if (r) return r;
-
-    offset = bsearch_mem(prefix, 1, db->base, db->size, 0, &len);
+    
+    if (prefix) {
+	offset = bsearch_mem(prefix, 1, db->base, db->size, 0, &len);
+    } else {
+	offset = 0;
+    }
     p = db->base + offset;
     pend = db->base + db->size;
     while (p < pend) {
@@ -381,7 +385,7 @@ static int mystore(struct db *db,
 	if (sbuf.st_ino != db->ino) {
 	    db->ino = sbuf.st_ino;
 	    map_free(&db->base, &db->size);
-	    map_refresh(db->fd, 1, &db->base, &db->size,
+	    map_refresh(db->fd, 0, &db->base, &db->size,
 			sbuf.st_size, db->fname, 0);
 	}
 
@@ -456,7 +460,7 @@ static int mystore(struct db *db,
 	if ((*mytid)->fd) close((*mytid)->fd);
 	(*mytid)->fd = writefd;
 	map_free(&db->base, &db->size);
-	map_refresh(writefd, 1, &db->base, &db->size, sbuf.st_size,
+	map_refresh(writefd, 0, &db->base, &db->size, sbuf.st_size,
 		    fnamebuf, 0);
     } else {
 	/* commit immediately */
@@ -480,7 +484,7 @@ static int mystore(struct db *db,
 
 	db->ino = sbuf.st_ino;
 	map_free(&db->base, &db->size);
-	map_refresh(writefd, 1, &db->base, &db->size, sbuf.st_size,
+	map_refresh(writefd, 0, &db->base, &db->size, sbuf.st_size,
 	    db->fname, 0);
     }
 
@@ -569,5 +573,7 @@ struct cyrusdb_backend cyrusdb_flat =
     &delete,
 
     &commit_txn,
-    &abort_txn
+    &abort_txn,
+
+    NULL
 };
