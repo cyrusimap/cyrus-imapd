@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.57 2000/12/18 04:53:41 leg Exp $
+ * $Id: imtest.c,v 1.58 2001/01/30 21:58:30 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1180,7 +1180,7 @@ int main(int argc, char **argv)
   int server_supports_tls;
 
   /* look at all the extra args */
-  while ((c = getopt(argc, argv, "zvk:l:p:u:a:m:f:t:")) != EOF)
+  while ((c = getopt(argc, argv, "zvk:l:p:u:a:m:f:r:t:")) != EOF)
     switch (c) {
     case 'z':
 	run_stress_test=1;
