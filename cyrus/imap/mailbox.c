@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.144 2003/05/08 18:43:57 rjs3 Exp $
+ $Id: mailbox.c,v 1.145 2003/09/26 19:39:18 rjs3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -921,7 +921,14 @@ struct mailbox *mailbox;
     strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
     strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
 
-    /* xxx why is this not a lock_reopen() ? */
+    /* why is this not a lock_reopen()? -leg
+     *
+     * this is not a lock_reopen() because we need to do all of the
+     * work of mailbox_open_index, not just opening the file -- 
+     * presumably we could extend the api of lock_reopen to tell us if
+     * it had to reopen the file or not, then this could be a bit smarter --
+     * but we'd still have to deal with the fact that mailbox_open_index
+     * does its own open() call. -rjs3 */
     for (;;) {
 	r = lock_blocking(mailbox->index_fd);
 	if (r == -1) {
