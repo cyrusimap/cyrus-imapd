@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.59 1998/10/29 20:16:31 tjs Exp $
+ * $Id: message.c,v 1.60 1999/01/12 11:55:58 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -900,7 +900,6 @@ struct body *body;
 
     /* Skip whitespace after type */
     message_parse_rfc822space(&hdr);
-    if (!hdr) return;
 
     /* Ignore header if not at end of header or parameter delimiter */
     if (hdr && *hdr != ';') return;
