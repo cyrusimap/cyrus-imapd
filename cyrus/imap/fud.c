@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.28 2002/02/21 16:48:15 rjs3 Exp $ */
+/* $Id: fud.c,v 1.29 2002/02/22 17:25:26 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -80,12 +80,13 @@
 
 extern int errno;
 extern int optind;
-extern char *optarg;
 
 /* current namespace */
 static struct namespace fud_namespace;
 
 /* forward decls */
+extern void setproctitle_init(int argc, char **argv, char **envp);
+
 int handle_request(const char *who, const char *name, 
 		   struct sockaddr_in sfrom);
 
@@ -93,7 +94,7 @@ void send_reply(struct sockaddr_in sfrom, int status,
 		const char *user, const char *mbox, 
 		int numrecent, time_t lastread, time_t lastarrived);
 
-int soc = 0; /* inetd has handed us the port as stdin */
+int soc = 0; /* inetd (master) has handed us the port as stdin */
 
 char who[16];
 
@@ -109,8 +110,6 @@ int begin_handling(void)
         char    mbox[MAX_MAILBOX_NAME+1];
         char    *q;
         int     off;
-
-	openlog("fud", LOG_PID, LOG_LOCAL6);
 
         while(1) {
             /* For safety */
@@ -151,28 +150,28 @@ void shut_down(int code)
 }
 
 
-int main(int argc, char **argv)
+/*
+ * run once when process is forked;
+ * MUST NOT exit directly; must return with non-zero error code
+ */
+int service_init(int argc, char **argv, char **envp)
 {
-    int r;
     int opt;
-    char *alt_config = NULL;
    
-    r = 0; /* to shut up lint/gcc */
+    config_changeident("fud");
 
-    if(geteuid() == 0)
-        fatal("must run as the Cyrus user", EC_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+
+    setproctitle_init(argc, argv, envp);
 
     while ((opt = getopt(argc, argv, "C:")) != EOF) {
 	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
+	case 'C': /* alt config file - handled by service::main() */
 	    break;
 	default:
 	    break;
 	}
     }
-
-    config_init(alt_config, "fud");
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers();
@@ -181,15 +180,27 @@ int main(int argc, char **argv)
     mboxlist_open(NULL);
     mailbox_initialize();
 
+    return 0;
+}
+
+void service_abort(int error)
+{
+    shut_down(error);
+}
+
+int service_main(int argc, char **argv, char **envp)
+{
+    int r = 0; 
+
     /* Set namespace */
     if ((r = mboxname_init_namespace(&fud_namespace, 1)) != 0) {
 	syslog(LOG_ERR, error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    begin_handling();
+    r = begin_handling();
 
-    shut_down(0);
+    shut_down(r);
 }
 
 static void cyrus_timeout(int signo)
@@ -300,14 +311,13 @@ int handle_request(const char *who, const char *name,
 	if(cyrus_acl_myrights(mystate, acl) & ACL_USER0) {
 	    /* We want to proxy this one */
 	    auth_freestate(mystate);
-	    syslog(LOG_DEBUG, "doing proxy");
 	    return do_proxy_request(who, name, location, sfrom);
 	} else {
 	    /* Permission Denied */
 	    auth_freestate(mystate);
 	    send_reply(sfrom, REQ_DENY, who, name, 0, 0, 0);
 	    return 0;
-	}	
+	}
     }
 
     /*
@@ -400,6 +410,13 @@ send_reply(struct sockaddr_in sfrom, int status,
 
 void fatal(const char* s, int code)
 {
-    fprintf(stderr, "fud: %s\n", s);
-    exit(code);
+    static int recurse_code = 0;
+    if (recurse_code) {
+        /* We were called recursively. Just give up */
+	syslog(LOG_ERR, "fatal error: %s", s);
+	exit(code);
+    }
+    recurse_code = code;
+
+    shut_down(code);
 }

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.29 2002/02/11 17:41:45 ken3 Exp $ */
+/* $Id: service.c,v 1.30 2002/02/22 17:25:30 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -164,6 +164,8 @@ int main(int argc, char **argv, char **envp)
     struct request_info request;
     int opt;
     char *alt_config = NULL;
+    int soctype;
+    int typelen = sizeof(soctype);
 
     /* accept locking */
     int lockfd;
@@ -269,30 +271,56 @@ int main(int argc, char **argv, char **envp)
 		}
 	    }
 
-	    fd = accept(LISTEN_FD, NULL, NULL);
-	    if (fd < 0) {
-		switch (errno) {
-		case ENETDOWN:
+	    /* udp */
+	    if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
+			   (char *) &soctype, &typelen) < 0) {
+		syslog(LOG_ERR,
+		       "getsockopt: SOL_SOCKET: failed to get type:
+%m");
+		notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+		service_abort(EX_OSERR);
+	    }
+	    if (soctype == SOCK_STREAM) {
+		fd = accept(LISTEN_FD, NULL, NULL);
+		if (fd < 0) {
+		    switch (errno) {
+		    case ENETDOWN:
 #ifdef EPROTO
-		case EPROTO:
+		    case EPROTO:
 #endif
-		case ENOPROTOOPT:
-		case EHOSTDOWN:
+		    case ENOPROTOOPT:
+		    case EHOSTDOWN:
 #ifdef ENONET
-		case ENONET:
+		    case ENONET:
 #endif
-		case EHOSTUNREACH:
-		case EOPNOTSUPP:
-		case ENETUNREACH:
-		case EAGAIN:
-		    break;
-		default:
-		    syslog(LOG_ERR, "accept failed: %m");
+		    case EHOSTUNREACH:
+		    case EOPNOTSUPP:
+		    case ENETUNREACH:
+		    case EAGAIN:
+			break;
+		    default:
+			syslog(LOG_ERR, "accept failed: %m");
+			notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+			service_abort(EX_OSERR);
+		    }
+		}
+	    } else {
+		/* udp */
+		struct sockaddr_in from;
+		socklen_t fromlen;
+		char ch;
+		int r;
+ 
+		fromlen = sizeof(from);
+		r = recvfrom(LISTEN_FD, (void *) &ch, 1, MSG_PEEK,
+			     (struct sockaddr *) &from, &fromlen);
+		if (r == -1) {
+		    syslog(LOG_ERR, "recvfrom failed: %m");
 		    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 		    service_abort(EX_OSERR);
 		}
+		fd = LISTEN_FD;
 	    }
-
 	}
 
 	/* unlock */
@@ -309,12 +337,15 @@ int main(int argc, char **argv, char **envp)
 	    }
 	}
 
-	libwrap_init(&request, service);
+	/* tcp only */
+	if(soctype == SOCK_STREAM) {
+	    libwrap_init(&request, service);
 
-	if (!libwrap_ask(&request, fd)) {
-	    /* connection denied! */
-	    close(fd);
-	    continue;
+	    if (!libwrap_ask(&request, fd)) {
+		/* connection denied! */
+		close(fd);
+		continue;
+	    }
 	}
 	
 	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
@@ -333,7 +364,10 @@ int main(int argc, char **argv, char **envp)
 	    service_abort(EX_OSERR);
 	}
 
-	if (fd > 2) close(fd);
+	/* tcp only */
+	if(soctype == SOCK_STREAM) {
+	    if (fd > 2) close(fd);
+	}
 	
 	notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);
 	use_count++;
