@@ -26,6 +26,7 @@ mupdate
 mupdate_err.c
 mupdate_err.h
 nntpd
+nntpproxyd
 nntp_err.c
 nntp_err.h
 pop3d
