@@ -1,6 +1,6 @@
 /* tree.c -- abstract syntax tree handling
  * Larry Greenfield
- * $Id: tree.c,v 1.4 1999/09/06 02:52:31 leg Exp $
+ * $Id: tree.c,v 1.5 1999/09/30 07:36:59 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -26,6 +26,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
 
 #include <stdlib.h>
+#include "xmalloc.h"
+
 #include "tree.h"
 #include "y.tab.h"
 

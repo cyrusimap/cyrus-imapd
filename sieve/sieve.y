@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.3 1999/09/06 02:51:57 leg Exp $
+ * $Id: sieve.y,v 1.4 1999/09/30 07:36:59 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -26,8 +26,10 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
 
+#include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include "xmalloc.h"
 #include "comparator.h"
 #include "interp.h"
 #include "script.h"
@@ -68,6 +70,13 @@ static void free_htags(struct htags *h);
 static struct vtags *new_vtags(void);
 static struct vtags *canon_vtags(struct vtags *v);
 static void free_vtags(struct vtags *v);
+
+static int verify_mailboxes(stringlist_t *sl);
+static int verify_addresses(stringlist_t *sl);
+static int ok_header(char *s);
+
+int yyerror(char *msg);
+extern int yylex(void);
 
 #define YYERROR_VERBOSE /* i want better error messages! */
 %}
@@ -289,7 +298,6 @@ commandlist_t *sieve_parse(sieve_script_t *script, FILE *f)
 int yyerror(char *msg)
 {
     extern int yylineno;
-    extern char *yytext;
 
     script_push_error(parse_script, msg, yylineno);
     return 0;
