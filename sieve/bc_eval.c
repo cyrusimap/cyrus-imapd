@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.2.2.8 2005/03/12 03:30:10 ken3 Exp $
+ * $Id: bc_eval.c,v 1.2.2.9 2005/03/14 16:37:53 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -940,7 +940,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	return SIEVE_FAIL;
     }
     
-    if( version != BYTECODE_VERSION) {
+    if((version < BYTECODE_MIN_VERSION) || (version > BYTECODE_VERSION)) {
 	if(errmsg) {
 	    *errmsg =
 		"Incorrect Bytecode Version, please recompile (use sievec)";

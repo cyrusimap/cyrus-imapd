@@ -69,10 +69,16 @@ typedef union
 } bytecode_input_t;
 
 
-   /*version 0x01 scripts were written in host byte order.
-   we don't want to use this version number again and cause a mess
-   this isn't a huge concern, since this is version ntohl(1), or 16777216*/
-#define BYTECODE_VERSION 0x03
+/* version 0x01 scripts were written in host byte order.
+ * we don't want to use this version number again and cause a mess
+ * this isn't a huge concern, since this is version ntohl(1), or 16777216
+ *
+ * version 0x02 scripts started using network byte order (recompile)
+ * version 0x03 scripts implemented short-circuiting of testlists (recompile)
+ * version 0x04 scripts implemented BODY, INCLUDE and COPY extensions
+ */
+#define BYTECODE_VERSION 0x04
+#define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
 
