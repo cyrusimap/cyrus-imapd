@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.2 2002/07/10 20:45:03 rjs3 Exp $
+ * $Id: imapconf.h,v 1.16.4.3 2002/07/20 01:17:55 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,9 @@ extern int config_getswitch(enum imapopt opt);
  * imapoptions table */
 extern const char *config_getoverflowstring(const char *key, const char *def);
 extern const char *config_partitiondir(const char *partition);
+
+/* domain magic for virtdomains */
+char *canonify_userid(char *user, char *loginis);
 
 /* sasl configuration */
 extern int mysasl_config(void *context,

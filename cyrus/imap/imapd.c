@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.8 2002/07/17 18:43:29 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.9 2002/07/20 01:17:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -263,10 +263,9 @@ static int acl_ok(const char *user,
     char inboxname[1024];
     int r;
 
-    if (strchr(user, '.') || strlen(user)+6 >= sizeof(inboxname)) return 0;
-
-    strcpy(inboxname, "user.");
-    strcat(inboxname, user);
+    r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
+					       user, inboxname);
+    if (r) return r;
 
     if (!authstate ||
 	mboxlist_lookup(inboxname, NULL, &acl, NULL)) {
@@ -1689,7 +1688,7 @@ void cmd_login(char *tag, char *user)
 	return;
     }
 
-    canon_user = auth_canonifyid(user, 0);
+    canon_user = canonify_userid(user, NULL);
 
     if (!canon_user) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
@@ -4209,6 +4208,8 @@ char *identifier;
     int canonidlen = 0;
     char *acl;
     char *rightsdesc;
+    struct auth_state *authstate;
+    char *p;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -4228,18 +4229,27 @@ char *identifier;
     }
 
     if (!r) {
-	canon_identifier = auth_canonifyid(identifier, 0);
+	authstate = auth_newstate(identifier, NULL);
+	if (config_authisa(authstate, IMAPOPT_ADMINS))
+	    canon_identifier = identifier; /* don't canonify global admins */
+	else
+	    canon_identifier = canonify_userid(identifier, imapd_userid);
+	auth_freestate(authstate);
+
 	if (canon_identifier) canonidlen = strlen(canon_identifier);
 
 	if (!canon_identifier) {
 	    rightsdesc = "\"\"";
 	}
-	else if (!strncmp(mailboxname, "user.", 5) &&
-		 !strchr(canon_identifier, '.') &&
-		 !strncmp(mailboxname+5, canon_identifier, canonidlen) &&
-		 (mailboxname[5+canonidlen] == '\0' ||
-		  mailboxname[5+canonidlen] == '.')) {
+	else if (mboxname_userownsmailbox("INBOX", mailboxname)) {
+	    /* identifier's personal mailbox */
 	    rightsdesc = "lca r s w i p d 0 1 2 3 4 5 6 7 8 9";
+	}
+	else if (((!strncmp(mailboxname, "user.", 5) && (p = mailboxname+5)) ||
+		  ((p = strstr(mailboxname, "!user.")) && (p += 6))) &&
+		  !strchr(p, '.')) { 
+	    /* anyone can post to an INBOX */
+	    rightsdesc = "p l r s w i c d a 0 1 2 3 4 5 6 7 8 9";
 	}
 	else {
 	    rightsdesc = "\"\" l r s w i p c d a 0 1 2 3 4 5 6 7 8 9";
@@ -4248,7 +4258,7 @@ char *identifier;
 	prot_printf(imapd_out, "* LISTRIGHTS ");
 	printastring(name);
 	prot_putc(' ', imapd_out);
-	printastring(identifier);
+	printastring(canon_identifier);
 	prot_printf(imapd_out, " %s", rightsdesc);
 
 	prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
@@ -7214,12 +7224,9 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
     /* Now we need to see if this mailbox exists */
     /* first convert "INBOX" to "user.<userid>" */
     if (!strncasecmp(lastname, "inbox", 5)) {
-	char *domain;
-	if (config_virtdomains && (domain = strchr(imapd_userid, '@')))
-	    sprintf(mboxname, "%s!user.%.*s%s",
-		    domain+1, domain - imapd_userid, imapd_userid, lastname+5);
-	else
-	    sprintf(mboxname, "user.%s%s", imapd_userid, lastname+5);
+	(*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
+					       imapd_userid, mboxname);
+	strcat(mboxname, lastname+5);
     }
     else
 	strcpy(mboxname, lastname);

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.4 2002/07/12 13:34:17 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.5 2002/07/20 01:18:22 ken3 Exp $
  */
 #include <config.h>
 
@@ -236,6 +236,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
+    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
@@ -1058,7 +1059,7 @@ char *user;
 	prot_flush(popd_out);
 	shut_down(0);
     }
-    else if (!(p = auth_canonifyid(user,0)) ||
+    else if (!(p = canonify_userid(user, NULL)) ||
 	     /* '.' isn't allowed if '.' is the hierarchy separator */
 	     (popd_namespace.hier_sep == '.' && (dot = strchr(p, '.')) &&
 	      !(config_virtdomains &&  /* allow '.' in dom.ain */

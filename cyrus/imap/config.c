@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.3 2002/07/11 16:33:45 ken3 Exp $ */
+/* $Id: config.c,v 1.55.4.4 2002/07/20 01:17:54 ken3 Exp $ */
 
 #include <config.h>
 
@@ -548,7 +548,63 @@ int config_authisa(struct auth_state *authstate, enum imapopt opt)
     return 0;
 }
 
-#if HAS_SASL_2_1
+char *canonify_userid(char *user, char *loginid)
+{
+    char *domain = NULL;
+    int len = strlen(user);
+    char buf[81];
+
+    /* check for domain */
+    if (config_virtdomains &&
+	((domain = strrchr(user, '@')) || (domain = strrchr(user, '%')))) {
+	*domain = '@';
+	len = domain - user;
+    }
+
+    /* check for global identifiers */
+    if (strncasecmp(user, "anonymous", len) == 0) {
+	return "anonymous";
+    }
+    else if (strncasecmp(user, "anybody", len) == 0 ||
+	strncasecmp(user, "anyone", len) == 0) {
+	return "anyone";
+    }
+
+    if (config_virtdomains) {
+	if (domain) {
+	    if (config_defdomain && !strcasecmp(config_defdomain, domain+1)) {
+		*domain = '\0'; /* trim the default domain */
+	    }
+	}
+	else if (loginid) { /* used for LISTRIGHTS */
+	    if ((domain = strrchr(loginid, '@'))) {
+		/* append the domain from the login id */
+		snprintf(buf, sizeof(buf), "%s@%s", user, domain+1);
+		user = buf;
+	    }
+	}
+	else {
+	    socklen_t salen;
+	    struct hostent *hp;
+	    struct sockaddr_in localaddr;
+
+	    salen = sizeof(localaddr);
+	    if (getsockname(0, (struct sockaddr *)&localaddr, &salen) == 0) {
+		hp = gethostbyaddr((char *)&localaddr.sin_addr,
+				   sizeof(localaddr.sin_addr), AF_INET);
+		if (hp && (domain = strchr(hp->h_name, '.')) &&
+		    !(config_defdomain && !strcasecmp(config_defdomain, domain+1))) {
+		    /* append the domain from our IP */
+		    snprintf(buf, sizeof(buf), "%s@%s", user, domain+1);
+		    user = buf;
+		}
+	    }
+	}
+    }
+
+    return auth_canonifyid(user, 0);
+}
+
 int mysasl_canon_user(sasl_conn_t *conn,
 		      void *context __attribute__((unused)),
 		      const char *user, unsigned ulen,
@@ -559,13 +615,20 @@ int mysasl_canon_user(sasl_conn_t *conn,
 {
     char *canonuser = NULL;
 
-    canonuser = auth_canonifyid(user, ulen);
+    if (ulen > out_max) {
+	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	return SASL_BUFOVER;
+    }
+    memcpy(out, user, ulen);
+    out[ulen] = '\0';
+
+    canonuser = canonify_userid(out, NULL);
     if (!canonuser) {
 	sasl_seterror(conn, 0, "bad userid authenticated");
 	return SASL_BADAUTH;
     }
     *out_ulen = strlen(canonuser);
-    if(*out_ulen > out_max) {
+    if (*out_ulen > out_max) {
 	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
 	return SASL_BUFOVER;
     }
@@ -574,52 +637,3 @@ int mysasl_canon_user(sasl_conn_t *conn,
 
     return SASL_OK;
 }
-#else /* SASL 2.0 */
-int mysasl_canon_user(sasl_conn_t *conn,
-                      void *context,
-                      const char *user, unsigned ulen,
-                      const char *authid, unsigned alen,
-                      unsigned flags,
-                      const char *user_realm,
-                      char *out_user,
-                      unsigned out_max, unsigned *out_ulen,
-                      char *out_authid,
-                      unsigned out_amax, unsigned *out_alen)
-{
-    char *canon_authuser = NULL, *canon_requser = NULL;
-        
-    canon_authuser = auth_canonifyid(authid, alen);
-    if (!canon_authuser) {
-	sasl_seterror(conn, 0, "bad userid authenticated");
-	return SASL_BADAUTH;
-    }
-    *out_alen = strlen(canon_authuser);
-    if(*out_alen > out_amax) {
-	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
-	return SASL_BUFOVER;
-    }
-                      
-    strncpy(out_authid, canon_authuser, out_amax);
-                      
-    if (!user) {
-	/* don't bother calling auth_canonifyid twice */
-	canon_requser = canon_authuser;
-    } else {
-	canon_requser = auth_canonifyid(user, ulen);
-    }
-        
-    if (!canon_requser) {   
- 	sasl_seterror(conn, 0, "bad userid requested");
- 	return SASL_BADAUTH;
-    }
-    *out_ulen = strlen(canon_requser);
-    if(*out_ulen > out_max) {
-	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
-	return SASL_BUFOVER;
-    }
-                      
-    strncpy(out_user, canon_requser, out_max);
-        
-    return SASL_OK;
-}
-#endif

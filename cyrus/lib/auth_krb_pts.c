@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- * $Id: auth_krb_pts.c,v 1.44 2002/02/25 16:52:42 rjs3 Exp $
+ * $Id: auth_krb_pts.c,v 1.44.4.1 2002/07/20 01:18:24 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -250,16 +250,6 @@ char *auth_canonifyid(const char *identifier, size_t len)
     memcpy(canon_buf, identifier, len);
     canon_buf[len] = '\0';
    
-    if (strcasecmp(canon_buf, "anonymous") == 0) {
-	free(canon_buf);
-	return "anonymous";
-    }
-    if (strcasecmp(canon_buf, "anybody") == 0 ||
-	strcasecmp(canon_buf, "anyone") == 0) {
-	free(canon_buf);
-	return "anyone";
-    }
-
     aname[0] = inst[0] = realm[0] = '\0';
     if (kname_parse(aname, inst, realm, canon_buf) != 0) {
 	free(canon_buf);

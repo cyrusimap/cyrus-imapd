@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.33 2002/07/05 15:27:27 rjs3 Exp $
+ * $Id: auth_unix.c,v 1.33.2.1 2002/07/20 01:18:24 ken3 Exp $
  */
 
 #include <config.h>
@@ -165,14 +165,6 @@ size_t len;
     if(!len) len = strlen(identifier);
     if(len >= sizeof(retbuf)) return NULL;
 
-    if (strcasecmp(identifier, "anonymous") == 0) {
-	return "anonymous";
-    }
-    if (strcasecmp(identifier, "anybody") == 0 ||
-	strcasecmp(identifier, "anyone") == 0) {
-	return "anyone";
-    }
-    
     memcpy(retbuf, identifier, len);
     retbuf[len] = '\0';
 
