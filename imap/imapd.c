@@ -24,7 +24,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  */
-/* $Id: imapd.c,v 1.146 1998/06/07 23:43:50 tjs Exp $ */
+/* $Id: imapd.c,v 1.147 1998/06/09 07:20:16 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -146,6 +146,7 @@ int getsearchdate P((time_t *start, time_t *end));
 int getdatetime P((time_t *date));
 
 void eatline P((int c));
+void printstring P((const char *s));
 void printastring P((const char *s));
 
 void appendfieldlist P((struct fieldlist **l, char *section,
@@ -655,13 +656,6 @@ cmdloop()
 		mboxlist_close();	
 		cmd_noop(tag.s, cmd.s);
 	    }
-#ifdef ENABLE_EXPERIMENT
-	    else if (!strcmp(cmd.s, "Namespace")) {
-		if (c == '\r') c = prot_getc(imapd_in);
-		if (c != '\n') goto extraargs;
-		cmd_namespace(tag.s);
-	    }
-#endif
 #ifdef ENABLE_X_NETSCAPE_HACK
 	    else if (!strcmp(cmd.s, "Netscape")) {
 		/* Cretins. */
@@ -671,6 +665,13 @@ cmdloop()
 	    }
 #endif
 	    else if (!imapd_userid) goto nologin;
+#ifdef ENABLE_EXPERIMENT
+	    else if (!strcmp(cmd.s, "Namespace")) {
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_namespace(tag.s);
+	    }
+#endif
 	    else goto badcmd;
 	    break;
 
@@ -2402,9 +2403,9 @@ char *pattern;
     }
 
     if (subscribed) {
-	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid, imapd_authstate,
-			 lsubdata);
-	lsubdata((char *)0, 0, 0);
+	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid,
+			 imapd_authstate, lsubdata, NULL);
+	lsubdata((char *)0, 0, 0, 0);
     }
     else if (!pattern[0]) {
 	/* Special case: query top-level hierarchy separator */
@@ -2413,7 +2414,7 @@ char *pattern;
     else {
 	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
 			 imapd_authstate, listdata, NULL);
-	listdata((char *)0, 0, 0);
+	listdata((char *)0, 0, 0, 0);
     }
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
@@ -3020,59 +3021,75 @@ cmd_netscrape(tag)
  * order to ensure the namespace response is correct on a server with
  * no shared namespace.
  */
-static int
-namespace_cb(name, matchlen, maycreate, rock)
+static int namespacedata(name, matchlen, maycreate, rock)
     char* name;
     int matchlen;
     int maycreate;
     void* rock;
 {
-    int* sawone = rock;
+    char prefix[MAX_MAILBOX_PATH];
+    int* sawone = (int*) rock;
 
-    if (!strcmp(name, "user") || !strcmp(name, "INBOX")) {
+    if (!name) {
+	return 0;
+    }
+    
+    /* partial matches don't count.
+       (Unfortunately, there are a lot of these.) */
+    if (name[matchlen]) {
+	return 0;
+    }
+    
+    /* "INBOX" and "user" don't count. */
+    if (!(strcmp(name, "INBOX") && strcmp(name, "user"))) {
 	/* this is not a "shared" namespace
 	 * move along, move along
 	 */
 	return 0;
     }
 
-    /* this is a shared namespace */
+    /* this must be a shared namespace. */
     if (! *sawone) {
 	/* open the sexp, we're not going to print NIL */
 	prot_printf(imapd_out, "(");
 	*sawone = 1;
     }
-    *sawone = 1;
 
-    /* it's not; print it: */
-    prot_printf(imapd_out, "(\"%s\" \".\")", name);
+    /* finally print it */
+    prot_printf(imapd_out, "(");
+    sprintf(prefix, "%s.", name);
+    printstring(prefix);
+    prot_printf(imapd_out, " \".\")", name);
+    
+    return 0;
 }
-
+    
 /*
  * Print out a response to the NAMESPACE command defined by
- * RFC 2342.  This isn't configurable, but it wasn't obvious that there
- * was any reason that it needs to be.
+ * RFC 2342.
  */
 void
 cmd_namespace(tag)
     char* tag;
 {
     int sawone = 0;
+    char* pattern = xstrdup("%");
 
     /* print out the boring hardcoded namespaces */
     prot_printf(imapd_out,
 		"* NAMESPACE ((\"INBOX.\" \".\")) ((\"user.\" \".\")) ");
 
     /* now find all the exciting toplevel namespaces */
-    mboxlist_findall("%", imapd_userisadmin, imapd_userid, imapd_authstate,
-		     namespace_cb, (void*) &sawone);
-    /* if there were any, sawone = 1, and end it
-       if not, there were none, and print NIL */
+    mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
+		     imapd_authstate,  namespacedata, (void*) &sawone);
+    /* if sawone was set to nonzero by proc, terminate the list
+       otherwise, we didn't see any -- print NIL */
     prot_printf(imapd_out, sawone ? ")\r\n" : "NIL\r\n");
-
+    
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
-  
+
+    free(pattern);
 }
 #endif /* ENABLE_EXPERIMENT */
 
@@ -4103,6 +4120,31 @@ int c;
 }
 
 /*
+ * Print 's' as a quoted-string or literal (but not an atom)
+ */
+void
+printstring(s)
+const char *s;
+{
+    const char *p;
+    int len = 0;
+
+    /* Look for any non-QCHAR characters */
+    for (p = s; *p; p++) {
+	len++;
+	if (*p & 0x80 || *p == '\r' || *p == '\n'
+	    || *p == '\"' || *p == '%' || *p == '\\') break;
+    }
+
+    if (*p || len >= 1024) {
+	prot_printf(imapd_out, "{%u}\r\n%s", strlen(s), s);
+    }
+    else {
+	prot_printf(imapd_out, "\"%s\"", s);
+    }
+}
+
+/*
  * Print 's' as an atom, quoted-string, or literal
  */
 void
@@ -4390,7 +4432,7 @@ int maycreate;
     c = name[matchlen];
     if (c) name[matchlen] = '\0';
     prot_printf(imapd_out, "* %s (%s) \".\" ", cmd, c ? "\\Noselect" : "");
-    printastring(name);
+    printstring(name);
     prot_printf(imapd_out, "\r\n");
     if (c) name[matchlen] = c;
     return 0;
@@ -4411,7 +4453,7 @@ void* rock;
 /*
  * Issue a LSUB untagged response
  */
-static int lsubdata(name, matchlen, maycreate)
+static int lsubdata(name, matchlen, maycreate, rock)
 char *name;
 int matchlen;
 int maycreate;
