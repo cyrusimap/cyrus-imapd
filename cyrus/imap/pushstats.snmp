@@ -103,6 +103,8 @@ C,GETACL_COUNT,"Number of getacl", auto
 C,GETQUOTA_COUNT,"Number of getquota", auto
 C,GETQUOTAROOT_COUNT,"Number of getquotaroot", auto
 C,GETUIDS_COUNT,"Number of getuids", auto
+C,ID_COUNT,"Number of id", auto
+C,IDLE_COUNT,"Number of idle", auto
 C,LOGIN_COUNT,"Number of login", auto
 C,LOGOUT_COUNT,"Number of logout", auto
 C,LIST_COUNT,"Number of list", auto
@@ -121,5 +123,7 @@ C,SUBSCRIBE_COUNT,"Number of subscribe", auto
 C,SETACL_COUNT,"Number of setacl", auto
 C,SETQUOTA_COUNT,"Number of setquota", auto
 C,STATUS_COUNT,"Number of status", auto
+C,SORT_COUNT,"Number of sort", auto
+C,THREAD_COUNT,"Number of thread", auto
 C,UNSUBSCRIBE_COUNT,"Number of unsubscribe", auto
 C,UNSELECT_COUNT,"Number of unselect", auto

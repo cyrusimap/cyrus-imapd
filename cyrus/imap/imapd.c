@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.282 2000/12/14 19:26:48 ken3 Exp $ */
+/* $Id: imapd.c,v 1.283 2000/12/15 20:06:15 ken3 Exp $ */
 
 #include <config.h>
 
@@ -877,6 +877,8 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Id")) {
 		if (c != ' ') goto missingargs;
 		cmd_id(tag.s);
+
+		snmp_increment(ID_COUNT, 1);
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Idle")) {
@@ -888,6 +890,8 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_idle(tag.s);
+
+		snmp_increment(IDLE_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1163,6 +1167,8 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 	    sort:
 		cmd_sort(tag.s, usinguid);
+
+		snmp_increment(SORT_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Status")) {
 		if (c != ' ') goto missingargs;
@@ -1182,6 +1188,8 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 	    thread:
 		cmd_thread(tag.s, usinguid);
+
+		snmp_increment(THREAD_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
