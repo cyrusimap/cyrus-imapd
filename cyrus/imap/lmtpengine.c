@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.108 2004/03/04 16:49:55 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.109 2004/03/04 21:06:47 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -616,7 +616,7 @@ static int savemsg(struct clientdata *cd,
 	"Return-Path",  /* need to remove (we add our own) */
 	NULL
     };
-    char *addname, *addbody, *fold[5], *p;
+    char *addbody, *fold[5], *p;
     int addlen, nfold, i;
 
     /* Copy to spool file */
@@ -646,18 +646,16 @@ static int savemsg(struct clientdata *cd,
 	    hostname = config_servername;
 	}
 
-	addname = xstrdup("Return-Path");
 	addlen = 2 + strlen(rpath) + (hostname ? 1 + strlen(hostname) : 0);
 	addbody = xmalloc(addlen + 1);
 	sprintf(addbody, "<%s%s%s>",
 		rpath, hostname ? "@" : "", hostname ? hostname : "");
-	fprintf(f, "%s: %s\r\n", addname, addbody);
-	spool_cache_header(addname, addbody, m->hdrcache);
+	fprintf(f, "Return-Path: %s\r\n", addbody);
+	spool_cache_header(xstrdup("Return-Path"), addbody, m->hdrcache);
     }
 
     /* add a received header */
     rfc822date_gen(datestr, sizeof(datestr), now);
-    addname = xstrdup("Received");
     addlen = 8 + strlen(cd->lhlo_param) + strlen(cd->clienthost);
     if (m->authuser) addlen += 28 + strlen(m->authuser) + 5; /* +5 for ssf */
     addlen += 25 + strlen(config_servername) + strlen(CYRUS_VERSION);
@@ -702,12 +700,12 @@ static int savemsg(struct clientdata *cd,
     fold[nfold++] = p;
     p += sprintf(p, " %s", datestr);
  
-    fprintf(f, "%s: ", addname);
+    fprintf(f, "Received: ");
     for (i = 0, p = addbody; i < nfold; p = fold[i], i++) {
 	fprintf(f, "%.*s\r\n\t", fold[i] - p, p);
     }
     fprintf(f, "%s\r\n", p);
-    spool_cache_header(addname, addbody, m->hdrcache);
+    spool_cache_header(xstrdup("Received"), addbody, m->hdrcache);
 
     /* add any requested headers */
     if (func->addheaders) {
@@ -737,18 +735,16 @@ static int savemsg(struct clientdata *cd,
 	m->id = xmalloc(40 + strlen(config_servername));
 	sprintf(m->id, "<cmu-lmtpd-%d-%d-%u@%s>", p, (int) now,
 		msgid_count++, config_servername);
-	addname = xstrdup("Message-ID");
-	fprintf(f, "%s: %s\r\n", addname, m->id);
-	spool_cache_header(addname, xstrdup(m->id), m->hdrcache);
+	fprintf(f, "Message-ID: %s\r\n", m->id);
+	spool_cache_header(xstrdup("Message-ID"), xstrdup(m->id), m->hdrcache);
     }
 
     /* get date */
     if (!(body = spool_getheader(m->hdrcache, "date"))) {
 	/* no date, create one */
-	addname = xstrdup("Date");
 	addbody = xstrdup(datestr);
-	fprintf(f, "%s: %s\r\n", addname, addbody);
-	spool_cache_header(addname, addbody, m->hdrcache);
+	fprintf(f, "Date: %s\r\n", addbody);
+	spool_cache_header(xstrdup("Date"), addbody, m->hdrcache);
     }
 
     if (!m->return_path &&
