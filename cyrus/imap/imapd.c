@@ -3,6 +3,7 @@
  */
 
 #include <stdio.h>
+#include <time.h>
 #include <sysexits.h>
 #include <signal.h>
 #include <sys/types.h>
@@ -251,6 +252,11 @@ cmdloop()
 		c = getword(&arg2);
 		if (c != ' ') goto badsequence;
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
+	    }
+	    else if (!strcmp(cmd.s, "Search")) {
+		if (!imapd_mailbox) goto nomailbox;
+		if (c != ' ') goto missingargs;
+		cmd_search(tag.s);
 	    }
 	    else goto badcmd;
 	    break;
@@ -865,7 +871,192 @@ int usinguid;
     if (flag) free((char *)flag);
 }
 
+cmd_search(tag)
+char *tag;
+{
+    int c = ' ';
+    static struct buf criteria, arg;
+    struct searchargs searchargs;
+    static struct searchargs zerosearchargs;
+    int nothing_found = 0;
+    int flag;
+    time_t start, end;
 
+    searchargs = zerosearchargs;
+
+    while (c == ' ') {
+	c = getword(&criteria);
+	lcase(criteria.s);
+	switch (criteria.s[0]) {
+	case 'a':
+	    if (!strcmp(criteria.s, "answered")) {
+		searchargs.system_flags_set |= FLAG_ANSWERED;
+	    }
+	    else if (!strcmp(criteria.s, "all")) {
+		break;
+	    }
+	    else goto badcri;
+	    break;
+
+	case 'b':
+	    if (!strcmp(criteria.s, "before")) {
+		c = getdate(&start, &end);
+		if (c == EOF) goto baddate;
+		if (!searchargs.before || searchargs.before > start) {
+		    searchargs.before = start;
+		}
+	    }
+	    else goto badcri;
+	    break;
+
+	case 'd':
+	    if (!strcmp(criteria.s, "deleted")) {
+		searchargs.system_flags_set |= FLAG_DELETED;
+	    }
+	    else goto badcri;
+	    break;
+
+	case 'f':
+	    if (!strcmp(criteria.s, "flagged")) {
+		searchargs.system_flags_set |= FLAG_FLAGGED;
+	    }
+	    else goto badcri;
+	    break;
+
+	case 'k':
+	    if (!strcmp(criteria.s, "keyword")) {
+		if (c != ' ') goto badcri;		
+		c = getword(&arg);
+		if (!isatom(&arg)) goto badflag;
+		lcase(arg.s);
+		for (flag=0; flag < MAX_USER_FLAGS; flag++) {
+		    if (imapd_mailbox->flagname[flag] &&
+			!strcmp(imapd_mailbox->flagname[flag], arg.s)) break;
+		}
+		if (flag == MAX_USER_FLAGS) {
+		    nothing_found++;
+		    break;
+		}
+		searchargs.user_flags_set[flag/32] |= 1<<(flag&31);
+	    }
+	    else goto badcri;
+	    break;
+
+	case 'n':
+	    if (!strcmp(criteria.s, "new")) {
+		if (searchargs.seen_state == SEARCH_SET ||
+		    searchargs.recent_state == SEARCH_UNSET) nothing_found++;
+		searchargs.seen_state = SEARCH_UNSET;
+		searchargs.recent_state = SEARCH_SET;
+	    }
+	    else goto badcri;
+	    break;
+
+	case 'o':
+	    if (!strcmp(criteria.s, "old")) {
+		if (searchargs.recent_state == SEARCH_SET) nothing_found++;
+		searchargs.recent_state = SEARCH_UNSET;
+	    }
+	    else if (!strcmp(criteria.s, "on")) {
+		c = getdate(&start, &end);
+		if (c == EOF) goto baddate;
+		if (!searchargs.before || searchargs.before > end) {
+		    searchargs.before = end;
+		}
+		if (!searchargs.after || searchargs.after < start) {
+		    searchargs.after = start;
+		}
+	    }
+	    else goto badcri;
+	    break;
+
+	case 'r':
+	    if (!strcmp(criteria.s, "recent")) {
+		if (searchargs.recent_state == SEARCH_UNSET) nothing_found++;
+		searchargs.recent_state = SEARCH_SET;
+	    }
+	    else goto badcri;
+	    break;
+
+	case 's':
+	    if (!strcmp(criteria.s, "seen")) {
+		if (searchargs.seen_state == SEARCH_UNSET) nothing_found++;
+		searchargs.seen_state = SEARCH_SET;
+	    }
+	    else if (!strcmp(criteria.s, "since")) {
+		c = getdate(&start, &end);
+		if (c == EOF) goto baddate;
+		if (!searchargs.after || searchargs.after < end) {
+		    searchargs.after = end;
+		}
+	    }
+	    else goto badcri;
+	    break;
+
+	case 'u':
+	    if (!strcmp(criteria.s, "unseen")) {
+		if (searchargs.seen_state == SEARCH_SET) nothing_found++;
+		searchargs.seen_state = SEARCH_UNSET;
+	    }
+	    else if (!strcmp(criteria.s, "unanswered")) {
+		searchargs.system_flags_unset |= FLAG_ANSWERED;
+	    }
+	    else if (!strcmp(criteria.s, "undeleted")) {
+		searchargs.system_flags_unset |= FLAG_DELETED;
+	    }
+	    else if (!strcmp(criteria.s, "unflagged")) {
+		searchargs.system_flags_unset |= FLAG_FLAGGED;
+	    }
+	    else if (!strcmp(criteria.s, "unkeyword")) {
+		if (c != ' ') goto badcri;		
+		c = getword(&arg);
+		if (!isatom(&arg)) goto badflag;
+		lcase(arg.s);
+		for (flag=0; flag < MAX_USER_FLAGS; flag++) {
+		    if (imapd_mailbox->flagname[flag] &&
+			!strcmp(imapd_mailbox->flagname[flag], arg.s)) break;
+		}
+		if (flag != MAX_USER_FLAGS) {
+		    searchargs.user_flags_unset[flag/32] |= 1<<(flag&31);
+		}
+	    }
+	    else goto badcri;
+	    break;
+
+	default:
+	badcri:
+	    printf("%s BAD Invalid Search criteria\r\n", tag);
+	    if (c != '\n') eatline();
+	    return;
+	}
+    }
+
+    if (c != '\n') {
+	printf("%s BAD Unexpected extra arguments to Search\r\n", tag);
+	eatline();
+	return;
+    }
+
+    if (!nothing_found) index_search(imapd_mailbox, &searchargs);
+
+    printf("%s OK Search completed\r\n", tag);
+
+    return;
+
+ badflag:
+    printf("%s BAD Invalid flag name %s in Search command\r\n",
+	   tag, arg.s);
+    if (c != '\n') eatline();
+    return;
+
+ baddate:
+    printf("%s BAD Invalid date in Search command\r\n",
+	   tag);
+    if (c != '\n') eatline();
+    return;
+}
+    
+  
 #define BUFGROWSIZE 100
 int getword(buf)
 struct buf *buf;
@@ -1016,6 +1207,94 @@ struct buf *buf;
 	len++;
     }
 }
+
+int getdate(start, end)
+time_t *start, *end;
+{
+    int c;
+    struct tm tm;
+    static struct tm zerotm;
+    int quoted = 0;
+    char month[4];
+    static char *monthname[] = {
+	"jan", "feb", "mar", "apr", "may", "jun",
+	"jul", "aug", "sep", "oct", "nov", "dec" };
+
+    tm = zerotm;
+
+    c = getc(stdin);
+    if (c == '\"') {
+	quoted++;
+	c = getc(stdin);
+    }
+
+    if (!isdigit(c)) goto baddate;
+    tm.tm_mday = c - '0';
+    c = getc(stdin);
+    if (isdigit(c)) {
+	tm.tm_mday = tm.tm_mday * 10 + c - '0';
+	c = getc(stdin);
+    }
+    
+    if (c != '-') goto baddate;
+    c = getc(stdin);
+
+    if (!isalpha(c)) goto baddate;
+    month[0] = c;
+    c = getc(stdin);
+    if (!isalpha(c)) goto baddate;
+    month[1] = c;
+    c = getc(stdin);
+    if (!isalpha(c)) goto baddate;
+    month[2] = c;
+    c = getc(stdin);
+    month[3] = '\0';
+    lcase(month);
+
+    for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
+	if (!strcmp(month, monthname[tm.tm_mon])) break;
+    }
+    if (tm.tm_mon == 12) goto baddate;
+
+    if (c != '-') goto baddate;
+    c = getc(stdin);
+
+    if (!isdigit(c)) goto baddate;
+    tm.tm_year = c - '0';
+    c = getc(stdin);
+    if (!isdigit(c)) goto baddate;
+    tm.tm_year = tm.tm_year * 10 + c - '0';
+    c = getc(stdin);
+    if (isdigit(c)) {
+	if (tm.tm_year < 19) goto baddate;
+	tm.tm_year -= 19;
+	tm.tm_year = tm.tm_year * 10 + c - '0';
+	c = getc(stdin);
+	if (!isdigit(c)) goto baddate;
+	tm.tm_year = tm.tm_year * 10 + c - '0';
+	c = getc(stdin);
+    }
+
+    if (quoted) {
+	if (c != '\"') goto baddate;
+	c = getc(stdin);
+    }
+
+    tm.tm_isdst = -1;
+    *start = mktime(&tm);
+
+    tm.tm_sec = tm.tm_min = 59;
+    tm.tm_hour = 23;
+    *end = mktime(&tm);
+
+    return c;
+
+ baddate:
+    ungetc(c);
+    return EOF;
+}
+	
+
 
 int isatom(buf)
 struct buf *buf;

@@ -57,3 +57,19 @@ struct storeargs {
 #define STORE_ADD	1
 #define STORE_REMOVE	2
 #define STORE_REPLACE	3
+
+struct searchargs {
+    time_t before, after;
+    bit32 system_flags_set;
+    bit32 system_flags_unset;
+    bit32 user_flags_set[MAX_USER_FLAGS/32];
+    bit32 user_flags_unset[MAX_USER_FLAGS/32];
+    int seen_state;
+    int recent_state;
+    /* XXX bcc, cc, from, subject, to, body, text */
+};
+
+/* values for seen_state and recent_state */
+#define SEARCH_DONTCARE		0
+#define SEARCH_SET		1
+#define SEARCH_UNSET		2
