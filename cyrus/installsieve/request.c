@@ -141,6 +141,22 @@ int installdata(struct protstream *pout, struct protstream *pin,
   return setscriptactive(pout,pin,scriptname);
 }
 
+static char *getsievename(char *filename)
+{
+  char *ret;
+
+  ret=(char *) xmalloc( strlen(filename) + 2);
+
+  strcpy(ret, filename);
+
+  if ( strcmp( ret + strlen(ret) - 7,".script")==0)
+  {
+    ret[ strlen(ret) - 7] = '\0';
+  }
+
+  return ret;
+}
+
 
 int installafile(struct protstream *pout, struct protstream *pin,char *filename)
 {
@@ -152,6 +168,9 @@ int installafile(struct protstream *pout, struct protstream *pin,char *filename)
   int res;
   string_t *str;
   lexstate_t state;
+  char *sievename;
+
+  sievename=getsievename(filename);
 
   result=stat(filename,&filestats);
 
@@ -171,7 +190,7 @@ int installafile(struct protstream *pout, struct protstream *pin,char *filename)
     return -1;
   }
 
-  prot_printf(pout, "PUTSCRIPT \"%s\" ",filename);
+  prot_printf(pout, "PUTSCRIPT \"%s\" ",sievename);
 
 
   prot_printf(pout, "{%d+}\r\n",size);
@@ -221,7 +240,7 @@ int installafile(struct protstream *pout, struct protstream *pin,char *filename)
     return -1;
   }
 
-  return setscriptactive(pout,pin,filename);
+  return setscriptactive(pout,pin,sievename);
 }
 
 

@@ -160,6 +160,14 @@ secrets when given a plaintext password.  See the SASL documentation.
 .IP "\fBsasl_option\fR" 5
 Any other SASL option can be set by preceeding it with "sasl_".  This
 file overrides the SASL configuration file.
+.IP "\fBmaxscriptsize\fR" 5
+Maximum size any sieve script can be. This and maxscripts only apply
+if you are using timsieved
+.IP "\fBmaxscripts\fR" 5
+Maximum number of sieve scripts any user may have. This and
+maxscriptsize only apply if you are using timseved.
+
+
 .SH SEE ALSO
 .PP
 \fBimapd(8)\fR

@@ -23,6 +23,9 @@
           * It's possible to cause imtest/imapd to crash with Decoding
             error: Incorrect network address (krb_rd_req) by sending a
             large amount of information at once. 
+          * Running imtest and imapd from the same machine using Kerberos
+            protection or privacy layers causes the same problem. A work
+            around is to not use any layers (imtest -l 0). 
 
       * imtest doesn't have a manpage. 
 
