@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.26 1999/02/19 01:37:40 wcw Exp $
+ $Id: auth_krb_pts.c,v 1.27 1999/03/01 20:18:29 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -551,11 +551,14 @@ const char *cacheid;
                "Database %s inconsistent: header record found, data record missing", fnamebuf);
 	goto done;
     }
+
+    newstate->ngroups = us.ngroups;
+
     if (newstate->ngroups * PR_MAXNAMELEN < datalist.size) {
 	syslog(LOG_ERR,
-	       "Database %s inconsistent: not enough data for claimed number of groups", fnamebuf);
+	       "Database %s inconsistent: ngroups(%d) * PR_MAXNAMELEN(%d) < datalist.size(%d)",
+	       fnamebuf, newstate->ngroups, PR_MAXNAMELEN, datalist.size);
     }
-    newstate->ngroups = us.ngroups;
 
     if (newstate->ngroups) {
       newstate->groups = (char (*)[PR_MAXNAMELEN])xmalloc(newstate->ngroups *
