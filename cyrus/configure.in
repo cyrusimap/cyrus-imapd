@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.20 2002/11/22 22:02:25 rjs3 Exp $
+dnl $Id: configure.in,v 1.232.4.21 2002/12/11 16:59:34 ken3 Exp $
 dnl
 
 
@@ -119,43 +119,29 @@ AC_SUBST(DEPLIBS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
 
-AC_ARG_WITH(dbdir,[  --with-dbdir=DIR        Berkeley DB in <DIR>],
-  LDFLAGS="-L$withval/lib $LDFLAGS"
-  BDB_LIB="-L$withval/lib"
-  CMU_ADD_LIBPATH($withval/lib)
-  if test -d $withval/include/db3; then
-    CPPFLAGS="-I$withval/include/db3 $CPPFLAGS"
-    BDB_INC="-I$withval/include/db3"
-  else
-    CPPFLAGS="-I$withval/include $CPPFLAGS"
-    BDB_INC="-I$withval/include/db"
-  fi,
-  # otherwise, check for ../include/db3
-  for db3loc in $prefix /usr/local /usr
-    do
-      if test -d $db3loc/include/db3; then
-	CPPFLAGS="-I$db3loc/include/db3 $CPPFLAGS"
-	BDB_INC="-I$db3loc/include/db3"
-	break
-      fi
-    done)
-#Try to detect the name of the DB4/DB3 library
-dbfound="no"
-for dbname in db-4.1 db4.1 db-4.0 db4.0 db-4 db4 db-3.3 db3.3 db-3.2 db3.2 db-3.1 db3.1 db-3 db3 db
-  do
-    AC_CHECK_LIB($dbname, db_create, [AC_DEFINE(HAVE_LIBDB)
-				      LIBS=" -l$dbname ${LIBS}"
-				      BDB_LIB="${BDB_LIB} -l$dbname"
-				      dbfound="yes"
-				      break], dbfound="no")
-  done
-if test "$dbfound" = "no"; then
+dnl Berkeley DB Detection
+
+dnl support old-style
+AC_ARG_WITH(dbdir,
+	[  --with-dbdir=DIR        Berkeley DB files are in prefix DIR],
+	with_bdb_lib="$withval/lib"; with_db_inc="$withval/include",
+	with_bdb_lib=none; with_bdb_inc=none)
+
+CYRUS_BERKELEY_DB_CHK()
+
+if test "$dblib" = "no"; then
   AC_ERROR([this version requires Berkeley DB 3.x or later.
-(Get it from http://www.sleepycat.com/.)])
+(Get it from http://www.sleepycat.com/).  You may need to suppply the
+--with-bdb-libdir or --with-bdb-incdir configure options.])
 fi
 
-AC_SUBST(BDB_LIB)
-AC_SUBST(BDB_INC)
+if test "$with_bdb_lib" != "none"; then
+  CMU_ADD_LIBPATH($with_bdb_lib)
+fi
+LIBS="${LIBS} ${BDB_LIBADD}"
+CPPFLAGS="${BDB_INCADD} ${CPPFLAGS}"
+
+dnl End Berkeley DB Detection
 
 dnl function for doing each of the database backends
 dnl parameters: backend name, variable to set, withval
