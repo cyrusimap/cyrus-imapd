@@ -70,6 +70,7 @@ struct seen **seendbptr;
 
     seendb->file = fopen(fnamebuf, "r+");
     if (!seendb->file) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
 	return IMAP_IOERROR;
     }
 
@@ -107,12 +108,14 @@ char **seenuidsptr;
 	r = flock(fileno(seendb->file), LOCK_EX);
 	if (r == -1) {
 	    if (errno == EINTR) continue;
+	    syslog(LOG_ERR, "IOERROR: locking %s: %m", fnamebuf);
 	    return IMAP_IOERROR;
 	}
 
 	fstat(fileno(seendb->file), &sbuffd);
 	r = stat(fnamebuf, &sbuffile);
 	if (r == -1) {
+	    syslog(LOG_ERR, "IOERROR: stating %s: %m", fnamebuf);
 	    seen_unlock(seendb);
 	    return IMAP_IOERROR;
 	}
@@ -124,7 +127,10 @@ char **seenuidsptr;
 	else {
 	    fclose(seendb->file);
 	    seendb->file = fopen(fnamebuf, "r+");
-	    if (!seendb->file) return IMAP_IOERROR;
+	    if (!seendb->file) {
+		syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
+		return IMAP_IOERROR;
+	    }
 	}
     }
     
@@ -134,6 +140,7 @@ char **seenuidsptr;
 				      seendb->offset, seendb->size);
 
     if (seendb->offset == -1) {
+	syslog(LOG_ERR, "IOERROR: searching %s: %m", fnamebuf);
 	return IMAP_IOERROR;
     }
 
@@ -265,7 +272,10 @@ char *seenuids;
 	strcat(newfnamebuf, ".NEW");
 
 	writefile = fopen(newfnamebuf, "w+");
-	if (!writefile) return IMAP_IOERROR;
+	if (!writefile) {
+	    syslog(LOG_ERR, "IOERROR: creating %s: %m", newfnamebuf);
+	    return IMAP_IOERROR;
+	}
 
 	/* Copy the part of file before the user's entry */
 	fseek(seendb->file, 0, 0);
@@ -274,6 +284,7 @@ char *seenuids;
 	    n = fread(buf, 1, left < sizeof(buf) ? left : sizeof(buf),
 		      seendb->file);
 	    if (n == 0) {
+		syslog(LOG_ERR, "IOERROR: reading %s: %m", fnamebuf);
 		fclose(writefile);
 		unlink(newfnamebuf);
 		return IMAP_IOERROR;
@@ -310,6 +321,7 @@ char *seenuids;
 	if (ferror(writefile) || fsync(fileno(writefile)) ||
 	    flock(fileno(writefile), LOCK_EX) == -1 ||
 	    rename(newfnamebuf, fnamebuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: writing %s: %m", newfnamebuf);
 	    fclose(writefile);
 	    unlink(newfnamebuf);
 	    return IMAP_IOERROR;
@@ -324,6 +336,7 @@ char *seenuids;
 
 	fflush(writefile);
 	if (ferror(writefile) || fsync(fileno(writefile))) {
+	    syslog(LOG_ERR, "IOERROR: creating %s: %m", newfnamebuf);
 	    return IMAP_IOERROR;
 	}
     }
@@ -344,7 +357,11 @@ struct seen *seendb;
     seendb->mailbox->seen_lock_count = 0;
     r = flock(fileno(seendb->file), LOCK_UN);
 
-    if (r == -1) return IMAP_IOERROR;
+    if (r == -1) {
+	syslog(LOG_ERR, "IOERROR: unlocking seen db for %s: %m",
+	       seendb->mailbox->name);
+	return IMAP_IOERROR;
+    }
     return 0;
 }
 
@@ -374,7 +391,10 @@ struct mailbox *mailbox;
     strcat(fnamebuf, FNAME_SEEN);
     
     f = fopen(fnamebuf, "w");
-    if (!f) return IMAP_IOERROR;
+    if (!f) {
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
+	return IMAP_IOERROR;
+    }
     fclose(f);
     return 0;
 }
@@ -395,12 +415,16 @@ struct mailbox *mailbox;
     strcat(fnamebuf, FNAME_SEEN);
     
     f = fopen(fnamebuf, "r+");
-    if (!f) return IMAP_IOERROR;
+    if (!f) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
+	return IMAP_IOERROR;
+    }
 
     for (;;) {
 	r = flock(fileno(f), LOCK_EX);
 	if (r == -1) {
 	    if (errno == EINTR) continue;
+	    syslog(LOG_ERR, "IOERROR: locking %s: %m", fnamebuf);
 	    fclose(f);
 	    return IMAP_IOERROR;
 	}
@@ -408,6 +432,7 @@ struct mailbox *mailbox;
 	fstat(fileno(f), &sbuffd);
 	r = stat(fnamebuf, &sbuffile);
 	if (r == -1) {
+	    syslog(LOG_ERR, "IOERROR: stating %s: %m", fnamebuf);
 	    fclose(f);
 	    return IMAP_IOERROR;
 	}
@@ -418,7 +443,10 @@ struct mailbox *mailbox;
 	else {
 	    fclose(f);
 	    f = fopen(fnamebuf, "r+");
-	    if (!f) return IMAP_IOERROR;
+	    if (!f) {
+		return IMAP_IOERROR;
+		syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
+	    }
 	}
     }
 

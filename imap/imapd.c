@@ -810,6 +810,7 @@ char *name;
 	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
     }
     if (!r && chdir(mailbox.path)) {
+	syslog(LOG_ERR, "IOERROR: changing directory to %s: %m", mailbox.path);
 	r = IMAP_IOERROR;
     }
 

@@ -160,7 +160,10 @@ FILE *to;
 
     while (size) {
 	n = fread(buf, 1, size > 4096 ? 4096 : size, from);
-	if (!n) return IMAP_IOERROR;
+	if (!n) {
+	    syslog(LOG_ERR, "IOERROR: reading message: %m");
+	    return IMAP_IOERROR;
+	}
 
 	buf[n] = '\0';
 	if (n != strlen(buf)) r = IMAP_MESSAGE_CONTAINSNULL;
@@ -184,7 +187,10 @@ FILE *to;
 
     if (r) return r;
     fflush(to);
-    if (ferror(to) || fsync(fileno(to))) return IMAP_IOERROR;
+    if (ferror(to) || fsync(fileno(to))) {
+	syslog(LOG_ERR, "IOERROR: writing message: %m");
+	return IMAP_IOERROR;
+    }
     rewind(to);
 
     /* Go back and check headers */
@@ -239,6 +245,7 @@ struct index_record *message_index;
     message_free_body(&body);
 
     if (ferror(mailbox->cache)) {
+	syslog(LOG_ERR, "IOERROR: appending cache for %s: %m", mailbox->name);
 	return IMAP_IOERROR;
     }
 

@@ -48,7 +48,10 @@ char *mailbox;
 	sprintf(procfname, "%s%s%d", val, FNAME_PROCDIR, pid);
 
 	procfile = fopen(procfname, "w+");
-	if (!procfile) fatal("can't write proc file", EX_IOERR);
+	if (!procfile) {
+	    syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
+	    fatal("can't write proc file", EX_IOERR);
+	}
     }
 
     rewind(procfile);
