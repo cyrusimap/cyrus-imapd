@@ -1,7 +1,8 @@
+<!-- $Id: install.html,v 1.36 1997/12/17 23:59:25 tjs Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers, 17-Jun-1996 -->
+
 </HEAD>
 <BODY>
 <h1>           Installing and Configuring the Cyrus IMAP Server</h1>
@@ -51,9 +52,10 @@ the instructions in <A
 HREF="ftp://athena-dist.mit.edu/pub/kerberos/README.KRB4">ftp://athena-dist.mit.edu/pub/kerberos/README.KRB4</A>.
 The author is unable to assist other sites in obtaining Kerberos.
 
-<LI> It is recommended that sites install Sendmail version 8.7.1 or later.  Sendmail distributions may
-be obtained from
-<A HREF="ftp://ftp.cs.berkeley.edu/ucb/sendmail">ftp://ftp.cs.berkely.edu/ucb/sendmail</A>
+<LI> It is recommended that sites install Sendmail version 8.7.1 or later.
+Sendmail distributions may be obtained from
+<A
+HREF="ftp://ftp.sendmail.org/ucb/sendmail">ftp://ftp.sendmail.org/ucb/sendmail</A>
 
 <LI> If you want to export netnews newsgroups using IMAP, the IMAP
 server must receive newsgroups with the INN news server.
@@ -63,8 +65,8 @@ server must receive newsgroups with the INN news server.
 
 Once you have unpacked the files (see the <A
 HREF="readme.html"><TT>README</TT></A> file for more information),
-"<TT>cd</TT>" to the "<tt>imapd-1.5</tt>" directory (This document
-assumes that the version number is 1.5.). The configuration files and
+"<TT>cd</TT>" to the "<tt>cyrus-imapd-1.5</tt>" directory (assuming the
+version number is 1.5).  The configuration files and
 various subdirectories are stored there.  In the directory that the
 <TT>configure</TT> file is in, type "<kbd>./configure</kbd>" to
 configure the software.
@@ -395,7 +397,7 @@ messages into both levels and categories.  Invoke "<kbd>man
 syslog</kbd>" to see if "<tt>openlog()</tt>" takes three arguments. If
 it does not, replace the system "<tt>syslogd</tt>" and
 "<tt>syslog.conf</tt>" with the files provided in the <A
-NAME="syslog"><tt>imapd-1.5/syslog</tt></A> directory.
+NAME="syslog"><tt>cyrus-imapd-1.5/syslog</tt></A> directory.
 
 <pre>
 <kbd>   mv syslogd /etc/syslogd
@@ -403,7 +405,7 @@ NAME="syslog"><tt>imapd-1.5/syslog</tt></A> directory.
 </kbd></pre>
 
 If you do not copy the "<tt>syslog.conf</tt>" file in 
-"<TT>imapd-1.5/syslog</TT>" to the 
+"<TT>cyrus-imapd-1.5/syslog</TT>" to the 
 "<tt>/etc</tt>" directory, be sure to add support for
 "<tt>local6.debug</tt>".  The file should include a line like:
 
@@ -815,5 +817,9 @@ is done.  You must then configure a mail interface, such as Pine,
 to work with the IMAP server.
 
 <P><HR><P>
+<!-- hhmts start -->
+last modified by tjs at Tue Nov  4 17:03:03 1997
+<!-- hhmts end -->
+<br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
