@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <title>Cyrus IMAP Server:  Overview and Concepts</title>
-<!-- $Id: overview.html,v 1.7 2001/08/29 14:10:46 ken3 Exp $ -->
+<!-- $Id: overview.html,v 1.8 2001/09/05 02:56:36 wcw Exp $ -->
 </HEAD><BODY>
 <H1>              Cyrus IMAP Server:  Overview and Concepts</H1>
 
@@ -860,6 +860,11 @@ recipients of the message.</p>
 "singleinstancestore" flag in the configuration file.</p>
 
 <h3>Duplicate Delivery Suppression</h3><a name="duplicate"></a>
+
+A message is considered a duplicate if two copies of a message with
+the same message-id and the same envelope receipient are received.
+Cyrus uses the duplicate delivery database to hold this information,
+and it looks approximately 3 days back in the default install. 
 
 <h3>Sieve, a Mail Filtering Language</h3><a name="sieve"></a>
 
