@@ -45,6 +45,9 @@ use Getopt::Long;
 
 $username = "";
 
+print "NOTE: This program is deprecated. Please use sieveshell\n";
+print "\n";
+
 $ret = GetOptions("v|views:s" => \$views,
 		  "l|list" => \$list,
 #		  "p|port:i" => \$port,
@@ -97,8 +100,6 @@ sub prompt {
 }
 
 sub show_help {
-  print "NOTE: This program is deprecated. Please use sieveshell\n";
-  print "\n";
   print "Usage:\n";
   print "  installsieve [options] <server>\n";
   print "\n";
@@ -116,7 +117,6 @@ sub show_help {
 }
 
 #main code
-
 my $obj = sieve_get_handle($acapserver,"prompt","prompt","prompt","prompt");
 
 if (!defined $obj) {
