@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.96 2003/07/08 19:30:20 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.97 2003/07/11 19:08:03 ken3 Exp $
  */
 
 /*
@@ -223,7 +223,7 @@ static void cmd_help(void);
 static void cmd_list(char *arg1, char *arg2);
 static void cmd_mode(char *arg);
 static void cmd_newnews(char *wild, time_t tstamp);
-static void cmd_over(unsigned long uid, unsigned long last);
+static void cmd_over(char *msgid, unsigned long uid, unsigned long last);
 static void cmd_post(char *msgid, int mode);
 static void cmd_starttls(int nntps);
 void usage(void);
@@ -1272,6 +1272,7 @@ static void cmdloop(void)
 
 	case 'O':
 	    if (!strcmp(cmd.s, "Over")) {
+		char curgroup[MAX_MAILBOX_NAME+1], *msgid = NULL;
 		unsigned long last;
 
 	      over:
@@ -1284,6 +1285,12 @@ static void cmdloop(void)
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
+		/* in case a msgid makes us switch groups */
+		strcpy(curgroup, nntp_group ? nntp_group->name : "");
+
+		/* if/when OVER <msgid> is allowed, change 4th arg to:
+		   cmd.s[0] == 'X' ? NULL : &msgid
+		*/
 		if (parserange(arg1.s, &uid, &last, NULL, &be) != -1) {
 		    if (be) {
 			if (arg1.s && *arg1.s)
@@ -1300,7 +1307,13 @@ static void cmdloop(void)
 			}
 		    }
 		    else
-			cmd_over(uid, last);
+			cmd_over(msgid, uid, last);
+		}
+
+		/* return to previously selected group */
+		if (*curgroup && nntp_group &&
+		    strcmp(curgroup, nntp_group->name)) {
+		       open_group(curgroup, 1, NULL, NULL);
 		}
 	    }
 	    else goto badcmd;
@@ -2381,7 +2394,7 @@ static void cmd_newnews(char *wild, time_t tstamp)
     free_wildmats(nrock.wild);
 }
 
-static void cmd_over(unsigned long uid, unsigned long last)
+static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
 {
     int msgno;
     struct nntp_overview *over;
@@ -2396,7 +2409,7 @@ static void cmd_over(unsigned long uid, unsigned long last)
 		prot_printf(nntp_out, "224 Overview information follows:\r\n");
 
 	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t%lu\r\n",
-			over->uid,
+			msgid ? 0 : over->uid,
 			over->subj ? over->subj : "",
 			over->from ? over->from : "",
 			over->date ? over->date : "",
