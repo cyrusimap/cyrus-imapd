@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.41.4.11 2003/03/09 18:49:05 ken3 Exp $ */
+/* $Id: quota.c,v 1.41.4.12 2003/04/23 00:12:07 ken3 Exp $ */
 
 
 #include <config.h>
@@ -240,7 +240,7 @@ void addquotaroot(char *domain, char *qr)
  */
 int buildquotalist(char *domain, char **roots, int nroots)
 {
-    char quota_path[MAX_MAILBOX_PATH];
+    char quota_path[MAX_MAILBOX_PATH+1];
     int i;
     DIR *dirp;
     DIR *topp;
@@ -540,7 +540,7 @@ void
 reportquota(void)
 {
     int i;
-    char buf[MAX_MAILBOX_PATH];
+    char buf[MAX_MAILBOX_PATH+1];
 
     printf("   Quota  %% Used    Used Root\n");
 

@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.5.4.9 2003/02/13 20:33:02 rjs3 Exp $
+ * $Id: squatter.c,v 1.5.4.10 2003/04/23 00:12:07 ken3 Exp $
  */
 
 /*
@@ -415,7 +415,7 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
     int rflag = 0;
     int i;
-    char buf[MAX_MAILBOX_PATH];
+    char buf[MAX_MAILBOX_PATH+1];
     struct namespace squat_namespace;
     int r;
 
