@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.473 2004/06/22 21:36:18 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.474 2004/07/06 20:02:19 ken3 Exp $ */
 
 #include <config.h>
 
@@ -122,6 +122,10 @@ static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 /* our tls connection, if any */
 static SSL *tls_conn = NULL;
 #endif /* HAVE_SSL */
+
+/* stage(s) for APPEND */
+struct stagemsg **stage = NULL;
+unsigned long numstage = 0;
 
 /* the sasl proxy policy context */
 static struct proxy_context imapd_proxyctx = {
@@ -772,6 +776,12 @@ void fatal(const char *s, int code)
 	prot_printf(imapd_out, "* BYE Fatal error: %s\r\n", s);
 	prot_flush(imapd_out);
     }
+    if (stage) {
+	/* Cleanup the stage(s) */
+	while (numstage) append_removestage(stage[--numstage]);
+	free(stage);
+    }
+
     syslog(LOG_ERR, "Fatal error: %s", s);
     shut_down(code);
 }
@@ -2278,8 +2288,7 @@ static int isokflag(char *s)
 }
 
 #define FLAGGROW 10
-void
-cmd_append(char *tag, char *name)
+void cmd_append(char *tag, char *name)
 
 {
     int c;
@@ -2299,7 +2308,8 @@ cmd_append(char *tag, char *name)
     const char *parseerr = NULL;
     FILE *f;
     int numalloc = 5;
-    struct stagemsg **stage = xmalloc(numalloc * sizeof(struct stagemsg *));
+
+    stage = xmalloc(numalloc * sizeof(struct stagemsg *));
 
     /* See if we can append */
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
@@ -2428,14 +2438,14 @@ cmd_append(char *tag, char *name)
 	}
 	
 	/* Stage the message */
-	if (num == numalloc) {
+	if (numstage == numalloc) {
 	    numalloc *= 2;
 	    stage = xrealloc(stage, numalloc * sizeof(struct stagemsg *));
 	}
-	stage[num] = NULL;
-	f = append_newstage(mailboxname, now, num, &stage[num]);
+	stage[numstage] = NULL;
+	f = append_newstage(mailboxname, now, num, &stage[numstage]);
 	if (f) {
-	    num++;
+	    numstage++;
 	    totalsize += size;
 	    r = message_copy_strict(imapd_in, f, size);
 	    fclose(f);
@@ -2468,7 +2478,7 @@ cmd_append(char *tag, char *name)
 			 imapd_userid, imapd_authstate, ACL_INSERT, totalsize);
     }
     if (!r) {
-	for (i = 0; !r && i < num; i++) {
+	for (i = 0; !r && i < numstage; i++) {
 	    r = append_fromstage(&mailbox, stage[i], internaldate, 
 				 (const char **) flag, nflags, 0);
 	}
@@ -2481,10 +2491,9 @@ cmd_append(char *tag, char *name)
     }
 
     /* Cleanup the stage(s) */
-    for (i = 0; i < num; i++) {
-	append_removestage(stage[i]);
-    }
+    while (numstage) append_removestage(stage[--numstage]);
     free(stage);
+    stage = NULL;
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
