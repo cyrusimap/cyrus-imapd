@@ -2,14 +2,14 @@ dnl
 dnl Additional macros for configure.in packaged up for easier theft.
 dnl tjs@andrew.cmu.edu 6-may-1998
 dnl
-dnl $Id: aclocal.m4,v 1.2 1998/05/07 06:17:38 tjs Exp $
+dnl $Id: aclocal.m4,v 1.3 1998/05/13 03:51:30 wcw Exp $
 dnl
 
 dnl add -L(arg), and possibly (runpath switch)(arg), to LDFLAGS
 dnl (so the runpath for shared libraries is set).
 AC_DEFUN(ANDREW_ADD_LIBPATH, [
   # this is ANDREW ADD LIBPATH
-  if test "$andrew_runpath" = "none" ; then
+  if test "$andrew_runpath_switch" = "none" ; then
 	LDFLAGS="-L$1 ${LDFLAGS}"
   else
 	LDFLAGS="-L$1 ${LDFLAGS} $andrew_runpath_switch$1"
@@ -20,7 +20,7 @@ dnl add -L(1st arg), and possibly (runpath switch)(1st arg), to (2nd arg)
 dnl (so the runpath for shared libraries is set).
 AC_DEFUN(ANDREW_ADD_LIBPATH_TO, [
   # this is ANDREW ADD LIBPATH TO
-  if test "$andrew_runpath" = "none" ; then
+  if test "$andrew_runpath_switch" = "none" ; then
 	$2="-L$1 ${$2}"
   else
 	$2="-L$1 ${$2} $andrew_runpath_switch$1"
