@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.158 2003/05/13 17:26:48 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.159 2003/05/29 02:14:35 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1303,7 +1303,7 @@ int service_main(int argc, char **argv, char **envp)
     return 0;
 }
 
-/* called if 'service_init()' was called but not 'service_main()' */
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     shut_down(error);

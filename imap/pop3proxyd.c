@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.57 2003/05/19 13:56:35 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.58 2003/05/29 02:14:34 rjs3 Exp $
  */
 #include <config.h>
 
@@ -322,7 +322,7 @@ int service_main(int argc, char **argv, char **envp __attribute__((unused)))
     /* return 0; */
 }
 
-/* called if 'service_init()' was called but not 'service_main()' */
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     shut_down(error);
