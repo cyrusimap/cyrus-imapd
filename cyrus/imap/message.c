@@ -1239,7 +1239,7 @@ struct body *body;
 }
 
 /* Append character 'c' to 'ibuf' */
-#define PUTIBUF(ibuf,c) (((ibuf)->left || message_ibuf_ensure((ibuf),1)),(*((ibuf)->end)++ = (c)))
+#define PUTIBUF(ibuf,c) (((ibuf)->left || message_ibuf_ensure((ibuf),1)),((ibuf)->left--),(*((ibuf)->end)++ = (c)))
 
 /*
  * Write the IMAP envelope for 'body' to 'ibuf'
@@ -1871,7 +1871,7 @@ int len;
 {
     char *s;
 
-    if (len >= ibuf->left) return;
+    if (len <= ibuf->left) return;
     if (len < IBUFGROWSIZE) len = IBUFGROWSIZE;
 
     s = ibuf->start - sizeof(bit32);
