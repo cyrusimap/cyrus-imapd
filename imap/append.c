@@ -219,7 +219,7 @@ char *userid;
 	       message_index.size, mailbox->quota_path);
     }
 
-    if (setseen && userid) {
+    if (setseen && userid && (mailbox->myrights & ACL_SEEN)) {
 	append_addseen(mailbox, userid, message_index.uid, message_index.uid);
     }
     
@@ -388,7 +388,7 @@ char *userid;
 	if (!seenbegin && !copymsg[msg].seen) continue;
 	if (seenbegin && copymsg[msg].seen) continue;
 
-	if (!seenbegin) {
+	if (!seenbegin && (mailbox->myrights & ACL_SEEN)) {
 	    seenbegin = msg+1;
 	}
 	else {
