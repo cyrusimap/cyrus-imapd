@@ -1,36 +1,23 @@
 /* mkchartable.c -- Generate character set mapping table
- $Id: mkchartable.c,v 1.12 1998/05/15 21:52:20 neplokh Exp $
- 
- #        Copyright 1998 by Carnegie Mellon University
- #
- #                      All Rights Reserved
- #
- # Permission to use, copy, modify, and distribute this software and its
- # documentation for any purpose and without fee is hereby granted,
- # provided that the above copyright notice appear in all copies and that
- # both that copyright notice and this permission notice appear in
- # supporting documentation, and that the name of CMU not be
- # used in advertising or publicity pertaining to distribution of the
- # software without specific, written prior permission.
- #
- # CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
- # ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
- # CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
- # ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
- # WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
- # ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
- # SOFTWARE.
+ *
+ * Copyright 1996, Carnegie Mellon University.  All Rights Reserved.
+ * 
+ * This software is made available for academic and research
+ * purposes only.  No commercial license is hereby granted.
+ * Copying and other reproduction is authorized only for research,
+ * education, and other non-commercial purposes.  No warranties,
+ * either expressed or implied, are made regarding the operation,
+ * use, or results of the software.  Such a release does not permit
+ * use of the code for commercial purposes or benefits by anyone
+ * without specific, additional permission by the owner of the code.
  *
  */
 
-#include <stdio.h>
 #include <ctype.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
-
 #include "xmalloc.h"
-
-extern int optind;
-extern char *optarg;
 
 #define XX 127
 /*
@@ -56,20 +43,25 @@ static const char index_hex[256] = {
 };
 #define HEXCHAR(c)  (index_hex[(unsigned char)(c)])
 
-struct map {
+#define MAX_MAPCODE 20
+
+struct cmap {
     int code;
-    int mapcode;
+    int num_mapcode;
+    int mapcode[MAX_MAPCODE];
     char *translation;
+    int trans_offset;
 };
 
-struct map *map;
-int map_num;
-int map_alloc;
+struct cmap *map=NULL;
+int map_num=0;
+int map_alloc=0;
 #define MAPGROW 200
 
 struct tablechar {
     int code;
     char *translation;
+    int trans_offset;
     char *action;
     char *comment;
 };
@@ -81,15 +73,27 @@ struct table {
     struct tablechar ch[256];
 };
 
-struct table *table;
-int table_num;
-int table_alloc;
+struct table *table=NULL;
+int table_num=0;
+int table_alloc=0;
 #define TABLEGROW 200
 
+static void readmapfile(char *name);
+static void mungemappings(void);
+static void readcharfile(char *name);
+static void printtable(char *name);
+static void freetabledata(void);
+static void freetable(void);
+static void freemap(void);
+static void usage(void);
+static int newstate(char *args);
+static int findstate(char *name);
+static void mkunicodetable(void);
+static void mkutf8table(void);
+static void mkutf7table(void);
 
-main(argc, argv)
-int argc;
-char **argv;
+int
+main(int argc, char **argv)
 {
     int opt;
 
@@ -104,32 +108,83 @@ char **argv;
 	}
     }
 
-    if (map_num == 0) usage();
+    if (map_num == 0 || argc == optind) usage();
+
+    printf("#include \"charset.h\"\n");
+    printf("#include \"chartable.h\"\n");
+
+    mungemappings();
+
+    fprintf(stderr, "mkchartable: mapping unicode...\n");
+    mkunicodetable();
+    printtable("unicode");
+
+    fprintf(stderr, "mkchartable: mapping UTF-8...\n");
+    mkutf8table();
+    printtable("utf-8");
+
+    fprintf(stderr, "mkchartable: mapping UTF-7...\n");
+    mkutf7table();
+    printtable("utf-7");
 
     while (argv[optind]) {
+	fprintf(stderr, "mkchartable: mapping %s...\n", argv[optind]);
 	readcharfile(argv[optind]);
 	printtable(argv[optind]);
+	freetabledata();
 	optind++;
     }
+
+    printf("/*\n");
+    printf(" * Mapping of character sets to tables\n");
+    printf(" */\n");
+    printf("const struct charset chartables_charset_table[] = {\n");
+    printf("    { \"us-ascii\", chartables_us_ascii },	/* US-ASCII must be charset number 0 */\n");
+    printf("    { \"utf-8\", chartables_utf_8 },\n");
+    printf("    { \"utf-7\", chartables_utf_7 },\n");
+    printf("    { \"iso-8859-1\", chartables_iso_8859_1 },\n");
+    printf("    { \"iso-8859-2\", chartables_iso_8859_2 },\n");
+    printf("    { \"iso-8859-3\", chartables_iso_8859_3 },\n");
+    printf("    { \"iso-8859-4\", chartables_iso_8859_4 },\n");
+    printf("    { \"iso-8859-5\", chartables_iso_8859_5 },\n");
+    printf("    { \"iso-8859-6\", chartables_iso_8859_6 },\n");
+    printf("    { \"iso-8859-7\", chartables_iso_8859_7 },\n");
+    printf("    { \"iso-8859-8\", chartables_iso_8859_8 },\n");
+    printf("    { \"iso-8859-9\", chartables_iso_8859_9 },\n");
+    printf("    { \"koi8-r\", chartables_koi8_r },\n");
+    printf("    { \"iso-2022-jp\", chartables_iso_2022_jp },\n");
+    printf("    { \"iso-2022-kr\", chartables_iso_2022_kr },\n");
+    printf("    { \"gb2312\", chartables_gb2312 },\n");
+    printf("    { \"big5\", chartables_big5 },\n");
+    printf("    /* Compatiblilty names */\n");
+    printf("    { \"unicode-1-1-utf-7\", chartables_utf_7 },\n");
+    printf("    { \"unicode-2-0-utf-7\", chartables_utf_7 },\n");
+    printf("    { \"x-unicode-2-0-utf-7\", chartables_utf_7 },\n");
+    printf("};\n");
+    printf("const int chartables_num_charsets = (sizeof(chartables_charset_table)/sizeof(*chartables_charset_table));\n");
+
+    freetable();
+    freemap();
+
     return 0;
 }
 
-usage()
+static void usage(void)
 {
-    fprintf(stderr, "usage: mkchartable -m mapfile charsetfile...\r");
+    fprintf(stderr, "usage: mkchartable -m mapfile charsetfile...\r\n");
     exit(1);
 }
 
-readmapfile(name)
-char *name;
+/* Read a Unicode table, deriving useful mappings from it */
+static void
+readmapfile(char *name)
 {
     FILE *mapfile;
     char buf[1024];
     char *p;
     int line = 0;
-    int code, i, c;
-    static struct map zeromap;
-    char *dest;
+    int n, code, i, c;
+    static struct cmap zeromap;
 
     mapfile = fopen(name, "r");
     if (!mapfile) {
@@ -140,65 +195,125 @@ char *name;
     while (fgets(buf, sizeof(buf), mapfile)) {
 	line++;
 	p = buf;
-	while (*p && isspace(*p)) p++;
+	while (*p && isspace(*(unsigned char*)p)) p++;
 	if (!*p || *p == '#') continue;
 
+	/* Unicode character */
 	code = 0;
 	for (i=0; i<4; i++) {
 	    c = HEXCHAR(*p);
-	    *p++;
+	    p++;
 	    if (c == XX) goto syntaxerr;
 	    code = code*16 + c;
 	}
-	if (!*p || !isspace(*p)) goto syntaxerr;
+	if (*p++ != ';') goto syntaxerr;
 
+	/* Character name */
+	while (*p && *p != ';') p++;
+	if (*p++ != ';') goto syntaxerr;
+	   
 	if (map_num == map_alloc) {
 	    map_alloc += MAPGROW;
-	    map = (struct map *) xrealloc((char *)map, map_alloc * sizeof(struct map));
+	    map = (struct cmap *)
+		xrealloc((char *)map, map_alloc * sizeof(struct cmap));
 	}
 	map[map_num] = zeromap;
 	map[map_num].code = code;
 	
-	while (*p && isspace(*p)) p++;
-	
-	if (*p == '\"') {
-	    p++;
-	    
-	    map[map_num].translation = dest = xmalloc(strlen(p));
-	    while (*p != '\"') {
-		if (!*p) goto syntaxerr;
-		if (*p == '\\') {
-		    if (p[1] >= '0' && p[1] <= '3') {
-			if (p[2] < '0' || p[2] > '7' || p[3] < '0' || p[3] > '7')
-			  goto syntaxerr;
-			*dest++ = (p[1] - '0') * 64 + (p[2] - '0') * 8 + p[3] - '0';
-			p += 3;
-		    }
-		    else {
-			*dest++ = *++p;
-		    }
-		}
-		else {
-		    *dest++ = *p;
-		}
-		p++;
-	    }
-	    *dest = '\0';
-	    if (strlen(map[map_num].translation) > 3) {
-		fprintf(stderr, "%s: line %d: translation too long\n", name, line);
-		exit(1);
-	    }
+	/* General Category */
+	if (*p == 'Z') {
+	    /* Is whitespace, map to empty string */
+	    map[map_num].num_mapcode = 0;
+	    map_num++;
+	    continue;
 	}
-	else {
+	while (*p && *p != ';') p++;
+	if (*p++ != ';') goto syntaxerr;
+
+	/* Canonical Combining Class */
+	while (*p && *p != ';') p++;
+	if (*p++ != ';') goto syntaxerr;
+
+	/* Bidirectional category */
+	while (*p && *p != ';') p++;
+	if (*p++ != ';') goto syntaxerr;
+
+	/* Character decomposition */
+	n = 0;
+	while (*p && *p != ';') {
+	    if (n + 1 == MAX_MAPCODE) goto syntaxerr;
+	    if (*p == '<') {
+		/* Compatability mapping, skip over the <type> */
+		p = strchr(p, '>');
+		if (!p || p[1] != ' ') goto syntaxerr;
+		p += 2;
+
+		/* Ignore compat mappings to SP followed by combining char */
+		if (!strncmp(p, "0020 ", 5)) {
+		    p = strchr(p, ';');
+		    break;
+		}
+	    }
+
 	    code = 0;
 	    for (i=0; i<4; i++) {
 		c = HEXCHAR(*p);
-		*p++;
+		p++;
 		if (c == XX) goto syntaxerr;
 		code = code*16 + c;
 	    }
-	    map[map_num].mapcode = code;
+	    if (*p == ' ') p++;
+	    map[map_num].mapcode[n++] = code;
 	}
+	if (*p++ != ';') goto syntaxerr;
+
+	/* Decimal digit value */
+	while (*p && *p != ';') p++;
+	if (*p++ != ';') goto syntaxerr;
+			   
+	/* Digit value */
+	while (*p && *p != ';') p++;
+	if (*p++ != ';') goto syntaxerr;
+
+	/* Numeric value */
+	while (*p && *p != ';') p++;
+	if (*p++ != ';') goto syntaxerr;
+
+	/* Mirrored character */
+	while (*p && *p != ';') p++;
+	if (*p++ != ';') goto syntaxerr;
+
+	/* Unicode 1.0 name */
+	while (*p && *p != ';') p++;
+	if (*p++ != ';') goto syntaxerr;
+
+	/* Comment */
+	while (*p && *p != ';') p++;
+	if (*p++ != ';') goto syntaxerr;
+
+	/* Upper case equivalent mapping */
+	while (*p && *p != ';') p++;
+	if (*p++ != ';') goto syntaxerr;
+
+	/* Lower case equivalent mapping */
+	if (*p == ';') {
+	    /* No case mapping, use any decomposition we found above */
+	    if (n) {
+		map[map_num].num_mapcode = n;
+		map_num++;
+	    }
+	    continue;
+	}
+	code = 0;
+	for (i=0; i<4; i++) {
+	    c = HEXCHAR(*p);
+	    p++;
+	    if (c == XX) goto syntaxerr;
+	    code = code*16 + c;
+	}
+	if (*p != ';') goto syntaxerr;
+	map[map_num].mapcode[0] = code;
+	map[map_num].num_mapcode = 1;
 	map_num++;
     }
     fclose(mapfile);
@@ -207,9 +322,150 @@ char *name;
     fprintf(stderr, "%s: line %d: syntax error\n", name, line);
     exit(1);
 }
-		     
-readcharfile(name)
-char *name;
+
+/* Perform the transitive closure on the unicode mapping table
+ * Calculate translations for mappings
+ */
+static void
+mungemappings(void)
+{
+    int didchange;
+    int n, newn, n_mapcode, i;
+    int new_mapcode[MAX_MAPCODE];
+    int num_new_mapcode;
+    int last_translation = 1;
+    int max_len = 3;
+    
+    /* Keep scanning the table until no changes are made */
+    do {
+	didchange = 0;
+
+	fprintf(stderr, "mkchartable: expanding unicode mappings...\n");
+
+	for (n = 0; n < map_num; n++) {
+	    /* Build new map code sequence by iterating over existing
+	     * mapcode sequence
+	     */
+	    num_new_mapcode = 0;
+	    for (n_mapcode = 0; n_mapcode < map[n].num_mapcode; n_mapcode++) {
+
+		/* Search for a translation of this particular code */
+		for (newn = 0; newn < map_num; newn++) {
+		    if (map[newn].code == map[n].mapcode[n_mapcode]) break;
+		}
+		if (newn != map_num) {
+		    /* We have a translation */
+		    didchange++;
+		    for (i = 0; i < map[newn].num_mapcode; i++) {
+			new_mapcode[num_new_mapcode++] = map[newn].mapcode[i];
+		    }
+		}
+		else {
+		    /* Keep the old mapping for this code */
+		    new_mapcode[num_new_mapcode++] = map[n].mapcode[n_mapcode];
+		}
+	    }
+
+	    /* Copy in the new translation */
+	    map[n].num_mapcode = num_new_mapcode;
+	    memcpy(map[n].mapcode, new_mapcode, sizeof(new_mapcode));
+	}
+    } while (didchange);
+
+    printf("/* The following unicode mapping table is in effect\n");
+    printf("From To\n");
+    for (n = 0; n < map_num; n++) {
+	printf("\n%04x", map[n].code);
+	for (i = 0; i < map[n].num_mapcode; i++) {
+	    printf(" %04x", map[n].mapcode[i]);
+	}
+    }
+    printf("\n*/\n");
+
+    fprintf(stderr, "mkchartable: building expansion table...\n");    
+
+    printf("/* Table of traslations longer than three octets.\n");
+    printf(" * The XLT code in other tables is followed by an 2-octet\n");
+    printf(" * index into this table.\n");
+    printf(" * The index of 0 is reserved to mean 'no translation'\n");
+    printf(" */\n");
+    printf("const unsigned char chartables_long_translations[] = { 0, \n");
+
+    for (n = 0; n < map_num; n++) {
+	int n_mapcode, code;
+	unsigned char translation[256];
+	int n_t;
+	
+	/* Build translation strings for mappings to 0 or multiple codes */
+	if (map[n].num_mapcode == 0) {
+	    map[n].translation = xstrdup("");
+	}
+	else if (map[n].num_mapcode > 1) {
+	    n_t = 0;
+	    for (n_mapcode = 0; n_mapcode < map[n].num_mapcode; n_mapcode++) {
+		code = map[n].mapcode[n_mapcode];
+		/* Convert code to UTF-8 */
+		if (code && code <= 0x7f) {
+		    translation[n_t++] = (unsigned char)code;
+		}
+		else if (code <= 0x7FF) {
+		    translation[n_t++] = (unsigned char) (0xc0 + (code>>6));
+		    translation[n_t++] = (unsigned char) (0x80+(code&0x3f));
+		}
+		else {
+		    translation[n_t++] = (unsigned char) (0xe0 + (code>>12));
+		    translation[n_t++] = (unsigned char) (0x80+((code>>6)&0x3f));
+		    translation[n_t++] = (unsigned char) (0x80+(code&0x3f));
+		}
+	    }
+	    if (n_t <= 3) {
+		map[n].translation = xmalloc(4);
+		memcpy(map[n].translation, translation, n_t);
+		map[n].translation[n_t] = '\0';
+	    }
+	    else {
+		if (n_t > max_len) max_len = n_t;
+		for (i = 0; i < n_t; i++) {
+		    code = translation[i];
+		    if (isprint(code) && code != '\\' && code != '\"' && code != '\'') {
+			printf(" '%c',", code);
+		    } else {
+			printf(" %3d,", code);
+		    }
+		}
+		printf(" END, /* Translation for %04x (offset %04x) */\n",
+		       map[n].code, last_translation);
+		map[n].trans_offset = last_translation;
+		last_translation += n_t;
+	    }
+	}
+    }
+    printf("};\n\n const int charset_max_translation = %d;\n\n", max_len);
+}
+
+static void
+setcode(int state, int character, int code)
+{
+    int i = 0;
+
+    for (i = 0; i < map_num; i++) {
+	if (map[i].code == code) break;
+    }
+
+    if (i == map_num) {
+	table[state].ch[character].code = code;
+    } else if (map[i].translation) {
+	table[state].ch[character].translation = map[i].translation;
+    } else if (map[i].trans_offset) {
+	table[state].ch[character].trans_offset = map[i].trans_offset;
+    } else {
+	table[state].ch[character].code = map[i].mapcode[0];
+    }
+	
+}
+
+static void
+readcharfile(char *name)
 {
     FILE *charfile;
     char buf[1024];
@@ -218,7 +474,6 @@ char *name;
     int curstate = -1;
     int thischar, thisstate;
     int code, i, c;
-    int hops;
     
     charfile = fopen(name, "r");
     if (!charfile) {
@@ -233,7 +488,7 @@ char *name;
 	p = buf + strlen(buf);
 	if (p > buf && p[-1] == '\n') p[-1] = '\0';
 	p = buf;
-	while (*p && isspace(*p)) p++;
+	while (*p && isspace(*(unsigned char*)p)) p++;
 	if (!*p || *p == '#') continue;
 
 	if (*p == ':') {
@@ -248,14 +503,14 @@ char *name;
 
 	thisstate = curstate;
 	thischar = i = 0;
-	while (!isspace(*p)) {
+	while (!isspace(*(unsigned char*)p)) {
 	    c = HEXCHAR(*p);
 	    i++;
-	    *p++;
+	    p++;
 	    if (c == XX) goto syntaxerr;
 	    thischar = thischar*16 + c;
 	}
-	while (*p && isspace(*p)) p++;
+	while (*p && isspace(*(unsigned char*)p)) p++;
 
 	if (i > 4) goto syntaxerr;	
 	if (i > 2) {
@@ -265,7 +520,7 @@ char *name;
 			thischar>>8);
 		table[thisstate].ch[thischar>>8].action = xstrdup(action);
 		*(strchr(table[thisstate].ch[thischar>>8].action, ' ')) = '\0';
-		table[thisstate].ch[thischar>>8].comment = "multi-byte";
+		table[thisstate].ch[thischar>>8].comment = xstrdup("multi-byte");
 		thisstate = newstate(action+1);
 	    }
 	    else if (!table[thisstate].ch[thischar>>8].action ||
@@ -302,7 +557,7 @@ char *name;
 
 	if (*p == ':' || *p == '>' || *p == '<') {
 	    p = table[thisstate].ch[thischar].action = xstrdup(p);
-	    while (*p && !isspace(*p)) p++;
+	    while (*p && !isspace(*(unsigned char*)p)) p++;
 	    *p = '\0';
 	    continue;
 	}
@@ -310,29 +565,11 @@ char *name;
 	code = 0;
 	for (i=0; i<4; i++) {
 	    c = HEXCHAR(*p);
-	    *p++;
+	    p++;
 	    if (c == XX) goto syntaxerr;
 	    code = code*16 + c;
 	}
-	
-	for (hops = 0; hops < 10; hops++) {
-	    for (i = 0; i < map_num; i++) {
-		if (map[i].code == code) break;
-	    }
-	    if (i == map_num || map[i].translation) break;
-	    code = map[i].mapcode;
-	}
-
-	if (hops == 10) {
-	    fprintf(stderr, "too many translations for code %x\n", code);
-	    exit(1);
-	}
-	if (i == map_num) {
-	    table[thisstate].ch[thischar].code = code;
-	}
-	else {
-	    table[thisstate].ch[thischar].translation = map[i].translation;
-	}
+	setcode(thisstate, thischar, code);
     }
     fclose(charfile);
     return;
@@ -341,16 +578,154 @@ char *name;
     exit(1);
 }
 
-int
-newstate(args)
-char *args;
+/* Generate the table used for mapping raw unicode values */
+static void mkunicodetable(void)
+{
+    int i;
+    int thisstate;
+    unsigned char need_block[256];
+    int block;
+    char buf[80];
+
+    /* Record which blocks we need mappings for */
+    for (i = 0; i < 256; i++) {
+	need_block[i] = 0;
+    }
+    for (i = 0; i < map_num; i++) {
+	need_block[map[i].code>>8] = 1;
+    }
+
+    table_num = 0;
+
+    printf("/* The next two tables are used for doing translations on\n");
+    printf(" * 16-bit unicode values.  First look up the Unicode block\n");
+    printf(" * (high-order byte) in the chartables_unicode_block table\n");
+    printf(" * to find the index into chartables_unicode for that block.\n");
+    printf(" * If the index is 255, there are no translations for that\n");
+    printf(" * block, so characters can be encoded in UTF-8 algorithmically\n");
+    printf(" * Otherwise, look up the low-order byte in the chartables_unicode\n");
+    printf(" * using the index to select the state.\n");
+    printf(" */\n");
+    printf("const unsigned char chartables_unicode_block[256] = {");
+
+    for (block = 0; block < 256; block++) {
+	if (!(block & 0x7)) printf("\n");
+	if (!need_block[block]) {
+	    printf(" 255,");
+	    continue;
+	}
+
+ 	sprintf(buf, "BLOCK-%02x-INDEX-%d", block, table_num);
+	thisstate = newstate(buf);
+	printf(" %3d,", thisstate);
+
+	for (i = 0; i < 256; i++) {
+	    setcode(thisstate, i, (block << 8) + i);
+	}
+    }
+
+    printf("\n};\n\n");
+
+    printf("/* NOTE: Unlike other charset translation tables, the \n");
+    printf(" * chartables_unicode table is NOT used to directly parse\n");
+    printf(" * a charset.  See the comment on chartables_unicode_block\n");
+    printf(" * for a descripton of how this table is used.\n");
+    printf(" */\n");
+}
+
+static void mkutf8table(void)
+{
+    int start_state, thisstate;
+    int thischar, prefix;
+    char buf[80];
+
+    table_num = 0;
+
+    start_state = newstate("START");
+
+    /* Populate the ascii section */
+    for (thischar = 0; thischar <= 0x7f; thischar++) {
+	setcode(start_state, thischar, thischar);
+    }
+
+    /* 3-char sequence tables must be numbered 1 and 2 */
+    thisstate = newstate("STATE-3-2 <");
+    for (thischar = 0x80; thischar <= 0xbf; thischar++) {
+	table[thisstate].ch[thischar].action = "U83_2";
+    }
+    thisstate = newstate("STATE-3-3 <");
+    for (thischar = 0x80; thischar <= 0xbf; thischar++) {
+	table[thisstate].ch[thischar].action = "U83_3";
+    }
+
+    /* Populate 2-char sequences */
+    for (prefix = 2; prefix <= 0x1f; prefix++) {
+	sprintf(buf, ">STATE-2-%02x", prefix);
+	table[start_state].ch[prefix+0xc0].action = xstrdup(buf);
+	strcat(buf, " <");
+	thisstate = newstate(xstrdup(buf+1));
+	for (thischar = 0; thischar <= 0x3f; thischar++) {
+	    setcode(thisstate, thischar+0x80, thischar+(prefix<<6));
+	}
+    }
+
+    /* Populate 3-char sequences */
+    for (thischar = 0xe0; thischar <= 0xef; thischar++) {
+	table[start_state].ch[thischar].action = "U83";
+    }
+    
+}
+
+static char basis_64[] =
+   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static void mkutf7table(void)
+{
+    int start_state, thisstate;
+    int thischar;
+    char *p;
+
+    table_num = 0;
+
+    start_state = newstate("START");
+
+    /* Populate the ascii section */
+    table[start_state].ch['+'].action = ">GOTSHIFT";
+    for (thischar = 0; thischar <= 0x7f; thischar++) {
+	if (!table[start_state].ch[thischar].action) {
+	    setcode(start_state, thischar, thischar);
+	}
+    }
+
+    /* Normal base64 decoding table must be numbered 1 */
+    thisstate = newstate("B64NORMAL <");
+    table[thisstate].ch['-'].action = "<";
+    for (p = basis_64; *p; p++) {
+	table[thisstate].ch[*(unsigned char*)p].action = "U7N";
+    }
+    for (thischar = 0; thischar <= 0x7f; thischar++) {
+	if (!table[thisstate].ch[thischar].action) {
+	    setcode(thisstate, thischar, thischar);
+	}
+    }
+    
+    /* Populate initial base64 decoding table */
+    thisstate = newstate("GOTSHIFT <");
+    setcode(thisstate, '-', '+');
+    for (p = basis_64; *p; p++) {
+	table[thisstate].ch[*(unsigned char*)p].action = "U7F";
+    }
+}
+
+static int
+newstate(char *args)
 {
     char *p;
     int i;
 
     if (table_num == table_alloc) {
 	table_alloc += TABLEGROW;
-	table = (struct table *)xrealloc((char *)table,
+	table = (struct table *)realloc((char *)table,
 					 table_alloc * sizeof(struct table));
     }
 
@@ -359,13 +734,14 @@ char *args;
     for (i = 0; i < 256; i++) {
 	table[table_num].ch[i].code = -1;
 	table[table_num].ch[i].translation = 0;
+	table[table_num].ch[i].trans_offset = 0;
 	table[table_num].ch[i].action = 0;
 	table[table_num].ch[i].comment = 0;
     }
 
     p = table[table_num].name;
-    while (*p && !isspace(*p)) p++;
-    *p++ = '\0';
+    while (*p && !isspace(*(unsigned char*)p)) p++;
+    if (*p) *p++ = '\0';
     while (*p) {
 	if (*p == '<') table[table_num].endaction = "RET";
 	p++;
@@ -374,9 +750,8 @@ char *args;
     return table_num++;
 }
 
-int
-findstate(name)
-char *name;
+static int
+findstate(char *name)
 {
     int i;
 
@@ -386,8 +761,8 @@ char *name;
     return -1;
 }
 
-printtable(name)
-char *name;
+static void
+printtable(char *name)
 {
     char buf[1024];
     char *p;
@@ -397,13 +772,14 @@ char *name;
     int i;
     
     p = strrchr(name, '/');
+    if (!p) p = strrchr(name, '\\');
     if (p) p++;
     else p = name;
     strcpy(buf, p);
-    if (p = strchr(buf, '.')) *p = '\0';
-    while (p = strchr(buf, '-')) *p = '_';
+    if ((p = strchr(buf, '.')) != NULL) *p = '\0';
+    while ((p = strchr(buf, '-')) != NULL) *p = '_';
 
-    printf("const unsigned char %s[%d][256][4] = {\n", buf, table_num);
+    printf("const unsigned char chartables_%s[%d][256][4] = {\n", buf, table_num);
 
     for (curstate = 0; curstate < table_num; curstate++) {
 	printf(" {");
@@ -435,11 +811,13 @@ char *name;
 			   0x80+((code>>6)&0x3f), 0x80+(code&0x3f),
 			   table[curstate].endaction);
 		}
-	    }
-	    else if ((p = table[curstate].ch[thischar].translation) != 0) {
+	    } else if ((code = table[curstate].ch[thischar].trans_offset) != 0) {
+		printf(" XLT, %3d, %3d, %s,", code >> 8, code & 0xff,
+		       table[curstate].endaction); 
+	    } else if ((p = table[curstate].ch[thischar].translation) != 0) {
 		end = table[curstate].endaction;
 		for (i = 0; i < 4; i++) {
-		    if (isprint(*p) && *p != '\\' && *p != '\"' && *p != '\'') {
+		    if (isprint((unsigned char)*p) && *p != '\\' && *p != '\"' && *p != '\'') {
 			printf(" '%c',", *p);
 		    }
 		    else if (!*p) {
@@ -447,7 +825,7 @@ char *name;
 			end = "  0";
 		    }
 		    else {
-			printf(" %3d,", *p);
+			printf(" %3d,", (unsigned char)*p);
 		    }
 		    if (*p) p++;
 		}
@@ -457,6 +835,9 @@ char *name;
 	    }
 	    else if (*p == '<') {
 		printf(" RET,   0,   0,   0,");
+	    }
+	    else if (*p == 'U') {
+		printf(" %s,   0,   0,   0,", p);
 	    }
 	    else {
 		code = findstate(p+1);
@@ -478,13 +859,57 @@ char *name;
     printf("};\n\n");
 }
 
-
-
-fatal(s, code)
-char *s;
-int code;
+static void
+freetabledata(void)
 {
-    fprintf(stderr, "mkchartable: %s\n", s);
-    exit(code);
+    int curstate, thischar;
+/*    char *cp; */
+
+    for (curstate = 0; curstate < table_num; curstate++) {
+	for (thischar = 0; thischar < 256; thischar++) {
+	    if (table[curstate].ch[thischar].comment != NULL) {
+		free(table[curstate].ch[thischar].comment);
+	    }
+
+	    if (table[curstate].ch[thischar].action != NULL) {
+		free(table[curstate].ch[thischar].action);
+	    }
+	}
+	if (table[curstate].name != NULL) {
+	    free(table[curstate].name);
+	}
+    }
 }
-    
+
+static void
+freetable(void)
+{
+    if (table_alloc) {
+        free(table);
+	table_alloc=0;
+    }
+}
+
+static void
+freemap(void)
+{
+    int n;
+/*	int n_mapcode; */
+
+    for (n = 0; n < map_num; n++) {
+	if (map[n].translation != NULL) {
+	    free(map[n].translation);
+	}
+    }
+
+    if (map_alloc) {
+        free(map);
+	map_alloc=0;
+    }
+}
+
+void fatal(char* s, int c)
+{
+    fprintf(stderr, "Error while building charset table: %s\n", s);
+    exit(c);
+}
