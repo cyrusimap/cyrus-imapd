@@ -21,20 +21,37 @@
  * SOFTWARE.
  *
  */
+
+/*
+ * This module supports three types of proxy-logins, in which kerberos
+ * principal FOO can log in as user BAR.  The two cases are as follows:
+ *   1. ACL proxy (enabled by loginUseAcl) - permitted if BAR has a
+ *      mailbox, and FOO has administer (a) access to BAR's mailbox.
+ *   2. krb.equiv proxy - permitted if the /etc/krb.equiv file contains
+ *      a mapping from principal FOO
+ *      to user FOO.
+ */
+
 #include <stdio.h>
 #include <ctype.h>
 #include <sysexits.h>
 #include <krb.h>
+#include <pwd.h>
+#include <sys/param.h>
 
-#include <acte.h>
+#include "acte.h"
 #include "config.h"
 #include "mailbox.h"
+#include "acl.h"
 
 static login_authproc();
 
 extern struct acte_server krb_acte_server;
 
+extern char *auth_map_krbid();
+
 static char lrealm[REALM_SZ];
+static int use_acl = 0;
 
 /*
  * Kerberos-authenticated login
@@ -55,6 +72,7 @@ char **reply;
 	if (val = config_getstring("srvtab", 0)) {
 	    kerberos_set_srvtab(val);
 	}
+	use_acl = config_getswitch("loginUseAcl", 0);
     }
 
     if (kerberos_verify_password(user, pass, "imap", reply) == 0) {
@@ -81,12 +99,58 @@ int (**authproc)();
 	if (val = config_getstring("srvtab", 0)) {
 	    kerberos_set_srvtab(val);
 	}
+	use_acl = config_getswitch("loginUseAcl", 0);
     }
 
     *mech = &krb_acte_server;
     *authproc = login_authproc;
     return 0;
 }
+
+/*
+ * kequiv_ok() checks to see if 'user' is mapped to from the principal
+ * 'auth_aname', 'auth_inst', 'auth_realm'.  Returns 1 if so, 0 if
+ * not.
+ */
+static int kequiv_ok(user, auth_aname, auth_inst, auth_realm)
+char *user;
+char *auth_aname;
+char *auth_inst;
+char *auth_realm;
+{
+    char *mapped_user = auth_map_krbid(auth_aname, auth_inst, auth_realm);
+
+    return mapped_user && !strcmp(user, mapped_user);
+}
+
+
+/*
+ * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
+ * right to the principal 'auth_identity'. Returns 1 if so, 0 if not.
+ */
+static int acl_ok(user, auth_identity)
+char *user;
+char *auth_identity;
+{
+    char *acl;
+    char inboxname[1024];
+    int r;
+
+    if (strchr(user, '.') || strlen(user)+6 >= sizeof(inboxname)) return 0;
+
+    strcpy(inboxname, "user.");
+    strcat(inboxname, user);
+
+    if (auth_setid(auth_identity) ||
+	mboxlist_lookup(inboxname, (char *)0, &acl)) {
+	r = 0;  /* Failed so assume no proxy access */
+    }
+    else {
+	r = (acl_myrights(acl) & ACL_ADMIN) != 0;
+    }
+    return r;
+}
+
 
 static int
 login_authproc(user, auth_identity, reply)
@@ -138,7 +202,6 @@ char **reply;
     if (strcmp(auth_aname, aname) == 0 &&
 	strcmp(auth_inst, inst) == 0 &&
 	strcmp(auth_realm, realm[0] ? realm : lrealm) == 0) {
-
 	return 0;
     }
 
@@ -163,10 +226,19 @@ char **reply;
 	}
     }
 
+    /* Check for permitted proxy logins by other users */
+    if (kequiv_ok(user, auth_aname, auth_inst, auth_realm) ||
+	(use_acl && acl_ok(user, auth_identity))) {
+        sprintf(replybuf, "proxy from %s%s%s@%s",
+		auth_aname, auth_inst[0] ? "." : "",
+		auth_inst, auth_realm);
+        *reply = replybuf;
+        return 0;
+    }
+
     sprintf(replybuf, "proxy login from %s%s%s@%s denied",
 	    auth_aname, auth_inst[0] ? "." : "",
 	    auth_inst, auth_realm);
     *reply = replybuf;
     return 1;
 }
-
