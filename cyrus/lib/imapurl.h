@@ -39,6 +39,8 @@
  *
  */
 
+/* $Id: imapurl.h,v 1.4 2002/05/25 19:57:47 leg Exp $ */
+
 #ifndef IMAPURL_H
 #define IMAPURL_H
 

@@ -1,3 +1,5 @@
+$Id: README,v 1.3 2002/05/25 19:57:52 leg Exp $
+
 This directory contains support programs for the krb_pts authorization
 module, which supports Kerberos authorization with AFS PTServer
 groups.

@@ -1,3 +1,5 @@
+/* $Id: imapparse.c,v 1.7 2002/05/25 19:57:45 leg Exp $ */
+
 #include <config.h>
 
 #include <ctype.h>

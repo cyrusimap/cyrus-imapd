@@ -39,6 +39,8 @@
  *
  */
 
+/* $Id: ptextract.c,v 1.3 2002/05/25 19:57:52 leg Exp $ */
+
 #include <sys/types.h>
 #include <krb.h>
 #include <sysexits.h>

@@ -1,3 +1,5 @@
+$Id: deliver-notify-zephyr.patch,v 1.2 2002/05/25 19:57:43 leg Exp $
+
 This is a patch to deliver to make zephyr notifications more verbose.
 Naturally it requires zephyr.  It sends zephyrs to everyone on the acl.
 

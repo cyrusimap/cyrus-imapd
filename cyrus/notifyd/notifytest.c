@@ -1,6 +1,7 @@
 /* notifytest.c: notifyd test utility
  * Ken Murchison
  * Rob Siemborski
+ * $Id: notifytest.c,v 1.7 2002/05/25 19:57:49 leg Exp $
  */
 /* 
  * Copyright (c) 2002 Carnegie Mellon University.  All rights reserved.

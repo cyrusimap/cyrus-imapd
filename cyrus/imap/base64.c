@@ -38,6 +38,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* $Id: base64.c,v 1.8 2002/05/25 19:57:43 leg Exp $ */
+
 /* some random base64 code shared by imapd/proxyd, pop3d/pop3proxyd */
 
 #ifdef HAVE_CONFIG_H

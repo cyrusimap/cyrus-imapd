@@ -1,6 +1,7 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
+dnl $Id: kerberos_v4.m4,v 1.21 2002/05/25 19:57:42 leg Exp $
 
 AC_DEFUN(CMU_KRB_SENDAUTH_PROTO, [
 AC_MSG_CHECKING(for krb_sendauth prototype)

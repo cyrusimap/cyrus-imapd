@@ -39,6 +39,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* $Id: cyrusdb_db3.c,v 1.43 2002/05/25 19:57:47 leg Exp $ */
+
 #include <config.h>
 
 #include <db.h>

@@ -39,6 +39,8 @@
  *
  */
 
+/* $Id: acapmbox.h,v 1.18 2002/05/25 19:57:43 leg Exp $ */
+
 #ifndef ACAPMBOX_H_
 #define ACAPMBOX_H_
 

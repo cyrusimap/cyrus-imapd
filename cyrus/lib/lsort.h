@@ -1,6 +1,8 @@
 /* lsort.h -- linked list (merge) sort
  */
 
+/* $Id: lsort.h,v 1.2 2002/05/25 19:57:47 leg Exp $ */
+
 #ifndef INCLUDED_LSORT_H
 #define INCLUDED_LSORT_H
 

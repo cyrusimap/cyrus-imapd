@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.12 2002/03/12 18:10:53 ken3 Exp $
+# $Id: Makefile.in,v 1.13 2002/05/25 19:57:50 leg Exp $
 #
 # @configure_input@
 # 
@@ -41,6 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
+# $Id: Makefile.in,v 1.13 2002/05/25 19:57:50 leg Exp $
 # 
 
 SUBDIRS = lib managesieve

@@ -1,3 +1,5 @@
+dnl $Id: common.m4,v 1.9 2002/05/25 19:57:42 leg Exp $
+
 AC_DEFUN(CMU_TEST_LIBPATH, [
 changequote(<<, >>)
 define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_lib, [ *], [_p]))

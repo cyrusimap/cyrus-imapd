@@ -37,8 +37,10 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- *
  */
+
+/* $Id: config.c,v 1.50 2002/05/25 19:57:43 leg Exp $ */
+
 #include <config.h>
 
 #include <stdio.h>

@@ -1,3 +1,5 @@
+# $Id: Makefile.dist,v 1.5 2002/05/25 19:57:43 leg Exp $
+
 COMPILE_ET = /usr/local/bin/compile_et
 SNMPGEN = ../snmp/snmpgen
 

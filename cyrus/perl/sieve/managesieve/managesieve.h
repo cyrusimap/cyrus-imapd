@@ -38,6 +38,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+
+/* $Id: managesieve.h,v 1.4 2002/05/25 19:57:51 leg Exp $ */
+
 #include "isieve.h"
 
 

@@ -1,4 +1,5 @@
 dnl afs.m4--AFS libraries, includes, and dependencies
+dnl $Id: afs.m4,v 1.20 2002/05/25 19:57:41 leg Exp $
 dnl Chaskiel Grundman
 dnl based on kerberos_v4.m4
 dnl Derrick Brashear

@@ -1,5 +1,6 @@
 dnl telnet.m4--telnet special macros
 dnl Derrick Brashear
+dnl $Id: telnet.m4,v 1.11 2002/05/25 19:57:42 leg Exp $
 
 AC_DEFUN(CMU_TELNET_WHICH_TERM, [
 AC_CHECK_LIB(termlib, setupterm, [

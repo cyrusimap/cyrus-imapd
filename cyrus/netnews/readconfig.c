@@ -45,10 +45,11 @@
  *
  */
 
+/* $Id: readconfig.c,v 1.4 2002/05/25 19:57:49 leg Exp $ */
 
 /*     Copyright 1991 Rich Salz.
  *   All rights reserved.
- *   $Revision: 1.3 $
+ *   $Revision: 1.4 $
  *
  *    Redistribution and use in any form are permitted provided that the
  *    following restrictions are are met:

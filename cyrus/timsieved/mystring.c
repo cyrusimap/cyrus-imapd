@@ -1,3 +1,5 @@
+/* $Id: mystring.c,v 1.6 2002/05/25 19:57:53 leg Exp $ */
+
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif

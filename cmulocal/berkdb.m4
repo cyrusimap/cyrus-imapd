@@ -1,4 +1,4 @@
-
+dnl $Id: berkdb.m4,v 1.3 2002/05/25 19:57:41 leg Exp $
 
 AC_DEFUN(CMU_DB_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])

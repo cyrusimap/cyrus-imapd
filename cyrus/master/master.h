@@ -1,6 +1,8 @@
 #ifndef HAVE_MASTER_H
 #define HAVE_MASTER_H
 
+/* $Id: master.h,v 1.6 2002/05/25 19:57:48 leg Exp $ */
+
 /* needed for possible SNMP monitoring */
 struct service {
     char *name;

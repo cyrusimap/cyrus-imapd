@@ -42,6 +42,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* $Id: installscript.c,v 1.28 2002/05/25 19:57:46 leg Exp $ */
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
