@@ -1,6 +1,8 @@
-/* prot.h -- stdio-like module that handles IMAP protection mechanisms
- * $Id: prot.h,v 1.35.4.3 2002/08/01 22:09:45 rjs3 Exp $
- 
+/* prot.h -- stdio-like module that handles buffering, SASL, and TLS
+ *           details for I/O over sockets
+ *
+ * $Id: prot.h,v 1.35.4.4 2002/08/05 17:07:07 rjs3 Exp $
+ *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -72,9 +74,9 @@ struct protstream {
     int cnt; /* Space Remaining in buffer */
 
     /* File Descriptors */
-    int fd;
-    int logfd;
-    int big_buffer;
+    int fd;         /* The Socket */
+    int logfd;      /* The Telemetry Log (or PROT_NO_FD) */
+    int big_buffer; /* The Big Buffer (or PROT_NO_FD) */
 
     /* SASL / TLS */
     sasl_conn_t *conn;
@@ -135,6 +137,24 @@ extern int prot_putc(int c, struct protstream *s);
 #define prot_getc(s) ((s)->cnt-- > 0 ? (int)*(s)->ptr++ : prot_fill(s))
 #define prot_ungetc(c, s) ((s)->cnt++, (*--(s)->ptr = (c)))
 #define prot_putc(c, s) ((*(s)->ptr++ = (c)), --(s)->cnt == 0 ? prot_flush(s) : 0)
+
+/* The following two macros control the blocking nature of
+ * the protstream.
+ *
+ * For a read stream, the non-blocking behavior is that for the
+ * reading functions (prot_read, prot_getc, etc) we will return EOF and
+ * set errno = EAGAIN if no data was pending.
+ *
+ * For a write stream, it's a bit more complicated.  When a nonblocking
+ * write stream is flushed, a nonblocking write to the network is attempted.
+ * if it cannot write all of its data, the remaining data is flushed to a
+ * "bigbuffer" temporary file.  (When the next flush occurs, this temporary
+ * buffer is flushed first, and additional data is appended to it if necessary)
+ * Note that this means that in the telemetry logs, only the time of the
+ * first prot_flush_internal() call is logged, not the call for when the data
+ * actually is flushed to the network successfully.
+ */
+
 #define prot_BLOCK(s) ((s)->dontblock = 0)
 #define prot_NONBLOCK(s) ((s)->dontblock = 1)
 
