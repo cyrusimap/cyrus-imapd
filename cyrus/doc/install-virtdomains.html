@@ -1,4 +1,4 @@
-<!-- $Id: install-virtdomains.html,v 1.1.2.2 2002/08/22 14:55:15 ken3 Exp $ -->
+<!-- $Id: install-virtdomains.html,v 1.1.2.3 2002/08/26 18:32:45 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring Virtual Domains
@@ -11,8 +11,8 @@
 <h2>Introduction</h2>
 Virtual domains is the practice of hosting a service for more than one
 domain on one server.  Cyrus IMAP has the ability to host IMAP/POP
-mailboxes for multiple domains (e.g. test@example.com and
-test@example.net) on a single server or Murder.
+mailboxes for multiple domains (e.g. <tt>test@example.com</tt> and
+<tt>test@example.net</tt>) on a single server or Murder.
 
 <p>In order to accomplish this, Cyrus needs to know which domain to look
 in when a mailbox is accessed.  There are two ways in which Cyrus can
@@ -20,8 +20,8 @@ determine the domain:
 
 <ul>
 <li>Fully qualified userid - the client logs in with a userid
-containing the domain in which the user belongs (e.g test@example.com
-or test%example.net)</li>
+containing the domain in which the user belongs (e.g
+<tt>test@example.com</tt> or <tt>test%example.net</tt>)</li>
 <li>IP address - the server looks up the domain based on the IP
 address of the receiving interface (useful for servers with multiple
 NICs or using IP aliasing)</li>
@@ -36,10 +36,17 @@ Support for virtual domains is enabled by turning on the
 <tt>virtdomains</tt> option in <tt>imapd.conf</tt>.
 
 <p>When upgrading from a single domain installation to a virtual
-domain installation, the name of the existing domain should be
-specified using the <tt>defaultdomain</tt> option in
-<tt>imapd.conf</tt>.  This allows users to continue to access their
-mailboxes using unqualified userids.
+domain installation, the name of the existing domain (domain of the
+server hostname) should be specified using the <tt>defaultdomain</tt>
+option in <tt>imapd.conf</tt>.  This allows users to continue to
+access their mailboxes using unqualified userids.  For example, if the
+<tt>hostname</tt> command on your server returns 'www.xxx.yyy.zzz',
+then set <tt>defaultdomain</tt> to 'xxx.yyy.zzz'.
+
+<p>Even for new installations, it is <i>recommended</i> that the
+"real" domain of the server (domain of its primary hostname), be set
+to the <tt>defaultdomain</tt>.  See <a href=#admins>Administrators</a>
+below for further discussion.
 
 <h3>Multiple IP Addresses</h3>
 
@@ -78,33 +85,47 @@ appropriate directories:
    exit
 </kbd></pre>
 
-<h3>Administrators</h3>
+<a name="admins"><h3>Administrators</h3>
 
 The Cyrus virtual domains implementation supports per-domain
 administrators as well as "global" (inter-domain) administrators.
-Domain-specific administrators are specified with a fully qualified
-userid in the <tt>admins</tt> option (e.g. admin@example.net) and only
-have access to mailboxes in the associated domain.  Mailbox names
-should be specified in the same fashion as on a single domain
-configuration.
+Domain-specific administrators are specified with a
+fully qualified userid in the <tt>admins</tt> option
+(e.g. <tt>admin@example.net</tt>) and only have access to mailboxes in
+the associated domain.  Mailbox names should be specified in the same
+fashion as on a single domain configuration.
 
 <p>Global administrators are specified with an unqualified userid in the
 <tt>admins</tt> option and have access to <i>any</i> mailbox on the
-server.  Global admins must use a <tt>mailbox@domain</tt> syntax when
-specifying mailboxes.  Examples (using <tt>cyradm</tt>):
+server.  Because global admins use unqualified userids, they belong
+to the <tt>defaultdomain</tt>.  As a result, you can NOT have a global
+admin without specifying a <tt>defaultdomain</tt>.  Note that when
+trying to login as a global admin to a multi-homed server from remote
+machine, it might be necessary to fully qualify the userid with the
+<tt>defaultdomain</tt>.
 
-<p>To create a new user INBOX:
+<p>Global admins must use a <tt>mailbox@domain</tt> syntax when
+specifying mailboxes outside of the <tt>defaultdomain</tt>.  Examples
+(using <tt>cyradm</tt>):
+
+<p>To create a new INBOX for user 'test' in <tt>defaultdomain</tt>:
+
+<pre><kbd>
+   cm user.test
+</kbd></pre>
+
+<p>To create a new INBOX for user 'test' in domain 'example.com':
 
 <pre><kbd>
    cm user.test@example.com
 </kbd></pre>
 
-To list all mailboxes in a domain:
+To list all mailboxes in domain 'example.com':
 
 <pre><kbd>
    lm *@example.com
-</kbd><pre>
+</kbd></pre>
 
 <P><HR>
-last modified: $Date: 2002/08/22 14:55:15 $
+last modified: $Date: 2002/08/26 18:32:45 $
 </BODY></HTML>
