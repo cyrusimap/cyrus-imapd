@@ -339,9 +339,10 @@ sasl_security_properties_t *mysasl_secprops(void)
 }
 
 /* true if 'authstate' is in 'val' */
-static int isa(struct auth_state *authstate, const char *val)
+static int isa(struct auth_state *authstate, const char *opt)
 {
     char buf[1024];
+    const char *val = config_getstring(opt, "");
 
     while (*val) {
 	char *p;
