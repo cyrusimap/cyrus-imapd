@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.27.2.1 2004/06/23 20:15:18 ken3 Exp $
+ * $Id: message.c,v 1.27.2.2 2004/06/28 19:49:02 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -545,6 +545,7 @@ void free_notify_list(notify_list_t *n)
 {
     while (n) {
 	notify_list_t *b = n->next;
+	free(n->options);
 	free(n);
 	n = b;
     }
