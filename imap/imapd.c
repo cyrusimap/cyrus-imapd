@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.390 2002/05/23 21:12:37 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.391 2002/05/24 15:38:26 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -5987,7 +5987,8 @@ static int do_xfer_single(char *toserver, char *topart,
 			  int mbflags, 
 			  char *path, char *part, char *acl,
 			  int prereserved,
-			  mupdate_handle *h_in) 
+			  mupdate_handle *h_in,
+			  struct backend *be_in) 
 {
     int r = 0, rerr = 0;
     char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
@@ -6025,13 +6026,15 @@ static int do_xfer_single(char *toserver, char *topart,
      */
 
     /* Step 1: Connect to remote server */
-    if(!r) {
+    if(!r && !be_in) {
 	/* Just authorize as the IMAP server, so pass "" as our authzid */
 	be = findserver(NULL, toserver, "");
 	if(!be) r = IMAP_SERVER_UNAVAILABLE;
 	if(r) syslog(LOG_ERR,
 		     "Could not move mailbox: %s, Backend connect failed",
 		     mailboxname);
+    } else if(!r) {
+	be = be_in;
     }
 
     /* Step 1a: Connect to mupdate (as needed) */
@@ -6192,11 +6195,11 @@ done:
 			mailboxname);
     }
 
-    /* release the handle we got locally if necessary */
-    if(!h_in) {
+    /* release the handles we got locally if necessary */
+    if(!h_in)
 	mupdate_disconnect(&mupdate_h);
-    }
-    if(be) downserver(be);
+    if(be && !be_in)
+	downserver(be);
 
     return r;
 }
@@ -6206,6 +6209,7 @@ struct xfer_user_rock
     char *toserver;
     char *topart;
     mupdate_handle *h;
+    struct backend *be;
 };
 
 static int xfer_user_cb(char *name,
@@ -6216,6 +6220,7 @@ static int xfer_user_cb(char *name,
     mupdate_handle *mupdate_h = ((struct xfer_user_rock *)rock)->h;
     char *toserver = ((struct xfer_user_rock *)rock)->toserver;
     char *topart = ((struct xfer_user_rock *)rock)->topart;
+    struct backend *be = ((struct xfer_user_rock *)rock)->be;
     char externalname[MAX_MAILBOX_NAME];
     int mbflags;
     int r = 0;
@@ -6245,7 +6250,7 @@ static int xfer_user_cb(char *name,
 
     if(!r) {
 	r = do_xfer_single(toserver, topart, externalname, name, mbflags,
-			   path, part, acl, 0, mupdate_h);
+			   path, part, acl, 0, mupdate_h, be);
     }
 
     if(path) free(path);
@@ -6310,8 +6315,10 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     /* if we are not moving a user, just move the one mailbox */
     if(!r && !moving_user) {
 	r = do_xfer_single(toserver, topart, name, mailboxname, mbflags,
-			   path, part, acl, 0, NULL);
+			   path, part, acl, 0, NULL, NULL);
     } else {
+	struct backend *be = NULL;
+	
 	/* we need to reserve the users inbox - connect to mupdate */
 	if(!r) {
 	    r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
@@ -6321,6 +6328,16 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 		       mailboxname);
 		goto done;
 	    }
+	}
+
+	/* Get a single connection to the remote backend */
+	be = findserver(NULL, toserver, "");
+	if(!be) {
+	    r = IMAP_SERVER_UNAVAILABLE;
+	    syslog(LOG_ERR,
+		   "Could not move mailbox: %s, " \
+		   "Initial backend connect failed",
+		   mailboxname);
 	}
 
 	/* deactivate their inbox */
@@ -6342,7 +6359,8 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    rock.toserver = toserver;
 	    rock.topart = topart;
 	    rock.h = mupdate_h;
-	    
+	    rock.be = be;
+
 	    snprintf(buf, sizeof(buf), "%s.*", mailboxname);
 	    r = mboxlist_findall(NULL, buf, 1, imapd_userid,
 				 imapd_authstate, xfer_user_cb,
@@ -6355,7 +6373,11 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	/* ...and seen file, and subs file, and sieve scripts... */
 	if(!r) {
 	    r = do_xfer_single(toserver, topart, name, mailboxname, mbflags,
-			       path, part, acl, 1, mupdate_h);
+			       path, part, acl, 1, mupdate_h, be);
+	}
+
+	if(be) {
+	    downserver(be);
 	}
 
 	if(r && backout_mupdate) {
