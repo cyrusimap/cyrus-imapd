@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.32 2001/02/07 21:46:57 leg Exp $ */
+/* $Id: master.c,v 1.33 2001/02/21 01:09:39 ken3 Exp $ */
 
 #include <config.h>
 
@@ -429,6 +429,7 @@ void spawn_service(struct service *s)
     pid_t p;
     int i;
     char path[1024];
+    static char name_env[100];
     int fdflags;
     struct centry *c;
 
@@ -476,6 +477,11 @@ void spawn_service(struct service *s)
 	limit_fds(256);
 
 	syslog(LOG_DEBUG, "about to exec %s", path);
+
+	/* add service name to environment */
+	sprintf(name_env, "CYRUS_SERVICE=%s", s->name);
+	putenv(name_env);
+
 	execv(path, s->exec);
 	syslog(LOG_ERR, "couldn't exec %s: %m", path);
 
