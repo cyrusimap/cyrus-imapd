@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.54 2000/12/18 20:30:17 leg Exp $ */
+/* $Id: proxyd.c,v 1.55 2000/12/18 22:01:58 ken3 Exp $ */
 
 #define NEW_BACKEND_TIMEOUT
 
@@ -114,6 +114,8 @@ struct backend {
     enum {
 	ACAP = 1
     } capability;
+
+    void (*cmd_idle)(char* tag); /* function to perform IDLE */
 
     char last_result[LAST_RESULT_LEN];
     struct protstream *in; /* from the be server to me, the proxy */
@@ -201,7 +203,9 @@ void cmd_status(char *tag, char *name);
 void cmd_getuids(char *tag, char *startuid);
 void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
-void cmd_idle(char* tag);
+void cmd_id(char* tag);
+
+void id_getcmdline(int argc, char **argv);
 
 void cmd_starttls(char *tag, int imaps);
 int starttls_enabled(void);
@@ -651,6 +655,126 @@ static int proxy_authenticate(struct backend *s)
     return r;
 }
 
+/* Get IDLE continuation data (listen to client) */
+#define IDLECONT_POLL 1
+
+struct prot_waitevent *idle_continuation(struct protstream *s,
+					 struct prot_waitevent *ev, void *rock)
+{
+    int c;
+    /* 'cont' contains the chars that we still need to receive
+     * to complete a valid continuation.  we increment the pointer
+     * each time we receive one of these chars. */
+    char *cont = (char *) *(char **) rock;
+
+    prot_NONBLOCK(proxyd_in);
+    do {
+	c = prot_getc(proxyd_in);
+    } while ((c != EOF) && (TOUPPER(c) == *cont) && *++cont);
+    prot_BLOCK(proxyd_in);
+
+    if (c == EOF && errno == EAGAIN) {
+	/* out of input, so keep polling */
+	*(char **) rock = cont;
+	ev->mark = time(NULL) + IDLECONT_POLL;
+    }
+    else {
+	if (c != EOF && *cont) {
+	    /* invalid continuation, spit out a message */
+	    prot_printf(backend_current->out, 
+			"* BAD Invalid Idle continuation\r\n");
+	    eatline(c);
+	}
+
+	/* either the client timed out, or gave us a continuation.
+	   in either case we're done, so terminate the IDLE */
+	prot_printf(backend_current->out, "DONE\r\n");
+	ev->mark = time(NULL) + 60*60*24;  /* 24 hours */
+    }
+
+    return ev;
+}
+
+/* Pass IDLE to backend (listen to backend) */
+void idle_passthrough(char *tag)
+{
+    struct prot_waitevent *idle_event;
+    char done[] = "DONE\r\n";
+
+    assert(backend_current != NULL);
+
+    prot_printf(backend_current->out, "%s IDLE\r\n", tag);
+
+    /* Setup a function to try and grab continuation data
+       every IDLECONT_POLL seconds */
+    idle_event = prot_addwaitevent(backend_current->in,
+				   time(NULL) + IDLECONT_POLL,
+				   idle_continuation, (void *) &done);
+
+    pipe_including_tag(backend_current, tag);
+
+    /* Remove the continuation data function */
+    prot_removewaitevent(backend_current->in, idle_event);
+}
+
+/* Poll the backend for updates */
+struct prot_waitevent *idle_poll(struct protstream *s,
+				 struct prot_waitevent *ev, void *rock)
+{
+    int idle_period = *((int *) rock);
+    char mytag[128];
+	
+    proxyd_gentag(mytag);
+    prot_printf(backend_current->out, "%s Noop\r\n", mytag);
+    pipe_until_tag(backend_current, mytag);
+
+    ev->mark = time(NULL) + idle_period;
+    return ev;
+}
+
+/* Simulate IDLE by polling the backend */
+void idle_simulate(char *tag)
+{
+    static int idle_period = -1;
+    struct prot_waitevent *idle_event;
+    int c;
+    static struct buf arg;
+
+    /* get polling period */
+    if (idle_period == -1) {
+      idle_period = config_getint("imapidlepoll", 60);
+      if (idle_period < 1) idle_period = 1;
+    }
+
+    /* Setup a function to poll the backend for updates */
+    idle_event = prot_addwaitevent(proxyd_in,
+				   time(NULL) + idle_period,
+				   idle_poll, &idle_period);
+
+    /* Tell client we are idling and waiting for end of command */
+    prot_printf(proxyd_out, "+ go ahead\r\n");
+    prot_flush(proxyd_out);
+
+    /* Get continuation data */
+    c = getword(&arg);
+    if (c != EOF) {
+	if (!strcasecmp(arg.s, "Done") &&
+	    (c = (c == '\r') ? prot_getc(proxyd_in) : c) == '\n') {
+	    prot_printf(proxyd_out, "%s OK %s\r\n", tag,
+			error_message(IMAP_OK_COMPLETED));
+	}
+
+	else {
+	    prot_printf(proxyd_out, 
+			"%s BAD Invalid Idle continuation\r\n", tag);
+	    eatline(c);
+	}
+    }
+
+    /* Remove the continuation data function */
+    prot_removewaitevent(proxyd_in, idle_event);
+}
+
 void proxyd_capability(struct backend *s)
 {
     char tag[128];
@@ -664,6 +788,10 @@ void proxyd_capability(struct backend *s)
 	if (!strncasecmp(resp, "* Capability ", 13)) {
 	    st++; /* increment state */
 	    if (strstr(resp, "ACAP=")) s->capability |= ACAP;
+	    if (strstr(resp, "IDLE"))
+		s->cmd_idle = idle_passthrough;
+	    else
+		s->cmd_idle = idle_simulate;
 	} else {
 	    /* line we weren't expecting. hmmm. */
 	}
@@ -1065,6 +1193,9 @@ int service_main(int argc, char **argv, char **envp)
 
     signals_poll();
 
+    /* get command line args for use in ID before getopt mangles them */
+    id_getcmdline(argc, argv);
+
     memset(&extprops, 0, sizeof(sasl_external_properties_t));
     while ((opt = getopt(argc, argv, "sp:")) != EOF) {
 	switch (opt) {
@@ -1119,15 +1250,10 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
     }
 
-    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
+    secprops = mysasl_secprops(0);
     sasl_setprop(proxyd_saslconn, SASL_SEC_PROPS, secprops);
-    if (extprops.ssf) {
-	sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops);
-    }
-    if (proxyd_haveaddr) {
-	sasl_setprop(proxyd_saslconn, SASL_IP_REMOTE, &proxyd_remoteaddr);  
-	sasl_setprop(proxyd_saslconn, SASL_IP_LOCAL, &proxyd_localaddr);  
-    }
+    sasl_setprop(proxyd_saslconn, SASL_IP_REMOTE, &proxyd_remoteaddr);  
+    sasl_setprop(proxyd_saslconn, SASL_IP_LOCAL, &proxyd_localaddr);  
 
     proc_register("proxyd", proxyd_clienthost, (char *)0, (char *)0);
 
@@ -1361,7 +1487,7 @@ cmdloop()
 
 	/* Only Authenticate/Login/Logout/Noop/Starttls 
 	   allowed when not logged in */
-	if (!proxyd_userid && !strchr("ALNCS", cmd.s[0])) goto nologin;
+	if (!proxyd_userid && !strchr("ALNCIS", cmd.s[0])) goto nologin;
     	switch (cmd.s[0]) {
 	case 'A':
 	    if (!strcmp(cmd.s, "Authenticate")) {
@@ -1557,6 +1683,28 @@ cmdloop()
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
 		cmd_getquotaroot(tag.s, arg1.s);
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'I':
+	    if (!strcmp(cmd.s, "Id")) {
+		if (c != ' ') goto missingargs;
+		cmd_id(tag.s);
+	    }
+	    else if (!proxyd_userid) goto nologin;
+	    else if (!strcmp(cmd.s, "Idle")) {
+		if (c == '\r') c = prot_getc(proxyd_in);
+		if (c != '\n') goto extraargs;
+
+		/* should we do something else here??? */
+		if (!backend_current) {
+		    prot_printf(proxyd_out,
+				"%s NO cannot start idling\r\n", tag.s);
+		    continue;
+		}
+
+		backend_current->cmd_idle(tag.s);
 	    }
 	    else goto badcmd;
 	    break;
@@ -2208,68 +2356,226 @@ void cmd_noop(char *tag, char *cmd)
 }
 
 /*
- * Perform an IDLE command
+ * Parse and perform an ID command.
+ *
+ * the command has been parsed up to the parameter list.
+ *
+ * we only allow one ID in non-authenticated state from a given client.
+ * we only allow MAXIDFAILED consecutive failed IDs from a given client.
+ * we only record MAXIDLOG ID responses from a given client.
  */
-#define IDLECONT_POLL 1
+#define MAXIDFAILED	3
+#define MAXIDLOG	5
+#define MAXIDLOGLEN	(MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6))
+#define MAXIDFIELDLEN	30
+#define MAXIDVALUELEN	1024
+#define MAXIDPAIRS	30
 
-/* Get continuation data (listen to client) */
-struct prot_waitevent *idle_continuation(struct protstream *s,
-					 struct prot_waitevent *ev, void *rock)
+static char id_resp_command[MAXIDVALUELEN];
+static char id_resp_arguments[MAXIDVALUELEN] = "";
+
+void id_getcmdline(int argc, char **argv)
 {
-    int c;
-    /* 'cont' contains the chars that we still need to receive
-     * to complete a valid continuation.  we increment the pointer
-     * each time we receive one of these chars. */
-    char *cont = (char *) *(char **) rock;
-
-    prot_NONBLOCK(proxyd_in);
-    do {
-	c = prot_getc(proxyd_in);
-    } while ((c != EOF) && (TOUPPER(c) == *cont) && *++cont);
-    prot_BLOCK(proxyd_in);
-
-    if (c == EOF && errno == EAGAIN) {
-	/* out of input, so keep polling */
-	*(char **) rock = cont;
-	ev->mark = time(NULL) + IDLECONT_POLL;
+    snprintf(id_resp_command, MAXIDVALUELEN, *argv);
+    while (--argc > 0) {
+	snprintf(id_resp_arguments + strlen(id_resp_arguments),
+		 MAXIDVALUELEN - strlen(id_resp_arguments),
+		 "%s%s", *++argv, (argc > 1) ? " " : "");
     }
-    else {
-	if (c != EOF && *cont) {
-	    /* invalid continuation, spit out a message */
-	    prot_printf(backend_current->out, 
-			"* BAD Invalid Idle continuation\r\n");
-	    eatline(c);
-	}
-
-	/* either the client timed out, or gave us a continuation.
-	   in either case we're done, so terminate the IDLE */
-	prot_printf(backend_current->out, "DONE\r\n");
-	ev->mark = time(NULL) + 60*60*24;  /* 24 hours */
-    }
-
-    return ev;
 }
 
-/* Body of the command (listen to backend) */
-void cmd_idle(char *tag)
+void cmd_id(char *tag)
 {
-    struct prot_waitevent *idle_event;
-    char done[] = "DONE\r\n";
+    static int did_id = 0;
+    static int failed_id = 0;
+    static int logged_id = 0;
+    int error = 0;
+    int c = EOF, npair = 0;
+    static struct buf arg, field;
+    struct strlist *fields = 0, *values = 0;
+    struct utsname os;
 
-    assert(backend_current != NULL);
+    /* check if we've already had an ID in non-authenticated state */
+    if (!proxyd_userid && did_id) {
+	prot_printf(proxyd_out,
+		    "%s NO Only one Id allowed in non-authenticated state\r\n",
+		    tag);
+	eatline(c);
+	return;
+    }
 
-    prot_printf(backend_current->out, "%s IDLE\r\n", tag);
+    /* check if we've had too many failed IDs in a row */
+    if (failed_id >= MAXIDFAILED) {
+	prot_printf(proxyd_out, "%s NO Too many (%u) invalid Id commands\r\n",
+		    tag, failed_id);
+	eatline(c);
+	return;
+    }
 
-    /* Setup a function to try and grab continuation data
-       every IDLECONT_POLL seconds */
-    idle_event = prot_addwaitevent(backend_current->in,
-				   time(NULL) + IDLECONT_POLL,
-				   idle_continuation, (void *) &done);
+    /* ok, accept parameter list */
+    c = getword(&arg);
+    /* check for "NIL" or start of parameter list */
+    if (strcasecmp(arg.s, "NIL") && c != '(') {
+	prot_printf(proxyd_out, "%s BAD Invalid parameter list in Id\r\n", tag);
+	eatline(c);
+	failed_id++;
+	return;
+    }
 
-    pipe_including_tag(backend_current, tag);
+    /* parse parameter list */
+    if (c == '(') {
+	for (;;) {
+	    if (c == ')') {
+		/* end of string/value pairs */
+		break;
+	    }
 
-    /* Remove the continuation data function */
-    prot_removewaitevent(backend_current->in, idle_event);
+	    /* get field name */
+	    c = getstring(&field);
+	    if (c != ' ') {
+		prot_printf(proxyd_out,
+			    "%s BAD Invalid/missing field name in Id\r\n",
+			    tag);
+		error = 1;
+		break;
+	    }
+
+	    /* get field value */
+	    c = getnstring(&arg);
+	    if (c != ' ' && c != ')') {
+		prot_printf(proxyd_out,
+			    "%s BAD Invalid/missing value in Id\r\n",
+			    tag);
+		error = 1;
+		break;
+	    }
+
+	    /* ok, we're anal, but we'll still process the ID command */
+	    if (strlen(field.s) > MAXIDFIELDLEN) {
+		prot_printf(proxyd_out, 
+			    "%s BAD field longer than %u octets in Id\r\n",
+			    tag, MAXIDFIELDLEN);
+		error = 1;
+		break;
+	    }
+	    if (strlen(arg.s) > MAXIDVALUELEN) {
+		prot_printf(proxyd_out,
+			    "%s BAD value longer than %u octets in Id\r\n",
+			    tag, MAXIDVALUELEN);
+		error = 1;
+		break;
+	    }
+	    if (++npair > MAXIDPAIRS) {
+		prot_printf(proxyd_out,
+			    "%s BAD too many (%u) field-value pairs in ID\r\n",
+			    tag, MAXIDPAIRS);
+		error = 1;
+		break;
+	    }
+	    
+	    /* ok, we're happy enough */
+	    appendstrlist(&fields, field.s);
+	    appendstrlist(&values, arg.s);
+	}
+
+	if (error || c != ')') {
+	    /* erp! */
+	    eatline(c);
+	    freestrlist(fields);
+	    freestrlist(values);
+	    failed_id++;
+	    return;
+	}
+	c = prot_getc(imapd_in);
+    }
+
+    /* check for CRLF */
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(proxyd_out,
+		    "%s BAD Unexpected extra arguments to Id\r\n", tag);
+	eatline(c);
+	freestrlist(fields);
+	freestrlist(values);
+	failed_id++;
+	return;
+    }
+
+    /* log the client's ID string.
+       eventually this should be a callback or something. */
+    if (npair && logged_id < MAXIDLOG) {
+	char logbuf[MAXIDLOGLEN + 1] = "";
+	struct strlist *fptr, *vptr;
+
+	for (fptr = fields, vptr = values; fptr;
+	     fptr = fptr->next, vptr = vptr->next) {
+	    /* should we check for and format literals here ??? */
+	    snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
+		     " \"%s\" ", fptr->s);
+	    if (!strcmp(vptr->s, "NIL"))
+		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
+			 "NIL");
+	    else
+		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
+			"\"%s\"", vptr->s);
+	}
+
+	syslog(LOG_INFO, "client id:%s", logbuf);
+
+	logged_id++;
+    }
+
+    freestrlist(fields);
+    freestrlist(values);
+
+    /* spit out our ID string.
+       eventually this might be configurable. */
+    if (config_getswitch("imapidresponse", 1)) {
+	char env_buf[MAXIDVALUELEN];
+
+	prot_printf(proxyd_out, "* ID ("
+		    "\"name\" \"Cyrus Murder\""
+		    " \"version\" \"%s\""
+		    " \"vendor\" \"Project Cyrus\""
+		    " \"support-url\" \"http://asg.web.cmu.edu/cyrus\"",
+		    CYRUS_VERSION);
+
+	/* add the os info */
+	if (uname(&os) != -1)
+	    prot_printf(proxyd_out,
+			" \"os\" \"%s\""
+			" \"os-version\" \"%s\"",
+			os.sysname, os.release);
+
+	/* add the command line info */
+	prot_printf(proxyd_out, " \"command\" \"%s\"", id_resp_command);
+	if (strlen(id_resp_arguments))
+	    prot_printf(proxyd_out, " \"arguments\" \"%s\"", id_resp_arguments);
+	else
+	    prot_printf(proxyd_out, " \"arguments\" NIL");
+
+	/* add the environment info */
+	snprintf(env_buf, MAXIDVALUELEN,"Cyrus SASL %d.%d.%d",
+		 SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
+#ifdef DB_VERSION_STRING
+	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+		 "; %s", DB_VERSION_STRING);
+#endif
+#ifdef HAVE_SSL
+	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+		 "; %s", OPENSSL_VERSION_TEXT);
+#endif
+	/* XXX  anything else? ACAP info perhaps? */
+	prot_printf(proxyd_out, " \"environment\" \"%s\")\r\n", env_buf);
+    }
+    else
+	prot_printf(proxyd_out, "* ID NIL\r\n");
+
+    prot_printf(proxyd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
+
+    failed_id = 0;
+    did_id = 1;
 }
 
 /*
@@ -2290,7 +2596,7 @@ void cmd_capability(char *tag)
     }
     prot_printf(proxyd_out, "* CAPABILITY ");
     prot_printf(proxyd_out, CAPABILITY_STRING);
-    prot_printf(proxyd_out, " MAILBOX-REFERRALS");
+    prot_printf(proxyd_out, " IDLE MAILBOX-REFERRALS");
 
     if (starttls_enabled())
 	prot_printf(proxyd_out, " STARTTLS");
