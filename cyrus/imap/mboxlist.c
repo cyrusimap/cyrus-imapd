@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.145 2001/01/09 00:18:36 leg Exp $
+ * $Id: mboxlist.c,v 1.146 2001/01/09 17:41:38 ken3 Exp $
  */
 
 #include <config.h>
@@ -854,7 +854,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     char newpath[MAX_MAILBOX_PATH];
     struct mailbox newmailbox;
     acapmbox_data_t mboxdata;
-    char *oldacl;
+    char *oldacl, *newacl;
     const char *root = NULL;
     struct txn *tid = NULL;
     char *newpartition = NULL;
@@ -873,6 +873,10 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     default:
 	goto done;
     }
+
+    /* make a copy of the old ACL so it doesn't get overwritten
+       by another call to mboxlist_mylookup() */
+    newacl = xstrdup(oldacl);
 
     /* Check ability to delete old mailbox */
     if (!strcmp(oldname, newname) && !(mbtype & MBTYPE_REMOTE)) {
@@ -984,7 +988,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     }
 
     /* create new entry */
-    mboxent = mboxlist_makeentry(mbtype, newpartition, oldacl);
+    mboxent = mboxlist_makeentry(mbtype, newpartition, newacl);
 
     /* put it into the db */
     r = DB->store(mbdb, newname, strlen(newname), 
@@ -1007,15 +1011,18 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	assert(root != NULL); /* from above */
 	mailbox_hash_mbox(newpath, root, newname);
 	
-	r = mailbox_rename(oldname, oldpath, oldacl, newname, 
+	r = mailbox_rename(oldname, oldpath, newacl, newname, 
 			   newpath, isusermbox, NULL, NULL, &newmailbox);
 	mboxdata.uidvalidity = newmailbox.uidvalidity;
-	mboxdata.acl = oldacl;
+	mboxdata.acl = newacl;
 	mboxdata.total = newmailbox.exists;
 	if (!r) {
 	    mailbox_close(&newmailbox);
 	}
     }
+
+    /* we're done with the new ACL */
+    if (newacl) free(newacl);
 
     if (r != 0) {
 	int r2 = 0;
