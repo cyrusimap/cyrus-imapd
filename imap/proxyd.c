@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.182 2004/05/05 20:53:49 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.183 2004/05/06 15:11:38 ken3 Exp $ */
 
 #include <config.h>
 
@@ -185,7 +185,7 @@ void cmd_create(char *tag, char *name, char *partition);
 void cmd_delete(char *tag, char *name);
 void cmd_rename(char *tag, char *oldname, char *newname, char *partition);
 void cmd_find(char *tag, char *namespace, char *pattern);
-void cmd_list(char *tag, int subscribed, char *reference, char *pattern);
+void cmd_list(char *tag, int listopts, char *reference, char *pattern);
 void cmd_changesub(char *tag, char *namespace, char *name, int add);
 void cmd_getacl(const char *tag, const char *name);
 void cmd_listrights(char *tag, char *name, char *identifier);
@@ -1773,7 +1773,8 @@ void cmdloop()
 		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
-		cmd_list(tag.s, 0, arg1.s, arg2.s);
+		cmd_list(tag.s, proxyd_magicplus ? LIST_SUBSCRIBED : 0,
+			 arg1.s, arg2.s);
 	    }
 	    else if (!strcmp(cmd.s, "Lsub")) {
 		c = getastring(proxyd_in, proxyd_out, &arg1);
@@ -3804,7 +3805,7 @@ void cmd_find(char *tag, char *namespace, char *pattern)
  * LISTs we do locally
  * LSUBs we farm out
  */
-void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
+void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 {
     char *buf = NULL;
     int patlen = 0;
@@ -3820,11 +3821,11 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
     /* Reset state in mstringdata */
     mstringdata(NULL, NULL, 0, 0);
     
-    if (!pattern[0] && !subscribed) {
+    if (!pattern[0] && !(listopts & LIST_LSUB)) {
 	/* Special case: query top-level hierarchy separator */
 	prot_printf(proxyd_out, "* LIST (\\Noselect) \"%c\" \"\"\r\n",
 		    proxyd_namespace.hier_sep);
-    } else if (proxyd_magicplus || subscribed) {
+    } else if (listopts & (LIST_LSUB | LIST_SUBSCRIBED)) {
 	/* do an LSUB command; contact our INBOX */
 	if (!backend_inbox) {
 	    backend_inbox = proxyd_findinboxserver();
@@ -3835,7 +3836,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 			"%s Lsub {%d+}\r\n%s {%d+}\r\n%s\r\n",
 			tag, strlen(reference), reference,
 			strlen(pattern), pattern);
-	    pipe_lsub(backend_inbox, tag, 0, subscribed ? "LSUB" : "LIST");
+	    pipe_lsub(backend_inbox, tag, 0, (listopts & LIST_LSUB) ? "LSUB" : "LIST");
 	} else {		/* user doesn't have an INBOX */
 	    /* noop */
 	}
@@ -3879,8 +3880,8 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	if (buf) free(buf);
     }
 
-    if (backend_current &&
-	((!proxyd_magicplus && !subscribed) || backend_current != backend_inbox)) {
+    if (backend_current && (backend_current != backend_inbox ||
+			    !(listopts & (LIST_LSUB | LIST_SUBSCRIBED)))) {
 	/* our Lsub would've done this if 
 	   backend_current == backend_inbox */
 	char mytag[128];

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.463 2004/05/05 20:46:33 ken3 Exp $ */
+/* $Id: imapd.c,v 1.464 2004/05/06 15:11:22 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1159,7 +1159,8 @@ void cmdloop()
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "List")) {
-		int listopts = LIST_CHILDREN;
+		int listopts = LIST_CHILDREN |
+		    (imapd_magicplus ? LIST_SUBSCRIBED : 0);
 #ifdef ENABLE_LISTEXT
 		/* Check for and parse LISTEXT options */
 		c = prot_getc(imapd_in);
@@ -4255,8 +4256,7 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	    findall = imapd_namespace.mboxlist_findall;
 	}
 
-	if (imapd_magicplus ||
-	    listopts & LIST_LSUB || listopts & LIST_SUBSCRIBED) {
+	if (listopts & (LIST_LSUB | LIST_SUBSCRIBED)) {
 	    int force = config_getswitch(IMAPOPT_ALLOWALLSUBSCRIBE);
 
 	    (*findsub)(&imapd_namespace, pattern,
