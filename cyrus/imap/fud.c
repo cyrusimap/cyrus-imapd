@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.38 2002/08/13 19:41:00 rjs3 Exp $ */
+/* $Id: fud.c,v 1.39 2002/08/13 19:45:56 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -223,13 +223,12 @@ int do_proxy_request(const char *who, const char *name,
     int csoc = -1;
     struct sockaddr_in cin, cout;
     struct hostent *hp;
-    static int backend_port = 4201; /* default fud udp port in host order */
-    static struct servent *sp = NULL;
+    static int backend_port = 0; /* fud port in NETWORK BYTE ORDER */
 
     /* Open a UDP socket to the Cyrus mail server */
-    if(!sp) {
-	sp = getservbyname("fud", "udp");
-	backend_port = ntohs(sp->s_port);
+    if(!backend_port) {
+	struct servent *sp = getservbyname("fud", "udp");
+	backend_port = sp ? sp->s_port : htons(4201); /* default fud port */
     }
 
     hp = gethostbyname (backend_host);
@@ -242,7 +241,7 @@ int do_proxy_request(const char *who, const char *name,
     csoc = socket (PF_INET, SOCK_DGRAM, 0);
     memcpy (&cin.sin_addr.s_addr, hp->h_addr, hp->h_length);
     cin.sin_family = AF_INET;
-    cin.sin_port = htons(backend_port);
+    cin.sin_port = backend_port;
 
     /* Write a Cyrus query into *tmpbuf */
     memset (tmpbuf, '\0', sizeof(tmpbuf));
