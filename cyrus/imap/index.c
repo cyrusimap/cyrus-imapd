@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.24 2003/02/27 18:10:35 rjs3 Exp $
+ * $Id: index.c,v 1.180.4.25 2003/03/12 17:34:45 ken3 Exp $
  */
 #include <config.h>
 
@@ -3240,6 +3240,11 @@ static void parse_cached_envelope(char *env, char *tokens[])
 	    c++;			/* skip open quote */
 	    if (!ncom) tokens[i++] = c;	/* start of string */
 	    while (*c != '"') {		/* find close quote */
+		if (*c == '\0') {
+		    /* Oops, bad string. */
+		    fatal("Quoted string w/o end quote in parse_cached_header",
+			  EC_SOFTWARE);
+		}
 		if (*c == '\\') c++;	/* skip quoted-specials */
 		c++;
 	    }
