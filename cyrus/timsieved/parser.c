@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.24 2002/11/04 16:10:34 ken3 Exp $
+ * $Id: parser.c,v 1.25 2002/12/04 14:53:12 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -633,13 +633,20 @@ static int cmd_authenticate(struct protstream *sieved_out,
       /* Check for a remote mailbox (should we setup a redirect?) */
       char inboxname[1024];
       char *server;
+      int r;
       int type;
       
       strcpy(inboxname, "user.");
       strcat(inboxname, username);
 
-      mboxlist_detail(inboxname, &type, &server, NULL, NULL, NULL);
+      r = mboxlist_detail(inboxname, &type, &server, NULL, NULL, NULL);
       
+      if(r) {
+	  /* mboxlist_detail error */
+	  *errmsg = "mailbox unknown";
+	  return FALSE;
+      }
+
       if(type & MBTYPE_REMOTE) {
 	  /* It's a remote mailbox, we want to set up a referral */
 	  referral_host = xstrdup(server);
