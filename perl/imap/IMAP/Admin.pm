@@ -653,7 +653,6 @@ sub getinfo {
 		      -callback => sub {
 			my %d = @_;
 			my $text = $d{-text};
-			my $annotation;
 
 			if($text =~ /^\(.*\)$/) {
 			  # list of annotations
@@ -670,12 +669,11 @@ sub getinfo {
 				 return undef;
 			       }
 			  }
-			} elsif ($text =~ /^\"([^\"]+)\"/) {
+			} elsif ($text =~
+			       /^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)/) {
 			  # Single annotation, but possibly multiple values
 			  # however, we are only asking for one value, so...
-			  $annotation = $1;
-			  $text =~ /\"(\S*)\"\)/;
-			  $d{-rock}{$annotation} = $1;
+			  $d{-rock}{$1} = $3;
 		        } else {
 			  next;
 			}
