@@ -1,6 +1,6 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server Release Information</TITLE>
-    <!-- $Id: readme.html,v 1.17 1998/08/04 04:37:22 tjs Exp $ -->
+    <!-- $Id: readme.html,v 1.18 1998/10/29 20:02:32 tjs Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server Release Information</H1>
       
@@ -32,9 +32,6 @@
 	
       <ul>
 	
-	<LI> SunOS 5.5 (Solaris 2.5):  If compiling with unix authentication,
-	  see the file "<TT>pwcheck/README</TT>" in the distribution.
-	  
 	<LI> HP-UX 9.0.4:  Comments from testers:
 	  <P> The C that ships with HP-UX is totally unsuited for use with unix
 	    packages.  Either the HP-UX ANSI C developers kit must be
@@ -46,49 +43,58 @@
 	    consider using some other platform for IMAP servers.
 	    
       </ul>
+
+    <p>
+      The following are notes on specific Unix features:
+    <ul>
+      <li> On any system with shadow passwords (including Solaris 2.5 with
+	Unix authentication), see the file "<TT>pwcheck/README</TT>" in the
+	distribution.
+    </ul>
+    
+    
+    Send problems/questions/suggestions to <tt><a
+	href="cyrus-bugs@andrew.cmu.edu">cyrus-bugs@andrew.cmu.edu</a></tt>.
+    
+    <P>
+      The "<tt>info-cyrus@andrew.cmu.edu</tt>" mailing list exists for the 
+      discussion of this server and other Cyrus software.  Send mail 
+      to "<TT>info-cyrus-request@andrew.cmu.edu</TT>" to subscribe.
       
-      Send problems/questions/suggestions to <tt><a
-      href="cyrus-bugs@andrew.cmu.edu">cyrus-bugs@andrew.cmu.edu</a></tt>.
+    <P>
+      The Cyrus server supports the IMAP4rev1 protocol described in RFC
+      2060, with the exception that it does not currently support the
+      hierarchical behavior of the RENAME command.  IMAP4rev1 has been
+      approved as a proposed standard.
+    <P>
+      Character sets supported for searching are: us-ascii, iso-8859-1,
+      iso-8859-2, iso-8859-3, iso-8859-4, iso-8859-5, iso-8859-6,
+      iso-8859-7, iso-8859-8, iso-8859-9, koi8-r, and iso-2022-jp.  The
+      character mapping tables most likely contain errors.
       
-      <P>
-	The "<tt>info-cyrus@andrew.cmu.edu</tt>" mailing list exists for the 
-	discussion of this server and other Cyrus software.  Send mail 
-	to "<TT>info-cyrus-request@andrew.cmu.edu</TT>" to subscribe.
-	
-      <P>
-	The Cyrus server supports the IMAP4rev1 protocol described in RFC
-	2060, with the exception that it does not currently support the
-	hierarchical behavior of the RENAME command.  IMAP4rev1 has been
-	approved as a proposed standard.
-      <P>
-	Character sets supported for searching are: us-ascii, iso-8859-1,
-	iso-8859-2, iso-8859-3, iso-8859-4, iso-8859-5, iso-8859-6,
-	iso-8859-7, iso-8859-8, iso-8859-9, koi8-r, and iso-2022-jp.  The
-	character mapping tables most likely contain errors.
-	
-      <P>
-	The server may be compiled to support the KERBEROS_V4 authentication
-	mechanism described in
-	<a href="http://andrew2.andrew.cmu.edu/cyrus/rfc/rfc1731.html">RFC 1731</a>.
-	The POP3 server can support MIT's KPOP protocol.
-	
-      <P>
-	The mailbox namespace is like that for netnews--hierarchical names
-	separated by the "<tt>.</tt>" character.  Mailboxes without a parent may only
-	be created by an administrator.  Mailboxes with a parent may be
-	created as the ACL (Access Control List) on the parent mailbox
-	permits.
-	
-      <P>
-	Users' personal mailboxes are under the "<tt>user</tt>" hierarchy.
-	The names of the personal mailboxes for user "<tt>bovik</tt>" all
-	start with the prefix "<tt>user.bovik.</tt>".  The mailbox
-	"<tt>user.bovik</tt>" is special in that it is presented to user
-	"<tt>bovik</tt>" as if it were named "<tt>INBOX</tt>".  Creating
-	the mailbox "<tt>user.bovik</tt>" is equivalent to creating an
-	account for user "<tt>bovik</tt>"--it permits "<tt>bovik</tt>" to
-	receive mail, create personal mailboxes, and subscribe to
-	mailboxes.  Deleting the mailbox "<tt>user.bovik</tt>" has the
+    <P>
+      The server may be compiled to support the KERBEROS_V4 authentication
+      mechanism described in
+      <a href="http://andrew2.andrew.cmu.edu/cyrus/rfc/rfc1731.html">RFC 1731</a>.
+      The POP3 server can support MIT's KPOP protocol.
+      
+    <P>
+      The mailbox namespace is like that for netnews--hierarchical names
+      separated by the "<tt>.</tt>" character.  Mailboxes without a parent may only
+      be created by an administrator.  Mailboxes with a parent may be
+      created as the ACL (Access Control List) on the parent mailbox
+      permits.
+      
+    <P>
+      Users' personal mailboxes are under the "<tt>user</tt>" hierarchy.
+      The names of the personal mailboxes for user "<tt>bovik</tt>" all
+      start with the prefix "<tt>user.bovik.</tt>".  The mailbox
+      "<tt>user.bovik</tt>" is special in that it is presented to user
+      "<tt>bovik</tt>" as if it were named "<tt>INBOX</tt>".  Creating
+      the mailbox "<tt>user.bovik</tt>" is equivalent to creating an
+      account for user "<tt>bovik</tt>"--it permits "<tt>bovik</tt>" to
+      receive mail, create personal mailboxes, and subscribe to
+      mailboxes.  Deleting the mailbox "<tt>user.bovik</tt>" has the
 	special-case side-effect of deleting all mailboxes starting with
 	"<tt>user.bovik.</tt>" and of deleting the subscriptions for
 	"<tt>bovik</tt>."

@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.44 1998/09/18 19:30:08 wcw Exp $ -->
+<!-- $Id: install.html,v 1.45 1998/10/29 20:02:32 tjs Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -467,6 +467,13 @@ For a description of all the fields in this file, see the <A
 HREF="imapd.conf.5.html"><tt>imapd.conf</tt>(5)</A> man page.
  <P>
 
+Note that <b>everyday users should not be administrators</b>.
+Admins have powers not granted to regular users and while the server allows
+them to receive mail, some problems will occur if admins are used as regular
+users.
+
+<p>
+
 <li>Create the configuration directory specified by the
 "<tt>configdirectory</tt>" option in "<tt>imapd.conf.</tt>" The
 configuration directory is similar in concept to the
@@ -647,6 +654,10 @@ isn't already there.
 </ol>
 
  <P>
+
+<li> Restart inetd.  Many systems provide an easy way to do this, but the
+generic method is to find the process id of inetd (use <tt>/bin/ps -elf</tt>
+on most systems), then <tt>kill -HUP <i>pid</i></tt>.
 
 <li> Sendmail versions 8.7 and later include support for the Cyrus
 IMAP server.  If you are running a verson of Sendmail older than
@@ -877,7 +888,7 @@ to work with the IMAP server.
 
 <P><HR><P>
 <!-- hhmts start -->
-Last modified: Tue Sep 15 17:30:29 EDT 1998
+last modified by tjs at Thu Oct 29 14:32:54 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
