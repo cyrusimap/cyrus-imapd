@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.34.4.1 2002/07/10 20:00:07 ken3 Exp $
+   $Id: seen_db.c,v 1.34.4.2 2002/07/11 16:34:13 ken3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -115,7 +115,7 @@ char *seen_getpath(const char *userid)
 	c = (char) dir_hash_c(userid);
 	sprintf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
 		domain+1, FNAME_USERDIR, c, userid, FNAME_SEENSUFFIX);
-	*domain = '@';  /* replace '@' */
+	*domain = '@';  /* reassemble user@domain */
     }
     else {
 	c = (char) dir_hash_c(userid);

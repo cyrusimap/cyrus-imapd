@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.1 2002/07/10 20:00:02 ken3 Exp $
+ $Id: mailbox.c,v 1.134.4.2 2002/07/11 16:34:12 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2641,7 +2641,7 @@ void mailbox_hash_mbox(char *buf,
 		       const char *name)
 {
     const char *idx;
-    char c, *p, *x = buf;
+    char c, *p;
 
     sprintf(buf, "%s", root);
     buf += strlen(buf);
