@@ -25,11 +25,13 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: master.c,v 1.2 2000/02/18 06:41:26 leg Exp $ */
+/* $Id: master.c,v 1.3 2000/02/18 22:24:19 leg Exp $ */
 
 #include <config.h>
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #ifdef HAVE_UNISTD_H
@@ -38,7 +40,6 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <pwd.h>
-#include <sys/types.h>
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <syslog.h>
@@ -47,6 +48,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+
 #include "masterconf.h"
 
 #include "service.h"
@@ -88,9 +90,50 @@ static struct service Services[] =
 
 static int nservices = 3;
 
-char *const recovery_exec[] = { "ctl_mboxlist", "-r", NULL };
-char *const recoveryd_exec[] = { "ctl_deliver", "-r", "-E", "3", NULL };
+struct recover {
+    char *name;
+    char *const *exec;
+};
+
+char *const mboxrecover_exec[] = { "ctl_mboxlist", "-r", NULL };
+char *const delrecover_exec[] = { "ctl_deliver", "-r", NULL };
+
+static struct recover Recovery[] =
+{
+    { "mboxlist", mboxrecover_exec },
+    { "deliver", delrecover_exec },
+};
+
+int nrecovery = 2;
+
+struct event {
+    char *name;
+    time_t mark;
+    time_t period;
+    char *const *exec;
+    struct event *next;
+};
+
+static struct event *schedule = NULL;
+
 char *const checkpoint_exec[] = { "ctl_mboxlist", "-c", NULL };
+char *const delprune_exec[] = { "ctl_deliver", "-E", "3", NULL };
+
+static struct event chkpoint_event = { 
+    "mboxlist checkpoint",
+    0,
+    CHKPOINT_INTERVAL,
+    checkpoint_exec,
+    NULL
+};
+
+static struct event prune_event = {
+    "deliver pruning",
+    0,
+    (60 * 60 * 24),
+    delprune_exec,
+    NULL
+};
 
 void fatal(char *msg, int code)
 {
@@ -204,69 +247,30 @@ void run_recovery(void)
     pid_t p;
     int res;
     char path[1024];
+    int i;
 
-    switch (p = fork()) {
-    case -1:
-	syslog(LOG_CRIT, "can't fork process to run recovery");
-	fatal("can't run recovery", 1);
-	break;
+    for (i = 0; i < nrecovery; i++) {
+	switch (p = fork()) {
+	case -1:
+	    syslog(LOG_CRIT, "can't fork process to run recovery");
+	    fatal("can't run recovery", 1);
+	    break;
 
-    case 0:
-	become_cyrus();
-	sprintf(path, "%s/%s", SERVICE_PATH, recovery_exec[0]);
-	execv(path, recovery_exec);
-	syslog(LOG_ERR, "can't exec %s for recovery: %m", path);
-	exit(1);
+	case 0:
+	    become_cyrus();
+	    sprintf(path, "%s/%s", SERVICE_PATH, Recovery[i].exec[0]);
+	    execv(path, Recovery[i].exec);
+	    syslog(LOG_ERR, "can't exec %s for recovery: %m", path);
+	    exit(1);
 
-    default:
-	waitpid(p, &res, 0);
-	if (res != 0) {
-	    syslog(LOG_CRIT, "recovery process exited with code '%d'", res);
+	default:
+	    waitpid(p, &res, 0);
+	    if (res != 0) {
+		syslog(LOG_CRIT, "recovery process exited with code '%d'", 
+		       res);
+	    }
+	    break;
 	}
-	break;
-    }
-
-    switch (p = fork()) {
-    case -1:
-	break;
-
-    case 0:
-	become_cyrus();
-	sprintf(path, "%s/%s", SERVICE_PATH, recoveryd_exec[0]);
-	execv(path, recoveryd_exec);
-	syslog(LOG_ERR, "can't exec %s for recovery: %m", path);
-	exit(1);
-
-    default:
-	waitpid(p, &res, 0);
-	if (res != 0) {
-	    syslog(LOG_ERR, "duplicate expire exited with code '%d'", res);
-	}
-	break;
-    }
-}
-
-void spawn_checkpoint(void)
-{
-    pid_t p;
-    char path[1024];
-
-    switch (p = fork()) {
-    case -1:
-	syslog(LOG_CRIT, "can't fork process to run checkpoint");
-	break;
-
-    case 0:
-	become_cyrus();
-	sprintf(path, "%s/%s", SERVICE_PATH, checkpoint_exec[0]);
-	execv(path, checkpoint_exec);
-	syslog(LOG_ERR, "can't exec %s for checkpointing: %m", path);
-	exit(1);
-	break;
-
-    default:
-	/* we don't wait for it to complete */
-	break;
     }
 }
 
@@ -327,6 +331,67 @@ void spawn_service(struct service *s)
 	break;
     }
 
+}
+
+void schedule_event(struct event *a)
+{
+    struct event *ptr;
+
+    if (!schedule || a->mark < schedule->mark) {
+	a->next = schedule;
+	schedule = a;
+	
+	return;
+    }
+    for (ptr = schedule; ptr->next && ptr->next->mark <= a->mark; 
+	 ptr = ptr->next) ;
+
+    /* insert a */
+    a->next = ptr->next;
+    ptr->next = a;
+}
+
+void spawn_schedule(time_t now)
+{
+    struct event *a, *b;
+    char path[1024];
+    pid_t p;
+
+    a = schedule;
+    /* update schedule accordingly */
+    while (schedule && schedule->mark <= now) schedule = schedule->next;
+
+    /* run all events */
+    while (a && a != schedule) {
+	switch (p = fork()) {
+	case -1:
+	    syslog(LOG_CRIT, "can't fork process to run event %s");
+	    break;
+
+	case 0:
+	    become_cyrus();
+	    sprintf(path, "%s/%s", SERVICE_PATH, a->exec[0]);
+	    execv(path, a->exec);
+	    syslog(LOG_ERR, "can't exec %s for checkpointing: %m", path);
+	    exit(1);
+	    break;
+	    
+	default:
+	    /* we don't wait for it to complete */
+	    break;
+	}
+
+	b = a->next;
+	if (a->period) {
+	    a->mark = now + a->period;
+	    /* reschedule a */
+	    schedule_event(a);
+	} else {
+	    free(a);
+	}
+	/* examine next event */
+	a = b;
+    }
 }
 
 void reap_child(void)
@@ -472,11 +537,15 @@ int main(int argc, char **argv, char **envp)
     masterconf_init("master");
     syslog(LOG_NOTICE, "process started");
 
+    /* schedule checkpointing */
+    schedule_event(&chkpoint_event);
+    if (dupelim) {
+	/* schedule duplicate delivery pruning */
+	schedule_event(&prune_event);
+    }
+    
     /* run recovery on database environments */
     run_recovery();
-
-    /* checkpoint the database environments */
-    spawn_checkpoint();
 
     /* set signal handlers */
     sighandler_setup();
@@ -492,27 +561,31 @@ int main(int argc, char **argv, char **envp)
 
     if (become_cyrus_early) become_cyrus();
 
-    /* remind ourselves to checkpoint */
-    alarm(CHKPOINT_INTERVAL);
-
     /* ok, we're going to start spawning like mad now */
     syslog(LOG_NOTICE, "ready for work");
 
     for (;;) {
 	int r, i, msg, maxfd;
+	struct timeval tv, *tvptr;
+	time_t now = time(NULL);
 
+	/* run any scheduled processes */
+	spawn_schedule(now);
+
+	tvptr = NULL;
+	if (schedule) {
+	    if (now < schedule->mark) tv.tv_sec = 0;
+	    else tv.tv_sec = now - schedule->mark;
+	    tv.tv_usec = 0;
+	    tvptr = &tv;
+	}
+	
 	/* do we have any services undermanned? */
 	for (i = 0; i < nservices; i++) {
 	    if (Services[i].exec /* enabled */ &&
 		(Services[i].ready_workers < Services[i].desired_workers)) {
 		spawn_service(&Services[i]);
 	    }
-	}
-
-	if (do_chkpoint) {
-	    do_chkpoint = 0;
-	    spawn_checkpoint();
-	    alarm(CHKPOINT_INTERVAL);
 	}
 
 	if (gotsigchld) {
@@ -557,7 +630,7 @@ int main(int argc, char **argv, char **envp)
 	    }
 	}
 	errno = 0;
-	r = select(maxfd + 1, &rfds, NULL, NULL, NULL);
+	r = select(maxfd + 1, &rfds, NULL, NULL, tvptr);
 	if (r == -1 && errno == EAGAIN) continue;
 	if (r == -1 && errno == EINTR) continue;
 	if (r == -1) {
