@@ -1,0 +1,149 @@
+.\" -*- nroff -*-
+.TH MUPDATETEST 1
+.\" 
+.\" Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\"
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer. 
+.\"
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in
+.\"    the documentation and/or other materials provided with the
+.\"    distribution.
+.\"
+.\" 3. The name "Carnegie Mellon University" must not be used to
+.\"    endorse or promote products derived from this software without
+.\"    prior written permission. For permission or any other legal
+.\"    details, please contact  
+.\"      Office of Technology Transfer
+.\"      Carnegie Mellon University
+.\"      5000 Forbes Avenue
+.\"      Pittsburgh, PA  15213-3890
+.\"      (412) 268-4387, fax: (412) 268-7395
+.\"      tech-transfer@andrew.cmu.edu
+.\"
+.\" 4. Redistributions of any form whatsoever must retain the following
+.\"    acknowledgment:
+.\"    "This product includes software developed by Computing Services
+.\"     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+.\"
+.\" CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+.\" THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+.\" AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+.\" FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+.\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+.\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\" 
+.SH NAME
+mupdatetest \- interactive MUPDATE test program
+.SH SYNOPSIS
+.B mupdatetest
+[
+.B \-p
+.I port
+]
+[
+.B \-m
+.I mechanism
+]
+.br
+         [
+.B \-u
+.I user
+]
+[
+.B \-a
+.I user
+]
+[
+.B \-k
+.I num
+]
+[
+.B \-l
+.I num
+]
+.br
+         [
+.B \-r
+.I realm
+]
+[
+.B \-f
+.I file
+]
+[
+.B \-n
+.I num
+]
+[
+.B \-c
+]
+.br
+         [
+.B \-v
+]
+\fIhostname\fR
+.SH DESCRIPTION
+.I mupdatetest
+is a utility that allows you to authenticate to a MUPDATE server
+and interactively issue commands to it. Once authenticated you may
+issue any MUPDATE command by simply typing it in. It is capable
+of multiple SASL authentication mechanisms and handles encryption
+layers transparently. This utility is often used for testing the
+operation of a mupdate server. Note that you must be an admin in order
+to authenticate to an mupdate server.
+.PP
+.SH OPTIONS
+.TP
+.BI \-p " port"
+Port to connect to. If left off this defaults to \fBmupdate\fR as defined
+in /etc/services.
+.TP
+.BI -m " mechanism"
+Force mupdatetest to use \fImechanism\fR for authentication. If not specified
+the strongest authentication mechanism supported by the server is
+chosen.
+.TP
+.BI -u " user"
+Username to use for authentication; defaults to the current user.
+.TP
+.BI -a " user"
+Authname to use for authentication; defaults to the current user.
+.TP
+.BI -k " num"
+Minimum protection layer required.
+.TP
+.BI -l " num"
+Maximum protection layer to use (\fB0\fR=none; \fB1=\fRintegrity;
+etc).  For example if you are using the KERBEROS_V4 authentication
+mechanism specifying \fB0\fR will force mupdatetest to not use any layer
+and specifying \fB1\fR will force it to use the integrity layer.  By
+default the maximum supported protection layer will be used.
+.TP
+.BI -r " realm"
+Specify the \fIrealm\fR to use. Certain authentication mechanisms
+(e.g. DIGEST-MD5) may require one to specify the realm.
+.TP
+.BI -f " file"
+Pipe \fIfile\fR into connection after authentication.
+.TP
+.BI -n " num"
+Number of authentication attempts; default = 1.  The client will
+attempt to fast reauth (e.g. DIGEST-MD5), if possible.
+.TP
+.B -c
+Enable challenge prompt callbacks.  This will cause the OTP mechanism
+to ask for the the one-time password instead of the secret pass-phrase
+(library generates the correct response).
+.TP
+.B -v
+Verbose. Print out more information than usual.
+.SH SEE ALSO
+.PP
+\fBmupdate(8)\fR
