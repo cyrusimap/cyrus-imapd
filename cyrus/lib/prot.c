@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.2 2002/07/25 17:21:47 ken3 Exp $
+ * $Id: prot.c,v 1.72.4.3 2002/07/30 16:20:00 rjs3 Exp $
  */
 
 #include <config.h>
@@ -69,6 +69,14 @@
 #include "xmalloc.h"
 #include "assert.h"
 
+/* Transparant protgroup structure */
+struct protgroup
+{
+    size_t nalloced; /* Number of nodes in the group */
+    size_t next_element; /* Node number of next group member */
+    struct protstream **group;
+};
+
 /*
  * Create a new protection stream for file descriptor 'fd'.  Stream
  * will be used for writing iff 'write' is nonzero.
@@ -79,30 +87,17 @@ int write;
 {
     struct protstream *newstream;
 
-    newstream = (struct protstream *) xmalloc(sizeof(struct protstream));
+    newstream = (struct protstream *) xzmalloc(sizeof(struct protstream));
     newstream->buf = (unsigned char *) 
 	xmalloc(sizeof(char) * (PROT_BUFSIZE));
     newstream->buf_size = PROT_BUFSIZE;
     newstream->ptr = newstream->buf;
-    newstream->cnt = write ? PROT_BUFSIZE : 0;
     newstream->maxplain = PROT_BUFSIZE;
     newstream->fd = fd;
     newstream->write = write;
     newstream->logfd = -1;
-    newstream->error = 0;
-    newstream->eof = 0;
-    newstream->read_timeout = 0;
-    newstream->dontblock = 0;
-    newstream->flushonread = 0;
-    newstream->readcallback_proc = 0;
-    newstream->readcallback_rock = 0;
-    newstream->waitevent = 0;
-    newstream->conn = NULL;
-    newstream->saslssf=0;
-
-#ifdef HAVE_SSL
-    newstream->tls_conn=NULL;
-#endif /* HAVE_SSL */
+    if(write)
+	newstream->cnt = PROT_BUFSIZE;
 
     return newstream;
 }
@@ -742,6 +737,94 @@ int prot_read(struct protstream *s, char *buf, unsigned size)
 }
 
 /*
+ * select() for protection streams, read only
+ * Also supports selecting on an extra file descriptor
+ *
+ * returns # of protstreams with pending data (including the extra fd)
+ */ 
+/* xxx what about waitevents and idle timeouts */
+int prot_select(struct protgroup *readstreams, int extra_read_fd,
+		struct protgroup **out, int *extra_read_flag,
+		struct timeval *timeout) 
+{
+    struct protstream *s;
+    struct protgroup *retval = NULL;
+    int max_fd, found_fds = 0;
+    int i;
+    fd_set rfds;
+    
+    assert(readstreams || extra_read_fd != PROT_NO_FD);
+    assert(extra_read_fd == PROT_NO_FD || extra_read_flag);
+    assert(out);
+
+    /* Initialize things we might use */
+    errno = 0;
+    found_fds = 0;
+    FD_ZERO(&rfds);
+
+    /* If extra_read_fd is PROT_NO_FD, then the first protstream
+     * will override it */
+    max_fd = extra_read_fd;
+
+    for(i = 0; i<readstreams->next_element; i++) {
+	s = readstreams->group[i];
+
+	assert(!s->write);
+
+	FD_SET(s->fd, &rfds);
+	if(s->fd > max_fd)
+	    max_fd = s->fd;
+
+#ifdef HAVE_SSL
+	if(s->tls_conn != NULL && SSL_pending(s->tls_conn)) {
+	    found_fds++;
+
+	    if(!retval)
+		retval = protgroup_new(readstreams->next_element + 1);
+
+	    protgroup_insert(retval, s);
+	}
+#endif
+    }
+
+    /* xxx we should probably do a nonblocking select on the remaining
+     * protstreams instead of skipping this part entirely */
+    if(!retval) {
+	/* do a select */
+	if(extra_read_fd != PROT_NO_FD) {
+	    /* max_fd started with atleast extra_read_fd */
+	    FD_SET(extra_read_fd, &rfds);
+	}
+
+	if(select(max_fd + 1, &rfds, NULL, NULL, timeout) == -1)
+	    return -1;
+
+	if(extra_read_fd != PROT_NO_FD && FD_ISSET(extra_read_fd, &rfds)) {
+	    *extra_read_flag = 1;
+	    found_fds++;
+	} else {
+	    *extra_read_flag = 0;
+	}
+	
+	for(i = 0; i<readstreams->next_element; i++) {
+	    s = readstreams->group[i];
+
+	    if(FD_ISSET(s->fd, &rfds)) {
+		found_fds++;
+
+		if(!retval)
+		    retval = protgroup_new(readstreams->next_element + 1);
+
+		protgroup_insert(retval, s);
+	    }
+	}	
+    }
+    
+    *out = retval;
+    return found_fds;
+}
+
+/*
  * Version of fgets() that works with protection streams.
  */
 char *prot_fgets(char *buf, unsigned size, struct protstream *s)
@@ -803,4 +886,68 @@ int prot_putc(int c, struct protstream *s)
     }
 }
 
+/* Handle protgroups */
+/* Create a new protgroup of the given size, or 32 if size is 0 */
+struct protgroup *protgroup_new(size_t size) 
+{
+    struct protgroup *ret = xmalloc(sizeof(struct protgroup));
 
+    if(!size) size = PROTGROUP_SIZE_DEFAULT;
+
+    ret->nalloced = size;
+    ret->next_element = 0;
+    ret->group = xzmalloc(size * sizeof(struct protstream *));
+
+    return ret;
+}
+
+struct protgroup *protgroup_copy(struct protgroup *src)
+{
+    struct protgroup *dest;
+    assert(src);
+    dest = protgroup_new(src->nalloced);
+    if(src->next_element) {
+	memcpy(dest->group, src->group,
+	       src->next_element * sizeof(struct protstream *));
+    }
+    return dest;
+}
+
+void protgroup_reset(struct protgroup *group) 
+{
+    if(group) {
+	memset(group->group, 0,
+	       group->next_element * sizeof(struct protstream *));
+	group->next_element = 0;
+    }
+}
+
+void protgroup_free(struct protgroup *group) 
+{
+    if(group) {
+	assert(group->group);
+	free(group->group);
+	free(group);
+    }
+}
+
+void protgroup_insert(struct protgroup *group, struct protstream *item) 
+{
+    assert(group);
+    assert(item);
+    /* Double size of the protgroup if we're at our limit */
+    if(group->next_element == group->nalloced) {
+	group->nalloced *= 2;
+	group->group = xrealloc(group->group,
+				group->nalloced * sizeof(struct protstream *));
+    }
+    /* Insert the item on the end of the group */
+    group->group[group->next_element++] = item;
+}
+
+struct protstream *protgroup_getelement(struct protgroup *group, int element) 
+{
+    assert(group);
+    if(element >= group->next_element) return NULL;
+    else return group->group[element];
+}

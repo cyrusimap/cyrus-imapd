@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- * $Id: prot.h,v 1.35 2002/04/02 03:59:04 leg Exp $
+ * $Id: prot.h,v 1.35.4.1 2002/07/30 16:20:00 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -57,6 +57,8 @@
 #define PROT_BUFSIZE 4096
 /* #define PROT_BUFSIZE 8192 */
 
+#define PROT_NO_FD -1
+
 struct protstream;
 struct prot_waitevent;
 
@@ -85,6 +87,9 @@ struct protstream {
 #ifdef HAVE_SSL
     SSL *tls_conn;
 #endif /* HAVE_SSL */
+
+    /* For use by applications */
+    void *userdata;
 };
 
 typedef struct prot_waitevent *prot_waiteventcallback_t(struct protstream *s,
@@ -97,6 +102,9 @@ struct prot_waitevent {
     void *rock;
     struct prot_waitevent *next;
 };
+
+#define PROTGROUP_SIZE_DEFAULT 32
+struct protgroup; /* Opaque protgroup structure */
 
 extern int prot_getc(struct protstream *s);
 extern int prot_ungetc(int c, struct protstream *s);
@@ -135,5 +143,19 @@ extern int prot_printf(struct protstream *, const char *, ...)
     __attribute__ ((format (printf, 2, 3)));
 extern int prot_read(struct protstream *s, char *buf, unsigned size);
 extern char *prot_fgets(char *buf, unsigned size, struct protstream *s);
+
+extern int prot_select(struct protgroup *readstreams, int extra_read_fd,
+		       struct protgroup **out, int *extra_read_flag,
+		       struct timeval *timeout);
+
+
+/* Protgroup manipulations */
+struct protgroup *protgroup_new(size_t size);
+struct protgroup *protgroup_copy(struct protgroup *src);
+void protgroup_reset(struct protgroup *group);
+void protgroup_free(struct protgroup *group);
+
+void protgroup_insert(struct protgroup *group, struct protstream *item);
+struct protstream *protgroup_getelement(struct protgroup *group, int element);
 
 #endif /* INCLUDED_PROT_H */
