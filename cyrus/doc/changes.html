@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.36 2002/05/15 18:51:07 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.37 2002/05/31 14:38:45 wcw Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -14,6 +14,13 @@
 <ul>
 <li> Sieve is no longer dependent on duplicate delivery suppression
 (it still uses the duplicate delivery database however). </li>
+
+
+<li>snmpgen generates stubbed out code so we don't waste resources on
+something that just doesn't work. At some point in time, we'll make it
+work again as it would be useful to gather aggregate statistics on
+what commands are being used so we can better tune the server.  This
+change closes bug #1191. New bug 1267 opened to re-enable the feature.
 
 </ul>
 
@@ -1588,7 +1595,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/05/15 18:51:07 $ <br />
+last modified: $Date: 2002/05/31 14:38:45 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
