@@ -1,5 +1,5 @@
 dist:
-	mkdir -f man
+	mkdir man
 	for man in ../man/*.[1-9]; \
 	do \
 		echo "=== $$man ==="; \
@@ -7,3 +7,5 @@ dist:
 	done
 
 	pod2html ../perl/imap/cyradm > cyradm.1.html
+
+	rm -f groff-html-*.png
