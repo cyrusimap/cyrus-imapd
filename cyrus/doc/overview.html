@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <title>Cyrus IMAP Server:  Overview and Concepts</title>
-<!-- $Id: overview.html,v 1.21.2.2 2004/03/24 19:52:58 ken3 Exp $ -->
+<!-- $Id: overview.html,v 1.21.2.3 2004/07/27 13:13:42 ken3 Exp $ -->
 </HEAD><BODY>
 <H1>Cyrus IMAP Server:  Overview and Concepts</H1>
 
@@ -289,20 +289,6 @@ form:
 If "<TT>.<VAR>instance</VAR></TT>" is omitted, it defaults to the null
 string.  If "<TT>@<VAR>realm</VAR></TT>" is omitted, it defaults to
 the local realm.
-
-<p>"<TT><VAR>Principal</VAR></TT>", "<TT><VAR>instance</VAR></TT>", or
-"<TT><VAR>realm</VAR></TT>" may be replaced by the "<TT>*</TT>"
-wildcard.
-
-<UL>
-<LI>A "<TT>*</TT>" in an identifier represents all principals with the null instance
-at the local realm. 
-<LI>A "<TT>*.*@FOO.COM</TT>" in an identifier represents all principals 
-with all instances at <TT>FOO.COM</TT>.
-<LI>A "<TT>*.*@*</TT>" in an identifier represents all Kerberos-authenticated identities.
-</UL>
-
-None of the above refer to the <tt>anonymous</tt> user.
 
 <p>The file "<TT>/etc/krb.equiv</TT>" contains mappings between
 Kerberos principals.  The file contains zero or more lines, each

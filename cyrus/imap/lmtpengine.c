@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.93.2.14 2004/05/31 18:22:53 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.93.2.15 2004/07/27 13:13:43 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -687,9 +687,11 @@ static int savemsg(struct clientdata *cd,
 	/* grab TLS info for Received: header */
 	tls_get_info(cd->tls_conn, tls_info, sizeof(tls_info));
 	if (*tls_info) {
+	    size_t offset = p - addbody;
 	    fold[nfold++] = p;
 	    addlen += 3 + strlen(tls_info);
 	    addbody = xrealloc(addbody, addlen + 1);
+	    p = addbody + offset;
 	    p += sprintf(p, " (%s)", tls_info);
 	}
     }

@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.20 2004/07/16 14:37:39 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.21 2004/07/27 13:13:42 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -57,6 +57,10 @@ resulting in better performance.</li>
 <li>Added <tt>client_timeout</tt> option to control connect() timeouts
 for proxy code</li>
 <li>Added <tt>popuseacl</tt> option</li>
+<li>Fix a number of issues with the <tt>quota -f</tt> tool</li>
+<li>Fix thread safety issue in saslserver()</li>
+<li>Fix possible stage file leak in append code</li>
+<li>Fix bugs in handling of MULTIAPPEND introduced in 2.2.3</li>
 <li>Fixed regression bug in Sieve vacation</li>
 </ul>
 
@@ -2003,7 +2007,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2004/07/16 14:37:39 $ <br />
+last modified: $Date: 2004/07/27 13:13:42 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.36.2.3 2004/02/12 05:32:31 ken3 Exp $
+dnl $Id: sasl2.m4,v 1.36.2.4 2004/07/27 13:13:41 ken3 Exp $
 
 AC_DEFUN([SASL_GSSAPI_CHK],[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -34,6 +34,9 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
         ;;
       *)
         AC_WARN([The system type is not recognized. If you believe that CyberSafe GSSAPI works on this platform, please update the configure script])
+	if test "$gss_impl" = "cybersafe"; then
+	   AC_ERROR([CyberSafe was forced, cannot continue as platform is not supported])
+	fi
         ;;
     esac
 
@@ -47,10 +50,12 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
 ### especially when we have to provide two -L flags for new CyberSafe
        LDFLAGS="$LDFLAGS -L$gssapi/lib"
 
-       if test "$gss_impl" = "auto" -o "$gss_impl" = "cybersafe"; then
-         CPPFLAGS="$CPPFLAGS -D$platform"
-         if test -d "${gssapi}/appsec-sdk/include"; then
-           CPPFLAGS="$CPPFLAGS -I${gssapi}/appsec-sdk/include"
+       if test -n "$platform"; then
+         if test "$gss_impl" = "auto" -o "$gss_impl" = "cybersafe"; then
+           CPPFLAGS="$CPPFLAGS -D$platform"
+           if test -d "${gssapi}/appsec-sdk/include"; then
+             CPPFLAGS="$CPPFLAGS -I${gssapi}/appsec-sdk/include"
+           fi
          fi
        fi
     fi

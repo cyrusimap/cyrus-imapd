@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.15 2004/07/13 15:17:13 ken3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.16 2004/07/27 13:13:44 ken3 Exp $
  */
 
 #include <config.h>
@@ -392,7 +392,8 @@ mboxlist_mycreatemailboxcheck(char *name,
     if(!isadmin && force_user_create) return IMAP_PERMISSION_DENIED;
 
     /* User has admin rights over their own mailbox namespace */
-    if (mboxname_userownsmailbox(userid, name)) {
+    if (mboxname_userownsmailbox(userid, name) &&
+	(config_implicitrights & ACL_ADMIN)) {
 	isadmin = 1;
     }
 
