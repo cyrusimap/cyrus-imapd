@@ -2,7 +2,7 @@ dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
- AC_ARG_ENABLE(gssapi, [  --with-gssapi=<DIR>	  enable GSSAPI authentication (for staticsasl only) [yes] ],
+ AC_ARG_ENABLE(gssapi, [  --with-gssapi=<DIR>	  enable GSSAPI authentication [yes] ],
     gssapi=$enableval,
     gssapi=yes)
 
@@ -37,13 +37,21 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
   #  AC_CHECK_LIB(roken,base64_decode,gss_impl="heimdal",, $LIB_CRYPT)
 
   if test -d ${gssapi}; then
-     GSSAPIBASE_LIBS="-L$gssapi/lib"
+     gssapi_dir=$gssapi
+     GSSAPIBASE_LIBS="-L$gssapi_dir/lib"
+     GSSAPIBASE_STATIC_LIBS="-L$gssapi_dir"
+  else
+     dnl FIXME: This is only used for building cyrus, and then only as
+     dnl a real hack.  it needs to be fixed.
+     gssapi_dir="/usr/local/lib"
   fi
 
   if test "$gss_impl" = "mit"; then
      GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgssapi_krb5 -lkrb5 -lk5crypto -lcom_err"
+     GSSAPIBASE_STATIC_LIBS="$GSSAPIBASE_LIBS $gssapi_dir/libgssapi_krb5.a $gssapi_dir/libkrb5.a $gssapi_dir/libk5crypto.a $gssapi_dir/libcom_err.a"
   elif test "$gss_impl" = "heimdal"; then
      GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgssapi -lkrb5 -ldes -lasn1 -lroken ${LIB_CRYPT} -lcom_err"
+     GSSAPIBASE_STATIC_LIBS="$GSSAPIBASE_STATIC_LIBS $gssapi_dir/libgssapi.a $gssapi_dir/libkrb5.a $gssapi_dir/libdes.a $gssapi_dir/libasn1.a $gssapi_dir/libroken.a $gssapi_dir/libcom_err.a ${LIB_CRYPT}"
   else
      gssapi="no"
      AC_WARN(Disabling GSSAPI)
@@ -136,7 +144,7 @@ AC_ARG_WITH(staticsasl,
 
 	  SASL_GSSAPI_CHK
 
-	  LIB_SASL="$LIB_SASL $GSSAPIBASE_LIBS"
+	  LIB_SASL="$LIB_SASL $GSSAPIBASE_STATIC_LIBS"
 	fi
 
 	if test -d ${with_sasl}; then
