@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.93 1999/07/01 20:14:40 leg Exp $
+ * $Id: deliver.c,v 1.94 1999/07/02 01:06:17 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.93 1999/07/01 20:14:40 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.94 1999/07/02 01:06:17 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -283,6 +283,18 @@ char **argv;
 }
 
 #ifdef USE_SIEVE
+
+static char *make_sieve_db(char *user)
+{
+    static char buf[MAX_MAILBOX_PATH];
+
+    buf[0] = '.';
+    buf[1] = '\0';
+    strcat(buf, user);
+    strcat(buf, ".sieve.");
+
+    return buf;
+}
 
 static int hashheader(char *header)
 {
@@ -865,18 +877,6 @@ int autorespond(unsigned char *hash, int len, int days,
     }
 
     return ret;
-}
-
-static char *make_sieve_db(char *user)
-{
-    static char buf[MAX_MAILBOX_PATH];
-
-    buf[0] = '.';
-    buf[1] = '\0';
-    strcat(buf, user);
-    strcat(buf, ".sieve.");
-
-    return buf;
 }
 
 int send_response(char *addr, char *subj, char *msg, int mime,

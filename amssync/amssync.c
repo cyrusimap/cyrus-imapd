@@ -70,12 +70,6 @@ struct acldata {
     char *object;
 };
 
-extern struct sasl_client krb_sasl_client;
-struct sasl_client *login_sasl_client[] = {
-    &krb_sasl_client,
-    NULL
-};
-
 struct cbdata cb;
 struct acldata acldata;
 int content_mode, acl_mode, aclro_mode, verbose, debug, noncommit;
@@ -641,6 +635,9 @@ do_content(char *amsname, char *imapname)
 void cyr_connect(void)
 {
     int code, errs;
+    int minssf=0;
+    int maxssf=0;
+    char *user = 0;
 
     if (verbose) {
 	fprintf(logfile,"Connecting to Cyrus server...\n");
@@ -667,9 +664,11 @@ void cyr_connect(void)
 	    fprintf(stderr,"Unknown error %d from imclient_connect\n",code);
 	    exit(1);
 	}
-	code = imclient_connect(&imclient,server,port);
+	code = imclient_connect(&imclient, server, port);
     }
-    if (imclient_authenticate(imclient,login_sasl_client,"imap",NULL,SASL_PROT_ANY)) {
+    /* we have AMS, so we have AFS, so we have Kerberos */
+    if (imclient_authenticate(imclient, "KERBEROS_V4", "imap",
+			      user, minssf, maxssf)) {
 	fprintf(stderr,"Couldn't authenticate to server!\n");
 	exit(1);
     }

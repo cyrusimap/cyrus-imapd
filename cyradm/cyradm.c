@@ -430,8 +430,8 @@ char **argv;
 
     /*    r = imclient_authenticate(conn->imclient, login_sasl_client, "imap",
 	  user, prot);*/
-    r = timclient_authenticate(conn->imclient, "KERBEROS_V4", "imap",
-	  user, minssf, maxssf);
+    r = imclient_authenticate(conn->imclient, "KERBEROS_V4", "imap",
+			      user, minssf, maxssf);
     
     if (r == 1 && (minssf==0) && pwcommand) {
 	Tcl_DString command;
