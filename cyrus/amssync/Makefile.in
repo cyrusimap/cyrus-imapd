@@ -15,6 +15,7 @@
 # 
 srcdir = @srcdir@
 VPATH = @srcdir@
+PURIFY=/usr/local/bin/purify
 
 CC = @CC@
 INSTALL = @INSTALL@
@@ -25,8 +26,8 @@ CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@
 LIBS = -lutil @LIBS@ /usr/local/lib/afs/libsys.a
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
-CFLAGS = -g @CFLAGS@
-LDFLAGS = -g @LDFLAGS@
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@
 
 SHELL = /bin/sh
 
@@ -48,6 +49,9 @@ install:
 
 amssync: $(OBJS) $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o amssync $(OBJS) $(DEPLIBS) $(LIBS)
+
+amssync.pure: $(OBJS) $(DEPLIBS)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o amssync $(OBJS) $(DEPLIBS) $(LIBS)
 
 clean:
 	rm -f *.o Makefile.bak amssync
