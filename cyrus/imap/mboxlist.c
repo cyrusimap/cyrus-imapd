@@ -1661,21 +1661,6 @@ mboxlist_unlock()
 }
 
 /*
- * Retrieve internal information, for reconstructing mailboxes file
- */
-mboxlist_getinternalstuff(listfnamep, newlistfnamep, basep, sizep)
-char **listfnamep;
-char **newlistfnamep;
-char **basep;
-unsigned long *sizep;
-{
-    *listfnamep = listfname;
-    *newlistfnamep = newlistfname;
-    *basep = list_base;
-    *sizep = list_size;
-}
-
-/*
  * Open the subscription list for 'userid'.  If 'lock' is nonzero,
  * lock it.
  * 
