@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.25 2002/02/14 01:15:03 rjs3 Exp $ */
+/* $Id: fud.c,v 1.26 2002/02/16 19:32:45 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -93,15 +93,9 @@ void send_reply(struct sockaddr_in sfrom, int status,
 		const char *user, const char *mbox, 
 		int numrecent, time_t lastread, time_t lastarrived);
 
-int soc;
+int soc = 0; /* inetd has handed us the port as stdin */
 
 char who[16];
-
-int init_network(int port)
-{
-    soc = 0;	/* inetd has handed us the port as stdin */
-    return(0);
-}
 
 #define MAXLOGNAME 16		/* should find out for real */
 
@@ -159,7 +153,6 @@ void shut_down(int code)
 
 int main(int argc, char **argv)
 {
-    int port = 0;
     int r;
     int opt;
     char *alt_config = NULL;
@@ -194,11 +187,6 @@ int main(int argc, char **argv)
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    r = init_network(port);
-    if (r) {
-        fatal("unable to configure network port", EC_OSERR);
-    }
-    
     begin_handling();
 
     shut_down(0);
@@ -356,7 +344,7 @@ int handle_request(const char *who, const char *name,
     {
 	const char *base;
 	unsigned long len = 0;
-	int msg;
+	unsigned int msg;
 	unsigned uid;
 	
 	map_refresh(mailbox.index_fd, 0, &base, &len,
