@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.3 2002/03/15 19:54:25 rjs3 Exp $ */
+/* $Id: backend.c,v 1.4 2002/04/02 19:29:35 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -252,6 +252,7 @@ static int backend_authenticate(struct backend *s, const char *userid)
 	r = mysasl_getauthline(s->in, "A01", &in, &inlen);
     }
 
+    /* xxx unclear that this is correct */
     free_callbacks(cb);
 
     if (r == SASL_OK) {
