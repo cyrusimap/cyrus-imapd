@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.7 2002/08/06 15:47:31 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.8 2002/08/16 22:00:52 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -194,28 +194,6 @@ void *mupdate_client_start(void *rock);
 
 /* --- main() for each thread */
 static void *thread_main(void *rock);
-
-/* --- mutex wrapper functions for SASL */
-void *my_mutex_new(void)
-{
-    pthread_mutex_t *ret = (pthread_mutex_t *)xmalloc(sizeof(pthread_mutex_t));
-
-    pthread_mutex_init(ret, NULL);
-
-    return ret;
-}
-
-int my_mutex_destroy(pthread_mutex_t *m)
-{
-    if(!m) return SASL_BADPARAM;
-    
-    if(pthread_mutex_destroy(m)) return SASL_FAIL;
-
-    free(m);
-
-    return SASL_OK;
-}
-/* end mutex wrapper functions */
 
 static struct conn *conn_new(int fd)
 {
@@ -466,30 +444,7 @@ int service_init(int argc, char **argv,
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
-    /* set the SASL allocation functions */
-    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
-		   (sasl_calloc_t *) &calloc, 
-		   (sasl_realloc_t *) &xrealloc, 
-		   (sasl_free_t *) &free);
-
-    /* set the SASL mutex functions */
-    sasl_set_mutex((sasl_mutex_alloc_t *) &my_mutex_new,
-                   (sasl_mutex_lock_t *) &pthread_mutex_lock,
-                   (sasl_mutex_unlock_t *) &pthread_mutex_unlock,
-                   (sasl_mutex_free_t *) &my_mutex_destroy);
-
-    /* load the SASL plugins */
-    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
-	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
-	       sasl_errstring(r, NULL, NULL));
-	return EC_SOFTWARE;
-    }
-
-    if ((r = sasl_client_init(NULL)) != SASL_OK) {
-	syslog(LOG_ERR, "SASL failed initializing: sasl_client_init(): %s", 
-	       sasl_errstring(r, NULL, NULL));
-	return EC_SOFTWARE;
-    }
+    config_sasl_init(1, 1, mysasl_cb);
 
     /* see if we're the master or a slave */
     while ((opt = getopt(argc, argv, "C:m")) != EOF) {

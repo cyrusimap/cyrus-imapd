@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.1 2002/08/13 00:10:17 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.2 2002/08/16 22:00:34 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -186,9 +186,6 @@ typedef int rlim_t;
 
 /* some potentially memory saving tradeoffs, 
    preconfigured in memory-saving mode */
-
-/* call sasl_client_init() at the start of imapd */
-#define DELAY_SASL_CLIENT_INIT
 
 /* save the cmdlines for the ID command */
 #undef ID_SAVE_CMDLINE

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.8 2002/08/02 14:53:38 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.9 2002/08/16 22:00:49 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -264,11 +264,7 @@ int service_init(int argc __attribute__((unused)),
     singleinstance = config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
     BB = config_getstring(IMAPOPT_POSTUSER);
 
-    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
-	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
-	       sasl_errstring(r, NULL, NULL));
-	return EC_SOFTWARE;
-    }
+    config_sasl_init(0, 1, mysasl_cb);
 
     dupelim = config_getswitch(IMAPOPT_DUPLICATESUPPRESSION);
     /* initialize duplicate delivery database */

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sendmail-map.c,v 1.4 2001/11/27 02:25:00 ken3 Exp $
+ * $Id: sendmail-map.c,v 1.4.6.1 2002/08/16 22:00:55 rjs3 Exp $
  */
 
 #include <config.h>
@@ -148,14 +148,6 @@ int connect_acap(const char *server, const char *user)
     authprog = config_getstring("acap_getauth", NULL);
     if (authprog) {
 	system(authprog);
-    }
-
-    /* probably should setup callbacks here if configured to! */
-    r = sasl_client_init(NULL);
-    if (r != SASL_OK) {
-	syslog(LOG_ERR, "sasl_client_init() failed: %s",
-	       sasl_errstring(r, NULL, NULL));
-	fatal("couldn't connect to acap server", EC_UNAVAILABLE);
     }
 
     snprintf(acapurl, sizeof(acapurl), "acap://%s@%s/", user, server);

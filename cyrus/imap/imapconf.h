@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.5 2002/07/30 19:40:11 ken3 Exp $
+ * $Id: imapconf.h,v 1.16.4.6 2002/08/16 22:00:48 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,6 +49,8 @@
 
 /* Startup the configuration subsystem */
 extern int config_init(const char *alt_config, const char *ident);
+extern void config_sasl_init(int client, int server,
+			     const sasl_callback_t *callbacks);
 
 /* these will assert() if they're called on the wrong type of
    option (imapopt.c) */

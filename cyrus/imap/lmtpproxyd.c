@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42.4.6 2002/08/13 19:50:23 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.7 2002/08/16 22:00:50 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -229,18 +229,7 @@ int service_init(int argc __attribute__((unused)),
 
     BB = config_getstring(IMAPOPT_POSTUSER);
 
-    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
-	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
-	       sasl_errstring(r, NULL, NULL));
-	return EC_SOFTWARE;
-    }
-
-    r = sasl_client_init(NULL);
-    if(r != 0) {
-	syslog(LOG_ERR, "could not initialize client-side SASL: %s",
-	       sasl_errstring(r, NULL, NULL));
-	return EC_SOFTWARE;
-    }
+    config_sasl_init(1, 1, mysasl_cb);
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&lmtpd_namespace, 0)) != 0) {

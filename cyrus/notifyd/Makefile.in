@@ -1,5 +1,5 @@
 # Makefile.in - notifyd makefile
-# $Id: Makefile.in,v 1.4 2002/03/22 17:58:21 rjs3 Exp $
+# $Id: Makefile.in,v 1.4.4.1 2002/08/16 22:00:57 rjs3 Exp $
 # @configure_input@
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
@@ -70,7 +70,7 @@ IMAP_LIBS = @IMAP_LIBS@
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
 LIB_WRAP = @LIB_WRAP@
 LIBS = @ZEPHYR_LIBS@ @LIBS@ $(IMAP_COM_ERR_LIBS)
-DEPLIBS=../imap/libimap.a ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS=../imap/mutex_fake.o ../imap/libimap.a ../lib/libcyrus.a @DEPLIBS@
 
 PURIFY=/usr/local/bin/purify
 PUREOPT=-best-effort

@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.36 2002/06/24 16:29:04 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.36.2.1 2002/08/16 22:00:47 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -373,8 +373,6 @@ void do_dump(enum mboxop op, const char *part, int purge)
     d.tid = NULL;
     
     if(op == M_POPULATE) {
-	sasl_client_init(NULL);
-
 	ret = mupdate_connect(NULL, NULL, &(d.h), NULL);
 	if(ret) {
 	    fprintf(stderr, "couldn't connect to mupdate server\n");
@@ -688,6 +686,7 @@ int main(int argc, char *argv[])
     if(op != DUMP && dopurge) usage();
 
     config_init(alt_config, "ctl_mboxlist");
+    config_sasl_init(1,0,NULL);
 
     switch (op) {
     case RECOVER:

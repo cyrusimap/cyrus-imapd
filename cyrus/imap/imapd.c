@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.22 2002/08/15 17:52:24 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.23 2002/08/16 22:00:48 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -494,8 +494,7 @@ static void imapd_reset(void)
  */
 int service_init(int argc, char **argv, char **envp)
 {
-    int r;
-    int opt;
+    int r, opt;
     
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
@@ -505,26 +504,8 @@ int service_init(int argc, char **argv, char **envp)
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
-    /* set the SASL allocation functions */
-    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
-		   (sasl_calloc_t *) &calloc, 
-		   (sasl_realloc_t *) &xrealloc, 
-		   (sasl_free_t *) &free);
-
     /* load the SASL plugins */
-    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
-	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
-	       sasl_errstring(r, NULL, NULL));
-	return EC_SOFTWARE;
-    }
-
-#ifndef DELAY_SASL_CLIENT_INIT
-    if ((r = sasl_client_init(NULL)) != SASL_OK) {
-	syslog(LOG_ERR, "SASL failed initializing: sasl_client_init(): %s", 
-	       sasl_errstring(r, NULL, NULL));
-	return EC_SOFTWARE;
-    }
-#endif
+    config_sasl_init(1, 1, mysasl_cb);
 
     snprintf(shutdownfilename, sizeof(shutdownfilename), "%s/msg/shutdown",
 	     config_dir);

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.8 2002/07/30 19:40:12 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.9 2002/08/16 22:00:53 rjs3 Exp $
  */
 #include <config.h>
 
@@ -321,18 +321,8 @@ int service_init(int argc __attribute__((unused)),
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
-    /* set the SASL allocation functions */
-    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
-		   (sasl_calloc_t *) &calloc, 
-		   (sasl_realloc_t *) &xrealloc, 
-		   (sasl_free_t *) &free);
-
     /* load the SASL plugins */
-    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
-	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
-	       sasl_errstring(r, NULL, NULL));
-	return 2;
-    }
+    config_sasl_init(0, 1, mysasl_cb);
 
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);

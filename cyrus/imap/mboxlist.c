@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.14 2002/08/12 21:19:23 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.15 2002/08/16 22:00:50 rjs3 Exp $
  */
 
 #include <config.h>
@@ -2339,15 +2339,6 @@ void mboxlist_init(int myflags)
 
     if (myflags & MBOXLIST_SYNC) {
 	r = DB->sync();
-    }
-
-    if(config_mupdate_server) {
-	/* We're going to need SASL */
-	r = sasl_client_init(NULL);
-	if(r != 0) {
-	    syslog(LOG_ERR, "could not initialize SASL library");
-	    fatal("could not initialize SASL library", EC_TEMPFAIL);
-	}
     }
 }
 

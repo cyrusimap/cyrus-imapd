@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.28.6.1 2002/08/13 19:50:29 ken3 Exp $
+ * $Id: target-acap.c,v 1.28.6.2 2002/08/16 22:00:55 rjs3 Exp $
  */
 
 #include <config.h>
@@ -146,14 +146,6 @@ int connect_acap(const char *server)
 	authprog = config_getstring("acap_getauth", NULL);
 	if (authprog) {
             system(authprog);
-	}
-
-	/* probably should setup callbacks here if configured to! */
-	r = sasl_client_init(NULL);
-	if (r != SASL_OK) {
-  	    syslog(LOG_ERR, "sasl_client_init() failed: %s",
-		   sasl_errstring(r, NULL, NULL));
-	    fatal("couldn't connect to acap server", EC_UNAVAILABLE);
 	}
 
 	firsttime = 0;

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.11 2002/08/13 19:50:22 ken3 Exp $ */
+/* $Id: config.c,v 1.55.4.12 2002/08/16 22:00:47 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -65,6 +65,7 @@
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "mupdate_err.h"
+#include "mutex.h"
 #include "prot.h" /* for PROT_BUFSIZE */
 #include "util.h"
 #include "xmalloc.h"
@@ -97,6 +98,8 @@ int config_init(const char *alt_config, const char *ident)
     char *p;
     const char *val;
     int umaskval = 0;
+
+    syslog(LOG_ERR, "xyzzy");
 
     initialize_imap_error_table();
     initialize_mupd_error_table();
@@ -164,6 +167,36 @@ int config_init(const char *alt_config, const char *ident)
 
     return 0;
 }
+
+void config_sasl_init(int client, int server, const sasl_callback_t *callbacks){
+    static int called_already = 0;
+    
+    assert(client || server);
+    assert(!called_already);
+    
+    called_already = 1;
+
+    /* set the SASL allocation functions */
+    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
+		   (sasl_calloc_t *) &calloc, 
+		   (sasl_realloc_t *) &xrealloc, 
+		   (sasl_free_t *) &free);
+
+    /* set the SASL mutex functions */
+    sasl_set_mutex((sasl_mutex_alloc_t *) &cyrus_mutex_alloc,
+                   (sasl_mutex_lock_t *) &cyrus_mutex_lock,
+                   (sasl_mutex_unlock_t *) &cyrus_mutex_unlock,
+                   (sasl_mutex_free_t *) &cyrus_mutex_free);
+
+    if(client && sasl_client_init(callbacks)) {
+	fatal("could not init sasl (client)", EC_SOFTWARE);
+    }
+
+    if(server && sasl_server_init(callbacks, "Cyrus")) {
+	fatal("could not init sasl (client)", EC_SOFTWARE);
+    }
+}
+
 
 const char *config_getstring(enum imapopt opt)
 {

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: acapmbox.c,v 1.31.4.2 2002/07/25 17:21:39 ken3 Exp $ */
+/* $Id: acapmbox.c,v 1.31.4.3 2002/08/16 22:00:47 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -152,9 +152,6 @@ acap_conn_t *acapmbox_get_acapconn(acapmbox_handle_t *AC)
 }
 
 static acapmbox_handle_t *cached_conn = NULL;
-#ifdef DELAY_SASL_CLIENT_INIT
-static int did_sasl_client_init = 0;
-#endif
 
 void acapmbox_disconnect(acapmbox_handle_t *conn)
 {
@@ -183,16 +180,6 @@ acapmbox_handle_t *acapmbox_get_handle(void)
 	/* xxx verify cached_conn is still a valid connection */
 	return cached_conn;
     }
-#ifdef DELAY_SASL_CLIENT_INIT
-    if (!did_sasl_client_init) {
-	if ((r = sasl_client_init(NULL)) != SASL_OK) {
-	    syslog(LOG_ERR, "failed initializing: sasl_client_init(): %s", 
-		   sasl_errstring(r, NULL, NULL));
-	    return NULL;
-	}
-	did_sasl_client_init = 1;
-    }
-#endif
 
     cached_conn = (acapmbox_handle_t *) xmalloc(sizeof(acapmbox_handle_t));
     cached_conn->conn = NULL;

@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.40.4.3 2002/08/04 14:04:48 ken3 Exp $
+ * $Id: timsieved.c,v 1.40.4.4 2002/08/16 22:01:00 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -268,6 +268,8 @@ static struct sasl_callback mysasl_cb[] = {
 
 int service_init(int argc, char **argv, char **envp)
 {
+    config_sasl_init(0, 1, mysasl_cb);
+
     /* open mailboxes */
     mboxlist_init(0);
     mboxlist_open(NULL);
@@ -323,16 +325,6 @@ int service_main(int argc, char **argv, char **envp)
 	    sieved_haveaddr = 1;
 	}
     }
-
-    /* set the SASL allocation functions */
-    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
-		   (sasl_calloc_t *) &calloc, 
-		   (sasl_realloc_t *) &xrealloc, 
-		   (sasl_free_t *) &free);
-
-    /* Make a SASL connection and setup some properties for it */
-    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK)
-	fatal("SASL failed initializing: sasl_server_init()", -1); 
 
     /* other params should be filled in */
     if (sasl_server_new(SIEVE_SERVICE_NAME, config_servername, NULL,
