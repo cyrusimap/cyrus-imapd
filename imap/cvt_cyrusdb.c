@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.2 2002/02/20 03:12:02 rjs3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.3 2002/02/20 21:00:54 rjs3 Exp $
  */
 
 #include <config.h>
@@ -119,8 +119,7 @@ int converter_cb(void *rock __attribute__((unused)),
 		 const char *key, int keylen,
 		 const char *data, int datalen) 
 {
-    /* xxx should use transactions (change NULL to &tid) */
-    return DB_NEW->store(ndb, key, keylen, data, datalen, NULL);
+    return DB_NEW->store(ndb, key, keylen, data, datalen, &tid);
 }
 
 int main(int argc, char *argv[])
@@ -203,8 +202,7 @@ int main(int argc, char *argv[])
 
     DB_OLD->foreach(odb, "", 0, converter_p, converter_cb, NULL, NULL);
 
-    /* xxx we should use transactions: */
-    /* DB_NEW->commit(ndb, tid) */
+    DB_NEW->commit(ndb, tid);
 
     DB_OLD->close(odb);
     DB_NEW->close(ndb);
