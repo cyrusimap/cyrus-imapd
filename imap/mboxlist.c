@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.129 2000/07/04 00:10:43 leg Exp $
+ * $Id: mboxlist.c,v 1.130 2000/07/04 00:43:48 leg Exp $
  */
 
 #include <config.h>
@@ -1346,7 +1346,7 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	if (r) syslog(LOG_ERR, "ACAP: can't commit %s: %d", newname, r);
     }
 
-    if (!r) {
+    if (!r && !isusermbox) {
 	/* 10. delete old ACAP entry */
 	r = acapmbox_delete(acaphandle, oldname);
 	if (r) syslog(LOG_ERR, "ACAP: can't delete %s: %d", oldname, r);
