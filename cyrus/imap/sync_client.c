@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.13 2005/03/22 18:49:34 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.14 2005/03/27 14:44:52 ken3 Exp $
  */
 
 #include <config.h>
@@ -1629,7 +1629,7 @@ int do_folders(struct sync_folder_list *client_list,
                 goto bail;
 
 	    if (!r && m.quota.root && !strcmp(m.name, m.quota.root))
-		r = update_quota_work(&m.quota, &folder2->quota);
+		r = update_quota_work(&m.quota, NULL);
 
             if (do_contents) {
                 struct sync_msg_list *folder_msglist;
@@ -2282,7 +2282,7 @@ static int do_meta_sub(char *user)
     static struct buf name;
     struct sync_folder_list *server_list = sync_folder_list_create();
 
-    prot_printf(toserver, "LSUB\r\n"); 
+    prot_printf(toserver, "LSUB %s\r\n", user);
     prot_flush(toserver);
     r=sync_parse_code("LSUB",fromserver, SYNC_PARSE_EAT_OKLINE, &unsolicited);
 
@@ -2451,7 +2451,7 @@ static int do_sync(const char *filename)
     int c;
     int fd;
     struct protstream *input;
-    int n, r = 0;
+    int r = 0;
 
     if ((filename == NULL) || !strcmp(filename, "-"))
         fd = 0;
@@ -2696,10 +2696,12 @@ static int do_sync(const char *filename)
     }
 
     if (folder_list->count) {
-	for (n = 0; r && (n < SYNC_MAILBOX_RETRIES); n++) {
+	int n = 0;
+	do {
 	    sleep(n*2);  /* XXX  should this be longer? */
 	    r = do_mailboxes(folder_list);
-	}
+	} while (r && (++n < SYNC_MAILBOX_RETRIES));
+
 	if (r) goto bail;
     }
 
@@ -2707,7 +2709,7 @@ static int do_sync(const char *filename)
         if (action->active && (r=do_meta(action->user))) {
             if (r == IMAP_INVALID_USER) goto bail;
 
-            sync_action_list_add(user_list, action->user, NULL);
+            sync_action_list_add(user_list, NULL, action->user);
             if (verbose) {
                 printf("  Promoting: META %s -> USER %s\n",
                        action->user, action->user);
@@ -2720,10 +2722,12 @@ static int do_sync(const char *filename)
     }
 
     for (action = user_list->head ; action ; action = action->next) {
-	for (n = 0; r && (n < SYNC_MAILBOX_RETRIES); n++) {
+	int n = 0;
+	do {
 	    sleep(n*2);  /* XXX  should this be longer? */
 	    r = do_user(action->user);
-	}
+	} while (r && (++n < SYNC_MAILBOX_RETRIES));
+
 	if (r) goto bail;
     }
 

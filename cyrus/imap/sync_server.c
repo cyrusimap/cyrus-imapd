@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.7 2005/03/14 19:37:18 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.8 2005/03/27 14:44:53 ken3 Exp $
  */
 
 #include <config.h>
@@ -1066,9 +1066,9 @@ static void cmdloop(void)
         mailbox_close(mailbox);
         mailbox = 0;
     }
-
-    sync_unlock(&sync_lock);
 #if 0
+    sync_unlock(&sync_lock);
+
     if (sync_userid) free(sync_userid);
     if (sync_authstate) auth_freestate(sync_authstate);
 
