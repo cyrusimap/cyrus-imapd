@@ -1,6 +1,7 @@
 #include <config.h>
 
 #include <ctype.h>
+#include <string.h>
 
 #include "prot.h"
 #include "xmalloc.h"

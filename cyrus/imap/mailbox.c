@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.118 2002/02/13 22:09:03 rjs3 Exp $
+ $Id: mailbox.c,v 1.119 2002/02/19 18:50:13 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1457,7 +1457,7 @@ static int mailbox_calculate_flagcounts(struct mailbox *mailbox)
 
 	/* Sanity check */
 	if (*((bit32 *)(bufp+OFFSET_UID)) == 0) {
-	    syslog(LOG_ERR, "IOERROR: %s zero index record %u/%u",
+	    syslog(LOG_ERR, "IOERROR: %s zero index record %u/%lu",
 		   mailbox->name, msgno, mailbox->exists);
 	    goto fail;
 	}
@@ -1646,7 +1646,7 @@ void *deciderock;
 
 	/* Sanity check */
 	if (*((bit32 *)(buf+OFFSET_UID)) == 0) {
-	    syslog(LOG_ERR, "IOERROR: %s zero index record %u/%u",
+	    syslog(LOG_ERR, "IOERROR: %s zero index record %u/%lu",
 		   mailbox->name, msgno, mailbox->exists);
 	    goto fail;
 	}
@@ -1705,7 +1705,7 @@ void *deciderock;
     rewind(newindex);
     n = fread(buf, 1, mailbox->start_offset, newindex);
     if ((unsigned long)n != mailbox->start_offset) {
-	syslog(LOG_ERR, "IOERROR: reading index header for %s: got %d of %d",
+	syslog(LOG_ERR, "IOERROR: reading index header for %s: got %d of %ld",
 	       mailbox->name, n, mailbox->start_offset);
 	goto fail;
     }
@@ -2020,7 +2020,7 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 	r = mailbox_write_quota(&mailbox->quota);
 	if (r) {
 	    syslog(LOG_ERR,
-		   "LOSTQUOTA: unable to record free of %u bytes in quota %s",
+		   "LOSTQUOTA: unable to record free of %lu bytes in quota %s",
 		   mailbox->quota_mailbox_used, mailbox->quota.root);
 	}
 	mailbox_unlock_quota(&mailbox->quota);
@@ -2210,7 +2210,7 @@ mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl,
 	}
 	if (r2) {
 	    syslog(LOG_ERR,
-	      "LOSTQUOTA: unable to record use of %u bytes in quota %s",
+	      "LOSTQUOTA: unable to record use of %lu bytes in quota %s",
 		   newmailbox.quota_mailbox_used, newmailbox.quota.root);
 	}
     }
@@ -2420,7 +2420,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 	}
 	if (r2) {
 	    syslog(LOG_ERR,
-	      "LOSTQUOTA: unable to record use of %u bytes in quota %s",
+	      "LOSTQUOTA: unable to record use of %lu bytes in quota %s",
 		   newmailbox.quota_mailbox_used, newmailbox.quota.root);
 	}
     }

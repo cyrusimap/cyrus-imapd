@@ -162,7 +162,7 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
 	mark = 0;
     }
 
-    syslog(LOG_DEBUG, "duplicate_check: %-40s %-20s %d",
+    syslog(LOG_DEBUG, "duplicate_check: %-40s %-20s %ld",
 	   buf, buf+idlen+1, mark);
 
     return mark;
@@ -188,7 +188,7 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
 		      (char *) &mark, sizeof(mark), NULL);
     } while (r == CYRUSDB_AGAIN);
 
-    syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %d",
+    syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %ld",
 	   buf, buf+idlen+1, mark);
 
     return;

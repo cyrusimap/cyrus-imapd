@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat.c,v 1.1 2001/09/25 16:49:51 ken3 Exp $
+ * $Id: squat.c,v 1.2 2002/02/19 18:50:14 ken3 Exp $
  */
 
 /*
@@ -49,6 +49,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 
 #include "squat_internal.h"

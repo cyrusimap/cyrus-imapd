@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.31 2002/02/15 17:21:15 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.32 2002/02/19 18:50:13 ken3 Exp $
  */
 #include <config.h>
 
@@ -1231,7 +1231,7 @@ static void openproxy(void)
     prot_setflushonread(backend_in, backend_out);
 
     if (proxy_authenticate(server) != SASL_OK) {
-	syslog(LOG_ERR, "couldn't authenticate to backend server", EC_CONFIG);
+	syslog(LOG_ERR, "couldn't authenticate to backend server");
 	fatal("couldn't authenticate to backend server", 1);
     }
 

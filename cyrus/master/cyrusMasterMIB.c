@@ -25,11 +25,13 @@
 #include <ucd-snmp/ucd-snmp-config.h>
 #include <ucd-snmp/ucd-snmp-includes.h>
 #include <ucd-snmp/ucd-snmp-agent-includes.h>
+#include <ucd-snmp/util_funcs.h>
 
 
 #endif /* !IN_UCD_SNMP_SOURCE */
 
 #include <time.h>
+#include <string.h>
 
 #include "cyrusMasterMIB.h"
 
