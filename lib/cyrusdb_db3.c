@@ -528,7 +528,7 @@ static int foreach(struct db *mydb,
 static int mystore(struct db *mydb, 
 		   const char *key, int keylen,
 		   const char *data, int datalen,
-		   struct txn **mytid, int flag)
+		   struct txn **mytid, int putflags, int txnflags)
 {
     int r = 0;
     DBT k, d;
@@ -561,7 +561,7 @@ static int mystore(struct db *mydb,
 	if (CONFIG_DB_VERBOSE)
 	    syslog(LOG_DEBUG, "mystore: starting txn %lu", txn_id(tid));
     }
-    r = db->put(db, tid, &k, &d, 0);
+    r = db->put(db, tid, &k, &d, putflags);
     if (!mytid) {
 	/* finish once-off txn */
 	if (r) {
@@ -582,7 +582,7 @@ static int mystore(struct db *mydb,
 	} else {
 	    if (CONFIG_DB_VERBOSE)
 		syslog(LOG_DEBUG, "mystore: committing txn %lu", txn_id(tid));
-	    r = txn_commit(tid, 0);
+	    r = txn_commit(tid, txnflags);
 	}
     }
 
@@ -608,7 +608,7 @@ static int create(struct db *db,
 		  const char *data, int datalen,
 		  struct txn **tid)
 {
-    return mystore(db, key, keylen, data, datalen, tid, DB_NOOVERWRITE);
+    return mystore(db, key, keylen, data, datalen, tid, DB_NOOVERWRITE, 0);
 }
 
 static int store(struct db *db, 
@@ -616,12 +616,29 @@ static int store(struct db *db,
 		 const char *data, int datalen,
 		 struct txn **tid)
 {
-    return mystore(db, key, keylen, data, datalen, tid, 0);
+    return mystore(db, key, keylen, data, datalen, tid, 0, 0);
 }
 
-static int delete(struct db *mydb, 
-		  const char *key, int keylen,
-		  struct txn **mytid)
+static int create_nosync(struct db *db, 
+			 const char *key, int keylen,
+			 const char *data, int datalen,
+			 struct txn **tid)
+{
+    return mystore(db, key, keylen, data, datalen, tid, DB_NOOVERWRITE,
+		   DB_TXN_NOSYNC);
+}
+
+static int store_nosync(struct db *db, 
+			const char *key, int keylen,
+			const char *data, int datalen,
+			struct txn **tid)
+{
+    return mystore(db, key, keylen, data, datalen, tid, 0, DB_TXN_NOSYNC);
+}
+
+static int mydelete(struct db *mydb, 
+		    const char *key, int keylen,
+		    struct txn **mytid, int txnflags)
 {
     int r = 0;
     DBT k;
@@ -671,7 +688,7 @@ static int delete(struct db *mydb,
 	} else {
 	    if (CONFIG_DB_VERBOSE)
 		syslog(LOG_DEBUG, "delete: committing txn %lu", txn_id(tid));
-	    r = txn_commit(tid, 0);
+	    r = txn_commit(tid, txnflags);
 	}
     }
 
@@ -692,7 +709,21 @@ static int delete(struct db *mydb,
     return r;
 }
 
-static int commit_txn(struct db *db, struct txn *tid)
+static int delete(struct db *db, 
+		  const char *key, int keylen,
+		  struct txn **tid)
+{
+    return mydelete(db, key, keylen, tid, 0);
+}
+
+static int delete_nosync(struct db *db, 
+			 const char *key, int keylen,
+			 struct txn **tid)
+{
+    return mydelete(db, key, keylen, tid, DB_TXN_NOSYNC);
+}
+
+static int mycommit(struct db *db, struct txn *tid, int txnflags)
 {
     int r;
     DB_TXN *t = (DB_TXN *) tid;
@@ -701,7 +732,7 @@ static int commit_txn(struct db *db, struct txn *tid)
 
     if (CONFIG_DB_VERBOSE)
 	syslog(LOG_DEBUG, "commit_txn: committing txn %lu", txn_id(t));
-    r = txn_commit(t, 0);
+    r = txn_commit(t, txnflags);
     switch (r) {
     case 0:
 	break;
@@ -717,6 +748,16 @@ static int commit_txn(struct db *db, struct txn *tid)
     }
 
     return r;
+}
+
+static int commit_txn(struct db *db, struct txn *tid)
+{
+    return mycommit(db, tid, 0);
+}
+
+static int commit_nosync(struct db *db, struct txn *tid)
+{
+    return mycommit(db, tid, DB_TXN_NOSYNC);
 }
 
 static int abort_txn(struct db *db, struct txn *tid)
@@ -756,5 +797,27 @@ struct cyrusdb_backend cyrusdb_db3 =
     &delete,
 
     &commit_txn,
+    &abort_txn
+};
+
+struct cyrusdb_backend cyrusdb_db3_nosync = 
+{
+    "db3-nosync",		/* name */
+
+    &init,
+    &done,
+    &sync,
+
+    &open,
+    &close,
+
+    &fetch,
+    &fetchlock,
+    &foreach,
+    &create_nosync,
+    &store_nosync,
+    &delete_nosync,
+
+    &commit_nosync,
     &abort_txn
 };

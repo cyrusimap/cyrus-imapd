@@ -139,6 +139,7 @@ struct cyrusdb_backend {
 };
 
 extern struct cyrusdb_backend cyrusdb_db3;
+extern struct cyrusdb_backend cyrusdb_db3_nosync;
 extern struct cyrusdb_backend cyrusdb_flat;
 
 #endif /* INCLUDED_CYRUSDB_H */
