@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.54 1999/07/08 03:56:50 leg Exp $ -->
+<!-- $Id: install.html,v 1.55 1999/07/08 22:19:33 tmartin Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -456,10 +456,12 @@ setting here overrides the srvtab setting in the SASL configuration
 file.)
  <P>
 
-Note that <b>everyday users should not be administrators</b>.
-Admins have powers not granted to regular users and while the server allows
-them to receive mail, some problems will occur if admins are used as regular
-users.
+Note that <b>everyday users should not be administrators</b>.  Admins
+have powers not granted to regular users and while the server allows
+them to receive mail, some problems will occur if admins are used as
+regular users. You also should <b> not</b> read mail as an
+administrator. You should have seperate accounts for reading mail and
+administrating (for example: leg and leg.admin)
 
 <p>
 
@@ -531,6 +533,7 @@ synchronously.  The following example is for sendmail:
 <kbd>   /sbin/chattr +S /var/spool/mqueue
 </kbd></pre>
 
+[XXX is pwcheck used at all anymore?]
 <li>If the Cyrus IMAP server was configured to use the pwcheck
 daemon, install pwcheck.  The pwcheck daemon verifies passwords
 against the shadow password database.  Create the directory
@@ -762,7 +765,7 @@ is a problem.  To terminate the connection, type "<kbd>. logout</kbd>".
 <li>Use "<tt>imtest</tt>" to test logging in with plaintext passwords.
 
 <pre>
-<kbd>   /usr/local/bin/imtest -m login foobar
+<kbd>   /usr/local/bin/imtest -m login -p imap foobar
 </kbd></pre>
 
 If your server is running, you'll get the following message:
@@ -780,32 +783,75 @@ through <tt>syslog</tt> to the server log.  To terminate the
 connection, type "<kbd>. logout</kbd>".
 
 <P>
-<li>If the server is compiled with Kerberos v4 authentication, test
-Kerberos authentication by using the imtest command.  Change
-to the "<tt>cyrus-v1.6.0</tt>" directory and type the following:
+
+<li>You should now test the server with each of the various
+authentication mechanisms you have installed. First to find the
+mechanisms the server thinks are installed use imtest as above. After
+imtest logs in type:
+
+<pre> 
+   . CAPABILITY
+</pre> 
+
+This should produce a message similar to:
 
 <pre>
-   <kbd>/usr/local/bin/imtest -l 0 foobar</kbd>
-   S: * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.6.0 server ready
-   S: * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE
-   UIDPLUS X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=PLAIN
-   AUTH=ANONYMOUS AUTH=KERBEROS_V4 AUTH=DIGEST-MD5 AUTH=CRAM-MD5
-   UNSELECT
-   S: C01 OK Completed
-   S: + Ln8h6Q==
-   C: BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
-   BZSGgOy9ehHRj8NQjLjxDpib0D9uT0fo7QaXhLM6zCp9dQ1pX4FfNO2V39vBpJ4
-   S: + bnjMDt4VXhw=
-   C: Qf7eymxrhqJ58IW/PzznVQ==
-   S: A01 OK User logged in (no protection)
-   Authenticated.
-   Security strength factor: 0
+  * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS 
+  X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=PLAIN AUTH=ANONYMOUS
+  AUTH=KERBEROS_V4 AUTH=DIGEST-MD5 AUTH=CRAM-MD5 UNSELECT
+  . OK Completed
+</pre>
+
+Each of the mechanism names is preceded by a 'AUTH='. For this example
+PLAIN, ANONYMOUS, KERBEROS_V4, DIGEST-MD5, and CRAM-MD5 are
+available. If a mechanism does not appear that you believe should
+appear it may be because the mechanism is unable to initialize. For
+example, if the server is unable to access the srvtab file the
+KERBEROS_V4 mechanism will be unable to initialize. To terminate the
+imtest connection, type "<kbd>. logout</kbd>".
+
+Once you are satisfied with the authentication mechanism list you
+should attempt to log in with each of those mechanisms. Change to the
+"<tt>cyrus-v1.5.14</tt>" directory and run imtest specify\ing which
+mechanism you would like to use. The mechanism name must be in all
+capital letters. For example for KERBEROS_V4 type:
+
+<pre>
+   <kbd>/usr/local/bin/imtest -m KERBEROS_V4 -p imap foobar</kbd>
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
+   . AUTHENTICATE KERBEROS_V4
+   + Ln8h6Q==
+   BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
+   BZSGgOy9ehHRj8NQjLjxDpib0D9uT0fo7QaXhLM6zCp9dQ1pX4FfNO2V39vBp
+   Q19QIK4S1410prvM2c45qeizecI7zAvA=
+   2cRhIC+aH70WHqYaW18YnQ==
+   . OK User logged in (no protection)
+   __No integrity protection__
 </pre>
 
 Any message other than one starting with a "<tt>A01 OK</tt>" means there is
 a problem. If the test fails, a more specific error message is written
 through <TT>syslog</TT> to the server log.  To terminate the
 connection, type "<kbd>. logout</kbd>".
+
+Make sure to test each mechanism this way. Also, many mechanisms have
+security layers. You should test each layer for mechanisms that
+support layers. imtest by default will choose the strongest layer. Use
+the '-l' parameter to force imtest to use a weaker layer. The '-l'
+parameter takes the security strength factor. A security strength
+factor of 0 means no layer and 1 means integrity layer. Privacy layer
+security strength factors depend upon the mechanism. For example
+KERBEROS_V4 has 3 layers: none, integrity, and privacy with security
+strength factors of 0,1, and 56 respectivly. By default imtest will
+attempt to use privacy layer. To force imtest to negotiate an
+integrity layer type:
+
+<pre>
+  imtest -m KERBEROS_V4 -l 1 -p imap foobar
+</pre>
+
+See libsasl for a full description of what mechanisms support what layers. 
+
 
 </ol>
 
@@ -882,7 +928,7 @@ to work with the IMAP server.
 
 <P><HR><P>
 <!-- hhmts start -->
-last modified by leg at Thu Jul  1 16:00:57 EDT 1999
+Last modified: Thu Jul  8 18:17:12 EDT 1999
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
