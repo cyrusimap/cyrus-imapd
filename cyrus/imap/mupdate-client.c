@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.17 2002/01/29 18:22:51 leg Exp $
+ * $Id: mupdate-client.c,v 1.18 2002/01/29 19:45:55 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -561,17 +561,22 @@ int mupdate_find(mupdate_handle *handle, const char *mailbox,
     }
 }
 
-/* xxx should extend list semantics to take a hostname too */
 int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
-		 void *context) 
+		 const char *prefix, void *context) 
 {
     int ret;
     
     if(!handle || !callback) return MUPDATE_BADPARAM;
 
-    prot_printf(handle->pout,
-		"X%u LIST\r\n", handle->tagn++);
-
+    if(prefix) {
+	prot_printf(handle->pout,
+		    "X%u LIST {%d+}\r\n%s\r\n", handle->tagn++,
+		    strlen(prefix), prefix);
+    } else {
+	prot_printf(handle->pout,
+		    "X%u LIST\r\n", handle->tagn++);
+    }
+     
     ret = mupdate_scarf(handle, callback, context, 1);
 
     if (ret > 0) {

@@ -1,6 +1,6 @@
 /* mupdate-client.h -- cyrus murder database clients
  *
- * $Id: mupdate-client.h,v 1.8 2002/01/29 18:13:48 leg Exp $
+ * $Id: mupdate-client.h,v 1.9 2002/01/29 19:45:56 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -98,6 +98,6 @@ typedef int (*mupdate_callback)(struct mupdate_mailboxdata *mdata,
 /* perform an MUPDATE LIST operation (callback is called for
  * each remote mailbox) */
 int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
-		 void *context);
+		 const char *prefix, void *context);
 
 #endif
