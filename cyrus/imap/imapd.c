@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.188 1999/11/05 22:30:17 tmartin Exp $ */
+/* $Id: imapd.c,v 1.189 1999/11/16 01:01:48 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -1205,7 +1205,7 @@ char *user;
 char *passwd;
 {
     char *canon_user;
-    char *reply = 0;
+    const char *reply = 0;
     const char *val;
     char buf[MAX_MAILBOX_PATH];
     char *p;
@@ -1217,17 +1217,18 @@ char *passwd;
 
     /* possibly disallow login */
     if ((imapd_sucessful_tls == 0) &&
-	(config_getswitch("allowplaintext", 1)==0) &&
-	strcmp(canon_user, "anonymous")!=0)
-    {
-      prot_printf(imapd_out, "%s NO Login only available under a layer\r\n", tag, result);      
-      return;
+	(config_getswitch("allowplaintext", 1) == 0) &&
+	strcmp(canon_user, "anonymous") != 0) {
+	prot_printf(imapd_out, "%s NO Login only available under a layer\r\n",
+		    tag, result);
+	return;
     }
 
     if (!canon_user) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
 	       imapd_clienthost, beautify_string(user));
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_INVALID_USER));
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
+		    error_message(IMAP_INVALID_USER));
 	return;
     }
 
@@ -1248,19 +1249,26 @@ char *passwd;
 	    return;
 	}
     }
-    else if ((result=sasl_checkpass(imapd_saslconn,
-				    canon_user,
-				    strlen(canon_user),
-				    passwd,
-				    strlen(passwd),
-				    (const char **) &reply))!=SASL_OK) { 
-      if (reply) {
+    else if ((result = sasl_checkpass(imapd_saslconn,
+				      canon_user,
+				      strlen(canon_user),
+				      passwd,
+				      strlen(passwd),
+				      &reply)) != SASL_OK) { 
+	if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   imapd_clienthost, canon_user, reply);
-      }
-      sleep(3);
-      prot_printf(imapd_out, "%s NO Login failed. Error=%d\r\n", tag, result);
-      return;
+	}
+	sleep(3);
+
+	if (reply) {
+	    prot_printf(imapd_out, "%s NO Login failed: %s\r\n", tag, reply);
+	} else if (reply = sasl_errstring(result, NULL, NULL)) {
+	    prot_printf(imapd_out, "%s NO Login failed: %s\r\n", tag, reply);
+	} else {
+	    prot_printf(imapd_out, "%s NO Login failed: %d\r\n", tag, result);
+	}
+	return;
     }
     else {
 	imapd_userid = xstrdup(canon_user);
