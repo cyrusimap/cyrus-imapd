@@ -41,6 +41,7 @@ install::
 	$(srcdir)/install-sh -d ${DESTDIR}$(cyrus_prefix)/bin
 	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/include/cyrus
 	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/man/man1
+	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/man/man3
 	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/man/man5
 	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/man/man8
 	@for d in  $(SUBDIRS); \
