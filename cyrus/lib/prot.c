@@ -236,7 +236,11 @@ struct protstream *s;
     int left = s->ptr - s->buf;
     int n;
 
-    if (s->eof || s->error) return EOF;
+    if (s->eof || s->error) {
+	s->ptr = s->buf;
+	s->cnt = 1;
+	return EOF;
+    }
     if (!left) return 0;
 
     if (s->func) {
@@ -284,7 +288,7 @@ int len;
 	buf += s->cnt;
 	len -= s->cnt;
 	s->cnt = 0;
-	prot_flush(s);
+	if (prot_flush(s) == EOF) return EOF;
     }
     bcopy(buf, s->ptr, len);
     s->ptr += len;
