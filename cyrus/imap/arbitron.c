@@ -26,7 +26,7 @@
  *
  */
 
-/* $Id: arbitron.c,v 1.15 1999/04/08 21:04:21 tjs Exp $ */
+/* $Id: arbitron.c,v 1.16 1999/08/31 18:39:19 leg Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -91,7 +91,7 @@ char **argv;
 	}
     }
 
-    if (optind != argc) strncpy(pattern, argv[1], MAX_MAILBOX_NAME);
+    if (optind != argc) strncpy(pattern, argv[optind], MAX_MAILBOX_NAME);
 
     report_time = time(0) - (report_days*60*60*24);
     if (prune_months) {
