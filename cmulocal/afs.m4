@@ -1,5 +1,5 @@
 dnl afs.m4--AFS libraries, includes, and dependencies
-dnl $Id: afs.m4,v 1.22 2002/07/22 20:07:08 shadow Exp $
+dnl $Id: afs.m4,v 1.23 2002/07/22 20:32:12 shadow Exp $
 dnl Chaskiel Grundman
 dnl based on kerberos_v4.m4
 dnl Derrick Brashear
@@ -220,6 +220,7 @@ extern int UV_SetSecurity();],
           fi
 
           AC_MSG_CHECKING([if libaudit is needed])
+	  AFS_LIBAUDIT=""
           LIBS="$cmu_save_LIBS $AFS_CLIENT_LIBS ${LIB_SOCKET}"
           AC_TRY_LINK([#include <afs/param.h>
 #ifdef HAVE_AFS_STDS_H
@@ -239,6 +240,7 @@ extern int UV_SetSecurity();],
              [afsconf_SuperUser();],AFS_AUDIT_LIB="yes")
              if test "X$AFS_AUDIT_LIB" = "Xyes"; then
                  AC_MSG_RESULT([yes])
+	         AFS_LIBAUDIT="-laudit"
 	         AFS_CLIENT_LIBS_STATIC="${AFS_LIB_DIR}/afs/libvolser.a ${AFS_LIB_DIR}/afs/libvldb.a ${AFS_LIB_DIR}/afs/libkauth.a ${AFS_LIB_DIR}/afs/libprot.a ${AFS_LIB_DIR}/libubik.a ${AFS_LIB_DIR}/afs/libauth.a ${AFS_LIB_DIR}/afs/libaudit.a ${AFS_LIB_DIR}/librxkad.a ${AFS_LIB_DIR}/librx.a ${AFS_LIB_DIR}/afs/libsys.a ${AFS_LIB_DIR}/librx.a ${AFS_LIB_DIR}/liblwp.a ${AFS_LIBDESA} ${AFS_LIB_DIR}/afs/libcmd.a ${AFS_LIB_DIR}/afs/libcom_err.a ${AFS_LIB_DIR}/afs/util.a"
                  AFS_CLIENT_LIBS="-lvolser -lvldb -lkauth -lprot -lubik -lauth -laudit -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp ${AFS_LIBDES} -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a $AFS_BSD_LIB $AFS_DESCOMPAT_LIB"
                  AFS_RX_LIBS="-lauth -laudit -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp ${AFS_LIBDES} -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a $AFS_BSD_LIB $AFS_DESCOMPAT_LIB"
@@ -287,6 +289,7 @@ ac_cv_afs_int32=yes, ac_cv_afs_int32=no)])
           AC_SUBST(AFS_INC_FLAGS)
           AC_SUBST(AFS_LIB_FLAGS)
 	  AC_SUBST(AFS_TOP_DIR)
+	  AC_SUBST(AFS_LIBAUDIT)
 	  AC_SUBST(AFS_LIBDES)
           AC_SUBST(AFS_LIBDESA)
        	fi
