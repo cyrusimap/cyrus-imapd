@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.13.4.5 2003/06/15 17:54:49 ken3 Exp $ -->
+<!-- $Id: install-murder.html,v 1.13.4.6 2003/07/10 18:14:56 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -170,8 +170,8 @@ will not start running until after you recieve an mupdate client connection
 to the slave (which is not a recommended configuration at this point).<p>
 
 You will also want to change all of your <tt>imapd</tt> entries to be
-<tt>proxyd</tt>, and all of your <tt>pop3d</tt> entries to be
-<tt>pop3proxyd</tt>.  That is, you will probably have a <tt>SERVICES</tt>
+<tt>proxyd</tt>, and all of your <tt>lmtpd</tt> entries to be
+<tt>lmtpproxyd</tt>.  That is, you will probably have a <tt>SERVICES</tt>
 section that looks more like this now:<p>
 
 <pre>
@@ -179,9 +179,11 @@ section that looks more like this now:<p>
 
   imap          cmd="proxyd" listen="imap" prefork=5
   imaps         cmd="proxyd -s" listen="imaps" prefork=1
-  pop3          cmd="pop3proxyd" listen="pop3" prefork=0
-  pop3s         cmd="pop3proxyd -s" listen="pop3s" prefork=0
-  kpop          cmd="pop3proxyd -k" listen="kpop" prefork=0
+  pop3          cmd="pop3d" listen="pop3" prefork=0
+  pop3s         cmd="pop3d -s" listen="pop3s" prefork=0
+  kpop          cmd="pop3d -k" listen="kpop" prefork=0
+  nntp          cmd="nntpd" listen="nntp" prefork=0
+  nntps         cmd="nntpd -s" listen="nntps" prefork=0
   sieve         cmd="timsieved" listen="sieve" prefork=0
   lmtp          cmd="lmtpproxyd" listen="/var/imap/socket/lmtp" prefork=0
 </pre>
@@ -347,7 +349,7 @@ to ensure that the mupdate slave process is started, (is prefork=1)</li>
 </ul>
 
 <P><HR>
-last modified: $Date: 2003/06/15 17:54:49 $
+last modified: $Date: 2003/07/10 18:14:56 $
 </BODY></HTML>
 
 
