@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.52 1999/11/15 17:25:41 tmartin Exp $
+ * $Id: pop3d.c,v 1.53 1999/12/02 20:42:13 leg Exp $
  */
 
 #ifndef __GNUC__
@@ -384,7 +384,12 @@ cmdloop()
 	for (p = inputbuf; *p && !isspace(*p); p++);
 	if (*p) {
 	    *p++ = '\0';
-	    for (arg=p; *arg && isspace(*arg); arg++);
+	    arg = p;
+	    if (strcasecmp(inputbuf, "pass") != 0) {
+		while (*arg && isspace(*arg)) {
+		    arg++;
+		}
+	    }
 	    if (!*arg) {
 		prot_printf(popd_out, "-ERR Syntax error\r\n");
 		continue;
