@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.8 2004/02/16 21:20:40 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.9 2004/02/18 19:08:51 ken3 Exp $
  */
 
 /*
@@ -95,6 +95,7 @@
 #include "mupdate-client.h"
 #include "nntp_err.h"
 #include "prot.h"
+#include "proxy.h"
 #include "retry.h"
 #include "rfc822date.h"
 #include "smtpclient.h"
@@ -261,130 +262,6 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-/* proxy support functions */
-void proxyd_downserver(struct backend *s)
-{
-    if (!s || !s->timeout) {
-	/* already disconnected */
-	return;
-    }
-
-    /* need to logout of server */
-    backend_disconnect(s);
-
-    if(s == backend_current) backend_current = NULL;
-
-    /* remove the timeout */
-    prot_removewaitevent(nntp_in, s->timeout);
-    s->timeout = NULL;
-}
-
-struct prot_waitevent *backend_timeout(struct protstream *s,
-				       struct prot_waitevent *ev, void *rock)
-{
-    struct backend *be = (struct backend *) rock;
-
-    if (be != backend_current) {
-	/* server is not our current server, and idle too long.
-	 * down the backend server (removes the event as a side-effect)
-	 */
-	proxyd_downserver(be);
-	return NULL;
-    }
-    else {
-	/* it will timeout in IDLE_TIMEOUT seconds from now */
-	ev->mark = time(NULL) + IDLE_TIMEOUT;
-	return ev;
-    }
-}
-
-/* return the connection to the server */
-struct backend *proxyd_findserver(const char *server)
-{
-    int i = 0;
-    struct backend *ret = NULL;
-
-    while (backend_cached && backend_cached[i]) {
-	if (!strcmp(server, backend_cached[i]->hostname)) {
-	    ret = backend_cached[i];
-	    /* ping/noop the server */
-	    if ((ret->sock != -1) && backend_ping(ret)) {
-		backend_disconnect(ret);
-	    }
-	    break;
-	}
-	i++;
-    }
-
-    if (!ret || (ret->sock == -1)) {
-	/* need to (re)establish connection to server or create one */
-	ret = backend_connect(ret, server, &protocol[PROTOCOL_NNTP],
-			      nntp_userid ? nntp_userid : "anonymous", NULL);
-	if(!ret) return NULL;
-
-	/* set the id */
-	if (!ret->context) {
-	    ret->context = xmalloc(sizeof(unsigned));
-	    *((unsigned *) ret->context) = i;
-	}
-
-	/* add the timeout */
-	ret->timeout = prot_addwaitevent(nntp_in, time(NULL) + IDLE_TIMEOUT,
-					 backend_timeout, ret);
-    }
-
-    ret->timeout->mark = time(NULL) + IDLE_TIMEOUT;
-
-    /* insert server in list of cached connections */
-    if (!backend_cached[i]) {
-	backend_cached = (struct backend **) 
-	    xrealloc(backend_cached, (i + 2) * sizeof(struct backend *));
-	backend_cached[i] = ret;
-	backend_cached[i + 1] = NULL;
-    }
-
-    return ret;
-}
-
-static void kick_mupdate(void)
-{
-    char buf[2048];
-    struct sockaddr_un srvaddr;
-    int s, r;
-    int len;
-    
-    s = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (s == -1) {
-	syslog(LOG_ERR, "socket: %m");
-	return;
-    }
-
-    strlcpy(buf, config_dir, sizeof(buf));
-    strlcat(buf, FNAME_MUPDATE_TARGET_SOCK, sizeof(buf));
-    memset((char *)&srvaddr, 0, sizeof(srvaddr));
-    srvaddr.sun_family = AF_UNIX;
-    strcpy(srvaddr.sun_path, buf);
-    len = sizeof(srvaddr.sun_family) + strlen(srvaddr.sun_path) + 1;
-
-    r = connect(s, (struct sockaddr *)&srvaddr, len);
-    if (r == -1) {
-	syslog(LOG_ERR, "kick_mupdate: can't connect to target: %m");
-	close(s);
-	return;
-    }
-
-    r = read(s, buf, sizeof(buf));
-    if (r <= 0) {
-	syslog(LOG_ERR, "kick_mupdate: can't read from target: %m");
-	close(s);
-	return;
-    }
-
-    /* if we got here, it's been kicked */
-    close(s);
-    return;
-}
-
 /* proxy mboxlist_lookup; on misses, it asks the listener for this
    machine to make a roundtrip to the master mailbox server to make
    sure it's up to date */
@@ -424,7 +301,7 @@ static int read_response(struct backend *s, int force_notfatal, char **result)
 	/* uh oh */
 	if (s == backend_current && !force_notfatal)
 	    fatal("Lost connection to selected backend", EC_UNAVAILABLE);
-	proxyd_downserver(s);
+	proxy_downserver(s);
 	return IMAP_SERVER_UNAVAILABLE;
     }
 
@@ -443,7 +320,7 @@ static int pipe_to_end_of_response(struct backend *s, int force_notfatal)
 	    /* uh oh */
 	    if (s == backend_current && !force_notfatal)
 		fatal("Lost connection to selected backend", EC_UNAVAILABLE);
-	    proxyd_downserver(s);
+	    proxy_downserver(s);
 	    return IMAP_SERVER_UNAVAILABLE;
 	}
 
@@ -469,7 +346,7 @@ static void nntp_reset(void)
     /* close backend connections */
     i = 0;
     while (backend_cached && backend_cached[i]) {
-	proxyd_downserver(backend_cached[i]);
+	proxy_downserver(backend_cached[i]);
 	free(backend_cached[i]->context);
 	free(backend_cached[i]);
 	i++;
@@ -693,12 +570,6 @@ int service_main(int argc, char **argv, char **envp)
     prot_settimeout(nntp_in, timeout*60);
     prot_setflushonread(nntp_in, nntp_out);
 
-    if (config_mupdate_server) {
-	/* setup the cache */
-	backend_cached = xmalloc(sizeof(struct backend *));
-	backend_cached[0] = NULL;
-    }
-
     /* we were connected on nntps port so we should do 
        TLS negotiation immediatly */
     if (nntps == 1) cmd_starttls(1);
@@ -759,7 +630,7 @@ void shut_down(int code)
     /* close backend connections */
     i = 0;
     while (backend_cached && backend_cached[i]) {
-	proxyd_downserver(backend_cached[i]);
+	proxy_downserver(backend_cached[i]);
 	free(backend_cached[i]->context);
 	free(backend_cached[i]);
 	i++;
@@ -1791,7 +1662,10 @@ static int open_group(char *name, int has_prefix, struct backend **ret,
 
     if (newserver) {
 	/* remote group */
-	backend_next = proxyd_findserver(newserver);
+	backend_next = proxy_findserver(newserver, &protocol[PROTOCOL_NNTP],
+					nntp_userid ? nntp_userid : "anonymous",
+					&backend_cached, &backend_current,
+					NULL, nntp_in);
 	if (!backend_next) return IMAP_SERVER_UNAVAILABLE;
 
 	*ret = backend_next;
@@ -2325,7 +2199,9 @@ void list_proxy(char *server, void *data, void *rock)
     int r;
     char *result;
 
-    be = proxyd_findserver(server);
+    be = proxy_findserver(server, &protocol[PROTOCOL_NNTP],
+			  nntp_userid ? nntp_userid : "anonymous",
+			  &backend_cached, &backend_current, NULL, nntp_in);
     if (!be) return;
 
     prot_printf(be->out, "LIST %s %s\r\n", erock->cmd, erock->wild);
@@ -3084,7 +2960,10 @@ static int deliver(message_data_t *msg)
 	    unsigned id;
 	    char buf[4096];
 
-	    be = proxyd_findserver(server);
+	    be = proxy_findserver(server, &protocol[PROTOCOL_NNTP],
+				  nntp_userid ? nntp_userid : "anonymous",
+				  &backend_cached, &backend_current,
+				  NULL, nntp_in);
 	    if (!be) return IMAP_SERVER_UNAVAILABLE;
 
 	    /* check if we've already sent to this backend

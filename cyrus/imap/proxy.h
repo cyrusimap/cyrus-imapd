@@ -1,5 +1,5 @@
 /*
- * imap_proxy.h - IMAP proxy support functions
+ * proxy.h - proxy support functions
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,38 +39,24 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.h,v 1.1.2.4 2004/02/18 19:08:46 ken3 Exp $
+ * $Id: proxy.h,v 1.1.2.1 2004/02/18 19:08:52 ken3 Exp $
  */
 
-#ifndef _IMAP_PROXY_H
-#define _IMAP_PROXY_H
+#ifndef _PROXY_H
+#define _PROXY_H
 
-#include "annotate.h"
 #include "backend.h"
+#include "protocol.h"
+#include "prot.h"
 
-enum {
-    PROXY_NOCONNECTION = -1,
-    PROXY_OK = 0,
-    PROXY_NO = 1,
-    PROXY_BAD = 2
-};
+void proxy_downserver(struct backend *s);
 
-void proxy_gentag(char *tag, size_t len);
+struct backend *
+proxy_findserver(const char *server, struct protocol_t *prot,
+		 const char *userid, struct backend ***cache,
+		 struct backend **current, struct backend **inbox,
+		 struct protstream *clientin);
 
-struct backend *proxy_findinboxserver(void);
+void kick_mupdate(void);
 
-int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal);
-int pipe_including_tag(struct backend *s, const char *tag, int force_notfatal);
-int pipe_command(struct backend *s, int optimistic_literal);
-int pipe_lsub(struct backend *s, const char *tag,
-	      int force_notfatal, int for_find);
-
-void proxy_copy(const char *tag, char *sequence, char *name, int usinguid,
-		struct backend *s);
-
-int annotate_fetch_proxy(const char *server, const char *mbox_pat,
-			 struct strlist *entry_pat,
-			 struct strlist *attribute_pat);
-int annotate_store_proxy(const char *server, const char *mbox_pat,
-			 struct entryattlist *entryatts);
-#endif /* _IMAP_PROXY_H */
+#endif /* _PROXY_H */

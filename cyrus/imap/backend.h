@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.7.2.4 2004/02/16 21:20:32 ken3 Exp $ */
+/* $Id: backend.h,v 1.7.2.5 2004/02/18 19:08:45 ken3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -64,8 +64,10 @@ struct backend {
     /* service-specific context */
     void *context;
 
-    /* only used by proxyd and nntpd */
-    struct prot_waitevent *timeout;
+    /* only used by imapd and nntpd */
+    struct protstream *clientin; /* input stream from client to proxy */
+    struct backend **current, **inbox; /* pointers to current/inbox be ptrs */
+    struct prot_waitevent *timeout; /* event for idle timeout */
 
     sasl_conn_t *saslconn;
 #ifdef HAVE_SSL

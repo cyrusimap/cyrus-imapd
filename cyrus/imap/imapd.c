@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.16 2004/02/16 21:20:33 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.17 2004/02/18 19:08:46 ken3 Exp $ */
 
 #include <config.h>
 
@@ -74,6 +74,7 @@
 #include "idle.h"
 #include "global.h"
 #include "imap_err.h"
+#include "proxy.h"
 #include "imap_proxy.h"
 #include "imapd.h"
 #include "imapurl.h"
@@ -141,7 +142,7 @@ struct protstream *imapd_out = NULL;
 struct protstream *imapd_in = NULL;
 static char imapd_clienthost[NI_MAXHOST*2+1] = "[local]";
 static int imapd_logfd = -1;
-char *imapd_userid;
+char *imapd_userid = NULL, *proxy_userid = NULL;
 struct auth_state *imapd_authstate = 0;
 static int imapd_userisadmin = 0;
 static int imapd_userisproxyadmin = 0;
@@ -439,6 +440,10 @@ static void imapd_reset(void)
 	free(imapd_userid);
 	imapd_userid = NULL;
     }
+    if (proxy_userid != NULL) {
+	free(proxy_userid);
+	proxy_userid = NULL;
+    }
     if (imapd_authstate) {
 	auth_freestate(imapd_authstate);
 	imapd_authstate = NULL;
@@ -626,12 +631,6 @@ int service_main(int argc __attribute__((unused)),
     if (timeout < 30) timeout = 30;
     prot_settimeout(imapd_in, timeout*60);
     prot_setflushonread(imapd_in, imapd_out);
-
-    if (config_mupdate_server) {
-	/* setup the backend cache */
-	backend_cached = xmalloc(sizeof(struct backend *));
-	backend_cached[0] = NULL;
-    }
 
     /* we were connected on imaps port so we should do 
        TLS negotiation immediately */
@@ -1782,6 +1781,9 @@ void cmd_login(char *tag, char *user)
 	fatal(error_message(r), EC_CONFIG);
     }
 
+    /* Make a copy of the external userid for use in proxying */
+    proxy_userid = xstrdup(imapd_userid);
+
     /* Translate any separators in userid */
     mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid,
 				config_virtdomains ?
@@ -1905,6 +1907,9 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
 	syslog(LOG_ERR, error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
+
+    /* Make a copy of the external userid for use in proxying */
+    proxy_userid = xstrdup(imapd_userid);
 
     /* Translate any separators in userid */
     mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid,
@@ -2383,7 +2388,9 @@ void cmd_append(char *tag, char *name)
 	    return;
 	}
 
-	s = proxy_findserver(newserver);
+	s = proxy_findserver(newserver, &protocol[PROTOCOL_IMAP],
+			     proxy_userid, &backend_cached,
+			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
 	if (!r) {
@@ -2660,7 +2667,10 @@ void cmd_select(char *tag, char *cmd, char *name)
 	    return;
 	}
 
-	backend_next = proxy_findserver(newserver);
+	backend_next = proxy_findserver(newserver, &protocol[PROTOCOL_IMAP],
+					proxy_userid, &backend_cached,
+					&backend_current, &backend_inbox,
+					imapd_in);
 	if (!backend_next) r = IMAP_SERVER_UNAVAILABLE;
 
 	if (backend_current && backend_current != backend_next) {
@@ -3802,7 +3812,9 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	   (remove when we move to a unified environment) */
 	struct backend *s = NULL;
 
-	s = proxy_findserver(server);
+	s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+			     proxy_userid, &backend_cached,
+			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) {
 	    r = IMAP_SERVER_UNAVAILABLE;
 	    goto done;
@@ -3837,7 +3849,9 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 
 	index_check(imapd_mailbox, usinguid, 0);
 
-	s = proxy_findserver(server);
+	s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+			     proxy_userid, &backend_cached,
+			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
 	else if (!CAPA(s, CAPA_MULTIAPPEND)) {
 	    /* we need MULTIAPPEND for atomicity */
@@ -4008,7 +4022,9 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	    if (partition) *partition++ = '\0';
 	    if (guessedpart) partition = NULL;
 
-	    s = proxy_findserver(server);
+	    s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+				 proxy_userid, &backend_cached,
+				 &backend_current, &backend_inbox, imapd_in);
 	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
 	    if (!r) {
@@ -4142,7 +4158,9 @@ void cmd_delete(char *tag, char *name, int localonly)
 	    return;
 	}
 
-	s = proxy_findserver(server);
+	s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+			     proxy_userid, &backend_cached,
+			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
 	if (!r) {
@@ -4324,7 +4342,9 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	struct backend *s = NULL;
 	int res;
 
-	s = proxy_findserver(server);
+	s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+			     proxy_userid, &backend_cached,
+			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
 	/* xxx  start of separate proxy-only code
@@ -5226,7 +5246,9 @@ void cmd_setacl(char *tag, const char *name,
 	struct backend *s = NULL;
 	int res;
 
-	s = proxy_findserver(server);
+	s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+			     proxy_userid, &backend_cached,
+			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
 	if (!r && imapd_userisadmin && supports_referrals) {
@@ -5417,7 +5439,9 @@ void cmd_getquotaroot(const char *tag, const char *name)
 	    imapd_refer(tag, server, name);
 	    return;
 	} else {
-	    s = proxy_findserver(server);
+	    s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+				 proxy_userid, &backend_cached,
+				 &backend_current, &backend_inbox, imapd_in);
 
 	    if (s) {
 		prot_printf(s->out, "%s Getquotaroot {%d+}\r\n%s\r\n",
@@ -5749,7 +5773,9 @@ void cmd_status(char *tag, char *name)
 	    return;
 	}
 
-	s = proxy_findserver(server);
+	s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+			     proxy_userid, &backend_cached,
+			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
 	if (!r) {
 	    prot_printf(s->out, "%s Status {%d+}\r\n%s ", tag,

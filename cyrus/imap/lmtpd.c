@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.9 2004/02/16 21:20:40 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.10 2004/02/18 19:08:51 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -211,10 +211,6 @@ int service_init(int argc __attribute__((unused)),
 	syslog(LOG_ERR, error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
-
-    /* setup the cache */
-    backend_cached = xmalloc(sizeof(struct backend *));
-    backend_cached[0] = NULL;
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
@@ -659,7 +655,7 @@ void shut_down(int code)
     /* close backend connections */
     i = 0;
     while (backend_cached && backend_cached[i]) {
-	backend_disconnect(backend_cached[i]);
+	proxy_downserver(backend_cached[i]);
 	free(backend_cached[i]);
 	i++;
     }

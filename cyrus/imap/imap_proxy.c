@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.5 2004/02/16 21:20:32 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.6 2004/02/18 19:08:45 ken3 Exp $
  */
 
 #include <config.h>
@@ -56,6 +56,7 @@
 #include "global.h"
 #include "imap_err.h"
 #include "imap_proxy.h"
+#include "proxy.h"
 #include "mboxname.h"
 #include "mupdate-client.h"
 #include "prot.h"
@@ -64,7 +65,7 @@
 extern unsigned int proxy_cmdcnt;
 extern struct protstream *imapd_in, *imapd_out;
 extern struct backend *backend_inbox, *backend_current, **backend_cached;
-extern char *imapd_userid;
+extern char *imapd_userid, *proxy_userid;
 extern struct namespace imapd_namespace;
 
 #define IDLE_TIMEOUT (5 * 60)
@@ -72,94 +73,6 @@ extern struct namespace imapd_namespace;
 void proxy_gentag(char *tag, size_t len)
 {
     snprintf(tag, len, "PROXY%d", proxy_cmdcnt++);
-}
-
-void proxy_downserver(struct backend *s)
-{
-    if (!s || !s->timeout) {
-	/* already disconnected */
-	return;
-    }
-
-    /* need to logout of server */
-    backend_disconnect(s);
-
-    if (s == backend_inbox) backend_inbox = NULL;
-    if (s == backend_current) backend_current = NULL;
-
-    /* remove the timeout */
-    prot_removewaitevent(imapd_in, s->timeout);
-    s->timeout = NULL;
-}
-
-static struct prot_waitevent * 
-backend_timeout(struct protstream *s __attribute__((unused)),
-		struct prot_waitevent *ev, void *rock)
-{
-    struct backend *be = (struct backend *) rock;
-
-    if (be != backend_current) {
-	/* server is not our current server, and idle too long.
-	 * down the backend server (removes the event as a side-effect)
-	 */
-	proxy_downserver(be);
-	return NULL;
-    }
-    else {
-	/* it will timeout in IDLE_TIMEOUT seconds from now */
-	ev->mark = time(NULL) + IDLE_TIMEOUT;
-	return ev;
-    }
-}
-
-/* return the connection to the server */
-struct backend *proxy_findserver(const char *server)
-{
-    int i = 0;
-    struct backend *ret = NULL;
-
-    while (backend_cached && backend_cached[i]) {
-	if (!strcmp(server, backend_cached[i]->hostname)) {
-	    ret = backend_cached[i];
-	    /* ping/noop the server */
-	    if ((ret->sock != -1) && backend_ping(ret)) {
-		backend_disconnect(ret);
-	    }
-	    break;
-	}
-	i++;
-    }
-
-    if (!ret || (ret->sock == -1)) {
-	char authid[MAX_MAILBOX_NAME+1];
-
-	/* Translate any separators in userid for AUTH to backend */
-	strlcpy(authid, imapd_userid, sizeof(authid));
-        mboxname_hiersep_toexternal(&imapd_namespace, authid,
-				    config_virtdomains ?
-				    strcspn(authid, "@") : 0);
-
-	/* need to (re)establish connection to server or create one */
-	ret = backend_connect(ret, server, &protocol[PROTOCOL_IMAP],
-			      authid, NULL);
-	if(!ret) return NULL;
-
-	/* add the timeout */
-	ret->timeout = prot_addwaitevent(imapd_in, time(NULL) + IDLE_TIMEOUT,
-					 backend_timeout, ret);
-    }
-
-    ret->timeout->mark = time(NULL) + IDLE_TIMEOUT;
-
-    /* insert server in list of cached connections */
-    if (!backend_cached[i]) {
-	backend_cached = (struct backend **) 
-	    xrealloc(backend_cached, (i + 2) * sizeof(struct backend *));
-	backend_cached[i] = ret;
-	backend_cached[i + 1] = NULL;
-    }
-
-    return ret;
 }
 
 struct backend *proxy_findinboxserver(void)
@@ -175,7 +88,9 @@ struct backend *proxy_findinboxserver(void)
     if(!r) {
 	r = mlookup(NULL, NULL, inbox, &mbtype, NULL, &server, NULL, NULL);
 	if (!r && (mbtype & MBTYPE_REMOTE)) {
-	    s = proxy_findserver(server);
+	    s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+				 proxy_userid, &backend_cached,
+				 &backend_current, &backend_inbox, imapd_in);
 	}
     }
     
@@ -1180,7 +1095,9 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
     
     assert(server && mbox_pat && entry_pat && attribute_pat);
     
-    be = proxy_findserver(server);    
+    be = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+			  proxy_userid, &backend_cached,
+			  &backend_current, &backend_inbox, imapd_in);
     if (!be) return IMAP_SERVER_UNAVAILABLE;
 
     /* Send command to remote */
@@ -1214,7 +1131,9 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
     
     assert(server && mbox_pat && entryatts);
     
-    be = proxy_findserver(server);    
+    be = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+			  proxy_userid, &backend_cached,
+			  &backend_current, &backend_inbox, imapd_in);
     if (!be) return IMAP_SERVER_UNAVAILABLE;
 
     /* Send command to remote */
@@ -1238,40 +1157,4 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
     pipe_until_tag(be, mytag, 0);
 
     return 0;
-}
-
-void kick_mupdate(void)
-{
-    char buf[2048];
-    struct sockaddr_un srvaddr;
-    int s, r;
-    int len;
-    
-    s = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (s == -1) {
-	syslog(LOG_ERR, "socket: %m");
-	return;
-    }
-
-    strlcpy(buf, config_dir, sizeof(buf));
-    strlcat(buf, FNAME_MUPDATE_TARGET_SOCK, sizeof(buf));
-    memset((char *)&srvaddr, 0, sizeof(srvaddr));
-    srvaddr.sun_family = AF_UNIX;
-    strcpy(srvaddr.sun_path, buf);
-    len = sizeof(srvaddr.sun_family) + strlen(srvaddr.sun_path) + 1;
-
-    r = connect(s, (struct sockaddr *)&srvaddr, len);
-    if (r == -1) {
-	syslog(LOG_ERR, "kick_mupdate: can't connect to target: %m");
-	goto done;
-    }
-
-    r = read(s, buf, sizeof(buf));
-    if (r <= 0) {
-	syslog(LOG_ERR, "kick_mupdate: can't read from target: %m");
-    }
-
- done:
-    close(s);
-    return;
 }
