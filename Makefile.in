@@ -27,6 +27,7 @@ srcdir = @srcdir@
 VPATH = @srcdir@
 
 SHELL = /bin/sh
+@SET_MAKE@
 
 all::
 	@for d in  $(SUBDIRS); \
