@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.93 2000/02/11 06:46:05 leg Exp $
+# $Id: Makefile.in,v 1.94 2000/02/15 00:34:47 leg Exp $
 # 
 # @configure_input@
 #
@@ -88,7 +88,7 @@ IMAPDOBJS= pushstats.o imapd.o index.o tls.o
 
 PROGS = collectnews syncnews imapd pop3d \
 	arbitron fud reconstruct quota dump_deliverdb mbpath \
-        ipurge listenstats
+        ipurge
 SUIDPROGS = deliver
 
 
@@ -107,8 +107,8 @@ install:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
 	$<
 
-pushstats.c pushstats.h: pushstats.snmp generate_pushstats.pl
-	$(srcdir)/generate_pushstats.pl $(srcdir)/pushstats.snmp
+pushstats.c pushstats.h: pushstats.snmp
+	$(srcdir)/../snmp/snmpgen $(srcdir)/pushstats.snmp
 
 collectnews: collectnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o collectnews collectnews.o libimap.a $(DEPLIBS) \
