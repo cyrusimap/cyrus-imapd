@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.16 2004/04/08 21:13:03 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.17 2004/04/17 01:52:46 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -309,10 +309,86 @@ usage()
     exit(EC_USAGE);
 }
 
+struct fuzz_rock {
+    char *mboxname;
+    size_t prefixlen;
+    char *pat;
+    size_t patlen;
+    size_t matchlen;
+};
+
+#define WSP_CHARS "- _"
+
+static int fuzzy_match_cb(char *name,
+			  int matchlen __attribute__((unused)),
+			  int maycreate __attribute__((unused)),
+			  void *rock)
+{
+    struct fuzz_rock *frock = (struct fuzz_rock *) rock;
+    int i;
+
+    for (i = frock->prefixlen; name[i] && frock->pat[i]; i++) {
+	if (tolower((int) name[i]) != frock->pat[i] &&
+	    !(strchr(WSP_CHARS, name[i]) &&
+	      strchr(WSP_CHARS, frock->pat[i]))) {
+	    break;
+	}
+    }
+
+    /* see if we have a [partial] match */
+    if (!name[i] && (!frock->pat[i] || frock->pat[i] == '.') &&
+	i > frock->matchlen) {
+	frock->matchlen = i;
+	strlcpy(frock->mboxname, name, i+1);
+	if (i == frock->patlen) return CYRUSDB_DONE;
+    }
+
+    return 0;
+}
+
+static int fuzzy_match(char *mboxname)
+{
+    char name[MAX_MAILBOX_NAME+1], prefix[MAX_MAILBOX_NAME+1], *p = NULL;
+    size_t prefixlen;
+    struct fuzz_rock frock;
+
+    /* make a working copy */
+    strlcpy(name, mboxname, sizeof(name));
+
+    /* check to see if this is an personal mailbox */
+    if (!strncmp(name, "user.", 5) || (p = strstr(name, "!user."))) {
+	p = p ? p + 6 : name + 5;
+
+	/* check to see if this is an INBOX (no '.' after the userid) */
+	if (!(p = strchr(p, '.'))) return 0;
+    }
+
+    if (p) p++;  /* skip the trailing '.' */
+    else p = name;
+
+    /* copy the prefix */
+    prefixlen = p - name;
+    strlcpy(prefix, name, prefixlen+1);
+
+    /* normalize the rest of the pattern to lowercase */
+    lcase(p);
+
+    frock.mboxname = mboxname;
+    frock.prefixlen = prefixlen;
+    frock.pat = name;
+    frock.patlen = strlen(name);
+    frock.matchlen = 0;
+
+    strlcat(prefix, "*", sizeof(prefix));
+    mboxlist_findall(NULL, prefix, 0, NULL, NULL, fuzzy_match_cb, &frock);
+
+    return frock.matchlen;
+}
+
 /* proxy mboxlist_lookup; on misses, it asks the listener for this
    machine to make a roundtrip to the master mailbox server to make
    sure it's up to date */
-static int mlookup(const char *name, char **server, char **aclp, void *tid)
+static int mlookup(char *name, char **server, char **aclp, void *tid)
 {
     int r, type;
 
@@ -342,6 +418,11 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
 	r = mboxlist_detail(name, &type, NULL, NULL, server, aclp, tid);
 	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
 	    kick_mupdate();
+	    r = mboxlist_detail(name, &type, NULL, NULL, server, aclp, tid);
+	}
+	if (r == IMAP_MAILBOX_NONEXISTENT &&
+	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
+	    fuzzy_match(name)) {
 	    r = mboxlist_detail(name, &type, NULL, NULL, server, aclp, tid);
 	}
     }
@@ -632,6 +713,16 @@ int deliver(message_data_t *msgdata, char *authuser,
 		    strlcat(namebuf, ".", sizeof(namebuf));
 		    strlcat(namebuf, mailbox, sizeof(namebuf));
 		
+		    r = deliver_mailbox(msgdata->data, stage,  msgdata->size, 
+					NULL, 0, authuser, authstate,
+					msgdata->id, userbuf, notifyheader,
+					namebuf, quotaoverride, 0);
+		}
+
+		if (r == IMAP_MAILBOX_NONEXISTENT && mailbox &&
+		    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
+		    fuzzy_match(namebuf)) {
+		    /* try delivery to a fuzzy matched mailbox */
 		    r = deliver_mailbox(msgdata->data, stage,  msgdata->size, 
 					NULL, 0, authuser, authstate,
 					msgdata->id, userbuf, notifyheader,
