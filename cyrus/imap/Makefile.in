@@ -1,6 +1,15 @@
+# Authentication (login) routines.  Two choices
+#
+# Kerberos.  Requires auth_krb.o and kerberos.o in libcyrus.a
+# Also requires linking against Kerberos libraries
 LOGIN=login_krb.o
-SEEN=seen_local.o
 AUTHLIBS=/usr/local/lib/libkrb.a /usr/local/lib/libdes.a
+#
+# Unix passwd file.  Requires auth_unix.o in libcyrus.a
+#LOGIN=login_unix.o
+
+# \Seen state database.  Only one choice for now:
+SEEN=seen_local.o
 
 COMPILE_ET=compile_et
 COM_ERR=/usr/local/lib/libcom_err.a
