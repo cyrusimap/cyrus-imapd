@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.h,v 1.20 2002/05/25 19:57:47 leg Exp $ */
+/* $Id: cyrusdb.h,v 1.21 2002/07/24 18:05:18 rjs3 Exp $ */
 
 #ifndef INCLUDED_CYRUSDB_H
 #define INCLUDED_CYRUSDB_H
@@ -151,7 +151,11 @@ struct cyrusdb_backend {
 		  struct txn **tid,
 		  int force); /* 1 = ignore not found errors */
     
+    /* Commit the transaction.  When commit() returns, the tid will no longer
+     * be valid, regardless of if the commit succeeded or failed */
     int (*commit)(struct db *db, struct txn *tid);
+
+    /* Abort the transaction and invalidate the tid */
     int (*abort)(struct db *db, struct txn *tid);
 
     int (*dump)(struct db *db, int detail);
