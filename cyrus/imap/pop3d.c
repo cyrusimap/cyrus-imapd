@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122 2002/06/03 18:22:27 rjs3 Exp $
+ * $Id: pop3d.c,v 1.123 2002/07/20 01:08:35 ken3 Exp $
  */
 #include <config.h>
 
@@ -236,6 +236,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
+    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
