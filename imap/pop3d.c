@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.105 2001/08/12 03:31:06 ken3 Exp $
+ * $Id: pop3d.c,v 1.106 2001/08/13 17:11:57 ken3 Exp $
  */
 #include <config.h>
 
@@ -526,15 +526,13 @@ static void cmdloop(void)
 	else if (!strcmp(inputbuf, "stls") && starttls_enabled()) {
 	    if (arg) {
 		prot_printf(popd_out,
-			    "-ERR STLS doesn't take any arguements\r\n");
+			    "-ERR STLS doesn't take any arguments\r\n");
 	    } else {
 		cmd_starttls(0);
 	    }
 	}
 	else if (!popd_mailbox) {
-	    if (!strcmp(inputbuf, "user") &&
-		(kflag || popd_starttls_done ||
-		 config_getswitch("allowplaintext", 1))) {
+	    if (!strcmp(inputbuf, "user")) {
 		if (!arg) {
 		    prot_printf(popd_out, "-ERR Missing argument\r\n");
 		}
@@ -542,9 +540,7 @@ static void cmdloop(void)
 		    cmd_user(arg);
 		}
 	    }
-	    else if (!strcmp(inputbuf, "pass") &&
-		     (kflag || popd_starttls_done ||
-		      config_getswitch("allowplaintext", 1))) {
+	    else if (!strcmp(inputbuf, "pass")) {
 		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 		else cmd_pass(arg);
 	    }
@@ -930,6 +926,14 @@ char *user;
     char buf[1024];
     char *p;
     char shutdownfilename[1024];
+
+    /* possibly disallow USER */
+    if (!(kflag || popd_starttls_done ||
+	  config_getswitch("allowplaintext", 1))) {
+	prot_printf(popd_out,
+		    "-ERR USER command only available under a layer\r\n");
+	return;
+    }
 
     if (popd_userid) {
 	prot_printf(popd_out, "-ERR Must give PASS command\r\n");
