@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.51 2002/02/05 19:10:33 leg Exp $
+ * $Id: lmtpengine.c,v 1.52 2002/02/06 16:38:18 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -873,7 +873,7 @@ static int fill_cache(struct protstream *fin, FILE *fout, message_data_t *m)
  * returns 0 on success, imap error code on failure
  */
 static int savemsg(struct clientdata *cd,
-		   const char *addheaders,
+		   const struct lmtp_func *func,
 		   message_data_t *m)
 {
     FILE *f;
@@ -900,7 +900,7 @@ static int savemsg(struct clientdata *cd,
 
     prot_printf(cd->pout, "354 go ahead\r\n");
 
-    if (m->return_path) { /* add the return path */
+    if (m->return_path && func->addretpath) { /* add the return path */
 	char *rpath = m->return_path;
 	const char *hostname = 0;
 
@@ -942,8 +942,8 @@ static int savemsg(struct clientdata *cd,
     fprintf(f, "; %s\r\n", datestr);
 
     /* add any requested headers */
-    if (addheaders) {
-	fputs(addheaders, f);
+    if (func->addheaders) {
+	fputs(func->addheaders, f);
     }
 
     /* fill the cache */
@@ -1408,7 +1408,7 @@ void lmtpmode(struct lmtp_func *func,
 		    continue;
 		}
 		/* copy message from input to msg structure */
-		r = savemsg(&cd, func->addheaders, msg);
+		r = savemsg(&cd, func, msg);
 		if (r) continue;
 
 		if (msg->size > max_msgsize) {

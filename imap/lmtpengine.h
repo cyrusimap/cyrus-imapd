@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.9 2002/01/29 20:11:53 leg Exp $
+ * $Id: lmtpengine.h,v 1.10 2002/02/06 16:38:18 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -112,6 +112,7 @@ struct lmtp_func {
 					   (-1 means don't care about quota) */
 		       struct auth_state *authstate);
     char *addheaders;		/* add these headers to all messages */
+    int addretpath;		/* should i add a return-path header? */
     int preauth;		/* preauth connection? */
 };
 
