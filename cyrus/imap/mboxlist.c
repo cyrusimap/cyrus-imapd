@@ -134,7 +134,7 @@ char **aclp;
     strncpy(name, list_base + offset, namelen);
 
     /* Parse partition name, construct pathname if requested */
-    mboxlist_parseline(offset, len, (char *)0, (unsigned long *)0,
+    mboxlist_parseline(offset, len, (char **)0, (unsigned long *)0,
 		       &partition, &partitionlen, &acl, &acllen);
 
     if (pathp) {
@@ -731,7 +731,7 @@ char *userid;
     iov[num_iov++].iov_len = 1;
     iov[num_iov].iov_base = acl;
     iov[num_iov++].iov_len = strlen(acl);
-    iov[num_iov].iov_base = "\r";
+    iov[num_iov].iov_base = "\n";
     iov[num_iov++].iov_len = 1;
     iov[num_iov].iov_base = list_base + newoffset;
     if (oldoffset < newoffset) {
@@ -1019,10 +1019,9 @@ int (*proc)();
 	while (minmatch >= 0) {
 	    matchlen = glob_test(g, name, namelen, &minmatch);
 	    if (matchlen == -1 ||
-		(userid &&
+		(userid && namelen >= usermboxnamelen &&
 		 strncasecmp(name, usermboxname, usermboxnamelen) == 0 &&
-		 (name[usermboxnamelen] == '\0' ||
-		  name[usermboxnamelen] == '.'))) {
+		 (namelen == usermboxnamelen || name[usermboxnamelen] == '.'))) {
 		break;
 	    }
 
@@ -1088,11 +1087,12 @@ int (*proc)();
     int r;
     unsigned long offset, len, prefixlen, listlinelen;
     char *name, *endname, *p;
+    unsigned long namelen;
     long matchlen, minmatch;
     char *acl;
 
     if (r = mboxlist_opensubs(userid, 0, &subsfd, &subs_base, &subs_size,
-			      &subsfname, (char *) 0)) {
+			      &subsfname, (char **) 0)) {
 	return r;
     }
 
@@ -1148,15 +1148,16 @@ int (*proc)();
 	    }
 
 	    len = p - name + 1;
+	    namelen = endname - name;
 
 	    if (strncasecmp(name, usermboxname, usermboxnamelen)) break;
 	    minmatch = 0;
 	    while (minmatch >= 0) {
-		matchlen = glob_test(g, name, endname - name, &minmatch);
+		matchlen = glob_test(g, name, namelen, &minmatch);
 		if (matchlen == -1) break;
 
-		memcpy(namebuf, name, endname - name);
-		namebuf[endname - name] = '\0';
+		memcpy(namebuf, name, namelen);
+		namebuf[namelen] = '\0';
 
 		(void) bsearch_mem(namebuf, 0, list_base, list_size, 0,
 				   &listlinelen);
@@ -1194,21 +1195,21 @@ int (*proc)();
 	}
 
 	len = p - name + 1;
+	namelen = endname - name;
 
 	if (strncasecmp(name, pattern, prefixlen)) break;
 	minmatch = 0;
 	while (minmatch >= 0) {
-	    matchlen = glob_test(g, name, endname - name, &minmatch);
+	    matchlen = glob_test(g, name, namelen, &minmatch);
 	    if (matchlen == -1 ||
-		(userid &&
+		(userid && namelen >= usermboxnamelen &&
 		 strncasecmp(name, usermboxname, usermboxnamelen) == 0 &&
-		 (name[usermboxnamelen] == '\0' ||
-		  name[usermboxnamelen] == '.'))) {
+		 (namelen == usermboxnamelen || name[usermboxnamelen] == '.'))) {
 		break;
 	    }
 
-	    memcpy(namebuf, name, endname - name);
-	    namebuf[endname - name] = '\0';
+	    memcpy(namebuf, name, namelen);
+	    namebuf[namelen] = '\0';
 
 	    r = mboxlist_lookup(namebuf, (char **)0, &acl);
 	    if (r == 0) {
@@ -1225,6 +1226,7 @@ int (*proc)();
 		break;
 	    }
 	}
+	offset += len;
     }
 	
     mboxlist_closesubs(subsfd, subs_base, subs_size);
@@ -1785,7 +1787,8 @@ unsigned long *acllenp;
 
     if (namelenp) *namelenp = fieldlen;
     p++;
-    len -= fieldlen+1;
+    len -= fieldlen + 1;
+    line += fieldlen + 1;
 
     if (partitionp) *partitionp = line;
     p = memchr(line, '\t', len);
@@ -1795,7 +1798,8 @@ unsigned long *acllenp;
     fieldlen = p - line;
     if (partitionlenp) *partitionlenp = fieldlen;
     p++;
-    len -= fieldlen+1;
+    len -= fieldlen + 1;
+    line += fieldlen + 1;
 
     if (!len || line[len-1] != '\n') {
 	mboxlist_badline(line, "no newline terminator");
