@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.86 2003/12/11 22:25:26 rjs3 Exp $ */
+/* $Id: master.c,v 1.87 2003/12/18 16:29:24 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -2020,7 +2020,8 @@ int main(int argc, char **argv)
 		process_msg(&Services[i], &msg);
 	    }
 
-	    if (Services[i].nactive < Services[i].max_workers) {
+	    if (Services[i].exec &&
+		Services[i].nactive < Services[i].max_workers) {
 		/* bring us up to desired_workers */
 		for (j = Services[i].ready_workers;
 		     j < Services[i].desired_workers; 
