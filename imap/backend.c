@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.30 2004/07/06 18:17:50 rjs3 Exp $ */
+/* $Id: backend.c,v 1.31 2004/07/16 14:53:24 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -285,7 +285,7 @@ struct backend *backend_connect(struct backend *ret, const char *server,
     }
 
     if (server[0] == '/') { /* unix socket */
-	res0 = (struct addrinfo *) xmalloc(sizeof(struct addrinfo));
+	res0 = &hints;
 	memset(res0, 0, sizeof(struct addrinfo));
 	res0->ai_family = PF_UNIX;
 	res0->ai_socktype = SOCK_STREAM;
@@ -345,14 +345,16 @@ struct backend *backend_connect(struct backend *ret, const char *server,
     signal(SIGALRM, SIG_IGN);
     
     if (sock < 0) {
-	freeaddrinfo(res0);
+	if (res0 != &hints)
+	    freeaddrinfo(res0);
 	syslog(LOG_ERR, "connect(%s) failed: %m", server);
         close(sock);
 	free(ret);
 	return NULL;
     }
     memcpy(&ret->addr, res->ai_addr, res->ai_addrlen);
-    freeaddrinfo(res0);    
+    if (res0 != &hints)
+	freeaddrinfo(res0);
 
     ret->in = prot_new(sock, 0);
     ret->out = prot_new(sock, 1);
