@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.45 2004/01/12 19:13:49 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.46 2004/02/09 18:22:13 rjs3 Exp $
 
 AC_DEFUN([SASL_GSSAPI_CHK],[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -271,6 +271,11 @@ AC_ARG_WITH(staticsasl,
 
 	if test ${with_staticsasl} != "no"; then
 	  if test -d ${with_staticsasl}; then
+	    if test -d ${with_staticsasl}/lib64 ; then
+	      ac_cv_sasl_where_lib=${with_staticsasl}/lib64
+	    else
+	      ac_cv_sasl_where_lib=${with_staticsasl}/lib
+	    fi
 	    ac_cv_sasl_where_lib=${with_staticsasl}/lib
 	    ac_cv_sasl_where_inc=${with_staticsasl}/include
 
@@ -284,14 +289,17 @@ AC_ARG_WITH(staticsasl,
 
 	  AC_CHECK_HEADER(sasl/sasl.h, [
 	    AC_CHECK_HEADER(sasl/saslutil.h, [
-	     if test -r ${with_staticsasl}/lib/libsasl2.a; then
-		ac_cv_found_sasl=yes
-		AC_MSG_CHECKING(for static libsasl)
-		LIB_SASL="$LIB_SASL ${with_staticsasl}/lib/libsasl2.a"
-	     else
-	        AC_MSG_CHECKING(for static libsasl)
-		AC_ERROR([Could not find ${with_staticsasl}/lib/libsasl2.a])
-	     fi
+	     for i42 in lib64 lib; do
+	        if test -r ${with_staticsasl}/$i42/libsasl2.a; then
+		  ac_cv_found_sasl=yes
+		  AC_MSG_CHECKING(for static libsasl)
+		  LIB_SASL="$LIB_SASL ${with_staticsasl}/$i42/libsasl2.a"
+		fi
+	     done
+             if test ! "$ac_cv_found_sasl" = "yes"; then
+	          AC_MSG_CHECKING(for static libsasl)
+		  AC_ERROR([Could not find ${with_staticsasl}/lib*/libsasl2.a])
+             fi
 	    ])])
 
 	  AC_MSG_RESULT(found)
