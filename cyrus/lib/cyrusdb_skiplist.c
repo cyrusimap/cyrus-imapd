@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.11 2002/01/28 19:24:19 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.12 2002/01/28 20:16:49 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -87,6 +87,7 @@
 /* 
    header "skiplist file\0\0\0"
    version (4 bytes)
+   version_minor (4 bytes)
    maxlevel (4 bytes)
    curlevel (4 bytes)
    listsize (4 bytes)
