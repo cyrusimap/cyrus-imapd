@@ -16,7 +16,7 @@ imapd \- IMAP server process
 .B imapd
 .SH DESCRIPTION
 .I Imapd
-is an IMAP4 server.
+is an IMAP4rev1 server.
 It accepts commands on its standard input and responds on its standard output.
 It is normally invoked by
 .IR inetd (8)
@@ -34,7 +34,15 @@ is created under the directory specified in the
 configuration option, then
 .I imapd
 will shut down the connection, sending the first line contained in the
-file to the client as the reason.
+file to the client as the reason.  New connections are denied.
+.PP
+If the file
+msg/motd
+is created under the directory specified in the
+.I configdirectory
+configuration option, then
+.I imapd
+will send the first line contained in the file to clients upon connect.
 .PP
 If the directory
 .RI log/ user
