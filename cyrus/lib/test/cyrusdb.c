@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../cyrusdb.h"
+#include "../xmalloc.h"
 #include "../exitcodes.h"
 
 #ifdef BACKEND
@@ -10,12 +11,43 @@ struct cyrusdb_backend *DB = &(BACKEND);
 struct cyrusdb_backend *DB = &cyrusdb_flat;
 #endif
 
-#define TRY(s) { r = s; if (r) { printf("%s failed: %d\n", #s, r); exit(1); } }
+#define TRY(s) { r = s; \
+                 if (r) { printf("%s failed: %d\n", #s, r); exit(1); } }
 
 void fatal(const char *msg, int code)
 {
     printf("fatal: %s\n", msg);
     exit(code);
+}
+
+int yes(void *rock,
+	const char *key, int keylen,
+	const char *data, int datalen)
+{
+    return 1;
+}
+
+int appkey(void *rock,
+	   const char *key, int keylen,
+	   const char *data, int datalen)
+{
+    char *r = *(char **) rock;
+    int newlen;
+
+    if (r) {
+	newlen = strlen(r) + keylen + 2;
+	r = xrealloc(r, newlen);
+	strcat(r, " ");
+	strncpy(r + strlen(r), key, keylen);
+	r[newlen-1] = '\0';
+    } else {
+	r = xmalloc(keylen + 1);
+	strncpy(r, key, keylen);
+	r[keylen] = '\0';
+    }
+
+    *(char **)rock = r;
+    return 0;
 }
 
 int main(int argc, char *argv[])
@@ -38,10 +70,11 @@ int main(int argc, char *argv[])
 	    TRY(DB->open(fname, &db));
 
 	    printf("ok\n");
+	} else if (!db) {
+	    TRY(db == NULL);
 	} else if (!strncasecmp(buf, "close", 5)) {
-	    if (db) { /* close it */
-		TRY(DB->close(db));
-	    }
+	    TRY(DB->close(db));
+	    db = NULL;
 	    printf("ok\n");
 	} else if (!strncasecmp(buf, "put ", 4)) {
 	    char *key = buf + 4;
@@ -62,6 +95,24 @@ int main(int argc, char *argv[])
 	    printf("ok {%d} ", datalen);
 	    while (datalen--) printf("%c", *data++);
 	    printf("\n");
+	} else if (!strncasecmp(buf, "list", 4)) {
+	    char *keys = NULL;
+
+	    TRY(DB->foreach(db, NULL, 0, yes, appkey, &keys, NULL));
+	    if (keys) {
+		printf("ok {%d} %s", strlen(keys), keys);
+		free(keys);
+	    } else {
+		printf("ok {0} ");
+	    }
+	    printf("\n");
+	} else if (!strncasecmp(buf, "dump", 4)) {
+	    if (DB->dump) {
+		DB->dump(db, 0);
+		printf("ok\n");
+	    } else {
+		printf("no\n");
+	    }
 	} else {
 	bad:
 	    printf("?syntax error\n");
