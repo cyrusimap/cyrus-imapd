@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.19 2003/03/31 20:32:55 ken3 Exp $ */
+/* $Id: master.c,v 1.67.4.20 2003/04/01 16:18:03 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1499,8 +1499,9 @@ int main(int argc, char **argv)
 	    }
 	    
 	    /* Write PID */
-	    snprintf(buf, sizeof(buf), "%-16d\n", getpid());
+	    snprintf(buf, sizeof(buf), "%lu\n", (unsigned long)getpid());
 	    if(lseek(pidfd, 0, SEEK_SET) == -1 ||
+	       ftruncate(pidfd, 0) == -1 ||
 	       write(pidfd, buf, strlen(buf)) == -1) {
 		int exit_result = EX_OSERR;
 
