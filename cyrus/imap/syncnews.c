@@ -95,7 +95,7 @@ usage()
 compare_group(a, b)
 char **a, **b;
 {
-    return strcasecmp(*a, *b);
+    return strcmp(*a, *b);
 }
 
 /*
