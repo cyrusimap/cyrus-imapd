@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.50 2004/01/26 17:46:57 ken3 Exp $ */
+/* $Id: quota.c,v 1.51 2004/02/26 20:16:31 rjs3 Exp $ */
 
 
 #include <config.h>
@@ -233,11 +233,6 @@ static int find_cb(void *rockp,
 		   const char *key, int keylen,
 		   const char *data, int datalen)
 {
-    int r;
-    unsigned long used;
-    int limit;
-    char *p;
-
     if (!data) return 0;
 
     if (quota_num == quota_alloc) {
