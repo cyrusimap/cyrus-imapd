@@ -78,8 +78,6 @@ sub new {
 			-callback => sub {my %a = @_;
 					  map { $self->{support_referrals} = 1
 						  if /^MAILBOX-REFERRALS$/i;
-					        $self->{support_reconstruct} = 1
-						  if /^X-CYRUS-RECONSTRUCT$/i
 					      }
 					  split(/ /, $a{-text})}});
     $self->send(undef, undef, 'CAPABILITY');
@@ -126,19 +124,12 @@ sub authenticate {
 sub reconstruct {
     my ($self, $mailbox) = @_;
     my $rc;
-    if($self->{support_reconstruct}) {
-      # Advertise our desire for referrals
-      my $msg;
-      ($rc, $msg) = $self->send('', '', 'RECONSTRUCT %s', $mailbox);
-      $self->{error} = $msg;
-      if($rc eq "OK") {
-	$rc = 1;
-      } else {
-	$rc = 0;
-      }
+    my $msg;
+    ($rc, $msg) = $self->send('', '', 'RECONSTRUCT %s', $mailbox);
+    $self->{error} = $msg;
+    if($rc eq "OK") {
+      $rc = 1;
     } else {
-      $self->{error} =
-	"This server does not support the reconstruct operation.";
       $rc = 0;
     }
     return $rc;
