@@ -406,9 +406,9 @@ sub run {
 # (It's not as trivial as run() because it does things expected of standalone
 # programs, as opposed to things expected from within a program.)
 sub shell {
-  my ($server, $port, $authz, $auth, $systemrc, $userrc, $dorc, $mech) =
+  my ($server, $port, $authz, $auth, $systemrc, $userrc, $dorc, $mech, $pw) =
     ('', 143, undef, $ENV{USER} || $ENV{LOGNAME}, '/usr/local/etc/cyradmrc.pl',
-     "$ENV{HOME}/.cyradmrc.pl", 1, undef);
+     "$ENV{HOME}/.cyradmrc.pl", 1, undef, undef);
   GetOptions('user|u=s' => \$auth,
 	     'authz|u=s' => \$authz,
 	     'rc|r!' => \$dorc,
@@ -417,6 +417,7 @@ sub shell {
 	     'server|s=s' => \$server,
 	     'port|p=i' => \$port,
 	     'auth|a=s' => \$mech,
+	     'password|u=s' => \$pw,
 	    );
   if ($server ne '' && @ARGV) {
     die "cyradm: may not specify server both with --server and bare arg\n";
@@ -433,7 +434,8 @@ sub shell {
     $cyradm->addcallback({-trigger => 'EOF',
 			  -callback => \&_cb_eof,
 			  -rock => \$cyradm});
-    $cyradm->authenticate(-authz => $authz, -user => $auth, -mechanism => $mech)
+    $cyradm->authenticate(-authz => $authz, -user => $auth,
+			  -mechanism => $mech, -password => $pw)
       or die "cyradm: cannot authenticate to server with $mech as $auth\n";
   }
   my $fstk = [*STDIN, *STDOUT, *STDERR];

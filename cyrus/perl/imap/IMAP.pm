@@ -201,8 +201,8 @@ sub authenticate {
   $rc = 0;
   if (defined($opts{-mechanism}) && lc($opts{-mechanism}) ne 'login') {
     $rc = $self->_authenticate($opts{-mechanism}, $opts{-service},
-			       $opts{-authz}, $opts{-user}, $opts{-minssf},
-			       $opts{-maxssf});
+			       $opts{-authz}, $opts{-user}, $opts{-password},
+			       $opts{-minssf}, $opts{-maxssf});
   }
   $opts{-mechanism} ||= 'plain';
   if (!$rc && $opts{-mechanism} =~ /(\b|^)(plain|login)($|\b)/i) {

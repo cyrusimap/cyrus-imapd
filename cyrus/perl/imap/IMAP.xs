@@ -354,12 +354,13 @@ PPCODE:
 	imclient_processoneevent(client->imclient);
 
 SV *
-imclient__authenticate(client, mechlist, service, user, auth, minssf, maxssf)
+imclient__authenticate(client, mechlist, service, user, auth, password, minssf, maxssf)
 	Cyrus_IMAP client
 	char* mechlist
 	char* service
 	char* user
 	char* auth
+	char* password
 	int minssf
 	int maxssf
 PREINIT:
@@ -367,9 +368,18 @@ PREINIT:
 CODE:
 	/* If the user parameter is undef, set user to be NULL */
 	if(!SvOK(ST(3))) user = NULL;
+	if(!SvOK(ST(5))) password = NULL;
 
 	client->username = user; /* AuthZid */
 	client->authname = auth; /* Authid */
+
+	if(password) {
+	    if(client->password) safefree(client->password);
+	    client->password =
+		safemalloc(sizeof(sasl_secret_t) + strlen(password));
+	    client->password->len = strlen(password);
+	    strncpy(client->password->data, password, client->password->len);
+	}
 
 	rc = imclient_authenticate(client->imclient, mechlist, service, user,
 				   minssf, maxssf);
