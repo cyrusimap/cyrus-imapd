@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.5 2000/02/03 20:14:24 tmartin Exp $
+ * $Id: parser.c,v 1.6 2000/04/15 19:20:48 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -116,7 +116,14 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
     if (cmd_authenticate(sieved_out, sieved_in, mechanism_name, initial_challenge, &error_msg)==FALSE)
     {
-      goto error;
+	/* free memory */
+	free(mechanism_name);
+	free(initial_challenge);
+	
+	prot_printf(sieved_out, "NO (\"SASL\" \"%s\") \"Authentication error\"\r\n",error_msg);
+	prot_flush(sieved_out);
+
+	return -1;
     }
     
     break;
@@ -333,7 +340,8 @@ static int cmd_logout(struct protstream *sieved_out, struct protstream *sieved_i
 }
 
 static int cmd_authenticate(struct protstream *sieved_out, struct protstream *sieved_in,
-			    mystring_t *mechanism_name, mystring_t *initial_challenge, const char **errmsg)
+			    mystring_t *mechanism_name, mystring_t *initial_challenge, 
+			    const char **errmsg)
 {
 
   int sasl_result;
@@ -436,16 +444,18 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
 
   if (sasl_result!=SASL_OK)
   {
-    *errmsg = (const char *) sasl_errstring(sasl_result,NULL,NULL);
-    if (errstr!=NULL) {
-	syslog(LOG_NOTICE, "badlogin: %s %s %d %s",
-	       sieved_clienthost, mech, sasl_result, errstr);
-    } else { 
-      syslog(LOG_NOTICE, "badlogin: %s %s %s",
-	     sieved_clienthost, mech, 
-	     sasl_errstring(sasl_result, NULL, NULL));
-    }
-    return FALSE;
+      /* convert to user error code */
+      sasl_result = sasl_usererr(sasl_result);
+      *errmsg = (const char *) sasl_errstring(sasl_result,NULL,NULL);
+      if (errstr!=NULL) {
+	  syslog(LOG_NOTICE, "badlogin: %s %s %d %s",
+		 sieved_clienthost, mech, sasl_result, errstr);
+      } else { 
+	  syslog(LOG_NOTICE, "badlogin: %s %s %s",
+		 sieved_clienthost, mech, 
+		 sasl_errstring(sasl_result, NULL, NULL));
+      }
+      return FALSE;
   }
 
   /* get the userid from SASL */
@@ -466,7 +476,7 @@ static int cmd_authenticate(struct protstream *sieved_out, struct protstream *si
   }
 
   /* Yay! authenticated */
-  prot_printf(sieved_out, "OK \"Authenticated!\"\r\n");
+  prot_printf(sieved_out, "OK\r\n");
   syslog(LOG_NOTICE, "login: %s %s %s %s", sieved_clienthost, username,
 	 mech, "User logged in");
 

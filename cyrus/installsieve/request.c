@@ -54,7 +54,7 @@ void parseerror(char *str)
   exit(2);
 }
 
-static int handle_response(int res,int version,struct protstream *pin, mystring_t **errstr)
+int handle_response(int res,int version,struct protstream *pin, mystring_t **errstr)
 {    
   lexstate_t state;
 
@@ -62,11 +62,38 @@ static int handle_response(int res,int version,struct protstream *pin, mystring_
     parseerror("ATOM");
 
   if (res==TOKEN_NO) {
+
       if (yylex(&state, pin)!=' ')
+	  parseerror("expected space\n");
+
+      res = yylex(&state, pin);
+
+      /* additional error response */
+      if (res == '(') {
+	  /* '(' string [SP string] ')' */
+	  
+	  if (yylex(&state, pin)!=STRING)
+	      parseerror("expected string\n");
+
+	  if (strcmp(string_DATAPTR(state.str),"SASL")==0) {
+	      if (yylex(&state, pin)!=' ')
+		  parseerror("expected space\n");
+	      if (yylex(&state, pin)!=STRING)
+		  parseerror("expected string\n");
+	  }
+
+	  if (yylex(&state, pin)!=')')
+	      parseerror("expected RPAREN\n");
+
+	  res = yylex(&state, pin);
+      }
+
+      if (res !=' ')
 	  parseerror("expected sp\n");
       
       if (yylex(&state, pin)!=STRING)
 	  parseerror("expected string\n");
+      
 
       if (errstr)
 	  *errstr = state.str;
@@ -84,7 +111,7 @@ static int handle_response(int res,int version,struct protstream *pin, mystring_
   }
   
   if (yylex(&state, pin)!=EOL)
-      printf("expected eol\n");
+      parseerror("expected string\n");
   
   return 0;
 }

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.15 2000/04/12 18:41:09 tmartin Exp $ */
+/* $Id: proxyd.c,v 1.16 2000/04/15 19:20:46 tmartin Exp $ */
 
 #include <config.h>
 
@@ -541,6 +541,8 @@ static int proxy_authenticate(struct backend *s)
 
     /* read the initial greeting */
     if (!prot_fgets(buf, sizeof(buf), s->in)) {
+	syslog(LOG_ERR,"proxyd_authenticate(): couldn't read initial greeting: %s",
+	       s->in->error ? s->in->error: "(null)");
 	return SASL_FAIL;
     }
 
@@ -571,6 +573,7 @@ static int proxy_authenticate(struct backend *s)
 	    free(in);
 	}
 	if (r != SASL_OK && r != SASL_CONTINUE) {
+	    syslog(LOG_ERR,"proxyd_authenticate(): couldn't perform sasl_client_step");
 	    return r;
 	}
 
@@ -654,6 +657,7 @@ struct backend *proxyd_findserver(char *server)
     if (!ret->lastused) {
 	/* need to (re)establish connection to server or create one */
 	int sock;
+	int r;
 
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 	    syslog(LOG_ERR, "socket() failed: %m");
@@ -671,10 +675,11 @@ struct backend *proxyd_findserver(char *server)
 	prot_setflushonread(ret->in, ret->out);
 
 	/* now need to authenticate to backend server */
-	if (proxy_authenticate(ret)) {
-	    syslog(LOG_ERR, "couldn't authenticate to backend server", 
-		   EC_CONFIG);
-	    fatal("couldn't authenticate to backend server", 1);
+	if ((r = proxy_authenticate(ret))) {
+	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
+		   sasl_errstring(r,NULL,NULL));
+		   
+	    fatal("couldn't authenticate to backend server", EC_CONFIG);
 	}
     }
 
