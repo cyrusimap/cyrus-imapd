@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.304.2.7 2001/06/20 02:08:28 ken3 Exp $ */
+/* $Id: imapd.c,v 1.304.2.8 2001/06/29 21:46:04 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3583,7 +3583,6 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
     static int ignorereference = 0;
     clock_t start = clock();
     char mytime[100];
-    char patbuf[MAX_MAILBOX_NAME+1];
 
     /* Ignore the reference argument?
        (the behavior in 1.5.10 & older) */
