@@ -85,7 +85,7 @@ syncnews: syncnews.o libimap.a $(DEPLIBS)
 
 deliver: deliver.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o deliver deliver.o libimap.a \
-		$(DEPLIBS) $(LIBS) -ldbm
+		$(DEPLIBS) $(LIBS)
 
 imapd: $(IMAPDOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o imapd $(IMAPDOBJS) libimap.a \
