@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_quotalegacy.c,v 1.7 2004/06/08 20:44:38 ken3 Exp $ */
+/* $Id: cyrusdb_quotalegacy.c,v 1.8 2004/06/30 15:52:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -285,7 +285,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     assert(fname && ret);
 
     db->path = xstrdup(fname);
-    construct_hash_table(&db->table, 32, 0);
+    construct_hash_table(&db->table, 200, 0);
 
     /* strip any filename from the path */
     if ((p = strrchr(db->path, '/'))) *p = '\0';
