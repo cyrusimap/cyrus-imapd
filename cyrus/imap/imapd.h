@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.45 2001/03/07 19:48:47 leg Exp $
+ * $Id: imapd.h,v 1.46 2001/03/15 22:56:18 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -221,6 +221,7 @@ extern struct protstream *imapd_out, *imapd_in;
 
 extern void index_closemailbox(struct mailbox *mailbox);
 extern void index_newmailbox(struct mailbox *mailbox, int examine_mode);
+extern void index_operatemailbox(struct mailbox *mailbox);
 extern void index_check(struct mailbox *mailbox, int usinguid,
 			   int checkseen);
 extern void index_checkseen(struct mailbox *mailbox, int quiet,

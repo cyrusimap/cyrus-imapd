@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.160 2001/03/07 19:48:46 leg Exp $
+ * $Id: index.c,v 1.161 2001/03/15 22:56:18 leg Exp $
  */
 #include <config.h>
 
@@ -314,6 +314,24 @@ int examine_mode;
     index_listflags(mailbox);
     imapd_exists = -1;
     index_check(mailbox, 0, 1);
+}
+
+void index_operatemailbox(struct mailbox *mailbox)
+{
+    keepingseen = 0;
+    examining = 1;
+    allseen = 0;
+    recentuid = 0;
+    index_base = mailbox->index_base;
+    index_len = mailbox->index_len;
+    cache_base = mailbox->cache_base;
+    cache_len = mailbox->cache_len;
+    cache_end = mailbox->cache_size;
+
+    index_ino = mailbox->index_ino;
+    start_offset = mailbox->start_offset;
+    record_size = mailbox->record_size;
+    imapd_exists = mailbox->exists;
 }
 
 #define SLOP 50

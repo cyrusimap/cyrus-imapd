@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.4 2001/03/10 05:55:11 leg Exp $
+/* $Id: cyrdump.c,v 1.5 2001/03/15 22:56:18 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -179,8 +179,7 @@ static int dump_me(char *name, int matchlen, int maycreate, void *rock)
     }
     
     mailbox_read_index_header(&m);
-
-    imapd_exists = m.exists;
+    index_operatemailbox(&m);
 
     generate_boundary(boundary);
 
