@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.3 2002/07/25 17:21:44 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.4 2002/07/26 15:53:15 ken3 Exp $
  */
 #include <config.h>
 
@@ -220,6 +220,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
+    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },   
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
@@ -249,7 +250,7 @@ int service_init(int argc, char **argv, char **envp)
     if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
 	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
 	       sasl_errstring(r, NULL, NULL));
-	return 2;
+	return EC_SOFTWARE;
     }
 
     /* open the mboxlist, we'll need it for real work */
@@ -795,7 +796,7 @@ void
 cmd_user(user)
 char *user;
 {
-    char *p;
+    char *p, *dot, *domain;
 
     /* possibly disallow USER */
     if (!(kflag || popd_starttls_done ||
@@ -811,9 +812,11 @@ char *user;
     }
 
     shutdown_file(); /* check for shutdown file */
-    if (!(p = auth_canonifyid(user,0)) ||
+    if (!(p = canonify_userid(user,NULL)) ||
 	/* '.' isn't allowed if '.' is the hierarchy separator */
-	(popd_namespace.hier_sep == '.' && strchr(p, '.')) ||
+	(popd_namespace.hier_sep == '.' && (dot = strchr(p, '.')) &&
+	 !(config_virtdomains &&  /* allow '.' in dom.ain */
+	   (domain = strchr(p, '@')) && (dot > domain))) ||
 	strlen(p) + 6 > MAX_MAILBOX_PATH) {
 
 	prot_printf(popd_out, "-ERR [AUTH] Invalid user\r\n");
@@ -1180,7 +1183,6 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin)
       if (prot_fgets(str,sizeof(str),pin) == NULL) {
 	  return NULL;
       }
-      printf("S: %s", str);
       if (!strncasecmp(str,"SASL ",5)) {
 	  ret=parsemechlist(str);
       }
@@ -1219,18 +1221,6 @@ static int proxy_authenticate(const char *hostname)
 			  config_getstring(IMAPOPT_PROXY_REALM),
 			  pass);
 
-    r = sasl_client_new("pop", hostname, NULL, NULL,
-			cb, 0, &backend_saslconn);
-    if (r != SASL_OK) {
-	return r;
-    }
-
-    secprops = mysasl_secprops(0);
-    r = sasl_setprop(backend_saslconn, SASL_SEC_PROPS, secprops);
-    if (r != SASL_OK) {
-	return r;
-    }
-
     /* set the IP addresses */
     addrsize=sizeof(struct sockaddr_in);
     if (getpeername(backend_sock, (struct sockaddr *)&saddr_r, &addrsize) != 0)
@@ -1246,10 +1236,17 @@ static int proxy_authenticate(const char *hostname)
 		   sizeof(struct sockaddr_in), localip, 60) != 0)
 	return SASL_FAIL;
 
-    r = sasl_setprop(backend_saslconn, SASL_IPLOCALPORT, localip);
-    if (r != SASL_OK) return r;
-    r = sasl_setprop(backend_saslconn, SASL_IPREMOTEPORT, remoteip);
-    if (r != SASL_OK) return r;
+    r = sasl_client_new("pop", hostname, localip, remoteip,
+			cb, 0, &backend_saslconn);
+    if (r != SASL_OK) {
+	return r;
+    }
+
+    secprops = mysasl_secprops(0);
+    r = sasl_setprop(backend_saslconn, SASL_SEC_PROPS, secprops);
+    if (r != SASL_OK) {
+	return r;
+    }
 
     /* read the initial greeting */
     if (!prot_fgets(buf, sizeof(buf), backend_in)) {
@@ -1332,19 +1329,24 @@ static void openproxy(void)
 {
     struct hostent *hp;
     struct sockaddr_in sin;
+    char *userid;
     char inboxname[MAX_MAILBOX_PATH];
     int r;
     char *server = NULL;
 
+    /* Translate any separators in userid
+       (use a copy since we need the original userid for AUTH to backend) */
+    userid = strdup(popd_userid);
+    mboxname_hiersep_tointernal(&popd_namespace, userid,
+				config_virtdomains ?
+				strcspn(userid, "@") : 0);
+
     /* have to figure out what server to connect to */
-    strcpy(inboxname, "user.");
-    strcat(inboxname, popd_userid);
+    r = (*popd_namespace.mboxname_tointernal)(&popd_namespace, "INBOX",
+					      userid, inboxname);
+    free(userid);
 
-    /* Translate any separators in userid part of inboxname
-       (we need the original userid for AUTH to backend) */
-    mboxname_hiersep_tointernal(&popd_namespace, inboxname+5, 0);
-
-    r = mboxlist_lookup(inboxname, &server, NULL, NULL);
+    if (!r) r = mboxlist_lookup(inboxname, &server, NULL, NULL);
     if (r) fatal("couldn't find backend server", EC_CONFIG);
 
     /* xxx hide the fact that we are storing partitions */
