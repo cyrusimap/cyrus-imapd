@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.373 2002/03/29 21:52:14 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.374 2002/04/01 19:59:01 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -6031,7 +6031,9 @@ static int do_xfer_single(char *toserver, char *name, char *mailboxname,
      * & remove local "remote" mailboxlist entry */
     if(!r) {
 	/* Note that we do not check the ACL, and we don't update MUPDATE */
-	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
+	/* note also that we need to remember to let proxyadmins do this */
+	r = mboxlist_deletemailbox(mailboxname,
+				   imapd_userisadmin || imapd_userisproxyadmin,
 				   imapd_userid, imapd_authstate, 0, 1);
 	if(r) syslog(LOG_ERR,
 		     "Could not delete local mailbox during move of %s",
