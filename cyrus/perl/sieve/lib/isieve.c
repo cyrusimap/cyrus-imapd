@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: isieve.c,v 1.24.4.1 2002/08/05 20:22:59 ken3 Exp $ */
+/* $Id: isieve.c,v 1.24.4.2 2002/08/05 20:26:53 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -464,7 +464,7 @@ int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
   }
 }
 
-static int mysasl_simple_cb(void *context, int id, const char **result,
+static int refer_simple_cb(void *context, int id, const char **result,
 			    unsigned int *len)
 {
     if (!result) {
@@ -530,11 +530,11 @@ int do_referral(isieve_t *obj, char *refer_to)
 
 	    switch (callbacks[n].id) {
 	    case SASL_CB_USER:
-		callbacks[n].proc = &mysasl_simple_cb;
+		callbacks[n].proc = &refer_simple_cb;
 		callbacks[n].context = userid ? userid : authid;
 		break;
 	    case SASL_CB_AUTHNAME:
-		callbacks[n].proc = &mysasl_simple_cb;
+		callbacks[n].proc = &refer_simple_cb;
 		callbacks[n].context = authid;
 		break;
 	    default:
