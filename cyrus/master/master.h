@@ -1,7 +1,7 @@
 #ifndef HAVE_MASTER_H
 #define HAVE_MASTER_H
 
-/* $Id: master.h,v 1.11 2004/12/09 17:52:16 ken3 Exp $ */
+/* $Id: master.h,v 1.12 2004/12/09 17:54:57 ken3 Exp $ */
 
 #include <config.h>
 #include <sys/resource.h> /* for rlim_t */
@@ -19,22 +19,22 @@ struct service {
     int family;			/* address family */
 
     /* communication info */
-    int socket;			/* client/child socket */
+    int socket;			/* client/child communication channel */
     struct sockaddr *saddr;
     int stat[2];		/* master/child communication channel */
 
     /* limits */
     int desired_workers;	/* num child processes to have ready */
-    int max_workers;		/* max num child processes to execute */
-    rlim_t maxfds;		/* max num file descriptors */
+    int max_workers;		/* max num child processes to spawn */
+    rlim_t maxfds;		/* max num file descriptors to use */
     unsigned int maxforkrate;	/* max rate to spawn children */
 
     /* stats */
     int ready_workers;		/* num child processes ready for service */
-    int nforks;			/* num child processes executed */
+    int nforks;			/* num child processes spawned */
     int nactive;		/* num children servicing clients */
     int nconnections;		/* num connections made to children */
-    unsigned int forkrate;	/* rate at which we spawning children */
+    unsigned int forkrate;	/* rate at which we're spawning children */
 
     /* fork rate computation */
     time_t last_interval_start;
