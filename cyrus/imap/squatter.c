@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.5.4.12 2003/06/16 02:29:26 ken3 Exp $
+ * $Id: squatter.c,v 1.5.4.13 2003/07/16 14:58:46 ken3 Exp $
  */
 
 /*
@@ -81,6 +81,7 @@
 #include <syslog.h>
 #include <string.h>
 
+#include "annotate.h"
 #include "assert.h"
 #include "mboxlist.h"
 #include "global.h"
@@ -97,6 +98,13 @@
 
 /* global state */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
+
+void printstring(const char *s)
+{
+    /* needed to link against annotate.o */
+    fatal("printstring() executed, but its not used for squatter!",
+	  EC_SOFTWARE);
+}
 
 extern char *optarg;
 extern int optind;
@@ -153,7 +161,8 @@ static void print_stats(FILE* out, SquatStats* stats) {
 static int usage(const char *name)
 {
     fprintf(stderr,
-	    "usage: %s [-C <alt_config>] [-r] [-s] [-v] mailbox...\n", name);
+	    "usage: %s [-C <alt_config>] [-r] [-s] [-a] [-v] [mailbox...]\n",
+	    name);
  
     exit(EC_USAGE);
 }
@@ -285,7 +294,7 @@ static void stats_callback(void* closure __attribute__((unused)),
 /* This is called once for each mailbox we're told to index. */
 static int index_me(char *name, int matchlen __attribute__((unused)),
 		    int maycreate __attribute__((unused)),
-		    void *rock __attribute__((unused))) {
+		    void *rock) {
     struct mailbox m;
     int r;
     SquatStats stats;
@@ -298,7 +307,46 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
     struct stat tmp_file_info;
     char uid_validity_buf[30];
     char extname[MAX_MAILBOX_NAME+1];
- 
+    int use_annot = *((int *) rock);
+
+    /* make sure the mailbox (or an ancestor) has
+       /vendor/cmu/cyrus-imapd/squat set to "true" */
+    if (use_annot) {
+	char buf[MAX_MAILBOX_NAME+1] = "", *p;
+	struct annotation_data attrib;
+	int domainlen = 0;
+
+	if (config_virtdomains && (p = strchr(name, '!')))
+	    domainlen = p - name + 1;
+
+	strlcpy(buf, name, sizeof(buf));
+
+	/* since mailboxes inherit /vendor/cmu/cyrus-imapd/squat,
+	   we need to iterate all the way up to "" (server entry) */
+	while (1) {
+	    r = annotatemore_lookup(buf, "/vendor/cmu/cyrus-imapd/squat", "",
+				    &attrib);
+
+	    if (r ||				/* error */
+		attrib.value ||			/* found an entry */
+		!buf[0]) {			/* done recursing */
+		break;
+	    }
+
+	    p = strrchr(buf, '.');		/* find parent mailbox */
+
+	    if (p && (p - buf > domainlen))	/* don't split subdomain */
+		*p = '\0';
+	    else if (!buf[domainlen])		/* server entry */
+		buf[0] = '\0';
+	    else				/* domain entry */
+		buf[domainlen] = '\0';
+	}
+
+	if (r || !attrib.value || strcasecmp(attrib.value, "true"))
+	    return 0;
+    }
+
     /* Convert internal name to external */
     (*squat_namespace.mboxname_toexternal)(&squat_namespace, name,
 					   NULL, extname);
@@ -424,7 +472,7 @@ int main(int argc, char **argv)
 {
     int opt;
     char *alt_config = NULL;
-    int rflag = 0;
+    int rflag = 0, use_annot = 0;
     int i;
     char buf[MAX_MAILBOX_PATH+1];
     int r;
@@ -434,7 +482,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:rsv")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:rsav")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
           alt_config = optarg;
@@ -452,6 +500,10 @@ int main(int argc, char **argv)
 	  skip_unmodified = 1;
           break;
 
+	case 'a': /* use /squat annotation */
+	  use_annot = 1;
+	  break;
+
 	default:
 	    usage("squatter");
 	}
@@ -465,6 +517,9 @@ int main(int argc, char **argv)
     if ((r = mboxname_init_namespace(&squat_namespace, 1)) != 0) {
 	fatal(error_message(r), EC_CONFIG);
     }
+
+    annotatemore_init(0, NULL, NULL);
+    annotatemore_open(NULL);
 
     mboxlist_init(0);
     mboxlist_open(NULL);
@@ -480,18 +535,18 @@ int main(int argc, char **argv)
 	assert(!rflag);
 	strlcpy(buf, "*", sizeof(buf));
 	(*squat_namespace.mboxlist_findall)(&squat_namespace, buf, 1,
-					    0, 0, index_me, NULL);
+					    0, 0, index_me, &use_annot);
     }
 
     for (i = optind; i < argc; i++) {
 	/* Translate any separators in mailboxname */
 	(*squat_namespace.mboxname_tointernal)(&squat_namespace, argv[i],
 					       NULL, buf);
-	index_me(buf, 0, 0, NULL);
+	index_me(buf, 0, 0, &use_annot);
 	if (rflag) {
 	    strlcat(buf, ".*", sizeof(buf));
 	    (*squat_namespace.mboxlist_findall)(&squat_namespace, buf, 1,
-						0, 0, index_me, NULL);
+						0, 0, index_me, &use_annot);
 	}
     }
 
@@ -506,6 +561,8 @@ int main(int argc, char **argv)
     seen_done();
     mboxlist_close();
     mboxlist_done();
+    annotatemore_close();
+    annotatemore_done();
 
     cyrus_done();
     
