@@ -1,0 +1,31 @@
+Date: Fri, 08 Nov 2002 15:46:42 +0100
+From: Sebastian Hagedorn <Hagedorn@uni-koeln.de>
+To: info-cyrus@lists.andrew.cmu.edu
+Subject: Re: Squatter streamlining patch
+
+--On Thursday, November 07, 2002 21:35:34 -0700 Mark Derbyshire 
+<mark@taom.com> wrote:
+
+> while the SQUAT feature is great, it takes a few hours for squatter to
+> grind through the mailboxes.
+
+The included patch sounds interesting, but I guess I'll wait until it is 
+incorporated into the standard distribution.
+
+Anyway, we have come up with a different idea regarding squatter. I am 
+attaching a Perl script we are using in lieu of an entry in 
+/etc/cyrus.conf. It is invoked and halted by the following crontab entry 
+for the cyrus user:
+
+0  0-23/4  *  *  *  /usr/libexec/cyrus/squatrunner.pl >> 
+/var/lib/imap/squatter.log 2>&1
+0  1-23/4  *  *  *  /bin/touch /var/lib/imap/squat.stop > /dev/null 2>&1
+
+It's been working very nicely for us, allowing us to start and stop 
+squatter whenever we want without having to start at the beginning.
+
+Cheers, Sebastian Hagedorn
+--
+Sebastian Hagedorn M.A. - RZKR-R1 (Flachbau), Zi. 18, Robert-Koch-Str. 10
+Zentrum für angewandte Informatik - Universitätsweiter Service RRZK
+Universität zu Köln / Cologne University - Tel. +49-221-478-5587
