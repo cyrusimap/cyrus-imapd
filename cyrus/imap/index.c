@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.176 2002/04/10 00:47:59 ken3 Exp $
+ * $Id: index.c,v 1.177 2002/04/11 15:30:46 ken3 Exp $
  */
 #include <config.h>
 
@@ -3565,10 +3565,24 @@ static char *find_msgid(char *str, char **rem)
     src = str;
 
     /* find the start of a msgid */
-    while ((src = strchr(src, '<')) != NULL) {
+    while ((cp = src = strchr(src, '<')) != NULL) {
+
+	/* see if we have (and skip) a quoted localpart */
+	if (*++cp == '\"') {
+	    /* find the endquote, making sure it isn't escaped */
+	    do {
+		cp = strchr(++cp, '\"');
+	    } while (cp && *(cp-1) == '\\');
+
+	    /* no endquote, so bail */
+	    if (!cp) {
+		src++;
+		continue;
+	    }
+	}
 
 	/* find the end of the msgid */
-	if ((cp = strchr(src, '>')) == NULL)
+	if ((cp = strchr(cp, '>')) == NULL)
 	    return NULL;
 
 	/* alloc space for the msgid */
@@ -3579,16 +3593,12 @@ static char *find_msgid(char *str, char **rem)
 	/* quoted string */
 	if (*src == '\"') {
 	    src++;
-	    if (!strchr(src, '\"')) continue;
-	    while (*src) {
-		if (*src == '\"') break;
+	    while (*src != '\"') {
 		if (*src == '\\') {
 		    src++;
-		    if (!*src) break;
 		}
 		*dst++ = *src++;
 	    }
-	    if (*src != '\"') continue;
 	    src++;
 	}
 	/* atom */
