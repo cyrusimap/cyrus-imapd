@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.150 2000/12/26 21:35:40 leg Exp $
+ * $Id: index.c,v 1.151 2001/01/10 07:23:00 leg Exp $
  */
 #include <config.h>
 
@@ -949,9 +949,9 @@ int nflags;
     r = index_forsequence(mailbox, sequence, usinguid,
 			  index_storeflag, (char *)storeargs, NULL);
 
-
-    if (mailbox->dirty==1)
-    {
+    /* note that index_forsequence() doesn't sync the index file;
+       that's done below in mailbox_write_index_header() */
+    if (mailbox->dirty) {
 	/* xxx what to do on failure? */
 	mailbox_write_index_header(mailbox);
 	mailbox->dirty = 0;
@@ -2562,7 +2562,6 @@ void *rock;
 	/* either a system or user flag changed. need to at least touch acap
 	   to change the modtime */
 	mailbox->dirty = 1;
-	
 
 	/* If .SILENT, assume client has updated their cache */
 	if (storeargs->silent && 
@@ -2587,7 +2586,7 @@ void *rock;
     }
     
     if (dirty && mid) {
-	r = mailbox_write_index_record(mailbox, mid, &record);
+	r = mailbox_write_index_record(mailbox, mid, &record, 0);
 	if (r) return r;
     }
     
@@ -2599,12 +2598,10 @@ void *rock;
  *
  * Note: msgfile argument must be 0 if msg is not mapped in.
  */
-static int
-index_search_evaluate(mailbox, searchargs, msgno, msgfile)
-struct mailbox *mailbox;
-struct searchargs *searchargs;
-unsigned msgno;
-struct mapfile *msgfile;
+static int index_search_evaluate(struct mailbox *mailbox,
+				 struct searchargs *searchargs,
+				 unsigned msgno,
+				 struct mapfile *msgfile)
 {
     int i;
     struct strlist *l, *h;

@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.108 2001/01/09 00:18:20 leg Exp $
+ $Id: mailbox.c,v 1.109 2001/01/10 07:23:08 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1131,12 +1131,13 @@ mailbox_write_index_header(struct mailbox *mailbox)
 
 /*
  * Write an index record to a mailbox
+ * call fsync() on index_fd if 'sync' is true
  */
 int
-mailbox_write_index_record(mailbox, msgno, record)
-struct mailbox *mailbox;
-unsigned msgno;
-struct index_record *record;
+mailbox_write_index_record(struct mailbox *mailbox,
+			   unsigned msgno,
+			   struct index_record *record,
+			   int sync)
 {
     int n;
     char buf[INDEX_RECORD_SIZE];
@@ -1164,7 +1165,7 @@ struct index_record *record;
     }
 
     n = retry_write(mailbox->index_fd, buf, INDEX_RECORD_SIZE);
-    if (n != INDEX_RECORD_SIZE || fsync(mailbox->index_fd)) {
+    if (n != INDEX_RECORD_SIZE || (sync && fsync(mailbox->index_fd))) {
 	syslog(LOG_ERR, "IOERROR: writing index record %u for %s: %m",
 	       msgno, mailbox->name);
 	return IMAP_IOERROR;
