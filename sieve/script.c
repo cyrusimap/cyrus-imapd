@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.31 2000/07/02 18:29:50 ken3 Exp $
+ * $Id: script.c,v 1.32 2000/07/06 19:16:06 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -232,7 +232,8 @@ static int look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
 		found = 1;
 		break;
 	    }
-
+#if 0
+	    /* try matching against each (sub)domain */
 	    if (!gethostname(hostname, MAXHOSTNAMELEN)) {
 		char *subdom = hostname;
 		char buf[2 * MAXHOSTNAMELEN];
@@ -247,7 +248,7 @@ static int look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
 			subdom++;
 		}
 	    }
-	    
+#endif
 	    for (sl = myaddrs; sl != NULL && !found; sl = sl->next) {
 		void *altdata = NULL, *altmarker = NULL;
 		char *altaddr;
