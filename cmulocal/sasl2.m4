@@ -40,7 +40,7 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
      GSSAPIBASE_LIBS="-L$gssapi/lib"
   fi
 
-  if test "$gss_impl" = mit; then
+  if test "$gss_impl" = "mit"; then
      GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgssapi_krb5 -lkrb5 -lk5crypto -lcom_err"
   elif test "$gss_impl" = "heimdal"; then
      GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgssapi -lkrb5 -ldes -lasn1 -lroken ${LIB_CRYPT} -lcom_err"
@@ -78,6 +78,14 @@ AC_SUBST(GSSAPI_LIBS)
 AC_SUBST(GSSAPIBASE_LIBS)
 ])
 
+dnl What we want to do here is setup LIB_SASL with what one would
+dnl generally want to have (e.g. if static is requested, make it that,
+dnl otherwise make it dynamic.
+
+dnl We also want to creat LIB_DYN_SASL and DYNSASLFLAGS.
+
+dnl Also sets using_static_sasl to "no" "static" or "staticonly"
+
 AC_DEFUN(CMU_SASL2, [
 AC_ARG_WITH(sasl,
             [  --with-sasl=DIR         Compile with libsasl2 in <DIR>],
@@ -88,9 +96,9 @@ AC_ARG_WITH(staticsasl,
 	    [  --with-staticsasl=DIR  Compile with staticly linked libsasl2 in <DIR>],
 	    with_staticsasl="$withval";
 	    if test $with_staticsasl != "no"; then
-		with_sasl="static"
+		using_static_sasl="static"
 	    fi,
-	    with_staticsasl="no")
+	    with_staticsasl="no"; using_static_sasl="no")
 
 	SASLFLAGS=""
 	LIB_SASL=""
@@ -99,7 +107,7 @@ AC_ARG_WITH(staticsasl,
 	cmu_saved_LDFLAGS=$LDFLAGS
 	cmu_saved_LIBS=$LIBS
 
-	if test ${with_sasl} = "static"; then
+	if test ${with_staticsasl} != "no"; then
 	  if test -d ${with_staticsasl}; then
 	    ac_cv_sasl_where_lib=${with_staticsasl}/lib
 	    ac_cv_sasl_where_inc=${with_staticsasl}/include
@@ -129,38 +137,44 @@ AC_ARG_WITH(staticsasl,
 	  SASL_GSSAPI_CHK
 
 	  LIB_SASL="$LIB_SASL $GSSAPIBASE_LIBS"
+	fi
 
-	else
-	  if test -d ${with_sasl}; then
+	if test -d ${with_sasl}; then
             ac_cv_sasl_where_lib=${with_sasl}/lib
             ac_cv_sasl_where_inc=${with_sasl}/include
 
-	    SASLFLAGS="-I$ac_cv_sasl_where_inc"
-	    LIB_SASL="-L$ac_cv_sasl_where_lib"
+	    DYNSASLFLAGS="-I$ac_cv_sasl_where_inc"
+	    LIB_DYN_SASL="-L$ac_cv_sasl_where_lib"
 	    CPPFLAGS="${cmu_saved_CPPFLAGS} -I${ac_cv_sasl_where_inc}"
 	    LDFLAGS="${cmu_saved_LDFLAGS} -L${ac_cv_sasl_where_lib}"
-	  fi
+	fi
 
-	  dnl be sure to check for a SASLv2 specific function
-	  AC_CHECK_HEADER(sasl/sasl.h,
+	dnl be sure to check for a SASLv2 specific function
+	AC_CHECK_HEADER(sasl/sasl.h,
 	    AC_CHECK_HEADER(sasl/saslutil.h,
 	      AC_CHECK_LIB(sasl2, prop_get, 
                            ac_cv_found_sasl=yes,
 		           ac_cv_found_sasl=no),
 	                   ac_cv_found_sasl=no), ac_cv_found_sasl=no)
 
-	  if test "$ac_cv_found_sasl" = yes; then
-	    LIB_SASL="$LIB_SASL -lsasl2"
-	  else
-	    LIB_SASL=""
-	    SASLFLAGS=""
-	  fi
+	if test "$ac_cv_found_sasl" = "yes"; then
+	    DYNLIB_SASL="$LIB_SASL -lsasl2"
+	    if test "$using_static_sasl" != "static"; then
+		LIB_SASL=$DYNLIB_SASL
+		SASLFLAGS=$DYNSASLFLAGS
+	    fi
+	else
+	    DYNLIB_SASL=""
+	    DYNSASLFLAGS=""
+	    using_static_sasl="staticonly"
 	fi
 
 	LIBS="$cmu_saved_LIBS"
 	LDFLAGS="$cmu_saved_LDFLAGS"
 	CPPFLAGS="$cmu_saved_CPPFLAGS"
 
+	AC_SUBST(LIB_DYN_SASL)
+	AC_SUBST(DYNSASLFLAGS)
 	AC_SUBST(LIB_SASL)
 	AC_SUBST(SASLFLAGS)
 	])

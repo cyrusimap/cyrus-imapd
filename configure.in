@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.206 2001/12/05 15:23:22 ken3 Exp $
+dnl $Id: configure.in,v 1.207 2001/12/10 17:45:40 rjs3 Exp $
 dnl
 
 
@@ -733,7 +733,7 @@ if test "${with_perl}" = yes; then
     with_perl="perl5"
 fi
 if test "${with_perl}" != no; then
-    if test ${with_sasl} = "static"; then
+    if test ${using_static_sasl} = "staticonly"; then
 	AC_MSG_WARN([Cannot compile perl utilities using static libsasl])
 	with_perl="no"
     else 
