@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.193 2002/05/23 21:12:39 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.194 2002/05/29 16:49:15 rjs3 Exp $
  */
 
 #include <config.h>
@@ -766,7 +766,7 @@ int mboxlist_insertremote(const char *name, int mbtype,
  */
 int mboxlist_deletemailbox(const char *name, int isadmin, char *userid, 
 			   struct auth_state *auth_state, int checkacl,
-			   int local_only)
+			   int local_only, int force)
 {
     int r;
     char *acl;
@@ -779,6 +779,8 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     int mbtype;
     int deleteright = get_deleteright();
     mupdate_handle *mupdate_h = NULL;
+
+    if(!isadmin && force) return IMAP_PERMISSION_DENIED;
 
  retry:
     /* Check for request to delete a user:
@@ -811,7 +813,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 
     /* are we reserved? (but for remote mailboxes this is okay, since
      * we don't touch their data files at all) */
-    if(!isremote && (mbtype & MBTYPE_RESERVE)) {
+    if(!isremote && (mbtype & MBTYPE_RESERVE) && !force) {
 	r = IMAP_MAILBOX_RESERVED;
 	goto done;
     }
@@ -836,7 +838,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     /* Lock the mailbox if it isn't a remote mailbox */
     if(!r && !isremote) {
 	r = mailbox_open_locked(name, path, acl, 0, &mailbox, 0);
-	if(r) goto done;
+	if(r && !force) goto done;
     }
     
     /* delete entry */
@@ -850,12 +852,13 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
 	       name, cyrusdb_strerror(r));
 	r = IMAP_IOERROR;
-	goto done;
+	if(!force) goto done;
     }
 
     /* remove from mupdate - this can be weird if the commit below fails */
     /* xxx this is network I/O being done while holding a mboxlist lock */
-    if (!r && !isremote && !local_only && config_mupdate_server) {
+    if ((!r || force)
+	&& !isremote && !local_only && config_mupdate_server) {
 	/* delete the mailbox in MUPDATE */
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
@@ -873,7 +876,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     }
 
     /* commit db operations */
-    if (!r) {
+    if (!r || force) {
 	r = DB->commit(mbdb, tid);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
@@ -883,9 +886,9 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	tid = NULL;
     }
 
-    if (r || isremote) goto done;
+    if ((r && !force) || isremote) goto done;
 
-    if (!r) r = mailbox_delete(&mailbox, deletequotaroot);
+    if (!r || force) r = mailbox_delete(&mailbox, deletequotaroot);
 
     /*
      * See if we have to remove mailbox's quota root
@@ -895,9 +898,11 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     }
 
  done:
-    if(r && tid) {
+    if(r && tid && !force) {
 	/* Abort the transaction if it is still in progress */
 	DB->abort(mbdb, tid);
+    } else if(tid && force) {
+	DB->commit(mbdb, tid);
     }
 
     return r;
