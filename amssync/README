@@ -1,7 +1,7 @@
 This directory contains programs for shadowing a set of AMS (Andrew
 Message System) bboards into a Cyrus IMAP server.
 
-Usage: syncamstree [-a] [-c file | -s ] [-d] [-h] [-m] [-u principal] [-v] [server [port]]
+Usage: amssynctree [-a] [-c file | -s ] [-d] [-h] [-m] [-u principal] [-v] [server [port]]
        -a          Synchronize ACL's (also creates any new bboards)
        -c          Specify a config file name, otherwise use builtin default
        -d          Print debugging info
@@ -29,7 +29,7 @@ one of -a -m or -v is required.
 in order for this script to work properly, it must be called via a
 full pathname, or 1) it must be released to gamma host, 2) installed
 in /usr/cyrus/bin or 3) the BSYNCDIR environment variable must point
-to the correct location (the directory in which bin/syncamstree exists)
+to the correct location (the directory in which bin/amssynctree exists)
 
 Debugging info includes:
 * List ams groups as they are processed (same as -v)
