@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.5 2000/06/01 20:34:15 wcw Exp $ -->
+<!-- $Id: install-configure.html,v 1.6 2000/10/18 18:32:17 wcw Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -327,12 +327,13 @@ authenticate the client.</p>
 <ol>
 <li><p>OpenSSL requires the certificate and key in PEM format.  You can
 create the server's private key and certificate yourself using
-OpenSSL.  Here, we create a key for the machine
+OpenSSL.  Here, we create a self-signed  key for the machine
 "<tt> foobar.andrew.cmu.edu</tt>" and put both the certificate and key
 in the file "<tt>/var/imap/server.pem</tt>".</p>
 
 <p>Please enter the appropriate information for your organization,
 instead of Carnegie Mellon University.</p>
+
 <pre>
 <kbd>openssl req -new -x509 -nodes -out /var/imap/server.pem -keyout /var/imap/server.pem -days 365</kbd>
 Using configuration from /usr/local/lib/openssl/openssl.cnf
@@ -366,6 +367,10 @@ where to find the certificate and key file:
 <pre>tls_cert_file: /var/imap/server.pem
 tls_key_file: /var/imap/server.pem
 </pre>
+
+<p>If you have a Certificate Authority (CA), you may wish to generate
+a certificate request and send it to be signed by your CA.
+
 </li>
 
 <li>You can test STARTTLS by using <tt>imtest</tt>:
@@ -383,5 +388,5 @@ authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
 <P><HR>
-last modified: $Date: 2000/06/01 20:34:15 $
+last modified: $Date: 2000/10/18 18:32:17 $
 </BODY></HTML>
