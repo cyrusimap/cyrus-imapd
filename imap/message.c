@@ -972,7 +972,7 @@ struct boundary *boundaries;
     message_parse_content(infile, format, &preamble, boundaries);
 
     /* Parse the component body-parts */
-    while (boundaries->count == depth) {
+    while (boundaries->count == depth && !feof(infile)) {
 	body->subpart = (struct body *)xrealloc((char *)body->subpart,
 				 (body->numparts+1)*sizeof(struct body));
 	message_parse_body(infile, format, &body->subpart[body->numparts++],
