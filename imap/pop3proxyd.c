@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.36 2002/03/18 19:55:30 wcw Exp $
+ * $Id: pop3proxyd.c,v 1.37 2002/03/27 16:02:55 ken3 Exp $
  */
 #include <config.h>
 
@@ -111,7 +111,8 @@ char *popd_userid = 0;
 struct sockaddr_in popd_localaddr, popd_remoteaddr;
 int popd_haveaddr = 0;
 char popd_clienthost[250] = "[local]";
-struct protstream *popd_out, *popd_in;
+struct protstream *popd_out = NULL;
+struct protstream *popd_in = NULL;
 int popd_starttls_done = 0;
 int popd_auth_done = 0;
 
@@ -337,7 +338,7 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
-    prot_flush(popd_out);
+    if (popd_out) prot_flush(popd_out);
     exit(code);
 }
 
@@ -351,8 +352,10 @@ void fatal(const char* s, int code)
 	exit(recurse_code);
     }
     recurse_code = code;
-    prot_printf(popd_out, "-ERR [SYS/PERM] Fatal error: %s\r\n", s);
-    prot_flush(popd_out);
+    if (popd_out) {
+	prot_printf(popd_out, "-ERR [SYS/PERM] Fatal error: %s\r\n", s);
+	prot_flush(popd_out);
+    }
     shut_down(code);
 }
 
