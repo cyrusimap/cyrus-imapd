@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.14 2000/02/24 20:55:43 leg Exp $
+ * $Id: lmtpd.c,v 1.15 2000/02/24 21:28:08 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.14 2000/02/24 20:55:43 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.15 2000/02/24 21:28:08 tmartin Exp $";*/
 
 #include <config.h>
 
@@ -1274,6 +1274,67 @@ usage()
     exit(EC_USAGE);
 }
 
+/*
+ * Parse auth= parameter
+ *
+ *   DIGIT           = %x30-39            ;; Digits 0-9
+ *   HEXDIGIT        = %x41-46 / DIGIT    ;; hexidecimal digit (uppercase)
+ *   hexchar         = "+" HEXDIGIT HEXDIGIT
+ *   xchar           = %x21-2A / %x2C-3C / %x3E-7E
+ *                     ;; US-ASCII except for "+", "=", SPACE and CTL
+ *   xtext           = *(xchar / hexchar)
+ */
+
+static char *parseautheq(char *s)
+{
+    char *ret = (char *) xmalloc(strlen(s)+1);    
+    char *str = ret;
+
+    while (1)
+    {
+	/* hexchar */
+	if (*s == '+')
+	{
+	    int lup;
+	    *str = '\0';
+	    s++;
+	    
+	    for (lup=0;lup<2;lup++)
+	    {
+		if ((*s>='0') && (*s<='9'))
+		    (*str) = (*str) & (*s - '0');
+		else if ((*s>='A') && (*s<='F'))
+		    (*str) = (*str) & (*s - 'A' + 10);
+		else {
+		    free(ret);
+		    return NULL;
+		}
+		if (lup==0)
+		{
+		    (*str) = (*str) << 4;
+		    s++;
+		}		
+	    }
+	    str++;
+
+	} else if ((*s >= '!') && (*s <='~') && (*s!='+') && (*s!='=')) {
+	    /* ascii char */
+	    *str = *s;
+	    str++;
+	} else {
+	    /* bad char */
+	    free(ret);
+	    return NULL;
+	}
+	s++;
+    }
+
+    if (*s && (*s!=' ')) { free(ret); return NULL; }
+
+    *str = '\0';
+    return ret;
+}
+
 char *parseaddr(char *s)
 {
     char *p;
@@ -1785,10 +1846,11 @@ void lmtpmode(deliver_opts_t *delopts)
 		    tmp += 5;
 		    if (!(delopts->authstate = auth_newstate(tmp, NULL))) {
 			/* do we want to bounce mail because of this? */
-			prot_printf(deliver_out, "501 5.5.4 xxx Unknown user\r\n");
+			/* i guess not. accept with no auth user */
+			prot_printf(deliver_out, "250 2.1.0 ok\r\n");
 			continue;			
 		    }
-		    delopts->authuser = xstrdup(tmp);
+		    delopts->authuser = parseautheq(tmp);
 		} else if (*tmp != '\0') {
 		    prot_printf(deliver_out, 
 				"501 5.5.4 Syntax error in parameters\r\n");  

@@ -1,7 +1,7 @@
 #!/bin/sh
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: snmpgen,v 1.6 2000/02/24 20:11:33 tmartin Exp $
+# $Id: snmpgen,v 1.7 2000/02/24 21:28:11 tmartin Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -58,8 +58,6 @@ my %O; # maps names to oids
 
 my @list;
 
-print STDERR "!!!!!!!!!!!!!!!!!!!!!\n";
-
 #first find the BASE
 while (defined ($line = <INPUT>)) {
     $linenum++;
@@ -73,9 +71,10 @@ while (defined ($line = <INPUT>)) {
 	next;
     }
 
-    if ($line =~ /^BASE\s+((\d|\.)+)(\.\X)?/) {
+    if ($line =~ /^BASE\s+((\d|\.)+)((\.\X)?)/) {
 	$base = $1;
-	if ($2 eq ".X") {
+	print STDERR "!!!!!!!!!!!!!!! $2\n";
+	if ($2 eq "X") {
 	  $basex = "true";
 	} else {
 	  $basex = "false";
@@ -144,7 +143,7 @@ int snmp_set(${basename}_t cmd, int);
                                     
 const char *snmp_getdescription(${basename}_t cmd); 
  
-const char *snmp_getoid(const char *name, ${basename}_t cmd); 
+const char *snmp_getoid(const char *name, ${basename}_t cmd, char* buf, int buflen); 
  
 #endif /* ${basename}_H */ 
 
@@ -189,7 +188,28 @@ print OUTPUT_C <<EOF
     return NULL;
 }
 
-const char *snmp_getoid(const char *name, ${basename}_t evt)
+static const char* local_hash(const char *name)
+{
+    if (name == NULL) {
+        return -1;
+EOF
+;
+
+my $tmpnum = 0;
+foreach my $a (@lis)
+{
+    print OUTPUT_C "    } else if (strcasecmp($a,name)==0) {\n";
+    print OUTPUT_C "        return $tmpnum;\n";
+    $tmpnum++;
+}
+
+print OUTPUT_C <<EOF
+    } else {
+      return -1;
+    }
+}
+
+const char *snmp_getoid(const char *name, ${basename}_t evt, char *buf, int buflen)
 {
     switch (evt) {
 EOF
@@ -199,7 +219,7 @@ foreach my $a (keys %T)
 {
   if ($Omid{$a} eq "true")
     {
-      print OUTPUT_C "        case $a: return \"$Obeg{$a}.199$Oend{$a}\";\n";
+      print OUTPUT_C "        case $a: snprintf(buf,buflen,\"$Obeg{$a}%d$Oend{$a}\",local_hash(name)); return buf;\n";
     } else {
       print OUTPUT_C "        case $a: return \"$Obeg{$a}$Oend{$a}\";\n";
     }
@@ -256,10 +276,11 @@ int snmp_increment(${basename}_t cmd, int incr)
 {
     int len;
     char tosend[256];
+    char buf[1024];
 
     if (mysock == -1) return 1;
 
-    strcpy(tosend, snmp_getoid(NULL,cmd));
+    strcpy(tosend, snmp_getoid(NULL,cmd,buf,sizeof(buf)));
     strcat(tosend,"\\n");
 
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
@@ -275,10 +296,11 @@ int snmp_increment_str(${basename}_t cmd, const char *name, int incr)
 {
     int len;
     char tosend[256];
+    char buf[1024];
 
     if (mysock == -1) return 1;
 
-    strcpy(tosend, snmp_getoid(name,cmd));
+    strcpy(tosend, snmp_getoid(name,cmd,buf,sizeof(buf)));
     strcat(tosend,"\\n");
 
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
