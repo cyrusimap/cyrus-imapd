@@ -61,6 +61,23 @@ ctl_mboxlist \- perform operations on the mailbox list database
 [
 \fB\-f \fIfilename\fR
 ]
+.br
+.B ctl_mboxlist
+[
+.B \-C
+.I config-file
+]
+.B \-m
+[
+\fB\-a \fR
+]
+[
+\fB\-w \fR
+]
+[
+\fB\-f \fIfilename\fR
+]
+\f
 .SH DESCRIPTION
 .I Ctl_mboxlist
 is used to perform various administrative operations on the mailbox
@@ -85,6 +102,19 @@ flat-text format.
 .B \-u
 Load the contents of the database from standard input.  The input MUST
 be in the format output using the \fB\-d\fR option.
+.TP
+.B \-m
+For backend servers in the Cyrus Murder, synchronize the local mailbox list
+file with the MUPDATE server.
+.TP
+.B \-a
+When used with -m, assume the local mailboxes file is authoritiative, 
+that is, only change the mupdate server, do not delete any local mailboxes.
+USE THIS OPTION WITH CARE, as it allows namespace collisions into the murder.
+.TP
+.B \-w
+When used with -m, print out what would be done but do not perform the
+operations.
 .TP
 \fB\-f \fIfilename\fR
 Use the database specified by \fIfilename\fR instead of the default
