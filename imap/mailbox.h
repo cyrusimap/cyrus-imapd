@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.57 2001/01/09 00:18:29 leg Exp $
+ $Id: mailbox.h,v 1.58 2001/01/10 07:23:04 leg Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -259,7 +259,7 @@ extern int mailbox_write_header(struct mailbox *mailbox);
 extern int mailbox_write_index_header(struct mailbox *mailbox);
 extern int mailbox_write_index_record(struct mailbox *mailbox,
 				      unsigned msgno,
-				      struct index_record *record);
+				      struct index_record *record, int sync);
 extern int mailbox_append_index(struct mailbox *mailbox,
 				struct index_record *record,
 				unsigned start, unsigned num, int sync);
