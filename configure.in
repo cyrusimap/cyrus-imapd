@@ -381,7 +381,11 @@ AC_ARG_ENABLE(cmulocal,
 		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} cmulocal"
 		EXTRA_OUTPUT="${EXTRA_OUTPUT} cmulocal/Makefile"
 	fi)			
-
+AC_ARG_ENABLE(experiment,
+	[  --enable-experiment       enable experimental code (gurus only)],
+	if test "$enableval" = yes; then
+		AC_DEFINE(ENABLE_EXPERIMENT)
+	fi)			
 dnl
 dnl Random other libraries
 dnl

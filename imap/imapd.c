@@ -350,7 +350,7 @@ cmdloop()
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_expunge(tag.s);
+		cmd_expunge(tag.s, 0);
 	    }
 	    else if (!strcmp(cmd.s, "Examine")) {
 		if (c != ' ') goto missingargs;
@@ -627,6 +627,15 @@ cmdloop()
 		else if (!strcmp(arg1.s, "copy")) {
 		    goto copy;
 		}
+#ifdef ENABLE_EXPERIMENT
+		else if (!strcmp(arg1.s, "expunge")) {
+		    c = getword(&arg1);
+		    if (!is_sequence(arg1.s)) goto badsequence;
+		    if (c == '\r') c = prot_getc(imapd_in);
+		    if (c != '\n') goto extraargs;
+		    cmd_expunge(tag.s, arg1.s);
+		}
+#endif
 		else {
 		    prot_printf(imapd_out, "%s BAD Unrecognized UID subcommand\r\n", tag.s);
 		    eatline(c);
@@ -941,6 +950,9 @@ char *tag;
     }
     prot_printf(imapd_out, "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA");
     prot_printf(imapd_out, "%s", login_capabilities());
+#ifdef ENABLE_EXPERIMENT
+    prot_printf(imapd_out, " OPTIMIZE-1");
+#endif
     prot_printf(imapd_out, "\r\n%s OK Capability completed\r\n", tag);
 };
 
@@ -1903,12 +1915,16 @@ int usinguid;
 /*
  * Perform an EXPUNGE command
  */
-cmd_expunge(tag)
+cmd_expunge(tag, sequence)
 char *tag;
+char *sequence;
 {
     int r;
 
     if (!(imapd_mailbox->myrights & ACL_DELETE)) r = IMAP_PERMISSION_DENIED;
+    else if (sequence) {
+	r = mailbox_expunge(imapd_mailbox, 1, index_expungeuidlist, sequence);
+    }
     else {
 	r = mailbox_expunge(imapd_mailbox, 1, (int (*)())0, (char *)0);
     }
@@ -1919,7 +1935,8 @@ char *tag;
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	prot_printf(imapd_out, "%s OK Expunge completed\r\n", tag);
+	prot_printf(imapd_out, "%s OK %sExpunge completed\r\n", tag,
+		    sequence ? "UID " : "");
     }
 }    
 

@@ -155,3 +155,9 @@ struct searchargs {
 #define STATUS_UNSEEN		(1<<4)
 
 extern struct protstream *imapd_out, *imapd_in;
+
+#ifdef __STDC__
+extern int index_expungeuidlist(char *rock, char *index);
+#else
+extern int index_expungeuidlist();
+#endif
