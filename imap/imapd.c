@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.452 2004/01/29 17:00:07 ken3 Exp $ */
+/* $Id: imapd.c,v 1.453 2004/01/31 17:01:59 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -7259,7 +7259,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
     if (!strncasecmp(lastname, "inbox", 5)) {
 	(*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
 					       imapd_userid, mboxname);
-	strcat(mboxname, lastname+5);
+	strlcat(mboxname, lastname+5, sizeof(mboxname));
     }
     else
 	strlcpy(mboxname, lastname, sizeof(mboxname));
