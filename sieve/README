@@ -1,4 +1,4 @@
-$Id: README,v 1.4 2002/02/19 18:09:46 ken3 Exp $
+$Id: README,v 1.4.8.1 2004/11/24 16:48:35 shadow Exp $
 
 CMU Sieve 2.1
 -------------
@@ -31,7 +31,7 @@ And prints out the actions taken or errors encountered.  (This
 implementation will attempt all the actions or no actions.)
 
 Questions and comments to:
-Larry Greenfield (leg+sieve@andrew.cmu.edu)
+Derrick Brashear (shadow+sieve@andrew.cmu.edu)
 
 References:
 
@@ -51,5 +51,9 @@ draft-martin-sieve-notify-01.txt, June, 2001.
 [REGEX] Murchison, K., "Sieve: Regular Expression Extension",
 draft-murchison-sieve-regex-04.txt, August, 2001.
 
-[SUBADDR] Murchison, K., "Sieve: Subaddress Extension",
-draft-murchison-sieve-subaddress-03.txt, August, 2001.
+[RELATIONAL] Segmuller, W., "Sieve Extension: Relational Tests",
+RFC 3431, December 2002.
+
+[SUBADDR] Murchison, K., "Sieve Email Filtering -- Subaddress Extension",
+RFC 3598, September 2003.
+
