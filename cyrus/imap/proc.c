@@ -1,5 +1,5 @@
 /* proc.c -- Server process registry
- $Id: proc.c,v 1.11 1998/05/15 21:49:40 neplokh Exp $
+ $Id: proc.c,v 1.12 1999/02/16 02:00:55 wcw Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -82,6 +82,7 @@ proc_cleanup()
     if (procfname) {
 	fclose(procfile);
 	unlink(procfname);
-	procfname = 0;
+	free(procfname);
+	procfname = NULL;
     }
 }
