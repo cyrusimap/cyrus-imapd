@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.14.4.5 2002/12/20 18:31:59 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.14.4.6 2003/01/27 21:26:34 rjs3 Exp $
  */
 
 #include <config.h>
@@ -77,6 +77,7 @@
 #include "duplicate.h"
 #include "imapconf.h"
 #include "exitcodes.h"
+#include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "netnews.h"
 #include "seen.h"
@@ -170,7 +171,6 @@ int main(int argc, char *argv[])
     extern char *optarg;
     int opt, r, r2;
     char *alt_config = NULL;
-    int flag = 0;
     int reserve_flag = 1;
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
     char dirname[1024], backup1[1024], backup2[1024];
@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
 	    break;
 
 	case 'r':
-	    flag |= CYRUSDB_RECOVER;
+	    libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
 	    msg = "recovering cyrus databases";
 	    if (op == NONE) op = RECOVER;
 	    else usage();
