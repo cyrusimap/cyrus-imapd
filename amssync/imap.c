@@ -527,13 +527,15 @@ void DeleteIMAP(bboard *bbd, message *msg)
 /*
  * Unscribe and append the AMS message to the IMAP mailbox
  */
+#define ALLOCSLOP 4096
 void UploadAMS(bboard *imapdest, bboard *amssrc, message *msg)
 {
     char *fname;
     FILE *msgf, *tmpf;
     char *allmsg, *withcrnl, buf[1025], *descbuf, *tmpfil, *p, *q, *r;
+    int withcrnllen, withcrnlsize;
     int len, rc, gmtnegative, scribeval, done, unscribe;
-    int gmtoff, line;
+    int gmtoff;
     struct tm *tm;
     struct stat statbuf;
     struct ScribeState *scribestate;
@@ -713,23 +715,23 @@ void UploadAMS(bboard *imapdest, bboard *amssrc, message *msg)
      * Now copy each line of the message into a new buffer, adding CR's
      * where neccesarry for RFC822 compliance.
      */
-    withcrnl=xmalloc(1);
-    withcrnl[0]='\0';
+    withcrnlsize = statbuf.st_size + ALLOCSLOP;
+    withcrnllen = 0;
+    withcrnl = xmalloc(withcrnlsize);
     q=allmsg;
-    line=0;
     while ((p=strchr(q,'\n'))) {
-	line++;
-	withcrnl=xrealloc(withcrnl, strlen(withcrnl)+ (int)(p-q) +3);
-	strncat(withcrnl, q, (int)(p-q));
-	r=&withcrnl[strlen(withcrnl)-1];
-	if (*r != '\r') {
-	    r++;
-	    *r++='\r';
-	    *r++='\n';
-	    *r='\0';
+	if (withcrnllen + (int)(p-q) + 3 > withcrnlsize) {
+	    withcrnlsize += (int)(p-q) + ALLOCSLOP;
+	    withcrnl = xrealloc(withcrnl, withcrnlsize);
 	}
+	strncpy(withcrnl+withcrnllen, q, (int)(p-q));
+	withcrnllen += (int)(p-q);
+	if (withcrnllen && withcrnl[withcrnllen-1] == '\r') withcrnllen--;
+	withcrnl[withcrnllen++] = '\r';
+	withcrnl[withcrnllen++] = '\n';
 	q=p+1;
     }
+    withcrnl[withcrnllen++] = '\0';
 #if 0                           /* this code sucks. It's supposed to */
                                 /* deal with an all-header no body */
                                 /* message without a trailing LF, but */
