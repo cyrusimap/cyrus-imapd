@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.173 2004/02/04 19:14:09 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.174 2004/02/27 16:59:28 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -2625,15 +2625,24 @@ void cmd_idle(char *tag)
 		       a) short
 		       b) don't contain literals
 		    */
+
 		    prot_NONBLOCK(backend_current->in);
 		    while (prot_fgets(buf, sizeof(buf), backend_current->in)) {
 			prot_write(proxyd_out, buf, strlen(buf));
 			prot_flush(proxyd_out);
 		    }
 		    prot_BLOCK(backend_current->in);
+
+		    if(prot_error(backend_current->in)) {
+			/* uh oh, we're not happy */
+			fatal("Lost connection to selected backend",
+			      EC_UNAVAILABLE);
+		    }
 		}
 		else {
 		    /* XXX shouldn't get here !!! */
+		    fatal("unknown protstream returned by prot_select in cmd_idle",
+			  EC_SOFTWARE);
 		}
 	    }
 	}
