@@ -1,5 +1,5 @@
 /* +++Date last modified: 05-Jul-1997 */
-/* $Id: hash.c,v 1.11 2003/10/22 18:50:12 rjs3 Exp $ */
+/* $Id: hash.c,v 1.12 2004/05/24 14:32:34 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -300,7 +300,7 @@ void hash_enumerate(hash_table *table, void (*func)(char *, void *, void *),
 		    void *rock)
 {
       unsigned i;
-      bucket *temp;
+      bucket *temp, *temp_next;
 
       for (i=0;i<table->size; i++)
       {
@@ -308,8 +308,9 @@ void hash_enumerate(hash_table *table, void (*func)(char *, void *, void *),
             {
                   for (temp = (table->table)[i];
                         NULL != temp;
-                        temp = temp -> next)
+                        temp = temp_next)
                   {
+			temp_next = temp->next;
                         func(temp -> key, temp->data, rock);
                   }
             }
