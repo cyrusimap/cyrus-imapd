@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.22 2000/11/05 22:11:28 leg Exp $";
+      "$Id: ptloader.c,v 1.23 2001/01/02 00:00:24 leg Exp $";
 
 #include <config.h>
 
@@ -68,6 +68,7 @@ static char rcsid[] __attribute__((unused)) =
 #include "xmalloc.h"
 #include "lock.h"
 #include "retry.h"
+#include "hash.h"
 
 /* blame transarc i've been told */
 #ifndef AFSCONF_CLIENTNAME
@@ -117,7 +118,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.22 2000/11/05 22:11:28 leg Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.23 2001/01/02 00:00:24 leg Exp $");
 
     while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
 	switch (opt) {
@@ -322,17 +323,19 @@ int c;
 
     /* fill in our new state structure */
     data.size = sizeof(struct auth_state) + 
-	(groups.namelist_len * PR_MAXNAMELEN);
+	(groups.namelist_len * sizeof(struct auth_ident));
     newstate = (struct auth_state *) xmalloc(data.size);
     data.data = newstate;
-    strcpy(newstate->userid, user);
+    strcpy(newstate->userid.id, user);
+    newstate->userid.hash = hash(user);
     kname_parse(newstate->aname, newstate->inst, newstate->realm, user);
     newstate->mark = time(0);
     newstate->ngroups = groups.namelist_len;
     /* store group list in contiguous array for easy storage in the database */
-    memset(newstate->groups, 0, newstate->ngroups * PR_MAXNAMELEN);
+    memset(newstate->groups, 0, newstate->ngroups * sizeof(struct auth_ident));
     for (i = 0; i < newstate->ngroups; i++) {
-        strcpy(newstate->groups[i], groups.namelist_val[i]);
+        strcpy(newstate->groups[i].id, groups.namelist_val[i]);
+	newstate->groups[i].hash = hash(groups.namelist_val[i]);
 	/* don't free groups.namelist_val[i]. Something else currently
 	 * takes care of that data. 
 	 */
@@ -546,4 +549,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.22 2000/11/05 22:11:28 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.23 2001/01/02 00:00:24 leg Exp $ */
