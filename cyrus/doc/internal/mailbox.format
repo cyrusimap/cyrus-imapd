@@ -183,9 +183,43 @@ Body Response -
   Raw IMAP response for an (old style) request for the body.
 
 Binary Bodystructure -
-  Offsets into the message file to pull out various body parts.
-  (xxx this needs more description of the actual format used.
-   message_write_section in message.c)
+  Offsets into the message file to pull out various body parts.  Because
+  of the nature of MIME parts, this is somewhat recursive.
+
+  This looks like the following (starting the octet following the cache
+  field size).  All of the fields are bit32s.
+
+  [
+   [Number of message parts+1]
+   [
+    [Offset in the message file of the header of this part]
+    [Size (octets) of the header of this part]
+    [Offset in the message file of the content of this part]
+    [Size (octets) of the content of this part]
+    [Encoding Type of this part]
+   ]
+      (repeat for each part as well as once for the headers)
+   [zero *or* number of sub-parts in the case of a multipart.
+    if nonzero, this is a recursion into the top structure]
+      (repeat for each part)
+  ] 
+
+  Note if this is not a message/rfc822, than the values for the sizes
+  of the part 0 are -1 (to indicate that it doesn't exist).  Sub-parts are
+  not possible for a part 0, so they aren't included when finding recursive
+  entries.
+
+  Note that the top level RFC822 headers are a separate part from their
+  body text.
+
+  So, a message with a single attachment is:
+
+  [[3][rfc822 header info][rfc822 body info][attachment info][0][0]]
+
+  A message with an attachment that has two subparts:
+
+  [[3][rfc822 header info][rfc822 body info][attachment info][0][
+	[3][NIL header info][sub part 1 info][sub part 2 info][0][0]]]
 
 Cache Header -
   Any cached header fields.  These are in the same format they would
