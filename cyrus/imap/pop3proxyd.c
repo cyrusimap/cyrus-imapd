@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.7 2002/08/11 16:53:24 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.8 2002/08/13 20:06:10 ken3 Exp $
  */
 #include <config.h>
 
@@ -1121,17 +1121,29 @@ void cmd_auth(char *arg)
     popd_auth_done = 1;
 }
 
+/* status is only set *if* it is non-null *and* we return something other
+ * than SASL_CONTINUE */
 static int mysasl_getauthline(struct protstream *p, char **line, 
-			      unsigned int *linelen)
+			      unsigned int *linelen, char **status)
 {
     char buf[2096];
     char *str = (char *) buf;
+
+    if(status) *status = NULL;
     
     if (!prot_fgets(str, sizeof(buf), p)) {
 	return SASL_FAIL;
     }
-    if (!strncasecmp(str, "+OK", 3)) { return SASL_OK; }
-    if (!strncasecmp(str, "-ERR", 4)) { return SASL_BADAUTH; }
+    if (!strncasecmp(str, "+OK", 3)) {
+	if(status)
+	    *status = xstrdup(str + 3);
+	return SASL_OK;
+    }
+    if (!strncasecmp(str, "-ERR", 4)) {
+	if(status)
+	    *status = xstrdup(str + 4);
+	return SASL_BADAUTH;
+    }
     if (str[0] == '+' && str[1] == ' ') {
 	size_t len;
 	str += 2; /* jump past the "+ " */
@@ -1156,6 +1168,10 @@ static int mysasl_getauthline(struct protstream *p, char **line,
 	}
     } else {
 	/* huh??? */
+
+	if(status)
+	    *status = xstrdup(" Unknown Error");
+
 	return SASL_FAIL;
     }
 }
@@ -1211,7 +1227,9 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin)
   return ret;
 }
 
-static int proxy_authenticate(const char *hostname)
+/* status is only set *if* it is non-null *and* we return something other
+ * than SASL_CONTINUE */
+static int proxy_authenticate(const char *hostname, char **authline_status)
 {
     int r;
     sasl_security_properties_t *secprops = NULL;
@@ -1312,7 +1330,7 @@ static int proxy_authenticate(const char *hostname)
 
     in = NULL;
     inlen = 0;
-    r = mysasl_getauthline(backend_in, &in, &inlen);
+    r = mysasl_getauthline(backend_in, &in, &inlen, authline_status);
     while (r == SASL_CONTINUE) {
 	r = sasl_client_step(backend_saslconn, in, inlen, NULL, &out, &outlen);
 	if (in) { 
@@ -1330,7 +1348,7 @@ static int proxy_authenticate(const char *hostname)
 	prot_write(backend_out, buf, b64len);
 	prot_printf(backend_out, "\r\n");
 
-	r = mysasl_getauthline(backend_in, &in, &inlen);
+	r = mysasl_getauthline(backend_in, &in, &inlen, authline_status);
     }
 
     /* Done with callbacks */
@@ -1353,6 +1371,7 @@ static void openproxy(void)
     char inboxname[MAX_MAILBOX_PATH];
     int r;
     char *server = NULL;
+    char *statusline = NULL;
 
     /* Translate any separators in userid
        (use a copy since we need the original userid for AUTH to backend) */
@@ -1395,13 +1414,20 @@ static void openproxy(void)
     backend_out = prot_new(backend_sock, 1);
     prot_setflushonread(backend_in, backend_out);
 
-    if (proxy_authenticate(server) != SASL_OK) {
+    if (proxy_authenticate(server, &statusline) != SASL_OK) {
 	syslog(LOG_ERR, "couldn't authenticate to backend server");
-	fatal("couldn't authenticate to backend server", 1);
+	prot_printf(popd_out, "-ERR%s", statusline);
+	prot_flush(popd_out);
+	free(statusline);
+
+	shut_down(0); /* no process reuse */
     }
 
-    prot_printf(popd_out, "+OK Maildrop locked and ready\r\n");
+    prot_printf(popd_out, "+OK%s", statusline);
     prot_flush(popd_out);
+
+    free(statusline);
+
     return;
 }
 
