@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.76 1999/08/09 21:07:49 leg Exp $
+ $Id: mailbox.c,v 1.77 1999/08/09 21:43:36 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -2046,27 +2046,32 @@ const char *to;
 }
 
 void mailbox_hash_mbox(char *buf, 
-			const char *root,
-			const char *name)
+		       const char *root,
+		       const char *name)
 {
     char *idx, *p;
     char c;
 
-    idx = strchr(name, '.');
-    if (idx == NULL) {
-	c = *name;
+    if (config_hashimapspool) {
+	idx = strchr(name, '.');
+	if (idx == NULL) {
+	    c = *name;
+	} else {
+	    c = *(idx + 1);
+	}
+	c = (char) tolower((int) c);
+	if (!islower(c))
+	    c = 'q';
+	
+	sprintf(buf, "%s/%c/%s", root, c, name);
+	
+	/* change all '.'s to '/' */
+	for (p = buf + strlen(root) + 3; *p; p++) {
+	    if (*p == '.') *p = '/';
+	}
     } else {
-	c = *(idx + 1);
-    }
-    c = (char) tolower((int) c);
-    if (!islower(c))
-	c = 'q';
-
-    sprintf(buf, "%s/%c/%s", root, c, name);
-
-    /* change all '.'s to '/' */
-    for (p = buf + strlen(root) + 3; *p; p++) {
-	if (*p == '.') *p = '/';
+	/* standard mailbox placement */
+	sprintf(buf, "%s/%s", root, name);
     }
 }
 

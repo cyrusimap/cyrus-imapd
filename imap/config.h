@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: config.h,v 1.7 1998/05/15 21:48:17 neplokh Exp $
+ $Id: config.h,v 1.8 1999/08/09 21:43:35 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -48,5 +48,7 @@ extern const char *config_partitiondir P((const char *partition));
 extern const char *config_dir;
 extern const char *config_defpartition;
 extern const char *config_newsspool;
+
+extern int config_hashimapspool;
 
 #endif /* INCLUDED_CONFIG_H */

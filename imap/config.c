@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.19 1999/07/08 03:56:51 leg Exp $
+ $Id: config.c,v 1.20 1999/08/09 21:43:35 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -100,6 +100,9 @@ const char *ident;
 
     /* Look up news spool */
     config_newsspool = config_getstring("newsspool", 0);
+
+    /* look up mailbox hashing */
+    config_hashimapspool = config_getswitch("hashimapspool", 0);
 
     return 0;
 }
