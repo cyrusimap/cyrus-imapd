@@ -24,6 +24,18 @@
 extern int errno;
 
 #define CONFIG_FILENAME "/etc/imapd.conf"
+/* You'd think this'd be EX_CONFIG, but you'd be wrong.
+   If it's EX_CONFIG then sendmail's result is to fatally reject the
+   message; this isn't desireable, we just want to fail the message in a
+   more limited case.
+
+   We had a situation where someone changed imapd.conf and made it
+   unreadable by Cyrus.  In 13 seconds, 4 messages were rejected, so I
+   changed the code.
+   
+   XXX hopefully sendmail is the only meaningful place where this matters.
+   */
+#define CONFIG_EXIT_STATUS EX_TMPFAIL
 
 struct configlist {
     char *key;
@@ -57,7 +69,7 @@ const char *ident;
     config_dir = config_getstring("configdirectory", (char *)0);
     if (!config_dir) {
 	fatal("configdirectory option not specified in configuration file",
-	      EX_CONFIG);
+	      CONFIG_EXIT_STATUS);
     }
 
     mboxlist_checkconfig();
@@ -67,13 +79,13 @@ const char *ident;
     for (p = (char *)config_defpartition; *p; p++) {
 	if (!isalnum(*p))
 	  fatal("defaultpartition option contains non-alphanumeric character",
-		EX_CONFIG);
+		CONFIG_EXIT_STATUS);
 	if (isupper(*p)) *p = tolower(*p);
     }
     if (!config_partitiondir(config_defpartition)) {
 	sprintf(buf, "partition-%s option not specified in configuration file",
 		config_defpartition);
-	fatal(buf, EX_CONFIG);
+	fatal(buf, CONFIG_EXIT_STATUS);
     }
 
     /* Look up umask */
@@ -160,7 +172,7 @@ config_read()
     if (!infile) {
 	sprintf(buf, "can't open configuration file %s: %s", CONFIG_FILENAME,
 		error_message(errno));
-	fatal(buf, EX_CONFIG);
+	fatal(buf, CONFIG_EXIT_STATUS);
     }
     
     while (fgets(buf, sizeof(buf), infile)) {
@@ -179,7 +191,7 @@ config_read()
 	    sprintf(buf,
 		    "invalid option name on line %d of configuration file",
 		    lineno);
-	    fatal(buf, EX_CONFIG);
+	    fatal(buf, CONFIG_EXIT_STATUS);
 	}
 	*p++ = '\0';
 
@@ -188,7 +200,7 @@ config_read()
 	if (!*p) {
 	    sprintf(buf, "empty option value on line %d of configuration file",
 		    lineno);
-	    fatal(buf, EX_CONFIG);
+	    fatal(buf, CONFIG_EXIT_STATUS);
 	}
 
 	if (nconfiglist == alloced) {
