@@ -89,7 +89,7 @@ char **argv;
 		fprintf(stderr, "deliver: multiple -m options\n");
 		usage();
 	    }
-	    mailboxname = optarg;
+	    if (*optarg) mailboxname = optarg;
 	    break;
 
 	case 'a':
