@@ -8,6 +8,16 @@ CMU_INIT_AUTOMAKE
   It adds "-I cmulocal" to the aclocal command line, so that when
   automake runs aclocal, aclocal'll continue to pick up these macros.
 
+CMU_ADD_LIBPATH
+  Add -L(arg), and possibly -R(arg) (or whatever the runpath is) to 
+  LDFLAGS.
+
+CMU_ADD_LIBPATH_TO
+  Likewise to above, except adds it to the specified variable (arg 2).
+
+CMU_GUESS_RUNPATH_SWITCH
+  Attempts to guess what the runpath switch is (-R or whatever).
+
 CMU_COMERR
   Requires that com_err exist in the collection (at CMU, do this by
   running "cvs checkout com_err", and adding com_err to DIST_SUBDIRS
@@ -56,3 +66,4 @@ CMU_KRB4
   This attempts to find Kerberos 4 libraries and set up CFLAGS and LIBS
   appropriately. It also updates and substitutes RPATH for shared library 
   stuff.
+

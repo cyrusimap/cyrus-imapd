@@ -34,7 +34,7 @@ RANLIB = @RANLIB@
 
 DEFS = @DEFS@ @TCL_DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ @TCL_CPPFLAGS@
-LIBS =  @TCL_LIBS@ @LIBS@
+LIBS =  @TCL_LIBS@ @IMAP_LIBS@
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@ 
 
 CFLAGS = @CFLAGS@

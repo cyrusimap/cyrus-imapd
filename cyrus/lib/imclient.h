@@ -1,5 +1,5 @@
 /* imclient.h -- Streaming IMxP client library
- $Id: imclient.h,v 1.13 1998/09/21 20:01:41 tjs Exp $
+ $Id: imclient.h,v 1.14 1999/06/19 02:18:56 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -76,5 +76,8 @@ extern int imclient_authenticate P((struct imclient *imclient,
 				    struct sasl_client **availmech,
 				    const char *service,
 				    const char *user, int protallowed));
+
+int timclient_authenticate(struct imclient *imclient, char *mechlist, char *service, char *user, 
+		       int minssf, int maxssf);
 
 #endif /* INCLUDED_IMCLIENT_H */

@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.26 1999/04/08 21:00:48 tjs Exp $
+ $Id: imclient.c,v 1.27 1999/06/19 02:18:56 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -44,7 +44,9 @@
 #include <sys/select.h>
 #endif
 
-#include "sasl.h"
+#include <sasl.h>
+
+/*#include "sasl.h"*/
 #include "exitcodes.h"
 #include "xmalloc.h"
 #include "imparse.h"
@@ -99,9 +101,9 @@ struct imclient {
     int alloc_replybuf;
     
     /* Protection mechanism data */
-    struct sasl_client *mech;
+  /*    struct sasl_client *mech;
     sasl_encodefunc_t *encodefunc;
-    sasl_decodefunc_t *decodefunc;
+    sasl_decodefunc_t *decodefunc;*/
     void *state;
     int maxplain;
     
@@ -119,6 +121,9 @@ struct imclient {
     int callback_num;
     int callback_alloc;
     struct imclient_callback *callback;
+
+  sasl_conn_t *saslconn;
+  int saslcompleted;
 };
 
 /*
@@ -201,6 +206,8 @@ const char *port;
     *imclient = (struct imclient *)xmalloc(sizeof(struct imclient));
     **imclient = zeroimclient;
     (*imclient)->fd = s;
+    (*imclient)->saslconn = NULL;
+    (*imclient)->saslcompleted = 0;
     (*imclient)->servername = xstrdup(hp->h_name);
     (*imclient)->outptr = (*imclient)->outstart = (*imclient)->outbuf;
     (*imclient)->outleft = (*imclient)->maxplain = sizeof((*imclient)->outbuf);
@@ -228,7 +235,7 @@ struct imclient *imclient;
     close(imclient->fd);
     free(imclient->servername);
     if (imclient->replybuf) free(imclient->replybuf);
-    if (imclient->state) imclient->mech->free_state(imclient->state);
+    /*    if (imclient->state) imclient->mech->free_state(imclient->state);*/
     
     for (i = 0; i < imclient->callback_num; i++) {
 	free(imclient->callback[i].keyword);
@@ -639,7 +646,7 @@ int len;
     parsed = imclient->replylen;
 
     /* Decrypt the data */
-    if (imclient->decodefunc) {
+    if (imclient->saslcompleted==1) {
 	char lenbuf[4];
 	int toklen, len;
 	char *plainptr;
@@ -647,31 +654,38 @@ int len;
 
 	for (;;) {
 	    /* Make sure we have an entire token */
-	    len = imclient->replycryptend - imclient->replycryptstart - 4;
+
+	  /*	    len = imclient->replycryptend - imclient->replycryptstart - 4;
 	    if (len < 0) break;
 	    memcpy(lenbuf, imclient->replybuf + imclient->replycryptstart, 4);
 	    toklen = ntohl(*(int *)lenbuf);
 	    if (toklen > IMCLIENT_BUFSIZE) {
-		/* XXX report error: token too long */
+		
 		(void) shutdown(imclient->fd, 0);
 		break;
 	    }
-	    if (len < toklen) break;
 
-	    /* Decode the crypttext token */
-	    if (imclient->decodefunc(imclient->state,
-		     imclient->replybuf + imclient->replycryptstart + 4,
-				     toklen, &plainptr, &plainlen)) {
-		/* XXX report decode error */
+	    if (len < toklen) break; */
+
+	    if (sasl_decode(imclient->saslconn,
+			    imclient->replybuf + imclient->replycryptstart,
+			    imclient->replycryptend - imclient->replycryptstart,
+			    &plainptr, &plainlen)!=SASL_OK) 
+	      {
 		(void) shutdown(imclient->fd, 0);
 		break;
-	    }
+	      
+	      }
+
+	    imclient->replycryptstart += imclient->replycryptend - imclient->replycryptstart;
+	    if (plainlen==0) break; /* didn't get a whole token */
 
 	    /* Copy the plaintext out, done with crypttext */
-	    memmove(imclient->replybuf + imclient->replylen,
+	    memcpy(imclient->replybuf + imclient->replylen,
 		    plainptr, plainlen);
 	    imclient->replylen += plainlen;
-	    imclient->replycryptstart += 4+toklen;
+
+	    free(plainptr);
 	}
     }
     else {
@@ -937,37 +951,30 @@ struct imclient *imclient;
     for (;;) {
 	writelen = imclient->outptr - imclient->outstart;
 
-	if (imclient->encodefunc) {
-	    /*
-	     * If output crypttext buffer empty and have output plaintext,
-	     * encode the plaintext, moving it to the crypttext buffer.
-	     */
-	    if (!imclient->outcryptlen && writelen) {
-		imclient->outcryptstart = imclient->outcryptbuf;
-		if (imclient->encodefunc(imclient->state, imclient->outstart,
-					 writelen, imclient->outcryptbuf+4,
-					 &n)) {
-		    /* XXX encoding error */
-		    n = 0;
-		}
-		*(int *)imclient->outcryptbuf = htonl(n);
-		imclient->outcryptlen = n + 4;
-		imclient->outstart += writelen;
-	    }
+	if ((imclient->saslcompleted==1) && (writelen>0)) {
+	  int cryptlen=0;
+	  char *cryptptr=NULL;
 
-	    /* If have output crypttext, write it out */
-	    if (imclient->outcryptlen) {
-		n = write(imclient->fd, imclient->outcryptstart,
-			  imclient->outcryptlen);
-		if (n > 0) {
-		    imclient->outcryptstart += n;
-		    imclient->outcryptlen -= n;
-		    return;
-		}
-		/* XXX Also EPIPE & the like? */
-		/* Make sure we select() for writing */
-		writelen = imclient->outcryptlen;
+	  if (sasl_encode(imclient->saslconn, imclient->outstart, writelen,
+			  &cryptptr,&cryptlen)!=SASL_OK)
+	    {
+	      /* XXX encoding error */
+	      n=0;
 	    }
+	  
+	  n = write(imclient->fd, cryptptr,
+		    cryptlen);
+
+	  if (n > 0) {	    
+	    free(cryptptr);
+	    imclient->outstart += writelen;
+	    return;
+	  }
+
+
+	  /* XXX Also EPIPE & the like? */
+	  /* Make sure we select() for writing */
+
 	}
 	else if (writelen) {
 	    /* No protection mechanism, just write the plaintext */
@@ -1018,30 +1025,6 @@ struct imclient_reply *reply;
     struct authresult *result = (struct authresult *)rock;
 
     if (!strcmp(reply->keyword, "OK")) {
-	/* Check for premature command completion */
-	if (result->r != SASL_DONE) {
-	    result->replytype = replytype_prematureok;
-	    return;
-	}
-
-	/* Query for a negotiated protection mechanism */
-	(imclient->mech)->query_state(imclient->state, &userid, &protlevel,
-				      &imclient->encodefunc,
-				      &imclient->decodefunc,
-				      &imclient->maxplain);
-
-	if (imclient->encodefunc || imclient->decodefunc) {
-	    /* Protection starts right after tagged OK command */
-	    imclient->replylen = imclient->replycryptstart =
-	      imclient->replystart - imclient->replybuf;
-	}
-	else {
-	    /* No protection mechanism, free the authentication state */
-	    (imclient->mech)->free_state(imclient->state);
-	    imclient->state = 0;
-	    imclient->maxplain = sizeof(imclient->outbuf);
-	}
-
 	result->replytype = replytype_ok;
     }
     else if (!strcmp(reply->keyword, "NO")) {
@@ -1050,118 +1033,207 @@ struct imclient_reply *reply;
     else result->replytype = replytype_bad;
 }
 
-/*
- * Authenticate the connection 'imclient' using one of the mechanisms
- * in 'availmech'.  'user', if non-null, specifies the user to authenticate
- * as.  'protallowed' is a bitmask of permissible protection mechanisms.
- */
-int
-imclient_authenticate(imclient, availmech, service, user, protallowed)
-struct imclient *imclient;
-const char *service;
-struct sasl_client **availmech;
-const char *user;
-int protallowed;
+
+
+
+static sasl_security_properties_t *make_secprops(int min,int max)
 {
-    struct sasl_client **mech;
-    struct sockaddr localaddr, remoteaddr;
-    int localaddrlen, remoteaddrlen;
-    int gotaddr = 1;
-    struct authresult result;
-    int inputlen, outputlen;
-    char *output;
+  sasl_security_properties_t *ret=(sasl_security_properties_t *)
+  malloc(sizeof(sasl_security_properties_t));
 
-    /*
-     * Try to get the connection network addresses, for use by the
-     * protection mechanisms.
-     */
-    localaddrlen = remoteaddrlen = sizeof(localaddr);
-    if (getsockname(imclient->fd, (struct sockaddr *)&localaddr,
-		    &localaddrlen) < 0 ||
-	getpeername(imclient->fd, (struct sockaddr *)&remoteaddr,
-		    &remoteaddrlen) < 0) {
-	gotaddr = 0;
-    }
+  ret->maxbufsize=1024;
+  ret->min_ssf=min;
+  ret->max_ssf=max;
 
-    /* Try each mechanism in turn */
-    for (mech = availmech; *mech; mech++) {
-	if ((*mech)->start((*mech)->rock, service, imclient->servername,
-			   user, protallowed,
-			   IMCLIENT_BUFSIZE, gotaddr ? &localaddr : 0,
-			   gotaddr ? &remoteaddr : 0, &imclient->state)) {
-	    continue;
-	}
+  ret->security_flags=0;
+  ret->property_names=NULL;
+  ret->property_values=NULL;
 
-	imclient->mech = *mech;
-	result.r = 0;
-	result.replytype = replytype_inprogress;
-
-	if ((*mech)->can_send_initial_response &&
-	    (imclient->flags & IMCLIENT_CONN_INITIALRESPONSE)) {
-	    if ((*mech)->auth(imclient->state,
-			      0, 0,
-			      &outputlen, &output) == SASL_FAIL) {
-		continue;
-	    }
-	    imclient_send(imclient, authresult, (void *)&result,
-			  "AUTHENTICATE %a %B", (*mech)->auth_type,
-			  outputlen, output);
-	}
-	else {
-	    imclient_send(imclient, authresult, (void *)&result,
-			  "AUTHENTICATE %a", (*mech)->auth_type);
-	}
-
-	for (;;) {
-	    /* Wait for ready response or command completion */
-	    imclient->readytag = imclient->gensym;
-	    while (imclient->readytag) {
-		imclient_processoneevent(imclient);
-	    }
-
-	    /* stop looping on command completion */
-	    if (!imclient->readytxt) break;
-
-	    /*
-	     * Base64-decode the challenge and run through the
-	     * authentication mechanism.
-	     */
-	    inputlen = imclient_decodebase64(imclient->readytxt);
-	    if (inputlen != -1) {
-		result.r = (*mech)->auth(imclient->state,
-					 inputlen, imclient->readytxt,
-					 &outputlen, &output);
-	    }
-	    if (inputlen == -1 || result.r == SASL_FAIL) {
-		/* Abort this authentication exchange */
-		imclient_write(imclient, "*\r\n", 3);
-		continue;
-	    }
-
-	    /* Send our reply to the server */
-	    imclient_writebase64(imclient, output, outputlen);
-	}
-	
-	/* Everything happy */
-	if (result.replytype == replytype_ok) {
-	    return 0;
-	}
-
-	/* Something failed, clean up after ourselves */
-	(*mech)->free_state(imclient->state);
-	imclient->state = 0;
-	imclient->mech = 0;
-
-	/* If we got a premature OK, signal severe error to caller */
-	if (result.replytype == replytype_prematureok) return 2;
-
-	/* If we got BAD, stop trying authentication mechanisms */
-	if (result.r == 0 && result.replytype == replytype_bad) {
-	    return 1;
-	}
-    }
-    return 1;
+  return ret;
 }
+
+void interaction (sasl_interact_t *t)
+{
+  char result[1024];
+
+  printf("%s:",t->prompt);
+  scanf("%s",&result);
+
+  t->len=strlen(result);
+  t->result=(char *) malloc(t->len+1);
+  memset(t->result, 0, t->len+1);
+  memcpy((char *) t->result, result, t->len);
+
+}
+
+void fillin_interactions(sasl_interact_t *tlist)
+{
+  while (tlist->id!=SASL_CB_LIST_END)
+  {
+    interaction(tlist);
+    tlist++;
+  }
+
+}
+
+/* callbacks we support */
+static sasl_callback_t callbacks[] = {
+  {
+    SASL_CB_USER, NULL, NULL
+  }, {
+    SASL_CB_AUTHNAME, NULL, NULL
+  }, {
+    SASL_CB_PASS, NULL, NULL    
+  }, {
+    SASL_CB_LIST_END, NULL, NULL
+  }
+};
+
+/*
+ * Params:
+ *  mechlist: list of mechanisms seperated by spaces
+ *
+ * Returns:
+ *  0 - sucess
+ *  1 - failure
+ *  2 - severe failure?
+ */
+
+int timclient_authenticate(struct imclient *imclient, char *mechlist, char *service, char *user, 
+		       int minssf, int maxssf)
+{
+  int saslresult;
+  sasl_security_properties_t *secprops=NULL;
+  int addrsize=sizeof(struct sockaddr_in);
+  struct sockaddr_in *saddr_l=malloc(sizeof(struct sockaddr_in));
+  struct sockaddr_in *saddr_r=malloc(sizeof(struct sockaddr_in));
+  sasl_interact_t *client_interact=NULL;
+  char *out;
+  unsigned int outlen;
+  char *in;
+  int inlen;
+  const char *mechusing;
+  char inbase64[2048];
+  int inbase64len;
+  struct authresult result;
+
+  /* attempt to start sasl */
+  saslresult=sasl_client_init(callbacks);
+  if (saslresult!=SASL_OK) return 1;
+
+  /* client new connection */
+  saslresult=sasl_client_new(service,
+			     imclient->servername,
+			     NULL,
+			     0,
+			     &(imclient->saslconn));
+  if (saslresult!=SASL_OK) return 1;
+
+  /*******
+   * Now set the SASL properties
+   *******/
+
+  secprops=make_secprops(minssf,maxssf);
+  if (secprops==NULL) return 1;
+
+  saslresult=sasl_setprop(imclient->saslconn, SASL_SEC_PROPS, secprops);
+  if (saslresult!=SASL_OK) return 1;
+  free(secprops);
+
+  if (getpeername(imclient->fd,(struct sockaddr *)saddr_r,&addrsize)!=0)
+    return 1;
+
+  /*  saddr_r->sin_port=htons(saddr_r->sin_port);	*/
+  saslresult=sasl_setprop(imclient->saslconn, SASL_IP_REMOTE, saddr_r);
+  if (saslresult!=SASL_OK) return 1;
+
+  addrsize=sizeof(struct sockaddr_in);
+  if (getsockname(imclient->fd,(struct sockaddr *)saddr_l,&addrsize)!=0)
+    return 1;
+
+  saddr_l->sin_port = saddr_r->sin_port; /* b/c getsockname is dumb and doesn't set it */
+
+  /*  saddr_l->sin_port=htons(saddr_l->sin_port);	*/
+  saslresult=sasl_setprop(imclient->saslconn,   SASL_IP_LOCAL, saddr_l);
+  if (saslresult!=SASL_OK) return 1;
+
+  free(saddr_l);
+  free(saddr_r);
+
+  /********
+   * SASL is setup. Now try the actual authentication
+   ********/
+    
+  saslresult=SASL_INTERACT;
+
+  /* call sasl client start */
+  while (saslresult==SASL_INTERACT)
+  {
+    saslresult=sasl_client_start(imclient->saslconn, mechlist,
+				 NULL, &client_interact,
+				 &out, &outlen,
+				 &mechusing);
+    if (saslresult==SASL_INTERACT)
+      fillin_interactions(client_interact); /* fill in prompts */      
+
+  }
+
+  if ((saslresult!=SASL_OK) && (saslresult!=SASL_CONTINUE)) return saslresult;
+
+  imclient_send(imclient, authresult, (void *)&result,
+		"AUTHENTICATE %a", mechusing);
+
+  while (1)
+  {
+
+    /* Wait for ready response or command completion */
+    imclient->readytag = imclient->gensym;
+    while (imclient->readytag) {
+      imclient_processoneevent(imclient);
+    }
+    
+    /* stop looping on command completion */
+    if (!imclient->readytxt) break;
+
+    inlen = imclient_decodebase64(imclient->readytxt);
+
+  /*  saslresult=sasl_decode64(imclient->readytxt,imclient->replylen-2,
+			     inbase64,&inbase64len);
+			     if (saslresult!=SASL_OK) return 1;*/
+    
+
+    /* perform a step */
+    saslresult=SASL_INTERACT;
+    while (saslresult==SASL_INTERACT)
+    {
+      saslresult=sasl_client_step(imclient->saslconn,
+				  /*				  inbase64,
+								  inbase64len,*/
+				  imclient->readytxt,
+				  inlen, 
+				  &client_interact,
+				  &out,
+				  &outlen);
+
+      if (saslresult==SASL_INTERACT)
+	fillin_interactions(client_interact); /* fill in prompts */      	
+    }
+
+    /* send to server */
+    /* Send our reply to the server */
+    if ((saslresult==SASL_OK) || (saslresult==SASL_CONTINUE))
+      imclient_writebase64(imclient, out, outlen);
+
+    free(out);
+
+  }
+  
+  imclient->saslcompleted=1;
+
+  return 0;
+}
+
+
 
 #define XX 127
 /*

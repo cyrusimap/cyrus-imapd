@@ -1,20 +1,8 @@
-dnl aclocal.m4 generated automatically by aclocal 1.3
-
-dnl Copyright (C) 1994, 1995, 1996, 1997, 1998 Free Software Foundation, Inc.
-dnl This Makefile.in is free software; the Free Software Foundation
-dnl gives unlimited permission to copy and/or distribute it,
-dnl with or without modifications, as long as this notice is preserved.
-
-dnl This program is distributed in the hope that it will be useful,
-dnl but WITHOUT ANY WARRANTY, to the extent permitted by law; without
-dnl even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-dnl PARTICULAR PURPOSE.
-
 dnl
 dnl Additional macros for configure.in packaged up for easier theft.
 dnl tjs@andrew.cmu.edu 6-may-1998
 dnl
-dnl $Id: aclocal.m4,v 1.8 1999/06/19 02:18:40 leg Exp $
+dnl $Id: cyrus.m4,v 1.1 1999/06/19 02:18:47 leg Exp $
 dnl
 
 dnl It would be good if ANDREW_ADD_LIBPATH could detect if something was
@@ -56,22 +44,3 @@ AC_DEFUN(CMU_GUESS_RUNPATH_SWITCH, [
     ])
   LDFLAGS="${SAVE_LDFLAGS}"
   ])])
-
-dnl sasl.m4--sasl detection macro
-dnl Rob Earhart
-
-AC_DEFUN(CMU_SASL, [
-	cmu_need_sasl=no
-	AC_CHECK_HEADER(sasl.h,
-	  cmu_save_LIBS="$LIBS"
-	  AC_CHECK_LIB(sasl, sasl_getprop,,cmu_need_sasl=yes)
-	  LIBS="$cmu_save_LIBS"
-	,cmu_need_sasl=yes)
-	if test "$cmu_need_sasl" = yes; then
-	  AC_ERROR([Can't compile without libsasl
-                  (Get it from <url:ftp://ftp.andrew.cmu.edu:/pub/cyrus-mail/>).])
-	fi
-	LIB_SASL="-lsasl"
-	AC_SUBST(LIB_SASL)
-])
-

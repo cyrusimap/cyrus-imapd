@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.44 1999/04/08 21:04:27 tjs Exp $
+ * $Id: pop3d.c,v 1.45 1999/06/19 02:18:53 leg Exp $
  */
 
 #include <stdio.h>
@@ -42,10 +42,11 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include <sasl.h>
+
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
-#include "sasl.h"
 #include "config.h"
 #include "prot.h"
 #include "exitcodes.h"
@@ -71,6 +72,8 @@ char klrealm[REALM_SZ];
 AUTH_DAT kdata;
 #endif
 
+sasl_conn_t *popd_saslconn; /* the sasl connection context */
+
 char *popd_userid = 0;
 struct mailbox *popd_mailbox = 0;
 struct sockaddr_in popd_localaddr, popd_remoteaddr;
@@ -95,6 +98,31 @@ static void cmd_capa();
 static void cmd_pass();
 static void cmd_user();
 
+/* This creates a structure that defines the allowable
+ *   security properties 
+ */
+static sasl_security_properties_t *make_secprops(int min,int max)
+{
+  sasl_security_properties_t *ret=
+    (sasl_security_properties_t *) xmalloc(sizeof(sasl_security_properties_t));
+
+  ret->maxbufsize=4000;
+  ret->min_ssf=min;     /* minimum allowable security strength */
+  ret->max_ssf=max;     /* maximum allowable security strength */
+
+  ret->security_flags = 0;
+  if (!config_getswitch("allowplaintext", 1)) {
+      ret->security_flags |= SASL_SEC_NOPLAINTEXT;
+  }
+  if (!config_getswitch("allowanonymouslogin", 0)) {
+      ret->security_flags |= SASL_SEC_NOANONYMOUS;
+  }
+  ret->property_names=NULL;
+  ret->property_values=NULL;
+
+  return ret;
+}
+
 main(argc, argv, envp)
 int argc;
 char **argv;
@@ -106,6 +134,7 @@ char **envp;
     struct hostent *hp;
     struct sockaddr_in sa;
     int timeout;
+    sasl_security_properties_t *secprops=NULL;
 
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
@@ -157,6 +186,25 @@ char **envp;
 	    popd_haveaddr = 1;
 	}
     }
+
+    /* Make a SASL connection and setup some properties for it */
+
+    if (sasl_server_init(NULL,"Cyrus")!=SASL_OK)
+      fatal("SASL failed initializing: sasl_server_init()",EC_USAGE); 
+    /* XXX different error code? */
+
+    /* other params should be filled in */
+    if (sasl_server_new("pop", hostname, NULL, NULL, 2000, &popd_saslconn)!=SASL_OK)
+	fatal("SASL failed initializing: sasl_server_new()",EC_USAGE); 
+    /* XXX different error code? */
+
+    /* will always return something valid */
+    secprops=make_secprops(0,2000);        
+    sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops);
+    
+    sasl_setprop(popd_saslconn,   SASL_IP_REMOTE, &popd_remoteaddr);  
+    sasl_setprop(popd_saslconn,   SASL_IP_LOCAL, &popd_localaddr);  
+
 
     proc_register("pop3d", popd_clienthost, (char *)0, (char *)0);
 
@@ -590,15 +638,21 @@ char *pass;
 	    return;
 	}
     }
-    else if (login_plaintext(popd_userid, pass, &reply) != 0) {
+    else if ((sasl_checkpass(popd_saslconn,
+			     popd_userid,
+			     strlen(popd_userid),
+			     pass,
+			     strlen(pass),
+			     (const char **) &reply))!=SASL_OK) { 
 	if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   popd_clienthost, popd_userid, reply);
 	}
-	free(popd_userid);
-	popd_userid = 0;
 	sleep(3);
 	prot_printf(popd_out, "-ERR Invalid login\r\n");
+	free(popd_userid);
+	popd_userid = 0;
+
 	return;
     }
     else {
@@ -620,27 +674,22 @@ cmd_capa()
     int minpoll = config_getint("popminpoll", 0) * 60;
     int expire = config_getint("popexpiretime", -1);
     const char *capabilities, *next_capabilities;
-
+    char *sasllist;
+    
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
 
     /* SASL special case: print SASL, then a list of supported capabilities
        (parsed from the IMAP-style login_capabilities function, then a CRLF */
-    prot_printf(popd_out, "SASL"); /* no \r\n */
-    next_capabilities = login_capabilities();
-    while (next_capabilities[0]) {
-	capabilities = next_capabilities;
-	next_capabilities = strchr(capabilities+1, ' ');
-	if (!next_capabilities) {
-	    next_capabilities = capabilities + strlen(capabilities);
-	}
-	if (!strncmp(capabilities, " AUTH=", 6)) {
-	    capabilities += 6;
-	    prot_putc(' ', popd_out);
-	    prot_write(popd_out, capabilities,
-		       next_capabilities - capabilities);
-	}
+    if (sasl_listmech(popd_saslconn,
+			 "", /* should be id string */
+			 ""," ","",
+			 &sasllist,
+			 NULL,NULL)==SASL_OK)
+    {
+      prot_printf(popd_out, "SASL"); /* no \r\n */
+      prot_printf(popd_out," %s",sasllist);
+      prot_printf(popd_out, "\r\n");    
     }
-    prot_printf(popd_out, "\r\n");
 
     if (expire < 0) {
 	prot_printf(popd_out, "EXPIRE NEVER\r\n");
@@ -666,7 +715,7 @@ void
 cmd_auth(authtype)
 char *authtype;
 {
-    char *initial_response;
+  /*    char *initial_response;
     char *canon_user;
     int r;
     struct sasl_server *mech;
@@ -791,7 +840,7 @@ char *authtype;
     }
     else {
 	mech->free_state(state);
-    }
+	}*/
 }
 
 /*

@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.34 1998/06/10 22:18:15 tjs Exp $
+ * $Id: prot.c,v 1.35 1999/06/19 02:18:57 leg Exp $
  */
 
 #include <stdio.h>
@@ -71,7 +71,8 @@ int write;
     newstream->flushonread = 0;
     newstream->readcallback_proc = 0;
     newstream->readcallback_rock = 0;
-
+    newstream->conn = NULL;
+    newstream->saslssf=0;
     return newstream;
 }
 
@@ -106,6 +107,57 @@ time_t *ptr;
     s->log_timeptr = ptr;
     time(s->log_timeptr);
     return 0;
+}
+
+/*
+ * Turn on SASL for this connection
+ */
+
+int prot_setsasl(s, conn)
+struct protstream *s;
+sasl_conn_t *conn;
+{
+  int *ssfp;
+  int result;
+
+  /* flush first if need be */
+  if (s->write && s->ptr != s->buf) prot_flush(s);
+
+  s->conn=conn;
+
+  result = sasl_getprop(conn, SASL_SSF, (void **) &ssfp);
+  if (result != SASL_OK)
+    return 1;
+
+  s->saslssf=*ssfp;
+
+
+  if (s->write) {
+    int result;
+    int *maxp, max;
+
+    /* ask SASL for layer max */
+    result = sasl_getprop(conn, SASL_MAXOUTBUF, (void **) &maxp);
+    max = *maxp;
+    if (result != SASL_OK)
+      return 1;
+    
+    /* can not be bigger than the prot buffersize since that's already allocated */
+    if (max>PROT_BUFSIZE)
+      max=PROT_BUFSIZE;
+
+    max-=50; /* account for extra foo incurred from layers */
+
+    s->maxplain=max;
+    s->cnt=max;
+  }
+  else if (s->cnt) {  /* XXX what does this do? */
+    s->leftptr = s->ptr;
+    s->leftcnt = s->cnt;
+    s->cnt = 0;
+  }
+
+  return 0;
 }
 
 /*
@@ -221,18 +273,13 @@ struct protstream *s;
     int r;
     struct timeval timeout;
     fd_set rfds;
-    int haveinput;
-    
+    int haveinput; 
+   
     if (s->eof || s->error) return EOF;
 
     do {
-	if (s->leftcnt) {
-	    /* Crypttext left over from last fill, process it */
-	    n = s->leftcnt;
-	    memmove(s->buf, s->leftptr, n);
-	    s->leftcnt = 0;
-	}
-	else {
+
+      /* wait until get input */
 	    haveinput = 0;
 	    if (s->readcallback_proc ||
 		(s->flushonread && s->flushonread->ptr != s->flushonread->buf)) {
@@ -267,10 +314,11 @@ struct protstream *s;
 		    return EOF;
 		}
 	    }
+
 	    do {
 		n = read(s->fd, s->buf+cnt, sizeof(s->buf)-cnt);
 	    } while (n == -1 && errno == EINTR);
-	}
+
     
 	if (n <= 0) {
 	    if (n) s->error = strerror(errno);
@@ -278,10 +326,45 @@ struct protstream *s;
 	    return EOF;
 	}
 
-	if (!s->func) {
-	    /* No protection function, just use the raw data */
-	    s->cnt = n-1;
-	    s->ptr = s->buf+1;
+	if (s->saslssf!=0) { /* decode it */
+	  int result;
+	  char *out;
+	  int outlen;
+
+	  /* Decode the input token */
+	  result= sasl_decode(s->conn,
+			      s->buf,
+			      n,
+			      &out,
+			      &outlen);
+
+	  if (result!=SASL_OK) {
+	    snprintf(s->buf,200,"Decoding error: %s (%i)",sasl_errstring(result,NULL,NULL),result);
+	    s->error = s->buf;
+	    printf("%i\n",result);
+	    printf("error %s\n",s->error);
+	    return EOF;
+	  }
+
+	  s->cnt=0;
+	  if (outlen>0)
+	  {
+	    memcpy(s->buf,out,outlen);
+	    s->ptr=s->buf+1;
+	    s->cnt=outlen-1;
+	    free(out);
+	  }
+
+	} else {
+	  /* No protection function, just use the raw data */
+	  s->ptr = s->buf+cnt+1;
+	  s->cnt = n-1;
+	}
+
+	  
+
+	if (s->cnt>0)
+	{
 	    if (s->logfd != -1) {
 		time_t newtime;
 		char timebuf[20];
@@ -308,59 +391,12 @@ struct protstream *s;
 	    }
 	    return *s->buf;
 	}
+
 	cnt += n;
-	/* First 4 bytes contain length of crypttext token */
-	if (!inputlen && cnt >= 4) {
-	    inputlen = ntohl(*(int *)s->buf);
-	    if (inputlen > sizeof(s->buf) - 4) {
-		s->error = "Input crypttext token too long";
-		return EOF;
-	    }
-	}
-    } while (cnt < 4 || cnt-4 < inputlen);
 
-    /* Decode the input token */
-    err = s->func(s->state, s->buf+4, inputlen, &s->ptr, &s->cnt);
-    if (err) {
-	strcpy(s->buf, "Decoding error: ");
-	strcat(s->buf, err);
-	s->error = s->buf;
-	return EOF;
-    }
 
-    /* Save any left-over crypttext data for next time */
-    if (cnt > inputlen + 4) {
-	s->leftptr = s->buf + inputlen + 4;
-	s->leftcnt = cnt - (inputlen + 4);
-    }
+    } while (1);
 
-    if (s->logfd != -1) {
-	time_t newtime;
-	char timebuf[20];
-
-	if (s->log_timeptr) {
-	    time(&newtime);
-	    sprintf(timebuf, "<%d<", newtime - *s->log_timeptr);
-	    write(s->logfd, timebuf, strlen(timebuf));
-	    *s->log_timeptr = newtime;
-	}
-
-	left = s->cnt;
-	ptr = s->ptr;
-	do {
-	    n = write(s->logfd, ptr, left);
-	    if (n == -1 && errno != EINTR) {
-		break;
-	    }
-	    if (n > 0) {
-		ptr += n;
-		left -= n;
-	    }
-	} while (left);
-    }
-
-    s->cnt--;
-    return *s->ptr++;
 }
 
 /*
@@ -373,6 +409,7 @@ struct protstream *s;
     unsigned char *ptr = s->buf;
     int left = s->ptr - s->buf;
     int n;
+    char *foo;
 
     if (s->eof || s->error) {
 	s->ptr = s->buf;
@@ -405,16 +442,24 @@ struct protstream *s;
 	ptr = s->buf;
     }
 
-    if (s->func) {
-	/* Encode the data */
-	if (s->func(s->state, ptr, left, outputbuf+4, &left)) {
-	    s->error = "Encoding error";
-	    if (s->log_timeptr) time(s->log_timeptr);
-	    return EOF;
-	}
-	*(int *)outputbuf = htonl(left);
-	ptr = outputbuf;
-	left += 4;
+
+
+    if (s->saslssf!=0) {
+      /* Encode the data */  /* xxx handle left */
+      int outlen;
+      int result;
+      int lup;
+
+      result=sasl_encode(s->conn, ptr, left, &foo, &outlen);
+      if (result!=SASL_OK)
+      {
+	s->error = "Encoding error";
+	if (s->log_timeptr) time(s->log_timeptr);
+	return EOF;
+      }
+
+      ptr=foo;
+      left=outlen;
     }
 
     /* Write out the data */
@@ -425,11 +470,17 @@ struct protstream *s;
 	    if (s->log_timeptr) time(s->log_timeptr);
 	    return EOF;
 	}
+
 	if (n > 0) {
 	    ptr += n;
 	    left -= n;
 	}
     } while (left);
+
+    /* sasl_encode did a malloc so we need to free for it */
+    if (s->saslssf!=0) { 
+      free(foo);
+    }
 
     /* Reset the output buffer */
     s->ptr = s->buf;
@@ -582,6 +633,7 @@ struct protstream *s;
 	*p++ = c;
 	if (c == '\n') break;
     }
+    if (c==EOF) printf("EOF!!!!\n");
     if (p == buf) return 0;
     *p++ = '\0';
     return buf;
