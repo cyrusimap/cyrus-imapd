@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75 2002/06/06 00:12:34 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.1 2002/07/10 20:00:02 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1138,7 +1138,7 @@ static int process_recipient(char *addr,
 	}
     }
     else {
-	while (*addr != '@' && *addr != '>') {
+	while ((config_virtdomains || *addr != '@') && *addr != '>') {
 	    if (*addr == '\\') addr++;
 	    *dest++ = *addr++;
 	}

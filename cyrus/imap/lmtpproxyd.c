@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42 2002/06/03 18:22:26 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.1 2002/07/10 20:00:02 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -439,7 +439,7 @@ static int adddest(struct mydata *mydata,
     if (!strncmp(mailbox, BB, sl) && mailbox[sl] == '+') {
 	/* special shared folder address */
 	strcpy(buf, mailbox + sl + 1);
-	mboxname_hiersep_tointernal(&lmtpd_namespace, buf);
+	mboxname_hiersep_tointernal(&lmtpd_namespace, buf, 0);
 	r = mupdate_find(mhandle, buf, &mailboxdata);
     } else {
 	char *plus;
@@ -762,7 +762,7 @@ static int verify_user(const char *user,
 
 #ifdef CHECK_MUPDATE_EARLY
     /* Translate any separators */
-    if (!r) mboxname_hiersep_tointernal(&lmtpd_namespace, buf);
+    if (!r) mboxname_hiersep_tointernal(&lmtpd_namespace, buf, 0);
     if (!r) {
 	r = mupdate_find(mhandle, buf, &mailboxdata);
 	if (r == MUPDATE_NOCONN) {

@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134 2002/06/20 16:35:52 rjs3 Exp $
+ $Id: mailbox.c,v 1.134.4.1 2002/07/10 20:00:02 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2641,7 +2641,22 @@ void mailbox_hash_mbox(char *buf,
 		       const char *name)
 {
     const char *idx;
-    char c, *p;
+    char c, *p, *x = buf;
+
+    sprintf(buf, "%s", root);
+    buf += strlen(buf);
+
+    if (config_virtdomains && (p = strchr(name, '!'))) {
+	if (config_hashimapspool) {
+	    c = (char) dir_hash_c(name);
+	    sprintf(buf, "%s%c/%.*s", FNAME_DOMAINDIR, c, p - name, name);
+	}
+	else {
+	    sprintf(buf, "%s%.*s", FNAME_DOMAINDIR, p - name, name);
+	}
+	name = p+1;
+	buf += strlen(buf);
+    }
 
     if (config_hashimapspool) {
 	idx = strchr(name, '.');
@@ -2652,14 +2667,14 @@ void mailbox_hash_mbox(char *buf,
 	}
 	c = (char) dir_hash_c(idx);
 	
-	sprintf(buf, "%s/%c/%s", root, c, name);
+	sprintf(buf, "/%c/%s", c, name);
     } else {
 	/* standard mailbox placement */
-	sprintf(buf, "%s/%s", root, name);
+	sprintf(buf, "/%s", name);
     }
 
     /* change all '.'s to '/' */
-    for (p = buf + strlen(root) + 1; *p; p++) {
+    for (p = buf; *p; p++) {
 	if (*p == '.') *p = '/';
     }
 }

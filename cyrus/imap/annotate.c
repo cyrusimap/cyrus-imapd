@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8 2002/06/03 15:22:20 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.1 2002/07/10 19:59:57 ken3 Exp $
  */
 
 #include <config.h>
@@ -330,7 +330,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		/* Reset state in fetch_cb */
 		fetch_cb(NULL, 0, 0, 0);
 
-		mboxname_hiersep_tointernal(namespace, mailbox);
+		mboxname_hiersep_tointernal(namespace, mailbox, 0);
 		fdata.namespace = namespace;
 		fdata.userid = userid;
 		fdata.entryatts = l;

@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.15 2002/06/26 16:04:06 ken3 Exp $
+ * $Id: ipurge.c,v 1.15.2.1 2002/07/10 19:59:59 ken3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -179,7 +179,7 @@ main (int argc, char *argv[]) {
     for (; optind < argc; optind++) {
       strncpy(buf, argv[optind], MAX_MAILBOX_NAME);
       /* Translate any separators in mailboxname */
-      mboxname_hiersep_tointernal(&purge_namespace, buf);
+      mboxname_hiersep_tointernal(&purge_namespace, buf, 0);
       (*purge_namespace.mboxlist_findall)(&purge_namespace, buf, 1, 0, 0,
 					  purge_me, NULL);
     }

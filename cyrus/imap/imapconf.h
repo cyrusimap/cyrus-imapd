@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16 2002/06/14 18:18:49 rjs3 Exp $
+ * $Id: imapconf.h,v 1.16.4.1 2002/07/10 19:59:58 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -101,6 +101,9 @@ extern const char *config_mupdate_server;
 
 extern int config_hashimapspool;
 
+extern int config_virtdomains;
+extern const char *config_defdomain;
+
 /* signal handling (signals.c) */
 typedef void shutdownfn(int);
 
@@ -146,6 +149,7 @@ void eatline(struct protstream *pin, int c);
 /* filenames */
 #define FNAME_DBDIR "/db"
 #define FNAME_USERDIR "/user/"
+#define FNAME_DOMAINDIR "/domain/"
 #define FNAME_LOGDIR "/log/"
 
 #endif /* INCLUDED_IMAPCONF_H */

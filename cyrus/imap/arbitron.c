@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.23 2001/08/16 20:52:05 ken3 Exp $ */
+/* $Id: arbitron.c,v 1.23.6.1 2002/07/10 19:59:57 ken3 Exp $ */
 
 #include <config.h>
 
@@ -137,7 +137,7 @@ int main(int argc,char **argv)
     }
 
     /* Translate any separators in mailboxname */
-    mboxname_hiersep_tointernal(&arb_namespace, pattern);
+    mboxname_hiersep_tointernal(&arb_namespace, pattern, 0);
 
     (*arb_namespace.mboxlist_findall)(&arb_namespace, pattern, 1, 0, 0,
 				      do_mailbox, NULL);

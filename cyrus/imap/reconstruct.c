@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68 2002/03/30 19:46:57 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.1 2002/07/10 20:00:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -195,7 +195,7 @@ int main(int argc, char **argv)
     for (i = optind; i < argc; i++) {
 	strcpy(buf, argv[i]);
 	/* Translate any separators in mailboxname */
-	mboxname_hiersep_tointernal(&recon_namespace, buf);
+	mboxname_hiersep_tointernal(&recon_namespace, buf, 0);
 	do_reconstruct(buf, 0, 0, fflag ? &head : NULL);
 	if (rflag) {
 	    strcat(buf, ".*");

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131 2002/07/09 14:58:47 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.1 2002/07/10 20:00:05 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -3893,7 +3893,7 @@ void cmd_find(char *tag, char *namespace, char *pattern)
     }
 
     /* Translate any separators in pattern */
-    mboxname_hiersep_tointernal(&proxyd_namespace, pattern);
+    mboxname_hiersep_tointernal(&proxyd_namespace, pattern, 0);
 
     if (!strcasecmp(namespace, "mailboxes")) {
 	if (!backend_inbox) {
@@ -4001,7 +4001,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	}
 
 	/* Translate any separators in pattern */
-	mboxname_hiersep_tointernal(&proxyd_namespace, pattern);
+	mboxname_hiersep_tointernal(&proxyd_namespace, pattern, 0);
 
 	(*proxyd_namespace.mboxlist_findall)(&proxyd_namespace, pattern,
 					     proxyd_userisadmin, proxyd_userid,

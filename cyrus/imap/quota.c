@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.41 2002/05/22 19:55:24 rjs3 Exp $ */
+/* $Id: quota.c,v 1.41.4.1 2002/07/10 20:00:06 ken3 Exp $ */
 
 
 #include <config.h>
@@ -208,7 +208,7 @@ int buildquotalist(char **roots, int nroots)
      * translated name.
      */
     for (i = 0; i < nroots; i++) {
-	mboxname_hiersep_tointernal(&quota_namespace, roots[i]);
+	mboxname_hiersep_tointernal(&quota_namespace, roots[i], 0);
     }
 
     sprintf(quota_path, "%s%s", config_dir, FNAME_QUOTADIR);

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398 2002/07/03 20:40:05 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.1 2002/07/10 19:59:58 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1783,7 +1783,7 @@ void cmd_login(char *tag, char *user)
 	}
     }
     
-    imapd_authstate = auth_newstate(canon_user, (char *)0);
+    imapd_authstate = auth_newstate(imapd_userid, (char *)0);
     val = config_getstring("admins", "");
     while (*val) {
 	for (p = (char *)val; *p && !isspace((int) *p); p++);
@@ -1811,7 +1811,9 @@ void cmd_login(char *tag, char *user)
     }
 
     /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid);
+    mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid,
+				config_virtdomains ?
+				strcspn(imapd_userid, "@") : 0);
 
     freebuf(&passwdbuf);
     return;
@@ -1952,7 +1954,9 @@ cmd_authenticate(char *tag,char *authtype)
     }
 
     /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid);
+    mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid,
+				config_virtdomains ?
+				strcspn(imapd_userid, "@") : 0);
 
     return;
 }
@@ -3934,7 +3938,7 @@ char *pattern;
     }
 
     /* Translate any separators in pattern */
-    mboxname_hiersep_tointernal(&imapd_namespace, pattern);
+    mboxname_hiersep_tointernal(&imapd_namespace, pattern, 0);
 
     if (!strcasecmp(namespace, "mailboxes")) {
 	int force = config_getswitch("allowallsubscribe", 0);
@@ -4024,7 +4028,7 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	}
 
 	/* Translate any separators in pattern */
-	mboxname_hiersep_tointernal(&imapd_namespace, pattern);
+	mboxname_hiersep_tointernal(&imapd_namespace, pattern, 0);
 
 	/* Check to see if we should only list the personal namespace */
 	if (!strcmp(pattern, "*") && config_getint("foolstupidclients", 0)) {

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55 2002/06/18 16:40:19 rjs3 Exp $ */
+/* $Id: config.c,v 1.55.4.1 2002/07/10 19:59:57 ken3 Exp $ */
 
 #include <config.h>
 
@@ -81,6 +81,8 @@ const char *config_newsspool;	           /* /var/spool/news */
 const char *config_servername;	           /* gethostname() */
 const char *config_mupdate_server;         /* NULL */
 int config_hashimapspool;	           /* f */
+int config_virtdomains;	                   /* f */
+const char *config_defdomain;              /* NULL */
 
 static void config_read(const char *alt_config);
 
@@ -136,6 +138,10 @@ int config_init(const char *alt_config, const char *ident)
 
     /* look up mailbox hashing */
     config_hashimapspool = config_getswitch("hashimapspool", 0);
+
+    /* are we supporting virtual domains?  */
+    config_virtdomains = config_getswitch("virtdomains", 0);
+    config_defdomain = config_getstring("defaultdomain", 0);
 
     /* look up the hostname we should present to the user */
     config_servername = config_getstring("servername", 0);

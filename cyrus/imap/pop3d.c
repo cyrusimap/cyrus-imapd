@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122 2002/06/03 18:22:27 rjs3 Exp $
+ * $Id: pop3d.c,v 1.122.4.1 2002/07/10 20:00:04 ken3 Exp $
  */
 #include <config.h>
 
@@ -1359,11 +1359,14 @@ int openinbox(void)
     popd_login_time = time(0);
 
     /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&popd_namespace, popd_userid);
+    mboxname_hiersep_tointernal(&popd_namespace, popd_userid,
+				config_virtdomains ?
+				strcspn(popd_userid, "@") : 0);
 
-    strcpy(inboxname, "user.");
-    strcat(inboxname, popd_userid);
-    r = mailbox_open_header(inboxname, 0, &mboxstruct);
+    r = (*popd_namespace.mboxname_tointernal)(&popd_namespace, "INBOX",
+					      popd_userid, inboxname);
+
+    if (!r) r = mailbox_open_header(inboxname, 0, &mboxstruct);
     if (r) {
 	free(popd_userid);
 	popd_userid = 0;

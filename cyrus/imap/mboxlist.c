@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198 2002/07/02 17:50:32 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.1 2002/07/10 20:00:03 ken3 Exp $
  */
 
 #include <config.h>
@@ -332,6 +332,7 @@ mboxlist_mycreatemailboxcheck(char *name,
 			      struct txn **tid)
 {
     int r;
+    char *mbox = name;
     char *p;
     char *acl, *path;
     char *defaultacl, *identifier, *rights;
@@ -348,7 +349,11 @@ mboxlist_mycreatemailboxcheck(char *name,
     if (partition && strlen(partition) > MAX_PARTITION_LEN) {
 	return IMAP_PARTITION_UNKNOWN;
     }
-    r = mboxname_policycheck(name);
+    if (config_virtdomains && (p = strchr(name, '!'))) {
+	/* pointer to mailbox w/o domain prefix */
+	mbox = p + 1;
+    }
+    r = mboxname_policycheck(mbox);
     if (r) return r;
 
     /* you must be a real admin to create a local-only mailbox */
@@ -385,10 +390,10 @@ mboxlist_mycreatemailboxcheck(char *name,
 	break;
     }
 
-    /* Search for a parent */
+    /* Search for a parent - stop if we hit the domain separator */
     strcpy(parent, name);
     parentlen = 0;
-    while ((parentlen==0) && (p = strrchr(parent, '.'))) {
+    while ((parentlen==0) && (p = strrchr(parent, '.')) && !strchr(p, '!')) {
 	*p = '\0';
 
 	r = mboxlist_mylookup(parent, NULL, NULL, &parentpartition, 
@@ -440,15 +445,15 @@ mboxlist_mycreatemailboxcheck(char *name,
 	}
 	
 	acl = xstrdup("");
-	if (!strncmp(name, "user.", 5)) {
-	    char *firstdot = strchr(name+5, '.');
+	if (!strncmp(mbox, "user.", 5)) {
+	    char *firstdot = strchr(mbox+5, '.');
 	    if (!force_user_create && firstdot) {
 		/* Disallow creating user.X.* when no user.X */
 		free(acl);
 		return IMAP_PERMISSION_DENIED;
 	    }
 	    /* disallow wildcards in userids with inboxes. */	     
-	    if (strchr(name, '*') || strchr(name, '%') || strchr(name, '?')) {
+	    if (strchr(mbox, '*') || strchr(mbox, '%') || strchr(mbox, '?')) {
 		return IMAP_MAILBOX_BADNAME;
 	    }
 
@@ -460,7 +465,8 @@ mboxlist_mycreatemailboxcheck(char *name,
 	     * an acl for the wrong user.
 	     */
 	    if(firstdot) *firstdot = '\0';
-	    identifier = xstrdup(name+5);
+	    identifier = xmalloc(mbox - name + strlen(mbox+5) + 1);
+	    strcpy(identifier, mbox+5);
 	    if(firstdot) *firstdot = '.';
 
 	    if (config_getswitch("unixhierarchysep", 0)) {
@@ -472,6 +478,11 @@ mboxlist_mycreatemailboxcheck(char *name,
 		for (p = identifier; *p; p++) {
 		    if (*p == DOTCHAR) *p = '.';
 		}
+	    }
+	    if (mbox != name) {
+		/* add domain to identifier */
+		sprintf(identifier+strlen(identifier),
+			"@%.*s", mbox - name - 1, name);
 	    }
 	    cyrus_acl_set(&acl, identifier, ACL_MODE_SET, ACL_ALL,
 		    (cyrus_acl_canonproc_t *)0, (void *)0);
@@ -1679,6 +1690,16 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
     int r = 0;
     char *p;
     int prefixlen;
+    int userlen = strlen(userid), domainlen = 0;
+    char domainpat[MAX_MAILBOX_NAME+1]; /* do intra-domain fetches only */
+
+    if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
+	userlen = p - userid;
+	domainlen = strlen(p); /* includes separator */
+	sprintf(domainpat, "%s!%s", p+1, pattern);
+    }
+    else
+	strcpy(domainpat, pattern);
 
     cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
     cbrock.namespace = NULL;
@@ -1691,10 +1712,11 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
     cbrock.procrock = rock;
 
     /* Build usermboxname */
-    if (userid && !strchr(userid, '.') &&
+    if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > userlen)) &&
 	strlen(userid)+5 < MAX_MAILBOX_NAME) {
-	strcpy(usermboxname, "user.");
-	strcat(usermboxname, userid);
+	if (domainlen)
+	    sprintf(usermboxname, "%s!", userid+userlen+1);
+	sprintf(usermboxname+domainlen, "user.%.*s", userlen, userid);
 	usermboxnamelen = strlen(usermboxname);
     }
     else {
@@ -1710,8 +1732,9 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
 	    }
 	}
-	else if (!strncmp(pattern, usermboxname, usermboxnamelen) &&
-		 GLOB_TEST(cbrock.g, usermboxname) != -1) {
+	else if (!strncmp(pattern,
+			  usermboxname+domainlen, usermboxnamelen-domainlen) &&
+		 GLOB_TEST(cbrock.g, usermboxname+domainlen) != -1) {
 	    r = DB->fetch(mbdb, usermboxname, usermboxnamelen,
 			  &data, &datalen, NULL);
 	    if (!r && data) {
@@ -1742,14 +1765,14 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
      * search for those mailboxes next
      */
     if (userid &&
-	(!strncmp(usermboxname, pattern, usermboxnamelen-1) ||
+	(!strncmp(usermboxname+domainlen, pattern, usermboxnamelen-domainlen-1) ||
 	 !strncasecmp("inbox.", pattern, prefixlen < 6 ? prefixlen : 6))) {
 
-	if (!strncmp(usermboxname, pattern, usermboxnamelen-1)) {
+	if (!strncmp(usermboxname+domainlen, pattern, usermboxnamelen-domainlen-1)) {
 	    cbrock.inboxoffset = 0;
 	}
 	else {
-	    cbrock.inboxoffset = strlen(userid);
+	    cbrock.inboxoffset = domainlen + userlen;
 	}
 
 	cbrock.find_namespace = NAMESPACE_INBOX;
@@ -1772,7 +1795,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 	   just bother looking at the ones that have the same pattern
 	   prefix. */
 	r = DB->foreach(mbdb,
-			pattern, prefixlen,
+			domainpat, domainlen + prefixlen,
 			&find_p, &find_cb, &cbrock,
 			NULL);
     }
@@ -2312,13 +2335,24 @@ void mboxlist_done(void)
 /* hash the userid to a file containing the subscriptions for that user */
 char *mboxlist_hash_usersubs(const char *userid)
 {
-    char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_USERDIR) +
-			  strlen(userid) + sizeof(FNAME_SUBSSUFFIX) + 10);
-    char c;
+    char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_DOMAINDIR) +
+			  sizeof(FNAME_USERDIR) + strlen(userid) +
+			  sizeof(FNAME_SUBSSUFFIX) + 10);
+    char c, *domain;
 
-    c = (char) dir_hash_c(userid);
-    sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
-	    FNAME_SUBSSUFFIX);
+    if (config_virtdomains && (domain = strchr(userid, '@'))) {
+	char d = (char) dir_hash_c(domain+1);
+	*domain = '\0';  /* split user@domain */
+	c = (char) dir_hash_c(userid);
+	sprintf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
+		domain+1, FNAME_USERDIR, c, userid, FNAME_SUBSSUFFIX);
+	*domain = '@';  /* replace '@' */
+    }
+    else {
+	c = (char) dir_hash_c(userid);
+	sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
+		FNAME_SUBSSUFFIX);
+    }
 
     return fname;
 }

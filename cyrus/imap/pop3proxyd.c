@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42 2002/06/12 20:00:12 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.1 2002/07/10 20:00:05 ken3 Exp $
  */
 #include <config.h>
 
@@ -1284,7 +1284,7 @@ static void openproxy(void)
 
     /* Translate any separators in userid part of inboxname
        (we need the original userid for AUTH to backend) */
-    mboxname_hiersep_tointernal(&popd_namespace, inboxname+5);
+    mboxname_hiersep_tointernal(&popd_namespace, inboxname+5, 0);
 
     r = mboxlist_lookup(inboxname, &server, NULL, NULL);
     if (r) fatal("couldn't find backend server", EC_CONFIG);

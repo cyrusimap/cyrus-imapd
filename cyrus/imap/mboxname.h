@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.9 2002/01/24 16:39:28 rjs3 Exp $
+ * $Id: mboxname.h,v 1.9.4.1 2002/07/10 20:00:04 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -82,8 +82,10 @@ int mboxname_init_namespace(struct namespace *namespace, int force_std);
  * Translate separator charactors in a mailboxname from its external
  * representation to its internal representation '.'.
  * If using the unixhierarchysep '/', all '.'s get translated to DOTCHAR.
+ * length is the length of the string to translate (0 = strlen(name)).
  */
-char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name);
+char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name,
+				  int length);
 
 /*
  * Translate separator charactors in a mailboxname from its internal
