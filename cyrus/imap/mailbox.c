@@ -115,7 +115,7 @@ struct mailbox *mailbox;
     r = mboxlist_lookup(name, &path, &acl);
     if (r) return r;
 
-    return mailbox_open_header_path(name, path, acl, mailbox);
+    return mailbox_open_header_path(name, path, acl, mailbox, 0);
 }
 
 /*
@@ -124,11 +124,12 @@ struct mailbox *mailbox;
  * The structure pointed to by 'mailbox' is initialized.
  */
 int
-mailbox_open_header_path (name, path, acl, mailbox)
+mailbox_open_header_path (name, path, acl, mailbox, suppresslog)
 char *name;
 char *path
 char *acl;
 struct mailbox *mailbox;
+int suppresslog;
 {
     char *path, *acl;
     char fnamebuf[MAX_MAILBOX_PATH];
@@ -142,7 +143,9 @@ struct mailbox *mailbox;
     mailbox->header = fopen(fnamebuf, "r+");
     
     if (!mailbox->header && !mailbox_doing_reconstruct) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
+	if (!suppresslog) {
+	    syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
+	}
 	return IMAP_IOERROR;
     }
 
