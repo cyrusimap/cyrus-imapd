@@ -1,6 +1,6 @@
 /* mupdate-client.h -- cyrus murder database clients
  *
- * $Id: mupdate-client.h,v 1.6 2002/01/28 22:07:14 rjs3 Exp $
+ * $Id: mupdate-client.h,v 1.7 2002/01/28 22:34:07 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,9 +73,6 @@ enum mbtype {
 };
 
 /* mailbox data structure */
-/* when returned to client application, these strings are allocated and
- * the type is correctly set.  For callbacks, the type is not used, and
- * members are only set as needed. */
 struct mupdate_mailboxdata {
     const char *mailbox;
     const char *server;

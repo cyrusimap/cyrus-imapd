@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.21 2002/01/28 22:07:14 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.22 2002/01/28 22:34:07 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -110,9 +110,11 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
 			   const char *cmd, void *context) 
 {
     const char *hostname = (const char *)context;
+    int len = strlen(hostname);
     int ret;
-    
-    if(!strncmp(mdata->server, hostname, strlen(hostname))) {
+
+    /* Are we the apointed server? */
+    if(!strncmp(mdata->server, hostname, len) && mdata->server[len] == '!') {
 	/* the server thinks we have it, do we think we have it? */
 	ret = mboxlist_lookup(mdata->mailbox, NULL, NULL, NULL);
 	if(ret) {
