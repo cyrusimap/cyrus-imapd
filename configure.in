@@ -269,6 +269,9 @@ AC_ARG_WITH(afs,[  --with-afs=PATH         use AFS libraries from PATH],
 	[with_afs="${withval}"
 	CFLAGS="${CFLAGS} -I${withval}/include"],with_afs="/usr/local")
 
+AC_CHECK_LIB(ndbm, dbm_open)
+AC_CHECK_LIB(dbm, dbm_open)
+AC_CHECK_FUNC(dbopen,AC_DEFINE(HAVE_LIBDB),AC_CHECK_LIB(db, dbopen))
 AC_MSG_CHECKING(for Kerberos)
 AC_CACHE_VAL(cyrus_cv_lib_kerberos, if test -f /etc/krb.conf; then
 	cyrus_cv_lib_kerberos=yes
@@ -532,9 +535,6 @@ dnl
 dnl Random other libraries
 dnl
 
-AC_CHECK_LIB(ndbm, dbm_open)
-AC_CHECK_LIB(dbm, dbm_open)
-AC_CHECK_FUNC(dbopen,AC_DEFINE(HAVE_LIBDB),AC_CHECK_LIB(db, dbopen))
 AC_CHECK_FUNC(gethostbyname)
 if test $ac_cv_func_gethostbyname = no; then
   AC_CHECK_LIB(nsl, gethostbyname, EXTRA_LIBS="-lnsl")
