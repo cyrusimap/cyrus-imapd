@@ -17,7 +17,7 @@ typedef unsigned bit32;
 #define FNAME_CACHE "/cyrus.cache"
 #define FNAME_QUOTA "/cyrus.quota"
 
-#define QUOTA_UNITS (1024*1024)
+#define QUOTA_UNITS (1024)
 
 struct mailbox {
     FILE *header;
