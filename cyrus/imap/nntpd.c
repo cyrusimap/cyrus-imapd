@@ -1,4 +1,4 @@
-/* nntp.c -- NNTP server protocol parsing
+/* nntpd.c -- NNTP server
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -49,7 +49,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.1 2002/09/23 20:31:29 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.2 2002/09/23 20:32:53 ken3 Exp $
  */
 #include <config.h>
 
