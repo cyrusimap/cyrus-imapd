@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.12 2005/03/15 18:52:37 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.13 2005/03/22 18:49:34 ken3 Exp $
  */
 
 #include <config.h>
@@ -2426,6 +2426,8 @@ static void remove_folder(char *name, struct sync_action_list *list,
 
 /* ====================================================================== */
 
+#define SYNC_MAILBOX_RETRIES 3
+
 static int do_sync(const char *filename)
 {
     struct sync_user_list   *user_folder_list = sync_user_list_create();
@@ -2437,6 +2439,7 @@ static int do_sync(const char *filename)
     struct sync_action_list *append_list = sync_action_list_create();
     struct sync_action_list *acl_list    = sync_action_list_create();
     struct sync_action_list *quota_list  = sync_action_list_create();
+    struct sync_action_list *annot_list  = sync_action_list_create();
     struct sync_action_list *seen_list   = sync_action_list_create();
     struct sync_action_list *sub_list    = sync_action_list_create();
     struct sync_action_list *unsub_list  = sync_action_list_create();
@@ -2448,7 +2451,7 @@ static int do_sync(const char *filename)
     int c;
     int fd;
     struct protstream *input;
-    int r = 0;
+    int n, r = 0;
 
     if ((filename == NULL) || !strcmp(filename, "-"))
         fd = 0;
@@ -2516,6 +2519,8 @@ static int do_sync(const char *filename)
             sync_action_list_add(acl_list, arg1s, NULL);
         else if (!strcmp(type.s, "QUOTA"))
             sync_action_list_add(quota_list, arg1s, NULL);
+        else if (!strcmp(type.s, "ANNOTATION"))
+            sync_action_list_add(annot_list, arg1s, NULL);
         else if (!strcmp(type.s, "SEEN"))
             sync_action_list_add(seen_list, arg2s, arg1s);
         else if (!strcmp(type.s, "SUB"))
@@ -2531,14 +2536,15 @@ static int do_sync(const char *filename)
     for (action = user_list->head ; action ; action = action->next) {
 	char inboxname[MAX_MAILBOX_NAME+1];
 
-	/* USER action overrides any APPEND, ACL, QUOTA action on
-	   any of the user's mailboxes or any META, SIEVE, SEEN,
-	   SUB, UNSUB action for same user */
+	/* USER action overrides any APPEND, ACL, QUOTA, ANNOTATION action on
+	   any of the user's mailboxes or any META, SIEVE, SEEN, SUB, UNSUB
+	   action for same user */
 	(sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
 					      action->user, inboxname);
         remove_folder(inboxname, append_list, 1);
         remove_folder(inboxname, acl_list, 1);
         remove_folder(inboxname, quota_list, 1);
+        remove_folder(inboxname, annot_list, 1);
         remove_meta(action->user, meta_list);
         remove_meta(action->user, sieve_list);
         remove_meta(action->user, seen_list);
@@ -2556,11 +2562,12 @@ static int do_sync(const char *filename)
     }
 
     for (action = mailbox_list->head ; action ; action = action->next) {
-	/* MAILBOX action overrides any APPEND, ACL, QUOTA action
+	/* MAILBOX action overrides any APPEND, ACL, QUOTA, ANNOTATION action
 	   on same mailbox */
         remove_folder(action->name, append_list, 0);
         remove_folder(action->name, acl_list, 0);
         remove_folder(action->name, quota_list, 0);
+        remove_folder(action->name, annot_list, 0);
     }
 
     /* Create a lock for our transaction */
@@ -2611,7 +2618,21 @@ static int do_sync(const char *filename)
             }
         }
     }
-
+#if 0
+    for (action = annot_list->head ; action ; action = action->next) {
+        if (action->active && do_annotation(action->name) && *action->name) {
+            sync_action_list_add(mailbox_list, action->name, NULL);
+            if (verbose) {
+                printf("  Promoting: ANNOTATION %s -> MAILBOX %s\n",
+                       action->name, action->name);
+            }
+            if (verbose_logging) {
+                syslog(LOG_INFO, "  Promoting: ANNOTATION %s -> MAILBOX %s",
+                       action->name, action->name);
+            }
+        }
+    }
+#endif
     for (action = sieve_list->head ; action ; action = action->next) {
         if (action->active && do_sieve(action->user)) {
             sync_action_list_add(meta_list, NULL, action->user);
@@ -2674,8 +2695,13 @@ static int do_sync(const char *filename)
 	sync_folder_list_add(folder_list, NULL, action->name, NULL, NULL);
     }
 
-    if (folder_list->count && (r=do_mailboxes(folder_list)))
-	goto bail;
+    if (folder_list->count) {
+	for (n = 0; r && (n < SYNC_MAILBOX_RETRIES); n++) {
+	    sleep(n*2);  /* XXX  should this be longer? */
+	    r = do_mailboxes(folder_list);
+	}
+	if (r) goto bail;
+    }
 
     for (action = meta_list->head ; action ; action = action->next) {
         if (action->active && (r=do_meta(action->user))) {
@@ -2694,7 +2720,11 @@ static int do_sync(const char *filename)
     }
 
     for (action = user_list->head ; action ; action = action->next) {
-        if ((r=do_user(action->user))) goto bail;
+	for (n = 0; r && (n < SYNC_MAILBOX_RETRIES); n++) {
+	    sleep(n*2);  /* XXX  should this be longer? */
+	    r = do_user(action->user);
+	}
+	if (r) goto bail;
     }
 
   bail:
@@ -2716,6 +2746,7 @@ static int do_sync(const char *filename)
     sync_action_list_free(&append_list);
     sync_action_list_free(&acl_list);
     sync_action_list_free(&quota_list);
+    sync_action_list_free(&annot_list);
     sync_action_list_free(&seen_list);
     sync_action_list_free(&sub_list);
     sync_action_list_free(&unsub_list);

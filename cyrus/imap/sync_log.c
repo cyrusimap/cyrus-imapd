@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_log.c,v 1.1.2.3 2005/03/15 01:28:41 ken3 Exp $
+ * $Id: sync_log.c,v 1.1.2.4 2005/03/22 18:49:35 ken3 Exp $
  */
 
 /* YYY Need better quoting for obscure filenames: use literals? */
@@ -252,7 +252,6 @@ void sync_log_append(const char *name)
     sync_log_base(buf, len);
 }
 
-
 void sync_log_acl(const char *name)
 {
     char buf[MAX_MAILBOX_NAME+64];
@@ -263,7 +262,6 @@ void sync_log_acl(const char *name)
     len = snprintf(buf, sizeof(buf), "ACL %s\n", sync_quote_name(name));
     sync_log_base(buf, len);
 }
-
 
 void sync_log_quota(const char *name)
 {
@@ -276,6 +274,17 @@ void sync_log_quota(const char *name)
     sync_log_base(buf, len);
 }
 
+void sync_log_annotation(const char *name)
+{
+    char buf[MAX_MAILBOX_NAME+64];
+    int len;
+
+    if (!sync_log_file) return;
+
+    len = snprintf(buf, sizeof(buf), "ANNOTATION %s\n",
+		   *name ? sync_quote_name(name) : "\"\"");
+    sync_log_base(buf, len);
+}
 
 void sync_log_seen(const char *user, const char *name)
 {
@@ -302,41 +311,3 @@ void sync_log_subscribe(const char *user, const char *name, int add)
 
     sync_log_base(buf, len);
 }
-
-int sync_log_lock(int *fdp, char *userid)
-{
-    char fnamebuf[MAX_MAILBOX_PATH+1];
-    int r = 0;
-
-    if (!sync_log_file) return (0);
-
-    if (!sync_dir) return(IMAP_INTERNAL);
-
-    snprintf(fnamebuf, sizeof(fnamebuf), "%s/locks/%s", sync_dir, userid);
-
-    if ((*fdp = open(fnamebuf, O_CREAT|O_WRONLY, 0777)) < 0)
-        return(IMAP_IOERROR);
-
-    r = lock_blocking(*fdp);
-    if (r == -1) {
-        syslog(LOG_ERR, "IOERROR: locking sync for %s: %m", userid);
-        return IMAP_IOERROR;
-    }
-
-    return (0);
-}
-
-int sync_log_unlock(int *fdp)
-{
-    if (!sync_log_file) return (0);
-
-    if (!sync_dir) return(IMAP_INTERNAL);
-
-    if (*fdp >= 0)
-        close(*fdp);
-
-    *fdp = -1;
-
-    return(0);
-}
-

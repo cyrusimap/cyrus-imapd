@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.16.2.9 2005/02/14 06:43:14 shadow Exp $
+ * $Id: annotate.c,v 1.16.2.10 2005/03/22 18:49:20 ken3 Exp $
  */
 
 #include <config.h>
@@ -73,6 +73,7 @@
 #include "xmalloc.h"
 
 #include "annotate.h"
+#include "sync_log.h"
 
 #define DB config_annotation_db
 
@@ -1442,6 +1443,8 @@ static int store_cb(char *name, int matchlen,
 	if (r) goto cleanup;
     }
 
+    sync_log_annotation(int_mboxname);
+
     sdata->count++;
 
     if (proxy_store_func && mbrock.server &&
@@ -1764,6 +1767,8 @@ int annotatemore_store(char *mailbox,
 					    entries_ptr->entry->rock);
 		if (r) break;
 	    }
+
+	    if (!r) sync_log_annotation("");
 	}
     }
 

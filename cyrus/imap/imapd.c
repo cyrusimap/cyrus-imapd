@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.54 2005/02/28 20:44:59 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.55 2005/03/22 18:49:21 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4267,12 +4267,10 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
     if (!r) {
 	/* xxx we do forced user creates on LOCALCREATE to facilitate
 	 * mailbox moves */
-        sync_log_lock(&sync_lockfd, imapd_userid);
 	r = mboxlist_createmailbox(mailboxname, 0, partition,
 				   imapd_userisadmin, 
 				   imapd_userid, imapd_authstate,
 				   localonly, localonly, 0);
-        sync_log_unlock(&sync_lockfd);
 
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
 	    (autocreatequota = config_getint(IMAPOPT_AUTOCREATEQUOTA))) {
@@ -4401,13 +4399,9 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 	if (config_virtdomains && (p = strchr(mailboxname, '!')))
 	    domainlen = p - mailboxname + 1;
 
-        sync_log_lock(&sync_lockfd, imapd_userid);
-
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
 				   imapd_userid, imapd_authstate, 1-force,
 				   localonly, 0);
-
-        sync_log_unlock(&sync_lockfd);
     }
 
     /* was it a top-level user mailbox? */
@@ -4424,10 +4418,8 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
  	}
 	
 	/* build a list of mailboxes - we're using internal names here */
-	sync_log_lock(&sync_lockfd, imapd_userid);
 	mboxlist_findall(NULL, mailboxname, imapd_userisadmin, imapd_userid,
 			 imapd_authstate, delmbox, NULL);
-	sync_log_unlock(&sync_lockfd);
 
 	/* take care of deleting ACLs, subscriptions, seen state and quotas */
 	*p = '\0'; /* clip off pattern */
@@ -4732,8 +4724,6 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	if (*p == '*' || *p == '%') r = IMAP_MAILBOX_BADNAME;
     }
 
-    sync_log_lock(&sync_lockfd, imapd_userid);
-
     /* attempt to rename the base mailbox */
     if (!r) {
 	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
@@ -4826,8 +4816,6 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     /* take care of deleting old ACLs, subscriptions, seen state and quotas */
     if (!r && rename_user)
 	user_deletedata(olduser, imapd_userid, imapd_authstate, 1);
-
-    sync_log_unlock(&sync_lockfd);
 
     imapd_check(NULL, 0, 0);
 

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.35 2005/02/24 14:54:49 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.36 2005/03/22 18:49:32 ken3 Exp $
  */
 
 /*
@@ -3289,10 +3289,8 @@ static int newgroup(message_data_t *msg)
     snprintf(mailboxname, sizeof(mailboxname), "%s%.*s",
 	     newsprefix, (int) strcspn(group, " \t\r\n"), group);
 
-    sync_log_lock(&sync_lockfd, newsmaster);
     r = mboxlist_createmailbox(mailboxname, 0, NULL, 0,
 			       newsmaster, newsmaster_authstate, 0, 0, 0);
-    sync_log_unlock(&sync_lockfd);
 
     /* XXX check body of message for useful MIME parts */
 
@@ -3317,10 +3315,8 @@ static int rmgroup(message_data_t *msg)
 
     /* XXX should we delete right away, or wait until empty? */
 
-    sync_log_lock(&sync_lockfd, newsmaster);
     r = mboxlist_deletemailbox(mailboxname, 0,
 			       newsmaster, newsmaster_authstate, 1, 0, 0);
-    sync_log_unlock(&sync_lockfd);
 
     if (!r) sync_log_mailbox(mailboxname);
 
@@ -3351,10 +3347,8 @@ static int mvgroup(message_data_t *msg)
     snprintf(newmailboxname, sizeof(newmailboxname), "%s%.*s",
 	     newsprefix, len, group);
 
-    sync_log_lock(&sync_lockfd, newsmaster);
     r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, NULL, 0,
 			       newsmaster, newsmaster_authstate);
-    sync_log_unlock(&sync_lockfd);
 
     /* XXX check body of message for useful MIME parts */
 
