@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.58 2001/01/30 21:58:30 leg Exp $
+ * $Id: imtest.c,v 1.59 2001/02/17 20:07:04 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -315,7 +315,7 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
     SSL_load_error_strings();
     SSLeay_add_ssl_algorithms();
 
-    tls_ctx = SSL_CTX_new(SSLv23_client_method());
+    tls_ctx = SSL_CTX_new(TLSv1_client_method());
     if (tls_ctx == NULL) {
 	return IMTEST_FAIL;
     };
