@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.1.2.1 2003/12/19 18:33:38 ken3 Exp $
+ * $Id: smmapd.c,v 1.1.2.2 2004/02/02 19:35:30 ken3 Exp $
  */
 
 #include <config.h>
@@ -121,6 +121,10 @@ void shut_down(int code)
 
     mboxlist_close();
     mboxlist_done();
+
+    quotadb_close();
+    quotadb_done();
+
     cyrus_done();
     exit(code);
 }
@@ -159,6 +163,10 @@ int service_init(int argc, char **argv, char **envp)
     /* so we can do mboxlist operations */
     mboxlist_init(0);
     mboxlist_open(NULL);
+
+    /* so we can check the quotas */
+    quotadb_init(0);
+    quotadb_open(NULL);
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&map_namespace, 1)) != 0) {
