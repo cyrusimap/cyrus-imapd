@@ -1,6 +1,7 @@
 -*- text -*-
 
 		       Cyrus IMAP server design
+			     Jul 21, 1993
 
 * Introduction
 
@@ -29,6 +30,7 @@ The Cyrus IMAP server supports the following protocol extensions:
 	QUOTA (STORAGE only)
 	ACL
 	partitions on CREATE
+	CREATE.BBOARD/RENAME.BBOARD/DELETE.BBOARD
 	DUMP/RESTORE		[to be defined]
 
 The CHECK command will scan for flags that have changed since the
@@ -150,6 +152,10 @@ holding a lock on a later file.
 
 After obtaining a lock on any file, the implementation must
 double-check to make sure the file wasn't rewritten.
+
+It is necessary to lock cyrus.header before locking cyrus.quota in
+order to guard against the possibility of another process changing the
+cyrus.quota for the folder.
 
 The order of the specific update operations is:
 
@@ -455,42 +461,52 @@ On periodic basis:
 
 Implementation order is as follows:
 
-- append message (ex. cyrus.seen), check quotas, check ACLs
+- Basic functionality
 
-- append cyrus.seen, minimal cyrus-deliver
+  + append message (ex. cyrus.cache), check quotas, check ACLs
 
-- bboard/noop/logout, minimal cyrus-imapd
+  + append cyrus.cache, minimal cyrus-deliver
 
-- fetch/partial (ex. MIME parts)
+  + bboard/noop/logout, minimal cyrus-imapd
 
-- store flags/recent/seen
+  + fetch/partial (ex. MIME parts)
 
-- search internaldate/flags
+- Flags/Search
 
-- create/rename/delete
+  + store flags/recent/seen
 
-- search cyrus.seen/body
+  + search internaldate/flags
 
-- select/MIME fetch, full-fledged cyrus-deliver
+  + search cyrus.cache/body
 
-- subscribe/unsubscribe/find/acl
+- Users
 
-- expunge
+  + login/select/MIME fetch, full-fledged cyrus-deliver
 
-- check
+  + create/rename/delete/create.bboard/rename.bboard/delete.bboard
 
-- copy, login, etc.  Alpha release
+  + subscribe/unsubscribe/find/acl
 
-- IMSP seen/last, cyrus-update
+- Full IMAP2bis
 
-- quota
+  + expunge
 
-- cyrus-builddir, minimal cyrus-expire
+  + check
 
-- IMSP move
+  + copy, etc.  Alpha release
 
-- quota-usage reporter, full cyrus-expire
+- Everything else
 
-- cyrus-arbitron, cyrus-pop2d, cyrus-pop3d
+  + IMSP seen/last, cyrus-update
 
-- connection-counting inetd;  Beta release
+  + quota
+
+  + cyrus-builddir, minimal cyrus-expire
+
+  + IMSP move
+
+  + quota-usage reporter, full cyrus-expire
+
+  + cyrus-arbitron, cyrus-pop2d, cyrus-pop3d
+
+  + connection-counting inetd;  Beta release
