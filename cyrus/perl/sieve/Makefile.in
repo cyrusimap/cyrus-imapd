@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.11 2001/12/10 17:45:44 rjs3 Exp $
+# $Id: Makefile.in,v 1.12 2002/03/12 18:10:53 ken3 Exp $
 #
 # @configure_input@
 # 
@@ -43,7 +43,7 @@
 #
 # 
 
-SUBDIRS = lib acap managesieve
+SUBDIRS = lib managesieve
 SCRIPTS = installsieve sieveshell
 
 # Makefile.PL doesn't make a depend rule. just make depend in these dirs

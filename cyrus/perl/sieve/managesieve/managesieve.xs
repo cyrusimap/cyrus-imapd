@@ -272,7 +272,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   
   mechlist=read_capability(obj);
 
-  mlist = xstrdup(mechlist);
+  mlist = (char*) xstrdup(mechlist);
   if(!mlist) XSRETURN_UNDEF;
 
   /* loop through all the mechanisms */
@@ -281,8 +281,8 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
     r = auth_sasl(mlist, obj, &mtried, &globalerr);
 
     if(mtried) {
-	char *newlist = xmalloc(strlen(mlist)+1);
-	char *mtr = xstrdup(mtried);
+	char *newlist = (char*) xmalloc(strlen(mlist)+1);
+	char *mtr = (char*) xstrdup(mtried);
 	char *tmp;
 
 	ucase(mtr);

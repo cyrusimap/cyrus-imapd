@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.7 2002/01/18 22:58:48 rjs3 Exp $
+ * $Id: user.c,v 1.8 2002/03/12 18:10:49 ken3 Exp $
  */
 
 #include <config.h>
@@ -82,6 +82,9 @@
 
 static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 {
+#if 0
+    /* deleting all references to the user is too slow right now */
+
     char *ident = (char *) rock;
     int r;
     char *acl;
@@ -106,6 +109,7 @@ static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 
 	acl = nextid;
     }
+#endif
     return 0;
 }
 
@@ -125,12 +129,8 @@ int user_delete(char *user, char *userid, struct auth_state *authstate)
     /* delete quotas */
     user_deletequotas(user);
 
-#if 0
-    /* deleting all references to the user is too slow right now */
-
     /* delete ACLs - we're using the internal names here */
     mboxlist_findall(NULL, pat, 1, userid, authstate, user_deleteacl, user);
-#endif
 
     return 0;
 }

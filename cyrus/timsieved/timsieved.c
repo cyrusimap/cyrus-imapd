@@ -102,6 +102,7 @@ int sieved_userisadmin;
 /*
  * Cleanly shut down and exit
  */
+void shut_down(int code) __attribute__ ((noreturn));
 void shut_down(int code)
 {
     /* close mailboxes */
