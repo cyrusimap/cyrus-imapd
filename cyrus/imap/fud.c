@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.23 2001/08/03 21:18:06 ken3 Exp $ */
+/* $Id: fud.c,v 1.24 2001/08/16 20:52:05 ken3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -81,6 +81,9 @@
 extern int errno;
 extern int optind;
 extern char *optarg;
+
+/* current namespace */
+static struct namespace fud_namespace;
 
 /* forward decls */
 int handle_request(const char *who, const char *name, 
@@ -180,6 +183,12 @@ int main(int argc, char **argv)
     mboxlist_open(NULL);
     mailbox_initialize();
 
+    /* Set namespace */
+    if ((r = mboxname_init_namespace(&fud_namespace, 1)) != 0) {
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
+    }
+
     r = init_network(port);
     if (r) {
         fatal("unable to configure network port", EC_OSERR);
@@ -207,7 +216,7 @@ int handle_request(const char *who, const char *name,
     lastread = 0;
     lastarrived = 0;
 
-    r = mboxname_tointernal(name,NULL,who,mboxname);
+    r = (*fud_namespace.mboxname_tointernal)(&fud_namespace,name,who,mboxname);
     if (r) return r; 
 
     /*

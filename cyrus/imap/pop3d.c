@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.106 2001/08/13 17:11:57 ken3 Exp $
+ * $Id: pop3d.c,v 1.107 2001/08/16 20:52:07 ken3 Exp $
  */
 #include <config.h>
 
@@ -57,6 +57,7 @@
 #include <sys/types.h>
 #include <sys/param.h>
 #include <syslog.h>
+#include <com_err.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -82,7 +83,6 @@
 #include "mboxlist.h"
 #include "idle.h"
 #include "telemetry.h"
-#include "namespace.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -243,9 +243,9 @@ int service_init(int argc, char **argv, char **envp)
     idle_enabled();
 
     /* Set namespace */
-    if (!namespace_init(&popd_namespace, 0)) {
-	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
-	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    if ((r = mboxname_init_namespace(&popd_namespace, 0)) != 0) {
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
     }
 
     while ((opt = getopt(argc, argv, "C:sk")) != EOF) {
@@ -1238,8 +1238,8 @@ int openinbox(void)
 
     popd_login_time = time(0);
 
-    /* Translate userid */
-    hier_sep_tointernal(popd_userid, &popd_namespace);
+    /* Translate any separators in userid */
+    mboxname_hiersep_tointernal(&popd_namespace, popd_userid);
 
     strcpy(inboxname, "user.");
     strcat(inboxname, popd_userid);

@@ -41,6 +41,9 @@ ec IMAP_QUOTA_EXCEEDED,
 ec IMAP_USERFLAG_EXHAUSTED,
    "Too many user flags in mailbox"
 
+ec IMAP_NAMESPACE_BADPREFIX,
+   "Invalid namespace prefix in configuration file"
+
 ec IMAP_MAILBOX_BADFORMAT,
    "Mailbox has an invalid format"
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.39 2001/07/27 23:36:47 leg Exp $ */
+/* $Id: quota.c,v 1.40 2001/08/16 20:52:08 ken3 Exp $ */
 
 
 #include <config.h>
@@ -81,11 +81,15 @@
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+#include "mboxname.h"
 #include "convert_code.h"
 
 extern int errno;
 extern int optind;
 extern char *optarg;
+
+/* current namespace */
+static struct namespace quota_namespace;
 
 /* forward declarations */
 void usage(void);
@@ -143,6 +147,12 @@ int main(int argc,char **argv)
 
     config_init(alt_config, "quota");
 
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&quota_namespace, 1)) != 0) {
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
+    }
+
     r = buildquotalist(argv+optind, argc-optind);
 
     if (!r && fflag) {
@@ -189,6 +199,17 @@ int buildquotalist(char **roots, int nroots)
     DIR *dirp;
     DIR *topp;
     struct dirent *dirent;
+
+    /* Translate separator in mailboxnames.
+     *
+     * We do this directly instead of using the mboxname_tointernal()
+     * function pointer because we know that we are using the internal
+     * namespace and so we don't have to allocate a buffer for the
+     * translated name.
+     */
+    for (i = 0; i < nroots; i++) {
+	mboxname_hiersep_tointernal(&quota_namespace, roots[i]);
+    }
 
     sprintf(quota_path, "%s%s", config_dir, FNAME_QUOTADIR);
     if (chdir(quota_path)) {
@@ -438,7 +459,8 @@ int fixquota(int ispartial)
 	firstquota = 0;
 	partial = ispartial;
 
-	r = mboxlist_findall(pattern, 1, 0, 0, fixquota_mailbox, NULL);
+	r = (*quota_namespace.mboxlist_findall)(&quota_namespace, pattern, 1,
+						0, 0, fixquota_mailbox, NULL);
 	if (r) {
 	    mboxlist_close();
 	    return r;
@@ -464,6 +486,7 @@ void
 reportquota(void)
 {
     int i;
+    char buf[MAX_MAILBOX_PATH];
 
     printf("   Quota  %% Used    Used Root\n");
 
@@ -479,8 +502,11 @@ reportquota(void)
 	else {
 	    printf("                ");
 	}
-	printf(" %7ld %s\n", quota[i].quota.used / QUOTA_UNITS,
-	       quota[i].quota.root);
+	/* Convert internal name to external */
+	(*quota_namespace.mboxname_toexternal)(&quota_namespace,
+					       quota[i].quota.root,
+					       "cyrus", buf);
+	printf(" %7ld %s\n", quota[i].quota.used / QUOTA_UNITS, buf);
     }
 }
 

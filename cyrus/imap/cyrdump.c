@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.5 2001/03/15 22:56:18 leg Exp $
+/* $Id: cyrdump.c,v 1.6 2001/08/16 20:52:05 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -70,6 +70,9 @@ static void print_seq(const char *tag, const char *attrib,
 		      unsigned *seq, int n);
 int usage(const char *name);
 
+/* current namespace */
+static struct namespace dump_namespace;
+
 int imapd_exists;
 struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
@@ -83,7 +86,7 @@ int main(int argc, char *argv[])
 {
     int option;
     char buf[MAX_MAILBOX_PATH];
-    int i;
+    int i, r;
     char *alt_config = NULL;
     struct incremental_record irec;
 
@@ -115,10 +118,19 @@ int main(int argc, char *argv[])
     mboxlist_init(0);
     mboxlist_open(NULL);
 
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&dump_namespace, 1)) != 0) {
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
+    }
+
     irec.incruid = 0;
     for (i = optind; i < argc; i++) {
 	strlcpy(buf, argv[optind], MAX_MAILBOX_NAME);
-	mboxlist_findall(buf, 1, 0, 0, dump_me, &irec);
+	/* Translate any separators in mailboxname */
+	mboxname_hiersep_tointernal(&dump_namespace, buf);
+	(*dump_namespace.mboxlist_findall)(&dump_namespace, buf, 1, 0, 0,
+					   dump_me, &irec);
     }
 
     mboxlist_close();

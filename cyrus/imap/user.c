@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.2 2001/06/23 03:14:03 ken3 Exp $
+ * $Id: user.c,v 1.3 2001/08/16 20:52:08 ken3 Exp $
  */
 
 #include <config.h>
@@ -123,8 +123,8 @@ int user_delete(char *user, char *userid, struct auth_state *authstate)
     /* delete quotas */
     user_deletequotas(user);
 
-    /* delete ACLs */
-    mboxlist_findall(pat, 1, userid, authstate, user_deleteacl, user);
+    /* delete ACLs - we're using the internal names here */
+    mboxlist_findall(NULL, pat, 1, userid, authstate, user_deleteacl, user);
 
     return 0;
 }
@@ -183,9 +183,9 @@ int user_rename(char *oldmailboxname, char *newmailboxname,
     char *oldfname, *newfname;
     int r = 0;
 
-    /* change ACLs */
+    /* change ACLs - we're using the internal names here */
     strcpy(pat, "*");
-    mboxlist_findall(pat, 1, userid, authstate, user_renameacl, ident);
+    mboxlist_findall(NULL, pat, 1, userid, authstate, user_renameacl, ident);
 
     /* rename/change subscriptions */
     oldfname = mboxlist_hash_usersubs(ident[0]);
@@ -195,7 +195,8 @@ int user_rename(char *oldmailboxname, char *newmailboxname,
     if (!r) {
 	unlink(oldfname);
 	sprintf(pat, "%s.*", oldmailboxname);
-	mboxlist_findsub(pat, 1, ident[1], authstate, user_renamesub,
+	/* we're using internal names here */
+	mboxlist_findsub(NULL, pat, 1, ident[1], authstate, user_renamesub,
 			 ident, 1);
     }
     free(oldfname);
