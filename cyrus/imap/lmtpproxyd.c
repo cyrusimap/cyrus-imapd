@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.63 2004/02/27 17:44:53 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.64 2004/03/05 19:49:14 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -133,7 +133,8 @@ struct mydata {
 typedef struct mydata mydata_t;
 
 static int adddest(struct mydata *mydata, const char *rcpt,
-		   char *mailbox, const char *authas);
+		   char *mailbox, const char *authas,
+		   struct auth_state *authstate, int acloverride);
 
 /* data per script */
 typedef struct script_data {
@@ -331,12 +332,14 @@ static struct backend *proxyd_findserver(const char *server)
 }
 
 static int adddest(struct mydata *mydata, const char *rcpt,
-		   char *mailbox, const char *authas)
+		   char *mailbox, const char *authas,
+		   struct auth_state *authstate, int acloverride)
 {
     struct rcpt *new_rcpt = xmalloc(sizeof(struct rcpt));
     struct dest *d;
     struct mupdate_mailboxdata *mailboxdata;
     int r;
+    int rights;
 
     strlcpy(new_rcpt->rcpt, rcpt, sizeof(new_rcpt->rcpt));
     new_rcpt->rcpt_num = mydata->cur_rcpt;
@@ -353,6 +356,17 @@ static int adddest(struct mydata *mydata, const char *rcpt,
 	fatal("error communicating with MUPDATE server", EC_TEMPFAIL);
     }
 
+    /* Check ACL (except for INBOXen) -- xxx might this be a race? */
+    if(!r && !acloverride) {
+	char *tmp = xstrdup(mailboxdata->acl);
+	rights = cyrus_acl_myrights(authstate, tmp);
+	free(tmp);
+	if(!(rights & ACL_POST)) {
+	    r = (rights & ACL_LOOKUP) ?
+		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	}
+    }
+    
     if (r) {
 	free(new_rcpt);
 	return r;
@@ -486,7 +500,7 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
    each of the original receipients.
 */
 int deliver(message_data_t *msgdata, char *authuser,
-	    struct auth_state *authstate __attribute__((unused)))
+	    struct auth_state *authstate)
 {
     int n, nrcpts;
     mydata_t mydata;
@@ -518,7 +532,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	if (!user) {
 	    strlcat(namebuf, mailbox, sizeof(namebuf));
 
-	    r = adddest(&mydata, rcpt, namebuf, mydata.authuser);
+	    r = adddest(&mydata, rcpt, namebuf, mydata.authuser, authstate, 0);
 	    if (r) {
 		msg_setrcpt_status(msgdata, n, r);
 		mydata.pend[n] = done;
@@ -534,7 +548,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    strlcat(namebuf, "user.", sizeof(namebuf));
 	    strlcat(namebuf, user, sizeof(namebuf));
 
-	    r = adddest(&mydata, rcpt, namebuf, authuser);
+	    r = adddest(&mydata, rcpt, namebuf, authuser, authstate, 1);
 	    if (r) {
 		msg_setrcpt_status(msgdata, n, r);
 		mydata.pend[n] = done;
