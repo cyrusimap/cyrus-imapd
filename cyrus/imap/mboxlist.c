@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.164 2002/02/06 15:30:59 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.165 2002/02/06 21:37:44 rjs3 Exp $
  */
 
 #include <config.h>
@@ -2052,9 +2052,8 @@ void mboxlist_open(char *fname)
 	strcat(fname, FNAME_MBOXLIST);
     }
 
-    mbdb = NULL;
     ret = DB->open(fname, &mbdb);
-    if (ret != 0 || !mbdb) {
+    if (ret != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
 	    /* Exiting TEMPFAIL because Sendmail thinks this
