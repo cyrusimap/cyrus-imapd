@@ -2,7 +2,7 @@ dnl
 dnl Additional macros for configure.in packaged up for easier theft.
 dnl tjs@andrew.cmu.edu 6-may-1998
 dnl
-dnl $Id: aclocal.m4,v 1.3 1998/05/13 03:51:30 wcw Exp $
+dnl $Id: aclocal.m4,v 1.4 1998/09/29 02:51:34 tjs Exp $
 dnl
 
 dnl add -L(arg), and possibly (runpath switch)(arg), to LDFLAGS
@@ -12,7 +12,7 @@ AC_DEFUN(ANDREW_ADD_LIBPATH, [
   if test "$andrew_runpath_switch" = "none" ; then
 	LDFLAGS="-L$1 ${LDFLAGS}"
   else
-	LDFLAGS="-L$1 ${LDFLAGS} $andrew_runpath_switch$1"
+	LDFLAGS="-L$1 $andrew_runpath_switch$1 ${LDFLAGS}"
   fi
 ])
 
