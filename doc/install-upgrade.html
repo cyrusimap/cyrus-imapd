@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.27 2002/04/30 18:33:02 leg Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28 2002/06/05 02:27:35 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -145,11 +145,9 @@ process Cyrus process and ensure that it starts on boot.  see <a
 href="install-configure.html#master">this section</a> of the
 configuration instructions.
 
-<li>sendmail configuration. You need to use a new cyrus mc file. See
-<a href="cyrusv2.mc"><tt>doc/cyrusv2.mc</tt></a> for a sample mc
-file. This requires Sendmail 8.10 or newer.  See <a
-href="install-configure.html#mta">this section</a> of the
-configuration document.
+<li>MTA configuration. You will have to reconfigure your MTA to speak
+to lmtpd.  See <a href="install-configure.html#mta">this section</a> of
+the configuration document.
 
 <li>cyrus.seen conversion. The cyrus.seen file will be automatically
 upgraded as users read mail.  After some time, you might want to
@@ -231,7 +229,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2002/04/30 18:33:02 $
+last modified: $Date: 2002/06/05 02:27:35 $
 </BODY></HTML>
 
 
