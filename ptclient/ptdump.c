@@ -1,6 +1,6 @@
 #include "auth_krb_pts.h"
 
-static char rcsid[] = "$Id: ptdump.c,v 1.1 1998/05/01 21:55:53 tjs Exp $";
+static char rcsid[] = "$Id: ptdump.c,v 1.2 1998/07/30 21:31:01 wcw Exp $";
 
 int 
 main(argc, argv)
@@ -73,7 +73,7 @@ main(argc, argv)
   for (i=0; i<size; i++) 
     sprintf(keyinhex+(2*i), "%.2x", thekey[i]);
 
-  if (thekey[key.size-4] == 'H') {
+  if (thekey[PTS_DB_HOFFSET] == 'H') {
     printf( "key: %s\t", keyinhex);
     if (data.size != sizeof(ptluser)) {
       printf("\nERROR: data.size (%d) != sizeof(ptluser)\n", 
@@ -81,7 +81,7 @@ main(argc, argv)
     }
     (void)memcpy(&us, data.data, data.size);
     printf("user: %s\t time: %d\n", us.user, us.cached);
-    thekey[key.size-4] = 'D';
+    thekey[PTS_DB_HOFFSET] = 'D';
     for (i=0; i<size; i++) 
       sprintf(keyinhex+(2*i), "%.2x", thekey[i]);
     printf( "matching data key: %s", keyinhex);
@@ -94,7 +94,7 @@ main(argc, argv)
     } else {
       printf("\tdata size: %d\n", data.size);
     }
-  } else if (thekey[key.size-4] == 'D') {
+  } else if (thekey[PTS_DB_HOFFSET] == 'D') {
     for (i=0; i<size; i++) 
       sprintf(keyinhex+(2*i), "%.2x", thekey[i]);
     printf( "key: %s\t", keyinhex);
@@ -124,7 +124,7 @@ main(argc, argv)
     for (i=0; i<size; i++) 
       sprintf(keyinhex+(2*i), "%.2x", thekey[i]);
 
-    if (thekey[key.size-4] == 'H') {
+    if (thekey[PTS_DB_HOFFSET] == 'H') {
       printf( "key: %s\t", keyinhex);
       if (data.size != sizeof(ptluser)) {
 	printf("\nERROR: data.size (%d) != sizeof(ptluser)\n", 
@@ -132,7 +132,7 @@ main(argc, argv)
       }
       (void)memcpy(&us, data.data, data.size);
       printf("user: %s\t time: %d\n", us.user, us.cached);
-      thekey[key.size-4] = 'D';
+      thekey[PTS_DB_HOFFSET] = 'D';
       for (i=0; i<size; i++) 
 	sprintf(keyinhex+(2*i), "%.2x", thekey[i]);
       printf( "matching data key: %s", keyinhex);
@@ -145,7 +145,7 @@ main(argc, argv)
       } else {
 	printf("\tdata size: %d\n", data.size);
       }
-    } else if (thekey[key.size-4] == 'D') {
+    } else if (thekey[PTS_DB_HOFFSET] == 'D') {
       for (i=0; i<size; i++) 
 	sprintf(keyinhex+(2*i), "%.2x", thekey[i]);
       printf("DATA key: %s\n", keyinhex);

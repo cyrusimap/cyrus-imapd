@@ -1,5 +1,5 @@
 /* auth_krb_pts.h -- Kerberos authorization with AFS PTServer groups
-	$Id: auth_krb_pts.h,v 1.11 1998/05/15 21:50:50 neplokh Exp $
+	$Id: auth_krb_pts.h,v 1.12 1998/07/30 21:30:50 wcw Exp $
 	
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -56,6 +56,8 @@
 #define PTS_DBFIL "/ptclient/ptscache.db"
 #define PTS_DBLOCK "/ptclient/ptscache.lock"
 #define PTS_DBSOCKET "/ptclient/ptsock"
+#define PTS_DB_HOFFSET PR_MAXNAMELEN  /* index to the header character 'H' or 'D' */
+#define PTS_DB_KEYSIZE (PR_MAXNAMELEN+4) /* full key size; header char + 3 NULL */
 
 
 #define PTCLIENT  "ptloader"
