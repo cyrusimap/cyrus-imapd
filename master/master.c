@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.57 2002/01/15 18:44:49 leg Exp $ */
+/* $Id: master.c,v 1.58 2002/02/13 21:02:54 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -687,19 +687,19 @@ void reap_child(void)
 
 static int gotsigchld = 0;
 
-void sigchld_handler(int sig)
+void sigchld_handler(int sig __attribute__((unused)))
 {
     gotsigchld = 1;
 }
 
 static int gotsighup = 0;
 
-void sighup_handler(int sig)
+void sighup_handler(int sig __attribute__((unused)))
 {
     gotsighup = 1;
 }
 
-void sigterm_handler(int sig)
+void sigterm_handler(int sig __attribute__((unused)))
 {
     struct sigaction action;
 
@@ -725,8 +725,9 @@ void sigterm_handler(int sig)
     exit(0);
 }
 
-void sigalrm_handler(int sig)
+void sigalrm_handler(int sig __attribute__((unused)))
 {
+    return;
 }
 
 void sighandler_setup(void)
@@ -814,7 +815,8 @@ static char **tokenize(char *p)
     return tokens;
 }
 
-void add_start(const char *name, struct entry *e, void *rock)
+void add_start(const char *name, struct entry *e,
+	       void *rock __attribute__((unused)))
 {
     char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
     char buf[256];
@@ -832,7 +834,8 @@ void add_start(const char *name, struct entry *e, void *rock)
     free(cmd);
 }
 
-void add_service(const char *name, struct entry *e, void *rock)
+void add_service(const char *name, struct entry *e,
+		 void *rock __attribute__((unused)))
 {
     char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
     int prefork = masterconf_getint(e, "prefork", 0);
@@ -917,7 +920,8 @@ void add_service(const char *name, struct entry *e, void *rock)
     free(max);
 }
 
-void add_event(const char *name, struct entry *e, void *rock)
+void add_event(const char *name, struct entry *e,
+	       void *rock __attribute__((unused)))
 {
     char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
     int period = 60 * masterconf_getint(e, "period", 0);
@@ -1035,7 +1039,7 @@ void reread_conf(void)
     masterconf_getsection("EVENTS", &add_event, NULL);
 }
 
-int main(int argc, char **argv, char **envp)
+int main(int argc, char **argv)
 {
     int i, opt, close_std = 1;
     extern int optind;
