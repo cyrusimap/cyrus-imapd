@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.7.2.1 2000/05/16 14:50:44 ken3 Exp $
+ * $Id: scripttest.c,v 1.7.2.2 2000/10/17 05:28:05 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -61,8 +61,7 @@ static int sieve_notify(void *ac,
     return SIEVE_FAIL;
 }
 
-int mysieve_error(int lineno, char *msg,
-		  void *i, void *s)
+int mysieve_error(int lineno, const char *msg, void *i, void *s)
 {
     char buf[1024];
     char **errstr = (char **) s;

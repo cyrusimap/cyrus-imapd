@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.123.2.11 2000/09/13 18:13:11 ken3 Exp $
+ * $Id: deliver.c,v 1.123.2.12 2000/10/17 05:28:04 ken3 Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.123.2.11 2000/09/13 18:13:11 ken3 Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.123.2.12 2000/10/17 05:28:04 ken3 Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -1315,7 +1315,7 @@ sieve_vacation_t vacation = {
 static char *markflags[] = { "\\flagged" };
 static sieve_imapflags_t mark = { markflags, 1 };
 
-int mysieve_parse_error(int lineno, char *msg, void *ic, void *sc)
+int mysieve_parse_error(int lineno, const char *msg, void *ic, void *sc)
 {
     script_data_t *sd = (script_data_t *) sc;
 
@@ -1324,7 +1324,7 @@ int mysieve_parse_error(int lineno, char *msg, void *ic, void *sc)
 
     return SIEVE_OK;
 }
-int mysieve_execute_error(char *msg, void *ic, void *sc, void *mc)
+int mysieve_execute_error(const char *msg, void *ic, void *sc, void *mc)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
