@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.32 2002/10/11 18:50:07 rjs3 Exp $
+# $Id: Admin.pm,v 1.33 2002/12/19 16:57:14 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -266,7 +266,7 @@ sub listaclmailbox {
   $self->addcallback({-trigger => 'ACL',
 		      -callback => sub {
 			my %d = @_;
-			return unless $d{-text} =~ s/^\"*$mbx\"*\s+//;
+			return unless $d{-text} =~ s/^\"*\Q$mbx\E\"*\s+//;
 			while ($d{-text} =~ s/(\S+)\s+(\S+)\s*//) {
 			  $d{-rock}{$1} = $2;
 			}
