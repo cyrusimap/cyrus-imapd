@@ -59,6 +59,7 @@ char *acl;
 
 	nextid = strchr(rights, '\t');
 	if (!nextid) {
+	    rights[-1] = '\t';
 	    break;
 	}
 	*nextid++ = '\0';
