@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.79 2001/12/04 02:23:06 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.80 2002/01/24 16:39:28 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -4151,14 +4151,13 @@ void cmd_namespace(tag)
     char* tag;
 {
     int sawone[3] = {0, 0, 0};
-    char* pattern = xstrdup("%");
+    char pattern[2] = {'%','\0'};
 
     /* now find all the exciting toplevel namespaces -
      * we're using internal names here
      */
     mboxlist_findall(NULL, pattern, proxyd_userisadmin, proxyd_userid,
 		     proxyd_authstate, namespacedata, (void*) sawone);
-    free(pattern);
 
     prot_printf(proxyd_out, "* NAMESPACE");
     if (sawone[NAMESPACE_INBOX]) {

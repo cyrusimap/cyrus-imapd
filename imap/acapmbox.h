@@ -1,4 +1,3 @@
-
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -120,7 +119,7 @@ int acapmbox_markactive(acapmbox_handle_t *AC,
  * Remove an entry
  */
 int acapmbox_delete(acapmbox_handle_t *AC,
-		    char *mailbox_name);
+		    const char *mailbox_name);
 
 
 /*

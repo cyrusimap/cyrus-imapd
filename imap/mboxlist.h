@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.17 2001/11/27 02:24:59 ken3 Exp $
+ * $Id: mboxlist.h,v 1.18 2002/01/24 16:39:28 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -70,7 +70,7 @@ extern struct db *mbdb;
 
 /* flags for types of mailboxes */
 #define MBTYPE_REMOTE 0x01
-#define MBTYPE_CONFLICT 0x02
+#define MBTYPE_RESERVE 0x02
 #define MBTYPE_NETNEWS 0x04
 
 /* master name of the mailboxes file */
@@ -88,9 +88,13 @@ struct mbox_entry {
 /* Lookup 'name' in the mailbox list. */
 int mboxlist_lookup(const char *name, char **pathp, char **aclp, void *tid);
 
+/* Lookup 'name' and get more detail */
+int mboxlist_detail(const char *name, int *typep, char **pathp, char **partp,
+		    char **aclp, struct txn *tid);
+
 /* insert a stub entry */
-int mboxlist_insertremote(char *name, int mbtype, char *host, char *acl,
-			  void **rettid);
+int mboxlist_insertremote(const char *name, int mbtype, const char *host,
+			  const char *acl, void **rettid);
 
 /* check user's ability to create mailbox */
 int mboxlist_createmailboxcheck(char *name, int mbtype, char *partition, 
@@ -104,7 +108,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 			   struct auth_state *auth_state);
 
 /* Delete a mailbox. */
-int mboxlist_deletemailbox(char *name, int isadmin, char *userid, 
+int mboxlist_deletemailbox(const char *name, int isadmin, char *userid, 
 			   struct auth_state *auth_state, int checkacl);
 
 /* Rename/move a mailbox (hierarchical) */
@@ -159,7 +163,7 @@ int mboxlist_setquota(const char *root, int newquota);
 
 /* returns a malloc() string that is the representation in the mailboxes 
    file.  for ctl_mboxlist */
-char *mboxlist_makeentry(int mbtype, char *part, char *acl);
+char *mboxlist_makeentry(int mbtype, const char *part, const char *acl);
 
 /* open the mailboxes db */
 void mboxlist_open(char *name);

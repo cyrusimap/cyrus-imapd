@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.26 2002/01/23 21:53:05 rjs3 Exp $
+ * $Id: mupdate.c,v 1.27 2002/01/24 16:39:28 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,12 +71,11 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include <skip-list.h>
-
 #include "mupdate-client.h"
 #include "xmalloc.h"
 #include "iptostring.h"
 #include "mailbox.h"
+#include "mboxlist.h"
 #include "exitcodes.h"
 #include "prot.h"
 #include "imapconf.h"
@@ -131,7 +130,6 @@ pthread_mutex_t connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct conn *connlist;
 
 /* ---- database access ---- */
-skiplist *mailboxes;
 pthread_mutex_t mailboxes_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct conn *updatelist;
 
@@ -718,104 +716,13 @@ static int mycmp(const void *v1, const void *v2)
     return strcmp((const char *) v1, (const char *) v2);
 }
 
-/* read from disk
- database must be unlocked. */
+/* read from disk database must be unlocked. */
 void database_init()
 {
-    char dbname[1024];
-    FILE *db;
-
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
-    mailboxes = skiplist_new(20, 0.5, &mycmp);
-    snprintf(dbname, sizeof dbname, "%s/%s", config_dir, "mupdate.log");
-    db = fopen(dbname, "r");
-    if (db != NULL) {
-	while (!feof(db)) {
-	    int c;
-	    struct mbent m, *mptr;
-	    int i = 0;
-
-	    c = fgetc(db);
-	    if (c == 'A') m.t = SET_ACTIVE;
-	    else if (c == 'R') m.t = SET_RESERVE;
-	    else if (c == 'D') m.t = SET_DELETE;
-	    else if (c == -1) break;
-	    else abort();
-
-	    /* skip after \t */
-	    while ((c = fgetc(db)) > 0) {
-		if (c == '\t') break;
-	    }
-	    if (c < 0) break;
-
-	    while ((c = fgetc(db)) > 0) {
-		if (c == '\n' || c == '\t') break;
-		m.mailbox[i++] = c;
-		assert(i != MAX_MAILBOX_NAME);
-	    }
-	    m.mailbox[i] = '\0';
-
-	    switch (m.t) {
-	    case SET_ACTIVE:
-	    {
-		char *acl = NULL;
-		int aclalloc = 0;
-
-		i = 0;
-		while ((c = fgetc(db)) > 0) {
-		    if (c == '\n' || c == '\t') break;
-		    m.server[i++] = c;
-		    assert(i != MAX_MAILBOX_NAME);
-		}
-		m.server[i] = '\0';
-
-		assert(c == '\t');
-		i = 0;
-		while ((c = fgetc(db)) > 0) {
-		    if (c == '\n' || c == '\t') break;
-		    if (i == aclalloc) {
-			acl = xrealloc(acl, aclalloc += 500);
-		    }
-		    acl[i++] = c;
-		}
-
-		mptr = xmalloc(sizeof(struct mbent) + (i + 1));
-		memcpy(mptr, &m, sizeof(struct mbent));
-		memcpy(mptr->acl, acl, i);
-		mptr->acl[i] = '\0';
-		if (acl) free(acl);
-
-		sinsert(mailboxes, mptr);
-		break;
-	    }
-	    case SET_RESERVE:
-		i = 0;
-		while ((c = fgetc(db)) > 0) {
-		    if (c == '\n' || c == '\t') break;
-		    m.server[i++] = c;
-		    assert(i != MAX_MAILBOX_NAME);
-		}
-		m.server[i] = '\0';
-
-		mptr = xmalloc(sizeof(struct mbent));
-		memcpy(mptr, &m, sizeof(struct mbent));
-		sinsert(mailboxes, mptr);
-		break;
-	    case SET_DELETE:
-		sdelete(mailboxes, &m);
-		break;
-	    }
-	}
-
-	fclose(db);
-    }
-
-    dblog = fopen(dbname, "a");
-    if (dblog == NULL) {
-	syslog(LOG_CRIT, "unable to open logfile %s: %m", dbname);
-	abort();
-    }
+    mboxlist_init(0);
+    mboxlist_open(NULL);
 
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
@@ -830,102 +737,58 @@ static const char *translate(enum settype t)
     }
 }
 
-/* log change to database.
- database must be locked. */
-void database_log(const struct mbent *new)
+/* log change to database. database must be locked. */
+void database_log(const struct mbent *mb)
 {
-    switch (new->t) {
+    switch (mb->t) {
     case SET_ACTIVE:
-	fprintf(dblog, "%s\t%s\t%s\t%s\n", translate(new->t),
-		new->mailbox, new->server, new->acl);
+	mboxlist_insertremote(mb->mailbox, 0, mb->server, mb->acl, NULL);
 	break;
 
     case SET_RESERVE:
-	fprintf(dblog, "%s\t%s\t%s\n", translate(new->t),
-		new->mailbox, new->server);
+	mboxlist_insertremote(mb->mailbox, MBTYPE_RESERVE, mb->server,
+			      "", NULL);
 	break;
 
     case SET_DELETE:
-	fprintf(dblog, "%s\t%s\n", translate(new->t), new->mailbox);
+	mboxlist_deletemailbox(mb->mailbox, 1, "", NULL, 0);
 	break;
-    }
-    if (fflush(dblog) < 0) {
-	syslog(LOG_ERR, "fflush mupdate log: %m");
-    }
-    if (fsync(fileno(dblog)) < 0) {
-	syslog(LOG_ERR, "fsync mupdate log: %m");
     }
 }
 
-/* probabilistically compress database log.
-   database must be locked. */
-void database_compress()
+/* lookup in database. database must be locked */
+/* This could probabally be more efficient and avoid some copies */
+struct mbent *database_lookup(const char *name) 
 {
-    char dbname[1024];
-    int items = skiplist_items(mailboxes);
-    FILE *db;
+    char *path, *acl;
+    int type;
+    struct mbent *out;
+    
+    if(!name) return NULL;
+    
+    if(mboxlist_detail(name, &type, &path, NULL, &acl, NULL))
+	return NULL;
 
-    /* 2 chances in # of items */
-    if (items && (rand() % items) < 2) {
-	/* do the compression */
-
-	char dbnamenew[1024];
-	skipnode *ptr;
-	struct mbent *m;
-
-	syslog(LOG_DEBUG, "compressing mupdate log");
-	
-	snprintf(dbname, sizeof dbname, "%s/%s", config_dir, "mupdate.log");
-	snprintf(dbnamenew, sizeof dbnamenew, "%s.NEW", dbname);
-	db = fopen(dbnamenew, "w");
-	if (db == NULL) {
-	    syslog(LOG_ERR, "can't compress database: open(%s): %m", 
-		   dbnamenew);
-	    return;
-	}
-	assert(db != NULL);
-	for (m = sfirst(mailboxes, &ptr); m != NULL; m = snext(&ptr)) {
-	    switch (m->t) {
-	    case SET_ACTIVE:
-		fprintf(db, "%s\t%s\t%s\t%s\n", translate(m->t),
-			m->mailbox, m->server, m->acl);
-		break;
-		
-	    case SET_RESERVE:
-		fprintf(db, "%s\t%s\t%s\n", translate(m->t),
-			m->mailbox, m->server);
-		break;
-
-	    case SET_DELETE:
-		/* deleted item in the list !?! */
-		abort();
-	    }
-	}
-	if ((fsync(fileno(db)) < 0) ||
-	    (rename(dbnamenew, dbname) < 0)) {
-	    syslog(LOG_ERR, "can't compress database: %m");
-	    (void) unlink(dbnamenew);
-	}
-	fclose(db);
-
-	/* reopen for logging purposes */
-	fclose(dblog);
-	dblog = fopen(dbname, "a");
-	if (dblog == NULL) {
-	    syslog(LOG_CRIT, "unable to open logfile %s: %m", dbname);
-	    abort();
-	}
-    } else if (!items) {
-	/* No items, truncate the file */
-	snprintf(dbname, sizeof dbname, "%s/%s", config_dir, "mupdate.log");
-	db = fopen(dbname, "w");
-	if (db == NULL) {
-	    syslog(LOG_ERR, "can't compress database: open(%s): %m", 
-		   dbname);
-	    return;
-	}
-	fclose(db);
+    if(type & MBTYPE_RESERVE) {
+	out = xmalloc(sizeof(struct mbent) + 1);
+	out->t = SET_RESERVE;
+	out->acl[0] = '\0';
+    } else {
+	out = xmalloc(sizeof(struct mbent) + strlen(acl));
+	out->t = SET_ACTIVE;
+	strcpy(out->acl, acl);
     }
+
+    strncpy(out->mailbox, name, sizeof(out->mailbox));
+    strncpy(out->server, path, sizeof(out->server));
+
+    return out;
+}
+
+/* Do we want to maintain a free list, if so we'll need to lock it. */
+void database_lookup_free(struct mbent *m) 
+{
+    if(m) free(m);
 }
 
 void cmd_authenticate(struct conn *C,
@@ -1048,7 +911,7 @@ void cmd_set(struct conn *C,
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
-    m = ssearch(mailboxes, mailbox);
+    m = database_lookup(mailbox);
     if (m && t == SET_RESERVE) {
 	/* failed; mailbox already exists */
 	prot_printf(C->pout, "%s NO \"mailbox already exists\"\r\n", tag);
@@ -1067,10 +930,6 @@ void cmd_set(struct conn *C,
 
 	/* write to disk */
 	database_log(m);
-
-	/* remove from memory */
-	sdelete(mailboxes, m);
-	free(m);
     } else {
 	if (m && (!acl || strlen(acl) < strlen(m->acl))) {
 	    /* change what's already there */
@@ -1078,11 +937,6 @@ void cmd_set(struct conn *C,
 	    if (acl) strcpy(m->acl, acl);
 	    m->t = t;
 	} else {
-	    if (m) {
-		/* need bigger one */
-		sdelete(mailboxes, m);
-	    }
-
 	    /* allocate new mailbox */
 	    if (acl) {
 		newm = xrealloc(m, sizeof(struct mbent) + strlen(acl));
@@ -1100,9 +954,6 @@ void cmd_set(struct conn *C,
 
 	    /* write to disk */
 	    database_log(newm);
-
-	    /* insert it in */
-	    sinsert(mailboxes, newm);
 	}
     }
 
@@ -1124,7 +975,7 @@ void cmd_set(struct conn *C,
 
     prot_printf(C->pout, "%s OK \"done\"\r\n", tag);
  done:
-    database_compress();
+    database_lookup_free(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
 
@@ -1134,30 +985,33 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
     struct mbent *m = NULL;
     struct conn *upc = NULL;
     enum settype t = -1;
-
-    pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
+    int ret = 0;
 
     if(!mdata || !rock) return 1;
 
+    pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
+
     if(!strncmp(rock, "DELETE", 6)) {
-	m = ssearch(mailboxes, mdata->mailbox);
+	m = database_lookup(mdata->mailbox);
+
 	if(!m) {
 	    syslog(LOG_DEBUG, "attempt to delete unknown mailbox %s",
 		   mdata->mailbox);
 	    /* Mailbox doesn't exist */
-	    return -1;
+	    ret = -1;
+	    goto done;
 	}
 	m->t = t = SET_DELETE;
 
 	/* write to disk */
 	database_log(m);
-
-	sdelete(mailboxes, m);
-	free(m);
     } else {
-	if(!mdata->mailbox) return 1;
+	if(!mdata->mailbox) {
+	    ret = 1;
+	    goto done;
+	}
 
-	m = ssearch(mailboxes, mdata->mailbox);
+	m = database_lookup(mdata->mailbox);
 	
 	if (m && (!mdata->acl || strlen(mdata->acl) < strlen(m->acl))) {
 	    /* change what's already there */
@@ -1171,17 +1025,13 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    } else {
 		syslog(LOG_DEBUG,
 		       "bad mupdate command in cmd_change: %s", rock);
-		return 1;
+		ret = 1;
+		goto done;
 	    }
 
 	    database_log(m);
 	} else {
 	    struct mbent *newm;
-
-	    if(m) {
-		/* need a bigger one */
-		sdelete(mailboxes, m);
-	    }
 
 	    /* allocate new mailbox */
 	    if (mdata->acl) {
@@ -1204,13 +1054,13 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    } else {
 		syslog(LOG_DEBUG,
 		       "bad mupdate command in cmd_change: %s", rock);
-		return 1;
+		ret = 1;
+		goto done;
 	    }
 	    
 	    /* write to disk */
 	    database_log(newm);
-	    /* insert it */
-	    sinsert(mailboxes, newm);
+	    free(newm);
 	}
     }
     
@@ -1230,10 +1080,11 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	pthread_mutex_unlock(&upc->m);
     }
 
-    database_compress();
+ done:
+    database_lookup_free(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
-    return 0;
+    return ret;
 }
 
 void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
@@ -1243,7 +1094,7 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
     syslog(LOG_DEBUG, "cmd_find(fd:%d, %s)", C->fd, mailbox);
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
-    m = ssearch(mailboxes, mailbox);
+    m = database_lookup(mailbox);
 
     if (m && m->t == SET_ACTIVE) {
 	prot_printf(C->pout, "%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
@@ -1259,6 +1110,8 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
     } else {
 	/* no output: not found */
     }
+
+    database_lookup_free(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     if (dook) {
@@ -1266,10 +1119,44 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
     }
 }
 
+/* Callback for cmd_startupdate to be passed to mboxlist_findall. */
+static int sendupdate(char *name, int matchlen, int maycreate, void *rock)
+{
+    struct conn *C = (struct conn *)rock;
+    struct mbent *m;
+    
+    if(!C) return -1;
+    
+    m = database_lookup(name);
+    if(!m) return -1;
+    
+    switch (m->t) {
+    case SET_ACTIVE:
+	prot_printf(C->pout, "%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
+		    C->streaming,
+		    strlen(m->mailbox), m->mailbox,
+		    strlen(m->server), m->server,
+		    strlen(m->acl), m->acl);
+	break;
+    case SET_RESERVE:
+	prot_printf(C->pout, "%s RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
+		    C->streaming,
+		    strlen(m->mailbox), m->mailbox,
+		    strlen(m->server), m->server);
+	break;
+    case SET_DELETE:
+	/* deleted item in the list !?! */
+	abort();
+    }
+    
+    database_lookup_free(m);
+}
+
 void cmd_startupdate(struct conn *C, const char *tag)
 {
     skipnode *ptr;
     struct mbent *m;
+    char pattern[2] = {'%','\0'};
 
     /* initialize my condition variable */
     pthread_cond_init(&C->cond, NULL);
@@ -1281,27 +1168,8 @@ void cmd_startupdate(struct conn *C, const char *tag)
     updatelist = C;
     C->streaming = xstrdup(tag);
 
-    /* send current database */
-    for (m = sfirst(mailboxes, &ptr); m != NULL; m = snext(&ptr)) {
-	switch (m->t) {
-	case SET_ACTIVE:
-	    prot_printf(C->pout, "%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
-			tag,
-			strlen(m->mailbox), m->mailbox,
-			strlen(m->server), m->server,
-			strlen(m->acl), m->acl);
-	    break;
-	case SET_RESERVE:
-	    prot_printf(C->pout, "%s RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
-			tag,
-			strlen(m->mailbox), m->mailbox,
-			strlen(m->server), m->server);
-	    break;
-	case SET_DELETE:
-	    /* deleted item in the list !?! */
-	    abort();
-	}
-    }
+    mboxlist_findall(NULL, pattern, 1, NULL,
+		     NULL, sendupdate, (void*)C);
 
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
