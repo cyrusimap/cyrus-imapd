@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.208 2004/06/22 16:59:16 rjs3 Exp $
+ * $Id: index.c,v 1.209 2004/06/22 19:42:56 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1765,7 +1765,7 @@ static int index_fetchsection(const char *resp,
 	else if (p[6] == '.') {
 	    /* BINARY.SIZE */
 	    prot_printf(imapd_out, "%s%u", resp, size);
-
+	    
 	    if (decbuf) free(decbuf);
 	    return 0;
 	}
@@ -2223,6 +2223,7 @@ static int index_fetchreply(struct mailbox *mailbox,
     const char *msg_base = 0;
     unsigned long msg_size = 0;
     int sepchar = '(';
+    int started = 0;
     int i;
     bit32 user_flags[MAX_USER_FLAGS/32];
     const char *cacheitem;
@@ -2263,6 +2264,7 @@ static int index_fetchreply(struct mailbox *mailbox,
 	     fetchargs->headers || fetchargs->headers_not) {
 	/* these fetch items will always succeed, so start the response */
 	prot_printf(imapd_out, "* %u FETCH ", msgno);
+	started = 1;
     }
     if (fetchitems & FETCH_UID) {
 	prot_printf(imapd_out, "%cUID %u", sepchar, UID(msgno));
@@ -2378,7 +2380,7 @@ static int index_fetchreply(struct mailbox *mailbox,
     }
     for (section = fetchargs->bodysections; section; section = section->next) {
 	respbuf[0] = 0;
-	if (sepchar == '(') {
+	if (sepchar == '(' && !started) {
 	    /* we haven't output a fetch item yet, so start the response */
 	    snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
 	}
@@ -2397,7 +2399,7 @@ static int index_fetchreply(struct mailbox *mailbox,
     }
     for (section = fetchargs->binsections; section; section = section->next) {
 	respbuf[0] = 0;
-	if (sepchar == '(') {
+	if (sepchar == '(' && !started) {
 	    /* we haven't output a fetch item yet, so start the response */
 	    snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
 	}
@@ -2416,7 +2418,7 @@ static int index_fetchreply(struct mailbox *mailbox,
     }
     for (section = fetchargs->sizesections; section; section = section->next) {
 	respbuf[0] = 0;
-	if (sepchar == '(') {
+	if (sepchar == '(' && !started) {
 	    /* we haven't output a fetch item yet, so start the response */
 	    snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
 	}
