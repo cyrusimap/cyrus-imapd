@@ -33,7 +33,7 @@ VPATH = @srcdir@
 CC = @CC@
 INSTALL = @INSTALL@
 RANLIB = @RANLIB@
-ARCHIVE = ar cr
+ARCHIVE = $(AR) cr
 
 AWK = @AWK@
 SED = sed
@@ -98,6 +98,7 @@ depend: compile_et
 ## install_library_target(com_err,$(LIBOBJS),$(LINTFILES),)
 
 libcom_err.a: $(LIBOBJS)
+	rm -f libcom_err.a
 	$(ARCHIVE) $@ $(LIBOBJS)
 	$(RANLIB) $@
 
