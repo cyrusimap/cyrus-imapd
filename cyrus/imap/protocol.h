@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.h,v 1.2 2003/10/22 18:02:59 rjs3 Exp $ */
+/* $Id: protocol.h,v 1.3 2004/02/03 20:59:55 ken3 Exp $ */
 
 #ifndef _INCLUDED_PROTOCOL_H
 #define _INCLUDED_PROTOCOL_H
@@ -65,9 +65,9 @@ struct tls_cmd_t {
     const char *fail;		/* failure response */
 };
 
-struct logout_cmd_t {
-    const char *cmd;		/* logout command string */
-    const char *resp;		/* logout response */
+struct simple_cmd_t {
+    const char *cmd;		/* command string */
+    const char *resp;		/* success response */
 };
 
 struct protocol_t {
@@ -76,7 +76,8 @@ struct protocol_t {
     struct capa_cmd_t capa_cmd;
     struct tls_cmd_t tls_cmd;
     struct sasl_cmd_t sasl_cmd;
-    struct logout_cmd_t logout_cmd;
+    struct simple_cmd_t ping_cmd;
+    struct simple_cmd_t logout_cmd;
 };
 
 extern struct protocol_t protocol[];

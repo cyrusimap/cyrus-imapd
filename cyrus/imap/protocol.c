@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.2 2003/10/22 18:02:59 rjs3 Exp $ */
+/* $Id: protocol.c,v 1.3 2004/02/03 20:59:55 ken3 Exp $ */
 
 #include <string.h>
 #include <limits.h>
@@ -100,25 +100,30 @@ struct protocol_t protocol[] = {
       { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parsemechlist },
       { "S01 STARTTLS", "S01 OK", "S01 NO" },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL },
+      { "N01 NOOP", "N01 OK" },
       { "Q01 LOGOUT", "Q01 " } },
     { "pop3", "pop",
       { "CAPA", ".", "STLS", "SASL ", NULL },
       { "STLS", "+OK", "-ERR" },
       { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL },
+      { NULL },
       { "QUIT", "+OK" } },
     { "nntp", "news",
       { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
       { "STARTTLS", "382", "580" },
       { "AUTHINFO SASL", 512, 0, "28", "5", "383 ", "*", &nntp_parsesuccess },
+      { "DATE", "111" },
       { "QUIT", "205" } },
     { "lmtp", "lmtp",
       { "LHLO murder", "250 ", "STARTTLS", "AUTH ", NULL },
       { "STARTTLS", "220", "454" },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
+      { "NOOP", "250" },
       { "QUIT", "221" } },
     { "mupdate", "mupdate",
       { NULL, "* OK", NULL, "* AUTH ", NULL },
       { NULL },
       { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL },
+      { "N01 NOOP", "N01 OK" },
       { "Q01 LOGOUT", "Q01 " } }
 };

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.9 2003/10/22 20:05:10 ken3 Exp $ */
+/* $Id: backend.h,v 1.10 2004/02/03 20:59:55 ken3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -86,6 +86,7 @@ struct backend {
 struct backend *backend_connect(struct backend *cache, const char *server,
 				struct protocol_t *prot, const char *userid,
 				const char **auth_status);
+int backend_ping(struct backend *s, struct protocol_t *prot);
 void backend_disconnect(struct backend *s, struct protocol_t *prot);
 
 #define CAPA(s, c) ((s)->capability & (c))
