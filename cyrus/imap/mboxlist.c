@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.136 2000/09/05 04:07:07 leg Exp $
+ * $Id: mboxlist.c,v 1.137 2000/09/28 19:07:24 leg Exp $
  */
 
 #include <config.h>
@@ -1242,6 +1242,52 @@ struct find_rock {
     void *procrock;
 };
 
+/* return non-zero if we like this one */
+static int find_p(void *rockp, 
+		   const char *key, int keylen)
+{
+    char namebuf[MAX_MAILBOX_NAME+1];
+    char namematchbuf[MAX_MAILBOX_NAME+1];
+    struct find_rock *rock = (struct find_rock *) rockp;
+    long minmatch;
+    struct glob *g = rock->g;
+
+    /* foreach match, do this test */
+    minmatch = 0;
+    while (minmatch >= 0) {
+	long matchlen;
+
+	memcpy(namebuf, key, keylen);
+	namebuf[keylen] = '\0';
+	strcpy(namematchbuf, namebuf);
+	
+	if (!rock->inbox && rock->usermboxname &&
+	    !strncmp(namebuf, rock->usermboxname, rock->usermboxnamelen)
+	    && (keylen == rock->usermboxnamelen || 
+		namebuf[rock->usermboxnamelen] == '.')) {
+	    /* this would've been output with the inbox stuff, so skip it */
+	    return 0;
+	}
+	if (rock->inboxoffset) {
+	    namematchbuf[rock->inboxoffset] = rock->inboxcase[0];
+	    namematchbuf[rock->inboxoffset+1] = rock->inboxcase[1];
+	    namematchbuf[rock->inboxoffset+2] = rock->inboxcase[2];
+	    namematchbuf[rock->inboxoffset+3] = rock->inboxcase[3];
+	    namematchbuf[rock->inboxoffset+4] = rock->inboxcase[4];
+	}
+	
+	matchlen = glob_test(g, namematchbuf+rock->inboxoffset,
+			     keylen-rock->inboxoffset, &minmatch);
+	if (matchlen == -1) break;
+
+	/* if we get here, close enough for us to spend the time
+           acting interested */
+	return 1;
+    }
+
+    return 0;
+}
+
 static int find_cb(void *rockp, 
 		   const char *key, int keylen,
 		   const char *data, int datalen)
@@ -1440,7 +1486,7 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 	/* iterate through prefixes matching usermboxname */
 	DB->foreach(mbdb,
 		    usermboxname, usermboxnamelen,
-		    &find_cb, &cbrock,
+		    &find_p, &find_cb, &cbrock,
 		    NULL);
     }
 
@@ -1455,7 +1501,7 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
        just bother looking at the ones that have the same pattern prefix. */
     DB->foreach(mbdb,
 		pattern, prefixlen,
-		&find_cb, &cbrock,
+		&find_p, &find_cb, &cbrock,
 		NULL);
 
   done:
@@ -1865,7 +1911,7 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
 	/* iterate through prefixes matching usermboxname */
 	SUBDB->foreach(subs,
 		       usermboxname, usermboxnamelen,
-		       &find_cb, &cbrock,
+		       &find_p, &find_cb, &cbrock,
 		       NULL);
 
 	cbrock.usermboxname = usermboxname;
@@ -1884,7 +1930,8 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
     }
     /* search for all remaining mailboxes.
        just bother looking at the ones that have the same pattern prefix. */
-    SUBDB->foreach(subs, pattern, prefixlen, &find_cb, &cbrock, NULL);
+    SUBDB->foreach(subs, pattern, prefixlen, 
+		   &find_p, &find_cb, &cbrock, NULL);
 
   done:
     if (subs) mboxlist_closesubs(subs);
