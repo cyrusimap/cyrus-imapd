@@ -173,7 +173,7 @@ static config_read()
     while (fgets(buf, sizeof(buf), infile)) {
 	lineno++;
 
-	buf[strlen(buf)-1] = '\0';
+	if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
 	for (p = buf; *p && isspace(*p); p++);
 	if (!*p || *p == '#') continue;
 
