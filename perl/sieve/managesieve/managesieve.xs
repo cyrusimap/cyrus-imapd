@@ -124,7 +124,7 @@ perlsieve_getpass(conn, context, id, psecret)
         tmp = POPp;
 
         /* copy result */
-        *psecret = malloc(sizeof(sasl_secret_t)+strlen(tmp));
+        *psecret = malloc(sizeof(sasl_secret_t) + strlen(tmp) + 2);
         if (!*psecret) return SASL_NOMEM;
         strcpy( (*psecret)->data ,tmp);
         (*psecret)->len = strlen(tmp);
@@ -175,7 +175,7 @@ perlsieve_simple(context, id, result, len)
         tmp = POPp;
 
         /* copy result */
-        *result = malloc(strlen(tmp));
+        *result = malloc(strlen(tmp) + 2);
         if (!*result) return SASL_NOMEM;
         strcpy(*result,tmp);
         if (len) *len = strlen(*result);
