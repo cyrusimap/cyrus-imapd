@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.66 1999/09/27 23:51:57 tmartin Exp $ -->
+<!-- $Id: install.html,v 1.67 1999/10/02 00:44:45 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -20,7 +20,7 @@ It is somewhat out of date and will eventually be updated.
 "<tt>cyrus-bugs@andrew.cmu.edu</tt>".  The
 <tt>info-cyrus@andrew.cmu.edu</tt> mailing list exists for the
 discussion of this server and other Cyrus software; more information
-is availible <a href="mailing-list.html">in the mailing-list
+is available <a href="mailing-list.html">in the mailing-list
 document</a>.  Be sure to include the version numbers of imapd and
 libsasl you are using, as well as your system type (and version!) and
 any configuration options you selected.
@@ -335,7 +335,7 @@ function exists, "<tt>fcntl</tt>" otherwise. <P>
 <dt><tt>--disable-sieve</tt>
 <dd>By default, Sieve support is enabled.  Note that you need
 duplicate delivery suppression enabled if you're going to use Sieve.
-Use <tt>--disable-sieve</tt> to disable Sieve support<p>
+Use <tt>--disable-sieve</tt> to disable compiling Sieve support<p>
 
 <dt><tt>--disable-cyradm</tt>
 <dd>Do not compile the <TT>cyradm</TT> administrative client.<P>
@@ -468,10 +468,15 @@ If you do not copy the "<tt>syslog.conf</tt>" file in
    local6.debug  /var/adm/imapd.log
 </pre>
 
-Create the <TT>imapd.log</TT> file:
+You probably also want to log SASL messages with a line like:
+<pre>
+   auth.debug /var/adm/auth.log
+</pre>
+
+Create the log files:
 
 <pre>
-<kbd>   touch /var/adm/imapd.log
+<kbd>   touch /var/adm/imapd.log /var/adm/auth.log
 </kbd></pre>
 
 <li>Create the file "<tt>/etc/imapd.conf</tt>". Here is a sample
@@ -654,7 +659,7 @@ protocol, add the following line
 If you wish to use to timsieved service, add the following line
 
 <pre>
-   sieve  stream  tcp  nowait  cyrus  /usr/cyrus/bin/timsieved
+   sieve  stream  tcp  nowait  cyrus  /usr/cyrus/bin/timsieved timsieved
 </pre>
 
 "<tt>cyrus</tt>" is the Cyrus user and "<tt>/usr/cyrus/bin/</tt>" is the
@@ -904,6 +909,13 @@ mechanisms support what layers.
 <ol>
 
 <p>
+<li>The Sieve server, "<tt>timsieved</tt>", is used for transporting
+user Sieve scripts to the sealed IMAP server.  It is incompatible with
+the "<tt>sieveusehomedir</tt>" option.  It is named after the
+principal author, Tim Martin, who desperately wanted something named
+after him in the Cyrus distribution.
+
+<p>
 <li>From your normal account, telnet to the sieve port on the
 server you're setting up:
 
@@ -929,14 +941,15 @@ are listed. This list should be identical to the one listed by
 
 <p>
 <li>Next test authenticating to the sieve server. To do this run the
-"<tt>installsieve</tt>" utility. You must specify the server. Note you
-may have to specify the port if you run this utility from a different
-machine. To specify the port use the "<tt>-p [port]</tt>" switch.
+"<tt>installsieve</tt>" utility. You must specify the server. You may
+have to specify the port if you run this utility from a different
+machine without the "sieve" entry in "<tt>/etc/services</tt>". To
+specify the port use the "<tt>-p [port]</tt>" switch.
 
 "<kbd>installsieve foobar</kbd>"
 
 This should produce either the message "<tt>Authentication
-suceeded!</tt>" or "<tt>Authentication failed</tt>".
+succeeded!</tt>" or "<tt>Authentication failed</tt>".
 
 You might wish to test all authentication types. To force installsieve
 to use a specific mechanism use the "<tt>-m [mechanism]</tt>" switch.
