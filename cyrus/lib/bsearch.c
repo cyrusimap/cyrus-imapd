@@ -149,7 +149,7 @@ unsigned long *lenp;
 	}
 
 	if (!cmp) {
-	    *lenp = len;
+	    if (lenp) *lenp = len;
 	    return offset;
 	}
 
