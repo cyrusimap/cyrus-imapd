@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.29 2004/09/08 20:01:02 shadow Exp $
+ * $Id: pop3d.c,v 1.144.2.30 2004/09/09 18:47:07 shadow Exp $
  */
 #include <config.h>
 
@@ -286,8 +286,6 @@ static struct sasl_callback mysasl_cb[] = {
 
 static void popd_reset(void)
 {
-    int nullfd = -1;
-
     proc_cleanup();
 
     /* close local mailbox */
@@ -324,14 +322,7 @@ static void popd_reset(void)
     }
 #endif
 
-    nullfd = open("/dev/null", O_RDONLY, 0);
-    if (nullfd < 0) {
-       fatal("open() failed", EC_TEMPFAIL);
-    }
-    cyrus_dup2_sock(nullfd, 0);
-    cyrus_dup2_sock(nullfd, 1);
-    cyrus_dup2_sock(nullfd, 2);
-    close(nullfd);
+    cyrus_reset_stdio();
 
     strcpy(popd_clienthost, "[local]");
     if (popd_logfd != -1) {
