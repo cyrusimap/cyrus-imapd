@@ -35,7 +35,7 @@ extern int errno;
    
    XXX hopefully sendmail is the only meaningful place where this matters.
    */
-#define CONFIG_EXIT_STATUS EX_TMPFAIL
+#define CONFIG_EXIT_STATUS EX_TEMPFAIL
 
 struct configlist {
     char *key;
