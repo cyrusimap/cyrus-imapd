@@ -55,7 +55,7 @@ struct protstream {
     const char *(*func)();
     void *state;
     int maxplain;
-    char *error;
+    const char *error;
     int eof;
     int read_timeout;
 };
@@ -71,7 +71,7 @@ extern int prot_setlogtime P((struct protstream *s, time_t *ptr));
 extern int prot_setfunc P((struct protstream *s,
 			   const char *(*func)(), void *state, int maxplain));
 extern int prot_settimeout P((struct protstream *s, int timeout));
-extern char *prot_error P((struct protstream *s));
+extern const char *prot_error P((struct protstream *s));
 extern int prot_rewind P((struct protstream *s));
 extern int prot_fill P((struct protstream *s));
 extern int prot_flush P((struct protstream *s));

@@ -28,7 +28,7 @@ if test $ac_cv_sys_long_file_names = no; then
 	AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
 AC_CHECK_HEADERS(unistd.h)
-AC_REPLACE_FUNCS(memmove strcasecmp ftruncate)
+AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
 AC_HEADER_DIRENT
 AC_SUBST(CPPFLAGS)
 AC_SUBST(PRE_SUBDIRS)
@@ -429,6 +429,7 @@ dnl
 AC_CHECK_LIB(ndbm, dbm_open)
 AC_CHECK_LIB(dbm, dbm_open)
 AC_CHECK_LIB(db, dbopen)
+AC_CHECK_LIB(dld, shl_load, LIBS="${LIBS} -ldld")dnl HPUX needs this for Tcl
 AC_CHECK_LIB(socket, accept, LIBS="${LIBS} -lsocket -lnsl",,-lnsl)
 AC_CHECK_LIB(iberty, index, LIBS="${LIBS} -liberty")
 
