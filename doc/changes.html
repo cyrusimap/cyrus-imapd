@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.27 2002/01/18 22:58:45 rjs3 Exp $ -->
+<!-- $Id: changes.html,v 1.28 2002/02/06 17:04:04 leg Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -23,6 +23,24 @@ Gouaux, <tt>amos@utdallas.edu</tt>) </li>
 
 <li> Warning-related bug fixes from Henrique de Moras Holschuh
 <tt>hmh@debian.org</tt></li>
+
+<li> automatic archival of db3 files so that filesystem backups are
+always consistent (Ken Murchison, <tt>ken@oceana.com</tt>)</li>
+
+<li> added a skiplist database backend, still needs more testing </li>
+
+<li> further work on the Cyrus Murder </li>
+
+<li> fixed bug in <tt>remotepurge</tt> dealing with mailboxes with
+characters that need to be escaped inside quoted-strings </li>
+
+<li> Cyrus::IMAP::Admin now supports referrals </li>
+
+<li> <tt>cyradm</tt>, via Cyrus::IMAP::Shell, now can remove
+quotaroots </li>
+
+<li> <tt>timsieved</tt>, <tt>sieveshell</tt>, and the MANAGESIEVE
+protocol extended with referrals </li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.0</h2>
@@ -1483,7 +1501,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/01/18 22:58:45 $ <br />
+last modified: $Date: 2002/02/06 17:04:04 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
