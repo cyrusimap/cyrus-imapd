@@ -215,6 +215,7 @@ char **newpartition;
     char *buf, *p;
     char *canon_user;
     char *acl;
+    char *defaultacl, *identifier, *rights;
     char parent[MAX_NAME_LEN+1];
     unsigned parentlen;
 
@@ -330,9 +331,24 @@ char **newpartition;
 	    acl_set(&acl, name+5, ACL_ALL, (long (*)())0, (char *)0);
 	}
 	else {
-	    /* XXX config_getstring("defaultacl", ... */
-	    acl_set(&acl, "anybody", ACL_LOOKUP|ACL_READ|ACL_SEEN,
-		    (long (*)())0, (char *)0);
+	    defaultacl = identifier = 
+	      strsave(config_getstring("defaultacl", "anybody lrs"));
+	    for (;;) {
+		while (*identifier && isspace(*identifier)) identifier++;
+		rights = identifier;
+		while (*rights && !isspace(*rights)) rights++;
+		if (!*rights) break;
+		*rights++ = '\0';
+		while (*rights && isspace(*rights)) rights++;
+		if (!*rights) break;
+		p = rights;
+		while (*p && !isspace(*p)) p++;
+		if (*p) *p++ = '\0';
+		acl_set(&acl, identifier, acl_strtomask(rights),
+			(long (*)())0, (char *)0);
+		identifier = p;
+	    }
+	    free(defaultacl);
 	}
 
 	if (!partition) {  
