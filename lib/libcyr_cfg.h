@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.h,v 1.2 2003/10/22 18:03:05 rjs3 Exp $
+ * $Id: libcyr_cfg.h,v 1.3 2003/12/15 22:42:38 rjs3 Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -85,6 +85,8 @@ enum cyrus_opt {
     CYRUSOPT_DB_INIT_FLAGS,
     /* Full directory hashing (OFF) */
     CYRUSOPT_FULLDIRHASH,
+    /* Database for use by AUTH_PTS */
+    CYRUSOPT_PTSCACHE_DB,
 
     CYRUSOPT_LAST
     
