@@ -63,6 +63,15 @@ flag
 ]...
 .br
 .B deliver
+.B \-l
+[
+.B \-e
+]
+[
+.B \-q
+]
+.br
+.B deliver
 .B \-E
 .I days
 .SH DESCRIPTION
@@ -134,6 +143,8 @@ Deliver message even when receiving mailbox is over quota.
 Set the system flag or keyword
 .I flag
 on the delivered message.
+.B \-l
+Accept messages using the LMTP protocol.
 .TP
 .BI \-E " days"
 Prune the duplicate delivery database of entries older than
