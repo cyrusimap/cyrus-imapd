@@ -120,11 +120,24 @@ sub prompt {
       return $realm;
   }
 
+  my $ostty;
+  my $str = "";
+  chomp($ostty = `stty -g`);
+
+  if ($type eq "password") {
+      system "stty -echo -icanon min 1 time 0 2>/dev/null || " .
+	     "stty -echo cbreak";
+      $str = "\n";
+  }
+
   print "$prompt: ";
 
   $b = <STDIN>;
   chop($b);
   
+  print $str;
+  system "stty $ostty";
+
   return $b;
 }
 
