@@ -43,18 +43,17 @@ static const signed char index_hex[256] = {
     XX,10,11,12, 13,14,15,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,10,11,12, 13,14,15,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
 };
 #define HEXCHAR(c)  (index_hex[(unsigned char)(c)])
-
 
 struct map {
     int code;
@@ -66,6 +65,26 @@ struct map *map;
 int map_num;
 int map_alloc;
 #define MAPGROW 10 /* XXX 200 */
+
+struct tablechar {
+    int code;
+    char *translation;
+    char *action;
+    char *comment;
+};
+#define EMPTYTCHAR(tc) ((tc).code == -1 && !(tc).translation && !(tc).action)
+
+struct table {
+    char *name;
+    char *endaction;
+    struct tablechar ch[256];
+};
+
+struct table *table;
+int table_num;
+int table_alloc;
+#define TABLEGROW 10 /* XXX 200 */
+
 
 main(argc, argv)
 int argc;
@@ -87,7 +106,9 @@ char **argv;
     if (map_num == 0) usage();
 
     while (argv[optind]) {
-	readcharfile(argv[optind++]);
+	readcharfile(argv[optind]);
+	printtable(argv[optind]);
+	optind++;
     }
     return 0;
 }
@@ -193,7 +214,8 @@ char *name;
     char buf[1024];
     char *p;
     int line = 0;
-    int thischar, curchar = 0;
+    int curstate = -1;
+    int thischar, thisstate;
     int code, i, c;
     int hops;
     
@@ -203,15 +225,8 @@ char *name;
 	exit(1);
     }
 
-    p = strrchr(name, '/');
-    if (p) p++;
-    else p = name;
-    strcpy(buf, p);
-    if (p = strchr(buf, '.')) *p = '\0';
-    while (p = strchr(buf, '-')) *p = '_';
+    table_num = 0;
 
-    printf("const unsigned char %s[1][256][4] = { {\n", buf);
-    
     while (fgets(buf, sizeof(buf), charfile)) {
 	line++;
 	p = buf + strlen(buf);
@@ -220,23 +235,74 @@ char *name;
 	while (*p && isspace(*p)) p++;
 	if (!*p || *p == '#') continue;
 
-	thischar = 0;
+	if (*p == ':') {
+	    /* New state */
+	    curstate = newstate(p+1);
+	    continue;
+	}
+	
+	if (curstate == -1) {
+	    curstate = newstate("");
+	}
+
+	thisstate = curstate;
+	thischar = i = 0;
 	while (!isspace(*p)) {
 	    c = HEXCHAR(*p);
+	    i++;
 	    *p++;
 	    if (c == XX) goto syntaxerr;
 	    thischar = thischar*16 + c;
 	}
-	if (thischar != curchar) {
-	    fprintf(stderr, "%s: line %d: got %x, was expecting %x", name, line, thischar,
-		    curchar);
-	    exit(1);
-	}
-	curchar++;
 	while (*p && isspace(*p)) p++;
 
+	if (i > 4) goto syntaxerr;	
+	if (i > 2) {
+	    if (EMPTYTCHAR(table[thisstate].ch[thischar>>8])) {
+		char action[1024];
+		sprintf(action, ">%s_%02x <", table[thisstate].name,
+			thischar>>8);
+		table[thisstate].ch[thischar>>8].action = strsave(action);
+		*(strchr(table[thisstate].ch[thischar>>8].action, ' ')) = '\0';
+		table[thisstate].ch[thischar>>8].comment = "multi-byte";
+		thisstate = newstate(action+1);
+	    }
+	    else if (!table[thisstate].ch[thischar>>8].action ||
+		     table[thisstate].ch[thischar>>8].action[0] != '>') {
+		fprintf(stderr,
+			"%s: line %d: multibyte/single-byte conflict\n",
+			name, line);
+		exit(1);
+	    }
+	    else {
+		thisstate =
+		  findstate(table[thisstate].ch[thischar>>8].action+1);
+		if (thisstate == -1) {
+		    fprintf(stderr,
+			    "%s: line %d: can't find multibyte state\n",
+			    name, line);
+		    exit(1);
+		}
+	    }
+	    thischar &= 0xff;
+	}
+
+	if (!EMPTYTCHAR(table[thisstate].ch[thischar])) {
+	    fprintf(stderr, "%s: line %d: duplicate defs for %x\n",
+		    name, line, thischar);
+	    exit(1);
+	}
+
+	table[thisstate].ch[thischar].comment = strsave(buf);
+
 	if (*p == '?') {
-	    printf(" { EMPTY, 0,   0,   0, }, /* %s */\n", buf);
+	    continue;
+	}
+
+	if (*p == ':' || *p == '>' || *p == '<') {
+	    p = table[thisstate].ch[thischar].action = strsave(p);
+	    while (*p && !isspace(*p)) p++;
+	    *p = '\0';
 	    continue;
 	}
 
@@ -261,34 +327,140 @@ char *name;
 	    exit(1);
 	}
 	if (i == map_num) {
-	    printf(" { '%c', %3d, %3d,   0, }, /* %s */\n",
-		   'A' + (code>>14), 0x80+((code>>7)&0x7f), 0x80+(code&0x7f), buf);
+	    table[thisstate].ch[thischar].code = code;
 	}
 	else {
-	    p = map[i].translation;
-	    printf(" {");
-	    for (i = 0; i < 4; i++) {
-		if (isprint(*p) && *p != '\\' && *p != '\"' && *p != '\'') {
-		    printf(" '%c',", *p);
-		}
-		else {
-		    printf(" %3d,", *p);
-		}
-		if (*p) p++;
-	    }
-	    printf(" }, /* %s */\n", buf);
+	    table[thisstate].ch[thischar].translation = map[i].translation;
 	}
     }
-    if (curchar != 0x100) {
-	fprintf(stderr, "%s: too short\n");
-	exit(1);
-    }
-    printf("} };\n\n");
+    fclose(charfile);
     return;
  syntaxerr:
     fprintf(stderr, "%s: line %d: syntax error\n", name, line);
     exit(1);
 }
+
+int
+newstate(args)
+char *args;
+{
+    char *p;
+    int i;
+
+    if (table_num == table_alloc) {
+	table_alloc += TABLEGROW;
+	table = (struct table *)xrealloc((char *)table,
+					 table_alloc * sizeof(struct table));
+    }
+
+    table[table_num].name = strsave(args);
+    table[table_num].endaction = "END";
+    for (i = 0; i < 256; i++) {
+	table[table_num].ch[i].code = -1;
+	table[table_num].ch[i].translation = 0;
+	table[table_num].ch[i].action = 0;
+	table[table_num].ch[i].comment = 0;
+    }
+
+    p = table[table_num].name;
+    while (*p && !isspace(*p)) p++;
+    *p++ = '\0';
+    while (*p) {
+	if (*p == '<') table[table_num].endaction = "RET";
+	p++;
+    }
+
+    return table_num++;
+}
+
+int
+findstate(name)
+char *name;
+{
+    int i;
+
+    for (i = 0; i < table_num; i++) {
+	if (!strcmp(name, table[i].name)) return i;
+    }
+    return -1;
+}
+
+printtable(name)
+char *name;
+{
+    char buf[1024];
+    char *p;
+    int curstate, thischar;
+    int code;
+    char *end;
+    int i;
+    
+    p = strrchr(name, '/');
+    if (p) p++;
+    else p = name;
+    strcpy(buf, p);
+    if (p = strchr(buf, '.')) *p = '\0';
+    while (p = strchr(buf, '-')) *p = '_';
+
+    printf("const unsigned char %s[%d][256][4] = {\n", buf, table_num);
+
+    for (curstate = 0; curstate < table_num; curstate++) {
+	printf(" {");
+	if (table[curstate].name[0]) {
+	    printf(" /* %s */", table[curstate].name);
+	}
+	printf("\n");
+	
+	for (thischar = 0; thischar < 256; thischar++) {
+	    printf("   {");
+	    if ((code = table[curstate].ch[thischar].code) != -1) {
+		printf(" '%c', %3d, %3d, %s,", 'A' + (code>>14),
+		       0x80+((code>>7)&0x7f), 0x80+(code&0x7f),
+		       table[curstate].endaction);
+	    }
+	    else if ((p = table[curstate].ch[thischar].translation) != 0) {
+		end = table[curstate].endaction;
+		for (i = 0; i < 4; i++) {
+		    if (isprint(*p) && *p != '\\' && *p != '\"' && *p != '\'') {
+			printf(" '%c',", *p);
+		    }
+		    else if (!*p) {
+			printf(" %s,", end);
+			end = "  0";
+		    }
+		    else {
+			printf(" %3d,", *p);
+		    }
+		    if (*p) p++;
+		}
+	    }
+	    else if ((p = table[curstate].ch[thischar].action) == 0) {
+		printf(" EMPTY, %s, 0,   0,", table[curstate].endaction);
+	    }
+	    else if (*p == '<') {
+		printf(" RET,   0,   0,   0,");
+	    }
+	    else {
+		code = findstate(p+1);
+		if (code == -1) {
+		    fprintf(stderr, "%s: unknown state %s\n", name, p+1);
+		}
+		printf(" %s, %3d, %3d,   0,",
+		       *p == '>' ? "JSR" : "JMP",
+		       (code>>8), (code&0xff));
+	    }
+	    printf(" },");
+	    if (table[curstate].ch[thischar].comment) {
+		printf(" /* %s */", table[curstate].ch[thischar].comment);
+	    }
+	    printf("\n");
+	}
+	printf(" },\n");
+    }
+    printf("};\n\n");
+}
+
+
 
 fatal(s, code)
 char *s;
