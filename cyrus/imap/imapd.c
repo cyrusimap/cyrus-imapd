@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.37 2004/08/09 18:51:16 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.38 2004/08/19 19:02:12 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4182,7 +4182,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 						   imapd_userid, mailboxname);
     }
 
-    if (!r && config_mupdate_server) {
+    if (!r && !localonly && config_mupdate_server) {
 	int guessedpart = 0;
 
 	/* determine if we're creating locally or remotely */
