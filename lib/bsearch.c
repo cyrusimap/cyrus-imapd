@@ -85,7 +85,7 @@ unsigned long size;
 unsigned long *lenp;
 {
     int firstsearch = 1;
-    unsigned long start = 0, end = size, mid, offset;
+    unsigned long start = 0, end = size - 1, mid, offset;
     unsigned long len, n;
     int cmp;
     unsigned char *wordp, *p;
@@ -103,7 +103,7 @@ unsigned long *lenp;
 	}
 
 	if (mid) {
-	    p = memchr(buffer+mid, '\n', end-mid);
+	    p = memchr(buffer+mid, '\n', (end + 1) - mid);
 	    if (!p) {
 		end = mid - 1;
 		continue;
