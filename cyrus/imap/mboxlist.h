@@ -41,7 +41,7 @@
  *
 
  * 
- * $Id: mboxlist.h,v 1.8 2000/05/23 20:52:24 robeson Exp $
+ * $Id: mboxlist.h,v 1.9 2000/07/03 20:13:31 leg Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -117,13 +117,10 @@ int mboxlist_setacl(char *name, char *identifier, char *rights, int isadmin,
 int mboxlist_findall(char *pattern, int isadmin, char *userid, 
 		     struct auth_state *auth_state, int (*proc)(), void *rock);
 
-typedef foreach_res foreach_proc(void *rock, struct mbox_entry **mboxent);
-  
-int mboxlist_foreach(foreach_proc *p, void *rock, int rw);
-
 /* Find subscribed mailboxes that match 'pattern'. */
 int mboxlist_findsub(char *pattern, int isadmin, char *userid, 
-		     struct auth_state *auth_state, int (*proc)(), void *rock);
+		     struct auth_state *auth_state, int (*proc)(), void *rock,
+		     int force);
 
 /* given a mailbox 'name', where should we stage messages for it? 
    'stagedir' should be MAX_MAILBOX_PATH. */
@@ -131,7 +128,7 @@ int mboxlist_findstage(const char *name, char *stagedir);
 
 /* Change 'user's subscription status for mailbox 'name'. */
 int mboxlist_changesub(const char *name, const char *userid, 
-		       struct auth_state *auth_state, int add);
+		       struct auth_state *auth_state, int add, int force);
 
 /* set or create quota root */
 int mboxlist_setquota(const char *root, int newquota);
