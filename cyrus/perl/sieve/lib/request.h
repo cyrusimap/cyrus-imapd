@@ -56,30 +56,30 @@
 int handle_response(int res,int version,struct protstream *pin, mystring_t **errstr);
 
 int deleteascript(int version,struct protstream *pout, struct protstream *pin,
-		  char *name);
+		  char *name, char **errstr);
 
 int installafile(int version,struct protstream *pout, struct protstream *pin,
-		 char *filename);
+		 char *filename, char **errstr);
 
 int installdata(int version,struct protstream *pout, struct protstream *pin,
-		char *scriptname, char *data, int len);
+		char *scriptname, char *data, int len, char **errstr);
 
 int showlist(int version, struct protstream *pout, struct protstream *pin);
 
 int list_wcb(int version, struct protstream *pout, struct protstream *pin,isieve_listcb_t *cb ,void *rock);
 
 int setscriptactive(int version,struct protstream *pout, struct protstream *pin,
-		    char *name);
+		    char *name, char **errstr);
 
 /*
  * Getscript. Save {0,1} wheather to save to disk or display on screen
  */
 
 int getscript(int version, struct protstream *pout, struct protstream *pin,
-	      char *name, int save);
+	      char *name, int save, char **errstr);
 
 int getscriptvalue(int version,struct protstream *pout, struct protstream *pin,
-		   char *name, mystring_t **data);
+		   char *name, mystring_t **data, char **errstr);
 
 void parseerror(char *str);
 

@@ -42,8 +42,9 @@
 
 
 struct xscyrus {
-
     isieve_t *isieve;
+
+    char *errstr;		/* last error, if any */
 
     char *class; /* needed by perl */
 };

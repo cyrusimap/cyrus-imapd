@@ -53,6 +53,7 @@
 #include <string.h>
 
 #include <sys/file.h>
+#include <errno.h>
 
 #include "request.h"
 
@@ -64,13 +65,13 @@
 
 void parseerror(char *str)
 {
-  printf("Parse error: %s\n", str);
-  printf("exiting\n");
+  printf("Bad protocol from MANAGESIEVE server: %s\n", str);
 
   exit(2);
 }
 
-int handle_response(int res,int version,struct protstream *pin, mystring_t **errstr)
+int handle_response(int res,int version,struct protstream *pin, 
+		    mystring_t **errstr)
 {    
   lexstate_t state;
   int r = 0;
@@ -81,7 +82,7 @@ int handle_response(int res,int version,struct protstream *pin, mystring_t **err
   if (res==TOKEN_NO) {
 
       if (yylex(&state, pin)!=' ')
-	  parseerror("expected space\n");
+	  parseerror("expected space");
 
       res = yylex(&state, pin);
 
@@ -90,24 +91,24 @@ int handle_response(int res,int version,struct protstream *pin, mystring_t **err
 	  /* '(' string [SP string] ')' */
 	  
 	  if (yylex(&state, pin)!=STRING)
-	      parseerror("expected string\n");
+	      parseerror("expected string");
 
 	  if (strcmp(string_DATAPTR(state.str),"SASL")==0) {
 	      if (yylex(&state, pin)!=' ')
-		  parseerror("expected space\n");
+		  parseerror("expected space");
 	      if (yylex(&state, pin)!=STRING)
-		  parseerror("expected string\n");
+		  parseerror("expected string");
 	  }
 
 	  if (yylex(&state, pin)!=')')
-	      parseerror("expected RPAREN\n");
+	      parseerror("expected RPAREN");
 
 	  res = yylex(&state, pin);
 	  if (res == ' ') res = yylex(&state, pin);
       }
 
       if (res != STRING)
-	  parseerror("expected string\n");
+	  parseerror("expected string");
       
 
       if (errstr)
@@ -119,20 +120,21 @@ int handle_response(int res,int version,struct protstream *pin, mystring_t **err
       /* old version of protocol had strings with ok responses too */
       if (version == OLD_VERSION) {
 	  if (yylex(&state, pin)!=' ')
-	      parseerror("expected sp\n");
+	      parseerror("expected sp");
 	  
 	  if (yylex(&state, pin)!=STRING)
-	      parseerror("expected string\n");
+	      parseerror("expected string");
       }
   }
   
   if (yylex(&state, pin)!=EOL)
-      parseerror("expected EOL\n");
+      parseerror("expected EOL");
   
   return r;
 }
 
-int deleteascript(int version, struct protstream *pout, struct protstream *pin,char *name)
+int deleteascript(int version, struct protstream *pout, 
+		  struct protstream *pin, char *name, char **errstrp)
 {
   lexstate_t state;
   int res;
@@ -146,17 +148,18 @@ int deleteascript(int version, struct protstream *pout, struct protstream *pin,c
 
   ret = handle_response(res,version,pin,&errstr);
 
-  if (ret!=0)
-  {
-    printf("Deletescript error: %s\n",string_DATAPTR(errstr));
-    return -1;
+  if (ret!=0) {
+      *errstrp = malloc(128);
+      snprintf(*errstrp, 127, 
+	       "Deleting script: %s",string_DATAPTR(errstr));
+      return -1;
   }
 
   return 0;
 }
 
 int installdata(int version,struct protstream *pout, struct protstream *pin,
-		char *scriptname, char *data, int len)
+		char *scriptname, char *data, int len, char **errstrp)
 {
   int res;
   int ret;
@@ -180,9 +183,10 @@ int installdata(int version,struct protstream *pout, struct protstream *pin,
   /* if command failed */
   if (ret!=0)
   {
-    printf("Putting script failed with message: %s\n",string_DATAPTR(errstr));
-    
-    return -1;
+      *errstrp = malloc(128);
+      snprintf(*errstrp, 127, 
+	       "Putting script: %s",string_DATAPTR(errstr));
+      return -1;
   }
 
   return 0;
@@ -213,7 +217,8 @@ static char *getsievename(char *filename)
 }
 
 
-int installafile(int version,struct protstream *pout, struct protstream *pin,char *filename)
+int installafile(int version,struct protstream *pout, struct protstream *pin,
+		 char *filename, char **errstrp)
 {
   FILE *stream;
   struct stat filestats;  /* returned by stat */
@@ -230,10 +235,13 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,cha
 
   result=stat(filename,&filestats);
 
-  if (result!=0)
-  {
-    perror("stat");
-    return -1;
+  if (result!=0) {
+      if (errno == ENOENT) {
+	  *errstrp = "no such file";
+      } else {
+	  *errstrp = "file i/o error";
+      }
+      return -1;
   }
 
   size=filestats.st_size;
@@ -242,8 +250,10 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,cha
 
   if (stream==NULL)
   {
-    printf("Couldn't open file\n");
-    return -1;
+      *errstrp = malloc(128);
+      snprintf(*errstrp, 127, 
+	       "put script: internal error: couldn't open temporary file");
+      return -1;
   }
 
   prot_printf(pout, "PUTSCRIPT \"%s\" ",sievename);
@@ -278,8 +288,10 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,cha
   /* if command failed */
   if (ret!=0)
   {
-    printf("Putting script failed with message: %s\n",string_DATAPTR(errstr));    
-    return -1;
+      *errstrp = malloc(128);
+      snprintf(*errstrp, 127, 
+	       "put script: %s", string_DATAPTR(errstr));
+      return -1;
   }
 
   return 0;
@@ -345,7 +357,8 @@ int showlist(int version, struct protstream *pout, struct protstream *pin)
   return ret;
 }
 
-int list_wcb(int version, struct protstream *pout, struct protstream *pin,isieve_listcb_t *cb ,void *rock)
+int list_wcb(int version, struct protstream *pout, 
+	     struct protstream *pin,isieve_listcb_t *cb ,void *rock)
 {
   lexstate_t state;
   int end=0;
@@ -402,7 +415,7 @@ int list_wcb(int version, struct protstream *pout, struct protstream *pin,isieve
 }
 
 int setscriptactive(int version, struct protstream *pout, 
-		    struct protstream *pin,char *name)
+		    struct protstream *pin,char *name, char **errstrp)
 {
   lexstate_t state;
   int res;
@@ -421,9 +434,10 @@ int setscriptactive(int version, struct protstream *pout,
 
   /* if command failed */
   if (ret != 0) {
-    printf("Setting script %s active failed with message: %s\n",
-	   name, string_DATAPTR(errstr));
-    return -1;
+      *errstrp = malloc(128);
+      snprintf(*errstrp, 127, 
+	       "Setting script active: %s",string_DATAPTR(errstr));
+      return -1;
   }
 
   return 0;
@@ -436,7 +450,7 @@ static int viewafile(mystring_t *data, char *name)
   return 0;
 }
 
-static int writefile(mystring_t *data, char *name)
+static int writefile(mystring_t *data, char *name, char **errstrp)
 {
   FILE *stream;
 
@@ -448,10 +462,11 @@ static int writefile(mystring_t *data, char *name)
 
   stream=fopen(scrname,"w");
 
-  if (stream==NULL)
-  {
-    printf("Unable to open %s for writing\n",name);
-    return -1;
+  if (stream==NULL) {
+      *errstrp = malloc(128);
+      snprintf(*errstrp, 127,
+	       "writefile: unable to open %s for writing", name);
+      return -1;
   }
 
   fwrite(string_DATAPTR(data), 1, data->len, stream);
@@ -462,7 +477,7 @@ static int writefile(mystring_t *data, char *name)
 }
 
 int getscript(int version, struct protstream *pout, 
-	      struct protstream *pin,char *name, int save)
+	      struct protstream *pin,char *name, int save, char **errstrp)
 {
   int res;
   mystring_t *str=NULL;
@@ -479,7 +494,7 @@ int getscript(int version, struct protstream *pout,
   {
 
     if (save==1)
-      writefile(state.str, name);
+      writefile(state.str, name, errstrp);
     else
       viewafile(state.str, name);
 
@@ -494,7 +509,9 @@ int getscript(int version, struct protstream *pout,
   /* if command failed */
   if (ret!=0)
   {
-    printf("Getting script %s active failed with message: %s\n",name, string_DATAPTR(str));
+      *errstrp = malloc(128);
+      snprintf(*errstrp, 127, 
+	       "Getting script: %s",string_DATAPTR(errstr));
   }
 
   return ret;
@@ -503,7 +520,8 @@ int getscript(int version, struct protstream *pout,
 
 
 int getscriptvalue(int version, struct protstream *pout, 
-		   struct protstream *pin,char *name, mystring_t **data)
+		   struct protstream *pin,char *name, mystring_t **data, 
+		   char **errstrp)
 {
   int res;
   int ret;
@@ -530,8 +548,10 @@ int getscriptvalue(int version, struct protstream *pout,
   /* if command failed */
   if (ret!=0)
   {
-    printf("Getting script %s active failed with message: %s\n",name, string_DATAPTR(errstr));
-    return -1;
+      *errstrp = malloc(128);
+      snprintf(*errstrp, 127, 
+	       "Getting script: %s",string_DATAPTR(errstr));
+      return -1;
   }
 
   return 0;

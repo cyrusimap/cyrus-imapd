@@ -43,6 +43,7 @@
 #include <sys/file.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <string.h>
 
 #include <sasl.h>
 
@@ -239,7 +240,8 @@ char * read_capability(isieve_t *obj)
   return cap;
 }
 
-static int getauthline(isieve_t *obj, char **line, unsigned int *linelen)
+static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
+		       char **errstrp)
 {
   lexstate_t state;
   int res;
@@ -256,8 +258,8 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen)
     if (res==TOKEN_OK) {
       return STAT_OK;
     } else { /* server said no */
-      printf("Authentication failed with: \"%s\"\n",string_DATAPTR(errstr));
-      return STAT_NO;    
+	*errstrp = string_DATAPTR(errstr);
+	return STAT_NO;
     }
   }
 
@@ -273,7 +275,7 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen)
 }
 
 
-int auth_sasl(char *mechlist, isieve_t *obj)
+int auth_sasl(char *mechlist, isieve_t *obj, char **errstr)
 {
   sasl_interact_t *client_interact=NULL;
   int saslresult=SASL_INTERACT;
@@ -317,7 +319,7 @@ int auth_sasl(char *mechlist, isieve_t *obj)
   prot_flush(obj->pout);
 
   inlen = 0;
-  status = getauthline(obj,&in,&inlen);
+  status = getauthline(obj,&in,&inlen, errstr);
 
   while (status==STAT_CONT)
   {
@@ -338,8 +340,8 @@ int auth_sasl(char *mechlist, isieve_t *obj)
     /* check if sasl suceeded */
     if (saslresult<SASL_OK)
     {
-      printf("sasl result = %s\n",sasl_errstring(saslresult,NULL,NULL));
-      return saslresult;
+	*errstr = strdup(sasl_errstring(saslresult,NULL,NULL));
+	return saslresult;
     }
 
     /* send to server */
@@ -355,51 +357,51 @@ int auth_sasl(char *mechlist, isieve_t *obj)
     prot_flush(obj->pout);
 
     /* get reply */
-    status=getauthline(obj,&in,&inlen);
+    status=getauthline(obj,&in,&inlen, errstr);
   }
   
   return (status == STAT_OK) ? 0 : -1;
 }
 
 
-int isieve_put_file(isieve_t *obj, char *filename)
+int isieve_put_file(isieve_t *obj, char *filename, char **errstr)
 {
     return installafile(obj->version,
 			obj->pout, obj->pin,
-			filename);
+			filename, errstr);
 }
 
-int isieve_put(isieve_t *obj, char *name, char *data, int len)
+int isieve_put(isieve_t *obj, char *name, char *data, int len, char **errstr)
 {
     return installdata(obj->version,
 		       obj->pout, obj->pin,
-		       name, data, len);
+		       name, data, len, errstr);
 }
 
-int isieve_delete(isieve_t *obj, char *name)
+int isieve_delete(isieve_t *obj, char *name, char **errstr)
 {
     return deleteascript(obj->version,
 			 obj->pout, obj->pin,
-			 name);
+			 name, errstr);
 }
 
-int isieve_list(isieve_t *obj, isieve_listcb_t *cb,void *rock)
+int isieve_list(isieve_t *obj, isieve_listcb_t *cb,void *rock, char **errstr)
 {
     return list_wcb(obj->version, obj->pout, obj->pin, cb, rock);
 }
 
-int isieve_activate(isieve_t *obj, char *name)
+int isieve_activate(isieve_t *obj, char *name, char **errstr)
 {
-    return setscriptactive(obj->version,obj->pout, obj->pin, name);
+    return setscriptactive(obj->version,obj->pout, obj->pin, name, errstr);
 }
 
-int isieve_get(isieve_t *obj,char *name, char **output)
+int isieve_get(isieve_t *obj,char *name, char **output, char **errstr)
 {
     int ret;
-    mystring_t *mystr;
+    mystring_t *mystr = NULL;
 
     ret = getscriptvalue(obj->version,obj->pout, obj->pin,
-			 name, &mystr);
+			 name, &mystr, errstr);
 
     *output = string_DATAPTR(mystr);
 
