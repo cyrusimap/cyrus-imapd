@@ -8,7 +8,7 @@
  *
  */
 /* 
- $Id: acl_afs.c,v 1.16 1998/05/15 21:50:30 neplokh Exp $
+ $Id: acl_afs.c,v 1.17 1999/09/30 07:29:59 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -34,6 +34,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "acl.h"
 #include "auth.h"
@@ -192,11 +193,8 @@ void *canonrock;
  * Remove any entry for 'identifier' in the ACL pointed to by 'acl'.
  * The pointer pointed to by 'acl' must have been obtained from malloc().
  */
-acl_remove(acl, identifier, canonproc, canonrock)
-char **acl;
-const char *identifier;
-acl_canonproc_t canonproc;
-void *canonrock;
+int acl_remove(char **acl, const char *identifier, 
+	       acl_canonproc_t canonproc, void *canonrock)
 {
     return acl_set(acl, identifier, ACL_MODE_SET, 0, canonproc, canonrock);
 }
