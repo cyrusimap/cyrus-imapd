@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.17 2004/04/30 19:47:22 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.18 2004/05/01 23:14:32 ken3 Exp $
  */
 #include <config.h>
 
@@ -250,16 +250,24 @@ static int popd_proxy_policy(sasl_conn_t *conn,
 			     unsigned urlen,
 			     struct propctx *propctx)
 {
-    char *p;
+    if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
+	char userbuf[MAX_MAILBOX_NAME+1], *p;
+	size_t n;
 
-    /* See if we're trying to access a subfolder */
-    if (config_getswitch(IMAPOPT_POPSUBFOLDERS) &&
-	(p = strchr(requested_user, '+'))) {
-	size_t n = config_virtdomains ? strcspn(p, "@") : strlen(p);
+	/* make a working copy of the auth[z]id */
+	if (!rlen) rlen = strlen(requested_user);
+	memcpy(userbuf, requested_user, rlen);
+	userbuf[rlen] = '\0';
+	requested_user = userbuf;
 
-	/* strip the subfolder from the authzid */
-	memmove(p, p+n, strlen(p+n)+1);
-	rlen -= n;
+	/* See if we're trying to access a subfolder */
+	if (p = strchr(userbuf, '+')) {
+	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
+
+	    /* strip the subfolder from the authzid */
+	    memmove(p, p+n, strlen(p+n)+1);
+	    rlen -= n;
+	}
     }
 
     return mysasl_proxy_policy(conn, context, requested_user, rlen,
@@ -1402,7 +1410,6 @@ void cmd_auth(char *arg)
      */
     sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME,
 			       (const void **) &canon_user);
-    popd_userid = xstrdup(canon_user);
     if (sasl_result != SASL_OK) {
 	prot_printf(popd_out, 
 		    "-ERR [AUTH] weird SASL error %d getting SASL_USERNAME\r\n", 
@@ -1410,6 +1417,26 @@ void cmd_auth(char *arg)
 	return;
     }
 
+    /* If we're proxying, the authzid may contain a subfolder,
+       so re-canonify it */
+    if (config_getswitch(IMAPOPT_POPSUBFOLDERS) && strchr(canon_user, '+')) {
+	char userbuf[MAX_MAILBOX_NAME+1];
+	unsigned userlen;
+
+	sasl_result = popd_canon_user(popd_saslconn, NULL, canon_user, 0,
+				      SASL_CU_AUTHID | SASL_CU_AUTHZID,
+				      NULL, userbuf, sizeof(userbuf), &userlen);
+	if (sasl_result != SASL_OK) {
+	    prot_printf(popd_out, 
+			"-ERR [AUTH] SASL canonification error %d\r\n", 
+			sasl_result);
+	    return;
+	}
+
+	popd_userid = xstrdup(userbuf);
+    } else {
+	popd_userid = xstrdup(canon_user);
+    }
     syslog(LOG_NOTICE, "login: %s %s%s %s%s %s", popd_clienthost,
 	   popd_userid, popd_subfolder ? popd_subfolder : "",
 	   authtype, popd_starttls_done ? "+TLS" : "", "User logged in");
