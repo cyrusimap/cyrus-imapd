@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: charset.c,v 1.38 2002/03/12 18:10:51 ken3 Exp $
+/* $Id: charset.c,v 1.39 2002/03/14 00:37:55 ken3 Exp $
  */
 #include <config.h>
 #include <ctype.h>
@@ -79,7 +79,7 @@ static int writeutf8(unsigned utfcode, char *to);
 #define TRANSLATE(state,c,ptr,idx) \
 { \
     unsigned char _ch; \
-    const unsigned char *_translation = (state).curtable[0][(unsigned)(c)]; \
+    const unsigned char *_translation = (state).curtable[0][(unsigned char)(c) & 0xff]; \
     for (;;) { \
 	switch (_ch = *_translation++) { \
 	case JSR: \
@@ -103,7 +103,7 @@ static int writeutf8(unsigned utfcode, char *to);
 	    /* FALL THROUGH */ \
 	case U7N: \
 	    (state).b64_value <<= 6; \
-	    (state).b64_value += index_64[(unsigned) c]; \
+	    (state).b64_value += index_64[(unsigned char)(c) & 0xff]; \
 	    (state).num_bits += 6; \
 	    if ((state).num_bits >= 16) { \
 		(state).num_bits -= 16; \
