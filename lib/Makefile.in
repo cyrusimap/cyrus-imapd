@@ -88,6 +88,7 @@ OBJS = acl.o assert.o bsearch.o charset.o glob.o retry.o util.o \
 all: libcyrus.a
 
 install:
+	$(srcdir)/../install-sh -d $(DESTDIR)$(exec_prefix)/lib
 	$(INSTALL) -m 644 libcyrus.a $(DESTDIR)$(exec_prefix)/lib
 	$(RANLIB) $(DESTDIR)$(exec_prefix)/lib/libcyrus.a
 	for file in $(HDRS); \
