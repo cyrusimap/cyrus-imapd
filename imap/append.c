@@ -32,6 +32,7 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "append.h"
+#include "prot.h"
 #include "xmalloc.h"
 
 static int append_addseen();
@@ -106,7 +107,7 @@ long quotacheck;
 }
 
 /*
- * Append to 'mailbox' from the stdio stream 'messagefile'.
+ * Append to 'mailbox' from the prot stream 'messagefile'.
  * 'mailbox' must have been opened with append_setup().
  * If 'size', is nonzero it the expected size of the message.
  * If 'size' is zero, message may need LF to CRLF conversion.
@@ -120,7 +121,7 @@ int
 append_fromstream(mailbox, messagefile, size, internaldate, flag, nflags,
 		  userid)
 struct mailbox *mailbox;
-FILE *messagefile;
+struct protstream *messagefile;
 unsigned size;
 time_t internaldate;
 char **flag;
