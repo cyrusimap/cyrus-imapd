@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.351 2002/03/14 21:19:25 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.352 2002/03/14 22:25:16 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -83,6 +83,7 @@
 #include "mboxlist.h"
 #include "mbdump.h"
 #include "mkgmtime.h"
+#include "mupdate-client.h"
 #include "telemetry.h"
 #include "tls.h"
 #include "user.h"
@@ -99,6 +100,7 @@ extern char *optarg;
 extern int errno;
 
 /* global state */
+static const char *mupdate_server = NULL;
 static char shutdownfilename[1024];
 static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
@@ -506,6 +508,9 @@ int service_init(int argc, char **argv, char **envp)
 	return EC_SOFTWARE;
     }
 #endif
+
+    /* get the mupdate server */
+    mupdate_server = config_getstring("mupdate_server", NULL);
 
     sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
 
@@ -1181,7 +1186,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : 0, 1);
 
-		snmp_increment(CREATE_COUNT, 1);
+		/* xxxx snmp_increment(CREATE_COUNT, 1); */
 	    }
 	    else goto badcmd;
 	    break;
@@ -2139,7 +2144,6 @@ void cmd_capability(char *tag)
 {
     const char *sasllist; /* the list of SASL mechanisms */
     unsigned mechcount;
-    const char *mupdate_server;
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
@@ -2165,7 +2169,6 @@ void cmd_capability(char *tag)
 	prot_printf(imapd_out, " LOGINDISABLED");
     }
 
-    mupdate_server = config_getstring("mupdate_server", NULL);
     if(mupdate_server) {
 	prot_printf(imapd_out, " MUPDATE=mupdate://%s/", mupdate_server);
     }
@@ -5635,12 +5638,33 @@ void cmd_undump(char *tag, char *name)
     }
 }
 
+static int getresult(struct protstream *p, char *tag) 
+{
+    char buf[2096];
+    char *str = (char *) buf;
+    
+    while(1) {
+	if (!prot_fgets(str, sizeof(buf), p)) {
+	    return IMAP_SERVER_UNAVAILABLE;
+	}
+	if (!strncmp(str, tag, strlen(tag))) {
+	    str += strlen(tag) + 1;
+	    if (!strncasecmp(str, "OK ", 3)) { return 0; }
+	    if (!strncasecmp(str, "NO ", 3)) { return IMAP_REMOTE_DENIED; }
+	    return IMAP_SERVER_UNAVAILABLE; /* huh? */
+	}
+	/* skip this line, we don't really care */
+    }
+}
+
 void cmd_xfer(char *tag, char *toserver, char *name) 
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_NAME+1];
     char *path;
     struct backend *be = NULL;
+    mupdate_handle *mupdate_h = NULL;
+    int backout_mupdate = 0;
     
     /* administrators only please */
     if (!imapd_userisadmin) {
@@ -5677,7 +5701,32 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	if(!be) r = IMAP_SERVER_UNAVAILABLE;
     }
 
+    /* Step 1b: Connect to mupdate */
+    if(!r) {
+	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "can not connect to mupdate server to move '%s'",
+		   name);
+	    goto done;
+	}
+    }
+
+    /* Step 2: LOCALCREATE on remote server */
+    if(!r) {
+	/* xxxx partition????? */
+	prot_printf(be->out, "LC1 LOCALCREATE {%d+}\r\n%s\r\n",
+		    strlen(name), name);
+	r = getresult(be->in, "LC1");
+    }
+    
  done:
+    if(backout_mupdate) {
+	/* something like: 
+	 * mupdate_activate(mupdate_h, name, thisserver!thispartition, acl)
+	 */
+    }
+    if(mupdate_h) mupdate_disconnect(&mupdate_h);
     if(be) downserver(be);
 
     if (r) {
