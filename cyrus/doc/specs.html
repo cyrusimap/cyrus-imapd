@@ -1,4 +1,4 @@
-<!-- $Id: specs.html,v 1.2 2001/02/15 20:47:27 ken3 Exp $ -->
+<!-- $Id: specs.html,v 1.3 2001/03/09 20:01:47 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus IMAP Server Protocol Specifications</TITLE>
@@ -8,11 +8,13 @@
 
 <TABLE BORDER="1" CELLSPACING="1" CELLPADDING="2">
 
-<TR><TD COLSPAN=2><br><h2>IMAP/POP</h2></TD></TR>
+<TR><TD COLSPAN=2><br><h2>IMAP</h2></TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc2060">RFC 2060</A></TD>
-<TD>Internet Message Access Protocol - version 4rev1(IMAP4)
+<TD>Internet Message Access Protocol - version 4rev1
 <BR><I>being updated by</I> <A href="http://www.imc.org/draft-crispin-imapv">
 draft-crispin-imapv</A></TD></TR>
+<TR><TD><A HREF="http://www.imc.org/rfc1730">RFC 1730</A></TD>
+<TD>Internet Message Access Protocol - version 4</TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc1731">RFC 1731</A></TD>
 <TD>IMAP4 Authentication Mechanisms</TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc2086">RFC 2086</A></TD>
@@ -23,14 +25,10 @@ draft-crispin-imapv</A></TD></TR>
 <TD>IMAP4 non-synchronizing literals</TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc2177">RFC 2177</A></TD>
 <TD>IMAP4 IDLE command</TD></TR>
-<TR><TD><A HREF="http://www.imc.org/rfc2195">RFC 2195</A></TD>
-<TD>IMAP/POP AUTHorize Extension for Simple Challenge/Response</TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc2342">RFC 2342</A></TD>
 <TD>IMAP4 Namespace</TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc2359">RFC 2359</A></TD>
 <TD>IMAP4 UIDPLUS extension</TD></TR>
-<TR><TD><A HREF="http://www.imc.org/rfc2595">RFC 2595</A></TD>
-<TD>Using TLS with IMAP, POP3 and ACAP</TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc2971">RFC 2971</A></TD>
 <TD>IMAP4 ID extension</TD></TR>
 <TR><TD><A HREF="http://www.imc.org/draft-crispin-imap-multiappend">
@@ -42,6 +40,8 @@ draft-ietf-imapext-sort</A></TD>
 <TR><TD><A HREF="http://www.imc.org/draft-ietf-imapext-thread">
 draft-ietf-imapext-thread</A></TD>
 <TD>IMAP THREAD extension</TD></TR>
+
+<TR><TD COLSPAN=2><br><h2>POP</h2></TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc1939">RFC 1939</A></TD>
 <TD>Post Office Protocol - Version 3 (POP3)</TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc1734">RFC 1734</A></TD>
@@ -52,10 +52,21 @@ draft-ietf-imapext-thread</A></TD>
 <TR><TD COLSPAN=2><br><h2>SASL</h2></TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc2222">RFC 2222</A></TD>
 <TD>Simple Authentication and Security Layer (SASL)</TD></TR>
+<TR><TD><A HREF="http://www.imc.org/rfc2195">RFC 2195</A></TD>
+<TD>IMAP/POP AUTHorize Extension for Simple Challenge/Response</TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc2245">RFC 2245</A></TD>
 <TD>Anonymous SASL Mechanism</TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc2831">RFC 2831</A></TD>
 <TD>Using Digest Authentication as a SASL Mechanism</TD></TR>
+
+<TR><TD COLSPAN=2><br><h2>TLS/SSL</h2></TD></TR>
+<TR><TD><A HREF="http://www.imc.org/rfc2595">RFC 2595</A></TD>
+<TD>Using TLS with IMAP, POP3 and ACAP</TD></TR>
+<TR><TD><A HREF="http://www.imc.org/rfc2246">RFC 2246</A></TD>
+<TD>TLS Protocol</TD></TR>
+<TR><TD><A HREF="http://www.netscape.com/eng/ssl3/draft302.txt">
+draft-freier-ssl-version3</A></TD>
+<TD>The SSL Protocol Version 3.0</TD></TR>
 
 <TR><TD COLSPAN=2><br><h2>LMTP</h2></TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc2033">RFC 2033</A></TD>
@@ -70,7 +81,7 @@ draft-ietf-imapext-thread</A></TD>
 <TD>SMTP Service Extension for Authentication</TD></TR>
 <TR><TD><A HREF="http://www.imc.org/rfc2920">RFC 2920</A></TD>
 <TD>SMTP Service Extension for Command Pipelining</TD></TR>
-<TR><TD><A HREF="http://search.ietf.org/internet-drafts/draft-murchison-lmtp-ignorequota-00.txt">
+<TR><TD><A HREF="http://www.imc.org/draft-murchison-lmtp-ignorequota">
 draft-murchison-lmtp-ignorequota</A></TD>
 <TD>LMTP Service Extension for Ignoring Recipient Quotas</TD></TR>
 
@@ -83,12 +94,13 @@ draft-showalter-sieve-vacation</A></TD>
 <TR><TD><A HREF="http://www.imc.org/draft-murchison-sieve-regex">
 draft-murchison-sieve-regex</A></TD>
 <TD>Sieve -- Regular Expression Extension</TD></TR>
-<TR>
-<TD><A HREF="http://www.imc.org/draft-murchison-sieve-subaddress">
+<TR><TD><A HREF="http://www.imc.org/draft-murchison-sieve-subaddress">
 draft-murchison-sieve-subaddress</A></TD>
 <TD>Sieve -- Subaddress Extension</TD></TR>
-<TR>
-<TD><A HREF="http://www.imc.org/draft-martin-managesieve">
+<TR><TD><A HREF="http://www.imc.org/draft-martin-sieve-notify">
+draft-martin-sieve-notify</A></TD>
+<TD>Sieve -- An extension for providing instant notifications</TD></TR>
+<TR><TD><A HREF="http://www.imc.org/draft-martin-managesieve">
 draft-martin-managesieve</A></TD>
 <TD>Protocol for Remotely Managing Sieve Scripts</TD></TR>
 </TABLE>
