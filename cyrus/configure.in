@@ -142,6 +142,38 @@ AC_MSG_RESULT($cyrus_cv_func_mmap_shared)
 if test $cyrus_cv_func_mmap_shared = yes; then
 	WITH_MAP="shared"
 else
+AC_MSG_CHECKING(for stupid shared mmap)
+AC_CACHE_VAL(cyrus_cv_func_mmap_stupidshared,AC_TRY_RUN([
+#include <sys/types.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+main() {
+char *base;
+int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0666);
+if (fd == -1) exit(1);
+if (write(fd, "test", 4) != 4) exit(1);
+fsync(fd);
+base = mmap((caddr_t)0, 4, PROT_READ, MAP_SHARED
+#ifdef MAP_FILE
+| MAP_FILE
+#endif
+#ifdef MAP_VARIABLE
+| MAP_VARIABLE
+#endif
+, fd, 0L);
+if (base == (caddr_t)-1) exit(1);
+if (strncmp(base, "test", 4) != 0) exit(1);
+lseek(fd, 0L, 0);	
+if (write(fd, "test", 4) != 4) exit(1);
+fsync(fd);
+if (strncmp(base, "test", 4) != 0) exit(1);
+exit(0);}
+],cyrus_cv_func_mmap_stupidshared=yes,cyrus_cv_func_mmap_stupidshared=no,
+cyrus_cv_func_mmap_stupidshared=no))
+AC_MSG_RESULT($cyrus_cv_func_mmap_stupidshared)
+if test $cyrus_cv_func_mmap_stupidshared = yes; then
+	WITH_MAP="stupidshared"
+else
 	AC_MSG_CHECKING(for non-shared mmap)
 	AC_CACHE_VAL(cyrus_cv_func_mmap_private,AC_TRY_RUN([
 #include <sys/types.h>
@@ -172,6 +204,7 @@ cyrus_cv_func_mmap_private=no))
 		AC_MSG_WARN(*** Expect a considerable performance penalty)
 		WITH_MAP=nommap
 	fi
+fi
 fi
 
 AC_SUBST(WITH_MAP)
@@ -371,8 +404,8 @@ AC_ARG_ENABLE(amssync,
 	[  --enable-amssync        enable AMS bboard sync support],
 	if test "$enableval" = yes; then
 		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} amssync"
-		EXTRA_OUTPUT="${EXTRA_OUTPUT} amssync/Makefile amssync/amssynctree"
-		AC_CHECK_LIB(ossup, bzero, LIBS="${LIBS} -lossup")
+		EXTRA_OUTPUT="${EXTRA_OUTPUT} amssync/Makefile"
+		AC_CHECK_LIB(ossup, strchr, LIBS="${LIBS} -lossup")
 	fi)			
 dnl Have to check getdtabalesize after adding ossup, as some ossup's define it
 AC_REPLACE_FUNCS(getdtablesize)
@@ -394,5 +427,6 @@ AC_CHECK_LIB(ndbm, dbm_open)
 AC_CHECK_LIB(dbm, dbm_open)
 AC_CHECK_LIB(db, dbopen)
 AC_CHECK_LIB(socket, accept, LIBS="${LIBS} -lsocket -lnsl",,-lnsl)
+AC_CHECK_LIB(iberty, index, LIBS="${LIBS} -liberty")
 
 AC_OUTPUT(Makefile man/Makefile et/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile $EXTRA_OUTPUT)
