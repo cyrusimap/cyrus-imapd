@@ -909,12 +909,12 @@ int statusitems;
 	prot_printf(imapd_out, "%cRECENT %u", sepchar, num_recent);
 	sepchar = ' ';
     }
-    if (statusitems & STATUS_UID_NEXT) {
-	prot_printf(imapd_out, "%cUID-NEXT %u", sepchar, mailbox->last_uid+1);
+    if (statusitems & STATUS_UIDNEXT) {
+	prot_printf(imapd_out, "%cUIDNEXT %u", sepchar, mailbox->last_uid+1);
 	sepchar = ' ';
     }
-    if (statusitems & STATUS_UID_VALIDITY) {
-	prot_printf(imapd_out, "%cUID-VALIDITY %u", sepchar,
+    if (statusitems & STATUS_UIDVALIDITY) {
+	prot_printf(imapd_out, "%cUIDVALIDITY %u", sepchar,
 		    mailbox->uidvalidity);
 	sepchar = ' ';
     }

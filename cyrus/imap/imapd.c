@@ -2333,14 +2333,11 @@ char *name;
 	else if (!strcmp(arg.s, "recent")) {
 	    statusitems |= STATUS_RECENT;
 	}
-	else if (!strcmp(arg.s, "uid-next")) {
-	    statusitems |= STATUS_UID_NEXT;
+	else if (!strcmp(arg.s, "uidnext")) {
+	    statusitems |= STATUS_UIDNEXT;
 	}
-	else if (!strcmp(arg.s, "uid-validity")) {
-	    statusitems |= STATUS_UID_VALIDITY;
-	}
-	else if (!strcmp(arg.s, "unseen")) {
-	    statusitems |= STATUS_UNSEEN;
+	else if (!strcmp(arg.s, "uidvalidity")) {
+	    statusitems |= STATUS_UIDVALIDITY;
 	}
 	else if (!strcmp(arg.s, "unseen")) {
 	    statusitems |= STATUS_UNSEEN;
