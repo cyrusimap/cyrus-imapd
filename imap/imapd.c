@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.260 2000/06/20 02:13:33 leg Exp $ */
+/* $Id: imapd.c,v 1.261 2000/07/03 20:14:20 leg Exp $ */
 
 #include <config.h>
 
@@ -3211,7 +3211,7 @@ char *pattern;
     if (!strcmp(namespace, "mailboxes")) {
 	mboxlist_findsub(pattern, imapd_userisadmin, 
 			 imapd_userid, imapd_authstate,
-			 mailboxdata, NULL);
+			 mailboxdata, NULL, 0);
     }
     else if (!strcmp(namespace, "all.mailboxes")) {
 	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
@@ -3284,7 +3284,7 @@ char *pattern;
 
 	if (subscribed) {
 	    mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid,
-			     imapd_authstate, lsubdata, NULL);
+			     imapd_authstate, lsubdata, NULL, 0);
 	    lsubdata((char *)0, 0, 0, 0);
 	}
 	else {
@@ -3317,7 +3317,8 @@ int add;
     if (!namespace || !strcmp(namespace, "mailbox")) {
 	r = mboxname_tointernal(name, imapd_userid, mailboxname);
 	if (!r) {
-	    r = mboxlist_changesub(mailboxname, imapd_userid, imapd_authstate, add);
+	    r = mboxlist_changesub(mailboxname, imapd_userid, 
+				   imapd_authstate, add, 0);
 	}
     }
     else if (!strcmp(namespace, "bboard")) {
