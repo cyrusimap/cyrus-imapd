@@ -1,6 +1,5 @@
 /* chk_cyrus.c: cyrus mailstore consistancy checker
  * 
- * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.8 2003/02/13 20:15:23 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.9 2003/04/09 17:49:20 rjs3 Exp $
  */
 
 #include <config.h>

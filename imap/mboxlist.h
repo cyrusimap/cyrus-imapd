@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.34 2003/02/13 20:15:28 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.35 2003/04/09 17:49:23 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -158,7 +158,7 @@ int mboxlist_findsub_alt(struct namespace *namespace, char *pattern,
 
 /* given a mailbox 'name', where should we stage messages for it? 
    'stagedir' should be MAX_MAILBOX_PATH. */
-int mboxlist_findstage(const char *name, char *stagedir);
+int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len);
 
 /* Change 'user's subscription status for mailbox 'name'. */
 int mboxlist_changesub(const char *name, const char *userid, 
