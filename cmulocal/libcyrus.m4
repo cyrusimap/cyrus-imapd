@@ -1,9 +1,9 @@
 dnl libcyrus.m4--Cyrus libraries and includes
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
-dnl $Id: libcyrus.m4,v 1.18 2002/12/21 18:44:24 cg2v Exp $
+dnl $Id: libcyrus.m4,v 1.19 2003/10/08 20:35:25 rjs3 Exp $
 
-AC_DEFUN(CMU_LIBCYRUS_INC_WHERE1, [
+AC_DEFUN([CMU_LIBCYRUS_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1 $SASLFLAGS"
 CMU_CHECK_HEADER_NOCACHE(cyrus/imclient.h,
@@ -12,7 +12,7 @@ ac_cv_found_cyrus_inc=no)
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
-AC_DEFUN(CMU_LIBCYRUS_INC_WHERE, [
+AC_DEFUN([CMU_LIBCYRUS_INC_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for libcyrus headers in $i)
       CMU_LIBCYRUS_INC_WHERE1($i)
@@ -27,7 +27,7 @@ AC_DEFUN(CMU_LIBCYRUS_INC_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_LIBCYRUS_LIB_WHERE1, [
+AC_DEFUN([CMU_LIBCYRUS_LIB_WHERE1], [
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lcyrus ${LIB_SASL} ${LIBSSL_LIB_FLAGS} ${LIB_SOCKET}"
 AC_TRY_LINK([void fatal(){}],
@@ -37,7 +37,7 @@ ac_cv_found_cyrus_lib=no)
 LIBS=$saved_LIBS
 ])
 
-AC_DEFUN(CMU_LIBCYRUS_LIB_WHERE, [
+AC_DEFUN([CMU_LIBCYRUS_LIB_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for libcyrus libraries in $i)
       CMU_LIBCYRUS_LIB_WHERE1($i)
@@ -53,7 +53,7 @@ AC_DEFUN(CMU_LIBCYRUS_LIB_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_LIBCYRUS, [
+AC_DEFUN([CMU_LIBCYRUS], [
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_SASL2])
 AC_REQUIRE([CMU_LIBSSL])

@@ -1,9 +1,9 @@
 dnl sasl.m4--sasl libraries and includes
 dnl Derrick Brashear
 dnl from KTH sasl and Arla
-dnl $Id: sasl.m4,v 1.21 2002/12/21 18:44:25 cg2v Exp $
+dnl $Id: sasl.m4,v 1.22 2003/10/08 20:35:25 rjs3 Exp $
 
-AC_DEFUN(CMU_SASL_INC_WHERE1, [
+AC_DEFUN([CMU_SASL_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 CMU_CHECK_HEADER_NOCACHE(sasl.h,
@@ -12,7 +12,7 @@ ac_cv_found_sasl_inc=no)
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
-AC_DEFUN(CMU_SASL_INC_WHERE, [
+AC_DEFUN([CMU_SASL_INC_WHERE], [
    for i in $1; do
       CMU_SASL_INC_WHERE1($i)
       CMU_TEST_INCPATH($i, sasl)
@@ -23,7 +23,7 @@ AC_DEFUN(CMU_SASL_INC_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_SASL_LIB_WHERE1, [
+AC_DEFUN([CMU_SASL_LIB_WHERE1], [
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lsasl"
 AC_TRY_LINK(,
@@ -33,7 +33,7 @@ ac_cv_found_sasl_lib=no)
 LIBS=$saved_LIBS
 ])
 
-AC_DEFUN(CMU_SASL_LIB_WHERE, [
+AC_DEFUN([CMU_SASL_LIB_WHERE], [
    for i in $1; do
       CMU_SASL_LIB_WHERE1($i)
       dnl deal with false positives from implicit link paths
@@ -45,7 +45,7 @@ AC_DEFUN(CMU_SASL_LIB_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_SASL, [
+AC_DEFUN([CMU_SASL], [
 AC_ARG_WITH(sasl,
             [  --with-sasl=DIR        Compile with libsasl in <DIR>],
 	    with_sasl="$withval",
@@ -85,7 +85,7 @@ AC_ARG_WITH(sasl,
 	AC_SUBST(SASLFLAGS)
 	])
 
-AC_DEFUN(CMU_SASL_REQUIRED,
+AC_DEFUN([CMU_SASL_REQUIRED],
 [AC_REQUIRE([CMU_SASL])
 if test "$ac_cv_found_sasl" != "yes"; then
         AC_ERROR([Cannot continue without libsasl.

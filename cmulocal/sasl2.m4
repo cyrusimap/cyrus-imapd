@@ -1,8 +1,8 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.32 2003/09/30 17:31:35 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.33 2003/10/08 20:35:25 rjs3 Exp $
 
-AC_DEFUN(SASL_GSSAPI_CHK,[
+AC_DEFUN([SASL_GSSAPI_CHK],[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
     gssapi=$enableval,
     gssapi=yes)
@@ -117,7 +117,7 @@ dnl We also want to create LIB_DYN_SASL and DYNSASLFLAGS.
 
 dnl Also sets using_static_sasl to "no" "static" or "staticonly"
 
-AC_DEFUN(CMU_SASL2, [
+AC_DEFUN([CMU_SASL2], [
 AC_ARG_WITH(sasl,
             [  --with-sasl=DIR         Compile with libsasl2 in <DIR>],
 	    with_sasl="$withval",
@@ -216,14 +216,14 @@ AC_ARG_WITH(staticsasl,
 	AC_SUBST(SASLFLAGS)
 	])
 
-AC_DEFUN(CMU_SASL2_REQUIRED,
+AC_DEFUN([CMU_SASL2_REQUIRED],
 [AC_REQUIRE([CMU_SASL2])
 if test "$ac_cv_found_sasl" != "yes"; then
         AC_ERROR([Cannot continue without libsasl2.
 Get it from ftp://ftp.andrew.cmu.edu/pub/cyrus-mail/.])
 fi])
 
-AC_DEFUN(CMU_SASL2_CHECKAPOP_REQUIRED, [
+AC_DEFUN([CMU_SASL2_CHECKAPOP_REQUIRED], [
 	AC_REQUIRE([CMU_SASL2_REQUIRED])
 
 	cmu_saved_LDFLAGS=$LDFLAGS
@@ -236,7 +236,7 @@ AC_DEFUN(CMU_SASL2_CHECKAPOP_REQUIRED, [
 	LDFLAGS=$cmu_saved_LDFLAGS
 ])
 
-AC_DEFUN(SASL2_CRYPT_CHK,[
+AC_DEFUN([SASL2_CRYPT_CHK],[
  AC_CHECK_FUNC(crypt, cmu_have_crypt=yes, [
   AC_CHECK_LIB(crypt, crypt,
 	       LIB_CRYPT="-lcrypt"; cmu_have_crypt=yes,

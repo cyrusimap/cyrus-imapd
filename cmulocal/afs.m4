@@ -1,11 +1,11 @@
 dnl afs.m4--AFS libraries, includes, and dependencies
-dnl $Id: afs.m4,v 1.25 2003/05/09 03:51:17 cg2v Exp $
+dnl $Id: afs.m4,v 1.26 2003/10/08 20:35:24 rjs3 Exp $
 dnl Chaskiel Grundman
 dnl based on kerberos_v4.m4
 dnl Derrick Brashear
 dnl from KTH krb and Arla
 
-AC_DEFUN(CMU_AFS_INC_WHERE1, [
+AC_DEFUN([CMU_AFS_INC_WHERE1], [
 cmu_save_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$cmu_save_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <afs/param.h>],
@@ -18,7 +18,7 @@ ac_cv_found_afs_inc=no)
 CPPFLAGS=$cmu_save_CPPFLAGS
 ])
 
-AC_DEFUN(CMU_AFS_LIB_WHERE1, [
+AC_DEFUN([CMU_AFS_LIB_WHERE1], [
 save_LIBS="$LIBS"
 save_LDFLAGS="$LDFLAGS"
 
@@ -30,7 +30,7 @@ LIBS="$save_LIBS"
 LDFLAGS="$save_LDFLAGS"
 ])
 
-AC_DEFUN(CMU_AFS_WHERE, [
+AC_DEFUN([CMU_AFS_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for AFS in $i)
       CMU_AFS_INC_WHERE1("$i/include")
@@ -52,7 +52,7 @@ AC_DEFUN(CMU_AFS_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_AFS, [
+AC_DEFUN([CMU_AFS], [
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_LIBSSL])
 AC_ARG_WITH(AFS,
@@ -294,7 +294,7 @@ ac_cv_afs_int32=yes, ac_cv_afs_int32=no)])
        	fi
 	])
 
-AC_DEFUN(CMU_NEEDS_AFS,
+AC_DEFUN([CMU_NEEDS_AFS],
 [AC_REQUIRE([CMU_AFS])
 if test "$ac_cv_found_afs" != "yes"; then
         AC_ERROR([Cannot continue without AFS])

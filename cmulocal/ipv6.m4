@@ -1,7 +1,7 @@
 dnl See whether we can use IPv6 related functions
 dnl contributed by Hajimu UMEMOTO
 
-AC_DEFUN(IPv6_CHECK_FUNC, [
+AC_DEFUN([IPv6_CHECK_FUNC], [
 AC_CHECK_FUNC($1, [dnl
   ac_cv_lib_socket_$1=no
   ac_cv_lib_inet6_$1=no
@@ -63,7 +63,7 @@ fi])
 
 
 dnl See whether we have ss_family in sockaddr_storage
-AC_DEFUN(IPv6_CHECK_SS_FAMILY, [
+AC_DEFUN([IPv6_CHECK_SS_FAMILY], [
 AC_MSG_CHECKING([whether you have ss_family in struct sockaddr_storage])
 AC_CACHE_VAL(ipv6_cv_ss_family, [dnl
 AC_TRY_COMPILE([#include <sys/types.h>
@@ -79,7 +79,7 @@ AC_MSG_RESULT($ipv6_cv_ss_family)])
 
 
 dnl whether you have sa_len in struct sockaddr
-AC_DEFUN(IPv6_CHECK_SA_LEN, [
+AC_DEFUN([IPv6_CHECK_SA_LEN], [
 AC_MSG_CHECKING([whether you have sa_len in struct sockaddr])
 AC_CACHE_VAL(ipv6_cv_sa_len, [dnl
 AC_TRY_COMPILE([#include <sys/types.h>
@@ -95,7 +95,7 @@ AC_MSG_RESULT($ipv6_cv_sa_len)])
 
 
 dnl See whether sys/socket.h has socklen_t
-AC_DEFUN(IPv6_CHECK_SOCKLEN_T, [
+AC_DEFUN([IPv6_CHECK_SOCKLEN_T], [
 AC_MSG_CHECKING(for socklen_t)
 AC_CACHE_VAL(ipv6_cv_socklen_t, [dnl
 AC_TRY_LINK([#include <sys/types.h>

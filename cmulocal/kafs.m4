@@ -1,9 +1,9 @@
 dnl kerberos_v4.m4--Kafs libraries and includes
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
-dnl $Id: kafs.m4,v 1.5 2002/12/21 18:44:24 cg2v Exp $
+dnl $Id: kafs.m4,v 1.6 2003/10/08 20:35:24 rjs3 Exp $
 
-AC_DEFUN(CMU_KAFS_INC_WHERE1, [
+AC_DEFUN([CMU_KAFS_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([
@@ -28,7 +28,7 @@ fi
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
-AC_DEFUN(CMU_KAFS_INC_WHERE, [
+AC_DEFUN([CMU_KAFS_INC_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for kafs headers in $i)
       CMU_KAFS_INC_WHERE1($i)
@@ -43,7 +43,7 @@ AC_DEFUN(CMU_KAFS_INC_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_KAFS_LIB_WHERE1, [
+AC_DEFUN([CMU_KAFS_LIB_WHERE1], [
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lkafs $KRB_LIB_FLAGS $KRB5_LIB_FLAGS"
 AC_TRY_LINK(,
@@ -53,7 +53,7 @@ ac_cv_found_kafs_lib=no)
 LIBS=$saved_LIBS
 ])
 
-AC_DEFUN(CMU_KAFS_LIB_WHERE, [
+AC_DEFUN([CMU_KAFS_LIB_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for kafs libraries in $i)
       CMU_KAFS_LIB_WHERE1($i)
@@ -69,7 +69,7 @@ AC_DEFUN(CMU_KAFS_LIB_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_KAFS, [
+AC_DEFUN([CMU_KAFS], [
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_KRB4])
 AC_REQUIRE([CMU_KRB5])

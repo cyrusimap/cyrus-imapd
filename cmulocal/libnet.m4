@@ -1,16 +1,16 @@
 dnl libnet.m4--libnet and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: libnet.m4,v 1.6 2002/12/21 18:44:24 cg2v Exp $
+dnl $Id: libnet.m4,v 1.7 2003/10/08 20:35:25 rjs3 Exp $
 
-AC_DEFUN(CMU_LIBNET_CFG_WHERE1, [
+AC_DEFUN([CMU_LIBNET_CFG_WHERE1], [
 ac_cv_found_libnet_bin=no
 if test -f "$1/libnet-config" ; then
   ac_cv_found_libnet_cfg=yes
 fi
 ])
 
-AC_DEFUN(CMU_LIBNET_CFG_WHERE, [
+AC_DEFUN([CMU_LIBNET_CFG_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for libnet config in $i)
       CMU_LIBNET_CFG_WHERE1($i)
@@ -24,14 +24,14 @@ AC_DEFUN(CMU_LIBNET_CFG_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_LIBNET_INC_WHERE1, [
+AC_DEFUN([CMU_LIBNET_INC_WHERE1], [
 ac_cv_found_libnet_inc=no
 if test -f "$1/libnet.h" ; then
   ac_cv_found_libnet_inc=yes
 fi
 ])
 
-AC_DEFUN(CMU_LIBNET_INC_WHERE, [
+AC_DEFUN([CMU_LIBNET_INC_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for libnet header in $i)
       CMU_LIBNET_INC_WHERE1($i)
@@ -45,7 +45,7 @@ AC_DEFUN(CMU_LIBNET_INC_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_LIBNET_LIB_WHERE1, [
+AC_DEFUN([CMU_LIBNET_LIB_WHERE1], [
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lnet"
 AC_TRY_LINK(,
@@ -62,7 +62,7 @@ ac_cv_found_libnet_lib=no)
 LIBS=$saved_LIBS
 ])
 
-AC_DEFUN(CMU_LIBNET_LIB_WHERE, [
+AC_DEFUN([CMU_LIBNET_LIB_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for libnet library in $i)
       CMU_LIBNET_LIB_WHERE1($i)
@@ -77,7 +77,7 @@ AC_DEFUN(CMU_LIBNET_LIB_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_LIBNET, [
+AC_DEFUN([CMU_LIBNET], [
 AC_ARG_WITH(libnet,
 	[  --with-libnet=PREFIX      Compile with LIBNET support],
 	[if test "X$with_libnet" = "X"; then

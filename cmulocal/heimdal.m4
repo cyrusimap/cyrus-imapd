@@ -1,9 +1,9 @@
 dnl kerberos_v5.m4--Kerberos 5 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: heimdal.m4,v 1.6 2002/12/21 18:44:24 cg2v Exp $
+dnl $Id: heimdal.m4,v 1.7 2003/10/08 20:35:24 rjs3 Exp $
 
-AC_DEFUN(CMU_LIBHEIMDAL_INC_WHERE1, [
+AC_DEFUN([CMU_LIBHEIMDAL_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <krb5.h>],
@@ -13,7 +13,7 @@ ac_cv_found_libheimdal_inc=no)
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
-AC_DEFUN(CMU_LIBHEIMDAL_INC_WHERE, [
+AC_DEFUN([CMU_LIBHEIMDAL_INC_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for heimdal headers in $i)
       CMU_LIBHEIMDAL_INC_WHERE1($i)
@@ -32,7 +32,7 @@ AC_DEFUN(CMU_LIBHEIMDAL_INC_WHERE, [
 # Test for kerberos lib files
 #
 
-AC_DEFUN(CMU_LIBHEIMDAL_LIB_WHERE1, [
+AC_DEFUN([CMU_LIBHEIMDAL_LIB_WHERE1], [
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lkadm5clnt -lkrb5 -lasn1 -lkadm5clnt -lroken -lresolv"
 AC_TRY_LINK(,
@@ -42,7 +42,7 @@ ac_cv_found_libheimdal_lib=no)
 LIBS=$saved_LIBS
 ])
 
-AC_DEFUN(CMU_LIBHEIMDAL_LIB_WHERE, [
+AC_DEFUN([CMU_LIBHEIMDAL_LIB_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for heimdal libraries in $i)
       CMU_LIBHEIMDAL_LIB_WHERE1($i)
@@ -57,7 +57,7 @@ AC_DEFUN(CMU_LIBHEIMDAL_LIB_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_LIBHEIMDAL, [
+AC_DEFUN([CMU_LIBHEIMDAL], [
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_USE_COMERR])
 AC_REQUIRE([CMU_LIBSSL])

@@ -1,9 +1,9 @@
 dnl
 dnl macros for configure.in to detect openssl
-dnl $Id: openssl.m4,v 1.7 2003/10/08 20:24:05 rjs3 Exp $
+dnl $Id: openssl.m4,v 1.8 2003/10/08 20:35:25 rjs3 Exp $
 dnl
 
-AC_DEFUN(CMU_HAVE_OPENSSL, [
+AC_DEFUN([CMU_HAVE_OPENSSL], [
 AC_ARG_WITH(openssl,[  --with-openssl=PATH     use OpenSSL from PATH],
 	with_openssl=$withval, with_openssl="yes")
 

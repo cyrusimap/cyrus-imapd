@@ -1,7 +1,7 @@
 dnl libwrap.m4 --- do we have libwrap, the access control library?
-dnl $Id: libwrap.m4,v 1.6 2002/08/21 15:03:19 rjs3 Exp $
+dnl $Id: libwrap.m4,v 1.7 2003/10/08 20:35:25 rjs3 Exp $
 
-AC_DEFUN(CMU_LIBWRAP, [
+AC_DEFUN([CMU_LIBWRAP], [
   AC_REQUIRE([CMU_SOCKETS])
   AC_ARG_WITH(libwrap, 
               [  --with-libwrap=DIR      use libwrap (rooted in DIR) [yes] ],

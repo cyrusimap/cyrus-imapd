@@ -1,9 +1,9 @@
 dnl librestrict.m4--restrict libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: librestrict.m4,v 1.3 2002/12/21 18:44:25 cg2v Exp $
+dnl $Id: librestrict.m4,v 1.4 2003/10/08 20:35:25 rjs3 Exp $
 
-AC_DEFUN(CMU_RESTRICT_LIB_WHERE1, [
+AC_DEFUN([CMU_RESTRICT_LIB_WHERE1], [
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lrestrict"
 AC_TRY_LINK(,
@@ -13,7 +13,7 @@ ac_cv_found_restrict_lib=no)
 LIBS=$saved_LIBS
 ])
 
-AC_DEFUN(CMU_RESTRICT_LIB_WHERE, [
+AC_DEFUN([CMU_RESTRICT_LIB_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for restrict library in $i)
       CMU_RESTRICT_LIB_WHERE1($i)
@@ -28,7 +28,7 @@ AC_DEFUN(CMU_RESTRICT_LIB_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_RESTRICT, [
+AC_DEFUN([CMU_RESTRICT], [
 AC_ARG_WITH(restrict,
 	[  --with-restrict=PREFIX      Compile with RESTRICT support],
 	[if test "X$with_restrict" = "X"; then

@@ -1,9 +1,9 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.25 2002/12/29 05:13:02 cg2v Exp $
+dnl $Id: kerberos_v4.m4,v 1.26 2003/10/08 20:35:24 rjs3 Exp $
 
-AC_DEFUN(CMU_KRB_SENDAUTH_PROTO, [
+AC_DEFUN([CMU_KRB_SENDAUTH_PROTO], [
 AC_MSG_CHECKING(for krb_sendauth prototype)
 AC_TRY_COMPILE(
 [#include <krb.h>
@@ -22,7 +22,7 @@ fi
 AC_MSG_RESULT($ac_cv_krb_sendauth_proto)
 ])
 
-AC_DEFUN(CMU_KRB_SET_KEY_PROTO, [
+AC_DEFUN([CMU_KRB_SET_KEY_PROTO], [
 AC_MSG_CHECKING(for krb_set_key prototype)
 AC_CACHE_VAL(ac_cv_krb_set_key_proto, [
 cmu_save_CPPFLAGS="$CPPFLAGS"
@@ -41,7 +41,7 @@ fi
 AC_MSG_RESULT($ac_cv_krb_set_key_proto)
 ])
 
-AC_DEFUN(CMU_KRB4_32_DEFN, [
+AC_DEFUN([CMU_KRB4_32_DEFN], [
 AC_MSG_CHECKING(for KRB4_32 definition)
 AC_CACHE_VAL(ac_cv_krb4_32_defn, [
 cmu_save_CPPFLAGS="$CPPFLAGS"
@@ -60,7 +60,7 @@ fi
 AC_MSG_RESULT($ac_cv_krb4_32_defn)
 ])
 
-AC_DEFUN(CMU_KRB_RD_REQ_PROTO, [
+AC_DEFUN([CMU_KRB_RD_REQ_PROTO], [
 AC_MSG_CHECKING(for krb_rd_req prototype)
 AC_CACHE_VAL(ac_cv_krb_rd_req_proto, [
 cmu_save_CPPFLAGS="$CPPFLAGS"
@@ -80,7 +80,7 @@ fi
 AC_MSG_RESULT($ac_cv_krb_rd_req_proto)
 ])
 
-AC_DEFUN(CMU_KRB_INC_WHERE1, [
+AC_DEFUN([CMU_KRB_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <krb.h>],
@@ -97,7 +97,7 @@ fi
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
-AC_DEFUN(CMU_KRB_INC_WHERE, [
+AC_DEFUN([CMU_KRB_INC_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for kerberos headers in $i)
       CMU_KRB_INC_WHERE1($i)
@@ -116,7 +116,7 @@ AC_DEFUN(CMU_KRB_INC_WHERE, [
 # Test for kerberos lib files
 #
 
-AC_DEFUN(CMU_KRB_LIB_WHERE1, [
+AC_DEFUN([CMU_KRB_LIB_WHERE1], [
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lkrb $KRB_LIBDES"
 AC_TRY_LINK(,
@@ -126,7 +126,7 @@ ac_cv_found_krb_lib=no)
 LIBS=$saved_LIBS
 ])
 
-AC_DEFUN(CMU_KRB_LIB_WHERE, [
+AC_DEFUN([CMU_KRB_LIB_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for kerberos libraries in $i)
       CMU_KRB_LIB_WHERE1($i)
@@ -142,7 +142,7 @@ AC_DEFUN(CMU_KRB_LIB_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_KRB4, [
+AC_DEFUN([CMU_KRB4], [
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_LIBSSL])
 AC_ARG_WITH(krb4,

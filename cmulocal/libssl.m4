@@ -1,9 +1,9 @@
 dnl libssl.m4--Ssl libraries and includes
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
-dnl $Id: libssl.m4,v 1.8 2002/12/21 18:44:25 cg2v Exp $
+dnl $Id: libssl.m4,v 1.9 2003/10/08 20:35:25 rjs3 Exp $
 
-AC_DEFUN(CMU_LIBSSL_INC_WHERE1, [
+AC_DEFUN([CMU_LIBSSL_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 CMU_CHECK_HEADER_NOCACHE(openssl/ssl.h,
@@ -12,7 +12,7 @@ ac_cv_found_libssl_inc=no)
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
-AC_DEFUN(CMU_LIBSSL_INC_WHERE, [
+AC_DEFUN([CMU_LIBSSL_INC_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for libssl headers in $i)
       CMU_LIBSSL_INC_WHERE1($i)
@@ -27,7 +27,7 @@ AC_DEFUN(CMU_LIBSSL_INC_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_LIBSSL_LIB_WHERE1, [
+AC_DEFUN([CMU_LIBSSL_LIB_WHERE1], [
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lssl -lcrypto $LIB_SOCKET"
 AC_TRY_LINK(,
@@ -37,7 +37,7 @@ ac_cv_found_ssl_lib=no)
 LIBS=$saved_LIBS
 ])
 
-AC_DEFUN(CMU_LIBSSL_LIB_WHERE, [
+AC_DEFUN([CMU_LIBSSL_LIB_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for libssl libraries in $i)
       CMU_LIBSSL_LIB_WHERE1($i)
@@ -53,7 +53,7 @@ AC_DEFUN(CMU_LIBSSL_LIB_WHERE, [
     done
 ])
 
-AC_DEFUN(CMU_LIBSSL, [
+AC_DEFUN([CMU_LIBSSL], [
 AC_REQUIRE([CMU_SOCKETS])
 AC_ARG_WITH(libssl,
 	[  --with-libssl=PREFIX      Compile with Libssl support],

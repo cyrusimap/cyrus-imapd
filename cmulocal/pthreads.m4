@@ -1,8 +1,8 @@
 dnl pthreads.m4--pthreads setup macro
 dnl Rob Earhart
-dnl $Id: pthreads.m4,v 1.10 2002/05/25 19:57:42 leg Exp $
+dnl $Id: pthreads.m4,v 1.11 2003/10/08 20:35:25 rjs3 Exp $
 
-AC_DEFUN(CMU_PTHREADS, [
+AC_DEFUN([CMU_PTHREADS], [
    AC_REQUIRE([AC_CANONICAL_HOST])
    cmu_save_LIBS="$LIBS"
    AC_CHECK_LIB(pthread, pthread_create,LIB_PTHREAD="-lpthread",
