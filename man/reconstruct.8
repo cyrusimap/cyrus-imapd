@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: reconstruct.8,v 1.18 2003/10/22 18:50:13 rjs3 Exp $
+.\" $Id: reconstruct.8,v 1.19 2004/10/13 18:07:49 shadow Exp $
 .SH NAME
 reconstruct \- reconstruct mailboxes
 .SH SYNOPSIS
@@ -141,6 +141,21 @@ file.  Use whatever data in the existing
 file it can scavenge, then scans all partitions listed in the
 .IR imapd.conf (5)
 file for additional mailboxes.
+.SH EXAMPLES
+You want to reconstruct the index files for a user, you have recovered a deleted mail file from backup
+and given it a suitable name (eg user/ben-lacy/33.), but it is not visible since it is not indexed:
+
+.nf
+reconstruct -r user.ben-lacy
+.fi
+.PP
+If you have the \fBunixhierarchysep:yes\fR option set in \fB/etc/imapd.conf\fR you would need
+to run:
+
+.nf
+reconstruct -r user/ben.lacy
+.fi
+
 .SH FILES
 .TP
 .B /etc/imapd.conf
