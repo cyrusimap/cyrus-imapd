@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.176 2002/03/19 21:19:45 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.177 2002/03/26 17:48:31 rjs3 Exp $
  */
 
 #include <config.h>
@@ -210,11 +210,17 @@ static int mboxlist_mylookup(const char *name, int *typep,
 	if (pathp) {
 	    if (mbtype & MBTYPE_REMOTE) {
 		*pathp = partition;
+	    } else if (mbtype & MBTYPE_MOVING) {
+		char *part = strchr(partition, '!');
+		
+		if(!part) return IMAP_SYS_ERROR;
+		else part++; /* skip the !, go to the beginning
+				of the partition name */
+		r = mboxlist_getpath(part, name, pathp);
+		if(r) return r;
 	    } else {
 		r = mboxlist_getpath(partition, name, pathp);
-		if (r) {
-		    return r;
-		}
+		if(r) return r;
 	    }
 	}
 
@@ -549,6 +555,11 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     case IMAP_AGAIN:
 	goto retry;
     default:
+	goto done;
+    }
+
+    if(mbtype & MBTYPE_MOVING) {
+	r = IMAP_MAILBOX_NOTSUPPORTED;
 	goto done;
     }
 
@@ -991,6 +1002,12 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
+    /* We don't support renaming mailboxes in transit */
+    if(!r && mbtype & MBTYPE_MOVING) {
+	r = IMAP_MAILBOX_NOTSUPPORTED;
+	goto done;
+    }
+
     /* Check ability to create new mailbox */
     if (!partitionmove) {
 	if (!strncmp(newname, "user.", 5) && !strchr(newname+5, '.')) {
@@ -1260,6 +1277,12 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
     case IMAP_AGAIN:
 	goto retry;
     default:
+	goto done;
+    }
+
+    /* Can't do this to an in-transit mailbox */
+    if(mbtype & MBTYPE_MOVING) {
+	r = IMAP_MAILBOX_NOTSUPPORTED;
 	goto done;
     }
 
@@ -1914,7 +1937,7 @@ int mboxlist_setquota(const char *root, int newquota)
 	return r;
     }
     /* Can't set quota on a remote mailbox */
-    if (t & MBTYPE_REMOTE) {
+    if (t & (MBTYPE_REMOTE | MBTYPE_MOVING)) {
 	return IMAP_MAILBOX_NOTSUPPORTED;
     }
 

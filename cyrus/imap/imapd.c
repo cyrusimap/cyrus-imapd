@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.365 2002/03/26 00:30:12 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.366 2002/03/26 17:48:30 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -396,15 +396,12 @@ static int mlookup(const char *tag, const char *ext_name,
     if(flags) *flags = mbtype;
     if(r) return r;
 
-    if(mbtype & MBTYPE_REMOTE) {
+    if(mbtype & MBTYPE_MOVING) {
 	/* do we have rights on the mailbox? */
 	if(!imapd_userisadmin &&
 	   (!acl || !(cyrus_acl_myrights(imapd_authstate,acl) & ACL_LOOKUP))) {
 	    r = IMAP_MAILBOX_NONEXISTENT;
 	} else if(tag && ext_name && remote && *remote) {
-	    /* xxx this doesn't work because the partition has to stay
-	     * the same throughout (what we actually want to do is refer
-	     * to the host we are moving too) */
 	    char *c = NULL;
 	    
 	    c = strchr(remote, '!');
@@ -5962,14 +5959,11 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     /* Step 2.5: Set mailbox as REMOTE on local server */
     /* xxx NEED TO ALSO SET REMOTE HOST SO REFERRAL WORKS CORRECTLY */
     if(!r) {
-	/* Note that we change partition to be path here, since MBTYPE_REMOTE
-	 * will cause us to return the partition verbatim */
-	/* xxx we probably just want a different flag like MBTYPE_MOVING */
-	r = mboxlist_update(mailboxname, mbflags|MBTYPE_REMOTE, path, acl);
+	snprintf(buf, sizeof(buf), "%s!%s", toserver, part);
+	r = mboxlist_update(mailboxname, mbflags|MBTYPE_MOVING, buf, acl);
 	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, " \
 		     "mboxlist_update failed", mailboxname);
     }
-
 
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
     if(!r) {
