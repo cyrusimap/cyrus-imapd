@@ -348,6 +348,8 @@ char *cacheid;
 	    }
 	    else if (!ptdb) {
 		syslog(LOG_ERR, "IOERROR: creating database %s: %m", DBFIL);
+		CLOSE(ptdb);
+		close(fd);
 		return 0;
 	    }
 	    else {
@@ -362,24 +364,29 @@ char *cacheid;
 		if (PUT(ptdb, &key, &dataheader, 0) < 0) {
 		    syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
 			   DBFIL); 
+		    CLOSE(ptdb);
+		    close(fd);
 		    return 0;
 		}
 		/* close and reopen the database in read-only mode */
 		if (CLOSE(ptdb) < 0) {
 		    syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
 			   DBFIL); 
+		    close(fd);
 		    return 0;
 		}
 		ptdb = dbopen(DBFIL, O_RDONLY, 0644, DB_HASH, &info);
 		if (!ptdb) {
 		    syslog(LOG_ERR, "IOERROR: reopening new database %s: %m",
 			   DBFIL); 
+		    close(fd);
 		    return 0;
 		}
 	    }          
 	}
 	else {
 	    syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
+	    close(fd);
 	    return 0;
 	}
     }
