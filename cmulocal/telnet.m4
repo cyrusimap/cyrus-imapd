@@ -139,6 +139,24 @@ AC_MSG_RESULT($cmu_cv_des_ecb_encrypt_proto)
 AC_DEFUN(CMU_TELNET_NEWDES, [
 AC_REQUIRE([CMU_KRB4])
 AC_REQUIRE([CMU_KRB5])
+AC_MSG_CHECKING(for des_new_random_key prototype)
+AC_CACHE_VAL(ac_cv_func_des_new_random_key_proto, [
+AC_TRY_COMPILE(
+[#include <des.h>
+des_cblock key;],
+[des_new_random_key(&key);],
+ac_cv_func_des_new_random_key=yes,
+ac_cv_func_des_new_random_key=no)
+])
+if test "$ac_cv_func_des_new_random_key" = yes; then
+        AC_DEFINE(NEWDESLIB)dnl
+fi
+AC_MSG_RESULT($ac_cv_func_des_new_random_key)
+])
+
+AC_DEFUN(CMU_TELNET_OLDNEWDES, [
+AC_REQUIRE([CMU_KRB4])
+AC_REQUIRE([CMU_KRB5])
 	 saved_LIBS=$LIBS
 	 LIBS="$KRB_LIB_FLAGS $KRB5_LIB_FLAGS"
 	 if test "$with_des" = yes; then
