@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.28.2.4 2002/08/21 20:46:43 ken3 Exp $
+# $Id: Admin.pm,v 1.28.2.5 2002/08/29 20:15:56 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -695,9 +695,19 @@ sub getinfo {
 			  }
 			} elsif ($text =~
 			       /^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)/) {
-			  # Single annotation, but possibly multiple values
+			  # Single annotation, not literal,
+			  # but possibly multiple values
 			  # however, we are only asking for one value, so...
 			  $d{-rock}{$1} = $3;
+		        }  elsif ($text =~
+			       /^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\{(.*)\}\r\n/) {
+			  my $len = $3;
+			  $text =~ s/^\s*\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\{(.*)\}\r\n//s;
+			  $text = substr($text, 0, $len);
+			  # Single annotation (literal style),
+			  # possibly multiple values
+			  # however, we are only asking for one value, so...
+			  $d{-rock}{$1} = $text;
 		        } else {
 			  next;
 			}
