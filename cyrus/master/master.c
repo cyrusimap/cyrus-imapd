@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.90 2004/01/21 17:03:25 rjs3 Exp $ */
+/* $Id: master.c,v 1.91 2004/01/21 22:51:18 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1493,7 +1493,7 @@ void add_event(const char *name, struct entry *e, void *rock)
 	struct tm *tm = localtime(&now);
 
 	period = 86400; /* 24 hours */
-	evt->periodic = 1;
+	evt->periodic = 0;
 	tm->tm_hour = hour;
 	tm->tm_min = min;
 	tm->tm_sec = 0;
@@ -1503,7 +1503,7 @@ void add_event(const char *name, struct entry *e, void *rock)
 	}
     }
     else {
-	evt->periodic = 0;
+	evt->periodic = 1;
 	evt->mark = now;
     }
     evt->period = period;
