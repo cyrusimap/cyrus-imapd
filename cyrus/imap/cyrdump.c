@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.2 2001/02/23 17:52:18 leg Exp $
+/* $Id: cyrdump.c,v 1.3 2001/02/23 22:00:49 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -75,12 +75,17 @@ struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
 char *imapd_userid = NULL;
 
+struct incremental_record {
+    int incruid;
+};
+
 int main(int argc, char *argv[])
 {
     int option;
     char buf[MAX_MAILBOX_PATH];
     int i;
     char *alt_config = NULL;
+    struct incremental_record irec;
 
     if (geteuid() == 0) {
 	usage(argv[0]);
@@ -110,9 +115,10 @@ int main(int argc, char *argv[])
     mboxlist_init(0);
     mboxlist_open(NULL);
 
+    irec.incruid = 0;
     for (i = optind; i < argc; i++) {
 	strlcpy(buf, argv[optind], MAX_MAILBOX_NAME);
-	mboxlist_findall(buf, 1, 0, 0, dump_me, NULL);
+	mboxlist_findall(buf, 1, 0, 0, dump_me, &irec);
     }
 
     mboxlist_close();
@@ -140,10 +146,6 @@ static void generate_boundary(char *boundary)
     snprintf(boundary, 100, "dump-%ld-%ld-%ld", 
 	     getpid(), time(NULL), rand());
 }
-
-struct incremental_record {
-    int incruid;
-};
 
 static int dump_me(char *name, int matchlen, int maycreate, void *rock)
 {
@@ -174,10 +176,14 @@ static int dump_me(char *name, int matchlen, int maycreate, void *rock)
 	mailbox_close(&m);
 	return 0;
     }
+    
+    mailbox_read_index_header(&m);
+
+    imapd_exists = m.exists;
 
     generate_boundary(boundary);
 
-    printf("Content-Type: multipart/related; boundary=\"%s\"\n", boundary);
+    printf("Content-Type: multipart/related; boundary=\"%s\"\n\n", boundary);
 
     printf("--%s\n", boundary);
     printf("Content-Type: text/xml\n");
@@ -228,6 +234,8 @@ static int dump_me(char *name, int matchlen, int maycreate, void *rock)
 
 	if (uids[i] < irec->incruid) {
 	    /* already dumped this message */
+	    /* xxx could do binary search to get to the first
+	       undumped uid */
 	    continue;
 	}
 
@@ -248,6 +256,9 @@ static int dump_me(char *name, int matchlen, int maycreate, void *rock)
     }
 
     printf("\n--%s--\n", boundary);
+
+    index_closemailbox(&m);
+    mailbox_close(&m);
 
     return 0;
 }
