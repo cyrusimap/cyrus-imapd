@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.76 2003/08/08 23:08:52 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.77 2003/08/12 17:55:28 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -126,8 +126,11 @@ int main(int argc, char **argv)
     int mflag = 0;
     int fflag = 0;
     char buf[MAX_MAILBOX_PATH+1];
+    char mbbuf[MAX_MAILBOX_PATH+1];
     struct discovered head;
     char *alt_config = NULL;
+    char *start_part = NULL;
+    const char *start_part_path = NULL;
 
     memset(&head, 0, sizeof(head));
 
@@ -137,10 +140,14 @@ int main(int argc, char **argv)
     assert(INDEX_HEADER_SIZE == (OFFSET_SPARE3+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8));
 
-    while ((opt = getopt(argc, argv, "C:rmf")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:p:rmf")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
+	    break;
+
+	case 'p':
+	    start_part = optarg;
 	    break;
 
 	case 'r':
@@ -168,6 +175,15 @@ int main(int argc, char **argv)
 	fatal(error_message(r), EC_CONFIG);
     }
 
+    if(start_part) {
+    	/* Get partition's path */
+	snprintf(buf, sizeof(buf), "partition-%s", start_part);
+	start_part_path = config_getstring(buf, NULL);
+	if (!start_part_path) {
+	    fatal(error_message(IMAP_PARTITION_UNKNOWN), EC_USAGE);
+	}
+    }
+
     if (mflag) {
 	if (rflag || fflag || optind != argc) usage();
 	do_mboxlist();
@@ -181,6 +197,66 @@ int main(int argc, char **argv)
 
     mailbox_reconstructmode();
 
+    /* Deal with nonexistent mailboxes */
+    if (start_part) {
+	/* We were handed a mailbox that does not exist currently */
+	if(optind == argc) {
+	    fprintf(stderr, "When using -p, you must specify a mailbox to attempt to reconstruct.");
+	    exit(EC_USAGE);
+	}
+
+	/* do any of the mailboxes exist in mboxlist already? */
+	/* Do they look like mailboxes? */
+	for (i = optind; i < argc; i++) {
+	    struct stat sbuf;
+
+	    if(strchr(argv[i],'%') || strchr(argv[i],'*')) {
+		fprintf(stderr, "Using wildcards with -p is not supported.\n");
+		exit(EC_USAGE);
+	    }
+
+	    /* Translate any separators in mailboxname */
+	    strlcpy(buf, argv[i], sizeof(buf));
+	    mboxname_hiersep_tointernal(&recon_namespace, buf);
+
+	    /* Does it exist */
+	    do {
+		r = mboxlist_lookup(buf, NULL, NULL, NULL);
+	    } while (r == IMAP_AGAIN);
+
+	    if(r != IMAP_MAILBOX_NONEXISTENT) {
+		fprintf(stderr,
+			"Mailbox %s already exists.  Cannot specify -p.\n",
+			argv[i]);
+		exit(EC_USAGE);
+	    }
+
+	    /* Does the suspected path *look* like a mailbox? */
+	    mailbox_hash_mbox(mbbuf, sizeof(mbbuf), start_part_path, buf);
+	    strlcat(mbbuf, "/cyrus.header", sizeof(mbbuf));
+	    if(stat(mbbuf, &sbuf) < 0) {
+		fprintf(stderr,
+			"%s does not appear to be a mailbox (no %s).\n",
+			argv[i], mbbuf);
+		exit(EC_USAGE);
+	    }
+	}
+	
+	/* None of them exist.  Create them. */
+	for (i = optind; i < argc; i++) {
+	    /* Translate any separators in mailboxname */
+	    strlcpy(buf, argv[i], sizeof(buf));
+	    mboxname_hiersep_tointernal(&recon_namespace, buf);
+
+	    r = mboxlist_createmailbox(buf, 0, start_part, 1,
+				       "cyrus", NULL, 0, 0, 1);
+	    if(r) {
+		fprintf(stderr, "could not create %s\n", argv[i]);
+	    }
+	}
+    }
+
+    /* Normal Operation */
     if (optind == argc) {
 	if (rflag) {
 	    fprintf(stderr, "please specify a mailbox to recurse from\n");
@@ -241,7 +317,7 @@ int main(int argc, char **argv)
 void usage(void)
 {
     fprintf(stderr,
-	    "usage: reconstruct [-C <alt_config>] [-r] [-f] mailbox...\n");
+	    "usage: reconstruct [-C <alt_config>] [-p partition] [-r] [-f] mailbox...\n");
     fprintf(stderr, "       reconstruct [-C <alt_config>] -m\n");
     exit(EC_USAGE);
 }    
