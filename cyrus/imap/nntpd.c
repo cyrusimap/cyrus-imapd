@@ -47,7 +47,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.29 2002/10/22 00:56:32 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.30 2002/10/22 19:48:12 ken3 Exp $
  */
 #include <config.h>
 
@@ -177,6 +177,7 @@ struct {
 		   {  -1, 238, 438,  -1 },
 		   { 239,  -1,  -1, 439 } };
 
+static void cmd_help();
 static void cmd_starttls();
 static void cmd_user();
 static void cmd_pass();
@@ -185,6 +186,7 @@ static void cmd_mode();
 static void cmd_list();
 static void cmd_article();
 static void cmd_post();
+static void cmd_hdr();
 static void cmd_over();
 static void cmdloop(void);
 static int open_group();
@@ -575,33 +577,7 @@ static void cmdloop(void)
 
 	switch (cmd.s[0]) {
 	case 'A':
-	    if (!strcmp(cmd.s, "Authinfo")) {
-		arg3.len = 0;
-		if (c != ' ') goto missingargs;
-		c = getword(nntp_in, &arg1);
-		if (c == EOF) goto missingargs;
-		if (c != ' ') goto missingargs;
-		c = getword(nntp_in, &arg2);
-		if (c == EOF) goto missingargs;
-
-		lcase(arg1.s);
-		if (!strcmp(arg1.s, "sasl") && c == ' ') {
-		    c = getword(nntp_in, &arg3);
-		    if (c == EOF) goto missingargs;
-		}
-		if (c == '\r') c = prot_getc(nntp_in);
-		if (c != '\n') goto extraargs;
-
-		if (!strcmp(arg1.s, "user"))
-		    cmd_user(arg2.s);
-		else if (!strcmp(arg1.s, "pass"))
-		    cmd_pass(arg2.s);
-		else if (!strcmp(arg1.s, "sasl"))
-		    cmd_sasl(arg2.s, arg3.len ? arg3.s : NULL);
-		else
-		    prot_printf(nntp_out, "500 Unrecognized command\r\n");
-	    }
-	    else if (!strcmp(cmd.s, "Article")) {
+	    if (!strcmp(cmd.s, "Article")) {
 		char fname[MAX_MAILBOX_PATH];
 		char *msgid;
 		struct mailbox *mbox;
@@ -655,6 +631,32 @@ static void cmdloop(void)
 		cmd_article(fname, msgid, have_msgid ? 0 : uid, mode);
 
 		if (!have_msgid) free(msgid);
+	    }
+	    else if (!strcmp(cmd.s, "Authinfo")) {
+		arg3.len = 0;
+		if (c != ' ') goto missingargs;
+		c = getword(nntp_in, &arg1);
+		if (c == EOF) goto missingargs;
+		if (c != ' ') goto missingargs;
+		c = getword(nntp_in, &arg2);
+		if (c == EOF) goto missingargs;
+
+		lcase(arg1.s);
+		if (!strcmp(arg1.s, "sasl") && c == ' ') {
+		    c = getword(nntp_in, &arg3);
+		    if (c == EOF) goto missingargs;
+		}
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		if (!strcmp(arg1.s, "user"))
+		    cmd_user(arg2.s);
+		else if (!strcmp(arg1.s, "pass"))
+		    cmd_pass(arg2.s);
+		else if (!strcmp(arg1.s, "sasl"))
+		    cmd_sasl(arg2.s, arg3.len ? arg3.s : NULL);
+		else
+		    prot_printf(nntp_out, "500 Unrecognized command\r\n");
 	    }
 	    else goto badcmd;
 	    break;
@@ -711,9 +713,56 @@ static void cmdloop(void)
 	    break;
 
 	case 'H':
-	    if (!strcmp(cmd.s, "Head")) {
+	    if (!strcmp(cmd.s, "Hdr")) {
+		unsigned long last;
+
+	      hdr:
+		uid = 0;
+		p = NULL;
+
+		if (c != ' ') goto missingargs;
+		c = getword(nntp_in, &arg1);
+		if (c == EOF) goto missingargs;
+		if (c == ' ') {
+		    c = getword(nntp_in, &arg2);
+		    if (c == EOF) goto missingargs;
+		    uid = parsenum(arg2.s, &p);
+		    if (uid == -1) goto noarticle;
+		}
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		/* check to see if we were given a msgid */
+		if (!nntp_group) goto noopengroup;
+		if (!uid)
+		    last = uid = index_getuid(nntp_current);
+		else if (p && *p) {
+		    if (*p != '-') goto noarticle;
+		    if (*++p)
+			last = parsenum(p, NULL);
+		    else
+			last = index_getuid(nntp_exists);
+		}
+		else
+		    last = uid;
+		if (last == -1) goto noarticle;
+
+		prot_printf(nntp_out, "%u Header follows:\r\n",
+			    cmd.s[0] == 'X' ? 221 : 225);
+
+		cmd_hdr(arg1.s, uid, last;
+
+		prot_printf(nntp_out, ".\r\n");
+	    }
+	    else if (!strcmp(cmd.s, "Head")) {
 		mode = ARTICLE_HEAD;
 		goto article;
+	    }
+	    else if (!strcmp(cmd.s, "Help")) {
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		cmd_help();
 	    }
 	    else goto badcmd;
 	    break;
@@ -806,7 +855,10 @@ static void cmdloop(void)
 	    break;
 
 	case 'N':
-	    if (!strcmp(cmd.s, "Newnews")) {
+	    if (!strcmp(cmd.s, "Newgroups")) {
+		goto cmdnotimpl;
+	    }
+	    else if (!strcmp(cmd.s, "Newnews")) {
 		time_t tstamp;
 		char pattern[MAX_MAILBOX_NAME+1];
 
@@ -893,8 +945,7 @@ static void cmdloop(void)
 		    last = uid;
 		if (last == -1) goto noarticle;
 
-		prot_printf(nntp_out,
-			    "224 Overview information follows:\r\n");
+		prot_printf(nntp_out, "224 Overview information follows:\r\n");
 
 		cmd_over(uid, last);
 
@@ -925,7 +976,13 @@ static void cmdloop(void)
 	    break;
 
 	case 'S':
-	    if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
+	    if (!strcmp(cmd.s, "Slave")) {	
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		prot_printf(nntp_out, "202 Slave status noted\r\n");
+	    }
+	    else if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
@@ -950,6 +1007,9 @@ static void cmdloop(void)
 	    if (!strcmp(cmd.s, "Xover")) {
 		goto over;
 	    }
+	    else if (!strcmp(cmd.s, "Xhdr")) {
+		goto hdr;
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -959,6 +1019,11 @@ static void cmdloop(void)
 	    eatline(nntp_in, c);
 	}
 
+	continue;
+
+      cmdnotimpl:
+	prot_printf(nntp_out, "503 \"%s\" not yet implemented\r\n", cmd.s);
+	eatline(nntp_in, c);
 	continue;
 
       cmddisabled:
@@ -1000,6 +1065,36 @@ static void cmdloop(void)
 	eatline(nntp_in, c);
 	continue;
     }
+}
+
+static void cmd_help()
+{
+    prot_printf(nntp_out, "100 Supported commands:\r\n");
+    prot_printf(nntp_out, "\tARTICLE\r\n");
+    prot_printf(nntp_out, "\tAUTHINFO USER | PASS | SASL\r\n");
+    prot_printf(nntp_out, "\tBODY\r\n");
+    prot_printf(nntp_out, "\tCHECK\r\n");
+    prot_printf(nntp_out, "\tDATE\r\n");
+    prot_printf(nntp_out, "\tGROUP\r\n");
+    prot_printf(nntp_out, "\tHDR | XHDR\r\n");
+    prot_printf(nntp_out, "\tHEAD\r\n");
+    prot_printf(nntp_out, "\tHELP\r\n");
+    prot_printf(nntp_out, "\tIHAVE\r\n");
+    prot_printf(nntp_out, "\tLAST\r\n");
+    prot_printf(nntp_out, "\tLIST [ ACTIVE ]\r\n");
+    prot_printf(nntp_out, "\tLISTGROUP\r\n");
+    prot_printf(nntp_out, "\tMODE READER | STREAM\r\n");
+    if (config_getswitch(IMAPOPT_ALLOWNEWNEWS))
+	prot_printf(nntp_out, "\tNEWNEWS\r\n");
+    prot_printf(nntp_out, "\tNEXT\r\n");
+    prot_printf(nntp_out, "\tOVER | XOVER\r\n");
+    prot_printf(nntp_out, "\tPOST\r\n");
+    prot_printf(nntp_out, "\tQUIT\r\n");
+    prot_printf(nntp_out, "\tSLAVE\r\n");
+    prot_printf(nntp_out, "\tSTARTTLS\r\n");
+    prot_printf(nntp_out, "\tSTAT\r\n");
+    prot_printf(nntp_out, "\tTAKETHIS\r\n");
+    prot_printf(nntp_out, ".\r\n");
 }
 
 #ifdef HAVE_SSL
@@ -1377,6 +1472,7 @@ void cmd_list(char *arg1, char *arg2)
 	    prot_write(nntp_out, mechlist, strlen(mechlist));
 	}
 
+	prot_printf(nntp_out, "HDR\r\n");
 	prot_printf(nntp_out, "LISTGROUP\r\n");
 	prot_printf(nntp_out, "OVER\r\n");
 	prot_printf(nntp_out, "STARTTLS\r\n");
@@ -1418,6 +1514,10 @@ void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, "Bytes:\r\n");
 	prot_printf(nntp_out, "Lines:\r\n");
 	prot_printf(nntp_out, ".\r\n");
+    }
+    else if (!strcmp(arg1, "active.times") || !strcmp(arg1, "distributions") ||
+	     !strcmp(arg1, "distrib.pats") || !strcmp(arg1, "newsgroups")) {
+	prot_printf(nntp_out, "503 Unsupported LIST command\r\n");
     }
     else {
 	prot_printf(nntp_out, "500 Unrecognized LIST command\r\n");
@@ -1956,6 +2056,23 @@ static void cmd_post(char *msgid, int mode)
     }
 
     prot_flush(nntp_out);
+}
+
+static void cmd_hdr(char *hdr, unsigned long uid, unsigned long last;
+{
+    int msgno;
+    char *body;
+
+    lcase(hdr);
+
+    for (; uid <= last; uid++) {
+	msgno = index_finduid(uid);
+	if (index_getuid(msgno) != uid) continue;
+
+	if ((body = index_getheader(nntp_group, msgno, hdr))) {
+	    prot_printf(nntp_out, "%lu %s\r\n", uid, body);
+	}
+    }
 }
 
 static void cmd_over(unsigned long uid, unsigned long last)

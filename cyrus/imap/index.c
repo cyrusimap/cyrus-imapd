@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.14 2002/10/16 01:13:51 ken3 Exp $
+ * $Id: index.c,v 1.180.4.15 2002/10/22 19:48:11 ken3 Exp $
  */
 #include <config.h>
 
@@ -4689,4 +4689,64 @@ extern struct nntp_overview *index_overview(struct mailbox *mailbox,
     }
 
     return &over;
+}
+
+extern char *index_getheader(struct mailbox *mailbox, unsigned msgno,
+			     char *hdr)
+{
+    static const char *msg_base = 0;
+    static unsigned long msg_size = 0;
+    struct strlist headers = { hdr, NULL, NULL };
+    static char *alloc = NULL;
+    static int allocsize = 0;
+    const char *cacheitem;
+    unsigned size;
+    char *buf;
+    int i;
+
+    if (msg_base) {
+	mailbox_unmap_message(mailbox, UID(msgno), &msg_base, &msg_size);
+	msg_base = 0;
+	msg_size = 0;
+    }
+
+    for (i = 0; i < mailbox_num_cache_header; i++) {
+	if (!strcmp(mailbox_cache_header_name[i], hdr)) break;
+    }
+    if (i < mailbox_num_cache_header) {
+	/* cached header */
+	cacheitem = cache_base + CACHE_OFFSET(msgno);
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip section */
+    
+	size = CACHE_ITEM_LEN(cacheitem);
+	if (allocsize < size+2) {
+	    allocsize = size+100;
+	    alloc = xrealloc(alloc, allocsize);
+	}
+
+	memcpy(alloc, cacheitem+4, size);
+	alloc[size] = '\0';
+
+	buf = alloc;
+    }
+    else {
+	/* uncached header */
+	if (mailbox_map_message(mailbox, 0, UID(msgno), &msg_base, &msg_size))
+	    return NULL;
+
+	buf = index_readheader(msg_base, msg_size, mailbox->format, 0,
+			       HEADER_SIZE(msgno));
+    }
+
+    index_pruneheader(buf, &headers, NULL);
+
+    if (*buf) {
+	buf += strlen(hdr) + 1; /* skip header: */
+	massage_header(buf);
+    }
+
+    return buf;
 }

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.4.6.3 2002/10/16 01:11:11 ken3 Exp $
+ * $Id: index.h,v 1.4.6.4 2002/10/22 19:48:12 ken3 Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -170,5 +170,7 @@ extern int index_getuid(unsigned msgno);
 extern char *index_get_msgid(struct mailbox *mailbox, unsigned msgno);
 extern struct nntp_overview *index_overview(struct mailbox *mailbox,
 					    unsigned msgno);
+extern char *index_getheader(struct mailbox *mailbox, unsigned msgno,
+			     char *hdr);
 
 #endif /* INDEX_H */
