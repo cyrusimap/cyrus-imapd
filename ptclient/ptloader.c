@@ -13,7 +13,7 @@
  *
  */
 
-static char rcsid[] = "$Id: ptloader.c,v 1.8 1998/03/06 16:45:26 wcw Exp $";
+static char rcsid[] = "$Id: ptloader.c,v 1.9 1998/03/06 18:56:51 wcw Exp $";
 #include <string.h>
 #include "auth_krb_pts.h"
 #include <stdio.h>
@@ -47,7 +47,8 @@ main(argc, argv)
     int listen_queue = 5;
     extern char *optarg;
     extern int optind;
-    char *user, *pw_file;
+    char *user;
+    char *pw_file = NULL;
     time_t next_auth_time;
     unsigned int auth_interval;
     int do_reauth = 1;
@@ -57,7 +58,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_DEBUG, "starting: $Id: ptloader.c,v 1.8 1998/03/06 16:45:26 wcw Exp $");
+    syslog(LOG_DEBUG, "starting: $Id: ptloader.c,v 1.9 1998/03/06 18:56:51 wcw Exp $");
 
     while ((opt = getopt(argc, argv, "Ud:l:f:u:t:")) != EOF) {
       switch (opt) {
@@ -83,7 +84,7 @@ main(argc, argv)
 	auth_interval = atoi(optarg);
 	break;
       case '?':
-	fprintf(stderr,"usage: -dlfut"
+	fprintf(stderr,"usage: -Udlfut"
 		"\n\t-d <n>\tdebug level"
 		"\n\t-l <n>\tlisten(2) queue backlog"
 		"\n\t-U\tDo not reauthenticate"
@@ -138,6 +139,10 @@ main(argc, argv)
     }
 
     if (do_reauth) {
+      if (pw_file == NULL) {
+	syslog(LOG_ERR, "Invalid password file specified. Exiting...");
+	exit(-1);
+      }
       if (reauth(user, pw_file, 1) < 0) {
 	syslog(LOG_ERR, "initialization failed. exiting...");
 	exit(-1);
@@ -252,7 +257,9 @@ int c;
     memset(list, 0, us.ngroups * PR_MAXNAMELEN);
     for (i=0; i<us.ngroups; i++){
         strcpy((*list)[i], groups.namelist_val[i]);
-	free(groups.namelist_val[i]);
+	/* don't free groups.namelist_val[i]. Something else currently
+	 * takes care of that data. 
+	 */
     }
     if (groups.namelist_val != NULL) {
       free(groups.namelist_val);
@@ -409,4 +416,4 @@ int exitcode;
   syslog(LOG_ERR, "%s", msg);
   exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.8 1998/03/06 16:45:26 wcw Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.9 1998/03/06 18:56:51 wcw Exp $ */
