@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <acl.h>
+#include "acl.h"
 #include "auth.h"
 #include "xmalloc.h"
 
