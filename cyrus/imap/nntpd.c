@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.37 2002/10/29 12:24:41 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.38 2002/11/01 18:09:30 ken3 Exp $
  */
 
 /*
@@ -136,6 +136,7 @@ struct protstream *nntp_out = NULL;
 struct protstream *nntp_in = NULL;
 unsigned nntp_exists = 0;
 unsigned nntp_current = 0;
+unsigned did_extensions = 0;
 
 static int nntps = 0;
 int nntp_starttls_done = 0;
@@ -1274,12 +1275,13 @@ void cmd_authinfo_user(char *user)
     /* possibly disallow USER */
     if (!(nntp_starttls_done || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(nntp_out,
-		    "503 AUTHINFO USER command only available under a layer\r\n");
+		    "501 AUTHINFO USER command only available under a layer\r\n");
 	return;
     }
 
     if (nntp_userid) {
-	prot_printf(nntp_out, "381 Must give AUTHINFO PASS command\r\n");
+	prot_printf(nntp_out, "%u Must give AUTHINFO PASS command\r\n",
+		    did_extensions ? 350 : 381);
 	return;
     }
 
@@ -1292,19 +1294,21 @@ void cmd_authinfo_user(char *user)
 	if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
 
 	for(p = buf; *p == '['; p++); /* can't have [ be first char */
-	prot_printf(nntp_out, "250 %s\r\n", p);
+	prot_printf(nntp_out, "205 closing connection - %s\r\n", p);
 	prot_flush(nntp_out);
 	shut_down(0);
     }
     else if (!(p = canonify_userid(user, NULL, NULL))) {
-	prot_printf(nntp_out, "482 Invalid user\r\n");
+	prot_printf(nntp_out, "%u Invalid user\r\n",
+		    did_extensions ? 452 : 482);
 	syslog(LOG_NOTICE,
 	       "badlogin: %s plaintext %s invalid user",
 	       nntp_clienthost, beautify_string(user));
     }
     else {
 	nntp_userid = xstrdup(p);
-	prot_printf(nntp_out, "381 Give AUTHINFO PASS command\r\n");
+	prot_printf(nntp_out, "%u Give AUTHINFO PASS command\r\n",
+		    did_extensions ? 350 : 381);
     }
 }
 
@@ -1313,7 +1317,8 @@ void cmd_authinfo_pass(char *pass)
     char *reply = 0;
 
     if (!nntp_userid) {
-	prot_printf(nntp_out, "480 Must give AUTHINFO USER command\r\n");
+	prot_printf(nntp_out, "%u Must give AUTHINFO USER command\r\n",
+		    did_extensions ? 450 : 480);
 	return;
     }
 
@@ -1327,7 +1332,8 @@ void cmd_authinfo_pass(char *pass)
 	else {
 	    syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
 		   nntp_clienthost);
-	    prot_printf(nntp_out, "482 Invalid login\r\n");
+	    prot_printf(nntp_out, "%u Invalid login\r\n",
+			did_extensions ? 452 : 482);
 	    return;
 	}
     }
@@ -1340,7 +1346,8 @@ void cmd_authinfo_pass(char *pass)
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   nntp_clienthost, nntp_userid, reply);
 	}
-	prot_printf(nntp_out, "482 Invalid login\r\n");
+	prot_printf(nntp_out, "%u Invalid login\r\n",
+		    did_extensions ? 452 : 482);
 	free(nntp_userid);
 	nntp_userid = 0;
 
@@ -1351,7 +1358,8 @@ void cmd_authinfo_pass(char *pass)
 	       nntp_userid, nntp_starttls_done ? "+TLS" : "", 
 	       reply ? reply : "");
 
-	prot_printf(nntp_out, "281 User logged in\r\n");
+	prot_printf(nntp_out, "%u User logged in\r\n",
+		    did_extensions ? 250 : 281);
 
 	nntp_authstate = auth_newstate(nntp_userid, NULL);
 
@@ -1632,7 +1640,7 @@ void cmd_list(char *arg1, char *arg2)
 	free_wildmats(wild);
     }
     else if (!strcmp(arg1, "extensions")) {
-	unsigned mechcount;
+	unsigned mechcount = 0;
 	const char *mechlist;
 
 	if (arg2) {
@@ -1641,14 +1649,17 @@ void cmd_list(char *arg1, char *arg2)
 	}
 
 	prot_printf(nntp_out, "202 Extensions supported:\r\n");
-	prot_printf(nntp_out, "AUTHINFO USER\r\n");
 
-	/* add the SASL mechs */
-	if (sasl_listmech(nntp_saslconn, NULL,
-			  "SASL ", " ", "\r\n",
-			  &mechlist,
-			  NULL, &mechcount) == SASL_OK && mechcount > 0) {
-	    prot_write(nntp_out, mechlist, strlen(mechlist));
+	/* check for SASL mechs */
+	sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
+		      &mechlist, NULL, &mechcount);
+
+	if (mechcount || config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+	    prot_printf(nntp_out, "AUTHINFO%s\r\n",
+			config_getswitch(IMAPOPT_ALLOWPLAINTEXT) ? " USER" : "");
+
+	    /* add the SASL mechs */
+	    if (mechcount) prot_write(nntp_out, mechlist, strlen(mechlist));
 	}
 
 	prot_printf(nntp_out, "HDR\r\n");
@@ -1656,6 +1667,8 @@ void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, "OVER\r\n");
 	prot_printf(nntp_out, "STARTTLS\r\n");
 	prot_printf(nntp_out, ".\r\n");
+
+	did_extensions = 1;
     }
     else if (!strcmp(arg1, "overview.fmt")) {
 	if (arg2) {
