@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.58 2001/01/10 07:23:04 leg Exp $
+ $Id: mailbox.h,v 1.59 2001/02/23 22:01:49 leg Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -102,9 +102,10 @@ struct mailbox {
     const char *header_base;
     unsigned long header_len;
     const char *index_base;
-    unsigned long index_len;
+    unsigned long index_len;	/* mapped size */
     const char *cache_base;
-    unsigned long cache_len;
+    unsigned long cache_len;	/* mapped size */
+    unsigned long cache_size;	/* actual size */
 
     int header_lock_count;
     int index_lock_count;
@@ -199,7 +200,8 @@ struct index_record {
 extern char *mailbox_cache_header_name[];
 extern int mailbox_num_cache_header;
 
-typedef int mailbox_decideproc_t(void *rock, char *indexbuf);
+typedef int mailbox_decideproc_t(struct mailbox *mailbox, 
+				 void *rock, char *indexbuf);
 
 typedef void mailbox_notifyproc_t(struct mailbox *mailbox);
 
