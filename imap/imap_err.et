@@ -89,6 +89,9 @@ ec IMAP_QUOTAROOT_NONEXISTENT,
 ec IMAP_PROTOCOL_ERROR,
    "Bad protocol"
 
+ec IMAP_PROTOCOL_BAD_PARAMETERS,
+   "Syntax error in parameters"
+
 # following used only proxy/db operations
 
 ec IMAP_SERVER_UNAVAILABLE,
