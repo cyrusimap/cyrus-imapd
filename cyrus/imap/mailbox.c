@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <sys/file.h>
+#include <dirent.h>
 
 #include "acl.h"
 #include "assert.h"
@@ -349,8 +350,8 @@ struct mailbox *mailbox;
     if (mailbox->header_lock_count++) return 0;
 
     assert(mailbox->index_lock_count == 0);
-    assert(mailbox->seen_lock_count == 0);
     assert(mailbox->quota_lock_count == 0);
+    assert(mailbox->seen_lock_count == 0);
 
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_HEADER);
@@ -404,8 +405,8 @@ struct mailbox *mailbox;
 
     if (mailbox->index_lock_count++) return 0;
 
-    assert(mailbox->seen_lock_count == 0);
     assert(mailbox->quota_lock_count == 0);
+    assert(mailbox->seen_lock_count == 0);
 
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_INDEX);
@@ -457,6 +458,8 @@ struct mailbox *mailbox;
     assert(mailbox->header_lock_count != 0);
 
     if (mailbox->quota_lock_count++) return 0;
+
+    assert(mailbox->seen_lock_count == 0);
 
     if (!mailbox->quota) {
 	if (!mailbox->quota_path) {
@@ -1001,3 +1004,59 @@ int format;
     return r;
 }
 
+int mailbox_delete(name)
+char *name;
+{
+    int r;
+    struct mailbox mailbox;
+    DIR *dirp;
+    struct dirent *f;
+    char buf[MAX_MAILBOX_PATH];
+    char *tail;
+
+    /* Lock everything in sight */
+    r = mailbox_open_header(name, &mailbox);
+    if (r) return r;
+    r =  mailbox_lock_header(&mailbox);
+    if (!r) r = mailbox_open_index(&mailbox);
+    if (!r) r = mailbox_lock_index(&mailbox);
+    if (!r) r = mailbox_lock_quota(&mailbox);
+    if (r) {
+	mailbox_close(&mailbox);
+	return r;
+    }
+
+    seen_delete(&mailbox);
+
+    /* Free any quota being used by this mailbox */
+    mailbox.quota_used -= mailbox.quota_mailbox_used;
+    r = mailbox_write_quota(&mailbox);
+    if (r) {
+	syslog(LOG_ERR,
+	       "LOSTQUOTA: unable to record free of %d bytes in quota file %s",
+	       mailbox.quota_mailbox_used, mailbox.quota_path);
+    }
+    mailbox_unlock_quota(&mailbox);
+
+    /* remove all files in directory */
+    strcpy(buf, mailbox.path);
+    tail = buf + strlen(buf);
+    *tail++ = '/';
+    dirp = opendir(mailbox.path);
+    if (dirp) {
+	while (f = readdir(dirp)) {
+	    strcpy(tail, f->d_name);
+	    (void) unlink(buf);
+	}
+	closedir(dirp);
+    }
+
+    /* Remove empty directories, going up path */
+    tail--;
+    do {
+	*tail = '\0';
+    } while (rmdir(buf) == 0 && (tail = strrchr(buf, '/')));
+
+    mailbox_close(&mailbox);
+    return 0;
+}
