@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.73 2002/07/18 16:06:27 leg Exp $
+ * $Id: prot.c,v 1.74 2002/07/24 19:58:40 rjs3 Exp $
  */
 
 #include <config.h>
@@ -489,7 +489,7 @@ int prot_fill(struct protstream *s)
 		char timebuf[20];
 
 		time(&newtime);
-		sprintf(timebuf, "<%ld<", newtime);
+		snprintf(timebuf, sizeof(timebuf), "<%ld<", newtime);
 		write(s->logfd, timebuf, strlen(timebuf));
 
 		left = s->cnt;
@@ -537,7 +537,7 @@ int prot_flush(struct protstream *s)
 	char timebuf[20];
 
 	time(&newtime);
-	sprintf(timebuf, ">%ld>", newtime);
+	snprintf(timebuf, sizeof(timebuf), ">%ld>", newtime);
 	write(s->logfd, timebuf, strlen(timebuf));
 
 	do {
@@ -611,7 +611,9 @@ int prot_flush(struct protstream *s)
 int prot_write(struct protstream *s, const char *buf, unsigned len)
 {
     assert(s->write);
-
+    if(s->error || s->eof) return EOF;
+    if(len == 0) return 0;
+    
     while (len >= s->cnt) {
 	/* XXX can we manage to write data from 'buf' without copying it
 	   to s->ptr ? */
@@ -660,13 +662,13 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 	    switch (*++percent) {
 	    case 'd':
 		l = va_arg(pvar, long);
-		sprintf(buf, "%ld", l);
+		snprintf(buf, sizeof(buf), "%ld", l);
 		prot_write(s, buf, strlen(buf));
 		break;
 
 	    case 'u':
 		ul = va_arg(pvar, long);
-		sprintf(buf, "%lu", ul);
+		snprintf(buf, sizeof(buf), "%lu", ul);
 		prot_write(s, buf, strlen(buf));
 		break;
 
@@ -677,13 +679,13 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 
 	case 'd':
 	    i = va_arg(pvar, int);
-	    sprintf(buf, "%d", i);
+	    snprintf(buf, sizeof(buf), "%d", i);
 	    prot_write(s, buf, strlen(buf));
 	    break;
 
 	case 'u':
 	    u = va_arg(pvar, int);
-	    sprintf(buf, "%u", u);
+	    snprintf(buf, sizeof(buf), "%u", u);
 	    prot_write(s, buf, strlen(buf));
 	    break;
 
