@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.5 2001/01/31 00:59:58 ken3 Exp $
+ * $Id: lmtpengine.h,v 1.5.8.1 2001/08/17 21:04:29 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -62,6 +62,11 @@ struct message_data {
     char *return_path;		/* where to return message */
     address_data_t **rcpt;	/* to recipients of this message */
     int rcpt_num;		/* number of recipients */
+
+    /* auth state */
+    char *authuser;
+    struct auth_state *authstate;
+
     header_t *cache[HEADERCACHESIZE];
 };
 
