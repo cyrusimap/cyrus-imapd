@@ -218,7 +218,7 @@ int service_init(int argc, char **argv, char **envp)
 
 void service_abort(void)
 {
-    return 0;
+    return;
 }
 
 int service_main(int argc, char **argv, char **envp)
