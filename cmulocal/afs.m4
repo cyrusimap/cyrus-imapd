@@ -218,7 +218,7 @@ extern int UV_SetSecurity();],
           else
              AC_MSG_RESULT([no])
           fi
-	  AC_CHECK_FUNCS(VL_ProbeServer);
+	  AC_CHECK_FUNCS(VL_ProbeServer)
           AC_MSG_CHECKING([if new-style afs_ integer types are defined])
           AC_CACHE_VAL(ac_cv_afs_int32,
 dnl The next few lines contain a quoted argument to egrep
