@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: master.c,v 1.6 2000/02/25 21:29:36 leg Exp $ */
+/* $Id: master.c,v 1.7 2000/02/29 21:08:04 leg Exp $ */
 
 #include <config.h>
 
@@ -122,6 +122,12 @@ int become_cyrus(void)
     return setuid(uid);
 }
 
+void get_prog(char *path, char *const *cmd)
+{
+    if (cmd[0][0] == '/') strcpy(path, cmd[0]);
+    else sprintf(path, "%s/%s", SERVICE_PATH, cmd[0]);
+}
+
 void get_statsock(int filedes[2])
 {
     int r, fdflags;
@@ -213,11 +219,11 @@ void service_create(struct service *s)
 
 void run_startup(char **cmd)
 {
-    pid_t p;
-    int res;
+    pid_t pid;
+    int status;
     char path[1024];
 
-    switch (p = fork()) {
+    switch (pid = fork()) {
     case -1:
 	syslog(LOG_CRIT, "can't fork process to run recovery");
 	fatal("can't run recovery", 1);
@@ -225,18 +231,24 @@ void run_startup(char **cmd)
 	
     case 0:
 	become_cyrus();
-	if (cmd[0] != "/") sprintf(path, "%s/%s", SERVICE_PATH, cmd[0]);
-	else strcpy(path, cmd[0]);
+	get_prog(path, cmd);
 	execv(path, cmd);
 	syslog(LOG_ERR, "can't exec %s for recovery: %m", path);
 	exit(1);
 	
     default:
-	if (waitpid(p, &res, 0) < 0) {
+	if (waitpid(pid, &status, 0) < 0) {
 	    syslog(LOG_ERR, "waitpid(): %m");
-	} else if (res != 0) {
-	    syslog(LOG_CRIT, "recovery process exited with code '%d'", 
-		   res);
+	} else if (status != 0) {
+	    if (WIFEXITED(status)) {
+		syslog(LOG_ERR, "process %d exited, status %d\n", pid, 
+		       WEXITSTATUS(status));
+	    }
+	    if (WIFSIGNALED(status)) {
+		syslog(LOG_ERR, 
+		       "process %d exited, signaled to death by %d\n",
+		       pid, WTERMSIG(status));
+	    }
 	}
 	break;
     }
@@ -261,8 +273,7 @@ void spawn_service(struct service *s)
 	    exit(1);
 	}
 
-	if (s->exec[0][0] == '/') strcpy(path, s->exec[0]);
-	else sprintf(path, "%s/%s", SERVICE_PATH, s->exec[0]);
+	get_prog(path, s->exec);
 	if (dup2(s->stat[1], STATUS_FD) < 0) {
 	    syslog(LOG_ERR, "can't duplicate status fd: %m");
 	    exit(1);
@@ -349,7 +360,7 @@ void spawn_schedule(time_t now)
 
 	case 0:
 	    become_cyrus();
-	    sprintf(path, "%s/%s", SERVICE_PATH, a->exec[0]);
+	    get_prog(path, a->exec);
 	    execv(path, a->exec);
 	    syslog(LOG_ERR, "can't exec %s for checkpointing: %m", path);
 	    exit(1);
