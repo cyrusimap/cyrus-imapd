@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.2 2003/02/28 18:13:22 rjs3 Exp $
+ * $Id: bc_eval.c,v 1.1.4.3 2003/02/28 18:42:59 rjs3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -215,7 +215,6 @@ int shouldRespond(void * m, sieve_interp_t *interp,
    
 	
 	if (body[0]) {  
-
 	    parse_address(body[0], &data, &marker);
 	    tmp = get_address(ADDRESS_ALL, &data, &marker, 1);
 	    myaddr = (tmp != NULL) ? xstrdup(tmp) : NULL;
@@ -234,6 +233,7 @@ int shouldRespond(void * m, sieve_interp_t *interp,
 	tmp = get_address(ADDRESS_ALL, &data, &marker, 1);
 	reply_to = (tmp != NULL) ? xstrdup(tmp) : NULL;
 	free_address(&data, &marker);
+
 	/* first, is there a reply-to address? */
 	if (reply_to == NULL) {
 	    l = SIEVE_DONE;
@@ -437,6 +437,9 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 
 	/*loop through all the headers*/
 	currh=headersi+2;
+#if VERBOSE
+	printf("about to process %d headers\n", numheaders);
+#endif
 	for (x=0; x<numheaders && !res; x++)
 	{
 	    const char *this_header;
@@ -449,7 +452,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 		if(interp->getheader(m, this_header, &val) != SIEVE_OK)
 		    continue;
 #if VERBOSE
-                printf(" header %s is %s\n", this_header, val[0]);
+                printf(" [%d] header %s is %s\n", x, this_header, val[0]);
 #endif
 	    } else {
 		/* Envelope */
@@ -463,6 +466,10 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 		count++;
 	    } else {
 		for (y=0; val[y]!=NULL && !res; y++) {
+#if VERBOSE
+		    printf("about to parse %s\n", val[y]);
+#endif
+
 		    if (parse_address(val[y], &data, &marker)!=SIEVE_OK) 
 			return 0;
 
@@ -501,8 +508,13 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 			    }
 			} /* For each data */
 		    } /* For each address */
+
+		    free_address(&data, &marker);
 		} /* For each message header */
 	    }
+#if VERBOSE
+	    printf("end of loop, res is %d, x is %d (%d)\n", res, x, numheaders);
+#endif	    
 	} /* For each script header */
      
 	if  (match == B_COUNT)
