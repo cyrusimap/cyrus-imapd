@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.43 2001/10/23 00:53:09 ken3 Exp $
+ * $Id: script.c,v 1.44 2002/01/15 21:12:54 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -228,7 +228,7 @@ static char* look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
 	/* loop through each address in the header */
 	while (!found && ((addr = get_address(ADDRESS_ALL, 
 					      &data, &marker, 1)) != NULL)) {
-	    if (!strcmp(addr, myaddr)) {
+	    if (!strcasecmp(addr, myaddr)) {
 		found = myaddr;
 		break;
 	    }
@@ -240,7 +240,7 @@ static char* look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
 		/* is this address one of my addresses? */
 		parse_address(sl->s, &altdata, &altmarker);
 		altaddr = get_address(ADDRESS_ALL, &altdata, &altmarker, 1);
-		if (!strcmp(addr, altaddr))
+		if (!strcasecmp(addr, altaddr))
 		    found = sl->s;
 
 		free_address(&altdata, &altmarker);
