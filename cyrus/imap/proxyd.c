@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.153 2003/03/12 20:57:09 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.154 2003/03/26 15:42:33 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -84,7 +84,6 @@
 #include "charset.h"
 #include "imparse.h"
 #include "iptostring.h"
-#include "mkgmtime.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mboxname.h"
