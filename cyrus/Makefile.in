@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.51 2001/12/06 17:48:30 leg Exp $
+# $Id: Makefile.in,v 1.52 2002/01/14 20:08:59 leg Exp $
 #
 # @configure_input@
 # 
@@ -58,7 +58,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-VERSION = 2.1.0
+VERSION = 2.1.1
 
 all:: 
 	@for d in  $(SUBDIRS); \
