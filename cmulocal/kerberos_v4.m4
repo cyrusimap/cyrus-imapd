@@ -1,7 +1,7 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.22 2002/07/22 20:19:12 shadow Exp $
+dnl $Id: kerberos_v4.m4,v 1.23 2002/07/22 20:26:02 shadow Exp $
 
 AC_DEFUN(CMU_KRB_SENDAUTH_PROTO, [
 AC_MSG_CHECKING(for krb_sendauth prototype)
@@ -120,9 +120,9 @@ AC_DEFUN(CMU_KRB_INC_WHERE, [
 AC_DEFUN(CMU_KRB_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lkrb -ldes"
+LIBS="$saved_LIBS -L$1 -lkrb"
 AC_TRY_LINK(,
-[dest_tkt();des_ecb_encrypt();],
+[dest_tkt();],
 [ac_cv_found_krb_lib=yes],
 ac_cv_found_krb_lib=no)
 LIBS=$saved_LIBS
