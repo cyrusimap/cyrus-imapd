@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.25 2000/02/22 20:16:57 leg Exp $
+ * $Id: script.c,v 1.26 2000/04/06 15:18:40 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -401,12 +401,23 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 	    {
 		char **body, buf[128], myaddr[256], *fromaddr;
 		char *reply_to = NULL;
-		int l;
+		int l = SIEVE_OK;
 
-		strcpy(buf, "to");
-		l = i->getenvelope(m, buf, &body);
-		if (body[0]) {
-		    strncpy(myaddr, body[0], sizeof(myaddr) - 1);
+		/* is there an Auto-Submitted keyword other than "no"? */
+		strcpy(buf, "auto-submitted");
+		if (i->getheader(m, buf, &body) == SIEVE_OK) {
+		    /* we don't deal with comments, etc. here */
+		    /* skip leading white-space */
+		    while (*body[0] && isspace((int) *body[0])) body[0]++;
+		    if (strcasecmp(body[0], "no")) l = SIEVE_DONE;
+		}
+
+		if (l == SIEVE_OK) {
+		    strcpy(buf, "to");
+		    l = i->getenvelope(m, buf, &body);
+		    if (body[0]) {
+			strncpy(myaddr, body[0], sizeof(myaddr) - 1);
+		    }
 		}
 		if (l == SIEVE_OK) {
 		    strcpy(buf, "from");
@@ -453,7 +464,8 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		    /* ok, we're willing to respond to the sender.
 		       but is this message to me?  that is, is my address
 		       in the TO or CC fields? */
-		    if (strcpy(buf, "to"), i->getheader(m, buf, &body) == SIEVE_OK)
+		    if (strcpy(buf, "to"), 
+			i->getheader(m, buf, &body) == SIEVE_OK)
 			found = look_for_me(myaddr, c->u.v.addresses, body);
 
 		    if (!found && (strcpy(buf, "cc"),
@@ -568,7 +580,8 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 
 #define GROW_AMOUNT 100
 
-static void add_header(sieve_interp_t *i, char *header, void *message_context, char **out, 
+static void add_header(sieve_interp_t *i, char *header, 
+		       void *message_context, char **out, 
 		       int *outlen, int *outalloc)
 {
     char **h;
@@ -597,8 +610,8 @@ static void add_header(sieve_interp_t *i, char *header, void *message_context, c
     *outlen += addlen;
 }
 
-static int fillin_headers(sieve_interp_t *i, stringlist_t *sl, void *message_context, 
-			  char **out, int *outlen)
+static int fillin_headers(sieve_interp_t *i, stringlist_t *sl, 
+			  void *message_context, char **out, int *outlen)
 {
     int allocsize = GROW_AMOUNT;
     *out = xmalloc(GROW_AMOUNT);
@@ -682,9 +695,11 @@ static int send_notify_callback(sieve_script_t *s, void *message_context,
 
     sieve_notify_context_t nc;
 
-    fillin_headers(&(s->interp), notify->headers, message_context, &headers, &headerslen);
+    fillin_headers(&(s->interp), notify->headers, message_context, 
+		   &headers, &headerslen);
 
-    nc.message = xmalloc( strlen(notify->message) + headerslen + strlen(actions_string) + 30);
+    nc.message = xmalloc(strlen(notify->message) + headerslen + 
+			 strlen(actions_string) + 30);
 
     strcpy(nc.message,notify->message);
     strcat(nc.message,"\n\n");
@@ -808,8 +823,9 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 				   &errmsg);
 	    
 	    if (ret == SIEVE_OK)
-		snprintf(actions_string+strlen(actions_string),sizeof(actions_string)-
-			 strlen(actions_string), "Rejected with: %s\n",a->u.rej.msg);
+		snprintf(actions_string+strlen(actions_string),
+			 sizeof(actions_string)-strlen(actions_string), 
+			 "Rejected with: %s\n", a->u.rej.msg);
 
 	    break;
 	case ACTION_FILEINTO:
@@ -823,8 +839,9 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 				     &errmsg);
 
 	    if (ret == SIEVE_OK)
-		snprintf(actions_string+strlen(actions_string),sizeof(actions_string)-
-			 strlen(actions_string),"Filed into: %s\n",a->u.fil.mailbox);
+		snprintf(actions_string+strlen(actions_string),
+			 sizeof(actions_string)-strlen(actions_string),
+			 "Filed into: %s\n",a->u.fil.mailbox);
 	    break;
 	case ACTION_KEEP:
 	    implicit_keep = 0;
@@ -836,8 +853,9 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 				 message_context,
 				 &errmsg);
 	    if (ret == SIEVE_OK)
-		snprintf(actions_string+strlen(actions_string),sizeof(actions_string)-
-			 strlen(actions_string),"Kept\n");
+		snprintf(actions_string+strlen(actions_string),
+			 sizeof(actions_string)-strlen(actions_string),
+			 "Kept\n");
 	    break;
 	case ACTION_REDIRECT:
 	    implicit_keep = 0;
@@ -849,8 +867,9 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 				     message_context,
 				     &errmsg);
 	    if (ret == SIEVE_OK)
-		snprintf(actions_string+strlen(actions_string),sizeof(actions_string)-
-			 strlen(actions_string),"Redirected to %s\n",a->u.red.addr);
+		snprintf(actions_string+strlen(actions_string),
+			 sizeof(actions_string)-strlen(actions_string),
+			 "Redirected to %s\n", a->u.red.addr);
 	    break;
 	case ACTION_DISCARD:
 	    implicit_keep = 0;
@@ -860,8 +879,9 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 					message_context,
 					&errmsg);
 	    if (ret == SIEVE_OK)
-		snprintf(actions_string+strlen(actions_string),sizeof(actions_string)-
-			 strlen(actions_string),"Discarded\n");
+		snprintf(actions_string+strlen(actions_string),
+			 sizeof(actions_string)-strlen(actions_string),
+			 "Discarded\n");
 	    break;
 
 	case ACTION_VACATION:
@@ -892,14 +912,15 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 							    &errmsg);
 
 		    if (ret == SIEVE_OK)
-			snprintf(actions_string+strlen(actions_string),sizeof(actions_string)-
-				 strlen(actions_string),"Sent vacation reply\n");
+			snprintf(actions_string+strlen(actions_string),
+				 sizeof(actions_string)-strlen(actions_string),
+				 "Sent vacation reply\n");
 
 		} else if (ret == SIEVE_DONE) {
 		    if (ret == SIEVE_OK)
 			snprintf(actions_string+strlen(actions_string),
 				 sizeof(actions_string)-strlen(actions_string),
-				 "Didn't send vacation reply because address has recently received one\n");
+				 "Vacation reply suppressed\n");
 
 		    ret = SIEVE_OK;
 		}
@@ -964,8 +985,9 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
         ret = s->interp.keep(&keep_context, s->interp.interp_context,
 			     s->script_context, message_context, &errmsg);
         if (ret == SIEVE_OK)
-            snprintf(actions_string+strlen(actions_string),sizeof(actions_string)-
-                     strlen(actions_string),"Kept\n");
+            snprintf(actions_string+strlen(actions_string),
+		     sizeof(actions_string)-strlen(actions_string),
+		     "Kept\n");
     }
 
  error: /* report run-time errors */

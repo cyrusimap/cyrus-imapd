@@ -1,0 +1,30 @@
+# sieve_err.et -- Error codes for the Sieve subsystem
+#
+# Copyright 2000 Carnegie Mellon University
+# 
+error_table siev
+
+ec SIEVE_FAIL,
+   "Generic Sieve error"
+
+ec SIEVE_NOT_FINALIZED,
+   "Sieve interpretor not finalized"
+
+ec SIEVE_PARSE_ERROR,
+   "Parse error in Sieve script"
+
+ec SIEVE_RUN_ERROR,
+   "Run-time error during Sieve execution"
+
+ec SIEVE_INTERNAL_ERROR,
+   "Internal error in Sieve subsystem"
+
+ec SIEVE_NOMEM,
+   "Memory exhausted in Sieve subsystem"
+
+ec SIEVE_DONE,
+   "Sieve action already taken"
+
+end
+
+

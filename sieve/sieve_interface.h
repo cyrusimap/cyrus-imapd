@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.11 2000/02/22 07:56:41 tmartin Exp $
+ * $Id: sieve_interface.h,v 1.12 2000/04/06 15:18:41 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -31,16 +31,10 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 extern const char *sieve_version;
 
-typedef enum {
-    SIEVE_OK = 0,
-    SIEVE_FAIL = 1284593152,
-    SIEVE_NOT_FINALIZED,
-    SIEVE_PARSE_ERROR,
-    SIEVE_RUN_ERROR,
-    SIEVE_INTERNAL_ERROR,
-    SIEVE_NOMEM,
-    SIEVE_DONE
-} sieve_error_t;
+/* error codes */
+#define SIEVE_OK (0)
+
+#include <sieve_err.h>
 
 /* external sieve types */
 typedef struct sieve_interp sieve_interp_t;
@@ -136,10 +130,9 @@ int sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f);
 
 typedef int sieve_execute_error(char *msg, void *interp_context,
 				void *script_context, void *message_context);
-int sieve_register_execute_error(sieve_interp_t *interp, sieve_execute_error *f);
+int sieve_register_execute_error(sieve_interp_t *interp, 
+				 sieve_execute_error *f);
  
-
-
 /* given an interpretor and a script, produce an executable script */
 int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 		       void *script_context, sieve_script_t **ret);
@@ -151,6 +144,6 @@ int sieve_execute_script(sieve_script_t *script,
 			 void *message_context);
 
 /* Get space separated list of extensions supported by the implementation */
-char *sieve_listextensions(void);
+const char *sieve_listextensions(void);
 
 #endif
