@@ -98,6 +98,8 @@ static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 static int index_forsequence(), index_insequence();
 static int index_listflags();
 static int index_fetchflags(), index_fetchreply();
+static char *index_readheader();
+static void index_pruneheader();
 static int index_storeseen(), index_storeflag();
 static int index_search_evaluate();
 static int index_searchmsg(), index_searchheader();
@@ -1099,14 +1101,14 @@ unsigned octet_count;
 
     /* partial fetch: adjust 'size', normalize 'start_octet' to be 0-based */
     if (start_octet) {
-	if (size < start_octet) {
+	start_octet--;
+	if (size <= start_octet) {
 	    size = 0;
 	}
 	else {
-	    size -= start_octet - 1;
+	    size -= start_octet;
 	}
 	if (size > octet_count) size = octet_count;
-	start_octet--;
     }
 
     /* If no data, output null quoted string */
@@ -1208,7 +1210,7 @@ int octet_count;
 	    while (isdigit(*p)) start_octet = start_octet * 10 + *p++ - '0';
 	    p++;			/* Skip over '.' */
 	    while (isdigit(*p)) octet_count = octet_count * 10 + *p++ - '0';
-	    start_octet++;
+	    start_octet++;	/* Make 1-based */
 	}
 
 	index_fetchmsg(msg_base, msg_size, format, 0, msg_size,
@@ -1269,12 +1271,133 @@ int octet_count;
 	while (isdigit(*p)) start_octet = start_octet * 10 + *p++ - '0';
 	p++;			/* Skip over '.' */
 	while (isdigit(*p)) octet_count = octet_count * 10 + *p++ - '0';
-	start_octet++;
+	start_octet++;		/* Make 1-based */
     }
 
     index_fetchmsg(msg_base, msg_size, format, CACHE_ITEM_BIT32(cacheitem),
 		   CACHE_ITEM_BIT32(cacheitem+4),
 		   start_octet, octet_count);
+    return;
+
+ badpart:
+    prot_printf(imapd_out, "NIL");
+}
+
+/*
+ * Helper function to fetch a HEADER.FIELDS[.NOT] body section
+ */
+static
+index_fetchfsection(msg_base, msg_size, format, fsection, cacheitem)
+char *msg_base;
+unsigned long msg_size;
+int format;
+struct fieldlist *fsection;
+char *cacheitem;
+{
+    char *p;
+    int skip = 0;
+    int fields_not = 0;
+    unsigned crlf_start = 0;
+    unsigned crlf_size = 2;
+    int start_octet = 0;
+    int octet_count = 0;
+    char *buf;
+    unsigned size;
+
+    /* If no data, output null quoted string */
+    if (!msg_base) {
+	prot_printf(imapd_out, "\"\"");
+	return;
+    }
+
+    cacheitem += 4;
+    p = fsection->section;
+
+    while (*p != 'H') {
+	skip = 0;
+	while (isdigit(*p)) skip = skip * 10 + *p++ - '0';
+	if (*p == '.') p++;
+
+	/* section number too large */
+	if (skip >= CACHE_ITEM_BIT32(cacheitem)) goto badpart;
+
+	if (*p != 'H') {
+	    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4 + 4;
+	    while (--skip) {
+		if (CACHE_ITEM_BIT32(cacheitem) > 0) {
+		    skip += CACHE_ITEM_BIT32(cacheitem)-1;
+		    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4;
+		}
+		cacheitem += 4;
+	    }
+	}
+    }
+
+    cacheitem += skip * 5 * 4 + 4;
+
+    if (CACHE_ITEM_BIT32(cacheitem+4) == -1) goto badpart;
+	
+    if (p[13]) fields_not++;	/* Check for "." after "HEADER.FIELDS" */
+
+    p = fsection->trail;
+    if (p[1] == '<') {
+	p += 2;
+	start_octet = octet_count = 0;
+	while (isdigit(*p)) start_octet = start_octet * 10 + *p++ - '0';
+	p++;			/* Skip over '.' */
+	while (isdigit(*p)) octet_count = octet_count * 10 + *p++ - '0';
+	start_octet++;		/* Make 1-based */
+    }
+
+    buf = index_readheader(msg_base, msg_size, format,
+			   CACHE_ITEM_BIT32(cacheitem),
+			   CACHE_ITEM_BIT32(cacheitem+4));
+
+    if (fields_not) {
+	index_pruneheader(buf, 0, fsection->fields);
+    }
+    else {
+	index_pruneheader(buf, fsection->fields, 0);
+    }
+    size = strlen(buf);
+
+    /* partial fetch: adjust 'size', normalize 'start_octet' to be 0-based */
+    if (start_octet) {
+	start_octet--;
+	if (size <= start_octet) {
+	    crlf_start = start_octet - size;
+	    size = 0;
+	    start_octet = 0;
+	    if (crlf_size <= crlf_start) {
+		crlf_size = 0;
+	    }
+	    else {
+		crlf_size -= crlf_start;
+	    }
+	}
+	else {
+	    size -= start_octet;
+	}
+	if (size > octet_count) {
+	    size = octet_count;
+	    crlf_size = 0;
+	}
+	else if (size + crlf_size > octet_count) {
+	    crlf_size = octet_count - size;
+	}
+    }
+
+    /* If no data, output null quoted string */
+    if (size + crlf_size == 0) {
+	prot_printf(imapd_out, "\"\"");
+	return;
+    }
+
+    /* Write literal */
+    prot_printf(imapd_out, "{%u}\r\n", size + crlf_size);
+    prot_write(imapd_out, buf + start_octet, size);
+    prot_write(imapd_out, "\r\n" + crlf_start, crlf_size);
+
     return;
 
  badpart:
@@ -1345,7 +1468,7 @@ unsigned size;
  * listed in headers or (if headers_not is non-empty) those headers
  * not in headers_not.
  */
-static
+static void
 index_pruneheader(buf, headers, headers_not)
 char *buf;
 struct strlist *headers;
@@ -1436,14 +1559,19 @@ struct strlist *headers_not;
  * cacheheaders in cyrus.cache
  */
 static
-index_fetchcacheheader(msgno, headers)
+index_fetchcacheheader(msgno, headers, trail)
 unsigned msgno;
 struct strlist *headers;
+char *trail;
 {
     static char *buf;
     static int bufsize;
     char *cacheitem;
     unsigned size;
+    unsigned crlf_start = 0;
+    unsigned crlf_size = 2;
+    int start_octet = 0;
+    int octet_count = 0;
 
     cacheitem = cache_base + CACHE_OFFSET(msgno);
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
@@ -1461,9 +1589,46 @@ struct strlist *headers;
     buf[size] = '\0';
 
     index_pruneheader(buf, headers, 0);
-
     size = strlen(buf);
-    prot_printf(imapd_out, "{%u}\r\n%s\r\n", size+2, buf);
+
+    if (trail[1]) {
+	/* Deal with ]<start.count> */
+	trail += 2;
+	while (isdigit(*trail)) start_octet = start_octet * 10 + *trail++ - '0';
+	trail++;			/* Skip over '.' */
+	while (isdigit(*trail)) octet_count = octet_count * 10 + *trail++ - '0';
+
+	if (size <= start_octet) {
+	    crlf_start = start_octet - size;
+	    size = 0;
+	    start_octet = 0;
+	    if (crlf_size <= crlf_start) {
+		crlf_size = 0;
+	    }
+	    else {
+		crlf_size -= crlf_start;
+	    }
+	}
+	else {
+	    size -= start_octet;
+	}
+	if (size > octet_count) {
+	    size = octet_count;
+	    crlf_size = 0;
+	}
+	else if (size + crlf_size > octet_count) {
+	    crlf_size = octet_count - size;
+	}
+    }
+	
+    if (size + crlf_size == 0) {
+	prot_printf(imapd_out, "\"\"");
+    }
+    else {
+	prot_printf(imapd_out, "{%u}\r\n", size + crlf_size);
+	prot_write(imapd_out, buf + start_octet, size);
+	prot_write(imapd_out, "\r\n" + crlf_start, crlf_size);
+    }
 }
 
 /*
@@ -1599,12 +1764,13 @@ char *rock;
     int i;
     bit32 user_flags[MAX_USER_FLAGS/32];
     char *cacheitem;
-    struct strlist *section;
+    struct strlist *section, *field;
+    struct fieldlist *fsection;
     char *partialdot;
 
     /* Open the message file if we're going to need it */
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822|FETCH_UNCACHEDHEADER)) ||
-	fetchargs->bodysections || fetchargs->headers_not) {
+	fetchargs->bodysections) {
 	msgfd = open(mailbox_message_fname(mailbox, UID(msgno)), O_RDONLY,
 		     0666);
 	if (msgfd == -1) {
@@ -1706,17 +1872,17 @@ char *rock;
 		       HEADER_SIZE(msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
-    else if ((fetchitems & FETCH_UNCACHEDHEADER) || fetchargs->headers_not) {
+    else if (fetchargs->headers || fetchargs->headers_not) {
 	prot_printf(imapd_out, "%cRFC822.HEADER ", sepchar);
 	sepchar = ' ';
-	index_fetchheader(msg_base, msg_size, mailbox->format,
-			  HEADER_SIZE(msgno),
-			  fetchargs->headers, fetchargs->headers_not);
-    }
-    else if (fetchargs->headers) {
-	prot_printf(imapd_out, "%cRFC822.HEADER ", sepchar);
-	sepchar = ' ';
-	index_fetchcacheheader(msgno, fetchargs->headers);
+	if (fetchitems & FETCH_UNCACHEDHEADER) {
+	    index_fetchheader(msg_base, msg_size, mailbox->format,
+			      HEADER_SIZE(msgno),
+			      fetchargs->headers, fetchargs->headers_not);
+	}
+	else {
+	    index_fetchcacheheader(msgno, fetchargs->headers, "]");
+	}
     }
 
     if (fetchitems & FETCH_TEXT) {
@@ -1731,6 +1897,41 @@ char *rock;
 	sepchar = ' ';
 	index_fetchmsg(msg_base, msg_size, mailbox->format, 0, SIZE(msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
+    }
+    for (fsection = fetchargs->fsections; fsection; fsection = fsection->next) {
+	prot_printf(imapd_out, "%cBODY[%s ", sepchar, fsection->section);
+	sepchar = '(';
+	for (field = fsection->fields; field; field = field->next) {
+	    prot_putc(sepchar, imapd_out);
+	    sepchar = ' ';
+	    printastring(field->s);
+	}
+	prot_putc(')', imapd_out);
+	sepchar = ' ';
+
+	if (fsection->trail[1] == '<') {
+	    /* Have to trim off the maximum number of octets from the reply */
+	    partialdot = strrchr(fsection->trail, '.');
+	    *partialdot = '\0';
+	    prot_printf(imapd_out, "%s> ", fsection->trail);
+	    *partialdot = '.';
+	}
+	else {
+	    prot_printf(imapd_out, "%s ", fsection->trail);
+	}
+
+	if (fetchitems & FETCH_UNCACHEDHEADER) {
+	    cacheitem = cache_base + CACHE_OFFSET(msgno);
+	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
+	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
+	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
+
+	    index_fetchfsection(msg_base, msg_size, mailbox->format, fsection,
+				cacheitem);
+	}
+	else {
+	    index_fetchcacheheader(msgno, fsection->fields, fsection->trail);
+	}
     }
     for (section = fetchargs->bodysections; section; section = section->next) {
 	if (section->s[strlen(section->s)-1] == '>') {
