@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.60 1999/01/12 11:55:58 tjs Exp $
+ * $Id: message.c,v 1.61 1999/03/02 01:02:34 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -1590,6 +1590,7 @@ struct body *body;
     struct body toplevel;
     int n;
     struct iovec iov[15];
+    char* t;
 
     toplevel.type = "MESSAGE";
     toplevel.subtype = "RFC822";
@@ -1620,8 +1621,9 @@ struct body *body;
     message_write_searchaddr(&bcc, body->bcc);
 
     message_ibuf_init(&subject);
-    message_write_nstring(&subject, charset_decode1522(body->subject));
-
+    charset_decode1522(body->subject, t, 0);
+    message_write_nstring(&subject, t);
+    free(t);
 
     message_ibuf_iov(&iov[0], &envelope);
     message_ibuf_iov(&iov[1], &bodystructure);
@@ -2165,6 +2167,7 @@ struct ibuf *ibuf;
 struct address *addrlist;
 {
     int prevaddr = 0;
+    char* tmp;
 
     while (addrlist) {
 
@@ -2173,8 +2176,10 @@ struct address *addrlist;
 	    if (addrlist->mailbox) {
 		if (prevaddr) PUTIBUF(ibuf, ',');
 		
-		message_write_text(ibuf,
-				   charset_decode1522(addrlist->mailbox));
+		charset_decode1522(addrlist->mailbox, tmp, 0);
+		message_write_text(ibuf, tmp);
+		free(tmp);
+		tmp = NULL;
 		PUTIBUF(ibuf, ':');
 	
 		/* Suppress a trailing comma */
@@ -2189,7 +2194,9 @@ struct address *addrlist;
 	    if (prevaddr) PUTIBUF(ibuf, ',');
 
 	    if (addrlist->name) {
-		message_write_text(ibuf, charset_decode1522(addrlist->name));
+		charset_decode1522(addrlist->name, tmp, 0);
+		message_write_text(ibuf, tmp);
+		free(tmp); tmp = NULL;
 		PUTIBUF(ibuf, ' ');
 	    }
 
