@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.26 2002/01/30 02:12:13 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.27 2002/02/01 19:41:15 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -188,7 +188,7 @@ static int dump_cb(void *rockp,
 	 * need to send fresh data.  There will be no point at which something
 	 * is in the act_head list that we do not have locally, because that
 	 * is a condition of being in the act_head list */
-	if(!strcmp(name, act_head->mailbox)) {
+	if(act_head && !strcmp(name, act_head->mailbox)) {
 	    struct mb_node *tmp;
 	    /* Do not update if location does match, and there is an acl,
 	     * and the acl matches */
