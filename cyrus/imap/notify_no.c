@@ -1,5 +1,5 @@
-/* notify_zephyr.c -- Module to (not) notify of new mail
- $Id: notify_no.c,v 1.7 2000/05/23 20:52:26 robeson Exp $
+/* notify_no.c -- Module to (not) notify of new mail
+ $Id: notify_no.c,v 1.8 2001/10/02 21:08:11 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -40,6 +40,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+
+const char *notify_method_desc = (char *)0;
 
 void notify(const char *class,
 	    const char *instance,

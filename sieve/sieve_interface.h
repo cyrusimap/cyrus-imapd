@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.14 2000/08/04 18:40:31 leg Exp $
+ * $Id: sieve_interface.h,v 1.15 2001/10/02 21:08:14 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -29,7 +29,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <stdio.h>
 
-extern const char *sieve_version;
+#define SIEVE_VERSION "CMU Sieve 2.0"
 
 /* error codes */
 #define SIEVE_OK (0)

@@ -13,6 +13,9 @@
 #include <syslog.h>
 #include <fcntl.h>
 #include "imapconf.h"
+#include "notify.h"
+
+const char *notify_method_desc = "unix";
 
 #define FNAME_NOTIFY_SOCK "/socket/notify"
 #define DIRSIZE 8192

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.7 2001/06/16 02:30:17 ken3 Exp $ */
+/* $Id: idle_idled.c,v 1.8 2001/10/02 21:08:10 ken3 Exp $ */
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -56,6 +56,8 @@
 #include "idle.h"
 #include "idled.h"
 #include "imapconf.h"
+
+const char *idle_method_desc = "idled";
 
 /* function to report mailbox updates to the client */
 static idle_updateproc_t *idle_update = NULL;
@@ -131,7 +133,7 @@ int idle_enabled(void)
     return 1;
 }
 
-void idle_poll(int sig)
+static void idle_poll(int sig)
 {
     switch (sig) {
     case SIGUSR1:

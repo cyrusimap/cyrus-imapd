@@ -1,5 +1,5 @@
 /* notify_zephyr.c -- Module to notify of new mail via zephyr
- $Id: notify_zephyr.c,v 1.25 2001/01/02 02:01:32 leg Exp $ 
+ $Id: notify_zephyr.c,v 1.26 2001/10/02 21:08:11 ken3 Exp $ 
 
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -66,6 +66,8 @@
 #endif
 
 #include "notify.h"
+
+const char *notify_method_desc = "zephyr";
 
 extern int errno;
 

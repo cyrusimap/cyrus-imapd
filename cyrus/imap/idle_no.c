@@ -38,10 +38,12 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_no.c,v 1.1 2000/12/14 19:26:48 ken3 Exp $ */
+/* $Id: idle_no.c,v 1.2 2001/10/02 21:08:10 ken3 Exp $ */
 
 #include "idle.h"
 
+
+const char *idle_method_desc = (char *)0;
 
 int idle_enabled(void)
 {

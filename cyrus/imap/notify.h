@@ -1,5 +1,5 @@
 /* notify.h -- abstract interface for notifications
-  $Id: notify.h,v 1.2 2000/05/23 20:52:26 robeson Exp $
+  $Id: notify.h,v 1.3 2001/10/02 21:08:11 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,8 @@
 
 #ifndef NOTIFY_H
 #define NOTIFY_H
+
+extern const char *notify_method_desc;
 
 void notify(const char *class,
 	    const char *instance,

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.75 2001/08/22 01:34:27 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.76 2001/10/02 21:08:11 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -66,7 +66,6 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
-#include <sys/utsname.h>
 
 #include <sasl.h>
 #include <saslutil.h>
@@ -210,7 +209,8 @@ struct idparamlist {
     char *value;
     struct idparamlist *next;
 };
-void id_getcmdline(int argc, char **argv);
+extern void id_getcmdline(int argc, char **argv);
+extern void id_response(struct protstream *pout);
 void id_appendparamlist(struct idparamlist **l, char *field, char *value);
 void id_freeparamlist(struct idparamlist *l);
 
@@ -2153,20 +2153,6 @@ void cmd_noop(char *tag, char *cmd)
  * we only allow MAXIDFAILED consecutive failed IDs from a given client.
  * we only record MAXIDLOG ID responses from a given client.
  */
-enum {
-    MAXIDFAILED	= 3,
-    MAXIDLOG = 5,
-    MAXIDFIELDLEN = 30,
-    MAXIDVALUELEN = 1024,
-    MAXIDPAIRS = 30,
-    MAXIDLOGLEN = (MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6))
-};
-
-#ifdef ID_SAVE_CMDLINE
-static char id_resp_command[MAXIDVALUELEN];
-static char id_resp_arguments[MAXIDVALUELEN] = "";
-#endif
-
 void cmd_id(char *tag)
 {
     static int did_id = 0;
@@ -2175,7 +2161,6 @@ void cmd_id(char *tag)
     int error = 0;
     int c = EOF, npair = 0;
     static struct buf arg, field;
-    struct utsname os;
     struct idparamlist *params = 0;
 
     /* check if we've already had an ID in non-authenticated state */
@@ -2309,48 +2294,7 @@ void cmd_id(char *tag)
     /* spit out our ID string.
        eventually this might be configurable. */
     if (config_getswitch("imapidresponse", 1)) {
-	char env_buf[MAXIDVALUELEN];
-
-	prot_printf(proxyd_out, "* ID ("
-		    "\"name\" \"Cyrus Murder\""
-		    " \"version\" \"%s\""
-		    " \"vendor\" \"Project Cyrus\""
-		    " \"support-url\" \"http://asg.web.cmu.edu/cyrus\"",
-		    CYRUS_VERSION);
-
-	/* add the os info */
-	if (uname(&os) != -1)
-	    prot_printf(proxyd_out,
-			" \"os\" \"%s\""
-			" \"os-version\" \"%s\"",
-			os.sysname, os.release);
-
-#ifdef ID_SAVE_CMDLINE
-	/* add the command line info */
-	prot_printf(proxyd_out, " \"command\" \"%s\"", id_resp_command);
-	if (strlen(id_resp_arguments)) {
-	    prot_printf(proxyd_out, " \"arguments\" \"%s\"", id_resp_arguments);
-	} else {
-	    prot_printf(proxyd_out, " \"arguments\" NIL");
-	}
-#endif
-	/* add the environment info */
-	snprintf(env_buf, MAXIDVALUELEN,"Cyrus SASL %d.%d.%d",
-		 SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
-#ifdef DB_VERSION_STRING
-	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-		 "; %s", DB_VERSION_STRING);
-#endif
-#ifdef HAVE_SSL
-	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-		 "; %s", OPENSSL_VERSION_TEXT);
-#endif
-#ifdef HAVE_LIBWRAP
-	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-		 "; TCP Wrappers");
-#endif
-	/* XXX  anything else? ACAP info perhaps? */
-	prot_printf(proxyd_out, " \"environment\" \"%s\"", env_buf);
+	id_response(proxyd_out);
 
 	/* add info about the backend */
 	if (backend_current)
@@ -2370,21 +2314,6 @@ void cmd_id(char *tag)
     failed_id = 0;
     did_id = 1;
 }
-
-#ifdef ID_SAVE_CMDLINE
-/*
- * Grab the command line args for the ID response.
- */
-void id_getcmdline(int argc, char **argv)
-{
-    snprintf(id_resp_command, MAXIDVALUELEN, *argv);
-    while (--argc > 0) {
-	snprintf(id_resp_arguments + strlen(id_resp_arguments),
-		 MAXIDVALUELEN - strlen(id_resp_arguments),
-		 "%s%s", *++argv, (argc > 1) ? " " : "");
-    }
-}
-#endif
 
 /*
  * Append the 'field' / 'value' pair to the idparamlist 'l'.
@@ -2570,7 +2499,7 @@ char idle_passthrough(char *tag, int idle_period, struct buf *arg)
 }
 
 /* Poll the backend for updates */
-struct prot_waitevent *idle_poll(struct protstream *s,
+static struct prot_waitevent *idle_poll(struct protstream *s,
 				 struct prot_waitevent *ev, void *rock)
 {
     int idle_period = *((int *) rock);
