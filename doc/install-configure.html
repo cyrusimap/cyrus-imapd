@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.7 2000/10/23 20:47:54 leg Exp $ -->
+<!-- $Id: install-configure.html,v 1.8 2000/10/26 23:07:31 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -383,6 +383,18 @@ a certificate request and send it to be signed by your CA.
 
 <h3>Client-side certificates</h3>
 
+<p>Client certificates are somewhat harder to configure than server
+certificates.  You'll need a CA (certificate authority) and need to
+generate client certificates signed by that CA.  STARTTLS in Sendmail
+and other MTAs have similiar problems, so <a
+href="http://www.sendmail.org/~ca/email/starttls.html">Claus Assman's
+page</a> is a good reference.</p>
+
+<p>You can use the self-signed certificate generated above as a CA for
+client certificates.  To do this, try the following:</p>
+
+
+
 <p><b>TODO:</b> write me!</p>
 
 <p>Unfortunately, there's no standard on how to convert the client's
@@ -390,5 +402,5 @@ authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
 <P><HR>
-last modified: $Date: 2000/10/23 20:47:54 $
+last modified: $Date: 2000/10/26 23:07:31 $
 </BODY></HTML>
