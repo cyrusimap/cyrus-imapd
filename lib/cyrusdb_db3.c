@@ -71,6 +71,11 @@
 
 /* --- cut here --- */
 
+#if DB_VERSION_MAJOR >= 4
+#define txn_checkpoint(xx1,xx2,xx3,xx4) (xx1)->txn_checkpoint(xx1,xx2,xx3,xx4)
+#define txn_id(xx1) (xx1)->id(xx1)
+#endif
+
 static int dbinit = 0;
 static DB_ENV *dbenv;
 
@@ -145,7 +150,7 @@ static int init(const char *dbdir, int myflags)
  retry:
     flags |= DB_INIT_LOCK | DB_INIT_MPOOL | 
 	     DB_INIT_LOG | DB_INIT_TXN;
-#if DB_VERSION_MINOR > 0
+#if (DB_VERSION_MAJOR > 3) || ((DB_VERSION_MAJOR == 3) && (DB_VERSION_MINOR > 0))
     r = dbenv->open(dbenv, dbdir, flags, 0644); 
 #else
     r = dbenv->open(dbenv, dbdir, NULL, flags, 0644); 
@@ -205,7 +210,7 @@ static int sync(void)
     assert(dbinit);
 
     do {
-#if DB_VERSION_MINOR > 0
+#if (DB_VERSION_MAJOR > 3) || ((DB_VERSION_MAJOR == 3) && (DB_VERSION_MINOR > 0))
 	r = txn_checkpoint(dbenv, 0, 0, 0);
 #else
 	r = txn_checkpoint(dbenv, 0, 0);
