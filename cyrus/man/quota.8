@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: quota.8,v 1.8.4.1 2003/02/27 18:12:34 rjs3 Exp $
+.\" $Id: quota.8,v 1.8.4.2 2003/03/08 04:18:55 ken3 Exp $
 .SH NAME
 quota \- report and optionally fix quota usage
 .SH SYNOPSIS
@@ -47,6 +47,10 @@ quota \- report and optionally fix quota usage
 [
 .B \-C
 .I config-file
+]
+[
+.B \-d
+.I domain
 ]
 [
 .B \-f
@@ -64,6 +68,10 @@ option is given,
 first fixes any inconsistencies in the quota subsystem, such as
 mailboxes with the wrong quota root or quota roots with the wrong
 quota usage reported.
+If an optional
+.I domain
+is given, the quota listing (and inconsistency fixing) is performed in
+that domain rather than the default domain.
 If any optional
 .I mailbox-prefix
 arguments are given, the quota listing (and inconsistency fixing) is
@@ -86,6 +94,9 @@ file unless specified otherwise by \fB-C\fR.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-d " domain"
+List/fix quotas in \fIdomain\fR.
 .TP
 .B \-f
 Fix any inconsistencies in the quota subsystem before generating a
