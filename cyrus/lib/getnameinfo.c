@@ -1,6 +1,6 @@
 /*
  * Mar  8, 2000 by Hajimu UMEMOTO <ume@mahoroba.org>
- * $Id: getnameinfo.c,v 1.2 2001/11/27 02:25:02 ken3 Exp $
+ * $Id: getnameinfo.c,v 1.3 2002/07/24 20:27:41 rjs3 Exp $
  *
  * This module is besed on ssh-1.2.27-IPv6-1.5 written by
  * KIKUCHI Takahiro <kick@kyoto.wide.ad.jp>
@@ -72,7 +72,7 @@ getnameinfo(const struct sockaddr *sa, socklen_t salen __attribute__((unused)),
     char tmpserv[16];
   
     if (serv) {
-	sprintf(tmpserv, "%d", ntohs(sin->sin_port));
+	snprintf(tmpserv, sizeof(tmpserv), "%d", ntohs(sin->sin_port));
 	if (strlen(tmpserv) > servlen)
 	    return EAI_MEMORY;
 	else
