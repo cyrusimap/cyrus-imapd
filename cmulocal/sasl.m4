@@ -63,7 +63,7 @@ AC_ARG_WITH(sasl,
           ac_cv_sasl_where_inc=${with_sasl}/include
 
 	  SASLFLAGS="-I$ac_cv_sasl_where_inc"
-	  LIB_SASL"-L$ac_cv_sasl_where_lib"
+	  LIB_SASL="-L$ac_cv_sasl_where_lib"
 	  CPPFLAGS="${cmu_saved_CPPFLAGS} -I${ac_cv_sasl_where_inc}"
 	  LDFLAGS="${cmu_saved_LDFLAGS} -L${ac_cv_sasl_where_lib}"
 	fi
