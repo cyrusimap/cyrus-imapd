@@ -1,7 +1,7 @@
 /* bc_emit.c -- sieve bytecode - pass 2 of the compiler
  * Rob Siemborski
  * Jen Smith
- * $Id: bc_emit.c,v 1.1.4.2 2003/03/31 16:55:25 rjs3 Exp $
+ * $Id: bc_emit.c,v 1.1.4.3 2003/06/20 18:52:25 jsmith2 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -89,8 +89,7 @@ static int bc_stringlist_emit(int fd, int *codep, bytecode_info_t *bc)
     int wrote = 2*sizeof(int);
     int begin,end;
     /* Write out number of items in the list */
-    ret = write(fd, &len, sizeof(int));
-    if(ret == -1) return 0;
+    if (write(fd, &len, sizeof(int))== -1) return -1 ;
     
     begin=lseek(fd,0,SEEK_CUR);
     lseek(fd,sizeof(int),SEEK_CUR);/*skip one spot endoflist position*/
@@ -101,10 +100,10 @@ static int bc_stringlist_emit(int fd, int *codep, bytecode_info_t *bc)
     {
 	int datalen = bc->data[(*codep)++].len;
 	
-	if(write(fd, &datalen, sizeof(int)) == -1) return 0;
+	if(write(fd, &datalen, sizeof(int)) == -1) return -1;
 	wrote += sizeof(int);
 	
-	if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return 0;
+	if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
 	wrote += datalen;
 	
 	ret = align_string(fd,datalen);
@@ -116,7 +115,7 @@ static int bc_stringlist_emit(int fd, int *codep, bytecode_info_t *bc)
  
     /*go back and write end of list position*/
     lseek(fd,begin,SEEK_SET);
-    if(write(fd, &end, sizeof(int)) == -1) return 0;
+    if(write(fd, &end, sizeof(int)) == -1) return -1;
 
     /*return to the end */
     lseek(fd,end,SEEK_SET);
@@ -136,8 +135,7 @@ static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
     
     
     /* Write out number of items in the list */
-    ret = write(fd, &len, sizeof(int));
-    if(ret == -1) return -1;
+    if(write(fd, &len, sizeof(int))== -1) return -1;
     
   
     /* Loop through all the items of the list, writing out each
@@ -146,7 +144,7 @@ static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
 	int nextcodep = bc->data[(*codep)++].jump;
 	
 	ret = bc_test_emit(fd, codep, bc);
-	if(ret == -1) return -1;
+	if(ret < 0 ) return -1;
 	
 	wrote+=ret;
 	*codep = nextcodep;
@@ -165,7 +163,7 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
     int ret; /* Temporary Return Value Variable */
     
     /* Output this opcode */
-    if(write(fd, &bc->data[(*codep)].op, sizeof(bc->data[(*codep)].op)) == -1)
+    if(write(fd, &bc->data[(*codep)].op, sizeof(int)) == -1)
 	return -1;
     wrote += sizeof(int);
     
@@ -179,10 +177,10 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
     {
 	/* Single parameter: another test */
 	ret = bc_test_emit(fd, codep, bc);
-	if(ret != -1)
-	    wrote+=ret;
+	if(ret < 0)
+	    return -1;
 	else
-	    return ret;
+	    wrote+=ret;
 	break;
     }
     
@@ -191,19 +189,17 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 	/*where we jump to?*/
 	/* Just drop a testlist */
 	ret = bc_testlist_emit(fd, codep, bc);
-	if(ret != -1)
-	    wrote+=ret;
+	if(ret < 0)
+	    return -1;
 	else
-	    return ret;
+	    wrote+=ret;
 	break;
 	
     case BC_SIZE:
 	/* Drop tag and number */
-	if(write(fd, &bc->data[(*codep)].value,
-		 sizeof(bc->data[(*codep)].value)) == -1)
+	if(write(fd, &bc->data[(*codep)].value, sizeof(int)) == -1)
 	    return -1;
-	if(write(fd, &bc->data[(*codep)+1].value,
-		 sizeof(bc->data[(*codep)+1].value)) == -1)
+	if(write(fd, &bc->data[(*codep)+1].value, sizeof(int)) == -1)
 	    return -1;
 	
 	wrote += 2 * sizeof(int);
@@ -222,18 +218,18 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
     case BC_HEADER:
     {
 	int ret;
-	    /* Drop match type and comparator */
-	if(write(fd, &bc->data[(*codep)].value,
-		 sizeof(bc->data[(*codep)].value)) == -1)
+	/* Drop match type, comparator, and relation */
+	if(write(fd, &bc->data[(*codep)].value, sizeof(int)) == -1)
 	    return -1;
-	if(write(fd, &bc->data[(*codep)+1].value,
-		 sizeof(bc->data[(*codep)+1].value)) == -1)
+	wrote += sizeof(int);
+	(*codep)++;
+	/*drop comparator */
+	if(write(fd, &bc->data[(*codep)].value, sizeof(int)) == -1)
 	    return -1;
-	wrote += 2*sizeof(int);
-	(*codep) += 2;    
+	wrote += sizeof(int);
+	(*codep)++;    
 	/*now drop relation*/
-	if(write(fd, &bc->data[(*codep)].value,
-		 sizeof(bc->data[(*codep)].value)) == -1)
+	if(write(fd, &bc->data[(*codep)].value, sizeof(int)) == -1)
 	    return -1;
 	wrote += sizeof(int);
 	(*codep)++;
@@ -252,24 +248,23 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
     case BC_ENVELOPE:
     {
 	int ret;
-	/* Drop match type and Comparator  */
-	if(write(fd, &bc->data[(*codep)].value,
-		 sizeof(bc->data[(*codep)].value)) == -1)
+	/* Drop match type */
+	if(write(fd, &bc->data[(*codep)].value, sizeof(int)) == -1)
 	    return -1;
-	if(write(fd, &bc->data[(*codep)+1].value,
-		 sizeof(bc->data[(*codep)+1].value)) == -1)
+	wrote += sizeof(int);
+	(*codep)++;
+	/*drop comparator */
+	if(write(fd, &bc->data[(*codep)].value, sizeof(int)) == -1)
 	    return -1;
-	wrote += 2*sizeof(int);
-	(*codep) += 2;    
+	wrote += sizeof(int);
+	(*codep)++;
 	/*now drop relation*/
-	if(write(fd, &bc->data[(*codep)].value,
-		 sizeof(bc->data[(*codep)].value)) == -1)
+	if(write(fd, &bc->data[(*codep)].value, sizeof(int)) == -1)
 	    return -1;
 	wrote += sizeof(int);
 	(*codep)++;
 	/*now drop address part*/
-	if(write(fd, &bc->data[(*codep)].value,
-		 sizeof(bc->data[(*codep)].value)) == -1)
+	if(write(fd, &bc->data[(*codep)].value, sizeof(int)) == -1)
 	    return -1;
 	wrote += sizeof(int);
 	(*codep)++;
@@ -315,7 +310,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
      */
     while(codep < stopcodep) {
 	/* Output this opcode */
-	if(write(fd, &bc->data[codep].op, sizeof(bc->data[codep].op)) == -1)
+	if(write(fd, &bc->data[codep].op, sizeof(int)) == -1)
 	    return -1;
 	
 	filelen+=sizeof(int);
@@ -358,8 +353,6 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    c=codep+3;
 	    testdist = bc_test_emit(fd, &c, bc);
 	    if(testdist == -1)return -1;
-	   
-	   	    
 	    filelen +=testdist;
 	    
             /*store the location for hte end of the test
@@ -367,8 +360,9 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    jumpto=filelen/4;
 	    if(lseek(fd, testEndLoc, SEEK_SET) == -1)
 		return -1;
-	    if(write(fd,&jumpto,sizeof(jumpto)) == -1)
+	    if(write(fd,&jumpto,sizeof(int)) == -1)
 		return -1;
+
 	    if(lseek(fd,filelen,SEEK_SET) == -1)
 		return -1;
 
@@ -380,7 +374,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 		return ret;
 	    jumpFalseLoc=filelen+sizeof(int);
 	    
-	    filelen +=2*sizeof(int);
+	    filelen +=2*sizeof(int); /*jumpop + jump*/
 	    
 	    /* spew the then code */ 
 	    thendist = bc_action_emit(fd, bc->data[codep].value,
@@ -400,7 +394,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 		    return ret;
 
 		jumpEndLoc=filelen+sizeof(int);
-		filelen+=2*sizeof(int);
+		filelen+=2*sizeof(int);/*jumpop + jump*/
 	    }
 	  
 	    /*put previous jump to the end of the then code,
@@ -408,7 +402,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    jumpto=filelen/4;
 	    if(lseek(fd, jumpFalseLoc, SEEK_SET) == -1)
 		return -1;
-	    if(write(fd,&jumpto,sizeof(jumpto)) == -1)
+	    if(write(fd,&jumpto,sizeof(int)) == -1)
 		return -1;
 	    if(lseek(fd,filelen,SEEK_SET) == -1)
 		return -1;
@@ -426,7 +420,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	        jumpto=filelen/4;
 		if(lseek(fd, jumpEndLoc, SEEK_SET) == -1)
 		    return -1;
-		if(write(fd,&jumpto,sizeof(jumpto)) == -1)
+		if(write(fd,&jumpto,sizeof(int)) == -1)
 		    return -1;
 		if(lseek(fd,filelen,SEEK_SET) == -1)
 		    return -1;
@@ -444,7 +438,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	case B_REDIRECT:
 	    /*just a string*/
 	    len = bc->data[codep++].len;
-	    if(write(fd,&len,sizeof(len)) == -1)
+	    if(write(fd,&len,sizeof(int)) == -1)
 		return -1;
 
 	    filelen+=sizeof(int);
@@ -476,7 +470,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    /*method and id*/
 	    for(i=0; i<2; i++) {
 		len = bc->data[codep++].len;
-		if(write(fd,&len,sizeof(len)) == -1)
+		if(write(fd,&len,sizeof(int)) == -1)
 		    return -1;
 		filelen += sizeof(int);
 		if(len == -1)
@@ -507,14 +501,13 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    filelen+=ret;
 	    
 	    /*priority*/
-	    if(write(fd, &bc->data[codep].value,
-		     sizeof(bc->data[codep].value)) == -1)
+	    if(write(fd, &bc->data[codep].value,sizeof(int)) == -1)
 		return -1;
 	    codep++;
 	    filelen += sizeof(int);
 	    
 	    len = bc->data[codep++].len;
-	    if(write(fd,&len,sizeof(len)) == -1)
+	    if(write(fd,&len,sizeof(int)) == -1)
 		return -1;
 	    filelen += sizeof(int);
 	    
@@ -534,8 +527,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    /* priority and comptype and relational*/
 	    for(i=0; i<3; i++) 
 	    {
-		if(write(fd, &bc->data[codep].value,
-			 sizeof(bc->data[codep].value)) == -1)
+		if(write(fd, &bc->data[codep].value,sizeof(int)) == -1)
 		    return -1;
 		filelen += sizeof(int);
 		codep++;
@@ -544,7 +536,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    /*comp string*/
 	    
 	    len = bc->data[codep++].len;
-	    if(write(fd,&len,sizeof(len)) == -1)
+	    if(write(fd,&len,sizeof(int)) == -1)
 		return -1;
 	    filelen += sizeof(int);
 	    
@@ -580,7 +572,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 
 		/*write length of string*/
 		len = bc->data[codep++].len;
-		if(write(fd,&len,sizeof(len)) == -1)
+		if(write(fd,&len,sizeof(int)) == -1)
 		    return -1;
 		filelen += sizeof(int);
 		    
@@ -604,14 +596,12 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 		}
 		
 	    }
-	    if(write(fd,&bc->data[codep].value,
-		     sizeof(bc->data[codep].value)) == -1)
+	    if(write(fd,&bc->data[codep].value, sizeof(int)) == -1)
 		return -1;
 	    codep++;
 	    filelen += sizeof(int);
 
-	    if(write(fd,&bc->data[codep].value,
-		     sizeof(bc->data[codep].value)) == -1)
+	    if(write(fd,&bc->data[codep].value, sizeof(int)) == -1)
 		return -1;
 	    codep++;
 	    filelen += sizeof(int);
@@ -643,7 +633,7 @@ int sieve_emit_bytecode(int fd, bytecode_info_t *bc)
     if(write(fd, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN) == -1)
 	return -1;
 
-    if(write(fd, &data, sizeof(data)) == -1)
+    if(write(fd, &data, sizeof(int)) == -1)
 	return -1;
 
 #if DUMPCODE
@@ -651,7 +641,7 @@ int sieve_emit_bytecode(int fd, bytecode_info_t *bc)
 #endif
 
     /*the 4 is to account for the version # at the begining*/
-    return bc_action_emit(fd, 0, bc->scriptend, bc, 4 + BYTECODE_MAGIC_LEN);
+    return bc_action_emit(fd, 0, bc->scriptend, bc, sizeof(int) + BYTECODE_MAGIC_LEN);
 }
 
 void sieve_free_bytecode(bytecode_info_t **p) 
