@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.8 2004/02/14 16:15:16 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.9 2004/02/16 21:20:40 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -659,7 +659,7 @@ void shut_down(int code)
     /* close backend connections */
     i = 0;
     while (backend_cached && backend_cached[i]) {
-	backend_disconnect(backend_cached[i], &protocol[PROTOCOL_LMTP]);
+	backend_disconnect(backend_cached[i]);
 	free(backend_cached[i]);
 	i++;
     }

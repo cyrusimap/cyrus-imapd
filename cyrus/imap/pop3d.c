@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.5 2004/01/31 18:56:59 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.6 2004/02/16 21:20:41 ken3 Exp $
  */
 #include <config.h>
 
@@ -206,7 +206,7 @@ static void popd_reset(void)
 
     /* close backend connection */
     if (backend) {
-	backend_disconnect(backend, &protocol[PROTOCOL_POP3]);
+	backend_disconnect(backend);
 	free(backend);
 	backend = NULL;
     }
@@ -458,7 +458,7 @@ void shut_down(int code)
 
     /* close backend connection */
     if (backend) {
-	backend_disconnect(backend, &protocol[PROTOCOL_POP3]);
+	backend_disconnect(backend);
 	free(backend);
     }
 

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.15 2004/02/05 21:21:54 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.16 2004/02/16 21:20:33 ken3 Exp $ */
 
 #include <config.h>
 
@@ -7326,7 +7326,7 @@ done:
     if(mupdate_h && !h_in)
 	mupdate_disconnect(&mupdate_h);
     if(be && !be_in)
-	backend_disconnect(be, &protocol[PROTOCOL_IMAP]);
+	backend_disconnect(be);
 
     return r;
 }
@@ -7539,7 +7539,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	}
 
 	if(be) {
-	    backend_disconnect(be, &protocol[PROTOCOL_IMAP]);
+	    backend_disconnect(be);
 	    free(be);
 	}
 

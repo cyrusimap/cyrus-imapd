@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.169.2.2 2004/02/04 20:26:28 ken3 Exp $ */
+/* $Id: deliver.c,v 1.169.2.3 2004/02/16 21:20:32 ken3 Exp $ */
 
 #include <config.h>
 
@@ -382,7 +382,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     r = lmtp_runtxn(conn, txn);
 
     /* disconnect */
-    backend_disconnect(conn, &protocol[PROTOCOL_LMTP]);
+    backend_disconnect(conn);
 
     /* examine txn for error state */
     r = 0;

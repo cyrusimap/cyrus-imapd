@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.7 2004/02/06 18:48:13 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.8 2004/02/16 21:20:40 ken3 Exp $
  */
 
 /*
@@ -270,7 +270,7 @@ void proxyd_downserver(struct backend *s)
     }
 
     /* need to logout of server */
-    backend_disconnect(s, &protocol[PROTOCOL_NNTP]);
+    backend_disconnect(s);
 
     if(s == backend_current) backend_current = NULL;
 
@@ -306,14 +306,17 @@ struct backend *proxyd_findserver(const char *server)
 
     while (backend_cached && backend_cached[i]) {
 	if (!strcmp(server, backend_cached[i]->hostname)) {
-	    /* xxx do we want to ping/noop the server here? */
 	    ret = backend_cached[i];
+	    /* ping/noop the server */
+	    if ((ret->sock != -1) && backend_ping(ret)) {
+		backend_disconnect(ret);
+	    }
 	    break;
 	}
 	i++;
     }
 
-    if (!ret || !ret->timeout) {
+    if (!ret || (ret->sock == -1)) {
 	/* need to (re)establish connection to server or create one */
 	ret = backend_connect(ret, server, &protocol[PROTOCOL_NNTP],
 			      nntp_userid ? nntp_userid : "anonymous", NULL);

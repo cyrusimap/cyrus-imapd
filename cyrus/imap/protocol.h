@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.h,v 1.2.2.1 2004/02/04 20:26:32 ken3 Exp $ */
+/* $Id: protocol.h,v 1.2.2.2 2004/02/16 21:20:42 ken3 Exp $ */
 
 #ifndef _INCLUDED_PROTOCOL_H
 #define _INCLUDED_PROTOCOL_H
@@ -89,7 +89,8 @@ struct tls_cmd_t {
 
 struct simple_cmd_t {
     const char *cmd;		/* command string */
-    const char *resp;		/* success response */
+    const char *unsol;		/* unsolicited response */
+    const char *ok;		/* success response */
 };
 
 struct protocol_t {

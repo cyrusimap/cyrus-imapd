@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.4 2004/02/14 16:15:12 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.5 2004/02/16 21:20:32 ken3 Exp $
  */
 
 #include <config.h>
@@ -82,7 +82,7 @@ void proxy_downserver(struct backend *s)
     }
 
     /* need to logout of server */
-    backend_disconnect(s, &protocol[PROTOCOL_IMAP]);
+    backend_disconnect(s);
 
     if (s == backend_inbox) backend_inbox = NULL;
     if (s == backend_current) backend_current = NULL;
@@ -120,14 +120,17 @@ struct backend *proxy_findserver(const char *server)
 
     while (backend_cached && backend_cached[i]) {
 	if (!strcmp(server, backend_cached[i]->hostname)) {
-	    /* xxx do we want to ping/noop the server here? */
 	    ret = backend_cached[i];
+	    /* ping/noop the server */
+	    if ((ret->sock != -1) && backend_ping(ret)) {
+		backend_disconnect(ret);
+	    }
 	    break;
 	}
 	i++;
     }
 
-    if (!ret || !ret->timeout) {
+    if (!ret || (ret->sock == -1)) {
 	char authid[MAX_MAILBOX_NAME+1];
 
 	/* Translate any separators in userid for AUTH to backend */

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.7.2.3 2004/02/04 20:26:28 ken3 Exp $ */
+/* $Id: backend.h,v 1.7.2.4 2004/02/16 21:20:32 ken3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -57,6 +57,9 @@ struct backend {
     char hostname[MAX_PARTITION_LEN];
     struct sockaddr_storage addr;
     int sock;
+
+    /* protocol we're speaking */
+    struct protocol_t *prot;
 
     /* service-specific context */
     void *context;
@@ -82,8 +85,8 @@ struct backend {
 struct backend *backend_connect(struct backend *cache, const char *server,
 				struct protocol_t *prot, const char *userid,
 				const char **auth_status);
-int backend_ping(struct backend *s, struct protocol_t *prot);
-void backend_disconnect(struct backend *s, struct protocol_t *prot);
+int backend_ping(struct backend *s);
+void backend_disconnect(struct backend *s);
 
 #define CAPA(s, c) ((s)->capability & (c))
 
