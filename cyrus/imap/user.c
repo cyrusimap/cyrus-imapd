@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.10.4.2 2002/07/25 17:21:45 ken3 Exp $
+ * $Id: user.c,v 1.10.4.3 2002/08/20 17:35:13 ken3 Exp $
  */
 
 #include <config.h>
@@ -276,29 +276,43 @@ int user_copyquota(char *oldname, char *newname)
 #endif
 int user_deletequotas(const char *user)
 {
-    char c, qpath[MAX_MAILBOX_NAME], *tail;
+    struct namespace namespace;
+    char inboxname[1024];
+    int r;
+    char dir[MAX_MAILBOX_NAME], *fname, qpath[MAX_MAILBOX_NAME];
     DIR *dirp;
     struct dirent *f;
 
-    /* this violates the quota abstraction layer; oh well */
-    c = dir_hash_c(user);
-    snprintf(qpath, sizeof(qpath), "%s%s%c/", config_dir, FNAME_QUOTADIR, c);
-    tail = qpath + strlen(qpath);
+    /* set namespace */
+    r = mboxname_init_namespace(&namespace, 0);
 
-    dirp = opendir(qpath);
-    if (dirp) {
-	while ((f = readdir(dirp)) != NULL) {
-	    if (!strncmp(f->d_name, "user.", 5) &&
-		!strncmp(f->d_name+5, user, strlen(user)) &&
-		(f->d_name[5+strlen(user)] == '\0'||
-		 f->d_name[5+strlen(user)] == '.')) {
+    /* get user's toplevel quotaroot (INBOX) */
+    if (!r)
+	r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
+					     user, inboxname);
 
-		strcpy(tail, f->d_name);
-		unlink(qpath);
+    if (!r) {
+	/* get path to toplevel quotaroot */
+	mailbox_hash_quota(dir, inboxname);
+
+	/* split directory and filename */
+	fname = strrchr(dir, '/');
+	*fname++ = '\0';
+
+	dirp = opendir(dir);
+	if (dirp) {
+	    while ((f = readdir(dirp)) != NULL) {
+		if (!strncmp(f->d_name, fname, strlen(fname)) &&
+		    (f->d_name[strlen(fname)] == '\0'||
+		     f->d_name[strlen(fname)] == '.')) {
+
+		    snprintf(qpath, sizeof(qpath), "%s/%s", dir, f->d_name);
+		    unlink(qpath);
+		}
 	    }
+	    closedir(dirp);
 	}
-	closedir(dirp);
     }
 
-    return 0;
+    return r;
 }
