@@ -1,4 +1,4 @@
-<!-- $Id: install-sieve.html,v 1.1 2000/04/25 02:56:42 leg Exp $ -->
+<!-- $Id: install-sieve.html,v 1.2 2000/10/12 19:11:54 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing Sieve
@@ -16,6 +16,22 @@ support.
 <p>A <a href="http://www.cyrusoft.com/sieve">brief introduction</a> to
 Sieve at is available from <a href="http://www.cyrusoft.com/">Cyrusoft
 International</a>.
+
+<h3>Configure outgoing mail</h3>
+
+<p>Some Sieve actions (redirect, vacation) can send outgoing mail.</p>
+
+<p>You'll need to make sure that "<tt>lmtpd</tt>" can send outgoing
+messages.  Currently, it invokes "<tt>/usr/lib/sendmail</tt>" by
+default to send messages.  Change this by adding a line like:
+
+<pre>
+   sendmail: /usr/sbin/sendmail
+</pre>
+
+in your "<tt>/etc/imapd.conf</tt>".  If you're using Postfix or another
+MTA, make sure that the sendmail referenced in
+"<tt>/etc/imapd.conf</tt>" is Sendmail-compatible.</p>
 
 <h3>Managing Sieve Scripts</h3>
 
@@ -105,7 +121,7 @@ in the sieve script. The message should be rejected.
 </ol>
 
 <P><HR>
-last modified: $Date: 2000/04/25 02:56:42 $
+last modified: $Date: 2000/10/12 19:11:54 $
 </BODY></HTML>
 
 
