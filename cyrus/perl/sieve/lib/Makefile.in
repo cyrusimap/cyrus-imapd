@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.7 2002/05/25 19:57:50 leg Exp $
+# $Id: Makefile.in,v 1.7.4.1 2003/02/11 14:17:40 rjs3 Exp $
 # 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -51,9 +51,9 @@ RANLIB = @RANLIB@
 
 DEFS = @DEFS@ -Dbool=char -DHAS_BOOL
 CPPFLAGS = -I. -I../../.. -I$(srcdir) -I$(srcdir)/../../../lib @CPPFLAGS@ @DYNSASLFLAGS@
-LIBS = ../../../lib/libcyrus.a @LIB_DYN_SASL@ @LIBS@
+LIBS = ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a @LIB_DYN_SASL@ @LIBS@
 IMAP_LIBS = @IMAP_LIBS@
-DEPLIBS = ../../../lib/libcyrus.a @DEPLIBS@
+DEPLIBS = ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a @DEPLIBS@
 
 CFLAGS = -g
 LDFLAGS = -g @LDFLAGS@
