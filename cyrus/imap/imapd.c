@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.40 2004/09/03 17:03:27 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.41 2004/09/03 18:18:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4451,6 +4451,7 @@ struct renrock
     int nl;
     int rename_user;
     char *olduser, *newuser;
+    char *acl_olduser, *acl_newuser;
     char *newmailboxname;
     char *partition;
 };
@@ -4490,7 +4491,8 @@ static int renmbox(char *name,
 	/* If we're renaming a user, change quotaroot and ACL */
 	if (text->rename_user) {
 	    user_copyquotaroot(name, text->newmailboxname);
-	    user_renameacl(text->newmailboxname, text->olduser, text->newuser);
+	    user_renameacl(text->newmailboxname,
+			   text->acl_olduser, text->acl_newuser);
 	}
 
 	/* Rename mailbox annotations */
@@ -4522,6 +4524,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     int recursive_rename = 1;
     int rename_user = 0;
     char olduser[128], newuser[128];
+    char acl_olduser[128], acl_newuser[128];
     int mbtype;
     char *server;
 
@@ -4723,25 +4726,27 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	if (domain)
 	    sprintf(olduser+strlen(olduser), "@%.*s",
 		    domain - oldmailboxname, oldmailboxname);
+	strcpy(acl_olduser, olduser);
 
-	/* Translate any separators in source old userid */
-	mboxname_hiersep_tointernal(&imapd_namespace, olduser,
+	/* Translate any separators in source old userid (for ACLs) */
+	mboxname_hiersep_toexternal(&imapd_namespace, acl_olduser,
 				    config_virtdomains ?
-				    strcspn(olduser, "@") : 0);
+				    strcspn(acl_olduser, "@") : 0);
 
 	domain = strchr(newmailboxname, '!');
 	strcpy(newuser, domain ? domain+6 : newmailboxname+5);
 	if (domain)
 	    sprintf(newuser+strlen(newuser), "@%.*s",
 		    domain - newmailboxname, newmailboxname);
+	strcpy(acl_newuser, newuser);
 
-	/* Translate any separators in destination new userid */
-	mboxname_hiersep_tointernal(&imapd_namespace, newuser,
+	/* Translate any separators in destination new userid (for ACLs) */
+	mboxname_hiersep_toexternal(&imapd_namespace, acl_newuser,
 				    config_virtdomains ?
-				    strcspn(newuser, "@") : 0);
+				    strcspn(acl_newuser, "@") : 0);
 
 	user_copyquotaroot(oldmailboxname, newmailboxname);
-	user_renameacl(newmailboxname, olduser, newuser);
+	user_renameacl(newmailboxname, acl_olduser, acl_newuser);
 	user_renamedata(olduser, newuser, imapd_userid, imapd_authstate);
 
 	/* XXX report status/progress of meta-data */
@@ -4780,6 +4785,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	rock.nl = nl;
 	rock.olduser = olduser;
 	rock.newuser = newuser;
+	rock.acl_olduser = acl_olduser;
+	rock.acl_newuser = acl_newuser;
 	rock.partition = partition;
 	rock.rename_user = rename_user;
 	
@@ -4791,7 +4798,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
     /* take care of deleting old ACLs, subscriptions, seen state and quotas */
     if (!r && rename_user)
-	user_deletedata(oldname+5, imapd_userid, imapd_authstate, 1);
+	user_deletedata(olduser, imapd_userid, imapd_authstate, 1);
 
     imapd_check(NULL, 0, 0);
 
