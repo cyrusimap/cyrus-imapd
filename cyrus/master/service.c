@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.46 2004/01/11 23:39:32 ken3 Exp $ */
+/* $Id: service.c,v 1.47 2004/01/12 18:40:27 ken3 Exp $ */
 
 #include <config.h>
 
@@ -65,6 +65,7 @@
 #include <stdlib.h>
 #include <sysexits.h>
 #include <string.h>
+#include <limits.h>
 
 #include "service.h"
 #include "xmalloc.h"
