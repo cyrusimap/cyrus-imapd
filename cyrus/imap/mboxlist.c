@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.112 2000/02/10 05:10:38 tmartin Exp $
+ * $Id: mboxlist.c,v 1.113 2000/02/10 08:00:23 leg Exp $
  */
 
 #include <stdio.h>
@@ -1641,7 +1641,6 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
     char inboxbuf[MAX_MAILBOX_NAME + 1], 
 	usermboxname[MAX_MAILBOX_NAME + 1];
     int usermboxnamelen = 0;
-    long minmatch;
     unsigned long prefixlen = 0;
     int r;
     struct glob *g = NULL;

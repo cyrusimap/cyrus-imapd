@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.44 2000/02/10 05:10:44 tmartin Exp $ */
+/* $Id: reconstruct.c,v 1.45 2000/02/10 08:00:27 leg Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -71,7 +71,7 @@
 #include "config.h"
 #include "mboxname.h"
 #include "mboxlist.h"
-#include "seen_local.h"
+#include "seen.h"
 #include "retry.h"
 #include "convert_code.h"
 

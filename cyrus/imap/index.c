@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.93 2000/02/10 05:10:37 tmartin Exp $
+ * $Id: index.c,v 1.94 2000/02/10 08:00:21 leg Exp $
  */
 #include <stdio.h>
 #include <string.h>
@@ -52,7 +52,7 @@
 #include "append.h"
 #include "charset.h"
 #include "xmalloc.h"
-#include "seen_local.h"
+#include "seen.h"
 
 extern int errno;
 
@@ -507,9 +507,9 @@ int oldexists;
 		if (!seenflag[msgno]) break;
 	    }
 	    if (msgno == imapd_exists + 1) {
-		toimsp(mailbox->name, mailbox->uidvalidity,
+/*		toimsp(mailbox->name, mailbox->uidvalidity,
 		       "SEENsnn", imapd_userid, mailbox->last_uid,
-		       seen_last_change, 0);
+		       seen_last_change, 0); */
 	    }
 	}
 	return;

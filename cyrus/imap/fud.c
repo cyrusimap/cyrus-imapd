@@ -27,7 +27,7 @@
  *
  */
 
-/* $Id: fud.c,v 1.10 2000/02/10 05:10:36 tmartin Exp $ */
+/* $Id: fud.c,v 1.11 2000/02/10 08:00:20 leg Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -54,7 +54,7 @@
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "acl.h"
-#include "seen_local.h"
+#include "seen.h"
 #include "mboxname.h"
 #include "map.h"
 

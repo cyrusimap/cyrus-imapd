@@ -26,7 +26,7 @@
  *
  */
 
-/* $Id: arbitron.c,v 1.17 2000/02/10 05:10:32 tmartin Exp $ */
+/* $Id: arbitron.c,v 1.18 2000/02/10 08:00:20 leg Exp $ */
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -50,7 +50,7 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "convert_code.h"
-#include "seen_local.h"
+#include "seen.h"
 
 extern int errno;
 extern int optind;
