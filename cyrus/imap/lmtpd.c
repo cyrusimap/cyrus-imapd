@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.32 2003/05/29 14:50:47 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.33 2003/06/13 15:46:18 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1178,6 +1178,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 
 	if (config_virtdomains && (domain = strchr(rcpt, '@'))) {
 	    *domain++ = '\0';
+	    if (config_defdomain && !strcasecmp(config_defdomain, domain))
+		domain = NULL;
 	}
 
 	mydata.cur_rcpt = n;
