@@ -52,7 +52,7 @@ bugs: html/bugs.html htmlstrip
 anoncvs: html/anoncvs.html htmlstrip
 	./htmlstrip html/anoncvs.html > anoncvs
 
-mailinglist: html/mailing-list.html htmlstrip
+mailing-list: html/mailing-list.html htmlstrip
 	./htmlstrip html/mailing-list.html > mailing-list
 
 clean:
