@@ -25,6 +25,7 @@ documentation and/or software.
 
 /* do i need all of this just for htonl()? damn. */
 #include <sys/types.h>
+#include <sys/param.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
