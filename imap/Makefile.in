@@ -78,7 +78,7 @@ rmnews: rmnews.o libimap.a $(LIBS)
 
 deliver: deliver.o libimap.a $(LIBS)
 	$(CC) $(LDFLAGS) -o deliver deliver.o libimap.a \
-		$(LIBS) $(NODEP_LIBS)
+		$(LIBS) $(NODEP_LIBS) -ldbm
 
 imapd: $(IMAPDOBJS) libimap.a $(LIBS)
 	$(CC) $(LDFLAGS) -o imapd $(IMAPDOBJS) libimap.a \
