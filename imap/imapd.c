@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.214 2000/02/22 01:23:00 leg Exp $ */
+/* $Id: imapd.c,v 1.215 2000/02/22 05:02:27 leg Exp $ */
 
 #include <config.h>
 
@@ -131,7 +131,8 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid);
 void cmd_expunge(char *tag, char *sequence);
 void cmd_create(char *tag, char *name, char *partition);
 void cmd_delete(char *tag, char *name);
-void cmd_rename(char *tag, char *oldname, char *newname, char *partition);
+void cmd_rename(const char *tag, char *oldname, 
+		char *newname, char *partition);
 void cmd_find(char *tag, char *namespace, char *pattern);
 void cmd_list(char *tag, int subscribed, char *reference, char *pattern);
 void cmd_changesub(char *tag, char *namespace, char *name, int add);
@@ -154,31 +155,31 @@ int starttls_enabled(void);
 void cmd_netscrape(char* tag);
 #endif
 
-int getword P((struct buf *buf));
-int getastring P((struct buf *buf));
-int getbase64string P((struct buf *buf));
-int getsearchprogram P((char *tag, struct searchargs *searchargs,
-			int *charset, int parsecharset));
-int getsearchcriteria P((char *tag, struct searchargs *searchargs,
-			 int *charset, int parsecharset));
-int getsearchdate P((time_t *start, time_t *end));
-int getdatetime P((time_t *date));
+int getword(struct buf *buf);
+int getastring(struct buf *buf);
+int getbase64string(struct buf *buf);
+int getsearchprogram(char *tag, struct searchargs *searchargs,
+			int *charset, int parsecharset);
+int getsearchcriteria(char *tag, struct searchargs *searchargs,
+			 int *charset, int parsecharset);
+int getsearchdate(time_t *start, time_t *end);
+int getdatetime(time_t *date);
 
-void eatline P((int c));
-void printstring P((const char *s));
-void printastring P((const char *s));
+void eatline(int c);
+void printstring(const char *s);
+void printastring(const char *s);
 
-void appendfieldlist P((struct fieldlist **l, char *section,
-			struct strlist *fields, char *trail));
-void appendstrlist P((struct strlist **l, char *s));
-void appendstrlistpat P((struct strlist **l, char *s));
-void freefieldlist P((struct fieldlist *l));
-void freestrlist P((struct strlist *l));
-void appendsearchargs P((struct searchargs *s, struct searchargs *s1,
-			 struct searchargs *s2));
-void freesearchargs P((struct searchargs *s));
+void appendfieldlist(struct fieldlist **l, char *section,
+			struct strlist *fields, char *trail);
+void appendstrlist(struct strlist **l, char *s);
+void appendstrlistpat(struct strlist **l, char *s);
+void freefieldlist(struct fieldlist *l);
+void freestrlist(struct strlist *l);
+void appendsearchargs(struct searchargs *s, struct searchargs *s1,
+			 struct searchargs *s2);
+void freesearchargs(struct searchargs *s);
 
-void printauthready P((int len, unsigned char *data));
+void printauthready(int len, unsigned char *data);
 
 static int mailboxdata(), listdata(), lsubdata();
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
@@ -1497,18 +1498,13 @@ char *tag;
 	index_check(imapd_mailbox, 0, 0);
     }
     prot_printf(imapd_out,
-     "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS");
-    /* XXX */
-    prot_printf(imapd_out,
-		" X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME");
-    if (starttls_enabled()) {
+     "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS"
+     " NO_ATOMIC_RENAME UNSELECT");
+    if (starttls_enabled())
 	prot_printf(imapd_out, " STARTTLS");
-    }
-    if ((imapd_starttls_done == 0) &&
-	(config_getswitch("allowplaintext", 1)==0))
-    {
-      prot_printf(imapd_out, " LOGINDISABLED");	
-    }      
+    if ((imapd_starttls_done == 0) && !config_getswitch("allowplaintext", 1))
+	prot_printf(imapd_out, " LOGINDISABLED");	
+
     /* add the SASL mechs */
     if (sasl_listmech(imapd_saslconn, NULL, 
 		      "AUTH=", " AUTH=", "",
@@ -1520,7 +1516,6 @@ char *tag;
 	/* else don't show anything */
     }
 
-    prot_printf(imapd_out, " UNSELECT");
 #ifdef ENABLE_X_NETSCAPE_HACK
     prot_printf(imapd_out, " X-NETSCAPE");
 #endif
@@ -2673,35 +2668,95 @@ char *name;
     }
 }	
 
+struct tmplist {
+    int alloc;
+    int num;
+    char mb[1][MAX_MAILBOX_NAME];
+};
+
+#define TMPLIST_INC 10
+
+static int addmbox(char *name, int matchlen, int maycreate, void *rock)
+{
+    struct tmplist **lptr = (struct tmplist **) rock;
+    struct tmplist *l = *lptr;
+    
+    if (l->alloc == l->num) {
+	l->alloc += TMPLIST_INC;
+	l = xrealloc(l, sizeof(struct tmplist) + 
+		     l->alloc * MAX_MAILBOX_NAME * (sizeof(char)));
+	*lptr = l;
+    }
+    
+    strcpy(l->mb[l->num++], name);
+    
+    return 0;
+}
+
 /*
  * Perform a RENAME command
  */
-void
-cmd_rename(tag, oldname, newname, partition)
-char *tag;
-char *oldname;
-char *newname;
-char *partition;
+void cmd_rename(const char *tag, 
+		char *oldname, char *newname, char *partition)
 {
-    int r;
-    char oldmailboxname[MAX_MAILBOX_NAME+1];
-    char newmailboxname[MAX_MAILBOX_NAME+1];
+    int r = 0;
+    char oldmailboxname[MAX_MAILBOX_NAME+3];
+    char newmailboxname[MAX_MAILBOX_NAME+2];
+    char *p;
+    int isinbox;
 
-
+    /* canonicalize names */
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
     }
-    else {
-	r = mboxname_tointernal(oldname, imapd_userid, oldmailboxname);
+
+    isinbox = !strcasecmp(oldname, "inbox");
+    if (!r) r = mboxname_tointernal(oldname, imapd_userid, oldmailboxname);
+    if (!r) r = mboxname_tointernal(newname, imapd_userid, newmailboxname);
+
+    /* verify that the mailbox doesn't have a wildcard in it */
+    for (p = oldmailboxname; !r && *p; p++) {
+	if (*p == '*' || *p == '%') r = IMAP_MAILBOX_BADNAME;
     }
 
-    if (!r) {
-	r = mboxname_tointernal(newname, imapd_userid, newmailboxname);
-    }
-
+    /* attempt to rename the base mailbox */
     if (!r) {
 	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
-				   imapd_userisadmin, imapd_userid, imapd_authstate);
+				   imapd_userisadmin, 
+				   imapd_userid, imapd_authstate);
+    }
+
+    /* rename all mailboxes matching this */
+    if (!r && !isinbox) {
+	struct tmplist *l = xmalloc(sizeof(struct tmplist));
+	int ol = strlen(oldmailboxname) + 1;
+	int nl = strlen(newmailboxname) + 1;
+	int i;
+
+	l->alloc = 0;
+	l->num = 0;
+
+	strcat(oldmailboxname, ".*");
+	strcat(newmailboxname, ".");
+
+	/* add submailboxes; we pretend we're an admin since we successfully
+	 renamed the parent */
+	mboxlist_findall(oldmailboxname, 1, imapd_userid,
+			 imapd_authstate, addmbox, &l);
+
+	/* foreach mailbox in list, rename it, pretending we're admin */
+	for (i = 0; i < l->num; i++) {
+	    if (nl + strlen(l->mb[i] + ol) > MAX_MAILBOX_NAME) {
+		/* this mailbox name is too long */
+		continue;
+	    }
+	    strcpy(newmailboxname + nl, l->mb[i] + ol);
+	    mboxlist_renamemailbox(l->mb[i], newmailboxname,
+				   partition,
+				   1, imapd_userid, imapd_authstate);
+	}
+
+	free(l);
     }
 
     if (imapd_mailbox) {
@@ -2710,8 +2765,7 @@ char *partition;
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-    }
-    else {
+    } else {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
     }
