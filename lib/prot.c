@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.70 2002/05/16 22:43:19 leg Exp $
+ * $Id: prot.c,v 1.71 2002/06/05 23:37:17 leg Exp $
  */
 
 #include <config.h>
@@ -412,6 +412,11 @@ int prot_fill(struct protstream *s)
 		    errno = EAGAIN;
 		    return EOF;
 		}
+	    }
+	    else if (r == -1) {
+		syslog(LOG_ERR, "select() failed: %m");
+		s->error = xstrdup("select failed");
+		return EOF;
 	    }
 	}
 	
