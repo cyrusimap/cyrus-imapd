@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.23.4.2 2002/08/13 20:20:27 ken3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.23.4.3 2002/08/29 16:19:57 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and configuring the IMAP Server
@@ -374,8 +374,9 @@ localuser:
 
 <pre>
 local_delivery:
-  driver = pipe
+  driver = lmtp
   command = "/usr/cyrus/bin/deliver -l"
+  batch_max = 20
   user = cyrus
 </pre>
 </li>
@@ -576,5 +577,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2002/08/13 20:20:27 $
+last modified: $Date: 2002/08/29 16:19:57 $
 </BODY></HTML>
