@@ -59,7 +59,7 @@ LOBJS= append.o mailbox.o mboxlist.o message.o \
 
 IMAPDOBJS= imapd.o index.o
 
-PROGS = collectnews rmnews deliver imapd
+PROGS = collectnews rmnews deliver imapd pop3d
 
 all: $(PROGS)
 
@@ -77,6 +77,9 @@ deliver: deliver.o libimap.a $(LIBS)
 
 imapd: $(IMAPDOBJS) libimap.a $(LIBS)
 	$(CC) $(LDFLAGS) -o imapd $(IMAPDOBJS) libimap.a $(LIBS)
+
+pop3d: pop3d.o libimap.a $(LIBS)
+	$(CC) $(LDFLAGS) -o pop3d pop3d.o libimap.a $(LIBS)
 
 libimap.a: $(LOBJS)
 	ar cr libimap.a $(LOBJS)
