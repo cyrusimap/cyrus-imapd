@@ -63,6 +63,7 @@ typedef enum {
 
 char *authname=NULL;
 char *realm=NULL;
+char *password=NULL;
 
 /* global vars */
 sasl_conn_t *conn;
@@ -83,9 +84,20 @@ void interaction (int id, const char *prompt,
     char result[1024];
     
     if (id==SASL_CB_PASS) {
+      if (password!=NULL) /* if specified on command line */
+      {
+	*tresult = strdup(password);
+	*tlen=strlen(*tresult);
+	
+	/* wipe it out from memory now. we don't want to hold 
+	   onto the user's plaintext password */
+	memset(password, '\0', strlen(password));
+	
+      } else {
 	printf("%s: ", prompt);
 	*tresult=strdup(getpass(""));
 	*tlen=strlen(*tresult);
+      }
 	return;
     } else if ((id==SASL_CB_USER) || (id==SASL_CB_AUTHNAME)) {
 	if (authname) {
@@ -462,6 +474,7 @@ void usage(void)
   printf("  -m <mech>    Mechanism to use for authentication\n");
   printf("  -g <name>    Get script <name> and save to disk\n");
   printf("  -u <user>    Userid/Authname to use\n");
+  printf("  -w <passwd>  Specify password (Should only be used for automated scripts)\n");
   exit(1);
 }
 
@@ -490,7 +503,7 @@ int main(int argc, char **argv)
   int result;
 
   /* look at all the extra args */
-  while ((c = getopt(argc, argv, "a:d:g:lv:p:i:m:u:")) != EOF)
+  while ((c = getopt(argc, argv, "a:d:g:lv:p:i:m:u:w:")) != EOF)
     switch (c) 
     {
     case 'a':
@@ -524,6 +537,9 @@ int main(int argc, char **argv)
       break;
     case 'u':
       authname = optarg;
+      break;
+    case 'w':
+      password = optarg;
       break;
     default:
       usage();
