@@ -121,6 +121,14 @@ static int abort_txn(struct db *db, struct txn *tid)
     return 0;
 }
 
+static struct txn *new_txn(void)
+{
+    struct txn *ret = (struct txn *) xmalloc(sizeof(struct txn));
+    ret->fnamenew = NULL;
+    ret->fd = 0;
+    return ret;
+}
+
 static int init(const char *dbdir, int myflags)
 {
     return 0;
@@ -197,8 +205,7 @@ static int starttxn_or_refetch(struct db *db, struct txn **mytid)
 	    syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, db->fname);
 	    return CYRUSDB_IOERROR;
 	}
-	*mytid = (struct txn *) xmalloc(sizeof(struct txn));
-	(*mytid)->fnamenew = NULL;
+	*mytid = new_txn();
 
 	if (db->ino != sbuf.st_ino) {
 	    map_free(&db->base, &db->size);
@@ -368,8 +375,7 @@ static int mystore(struct db *db,
 	}
 
 	if (mytid) {
-	    *mytid = (struct txn *) xmalloc(sizeof(struct txn));
-	    (*mytid)->fnamenew = NULL;
+	    *mytid = new_txn();
 	}
     }
 
@@ -389,8 +395,15 @@ static int mystore(struct db *db,
 	strcpy(fnamebuf, db->fname);
 	strcat(fnamebuf, ".NEW");
     }
+
     unlink(fnamebuf);
-    writefd = open(fnamebuf, O_RDWR | O_CREAT, 0666);
+    r = writefd = open(fnamebuf, O_RDWR | O_CREAT, 0666);
+    if (r < 0) {
+        syslog(LOG_ERR, "opening %s for writing failed: %m", fnamebuf);
+	if (mytid) abort_txn(db, *mytid);
+	return CYRUSDB_IOERROR;
+    }
+
     niov = 0;
     iov[niov].iov_base = (char *) db->base;
     iov[niov++].iov_len = offset;
@@ -428,7 +441,8 @@ static int mystore(struct db *db,
 
 	}
 
-	(*mytid)->fnamenew = xstrdup(fnamebuf);
+	if (!(*mytid)->fnamenew) (*mytid)->fnamenew = xstrdup(fnamebuf);
+	if ((*mytid)->fd) close((*mytid)->fd);
 	(*mytid)->fd = writefd;
 	map_free(&db->base, &db->size);
 	map_refresh(writefd, 1, &db->base, &db->size, sbuf.st_size,
@@ -443,15 +457,15 @@ static int mystore(struct db *db,
 	    return CYRUSDB_IOERROR;
 	}
 
+	close(db->fd);
+	db->fd = writefd;
+
 	/* release lock */
 	r = lock_unlock(db->fd);
 	if (r == -1) {
 	    syslog(LOG_ERR, "IOERROR: unlocking db %s: %m", db->fname);
 	    r = CYRUSDB_IOERROR;
 	}
-
-	close(db->fd);
-	db->fd = writefd;
 
 	db->ino = sbuf.st_ino;
 	map_free(&db->base, &db->size);
