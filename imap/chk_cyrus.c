@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.3 2002/05/20 20:04:08 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.4 2002/05/21 18:29:24 rjs3 Exp $
  */
 
 #include <config.h>
@@ -188,20 +188,33 @@ int main(int argc, char **argv)
 {
     char *alt_config = NULL;
     char pattern[2] = { '*', '\0' };
-    
+    const char *mailbox = NULL;
+
     extern char *optarg;
     int opt;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "C:P:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:P:M:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
 	    break;
 
 	case 'P':
+	    if(mailbox) {
+		usage();
+		exit(EC_USAGE);
+	    }
 	    check_part = optarg;
+	    break;
+
+	case 'M':
+	    if(check_part) {
+		usage();
+		exit(EC_USAGE);
+	    }
+	    mailbox = optarg;
 	    break;
 
 	default:
@@ -211,20 +224,25 @@ int main(int argc, char **argv)
 	}
     }
 
-    config_init(alt_config, "chk_cyrus");
+    config_init(alt_config, "chk_cyrus");    
 
-    fprintf(stderr, "Examining partition: %s\n",
-	    (check_part ? check_part : "ALL PARTITIONS"));
-    
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    /* build a list of mailboxes - we're using internal names here */
-    mboxlist_findall(NULL, pattern, 1, NULL,
-		     NULL, chkmbox, NULL);
-
+    if(mailbox) {
+	fprintf(stderr, "Examining mailbox: %s\n", mailbox);
+	chkmbox(mailbox,0,0,NULL);
+    } else {
+	fprintf(stderr, "Examining partition: %s\n",
+		(check_part ? check_part : "ALL PARTITIONS"));
+	
+	/* build a list of mailboxes - we're using internal names here */
+	mboxlist_findall(NULL, pattern, 1, NULL,
+			 NULL, chkmbox, NULL);
+    }
+    
     mboxlist_close();
     mboxlist_done();
-    
+
     return 0;
 }
