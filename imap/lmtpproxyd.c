@@ -1,6 +1,6 @@
-/* lmtpproxyd.c -- prototype program to deliver mail through to backend servers
+/* lmtpproxyd.c -- Program to sieve and proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.1 2000/06/04 22:54:11 leg Exp $
+ * $Id: lmtpproxyd.c,v 1.2 2000/06/16 02:29:30 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.1 2000/06/04 22:54:11 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.2 2000/06/16 02:29:30 leg Exp $";*/
 
 #include <config.h>
 
@@ -76,9 +76,6 @@
 #include <sasl.h>
 #include <saslutil.h>
 
-#include "acap.h"
-#include "acapsieve.h"
-
 #include "acl.h"
 #include "assert.h"
 #include "util.h"
@@ -103,54 +100,75 @@
 
 struct protstream *deliver_out, *deliver_in;
 
-static acap_conn_t *acapconn;
-
 extern int optind;
 extern char *optarg;
+
 extern int errno;
 
-typedef struct mydata {
+/* a final destination for a message */
+struct rcpt {
+    char mailbox[MAX_MAILBOX_NAME]; /* where? */
+    int rcpt_num;		    /* credit this to who? */
+    struct rcpt *next;
+};
+
+struct dest {
+    char server[MAX_MAILBOX_NAME];  /* where? */
+    char authas[MAX_MAILBOX_NAME];  /* as who? */
+    int rnum;			    /* number of rcpts */
+    struct rcpt *to;
+    struct dest *next;
+};
+
+enum pending {
+    s_wait,			/* processing sieve requests */
+    s_err,			/* error in sieve processing/sending */
+    s_done,			/* sieve script successfully run */
+    nosieve,			/* no sieve script */
+    done,
+};
+
+/* data pertaining to a message in transit */
+struct mydata {
     message_data_t *m;
     int cur_rcpt;
 
-    char *notifyheader;
     const char *temp[2];	/* used to avoid extra indirection in
 				   getenvelope() */
-
     char *authuser;		/* user who submitted message */
-    struct auth_state *authstate;
-} mydata_t;
+
+    struct dest *dlist;
+    enum pending *pend;
+};
+
+typedef struct mydata mydata_t;
+
+static int adddest(struct mydata *mydata, 
+		   const char *mailbox, const char *authas);
 
 /* data per script */
 typedef struct script_data {
     char *username;
     char *mailboxname;
-    struct auth_state *authstate;
 } script_data_t;
 
 /* forward declarations */
-int deliver_mailbox(struct protstream *msg,
-		    unsigned size,
-		    char *authuser,
-		    struct auth_state *authstate,
-		    char *user, char *mailbox);
 static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
 static int verify_user(const char *user);
 static char *generate_notify(message_data_t *m);
 
+void shut_down(int code);
+
 struct lmtp_func mylmtp = { &deliver, &verify_user, 0 };
 
-/* global declarations */
 static int quotaoverride = 0;		/* should i override quota? */
-static int dupelim = 0;
-static int singleinstance = 1;
+int dupelim = 0;
 const char *BB = "";
 
 static void logdupelem();
 static void usage();
 static void setup_sieve();
-void shut_down(int code);
 
 #ifdef USE_SIEVE
 static sieve_interp_t *sieve_interp;
@@ -211,6 +229,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
     /* ok, is auth_identity an admin? 
      * for now only admins can do lmtp from another machine
      */
+
     authstate = auth_newstate(canon_authuser, NULL);
     allowed = authisa(authstate, "lmtp", "admins");
     auth_freestate(authstate);
@@ -244,25 +263,8 @@ int service_init(int argc, char **argv, char **envp)
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
-    /* so we can do mboxlist operations */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
-    dupelim = 1;
-    if (duplicate_init(0) != 0) {
-	syslog(LOG_ERR, 
-	       "deliver: unable to init duplicate delivery database\n");
-	dupelim = 0;
-    }
-
 #ifdef USE_SIEVE
-    sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
-    if (!sieve_usehomedir) {
-	sieve_dir = config_getstring("sievedir", "/usr/sieve");
-    } else {
-	sieve_dir = NULL;
-    }
-
+    sieve_dir = config_getstring("sievedir", "/usr/sieve");
     mylmtp.addheaders = xmalloc(80);
     snprintf(mylmtp.addheaders, 80, "X-Sieve: %s\r\n", sieve_version);
 
@@ -272,17 +274,23 @@ int service_init(int argc, char **argv, char **envp)
 
     BB = config_getstring("postuser", BB);
 
-    if ((r = sasl_client_init(NULL)) != SASL_OK) {
-	syslog(LOG_ERR, "SASL failed initializing: sasl_client_init(): %s", 
-	       sasl_errstring(r, NULL, NULL));
-	return EC_SOFTWARE;
-    }
-
     if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
 	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
 	       sasl_errstring(r, NULL, NULL));
 	return EC_SOFTWARE;
     }
+
+    /* initialize duplicate delivery database */
+    dupelim = 1;
+    if (duplicate_init(0) != 0) {
+	syslog(LOG_ERR, 
+	       "deliver: unable to init duplicate delivery database\n");
+	dupelim = 0;
+    }
+
+    /* so we can do mboxlist operations */
+    mboxlist_init(0);
+    mboxlist_open(NULL);
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
@@ -303,8 +311,12 @@ int service_main(int argc, char **argv, char **envp)
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
 
-    while ((opt = getopt(argc, argv, "")) != EOF) {
+    while ((opt = getopt(argc, argv, "q")) != EOF) {
 	switch(opt) {
+	case 'q':
+	    quotaoverride = 1;
+	    break;
+
 	default:
 	    usage();
 	}
@@ -314,9 +326,16 @@ int service_main(int argc, char **argv, char **envp)
     snmp_increment(ACTIVE_CONNECTIONS, 1);
 
     lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
-    shut_down(0);		/* we don't want to reuse this connection */
+    shut_down(0);
 
     return 0;
+}
+
+/* called if 'service_init()' was called but not 'service_main()' */
+void service_abort(void)
+{
+    mboxlist_close();
+    mboxlist_done();
 }
 
 #ifdef USE_SIEVE
@@ -616,25 +635,27 @@ int sieve_fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
-    mydata_t *md = (mydata_t *) mc;
-    message_data_t *m = (message_data_t *) md->m;
+    mydata_t *mdata = (mydata_t *) mc;
+    message_data_t *md = mdata->m;
     int ret;
+    char *mailboxname = fc->mailbox;
+    char namebuf[MAX_MAILBOX_NAME];
 
-    /* we're now the user who owns the script */
-    if (!sd->authstate)
-	return SIEVE_FAIL;
+    if (sd->username && !strncasecmp(mailboxname, "INBOX", 5)) {
+	/* canonicalize mailbox */
+	snprintf(namebuf, sizeof namebuf,
+		 "%s+user.%s%s", BB, sd->username, mailboxname + 5);
+    } else {
+	snprintf(namebuf, sizeof namebuf, "%s+%s", BB, mailboxname);
+    }
 
-    ret = deliver_mailbox(m->data, m->size,
-                          md->authuser, md->authstate, 
-                          sd->username, fc->mailbox);
+    /* deliver as the user who owns the script */
+    ret = adddest(mdata, namebuf, sd->username);
+    snmp_increment(SIEVE_FILEINTO, 1);
 
-    if (ret == 0) {
-
-	snmp_increment(SIEVE_FILEINTO, 1);
-
+    if (!ret) {
 	return SIEVE_OK;
     } else {
-	*errmsg = error_message(ret);
 	return SIEVE_FAIL;
     }
 }
@@ -646,36 +667,18 @@ int sieve_keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     script_data_t *sd = (script_data_t *) sc;
     mydata_t *mydata = (mydata_t *) mc;
     message_data_t *md = mydata->m;
-    char namebuf[MAX_MAILBOX_PATH];
+    char namebuf[MAX_MAILBOX_NAME];
     int ret = 1;
 
     if (sd->mailboxname) {
-	strcpy(namebuf, "INBOX.");
-	strcat(namebuf, sd->mailboxname);
-
-	ret = deliver_mailbox(md->data, md->size,
-			      mydata->authuser, mydata->authstate,
-			      sd->username, namebuf);
-    }
-    if (ret) {
-	/* we're now the user who owns the script */
-	if (!sd->authstate)
-	    return SIEVE_FAIL;
-
-	strcpy(namebuf, "INBOX");
-
-	ret = deliver_mailbox(md->data, md->size,
-			      sd->username, sd->authstate,
-			      sd->username, namebuf);
-    }
-
-    if (ret == 0) {	
-	snmp_increment(SIEVE_KEEP, 1);
-	return SIEVE_OK;
+	snprintf(namebuf, sizeof(namebuf), 
+		 "%s+%s", sd->username, sd->mailboxname);
     } else {
-	*errmsg = error_message(ret);
-	return SIEVE_FAIL;
+	snprintf(namebuf, sizeof(namebuf), "%s", sd->username);
     }
+
+    snmp_increment(SIEVE_KEEP, 1);
+    return SIEVE_OK;
 }
 
 static int sieve_notify(void *ac,
@@ -832,10 +835,6 @@ sieve_vacation_t vacation = {
     &send_response,		/* send_response() */
 };
 
-/* imapflags support */
-static char *markflags[] = { "\\flagged" };
-static sieve_imapflags_t mark = { markflags, 1 };
-
 int sieve_parse_error_handler(int lineno, char *msg, void *ic, void *sc)
 {
     script_data_t *sd = (script_data_t *) sc;
@@ -892,6 +891,7 @@ static void setup_sieve(void)
 	syslog(LOG_ERR, "sieve_register_keep() returns %d\n", res);
 	fatal("sieve_register_keep()", EC_TEMPFAIL);
     }
+
     res = sieve_register_notify(sieve_interp, &sieve_notify);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_notify() returns %d\n", res);
@@ -937,47 +937,20 @@ static void setup_sieve(void)
 /* returns true if user has a sieve file */
 static FILE *sieve_find_script(const char *user)
 {
-    acapsieve_handle_t *ash;
-    char *script;
-    FILE *ret = NULL;
-    int r;
+    char buf[1024];
 
-    if (!acapconn) {
-	/* establish connection to the acap server */
-
+    if (strlen(user) > 900) {
+	return NULL;
     }
-
-    /* use the acap sieve API */
-    ash = acapsieve_convert(user, acapconn);
     
-    /* find the active script */
-    r = acapsieve_getactive(ash, &script);
-    if (!r && script) {
-	ret = tmpfile();
-	if (ret) {
-	    r = fputs(script, ret);
-	    if (r != EOF) {
-		rewind(ret);
-	    } else {
-		r = IMAP_IOERROR;
-		fclose(ret);
-	    }
-	} else {
-	    r = IMAP_IOERROR;
-	}
-
-	free(script);
+    if (!dupelim) {
+	/* duplicate delivery suppression is needed for sieve */
+	return NULL;
     }
 
-    /* return to our normally scheduled acap session */
-    acapconn = acapsieve_release_handle(ash);
+    /* find the sieve script on the ACAP server */
 
-    if (r) {
-	/* can't fetch the script */
-	fatal("can't fetch sieve scripts", EC_UNAVAILABLE);
-    }
-
-    return ret;
+    return (fopen(buf, "r"));
 }
 #else /* USE_SIEVE */
 static FILE *sieve_find_script(const char *user)
@@ -986,64 +959,217 @@ static FILE *sieve_find_script(const char *user)
 }
 #endif /* USE_SIEVE */
 
-static void
-usage()
+static void usage()
 {
-    fprintf(stderr, "421-4.3.0 usage: lmtpd [-q]\r\n");
+    fprintf(stderr, "421-4.3.0 usage: lmtpproxyd\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
     exit(EC_USAGE);
 }
 
-/* places msg in mailbox mailboxname.  
- * if you wish to use single instance store, pass stage as non-NULL
- * if you want to deliver message regardless of duplicates, pass id as NULL
- * if you want to notify, pass user
- * if you want to force delivery (to force delivery to INBOX, for instance)
- * pass acloverride
- */
-int deliver_mailbox(struct protstream *msg,
-		    unsigned size,
-		    char *authuser,
-		    struct auth_state *authstate,
-		    char *user,
-		    char *mailboxname)
+struct connlist {
+    char *host;
+    struct lmtp_conn *conn;
+    struct connlist *next;
+} *chead = NULL;
+
+static struct lmtp_conn *getconn(const char *server)
 {
     int r;
-    struct appendstate as;
-    char namebuf[MAX_MAILBOX_PATH];
-    time_t now = time(NULL);
+    struct connlist *p = chead;
 
-    if (user && !strncasecmp(mailboxname, "INBOX", 5)) {
-	/* canonicalize mailbox */
-	if (strchr(user, '.') ||
-	    strlen(user) + 30 > MAX_MAILBOX_PATH) {
-	    return IMAP_MAILBOX_NONEXISTENT;
+    while (p) {
+	if (!strcmp(p->host, server)) break;
+	p = p->next;
+    }
+    if (!p) {
+	/* create a new one */
+	p = xmalloc(sizeof(struct connlist));
+	p->host = xstrdup(server);
+	r = lmtp_connect(p->host, NULL, &p->conn);
+	if (r) {
+	    fatal("can't connect to backend lmtp server", EC_TEMPFAIL);
 	}
-	strcpy(namebuf, "user.");
-	strcat(namebuf, user);
-	strcat(namebuf, mailboxname + 5);
-    } else {
-	strcpy(namebuf, mailboxname);
+
+	/* insert it */
+	p->next = chead;
+	chead = p;
     }
 
-    /* verify mailbox exists */
+    /* verify connection is ok */
+    r = lmtp_verify_conn(p->conn);
+    if (r) {
+	r = lmtp_disconnect(p->conn);
+	if (r) {
+	    fatal("can't dispose of backend server connection", EC_TEMPFAIL);
+	}
 
-    /* open connection to appropriate backend server, if needed */
-
-    /* run lmtp transaction */
-
-    prot_rewind(msg);
-
-    /* dot stuff message */
-
-    return r;
+	r = lmtp_connect(p->host, NULL, &p->conn);
+	if (r) {
+	    fatal("can't connect to backend lmtp server", EC_TEMPFAIL);
+	}
+    }
+    
+    return p->conn;
 }
 
+static void putconn(const char *server, struct lmtp_conn *c)
+{
+    return;
+}
+
+static int adddest(struct mydata *mydata, 
+		   const char *mailbox, const char *authas)
+{
+    struct rcpt *new = xmalloc(sizeof(struct rcpt));
+    struct dest *d;
+    int sl = strlen(BB);
+    char *s;
+    int r;
+
+    strlcpy(new->mailbox, mailbox, MAX_MAILBOX_NAME);
+    new->rcpt_num = mydata->cur_rcpt;
+    
+    /* find what server we're sending this to */
+    if (!strncmp(mailbox, BB, sl) && sl == '+') {
+	/* special shared folder address */
+	r = mboxlist_lookup(mailbox + sl + 1, &s, NULL, NULL);
+    } else {
+	char buf[MAX_MAILBOX_NAME];
+	char *plus;
+
+	strlcpy(buf, "user.", sizeof buf);
+	strlcat(buf, mailbox, sizeof buf);
+	plus = strchr(buf, '+');
+	if (plus) *plus = '\0';
+
+	/* find where this user lives */
+	r = mboxlist_lookup(mailbox + sl + 1, &s, NULL, NULL);
+    }
+
+    if (r) {
+	free(new);
+	return r;
+    }
+
+    /* see if we currently have a 's'/'authas' combination. */
+    d = mydata->dlist;
+    while (d) {
+	if (!strcmp(d->server, s) && !strcmp(d->authas, authas)) break;
+	d = d->next;
+    }
+
+    if (d == NULL) {
+	/* create a new one */
+	d = xmalloc(sizeof(struct dest));
+	strlcpy(d->server, s, MAX_MAILBOX_NAME);
+	strlcpy(d->authas, authas, MAX_MAILBOX_NAME);
+	d->rnum = 0;
+	d->to = NULL;
+	d->next = mydata->dlist;
+	mydata->dlist = d;
+    }
+
+    /* add rcpt to d */
+    d->rnum++;
+    new->next = d->to;
+    d->to = new;
+
+    /* and we're done */
+    return 0;
+}
+
+static void runme(struct mydata *mydata, message_data_t *msgdata)
+{
+    struct dest *d;
+
+    /* run the txns */
+    d = mydata->dlist;
+    while (d) {
+	struct lmtp_txn *lt = LMTP_TXN_ALLOC(d->rnum);
+	struct rcpt *rc;
+	struct lmtp_conn *remote;
+	int i = 0;
+	int r = 0;
+	
+	lt->from = msgdata->return_path;
+	lt->auth = d->authas;
+	lt->isdotstuffed = 0;
+	
+	prot_rewind(msgdata->data);
+	lt->data = msgdata->data;
+	lt->rcpt_num = d->rnum;
+	rc = d->to;
+	while (rc) {
+	    assert(i < d->rnum);
+	    lt->rcpt[i++].addr = rc->mailbox;
+	    rc = rc->next;
+	}
+	assert(i == d->rnum);
+	
+	remote = getconn(d->server);
+	if (remote) {
+	    r = lmtp_runtxn(remote, lt);
+	    putconn(d->server, remote);
+	} else {
+	    /* remote server not available; tempfail all deliveries */
+	    for (i = 0; i < d->rnum; i++) {
+		lt->rcpt[i].result = RCPT_TEMPFAIL;
+	    }
+	}
+
+	/* process results of the txn, propogating error state to the
+	   recipients */
+	for (rc = d->to, i = 0; rc != NULL; rc = rc->next, i++) {
+	    switch (mydata->pend[i]) {
+	    case s_wait:
+		/* hmmm, if something fails we'll want to try an 
+		   error delivery */
+		if (lt->rcpt[i].result != RCPT_GOOD) {
+		    mydata->pend[i] = s_err;
+		}
+		break;
+	    case s_err:
+		/* we've already detected an error for this recipient,
+		   any nothing will convince me otherwise */
+		break;
+	    case nosieve:
+		/* this is the only delivery we're attempting for this rcpt */
+		msg_setrcpt_status(msgdata, i, lt->rcpt[i].r);
+		mydata->pend[i] = done;
+		break;
+	    case done:
+	    case s_done:
+		/* yikes! we shouldn't be getting a notification for this
+		   person! */
+		abort();
+		break;
+	    }
+	}
+
+	free(lt);
+	d = d->next;
+    }
+}
+
+
+/* deliver() runs through each recipient in 'msgdata', compiling a list of 
+   final destinations for this message (each represented by a 'struct dest'
+   linked off of 'mydata'.
+
+   it then batches all the times this message is going to the same
+   backend server with the same authentication, and attempts delivery of
+   all of them simultaneously.
+
+   it then examines the results, attempts any error deliveries (for sieve
+   script errors) if necessary, and assigns the correct result for
+   each of the original receipients.
+*/
 int deliver(message_data_t *msgdata, char *authuser,
 	    struct auth_state *authstate)
 {
-    int n, nrcpts;
+    int n, nrcpts, i;
     mydata_t mydata;
+    struct dest *d;
     
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
@@ -1051,132 +1177,159 @@ int deliver(message_data_t *msgdata, char *authuser,
 
     /* create 'mydata', our per-delivery data */
     mydata.m = msgdata;
-    mydata.notifyheader = generate_notify(msgdata);
     mydata.authuser = authuser;
-    mydata.authstate = authstate;
+    mydata.pend = xmalloc(sizeof(enum pending) * nrcpts);
     
-    /* loop through each recipient, attempting delivery for each */
+    /* loop through each recipient, compiling list of destinations */
     for (n = 0; n < nrcpts; n++) {
 	char *rcpt = xstrdup(msg_getrcpt(msgdata, n));
 	char *plus;
 	int r = 0;
+	FILE *f;
 
 	mydata.cur_rcpt = n;
 	plus = strchr(rcpt, '+');
 	if (plus) *plus++ = '\0';
 	/* case 1: shared mailbox request */
 	if (plus && !strcmp(rcpt, BB)) {
-	    r = deliver_mailbox(msgdata->data, 
-				msgdata->size, 
-				mydata.authuser, mydata.authstate,
-				NULL, plus);
+	    *--plus = '+';	/* put that plus back */
+	    adddest(&mydata, rcpt, mydata.authuser);
+
+	    mydata.pend[n] = nosieve;
 	}
 
-	/* case 2: ordinary user, might have Sieve script */
-	else if (!strchr(rcpt, '.') &&
-	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
-	    FILE *f = sieve_find_script(rcpt);
+	/* case 2: ordinary user, has a Sieve script */
+	else if (f = sieve_find_script(rcpt)) {
 	    char namebuf[MAX_MAILBOX_PATH];
-
-	    if (f != NULL) {
-		script_data_t *sdata = NULL;
-		sieve_script_t *s = NULL;
-
-		sdata = (script_data_t *) xmalloc(sizeof(script_data_t));
-
-		sdata->username = rcpt;
-		sdata->mailboxname = plus;
-		sdata->authstate = auth_newstate(rcpt, (char *)0);
-
-		/* slap the mailboxname back on so we hash the envelope & id
-		   when we figure out whether or not to keep the message */
-		snprintf(namebuf, sizeof(namebuf), "%s+%s", rcpt, plus);
+	    script_data_t *sdata = NULL;
+	    sieve_script_t *s = NULL;
+	    
+	    sdata = (script_data_t *) xmalloc(sizeof(script_data_t));
+	    
+	    sdata->username = rcpt;
+	    sdata->mailboxname = plus;
+	    
+	    /* slap the mailboxname back on so we hash the envelope & id
+	       when we figure out whether or not to keep the message */
+	    snprintf(namebuf, sizeof(namebuf), "%s+%s", rcpt, plus);
+	    
+	    /* is this the first time we've sieved the message? */
+	    if (msgdata->id) {
+		char *sdb = make_sieve_db(namebuf);
 		
-		/* is this the first time we've sieved the message? */
-		if (msgdata->id) {
-		    char *sdb = make_sieve_db(namebuf);
-		    
-		    if (duplicate_check(msgdata->id, strlen(msgdata->id),
-					sdb, strlen(sdb))) {
-			logdupelem(msgdata->id, sdb);
-			/* done it before ! */
-			r = 0;
-			goto donercpt;
-		    }
+		if (duplicate_check(msgdata->id, strlen(msgdata->id),
+				    sdb, strlen(sdb))) {
+		    logdupelem(msgdata->id, sdb);
+		    /* done it before ! */
+		    mydata.pend[n] = done;
+		    msg_setrcpt_status(msgdata, n, 0);
+		    goto donercpt;
 		}
-		
-		r = sieve_script_parse(sieve_interp, f, (void *) sdata, &s);
-		fclose(f);
-		if (r == SIEVE_OK) {
-		    r = sieve_execute_script(s, (void *) &mydata);
-		}
-		if ((r == SIEVE_OK) && (msgdata->id)) {
-		    /* ok, we've run the script */
-		    char *sdb = make_sieve_db(namebuf);
-		    
-		    duplicate_mark(msgdata->id, strlen(msgdata->id), 
-				   sdb, strlen(sdb), time(NULL));
-		}
-		
-		/* free everything */
-		if (sdata->authstate) auth_freestate(sdata->authstate);
-		if (sdata) free(sdata);
-		sieve_script_free(&s);
-		
-		/* if there was an error, r is non-zero and 
-		   we'll do normal delivery */
+	    }
+	    
+	    r = sieve_script_parse(sieve_interp, f, (void *) sdata, &s);
+	    fclose(f);
+	    if (r == SIEVE_OK) {
+		r = sieve_execute_script(s, (void *) &mydata);
+	    }
+	    if (r == SIEVE_OK) {
+		mydata.pend[n] = s_wait;
 	    } else {
-		/* no sieve script */
-		r = 1; /* do normal delivery actions */
+		mydata.pend[n] = s_err;
 	    }
 
-	    if (r && plus &&
-		strlen(rcpt) + strlen(plus) + 30 <= MAX_MAILBOX_PATH) {
-		/* normal delivery to + mailbox */
-		strcpy(namebuf, "INBOX.");
-		strcat(namebuf, plus);
+	    /* free everything */
+	    if (sdata) free(sdata);
+	    sieve_script_free(&s);
 		
-		r = deliver_mailbox(msgdata->data, 
-				    msgdata->size, 
-				    mydata.authuser, mydata.authstate,
-				    rcpt, namebuf);
-	    }
+	}
 
-	    if (r) {
-		/* normal delivery to INBOX */
-		strcpy(namebuf, "INBOX");
-		
-		/* ignore ACL's trying to deliver to INBOX */
-		r = deliver_mailbox(msgdata->data, 
-				    msgdata->size, 
-				    mydata.authuser, mydata.authstate,
-				    rcpt, namebuf);
-	    }
+	/* case 3: ordinary user, no Sieve script */
+	else {
+	    *--plus = '+';
+	    adddest(&mydata, rcpt, authuser);
+	    mydata.pend[n] = nosieve;
 	}
 
     donercpt:
 	free(rcpt);
-	msg_setrcpt_status(msgdata, n, r);
     }
 
-    if (mydata.notifyheader) free(mydata.notifyheader);
+    /* run the txns */
+    runme(&mydata, msgdata);
 
+    /* free the recipient/destination lists */
+    d = mydata.dlist;
+    while (d) {
+	struct dest *nextd = d->next;
+	struct rcpt *rc = d->to;
+	
+	while (rc) {
+	    struct rcpt *nextrc = rc->next;
+	    free(rc);
+	    rc = nextrc;
+	}
+	free(d);
+	d = nextd;
+    }
+    mydata.dlist = NULL;
+
+    /* do any sieve error recovery, if needed */
+    for (n = 0; n < nrcpts; n++) {
+	switch (mydata.pend[n]) {
+	case s_wait:
+	    /* this must be a successful delivery! */
+	    msg_setrcpt_status(msgdata, n, 0);
+	    mydata.pend[i] = s_done;
+
+	    if (msgdata->id) {
+		/* ok, we've run the script */
+		char *sdb = make_sieve_db(msg_getrcpt(msgdata, n));
+		
+		duplicate_mark(msgdata->id, strlen(msgdata->id), 
+			       sdb, strlen(sdb), time(NULL));
+	    }
+	    break;
+	case s_err:
+	    /* need to do error recovery */
+	    adddest(&mydata, msg_getrcpt(msgdata, n), authuser);
+	    mydata.pend[n] = nosieve;
+	    break;
+	case s_done:
+	case nosieve:
+	    /* yikes, something went wrong */
+	    abort();
+	    break;
+	case done:
+	    /* good */
+	    break;
+	}
+    }
+
+    /* run the error recovery txns */
+    runme(&mydata, msgdata);
+
+    /* everything should be in the 'done' state now, verify this */
+    for (n = 0; n < nrcpts; n++) {
+	assert(mydata.pend[n] == done || mydata.pend[n] == s_done);
+    }
+	    
+    /* free data */
+    free(mydata.pend);
+    
     return 0;
 }
 
 /*
  */
-static void
-logdupelem(msgid, name)
-char *msgid;
-char *name;
+static void logdupelem(char *msgid, char *name)
 {
     if (strlen(msgid) < 80) {
-	char *pretty;
+	char pretty[160];
 
 	beautify_copy(pretty, msgid);
 	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s",
-	       name, pretty);
+	       name, msgid);
     }
     else {
 	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s",
@@ -1209,7 +1362,6 @@ void shut_down(int code)
 static int verify_user(const char *user)
 {
     char buf[MAX_MAILBOX_NAME];
-    char *plus;
     int r;
     int sl = strlen(BB);
 
@@ -1217,55 +1369,24 @@ static int verify_user(const char *user)
     if (!strncmp(user, BB, sl) && user[sl] == '+') {
 	/* special shared folder address */
 	r = mboxlist_lookup(user + sl + 1, NULL, NULL, NULL);
-    } else {
-	/* ordinary user */
-	if (strlen(user) > sizeof(buf)-10) {
+    } else {			/* ordinary user */
+	int l;
+	char *plus = strchr(user, '+');
+
+	if (plus) l = plus - user;
+	else l = strlen(buf);
+
+	if (strlen(user) > l-10) {
+	    /* too long a name */
 	    r = IMAP_MAILBOX_NONEXISTENT;
 	} else {
+	    /* just copy before the plus */
 	    strcpy(buf, "user.");
-	    strcat(buf, user);
-	    plus = strchr(buf, '+');
-	    if (plus) *plus = '\0';
+	    strncat(buf, user, l);
+	    buf[l + 5] = '\0';
 	    r = mboxlist_lookup(buf, NULL, NULL, NULL);
 	}
     }
 
     return r;
-}
-
-const char *notifyheaders[] = { "From", "Subject", "To", 0 };
-/* returns a malloc'd string that should be sent to users for successful
-   delivery of 'm'. */
-char *generate_notify(message_data_t *m)
-{
-    const char **body;
-    char *ret = NULL;
-    int len = 0;
-    int pos = 0;
-    int i;
-
-    for (i = 0; notifyheaders[i]; i++) {
-	const char *h = notifyheaders[i];
-	body = msg_getheader(m, h);
-	if (body) {
-	    int j;
-
-	    for (j = 0; body[j] != NULL; j++) {
-		/* put the header */
-		while (pos + strlen(h) + 5 > len) {
-		    ret = xrealloc(ret, len += 1024);
-		}
-		pos += sprintf(ret + pos, "%s: ", h);
-		
-		/* put the header body.
-		   xxx it would be nice to linewrap.*/
-		while (pos + strlen(body[j]) + 3 > len) {
-		    ret = xrealloc(ret, len += 1024);
-		}
-		pos += sprintf(ret + pos, "%s\n", body[j]);
-	    }
-	}
-    }
-
-    return ret;
 }
