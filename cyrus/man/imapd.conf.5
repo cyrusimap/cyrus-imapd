@@ -69,6 +69,10 @@ warnings.
 .IP "\fBtimeout:\fR 30" 5
 The length of the IMAP server's inactivity autologout timer,
 in minutes.  The minimum value is 30, the default.
+.IP "\fBimapidresponse:\fR yes" 5
+If enabled, the server responds to an ID command with a parameter
+list containing: version, vendor, support-url, os, os-version,
+command, arguments, environment.  Otherwise the server returns NIL.
 .IP "\fBpoptimeout:\fR 10" 5
 Set the length of the POP server's inactivity autologout timer,
 in minutes.  The minimum value is 10, the default.
@@ -151,6 +155,12 @@ directories: ~user/.sieve.
 .IP "\fBsievedir:\fR /usr/sieve" 5
 If sieveusehomedir is false, this directory is searched for Sieve
 scripts.
+.IP "\fBsendmail:\fR /usr/lib/sendmail" 5
+The pathname of the sendmail executable.  Sieve uses sendmail for sending
+rejections, redirects and vacation responses.
+.IP "\fBpostmaster:\fR postmaster" 5
+Username that is used as the 'From' address in rejection MDNs produced
+by sieve.
 .IP "\fBhashimapspool:\fR false" 5
 If enabled, the partitions will also be hashed, in addition to the
 hashing done on configuration directories.  This is recommended if one
@@ -170,16 +180,14 @@ value of 1 requires integrity protection; any higher value requires
 some amount of encryption.
 .IP "\fBsasl_pwcheck_method:\fR PAM" 5
 The mechanism used by the server to verify plaintext passwords.
-Possible values also include "sasldb", "kerberos_v4", "passwd", and
-"shadow".
+Possible values also include "kerberos_v4", "passwd", and "shadow".
 .IP "\fBsasl_auto_transition:\fR no" 5
 If enabled, the SASL library will automatically create authentication
 secrets when given a plaintext password.  See the SASL documentation.
 .IP "\fBsasl_option\fR" 5
 Any other SASL option can be set by preceeding it with "sasl_".  This
 file overrides the SASL configuration file.
-.IP "\fBlmtpsocket:\fR /var/imap/socket/lmtp" 5
-Unix domain socket that lmtpd listens on.
+
 .SH SEE ALSO
 .PP
 \fBimapd(8)\fR, \fBtimsieved(8)\fR, \fBdeliver(8)\fR
