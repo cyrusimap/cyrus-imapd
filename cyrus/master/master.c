@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.6 2002/12/10 21:53:42 ken3 Exp $ */
+/* $Id: master.c,v 1.67.4.7 2002/12/16 16:46:56 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1307,6 +1307,15 @@ int main(int argc, char **argv)
 	if(lock_nonblocking(pidfd)) {
 	    fatal("cannot get exclusive lock on pidfile (is another master still running?)", EX_OSERR);
 	} else {
+	    int pidfd_flags = fcntl(pidfd, F_GETFD, 0);
+	    if (pidfd_flags != -1)
+		pidfd_flags = fcntl(pidfd, F_SETFD, 
+				    pidfd_flags | FD_CLOEXEC);
+	    if (pidfd_flags == -1) {
+		fatal("unable to set close-on-exec for pidfile: %m", 1);
+	    }
+	    
+	    /* Write PID */
 	    snprintf(buf, sizeof(buf), "%d\n", getpid());
 	    write(pidfd, buf, strlen(buf));
 	    fsync(pidfd);
