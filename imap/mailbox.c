@@ -261,7 +261,7 @@ struct mailbox *mailbox;
     mailbox->start_offset = ntohl(*((bit32 *)(buf+12)));
     mailbox->record_size = ntohl(*((bit32 *)(buf+16)));
     mailbox->exists = ntohl(*((bit32 *)(buf+20)));
-    mailbox->last_internaldate = ntohl(*((bit32 *)(buf+24)));
+    mailbox->last_appenddate = ntohl(*((bit32 *)(buf+24)));
     mailbox->last_uid = ntohl(*((bit32 *)(buf+28)));
     mailbox->quota_mailbox_used = ntohl(*((bit32 *)(buf+32)));
 
@@ -599,7 +599,7 @@ struct mailbox *mailbox;
     *((bit32 *)(buf+12)) = htonl(mailbox->start_offset);
     *((bit32 *)(buf+16)) = htonl(mailbox->record_size);
     *((bit32 *)(buf+20)) = htonl(mailbox->exists);
-    *((bit32 *)(buf+24)) = htonl(mailbox->last_internaldate);
+    *((bit32 *)(buf+24)) = htonl(mailbox->last_appenddate);
     *((bit32 *)(buf+28)) = htonl(mailbox->last_uid);
     *((bit32 *)(buf+32)) = htonl(mailbox->quota_mailbox_used);
 
@@ -982,7 +982,7 @@ int format;
     mailbox.start_offset = INDEX_HEADER_SIZE;
     mailbox.record_size = INDEX_RECORD_SIZE;
     mailbox.exists = 0;
-    mailbox.last_internaldate = 0;
+    mailbox.last_appenddate = 0;
     mailbox.last_uid = 0;
     mailbox.quota_mailbox_used = 0;
 

@@ -163,6 +163,20 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_noop(tag.s, cmd.s);
 	    }
+	    if (!strcmp(cmd.s, "Copy")) {
+		if (!imapd_mailbox) goto nomailbox;
+		usinguid = 0;
+		if (c != ' ') goto missingargs;
+	    copy:
+		c = getword(&arg1);
+		if (c != ' ' || !issequence(arg1.s)) goto badsequence;
+		c = getastring(&arg2);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+
+		cmd_copy(tag.s, arg1.s, arg2.s, usinguid);
+	    }
 	    else if (!strcmp(cmd.s, "Create")) {
 		havepartition = 0;
 		if (c != ' ') goto missingargs;
@@ -221,8 +235,8 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    fetch:
-		c = getsequence(&arg1);
-		if (c != ' ') goto badsequence;
+		c = getword(&arg1);
+		if (c != ' ' || !issequence(arg1.s)) goto badsequence;
 		cmd_fetch(tag.s, arg1.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Find")) {
@@ -327,8 +341,8 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    store:
-		c = getsequence(&arg1);
-		if (c != ' ') goto badsequence;
+		c = getword(&arg1);
+		if (c != ' ' || !issequence(arg1.s)) goto badsequence;
 		c = getword(&arg2);
 		if (c != ' ') goto badsequence;
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
@@ -393,7 +407,9 @@ cmdloop()
 		else if (!strcmp(arg1.s, "search")) {
 		    goto search;
 		}
-		/* XXX copy */
+		else if (!strcmp(arg1.s, "copy")) {
+		    goto copy;
+		}
 		else {
 		    printf("%s BAD Unrecognized UID subcommand\r\n", tag.s);
 		    if (c != '\n') eatline();
@@ -1363,6 +1379,37 @@ int usinguid;
     goto freeargs;
 }
     
+cmd_copy(tag, sequence, name, usinguid)
+char *tag;
+char *sequence;
+char *name;
+int usinguid;
+{
+    char *cmd = usinguid ? "UID Copy" : "Copy";
+    int r;
+    char inboxname[MAX_MAILBOX_PATH];
+
+    if (strcasecmp(name, "inbox") == 0 &&
+	!strchr(imapd_userid, '.') &&
+	strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
+	strcpy(inboxname, "user.");
+	strcat(inboxname, imapd_userid);
+	r = index_copy(imapd_mailbox, sequence, usinguid, inboxname);
+    }
+    else {
+	r = index_copy(imapd_mailbox, sequence, usinguid, name);	
+    }
+
+    index_check(imapd_mailbox, usinguid, 0);
+
+    if (r) {
+	printf("%s NO %s failed: %s\r\n", tag, cmd, error_message(r));
+    }
+    else {
+	printf("%s OK %s completed\r\n", tag, cmd);
+    }
+}    
+
 cmd_expunge(tag)
 char *tag;
 {
@@ -1372,6 +1419,7 @@ char *tag;
     else {
 	r = mailbox_expunge(imapd_mailbox, (int (*)())0, (char *)0);
     }
+
     index_check(imapd_mailbox, 0, 0);
 
     if (r) {
@@ -1731,42 +1779,6 @@ struct buf *buf;
     }
 }
 
-int getsequence(buf)
-struct buf *buf;
-{
-    int c;
-    int i, len = 0;
-    int sawcolon = 0;
-
-    if (buf->alloc == 0) {
-	buf->alloc = BUFGROWSIZE;
-	buf->s = xmalloc(buf->alloc+1);
-    }
-	
-    for (;;) {
-	c = getc(stdin);
-	if (len == buf->alloc) {
-	    buf->alloc += BUFGROWSIZE;
-	    buf->s = xrealloc(buf->s, buf->alloc+1);
-	}
-	buf->s[len] = c;
-	if (c == ',') {
-	    if (!len || !isdigit(buf->s[len-1])) return EOF;
-	    sawcolon = 0;
-	}
-	else if (c == ':') {
-	    if (sawcolon || !len || !isdigit(buf->s[len-1])) return EOF;
-	    sawcolon = 1;
-	}
-	else if (!isdigit(c)) {
-	    if (!len || !isdigit(buf->s[len-1])) return EOF;
-	    buf->s[len] = '\0';
-	    return c;
-	}
-	len++;
-    }
-}
-
 int getdate(start, end)
 time_t *start, *end;
 {
@@ -1862,6 +1874,39 @@ char *s;
 	    *s == ' ' || *s == '{' || *s == '(' || *s == ')' ||
 	    *s == '\"' || *s == '%' || *s == '\\') return 0;
     }
+    return 1;
+}
+
+int issequence(s)
+char *s;
+{
+    int c;
+    int len = 0;
+    int sawcolon = 0;
+
+    while (c = *s) {
+	if (c == ',') {
+	    if (!len) return 0;
+	    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
+	    sawcolon = 0;
+	}
+	else if (c == ':') {
+	    if (sawcolon || !len) return 0;
+	    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
+	    sawcolon = 1;
+	}
+	else if (c == '*') {
+	    if (len && s[-1] != ',' && s[-1] != ':') return 0;
+	    if (isdigit(s[1])) return 0;
+	}
+	else if (!isdigit(c)) {
+	    return 0;
+	}
+	s++;
+	len++;
+    }
+    if (len == 0) return 0;
+    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
     return 1;
 }
 

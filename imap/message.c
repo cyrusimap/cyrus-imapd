@@ -110,7 +110,8 @@ FILE *from, *to;
 	}
 	fputs(buf, to);
     }
-    if (ferror(from) || ferror(to)) return IMAP_IOERROR;
+    fflush(to);
+    if (ferror(from) || ferror(to) || fsync(fileno(to))) return IMAP_IOERROR;
     return 0;
 }
 
@@ -157,6 +158,8 @@ FILE *to;
     }
 
     if (r) return r;
+    fflush(to);
+    if (ferror(to) || fsync(fileno(to))) return IMAP_IOERROR;
     rewind(to);
 
     /* Go back and check headers */

@@ -56,7 +56,7 @@ struct mailbox {
     unsigned long start_offset;
     unsigned long record_size;
     unsigned long exists;
-    time_t last_internaldate;
+    time_t last_appenddate;
     unsigned long last_uid;
     unsigned long quota_mailbox_used;
 
