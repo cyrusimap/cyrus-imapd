@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.11 2004/01/05 19:56:38 ken3 Exp $
+.\" $Id: imapoptions,v 1.12 2004/01/07 20:17:17 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -507,9 +507,10 @@ are listed with ``<none>''.
 
 { "rfc3028_strict", 1, SWITCH }
 /* If enabled, Sieve will be strict (per RFC 3028) with regards to
-   which headers are allowed to be used in an address test.  This
-   means that only those headers which are defined to contain addresses
-   will be allowed.  When disabled, ANY grammatically correct header
+   which headers are allowed to be used in address and envelope tests.
+   This means that only those headers which are defined to contain addresses
+   will be allowed in address tests and only "to" and "from" will be
+   allowed in envelope tests.  When disabled, ANY grammatically correct header
    will be allowed. */
 
 # Commented out - used by libsasl
