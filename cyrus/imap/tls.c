@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.49 2003/12/15 20:00:41 ken3 Exp $ */
+/* $Id: tls.c,v 1.50 2004/05/04 19:47:34 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -331,14 +331,14 @@ static int tls_dump(const char *s, int len)
          * we will move the selection point in the debug window
          */	
 	if (var_imapd_tls_loglevel>0)
-	  printf("%s", buf);
+	  syslog(LOG_DEBUG, "%s", buf);
 	ret += strlen(buf);
     }
 #ifdef TRUNCATE
     if (trunc > 0) {
 	snprintf(buf, sizeof(buf), "%04x - <SPACES/NULS>\n", len+ trunc);
 	if (var_imapd_tls_loglevel>0)
-	  printf("%s", buf);
+	  syslog(LOG_DEBUG, "%s", buf);
 	ret += strlen(buf);
     }
 #endif
