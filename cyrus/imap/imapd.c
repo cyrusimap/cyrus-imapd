@@ -674,6 +674,7 @@ char *user;
 char *passwd;
 {
     char *canon_user;
+    int userlen;
     char *reply = 0;
     char *val;
     char buf[MAX_MAILBOX_PATH];
@@ -723,9 +724,10 @@ char *passwd;
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
     val = config_getstring("admins", "");
+    userlen = strlen(canon_user);
     while (*val) {
-	if (!strncmp(val, user, strlen(user)) &&
-	    (!val[strlen(user)] || isspace(val[strlen(user)]))) {
+	if (!strncmp(val, canon_user, userlen) &&
+	    (!val[userlen] || isspace(val[userlen]))) {
 	    break;
 	}
 	while (*val && !isspace(*val)) val++;
@@ -756,6 +758,7 @@ char *tag;
 char *authtype;
 {
     char *canon_user;
+    int userlen;
     int r;
     struct acte_server *mech;
     int (*authproc)();
@@ -833,9 +836,10 @@ char *authtype;
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
     val = config_getstring("admins", "");
+    userlen = strlen(canon_user);
     while (*val) {
-	if (!strncmp(val, user, strlen(user)) &&
-	    (!val[strlen(user)] || isspace(val[strlen(user)]))) {
+	if (!strncmp(val, canon_user, userlen) &&
+	    (!val[userlen] || isspace(val[userlen]))) {
 	    break;
 	}
 	while (*val && !isspace(*val)) val++;
