@@ -3291,7 +3291,7 @@ char *s;
     /* Look for any non-QCHAR characters */
     for (p = s; *p; p++) {
 	if (*p & 0x80 || *p == '\r' || *p == '\n'
-	    || *p == '\"' || *p == '%' || *p == '\\') break;
+	    || *p == '\"' || *p == '%' || *p == '*' || *p == '\\') break;
     }
 
     if (*p) {
