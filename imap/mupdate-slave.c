@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.14 2002/02/07 21:43:45 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.15 2002/02/18 21:35:17 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -225,22 +225,12 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 {
     const char *server, *num;
     mupdate_handle *h = NULL;
-    int connection_count = 0;
-    int retries = 15;
     int retry_delay = 20;
     int ret;
 
     server = config_getstring("mupdate_server", NULL);
     if(server == NULL) {
 	fatal("couldn't get mupdate server name", EC_UNAVAILABLE);
-    }
-
-    num = config_getstring("mupdate_retry_count",NULL);
-    if(num && imparse_isnumber(num)) {
-	retries = atoi(num);
-	if(retries < 0) {
-	    fatal("invalid value for mupdate_retry_count", EC_UNAVAILABLE);
-	}
     }
 
     num = config_getstring("mupdate_retry_delay",NULL);
@@ -251,8 +241,6 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 	}
     }
 
-    /* xxx open the kick socket here */
-    
     while(1) {
 	ret = mupdate_connect(server, NULL, &h, NULL);
 	if(ret) {
@@ -260,8 +248,6 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 	    goto retry;
 	}
    
-	/* Successful Connection, reset counter: */
-	connection_count = -1;
 	syslog(LOG_ERR, "successful mupdate connection to %s", server);
 
 	mupdate_listen(h, retry_delay);
@@ -274,17 +260,10 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 	if(h && h->saslconn) sasl_dispose(&h->saslconn);
 	free(h); h = NULL;
 	
-	/* Should we retry? */
-	if(++connection_count < retries) {
-	    syslog(LOG_ERR,
-		   "retrying connection to mupdate server in %d seconds",
-		   retry_delay);
-	} else {
-	    syslog(LOG_ERR,
-		   "too many connection retries. dying.");
-	    break;
-	}
-	
+	syslog(LOG_ERR,
+	       "retrying connection to mupdate server in %d seconds",
+	       retry_delay);
+
 	/* Wait before retrying */
 	sleep(retry_delay);
     }

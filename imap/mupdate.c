@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.51 2002/02/18 16:35:23 rjs3 Exp $
+ * $Id: mupdate.c,v 1.52 2002/02/18 21:35:17 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -431,7 +431,7 @@ void cmdloop(struct conn *c)
 
     /* AUTH banner is mandatory */
     if(!masterp) {
-	char *mupdate_server = config_getstring("mupdate_server", NULL);
+	const char *mupdate_server = config_getstring("mupdate_server", NULL);
 	if(!mupdate_server)
 	    fatal("mupdate server was not specified for slave", EC_TEMPFAIL);
 	snprintf(slavebuf, sizeof(slavebuf), "mupdate://%s", mupdate_server);
