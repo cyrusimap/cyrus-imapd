@@ -244,7 +244,6 @@ char *seenuids;
     int n;
     struct iovec iov[10];
     int num_iov;
-    struct stat sbuf;
     static const char padbuf[/* 100 */] = {
 	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
 	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 
@@ -314,7 +313,7 @@ char *seenuids;
 	/* Flush and swap in the new file */
 	if (n == -1 || fsync(writefd) ||
 	    lock_blocking(writefd) == -1 ||
-	    fstat(seendb->fd, &sbuf) == -1 ||
+	    fstat(writefd, &sbuf) == -1 ||
 	    rename(newfnamebuf, fnamebuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: writing %s: %m", newfnamebuf);
 	    close(writefd);
@@ -323,6 +322,7 @@ char *seenuids;
 	}
 	close(seendb->fd);
 	seendb->fd = writefd;
+	seendb->ino = sbuf.st_ino;
 	seendb->length = length;
 	map_free(&seendb->base, &seendb->size);
 	map_refresh(seendb->fd, 1, &seendb->base, &seendb->size,
