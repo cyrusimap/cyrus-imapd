@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.202 2001/09/19 18:53:30 ken3 Exp $
+dnl $Id: configure.in,v 1.203 2001/09/20 17:48:41 ken3 Exp $
 dnl
 
 
@@ -125,7 +125,7 @@ AC_ARG_WITH(dbdir,[  --with-dbdir=DIR       Berkeley DB in <DIR>],
     done)
 #Try to detect the name of the DB3 library
 dbfound="no"
-for dbname in db-3.2 db3.2 db-3.1 db3.1 db-3 db3 db
+for dbname in db-3.3 db3.3 db-3.2 db3.2 db-3.1 db3.1 db-3 db3 db
   do
     AC_CHECK_LIB($dbname, db_create, [AC_DEFINE(HAVE_LIBDB)
 				      LIBS=" -l$dbname ${LIBS}"
