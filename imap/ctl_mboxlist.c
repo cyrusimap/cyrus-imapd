@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: ctl_mboxlist.c,v 1.3 2000/03/07 00:56:04 tmartin Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.4 2000/03/08 01:42:12 leg Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -133,8 +133,7 @@ void do_dump(enum mboxop op)
 		goto error;
 	    }
 
-	    mboxdata.uidvalidity = mailbox->uidvalidity;
-
+	    mboxdata.uidvalidity = mailbox.uidvalidity;
 	    mboxdata.answered = mailbox.answered;
 	    mboxdata.flagged = mailbox.flagged;
 	    mboxdata.deleted = mailbox.deleted;
