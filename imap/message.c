@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.86 2000/10/12 19:15:32 leg Exp $
+ * $Id: message.c,v 1.87 2000/11/17 02:12:06 leg Exp $
  */
 
 #include <config.h>
@@ -392,10 +392,9 @@ char *defaultContentType;
 struct boundary *boundaries;
 {
     struct boundary newboundaries;
-    static struct body zerobody;
     int sawboundary;
 
-    *body = zerobody;
+    memset(body, 0, sizeof(struct body));
     newboundaries.id = 0;
 
     /* No passed-in boundary structure, create a new, empty one */
@@ -420,7 +419,7 @@ struct boundary *boundaries;
 	body->subpart = (struct body *)xmalloc(sizeof(struct body));
 
 	if (sawboundary) {
-	    *body->subpart = zerobody;
+	    memset(body->subpart, 0, sizeof(struct body));
 	    message_parse_type(DEFAULT_CONTENT_TYPE, body->subpart);
 	}
 	else {
@@ -949,7 +948,6 @@ char *hdr;
 struct param **paramp;
 {
     struct param *param;
-    static struct param zeroparam;
     char *attribute;
     int attributelen;
     char *value;
@@ -1011,7 +1009,7 @@ struct param **paramp;
 		  
 	/* Save attribute/value pair */
 	*paramp = param = (struct param *)xmalloc(sizeof(struct param));
-	*param = zeroparam;
+	memset(param, 0, sizeof(struct param));
 	param->attribute = xmalloc(attributelen + 1);
 	strlcpy(param->attribute, attribute, attributelen);
 	param->attribute[attributelen] = '\0';
@@ -1218,7 +1216,6 @@ char *hdr;
 struct param **paramp;
 {
     struct param *param;
-    static struct param zeroparam;
     char *value;
     int valuelen;
     char *p;
@@ -1247,7 +1244,7 @@ struct param **paramp;
 		  
 	/* Save value pair */
 	*paramp = param = (struct param *)xmalloc(sizeof(struct param));
-	*param = zeroparam;
+	memset(param, 0, sizeof(struct param));
 	param->value = xmalloc(valuelen + 1);
 	strlcpy(param->value, value, valuelen);
 	param->value[valuelen] = '\0';
@@ -1271,7 +1268,6 @@ unsigned flags;
 {
     struct tm tm;
     time_t t;
-    static struct tm zerotm;
     char month[4];
     static char *monthname[] = {
 	"jan", "feb", "mar", "apr", "may", "jun",
@@ -1281,7 +1277,7 @@ unsigned flags;
 
     if (!hdr) goto baddate;
 
-    tm = zerotm;
+    memset(&tm, 0, sizeof(tm));
 
     message_parse_rfc822space(&hdr);
     if (!hdr) goto baddate;
@@ -1525,12 +1521,12 @@ struct body *body;
 struct boundary *boundaries;
 {
     struct body preamble, epilogue;
-    static struct body zerobody;
     struct param *boundary;
     char *defaultContentType = DEFAULT_CONTENT_TYPE;
     int i, depth;
 
-    preamble = epilogue = zerobody;
+    memset(&preamble, 0, sizeof(struct body));
+    memset(&epilogue, 0, sizeof(struct body));
     if (strcmp(body->subtype, "DIGEST") == 0) {
 	defaultContentType = "MESSAGE/RFC822";
     }

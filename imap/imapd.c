@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.279 2000/11/14 19:14:06 ken3 Exp $ */
+/* $Id: imapd.c,v 1.280 2000/11/17 02:11:29 leg Exp $ */
 
 #include <config.h>
 
@@ -110,7 +110,6 @@ struct protstream *imapd_out, *imapd_in;
 time_t imapd_logtime;
 
 static struct mailbox mboxstruct;
-static struct fetchargs zerofetchargs;
 
 static char *monthname[] = {
     "jan", "feb", "mar", "apr", "may", "jun",
@@ -2286,7 +2285,7 @@ int usinguid;
     char *p, *section;
     int fetchedsomething;
 
-    fetchargs = zerofetchargs;
+    memset(&fetchargs, 0, sizeof(struct fetchargs));
 
     c = getword(&fetchatt);
     if (c == '(' && !fetchatt.s[0]) {
@@ -2650,7 +2649,7 @@ char *count;
     char *section;
     int fetchedsomething;
 
-    fetchargs = zerofetchargs;
+    memset(&fetchargs, 0, sizeof(struct fetchargs));
 
     for (p = msgno; *p; p++) {
 	if (!isdigit((int) *p)) break;
@@ -2753,7 +2752,6 @@ int usinguid;
 {
     char *cmd = usinguid ? "UID Store" : "Store";
     struct storeargs storeargs;
-    static struct storeargs zerostoreargs;
     static struct buf flagname;
     int len, c;
     char **flag = 0;
@@ -2761,7 +2759,7 @@ int usinguid;
     int flagsparsed = 0, inlist = 0;
     int r;
 
-    storeargs = zerostoreargs;
+    memset(&storeargs, 0, sizeof storeargs);
 
     lcase(operation);
 
@@ -2887,10 +2885,8 @@ int usinguid;
     int c;
     int charset = 0;
     struct searchargs *searchargs;
-    static struct searchargs zerosearchargs;
 
-    searchargs = (struct searchargs *)xmalloc(sizeof(struct searchargs));
-    *searchargs = zerosearchargs;
+    searchargs = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
 
     c = getsearchprogram(tag, searchargs, &charset, 1);
     if (c == EOF) {
@@ -2933,7 +2929,6 @@ int usinguid;
     static struct buf arg;
     int charset = 0;
     struct searchargs *searchargs;
-    static struct searchargs zerosearchargs;
 
     c = getsortcriteria(tag, &sortcrit);
     if (c == EOF) {
@@ -2970,8 +2965,7 @@ int usinguid;
 	return;
     }
 
-    searchargs = (struct searchargs *)xmalloc(sizeof(struct searchargs));
-    *searchargs = zerosearchargs;
+    searchargs = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
 
     c = getsearchprogram(tag, searchargs, &charset, 0);
     if (c == EOF) {
@@ -3013,7 +3007,6 @@ int usinguid;
     int charset = 0;
     int alg;
     struct searchargs *searchargs;
-    static struct searchargs zerosearchargs;
 
     /* get algorithm */
     c = getword(&arg);
@@ -3048,8 +3041,7 @@ int usinguid;
 	return;
     }
 
-    searchargs = (struct searchargs *)xmalloc(sizeof(struct searchargs));
-    *searchargs = zerosearchargs;
+    searchargs = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
 
     c = getsearchprogram(tag, searchargs, &charset, 0);
     if (c == EOF) {
@@ -4452,7 +4444,6 @@ int *charset;
 int parsecharset;
 {
     static struct buf criteria, arg;
-    static struct searchargs zerosearchargs;
     struct searchargs *sub1, *sub2;
     char *p, *str;
     int i, c, flag, size;
@@ -4651,8 +4642,7 @@ int parsecharset;
     case 'n':
 	if (!strcmp(criteria.s, "not")) {
 	    if (c != ' ') goto missingarg;		
-	    sub1 = (struct searchargs *)xmalloc(sizeof(struct searchargs));
-	    *sub1 = zerosearchargs;
+	    sub1 = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
 	    c = getsearchcriteria(tag, sub1, charset, 0);
 	    if (c == EOF) {
 		freesearchargs(sub1);
@@ -4670,16 +4660,14 @@ int parsecharset;
     case 'o':
 	if (!strcmp(criteria.s, "or")) {
 	    if (c != ' ') goto missingarg;		
-	    sub1 = (struct searchargs *)xmalloc(sizeof(struct searchargs));
-	    *sub1 = zerosearchargs;
+	    sub1 = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
 	    c = getsearchcriteria(tag, sub1, charset, 0);
 	    if (c == EOF) {
 		freesearchargs(sub1);
 		return EOF;
 	    }
 	    if (c != ' ') goto missingarg;		
-	    sub2 = (struct searchargs *)xmalloc(sizeof(struct searchargs));
-	    *sub2 = zerosearchargs;
+	    sub2 = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
 	    c = getsearchcriteria(tag, sub2, charset, 0);
 	    if (c == EOF) {
 		freesearchargs(sub1);
@@ -4889,11 +4877,10 @@ time_t *start, *end;
 {
     int c;
     struct tm tm;
-    static struct tm zerotm;
     int quoted = 0;
     char month[4];
 
-    tm = zerotm;
+    memset(&tm, 0, sizeof tm);
 
     c = prot_getc(imapd_in);
     if (c == '\"') {
@@ -5092,11 +5079,10 @@ time_t *date;
     int c;
     struct tm tm;
     int old_format = 0;
-    static struct tm zerotm;
     char month[4], zone[4], *p;
     int zone_off;
 
-    tm = zerotm;
+    memset(&tm, 0, sizeof tm);
 
     c = prot_getc(imapd_in);
     if (c != '\"') goto baddate;
