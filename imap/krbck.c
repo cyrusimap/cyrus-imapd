@@ -18,6 +18,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <netdb.h>
+#include <netinet/in.h>
 #include <krb.h>
 #include <des.h>
 #include <netinet/in.h>
