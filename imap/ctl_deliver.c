@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.2 2000/02/16 03:12:00 leg Exp $
+ $Id: ctl_deliver.c,v 1.3 2000/02/18 03:27:29 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -27,10 +27,8 @@
  *
  */
 
-/* add a -r RECOVER flag? */
-
 static char _rcsid[] __attribute__ ((unused)) = 
-        "$Id: ctl_deliver.c,v 1.2 2000/02/16 03:12:00 leg Exp $";
+        "$Id: ctl_deliver.c,v 1.3 2000/02/18 03:27:29 leg Exp $";
 
 #include <config.h>
 
@@ -114,7 +112,7 @@ void fatal(const char *message, int code)
 void usage(void)
 {
     fprintf(stderr, "ctl_deliver -d [-f <dbfile>]\n"
-	    "ctl_deliver -E <days>\n");
+	    "ctl_deliver [-r] -E <days>\n");
     exit(-1);
 }
 
@@ -128,16 +126,22 @@ main(argc, argv)
     int opt, r = 0;
     char *alt_file = NULL;
     int days = 0;
-    enum { DUMP, PRUNE, NONE } op = NONE;
+    int flag = 0;
+    enum { DUMP, PRUNE, RECOVER, NONE } op = NONE;
 
-    config_init("dump_deliverdb");
+    config_init("ctl_deliver");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "dE:f:")) != EOF) {
+    while ((opt = getopt(argc, argv, "drE:f:")) != EOF) {
 	switch (opt) {
 	case 'd':
 	    if (op == NONE) op = DUMP;
 	    else usage();
+	    break;
+
+	case 'r':
+	    flag |= DUPLICATE_RECOVER;
+	    if (op == NONE) op = RECOVER;
 	    break;
 
 	case 'f':
@@ -146,7 +150,7 @@ main(argc, argv)
 	    break;
 
 	case 'E':
-	    if (op == NONE) op = PRUNE;
+	    if (op == NONE || op == RECOVER) op = PRUNE;
 	    else usage();
 	    days = atoi(optarg);
 	    break;
@@ -157,7 +161,7 @@ main(argc, argv)
 	}
     }
 
-    if (duplicate_init() != 0) {
+    if (duplicate_init(flag) != 0) {
 	fprintf(stderr, 
 		"deliver: unable to init duplicate delivery database\n");
 	exit(1);
@@ -183,6 +187,9 @@ main(argc, argv)
 	r = 0;
 	break;
 
+    case RECOVER:
+	break;
+
     case NONE:
 	r = 2;
 	usage();
@@ -193,4 +200,4 @@ main(argc, argv)
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.2 2000/02/16 03:12:00 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.3 2000/02/18 03:27:29 leg Exp $ */

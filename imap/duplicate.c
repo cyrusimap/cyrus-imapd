@@ -6,6 +6,26 @@
 #include <assert.h>
 #include <ctype.h>
 #include <time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#if HAVE_DIRENT_H
+# include <dirent.h>
+#else
+# define dirent direct
+# if HAVE_SYS_NDIR_H
+#  include <sys/ndir.h>
+# endif
+# if HAVE_SYS_DIR_H
+#  include <sys/dir.h>
+# endif
+# if HAVE_NDIR_H
+#  include <ndir.h>
+# endif
+#endif
 
 #include <db.h>
 
@@ -27,15 +47,40 @@ static void db_err(const char *db_prfx, char *buffer)
     syslog(LOG_ERR, "DBERROR %s: %s", db_prfx, buffer);
 }
 
-int duplicate_init()
+static int nuke_dir(char *dir)
+{
+    DIR *dirp;
+    struct dirent *dirent;
+
+    if (chdir(dir) == -1) {
+	if (!mkdir(dir, 0664)) return 0;
+	else return IMAP_IOERROR;
+    }
+    dirp = opendir(".");
+    if (!dirp) return IMAP_IOERROR;
+
+    while ((dirent = readdir(dirp)) != NULL) {
+	unlink(dirent->d_name);
+    }
+    closedir(dirp);
+    
+    return 0;
+}
+
+int duplicate_init(int myflags)
 {
     char buf[1024];
-    int r;
+    int r = 0;
+    int flags = 0;
 
     assert(!duplicate_dbinit);
 
     sprintf(buf, "%s/deliverdb/db", config_dir);
-    
+    if (myflags & DUPLICATE_RECOVER) {
+	/* remove the database environment; it'll be recreated */
+	r = nuke_dir(buf);
+	if (r) return r;
+    }
     if ((r = db_env_create(&duplicate_dbenv, 0)) != 0) {
 	char err[1024];
 	
@@ -44,9 +89,9 @@ int duplicate_init()
 	return IMAP_IOERROR;
     }
     
+    flags |= DB_INIT_CDB | DB_INIT_MPOOL | DB_CREATE;
     /* create the name of the db file */
-    r = duplicate_dbenv->open(duplicate_dbenv, buf, NULL, 
-			      DB_INIT_CDB | DB_INIT_MPOOL | DB_CREATE, 0644);
+    r = duplicate_dbenv->open(duplicate_dbenv, buf, NULL, flags, 0644);
     if (r) {
 	char err[1024];
 	

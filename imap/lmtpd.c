@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.3 2000/02/18 02:23:19 tmartin Exp $
+ * $Id: lmtpd.c,v 1.4 2000/02/18 03:27:45 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.3 2000/02/18 02:23:19 tmartin Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.4 2000/02/18 03:27:45 leg Exp $";*/
 
 #include <config.h>
 
@@ -385,7 +385,7 @@ int service_main(int argc, char **argv, char **envp)
     prot_settimeout(deliver_in, 300);
 
     dupelim = 1;
-    if (duplicate_init() != 0) {
+    if (duplicate_init(0) != 0) {
 	syslog(LOG_ERR, 
 	       "deliver: unable to init duplicate delivery database\n");
 	dupelim = 0;

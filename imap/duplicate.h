@@ -5,7 +5,9 @@
 
 extern DB_ENV *duplicate_dbenv;
 
-int duplicate_init(void);
+#define DUPLICATE_RECOVER 0x01
+
+int duplicate_init(int);
 
 time_t duplicate_check(char *id, int idlen, char *to, int tolen);
 void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark);
