@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.99 2004/12/08 18:05:05 ken3 Exp $ */
+/* $Id: master.c,v 1.100 2004/12/17 16:32:24 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1313,6 +1313,7 @@ void add_service(const char *name, struct entry *e, void *rock)
     char *proto = xstrdup(masterconf_getstring(e, "proto", "tcp"));
     char *max = xstrdup(masterconf_getstring(e, "maxchild", "-1"));
     rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 256);
+    int reconfig = 0;
     int i, j;
 
     if(babysit && prefork == 0) prefork = 1;
@@ -1331,11 +1332,16 @@ void add_service(const char *name, struct entry *e, void *rock)
 	fatal(buf, EX_CONFIG);
     }
 
-    /* see if we have an existing entry for this service */
+    /* see if we have an existing entry that can be reused */
     for (i = 0; i < nservices; i++) {
+	/* skip non-primary instances */
 	if (Services[i].associate > 0)
 	    continue;
-	if (Services[i].name && !strcmp(Services[i].name, name)) break;
+	/* must have empty/same service name, listen and proto */
+	if ((!Services[i].name || !strcmp(Services[i].name, name)) &&
+	    (!Services[i].listen || !strcmp(Services[i].listen, listen)) &&
+	    (!Services[i].proto || !strcmp(Services[i].proto, proto)))
+	    break;
     }
 
     /* we have duplicate service names in the config file */
@@ -1350,63 +1356,8 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 	fatal(buf, EX_CONFIG);
     }
-
-    if ((i < nservices) &&
-	!strcmp(Services[i].listen, listen) &&
-	!strcmp(Services[i].proto, proto)) {
-
-	/* we found an existing entry and the port paramters are the same */
-	Services[i].exec = tokenize(cmd);
-	if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
-
-	/* is this service actually there? */
-	if (!verify_service_file(Services[i].exec)) {
-	    char buf[1024];
-	    snprintf(buf, sizeof(buf),
-		     "cannot find executable for service '%s'", name);
-
-	    /* if it is not, we're misconfigured, die. */
-	    fatal(buf, EX_CONFIG);
-	}
-
-	Services[i].maxforkrate = maxforkrate;
- 	Services[i].maxfds = maxfds;
-
-	if (!strcmp(Services[i].proto, "tcp") ||
-	    !strcmp(Services[i].proto, "tcp4") ||
-	    !strcmp(Services[i].proto, "tcp6")) {
-	    Services[i].desired_workers = prefork;
-	    Services[i].babysit = babysit;
-	    Services[i].max_workers = atoi(max);
-	    if (Services[i].max_workers == -1) {
-		Services[i].max_workers = INT_MAX;
-	    }
-	} else {
-	    /* udp */
-	    if (prefork > 1) prefork = 1;
-	    Services[i].desired_workers = prefork;
-	    Services[i].max_workers = 1;
-	}
  
-	for (j = 0; j < nservices; j++) {
-	    if (Services[j].associate > 0 &&
-		Services[j].name && !strcmp(Services[j].name, name)) {
-		Services[j].maxforkrate = Services[i].maxforkrate;
-		Services[j].exec = Services[i].exec;
-		Services[j].desired_workers = Services[i].desired_workers;
-		Services[j].babysit = Services[i].babysit;
-		Services[j].max_workers = Services[i].max_workers;
-	    }
-	}
-
-	if (verbose > 2)
-	    syslog(LOG_DEBUG, "reconfig: service '%s' (%s, %s:%s, %d, %d)",
-		   Services[i].name, cmd,
-		   Services[i].proto, Services[i].listen,
-		   Services[i].desired_workers,
-		   Services[i].max_workers);
-    }
-    else {
+    if (i == nservices) {
 	/* either we don't have an existing entry or we are changing
 	 * the port parameters, so create a new service
 	 */
@@ -1416,69 +1367,73 @@ void add_service(const char *name, struct entry *e, void *rock)
 	    Services = xrealloc(Services, 
 			       (allocservices+=5) * sizeof(struct service));
 	}
+	memset(&Services[nservices++], 0, sizeof(struct service));
 
-	Services[nservices].name = xstrdup(name);
-	Services[nservices].listen = listen;
-	Services[nservices].proto = proto;
-	Services[nservices].exec = tokenize(cmd);
-	if (!Services[nservices].exec) fatal("out of memory", EX_UNAVAILABLE);
+	Services[i].last_interval_start = time(NULL);
+    }
+    else if (Services[i].listen) reconfig = 1;
 
-	/* is this service actually there? */
-	if (!verify_service_file(Services[i].exec)) {
-	    char buf[1024];
-	    snprintf(buf, sizeof(buf),
-		     "cannot find executable for service '%s'", name);
+    if (!Services[i].name) Services[i].name = xstrdup(name);
+    if (Services[i].listen) free(Services[i].listen);
+    Services[i].listen = listen;
+    if (Services[i].proto) free(Services[i].proto);
+    Services[i].proto = proto;
 
-	    /* if it is not, we're misconfigured, die. */
-	    fatal(buf, EX_CONFIG);
-	}
+    Services[i].exec = tokenize(cmd);
+    if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
 
-	Services[nservices].socket = 0;
-	Services[nservices].saddr = NULL;
-
-	Services[nservices].ready_workers = 0;
-
- 	Services[nservices].maxfds = maxfds;
-	Services[nservices].maxforkrate = maxforkrate;
-
-	if(!strcmp(Services[nservices].proto, "tcp") ||
-	   !strcmp(Services[nservices].proto, "tcp4") ||
-	   !strcmp(Services[nservices].proto, "tcp6")) {
-	    Services[nservices].desired_workers = prefork;
-	    Services[nservices].babysit = babysit;
-	    Services[nservices].max_workers = atoi(max);
-	    if (Services[nservices].max_workers == -1) {
-		Services[nservices].max_workers = INT_MAX;
-	    }
-	} else {
-	    if (prefork > 1) prefork = 1;
-	    Services[nservices].desired_workers = prefork;
-	    Services[nservices].max_workers = 1;
-	}
+    /* is this service actually there? */
+    if (!verify_service_file(Services[i].exec)) {
+	char buf[1024];
+	snprintf(buf, sizeof(buf),
+		 "cannot find executable for service '%s'", name);
 	
-	memset(Services[nservices].stat, 0, sizeof(Services[nservices].stat));
-
-	Services[nservices].last_interval_start = time(NULL);
-	Services[nservices].interval_forks = 0;
-	Services[nservices].forkrate = 0;
-	
-	Services[nservices].nforks = 0;
-	Services[nservices].nactive = 0;
-	Services[nservices].nconnections = 0;
-	Services[nservices].associate = 0;
-	
-	if (verbose > 2)
-	    syslog(LOG_DEBUG, "add: service '%s' (%s, %s:%s, %d, %d, %d)",
-		   Services[nservices].name, cmd,
-		   Services[nservices].proto, Services[nservices].listen,
-		   Services[nservices].desired_workers,
-		   Services[nservices].max_workers,
-		   (int) Services[nservices].maxfds);
-
-	nservices++;
+	/* if it is not, we're misconfigured, die. */
+	fatal(buf, EX_CONFIG);
     }
 
+    Services[i].maxforkrate = maxforkrate;
+    Services[i].maxfds = maxfds;
+
+    if (!strcmp(Services[i].proto, "tcp") ||
+	!strcmp(Services[i].proto, "tcp4") ||
+	!strcmp(Services[i].proto, "tcp6")) {
+	Services[i].desired_workers = prefork;
+	Services[i].babysit = babysit;
+	Services[i].max_workers = atoi(max);
+	if (Services[i].max_workers == -1) {
+	    Services[i].max_workers = INT_MAX;
+	}
+    } else {
+	/* udp */
+	if (prefork > 1) prefork = 1;
+	Services[i].desired_workers = prefork;
+	Services[i].max_workers = 1;
+    }
     free(max);
+ 
+    if (reconfig) {
+	/* reconfiguring an existing service, update any other instances */
+	for (j = 0; j < nservices; j++) {
+	    if (Services[j].associate > 0 && Services[j].listen &&
+		Services[j].name && !strcmp(Services[j].name, name)) {
+		Services[j].maxforkrate = Services[i].maxforkrate;
+		Services[j].exec = Services[i].exec;
+		Services[j].desired_workers = Services[i].desired_workers;
+		Services[j].babysit = Services[i].babysit;
+		Services[j].max_workers = Services[i].max_workers;
+	    }
+	}
+    }
+
+    if (verbose > 2)
+	syslog(LOG_DEBUG, "%s: service '%s' (%s, %s:%s, %d, %d, %d)",
+	       reconfig ? "reconfig" : "add",
+	       Services[i].name, cmd,
+	       Services[i].proto, Services[i].listen,
+	       Services[i].desired_workers,
+	       Services[i].max_workers,
+	       (int) Services[i].maxfds);
 }
 
 void add_event(const char *name, struct entry *e, void *rock)
@@ -1599,17 +1554,26 @@ void reread_conf(void)
 		       Services[i].name, Services[i].socket,
 		       Services[i].stat[0], Services[i].stat[1]);
 
-	    /* Only free the service info once */
+	    /* Only free the service info on the primary */
 	    if(Services[i].associate == 0) {
-		free(Services[i].name);
 		free(Services[i].listen);
 		free(Services[i].proto);
 	    }
-	    Services[i].name = NULL;
+	    Services[i].listen = NULL;
+	    Services[i].proto = NULL;
 	    Services[i].desired_workers = 0;
-	    Services[i].nforks = 0;
-	    Services[i].nactive = 0;
-	    Services[i].nconnections = 0;
+
+	    /* send SIGHUP to all children */
+	    for (j = 0 ; j < child_table_size ; j++ ) {
+		c = ctable[j];
+		while (c != NULL) {
+		    if ((c->si == i) &&
+			(c->service_state != SERVICE_STATE_DEAD)) {
+			kill(c->pid, SIGHUP);
+		    }
+		    c = c->next;
+		}
+	    }
 
 	    /* close all listeners */
 	    if (Services[i].socket > 0) {
@@ -1617,20 +1581,6 @@ void reread_conf(void)
 		close(Services[i].socket);
 	    }
 	    Services[i].socket = 0;
-	    Services[i].saddr = NULL;
-
-	    if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
-	    if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
-	    memset(Services[i].stat, 0, sizeof(Services[i].stat));
-
-	    /* remove service from all children */
-	    for (j = 0 ; j < child_table_size ; j++ ) {
-		c = ctable[j];
-		while (c != NULL) {
-		    if (c->si == i) c->si = SERVICE_NONE;
-		    c = c->next;
-		}
-	    }
 	}
 	else if (Services[i].exec && !Services[i].socket) {
 	    /* initialize new services */
@@ -2008,6 +1958,27 @@ int main(int argc, char **argv)
 		       "Applying babysitter.",
 		       Services[i].name);
 		spawn_service(i);
+	    } else if (!Services[i].exec /* disabled */ &&
+		       Services[i].name /* not yet removed */ &&
+		       Services[i].nactive == 0) {
+		if (verbose > 2)
+		    syslog(LOG_DEBUG, "remove: service %s pipe %d %d",
+			   Services[i].name,
+			   Services[i].stat[0], Services[i].stat[1]);
+
+		/* Only free the service info on the primary */
+		if (Services[i].associate == 0) {
+		    free(Services[i].name);
+		}
+		Services[i].name = NULL;
+		Services[i].nforks = 0;
+		Services[i].nactive = 0;
+		Services[i].nconnections = 0;
+		Services[i].associate = 0;
+
+		if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
+		if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
+		memset(Services[i].stat, 0, sizeof(Services[i].stat));
 	    }
 	}
 

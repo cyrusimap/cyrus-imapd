@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.191 2004/11/23 17:40:15 shadow Exp $ */
+/* $Id: proxyd.c,v 1.192 2004/12/17 16:32:20 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1143,7 +1143,6 @@ int service_init(int argc, char **argv, char **envp)
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
-    signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */
