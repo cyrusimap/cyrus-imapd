@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.27 2002/02/01 19:41:15 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.28 2002/03/01 22:17:21 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -300,9 +300,15 @@ void do_undump(void)
     int r = 0;
     char buf[16384];
     int line = 0;
-    char *key, *data;
+    char last_commit[MAX_MAILBOX_NAME];
+    char *key=NULL, *data=NULL;
     int keylen, datalen;
+    const int PER_COMMIT = 1000;
+    int untilCommit = PER_COMMIT;
+    struct txn *tid = NULL;
     
+    last_commit[0] = '\0';
+
     while (fgets(buf, sizeof(buf), stdin)) {
 	char *name, *partition, *acl;
 	char *p;
@@ -343,7 +349,7 @@ void do_undump(void)
 	
 	tries = 0;
     retry:
-	r = CONFIG_DB_MBOX->store(mbdb, key, keylen, data, datalen, NULL);
+	r = CONFIG_DB_MBOX->store(mbdb, key, keylen, data, datalen, &tid);
 	switch (r) {
 	case 0:
 	    break;
@@ -358,15 +364,35 @@ void do_undump(void)
 	    r = IMAP_IOERROR;
 	    break;
 	}
-
+	
 	free(data);
+
+	if(--untilCommit == 0) {
+	    /* commit */
+	    r = CONFIG_DB_MBOX->commit(mbdb, tid);
+	    if(r) break;
+	    tid = NULL;
+	    untilCommit = PER_COMMIT;
+	    strncpy(last_commit,key,MAX_MAILBOX_NAME);
+	}
 
 	if (r) break;
     }
 
-    if (r) {
-	fprintf(stderr, "db error: %s\n", cyrusdb_strerror(r));
+    if(!r && tid) {
+	/* commit the last transaction */
+	r=CONFIG_DB_MBOX->commit(mbdb, tid);
     }
+
+    if (r) {
+	if(tid) CONFIG_DB_MBOX->abort(mbdb, tid);
+	fprintf(stderr, "db error: %s\n", cyrusdb_strerror(r));
+	if(key) fprintf(stderr, "was processing mailbox: %s\n", key);
+	if(last_commit[0]) fprintf(stderr, "last commit was at: %s\n",
+				   last_commit);
+	else fprintf(stderr, "no commits\n");
+    }
+    
 
     return;
 }
