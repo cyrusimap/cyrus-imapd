@@ -742,7 +742,7 @@ struct mailbox *mailbox;
     
     *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox->generation_no;
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
-    *((bit32 *)(buf+OFFSET_MINOR_VERISION)) = htonl(mailbox->minor_version);
+    *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(mailbox->minor_version);
     *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(mailbox->start_offset);
     *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(mailbox->record_size);
     *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(mailbox->exists);
@@ -1086,7 +1086,7 @@ char *deciderock;
       htonl(ntohl(*((bit32 *)(buf+32)))-quotadeleted);
     /* Fix up start offset if necessary */
     if (mailbox->start_offset < INDEX_HEADER_SIZE) {
-	*((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(ntohl(INDEX_HEADER_SIZE));
+	*((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
     }
 	
     rewind(newindex);
