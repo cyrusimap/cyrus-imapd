@@ -42,12 +42,12 @@
 /*
  * TODO:
  *
+ * - HDR <msgid>
  * - support for control messages
- * - wildmat support
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.31 2002/10/22 20:11:42 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.32 2002/10/23 19:55:07 ken3 Exp $
  */
 #include <config.h>
 
@@ -860,7 +860,7 @@ static void cmdloop(void)
 	    }
 	    else if (!strcmp(cmd.s, "Newnews")) {
 		time_t tstamp;
-		char pattern[MAX_MAILBOX_NAME+1];
+		struct wildmat *wild;
 
 		if (!config_getswitch(IMAPOPT_ALLOWNEWNEWS))
 		    goto cmddisabled;
@@ -886,13 +886,15 @@ static void cmdloop(void)
 					     arg4.len ? arg4.s : NULL)) < 0)
 		    goto baddatetime;
 
+		wild = split_wildmats(arg1.s);
+
 		prot_printf(nntp_out, "230 List of new articles follows\r\n");
 
-		strcpy(pattern, newsprefix);
-		strcat(pattern, arg1.s);
-		netnews_findall(pattern, tstamp, 1, do_newnews, NULL);
+		netnews_findall(wild, tstamp, 1, do_newnews, NULL);
 
 		prot_printf(nntp_out, ".\r\n");
+
+		free_wildmats(wild);
 	    }
 	    else if (!strcmp(cmd.s, "Next")) {
 		if (c == '\r') c = prot_getc(nntp_in);
@@ -1412,6 +1414,7 @@ int do_list(char *name, int matchlen, int maycreate __attribute__((unused)),
 	    void *rock)
 {
     static char lastname[MAX_MAILBOX_NAME+1] = "";
+    struct wildmat *wild = (struct wildmat *) rock;
     char *acl;
     int r, myrights;
 
@@ -1426,6 +1429,12 @@ int do_list(char *name, int matchlen, int maycreate __attribute__((unused)),
 
     strncpy(lastname, name, matchlen);
     lastname[matchlen] = '\0';
+
+    /* see if the mailbox matches one of our wildmats */
+    while (wild->pat && wildmat(name, wild->pat) != 1) wild++;
+
+    /* if we don't have a match, or its a negative match, skip it */
+    if (!wild->pat || wild->not) return 0;
 
     /* look it up */
     r = mboxlist_detail(name, NULL, NULL, NULL, &acl, NULL);
@@ -1452,7 +1461,33 @@ void cmd_list(char *arg1, char *arg2)
     else
 	lcase(arg1);
 
-    if (!strcmp(arg1, "extensions")) {
+    if (!strcmp(arg1, "active")) {
+	char pattern[MAX_MAILBOX_NAME+1];
+	struct wildmat *wild;
+
+	if (!arg2) arg2 = "*";
+
+	/* split the list of wildmats */
+	wild = split_wildmats(arg2);
+
+	prot_printf(nntp_out, "215 list of newsgroups follows:\r\n");
+
+	strcpy(pattern, newsprefix);
+	strcat(pattern, "*");
+	mboxlist_findall(NULL, pattern, 0, nntp_userid, nntp_authstate,
+			 do_list, wild);
+
+	prot_printf(nntp_out, ".\r\n");
+
+	if (nntp_group) {
+	    mailbox_close(nntp_group);
+	    nntp_group = 0;
+	}
+
+	/* free the wildmats */
+	free_wildmats(wild);
+    }
+    else if (!strcmp(arg1, "extensions")) {
 	unsigned mechcount;
 	const char *mechlist;
 
@@ -1476,27 +1511,6 @@ void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, "LISTGROUP\r\n");
 	prot_printf(nntp_out, "OVER\r\n");
 	prot_printf(nntp_out, "STARTTLS\r\n");
-	prot_printf(nntp_out, ".\r\n");
-    }
-    else if (!strcmp(arg1, "active")) {
-	char pattern[MAX_MAILBOX_NAME+1];
-
-	if (arg2) {
-	    /* XXX do something with wildmat */
-	}
-	strcpy(pattern, newsprefix);
-	strcat(pattern, "*");
-
-	prot_printf(nntp_out, "215 list of newsgroups follows:\r\n");
-
-	mboxlist_findall(NULL, pattern, 0, nntp_userid, nntp_authstate,
-			 do_list, NULL);
-
-	if (nntp_group) {
-	    mailbox_close(nntp_group);
-	    nntp_group = 0;
-	}
-
 	prot_printf(nntp_out, ".\r\n");
     }
     else if (!strcmp(arg1, "overview.fmt")) {

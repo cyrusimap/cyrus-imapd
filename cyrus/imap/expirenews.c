@@ -41,7 +41,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: expirenews.c,v 1.1.2.1 2002/10/16 20:02:59 ken3 Exp $ */
+/* $Id: expirenews.c,v 1.1.2.2 2002/10/23 19:55:07 ken3 Exp $ */
 
 #include <config.h>
 
@@ -56,7 +56,6 @@
 
 #include "exitcodes.h"
 #include "imapconf.h"
-#include "mailbox.h"
 #include "netnews.h"
 
 /* global state */
@@ -70,7 +69,7 @@ void fatal(const char *message, int code)
 
 void usage(void)
 {
-    fprintf(stderr, "expirenews [-C <altconfig>] -E <days> [<wildmat>...]\n");
+    fprintf(stderr, "expirenews [-C <altconfig>] -E <days> [<wildmat>]\n");
     exit(-1);
 }
 
@@ -94,8 +93,8 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
     int days = 0, count = 0, deleted = 0;
     time_t expmark;
-    const char *prefix;
-    char pattern[MAX_MAILBOX_NAME+1] = "", *p;
+    char *p;
+    struct wildmat *wild;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
@@ -130,22 +129,19 @@ int main(int argc, char *argv[])
 
     expmark = time(NULL) - (days * 60 * 60 * 24);
 
-    if ((prefix = config_getstring(IMAPOPT_NEWSPREFIX)))
-	snprintf(pattern, sizeof(pattern), "%s.", prefix);
-    p = pattern + strlen(pattern);
+    if (optind == argc) /* do all newsgroups */
+	p = "*";
+    else
+	p = argv[optind];
 
-    if (optind == argc) { /* do all newsgroups */
-	strcpy(p, "*");
-	count = netnews_findall(pattern, expmark, 0, prune_cb, &deleted);
-    } else {
-	for (; optind < argc; optind++) {
-	    strncpy(p, argv[optind], MAX_MAILBOX_NAME);
-	    count += netnews_findall(pattern, expmark, 0, prune_cb, &deleted);
-	}
-    }
+    wild = split_wildmats(p);
+
+    count = netnews_findall(wild, expmark, 0, prune_cb, &deleted);
 
     syslog(LOG_NOTICE, "expirenews: purged %d out of %d entries",
 	   deleted, count);
+
+    free_wildmats(wild);
 
     netnews_done();
 

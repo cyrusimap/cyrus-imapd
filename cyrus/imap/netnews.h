@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: netnews.h,v 1.1.2.2 2002/10/16 20:02:59 ken3 Exp $ */
+/* $Id: netnews.h,v 1.1.2.3 2002/10/23 19:55:07 ken3 Exp $ */
 
 #ifndef NETNEWS_H
 #define NETNEWS_H
@@ -48,6 +48,15 @@
 /* name of the netnews database */
 #define FNAME_NETNEWSDB "/netnews.db"
 
+struct wildmat {
+    char *pat;
+    int not;
+};
+
+struct wildmat *split_wildmats(char *str);
+void free_wildmats(struct wildmat *wild);
+extern int wildmat(const char *text, const char *p);
+
 int netnews_init(char*, int);
 
 int netnews_lookup(char *msgid, char **mailbox, unsigned long *uid,
@@ -56,7 +65,7 @@ void netnews_store(char *msgid, char *mailbox, unsigned long uid,
 		   unsigned long lines, time_t tstamp);
 void netnews_delete(char *msgid);
 
-int netnews_findall(const char *pattern, time_t mark, int since,
+int netnews_findall(struct wildmat *wild, time_t mark, int since,
 		    int (*proc)(), void *rock);
 
 int netnews_done(void);

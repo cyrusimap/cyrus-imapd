@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: expirenews.8,v 1.1.2.1 2002/10/16 20:03:00 ken3 Exp $
+.\" $Id: expirenews.8,v 1.1.2.2 2002/10/23 19:55:08 ken3 Exp $
 .SH NAME
 expirenews \- expire news articles
 .SH SYNOPSIS
@@ -50,12 +50,12 @@ expirenews \- expire news articles
 ]
 .BI \-E " days"
 [
-.IR wildmat ...
+.I wildmat
 ]
 .SH DESCRIPTION
 .I Expirenews
 is used to expire news articles in newsgroups specified by the
-\fIwildmat\fR pattern(s) that are older than specified by \fB-E\fR.
+\fIwildmat\fR pattern that are older than specified by \fB-E\fR.
 If no \fIwildmat\fR is given, \fIexpirenews\fR works on all newsgroups.
 .I Expirenews
 both prunes the netnews database and deletes the articles.

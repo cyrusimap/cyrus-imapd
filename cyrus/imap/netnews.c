@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: netnews.c,v 1.1.2.3 2002/10/16 20:02:59 ken3 Exp $ */
+/* $Id: netnews.c,v 1.1.2.4 2002/10/23 19:55:07 ken3 Exp $ */
 
 #include <config.h>
 
@@ -78,9 +78,9 @@
 #include "imap_err.h"
 #include "imapconf.h"
 #include "exitcodes.h"
+#include "mailbox.h"
 #include "util.h"
 #include "cyrusdb.h"
-#include "glob.h"
 
 #include "netnews.h"
 
@@ -219,7 +219,7 @@ void netnews_delete(char *msgid)
 }
 
 struct findrock {
-    struct glob *glob;
+    struct wildmat *wild;
     time_t mark;
     int later;
     int count;
@@ -231,15 +231,18 @@ static int find_p(void *rock, const char *id, int idlen,
 		  const char *data, int datalen)
 {
     struct findrock *frock = (struct findrock *) rock;
+    struct wildmat *wild = frock->wild;
     struct netnews_entry entry;
 
     frock->count++;
 
     parse_entry(data, &entry);
 
-    /* check mailbox against pattern */
-    if (GLOB_TEST(frock->glob, entry.mailbox) == -1)
-	return 0;
+    /* see if the mailbox matches one of our wildmats */
+    while (wild->pat && wildmat(entry.mailbox, wild->pat) != 1) wild++;
+
+    /* if we don't have a match, or its a negative match, skip it */
+    if (!wild->pat || wild->not) return 0;
 
     /* check timestamp against mark */
     if (frock->later)
@@ -272,12 +275,12 @@ static int find_cb(void *rock, const char *id, int idlen,
     return r;
 }
 
-int netnews_findall(const char *pattern, time_t mark, int later,
+int netnews_findall(struct wildmat *wild, time_t mark, int later,
 		    int (*proc)(), void *rock)
 {
     struct findrock frock;
 
-    frock.glob = glob_init(pattern, GLOB_HIERARCHY);
+    frock.wild = wild;
     frock.mark = mark;
     frock.later = later;
     frock.count = 0;
@@ -286,8 +289,6 @@ int netnews_findall(const char *pattern, time_t mark, int later,
 
     /* check each entry in our database */
     DB->foreach(newsdb, "", 0, &find_p, &find_cb, &frock, NULL);
-
-    glob_free(&frock.glob);
 
     return frock.count;
 }
@@ -308,3 +309,50 @@ int netnews_done(void)
 
     return r;
 }
+
+struct wildmat *split_wildmats(char *str)
+{
+    const char *prefix;
+    char pattern[MAX_MAILBOX_NAME+1] = "", *p, *c;
+    struct wildmat *wild = NULL;
+    int n = 0;
+
+    if ((prefix = config_getstring(IMAPOPT_NEWSPREFIX)))
+	snprintf(pattern, sizeof(pattern), "%s.", prefix);
+    p = pattern + strlen(pattern);
+
+    /*
+     * split the list of wildmats
+     *
+     * we split them right to left because this is the order in which
+     * we want to test them (per draft-ietf-nntpext-base 5.2)
+     */
+    do {
+	if ((c = strrchr(str, ',')))
+	    *c++ = '\0';
+	else
+	    c = str;
+
+	if (!(n % 10)) /* alloc some more */
+	    wild = xrealloc(wild, (n + 11) * sizeof(struct wildmat));
+
+	wild[n].not = (*c == '!');
+	strcpy(p, wild[n].not ? c + 1 : c);
+	wild[n++].pat = xstrdup(pattern);
+    } while (c != str);
+    wild[n].pat = NULL;
+
+    return wild;
+}
+
+void free_wildmats(struct wildmat *wild)
+{
+    struct wildmat *w = wild;
+
+    while (w->pat) {
+	free(w->pat);
+	w++;
+    }
+    free(wild);
+}
+

@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.164.4.12 2002/10/18 20:02:20 ken3 Exp $
+# $Id: Makefile.in,v 1.164.4.13 2002/10/23 19:55:06 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -260,10 +260,13 @@ pop3proxyd: pop3proxyd.o tls.o mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o pop3proxyd pop3proxyd.o tls.o $(SERVICE) \
 	 mutex_fake.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-nntpd: nntpd.o index.o spool.o netnews.o tls.o mutex_fake.o nntp_err.o \
-	libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o nntpd nntpd.o index.o spool.o netnews.o tls.o \
-	 $(SERVICE) mutex_fake.o nntp_err.o libimap.a \
+wildmat.c:
+	ln -s ../netnews/wildmat.c wildmat.c
+
+nntpd: nntpd.o index.o spool.o netnews.o wildmat.o tls.o mutex_fake.o \
+	nntp_err.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o nntpd nntpd.o index.o spool.o netnews.o wildmat.o \
+	 tls.o $(SERVICE) mutex_fake.o nntp_err.o libimap.a \
 	 $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 arbitron: arbitron.o mutex_fake.o libimap.a $(DEPLIBS)
@@ -306,9 +309,10 @@ fetchnews: fetchnews.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
 	 $@ fetchnews.o mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
 
-expirenews: expirenews.o netnews.o mutex_fake.o libimap.a $(DEPLIBS)
+expirenews: expirenews.o netnews.o wildmat.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
-	 $@ expirenews.o netnews.o mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
+	 $@ expirenews.o netnews.o wildmat.o mutex_fake.o libimap.a \
+	 $(DEPLIBS) $(LIBS)
 
 libimap.a: $(LOBJS)
 	rm -f libimap.a
