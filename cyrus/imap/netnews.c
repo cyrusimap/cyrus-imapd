@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: netnews.c,v 1.1.2.1 2002/10/15 19:12:49 ken3 Exp $ */
+/* $Id: netnews.c,v 1.1.2.2 2002/10/16 17:23:56 ken3 Exp $ */
 
 #include <config.h>
 
@@ -128,13 +128,31 @@ int netnews_init(char *fname, int myflags)
     return r;
 }
 
+struct netnews_entry {
+    char *mailbox;
+    unsigned long uid;
+    unsigned long lines;
+    time_t tstamp;
+};
+
+static void parse_entry(const char *data, struct netnews_entry *entry)
+{
+    char *p = (char *) data;
+
+    entry->mailbox = p;
+    p += strlen(p);
+
+    entry->uid = strtoul(++p, &p, 10);
+    entry->lines = strtoul(++p, &p, 10);
+    entry->tstamp = (time_t) strtoul(++p, &p, 10);
+}
+
 int netnews_lookup(char *msgid, char **mailbox, unsigned long *uid,
-		unsigned long *lines, time_t *tstamp)
+		   unsigned long *lines, time_t *tstamp)
 {
     int r;
     const char *data = NULL;
     int len = 0;
-    unsigned long ul;
 
     if (!news_dbopen) return 0;
 
@@ -144,19 +162,14 @@ int netnews_lookup(char *msgid, char **mailbox, unsigned long *uid,
 
     if (data) {
 	/* found the record */
-	char *p = (char *) data;
+	struct netnews_entry entry;
 
-	if (mailbox) *mailbox = p;
-	p += strlen(p);
+	parse_entry(data, &entry);
 
-	ul = strtoul(++p, &p, 10);
-	if (uid) *uid = ul;
-
-	ul = strtoul(++p, &p, 10);
-	if (lines) *lines = ul;
-
-	ul = strtoul(++p, &p, 10);
-	if (tstamp) *tstamp = (time_t) ul;
+	if (mailbox) *mailbox = entry.mailbox;
+	if (uid) *uid = entry.uid;
+	if (lines) *lines = entry.lines;
+	if (tstamp) *tstamp = entry.tstamp;
 
 	return 1;
     } else if (r != CYRUSDB_OK) {
@@ -168,7 +181,7 @@ int netnews_lookup(char *msgid, char **mailbox, unsigned long *uid,
 }
 
 void netnews_store(char *msgid, char *mailbox, unsigned long uid,
-		unsigned long lines, time_t tstamp)
+		   unsigned long lines, time_t tstamp)
 {
     char buf[1024];
     int n, r;
@@ -191,6 +204,19 @@ void netnews_store(char *msgid, char *mailbox, unsigned long uid,
     return;
 }
 
+void netnews_delete(char *msgid)
+{
+    int r;
+
+    if (!news_dbopen) return;
+
+    do {
+	r = DB->delete(newsdb, msgid, strlen(msgid), NULL, 0);
+    } while (r == CYRUSDB_AGAIN);
+
+    return;
+}
+
 struct expirerock {
     struct db *db;
     time_t expmark;
@@ -199,22 +225,27 @@ struct expirerock {
 };
 
 static int expire_p(void *rock, const char *id, int idlen,
-		  const char *data, int datalen)
+		    const char *data, int datalen)
 {
     struct expirerock *prock = (struct expirerock *) rock;
+    char *p = (char *) data;
+    unsigned long ul;
     time_t mark;
 
     prock->count++;
 
-    /* grab the mark */
-    memcpy(&mark, data, sizeof(time_t));
+    p += strlen(p); /* mailbox */
+    ul = strtoul(++p, &p, 10); /* uid */
+    ul = strtoul(++p, &p, 10); /* lines */
+    ul = strtoul(++p, &p, 10); /* timestamp */
+    mark = (time_t) ul;
 
     /* check if we should expire this entry */
     return (mark < prock->expmark);
 }
 
 static int expire_cb(void *rock, const char *id, int idlen,
-		   const char *data, int datalen)
+		     const char *data, int datalen)
 {
     struct expirerock *prock = (struct expirerock *) rock;
     int r;
@@ -247,77 +278,6 @@ int netnews_expire(int days)
 	   prock.deletions, prock.count);
 
     return 0;
-}
-
-struct dumprock {
-    FILE *f;
-    int count;
-};
-
-static int dump_p(void *rock,
-		  const char *key, int keylen,
-		  const char *data, int datalen)
-{
-    struct dumprock *drock = (struct dumprock *) rock;
-
-    drock->count++;
-
-    return 1;
-}
-
-static const char hexcodes[] = "0123456789ABCDEF";
-
-static int dump_cb(void *rock,
-		   const char *key, int keylen,
-		   const char *data, int datalen)
-{
-    struct dumprock *drock = (struct dumprock *) rock;
-    time_t mark;
-    char *id, *to, *freeme;
-    int idlen, i;
-
-    assert(datalen == sizeof(time_t));
-
-    memcpy(&mark, data, sizeof(time_t));
-    to = (char*) key + strlen(key) + 1;
-    id = (char *) key;
-    idlen = strlen(id);
-
-    for (i = 0; i < idlen; i++) {
-	if (!isprint((unsigned char) id[i])) break;
-    }
-
-    if (i != idlen) {
-	/* change to hexadecimal */
-	freeme = (char *) xmalloc(sizeof(char) * idlen * 2 + 1);
-	for (i = 0; i < idlen; i++) {
-	    freeme[2 * i] = hexcodes[(id[i] >> 4) & 0xf];
-	    freeme[2 * i + 1] = hexcodes[id[i] & 0xf];
-	}
-	freeme[2 * idlen] = '\0';
-	id = freeme;
-    } else {
-	freeme = NULL;
-    }
-
-    fprintf(drock->f, "id: %-40s\tto: %-20s\tat: %ld\n", id, to, (long) mark);
-
-    if (freeme) free(freeme);
-
-    return 0;
-}
-
-int netnews_dump(FILE *f)
-{
-    struct dumprock drock;
-
-    drock.f = f;
-    drock.count = 0;
-
-    /* check each entry in our database */
-    DB->foreach(newsdb, "", 0, &dump_p, &dump_cb, &drock, NULL);
-
-    return drock.count;
 }
 
 int netnews_done(void)
