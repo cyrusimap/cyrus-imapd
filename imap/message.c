@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.69 1999/10/22 16:47:08 leg Exp $
+ * $Id: message.c,v 1.70 1999/10/27 21:04:18 leg Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -1446,7 +1446,7 @@ struct boundary *boundaries;
 	message_parse_body(msg, format, &body->subpart[body->numparts++],
 			   defaultContentType, boundaries);
 	if (msg->offset == msg->len &&
-	    body->subpath[body->numparts-1].boundary_size == 0) {
+	    body->subpart[body->numparts-1].boundary_size == 0) {
 	    /* hit the end of the message, therefore end all pending
 	       multiparts */
 	    boundaries->count = 0;
