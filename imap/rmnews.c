@@ -79,7 +79,7 @@ char **argv;
 
     /* only allow setuid/setgid from news user */
     ruid = getuid();
-    rgid = getgid()
+    rgid = getgid();
     if (ruid != geteuid() || rgid != getegid()) {
 	struct stat sbuf;
 	if (stat(newspartition, &sbuf) || sbuf.st_uid != ruid) {
