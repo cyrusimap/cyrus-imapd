@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.19 2002/02/22 23:30:01 leg Exp $ -->
+<!-- $Id: install-configure.html,v 1.20 2002/05/06 17:30:16 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -215,7 +215,9 @@ restarted.
    wrapped versions, and the Sieve script management protocol
    <dt><tt>prefork.conf</tt><dd>The same configuration as above, but
    with some preforked processes for faster processing.
-   <dt><tt>cmu.conf</tt><dd>Our configuration
+   <dt><tt>backend-cmu.conf</tt><dd>Our configuration (for Murder Backend /
+	typical IMAP servers)
+   <dt><tt>frontend-cmu.conf</tt><dd>Our configuration (for Murder Frontend servers)
    </dl>
 
 <p>To use <tt>normal.conf</tt>, do:
@@ -444,5 +446,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2002/02/22 23:30:01 $
+last modified: $Date: 2002/05/06 17:30:16 $
 </BODY></HTML>
