@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.5 2004/02/17 14:28:43 rjs3 Exp $ */
+/* $Id: protocol.c,v 1.6 2004/02/26 21:49:02 ken3 Exp $ */
 
 #include <config.h>
 
@@ -112,7 +112,7 @@ struct protocol_t protocol[] = {
 	{ { "SASL ", CAPA_AUTH }, { "STLS", CAPA_STARTTLS }, { NULL, 0 } } },
       { "STLS", "+OK", "-ERR" },
       { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL },
-      { NULL },
+      { NULL, NULL },
       { "QUIT", "+OK" } },
     { "nntp", "news",
       { "LIST EXTENSIONS", ".", NULL,
@@ -133,7 +133,7 @@ struct protocol_t protocol[] = {
     { "mupdate", "mupdate",
       { NULL, "* OK", NULL,
 	{ { "* AUTH ", CAPA_AUTH }, { NULL, 0 } } },
-      { NULL },
+      { NULL, NULL, NULL },
       { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL },
       { "N01 NOOP", "N01 OK" },
       { "Q01 LOGOUT", "Q01 " } }
