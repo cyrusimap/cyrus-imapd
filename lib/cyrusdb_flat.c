@@ -69,7 +69,7 @@ struct db {
     char *fname;
 
     int fd;			/* current file open */
-    long ino;
+    unsigned long ino;
 
     const char *base;		/* contents of file */
     unsigned long size;		/* actual size */
@@ -139,7 +139,8 @@ static struct txn *new_txn(void)
     return ret;
 }
 
-static int init(const char *dbdir, int myflags)
+static int init(const char *dbdir __attribute__((unused)),
+		int myflags __attribute__((unused)))
 {
     return 0;
 }
@@ -537,7 +538,7 @@ static int store(struct db *db,
 
 static int delete(struct db *db, 
 		  const char *key, int keylen,
-		  struct txn **mytid, int force)
+		  struct txn **mytid, int force __attribute__((unused)))
 {
     return mystore(db, key, keylen, NULL, 0, mytid, 1);
 }
