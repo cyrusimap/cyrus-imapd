@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 /*
- * $Id: xmalloc.c,v 1.19 2000/02/10 21:25:42 leg Exp $
+ * $Id: xmalloc.c,v 1.20 2000/04/06 15:09:05 leg Exp $
  */
 #include <config.h>
 #include <stdio.h>
@@ -85,3 +85,27 @@ void fs_give(void** ptr)
     free((void *)*ptr);
     *ptr = 0;
 }
+
+#ifndef HAS_STRLCPY
+/* strlcpy -- copy string smartly.
+ *
+ * i believe/hope this is compatible with the BSD strlcpy(). 
+ */
+size_t strlcpy(char *dst, const char *src, size_t len)
+{
+    size_t n;
+
+    if (len <= 0) return strlen(src);
+    for (n = 0; n < len; n++) {
+	if ((dst[n] = src[n]) == '\0') break;
+    }
+    if (src[n] == '\0') {
+	/* copied entire string */
+	return n;
+    } else {
+	dst[n] = '\0';
+	/* ran out of space */
+	return n + strlen(src + n);
+    }
+}
+#endif
