@@ -73,10 +73,10 @@ ec IMAP_MESSAGE_NOBLANKLINE,
 # Following only used for internationalization of error messages
 
 ec IMAP_UNRECOGNIZED_CHARSET,
-   "Unrecognized character set",
+   "Unrecognized character set"
 
 ec IMAP_INVALID_USER,
-   "Invalid user",
+   "Invalid user"
 
 ec IMAP_ANONYMOUS_NOT_PERMITTED,
    "Anonymous login is not permitted"
@@ -84,18 +84,18 @@ ec IMAP_ANONYMOUS_NOT_PERMITTED,
 # Following used for internationalizatio of untagged NO responses
 
 ec IMAP_NO_OVERQUOTA,
-   "Mailbox %s is over quota",
+   "Mailbox %s is over quota"
 
 ec IMAP_NO_CLOSEQUOTA,
-   "Mailbox %s is at %d%% of quota",
+   "Mailbox %s is at %d%% of quota"
 
 ec IMAP_NO_MSGGONE,
-   "Message %d no longer exists",
+   "Message %d no longer exists"
 
 ec IMAP_NO_CHECKSEEN,
-   "Unable to checkpoint \\Seen state",
+   "Unable to checkpoint \\Seen state"
 
 ec IMAP_NO_CHECKPRESERVE,
-   "Unable to preserve \\Seen state",
+   "Unable to preserve \\Seen state"
 
 end
