@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/SIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.72 2002/05/24 17:46:52 ken3 Exp $
+ * $Id: imtest.c,v 1.73 2002/05/24 17:57:29 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1049,7 +1049,6 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 
     if (status == STAT_OK) {
 	if (in) {
-	    printf("success: '%s'\n", in);
 	    saslresult=sasl_client_step(conn,
 					in,
 					inlen,
