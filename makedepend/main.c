@@ -78,6 +78,9 @@ struct symtab	predefs[] = {
 #ifdef solaris20
 	{"solaris20", "1"},
 #endif
+#ifdef __i386
+	{"__i386", "1"},
+#endif
 #ifdef hpux
 	{"hpux", "1"},
 #endif
@@ -140,7 +143,7 @@ catch (sig)
 	fatalerr ("got signal %d\n", sig);
 }
 
-#if defined(USG) || (defined(SYSV386) && defined(SYSV)) || defined(WIN32)
+#if defined(USG) || (defined(SYSV386) && defined(SYSV)) || defined(WIN32) || defined(__i386)
 #define USGISH
 #endif
 
