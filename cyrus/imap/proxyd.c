@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.30 2000/05/29 03:02:59 leg Exp $ */
+/* $Id: proxyd.c,v 1.31 2000/06/01 05:23:31 leg Exp $ */
 
 #include <config.h>
 
@@ -955,13 +955,13 @@ int service_init(int argc, char **argv, char **envp)
     if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
 	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
 	       sasl_errstring(r, NULL, NULL));
-	return 2;
+	return EC_SOFTWARE;
     }
 
-    if (sasl_client_init(NULL) != SASL_OK) {
+    if ((r = sasl_client_init(NULL)) != SASL_OK) {
 	syslog(LOG_ERR, "SASL failed initializing: sasl_client_init(): %s", 
 	       sasl_errstring(r, NULL, NULL));
-	return 2;
+	return EC_SOFTWARE;
     }
 
     return 0;
@@ -2721,6 +2721,11 @@ void cmd_create(char *tag, char *name, char *server)
 
     if (server && !proxyd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
+    }
+
+    if (name[0] && name[strlen(name)-1] == '.') {
+	/* We don't care about trailing hierarchy delimiters. */
+	name[strlen(name)-1] = '\0';
     }
 
     if (!r) r = mboxname_tointernal(name, proxyd_userid, mailboxname);
