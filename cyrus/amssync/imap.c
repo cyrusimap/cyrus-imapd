@@ -408,7 +408,7 @@ void do_imap_close(struct imclient *imclient)
  * subsequent getimap() calls . the interface of this system (in
  * general) isn't very good
  */
-static char imapser[MAXHOSTNAMELEN]="cyrus.andrew.cmu.edu";
+static char imapser[1024]="cyrus.andrew.cmu.edu";
 static char *imapport=NULL;
 
 int setimapser(char *server, char  *port)
