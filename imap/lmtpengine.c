@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.27 2001/08/15 17:00:48 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.28 2001/08/18 00:46:47 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1575,13 +1575,8 @@ void lmtpmode(struct lmtp_func *func,
     starttls_done = 0;
 #ifdef HAVE_SSL
     if (tls_conn) {
-#ifdef TLS_REUSE
-	/* make sure we re-use sessions */
-	tls_reuse_sessions(&tls_conn);
-#else
-	tls_free(&tls_conn);
+	tls_reset_servertls(&tls_conn);
 	tls_conn = NULL;
-#endif /* TLS_REUSE */
     }
 #endif
 }

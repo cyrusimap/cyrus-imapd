@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.140 2001/08/16 20:52:05 ken3 Exp $
+# $Id: Makefile.in,v 1.141 2001/08/18 00:46:46 ken3 Exp $
 # 
 # @configure_input@
 #
@@ -135,6 +135,10 @@ install:
 idled: idled.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o idled \
 	 idled.o libimap.a $(DEPLIBS) $(LIBS)
+
+tls_prune: tls_prune.o tls.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o \
+	 $@ tls_prune.o tls.o libimap.a $(DEPLIBS) $(LIBS)
 
 acappush: acappush.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o acappush \

@@ -1,10 +1,7 @@
-/* tls.h - STARTTLS helper functions for imapd
- * Tim Martin
- * 9/21/99
+/* 
+ * tls_prune.c -- program to prune TLS session db of expired sessions
  *
- *  Based upon Lutz Jaenicke's TLS patches for postfix
- *
- * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -43,34 +40,49 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifdef HAVE_SSL
+/* $Id: tls_prune.c,v 1.1 2001/08/18 00:46:48 ken3 Exp $ */
 
-#ifndef TLS_H
-#define TLS_H
+#include <stdio.h>
+#include <unistd.h>
 
-/* init tls */
-int tls_init_serverengine(int verifydepth, /* depth to verify */
-			  int askcert,     /* 1 = client auth */
-			  int requirecert, /* 1 = require client auth */
-			  int tlsonly,
-			  char *var_imapd_tls_CAfile,
-			  char *var_imapd_tls_CApath,
-			  char *var_imapd_tls_cert_file,
-			  char *var_imapd_tls_key_file);
+#include "tls.h"
+#include "exitcodes.h"
 
-/* start tls negotiation */
-int tls_start_servertls(int readfd, int writefd, 
-			int *layerbits, char **authid, SSL **ret);
+void fatal(const char *message, int code)
+{
+    fprintf(stderr, "fatal error: %s\n", message);
+    exit(code);
+}
 
-/* reset tls */
-int tls_reset_servertls(SSL **conn);
+void usage(void)
+{
+    fprintf(stderr, "tls_prune [-C <altconfig>]\n");
+    exit(-1);
+}
 
-/* shutdown/cleanup tls */
-int tls_shutdown_serverengine(void);
 
-/* remove expired sessions from the external cache */
-int tls_prune_sessions(void);
+int main(int argc, char *argv[])
+{
+    extern char *optarg;
+    int opt;
+    char *alt_config = NULL;
 
-#endif /* TLS_H */
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-#endif /* HAVE_SSL */
+    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+
+	default:
+	    usage();
+	    break;
+	}
+    }
+
+    config_init(alt_config, "tls_prune");
+
+    return tls_prune_sessions();
+
+}

@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.199 2001/08/12 18:22:11 ken3 Exp $
+dnl $Id: configure.in,v 1.200 2001/08/18 00:46:46 ken3 Exp $
 dnl
 
 
@@ -513,6 +513,7 @@ fi
 dnl
 dnl Test for OpenSSL
 dnl
+IMAP_PROGS=""
 AC_ARG_WITH(with-openssl,[  --with-openssl=PATH      use OpenSSL from PATH],
 	with_openssl="${withval}")
 
@@ -544,6 +545,7 @@ AC_MSG_RESULT($with_openssl)
 
 if test "$with_openssl" != "no"; then
 	AC_DEFINE(HAVE_SSL)
+	IMAP_PROGS="$IMAP_PROGS tls_prune"
 fi
 
 dnl
@@ -597,7 +599,6 @@ AC_ARG_WITH(idle,[  --with-idle=METHOD      use METHOD for IMAP IDLE
                           METHOD is [poll], idled or no],
 	WITH_IDLE="${withval}",WITH_IDLE="poll")
 AC_SUBST(WITH_IDLE)
-IMAP_PROGS=""
 if test "$WITH_IDLE" = "idled"; then
   IMAP_PROGS="$IMAP_PROGS idled"
 fi

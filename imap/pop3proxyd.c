@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.23 2001/08/16 20:52:07 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.24 2001/08/18 00:46:47 ken3 Exp $
  */
 #include <config.h>
 
@@ -311,6 +311,9 @@ void usage(void)
 void shut_down(int code)
 {
     proc_cleanup();
+#ifdef HAVE_SSL
+    tls_shutdown_serverengine();
+#endif
     prot_flush(popd_out);
     exit(code);
 }

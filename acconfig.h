@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.18 2001/08/12 18:22:11 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.19 2001/08/18 00:46:46 ken3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -154,5 +154,8 @@ enum {
     CONFIG_TIMING_VERBOSE = 0,
 
     /* should we be pedantic about namespace or sleezy? */
-    SLEEZY_NAMESPACE = 1
+    SLEEZY_NAMESPACE = 1,
+
+    /* should we do a fast TLS session shutdown */
+    TLS_FAST_SHUTDOWN = 1
 };

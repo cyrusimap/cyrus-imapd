@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.315 2001/08/16 20:52:06 ken3 Exp $ */
+/* $Id: imapd.c,v 1.316 2001/08/18 00:46:46 ken3 Exp $ */
 
 #include <config.h>
 
@@ -383,13 +383,10 @@ static void imapd_reset(void)
     imapd_starttls_done = 0;
 #ifdef HAVE_SSL
     if (tls_conn) {
-#ifdef TLS_REUSE
-	/* make sure we re-use sessions */
-	tls_reuse_sessions(&tls_conn);
-#else
-	tls_free(&tls_conn);
+	if (tls_reset_servertls(&tls_conn) == -1) {
+	    fatal("tls_reset() failed", EC_TEMPFAIL);
+	}
 	tls_conn = NULL;
-#endif /* TLS_REUSE */
     }
 #endif
 
@@ -627,6 +624,9 @@ void shut_down(int code)
     seen_done();
     mboxlist_close();
     mboxlist_done();
+#ifdef HAVE_SSL
+    tls_shutdown_serverengine();
+#endif
     prot_flush(imapd_out);
     /* one less active connection */
     snmp_increment(ACTIVE_CONNECTIONS, -1);

@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.19 2001/08/15 01:41:35 ken3 Exp $ */
+/* $Id: tls.c,v 1.20 2001/08/18 00:46:48 ken3 Exp $ */
 
 #include <config.h>
 
@@ -122,16 +122,13 @@
 #include "xmalloc.h"
 #include "tls.h"
 
-#ifdef TLS_REUSE
+/* Session caching/reuse stuff */
 #include "imapconf.h"
 #include "time.h"
 #include "cyrusdb.h"
 
-/* we MUST use db3 because the session data is binary */
-#define DB (&cyrusdb_db3)
-
+#define DB (&cyrusdb_db3) /* sessions are binary -> MUST use DB3 */
 #define FNAME_SESSIONS "/tls_sessions.db"
-#endif /* TLS_REUSE */
 
 /* We must keep some of the info available */
 static const char hexcodes[] = "0123456789ABCDEF";
@@ -359,7 +356,6 @@ static int set_cert_stuff(SSL_CTX * ctx, char *cert_file, char *key_file)
     return (1);
 }
 
-#ifdef TLS_REUSE
 /*
  * The new_session_cb() is called, whenever a new session has been
  * negotiated and session caching is enabled.  We save the session in
@@ -408,8 +404,11 @@ int new_session_cb(SSL *ssl, SSL_SESSION *sess)
 		   dbname, cyrusdb_strerror(ret));
 	}
 	else {
-	    ret = DB->store(sessdb, sess->session_id, sess->session_id_length,
-			    data, len + sizeof(time_t), NULL);
+	    do {
+		ret = DB->store(sessdb, sess->session_id,
+				sess->session_id_length,
+				data, len + sizeof(time_t), NULL);
+	    } while (ret == CYRUSDB_AGAIN);
 	    DB->close(sessdb);
 	}
     }
@@ -452,7 +451,9 @@ void remove_session(unsigned char *id, int idlen)
 	       dbname, cyrusdb_strerror(ret));
     }
     else {
-	DB->delete(sessdb, id, idlen, NULL);
+	do {
+	    ret = DB->delete(sessdb, id, idlen, NULL);
+	} while (ret == CYRUSDB_AGAIN);
 	DB->close(sessdb);
     }
 
@@ -514,7 +515,9 @@ SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
 	       dbname, cyrusdb_strerror(ret));
     }
     else {
-	DB->fetch(sessdb, id, idlen, &data, &len, NULL);
+	do {
+	    ret = DB->fetch(sessdb, id, idlen, &data, &len, NULL);
+	} while (ret == CYRUSDB_AGAIN);
 	DB->close(sessdb);
     }
 
@@ -550,7 +553,6 @@ SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
     *copy = 0;
     return sess;
 }
-#endif /* TLS_REUSE */
 
  /*
   * This is the setup routine for the SSL server. As smtpd might be called
@@ -572,11 +574,11 @@ int     tls_init_serverengine(int verifydepth,
 {
     int     off = 0;
     int     verify_flags = SSL_VERIFY_NONE;
-    int     session_id_context = 1; /* anything will do */
     char   *CApath;
     char   *CAfile;
     char   *s_cert_file;
     char   *s_key_file;
+    int    timeout;
 
     if (tls_serverengine)
 	return (0);				/* already running */
@@ -610,15 +612,34 @@ int     tls_init_serverengine(int verifydepth,
     SSL_CTX_set_options(ctx, off);
     SSL_CTX_set_info_callback(ctx, apps_ssl_info_callback);
     SSL_CTX_sess_set_cache_size(ctx, 128);
-#ifdef TLS_REUSE
-    SSL_CTX_set_session_id_context(ctx,(void*)&session_id_context,
-				   sizeof session_id_context);
-    /* set the timeout for the internal cache */
-    SSL_CTX_set_timeout(ctx, config_getint("tls_session_timeout", 300));
-    SSL_CTX_sess_set_new_cb(ctx, new_session_cb);
-    SSL_CTX_sess_set_remove_cb(ctx, remove_session_cb);
-    SSL_CTX_sess_set_get_cb(ctx, get_session_cb);
-#endif /* TLS_REUSE */
+
+    /* Get the session timeout from the config file (in minutes) */
+    timeout = config_getint("tls_session_timeout", 1440); /* 24 hours */
+    if (timeout < 0) timeout = 0;
+    if (timeout > 1440) timeout = 1440; /* 24 hours max */
+
+    /* A timeout of zero disables session caching */
+    if (timeout) {
+	char *session_id_context = "cyrus"; /* anything will do */
+	char dbdir[1024];
+
+	/* Set the context for session reuse */
+	SSL_CTX_set_session_id_context(ctx, (void*) &session_id_context,
+				       sizeof(session_id_context));
+
+	/* Set the timeout for the internal/external cache (in seconds) */
+	SSL_CTX_set_timeout(ctx, timeout*60);
+
+	/* Set the callback functions for the external session cache */
+	SSL_CTX_sess_set_new_cb(ctx, new_session_cb);
+	SSL_CTX_sess_set_remove_cb(ctx, remove_session_cb);
+	SSL_CTX_sess_set_get_cb(ctx, get_session_cb);
+
+	/* Initialize DB environment */
+	strcpy(dbdir, config_dir);
+	strcat(dbdir, FNAME_DBDIR);
+	DB->init(dbdir, 0);
+    }
 
     if (strlen(var_imapd_tls_CAfile) == 0)
 	CAfile = NULL;
@@ -861,23 +882,42 @@ int tls_start_servertls(int readfd, int writefd,
     return r;
 }
 
-int tls_free(SSL **conn)
+int tls_reset_servertls(SSL **conn)
 {
+    int r = 0;
+
     if (*conn) {
+	if (TLS_FAST_SHUTDOWN) {
+	    /*
+	     * Don't bother spending time closing the TLS session,
+	     * but make sure its available for reuse.
+	     */
+	    SSL_set_shutdown(*conn,SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
+	}
+	else {
+	    /* Follow the TLS protocol and do a shutdown handshake */
+	    r = SSL_shutdown(*conn);
+	    if (r == 0) {
+		/* Just sent, now wait for peer to ack */
+		r = SSL_shutdown(*conn);
+	    }
+	    if (r == 0) r = -1;
+	}
 	SSL_free(*conn);
     }
     
-    return 0;
+    return r;
 }
 
-#ifdef TLS_REUSE
-int tls_reuse_sessions(SSL **conn)
+int tls_shutdown_serverengine(void)
 {
-    if (*conn) {
-	SSL_set_shutdown(*conn,SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
+    if (tls_serverengine) {
+	/* close DB environment */
+	DB->done();
     }
 
     return 0;
+
 }
 
 /*
@@ -909,7 +949,11 @@ static int find_p(void *rock, const char *id, int idlen,
 static int find_cb(void *rock, const char *id, int idlen,
 		   const char *data, int datalen)
 {
-    DB->delete((struct db *) rock, id, idlen, NULL);
+    int ret;
+
+    do {
+	ret = DB->delete((struct db *) rock, id, idlen, NULL);
+    } while (ret == CYRUSDB_AGAIN);
 
     /* log this transaction */
     if (var_imapd_tls_loglevel > 0) {
@@ -924,29 +968,29 @@ static int find_cb(void *rock, const char *id, int idlen,
     return 0;
 }
 
-int tls_expire_sessions(void)
+int tls_prune_sessions(void)
 {
-    char dbname[1024];
+    char dbdir[1024];
     struct db *sessdb = NULL;
     int ret;
 
     /* initialize DB environment */
-    strcpy(dbname, config_dir);
-    strcat(dbname, FNAME_DBDIR);
-    DB->init(dbname, 0);
+    strcpy(dbdir, config_dir);
+    strcat(dbdir, FNAME_DBDIR);
+    DB->init(dbdir, 0);
 
    /* create the name of the db file */
-    strcpy(dbname, config_dir);
-    strcat(dbname, FNAME_SESSIONS);
+    strcpy(dbdir, config_dir);
+    strcat(dbdir, FNAME_SESSIONS);
 
-    /* fetch the session from our database */
-    ret = DB->open(dbname, &sessdb);
+    ret = DB->open(dbdir, &sessdb);
     if (ret != CYRUSDB_OK) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s",
-	       dbname, cyrusdb_strerror(ret));
+	       dbdir, cyrusdb_strerror(ret));
 	return 1;
     }
     else {
+	/* check each session in our database */
 	DB->foreach(sessdb, "", 0, &find_p, &find_cb, sessdb, NULL);
 	DB->close(sessdb);
     }
@@ -955,6 +999,5 @@ int tls_expire_sessions(void)
 
     return 0;
 }
-#endif /* TLS_REUSE */
 
 #endif /* HAVE_SSL */

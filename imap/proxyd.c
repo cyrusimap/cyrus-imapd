@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.73 2001/08/16 20:52:07 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.74 2001/08/18 00:46:47 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1198,6 +1198,9 @@ void shut_down(int code)
 
     mboxlist_close();
     mboxlist_done();
+#ifdef HAVE_SSL
+    tls_shutdown_serverengine();
+#endif
     prot_flush(proxyd_out);
     exit(code);
 }

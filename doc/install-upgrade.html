@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.16 2001/08/12 18:22:11 ken3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.17 2001/08/18 00:46:46 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -20,6 +20,16 @@ translate the folder names in <tt>fileinto</tt> actions.
 <li> If you have enabled the improved directory hashing scheme, run
 the script "<tt>tools/rehash full</tt>".  This script will rehash your
 existing directories.
+
+<li> Cyrus now caches SSL/TLS sessions in an external database. If you
+  have support for SSL/TLS, and haven't disabled session caching (see
+  <tt>imapd.conf(5)</tt>), you should add a line like the following to
+  the <tt>EVENTS</tt> section of <tt>cyrus.conf</tt> to prune expired
+  sessions from the database:
+
+<pre><kdb>   # this is only necessary if caching TLS sessions
+   tlsprune      cmd="tls_prune" period=1440
+</kbd></pre>
 </ul>
 
 <h3>Upgrading from 2.0.6, 2.0.7, 2.0.8, or 2.0.9 or earlier</h3>
@@ -179,7 +189,7 @@ worry about it.)
 </ul>
 
 <P><HR><P>
-last modified: $Date: 2001/08/12 18:22:11 $
+last modified: $Date: 2001/08/18 00:46:46 $
 </BODY></HTML>
 
 
