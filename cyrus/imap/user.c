@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.10.4.7 2002/08/23 19:53:26 ken3 Exp $
+ * $Id: user.c,v 1.10.4.8 2003/01/11 20:23:45 ken3 Exp $
  */
 
 #include <config.h>
@@ -387,12 +387,12 @@ int user_copyquotaroot(char *oldname, char *newname)
 {
     int r = 0;
     struct quota quota;
-    char buf[MAX_MAILBOX_PATH];
+    char buf[MAX_MAILBOX_PATH+1];
 
     quota.root = oldname;
     quota.fd = -1;
 
-    mailbox_hash_quota(buf, quota.root);
+    mailbox_hash_quota(buf, sizeof(buf), quota.root);
     quota.fd = open(buf, O_RDWR, 0);
     if (quota.fd > 0) {
 	r = mailbox_read_quota(&quota);
@@ -407,7 +407,7 @@ int user_deletequotaroots(const char *user)
     struct namespace namespace;
     char inboxname[1024];
     int r;
-    char dir[MAX_MAILBOX_NAME], *fname, qpath[MAX_MAILBOX_NAME];
+    char dir[MAX_MAILBOX_NAME+1], *fname, qpath[MAX_MAILBOX_NAME];
     DIR *dirp;
     struct dirent *f;
 
@@ -421,7 +421,7 @@ int user_deletequotaroots(const char *user)
 
     if (!r) {
 	/* get path to toplevel quotaroot */
-	mailbox_hash_quota(dir, inboxname);
+	mailbox_hash_quota(dir, sizeof(dir), inboxname);
 
 	/* split directory and filename */
 	fname = strrchr(dir, '/');
