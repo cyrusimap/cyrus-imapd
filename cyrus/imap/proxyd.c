@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.179 2004/05/05 18:53:07 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.180 2004/05/05 19:14:59 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3878,7 +3878,8 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	if (buf) free(buf);
     }
 
-    if (backend_current && (!subscribed || backend_current != backend_inbox)) {
+    if (backend_current &&
+	((!proxyd_magicplus && !subscribed) || backend_current != backend_inbox)) {
 	/* our Lsub would've done this if 
 	   backend_current == backend_inbox */
 	char mytag[128];
