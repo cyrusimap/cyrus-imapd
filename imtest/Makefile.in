@@ -39,9 +39,16 @@ LDFLAGS = -g
 
 SHELL = /bin/sh
 
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+cyrus_prefix = @cyrus_prefix@
+
 OBJS=imtest.o
 
 all: imtest
+
+install:
+	$(INSTALL) -s -m 755 imtest $(DESTDIR)$(exec_prefix)/bin
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<

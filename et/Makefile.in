@@ -48,6 +48,8 @@ LOCALINCLUDE=-I. -I$(srcdir)
 
 all: compile_et libcom_err.a
 
+install:
+
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) $<
 

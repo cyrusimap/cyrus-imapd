@@ -31,6 +31,10 @@ VPATH = @srcdir@
 SHELL = /bin/sh
 @SET_MAKE@
 
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+cyrus_prefix = @cyrus_prefix@
+
 all:: checkdepend
 	@for d in  $(SUBDIRS); \
 	do \
@@ -39,14 +43,18 @@ all:: checkdepend
 			echo "### Done with" `pwd`);		\
 	done
 
-#install::
-#	- mkdir ${DESTDIR}/etc
-#	@for d in  $(SUBDIRS); \
-#	do \
-#		(cd $$d; echo "### Making" install "in" `pwd`;	\
-#			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) install ;	\
-#			echo "### Done with" `pwd`);		\
-#	done
+install::
+	- mkdir ${DESTDIR}$(exec_prefix)/bin
+	- mkdir ${DESTDIR}$(cyrus_prefix)/bin
+	- mkdir ${DESTDIR}$(prefix)/man
+	- mkdir ${DESTDIR}$(prefix)/man/man1
+	- mkdir ${DESTDIR}$(prefix)/man/man8
+	@for d in  $(SUBDIRS); \
+	do \
+		(cd $$d; echo "### Making" install "in" `pwd`;	\
+			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) install ;	\
+			echo "### Done with" `pwd`);		\
+	done
 
 clean::
 	@-for d in  $(SUBDIRS); \
