@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.147.2.3 2001/06/12 20:41:59 ken3 Exp $
+ * $Id: mboxlist.c,v 1.147.2.4 2001/06/25 19:48:11 ken3 Exp $
  */
 
 #include <config.h>
@@ -1394,10 +1394,10 @@ static int find_cb(void *rockp,
 	    if (rock->find_namespace == NAMESPACE_SHARED &&
 		rock->checkshared && rock->namespace) {
 		/* special case:  LIST "" % -- output prefix only */
-		(*rock->proc)(rock->namespace->prefix[NAMESPACE_SHARED],
-			      strlen(rock->namespace->prefix[NAMESPACE_SHARED])-1,
-			      0, rock->procrock);
-		r = IMAP_OK_COMPLETED;
+		r = (*rock->proc)(rock->namespace->prefix[NAMESPACE_SHARED],
+				  strlen(rock->namespace->prefix[NAMESPACE_SHARED])-1,
+				  1, rock->procrock);
+		/* FIXME: short-circuit this */
 	    }
 	    else {
 		r = (*rock->proc)(namebuf+rock->inboxoffset, matchlen, 
