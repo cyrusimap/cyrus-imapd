@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.397 2002/06/07 02:05:32 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.398 2002/07/03 20:40:05 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -4597,11 +4597,14 @@ void cmd_starttls(char *tag, int imaps)
     /* if error */
     if (result==-1) {
 	if (imaps == 0)	{
-	    prot_printf(imapd_out, "%s NO Starttls failed\r\n", tag);
-	    syslog(LOG_NOTICE, "STARTTLS failed: %s", imapd_clienthost);
+	    prot_printf(imapd_out, "%s NO Starttls negotiation failed\r\n", 
+			tag);
+	    syslog(LOG_NOTICE, "STARTTLS negotiation failed: %s", 
+		   imapd_clienthost);
 	    return;
 	} else {
-	    syslog(LOG_NOTICE, "imaps failed: %s", imapd_clienthost);
+	    syslog(LOG_NOTICE, "imaps TLS negotiation failed: %s", 
+		   imapd_clienthost);
 	    fatal("tls_start_servertls() failed", EC_TEMPFAIL);
 	    return;
 	}
