@@ -61,7 +61,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-MAN1 = $(srcdir)/imtest.1 $(srcdir)/installsieve.1
+MAN1 = $(srcdir)/imtest.1 $(srcdir)/installsieve.1 $(srcdir)/sieveshell.1
 MAN3 = $(srcdir)/imclient.3
 MAN5 = $(srcdir)/imapd.conf.5 $(srcdir)/krb.equiv.5 $(srcdir)/cyrus.conf.5
 MAN8 = $(srcdir)/arbitron.8 $(srcdir)/collectnews.8 $(srcdir)/deliver.8 \
@@ -72,8 +72,11 @@ MAN8 = $(srcdir)/arbitron.8 $(srcdir)/collectnews.8 $(srcdir)/deliver.8 \
 	$(srcdir)/ctl_deliver.8 $(srcdir)/ctl_cyrusdb.8 $(srcdir)/ipurge.8 \
 	$(srcdir)/tls_prune.8 $(srcdir)/squatter.8
 
+all: $(MAN1) $(MAN3) $(MAN5) $(MAN8)
 
-all:
+$(srcdir)/sieveshell.1: $(srcdir)/../perl/sieve/scripts/sieveshell.pl
+	@echo creating sieveshell.1
+	pod2man $(srcdir)/../perl/sieve/scripts/sieveshell.pl > $(srcdir)/sieveshell.1
 
 install:
 	for file in $(MAN1); \
