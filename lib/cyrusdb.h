@@ -53,8 +53,8 @@ enum cyrusdb_initflags {
 };
 
 typedef int foreach_cb(void *rock,
-		       char *key, int keylen,
-		       char *data, int datalen);
+		       const char *key, int keylen,
+		       const char *data, int datalen);
 
 struct cyrusdb_backend {
     const char *name;
