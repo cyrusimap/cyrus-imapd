@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.h,v 1.20.4.2 2002/08/14 20:21:05 ken3 Exp $ */
+/* $Id: cyrusdb.h,v 1.20.4.3 2002/09/04 21:37:09 rjs3 Exp $ */
 
 #ifndef INCLUDED_CYRUSDB_H
 #define INCLUDED_CYRUSDB_H
@@ -128,6 +128,11 @@ struct cyrusdb_backend {
     /* foreach: iterate through entries that start with 'prefix'
        if 'p' returns true, call 'cb'
 
+       if 'cb' changes the database, these changes will only be visible
+       if they are after the current database cursor.  If other processes
+       change the database (i.e. outside of a transaction) these changes
+       may or may not be visible to the foreach()
+
        'p' should be fast and should avoid blocking it should be safe
        to call other db routines inside of 'cb'.  however, the "flat"
        backend is currently are not reentrant in this way
@@ -138,6 +143,9 @@ struct cyrusdb_backend {
 		   foreach_p *p,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **tid);
+
+    /* Place entries in database create will not overwrite existing
+     * entries */
     int (*create)(struct db *db, 
 		  const char *key, int keylen,
 		  const char *data, int datalen,
@@ -146,6 +154,8 @@ struct cyrusdb_backend {
 		 const char *key, int keylen,
 		 const char *data, int datalen,
 		 struct txn **tid);
+
+    /* Remove entrys from the database */
     int (*delete)(struct db *db, 
 		  const char *key, int keylen,
 		  struct txn **tid,

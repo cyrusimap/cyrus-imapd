@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.19.4.4 2002/09/03 18:52:52 rjs3 Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.19.4.5 2002/09/04 21:37:09 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -331,6 +331,25 @@ static int fetchlock(struct db *db,
     return myfetch(db, key, keylen, data, datalen, mytid);
 }
 
+#define GETENTRY(p)			\
+     key = p;				\
+     data = strchr(key, '\t');		\
+ 					\
+     if (!data) {			\
+ 	/* huh, might be corrupted? */	\
+ 	r = CYRUSDB_IOERROR;		\
+ 	break;				\
+     }					\
+     keylen = data - key;		\
+     data++; /* skip of the \t */	\
+ 					\
+     dataend = strchr(data, '\n');	\
+     if (!dataend) {			\
+ 	/* huh, might be corrupted? */	\
+ 	r = CYRUSDB_IOERROR;		\
+ 	break;				\
+     }					\
+     datalen = dataend - data;
 
 static int foreach(struct db *db,
 		   char *prefix, int prefixlen,
@@ -343,53 +362,126 @@ static int foreach(struct db *db,
     unsigned long len;
     const char *p, *pend;
 
+    /* for use inside the loop, but we need the values to be retained
+     * from loop to loop */
+    const char *key = NULL;
+    size_t keylen = 0;
+    const char *data = NULL, *dataend = NULL;
+    size_t datalen = 0;
+    int dontmove = 0;
+
+    /* For when we have a transaction running */
+    char *savebuf = NULL;
+    size_t savebuflen = 0;
+    size_t savebufsize = 0;
+
+    /* for the local iteration so that the db can change out from under us */
+    const char *dbbase = NULL;
+    unsigned long dblen = 0;
+    int dbfd = -1;
+
     r = starttxn_or_refetch(db, mytid);
     if (r) return r;
-    
+
+    if(!mytid) {
+	/* No transaction, use the fast method to avoid stomping on our
+	 * memory map if changes happen */
+	dbfd = dup(db->fd);
+	if(dbfd == -1) return CYRUSDB_IOERROR;
+	
+	map_refresh(dbfd, 1, &dbbase, &dblen, db->size, db->fname, 0);
+
+	/* drop our read lock on the file, since we don't really care
+	 * if it gets replaced out from under us, our mmap stays on the
+	 * old version */
+	lock_unlock(db->fd);
+    } else {
+	/* use the same variables as in the no transaction case, just to
+	 * get things set up */
+	dbbase = db->base;
+	dblen = db->len;
+    }
+
     if (prefix) {
-	offset = bsearch_mem(prefix, 1, db->base, db->size, 0, &len);
+	offset = bsearch_mem(prefix, 1, dbbase, db->size, 0, &len);
     } else {
 	offset = 0;
     }
-    p = db->base + offset;
-    pend = db->base + db->size;
+    
+    p = dbbase + offset;
+    pend = dbbase + db->size;
+
     while (p < pend) {
-	const char *key = p;
-	int keylen;
-	const char *data = strchr(key, '\t'), *dataend;
-	int datalen;
-
-	if (!data) {
-	    /* huh, might be corrupted? */
-	    r = CYRUSDB_IOERROR;
-	    break;
+	if(!dontmove) {
+	    GETENTRY(p)
 	}
-	keylen = data - key;
-	data++; /* skip of the \t */
-       
-	dataend = strchr(data, '\n');
-	if (!dataend) {
-	    /* huh, might be corrupted? */
-	    r = CYRUSDB_IOERROR;
-	    break;
-	}
-	datalen = dataend - data;
-
+	else dontmove = 0;
+	
 	/* does it still match prefix? */
 	if (keylen < prefixlen) break;
 	if (prefixlen && memcmp(key, prefix, prefixlen)) break;
 
 	if (goodp(rock, key, keylen, data, datalen)) {
+	    unsigned long ino = db->ino;
+ 	    unsigned long sz = db->size;
+
+	    if(mytid) {
+		/* transaction present, this means we do the slow way */
+		if (keylen > savebuflen) {
+		    int dblsize = 2 * savebuflen;
+		    int addsize = keylen + 32;
+		    
+		    savebuflen = (dblsize > addsize) ? dblsize : addsize;
+		    savebuf = xrealloc(savebuf, savebuflen);
+		}
+		memcpy(savebuf, key, keylen);
+		savebufsize = keylen;
+	    }
+	    
 	    /* make callback */
 	    r = cb(rock, key, keylen, data, datalen);
 	    if (r) break;
+
+	    if(mytid) {
+		/* reposition? (we made a change) */
+		if (!(ino == db->ino && sz == db->size)) {
+		    /* something changed in the file; reseek */
+		    offset = bsearch_mem(savebuf, 1, db->base, db->size,
+					 0, &len);
+		    p = db->base + offset;
+		    
+		    GETENTRY(p);
+		    
+		    /* 'key' might not equal 'savebuf'.  if it's different,
+		       we want to stay where we are.  if it's the same, we
+		       should move on to the next one */
+		    if (savebufsize == keylen &&
+			!memcmp(savebuf, key, savebufsize)) {
+			p = dataend + 1;
+		    } else {
+			/* 'savebuf' got deleted, so we're now pointing at the
+			   right thing */
+			dontmove = 1;
+		    }
+		}	
+	    }
 	}
 
 	p = dataend + 1;
     }
 
+    if(!mytid) {
+	/* cleanup the fast method */
+	map_free(&dbbase, &dblen);
+	close(dbfd);
+    } else if(savebuf) {
+	free(savebuf);
+    }
+
     return r;
 }
+
+#undef GETENTRY
 
 static int mystore(struct db *db, 
 		   const char *key, int keylen,
@@ -405,6 +497,7 @@ static int mystore(struct db *db,
     struct iovec iov[10];
     int niov;
     struct stat sbuf;
+    char *tmpkey = NULL;
 
     /* lock file, if needed */
     if (!mytid || !*mytid) {
@@ -427,12 +520,21 @@ static int mystore(struct db *db,
 	}
     }
 
+    /* if we need to truncate the key, do so */
+    if(key[keylen] != '\0') {
+	tmpkey = xmalloc(keylen + 1);
+	memcpy(tmpkey, key, keylen);
+	tmpkey[keylen] = '\0';
+	key = tmpkey;
+    }
+
     /* find entry, if it exists */
     offset = bsearch_mem(key, 1, db->base, db->size, 0, &len);
 
     /* overwrite? */
     if (len && !overwrite) {
 	if (mytid) abort_txn(db, *mytid);
+	if (tmpkey) free(tmpkey);
 	return CYRUSDB_EXISTS;
     }
 
@@ -449,6 +551,7 @@ static int mystore(struct db *db,
     if (r < 0) {
         syslog(LOG_ERR, "opening %s for writing failed: %m", fnamebuf);
 	if (mytid) abort_txn(db, *mytid);
+	if (tmpkey) free(tmpkey);
 	return CYRUSDB_IOERROR;
     }
 
@@ -500,6 +603,7 @@ static int mystore(struct db *db,
 	    rename(fnamebuf, db->fname) == -1) {
 	    syslog(LOG_ERR, "IOERROR: writing %s: %m", fnamebuf);
 	    close(writefd);
+	    if (tmpkey) free(tmpkey);
 	    return CYRUSDB_IOERROR;
 	}
 
@@ -520,6 +624,8 @@ static int mystore(struct db *db,
 	db->size = sbuf.st_size;
     }
 
+    if(tmpkey) free(tmpkey);
+    
     return r;
 }
 
