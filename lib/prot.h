@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- $Id: prot.h,v 1.19 1999/11/15 17:25:41 tmartin Exp $
+ $Id: prot.h,v 1.20 1999/11/30 23:49:01 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -51,7 +51,7 @@ struct protstream;
 typedef void prot_readcallback_t P((struct protstream *s, void *rock));
 
 struct protstream {
-    char *ptr;
+    unsigned char *ptr;
     int cnt;
     int fd;
     int write;
@@ -69,12 +69,11 @@ struct protstream {
     prot_readcallback_t *readcallback_proc;
     void *readcallback_rock;
     int buf_size;
-    char *buf;
+    unsigned char *buf;
 
 #ifdef HAVE_SSL
-  SSL *tls_conn;
+    SSL *tls_conn;
 #endif /* HAVE_SSL */
-
 };
 
 #define prot_getc(s) ((s)->cnt-- > 0 ? (int)*(s)->ptr++ : prot_fill(s))
