@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180 2002/06/18 16:40:19 rjs3 Exp $
+ * $Id: index.c,v 1.181 2002/07/24 17:34:18 wcw Exp $
  */
 #include <config.h>
 
@@ -3496,7 +3496,7 @@ static char *find_msgid(char *str, char **rem)
 	if (*++cp == '\"') {
 	    /* find the endquote, making sure it isn't escaped */
 	    do {
-		cp = strchr(++cp, '\"');
+		++cp; cp = strchr(cp, '\"');
 	    } while (cp && *(cp-1) == '\\');
 
 	    /* no endquote, so bail */
