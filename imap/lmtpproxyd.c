@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.33 2002/02/11 17:41:43 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.34 2002/02/14 22:41:18 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -324,33 +324,42 @@ struct connlist {
     struct connlist *next;
 } *chead = NULL;
 
-static int usercb(void *context, int id,
-		  const char **result, unsigned *len)
-{
-    assert(id == SASL_CB_USER);
-    *result = "";
-    if (len) *len = 0;
-    return 0;
-}
-
-static sasl_callback_t callbacks[] = {
-    { SASL_CB_USER, &usercb, NULL },
-    { SASL_CB_LIST_END, NULL, NULL }
-};
+extern sasl_callback_t *mysasl_callbacks(const char *username,
+					 const char *authname,
+					 const char *realm,
+					 const char *password);
+void free_callbacks(sasl_callback_t *in);
 
 static struct lmtp_conn *getconn(const char *server)
 {
     int r;
     struct connlist *p = chead;
+    sasl_callback_t *cb = NULL;
 
     for (p = chead; p != NULL; p = p->next) {
 	if (!strcmp(p->host, server)) break;
     }
     if (!p) {
+	const char *pass;
+	char *cp;
+	char optstr[128];
+
 	/* create a new one */
 	p = xmalloc(sizeof(struct connlist));
 	p->host = xstrdup(server);
-	r = lmtp_connect(p->host, callbacks, &p->conn);
+
+	strcpy(optstr, server);
+	cp = strchr(optstr, '.');
+	if (cp) *cp = '\0';
+	strcat(optstr, "_password");
+	pass = config_getstring(optstr, NULL);
+
+	cb = mysasl_callbacks(config_getstring("lmtpproxy_username", ""),
+			      config_getstring("lmtpproxy_authname", "proxy"),
+			      config_getstring("lmtpproxy_realm", NULL),
+			      pass);
+	
+	r = lmtp_connect(p->host, cb, &p->conn);
 	if (r) {
 	    fatal("can't connect to backend lmtp server", EC_TEMPFAIL);
 	}
@@ -373,7 +382,9 @@ static struct lmtp_conn *getconn(const char *server)
 	    fatal("can't connect to backend lmtp server", EC_TEMPFAIL);
 	}
     }
-    
+
+    if(cb) free_callbacks(cb);
+
     return p->conn;
 }
 
@@ -477,7 +488,7 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
 	int r = 0;
 	
 	lt->from = msgdata->return_path;
-	lt->auth = d->authas;
+	lt->auth = d->authas[0] ? d->authas : NULL;
 	lt->isdotstuffed = 0;
 	
 	prot_rewind(msgdata->data);
@@ -536,7 +547,6 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
 	d = d->next;
     }
 }
-
 
 /* deliver() runs through each recipient in 'msgdata', compiling a list of 
    final destinations for this message (each represented by a 'struct dest'
