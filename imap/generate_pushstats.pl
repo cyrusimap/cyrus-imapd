@@ -225,7 +225,7 @@ int snmp_increment(${basename}_t cmd, int incr)
 
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
 
-    if (sendto(mysock, tosend, strlen(tosend), 0, &remote, len) == -1) {
+    if (sendto(mysock, tosend, strlen(tosend), 0, (struct sockaddr *) &remote, len) == -1) {
 	return 1;
     }
 
