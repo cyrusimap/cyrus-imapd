@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.29 2002/02/05 05:04:15 leg Exp $
+ * $Id: lmtpproxyd.c,v 1.30 2002/02/05 17:46:06 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -423,14 +423,14 @@ static int adddest(struct mydata *mydata,
     d = mydata->dlist;
     for (d = mydata->dlist; d != NULL; d = d->next) {
 	if (!strcmp(d->server, mailboxdata->server) && 
-	    !strcmp(d->authas, authas)) break;
+	    !strcmp(d->authas, authas ? authas : "")) break;
     }
 
     if (d == NULL) {
 	/* create a new one */
 	d = xmalloc(sizeof(struct dest));
 	strlcpy(d->server, mailboxdata->server, MAX_MAILBOX_NAME);
-	strlcpy(d->authas, authas, MAX_MAILBOX_NAME);
+	strlcpy(d->authas, authas ? authas : "", MAX_MAILBOX_NAME);
 	d->rnum = 0;
 	d->to = NULL;
 	d->next = mydata->dlist;
