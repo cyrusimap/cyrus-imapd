@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.8 2000/10/26 23:07:31 leg Exp $ -->
+<!-- $Id: install-configure.html,v 1.9 2000/12/20 00:06:06 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -196,7 +196,7 @@ aren't already there.
 </pre>
 </ol>
 
-<h3>Configuring the Master Process</h3>
+<a name="master"><h3>Configuring the Master Process</h3></a>
 
 <ol>
 <li> Choose a configuration from the <tt>master/conf</tt> directory:
@@ -233,7 +233,7 @@ process by hand:
 shut down the mail system by sending it a signal with <tt>kill</tt>.
 </ol>
 
-<h3>Configuring the Mail Transfer Agent</h3>
+<a name="mta"><h3>Configuring the Mail Transfer Agent</h3></a>
 
 <p>In order to deliver mail to the Cyrus system, you'll have to
 configure your MTA (usually <a
@@ -301,7 +301,7 @@ user.  Also add a <TT>cron</TT> job to run
 <TT>active</TT> file.)
 
 </ol>
-<h2>SSL, TLS, and OpenSSL</h2><a name="openssl"></a>
+<a name="openssl"><h2>SSL, TLS, and OpenSSL</h2></a>
 
 <p>Transport Layer Security (TLS), is a standardized version of the Secure
 Sockets Layer (SSL v3) standard.  IMAP can make use of two different
@@ -402,5 +402,5 @@ authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
 <P><HR>
-last modified: $Date: 2000/10/26 23:07:31 $
+last modified: $Date: 2000/12/20 00:06:06 $
 </BODY></HTML>
