@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: service.c,v 1.1 2000/02/15 22:21:53 leg Exp $ */
+/* $Id: service.c,v 1.2 2000/02/18 06:41:49 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -45,31 +45,39 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include "config.h"
+#include <stdlib.h>
 
 #include "service.h"
 
 /* number of times this service has been used */
 static int use_count = 0;
+static int verbose = 0;
 
 void notify_master(int fd, int msg)
 {
+    if (verbose) syslog(LOG_DEBUG, "telling master %d", msg);
     if (write(fd, &msg, sizeof(msg)) != sizeof(msg)) {
 	syslog(LOG_ERR, "unable to tell master %x: %m", msg);
     }
 }
+
+extern void config_init(const char *);
 
 int main(int argc, char **argv, char **envp)
 {
     char name[64];
     int fdflags;
     int fd;
+    char *p;
+
+    p = getenv("CYRUS_VERBOSE");
+    if (p) verbose = atoi(p);
 
     snprintf(name, sizeof(name) - 1, "service-%s", argv[0]);
     config_init(name);
 
     syslog(LOG_DEBUG, "executed");
-    
+
     /* set close on exec */
     fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
     if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD, 
@@ -97,6 +105,8 @@ int main(int argc, char **argv, char **envp)
 	/* ok, listen to this socket until someone talks to us */
 	fd = -1;
 	while (fd < 0) { /* loop until we succeed */
+	    /* we should probably do a select() here and time out */
+
 	    fd = accept(LISTEN_FD, NULL, NULL);
 	    if (fd < 0) {
 		switch (errno) {
