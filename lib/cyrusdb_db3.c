@@ -47,6 +47,10 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include "cyrusdb.h"
 #include "exitcodes.h"
@@ -74,6 +78,7 @@
 #if DB_VERSION_MAJOR >= 4
 #define txn_checkpoint(xx1,xx2,xx3,xx4) (xx1)->txn_checkpoint(xx1,xx2,xx3,xx4)
 #define txn_id(xx1) (xx1)->id(xx1)
+#define log_archive(xx1,xx2,xx3,xx4) (xx1)->log_archive(xx1,xx2,xx3)
 #endif
 
 static int dbinit = 0;
@@ -216,7 +221,7 @@ static int done(void)
     return 0;
 }
 
-static int sync(void)
+static int mysync(void)
 {
     int r;
 
@@ -238,7 +243,145 @@ static int sync(void)
     return 0;
 }
 
-static int open(const char *fname, struct db **ret)
+static int copyfile(const char *srcname, const char *dstname)
+{
+    int srcfd, dstfd;
+    struct stat sbuf;
+    char *buf;
+    int bufsize, n;
+
+    if ((srcfd = open(srcname, O_RDONLY)) < 0) {
+	syslog(LOG_DEBUG, "error opening %s for reading", srcname);
+	return -1;
+    }
+
+    if (fstat(srcfd, &sbuf) < 0) {
+	syslog(LOG_DEBUG, "error fstating %s", srcname);
+	close(srcfd);
+	return -1;
+    }
+
+    if ((dstfd = open(dstname, O_WRONLY | O_CREAT, sbuf.st_mode)) < 0) {
+	syslog(LOG_DEBUG, "error opening %s for writing (%d)",
+	       dstname, sbuf.st_mode);
+	close(srcfd);
+	return -1;
+    }
+
+    bufsize = sbuf.st_blksize;
+    if ((buf = (char*) xmalloc(bufsize)) == NULL) {
+	syslog(LOG_DEBUG, "error allocing buf (%d)", bufsize);
+	close(srcfd);
+	close(dstfd);
+	return -1;
+    }
+
+    for (;;) {
+	n = read(srcfd, buf, bufsize);
+
+	if (n < 0) {
+	    if (errno == EINTR)
+		continue;
+
+	    syslog(LOG_DEBUG, "error reading buf (%d)", bufsize);
+	    close(srcfd);
+	    close(dstfd);
+	    unlink(dstname);
+	    return -1;
+	}
+
+	if (n == 0)
+	    break;
+
+	if (retry_write(dstfd, buf, n) != n) {
+	    syslog(LOG_DEBUG, "error writing buf (%d)", n);
+	    close(srcfd);
+	    close(dstfd);
+	    unlink(dstname);
+	    return -1;
+	}
+    }
+
+    close(srcfd);
+    close(dstfd);
+    return 0;
+}
+
+static int myarchive(const char *dirname)
+{
+    int r;
+    char **begin, **list;
+    char dstname[1024], *dp;
+
+    strcpy(dstname, dirname);
+    dp = dstname + strlen(dstname);
+
+    /* Get the list of log files to remove. */
+    r = log_archive(dbenv, &list, DB_ARCH_ABS, NULL);
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: error listing log files: %s",
+	       db_strerror(r));
+	return CYRUSDB_IOERROR;
+    }
+    if (list != NULL) {
+	for (begin = list; *list != NULL; ++list) {
+	    syslog(LOG_DEBUG, "removing log file: %s", *list);
+	    r = unlink(*list);
+	    if (r) {
+		syslog(LOG_ERR, "DBERROR: error removing log file: %s",
+		       *list);
+		return CYRUSDB_IOERROR;
+	    }
+	}
+	free (begin);
+    }
+
+    /* Get the list of database files to archive. */
+    r = log_archive(dbenv, &list, DB_ARCH_ABS | DB_ARCH_DATA, NULL);
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: error listing database files: %s",
+	       db_strerror(r));
+	return CYRUSDB_IOERROR;
+    }
+    if (list != NULL) {
+	for (begin = list; *list != NULL; ++list) {
+	    syslog(LOG_DEBUG, "archiving database file: %s", *list);
+	    strcpy(dp, strrchr(*list, '/'));
+	    r = copyfile(*list, dstname);
+	    if (r) {
+		syslog(LOG_ERR, "DBERROR: error archiving database file: %s",
+		       *list);
+		return CYRUSDB_IOERROR;
+	    }
+	}
+	free (begin);
+    }
+
+    /* Get the list of log files to archive. */
+    r = log_archive(dbenv, &list, DB_ARCH_ABS | DB_ARCH_LOG, NULL);
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: error listing log files: %s",
+	       db_strerror(r));
+	return CYRUSDB_IOERROR;
+    }
+    if (list != NULL) {
+	for (begin = list; *list != NULL; ++list) {
+	    syslog(LOG_DEBUG, "archiving log file: %s", *list);
+	    strcpy(dp, strrchr(*list, '/'));
+	    r = copyfile(*list, dstname);
+	    if (r) {
+		syslog(LOG_ERR, "DBERROR: error archiving log file: %s",
+		       *list);
+		return CYRUSDB_IOERROR;
+	    }
+	}
+	free (begin);
+    }
+
+    return 0;
+}
+
+static int myopen(const char *fname, struct db **ret)
 {
     DB *db;
     int r;
@@ -265,7 +408,7 @@ static int open(const char *fname, struct db **ret)
     return r;
 }
 
-static int close(struct db *db)
+static int myclose(struct db *db)
 {
     int r;
     DB *a = (DB *) db;
@@ -803,10 +946,11 @@ struct cyrusdb_backend cyrusdb_db3 =
 
     &init,
     &done,
-    &sync,
+    &mysync,
+    &myarchive,
 
-    &open,
-    &close,
+    &myopen,
+    &myclose,
 
     &fetch,
     &fetchlock,
@@ -825,10 +969,11 @@ struct cyrusdb_backend cyrusdb_db3_nosync =
 
     &init,
     &done,
-    &sync,
+    &mysync,
+    &myarchive,
 
-    &open,
-    &close,
+    &myopen,
+    &myclose,
 
     &fetch,
     &fetchlock,

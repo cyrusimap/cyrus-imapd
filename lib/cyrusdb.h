@@ -85,6 +85,9 @@ struct cyrusdb_backend {
     /* checkpoints this database environment */
     int (*sync)(void);
 
+    /* archives this database environment into the specified directory */
+    int (*archive)(const char *dirname);
+
     /* open the specified database in the global environment */
     int (*open)(const char *fname, struct db **ret);
 
