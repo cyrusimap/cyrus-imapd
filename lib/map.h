@@ -37,10 +37,10 @@
 #endif
 #endif
 
-void map_refresh P((int fd, int onceonly, const char **base,
+extern void map_refresh P((int fd, int onceonly, const char **base,
 		    unsigned long *len, unsigned long newlen,
 		    const char *name, const char *mboxname));
 
-void map_free P((const char **base, unsigned long *len));
+extern void map_free P((const char **base, unsigned long *len));
 
 #endif /* INCLUDED_MAP_H */

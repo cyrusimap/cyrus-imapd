@@ -40,7 +40,7 @@
 
 extern char *xmalloc P((unsigned size));
 extern char *xrealloc P((char *ptr, unsigned size));
-extern char *strsave P((char *str));
+extern char *xstrdup P((const char *str));
 extern void *fs_get P((unsigned size));
 extern void fs_give P((void **ptr));
 

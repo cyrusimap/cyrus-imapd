@@ -132,7 +132,7 @@ const char *cacheid;
 	    auth_ngroups++;
 	    auth_group = (char **)xrealloc((char *)auth_group,
 					   auth_ngroups * sizeof(char *));
-	    auth_group[auth_ngroups-1] = strsave(grp->gr_name);
+	    auth_group[auth_ngroups-1] = xstrdup(grp->gr_name);
 	}
     }
     endgrent();
