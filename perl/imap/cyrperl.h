@@ -43,11 +43,11 @@ struct xscyrus {
 };
 
 /* C callback to invoke a Perl callback on behalf of imclient */
-extern void imclient_xs_cb(struct imclient *, rock_t, struct imclient_reply *);
+/*void imclient_xs_cb(struct imclient *, rock_t, struct imclient_reply *);*/
 
 /* C callback to invoke a Perl callback on behalf of imclient_send()'s cb */
-extern void imclient_xs_fcmdcb(struct imclient *, rock_t,
-			       struct imclient_reply *);
+/*void imclient_xs_fcmdcb(struct imclient *, rock_t,
+  struct imclient_reply *);*/
 
 /* Clean up after a "self-freeing" Perl callback */
-extern void imclient_xs_callback_free(struct xsccb *);
+/*void imclient_xs_callback_free(struct xsccb *);*/

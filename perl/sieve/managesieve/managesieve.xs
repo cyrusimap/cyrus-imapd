@@ -166,7 +166,7 @@ SV *    rock;
 }
 
 
-MODULE = SIEVE::Cyrus		PACKAGE = SIEVE::Cyrus		
+MODULE = SIEVE::managesieve		PACKAGE = SIEVE::managesieve
 PROTOTYPES: ENABLE
 
 
