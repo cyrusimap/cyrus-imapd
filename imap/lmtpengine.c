@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.89 2003/06/25 03:34:01 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.90 2003/07/22 19:17:15 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1470,7 +1470,7 @@ void lmtpmode(struct lmtp_func *func,
 	      }
 
 	      /* Create telemetry log */
-	      deliver_logfd = telemetry_log(user, pin, pout);
+	      deliver_logfd = telemetry_log(user, pin, pout, 0);
 
 	      /* authenticated successfully! */
 	      snmp_increment_args(AUTHENTICATION_YES,1,

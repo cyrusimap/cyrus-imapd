@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.162 2003/06/25 03:34:02 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.163 2003/07/22 19:17:17 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -2222,7 +2222,7 @@ void cmd_login(char *tag, char *user)
     prot_printf(proxyd_out, "%s OK %s\r\n", tag, reply);
 
     /* Create telemetry log */
-    proxyd_logfd = telemetry_log(proxyd_userid, proxyd_in, proxyd_out);
+    proxyd_logfd = telemetry_log(proxyd_userid, proxyd_in, proxyd_out, 0);
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&proxyd_namespace, proxyd_userisadmin)) != 0) {
@@ -2336,7 +2336,7 @@ void cmd_authenticate(char *tag, char *authtype)
     prot_setsasl(proxyd_out, proxyd_saslconn);
 
     /* Create telemetry log */
-    proxyd_logfd = telemetry_log(proxyd_userid, proxyd_in, proxyd_out);
+    proxyd_logfd = telemetry_log(proxyd_userid, proxyd_in, proxyd_out, 0);
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&proxyd_namespace, proxyd_userisadmin)) != 0) {

@@ -1,5 +1,5 @@
 /* telemetry.c -- common server telemetry
- * $Id: telemetry.c,v 1.5 2003/02/13 20:15:31 rjs3 Exp $
+ * $Id: telemetry.c,v 1.6 2003/07/22 19:17:20 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -50,6 +50,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/time.h>
 #include <string.h>
 
 #include "prot.h"
@@ -57,14 +58,28 @@
 
 /* create telemetry log; return fd of log */
 int telemetry_log(const char *userid, struct protstream *pin, 
-		  struct protstream *pout)
+		  struct protstream *pout, int usetimestamp)
 {
     char buf[1024];
     int fd = -1;
     time_t now;
 
-    snprintf(buf, sizeof(buf), "%s%s%s/%lu", 
-	     config_dir, FNAME_LOGDIR, userid, (unsigned long) getpid());
+    if(usetimestamp) {
+	struct timeval tv;
+
+	gettimeofday(&tv, NULL);
+
+	/* use sec.clocks */
+	snprintf(buf, sizeof(buf), "%s%s%s/%lu.%lu",
+		 config_dir, FNAME_LOGDIR, userid,
+		 (unsigned long)tv.tv_sec, (unsigned long)tv.tv_usec);
+    } else {
+	/* use pid */
+	snprintf(buf, sizeof(buf), "%s%s%s/%lu", 
+		 config_dir, FNAME_LOGDIR, userid, (unsigned long)
+		 getpid());
+    }
+
     fd = open(buf, O_CREAT | O_APPEND | O_WRONLY, 0644);
 
     if (fd != -1) {
