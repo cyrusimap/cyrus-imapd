@@ -69,15 +69,31 @@ struct storeargs {
 #define STORE_REMOVE	2
 #define STORE_REPLACE	3
 
+struct searchsub {
+    struct searchsub *next;
+    struct searchargs *sub1;
+    /*
+     * If sub2 is null, then sub1 is NOT'ed.
+     * Otherwise sub1 and sub2 are OR'ed.
+     */
+    struct searchargs *sub2;
+};
+
 /* Things that may be searched for */
 struct searchargs {
+    int recent_set;
+    int recent_unset;
+    int peruser_flags_set;
+    int peruser_flags_unset;
+    unsigned smaller, larger;
     time_t before, after;
+    time_t sentbefore, sentafter;
     bit32 system_flags_set;
     bit32 system_flags_unset;
     bit32 user_flags_set[MAX_USER_FLAGS/32];
     bit32 user_flags_unset[MAX_USER_FLAGS/32];
-    int seen_state;
-    int recent_state;
+    struct strlist *sequence;
+    struct strlist *uidsequence;
     struct strlist *from;
     struct strlist *to;
     struct strlist *cc;
@@ -85,9 +101,9 @@ struct searchargs {
     struct strlist *subject;
     struct strlist *body;
     struct strlist *text;
+    struct strlist *header_name, *header;
+    struct searchsub *sublist;
 };
 
-/* values for seen_state and recent_state */
-#define SEARCH_DONTCARE		0
-#define SEARCH_SET		1
-#define SEARCH_UNSET		2
+
+

@@ -686,142 +686,19 @@ struct mailbox *mailbox;
 struct searchargs *searchargs;
 int usinguid;
 {
-    int msgno, start=1, end=imapd_exists;
-    int seen_matters = (searchargs->seen_state != SEARCH_DONTCARE);
-    int seenstate = (searchargs->seen_state == SEARCH_SET);
-    int i;
-    struct strlist *l;
-    char *cacheitem;
-    int cachelen;
-    FILE *msgfile;
-
-    if (searchargs->recent_state == SEARCH_SET) {
-	start = lastnotrecent+1;
-    }
-    else if (searchargs->recent_state == SEARCH_UNSET) {
-	end = lastnotrecent;
-    }
+    int msgno;
+    FILE *msgfile = 0;
 
     printf("* SEARCH");
 
-    for (msgno = start; msgno <= end; msgno++) {
-	if (seen_matters && seenstate != seenflag[msgno]) continue;
-
-	if (searchargs->after && INTERNALDATE(msgno) < searchargs->after)
-	  continue;
-	if (searchargs->before && INTERNALDATE(msgno) > searchargs->before)
-	  continue;
-
-	if (~SYSTEM_FLAGS(msgno) & searchargs->system_flags_set) continue;
-	if (SYSTEM_FLAGS(msgno) & searchargs->system_flags_unset) continue;
-	
-	for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-	    if (~USER_FLAGS(msgno,i) & searchargs->user_flags_set[i])
-	      break;
-	    if (USER_FLAGS(msgno,i) & searchargs->user_flags_unset[i])
-	      break;
+    for (msgno = 1; msgno <= imapd_exists; msgno++) {
+	if (index_search_evaluate(mailbox, searchargs, msgno, &msgfile)) {
+	    printf(" %d", usinguid ? UID(msgno) : msgno);
 	}
-	if (i != MAX_USER_FLAGS/32) continue;
-
-	if (searchargs->from || searchargs->to ||
-	    searchargs->cc || searchargs->bcc) {
-	    cacheitem = cache_base + CACHE_OFFSET(msgno);
-	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
-	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
-	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
-	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip section */
-	    cachelen = CACHE_ITEM_LEN(cacheitem);
-	    
-	    for (l = searchargs->from; l; l = l->next) {
-		if (!index_search_string(l->s, cacheitem+4, cachelen)) break;
-	    }
-	    if (l) continue;
-
-	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip from */
-	    cachelen = CACHE_ITEM_LEN(cacheitem);
-
-	    for (l = searchargs->to; l; l = l->next) {
-		if (!index_search_string(l->s, cacheitem+4, cachelen)) break;
-	    }
-	    if (l) continue;
-
-	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip to */
-	    cachelen = CACHE_ITEM_LEN(cacheitem);
-
-	    for (l = searchargs->cc; l; l = l->next) {
-		if (!index_search_string(l->s, cacheitem+4, cachelen)) break;
-	    }
-	    if (l) continue;
-
-	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip cc */
-	    cachelen = CACHE_ITEM_LEN(cacheitem);
-
-	    for (l = searchargs->bcc; l; l = l->next) {
-		if (!index_search_string(l->s, cacheitem+4, cachelen)) break;
-	    }
-	    if (l) continue;
-	}
-	if (searchargs->subject) {
-	    cacheitem = cache_base + CACHE_OFFSET(msgno) + 5;
-
-	    /* Skip over date */
-	    if (*cacheitem == '\"') {
-		cacheitem = strchr(cacheitem+1, '\"') + 2;
-	    }
-	    else if (*cacheitem == 'N') {
-		cacheitem += 4;
-	    }
-	    else {
-		cacheitem++;
-		cachelen = 0;
-		while (isdigit(*cacheitem)) {
-		    cachelen = cachelen*10 + *cacheitem++ - '0';
-		}
-		cacheitem += cachelen + 4;
-	    }
-	    
-	    if (*cacheitem == '\"') {
-		cacheitem++;
-		cachelen = strchr(cacheitem+1, '\"') - cacheitem;
-	    }
-	    else if (*cacheitem == 'N') {
-		cachelen = 0;
-	    }
-	    else {
-		cacheitem++;
-		cachelen = 0;
-		while (isdigit(*cacheitem)) {
-		    cachelen = cachelen*10 + *cacheitem++ - '0';
-		}
-		cacheitem += 3;
-	    }
-
-	    for (l = searchargs->subject; l; l = l->next) {
-		if (!index_search_string(l->s, cacheitem, cachelen)) break;
-	    }
-	    if (l) continue;
-	}
-	if (searchargs->body || searchargs->text) {
-	    msgfile = fopen(mailbox_message_fname(mailbox, UID(msgno)), "r");
-	    if (!msgfile) continue;
-
-	    for (l = searchargs->body; l; l = l->next) {
-		if (!index_search_msg(l->s, msgfile, mailbox->format,
-				      CONTENT_OFFSET(msgno))) break;
-	    }
-	    if (l) {
-		fclose(msgfile);
-		continue;
-	    }
-	    for (l = searchargs->text; l; l = l->next) {
-		if (!index_search_msg(l->s, msgfile, mailbox->format, 0))
-		  break;
-	    }
+	if (msgfile) {
 	    fclose(msgfile);
-	    if (l) continue;
+	    msgfile = 0;
 	}
-
-	printf(" %d", usinguid ? UID(msgno) : msgno);
     }
     printf("\r\n");
 }
@@ -961,6 +838,53 @@ char *rock;
 	sequence++;
     }
 }
+
+/*
+ * Return nonzero iff 'num' is included in 'sequence'
+ */
+static int
+index_insequence(num, sequence, usinguid)
+int num;
+char *sequence;
+int usinguid;
+{
+    int i, start = 0, end;
+
+    for (;;) {
+	if (isdigit(*sequence)) {
+	    start = start*10 + *sequence - '0';
+	}
+	else if (*sequence == '*') {
+	    sequence++;
+	    start = usinguid ? UID(imapd_exists) : imapd_exists;
+	}
+	else if (*sequence == ':') {
+	    end = 0;
+	    sequence++;
+	    while (isdigit(*sequence)) {
+		end = end*10 + *sequence++ - '0';
+	    }
+	    if (*sequence == '*') {
+		sequence++;
+		end = usinguid ? UID(imapd_exists) : imapd_exists;
+	    }
+	    if (start > end) {
+		i = end;
+		end = start;
+		start = i;
+	    }
+	    if (num >= start && num <= end) return 1;
+	    start = 0;
+	    if (!*sequence) return 0;
+	}
+	else {
+	    if (num == start) return 1;
+	    start = 0;
+	    if (!*sequence) return 0;
+	}
+	sequence++;
+    }
+}    
 
 /*
  * Helper function to fetch data from a message file.
@@ -1595,6 +1519,244 @@ char *rock;
     return 0;
 }
 
+/*
+ * Evaluate a searchargs structure on a msgno
+ */
+static int
+index_search_evaluate(mailbox, searchargs, msgno, msgfile)
+struct mailbox *mailbox;
+struct searchargs *searchargs;
+int msgno;
+FILE **msgfile;
+{
+    int i;
+    struct strlist *l;
+    char *cacheitem;
+    int cachelen;
+    struct searchsub *s;
+
+    if (searchargs->recent_set && msgno <= lastnotrecent) return 0;
+    if (searchargs->recent_unset && msgno > lastnotrecent) return 0;
+    if (searchargs->peruser_flags_set && !seenflag[msgno]) return 0;
+    if (searchargs->peruser_flags_unset && seenflag[msgno]) return 0;
+
+    if (searchargs->smaller && SIZE(msgno) >= searchargs->smaller) return 0;
+    if (searchargs->larger && SIZE(msgno) <= searchargs->larger) return 0;
+
+    if (searchargs->after && INTERNALDATE(msgno) < searchargs->after)
+      return 0;
+    if (searchargs->before && INTERNALDATE(msgno) > searchargs->before)
+      return 0;
+#if 0 /* XXX */
+    if (searchargs->sentafter && SENTDATE(msgno) < searchargs->sentafter)
+      return 0;
+    if (searchargs->sentbefore && SENTDATE(msgno) > searchargs->sentbefore)
+      return 0;
+#endif    
+
+    if (~SYSTEM_FLAGS(msgno) & searchargs->system_flags_set) return 0;
+    if (SYSTEM_FLAGS(msgno) & searchargs->system_flags_unset) return 0;
+	
+    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
+	if (~USER_FLAGS(msgno,i) & searchargs->user_flags_set[i])
+	  return 0;
+	if (USER_FLAGS(msgno,i) & searchargs->user_flags_unset[i])
+	  return 0;
+    }
+
+    for (l = searchargs->sequence; l; l = l->next) {
+	if (!index_insequence(msgno, l->s, 0)) return 0;
+    }
+    for (l = searchargs->uidsequence; l; l = l->next) {
+	if (!index_insequence(UID(msgno), l->s, 1)) return 0;
+    }
+
+    if (searchargs->from || searchargs->to ||searchargs->cc || searchargs->bcc) {
+
+	cacheitem = cache_base + CACHE_OFFSET(msgno);
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip section */
+	cachelen = CACHE_ITEM_LEN(cacheitem);
+	    
+	for (l = searchargs->from; l; l = l->next) {
+	    if (!index_search_string(l->s, cacheitem+4, cachelen)) return 0;
+	}
+
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip from */
+	cachelen = CACHE_ITEM_LEN(cacheitem);
+
+	for (l = searchargs->to; l; l = l->next) {
+	    if (!index_search_string(l->s, cacheitem+4, cachelen)) return 0;
+	}
+
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip to */
+	cachelen = CACHE_ITEM_LEN(cacheitem);
+
+	for (l = searchargs->cc; l; l = l->next) {
+	    if (!index_search_string(l->s, cacheitem+4, cachelen)) return 0;
+	}
+
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip cc */
+	cachelen = CACHE_ITEM_LEN(cacheitem);
+
+	for (l = searchargs->bcc; l; l = l->next) {
+	    if (!index_search_string(l->s, cacheitem+4, cachelen)) return 0;
+	}
+    }
+
+    if (searchargs->subject) {
+	cacheitem = cache_base + CACHE_OFFSET(msgno) + 5;
+
+	/* Skip over date */
+	if (*cacheitem == '\"') {
+	    cacheitem = strchr(cacheitem+1, '\"') + 2;
+	}
+	else if (*cacheitem == 'N') {
+	    cacheitem += 4;
+	}
+	else {
+	    cacheitem++;
+	    cachelen = 0;
+	    while (isdigit(*cacheitem)) {
+		cachelen = cachelen*10 + *cacheitem++ - '0';
+	    }
+	    cacheitem += cachelen + 4;
+	}
+	    
+	if (*cacheitem == '\"') {
+	    cacheitem++;
+	    cachelen = strchr(cacheitem+1, '\"') - cacheitem;
+	}
+	else if (*cacheitem == 'N') {
+	    cachelen = 0;
+	}
+	else {
+	    cacheitem++;
+	    cachelen = 0;
+	    while (isdigit(*cacheitem)) {
+		cachelen = cachelen*10 + *cacheitem++ - '0';
+	    }
+	    cacheitem += 3;
+	}
+
+	for (l = searchargs->subject; l; l = l->next) {
+	    if (!index_search_string(l->s, cacheitem, cachelen)) return 0;
+	}
+    }
+
+    for (s = searchargs->sublist; s; s = s->next) {
+	if (index_search_evaluate(mailbox, s->sub1, msgno, msgfile)) {
+	    if (!s->sub2) return 0;
+	}
+	else {
+	    if (s->sub2 &&
+		!index_search_evaluate(mailbox, s->sub2, msgno, msgfile))
+	      return 0;
+	}
+    }
+
+    if (searchargs->body || searchargs->text || searchargs->header) {
+	if (!*msgfile) {
+	    *msgfile = fopen(mailbox_message_fname(mailbox, UID(msgno)), "r");
+	    if (!*msgfile) return 0;
+	}
+
+	/* XXX search header */
+
+	for (l = searchargs->body; l; l = l->next) {
+	    if (!index_search_msg(l->s, *msgfile, mailbox->format,
+				  CONTENT_OFFSET(msgno))) return 0;
+	}
+	for (l = searchargs->text; l; l = l->next) {
+	    if (!index_search_msg(l->s, *msgfile, mailbox->format, 0))
+	      return 0;
+	}
+    }
+
+    return 1;
+}
+
+/*
+ * Search a string
+ */
+static int
+index_search_string(substr, text, textlen)
+char *substr;
+char *text;
+int textlen;
+{
+    int substrlen = strlen(substr);
+    textlen -= substrlen;
+    while (textlen-- >= 0) {
+	if (TOLOWER(*substr) == TOLOWER(*text) &&
+	    !strncasecmp(substr, text, substrlen))
+	  return 1;
+	text++;
+    }
+    return 0;
+}
+	    
+/*
+ * Search part of a message for a substring
+ */
+static int
+index_search_msg(substr, msgfile, format, offset)
+char *substr;
+FILE *msgfile;
+int format;
+int offset;
+{
+    int substrlen = strlen(substr);
+    char buf[4096];
+    char *p;
+    int n;
+    
+    if (format == MAILBOX_FORMAT_NETNEWS) {
+	/* Convert the substring to local newline convention */
+	if (p = strchr(substr, '\n')) {
+	    if (p == substr || p[-1] != '\r') return 0;
+	    substr = strsave(substr);
+	    p = substr;
+	    while (p = strchr(p, '\n')) {
+		if (p[-1] != '\r') {
+		    free(substr);
+		    return 0;
+		}
+		strcpy(p-1, p);
+	    }
+	}
+	else {
+	    format = MAILBOX_FORMAT_NORMAL;
+	}
+    }
+
+    fseek(msgfile, offset, 0);
+    n = fread(buf, 1, substrlen-1, msgfile);
+    if (n != substrlen-1) {
+	if (format == MAILBOX_FORMAT_NETNEWS) free(substr);
+	return 0;
+    }
+    while (n = fread(buf+substrlen-1, 1, sizeof(buf)-substrlen+1, msgfile)) {
+	p = buf;
+	while (n-- > 0) {
+	    if (TOLOWER(*substr) == TOLOWER(*p) &&
+		!strncasecmp(substr, p, substrlen)) {
+		if (format == MAILBOX_FORMAT_NETNEWS) free(substr);
+		return 1;
+	    }
+	    p++;
+	}
+	strncpy(buf, p, substrlen-1);
+    }
+    if (format == MAILBOX_FORMAT_NETNEWS) free(substr);
+    return 0;
+}
+	    
+/*
+ * Helper function to set up arguments to append_copy()
+ */
 #define COPYARGSGROW 5 /* XXX 30 */
 static int
 index_copysetup(mailbox, msgno, rock)
@@ -1660,74 +1822,3 @@ char *rock;
 
     return 0;
 }
-
-static int
-index_search_string(substr, text, textlen)
-char *substr;
-char *text;
-int textlen;
-{
-    int substrlen = strlen(substr);
-    textlen -= substrlen;
-    while (textlen-- >= 0) {
-	if (TOLOWER(*substr) == TOLOWER(*text) &&
-	    !strncasecmp(substr, text, substrlen))
-	  return 1;
-	text++;
-    }
-    return 0;
-}
-	    
-static int
-index_search_msg(substr, msgfile, format, offset)
-char *substr;
-FILE *msgfile;
-int format;
-int offset;
-{
-    int substrlen = strlen(substr);
-    char buf[4096];
-    char *p;
-    int n;
-    
-    if (format == MAILBOX_FORMAT_NETNEWS) {
-	/* Convert the substring to local newline convention */
-	if (p = strchr(substr, '\n')) {
-	    if (p == substr || p[-1] != '\r') return 0;
-	    substr = strsave(substr);
-	    p = substr;
-	    while (p = strchr(p, '\n')) {
-		if (p[-1] != '\r') {
-		    free(substr);
-		    return 0;
-		}
-		strcpy(p-1, p);
-	    }
-	}
-	else {
-	    format = MAILBOX_FORMAT_NORMAL;
-	}
-    }
-
-    fseek(msgfile, offset, 0);
-    n = fread(buf, 1, substrlen-1, msgfile);
-    if (n != substrlen-1) {
-	if (format == MAILBOX_FORMAT_NETNEWS) free(substr);
-	return 0;
-    }
-    while (n = fread(buf+substrlen-1, 1, sizeof(buf)-substrlen+1, msgfile)) {
-	p = buf;
-	while (n-- > 0) {
-	    if (TOLOWER(*substr) == TOLOWER(*p) &&
-		!strncasecmp(substr, p, substrlen)) {
-		if (format == MAILBOX_FORMAT_NETNEWS) free(substr);
-		return 1;
-	    }
-	    p++;
-	}
-	strncpy(buf, p, substrlen-1);
-    }
-    if (format == MAILBOX_FORMAT_NETNEWS) free(substr);
-    return 0;
-}
-	    

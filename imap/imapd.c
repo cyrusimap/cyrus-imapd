@@ -1259,259 +1259,35 @@ cmd_search(tag, usinguid)
 char *tag;
 int usinguid;
 {
-    int c = ' ';
-    static struct buf criteria, arg;
-    struct searchargs searchargs;
+    int c;
+    char *charset = 0;
+    struct searchargs *searchargs;
     static struct searchargs zerosearchargs;
-    int nothing_found = 0;
-    int flag;
-    time_t start, end;
 
-    searchargs = zerosearchargs;
+    searchargs = (struct searchargs *)xmalloc(sizeof(struct searchargs));
+    *searchargs = zerosearchargs;
 
-    while (c == ' ') {
-	c = getword(&criteria);
-	lcase(criteria.s);
-	switch (criteria.s[0]) {
-	case 'a':
-	    if (!strcmp(criteria.s, "answered")) {
-		searchargs.system_flags_set |= FLAG_ANSWERED;
-	    }
-	    else if (!strcmp(criteria.s, "all")) {
-		break;
-	    }
-	    else goto badcri;
-	    break;
-
-	case 'b':
-	    if (!strcmp(criteria.s, "before")) {
-		if (c != ' ') goto missingarg;		
-		c = getdate(&start, &end);
-		if (c == EOF) goto baddate;
-		if (!searchargs.before || searchargs.before > start) {
-		    searchargs.before = start;
-		}
-	    }
-	    else if (!strcmp(criteria.s, "bcc")) {
-		if (c != ' ') goto missingarg;		
-		c = getastring(&arg);
-		if (c == EOF) goto missingarg;
-		appendstrlist(&searchargs.bcc, arg.s);
-	    }
-	    else if (!strcmp(criteria.s, "body")) {
-		if (c != ' ') goto missingarg;		
-		c = getastring(&arg);
-		if (c == EOF) goto missingarg;
-		appendstrlist(&searchargs.body, arg.s);
-	    }
-	    else goto badcri;
-	    break;
-
-	case 'c':
-	    if (!strcmp(criteria.s, "cc")) {
-		if (c != ' ') goto missingarg;		
-		c = getastring(&arg);
-		if (c == EOF) goto missingarg;
-		appendstrlist(&searchargs.cc, arg.s);
-	    }
-	    else goto badcri;
-	    break;
-
-	case 'd':
-	    if (!strcmp(criteria.s, "deleted")) {
-		searchargs.system_flags_set |= FLAG_DELETED;
-	    }
-	    else goto badcri;
-	    break;
-
-	case 'f':
-	    if (!strcmp(criteria.s, "flagged")) {
-		searchargs.system_flags_set |= FLAG_FLAGGED;
-	    }
-	    else if (!strcmp(criteria.s, "from")) {
-		if (c != ' ') goto missingarg;		
-		c = getastring(&arg);
-		if (c == EOF) goto missingarg;
-		appendstrlist(&searchargs.from, arg.s);
-	    }
-	    else goto badcri;
-	    break;
-
-	case 'k':
-	    if (!strcmp(criteria.s, "keyword")) {
-		if (c != ' ') goto missingarg;		
-		c = getword(&arg);
-		if (!isatom(arg.s)) goto badflag;
-		lcase(arg.s);
-		for (flag=0; flag < MAX_USER_FLAGS; flag++) {
-		    if (imapd_mailbox->flagname[flag] &&
-			!strcmp(imapd_mailbox->flagname[flag], arg.s)) break;
-		}
-		if (flag == MAX_USER_FLAGS) {
-		    nothing_found++;
-		    break;
-		}
-		searchargs.user_flags_set[flag/32] |= 1<<(flag&31);
-	    }
-	    else goto badcri;
-	    break;
-
-	case 'n':
-	    if (!strcmp(criteria.s, "new")) {
-		if (searchargs.seen_state == SEARCH_SET ||
-		    searchargs.recent_state == SEARCH_UNSET) nothing_found++;
-		searchargs.seen_state = SEARCH_UNSET;
-		searchargs.recent_state = SEARCH_SET;
-	    }
-	    else goto badcri;
-	    break;
-
-	case 'o':
-	    if (!strcmp(criteria.s, "old")) {
-		if (searchargs.recent_state == SEARCH_SET) nothing_found++;
-		searchargs.recent_state = SEARCH_UNSET;
-	    }
-	    else if (!strcmp(criteria.s, "on")) {
-		if (c != ' ') goto missingarg;		
-		c = getdate(&start, &end);
-		if (c == EOF) goto baddate;
-		if (!searchargs.before || searchargs.before > end) {
-		    searchargs.before = end;
-		}
-		if (!searchargs.after || searchargs.after < start) {
-		    searchargs.after = start;
-		}
-	    }
-	    else goto badcri;
-	    break;
-
-	case 'r':
-	    if (!strcmp(criteria.s, "recent")) {
-		if (searchargs.recent_state == SEARCH_UNSET) nothing_found++;
-		searchargs.recent_state = SEARCH_SET;
-	    }
-	    else goto badcri;
-	    break;
-
-	case 's':
-	    if (!strcmp(criteria.s, "seen")) {
-		if (searchargs.seen_state == SEARCH_UNSET) nothing_found++;
-		searchargs.seen_state = SEARCH_SET;
-	    }
-	    else if (!strcmp(criteria.s, "since")) {
-		if (c != ' ') goto missingarg;		
-		c = getdate(&start, &end);
-		if (c == EOF) goto baddate;
-		if (!searchargs.after || searchargs.after < start) {
-		    searchargs.after = start;
-		}
-	    }
-	    else if (!strcmp(criteria.s, "subject")) {
-		if (c != ' ') goto missingarg;		
-		c = getastring(&arg);
-		if (c == EOF) goto missingarg;
-		appendstrlist(&searchargs.subject, arg.s);
-	    }
-	    else goto badcri;
-	    break;
-
-	case 't':
-	    if (!strcmp(criteria.s, "to")) {
-		if (c != ' ') goto missingarg;		
-		c = getastring(&arg);
-		if (c == EOF) goto missingarg;
-		appendstrlist(&searchargs.to, arg.s);
-	    }
-	    else if (!strcmp(criteria.s, "text")) {
-		if (c != ' ') goto missingarg;		
-		c = getastring(&arg);
-		if (c == EOF) goto missingarg;
-		appendstrlist(&searchargs.text, arg.s);
-	    }
-	    else goto badcri;
-	    break;
-
-	case 'u':
-	    if (!strcmp(criteria.s, "unseen")) {
-		if (searchargs.seen_state == SEARCH_SET) nothing_found++;
-		searchargs.seen_state = SEARCH_UNSET;
-	    }
-	    else if (!strcmp(criteria.s, "unanswered")) {
-		searchargs.system_flags_unset |= FLAG_ANSWERED;
-	    }
-	    else if (!strcmp(criteria.s, "undeleted")) {
-		searchargs.system_flags_unset |= FLAG_DELETED;
-	    }
-	    else if (!strcmp(criteria.s, "unflagged")) {
-		searchargs.system_flags_unset |= FLAG_FLAGGED;
-	    }
-	    else if (!strcmp(criteria.s, "unkeyword")) {
-		if (c != ' ') goto missingarg;		
-		c = getword(&arg);
-		if (!isatom(arg.s)) goto badflag;
-		lcase(arg.s);
-		for (flag=0; flag < MAX_USER_FLAGS; flag++) {
-		    if (imapd_mailbox->flagname[flag] &&
-			!strcmp(imapd_mailbox->flagname[flag], arg.s)) break;
-		}
-		if (flag != MAX_USER_FLAGS) {
-		    searchargs.user_flags_unset[flag/32] |= 1<<(flag&31);
-		}
-	    }
-	    else goto badcri;
-	    break;
-
-	default:
-	badcri:
-	    printf("%s BAD Invalid Search criteria\r\n", tag);
-	    if (c != '\n') eatline();
-	    goto freeargs;
-	}
+    c = getsearchprogram(tag, searchargs, &charset, 1);
+    if (charset) free(charset);
+    if (c == EOF) {
+	eatline();
+	freesearchargs(searchargs);
+	return;
     }
 
     if (c == '\r') c = getc(stdin);
     if (c != '\n') {
 	printf("%s BAD Unexpected extra arguments to Search\r\n", tag);
 	eatline();
-	goto freeargs;
+	freesearchargs(searchargs);
+	return;
     }
 
-    if (nothing_found) {
-	printf("* SEARCH\r\n");
-    }
-    else {
-	index_search(imapd_mailbox, &searchargs, usinguid);
-    }
+    index_search(imapd_mailbox, searchargs, usinguid);
 
     printf("%s OK Search completed\r\n", tag);
 
- freeargs:
-    freestrlist(searchargs.from);
-    freestrlist(searchargs.to);
-    freestrlist(searchargs.cc);
-    freestrlist(searchargs.bcc);
-    freestrlist(searchargs.subject);
-    freestrlist(searchargs.body);
-    freestrlist(searchargs.text);
-    return;
-
- missingarg:
-    printf("%s BAD Missing required argument to Search %s\r\n",
-	   tag, criteria.s);
-    if (c != '\n') eatline();
-    goto freeargs;
-
- badflag:
-    printf("%s BAD Invalid flag name %s in Search command\r\n",
-	   tag, arg.s);
-    if (c != '\n') eatline();
-    goto freeargs;
-
- baddate:
-    printf("%s BAD Invalid date in Search command\r\n",
-	   tag);
-    if (c != '\n') eatline();
-    goto freeargs;
+    freesearchargs(searchargs);
 }
 
 /*
@@ -2019,6 +1795,433 @@ struct buf *buf;
 }
 
 /*
+ * Parse a search program
+ */
+int getsearchprogram(tag, searchargs, charset, parsecharset)
+char *tag;
+struct searchargs *searchargs;
+char **charset;
+int parsecharset;
+{
+    int c;
+
+    do {
+	c = getsearchcriteria(tag, searchargs, charset, parsecharset);
+	parsecharset = 0;
+    } while (c == ' ');
+    return c;
+}
+
+/*
+ * Parse a search criteria
+ */
+int getsearchcriteria(tag, searchargs, charset, parsecharset)
+char *tag;
+struct searchargs *searchargs;
+char **charset;
+int parsecharset;
+{
+    static struct buf criteria, arg;
+    static struct searchargs zerosearchargs;
+    struct searchargs *sub1, *sub2;
+    char *p;
+    int c, i, flag, size;
+    time_t start, end;
+
+    c = getword(&criteria);
+    lcase(criteria.s);
+    switch (criteria.s[0]) {
+    case '\0':
+	if (c != '(') goto badcri;
+	c = getsearchprogram(tag, searchargs, charset, 0);
+	if (c == EOF) return EOF;
+	if (c != ')') {
+	    printf("%s BAD Missing required close paren in Search command\r\n",
+		   tag);
+	    if (c != EOF) ungetc(c, stdin);
+	    return EOF;
+	}
+	c = getc(stdin);
+	break;
+
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+    case '*':
+	if (issequence(criteria.s)) {
+	    appendstrlist(&searchargs->sequence, criteria.s);
+	}
+	else goto badcri;
+	break;
+
+    case 'a':
+	if (!strcmp(criteria.s, "answered")) {
+	    searchargs->system_flags_set |= FLAG_ANSWERED;
+	}
+	else if (!strcmp(criteria.s, "all")) {
+	    break;
+	}
+	else goto badcri;
+	break;
+
+    case 'b':
+	if (!strcmp(criteria.s, "before")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getdate(&start, &end);
+	    if (c == EOF) goto baddate;
+	    if (!searchargs->before || searchargs->before > start) {
+		searchargs->before = start;
+	    }
+	}
+	else if (!strcmp(criteria.s, "bcc")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getastring(&arg);
+	    if (c == EOF) goto missingarg;
+	    appendstrlist(&searchargs->bcc, arg.s);
+	}
+	else if (!strcmp(criteria.s, "body")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getastring(&arg);
+	    if (c == EOF) goto missingarg;
+	    appendstrlist(&searchargs->body, arg.s);
+	}
+	else goto badcri;
+	break;
+
+    case 'c':
+	if (!strcmp(criteria.s, "cc")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getastring(&arg);
+	    if (c == EOF) goto missingarg;
+	    appendstrlist(&searchargs->cc, arg.s);
+	}
+	else if (parsecharset && !strcmp(criteria.s, "charset")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getastring(&arg);
+	    if (c != ' ') goto missingarg;
+	    lcase(arg.s);
+	    *charset = strsave(arg.s);
+	}
+	else goto badcri;
+	break;
+
+    case 'd':
+	if (!strcmp(criteria.s, "deleted")) {
+	    searchargs->system_flags_set |= FLAG_DELETED;
+	}
+	else goto badcri;
+	break;
+
+    case 'f':
+	if (!strcmp(criteria.s, "flagged")) {
+	    searchargs->system_flags_set |= FLAG_FLAGGED;
+	}
+	else if (!strcmp(criteria.s, "from")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getastring(&arg);
+	    if (c == EOF) goto missingarg;
+	    appendstrlist(&searchargs->from, arg.s);
+	}
+	else goto badcri;
+	break;
+
+    case 'h':
+	if (!strcmp(criteria.s, "header")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getastring(&arg);
+	    if (c != ' ') goto missingarg;
+	    appendstrlist(&searchargs->header_name, arg.s);
+	    c = getastring(&arg);
+	    if (c == EOF) goto missingarg;
+	    appendstrlist(&searchargs->header, arg.s);
+	}
+	else goto badcri;
+	break;
+
+    case 'k':
+	if (!strcmp(criteria.s, "keyword")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getword(&arg);
+	    if (!isatom(arg.s)) goto badflag;
+	    lcase(arg.s);
+	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
+		if (imapd_mailbox->flagname[flag] &&
+		    !strcmp(imapd_mailbox->flagname[flag], arg.s)) break;
+	    }
+	    if (flag == MAX_USER_FLAGS) {
+		searchargs->recent_set = searchargs->recent_unset = 1;
+		break;
+	    }
+	    searchargs->user_flags_set[flag/32] |= 1<<(flag&31);
+	}
+	else goto badcri;
+	break;
+
+    case 'l':
+	if (!strcmp(criteria.s, "larger")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getword(&arg);
+	    size = 0;
+	    for (p = arg.s; *p && isdigit(*p); p++) {
+		size = size * 10 + *p - '0';
+	    }
+	    if (!arg.s || *p) goto badnumber;
+	    if (size > searchargs->larger) searchargs->larger = size;
+	}
+	else goto badcri;
+	break;
+
+    case 'n':
+	if (!strcmp(criteria.s, "not")) {
+	    if (c != ' ') goto missingarg;		
+	    sub1 = (struct searchargs *)xmalloc(sizeof(struct searchargs));
+	    *sub1 = zerosearchargs;
+	    c = getsearchcriteria(tag, sub1, charset, 0);
+	    if (c == EOF) {
+		freesearchargs(sub1);
+		return EOF;
+	    }
+
+#if 0 /* Have to pay attenton to DeMorgan's Law */
+	    /* Pull the trivial stuff into searchargs */
+	    if (sub1->smaller && sub1->smaller > searchargs->larger)
+	      searchargs->larger = sub1->smaller - 1;
+	    if (sub1->larger && sub1->larger < searchargs->smaller)
+	      searchargs->smaller = sub1->larger + 1;
+	    if (sub1->before && sub1->before > searchargs->after)
+	      searchargs->after = sub1->before - 1;
+	    if (sub1->after && sub1->after < searchargs->before)
+	      searchargs->before = sub1->after + 1;
+	    if (sub1->sentbefore && sub1->sentbefore > searchargs->sentafter)
+	      searchargs->sentafter = sub1->sentbefore - 1;
+	    if (sub1->sentafter && sub1->sentafter < searchargs->sentbefore)
+	      searchargs->sentbefore = sub1->sentafter + 1;
+	    searchargs->system_flags_set |= sub1->system_flags_unset;
+	    searchargs->system_flags_unset |= sub1->system_flags_set;
+	    searchargs->peruser_flags_set |= sub1->peruser_flags_unset;
+	    searchargs->peruser_flags_unset |= sub1->peruser_flags_set;
+	    searchargs->recent_set |= sub1->recent_unset;
+	    searchargs->recent_unset |= sub1->recent_set;
+	    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
+		searchargs->user_flags_set[i] |= sub1->user_flags_unset[i];
+		searchargs->user_flags_unset[i] |= sub1->user_flags_set[i];
+		sub1->user_flags_set[i] = sub1->user_flags_unset[i] = 0;
+	    }
+
+	    /* See if we have to append this to the sublist */
+	    if (sub1->sequence || sub1->uidsequence || sub1->from ||
+		sub1->to || sub1->cc || sub1->bcc || sub1->subject ||
+		sub1->body || sub1->text || sub1->header || sub1->sublist) {
+ 
+		/* Clear out the trival stuff we moved up */
+		sub1->smaller = sub1->larger = 0;
+		sub1->before = sub1->after = 0;
+		sub1->sentbefore = sub1->sentafter = 0;
+		sub1->system_flags_set = sub1->system_flags_unset = 0;
+		sub1->peruser_flags_set = sub1->peruser_flags_unset = 0;
+		sub1->recent_set = sub1->recent_unset = 0;
+		appendsearchargs(searchargs, sub1, (struct searchargs *)0);
+	    }
+	    else freesearchargs(sub1);
+#else
+	    appendsearchargs(searchargs, sub1, (struct searchargs *)0);
+#endif
+	}
+	else if (!strcmp(criteria.s, "new")) {
+	    searchargs->peruser_flags_unset = 1;
+	    searchargs->recent_set = 1;
+	}
+	else goto badcri;
+	break;
+
+    case 'o':
+	if (!strcmp(criteria.s, "or")) {
+	    if (c != ' ') goto missingarg;		
+	    sub1 = (struct searchargs *)xmalloc(sizeof(struct searchargs));
+	    *sub1 = zerosearchargs;
+	    c = getsearchcriteria(tag, sub1, charset, 0);
+	    if (c == EOF) {
+		freesearchargs(sub1);
+		return EOF;
+	    }
+	    if (c != ' ') goto missingarg;		
+	    sub2 = (struct searchargs *)xmalloc(sizeof(struct searchargs));
+	    *sub2 = zerosearchargs;
+	    c = getsearchcriteria(tag, sub2, charset, 0);
+	    if (c == EOF) {
+		freesearchargs(sub1);
+		freesearchargs(sub2);
+		return EOF;
+	    }
+	    appendsearchargs(searchargs, sub1, sub2);
+	}
+	else if (!strcmp(criteria.s, "old")) {
+	    searchargs->recent_unset = 1;
+	}
+	else if (!strcmp(criteria.s, "on")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getdate(&start, &end);
+	    if (c == EOF) goto baddate;
+	    if (!searchargs->before || searchargs->before > end) {
+		searchargs->before = end;
+	    }
+	    if (!searchargs->after || searchargs->after < start) {
+		searchargs->after = start;
+	    }
+	}
+	else goto badcri;
+	break;
+
+    case 'r':
+	if (!strcmp(criteria.s, "recent")) {
+	    searchargs->recent_set = 1;
+	}
+	else goto badcri;
+	break;
+
+    case 's':
+	if (!strcmp(criteria.s, "seen")) {
+	    searchargs->peruser_flags_set = 1;
+	}
+	else if (!strcmp(criteria.s, "sentbefore")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getdate(&start, &end);
+	    if (c == EOF) goto baddate;
+	    if (!searchargs->sentbefore || searchargs->sentbefore > start) {
+		searchargs->sentbefore = start;
+	    }
+	}
+	else if (!strcmp(criteria.s, "senton")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getdate(&start, &end);
+	    if (c == EOF) goto baddate;
+	    if (!searchargs->sentbefore || searchargs->sentbefore > end) {
+		searchargs->sentbefore = end;
+	    }
+	    if (!searchargs->sentafter || searchargs->sentafter < start) {
+		searchargs->sentafter = start;
+	    }
+	}
+	else if (!strcmp(criteria.s, "sentsince")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getdate(&start, &end);
+	    if (c == EOF) goto baddate;
+	    if (!searchargs->sentafter || searchargs->sentafter < start) {
+		searchargs->sentafter = start;
+	    }
+	}
+	else if (!strcmp(criteria.s, "since")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getdate(&start, &end);
+	    if (c == EOF) goto baddate;
+	    if (!searchargs->after || searchargs->after < start) {
+		searchargs->after = start;
+	    }
+	}
+	else if (!strcmp(criteria.s, "smaller")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getword(&arg);
+	    size = 0;
+	    for (p = arg.s; *p && isdigit(*p); p++) {
+		size = size * 10 + *p - '0';
+	    }
+	    if (!arg.s || *p) goto badnumber;
+	    if (size == 0) size = 1;
+	    if (!searchargs->smaller || size < searchargs->smaller)
+	      searchargs->smaller = size;
+	}
+	else if (!strcmp(criteria.s, "subject")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getastring(&arg);
+	    if (c == EOF) goto missingarg;
+	    appendstrlist(&searchargs->subject, arg.s);
+	}
+	else goto badcri;
+	break;
+
+    case 't':
+	if (!strcmp(criteria.s, "to")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getastring(&arg);
+	    if (c == EOF) goto missingarg;
+	    appendstrlist(&searchargs->to, arg.s);
+	}
+	else if (!strcmp(criteria.s, "text")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getastring(&arg);
+	    if (c == EOF) goto missingarg;
+	    appendstrlist(&searchargs->text, arg.s);
+	}
+	else goto badcri;
+	break;
+
+    case 'u':
+	if (!strcmp(criteria.s, "uid")) {
+	    if (c != ' ') goto missingarg;
+	    c = getword(&arg);
+	    if (!issequence(arg.s)) goto badcri;
+	    appendstrlist(&searchargs->uidsequence, arg.s);
+	}
+	else if (!strcmp(criteria.s, "unseen")) {
+	    searchargs->peruser_flags_unset = 1;
+	}
+	else if (!strcmp(criteria.s, "unanswered")) {
+	    searchargs->system_flags_unset |= FLAG_ANSWERED;
+	}
+	else if (!strcmp(criteria.s, "undeleted")) {
+	    searchargs->system_flags_unset |= FLAG_DELETED;
+	}
+	else if (!strcmp(criteria.s, "unflagged")) {
+	    searchargs->system_flags_unset |= FLAG_FLAGGED;
+	}
+	else if (!strcmp(criteria.s, "unkeyword")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getword(&arg);
+	    if (!isatom(arg.s)) goto badflag;
+	    lcase(arg.s);
+	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
+		if (imapd_mailbox->flagname[flag] &&
+		    !strcmp(imapd_mailbox->flagname[flag], arg.s)) break;
+	    }
+	    if (flag != MAX_USER_FLAGS) {
+		searchargs->user_flags_unset[flag/32] |= 1<<(flag&31);
+	    }
+	}
+	else goto badcri;
+	break;
+
+    default:
+    badcri:
+	printf("%s BAD Invalid Search criteria\r\n", tag);
+	if (c != EOF) ungetc(c, stdin);
+	return EOF;
+    }
+
+    return c;
+
+ missingarg:
+    printf("%s BAD Missing required argument to Search %s\r\n",
+	   tag, criteria.s);
+    if (c != EOF) ungetc(c, stdin);
+    return EOF;
+
+ badflag:
+    printf("%s BAD Invalid flag name %s in Search command\r\n",
+	   tag, arg.s);
+    if (c != EOF) ungetc(c, stdin);
+    return EOF;
+
+ baddate:
+    printf("%s BAD Invalid date in Search command\r\n", tag);
+    if (c != EOF) ungetc(c, stdin);
+    return EOF;
+
+ badnumber:
+    printf("%s BAD Invalid number in Search command\r\n", tag);
+    if (c != EOF) ungetc(c, stdin);
+    return EOF;
+}
+
+/*
  * Parse a "date", for SEARCH criteria
  * The time_t's pointed to by 'start' and 'end' are set to the
  * times of the start and end of the parsed date.
@@ -2418,6 +2621,54 @@ struct strlist *l;
 	free((char *)l);
 	l = n;
     }
+}
+
+/*
+ * Append the searchargs 's1' and 's2' to the sublist of 's'
+ */
+appendsearchargs(s, s1, s2)
+struct searchargs *s, *s1, *s2;
+{
+    struct searchsub **tail = &s->sublist;
+
+    while (*tail) tail = &(*tail)->next;
+
+    *tail = (struct searchsub *)xmalloc(sizeof(struct searchsub));
+    (*tail)->sub1 = s1;
+    (*tail)->sub2 = s2;
+    (*tail)->next = 0;
+}
+
+
+/*
+ * Free the searchargs 's'
+ */
+freesearchargs(s)
+struct searchargs *s;
+{
+    struct searchsub *sub, *n;
+
+    if (!s) return;
+
+    freestrlist(s->sequence);
+    freestrlist(s->uidsequence);
+    freestrlist(s->from);
+    freestrlist(s->to);
+    freestrlist(s->cc);
+    freestrlist(s->bcc);
+    freestrlist(s->subject);
+    freestrlist(s->body);
+    freestrlist(s->text);
+    freestrlist(s->header_name);
+    freestrlist(s->header);
+
+    for (sub = s->sublist; sub; sub = n) {
+	n = sub->next;
+	freesearchargs(sub->sub1);
+	freesearchargs(sub->sub2);
+	free(sub);
+    }
+    free(s);
 }
 
 /*
