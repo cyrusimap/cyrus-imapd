@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.91 2002/04/28 21:19:20 leg Exp $
+ * $Id: append.c,v 1.92 2002/06/14 17:10:01 rjs3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -248,7 +248,6 @@ int append_commit(struct appendstate *as,
     int r = 0;
     
     if (as->s == APPEND_DONE) return 0;
-    as->s = APPEND_DONE;
 
     if (start) *start = as->m.last_uid + 1;
     if (num) *num = as->nummsg;
@@ -256,6 +255,8 @@ int append_commit(struct appendstate *as,
 
     /* write out the header if we created new user flags */
     if (as->writeheader && (r = mailbox_write_header(&as->m))) {
+	syslog(LOG_ERR, "IOERROR: writing header for %s: %s",
+	       as->m.name, error_message(r));
 	append_abort(as);
 	return r;
     }
@@ -294,6 +295,8 @@ int append_commit(struct appendstate *as,
        this writes to acappush too. */
     r = mailbox_write_index_header(&as->m);
     if (r) {
+	syslog(LOG_ERR, "IOERROR: writing index header for %s: %s",
+	       as->m.name, error_message(r));
 	append_abort(as);
 	return r;
     }
@@ -319,6 +322,8 @@ int append_commit(struct appendstate *as,
     mailbox_unlock_index(&as->m);
     mailbox_unlock_header(&as->m);
     mailbox_close(&as->m);
+
+    as->s = APPEND_DONE;
 
     return 0;
 }
