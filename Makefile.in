@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.36 2000/08/29 19:20:30 leg Exp $
+# $Id: Makefile.in,v 1.37 2000/09/05 04:35:29 leg Exp $
 #
 # @configure_input@
 # 
@@ -65,7 +65,18 @@ all:: checkdepend
 	done
 
 dist:: checkdepend
-	echo "build the lex and yacc files!"
+	mkdir dist ; \
+	echo "checking out the distribution" ; \
+	cd dist ; cvs -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs \
+		co -d cyrus-imapd-$(VERSION) cyrus ; \
+	cd cyrus-imapd-$(VERSION) ; \
+	@for d in $(SUBDIRS); \
+	do \
+		(cd $$d; echo "### Making" dist "in" `pwd`;	\
+		  if [ -f Makefile.dist ]; then ; \
+		    $(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) -f Makefile.dist dist ; \
+		  fi) || exit 1; \
+	done
 
 install::
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/bin
