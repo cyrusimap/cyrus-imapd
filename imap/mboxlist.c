@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.104 2000/02/01 04:05:53 leg Exp $
+ * $Id: mboxlist.c,v 1.105 2000/02/01 04:08:00 leg Exp $
  */
 
 #include <stdio.h>
@@ -1067,7 +1067,7 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	    
 	    /* delete from ACAP */
 	    r = acapmbox_delete(acaphandle, name);
-	    if (!r) {
+	    if (r) {
 		syslog(LOG_ERR, "ACAP: can't delete mailbox entry '%s': %s",
 		       name, error_message(r));
 	    }
