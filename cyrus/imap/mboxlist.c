@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.171 2002/02/28 19:53:33 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.172 2002/03/05 16:18:15 rjs3 Exp $
  */
 
 #include <config.h>
@@ -817,6 +817,25 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	}
     }
 
+    /* remove from mupdate */
+    /* xxx this can lead to inconsistancies if the later stuff fails */
+    if (!r && mupdate_server) {
+	/* delete the mailbox in MUPDATE */
+	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "can not connect to mupdate server for delete of '%s'",
+		   name);
+	    goto done;
+	}
+	r = mupdate_delete(mupdate_h, name);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "MUPDATE: can't delete mailbox entry '%s'", name);
+	}
+	mupdate_disconnect(&mupdate_h);
+    }
+
     /* delete entry */
     r = DB->delete(mbdb, name, strlen(name), &tid, 0);
     switch (r) {
@@ -845,23 +864,6 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 
     if (!r) r = mailbox_open_header_path(name, path, acl, 0, &mailbox, 0);
     if (!r) r = mailbox_delete(&mailbox, deletequotaroot);
-
-    if (!r && mupdate_server) {
-	/* delete the mailbox in MUPDATE */
-	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
-	if(r) {
-	    syslog(LOG_ERR,
-		   "can not connect to mupdate server for delete of '%s'",
-		   name);
-	    goto done;
-	}
-	r = mupdate_delete(mupdate_h, name);
-	if(r) {
-	    syslog(LOG_ERR,
-		   "MUPDATE: can't delete mailbox entry '%s'", name);
-	}
-	mupdate_disconnect(&mupdate_h);
-    }
 
     /*
      * See if we have to remove mailbox's quota root
