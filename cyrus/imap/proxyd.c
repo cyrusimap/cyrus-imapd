@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.104 2002/03/07 23:29:32 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.105 2002/03/11 15:59:39 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -3676,7 +3676,6 @@ void cmd_reconstruct(char *tag, char *name)
     char *server = NULL;
 
     if(!proxyd_userisadmin) r = IMAP_PERMISSION_DENIED;
-    else if(!supports_referrals) r = IMAP_REQUIRE_REFERRALS;
     else {
 	r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace,
 						    name,
@@ -3693,7 +3692,6 @@ void cmd_reconstruct(char *tag, char *name)
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
     }
 }	
-
 
 /*
  * Perform a RENAME command
@@ -4433,7 +4431,6 @@ void cmd_getquota(char *tag, char *name)
     char quotarootbuf[MAX_MAILBOX_NAME + 3];
 
     if(!proxyd_userisadmin) r = IMAP_PERMISSION_DENIED;
-    else if(!supports_referrals) r = IMAP_REQUIRE_REFERRALS;
     else {
 	r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace,
 						    name,
@@ -4548,7 +4545,6 @@ void cmd_setquota(char *tag, char *quotaroot)
 
     if(badresource) r = IMAP_UNSUPPORTED_QUOTA;
     else if(!proxyd_userisadmin) r = IMAP_PERMISSION_DENIED;
-    else if(!supports_referrals) r = IMAP_REQUIRE_REFERRALS;
     else {
 	r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace,
 						    quotaroot,
