@@ -303,7 +303,7 @@ static struct acap_search_callback myacap_search_cb = {
 };
 
 static struct acap_requested myacap_request = {
-    1, { "entry" }
+    1, {{"entry" , 0x00}}
 };
 
 /*
