@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.46 2002/01/15 20:24:22 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.47 2002/01/15 20:37:38 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2394,7 +2394,7 @@ int lmtp_disconnect(struct lmtp_conn *conn)
 /* Reset the given sasl_conn_t to a sane state */
 static int reset_saslconn(sasl_conn_t **conn) 
 {
-    int ret, secflags;
+    int ret, secflags, plaintext_result;
     sasl_security_properties_t *secprops = NULL;
 
     sasl_dispose(conn);
@@ -2415,7 +2415,9 @@ static int reset_saslconn(sasl_conn_t **conn)
     if(ret != SASL_OK) return ret;
     
     secflags = SASL_SEC_NOANONYMOUS;
-    if (!config_getswitch("allowplaintext", 1)) {
+
+    plaintext_result = config_getswitch("allowplaintext", 1);
+    if (!config_getswitch("lmtp_allowplaintext", plaintext_result)) {
 	secflags |= SASL_SEC_NOPLAINTEXT;
     }
     secprops = mysasl_secprops(secflags);
