@@ -73,7 +73,7 @@ void parseerror(char *str)
 int handle_response(int res,int version,struct protstream *pin, mystring_t **errstr)
 {    
   lexstate_t state;
-  int res = 0;
+  int r = 0;
 
   if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
     parseerror("ATOM");
@@ -113,7 +113,7 @@ int handle_response(int res,int version,struct protstream *pin, mystring_t **err
       if (errstr)
 	  *errstr = state.str;
 
-      res = -1;
+      r = -1;
   } else {
       /* ok? */
       /* old version of protocol had strings with ok responses too */
@@ -129,7 +129,7 @@ int handle_response(int res,int version,struct protstream *pin, mystring_t **err
   if (yylex(&state, pin)!=EOL)
       parseerror("expected EOL\n");
   
-  return res;
+  return r;
 }
 
 int deleteascript(int version, struct protstream *pout, struct protstream *pin,char *name)
