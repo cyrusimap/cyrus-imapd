@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.23 2001/01/10 06:34:39 leg Exp $
+ * $Id: actions.c,v 1.24 2001/01/16 01:00:37 leg Exp $
  * 
  */
 /*
@@ -364,7 +364,6 @@ static int isactive(char *name)
 {
     char filename[1024];
     char activelink[1024];
-	struct stat filestats;  /* returned by stat */
     int result;  
 
     snprintf(filename, 1023, "%s.script", name);
@@ -481,7 +480,6 @@ int setactive(struct protstream *conn, mystring_t *name)
 {
     int result;
     char filename[1024];
-    struct stat a, b;
 
     /* if string name is empty, disable active script */
     if (!strlen(string_DATAPTR(name))) {
