@@ -1,6 +1,6 @@
 /* script.h -- script definition
  * Larry Greenfield
- * $Id: script.h,v 1.1 1999/07/02 18:55:35 leg Exp $
+ * $Id: script.h,v 1.1.1.1 1999/07/02 18:55:35 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University

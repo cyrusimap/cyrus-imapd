@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.1 1999/07/02 18:55:35 leg Exp $
+ * $Id: test.c,v 1.1.1.1 1999/07/02 18:55:35 leg Exp $
  *
  * usage: "test message < script"
  */
