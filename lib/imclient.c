@@ -413,7 +413,8 @@ va_dcl
 	    break;
 
 	default:
-	    fatal("internal error: invalid format specifier in imclient_send");
+	    fatal("internal error: invalid format specifier in imclient_send",
+		  EX_SOFTWARE);
 	}
 	fmt = percent + 1;
     }
