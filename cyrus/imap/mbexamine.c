@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.2 2003/05/12 23:15:58 ken3 Exp $ */
+/* $Id: mbexamine.c,v 1.3 2003/05/15 17:16:27 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -298,7 +298,7 @@ int do_examine(char *name,
 	printf("%06d> UID:%08d   INT_DATE:%d SENTDATE:%d SIZE:%-6d\n",
 	       i, UID(i), INTERNALDATE(i), SENTDATE(i),
 	       SIZE(i));
-	printf("      > HDRSIZE:%-6d LASTUPD :%d SYSFLAGS:%08X\n",
+	printf("      > HDRSIZE:%-6d LASTUPD :%ld SYSFLAGS:%08X\n",
 	       HEADER_SIZE(i), LAST_UPDATED(i), SYSTEM_FLAGS(i));
 	printf("      > USERFLAGS:");
 	for(j=(MAX_USER_FLAGS/32)-1; j>=0; j--) {
