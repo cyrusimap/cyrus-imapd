@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.17.4.2 2003/03/05 18:15:10 rjs3 Exp $
+ * $Id: sieve_interface.h,v 1.17.4.3 2003/03/27 19:28:35 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -157,10 +157,6 @@ int sieve_script_free(sieve_script_t **s);
 /* execute bytecode on a message */
 int sieve_execute_bytecode(sieve_bytecode_t *script, 
 			   void *message_context);
-
-/* execute a script on a message, producing side effects via callbacks */
-int sieve_execute_script(sieve_script_t *script, 
-			 void *message_context);
 
 /* Get space separated list of extensions supported by the implementation */
 const char *sieve_listextensions(void);

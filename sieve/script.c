@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.54.4.2 2003/02/27 18:13:53 rjs3 Exp $
+ * $Id: script.c,v 1.54.4.3 2003/03/27 19:28:34 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -136,7 +136,6 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     /* clear all support bits */
     memset(&s->support, 0, sizeof(struct sieve_support));
 
-    s->imapflags.flag = NULL; s->imapflags.nflags = 0;
     s->err = 0;
 
     yylineno = 1;		/* reset line number */
@@ -168,7 +167,6 @@ int sieve_script_free(sieve_script_t **s)
 	if ((*s)->cmds) {
 	    free_tree((*s)->cmds);
 	}
-	free_imapflags(&(*s)->imapflags);
 	free(*s);
     }
 
