@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.6.6.1 2002/08/14 20:21:04 ken3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.6.6.2 2002/08/22 14:32:16 ken3 Exp $
  */
 
 #include <config.h>
@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
 
     if(old_db[0] != '/' || new_db[0] != '/') {
 	printf("\nSorry, you cannot use this tool with relative path names.\n"
-	       "This is because some database backends (mainly bdb) do not\n"
+	       "This is because some database backends (mainly berkeley) do not\n"
 	       "always do what you would expect with them.\n"
 	       "\nPlease use absolute pathnames instead.\n\n");
 	exit(EC_OSERR);
