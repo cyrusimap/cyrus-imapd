@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.26 2002/01/25 19:26:55 leg Exp $
+   $Id: seen_db.c,v 1.27 2002/02/24 23:40:45 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -261,7 +261,7 @@ static int seen_readit(struct seen *seendb,
     int uidlen;
 
     assert(seendb && seendb->uniqueid);
-    if (rw) {
+    if (rw || seendb->tid) {
 	r = DB->fetchlock(seendb->db, 
 			  seendb->uniqueid, strlen(seendb->uniqueid),
 			  &data, &datalen, &seendb->tid);
@@ -288,7 +288,7 @@ static int seen_readit(struct seen *seendb,
 	r = seen_readold(seendb, lastreadptr, lastuidptr,
 			 lastchangeptr, seenuidsptr);
 	if (r) {
-	    DB->abort(seendb->db, seendb->tid);
+	    abortcurrent(seendb);
 	}
 	return r;
     }
