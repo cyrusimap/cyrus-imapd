@@ -39,7 +39,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.49 2000/12/05 21:35:40 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.50 2000/12/07 22:37:56 leg Exp $ */
+
+#define NEW_BACKEND_TIMEOUT
 
 #include <config.h>
 
@@ -727,8 +729,8 @@ struct prot_waitevent *backend_timeout(struct protstream *s,
 	/* because we're going to remove the current event, we must build
 	   a dummy event pointing to the next event so we can continue
 	   processing the rest of the events registered on this stream */
-	dummy_event->mark = time(NULL) + 60*60*24;  /* 24 hours */
-	dummy_event->next = ev->next;
+	dummy_event.mark = time(NULL) + 60*60*24;  /* 24 hours */
+	dummy_event.next = ev->next;
 
 	/* down the backend server */
 	proxyd_downserver(be);
@@ -1242,8 +1244,6 @@ cmdloop()
     char motdfilename[1024];
     char hostname[MAXHOSTNAMELEN+1];
     int c;
-#ifdef NEEDS_PROXY
-#endif
     int usinguid, havepartition, havenamespace, oldform;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
     char *p;
