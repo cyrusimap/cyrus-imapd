@@ -28,8 +28,9 @@ To make a release:
 - make sure to build configure
 
 - add upgrade notes to doc/html/install.html
-
 - rebuild the doc/ directory (make all in the doc/ directory)
+
+- tag the CVS repository with cyrus-release-Major-Minor-Revision
 
 - announce to:
     info-cyrus
