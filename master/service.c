@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.50 2004/03/22 20:05:47 ken3 Exp $ */
+/* $Id: service.c,v 1.51 2004/09/13 22:04:37 shadow Exp $ */
 
 #include <config.h>
 
@@ -145,7 +145,7 @@ static int libwrap_ask(struct request_info *r __attribute__((unused)),
 #endif
 
 extern void cyrus_init(const char *, const char *, unsigned);
-extern const char *config_getstring(const char *key, const char *def);
+extern const char *config_getstring(const char *key);
 extern const char *config_dir;
 
 static int getlockfd(char *service, int id)
@@ -365,7 +365,7 @@ int main(int argc, char **argv, char **envp)
     if (call_debugger) {
 	char debugbuf[1024];
 	int ret;
-	const char *debugger = config_getstring("debug_command", NULL);
+	const char *debugger = config_getstring("debug_command");
 	if (debugger) {
 	    snprintf(debugbuf, sizeof(debugbuf), debugger, 
 		     argv[0], getpid(), service);
