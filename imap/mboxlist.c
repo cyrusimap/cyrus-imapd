@@ -163,12 +163,13 @@ char **aclp;
 /*
  * Check/set up for mailbox creation
  */
-mboxlist_createmailboxcheck(name, partition, isadmin, userid, newacl,
+mboxlist_createmailboxcheck(name, partition, isadmin, userid, auth_state, newacl,
 			    newpartition)
 char *name;
 char *partition;
 int isadmin;
 char *userid;
+struct auth_state *auth_state;
 char **newacl;
 char **newpartition;
 {
@@ -202,7 +203,7 @@ char **newpartition;
 	
 	/* Lie about error if privacy demands */
 	if (!isadmin) {
-	    if (!(acl_myrights(acl) & ACL_LOOKUP)) {
+	    if (!(acl_myrights(auth_state, acl) & ACL_LOOKUP)) {
 		r = IMAP_PERMISSION_DENIED;
 	    }
 	}
@@ -237,7 +238,7 @@ char **newpartition;
 	memcpy(acl, parentacl, parentacllen);
 	acl[parentacllen] = '\0';
 
-	if (!isadmin && !(acl_myrights(acl) & ACL_CREATE)) {
+	if (!isadmin && !(acl_myrights(auth_state, acl) & ACL_CREATE)) {
 	    free(partition);
 	    free(acl);
 	    return IMAP_PERMISSION_DENIED;
@@ -316,12 +317,13 @@ char **newpartition;
 /*
  * Create a mailbox
  */
-mboxlist_createmailbox(name, format, partition, isadmin, userid)
+mboxlist_createmailbox(name, format, partition, isadmin, userid, auth_state)
 char *name;
 int format;
 char *partition;
 int isadmin;
 char *userid;
+struct auth_state *auth_state;
 {
     int r;
     char *p;
@@ -339,7 +341,7 @@ char *userid;
     if (r) return r;
 
     /* Check ability to create mailbox */
-    r = mboxlist_createmailboxcheck(name, partition, isadmin, userid,
+    r = mboxlist_createmailboxcheck(name, partition, isadmin, userid, auth_state,
 				    &acl, &partition);
     if (r) {
 	mboxlist_unlock();
@@ -436,10 +438,11 @@ char *userid;
  * performed by an admin.  The operation removes the user "FOO"'s 
  * subscriptions and all sub-mailboxes of user.FOO
  */
-mboxlist_deletemailbox(name, isadmin, userid, checkacl)
+mboxlist_deletemailbox(name, isadmin, userid, auth_state, checkacl)
 char *name;
 int isadmin;
 char *userid;
+struct auth_state *auth_state;
 int checkacl;
 {
     int r;
@@ -472,7 +475,9 @@ int checkacl;
 	 * We don't have to lie about the error code since we know
 	 * the user is an admin.
 	 */
-	if (!(acl_myrights(acl) & ACL_DELETE)) return IMAP_PERMISSION_DENIED;
+	if (!(acl_myrights(auth_state, acl) & ACL_DELETE)) {
+	    return IMAP_PERMISSION_DENIED;
+	}
 	
 	deleteuser = 1;
 
@@ -500,7 +505,7 @@ int checkacl;
 	mboxlist_unlock();
 	return r;
     }
-    access = acl_myrights(acl);
+    access = acl_myrights(auth_state, acl);
     if (checkacl && !(access & ACL_DELETE)) {
 	mboxlist_unlock();
 
@@ -552,7 +557,7 @@ int checkacl;
 	    len = endline - (list_base + offset) + 1;
 	    
 	    /* Remove the sub-mailbox  */
-	    r = mailbox_open_header(submailboxname, &mailbox);
+	    r = mailbox_open_header(submailboxname, 0, &mailbox);
 	    if (!r) r = mailbox_delete(&mailbox, 0);
 	}
     }
@@ -573,7 +578,7 @@ int checkacl;
     }
     close(newlistfd);
     
-    r = mailbox_open_header(name, &mailbox);
+    r = mailbox_open_header(name, 0, &mailbox);
 
     /*
      * See if we have to remove mailbox's quota root
@@ -615,12 +620,13 @@ int checkacl;
 /*
  * Rename/move a mailbox
  */
-int mboxlist_renamemailbox(oldname, newname, partition, isadmin, userid)
+int mboxlist_renamemailbox(oldname, newname, partition, isadmin, userid, auth_state)
 char *oldname;
 char *newname;
 char *partition;
 int isadmin;
 char *userid;
+struct auth_state *auth_state;
 {
     int r;
     long access;
@@ -651,7 +657,7 @@ char *userid;
 		mboxlist_unlock();
 		return r;
 	    }
-	    access = acl_myrights(acl);
+	    access = acl_myrights(auth_state, acl);
 	    if (!(access & ACL_DELETE)) {
 		mboxlist_unlock();
 		return IMAP_PERMISSION_DENIED;
@@ -670,7 +676,7 @@ char *userid;
 	    mboxlist_unlock();
 	    return r;
 	}
-	access = acl_myrights(acl);
+	access = acl_myrights(auth_state, acl);
 	if (!(access & ACL_DELETE)) {
 	    mboxlist_unlock();
 	    return (isadmin || (access & ACL_LOOKUP)) ?
@@ -686,7 +692,7 @@ char *userid;
 	free(acl);
 	return IMAP_PERMISSION_DENIED;
     }
-    r = mboxlist_createmailboxcheck(newname, partition, isadmin, userid,
+    r = mboxlist_createmailboxcheck(newname, partition, isadmin, userid, auth_state,
 				    (char **)0, &partition);
     if (r) {
 	mboxlist_unlock();
@@ -807,12 +813,13 @@ char *userid;
  * nonzero if user is a mailbox admin.  'userid' is the user's login id.
  */
 int
-mboxlist_setacl(name, identifier, rights, isadmin, userid)
+mboxlist_setacl(name, identifier, rights, isadmin, userid, auth_state)
 char *name;
 char *identifier;
 char *rights;
 int isadmin;
 char *userid;
+struct auth_state *auth_state;
 {
     int useridlen = strlen(userid);
     int r;
@@ -841,7 +848,7 @@ char *userid;
     /* Get old ACL */
     r = mboxlist_lookup(name, (char **)0, &acl);
     if (!r && !isadmin && !isusermbox) {
-	access = acl_myrights(acl);
+	access = acl_myrights(auth_state, acl);
 	if (!(access & ACL_ADMIN)) {
 	    r = (access & ACL_LOOKUP) ?
 	      IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
@@ -850,7 +857,7 @@ char *userid;
 
     /* Open & lock  mailbox header */
     if (!r) {
-	r = mailbox_open_header(name, &mailbox);
+	r = mailbox_open_header(name, auth_state, &mailbox);
     }
     if (r) {
 	mboxlist_unlock();
@@ -958,10 +965,11 @@ char *userid;
  * a nonzero value, mboxlist_findall immediately stops searching
  * and returns that value.
  */
-int mboxlist_findall(pattern, isadmin, userid, proc)
+int mboxlist_findall(pattern, isadmin, userid, auth_state, proc)
 char *pattern;
 int isadmin;
 char *userid;
+struct auth_state *auth_state;
 int (*proc)();
 {
     struct glob *g;
@@ -1127,13 +1135,13 @@ int (*proc)();
 		if (acllen < sizeof(aclbuf)) {
 		    memcpy(aclbuf, acl, acllen);
 		    aclbuf[acllen] = '\0';
-		    rights = acl_myrights(aclbuf);
+		    rights = acl_myrights(auth_state, aclbuf);
 		}
 		else {
 		    aclcopy = xmalloc(acllen + 1);
 		    memcpy(aclcopy, acl, acllen);
 		    aclcopy[acllen] = '\0';
-		    rights = acl_myrights(aclcopy);
+		    rights = acl_myrights(auth_state, aclcopy);
 		    free(aclcopy);
 		}
 		if (rights & ACL_LOOKUP) {
@@ -1158,10 +1166,11 @@ int (*proc)();
  * is the user's login id.  For each matching mailbox, calls
  * 'proc' with the name of the mailbox.
  */
-int mboxlist_findsub(pattern, isadmin, userid, proc)
+int mboxlist_findsub(pattern, isadmin, userid, auth_state, proc)
 char *pattern;
 int isadmin;
 char *userid;
+struct auth_state *auth_state;
 int (*proc)();
 {
     int subsfd;
@@ -1303,7 +1312,7 @@ int (*proc)();
 		    }
 		}
 		else {
-		    mboxlist_changesub(namebuf, userid, 0);
+		    mboxlist_changesub(namebuf, userid, auth_state, 0);
 		    break;
 		}
 	    }
@@ -1346,7 +1355,7 @@ int (*proc)();
 	    r = mboxlist_lookup(namebuf, (char **)0, &acl);
 	    if (r == 0) {
 		r = (*proc)(namebuf, matchlen,
-			    (acl_myrights(acl) & ACL_CREATE));
+			    (acl_myrights(auth_state, acl) & ACL_CREATE));
 		if (r) {
 		    mboxlist_closesubs(subsfd, subs_base, subs_size);
 		    glob_free(&g);
@@ -1354,7 +1363,7 @@ int (*proc)();
 		}
 	    }
 	    else {
-		mboxlist_changesub(namebuf, userid, 0);
+		mboxlist_changesub(namebuf, userid, auth_state, 0);
 		break;
 	    }
 	}
@@ -1371,9 +1380,10 @@ int (*proc)();
  * Subscribes if 'add' is nonzero, unsubscribes otherwise.
  */
 int 
-mboxlist_changesub(name, userid, add)
+mboxlist_changesub(name, userid, auth_state, add)
 const char *name;
 const char *userid;
+struct auth_state *auth_state;
 int add;
 {
     int r;
@@ -1398,7 +1408,7 @@ int add;
 	    mboxlist_closesubs(subsfd, subs_base, subs_size);
 	    return r;
 	}
-	if ((acl_myrights(acl) & (ACL_READ|ACL_LOOKUP)) == 0) {
+	if ((acl_myrights(auth_state, acl) & (ACL_READ|ACL_LOOKUP)) == 0) {
 	    mboxlist_closesubs(subsfd, subs_base, subs_size);
 	    return IMAP_MAILBOX_NONEXISTENT;
 	}
@@ -1621,7 +1631,7 @@ int *seen;
 	    }
 	    if (deletethis) {
 		/* Remove the mailbox.  Don't care about errors */
-		r = mailbox_open_header(namebuf, &mailbox);
+		r = mailbox_open_header(namebuf, 0, &mailbox);
 		if (!r) {
 		    toimsp(namebuf, mailbox.uidvalidity, "RENsn", "", 0, 0);
 		    r = mailbox_delete(&mailbox, 0);
@@ -1988,7 +1998,7 @@ int maycreate;
     int r;
     struct mailbox mailbox;
 
-    r = mailbox_open_header(name, &mailbox);
+    r = mailbox_open_header(name, 0, &mailbox);
     if (r) goto error_noclose;
 
     r = mailbox_lock_header(&mailbox);

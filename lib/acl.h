@@ -40,6 +40,8 @@
 #endif
 #endif
 
+#include "auth.h"
+
 /* max length of an acl string */
 #define ACL_MAXSTR 32
 
@@ -79,11 +81,10 @@ extern long acl_strtomask P((const char *str));
 extern char *acl_masktostr P((int acl, char *str));
 
 /*  acl_myrights(acl)
- * Calculate the set of rights the user has in the ACL 'acl'.
+ * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
  * 'acl' must be writable, but is restored to its original condition.
- * current user must have been set by auth_setid
  */
-extern int acl_myrights P((char *acl));
+extern int acl_myrights P((struct auth_state *auth_state, char *acl));
 
 /*  acl_set(acl, identifier, access, canonproc, canonrock)
  * Modify the ACL pointed to by 'acl' to make the rights granted to

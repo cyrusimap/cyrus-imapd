@@ -33,9 +33,15 @@
 #include "auth.h"
 #include "xmalloc.h"
 
-static char auth_userid[30] = "anonymous";
-static char **auth_group;
-static int auth_ngroups;
+struct auth_state {
+    char userid[30];
+    char **group;
+    int ngroups;
+}
+
+static struct auth_state auth_anonymous = {
+    "anonymous", 0, 0
+};
 
 /*
  * Determine if the user is a member of 'identifier'
@@ -45,19 +51,22 @@ static int auth_ngroups;
  *	2	User is in the group that is identifier
  *	3	User is identifer
  */
-auth_memberof(identifier)
+auth_memberof(auth_state, identifier)
+struct auth_state *auth_state;
 const char *identifier;
 {
     int i;
 
+    if (!auth_state) auth_state = &auth_anonymous;
+ 
     if (strcmp(identifier, "anyone") == 0) return 1;
 
-    if (strcmp(identifier, auth_userid) == 0) return 3;
+    if (strcmp(identifier, auth_state->userid) == 0) return 3;
 
     if (strncmp(identifier, "group:", 6) != 0) return 0;
 
-    for (i=0; i<auth_ngroups; i++) {
-	if (strcmp(identifier+6, auth_group[i]) == 0) return 2;
+    for (i=0; i<auth_state->ngroups; i++) {
+	if (strcmp(identifier+6, auth_state->group[i]) == 0) return 2;
     }
     return 0;
 }
@@ -104,23 +113,27 @@ const char *identifier;
  * points to a 16-byte binary key to cache identifier's information
  * with.
  */
-auth_setid(identifier, cacheid)
+struct auth_state *
+auth_newstate(identifier, cacheid)
 const char *identifier;
 const char *cacheid;
 {
+    struct auth_state *newstate;
     struct passwd *pwd;
     struct group *grp;
     char **mem;
 
     identifier = auth_canonifyid(identifier);
-    if (!identifier) return -1;
-    if (!strncmp(identifier, "group:", 6)) return -1;
+    if (!identifier) return 0;
+    if (!strncmp(identifier, "group:", 6)) return 0;
     
     pwd = getpwnam(identifier);
-    if (!pwd) return -1;
+    if (!pwd) return 0;
 
-    strcpy(auth_userid, identifier);
-    auth_ngroups = 0;
+    newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
+
+    strcpy(newstate->userid, identifier);
+    newstate->ngroups = 0;
 
     setgrent();
     while (grp = getgrent()) {
@@ -129,13 +142,22 @@ const char *cacheid;
 	}
 
 	if (*mem || pwd->pw_gid == grp->gr_gid) {
-	    auth_ngroups++;
-	    auth_group = (char **)xrealloc((char *)auth_group,
-					   auth_ngroups * sizeof(char *));
-	    auth_group[auth_ngroups-1] = xstrdup(grp->gr_name);
+	    newstate->ngroups++;
+	    newstate->group = (char **)xrealloc((char *)newstate->group,
+						newstate->ngroups * sizeof(char *));
+	    newstate->group[newstate->ngroups-1] = xstrdup(grp->gr_name);
 	}
     }
     endgrent();
-    return 0;
+    return newstate;
 }
+
+void
+auth_freestate(auth_state)
+struct auth_state *auth_state;
+{
+    if (auth_state->group) free((char *)auth_state->group);
+    free((char *)auth_state);
+}
+
 

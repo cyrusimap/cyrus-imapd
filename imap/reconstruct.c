@@ -117,15 +117,15 @@ char **argv;
     if (optind == argc) {
 	if (!rflag) usage();
 	strcpy(buf, "*");
-	mboxlist_findall(buf, 1, 0, do_reconstruct);
+	mboxlist_findall(buf, 1, 0, 0, do_reconstruct);
     }
 
     for (i = optind; i < argc; i++) {
 	if (rflag) {
 	    strcpy(buf, argv[i]);
 	    strcat(buf, ".*");
-	    mboxlist_findall(argv[i], 1, 0, do_reconstruct);
-	    mboxlist_findall(buf, 1, 0, do_reconstruct);
+	    mboxlist_findall(argv[i], 1, 0, 0, do_reconstruct);
+	    mboxlist_findall(buf, 1, 0, 0, do_reconstruct);
 	}
 	else {
 	    do_reconstruct(argv[i], 0, 0);
@@ -208,7 +208,7 @@ char *name;
     int n;
 
     /* Open/lock header */
-    r = mailbox_open_header(name, &mailbox);
+    r = mailbox_open_header(name, 0, &mailbox);
     if (r) {
 	return r;
     }
@@ -735,7 +735,7 @@ do_mboxlist()
 	for (p = pathresult + strlen(root); *p; p++) {
 	    if (*p == '.') *p = '/';
 	}
-	r = mailbox_open_header_path(mboxname, pathresult, "",
+	r = mailbox_open_header_path(mboxname, pathresult, "", 0,
 				     &mailbox, 1);
 	if (r) {
 	    /* Try lowercasing mailbox name */
@@ -745,7 +745,7 @@ do_mboxlist()
 		if (*p == '.') *p = '/';
 	    }
 
-	    r = mailbox_open_header_path(mboxname, pathresult, "",
+	    r = mailbox_open_header_path(mboxname, pathresult, "", 0,
 					 &mailbox, 1);
 	}
 
@@ -809,7 +809,7 @@ do_mboxlist()
 	    else if (!strcmp(dirent->d_name, FNAME_HEADER+1) &&
 		     !newmbox_lookup(todo_head->name) &&
 		     !mailbox_open_header_path(todo_head->name,
-					       todo_head->path, "",
+					       todo_head->path, "", 0,
 					       &mailbox, 1)) {
 		r = mailbox_open_index(&mailbox);
 		if (!r) {

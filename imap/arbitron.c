@@ -96,7 +96,7 @@ char **argv;
     }
 
     strcpy(pattern, "*");
-    mboxlist_findall(pattern, 1, 0, do_mailbox);
+    mboxlist_findall(pattern, 1, 0, 0, do_mailbox);
 
     exit(code);
 }
@@ -153,7 +153,7 @@ char *name;
     struct arbitronargs arbitronargs;
 
     /* Open/lock header */
-    r = mailbox_open_header(name, &mailbox);
+    r = mailbox_open_header(name, 0, &mailbox);
     if (r) {
 	return r;
     }

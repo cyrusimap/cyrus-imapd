@@ -151,12 +151,12 @@ unsigned long feeduid;
     }
 
     r = append_setup(&mailbox, newsprefix ? namebuf : group,
-		     MAILBOX_FORMAT_NETNEWS, 0, 0);
+		     MAILBOX_FORMAT_NETNEWS, 0, 0, 0);
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	r = mboxlist_createmailbox(newsprefix ? namebuf : group,
 				   MAILBOX_FORMAT_NETNEWS, "news",
-				   1, "anonymous");
+				   1, "anonymous", 0);
 	if (r) {
 	    syslog(LOG_CRIT, "cannot create %s: %s",
 		   newsprefix ? namebuf : group,
@@ -165,7 +165,7 @@ unsigned long feeduid;
 	}
 
 	r = append_setup(&mailbox, newsprefix ? namebuf : group,
-			 MAILBOX_FORMAT_NETNEWS, 0, 0);
+			 MAILBOX_FORMAT_NETNEWS, 0, 0, 0);
     }
 
     if (r) {

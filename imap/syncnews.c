@@ -213,7 +213,7 @@ do_syncnews()
 	if (!group_seen[i]) {
 	    r = mboxlist_createmailbox(group[i],
 				       MAILBOX_FORMAT_NETNEWS, "news",
-				       1, "anonymous");
+				       1, "anonymous", 0);
 	    if (r) {
 		fprintf(stderr, "syncnews: cannot creat %s: %s\n",
 			group[i], error_message(r));

@@ -54,7 +54,8 @@ struct copymsg {
 };
 
 extern int append_setup P((struct mailbox *mailbox, const char *name,
-			   int format, long aclcheck, long quotacheck));
+			   int format, struct auth_state *auth_state,
+			   long aclcheck, long quotacheck));
 
 extern int append_fromstream P((struct mailbox *mailbox,
 				struct protstream *messagefile,

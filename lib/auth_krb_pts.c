@@ -44,18 +44,20 @@
 #define KRB_MAPNAME "/etc/krb.equiv"
 #endif
 
-static char auth_userid[PR_MAXNAMELEN] = "anonymous";
-static char auth_name[PR_MAXNAMELEN] = "anonymous";
-static char auth_aname[ANAME_SZ] = "anonymous";
-static char auth_inst[INST_SZ] = ""; 
-static char auth_realm[REALM_SZ] = "";
+struct auth_state {
+    char userid[PR_MAXNAMELEN];
+    char name[PR_MAXNAMELEN];
+    char aname[ANAME_SZ];
+    char inst[INST_SZ];
+    char realm[REALM_SZ];
+    int ngroups;
+    char (*groups)[PR_MAXNAMELEN];
+};
 
-/*
-  cdecl> declare x as pointer to array of array 64 of char
-  char (*x)[][64]
-  */
-static char (*auth_groups)[][PR_MAXNAMELEN]=NULL;
-static int auth_ngroups=0;
+static struct auth_state auth_anonymous = {
+    "anonymous", "anonymous", "anonymous", "", "", 0, 0
+};
+
 
 static int parse_krbequiv_line P((const char *src,
 				  char *principal, char *localuser));
@@ -70,20 +72,23 @@ char *auth_map_krbid P((const char *real_aname, const char *real_inst,
  *      2       User is in the group that is identifier
  *      3       User is identifer
  */
-int auth_memberof(identifier)
+int auth_memberof(auth_state, identifier)
+struct auth_state *auth_state;
 const char *identifier;
 {
     int i;
     
+    if (!auth_state) auth_state = &auth_anonymous;
+
     if (strcmp(identifier, "anyone") == 0) return 1;
     
-    if (strcmp(identifier, auth_userid) == 0) return 3;
+    if (strcmp(identifier, auth_state->userid) == 0) return 3;
     
     /* "anonymous" is not a member of any group */
-    if (strcmp(auth_userid, "anonymous") == 0) return 0;
+    if (strcmp(auth_state->userid, "anonymous") == 0) return 0;
     
-    for (i=0;i<auth_ngroups;i++)
-        if (!strcmp(identifier,(*auth_groups)[i]))
+    for (i=0; i < auth_state->ngroups; i++)
+        if (!strcmp(identifier,auth_state->groups[i]))
             return 2;
   
     return 0;
@@ -288,11 +293,12 @@ const char *identifier;
  * this object is formed by appending a 'D' and 3 nulls to the base key.
  */
 
-
-int auth_setid(identifier, cacheid)
+struct auth_state *
+auth_newstate(identifier, cacheid)
 const char *identifier;
 const char *cacheid;
 {
+    struct auth_state *newstate;
     DBT key, dataheader,datalist;
     char keydata[PR_MAXNAMELEN + 4]; /* or 20, whichever is greater */
     int fd,rc,xpid;
@@ -307,18 +313,18 @@ const char *cacheid;
     static char response[1024];
     int start, n;
     
-    if (auth_ngroups) {
-	free(auth_groups);
-	auth_groups = NULL;
-	auth_ngroups = 0;
-    }
-    
     identifier = auth_canonifyid(identifier);
-    if (!identifier) return -1;
-    auth_aname[0] = auth_inst[0] = auth_realm[0] = '\0';
-    kname_parse(auth_aname, auth_inst, auth_realm, identifier);
-    if (strcmp(auth_userid, "anyone") == 0) return 0;
-    strcpy(auth_userid, identifier);
+    if (!identifier) return 0;
+
+    newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
+
+    newstate->aname[0] = newstate->inst[0] = newstate->realm[0] = '\0';
+    newstate->ngroups = 0;
+    newstate->groups = 0;
+
+    kname_parse(newstate->aname, newstate->inst, newstate->realm, identifier);
+    if (strcmp(newstate->userid, "anyone") == 0) return newstate;
+    strcpy(newstate->userid, identifier);
     
     info.hash = hashfn;
     info.lorder = 0;
@@ -330,11 +336,11 @@ const char *cacheid;
     fd=open(DBLOCK, O_CREAT|O_TRUNC|O_RDWR, 0644);
     if (fd == -1) {
         syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", DBLOCK);
-        return 0;
+        return newstate;
     }
     if (lock_shared(fd) < 0) {
         syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", DBLOCK);
-        return 0;
+        return newstate;
     }
     ptdb = dbopen(DBFIL, O_RDONLY, 0, DB_HASH, &info);
     if (!ptdb) {
@@ -349,14 +355,14 @@ const char *cacheid;
 		if (!ptdb) {
 		    syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
 		    close(fd);
-		    return 0;
+		    return newstate;
 		}
 	    }
 	    else if (!ptdb) {
 		syslog(LOG_ERR, "IOERROR: creating database %s: %m", DBFIL);
 		CLOSE(ptdb);
 		close(fd);
-		return 0;
+		return newstate;
 	    }
 	    else {
 		/*
@@ -372,28 +378,28 @@ const char *cacheid;
 			   DBFIL); 
 		    CLOSE(ptdb);
 		    close(fd);
-		    return 0;
+		    return newstate;
 		}
 		/* close and reopen the database in read-only mode */
 		if (CLOSE(ptdb) < 0) {
 		    syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
 			   DBFIL); 
 		    close(fd);
-		    return 0;
+		    return newstate;
 		}
 		ptdb = dbopen(DBFIL, O_RDONLY, 0644, DB_HASH, &info);
 		if (!ptdb) {
 		    syslog(LOG_ERR, "IOERROR: reopening new database %s: %m",
 			   DBFIL); 
 		    close(fd);
-		    return 0;
+		    return newstate;
 		}
 	    }          
 	}
 	else {
 	    syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
 	    close(fd);
-	    return 0;
+	    return newstate;
 	}
     }
     if (cacheid) {
@@ -421,14 +427,14 @@ const char *cacheid;
         syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
         CLOSE(ptdb);
         close(fd);
-        return 0;
+        return newstate;
     }
     if (!rc) {
         if(dataheader.size != sizeof(ptluser)) {
             syslog(LOG_ERR, "IOERROR: Database %s probably corrupt", DBFIL);
             CLOSE(ptdb);
             close(fd);
-            return 0;
+            return newstate;
         }
         /* make sure the record is aligned */
         memcpy(&us, dataheader.data, sizeof(ptluser));
@@ -438,7 +444,7 @@ const char *cacheid;
         close(fd);
         
         s = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (s == -1) return errno;
+        if (s == -1) return newstate;
         
         memset((char *)&srvaddr, 0, sizeof(srvaddr));
         srvaddr.sun_family = AF_UNIX;
@@ -446,7 +452,7 @@ const char *cacheid;
         r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
         if (r == -1) {
 	    /* *reply = "cannot connect to ptloader server";*/
-            return errno;
+            return newstate;
         }
         
         iov[0].iov_base = (char *)&key.size;
@@ -466,7 +472,7 @@ const char *cacheid;
         
         close(s);
         
-        if (start <= 1 || strncmp(response, "OK", 2)) return 0;
+        if (start <= 1 || strncmp(response, "OK", 2)) return newstate;
         /*  response[start] = '\0';
          *reply = response; */
 
@@ -475,17 +481,17 @@ const char *cacheid;
         fd = open(DBLOCK, O_CREAT|O_TRUNC|O_RDWR, 0644);
         if (fd == -1) {
             syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", DBLOCK);
-            return 0;
+            return newstate;
         }
         if (lock_shared(fd) < 0) {
             syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", DBLOCK);
-            return 0;
+            return newstate;
         }
         ptdb = dbopen(DBFIL, O_RDONLY, 0, DB_HASH, &info);
         if (!ptdb) {
             syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
             close(fd);
-            return 0;
+            return newstate;
         }
 
         /* fetch the new header record and process it */
@@ -496,7 +502,7 @@ const char *cacheid;
             syslog(LOG_ERR, "IOERROR: reading database: %m");             
             CLOSE(ptdb);
             close(fd);
-            return 0;
+            return newstate;
         }
         /* The record still isn't there, even though the child claimed sucess
          */ 
@@ -505,7 +511,7 @@ const char *cacheid;
                    identifier);
             CLOSE(ptdb);
             close(fd);
-            return 0;
+            return newstate;
         }
         memcpy(&us, dataheader.data, dataheader.size);
     }
@@ -519,7 +525,7 @@ const char *cacheid;
                identifier, us.user);
         CLOSE(ptdb);
         close(fd);      
-        return 0;
+        return newstate;
     }
     /*
      * now get the actual data from the database. this will be a contiguous
@@ -531,18 +537,26 @@ const char *cacheid;
     close(fd);
     if (rc < 0) {
         syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
-        return 0;
+        return newstate;
     }
     if (rc) {
         syslog(LOG_ERR,
                "Database %s inconsistent: header record found, data record missing", DBFIL);
-        return -1;
+        return newstate;
     }
-    auth_ngroups = us.ngroups;
-    if (auth_ngroups) {
-        auth_groups = (char (*)[][PR_MAXNAMELEN])xmalloc(auth_ngroups *
+    newstate->ngroups = us.ngroups;
+    if (newstate->ngroups) {
+        newstate->groups = (char (*)[PR_MAXNAMELEN])xmalloc(newstate->ngroups *
 							 PR_MAXNAMELEN); 
-        memcpy(auth_groups, datalist.data, auth_ngroups*PR_MAXNAMELEN);
+        memcpy(newstate->groups, datalist.data, newstate->ngroups*PR_MAXNAMELEN);
     }
-    return 0;
+    return newstate;
+}
+
+void
+auth_freestate(auth_state)
+struct auth_state *auth_state;
+{
+    if (auth_state->groups) free((char *)auth_state->groups);
+    free((char *)auth_state);
 }

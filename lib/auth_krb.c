@@ -39,10 +39,18 @@
 #define KRB_MAPNAME "/etc/krb.equiv"
 #endif
 
-static char auth_userid[MAX_K_NAME_SZ+1] = "anonymous";
-static char auth_aname[ANAME_SZ] = "anonymous";
-static char auth_inst[INST_SZ];
-static char auth_realm[REALM_SZ];
+struct auth_state {
+    char userid[MAX_K_NAME_SZ+1];
+    char aname[ANAME_SZ];
+    char auth_inst[INST_SZ];
+    char auth_realm[REALM_SZ];
+};
+
+static struct auth_state auth_anonymous = {
+    "anonymous", "anonymous", "", ""
+};
+
+
 
 static int parse_krbequiv_line P((const char *src,
 				  char *principal, char *localuser));
@@ -58,32 +66,35 @@ char *auth_map_krbid P((const char *real_aname, const char *real_inst,
  *	3	User is identifer
  */
 int
-auth_memberof(identifier)
+auth_memberof(auth_state, identifier)
+struct auth_state *auth_state;
 const char *identifier;
 {
     char aname[ANAME_SZ];
     char inst[INST_SZ];
     char realm[REALM_SZ];
 
+    if (!auth_state) auth_state = &auth_anonymous;
+
     if (strcmp(identifier, "anyone") == 0) return 1;
 
     if (strcmp(identifier, auth_userid) == 0) return 3;
 
     /* "anonymous" is not a member of any group */
-    if (strcmp(auth_userid, "anonymous") == 0) return 0;
+    if (strcmp(auth_state->userid, "anonymous") == 0) return 0;
 
     aname[0] = inst[0] = realm[0] = '\0';
     if (kname_parse(aname, inst, realm, identifier) != 0) {
 	return 0;
     }
 
-    if (strcmp(aname, auth_aname) != 0 && strcmp(aname, "*") != 0) {
+    if (strcmp(aname, auth_state->aname) != 0 && strcmp(aname, "*") != 0) {
 	return 0;
     }
-    if (strcmp(inst, auth_inst) != 0 && strcmp(inst, "*") != 0) {
+    if (strcmp(inst, auth_state->inst) != 0 && strcmp(inst, "*") != 0) {
 	return 0;
     }
-    if (strcmp(realm, auth_realm) != 0 && strcmp(realm, "*") != 0) {
+    if (strcmp(realm, auth_state->realm) != 0 && strcmp(realm, "*") != 0) {
 	return 0;
     }
     return 2;
@@ -269,17 +280,29 @@ const char *identifier;
  * points to a 16-byte binary key to cache identifier's information
  * with.
  */
-int
-auth_setid(identifier, cacheid)
+struct auth_state *
+auth_newstate(identifier, cacheid)
 const char *identifier;
 const char *cacheid;
 {
-    identifier = auth_canonifyid(identifier);
-    if (!identifier) return -1;
+    struct auth_state *newstate;
 
-    strcpy(auth_userid, identifier);
-    auth_aname[0] = auth_inst[0] = auth_realm[0] = '\0';
-    kname_parse(auth_aname, auth_inst, auth_realm, identifier);
-    return 0;
+    identifier = auth_canonifyid(identifier);
+    if (!identifier) return 0;
+
+    newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
+
+    strcpy(newstate->userid, identifier);
+    newstate->aname[0] = newstate->inst[0] = newstate->realm[0] = '\0';
+    kname_parse(newstate->aname, newstate->inst, newstate->realm, identifier);
+
+    return newstate;
+}
+
+void
+auth_freestate(auth_state)
+struct auth_state *auth_state;
+{
+    free((char *)auth_state);
 }
 

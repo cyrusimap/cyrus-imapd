@@ -702,7 +702,7 @@ int nflags;
 	return 0;
     }
 
-    mailbox_read_acl(mailbox);
+    mailbox_read_acl(mailbox, imapd_authstate);
     myrights &= mailbox->myrights;
 
     /* First pass at checking permission */
@@ -878,7 +878,7 @@ char *name;
     }
 
     r = append_setup(&append_mailbox, name, MAILBOX_FORMAT_NORMAL,
-		     ACL_INSERT, totalsize);
+		     imapd_authstate, ACL_INSERT, totalsize);
     if (r) return r;
 
     r = append_copy(mailbox, &append_mailbox, copyargs.nummsg,

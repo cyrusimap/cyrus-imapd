@@ -78,6 +78,7 @@ char **argv;
     char **flag = 0;
     int nflags = 0;
     char *authuser = 0;
+    struct auth_state *authstate = 0;
     char *id = 0;
     char *notifyheader = 0;
 
@@ -142,7 +143,7 @@ char **argv;
 
     if (authuser) {
 	authuser = auth_canonifyid(authuser);
-	if (authuser) auth_setid(authuser, (char *)0);
+	if (authuser) authstate = auth_newstate(authuser, (char *)0);
     }
 
     /* Copy message to temp file */
@@ -152,7 +153,7 @@ char **argv;
 
     if (optind == argc) {
 	/* Deliver to global mailbox */
-	r = deliver(prot_f, size, flag, nflags, authuser, id, notifyheader,
+	r = deliver(prot_f, size, flag, nflags, authuser, authstate, id, notifyheader,
 		    (char *)0, mailboxname);
 	
 	if (r) {
@@ -164,7 +165,7 @@ char **argv;
 	exit(exitval);
     }
     while (optind < argc) {
-	r = deliver(prot_f, size, flag, nflags, authuser, id, notifyheader,
+	r = deliver(prot_f, size, flag, nflags, authuser, authstate, id, notifyheader,
 		       argv[optind], mailboxname);
 
 	if (r) {
@@ -334,6 +335,7 @@ smtpmode()
     char **flag = 0;
     int nflags = 0;
     char *authuser = 0;
+    struct auth_state *authstate = 0;
     char *id = 0;
     char *notifyheader = 0;
     char *p;
@@ -368,7 +370,7 @@ smtpmode()
 		    p = strchr(rcpt_addr[i], '.');
 		    if (p) *p++ = '\0';
 
-		    r = deliver(prot_f, size, flag, nflags, authuser, id,
+		    r = deliver(prot_f, size, flag, nflags, authuser, authstate, id,
 				notifyheader,
 				rcpt_addr[i][0] ? rcpt_addr[i] : (char *)0, p);
 		    printf("%s\r\n", convert_smtp(r));
@@ -662,12 +664,13 @@ int smtpmode;
 }
 
 
-deliver(msg, size, flag, nflags, authuser, id, notifyheader, user, mailboxname)
+deliver(msg, size, flag, nflags, authuser, authstate, id, notifyheader, user, mailboxname)
 struct protstream *msg;
 unsigned size;
 char **flag;
 int nflags;
 char *authuser;
+struct auth_state *authstate;
 char *id;
 char *notifyheader;
 char *user;
@@ -701,7 +704,7 @@ char *mailboxname;
 	    }
 
 	    r = append_setup(&mailbox, namebuf, MAILBOX_FORMAT_NORMAL,
-			     ACL_POST, 0);
+			     authstate, ACL_POST, 0);
 	}
 	if (r) {
 	    strcpy(namebuf, "user.");
@@ -713,7 +716,7 @@ char *mailboxname;
 		return 0;
 	    }
 	    r = append_setup(&mailbox, namebuf, MAILBOX_FORMAT_NORMAL,
-			     0, 0);
+			     authstate, 0, 0);
 	}
     }
     else if (mailboxname) {
@@ -722,7 +725,7 @@ char *mailboxname;
 	    return 0;
 	}
 	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
-			 ACL_POST, 0);
+			 authstate, ACL_POST, 0);
     }
     else {
 	fprintf(stderr, "deliver: either -m or user required\n");
