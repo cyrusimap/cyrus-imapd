@@ -6,7 +6,7 @@
 
 struct cyrusdb_backend *DB = &cyrusdb_flat;
 
-#define TRY(s) { r = s; if (r) { printf("%s failed: %d", #s, r); exit(1); } }
+#define TRY(s) { r = s; if (r) { printf("%s failed: %d\n", #s, r); exit(1); } }
 
 void fatal(const char *msg, int code)
 {
