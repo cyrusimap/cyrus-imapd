@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.8 2004/04/08 21:12:58 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.9 2004/05/05 20:52:15 ken3 Exp $
  */
 
 #include <config.h>
@@ -477,7 +477,7 @@ int pipe_command(struct backend *s, int optimistic_literal)
  * down the response when this is the case.
  */
 int pipe_lsub(struct backend *s, const char *tag,
-	      int force_notfatal, int for_find) 
+	      int force_notfatal, const char *resp) 
 {
     int taglen = strlen(tag);
     int c;
@@ -667,23 +667,23 @@ int pipe_lsub(struct backend *s, const char *tag,
 
 	    /* send our response */
 	    /* we need to set \Noselect if it's not in our mailboxes.db */
-	    if(!for_find) {
+	    if(resp[0] == 'L') {
 		if(!exist_r) {
-		    prot_printf(imapd_out, "* LSUB %s \"%s\" ",
-				flags, sep.s);
+		    prot_printf(imapd_out, "* %s %s \"%s\" ",
+				resp, flags, sep.s);
 		} else {
-		    prot_printf(imapd_out, "* LSUB (\\Noselect) \"%s\" ",
-				sep.s);
+		    prot_printf(imapd_out, "* %s (\\Noselect) \"%s\" ",
+				resp, sep.s);
 		}
 
 		printstring(name.s);
 		prot_printf(imapd_out, "\r\n");
 
-	    } else if(for_find && !exist_r) {
+	    } else if(resp[0] == 'M' && !exist_r) {
 		/* Note that it has to exist for a find response */
 
 		/* xxx what happens if name.s isn't an atom? */
-		prot_printf(imapd_out, "* MAILBOX %s\r\n",name.s);
+		prot_printf(imapd_out, "* %s %s\r\n", resp, name.s);
 	    }
 	}
     } /* while(1) */

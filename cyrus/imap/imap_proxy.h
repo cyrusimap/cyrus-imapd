@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.h,v 1.1.2.4 2004/02/18 19:08:46 ken3 Exp $
+ * $Id: imap_proxy.h,v 1.1.2.5 2004/05/05 20:52:15 ken3 Exp $
  */
 
 #ifndef _IMAP_PROXY_H
@@ -63,7 +63,7 @@ int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal);
 int pipe_including_tag(struct backend *s, const char *tag, int force_notfatal);
 int pipe_command(struct backend *s, int optimistic_literal);
 int pipe_lsub(struct backend *s, const char *tag,
-	      int force_notfatal, int for_find);
+	      int force_notfatal, const char *resp);
 
 void proxy_copy(const char *tag, char *sequence, char *name, int usinguid,
 		struct backend *s);
