@@ -397,7 +397,7 @@ const char *userid;
 		r = IMAP_IOERROR;
 		goto fail;
 	    }
-	    if (mailbox_map_message(mailbox, copymsg[msg].uid,
+	    if (mailbox_map_message(mailbox, 0, copymsg[msg].uid,
 				    &src_base, &src_size) != 0) {
 		fclose(destfile);
 		syslog(LOG_ERR, "IOERROR: opening message file %u of %s: %m",

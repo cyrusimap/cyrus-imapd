@@ -103,21 +103,44 @@ unsigned long uid;
  * Returns map in 'basep' and 'lenp'
  */
 int
-mailbox_map_message(mailbox, uid, basep, lenp)
+mailbox_map_message(mailbox, iscurrentdir, uid, basep, lenp)
 struct mailbox *mailbox;
+int iscurrentdir;
 unsigned long uid;
 const char **basep;
 unsigned long *lenp;
 {
     int msgfd;
-    static char buf[256];
+    static char buf[4096];
     char *p = buf;
     struct stat sbuf;
+    static int newsprefixlen = -1;
+
+    if (newsprefixlen == -1) {
+	const char *newsprefix;
+
+	newsprefix = config_getstring("newsprefix", 0);
+	if (newsprefix) {
+	    newsprefixlen = strlen(newsprefix);
+	    if (newsprefix[newsprefixlen-1] != '.') newsprefixlen++;
+	}
+	else newsprefixlen = 0;
+    }
 
     if (mailbox->format == MAILBOX_FORMAT_NETNEWS && config_newsspool) {
 	strcpy(buf, config_newsspool);
 	p = buf + strlen(buf);
 	if (p[-1] != '/') *p++ = '/';
+	strcpy(p, mailbox->name + newsprefixlen);
+	while (*p) {
+	    if (*p == '.') *p = '/';
+	    p++;
+	}
+	*p++ = '/';
+    }
+    else if (!iscurrentdir) {
+	strcpy(buf, mailbox->path);
+	p = buf + strlen(buf);
     }
 
     sprintf(p, "%lu%s", uid,
