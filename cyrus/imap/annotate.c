@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.2 2002/07/11 20:14:35 rjs3 Exp $
+ * $Id: annotate.c,v 1.8.6.3 2002/07/12 16:09:13 rjs3 Exp $
  */
 
 #include <config.h>
@@ -417,8 +417,6 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 
 		    if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
 		    if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
-		    /* can't have [ be first char, sigh */
-		    for(p = buf; *p == '['; p++);
 
 		    attvalues = NULL;
 		    if (fdata.attribs & ATTRIB_VALUE_SHARED)
