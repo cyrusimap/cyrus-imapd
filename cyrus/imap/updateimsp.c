@@ -72,6 +72,7 @@ struct dropfile {
     struct dropfile *next;
     unsigned int uid;
     time_t last_change;
+    unsigned int exists;
     char fname[1];
 };
 
@@ -192,7 +193,7 @@ int
 parsefname(newfile)
 struct dropfile *newfile;
 {
-    unsigned char decodebuf[8];
+    unsigned char decodebuf[3*4];
     int c1, c2, c3, c4;
     char *from;
     unsigned char *to;
@@ -206,19 +207,24 @@ struct dropfile *newfile;
     len = 0;
     for (;;) {
 	c1 = *from++;
+	if (c1 == '=') break;
 	if (CHAR64(c1) == XX) return 0;
 	
 	c2 = *from++;
 	if (CHAR64(c2) == XX) return 0;
 
 	c3 = *from++;
-	if (CHAR64(c3) == XX) return 0;
+	if (c3 != '=' && CHAR64(c3) == XX) return 0;
 
 	c4 = *from++;
 	if (c4 != '=' && CHAR64(c4) == XX) return 0;
 
-	if (len + 2 > sizeof(decodebuf)) return 0;
+	if (len >= sizeof(decodebuf)) return 0;
 	to[len++] = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+	if (c3 == '=') {
+	    break;
+	}
+	if (len >= sizeof(decodebuf)) return 0;
 	to[len++] = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
 	if (c4 == '=') {
 	    break;
@@ -227,19 +233,23 @@ struct dropfile *newfile;
 	to[len++] = (((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
     }
 
-    if (len != 8) return 0;
+    if (len < 8) return 0;
 
     newfile->uid = ntohl(*(bit32 *)decodebuf);
     newfile->last_change = ntohl(*(bit32 *)(decodebuf+4));
 
-    p = newfile->fname + 13;
     if (newfile->fname[0] == 'S') {
-	p = strchr(p, '=');
-	if (!p) return 0;
-	p++;
+	if (len != 2*4) return 0;
+	from = strchr(from, '=');
+	if (!from) return 0;
+	from++;
+    }
+    else {
+	if (len != 3*4) return 0;
+	newfile->exists = ntohl(*(bit32 *)(decodebuf+8));
     }
 
-    if (strchr(p, '=')) return 0;
+    if (strchr(from, '=')) return 0;
 
     return 1;
 }
@@ -287,7 +297,8 @@ struct dropfile **listp;
 	}
 	cmp = (subb->fname[0] - suba->fname[0]);
 	if (!cmp) {
-	    cmp = strcmp(suba->fname+13, subb->fname+13);
+	    cmp = strcmp(strchr(suba->fname, '='),
+			 strchr(subb->fname, '='));
 	}
 	if (!cmp) {
 	    if (suba->last_change < subb->last_change ||
@@ -398,7 +409,7 @@ char *hostname;
 
     commands_pending = 0;
     while (droplist) {
-	if (strlen(droplist->fname+13) >= MAX_MAILBOX_PATH) {
+	if (strlen(droplist->fname) >= MAX_MAILBOX_PATH) {
 /*debug*/ printf("too long %s\n", droplist->fname);
 	    unlink(droplist->fname);
 	    tmp = droplist;
@@ -406,7 +417,7 @@ char *hostname;
 	    free((char *)tmp);
 	    continue;
 	}
-	strcpy(mailboxname, droplist->fname+13);
+	strcpy(mailboxname, strchr(droplist->fname, '=')+1);
 	if (p = strchr(mailboxname, '=')) {
 	    *p++ = '\0';
 	    username = p;
@@ -425,7 +436,8 @@ char *hostname;
 	commands_pending++;
 	if (droplist->fname[0] == 'L') {
 	    imclient_send(imspconn, callback_dropfile, (void *)droplist,
-			  "LAST %s %u", mailboxname, droplist->uid);
+			  "LAST %s %u %u", mailboxname, droplist->uid,
+			  droplist->exists);
 	}
 	else {
 	    imclient_send(imspconn, callback_dropfile, (void *)droplist,
@@ -438,6 +450,7 @@ char *hostname;
     while (commands_pending) {
 	imclient_processoneevent(imspconn);
     }
+    imclient_close(imspconn);
     return;
 
   freelist:
