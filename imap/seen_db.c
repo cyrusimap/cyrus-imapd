@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.33 2002/06/09 14:10:38 ken3 Exp $
+   $Id: seen_db.c,v 1.34 2002/06/09 16:13:41 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -463,8 +463,9 @@ int seen_delete_user(const char *user)
 
     /* erp! */
     r = unlink(fname);
-    if (r == ENOENT) {
+    if (r < 0 && errno == ENOENT) {
 	syslog(LOG_WARNING, "can not unlink %s: %m", fname);
+	/* but maybe the user just never read anything? */
 	r = 0;
     }
     else if (r < 0) {
