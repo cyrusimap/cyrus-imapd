@@ -1,5 +1,5 @@
 /* map_shared.c -- memory-mapping routines.
- $Id: map_shared.c,v 1.13 1999/04/08 21:00:49 tjs Exp $
+ $Id: map_shared.c,v 1.14 1999/09/30 07:32:00 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -30,6 +30,7 @@
 
 #include "map.h"
 #include "exitcodes.h"
+#include "xmalloc.h"
 
 #define SLOP (8*1024)
 
