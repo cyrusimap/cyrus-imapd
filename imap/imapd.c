@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.333 2002/01/11 20:22:15 leg Exp $ */
+/* $Id: imapd.c,v 1.334 2002/01/29 19:10:57 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -81,7 +81,6 @@
 #include "append.h"
 #include "iptostring.h"
 #include "mboxlist.h"
-#include "acapmbox.h"
 #include "idle.h"
 #include "telemetry.h"
 #include "user.h"
@@ -1956,7 +1955,6 @@ void cmd_capability(char *tag)
 {
     const char *sasllist; /* the list of SASL mechanisms */
     unsigned mechcount;
-    const char *acapserver;
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
@@ -1976,11 +1974,6 @@ void cmd_capability(char *tag)
     }
     if (!imapd_starttls_done && !config_getswitch("allowplaintext", 1)) {
 	prot_printf(imapd_out, " LOGINDISABLED");
-    }
-    acapserver = config_getstring("acap_server", NULL);
-    if (acapserver != NULL) {
-	prot_printf(imapd_out, " ACAP=acap://%s%s/", 
-		    acapserver, global_dataset);
     }
 
     /* add the SASL mechs */
