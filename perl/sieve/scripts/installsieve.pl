@@ -1,3 +1,6 @@
+#! /bin/sh
+exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
+#!perl -w
 # 
 # Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
 #
@@ -44,14 +47,14 @@ $username = "";
 
 $ret = GetOptions("v|views:s" => \$views,
 		  "l|list" => \$list,
-		  "p|port:i" => \$port,
+#		  "p|port:i" => \$port,
 		  "i|installs:s" => \$installs,
 		  "a|activates:s" => \$activates,
 		  "d|deletes:s" => \$deletes,
-		  "m|mechanism:s" => \$mech,
+#		  "m|mechanism:s" => \$mech,
 		  "g|gets:s" => \$gets,
                   "u|username:s" => \$username,
-		  "w|password:s" => \$pass
+#		  "w|password:s" => \$pass
                   );
 if (!$ret || $#ARGV != 0) { 
     show_help();
@@ -79,7 +82,7 @@ sub prompt {
 
   if (($type eq "username") && (defined $username)) {
       return $username;
-  } elsif (($type eq "authname") && (defined $authname)) {
+  } elsif (($type eq "authname") && (defined $username)) {
       return $username;
   } elsif (($type eq "realm") && (defined $realm)) {
       return $realm;
@@ -101,15 +104,14 @@ sub show_help {
   print "\n";
   print "  -v <name>    view script\n";
   print "  -l           list available scripts\n";
-  print "  -p <port>    port to connect to\n";
+#  print "  -p <port>    port to connect to\n";
   print "  -i <file>    filename of script to install\n";
   print "  -a <name>    Set <name> as the active script\n";
   print "  -d <name>    Delete <name> script from server\n";
-  print "  -m <mech>    Mechanism to use for authentication\n";
+#  print "  -m <mech>    Mechanism to use for authentication\n";
   print "  -g <name>    Get script <name> and save to disk\n";
   print "  -u <user>    Userid/Authname to use\n";
-  print "  -t <user>    Userid to use (for proxying)\n";
-  print "  -w <passwd>  Specify password (Should only be used for automated scripts)\n";
+#  print "  -w <passwd>  Specify password (Should only be used for automated scripts)\n";
   print "\n";
 }
 
@@ -123,34 +125,42 @@ if (!defined $obj) {
 
 if (defined $installs) {
   $ret = sieve_put_file($obj, $installs);
-  if ($ret != 0) { print "Upload failed\n"; }
+  if ($ret != 0) { print "upload failed\n"; }
 }
 
 if (defined $deletes) {
   $ret = sieve_delete($obj, $deletes);
-  if ($ret != 0) { print "Delete failed\n"; }
+  if ($ret != 0) { print "delete failed\n"; }
 }
 
 if (defined $activates) {
   $ret = sieve_activate($obj, $activates);
-  if ($ret != 0) { print "Activate failed\n"; }
+  if ($ret != 0) { print "activate failed\n"; }
 }
 
-if (defined $gets || defined $views) {
-  $ret = sieve_get($obj, $gets || $views, $str);
-  if ($ret != 0) { 
-    print "get failed\n"; 
-  } elsif (defined $gets) {
-      open (OUTPUT,">$gets") || die "Unable to open $gets";
-      print OUTPUT $str;
-      close(OUTPUT);    
-  } else {
-      # view
-      print $str;
-  }
+if (defined $gets) {
+    $str = "";
+    $ret = sieve_get($obj, $gets, $str);
+    if ($ret != 0) { 
+	print "get failed\n"; 
+    } else {
+	open (OUTPUT,">$gets") || die "Unable to open $gets";
+	print OUTPUT $str;
+	close(OUTPUT);    
+    }
+}
+if (defined $views) {
+    $str = "";
+    $ret = sieve_get($obj, $views, $str);
+    if ($ret != 0) { 
+	print "get failed\n"; 
+    } else {
+	# view
+	print $str;
+    }
 }
 
-if ($list == 1) {
+if (defined $list) {
   $ret = sieve_list($obj, "list_cb");  
   if ($ret != 0) { print "List command failed\n"; }
 }
