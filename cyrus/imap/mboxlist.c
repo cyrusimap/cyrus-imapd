@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.116 2000/02/22 05:06:45 leg Exp $
+ * $Id: mboxlist.c,v 1.117 2000/02/22 22:12:27 leg Exp $
  */
 
 #include <config.h>
@@ -834,7 +834,7 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	 * the user is an admin.
 	 */
 	if (checkacl &&
-	    (!(acl_myrights(auth_state, acl) & ACL_DELETE))) {
+	    (!(acl_myrights(auth_state, acl) & ACL_CREATE))) {
 	    r = IMAP_PERMISSION_DENIED;
 	    goto done;
 	}
@@ -870,7 +870,7 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 
     /* check if user has Delete right */
     access = acl_myrights(auth_state, mboxent->acls);
-    if (checkacl && !(access & ACL_DELETE)) {
+    if (checkacl && !(access & ACL_CREATE)) {
 	/* User has admin rights over their own mailbox namespace */
 	if (mboxname_userownsmailbox(userid, name)) {
 	    isadmin = 1;
@@ -1154,7 +1154,7 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	if (!strcmp(oldname+5, userid)) {
 	    /* Special case of renaming inbox */
 	    access = acl_myrights(auth_state, oldacl);
-	    if (!(access & ACL_DELETE)) {
+	    if (!(access & ACL_CREATE)) {
 	      r = IMAP_PERMISSION_DENIED;
 	      goto done;
 	    }
@@ -1169,7 +1169,7 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	goto done;
     } else {
 	access = acl_myrights(auth_state, oldacl);
-	if (!(access & ACL_DELETE) && !isadmin) {
+	if (!(access & ACL_CREATE) && !isadmin) {
 	    r = (isadmin || (access & ACL_LOOKUP)) ?
 		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	    goto done;
