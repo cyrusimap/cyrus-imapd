@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.55 1998/06/22 01:28:23 tjs Exp $
+ * $Id: message.c,v 1.56 1998/07/10 19:39:23 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -232,7 +232,20 @@ unsigned size;
 	    else if (*p == '\r') {
 		sawcr = 1;
 	    }
-	    else sawcr = 0;
+	    else {
+		sawcr = 0;
+		if (*p >= 0x80) {
+		    if (reject8bit) {
+			/* We have been configured to reject all mail of this
+			   form. */
+			if (!r) r = IMAP_MESSAGE_CONTAINS8BIT;
+		    } else {
+			/* We have been configured to munge all mail of this
+			   form. */
+			*p = 'X';
+		    }
+		}
+	    }
 	}
 
 	fwrite(buf, 1, n, to);
@@ -262,21 +275,11 @@ unsigned size;
 	    }
 	}
 
-	/* Check for non-ASCII character */ 
-	for (p = (unsigned char *)buf; *p; p++) {
-	    if (*p >= 0x80) {
-		if (reject8bit) {
-		    /* We have been configured to reject all mail of this
-		       form. */
-		    return IMAP_MESSAGE_CONTAINS8BIT;
-		} else {
-		    /* We have been configured to munge all mail of this
-		       form. */
-		    *p = 'X';
-		}
-	    }
-	}
-
+	/* Used to be some 8bit checks here but those were moved above so that 
+	   we could do something other than refuse the message.
+	   Unfortunately, we still need to look for the end of the string. */
+	while(*p) p++;
+	
 	sawnl = (p[-1] == '\n');
     }
 }
