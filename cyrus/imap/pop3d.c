@@ -668,7 +668,7 @@ int openinbox()
 
     strcpy(inboxname, "user.");
     strcat(inboxname, popd_userid);
-    r = mailbox_open_header(inboxname, &mboxstruct);
+    r = mailbox_open_header(inboxname, 0, &mboxstruct);
     if (r) {
 	free(popd_userid);
 	popd_userid = 0;

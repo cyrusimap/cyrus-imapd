@@ -100,7 +100,7 @@ doupdate()
     const char *work_base, *retry_base;
     unsigned long work_size = 0, retry_size = 0;
     struct stat work_sbuf, retry_sbuf;
-    char *failaction;
+    const char *failaction;
 
     imsphost = config_getstring("imspservers", 0);
     if (!imsphost) {

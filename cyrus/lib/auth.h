@@ -38,8 +38,12 @@
 #endif
 #endif
 
-extern int auth_memberof P((const char *identifier));
+struct auth_state;
+
+extern int auth_memberof P((struct auth_state *auth_state, const char *identifier));
 extern char *auth_canonifyid P((const char *identifier));
-extern int auth_setid P((const char *identifier, const char *cacheid));
+extern struct auth_state *auth_newstate P((const char *identifier,
+					   const char *cacheid));
+extern void auth_freestate P((struct auth_state *auth_state));
 
 #endif /* INCLUDED_AUTH_H */

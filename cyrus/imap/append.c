@@ -59,16 +59,17 @@ static int append_addseen P((struct mailbox *mailbox, const char *userid,
  * On success, the struct pointed to by 'mailbox' is set up.
  *
  */
-int append_setup(mailbox, name, format, aclcheck, quotacheck)
+int append_setup(mailbox, name, format, auth_state, aclcheck, quotacheck)
 struct mailbox *mailbox;
 const char *name;
 int format;
+struct auth_state *auth_state;
 long aclcheck;
 long quotacheck;
 {
     int r;
 
-    r = mailbox_open_header(name, mailbox);
+    r = mailbox_open_header(name, auth_state, mailbox);
     if (r) return r;
 
     if ((mailbox->myrights & aclcheck) != aclcheck) {

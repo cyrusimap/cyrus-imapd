@@ -239,7 +239,7 @@ int maycreate;
 	}
     }
 
-    r = mailbox_open_header(name, &mailbox);
+    r = mailbox_open_header(name, 0, &mailbox);
     if (r) return r;
 
     if (thisquota == -1) {
@@ -393,7 +393,7 @@ int ispartial;
 	firstquota = 0;
 	partial = ispartial;
 
-	r = mboxlist_findall(pattern, 1, 0, fixquota_mailbox);
+	r = mboxlist_findall(pattern, 1, 0, 0, fixquota_mailbox);
 	if (r) {
 	    mboxlist_unlock();
 	    return r;

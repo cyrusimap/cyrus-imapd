@@ -165,8 +165,9 @@ mailbox_reconstructmode()
  * The structure pointed to by 'mailbox' is initialized.
  */
 int
-mailbox_open_header(name, mailbox)
+mailbox_open_header(name, auth_state, mailbox)
 const char *name;
+struct auth_state *auth_state;
 struct mailbox *mailbox;
 {
     char *path, *acl;
@@ -175,7 +176,7 @@ struct mailbox *mailbox;
     r = mboxlist_lookup(name, &path, &acl);
     if (r) return r;
 
-    return mailbox_open_header_path(name, path, acl, mailbox, 0);
+    return mailbox_open_header_path(name, path, acl, auth_state, mailbox, 0);
 }
 
 /*
@@ -184,10 +185,11 @@ struct mailbox *mailbox;
  * The structure pointed to by 'mailbox' is initialized.
  */
 int
-mailbox_open_header_path (name, path, acl, mailbox, suppresslog)
+mailbox_open_header_path (name, path, acl, auth_state, mailbox, suppresslog)
 const char *name;
 const char *path;
 const char *acl;
+struct auth_state *auth_state;
 struct mailbox *mailbox;
 int suppresslog;
 {
@@ -211,7 +213,7 @@ int suppresslog;
     mailbox->name = xstrdup(name);
     mailbox->path = xstrdup(path);
     mailbox->acl = xstrdup(acl);
-    mailbox->myrights = acl_myrights(mailbox->acl);
+    mailbox->myrights = acl_myrights(auth_state, mailbox->acl);
 
     if (!mailbox->header) return 0;
 
@@ -417,8 +419,9 @@ struct mailbox *mailbox;
  * Read the the ACL for 'mailbox'.
  */
 int 
-mailbox_read_acl(mailbox)
+mailbox_read_acl(mailbox, auth_state)
 struct mailbox *mailbox;
+struct auth_state *auth_state;
 {
     int r;
     char *acl;
@@ -428,7 +431,7 @@ struct mailbox *mailbox;
 
     free(mailbox->acl);
     mailbox->acl = xstrdup(acl);
-    mailbox->myrights = acl_myrights(mailbox->acl);
+    mailbox->myrights = acl_myrights(auth_state, mailbox->acl);
 
     return 0;
 }
@@ -1723,7 +1726,7 @@ bit32 *newuidvalidityp;
     char *oldfnametail, *newfnametail;
 
     /* Open old mailbox and lock */
-    r = mailbox_open_header(oldname, &oldmailbox);
+    r = mailbox_open_header(oldname, 0, &oldmailbox);
     if (r) {
 	return r;
     }

@@ -149,19 +149,21 @@ const char *auth_identity;
     char *acl;
     char inboxname[1024];
     int r;
+    struct auth_state *authstate;
 
     if (strchr(user, '.') || strlen(user)+6 >= sizeof(inboxname)) return 0;
 
     strcpy(inboxname, "user.");
     strcat(inboxname, user);
 
-    if (auth_setid(auth_identity, (char *)0) ||
+    if (!(authstate = auth_newstate(auth_identity, (char *)0)) ||
 	mboxlist_lookup(inboxname, (char **)0, &acl)) {
 	r = 0;  /* Failed so assume no proxy access */
     }
     else {
-	r = (acl_myrights(acl) & ACL_ADMIN) != 0;
+	r = (acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
     }
+    if (authstate) auth_freestate(authstate);
     return r;
 }
 

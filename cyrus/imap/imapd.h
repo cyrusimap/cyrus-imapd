@@ -37,6 +37,9 @@
 /* Userid client has logged in as */
 extern char *imapd_userid;
 
+/* Authorization state for logged in userid */
+extern struct auth_state *imapd_authstate;
+
 /* True if user is an admin */
 extern int imapd_userisadmin;
 

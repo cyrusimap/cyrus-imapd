@@ -69,6 +69,7 @@ struct buf {
 };
 
 char *imapd_userid;
+struct auth_state *imapd_authstate = 0;
 int imapd_userisadmin;
 struct mailbox *imapd_mailbox;
 int imapd_exists;
@@ -143,7 +144,7 @@ void appendstrlistpat P((struct strlist **l, char *s));
 void freefieldlist P((struct fieldlist *l));
 void freestrlist P((struct strlist *l));
 void appendsearchargs P((struct searchargs *s, struct searchargs *s1,
-			 struct searchargs*s2));
+			 struct searchargs *s2));
 void freesearchargs P((struct searchargs *s));
 
 void printauthready P((int len, unsigned char *data));
@@ -862,7 +863,7 @@ char *passwd;
     }
     
 
-    auth_setid(canon_user, (char *)0);
+    imapd_authstate = auth_newstate(canon_user, (char *)0);
     imapd_userid = xstrdup(canon_user);
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
@@ -871,7 +872,7 @@ char *passwd;
 	for (p = (char *)val; *p && !isspace(*p); p++);
 	strncpy(buf, val, p - val);
 	buf[p-val] = 0;
-	if (auth_memberof(buf)) {
+	if (auth_memberof(imapd_authstate, buf)) {
 	    imapd_userisadmin = 1;
 	    break;
 	}
@@ -980,7 +981,7 @@ char *authtype;
 	return;
     }
 
-    auth_setid(canon_user, mech->get_cacheid(state));
+    imapd_authstate = auth_newstate(canon_user, mech->get_cacheid(state));
     imapd_userid = xstrdup(canon_user);
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
@@ -989,7 +990,7 @@ char *authtype;
 	for (p = (char *)val; *p && !isspace(*p); p++);
 	strncpy(buf, val, p - val);
 	buf[p-val] = 0;
-	if (auth_memberof(buf)) {
+	if (auth_memberof(imapd_authstate, buf)) {
 	    imapd_userisadmin = 1;
 	    break;
 	}
@@ -1183,7 +1184,7 @@ char *name;
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
     if (!r) {
 	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
-			 ACL_INSERT, size);
+			 imapd_authstate, ACL_INSERT, size);
     }
     if (r) {
 	if (isnowait) {
@@ -1196,8 +1197,8 @@ char *name;
 	       tag,
 	       (r == IMAP_MAILBOX_NONEXISTENT &&
 		mboxlist_createmailboxcheck(mailboxname, 0, imapd_userisadmin,
-					    imapd_userid, (char **)0,
-					    (char **)0) == 0)
+					    imapd_userid, imapd_authstate,
+					    (char **)0, (char **)0) == 0)
 	       ? "[TRYCREATE] " : "", error_message(r));
 	goto freeflags;
     }
@@ -1270,7 +1271,7 @@ char *name;
     }
 
     if (!r) {
-	r = mailbox_open_header(mailboxname, &mailbox);
+	r = mailbox_open_header(mailboxname, imapd_authstate, &mailbox);
     }
 
     if (!r) {
@@ -2019,8 +2020,8 @@ int usinguid;
 	prot_printf(imapd_out, "%s NO %s%s\r\n", tag,
 		    (r == IMAP_MAILBOX_NONEXISTENT &&
 		     mboxlist_createmailboxcheck(name, 0, imapd_userisadmin,
-						 imapd_userid, (char **)0,
-						 (char **)0) == 0)
+						 imapd_userid, imapd_authstate,
+						 (char **)0, (char **)0) == 0)
 		    ? "[TRYCREATE] " : "", error_message(r));
     }
     else {
@@ -2083,15 +2084,15 @@ char *partition;
     }
 
     if (!r) {
-	r = mboxlist_createmailbox(mailboxname, MAILBOX_FORMAT_NORMAL,
-				   partition, imapd_userisadmin, imapd_userid);
+	r = mboxlist_createmailbox(mailboxname, MAILBOX_FORMAT_NORMAL, partition,
+				   imapd_userisadmin, imapd_userid, imapd_authstate);
 
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
 	    (autocreatequota = config_getint("autocreatequota", 0))) {
 
 	    /* Auto create */
 	    r = mboxlist_createmailbox(mailboxname, MAILBOX_FORMAT_NORMAL,
-				       partition, 1, imapd_userid);
+				       partition, 1, imapd_userid, imapd_authstate);
 	    
 	    if (!r && autocreatequota > 0) {
 		(void) mboxlist_setquota(mailboxname, autocreatequota);
@@ -2126,7 +2127,7 @@ char *name;
 
     if (!r) {
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
-				   imapd_userid, 1);
+				   imapd_userid, imapd_authstate, 1);
     }
 
     if (imapd_mailbox) {
@@ -2169,7 +2170,7 @@ char *partition;
 
     if (!r) {
 	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
-				   imapd_userisadmin, imapd_userid);
+				   imapd_userisadmin, imapd_userid, imapd_authstate);
     }
 
     if (imapd_mailbox) {
@@ -2201,11 +2202,11 @@ char *pattern;
     }
 
     if (!strcmp(namespace, "mailboxes")) {
-	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid,
+	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid, imapd_authstate,
 			 mailboxdata);
     }
     else if (!strcmp(namespace, "all.mailboxes")) {
-	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
+	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid, imapd_authstate,
 			 mailboxdata);
     }
     else if (!strcmp(namespace, "bboards")
@@ -2242,7 +2243,7 @@ char *pattern;
     }
 
     if (subscribed) {
-	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid,
+	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid, imapd_authstate,
 			 lsubdata);
 	lsubdata((char *)0, 0, 0);
     }
@@ -2251,7 +2252,7 @@ char *pattern;
 	prot_printf(imapd_out, "* LIST (\\Noselect) \".\" \"\"\r\n");
     }
     else {
-	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
+	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid, imapd_authstate,
 			 listdata);
 	listdata((char *)0, 0, 0);
     }
@@ -2276,7 +2277,7 @@ int add;
     if (!namespace || !strcmp(namespace, "mailbox")) {
 	r = mboxname_tointernal(name, imapd_userid, mailboxname);
 	if (!r) {
-	    r = mboxlist_changesub(mailboxname, imapd_userid, add);
+	    r = mboxlist_changesub(mailboxname, imapd_userid, imapd_authstate, add);
 	}
     }
     else if (!strcmp(namespace, "bboard")) {
@@ -2319,7 +2320,7 @@ int oldform;
     }
 
     if (!r) {
-	access = acl_myrights(acl);
+	access = acl_myrights(imapd_authstate, acl);
 
 	if (!(access & (ACL_READ|ACL_ADMIN)) &&
 	    !imapd_userisadmin &&
@@ -2398,7 +2399,7 @@ int oldform;
     }
 
     if (!r) {
-	rights = acl_myrights(acl);
+	rights = acl_myrights(imapd_authstate, acl);
 
 	/* Add in implicit rights */
 	if (imapd_userisadmin ||
@@ -2441,7 +2442,7 @@ char *rights;
 
     if (!r) {
 	r = mboxlist_setacl(mailboxname, identifier, rights,
-			    imapd_userisadmin, imapd_userid);
+			    imapd_userisadmin, imapd_userid, imapd_authstate);
     }
 
     if (r) {
@@ -2515,7 +2516,7 @@ char *name;
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
 
     if (!r) {
-	r = mailbox_open_header(mailboxname, &mailbox);
+	r = mailbox_open_header(mailboxname, imapd_authstate, &mailbox);
     }
 
     if (!r) {
@@ -2697,7 +2698,7 @@ char *name;
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
 
     if (!r) {
-	r = mailbox_open_header(mailboxname, &mailbox);
+	r = mailbox_open_header(mailboxname, imapd_authstate, &mailbox);
     }
 
     if (!r) {

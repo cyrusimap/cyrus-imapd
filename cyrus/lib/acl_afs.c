@@ -44,10 +44,11 @@
 #include "xmalloc.h"
 
 /*
- * Calculate the set of rights the user has in the ACL 'acl'.
+ * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
  * 'acl' must be writable, but is restored to its original condition.
  */
-int acl_myrights(acl)
+int acl_myrights(auth_state, acl)
+struct auth_state *auth_state;
 char *acl;
 {
     char *thisid, *rights, *nextid;
@@ -73,7 +74,7 @@ char *acl;
 	    acl_ptr = &acl_negative;
 	    thisid++;
 	}
-	if (auth_memberof(thisid)) {
+	if (auth_memberof(auth_state, thisid)) {
 	    *acl_ptr |= acl_strtomask(rights);
 	}
 

@@ -40,6 +40,8 @@
 #include <sys/types.h>
 #include <limits.h>
 
+#include "auth.h"
+
 #if UINT_MAX == 4294967295
 typedef unsigned int bit32;
 #else
@@ -185,9 +187,10 @@ extern void mailbox_unmap_message P((struct mailbox *mailbox,
 				    const char **basep, unsigned long *lenp));
 
 extern void mailbox_reconstructmode P((void));
-extern int mailbox_open_header P((const char *name, struct mailbox *mailbox));
+extern int mailbox_open_header P((const char *name, struct auth_state *auth_state,
+				  struct mailbox *mailbox));
 extern int mailbox_open_header_path P((const char *name, const char *path,
-				       const char *acl,
+				       const char *acl, struct auth_state *auth_state,
 				       struct mailbox *mailbox,
 				       int suppresslog));
 extern int mailbox_open_index P((struct mailbox *mailbox));
@@ -195,7 +198,7 @@ extern void mailbox_close P((struct mailbox *mailbox));
 
 extern int mailbox_read_header P((struct mailbox *mailbox));
 extern int mailbox_read_header_acl P((struct mailbox *mailbox));
-extern int mailbox_read_acl P((struct mailbox *mailbox));
+extern int mailbox_read_acl P((struct mailbox *mailbox, struct auth_state *auth_state));
 extern int mailbox_read_index_header P((struct mailbox *mailbox));
 extern int mailbox_read_index_record P((struct mailbox *mailbox,
 					unsigned msgno,
