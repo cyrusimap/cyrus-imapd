@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.7 2004/01/31 18:56:59 ken3 Exp $
+ * $Id: mupdate.c,v 1.77.2.8 2004/02/05 20:32:01 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -527,6 +527,16 @@ int service_init(int argc, char **argv,
     }
 
     if (!masterp && autoselect) masterp = islocalip(config_mupdate_server);
+
+    if (masterp &&
+	config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
+	/* XXX  We currently prohibit this because mailboxes created
+	 * on the master will cause local mailbox entries to be propagated
+	 * to the slave.  We can probably fix this by prepending
+	 * config_servername onto the entries before updating the slaves.
+	 */
+	fatal("can not run mupdate master on a unified server", EC_USAGE);
+    }
 
     if(pipe(conn_pipe) == -1) {
 	syslog(LOG_ERR, "could not setup connection signaling pipe %m");
