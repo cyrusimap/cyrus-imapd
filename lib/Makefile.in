@@ -46,7 +46,7 @@ LDFLAGS = @LDFLAGS@
 
 SHELL = /bin/sh
 
-OBJS= acl.o assert.o charset.o glob.o is.o util.o prot.o n_binsearch.o \
+OBJS= acl.o assert.o bsearch.o charset.o glob.o is.o retry.o util.o prot.o \
 	imclient.o imparse.o xmalloc.o \
 	nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o gmtoff_@WITH_GMTOFF@.o \
 	map_@WITH_MAP@.o $(ACL) $(AUTH) @LIBOBJS@
