@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.28 2002/02/18 20:04:16 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.29 2002/02/28 19:54:14 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,6 +39,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#ifndef _CYRUS_IMAPD_CONFIG_H_
+#define _CYRUS_IMAPD_CONFIG_H_
 
 @TOP@
 
@@ -132,6 +134,10 @@
 /* do we have rlim_t? */
 #undef HAVE_RLIM_T
 
+/* Database Backends that are configurable */
+#undef CONFIG_DB_MBOX
+#undef CONFIG_DB_SUBS
+
 @BOTTOM@
 
 /* where are our binaries? */
@@ -208,3 +214,5 @@ enum {
     /* should we have long LMTP error messages? */
     LMTP_LONG_ERROR_MSGS = 1
 };
+
+#endif /* _CYRUS_IMAPD_CONFIG_H_ */
