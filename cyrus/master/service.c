@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.37.4.8 2003/02/13 20:33:20 rjs3 Exp $ */
+/* $Id: service.c,v 1.37.4.9 2003/03/04 00:38:12 ken3 Exp $ */
 
 #include <config.h>
 
@@ -466,7 +466,7 @@ int main(int argc, char **argv, char **envp)
 	    service_abort(0);
 	}
 	if (fd < 0) {
-	    /* how did this happen? */
+	    /* how did this happen? - we might have caught a signal. */
 	    syslog(LOG_ERR, "accept() failed but we didn't catch it?");
 	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	    service_abort(EX_SOFTWARE);
