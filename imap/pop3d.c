@@ -517,7 +517,7 @@ cmdloop()
 cmd_pass(pass)
 char *pass;
 {
-    char *reply;
+    char *reply = 0;
     int plaintextloginpause;
 
     if (!popd_userid) {
