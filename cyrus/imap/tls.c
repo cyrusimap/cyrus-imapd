@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.47 2003/10/22 18:50:08 rjs3 Exp $ */
+/* $Id: tls.c,v 1.48 2003/12/15 16:04:33 ken3 Exp $ */
 
 #include <config.h>
 
@@ -510,7 +510,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
 	ret = DB->fetch(sessdb, id, idlen, &data, &len, NULL);
     } while (ret == CYRUSDB_AGAIN);
 
-    if (data) {
+    if (!ret && data) {
 	assert(len >= (int) sizeof(time_t));
 
 	/* grab the expire time */

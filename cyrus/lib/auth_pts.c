@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.3 2003/10/28 21:14:31 rjs3 Exp $
+ * $Id: auth_pts.c,v 1.4 2003/12/15 16:04:34 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -190,7 +190,7 @@ struct auth_state *auth_newstate(const char *identifier)
 /* Returns 0 on success */
 int ptload(const char *identifier, struct auth_state **state) 
 {
-    struct auth_state *fetched;
+    struct auth_state *fetched = NULL;
     size_t id_len;
     const char *data;
     int dsize;
@@ -228,7 +228,7 @@ int ptload(const char *identifier, struct auth_state **state)
     /* fetch the current record for the user */
     r = CONFIG_DB_PTS->fetch(ptdb, identifier, id_len,
                              &data, &dsize, NULL);
-    if (r != 0) {
+    if (r && r != CYRUSDB_NOTFOUND) {
         syslog(LOG_ERR, "auth_newstate: error fetching record: %s",
                cyrusdb_strerror(r));
 

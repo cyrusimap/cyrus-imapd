@@ -12,7 +12,8 @@ struct cyrusdb_backend *DB = &cyrusdb_flat;
 #endif
 
 #define TRY(s) { r = s; \
-                 if (r) { printf("%s failed: %d\n", #s, r); exit(1); } }
+                 if (r && r != CYRUSDB_NOTFOUND) { \
+		     printf("%s failed: %d\n", #s, r); exit(1); } }
 
 void fatal(const char *msg, int code)
 {
