@@ -1,5 +1,5 @@
 /* auth_krb_pts.h -- Kerberos authorization with AFS PTServer groups
-	$Id: auth_krb_pts.h,v 1.14 1998/11/04 00:21:53 tjs Exp $
+	$Id: auth_krb_pts.h,v 1.15 1999/10/29 23:34:58 leg Exp $
 	
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -76,7 +76,7 @@ typedef struct {
 #define SEQ(db,key,data,flags) (db)->seq((db),(key),(data),(flags))
 #define DEL(db,key,flags) (db)->del((db),(key),(flags))
 #define SYNC(db,flags) (db)->sync((db),(flags))
-#define EXPIRE_TIME 86400 /* 24 hours */
+#define EXPIRE_TIME (3 * 60 * 60) /* 3 hours */
 
 
 #endif /* INCLUDED_AUTH_KRB_PTS_H */
