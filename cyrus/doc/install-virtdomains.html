@@ -1,4 +1,4 @@
-<!-- $Id: install-virtdomains.html,v 1.1.2.3 2002/08/26 18:32:45 ken3 Exp $ -->
+<!-- $Id: install-virtdomains.html,v 1.1.2.4 2002/08/27 15:26:00 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring Virtual Domains
@@ -40,7 +40,7 @@ domain installation, the name of the existing domain (domain of the
 server hostname) should be specified using the <tt>defaultdomain</tt>
 option in <tt>imapd.conf</tt>.  This allows users to continue to
 access their mailboxes using unqualified userids.  For example, if the
-<tt>hostname</tt> command on your server returns 'www.xxx.yyy.zzz',
+primary IP address on your server resolves to 'www.xxx.yyy.zzz',
 then set <tt>defaultdomain</tt> to 'xxx.yyy.zzz'.
 
 <p>Even for new installations, it is <i>recommended</i> that the
@@ -127,5 +127,5 @@ To list all mailboxes in domain 'example.com':
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2002/08/26 18:32:45 $
+last modified: $Date: 2002/08/27 15:26:00 $
 </BODY></HTML>
