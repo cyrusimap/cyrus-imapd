@@ -1,7 +1,7 @@
 /* lex.c -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.c,v 1.13 2000/02/03 20:14:23 tmartin Exp $
+ * $Id: lex.c,v 1.14 2000/04/06 15:20:10 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -26,6 +26,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
 
+#include <config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -36,7 +37,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "codes.h"
 #include "mystring.h"
 #include "actions.h"
-#include "config.h"
+#include "imapconf.h"
 #include "xmalloc.h"
 
 int token_lookup (char *str, int len)

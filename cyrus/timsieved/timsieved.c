@@ -25,6 +25,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
 
+#include <config.h>
 
 #include <sasl.h> /* yay! sasl */
 
@@ -48,7 +49,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <string.h>
 
 #include "prot.h"
-#include "config.h"
+#include "imapconf.h"
 #include "xmalloc.h"
 
 #include "codes.h"

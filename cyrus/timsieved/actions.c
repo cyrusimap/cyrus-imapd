@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.13 2000/02/10 05:10:51 tmartin Exp $
+ * $Id: actions.c,v 1.14 2000/04/06 15:20:10 leg Exp $
  * 
  */
 /***********************************************************
@@ -26,7 +26,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
 
-
+#include <config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -42,15 +42,13 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <string.h>
 
 #include "prot.h"
-#include "config.h"
+#include "imapconf.h"
 #include "xmalloc.h"
 #include "sieve_interface.h"
-
 
 #include "codes.h"
 #include "actions.h"
 #include "scripttest.h"
-
 
 /* after a user has authentication, our current directory is their Sieve 
    directory! */
