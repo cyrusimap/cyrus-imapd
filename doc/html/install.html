@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.36 1997/12/17 23:59:25 tjs Exp $ -->
+<!-- $Id: install.html,v 1.37 1998/06/24 15:39:27 dar Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -588,6 +588,24 @@ protocol, add the following line
 
 "<tt>cyrus</tt>" is the Cyrus user and "<tt>/usr/cyrus/bin/</tt>" is the
 path name to the executable.
+
+<p><li>
+ If you wish to use the interm finger information service:
+<ol>
+<li>Add the following line to the "<tt>/etc/services</tt>" file if it
+isn't already there.
+
+<pre>
+   fud       4201/udp
+</pre>
+
+<li>Add the following line to the "<tt>/etc/inetd.conf</tt>" file.
+
+<pre>
+   fud  dgram  udp  wait  cyrus  /usr/cyrus/bin/fud   fud
+</pre>
+</ol>
+
 
  <P>
 
