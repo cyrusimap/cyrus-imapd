@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.17 2001/02/22 19:27:23 ken3 Exp $ */
+/* $Id: service.c,v 1.18 2001/02/23 23:41:37 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -152,7 +152,7 @@ int main(int argc, char **argv, char **envp)
 	    break;
 	}
     }
-    optind = 0;
+    optind = 1;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
