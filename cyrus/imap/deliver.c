@@ -267,13 +267,7 @@ char *f;
 	}
 	return 1;
     }
-    if (!f[0]) return 0;
-    while (*f) {
-	if (*f & 0x80 || *f < 0x1f || *f == 0x7f ||
-	    *f == ' ' || *f == '{' || *f == '(' || *f == ')' ||
-	    *f == '\"' || *f == '%' || *f == '\\') return 0;
-	f++;
-    }
+    if (!is_atom(f)) return 0;
     return 1;
 }
 
