@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.11.2.1 2004/01/27 23:13:37 ken3 Exp $
+ * $Id: chk_cyrus.c,v 1.11.2.2 2004/04/08 21:12:56 ken3 Exp $
  */
 
 #include <config.h>
@@ -92,8 +92,8 @@ static int chkmbox(char *name,
 		   void *rock __attribute__((unused))) 
 {
     int r;
-    char *part, *path;
-
+    char *part, *path, *mpath;
+    char fnamebuf[MAX_MAILBOX_PATH+1];
     unsigned long real_len;
     int fd=-1;
     int i,exists;
@@ -102,7 +102,7 @@ static int chkmbox(char *name,
     index_base = NULL;
 
     /* Do an mboxlist_detail on the mailbox */
-    r = mboxlist_detail(name, NULL, &path, &part, NULL, NULL);
+    r = mboxlist_detail(name, NULL, &path, &mpath, &part, NULL, NULL);
 
     /* xxx reserved mailboxes? */
 
@@ -123,18 +123,24 @@ static int chkmbox(char *name,
 	goto done;
     }
 
-    fd = open("cyrus.index", O_RDONLY, 0666);
+    if (mpath &&
+	(config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_INDEX))
+	strlcpy(fnamebuf, mpath, sizeof(fnamebuf));
+    else
+	strlcpy(fnamebuf, path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
+    fd = open(fnamebuf, O_RDONLY, 0666);
     if(fd == -1) {
 	fprintf(stderr, "can't open cyrus.index\n");
 	/* whole mailbox! */
-	printf("%s\n",path);
+	printf("%s\n", fnamebuf);
 	goto done;
     }
 
     if(fstat(fd, &sbuf) == -1) {
 	fprintf(stderr, "can't stat cyrus.index\n");
 	/* whole mailbox! */
-	printf("%s\n",path);
+	printf("%s\n", fnamebuf);
 	goto done;
     }
 

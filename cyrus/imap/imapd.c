@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.21 2004/04/01 02:40:16 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.22 2004/04/08 21:12:58 ken3 Exp $ */
 
 #include <config.h>
 
@@ -325,18 +325,18 @@ static void imapd_refer(const char *tag,
 /* ext_name is the external name of the mailbox */
 /* you can avoid referring the client by setting tag or ext_name to NULL. */
 int mlookup(const char *tag, const char *ext_name,
-	    const char *name, int *flags, char **pathp, char **partp,
-	    char **aclp, struct txn **tid) 
+	    const char *name, int *flags, char **pathp, char **mpathp,
+	    char **partp, char **aclp, struct txn **tid) 
 {
     int r, mbtype;
     char *remote, *acl;
 
-    r = mboxlist_detail(name, &mbtype, pathp, &remote, &acl, tid);
+    r = mboxlist_detail(name, &mbtype, pathp, mpathp, &remote, &acl, tid);
     if (r == IMAP_MAILBOX_NONEXISTENT || (mbtype & MBTYPE_RESERVE)) {
 	/* It is not currently active, make sure we have the most recent
 	 * copy of the database */
 	kick_mupdate();
-	r = mboxlist_detail(name, &mbtype, pathp, &remote, &acl, tid);
+	r = mboxlist_detail(name, &mbtype, pathp, mpathp, &remote, &acl, tid);
     }
 
     if(partp) *partp = remote;
@@ -2386,7 +2386,8 @@ void cmd_append(char *tag, char *name)
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbtype, NULL, &newserver, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
+		    &newserver, NULL, NULL);
     }
 
     if (!r && (mbtype & MBTYPE_REMOTE)) {
@@ -2669,7 +2670,8 @@ void cmd_select(char *tag, char *cmd, char *name)
     }
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbtype, NULL, &newserver, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
+		    &newserver, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -2746,10 +2748,6 @@ void cmd_select(char *tag, char *cmd, char *name)
 	r = (imapd_userisadmin || (mailbox.myrights & ACL_LOOKUP)) ?
 	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
     }
-    if (!r && chdir(mailbox.path)) {
-	syslog(LOG_ERR, "IOERROR: changing directory to %s: %m", mailbox.path);
-	r = IMAP_IOERROR;
-    }
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -2825,7 +2823,7 @@ void cmd_close(char *tag)
     /* local mailbox */
     if (!(imapd_mailbox->myrights & ACL_DELETE)) r = 0;
     else {
-	r = mailbox_expunge(imapd_mailbox, 1, (int (*)())0, (char *)0, 0);
+	r = mailbox_expunge(imapd_mailbox, (int (*)())0, (char *)0, 0);
     }
 
     index_closemailbox(imapd_mailbox);
@@ -3814,7 +3812,8 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, &server, NULL, NULL);
+	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+		    &server, NULL, NULL);
     }
 
     if (!r && backend_current) {
@@ -3969,11 +3968,10 @@ void cmd_expunge(char *tag, char *sequence)
     /* local mailbox */
     if (!(imapd_mailbox->myrights & ACL_DELETE)) r = IMAP_PERMISSION_DENIED;
     else if (sequence) {
-	r = mailbox_expunge(imapd_mailbox, 1, index_expungeuidlist,
-			    sequence, 0);
+	r = mailbox_expunge(imapd_mailbox, index_expungeuidlist, sequence, 0);
     }
     else {
-	r = mailbox_expunge(imapd_mailbox, 1, (mailbox_decideproc_t *)0,
+	r = mailbox_expunge(imapd_mailbox, (mailbox_decideproc_t *)0,
 			    (void *)0, 0);
     }
 
@@ -4157,7 +4155,8 @@ void cmd_delete(char *tag, char *name, int localonly)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, &server, NULL, NULL);
+	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+		    &server, NULL, NULL);
     }
 
     if (!r && (mbtype & MBTYPE_REMOTE)) {
@@ -4347,7 +4346,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 						   imapd_userid, newmailboxname);
 
     if (!r) {
-	r = mlookup(NULL, NULL, oldmailboxname, &mbtype, NULL, &server, NULL, NULL);
+	r = mlookup(NULL, NULL, oldmailboxname, &mbtype, NULL, NULL,
+		    &server, NULL, NULL);
     }
 
     if (!r && (mbtype & MBTYPE_REMOTE)) {
@@ -4640,7 +4640,8 @@ void cmd_reconstruct(const char *tag, const char *name, int recursive)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbtype, NULL, &server, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
+		    &server, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -4955,7 +4956,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 						       name, imapd_userid,
 						       mailboxname);
 	    if (!r) r = mlookup(NULL, NULL, mailboxname,
-				NULL, NULL, NULL, NULL, NULL);
+				NULL, NULL, NULL, NULL, NULL, NULL);
 
 	    /* Doesn't exist on murder */
 	}
@@ -5041,7 +5042,7 @@ void cmd_getacl(const char *tag, const char *name)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5103,7 +5104,7 @@ char *identifier;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5199,7 +5200,7 @@ void cmd_myrights(const char *tag, const char *name)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5250,7 +5251,8 @@ void cmd_setacl(char *tag, const char *name,
 
     /* is it remote? */
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbtype, NULL, &server, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
+		    &server, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5336,7 +5338,7 @@ static int quota_cb(char *name, int matchlen __attribute__((unused)),
     char *this_server;
     const char *servername = (const char *)rock;
     
-    r = mlookup(NULL, NULL, name, NULL, NULL, &this_server, NULL, NULL);
+    r = mlookup(NULL, NULL, name, NULL, NULL, NULL, &this_server, NULL, NULL);
     if(r) return r;
 
     if(strcmp(servername, this_server)) {
@@ -5366,8 +5368,8 @@ void cmd_getquota(const char *tag, const char *name)
     }
 
     if (!r) {
-    	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, &server_rock_tmp,
-		    NULL, NULL);
+    	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+		    &server_rock_tmp, NULL, NULL);
     }
 
     if (!r && (mbtype & MBTYPE_REMOTE)) {
@@ -5438,7 +5440,8 @@ void cmd_getquotaroot(const char *tag, const char *name)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbtype, NULL, &server, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
+		    &server, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -5585,8 +5588,8 @@ void cmd_setquota(const char *tag, const char *quotaroot)
     }
 
     if (!r) {
-    	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, &server_rock_tmp,
-		    NULL, NULL);
+    	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+		    &server_rock_tmp, NULL, NULL);
     }
 
     if (!r && (mbtype & MBTYPE_REMOTE)) {
@@ -5766,7 +5769,8 @@ void cmd_status(char *tag, char *name)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbtype, NULL, &server, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
+		    &server, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) {
 	/* Eat the argument */
@@ -5974,7 +5978,7 @@ void cmd_namespace(tag)
 	    (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
 						   imapd_userid, inboxname);
 	    sawone[NAMESPACE_INBOX] = 
-		!mboxlist_lookup(inboxname, NULL, NULL, NULL);
+		!mboxlist_lookup(inboxname, NULL, NULL);
 	}
 	sawone[NAMESPACE_USER] = 1;
 	sawone[NAMESPACE_SHARED] = 1;
@@ -6853,7 +6857,7 @@ void cmd_dump(char *tag, char *name, int uid_start)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_NAME+1];
-    char *path, *acl;
+    char *path, *mpath, *acl;
 
     /* administrators only please */
     if (!imapd_userisadmin) {
@@ -6866,13 +6870,14 @@ void cmd_dump(char *tag, char *name, int uid_start)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, &path, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, &path, &mpath,
+		    NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
     if(!r) {
-	r = dump_mailbox(tag, mailboxname, path, acl, uid_start, imapd_in,
-			 imapd_out, imapd_authstate);
+	r = dump_mailbox(tag, mailboxname, path, mpath, acl, uid_start,
+			 imapd_in, imapd_out, imapd_authstate);
     }
 
     if (r) {
@@ -6887,7 +6892,7 @@ void cmd_undump(char *tag, char *name)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_NAME+1];
-    char *path, *acl;
+    char *path, *mpath, *acl;
 
     /* administrators only please */
     if (!imapd_userisadmin) {
@@ -6900,18 +6905,20 @@ void cmd_undump(char *tag, char *name)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, &path, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, &path, &mpath,
+		    NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
     if(!r) {
 	/* save this stuff from additional mlookups */
 	char *safe_path = xstrdup(path);
+	char *safe_mpath = mpath ? xstrdup(mpath) : NULL;
 	char *safe_acl = xstrdup(acl);
-	r = undump_mailbox(mailboxname, safe_path, safe_acl,
-			   imapd_in, imapd_out,
-			   imapd_authstate);
+	r = undump_mailbox(mailboxname, safe_path, safe_mpath, safe_acl,
+			   imapd_in, imapd_out, imapd_authstate);
 	free(safe_path);
+	if (safe_mpath) free(safe_mpath);
 	free(safe_acl);
     }
 
@@ -7145,7 +7152,7 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
 static int do_xfer_single(char *toserver, char *topart,
 			  char *name, char *mailboxname,
 			  int mbflags, 
-			  char *path, char *part, char *acl,
+			  char *path, char *mpath, char *part, char *acl,
 			  int prereserved,
 			  mupdate_handle *h_in,
 			  struct backend *be_in) 
@@ -7255,8 +7262,8 @@ static int do_xfer_single(char *toserver, char *topart,
 
 	prot_printf(be->out, "D01 UNDUMP {%d+}\r\n%s ", strlen(name), name);
 
-	r = dump_mailbox(NULL, mailboxname, path, acl, 0, be->in, be->out,
-			 imapd_authstate);
+	r = dump_mailbox(NULL, mailboxname, path, mpath, acl,
+			 0, be->in, be->out, imapd_authstate);
 
 	if(r)
 	    syslog(LOG_ERR,
@@ -7390,19 +7397,20 @@ static int xfer_user_cb(char *name,
     char externalname[MAX_MAILBOX_NAME+1];
     int mbflags;
     int r = 0;
-    char *inpath, *inpart, *inacl;
-    char *path = NULL, *part = NULL, *acl = NULL;
+    char *inpath, *inmpath, *inpart, *inacl;
+    char *path = NULL, *mpath = NULL, *part = NULL, *acl = NULL;
 
     if (!r) {
 	/* NOTE: NOT mlookup() because we don't want to issue a referral */
 	/* xxx but what happens if they are remote
 	 * mailboxes? */
 	r = mboxlist_detail(name, &mbflags,
-			    &inpath, &inpart, &inacl, NULL);
+			    &inpath, &inmpath, &inpart, &inacl, NULL);
     }
     
     if (!r) {
 	path = xstrdup(inpath);
+	if (inmpath) mpath = xstrdup(inmpath);
 	part = xstrdup(inpart);
 	acl = xstrdup(inacl);
     }
@@ -7416,10 +7424,11 @@ static int xfer_user_cb(char *name,
 
     if(!r) {
 	r = do_xfer_single(toserver, topart, externalname, name, mbflags,
-			   path, part, acl, 0, mupdate_h, be);
+			   path, mpath, part, acl, 0, mupdate_h, be);
     }
 
     if(path) free(path);
+    if(mpath) free(mpath);
     if(part) free(part);
     if(acl) free(acl);
 
@@ -7436,8 +7445,8 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     int moving_user = 0;
     int backout_mupdate = 0;
     mupdate_handle *mupdate_h = NULL;
-    char *inpath, *inpart, *inacl;
-    char *path = NULL, *part = NULL, *acl = NULL;
+    char *inpath, *inmpath, *inpart, *inacl;
+    char *path = NULL, *mpath = NULL, *part = NULL, *acl = NULL;
     char *p, *mbox = mailboxname;
     
     /* administrators only please */
@@ -7480,12 +7489,13 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     
     if (!r) {
 	r = mlookup(tag, name, mailboxname, &mbflags,
-		    &inpath, &inpart, &inacl, NULL);
+		    &inpath, &inmpath, &inpart, &inacl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
     
     if (!r) {
 	path = xstrdup(inpath);
+	if (inmpath) mpath = xstrdup(inmpath);
 	part = xstrdup(inpart);
 	acl = xstrdup(inacl);
     }
@@ -7493,7 +7503,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     /* if we are not moving a user, just move the one mailbox */
     if(!r && !moving_user) {
 	r = do_xfer_single(toserver, topart, name, mailboxname, mbflags,
-			   path, part, acl, 0, NULL, NULL);
+			   path, mpath, part, acl, 0, NULL, NULL);
     } else if (!r) {
 	struct backend *be = NULL;
 	
@@ -7574,7 +7584,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	/* ...and seen file, and subs file, and sieve scripts... */
 	if(!r) {
 	    r = do_xfer_single(toserver, topart, name, mailboxname, mbflags,
-			       path, part, acl, 1, mupdate_h, be);
+			       path, mpath, part, acl, 1, mupdate_h, be);
 	}
 
 	if(be) {
@@ -7607,6 +7617,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
  done:
     if(part) free(part);
     if(path) free(path);
+    if(mpath) free(mpath);
     if(acl) free(acl);
 
     imapd_check(NULL, 0, 0);
@@ -8349,7 +8360,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
 
     /* Look it up */
     nonexistent = mboxlist_detail(mboxname, &mbtype,
-				  NULL, NULL, NULL, NULL);
+				  NULL, NULL, NULL, NULL, NULL);
     if(!nonexistent && (mbtype & MBTYPE_RESERVE))
 	nonexistent = IMAP_MAILBOX_RESERVED;
 
@@ -8471,7 +8482,8 @@ void cmd_mupdatepush(char *tag, char *name)
     }
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, &part, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL,
+		    &part, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 

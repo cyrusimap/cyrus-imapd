@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: mbpath.8,v 1.5 2003/08/09 23:43:14 rjs3 Exp $
+.\" $Id: mbpath.8,v 1.5.4.1 2004/04/08 21:13:12 ken3 Exp $
 .SH NAME
 mbpath \- translate mailbox names to filesystem paths
 .SH SYNOPSIS
@@ -50,6 +50,12 @@ mbpath \- translate mailbox names to filesystem paths
 ]
 [
 .B \-q
+]
+[
+.B \-s
+]
+[
+.B \-m
 ]
 [
 .IR mailbox-names ...
@@ -73,8 +79,11 @@ suppress any error output.
 .PP
 .I \-s
 if any error occurs, stop processing the list of mailboxes and exit.
+.PP
+.I \-m
+output the path to the metadata files (if different from the message files).
 .SH FILES
 .TP
 .B /etc/imapd.conf
 
-.\" $Header: /mnt/data/cyrus/cvsroot/src/cyrus/man/mbpath.8,v 1.5 2003/08/09 23:43:14 rjs3 Exp $
+.\" $Header: /mnt/data/cyrus/cvsroot/src/cyrus/man/mbpath.8,v 1.5.4.1 2004/04/08 21:13:12 ken3 Exp $

@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.12.2.2 2004/01/31 18:57:00 ken3 Exp $
+ * $Id: squatter.c,v 1.12.2.3 2004/04/08 21:13:09 ken3 Exp $
  */
 
 /*
@@ -292,12 +292,12 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
     int r;
     SquatStats stats;
     SquatReceiverData data;
-    char tmp_file_name[1000];
-    char index_file_name[1000];
+    char squat_file_name[MAX_MAILBOX_PATH+1], *path;
+    char new_file_name[MAX_MAILBOX_PATH+1];
     int fd;
     SquatOptions options;
+    struct stat squat_file_info;
     struct stat index_file_info;
-    struct stat tmp_file_info;
     char uid_validity_buf[30];
     char extname[MAX_MAILBOX_NAME+1];
     int use_annot = *((int *) rock);
@@ -368,17 +368,19 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
         return 1;
     }
 
-    snprintf(index_file_name, sizeof(index_file_name),
-             "%s%s", m.path, FNAME_SQUAT_INDEX);
-    snprintf(tmp_file_name, sizeof(tmp_file_name),
-             "%s%s", m.path, FNAME_INDEX);
+    path = (m.mpath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_SQUAT)) ?
+	m.mpath : m.path;
+    snprintf(squat_file_name, sizeof(squat_file_name),
+             "%s%s", path, FNAME_SQUAT_INDEX);
 
     /* process only changed mailboxes if skip option delected. */
     if (skip_unmodified &&
-        !stat(tmp_file_name, &tmp_file_info) &&
-        !stat(index_file_name, &index_file_info)) {
-        if (SKIP_FUZZ + tmp_file_info.st_mtime <
-            index_file_info.st_mtime) {
+        !fstat(m.index_fd, &index_file_info) &&
+        !stat(squat_file_name, &squat_file_info)) {
+        if (SKIP_FUZZ + index_file_info.st_mtime <
+            squat_file_info.st_mtime) {
             syslog(LOG_DEBUG, "skipping mailbox %s", extname);
             if (verbose > 0) {
                 printf("Skipping mailbox %s\n", extname);
@@ -388,15 +390,15 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
         }
     }
 
-    snprintf(tmp_file_name, sizeof(tmp_file_name),
-             "%s%s.tmp", m.path, FNAME_SQUAT_INDEX);
+    strlcpy(new_file_name, squat_file_name, sizeof(new_file_name));
+    strlcat(new_file_name, ".NEW", sizeof(new_file_name));
 
     syslog(LOG_INFO, "indexing mailbox %s... ", extname);
     if (verbose > 0) {
       printf("Indexing mailbox %s... ", extname);
     }
 
-    if ((fd = open(tmp_file_name,
+    if ((fd = open(new_file_name,
 		   O_CREAT | O_TRUNC | O_WRONLY, S_IREAD | S_IWRITE))
         < 0) {
       fatal_syserror("Unable to create temporary index file");
@@ -449,7 +451,7 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
 
     /* OK, we successfully created the index under the temporary file name.
        Let's rename it to make it the real index. */
-    if (rename(tmp_file_name, index_file_name) < 0) {
+    if (rename(new_file_name, squat_file_name) < 0) {
       fatal_syserror("Unable to rename temporary index file");
     }
 

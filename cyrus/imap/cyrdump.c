@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.14.2.1 2004/01/27 23:13:38 ken3 Exp $
+/* $Id: cyrdump.c,v 1.14.2.2 2004/04/08 21:12:57 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -262,7 +262,7 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 	printf("Content-Type: message/rfc822\n");
 	printf("Content-ID: %d\n", uids[i]);
 	printf("\n");
-	r = mailbox_map_message(&m, 0, uids[i], &base, &len);
+	r = mailbox_map_message(&m, uids[i], &base, &len);
 	if (r) {
 	    if (verbose) {
 		printf("error mapping message %d: %s\n", uids[i], 

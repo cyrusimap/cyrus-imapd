@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.20.2.4 2004/04/03 18:44:52 ken3 Exp $
+ * $Id: ipurge.c,v 1.20.2.5 2004/04/08 21:13:03 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -257,11 +257,6 @@ int purge_me(char *name, int matchlen __attribute__((unused)),
   }
   the_box.header_lock_count = 1;
 
-  error = chdir(the_box.path);
-  if (error < 0) {
-    syslog(LOG_ERR, "Couldn't change directory to %s : %m", the_box.path);
-    return error;
-  }
   error = mailbox_open_index(&the_box);
   if (error != 0) {
     mailbox_close(&the_box);
@@ -271,7 +266,7 @@ int purge_me(char *name, int matchlen __attribute__((unused)),
   (void) mailbox_lock_index(&the_box);
   the_box.index_lock_count = 1;
 
-  mailbox_expunge(&the_box, 1, purge_check, &stats, EXPUNGE_FORCE);
+  mailbox_expunge(&the_box, purge_check, &stats, EXPUNGE_FORCE);
   mailbox_close(&the_box);
 
   print_stats(&stats);

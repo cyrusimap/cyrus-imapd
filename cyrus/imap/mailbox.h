@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.77.2.6 2004/04/03 18:44:53 ken3 Exp $
+ * $Id: mailbox.h,v 1.77.2.7 2004/04/08 21:13:05 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -110,6 +110,7 @@ struct mailbox {
     /* Information in mailbox list */
     char *name;
     char *path;
+    char *mpath;
     char *acl;
     long myrights;
 
@@ -241,9 +242,7 @@ extern void mailbox_message_get_fname(struct mailbox *mailbox,
 				      unsigned long uid,
 				      char *out, size_t size);
 
-extern int mailbox_map_message(struct mailbox *mailbox,
-				  int iscurrentdir,
-				  unsigned long uid,
+extern int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
 				  const char **basep, unsigned long *lenp);
 extern void mailbox_unmap_message(struct mailbox *mailbox,
 				  unsigned long uid,
@@ -251,20 +250,20 @@ extern void mailbox_unmap_message(struct mailbox *mailbox,
 
 extern void mailbox_reconstructmode(void);
 
-extern int mailbox_stat(const char *mbpath,
-			struct stat *header,
-			struct stat *index,
+extern int mailbox_stat(const char *mbpath, const char *metapath,
+			struct stat *header, struct stat *index,
 			struct stat *cache);
 
 extern int mailbox_open_header(const char *name, struct auth_state *auth_state,
 			       struct mailbox *mailbox);
 extern int mailbox_open_header_path(const char *name, const char *path,
-				    const char *acl, 
+				    const char *mpath, const char *acl, 
 				    struct auth_state *auth_state,
 				    struct mailbox *mailbox,
 				    int suppresslog);
 extern int mailbox_open_locked(const char *mbname,
 			       const char *mbpath,
+			       const char *metapath,
 			       const char *mbacl,
 			       struct auth_state *auth_state,
 			       struct mailbox *mb,
@@ -298,7 +297,7 @@ extern int mailbox_append_index(struct mailbox *mailbox,
 				struct index_record *record,
 				unsigned start, unsigned num, int sync);
 
-extern int mailbox_expunge(struct mailbox *mailbox, int iscurrentdir,
+extern int mailbox_expunge(struct mailbox *mailbox,
 			   mailbox_decideproc_t *decideproc, void *deciderock,
 			   int flags);
 extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
@@ -307,21 +306,20 @@ extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
 extern void mailbox_make_uniqueid(char *name, unsigned long uidvalidity,
 				  char *uniqueid, size_t outlen);
 
-extern int mailbox_create(const char *name, char *path,
+extern int mailbox_create(const char *name, char *partition,
 			  const char *acl, const char *uniqueid, int format,
 			  struct mailbox *mailboxp);
 extern int mailbox_delete(struct mailbox *mailbox, int delete_quota_root);
 
 extern int mailbox_rename_copy(struct mailbox *oldmailbox, 
-			       const char *newname, char *newpath,
+			       const char *newname, char *newpartition,
 			       bit32 *olduidvalidityp, bit32 *newuidvalidityp,
 			       struct mailbox *mailboxp);
-extern int mailbox_rename_cleanup(struct mailbox *oldmailbox,
-				  int isinbox);
+extern int mailbox_rename_cleanup(struct mailbox *oldmailbox, int isinbox);
 
 extern int mailbox_sync(const char *oldname, const char *oldpath, 
-			const char *oldacl, 
-			const char *newname, char *newpath, 
+			const char *oldmpath, const char *oldacl, 
+			const char *newname, char *newpath, char *newmpath,
 			int docreate,
 			bit32 *olduidvalidityp, bit32 *newuidvalidtyp,
 			struct mailbox *mailboxp);

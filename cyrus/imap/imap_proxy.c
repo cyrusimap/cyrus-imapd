@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.7 2004/02/27 21:17:26 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.8 2004/04/08 21:12:58 ken3 Exp $
  */
 
 #include <config.h>
@@ -86,7 +86,7 @@ struct backend *proxy_findinboxserver(void)
 					       imapd_userid, inbox);
 
     if(!r) {
-	r = mlookup(NULL, NULL, inbox, &mbtype, NULL, &server, NULL, NULL);
+	r = mlookup(NULL, NULL, inbox, &mbtype, NULL, NULL, &server, NULL, NULL);
 	if (!r && (mbtype & MBTYPE_REMOTE)) {
 	    s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
 				 proxy_userid, &backend_cached,
@@ -655,7 +655,7 @@ int pipe_lsub(struct backend *s, const char *tag,
 	    if (!r) {
 		int mbtype;
 		exist_r = mboxlist_detail(mailboxname, &mbtype,
-					  NULL, NULL, NULL, NULL);
+					  NULL, NULL, NULL, NULL, NULL);
 		if(!exist_r && (mbtype & MBTYPE_RESERVE))
 		    exist_r = IMAP_MAILBOX_RESERVED;
 	    } else {

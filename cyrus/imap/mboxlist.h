@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  * 
- * $Id: mboxlist.h,v 1.38.2.1 2004/03/24 19:53:07 ken3 Exp $
+ * $Id: mboxlist.h,v 1.38.2.2 2004/04/08 21:13:06 ken3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -80,13 +80,16 @@ struct mbox_entry {
     char acls[1];
 };
 
+/* Convert a partition into a path */
+int mboxlist_getpath(const char *partition, const char *name, 
+		     char **pathp, char **mpathp);
+
 /* Lookup 'name' in the mailbox list. */
-int mboxlist_lookup(const char *name, char **pathp, char **aclp,
-		    struct txn **tid);
+int mboxlist_lookup(const char *name, char **aclp, struct txn **tid);
 
 /* Lookup 'name' and get more detail */
-int mboxlist_detail(const char *name, int *typep, char **pathp, char **partp,
-		    char **aclp, struct txn **tid);
+int mboxlist_detail(const char *name, int *typep, char **pathp, char **mpathp,
+		    char **partp, char **aclp, struct txn **tid);
 
 /* insert/delete stub entries */
 int mboxlist_insertremote(const char *name, int mbtype, const char *host,

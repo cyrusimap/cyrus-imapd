@@ -1,5 +1,5 @@
 /* mbdump.h -- Mailbox dump routine definitions
- * $Id: mbdump.h,v 1.4 2003/02/13 20:15:27 rjs3 Exp $
+ * $Id: mbdump.h,v 1.4.4.1 2004/04/08 21:13:05 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -56,11 +56,12 @@
  * this is a Cyrus-only extention)
  */
 extern int dump_mailbox(const char *tag, const char *mbname,
-			const char *mbpath, const char *mbacl, int uid_start,
+			const char *mbpath, const char *metapath,
+			const char *mbacl, int uid_start,
 			struct protstream *pin, struct protstream *pout,
 			struct auth_state *auth_state);
 extern int undump_mailbox(const char *mbname, const char *mbpath,
-			  const char *mbacl,
+			  const char *metapath, const char *mbacl,
 			  struct protstream *pin, struct protstream *pout,
 			  struct auth_state *auth_state);
 

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.17.2.2 2004/02/27 21:17:36 ken3 Exp $
+ * $Id: user.c,v 1.17.2.3 2004/04/08 21:13:10 ken3 Exp $
  */
 
 #include <config.h>
@@ -92,7 +92,7 @@ static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
     char *acl;
     char *rights, *nextid;
 
-    r = mboxlist_lookup(name, (char **)0, &acl, NULL);
+    r = mboxlist_lookup(name, &acl, NULL);
 
     while (!r && acl) {
 	rights = strchr(acl, '\t');
@@ -368,7 +368,7 @@ int user_renameacl(char *name, char *olduser, char *newuser)
     char *acl;
     char *rights, *nextid;
 
-    r = mboxlist_lookup(name, (char **)0, &acl, NULL);
+    r = mboxlist_lookup(name, &acl, NULL);
 
     while (!r && acl) {
 	rights = strchr(acl, '\t');

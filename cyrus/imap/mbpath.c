@@ -1,6 +1,6 @@
 /* mbpath.c -- help the sysadmin to find the path matching the mailbox
  *
- * $Id: mbpath.c,v 1.14.2.1 2004/01/27 23:13:47 ken3 Exp $
+ * $Id: mbpath.c,v 1.14.2.2 2004/04/08 21:13:06 ken3 Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -42,7 +42,7 @@
  *
  */
 
-/* static char _rcsid[] = "$Id: mbpath.c,v 1.14.2.1 2004/01/27 23:13:47 ken3 Exp $"; */
+/* static char _rcsid[] = "$Id: mbpath.c,v 1.14.2.2 2004/04/08 21:13:06 ken3 Exp $"; */
 
 #include <config.h>
 
@@ -79,20 +79,22 @@ const int config_need_data = 0;
 
 static int 
 usage(void) {
-  fprintf(stderr,"usage: mbpath [-C <alt_config>] [-q] <mailbox name>...\n");
+  fprintf(stderr,"usage: mbpath [-C <alt_config>] [-q] [-s] [-m] <mailbox name>...\n");
   fprintf(stderr,"\t-q\tquietly drop any error messages\n");
+  fprintf(stderr,"\t-s\tstop on error\n");
+  fprintf(stderr,"\t-m\toutput the path to the metadata files (if different from the message files)\n");
   exit(-1);
 }
 
 int
 main(int argc, char **argv)
 {
-  char *path;
-  int rc, i, quiet = 0, stop_on_error=0;
+  char *path, *mpath;
+  int rc, i, quiet = 0, stop_on_error=0, metadata=0;
   char opt;
   char *alt_config = NULL;
 
-  while ((opt = getopt(argc, argv, "C:qs")) != EOF) {
+  while ((opt = getopt(argc, argv, "C:qsm")) != EOF) {
     switch(opt) {
     case 'C': /* alt config file */
       alt_config = optarg;
@@ -103,6 +105,9 @@ main(int argc, char **argv)
     case 's':
       stop_on_error = 1;
       break;
+    case 'm':
+	metadata = 1;
+	break;
 
     default:
       usage();
@@ -116,8 +121,10 @@ main(int argc, char **argv)
 
   for (i = optind; i < argc; i++) {
     (void)memset(&path, 0, sizeof(path));
-    if ((rc = mboxlist_lookup(argv[i], &path, NULL, NULL)) == 0) {
-      printf("%s\n", path);
+    if ((rc = mboxlist_detail(argv[i], NULL, &path, &mpath,
+			      NULL, NULL, NULL)) == 0) {
+      if (metadata && mpath) printf("%s\n", mpath);
+      else printf("%s\n", path);
     } else {
       if (!quiet && (rc == IMAP_MAILBOX_NONEXISTENT)) {
 	fprintf(stderr, "Invalid mailbox name: %s\n", argv[i]);
@@ -140,5 +147,5 @@ main(int argc, char **argv)
   return 0;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.14.2.1 2004/01/27 23:13:47 ken3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.14.2.2 2004/04/08 21:13:06 ken3 Exp $ */
 

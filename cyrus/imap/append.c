@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102.2.3 2004/04/03 19:53:43 ken3 Exp $
+ * $Id: append.c,v 1.102.2.4 2004/04/08 21:12:56 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -108,7 +108,7 @@ int append_check(const char *name, int format,
     int mbflags;
     
     /* Is mailbox moved? */
-    r = mboxlist_detail(name, &mbflags, NULL, NULL, NULL, NULL);
+    r = mboxlist_detail(name, &mbflags, NULL, NULL, NULL, NULL, NULL);
 
     if (!r) {
 	if(mbflags & MBTYPE_MOVING) return IMAP_MAILBOX_MOVED;
@@ -841,10 +841,15 @@ int append_copy(struct mailbox *mailbox,
 				  sizeof(fname) - strlen(fname));
 
 	if (copymsg[msg].cache_len) {
-	    char fnamebuf[MAILBOX_FNAME_LEN];
+	    char fnamebuf[MAX_MAILBOX_PATH + MAILBOX_FNAME_LEN + 1];
 
-	    mailbox_message_get_fname(mailbox, copymsg[msg].uid, fnamebuf,
-				      sizeof(fnamebuf));
+	    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+	    strlcat(fnamebuf, "/", sizeof(fnamebuf));
+	    
+	    mailbox_message_get_fname(mailbox, copymsg[msg].uid,
+				      fnamebuf + strlen(fnamebuf),
+				      sizeof(fnamebuf) - strlen(fnamebuf));
+
 	    /* Link/copy message file */
 	    r = mailbox_copyfile(fnamebuf, fname, 0);
 	    if (r) goto fail;
@@ -880,7 +885,7 @@ int append_copy(struct mailbox *mailbox,
 		r = IMAP_IOERROR;
 		goto fail;
 	    }
-	    if (mailbox_map_message(mailbox, 0, copymsg[msg].uid,
+	    if (mailbox_map_message(mailbox, copymsg[msg].uid,
 				    &src_base, &src_size) != 0) {
 		fclose(destfile);
 		syslog(LOG_ERR, "IOERROR: opening message file %lu of %s: %m",

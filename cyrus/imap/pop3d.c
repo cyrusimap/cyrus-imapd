@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.12 2004/04/03 18:44:54 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.13 2004/04/08 21:13:08 ken3 Exp $
  */
 #include <config.h>
 
@@ -696,7 +696,7 @@ static void cmdloop(void)
 		    }
 
 		    if (msg <= popd_exists) {
-			(void) mailbox_expunge(popd_mailbox, 1, expungedeleted,
+			(void) mailbox_expunge(popd_mailbox, expungedeleted,
 					       0, 0);
 		    }
 		}
@@ -1341,7 +1341,8 @@ int openinbox(void)
     r = (*popd_namespace.mboxname_tointernal)(&popd_namespace, "INBOX",
 					      userid, inboxname);
 
-    if (!r) r = mboxlist_detail(inboxname, &type, NULL, &server, NULL, NULL);
+    if (!r) r = mboxlist_detail(inboxname, &type, NULL, NULL,
+				&server, NULL, NULL);
     if (r) {
 	sleep(3);
 	syslog(LOG_ERR, "Unable to locate maildrop for %s", popd_userid);
@@ -1410,11 +1411,6 @@ int openinbox(void)
 	    goto fail;
 	}
 
-	if (chdir(mboxstruct.path)) {
-	    syslog(LOG_ERR, "IOERROR: changing directory to %s: %m",
-		   mboxstruct.path);
-	    r = IMAP_IOERROR;
-	}
 	if (!r) {
 	    popd_exists = mboxstruct.exists;
 	    popd_msg = (struct msg *) xrealloc(popd_msg, (popd_exists+1) *
@@ -1461,8 +1457,11 @@ static void blat(int msg,int lines)
     char fnamebuf[MAILBOX_FNAME_LEN];
     int thisline = -2;
 
-    mailbox_message_get_fname(popd_mailbox, popd_msg[msg].uid, fnamebuf,
-			      sizeof(fnamebuf));
+    strlcpy(fnamebuf, popd_mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, "/", sizeof(fnamebuf));
+    mailbox_message_get_fname(popd_mailbox, popd_msg[msg].uid,
+			      fnamebuf + strlen(fnamebuf),
+			      sizeof(fnamebuf) - strlen(fnamebuf));
     msgfile = fopen(fnamebuf, "r");
     if (!msgfile) {
 	prot_printf(popd_out, "-ERR [SYS/PERM] Could not read message file\r\n");

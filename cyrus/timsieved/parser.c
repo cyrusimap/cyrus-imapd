@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.33.2.3 2004/03/24 19:53:21 ken3 Exp $
+ * $Id: parser.c,v 1.33.2.4 2004/04/08 21:13:12 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -665,7 +665,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
       (*sieved_namespace.mboxname_tointernal)(&sieved_namespace, "INBOX",
 					     username, inboxname);
 
-      r = mboxlist_detail(inboxname, &type, &server, NULL, NULL, NULL);
+      r = mboxlist_detail(inboxname, &type, &server, NULL, NULL, NULL, NULL);
       
       if(r) {
 	  /* mboxlist_detail error */

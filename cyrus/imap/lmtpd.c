@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.15 2004/03/24 19:53:06 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.16 2004/04/08 21:13:03 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -339,10 +339,10 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
     }
     else {
 	/* do a local lookup and kick the slave if necessary */
-	r = mboxlist_detail(name, &type, NULL, server, aclp, tid);
+	r = mboxlist_detail(name, &type, NULL, NULL, server, aclp, tid);
 	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
 	    kick_mupdate();
-	    r = mboxlist_detail(name, &type, NULL, server, aclp, tid);
+	    r = mboxlist_detail(name, &type, NULL, NULL, server, aclp, tid);
 	}
     }
 

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.5 2004/04/03 18:44:51 ken3 Exp $
+ * $Id: index.c,v 1.199.2.6 2004/04/08 21:13:02 ken3 Exp $
  */
 #include <config.h>
 
@@ -263,7 +263,16 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 
     /* Check for expunge */
     if (index_len) {
-	if (stat(FNAME_INDEX+1, &sbuf) != 0) {
+	char fnamebuf[MAX_MAILBOX_PATH+1], *path;
+
+	path = (mailbox->mpath &&
+		(config_metapartition_files &
+		 IMAP_ENUM_METAPARTITION_FILES_INDEX)) ?
+	    mailbox->mpath : mailbox->path;
+	strlcpy(fnamebuf, path, sizeof(fnamebuf));
+	strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
+	
+	if (stat(fnamebuf, &sbuf) != 0) {
 	    if (errno == ENOENT) {
 		/* Mailbox has been deleted */
 		for(;imapd_exists > 0; imapd_exists--) {
@@ -1237,7 +1246,7 @@ static int index_appendremote(struct mailbox *mailbox,
     char sepchar = '(';
 
     /* Open the message file */
-    if (mailbox_map_message(mailbox, 1, UID(msgno), &msg_base, &msg_size)) {
+    if (mailbox_map_message(mailbox, UID(msgno), &msg_base, &msg_size)) {
 	return IMAP_NO_MSGGONE;
     }
 
@@ -2326,7 +2335,7 @@ static int index_fetchreply(struct mailbox *mailbox,
 	fetchargs->cache_atleast > CACHE_VERSION(msgno) ||
 	fetchargs->binsections || fetchargs->sizesections ||
 	fetchargs->bodysections) {
-	if (mailbox_map_message(mailbox, 1, UID(msgno), &msg_base, &msg_size)) {
+	if (mailbox_map_message(mailbox, UID(msgno), &msg_base, &msg_size)) {
 	    prot_printf(imapd_out, "* OK ");
 	    prot_printf(imapd_out, error_message(IMAP_NO_MSGGONE), msgno);
 	    prot_printf(imapd_out, "\r\n");
@@ -2887,7 +2896,7 @@ static int index_search_evaluate(struct mailbox *mailbox,
     if (searchargs->body || searchargs->text ||
 	searchargs->cache_atleast > CACHE_VERSION(msgno)) {
 	if (! msgfile->size) { /* Map the message in if we haven't before */
-	    if (mailbox_map_message(mailbox, 1, UID(msgno),
+	    if (mailbox_map_message(mailbox, UID(msgno),
 				    &msgfile->base, &msgfile->size)) {
 		return 0;
 	    }
@@ -3078,7 +3087,7 @@ static void index_getsearchtextmsg(struct mailbox* mailbox,
   char *p, *q;
   int format = mailbox->format;
   
-  if (mailbox_map_message(mailbox, 0, uid, &msgfile.base, &msgfile.size)) {
+  if (mailbox_map_message(mailbox, uid, &msgfile.base, &msgfile.size)) {
     return;
   }
 
@@ -4922,7 +4931,7 @@ extern char *index_getheader(struct mailbox *mailbox, unsigned msgno,
     }
     else {
 	/* uncached header */
-	if (mailbox_map_message(mailbox, 0, UID(msgno), &msg_base, &msg_size))
+	if (mailbox_map_message(mailbox, UID(msgno), &msg_base, &msg_size))
 	    return NULL;
 
 	buf = index_readheader(msg_base, msg_size, mailbox->format, 0,

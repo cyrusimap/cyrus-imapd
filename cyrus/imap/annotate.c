@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.16.2.5 2004/02/27 21:17:24 ken3 Exp $
+ * $Id: annotate.c,v 1.16.2.6 2004/04/08 21:12:56 ken3 Exp $
  */
 
 #include <config.h>
@@ -409,7 +409,7 @@ typedef enum {
 
 struct mailbox_annotation_rock
 {
-    char *server, *partition, *acl, *path;
+    char *server, *partition, *acl, *path, *mpath;
 };
 
 /* To free values in the mailbox_annotation_rock as needed */
@@ -424,14 +424,15 @@ static void get_mb_data(const char *mboxname,
 			struct mailbox_annotation_rock *mbrock) 
 {
     if(!mbrock->server && !mbrock->partition) {
-	int r = mboxlist_detail(mboxname, NULL, &(mbrock->path),
+	int r = mboxlist_detail(mboxname, NULL,
+				&(mbrock->path), &(mbrock->mpath),
 				&(mbrock->server), &(mbrock->acl), NULL);
 	if (r) return;
 
 	mbrock->partition = strchr(mbrock->server, '!');
 	if (mbrock->partition) {
 	    *(mbrock->partition)++ = '\0';
-	    mbrock->path = NULL;
+	    mbrock->path = mbrock->mpath = NULL;
 	} else {
 	    mbrock->partition = mbrock->server;
 	    mbrock->server = NULL;
@@ -778,7 +779,7 @@ static void annotation_get_lastupdate(const char *int_mboxname,
 	return;
 
     if (!mbrock->path) return;
-    if (mailbox_stat(mbrock->path, &header, &index, NULL)) return;
+    if (mailbox_stat(mbrock->path, mbrock->mpath, &header, &index, NULL)) return;
 
     modtime = (header.st_mtime > index.st_mtime) ?
 	header.st_mtime : index.st_mtime;

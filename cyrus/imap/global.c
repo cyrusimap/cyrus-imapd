@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.2.2.6 2004/03/24 19:53:00 ken3 Exp $ */
+/* $Id: global.c,v 1.2.2.7 2004/04/08 21:12:58 ken3 Exp $ */
 
 #include <config.h>
 
@@ -83,6 +83,7 @@ static enum {
 static int cyrus_init_nodb = 0;
 
 int config_implicitrights;        /* "lca" */
+unsigned long config_metapartition_files;    /* 0 */
 struct cyrusdb_backend *config_mboxlist_db;
 struct cyrusdb_backend *config_quota_db;
 struct cyrusdb_backend *config_subscription_db;
@@ -163,6 +164,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
     /* look up and canonify the implicit rights of mailbox owners */
     config_implicitrights =
 	cyrus_acl_strtomask(config_getstring(IMAPOPT_IMPLICIT_OWNER_RIGHTS));
+
+    config_metapartition_files = config_getbitfield(IMAPOPT_METAPARTITION_FILES);
 
     if (!cyrus_init_nodb) {
 	/* lookup the database backends */
@@ -489,7 +492,7 @@ static int acl_ok(const char *user, struct auth_state *authstate)
 					     bufuser, inboxname);
 
     if (r || !authstate ||
-	mboxlist_lookup(inboxname, NULL, &acl, NULL)) {
+	mboxlist_lookup(inboxname, &acl, NULL)) {
 	r = 0;  /* Failed so assume no proxy access */
     }
     else {

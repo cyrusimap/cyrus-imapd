@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.11 2004/03/24 19:53:09 ken3 Exp $
+ * $Id: mupdate.c,v 1.77.2.12 2004/04/08 21:13:07 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1413,7 +1413,7 @@ struct mbent *database_lookup(const char *name, struct mpool *pool)
     
     if(!name) return NULL;
     
-    if(mboxlist_detail(name, &type, NULL, &part, &acl, NULL))
+    if(mboxlist_detail(name, &type, NULL, NULL, &part, &acl, NULL))
 	return NULL;
 
     if(type & MBTYPE_RESERVE) {

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.10 2004/03/24 19:53:07 ken3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.11 2004/04/08 21:13:05 ken3 Exp $
  */
 
 #include <config.h>
@@ -109,10 +109,11 @@ struct change_rock {
 /*
  * Convert a partition into a path
  */
-static int mboxlist_getpath(const char *partition, const char *name, 
-			    char **pathp)
+int mboxlist_getpath(const char *partition, const char *name, 
+		     char **pathp, char **mpathp)
 {
     static char pathresult[MAX_MAILBOX_PATH+1];
+    static char mpathresult[MAX_MAILBOX_PATH+1];
     const char *root;
 
     assert(partition && pathp);
@@ -121,8 +122,16 @@ static int mboxlist_getpath(const char *partition, const char *name,
     if (!root) return IMAP_PARTITION_UNKNOWN;
 
     mailbox_hash_mbox(pathresult, sizeof(pathresult), root, name);
-
     *pathp = pathresult;
+
+    if (mpathp) {
+	root = config_metapartitiondir(partition);
+	if (!root) *mpathp = NULL;
+	else {
+	    mailbox_hash_mbox(mpathresult, sizeof(mpathresult), root, name);
+	    *mpathp = mpathresult;
+	}
+    }
 
     return 0;
 }
@@ -151,8 +160,8 @@ static const int get_deleteright(void)
  * to the mailbox ACL is placed in the char * pointed to by it.
  */
 static int mboxlist_mylookup(const char *name, int *typep,
-			     char **pathp, char **partp,
-			     char **aclp, 
+			     char **pathp, char **mpathp,
+			     char **partp, char **aclp, 
 			     struct txn **tid, int wrlock)
 {
     int acllen;
@@ -198,16 +207,17 @@ static int mboxlist_mylookup(const char *name, int *typep,
 	if (pathp) {
 	    if (mbtype & MBTYPE_REMOTE) {
 		*pathp = partition;
+		if (mpathp) *mpathp = NULL;
 	    } else if (mbtype & MBTYPE_MOVING) {
 		char *part = strchr(partition, '!');
 		
 		if(!part) return IMAP_SYS_ERROR;
 		else part++; /* skip the !, go to the beginning
 				of the partition name */
-		r = mboxlist_getpath(part, name, pathp);
+		r = mboxlist_getpath(part, name, pathp, mpathp);
 		if(r) return r;
 	    } else {
-		r = mboxlist_getpath(partition, name, pathp);
+		r = mboxlist_getpath(partition, name, pathp, mpathp);
 		if(r) return r;
 	    }
 	}
@@ -248,20 +258,18 @@ static int mboxlist_mylookup(const char *name, int *typep,
  * Lookup 'name' in the mailbox list.
  * The capitalization of 'name' is canonicalized to the way it appears
  * in the mailbox list.
- * If 'path' is non-nil, a pointer to the full pathname of the mailbox
- * is placed in the char * pointed to by it.  If 'acl' is non-nil, a pointer
- * to the mailbox ACL is placed in the char * pointed to by it.
+ * If 'acl' is non-nil, a pointer to the mailbox ACL is placed in the char
+ * pointed to by it.
  */
-int mboxlist_lookup(const char *name, char **pathp, char **aclp, 
-		    struct txn **tid)
+int mboxlist_lookup(const char *name, char **aclp, struct txn **tid)
 {
-    return mboxlist_mylookup(name, NULL, pathp, NULL, aclp, tid, 0);
+    return mboxlist_mylookup(name, NULL, NULL, NULL, NULL, aclp, tid, 0);
 }
 
-int mboxlist_detail(const char *name, int *typep, char **pathp, char **partp,
-		    char **aclp, struct txn **tid) 
+int mboxlist_detail(const char *name, int *typep, char **pathp, char **mpathp,
+		    char **partp, char **aclp, struct txn **tid) 
 {
-    return mboxlist_mylookup(name, typep, pathp, partp, aclp, tid, 0);
+    return mboxlist_mylookup(name, typep, pathp, mpathp, partp, aclp, tid, 0);
 }
 
 int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len) 
@@ -273,7 +281,7 @@ int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
     assert(stagedir != NULL);
 
     /* Find mailbox */
-    r = mboxlist_mylookup(name, NULL, NULL, &partition, NULL, NULL, 0);
+    r = mboxlist_mylookup(name, NULL, NULL, NULL, &partition, NULL, NULL, 0);
     switch (r) {
     case 0:
 	break;
@@ -358,7 +366,7 @@ mboxlist_mycreatemailboxcheck(char *name,
     int r;
     char *mbox = name;
     char *p;
-    char *acl, *path;
+    char *acl;
     char *defaultacl, *identifier, *rights;
     char parent[MAX_MAILBOX_NAME+1];
     unsigned long parentlen;
@@ -390,7 +398,7 @@ mboxlist_mycreatemailboxcheck(char *name,
     }
 
     /* Check to see if new mailbox exists */
-    r = mboxlist_mylookup(name, &mbtype, &path, NULL, &acl, tid, RMW);
+    r = mboxlist_mylookup(name, &mbtype, NULL, NULL, NULL, &acl, tid, RMW);
     switch (r) {
     case 0:
 	if(mbtype & MBTYPE_RESERVE)
@@ -420,7 +428,7 @@ mboxlist_mycreatemailboxcheck(char *name,
     while ((parentlen==0) && (p = strrchr(parent, '.')) && !strchr(p, '!')) {
 	*p = '\0';
 
-	r = mboxlist_mylookup(parent, NULL, NULL, &parentpartition, 
+	r = mboxlist_mylookup(parent, NULL, NULL, NULL, &parentpartition, 
 			      &parentacl, tid, 0);
 	switch (r) {
 	case 0:
@@ -582,7 +590,6 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 {
     int r;
     char *acl = NULL;
-    const char *root = NULL;
     char *newpartition = NULL;
     struct txn *tid = NULL;
     mupdate_handle *mupdate_h = NULL;
@@ -615,21 +622,6 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     if(mbtype & (MBTYPE_MOVING | MBTYPE_RESERVE)) {
 	r = IMAP_MAILBOX_NOTSUPPORTED;
 	goto done;
-    }
-
-    if (!(mbtype & MBTYPE_REMOTE)) {
-	/* Get partition's path */
-	root = config_partitiondir(newpartition);
-	if (!root) {
-	    r = IMAP_PARTITION_UNKNOWN;
-	    syslog(LOG_ERR, "Could not find partition-%s in config file during create",
-		   newpartition);
-	    goto done;
-	}
-	if (strlen(root)+strlen(name)+20 > MAX_MAILBOX_PATH) {
-	    r = IMAP_MAILBOX_BADNAME;
-	    goto done;
-	}
     }
 
     /* 3a. Reserve mailbox in local database */
@@ -675,11 +667,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
  done: /* All checks compete.  Time to fish or cut bait. */
     if (!r && !dbonly && !(mbtype & MBTYPE_REMOTE)) {
 	/* Filesystem Operations */
-	char mbbuf[MAX_MAILBOX_PATH+1];
-
-	/* Create new mailbox in the filesystem */
-	mailbox_hash_mbox(mbbuf, sizeof(mbbuf), root, name);
-	r = mailbox_create(name, mbbuf, acl, NULL,
+	r = mailbox_create(name, newpartition, acl, NULL,
 			   ((mbtype & MBTYPE_NETNEWS) ?
 			    MAILBOX_FORMAT_NETNEWS :
 			    MAILBOX_FORMAT_NORMAL), 
@@ -841,7 +829,7 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     }
 
  retry:
-    r = mboxlist_mylookup(name, &mbtype, NULL, &part, NULL, tid, 1);
+    r = mboxlist_mylookup(name, &mbtype, NULL, NULL, &part, NULL, tid, 1);
     switch (r) {
     case 0:
 	break;
@@ -917,7 +905,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     long access;
     struct mailbox mailbox;
     int deletequotaroot = 0;
-    char *path;
+    char *path, *mpath;
     struct txn *tid = NULL;
     int isremote = 0;
     int mbtype;
@@ -942,7 +930,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	if (!isadmin) { r = IMAP_PERMISSION_DENIED; goto done; }
     }
 
-    r = mboxlist_mylookup(name, &mbtype, &path, NULL, &acl, &tid, 1);
+    r = mboxlist_mylookup(name, &mbtype, &path, &mpath, NULL, &acl, &tid, 1);
     switch (r) {
     case 0:
 	break;
@@ -983,7 +971,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 
     /* Lock the mailbox if it isn't a remote mailbox */
     if(!r && !isremote) {
-	r = mailbox_open_locked(name, path, acl, 0, &mailbox, 0);
+	r = mailbox_open_locked(name, path, mpath, acl, 0, &mailbox, 0);
 	if(r && !force) goto done;
     }
     
@@ -1075,7 +1063,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     int isusermbox = 0; /* Are we renaming someone's inbox */
     int partitionmove = 0;
     int mbtype;
-    char *oldpath = NULL;
+    char *oldpath = NULL, *oldmpath = NULL;
     char newpath[MAX_MAILBOX_PATH+1];
     int oldopen = 0, newopen = 0, newreserved = 0;
     struct mailbox oldmailbox;
@@ -1093,7 +1081,8 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 
  retry:
     /* 1. get path & acl from mboxlist */
-    r = mboxlist_mylookup(oldname, &mbtype, &oldpath, NULL, &oldacl, &tid, 1);
+    r = mboxlist_mylookup(oldname, &mbtype, &oldpath, &oldmpath,
+			  NULL, &oldacl, &tid, 1);
     switch (r) {
     case 0:
 	break;
@@ -1207,15 +1196,6 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	newpartition = xstrdup(partition);
     }
 
-    if (!(mbtype & MBTYPE_REMOTE)) {
-	/* Get partition's path */
-	root = config_partitiondir(newpartition);
-	if (!root) {
-	    r = IMAP_PARTITION_UNKNOWN;
-	    goto done;
-	}
-    }
-
     /* 3a. mark as reserved in the local DB */
     if(!r && !partitionmove) {
 	mboxent = mboxlist_makeentry(mbtype | MBTYPE_RESERVE,
@@ -1268,7 +1248,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     /* 5. Lock oldname/oldpath */
 
     if(!r) {
-	r = mailbox_open_locked(oldname, oldpath, oldacl, auth_state,
+	r = mailbox_open_locked(oldname, oldpath, oldmpath, oldacl, auth_state,
 				&oldmailbox, 0);
 	oldopen = 1;
     }
@@ -1276,10 +1256,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     /* 6. Copy mailbox */
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
 	/* Rename the actual mailbox */
-	assert(root != NULL); /* from above */
-	mailbox_hash_mbox(newpath, sizeof(newpath), root, newname);
-	
-	r = mailbox_rename_copy(&oldmailbox, newname, newpath,
+	r = mailbox_rename_copy(&oldmailbox, newname, newpartition,
 				NULL, NULL, &newmailbox);
 	if (r) {
 	    goto done;
@@ -1474,7 +1451,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
     struct mailbox mailbox;
     int mailbox_open = 0;
     char *acl, *newacl = NULL;
-    char *partition, *path;
+    char *partition, *path, *mpath;
     char *mboxent = NULL;
     int mbtype;
     struct txn *tid = NULL;
@@ -1531,7 +1508,8 @@ int mboxlist_setacl(const char *name, const char *identifier,
     /* 1. Start Transaction */
     /* lookup the mailbox to make sure it exists and get its acl */
     do {
-	r = mboxlist_mylookup(name, &mbtype, &path, &partition, &acl, &tid, 1);
+	r = mboxlist_mylookup(name, &mbtype, &path, &mpath,
+			      &partition, &acl, &tid, 1);
     } while(r == IMAP_AGAIN);    
 
     /* Can't do this to an in-transit or reserved mailbox */
@@ -1547,7 +1525,8 @@ int mboxlist_setacl(const char *name, const char *identifier,
 	tid = NULL;
 
 	/* open & lock mailbox header */
-        r = mailbox_open_header_path(name, path, acl, NULL, &mailbox, 0);
+        r = mailbox_open_header_path(name, path, mpath,
+				     acl, NULL, &mailbox, 0);
 	if (!r) {
 	    mailbox_open = 1;
 	    r = mailbox_lock_header(&mailbox);
@@ -1556,7 +1535,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
 	if(!r) {
 	    do {
 		/* lookup the mailbox to make sure it exists and get its acl */
-		r = mboxlist_mylookup(name, &mbtype, &path,
+		r = mboxlist_mylookup(name, &mbtype, &path, NULL,
 				      &partition, &acl, &tid, 1);
 	    } while( r == IMAP_AGAIN );
 	}
@@ -1829,7 +1808,7 @@ static int find_cb(void *rockp,
 
       	/* make sure it's in the mailboxes db */
 	if (rock->checkmboxlist) {
-	    r = mboxlist_lookup(namebuf, NULL, NULL, NULL);
+	    r = mboxlist_lookup(namebuf, NULL, NULL);
 	} else {
 	    r = 0;		/* don't bother checking */
 	}
@@ -2330,7 +2309,7 @@ int mboxlist_setquota(const char *root, int newquota, int force)
 	strlcat(pattern, ".*", sizeof(pattern));
 
 	/* look for a top-level mailbox in the proposed quotaroot */
-	r = mboxlist_detail(quota.root, &t, NULL, NULL, NULL, NULL);
+	r = mboxlist_detail(quota.root, &t, NULL, NULL, NULL, NULL, NULL);
 	if (r) {
 	    if (!force && r == IMAP_MAILBOX_NONEXISTENT) {
 		/* look for a child mailbox in the proposed quotaroot */
@@ -3080,7 +3059,7 @@ int mboxlist_changesub(const char *name, const char *userid,
 
     if (add && !force) {
 	/* Ensure mailbox exists and can be either seen or read by user */
-	if ((r = mboxlist_lookup(name, NULL, &acl, NULL))!=0) {
+	if ((r = mboxlist_lookup(name, &acl, NULL))!=0) {
 	    mboxlist_closesubs(subs);
 	    return r;
 	}

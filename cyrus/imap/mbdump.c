@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.26.2.4 2004/04/02 20:50:50 ken3 Exp $
+ * $Id: mbdump.c,v 1.26.2.5 2004/04/08 21:13:05 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -144,8 +144,21 @@ static int dump_annotations(const char *mailbox __attribute__((unused)),
     return 0;
 }
 
+struct data_file {
+    const char *fname;
+    unsigned long flag;
+};
+
+static struct data_file data_files[] = {
+    { FNAME_HEADER+1, IMAP_ENUM_METAPARTITION_FILES_HEADER },
+    { FNAME_INDEX+1, IMAP_ENUM_METAPARTITION_FILES_INDEX },
+    { FNAME_CACHE+1, IMAP_ENUM_METAPARTITION_FILES_CACHE },
+    /* XXX For two-phase expunge, we also need to copy cyrus.expunge */
+    { NULL, 0 }
+};
+
 int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
-		 const char *mbacl, int uid_start,
+		 const char *metapath, const char *mbacl, int uid_start,
 		 struct protstream *pin, struct protstream *pout,
 		 struct auth_state *auth_state)
 {
@@ -163,12 +176,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     struct stat sbuf;
     char c;
     int i;
-    const char *data_files[] = { "cyrus.header",
-				 "cyrus.cache",
-				 "cyrus.index",
-				 NULL 
-                               };
-    /* XXX For two-phase expunge, we also need to copy cyrus.expunge */
+    struct data_file *df;
 
     /* non-null userid means we are moving the user */
     const char *userid = NULL;
@@ -204,7 +212,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	return IMAP_SYS_ERROR;
     }
 
-    r = mailbox_open_locked(mbname, mbpath, mbacl, auth_state, &mb, 0);
+    r = mailbox_open_locked(mbname, mbpath, metapath, mbacl, auth_state, &mb, 0);
     if(r) {
 	closedir(mbdir);
 	return r;
@@ -313,10 +321,16 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     /* XXX For two-phase expunge, we also need to copy message files
        referenced by cyrus.expunge */
 
-    for(i=0;data_files[i];i++) {
-	/* map file */
-	strlcpy(fname_tail, data_files[i], sizeof(filename) - fname_len);
+    for (df = data_files; df->fname; df++) {
+	const char *path;
 
+	/* map file */
+	path = (metapath && (config_metapartition_files & df->flag)) ?
+	    metapath : mbpath;
+	strlcpy(filename, path, sizeof(filename));
+	strlcat(filename, "/", sizeof(filename));
+	strlcat(filename, df->fname, sizeof(filename));
+		
 	filefd = open(filename, O_RDONLY, 0666);
 	if (filefd == -1) {
 	    syslog(LOG_ERR, "IOERROR: open on %s: %m", filename);
@@ -339,7 +353,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	/* send filename, size, and contents */
 	if(first) {
 	    prot_printf(pout, "{%d}\r\n",
-			strlen(data_files[i]));
+			strlen(df->fname));
 	    
 	    if(!tag) {
 		/* synchronize */
@@ -354,14 +368,14 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	    }
 
 	    prot_printf(pout, "%s {%lu%s}\r\n",
-			data_files[i], len,
+			df->fname, len,
 			(!tag ? "+" : ""));
 	    first = 0;
 	} else {
 	    prot_printf(pout, " {%d%s}\r\n%s {%lu%s}\r\n",
-			strlen(data_files[i]),
+			strlen(df->fname),
 			(!tag ? "+" : ""),
-			data_files[i], len,
+			df->fname, len,
 			(!tag ? "+" : ""));
 	}
 	prot_write(pout, base, len);
@@ -516,7 +530,8 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     return r;
 }
 
-int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
+int undump_mailbox(const char *mbname, const char *mbpath,
+		   const char *metapath, const char *mbacl,
 		   struct protstream *pin, struct protstream *pout,
 		   struct auth_state *auth_state)
 {
@@ -594,7 +609,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	goto done;
     }
     
-    r = mailbox_open_locked(mbname, mbpath, mbacl, auth_state, &mb, 0);
+    r = mailbox_open_locked(mbname, mbpath, metapath, mbacl, auth_state, &mb, 0);
     if(r) goto done;
 
     while(1) {
@@ -749,8 +764,16 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 		}
 	    }
 	} else {
+	    struct data_file *df;
+	    const char *path;
+
+	    /* see if its one of our datafiles */
+	    for (df = data_files; df->fname && strcmp(df->fname, file.s); df++);
+	    path = df->fname && metapath &&
+		(config_metapartition_files & df->flag) ?
+		metapath : mbpath;
 	    if(snprintf(fnamebuf, sizeof(fnamebuf),
-			 "%s/%s", mbpath, file.s) == -1) {
+			 "%s/%s", path, file.s) == -1) {
 		r = IMAP_PROTOCOL_ERROR;
 		goto done;
 	    }

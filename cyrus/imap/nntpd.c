@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.16 2004/04/03 18:44:53 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.17 2004/04/08 21:13:07 ken3 Exp $
  */
 
 /*
@@ -271,10 +271,10 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
 
     if(server) *server = NULL;
 
-    r = mboxlist_detail(name, &type, NULL, server, aclp, tid);
+    r = mboxlist_detail(name, &type, NULL, NULL, server, aclp, tid);
     if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
 	kick_mupdate();
-	r = mboxlist_detail(name, &type, NULL, server, aclp, tid);
+	r = mboxlist_detail(name, &type, NULL, NULL, server, aclp, tid);
     }
 
     if (type & MBTYPE_REMOTE) {
@@ -3259,7 +3259,7 @@ static int cancel_cb(const char *msgid __attribute__((unused)),
 	if (!r) {
 	    mailbox_lock_index(&mbox);
 	    mbox.index_lock_count = 1;
-	    mailbox_expunge(&mbox, 0, expunge_cancelled, &uid, EXPUNGE_FORCE);
+	    mailbox_expunge(&mbox, expunge_cancelled, &uid, EXPUNGE_FORCE);
 	}
 
 	if (doclose) mailbox_close(&mbox);

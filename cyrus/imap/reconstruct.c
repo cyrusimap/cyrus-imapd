@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.3 2004/04/02 20:59:31 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.4 2004/04/08 21:13:08 ken3 Exp $ */
 
 #include <config.h>
 
@@ -131,7 +131,7 @@ int main(int argc, char **argv)
     struct discovered head;
     char *alt_config = NULL;
     char *start_part = NULL;
-    const char *start_part_path = NULL;
+    const char *start_part_path = NULL, *start_part_mpath = NULL, *path;
 
     memset(&head, 0, sizeof(head));
 
@@ -187,6 +187,7 @@ int main(int argc, char **argv)
 	if (!start_part_path) {
 	    fatal(error_message(IMAP_PARTITION_UNKNOWN), EC_USAGE);
 	}
+	start_part_mpath = config_metapartitiondir(start_part);
     }
 
     if (mflag) {
@@ -209,7 +210,8 @@ int main(int argc, char **argv)
     if (start_part) {
 	/* We were handed a mailbox that does not exist currently */
 	if(optind == argc) {
-	    fprintf(stderr, "When using -p, you must specify a mailbox to attempt to reconstruct.");
+	    fprintf(stderr,
+		    "When using -p, you must specify a mailbox to attempt to reconstruct.");
 	    exit(EC_USAGE);
 	}
 
@@ -229,7 +231,7 @@ int main(int argc, char **argv)
 
 	    /* Does it exist */
 	    do {
-		r = mboxlist_lookup(buf, NULL, NULL, NULL);
+		r = mboxlist_lookup(buf, NULL, NULL);
 	    } while (r == IMAP_AGAIN);
 
 	    if(r != IMAP_MAILBOX_NONEXISTENT) {
@@ -240,8 +242,12 @@ int main(int argc, char **argv)
 	    }
 
 	    /* Does the suspected path *look* like a mailbox? */
-	    mailbox_hash_mbox(mbbuf, sizeof(mbbuf), start_part_path, buf);
-	    strlcat(mbbuf, "/cyrus.header", sizeof(mbbuf));
+	    path = (start_part_mpath &&
+		    (config_metapartition_files &
+		     IMAP_ENUM_METAPARTITION_FILES_HEADER)) ?
+		start_part_mpath : start_part_path;
+	    mailbox_hash_mbox(mbbuf, sizeof(mbbuf), path, buf);
+	    strlcat(mbbuf, "FNAME_HEADER", sizeof(mbbuf));
 	    if(stat(mbbuf, &sbuf) < 0) {
 		fprintf(stderr,
 			"%s does not appear to be a mailbox (no %s).\n",
@@ -416,7 +422,7 @@ int reconstruct(char *name, struct discovered *found)
 
     char *p;
 
-    char fnamebuf[MAX_MAILBOX_PATH+1];
+    char fnamebuf[MAX_MAILBOX_PATH+1], newfnamebuf[MAX_MAILBOX_PATH+1];
     FILE *newindex, *msgfile;
     DIR *dirp;
     struct dirent *dirent;
@@ -440,23 +446,28 @@ int reconstruct(char *name, struct discovered *found)
     struct index_record message_index, old_index;
     static struct index_record zero_index;
 
-    char *mypath, *myacl;
+    char *mypath, *mympath, *mypart, *myacl;
     int mytype;
-    char mbpath[MAX_MAILBOX_PATH+1];
+    char mbpath[MAX_MAILBOX_PATH+1], *path;
     
     int expunge_fd = -1;
 
     /* Start by looking up current data in mailbox list */
-    r = mboxlist_detail(name, &mytype, &mypath, NULL, &myacl, NULL);
+    r = mboxlist_detail(name, &mytype, &mypath, &mympath,
+			&mypart, &myacl, NULL);
     if(r) return r;
     
     /* stat for header, if it is not there, we need to create it
      * note that we do not want to wind up with a fully-open mailbox,
      * so we will re-open. */
-    snprintf(mbpath, sizeof(mbpath), "%s%s", mypath, FNAME_HEADER);
+    path = (mympath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_HEADER)) ?
+	mympath : mypath;
+    snprintf(mbpath, sizeof(mbpath), "%s%s", path, FNAME_HEADER);
     if(stat(mbpath, &sbuf) == -1) {
 	/* Header doesn't exist, create it! */
-	r = mailbox_create(name, mypath, myacl, NULL,
+	r = mailbox_create(name, mypart, myacl, NULL,
 			   ((mytype & MBTYPE_NETNEWS) ?
 			    MAILBOX_FORMAT_NETNEWS :
 			    MAILBOX_FORMAT_NORMAL), NULL);
@@ -504,7 +515,8 @@ int reconstruct(char *name, struct discovered *found)
     r = mailbox_read_header_acl(&mailbox);
     if (r) return r;
 
-    r = mboxlist_detail(name, &list_type, NULL, &list_part, &list_acl, NULL);
+    r = mboxlist_detail(name, &list_type, NULL, NULL,
+			&list_part, &list_acl, NULL);
     if (r) return r;
 
     if(strcmp(list_acl, mailbox.acl)) {
@@ -530,7 +542,12 @@ int reconstruct(char *name, struct discovered *found)
     mailbox.pop3_last_login = 0;
 
     /* Create new index/cache files */
-    strlcpy(fnamebuf, FNAME_INDEX+1, sizeof(fnamebuf));
+    path = (mailbox.mpath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_INDEX)) ?
+	mailbox.mpath : mailbox.path;
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
     strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
     newindex = fopen(fnamebuf, "w+");
     if (!newindex) {
@@ -538,7 +555,12 @@ int reconstruct(char *name, struct discovered *found)
 	return IMAP_IOERROR;
     }
 
-    strlcpy(fnamebuf, FNAME_CACHE+1, sizeof(fnamebuf));
+    path = (mailbox.mpath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_CACHE)) ?
+	mailbox.mpath : mailbox.path;
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_CACHE, sizeof(fnamebuf));
     strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
     newcache_fd = open(fnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (newcache_fd == -1) {
@@ -555,9 +577,15 @@ int reconstruct(char *name, struct discovered *found)
     /* Remove any previously expunged messages */
     /* XXX  For two-phase we will need to keep the messages referenced
        in cyrus.expunge and refresh its header and offsets */
-    if (stat(FNAME_EXPUNGE_INDEX+1, &sbuf) != -1 &&
+    path = (mailbox.mpath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_EXPUNGE)) ?
+	mailbox.mpath : mailbox.path;
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_EXPUNGE_INDEX, sizeof(fnamebuf));
+    if (stat(fnamebuf, &sbuf) != -1 &&
 	sbuf.st_size > OFFSET_LEAKED_CACHE &&
-	(expunge_fd = open(FNAME_EXPUNGE_INDEX+1, O_RDONLY, 0666)) != -1) {
+	(expunge_fd = open(fnamebuf, O_RDONLY, 0666)) != -1) {
 	const char *index_base = NULL;
 	unsigned long index_len = 0;	/* mapped size */
 	int format, minor_version;
@@ -585,6 +613,7 @@ int reconstruct(char *name, struct discovered *found)
 	    /* Delete message files */
 	    for (msgno = 1; msgno <= exists; msgno++, p += record_size) {
 		unsigned long uid = ntohl(*((bit32 *)(p + OFFSET_UID)));
+		char msgfname[MAILBOX_FNAME_LEN+1];
 
 		/* Sanity check UID */
 		if (uid == 0) {
@@ -594,15 +623,15 @@ int reconstruct(char *name, struct discovered *found)
 		}
 
 		mailbox_message_get_fname(&mailbox, uid,
-					  fnamebuf, sizeof(fnamebuf));
-		unlink(fnamebuf);
+					  msgfname, sizeof(msgfname));
+		unlink(msgfname);
 	    }
 	}
 
 	map_free(&index_base, &index_len);
 	close(expunge_fd);
     }
-    unlink(FNAME_EXPUNGE_INDEX+1);
+    unlink(fnamebuf);
 
     /* Find all message files in directory */
     uid = (unsigned long *) xmalloc(UIDGROW * sizeof(unsigned long));
@@ -648,13 +677,13 @@ int reconstruct(char *name, struct discovered *found)
     mailbox.cache_fd = newcache_fd;
 
     for (msg = 0; msg < uid_num; msg++) {
-	char fnamebuf[MAILBOX_FNAME_LEN];
+	char msgfname[MAILBOX_FNAME_LEN+1];
 
 	message_index = zero_index;
 	message_index.uid = uid[msg];
 	
-	mailbox_message_get_fname(&mailbox, uid[msg], fnamebuf, sizeof(fnamebuf));
-	msgfile = fopen(fnamebuf, "r");
+	mailbox_message_get_fname(&mailbox, uid[msg], msgfname, sizeof(msgfname));
+	msgfile = fopen(msgfname, "r");
 	if (!msgfile) continue;
 	if (fstat(fileno(msgfile), &sbuf)) {
 	    fclose(msgfile);
@@ -663,7 +692,7 @@ int reconstruct(char *name, struct discovered *found)
 	if (sbuf.st_size == 0) {
 	    /* Zero-length message file--blow it away */
 	    fclose(msgfile);
-	    unlink(fnamebuf);
+	    unlink(msgfname);
 	    continue;
 	}
 
@@ -777,16 +806,28 @@ int reconstruct(char *name, struct discovered *found)
     }
 
     /* Rename new index/cache file in place */
-    strlcpy(fnamebuf, FNAME_INDEX+1, sizeof(fnamebuf));
-    strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
-    if (rename(fnamebuf, FNAME_INDEX+1)) {
+    path = (mailbox.mpath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_INDEX)) ?
+	mailbox.mpath : mailbox.path;
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
+    strlcpy(newfnamebuf, fnamebuf, sizeof(newfnamebuf));
+    strlcat(newfnamebuf, ".NEW", sizeof(fnamebuf));
+    if (rename(newfnamebuf, fnamebuf)) {
 	fclose(newindex);
 	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
     }
-    strlcpy(fnamebuf, FNAME_CACHE+1, sizeof(fnamebuf));
-    strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
-    if (rename(fnamebuf, FNAME_CACHE+1)) {
+    path = (mailbox.mpath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_CACHE)) ?
+	mailbox.mpath : mailbox.path;
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_CACHE, sizeof(fnamebuf));
+    strlcpy(newfnamebuf, fnamebuf, sizeof(newfnamebuf));
+    strlcat(newfnamebuf, ".NEW", sizeof(newfnamebuf));
+    if (rename(newfnamebuf, fnamebuf)) {
 	fclose(newindex);
 	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
@@ -797,6 +838,12 @@ int reconstruct(char *name, struct discovered *found)
     mailbox_close(&mailbox);
 
     if (found) {
+	if (mailbox.mpath &&
+	    (config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_HEADER) &&
+	    chdir(mailbox.mpath) == -1) {
+	    return IMAP_IOERROR;
+	}
+
 	/* we recurse down this directory to see if there's any mailboxes
 	   under this not in the mailboxes database */
 	dirp = opendir(".");
@@ -811,8 +858,8 @@ int reconstruct(char *name, struct discovered *found)
 
 	    /* ok, we found a directory that doesn't have a dot in it;
 	     is there a cyrus.header file? */
-	    snprintf(fnamebuf, sizeof(fnamebuf), "%s/cyrus.header",
-		     dirent->d_name);
+	    snprintf(fnamebuf, sizeof(fnamebuf), "%s%s",
+		     dirent->d_name, FNAME_HEADER);
 	    if (stat(fnamebuf, &sbuf) < 0) continue;
 
 	    /* ok, we have a real mailbox directory */
@@ -821,7 +868,7 @@ int reconstruct(char *name, struct discovered *found)
 
 	    /* does fnamebuf exist as a mailbox in mboxlist? */
 	    do {
-		r = mboxlist_lookup(fnamebuf, NULL, NULL, NULL);
+		r = mboxlist_lookup(fnamebuf, NULL, NULL);
 	    } while (r == IMAP_AGAIN);
 	    if (!r) continue; /* mailbox exists; it'll be reconstructed
 			         with a -r */
@@ -840,6 +887,8 @@ int reconstruct(char *name, struct discovered *found)
 
     return r;
 }
+
+/* XXX  What is the stuff below used for?  Do we need to metadata-ize it? */
 
 /* List of directories to scan for mailboxes */
 struct todo {

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.2.2.6 2004/04/05 17:57:41 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.2.2.7 2004/04/08 21:13:11 ken3 Exp $ */
 
 #include <config.h>
 
@@ -149,6 +149,18 @@ const char *config_partitiondir(const char *partition)
     char buf[80];
 
     if(strlcpy(buf, "partition-", sizeof(buf)) >= sizeof(buf))
+	return 0;
+    if(strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
+	return 0;
+
+    return config_getoverflowstring(buf, NULL);
+}
+
+const char *config_metapartitiondir(const char *partition)
+{
+    char buf[80];
+
+    if(strlcpy(buf, "metapartition-", sizeof(buf)) >= sizeof(buf))
 	return 0;
     if(strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
 	return 0;
