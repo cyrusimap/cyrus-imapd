@@ -249,7 +249,7 @@ static int myfetch(struct db *mydb,
     int r = 0;
     DBT k, d;
     DB *db = (DB *) mydb;
-    DB_TXN *tid;
+    DB_TXN *tid = NULL;
 	
     assert(dbinit && db);
 
@@ -265,6 +265,8 @@ static int myfetch(struct db *mydb,
     r = db->get(db, tid, &k, &d, 0);
     switch (r) {
     case 0:
+	if (data) *data = d.data;
+	if (datalen) *datalen = d.size;
 	break;
     case DB_NOTFOUND:
 	*data = NULL;
