@@ -80,7 +80,7 @@ struct acte_client *login_acte_client[] = {
 
 struct cbdata cb;
 struct acldata acldata;
-int content_mode, acl_mode, blast_mode, aclro_mode, verbose, debug, noncommit;
+int content_mode, acl_mode, aclro_mode, verbose, debug, noncommit;
 char *cfgname, *principal, *server, *port;
 char *dir, *rexp, *bbd, *amsdir;
 char buf[2048], buf2[2048], submap[2048];
@@ -157,12 +157,11 @@ void bbdelete(void* bboard) {
 void usage(void)
 {
     fprintf(stderr,"\
-Usage: syncams [-A | -a] [-b] [-d] [-h] [-m]\n\
+Usage: syncams [-A | -a] [-d] [-h] [-m]\n\
                [-u principal] [-v] -c file server [port]\n\
 (old options, not all supported yet)\n\
 \t-a\tSynchronize ACL's (read-only), create any new bboards\n\
 \t-A\tSynchronize ACL's, create any new bboards\n\
-\t-b\tDelete dead bboards\n\
 \t-m\tSynchronize content (messages)\n\
 \t-c\tSpecify a config file name\n\
 \t-d\tPrint debugging info\n\
@@ -723,7 +722,7 @@ int main(int argc, char **argv)
 
     setbuf(stderr,(char *) NULL);
 
-    content_mode = acl_mode = aclro_mode = blast_mode =
+    content_mode = acl_mode = aclro_mode = 
 	verbose = debug = noncommit = 0;
     cfgname = principal = server = port = (char *) NULL;
     /* Parse command line */
@@ -733,8 +732,6 @@ int main(int argc, char **argv)
 	    aclro_mode = 1;
 	} else if (!strcmp(*argv,"-A")) {
 	    acl_mode = 1;
-	} else if (!strcmp(*argv,"-b")) {
-	    blast_mode = 1;
 	} else if (!strcmp(*argv,"-c")) {
 	    if (argc <= 1) { usage(); }
 	    cfgname = xstrdup(*++argv);
@@ -761,8 +758,8 @@ int main(int argc, char **argv)
 	    usage();
 	}
     }
-    if (!(content_mode || acl_mode || blast_mode || verbose)) {
-	fprintf(stderr,"-a, -A, -v, -b, and/or -m required\n");
+    if (!(content_mode || acl_mode || verbose)) {
+	fprintf(stderr,"-a, -A, -v, and/or -m required\n");
 	usage();
     }
     if (!server) {
@@ -785,11 +782,10 @@ int main(int argc, char **argv)
 	fprintf(logfile,"\
 Server: %s\n\
 Port: %s\n\
-  Mode: %s%s%s%s\n",server,port,
+  Mode: %s%s%s\n",server,port,
 		acl_mode ? "Update ACLs" : "No ACLs",
 		aclro_mode ? " (read-only)" : "",
-		content_mode ? ", Update Content" : ", No Content",
-		blast_mode ? ", blast old bboards" : ", keep old bboards");
+		content_mode ? ", Update Content" : ", No Content");
     }
     /* Connect to Cyrus server once, no matter what */
     cyr_connect();
@@ -806,7 +802,7 @@ Port: %s\n\
     }
 
     /* tjs */
-    if (blast_mode) {
+    if (acl_mode) {
 	bb_hash = ht_create(h_string, 
 			    BBHASH_SIZE /* size; a magic number */,
 			    sizeof(char*), /* size of member (useless,
@@ -840,7 +836,7 @@ Port: %s\n\
 	}
 
 	/* tjs */
-	if (blast_mode) {
+	if (acl_mode) {
 	    /* XXX THIS IS REALLY BRAINDEAD
 	     * this code doesn't actually interpret regular expressons
 	     * it just looks and sees if the first char is ^; if so,
@@ -887,22 +883,16 @@ Port: %s\n\
 		if (acl_mode) {
 		    if (verbose) { fprintf(logfile,"ACLs...\n"); }
 		    if (do_acl(amsdir,bbd)) { err++; }
+		    if (verbose) {
+			fprintf(logfile, "Not blasting...\n");
+		    }
+		    ht_remove(bb_hash, (void*) bbd);
 		}
 		if (content_mode) {
 		    if (verbose) { fprintf(logfile,"Content...\n"); }
 		    if (do_content(amsdir,bbd)) { err++; }
 		}
 
-		/* tjs */
-		/* if we're in blast mode, remove it from hash table
-		   (don't delete)
-		 */
-		if (blast_mode) {
-		    if (verbose) {
-			fprintf(logfile, "Not blasting...\n");
-		    }
-		    ht_remove(bb_hash, (void*) bbd);
-		}
 		cnt++;
 	    }
 	    fgets(buf2,2048,subfile);
@@ -912,7 +902,7 @@ Port: %s\n\
 	buf[255] = 0;
     } /* end main loop! */
 
-    if (debug && blast_mode) {
+    if (debug && acl_mode) {
 	puts("The following bboards remain in hash table:");
 	ht_foreach(bb_hash, (void*) puts);
     }
@@ -920,7 +910,7 @@ Port: %s\n\
     /* tjs */
     /* for any bboard left in the hash table,
        blast it. */
-    if (blast_mode) {
+    if (acl_mode) {
 	ht_foreach(bb_hash, (void*) bbdelete);
     }
 
