@@ -40,7 +40,9 @@ typedef struct bbd_struct {
 } bboard;
 
 
-bboard *getams();
-bboard *getimap();
+int getams();
+int getimap();
 int cmpmsg();
+void DeleteImap();
+int UploadAMS();
 

@@ -43,7 +43,7 @@
 #include "imclient.h"
 #include "amssync.h"
 
-extern int debug,verbose;
+extern int debug,verbose, imap_bboard_error;
 
 
 
@@ -315,6 +315,8 @@ void processfetch(struct imclient *conn, bboard *bbd, struct
             if (*q=='I' && !strncmp(q,"INTERNALDATE ",strlen("INTERNALDATE ")))
                 {
                     p=&q[strlen("INTERNALDATE ")];
+                    if (debug > 2)
+                       printf("Date is %s\n", p);
                     bbd->msgs[bbd->inuse].stamp=parsefetchdate(&p);
                     if (bbd->msgs[bbd->inuse].stamp == -1) {
                         printf ("Date parse of (%ld) %s failed\n",
@@ -381,7 +383,6 @@ void markdone(struct imclient *conn, char *rock, struct
 void errcheck(struct imclient *conn, char *rock, struct
                  imclient_reply *inmsg)
 {
-    char buf[1050];
   
     if (!strncmp(inmsg->keyword, "OK", 2)) {
 	if (debug) {
@@ -390,17 +391,14 @@ void errcheck(struct imclient *conn, char *rock, struct
     }
     else {
 	if (rock) {
-	    sprintf(buf, "%s failed: %s\n", (char *)rock, inmsg->text);
+	    fprintf(stderr, "%s failed: %s\n", (char *)rock, inmsg->text);
 	}
 	else {
-	    sprintf(buf, "A command failed: %s %s\n", inmsg->keyword,
+	    fprintf(stderr, "A command failed: %s %s\n", inmsg->keyword,
 		    inmsg->text);
 	}
 	if (!strstr(inmsg->text, "Message")) {
-	    fatal(buf, EX_PROTOCOL);
-	}
-	else {
-	    fputs(buf,stderr);
+	   imap_bboard_error=1;
 	}
     }
     if (rock) {
@@ -429,7 +427,7 @@ void do_imap_close(struct imclient *imclient)
  * information and builds a sorted message list. the inuse and alloced
  * members do not take the sentinel into account.
  */
-bboard *getimap( struct imclient *imclient, char *bbd,bboard *imapbbd)
+int getimap( struct imclient *imclient, char *bbd,bboard *imapbbd)
 {
     int waitforcomplete,i;
 
@@ -449,7 +447,8 @@ bboard *getimap( struct imclient *imclient, char *bbd,bboard *imapbbd)
 
     if (imapbbd->inuse == -2) {
       fprintf(stderr,"Select of %s did not elicit EXISTS response\n",bbd);
-      fatal(" does bboard exist?\n", EX_PROTOCOL);
+      fprintf(stderr," does bboard exist?\n", EX_PROTOCOL);
+      return 1;      
     }
 
     waitforcomplete=0;
@@ -483,7 +482,7 @@ bboard *getimap( struct imclient *imclient, char *bbd,bboard *imapbbd)
 	}
     }
     imapbbd->msgs[imapbbd->inuse+1].stamp=0x7fffffff;
-    
+    return 0;
 }
 
 /*
@@ -507,16 +506,15 @@ void DeleteIMAP(struct imclient * imclient, char *name, message *msg)
  * Unscribe and append the AMS message to the IMAP mailbox
  */
 #define ALLOCSLOP 4096
-void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
+int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
                *msg)  
 {
     FILE *msgf, *tmpf;
-    char *allmsg, *withcrnl, buf[1025],amsfile[MAXPATHLEN], *descbuf, *tmpfil;
+    char *allmsg, *withcrnl, buf[1025], amsfile[MAXPATHLEN], *descbuf, *tmpfil;
     char *startline, *p, *q, *r; 
     int withcrnllen, withcrnlsize;
-    int inheaders;
     int len, rc, gmtnegative, scribeval, done, unscribe;
-    int gmtoff;
+    int gmtoff, inheaders;
     struct tm *tm;
     struct stat statbuf;
     struct ScribeState *scribestate;
@@ -535,15 +533,16 @@ void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
     
     msgf=fopen(amsfile,"r");
     if (!msgf) {
-	fprintf(stderr, "Couldn't open message\n");
 	perror(amsfile);
-	exit(EX_NOINPUT);
+        fprintf(stderr, "Couldn't open message\n");
+        return 1;
+        
     }
     if (fstat(fileno(msgf), &statbuf) == -1) {
-	fprintf(stderr, "Couldn't stat message\n");
 	perror(amsfile);
 	fclose(msgf);
-	exit(EX_NOINPUT); 
+        fprintf(stderr, "Couldn't stat message\n");
+        return 1;        
     }
     allmsg=xmalloc(statbuf.st_size+1);
     memset(allmsg, 0, statbuf.st_size+1);
@@ -554,11 +553,11 @@ void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
     /* Read header lines , and try to find any Content-Type headers */
     while (!done) {
 	if (fgets(&buf[0], 1024, msgf) == 0) {
-	    fprintf(stderr, "Couldn't read message\n");
+
 	    perror(amsfile);
 	    fclose(msgf);
-	    exit(EX_NOINPUT);
-	}
+	    fatal(EX_OSERR, "Couldn't read message\n");
+        }
 	/* If a BE2 message, pass the version number into UnScribeInit */
 	if (!strncmp(buf, "Content-Type: X-BE2", 19)) {
 	    r=&buf[strlen(buf)-2];
@@ -589,18 +588,16 @@ void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
 	tmpfil=tmpnam(NULL);
 	close(creat(tmpfil,0700));
 	if ((tmpf=fopen(tmpfil,"r+")) == NULL) {
-	    fprintf(stderr, "Couldn't create temp file\n");
 	    perror(tmpfil);
-	    exit(EX_OSERR);
+	    fatal(EX_OSERR,"Couldn't create temp file\n");
 	}
 	rc=fwrite(allmsg, 1, len, tmpf);
 	if (rc == -1) {
-	    fprintf(stderr, "Couldn't write headers to temp file\n");
 	    perror(tmpfil);
 	    fclose(tmpf);
 	    unlink(tmpfil);
 	    fclose(msgf);
-	    exit(EX_OSERR);
+	    fatal(EX_OSERR, "Couldn't write headers to temp file\n");
 	}
 	if (rc < len) {
 	    fprintf(stderr, "Short write of headers to temp file %s\n",
@@ -609,12 +606,11 @@ void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
 	/* Read the formatted body into the buffer. It will fit. */
 	rc=fread(allmsg,1, statbuf.st_size - len+1, msgf);
 	if (rc == -1) {
-	    fprintf(stderr, "Couldn't read message\n");
 	    perror(amsfile);
 	    fclose(msgf);
 	    fclose(tmpf);
 	    unlink(tmpfil);
-	    exit(EX_NOINPUT);
+	    fatal(EX_NOINPUT, "Couldn't read message\n");
 	}      
 	if (rc < statbuf.st_size - len) {
 	    fprintf(stderr, "Short read (%d/%ld) of message %s\n",rc ,
@@ -624,52 +620,48 @@ void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
 	/* Call UnScribe and UnScribeFlush */
 	rc=UnScribe(scribeval, &scribestate, allmsg, rc, tmpf);
 	if (rc == -1) {
-	    fprintf(stderr, "Unable to write UnScribed message\n");
 	    perror(tmpfil);
 	    fclose(tmpf);
 	    unlink(tmpfil);
-	    exit(EX_OSERR);
+	    fatal(EX_OSERR, "Unable to write UnScribed message\n");
 	}      
 	if (rc < 0) {
-	    fprintf(stderr, "UnScribe failed!\n");
 	    fclose(tmpf);
 	    unlink(tmpfil);
-	    exit(EX_UNAVAILABLE);
+	    fprintf(stderr,"UnScribe failed!\n");
+            return 1;            
 	}
 	rc=UnScribeFlush(scribeval, &scribestate, tmpf);
 	if (rc == -1) {
-	    fprintf(stderr, "Unable to flush UnScribed message\n");
 	    perror(tmpfil);
 	    fclose(tmpf);
 	    unlink(tmpfil);
-	    exit(EX_OSERR);
+	    fatal(EX_OSERR, "Unable to flush UnScribed message\n");
 	}      
 	if (rc < 0) {
-	    fprintf(stderr, "UnScribeFlush failed!\n");
 	    fclose(tmpf);
 	    unlink(tmpfil);
-	    exit(EX_UNAVAILABLE);
+            fprintf(stderr, "UnScribeFlush failed!\n");
+            return 1;           
 	}
 	/* Reallocate message buffer and read whole unformatted message in */
 	rewind(tmpf);
 	free(allmsg);
 	if (fstat(fileno(tmpf), &statbuf) == -1) {
-	    fprintf(stderr, "Couldn't stat temp file\n");
 	    perror(tmpfil);
 	    fclose(tmpf);
 	    unlink(tmpfil);
-	    exit(EX_OSERR);
+	    fatal(EX_OSERR, "Couldn't stat temp file\n");
 	}
 	allmsg=xmalloc(statbuf.st_size+1);
 	memset(allmsg, 0, statbuf.st_size+1);
     
 	rc=fread(allmsg,1, statbuf.st_size, tmpf);
 	if (rc == -1) {
-	    fprintf(stderr, "Couldn't read temp file\n");
 	    perror(tmpfil);
 	    fclose(tmpf);
 	    unlink(tmpfil);
-	    exit(EX_OSERR);
+	    fatal(EX_OSERR, "Couldn't read temp file\n");
 	}      
 	if (rc < statbuf.st_size) {
 	    fprintf(stderr, "Short read (%d/%d) of temp file\n",rc ,
@@ -683,11 +675,10 @@ void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
 	rewind(msgf);
 	rc=fread(allmsg,1, statbuf.st_size, msgf);
 	if (rc == -1) {
-	    fprintf(stderr, "Couldn't read message file\n");
 	    perror(tmpfil);
 	    fclose(tmpf);
 	    unlink(tmpfil);
-	    exit(EX_OSERR);
+	    fatal(EX_OSERR, "Couldn't read message file\n");
 	}      
 	if (rc < statbuf.st_size) {
 	    fprintf(stderr, "Short read (%d/%d) of message file\n",rc ,
@@ -753,7 +744,7 @@ void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
 	free(withcrnl);
 	free(allmsg);
 	free(amsfile);
-	return;
+	return 0;
     }
     if (gmtoff < 0) {
 	gmtoff = -gmtoff;
@@ -764,6 +755,8 @@ void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
 	    tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
 	    tm->tm_hour, tm->tm_min, tm->tm_sec,
 	    gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
+    if (debug >=2)
+       printf("Setting time to %s\n", buf);
     
     /* informative message for errcheck */
     descbuf=xmalloc(1024);
@@ -776,4 +769,5 @@ void UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
     free(withcrnl);
     
     free(allmsg);
+    return 0;
 }
