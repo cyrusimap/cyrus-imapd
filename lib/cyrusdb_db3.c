@@ -99,7 +99,11 @@ static int init(const char *dbdir, int myflags)
     /* what directory are we in? */
     flags |= DB_CREATE | DB_INIT_LOCK | DB_INIT_MPOOL | 
 	     DB_INIT_LOG | DB_INIT_TXN;
+#if DB_VERSION_MINOR > 0
+    r = dbenv->open(dbenv, dbdir, flags, 0644); 
+#else
     r = dbenv->open(dbenv, dbdir, NULL, flags, 0644); 
+#endif
     if (r) {
 	syslog(LOG_ERR, "DBERROR: dbenv->open '%s' failed: %s", dbdir,
 	       db_strerror(r));
@@ -135,7 +139,11 @@ static int sync(void)
     assert(dbinit);
 
     do {
+#if DB_VERSION_MINOR > 0
+	r = txn_checkpoint(dbenv, 0, 0, 0);
+#else
 	r = txn_checkpoint(dbenv, 0, 0);
+#endif
     } while (r == DB_INCOMPLETE);
     if (r) {
 	syslog(LOG_ERR, "DBERROR: couldn't checkpoint: %s",
