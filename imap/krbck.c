@@ -122,7 +122,7 @@ char **argv;
     int err;
 
     KTEXT_ST authent;
-    AUTH_DAT *ad;
+    AUTH_DAT ad;
 
     /* getservbyname("kerberos", "udp") returns port 750
      * if fails, tell them to add "kerberos 750/udp" to /etc/services
@@ -363,9 +363,9 @@ char **argv;
        char *fn;
      */
 
-    if (evalcheck("krb_rd_req(&authent, \"imap\", phost, 0L, ad, srvtab)",
+    if (evalcheck("krb_rd_req(&authent, \"imap\", phost, 0L, &ad, srvtab)",
 		  !(err=krb_rd_req(&authent, "imap", phost, 
-				 0L /* XXX why? */, ad, srvtab)),
+				 0L /* XXX why? */, &ad, srvtab)),
 		  "returned nonzero")) {
 	printf("\terror is: %s\n", error_message(err));
 	exit(EXIT_CHOKE);
