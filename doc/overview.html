@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <title>Cyrus IMAP Server:  Overview and Concepts</title>
-<!-- $Id: overview.html,v 1.8 2001/09/05 02:56:36 wcw Exp $ -->
+<!-- $Id: overview.html,v 1.9 2002/04/08 23:38:53 ken3 Exp $ -->
 </HEAD><BODY>
 <H1>              Cyrus IMAP Server:  Overview and Concepts</H1>
 
@@ -9,7 +9,7 @@
 <p>This document gives an overview of the Cyrus IMAP server.  The
 Cyrus IMAP (Internet Message Access Protocol) server provides 
 access to personal mail and system-wide bulletin boards through 
-the IMAP protocol.   The Cyrus IMAP server is a scaleable 
+the IMAP protocol.   The Cyrus IMAP server is a scalable 
 enterprise mail system designed for use from small to 
 large enterprise environments using 
 standards-based technologies.   
@@ -64,10 +64,6 @@ Mailboxes</A>
 <li><a href="#quotapartitions">Quotas and Partitions</a>
 </UL>
 <li><a href="#notification">New Mail Notification</a>
-<UL>
-<li><A href="#notificationzephyr">Zephyr</A>
-<li><A href="#notificationunix">Unix Sockets Daemon</A>
-</UL>
 <li><a href="#partitions">Partitions</a>
 <UL>
 <li><a href="#partitionscreate">Specifying Partitions with "<TT>create</TT>"</a>
@@ -524,32 +520,30 @@ quota root can apply to mailboxes in different partitions.
 
 <h2><a name="notification">New Mail Notification</a></h2>
 
-<p>The Cyrus IMAP server comes with two optional notification
-mechanisms, for use with either the Zephyr notification service, or a
-custom Unix sockets notification daemon.
+<p>The Cyrus IMAP server comes with a notification daemon which
+supports multiple mechanisms for notifying users of new mail.
+Notifications can be configured to be sent upon normal delivery
+(<tt>"MAIL"</tt> class) and/or sent as requested by a <a
+href=specs.html#sieve>Sieve</a> script (<tt>"SIEVE"</tt> class).
 
-<h3><a name="notificationzephyr">Zephyr</a></h3>
+<p>By default, both types of notifications are disabled.
+Notifications are enabled by using one or both of the following
+configuration options:
 
- <P>If the server software is compiled with the Zephyr notification
-mechanism, then the server sends a Zephyrgram to a user whenever mail
-is delivered to one of that user's mailboxes.  The Zephyrgram is sent
-with a class of "<TT>MAIL</TT>" and an instance of the mailbox name.
+<ul>
+<li>
+the "<TT>mailnotifier</TT>" option selects the <a
+href=man/notifyd.8.html>notifyd</a> method to use for
+"<tt>MAIL</tt>" class notifications
+</li>
 
-<h3><a name="notificationunix">Unix Sockets Daemon</a></h3>
-
- <P>If the server software is compiled with the custom Unix sockets
-notification daemon mechanism, then the server creates a Unix socket
-connection to <TT>/var/imap/socket/notify</TT> and passes the following
-information (separated by newlines):
-<ol><li>Class</li>
-<li>Instance</li>
-<li>User: The username that the email is being delivered to</li>
-<li>Mailbox: The folder that the email is being delivered to</li>
-<li>Message: The From, To, and Subject headers of the email.</li></ol>
-
-The <TT>contrib/notify_unix</TT> directory has two examples of Perl
-daemons that implement simple notification.  See the <TT>README</TT>
-file located the the same directory for details.
+<li>
+the "<TT>sievenotifier</TT>" option selects the <a
+href=man/notifyd.8.html>notifyd</a> method to use for
+"<tt>SIEVE</tt>" class notifications (when no method is specified by
+the Sieve action)
+</li>
+</ul>
 
 <h2><a name="partitions">Partitions</a></h2>
 
@@ -826,7 +820,7 @@ character.
 <p>The "<TT>proc</TT>" subdirectory is normally be cleaned out on
 server reboot.
 
-<h2>Message Delivery</h2>
+<h2>Message Delivery</h2><a name="messagedelivery"></a>
 
 This section refers to version 2.0 of the Cyrus IMAP server.
 
@@ -865,6 +859,13 @@ A message is considered a duplicate if two copies of a message with
 the same message-id and the same envelope receipient are received.
 Cyrus uses the duplicate delivery database to hold this information,
 and it looks approximately 3 days back in the default install. 
+
+<p>Duplicate delivery suppression can be turned off by using the
+"duplicatesuppression" flag in the configuration file.</p>
+
+<p><b>NOTE:</b> Duplicate delivery suppression is required for Sieve.
+Disabling duplicate delivery suppression will also disable Sieve, and
+as such should only be disabled for performance reasons.
 
 <h3>Sieve, a Mail Filtering Language</h3><a name="sieve"></a>
 
