@@ -1,21 +1,28 @@
-This directory contains programs for shadowing a set of AMS (Andrew
-Message System) bboards into a Cyrus IMAP server.
 
-Usage: amssynctree [-A | -a] [-c file | -s ] [-d] [-h] [-m] [-u principal] [-v] [server [port]]
+amssync.c
+Kevin Martin
+version 4/22/96
+
+*amssync* mirrors a set of AMS bboards onto a Cyrus IMAP server.  It is run
+regularly by *doamssync*, which starts at boot time.  Authentication is
+normally "postman".
+
+Usage: amssync [-A | -a] [-d] [-h] [-m]
+               [-u principal] [-v] -c file server [port]
+(old options, not all supported yet)
        -a          Synchronize ACL's (read-only) (also creates any new bboards)
        -A          Synchronize ACL's (also creates any new bboards)
-       -c          Specify a config file name, otherwise use builtin default
+       -c          Specify a config file name
        -d          Print debugging info
        -h          Print this message
        -m          Synchronize content (messages)
-       -s          Read config file from stdin
        -u          Give principal full perms on all acls (for testing only)
        -v          List ams groups as they are processed
+(new options)
+	-n	Only show changes, don't commit anything
 The format of the config file is basedir:regexp
 basedir is the root of the AMS bboard tree (i.e. /afs/andrew.cmu.edu/usr0/bb)
 regexp is used to determine what groups in that tree are synchronized
-The current default config is:
-/afs/andrew/usr0/bb:^assocs
 
 this script should be run with postman authentication (with postman as IMAP
 server admin), as any server admin who can read the AMS groups, or, if the top 
