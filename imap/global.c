@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.4 2003/12/15 22:42:37 rjs3 Exp $ */
+/* $Id: global.c,v 1.5 2003/12/29 20:22:54 ken3 Exp $ */
 
 #include <config.h>
 
@@ -361,7 +361,7 @@ char *canonify_userid(char *user, char *loginid, int *domain_from_ip)
 		user = buf;
 	    }
 	}
-	else {
+	else if (config_virtdomains != IMAP_ENUM_VIRTDOMAINS_USERID) {
 	    socklen_t salen;
 	    int error;
 	    struct sockaddr_storage localaddr;
