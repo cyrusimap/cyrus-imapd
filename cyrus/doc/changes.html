@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.77 2004/02/25 03:43:18 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.78 2004/02/25 17:24:20 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -17,8 +17,9 @@ destination mailbox (locks are no longer held during a network
 read).</li>
 <li>Fixed off-by-one error in <tt>fetchnews</tt> (articles are no longer
 skipped).</li>
-<li><tt>nntpd</tt> now adds the post address to the Reply-To: header
-instead of the To: header.</li>
+<li><tt>nntpd</tt> now uses the Followup-To: header (if exists) instead of
+the Newsgroups: header when constructing post address(es) and adds them
+to the Reply-To: header instead of the To: header.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.2</h1>
@@ -1919,7 +1920,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2004/02/25 03:43:18 $ <br />
+last modified: $Date: 2004/02/25 17:24:20 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
