@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.10.6.1 2002/07/25 17:21:51 ken3 Exp $
+# $Id: Makefile.in,v 1.10.6.2 2002/11/22 22:02:27 rjs3 Exp $
 #
 # @configure_input@
 # 
@@ -56,6 +56,8 @@ SASL_LIB=@LIB_DYN_SASL@
 SASL_INC=@DYNSASLFLAGS@
 OPENSSL_LIB=@OPENSSL_LIB@
 OPENSSL_INC=@OPENSSL_INC@
+BDB_LIB=@BDB_LIB@
+BDB_INC=@BDB_INC@
 
 PERL=@PERL@
 
@@ -78,6 +80,7 @@ all:: $(PLMAKE)
 
 imap/Makefile: imap/Makefile.PL
 	(cd imap; \
+	 BDB_LIB="$(BDB_LIB)" BDB_INC="$(BDB_INC)" \
 	 OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
 	 SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
 	   $(PERL) Makefile.PL PREFIX=$(prefix))

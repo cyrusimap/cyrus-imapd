@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.PL,v 1.14.4.1 2002/07/25 17:21:52 ken3 Exp $
+# $Id: Makefile.PL,v 1.14.4.2 2002/11/22 22:02:28 rjs3 Exp $
 
 use ExtUtils::MakeMaker;
 use Config;
@@ -47,6 +47,9 @@ my $SASL_LIB = $ENV{SASL_LIB} || "-lsasl2";
 
 my $OPENSSL_INC = $ENV{OPENSSL_INC};
 my $OPENSSL_LIB = $ENV{OPENSSL_LIB};
+
+my $BDB_INC = $ENV{BDB_INC};
+my $BDB_LIB = $ENV{BDB_LIB};
 
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
@@ -60,7 +63,7 @@ WriteMakefile(
     'clean'	=> {'FILES' => 'libcyrperl.a cyradm'},
     'OBJECT'    => 'IMAP.o',
     'MYEXTLIB'  => '../../lib/libcyrus.a',
-    'LIBS'	=> ["$SASL_LIB $OPENSSL_LIB -lssl -lcrypto"],
+    'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB -lssl -lcrypto"],
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../../lib $SASL_INC $OPENSSL_INC", 
     'EXE_FILES' => [cyradm],

@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.19 2002/11/17 03:57:13 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.20 2002/11/22 22:02:25 rjs3 Exp $
 dnl
 
 
@@ -121,17 +121,21 @@ AC_FUNC_VPRINTF
 
 AC_ARG_WITH(dbdir,[  --with-dbdir=DIR        Berkeley DB in <DIR>],
   LDFLAGS="-L$withval/lib $LDFLAGS"
+  BDB_LIB="-L$withval/lib"
   CMU_ADD_LIBPATH($withval/lib)
   if test -d $withval/include/db3; then
     CPPFLAGS="-I$withval/include/db3 $CPPFLAGS"
+    BDB_INC="-I$withval/include/db3"
   else
     CPPFLAGS="-I$withval/include $CPPFLAGS"
+    BDB_INC="-I$withval/include/db"
   fi,
   # otherwise, check for ../include/db3
   for db3loc in $prefix /usr/local /usr
     do
       if test -d $db3loc/include/db3; then
 	CPPFLAGS="-I$db3loc/include/db3 $CPPFLAGS"
+	BDB_INC="-I$db3loc/include/db3"
 	break
       fi
     done)
@@ -141,6 +145,7 @@ for dbname in db-4.1 db4.1 db-4.0 db4.0 db-4 db4 db-3.3 db3.3 db-3.2 db3.2 db-3.
   do
     AC_CHECK_LIB($dbname, db_create, [AC_DEFINE(HAVE_LIBDB)
 				      LIBS=" -l$dbname ${LIBS}"
+				      BDB_LIB="${BDB_LIB} -l$dbname"
 				      dbfound="yes"
 				      break], dbfound="no")
   done
@@ -148,6 +153,9 @@ if test "$dbfound" = "no"; then
   AC_ERROR([this version requires Berkeley DB 3.x or later.
 (Get it from http://www.sleepycat.com/.)])
 fi
+
+AC_SUBST(BDB_LIB)
+AC_SUBST(BDB_INC)
 
 dnl function for doing each of the database backends
 dnl parameters: backend name, variable to set, withval
