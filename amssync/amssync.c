@@ -600,31 +600,11 @@ do_content(char *amsname, char *imapname)
 
 int main(int argc, char **argv)
 {
-    char errbuf[BUFSIZ], mydir[256], *p1;
+    char *p1;
     int err, cnt;
 
     setbuf(stderr,(char *) NULL);
-    /* figure out our working directory */
-    if (p1 = getenv("BSYNCDIR")) {
-	strcpy(mydir,p1);
-    } else {
-	if (p1 = strrchr(argv[0],'/')) {
-	    strncpy(mydir,argv[0],p1-argv[0]+1);
-	    mydir[p1-argv[0]+1] = 0;
-	} else {
-	    getcwd(mydir,255);
-	}
-	if (mydir[0] != '/') {
-	    getcwd(errbuf,255);
-	    strcat(errbuf,"/");
-	    strcat(errbuf,mydir);
-	    strcpy(mydir,errbuf);
-	}
-    }
-    realpath(mydir,errbuf);
-    strcpy(mydir,errbuf);
-    strcat(mydir,"/");
-    
+
     content_mode = acl_mode = aclro_mode = verbose = debug = noncommit = 0;
     cfgname = principal = server = port = (char *) NULL;
     /* Parse command line */
