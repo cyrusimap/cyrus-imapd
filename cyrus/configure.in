@@ -363,7 +363,7 @@ AC_ARG_ENABLE(amssync,
 	if test "$enableval" = yes; then
 		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} amssync"
 		EXTRA_OUTPUT="${EXTRA_OUTPUT} amssync/Makefile amssync/amssynctree"
-		AC_CHECK_LIB(ossup, main)
+		AC_CHECK_LIB(ossup, main, LIBS="${LIBS} -lossup")
 	fi)			
 dnl Have to check getdtabalesize after adding ossup, as some ossup's define it
 AC_REPLACE_FUNCS(getdtablesize)
