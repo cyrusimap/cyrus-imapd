@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.45 2002/02/06 16:36:55 leg Exp $
+ * $Id: mupdate.c,v 1.46 2002/02/07 21:43:45 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,6 +52,7 @@
 #include <ctype.h>
 #include <signal.h>
 #include <time.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <syslog.h>
 #include <errno.h>
@@ -75,6 +76,7 @@
 #include "prot.h"
 #include "imapconf.h"
 #include "version.h"
+#include "mpool.h"
 
 static int masterp = 0;
 
@@ -125,6 +127,10 @@ struct conn {
 int ready_for_connections = 0;
 pthread_cond_t ready_for_connections_cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t ready_for_connections_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+int synced = 0;
+pthread_cond_t synced_cond = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t synced_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 pthread_mutex_t connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct conn *connlist = NULL;
@@ -350,6 +356,17 @@ int service_init(int argc, char **argv, char **envp)
 	}
     }
 
+    /* Slave Skiplist Fast Resync? */
+    if(!masterp && config_getswitch("mupdate_slave_fast_resync",0)) {
+	char fname[4096];
+	
+	if(snprintf(fname,4096,"%s%s",config_dir,FNAME_MBOXLIST) == -1)
+	    fatal("mboxlist database filename too large",EC_TEMPFAIL);
+
+	putenv("CYRUS_SKIPLIST_UNSAFE=1");
+ 	unlink(fname);
+    }
+
     database_init();
 
     if (!masterp) {
@@ -362,6 +379,12 @@ int service_init(int argc, char **argv, char **envp)
 	    syslog(LOG_ERR, "could not start client thread");
 	    return EC_SOFTWARE;
 	}
+
+	/* Wait until they sync the database */
+	pthread_mutex_lock(&synced_mutex);
+	if(!synced)
+	    pthread_cond_wait(&synced_cond, &synced_mutex);
+	pthread_mutex_unlock(&synced_mutex);
     } else {
 	mupdate_ready();
     }
@@ -785,7 +808,9 @@ void database_log(const struct mbent *mb)
 
 /* lookup in database. database must be locked */
 /* This could probabally be more efficient and avoid some copies */
-struct mbent *database_lookup(const char *name) 
+/* passing in a NULL pool implies that we should use regular xmalloc,
+ * a non-null pool implies we should use the mpool functionality */
+struct mbent *database_lookup(const char *name, struct mpool *pool) 
 {
     char *path, *acl;
     int type;
@@ -797,17 +822,19 @@ struct mbent *database_lookup(const char *name)
 	return NULL;
 
     if(type & MBTYPE_RESERVE) {
-	out = xmalloc(sizeof(struct mbent) + 1);
+	if(!pool) out = xmalloc(sizeof(struct mbent) + 1);
+	else out = mpool_malloc(pool, sizeof(struct mbent) + 1);
 	out->t = SET_RESERVE;
 	out->acl[0] = '\0';
     } else {
-	out = xmalloc(sizeof(struct mbent) + strlen(acl));
+	if(!pool) out = xmalloc(sizeof(struct mbent) + strlen(acl));
+	else out = mpool_malloc(pool, sizeof(struct mbent) + strlen(acl));
 	out->t = SET_ACTIVE;
 	strcpy(out->acl, acl);
     }
 
-    strncpy(out->mailbox, name, sizeof(out->mailbox));
-    strncpy(out->server, path, sizeof(out->server));
+    out->mailbox = (pool) ? mpool_strdup(pool, name) : xstrdup(name);
+    out->server = (pool) ? mpool_strdup(pool, path) : xstrdup(path);
 
     return out;
 }
@@ -931,7 +958,7 @@ void cmd_set(struct conn *C,
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
-    m = database_lookup(mailbox);
+    m = database_lookup(mailbox, NULL);
     if (m && t == SET_RESERVE) {
 	/* failed; mailbox already exists */
 	prot_printf(C->pout, "%s NO \"mailbox already exists\"\r\n", tag);
@@ -999,7 +1026,7 @@ void cmd_set(struct conn *C,
 
     prot_printf(C->pout, "%s OK \"done\"\r\n", tag);
  done:
-    free(m);
+    free_mbent(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
 
@@ -1010,7 +1037,7 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
     syslog(LOG_DEBUG, "cmd_find(fd:%d, %s)", C->fd, mailbox);
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
-    m = database_lookup(mailbox);
+    m = database_lookup(mailbox, NULL);
 
     if (m && m->t == SET_ACTIVE) {
 	prot_printf(C->pout, "%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
@@ -1027,7 +1054,7 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
 	/* no output: not found */
     }
 
-    free(m);
+    free_mbent(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     if (dook) {
@@ -1044,7 +1071,7 @@ static int sendupdate(char *name, int matchlen, int maycreate, void *rock)
     
     if(!C) return -1;
     
-    m = database_lookup(name);
+    m = database_lookup(name, NULL);
     if(!m) return -1;
 
     if(!C->list_prefix ||
@@ -1072,7 +1099,7 @@ static int sendupdate(char *name, int matchlen, int maycreate, void *rock)
 	}
     }
     
-    free(m);
+    free_mbent(m);
     return 0;
 }
 
@@ -1148,19 +1175,6 @@ void sendupdates(struct conn *C, int flushnow)
     struct pending *p, *q;
 
     pthread_mutex_lock(&C->m);
-
-#if 0
-    /* don't bother waiting for a signal; we'll only be called occasionally */
-
-    gettimeofday(&now, NULL);
-    timeout.tv_sec = now.tv_sec + poll_interval;
-    timeout.tv_nsec = now.tv_usec * 1000;
-	    
-    r = 0;
-    while (r != ETIMEDOUT) {
-	r = pthread_cond_timedwait(&C->cond, &C->m, &timeout);
-    }
-#endif
 
     /* just grab the update list and release the lock */
     p = C->plist;
@@ -1245,7 +1259,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
     if(!strncmp(rock, "DELETE", 6)) {
-	m = database_lookup(mdata->mailbox);
+	m = database_lookup(mdata->mailbox, NULL);
 
 	if(!m) {
 	    syslog(LOG_DEBUG, "attempt to delete unknown mailbox %s",
@@ -1256,7 +1270,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	}
 	m->t = t = SET_DELETE;
     } else {
-	m = database_lookup(mdata->mailbox);
+	m = database_lookup(mdata->mailbox, NULL);
 	
 	if (m && (!mdata->acl || strlen(mdata->acl) < strlen(m->acl))) {
 	    /* change what's already there */
@@ -1328,30 +1342,39 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
     }
 
  done:
-    free(m);
+    free_mbent(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     return ret;
 }
+
+struct sync_rock 
+{
+    struct mpool *pool;
+    struct mbent_queue *boxes;
+};
 
 /* Read a series of MAILBOX and RESERVE commands and tack them onto a
  * queue */
 int cmd_resync(struct mupdate_mailboxdata *mdata,
 	       const char *rock, void *context)
 {
-    struct mbent_queue *remote_boxes = (struct mbent_queue *)context;
+    struct sync_rock *r = (struct sync_rock *)context;
+    struct mbent_queue *remote_boxes = r->boxes;
     struct mbent *newm = NULL;
 
     if(!mdata || !rock || !mdata->mailbox || !remote_boxes) return 1;
 
     /* allocate new mailbox */
     if (mdata->acl) {
-	newm = xmalloc(sizeof(struct mbent) + strlen(mdata->acl));
+	newm = mpool_malloc(r->pool,sizeof(struct mbent) + strlen(mdata->acl));
     } else {
-	newm = xmalloc(sizeof(struct mbent) + 1);
+	newm = mpool_malloc(r->pool,sizeof(struct mbent) + 1);
     }
-    strcpy(newm->mailbox, mdata->mailbox);
-    strcpy(newm->server, mdata->server);
+
+    newm->mailbox = mpool_strdup(r->pool, mdata->mailbox);
+    newm->server = mpool_strdup(r->pool, mdata->server);
+
     if (mdata->acl) {
 	strcpy(newm->acl, mdata->acl);
     } else {
@@ -1379,12 +1402,13 @@ int cmd_resync(struct mupdate_mailboxdata *mdata,
 /* Callback for mupdate_synchronize to be passed to mboxlist_findall. */
 static int sync_findall_cb(char *name, int matchlen, int maycreate, void *rock)
 {
-    struct mbent_queue *local_boxes = (struct mbent_queue *)rock;
+    struct sync_rock *r = (struct sync_rock *)rock;
+    struct mbent_queue *local_boxes = (struct mbent_queue *)r->boxes;
     struct mbent *m;
 
     if(!local_boxes) return 1;
 
-    m = database_lookup(name);
+    m = database_lookup(name, r->pool);
     /* If it doesn't exist, fine... */
     if(!m) return 0;
     
@@ -1400,10 +1424,15 @@ int mupdate_synchronize(mupdate_handle *handle)
     struct mbent_queue local_boxes;
     struct mbent_queue remote_boxes;
     struct mbent *l,*r;
+    struct mpool *pool;
+    struct sync_rock rock;
     char pattern[] = { '*', '\0' };
 
     if(!handle || !handle->saslcompleted) return 1;
 
+    pool = new_mpool(131072); /* Arbitrary, but large (128k) */
+    rock.pool = pool;
+    
     /* ask for updates and set nonblocking */
     prot_printf(handle->pout, "U01 UPDATE\r\n");
 
@@ -1419,24 +1448,28 @@ int mupdate_synchronize(mupdate_handle *handle)
     remote_boxes.head = NULL;
     remote_boxes.tail = &(remote_boxes.head);
 
+    rock.boxes = &remote_boxes;
+
     /* If there is a fatal error, die, other errors ignore */
-    if (mupdate_scarf(handle, cmd_resync, &remote_boxes, 1, NULL) != 0) {
+    if (mupdate_scarf(handle, cmd_resync, &rock, 1, NULL) != 0) {
 	struct mbent *p=remote_boxes.head, *p_next=NULL;
 	while(p) {
 	    p_next = p->next;
-	    free(p);
 	    p = p_next;
 	}
 	
 	pthread_mutex_unlock(&mailboxes_mutex);
+	free_mpool(pool);
 	return 1;
     }
 
     /* Make socket nonblocking now */
     prot_NONBLOCK(handle->pin);
 
+    rock.boxes = &local_boxes;
+
     mboxlist_findall(NULL, pattern, 1, NULL,
-		     NULL, sync_findall_cb, (void*)&local_boxes);
+		     NULL, sync_findall_cb, (void*)&rock);
 
     /* Traverse both lists, compare the names */
     /* If they match, ensure that server and acl are correct, if so,
@@ -1461,13 +1494,10 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    /* Okay, dump these two */
 	    local_boxes.head = l->next;
 	    remote_boxes.head = r->next;
-	    free(l);
-	    free(r);
 	} else if (ret < 0) {
 	    /* Local without corresponding remote, delete it */
 	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0);
 	    local_boxes.head = l->next;
-	    free(l);
 	} else /* (ret > 0) */ {
 	    /* Remote without corresponding local, insert it */
 	    mboxlist_insertremote(r->mailbox, 
@@ -1475,7 +1505,6 @@ int mupdate_synchronize(mupdate_handle *handle)
 				   MBTYPE_RESERVE : 0),
 				  r->server, r->acl, NULL);
 	    remote_boxes.head = r->next;
-	    free(r);
 	}
     }
 
@@ -1484,7 +1513,6 @@ int mupdate_synchronize(mupdate_handle *handle)
 	while(l) {
 	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0);
 	    local_boxes.head = l->next;
-	    free(l);
 	    l = local_boxes.head;
 	}
     } else if (r && !l) {
@@ -1495,17 +1523,23 @@ int mupdate_synchronize(mupdate_handle *handle)
 				   MBTYPE_RESERVE : 0),
 				  r->server, r->acl, NULL);
 	    remote_boxes.head = r->next;
-	    free(r);
 	    r = remote_boxes.head;
 	}
     }
 
-
-
     /* All up to date! */
     syslog(LOG_NOTICE, "mailbox list synchronization complete");
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
+    free_mpool(pool);
     return 0;
+}
+
+void mupdate_signal_db_synced(void) 
+{
+    pthread_mutex_lock(&synced_mutex);
+    synced = 1;
+    pthread_cond_broadcast(&synced_cond);
+    pthread_mutex_unlock(&synced_mutex);
 }
 
 void mupdate_ready(void) 
@@ -1532,4 +1566,13 @@ void mupdate_unready(void)
     ready_for_connections = 0;
 
     pthread_mutex_unlock(&ready_for_connections_mutex);
+}
+
+/* Used to free malloc'd mbent's */
+void free_mbent(struct mbent *p) 
+{
+    if(!p) return;
+    free(p->server);
+    free(p->mailbox);
+    free(p);
 }
