@@ -46,9 +46,10 @@ struct fetchargs {
 #define FETCH_HEADER		(1<<7)
 #define FETCH_TEXT		(1<<8)
 #define FETCH_RFC822		(1<<9)
+#define FETCH_SETSEEN		(1<<10)
 #define FETCH_FAST (FETCH_FLAGS|FETCH_INTERNALDATE|FETCH_SIZE)
 #define FETCH_ALL  (FETCH_FLAGS|FETCH_INTERNALDATE|FETCH_SIZE|FETCH_ENVELOPE)
-#define FETCH_FULL (FETCH_ALL|FETCH_BODY)
+#define FETCH_FULL (FETCH_ALL|FETCH_BODY|FETCH_SETSEEN)
 
 /* Arguments to Store functions */
 struct storeargs {
