@@ -136,6 +136,7 @@ static void message_parse_header P((char *hdr, struct ibuf *ibuf));
 static void message_parse_type P((char *hdr, struct body *body));
 static void message_parse_disposition P((char *hdr, struct body *body));
 static void message_parse_params P((char *hdr, struct param **paramp));
+static void message_fold_params P((struct param **paramp));
 static void message_parse_language P((char *hdr, struct param **paramp));
 static time_t message_parse_date P((char *hdr));
 static void message_parse_rfc822space P((char **s));
@@ -827,6 +828,7 @@ struct body *body;
     /* Parse parameter list */
     if (hdr) {
 	message_parse_params(hdr+1, &body->params);
+	message_fold_params(&body->params);
     }
 }
 
@@ -874,6 +876,7 @@ struct body *body;
     /* Parse parameter list */
     if (hdr) {
 	message_parse_params(hdr+1, &body->disposition_params);
+	message_fold_params(&body->disposition_params);
     }
 }
 
@@ -973,6 +976,172 @@ struct param **paramp;
 	paramp = &param->next;
     }
 }
+
+/* Alphabet for hex encoding */
+static char basis_hex[] = "0123456789ABCDEF";
+
+/*
+ * Decode RFC-2231 parameter continuations
+ *
+ * Algorithm: Run down the list of parameters looking for
+ * an attribute of the form "foo*0" or "foo*0*".  When we find 
+ * such an attribute, we look for "foo*1"/"foo*1*", "foo*2"/"foo*2*"
+ * etc, appending each value to that of "foo*0" and then removing the
+ * parameter we just appended from the list.  When appending values,
+ * if either parameter has extended syntax, we have to convert the other
+ * value from simple to extended syntax.  At the end, we change the name
+ * of "foo*0"/"foo*0*" to either "foo" or "foo*", depending on whether
+ * the value has extended syntax or not.
+ */
+static void
+message_fold_params(struct param **params)
+{
+    struct param *thisparam;	/* The "foo*1" param we're folding */
+    struct param **continuation; /* Pointer to the "foo*2" param */
+    struct param *tmpparam;	/* Placeholder for removing "foo*2" */
+    char *asterisk;
+    int section;
+    int is_extended;
+    char sectionbuf[5];
+    int attributelen, sectionbuflen;
+    char *from, *to;
+
+    for (thisparam = *params; thisparam; thisparam = thisparam->next) {
+	asterisk = strchr(thisparam->attribute, '*');
+	if (asterisk && asterisk[1] == '0' &&
+	    (!asterisk[2] || (asterisk[2] == '*' && !asterisk[3]))) {
+	    /* An initial section.  Find and collect the rest */
+	    is_extended = (asterisk[2] == '*');
+	    *asterisk = '\0';
+	    attributelen = asterisk - thisparam->attribute;
+	    section = 1;
+	    for (;;) {
+		if (section == 100) break;
+		sectionbuf[0] = '*';
+		if (section > 9) {
+		    sectionbuf[1] = section/10 + '0';
+		    sectionbuf[2] = section%10 + '0';
+		    sectionbuf[3] = '\0';
+		    sectionbuflen = 3;
+		}
+		else {
+		    sectionbuf[1] = section + '0';
+		    sectionbuf[2] = '\0';
+		    sectionbuflen = 2;
+		}
+
+		/* Find the next continuation */
+		for (continuation = params; *continuation;
+		     continuation = &((*continuation)->next)) {
+		    if (!strncmp((*continuation)->attribute, thisparam->attribute,
+				 attributelen) &&
+			!strncmp((*continuation)->attribute + attributelen,
+				 sectionbuf, sectionbuflen) &&
+			((*continuation)->attribute[attributelen+sectionbuflen] == '\0' ||
+			 ((*continuation)->attribute[attributelen+sectionbuflen] == '*' && (*continuation)->attribute[attributelen+sectionbuflen+1] == '\0'))) {
+			break;
+		    }
+		}
+
+		/* No more continuations to find */
+		if (!*continuation) break;
+		
+		if ((*continuation)->attribute[attributelen+sectionbuflen] == '\0') {
+		    /* Continuation is simple */
+		    if (is_extended) {
+			/* Have to re-encode continuation value */
+			thisparam->value =
+			    xrealloc(thisparam->value,
+				     strlen(thisparam->value) +
+				     3*strlen((*continuation)->value) + 1);
+			from = (*continuation)->value;
+			to = thisparam->value + strlen(thisparam->value);
+			while (*from) {
+			    if (*from <= ' ' || *from >= 0x7f ||
+				*from == '*' || *from == '\'' ||
+				*from == '%' || strchr(TSPECIALS, *from)) {
+				*to++ = '%';
+				*to++ = basis_hex[(*from>>4) & 0xf];
+				*to++ = basis_hex[*from & 0xf];
+			    } else {
+				*to++ = *from;
+			    }
+			    from++;
+			}
+			*to++ = '\0';
+		    }
+		    else {
+			thisparam->value =
+			    xrealloc(thisparam->value,
+				     strlen(thisparam->value) +
+				     strlen((*continuation)->value) + 1);
+			from = (*continuation)->value;
+			to = thisparam->value + strlen(thisparam->value);
+			while (*to++ = *from++);
+		    }
+		}
+		else {
+		    /* Continuation is extended */
+		    if (is_extended) {
+			thisparam->value =
+			    xrealloc(thisparam->value,
+				     strlen(thisparam->value) +
+				     strlen((*continuation)->value) + 1);
+			from = (*continuation)->value;
+			to = thisparam->value + strlen(thisparam->value);
+			while (*to++ = *from++);
+		    }
+		    else {
+			/* Have to re-encode thisparam value */
+			char *tmpvalue =
+			    xmalloc(2 + 3*strlen(thisparam->value) +
+				    strlen((*continuation)->value) + 1);
+
+			from = thisparam->value;
+			to = tmpvalue;
+			*to++ = '\''; /* Unspecified charset */
+			*to++ = '\''; /* Unspecified language */
+			while (*from) {
+			    if (*from <= ' ' || *from >= 0x7f ||
+				*from == '*' || *from == '\'' ||
+				*from == '%' || strchr(TSPECIALS, *from)) {
+				*to++ = '%';
+				*to++ = basis_hex[(*from>>4) & 0xf];
+				*to++ = basis_hex[*from & 0xf];
+			    } else {
+				*to++ = *from;
+			    }
+			    from++;
+			}
+			from = (*continuation)->value;
+			while (*to++ = *from++);
+
+			free(thisparam->value);
+			thisparam->value = tmpvalue;
+			is_extended = 1;
+		    }
+		}
+
+		/* Remove unneeded continuation */
+		free((*continuation)->attribute);
+		free((*continuation)->value);
+		tmpparam = *continuation;
+		*continuation = (*continuation)->next;
+		free(tmpparam);
+		section++;
+	    }
+
+	    /* Fix up attribute name */
+	    if (is_extended) {
+		asterisk[0] = '*';
+		asterisk[1] = '\0';
+	    } else {
+		asterisk[0] = '\0';
+	    }
+	}
+    }
+}	 
+
 
 /*
  * Parse a language list from a header
