@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.61 2000/12/27 18:08:12 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.62 2001/01/13 03:19:39 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -2366,7 +2366,7 @@ void cmd_id(char *tag)
 #endif
 #ifdef HAVE_LIBWRAP
 	snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-		 "; TCP Wrapper");
+		 "; TCP Wrappers");
 #endif
 	/* XXX  anything else? ACAP info perhaps? */
 	prot_printf(proxyd_out, " \"environment\" \"%s\")\r\n", env_buf);
