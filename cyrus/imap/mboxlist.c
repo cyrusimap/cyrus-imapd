@@ -967,7 +967,7 @@ int (*proc)();
 
     /* Check for INBOX first of all */
     if (userid) {
-	if (GLOB_TEST(g, "inbox") != -1) {
+	if (GLOB_TEST(g, "INBOX") != -1) {
 	    (void) bsearch_mem(usermboxname, 1, list_base, list_size, 0, &len);
 	    if (len) {
 		r = (*proc)("INBOX", 5, 1);
@@ -1175,7 +1175,7 @@ int (*proc)();
 
     /* Check for INBOX first of all */
     if (userid) {
-	if (GLOB_TEST(g, "inbox") != -1) {
+	if (GLOB_TEST(g, "INBOX") != -1) {
 	    (void) bsearch_mem(usermboxname, 1, subs_base, subs_size, 0, &len);
 	    if (len) {
 		r = (*proc)("INBOX", 5, 1);
