@@ -78,6 +78,11 @@ updates.  it doesn't deal with the ACAP server dying and in general
 should be replaced with something more general.
 
 <li> is <tt>proxyd</tt> implementing idle timeouts correctly?
+
+
+<li>skip-list code uses assert(). Does SIGABRT get properly trapped
+ so we don't end up exiting holding locks?
+
 </ul>
 
 <h3>lmtpd, deliver, and sieve</h3>
@@ -124,7 +129,7 @@ overridden.
 either remove <tt>collectnews</tt> or fix it.
 
 <li> any utilities doing db operations should catch signals and poll
-for them to see if it should exit.
+for them to see if it should exit (like mbpath, ipurge).
 
 <li> it would be nice if <tt>cyradm</tt> had a version command (would
 do an ID against the server).
@@ -162,7 +167,7 @@ efficient and easier to use than Amanda on the filesystem.
 would like to submit a bug, feature request or (best of all) patch.
 
 <P><HR>
-Last update: $Date: 2000/05/30 01:52:13 $ 
+Last update: $Date: 2000/06/01 23:08:54 $ 
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
