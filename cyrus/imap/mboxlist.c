@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.208 2003/03/11 21:41:00 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.209 2003/04/09 17:49:20 rjs3 Exp $
  */
 
 #include <config.h>
@@ -118,8 +118,8 @@ static int mboxlist_getpath(const char *partition, const char *name,
     if (partitionlen > sizeof(optionbuf)-11) {
 	return IMAP_PARTITION_UNKNOWN;
     }
-    strcpy(optionbuf, "partition-");
-    strcat(optionbuf, partition);
+    strlcpy(optionbuf, "partition-", sizeof(optionbuf));
+    strlcat(optionbuf, partition, sizeof(optionbuf));
     
     root = config_getstring(optionbuf, (char *)0);
     if (!root) {
@@ -161,7 +161,7 @@ static int mboxlist_mylookup(const char *name, int *typep,
 			     struct txn **tid, int wrlock)
 {
     int acllen;
-    static char partition[MAX_PARTITION_LEN];
+    static char partition[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
     static char *aclresult;
     static int aclresultalloced;
     int r;
@@ -270,7 +270,7 @@ int mboxlist_detail(const char *name, int *typep, char **pathp, char **partp,
     return mboxlist_mylookup(name, typep, pathp, partp, aclp, NULL, 0);
 }
 
-int mboxlist_findstage(const char *name, char *stagedir) 
+int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len) 
 {
     char optionbuf[MAX_MAILBOX_NAME+1];
     const char *root;
@@ -289,15 +289,15 @@ int mboxlist_findstage(const char *name, char *stagedir)
 	break;
     }
 	
-    strcpy(optionbuf, "partition-");
-    strcpy(optionbuf + 10, partition);
+    strlcpy(optionbuf, "partition-", sizeof(optionbuf));
+    strlcat(optionbuf, partition, sizeof(optionbuf));
     
     root = config_getstring(optionbuf, (char *)0);
     if (!root) {
 	return IMAP_PARTITION_UNKNOWN;
     }
 	
-    sprintf(stagedir, "%s/stage./", root);
+    snprintf(stagedir, sd_len, "%s/stage./", root);
     
     return 0;
 }
@@ -384,7 +384,7 @@ mboxlist_mycreatemailboxcheck(char *name,
     }
 
     /* Search for a parent */
-    strcpy(parent, name);
+    strlcpy(parent, name, sizeof(parent));
     parentlen = 0;
     while ((parentlen==0) && (p = strrchr(parent, '.'))) {
 	*p = '\0';
@@ -582,7 +582,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 
     if (!(mbtype & MBTYPE_REMOTE)) {
 	/* Get partition's path */
-	sprintf(buf, "partition-%s", newpartition);
+	snprintf(buf, sizeof(buf), "partition-%s", newpartition);
 	root = config_getstring(buf, (char *)0);
 	if (!root) {
 	    r = IMAP_PARTITION_UNKNOWN;
@@ -622,7 +622,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	    goto done;
 	}
 
-	sprintf(buf, "%s!%s", config_servername, newpartition);
+	sprintf(buf, sizeof(buf), "%s!%s", config_servername, newpartition);
 
 	/* reserve the mailbox in MUPDATE */
 	r = mupdate_reserve(mupdate_h, name, buf);
@@ -708,7 +708,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     /* xxx maybe we should roll back if this fails? */
     if (!r && config_mupdate_server && !localonly) {
 	/* commit the mailbox in MUPDATE */
-	sprintf(buf, "%s!%s", config_servername, newpartition);
+	sprintf(buf, sizeof(buf), "%s!%s", config_servername, newpartition);
 	    
 	r = mupdate_activate(mupdate_h, name, buf, acl);
 	if(r > 0) {
@@ -1093,7 +1093,8 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	if (!partitionmove) {
 	    /* Reserve new name in MUPDATE */
 	    char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-	    sprintf(buf, "%s!%s", config_servername, newpartition);
+	    snprintf(buf, sizeof(buf), "%s!%s",
+		     config_servername, newpartition);
 
 	    r = mupdate_reserve(mupdate_h, newname, buf);
 	    if(r) {
@@ -1227,7 +1228,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	/* commit the mailbox in MUPDATE */
 	/* This is okay even if we are moving partitions */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-	sprintf(buf, "%s!%s", config_servername, newpartition);
+
+	snprintf(buf, sizeof(buf), "%s!%s",
+		 config_servername, newpartition);
 	
 	r = mupdate_activate(mupdate_h, newname, buf, newacl);
 	if(r > 0) {
@@ -1438,7 +1441,8 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
         mupdate_handle *mupdate_h = NULL;
 	/* commit the update to MUPDATE */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-	sprintf(buf, "%s!%s", config_servername, partition);
+
+	snprintf(buf, sizeof(buf), "%s!%s", config_servername, partition);
 
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
@@ -1503,6 +1507,10 @@ static int find_p(void *rockp,
     if (rock->inboxoffset) {
 	char namebuf[MAX_MAILBOX_NAME+1];
 
+	if(keylen >= sizeof(namebuf)) {
+	    syslog(LOG_ERR, "oversize keylen in mboxlist.c:find_p()");
+	    return 0;
+	}
 	memcpy(namebuf, key, keylen);
 	namebuf[keylen] = '\0';
 	
@@ -1593,7 +1601,11 @@ static int find_cb(void *rockp,
     minmatch = 0;
     while (minmatch >= 0) {
 	long matchlen;
-
+	
+	if(keylen >= sizeof(namebuf)) {
+	    syslog(LOG_ERR, "oversize keylen in mboxlist.c:find_cb()");
+	    return 0;
+	}
 	memcpy(namebuf, key, keylen);
 	namebuf[keylen] = '\0';
 	
@@ -1698,8 +1710,8 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
     /* Build usermboxname */
     if (userid && !strchr(userid, '.') &&
 	strlen(userid)+5 < MAX_MAILBOX_NAME) {
-	strcpy(usermboxname, "user.");
-	strcat(usermboxname, userid);
+	strlcpy(usermboxname, "user.", sizeof(usermboxname));
+	strlcat(usermboxname, userid, sizeof(usermboxname));
 	usermboxnamelen = strlen(usermboxname);
     }
     else {
@@ -1723,7 +1735,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 		r = (*proc)(usermboxname, usermboxnamelen, 1, rock);
 	    }
 	}
-	strcpy(usermboxname+usermboxnamelen, ".");
+	strlcat(usermboxname, ".", sizeof(usermboxname));
 	usermboxnamelen++;
 
 	cbrock.usermboxname = usermboxname;
@@ -1816,8 +1828,8 @@ int mboxlist_findall_alt(struct namespace *namespace,
     /* Build usermboxname */
     if (userid && !strchr(userid, '.') &&
 	strlen(userid)+5 < MAX_MAILBOX_NAME) {
-	strcpy(usermboxname, "user.");
-	strcat(usermboxname, userid);
+	strlcpy(usermboxname, "user.", sizeof(usermboxname));
+	strlcat(usermboxname, userid, sizeof(usermboxname));
 	usermboxnamelen = strlen(usermboxname);
     }
     else {
@@ -1833,7 +1845,8 @@ int mboxlist_findall_alt(struct namespace *namespace,
 		r = (*proc)(cbrock.inboxcase, 5, 0, rock);
 	    }
 	}
-	strcpy(usermboxname+usermboxnamelen, ".");
+
+	strlcat(usermboxname, ".", sizeof(usermboxname));
 	usermboxnamelen++;
 
 	cbrock.usermboxname = usermboxname;
@@ -1859,8 +1872,8 @@ int mboxlist_findall_alt(struct namespace *namespace,
      * Append pattern to "INBOX.", search for those mailboxes next
      */
     if (userid) {
-	strcpy(patbuf, "INBOX.");
-	strcat(patbuf, pattern);
+	strlcpy(patbuf, "INBOX.", sizeof(patbuf));
+	strlcat(patbuf, pattern, sizeof(patbuf));
 	cbrock.g = glob_init(patbuf, GLOB_HIERARCHY|GLOB_INBOXCASE);
 	cbrock.inboxcase = glob_inboxcase(cbrock.g);
 	cbrock.inboxoffset = strlen(userid);
@@ -1886,15 +1899,17 @@ int mboxlist_findall_alt(struct namespace *namespace,
      *
      * If "Other Users*" can match pattern, search for those mailboxes next
      */
-    len = strlen(namespace->prefix[NAMESPACE_USER])-1;
+    len = strlen(namespace->prefix[NAMESPACE_USER]);
+    if(len>0) len--;
+    
     if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
 		 prefixlen < len ? prefixlen : len)) {
 
 	if (prefixlen < len)
 	    cbrock.g = glob_init(pattern+prefixlen, GLOB_HIERARCHY);
 	else {
-	    strcpy(patbuf, "user");
-	    strcat(patbuf, pattern+len);
+	    strlcpy(patbuf, "user", sizeof(patbuf));
+	    strlcat(patbuf, pattern+len, sizeof(patbuf));
 	    cbrock.g = glob_init(patbuf, GLOB_HIERARCHY);
 	}
 	cbrock.find_namespace = NAMESPACE_USER;
@@ -1916,13 +1931,14 @@ int mboxlist_findall_alt(struct namespace *namespace,
      * just bother looking at the ones that have the same pattern prefix.
      */
     len = strlen(namespace->prefix[NAMESPACE_SHARED]);
+    if(len>0) len--;
     if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
-		 prefixlen < len - 1 ? prefixlen : len - 1)) {
+		 prefixlen < len ? prefixlen : len)) {
 
 	cbrock.find_namespace = NAMESPACE_SHARED;
 	cbrock.inboxoffset = 0;
 
-	if (prefixlen < len) {
+	if (prefixlen <= len) {
 	    /* Find pattern which matches shared namespace prefix */
 	    for (p = pattern+prefixlen; *p; p++) {
 		if (*p == '%') continue;
@@ -1944,14 +1960,14 @@ int mboxlist_findall_alt(struct namespace *namespace,
 			&find_p, &find_cb, &cbrock,
 			NULL);
 	}
-	else if (pattern[len-1] == '.') {
-	    strcpy(patbuf, "");
-	    strcat(patbuf, pattern+len);
+	else if (pattern[len] == '.') {
+	    /* patbuf[0] = '\0'; */
+	    strlcpy(patbuf, pattern+len+1, sizeof(patbuf));
 	    cbrock.g = glob_init(patbuf, GLOB_HIERARCHY);
 
 	    pattern[prefixlen] = '\0';
 	    DB->foreach(mbdb,
-			pattern+len, prefixlen-len,
+			pattern+len+1, prefixlen-len-1,
 			&find_p, &find_cb, &cbrock,
 			NULL);
 	}
@@ -2026,8 +2042,8 @@ int mboxlist_setquota(const char *root, int newquota, int force)
 	return r;
     }
 
-    strcpy(pattern, quota.root);
-    strcat(pattern, ".*");
+    strlcpy(pattern, quota.root, sizeof(pattern));
+    strlcat(pattern, ".*", sizeof(pattern));
     
     /* top level mailbox */
     if(have_mailbox)
@@ -2070,8 +2086,8 @@ int mboxlist_unsetquota(const char *root)
     /*
      * Have to remove it from all affected mailboxes
      */
-    strcpy(pattern, root);
-    strcat(pattern, ".*");
+    strlcpy(pattern, root, sizeof(pattern));
+    strlcat(pattern, ".*", sizeof(pattern));
     
     /* top level mailbox */
     mboxlist_rmquota(root, 0, 0, (void *)root);
@@ -2240,8 +2256,8 @@ void mboxlist_init(int myflags)
     int flags = 0;
 
     /* create the name of the db file */
-    strcpy(dbdir, config_dir);
-    strcat(dbdir, FNAME_DBDIR);
+    strlcpy(dbdir, config_dir, sizeof(dbdir));
+    strlcat(dbdir, FNAME_DBDIR, sizeof(dbdir));
     if (myflags & MBOXLIST_RECOVER) flags |= CYRUSDB_RECOVER;
     r = DB->init(dbdir, flags);
     if (r != CYRUSDB_OK) {
@@ -2269,10 +2285,13 @@ void mboxlist_open(char *fname)
 
     /* create db file name */
     if (!fname) {
-	fname = xmalloc(strlen(config_dir)+sizeof(FNAME_MBOXLIST));
+	size_t fname_len = strlen(config_dir)+strlen(FNAME_MBOXLIST)+1;
+	
+	fname = xmalloc(fname_len);
 	tofree = fname;
-	strcpy(fname, config_dir);
-	strcat(fname, FNAME_MBOXLIST);
+
+	strlcpy(fname, config_dir, fname_len);
+	strlcat(fname, FNAME_MBOXLIST, fname_len);
     }
 
     ret = DB->open(fname, &mbdb);
@@ -2400,8 +2419,8 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
     /* Build usermboxname */
     if (userid && !strchr(userid, '.') &&
 	strlen(userid)+5 < MAX_MAILBOX_NAME) {
-	strcpy(usermboxname, "user.");
-	strcat(usermboxname, userid);
+	strlcpy(usermboxname, "user.", sizeof(usermboxname));
+	strlcat(usermboxname, userid, sizeof(usermboxname));
 	usermboxnamelen = strlen(usermboxname);
     }
     else {
@@ -2425,7 +2444,7 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
 		r = (*proc)(usermboxname, usermboxnamelen, 1, rock);
 	    }
 	}
-	strcpy(usermboxname+usermboxnamelen, ".");
+	strlcat(usermboxname, ".", sizeof(usermboxname));
 	usermboxnamelen++;
 
 	cbrock.usermboxname = usermboxname;
@@ -2523,8 +2542,8 @@ int mboxlist_findsub_alt(struct namespace *namespace,
     /* Build usermboxname */
     if (userid && !strchr(userid, '.') &&
 	strlen(userid)+5 < MAX_MAILBOX_NAME) {
-	strcpy(usermboxname, "user.");
-	strcat(usermboxname, userid);
+	strlcpy(usermboxname, "user.", sizeof(usermboxname));
+	strlcat(usermboxname, userid, sizeof(usermboxname));
 	usermboxnamelen = strlen(usermboxname);
     }
     else {
@@ -2540,7 +2559,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 		r = (*proc)(cbrock.inboxcase, 5, 0, rock);
 	    }
 	}
-	strcpy(usermboxname+usermboxnamelen, ".");
+	strlcat(usermboxname, ".", sizeof(usermboxname));
 	usermboxnamelen++;
 
 	cbrock.usermboxname = usermboxname;
@@ -2563,8 +2582,8 @@ int mboxlist_findsub_alt(struct namespace *namespace,
      * Append pattern to "INBOX.", search for those subscriptions next
      */
     if (userid) {
-	strcpy(patbuf, "INBOX.");
-	strcat(patbuf, pattern);
+	strlcpy(patbuf, "INBOX.", sizeof(patbuf));
+	strlcat(patbuf, pattern, sizeof(patbuf));
 	cbrock.g = glob_init(patbuf, GLOB_HIERARCHY|GLOB_INBOXCASE);
 	cbrock.inboxcase = glob_inboxcase(cbrock.g);
 	cbrock.inboxoffset = strlen(userid);
@@ -2626,13 +2645,14 @@ int mboxlist_findsub_alt(struct namespace *namespace,
      * just bother looking at the ones that have the same pattern prefix.
      */
     len = strlen(namespace->prefix[NAMESPACE_SHARED]);
+    if(len>0) len--;
     if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
-		 prefixlen < len - 1 ? prefixlen : len - 1)) {
+		 prefixlen < len ? prefixlen : len)) {
 
 	cbrock.find_namespace = NAMESPACE_SHARED;
 	cbrock.inboxoffset = 0;
 
-	if (prefixlen < len) {
+	if (prefixlen <= len) {
 	    /* Find pattern which matches shared namespace prefix */
 	    for (p = pattern+prefixlen; *p; p++) {
 		if (*p == '%') continue;
@@ -2654,14 +2674,14 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 			   &find_p, &find_cb, &cbrock,
 			   NULL);
 	}
-	else if (pattern[len-1] == '.') {
-	    strcpy(patbuf, "");
-	    strcat(patbuf, pattern+len);
+	else if (pattern[len] == '.') {
+	    /* patbuf[0] = '\0' */
+	    strlcat(patbuf, pattern+len+1, sizeof(patbuf));
 	    cbrock.g = glob_init(patbuf, GLOB_HIERARCHY);
 
 	    pattern[prefixlen] = '\0';
 	    SUBDB->foreach(subs,
-			   pattern+len, prefixlen-len,
+			   pattern+len+1, prefixlen-len-1,
 			   &find_p, &find_cb, &cbrock,
 			   NULL);
 	}
