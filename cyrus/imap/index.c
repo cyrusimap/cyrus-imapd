@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.144 2000/11/14 15:54:55 ken3 Exp $
+ * $Id: index.c,v 1.145 2000/11/17 17:05:57 ken3 Exp $
  */
 #include <config.h>
 
@@ -3161,6 +3161,9 @@ static char *index_extract_subject(const char *subj, int *is_refwd)
 	if (!strncasecmp(base, "[fwd:", 5) &&
 	    base[strlen(base) - 1]  == ']') {
 
+	    /* inc refwd counter */
+	    *is_refwd += 1;
+
 	    /* trim "]" */
 	    base[strlen(base) - 1] = '\0';
 
@@ -3308,19 +3311,22 @@ static char *_index_extract_subject(char *s, int *is_refwd)
  */
 static char *find_msgid(char *str, int *len)
 {
-    char *start, *at, *end;
+    char *s, *p;
 
-    if (str &&
-	(start = strchr(str, '<')) &&
-	(at = strchr(start, '@')) &&
-	(end = strchr(at, '>'))) {
-	*len = end - start + 1;
-	return start;
+    *len = 0;
+    p = str;
+    while (p && (s = strchr(p, '<'))) {
+	p = s + 1;
+	while (*p && *p != '@' && *p != '<' && *p != '>') p++;
+	if (*p != '@') continue;
+	while (*p && *p != '<' && *p != '>') p++;
+	if (*p == '>') {
+	    *len = p - s + 1;
+	    return s;
+	}	    
     }
-    else {
-	*len = 0;
-	return NULL;
-    }
+
+    return NULL;
 }
 
 /* Get message-id, and references/in-reply-to */
@@ -3421,7 +3427,8 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	    ret = strcmp(md1->cc, md2->cc);
 	    break;
 	case SORT_DATE:
-	    ret = numcmp(md1->date, md2->date);
+	    ret = (md1->date && md2->date) ?
+		numcmp(md1->date, md2->date) : numcmp(md1->msgno, md2->msgno);
 	    break;
 	case SORT_FROM:
 	    ret = strcmp(md1->from, md2->from);
@@ -3772,10 +3779,12 @@ static void thread_orphan_child(Thread *child)
 /*
  * Link messages together using message-id and references.
  */
-void ref_link_messages(MsgData *msgdata, Thread **newnode,
+static void ref_link_messages(MsgData *msgdata, Thread **newnode,
 		       struct hash_table *id_table)
 {
     Thread *cur, *parent, *ref;
+    int dup_count = 0;
+    char buf[100];
     int i;
 
     /* for each message... */
@@ -3790,9 +3799,11 @@ void ref_link_messages(MsgData *msgdata, Thread **newnode,
 	     * on the old one.
 	     */
 	    if (cur->msgdata) {
+		sprintf(buf, "-dup%d", dup_count++);
 		msgdata->msgid =
-		    (char *) xrealloc(msgdata->msgid, strlen(msgdata->msgid)+5);
-		strcat(msgdata->msgid, "-dup");
+		    (char *) xrealloc(msgdata->msgid,
+				      strlen(msgdata->msgid) + strlen(buf) + 1);
+		strcat(msgdata->msgid, buf);
 		/* clear cur so that we create a new container */
 		cur = NULL;
 	    }
@@ -3947,9 +3958,39 @@ static void ref_prune_tree(Thread *parent)
 }
 
 /*
+ * Sort the messages in the root set by date.
+ */
+static void ref_sort_root(Thread *root)
+{
+    Thread *cur;
+    struct sortcrit sortcrit[] = {{ SORT_DATE,     0 },
+				  { SORT_SEQUENCE, 0 }};
+
+    cur = root->child;
+    while (cur) {
+	/* if the message is a dummy, sort its children */
+	if (!cur->msgdata) {
+	    cur->child = lsort(cur->child,
+			       (void * (*)(void*)) index_thread_getnext,
+			       (void (*)(void*,void*)) index_thread_setnext,
+			       (int (*)(void*,void*,void*)) index_thread_compare,
+			       sortcrit);
+	}
+	cur = cur->next;
+    }
+
+    /* sort the root set */
+    root->child = lsort(root->child,
+			(void * (*)(void*)) index_thread_getnext,
+			(void (*)(void*,void*)) index_thread_setnext,
+			(int (*)(void*,void*,void*)) index_thread_compare,
+			sortcrit);
+}
+
+/*
  * Group threads with same subject.
  */
-void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
+static void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 {
     Thread *cur, *old, *prev, *next, *child;
     struct hash_table subj_table;
@@ -3963,7 +4004,7 @@ void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
     /* Step 5.B: populate the table with a container for each subject
      * at the root
      */
-    for (cur = root->child; cur; cur = cur->next) {	
+    for (cur = root->child; cur; cur = cur->next) {
 	/* Step 5.B.i: find subject of the thread
 	 *
 	 * if the container is not empty, use it's subject
@@ -4183,8 +4224,6 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
     int tref, nnode;
     Thread *newnode;
     struct hash_table id_table;
-    struct sortcrit rootcrit[] = {{ SORT_DATE,     0 },
-				  { SORT_SEQUENCE, 0 }};
 
     /* Create/load the msgdata array */
     freeme = msgdata = index_msgdata_load(msgno_list, nmsg, loadcrit);
@@ -4236,11 +4275,7 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
     ref_prune_tree(root);
 
     /* Step 4: sort the root set */
-    root->child = lsort(root->child,
-			(void * (*)(void*)) index_thread_getnext,
-			(void (*)(void*,void*)) index_thread_setnext,
-			(int (*)(void*,void*,void*)) index_thread_compare,
-			rootcrit);
+    ref_sort_root(root);
 
     /* Step 5: group root set by subject */
     ref_group_subjects(root, nroot, &newnode);
