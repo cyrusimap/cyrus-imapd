@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.99 2001/08/02 17:06:57 ken3 Exp $
+ * $Id: pop3d.c,v 1.100 2001/08/03 15:33:24 rjs3 Exp $
  */
 #include <config.h>
 
@@ -322,7 +322,7 @@ int service_main(int argc, char **argv, char **envp)
 
     /* Create APOP challenge for banner */
     if (!sasl_mkchal(popd_saslconn, popd_apop_chal, sizeof(popd_apop_chal), 1)) {
-	syslog(LOG_ERROR, "APOP disabled: can't create challenge");
+	syslog(LOG_ERR, "APOP disabled: can't create challenge");
 	*popd_apop_chal = 0;
     }
 
@@ -798,11 +798,6 @@ static void cmd_starttls(int pop3s)
 
     if (result != SASL_OK) {
 	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
-    }
-
-    /* if authenticated set that */
-    if (external.auth_id != NULL) {
-	popd_userid = external.auth_id;
     }
 
     /* tell the prot layer about our new layers */
