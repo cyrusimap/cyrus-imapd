@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42.4.16 2003/03/27 19:36:26 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.17 2003/03/29 00:59:07 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -315,10 +315,10 @@ static struct lmtp_conn *getconn(const char *server)
 	p = xmalloc(sizeof(struct connlist));
 	p->host = xstrdup(server);
 
-	strcpy(optstr, server);
+	strlcpy(optstr, server, sizeof(optstr));
 	cp = strchr(optstr, '.');
 	if (cp) *cp = '\0';
-	strcat(optstr, "_password");
+	strlcat(optstr, "_password", sizeof(optstr));
 	pass = config_getoverflowstring(optstr, NULL);
 	if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
 
@@ -388,12 +388,16 @@ static int adddest(struct mydata *mydata,
     new_rcpt->rcpt_num = mydata->cur_rcpt;
     
     /* find what server we're sending this to */
-    if (!strncmp(mailbox, BB, sl) && mailbox[sl] == '+') {
+    if (sl < strlen(mailbox) &&
+	!strncmp(mailbox, BB, sl) &&
+	mailbox[sl] == '+') {
 	/* special shared folder address */
 	if (domainlen)
-	    sprintf(buf, "%s!%.*s", domain, userlen - sl - 1, mailbox + sl + 1);
+	    snprintf(buf, sizeof(buf),
+		     "%s!%.*s", domain, userlen - sl - 1, mailbox + sl + 1);
 	else
-	    sprintf(buf, "%.*s", userlen - sl - 1, mailbox + sl + 1);
+	    snprintf(buf, sizeof(buf),
+		     "%.*s", userlen - sl - 1, mailbox + sl + 1);
 	/* Translate any separators in user */
 	mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen, 0);
 	r = mupdate_find(mhandle, buf, &mailboxdata);
@@ -735,15 +739,15 @@ static int verify_user(const char *user,
 	if (plus) l = plus - user;
 	else l = userlen;
 
-	if ((l + domainlen) >= MAX_MAILBOX_NAME) {
+	if ((l + domainlen) >= MAX_MAILBOX_NAME - 5) {
 	    /* too long a name */
 	    r = IMAP_MAILBOX_NONEXISTENT;
 	} else {
 	    /* just copy before the plus */
 	    if (domainlen)
-		sprintf(buf, "%s!user.%.*s", domain, l, user);
+		snprintf(buf, sizeof(buf), "%s!user.%.*s", domain, l, user);
 	    else
-		sprintf(buf, "user.%.*s", l, user);
+		snprintf(buf, sizeof(buf), "user.%.*s", l, user);
 	}
     }
 
