@@ -13,14 +13,18 @@
  *
  */
 
-static char rcsid[] = "$Id: ptloader.c,v 1.9 1998/03/06 18:56:51 wcw Exp $";
+static char rcsid[] = "$Id: ptloader.c,v 1.10 1998/05/01 21:56:02 tjs Exp $";
 #include <string.h>
 #include "auth_krb_pts.h"
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/param.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
+#include <krb.h>
+#include <rx/rxkad.h>
+#include <afs/auth.h>
 #include <com_err.h>
 
 
@@ -29,6 +33,15 @@ static char ptclient_debug = 0;
 static void newclient();
 static int reauth();
 int fatal();
+
+int
+key_to_key(user,instance,realm,passwd,key)
+    char *user, *instance, *realm, *passwd;
+    C_Block key;
+{
+  memcpy(key, passwd, sizeof(des_cblock));
+  return (0);
+}
 
 #define AUTH_USER "postman"
 #define AUTH_INTERVAL (60*60*10) /* every 10 hours*/
@@ -46,24 +59,26 @@ main(argc, argv)
     mode_t oldumask;
     int listen_queue = 5;
     extern char *optarg;
-    extern int optind;
     char *user;
     char *pw_file = NULL;
     time_t next_auth_time;
     unsigned int auth_interval;
-    int do_reauth = 1;
+    int do_reauth = 1, use_srvtab = 0;
 
     auth_interval = AUTH_INTERVAL;
     user = AUTH_USER;
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_DEBUG, "starting: $Id: ptloader.c,v 1.9 1998/03/06 18:56:51 wcw Exp $");
+    syslog(LOG_DEBUG, "starting: $Id: ptloader.c,v 1.10 1998/05/01 21:56:02 tjs Exp $");
 
-    while ((opt = getopt(argc, argv, "Ud:l:f:u:t:")) != EOF) {
+    while ((opt = getopt(argc, argv, "Usd:l:f:u:t:")) != EOF) {
       switch (opt) {
       case 'U':
 	do_reauth = 0;
+	break;
+      case 's':
+	use_srvtab = 1;
 	break;
       case 'd':
 	ptclient_debug = atoi(optarg);
@@ -88,6 +103,7 @@ main(argc, argv)
 		"\n\t-d <n>\tdebug level"
 		"\n\t-l <n>\tlisten(2) queue backlog"
 		"\n\t-U\tDo not reauthenticate"
+		"\n\t-s\tAssume file is srvtab"
 		"\n\t-u <userid>\tuser to authenticate as"
 		"\n\t-f <file>\tfile for the users password"
 		"\n\t-t <seconds>\tinterval between authentications"
@@ -143,7 +159,7 @@ main(argc, argv)
 	syslog(LOG_ERR, "Invalid password file specified. Exiting...");
 	exit(-1);
       }
-      if (reauth(user, pw_file, 1) < 0) {
+      if (reauth(user, pw_file, 1, use_srvtab) < 0) {
 	syslog(LOG_ERR, "initialization failed. exiting...");
 	exit(-1);
       }
@@ -168,7 +184,7 @@ main(argc, argv)
 	if (ptclient_debug > 10) {
 	  syslog(LOG_DEBUG, "Reauthenticating at %d", time(0));
 	}
-	if (reauth(user, pw_file, 0) < 0) {
+	if (reauth(user, pw_file, 0, use_srvtab) < 0) {
 	  syslog(LOG_ERR, "error reauthenticating. continuing...");
 	} else {
 	  next_auth_time = time(0) + auth_interval;
@@ -230,11 +246,6 @@ int c;
     }
 
     (void)memset(&info, 0, sizeof(info));
-    info.hash = hashfn;
-    info.lorder = 0;
-    info.bsize = 2048;
-    info.cachesize = 20480;
-    info.ffactor = 8;
 
     (void)memset(&groups, 0, sizeof(groups));
     groups.namelist_len = 0;
@@ -345,10 +356,11 @@ sendreply:
 }
 
 static int
-reauth(name, file, newpag) 
+reauth(name, file, newpag, is_srvtab) 
      char *name;
      char *file;
      int newpag;
+     int is_srvtab;
 {
   int rc;
   char *reason;
@@ -358,42 +370,111 @@ reauth(name, file, newpag)
   static char pr_init = 0;
 
   if (pr_init) {
+#ifdef HAVE_PR_END
     /* this doesn't really do anything other than attempt to
      * clean up the ubik connection. Calling pr_Initialize
      * later in the code will most likely leak memory until 
      * the AFS libraries get cleaned up.
      */
     pr_End();
+#else
+    /* this destroys existing ubik connections... */
+    pr_Initialize(1L,"/", 0);
+    if (!pr_Initialize (1L, AFSCONF_CLIENTNAME, 0))
+#endif
   }
 
-  if ((fp = fopen(file, "r")) == NULL) {
-    syslog(LOG_ERR, "fopen: password file: %m");
-    return(-1);
-  }
-  if (fgets(password, sizeof(password), fp) == NULL) {
-    syslog(LOG_ERR, "fgets: unable to read password: %m");
-    return(-1);
-  }
-  if (feof(fp) != 0) {
-    syslog(LOG_ERR, "internal error: password longer than max length(%d)\n", 
-	   sizeof(password));
-    return(-1);
-  }
-  fclose(fp);
+  if (is_srvtab) {
+    /* Not done yet */
+    char lrealm[REALM_SZ];
+    int bkvno = 0, kerrno;
+    C_Block use_as_key;
+    CREDENTIALS c;
+    struct ktc_principal aserver;
+    struct ktc_principal aclient;
+    struct ktc_token atoken, btoken;
 
-  /* if the file has an ending \n, nuke it. */
-  if ((c = strrchr(password, '\n')) != NULL) {
-    *c='\0';
+    krb_get_lrealm(lrealm, 1);
+    read_service_key(name, NULL, lrealm, bkvno, file, (char *)password);
+    memcpy(use_as_key, password, 8);
+    kerrno = krb_get_in_tkt(name, NULL, lrealm, "krbtgt", lrealm, 
+			    DEFAULT_TKT_LIFE, key_to_key, NULL, use_as_key);
+    memset(use_as_key, 0, sizeof(use_as_key));
+    if (kerrno != 0) {
+      syslog(LOG_ERR, "get_in_tkt: %d", kerrno);
+      return(-1);
+    }
+    if ((kerrno = krb_get_cred("afs", "", lrealm, &c)) != 0) {
+      if ((kerrno = get_ad_tkt("afs", "", lrealm, 255)) != 0) {
+	syslog(LOG_ERR,"get_ad_tkt: %d", kerrno);
+        return(-1);
+      } else {
+        if ((kerrno = krb_get_cred("afs", "", lrealm, &c)) != 0) {
+	  syslog(LOG_ERR,"get_cred: %d", kerrno);
+          return(-1);
+        }
+      }
+    }
+    strncpy(aserver.name, "afs", MAXKTCNAMELEN - 1);
+    strncpy(aserver.instance, "", MAXKTCNAMELEN - 1);
+    strncpy(aserver.cell, lrealm, MAXKTCREALMLEN - 1);
+    {
+      char *t = aserver.cell;
+      char *s = aserver.cell;
+      int c;
+      while (c = *t++) {
+        if (isupper(c)) c=tolower(c);
+        *s++ = c;
+      }
+      *s++ = 0;
+    }
+    
+    atoken.kvno = c.kvno;
+    atoken.startTime = c.issue_date;
+#ifdef HAVE_KRB_LIFE_TO_TIME
+    atoken.endTime = krb_life_to_time(c.issue_date, c.lifetime);
+#else
+    atoken.endTime = c.issue_date + ((unsigned char)c.lifetime * 5 * 60);
+#endif
+    memcpy(&atoken.sessionKey, c.session, 8);
+    atoken.ticketLen = c.ticket_st.length;
+    memcpy(atoken.ticket, c.ticket_st.dat, atoken.ticketLen);
+    
+    if ((kerrno = ktc_SetToken(&aserver, &atoken, &aclient)) != 0) {
+      syslog(LOG_ERR, "ktc_SetToken: %d", kerrno);
+      return(-1);
+    }
+  } else {
+    if ((fp = fopen(file, "r")) == NULL) {
+      syslog(LOG_ERR, "fopen: password file: %m");
+      return(-1);
+    }
+    if (fgets(password, sizeof(password), fp) == NULL) {
+      syslog(LOG_ERR, "fgets: unable to read password: %m");
+      return(-1);
+    }
+    if (feof(fp) != 0) {
+      syslog(LOG_ERR, "internal error: password longer than max length(%d)\n", 
+	     sizeof(password));
+      return(-1);
+    }
+    fclose(fp);
+    
+    /* if the file has an ending \n, nuke it. */
+    if ((c = strrchr(password, '\n')) != NULL) {
+      *c='\0';
+    }
+    /* so we probably should allow instances but it isn't worth
+     * the overhead right now 
+     */
+    if (ka_UserAuthenticate(name, /*inst*/ "", /*realm*/0, password, 
+			    newpag, &reason)) 
+      {
+	syslog(LOG_ERR, "Unable to authenticate to AFS: %s", reason);
+	return (-1);
+      }
+    (void)memset(&password, 0, sizeof(password));
   }
-  /* so we probably should allow instances but it isn't worth
-   * the overhead right now 
-   */
-  if (ka_UserAuthenticate(name, /*inst*/ "", /*realm*/0, password, 
-			  newpag, &reason)) {
-    syslog(LOG_ERR, "Unable to authenticate to AFS: %s", reason);
-    return (-1);
-  }
-  (void)memset(&password, 0, sizeof(password));
 
   if ((rc = pr_Initialize(1L, AFSCONF_CLIENTNAME, 0))) {
     syslog(LOG_ERR, "pr_Initialize: %s", error_message(rc));
@@ -416,4 +497,4 @@ int exitcode;
   syslog(LOG_ERR, "%s", msg);
   exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.9 1998/03/06 18:56:51 wcw Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.10 1998/05/01 21:56:02 tjs Exp $ */

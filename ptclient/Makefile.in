@@ -15,6 +15,7 @@
 # 
 srcdir = @srcdir@
 VPATH = @srcdir@
+PURIFY = /usr/local/bin/purify
 
 CC = @CC@
 INSTALL = @INSTALL@
@@ -24,7 +25,7 @@ DEFS = @DEFS@
 CPPFLAGS = -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
 AFSLIBS = @AFSLIBS@
 LIBS = @LIBS@ 
-DEPLIBS = ../et/libcom_err.a ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
@@ -35,7 +36,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-all: ptloader ptexpire # pttest
+all: ptloader ptexpire ptdump # pttest
 
 install:
 	$(INSTALL) @STRIP@ -m 755 ptloader $(DESTDIR)$(cyrus_prefix)/bin
@@ -47,8 +48,18 @@ install:
 ptloader: ptloader.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ ptloader.o $(AFSLIBS) $(DEPLIBS) $(LIBS)
 
+ptloader.pure: ptloader.o $(DEPLIBS)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptloader.o $(AFSLIBS) $(DEPLIBS) $(LIBS)
+
 ptexpire: ptexpire.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ ptexpire.o $(DEPLIBS) $(LIBS)
+
+ptdump: ptdump.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ ptdump.o $(DEPLIBS) $(LIBS)
+
+
+ptexpire.pure: ptexpire.o $(DEPLIBS)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptexpire.o $(DEPLIBS) $(LIBS)
 
 #pttest: pttest.o auth_krb_pts.o  $(DEPLIBS)
 #        $(CC) $(LDFLAGS) -o $@ pttest.o auth_krb_pts.o $(OBJS) $(DEPLIBS) $(LIBS)
