@@ -109,6 +109,9 @@ ec IMAP_ANNOTATION_BADATTRIB,
 ec IMAP_SERVER_UNAVAILABLE,
    "Server(s) unavailable to complete operation"
 
+ec IMAP_REMOTE_DENIED,
+   "The remote Server(s) denied the operation"
+
 ec IMAP_AGAIN,
    "Retry operation"
 
