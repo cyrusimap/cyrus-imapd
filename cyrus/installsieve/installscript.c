@@ -62,6 +62,7 @@ typedef enum {
 } imt_stat;
 
 char *authname=NULL;
+char *username=NULL;
 char *realm=NULL;
 char *password=NULL;
 
@@ -100,7 +101,10 @@ void interaction (int id, const char *prompt,
       }
 	return;
     } else if ((id==SASL_CB_USER) || (id==SASL_CB_AUTHNAME)) {
-	if (authname) {
+        if ((id==SASL_CB_USER) && (username!=NULL))
+	{
+	  strcpy(result, username);
+	} else if (authname) {
 	    strcpy(result, authname);
 	} else {
 	    strcpy(result, getpwuid(getuid())->pw_name);
@@ -474,6 +478,7 @@ void usage(void)
   printf("  -m <mech>    Mechanism to use for authentication\n");
   printf("  -g <name>    Get script <name> and save to disk\n");
   printf("  -u <user>    Userid/Authname to use\n");
+  printf("  -t <user>    Userid to use (for proxying)\n");
   printf("  -w <passwd>  Specify password (Should only be used for automated scripts)\n");
   exit(1);
 }
@@ -503,7 +508,7 @@ int main(int argc, char **argv)
   int result;
 
   /* look at all the extra args */
-  while ((c = getopt(argc, argv, "a:d:g:lv:p:i:m:u:w:")) != EOF)
+  while ((c = getopt(argc, argv, "a:d:g:lv:p:i:m:u:w:t:")) != EOF)
     switch (c) 
     {
     case 'a':
@@ -537,6 +542,9 @@ int main(int argc, char **argv)
       break;
     case 'u':
       authname = optarg;
+      break;
+    case 't':
+      username = optarg;
       break;
     case 'w':
       password = optarg;

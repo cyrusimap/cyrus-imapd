@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.187 1999/11/05 01:00:35 tmartin Exp $ */
+/* $Id: imapd.c,v 1.188 1999/11/05 22:30:17 tmartin Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -96,8 +96,9 @@ time_t imapd_logtime;
 
 #ifdef HAVE_SSL
 extern SSL *tls_conn;
-int imapd_sucessful_tls = 0;
 #endif /* HAVE_SSL */
+
+int imapd_sucessful_tls = 0; /* yes keep outside of ifdef */
 
 static struct mailbox mboxstruct;
 
@@ -1212,14 +1213,17 @@ char *passwd;
     int plaintextloginpause;
     int result;
 
+    canon_user = auth_canonifyid(user);
+
+    /* possibly disallow login */
     if ((imapd_sucessful_tls == 0) &&
-	(config_getswitch("allowplaintext", 1)==0))
+	(config_getswitch("allowplaintext", 1)==0) &&
+	strcmp(canon_user, "anonymous")!=0)
     {
       prot_printf(imapd_out, "%s NO Login only available under a layer\r\n", tag, result);      
       return;
     }
 
-    canon_user = auth_canonifyid(user);
     if (!canon_user) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
 	       imapd_clienthost, beautify_string(user));

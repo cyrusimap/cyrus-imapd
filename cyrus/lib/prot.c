@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.43 1999/11/05 01:00:40 tmartin Exp $
+ * $Id: prot.c,v 1.44 1999/11/05 22:30:22 tmartin Exp $
  */
 
 #include <stdio.h>
@@ -43,8 +43,6 @@
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
-
-#define HAVE_SSL 1
 
 #include "prot.h"
 #include "xmalloc.h"
