@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.64 2003/06/07 16:43:03 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.65 2003/06/09 01:42:51 ken3 Exp $ */
 
 #include <config.h>
 
@@ -5047,7 +5047,7 @@ void cmd_getannotation(char *tag, char *mboxpat)
  */    
 void cmd_setannotation(char *tag, char *mboxpat __attribute__((unused)))
 {
-    int c;
+    int c, r = 0;
     struct entryattlist *entryatts = NULL;
 
     c = getannotatestoredata(tag, &entryatts);
@@ -5066,7 +5066,16 @@ void cmd_setannotation(char *tag, char *mboxpat __attribute__((unused)))
 	goto freeargs;
     }
 
-    prot_printf(proxyd_out, "%s NO setting annotations not supported\r\n", tag);
+    r = annotatemore_store(mboxpat,
+			   entryatts, &proxyd_namespace, proxyd_userisadmin,
+			   proxyd_userid, proxyd_authstate);
+
+    if (r) {
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+    } else {
+	prot_printf(proxyd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    }
 
   freeargs:
     if (entryatts) freeentryatts(entryatts);
