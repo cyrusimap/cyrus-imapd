@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.32 2003/01/31 21:51:35 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.33 2003/02/04 19:02:55 rjs3 Exp $
  */
 
 #include <config.h>
@@ -2945,4 +2945,19 @@ int mboxlist_changesub(const char *name, const char *userid,
 
     mboxlist_closesubs(subs);
     return r;
+}
+
+/* Transaction Handlers */
+int mboxlist_commit(struct txn *tid) 
+{
+    assert(tid);
+    
+    return DB->commit(mbdb, tid);
+}
+
+int mboxlist_abort(struct txn *tid) 
+{
+    assert(tid);
+
+    return DB->abort(mbdb, tid);
 }

@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.33.4.3 2003/01/31 21:51:36 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.33.4.4 2003/02/04 19:02:56 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -192,5 +192,9 @@ void mboxlist_init(int flags);
 
 /* done with database stuff */
 void mboxlist_done(void);
+
+/* for transactions */
+int mboxlist_commit(struct txn *tid);
+int mboxlist_abort(struct txn *tid);
 
 #endif
