@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.63 2002/03/10 03:56:11 ken3 Exp $ */
+/* $Id: master.c,v 1.64 2002/03/13 15:19:48 ken3 Exp $ */
 
 #include <config.h>
 
@@ -839,9 +839,9 @@ void add_start(const char *name, struct entry *e,
     free(cmd);
 }
 
-void add_service(const char *name, struct entry *e,
-		 void *rock __attribute__((unused)))
+void add_service(const char *name, struct entry *e, void *rock)
 {
+    int ignore_err = (int) rock;
     char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
     int prefork = masterconf_getint(e, "prefork", 0);
     char *listen = mystrdup(masterconf_getstring(e, "listen", NULL));
@@ -851,8 +851,14 @@ void add_service(const char *name, struct entry *e,
 
     if (!cmd || !listen) {
 	char buf[256];
-	snprintf(buf, sizeof(buf), "unable to find command or port for %s", 
-		 name);
+	snprintf(buf, sizeof(buf),
+		 "unable to find command or port for service '%s'", name);
+
+	if (ignore_err) {
+	    syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+	    return;
+	}
+
 	fatal(buf, EX_CONFIG);
     }
 
@@ -865,6 +871,12 @@ void add_service(const char *name, struct entry *e,
     if ((i < nservices) && Services[i].exec) {
 	char buf[256];
 	snprintf(buf, sizeof(buf), "multiple entries for service '%s'", name);
+
+	if (ignore_err) {
+	    syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+	    return;
+	}
+
 	fatal(buf, EX_CONFIG);
     }
 
@@ -949,17 +961,23 @@ void add_service(const char *name, struct entry *e,
     free(max);
 }
 
-void add_event(const char *name, struct entry *e,
-	       void *rock __attribute__((unused)))
+void add_event(const char *name, struct entry *e, void *rock)
 {
+    int ignore_err = (int) rock;
     char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
     int period = 60 * masterconf_getint(e, "period", 0);
     struct event *evt;
 
     if (!cmd) {
 	char buf[256];
-	snprintf(buf, sizeof(buf), "unable to find command or port for %s", 
-		 name);
+	snprintf(buf, sizeof(buf),
+		 "unable to find command or port for event '%s'", name);
+
+	if (ignore_err) {
+	    syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+	    return;
+	}
+
 	fatal(buf, EX_CONFIG);
     }
     
@@ -1015,8 +1033,8 @@ void reread_conf(void)
        they will be re-enabled if they appear in config file */
     for (i = 0; i < nservices; i++) Services[i].exec = NULL;
 
-     /* read services */
-    masterconf_getsection("SERVICES", &add_service, NULL);
+    /* read services */
+    masterconf_getsection("SERVICES", &add_service, (void*) 1);
 
     for (i = 0; i < nservices; i++) {
 	if (!Services[i].exec && Services[i].socket) {
@@ -1065,7 +1083,7 @@ void reread_conf(void)
     }
 
     /* read events */
-    masterconf_getsection("EVENTS", &add_event, NULL);
+    masterconf_getsection("EVENTS", &add_event, (void*) 1);
 }
 
 int main(int argc, char **argv)
