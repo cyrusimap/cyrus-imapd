@@ -38,14 +38,14 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.h,v 1.1 2000/12/14 19:26:48 ken3 Exp $ */
+/* $Id: idled.h,v 1.2 2001/02/22 16:09:17 ken3 Exp $ */
 
 #ifndef IDLED_H
 #define IDLED_H
 
 #include "mailbox.h"
 
-/* socket to communicate with the acappusher */
+/* socket to communicate with the idled */
 #define FNAME_IDLE_SOCK "/socket/idle"
 
 typedef struct idle_data_s {
