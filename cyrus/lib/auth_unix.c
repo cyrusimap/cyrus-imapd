@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.37 2003/10/22 18:50:12 rjs3 Exp $
+ * $Id: auth_unix.c,v 1.37.2.1 2004/09/13 22:47:50 shadow Exp $
  */
 
 #include <config.h>
@@ -208,7 +208,9 @@ size_t len;
 	}
     }
 
-    if (!sawalpha) return NULL;  /* has to be one alpha char */
+    /* we used to enforce "has to be one alpha char" */
+    /* now we don't */
+    /* if (!sawalpha) return NULL;  */
 
     return retbuf;
 }
