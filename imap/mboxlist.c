@@ -22,6 +22,8 @@
 static char *listfname, *newlistfname;
 
 #define FNAME_MBOXLIST "/mailboxes"
+#define FNAME_USERDIR "/user/"
+#define FNAME_SUBSSUFFIX ".sub"
 
 /*
  * Maximum length of a mailbox name.  This, plus the partition name
@@ -141,11 +143,11 @@ char **acl;
     return 0;
 }
 
-mboxlist_createmailbox(name, format, partition, isadmin, username)
+mboxlist_createmailbox(name, format, partition, isadmin, userid)
 char *name;
 char *partition;
 int isadmin;
-char *username;
+char *userid;
 {
     FILE *listfile = 0;
     int i;
@@ -181,9 +183,9 @@ char *username;
     if (r) return r;
 
     /* User has admin rights over their own mailbox namespace */
-    if (!strchr(username, '.') && !strncasecmp(name, "user.", 5) &&
-	!strncasecmp(name+5, username, strlen(username)) &&
-	name[5+strlen(username)] == '.') {
+    if (!strchr(userid, '.') && !strncasecmp(name, "user.", 5) &&
+	!strncasecmp(name+5, userid, strlen(userid)) &&
+	name[5+strlen(userid)] == '.') {
 	isadmin = 1;
     }
 
@@ -357,10 +359,10 @@ char *username;
     return 0;
 }
 	
-mboxlist_find(pattern, isadmin, username)
+mboxlist_findall(pattern, isadmin, userid)
 char *pattern;
 int isadmin;
-char *username;
+char *userid;
 {
     FILE *listfile;
     struct glob *g;
@@ -380,9 +382,9 @@ char *username;
 
     g = glob_init(pattern, GLOB_ICASE);
 
-    if (!strchr(username, '.') && strlen(username)+5 < MAX_NAME_LEN) {
+    if (!strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
 	strcpy(usermboxname, "user.");
-	strcat(usermboxname, username);
+	strcat(usermboxname, userid);
 
 	if (glob_test(g, "inbox", -1)) {
 	    buflen = sizeof(buf);
@@ -395,7 +397,7 @@ char *username;
 	usermboxnamelen = strlen(usermboxname);
     }
     else {
-	username = 0;
+	userid = 0;
     }
 
     /* Find fixed-string pattern prefix */
@@ -406,7 +408,7 @@ char *username;
     *p = '\0';
 
     /* If user.X can match pattern, search for those mailboxes first */
-    if (username && !strncasecmp(usermboxname, pattern,
+    if (userid && !strncasecmp(usermboxname, pattern,
 	    prefixlen < usermboxnamelen ? prefixlen : usermboxnamelen)) {
 
 	buflen = sizeof(buf);
@@ -469,8 +471,294 @@ char *username;
 	}
     }
 	
+    fclose(listfile);
     glob_free(g);
     return;
+}
+
+mboxlist_find(pattern, isadmin, userid)
+char *pattern;
+int isadmin;
+char *userid;
+{
+    FILE *subsfile;
+    char *subsfname, *newsubsfname;
+    FILE *listfile;
+    struct glob *g;
+    char usermboxname[MAX_NAME_LEN];
+    int usermboxnamelen;
+    char buf[512], *bufp = buf;
+    unsigned offset, buflen, prefixlen;
+    char *endname, *p;
+
+    if (mboxlist_opensubs(userid, &subsfile, &subsfname, &newsubsfname)) {
+	return;
+    }
+    flock(fileno(subsfile), LOCK_UN);
+
+    if (!listfname) mboxlist_getfname();
+
+    listfile = fopen(listfname, "r");
+    if (!listfile) {
+	fatal("can't read mailbox list", EX_OSFILE);
+    }
+
+    g = glob_init(pattern, GLOB_ICASE);
+
+    if (!strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
+	strcpy(usermboxname, "user.");
+	strcat(usermboxname, userid);
+
+	if (glob_test(g, "inbox", -1)) {
+	    buflen = sizeof(buf);
+	    (void) n_binarySearchFD(fileno(subsfile), usermboxname, 0, &bufp,
+				    &buflen, 0, 0);
+	    if (buflen) printf("* MAILBOX INBOX\r\n");
+	}
+
+	strcat(usermboxname, ".");
+	usermboxnamelen = strlen(usermboxname);
+    }
+    else {
+	userid = 0;
+    }
+
+    /* Find fixed-string pattern prefix */
+    for (p = pattern; *p; p++) {
+	if (*p == '*' || *p == '%' || *p == '?') break;
+    }
+    prefixlen = p - pattern;
+    *p = '\0';
+
+    /* If user.X can match pattern, search for those mailboxes first */
+    if (userid && !strncasecmp(usermboxname, pattern,
+	    prefixlen < usermboxnamelen ? prefixlen : usermboxnamelen)) {
+
+	buflen = sizeof(buf);
+	offset = n_binarySearchFD(fileno(subsfile), usermboxname, 0, &bufp,
+				  &buflen, 0, 0);
+	fseek(subsfile, offset, 0);
+	for (;;) {
+	    if (!fgets(buf, sizeof(buf), subsfile)) break;
+	    /* XXX assuming \t before running past sizeof(buf) */
+	    p = strchr(buf, '\t');
+	    *p = '\0';
+	    if (strncasecmp(buf, usermboxname, usermboxnamelen)) break;
+	    if (glob_test(g, buf, -1)) {
+		bufp = 0;
+		buflen = 0;
+		offset = n_binarySearchFD(fileno(listfile), buf,
+					  0, &bufp, &buflen, 0, 0);
+		if (buflen) {
+		    printf("* MAILBOX %s\r\n", buf);
+		}
+		else {
+		    mboxlist_changesub(buf, userid, 0);
+		}
+	    }
+	}
+    }
+
+    buflen = sizeof(buf);
+    offset = n_binarySearchFD(fileno(subsfile), pattern, 0, &bufp,
+			      &buflen, 0, 0);
+    fseek(subsfile, offset, 0);
+    usermboxname[--usermboxnamelen] = '\0';
+    for (;;) {
+	if (!fgets(buf, sizeof(buf), subsfile)) break;
+	/* XXX assuming \t before running past sizeof(buf) */
+	endname = strchr(buf, '\t');
+	*endname = '\0';
+	if (strncasecmp(buf, pattern, prefixlen)) break;
+	if (glob_test(g, buf, -1) &&
+	    (strncasecmp(buf, usermboxname, usermboxnamelen) ||
+	     (buf[usermboxnamelen] != '\0' && buf[usermboxnamelen] != '.'))) {
+	    bufp = 0;
+	    buflen = 0;
+	    offset = n_binarySearchFD(fileno(listfile), buf,
+				      0, &bufp, &buflen, 0, 0);
+	    if (buflen) {
+		printf("* MAILBOX %s\r\n", buf);
+	    }
+	    else {
+		mboxlist_changesub(buf, userid, 0);
+	    }
+	}
+    }
+	
+    fclose(subsfile);
+    fclose(listfile);
+    glob_free(g);
+    return;
+}
+
+int mboxlist_changesub(name, userid, add)
+char *name;
+char *userid;
+int add;
+{
+    char inbox[MAX_MAILBOX_PATH];
+    int r;
+    char *acl;
+    FILE *subsfile, *newsubsfile;
+    char *subsfname, *newsubsfname;
+    unsigned offset, len;
+    char *buf = 0;
+    int n;
+    char copybuf[4096];
+    
+    if (r = mboxlist_opensubs(userid, &subsfile, &subsfname, &newsubsfname)) {
+	return r;
+    }
+
+    if (!strcasecmp(name, "inbox")) {
+	strcpy(inbox, "user.");
+	strcat(inbox, userid);
+	name = inbox;
+    }
+
+    if (add) {
+	/* Ensure mailbox exists and can be either seen or read */
+	if (r = mboxlist_lookup(name, (char **)0, &acl)) {
+	    fclose(subsfile);
+	    return r;
+	}
+	if ((acl_myrights(acl) & (ACL_READ|ACL_LOOKUP)) == 0) {
+	    fclose(subsfile);
+	    return IMAP_MAILBOX_NONEXISTENT;
+	}
+    }
+
+    offset = n_binarySearchFD(fileno(subsfile), name, 0, &buf, &len, 0, 0);
+    if (add) {
+	if (len) {
+	    fclose(subsfile);
+	    return IMAP_MAILBOX_SUBSCRIBED;
+	}
+    }
+    else {
+	if (!len) {
+	    fclose(subsfile);
+	    return IMAP_MAILBOX_UNSUBSCRIBED;
+	}
+    }
+
+    rewind(subsfile);
+    newsubsfile = fopen(newsubsfname, "w");
+    if (!newsubsfile) {
+	fclose(subsfile);
+	return IMAP_IOERROR;
+    }
+
+    while (offset) {
+	n = fread(copybuf, 1,
+		  offset < sizeof(copybuf) ? offset : sizeof(copybuf),
+		  subsfile);
+	if (!n) {
+	    fclose(subsfile);
+	    fclose(newsubsfile);
+	    return IMAP_IOERROR;
+	}
+	fwrite(copybuf, 1, n, newsubsfile);
+	offset -= n;
+    }
+
+    if (add) {
+	fprintf(newsubsfile, "%s\t\n", name);
+    }
+    else {
+	fseek(subsfile, len, 1);
+    }
+
+    while (n = fread(copybuf, 1, sizeof(copybuf), subsfile)) {
+	fwrite(copybuf, 1, n, newsubsfile);
+    }
+    fflush(newsubsfile);
+    if (ferror(newsubsfile) || fsync(fileno(newsubsfile)) ||
+	rename(newsubsfname, subsfname) == -1) {
+	fclose(subsfile);
+	fclose(newsubsfile);
+	return IMAP_IOERROR;
+    }
+    fclose(subsfile);
+    fclose(newsubsfile);
+    return 0;
+}
+
+    
+static int
+mboxlist_opensubs(userid, subsfile, fname, newfname)
+char *userid;
+FILE **subsfile;
+char **fname;
+char **newfname;
+{
+    int r;
+    char *val;
+    static char *subsfname, *newsubsfname;
+    int subsfd;
+    struct stat sbuffile, sbuffd;
+    char buf[MAX_MAILBOX_PATH];
+
+    /* Users without INBOXes may not keep subscriptions */
+    if (strchr(userid, '.') || strlen(userid) + 6 > MAX_MAILBOX_PATH) {
+	return IMAP_PERMISSION_DENIED;
+    }
+    strcpy(buf, "user.");
+    strcat(buf, userid);
+    if (mboxlist_lookup(buf, (char **)0, (char **)0) != 0) {
+	return IMAP_PERMISSION_DENIED;
+    }
+
+    if (subsfname) {
+	free(subsfname);
+	free(newsubsfname);
+    }
+
+    /* Build subscription list filename */
+    val = config_getstring("configdirectory", "");
+    subsfname = xmalloc(strlen(val)+sizeof(FNAME_USERDIR)+
+			strlen(userid)+sizeof(FNAME_SUBSSUFFIX));
+    strcpy(subsfname, val);
+    strcat(subsfname, FNAME_USERDIR);
+    strcat(subsfname, userid);
+    strcat(subsfname, FNAME_SUBSSUFFIX);
+    newsubsfname = xmalloc(strlen(subsfname)+5);
+    strcpy(newsubsfname, subsfname);
+    strcat(newsubsfname, ".NEW");
+
+    subsfd = open(subsfname, O_RDWR|O_CREAT, 0666);
+    if (subsfd == -1) {
+	return IMAP_IOERROR;
+    }
+    *subsfile = fdopen(subsfd, "r+");
+    for (;;) {
+	r = flock(fileno(*subsfile), LOCK_EX);
+	if (r == -1) {
+	    if (errno == EINTR) continue;
+	    fclose(*subsfile);
+	    return IMAP_IOERROR;
+	}
+	
+	fstat(fileno(*subsfile), &sbuffd);
+	r = stat(subsfname, &sbuffile);
+	if (r == -1) {
+	    fclose(*subsfile);
+	    return IMAP_IOERROR;
+	}
+
+	if (sbuffd.st_ino == sbuffile.st_ino) break;
+
+	fclose(*subsfile);
+	*subsfile = fopen(subsfname, "r+");
+	if (!*subsfile) {
+	    return IMAP_IOERROR;
+	}
+    }
+
+    *fname = subsfname;
+    *newfname = newsubsfname;
+    return 0;
 }
 
 static mboxlist_getfname()
