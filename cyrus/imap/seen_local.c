@@ -470,4 +470,20 @@ struct mailbox *newmailbox;
     return mailbox_copyfile(oldfname, newfname);
 }
 
+int seen_reconstruct(mailbox)
+struct mailbox *mailbox;
+{
+    char fnamebuf[MAX_MAILBOX_PATH];
+    FILE *file;
     
+    strcpy(fnamebuf, mailbox->path);
+    strcat(fnamebuf, FNAME_SEEN);
+
+    file = fopen(fnamebuf, "r+");
+    if (file) {
+	fclose(file);
+	return 0;
+    }
+
+    return seen_create(mailbox);
+}
