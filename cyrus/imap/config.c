@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.4 2002/07/20 01:17:54 ken3 Exp $ */
+/* $Id: config.c,v 1.55.4.5 2002/07/22 19:45:44 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -50,6 +50,7 @@
 #include <syslog.h>
 #include <com_err.h>
 #include <sys/types.h>
+#include <netinet/in.h>
 #include <sys/stat.h>
 
 #if HAVE_UNISTD_H
