@@ -1,5 +1,5 @@
 /* glob.c -- fast globbing routine using '*', '%', and '?'
- $Id: glob.c,v 1.15 1998/05/15 21:51:18 neplokh Exp $
+ $Id: glob.c,v 1.16 1998/06/08 23:16:47 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -45,7 +45,10 @@ static char inbox[] = "INBOX";
  *   4) '*' eats all '*'s and '%'s connected by any wildcard
  *   5) '%' eats all adjacent '%'s
  */
-glob *glob_init_suppress P((const char *str, int flags, const char *suppress))
+glob *glob_init_suppress (str, flags, suppress)
+    const char *str;
+    int flags;
+    const char *suppress;
 {
     glob *g;
     char *dst;
@@ -162,7 +165,8 @@ glob *glob_init_suppress P((const char *str, int flags, const char *suppress))
 
 /* free a glob structure
  */
-void glob_free P((glob **g))
+void glob_free (g)
+    glob **g;
 {
     fs_give((void **) g);
 }
@@ -175,7 +179,11 @@ void glob_free P((glob **g))
  *            set to return value + 1 on partial match, otherwise -1
  *            if NULL, partial matches not allowed
  */
-int glob_test P((glob *g, const char *ptr, long int len, long int *min))
+int glob_test (g, ptr, len, min)
+    glob* g;
+    const char* ptr;
+    long int len;
+    long int *min;
 {
     const char *gptr, *pend;	/* glob pointer, end of ptr string */
     const char *gstar, *pstar;	/* pointers for '*' patterns */
@@ -373,7 +381,9 @@ int glob_test P((glob *g, const char *ptr, long int len, long int *min))
 }
 
 #ifdef TEST_GLOB
-int main P((int argc, char **argv))
+int main (argc, argv)
+    int argc;
+    char* argv[];
 {
     glob *g = glob_init_suppress(argv[1], GLOB_INBOXCASE|GLOB_HIERARCHY,
 				 "user.nifty");
