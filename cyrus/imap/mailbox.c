@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.13 2002/12/20 18:32:03 rjs3 Exp $
+ $Id: mailbox.c,v 1.134.4.14 2003/01/11 04:01:20 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -786,7 +786,7 @@ mailbox_read_quota(quota)
 struct quota *quota;
 {
     const char *p, *eol;
-    char buf[4096];
+    char buf[MAX_MAILBOX_PATH+1];
     const char *quota_base = 0;
     unsigned long quota_len = 0;
 
@@ -798,7 +798,7 @@ struct quota *quota;
     }
 
     if (quota->fd == -1) {
-	mailbox_hash_quota(buf, quota->root);
+	mailbox_hash_quota(buf, sizeof(buf), quota->root);
 	quota->fd = open(buf, O_RDWR, 0);
 	if (quota->fd == -1) {
 	    syslog(LOG_ERR, "IOERROR: opening quota file %s: %m", buf);
@@ -959,7 +959,7 @@ int
 mailbox_lock_quota(quota)
 struct quota *quota;
 {
-    char quota_path[MAX_MAILBOX_PATH];
+    char quota_path[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     const char *lockfailaction;
     int r;
@@ -975,7 +975,7 @@ struct quota *quota;
 	quota->limit = -1;
 	return 0;
     }
-    mailbox_hash_quota(quota_path, quota->root);
+    mailbox_hash_quota(quota_path, sizeof(quota_path), quota->root);
     if (quota->fd == -1) {
 	quota->fd = open(quota_path, O_RDWR, 0);
 	if (quota->fd == -1) {
@@ -1299,15 +1299,15 @@ int mailbox_write_quota(struct quota *quota)
     int r;
     int len;
     char buf[1024];
-    char quota_path[MAX_MAILBOX_PATH];
-    char new_quota_path[MAX_MAILBOX_PATH];
+    char quota_path[MAX_MAILBOX_PATH+1];
+    char new_quota_path[MAX_MAILBOX_PATH+1];
     int newfd;
 
     assert(quota->lock_count != 0);
 
     if (!quota->root) return 0;
 
-    mailbox_hash_quota(quota_path, quota->root);
+    mailbox_hash_quota(quota_path, sizeof(quota_path), quota->root);
     strcpy(new_quota_path, quota_path);
     strcat(new_quota_path, ".NEW");
 
@@ -1360,13 +1360,13 @@ int
 mailbox_delete_quota(quota)
 struct quota *quota;
 {
-    char quota_path[MAX_MAILBOX_PATH];
+    char quota_path[MAX_MAILBOX_PATH+1];
 
     assert(quota->lock_count != 0);
 
     if (!quota->root) return 0;
 
-    mailbox_hash_quota(quota_path, quota->root);
+    mailbox_hash_quota(quota_path, sizeof(quota_path), quota->root);
 
     unlink(quota_path);
 
@@ -1912,18 +1912,18 @@ void *deciderock;
 */
 int mailbox_findquota(char *start, const char *name)
 {
-    char quota_path[MAX_MAILBOX_PATH];
+    char quota_path[MAX_MAILBOX_PATH+1];
     char *tail;
     struct stat sbuf;
 
     strcpy(start, name);
 
-    mailbox_hash_quota(quota_path, start);
+    mailbox_hash_quota(quota_path, sizeof(quota_path), start);
     while (stat(quota_path, &sbuf) == -1) {
 	tail = strrchr(start, '.');
 	if (!tail) return 0;
 	*tail = '\0';
-	mailbox_hash_quota(quota_path, start);
+	mailbox_hash_quota(quota_path, sizeof(quota_path), start);
     }
     return 1;
 }
@@ -2615,21 +2615,27 @@ void mailbox_hash_mbox(char *buf,
 
 /* simple hash so it's easy to find these things in the filesystem;
    our human time is worth more than efficiency */
-void mailbox_hash_quota(char *buf, const char *qr)
-{
+void mailbox_hash_quota(char *buf, unsigned size, const char *qr) {
     const char *idx;
     char c, *p;
+    unsigned len;
 
-    sprintf(buf, "%s", config_dir);
-    buf += strlen(buf);
+    if ((len = snprintf(buf, size, "%s", config_dir)) >= size) {
+        fatal("insufficient buffer size in mailbox_hash_quota", EC_TEMPFAIL);
+    }
+    buf += len;
+    size -= len;
 
     if (config_virtdomains && (p = strchr(qr, '!'))) {
 	*p = '\0';  /* split domain!qr */
 	c = (char) dir_hash_c(qr);
-	sprintf(buf, "%s%c/%s", FNAME_DOMAINDIR, c, qr);
+	if ((len = snprintf(buf, size, "%s%c/%s", FNAME_DOMAINDIR, c, qr)) >= size) {
+	    fatal("insufficient buffer size in mailbox_hash_quota", EC_TEMPFAIL);
+	}
 	*p++ = '!';  /* reassemble domain!qr */
 	qr = p;
-	buf += strlen(buf);
+	buf += len;
+	size -= len;
     }
 
     idx = strchr(qr, '.'); /* skip past user. */
@@ -2640,5 +2646,7 @@ void mailbox_hash_quota(char *buf, const char *qr)
     }
     c = (char) dir_hash_c(idx);
 
-    sprintf(buf, "%s%c/%s", FNAME_QUOTADIR, c, qr);
+    if (snprintf(buf, size, "%s%c/%s", FNAME_QUOTADIR, c, qr) >= size) {
+	fatal("insufficient buffer size in mailbox_hash_quota", EC_TEMPFAIL);
+    }
 }

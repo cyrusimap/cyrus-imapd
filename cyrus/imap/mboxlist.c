@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.28 2002/12/20 18:32:03 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.29 2003/01/11 04:01:21 ken3 Exp $
  */
 
 #include <config.h>
@@ -2080,8 +2080,8 @@ int mboxlist_findall_alt(struct namespace *namespace,
  */
 int mboxlist_setquota(const char *root, int newquota, int force)
 {
-    char quota_path[MAX_MAILBOX_PATH];
-    char pattern[MAX_MAILBOX_PATH];
+    char quota_path[MAX_MAILBOX_PATH+1];
+    char pattern[MAX_MAILBOX_PATH+1];
     struct quota quota;
     int have_mailbox = 1;
     int r, t;
@@ -2094,7 +2094,7 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     memset(&quota, 0, sizeof(struct quota));
 
     quota.root = (char *) root;
-    mailbox_hash_quota(quota_path, root);
+    mailbox_hash_quota(quota_path, sizeof(quota_path), root);
 
     if ((quota.fd = open(quota_path, O_RDWR, 0)) != -1) {
 	/* Just lock and change it */
@@ -2160,8 +2160,8 @@ int mboxlist_setquota(const char *root, int newquota, int force)
  */
 int mboxlist_unsetquota(const char *root)
 {
-    char quota_path[MAX_MAILBOX_PATH];
-    char pattern[MAX_MAILBOX_PATH];
+    char quota_path[MAX_MAILBOX_PATH+1];
+    char pattern[MAX_MAILBOX_PATH+1];
     int fd;
     int r=0;
 
@@ -2170,7 +2170,7 @@ int mboxlist_unsetquota(const char *root)
 	return IMAP_MAILBOX_BADNAME;
     }
     
-    mailbox_hash_quota(quota_path, root);
+    mailbox_hash_quota(quota_path, sizeof(quota_path), root);
 
     if ((fd = open(quota_path, O_RDWR, 0)) == -1) {
 	/* already unset */

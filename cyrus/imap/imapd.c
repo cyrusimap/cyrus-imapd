@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.56 2003/01/08 14:42:57 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.57 2003/01/11 04:01:19 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4272,7 +4272,7 @@ char *name;
 {
     int r;
     struct quota quota;
-    char buf[MAX_MAILBOX_PATH];
+    char buf[MAX_MAILBOX_PATH+1];
     char mailboxname[MAX_MAILBOX_NAME+1];
 
     quota.fd = -1;
@@ -4283,7 +4283,7 @@ char *name;
 						   imapd_userid, mailboxname);
 	if (!r) {
 	    quota.root = mailboxname;
-	    mailbox_hash_quota(buf, quota.root);
+	    mailbox_hash_quota(buf, sizeof(buf), quota.root);
 	    quota.fd = open(buf, O_RDWR, 0);
 	    if (quota.fd == -1) {
 		r = IMAP_QUOTAROOT_NONEXISTENT;
@@ -6295,7 +6295,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    
 	    quota.fd = -1;
 	    quota.root = mailboxname;
-	    mailbox_hash_quota(buf,quota.root);
+	    mailbox_hash_quota(buf,sizeof(buf),quota.root);
 	    quota.fd = open(buf, O_RDWR, 0);
 	    if(quota.fd != -1) {	    
 		r = mailbox_read_quota(&quota);
