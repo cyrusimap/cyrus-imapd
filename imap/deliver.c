@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.130 2000/02/03 06:51:05 tmartin Exp $
+ * $Id: deliver.c,v 1.131 2000/02/08 06:34:01 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.130 2000/02/03 06:51:05 tmartin Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.131 2000/02/08 06:34:01 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -399,8 +399,7 @@ char **argv;
 
 	case 'e':
 	    dupelim = 1;
-	    if (duplicate_init() != 0)
-	    {
+	    if (duplicate_init() != 0) {
 		syslog(LOG_ERR, "deliver: unable to init duplicate delivery database\n");
 		dupelim = 0;
 	    }
@@ -1027,7 +1026,7 @@ int sieve_reject(char *msg, void *ic, void *sc, void *mc)
     
     if (strcpy(buf, "original-recipient"),
 	getheader((void *) md, buf, &body) == SIEVE_OK) {
-	origreceip = xstrdup(body[0]);
+	origreceip = body[0];
     } else {
 	origreceip = NULL;		/* no original-recipient */
     }
