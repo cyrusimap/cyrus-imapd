@@ -1515,7 +1515,6 @@ int newquota;
 	if (!r) r = mailbox_write_quota(&quota);
 	if (quota.fd != -1) {
 	    close(quota.fd);
-	    map_free(&quota.base, &quota.len);
 	}
 	return r;
     }
@@ -1562,7 +1561,6 @@ int newquota;
     r = mailbox_write_quota(&quota);
     if (quota.fd != -1) {
 	close(quota.fd);
-	map_free(&quota.base, &quota.len);
     }
     mboxlist_unlock();
     return r;

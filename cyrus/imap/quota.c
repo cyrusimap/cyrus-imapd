@@ -188,7 +188,6 @@ int nroots;
 	if (quota[quota_num].quota.fd != -1) {
 	    close(quota[quota_num].quota.fd);
 	    quota[quota_num].quota.fd = -1;
-	    map_free(&quota[quota_num].quota.base, &quota[quota_num].quota.len);
 	}
 	if (r) {
 	    com_err(dirent->d_name, r,
@@ -305,7 +304,6 @@ char *root;
 	if (quota[i].quota.fd != -1) {
 	    close(quota[i].quota.fd);
 	    quota[i].quota.fd = -1;
-	    map_free(&quota[i].quota.base, &quota[i].quota.len);
 	}
     }
     redofix = 1;
@@ -353,7 +351,6 @@ int thisquota;
 	    if (quota[thisquota].quota.fd != -1) {
 		close(quota[thisquota].quota.fd);
 		quota[thisquota].quota.fd = -1;
-		map_free(&quota[thisquota].quota.base, &quota[thisquota].quota.len);
 	    }
 	    return r;
 	}
@@ -369,7 +366,6 @@ int thisquota;
 
     close(quota[thisquota].quota.fd);
     quota[thisquota].quota.fd = -1;
-    map_free(&quota[thisquota].quota.base, &quota[thisquota].quota.len);
     return 0;
 }
 

@@ -1108,6 +1108,7 @@ char *name;
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
     struct mailbox mailbox;
+    unsigned long uidvalidity, newuid;
 
     /* Parse flags */
     c = getword(&arg);
@@ -1236,6 +1237,8 @@ char *name;
     /* Perform the rest of the append */
     r = append_fromstream(&mailbox, imapd_in, size, internaldate, flag, nflags,
 			  imapd_userid);
+    uidvalidity = mailbox.uidvalidity;
+    newuid = mailbox.last_uid;
     mailbox_close(&mailbox);
 
     /* Parse newline terminating command */
@@ -1255,8 +1258,14 @@ char *name;
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
+#ifdef ENABLE_EXPERIMENT
+	prot_printf(imapd_out, "%s OK [APPENDUID %u %u] %s\r\n", tag,
+		    uidvalidity, newuid,
+		    error_message(IMAP_OK_COMPLETED));
+#else
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
+#endif
     }
 
  freeflags:
@@ -2038,10 +2047,12 @@ int usinguid;
     char *cmd = usinguid ? "UID Copy" : "Copy";
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
+    char *copyuid;
 
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
     if (!r) {
-	r = index_copy(imapd_mailbox, sequence, usinguid, mailboxname);
+	r = index_copy(imapd_mailbox, sequence, usinguid, mailboxname,
+		       &copyuid);
     }
 
     index_check(imapd_mailbox, usinguid, 0);
@@ -2055,8 +2066,14 @@ int usinguid;
 		    ? "[TRYCREATE] " : "", error_message(r));
     }
     else {
+#ifdef ENABLE_EXPERIMENT
+	prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag, copyuid,
+		    error_message(IMAP_OK_COMPLETED));
+#else
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
+#endif
+	free(copyuid);
     }
 }    
 
@@ -2577,8 +2594,6 @@ char *name;
 	    r = IMAP_QUOTAROOT_NONEXISTENT;
 	}
 	else {
-	    map_refresh(quota.fd, 1, &quota.base, &quota.len,
-			MAP_UNKNOWN_LEN, buf, 0);
 	    r = mailbox_read_quota(&quota);
 	}
     }
@@ -2596,7 +2611,6 @@ char *name;
 
     if (quota.fd != -1) {
 	close(quota.fd);
-	map_free(&quota.base, &quota.len);
     }
 
     if (r) {
