@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.h,v 1.2.2.2 2004/02/16 21:20:42 ken3 Exp $ */
+/* $Id: protocol.h,v 1.2.2.3 2004/05/06 18:09:22 ken3 Exp $ */
 
 #ifndef _INCLUDED_PROTOCOL_H
 #define _INCLUDED_PROTOCOL_H
@@ -74,7 +74,7 @@ struct capa_cmd_t {
     const char *cmd;		/* [OPTIONAL] capability command string
 				   (NULL = capabilities in banner) */
     const char *resp;		/* end of capability response */
-    char *(*parse_mechlist)(char *str, struct protocol_t *prot);
+    char *(*parse_mechlist)(const char *str, struct protocol_t *prot);
 				/* [OPTIONAL] parse capability string,
 				   returns space-separated list of mechs */
     struct capa_t capa[MAX_CAPA+1];/* capabilities to parse for

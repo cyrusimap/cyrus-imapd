@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.2.2.5 2004/05/02 00:27:06 ken3 Exp $ */
+/* $Id: protocol.c,v 1.2.2.6 2004/05/06 18:09:22 ken3 Exp $ */
 
 #include <config.h>
 
@@ -49,37 +49,28 @@
 #include "protocol.h"
 #include "xmalloc.h"
 
-static char *imap_parsemechlist(char *str, struct protocol_t *prot)
+static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
 {
+    char *ret = xzmalloc(strlen(str)+1);
     char *tmp;
-    int num=0;
-    char *ret=xmalloc(strlen(str)+1);
-    
-    ret[0] = '\0';
+    int num = 0;
     
     if (strstr(str, "SASL-IR")) {
 	/* server supports initial response in AUTHENTICATE command */
 	prot->sasl_cmd.maxlen = INT_MAX;
     }
     
-    while ((tmp=strstr(str,"AUTH="))!=NULL)
-    {
-	char *end=tmp+5;
-	tmp+=5;
+    while ((tmp = strstr(str, "AUTH="))) {
+	char *end = (tmp += 5);
 	
-	while(((*end)!=' ') && ((*end)!='\0'))
-	    end++;
-	
-	(*end)='\0';
+	while((*end != ' ') && (*end != '\0')) end++;
 	
 	/* add entry to list */
-	if (num>0)
-	    strcat(ret," ");
-	strcat(ret, tmp);
-	num++;
+	if (num++ > 0) strcat(ret, " ");
+	strlcat(ret, tmp, strlen(ret) + (end - tmp) + 1);
 	
 	/* reset the string */
-	str=end+1;
+	str = end + 1;
     }
     
     return ret;
@@ -100,11 +91,11 @@ static char *nntp_parsesuccess(char *str, const char **status)
 struct protocol_t protocol[] = {
     { "imap", "imap",
       { "C01 CAPABILITY", "C01 ", &imap_parsemechlist,
-	{ { "AUTH=", CAPA_AUTH },
-	  { "STARTTLS", CAPA_STARTTLS },
-	  { "IDLE", CAPA_IDLE },
-	  { "MUPDATE", CAPA_MUPDATE },
-	  { "MULTIAPPEND", CAPA_MULTIAPPEND },
+	{ { " AUTH=", CAPA_AUTH },
+	  { " STARTTLS", CAPA_STARTTLS },
+	  { " IDLE", CAPA_IDLE },
+	  { " MUPDATE", CAPA_MUPDATE },
+	  { " MULTIAPPEND", CAPA_MULTIAPPEND },
 	  { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO" },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL },
