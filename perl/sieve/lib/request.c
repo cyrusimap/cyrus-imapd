@@ -73,6 +73,7 @@ void parseerror(char *str)
 int handle_response(int res,int version,struct protstream *pin, mystring_t **errstr)
 {    
   lexstate_t state;
+  int res = 0;
 
   if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
     parseerror("ATOM");
@@ -112,22 +113,23 @@ int handle_response(int res,int version,struct protstream *pin, mystring_t **err
       if (errstr)
 	  *errstr = state.str;
 
-      return -1;
-  }
-  
-  /* old version of protocol had strings with ok responses too */
-  if (version == OLD_VERSION) {
-      if (yylex(&state, pin)!=' ')
-	  parseerror("expected sp\n");
-      
-      if (yylex(&state, pin)!=STRING)
-	  parseerror("expected string\n");
+      res = -1;
+  } else {
+      /* ok? */
+      /* old version of protocol had strings with ok responses too */
+      if (version == OLD_VERSION) {
+	  if (yylex(&state, pin)!=' ')
+	      parseerror("expected sp\n");
+	  
+	  if (yylex(&state, pin)!=STRING)
+	      parseerror("expected string\n");
+      }
   }
   
   if (yylex(&state, pin)!=EOL)
-      parseerror("expected string\n");
+      parseerror("expected EOL\n");
   
-  return 0;
+  return res;
 }
 
 int deleteascript(int version, struct protstream *pout, struct protstream *pin,char *name)
