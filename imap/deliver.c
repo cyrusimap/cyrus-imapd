@@ -522,7 +522,7 @@ int smtpmode;
 	if (*return_path == '<') {
 	    return_path = strsave(return_path+1);
 	    if (return_path[strlen(return_path)-1] == '>') {
-		return_path[strlen(return_path)-1] == '\0';
+		return_path[strlen(return_path)-1] = '\0';
 	    }
 	}
 
