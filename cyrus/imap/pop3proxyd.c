@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.18 2002/11/15 21:46:58 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.19 2002/12/12 20:24:31 ken3 Exp $
  */
 #include <config.h>
 
@@ -83,6 +83,7 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "telemetry.h"
+#include "backend.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -118,13 +119,19 @@ struct protstream *popd_in = NULL;
 int popd_starttls_done = 0;
 int popd_auth_done = 0;
 
-struct protstream *backend_out, *backend_in;
-int backend_sock;
-sasl_conn_t *backend_saslconn;
+struct backend *backend = NULL;
 
 /* the sasl proxy policy context */
 static struct proxy_context popd_proxyctx = {
     0, 0, NULL, NULL, NULL
+};
+
+static struct protocol_t protocol = {
+    110, "pop",
+    { "CAPA", ".", "STLS", "SASL ", NULL },
+    { "STLS", "+OK", "-ERR" },
+    { "AUTH", "", "+OK", "-ERR", "+ ", "*", NULL },
+    { "QUIT", "+OK" }
 };
 
 /* current namespace */
@@ -1019,252 +1026,13 @@ void cmd_auth(char *arg)
     popd_auth_done = 1;
 }
 
-/* status is only set *if* it is non-null *and* we return something other
- * than SASL_CONTINUE */
-static int mysasl_getauthline(struct protstream *p, char **line, 
-			      unsigned int *linelen, char **status)
-{
-    char buf[2096];
-    char *str = (char *) buf;
-
-    if(status) *status = NULL;
-    
-    if (!prot_fgets(str, sizeof(buf), p)) {
-	return SASL_FAIL;
-    }
-    if (!strncasecmp(str, "+OK", 3)) {
-	if(status)
-	    *status = xstrdup(str + 3);
-	return SASL_OK;
-    }
-    if (!strncasecmp(str, "-ERR", 4)) {
-	if(status)
-	    *status = xstrdup(str + 4);
-	return SASL_BADAUTH;
-    }
-    if (str[0] == '+' && str[1] == ' ') {
-	size_t len;
-	str += 2; /* jump past the "+ " */
-
-	len = strlen(str) + 1;
-
-	*line = xmalloc(strlen(str) + 1);
-	if (*str != '\r') {	/* decode it */
-	    int r;
-	    
-	    r = sasl_decode64(str, strlen(str), *line, len, linelen);
-	    if (r != SASL_OK) {
-		return r;
-	    }
-	    
-	    return SASL_CONTINUE;
-	} else {		/* blank challenge */
-	    *line = NULL;
-	    *linelen = 0;
-
-	    return SASL_CONTINUE;
-	}
-    } else {
-	/* huh??? */
-
-	if(status)
-	    *status = xstrdup(" Unknown Error");
-
-	return SASL_FAIL;
-    }
-}
-
-extern sasl_callback_t *mysasl_callbacks(const char *username,
-					 const char *authname,
-					 const char *realm,
-					 const char *password);
-extern void free_callbacks(sasl_callback_t *in);
-
-static char *parsemechlist(char *str)
-{
-  char *tmp;
-  char *ret=malloc(strlen(str)+1);
-  if (ret==NULL) return NULL;
-
-  strcpy(ret,"");
-
-  if ((tmp=strstr(str,"SASL "))!=NULL)
-  {
-    char *end=tmp+5;
-    tmp+=5;
-
-    while(((*end)!='\n') && ((*end)!='\0'))
-      end++;
-
-    (*end)='\0';
-
-    strcpy(ret, tmp);
-  }
-
-  return ret;
-}
-
-static char *ask_capability(struct protstream *pout, struct protstream *pin)
-{
-  char str[1024];
-  char *ret = NULL;
-
-  /* request capabilities of server */
-  prot_printf(pout, "CAPA\r\n");
-  prot_flush(pout);
-
-  do {
-      if (prot_fgets(str,sizeof(str),pin) == NULL) {
-	  return NULL;
-      }
-      if (!strncasecmp(str,"SASL ",5)) {
-	  ret=parsemechlist(str);
-      }
-  } while (strncasecmp(str, ".", 1));
-
-  return ret;
-}
-
-/* status is only set *if* it is non-null *and* we return something other
- * than SASL_CONTINUE */
-static int proxy_authenticate(const char *hostname, char **authline_status)
-{
-    int r;
-    sasl_security_properties_t *secprops = NULL;
-    struct sockaddr_in saddr_l;
-    struct sockaddr_in saddr_r;
-    socklen_t addrsize;
-    sasl_callback_t *cb;
-    char buf[2048];
-    char optstr[128];
-    char *in, *p;
-    const char *out;
-    unsigned int inlen, outlen;
-    const char *mech_conf, *mechusing;
-    char *mechlist;
-    unsigned b64len;
-    char localip[60], remoteip[60];
-    const char *pass;
-
-    strcpy(optstr, hostname);
-    p = strchr(optstr, '.');
-    if (p) *p = '\0';
-    strcat(optstr, "_password");
-    pass = config_getoverflowstring(optstr, NULL);
-    if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
-    cb = mysasl_callbacks(popd_userid, 
-			  config_getstring(IMAPOPT_PROXY_AUTHNAME),
-			  config_getstring(IMAPOPT_PROXY_REALM),
-			  pass);
-
-    /* set the IP addresses */
-    addrsize=sizeof(struct sockaddr_in);
-    if (getpeername(backend_sock, (struct sockaddr *)&saddr_r, &addrsize) != 0)
-	return SASL_FAIL;
-    addrsize=sizeof(struct sockaddr_in);
-    if (getsockname(backend_sock, (struct sockaddr *)&saddr_l,&addrsize)!=0)
-	return SASL_FAIL;
-
-    if (iptostring((struct sockaddr *)&saddr_r,
-		   sizeof(struct sockaddr_in), remoteip, 60) != 0)
-	return SASL_FAIL;
-    if (iptostring((struct sockaddr *)&saddr_l,
-		   sizeof(struct sockaddr_in), localip, 60) != 0)
-	return SASL_FAIL;
-
-    r = sasl_client_new("pop", hostname, localip, remoteip,
-			cb, 0, &backend_saslconn);
-    if (r != SASL_OK) {
-	return r;
-    }
-
-    secprops = mysasl_secprops(0);
-    r = sasl_setprop(backend_saslconn, SASL_SEC_PROPS, secprops);
-    if (r != SASL_OK) {
-	return r;
-    }
-
-    /* read the initial greeting */
-    if (!prot_fgets(buf, sizeof(buf), backend_in)) {
-	return SASL_FAIL;
-    }
-
-    /* Get SASL mechanism list */
-    /* We can force a particular mechanism using a <shorthost>_mechs option */
-    strcpy(buf, hostname);
-    p = strchr(buf, '.');
-    *p = '\0';
-    strcat(buf, "_mechs");
-    mech_conf = config_getoverflowstring(buf, NULL);
-    
-    /* If we don't have a mech_conf, ask the server what it can do */
-    if(!mech_conf) {
-	mechlist = ask_capability(backend_out, backend_in);
-    } else {
-	mechlist = xstrdup(mech_conf);
-    }
-
-    /* we now do the actual SASL exchange */
-    r = sasl_client_start(backend_saslconn, 
-			  mechlist,
-			  NULL, &out, &outlen, &mechusing);
-
-    /* garbage collect */
-    free(mechlist);
-    mechlist = NULL;
-
-    if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
-	return r;
-    }
-    if (out == NULL || outlen == 0) {
-	prot_printf(backend_out, "AUTH %s\r\n", mechusing);
-    } else {
-	/* send initial challenge */
-	r = sasl_encode64(out, outlen, buf, sizeof(buf), &b64len);
-	if (r != SASL_OK)
-	    return r;
-	prot_printf(backend_out, "AUTH %s %s\r\n", mechusing, buf);
-    }
-
-    in = NULL;
-    inlen = 0;
-    r = mysasl_getauthline(backend_in, &in, &inlen, authline_status);
-    while (r == SASL_CONTINUE) {
-	r = sasl_client_step(backend_saslconn, in, inlen, NULL, &out, &outlen);
-	if (in) { 
-	    free(in);
-	}
-	if (r != SASL_OK && r != SASL_CONTINUE) {
-	    return r;
-	}
-
-	r = sasl_encode64(out, outlen, buf, sizeof(buf), &b64len);
-	if (r != SASL_OK) {
-	    return r;
-	}
-
-	prot_write(backend_out, buf, b64len);
-	prot_printf(backend_out, "\r\n");
-
-	r = mysasl_getauthline(backend_in, &in, &inlen, authline_status);
-    }
-
-    /* Done with callbacks */
-    free_callbacks(cb);
-
-    /* r == SASL_OK on success */
-    return r;
-}
-
 static void openproxy(void)
 {
-    struct hostent *hp;
-    struct sockaddr_in sin;
     char *userid;
     char inboxname[MAX_MAILBOX_PATH];
     int r;
     char *server = NULL;
-    char *statusline = NULL;
+    const char *statusline = NULL;
 
     /* Translate any separators in userid
        (use a copy since we need the original userid for AUTH to backend) */
@@ -1288,43 +1056,20 @@ static void openproxy(void)
 	if(c) *c = '\0';
     }
 
-    hp = gethostbyname(server);
-    if (!hp) fatal("gethostbyname failed", EC_CONFIG);
-    sin.sin_family = AF_INET;
-    memcpy(&sin.sin_addr, hp->h_addr, hp->h_length);
-    sin.sin_port = htons(110);
-    
-    if ((backend_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-	syslog(LOG_ERR, "socket() failed: %m");
-	fatal("socket failed", EC_CONFIG);
-    }
-    if (connect(backend_sock, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
-	syslog(LOG_ERR, "connect() failed: %m");
-	fatal("connect failed", 1);
-    }
-    
-    backend_in = prot_new(backend_sock, 0);
-    backend_out = prot_new(backend_sock, 1);
-    prot_setflushonread(backend_in, backend_out);
+    backend = findserver(NULL, server, &protocol, popd_userid, &statusline);
 
-    if (proxy_authenticate(server, &statusline) != SASL_OK) {
+    if (!backend) {
 	syslog(LOG_ERR, "couldn't authenticate to backend server");
 	prot_printf(popd_out, "-ERR%s",
 		    statusline ? statusline : " Authentication to backend server failed\r\n");
 	prot_flush(popd_out);
-	if(statusline) free(statusline);
 
 	shut_down(0); /* no process reuse */
-    } else {
-	prot_setsasl(backend_in, backend_saslconn);
-	prot_setsasl(backend_out, backend_saslconn);
     }
 
     prot_printf(popd_out, "+OK%s",
-		statusline ? statusline : " Mailbox locked and ready");
+		statusline ? statusline : " Mailbox locked and ready\r\n");
     prot_flush(popd_out);
-
-    free(statusline);
 
     return;
 }
@@ -1339,8 +1084,8 @@ static void bitpipe(void)
     
     FD_ZERO(&read_set);
     FD_SET(0, &read_set);  
-    FD_SET(backend_sock, &read_set);
-    nfds = backend_sock + 1;
+    FD_SET(backend->sock, &read_set);
+    nfds = backend->sock + 1;
     
     for (;;) {
 	rset = read_set;
@@ -1352,25 +1097,23 @@ static void bitpipe(void)
 	    do {
 		int c = prot_read(popd_in, buf, sizeof(buf));
 		if (c == 0 || c < 0) goto done;
-		prot_write(backend_out, buf, c);
+		prot_write(backend->out, buf, c);
 	    } while (popd_in->cnt > 0);
-	    prot_flush(backend_out);
+	    prot_flush(backend->out);
 	}
 
-	if (FD_ISSET(backend_sock, &rset)) {
+	if (FD_ISSET(backend->sock, &rset)) {
 	    do {
-		int c = prot_read(backend_in, buf, sizeof(buf));
+		int c = prot_read(backend->in, buf, sizeof(buf));
 		if (c == 0 || c < 0) goto done;
 		prot_write(popd_out, buf, c);
-	    } while (backend_in->cnt > 0);
+	    } while (backend->in->cnt > 0);
 	    prot_flush(popd_out);
 	}
     }
  done:
     /* ok, we're done. close backend connection */
-    prot_free(backend_in);
-    prot_free(backend_out);
-    close(backend_sock);
+    downserver(backend, NULL);
 
     /* close the connection to the client */
     close(0);

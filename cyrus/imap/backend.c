@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7.6.5 2002/08/16 20:24:34 ken3 Exp $ */
+/* $Id: backend.c,v 1.7.6.6 2002/12/12 20:24:24 ken3 Exp $ */
 
 #include <config.h>
 
@@ -75,80 +75,7 @@
 #include "xmalloc.h"
 #include "iptostring.h"
 
-static void get_capability(struct backend *s)
-{
-    static int cap_tag_num = 0;
-    char tag[64];
-    char resp[1024];
-    int st = 0;
-
-    cap_tag_num++;
-    snprintf(tag, sizeof(tag), "C%d", cap_tag_num);
-
-    prot_printf(s->out, "%s Capability\r\n",tag);
-    do {
-	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
-	if (!strncasecmp(resp, "* Capability ", 13)) {
-	    st++; /* increment state */
-	    if (strstr(resp, "IDLE")) s->capability |= IDLE;
-	    if (strstr(resp, "MUPDATE")) s->capability |= MUPDATE;
-	} else {
-	    /* line we weren't expecting. hmmm. */
-	}
-    } while (st == 0);
-    do {
-	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
-	if (!strncmp(resp, tag, strlen(tag))) {
-	    st++; /* increment state */
-	} else {
-	    /* line we weren't expecting. hmmm. */
-	}
-    } while (st == 1);
-}
-
-static int mysasl_getauthline(struct protstream *p, char *tag,
-			      char **line, unsigned int *linelen)
-{
-    char buf[2096];
-    char *str = (char *) buf;
-    
-    if (!prot_fgets(str, sizeof(buf), p)) {
-	return SASL_FAIL;
-    }
-    if (!strncmp(str, tag, strlen(tag))) {
-	str += strlen(tag) + 1;
-	if (!strncasecmp(str, "OK ", 3)) { return SASL_OK; }
-	if (!strncasecmp(str, "NO ", 3)) { return SASL_BADAUTH; }
-	return SASL_FAIL; /* huh? */
-    } else if (str[0] == '+' && str[1] == ' ') {
-	unsigned buflen;
-	str += 2; /* jump past the "+ " */
-
-	buflen = strlen(str) + 1;
-
-	*line = xmalloc(buflen);
-	if (*str != '\r') {	/* decode it */
-	    int r;
-	    
-	    r = sasl_decode64(str, strlen(str), *line, buflen, linelen);
-	    if (r != SASL_OK) {
-		return r;
-	    }
-	    
-	    return SASL_CONTINUE;
-	} else {		/* blank challenge */
-	    *line = NULL;
-	    *linelen = 0;
-
-	    return SASL_CONTINUE;
-	}
-    } else {
-	/* huh??? */
-	return SASL_FAIL;
-    }
-}
-
-static char *parsemechlist(char *str)
+char *imap_parsemechlist(char *str)
 {
     char *tmp;
     int num=0;
@@ -179,40 +106,45 @@ static char *parsemechlist(char *str)
     return ret;
 }
 
-static char *ask_capability(struct protstream *pout, struct protstream *pin)
+static char *ask_capability(struct protstream *pout, struct protstream *pin,
+			    struct capa_cmd_t *capa_cmd,
+			    int *supports_starttls)
 {
     char str[4096];
-    char *ret;
+    char *ret = NULL, *tmp;
     
+    *supports_starttls = 0;
+
     /* request capabilities of server */
-    prot_printf(pout, "C01 CAPABILITY\r\n");
+    prot_printf(pout, "%s\r\n", capa_cmd->cmd);
     prot_flush(pout);
-    
-    do { /* look for the * CAPABILITY response */
-	if (prot_fgets(str,sizeof(str),pin) == NULL) {
-	    return NULL;
-	}
-    } while (strncasecmp(str, "* CAPABILITY", 12));
-    
-    ret=parsemechlist(str);
-    
-    do { /* look for TAG */
+
+    do { /* look for the end of the capabilities */
 	if (prot_fgets(str, sizeof(str), pin) == NULL) {
-	    free(ret);
 	    return NULL;
 	}
-    } while (strncmp(str, "C01", strlen("C01")));
+
+	/* check for starttls */
+	if (capa_cmd->tls &&
+	    strstr(str, capa_cmd->tls) != NULL) {
+	    *supports_starttls = 1;
+	}
+	
+	/* check for auth */
+	if (capa_cmd->auth &&
+	    (tmp = strstr(str, capa_cmd->auth)) != NULL) {
+	    if (capa_cmd->parse_mechlist)
+		ret = capa_cmd->parse_mechlist(str);
+	    else
+		ret = strdup(tmp+strlen(capa_cmd->auth));
+	}
+    } while (strncasecmp(str, capa_cmd->resp, strlen(capa_cmd->resp)));
     
     return ret;
 }
 
-extern sasl_callback_t *mysasl_callbacks(const char *username,
-					 const char *authname,
-					 const char *realm,
-					 const char *password);
-extern void free_callbacks(sasl_callback_t *in);
-
-static int backend_authenticate(struct backend *s, const char *userid)
+static int backend_authenticate(struct backend *s, struct protocol_t *prot,
+				const char *userid, const char **status)
 {
     int r;
     sasl_security_properties_t *secprops = NULL;
@@ -220,15 +152,9 @@ static int backend_authenticate(struct backend *s, const char *userid)
     char remoteip[60], localip[60];
     socklen_t addrsize;
     sasl_callback_t *cb;
-    char buf[2048];
-    char optstr[128];
-    char *in, *p;
-    const char *out;
-    unsigned int inlen, outlen;
-    const char *mech_conf, *mechusing;
-    char *mechlist;
-    unsigned b64len;
-    const char *pass;
+    char buf[2048], optstr[128], *p, *mechlist;
+    const char *mech_conf, *pass;
+    int starttls;
 
     strcpy(optstr, s->hostname);
     p = strchr(optstr, '.');
@@ -257,7 +183,7 @@ static int backend_authenticate(struct backend *s, const char *userid)
 	return SASL_FAIL;
 
     /* Require proxying if we have an "interesting" userid (authzid) */
-    r = sasl_client_new("imap", s->hostname, localip, remoteip,
+    r = sasl_client_new(prot->service, s->hostname, localip, remoteip,
 			cb, (userid  && *userid ? SASL_NEED_PROXY : 0),
 			&s->saslconn);
     if (r != SASL_OK) {
@@ -288,46 +214,21 @@ static int backend_authenticate(struct backend *s, const char *userid)
     
     /* If we don't have a mech_conf, ask the server what it can do */
     if(!mech_conf) {
-	mechlist = ask_capability(s->out, s->in);
+	mechlist = ask_capability(s->out, s->in, &prot->capa_cmd, &starttls);
     } else {
 	mechlist = xstrdup(mech_conf);
     }
 
-    /* we now do the actual SASL exchange */
-    r = sasl_client_start(s->saslconn, mechlist,
-			  NULL, NULL, NULL, &mechusing);
+    if (mechlist) {
+	r = saslclient(s->saslconn, &prot->sasl_cmd, mechlist,
+		       s->in, s->out, NULL, status);
 
-    /* garbage collect */
-    free(mechlist);
-    mechlist = NULL;
-
-    if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
-	return r;
+	/* garbage collect */
+	free(mechlist);
+	mechlist = NULL;
     }
-    prot_printf(s->out, "A01 AUTHENTICATE %s\r\n", mechusing);
-
-    in = NULL;
-    inlen = 0;
-    r = mysasl_getauthline(s->in, "A01", &in, &inlen);
-    while (r == SASL_CONTINUE) {
-	r = sasl_client_step(s->saslconn, in, inlen, NULL, &out, &outlen);
-	if (in) { 
-	    free(in);
-	}
-	if (r != SASL_OK && r != SASL_CONTINUE) {
-	    return r;
-	}
-
-	r = sasl_encode64(out, outlen, buf, sizeof(buf), &b64len);
-	if (r != SASL_OK) {
-	    return r;
-	}
-
-	prot_write(s->out, buf, b64len);
-	prot_printf(s->out, "\r\n");
-
-	r = mysasl_getauthline(s->in, "A01", &in, &inlen);
-    }
+    else
+	r = SASL_NOMECH;
 
     /* xxx unclear that this is correct */
     free_callbacks(cb);
@@ -342,7 +243,8 @@ static int backend_authenticate(struct backend *s, const char *userid)
 }
 
 struct backend *findserver(struct backend *ret, const char *server,
-			   const char *userid) 
+			   struct protocol_t *prot, const char *userid,
+			   const char **auth_status)
 {
     /* need to (re)establish connection to server or create one */
     int sock;
@@ -361,7 +263,7 @@ struct backend *findserver(struct backend *ret, const char *server,
 	}
 	ret->addr.sin_family = AF_INET;
 	memcpy(&ret->addr.sin_addr, hp->h_addr, hp->h_length);
-	ret->addr.sin_port = htons(143);
+	ret->addr.sin_port = htons(prot->port);
 
 	ret->timeout = NULL;
     }
@@ -385,7 +287,7 @@ struct backend *findserver(struct backend *ret, const char *server,
     prot_setflushonread(ret->in, ret->out);
     
     /* now need to authenticate to backend server */
-    if ((r = backend_authenticate(ret,userid))) {
+    if ((r = backend_authenticate(ret, prot, userid, auth_status))) {
 	syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
 	       sasl_errstring(r, NULL, NULL));
 	free(ret);
@@ -393,29 +295,30 @@ struct backend *findserver(struct backend *ret, const char *server,
 	return NULL;
     }
     
-    /* find the capabilities of the server */
-    get_capability(ret);
-    
     return ret;
 }
 
-void downserver(struct backend *s) 
+void downserver(struct backend *s, struct logout_cmd_t *logout) 
 {
     char buf[1024];
     if(!s) return;
     
-    prot_printf(s->out, "L01 LOGOUT\r\n");
-    prot_flush(s->out);
+    if (logout) {
+	prot_printf(s->out, "%s\r\n", logout->cmd);
+	prot_flush(s->out);
+    }
 
     while (prot_fgets(buf, sizeof(buf), s->in)) {
-	if (!strncmp("L01", buf, 3)) {
+	if (!strncmp(logout->resp, buf, strlen(logout->resp))) {
 	    break;
 	}
+#if 0 /* XXX do we care?  should we do a protocol specific check? */
 	if (!strncmp("* BAD", buf, 5)) {
 	    syslog(LOG_ERR, "got BAD in response to LOGOUT command sent to %s",
 		   s->hostname);
 	    break;
 	}
+#endif
     }
 
     /* Flush the incoming buffer */

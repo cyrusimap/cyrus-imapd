@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.36 2002/12/11 20:40:26 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.37 2002/12/12 20:24:31 ken3 Exp $ */
 
 #include <config.h>
 
@@ -125,6 +125,15 @@ static int disable_referrals;
 
 /* has the client issued an RLIST or RLSUB? */
 static int supports_referrals;
+
+static struct protocol_t protocol = {
+    143, "imap",
+    { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parsemechlist },
+    { "S01 STARTTLS", "S01 OK", "S01 NO" },
+    { "A01 AUTHENTICATE", NULL, "A01 OK", "A01 NO", "+ ", "*", NULL },
+    { "Q01 LOGOUT", "Q01 " }
+};
+
 
 /* -------- from imapd ---------- */
 
@@ -876,7 +885,7 @@ void proxyd_downserver(struct backend *s)
     }
 
     /* need to logout of server */
-    downserver(s);
+    downserver(s, &protocol.logout_cmd);
 
     if(s == backend_inbox) backend_inbox = NULL;
     if(s == backend_current) backend_current = NULL;
@@ -905,6 +914,37 @@ struct prot_waitevent *backend_timeout(struct protstream *s,
     }
 }
 
+static void get_capability(struct backend *s)
+{
+    static int cap_tag_num = 0;
+    char tag[64];
+    char resp[1024];
+    int st = 0;
+
+    cap_tag_num++;
+    snprintf(tag, sizeof(tag), "C%d", cap_tag_num);
+
+    prot_printf(s->out, "%s Capability\r\n",tag);
+    do {
+	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
+	if (!strncasecmp(resp, "* Capability ", 13)) {
+	    st++; /* increment state */
+	    if (strstr(resp, "IDLE")) s->capability |= IDLE;
+	    if (strstr(resp, "MUPDATE")) s->capability |= MUPDATE;
+	} else {
+	    /* line we weren't expecting. hmmm. */
+	}
+    } while (st == 0);
+    do {
+	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
+	if (!strncmp(resp, tag, strlen(tag))) {
+	    st++; /* increment state */
+	} else {
+	    /* line we weren't expecting. hmmm. */
+	}
+    } while (st == 1);
+}
+
 /* return the connection to the server */
 struct backend *proxyd_findserver(const char *server)
 {
@@ -922,9 +962,12 @@ struct backend *proxyd_findserver(const char *server)
 
     if (!ret || !ret->timeout) {
 	/* need to (re)establish connection to server or create one */
-	ret = findserver(ret, server, proxyd_userid);
+	ret = findserver(ret, server, &protocol, proxyd_userid, NULL);
 	if(!ret) return NULL;
 
+	/* find the capabilities of the server */
+	get_capability(ret);
+    
 	/* add the timeout */
 	ret->timeout = prot_addwaitevent(proxyd_in, time(NULL) + IDLE_TIMEOUT,
 					 backend_timeout, ret);
