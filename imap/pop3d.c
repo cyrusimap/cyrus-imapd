@@ -457,6 +457,7 @@ int lines;
 	}
 	while (buf[strlen(buf)-1] != '\n' && fgets(buf, sizeof(buf), msgfile));
     }
+    fclose(msgfile);
     fprintf(stdout, ".\r\n");
 }
 
