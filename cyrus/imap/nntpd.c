@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.65 2003/03/02 19:59:17 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.66 2003/03/02 20:06:04 ken3 Exp $
  */
 
 /*
@@ -2633,7 +2633,6 @@ static void feedpeer(message_data_t *msg)
 	*s++ = '\0';
 	wild = split_wildmats(s);
     }
-prot_printf(nntp_out, "%s\t%s\n", server, wild->pat);
 
     /* check path to see if this message came through our peer */
     len = strlen(server);
@@ -2657,7 +2656,6 @@ prot_printf(nntp_out, "%s\t%s\n", server, wild->pat);
 		w++;
 	    }
 
-prot_printf(nntp_out, "%s\t%s\n", msg->rcpt[n], w->pat ? w->pat : "");
 	    if (w->pat) {
 		/* we have a match, check to see what kind of match */
 		if (!w->not) {
