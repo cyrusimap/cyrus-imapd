@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.223 2002/02/28 20:36:00 rjs3 Exp $
+dnl $Id: configure.in,v 1.224 2002/03/01 17:07:21 rjs3 Exp $
 dnl
 
 
@@ -158,11 +158,25 @@ AC_DEFUN(CYRUS_SET_BACKEND, [
 	AC_DEFINE_UNQUOTED($2, $DB_STRING)
 	AC_MSG_RESULT($3)
 ])
+AC_DEFUN(CYRUS_SET_BACKEND_BINARY, [
+	AC_MSG_CHECKING([$1 database backend])
+	if test "$3" = "flat"; then
+	   AC_ERROR([this database requires a backend capable of binary data])
+	fi
+	if test "$3" != "db3" -a \
+		"$3" != "db3_nosync" -a \
+		"$3" != "skiplist"; then
+	   AC_ERROR([invalid $1 value])
+	fi
+	DB_STRING="(&cyrusdb_$3)"
+	AC_DEFINE_UNQUOTED($2, $DB_STRING)
+	AC_MSG_RESULT($3)
+])
 
 AC_ARG_WITH(duplicate-db,
-	[  --with-duplicate-db=DB     use DB (flat, db3, skiplist) as a backend for the duplicate delivery db (Default: db3_nosync) ],
+	[  --with-duplicate-db=DB     use DB (db3, skiplist) as a backend for the duplicate delivery db (Default: db3_nosync) ],
 	DB="$withval", DB="db3_nosync")
-CYRUS_SET_BACKEND("duplicate db", CONFIG_DB_DUPLICATE, $DB)
+CYRUS_SET_BACKEND_BINARY("duplicate db", CONFIG_DB_DUPLICATE, $DB)
 
 AC_ARG_WITH(mboxlist-db,
 	[  --with-mboxlist-db=DB      use DB (flat, db3, skiplist) as a backend for the mailbox list (Default: db3) ],
@@ -180,9 +194,9 @@ AC_ARG_WITH(subs-db,
 CYRUS_SET_BACKEND("subscription", CONFIG_DB_SUBS, $DB)
 
 AC_ARG_WITH(tls-db,
-	[  --with-tls-db=DB           use DB (flat, db3, skiplist) as a backend for the TLS cache (Default: db3_nosync) ],
+	[  --with-tls-db=DB           use DB (db3, skiplist) as a backend for the TLS cache (Default: db3_nosync) ],
 	DB="$withval", DB="db3_nosync")
-CYRUS_SET_BACKEND("TLS cache", CONFIG_DB_TLS, $DB)
+CYRUS_SET_BACKEND_BINARY("TLS cache", CONFIG_DB_TLS, $DB)
 
 sievedir="sieve"
 AC_ARG_ENABLE(sieve,
