@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: squatter.8,v 1.2 2002/05/25 19:57:48 leg Exp $
+.\" $Id: squatter.8,v 1.3 2003/01/02 19:55:33 rjs3 Exp $
 .SH NAME
 squatter \- create SQUAT indexes for mailboxes
 .SH SYNOPSIS
@@ -50,6 +50,9 @@ squatter \- create SQUAT indexes for mailboxes
 ]
 [
 .B \-r
+]
+[
+.B \-s
 ]
 [
 .B \-v
@@ -93,6 +96,10 @@ Read configuration options from \fIconfig-file\fR.
 .B \-r
 Recursively create indexes for all sub-mailboxes of the mailboxes or
 mailbox prefixes given as arguments.
+.TP
+.B \-s
+Skip mailboxes whose index file is older than their current squat file
+(within a small time delta).
 .TP
 .B \-v
 Increase the verbosity of progress/status messages.
