@@ -36,6 +36,9 @@ AC_COMPILE_CHECK(nonblocking fcntl,[#include <sys/types.h>
 #define FNDELAY		O_NDELAY
 #endif],[fcntl(0, F_GETFL, 0)&FNDELAY],WITH_NONBLOCK=fcntl,WITH_NONBLOCK=ioctl)
 AC_SUBST(WITH_NONBLOCK)
+AC_COMPILE_CHECK(tm_gmtoff,[#include <time.h>],[struct tm tm;
+tm.tm_gmtoff = 0;],WITH_GMTOFF=tm,WITH_GMTOFF=gmtime)
+AC_SUBST(WITH_GMTOFF)
 echo checking for mmap
 AC_TEST_PROGRAM([#include <sys/types.h>
 #include <sys/mman.h>
