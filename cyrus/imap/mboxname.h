@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.7 2001/08/16 20:52:07 ken3 Exp $
+ * $Id: mboxname.h,v 1.8 2001/11/19 21:32:44 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -50,7 +50,9 @@
 #define DOTCHAR '^'
 
 /* list of our namespaces */
-enum { NAMESPACE_INBOX, NAMESPACE_USER, NAMESPACE_SHARED };
+enum { NAMESPACE_INBOX = 0, 
+       NAMESPACE_USER = 1, 
+       NAMESPACE_SHARED = 2 };
 
 /* structure holding server namespace info */
 struct namespace {

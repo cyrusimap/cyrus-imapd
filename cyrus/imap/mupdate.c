@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.11 2001/10/23 20:16:26 leg Exp $
+ * $Id: mupdate.c,v 1.12 2001/11/19 21:32:44 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -587,6 +587,8 @@ int service_main_fd(int fd, int argc, char **argv, char **envp)
     if (r == 0) {
 	pthread_detach(t);
     }
+
+    return 0;
 }
 
 /* mailbox name MUST be first, since it is the key */
@@ -975,7 +977,7 @@ void sendupdates(struct conn *C)
     struct pending *p, *q;
     struct timeval now;
     struct timespec timeout;
-    int r, ch;
+    int r;
 
     pthread_mutex_lock(&C->m);
 

@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.23 2001/11/13 18:30:44 leg Exp $
+   $Id: seen_db.c,v 1.24 2001/11/19 21:32:45 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -60,6 +60,7 @@
 #include "cyrusdb.h"
 #include "map.h"
 #include "bsearch.h"
+#include "util.h"
 
 #include "imapconf.h"
 #include "xmalloc.h"

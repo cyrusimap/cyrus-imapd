@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.6 2001/08/16 20:52:05 ken3 Exp $
+/* $Id: cyrdump.c,v 1.7 2001/11/19 21:32:44 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -156,7 +156,7 @@ void fatal(const char *s, int code)
 static void generate_boundary(char *boundary)
 {
     snprintf(boundary, 100, "dump-%ld-%ld-%ld", 
-	     getpid(), time(NULL), rand());
+	     (long) getpid(), (long) time(NULL), (long) rand());
 }
 
 static int dump_me(char *name, int matchlen, int maycreate, void *rock)
