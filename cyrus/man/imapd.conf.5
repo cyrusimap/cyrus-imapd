@@ -171,6 +171,12 @@ directories: ~user/.sieve.
 .IP "\fBsievedir:\fR /usr/sieve" 5
 If sieveusehomedir is false, this directory is searched for Sieve
 scripts.
+.IP "\fBsendmail:\fR /usr/lib/sendmail" 5
+The pathname of the sendmail executable.  Sieve uses sendmail for sending
+rejections, redirects and vacation responses.
+.IP "\fBpostmaster:\fR postmaster" 5
+Username that is used as the 'From' address in rejection MDNs produced
+by sieve.
 .IP "\fBhashimapspool:\fR false" 5
 If enabled, the partitions will also be hashed, in addition to the
 hashing done on configuration directories.  This is recommended if one
