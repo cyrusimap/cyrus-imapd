@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.34 2001/09/02 14:53:59 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.35 2001/11/09 01:48:19 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -143,56 +143,86 @@ static int roundToK(int x)
 	return ri+1;    
 }
 
-static char *convert_lmtp(int r)
+static void *send_lmtp_error(struct protstream *pout, int r)
 {
     switch (r) {
     case 0:
-	return "250 2.1.5 Ok";
-	
+	prot_printf(pout, "250 2.1.5 Ok\r\n");
+	break;
+
     case IMAP_IOERROR:
-	return "451 4.3.0 System I/O error";
+	prot_printf(pout, "451 4.3.0 System I/O error\r\n");
+	break;
 
     case IMAP_SERVER_UNAVAILABLE:
-	return "451 4.4.0 Remote server unavailable";
+	prot_printf(pout, "451 4.4.0 Remote server unavailable\r\n");
+	break;
 
     case IMAP_NOSPACE:
-	return "451 4.3.1 cannot create file: out of space";
+	prot_printf(pout, "451 4.3.1 cannot create file: out of space\r\n");
+	break;
 
     case IMAP_AGAIN:
-	return "451 4.3.0 transient system error";
-		
+	prot_printf(pout, "451 4.3.0 transient system error\r\n");
+	break;
+
     case IMAP_PERMISSION_DENIED:
-	return "550 5.7.1 Permission denied";
+	if (LMTP_LONG_ERROR_MSGS) {
+	    prot_printf(pout, 
+"550-You do not have permission to post a message to this mailbox.\r\n\r\n"
+"550-Please contact the owner of this mailbox in order to submit\r\n"
+"550-your message, or postmaster@andrew.cmu.edu if you believe you\r\n"
+"550-received this message in error.\r\n"
+"550 5.7.1 Permission denied");
+	} else {
+	    prot_printf(pout, "550 5.7.1 Permission denied\r\n");
+	}
+	break;
 
     case IMAP_QUOTA_EXCEEDED:
-	return "452 4.2.2 Over quota";
+	prot_printf(pout, "452 4.2.2 Over quota\r\n");
+	break;
 
     case IMAP_MAILBOX_BADFORMAT:
     case IMAP_MAILBOX_NOTSUPPORTED:
-	return "451 4.2.0 Mailbox has an invalid format";
+	prot_printf(pout, "451 4.2.0 Mailbox has an invalid format\r\n");
+	break;
 
     case IMAP_MESSAGE_CONTAINSNULL:
-	return "554 5.6.0 Message contains NUL characters";
-	
+	prot_printf(pout, "554 5.6.0 Message contains NUL characters\r\n");
+	break;
+
     case IMAP_MESSAGE_CONTAINSNL:
-	return "554 5.6.0 Message contains bare newlines";
+	prot_printf(pout, "554 5.6.0 Message contains bare newlines\r\n");
+	break;
 
     case IMAP_MESSAGE_CONTAINS8BIT:
-	return "554 5.6.0 Message contains non-ASCII characters in headers";
+	prot_printf(pout, "554 5.6.0 Message contains non-ASCII characters in headers\r\n");
+	break;
 
     case IMAP_MESSAGE_BADHEADER:
-	return "554 5.6.0 Message contains invalid header";
+	prot_printf(pout, "554 5.6.0 Message contains invalid header\r\n");
+	break;
 
     case IMAP_MESSAGE_NOBLANKLINE:
-	return "554 5.6.0 Message has no header/body separator";
+	prot_printf(pout, 
+		    "554 5.6.0 Message has no header/body separator\r\n");
+	break;
 
     case IMAP_MAILBOX_NONEXISTENT:
 	/* XXX Might have been moved to other server */
-	return "550 5.1.1 User unknown";
-    }
+	prot_printf(pout, "550 5.1.1 User unknown\r\n");
+	break;
 
-    /* Some error we're not expecting. */
-    return "554 5.0.0 Unexpected internal error";
+    case IMAP_PROTOCOL_BAD_PARAMETERS:
+	prot_printf(pout, "501 5.5.4 Syntax error in parameters\r\n");
+	break;
+
+    default:
+	/* Some error we're not expecting. */
+	prot_printf(pout, "554 5.0.0 Unexpected internal error\r\n");
+	break;
+    }
 }
 
 /* ----- this section defines functions on message_data_t.
@@ -875,7 +905,7 @@ static int savemsg(struct clientdata *cd,
     if (r) {
 	fclose(f);
 	while (nrcpts--) {
-	    prot_printf(cd->pout, "%s\r\n", convert_lmtp(r));
+	    send_lmtp_error(cd->pout, r);
 	}
 	return r;
     }
@@ -933,12 +963,12 @@ static int savemsg(struct clientdata *cd,
 
 /* see if 'addr' exists. if so, fill in 'ad' appropriately.
    on success, return NULL.
-   on failure, return an error message. */
-static char *process_recipient(char *addr,
-			       int ignorequota,
-			       int (*verify_user)(const char *, long,
-						  struct auth_state *),
-			       message_data_t *msg)
+   on failure, return the error. */
+static int process_recipient(char *addr,
+			     int ignorequota,
+			     int (*verify_user)(const char *, long,
+						struct auth_state *),
+			     message_data_t *msg)
 {
     char *dest;
     char *user;
@@ -964,7 +994,7 @@ static char *process_recipient(char *addr,
 	if (!addr) {
 	    free(ret->all);
 	    free(ret);
-	    return "501 5.5.4 Syntax error in parameters";
+	    return IMAP_PROTOCOL_BAD_PARAMETERS;
 	}
 	addr++;
     }
@@ -989,7 +1019,7 @@ static char *process_recipient(char *addr,
 	/* we lost */
 	free(ret->all);
 	free(ret);
-	return convert_lmtp(r);
+	return r;
     }
     ret->user = xstrdup(user);
 
@@ -997,8 +1027,8 @@ static char *process_recipient(char *addr,
 
     msg->rcpt[msg->rcpt_num] = ret;
 
-    return NULL;
-}    
+    return 0;
+}
 
 void lmtpmode(struct lmtp_func *func,
 	      struct protstream *pin, 
@@ -1288,8 +1318,7 @@ void lmtpmode(struct lmtp_func *func,
 		r = func->deliver(msg, msg->authuser, msg->authstate);
 		for (j = 0; j < msg->rcpt_num; j++) {
 		    if (!msg->rcpt[j]->status) delivered++;
-		    prot_printf(pout, "%s\r\n", 
-				convert_lmtp(msg->rcpt[j]->status));
+		    send_lmtp_error(pout, msg->rcpt[j]->status);
 		}
 
 		snmp_increment(mtaTransmittedMessages, delivered);
@@ -1498,13 +1527,13 @@ void lmtpmode(struct lmtp_func *func,
 		    continue;
 		}
 
-		err = process_recipient(rcpt,
-					ignorequota,
-					func->verify_user,
-					msg);
+		r = process_recipient(rcpt,
+				      ignorequota,
+				      func->verify_user,
+				      msg);
 		if (rcpt) free(rcpt); /* malloc'd in parseaddr() */
-		if (err != NULL) {
-		    prot_printf(pout, "%s\r\n", err);
+		if (r) {
+		    send_lmtp_error(pout, r);
 		    continue;
 		}
 		msg->rcpt_num++;
@@ -1735,6 +1764,26 @@ static void chop(char *s)
     }
 }
 
+/* getlastresp reads from 'pin' until we get an LMTP that isn't a continuation.
+   it puts it in 'buf', which must be at least 'len' big.
+
+   '*code' will contain the integer three digit response code.
+   if a read failed, '*code == 400', a temporary failure. 
+
+   returns an IMAP error code. */
+static int getlastresp(char *buf, int len, int *code, struct protstream *pin)
+{
+    do {
+	if (!prot_fgets(buf, len, pin)) {
+	    *code = 400;
+	    return IMAP_SERVER_UNAVAILABLE;
+	}
+    } while (ISCONT(buf));
+    *code = ask_code(buf);
+
+    return 0;
+}
+
 /* xxx fill in this function 
 
    perform authentication against connection 'conn'
@@ -1848,19 +1897,7 @@ int lmtp_connect(const char *phost,
     prot_setflushonread(conn->pin, conn->pout);
 
     /* read greeting */
-    for (;;) {
-	if (prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
-	    code = ask_code(buf);
-	    if (ISCONT(buf) && ISGOOD(code)) {
-		continue;
-	    }
-	} else {
-	    /* can't read greeting */
-	    code = 400;
-	}
-	break;
-    }
-    /* check status code */
+    getlastresp(buf, sizeof(buf)-1, &code, conn->pin);
     if (!ISGOOD(code)) goto done;
 
     /* LHLO */
@@ -1988,12 +2025,7 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
 
     /* rset */
     prot_printf(conn->pout, "RSET\r\n");
-    if (!prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
-	code = 400;
-	r = IMAP_SERVER_UNAVAILABLE;
-	goto failall;
-    }
-    code = ask_code(buf);
+    r = getlastresp(buf, sizeof(buf)-1, &code, conn->pin);
     if (!ISGOOD(code)) {
 	goto failall;
     }
@@ -2004,12 +2036,7 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
 	prot_printf(conn->pout, " AUTH=%s", txn->auth ? txn->auth : "<>");
     }
     prot_printf(conn->pout, "\r\n");
-    if (!prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
-	code = 400;
-	r = IMAP_SERVER_UNAVAILABLE;
-	goto failall;
-    }
-    code = ask_code(buf);
+    r = getlastresp(buf, sizeof(buf)-1, &code, conn->pin);
     if (!ISGOOD(code)) {
 	goto failall;
     }
@@ -2022,12 +2049,10 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
 	    prot_printf(conn->pout, " IGNOREQUOTA");
 	}
 	prot_printf(conn->pout, "\r\n");
-	if (!prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
-	    code = 400;
-	    r = IMAP_SERVER_UNAVAILABLE;
+	r = getlastresp(buf, sizeof(buf)-1, &code, conn->pin);
+	if (r) {
 	    goto failall;
 	}
-	code = ask_code(buf);
 	txn->rcpt[j].r = revconvert_lmtp(buf);
 	if (ISGOOD(code)) {
 	    onegood = 1;
@@ -2049,12 +2074,10 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
 
     /* data */
     prot_printf(conn->pout, "DATA\r\n");
-    if (!prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
-	code = 400;
-	r = IMAP_SERVER_UNAVAILABLE;
+    r = getlastresp(buf, sizeof(buf)-1, &code, conn->pin);
+    if (r) {
 	goto failall;
     }
-    code = ask_code(buf);
     if (code != 354) {
 	/* erg? */
 	if (ISGOOD(code)) code = 400;
@@ -2069,14 +2092,12 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
     for (j = 0; j < txn->rcpt_num; j++) {
 	if (txn->rcpt[j].result == RCPT_GOOD) {
 	    /* expecting a status code for this recipient */
-	    if (!prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
+	    r = getlastresp(buf, sizeof(buf)-1, &code, conn->pin);
+	    if (r) {
 		/* technically, some recipients might've succeeded here, 
 		   but we'll be paranoid */
-		code = 400;
-		r = IMAP_SERVER_UNAVAILABLE;
 		goto failall;
 	    }
-	    code = ask_code(buf);
 	    txn->rcpt[j].r = revconvert_lmtp(buf);
 	    if (ISGOOD(code)) {
 		onegood = 1;
@@ -2123,17 +2144,15 @@ int lmtp_verify_conn(struct lmtp_conn *conn)
 {
     char buf[8192];
     int r = 0;
+    int code = 0;
 
     /* noop me */
     prot_printf(conn->pout, "NOOP\r\n");
-    if (prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
-	int code = ask_code(buf);
-
-	if (!ISGOOD(code)) r = IMAP_SERVER_UNAVAILABLE;
-    } else {
+    r = getlastresp(buf, sizeof(buf)-1, &code, conn->pin);
+    if (!r && !ISGOOD(code)) {
 	r = IMAP_SERVER_UNAVAILABLE;
     }
-    
+
     return r;
 }
 
