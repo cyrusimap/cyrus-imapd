@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.170 2000/05/09 17:54:41 leg Exp $
+dnl $Id: configure.in,v 1.171 2000/05/10 15:19:27 leg Exp $
 dnl
 
 
@@ -72,9 +72,11 @@ AC_ARG_WITH(dbdir,[  --with-dbdir=DIR       Berkeley DB in <DIR>],
   CMU_ADD_LIBPATH($withval/lib)
   CPPFLAGS="-I$withval/include $CPPFLAGS")
 AC_CHECK_LIB(db-3, db_create, [AC_DEFINE(HAVE_LIBDB)
-       	                       LIBS=" -ldb ${LIBS}"],
-AC_ERROR([this version requires Berkeley DB 3.x.
-          (Get it from http://www.sleepycat.com/.)]))
+       	                       LIBS=" -ldb-3 ${LIBS}"],
+  AC_CHECK_LIB(db, db_create, [AC_DEFINE(HAVE_LIBDB)
+			       LIBS="-ldb ${LIBS}"],
+    AC_ERROR([this version requires Berkeley DB 3.x.
+(Get it from http://www.sleepycat.com/.)])))
 
 sievedir="sieve"
 AC_ARG_ENABLE(sieve,
