@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.179 2002/04/01 17:52:50 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.180 2002/04/03 16:14:41 rjs3 Exp $
  */
 
 #include <config.h>
@@ -745,9 +745,7 @@ int mboxlist_insertremote(const char *name, int mbtype, const char *host,
 	
 /*
  * Delete a mailbox.
- * Deleting the mailbox user.FOO deletes the user "FOO".  It may only be
- * performed by an admin.  The operation removes the user "FOO"'s 
- * subscriptions and all sub-mailboxes of user.FOO
+ * Deleting the mailbox user.FOO may only be performed by an admin.
  *
  * 1. Begin transaction
  * 2. Verify ACL's
@@ -765,7 +763,6 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     int r;
     char *acl;
     long access;
-    int deleteuser = 0; /* if we are deleting user.<user> */
     struct mailbox mailbox;
     int deletequotaroot = 0;
     char *path;
@@ -787,32 +784,6 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 
 	/* Only admins may delete user */
 	if (!isadmin) { r = IMAP_PERMISSION_DENIED; goto done; }
-
-	r = mboxlist_mylookup(name, NULL, NULL, NULL, &acl, &tid, 1);
-	switch (r) {
-	case 0:
-	    break;
-	case IMAP_AGAIN:
-	    goto retry;	  
-	    break;
-	default:
-	    DB->abort(mbdb, tid);
-	    goto done;
-	    break;
-	}
-	
-	/* Check ACL before doing anything stupid
-	 * We don't have to lie about the error code since we know
-	 * the user is an admin.
-	 */
-	if (checkacl &&
-	    (!(cyrus_acl_myrights(auth_state, acl) & deleteright))) {
-	    r = IMAP_PERMISSION_DENIED;
-	    DB->abort(mbdb, tid);
-	    goto done;
-	}
-	
-	deleteuser = 1;
     }
 
     r = mboxlist_mylookup(name, &mbtype, &path, NULL, &acl, &tid, 1);
@@ -831,7 +802,8 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 
     isremote = mbtype & MBTYPE_REMOTE;
 
-    /* check if user has Delete right */
+    /* check if user has Delete right (we've already excluded non-admins
+     * from deleting a user mailbox) */
     if(checkacl) {
 	access = cyrus_acl_myrights(auth_state, acl);
 	if(!(access & deleteright)) {
