@@ -14,7 +14,7 @@ dnl
 dnl Additional macros for configure.in packaged up for easier theft.
 dnl tjs@andrew.cmu.edu 6-may-1998
 dnl
-dnl $Id: aclocal.m4,v 1.25 2000/02/15 22:19:59 leg Exp $
+dnl $Id: aclocal.m4,v 1.26 2000/02/17 02:56:54 tmartin Exp $
 dnl
 
 dnl It would be good if ANDREW_ADD_LIBPATH could detect if something was
@@ -59,7 +59,7 @@ AC_DEFUN(CMU_GUESS_RUNPATH_SWITCH, [
 
 dnl sasl.m4--sasl detection macro
 dnl Rob Earhart
-dnl $Id: aclocal.m4,v 1.25 2000/02/15 22:19:59 leg Exp $
+dnl $Id: aclocal.m4,v 1.26 2000/02/17 02:56:54 tmartin Exp $
 
 AC_DEFUN(CMU_SASL, [
   AC_ARG_WITH(sasldir,[  --with-sasldir=PATH     PATH where the sasl library is installed], sasldir="$withval")
@@ -87,5 +87,71 @@ AC_DEFUN(CMU_SASL, [
     SASLFLAGS="-I$sasldir/include"
     AC_SUBST(SASLFLAGS)    
   fi
+])
+
+dnl agentx.m4--detect agentx libraries
+dnl copied from x-unixrc
+dnl Tim Martin
+
+AC_DEFUN(CMU_AGENTX, [
+
+	dnl
+	dnl CMU AgentX
+	dnl
+	AC_MSG_CHECKING([for AgentX])
+	AC_ARG_WITH(agentx, [  --with-agentx              CMU AgentX libraries located in (val)], AGENTX_DIR="$withval", AGENTX_DIR=no)
+
+	if test "${AGENTX_DIR}" != "no" &&
+	   test -f $AGENTX_DIR/lib${ABILIBDIR}/libagentx.a &&
+	   test -f $AGENTX_DIR/include/agentx.h; then
+	     AGENTX_DIR="$AGENTX_DIR"
+	elif test -d /usr/local &&
+	   test -f /usr/local/lib${ABILIBDIR}/libagentx.a &&
+	   test -f /usr/local/include/agentx.h; then
+	     AGENTX_DIR="/usr/local"
+
+	elif test -d /usr/ng &&
+	   test -f /usr/ng/lib${ABILIBDIR}/libagentx.a &&
+	   test -f /usr/ng/include/agentx.h; then
+	     AGENTX_DIR="/usr/ng"
+
+	else
+	  AC_MSG_WARN([Could not locate AgentX Libraries! http://www.net.cmu.edu/groups/netdev/agentx/])
+	fi
+
+	LIB_AGENTX="-L$AGENTX_DIR/lib${ABILIBDIR} -lagentx"
+	AC_SUBST(LIB_AGENTX)
+	AGENTXFLAGS="-I$AGENTX_DIR/include"
+        AC_SUBST(AGENTXFLAGS)   
+	AC_MSG_RESULT([found $AGENTX_DIR/lib${ABILIBDIR}/libagentx.a])
+
+])
+dnl pthreads.m4--pthreads setup macro
+dnl Rob Earhart
+
+AC_DEFUN(CMU_PTHREADS, [
+
+
+  AC_MSG_CHECKING([for pthreads])
+
+   AC_REQUIRE([AC_CANONICAL_HOST])
+   cmu_save_LIBS="$LIBS"
+   AC_CHECK_LIB(pthread, pthread_create,LIB_PTHREAD="-lpthread",
+     AC_CHECK_LIB(c_r, pthread_create,LIB_PTHREAD="-lc_r",
+       AC_ERROR([Can't compile without pthreads])))
+  LIBS="$cmu_save_LIBS"
+   AC_SUBST(LIB_PTHREAD)
+   AC_DEFINE(_REENTRANT)
+   case "$host_os" in
+   solaris2*)
+ 	AC_DEFINE(_POSIX_PTHREAD_SEMANTICS)
+ 	AC_DEFINE(__EXTENSIONS__)
+ 	;;
+   irix6*)
+ 	AC_DEFINE(_SGI_REENTRANT_FUNCTIONS)
+ 	;;
+   esac
+
+  AC_MSG_RESULT([found])
 ])
 
