@@ -482,7 +482,7 @@ int len;
     /* While we don't have room to buffer all the output */
     while (len > imclient->outleft) {
 	/* Copy as much data as will fit in output buffer */
-	bcopy(s, imclient->outptr, imclient->outleft);
+	memcpy(imclient->outptr, s, imclient->outleft);
 	imclient->outptr += imclient->outleft;
 	s += imclient->outleft;
 	len -= imclient->outleft;
@@ -499,7 +499,7 @@ int len;
     }
 
     /* Copy remaining data to output buffer */
-    bcopy(s, imclient->outptr, len);
+    memcpy(imclient->outptr, s, len);
     imclient->outptr += len;
     imclient->outleft -= len;
 }
@@ -531,16 +531,16 @@ int len;
 	/* If there is unused space at the front, move the plaintext there */
 	if (imclient->replystart != imclient->replybuf) {
 	    imclient->replylen -= imclient->replystart - imclient->replybuf;
-	    bcopy(imclient->replystart, imclient->replybuf,
-		  imclient->replylen);
+	    memmove(imclient->replybuf, imclient->replystart,
+		    imclient->replylen);
 	    imclient->replystart = imclient->replybuf;
 	}
 	/* If unused space between plaintext and crypttext, move crypttext */
 	if (imclient->replycryptstart > imclient->replylen) {
 	    if (imclient->replycryptend - imclient->replycryptstart) {
-		bcopy(imclient->replybuf + imclient->replycryptstart,
-		      imclient->replybuf + imclient->replylen,
-		      imclient->replycryptend - imclient->replycryptstart);
+		memmove(imclient->replybuf + imclient->replylen,
+			imclient->replybuf + imclient->replycryptstart,
+			imclient->replycryptend - imclient->replycryptstart);
 	    }
 	    imclient->replycryptend -=
 	      imclient->replycryptstart - imclient->replylen;
@@ -568,7 +568,7 @@ int len;
     }
 
     /* Copy the data to the buffer and NUL-terminate it */
-    bcopy(buf, imclient->replybuf + imclient->replycryptend, len);
+    memcpy(imclient->replybuf + imclient->replycryptend, buf, len);
     imclient->replycryptend += len;
 
     /* Remember where new data starts */
@@ -585,7 +585,7 @@ int len;
 	    /* Make sure we have an entire token */
 	    len = imclient->replycryptend - imclient->replycryptstart - 4;
 	    if (len < 0) break;
-	    bcopy(imclient->replybuf + imclient->replycryptstart, lenbuf, 4);
+	    memcpy(lenbuf, imclient->replybuf + imclient->replycryptstart, 4);
 	    toklen = ntohl(*(int *)lenbuf);
 	    if (toklen > IMCLIENT_BUFSIZE) {
 		/* XXX report error: token too long */
@@ -604,7 +604,8 @@ int len;
 	    }
 
 	    /* Copy the plaintext out, done with crypttext */
-	    bcopy(plainptr, imclient->replybuf + imclient->replylen, plainlen);
+	    memmove(imclient->replybuf + imclient->replylen,
+		    plainptr, plainlen);
 	    imclient->replylen += plainlen;
 	    imclient->replycryptstart += 4+toklen;
 	}

@@ -249,7 +249,7 @@ char **output;			/* Set to point to client reply data */
 	    kstate->authstepno = -1;
 	    return ACTE_FAIL;
 	}
-	bcopy(input, tmp, 4);
+	memcpy(tmp, input, 4);
 	kstate->challenge = ntohl(*(int *)tmp);
 
 	code = krb_mk_req(&authent, kstate->service, kstate->instance,
@@ -272,13 +272,13 @@ char **output;			/* Set to point to client reply data */
 	    return ACTE_FAIL;
 	}
 	des_ecb_encrypt(input, input, kstate->schedule, 0);
-	bcopy(input, tmp, 4);
+	memcpy(tmp, input, 4);
 	if (ntohl(*(int *)tmp) != kstate->challenge + 1) {
 	    /* Server failed to mutually authenticte */
 	    kstate->authstepno = -1;
 	    return ACTE_FAIL;
 	}	    
-	bcopy(input+4, tmp, 4);
+	memcpy(tmp, input+4, 4);
 	maxbufsize = ntohl(*(int *)tmp) & 0xfffff;
 	kstate->protallowed &= input[4];
 	if (maxbufsize <= PROTECTION_OVERHEAD) {
@@ -517,13 +517,13 @@ char **reply;			/* On failure, filled in with ptr to reason */
 	}
 	des_pcbc_encrypt(input, input, inputlen,
 			 kstate->schedule, kstate->session, 0);
-	bcopy(input, tmp, 4);
+	memcpy(tmp, input, 4);
 	if (ntohl(*(int *)tmp) != kstate->challenge) {
 	    kstate->authstepno = -1;
 	    *reply = "Incorrect checksum in Kerberos authenticator";
 	    return ACTE_FAIL;
 	}
-	bcopy(input+4, tmp, 4);
+	memcpy(tmp, input+4, 4);
 	maxbufsize = ntohl(*(int *)tmp) & 0xfffff;
 	if (maxbufsize < kstate->maxbufsize) kstate->maxbufsize = maxbufsize;
 	protallowed = input[4];
