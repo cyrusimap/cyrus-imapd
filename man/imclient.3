@@ -252,7 +252,7 @@ static void callback_capability(struct imclient *imclient,
     }
 }
 
-static int end_command (struct imclient *connection, void*
+static void end_command (struct imclient *connection, void*
 			rock,  struct imclient_reply *inmsg) {
     (*(int*)rock)--;
 }
@@ -282,7 +282,7 @@ main() {
     
     nc = 1;
     
-    imclient_send(imclient, (imclient_proc_t*) end_command,
+    imclient_send(imclient, end_command,
 		  (void*) &nc, "CAPABILITY");
     
     while(nc > 0) {
