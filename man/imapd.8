@@ -1,0 +1,53 @@
+.TH IMAPD 8
+.\" 	(C) Copyright 1994 by Carnegie Mellon University
+.\" 
+.\"                      All Rights Reserved
+.\" 
+.\" Permission to use, copy, modify, and distribute this software and its 
+.\" documentation for any purpose and without fee is hereby granted, 
+.\" provided that the above copyright notice appear in all copies and that
+.\" both that copyright notice and this permission notice appear in 
+.\" supporting documentation, and that the name of CMU not be
+.\" used in advertising or publicity pertaining to distribution of the
+.\" software without specific, written prior permission.  
+.\" 
+.\" CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+.\" ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+.\" CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+.\" ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+.\" WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+.\" ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+.\" SOFTWARE.
+.SH NAME
+imapd \- IMAP server process
+.SH SYNOPSIS
+.B imapd
+.SH DESCRIPTION
+.I Imapd
+is an IMAP4 server.
+It accepts commands on its standard input and responds on its standard output.
+It is normally invoked by
+.IR inetd (8)
+with those descriptors attached to a remote client connection.
+.PP
+.I Imapd
+reads its configuration options out of the
+.IR imapd.conf (5)
+file.
+.PP
+If the directory
+.RI log/ user
+exists under the directory specified in the
+.I configdirectory
+configuration option, then
+.I imapd
+will create protocol telemetry logs for sessions authenticating as
+.IR user .
+The telemetry logs will be stored in the 
+.RI log/ user
+directory with a filename of the
+.I imapd
+process-id.
+.SH FILES
+.TP
+.B /etc/imapd.conf
