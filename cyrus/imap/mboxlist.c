@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.143 2001/01/02 20:12:25 leg Exp $
+ * $Id: mboxlist.c,v 1.144 2001/01/02 20:32:50 leg Exp $
  */
 
 #include <config.h>
@@ -1308,7 +1308,7 @@ static int find_p(void *rockp,
 	}
 	acl++;
 	acllen = datalen - (acl - data);
-	if (acllen > aclbufsz) {
+	if (acllen >= aclbufsz) {
 	    aclbufsz = acllen + 500;
 	    aclbuf = xrealloc(aclbuf, aclbufsz);
 	}
