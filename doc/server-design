@@ -22,14 +22,28 @@ Non-ASCII characters, shell metacharacters, and "/" are not permitted
 in folder names.  A folder name may not start or end with a "."
 character, nor may it contain two "." characters in a row.
 
-* IMAP extensions
+* IMAP protocol extensions and implementation decisions
 
 The Cyrus IMAP server supports the following protocol extensions:
 
-	QUOTA			[have to write definition]
+	QUOTA (STORAGE only)
 	ACL
 	partitions on CREATE
 	DUMP/RESTORE		[to be defined]
+
+The CHECK command will scan for flags that have changed since the
+client was notified about them, issuing unsolicited FETCH replies to
+update the client's state.
+
+The EXPUNGE operation is allowed at any time, even when other server
+processes are reading the folder.  To avoid sending unsolicited
+EXPUNGE replies at inopportune times, servers keep an open file handle
+on the folder header files that are replaced by the EXPUNGE operation.
+The server may send unsolicited EXPUNGE commands during the execution
+of the APPEND, CHECK, and EXPUNGE commands.
+
+The PURGE command is implemented as a NOOP.  The server always acts as
+if PURGE ALWAYS is in effect.
 
 
 * Mailbox/Bboard storage format
@@ -98,11 +112,12 @@ cyrus.cache	Contains a header and asequence of variable-length
 - sizes and file offsets of the various MIME body parts
 
 cyrus.seen	Contains the \seen and \recent information of users.
-		One record per user, each record contains
+		One record per user, sorted by user, each record contains:
 
 - Userid
 - Time last opened (for \RECENT)
-- List of sequence numbers of read messages, in ".newsrc" format.
+- SEQUENCE of sequence-no's of read messages
+- Optional space character padding, to avoid having to rewrite file on updates
 
 In order to support replicated folders in a future implementation,
 access to cyrus.seen will be through an interface which can later be
@@ -137,8 +152,9 @@ To append one or more messages:
 	check ACL
 	open cyrus.index and cyrus.cache if not already reading them
 	lock already-open cyrus.index file
-	if cyrus.index has been replaced since last opened, open and
-		lock it and its cyrus.cache too.
+	if cyrus.index has been replaced since last opened, close,
+		reopen, send EXPUNGE notifications, and repeat.
+	if reopened cyrus.index file, reopen cyrus.cache file.
 	Lock appropriate cyrus.quota
 	check quota
 	assign sequence number as one plus last-seqno
@@ -146,9 +162,7 @@ To append one or more messages:
 	write message file(s)
 	append info to cyrus.cache
 	append info to cyrus.index
-	if have two index files open, append info to other cyrus.cache
-		and cyrus.index
-	update last-date, last-seqno, and quota-used in both. [?]
+	update last-date, last-seqno, and quota-used
 	update cyrus.quota
 	release locks
 
@@ -200,6 +214,8 @@ update recent/seen info:
 
 [dump/restore, to implement IMSP MOVE]
 
+[need to blow away other readers when bboard deleted or removed]
+
 * Reading semantics
 
 In order to avoid presenting stale data, the following operations
@@ -249,9 +265,6 @@ Search:
 	- must serch message file contents
 		BODY, TEXT
 
-Purge:
-	The server always acts as if PURGE ALWAYS is in effect.
-
 * Configuration directory
 
 On each server, there is a directory which contains files specifiying
@@ -259,7 +272,7 @@ the server configuration.  The files are:
 
 - cyrus.policy
 
-Specifies site policy options, such as
+Specifies site policy options, such as:
 
 	Whether to automatcally create INBOX mailboxes for users
 	The hostnames and Kerberos identifications of the IMSP servers
@@ -288,8 +301,7 @@ listed first in cyrus.partitions.
 
 Lists the names and partitions of all the bboards.
 
-- [something to list names/locations of users]
-
+- [something to do duplicate delivery elimination]
 
 * User directory:
 
@@ -321,7 +333,7 @@ The following programs will be written
 	Called by inetd or equivalent. 
 
 - cyrus-deliver
-	Called by the mail system to deliver message to user.
+	Called by the mail system to deliver message to mailbox or bboard.
 	Will be backwards-interface-compatable with rmail.
 
 - cyrus-update
@@ -395,7 +407,7 @@ Implementation order is as follows:
 
 - check
 
-- copy, login, etc.
+- copy, login, etc.  Alpha release
 
 - IMSP seen/last, cyrus-update
 
@@ -405,8 +417,8 @@ Implementation order is as follows:
 
 - IMSP move
 
-- quota-usage reporter
+- quota-usage reporter, full cyrus-expire
 
 - cyrus-arbitron, cyrus-pop2d, cyrus-pop3d
 
-- connection-counting inetd
+- connection-counting inetd;  Beta release
