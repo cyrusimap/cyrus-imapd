@@ -3,7 +3,7 @@
 echo -n "Starting ptclient" > /dev/console
 
 ptscache="/var/ptclient/ptscache.db"
-db_load -T -t hash -f /dev/null $ptscache
+/usr/local/bin/db_load -T -t hash -f /dev/null $ptscache
 touch $ptscache
 chown cyrus $ptscache
 chgrp mail $ptscache
