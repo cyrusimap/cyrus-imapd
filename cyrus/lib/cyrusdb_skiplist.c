@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.10 2002/01/28 17:52:01 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.11 2002/01/28 19:24:19 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -55,6 +55,8 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <time.h>
+#include <netinet/in.h>
 
 #include "cyrusdb.h"
 #include "xmalloc.h"
@@ -160,6 +162,7 @@ struct txn {
 };
 
 static time_t global_recovery = 0;
+static int do_fsync = 1;
 
 static int myinit(const char *dbdir, int myflags)
 {
@@ -205,6 +208,10 @@ static int myinit(const char *dbdir, int myflags)
     }
 
     srand(time(NULL) * getpid());
+
+    if (getenv("CYRUS_SKIPLIST_UNSAFE")) {
+	do_fsync = 0;
+    }
     
     return 0;
 }
@@ -300,6 +307,8 @@ static int recovery(struct db *db);
 static int LEVEL(const char *ptr)
 {
     const bit32 *p, *q;
+
+    assert(TYPE(ptr) == DUMMY || TYPE(ptr) == INORDER || TYPE(ptr) == ADD);
     p = q = (bit32 *) FIRSTPTR(ptr);
     while (*p != -1) p++;
     return (p - q);
@@ -453,10 +462,12 @@ static int write_lock(struct db *db, const char *altname)
 	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, fname);
 	return CYRUSDB_IOERROR;
     }
-    db->map_size = sbuf.st_size;
     if (db->map_ino != sbuf.st_ino) {
 	map_free(&db->map_base, &db->map_len);
     }
+    db->map_size = sbuf.st_size;
+    db->map_ino = sbuf.st_ino;
+    
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
 		fname, 0);
     
@@ -477,10 +488,11 @@ static int read_lock(struct db *db)
 	return CYRUSDB_IOERROR;
     }
 
-    db->map_size = sbuf.st_size;
     if (db->map_ino != sbuf.st_ino) {
 	map_free(&db->map_base, &db->map_len);
     }
+    db->map_size = sbuf.st_size;
+    db->map_ino = sbuf.st_ino;
     
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
 		db->fname, 0);
@@ -558,7 +570,7 @@ static int myopen(const char *fname, struct db **ret)
 	}
 	
 	/* sync the db */
-	if (!r && (fsync(db->fd) < 0)) {
+	if (!r && do_fsync && (fsync(db->fd) < 0)) {
 	    syslog(LOG_ERR, "DBERROR: fsync(%s): %m", db->fname);
 	    r = CYRUSDB_IOERROR;
 	}
@@ -1071,7 +1083,7 @@ int mycommit(struct db *db, struct txn *tid)
     assert(db && tid);
 
     /* fsync */
-    if (fsync(db->fd) < 0) {
+    if (do_fsync && (fsync(db->fd) < 0)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", db->fname);
 	return CYRUSDB_IOERROR;
     }
@@ -1081,7 +1093,7 @@ int mycommit(struct db *db, struct txn *tid)
     retry_write(db->fd, (char *) &commitrectype, 4);
 
     /* fsync */
-    if (fsync(db->fd) < 0) {
+    if (do_fsync && (fsync(db->fd) < 0)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", db->fname);
 	return CYRUSDB_IOERROR;
     }
@@ -1215,8 +1227,13 @@ static int mycheckpoint(struct db *db, int locked)
 
     /* grab write lock (could be read but this prevents multiple checkpoints
      simultaneously) */
-    if (!locked && (r = write_lock(db, NULL)) < 0) {
-	return r;
+    if (!locked) {
+	r = write_lock(db, NULL);
+	if (r < 0) return r;
+    } else {
+	/* we need the latest and greatest data */
+	map_refresh(db->fd, 0, &db->map_base, &db->map_len, MAP_UNKNOWN_LEN,
+		    db->fname, 0);
     }
 
     /* open fname.NEW */
@@ -1332,7 +1349,7 @@ static int mycheckpoint(struct db *db, int locked)
     r = write_header(db);
 
     /* sync new file */
-    if (!r && (fsync(db->fd) < 0)) {
+    if (!r && do_fsync && (fsync(db->fd) < 0)) {
 	syslog(LOG_ERR, "DBERROR: skiplist checkpoint: fsync(%s): %m", fname);
 	r = CYRUSDB_IOERROR;
     }
@@ -1358,6 +1375,21 @@ static int mycheckpoint(struct db *db, int locked)
 
     /* release old write lock */
     close(oldfd);
+
+    {
+	struct stat sbuf;
+
+	/* let's make sure we're up to date */
+	map_free(&db->map_base, &db->map_len);
+	if (fstat(db->fd, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: fstat %s: %m", db->fname);
+	    return CYRUSDB_IOERROR;
+	}
+	db->map_size = sbuf.st_size;
+	db->map_ino = sbuf.st_ino;
+	map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
+		    db->fname, 0);
+    }
 
     if (!locked) {
 	/* unlock the new db files */
@@ -1722,7 +1754,7 @@ static int recovery(struct db *db)
     }
 
     /* fsync the recovered database */
-    if (!r && fsync(db->fd) < 0) {
+    if (!r && do_fsync && (fsync(db->fd) < 0)) {
 	syslog(LOG_ERR, 
 	       "DBERROR: skiplist recovery %s: fsync: %m", db->fname); 
 	r = CYRUSDB_IOERROR;
@@ -1735,7 +1767,7 @@ static int recovery(struct db *db)
     }
 
     /* fsync the new header */
-    if (!r && fsync(db->fd) < 0) {
+    if (!r && do_fsync && (fsync(db->fd) < 0)) {
 	syslog(LOG_ERR,
 	       "DBERROR: skiplist recovery %s: fsync: %m", db->fname); 
 	r = CYRUSDB_IOERROR;
