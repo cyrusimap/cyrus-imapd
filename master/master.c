@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.71 2002/12/09 22:48:08 rjs3 Exp $ */
+/* $Id: master.c,v 1.72 2002/12/10 15:47:49 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -94,6 +94,8 @@
 #include "master.h"
 #include "service.h"
 
+#include "lock.h"
+
 enum {
     become_cyrus_early = 1,
     child_table_size = 10000,
@@ -102,6 +104,7 @@ enum {
 
 static int verbose = 0;
 static int listen_queue_backlog = 32;
+static int pidfd = -1;
 
 struct service *Services = NULL;
 int allocservices = 0;
@@ -441,6 +444,9 @@ void run_startup(char **cmd)
 	break;
 	
     case 0:
+	/* Child - Release our pidfile lock. */
+	if(pidfd != -1) close(pidfd);
+
 	if (become_cyrus() != 0) {
 	    syslog(LOG_ERR, "can't change to the cyrus user");
 	    exit(1);
@@ -541,7 +547,9 @@ void spawn_service(struct service *s)
 	break;
 
     case 0:
-	/* child */
+	/* Child - Release our pidfile lock. */
+	if(pidfd != -1) close(pidfd);
+
 	if (become_cyrus() != 0) {
 	    syslog(LOG_ERR, "can't change to the cyrus user");
 	    exit(1);
@@ -650,6 +658,9 @@ void spawn_schedule(time_t now)
 		break;
 
 	    case 0:
+		/* Child - Release our pidfile lock. */
+		if(pidfd != -1) close(pidfd);
+
 		if (become_cyrus() != 0) {
 		    syslog(LOG_ERR, "can't change to the cyrus user");
 		    exit(1);
@@ -1196,6 +1207,8 @@ void reread_conf(void)
 
 int main(int argc, char **argv)
 {
+    const char *default_pidfile = "/var/run/cyrus-master.pid";
+    const char *pidfile = default_pidfile;
     int i, opt, close_std = 1, daemon_mode = 0;
     extern int optind;
     extern char *optarg;
@@ -1205,11 +1218,15 @@ int main(int argc, char **argv)
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
-    while ((opt = getopt(argc, argv, "l:Dd")) != EOF) {
+    while ((opt = getopt(argc, argv, "p:l:Dd")) != EOF) {
 	switch (opt) {
 	case 'l':
             /* user defined listen queue backlog */
 	    listen_queue_backlog = atoi(optarg);
+	    break;
+	case 'p':
+	    /* Set the pidfile name */
+	    pidfile = optarg;
 	    break;
 	case 'd':
 	    /* Daemon Mode */
@@ -1279,6 +1296,22 @@ int main(int argc, char **argv)
     }
 
     limit_fds(RLIM_INFINITY);
+
+    /* Write out the pidfile */
+    pidfd = open(pidfile, O_CREAT|O_RDWR, 0644);
+    if(pidfd == -1) {
+	syslog(LOG_ERR, "can't open pidfile: %m");
+    } else {
+	char buf[100];
+
+	if(lock_nonblocking(pidfd)) {
+	    fatal("cannot get exclusive lock on pidfile (is another master still running?)", EX_OSERR);
+	} else {
+	    snprintf(buf, sizeof(buf), "%d\n", getpid());
+	    write(pidfd, buf, strlen(buf));
+	    fsync(pidfd);
+	}
+    }
 
     masterconf_init("master");
     syslog(LOG_NOTICE, "process started");
