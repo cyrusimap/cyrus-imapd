@@ -30,11 +30,13 @@
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <syslog.h>
+#include <com_err.h>
 
 #include "acl.h"
 #include "glob.h"
 #include "assert.h"
 #include "config.h"
+#include "util.h"
 #include "mailbox.h"
 #include "imap_err.h"
 #include "xmalloc.h"
@@ -52,6 +54,9 @@ static int mboxlist_policycheck();
 static int mboxlist_userownsmailbox();
 static long ensureOwnerRights();
 static int mboxlist_deletesubmailbox();
+
+static struct quota *mboxlist_newquota;
+static int mboxlist_changequota();
 
 #define FNAME_MBOXLIST "/mailboxes"
 #define FNAME_USERDIR "/user/"
@@ -523,7 +528,7 @@ char *userid;
 	/* Delete sub-mailboxes */
 	strcpy(buf2, name);
 	strcat(buf2, ".*");
-	r = mboxlist_findall(buf2, 1, userid, mboxlist_deletesubmailbox);
+	r = mboxlist_findall(buf2, 1, 0, mboxlist_deletesubmailbox);
 	if (r) return r;
 
 	/* Delete any subscription list file */
@@ -937,7 +942,7 @@ int (*proc)();
     g = glob_init(pattern, GLOB_ICASE|GLOB_HIERARCHY);
 
     /* Check for INBOX first of all */
-    if (!strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
+    if (userid && !strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
 
@@ -1006,7 +1011,7 @@ int (*proc)();
     offset = n_binarySearchFD(fileno(listfile), pattern, 0, &bufp,
 			      &buflen, 0, 0);
     fseek(listfile, offset, 0);
-    usermboxname[--usermboxnamelen] = '\0';
+    if (userid) usermboxname[--usermboxnamelen] = '\0';
     for (;;) {
 	if (!fgets(buf, sizeof(buf), listfile)) break;
 	/* XXX assuming \t before running past sizeof(buf) */
@@ -1017,7 +1022,8 @@ int (*proc)();
 	while (minmatch >= 0) {
 	    matchlen = glob_test(g, buf, -1L, &minmatch);
 	    if (matchlen == -1 ||
-		(strncasecmp(buf, usermboxname, usermboxnamelen) == 0 &&
+		(userid &&
+		 strncasecmp(buf, usermboxname, usermboxnamelen) == 0 &&
 		 (buf[usermboxnamelen] == '\0' || buf[usermboxnamelen] == '.'))) {
 		break;
 	    }
@@ -1106,7 +1112,7 @@ int (*proc)();
     g = glob_init(pattern, GLOB_ICASE|GLOB_HIERARCHY);
 
     /* Check for INBOX first of all */
-    if (!strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
+    if (userid && !strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
 
@@ -1183,7 +1189,7 @@ int (*proc)();
     offset = n_binarySearchFD(fileno(subsfile), pattern, 0, &bufp,
 			      &buflen, 0, 0);
     fseek(subsfile, offset, 0);
-    usermboxname[--usermboxnamelen] = '\0';
+    if (userid) usermboxname[--usermboxnamelen] = '\0';
     for (;;) {
 	if (!fgets(buf, sizeof(buf), subsfile)) break;
 	/* XXX assuming \t before running past sizeof(buf) */
@@ -1194,7 +1200,8 @@ int (*proc)();
 	while (minmatch >= 0) {
 	    matchlen = glob_test(g, buf, -1L, &minmatch);
 	    if (matchlen == -1 ||
-		(strncasecmp(buf, usermboxname, usermboxnamelen) == 0 &&
+		(userid &&
+		 strncasecmp(buf, usermboxname, usermboxnamelen) == 0 &&
 		 (buf[usermboxnamelen] == '\0' || buf[usermboxnamelen] == '.'))) {
 		break;
 	    }
@@ -1498,6 +1505,122 @@ char *userid;
 }
     
 /*
+ * Set the quota on or create a quota root
+ */
+int
+mboxlist_setquota(root, newquota)
+char *root;
+int newquota;
+{
+    char quota_path[MAX_MAILBOX_PATH];
+    char pattern[MAX_MAILBOX_PATH];
+    struct quota quota;
+    static struct quota zeroquota;
+    int r;
+    FILE *listfile = 0;
+    struct stat sbuffd, sbuffile;
+    char *p;
+    unsigned offset, len, size;
+    char buf[MAX_MAILBOX_PATH];
+
+    if (!root[0] || root[0] == '.' || strchr(root, '/')
+	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
+	return IMAP_MAILBOX_BADNAME;
+    }
+    
+    quota = zeroquota;
+
+    strcpy(quota_path, config_dir);
+    strcat(quota_path, FNAME_QUOTADIR);
+    quota.root = quota_path + strlen(quota_path);
+    strcpy(quota.root, root);
+    lcase(quota.root);
+
+    if (quota.file = fopen(quota_path, "r+")) {
+	/* Just lock and change it */
+	r = mailbox_lock_quota(&quota);
+
+	quota.limit = newquota;
+
+	if (!r) r = mailbox_write_quota(&quota);
+	if (quota.file) fclose(quota.file);
+	return r;
+    }
+
+    /*
+     * Have to create a new quota root
+     * Open and lock mailbox list file
+     */
+    if (!listfname) mboxlist_getfname();
+    listfile = fopen(listfname, "r+");
+    for (;;) {
+	if (!listfile) {
+	    syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
+	    fatal("can't read mailbox list", EX_OSFILE);
+	}
+
+	r = flock(fileno(listfile), LOCK_EX);
+	if (r == -1) {
+	    if (errno == EINTR) continue;
+	    syslog(LOG_ERR, "IOERROR: locking %s: %m", listfname);
+	    return IMAP_IOERROR;
+	}
+	
+	fstat(fileno(listfile), &sbuffd);
+	r = stat(listfname, &sbuffile);
+	if (r == -1) {
+	    syslog(LOG_ERR, "IOERROR: stating %s: %m", listfname);
+	    return IMAP_IOERROR;
+	}
+
+	size = sbuffd.st_size;
+	if (sbuffd.st_ino == sbuffile.st_ino) break;
+
+	fclose(listfile);
+	listfile = fopen(listfname, "r+");
+    }
+
+    /* Ensure there is at least one mailbox under the quota root */
+    p = 0;
+    offset = n_binarySearchFD(fileno(listfile), quota.root, 0, &p, &len, 0, size);
+    if (!len) {
+	fseek(listfile, offset, 0);
+	if (!fgets(buf, sizeof(buf), listfile) ||
+	    strncasecmp(quota.root, buf, strlen(quota.root)) != 0 ||
+	    buf[strlen(quota.root)] != '.') {
+	    fclose(listfile);
+	    return IMAP_MAILBOX_NONEXISTENT;
+	}
+    }
+    
+    /* perhaps create .NEW, lock, check if it got recreated, move in place */
+    quota.lock_count = 1;
+    quota.used = 0;
+    quota.limit = newquota;
+    r = mailbox_write_quota(&quota);
+
+    if (r) {
+	fclose(listfile);
+	return r;
+    }
+
+    strcpy(pattern, quota.root);
+    strcat(pattern, ".*");
+    mboxlist_newquota = &quota;
+    
+    if (len) {
+	mboxlist_changequota(quota.root, 0, 0);
+    }
+    mboxlist_findall(pattern, 1, 0, mboxlist_changequota);
+    
+    r = mailbox_write_quota(&quota);
+    if (quota.file) fclose(quota.file);
+    fclose(listfile);
+    return r;
+}
+
+
+/*
  * Open and lock the subscription list for 'userid'.
  * The FILE pointer pointed to by 'subsfile' is set to the open,
  * locked file.  The character pointers pointed to by 'fname' and
@@ -1637,6 +1760,61 @@ long access;
 {
     if (strcasecmp(identifier, owner) != 0) return access;
     return access|ACL_LOOKUP|ACL_ADMIN|ACL_CREATE;
+}
+
+/*
+ * Helper function to change the quota root for 'name' to that pointed
+ * to by the static global struct pointer 'mboxlist_newquota'.
+ */
+static int
+mboxlist_changequota(name, matchlen, maycreate)
+char *name;
+int matchlen;
+int maycreate;
+{
+    int r;
+    struct mailbox mailbox;
+
+    r = mailbox_open_header(name, &mailbox);
+    if (r) goto error_noclose;
+
+    r = mailbox_lock_header(&mailbox);
+    if (r) goto error;
+
+    if (mailbox.quota.root) {
+	if (strlen(mailbox.quota.root) >= strlen(mboxlist_newquota->root)) {
+	    /* Part of a child quota root */
+	    mailbox_close(&mailbox);
+	    return 0;
+	}
+
+	r = mailbox_lock_quota(&mailbox.quota);
+	if (r) goto error;
+	mailbox.quota.used -= mailbox.quota_mailbox_used;
+	r = mailbox_write_quota(&mailbox.quota);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "LOSTQUOTA: unable to record free of %d bytes in quota %s",
+		   mailbox.quota_mailbox_used, mailbox.quota.root);
+	}
+	mailbox_unlock_quota(&mailbox.quota);
+	free(mailbox.quota.root);
+    }
+
+    mailbox.quota.root = strsave(mboxlist_newquota->root);
+    r = mailbox_write_header(&mailbox);
+    if (r) goto error;
+
+    mboxlist_newquota->used += mailbox.quota_mailbox_used;
+    return 0;
+
+ error:
+    mailbox_close(&mailbox);
+ error_noclose:
+    syslog(LOG_ERR, "LOSTQUOTA: unable to change quota root for %s to %s: %s",
+	   name, mboxlist_newquota->root, error_message(r));
+    
+    return 0;
 }
 
 /*

@@ -92,14 +92,15 @@ long quotacheck;
 	return r;
     }
 
-    r = mailbox_lock_quota(mailbox);
+    r = mailbox_lock_quota(&mailbox->quota);
     if (r) {
 	mailbox_close(mailbox);
 	return r;
     }
 
-    if (mailbox->quota_limit >= 0 && quotacheck >= 0  &&
-	mailbox->quota_used + quotacheck > mailbox->quota_limit * QUOTA_UNITS) {
+    if (mailbox->quota.limit >= 0 && quotacheck >= 0  &&
+	mailbox->quota.used + quotacheck > mailbox->quota.limit * QUOTA_UNITS) {
+	mailbox_close(mailbox);
 	return IMAP_QUOTA_EXCEEDED;
     }
 
@@ -260,12 +261,12 @@ char *userid;
     }
     
     /* Write out quota file */
-    mailbox->quota_used += message_index.size;
-    r = mailbox_write_quota(mailbox);
+    mailbox->quota.used += message_index.size;
+    r = mailbox_write_quota(&mailbox->quota);
     if (r) {
 	syslog(LOG_ERR,
 	       "LOSTQUOTA: unable to record use of %d bytes in quota file %s",
-	       message_index.size, mailbox->quota_path);
+	       message_index.size, mailbox->quota.root);
     }
 
     /* Set \Seen flag if necessary */
@@ -297,6 +298,7 @@ char *userid;
     unsigned long quota_usage = 0;
     char fname[MAX_MAILBOX_PATH];
     FILE *srcfile, *destfile;
+    struct protstream *prot_src;
     int r;
     long last_cacheoffset;
     int writeheader = 0;
@@ -360,7 +362,9 @@ char *userid;
 		r = IMAP_IOERROR;
 		goto fail;
 	    }
-	    r = message_copy_byline(srcfile, destfile);
+	    prot_src = prot_new(fileno(srcfile), 0);
+	    r = message_copy_byline(prot_src, destfile);
+	    prot_free(prot_src);
 	    fclose(srcfile);
 	    if (!r) r = message_parse(destfile, append_mailbox,
 				      &message_index[msg]);
@@ -441,12 +445,12 @@ char *userid;
     if (r) goto fail;
     
     /* Write out quota file */
-    append_mailbox->quota_used += quota_usage;
-    r = mailbox_write_quota(append_mailbox);
+    append_mailbox->quota.used += quota_usage;
+    r = mailbox_write_quota(&append_mailbox->quota);
     if (r) {
 	syslog(LOG_ERR,
 	       "LOSTQUOTA: unable to record use of %d bytes in quota file %s",
-	       quota_usage, append_mailbox->quota_path);
+	       quota_usage, append_mailbox->quota.root);
     }
     
     /* Set \Seen flags if necessary */
@@ -589,12 +593,12 @@ unsigned long feeduid;
     if (r) goto fail;
     
     /* Write out quota file */
-    mailbox->quota_used += quota_usage;
-    r = mailbox_write_quota(mailbox);
+    mailbox->quota.used += quota_usage;
+    r = mailbox_write_quota(&mailbox->quota);
     if (r) {
 	syslog(LOG_ERR,
 	       "LOSTQUOTA: unable to record use of %d bytes in quota file %s",
-	       quota_usage, mailbox->quota_path);
+	       quota_usage, mailbox->quota.root);
     }
     
     free(message_index);

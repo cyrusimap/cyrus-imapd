@@ -84,6 +84,9 @@ ec IMAP_INVALID_LOGIN,
 ec IMAP_ANONYMOUS_NOT_PERMITTED,
    "Anonymous login is not permitted"
 
+ec IMAP_UNSUPPORTED_QUOTA,
+   "Unsupported quota resource"
+
 # Following used for internationalizatio of untagged NO responses
 
 ec IMAP_NO_OVERQUOTA,

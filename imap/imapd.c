@@ -185,6 +185,9 @@ cmdloop()
 	/* Parse tag */
 	c = getword(&tag);
 	if (c == EOF) {
+	    if (p = prot_error(imapd_in)) {
+		prot_printf(imapd_out, "* BYE %s\r\n", p);
+	    }
 	    shutdown(0);
 	}
 	if (c != ' ' || !isatom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
@@ -371,6 +374,14 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_getacl(tag.s, arg1.s, arg2.s);
 	    }
+	    else if (!strcmp(cmd.s, "Getquotaroot")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg1);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_getquotaroot(tag.s, arg1.s);
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -539,6 +550,12 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s, arg4.s);
+	    }
+	    else if (!strcmp(cmd.s, "Setquota")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg1);
+		if (c != ' ') goto missingargs;
+		cmd_setquota(tag.s, arg1.s);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1012,7 +1029,7 @@ char *name;
 	r = mailbox_open_index(&mailbox);
     }
     if (!r && !(mailbox.myrights & ACL_READ)) {
-	r = (mailbox.myrights & ACL_LOOKUP) ?
+	r = (imapd_userisadmin || (mailbox.myrights & ACL_LOOKUP)) ?
 	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
     }
     if (!r && chdir(mailbox.path)) {
@@ -1043,10 +1060,10 @@ char *name;
 
     if (imapd_mailbox->myrights & ACL_DELETE) {
 	/* Warn if mailbox is close to or over quota */
-	mailbox_read_quota(imapd_mailbox);
-	if (imapd_mailbox->quota_limit > 0) {
-	    usage = imapd_mailbox->quota_used * 100 /
-	      (imapd_mailbox->quota_limit * QUOTA_UNITS);
+	mailbox_read_quota(&imapd_mailbox->quota);
+	if (imapd_mailbox->quota.limit > 0) {
+	    usage = imapd_mailbox->quota.used * 100 /
+	      (imapd_mailbox->quota.limit * QUOTA_UNITS);
 	    if (usage >= 100) {
 		prot_printf(imapd_out, "* NO ");
 		prot_printf(imapd_out, error_message(IMAP_NO_OVERQUOTA), name);
@@ -1971,6 +1988,130 @@ char *rights;
     }
     
     prot_printf(imapd_out, "%s OK %s completed\r\n", tag, cmd);
+}
+
+/*
+ * Perform a GETQUOTAROOT command
+ */
+cmd_getquotaroot(tag, name)
+char *tag;
+char *name;
+{
+    char inboxname[MAX_MAILBOX_PATH];
+    struct mailbox mailbox;
+    int r;
+    int doclose = 0;
+
+    if (strcasecmp(name, "inbox") == 0 &&
+	     !strchr(imapd_userid, '.') &&
+	     strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
+	strcpy(inboxname, "user.");
+	strcat(inboxname, imapd_userid);
+	r = mailbox_open_header(inboxname, &mailbox);
+    }
+    else {
+	r = mailbox_open_header(name, &mailbox);
+    }
+
+    if (!r) {
+	doclose = 1;
+	if (!imapd_userisadmin && !(mailbox.myrights & ACL_READ)) {
+	    r = (mailbox.myrights & ACL_LOOKUP) ?
+	      IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	}
+    }
+
+    if (!r) {
+	prot_printf(imapd_out, "* QUOTAROOT ");
+	printastring(name);
+	if (mailbox.quota.root) {
+	    prot_printf(imapd_out, " ");
+	    printastring(mailbox.quota.root);
+	    r = mailbox_read_quota(&mailbox.quota);
+	    if (!r) {
+		prot_printf(imapd_out, "\r\n* QUOTA ");
+		printastring(mailbox.quota.root);
+		prot_printf(imapd_out, " (");
+		if (mailbox.quota.limit >= 0) {
+		    prot_printf(imapd_out, "STORAGE %d %d",
+				mailbox.quota.used/QUOTA_UNITS,
+				mailbox.quota.limit);
+		}
+		prot_putc(')', imapd_out);
+	    }
+	}
+	prot_printf(imapd_out, "\r\n");
+    }
+
+    if (doclose) mailbox_close(&mailbox);
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	return;
+    }
+    
+    prot_printf(imapd_out, "%s OK Getquotaroot completed\r\n", tag);
+}
+
+/*
+ * Parse and perform a SETQUOTA command
+ * The command has been parsed up to the resource list
+ */
+cmd_setquota(tag, quotaroot)
+char *tag;
+char *quotaroot;
+{
+    int newquota = -1;
+    int badresource = 0;
+    int c;
+    static struct buf arg;
+    char *p;
+    int r;
+
+    c = prot_getc(imapd_in);
+    if (c != '(') goto badlist;
+
+    c = getword(&arg);
+    if (c != ')' || arg.s[0] != '\0') {
+	for (;;) {
+	    if (c != ' ') goto badlist;
+	    if (strcasecmp(arg.s, "storage") != 0) badresource = 1;
+	    c = getword(&arg);
+	    if (c != ' ' && c != ')') goto badlist;
+	    if (arg.s[0] == '\0') goto badlist;
+	    newquota = 0;
+	    for (p = arg.s; *p; p++) {
+		if (!isdigit(*p)) goto badlist;
+		newquota = newquota * 10 + *p - '0';
+	    }
+	    if (c == ')') break;
+	}
+    }
+    c = prot_getc(imapd_in);
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to SETQUOTA\r\n", tag);
+	eatline();
+	return;
+    }
+
+    if (badresource) r = IMAP_UNSUPPORTED_QUOTA;
+    else if (!imapd_userisadmin) r = IMAP_PERMISSION_DENIED;
+    else {
+	r = mboxlist_setquota(quotaroot, newquota);
+    }
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	return;
+    }
+    
+    prot_printf(imapd_out, "%s OK Setquota completed\r\n", tag);
+    return;
+
+ badlist:
+    prot_printf(imapd_out, "%s BAD Invalid quota list in Setquota\r\n", tag);
+    if (c != '\n') eatline();
 }
 
 /*
