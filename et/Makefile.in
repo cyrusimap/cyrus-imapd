@@ -69,7 +69,7 @@ all: compile_et libcom_err.a
 install:
 
 .c.o:
-	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. -I.. $(CFLAGS) $<
+	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I$(srcdir)/../lib -I. -I.. $(CFLAGS) $<
 
 # solaris make loses on com_err.c but not on init_et.c, but this helps
 com_err.o: com_err.c

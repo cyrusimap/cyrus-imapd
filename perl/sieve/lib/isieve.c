@@ -50,11 +50,13 @@
 #include <netdb.h>
 #include <string.h>
 
-#include <sasl.h>
+#include <sasl/sasl.h>
+#include <sasl/saslutil.h>
 
 #include "isieve.h"
 #include "lex.h"
 #include "request.h"
+#include "iptostring.h"
 
 #include <prot.h>
 
@@ -137,7 +139,6 @@ static sasl_security_properties_t *make_secprops(int min,int max)
 /*
  * Initialize SASL and set necessary options
  */
-
 int init_sasl(isieve_t *obj,
 	      int ssf,
 	      sasl_callback_t *callbacks)
@@ -145,17 +146,37 @@ int init_sasl(isieve_t *obj,
   int saslresult;
   sasl_security_properties_t *secprops=NULL;
   socklen_t addrsize=sizeof(struct sockaddr_in);
-  struct sockaddr_in *saddr_l=malloc(sizeof(struct sockaddr_in));
-  struct sockaddr_in *saddr_r=malloc(sizeof(struct sockaddr_in));
+  struct sockaddr_in saddr_l, saddr_r;
+  char localip[60], remoteip[60];
 
   /* attempt to start sasl */
   saslresult=sasl_client_init(callbacks);
 
   if (saslresult!=SASL_OK) return -1;
 
+  addrsize=sizeof(struct sockaddr_in);
+  if (getpeername(obj->sock,(struct sockaddr *)&saddr_r,&addrsize)!=0)
+      return -1;
+  
+  addrsize=sizeof(struct sockaddr_in);
+  if (getsockname(obj->sock,(struct sockaddr *)&saddr_l,&addrsize)!=0)
+      return -1;
+
+  /* set the port manually since getsockname is stupid and doesn't */
+  saddr_l.sin_port = htons(obj->port);
+
+  if (iptostring((struct sockaddr *)&saddr_r,
+		 sizeof(struct sockaddr_in), remoteip, 60))
+      return -1;
+
+  if (iptostring((struct sockaddr *)&saddr_l,
+		 sizeof(struct sockaddr_in), localip, 60))
+      return -1;
+
   /* client new connection */
-  saslresult=sasl_client_new("sieve",
+  saslresult=sasl_client_new(SIEVE_SERVICE_NAME,
 			     obj->serverFQDN,
+			     localip, remoteip,
 			     NULL,
 			     0,
 			     &obj->conn);
@@ -170,27 +191,6 @@ int init_sasl(isieve_t *obj,
     free(secprops);
   }
 
-  if (getpeername(obj->sock,(struct sockaddr *)saddr_r,&addrsize)!=0)
-    return -1;
-
-  if (sasl_setprop(obj->conn, SASL_IP_REMOTE, saddr_r)!=SASL_OK)
-    return -1;
-  
-  addrsize=sizeof(struct sockaddr_in);
-  if (getsockname(obj->sock,(struct sockaddr *)saddr_l,&addrsize)!=0)
-    return -1;
-
-  /* set the port manually since getsockname is stupid and doesn't */
-  saddr_l->sin_port = htons(obj->port);
-
-  if (sasl_setprop(obj->conn, SASL_IP_LOCAL, saddr_l)!=SASL_OK)
-    return -1;
-
-
-  /* should be freed */
-  free(saddr_l);
-  free(saddr_r);
-  
   return 0;
 }
 
@@ -254,6 +254,7 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
   lexstate_t state;
   int res;
   int ret;
+  size_t len;
   mystring_t *errstr;
 
   /* now let's see what the server said */
@@ -271,10 +272,12 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
     }
   }
 
-  *line=(char *) malloc(state.str->len*2+1);
+  len = state.str->len*2+1;
+  *line=(char *) malloc(len);
+  if(!*line) return STAT_NO;
 
   sasl_decode64(string_DATAPTR(state.str), state.str->len,
-		*line, linelen);
+		*line, len, linelen);
 
   if (yylex(&state, obj->pin)!=EOL)
       return STAT_NO;
@@ -287,7 +290,7 @@ int auth_sasl(char *mechlist, isieve_t *obj, char **errstr)
 {
   sasl_interact_t *client_interact=NULL;
   int saslresult=SASL_INTERACT;
-  char *out;
+  const char *out;
   unsigned int outlen;
   char *in;
   unsigned int inlen;
@@ -301,7 +304,7 @@ int auth_sasl(char *mechlist, isieve_t *obj, char **errstr)
   while (saslresult==SASL_INTERACT)
   {
     saslresult=sasl_client_start(obj->conn, mechlist,
-				 NULL, &client_interact,
+				 &client_interact,
 				 &out, &outlen,
 				 &mechusing);
     if (saslresult==SASL_INTERACT)

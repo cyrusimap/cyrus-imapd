@@ -50,7 +50,7 @@
 #include <pwd.h>
 #include <sys/types.h>
 
-#include <sasl.h>
+#include <sasl/sasl.h>
 
 extern int errno;
 

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: signals.c,v 1.7 2000/12/26 21:35:41 leg Exp $ */
+/* $Id: signals.c,v 1.8 2001/11/27 02:25:00 ken3 Exp $ */
 
 #include <config.h>
 
@@ -84,17 +84,17 @@ void signals_add_handlers(void)
     }
 }
 
-static shutdownfn *shutdown = NULL;
+static shutdownfn *shutdown_cb = NULL;
 
 void signals_set_shutdown(shutdownfn *s)
 {
-    shutdown = s;
+    shutdown_cb = s;
 }
 
 void signals_poll(void)
 {
     if (gotsignal) {
-	if (shutdown) shutdown(EC_TEMPFAIL);
+	if (shutdown_cb) shutdown_cb(EC_TEMPFAIL);
 	else exit(EC_TEMPFAIL);
     }
 }

@@ -1,5 +1,5 @@
 /* imclient.h -- Streaming IMxP client library
- $Id: imclient.h,v 1.20 2000/12/18 04:53:42 leg Exp $
+ $Id: imclient.h,v 1.21 2001/11/27 02:25:03 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -53,7 +53,7 @@
 #endif
 #endif
 
-#include <sasl.h>
+#include <sasl/sasl.h>
 
 struct imclient;
 struct sasl_client; /* to avoid having to include sasl sometimes */

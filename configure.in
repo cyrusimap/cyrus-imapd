@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.204 2001/10/25 15:35:30 ken3 Exp $
+dnl $Id: configure.in,v 1.205 2001/11/27 02:24:54 ken3 Exp $
 dnl
 
 
@@ -93,7 +93,7 @@ CPPFLAGS="${CPPFLAGS} -I/usr/local/include"
 CMU_ADD_LIBPATH("/usr/local/lib")
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h)
-AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
+AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror getaddrinfo getnameinfo)
 AC_HEADER_DIRENT
 
 dnl this is to check for time things for sieve
@@ -163,32 +163,6 @@ if test "$sievedir" != "no"; then
 
 	PRE_SUBDIRS="${PRE_SUBDIRS} $sievedir"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} $sievedir/Makefile"
-fi
-
-AC_ARG_WITH(perl,       [  --with-perl=PERL           use PERL for perl],
-	with_perl="$withval", with_perl="perl5")
-if test "${with_perl}" = yes; then
-    with_perl="perl5"
-fi
-if test "${with_perl}" != no; then
-    AC_CHECK_PROGS(PERL, ${with_perl} perl, with_perl=no)
-fi
-if test "$with_perl" = "no"; then
-    AC_MSG_WARN(No Perl found: administrative tools won't be available)
-else
-dnl compile perl stuff
-    EXTRA_SUBDIRS="${EXTRA_SUBDIRS} perl"
-dnl and compile perl/cyradm
-    PERL_SUBDIRS="imap"
-fi
-
-dnl for timsieved
-if test "$sievedir" != "no"; then
-	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} timsieved"
-	EXTRA_OUTPUT="${EXTRA_OUTPUT} timsieved/Makefile"
-
-	PERL_SUBDIRS="${PERL_SUBDIRS} sieve"
-	EXTRA_OUTPUT="${EXTRA_OUTPUT} perl/sieve/Makefile perl/sieve/lib/Makefile"
 fi
 
 dnl for et routines
@@ -725,6 +699,17 @@ AC_ARG_ENABLE(fulldirhash,
 		AC_DEFINE(USE_DIR_FULL)
 	fi)
 
+AC_MSG_CHECKING(to use old sieve service name)
+AC_ARG_ENABLE(oldsievename,
+	[  --enable-oldsievename   enable the use of 'imap' as the sieve service name],
+	if test "$enableval" = yes; then
+		AC_MSG_RESULT(yes)
+		AC_DEFINE(OLD_SIEVE_SERVICE_NAME)
+	else
+		AC_MSG_RESULT(no)
+	fi,
+	AC_MSG_RESULT(no))
+
 AC_ARG_ENABLE(netscapehack,
 	[  --enable-netscapehack   enable Netscape hack for the menu option
                           in Communicator to Administrate Mail],
@@ -733,12 +718,45 @@ AC_ARG_ENABLE(netscapehack,
 	fi)
 
 AC_CHECK_FUNC(dlopen,,AC_CHECK_LIB(dl, dlopen))
-CMU_SASL_REQUIRED
+CMU_SASL2_REQUIRED
+
+AC_ARG_WITH(perl,       [  --with-perl=PERL           use PERL for perl],
+	with_perl="$withval", with_perl="perl5")
+
+if test "${with_perl}" = yes; then
+    with_perl="perl5"
+fi
+if test "${with_perl}" != no; then
+    if test ${with_sasl} = "static"; then
+	AC_MSG_WARN([Cannot compile perl utilities using static libsasl])
+	with_perl="no"
+    else 
+	AC_CHECK_PROGS(PERL, ${with_perl} perl, with_perl=notfound)
+    fi
+fi
+if test "$with_perl" = "notfound"; then
+    AC_MSG_WARN(Perl not found: Administrative tools won't be available)
+elif test "${with_perl}" != "no"; then
+dnl compile perl stuff
+    EXTRA_SUBDIRS="${EXTRA_SUBDIRS} perl"
+dnl and compile perl/cyradm
+    PERL_SUBDIRS="imap"
+fi
+
+dnl for timsieved
+if test "$sievedir" != "no"; then
+	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} timsieved"
+	EXTRA_OUTPUT="${EXTRA_OUTPUT} timsieved/Makefile"
+
+	PERL_SUBDIRS="${PERL_SUBDIRS} sieve"
+	EXTRA_OUTPUT="${EXTRA_OUTPUT} perl/sieve/Makefile perl/sieve/lib/Makefile"
+fi
 
 dnl
 dnl Check for sasl_checkapop()
 dnl
-AC_CHECK_LIB(sasl, sasl_checkapop, AC_DEFINE(HAVE_APOP))
+AC_CHECK_LIB(sasl2, sasl_checkapop, AC_DEFINE(HAVE_APOP),
+	AC_MSG_ERROR([libsasl2 without working sasl_checkapop.  Cannot continue.]))
 
 dnl --- cmu agentx library deprecated in favor of ucd snmp
 dnl CMU_AGENTX

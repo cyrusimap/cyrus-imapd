@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.23 2001/11/08 23:17:53 leg Exp $ */
+/* $Id: acconfig.h,v 1.24 2001/11/27 02:24:54 ken3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -68,6 +68,9 @@
 
 /* do we support XNETSCAPE */
 #undef ENABLE_X_NETSCAPE_HACK
+
+/* are we using the old sieve service name (imap) */
+#undef OLD_SIEVE_SERVICE_NAME
 
 /* we better have berkeley db 3.x */
 #undef HAVE_LIBDB
@@ -139,6 +142,28 @@ typedef int rlim_t;
 
 /* save the cmdlines for the ID command */
 #undef ID_SAVE_CMDLINE
+
+/* getaddrinfo things */
+#include <netdb.h>
+#include <sys/socket.h>
+
+#ifndef HAVE_GETADDRINFO
+#define	getaddrinfo	sasl_getaddrinfo
+#define	freeaddrinfo	sasl_freeaddrinfo
+#define	getnameinfo	sasl_getnameinfo
+#define	gai_strerror	sasl_gai_strerror
+#include "gai.h"
+#endif
+
+#ifndef	NI_WITHSCOPEID
+#define	NI_WITHSCOPEID	0
+#endif
+
+#ifdef OLD_SIEVE_SERVICE_NAME
+#define SIEVE_SERVICE_NAME "imap"
+#else
+#define SIEVE_SERVICE_NAME "sieve"
+#endif
 
 /* compile time options; think carefully before modifying */
 enum {

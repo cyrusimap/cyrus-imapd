@@ -42,7 +42,7 @@
 #define ISIEVE_H_
 
 #include "prot.h"
-#include <sasl.h>
+#include <sasl/sasl.h>
 
 typedef struct iseive_s isieve_t;
 

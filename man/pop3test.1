@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.TH IMTEST 1
+.TH POP3TEST 1
 .\" 
 .\" Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
 .\"
@@ -40,9 +40,9 @@
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
 .SH NAME
-imtest \- interactive IMAP test program
+pop3test \- interactive POP3 test program
 .SH SYNOPSIS
-.B imtest
+.B pop3test
 [
 .B \-t
 .I keyfile
@@ -56,7 +56,7 @@ imtest \- interactive IMAP test program
 .I mechanism
 ]
 .br
-       [
+         [
 .B \-u
 .I user
 ]
@@ -73,7 +73,7 @@ imtest \- interactive IMAP test program
 .I num
 ]
 .br
-       [
+         [
 .B \-r
 .I realm
 ]
@@ -87,19 +87,16 @@ imtest \- interactive IMAP test program
 [
 .B \-v
 ]
-[
-.B \-z
-]
 .br
-       \fIhostname\fR
+         \fIhostname\fR
 .SH DESCRIPTION
-.I imtest
-is a utility that allows you to authenticate to a IMAP or IMSP server
+.I pop3test
+is a utility that allows you to authenticate to a POP3 server
 and interactively issue commands to it. Once authenticated you may
-issue any IMAP or IMSP command by simply typing it in. It is capable
+issue any POP3 command by simply typing it in. It is capable
 of multiple SASL authentication mechanisms and handles encryption
 layers transparently. This utility is often used for testing the
-operation of a imsp or imap server. Also those developing IMAP clients
+operation of a pop3 server. Also those developing POP3 clients
 find it useful.
 .PP
 .SH OPTIONS
@@ -114,9 +111,10 @@ Port to connect to. If left off this defaults to \fBimap\fR as defined in
 /etc/services. 
 .TP
 .BI -m " mechanism"
-Force imtest to use \fImechanism\fR for authentication. If not specified
+Force pop3test to use \fImechanism\fR for authentication. If not specified
 the strongest authentication mechanism supported by the server is
-chosen.  Specify \fBlogin\fR to use the LOGIN command instead of AUTHENTICATE.
+chosen.  Specify \fBuser\fR to use the USER/PASS commands or
+\fBapop\fR to use the APOP command instead of AUTH.
 .TP
 .BI -u " user"
 Username to use for authentication; defaults to the current user.
@@ -130,7 +128,7 @@ Minimum protection layer required.
 .BI -l " num"
 Maximum protection layer to use (\fB0\fR=none; \fB1=\fRintegrity;
 etc).  For example if you are using the KERBEROS_V4 authentication
-mechanism specifying \fB0\fR will force imtest to not use any layer
+mechanism specifying \fB0\fR will force pop3test to not use any layer
 and specifying \fB1\fR will force it to use the integrity layer.  By
 default the maximum supported protection layer will be used.
 .TP
@@ -148,9 +146,6 @@ response) instead of the one-time password.
 .TP
 .B -v
 Verbose. Print out more information than usual.
-.TP
-.B -z
-Timing test.
 .SH SEE ALSO
 .PP
-\fBimapd(8)\fR
+\fBpop3d(8)\fR

@@ -90,5 +90,5 @@ AC_DEFUN(CMU_SASL_REQUIRED,
 [AC_REQUIRE([CMU_SASL])
 if test "$ac_cv_found_sasl" != "yes"; then
         AC_ERROR([Cannot continue without libsasl.
-Get it from ftp://ftp.andrew.cmu.edu:/pub/cyrus-mail/.])
+Get it from ftp://ftp.andrew.cmu.edu/pub/cyrus-mail/.])
 fi])

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.110 2001/10/25 17:32:55 ken3 Exp $
+ * $Id: pop3d.c,v 1.111 2001/11/27 02:24:59 ken3 Exp $
  */
 #include <config.h>
 
@@ -65,15 +65,15 @@
 #include <ctype.h>
 #include "prot.h"
 
-#include <sasl.h>
-#include <saslutil.h>
+#include <sasl/sasl.h>
+#include <sasl/saslutil.h>
 
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
+#include "iptostring.h"
 #include "imapconf.h"
 #include "tls.h"
-
 
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -134,7 +134,7 @@ static mailbox_decideproc_t expungedeleted;
 /* current namespace */
 static struct namespace popd_namespace;
 
-static void cmd_apop(char *user, char *digest);
+static void cmd_apop(char *response);
 static int apop_enabled(void);
 static char popd_apop_chal[45 + MAXHOSTNAMELEN + 1]; /* <rand.time@hostname> */
 
@@ -153,9 +153,21 @@ void shut_down(int code) __attribute__ ((noreturn));
 
 
 extern void setproctitle_init(int argc, char **argv, char **envp);
-extern int proc_register(char *progname, char *clienthost, 
-			 char *userid, char *mailbox);
+extern int proc_register(const char *progname, const char *clienthost, 
+			 const char *userid, const char *mailbox);
 extern void proc_cleanup(void);
+
+
+/* Enable the resetting of a sasl_conn_t */
+static int reset_saslconn(sasl_conn_t **conn);
+
+static struct 
+{
+    char *ipremoteport;
+    char *iplocalport;
+    sasl_ssf_t ssf;
+    char *authid;
+} saslprops = {NULL,NULL,0,NULL};
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
@@ -188,6 +200,21 @@ static void popd_reset(void)
 	popd_saslconn = NULL;
     }
     popd_starttls_done = 0;
+
+    if(saslprops.iplocalport) {
+       free(saslprops.iplocalport);
+       saslprops.iplocalport = NULL;
+    }
+    if(saslprops.ipremoteport) {
+       free(saslprops.ipremoteport);
+       saslprops.ipremoteport = NULL;
+    }
+    if(saslprops.authid) {
+       free(saslprops.authid);
+       saslprops.authid = NULL;
+    }
+    saslprops.ssf = 0;
+
 #ifdef HAVE_SSL
     if (tls_conn) {
 	tls_reset_servertls(&tls_conn);
@@ -274,6 +301,7 @@ int service_main(int argc, char **argv, char **envp)
 {
     socklen_t salen;
     struct hostent *hp;
+    char localip[60], remoteip[60];
     int timeout;
     sasl_security_properties_t *secprops=NULL;
 
@@ -304,16 +332,25 @@ int service_main(int argc, char **argv, char **envp)
     }
 
     /* other params should be filled in */
-    if (sasl_server_new("pop", config_servername, NULL, 
-			NULL, SASL_SECURITY_LAYER, &popd_saslconn) != SASL_OK)
+    if (sasl_server_new("pop", config_servername, NULL, NULL, NULL,
+			NULL, 0, &popd_saslconn) != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
     /* will always return something valid */
     secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops);
     
-    sasl_setprop(popd_saslconn, SASL_IP_REMOTE, &popd_remoteaddr);  
-    sasl_setprop(popd_saslconn, SASL_IP_LOCAL, &popd_localaddr);  
+    if(iptostring((struct sockaddr *)&popd_localaddr,
+		  sizeof(struct sockaddr_in), localip, 60) == 0) {
+	sasl_setprop(popd_saslconn, SASL_IPLOCALPORT, localip);
+	saslprops.iplocalport = xstrdup(localip);
+    }
+    
+    if(iptostring((struct sockaddr *)&popd_remoteaddr,
+		  sizeof(struct sockaddr_in), remoteip, 60) == 0) {
+	sasl_setprop(popd_saslconn, SASL_IPREMOTEPORT, remoteip);  
+	saslprops.ipremoteport = xstrdup(remoteip);
+    }
 
     proc_register("pop3d", popd_clienthost, NULL, NULL);
 
@@ -542,26 +579,8 @@ static void cmdloop(void)
 		else cmd_pass(arg);
 	    }
 	    else if (!strcmp(inputbuf, "apop") && apop_enabled()) {
-		char *user = NULL, *digest = NULL;
-
-		/* Parse out username and digest.
-		 *
-		 * Per RFC 1939, response must be "<user> <digest>", where
-		 * <digest> is a 16-octet value which is sent in hexadecimal
-		 * format, using lower-case ASCII characters.
-		 */
-		if (arg) {
-		    user = arg;
-		    arg = strrchr(arg, ' ');
-		}
 		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
-		else if (strspn(arg + 1, "0123456789abcdef") != 32)
-		    prot_printf(popd_out, "-ERR Invalid digest string\r\n");
-		else {
-		    *arg++ = '\0';
-		    digest = arg;
-		    cmd_apop(user, digest);
-		}
+		else cmd_apop(arg);
 	    }
 	    else if (!strcmp(inputbuf, "auth")) {
 		cmd_auth(arg);
@@ -730,11 +749,11 @@ static void cmd_starttls(int pop3s)
 {
     int result;
     int *layerp;
-    sasl_external_properties_t external;
-
+    sasl_ssf_t ssf;
+    char *auth_id;
 
     /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &(external.ssf);
+    layerp = (int *) &ssf;
 
     if (popd_starttls_done == 1)
     {
@@ -771,7 +790,7 @@ static void cmd_starttls(int pop3s)
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
 			       layerp,
-			       &(external.auth_id),
+			       &auth_id,
 			       &tls_conn);
 
     /* if error */
@@ -787,11 +806,22 @@ static void cmd_starttls(int pop3s)
     }
 
     /* tell SASL about the negotiated layer */
-    result = sasl_setprop(popd_saslconn, SASL_SSF_EXTERNAL, &external);
-
+    result = sasl_setprop(popd_saslconn, SASL_SSF_EXTERNAL, &ssf);
     if (result != SASL_OK) {
 	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
     }
+    saslprops.ssf = ssf;
+
+    result = sasl_setprop(popd_saslconn, SASL_AUTH_EXTERNAL, auth_id);
+    if (result != SASL_OK) {
+        fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+    }
+    if(saslprops.authid) {
+	free(saslprops.authid);
+	saslprops.authid = NULL;
+    }
+    if(auth_id)
+	saslprops.authid = xstrdup(auth_id);
 
     /* tell the prot layer about our new layers */
     prot_settls(popd_in, tls_conn);
@@ -806,24 +836,26 @@ static void cmd_starttls(int pop3s __attribute__((unused)))
 }
 #endif /* HAVE_SSL */
 
-#ifdef HAVE_APOP
 static int apop_enabled(void)
 {
+    /* Check if pseudo APOP mechanism is enabled (challenge == NULL) */
+    if (sasl_checkapop(popd_saslconn, NULL, 0, NULL, 0) != SASL_OK) return 0;
     /* Check if we have a challenge string */
     if (!*popd_apop_chal) return 0;
     return 1;
 }
 
-static void cmd_apop(char *user, char *digest)
+static void cmd_apop(char *response)
 {
     int fd;
     struct protstream *shutdown_in;
     char buf[1024];
     char *p;
     char shutdownfilename[1024];
-    char *reply = 0;
+    int sasl_result;
+    char *canon_user;
 
-    assert((user != NULL) && (digest != NULL));
+    assert(response != NULL);
 
     if (popd_userid) {
 	prot_printf(popd_out, "-ERR Must give PASS command\r\n");
@@ -842,51 +874,49 @@ static void cmd_apop(char *user, char *digest)
 	prot_flush(popd_out);
 	shut_down(0);
     }
-    else if (!(p = auth_canonifyid(user)) ||
-	     /* '.' isn't allowed if '.' is the hierarchy separator */
-	     (popd_namespace.hier_sep == '.' && strchr(p, '.')) ||
-	     strlen(p) + 6 > MAX_MAILBOX_PATH) {
-	prot_printf(popd_out, "-ERR Invalid user\r\n");
-	syslog(LOG_NOTICE,
-	       "badlogin: %s APOP %s invalid user",
-	       popd_clienthost, beautify_string(user));
+
+    sasl_result = sasl_checkapop(popd_saslconn,
+				 popd_apop_chal,
+				 strlen(popd_apop_chal),
+				 response,
+				 strlen(response));
+    
+    /* failed authentication */
+    if (sasl_result != SASL_OK)
+    {
+	sleep(3);      
+		
+	prot_printf(popd_out, "-ERR authenticating: %s\r\n",
+		    sasl_errstring(sasl_result, NULL, NULL));
+
+	syslog(LOG_NOTICE, "badlogin: %s APOP (%s) %s",
+	       popd_clienthost, popd_apop_chal,
+	       sasl_errdetail(popd_saslconn));
+	
 	return;
     }
-    else if ((sasl_checkapop(popd_saslconn,
-			     p,
-			     strlen(p),
-			     popd_apop_chal,
-			     strlen(popd_apop_chal),
-			     digest,
-			     strlen(digest),
-			     (const char **) &reply))!=SASL_OK) { 
-	if (reply) {
-	    syslog(LOG_NOTICE, "badlogin: %s APOP %s %s",
-		   popd_clienthost, p, reply);
-	}
-	sleep(3);
-	prot_printf(popd_out, "-ERR Invalid login\r\n");
+
+    /* successful authentication */
+
+    /*
+     * get the userid from SASL --- already canonicalized from
+     * mysasl_authproc()
+     */
+    sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME,
+			       (const void **) &canon_user);
+    popd_userid = xstrdup(canon_user);
+    if (sasl_result != SASL_OK) {
+	prot_printf(popd_out, 
+		    "-ERR weird SASL error %d getting SASL_USERNAME\r\n", 
+		    sasl_result);
 	return;
     }
-    else {
-	popd_userid = xstrdup(p);
-	syslog(LOG_NOTICE, "login: %s %s APOP %s",
-	       popd_clienthost, popd_userid, reply ? reply : "");
-    }
+    
+    syslog(LOG_NOTICE, "login: %s %s APOP %s",
+	   popd_clienthost, popd_userid, "User logged in");
+
     openinbox();
 }
-#else
-static int apop_enabled(void)
-{
-    return 0;
-}
-
-static void cmd_apop(char *user __attribute__((unused)),
-		     char *digest __attribute__((unused)))
-{
-    fatal("cmd_apop() called, but no sasl_checkapop()", EC_SOFTWARE);
-}
-#endif /* HAVE_APOP */
 
 void
 cmd_user(user)
@@ -923,7 +953,7 @@ char *user;
 	prot_flush(popd_out);
 	shut_down(0);
     }
-    else if (!(p = auth_canonifyid(user)) ||
+    else if (!(p = auth_canonifyid(user,0)) ||
 	     /* '.' isn't allowed if '.' is the hierarchy separator */
 	     (popd_namespace.hier_sep == '.' && strchr(p, '.')) ||
 	     strlen(p) + 6 > MAX_MAILBOX_PATH) {
@@ -984,12 +1014,11 @@ char *pass;
 	    return;
 	}
     }
-    else if ((sasl_checkpass(popd_saslconn,
-			     popd_userid,
-			     strlen(popd_userid),
-			     pass,
-			     strlen(pass),
-			     (const char **) &reply))!=SASL_OK) { 
+    else if (sasl_checkpass(popd_saslconn,
+			    popd_userid,
+			    strlen(popd_userid),
+			    pass,
+			    strlen(pass))!=SASL_OK) { 
 	if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   popd_clienthost, popd_userid, reply);
@@ -1019,7 +1048,7 @@ cmd_capa()
     int minpoll = config_getint("popminpoll", 0) * 60;
     int expire = config_getint("popexpiretime", -1);
     unsigned mechcount;
-    char *mechlist;
+    const char *mechlist;
 
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
 
@@ -1030,7 +1059,6 @@ cmd_capa()
 		      &mechlist,
 		      NULL, &mechcount) == SASL_OK && mechcount > 0) {
 	prot_write(popd_out, mechlist, strlen(mechlist));
-	free(mechlist);
     }
 
     if (tls_enabled("pop3")) {
@@ -1071,14 +1099,14 @@ void cmd_auth(char *arg)
     static struct buf clientin;
     unsigned int clientinlen=0;
     char *authtype;
-    char *serverout;
+    const char *serverout;
     unsigned int serveroutlen;
-    const char *errstr;
+    char *cin;
     char *canon_user;
 
     /* if client didn't specify an argument we give them the list */
     if (!arg) {
-	char *sasllist;
+	const char *sasllist;
 	unsigned int mechnum;
 
 	prot_printf(popd_out, "+OK List of supported mechanisms follows\r\n");
@@ -1114,29 +1142,43 @@ void cmd_auth(char *arg)
 	int arglen = strlen(arg);
 
 	clientin.alloc = arglen + 1;
-	clientin.s = xmalloc(clientin.alloc);
-	sasl_result = sasl_decode64(arg, arglen, clientin.s, &clientinlen);
+	cin = clientin.s = xmalloc(clientin.alloc);
+	sasl_result = sasl_decode64(arg, arglen,
+				    clientin.s, clientin.alloc, &clientinlen);
     } else {
 	sasl_result = SASL_OK;
+	cin = NULL;
 	clientinlen = 0;
     }
 
     /* server did specify a command, so let's try to authenticate */
     if (sasl_result == SASL_OK || sasl_result == SASL_CONTINUE)
 	sasl_result = sasl_server_start(popd_saslconn, authtype,
-					clientin.s, clientinlen,
-					&serverout, &serveroutlen,
-					&errstr);
+					cin, clientinlen,
+					&serverout, &serveroutlen);
     /* sasl_server_start will return SASL_OK or SASL_CONTINUE on success */
     while (sasl_result == SASL_CONTINUE)
     {
+	char c;
+	
 	/* print the message to the user */
 	printauthready(popd_out, serveroutlen, (unsigned char *)serverout);
-	free(serverout);
+
+	c = prot_getc(popd_in);
+	if(c == '*') {
+	    eatline(popd_in,c);
+	    prot_printf(popd_out,
+			"-ERR Client canceled authentication\r\n");
+	    reset_saslconn(&popd_saslconn);
+	    return;
+	} else {
+	    prot_ungetc(c, popd_in);
+	}
 
 	/* get string from user */
 	clientinlen = getbase64string(popd_in, &clientin);
 	if (clientinlen == -1) {
+	    reset_saslconn(&popd_saslconn);
 	    prot_printf(popd_out, "-ERR Invalid base64 string\r\n");
 	    return;
 	}
@@ -1144,24 +1186,22 @@ void cmd_auth(char *arg)
 	sasl_result = sasl_server_step(popd_saslconn,
 				       clientin.s,
 				       clientinlen,
-				       &serverout, &serveroutlen,
-				       &errstr);
+				       &serverout, &serveroutlen);
     }
 
     /* failed authentication */
     if (sasl_result != SASL_OK)
     {
 	sleep(3);      
-	
-	/* convert the sasl error code to a string */
-	if (!errstr) errstr = sasl_errstring(sasl_result, NULL, NULL);
-	if (!errstr) errstr = "unknown error";
-	
-	prot_printf(popd_out, "-ERR authenticating: %s\r\n", errstr);
+		
+	reset_saslconn(&popd_saslconn);
+	prot_printf(popd_out, "-ERR authenticating: %s\r\n",
+		    sasl_errstring(sasl_result, NULL, NULL));
 
 	if (authtype) {
 	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
-		   popd_clienthost, authtype, errstr);
+		   popd_clienthost, authtype,
+		   sasl_errstring(sasl_result, NULL, NULL));
 	} else {
 	    syslog(LOG_NOTICE, "badlogin: %s %s",
 		   popd_clienthost, authtype);
@@ -1176,7 +1216,7 @@ void cmd_auth(char *arg)
      * mysasl_authproc()
      */
     sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME,
-			       (void **) &canon_user);
+			       (const void **) &canon_user);
     popd_userid = xstrdup(canon_user);
     if (sasl_result != SASL_OK) {
 	prot_printf(popd_out, 
@@ -1353,4 +1393,47 @@ static int expungedeleted(struct mailbox *mailbox, void *rock, char *index)
 	}
     }
     return 0;
+}
+
+/* Reset the given sasl_conn_t to a sane state */
+static int reset_saslconn(sasl_conn_t **conn) 
+{
+    int ret;
+    sasl_security_properties_t *secprops = NULL;
+
+    sasl_dispose(conn);
+    /* do initialization typical of service_main */
+    ret = sasl_server_new("pop", config_servername,
+                         NULL, NULL, NULL,
+                         NULL, 0, conn);
+    if(ret != SASL_OK) return ret;
+
+    if(saslprops.ipremoteport)
+       ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
+                          saslprops.ipremoteport);
+    if(ret != SASL_OK) return ret;
+    
+    if(saslprops.iplocalport)
+       ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
+                          saslprops.iplocalport);
+    if(ret != SASL_OK) return ret;
+    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
+    ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
+    if(ret != SASL_OK) return ret;
+    /* end of service_main initialization excepting SSF */
+
+    /* If we have TLS/SSL info, set it */
+    if(saslprops.ssf) {
+       ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+    }
+
+    if(ret != SASL_OK) return ret;
+
+    if(saslprops.authid) {
+       ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, saslprops.authid);
+       if(ret != SASL_OK) return ret;
+    }
+    /* End TLS/SSL Info */
+
+    return SASL_OK;
 }

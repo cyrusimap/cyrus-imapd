@@ -66,24 +66,26 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-OBJS=imtest.o
-
-all: imtest
+all: imtest pop3test
 
 install:
 	$(INSTALL) -s -m 755 imtest $(DESTDIR)$(exec_prefix)/bin
+	$(INSTALL) -s -m 755 pop3test $(DESTDIR)$(exec_prefix)/bin
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
-imtest: $(OBJS) $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o imtest $(OBJS) $(DEPLIBS) $(IMAP_LIBS)
+imtest: imtest.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o imtest imtest.o $(DEPLIBS) $(IMAP_LIBS)
 
-imtest.pure: $(OBJS) $(DEPLIBS)
+imtest.pure: imtest.o $(DEPLIBS)
 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o imtest $(OBJS) $(DEPLIBS) $(LIBS) $(IMAP_LIBS)
 
+pop3test: pop3test.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o pop3test pop3test.o $(DEPLIBS) $(IMAP_LIBS)
+
 clean:
-	rm -f *.o Makefile.bak makedepend.log imtest
+	rm -f *.o Makefile.bak makedepend.log imtest pop3test
 
 distclean: clean
 	rm -f Makefile

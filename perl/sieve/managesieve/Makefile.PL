@@ -38,9 +38,12 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 use ExtUtils::MakeMaker;
+use Config;
 
 my $SASL_INC = $ENV{SASL_INC};
-my $SASL_LIB = $ENV{SASL_LIB} || "-lsasl";
+my $SASL_LIB = $ENV{SASL_LIB} || "-lsasl2";
+
+$libs = "-lcyrus";
 
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
@@ -48,7 +51,7 @@ WriteMakefile(
     'NAME'	=> 'Cyrus::SIEVE::managesieve',
     'ABSTRACT'  => 'Cyurs Sieve management interface',
     'VERSION_FROM' => 'managesieve.pm', # finds $VERSION
-    'MYEXTLIB'  => '../lib/libisieve.a ../../../lib/libcyrus.a',
+    'MYEXTLIB'  => '../lib/isieve.o ../lib/lex.o ../lib/mystring.o ../lib/request.o ../../../lib/libcyrus.a',
     'LIBS'	=> ["$SASL_LIB -lssl -lcrypto"], 
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../lib/ -I../../../lib/ $SASL_INC",

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.61 2001/03/14 22:39:04 leg Exp $
+ * $Id: prot.c,v 1.62 2001/11/27 02:25:03 ken3 Exp $
  */
 
 #include <config.h>
@@ -150,7 +150,7 @@ int prot_setsasl(s, conn)
 struct protstream *s;
 sasl_conn_t *conn;
 {
-  int *ssfp;
+  const int *ssfp;
   int result;
 
   /* flush first if need be */
@@ -158,7 +158,7 @@ sasl_conn_t *conn;
 
   s->conn=conn;
 
-  result = sasl_getprop(conn, SASL_SSF, (void **) &ssfp);
+  result = sasl_getprop(conn, SASL_SSF, (const void **) &ssfp);
   if (result != SASL_OK)
     return 1;
 
@@ -166,10 +166,11 @@ sasl_conn_t *conn;
 
   if (s->write) {
     int result;
-    int *maxp, max;
+    const int *maxp;
+    int max;
 
     /* ask SASL for layer max */
-    result = sasl_getprop(conn, SASL_MAXOUTBUF, (void **) &maxp);
+    result = sasl_getprop(conn, SASL_MAXOUTBUF, (const void **) &maxp);
     max = *maxp;
     if (result != SASL_OK)
       return 1;
@@ -419,7 +420,7 @@ int prot_fill(struct protstream *s)
 	
 	if (s->saslssf) { /* decode it */
 	    int result;
-	    char *out;
+	    const char *out;
 	    unsigned outlen;
 	    static char errbuf[256];
 	    
@@ -443,7 +444,6 @@ int prot_fill(struct protstream *s)
 		memcpy(s->buf, out, outlen);
 		s->ptr = s->buf + 1;
 		s->cnt = outlen;
-		free(out);
 	    } else {		/* didn't decode anything */
 		s->cnt = 0;
 	    }
@@ -491,7 +491,7 @@ int prot_flush(struct protstream *s)
     unsigned char *ptr = s->buf;
     int left = s->ptr - s->buf;
     int n;
-    char *encoded_output;
+    const char *encoded_output;
 
     assert(s->write);
     assert(s->cnt >= 0);
@@ -562,11 +562,6 @@ int prot_flush(struct protstream *s)
 	    left -= n;
 	}
     } while (left);
-
-    /* sasl_encode() did a malloc so we need to free for it */
-    if (s->saslssf != 0) { 
-	free(encoded_output);
-    }
 
     /* Reset the output buffer */
     s->ptr = s->buf;

@@ -44,7 +44,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
-#include <sasl.h>
+#include <sasl/sasl.h>
 
 #include "isieve.h"
 #include "lex.h"
