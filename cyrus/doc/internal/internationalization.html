@@ -3,9 +3,10 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 
 <head>
+<!-- warning this is a UTF-8 file. please don't pretend it's ISO-8859. -->
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="revision" 
-content="$Id: internationalization.html,v 1.1.2.2 2002/12/31 15:17:15 ken3 Exp $" />
+content="$Id: internationalization.html,v 1.1.2.3 2003/01/28 04:39:02 ken3 Exp $" />
 <meta name="author" content="Larry Greenfield" />
 
 <title>internationalization</title>
@@ -14,32 +15,32 @@ content="$Id: internationalization.html,v 1.1.2.2 2002/12/31 15:17:15 ken3 Exp $
 <body>
 <h1>charset code</h1>
 
-<h2>overall</h2>
+<h2>introduction</h2>
 
 <p>Cyrus currently transcodes characters to a canonical UTF-8 form for
-searching. The base spec of IMAP4 only requires internationalization
-to implement SEARCH. Since the base spec came out, several extensions
-have been proposed that require further charset support: SORT, THREAD,
-and the Sieve subsystem. As of this writing, Cyrus doesn't correctly
-support these other commands.</p>
+searching. The base spec of IMAP4 only requires understanding multiple
+character sets to properly implement SEARCH. Since the base spec came
+out, several extensions have been proposed that require further
+charset support: SORT, THREAD, and the Sieve subsystem. As of this
+writing, Cyrus doesn't correctly support these other commands.</p>
 
 <p>Cyrus currently only believes in 16-bit characters. Technically,
 Unicode has up to 21-bit characters (expressible in UTF-16 and 3-byte
 UTF-8) and ISO 10646 allows up to 31-bit characters (though ISO's
 current policy is to not allocate any characters outside of the 21-bit
 Unicode range). The lower 16-bit characters make up the basic
-multilingual plane where the majority of languages live. This
+multilingual plane (BMP) where the majority of languages live. This
 restriction is apparent in <tt>charset.c:writeutf8()</tt>, the UTF-8
 decoders, and the Unicode canonicalization table used by Cyrus. Since
 Cyrus's known character sets (except for UTF-8) don't contain any
 characters off of the BMP this isn't seen to be a major problem.</p>
 
 <p>Throughout this text, Unicode and ISO 10646 will be used
-interchangible to refer to the 16-bit character set, regardless of
-encoding. "Character", unless otherwise specified, refers to a single
-Unicode character <tt>ffff</tt> or under. </p>
+interchangible to refer to the 16-bit character set of the BMP,
+regardless of encoding. "Character", unless otherwise specified,
+refers to a single Unicode character <tt>ffff</tt> or under. </p>
 
-<h3>cyrus canonical form</h3>
+<h2>cyrus canonical form</h2>
 
 <p>Since when users search e-mail messages it's much easier for them
 to eliminate false positives than realize there are hits that aren't
@@ -71,7 +72,8 @@ ASCII characters, such as "æ" to "ae". </li>
 
 </ul>
 
-<h2>transcoding</h2>
+<p>The actual transcoding does all of these steps at once with the aid
+of tables, carefully built at compile-time.</p>
 
 <p>The central part of Cyrus's internationalization support is it's
 transcoding routines in <tt>lib/charset.[ch]</tt>, and
@@ -82,7 +84,7 @@ href="#mkchartable">mkchartable</a>) and uses them so that it never
 has to consider more than a single octet at a time while outputing the
 Cyrus canonical form for an input string.</p>
 
-<h3>external interface</h3>
+<h2>external interface</h2>
 
 <p>
 <tt>lib/charset.h</tt> is the public interface for Cyrus lib clients
@@ -148,28 +150,213 @@ but not described here.</dd>
 
 </dl>
 
-<h3>the TRANSLATE macro: using the transcoding tables</h3>
+<h2>the TRANSLATE macro: using the transcoding tables</h2>
 
-<p>implicit case mapping</p>
+<p>The external interface is implemented with the help of the
+<tt>START</tt> and <tt>TRANSLATE</tt> macros:</p>
 
-<p>output characters or control codes. control codes are uppercase
-US-ASCII characters since those can never be output characters.</p>
+<dl>
+<dt><tt>void START(struct decode_state *state, const unsigned char
+(*table)[256][4])</tt></dt>
 
-<h3 id="comp_pat">boyer-moore searching, compiled patterns</h3>
+<dd>
+<tt>START</tt> initializes <i>state</i> to be ready for transcoding of the
+charset translation table given with <i>table</i>. The starting active
+table is always the first one in the list passed in.</dd>
 
-<p>brief description of boyer-moore</p>
+<dt><tt>void TRANSLATE(struct decode_state *state, unsigned char
+input, unsigned char *outbuf, unsigned outindex)</tt></dt>
 
-<p>why two arrays?</p>
+<dd>
+<tt>TRANSLATE</tt> takes four parameters: <i>state</i> is the current
+state of the translation; it must have been initialized with
+<tt>START</tt> and is modified by <tt>TRANSLATE</tt>; <i>input</i> is
+one octet of input from the stream to be transcoded; <i>outbuf</i> is
+a pointer to the start of the buffer to write output characters;
+<i>outindex</i> is the index where this translation should be
+written. The size of <i>outbuf</i> must be at least <i>outindex +
+charset_max_translation</i>.
+</dd>
+</dl>
 
-<p>meta-data stored at the end</p>
+<p>Each charset consists of a set of one or more tables; the
+<i>table</i> parameter passed into <tt>START</tt> is the first of
+these tables and the others are adjacent in memory. Characters are
+transcoded by indexing into the active table with <i>input</i> and
+examining the 4 octet translation. The 4 octet translation may consist
+of 0–3 character translations followed by a control code or a
+series of control codes. In effect, the translation for a given octet
+is a mini-program that consists either of UTF-8 octets or control
+codes. One of the control codes RET, END, JSR, or JMP must occur in
+the 4 octet translation.</p>
 
-<h2>generating the tables: <tt>mkchartable</tt></h2>
+<h3>control codes</h3>
+
+<p>Control codes are represented by uppercase US-ASCII characters
+since no uppercase characters can appear in the output translation
+(recall that Cyrus canonical form downcases). Any uppercase US-ASCII
+character (<tt>[A .. Z]</tt>) is thus interpreted specially by the
+<tt>TRANSLATE</tt> virtual machine. Any other octet encountered as an
+output translation is presumed to be part of the UTF-8 output
+sequence and copied to the output.</p>
+
+<p>The names of control codes are actually C pre-processor defines to
+uppercase US-ASCII characters. As the mnenomics are easier to
+understand, I use them in discussing their semantics.</p>
+
+<h3>control code reference</h3>
+
+<p><tt>TRANSLATE</tt> recognizes the following "normal" control codes:</p>
+
+<dl>
+<dt>XLT</dt>
+
+<dd>This is the first octet of the four octet sequence, indicating
+that the desired translation is larger than 3 UTF-8 octets. The next
+two octets represent an offset to look up in the special
+chartables_long_translations[] table. After that translation is copied
+to the outbuf, the final octet is interpreted (it must be either a RET
+or an END).</dd>
+
+<dt>JSR</dt>
+
+<dd>The <tt>TRANSLATE</tt> virtual machine has a stack, fixed at size
+1. A JSR copies address of the current active table to the stack and
+transitions to the active table given by the next two octets. (For
+instance, table 1 would be the next table after the table given as a
+parameter to <tt>START</tt>.) Translation of the current octet stops
+after encountering a JSR.
+
+<p>JSRs are useful for converting a two octet input character: the
+first octet in the character will make a JSR to some table; the second
+octet will produce a translation and RET to the current table.
+</p> 
+
+<p>Since the virtual machine has a fixed size stack, it would be
+highly unusual for the virtual machine to encounter two different JSRs
+without an intervening RET.</p></dd>
+
+<dt>JMP</dt>
+
+<dd> Similiar to JSR, but does not change the stack. It is the
+equivalent of a goto. JMPs are useful to deal with modal input
+character sets (such as an escape in ISO-2022-JP, see <a
+href="#mkchartable">how the tables are generated</a>).</dd>
+
+<dt>RET</dt>
+
+<dd>Indicates that we are done translating this input octet and we should
+return to the previous active table. It might appear as the first of
+the 4 translation octets, in which case this input character
+translates into nothing (it might be whitespace, for instance).</dd>
+
+<dt>END</dt>
+
+<dd>Indicates we are done translating this input octet. When
+<tt>TRANSLATE</tt> is next called, that input octet will be
+interpreted against the current active table; the stack does not
+change. </dd>
+
+</dl>
+
+<p>In addition, it recognizes the following "special" control codes
+for charsets that aren't easily represented by a set of tables, UTF-8
+and UTF-7:</p>
+
+<dl>
+<dt>U7F </dt>
+
+<dd>UTF-7 consists of US-ASCII characters and a special escape
+character that indicates a transition to base-64 encoded UTF-16
+characters. The virtual machine has built in code to handle the base64
+decoding. In UTF-7's base64, 8 input octets result in 3 characters, so
+the tables would be rather large.</dd>
+
+<dt>U7N</dt>
+
+<dd>This indicates that the current octet is the continuation of the
+base-64 section.</dd>
+
+<dt>U83</dt>
+
+<dd>One and two character UTF-8 sequences are handled normally in the
+charset code. To keep the table size down, 3 octet sequences are
+handled specially. U83 indicates that the current input octet is the
+start of a three character sequence. It is also an implicit jump to
+the 2nd table in the UTF-8 sequence, ending this translation.</dd>
+
+<dt>U83_2</dt>
+
+<dd>This input octet 2nd of 3-octet UTF-8 input, with an implicit
+jump to the 3rd table. </dd>
+
+<dt>U83_3</dt>
+
+<dd>3rd octet of a 3-octet UTF-8 input. This produces the output
+characters and has an implicit jump to the 1st table of UTF-8.</dd>
+
+</dl>
+
+<h2 id="comp_pat">searching and compiled patterns</h2>
+
+<h3>boyer-moore</h3>
+
+<p>brief description of boyer-moore xxx</p>
+
+<h3>cyrus implementation</h3>
+
+<p>why two arrays? xxx</p>
+
+<p>meta-data stored at the end xxx</p>
+
+<h2 id="mkchartable">generating the tables: <tt>mkchartable</tt></h2>
+
+<p>The program <tt>mkchartable</tt> is used to generate the charset
+transcoding tables used by TRANSLATE. These tables are carefully
+constructed so no more than a single octet need be examined at a time;
+this octet results in either an output stream of UTF-8 characters
+being generated or some sort of state change.</p>
+
+<p><tt>mkchartable</tt> uses three different sorts of input files to
+generate these tables. These files are located in the
+<tt>lib/charset</tt> directory.</p>
+
+<h3 id="charset_tables">charset tables</h3>
+
+<p>Each charset file maps a single charset to the corresponding
+Unicode characters. For the US-ASCII and ISO-8859-x character
+sets this is trivial: each input byte corresponds to a single Unicode
+character. </p>
+
+<p>Other character sets are trickier. For instance, GB-2312 has both 
+single and double byte characters, but is still a simple map from
+input character to output character. More complicated is modal
+character encodings. For instance, ISO-2022-JP starts in US-ASCII mode
+and uses <tt>1B</tt> as an escape character followed by another two
+characters to select a new mode.</p>
+
+<p>The input charset labels modes with "<tt>:</tt>" followed by the
+mode name. The starting mode "<tt>US-ASCII</tt>" in ISO-2022-JP is
+preceeded by "<tt>:US-ASCII</tt>". Mode transitions are denoted by a
+Unicode conversion of "<tt>&gt;newmode</tt>". To denote the character
+<tt>42</tt> transitions into the "<tt>US-ASCII</tt>" mode, the charset
+file has "<tt>42 &gt;US-ASCII</tt>".</p>
+
+<h3>unicode data table</h3>
+
+<p>unidata2.txt: describes each unicode character xxx</p>
+
+<h3>unicode fixup table</h3>
 
 <p>unifix.txt: fixups for more generous matching. besides casemapping,
 and whitespace elimination, is the Cyrus normalization
-file. (eliminates accents, etc.)</p>
+file. (eliminates accents, etc.) xxx</p>
 
-<p>unidata2.txt: describes each unicode character</p>
+<h3>generating <tt>chartable.c</tt></h3>
+
+<p>how <tt>mkchartable</tt> works: collapses the encoding modes, the
+unicode translations, and other normalizations into the output tables
+described above xxx</p>
 
 <h2>for the future</h2>
 
@@ -177,12 +364,33 @@ file. (eliminates accents, etc.)</p>
 
 <h3>adjustable normalization?</h3>
 
+<p>The use of uppercase US-ASCII characters is one of the annoyances
+in trying to generalize the charset transcoding. If we continue to
+restrict the characters under consideration to the BMP, switching to
+UTF-8 control codes that start 4 or 5 byte sequences is possible.</p>
+
+<p>Another possibility is to use a NUL character as an escape
+sequence, though this increases the size of each control code by 1
+octet.</p>
+
+<h3>handle &gt;2 octet input characters</h3>
+
+<h3>make UTF-8 more regular</h3>
+
+<p>consider whether we really need U83, U83_2, U83_3. also consider
+changing <tt>{ U83, 0, 0, 0 }</tt> translations to <tt>{ U83, JMP, 0, 1
+}</tt> sequences to at least eliminate the implicit jump.</p>
+
 <h2>references</h2>
 
+<p>xxx</p>
+
 <ul>
-<li>Unicode / ISO 10646</li>
-<li>utf-8 RFC</li>
-<li>boyer-moore</li>
+<li>[UNICODE] Unicode / ISO 10646</li>
+<li>[UTF-8] utf-8 RFC</li>
+<li>[UTF-7] utf-7 RFC</li>
+<li>[BM] boyer-moore</li>
+<li>[ACAP] the comparators reference. see section XXX of RFC 2244.</li>
 </ul>
 
 </body>
