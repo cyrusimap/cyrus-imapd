@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.8 2000/02/19 04:46:06 leg Exp $ */
+/* $Id: proxyd.c,v 1.9 2000/03/02 21:21:28 leg Exp $ */
 
 #include <config.h>
 
@@ -199,12 +199,11 @@ static int pipe_until_tag(struct backend *s, char *tag)
 
     s->lastused = time(NULL);
     
-    eol[0] = '\0';
-
     /* the only complication here are literals */
     for (;;) {
 	/* if "cont" is set, we're looking at the continuation to a very
 	   long line */
+	if (!cont) eol[0] = '\0';
 
 	if (!prot_fgets(buf, sizeof(buf), s->in)) {
 	    /* uh oh */
@@ -240,7 +239,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
 	if (sl == (sizeof(buf) - 1)) { /* only got part of a line */
 	    /* we save the last 64 characters in case it has important
 	       literal information */
-	    strncpy(eol, buf + sl - 64, 65);
+	    strcpy(eol, buf + sl - 64);
 
 	    /* write out this part, but we have to keep reading until we
 	       hit the end of the line */
@@ -255,9 +254,9 @@ static int pipe_until_tag(struct backend *s, char *tag)
 
 	    /* now we have to see if this line ends with a literal */
 	    if (sl < 64) {
-		strncat(eol, buf, 64);
+		strcat(eol, buf);
 	    } else {
-		strncat(eol, buf + sl - 63, 64);
+		strcat(eol, buf + sl - 63);
 	    }
 
 	    /* eol now contains the last characters from the line; we want
@@ -289,6 +288,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
 		eol[0] = '\0';
 		
 		/* have to keep going for the end of the line */
+		cont = 1;
 		continue;
 	    }
 	}
@@ -489,7 +489,7 @@ static int proxy_authenticate(struct backend *s)
     int b64len;
     const char *pass;
 
-    strcpy(buf, s->hostname);
+    strcpy(optstr, s->hostname);
     p = strchr(optstr, '.');
     if (p) *p = '\0';
     strcat(optstr, "_password");
@@ -569,6 +569,11 @@ static int proxy_authenticate(struct backend *s)
 	prot_printf(s->out, "\r\n");
 
 	r = mysasl_getauthline(s->in, mytag, &in, &inlen);
+    }
+
+    if (r == SASL_OK) {
+	prot_setsasl(s->in, s->saslconn);
+	prot_setsasl(s->out, s->saslconn);
     }
 
     /* r == SASL_OK on success */
@@ -994,6 +999,7 @@ void shut_down(int code)
 	i++;
     }
 
+    mboxlist_close();
     mboxlist_done();
     prot_flush(proxyd_out);
     exit(code);
@@ -1185,7 +1191,6 @@ cmdloop()
 		if (!backend_current) goto nomailbox;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
-		mboxlist_close();	
 		cmd_noop(tag.s, cmd.s);
 	    }
 	    else if (!strcmp(cmd.s, "Copy")) {
@@ -1221,7 +1226,6 @@ cmdloop()
 		if (!backend_current) goto nomailbox;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
-		mboxlist_close();	
 		cmd_close(tag.s);
 	    }
 	    else goto badcmd;
@@ -1258,7 +1262,6 @@ cmdloop()
 		if (!backend_current) goto nomailbox;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
-		mboxlist_close();	
 		cmd_expunge(tag.s, 0);
 	    }
 	    else if (!strcmp(cmd.s, "Examine")) {
@@ -1282,7 +1285,6 @@ cmdloop()
 		c = getword(&arg1);
 		if (c == '\r') goto missingargs;
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
-		mboxlist_close();	
 		cmd_fetch(tag.s, arg1.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Find")) {
@@ -1408,7 +1410,6 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Noop")) {
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
-		mboxlist_close();
 		cmd_noop(tag.s, cmd.s);
 	    }
 #ifdef ENABLE_X_NETSCAPE_HACK
@@ -1440,7 +1441,6 @@ cmdloop()
 		c = getword(&arg4);
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
-		mboxlist_close();	
 		cmd_partial(tag.s, arg1.s, arg2.s, arg3.s, arg4.s);
 	    }
 	    else goto badcmd;
@@ -1476,7 +1476,6 @@ cmdloop()
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
 		c = getword(&arg2);
 		if (c != ' ') goto badsequence;
-		mboxlist_close();	
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Select")) {
@@ -1493,7 +1492,6 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    search:
-		mboxlist_close();	
 		cmd_search(tag.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Subscribe")) {
