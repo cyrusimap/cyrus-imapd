@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.413 2002/11/18 15:50:15 ken3 Exp $ */
+/* $Id: imapd.c,v 1.414 2003/01/05 14:12:08 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1831,7 +1831,7 @@ cmd_authenticate(char *tag,char *authtype)
 	switch (r) {
 	case IMAP_SASL_CANCEL:
 	    prot_printf(imapd_out,
-			"%s NO Client canceled authentication\r\n", tag);
+			"%s BAD Client canceled authentication\r\n", tag);
 	    break;
 	case IMAP_SASL_PROTERR:
 	    errorstring = prot_error(imapd_in);
