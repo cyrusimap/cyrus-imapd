@@ -1,4 +1,5 @@
 COMPILE_ET = /usr/local/bin/compile_et
+SNMPGEN = ../snmp/snmpgen
 
 BUILT_SOURCES = imap_err.h imap_err.c \
 	lmtpstats.c lmtpstats.h \
@@ -8,3 +9,9 @@ dist: $(BUILT_SOURCES)
 
 imap_err.h imap_err.c: imap_err.et
 	$(COMPILE_ET) imap_err.et
+
+pushstats.c pushstats.h: pushstats.snmp
+	$(SNMPGEN) pushstats.snmp
+
+lmtpstats.c lmtpstats.h: lmtpstats.snmp
+	$(SNMPGEN) lmtpstats.snmp
