@@ -1,0 +1,26 @@
+Revision history for Perl extension IMAP::Cyrus.
+
+0.01  Mon Oct 18 11:24:14 1999
+	- original version; created by h2xs 1.19
+
+0.06  Fri Oct 29 13:45:46 1999
+	- imclient part complete, except for Perl wrapper for _send()
+
+0.85  Thu Nov  4 16:24:13 1999
+	- Perl wrapper for _authenticate(), does CAPABILITY call and works
+	  around SASL bug
+	- wrapper for _send complete; doesn't handle sync literals, because
+	  that requires imclient internals visible from Perl
+	- updated to Cyrus 1.6.19
+	- added &getselectinfo()
+	- tests are more comprehensive, no longer dependent on ECE
+
+0.86  Fri Nov 12 16:22:17 1999
+	- (partially) implemented IMAP::Cyrus::Shell
+	- split IMAP::Cyrus and IMAP::Cyrus::Admin
+
+0.95  Thu Dec 16 14:30:32 1999
+	- rewrite IMAP::Cyrus::Admin error handling to use an error method
+	  instead of stealing $@; this also allows checking for errors when
+	  routines can legitimately return undef/()
+	- wrapping it up, finalizing documentation, shell wrapper for cyradm
