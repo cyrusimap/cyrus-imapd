@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.304.2.10 2001/07/01 22:58:31 ken3 Exp $ */
+/* $Id: imapd.c,v 1.304.2.8.2.1 2001/07/01 23:02:10 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3539,6 +3539,8 @@ char *pattern;
 	if (*p == '%') *p = '?';
     }
 
+    hier_sep_tointernal(pattern, &imapd_namespace);
+
     if (!strcmp(namespace, "mailboxes")) {
 	if (imapd_namespace.isalt)
 	    mboxlist_findsub_alt(pattern, &imapd_namespace, imapd_userisadmin, 
@@ -3595,10 +3597,11 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 
     if (!pattern[0] && !subscribed) {
 	/* Special case: query top-level hierarchy separator */
-	prot_printf(imapd_out, "* LIST (\\Noselect) \".\" \"\"\r\n");
+	prot_printf(imapd_out, "* LIST (\\Noselect) \"%c\" \"\"\r\n",
+		    imapd_namespace.hier_sep);
     } else {
 	/* Do we need to concatenate fields? */
-	if (!ignorereference || pattern[0] == '.') {
+	if (!ignorereference || pattern[0] == imapd_namespace.hier_sep) {
 	    /* Either
 	     * - name begins with dot
 	     * - we're configured to honor the reference argument */
@@ -3613,7 +3616,8 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 
 	    if (*reference) {
 		/* check for LIST A. .B, change to LIST "" A.B */
-		if (reference[reflen-1] == '.' && pattern[0] == '.') {
+		if (reference[reflen-1] == imapd_namespace.hier_sep &&
+		    pattern[0] == imapd_namespace.hier_sep) {
 		    reference[--reflen] = '\0';
 		}
 		strcpy(buf, reference);
@@ -3621,6 +3625,8 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	    strcat(buf, pattern);
 	    pattern = buf;
 	}
+
+	hier_sep_tointernal(pattern, &imapd_namespace);
 
 	if (subscribed) {
 	    int force = config_getswitch("allowallsubscribe", 0);

@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- $Id: mboxname.c,v 1.20.4.4 2001/07/01 22:58:31 ken3 Exp $
+ $Id: mboxname.c,v 1.20.4.2.2.1 2001/07/01 23:02:11 ken3 Exp $
 
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -121,6 +121,7 @@ int mboxname_tointernal(const char *name, struct namespace *namespace,
 	strcpy(result, "user.");
 	strcat(result, userid);
 	strcat(result, name+5);
+	hier_sep_tointernal(result+5, namespace);
 	return 0;
     }
 
@@ -129,6 +130,7 @@ int mboxname_tointernal(const char *name, struct namespace *namespace,
 	return IMAP_MAILBOX_BADNAME;
     }
     strcpy(result, name);
+    hier_sep_tointernal(result, namespace);
     return 0;
 }
 
@@ -152,6 +154,7 @@ int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
 	}
 
 	strcpy(result, name+prefixlen);
+	hier_sep_tointernal(result, namespace);
 	return 0;
     }
 
@@ -171,6 +174,7 @@ int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
 
 	strcpy(result, "user.");
 	strcat(result, name+prefixlen);
+	hier_sep_tointernal(result+5, namespace);
 	return 0;
     }
 
@@ -205,6 +209,7 @@ int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
     }
     strcat(result, ".");
     strcat(result, name);
+    hier_sep_tointernal(result+5, namespace);
     return 0;
 }
 
@@ -218,7 +223,7 @@ int mboxname_toexternal(const char *name, struct namespace *namespace,
 			const char *userid, char *result)
 {
     strcpy(result, name);
-
+    hier_sep_toexternal(result, namespace);
     return 0;
 }
 
@@ -269,6 +274,7 @@ int mboxname_toexternal_alt(const char *name, struct namespace *namespace,
 	}
     }
 
+    hier_sep_toexternal(result, namespace);
     return 0;
 }
 
