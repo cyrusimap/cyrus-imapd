@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.8 2000/06/09 02:45:10 leg Exp $ */
+/* $Id: service.c,v 1.9 2000/08/23 21:44:23 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -153,8 +153,6 @@ int main(int argc, char **argv, char **envp)
 	return 1;
     }
 
-    libwrap_init(&request, argv[0]);
-
     if (service_init(argc, argv, envp) != 0) {
 	notify_master(STATUS_FD, SERVICE_UNAVAILABLE);
 	return 1;
@@ -192,6 +190,8 @@ int main(int argc, char **argv, char **envp)
 	    }
 	}
 	
+	libwrap_init(&request, argv[0]);
+
 	if (!libwrap_ask(&request, fd)) {
 	    /* connection denied! */
 	    close(fd);
