@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.4 2003/12/07 15:26:13 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.5 2003/12/09 20:02:44 ken3 Exp $ */
 
 #include <config.h>
 
@@ -82,7 +82,8 @@ extern void fatal(const char *fatal_message, int fatal_code)
 const char *config_getstring(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
-    assert(imapopts[opt].t == OPT_STRING);
+    assert((imapopts[opt].t == OPT_STRING) ||
+	   (imapopts[opt].t == OPT_STRINGLIST));
     
     return imapopts[opt].val.s;
 }
@@ -321,6 +322,7 @@ void config_read(const char *alt_config)
 		break;
 	    }
 	    case OPT_ENUM:
+	    case OPT_STRINGLIST:
 	    {
 		const struct enum_option_s *e = imapopts[opt].enum_options;
 
@@ -328,9 +330,12 @@ void config_read(const char *alt_config)
 		    if (!strcasecmp(e->name, p)) break;
 		    e++;
 		}
-		if (e->name)
-		    imapopts[opt].val.e = e->val;
-		else {
+		if (e->name) {
+		    if (imapopts[opt].t == OPT_STRINGLIST)
+			imapopts[opt].val.s = e->name;
+		    else
+			imapopts[opt].val.e = e->val;
+		} else {
 		    /* error during conversion */
 		    sprintf(errbuf, "invalid value for %s in line %d",
 			    imapopts[opt].optname, lineno);
