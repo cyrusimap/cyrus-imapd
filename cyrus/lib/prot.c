@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.50 2000/05/10 18:03:19 leg Exp $
+ * $Id: prot.c,v 1.51 2000/05/12 22:18:54 leg Exp $
  */
 
 #include <config.h>
@@ -70,8 +70,6 @@ int write;
     newstream->write = write;
     newstream->logfd = -1;
     newstream->log_timeptr = 0;
-    newstream->func = 0;
-    newstream->state = 0;
     newstream->error = 0;
     newstream->eof = 0;
     newstream->read_timeout = 0;
@@ -113,9 +111,7 @@ int fd;
 /*
  * Start logging timing information for stream 's'.
  */
-int prot_setlogtime(s, ptr)
-struct protstream *s;
-time_t *ptr;
+int prot_setlogtime(struct protstream *s, time_t *ptr)
 {
     s->log_timeptr = ptr;
     time(s->log_timeptr);
@@ -190,9 +186,7 @@ sasl_conn_t *conn;
  * Set the read timeout for the stream 's' to 'timeout' seconds.
  * 's' must have been created for reading.
  */
-int prot_settimeout(s, timeout)
-struct protstream *s;
-int timeout;
+int prot_settimeout(struct protstream *s, int timeout)
 {
     assert(!s->write);
 
@@ -205,9 +199,7 @@ int timeout;
  * blocking for reading. 's' must have been created for reading,
  * 'flushs' for writing.
  */
-int prot_setflushonread(s, flushs)
-struct protstream *s;
-struct protstream *flushs;
+int prot_setflushonread(struct protstream *s, struct protstream *flushs)
 {
     assert(!s->write);
 
@@ -219,10 +211,8 @@ struct protstream *flushs;
  * Set on stream 's' the callback 'proc' and 'rock'
  * to make the next time we have to wait for input.
  */
-int prot_setreadcallback(s, proc, rock)
-struct protstream *s;
-prot_readcallback_t *proc;
-void *rock;
+int prot_setreadcallback(struct protstream *s, 
+			 prot_readcallback_t *proc, void *rock)
 {
     assert(!s->write);
 
@@ -451,21 +441,20 @@ int prot_flush(struct protstream *s)
     }
 
     if (s->saslssf != 0) {
-      /* Encode the data */  /* xxx handle left */
-      unsigned int outlen;
-      int result;
-
-      result = sasl_encode(s->conn, (char *) ptr, left, 
-			   &encoded_output, &outlen);
-      if (result!=SASL_OK)
-      {
-	s->error = "Encoding error";
-	if (s->log_timeptr) time(s->log_timeptr);
-	return EOF;
-      }
-
-      ptr = (unsigned char *) encoded_output;
-      left = outlen;
+	/* Encode the data */  /* xxx handle left */
+	unsigned int outlen;
+	int result;
+	
+	result = sasl_encode(s->conn, (char *) ptr, left, 
+			     &encoded_output, &outlen);
+	if (result != SASL_OK) {
+	    s->error = "Encoding error";
+	    if (s->log_timeptr) time(s->log_timeptr);
+	    return EOF;
+	}
+	
+	ptr = (unsigned char *) encoded_output;
+	left = outlen;
     }
 
     /* Write out the data */
