@@ -56,12 +56,12 @@ AC_DEFUN(CMU_AFS, [
 AC_REQUIRE([CMU_SOCKETS])
 AC_ARG_WITH(AFS,
 	[  --with-afs=PREFIX      Compile with AFS support],
-	[if test "X$with_afs" = "X"; then
-		with_afs=yes
+	[if test "X$with_AFS" = "X"; then
+		with_AFS=yes
 	fi])
 
-	if test "X$with_afs" != "X"; then
-	  ac_cv_afs_where=$with_afs
+	if test "X$with_AFS" != "X"; then
+	  ac_cv_afs_where=$with_AFS
 	fi
 	if test "X$ac_cv_afs_where" = "X"; then
 	  CMU_AFS_WHERE(/usr/afsws /usr/local /usr/athena)
