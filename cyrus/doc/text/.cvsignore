@@ -12,6 +12,7 @@ install-auth
 install-compile
 install-configure
 install-murder
+install-netnews
 install-virtdomains
 install-perf
 install-prereq
