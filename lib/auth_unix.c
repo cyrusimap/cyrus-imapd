@@ -128,6 +128,7 @@ const char *cacheid;
 
     strcpy(newstate->userid, identifier);
     newstate->ngroups = 0;
+    newstate->group = (char **0);
 
     setgrent();
     while (grp = getgrent()) {
