@@ -449,7 +449,7 @@ char *read_capability(void)
 void usage(void)
 {
   printf("usage:\n");
-  printf(" installscript [options] servername\n");
+  printf(" installsieve [options] servername\n");
   printf("  -v <name>    view script\n");
   printf("  -l           list available scripts\n");
   printf("  -p <port>    port to connect to\n");
