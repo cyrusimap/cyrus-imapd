@@ -24,12 +24,12 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
-#include <sysexits.h>
 #include <syslog.h>
 #include <com_err.h>
 
 #include "config.h"
 #include "mailbox.h"
+#include "sysexits.h"
 #include "imap_err.h"
 #include "xmalloc.h"
 

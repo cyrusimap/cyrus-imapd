@@ -23,8 +23,9 @@
  */
 #include <stdio.h>
 #include <syslog.h>
-#include <sysexits.h>
+
 #include "config.h"
+#include "sysexits.h"
 #include "xmalloc.h"
 
 #define FNAME_PROCDIR "/proc/"

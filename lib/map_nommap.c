@@ -22,10 +22,11 @@
  *
  */
 #include <stdio.h>
-#include <sysexits.h>
 #include <sys/types.h>
 #include <syslog.h>
 #include "xmalloc.h"
+
+#include "sysexits.h"
 
 #define SLOP (4*1024)
 

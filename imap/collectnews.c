@@ -24,19 +24,14 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <sysexits.h>
 #include <syslog.h>
 #include <com_err.h>
 
 #include "config.h"
+#include "sysexits.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
-
-/* Many systems don't define EX_CONFIG */
-#ifndef EX_CONFIG
-#define EX_CONFIG 78
-#endif
 
 extern int errno;
 
