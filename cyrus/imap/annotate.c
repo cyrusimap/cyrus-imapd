@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.16.2.10 2005/03/22 18:49:20 ken3 Exp $
+ * $Id: annotate.c,v 1.16.2.11 2005/03/23 17:40:48 shadow Exp $
  */
 
 #include <config.h>
@@ -803,6 +803,62 @@ static void annotation_get_lastupdate(const char *int_mboxname,
     output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
 }
 
+static void annotation_get_lastpop(const char *int_mboxname,
+                                 const char *ext_mboxname,
+                                 const char *entry,
+                                 struct fetchdata *fdata,
+                                 struct mailbox_annotation_rock *mbrock,
+                                 void *rock __attribute__((unused)))
+{ 
+    struct mailbox mailbox;
+    int r = 0;
+    char value[40];
+    struct annotation_data attrib;
+  
+    if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
+
+      fatal("annotation_get_lastpop called with bad parameters",
+              EC_TEMPFAIL);
+
+    get_mb_data(int_mboxname, mbrock);
+
+    /* Check ACL */
+    if(!fdata-&gt;isadmin &&
+       (!mbrock-&gt;acl ||
+      !(cyrus_acl_myrights(fdata-&gt;auth_state, mbrock-&gt;acl) & ACL_LOOKUP) ||
+      !(cyrus_acl_myrights(fdata-&gt;auth_state, mbrock-&gt;acl) & ACL_READ)))
+      return;
+
+
+    if (mailbox_open_header(int_mboxname, 0, &mailbox) != 0)
+      return;
+
+    if (!r) {
+      r = mailbox_open_index(&mailbox);
+    }
+
+    if (!r) {
+      if (mailbox.pop3_last_login == 0) {
+          strcpy (value, " ");
+      } else {
+          cyrus_ctime(mailbox.pop3_last_login, value);
+      }
+    }
+
+    mailbox_close(&mailbox);
+
+    if ( r)
+      return;
+
+    memset(&attrib, 0, sizeof(attrib));
+
+    attrib.value = value;
+    attrib.size = strlen(value);
+    attrib.contenttype = "text/plain";
+
+    output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
+}
+
 struct rw_rock {
     const char *ext_mboxname;
     struct fetchdata *fdata;
@@ -891,6 +947,8 @@ const struct annotate_f_entry mailbox_ro_entries[] =
       annotation_get_size, NULL },
     { "/vendor/cmu/cyrus-imapd/lastupdate", BACKEND_ONLY,
       annotation_get_lastupdate, NULL },
+    { "/vendor/cmu/cyrus-imapd/lastpop", BACKEND_ONLY,
+      annotation_get_lastpop, NULL },
     { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
 };
 
