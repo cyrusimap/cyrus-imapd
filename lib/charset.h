@@ -22,6 +22,9 @@
  *
  */
 
+#ifndef INC_CHARSET
+#define INC_CHARSET
+
 /* Marker to indicate characters that don't map to anything */
 #define EMPTY 'X'
 #define EMPTY_STRING "X"
@@ -31,9 +34,17 @@
 #define ENCODING_BASE64 2
 #define ENCODING_UNKNOWN 255
 
+typedef int comp_pat;
+
 int charset_lookupname(/* char *name */);
 char *charset_convert(/* char *s, int charset */);
 char *charset_decode1522(/* char *s */);
-int charset_searchfile(/* char *substr, FILE *msgfile, int mapnl,
+comp_pat *charset_compilepat(/* char *s */);
+void charset_freepat(/* comp_pat *pat */);
+int charset_searchstring(/* char *substr, comp_pat *pat,
+			    char *s, int len */);
+int charset_searchfile(/* char *substr, comp_pat *pat,
+			  FILE *msgfile, int mapnl,
 			  int len, int charset, int encoding */);
 
+#endif INC_CHARSET

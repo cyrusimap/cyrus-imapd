@@ -22,6 +22,9 @@
  *
  */
 
+#include "prot.h"
+#include "charset.h"
+
 /* Userid client has logged in as */
 extern char *imapd_userid;
 
@@ -40,6 +43,7 @@ extern char imapd_clienthost[];
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
     char *s;			/* String */
+    comp_pat *p;		/* Compiled pattern, for search */
     struct strlist *next;
 };
 
@@ -126,7 +130,5 @@ struct searchargs {
     struct strlist *header_name, *header;
     struct searchsub *sublist;
 };
-
-#include "prot.h"
 
 extern struct protstream *imapd_out, *imapd_in;
