@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.30 2000/05/29 00:37:10 leg Exp $
+ * $Id: lmtpd.c,v 1.31 2000/05/29 03:00:22 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.30 2000/05/29 00:37:10 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.31 2000/05/29 03:00:22 leg Exp $";*/
 
 #include <config.h>
 
@@ -1204,6 +1204,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 	free(rcpt);
 	msg_setrcpt_status(msgdata, n, r);
     }
+
+    append_removestage(mydata.stage);
 
     return 0;
 }
