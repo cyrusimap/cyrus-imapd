@@ -321,7 +321,7 @@ case "$with_tcl" in
 		AC_MSG_ERROR(Could not find Tcl libraries.  You must either install Tcl or configure with --disable-cyradm)
 	     fi],-lm) ;;
 	*)  CPPFLAGS="${CPPFLAGS} -I${with_tcl}/include"
-	    LIBS="${LIBS} ${with_tcl}/lib/libtcl.a -lm" ;;
+	    LIBS="${LIBS} -L${with_tcl}/lib -ltcl -lm" ;;
 esac
 dnl
 dnl Test for Zephyr
@@ -448,10 +448,10 @@ dnl Random other libraries
 dnl
 AC_CHECK_LIB(ndbm, dbm_open)
 AC_CHECK_LIB(dbm, dbm_open)
-AC_CHECK_LIB(db, dbopen)
+AC_CHECK_FUNC(dbopen,AC_DEFINE(HAVE_LIBDB),AC_CHECK_LIB(db, dbopen))
 AC_CHECK_LIB(dld, shl_load, LIBS="${LIBS} -ldld")dnl HPUX needs this for Tcl
 AC_CHECK_LIB(dl, dlopen, LIBS="${LIBS} -ldl")dnl Solaris needs this for Tcl
 AC_CHECK_LIB(socket, accept, LIBS="${LIBS} -lsocket -lnsl",,-lnsl)
-AC_CHECK_LIB(iberty, index, LIBS="${LIBS} -liberty")
+AC_CHECK_LIB(iberty, rindex, LIBS="${LIBS} -liberty")
 
 AC_OUTPUT(Makefile man/Makefile et/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile $EXTRA_OUTPUT)
