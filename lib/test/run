@@ -8,7 +8,7 @@ while (defined $ARGV[0] && ("-v" eq $ARGV[0])) {
     shift @ARGV;
 }
 
-my $libs = $ENV{"LIBS"};
+my $libs = $ENV{"LIBS"} || "";
 
 sub mysys {
     my $cmd = shift;
