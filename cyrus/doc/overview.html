@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <title>Cyrus IMAP Server:  Overview and Concepts</title>
-<!-- $Id: overview.html,v 1.22 2003/10/28 16:59:08 rjs3 Exp $ -->
+<!-- $Id: overview.html,v 1.23 2004/03/22 00:31:00 ken3 Exp $ -->
 </HEAD><BODY>
 <H1>Cyrus IMAP Server:  Overview and Concepts</H1>
 
@@ -68,13 +68,6 @@ Mailboxes</A>
 <li><a href="#partitionsrename">Changing Partitions with "<TT>rename</TT>"</a>
 </UL>
 <li><a href="#news">News</a>
-<UL>
-<li><a href="#newspart">"<TT>news</TT>" Partition</a>
-<li><a href="#netnews">Netnews</a>
-<li><a href="#newscollect"><TT>collectnews</TT></a>
-<li><a href="#newsrm"><TT>rmnews</TT></a>
-<li><a href="#newssync"><TT>syncnews</TT></a>
-</UL>
 <li><A href="#pop3">POP3 Server</A>
 <li><A href="#syslog">The <TT>syslog</TT> facility</A>
 <li><A href="#recovery">Mail Directory Recovery</A>
@@ -619,72 +612,10 @@ get from the "<TT>create</TT>" command.
 
 <h2><A NAME="news">News</a></h2>
 
-This section contains an overview of concepts related to exporting
-news groups through the IMAP server.
-
-<h3><a name="newspart">"<TT>news</TT>" Partition</a></h3>
-
-The partition named "<TT>news</TT>" is reserved for netnews and cannot be used
-for any other purpose.
-
-<h3><a name="netnews">Netnews</a></h3>
-
-The IMAP server can export netnews newsgroups as IMAP mailboxes.  This
-is done by creating a partition named "<TT>news</TT>" which points to the news
-spool directory and arranging for the IMAP server's auxiliary
-databases to be maintained.  The server software includes programs for
-integrating with the INN netnews server.  The following information
-assumes working knowledge of the INN netnews server.
-
-<h3><a name="newscollect"><TT>collectnews</TT></a></h3>
-
-The "<TT>collectnews</TT>" program takes as input a list of article file
-path names relative to the news spool directory.  It then adds those
-messages to the auxiliary databases.  If collectnews encounters a
-newsgroup that does not have a corresponding IMAP
-mailbox listed in the mailboxes file (described later), it adds it there.
-
-<p>The "<TT>collectnews</TT>" program is normally run from <TT>cron</TT> as 
-the <TT>cyrus</TT> user.  It is given as input a news overview feed.  Since
-<TT>collectnews</TT> needs to write the auxiliary databases in the news spool
-area, the <TT>cyrus</TT> user must be in the news group and the news group must
-be able to write to the news spool area.
-
-<h3><a name="newsrm"><TT>rmnews</TT></a></h3>
-
-The "<TT>rmnews</TT>" program takes a list of article pathnames relative to the
-news spool directory.  It removes (expunges) any mention of those
-messages from the auxiliary databases and unlinks the article files.
-The "<TT>rmnews</TT>" program is used to remove both expired and canceled articles.
-
-<p>"<TT>Rmnews</TT>" takes the same input as the "<TT>fastrm</TT>"
-program.  It is normally run to clean up after <tt>expire</tt> by
-invoking <TT>news.daily</TT> with the "<TT>delayrm</TT>" argument and
-having <TT>RMPROC</TT> in <TT>expirerm</TT> changed from
-"<TT>fastrm</TT>" to "<TT>rmnews</TT>".
-
-<p><TT>Rmnews</TT> is also normally run from <TT>cron</TT> as the <TT>cyrus</TT>
-user to remove canceled and superseded articles.  It is given as input
-a special cancel feed.
-
-<p>As "<TT>rmnews</TT>" is invoked at expire time by the <tt>news</tt> user and
-must be able to write to the auxiliary databases, it must be installed with
-set-uid to the <tt>cyrus</tt> user and set-gid to the <tt>news</tt> group.
-
-<h3><a name="newssync"><TT>syncnews</TT></a></h3>
-
-The "<tt>syncnews</tt>" program takes as an argument the name of the
-news active file.  It
-compares the list of IMAP news mailboxes with the news active file.
-News mailboxes which are not listed in the active file are removed.
-Newsgroups listed in the active file but not in the IMAP mailboxes
-file have IMAP mailboxes created.
-
-<p>A newsgroup must have a status of ``y'', ``m'', or ``n'' to be
-considered listed in the active file.
-
-The "<tt>syncnews</tt>" program should be invoked by the
-<tt>cyrus</tt> user at least daily from cron.
+Cyrus has the ability to export Usenet via IMAP and/or export shared
+IMAP mailboxes via an NNTP server which is included with Cyrus.  For
+more information on exporting news groups through the IMAP server, see
+<a href="install-netnews.html">install-netnews.html</a>.
 
 <h2><a name="pop3">POP3 Server</a></h2>
 
