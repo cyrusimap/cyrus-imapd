@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.63 1999/03/02 20:57:07 tjs Exp $
+ * $Id: message.c,v 1.64 1999/03/10 20:10:29 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -592,6 +592,10 @@ struct boundary *boundaries;
 		if (!strncasecmp(next+2, "rom:", 4)) {
 		    message_parse_address(next+6, &body->from);
 		}
+		else if (body->cacheheaders.start &&
+			 !strncasecmp(next+2, "ollowup-to:", 11)) {
+		    message_parse_header(next+1, &body->cacheheaders);
+		}
 		break;
 
 	    case 'i':
@@ -608,6 +612,14 @@ struct boundary *boundaries;
 		}
 		break;
 
+	    case 'n':
+	    case 'N':
+		if (body->cacheheaders.start &&
+		    !strncasecmp(next+2, "ewsgroups:", 10)) {
+		    message_parse_header(next+1, &body->cacheheaders);
+		}
+		break;
+		
 	    case 'p':
 	    case 'P':
 		if (body->cacheheaders.start &&
@@ -625,6 +637,11 @@ struct boundary *boundaries;
 			 !strncasecmp(next+2, "eferences:", 10)) {
 		    message_parse_header(next+1, &body->cacheheaders);
 		}
+		else if (body->cacheheaders.start &&
+			 !strncasecmp(next+2, "esent-from:", 11)) {
+		    message_parse_header(next+1, &body->cacheheaders);
+		}
+
 		break;
 
 	    case 's':
