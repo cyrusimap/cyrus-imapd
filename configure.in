@@ -31,7 +31,8 @@ if test $ac_cv_sys_long_file_names = no; then
 	AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
 dnl get this over with; important if we're not using gcc
-CPPFLAGS="-I/usr/local/include ${CFLAGS}"
+CPPFLAGS="-I/usr/local/include ${CPPFLAGS}"
+LDFLAGS="-L/usr/local/lib ${CFLAGS}"
 AC_CHECK_HEADERS(unistd.h sys/select.h db_185.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
 AC_HEADER_DIRENT
@@ -328,9 +329,9 @@ if test "$WITH_AUTH" = krb_pts; then
 	if test -f ${with_afs}/lib/afs/libaudit.a; then
 		AFSLIBS="$AFSLIBS ${with_afs}/lib/afs/libaudit.a"
 	fi
-dnl	if test -f /usr/ucblib/libucb.a; then
-dnl		AFSLIBS="$AFSLIBS ${ld_runpath_switch}/usr/ucblib -L/usr/ucblib -lucb"
-dnl	fi
+	if test -f /usr/ucblib/libucb.a; then
+		AFSLIBS="$AFSLIBS ${ld_runpath_switch}/usr/ucblib -L/usr/ucblib -lucb"
+	fi
 
 	AC_CACHE_VAL(cyrus_afs_sigvec,[
 		SAVE_LIBS="$LIBS"
@@ -451,7 +452,9 @@ case "$with_krb" in
 		AC_MSG_ERROR(The Kerberos DES library is required for Kerberos support)
 	    fi
 	    AC_CHECK_LIB(resolv,krb_realmofhost,
-	    [LIBS="${LIBS} -lresolv"], , -lresolv)
+	    [LIBS="${LIBS} -lresolv"],[
+		AC_CHECK_LIB(resolv,res_search)
+		] , -lresolv)
 	    AC_CHECK_LIB(iberty,basename,
 	    [LIBS="${LIBS} -liberty"], , -liberty)
 	    ;;
