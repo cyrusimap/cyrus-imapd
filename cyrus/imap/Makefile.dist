@@ -1,6 +1,8 @@
 COMPILE_ET = /usr/local/bin/compile_et
 
-BUILT_SOURCES = imap_err.h imap_err.c
+BUILT_SOURCES = imap_err.h imap_err.c \
+	lmtpstats.c lmtpstats.h \
+	pushstats.c pushstats.h
 
 dist: $(BUILT_SOURCES)
 
