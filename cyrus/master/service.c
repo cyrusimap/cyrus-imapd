@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.31 2002/03/05 18:25:18 leg Exp $ */
+/* $Id: service.c,v 1.32 2002/03/08 19:26:17 leg Exp $ */
 
 #include <config.h>
 
@@ -75,6 +75,7 @@ extern char *optarg;
 static int use_count = 0;
 static int verbose = 0;
 static int gotalrm = 0;
+static int lockfd = -1;
 
 void notify_master(int fd, int msg)
 {
@@ -151,10 +152,74 @@ static int getlockfd(char *service)
 	syslog(LOG_ERR, 
 	       "locking disabled: couldn't open socket lockfile %s: %m",
 	       lockfile);
+	lockfd = -1;
 	return -1;
     }
 
-    return fd;
+    lockfd = fd;
+    return 0;
+}
+
+static int lockaccept(void)
+{
+    struct flock alockinfo;
+    int rc;
+
+    /* setup the alockinfo structure */
+    alockinfo.l_start = 0;
+    alockinfo.l_len = 0;
+    alockinfo.l_whence = SEEK_SET;
+
+    if (lockfd != -1) {
+	alockinfo.l_type = F_WRLCK;
+	while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 && 
+	       errno == EINTR &&
+	       !gotalrm)
+	    /* noop */;
+	
+	if (rc < 0 && gotalrm) {
+	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+	    service_abort(0);
+	    return -1;
+	}
+
+	if (rc < 0) {
+	    syslog(LOG_ERR, "fcntl: F_SETLKW: error getting accept lock: %m");
+	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+	    service_abort(EX_OSERR);
+	    return -1;
+	}
+    }
+
+    return 0;
+}
+
+static int unlockaccept(void)
+{
+    struct flock alockinfo;
+    int rc;
+
+    /* setup the alockinfo structure */
+    alockinfo.l_start = 0;
+    alockinfo.l_len = 0;
+    alockinfo.l_whence = SEEK_SET;
+
+    if (lockfd != -1) {
+	alockinfo.l_type = F_UNLCK;
+	while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 && 
+	       errno == EINTR)
+	    /* noop */;
+
+	if (rc < 0) {
+	    syslog(LOG_ERR, 
+		   "fcntl: F_SETLKW: error releasing accept lock: %m");
+	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+	    service_abort(EX_OSERR);
+	    return -1;
+	}
+    }
+
+    return 0;
 }
 
 static void sigalrm(int sig)
@@ -175,9 +240,6 @@ int setsigalrm(void)
 #ifdef SA_RESETHAND
     action.sa_flags |= SA_RESETHAND;
 #endif
-#ifdef SA_RESTART
-    action.sa_flags |= SA_RESTART;
-#endif
     action.sa_handler = sigalrm;
     if (sigaction(SIGALRM, &action, NULL) < 0) {
 	syslog(LOG_ERR, "installing SIGALRM handler: sigaction: %m");
@@ -197,11 +259,6 @@ int main(int argc, char **argv, char **envp)
     char *alt_config = NULL;
     int soctype;
     int typelen = sizeof(soctype);
-
-    /* accept locking */
-    int lockfd;
-    struct flock alockinfo;
-    int rc;
 
     while ((opt = getopt(argc, argv, "C:")) != EOF) {
 	switch (opt) {
@@ -267,12 +324,7 @@ int main(int argc, char **argv, char **envp)
 	return 1;
     }
 
-    lockfd = getlockfd(service);
-    /* setup the alockinfo structure */
-    alockinfo.l_start = 0;
-    alockinfo.l_len = 0;
-    alockinfo.l_whence = SEEK_SET;
-
+    getlockfd(service);
     for (;;) {
 	/* ok, listen to this socket until someone talks to us */
 
@@ -287,25 +339,10 @@ int main(int argc, char **argv, char **envp)
 	}
 
 	/* lock */
-	if (lockfd != -1) {
-	    alockinfo.l_type = F_WRLCK;
-	    while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 && 
-		   errno == EINTR &&
-		   !gotalrm)
-		/* noop */;
-
-	    if (rc < 0) {
-		if (!gotalrm) {
-		    syslog(LOG_ERR, 
-			   "fcntl: F_SETLKW: error getting accept lock: %m");
-		}
-		notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-		service_abort(EX_OSERR);
-	    }
-	}
+	lockaccept();
 
 	fd = -1;
-	while (fd < 0) { /* loop until we succeed */
+	while (fd < 0 && !gotalrm) { /* loop until we succeed */
 	    if (soctype == SOCK_STREAM) {
 		fd = accept(LISTEN_FD, NULL, NULL);
 		if (fd < 0) {
@@ -323,15 +360,9 @@ int main(int argc, char **argv, char **envp)
 		    case EOPNOTSUPP:
 		    case ENETUNREACH:
 		    case EAGAIN:
+		    case EINTR:
 			break;
 			
-		    case EINTR:
-			if (gotalrm) {
-			    notify_master(STATUS_FD, 
-					  MASTER_SERVICE_UNAVAILABLE);
-			    service_abort(EX_OSERR);
-			}
-			/* else, fall through */
 		    default:
 			syslog(LOG_ERR, "accept failed: %m");
 			notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
@@ -357,25 +388,24 @@ int main(int argc, char **argv, char **envp)
 	    }
 	}
 
+	/* unlock */
+	unlockaccept();
+
+	if (fd < 0 && gotalrm) {
+	    /* timed out */
+	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+	    service_abort(0);
+	}
+	if (fd < 0) {
+	    /* how did this happen? */
+	    syslog(LOG_ERR, "accept() failed but we didn't catch it?");
+	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+	    service_abort(EX_SOFTWARE);
+	}
+
 	/* cancel the alarm */
 	alarm(0);
 	gotalrm = 0;
-
-	/* unlock */
-	if (lockfd != -1) {
-	    alockinfo.l_type = F_UNLCK;
-	    while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 && 
-		   errno == EINTR)
-		/* noop */;
-
-	    if (rc < 0) {
-		syslog(LOG_ERR, 
-		       "fcntl: F_SETLKW: error releasing accept lock: %m");
-		notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-		service_abort(EX_OSERR);
-		return 1;
-	    }
-	}
 
 	/* tcp only */
 	if(soctype == SOCK_STREAM) {
