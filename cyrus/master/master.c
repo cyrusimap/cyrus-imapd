@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.18 2000/11/07 19:36:02 leg Exp $ */
+/* $Id: master.c,v 1.19 2000/11/08 19:35:12 leg Exp $ */
 
 #include <config.h>
 
@@ -551,6 +551,11 @@ void sigterm_handler(int sig)
     if (kill(0, SIGTERM) < 0) {
 	syslog(LOG_ERR, "kill(0, SIGTERM): %m");
     }
+
+#if HAVE_UCDSNMP
+    /* tell master agent we're exiting */
+    snmp_shutdown("cyrusMaster");
+#endif
 
     syslog(LOG_INFO, "exiting on SIGTERM");
     exit(0);
