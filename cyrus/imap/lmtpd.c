@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.29 2003/03/31 01:19:31 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.30 2003/04/21 15:49:56 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1026,7 +1026,7 @@ static int sieve_find_script(const char *user, char *fname, size_t size)
 	/* check ~USERNAME/.sieve */
 	snprintf(fname, size, "%s/%s", pent->pw_dir, ".sieve");
     } else { /* look in sieve_dir */
-	char hash, *domain;
+	char hash, *domain = NULL;
 	char bufuser[MAX_MAILBOX_NAME+1];
 
 	strlcpy(bufuser, user, sizeof(bufuser));
@@ -1036,18 +1036,20 @@ static int sieve_find_script(const char *user, char *fname, size_t size)
 				    strcspn(bufuser, "@") : 0);
 
 	if (config_virtdomains && (domain = strchr(bufuser, '@'))) {
-	    char d = (char) dir_hash_c(domain+1);
-	    *domain = '\0';  /* split user@domain */
-	    hash = (char) dir_hash_c(user);
+	    *domain++ = '\0';  /* split user@domain */
+	}
+
+	hash = (char) dir_hash_c(bufuser);
+	if (domain &&
+	    !(config_defdomain && !strcasecmp(config_defdomain, domain))) {
+	    char d = (char) dir_hash_c(domain);
 	    snprintf(fname, size, "%s%s%c/%s/%c/%s/default.bc",
-		     sieve_dir, FNAME_DOMAINDIR, d, domain+1,
+		     sieve_dir, FNAME_DOMAINDIR, d, domain,
 		     hash, bufuser);
 	}
 	else {
-	    hash = (char) dir_hash_c(bufuser);
-
 	    snprintf(fname, size, "%s/%c/%s/default.bc",
-		     sieve_dir, hash, user);
+		     sieve_dir, hash, bufuser);
 	}
     }
 	
