@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.16 2002/02/22 21:33:45 ken3 Exp $
+ * $Id: sieve.y,v 1.17 2002/03/05 16:15:01 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -772,7 +772,12 @@ static int verify_header(char *hdr)
     char errbuf[100];
 
     while (*h) {
-	if (!isgraph(*h) || *h == ':') {
+	/* field-name      =       1*ftext
+	   ftext           =       %d33-57 / %d59-126         
+	   ; Any character except
+	   ;  controls, SP, and
+	   ;  ":". */
+	if (!((*h >= 33 && *h <= 57) || (*h >= 59 && *h <= 126))) {
 	    sprintf(errbuf, "header '%s': not a valid header", hdr);
 	    yyerror(errbuf);
 	    return 0;
