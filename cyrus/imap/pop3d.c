@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.90.2.3.2.1 2001/07/04 16:02:23 ken3 Exp $
+ * $Id: pop3d.c,v 1.90.2.3.2.2 2001/07/05 14:49:19 ken3 Exp $
  */
 #include <config.h>
 
@@ -854,10 +854,6 @@ static void cmd_apop(char *user, char *digest)
 	syslog(LOG_NOTICE, "login: %s %s APOP %s",
 	       popd_clienthost, popd_userid, reply ? reply : "");
     }
-
-    /* Translate userid */
-    hier_sep_tointernal(popd_userid, &popd_namespace);
-
     openinbox();
 }
 #else
@@ -941,9 +937,6 @@ char *pass;
 
 	syslog(LOG_NOTICE, "login: %s %s kpop", popd_clienthost, popd_userid);
 
-	/* Translate userid */
-	hier_sep_tointernal(popd_userid, &popd_namespace);
-
 	openinbox();
 	return;
     }
@@ -987,9 +980,6 @@ char *pass;
 	    sleep(plaintextloginpause);
 	}
     }
-    /* Translate userid */
-    hier_sep_tointernal(popd_userid, &popd_namespace);
-
     openinbox();
 }
 
@@ -1165,9 +1155,6 @@ void cmd_auth(char *arg)
 	return;
     }
     
-    /* Translate userid */
-    hier_sep_tointernal(popd_userid, &popd_namespace);
-
     if (openinbox()==0) {
 	proc_register("pop3d", popd_clienthost, 
 		      popd_userid, popd_mailbox->name);    
@@ -1191,6 +1178,9 @@ int openinbox(void)
     int minpoll;
 
     popd_login_time = time(0);
+
+    /* Translate userid */
+    hier_sep_tointernal(popd_userid, &popd_namespace);
 
     strcpy(inboxname, "user.");
     strcat(inboxname, popd_userid);
