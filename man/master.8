@@ -47,6 +47,9 @@ master \- master Cyrus process
 .B \-l
 .I listen queue
 ]
+[
+.B \-D
+]
 .SH DESCRIPTION
 .I Master
 is the process that controls all of the Cyrus processes. This process
@@ -62,9 +65,11 @@ when it receives a SIGTERM.
 .TP
 .BI \-l " listen queue backlog"
 Increase the listen queue backlog. By default, the listen queue is set
-to 10.   On systems with high load, it may be desirable to increase
-this value. refer to
-\fBlisten(2)\fR for details.
+to 32.   On systems with a high connection rate, it may be desirable
+to increase this value. refer to \fBlisten(2)\fR for details.
+.TP
+.BI \-D
+Don't close stdin/stdout/stderr. Primiarly useful for debugging.
 .SH CONFIGURATION
 Upon execution,
 .I master
