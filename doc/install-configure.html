@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.12 2001/08/10 15:53:29 rjs3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.13 2001/08/12 03:31:05 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -372,11 +372,26 @@ Email Address []:
 example: <kbd>chown cyrus /var/imap/server.pem</kbd>
 
 <li>Add the following to <tt>/etc/imapd.conf</tt> to tell the server
-where to find the certificate and key file:
+where to find the certificate and key file (used for ALL services):
 
 <pre>tls_cert_file: /var/imap/server.pem
 tls_key_file: /var/imap/server.pem
 </pre>
+
+Optionally, you can use separate certificates and key files for each
+service:
+
+<pre>tls_imap_cert_file: /var/imap/imap-server.pem
+tls_imap_key_file: /var/imap/imap-server.pem
+
+tls_pop3_cert_file: /var/imap/pop3-server.pem
+tls_pop3_key_file: /var/imap/pop3-server.pem
+</pre>
+
+This is useful if you want to use different hostnames for each service
+(e.g. via virtual host interfaces or DNS CNAMEs). In the absence of
+any of the service specific options, the value of the global option is
+used.
 
 <p>If you have a Certificate Authority (CA), you may wish to generate
 a certificate request and send it to be signed by your CA.
@@ -410,5 +425,5 @@ authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
 <P><HR>
-last modified: $Date: 2001/08/10 15:53:29 $
+last modified: $Date: 2001/08/12 03:31:05 $
 </BODY></HTML>
