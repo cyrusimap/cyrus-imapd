@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.110 2000/04/12 18:41:08 tmartin Exp $
+# $Id: Makefile.in,v 1.111 2000/04/29 18:43:03 tmartin Exp $
 # 
 # @configure_input@
 #
@@ -82,10 +82,10 @@ cyrus_prefix = @cyrus_prefix@
 
 LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o \
 	config.o imap_err.o proc.o setproctitle.o convert_code.o \
-	duplicate.o saslclient.o acapmbox.o pushstats.o signals.o \
+	duplicate.o saslclient.o acapmbox.o signals.o \
 	base64.o $(SEEN) $(NOTIFY)
 
-IMAPDOBJS=imapd.o index.o tls.o
+IMAPDOBJS=pushstats.o imapd.o index.o tls.o
 
 SERVICE=../master/service.o
 
@@ -116,6 +116,9 @@ acappush: acappush.o libimap.a $(DEPLIBS)
 pushstats.c pushstats.h: pushstats.snmp $(srcdir)/../snmp/snmpgen
 	$(srcdir)/../snmp/snmpgen $(srcdir)/pushstats.snmp
 
+lmtpstats.c lmtpstats.h: lmtpstats.snmp $(srcdir)/../snmp/snmpgen
+	$(srcdir)/../snmp/snmpgen $(srcdir)/lmtpstats.snmp
+
 collectnews: collectnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o collectnews collectnews.o libimap.a $(DEPLIBS) \
 	 $(LIBS)
@@ -128,9 +131,9 @@ deliver: deliver.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o deliver \
 	deliver.o libimap.a $(DEPLIBS) $(LIBS)
 
-lmtpd: lmtpd.o libimap.a $(DEPLIBS) $(SIEVE_LIBS) $(SERVICE)
+lmtpd: lmtpstats.o lmtpd.o libimap.a $(DEPLIBS) $(SIEVE_LIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o lmtpd \
-	 $(SERVICE) lmtpd.o libimap.a $(DEPLIBS) $(SIEVE_LIBS) $(LIBS)
+	 $(SERVICE) lmtpd.o lmtpstats.o libimap.a $(DEPLIBS) $(SIEVE_LIBS) $(LIBS)
 
 ctl_deliver: ctl_deliver.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
@@ -144,9 +147,9 @@ imapd: $(IMAPDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o imapd \
 	 $(SERVICE) $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
-proxyd: proxyd.o tls.o libimap.a $(DEPLIBS) $(SERVICE)
+proxyd: pushstats.o proxyd.o tls.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o proxyd \
-	 $(SERVICE) proxyd.o tls.o libimap.a $(DEPLIBS) $(LIBS)
+	 $(SERVICE) pushstats.o proxyd.o tls.o libimap.a $(DEPLIBS) $(LIBS)
 
 gun: gun.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o gun gun.o libimap.a $(DEPLIBS) $(LIBS)

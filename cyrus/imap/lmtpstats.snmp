@@ -1,0 +1,70 @@
+# 
+# Count number of times command was executed
+#
+
+define mgmt 1.3.6.1.2
+define mib2 [mgmt].1
+define mtamib [mib2].28
+
+define cmutree 1.3.6.1.4.3.2.2.2
+
+# 'C' means counter
+# 'auto' means just pick any number you want
+
+BASE [cmutree].7.1
+
+# Connections
+
+C,TOTAL_CONNECTIONS,"Count of the total number of connections since the beginning of time", auto
+C,ACTIVE_CONNECTIONS,"Count of the active number of connections", auto
+
+#
+# Authentication stats
+#
+
+var AUTH
+
+BASE [cmutree].7.2.{AUTH}
+
+C,AUTHENTICATION_YES,"Sucessful authentication of given mechanism",auto
+C,AUTHENTICATION_NO, "Failed authentication of given mechanism",   auto
+
+#
+# Message stats
+#
+
+var MTA
+
+BASE [mtamib].1.{MTA}
+
+C,mtaReceivedMessages         ,"Messages we've received",1
+C,mtaTransmittedMessages      ,"Messages stored to disk",3
+C,mtaReceivedVolume           ,"Kbytes received",4
+C,mtaTransmittedVolume        ,"Kbytes stored to disk",6
+C,mtaReceivedRecipients       ,"Recipients accepted",7
+C,mtaSucessfulConvertedMessages,"Messages converted because of 8bit foo",10
+
+#
+# Sieve stats
+#
+
+C,SIEVE_MESSAGES_PROCESSED,"Number of messages processed by Sieve scripts",auto
+
+C,SIEVE_REDIRECT        ,"sieve redirects",auto
+C,SIEVE_DISCARD         ,"sieve discards",auto
+C,SIEVE_REJECT          ,"sieve rejects",auto
+C,SIEVE_FILEINTO        ,"sieve fileintos",auto
+C,SIEVE_KEEP            ,"sieve messages kept",auto
+C,SIEVE_NOTIFY          ,"sieve notifications sent",auto
+C,SIEVE_VACATION_REPLIED,"vacation messages sent",auto
+C,SIEVE_VACATION_TOTAL  ,"Vacation messages sent and ones not sent because already replied to this person",auto
+
+
+#
+# General information
+#
+
+BASE [cmutree].7.3
+
+S,SERVER_NAME_VERSION,"Name and version string for server",auto
+T,SERVER_UPTIME,"Amount of time server has been running",auto

@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.161 2000/04/27 17:02:28 leg Exp $
+dnl $Id: configure.in,v 1.162 2000/04/29 18:43:02 tmartin Exp $
 dnl
 
 
@@ -823,4 +823,4 @@ IMAP_LIBS="${LIB_SASL} ${LIBS}"
 AC_SUBST(IMAP_COM_ERR_LIBS)
 AC_SUBST(IMAP_LIBS)
 
-AC_OUTPUT(Makefile man/Makefile master/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile snmp/Makefile $EXTRA_OUTPUT)
+AC_OUTPUT(Makefile man/Makefile master/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile snmp/Makefile SIEVE/Makefile SIEVE/timsieved/Makefile SIEVE/acap/Makefile $EXTRA_OUTPUT)

@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.69 2000/04/18 01:00:14 leg Exp $
+ * $Id: append.c,v 1.70 2000/04/29 18:43:05 tmartin Exp $
  *
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -255,6 +255,17 @@ int append_abort(struct appendstate *as)
     mailbox_close(&as->m);
 
     return r;
+}
+
+/*
+ * Return the number of stage msgs
+ */
+
+int append_stageparts(struct stagemsg *stagep)
+{
+    if (!stagep) return 0;
+
+    return stagep->num_parts;
 }
 
 /*
