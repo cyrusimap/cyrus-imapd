@@ -1,4 +1,4 @@
-$Id: README,v 1.9 2002/06/05 21:22:09 leg Exp $
+$Id: README,v 1.10 2002/06/05 21:28:19 leg Exp $
 
 This is the Carnegie Mellon University Cyrus IMAP Server.
 
@@ -37,3 +37,4 @@ the binary distribution.
             http://asg.web.cmu.edu/cyrus 
   or ftp directly from
             ftp://ftp.andrew.cmu.edu/pub/cyrus-mail
+
