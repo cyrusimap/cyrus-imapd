@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.19 2000/06/06 21:18:17 leg Exp $
+ * $Id: target-acap.c,v 1.20 2000/10/18 21:00:59 leg Exp $
  */
 
 #include <config.h>
@@ -120,7 +120,7 @@ static int dissect_entry(acap_entry_t *e, acapmbox_data_t *data)
     return ACAP_OK;
 }
 
-void connect_acap(const char *server)
+int connect_acap(const char *server)
 {
     const char *user, *authprog;
     char acapurl[1024];
@@ -152,12 +152,14 @@ void connect_acap(const char *server)
     }
 
     snprintf(acapurl, sizeof(acapurl), "acap://%s@%s/", user, server);
+    r = ACAP_NO_CONNECTION;
+
     r = acap_conn_connect(acapurl, NULL, &acap_conn);
     if (r != ACAP_OK) {
 	syslog(LOG_ERR, "couldn't connect to ACAP server: %s",
 	       error_message(r));
-	fatal("couldn't connect to acap server", EC_UNAVAILABLE);
     }
+    return r;
 }
 
 void myacap_addto(acap_entry_t *entry,
@@ -347,7 +349,7 @@ static struct acap_context_callback myacap_context_cb = {
 /* this code grabs the current list of mailboxes from the ACAP server,
    saves it into a brand new database, and then moves the database into
    place. it also initializes the callbacks */
-void synchronize_mboxlist(void)
+int synchronize_mboxlist(void)
 {
     acap_cmd_t *cmd;
     int r;
@@ -359,12 +361,13 @@ void synchronize_mboxlist(void)
 	fatal("skiplist_new failed", EC_TEMPFAIL);
     }
 
-    mboxlist_open(NULL);
-    
     syslog(LOG_NOTICE, "starting mailbox synchronization");
 
     strcpy(s, "*");
     r = mboxlist_findall(s, 1, "", NULL, &mboxadd, mailboxes);
+    if (r) {
+	return r;
+    }
 
     r = acap_search_dataset(acap_conn, global_dataset "/", 
 		      "EQUAL \"mailbox.status\" \"i;octet\" \"committed\"", 0,
@@ -376,21 +379,20 @@ void synchronize_mboxlist(void)
     if (r != ACAP_OK) {
 	syslog(LOG_ERR, "acap_search_dataset() failed: %s\n", 
 	       error_message(r));
-	fatal("can't download list of datasets\n", EC_UNAVAILABLE);
+	return r;
     }
 	
     r = acap_process_on_command(acap_conn, cmd, NULL);
     if (r != ACAP_OK) {
 	syslog(LOG_ERR, "acap_process_on_command() failed: %s\n", 
 	       error_message(r));
-	fatal("can't download list of datasets\n", EC_UNAVAILABLE);
+	return r;
     }
 
     /* anything left over has been deleted */
     sforeach(mailboxes, &mboxdel);
     skiplist_freeeach(mailboxes, (void (*)(const void *))&free);
-
-    mboxlist_close();
+    skiplist_free(mailboxes);
 
     syslog(LOG_NOTICE, "done synchronizing mailbox database: %d entries", num);
 }
@@ -522,6 +524,7 @@ int main(int argc, char *argv[], char *envp[])
 {
     const char *server;
     int opt;
+    int r;
 
     while ((opt = getopt(argc, argv, "d")) != EOF) {
 	switch (opt) {
@@ -553,9 +556,21 @@ int main(int argc, char *argv[], char *envp[])
     signal(SIGINT, &handler);
     signal(SIGPIPE, SIG_IGN);
 
-    connect_acap(server);
+    mboxlist_open(NULL);
 
-    synchronize_mboxlist();
+    r = connect_acap(server);
+    if (!r) r = synchronize_mboxlist();
+
+    if (r && debugmode) {
+	fatal("can't download list of datasets\n", EC_UNAVAILABLE);
+    }
+    while (r) {
+	acap_conn_close(acap_conn);
+	sleep(config_getint("acap_retry_timeout", 60));
+	
+	r = connect_acap(server);
+	if (!r) r = synchronize_mboxlist();
+    }
 
     /* we fork to return immediately */
     if (!debugmode) {
@@ -569,8 +584,6 @@ int main(int argc, char *argv[], char *envp[])
 	}
     }
 
-    mboxlist_open(NULL);
-
     for (;;) {
 	/* we now look for processes asking us to issue an UPDATECONTEXT,
 	   presumably because they are looking for a mailbox that 
@@ -580,10 +593,17 @@ int main(int argc, char *argv[], char *envp[])
 	/* if this returns, we have a problem.  we should probably try
 	   to reestablish the connection with the ACAP server and
 	   resynchronize */
-	acap_conn_close(acap_conn);
-	connect_acap(server);
-	synchronize_mboxlist();
+	r = ACAP_NO_CONNECTION;
+	while (r) {
+	    acap_conn_close(acap_conn);
+	    sleep(config_getint("acap_retry_timeout", 60));
+
+	    r = connect_acap(server);
+	    if (!r) r = synchronize_mboxlist();
+	}
     }
+
+    mboxlist_close();
 
     return 1;
 }
