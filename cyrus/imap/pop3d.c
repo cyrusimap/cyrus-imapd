@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.109 2001/08/22 01:34:27 ken3 Exp $
+ * $Id: pop3d.c,v 1.110 2001/10/25 17:32:55 ken3 Exp $
  */
 #include <config.h>
 
@@ -335,9 +335,9 @@ int service_main(int argc, char **argv, char **envp)
 	*popd_apop_chal = 0;
     }
 
-    prot_printf(popd_out, "+OK %s Cyrus POP3 %s server ready\r\n",
-		apop_enabled() ? popd_apop_chal : config_servername,
-		CYRUS_VERSION);
+    prot_printf(popd_out, "+OK %s Cyrus POP3 %s server ready %s\r\n",
+		config_servername, CYRUS_VERSION,
+		apop_enabled() ? popd_apop_chal : "");
     cmdloop();
 
     /* QUIT executed */
