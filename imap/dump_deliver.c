@@ -1,5 +1,5 @@
 /* dump_deliver.c -- Program to dump deliver db for debugging purposes
- $Id: dump_deliver.c,v 1.4 1998/05/15 21:48:25 neplokh Exp $
+ $Id: dump_deliver.c,v 1.5 1999/11/05 01:26:52 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -27,7 +27,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: dump_deliver.c,v 1.4 1998/05/15 21:48:25 neplokh Exp $";
+static char _rcsid[] = "$Id: dump_deliver.c,v 1.5 1999/11/05 01:26:52 leg Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -75,6 +75,7 @@ dump_deliver(fname)
   HASHINFO info;
   int num_deletions = 0, alloc_deletions = 0;
   char *to;
+  time_t mark;
 
 
   /* Note we don't lock the db -- this may cause some problems if things
@@ -92,10 +93,10 @@ dump_deliver(fname)
   while ((rc = DeliveredDBptr->seq(DeliveredDBptr, &delivery, &date, mode)) == 0) {
     count++;
     mode = R_NEXT;
-    (void)memcpy(datebuf, date.data, date.size);
-    datebuf[date.size] = '\0';
+    (void)memcpy(&mark, date.data, sizeof(time_t));
     to = ((char *)delivery.data + (strlen(delivery.data) + 1));
-    printf("id: %-40s\tto: %-20s\tat: %s\n", delivery.data, to, datebuf);
+    printf("id: %-40s\tto: %-20s\tat: %d\n", delivery.data, to,
+	   *(time_t *) date.data);
   }
   if (rc < 0) {
     fprintf(stderr, "error detected looking up entry: %d\n");
@@ -136,7 +137,9 @@ main(argc, argv)
   }
 
   config_init("dump_deliverdb");
-
+  
+  printf("it is NOW: %d\n", time(NULL));
+  
   if (alt_file == NULL) {
     char fname[MAX_MAILBOX_PATH];
     
@@ -158,5 +161,5 @@ int code;
     exit(code);
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.4 1998/05/15 21:48:25 neplokh Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.5 1999/11/05 01:26:52 leg Exp $ */
 

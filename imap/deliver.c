@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.112 1999/10/29 23:34:46 leg Exp $
+ * $Id: deliver.c,v 1.113 1999/11/05 01:26:51 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.112 1999/10/29 23:34:46 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.113 1999/11/05 01:26:51 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -2796,7 +2796,7 @@ _prune_actual_db(fname, mark)
   while ((rc = DeliveredDBptr->seq(DeliveredDBptr, &delivery, &date, mode)) == 0) {
     mode = R_NEXT;
     count++;
-    if ((date.size > 0) && ((time_t)date.data < mark)) {
+    if ((date.size > 0) && ((*(time_t *)date.data) < mark)) {
       if (num_deletions >= alloc_deletions) {
 	alloc_deletions += 1000;
 	deletions = (DBT *) xrealloc((char *)deletions,
@@ -2815,7 +2815,7 @@ _prune_actual_db(fname, mark)
 	      
 	ptr = ((char *)delivery.data + (strlen(delivery.data) + 1)); 
 	syslog(LOG_NOTICE, "prunedelivered: marking %s/%s at %d for deletion\n",
-	       delivery.data, ptr, (time_t)date.data);
+	       delivery.data, ptr, *(time_t *)date.data);
       }
     }
   }
@@ -2846,7 +2846,7 @@ _prune_actual_db(fname, mark)
 						delivery = dbm_nextkey(DeliveredDBptr)) {
     date = dbm_fetch(DeliveredDBptr, delivery);
     if (!date.dptr) continue;
-    if ((date.dsize > 0) && ((time_t)date.dptr < mark)) {
+    if ((date.dsize > 0) && ((*(time_t *)date.dptr) < mark)) {
       if (dbm_delete(DeliveredDBptr, delivery)) {
 	rcode = 1;
       }
