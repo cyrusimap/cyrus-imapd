@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <syslog.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
@@ -15,6 +16,20 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
+
+/*
+ * Calculate relative filename for the message with UID 'uid'
+ * in 'mailbox'.  Returns pointer to static buffer.
+ */
+char *mailbox_message_fname(mailbox, uid)
+struct mailbox *mailbox;
+unsigned long uid;
+{
+    static char buf[64];
+
+    sprintf(buf, "%lu%s", uid, mailbox->format == MAILBOX_FORMAT_NETNEWS ? "" : ".");
+    return buf;
+}
 
 /*
  * Open and read the header of the mailbox with pathname 'path'.
@@ -71,6 +86,8 @@ struct mailbox *mailbox;
     bit32 index_gen, cache_gen;
     int tries = 0;
 
+    if (mailbox->index) fclose(mailbox->index);
+    if (mailbox->cache) fclose(mailbox->cache);
     do {
 	strcpy(fnamebuf, mailbox->path);
 	strcat(fnamebuf, FNAME_INDEX);
@@ -410,8 +427,6 @@ struct mailbox *mailbox;
 
 	if (sbuffd.st_ino == sbuffile.st_ino) break;
 
-	fclose(mailbox->index);
-	fclose(mailbox->cache);
 	if (r = mailbox_open_index(mailbox)) {
 	    return r;
 	}
@@ -731,6 +746,172 @@ struct mailbox *mailbox;
     mailbox->quota = newfile;
 
     return 0;
+}
+
+/* XXX
+ * Assumes that the current directory is set to the mailbox directory
+ */
+mailbox_expunge(mailbox, decideproc, deciderock)
+struct mailbox *mailbox;
+int (*decideproc)();
+char *deciderock;
+{
+    int r, n;
+    FILE *newindex, *newcache;
+    unsigned long *deleted;
+    int numdeleted = 0, quotadeleted = 0;
+    char *buf;
+    int msgno;
+    int lastmsgdeleted = 1;
+    unsigned long cachediff = 0;
+    unsigned long cachestart = sizeof(bit32);
+    unsigned long cache_offset;
+    long left;
+    char cachebuf[4096];
+
+    /* Lock files and open new index/cache files */
+    r = mailbox_lock_header(mailbox);
+    if (r) return r;
+    r = mailbox_lock_index(mailbox);
+    if (r) {
+	mailbox_unlock_header(mailbox);
+	return r;
+    }
+    newindex = fopen("cyrus.index.NEW", "w+");
+    newcache = fopen("cyrus.cache.NEW", "w+");
+    if (!newindex || !newcache) {
+	if (newindex) fclose(newindex);
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
+    }
+
+    /* Allocate temporary buffers */
+    deleted = (unsigned long *)xmalloc(mailbox->exists*sizeof(unsigned long));
+    buf = xmalloc(mailbox->start_offset > mailbox->record_size ?
+		  mailbox->start_offset : mailbox->record_size);
+
+    /* Copy over headers */
+    rewind(mailbox->index);
+    n = fread(buf, 1, mailbox->start_offset, mailbox->index);
+    if (n != mailbox->start_offset) {
+	goto fail;
+    }
+    (*(bit32 *)buf)++;    /* Increment generation number */
+    fwrite(buf, 1, mailbox->start_offset, newindex);
+    fwrite(buf, 1, sizeof(bit32), newcache);
+
+    /* Copy over records for nondeleted messages */
+    for (msgno = 1; msgno <= mailbox->exists; msgno++) {
+	n = fread(buf, 1, mailbox->record_size, mailbox->index);
+	if (decideproc ? decideproc(deciderock, buf) :
+	    (ntohl(*((bit32 *)(buf+28))) & FLAG_DELETED)) {
+
+	    /* Remember UID and size */
+	    deleted[numdeleted++] = ntohl(*((bit32 *)buf));
+	    quotadeleted += ntohl(*((bit32 *)(buf+8)));
+
+	    /* Copy over cache file data */
+	    if (!lastmsgdeleted) {
+		cache_offset = ntohl(*((bit32 *)(buf+20)));
+		left =  cache_offset - cachestart;
+		fseek(mailbox->cache, cachestart, 0);
+		while (left) {
+		    n = fread(cachebuf, 1,
+			      left>sizeof(cachebuf) ? sizeof(cachebuf) : left,
+			      mailbox->cache);
+		    if (!n) goto fail;
+		    fwrite(cachebuf, 1, n, newcache);
+		    left -= n;
+		}
+		cachestart = cache_offset;
+		lastmsgdeleted = 1;
+	    }
+	}
+	else {
+	    cache_offset = ntohl(*((bit32 *)(buf+20)));
+
+	    /* Set up for copying cache file data */
+	    if (lastmsgdeleted) {
+		cachediff += cache_offset - cachestart;
+		cachestart = cache_offset;
+		lastmsgdeleted = 0;
+	    }
+
+	    /* Fix up cache file offset */
+	    *((bit32 *)(buf+20)) = htonl(cache_offset - cachediff);
+
+	    fwrite(buf, 1, mailbox->record_size, newindex);
+	}
+    }
+
+    /* Copy over any remaining cache file data */
+    if (!lastmsgdeleted) {
+	fseek(mailbox->cache, cachestart, 0);
+	while (n = fread(cachebuf, 1, sizeof(cachebuf), mailbox->cache)) {
+	    fwrite(cachebuf, 1, n, newcache);
+	}
+    }
+
+    /* Fix up information in index header */
+    rewind(newindex);
+    n = fread(buf, 1, mailbox->start_offset, newindex);
+    if (n != mailbox->start_offset) {
+	goto fail;
+    }
+    /* Fix up exists */
+    *((bit32 *)(buf+20)) = htonl(ntohl(*((bit32 *)(buf+20)))-numdeleted);
+    /* Fix up quota_mailbox_used */
+    *((bit32 *)(buf+32)) = htonl(ntohl(*((bit32 *)(buf+32)))-quotadeleted);
+    rewind(newindex);
+    fwrite(buf, 1, mailbox->start_offset, newindex);
+    
+    /* Ensure everything made it to disk */
+    fflush(newindex);
+    fflush(newcache);
+    if (ferror(newindex) || ferror(newcache) ||
+	fsync(fileno(newindex)) || fsync(fileno(newcache))) {
+	goto fail;
+    }
+
+    /* Record quota release */
+    r = mailbox_lock_quota(mailbox);
+    if (r) goto fail;
+    mailbox->quota_used -= quotadeleted;
+    r = mailbox_write_quota(mailbox);
+    if (r) {
+	syslog(LOG_ERR,
+	       "LOSTQUOTA: unable to record free of %d bytes in quota file %s",
+	       quotadeleted, mailbox->quota_path);
+    }
+    mailbox_unlock_quota(mailbox);
+
+    rename("cyrus.index.NEW", FNAME_INDEX+1);
+    if (rename("cyrus.cache.NEW", FNAME_CACHE+1)) {
+	/* XXX in serious trouble */
+    }
+    mailbox_unlock_index(mailbox);
+    mailbox_unlock_header(mailbox);
+    fclose(newindex);
+    fclose(newcache);
+
+    /* Delete message files */
+    for (msgno = 0; msgno < numdeleted; msgno++) {
+	unlink(mailbox_message_fname(mailbox, deleted[msgno]));
+    }
+
+    free(buf);
+    free(deleted);
+
+    return 0;
+
+ fail:
+    free(buf);
+    free(deleted);
+    fclose(newindex);
+    fclose(newcache);
+    mailbox_unlock_index(mailbox);
+    mailbox_unlock_header(mailbox);
+    return IMAP_IOERROR;
 }
 
 static char *

@@ -197,7 +197,13 @@ cmdloop()
 	    break;
 
 	case 'E':
-	    if (!strcmp(cmd.s, "Examine")) {
+	    if (!strcmp(cmd.s, "Expunge")) {
+		if (!imapd_mailbox) goto nomailbox;
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_expunge(tag.s);
+	    }
+	    else if (!strcmp(cmd.s, "Examine")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg1);
 		if (c == EOF) goto missingargs;
@@ -316,16 +322,7 @@ cmdloop()
 	    break;
 
 	case 'S':
-	    if (!strcmp(cmd.s, "Select")) {
-		if (c != ' ') goto missingargs;
-		c = getastring(&arg1);
-		if (c == EOF) goto missingargs;
-		if (c == '\r') c = getc(stdin);
-		if (c != '\n') goto extraargs;
-
-		cmd_select(tag.s, cmd.s, arg1.s);
-	    }
-	    else if (!strcmp(cmd.s, "Store")) {
+	    if (!strcmp(cmd.s, "Store")) {
 		if (!imapd_mailbox) goto nomailbox;
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
@@ -335,6 +332,15 @@ cmdloop()
 		c = getword(&arg2);
 		if (c != ' ') goto badsequence;
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
+	    }
+	    else if (!strcmp(cmd.s, "Select")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg1);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+
+		cmd_select(tag.s, cmd.s, arg1.s);
 	    }
 	    else if (!strcmp(cmd.s, "Search")) {
 		if (!imapd_mailbox) goto nomailbox;
@@ -1357,6 +1363,25 @@ int usinguid;
     goto freeargs;
 }
     
+cmd_expunge(tag)
+char *tag;
+{
+    int r;
+
+    if (!(imapd_mailbox->myrights & ACL_DELETE)) r = IMAP_PERMISSION_DENIED;
+    else {
+	r = mailbox_expunge(imapd_mailbox, (int (*)())0, (char *)0);
+    }
+    index_check(imapd_mailbox, 0, 0);
+
+    if (r) {
+	printf("%s NO Expunge failed: %s\r\n", tag, error_message(r));
+    }
+    else {
+	printf("%s OK Expunge completed\r\n", tag);
+    }
+}    
+
 cmd_create(tag, name, partition)
 char *tag;
 char *name;

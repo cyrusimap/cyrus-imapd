@@ -83,20 +83,6 @@ struct ibuf {
 #define DEFAULT_CONTENT_TYPE "TEXT/PLAIN; CHARSET=us-ascii"
 
 /*
- * Calculate relative filename for the message with UID 'uid'
- * in 'mailbox'.  Returns pointer to static buffer.
- */
-char *message_fname(mailbox, uid)
-struct mailbox *mailbox;
-unsigned long uid;
-{
-    static char buf[64];
-
-    sprintf(buf, "%lu%s", uid, mailbox->format == MAILBOX_FORMAT_NETNEWS ? "" : ".");
-    return buf;
-}
-
-/*
  * Copy a message from 'from' to 'to', converting bare LF characters to CRLF.
  */
 int
