@@ -754,8 +754,8 @@ char *authtype;
     char *reply = 0;
     int protlevel;
     char *user;
-    int (*encodefunc)();
-    int (*decodefunc)();
+    char *(*encodefunc)();
+    char *(*decodefunc)();
     int maxplain;
     char *val;
 
