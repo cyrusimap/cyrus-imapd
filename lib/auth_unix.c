@@ -1,31 +1,35 @@
 /* auth_unix.c -- Unix passwd file authorization
- $Id: auth_unix.c,v 1.22 1998/05/15 21:50:54 neplokh Exp $
- 
- #        Copyright 1998 by Carnegie Mellon University
- #
- #                      All Rights Reserved
- #
- # Permission to use, copy, modify, and distribute this software and its
- # documentation for any purpose and without fee is hereby granted,
- # provided that the above copyright notice appear in all copies and that
- # both that copyright notice and this permission notice appear in
- # supporting documentation, and that the name of CMU not be
- # used in advertising or publicity pertaining to distribution of the
- # software without specific, written prior permission.
- #
- # CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
- # ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
- # CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
- # ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
- # WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
- # ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
- # SOFTWARE.
  *
+ *        Copyright 1998 by Carnegie Mellon University
+ *
+ *                      All Rights Reserved
+ *
+ * Permission to use, copy, modify, and distribute this software and its
+ * documentation for any purpose and without fee is hereby granted,
+ * provided that the above copyright notice appear in all copies and that
+ * both that copyright notice and this permission notice appear in
+ * supporting documentation, and that the name of CMU not be
+ * used in advertising or publicity pertaining to distribution of the
+ * software without specific, written prior permission.
+ *
+ * CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+ * ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+ * CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+ * ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+ * WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+ * SOFTWARE.
+ *
+ */
+
+/*
+ * $Id: auth_unix.c,v 1.23 1998/08/11 00:16:36 tjs Exp $
  */
 
 #include <pwd.h>
 #include <grp.h>
 #include <ctype.h>
+#include <string.h>
 
 #include "auth.h"
 #include "xmalloc.h"
@@ -68,16 +72,66 @@ const char *identifier;
     return 0;
 }
 
+/* Map of which characters are allowed by auth_canonifyid.
+ * Key: 0 -> not allowed (special, ctrl, or would confuse Unix or imapd)
+ *      1 -> allowed, but requires an alpha somewhere else in the string
+ *      2 -> allowed, and is an alpha
+ *
+ * At least one character must be an alpha.
+ *
+ * This may not be restrictive enough.
+ * Here are the reasons for the restrictions:
+ *
+ * &	forbidden because of MUTF-7.  (This could be fixed.)
+ * +    forbidden because of userid+detail subaddressing.
+ * :    forbidden because it's special in /etc/passwd
+ * /    forbidden because it can't be used in a mailbox name
+ * * %  forbidden because they're IMAP magic in the LIST/LSUB commands
+ * ?    it just scares me
+ * ctrl chars, DEL
+ *      can't send them as IMAP characters in plain folder names, I think
+ * 80-FF forbidden because you can't send them in IMAP anyway
+ *       (and they're forbidden as folder names). (This could be fixed.)
+ */
+static char allowedchars[256] = {
+ /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00-0F */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10-1F */
+    1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, /* 20-2F */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, /* 30-3F */
+
+    1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, /* 40-4F */
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, /* 50-5F */
+    1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, /* 60-6F */
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 0, /* 70-7F */
+
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
 /*
  * Convert 'identifier' into canonical form.
  * Returns a pointer to a static buffer containing the canonical form
  * or NULL if 'identifier' is invalid.
+ *
+ * XXX If any of the characters marked with 0 are valid and are cropping up,
+ * the right thing to do is probably to canonicalize the identifier to two
+ * representations: one for getpwent calls and one for folder names.  The
+ * latter canonicalizes to a MUTF7 representation.
  */
 char *auth_canonifyid(identifier)
 const char *identifier;
 {
     static char retbuf[81];
     struct group *grp;
+    char sawalpha;
     char *p;
 
     if (strcasecmp(identifier, "anonymous") == 0) {
@@ -90,11 +144,15 @@ const char *identifier;
     
     if (strlen(identifier) >= sizeof(retbuf)) return 0;
     strcpy(retbuf, identifier);
-    
-    /* Removed this because some wacky sites actually have caps addresses
-       in ids. */
-    /* lcase(retbuf); */
 
+    /* This used to be far more restrictive, but many sites seem to ignore the 
+     * ye olde Unix conventions of username.  Specifically, we used to
+     * - drop case on the buffer
+     * - disallow lots of non-alpha characters ('-', '_', others)
+     * Now we do neither of these, but impose a very different policy based on 
+     * the character map above.
+     */
+    
     if (!strncmp(retbuf, "group:", 6)) {
 	grp = getgrnam(retbuf+6);
 	if (!grp) return 0;
@@ -104,14 +162,29 @@ const char *identifier;
 
     if (strlen(identifier) >= sizeof(retbuf)) return 0;
 
+    /* Copy the string and look up values in the allowedchars array above.
+     * If we see any we don't like, reject the string.
+     */
     p = retbuf;
-    if (!isalpha(*identifier)) return 0;
+    sawalpha = 0;
     while (*identifier) {
 	*p = *identifier++;
-	if (!isalpha(*p) && !isdigit(*p) && *p != '-') return 0;
+
+	switch (allowedchars[*(unsigned char*) p]) {
+	case 0:
+	    return NULL;
+	    
+	case 2:
+	    sawalpha = 1;
+	    /* FALL THROUGH */
+	    
+	default:
+	}
 	p++;
     }
     *p = 0;
+
+    if (!sawalpha) return NULL;  /* has to be one alpha char */
 
     return retbuf;
 }
