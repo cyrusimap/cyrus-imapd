@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.14 2000/02/02 02:34:45 tmartin Exp $
+ * $Id: script.c,v 1.15 2000/02/02 20:01:27 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -36,7 +36,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "interp.h"
 #include "script.h"
 #include "tree.h"
-#include "y.tab.h"
+#include "sieve.h"
 #include "message.h"
 
 /* does this interpretor support this requirement? */
