@@ -37,8 +37,8 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
   #  AC_CHECK_LIB(roken,base64_decode,gss_impl="heimdal",, $LIB_CRYPT)
 
   if test -d ${gssapi}; then
-     gssapi_dir=$gssapi
-     GSSAPIBASE_LIBS="-L$gssapi_dir/lib"
+     gssapi_dir="${gssapi}/lib"
+     GSSAPIBASE_LIBS="-L$gssapi_dir"
      GSSAPIBASE_STATIC_LIBS="-L$gssapi_dir"
   else
      dnl FIXME: This is only used for building cyrus, and then only as
