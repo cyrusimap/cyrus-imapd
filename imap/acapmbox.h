@@ -80,7 +80,8 @@ typedef enum {
     ACAPMBOX_ANSWERED,
     ACAPMBOX_FLAGGED,
     ACAPMBOX_DELETED,
-    ACAPMBOX_TOTAL
+    ACAPMBOX_TOTAL,
+    ACAPMBOX_UIDVALIDITY
 } acapmbox_property_t;
 
 /*
