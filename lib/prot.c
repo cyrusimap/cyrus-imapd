@@ -79,7 +79,7 @@ int write;
 int prot_free(s)
 struct protstream *s;
 {
-    fs_free((char **)&s);
+    fs_give((char **)&s);
     return 0;
 }
 
@@ -323,7 +323,7 @@ va_dcl
     fmt = va_arg(pvar, char *);
 #endif
 
-    while (percent = index(fmt, '%')) {
+    while (percent = strchr(fmt, '%')) {
 	prot_write(s, fmt, percent-fmt);
 	switch (*++percent) {
 	case '%':
