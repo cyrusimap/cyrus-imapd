@@ -24,7 +24,7 @@ sub runone {
     $p = "" if (!defined $p);
     $d = "" if (!defined $d);
     $tname = $t if (!defined $tname);
-    mkdir $tname, 0644;
+    mkdir $tname, 0755;
     chdir $tname;
     $res = mysys("gcc $d -g -o $t ../$t.c -lcyrus");
     if (!$res) {
