@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.53 2002/02/10 01:53:58 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.54 2002/02/11 16:25:03 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1109,7 +1109,7 @@ void lmtpmode(struct lmtp_func *func,
 {
     message_data_t *msg = NULL;
     char shutdownfilename[1024];
-    int shutdown_fd;
+    int shutdown_fd = -1;
     int max_msgsize;
     char buf[4096];
     char *p;
