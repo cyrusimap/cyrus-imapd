@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.24 2003/02/13 20:33:00 rjs3 Exp $
+ * $Id: pop3d.c,v 1.122.4.25 2003/02/26 20:20:10 ken3 Exp $
  */
 #include <config.h>
 
@@ -83,6 +83,7 @@
 #include "mboxlist.h"
 #include "idle.h"
 #include "telemetry.h"
+#include "backend.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -114,6 +115,7 @@ int popd_haveaddr = 0;
 char popd_clienthost[NI_MAXHOST*2+1] = "[local]";
 struct protstream *popd_out = NULL;
 struct protstream *popd_in = NULL;
+static int popd_logfd = -1;
 unsigned popd_exists = 0;
 unsigned popd_highest;
 unsigned popd_login_time;
@@ -125,6 +127,7 @@ struct msg {
 
 static int pop3s = 0;
 int popd_starttls_done = 0;
+int popd_auth_done = 0;
 
 static struct mailbox mboxstruct;
 
@@ -141,22 +144,29 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 /* current namespace */
 static struct namespace popd_namespace;
 
+/* PROXY stuff */
+struct backend *backend = NULL;
+
+static void bitpipe(void);
+/* end PROXY stuff */
+
 static void cmd_apop(char *response);
 static int apop_enabled(void);
 static char popd_apop_chal[45 + MAXHOSTNAMELEN + 1]; /* <rand.time@hostname> */
 
-static void cmd_auth();
-static void cmd_capa();
-static void cmd_pass();
-static void cmd_user();
+static void cmd_auth(char *arg);
+static void cmd_capa(void);
+static void cmd_pass(char *pass);
+static void cmd_user(char *user);
 static void cmd_starttls(int pop3s);
 static void blat(int msg,int lines);
-int openinbox(void);
+static int openinbox(void);
 static void cmdloop(void);
-void kpop(void);
+static void kpop(void);
 static int parsenum(char **ptr);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
+char *shutdown_file(void);
 
 
 extern void setproctitle_init(int argc, char **argv, char **envp);
@@ -191,9 +201,17 @@ static void popd_reset(void)
 {
     proc_cleanup();
 
+    /* close local mailbox */
     if (popd_mailbox) {
 	mailbox_close(popd_mailbox);
 	popd_mailbox = 0;
+    }
+
+    /* close backend connection */
+    if (backend) {
+	backend_disconnect(backend, &protocol[PROTOCOL_POP3]);
+	free(backend);
+	backend = NULL;
     }
 
     if (popd_in) {
@@ -215,6 +233,10 @@ static void popd_reset(void)
     cyrus_close_sock(2);
 
     strcpy(popd_clienthost, "[local]");
+    if (popd_logfd != -1) {
+	close(popd_logfd);
+	popd_logfd = -1;
+    }
     if (popd_userid != NULL) {
 	free(popd_userid);
 	popd_userid = NULL;
@@ -224,6 +246,7 @@ static void popd_reset(void)
 	popd_saslconn = NULL;
     }
     popd_starttls_done = 0;
+    popd_auth_done = 0;
 
     if(saslprops.iplocalport) {
        free(saslprops.iplocalport);
@@ -269,7 +292,7 @@ int service_init(int argc __attribute__((unused)),
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */
-    global_sasl_init(0, 1, mysasl_cb);
+    global_sasl_init(1, 1, mysasl_cb);
 
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
@@ -385,9 +408,9 @@ int service_main(int argc, char **argv, char **envp)
 	*popd_apop_chal = 0;
     }
 
-    prot_printf(popd_out, "+OK %s Cyrus POP3 %s server ready %s\r\n",
-		config_servername, CYRUS_VERSION,
-		apop_enabled() ? popd_apop_chal : "");
+    prot_printf(popd_out, "+OK %s Cyrus POP3%s %s server ready %s\r\n",
+		config_servername, config_mupdate_server ? " Murder" : "",
+		CYRUS_VERSION, apop_enabled() ? popd_apop_chal : "");
     cmdloop();
 
     /* QUIT executed */
@@ -420,9 +443,18 @@ void usage(void)
 void shut_down(int code)
 {
     proc_cleanup();
+
+    /* close local mailbox */
     if (popd_mailbox) {
 	mailbox_close(popd_mailbox);
     }
+
+    /* close backend connection */
+    if (backend) {
+	backend_disconnect(backend, &protocol[PROTOCOL_POP3]);
+	free(backend);
+    }
+
     mboxlist_close();
     mboxlist_done();
 
@@ -444,6 +476,32 @@ void shut_down(int code)
     cyrus_done();
 
     exit(code);
+}
+
+/*
+ * Return the contents of a shutdown file.  NULL = no file.
+ */
+char *shutdown_file(void)
+{
+    int fd;
+    struct protstream *shutdown_in;
+    static char shutdownfilename[1024] = "";
+    static char buf[1024];
+    char *p;
+    
+    if (!shutdownfilename[0])
+	snprintf(shutdownfilename, sizeof(shutdownfilename), 
+		 "%s/msg/shutdown", config_dir);
+    if ((fd = open(shutdownfilename, O_RDONLY, 0)) == -1) return NULL;
+
+    shutdown_in = prot_new(fd, 0);
+    prot_fgets(buf, sizeof(buf), shutdown_in);
+    if ((p = strchr(buf, '\r')) != NULL) *p = 0;
+    if ((p = strchr(buf, '\n')) != NULL) *p = 0;
+
+    syslog(LOG_WARNING, "%s, closing connection", buf);
+
+    return buf;
 }
 
 void fatal(const char* s, int code)
@@ -574,6 +632,26 @@ static void cmdloop(void)
 
     for (;;) {
 	signals_poll();
+
+	/* check if client has just authenticated */
+	if (popd_auth_done && !popd_mailbox) {
+	    /* open the INBOX */
+	    if (openinbox() != 0) return;
+
+	    /* create a pipe from client to backend */
+	    if (backend) {
+		bitpipe();
+		/* client has QUIT, we're done */
+		return;
+	    }
+	}
+
+	/* check for shutdown file */
+	if ((arg = shutdown_file()) != NULL) {
+	    for (p = arg; *p == '['; p++); /* can't have [ be first char */
+	    prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
+	    shut_down(0);
+	}
 
 	if (!prot_fgets(inputbuf, sizeof(inputbuf), popd_in)) {
 	    shut_down(0);
@@ -943,11 +1021,6 @@ static int apop_enabled(void)
 
 static void cmd_apop(char *response)
 {
-    int fd;
-    struct protstream *shutdown_in;
-    char buf[1024];
-    char *p;
-    char shutdownfilename[1024];
     int sasl_result;
     char *canon_user;
 
@@ -956,20 +1029,6 @@ static void cmd_apop(char *response)
     if (popd_userid) {
 	prot_printf(popd_out, "-ERR [AUTH] Must give PASS command\r\n");
 	return;
-    }
-
-    snprintf(shutdownfilename, sizeof(shutdownfilename), 
-	     "%s/msg/shutdown", config_dir);
-    if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
-	shutdown_in = prot_new(fd, 0);
-	prot_fgets(buf, sizeof(buf), shutdown_in);
-	if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-	if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
-
-	for(p = buf; *p == '['; p++); /* can't have [ be first char */
-	prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
-	prot_flush(popd_out);
-	shut_down(0);
     }
 
     sasl_result = sasl_checkapop(popd_saslconn,
@@ -1012,18 +1071,12 @@ static void cmd_apop(char *response)
     syslog(LOG_NOTICE, "login: %s %s APOP %s",
 	   popd_clienthost, popd_userid, "User logged in");
 
-    openinbox();
+    popd_auth_done = 1;
 }
 
-void
-cmd_user(user)
-char *user;
+void cmd_user(char *user)
 {
-    int fd;
-    struct protstream *shutdown_in;
-    char buf[1024];
     char *p, *dot, *domain;
-    char shutdownfilename[1024];
 
     /* possibly disallow USER */
     if (!(kflag || popd_starttls_done ||
@@ -1038,20 +1091,7 @@ char *user;
 	return;
     }
 
-    snprintf(shutdownfilename, sizeof(shutdownfilename),
-	     "%s/msg/shutdown", config_dir);
-    if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
-	shutdown_in = prot_new(fd, 0);
-	prot_fgets(buf, sizeof(buf), shutdown_in);
-	if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-	if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
-
-	for(p = buf; *p == '['; p++); /* can't have [ be first char */
-	prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
-	prot_flush(popd_out);
-	shut_down(0);
-    }
-    else if (!(p = canonify_userid(user, NULL, NULL)) ||
+    if (!(p = canonify_userid(user, NULL, NULL)) ||
 	     /* '.' isn't allowed if '.' is the hierarchy separator */
 	     (popd_namespace.hier_sep == '.' && (dot = strchr(p, '.')) &&
 	      !(config_virtdomains &&  /* allow '.' in dom.ain */
@@ -1068,8 +1108,7 @@ char *user;
     }
 }
 
-void cmd_pass(pass)
-char *pass;
+void cmd_pass(char *pass)
 {
     char *reply = 0;
     int plaintextloginpause;
@@ -1095,7 +1134,7 @@ char *pass;
 
 	syslog(LOG_NOTICE, "login: %s %s kpop", popd_clienthost, popd_userid);
 
-	openinbox();
+	popd_auth_done = 1;
 	return;
     }
 #endif
@@ -1138,13 +1177,13 @@ char *pass;
 	    sleep(plaintextloginpause);
 	}
     }
-    openinbox();
+
+    popd_auth_done = 1;
 }
 
 /* Handle the POP3 Extension extension.
  */
-void
-cmd_capa()
+void cmd_capa()
 {
     int minpoll = config_getint(IMAPOPT_POPMINPOLL) * 60;
     int expire = config_getint(IMAPOPT_POPEXPIRETIME);
@@ -1184,8 +1223,8 @@ cmd_capa()
     }
     
     prot_printf(popd_out,
-		"IMPLEMENTATION Cyrus POP3 server %s\r\n",
-		CYRUS_VERSION);
+		"IMPLEMENTATION Cyrus POP3%s server %s\r\n",
+		config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
 
     prot_printf(popd_out, ".\r\n");
     prot_flush(popd_out);
@@ -1209,7 +1248,7 @@ void cmd_auth(char *arg)
 
 	prot_printf(popd_out, "+OK List of supported mechanisms follows\r\n");
       
-	/* CRLF seperated, dot terminated */
+	/* CRLF separated, dot terminated */
 	if (sasl_listmech(popd_saslconn, NULL,
 			  "", "\r\n", "\r\n",
 			  &sasllist,
@@ -1289,16 +1328,13 @@ void cmd_auth(char *arg)
 	return;
     }
     
-    if (openinbox()==0) {
-	proc_register("pop3d", popd_clienthost, 
-		      popd_userid, popd_mailbox->name);    
+    syslog(LOG_NOTICE, "login: %s %s %s %s", popd_clienthost, popd_userid,
+	   authtype, "User logged in");
 
-	syslog(LOG_NOTICE, "login: %s %s %s %s", popd_clienthost, popd_userid,
-	       authtype, "User logged in");
+    prot_setsasl(popd_in,  popd_saslconn);
+    prot_setsasl(popd_out, popd_saslconn);
 
-	prot_setsasl(popd_in,  popd_saslconn);
-	prot_setsasl(popd_out, popd_saslconn);
-    }
+    popd_auth_done = 1;
 }
 
 /*
@@ -1306,89 +1342,135 @@ void cmd_auth(char *arg)
  */
 int openinbox(void)
 {
-    char inboxname[MAX_MAILBOX_PATH];
-    int r, msg;
-    struct index_record record;
-    int minpoll;
+    char *userid, inboxname[MAX_MAILBOX_PATH], *server = NULL;
+    int r;
+    const char *statusline = NULL;
 
-    popd_login_time = time(0);
-
-    /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&popd_namespace, popd_userid,
+    /* Translate any separators in userid
+       (use a copy since we need the original userid for AUTH to backend) */
+    userid = xstrdup(popd_userid);
+    mboxname_hiersep_tointernal(&popd_namespace, userid,
 				config_virtdomains ?
-				strcspn(popd_userid, "@") : 0);
+				strcspn(userid, "@") : 0);
 
     r = (*popd_namespace.mboxname_tointernal)(&popd_namespace, "INBOX",
-					      popd_userid, inboxname);
+					      userid, inboxname);
+    free(userid);
 
-    if (!r) r = mailbox_open_header(inboxname, 0, &mboxstruct);
+    if (!r) r = mboxlist_lookup(inboxname, &server, NULL, NULL);
     if (r) {
 	free(popd_userid);
 	popd_userid = 0;
 	sleep(3);
-	prot_printf(popd_out, "-ERR [SYS/PERM] Unable to open maildrop\r\n");
+	prot_printf(popd_out, "-ERR [SYS/PERM] Unable to locate maildrop\r\n");
 	return 1;
     }
 
-    r = mailbox_open_index(&mboxstruct);
-    if (!r) r = mailbox_lock_pop(&mboxstruct);
-    if (r) {
-	mailbox_close(&mboxstruct);
-	free(popd_userid);
-	popd_userid = 0;
-	prot_printf(popd_out, "-ERR [IN-USE] Unable to lock maildrop\r\n");
-	return 1;
+    /* xxx hide the fact that we are storing partitions */
+    if(server) {
+	char *c;
+	c = strchr(server, '!');
+	if(c) *c = '\0';
     }
 
-    if ((minpoll = config_getint(IMAPOPT_POPMINPOLL)) &&
-	mboxstruct.pop3_last_login + 60*minpoll > popd_login_time) {
-	prot_printf(popd_out,
-	    "-ERR [LOGIN-DELAY] Logins must be at least %d minute%s apart\r\n",
-		    minpoll, minpoll > 1 ? "s" : "");
-	if (!mailbox_lock_index(&mboxstruct)) {
-	    mboxstruct.pop3_last_login = popd_login_time;
-	    mailbox_write_index_header(&mboxstruct);
+    if (server[0] == '/') {
+	/* local mailbox */
+	int msg;
+	struct index_record record;
+	int minpoll;
+
+	popd_login_time = time(0);
+
+	r = mailbox_open_header(inboxname, 0, &mboxstruct);
+	if (r) {
+	    free(popd_userid);
+	    popd_userid = 0;
+	    sleep(3);
+	    prot_printf(popd_out, "-ERR [SYS/PERM] Unable to open maildrop\r\n");
+	    return 1;
 	}
-	mailbox_close(&mboxstruct);
-	free(popd_userid);
-	popd_userid = 0;
-	return 1;
-    }
 
-    if (chdir(mboxstruct.path)) {
-	syslog(LOG_ERR, "IOERROR: changing directory to %s: %m",
-	       mboxstruct.path);
-	r = IMAP_IOERROR;
+	r = mailbox_open_index(&mboxstruct);
+	if (!r) r = mailbox_lock_pop(&mboxstruct);
+	if (r) {
+	    mailbox_close(&mboxstruct);
+	    free(popd_userid);
+	    popd_userid = 0;
+	    prot_printf(popd_out, "-ERR [IN-USE] Unable to lock maildrop\r\n");
+	    return 1;
+	}
+
+	if ((minpoll = config_getint(IMAPOPT_POPMINPOLL)) &&
+	    mboxstruct.pop3_last_login + 60*minpoll > popd_login_time) {
+	    prot_printf(popd_out,
+			"-ERR [LOGIN-DELAY] Logins must be at least %d minute%s apart\r\n",
+			minpoll, minpoll > 1 ? "s" : "");
+	    if (!mailbox_lock_index(&mboxstruct)) {
+		mboxstruct.pop3_last_login = popd_login_time;
+		mailbox_write_index_header(&mboxstruct);
+	    }
+	    mailbox_close(&mboxstruct);
+	    free(popd_userid);
+	    popd_userid = 0;
+	    return 1;
+	}
+
+	if (chdir(mboxstruct.path)) {
+	    syslog(LOG_ERR, "IOERROR: changing directory to %s: %m",
+		   mboxstruct.path);
+	    r = IMAP_IOERROR;
+	}
+	if (!r) {
+	    popd_exists = mboxstruct.exists;
+	    popd_highest = 0;
+	    popd_msg = (struct msg *) xmalloc((popd_exists+1) *
+					      sizeof(struct msg));
+	    for (msg = 1; msg <= popd_exists; msg++) {
+		if ((r = mailbox_read_index_record(&mboxstruct, msg, &record))!=0)
+		    break;
+		popd_msg[msg].uid = record.uid;
+		popd_msg[msg].size = record.size;
+		popd_msg[msg].deleted = 0;
+	    }
+	}
+	if (r) {
+	    mailbox_close(&mboxstruct);
+	    free(popd_userid);
+	    popd_userid = 0;
+	    free(popd_msg);
+	    popd_msg = 0;
+	    popd_exists = 0;
+	    prot_printf(popd_out,
+			"-ERR [SYS/PERM] Unable to read maildrop\r\n");
+	    return 1;
+	}
+	popd_mailbox = &mboxstruct;
+	proc_register("pop3d", popd_clienthost, popd_userid,
+		      popd_mailbox->name);
     }
-    if (!r) {
-	popd_exists = mboxstruct.exists;
-	popd_highest = 0;
-	popd_msg = (struct msg *)xmalloc((popd_exists+1) * sizeof(struct msg));
-	for (msg = 1; msg <= popd_exists; msg++) {
-	    if ((r = mailbox_read_index_record(&mboxstruct, msg, &record))!=0)
-	      break;
-	    popd_msg[msg].uid = record.uid;
-	    popd_msg[msg].size = record.size;
-	    popd_msg[msg].deleted = 0;
+    else {
+	/* remote mailbox */
+
+	backend = backend_connect(NULL, server, &protocol[PROTOCOL_POP3],
+				  popd_userid, &statusline);
+
+	if (!backend) {
+	    syslog(LOG_ERR, "couldn't authenticate to backend server");
+	    prot_printf(popd_out, "-ERR%s",
+			statusline ? statusline :
+			" Authentication to backend server failed\r\n");
+	    prot_flush(popd_out);
+
+	    return 1;
 	}
     }
-    if (r) {
-	mailbox_close(&mboxstruct);
-	free(popd_userid);
-	popd_userid = 0;
-	free(popd_msg);
-	popd_msg = 0;
-	popd_exists = 0;
-	prot_printf(popd_out, "-ERR [SYS/PERM] Unable to read maildrop\r\n");
-	return 1;
-    }
-    popd_mailbox = &mboxstruct;
-    proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
 
     /* Create telemetry log */
-    telemetry_log(popd_userid, popd_in, popd_out);
+    popd_logfd = telemetry_log(popd_userid, popd_in, popd_out);
 
-    prot_printf(popd_out, "+OK Maildrop locked and ready\r\n");
+    prot_printf(popd_out, "+OK%s",
+		statusline ? statusline : " Mailbox locked and ready\r\n");
+    prot_flush(popd_out);
     return 0;
 }
 
@@ -1506,4 +1588,55 @@ static int reset_saslconn(sasl_conn_t **conn)
     /* End TLS/SSL Info */
 
     return SASL_OK;
+}
+
+/* we've authenticated the client, we've connected to the backend.
+   now it's all up to them */
+static void bitpipe(void)
+{
+    fd_set read_set, rset;
+    int nfds, r;
+    char buf[4096], *shut;
+    
+    FD_ZERO(&read_set);
+    FD_SET(0, &read_set);  
+    FD_SET(backend->sock, &read_set);
+    nfds = backend->sock + 1;
+    
+    for (;;) {
+	/* check for shutdown file */
+	if ((shut = shutdown_file()) != NULL) {
+	    char *p;
+	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
+	    prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
+	    shut_down(0);
+	}
+
+	rset = read_set;
+	r = select(nfds, &rset, NULL, NULL, NULL);
+	/* if select() failed it's not worth trying to figure anything out */
+	if (r < 0) goto done;
+
+	if (FD_ISSET(0, &rset)) {
+	    do {
+		int c = prot_read(popd_in, buf, sizeof(buf));
+		if (c == 0 || c < 0) goto done;
+		prot_write(backend->out, buf, c);
+	    } while (popd_in->cnt > 0);
+	    prot_flush(backend->out);
+	}
+
+	if (FD_ISSET(backend->sock, &rset)) {
+	    do {
+		int c = prot_read(backend->in, buf, sizeof(buf));
+		if (c == 0 || c < 0) goto done;
+		prot_write(popd_out, buf, c);
+	    } while (backend->in->cnt > 0);
+	    prot_flush(popd_out);
+	}
+    }
+ done:
+    /* ok, we're done. */
+
+    return;
 }
