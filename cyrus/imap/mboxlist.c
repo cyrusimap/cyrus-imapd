@@ -46,6 +46,10 @@
 
 static char *listfname, *newlistfname;
 
+static int mboxlist_opensubs();
+static int mboxlist_getfname();
+static int mboxlist_policycheck();
+static int mboxlist_userownsmailbox();
 static long ensureOwnerRights();
 static int mboxlist_deletesubmailbox();
 
