@@ -28,27 +28,17 @@
 #include "charset.h"
 #include "xmalloc.h"
 
-#include "charset/us-ascii.h"
-#include "charset/iso-8859-1.h"
-#include "charset/iso-8859-2.h"
-#include "charset/iso-8859-3.h"
-#include "charset/iso-8859-4.h"
-#include "charset/iso-8859-5.h"
-#include "charset/iso-8859-6.h"
-#include "charset/iso-8859-7.h"
-#include "charset/iso-8859-8.h"
-#include "charset/iso-8859-9.h"
-#include "charset/koi8-r.h"
+#include "chartables.h"
 
 struct charset {
     char *name;
-    char **table;
+    const unsigned char (*table)[256][4];
 };
 
 /*
  * Mapping of character sets to tables
  */
-static struct charset charset_table[] = {
+static const struct charset charset_table[] = {
     { "us-ascii", us_ascii },	/* US-ASCII must be charset number 0 */
     { "iso-8859-1", iso_8859_1 },
     { "iso-8859-2", iso_8859_2 },
@@ -68,7 +58,7 @@ static struct charset charset_table[] = {
 /*
  * Table for decoding hexadecimal in quoted-printable
  */
-static char index_hex[128] = {
+static const char index_hex[128] = {
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
@@ -83,7 +73,7 @@ static char index_hex[128] = {
 /*
  * Table for decoding base64
  */
-static char index_64[128] = {
+static const char index_64[128] = {
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,62, -1,-1,-1,63,
@@ -95,61 +85,7 @@ static char index_64[128] = {
 };
 #define CHAR64(c)  (((c) < 0 || (c) > 127) ? -1 : index_64[(c)])
 
-/*
- * "Short-form" character mapping table for converting
- * US-ASCII to canonical searching form.
- */
-static char usascii_lcase[256] = {
-    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
-    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
-    0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
-    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
-    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
-    0x40, 'a', 'b', 'c', 'd', 'e', 'f', 'g',
-    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
-    'p', 'q', 'r', 's', 't', 'u', 'v', 'w',
-    'x', 'y', 'z', 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
-    0x60, 'a', 'b', 'c', 'd', 'e', 'f', 'g',
-    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
-    'p', 'q', 'r', 's', 't', 'u', 'v', 'w',
-    'x', 'y', 'z', 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-    EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR, EMPTY_CHAR,
-};
-#define USASCII(c) (usascii_lcase[(unsigned char)(c)])
+#define USASCII(c) (us_ascii[0][(unsigned char)(c)][0])
 
 /*
  * Lookup the character set 'name'.  Returns the character set number
@@ -178,14 +114,14 @@ int charset;
     static char *retval = 0;
     static int alloced = 0;
     int pos = 0;
-    char **table;
-    char *translation;
+    const unsigned char (*table)[4];
+    const char *translation;
     int len;
 
     if (!s) return 0;
-    if (charset < 0 || charset >= NUM_CHARSETS) return EMPTY;
+    if (charset < 0 || charset >= NUM_CHARSETS) return EMPTY_STRING;
 
-    table = charset_table[charset].table;
+    table = charset_table[charset].table[0];
     
     if (!alloced) {
 	alloced = GROWSIZE;
@@ -219,10 +155,10 @@ char *s;
     char *start, *encoding, *end;
     char *p;
     int i, c, c1, c2, c3, c4;
-    char **table;
+    const unsigned char (*table)[4];
     static char *retval = 0;
     static int alloced = 0;
-    char *translation;
+    const char *translation;
     int pos = 0;
     int len;
 
@@ -268,7 +204,7 @@ char *s;
 	for (i=0; i<NUM_CHARSETS; i++) {
 	    if (strlen(charset_table[i].name) == encoding-start &&
 		!strncasecmp(start, charset_table[i].name, encoding-start)) {
-		table = charset_table[i].table;
+		table = charset_table[i].table[0];
 		break;
 	    }
 	}
@@ -279,7 +215,7 @@ char *s;
 		alloced += 2 + GROWSIZE;
 		retval = xrealloc(retval, alloced);
 	    }
-	    strcpy(retval+pos, EMPTY);
+	    strcpy(retval+pos, EMPTY_STRING);
 	    pos += 1;
 	}
 	else if (encoding[1] == 'q' || encoding[1] == 'Q') {
@@ -302,9 +238,6 @@ char *s;
 		else if (c == '_') c = ' ';
 
 		translation = table[(unsigned char)c];
-		if (!c) {
-		    translation = EMPTY;
-		}
 		len = strlen(translation);
 		if (pos + len >= alloced) {
 		    alloced += len + GROWSIZE;
@@ -397,7 +330,7 @@ static int rawstart, rawleft;	/* Location/count of unprocessed raw data */
 static char decodebuf[4096];	/* Buffer of data deocded, but not converted
 				 * into canonical searching form */
 static int decodestart, decodeleft; /* Location/count of decoded data */
-static char **decodetable;	/* Charset table to convert decoded data
+static const unsigned char (*decodetable)[4];	/* Charset table to convert decoded data
 				 * into canonical searching form */
 
 /*
@@ -425,7 +358,7 @@ int encoding;
     
     /* Initialize character set mapping */
     if (charset < 0 || charset >= NUM_CHARSETS) return 0;
-    decodetable = charset_table[charset].table;
+    decodetable = charset_table[charset].table[0];
     decodeleft = 0;
 
     /* Initialize transfer-decoding */
@@ -504,7 +437,7 @@ char *buf;
 int size;
 {
     int retval = 0;
-    char *translation;
+    const char *translation;
     int len;
 
     if (decodeleft && decodestart != 0) {

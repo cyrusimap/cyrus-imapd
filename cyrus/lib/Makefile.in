@@ -50,14 +50,22 @@ OBJS= acl.o assert.o charset.o glob.o util.o prot.o n_binsearch.o xmalloc.o \
 all: libcyrus.a
 
 .c.o:
-	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) $<
+	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) $<
 
 libcyrus.a: $(OBJS)
 	ar cr libcyrus.a $(OBJS)
 	$(RANLIB) libcyrus.a
 
+charset.c: chartables.h
+
+chartables.h : mkchartable 
+	mkchartable -m $(srcdir)/charset/unicode.map $(srcdir)/charset/*.t >chartables.h
+
+mkchartable: mkchartable.o xmalloc.o assert.o
+	$(CC) $(LDFLAGS) -o mkchartable mkchartable.o xmalloc.o assert.o
+
 clean:
-	rm -f *.o *.a Makefile.bak
+	rm -f *.o *.a chartables.h Makefile.bak
 
 distclean: clean
 	rm -f Makefile
