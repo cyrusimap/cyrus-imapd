@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
-<!-- Changed by: Tim Showalter 26-Mar-1997 -->
+<!-- $rcsid$ -->
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
@@ -8,8 +8,31 @@
 
 <ul>
 
+<li> Bug swap: imtest quotes password with a non-synchronizing literal in
+order to allow wird characters like ) in passwords.  But it doesn't
+look to see if the server supports non-synchronizing literals.
+
 <li> If the file "<TT>msg/motd</TT>" exists, the first line is sent to
 clients upon login.
+
+<li> Bug fix: to handle BODY[] properly when fetching news articles
+(truncation no longer occurs). (thanks to John Prevost)
+
+<li> The makedepend supplied should now run on Solaris Intel.  (thanks to
+Chris Newman)
+
+<li> Added some hacks to pwcheck.c for Linux and Digital Unix where the
+default protections on the socket don't allow the cyrus user to read it.
+(thanks to Lyndon Nerenberg)
+
+<li> Bug fix: Flags beginning with \ are system flags and users can
+only create the defined flags.  The code to do this before was
+confused.  This should also prevent imapd from getting confused with
+user-defined flags. 
+
+<li> The configure scripts and makefiles have some random fixes.
+
+<li> Other small bug fixes.
 
 </ul>
 
