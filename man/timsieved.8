@@ -1,0 +1,47 @@
+.\" -*- nroff -*-
+.TH POP3D 8
+.\" Copyright 1999 Carnegie Mellon University
+.\" 
+.\" No warranties, either expressed or implied, are made regarding the
+.\" operation, use, or results of the software.
+.\"
+.\" Permission to use, copy, modify and distribute this software and its
+.\" documentation is hereby granted for non-commercial purposes only
+.\" provided that this copyright notice appears in all copies and in
+.\" supporting documentation.
+.\"
+.\" Permission is also granted to Internet Service Providers and others
+.\" entities to use the software for internal purposes.
+.\"
+.\" The distribution, modification or sale of a product which uses or is
+.\" based on the software, in whole or in part, for commercial purposes or
+.\" benefits requires specific, additional permission from:
+.\"
+.\"  Office of Technology Transfer
+.\"  Carnegie Mellon University
+.\"  5000 Forbes Avenue
+.\"  Pittsburgh, PA  15213-3890
+.\"  (412) 268-4387, fax: (412) 268-7395
+.\"  tech-transfer@andrew.cmu.edu
+.SH NAME
+timsieved \- CMU hack for getting sieve scripts onto the server
+.SH SYNOPSIS
+.B pop3d
+.SH DESCRIPTION
+.I timsieved
+is a server that allows users to remotly manage their sieve scripts kept on the server.
+It accepts commands on its standard input and responds on its standard output.
+It is normally invoked by
+.IR inetd (8)
+with those descriptors attached to a remote client connection.
+.PP
+.I timsieved
+reads its configuration options out of the
+.IR imapd.conf (5)
+file.
+.PP
+.SH OPTIONS
+.TP
+.SH FILES
+.TP
+.B /etc/imapd.conf
