@@ -1,6 +1,6 @@
 /* acl.h -- definitions for access control lists
  *
- *	(C) Copyright 1993 by Carnegie Mellon University
+ *	(C) Copyright 1993-1994 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -49,11 +49,41 @@
 #define ACL_USER8  0x20000L
 #define ACL_USER9  0x40000L
 
+#ifdef __STDC__
 /* convert a string to an acl bit vector
  */
-long acl_strtomask( /* char *str */ );
+extern long acl_strtomask(char *);
 
-/* convert an acl bit vector to a string
+/*  acl_masktostr(acl, dst)
+ * convert an acl bit vector to a string
+ *  dst must have room for 32 characters (only 20 used currently)
  *  returns dst
  */
-char *acl_masktostr( /* long acl, char *dst */ );
+extern char *acl_masktostr(long, char *);
+
+/*  acl_myrights(acl)
+ * Calculate the set of rights the user has in the ACL 'acl'.
+ * 'acl' must be writable, but is restored to its original condition.
+ * current user must have been set by auth_setid
+ */
+extern long acl_myrights(char *);
+
+/*  acl_set(acl, identifier, access, canonproc, canonrock)
+ * Modify the ACL pointed to by 'acl' to make the rights granted to
+ * 'identifier' the set specified in the mask 'access'.  The pointer
+ * pointed to by 'acl' must have been obtained from malloc().
+ *  returns -1 on error, 0 on success
+ */
+extern int acl_set(char **, char *, long, long (*)(), char *);
+
+/*  acl_delete(acl, identifier, canonproc, canonrock)
+ * Remove any entry for 'identifier' in the ACL pointed to by 'acl'.
+ * The pointer pointed to by 'acl' must have been obtained from malloc().
+ *  returns -1 on error, 0 on success
+ */
+extern int acl_delete(char **, char *, long (*)(), char *);
+#else
+extern long acl_strtomask(), acl_myrights();
+extern char *acl_masktostr();
+extern int acl_set(), acl_delete();
+#endif
