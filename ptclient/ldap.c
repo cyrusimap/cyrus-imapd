@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ldap.c,v 1.6 2004/05/22 03:45:57 rjs3 Exp $";
+      "$Id: ldap.c,v 1.7 2004/06/24 19:28:39 rjs3 Exp $";
 
 #include <config.h>
 
@@ -631,6 +631,7 @@ static int ptsmodule_tokenize_domains(
  *   %u   = user
  *   %U   = user part of %u
  *   %d   = domain part of %u if available, othwise same as %r
+ *   %R   = prepend '@' to domain
  *   %1-9 = domain tokens (%1 = tld, %2 = domain when %d = domain.tld)
  *   %D   = user DN
  * Note: calling function must free memory.
@@ -662,7 +663,7 @@ static int ptsmodule_expand_tokens(
 	user_len=username ? strlen(username) : 0;
 	dn_len=dn ? strlen(dn) : 0;
 
-	maxparamlength = PTSM_MAX(user_len, dn_len);
+	maxparamlength = PTSM_MAX(user_len+1, dn_len); /* +1 for %R when '@' is prepended */
 
 	/* find the number of occurences of percent sign in filter */
 	for( percents=0, buf=(char *)pattern; *buf; buf++ ) {
@@ -733,15 +734,19 @@ static int ptsmodule_expand_tokens(
 				} else
 					syslog(LOG_DEBUG, "Domain tokens not available.");
 				break;
+			case 'R':
 			case 'd':
 				if (ISSET(username) && (domain = strchr(username, '@')) && domain[1]!='\0') {
 					rc=ptsmodule_escape(domain+1, strlen(domain+1), &ebuf);
 					if (rc == PTSM_OK) {
+						if (*(temp+1) == 'R')
+							strcat(buf,"@");
 						strcat(buf,ebuf);
 						free(ebuf);
 					}
 					break;
 				} 
+				break;
 			case 'D':
 				if (ISSET(dn)) {
 					rc = ptsmodule_escape(dn, strlen(dn), &ebuf);
@@ -865,10 +870,10 @@ static int ptsmodule_make_authstate_attribute(
     struct auth_state **newstate) 
 {
     char *dn = NULL;
-    LDAPMessage *res;
-    LDAPMessage *entry;
-    char *attr, **vals;
-    BerElement *ber;
+    LDAPMessage *res = NULL;
+    LDAPMessage *entry = NULL;
+    char *attr = NULL, **vals = NULL;
+    BerElement *ber = NULL;
     int rc;
     char *attrs[] = {(char *)ptsm->member_attribute,NULL};
 
@@ -977,8 +982,8 @@ static int ptsmodule_make_authstate_filter(
     int rc;
     int i; int n;
     LDAPMessage *res = NULL;
-    LDAPMessage *entry;
-    char *attr, **vals;
+    LDAPMessage *entry = NULL;
+    char *attr = NULL, **vals = NULL;
     BerElement *ber = NULL;
     char *attrs[] = {(char *)ptsm->member_attribute,NULL};
     char *dn = NULL;
@@ -1088,9 +1093,9 @@ static int ptsmodule_make_authstate_group(
     char *base = NULL, *filter = NULL;
     int rc;
     int i; int n;
-    LDAPMessage *res;
-    LDAPMessage *entry;
-    char *attr, **vals;
+    LDAPMessage *res = NULL;
+    LDAPMessage *entry = NULL;
+    char *attr = NULL, **vals = NULL;
     char *attrs[] = {NULL};
 
     if (strncmp(canon_id, "group:", 6))  { // Sanity check
