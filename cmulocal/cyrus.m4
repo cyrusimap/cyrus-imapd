@@ -2,8 +2,6 @@ dnl
 dnl Additional macros for configure.in packaged up for easier theft.
 dnl tjs@andrew.cmu.edu 6-may-1998
 dnl
-dnl $Id: cyrus.m4,v 1.1 1999/06/19 02:18:47 leg Exp $
-dnl
 
 dnl It would be good if ANDREW_ADD_LIBPATH could detect if something was
 dnl already there and not redundantly add it if it is.
