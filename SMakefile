@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.29 1998/07/10 19:39:09 tjs Exp $
+# $Id: SMakefile,v 1.30 1998/07/31 22:08:37 tjs Exp $
 #
 
 MAKE=gmake
@@ -15,7 +15,7 @@ if "${CC-unset}" = "unset"; then
   CC=cc
 fi
 
-CFLAGS="${CFLAGS} -g"
+# CFLAGS="${CFLAGS} -g"
 
 VER=`smake -D | sed 's;^.*\/;;'`
 LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
@@ -38,7 +38,7 @@ case `uname` in
 	;;
   SunOS) # these flags are only for solaris
 	 # -xs: generate debugging information that gdb likes
-	 CFLAGS="${CFLAGS}"
+	 CFLAGS="${CFLAGS} -xO3 "
 	 LDFLAGS="${LDFLAGS} -xs"
 	 ;;
   ULTRIX)  
