@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.11 2005/03/15 01:28:41 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.12 2005/03/15 18:52:37 ken3 Exp $
  */
 
 #include <config.h>
@@ -1771,7 +1771,7 @@ static int do_mailboxes(struct sync_folder_list *client_folder_list)
 
     /* Worthwhile doing mailboxes even in case of single mailbox:
      * catches duplicate messages in single folder. Only cost is that
-     * mailbox at server end is opened twice: once for user_some(),
+     * mailbox at server end is opened twice: once for do_mailboxes_work(),
      * once for do_folders() */
 
     if (!r) r = do_mailboxes_work(client_folder_list,
@@ -2563,10 +2563,10 @@ static int do_sync(const char *filename)
         remove_folder(action->name, quota_list, 0);
     }
 
-    /* And then run tasks. Folder mismatch => fall through to
-     * do_user to try and clean things up */
-    if ((r = send_lock())) goto bail;
+    /* Create a lock for our transaction */
+    if ((r = send_lock())) goto cleanup;
 
+    /* And then run tasks. */
     for (action = append_list->head ; action ; action = action->next) {
         if (!action->active)
             continue;
@@ -2679,8 +2679,7 @@ static int do_sync(const char *filename)
 
     for (action = meta_list->head ; action ; action = action->next) {
         if (action->active && (r=do_meta(action->user))) {
-            if (r == IMAP_INVALID_USER)
-                goto bail;
+            if (r == IMAP_INVALID_USER) goto bail;
 
             sync_action_list_add(user_list, action->user, NULL);
             if (verbose) {
@@ -2695,12 +2694,13 @@ static int do_sync(const char *filename)
     }
 
     for (action = user_list->head ; action ; action = action->next) {
-        if ((r=do_user(action->user)))
-            goto bail;
+        if ((r=do_user(action->user))) goto bail;
     }
 
- bail:
+  bail:
     send_unlock();
+
+  cleanup:
     if (r) {
 	if (verbose)
 	    fprintf(stderr, "Error in do_sync(): bailing out!\n");
@@ -2720,7 +2720,9 @@ static int do_sync(const char *filename)
     sync_action_list_free(&sub_list);
     sync_action_list_free(&unsub_list);
     sync_folder_list_free(&folder_list);
+
     prot_free(input);
+
     return(r);
 }
 
@@ -3031,19 +3033,12 @@ int main(int argc, char **argv)
     toserver = be->out;
 
     if (user) {
-	if ((r = send_lock())) {
-	    if (verbose) {
-		fprintf(stderr,
-			"Error from send_lock(): bailing out!\n");
-	    }
-	    syslog(LOG_ERR, "Error in send_lock(): bailing out!");
-	    exit_rc = 1;
-	} else if (input_filename) {
+	if (input_filename) {
             if ((file=fopen(input_filename, "r")) == NULL) {
                 syslog(LOG_NOTICE, "Unable to open %s: %m", input_filename);
                 shut_down(1);
             }
-            while (fgets(buf, sizeof(buf), file)) {
+            while (!r && fgets(buf, sizeof(buf), file)) {
                 /* Chomp, then ignore empty/comment lines. */
                 if (((len=strlen(buf)) > 0) && (buf[len-1] == '\n'))
                     buf[--len] = '\0';
@@ -3051,28 +3046,46 @@ int main(int argc, char **argv)
                 if ((len == 0) || (buf[0] == '#'))
                     continue;
 
-                if (do_user(buf)) {
-                    if (verbose)
-                        fprintf(stderr,
-                                "Error from do_user(): bailing out!\n");
-                    syslog(LOG_ERR, "Error in do_user(%s): bailing out!", buf);
-                    exit_rc = 1;
-                    break;
-                }
-            }
+		if ((r = send_lock())) {
+		    if (verbose) {
+			fprintf(stderr,
+				"Error from send_lock(): bailing out!\n");
+		    }
+		    exit_rc = 1;
+		}
+		else {
+		    if (do_user(buf)) {
+			if (verbose)
+			    fprintf(stderr,
+				    "Error from do_user(%s): bailing out!\n",
+				    buf);
+			syslog(LOG_ERR, "Error in do_user(%s): bailing out!",
+			       buf);
+			exit_rc = 1;
+		    }
+		    send_unlock();
+		}
+	    }
             fclose(file);
-        } else for (i = optind; i < argc; i++) {
-	    if (do_user(argv[i])) {
-		if (verbose)
-		    fprintf(stderr, "Error from do_user(%s): bailing out!\n",
-			    argv[1]);
-		syslog(LOG_ERR, "Error in do_user(%s): bailing out!", argv[i]);
+        } else for (i = optind; !r && i < argc; i++) {
+	    if ((r = send_lock())) {
+		if (verbose) {
+		    fprintf(stderr,
+			    "Error from send_lock(): bailing out!\n");
+		}
 		exit_rc = 1;
-		break;
+	    }
+	    else {
+		if (do_user(argv[i])) {
+		    if (verbose)
+			fprintf(stderr, "Error from do_user(%s): bailing out!\n",
+				argv[1]);
+		    syslog(LOG_ERR, "Error in do_user(%s): bailing out!", argv[i]);
+		    exit_rc = 1;
+		}
+		send_unlock();
 	    }
 	}
-
-	send_unlock();
     } else if (mailbox) {
         struct sync_folder_list *folder_list = sync_folder_list_create();
         struct sync_user   *user;
@@ -3109,39 +3122,43 @@ int main(int argc, char **argv)
 	    }
 	    syslog(LOG_ERR, "Error in send_lock(): bailing out!");
 	    exit_rc = 1;
-	} else if (do_mailboxes(folder_list)) {
-	    if (verbose) {
-		fprintf(stderr,
-			"Error from do_mailboxes(): bailing out!\n");
+	} else {
+	    if (do_mailboxes(folder_list)) {
+		if (verbose) {
+		    fprintf(stderr,
+			    "Error from do_mailboxes(): bailing out!\n");
+		}
+		syslog(LOG_ERR, "Error in do_mailboxes(): bailing out!");
+		exit_rc = 1;
 	    }
-	    syslog(LOG_ERR, "Error in do_mailboxes(): bailing out!");
-	    exit_rc = 1;
+	    send_unlock();
 	}
-	send_unlock();
 
         sync_folder_list_free(&folder_list);
     } else if (sieve) {
-	if ((r = send_lock())) {
-	    if (verbose) {
-		fprintf(stderr,
-			"Error from send_lock(): bailing out!\n");
-	    }
-	    syslog(LOG_ERR, "Error in send_lock(): bailing out!");
-	    exit_rc = 1;
-	}
         for (i = optind; !r && i < argc; i++) {
-            if (do_user_seen(argv[i])/*do_sieve(argv[i])*/) {
-                if (verbose) {
-                    fprintf(stderr,
-                            "Error from do_sieve(): bailing out!\n");
-                }
-                syslog(LOG_ERR, "Error in do_sieve(%s): bailing out!",
-                       argv[i]);
-                exit_rc = 1;
-                break;
-            }
+	    if ((r = send_lock())) {
+		if (verbose) {
+		    fprintf(stderr,
+			    "Error from send_lock(): bailing out!\n");
+		}
+		syslog(LOG_ERR, "Error in send_lock(): bailing out!");
+		exit_rc = 1;
+	    }
+	    else {
+		if (do_sieve(argv[i])) {
+		    if (verbose) {
+			fprintf(stderr,
+				"Error from do_sieve(%s): bailing out!\n",
+				argv[i]);
+		    }
+		    syslog(LOG_ERR, "Error in do_sieve(%s): bailing out!",
+			   argv[i]);
+		    exit_rc = 1;
+		}
+		send_unlock();
+	    }
         }
-	send_unlock();
     } else if (repeat)
         do_daemon(sync_log_file, sync_shutdown_file, timeout, min_delta, be, cb);
     else if (verbose)
