@@ -27,6 +27,14 @@ Upgrading from 1.6.22 or 1.6.24
     formats as the server is used. It is not possible to run 1.6 after 2.0
     has been used on a mail spool without reconstructing every mailbox. 
 
+      * Create some extra directories and remove the duplicate delivery
+        database: 
+
+           mkdir /var/imap/db
+           mkdir /var/imap/socket
+           chown cyrus /var/imap/db /var/imap/socket
+           rm /var/imap/deliverdb/*
+
       * Convert mailboxes file to Berkeley DB: 
 
            su cyrus
@@ -36,6 +44,14 @@ Upgrading from 1.6.22 or 1.6.24
 
         Please keep a backup of your mailboxes file. You can dump an
         old-style mailboxes file by using ctl_mboxlist -d. 
+      * remove "/etc/inetd.conf" entries. The imap and popd3d lines need to
+        be removed from /etc/inetd.conf and inetd needs to be restarted. 
+      * master process configuration: You'll need to configure the master
+        process Cyrus process and ensure that it starts on boot. see this
+        section of the configuration instructions. 
+      * sendmail configuration. You need to use a new cyrus mc file. See
+        doc/cyrusv2.mc for a sample mc file. This requires Sendmail 8.10 or
+        newer. See this section of the configuration document. 
       * cyrus.seen conversion. The cyrus.seen file will be automatically
         upgraded as users read mail. After some time, you might want to
         delete the cyrus.seen file in each mailbox; it is superceded by the
@@ -47,11 +63,6 @@ Upgrading from 1.6.22 or 1.6.24
         netnews/ directory to INN or see if INN is now distributing those
         changes. You will also want to run remotepurge on a regular basis
         to purge old netnews posts. 
-      * remove inetd.conf entries. The imap and popd3d lines need to be
-        removed from /etc/inetd.conf and inetd needs to be restarted. 
-      * sendmail configuration. You need to use a new cyrus mc file. See
-        doc/cyrusv2.mc for a sample mc file. This requires Sendmail 8.10 or
-        newer. 
 
 Upgrading from 1.6.13
 

@@ -7,6 +7,20 @@ Installing Sieve
     A brief introduction to Sieve at is available from Cyrusoft
     International. 
 
+Configure outgoing mail
+
+    Some Sieve actions (redirect, vacation) can send outgoing mail. 
+
+    You'll need to make sure that "lmtpd" can send outgoing messages.
+    Currently, it invokes "/usr/lib/sendmail" by default to send messages.
+    Change this by adding a line like: 
+
+       sendmail: /usr/sbin/sendmail
+
+    in your "/etc/imapd.conf". If you're using Postfix or another MTA, make
+    sure that the sendmail referenced in "/etc/imapd.conf" is
+    Sendmail-compatible. 
+
 Managing Sieve Scripts
 
     Since Cyrus is based around the concept of a sealed-server, the normal
