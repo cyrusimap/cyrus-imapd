@@ -19,8 +19,8 @@ discussion of this server and other Cyrus software.  Send mail to
 
 Once you have unpacked the files (see the <A
 HREF="readme.html"><TT>README</TT></A> file for more information),
-"<TT>cd</TT>" to the "<tt>imapd-1.2</tt>" directory (This document
-assumes that the version number is 1.2.). The configuration files and
+"<TT>cd</TT>" to the "<tt>imapd-1.3</tt>" directory (This document
+assumes that the version number is 1.3.). The configuration files and
 various subdirectories are stored there.  In the directory that the
 <TT>configure</TT> file is in, type "<kbd>./configure</kbd>" to
 configure the software.
@@ -248,7 +248,7 @@ HREF="deliver.8.html"><tt>deliver</tt></A>", "<A
 HREF="imapd.8.html"><tt>imapd</tt></A>", and "<A
 HREF="pop3d.8.html"><tt>pop3d</tt></A>" programs. We recommend
 installing them in the "<tt>/usr/etc</tt>" directory.  Change directory
-to "<tt>imap</tt>", a subdirectory of <tt>imapd-1.2</tt>.  Make "<A
+to "<tt>imap</tt>", a subdirectory of <tt>imapd-1.3</tt>.  Make "<A
 NAME="deliver"><tt>deliver</tt></A>" setuid to the Cyrus user:
 
 <pre>
@@ -265,7 +265,7 @@ messages into both levels and categories.  Invoke "<kbd>man
 syslog</kbd>" to see if "<tt>openlog()</tt>" takes three arguments. If
 it does not, replace the system "<tt>syslogd</tt>" and
 "<tt>syslog.conf</tt>" with the files provided in the <A
-NAME="syslog"><tt>imapd-1.2/syslog</tt></A> directory.
+NAME="syslog"><tt>imapd-1.3/syslog</tt></A> directory.
 
 <pre>
 <kbd>   mv syslogd /etc/syslogd
@@ -458,7 +458,7 @@ If your server is running, you'll get the following message:
    Trying 128.2.44.20...
    Connected to foobar.andrew.cmu.edu.
    Escape character is '^]'.
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.2 server ready
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.3 server ready
 </pre>
 
 Any message other than one starting with "<tt>* OK</tt>" means there
@@ -466,7 +466,7 @@ is a problem.  To terminate the connection, type "<kbd>. logout</kbd>".
 
 <P>
 <li>Use "<tt>imtest</tt>" to test logging in with plaintext passwords.  Change
-to the "<tt>imapd-1.2</tt>" directory and type the following.
+to the "<tt>imapd-1.3</tt>" directory and type the following.
 
 <pre>
 <kbd>   imtest/imtest -p foobar imap
@@ -475,7 +475,7 @@ to the "<tt>imapd-1.2</tt>" directory and type the following.
 If your server is running, you'll get the following message:
 
 <pre>
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.2 server ready
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.3 server ready
    Password: <var>&lt;enter your password, imtest does not echo it&gt;</var>
    . LOGIN smith X
    . OK User logged in
@@ -489,11 +489,11 @@ connection, type "<kbd>. logout</kbd>".
 <P>
 <li>If the server is compiled with Kerberos v4 authentication, test
 Kerberos authentication by using the imtest command.  Change
-to the "<tt>cyrus-v1.2</tt>" directory and type the following:
+to the "<tt>cyrus-v1.3</tt>" directory and type the following:
 
 <pre>
    <kbd>imtest/imtest -k foobar imap</kbd>
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.2 server ready
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.3 server ready
    . AUTHENTICATE KERBEROS_V4
    + Ln8h6Q==
    BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
