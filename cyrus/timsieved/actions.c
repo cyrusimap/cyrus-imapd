@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.18 2000/04/15 19:20:48 tmartin Exp $
+ * $Id: actions.c,v 1.9.2.1 2000/05/12 17:54:32 leg Exp $
  * 
  */
 /***********************************************************
@@ -26,7 +26,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
 
-#include <config.h>
+
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -42,13 +42,14 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <string.h>
 
 #include "prot.h"
-#include "imapconf.h"
+#include "config.h"
 #include "xmalloc.h"
-#include "sieve_interface.h"
 
 #include "codes.h"
 #include "actions.h"
 #include "scripttest.h"
+
+
 
 /* after a user has authentication, our current directory is their Sieve 
    directory! */
@@ -87,6 +88,8 @@ int actions_setuser(char *userid)
     
   snprintf(sieve_dir, 1023, "%s/%c/%s", foo, hash,userid);
 
+  printf("sievedir=%s\n",sieve_dir);
+
   result = chdir(sieve_dir);
   if (result != 0) {
       result = mkdir(sieve_dir, 0755);
@@ -100,13 +103,16 @@ int actions_setuser(char *userid)
   return TIMSIEVE_OK;
 }
 
-/*
- *
- * Everything but '/' and '\0' are valid.
- *
- */
+static int validchar(char ch)
+{
+    if (isalnum((int) ch) || (ch == '_') || (ch == '-') || (ch == ' ')) {
+	return TIMSIEVE_OK;
+    }
 
-int scriptname_valid(mystring_t *name)
+    return TIMSIEVE_FAIL;
+}
+
+int verifyscriptname(mystring_t *name)
 {
   int lup;
   char *ptr;
@@ -116,40 +122,11 @@ int scriptname_valid(mystring_t *name)
 
   ptr=string_DATAPTR(name);
 
-  for (lup=0;lup<name->len;lup++)
-  {
-      if ((ptr[lup]=='/') || (ptr[lup]=='\0'))
-	  return TIMSIEVE_FAIL;
+  for (lup=0;lup<name->len;lup++) {
+      if ( validchar(ptr[lup])!=TIMSIEVE_OK) return TIMSIEVE_FAIL;
   }
   
   return TIMSIEVE_OK;
-}
-
-int capabilities(struct protstream *conn, sasl_conn_t *saslconn)
-{
-    char *sasllist;
-    int mechcount;
-
-    /* implementation */
-    prot_printf(conn, "\"IMPLEMENTATION\" \"" SIEVED_IDENT " " SIEVED_VERSION "\"\r\n");
-    
-    /* SASL */
-    if (sasl_listmech(saslconn, NULL, 
-		    "\"SASL\" \"", " ", "\"\r\n",
-		    &sasllist,
-		    NULL, &mechcount) == SASL_OK && mechcount > 0)
-    {
-      prot_printf(conn,"%s",sasllist);
-    }
-    
-    /* Sieve capabilities */
-    prot_printf(conn,"\"SIEVE\" \"%s\"\r\n",sieve_listextensions());
-
-    /* TODO: STARTTLS */
-
-    prot_printf(conn,"OK\r\n");
-
-    return TIMSIEVE_OK;
 }
 
 int getscript(struct protstream *conn, mystring_t *name)
@@ -161,14 +138,6 @@ int getscript(struct protstream *conn, mystring_t *name)
   int cnt;
 
   char path[1024];
-
-  result = scriptname_valid(name);
-  if (result!=TIMSIEVE_OK)
-  {
-      prot_printf(conn,"NO \"Invalid script name\"\r\n");
-      return result;
-  }
-
 
   snprintf(path, 1023, "%s.script", string_DATAPTR(name));
 
@@ -209,7 +178,7 @@ int getscript(struct protstream *conn, mystring_t *name)
 
   prot_printf(conn,"\r\n");
   
-  prot_printf(conn, "OK\r\n");
+  prot_printf(conn, "OK \"Success\"\r\n");
 
   return TIMSIEVE_OK;
 }
@@ -245,7 +214,6 @@ static int countscripts(char *name)
     return number;
 }
 
-
 /* save name as a sieve script */
 int putscript(struct protstream *conn, mystring_t *name, mystring_t *data)
 {
@@ -257,20 +225,13 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data)
   char path[1024], p2[1024];
   int maxscripts;
 
-  result = scriptname_valid(name);
-  if (result!=TIMSIEVE_OK)
-  {
-      prot_printf(conn,"NO \"Invalid script name\"\r\n");
-      return result;
-  }
-
   /* see if this would put the user over quota */
   maxscripts = config_getint("sieve_maxscripts",5);
 
   if (countscripts(string_DATAPTR(name))+1 > maxscripts)
   {
     prot_printf(conn,
-		"NO (\"QUOTA\") \"You are only allowed %d scripts on this server\"\r\n",
+		"NO \"You are only allowed %d scripts on this server\"\r\n",
 		maxscripts);
     return TIMSIEVE_FAIL;
   }
@@ -321,7 +282,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data)
   snprintf(p2, 1023, "%s.script", string_DATAPTR(name));
   rename(path, p2);
 
-  prot_printf(conn, "OK\r\n");
+  prot_printf(conn, "OK \"Success\"\r\n");
 
   return TIMSIEVE_OK;
 }
@@ -351,7 +312,6 @@ static int isactive(char *name)
 
   result=stat(filename,&filestats);
   if (result != 0) {
-      syslog(LOG_ERR, "stat failed with %m");
       return FALSE;
   }
 
@@ -368,13 +328,6 @@ int deletescript(struct protstream *conn, mystring_t *name)
   int result;
   char path[1024];
 
-  result = scriptname_valid(name);
-  if (result!=TIMSIEVE_OK)
-  {
-      prot_printf(conn,"NO \"Invalid script name\"\r\n");
-      return result;
-  }
-
   snprintf(path, 1023, "%s.script", string_DATAPTR(name));
 
   if (isactive(string_DATAPTR(name)) && (deleteactive(conn)!=TIMSIEVE_OK)) {
@@ -388,7 +341,7 @@ int deletescript(struct protstream *conn, mystring_t *name)
       return TIMSIEVE_FAIL;
   }
 
-  prot_printf(conn,"OK\r\n");
+  prot_printf(conn,"OK \"Success\"\r\n");
   return TIMSIEVE_OK;
 }
 
@@ -421,7 +374,7 @@ int listscripts(struct protstream *conn)
 	namewo[length-7]='\0';
 	
 	if (isactive(namewo)==TRUE)
-	  prot_printf(conn,"\"%s\" ACTIVE\r\n", namewo);
+	  prot_printf(conn,"\"%s*\"\r\n", namewo);
 	else
 	  prot_printf(conn,"\"%s\"\r\n", namewo);
 
@@ -430,7 +383,7 @@ int listscripts(struct protstream *conn)
     }    
   }
 
-  prot_printf(conn,"OK\r\n");
+  prot_printf(conn,"OK \"Success\"\r\n");
   
   return TIMSIEVE_OK;
 }
@@ -461,29 +414,14 @@ int setactive(struct protstream *conn, mystring_t *name)
   int result;
   char filename[1024];
 
-  result = scriptname_valid(name);
-  if (result!=TIMSIEVE_OK)
-  {
-      prot_printf(conn,"NO \"Invalid script name\"\r\n");
-      return result;
-  }
-
   if (exists(string_DATAPTR(name))==FALSE)
   {
     prot_printf(conn,"NO \"Script does not exist\"\r\n");
     return TIMSIEVE_NOEXIST;
   }
 
-  /* if script already is the active one just say ok */
-  if (isactive(string_DATAPTR(name))==TRUE) {
-      prot_printf(conn,"OK\r\n");
-      return TIMSIEVE_OK;  
-  }
-
   /* get the name of the active sieve script */
   snprintf(filename, 1023, "%s.script", string_DATAPTR(name));
-
-
 
   /* ok we want to do this atomically so let's
      - make <activesieve>.NEW as a hard link
@@ -493,61 +431,17 @@ int setactive(struct protstream *conn, mystring_t *name)
   result = link(filename, "default.NEW");
 
   if (result!=0) {
-      syslog(LOG_ERR, "Error creating link %m");
-      prot_printf(conn, "NO \"Can't make link\"\r\n");    
-      return TIMSIEVE_FAIL;
+    prot_printf(conn, "NO \"Can't make link\"\r\n");    
+    return TIMSIEVE_FAIL;
   }
 
   result=rename("default.NEW", "default");
 
   if (result!=0) {
-      syslog(LOG_ERR, "Error renaming default.NEW to default %m");
       prot_printf(conn,"NO \"Error renaming\"\r\n");
       return TIMSIEVE_FAIL;
   }
 
-
-  prot_printf(conn,"OK\r\n");
+  prot_printf(conn,"OK \"Worked\"\r\n");
   return TIMSIEVE_OK;
-}
-
-int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long num)
-{
-    int result;
-    int maxscripts;
-    unsigned long maxscriptsize;
-
-    result = scriptname_valid(sieve_name);
-    if (result!=TIMSIEVE_OK)
-    {
-	prot_printf(conn,"NO \"Invalid script name\"\r\n");
-	return result;
-    }
-
-    /* see if the size of the script is too big */
-    maxscriptsize = config_getint("sieve_maxscriptsize", 32);
-    maxscriptsize *= 1024;
-
-    if (num > maxscriptsize)
-    {
-	prot_printf(conn,
-		    "NO (\"QUOTA\") \"Script size is too large. Max script size is %d bytes\"\r\n",
-		    maxscriptsize);
-	return TIMSIEVE_FAIL;
-    }
-
-    /* see if this would put the user over quota */
-    maxscripts = config_getint("sieve_maxscripts",5);
-
-    if (countscripts(string_DATAPTR(sieve_name))+1 > maxscripts)
-    {
-	prot_printf(conn,
-		    "NO (\"QUOTA\") \"You are only allowed %d scripts on this server\"\r\n",
-		    maxscripts);
-	return TIMSIEVE_FAIL;
-    }
-
-
-    prot_printf(conn,"OK\r\n");
-    return TIMSIEVE_OK;
 }
