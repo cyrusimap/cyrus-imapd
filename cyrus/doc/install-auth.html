@@ -1,4 +1,4 @@
-<!-- $Id: install-auth.html,v 1.3 2000/05/28 19:48:59 leg Exp $ -->
+<!-- $Id: install-auth.html,v 1.4 2000/06/04 22:43:58 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Authenticating Users
@@ -137,7 +137,9 @@ the host name is "<tt>foobar</tt>" and the realm is
 
 <li><p>If you plan to install Kerberized POP, create the Kerberos
 identity "<tt>pop.HOST@REALM</tt>" and add the key to the "<tt>srvtab</tt>"
-file.</p></li>
+file.  Likewise, if you plan on using LMTP over TCP, create the
+Kerberos identity "<tt>lmtp.HOST@REALM</tt>" and add the key to the
+"<tt>srvtab</tt>" file.</p></li>
 
 <li><P>Make the "<TT>srvtab</TT>" file owned by the cyrus user:
 <pre>
@@ -181,7 +183,7 @@ current ticket's held.  Override this with the <tt>-u</tt> option.</li>
 </ol>
 
 <P><HR>
-last modified: $Date: 2000/05/28 19:48:59 $
+last modified: $Date: 2000/06/04 22:43:58 $
 </BODY></HTML>
 
 
