@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.465 2004/05/06 18:46:21 ken3 Exp $ */
+/* $Id: imapd.c,v 1.466 2004/05/18 18:11:07 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -3181,6 +3181,8 @@ cmd_partial(const char *tag, const char *msgno, char *data,
 	freestrlist(fetchargs.bodysections);
 	return;
     }
+
+    fetchargs.fetchitems |= FETCH_IS_PARTIAL;
 
     index_fetch(imapd_mailbox, msgno, 0, &fetchargs, &fetchedsomething);
 

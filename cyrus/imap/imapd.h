@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.55 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: imapd.h,v 1.56 2004/05/18 18:11:08 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -105,6 +105,7 @@ enum {
     FETCH_RFC822 =              (1<<9),
     FETCH_SETSEEN =             (1<<10),
 /*     FETCH_UNCACHEDHEADER =      (1<<11) -- obsolete */
+    FETCH_IS_PARTIAL =          (1<<12), /* this is the PARTIAL command */
 };
 
 enum {
