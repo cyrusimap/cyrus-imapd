@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.2.2.9 2004/06/15 15:59:45 ken3 Exp $
+ * $Id: cyr_expire.c,v 1.2.2.10 2004/08/05 16:23:30 ken3 Exp $
  */
 
 #include <config.h>
@@ -302,7 +302,7 @@ int main(int argc, char *argv[])
     if (erock.verbose && 
 	erock.expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
 	fprintf(stderr,
-		"expunging deleted messages in mailboxes older than %ld days\n",
+		"expunging deleted messages in mailboxes older than %d days\n",
 		expunge_days);
     }
 

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.17.2.4 2004/03/24 19:53:00 ken3 Exp $ */
+/* $Id: idled.c,v 1.17.2.5 2004/08/05 16:23:31 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -297,8 +297,8 @@ int main(int argc, char **argv)
     mboxlist_close();
     mboxlist_done();
 
-    /* create idle table */
-    construct_hash_table(&itable, nmbox, 1);
+    /* create idle table -- +1 to avoid a zero value */
+    construct_hash_table(&itable, nmbox + 1, 1);
     ifreelist = NULL;
 
     /* create socket we are going to use for listening */

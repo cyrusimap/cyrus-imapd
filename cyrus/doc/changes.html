@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.21 2004/07/27 13:13:42 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.22 2004/08/05 16:23:28 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -47,6 +47,12 @@ the new <tt>sieve_allowregex</tt> option to disable it.</li>
 <li>The MIME structure of a new message destined for multiple
 recipients is now only parsed once rather than once per delivery,
 resulting in better performance.</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.2.7</h1>
+<ul>
+<li>Fix a double-free bug in the notify code</li>
+<li>Fix a problem with idled and an empty mailbox list</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.6</h1>
@@ -2007,7 +2013,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2004/07/27 13:13:42 $ <br />
+last modified: $Date: 2004/08/05 16:23:28 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

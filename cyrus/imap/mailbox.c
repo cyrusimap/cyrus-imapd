@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.15 2004/05/31 15:06:58 rjs3 Exp $
+ * $Id: mailbox.c,v 1.147.2.16 2004/08/05 16:23:44 ken3 Exp $
  *
  */
 
@@ -117,7 +117,7 @@ static struct fnamebuf *mailbox_meta_get_fname(struct fnamepath *fpath,
 					       struct mailbox *mailbox,
 					       unsigned long metaflag)
 {
-    const char *filename;
+    const char *filename = NULL;
     struct fnamebuf *fname;
     char *path;
     size_t n;
@@ -2333,7 +2333,6 @@ int mailbox_create(const char *name,
 		   struct mailbox *mailboxp)
 {
     int r;
-    char *p;
     char quota_root[MAX_MAILBOX_PATH+1];
     int hasquota;
     char *path, *mpath;
@@ -2615,7 +2614,6 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     struct index_record record;
     struct fnamepath oldfpath, newfpath;
     struct fnamebuf *oldfname, *newfname;
-    size_t fn_len;
     struct txn *tid = NULL;
 
     assert(oldmailbox->header_lock_count > 0

@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.48.2.6 2004/06/23 20:15:21 ken3 Exp $
+ * $Id: timsieved.c,v 1.48.2.7 2004/08/05 16:23:52 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -86,6 +86,8 @@
 #include "acl.h"
 #include "mboxlist.h"
 #include "util.h"
+
+#include "scripttest.h"
 
 /* global state */
 const int config_need_data = 0;

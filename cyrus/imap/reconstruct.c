@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.8 2004/07/02 14:10:02 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.9 2004/08/05 16:23:47 ken3 Exp $ */
 
 #include <config.h>
 
@@ -83,6 +83,7 @@
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
+#include "map.h"
 #include "message.h"
 #include "xmalloc.h"
 #include "global.h"

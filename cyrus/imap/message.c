@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.97.2.5 2004/06/28 18:44:28 ken3 Exp $
+ * $Id: message.c,v 1.97.2.6 2004/08/05 16:23:45 ken3 Exp $
  */
 
 #include <config.h>
@@ -362,7 +362,6 @@ int message_parse_mapped(const char *msg_base, unsigned long msg_len,
 			 struct body *body)
 {
     struct msg msg;
-    int n;
 
     msg.base = msg_base;
     msg.len = msg_len;

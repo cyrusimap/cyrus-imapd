@@ -39,12 +39,13 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.11 2004/05/06 19:08:06 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.12 2004/08/05 16:23:31 ken3 Exp $
  */
 
 #include <config.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
@@ -67,6 +68,12 @@ extern struct protstream *imapd_in, *imapd_out;
 extern struct backend *backend_inbox, *backend_current, **backend_cached;
 extern char *imapd_userid, *proxy_userid;
 extern struct namespace imapd_namespace;
+
+extern void printstring(const char *s);
+extern void printastring(const char *s);
+extern int mlookup(const char *tag, const char *ext_name,
+		   const char *name, int *flags, char **pathp, char **mpathp,
+		   char **partp, char **aclp, struct txn **tid) ;
 
 #define IDLE_TIMEOUT (5 * 60)
 

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.24 2004/07/16 12:26:34 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.25 2004/08/05 16:23:46 ken3 Exp $
  */
 
 /*
@@ -3069,7 +3069,7 @@ static int deliver(message_data_t *msg)
     int n, r = 0, myrights;
     char *rcpt = NULL, *local_rcpt = NULL, *server, *acl;
     time_t now = time(NULL);
-    unsigned long uid, backend_mask = 0;
+    unsigned long uid;
     struct body *body = NULL;
     struct dest *dlist = NULL;
 

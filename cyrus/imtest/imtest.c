@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.93.2.9 2004/06/29 17:05:29 ken3 Exp $
+ * $Id: imtest.c,v 1.93.2.10 2004/08/05 16:23:49 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -625,13 +625,15 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
 	return (ret);
     
     if (cmd == (BIO_CB_READ | BIO_CB_RETURN)) {
-	printf("read from %08X [%08lX] (%d bytes => %ld (0x%X))\n", bio, argp,
-	       argi, ret, ret);
+	printf("read from %08X [%08lX] (%d bytes => %ld (0x%X))\n",
+	       (unsigned int) bio, (long unsigned int) argp,
+	       argi, ret, (unsigned int) ret);
 	tls_dump(argp, (int) ret);
 	return (ret);
     } else if (cmd == (BIO_CB_WRITE | BIO_CB_RETURN)) {
-	printf("write to %08X [%08lX] (%d bytes => %ld (0x%X))\n", bio, argp,
-	       argi, ret, ret);
+	printf("write to %08X [%08lX] (%d bytes => %ld (0x%X))\n",
+	       (unsigned int) bio, (long unsigned int) argp,
+	       argi, ret, (unsigned int) ret);
 	tls_dump(argp, (int) ret);
     }
     return (ret);
@@ -1974,7 +1976,8 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *rock,
  *
  */
 
-static char *nntp_parse_mechlist(const char *str, struct protocol_t *prot)
+static char *nntp_parse_mechlist(const char *str,
+				 struct protocol_t *prot __attribute__((unused)))
 {
     char *ret;
     char *tmp;

@@ -1,7 +1,7 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
  * Ken Murchison (rewritten to handle relational ops and non-terminated text)
- * $Id: comparator.c,v 1.15.2.1 2004/06/23 20:15:18 ken3 Exp $
+ * $Id: comparator.c,v 1.15.2.2 2004/08/05 16:23:51 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -38,6 +38,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "tree.h"
 #include "sieve.h"
 #include "bytecode.h"
+#include "xmalloc.h"
 
 /*!!! uses B_CONTAINS not CONTAINS, etc, only works with bytecode*/
 

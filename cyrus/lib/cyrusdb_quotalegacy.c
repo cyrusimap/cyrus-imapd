@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_quotalegacy.c,v 1.1.2.6 2004/06/30 19:38:22 ken3 Exp $ */
+/* $Id: cyrusdb_quotalegacy.c,v 1.1.2.7 2004/08/05 16:23:50 ken3 Exp $ */
 
 #include <config.h>
 
@@ -526,7 +526,7 @@ static int foreach(struct db *db,
 
     for (i = 0; i < globbuf.gl_pathc; i++) {
 	const char *data, *key;
-	size_t keylen, datalen;
+	int keylen, datalen;
 
 	r = myfetch(db, globbuf.gl_pathv[i], &data, &datalen, tid);
 	if (r) break;

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.2.2.7 2004/07/16 18:40:20 ken3 Exp $
+ * $Id: fetchnews.c,v 1.2.2.8 2004/08/05 16:23:30 ken3 Exp $
  */
 
 #include <config.h>
@@ -259,7 +259,7 @@ int main(int argc, char *argv[])
     struct protstream *pin, *pout, *sin, *sout;
     char buf[4096];
     char sfile[1024] = "";
-    int fd, i, n, offered, rejected, accepted, failed;
+    int fd = -1, i, n, offered, rejected, accepted, failed;
     time_t stamp;
     struct tm *tm;
     char **resp = NULL;

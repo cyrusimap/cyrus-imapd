@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.16 2004/07/27 13:13:44 ken3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.17 2004/08/05 16:23:44 ken3 Exp $
  */
 
 #include <config.h>
@@ -1066,7 +1066,6 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     int partitionmove = 0;
     int mbtype;
     char *oldpath = NULL, *oldmpath = NULL;
-    char newpath[MAX_MAILBOX_PATH+1];
     int oldopen = 0, newopen = 0, newreserved = 0;
     struct mailbox oldmailbox;
     struct mailbox newmailbox;

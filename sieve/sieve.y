@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.23.2.9 2004/07/16 14:37:44 ken3 Exp $
+ * $Id: sieve.y,v 1.23.2.10 2004/08/05 16:23:51 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -753,9 +753,6 @@ static test_t *build_body(int t, struct btags *b, stringlist_t *pl)
     assert(t == BODY);
 
     if (ret) {
-	int i;
-	stringlist_t *sl;
-
 	ret->u.b.comptag = b->comptag;
 	ret->u.b.relation = b->relation;
 	ret->u.b.comparator = xstrdup(b->comparator);

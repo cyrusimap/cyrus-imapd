@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.35 2004/07/15 16:23:24 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.36 2004/08/05 16:23:31 ken3 Exp $ */
 
 #include <config.h>
 
@@ -78,6 +78,7 @@
 #include "imapd.h"
 #include "imapurl.h"
 #include "imparse.h"
+#include "index.h"
 #include "iptostring.h"
 #include "mailbox.h"
 #include "message.h"
@@ -378,7 +379,7 @@ static int imapd_proxy_policy(sasl_conn_t *conn,
 	requested_user = userbuf;
 
 	/* See if we're using the magic plus */
-	if (p = strchr(userbuf, '+')) {
+	if ((p = strchr(userbuf, '+'))) {
 	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
 
 	    /* strip the magic plus from the authzid */

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.25 2004/06/29 16:35:59 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.26 2004/08/05 16:23:46 ken3 Exp $
  */
 #include <config.h>
 
@@ -206,7 +206,7 @@ static int popd_canon_user(sasl_conn_t *conn, void *context,
 	user = userbuf;
 
 	/* See if we're trying to access a subfolder */
-	if (p = strchr(userbuf, '+')) {
+	if ((p = strchr(userbuf, '+'))) {
 	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
 
 	    if (flags & SASL_CU_AUTHZID) {
@@ -263,7 +263,7 @@ static int popd_proxy_policy(sasl_conn_t *conn,
 	requested_user = userbuf;
 
 	/* See if we're trying to access a subfolder */
-	if (p = strchr(userbuf, '+')) {
+	if ((p = strchr(userbuf, '+'))) {
 	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
 
 	    /* strip the subfolder from the authzid */
@@ -1471,7 +1471,7 @@ int openinbox(void)
 {
     char userid[MAX_MAILBOX_NAME+1], inboxname[MAX_MAILBOX_PATH+1];
     char extname[MAX_MAILBOX_NAME+1] = "INBOX";
-    int type, myrights;
+    int type, myrights = 0;
     char *server = NULL, *acl;
     int r, log_level = LOG_ERR;
     const char *statusline = NULL;
