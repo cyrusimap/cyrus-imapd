@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: search_engines.c,v 1.1 2001/09/25 16:49:51 ken3 Exp $
+ * $Id: search_engines.c,v 1.2 2001/09/30 12:59:03 ken3 Exp $
  */
 
 #include <config.h>
@@ -252,6 +252,7 @@ static int search_squat(unsigned* msg_list, struct mailbox *mailbox,
   }
   if ((index = squat_search_open(fd)) == NULL) {
     syslog(LOG_DEBUG, "SQUAT failed to open index");
+    close(fd);
     return -1;
   }
   if ((msg_vector = search_squat_do_query(index, mailbox, searchargs))
@@ -292,6 +293,7 @@ static int search_squat(unsigned* msg_list, struct mailbox *mailbox,
     free(unindexed_vector);
   }
   squat_search_close(index);
+  close(fd);
   return result;
 }
 
