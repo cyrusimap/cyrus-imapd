@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.164.4.8 2002/10/04 19:52:36 ken3 Exp $
+# $Id: Makefile.in,v 1.164.4.9 2002/10/08 16:25:11 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -300,6 +300,10 @@ quota: quota.o mutex_fake.o libimap.a $(DEPLIBS)
 krbck: krbck.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o krbck krbck.o mutex_fake.o \
 	libimap.a $(DEPLIBS) $(LIBS)
+
+fetchnews: fetchnews.o mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o \
+	 $@ fetchnews.o mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
 
 libimap.a: $(LOBJS)
 	rm -f libimap.a

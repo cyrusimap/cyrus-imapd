@@ -7,6 +7,7 @@ cvt_cyrusdb
 cyrdump
 deliver
 feedcyrus
+fetchnews
 fud
 idled
 imap_err.c
