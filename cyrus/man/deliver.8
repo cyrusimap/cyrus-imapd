@@ -63,32 +63,11 @@ deliver \- deliver mail to an IMAP mailbox
 .I auth-id
 ]
 [
-.B \-e
-]
-[
-.B \-q
-]
-[
-.B \-F
-flag
-]...
-.br
-[
 .I userid
 ]...
 .br
 .B deliver
 .B \-l
-[
-.B \-e
-]
-[
-.B \-q
-]
-.br
-.B deliver
-.B \-E
-.I days
 .SH DESCRIPTION
 .I Deliver
 reads a message from the standard input and delivers it to one or more
@@ -144,26 +123,8 @@ does not grant the sender the "p" right, the delivery fails.
 .BI \-a " auth-id"
 Specify the authorization id of the sender.  Defaults to "anonymous".
 .TP
-.B \-e
-Enable duplicate delivery suppression.  Will suppress delivery of the
-message to a mailbox if a message with the same message-id (or
-resent-message-id) is recorded as having already been delivered to the
-mailbox.  Records the mailbox and message-id/resent-message-id of all
-successful deliveries.
-.TP
-.B \-q
-Deliver message even when receiving mailbox is over quota.
-.TP
-.BI \-F " flag"
-Set the system flag or keyword
-.I flag
-on the delivered message.
 .B \-l
 Accept messages using the LMTP protocol.
-.TP
-.BI \-E " days"
-Prune the duplicate delivery database of entries older than
-.IR days .
 .SH NOTES
 Depending on the setting of \fBreject8bit\fR in \fBimapd.conf(5)\fR, deliver
 either rejects messages with 8-bit-set characters in the headers or 
