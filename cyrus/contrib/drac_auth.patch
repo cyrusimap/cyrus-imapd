@@ -9,7 +9,7 @@ Installation
 
 1.  Apply this patch in the toplevel directory using the following command:
 
-	# patch -b -p0 < contrib/drac.patch
+	# patch -b -p0 < contrib/drac_auth.patch
 
 2.  Cleanup any previous builds:
 
@@ -58,8 +58,8 @@ imapd: Once a client is logged in, drac_send() will be called every 5 minutes.
 
 
 
-*** acconfig.h.orig	Tue Jan  2 00:58:10 2001
---- acconfig.h	Thu Feb 15 12:27:25 2001
+*** acconfig.h.orig	Wed Feb  7 16:46:56 2001
+--- acconfig.h	Tue Feb 20 08:49:19 2001
 ***************
 *** 78,83 ****
 --- 78,86 ----
@@ -72,11 +72,11 @@ imapd: Once a client is logged in, drac_send() will be called every 5 minutes.
   /* do we have OpenSSL? */
   #undef HAVE_SSL
   
-*** configure.in.orig	Mon Dec 25 22:29:34 2000
---- configure.in	Thu Feb 15 12:27:25 2001
+*** configure.in.orig	Mon Feb 19 13:36:34 2001
+--- configure.in	Tue Feb 20 08:49:19 2001
 ***************
-*** 713,718 ****
---- 713,733 ----
+*** 714,719 ****
+--- 714,734 ----
   SNMP_SUBDIRS=""
   AC_SUBST(SNMP_SUBDIRS)
   
@@ -98,8 +98,8 @@ imapd: Once a client is logged in, drac_send() will be called every 5 minutes.
   CMU_SOCKETS
   CMU_LIBWRAP
   CMU_UCDSNMP
-*** imap/imapd.c.orig	Fri Jan 19 11:37:28 2001
---- imap/imapd.c	Thu Feb 15 12:27:25 2001
+*** imap/imapd.c.orig	Fri Feb 16 13:55:10 2001
+--- imap/imapd.c	Tue Feb 20 08:49:19 2001
 ***************
 *** 486,491 ****
 --- 486,499 ----
@@ -183,11 +183,11 @@ imapd: Once a client is logged in, drac_send() will be called every 5 minutes.
   
       /* Create telemetry log */
       sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, imapd_userid,
-*** imap/pop3d.c.orig	Tue Dec 26 16:35:41 2000
---- imap/pop3d.c	Thu Feb 15 12:27:25 2001
+*** imap/pop3d.c.orig	Fri Feb 16 13:55:10 2001
+--- imap/pop3d.c	Tue Feb 20 08:49:19 2001
 ***************
-*** 1110,1115 ****
---- 1110,1124 ----
+*** 1111,1116 ****
+--- 1111,1125 ----
       popd_mailbox = &mboxstruct;
       proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
   
@@ -203,11 +203,11 @@ imapd: Once a client is logged in, drac_send() will be called every 5 minutes.
       /* Create telemetry log */
       sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, popd_userid,
   	    (long unsigned) getpid());
-*** man/imapd.conf.5.orig	Mon Jan 29 16:42:33 2001
---- man/imapd.conf.5	Thu Feb 15 12:27:25 2001
+*** man/imapd.conf.5.orig	Mon Feb 19 14:38:59 2001
+--- man/imapd.conf.5	Tue Feb 20 08:49:19 2001
 ***************
-*** 215,220 ****
---- 215,222 ----
+*** 217,222 ****
+--- 217,224 ----
   file overrides the SASL configuration file.
   .IP "\fBlmtpsocket:\fR /var/imap/socket/lmtp" 5
   Unix domain socket that lmtpd listens on.
