@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.20 2002/09/12 15:39:50 rjs3 Exp $
+# $Id: Shell.pm,v 1.21 2002/09/19 17:18:28 rjs3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -1238,7 +1238,7 @@ Cyrus::IMAP::Shell - Perl version of cyradm
 
 =head1 SYNOPSIS
 
-  $ cyradm [--user user] [--[no]rc] [--systemrc file] [--userrc file] \
+  $ cyradm [--user authid] [--authz authzid] [--[no]rc] [--systemrc file] [--userrc file] \
   > [--port n] [--auth mechanism] [--server] server
 
 but possibly
