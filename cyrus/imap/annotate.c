@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.26 2003/05/27 01:17:47 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.27 2003/05/28 19:21:05 ken3 Exp $
  */
 
 #include <config.h>
@@ -87,8 +87,8 @@ static void output_attlist(struct protstream *pout, struct attvaluelist *l);
 
 struct db *anndb;
 static int annotate_dbopen = 0;
-int (*proxy_func)(const char *server, const char *entry_pat,
-		  struct strlist *attribute_pat) = NULL;
+int (*proxy_func)(const char *server, const char *mbox_pat,
+		  const char *entry_pat, struct strlist *attribute_pat) = NULL;
 #endif
 
 /* String List Management */
@@ -214,7 +214,7 @@ void freeentryatts(struct entryattlist *l)
 
 /* must be called after cyrus_init */
 void annotatemore_init(int myflags,int (*func)(const char *, const char *,
-					       struct strlist *))
+					       const char *, struct strlist *))
 {
     int r;
 
@@ -527,6 +527,7 @@ struct fetchdata {
     /* if these are NULL, we have had a local exact match, and we
        DO NOT proxy */
     struct hash_table server_table;
+    const char *orig_mailbox;
     const char *orig_entry;
     struct strlist *orig_attribute;
 };
@@ -649,7 +650,8 @@ static int fetch_cb(char *name, int matchlen,
     if(proxy_func && fdata->orig_entry
        && !hash_lookup(mbrock.server, &(fdata->server_table))) {
 	/* xxx ignoring result */
-	proxy_func(mbrock.server, fdata->orig_entry, fdata->orig_attribute);
+	proxy_func(mbrock.server, fdata->orig_mailbox,
+		   fdata->orig_entry, fdata->orig_attribute);
 	hash_insert(mbrock.server, (void *)0xDEADBEEF, &(fdata->server_table));
     }
 
@@ -840,11 +842,13 @@ int annotatemore_fetch(char *mailbox,
 		fetch_cb(NULL, 0, 0, 0);
 
 		if(proxy_func && !exact_match) {
+		    fdata.orig_mailbox = mailbox;
 		    fdata.orig_entry = e->s;
 		    fdata.orig_attribute = attribs;
 		    /* xxx better way to determine a size for this table? */
 		    construct_hash_table(&fdata.server_table, 10, 1);
 		} else if (proxy_func) {
+		    fdata.orig_mailbox = NULL;
 		    fdata.orig_entry = NULL;
 		    fdata.orig_attribute = NULL;
 		}
