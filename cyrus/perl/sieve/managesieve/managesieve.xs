@@ -239,7 +239,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   callbacks[2].context = realm_cb;
   callbacks[3].id = SASL_CB_PASS;
   callbacks[3].proc = &perlsieve_getpass;
-  callbacks[3].context = username_cb;
+  callbacks[3].context = password_cb;
   callbacks[4].id = SASL_CB_LIST_END;
 
   /* map port -> num */
