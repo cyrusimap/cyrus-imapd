@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <title>Cyrus IMAP Server:  Overview and Concepts</title>
-<!-- $Id: overview.html,v 1.14 2003/07/25 20:54:53 rjs3 Exp $ -->
+<!-- $Id: overview.html,v 1.15 2003/07/25 20:55:42 rjs3 Exp $ -->
 </HEAD><BODY>
 <H1>Cyrus IMAP Server:  Overview and Concepts</H1>
 
@@ -274,8 +274,13 @@ followed by a group listed in "<tt>/etc/group</tt>".  Thus:
     root                Refers to the user root
     group:staff         Refers to the group staff
 </pre>
+
+<p>It is also possible to use unix groups with users authenticated
+through a non-/etc/passwd backend.  Doing so doesn't make a lot of sense
+in the long run, however, non-kerberos sites should probably still choose
+"unix" as their authoriation method.
     
-Using the Kerberos authorization mechanism, identifiers are of the
+<p>Using the Kerberos authorization mechanism, identifiers are of the
 form:
 
 <pre>
@@ -854,9 +859,17 @@ network.  This is an easy optimization so that the IMAP server doesn't
 need to maintain a queue of messages or run an MTA.</p>
 
 <p>Authenticated final delivery is also supported in the form of LMTP
-AUTH.  If the final delivery isn't authenticated, it is treated (for
+AUTH.  This is accomplished using SASL to authenticate the delivering
+user.  If your mail server is performing delivery via
+LMTP AUTH, you will want their authentication id to be an LMTP admins
+(either via the <tt>admins</tt> imapd.conf option or via the
+<tt>lmtp_admins</tt> option).
+
+<p>If the final delivery isn't authenticated, it is treated (for
 the purposes of checking ACLs) as if the "anonymous" user is
-attempting delivery.</p>
+attempting delivery.  This will result in mail being delivered to user's
+INBOXes (which have an implicit anyone 'p' right), but to no other mailboxes
+</p>
 
 <h3>Single Instance Store</h3><a name="singleinstance"></a>
 
