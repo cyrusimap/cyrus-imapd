@@ -20,7 +20,6 @@ mbpath
 mupdate
 mupdate_err.c
 mupdate_err.h
-mupdatetest
 pop3d
 pop3proxyd
 proxyd
