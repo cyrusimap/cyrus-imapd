@@ -50,8 +50,9 @@
 
 /* init tls */
 int tls_init_serverengine(int verifydepth, /* depth to verify */
-			  int askcert,     /* 1 = verify client */
-			  int requirecert, /* 1 = another client verify? */
+			  int askcert,     /* 1 = client auth */
+			  int requirecert, /* 1 = require client auth */
+			  int tlsonly,
 			  char *var_imapd_tls_CAfile,
 			  char *var_imapd_tls_CApath,
 			  char *var_imapd_tls_cert_file,

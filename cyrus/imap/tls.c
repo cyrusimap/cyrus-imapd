@@ -360,6 +360,7 @@ static int set_cert_stuff(SSL_CTX * ctx, char *cert_file, char *key_file)
 int     tls_init_serverengine(int verifydepth,
 			      int askcert,
 			      int requirecert,
+			      int tlsonly,
 			      char *var_imapd_tls_CAfile,
 			      char *var_imapd_tls_CApath,
 			      char *var_imapd_tls_cert_file,
@@ -381,7 +382,11 @@ int     tls_init_serverengine(int verifydepth,
     SSL_load_error_strings();
     SSLeay_add_ssl_algorithms();
 
-    ctx = SSL_CTX_new(SSLv23_server_method());
+    if (tlsonly) {
+	ctx = SSL_CTX_new(TLSv1_server_method());
+    } else {
+	ctx = SSL_CTX_new(SSLv23_server_method());
+    }
     if (ctx == NULL) {
 	return (-1);
     };
@@ -469,7 +474,7 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
   * filled in if the client authenticated. 'ret' is the SSL connection
   * on success.
   */
-int tls_start_servertls(int readfd, int writefd, 
+int tls_start_servertls(int readfd, int writefd,
 			int *layerbits, char **authid, SSL **ret)
 {
     int     sts;
