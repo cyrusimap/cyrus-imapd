@@ -19,6 +19,8 @@ extern int yylex(void);
 
 %token ATOM QTEXT DTEXT
 
+%start sieve_address
+
 %%
 address: mailbox			/* one addressee */
 	| group				/* named list */
@@ -33,7 +35,7 @@ mailboxes: mailbox
 	;
 
 mailbox: addrspec			/* simple address */
-	| phrase routeaddr		/*  name & addr-spec */
+	| phrase routeaddr		/* name & addr-spec */
 	;
 
 routeaddr: '<' addrspec '>'
@@ -42,6 +44,10 @@ routeaddr: '<' addrspec '>'
 
 route: '@' domain			/* path-relative */
 	| '@' domain ',' route
+	;
+
+sieve_address: addrspec			/* simple address */
+	| phrase '<' addrspec '>'	/* name & addr-spec */
 	;
 
 addrspec: localpart '@' domain		/* global-address */
