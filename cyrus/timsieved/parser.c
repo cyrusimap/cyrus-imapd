@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.35 2004/02/18 14:42:33 rjs3 Exp $
+ * $Id: parser.c,v 1.36 2004/03/18 15:24:35 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -309,7 +309,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
     if (timlex(&sieve_data, NULL, sieved_in)!=STRING)
     {
-      error_msg = "Did not specify script data";
+      error_msg = "Did not specify legal script data length";
       goto error;
     }
 
