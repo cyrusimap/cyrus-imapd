@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.5 2000/06/12 02:39:35 leg Exp $ -->
+<!-- $Id: changes.html,v 1.6 2000/06/14 02:41:39 wcw Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -11,12 +11,15 @@
 auto-upgrade 3.0 databases (and, in fact, I haven't written any
 upgrade software yet).
 
+<li> SORT and THREAD should now function correctly.
+
 <li> Some configure fixes.
 
 <li> Some fixes for possible race conditions in initializing services
 and database structures.
 
-<li> SORT and THREAD should now function correctly.
+
+<li> Some non gcc compile fixes with structure initialization.
 
 </ul>
 
@@ -1030,7 +1033,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2000/06/12 02:39:35 $
+last modified: $Date: 2000/06/14 02:41:39 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>

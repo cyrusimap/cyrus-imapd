@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.28 2000/05/28 22:45:59 leg Exp $
+ * $Id: script.c,v 1.29 2000/06/14 02:41:25 wcw Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -981,7 +981,9 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     }
 
     if (implicit_keep) {
-	sieve_keep_context_t keep_context = { &s->interp.curflags };
+	sieve_keep_context_t keep_context;
+
+	keep_context.imapflags = &s->interp.curflags;
  
 	lastaction = ACTION_KEEP;
         ret = s->interp.keep(&keep_context, s->interp.interp_context,
