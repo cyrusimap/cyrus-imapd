@@ -37,6 +37,9 @@ extern char *krb_get_phost(), *krb_realmofhost();
 
 static char *srvtab = "";	/* Srvtab filename */
 
+static char *krb_en_integrity(), *krb_en_privacy();
+static char *krb_de_integrity(), *krb_de_privacy();
+
 /* Maximum number of bytes of overhead the protection mechanisms use */
 #define PROTECTION_OVERHEAD 31
 
