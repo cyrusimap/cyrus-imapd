@@ -1,0 +1,56 @@
+<TITLE>Cyrus IMAP Server v1.2Beta Home Page</TITLE>
+<h1>Cyrus IMAP Server, version 1.2Beta</h1>
+
+<P> IMAP (Internet Message Access Protocol) is an Internet standards-track
+protocol for accessing messages (mail, bboards, news, etc).  The Cyrus
+IMAP server differs from other IMAP server implementations in that it
+is generally intended to be run on sealed servers, where normal
+users are not permitted to log in.  The mailbox database is stored in
+parts of the filesystem that are private to the Cyrus IMAP system.
+All user access to mail is through the IMAP, POP3, or KPOP protocols.
+
+<P>The private mailbox database design gives the server large advantages
+in efficiency, scalability, and administratability.  Multiple
+concurrent read/write connections to the same mailbox are permitted.
+The server supports access control lists on mailboxes and storage
+quotas on mailbox hierarchies.
+
+<P>The Cyrus project is the implementation of IMAP servers by 
+the Carnegie Mellon University Computing Services Department.
+Over the next few months, we will be releasing components of
+this server, which will provide better mail security and
+easier mail administration.
+
+<H2>The Cyrus IMAP Server Distribution</H2>
+
+<P><A HREF="ftp://ftp.andrew.cmu.edu/pub/cyrus-mail/cyrus-imapd-v1.2beta.tar.gz"><B>Cyrus IMAP Server Version 1.2Beta distribution</B></A> 
+
+<P><B>Documentation</B>
+<UL>
+<LI> <A HREF="readme.html">General release information</A>
+<LI> <A HREF="overview.html">Overview and Concepts</A>
+<LI> <A HREF="unpack.html">Unpacking the Cyrus IMAP Server</A> 
+<LI> <A HREF="install.html">Installing the Cyrus IMAP Server</A>
+<LI> <A HREF="changes.html">Changes since the last release</A> 
+</UL>
+
+<B>Man Pages</B>
+<UL>
+<LI><A HREF="collectnews.8.html"><TT>collectnews</TT>(8)</A>
+<LI><A HREF="cyradm.1.html"><tt>cyradm</TT>(1)</a>
+<LI><A HREF="deliver.8.html"><TT>deliver</TT>(8)</A>
+<LI><A HREF="imapd.8.html"><TT>imapd</TT>(8)</A>
+<LI><A HREF="imapd.conf.5.html"><TT>imapd.conf</TT>(5)</A>
+<LI><A HREF="krb.equiv.5.html"><TT>krb.equiv</TT>(5)</A>
+<LI><A HREF="pop3d.8.html"><TT>pop3d</TT>(8)</A>
+<LI><A HREF="quota.8.html"><TT>quota</TT>(8)</A>
+<LI><A HREF="reconstruct.8.html"><TT>reconstruct</TT>(8)</A>
+<LI><A HREF="rmnews.8.html"><TT>rmnews</TT>(8)</A>
+<LI><A HREF="syncnews.8.html"><TT>syncnews</TT>(8)</A>
+</UL>
+
+<P><HR><P>
+<A HREF="http://andrew2.andrew.cmu.edu/cyrus/cyrus.html">Go</A> to the Project Cyrus Home Page<br>
+<A HREF="http://andrew2.andrew.cmu.edu/ANDREWII/AndrewII.html">Go</A> to the Andrew II Home Page
+
+
