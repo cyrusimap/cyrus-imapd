@@ -48,6 +48,7 @@
 #define ACL_USER7  0x10000L
 #define ACL_USER8  0x20000L
 #define ACL_USER9  0x40000L
+#define ACL_FULL   0xFFFFFL
 
 #ifdef __STDC__
 /* convert a string to an acl bit vector
