@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
 	    if (db) { /* close it */
 		TRY(DB->close(db));
 	    }
-	    TRY(DB->open(fname, 0, &db));
+	    TRY(DB->open(fname, 1, &db));
 
 	    printf("ok\n");
 	} else if (!db) {
