@@ -36,3 +36,12 @@ considered listed in the active file.
 .SH FILES
 .TP
 .B /etc/imapd.conf
+.SH BUGS
+If a newsgroup is listed in the active file, but does not have the
+news spool directories created, 
+.I syncnews
+will create those news spool directories in the process of creating
+the IMAP mailbox.  The created directories are likely to then have
+ownership and permissions that do not permit the news server to write
+article files.
+
