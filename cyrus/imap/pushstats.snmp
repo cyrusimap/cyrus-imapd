@@ -111,7 +111,7 @@ var AUTH
 
 BASE [cmutree].6.2.{AUTH}
 
-C,AUTHENTICATION_YES,"Sucessful authentication of given mechanism",auto
+C,AUTHENTICATION_YES,"Successful authentication of given mechanism",auto
 C,AUTHENTICATION_NO, "Failed authentication of given mechanism",   auto
 
 #
