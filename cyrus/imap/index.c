@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.169 2001/09/25 16:49:50 ken3 Exp $
+ * $Id: index.c,v 1.170 2001/11/13 18:29:35 leg Exp $
  */
 #include <config.h>
 
@@ -550,6 +550,7 @@ int oldexists;
     if (r) {
 	prot_printf(imapd_out, "* OK %s: %s\r\n",
 	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
+	seen_close(seendb);
 	return;
     }
 
