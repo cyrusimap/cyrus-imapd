@@ -1,6 +1,6 @@
 # Makefile.in - sieve makefile
 # @configure_input@
-# $Id: Makefile.in,v 1.15 2000/05/03 19:24:11 leg Exp $
+# $Id: Makefile.in,v 1.16 2000/06/23 16:09:50 ken3 Exp $
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
 #
@@ -41,7 +41,7 @@ LDFLAGS = @LDFLAGS@
 MAKEDEPEND = @MAKEDEPEND@
 
 LIBS = libsieve.a
-DEPLIBS=../lib/libcyrus.a @DEPLIBS@
+DEPLIBS=../lib/libcyrus.a ../et/libcom_err.a @DEPLIBS@
 
 all: libsieve.a
 
