@@ -1,4 +1,4 @@
-<!-- $Id: install-compile.html,v 1.1 2000/04/10 18:49:26 wcw Exp $ -->
+<!-- $Id: install-compile.html,v 1.2 2000/04/18 01:00:13 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Compiling the IMAP Server
@@ -13,7 +13,10 @@ Once you have unpacked the files by extracting the tar archive,
 where <i>NNNN</i> is the version number.  The configuration files and
 various subdirectories are stored there.  In the directory that the
 <TT>configure</TT> file is in, type "<kbd>./configure</kbd>" to
-configure the software.
+configure the software. Please continue to read this document as there
+are switches to <kbd>./configure</kbd> that may apply to you.
+
+<h2><kbd>configure</kbd> Overview</h2>
 
 <P>The "<TT>configure</TT>" shell script attempts to guess correct
 values for various system-dependent variables used during compilation.
@@ -57,75 +60,68 @@ specify a server-specific installation prefix other than
 "<TT>/usr/cyrus</TT>" by giving "<TT>configure</TT>" the option
 "<TT>--with-cyrus-prefix=PATH</TT>".
 
+<h2>Options to <kbd>configure</kbd></h2>
 <p>Here are a list of switches that can be used with "<A
-NAME="configure"><tt>configure</tt></A>".
+NAME="configure"><tt>configure</tt></A>". 3
 
 <dl>
 <dt><tt>--help</tt>
 <dd>Print a summary of the options to "<tt>configure</tt>", and exit. <P>
 
-<dt><tt>--with-cyrus-user=USER</tt>
-<dd>Specifies the userid that the Cyrus IMAP server will run as.  By
-default, configure uses "<TT>cyrus</TT>". <P>
-
-<dt><tt>--with-cyrus-group=USER</tt>
-<dd>Specifies the group used for installing setguid programs.  By default,
-configure uses "<TT>mail</TT>". <P>
-
-<dt><tt>--with-statedir=PATH</tt> 
-<dd>Specifies the directory used for communicating with various
-daemons.  By default, configure uses "<TT>/var</TT>". <P>
-
-<dt><tt>--with-sasldir=PATH</tt> 
-<dd>Specifies the path to the directories containing the library
-(<tt>.../lib</tt>) and include (<tt>.../include</tt>)
-files for libsasl. <P>
-
 <dt><tt>--with-auth=METHOD</tt>
 <dd>Specifies the authorization (group membership) module to use.
 Currently implemented authorization modules are:
-
 <dl compact> 
 <DT><tt>unix</tt>
 <DD>Unix <tt>/etc/passwd</tt> and <tt>/etc/group</tt> file
-
 <DT><tt>krb</tt>
 <DD>Kerberos principals (requires Kerberos libraries).  Optionally,
 specify where to find Kerberos v4 with "<tt>--with-krb=DIR</tt>"
 <B>IMPORTANT:</B> The Kerberos v4 support requires the DES library.
 Some vendor distributions of Kerberos, including the one with Solaris,
 do not have this support and cannot be used.
-
 <DT><tt>krb_pts</tt>
 <DD>Kerberos principals with AFS PTserver groups (requires Kerberos
 and AFS libraries).  Optionally, specify where the AFS libraries are
 found with "<tt>--with-afs=PATH</tt>".  Also requires krb support as above.
-
 </dl>
-
 Any method of authenticating with SASL can be used with any
-authorization module.
+authorization module.<P>
 
-<P>
+<dt><tt>--with-cyrus-group=USER</tt>
+<dd>Specifies the group used for installing setguid programs.  By default,
+configure uses "<TT>mail</TT>". <P>
+
+<dt><tt>--with-cyrus-prefix=PATH</tt>
+<dd>Change the location of the server software. By default, the
+	  <tt>cyrus-prefix</tt> is <tt>/usr/cyrus</tt>.<p>
+
+<dt><tt>--with-cyrus-user=USER</tt>
+<dd>Specifies the userid that the Cyrus IMAP server will run as.  By
+default, configure uses "<TT>cyrus</TT>". <P>
 
 <dt><tt>--with-notify=METHOD</tt>
 <dt><tt>--without-notify</tt>
 <dd>Specifies the new mail notification method to use.
 Currently implemented notification methods are:
-
 <dl compact> 
-
 <DT><tt>zephyr</tt>
 <DD>New mail notification through Zephyr.  Specify the location of
 the zephyr installation with "<tt>--with-zephyr=PATH</tt>".
-
 <DT><tt>no</tt>
 <DD>No new mail notification.
-
 </dl>
-
 By default, uses "<TT>zephyr</TT>" if the Zephyr libraries are available, 
 otherwise "<TT>no</TT>".<P>
+
+<dt><tt>--with-sasldir=PATH</tt> 
+<dd>Specifies the path to the directories containing the library
+(<tt>.../lib</tt>) and include (<tt>.../include</tt>)
+files for libsasl. <P>
+
+<dt><tt>--with-statedir=PATH</tt> 
+<dd>Specifies the directory used for communicating with various
+daemons.  By default, configure uses "<TT>/var</TT>". <P>
 
 <dt><tt>--with-openssl=PATH</tt>
 <dd>Specifies where to find the OpenSSL library.<P>
@@ -254,7 +250,5 @@ If you want, you can override the "<tt>make</tt>" variables
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2000/04/10 18:49:26 $
+last modified: $Date: 2000/04/18 01:00:13 $
 </BODY></HTML>
-
-

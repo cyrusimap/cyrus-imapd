@@ -7,7 +7,7 @@
 
 int acapmbox_init(void);
 
-#define global_dataset "/mb"
+#define global_dataset "/mailbox/site"
 
 typedef enum {
     ACAPMBOX_UNKNOWN,
@@ -119,6 +119,12 @@ int acapmbox_setsomeprops(acapmbox_handle_t *AC,
 acapmbox_status mboxdata_convert_status(acap_value_t *v);
 
 acap_conn_t *acapmbox_get_acapconn(acapmbox_handle_t *AC);
+
+/*
+ * return the ACAP entry for 'mailbox'.  
+ * 'ret' must be at least MAX_MAILBOX_PATH.
+ */
+int acapmbox_dataset_name(const char *mailbox, char *ret);
 
 /**************** proxy use *****************/
 #define FNAME_TARGET_SOCK "/socket/target"

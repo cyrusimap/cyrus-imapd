@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.2 2000/04/12 18:41:08 tmartin Exp $ -->
+<!-- $Id: install-configure.html,v 1.3 2000/04/18 01:00:13 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -234,10 +234,10 @@ aren't already there.
 
 <p>To use <tt>normal.conf</tt>, do:
 <pre>
-<kbd>   cp master/conf/normal.conf /etc/master.conf
+<kbd>   cp master/conf/normal.conf /etc/cyrus.conf
 </kbd></pre>
 
-<p>Optionally, you can edit <tt>/etc/master.conf</tt> to disable or
+<p>Optionally, you can edit <tt>/etc/cyrus.conf</tt> to disable or
 enabling certain services, or to tune the number of preforked copies.
 Be sure not to remove the entries that are labeled required.
 
@@ -404,7 +404,7 @@ Kerberos v5 keys are generally stored in "<tt>/etc/krb5.keytab</tt>".
 <li> Let the cyrus user read "<tt>/etc/krb5.keytab</tt>":
 user:
 <pre>
-<kbd>   chown cyrus /var/imap/srvtab
+<kbd>   chown cyrus /etc/krb5.keytab
 </kbd></pre></li>
 
 <li>Test using <tt>imtest -m GSSAPI</tt>.  <tt>imtest</tt> will
@@ -425,12 +425,13 @@ OpenSSL.</p>
 
 <p>The alternative, a SSL wrapped connection, involves the client
 connected to a seperate port ("<tt>imaps</tt>") and negotiating a SSL
-session before starting the IMAP protocol.  This is not currently
-supported natively by the Cyrus IMAP server.</p>
+session before starting the IMAP protocol.  Again, this is supported
+natively by the Cyrus IMAP server when it is compiled with
+OpenSSL.</p>
 
 <p>Both TLS and SSL require a server key and a certificate.
 Optionally, in addition to establishing a secure connection, TLS can
-authenticate the client.  </p>
+authenticate the client.</p>
 
 <h3>Configuring Cyrus with OpenSSL</h3>
 
@@ -449,7 +450,7 @@ Using configuration from /usr/local/lib/openssl/openssl.cnf
 Generating a 1024 bit RSA private key
 .............+++++
 ......................+++++
-writing new private key to 'FOO'
+writing new private key to '/var/imap/server.pem'
 -----
 You are about to be asked to enter information that will be incorporated
 into your certificate request.
@@ -493,5 +494,5 @@ authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
 <P><HR>
-last modified: $Date: 2000/04/12 18:41:08 $
+last modified: $Date: 2000/04/18 01:00:13 $
 </BODY></HTML>

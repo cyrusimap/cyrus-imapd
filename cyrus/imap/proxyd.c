@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.16 2000/04/15 19:20:46 tmartin Exp $ */
+/* $Id: proxyd.c,v 1.17 2000/04/18 01:00:19 leg Exp $ */
 
 #include <config.h>
 
@@ -70,6 +70,7 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "acapmbox.h"
+#include "imapurl.h"
 #include "pushstats.h"
 
 /* PROXY STUFF */
@@ -729,7 +730,7 @@ static struct backend *proxyd_findinboxserver(void)
 }
 
 /* proxyd_refer() issues a referral to the client. */
-static proxyd_refer(char *tag, char *server, char *mailbox)
+static void proxyd_refer(char *tag, char *server, char *mailbox)
 {
     char url[4 * MAX_MAILBOX_NAME];
 
@@ -1871,7 +1872,7 @@ void cmd_login(char *tag, char *user, char *passwd)
     if (!reply) reply = "User logged in";
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%ul", config_dir, FNAME_LOGDIR, proxyd_userid,
+    sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, proxyd_userid,
 	    (unsigned long) getpid());
     logfile = fopen(buf, "w");
     if (logfile) {
@@ -1997,7 +1998,7 @@ void cmd_authenticate(char *tag, char *authtype)
     prot_setsasl(proxyd_out, proxyd_saslconn);
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%ul", config_dir, FNAME_LOGDIR, proxyd_userid,
+    sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, proxyd_userid,
 	    (unsigned long) getpid());
     logfile = fopen(buf, "w");
     if (logfile) {
@@ -2330,7 +2331,6 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	pipe_including_tag(backend_current, tag);
     } else {
 	char mytag[128];
-	int r = 0;
 	struct d {
 	    char *idate;
 	    char *flags;
@@ -2484,7 +2484,6 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 		    mytag, usinguid ? "Uid Fetch" : "Fetch", sequence);
 	for (/* each FETCH response */;;) {
 	    int seqno = 0, uidno = 0;
-	    char *flags = NULL, *idate = NULL;
 
 	    /* read a line */
 	    c = prot_getc(backend_current->in);
@@ -2526,7 +2525,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	    q = p->next;
 	    p->next = q->next;
 	    for (/* each fetch item */;;) {
-		int sz;
+		int sz = 0;
 
 		switch (c) {
 		case 'u': case 'U':

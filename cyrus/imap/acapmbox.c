@@ -52,10 +52,9 @@ acap_conn_t *acapmbox_get_acapconn(acapmbox_handle_t *AC)
     return AC->conn;
 }
 
-/* this should probably vary depending on whether it's a private
+/* this varies depending on whether it's a private
    mailbox or a bboard, and it should default to 
-   "bb+bboard.name@server.name".
-   currently, we don't set this for personal mailboxes */
+   "bb+bboard.name@server.name". */
 char *acapmbox_get_postaddr(char *name)
 {
     static char postaddr[MAX_MAILBOX_PATH + 30];
@@ -91,7 +90,7 @@ void acapmbox_disconnect(acapmbox_handle_t *conn)
 
     if (conn == cached_conn) {
 
-	acap_conn_close(conn);
+	acap_conn_close(conn->conn);
 	free(conn);
 	/* xxx free memory */
 	cached_conn = NULL;
@@ -162,25 +161,23 @@ void acapmbox_release_handle(acapmbox_handle_t *handle)
     /* NOOP */
 }
 
-void acapmbox_cb(acap_result_t res, void *rock)
-{
-    printf("in callback\n");
-}
-
 /*
  * Create the full dataset with entry name
+ * 'ret' must be at least MAX_MAILBOX_PATH
  *
  */
 
-static char *create_full_dataset_name(char *mailbox_name)
+int acapmbox_dataset_name(const char *mailbox_name, char *ret)
 {
-    static char fullname[MAX_MAILBOX_PATH];
+    int j;
 
     /* needs to convert from mUTF7 to UTF-8 */
-    snprintf(fullname, sizeof(fullname), "%s/%s", 
-	     global_dataset, mailbox_name);
+    snprintf(ret, MAX_MAILBOX_PATH, "%s/%s",  global_dataset, mailbox_name);
+    for (j = strlen(global_dataset); ret[j] != '\0'; j++) {
+	if (ret[j] == '.') ret[j] = '/';
+    }
 
-    return fullname;
+    return 0;
 }
 
 int add_attr(skiplist *sl, char *name, char *value)
@@ -202,7 +199,7 @@ int acapmbox_store(acapmbox_handle_t *AC,
     acap_result_t acapres;
 
     acap_cmd_t *cmd;
-    char *fullname;
+    char fullname[MAX_MAILBOX_PATH];
     char tmpstr[30];
 
     if (AC == NULL) return 0;
@@ -212,8 +209,8 @@ int acapmbox_store(acapmbox_handle_t *AC,
     }
 
     /* create the new entry */
-    fullname = create_full_dataset_name(mboxdata->name);
-    if (fullname == NULL) return ACAP_NOMEM;
+    result = acapmbox_dataset_name(mboxdata->name, fullname);
+    if (result) return result;
 
     newentry = acap_entry_new(fullname);
     if (newentry == NULL) return ACAP_NOMEM;
@@ -366,12 +363,11 @@ int acapmbox_setsomeprops(acapmbox_handle_t *AC,
 			  int answered)
 {
     int result;
-    char *fullname;
+    char fullname[MAX_MAILBOX_PATH];
     acap_cmd_t *cmd;
     acap_entry_t *newentry;
     acap_result_t acapres;
     char tmpstr[30];
-
 
     if (AC == NULL) return 0;
 
@@ -381,8 +377,8 @@ int acapmbox_setsomeprops(acapmbox_handle_t *AC,
     }
 
     /* get the entry path */
-    fullname = create_full_dataset_name(mailbox_name);
-    if (fullname == NULL) return ACAP_NOMEM;
+    result = acapmbox_dataset_name(mailbox_name, fullname);
+    if (result) return result;
 
     newentry = acap_entry_new(fullname);
     if (newentry == NULL) return ACAP_NOMEM;
@@ -430,7 +426,7 @@ int acapmbox_setproperty(acapmbox_handle_t *AC,
 			 int value)
 {
     int result;
-    char *fullname;
+    char fullname[1024];
     acap_cmd_t *cmd;
     acap_attribute_t *tmpattr;
     char *attrname;
@@ -443,8 +439,8 @@ int acapmbox_setproperty(acapmbox_handle_t *AC,
     }
 
     /* get the entry path */
-    fullname = create_full_dataset_name(mailbox_name);
-    if (fullname == NULL) return ACAP_NOMEM;
+    result = acapmbox_dataset_name(mailbox_name, fullname);
+    if (result) return result;
 
     /* create the attribute */
     switch (prop) {
@@ -496,7 +492,7 @@ int acapmbox_setproperty_acl(acapmbox_handle_t *AC,
 			     char *newvalue)
 {
     int result;
-    char *fullname;
+    char fullname[1024];
     acap_cmd_t *cmd;
     acap_attribute_t *tmpattr;
     char *attrname;
@@ -508,8 +504,8 @@ int acapmbox_setproperty_acl(acapmbox_handle_t *AC,
     }
 
     /* get the entry path */
-    fullname = create_full_dataset_name(mailbox_name);
-    if (fullname == NULL) return ACAP_NOMEM;
+    result = acapmbox_dataset_name(mailbox_name, fullname);
+    if (result) return result;
 
     /* create the attribute */
     attrname = "mailbox.acl";
@@ -560,7 +556,7 @@ int acapmbox_delete(acapmbox_handle_t *AC,
 {
     acap_cmd_t *cmd;
     int r;
-    char *fullname;
+    char fullname[1024];
 
     if (AC == NULL) return 0;
     assert(mailbox_name != NULL);
@@ -569,8 +565,8 @@ int acapmbox_delete(acapmbox_handle_t *AC,
     }
 
     /* create the new entry */
-    fullname = create_full_dataset_name(mailbox_name);
-    if (fullname == NULL) return ACAP_NOMEM;
+    r = acapmbox_dataset_name(mailbox_name, fullname);
+    if (r) return r;
 
     r = acap_delete_entry_name(AC->conn,
 			       fullname,
@@ -634,7 +630,6 @@ void acapmbox_kick_target(void)
     }
 
     /* if we got here, it's been kicked */
-
     close(s);
     return;
 }

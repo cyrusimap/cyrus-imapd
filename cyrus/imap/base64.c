@@ -75,6 +75,7 @@ static const char index_64[256] = {
 };
 #define CHAR64(c)  (index_64[(unsigned char)(c)])
 
+extern void eatline(int c);
 /*
  * Parse a base64_string
  */

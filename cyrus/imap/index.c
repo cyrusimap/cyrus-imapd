@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.100 2000/04/07 19:49:43 leg Exp $
+ * $Id: index.c,v 1.101 2000/04/18 01:00:17 leg Exp $
  */
 #include <config.h>
 
@@ -357,6 +357,7 @@ int checkseen;
 
     /* Check Flags */
     if (checkseen) index_checkseen(mailbox, 0, usinguid, oldexists);
+    else if (oldexists == -1) seen_unlock(seendb);
     for (i = 1; i <= imapd_exists && seenflag[i]; i++);
     if (i == imapd_exists + 1) allseen = mailbox->last_uid;
     if (oldexists == -1) {
@@ -885,12 +886,11 @@ int usinguid;
  * Performs a COPY command
  */
 int
-index_copy(mailbox, sequence, usinguid, name, copyuidp)
-struct mailbox *mailbox;
-char *sequence;
-int usinguid;
-char *name;
-char **copyuidp;
+index_copy(struct mailbox *mailbox, 
+	   char *sequence, 
+	   int usinguid,
+	   char *name, 
+	   char **copyuidp)
 {
     static struct copyargs copyargs;
     int i;
@@ -900,8 +900,8 @@ char **copyuidp;
     char *copyuid;
     int copyuid_len, copyuid_size;
     int sepchar;
-    int uidvalidity;
-    int startuid, num;
+    unsigned long uidvalidity;
+    unsigned long startuid, num;
 
     copyargs.nummsg = 0;
     index_forsequence(mailbox, sequence, usinguid, index_copysetup,

@@ -54,7 +54,7 @@ OBJS=tugowar.o
 all: tugowar
 
 install:
-	$(INSTALL) -s -m 755 tugowar $(DESTDIR)$(exec_prefix)/bin
+	$(INSTALL) -s -m 755 tugowar $(DESTDIR)$(cyrus_prefix)/bin
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
