@@ -1,4 +1,4 @@
-<!-- $Id: install-netnews.html,v 1.1.2.5 2003/03/12 20:54:32 ken3 Exp $ -->
+<!-- $Id: install-netnews.html,v 1.1.2.6 2003/05/01 20:24:38 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus and Netnews
@@ -117,10 +117,25 @@ command, you will have to enable the <tt>allownewnews</tt> option in
 <tt>imapd.conf</tt>.
 
 <h4>Email clients</h4>
-If you are exporting Usenet via IMAP, then your users will reply to
-and post articles via SMTP.  In order for these messages to be fed
-into your server (and subsequently to the outside world) you need to
-use an email to news gateway, such as <a
+If you are exporting Usenet via IMAP, and your users' messaging clients
+are not savvy enough to reply to and post articles via NNTP, then you will
+have to configure your server so your users can reply to and post
+articles via SMTP.
+
+<p>To help faciliate this, you can set the <tt>newspostuser</tt>
+option to a userid which will be used to construct email delivery
+addresses for each incoming article.  These addresses are inserted
+into a <tt>To:</tt> in the article.  For example, if set to "post", an
+article posted to <tt>comp.mail.imap</tt> will have an address of
+"post+comp.mail.imap" inserted into the <tt>To:</tt> header.  This
+will allow a user to easily reply to an article via email by using
+their messaging client's "Reply All" feature.  Otherwise, the users
+will have to learn the correct email address format for posting and
+replying to articles.
+
+<p>In order for these email messages to be fed into your news server
+(and subsequently to the outside world) you need to use an email to
+news gateway, such as <a
 href=http://www.ossp.org/pkg/tool/lmtp2nntp/>lmtp2nntp</a>.  You need
 to configure your MTA (Sendmail, Postfix, etc) so that
 <tt>lmtp2nntp</tt> is used as the local mailer whenever it receives a
@@ -144,5 +159,5 @@ use its "feed" operation mode.
 To expire usenet articles on a regular basis, you should use the <tt>expirenews</tt> utility.  This utility both expunges articles from their mailboxes and prunes message-ids from <tt>netnews.db</tt>.  The <tt>master/conf/normal.conf</tt> and <tt>master/conf/prefork.conf</tt> sample configs both include EVENT entries for <tt>expirenews</tt> (disabled by default).
 
 <P><HR>
-last modified: $Date: 2003/03/12 20:54:32 $
+last modified: $Date: 2003/05/01 20:24:38 $
 </BODY></HTML>

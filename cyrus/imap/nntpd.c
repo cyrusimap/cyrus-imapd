@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.77 2003/05/01 17:10:05 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.78 2003/05/01 20:24:39 ken3 Exp $
  */
 
 /*
@@ -2349,22 +2349,25 @@ static int savemsg(message_data_t *m, FILE *f)
 	if ((body = spool_getheader(m->hdrcache, "newsgroups")) != NULL) {
 	    /* parse newsgroups and create recipients */
 	    if (!m->control && (r = parse_groups(body[0], m)) == 0) {
-		char buf[1024] = "";
-		const char *sep = "";
-		int n;
+		const char *newspostuser;
 
-		/* build a To: header */
-		for (n = 0; n < m->rcpt_num; n++) {
-		    snprintf(buf+strlen(buf), sizeof(buf)-strlen(buf),
-			     "%s%s+%s@%s", sep,
-			     config_getstring(IMAPOPT_NEWSPOSTUSER),
-			     m->rcpt[n]+strlen(newsprefix),
-			     config_servername);
-		    sep = ", ";
+		if ((newspostuser = config_getstring(IMAPOPT_NEWSPOSTUSER))) {
+		    char buf[1024] = "";
+		    const char *sep = "";
+		    int n;
+
+		    /* build a To: header */
+		    for (n = 0; n < m->rcpt_num; n++) {
+			snprintf(buf+strlen(buf), sizeof(buf)-strlen(buf),
+				 "%s%s+%s@%s", sep, newspostuser,
+				 m->rcpt[n]+strlen(newsprefix),
+				 config_servername);
+			sep = ", ";
+		    }
+
+		    /* add To: header */
+		    fprintf(f, "To: %s\r\n", buf);
 		}
-
-		/* add To: header */
-		fprintf(f, "To: %s\r\n", buf);
 	    }
 	} else {
 	    r = NNTP_NO_NEWSGROUPS;		/* no newsgroups */
