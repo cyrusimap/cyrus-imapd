@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.138 2002/10/03 19:02:40 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.139 2002/10/21 15:29:25 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -242,6 +242,11 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
 
 static int mlookup(const char *name, char **pathp, 
 		   char **aclp, void *tid);
+
+extern int saslserver(sasl_conn_t *conn, const char *mech,
+		      const char *init_resp, const char *continuation,
+		      struct protstream *pin, struct protstream *pout,
+		      int *sasl_result, char **success_data);
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
@@ -2310,13 +2315,6 @@ void cmd_login(char *tag, char *user)
 void cmd_authenticate(char *tag, char *authtype)
 {
     int sasl_result;
-    static struct buf clientin;
-    int clientinlen=0;
-    
-    const char *serverout;
-    unsigned int serveroutlen;
-    
-    const char *errorstring = NULL;
     const char *userid_buf;
     
     const int *ssfp;
@@ -2324,63 +2322,44 @@ void cmd_authenticate(char *tag, char *authtype)
 
     int r;
 
-    sasl_result = sasl_server_start(proxyd_saslconn, authtype,
-				    NULL, 0,
-				    &serverout, &serveroutlen);    
+    r = saslserver(proxyd_saslconn, authtype, NULL, "+ ",
+		   proxyd_in, proxyd_out, &sasl_result, NULL);
 
-    /* sasl_server_start will return SASL_OK or SASL_CONTINUE on success */
+    if (r != IMAP_SASL_OK) {
+	const char *errorstring = NULL;
 
-    while (sasl_result == SASL_CONTINUE)
-    {
-      char c;
+	switch (r) {
+	case IMAP_SASL_CANCEL:
+	    prot_printf(proxyd_out,
+			"%s NO Client canceled authentication\r\n", tag);
+	    break;
+	case IMAP_SASL_PROTERR:
+	    errorstring = prot_error(proxyd_in);
 
-      /* print the message to the user */
-      printauthready(proxyd_out, serveroutlen, (unsigned char *)serverout);
+	    prot_printf(proxyd_out,
+			"%s NO Error reading client response: %s\r\n",
+			tag, errorstring ? errorstring : "");
+	    break;
+	default: 
+	    /* failed authentication */
+	    errorstring = sasl_errstring(sasl_result, NULL, NULL);
 
-      c = prot_getc(proxyd_in);
-      if(c == '*') {
-         eatline(proxyd_in,c);
-         prot_printf(proxyd_out,
-                     "%s NO Client canceled authentication\r\n", tag);
-         reset_saslconn(&proxyd_saslconn);
-         return;
-      } else {
-         prot_ungetc(c, proxyd_in);
-      }
+	    syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
+		   proxyd_clienthost, authtype, sasl_errdetail(proxyd_saslconn));
 
-      /* get string from user */
-      clientinlen = getbase64string(proxyd_in, &clientin);
-      if (clientinlen == -1) {
-	reset_saslconn(&proxyd_saslconn);
-	prot_printf(proxyd_out, "%s BAD Invalid base64 string\r\n", tag);
-	return;
-      }
+	    snmp_increment_args(AUTHENTICATION_NO, 1,
+				VARIABLE_AUTH, 0, /* hash_simple(authtype) */ 
+				VARIABLE_LISTEND);
+	    sleep(3);
 
-      sasl_result = sasl_server_step(proxyd_saslconn,
-				     clientin.s,
-				     clientinlen,
-				     &serverout, &serveroutlen);
-    }
-
-
-    /* failed authentication */
-    if (sasl_result != SASL_OK)
-    {
-	/* convert the sasl error code to a string */
-	errorstring = sasl_errstring(sasl_result, NULL, NULL);
-      
-	syslog(LOG_NOTICE, "badlogin: %s %s %s",
-	       proxyd_clienthost, authtype, sasl_errdetail(proxyd_saslconn));
-	
-	sleep(3);
-
-	reset_saslconn(&proxyd_saslconn);
-	if (errorstring) {
-	    prot_printf(proxyd_out, "%s NO %s\r\n", tag, errorstring);
-	} else {
-	    prot_printf(proxyd_out, "%s NO Error authenticating\r\n", tag);
+	    if (errorstring) {
+		prot_printf(proxyd_out, "%s NO %s\r\n", tag, errorstring);
+	    } else {
+		prot_printf(proxyd_out, "%s NO Error authenticating\r\n", tag);
+	    }
 	}
 
+	reset_saslconn(&proxyd_saslconn);
 	return;
     }
 
