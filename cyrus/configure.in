@@ -195,6 +195,7 @@ AC_ARG_WITH(login,[  --with-login=METHOD     use login module METHOD
 AC_SUBST(WITH_LOGIN)
 if test "$WITH_LOGIN" = unix_pwcheck; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} pwcheck"
+	EXTRA_OUTPUT="${EXTRA_OUTPUT} pwcheck/Makefile"
 fi
 AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
                           METHOD is unix or krb],[WITH_AUTH="$withval"
@@ -212,6 +213,7 @@ AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
 AC_SUBST(WITH_AUTH)
 if test "$WITH_AUTH" = krb_pts; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
+	EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
 	AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix")
 fi
 
@@ -221,6 +223,9 @@ AC_ARG_ENABLE(cyradm,
 	if test "$enableval" = no; then
 		TCL_SUBDIRS=""
 	fi)		
+if test -n "$TCL_SUBDIRS"; then	
+	EXTRA_OUTPUT="${EXTRA_OUTPUT} cyradm/Makefile"
+fi
 AC_SUBST(TCL_SUBDIRS)
 
 dnl
@@ -339,6 +344,7 @@ AC_CACHE_VAL(cyrus_cv_lib_syslog, AC_TRY_CPP([#include <syslog.h>
 #endif],cyrus_cv_lib_syslog=yes,cyrus_cv_lib_syslog=no))
 if test $cyrus_cv_lib_syslog = no; then
 	PRE_SUBDIRS="${PRE_SUBDIRS} syslog"
+	EXTRA_OUTPUT="${EXTRA_OUTPUT} syslog/Makefile"
 	DEPLIBS="${DEPLIBS} ../syslog/libsyslog.a"
 	CPPFLAGS="$CPPFLAGS -I\$(srcdir)/../syslog"
 fi
@@ -348,6 +354,7 @@ AC_ARG_ENABLE(amssync,
 	[  --enable-amssync        enable AMS bboard sync support],
 	if test "$enableval" = yes; then
 		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} amssync"
+		EXTRA_OUTPUT="${EXTRA_OUTPUT} amssync/Makefile amssync/amssynctree"
 		AC_CHECK_LIB(ossup, main,
 			LIBS="${LIBS} -lossup"
 			LIBOBJS=`echo $LIBOBJS | sed s/getdtablesize.o//`
@@ -357,6 +364,7 @@ AC_ARG_ENABLE(cmulocal,
 	[  --enable-cmulocal       enable CMU-specific local support],
 	if test "$enableval" = yes; then
 		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} cmulocal"
+		EXTRA_OUTPUT="${EXTRA_OUTPUT} cmulocal/Makefile"
 	fi)			
 
 dnl
@@ -366,4 +374,5 @@ AC_CHECK_LIB(ndbm, main)
 AC_CHECK_LIB(dbm, main)
 AC_CHECK_LIB(db, main)
 AC_CHECK_LIB(socket, main, LIBS="${LIBS} -lsocket -lnsl",,-lnsl)
-AC_OUTPUT(Makefile man/Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile imap/feedcyrus cyradm/Makefile imtest/Makefile ptclient/Makefile pwcheck/Makefile amssync/Makefile amssync/amssynctree cmulocal/Makefile)
+
+AC_OUTPUT(Makefile man/Makefile et/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile $EXTRA_OUTPUT)
