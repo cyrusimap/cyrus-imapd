@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.13 2000/12/25 01:31:22 leg Exp $ */
+/* $Id: service.c,v 1.14 2000/12/27 16:31:49 ken3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -89,19 +89,19 @@ static void libwrap_init(struct request_info *r, char *service)
 
 static int libwrap_ask(struct request_info *r, int fd)
 {
-    int r;
+    int a;
 
     /* i hope using the sock_* functions are legal; it certainly makes
        this code very easy! */
     request_set(r, RQ_FILE, fd, 0);
     sock_host(r);
 
-    r = hosts_access(r);
-    if (!r) {
+    a = hosts_access(r);
+    if (!a) {
 	syslog(deny_severity, "refused connection from %s", eval_client(r));
     }
 
-    return r;
+    return a;
 }
 
 #else
