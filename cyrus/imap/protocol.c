@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.12 2004/08/04 13:03:16 ken3 Exp $ */
+/* $Id: protocol.c,v 1.13 2004/12/07 19:26:24 ken3 Exp $ */
 
 #include <config.h>
 
@@ -73,34 +73,6 @@ static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
 	/* reset the string */
 	str = end + 1;
     }
-    
-    return ret;
-}
-
-static char *nntp_parsemechlist(const char *str,
-				struct protocol_t *prot __attribute__((unused)))
-{
-    char *ret;
-    char *tmp;
-    int num = 0;
-    
-    tmp = strstr(str, " SASL:") + 6;
-    if (isspace((int) *tmp)) return NULL;
-
-    ret = xzmalloc(strlen(tmp)+1);
-    do {
-	char *end = tmp;
-	
-	while ((*end != ',') && (*end != ' ') && (*end != '\0')) end++;
-	
-	/* add entry to list */
-	if (num++ > 0) strcat(ret, " ");
-	strlcat(ret, tmp, strlen(ret) + (end - tmp) + 1);
-
-	/* reset the string */
-	tmp = end;
-
-    } while (*tmp++ != '\0');
     
     return ret;
 }
@@ -140,12 +112,12 @@ struct protocol_t protocol[] = {
       { "NOOP", "+OK" },
       { "QUIT", "+OK" } },
     { "nntp", "nntp",
-      { "LIST EXTENSIONS", ".", &nntp_parsemechlist,
-	{ { " SASL:", CAPA_AUTH },
+      { "CAPABILITIES", ".", NULL,
+	{ { "SASL ", CAPA_AUTH },
 	  { "STARTTLS", CAPA_STARTTLS },
 	  { NULL, 0 } } },
       { "STARTTLS", "382", "580" },
-      { "AUTHINFO SASL", 512, 0, "28", "5", "383 ", "*", &nntp_parsesuccess },
+      { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parsesuccess },
       { "DATE", "111" },
       { "QUIT", "205" } },
     { "lmtp", "lmtp",

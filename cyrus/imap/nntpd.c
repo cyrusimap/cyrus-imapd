@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.37 2004/12/04 23:23:30 ken3 Exp $
+ * $Id: nntpd.c,v 1.38 2004/12/07 19:26:23 ken3 Exp $
  */
 
 /*
@@ -148,7 +148,7 @@ struct protstream *nntp_in = NULL;
 static int nntp_logfd = -1;
 unsigned nntp_exists = 0;
 unsigned nntp_current = 0;
-unsigned did_extensions = 0;
+unsigned did_capabilities = 0;
 int allowanonymous = 0;
 int singleinstance = 1;	/* attempt single instance store */
 
@@ -220,6 +220,7 @@ static void cmd_article(int part, char *msgid, unsigned long uid);
 static void cmd_authinfo_user(char *user);
 static void cmd_authinfo_pass(char *pass);
 static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp);
+static void cmd_capabilities(char *keyword);
 static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 		    unsigned long uid, unsigned long last);
 static void cmd_help(void);
@@ -493,7 +494,7 @@ static void nntp_reset(void)
 
     nntp_exists = 0;
     nntp_current = 0;
-    did_extensions = 0;
+    did_capabilities = 0;
 }
 
 /*
@@ -861,17 +862,17 @@ static void cmdloop(void)
 	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
 	}
 
-	/* Ihave/Check/Takethis only allowed for feeders */
+	/* Ihave/Takethis only allowed for feeders */
 	if (!(nntp_capa & MODE_FEED) &&
-	    strchr("ICT", cmd.s[0])) goto noperm;
+	    strchr("IT", cmd.s[0])) goto noperm;
     
-	/* Body/Date/Group/Newgroups/Newnews/Next/Over/Post/Xhdr/Xover
+	/* Body/Date/Group/Newgroups/Newnews/Next/Over/Post/Xhdr/Xover/Xpat
 	   only allowed for readers */
 	if (!(nntp_capa & MODE_READ) &&
 	    strchr("BDGNOPX", cmd.s[0])) goto noperm;
     
-	/* Only Authinfo/Check/Head/Help/Ihave/List [ Active | Extensions ]/
-	   Mode/Quit/Stat/Starttls/Takethis allowed when not logged in */
+	/* Only Authinfo/Capabilities/Check/Head/Help/Ihave/List Active/
+	   Mode/Quit/Starttls/Stat/Takethis allowed when not logged in */
 	if (!nntp_userid && !allowanonymous &&
 	    !strchr("ACHILMQST", cmd.s[0])) goto nologin;
 
@@ -970,7 +971,20 @@ static void cmdloop(void)
 	    break;
 
 	case 'C':
-	    if (!strcmp(cmd.s, "Check")) {
+	    if (!strcmp(cmd.s, "Capabilities")) {
+		arg1.len = 0;
+
+		if (c == ' ') {
+		    c = getword(nntp_in, &arg1); /* keyword (optional) */
+		    if (c == EOF) goto missingargs;
+		}
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		cmd_capabilities(arg1.s);
+	    }
+	    else if (!(nntp_capa & MODE_FEED)) goto noperm;
+	    else if (!strcmp(cmd.s, "Check")) {
 		mode = POST_CHECK;
 		goto ihave;
 	    }
@@ -1786,6 +1800,52 @@ static int open_group(char *name, int has_prefix, struct backend **ret,
     return 0;
 }
 
+static void cmd_capabilities(char *keyword __attribute__((unused)))
+{
+    const char *mechlist;
+    unsigned mechcount = 0;
+
+    prot_printf(nntp_out, "101 Capability list follows:\r\n");
+    prot_printf(nntp_out, "VERSION 2\r\n");
+    prot_printf(nntp_out,
+		"IMPLEMENTATION Cyrus NNTP%s server %s\r\n",
+		config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+    if ((nntp_capa & MODE_READ) && (nntp_userid || allowanonymous))
+	prot_printf(nntp_out, "READER POST\r\n");
+    if (nntp_capa & MODE_FEED) prot_printf(nntp_out, "TRANSIT\r\n");
+
+    /* check for SASL mechs */
+    sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
+		  &mechlist, NULL, &mechcount);
+
+    if (!nntp_authstate) {
+	prot_printf(nntp_out, "AUTHINFO%s%s\r\n",
+		    (nntp_starttls_done ||
+		     config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
+		    " USER" : "", mechcount ? " SASL" : "");
+    }
+
+    /* add the SASL mechs */
+    if (mechcount) prot_printf(nntp_out, "%s", mechlist);
+
+    if (tls_enabled() && !nntp_starttls_done && !nntp_authstate)
+	prot_printf(nntp_out, "STARTTLS\r\n");
+
+    if ((nntp_capa & MODE_READ) &&
+	(nntp_userid || allowanonymous)) {
+	prot_printf(nntp_out, "HDR\r\n");
+	prot_printf(nntp_out, "LISTGROUP\r\n");
+	prot_printf(nntp_out, "OVER\r\n");
+    }
+
+    if (nntp_capa & MODE_FEED) {
+	prot_printf(nntp_out, "STREAMING\r\n");
+    }
+    prot_printf(nntp_out, ".\r\n");
+
+    did_capabilities = 1;
+}
+
 /*
  * duplicate_find() callback function to build Xref content
  */
@@ -2458,43 +2518,6 @@ static void cmd_list(char *arg1, char *arg2)
 	    nntp_group = 0;
 	}
     }
-    else if (!strcmp(arg1, "extensions")) {
-	const char *mechlist;
-
-	if (arg2) {
-	    prot_printf(nntp_out, "501 Unexpected extra argument\r\n");
-	    return;
-	}
-
-	prot_printf(nntp_out, "202 Extension list follows:\r\n");
-
-	/* check for SASL mechs */
-	sasl_listmech(nntp_saslconn, NULL, " SASL:", ",", "",
-		      &mechlist, NULL, NULL);
-
-	prot_printf(nntp_out, "AUTHINFO%s%s\r\n",
-		    !nntp_authstate &&
-		    (nntp_starttls_done ||
-		     config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
-		    " USER" : "", mechlist);
-
-	if (tls_enabled() && !nntp_starttls_done && !nntp_authstate)
-	    prot_printf(nntp_out, "STARTTLS\r\n");
-
-	if ((nntp_capa & MODE_READ) &&
-	    (nntp_userid || allowanonymous)) {
-	    prot_printf(nntp_out, "HDR\r\n");
-	    prot_printf(nntp_out, "LISTGROUP\r\n");
-	    prot_printf(nntp_out, "OVER\r\n");
-	}
-
-	if (nntp_capa & MODE_FEED) {
-	    prot_printf(nntp_out, "STREAMING\r\n");
-	}
-	prot_printf(nntp_out, ".\r\n");
-
-	did_extensions = 1;
-    }
     else if (!(nntp_capa & MODE_READ)) {
 	prot_printf(nntp_out, "502 Permission denied\r\n");
 	return;
@@ -2568,7 +2591,7 @@ static void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, "Date:\r\n");
 	prot_printf(nntp_out, "Message-ID:\r\n");
 	prot_printf(nntp_out, "References:\r\n");
-	if (did_extensions) {
+	if (did_capabilities) {
 	    /* new OVER format */
 	    prot_printf(nntp_out, ":bytes\r\n");
 	    prot_printf(nntp_out, ":lines\r\n");

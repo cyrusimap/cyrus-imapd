@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.103 2004/08/04 13:03:18 ken3 Exp $
+ * $Id: imtest.c,v 1.104 2004/12/07 19:26:22 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1969,41 +1969,6 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *rock,
 
 /********************************** NNTP *************************************/
 
-/*
- * Parse a mech list of the form: ... SASL:foo,bar ...
- *
- * Return: string with mechs separated by spaces
- *
- */
-
-static char *nntp_parse_mechlist(const char *str,
-				 struct protocol_t *prot __attribute__((unused)))
-{
-    char *ret;
-    char *tmp;
-    int num = 0;
-    
-    tmp = strstr(str, " SASL:") + 6;
-    if (isspace((int) *tmp)) return NULL;
-
-    ret = xzmalloc(strlen(tmp)+1);
-    do {
-	char *end = tmp;
-	
-	while ((*end != ',') && (*end != ' ') && (*end != '\0')) end++;
-	
-	/* add entry to list */
-	if (num++ > 0) strcat(ret, " ");
-	strlcat(ret, tmp, strlen(ret) + (end - tmp) + 1);
-
-	/* reset the string */
-	tmp = end;
-
-    } while (*tmp++ != '\0');
-    
-    return ret;
-}
-
 static int auth_nntp(void)
 {
     char str[1024];
@@ -2242,7 +2207,7 @@ static struct protocol_t protocols[] = {
     },
     { "nntp", "nntps", "nntp",
       { 0, "20", NULL },
-      { "LIST EXTENSIONS", ".", "STARTTLS", " SASL:", &nntp_parse_mechlist },
+      { "CAPABILITIES", ".", "STARTTLS", "SASL ", NULL },
       { "STARTTLS", "382", "580", 0 },
       { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parse_success },
       &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
