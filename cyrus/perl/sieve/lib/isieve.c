@@ -261,6 +261,8 @@ char * read_capability(isieve_t *obj)
       } else if (strcasecmp(attr,"STARTTLS")==0) {
 	  /* TODO */
       } else if (strncmp(val,"SASL=",5)==0) {
+	  /* xxx this will break if there is an unknown capability without
+	   * a value (e.g. if "STARTTLS" wasn't a known capability) */
 	  obj->version = OLD_VERSION;
 	  cap = (char *) xmalloc(strlen(val));
 	  memset(cap, '\0', strlen(val));
