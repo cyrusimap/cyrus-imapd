@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: master.8,v 1.6 2002/05/25 19:57:48 leg Exp $
+.\" $Id: master.8,v 1.6.4.1 2002/12/10 21:54:24 ken3 Exp $
 .SH NAME
 master \- master Cyrus process
 .SH SYNOPSIS
@@ -48,6 +48,7 @@ master \- master Cyrus process
 .B \-l
 .I listen queue
 ]
+.B \-d
 [
 .B \-D
 ]
@@ -68,6 +69,10 @@ when it receives a SIGTERM.
 Increase the listen queue backlog. By default, the listen queue is set
 to 32.   On systems with a high connection rate, it may be desirable
 to increase this value. refer to \fBlisten(2)\fR for details.
+.TP
+.BI \-d
+Start in daemon mode (run in background and disconnect from controlling
+terminal).
 .TP
 .BI \-D
 Don't close stdin/stdout/stderr. Primiarly useful for debugging.
