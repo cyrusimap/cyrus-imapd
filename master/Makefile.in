@@ -1,5 +1,5 @@
 # Makefile for the Cyrus controlling process
-# $Id: Makefile.in,v 1.3 2000/02/18 06:42:04 leg Exp $
+# $Id: Makefile.in,v 1.4 2000/04/27 17:03:39 leg Exp $
 # 
 # @configure_input@
 #
@@ -19,11 +19,11 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I. -I.. -I$(srcdir) @CPPFLAGS@
+CPPFLAGS = -I. -I.. -I$(srcdir) @CPPFLAGS@ @COM_ERR_CPPFLAGS@
 DEPLIBS = @DEPLIBS@
 
 CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@ @CFLAGS@
+LDFLAGS = @LDFLAGS@ @CFLAGS@ @COM_ERR_LDFLAGS@
 LIBS = @LIBS@
 
 SHELL = /bin/sh
@@ -57,6 +57,7 @@ clean:
 	rm -f *.o *.a Makefile.bak $(PROGS)
 
 distclean: clean
+	rm -f Makefile
 
 depend:
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
