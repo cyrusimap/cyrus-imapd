@@ -39,7 +39,7 @@
 
 void map_refresh P((int fd, int onceonly, const char **base,
 		    unsigned long *len, unsigned long newlen,
-		    const char *name, const char *mboxnme));
+		    const char *name, const char *mboxname));
 
 void map_free P((const char **base, unsigned long *len));
 
