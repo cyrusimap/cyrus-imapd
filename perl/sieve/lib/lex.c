@@ -1,6 +1,6 @@
 /* lex.c -- lexers for command line script installer
  * Tim Martin
- * $Id: lex.c,v 1.4 2001/02/05 18:34:07 leg Exp $
+ * $Id: lex.c,v 1.5 2002/02/05 22:29:43 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -65,7 +65,6 @@ int lexer_state = LEXER_STATE_NORMAL;
 #define ERR() {								\
 		lexer_state=LEXER_STATE_RECOVER;                        \
 		return SIEVE_FAIL;                                       \
-                /*  (result == DAEMON_ERR_EOF ? EOF : ERROR);*/	        \
   	      }
 
 #define ERR_PUSHBACK() {				\
@@ -77,8 +76,11 @@ int token_lookup(char *str, int len)
 {
   if (strcmp(str,"ok")==0) return TOKEN_OK;
   if (strcmp(str,"no")==0) return TOKEN_NO;
+  if (strcmp(str,"bye")==0) return TOKEN_BYE;
   if (strcmp(str,"active")==0) return TOKEN_ACTIVE;
-
+  if (strcmp(str,"referral")==0) return TOKEN_REFERRAL;
+  if (strcmp(str,"sasl")==0) return TOKEN_SASL;
+  
   return -1;
 }
 
@@ -108,9 +110,8 @@ int yylex(lexstate_t * lvalp, void * client)
 
     ch = prot_getc(stream);
 
-    if (ch == -1) {
+    if (ch == -1)
 	return SIEVE_FAIL;
-    }
 
     switch (lexer_state)
     {
@@ -135,11 +136,9 @@ int yylex(lexstate_t * lvalp, void * client)
       if (ch == '\"') {
 	/* End of the string */
 	lvalp->str = NULL;
-	/*	if (! client->recovering) { */
-	  result = string_allocate(buff_ptr - buffer, buffer, &lvalp->str);
-	  if (result != SIEVE_OK)
+	result = string_allocate(buff_ptr - buffer, buffer, &lvalp->str);
+	if (result != SIEVE_OK)
 	    ERR_PUSHBACK();
-	  /*} */
 	lexer_state=LEXER_STATE_NORMAL;
 	return STRING;
       }
@@ -185,16 +184,6 @@ int yylex(lexstate_t * lvalp, void * client)
 	ERR();
       if (ch != '\n')
 	ERR_PUSHBACK();
-      if (synchronizing) {
-	/*	static const char sync_reply[] = "+ \"Ready for data\"\r\n";*/
-
-	/* xxx	if (client->recovering)
-		return EOL;*/
-	/*	pthread_mutex_lock(client_OUTPUT_MUTEX(client));
-	conn_write(client_CONN(client), sync_reply, sizeof(sync_reply) - 1);
-	conn_flush(client_CONN(client));
-	pthread_mutex_unlock(client_OUTPUT_MUTEX(client));*/
-      }
 
       lvalp->str = NULL;
       result = string_allocate(count, NULL, &lvalp->str);

@@ -75,16 +75,17 @@ void parseerror(char *str)
 }
 
 int handle_response(int res,int version,struct protstream *pin, 
-		    mystring_t **errstr)
+		    char **refer_to, mystring_t **errstr)
 {    
   lexstate_t state;
   int r = 0;
 
-  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
+  *refer_to = NULL;
+
+  if ((res!=TOKEN_OK) && (res!=TOKEN_NO) && (res!=TOKEN_BYE))
     parseerror("ATOM");
 
-  if (res==TOKEN_NO) {
-
+  if(res == TOKEN_BYE) {
       if (yylex(&state, pin)!=' ')
 	  parseerror("expected space");
 
@@ -93,19 +94,66 @@ int handle_response(int res,int version,struct protstream *pin,
       /* additional error response */
       if (res == '(') {
 	  /* '(' string [SP string] ')' */
-	  
-	  if (yylex(&state, pin)!=STRING)
-	      parseerror("expected string");
 
-	  if (strcmp(string_DATAPTR(state.str),"SASL")==0) {
+	  /* we only support the REFERRAL response with BYE */
+	  if (yylex(&state, pin)==TOKEN_REFERRAL) {
 	      if (yylex(&state, pin)!=' ')
 		  parseerror("expected space");
 	      if (yylex(&state, pin)!=STRING)
 		  parseerror("expected string");
+
+	      *refer_to = xstrdup(string_DATAPTR(state.str));
+
+	      if (yylex(&state, pin)!=')')
+		  parseerror("expected RPAREN");
+	  } else {
+	      res = 0;
+	      while(res != ')' && res != -1) {
+		  res = yylex(&state, pin);
+	      }
+	      if(res != ')') {
+		  parseerror("expected RPARAN");
+	      }
 	  }
 
-	  if (yylex(&state, pin)!=')')
-	      parseerror("expected RPAREN");
+	  res = yylex(&state, pin);
+	  if (res == ' ') res = yylex(&state, pin);
+      }
+
+      if (res != STRING && res != EOL)
+	  parseerror("expected string2");
+
+      if (errstr)
+	  *errstr = state.str;
+
+      r = -2;
+  } else if (res==TOKEN_NO) {
+      if (yylex(&state, pin)!=' ')
+	  parseerror("expected space");
+
+      res = yylex(&state, pin);
+
+      /* additional error response */
+      if (res == '(') {
+	  /* '(' string [SP string] ')' */
+
+	  /* We only 'support' the SASL response to NO right now */
+	  if (yylex(&state, pin)==TOKEN_SASL) {
+	      if (yylex(&state, pin)!=' ')
+		  parseerror("expected space");
+	      if (yylex(&state, pin)!=STRING)
+		  parseerror("expected string");
+	      if (yylex(&state, pin)!=')')
+		  parseerror("expected RPAREN");
+	  } else {
+	      res = 0;
+	      while(res != ')' && res != -1) {
+		  res = yylex(&state, pin);
+	      }
+	      if(res != ')') {
+		  parseerror("expected RPARAN");
+	      }
+	  }
 
 	  res = yylex(&state, pin);
 	  if (res == ' ') res = yylex(&state, pin);
@@ -138,7 +186,8 @@ int handle_response(int res,int version,struct protstream *pin,
 }
 
 int deleteascript(int version, struct protstream *pout, 
-		  struct protstream *pin, char *name, char **errstrp)
+		  struct protstream *pin, char *name,
+		  char **refer_to, char **errstrp)
 {
   lexstate_t state;
   int res;
@@ -150,9 +199,11 @@ int deleteascript(int version, struct protstream *pout,
 
   res=yylex(&state, pin);
 
-  ret = handle_response(res,version,pin,&errstr);
+  ret = handle_response(res,version,pin,refer_to,&errstr);
 
-  if (ret!=0) {
+  if(ret == -2 && *refer_to) {
+      return -2;
+  } else if (ret!=0) {
       *errstrp = malloc(128);
       snprintf(*errstrp, 127, 
 	       "Deleting script: %s",string_DATAPTR(errstr));
@@ -163,7 +214,8 @@ int deleteascript(int version, struct protstream *pout,
 }
 
 int installdata(int version,struct protstream *pout, struct protstream *pin,
-		char *scriptname, char *data, int len, char **errstrp)
+		char *scriptname, char *data, int len,
+		char **refer_to, char **errstrp)
 {
   int res;
   int ret;
@@ -182,11 +234,12 @@ int installdata(int version,struct protstream *pout, struct protstream *pin,
   /* now let's see what the server said */
   res=yylex(&state,pin);
 
-  ret = handle_response(res,version,pin,&errstr);
+  ret = handle_response(res,version,pin,refer_to,&errstr);
 
   /* if command failed */
-  if (ret!=0)
-  {
+  if(ret == -2 && *refer_to) {
+      return -2;
+  } else if (ret!=0) {
       *errstrp = malloc(128);
       snprintf(*errstrp, 127, 
 	       "Putting script: %s",string_DATAPTR(errstr));
@@ -222,7 +275,7 @@ static char *getsievename(char *filename)
 
 
 int installafile(int version,struct protstream *pout, struct protstream *pin,
-		 char *filename, char **errstrp)
+		 char *filename, char **refer_to, char **errstrp)
 {
   FILE *stream;
   struct stat filestats;  /* returned by stat */
@@ -287,11 +340,12 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
   /* now let's see what the server said */
   res=yylex(&state,pin);
 
-  ret = handle_response(res,version,pin,&errstr);
+  ret = handle_response(res,version,pin,refer_to,&errstr);
 
   /* if command failed */
-  if (ret!=0)
-  {
+  if(ret == -2 && *refer_to) {
+      return -2;
+  } else if (ret!=0) {
       *errstrp = malloc(128);
       snprintf(*errstrp, 127, 
 	       "put script: %s", string_DATAPTR(errstr));
@@ -303,7 +357,8 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
 
 
 
-int showlist(int version, struct protstream *pout, struct protstream *pin)
+int showlist(int version, struct protstream *pout, struct protstream *pin,
+	     char **refer_to)
 {
   lexstate_t state;
   int end=0;
@@ -349,7 +404,7 @@ int showlist(int version, struct protstream *pout, struct protstream *pin)
 
     } else {
 
-	ret = handle_response(res,version,pin,NULL);
+	ret = handle_response(res,version,pin,refer_to,NULL);
 	
 	end=1;
     }
@@ -362,7 +417,8 @@ int showlist(int version, struct protstream *pout, struct protstream *pin)
 }
 
 int list_wcb(int version, struct protstream *pout, 
-	     struct protstream *pin,isieve_listcb_t *cb ,void *rock)
+	     struct protstream *pin,isieve_listcb_t *cb ,void *rock,
+	     char **refer_to)
 {
   lexstate_t state;
   int end=0;
@@ -405,21 +461,18 @@ int list_wcb(int version, struct protstream *pout,
       }
 
     } else {
-
-	ret = handle_response(res,version,pin,NULL);
+	ret = handle_response(res,version,pin,refer_to,NULL);
 	
 	end=1;
     }
-
-
-    
   } while (end==0);
 
   return ret;
 }
 
 int setscriptactive(int version, struct protstream *pout, 
-		    struct protstream *pin,char *name, char **errstrp)
+		    struct protstream *pin,char *name,
+		    char **refer_to, char **errstrp)
 {
   lexstate_t state;
   int res;
@@ -430,14 +483,15 @@ int setscriptactive(int version, struct protstream *pout,
   prot_printf(pout, "SETACTIVE \"%s\"\r\n",name);
   prot_flush(pout);
 
-
   /* now let's see what the server said */
   res=yylex(&state, pin);
 
-  ret = handle_response(res,version,pin, &errstr);
+  ret = handle_response(res,version,pin, &errstr, NULL);
 
   /* if command failed */
-  if (ret != 0) {
+  if(ret == -2 && *refer_to) {
+      return -2;
+  } else if (ret != 0) {
       *errstrp = malloc(128);
       snprintf(*errstrp, 127, 
 	       "Setting script active: %s",string_DATAPTR(errstr));
@@ -481,7 +535,8 @@ static int writefile(mystring_t *data, char *name, char **errstrp)
 }
 
 int getscript(int version, struct protstream *pout, 
-	      struct protstream *pin,char *name, int save, char **errstrp)
+	      struct protstream *pin,char *name, int save,
+	      char **refer_to, char **errstrp)
 {
   int res;
   mystring_t *str=NULL;
@@ -508,24 +563,24 @@ int getscript(int version, struct protstream *pout,
     res=yylex(&state,pin);
   }
 
-  ret = handle_response(res,version,pin, &errstr);
+  ret = handle_response(res, version, pin, refer_to, &errstr);
 
   /* if command failed */
-  if (ret!=0)
-  {
+  if(ret == -2 && *refer_to) {
+      return -2;
+  } else if (ret!=0) {
       *errstrp = malloc(128);
       snprintf(*errstrp, 127, 
 	       "Getting script: %s",string_DATAPTR(errstr));
   }
 
   return ret;
-
 }
 
 
 int getscriptvalue(int version, struct protstream *pout, 
 		   struct protstream *pin,char *name, mystring_t **data, 
-		   char **errstrp)
+		   char **refer_to, char **errstrp)
 {
   int res;
   int ret;
@@ -547,11 +602,12 @@ int getscriptvalue(int version, struct protstream *pout,
     res=yylex(&state,pin);
   }
 
-  ret = handle_response(res,version,pin, &errstr);
+  ret = handle_response(res,version,pin, refer_to, &errstr);
 
   /* if command failed */
-  if (ret!=0)
-  {
+  if(ret == -2 && *refer_to) {
+      return -2;
+  } else if (ret!=0) {
       *errstrp = malloc(128);
       snprintf(*errstrp, 127, 
 	       "Getting script: %s",string_DATAPTR(errstr));

@@ -57,25 +57,42 @@
 #include "lex.h"
 #include "request.h"
 #include "iptostring.h"
+#include "xmalloc.h"
 
 #include <prot.h>
 
 
 struct iseive_s {
-    
     char *serverFQDN;
     int port;
 
     int sock;
 
     sasl_conn_t *conn;
+    sasl_callback_t *callbacks;
 
     int version;
 
     struct protstream *pin;
     struct protstream *pout;
-
 };
+
+/* we need this separate from the free() call so that we can reuse
+ * the same memory for referrals */
+static void sieve_dispose(isieve_t *obj) 
+{
+    if(!obj) return;
+    sasl_dispose(&obj->conn);
+    free(obj->serverFQDN);
+    prot_free(obj->pin);
+    prot_free(obj->pout);
+}
+
+void sieve_free_net(isieve_t *obj) 
+{
+    sieve_dispose(obj);
+    free(obj);
+}
 
 /* initialize the network */
 int init_net(char *serverFQDN, int port, isieve_t **obj)
@@ -103,13 +120,13 @@ int init_net(char *serverFQDN, int port, isieve_t **obj)
     return -1;
   }
 
-  *obj = (isieve_t *) malloc(sizeof(isieve_t));
+  *obj = (isieve_t *) xmalloc(sizeof(isieve_t));
   if (!*obj) return -1;
 
   memset(*obj, '\0', sizeof(isieve_t));
 
   (*obj)->sock = sock;
-  (*obj)->serverFQDN = serverFQDN;
+  (*obj)->serverFQDN = xstrdup(serverFQDN);
   (*obj)->port = port;
 
   /* set up the prot layer */
@@ -122,7 +139,7 @@ int init_net(char *serverFQDN, int port, isieve_t **obj)
 static sasl_security_properties_t *make_secprops(int min,int max)
 {
   sasl_security_properties_t *ret=(sasl_security_properties_t *)
-    malloc(sizeof(sasl_security_properties_t));
+    xmalloc(sizeof(sasl_security_properties_t));
 
   ret->maxbufsize=1024;
   ret->min_ssf=min;
@@ -150,7 +167,10 @@ int init_sasl(isieve_t *obj,
   char localip[60], remoteip[60];
 
   /* attempt to start sasl */
-  saslresult=sasl_client_init(callbacks);
+  saslresult=sasl_client_init(NULL);
+
+  /* Save the callbacks array */
+  obj->callbacks = callbacks;
 
   if (saslresult!=SASL_OK) return -1;
 
@@ -177,7 +197,7 @@ int init_sasl(isieve_t *obj,
   saslresult=sasl_client_new(SIEVE_SERVICE_NAME,
 			     obj->serverFQDN,
 			     localip, remoteip,
-			     NULL,
+			     callbacks,
 			     0,
 			     &obj->conn);
 
@@ -230,7 +250,7 @@ char * read_capability(isieve_t *obj)
 	  /* TODO */
       } else if (strncmp(val,"SASL=",5)==0) {
 	  obj->version = OLD_VERSION;
-	  cap = (char *) malloc(strlen(val));
+	  cap = (char *) xmalloc(strlen(val));
 	  memset(cap, '\0', strlen(val));
 	  memcpy(cap, val+6, strlen(val)-7);
 
@@ -256,24 +276,26 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
   int ret;
   size_t len;
   mystring_t *errstr;
+  char *refer_to;
 
   /* now let's see what the server said */
   res=yylex(&state, obj->pin);
   if (res!=STRING)
   {
       ret = handle_response(res,obj->version,
-			    obj->pin, &errstr);
-
-    if (res==TOKEN_OK) {
-      return STAT_OK;
-    } else { /* server said no */
-	*errstrp = string_DATAPTR(errstr);
-	return STAT_NO;
-    }
+			    obj->pin, &refer_to, &errstr);
+      
+      if (res==TOKEN_OK) {
+	  return STAT_OK;
+      } else { /* server said no or bye*/
+	  /* xxx handle referrals */
+	  *errstrp = string_DATAPTR(errstr);
+	  return STAT_NO;
+      }
   }
 
   len = state.str->len*2+1;
-  *line=(char *) malloc(len);
+  *line=(char *) xmalloc(len);
   if(!*line) return STAT_NO;
 
   sasl_decode64(string_DATAPTR(state.str), state.str->len,
@@ -374,45 +396,147 @@ int auth_sasl(char *mechlist, isieve_t *obj, char **errstr)
   return (status == STAT_OK) ? 0 : -1;
 }
 
+int do_referral(isieve_t *obj, char *refer_to) 
+{
+    int ret;
+    struct servent *serv;
+    isieve_t *obj_new;
+    char *mechlist;
+    int port;
+    char *errstr;
+    
+    /* xxx we're not supporting port numbers here here */
+
+    serv = getservbyname("sieve", "tcp");
+    if (serv == NULL) {
+	port = 2000;
+    } else {
+	port = ntohs(serv->s_port);
+    }
+
+    ret = init_net(refer_to, port, &obj_new);
+    if(ret) return STAT_NO;
+
+    /* Start up SASL */
+    ret = init_sasl(obj_new, 128, obj->callbacks);
+    if(ret) return STAT_NO;
+
+    /* Authenticate */
+    mechlist = read_capability(obj_new);
+
+    ret = auth_sasl(mechlist, obj_new, &errstr);
+    if(ret) return STAT_NO;
+
+    /* free old isieve_t */
+    sieve_dispose(obj);
+
+    /* Copy new isieve_t into memory used by old object */
+    memcpy(obj,obj_new,sizeof(isieve_t));
+    free(obj_new);
+
+    /* Destroy the string that was allocated to save the destination server */
+    free(refer_to);
+
+    return STAT_OK;
+}
 
 int isieve_put_file(isieve_t *obj, char *filename, char **errstr)
 {
-    return installafile(obj->version,
-			obj->pout, obj->pin,
-			filename, errstr);
+    char *refer_to;
+    int ret = installafile(obj->version,
+			   obj->pout, obj->pin,
+			   filename, &refer_to, errstr);
+    if(ret == -2 && refer_to) {
+	ret = do_referral(obj, refer_to);
+	if(ret == STAT_OK) {
+	    ret = isieve_put_file(obj, filename, errstr);
+	} else {
+	    *errstr = "referral failed";
+	}
+    }
+    return ret;
 }
 
 int isieve_put(isieve_t *obj, char *name, char *data, int len, char **errstr)
 {
-    return installdata(obj->version,
-		       obj->pout, obj->pin,
-		       name, data, len, errstr);
+    char *refer_to;
+    int ret = installdata(obj->version,
+			  obj->pout, obj->pin,
+			  name, data, len, &refer_to, errstr);
+    if(ret == -2 && refer_to) {
+	ret = do_referral(obj, refer_to);
+	if(ret == STAT_OK) {
+	    ret = isieve_put(obj, name, data, len, errstr);
+	} else {
+	    *errstr = "referral failed";
+	}
+    }
+    return ret;
 }
 
 int isieve_delete(isieve_t *obj, char *name, char **errstr)
 {
-    return deleteascript(obj->version,
-			 obj->pout, obj->pin,
-			 name, errstr);
+    char *refer_to;
+    int ret = deleteascript(obj->version,
+			    obj->pout, obj->pin,
+			    name, &refer_to, errstr);
+    if(ret == -2 && refer_to) {
+	ret = do_referral(obj, refer_to);
+	if(ret == STAT_OK) {
+	    ret = isieve_delete(obj, name, errstr);
+	} else {
+	    *errstr = "referral failed";
+	}
+    }
+    return ret;
 }
 
 int isieve_list(isieve_t *obj, isieve_listcb_t *cb,void *rock, char **errstr)
 {
-    return list_wcb(obj->version, obj->pout, obj->pin, cb, rock);
+    char *refer_to;
+    int ret = list_wcb(obj->version, obj->pout, obj->pin, cb, rock, &refer_to);
+    if(ret == -2 && refer_to) {
+	ret = do_referral(obj, refer_to);
+	if(ret == STAT_OK) {
+	    ret = isieve_list(obj, cb, rock, errstr);
+	}
+    }
+    return ret;    
 }
 
 int isieve_activate(isieve_t *obj, char *name, char **errstr)
 {
-    return setscriptactive(obj->version,obj->pout, obj->pin, name, errstr);
+    char *refer_to;
+    int ret = setscriptactive(obj->version,obj->pout, obj->pin, name,
+			      &refer_to, errstr);
+    if(ret == -2 && refer_to) {
+	ret = do_referral(obj, refer_to);
+	if(ret == STAT_OK) {
+	    ret = isieve_activate(obj, name, errstr);
+	} else {
+	    *errstr = "referral failed";
+	}
+    }
+    return ret;
 }
 
 int isieve_get(isieve_t *obj,char *name, char **output, char **errstr)
 {
     int ret;
+    char *refer_to;
     mystring_t *mystr = NULL;
 
     ret = getscriptvalue(obj->version,obj->pout, obj->pin,
-			 name, &mystr, errstr);
+			 name, &mystr, &refer_to, errstr);
+
+    if(ret == -2 && *refer_to) {
+	ret = do_referral(obj, refer_to);
+	if(ret == STAT_OK) {
+	    ret = isieve_get(obj,name,output,errstr);
+	} else {
+	    *errstr = "referral failed";
+	}
+    }
 
     *output = string_DATAPTR(mystr);
 

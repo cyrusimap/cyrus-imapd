@@ -47,7 +47,11 @@
 typedef struct iseive_s isieve_t;
 
 int init_net(char *serverFQDN, int port, isieve_t **obj);
+void sieve_free_net(isieve_t *obj);
 
+/* The callbacks that are passed to init_sasl need to persist until
+ * after sieve_free_net is called on the object, so that referrals can
+ * continue to work */
 int init_sasl(isieve_t *obj,
 	      int ssf,
 	      sasl_callback_t *callbacks);
