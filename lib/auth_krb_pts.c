@@ -1,3 +1,32 @@
+/* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
+ *
+ *	(C) Copyright 1994 by Carnegie Mellon University
+ *
+ *                      All Rights Reserved
+ *
+ * Permission to use, copy, modify, distribute, and sell this software
+ * and its documentation for any purpose is hereby granted without
+ * fee, provided that the above copyright notice appear in all copies
+ * and that both that copyright notice and this permission notice
+ * appear in supporting documentation, and that the name of Carnegie
+ * Mellon University not be used in advertising or publicity
+ * pertaining to distribution of the software without specific,
+ * written prior permission.  Carnegie Mellon University makes no
+ * representations about the suitability of this software for any
+ * purpose.  It is provided "as is" without express or implied
+ * warranty.
+ *
+ * CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+ * THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+ * FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+ * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+ * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+ * SOFTWARE.
+ *
+ */
+
 #include <krb.h>
 #include <sys/wait.h>
 #include "auth_krb_pts.h"
@@ -12,6 +41,7 @@ static char auth_aname[ANAME_SZ] = "anonymous";
 static char auth_inst[INST_SZ] = ""; 
 static char auth_realm[REALM_SZ] = "";
 
+static char ptclient_path[4096];
 
 /*
   cdecl> declare x as pointer to array of array 64 of char
@@ -258,6 +288,7 @@ int auth_setid(char *identifier, char *cacheid) {
     DB *ptdb;
     HASHINFO info;
     ptluser us;
+    int forktries = 0;
 
     if (auth_ngroups) {
       free(auth_groups);
@@ -350,14 +381,14 @@ int auth_setid(char *identifier, char *cacheid) {
     rc=GET(ptdb,&key,&dataheader,0);
     keydata[key.size-4]=0;
     if (rc < 0) {
-        syslog(LOG_ERR, "IOERROR: reading database: %m");
+        syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
         CLOSE(ptdb);
         close(fd);
         return -1;
     }
     if (!rc) {
         if(dataheader.size != sizeof(ptluser)) {
-            syslog(LOG_ERR, "IOERROR: Database probably corrupt");
+            syslog(LOG_ERR, "IOERROR: Database %s probably corrupt", DBFIL);
             CLOSE(ptdb);
             close(fd);
             return -1;
@@ -372,22 +403,39 @@ int auth_setid(char *identifier, char *cacheid) {
            external lookup client */
         CLOSE(ptdb);
         close(fd);
+
+	if (!ptclient_path[0]) {
+	    strcpy(ptclient_path, CYRUS_PATH);
+	    strcat(ptclient_path, "/bin/");
+	    strcat(ptclient_path, PTCLIENT);
+	}
+
         if (pipe(pfd) < 0) {
-            syslog(LOG_ERR, "pipe: %m");
+            syslog(LOG_ERR, "SYSERR: pipe: %m");
             return -1;
         }
-        pid=vfork();
-        if (pid< 0) {
-            syslog(LOG_ERR, "vfork: %m");
-            close(pfd[0]);
-            close(pfd[1]);
-            return -1;
-        }
+
+	pid = -1;
+	while (pid == -1) {
+	    pid = vfork();
+	    if (pid < 0) {
+		if (errno == EAGAIN && ++forktries < 10) {
+		    sleep(1);
+		}
+		else {
+		    syslog(LOG_ERR, "SYSERR: vfork: %m");
+		    close(pfd[0]);
+		    close(pfd[1]);
+		    return -1;
+		}
+	    }
+	}
+
         if (!pid) {
             close(pfd[1]);
             dup2(pfd[0],0);
-            execl(PTCLIENT,PTCLIENT,0);
-            syslog(LOG_ERR, "exec: %m");
+            execl(ptclient_path, PTCLIENT, 0);
+            syslog(LOG_ERR, "SYSERR: exec %s: %m", ptclient_path);
             exit(-1);
         } else {
             /* The data passed along the pipe is as follows:
@@ -444,7 +492,7 @@ int auth_setid(char *identifier, char *cacheid) {
        occur */
     if (strcasecmp(identifier,us.user)) {
         syslog(LOG_ERR,
-               "Fetched record for user %s was for user %s: key not unique",
+               "Internal error: Fetched record for user %s was for user %s: key not unique",
                identifier, us.user);
         CLOSE(ptdb);
         close(fd);      
@@ -457,12 +505,12 @@ int auth_setid(char *identifier, char *cacheid) {
     CLOSE(ptdb);    
     close(fd);
     if (rc < 0) {
-        syslog(LOG_ERR, "IOERROR: reading database: %m");             
+        syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
         return -1;
     }
     if (rc) {
         syslog(LOG_ERR,
-               "Database inconsistent: header record found, data record missing");
+               "Database %s inconsistent: header record found, data record missing", DBFIL);
         return -1;
     }
     auth_ngroups=us.ngroups;
