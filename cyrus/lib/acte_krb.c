@@ -197,7 +197,7 @@ void **state;			/* On success, filled in with state ptr */
 	return ACTE_FAIL;
     }
 
-    strcpy(instance, host_name->h_name, sizeof(instance)-1);
+    strncpy(instance, host_name->h_name, sizeof(instance)-1);
     instance[sizeof(instance)-1] = '\0';
     if (p = strchr(instance, '.')) *p = '\0';
 
