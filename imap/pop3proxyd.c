@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.37 2002/03/27 16:02:55 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.38 2002/04/23 18:41:33 rjs3 Exp $
  */
 #include <config.h>
 
@@ -206,7 +206,7 @@ int service_init(int argc, char **argv, char **envp)
 /*
  * run for each accepted connection
  */
-int service_main(int argc, char **argv, char **envp)
+int service_main(int argc, char **argv, char **envp __attribute__((unused)))
 {
     int pop3s = 0;
     int opt;
@@ -887,7 +887,7 @@ void cmd_auth(char *arg)
 {
     int sasl_result;
     static struct buf clientin;
-    unsigned clientinlen=0;
+    int clientinlen=0;
     char *authtype;
     const char *serverout;
     unsigned int serveroutlen;
