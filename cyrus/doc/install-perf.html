@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: install-perf.html,v 1.8 2002/10/04 19:56:41 rjs3 Exp $ -->
+<!-- $Id: install-perf.html,v 1.9 2002/12/12 17:19:22 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -34,6 +34,28 @@ this.</p>
 out the code. We probably should add a <tt>configure</tt> option to
 do this.</p>
 </li>
+
+<li><tt><b>/var/imap/mailboxes.db</b></tt> - The mailboxes list is often
+the ultimate source of contention between imap processes, especially if
+clients are inefficient about their use of the LIST command.  For this reason
+it is often better to use the skiplist backend which is optimized for
+enumeration of the database, as opposed to the default, Berkeley DB
+(use <tt>--with-mboxlist-db=skiplist</tt>).
+
+<p>Mika Iisakkila (<i>mika.iisakkila@pingrid.fi</i>) writes: Nevertheless,
+you can also tweak the Berkeley backend if you want to or have to stick
+with it. Cyrus doesn't do anything to increase the BDB cache size, and the
+default (256 kB) is way too small for any reasonably large site. With some
+50000 mailboxes and random operations, I found the hit rate for default
+BDB cache to be 70-80%. After growing the cache size to 2M, hit rate
+approached 99% and disk traffic was greatly reduced since most of the
+operations are reads anyway. Therefore processes could complete their work
+and release their locks much more quickly, and the dreaded "DBERROR: xxx
+lockers" messages stayed at a comfortable level. You can modify the source
+(<tt>/lib/cyrusdb_db3.c</tt>, the setting is commented out) or you can put
+a <tt>DB_CONFIG</tt> file under <tt>/var/imap/db</tt> with the appropriate
+setting. Read more about this in the Berkeley docs before trying it, typos
+and incorrect settings can cause havoc.</p>
 
 <li><tt><b>/var/imap/deliverdb</b></tt> - Unless you disable
 duplicate delivery suppression, each time a mail message is
@@ -107,7 +129,7 @@ Solaris by Adrian Cockcroft. Go to your favorite search engine and
 look for his name.</p>
 
 <hr />
-last modified: $Date: 2002/10/04 19:56:41 $
+last modified: $Date: 2002/12/12 17:19:22 $
 </body>
 </html>
 
