@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.130 2004/02/12 02:32:23 ken3 Exp $
+ * $Id: lmtpd.c,v 1.131 2004/02/20 20:57:39 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -305,13 +305,28 @@ int deliver_mailbox(struct protstream *msg,
     }
 
     if (!r && user && (notifier = config_getstring(IMAPOPT_MAILNOTIFIER))) {
+	char inbox[MAX_MAILBOX_NAME+1];
 	char namebuf[MAX_MAILBOX_NAME+1];
 	char userbuf[MAX_MAILBOX_NAME+1];
+	const char *notify_mailbox = mailboxname;
 	int r2;
+
+	/* translate user.foo to INBOX */
+	if (!(*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace,
+						    "INBOX", user, inbox)) {
+	    int inboxlen = strlen(inbox);
+	    if (strlen(mailboxname) >= inboxlen &&
+		!strncmp(mailboxname, inbox, inboxlen) &&
+		(!mailboxname[inboxlen] || mailboxname[inboxlen] == '.')) {
+		strlcpy(inbox, "INBOX", sizeof(inbox)); 
+		strlcat(inbox, mailboxname+inboxlen, sizeof(inbox));
+		notify_mailbox = inbox;
+	    }
+	}
 
 	/* translate mailboxname */
 	r2 = (*lmtpd_namespace.mboxname_toexternal)(&lmtpd_namespace,
-						    mailboxname,
+						    notify_mailbox,
 						    user, namebuf);
 	if (!r2) {
 	    strlcpy(userbuf, user, sizeof(userbuf));
