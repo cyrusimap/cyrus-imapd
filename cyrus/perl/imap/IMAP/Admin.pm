@@ -528,8 +528,6 @@ sub setaclmailbox {
 	$cyradm->authenticate()
 	  or die "cyradm: cannot authenticate to $refserver\n";
 
-	my %tmp = ();
-	$tmp{$id} = $acl{$id};
 	my $ret = $cyradm->setaclmailbox($mbx, %acl);
 	if(defined($ret)) {
 	  $cnt++;
