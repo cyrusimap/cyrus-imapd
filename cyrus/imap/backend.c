@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7.6.16 2003/02/19 17:09:47 ken3 Exp $ */
+/* $Id: backend.c,v 1.7.6.17 2003/02/24 17:01:15 ken3 Exp $ */
 
 #include <config.h>
 
@@ -273,23 +273,16 @@ struct backend *backend_connect(struct backend *ret, const char *server,
     struct addrinfo hints, *res0 = NULL, *res;
 
     if (!ret) {
-	struct servent *serv;
-
 	ret = xmalloc(sizeof(struct backend));
 	memset(ret, 0, sizeof(struct backend));
 	strlcpy(ret->hostname, server, sizeof(ret->hostname));
-	if ((serv = getservbyname(prot->service, "tcp")) == NULL) {
-	    syslog(LOG_ERR, "getservbyname(%s) failed: %m", prot->service);
-	    free(ret);
-	    return NULL;
-	}
 	ret->timeout = NULL;
     }
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    err = getaddrinfo(server, "143", &hints, &res0);
+    err = getaddrinfo(server, prot->service, &hints, &res0);
     if (err) {
 	syslog(LOG_ERR, "getaddrinfo(%s) failed: %s",
 	       server, gai_strerror(err));
