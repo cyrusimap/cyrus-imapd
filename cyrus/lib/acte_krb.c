@@ -43,6 +43,7 @@ static char *srvtab = "";	/* Srvtab filename */
 /* Private state used by this mechanism */
 struct krb_state {
     /* common */
+    char service[MAX_K_NAME_SZ+1];
     int authstepno;
     des_cblock session;	/* Our session key */
     des_key_schedule schedule; /* Schedule for our session key */
@@ -197,6 +198,7 @@ void **state;			/* On success, filled in with state ptr */
     kstate = (struct krb_state *)malloc(sizeof(struct krb_state));
     if (!kstate) return ACTE_FAIL;
     memset((char *)kstate, 0, sizeof(*kstate));
+    strcpy(kstate->service, service);
     kstate->authstepno = 0;
     memcpy(kstate->session, cr.session, sizeof(des_cblock));
     des_key_sched(kstate->session, kstate->schedule);
@@ -241,8 +243,8 @@ char **output;			/* Set to point to client reply data */
 	}
 	kstate->challenge = ntohl(*(int *)input);
 
-	code = krb_mk_req(&authent, service, kstate->instance, kstate->realm,
-			  kstate->challenge);
+	code = krb_mk_req(&authent, kstate->service, kstate->instance,
+			  kstate->realm, kstate->challenge);
 	if (code) {
 	    kstate->authstepno = -1;
 	    return ACTE_FAIL;
@@ -355,6 +357,7 @@ char **reply;			/* On failure, filled in with ptr to reason */
 	return ACTE_FAIL;
     }
     memset((char *)kstate, 0, sizeof(*kstate));
+    strcpy(kstate->service, service);
     kstate->authstepno = 0;
     kstate->challenge = time(0) ^ getpid();
     kstate->protallowed = protallowed;
@@ -411,8 +414,8 @@ char **reply;			/* On failure, filled in with ptr to reason */
 	memcpy(authent.dat, input, inputlen);
 	authent.mbz = 0;
 	strcpy(instance, "*");
-	code = krb_rd_req(&authent, service, instance, 0L, &kstate->kdata,
-			  srvtab);
+	code = krb_rd_req(&authent, kstate->service, instance, 0L,
+			  &kstate->kdata, srvtab);
 	if (code) {
 	    kstate->authstepno = -1;
 	    *reply = krb_err_txt[code];
