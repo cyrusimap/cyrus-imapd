@@ -2,6 +2,27 @@ dnl libnet.m4--libnet and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
 
+AC_DEFUN(CMU_LIBNET_CFG_WHERE1, [
+ac_cv_found_libnet_bin=no
+if test -f "$1/libnet-config" ; then
+  ac_cv_found_libnet_cfg=yes
+fi
+])
+
+AC_DEFUN(CMU_LIBNET_CFG_WHERE, [
+   for i in $1; do
+      AC_MSG_CHECKING(for libnet config in $i)
+      CMU_LIBNET_CFG_WHERE1($i)
+      if test "$ac_cv_found_libnet_cfg" = "yes"; then
+        ac_cv_libnet_where_cfg=$i
+        AC_MSG_RESULT(found)
+        break
+      else
+        AC_MSG_RESULT(not found)
+      fi
+    done
+])
+
 AC_DEFUN(CMU_LIBNET_INC_WHERE1, [
 ac_cv_found_libnet_inc=no
 if test -f "$1/libnet.h" ; then
@@ -18,7 +39,7 @@ AC_DEFUN(CMU_LIBNET_INC_WHERE, [
         AC_MSG_RESULT(found)
         break
       else
-        AC_MSG_RESULT(no found)
+        AC_MSG_RESULT(not found)
       fi
     done
 ])
@@ -30,7 +51,14 @@ LIBS="$saved_LIBS -L$1 -lnet"
 AC_TRY_LINK(,
 [open_link_interface("","");],
 [ac_cv_found_libnet_lib=yes],
+AC_TRY_LINK(,
+[libnet_open_link_interface("","");],
+[
+CMU_LIBNET_CFLAGS_ADD="-DNEW_LIBNET_INTERFACE"
+ac_cv_found_libnet_lib=yes
+],
 ac_cv_found_libnet_lib=no)
+)
 LIBS=$saved_LIBS
 ])
 
@@ -44,7 +72,7 @@ AC_DEFUN(CMU_LIBNET_LIB_WHERE, [
         AC_MSG_RESULT(found)
         break
       else
-        AC_MSG_RESULT(no found)
+        AC_MSG_RESULT(not found)
       fi
     done
 ])
@@ -54,6 +82,11 @@ AC_ARG_WITH(libnet,
 	[  --with-libnet=PREFIX      Compile with LIBNET support],
 	[if test "X$with_libnet" = "X"; then
 		with_libnet=yes
+	fi])
+AC_ARG_WITH(libnet-config,
+	[  --with-libnet-config=dir  use libnet config program in dir],
+	[if test "$withval" = "yes" -o "$withval" = "no"; then
+		AC_MSG_ERROR([No argument for --with-libnet-config])
 	fi])
 AC_ARG_WITH(libnet-lib,
 	[  --with-libnet-lib=dir     use libnet libraries in dir],
@@ -68,9 +101,21 @@ AC_ARG_WITH(libnet-include,
 
 	if test "X$with_libnet" != "X"; then
 	  if test "$with_libnet" != "yes"; then
+            if test -f "$with_libnet/libnet-config"; then
+	      ac_cv_libnet_where_cfg=$with_libnet
+            else
+	      ac_cv_libnet_where_cfg=$with_libnet/bin
+            fi
 	    ac_cv_libnet_where_lib=$with_libnet/lib
 	    ac_cv_libnet_where_inc=$with_libnet/include
 	  fi
+	fi
+
+	if test "X$with_libnet_cfg" != "X"; then
+	  ac_cv_libnet_where_cfg=$with_libnet_cfg
+	fi
+	if test "X$ac_cv_libnet_where_cfg" = "X"; then
+	  CMU_LIBNET_CFG_WHERE(/usr/ng/bin /usr/bin /usr/local/bin)
 	fi
 
 	if test "X$with_libnet_lib" != "X"; then
@@ -88,16 +133,21 @@ AC_ARG_WITH(libnet-include,
 	fi
 
 	AC_MSG_CHECKING(whether to include libnet)
-	if test "X$ac_cv_libnet_where_lib" = "X" -a "X$ac_cv_libnet_where_inc" = "X"; then
+	if test "X$ac_cv_libnet_where_lib" = "X" -o "X$ac_cv_libnet_where_inc" = "X" -o "X$ac_cv_libnet_where_cfg" = "X"; then
 	  ac_cv_found_libnet=no
 	  AC_MSG_RESULT(no)
 	else
 	  ac_cv_found_libnet=yes
 	  AC_MSG_RESULT(yes)
+	  LIBNET_CONFIG=$ac_cv_libnet_where_cfg/libnet-config
 	  LIBNET_INC_DIR=$ac_cv_libnet_where_inc
 	  LIBNET_LIB_DIR=$ac_cv_libnet_where_lib
+
+	  LIBNET_CFLAGS="`$LIBNET_CONFIG --cflags` ${CMU_LIBNET_CFLAGS_ADD}"
+	  LIBNET_DEF_FLAGS="`$LIBNET_CONFIG --defines`"
 	  LIBNET_INC_FLAGS="-I${LIBNET_INC_DIR}"
-	  LIBNET_LIB_FLAGS="-L${LIBNET_LIB_DIR} -lnet"
+	  LIBNET_LIB_FLAGS="-L${LIBNET_LIB_DIR} `${LIBNET_CONFIG} --libs`"
+
 	  if test "X$RPATH" = "X"; then
 		RPATH=""
 	  fi
