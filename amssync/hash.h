@@ -1,4 +1,4 @@
-/* amssync.c -- synchronize AMS bboard into IMAP
+/* hash.h -- part of amssync
  *
  *	(C) Copyright 1996 by Carnegie Mellon University
  *
