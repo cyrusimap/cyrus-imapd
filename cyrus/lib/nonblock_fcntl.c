@@ -29,6 +29,12 @@
 #define FNDELAY		O_NDELAY
 #endif
 
+#ifdef O_NONBLOCK
+#define NON_BLOCKING_MODE O_NONBLOCK
+#else
+#define NON_BLOCKING_MODE FNDELAY
+#endif
+
 /*
  * Modifies the non-blocking mode on the file descriptor 'fd'.  If
  * 'mode' is nonzero, sets non-blocking mode, if 'mode' is zero
@@ -43,10 +49,10 @@ int mode;
     flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0) fatal("Internal error: fcntl F_GETFL failed");
     if (mode) {
-	flags |= FNDELAY;
+	flags |= NON_BLOCKING_MODE;
     }
     else {
-	flags &= ~FNDELAY;
+	flags &= ~NON_BLOCKING_MODE;
     }
     fcntl(fd, F_SETFL, flags);
 }
