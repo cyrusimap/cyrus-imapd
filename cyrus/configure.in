@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.124 1998/11/03 19:40:29 tjs Exp $
+dnl $Id: configure.in,v 1.125 1998/11/09 20:47:00 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -723,7 +723,7 @@ case "$with_krb" in
     fi
 
     ANDREW_ADD_LIBPATH(${with_krb}/lib)
-    CPPFLAGS="-I${cyrus_krbinclude} ${CPPFLAGS}"
+    CPPFLAGS="${CPPFLAGS} -I${cyrus_krbinclude}"
 
     AC_CHECK_FUNC(basename,,AC_CHECK_LIB(iberty,basename))
     ;;
