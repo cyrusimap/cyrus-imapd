@@ -22,8 +22,8 @@ AC_TRY_COMPILE(
 #endif
 ],
 [cc_t foo;],
-cmu_cv_cc_t_definition=no,
-cmu_cv_cc_t_definition=yes)
+cmu_cv_cc_t_definition=yes,
+cmu_cv_cc_t_definition=no)
 ])
 if test "$cmu_cv_cc_t_definition" = "no"; then
         AC_DEFINE(NO_CC_T)dnl
@@ -61,6 +61,24 @@ if test "$cmu_cv_des_string_to_key_proto" = yes; then
         AC_DEFINE(HAVE_DES_STRING_TO_KEY_PROTO)dnl
 fi
 AC_MSG_RESULT($cmu_cv_des_string_to_key_proto)
+])
+
+AC_DEFUN(CMU_TELNET_DES_KEY_SCHED_PROTO, [
+AC_MSG_CHECKING(for des_key_sched prototype)
+AC_CACHE_VAL(cmu_cv_des_key_sched_proto, [
+AC_TRY_COMPILE(
+[
+#include <des.h>
+char des_key_sched(int foo, int bar, int baz);
+],
+[des_key_sched(NULL, NULL);],
+cmu_cv_des_key_sched_proto=no,
+cmu_cv_des_key_sched_proto=yes)
+])
+if test "$cmu_cv_des_key_sched_proto" = yes; then
+        AC_DEFINE(HAVE_DES_KEY_SCHED_PROTO)dnl
+fi
+AC_MSG_RESULT($cmu_cv_des_key_sched_proto)
 ])
 
 AC_DEFUN(CMU_TELNET_DES_ECB_ENCRYPT_PROTO, [
