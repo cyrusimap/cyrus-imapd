@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.36 2003/02/13 20:32:58 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.37 2003/02/14 20:12:47 ken3 Exp $
  */
 
 #include <config.h>
@@ -1897,7 +1897,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 
     /* Find fixed-string pattern prefix */
     for (p = pattern; *p; p++) {
-	if (*p == '*' || *p == '%' || *p == '?') break;
+	if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
     }
     prefixlen = p - pattern;
     *p = '\0';
@@ -2027,7 +2027,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
 
     /* Find fixed-string pattern prefix */
     for (p = pattern; *p; p++) {
-	if (*p == '*' || *p == '%' || *p == '?') break;
+	if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
     }
     prefixlen = p - pattern;
 
@@ -2636,7 +2636,7 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
 
     /* Find fixed-string pattern prefix */
     for (p = pattern; *p; p++) {
-	if (*p == '*' || *p == '%' || *p == '?') break;
+	if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
     }
     prefixlen = p - pattern;
     *p = '\0';
@@ -2771,7 +2771,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 
     /* Find fixed-string pattern prefix */
     for (p = pattern; *p; p++) {
-	if (*p == '*' || *p == '%' || *p == '?') break;
+	if (*p == '*' || *p == '%' || *p == '?' || *p == '@') break;
     }
     prefixlen = p - pattern;
 
