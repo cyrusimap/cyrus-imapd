@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.37 2000/06/16 02:37:15 leg Exp $
+ * $Id: lmtpd.c,v 1.38 2000/06/20 19:45:38 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.37 2000/06/16 02:37:15 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.38 2000/06/20 19:45:38 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -441,7 +441,7 @@ int send_rejection(const char *origid,
     FILE *sm;
     const char *smbuf[3];
     char buf[8192], *namebuf;
-    int i;
+    int i, sm_exit = 0;
     time_t t;
     struct tm *tm;
     long gmtoff;
@@ -520,16 +520,16 @@ int send_rejection(const char *origid,
     fprintf(sm, "--%d/%s\r\n", (int) p, config_servername);
 
     fclose(sm);
-    waitpid(p, &i, 0);
+    waitpid(p, &sm_exit, 0);
 
-    return (i == 0 ? SIEVE_OK : SIEVE_FAIL); /* sendmail exit value */
+    return (sm_exit == 0 ? SIEVE_OK : SIEVE_FAIL); /* sendmail exit value */
 }
 
 int send_forward(char *forwardto, char *return_path, struct protstream *file)
 {
     FILE *sm;
     const char *smbuf[6];
-    int i;
+    int i, sm_exit = 0;
     char buf[1024];
     pid_t p;
 
@@ -557,9 +557,9 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
     }
 
     fclose(sm);
-    waitpid(p, &i, 0);
+    waitpid(p, &sm_exit, 0);
 
-    return (i == 0 ? SIEVE_OK : SIEVE_FAIL); /* sendmail exit value */
+    return (sm_exit == 0 ? SIEVE_OK : SIEVE_FAIL); /* sendmail exit value */
 }
 
 
@@ -758,7 +758,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     FILE *sm;
     const char *smbuf[6];
     char outmsgid[8192], *sievedb;
-    int i, sl;
+    int i, sl, sm_exit = 0;
     struct tm *tm;
     long tz;
     int tznegative = 0;
@@ -827,9 +827,9 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	fprintf(sm, "\r\n--%d/%s\r\n", (int) p, config_servername);
     }
     fclose(sm);
-    waitpid(p, &i, 0);
+    waitpid(p, &sm_exit, 0);
 
-    if (i == 0) { /* i is sendmail exit value */
+    if (sm_exit == 0) { /* sendmail exit value */
 	sievedb = make_sieve_db(sdata->username);
 
 	duplicate_mark(outmsgid, strlen(outmsgid), 
