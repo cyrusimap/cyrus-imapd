@@ -77,6 +77,13 @@ For example, if the value of the \fBdefaultpartion\fR option is
 .IP "\fBaltnamespace:\fR no" 5
 Use the alternate IMAP namespace, where personal folders reside at the
 same level in the hierarchy as INBOX.
+.br
+.sp
+This option ONLY applies where interaction takes place with the
+client/user.  Currently this is limited to the IMAP protocol (imapd, cyradm)
+and Sieve scripts (lmtpd).  This option does NOT apply to admin tools
+such as reconstruct, quota, etc., NOR does it affect LMTP delivery of
+messages directly to mailboxes via plus-addressing.
 .IP "\fBuserprefix:\fR Other Users" 5
 If using the alternate IMAP namespace, the prefix for the other users
 namespace.  The hierarchy delimiter will be automatically appended.
