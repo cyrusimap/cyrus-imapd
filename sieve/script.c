@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.5 1999/08/31 18:43:21 leg Exp $
+ * $Id: script.c,v 1.6 1999/09/06 02:51:38 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -89,22 +89,17 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     }
 
     s = (sieve_script_t *) xmalloc(sizeof(sieve_script_t));
-    if (s == NULL)
-	return SIEVE_NOMEM;
     s->interp = *interp;
     s->script_context = script_context;
     s->support.fileinto = s->support.reject = s->support.envelope = 0;
     s->err = NULL;
 
     s->cmds = sieve_parse(s, script);
-    if (s->cmds == NULL) {
-	free(s);
-	s = NULL;
-	res = SIEVE_PARSE_ERROR;
-    } else if (s->err != NULL) {
-	free_tree(s->cmds);
-	free(s);
-	s = NULL;
+    if (s->err != NULL) {
+	if (s->cmds) {
+	    free_tree(s->cmds);
+	}
+	s->cmds = NULL;
 	res = SIEVE_PARSE_ERROR;
     }
 
@@ -112,11 +107,26 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     return res;
 }
 
+static void sieve_script_free_errs(struct sieve_errorlist *e)
+{
+    struct sieve_errorlist *f = e;
+
+    while (f) {
+	e = f->next;
+	free(e);
+	f = e;
+    }
+}
+
 int sieve_script_free(sieve_script_t **s)
 {
     if (*s) {
-	free_tree((*s)->cmds);
-
+	if ((*s)->cmds) {
+	    free_tree((*s)->cmds);
+	}
+	if ((*s)->err) {
+	    sieve_script_free_errs((*s)->err);
+	}
 	free(*s);
     }
 
