@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.7 2002/12/16 16:46:56 ken3 Exp $ */
+/* $Id: master.c,v 1.67.4.8 2002/12/17 18:35:33 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1208,7 +1208,14 @@ void reread_conf(void)
 int main(int argc, char **argv)
 {
     const char *default_pidfile = "/var/run/cyrus-master.pid";
+    const char *lock_suffix = ".lock";
+
     const char *pidfile = default_pidfile;
+    char *pidfile_lock = NULL;
+
+    int startup_pipe[2] = { -1, -1 };
+    int pidlock_fd = -1;
+    
     int i, opt, close_std = 1, daemon_mode = 0;
     extern int optind;
     extern char *optarg;
@@ -1257,37 +1264,6 @@ int main(int argc, char **argv)
       }
     }
 
-    if(daemon_mode) {
-	/* Daemonize */
-	int count = 5;
-	pid_t pid;
-	
-	while (count--) {
-	    pid = fork();
-	    
-	    if (pid > 0)
-		_exit(0);		/* parent dies */
-	    
-	    if ((pid == -1) && (errno == EAGAIN)) {
-		syslog(LOG_WARNING, "master fork failed (sleeping): %m");
-		sleep(5);
-		continue;
-	    }
-	}
-
-	if (pid == -1) {
-	    fatal("fork error", EX_OSERR);
-	}
-
-	/*
-	 * We're now running in the child. Lose our controlling terminal
-	 * and obtain a new process group.
-	 */
-	if (setsid() == -1) {
-	    fatal("setsid failure", EX_OSERR);
-	}
-    }
-
     /* we reserve fds 3 and 4 for children to communicate with us, so they
        better be available. */
     for (fd = 3; fd < 5; fd++) {
@@ -1295,16 +1271,111 @@ int main(int argc, char **argv)
 	if (dup(0) != fd) fatal("couldn't dup fd 0: %m", 2);
     }
 
+    /* Pidfile Algorithm in Daemon Mode.  This is a little subtle because
+     * we want to ensure that we can report an error to our parent if the
+     * child fails to lock the pidfile.
+     *
+     * [A] Create/lock pidfile.lock.  If locked, exit(failure).
+     * [A] Create a pipe
+     * [A] Fork [B]
+     * [A] Block on reading exit code from pipe
+     * [B] Create/lock pidfile.  If locked, write failure code to pipe and
+     *     exit(failure)
+     * [B] write pid to pidfile
+     * [B] write success code to pipe & finish starting up
+     * [A] exit(code read from pipe)
+     *
+     */
+    if(daemon_mode) {
+	/* Daemonize */
+	pid_t pid = -1;
+
+	pidfile_lock = malloc(strlen(pidfile) + strlen(lock_suffix) + 1);
+	if(!pidfile_lock) fatal("out of memory", EX_TEMPFAIL);
+
+	strcpy(pidfile_lock, pidfile);
+	strcat(pidfile_lock, lock_suffix);
+	
+	pidlock_fd = open(pidfile_lock, O_CREAT|O_TRUNC|O_RDWR, 0644);
+	if(pidlock_fd == -1) {
+	    syslog(LOG_ERR, "can't open pidfile lock: %s (%m)", pidfile_lock);
+	    exit(EX_OSERR);
+	} else {
+	    if(lock_nonblocking(pidlock_fd)) {
+		syslog(LOG_ERR, "can't get exclusive lock on %s",
+		       pidfile_lock);
+		exit(EX_TEMPFAIL);
+	    }
+	}
+	
+	if(pipe(startup_pipe) == -1) {
+	    syslog(LOG_ERR, "can't create startup pipe (%m)");
+	    exit(EX_OSERR);
+	}
+
+	free(pidfile_lock);
+
+	do {
+	    pid = fork();
+	    	    
+	    if ((pid == -1) && (errno == EAGAIN)) {
+		syslog(LOG_WARNING, "master fork failed (sleeping): %m");
+		sleep(5);
+	    }
+	} while ((pid == -1) && (errno == EAGAIN));
+
+	if (pid == -1) {
+	    fatal("fork error", EX_OSERR);
+	} else if (pid != 0) {
+	    int exit_code;
+
+	    /* Parent, wait for child */
+	    if(read(startup_pipe[0], &exit_code, sizeof(exit_code)) == -1) {
+		syslog(LOG_ERR, "could not read from startup_pipe (%m)");
+		exit(EX_OSERR);
+	    } else {
+		exit(exit_code);
+	    }
+	}
+
+	/* Child! */
+	close(startup_pipe[0]);
+
+	/*
+	 * We're now running in the child. Lose our controlling terminal
+	 * and obtain a new process group.
+	 */
+	if (setsid() == -1) {
+	    int exit_result = EX_OSERR;
+	    
+	    /* Tell our parent that we failed. */
+	    write(startup_pipe[1], &exit_result, sizeof(exit_result));
+	
+	    fatal("setsid failure", EX_OSERR);
+	}
+    }
+
     limit_fds(RLIM_INFINITY);
 
     /* Write out the pidfile */
-    pidfd = open(pidfile, O_CREAT|O_RDWR, 0644);
+    pidfd = open(pidfile, O_CREAT|O_TRUNC|O_RDWR, 0644);
     if(pidfd == -1) {
+	int exit_result = EX_OSERR;
+
+	/* Tell our parent that we failed. */
+	write(startup_pipe[1], &exit_result, sizeof(exit_result));
+
 	syslog(LOG_ERR, "can't open pidfile: %m");
+	exit(EX_OSERR);
     } else {
 	char buf[100];
 
 	if(lock_nonblocking(pidfd)) {
+	    int exit_result = EX_OSERR;
+
+	    /* Tell our parent that we failed. */
+	    write(startup_pipe[1], &exit_result, sizeof(exit_result));
+	    
 	    fatal("cannot get exclusive lock on pidfile (is another master still running?)", EX_OSERR);
 	} else {
 	    int pidfd_flags = fcntl(pidfd, F_GETFD, 0);
@@ -1312,7 +1383,12 @@ int main(int argc, char **argv)
 		pidfd_flags = fcntl(pidfd, F_SETFD, 
 				    pidfd_flags | FD_CLOEXEC);
 	    if (pidfd_flags == -1) {
-		fatal("unable to set close-on-exec for pidfile: %m", 1);
+		int exit_result = EX_OSERR;
+		
+		/* Tell our parent that we failed. */
+		write(startup_pipe[1], &exit_result, sizeof(exit_result));
+
+		fatal("unable to set close-on-exec for pidfile: %m", EX_OSERR);
 	    }
 	    
 	    /* Write PID */
@@ -1320,6 +1396,20 @@ int main(int argc, char **argv)
 	    write(pidfd, buf, strlen(buf));
 	    fsync(pidfd);
 	}
+    }
+
+    if(daemon_mode) {
+	int exit_result = 0;
+
+	/* success! */
+	if(write(startup_pipe[1], &exit_result, sizeof(exit_result)) == -1) {
+	    syslog(LOG_ERR,
+		   "could not write success result to startup pipe (%m)");
+	    exit(EX_OSERR);
+	}
+
+	close(startup_pipe[1]);
+	if(pidlock_fd != -1) close(pidlock_fd);
     }
 
     masterconf_init("master");
