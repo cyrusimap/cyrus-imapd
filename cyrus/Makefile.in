@@ -86,7 +86,7 @@ distcvs:
 	if [ \! -d dist ]; then mkdir dist ; fi
 	@echo "checking out the distribution"
 	@cd dist ; cvs -Q -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs \
-		co -d cyrus-imapd-$(VERSION) cyrus
+		co -r cyrus-imapd-2_2 -d cyrus-imapd-$(VERSION) cyrus
 	touch distcvs
 
 install::

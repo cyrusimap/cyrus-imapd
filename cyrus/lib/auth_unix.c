@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.33.2.4 2003/02/13 20:33:11 rjs3 Exp $
+ * $Id: auth_unix.c,v 1.33.2.5 2003/03/19 19:00:39 rjs3 Exp $
  */
 
 #include <config.h>
@@ -162,6 +162,7 @@ size_t len;
     struct group *grp;
     char sawalpha;
     char *p;
+    int username_tolower = 0;
 
     if(!len) len = strlen(identifier);
     if(len >= sizeof(retbuf)) return NULL;
@@ -186,9 +187,14 @@ size_t len;
 
     /* Copy the string and look up values in the allowedchars array above.
      * If we see any we don't like, reject the string.
+     * Lowercase usernames if requested.
      */
+    username_tolower = libcyrus_config_getswitch(CYRUSOPT_USERNAME_TOLOWER);
     sawalpha = 0;
     for(p = retbuf; *p; p++) {
+	if (username_tolower && isupper((unsigned char)*p))
+	    *p = tolower((unsigned char)*p);
+
 	switch (allowedchars[*(unsigned char*) p]) {
 	case 0:
 	    return NULL;

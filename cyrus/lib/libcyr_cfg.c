@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.1.2.6 2003/02/27 18:12:12 rjs3 Exp $
+ * $Id: libcyr_cfg.c,v 1.1.2.7 2003/03/19 19:00:39 rjs3 Exp $
  */
 
 #include <config.h>
@@ -57,6 +57,10 @@ struct cyrusopt_s cyrus_options[] = {
 
     { CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
       (union cyrus_config_value)((int)1),
+      CYRUS_OPT_SWITCH },
+
+    { CYRUSOPT_USERNAME_TOLOWER,
+      (union cyrus_config_value)((int)0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_SKIPLIST_UNSAFE,

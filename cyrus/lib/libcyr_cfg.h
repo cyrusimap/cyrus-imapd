@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.h,v 1.1.2.6 2003/02/27 18:12:12 rjs3 Exp $
+ * $Id: libcyr_cfg.h,v 1.1.2.7 2003/03/19 19:00:39 rjs3 Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -71,6 +71,8 @@ enum cyrus_opt {
 
     /* Use unix groups with auth_unix? (ON) */
     CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
+    /* Lowercase usernames? (OFF) */
+    CYRUSOPT_USERNAME_TOLOWER,
     /* Don't fsync() the skiplist backend (OFF) */
     CYRUSOPT_SKIPLIST_UNSAFE,
     /* Temporary Storage Directory ("/tmp") */

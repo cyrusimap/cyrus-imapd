@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ldap.c,v 1.1.2.4 2003/02/13 20:33:31 rjs3 Exp $";
+      "$Id: ldap.c,v 1.1.2.5 2003/03/19 19:00:40 rjs3 Exp $";
 
 #include <config.h>
 
@@ -145,6 +145,7 @@ char *ldap_canonifyid(const char *identifier, size_t len)
     static char retbuf[81];
     char sawalpha;
     char *p;
+    int username_tolower = 0;
 
     if(!len) len = strlen(identifier);
     if(len >= sizeof(retbuf)) return NULL;
@@ -154,9 +155,14 @@ char *ldap_canonifyid(const char *identifier, size_t len)
 
     /* Copy the string and look up values in the allowedchars array above.
      * If we see any we don't like, reject the string.
+     * Lowercase usernames if requested.
      */
+    username_tolower = config_getswitch(IMAPOPT_USERNAME_TOLOWER);
     sawalpha = 0;
     for(p = retbuf; *p; p++) {
+	if (username_tolower && isupper((unsigned char)*p))
+	    *p = tolower((unsigned char)*p);
+
 	switch (allowedchars[*(unsigned char*) p]) {
 	case 0:
 	    return NULL;

@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.1.2.4 2003/03/02 20:02:08 ken3 Exp $
+.\" $Id: imapoptions,v 1.1.2.5 2003/03/19 19:00:39 rjs3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -559,6 +559,12 @@ are listed with ``<none>''.
    not using groups in ACLs for your IMAP server, and you are using auth_unix
    with a backend (such as LDAP) that can make getgrent() calls very
    slow) */
+
+# xxx help with wording
+{ "username_tolower", 1, SWITCH }
+/* Lowercase username before login/autheticate.  This is useful with
+   authentication backends which ignore case during username lookups (such
+   as LDAP).  */
 
 { "unixhierarchysep", 0, SWITCH }
 /* Use the UNIX separator character '/' for delimiting levels of

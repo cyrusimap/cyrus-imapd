@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.1.2.6 2003/03/05 18:32:05 ken3 Exp $ */
+/* $Id: global.c,v 1.1.2.7 2003/03/19 19:00:37 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -153,6 +153,8 @@ int cyrus_init(const char *alt_config, const char *ident)
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
     libcyrus_config_setswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
 			      config_getswitch(IMAPOPT_UNIX_GROUP_ENABLE));
+    libcyrus_config_setswitch(CYRUSOPT_USERNAME_TOLOWER,
+			      config_getswitch(IMAPOPT_USERNAME_TOLOWER));
     libcyrus_config_setswitch(CYRUSOPT_SKIPLIST_UNSAFE,
 			      config_getswitch(IMAPOPT_SKIPLIST_UNSAFE));
     libcyrus_config_setstring(CYRUSOPT_TEMP_PATH,
