@@ -18,6 +18,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
+#include <sys/stat.h>
 
 extern int errno;
 
@@ -35,6 +36,7 @@ main()
     struct sockaddr_un clientaddr;
     int r;
     int len;
+    mode_t oldumask;
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
@@ -50,11 +52,18 @@ main()
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
     strcpy(srvaddr.sun_path, fnamebuf);
+    /* Most systems make sockets 0777 no matter what you ask for.
+       Known exceptions are Linux and DUX. */
+    oldumask = umask((mode_t) 0); /* for Linux, which observes the umask when
+			    setting up the socket */
     r = bind(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
     if (r == -1) {
 	perror(fnamebuf);
 	exit(1);
     }
+    umask(oldumask); /* for Linux */
+    chmod(fnamebuf, (mode_t) 0777); /* for DUX, where this isn't the default.
+				    (harmlessly fails on some systems) */	
     r = listen(s, 5);
     if (r == -1) {
 	perror("listen");
