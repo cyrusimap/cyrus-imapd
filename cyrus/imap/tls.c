@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.37 2002/06/02 15:25:42 ken3 Exp $ */
+/* $Id: tls.c,v 1.38 2002/06/03 16:59:57 ken3 Exp $ */
 
 #include <config.h>
 
@@ -697,7 +697,7 @@ int     tls_init_serverengine(const char *ident,
 
     sprintf(buf, "tls_%s_require_cert", ident);
     requirecert = config_getswitch(buf,
-				   config_getstring("tls_require_cert", 0));
+				   config_getswitch("tls_require_cert", 0));
     if (requirecert)
 	verify_flags |= SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT
 	    | SSL_VERIFY_CLIENT_ONCE;
