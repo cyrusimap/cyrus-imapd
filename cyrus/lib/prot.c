@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.7 2002/08/02 17:18:24 rjs3 Exp $
+ * $Id: prot.c,v 1.72.4.8 2002/08/05 17:07:35 rjs3 Exp $
  */
 
 #include <config.h>
@@ -380,9 +380,10 @@ int prot_fill(struct protstream *s)
 		    s->readcallback_proc = 0;
 		    s->readcallback_rock = 0;
 		}
-		/* XXX should this force the flush, since we're now
-		 * waiting for a read? */
-		if (s->flushonread) prot_flush_internal(s->flushonread, 0);
+		/* Force a flush of the buffer.  If we are a blocking
+		   read stream, force the flush */
+		if (s->flushonread)
+		    prot_flush_internal(s->flushonread, !s->dontblock);
 	    }
 	    else {
 		haveinput = 1;
