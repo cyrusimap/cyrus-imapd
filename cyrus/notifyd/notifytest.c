@@ -180,7 +180,7 @@ int
 main(int argc, char *argv[])
 {
   const char *method = "", *priority = "normal";
-  const char *class = "TEST", *user = "", *mailbox = "";
+  const char *class = "MESSAGE", *user = "", *mailbox = "";
   const char *message = NULL, *path = NULL;
   int c;
   int flag_error = 0;
@@ -231,7 +231,7 @@ main(int argc, char *argv[])
       exit(1);
   }
  
-  if (!user) user = getpwuid(getuid())->pw_name;
+  if (!*user) user = getpwuid(getuid())->pw_name;
 
   return notify(path, method, class, priority, user, mailbox,
 		argc - optind, argv+optind, message);
