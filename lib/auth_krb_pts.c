@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.25 1999/02/09 19:13:07 tjs Exp $
+ $Id: auth_krb_pts.c,v 1.26 1999/02/19 01:37:40 wcw Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -29,9 +29,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
-/* XXX FOR DEBUGGING */
-#include <unistd.h>
-#include <sys/stat.h>
 
 #ifdef HAVE_DB_185_H
 #include <db_185.h>
@@ -320,28 +317,23 @@ const char *cacheid;
     static char response[1024];
     int start, n;
 
-    memset(&dataheader, 0, sizeof(dataheader));
-    memset(&datalist, 0, sizeof(datalist));
-
     identifier = auth_canonifyid(identifier);
     if (!identifier) return 0;
 
     newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
-
-    newstate->aname[0] = newstate->inst[0] = newstate->realm[0] = '\0';
-    newstate->ngroups = 0;
-    newstate->groups = 0;
+    (void)memset(newstate, 0, sizeof(struct auth_state));
 
     kname_parse(newstate->aname, newstate->inst, newstate->realm, identifier);
-    if (strcmp(newstate->userid, "anyone") == 0) return newstate;
-    strcpy(newstate->userid, identifier);
+    (void)strcpy(newstate->userid, identifier);
+
+    if (strcmp(identifier, "anyone") == 0) return newstate;
 
     (void)memset(&info, 0, sizeof(info));
     (void)memset(&key, 0, sizeof(key));
     key.data = keydata;
     key.size = PTS_DB_KEYSIZE;
-    strcpy(fnamebuf, STATEDIR);
-    strcat(fnamebuf, PTS_DBLOCK);
+    (void)strcpy(fnamebuf, STATEDIR);
+    (void)strcat(fnamebuf, PTS_DBLOCK);
     fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0664);
     if (fd == -1) {
         syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
@@ -351,9 +343,13 @@ const char *cacheid;
         syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
         return newstate;
     }
-    strcpy(fnamebuf, STATEDIR);
-    strcat(fnamebuf, PTS_DBFIL);
+    (void)strcpy(fnamebuf, STATEDIR);
+    (void)strcat(fnamebuf, PTS_DBFIL);
     ptdb = dbopen(fnamebuf, O_RDONLY, 0, DB_HASH, &info);
+
+    (void)memset(&dataheader, 0, sizeof(dataheader));
+    (void)memset(&datalist, 0, sizeof(datalist));
+
     if (!ptdb) {
 	if (errno == ENOENT) {
 	    /*
@@ -380,8 +376,8 @@ const char *cacheid;
 		 * Write a record to the database, so that the database
 		 * header will be written out
 		 */
-		memset(key.data, 0, key.size);
-		strcpy(key.data, "DUMMYREC");
+	        (void)memset(key.data, 0, key.size);
+		(void)strcpy(key.data, "DUMMYREC");
 		dataheader.size = 5;
 		dataheader.data = "NULL";
 		if (PUT(ptdb, &key, &dataheader, 0) < 0) {
@@ -415,19 +411,19 @@ const char *cacheid;
     }
     if (cacheid) {
       /* this should be the session key + the userid */
-        memset(keydata, 0, key.size);
-        memcpy(keydata, cacheid, 16); /* why 16? see sasl_krb_server.c */
+        (void)memset(keydata, 0, key.size);
+        (void)memcpy(keydata, cacheid, 16); /* why 16? see sasl_krb_server.c */
 	/* toss on userid to further uniquify */
 	if ((strlen(identifier) + 16)  < PTS_DB_KEYSIZE) {
-	  memcpy(keydata+16, identifier, strlen(identifier)); 
+	  (void)memcpy(keydata+16, identifier, strlen(identifier)); 
 	} else {
-	  memcpy(keydata+16, identifier, PTS_DB_KEYSIZE-16);
+	  (void)memcpy(keydata+16, identifier, PTS_DB_KEYSIZE-16);
 	}
     } /* cacheid */
     else {
       /* this is just the userid */
-        memset(keydata, 0, key.size);
-        strncpy(keydata, identifier, PR_MAXNAMELEN);
+        (void)memset(keydata, 0, key.size);
+        (void)strncpy(keydata, identifier, PR_MAXNAMELEN);
     }
     /* Fetch and process the header record for the user, if any */
     keydata[PTS_DB_HOFFSET] = 'H';
@@ -448,7 +444,7 @@ const char *cacheid;
             return newstate;
         }
         /* make sure the record is aligned */
-        memcpy(&us, dataheader.data, sizeof(ptluser));
+        (void)memcpy(&us, dataheader.data, sizeof(ptluser));
     }
     if (rc || (!cacheid && us.cached < time(0) - EXPIRE_TIME)) {
         CLOSE(ptdb);
@@ -457,12 +453,12 @@ const char *cacheid;
         s = socket(AF_UNIX, SOCK_STREAM, 0);
         if (s == -1) return newstate;
         
-	strcpy(fnamebuf, STATEDIR);
-	strcat(fnamebuf, PTS_DBSOCKET);
+	(void)strcpy(fnamebuf, STATEDIR);
+	(void)strcat(fnamebuf, PTS_DBSOCKET);
 
-        memset((char *)&srvaddr, 0, sizeof(srvaddr));
+        (void)memset((char *)&srvaddr, 0, sizeof(srvaddr));
         srvaddr.sun_family = AF_UNIX;
-        strcpy(srvaddr.sun_path, fnamebuf);
+        (void)strcpy(srvaddr.sun_path, fnamebuf);
         r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
         if (r == -1) {
 	    /* *reply = "cannot connect to ptloader server";*/
@@ -492,8 +488,8 @@ const char *cacheid;
 
         /* The database must be re-opened after external modifications, at
            least in db 1.1.85 */
-	strcpy(fnamebuf, STATEDIR);
-	strcat(fnamebuf, PTS_DBLOCK);
+	(void)strcpy(fnamebuf, STATEDIR);
+	(void)strcat(fnamebuf, PTS_DBLOCK);
         fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0664);
         if (fd == -1) {
             syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
@@ -503,8 +499,8 @@ const char *cacheid;
             syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
             return newstate;
         }
-	strcpy(fnamebuf, STATEDIR);
-	strcat(fnamebuf, PTS_DBFIL);
+	(void)strcpy(fnamebuf, STATEDIR);
+	(void)strcat(fnamebuf, PTS_DBFIL);
         ptdb = dbopen(fnamebuf, O_RDONLY, 0, DB_HASH, &info);
         if (!ptdb) {
             syslog(LOG_ERR, "IOERROR: opening database %s: %m", fnamebuf);
@@ -518,20 +514,17 @@ const char *cacheid;
         keydata[PTS_DB_HOFFSET] = 0;
         if (rc < 0) {
             syslog(LOG_ERR, "IOERROR: reading database: %m");             
-            CLOSE(ptdb);
-            close(fd);
-            return newstate;
+	    goto done;
         }
         /* The record still isn't there, even though the child claimed sucess
          */ 
         if (rc) {
             syslog(LOG_ERR, "ptloader did not add database record for %s",
                    identifier);
-            CLOSE(ptdb);
-            close(fd);
-            return newstate;
+	    goto done;
+
         }
-        memcpy(&us, dataheader.data, dataheader.size);
+        (void)memcpy(&us, dataheader.data, dataheader.size);
     }
     /*
      * We assume cache keys will be unique. This will catch duplicates if they
@@ -541,9 +534,7 @@ const char *cacheid;
         syslog(LOG_ERR,
                "Internal error: Fetched record for user %s was for user %s: key not unique",
                identifier, us.user);
-        CLOSE(ptdb);
-        close(fd);      
-        return newstate;
+	goto done;
     }
     /*
      * now get the actual data from the database. this will be a contiguous
@@ -551,27 +542,30 @@ const char *cacheid;
      */
     keydata[PTS_DB_HOFFSET] = 'D';
     rc = GET(ptdb, &key, &datalist, 0);
-    CLOSE(ptdb);    
-    close(fd);
     if (rc < 0) {
         syslog(LOG_ERR, "IOERROR: reading database %s: %m", fnamebuf);
-        return newstate;
+	goto done;
     }
     if (rc) {
         syslog(LOG_ERR,
                "Database %s inconsistent: header record found, data record missing", fnamebuf);
-        return newstate;
+	goto done;
     }
     if (newstate->ngroups * PR_MAXNAMELEN < datalist.size) {
 	syslog(LOG_ERR,
 	       "Database %s inconsistent: not enough data for claimed number of groups", fnamebuf);
     }
     newstate->ngroups = us.ngroups;
+
     if (newstate->ngroups) {
-        newstate->groups = (char (*)[PR_MAXNAMELEN])xmalloc(newstate->ngroups *
-							 PR_MAXNAMELEN); 
-        memcpy(newstate->groups, datalist.data, newstate->ngroups*PR_MAXNAMELEN);
+      newstate->groups = (char (*)[PR_MAXNAMELEN])xmalloc(newstate->ngroups *
+							  PR_MAXNAMELEN); 
+      (void)memcpy(newstate->groups, datalist.data, newstate->ngroups*PR_MAXNAMELEN);
     }
+
+ done:
+    CLOSE(ptdb);    
+    close(fd);
     return newstate;
 }
 
