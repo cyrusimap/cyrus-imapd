@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.40.4.1 2002/07/10 20:45:40 rjs3 Exp $
+ * $Id: timsieved.c,v 1.40.4.2 2002/07/30 19:20:12 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -200,13 +200,13 @@ static int mysasl_authproc(sasl_conn_t *conn,
 			   const char *def_realm, unsigned urlen,
 			   struct propctx *propctx)
 {
-    const char *val;
+    const char *val = config_getstring(IMAPOPT_LOGINREALMS);
     char *realm;
 
     /* check if remote realm */
-    if ((realm = strchr(auth_identity, '@'))!=NULL) {
+    if ((!config_virtdomains || *val) &&
+	(realm = strchr(auth_identity, '@'))!=NULL) {
 	realm++;
-	val = config_getstring(IMAPOPT_LOGINREALMS);
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
 		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
