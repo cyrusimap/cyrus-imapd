@@ -55,6 +55,7 @@ require DynaLoader;
   sieve_get_error
   sieve_get_global_error
   sieve_put_file
+  sieve_put_file_withdest
   sieve_put
   sieve_delete
   sieve_list
