@@ -179,7 +179,7 @@ char *name;
 		}
 		if (*name == '-') {
 		    /* Trailing bits not zero */
-		    if (c3 && 0x03) return IMAP_MAILBOX_BADNAME;
+		    if (c3 & 0x03) return IMAP_MAILBOX_BADNAME;
 
 		    /* End of UTF-7 sequence */
 		    break;
@@ -198,7 +198,7 @@ char *name;
 		}
 		if (*name == '-') {
 		    /* Trailing bits not zero */
-		    if (c6 && 0x0f) return IMAP_MAILBOX_BADNAME;
+		    if (c6 & 0x0f) return IMAP_MAILBOX_BADNAME;
 
 		    /* End of UTF-7 sequence */
 		    break;
