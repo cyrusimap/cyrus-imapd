@@ -1,15 +1,15 @@
 dnl pthreads.m4--pthreads setup macro
 dnl Rob Earhart
-dnl $Id: pthreads.m4,v 1.5 1998/12/01 16:08:53 rob Exp $
+dnl $Id: pthreads.m4,v 1.6 1998/12/02 06:00:40 rob Exp $
 
 AC_DEFUN(CMU_PTHREADS, [
   AC_REQUIRE([AC_CANONICAL_HOST])
   cmu_save_LIBS="$LIBS"
-  AC_CHECK_FUNC(pthread_create,,
-    AC_CHECK_LIB(pthread, pthread_create,,
-      AC_CHECK_LIB(c_r, pthread_create,,
-        AC_ERROR([Can't compile without pthreads]))))
+  AC_CHECK_LIB(pthread, pthread_create,LIB_PTHREAD="-lpthread",
+    AC_CHECK_LIB(c_r, pthread_create,LIB_PTHREAD="-lc_r",
+      AC_ERROR([Can't compile without pthreads])))
   LIBS="$cmu_save_LIBS"
+  AC_SUBST(LIB_PTHREAD)
   AC_DEFINE(_REENTRANT)
   case "$host_os" in
   solaris2*)
