@@ -76,4 +76,4 @@ else
 	INNSHELLVARS=/did/not/find/innshellvars
 fi])
 AC_SUBST(INNSHELLVARS)
-AC_OUTPUT(Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile glue/feedcyrus)
+AC_OUTPUT(Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile imtest/Makefile glue/feedcyrus)
