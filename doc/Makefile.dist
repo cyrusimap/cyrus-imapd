@@ -1,5 +1,5 @@
 dist:
-	mkdir man
+	mkdir -f man
 	for man in ../man/*.[1-9]; \
 	do \
 		echo "=== $$man ==="; \
