@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.71 2003/03/17 17:34:17 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.72 2003/03/17 17:59:22 ken3 Exp $
  */
 
 /*
@@ -2041,8 +2041,10 @@ static void cmd_list(char *arg1, char *arg2)
 	sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
 		      &mechlist, NULL, &mechcount);
 
-	if (mechcount || config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+	if (mechcount || nntp_starttls_done ||
+	    config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
 	    prot_printf(nntp_out, "AUTHINFO%s\r\n",
+			nntp_starttls_done ||
 			config_getswitch(IMAPOPT_ALLOWPLAINTEXT) ? " USER" : "");
 
 	    /* add the SASL mechs */
