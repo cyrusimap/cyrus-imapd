@@ -1,5 +1,7 @@
 dnl Process this file with autoconf to produce a configure script.
 
+dnl $Id: configure.in,v 1.105 1998/05/13 03:57:07 wcw Exp $
+
 AC_INIT(imap/imapd.c)
 
 AC_CHECK_PROG(HAVE_MAKEDEPEND,makedepend,yes)
@@ -49,6 +51,7 @@ AC_SUBST(CPPFLAGS)
 AC_SUBST(PRE_SUBDIRS)
 AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
+AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
 
 dnl for et routines
@@ -440,9 +443,15 @@ dnl
 dnl thanks to snprintf problems, we have to do this before kerberos checks,
 dnl then put krb libs at front of line
 dnl
-AC_CHECK_LIB(ndbm, dbm_open)
-AC_CHECK_LIB(dbm, dbm_open)
-AC_CHECK_FUNC(dbopen,AC_DEFINE(HAVE_LIBDB),AC_CHECK_LIB(db, dbopen))
+AC_CHECK_LIB(db,dbopen,[AC_DEFINE(HAVE_LIBDB)
+                        LIBS=" -ldb ${LIBS}"
+                        USEDB=1])
+
+if test -z "USEDB"; then
+  AC_CHECK_LIB(ndbm, dbm_open)
+  AC_CHECK_LIB(dbm, dbm_open)
+fi
+
 dnl
 dnl Test for Kerberos
 dnl
@@ -525,7 +534,7 @@ if test -z "$with_com_err"; then
 		# com_err is already in library path
 		# guess we're okay
 		# can use system com_err
-dnl		with_com_err=""
+		 with_com_err=""
 	], [
 	if test -f /usr/local/include/com_err.h; then
 		with_com_err="/usr/local"
@@ -555,7 +564,7 @@ case "$with_com_err" in
 	COMPILE_ET="compile_et"
 	;;
   *) # use whatever they told us, or whatever we found
-     COM_ERR_LIBS="${with_comm_err}/lib/libcom_err.a"
+     COM_ERR_LIBS="${with_com_err}/lib/libcom_err.a"
      COM_ERR_CPPFLAGS="-I${with_com_err}/include"
 dnl     ANDREW_ADD_LIBPATH_TO(${with_com_err}/lib, COM_ERR_LDFLAGS)
      COMPILE_ET="${with_com_err}/bin/compile_et"
