@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.230 2000/04/20 16:30:01 leg Exp $ */
+/* $Id: imapd.c,v 1.231 2000/04/25 02:38:37 leg Exp $ */
 
 #include <config.h>
 
@@ -1529,6 +1529,7 @@ void cmd_id(char *tag)
     if ((c = prot_getc(imapd_in)) != ' ') {
 	/* we lose */
 	eatline(c);
+	prot_printf(imapd_out, "%s BAD required parameter missing\r\n");
 	return;
     }
 
@@ -1541,6 +1542,7 @@ void cmd_id(char *tag)
 		"\"version\" \"%s\" "
 	   "\"vendor\" \"Project Cyrus <http://asg.web.cmu.edu/cyrus>\")\r\n",
 		CYRUS_VERSION);
+    prot_printf(imapd_out, "%s OK id given\r\n");
 }
 
 /*
