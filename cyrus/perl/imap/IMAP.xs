@@ -251,6 +251,8 @@ CODE:
 	/* Allocate and setup the return value */
 	rv = safemalloc(sizeof *rv);
 
+	rv->authenticated = 0;
+
 	memcpy(rv->callbacks, sample_callbacks, sizeof(sample_callbacks));
 
 	/* Setup respective contexts */
@@ -367,6 +369,13 @@ imclient__authenticate(client, mechlist, service, user, auth, password, minssf, 
 PREINIT:
 	int rc;
 CODE:
+	ST(0) = sv_newmortal();
+
+	if(client->authenticated) {
+	  ST(0) = &sv_no;
+	  return;
+	}
+
 	/* If the user parameter is undef, set user to be NULL */
 	if(!SvOK(ST(3))) user = NULL;
 	if(!SvOK(ST(5))) password = NULL;
@@ -384,11 +393,12 @@ CODE:
 
 	rc = imclient_authenticate(client->imclient, mechlist, service, user,
 				   minssf, maxssf);
-	ST(0) = sv_newmortal();
 	if (rc)
 	  ST(0) = &sv_no;
-	else
+	else {
+	  client->authenticated = 1;
 	  ST(0) = &sv_yes;
+	}
 
 void
 imclient_addcallback(client, ...)
