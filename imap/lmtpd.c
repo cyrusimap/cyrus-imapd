@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.10 2000/02/24 01:51:06 tmartin Exp $
+ * $Id: lmtpd.c,v 1.11 2000/02/24 05:19:07 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.10 2000/02/24 01:51:06 tmartin Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.11 2000/02/24 05:19:07 leg Exp $";*/
 
 #include <config.h>
 
@@ -165,7 +165,7 @@ void shut_down(int code);
 
 int dupelim = 0;
 int singleinstance = 1;
-const char *BB = "bb";
+const char *BB = "";
 
 void savemsg();
 char *convert_lmtp();
@@ -306,7 +306,7 @@ int service_init(int argc, char **argv, char **envp)
 #endif USE_SIEVE
 
     singleinstance = config_getswitch("singleinstancestore", 1);
-    BB = config_getstring("postuser", "bb");
+    BB = config_getstring("postuser", BB);
 
     if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL);
@@ -1400,26 +1400,30 @@ char *process_recipient(char *addr,
 
     if (dot) *dot = '\0';
 
-    if (*user) {
+    /* check if folder exists */
+    if (!strcmp(user, BB)) {
+	/* special shared folder address */
+	if (!dot) {
+	    r = IMAP_MAILBOX_NONEXISTENT;
+        } else {
+	    user = "";
+	    r = mboxlist_lookup(dot + 1, NULL, NULL, NULL);
+	}
+    } else {
+	/* ordinary user */
 	if (strlen(user) > sizeof(buf)-10) {
 	    return convert_lmtp(IMAP_MAILBOX_NONEXISTENT);
 	}
 
-	/* special case bb */
-	if (!strcmp(user, BB)) {
-	    r = mboxlist_lookup(user+3, (char **)0, (char **)0, NULL);
-	} else {	    
-	    strcpy(buf, "user.");
-	    strcat(buf, user);
-	    r = mboxlist_lookup(buf, (char **)0, (char **)0, NULL);
-	}
+	strcpy(buf, "user.");
+	strcat(buf, user);
+	r = mboxlist_lookup(buf, NULL, NULL, NULL);
     }
-    else {
-	r = IMAP_MAILBOX_NONEXISTENT;
-    }
-    if (r) {
-	return convert_lmtp(r);
-    }
+    
+    /* did we lose? */
+    if (r) return convert_lmtp(r);
+
+    /* setup address */
     if (dot) *dot++ = '\0';
     ret->mailbox = user;
     ret->detail = dot;
