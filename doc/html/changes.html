@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.78 1999/08/13 21:19:05 leg Exp $ -->
+<!-- $Id: changes.html,v 1.79 1999/08/14 18:56:43 wcw Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -30,11 +30,21 @@
       <li> imtest now correctly flushes the server's output to the
       screen
 
-      <li> Added more stupid hashing.  Now whenever there is a mailbox
-      access, it goes through a hash function.
+      <li> Added more hashing using a simple but stupid algorithm.
+      Now whenever there is a mailbox access, quota access, or
+      subscription access, it goes through a hash function. this is
+      done to help reduce the number of files/directories in any given
+      directory.
 
-      <li> deliver now checks sieveusehomedir and sievedir to see
-      where to look for sieve scripts
+      <li>Added the binary <tt>mbpath</tt>. Given a mailbox name, this
+      binary will print the filesystem path to that mailbox. This way
+      if you have multiple partitions and hashing turned out, you
+      don't have to spend as many mental cycles figuring out where the
+      actual directory is is.
+
+      <li> deliver now checks <tt>sieveusehomedir</tt> and
+      <tt>sievedir</tt> in the config file to determine where to look
+      for sieve scripts.
 
       <li> ptloader now has a workaround for afs 3.5
 
@@ -45,6 +55,7 @@
 
       <li> fixed a fairly major bug in prot_fill.  it was performing
       correctly when reading only a single character.
+
     </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.0-BETA </h2>
