@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32.4.8 2002/10/08 20:50:10 rjs3 Exp $ */
+/* $Id: fud.c,v 1.32.4.9 2002/11/01 15:10:35 ken3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -409,10 +409,10 @@ void fatal(const char* s, int code)
     static int recurse_code = 0;
     if (recurse_code) {
         /* We were called recursively. Just give up */
-	syslog(LOG_ERR, "fatal error: %s", s);
 	exit(code);
     }
     recurse_code = code;
+    syslog(LOG_ERR, "Fatal error: %s", s);
 
     shut_down(code);
 }
