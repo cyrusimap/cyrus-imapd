@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.10 2000/02/03 20:14:23 tmartin Exp $
+ * $Id: interp.c,v 1.11 2000/02/07 23:25:37 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -68,7 +68,7 @@ static char *sieve_extensions = "fileinto reject envelope vacation imapflags not
 
 char *sieve_listextensions(void)
 {
-    return "fileinto";
+    return sieve_extensions;
 }
 
 int sieve_interp_free(sieve_interp_t **interp)

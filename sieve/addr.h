@@ -7,3 +7,6 @@
 
 
 extern YYSTYPE addrlval;
+
+/* xxx should this be implemented somewhere? */
+int addrerror(char *msg);

@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.6 2000/02/02 02:34:46 tmartin Exp $
+ * $Id: test.c,v 1.7 2000/02/07 23:25:38 tmartin Exp $
  *
  * usage: "test message < script"
  */
@@ -239,17 +239,23 @@ void fill_cache(message_data_t *m)
 }
 
 /* gets the header "head" from msg. */
-int getheader(void *v, char *head, char ***body)
+int getheader(void *v, char *phead, char ***body)
 {
     message_data_t *m = (message_data_t *) v;
     int cl, clinit;
     char *h;
+    char *head;
 
     *body = NULL;
 
     if (!m->cache_full) {
 	fill_cache(m);
     }
+
+    /* copy header parameter so we can mangle it */
+    head = malloc(strlen(phead)+1);
+    if (!head) return SIEVE_FAIL;
+    strcpy(head, phead);
 
     h = head;
     while (*h != '\0') {
@@ -268,6 +274,8 @@ int getheader(void *v, char *head, char ***body)
 	cl %= HEADERCACHESIZE;
 	if (cl == clinit) break; /* gone all the way around */
     }
+
+    free(head);
 
     if (*body) {
 	return SIEVE_OK;

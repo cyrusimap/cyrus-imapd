@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.16 2000/02/03 06:51:10 tmartin Exp $
+ * $Id: script.c,v 1.17 2000/02/07 23:25:37 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -580,9 +580,9 @@ static int fillin_headers(sieve_interp_t *i, stringlist_t *sl, void *message_con
 
     if (sl == NULL)
     {
-	add_header(i,"to", message_context, out, outlen, &allocsize);
-	add_header(i,"from", message_context, out, outlen, &allocsize);
-	add_header(i,"subject", message_context, out, outlen, &allocsize);
+	add_header(i,"To", message_context, out, outlen, &allocsize);
+	add_header(i,"From", message_context, out, outlen, &allocsize);
+	add_header(i,"Subject", message_context, out, outlen, &allocsize);
     } else {
 	
 	while (sl!=NULL)
