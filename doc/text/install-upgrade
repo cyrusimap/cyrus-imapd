@@ -1,8 +1,10 @@
 Upgrading From Previous Versions
 
-Upgrading from 2.0.6, 2.0.7, or 2.0.8
+Upgrading from 2.0.6, 2.0.7, 2.0.8, or 2.0.9 or earlier
 
-    nothing known. 
+      * If you use timsieved to manage Sieve scripts, run the script
+        "tools/upgradesieve". timsieved now uses symlinks instead of hard
+        links. 
 
 Upgrading from a previous 2.0 version to 2.0.6
 
