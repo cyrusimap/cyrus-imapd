@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 /*
- * $Id: xmalloc.c,v 1.22 2000/05/23 20:56:20 robeson Exp $
+ * $Id: xmalloc.c,v 1.23 2000/11/17 02:10:48 leg Exp $
  */
 #include <config.h>
 #include <stdio.h>
@@ -55,6 +55,20 @@ void* xmalloc(unsigned size)
 
     ret = malloc(size);
     if (ret != NULL) return ret;
+
+    fatal("Virtual memory exhausted", EC_TEMPFAIL);
+    return 0; /*NOTREACHED*/
+}
+
+void* xzmalloc(unsigned size)
+{
+    void *ret;
+
+    ret = malloc(size);
+    if (ret != NULL) {
+	memset(ret, 0, size);
+	return ret;
+    }
 
     fatal("Virtual memory exhausted", EC_TEMPFAIL);
     return 0; /*NOTREACHED*/
