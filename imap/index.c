@@ -47,15 +47,16 @@ static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 
 /* Access macros for the memory-mapped index file data */
 #define INDEX_OFFSET(msgno) (index_base+start_offset+(((msgno)-1)*record_size))
-#define UID(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno))))
-#define INTERNALDATE(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+4)))
-#define SIZE(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+8)))
-#define HEADER_SIZE(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+12)))
-#define CONTENT_OFFSET(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+16)))
-#define CACHE_OFFSET(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+20)))
-#define LAST_UPDATED(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+24)))
-#define SYSTEM_FLAGS(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+28)))
-#define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+32+((i)*4))))
+#define UID(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_UID)))
+#define INTERNALDATE(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_INTERNALDATE)))
+#define SENTDATE(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_SENTDATE)))
+#define SIZE(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_SIZE)))
+#define HEADER_SIZE(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_HEADER_SIZE)))
+#define CONTENT_OFFSET(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_CONTENT_OFFSET)))
+#define CACHE_OFFSET(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_CACHE_OFFSET)))
+#define LAST_UPDATED(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_LAST_UPDATED)))
+#define SYSTEM_FLAGS(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_SYSTEM_FLAGS)))
+#define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+OFFSET_USER_FLAGS+((i)*4))))
 
 /* Access assistance macros for memory-mapped cache file data */
 #define CACHE_ITEM_BIT32(ptr) (ntohl(*((bit32 *)(ptr))))
@@ -1547,12 +1548,10 @@ FILE **msgfile;
       return 0;
     if (searchargs->before && INTERNALDATE(msgno) > searchargs->before)
       return 0;
-#if 0 /* XXX */
     if (searchargs->sentafter && SENTDATE(msgno) < searchargs->sentafter)
       return 0;
     if (searchargs->sentbefore && SENTDATE(msgno) > searchargs->sentbefore)
       return 0;
-#endif    
 
     if (~SYSTEM_FLAGS(msgno) & searchargs->system_flags_set) return 0;
     if (SYSTEM_FLAGS(msgno) & searchargs->system_flags_unset) return 0;
@@ -1778,6 +1777,7 @@ char *rock;
 
     copyargs->copymsg[copyargs->nummsg].uid = UID(msgno);
     copyargs->copymsg[copyargs->nummsg].internaldate = INTERNALDATE(msgno);
+    copyargs->copymsg[copyargs->nummsg].sentdate = SENTDATE(msgno);
     copyargs->copymsg[copyargs->nummsg].size = SIZE(msgno);
     copyargs->copymsg[copyargs->nummsg].header_size = HEADER_SIZE(msgno);
     copyargs->copymsg[copyargs->nummsg].cache_begin = cache_base + CACHE_OFFSET(msgno);

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <time.h>
 
 #include "imap_err.h"
 #include "mailbox.h"
@@ -200,6 +201,7 @@ struct index_record *message_index;
     message_parse_body(infile, mailbox->format, &body,
 		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
     
+    message_index->sentdate = message_parse_date(body.date);
     message_index->size = body.header_size + body.content_size;
     message_index->header_size = body.header_size;
     message_index->content_offset = body.content_offset;
@@ -219,7 +221,8 @@ struct index_record *message_index;
 /*
  * Parse a body-part
  */
-static message_parse_body(infile, format, body, defaultContentType, boundaries)
+static 
+message_parse_body(infile, format, body, defaultContentType, boundaries)
 FILE *infile;
 int format;
 struct body *body;
@@ -463,7 +466,8 @@ struct boundary *boundaries;
  * Parse a list of RFC-822 addresses from a header, appending them
  * to the address list pointed to by 'addrp'.
  */
-static message_parse_address(hdr, addrp)
+static 
+message_parse_address(hdr, addrp)
 char *hdr;
 PARSED_ADDRESS **addrp;
 {
@@ -497,7 +501,8 @@ PARSED_ADDRESS **addrp;
 /*
  * Parse a Content-Transfer-Encoding from a header.
  */
-static message_parse_encoding(hdr, hdrp)
+static 
+message_parse_encoding(hdr, hdrp)
 char *hdr;
 char **hdrp;
 {
@@ -533,7 +538,8 @@ char **hdrp;
 /*
  * Parse an uninterpreted header
  */
-static message_parse_string(hdr, hdrp)
+static 
+message_parse_string(hdr, hdrp)
 char *hdr;
 char **hdrp;
 {
@@ -568,7 +574,8 @@ char **hdrp;
 /*
  * Parse a Content-Type from a header.
  */
-static message_parse_type(hdr, body)	    
+static 
+message_parse_type(hdr, body)	    
 char *hdr;
 struct body *body;
 {
@@ -639,7 +646,8 @@ struct body *body;
 /*
  * Parse a parameter list from a header
  */
-static message_parse_params(hdr, paramp)
+static 
+message_parse_params(hdr, paramp)
 char *hdr;
 struct param **paramp;
 {
@@ -735,7 +743,8 @@ struct param **paramp;
 /*
  * Skip over RFC-822 whitespace and comments
  */
-static message_parse_rfc822space(s)
+static 
+message_parse_rfc822space(s)
 char **s;
 {
     char *p = *s;
@@ -791,7 +800,8 @@ char **s;
 /*
  * Parse the content of a MIME multipart body-part
  */
-static message_parse_multipart(infile, format, body, boundaries)
+static 
+message_parse_multipart(infile, format, body, boundaries)
 FILE *infile;
 int format;
 struct body *body;
@@ -895,7 +905,8 @@ struct boundary *boundaries;
 /*
  * Parse the content of a generic body-part
  */
-static message_parse_content(infile, format, body, boundaries)
+static 
+message_parse_content(infile, format, body, boundaries)
 FILE *infile;
 int format;
 struct body *body;
@@ -928,6 +939,82 @@ struct boundary *boundaries;
 	    if (format == MAILBOX_FORMAT_NETNEWS) body->content_size++;
 	}
     }
+}
+
+/*
+ * Parse a RFC-822 date from a header.
+ * Only parses to day granularity--ignores the time of day.
+ */
+static time_t
+message_parse_date(hdr)
+char *hdr;
+{
+    struct tm tm;
+    static struct tm zerotm;
+    char month[4];
+    static char *monthname[] = {
+	"jan", "feb", "mar", "apr", "may", "jun",
+	"jul", "aug", "sep", "oct", "nov", "dec"
+    };
+
+    tm = zerotm;
+
+    message_parse_rfc822space(&hdr);
+
+    if (isalpha(*hdr)) {
+	/* Day name -- skip over it */
+	hdr++;
+	if (!isalpha(*hdr)) goto baddate;
+	hdr++;
+	if (!isalpha(*hdr)) goto baddate;
+	hdr++;
+	message_parse_rfc822space(&hdr);
+	if (*hdr++ != ',') goto baddate;
+	message_parse_rfc822space(&hdr);
+    }
+
+    if (!isdigit(*hdr)) goto baddate;
+    tm.tm_mday = *hdr++ - '0';
+    if (isdigit(*hdr)) {
+	tm.tm_mday = tm.tm_mday*10 + *hdr++ - '0';
+    }
+    
+    /* Parse month name */
+    message_parse_rfc822space(&hdr);
+    month[0] = *hdr++;
+    if (!isalpha(month[0])) goto baddate;
+    month[1] = *hdr++;
+    if (!isalpha(month[1])) goto baddate;
+    month[2] = *hdr++;
+    if (!isalpha(month[2])) goto baddate;
+    month[3] = '\0';
+    lcase(month);
+    for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
+	if (!strcmp(month, monthname[tm.tm_mon])) break;
+    }
+    if (tm.tm_mon == 12) goto baddate;
+    
+    /* Parse year */
+    message_parse_rfc822space(&hdr);
+    if (!isdigit(*hdr)) goto baddate;
+    tm.tm_year = *hdr++ - '0';
+    if (!isdigit(*hdr)) goto baddate;
+    tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
+    if (isdigit(*hdr)) {
+	if (tm.tm_year < 19) goto baddate;
+	tm.tm_year -= 19;
+	tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
+	if (!isdigit(*hdr)) goto baddate;
+	tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
+    }
+
+    tm.tm_isdst = -1;
+    tm.tm_hour = 12;
+
+    return mktime(&tm);
+
+ baddate:
+    return time(0);
 }
 
 /*
@@ -1021,7 +1108,8 @@ struct body *body;
 /*
  * Write the IMAP envelope for 'body' to 'ibuf'
  */
-static message_write_envelope(ibuf, body)
+static 
+message_write_envelope(ibuf, body)
 struct ibuf *ibuf;
 struct body *body;
 {
@@ -1052,7 +1140,8 @@ struct body *body;
  * Write the BODY (if 'newformat' is zero) or BODYSTRUCTURE
  * (if 'newformat' is nonzero) for 'body' to 'ibuf'.
  */
-static message_write_body(ibuf, body, newformat)
+static 
+message_write_body(ibuf, body, newformat)
 struct ibuf *ibuf;
 struct body *body;
 int newformat;
@@ -1159,7 +1248,8 @@ int newformat;
 /*
  * Write the address list 'addrlist' to 'ibuf'
  */
-static message_write_address(ibuf, addrlist)
+static 
+message_write_address(ibuf, addrlist)
 struct ibuf *ibuf;
 PARSED_ADDRESS *addrlist;
 {
@@ -1184,7 +1274,8 @@ PARSED_ADDRESS *addrlist;
 /*
  * Write the single address 'addr' to 'ibuf'.
  */
-static message_write_singleaddress(ibuf, addr)
+static 
+message_write_singleaddress(ibuf, addr)
 struct ibuf *ibuf;
 PARSED_ADDRESS *addr;
 {
@@ -1265,7 +1356,8 @@ PARSED_ADDRESS *addr;
 /*
  * Write the nil-or-string 's' to 'ibuf'
  */
-static message_write_nstring(ibuf, s)
+static 
+message_write_nstring(ibuf, s)
 struct ibuf *ibuf;
 char *s;
 {
@@ -1306,7 +1398,8 @@ char *s;
 /*
  * Write the text 's' to 'ibuf'
  */
-static message_write_text(ibuf, s)
+static 
+message_write_text(ibuf, s)
 struct ibuf *ibuf;
 char *s;
 {
@@ -1319,7 +1412,8 @@ char *s;
 /*
  * Write out the IMAP number 'n' to 'ibuf'
  */
-static message_write_number(ibuf, n)
+static 
+message_write_number(ibuf, n)
 struct ibuf *ibuf;
 int n;
 {
@@ -1334,7 +1428,8 @@ int n;
 /*
  * Write out the FETCH BODY[section] location/size information to 'ibuf'.
  */
-static message_write_section(ibuf, body)
+static 
+message_write_section(ibuf, body)
 struct ibuf *ibuf;
 struct body *body;
 {
@@ -1428,7 +1523,8 @@ struct body *body;
 /*
  * Write the 32-bit integer quantitiy 'val' to 'ibuf'
  */
-static message_write_bit32(ibuf, val)
+static 
+message_write_bit32(ibuf, val)
 struct ibuf *ibuf;
 int val;
 {
@@ -1447,7 +1543,8 @@ int val;
 /*
  * Unparse the address list 'addrlist' to 'ibuf'
  */
-static message_write_searchaddr(ibuf, addrlist)
+static 
+message_write_searchaddr(ibuf, addrlist)
 struct ibuf *ibuf;
 PARSED_ADDRESS *addrlist;
 {
@@ -1461,7 +1558,8 @@ PARSED_ADDRESS *addrlist;
 /*
  * Unparse the single addres 'addr' to 'ibuf'.
  */
-static message_write_singlesearchaddr(ibuf, addr, last)
+static 
+message_write_singlesearchaddr(ibuf, addr, last)
 struct ibuf *ibuf;
 PARSED_ADDRESS *addr;
 int last;
@@ -1536,7 +1634,8 @@ int last;
  * Initialize 'ibuf'
  */
 #define IBUFGROWSIZE 1000
-static message_ibuf_init(ibuf)
+static 
+message_ibuf_init(ibuf)
 struct ibuf *ibuf;
 {
     char *s = xmalloc(IBUFGROWSIZE);
@@ -1548,7 +1647,8 @@ struct ibuf *ibuf;
 /*
  * Ensure 'ibuf' has enough free space to append 'len' bytes.
  */
-static message_ibuf_ensure(ibuf, len)
+static 
+message_ibuf_ensure(ibuf, len)
 struct ibuf *ibuf;
 int len;
 {
@@ -1568,7 +1668,8 @@ int len;
 /*
  * Write 'ibuf' to the cache file 'outfile'
  */
-static message_ibuf_write(outfile, ibuf)
+static 
+message_ibuf_write(outfile, ibuf)
 FILE *outfile;
 struct ibuf *ibuf;
 {
@@ -1587,7 +1688,8 @@ struct ibuf *ibuf;
 /*
  * Free the space used by 'ibuf'
  */
-static message_ibuf_free(ibuf)
+static 
+message_ibuf_free(ibuf)
 struct ibuf *ibuf;
 {
     free(ibuf->start - sizeof(bit32));
@@ -1596,7 +1698,8 @@ struct ibuf *ibuf;
 /*
  * Free the parsed body-part 'body'
  */
-static message_free_body(body)
+static 
+message_free_body(body)
 struct body *body;
 {
     struct param *param, *nextparam;
