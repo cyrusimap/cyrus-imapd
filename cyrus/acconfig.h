@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.7 2000/09/05 05:44:18 leg Exp $ */
+/* $Id: acconfig.h,v 1.8 2000/09/16 21:50:51 leg Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -110,3 +110,13 @@
 #ifndef __GNUC__
 #define __attribute__(foo)
 #endif
+
+/* compile time options; think carefully before modifying */
+enum {
+    /* should a hierarchical rename stop on error? */
+    RENAME_STOP_ON_ERROR = 1,
+
+    /* should we call fsync() to maybe help with softupdates?
+     * (that is, i'm not sure this solves the problem.) */
+    APPEND_ULTRA_PARANOID = 1,
+};
