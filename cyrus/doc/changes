@@ -2,8 +2,11 @@
 
 Changes to the Cyrus IMAP Server Since Version 1.6.13 
 
+      * An annoying memory management bug in imclient was fixed and it's
+        efficiency was improved somewhat. 
       * Added the sieve client (installsieve) and server (timsieved) for
-        getting sieve scripts onto the server. 
+        getting sieve scripts onto the server and managing them once they
+        are there. 
       * The default Sieve script layout has changed to
         sievedir/u/user/default; this supports multiple Sieve scripts per
         user with the ability to switch between them. 
