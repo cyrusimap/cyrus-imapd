@@ -837,5 +837,7 @@ struct cyrusdb_backend cyrusdb_db3_nosync =
     &delete_nosync,
 
     &commit_nosync,
-    &abort_txn
+    &abort_txn,
+
+    NULL
 };
