@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.51 1999/10/27 21:03:43 leg Exp $
+ * $Id: pop3d.c,v 1.52 1999/11/15 17:25:41 tmartin Exp $
  */
 
 #ifndef __GNUC__
@@ -53,6 +53,12 @@
 #include "util.h"
 #include "auth.h"
 #include "config.h"
+
+/* openSSL has it's own DES function which conflict in names with those used by krb.h */
+#ifdef HAVE_SSL
+#undef HAVE_SSL
+#endif /* HAVE_SSL */
+
 #include "prot.h"
 #include "exitcodes.h"
 #include "imap_err.h"

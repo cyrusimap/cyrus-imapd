@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- $Id: prot.h,v 1.18 1999/11/05 01:00:41 tmartin Exp $
+ $Id: prot.h,v 1.19 1999/11/15 17:25:41 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -33,11 +33,6 @@
 #include <sasl.h>
 
 #ifdef HAVE_SSL
-#include <openssl/lhash.h>
-#include <openssl/bn.h>
-#include <openssl/err.h>
-#include <openssl/pem.h>
-#include <openssl/x509.h>
 #include <openssl/ssl.h>
 #endif /* HAVE_SSL */
 
