@@ -219,8 +219,8 @@ static int gettid(struct txn **mytid, DB_TXN **tid)
 }
 
 static int myfetch(struct db *mydb, 
-		   char *key, int keylen,
-		   char **data, int *datalen,
+		   const char *key, int keylen,
+		   const char **data, int *datalen,
 		   struct txn **mytid, int flags)
 {
     int r = 0;
@@ -236,7 +236,7 @@ static int myfetch(struct db *mydb,
     memset(&k, 0, sizeof(k));
     memset(&d, 0, sizeof(d));
 
-    k.data = key;
+    k.data = (char *) key;
     k.size = keylen;
 
     r = db->get(db, tid, &k, &d, 0);
@@ -263,16 +263,16 @@ static int myfetch(struct db *mydb,
 }
 
 static int fetch(struct db *mydb, 
-		 char *key, int keylen,
-		 char **data, int *datalen,
+		 const char *key, int keylen,
+		 const char **data, int *datalen,
 		 struct txn **mytid)
 {
     return myfetch(mydb, key, keylen, data, datalen, mytid, 0);
 }
 
 static int fetchlock(struct db *mydb, 
-		     char *key, int keylen,
-		     char **data, int *datalen,
+		     const char *key, int keylen,
+		     const char **data, int *datalen,
 		     struct txn **mytid)
 {
     return myfetch(mydb, key, keylen, data, datalen, mytid, DB_RMW);
@@ -358,8 +358,8 @@ static int foreach(struct db *mydb,
 }
 
 static int mystore(struct db *mydb, 
-		   char *key, int keylen,
-		   char *data, int datalen,
+		   const char *key, int keylen,
+		   const char *data, int datalen,
 		   struct txn **mytid, int flag)
 {
     int r = 0;
@@ -376,9 +376,9 @@ static int mystore(struct db *mydb,
     memset(&k, 0, sizeof(k));
     memset(&d, 0, sizeof(d));
 
-    k.data = key;
+    k.data = (char *) key;
     k.size = keylen;
-    d.data = data;
+    d.data = (char *) data;
     d.size = datalen;
 
     do {
@@ -400,23 +400,23 @@ static int mystore(struct db *mydb,
 }
 
 static int create(struct db *db, 
-		  char *key, int keylen,
-		  char *data, int datalen,
+		  const char *key, int keylen,
+		  const char *data, int datalen,
 		  struct txn **tid)
 {
     return mystore(db, key, keylen, data, datalen, tid, DB_NOOVERWRITE);
 }
 
 static int store(struct db *db, 
-		 char *key, int keylen,
-		 char *data, int datalen,
+		 const char *key, int keylen,
+		 const char *data, int datalen,
 		 struct txn **tid)
 {
     return mystore(db, key, keylen, data, datalen, tid, 0);
 }
 
 static int delete(struct db *mydb, 
-		  char *key, int keylen,
+		  const char *key, int keylen,
 		  struct txn **mytid)
 {
     int r = 0;
@@ -432,7 +432,7 @@ static int delete(struct db *mydb,
 
     memset(&k, 0, sizeof(k));
 
-    k.data = key;
+    k.data = (char *) key;
     k.size = keylen;
 
     do {

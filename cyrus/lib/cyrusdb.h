@@ -43,8 +43,9 @@ struct txn;
 
 enum cyrusdb_ret {
     CYRUSDB_OK = 0,
-    CYRUSDB_IOERROR = 1,
-    CYRUSDB_AGAIN = 2
+    CYRUSDB_IOERROR = -1,
+    CYRUSDB_AGAIN = -2,
+    CYRUSDB_EXISTS = -3
 };
 
 enum cyrusdb_initflags {
@@ -66,27 +67,27 @@ struct cyrusdb_backend {
     int (*close)(struct db *db);
     
     int (*fetch)(struct db *mydb, 
-		 char *key, int keylen,
-		 char **data, int *datalen,
+		 const char *key, int keylen,
+		 const char **data, int *datalen,
 		 struct txn **mytid);
     int (*fetchlock)(struct db *mydb, 
-		     char *key, int keylen,
- 		     char **data, int *datalen,
+		     const char *key, int keylen,
+ 		     const char **data, int *datalen,
 		     struct txn **mytid);
     int (*foreach)(struct db *mydb,
 		   char *prefix, int prefixlen,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **tid);
     int (*create)(struct db *db, 
-		  char *key, int keylen,
-		  char *data, int datalen,
+		  const char *key, int keylen,
+		  const char *data, int datalen,
 		  struct txn **tid);
     int (*store)(struct db *db, 
-		 char *key, int keylen,
-		 char *data, int datalen,
+		 const char *key, int keylen,
+		 const char *data, int datalen,
 		 struct txn **tid);
     int (*delete)(struct db *db, 
-		  char *key, int keylen,
+		  const char *key, int keylen,
 		  struct txn **tid);
     
     int (*commit)(struct db *db, struct txn *tid);
@@ -94,3 +95,4 @@ struct cyrusdb_backend {
 };
 
 extern struct cyrusdb_backend cyrusdb_db3;
+extern struct cyrusdb_backend cyrusdb_flat;
