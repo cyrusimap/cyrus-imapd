@@ -757,7 +757,8 @@ char *userid;
     for (p = buf2 + strlen(root); *p; p++) {
 	if (*p == '.') *p = '/';
     }
-    r = mailbox_rename(oldname, newname, buf2, isusermbox);
+    r = mailbox_rename(oldname, newname, buf2, isusermbox,
+		       &olduidvalidity, &newuidvalidity);
     if (r) {
 	mboxlist_unlock();
 	return r;
