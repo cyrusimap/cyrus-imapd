@@ -29,12 +29,13 @@
 
 #include <pwd.h>
 #include <grp.h>
+#include <ctype.h>
 
 #include "auth.h"
 #include "xmalloc.h"
 
 struct auth_state {
-    char userid[30];
+    char userid[81];
     char **group;
     int ngroups;
 };
@@ -79,9 +80,9 @@ const char *identifier;
 char *auth_canonifyid(identifier)
 const char *identifier;
 {
-    static char retbuf[30];
-    struct passwd *pwd;
+    static char retbuf[81];
     struct group *grp;
+    const char *p;
 
     if (strcasecmp(identifier, "anonymous") == 0) {
 	return "anonymous";
@@ -102,9 +103,17 @@ const char *identifier;
 	return retbuf;
     }
 
-    pwd = getpwnam(retbuf);
-    if (!pwd) return 0;
-    strcpy(retbuf, pwd->pw_name);
+    if (strlen(identifier) >= retbuf) return 0;
+
+    p = retbuf;
+    if (!isalpha(*identifier)) return 0;
+    while (*identifier) {
+	*p = *identifier++;
+	if (!isalpha(*p) && !isdigit(*p) && *p != '-') return 0;
+	p++;
+    }
+    *p = 0;
+
     return retbuf;
 }
 
@@ -128,7 +137,6 @@ const char *cacheid;
     if (!strncmp(identifier, "group:", 6)) return 0;
     
     pwd = getpwnam(identifier);
-    if (!pwd) return 0;
 
     newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
 
@@ -141,7 +149,7 @@ const char *cacheid;
 	    if (!strcmp(*mem, identifier)) break;
 	}
 
-	if (*mem || pwd->pw_gid == grp->gr_gid) {
+	if (*mem || (pw && pwd->pw_gid == grp->gr_gid)) {
 	    newstate->ngroups++;
 	    newstate->group = (char **)xrealloc((char *)newstate->group,
 						newstate->ngroups * sizeof(char *));
