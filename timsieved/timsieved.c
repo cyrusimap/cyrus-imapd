@@ -274,11 +274,11 @@ char **envp;
     if (gethostname(hostname, MAXHOSTNAMELEN)!=0)
       fatal("gethostname failed\n",-5);
 
-    config_init("timsieved");
-
     /* set up the prot streams */
     sieved_in = prot_new(0, 0);
     sieved_out = prot_new(1, 1);
+
+    config_init("timsieved");
     timeout = config_getint("timeout", 10);
     if (timeout < 10) timeout = 10;
     prot_settimeout(sieved_in, timeout * 60);
