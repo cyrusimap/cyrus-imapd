@@ -633,14 +633,16 @@ int acapmbox_setproperty(acapmbox_handle_t *AC,
 				  NULL,
 				  NULL,
 				  &cmd);
-
-    /* get result of command */
-    result = acap_process_on_command(AC->conn, cmd, NULL);
+    
+    if (result == ACAP_OK) {
+	result = acap_process_on_command(AC->conn, cmd, NULL);
+    }
     if (result != ACAP_OK) {
-	printf("failure on command\n");
+	syslog(LOG_ERR, "couldn't update ACAP attribute: %s",
+	       error_message(result));
     }
 
-    /* xxx free memory */
+    acap_attribute_free(tmpattr);
 
     return result;
 }
@@ -682,13 +684,15 @@ int acapmbox_setproperty_acl(acapmbox_handle_t *AC,
 				  NULL,
 				  &cmd);
 
-    /* get result of command */
-    result = acap_process_on_command(AC->conn, cmd, NULL);
+    if (result == ACAP_OK) {
+	result = acap_process_on_command(AC->conn, cmd, NULL);
+    }
     if (result != ACAP_OK) {
-	printf("failure on command\n");
+	syslog(LOG_ERR, "couldn't update ACAP attribute: %s",
+	       error_message(result));
     }
 
-    /* xxx free memory */
+    acap_attribute_free(tmpattr);
 
     return result;
 }
