@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.61 2001/02/28 02:44:32 leg Exp $
+ * $Id: imtest.c,v 1.62 2001/03/15 22:55:15 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -717,7 +717,6 @@ void fillin_interactions(sasl_interact_t *tlist)
 static int waitfor(char *tag)
 {
     char str[1024];
-    char *ptr;
 
     do {
 	if (prot_fgets(str,sizeof(str),pin) == NULL) {
@@ -1027,7 +1026,7 @@ static void send_recv_test(void)
 
   end=time(NULL);
 
-  printf("Took: %i seconds\n",(int) end-start);
+  printf("took %ld seconds\n", end - start);
 }
 
 #define LOGOUT "L01 LOGOUT\r\n"
@@ -1041,7 +1040,6 @@ void interactive(char *filename)
   int nfound;
   int count;
   int fd = 0;
-  int atend = 0;
   int donewritingfile = 0;
 
   /* open the file if available */
