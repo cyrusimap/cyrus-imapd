@@ -78,7 +78,7 @@ AC_ARG_WITH(nadine-include,
 		AC_MSG_ERROR([No argument for --with-nadine-include])
 	fi])
 
-        if test "$with_ucdsnmp" != "yes" ; then
+        if test "$with_ucdsnmp" = "no" ; then
              AC_MSG_WARN([Nadine requires UCD SNMP. Disabling Nadine support])
              with_nadine=no
              with_nadine_lib=no
