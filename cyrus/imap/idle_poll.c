@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_poll.c,v 1.5.6.4 2003/02/13 20:32:55 rjs3 Exp $ */
+/* $Id: idle_poll.c,v 1.5.6.5 2003/05/20 15:45:50 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -71,14 +71,15 @@ int idle_enabled(void)
     return idle_period;
 }
 
-static void idle_poll(int sig)
+static void idle_poll(int sig __attribute__((unused)))
 {
     idle_update(IDLE_MAILBOX|IDLE_ALERT);
 
     alarm(idle_period);
 }
 
-int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc)
+int idle_init(struct mailbox *mailbox __attribute__((unused)),
+	      idle_updateproc_t *proc)
 {
     struct sigaction action;
 
@@ -102,7 +103,7 @@ int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc)
     return 1;
 }
 
-void idle_done(struct mailbox *mailbox)
+void idle_done(struct mailbox *mailbox __attribute__((unused)))
 {
     /* Remove the polling function */
     signal(SIGALRM, SIG_IGN);

@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.15.2.11 2003/04/30 17:27:57 ken3 Exp $
+ * $Id: ipurge.c,v 1.15.2.12 2003/05/20 15:45:50 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -205,8 +205,8 @@ usage(char *name) {
 }
 
 /* we don't check what comes in on matchlen and maycreate, should we? */
-int
-purge_me(char *name, int matchlen, int maycreate) {
+int purge_me(char *name, int matchlen __attribute__((unused)),
+	     int maycreate __attribute__((unused))) {
   struct mailbox the_box;
   int            error;
   mbox_stats_t   stats;
@@ -268,8 +268,8 @@ void deleteit(bit32 msgsize, mbox_stats_t *stats)
 
 /* thumbs up routine, checks date & size and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
-int
-purge_check(struct mailbox *mailbox, void *deciderock, char *buf) {
+int purge_check(struct mailbox *mailbox __attribute__((unused)),
+		void *deciderock, char *buf) {
   time_t my_time;
   mbox_stats_t *stats = (mbox_stats_t *) deciderock;
   bit32 senttime;

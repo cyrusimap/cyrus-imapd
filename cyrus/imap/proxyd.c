@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.58 2003/05/13 23:21:30 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.59 2003/05/20 15:45:51 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1232,7 +1232,9 @@ static void proxyd_reset(void)
     saslprops.ssf = 0;
 }
 
-int service_main(int argc, char **argv, char **envp)
+int service_main(int argc __attribute__((unused)),
+		 char **argv __attribute__((unused)),
+		 char **envp __attribute__((unused)))
 {
     socklen_t salen;
     char hbuf[NI_MAXHOST];

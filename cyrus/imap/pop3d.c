@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.30 2003/04/22 15:55:15 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.31 2003/05/20 15:45:50 rjs3 Exp $
  */
 #include <config.h>
 
@@ -331,7 +331,9 @@ int service_init(int argc __attribute__((unused)),
 /*
  * run for each accepted connection
  */
-int service_main(int argc, char **argv, char **envp)
+int service_main(int argc __attribute__((unused)),
+		 char **argv __attribute__((unused)),
+		 char **envp __attribute__((unused)))
 {
     socklen_t salen;
     char hbuf[NI_MAXHOST];
@@ -1510,7 +1512,8 @@ static int parsenum(char **ptr)
     return result;
 }
 
-static int expungedeleted(struct mailbox *mailbox, void *rock, char *index)
+static int expungedeleted(struct mailbox *mailbox __attribute__((unused)),
+			  void *rock __attribute__((unused)), char *index)
 {
     int msg;
     int uid = ntohl(*((bit32 *)(index+OFFSET_UID)));

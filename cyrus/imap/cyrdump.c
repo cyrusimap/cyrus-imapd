@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.9.4.10 2003/04/23 17:08:00 ken3 Exp $
+/* $Id: cyrdump.c,v 1.9.4.11 2003/05/20 15:45:49 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -163,7 +163,8 @@ static void generate_boundary(char *boundary, size_t size)
 	     (long) getpid(), (long) time(NULL), (long) rand());
 }
 
-static int dump_me(char *name, int matchlen, int maycreate, void *rock)
+static int dump_me(char *name, int matchlen __attribute__((unused)),
+		   int maycreate __attribute__((unused)), void *rock)
 {
     int r;
     struct mailbox m;
@@ -342,7 +343,7 @@ static void print_seq(const char *tag, const char *attrib,
 
 #endif
 
-void printastring(const char *s)
+void printastring(const char *s __attribute__((unused)))
 {
-    fatal("not implemented", EC_SOFTWARE);
+    fatal("printastring not implemented in cyrdump", EC_SOFTWARE);
 }

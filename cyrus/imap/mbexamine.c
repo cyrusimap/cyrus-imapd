@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.2.2.3 2003/05/16 22:06:53 rjs3 Exp $ */
+/* $Id: mbexamine.c,v 1.2.2.4 2003/05/20 15:45:50 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -193,9 +193,9 @@ void usage(void)
  * mboxlist_findall() callback function to examine a mailbox
  */
 int do_examine(char *name,
-	       int matchlen,
+	       int matchlen __attribute__((unused)),
 	       int maycreate __attribute__((unused)),
-	       void *rock)
+	       void *rock __attribute__((unused)))
 {
     int i,r = 0;
     int flag = 0;

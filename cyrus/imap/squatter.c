@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.5.4.10 2003/04/23 00:12:07 ken3 Exp $
+ * $Id: squatter.c,v 1.5.4.11 2003/05/20 15:45:53 rjs3 Exp $
  */
 
 /*
@@ -259,7 +259,8 @@ static void search_text_receiver(int uid, int part, int cmd,
 
 /* Let SQUAT tell us what's going on in the expensive
    squat_index_finish function. */
-static void stats_callback(void* closure, SquatStatsEvent* params) {
+static void stats_callback(void* closure __attribute__((unused)),
+			   SquatStatsEvent* params) {
   switch (params->generic.type) {
   case SQUAT_STATS_COMPLETED_INITIAL_CHAR:
     if (verbose > 1) {
@@ -279,7 +280,9 @@ static void stats_callback(void* closure, SquatStatsEvent* params) {
 }
 
 /* This is called once for each mailbox we're told to index. */
-static int index_me(char *name, int matchlen, int maycreate, void *rock) {
+static int index_me(char *name, int matchlen __attribute__((unused)),
+		    int maycreate __attribute__((unused)),
+		    void *rock __attribute__((unused))) {
     struct mailbox m;
     int r;
     SquatStats stats;
