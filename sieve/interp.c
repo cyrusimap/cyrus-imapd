@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.18 2000/12/12 21:33:36 ken3 Exp $
+ * $Id: interp.c,v 1.19 2000/12/12 21:41:26 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -25,13 +25,16 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <stdlib.h>
 
 #include "xmalloc.h"
 
 #include "sieve_interface.h"
 #include "interp.h"
-#include "config.h"
 
 const char *sieve_version = "cmu-sieve 2.0";
 
