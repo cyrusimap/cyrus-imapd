@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.25 2002/01/28 19:34:25 leg Exp $
+ * $Id: lmtpproxyd.c,v 1.26 2002/01/29 20:12:10 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -70,21 +70,16 @@
 #include "acl.h"
 #include "assert.h"
 #include "util.h"
-#include "auth.h"
 #include "prot.h"
-#include "gmtoff.h"
-#include "imparse.h"
-#include "lock.h"
 #include "imapconf.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "version.h"
-#include "append.h"
-#include "mboxlist.h"
-#include "notify.h"
+#include "mboxname.h"
 
+#include "mupdate-client.h"
 #include "lmtpengine.h"
 #include "lmtpstats.h"
 
@@ -120,7 +115,6 @@ enum pending {
 
 /* data pertaining to a message in transit */
 struct mydata {
-    message_data_t *m;
     int cur_rcpt;
 
     const char *temp[2];	/* used to avoid extra indirection in
@@ -145,18 +139,18 @@ typedef struct script_data {
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
-static int verify_user(const char *user);
-static char *generate_notify(message_data_t *m);
-
+static int verify_user(const char *user, long quotacheck,
+		       struct auth_state *authstate);
 void shut_down(int code);
+static void usage();
 
 struct lmtp_func mylmtp = { &deliver, &verify_user, 0, 0 };
 
+/* globals */
 static int quotaoverride = 0;		/* should i override quota? */
 const char *BB = "";
-
-static void usage();
-static void setup_sieve();
+static mupdate_handle *mhandle;
+static const char *mupdate_server = NULL;
 
 /* current namespace */
 static struct namespace lmtpd_namespace;
@@ -236,11 +230,25 @@ int service_init(int argc, char **argv, char **envp)
 	return EC_SOFTWARE;
     }
 
+    r = sasl_client_init(NULL);
+    if(r != 0) {
+	syslog(LOG_ERR, "could not initialize client-side SASL: %s",
+	       sasl_errstring(r, NULL, NULL));
+	return EC_SOFTWARE;
+    }
+
     /* Set namespace */
     if ((r = mboxname_init_namespace(&lmtpd_namespace, 0)) != 0) {
 	syslog(LOG_ERR, error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
+
+    mupdate_server = config_getstring("mupdate_server", NULL);
+    if (!mupdate_server) {
+	syslog(LOG_ERR, "no mupdate_server defined");
+	return EC_CONFIG;
+    }
+    mhandle = NULL;
 
     return 0;
 }
@@ -251,6 +259,7 @@ int service_init(int argc, char **argv, char **envp)
 int service_main(int argc, char **argv, char **envp)
 {
     int opt;
+    int r;
 
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
@@ -271,8 +280,27 @@ int service_main(int argc, char **argv, char **envp)
 	}
     }
 
-    lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
-    shut_down(0);
+    /* get a connection to the mupdate server */
+    r = 0;
+    if (!mhandle) {
+	r = mupdate_connect(mupdate_server, NULL, &mhandle, NULL);
+    }
+    if (!r) {
+	lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
+    } else {
+	mhandle = NULL;
+	syslog(LOG_ERR, "couldn't connect to %s: %s", mupdate_server,
+	       error_message(r));
+	prot_printf(deliver_out, "451 %s LMTP Cyrus %s %s\r\n",
+		    config_servername, CYRUS_VERSION, error_message(r));
+    }
+
+    /* free session state */
+    if (deliver_in) prot_free(deliver_in);
+    if (deliver_out) prot_free(deliver_out);
+    close(0);
+    close(1);
+    close(2);
 
     return 0;
 }
@@ -346,7 +374,6 @@ static int adddest(struct mydata *mydata,
     struct dest *d;
     struct mupdate_mailboxdata *mailboxdata;
     int sl = strlen(BB);
-    char *s;
     int r;
     char buf[MAX_MAILBOX_NAME];
 
@@ -356,7 +383,7 @@ static int adddest(struct mydata *mydata,
     /* find what server we're sending this to */
     if (!strncmp(mailbox, BB, sl) && mailbox[sl] == '+') {
 	/* special shared folder address */
-	strcpy(buf, user + sl + 1);
+	strcpy(buf, mailbox + sl + 1);
 	mboxname_hiersep_tointernal(&lmtpd_namespace, buf);
 	r = mupdate_find(mhandle, buf, &mailboxdata);
     } else {
@@ -369,6 +396,12 @@ static int adddest(struct mydata *mydata,
 
 	/* find where this user lives */
 	r = mupdate_find(mhandle, buf, &mailboxdata);
+    }
+
+    if (r == MUPDATE_NOCONN) {
+	/* yuck; our error handling for now will be to exit;
+	   this txn will be retried later */
+	fatal("mupdate server not responding", EC_TEMPFAIL);
     }
 
     if (r) {
@@ -402,7 +435,7 @@ static int adddest(struct mydata *mydata,
     new->next = d->to;
     d->to = new;
 
-    /* xxx free mailboxdata ? */
+    /* don't need to free mailboxdata; it goes with the handle */
 
     /* and we're done */
     return 0;
@@ -497,7 +530,7 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
 int deliver(message_data_t *msgdata, char *authuser,
 	    struct auth_state *authstate)
 {
-    int n, nrcpts, i;
+    int n, nrcpts;
     mydata_t mydata;
     struct dest *d;
     
@@ -506,7 +539,6 @@ int deliver(message_data_t *msgdata, char *authuser,
     assert(nrcpts);
 
     /* create 'mydata', our per-delivery data */
-    mydata.m = msgdata;
     mydata.authuser = authuser;
     mydata.pend = xmalloc(sizeof(enum pending) * nrcpts);
     
@@ -515,7 +547,6 @@ int deliver(message_data_t *msgdata, char *authuser,
 	char *rcpt = xstrdup(msg_getrcpt(msgdata, n));
 	char *plus;
 	int r = 0;
-	FILE *f;
 
 	mydata.cur_rcpt = n;
 	plus = strchr(rcpt, '+');
@@ -523,21 +554,31 @@ int deliver(message_data_t *msgdata, char *authuser,
 	/* case 1: shared mailbox request */
 	if (plus && !strcmp(rcpt, BB)) {
 	    *--plus = '+';	/* put that plus back */
-	    adddest(&mydata, rcpt, mydata.authuser);
-
-	    mydata.pend[n] = nosieve;
+	    r = adddest(&mydata, rcpt, mydata.authuser);
+	    
+	    if (r) {
+		msg_setrcpt_status(msgdata, n, r);
+		mydata.pend[n] = done;
+	    } else {
+		mydata.pend[n] = nosieve;
+	    }
 	}
 
 	/* case 2: ordinary user, Sieve script---naaah, not here */
 
 	/* case 3: ordinary user, no Sieve script */
 	else {
-	    if(plus) *--plus = '+';
-	    adddest(&mydata, rcpt, authuser);
-	    mydata.pend[n] = nosieve;
+	    if (plus) *--plus = '+';
+
+	    r = adddest(&mydata, rcpt, authuser);
+	    if (r) {
+		msg_setrcpt_status(msgdata, n, r);
+		mydata.pend[n] = done;
+	    } else {
+		mydata.pend[n] = nosieve;
+	    }
 	}
 
-    donercpt:
 	free(rcpt);
     }
 
@@ -568,6 +609,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 	case s_done:
 	case nosieve:
 	    /* yikes, we haven't implemented sieve ! */
+	    syslog(LOG_CRIT, 
+		   "sieve states reached, but we don't implement sieve");
 	    abort();
 	    break;
 	case done:
@@ -603,9 +646,6 @@ void fatal(const char* s, int code)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
-#ifdef HAVE_SSL
-    tls_shutdown_serverengine();
-#endif
     prot_flush(deliver_out);
 
     exit(code);
@@ -616,7 +656,7 @@ static int verify_user(const char *user,
 		       struct auth_state *authstate)
 {
     char buf[MAX_MAILBOX_PATH];
-    int r;
+    int r = 0;
     int sl = strlen(BB);
 
     /* check to see if mailbox exists */
@@ -641,13 +681,26 @@ static int verify_user(const char *user,
 	}
     }
 
+#ifdef CHECK_MUPDATE_EARLY
     /* Translate any separators */
     if (!r) mboxname_hiersep_tointernal(&lmtpd_namespace, buf);
-    if (!r) r = mupdate_find(mhandle, buf, &mailboxdata);
     if (!r) {
-	/* check ACL */
+	r = mupdate_find(mhandle, buf, &mailboxdata);
+	if (r == MUPDATE_NOCONN) {
+	    /* yuck; our error handling for now will be to exit;
+	       this txn will be retried later */
+	    
+	}
+    if (!r) {
+	/* xxx check ACL */
 
     }
+
+    if (!r) {
+	/* add to destination list */
+       
+    }
+#endif
 
     return r;
 }
