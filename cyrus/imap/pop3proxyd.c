@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.30 2002/02/11 17:41:44 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.31 2002/02/15 17:21:15 rjs3 Exp $
  */
 #include <config.h>
 
@@ -968,9 +968,7 @@ void cmd_auth(char *arg)
 				       clientin.s,
 				       clientinlen,
 				       &serverout, &serveroutlen);
-    syslog(LOG_NOTICE, "pop3d step - through it again");
     }
-    syslog(LOG_NOTICE, "pop3d step- done");
 
     /* failed authentication */
     if (sasl_result != SASL_OK)
@@ -1204,7 +1202,7 @@ static void openproxy(void)
     mboxname_hiersep_tointernal(&popd_namespace, inboxname+5);
 
     r = mboxlist_lookup(inboxname, &server, NULL, NULL);
-    if (!r) fatal("couldn't find backend server", EC_CONFIG);
+    if (r) fatal("couldn't find backend server", EC_CONFIG);
 
     /* xxx hide the fact that we are storing partitions */
     if(server) {
