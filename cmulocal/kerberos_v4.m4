@@ -2,6 +2,45 @@ dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
 
+AC_DEFUN(CMU_KRB_SET_KEY_PROTO, [
+AC_MSG_CHECKING(for krb_set_key prototype)
+AC_CACHE_VAL(ac_cv_krb_set_key_proto, [
+cmu_save_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="${CPPFLAGS} ${KRB_INC_FLAGS}"
+AC_TRY_COMPILE(
+[#include <krb.h>
+int krb_set_key(char *key, int cvt);],
+[int foo = krb_set_key(0, 0);],
+ac_cv_krb_set_key_proto=no,
+ac_cv_krb_set_key_proto=yes)
+])
+CPPFLAGS="${cmu_save_CPPFLAGS}"
+if test "$ac_cv_krb_set_key_proto" = yes; then
+	AC_DEFINE(HAVE_KRB_SET_KEY_PROTO)dnl
+fi
+AC_MSG_RESULT($ac_cv_krb_set_key_proto)
+])
+
+AC_DEFUN(CMU_KRB_RD_REQ_PROTO, [
+AC_MSG_CHECKING(for krb_rd_req prototype)
+AC_CACHE_VAL(ac_cv_krb_rd_req_proto, [
+cmu_save_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="${CPPFLAGS} ${KRB_INC_FLAGS}"
+AC_TRY_COMPILE(
+[#include <krb.h>
+int krb_rd_req(KTEXT authent, char *service, char *instance,
+unsigned KRB_INT32 from_addr, AUTH_DAT *ad, char *fn);],
+[int foo = krb_rd_req(NULL, NULL, NULL, 0, NULL, NULL);],
+ac_cv_krb_rd_req_proto=no,
+ac_cv_krb_rd_req_proto=yes)
+])
+CPPFLAGS="${cmu_save_CPPFLAGS}"
+if test "$ac_cv_krb_rd_req_proto" = yes; then
+	AC_DEFINE(HAVE_KRB_RD_REQ_PROTO)dnl
+fi
+AC_MSG_RESULT($ac_cv_krb_rd_req_proto)
+])
+
 AC_DEFUN(CMU_KRB_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
@@ -121,6 +160,7 @@ AC_ARG_WITH(krb4-include,
 	  cmu_save_LIBS="$LIBS"
 	  LIBS="${LIBS} ${KRB_LIB_FLAGS}"
 	  AC_CHECK_LIB(resolv, dns_lookup, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lresolv",,"${KRB_LIB_FLAGS}")
+	  AC_CHECK_LIB(crypt, crypt, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lcrypt",,"${KRB_LIB_FLAGS}")
 	  AC_CHECK_FUNCS(krb_get_int krb_life_to_time)
 	  LIBS="${cmu_save_LIBS}"
 	  AC_DEFINE(KERBEROS)
