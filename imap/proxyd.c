@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.57 2000/12/19 23:59:31 leg Exp $ */
+/* $Id: proxyd.c,v 1.58 2000/12/21 20:35:43 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -66,6 +66,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <sys/utsname.h>
 
 #include <sasl.h>
 #include <saslutil.h>
@@ -108,10 +109,9 @@ struct backend {
     sasl_conn_t *saslconn;
 
     enum {
-	ACAP = 1
+	ACAP = 0x1,
+	IDLE = 0x2
     } capability;
-
-    void (*cmd_idle)(char* tag); /* function to perform IDLE */
 
     char last_result[LAST_RESULT_LEN];
     struct protstream *in; /* from the be server to me, the proxy */
@@ -159,6 +159,7 @@ int proxyd_haveaddr = 0;
 char proxyd_clienthost[250] = "[local]";
 struct protstream *proxyd_out, *proxyd_in;
 time_t proxyd_logtime;
+static char shutdownfilename[1024];
 
 void shutdown_file(int fd);
 void motd_file(int fd);
@@ -199,9 +200,21 @@ void cmd_status(char *tag, char *name);
 void cmd_getuids(char *tag, char *startuid);
 void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
-void cmd_id(char* tag);
 
+void cmd_id(char* tag);
+struct idparamlist {
+    char *field;
+    char *value;
+    struct idparamlist *next;
+};
 void id_getcmdline(int argc, char **argv);
+void id_appendparamlist(struct idparamlist **l, char *field, char *value);
+void id_freeparamlist(struct idparamlist *l);
+
+void cmd_idle(char* tag);
+char idle_nomailbox(char* tag, int idle_period, struct buf *arg);
+char idle_passthrough(char* tag, int idle_period, struct buf *arg);
+char idle_simulate(char* tag, int idle_period, struct buf *arg);
 
 void cmd_starttls(char *tag, int imaps);
 int starttls_enabled(void);
@@ -210,8 +223,13 @@ int starttls_enabled(void);
 void cmd_netscape (char* tag);
 #endif
 
+enum string_types { IMAP_ASTRING, IMAP_NSTRING, IMAP_STRING };
+#define getastring(buf)	getxstring((buf), IMAP_ASTRING)
+#define getnstring(buf)	getxstring((buf), IMAP_NSTRING)
+#define getstring(buf)	getxstring((buf), IMAP_STRING)
+
 int getword (struct buf *buf);
-int getastring (struct buf *buf);
+int getxstring (struct buf *buf, int type);
 
 void eatline (int c);
 void printstring (const char *s);
@@ -643,126 +661,6 @@ static int proxy_authenticate(struct backend *s)
     return r;
 }
 
-/* Get IDLE continuation data (listen to client) */
-#define IDLECONT_POLL 1
-
-struct prot_waitevent *idle_continuation(struct protstream *s,
-					 struct prot_waitevent *ev, void *rock)
-{
-    int c;
-    /* 'cont' contains the chars that we still need to receive
-     * to complete a valid continuation.  we increment the pointer
-     * each time we receive one of these chars. */
-    char *cont = (char *) *(char **) rock;
-
-    prot_NONBLOCK(proxyd_in);
-    do {
-	c = prot_getc(proxyd_in);
-    } while ((c != EOF) && (TOUPPER(c) == *cont) && *++cont);
-    prot_BLOCK(proxyd_in);
-
-    if (c == EOF && errno == EAGAIN) {
-	/* out of input, so keep polling */
-	*(char **) rock = cont;
-	ev->mark = time(NULL) + IDLECONT_POLL;
-    }
-    else {
-	if (c != EOF && *cont) {
-	    /* invalid continuation, spit out a message */
-	    prot_printf(backend_current->out, 
-			"* BAD Invalid Idle continuation\r\n");
-	    eatline(c);
-	}
-
-	/* either the client timed out, or gave us a continuation.
-	   in either case we're done, so terminate the IDLE */
-	prot_printf(backend_current->out, "DONE\r\n");
-	ev->mark = time(NULL) + 60*60*24;  /* 24 hours */
-    }
-
-    return ev;
-}
-
-/* Pass IDLE to backend (listen to backend) */
-void idle_passthrough(char *tag)
-{
-    struct prot_waitevent *idle_event;
-    char done[] = "DONE\r\n";
-
-    assert(backend_current != NULL);
-
-    prot_printf(backend_current->out, "%s IDLE\r\n", tag);
-
-    /* Setup a function to try and grab continuation data
-       every IDLECONT_POLL seconds */
-    idle_event = prot_addwaitevent(backend_current->in,
-				   time(NULL) + IDLECONT_POLL,
-				   idle_continuation, (void *) &done);
-
-    pipe_including_tag(backend_current, tag);
-
-    /* Remove the continuation data function */
-    prot_removewaitevent(backend_current->in, idle_event);
-}
-
-/* Poll the backend for updates */
-struct prot_waitevent *idle_poll(struct protstream *s,
-				 struct prot_waitevent *ev, void *rock)
-{
-    int idle_period = *((int *) rock);
-    char mytag[128];
-	
-    proxyd_gentag(mytag);
-    prot_printf(backend_current->out, "%s Noop\r\n", mytag);
-    pipe_until_tag(backend_current, mytag);
-
-    ev->mark = time(NULL) + idle_period;
-    return ev;
-}
-
-/* Simulate IDLE by polling the backend */
-void idle_simulate(char *tag)
-{
-    static int idle_period = -1;
-    struct prot_waitevent *idle_event;
-    int c;
-    static struct buf arg;
-
-    /* get polling period */
-    if (idle_period == -1) {
-      idle_period = config_getint("imapidlepoll", 60);
-      if (idle_period < 1) idle_period = 1;
-    }
-
-    /* Setup a function to poll the backend for updates */
-    idle_event = prot_addwaitevent(proxyd_in,
-				   time(NULL) + idle_period,
-				   idle_poll, &idle_period);
-
-    /* Tell client we are idling and waiting for end of command */
-    prot_printf(proxyd_out, "+ go ahead\r\n");
-    prot_flush(proxyd_out);
-
-    /* Get continuation data */
-    c = getword(&arg);
-    if (c != EOF) {
-	if (!strcasecmp(arg.s, "Done") &&
-	    (c = (c == '\r') ? prot_getc(proxyd_in) : c) == '\n') {
-	    prot_printf(proxyd_out, "%s OK %s\r\n", tag,
-			error_message(IMAP_OK_COMPLETED));
-	}
-
-	else {
-	    prot_printf(proxyd_out, 
-			"%s BAD Invalid Idle continuation\r\n", tag);
-	    eatline(c);
-	}
-    }
-
-    /* Remove the continuation data function */
-    prot_removewaitevent(proxyd_in, idle_event);
-}
-
 void proxyd_capability(struct backend *s)
 {
     char tag[128];
@@ -776,10 +674,7 @@ void proxyd_capability(struct backend *s)
 	if (!strncasecmp(resp, "* Capability ", 13)) {
 	    st++; /* increment state */
 	    if (strstr(resp, "ACAP=")) s->capability |= ACAP;
-	    if (strstr(resp, "IDLE"))
-		s->cmd_idle = idle_passthrough;
-	    else
-		s->cmd_idle = idle_simulate;
+	    if (strstr(resp, "IDLE")) s->capability |= IDLE;
 	} else {
 	    /* line we weren't expecting. hmmm. */
 	}
@@ -1337,7 +1232,6 @@ void
 cmdloop()
 {
     int fd;
-    char shutdownfilename[1024];
     char motdfilename[1024];
     char hostname[MAXHOSTNAMELEN+1];
     int c;
@@ -1607,19 +1501,7 @@ cmdloop()
 	    else if (!strcmp(cmd.s, "Idle")) {
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
-
-#ifdef PROXY_IDLE
-		/* should we do something else here??? */
-		if (!backend_current) {
-		    prot_printf(proxyd_out,
-				"%s NO cannot start idling\r\n", tag.s);
-		    continue;
-		}
-
-		backend_current->cmd_idle(tag.s);
-#else
-		prot_printf(proxyd_out, "%s NO idle disabled\r\n", tag.s);
-#endif
+		cmd_idle(tag.s);
 	    }
 	    else goto badcmd;
 	    break;
@@ -2289,16 +2171,6 @@ void cmd_noop(char *tag, char *cmd)
 static char id_resp_command[MAXIDVALUELEN];
 static char id_resp_arguments[MAXIDVALUELEN] = "";
 
-void id_getcmdline(int argc, char **argv)
-{
-    snprintf(id_resp_command, MAXIDVALUELEN, *argv);
-    while (--argc > 0) {
-	snprintf(id_resp_arguments + strlen(id_resp_arguments),
-		 MAXIDVALUELEN - strlen(id_resp_arguments),
-		 "%s%s", *++argv, (argc > 1) ? " " : "");
-    }
-}
-
 #if 0
 void cmd_id(char *tag)
 {
@@ -2308,8 +2180,8 @@ void cmd_id(char *tag)
     int error = 0;
     int c = EOF, npair = 0;
     static struct buf arg, field;
-    struct strlist *fields = 0, *values = 0;
     struct utsname os;
+    struct idparamlist *params = 0;
 
     /* check if we've already had an ID in non-authenticated state */
     if (!proxyd_userid && did_id) {
@@ -2390,29 +2262,26 @@ void cmd_id(char *tag)
 	    }
 	    
 	    /* ok, we're happy enough */
-	    appendstrlist(&fields, field.s);
-	    appendstrlist(&values, arg.s);
+	    id_appendparamlist(&params, field.s, arg.s);
 	}
 
 	if (error || c != ')') {
 	    /* erp! */
 	    eatline(c);
-	    freestrlist(fields);
-	    freestrlist(values);
+	    id_freeparamlist(params);
 	    failed_id++;
 	    return;
 	}
-	c = prot_getc(imapd_in);
+	c = prot_getc(proxyd_in);
     }
 
     /* check for CRLF */
-    if (c == '\r') c = prot_getc(imapd_in);
+    if (c == '\r') c = prot_getc(proxyd_in);
     if (c != '\n') {
 	prot_printf(proxyd_out,
 		    "%s BAD Unexpected extra arguments to Id\r\n", tag);
 	eatline(c);
-	freestrlist(fields);
-	freestrlist(values);
+	id_freeparamlist(params);
 	failed_id++;
 	return;
     }
@@ -2421,19 +2290,18 @@ void cmd_id(char *tag)
        eventually this should be a callback or something. */
     if (npair && logged_id < MAXIDLOG) {
 	char logbuf[MAXIDLOGLEN + 1] = "";
-	struct strlist *fptr, *vptr;
+	struct idparamlist *pptr;
 
-	for (fptr = fields, vptr = values; fptr;
-	     fptr = fptr->next, vptr = vptr->next) {
+	for (pptr = params; pptr; pptr = pptr->next) {
 	    /* should we check for and format literals here ??? */
 	    snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
-		     " \"%s\" ", fptr->s);
-	    if (!strcmp(vptr->s, "NIL"))
+		     " \"%s\" ", pptr->field);
+	    if (!strcmp(pptr->value, "NIL"))
 		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
 			 "NIL");
 	    else
 		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
-			"\"%s\"", vptr->s);
+			"\"%s\"", pptr->value);
 	}
 
 	syslog(LOG_INFO, "client id:%s", logbuf);
@@ -2441,8 +2309,7 @@ void cmd_id(char *tag)
 	logged_id++;
     }
 
-    freestrlist(fields);
-    freestrlist(values);
+    id_freeparamlist(params);
 
     /* spit out our ID string.
        eventually this might be configurable. */
@@ -2505,6 +2372,241 @@ void cmd_id(char *tag)
 }
 
 #endif
+
+/*
+ * Grab the command line args for the ID response.
+ */
+void id_getcmdline(int argc, char **argv)
+{
+    snprintf(id_resp_command, MAXIDVALUELEN, *argv);
+    while (--argc > 0) {
+	snprintf(id_resp_arguments + strlen(id_resp_arguments),
+		 MAXIDVALUELEN - strlen(id_resp_arguments),
+		 "%s%s", *++argv, (argc > 1) ? " " : "");
+    }
+}
+
+/*
+ * Append the 'field' / 'value' pair to the idparamlist 'l'.
+ */
+void id_appendparamlist(struct idparamlist **l, char *field, char *value)
+{
+    struct idparamlist **tail = l;
+
+    while (*tail) tail = &(*tail)->next;
+
+    *tail = (struct idparamlist *)xmalloc(sizeof(struct idparamlist));
+    (*tail)->field = xstrdup(field);
+    (*tail)->value = xstrdup(value);
+    (*tail)->next = 0;
+}
+
+/*
+ * Free the idparamlist 'l'
+ */
+void id_freeparamlist(struct idparamlist *l)
+{
+    struct idparamlist *n;
+
+    while (l) {
+	n = l->next;
+	free(l->field);
+	free(l->value);
+	l = n;
+    }
+}
+
+/*
+ * Perform an IDLE command
+ */
+void cmd_idle(char *tag)
+{
+    static int idle_period = -1;
+    int c;
+    static struct buf arg;
+
+#ifdef PROXY_IDLE
+    /* get polling period */
+    if (idle_period == -1) {
+      idle_period = config_getint("imapidlepoll", 60);
+      if (idle_period < 1) idle_period = 1;
+    }
+
+    if (!backend_current)
+	c = idle_nomailbox(tag, idle_period, &arg);
+    else if (CAPA(backend_current, IDLE))
+	c = idle_passthrough(tag, idle_period, &arg);
+    else
+	c = idle_simulate(tag, idle_period, &arg);
+
+    if (c != EOF) {
+	if (!strcasecmp(arg.s, "Done") &&
+	    (c = (c == '\r') ? prot_getc(proxyd_in) : c) == '\n') {
+	    prot_printf(proxyd_out, "%s OK %s\r\n", tag,
+			error_message(IMAP_OK_COMPLETED));
+	}
+	else {
+	    prot_printf(proxyd_out, 
+			"%s BAD Invalid Idle continuation\r\n", tag);
+	    eatline(c);
+	}
+    }
+#else
+    prot_printf(proxyd_out, "%s NO idle disabled\r\n", tag);
+#endif
+}
+
+/* Check for alerts */ 
+struct prot_waitevent *idle_getalerts(struct protstream *s,
+				      struct prot_waitevent *ev, void *rock)
+{
+    int idle_period = *((int *) rock);
+    int fd;
+
+    if (! proxyd_userisadmin &&
+	(fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+
+	/* if we're actually running IDLE on the be, terminate it */
+	if (backend_current && CAPA(backend_current, IDLE))
+	    prot_printf(backend_current->out, "DONE\r\n");
+
+	shutdown_file(fd);
+    }
+
+    ev->mark = time(NULL) + idle_period;
+    return ev;
+}
+
+/* Run IDLE in the authenticated state (no mailbox) */
+char idle_nomailbox(char *tag, int idle_period, struct buf *arg)
+{
+    struct prot_waitevent *idle_event;
+    int c;
+
+    /* Tell client we are idling and waiting for end of command */
+    prot_printf(proxyd_out, "+ go ahead\r\n");
+    prot_flush(proxyd_out);
+
+    /* Setup an event function to check for alerts */
+    idle_event = prot_addwaitevent(proxyd_in,
+				   time(NULL) + idle_period,
+				   idle_getalerts, &idle_period);
+
+    /* Get continuation data */
+    c = getword(arg);
+
+    /* Remove the event function */
+    prot_removewaitevent(proxyd_in, idle_event);
+
+    return c;
+}
+
+/* Get unsolicited untagged responses from the backend
+   assumes that untagged responses are:
+   a) short
+   b) don't contain literals
+*/
+struct prot_waitevent *idle_getresp(struct protstream *s,
+				    struct prot_waitevent *ev, void *rock)
+{
+    int idle_period = *((int *) rock);
+    char buf[2048];
+
+    prot_NONBLOCK(backend_current->in);
+    while (prot_fgets(buf, sizeof(buf), backend_current->in)) {
+	prot_write(proxyd_out, buf, strlen(buf));
+	prot_flush(proxyd_out);
+    }
+    prot_BLOCK(backend_current->in);
+
+    return idle_getalerts(s, ev, rock);
+}
+
+/* Run IDLE on the backend */
+char idle_passthrough(char *tag, int idle_period, struct buf *arg)
+{
+    struct prot_waitevent *idle_event;
+    int c;
+    char buf[2048];
+
+    /* Start IDLE on backend */
+    prot_printf(backend_current->out, "%s IDLE\r\n", tag);
+    if (!prot_fgets(buf, sizeof(buf), backend_current->in)) {
+
+	/* if we received nothing from the backend, fail */
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag, 
+		    error_message(IMAP_SERVER_UNAVAILABLE));
+	return EOF;
+    }
+    if (buf[0] != '+') {
+
+	/* if we received anything but a continuation response,
+	   spit out what we received and quit */
+	prot_write(proxyd_out, buf, strlen(buf));
+	return EOF;
+    }
+
+    /* Tell client we are idling and waiting for end of command */
+    prot_printf(proxyd_out, "+ go ahead\r\n");
+    prot_flush(proxyd_out);
+
+    /* Setup an event function to get responses from the idling backend */
+    idle_event = prot_addwaitevent(proxyd_in,
+				   time(NULL) + idle_period,
+				   idle_getresp, &idle_period);
+
+    /* Get continuation data */
+    c = getword(arg);
+
+    /* Remove the event function */
+    prot_removewaitevent(backend_current->in, idle_event);
+
+    /* Either the client timed out, or gave us a continuation.
+       In either case we're done, so terminate IDLE on backend */
+    prot_printf(backend_current->out, "DONE\r\n");
+    pipe_until_tag(backend_current, tag);
+
+    return c;
+}
+
+/* Poll the backend for updates */
+struct prot_waitevent *idle_poll(struct protstream *s,
+				 struct prot_waitevent *ev, void *rock)
+{
+    int idle_period = *((int *) rock);
+    char mytag[128];
+	
+    proxyd_gentag(mytag);
+    prot_printf(backend_current->out, "%s Noop\r\n", mytag);
+    pipe_until_tag(backend_current, mytag);
+    prot_flush(proxyd_out);
+
+    return idle_getalerts(s, ev, rock);
+}
+
+/* Simulate IDLE by polling the backend */
+char idle_simulate(char *tag, int idle_period, struct buf *arg)
+{
+    struct prot_waitevent *idle_event;
+    int c;
+
+    /* Tell client we are idling and waiting for end of command */
+    prot_printf(proxyd_out, "+ go ahead\r\n");
+    prot_flush(proxyd_out);
+
+    /* Setup an event function to poll the backend for updates */
+    idle_event = prot_addwaitevent(proxyd_in,
+				   time(NULL) + idle_period,
+				   idle_poll, &idle_period);
+
+    /* Get continuation data */
+    c = getword(arg);
+
+    /* Remove the event function */
+    prot_removewaitevent(proxyd_in, idle_event);
+
+    return c;
+}
 
 /*
  * Perform a CAPABILITY command
@@ -4146,11 +4248,10 @@ int getword(struct buf *buf)
 }
 
 /*
- * Parse an astring
- * (atom, quoted-string, or literal)
+ * Parse an xstring
+ * (astring, nstring or string based on type)
  */
-int getastring(buf)
-struct buf *buf;
+int getxstring(struct buf *buf, int type)
 {
     int c;
     int i, len = 0;
@@ -4176,21 +4277,46 @@ struct buf *buf;
 	return EOF;
 
     default:
-	/*
-	 * Atom -- server is liberal in accepting specials other
-	 * than whitespace, parens, or double quotes
-	 */
-	for (;;) {
-	    if (c == EOF || isspace(c) || c == '(' || c == ')' || c == '\"') {
-		buf->s[len] = '\0';
-		return c;
+	switch (type) {
+	case IMAP_ASTRING:	 /* atom, quoted-string or literal */
+	    /*
+	     * Atom -- server is liberal in accepting specials other
+	     * than whitespace, parens, or double quotes
+	     */
+	    for (;;) {
+		if (c == EOF || isspace(c) || c == '(' || 
+		          c == ')' || c == '\"') {
+		    buf->s[len] = '\0';
+		    return c;
+		}
+		if (len == buf->alloc) {
+		    buf->alloc += BUFGROWSIZE;
+		    buf->s = xrealloc(buf->s, buf->alloc+1);
+		}
+		buf->s[len++] = c;
+		c = prot_getc(proxyd_in);
 	    }
-	    if (len == buf->alloc) {
-		buf->alloc += BUFGROWSIZE;
-		buf->s = xrealloc(buf->s, buf->alloc+1);
+	    break;
+
+	case IMAP_NSTRING:	 /* "NIL", quoted-string or literal */
+	    /*
+	     * Look for "NIL"
+	     */
+	    if (c == 'N') {
+		prot_ungetc(c, proxyd_in);
+		c = getword(buf);
+		if (!strcmp(buf->s, "NIL"))
+		    return c;
 	    }
-	    buf->s[len++] = c;
-	    c = prot_getc(proxyd_in);
+	    if (c != EOF) prot_ungetc(c, proxyd_in);
+	    return EOF;
+	    break;
+
+	case IMAP_STRING:	 /* quoted-string or literal */
+	    /*
+	     * Nothing to do here - fall through.
+	     */
+	    break;
 	}
 	
     case '\"':
