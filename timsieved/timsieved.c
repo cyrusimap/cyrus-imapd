@@ -153,8 +153,6 @@ void fatal(const char *s, int code)
 /*
  * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
  * right to the principal 'auth_identity'. Returns 1 if so, 0 if not.
- * The difference between this routine and the one in imapd.c is that
- * we need to take care to open and close the mailboxes db.
  */
 static int acl_ok(const char *user, 
                   const char *auth_identity,
@@ -176,10 +174,6 @@ static int acl_ok(const char *user,
     else {
         r = (cyrus_acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
     }
-
-    /* close mailboxes */
-    mboxlist_close();
-    mboxlist_done();
 
     return r;
 }
