@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.42 2001/08/01 17:40:37 leg Exp $
+ * $Id: script.c,v 1.43 2001/10/23 00:53:09 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -212,10 +212,10 @@ static int sysaddr(char *addr)
     return 0;
 }
 
-/* look for myaddr and myaddrs in the body of a header */
-static int look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
+/* look for myaddr and myaddrs in the body of a header - return the match */
+static char* look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
 {
-    int found = 0;
+    char *found = NULL;
     int l;
     stringlist_t *sl;
 
@@ -229,7 +229,7 @@ static int look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
 	while (!found && ((addr = get_address(ADDRESS_ALL, 
 					      &data, &marker, 1)) != NULL)) {
 	    if (!strcmp(addr, myaddr)) {
-		found = 1;
+		found = myaddr;
 		break;
 	    }
 
@@ -241,7 +241,7 @@ static int look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
 		parse_address(sl->s, &altdata, &altmarker);
 		altaddr = get_address(ADDRESS_ALL, &altdata, &altmarker, 1);
 		if (!strcmp(addr, altaddr))
-		    found = 1;
+		    found = sl->s;
 
 		free_address(&altdata, &altmarker);
 	    }
@@ -413,6 +413,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 	    {
 		const char **body;
 		char buf[128], *fromaddr;
+		char *found = NULL;
 		char *myaddr = NULL;
 		char *reply_to = NULL;
 		int l = SIEVE_OK;
@@ -477,8 +478,6 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		}
 
 		if (l == SIEVE_OK) {
-		    int found = 0;
-
 		    /* ok, we're willing to respond to the sender.
 		       but is this message to me?  that is, is my address
 		       in the TO, CC or BCC fields? */
@@ -524,11 +523,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		    }
 
 		    /* who do we want the message coming from? */
-		    if (c->u.v.addresses) {
-			fromaddr = c->u.v.addresses->s;
-		    } else {
-			fromaddr = myaddr;
-		    }
+		    fromaddr = found;
 		
 		    res = do_vacation(actions, reply_to, strdup(fromaddr),
 				      strdup(buf),
