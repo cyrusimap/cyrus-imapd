@@ -1,14 +1,14 @@
 #! /bin/sh
 case "x$BASH_VERSION" in
-x) exec /usr/bin/perl -MIMAP::Cyrus::Shell -e shell -- ${1+"$@"} ;;
-*) exec /usr/bin/perl -MIMAP::Cyrus::Shell -e shell -- "$@" ;;
+x) exec /usr/bin/perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
+*) exec /usr/bin/perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
 esac
 echo "$0: how did I get here?" >&2
 exit 1
 
 =head1 NAME
 
-cyradm - Cyrus administration shell, alter ego of IMAP::Cyrus::Shell
+cyradm - Cyrus administration shell, alter ego of Cyrus::IMAP::Shell
 
 =head1 SYNOPSIS
 
@@ -17,7 +17,7 @@ cyradm - Cyrus administration shell, alter ego of IMAP::Cyrus::Shell
 
 but possibly
 
-  $ perl -MIMAP::Cyrus::Shell -e 'run("myscript")'
+  $ perl -MCyrus::IMAP::Shell -e 'run("myscript")'
 
 or even (not recommended)
 
@@ -28,7 +28,7 @@ or even (not recommended)
 =head1 DESCRIPTION
 
 This module implements B<cyradm> in Perl.  It is a shell around
-L<IMAP::Cyrus::Admin>.  Commands are provided in both Tcl-compatible
+L<Cyrus::IMAP::Admin>.  Commands are provided in both Tcl-compatible
 forms and GNU-style long option forms.
 
 =head1 COMMANDS
@@ -259,7 +259,7 @@ Unknown commands are passed to a subshell for execution.
 
 The Tcl version of B<cyradm> is used for scripting as well as interactively.
 While this is possible to a limited extent by use of the C<run> method,
-scripting would normally be done with C<IMAP::Cyrus::Admin>, which is far
+scripting would normally be done with C<Cyrus::IMAP::Admin>, which is far
 more flexible than either interactive C<cyradm> or the Tcl scripting
 mechanism for Cyrus.
 
@@ -281,7 +281,7 @@ Brandon S. Allbery, allbery@ece.cmu.edu
 
 =head1 SEE ALSO
 
-IMAP::Cyrus::Admin
+Cyrus::IMAP::Admin
 Term::ReadLine
 sh(1), perl(1), imapd(8).
 
