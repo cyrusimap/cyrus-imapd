@@ -1,4 +1,4 @@
-$Id: drac_auth.patch,v 1.3 2001/03/07 01:57:08 ken3 Exp $
+$Id: drac_auth.patch,v 1.4 2001/03/07 16:43:20 ken3 Exp $
 
 Patch to add support for Dynamic Relay Authorization Control
 
@@ -42,7 +42,7 @@ Installation
 	# make install
 
 5.  If dracd is not running on the same system as Cyrus (localhost),
-    use the 'drachost' option in cyrus.conf(5) to specify the hostname of
+    use the 'drachost' option in imapd.conf(5) to specify the hostname of
     the dracd server.
 
 6.  Installation is complete!
@@ -52,8 +52,8 @@ Operation
 ---------
 
 The behavior of DRAC is controlled by the value of the 'dracinterval' option
-in imapd.conf(5).  If 'dracinterval' is 0 (zero), DRAC is disabled.
-Otherwise, DRAC is enabled and has the following behavior:
+in imapd.conf(5).  If 'dracinterval' is 0 (zero), DRAC support is disabled.
+Otherwise, DRAC support is enabled and has the following behavior:
 
 pop3d: Whenever a client opens a user's INBOX, drac_auth() is called.
 
@@ -64,8 +64,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 
 
 
-*** acconfig.h.orig	Wed Feb  7 16:46:56 2001
---- acconfig.h	Tue Mar  6 12:27:16 2001
+*** acconfig.h.orig	Tue Feb 20 08:58:08 2001
+--- acconfig.h	Wed Mar  7 10:15:46 2001
 ***************
 *** 78,83 ****
 --- 78,86 ----
@@ -78,8 +78,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   /* do we have OpenSSL? */
   #undef HAVE_SSL
   
-*** configure.in.orig	Mon Feb 19 12:54:42 2001
---- configure.in	Tue Mar  6 12:27:16 2001
+*** configure.in.orig	Tue Feb 20 08:58:08 2001
+--- configure.in	Wed Mar  7 10:15:46 2001
 ***************
 *** 714,719 ****
 --- 714,734 ----
@@ -104,8 +104,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   CMU_SOCKETS
   CMU_LIBWRAP
   CMU_UCDSNMP
-*** imap/imapd.c.orig	Fri Feb 16 13:55:10 2001
---- imap/imapd.c	Tue Mar  6 15:48:05 2001
+*** imap/imapd.c.orig	Fri Feb 23 17:22:59 2001
+--- imap/imapd.c	Wed Mar  7 10:15:46 2001
 ***************
 *** 89,94 ****
 --- 89,98 ----
@@ -120,8 +120,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   static SSL *tls_conn = NULL;
   #endif /* HAVE_SSL */
 ***************
-*** 486,491 ****
---- 490,510 ----
+*** 490,495 ****
+--- 494,514 ----
          TLS negotiation immediately */
       if (imaps == 1) cmd_starttls(NULL, 1);
   
@@ -144,8 +144,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
       snmp_increment(ACTIVE_CONNECTIONS, 1);
   
 ***************
-*** 561,566 ****
---- 580,590 ----
+*** 565,570 ****
+--- 584,594 ----
       prot_flush(imapd_out);
       /* one less active connection */
       snmp_increment(ACTIVE_CONNECTIONS, -1);
@@ -158,8 +158,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   }
   
 ***************
-*** 581,586 ****
---- 605,632 ----
+*** 585,590 ****
+--- 609,636 ----
   
   }
   
@@ -189,8 +189,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
    * Top-level command loop parsing
    */
 ***************
-*** 1429,1434 ****
---- 1475,1485 ----
+*** 1433,1438 ****
+--- 1479,1489 ----
   
       if (!reply) reply = "User logged in";
   
@@ -203,8 +203,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
       sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, imapd_userid,
   	    (unsigned long) getpid());
 ***************
-*** 1585,1590 ****
---- 1636,1646 ----
+*** 1589,1594 ****
+--- 1640,1650 ----
   
       prot_setsasl(imapd_in,  imapd_saslconn);
       prot_setsasl(imapd_out, imapd_saslconn);
@@ -216,8 +216,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   
       /* Create telemetry log */
       sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, imapd_userid,
-*** imap/pop3d.c.orig	Fri Feb 16 13:55:10 2001
---- imap/pop3d.c	Tue Mar  6 15:48:03 2001
+*** imap/pop3d.c.orig	Tue Feb 27 00:41:42 2001
+--- imap/pop3d.c	Wed Mar  7 10:15:46 2001
 ***************
 *** 98,104 ****
   
@@ -238,8 +238,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   #ifdef HAVE_SSL
   static SSL *tls_conn;
 ***************
-*** 276,281 ****
---- 278,287 ----
+*** 279,284 ****
+--- 281,290 ----
          TLS negotiation immediatly */
       if (pop3s == 1) cmd_starttls(1);
   
@@ -251,8 +251,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   		config_servername, CYRUS_VERSION);
       cmdloop();
 ***************
-*** 1110,1115 ****
---- 1116,1134 ----
+*** 1113,1118 ****
+--- 1119,1137 ----
       }
       popd_mailbox = &mboxstruct;
       proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
@@ -272,14 +272,21 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   
       /* Create telemetry log */
       sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, popd_userid,
-*** man/imapd.conf.5.orig	Mon Feb 19 14:39:37 2001
---- man/imapd.conf.5	Tue Mar  6 15:55:09 2001
+*** man/imapd.conf.5.orig	Wed Mar  7 10:53:07 2001
+--- man/imapd.conf.5	Wed Mar  7 10:54:00 2001
 ***************
-*** 217,222 ****
---- 217,228 ----
-  file overrides the SASL configuration file.
-  .IP "\fBlmtpsocket:\fR /var/imap/socket/lmtp" 5
+*** 224,230 ****
   Unix domain socket that lmtpd listens on.
+  .IP "\fBidlesocket:\fR /var/imap/socket/idle" 5
+  Unix domain socket that idled listens on.
+  .SH SEE ALSO
+  .PP
+  \fBimapd(8)\fR, \fBpop3d(8)\fR, \fBlmtpd(8)\fR, \fBtimsieved(8)\fR,
+! \fBidled(8)\fR, \fBdeliver(8)\fR, \fBmaster(8)\fR
+--- 224,236 ----
+  Unix domain socket that lmtpd listens on.
+  .IP "\fBidlesocket:\fR /var/imap/socket/idle" 5
+  Unix domain socket that idled listens on.
 + .IP "\fBdracinterval:\fR 5" 5
 + If nonzero, enables the use of DRAC (Dynamic Relay Authorization Control)
 + by the pop3d and imapd daemons.  Also sets the interval (in minutes) between 
@@ -289,3 +296,4 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   .SH SEE ALSO
   .PP
   \fBimapd(8)\fR, \fBpop3d(8)\fR, \fBlmtpd(8)\fR, \fBtimsieved(8)\fR,
+! \fBidled(8)\fR, \fBdeliver(8)\fR, \fBmaster(8)\fR, \fBrpc.dracd(1m)\fR
