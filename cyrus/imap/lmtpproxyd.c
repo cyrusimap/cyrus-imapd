@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42.4.4 2002/08/02 16:55:05 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.5 2002/08/02 18:24:11 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -644,7 +644,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	/* case 1: shared mailbox request */
 	if (plus && !strcmp(rcpt, BB)) {
 	    *--plus = '+';		/* put that plus back */
-	    if (domain) *--domain = '@'; /* put that ampersand back */
+	    if (domain) *--domain = '@'; /* put that at-sign back */
 	    r = adddest(&mydata, rcpt, mydata.authuser);
 	    
 	    if (r) {
