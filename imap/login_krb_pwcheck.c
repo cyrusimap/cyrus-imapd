@@ -102,7 +102,7 @@ const char **reply;
     if (!inited) login_init();
 
     if (lrealm[0] &&
-	kerberos_verify_password(user, pass, "imap", reply) == 0) {
+	kerberos_verify_password(user, pass, "imap", reply) != 0) {
 	return 1;
     }
 
