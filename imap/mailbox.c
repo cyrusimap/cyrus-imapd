@@ -528,12 +528,10 @@ struct mailbox *mailbox;
 
     fstat(mailbox->index_fd, &sbuf);
     mailbox->index_ino = sbuf.st_ino;
-    if (mailbox->index_mtime != sbuf.st_mtime) {
-	mailbox->index_mtime = sbuf.st_mtime;
-	map_refresh(mailbox->index_fd, 0, &mailbox->index_base,
-		    &mailbox->index_len, sbuf.st_size, "index",
-		    mailbox->name);
-    }
+    mailbox->index_mtime = sbuf.st_mtime;
+    map_refresh(mailbox->index_fd, 0, &mailbox->index_base,
+		&mailbox->index_len, sbuf.st_size, "index",
+		mailbox->name);
 
     if (mailbox->index_len < OFFSET_POP3_LAST_LOGIN ||
 	(mailbox->index_len <

@@ -453,7 +453,7 @@ AC_CHECK_LIB(ndbm, dbm_open)
 AC_CHECK_LIB(dbm, dbm_open)
 AC_CHECK_FUNC(dbopen,AC_DEFINE(HAVE_LIBDB),AC_CHECK_LIB(db, dbopen))
 AC_CHECK_LIB(socket, accept, LIBS="${LIBS} -lsocket -lnsl",,-lnsl)
-AC_CHECK_LIB(iberty, rindex, LIBS="${LIBS} -liberty")
+dnl AC_CHECK_LIB(iberty, rindex, LIBS="${LIBS} -liberty")
 dnl
 dnl Shared library support for Tcl
 dnl
