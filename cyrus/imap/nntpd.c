@@ -47,7 +47,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.21 2002/10/16 01:11:11 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.22 2002/10/16 15:27:04 ken3 Exp $
  */
 #include <config.h>
 
@@ -1423,6 +1423,7 @@ static int savemsg(message_data_t *m, FILE *f)
     struct stat sbuf;
     const char **body;
     int r;
+    static int post_count = 0;
 
     /* fill the cache */
     r = spool_fill_hdrcache(nntp_in, f, m->hdrcache);
@@ -1449,7 +1450,14 @@ static int savemsg(message_data_t *m, FILE *f)
     if ((body = spool_getheader(m->hdrcache, "message-id")) != NULL) {
 	m->id = xstrdup(body[0]);
     } else {
-	m->id = NULL;		/* no message-id */
+	/* no message-id, create one */
+	time_t t = time(NULL);
+	pid_t p = getpid();
+
+	m->id = xmalloc(40 + strlen(config_servername));
+	sprintf(m->id, "<cmu-nntpd-%d-%d-%d@%s>", p, (int) t, 
+		post_count++, config_servername);
+	fprintf(f, "Message-ID: %s\r\n", m->id);
     }
 
     /* get control */
@@ -1738,7 +1746,8 @@ static void cmd_over(unsigned long uid, unsigned long last)
 			over->ref ? over->ref : "",
 			over->bytes);
 
-	    if (netnews_lookup(over->msgid, NULL, NULL, &over->lines, NULL))
+	    if (over->msgid &&
+		netnews_lookup(over->msgid, NULL, NULL, &over->lines, NULL))
 		prot_printf(nntp_out, "%lu", over->lines);
 
 	    prot_printf(nntp_out, "\t\r\n");
