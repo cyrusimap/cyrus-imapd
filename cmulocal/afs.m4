@@ -218,19 +218,7 @@ extern int UV_SetSecurity();],
           else
              AC_MSG_RESULT([no])
           fi
-          AC_MSG_CHECKING([if VL_ProbeServer exists])
-          LIBS="$cmu_save_LIBS $AFS_CLIENT_LIBS ${LIB_SOCKET}"
-          AC_TRY_LINK([#include <afs/param.h>
-#ifdef HAVE_AFS_STDS_H
-#include <afs/stds.h>
-#endif],
-          [VL_ProbeServer();],VLPROBESERVER=yes,VLPROBESERVER=no)
-	  if test $VLPROBESERVER = "no"; then
-          	AC_MSG_RESULT([no])
-          else
-                AC_MSG_RESULT([yes])
-		AC_DEFINE(HAVE_VL_PROBESERVER)
-          fi
+	  AC_CHECK_FUNCS(VL_ProbeServer);
           AC_MSG_CHECKING([if new-style afs_ integer types are defined])
           AC_CACHE_VAL(ac_cv_afs_int32,
 dnl The next few lines contain a quoted argument to egrep
@@ -246,19 +234,19 @@ changequote([,]), [#include <afs/param.h>
 ac_cv_afs_int32=yes, ac_cv_afs_int32=no)])
           AC_MSG_RESULT($ac_cv_afs_int32)
           if test $ac_cv_afs_int32 = yes ; then
-            AC_DEFINE(HAVE_AFS_INT32)
+            AC_DEFINE(HAVE_AFS_INT32,, [AFS provides new "unambiguous" type names])
           else
-            AC_DEFINE(afs_int16, int16)
-            AC_DEFINE(afs_int32, int32)
-            AC_DEFINE(afs_uint16, u_int16)
-            AC_DEFINE(afs_uint32, u_int32)
+            AC_DEFINE(afs_int16, int16, [it's a type definition])
+            AC_DEFINE(afs_int32, int32, [it's a type definition])
+            AC_DEFINE(afs_uint16, u_int16, [it's a type definition])
+            AC_DEFINE(afs_uint32, u_int32, [it's a type definition])
           fi
 
           CPPFLAGS="${cmu_save_CPPFLAGS}"
           LDFLAGS="${cmu_save_LDFLAGS}"
           LIBS="${cmu_save_LIBS}"
-	  AC_DEFINE(AFS_ENV)
-          AC_DEFINE(AFS)
+	  AC_DEFINE(AFS_ENV,, [Use AFS. (find what needs this and nuke it)])
+          AC_DEFINE(AFS,, [Use AFS. (find what needs this and nuke it)])
           AC_SUBST(AFS_CLIENT_LIBS_STATIC)
           AC_SUBST(AFS_KTC_LIBS_STATIC)
           AC_SUBST(AFS_CLIENT_LIBS)
