@@ -1249,13 +1249,13 @@ int add;
     if (add) {
 	if (len) {
 	    fclose(subsfile);
-	    return IMAP_MAILBOX_SUBSCRIBED;
+	    return 0;		/* Already unsubscribed */
 	}
     }
     else {
 	if (!len) {
 	    fclose(subsfile);
-	    return IMAP_MAILBOX_UNSUBSCRIBED;
+	    return 0;		/* Alredy subscribed */
 	}
     }
 
