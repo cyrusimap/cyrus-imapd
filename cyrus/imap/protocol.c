@@ -39,9 +39,10 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.1.2.5 2003/07/08 16:55:05 ken3 Exp $ */
+/* $Id: protocol.c,v 1.1.2.6 2003/07/10 20:52:05 ken3 Exp $ */
 
 #include <string.h>
+#include <limits.h>
 
 #include "protocol.h"
 #include "xmalloc.h"
@@ -93,26 +94,26 @@ struct protocol_t protocol[] = {
     { "imap", "imap",
       { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parsemechlist },
       { "S01 STARTTLS", "S01 OK", "S01 NO" },
-      { "A01 AUTHENTICATE", 0, NULL, "A01 OK", "A01 NO", "+ ", "*", NULL },
+      { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL },
       { "Q01 LOGOUT", "Q01 " } },
     { "pop3", "pop",
       { "CAPA", ".", "STLS", "SASL ", NULL },
       { "STLS", "+OK", "-ERR" },
-      { "AUTH", 0, "", "+OK", "-ERR", "+ ", "*", NULL },
+      { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL },
       { "QUIT", "+OK" } },
     { "nntp", "news",
       { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
       { "STARTTLS", "382", "580" },
-      { "AUTHINFO SASL", 0, "", "28", "482", "381 ", "*", &nntp_parsesuccess },
+      { "AUTHINFO SASL", 512, 0, "28", "482", "381 ", "*", &nntp_parsesuccess },
       { "QUIT", "205" } },
     { "lmtp", "lmtp",
       { "LHLO murder", "250 ", "STARTTLS", "AUTH ", NULL },
       { "STARTTLS", "220", "454" },
-      { "AUTH", 0, "=", "235", "5", "334 ", "*", NULL },
+      { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
       { "QUIT", "221" } },
     { "mupdate", "mupdate",
       { NULL, "* OK", NULL, "* AUTH ", NULL },
       { NULL },
-      { "A01 AUTHENTICATE", 1, "", "A01 OK", "A01 NO", "", "*", NULL },
+      { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL },
       { "Q01 LOGOUT", "Q01 " } }
 };

@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.82.2.18 2003/06/10 14:32:56 ken3 Exp $
+ * $Id: imtest.c,v 1.82.2.19 2003/07/10 20:52:06 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -179,16 +179,16 @@ struct tls_cmd_t {
 
 struct sasl_cmd_t {
     char *cmd;		/* auth command string */
+    int maxlen;		/* maximum command line length,
+			   (0 = initial response unsupported by protocol) */
     int quote;		/* quote arguments (literal for base64 data) */
-    char *empty_init;	/* string to send as empty initial-response,
-			   (NULL = initial response unsupported by protocol) */
-    char *(*parse_success)(char *str);
-			/* [OPTIONAL] parse response for success data */
     char *ok;		/* success response string */
     char *fail;		/* failure response string */
     char *cont;		/* continue response string
 			   (NULL = send/receive literals) */
     char *cancel;	/* cancel auth string */
+    char *(*parse_success)(char *str);
+			/* [OPTIONAL] parse response for success data */
 };
 
 struct logout_cmd_t {
@@ -959,153 +959,119 @@ static char *waitfor(char *tag, char *tag2, int echo)
 
 int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 {
-    sasl_interact_t *client_interact=NULL;
-    int saslresult=SASL_INTERACT;
-    const char *out;
-    unsigned int outlen;
+    sasl_interact_t *client_interact = NULL;
+    int saslresult;
+    const char *out = NULL;
+    unsigned int outlen = 0;
     char *in;
     int inlen;
     const char *mechusing;
     char inbase64[4096];
     int inbase64len;
-    
-    imt_stat status = STAT_CONT;
+    char cmdbuf[40];
+    int sendliteral = sasl_cmd->quote;
+    imt_stat status;
     
     if (!sasl_cmd || !sasl_cmd->cmd) return IMTEST_FAIL;
     
-    /* call sasl client start */
-    while (saslresult==SASL_INTERACT) {
-	if (sasl_cmd->empty_init) {
-	    /* we support initial client response */
-	    saslresult = sasl_client_start(conn, mechlist,
-					   &client_interact,
-					   &out, &outlen,
-					   &mechusing);
-	} else {
-	    saslresult = sasl_client_start(conn, mechlist,
-					   &client_interact,
-					   NULL, NULL,
-					   &mechusing);
-	    out = NULL;
-	    outlen = 0;
-	}
-	    
-	if (saslresult==SASL_INTERACT)
+    do { /* start authentication */
+	saslresult = sasl_client_start(conn, mechlist, &client_interact,
+				       /* do we support initial response? */
+				       sasl_cmd->maxlen ? &out : NULL,
+				       &outlen, &mechusing);
+
+	if (saslresult == SASL_INTERACT)
 	    fillin_interactions(client_interact); /* fill in prompts */      
-	}
+    } while (saslresult == SASL_INTERACT);
     
-    if ((saslresult != SASL_OK) && 
-	(saslresult != SASL_CONTINUE)) {
+    if ((saslresult != SASL_OK) && (saslresult != SASL_CONTINUE)) {
 	return saslresult;
     }
-    
-    if (sasl_cmd->quote) {
-	printf("C: %s \"%s\"", sasl_cmd->cmd, mechusing);
-	prot_printf(pout, "%s \"%s\"", sasl_cmd->cmd, mechusing);
-    }
-    else {
-	printf("C: %s %s", sasl_cmd->cmd, mechusing);
-	prot_printf(pout, "%s %s", sasl_cmd->cmd, mechusing);
-    }
 
-    if (!out) {
-	/* no initial client response */
-	printf("\r\n");
-	prot_printf(pout, "\r\n");
-    }
-    else if (!outlen) {
-	/* empty initial client response */
-	printf(" %s\r\n", sasl_cmd->empty_init);
-	prot_printf(pout," %s\r\n", sasl_cmd->empty_init);
+    /* build the auth command */
+    if (sasl_cmd->quote) {
+	sprintf(cmdbuf, "%s \"%s\"", sasl_cmd->cmd, mechusing);
     }
     else {
-	/* initial client response - convert to base64 */
-	saslresult = sasl_encode64(out, outlen,
-				   inbase64, 2048, (unsigned *) &inbase64len);
-	if (saslresult != SASL_OK) return saslresult;
-	
-	if (sasl_cmd->quote) {
-	    /* send a literal */
-	    printf(" {%d+}\r\n%s\r\n", inbase64len, inbase64);
-	    prot_printf(pout, " {%d+}\r\n", inbase64len);
-	    prot_flush(pout);
+	sprintf(cmdbuf, "%s %s", sasl_cmd->cmd, mechusing);
+    }
+    printf("C: %s", cmdbuf);
+    prot_printf(pout, "%s", cmdbuf);
+
+    if (out) { /* initial response */
+	if (!outlen) { /* empty initial response */
+	    printf(" =");
+	    prot_printf(pout, " =");
+
+	    out = NULL;
 	}
-	else {
-	    printf(" %s\r\n", inbase64);
+	else if (!sendliteral &&
+		 ((strlen(cmdbuf) + outlen + 3) > sasl_cmd->maxlen)) {
+	    /* initial response is too long for auth command,
+	       so wait for a server challenge before sending it */
+	    goto noinitresp;
+	}
+	else { /* full response -- encoded below */
+	    printf(" ");
 	    prot_printf(pout, " ");
 	}
-
-	prot_write(pout, inbase64, inbase64len);
-	prot_printf(pout, "\r\n");
     }
-    prot_flush(pout);
 
-    status = getauthline(sasl_cmd, &in, &inlen);
-    
-    while (status==STAT_CONT) {
-	saslresult=SASL_INTERACT;
-	while (saslresult==SASL_INTERACT) {
-	    saslresult=sasl_client_step(conn,
-					in,
-					inlen,
-					&client_interact,
-					&out,
-					&outlen);
-	    
-	    if (saslresult==SASL_INTERACT)
-		fillin_interactions(client_interact); /* fill in prompts */
+    do {
+	if (out) { /* response */
+	    /* convert to base64 */
+	    saslresult = sasl_encode64(out, outlen, inbase64, 2048,
+				       (unsigned *) &inbase64len);
+	    if (saslresult != SASL_OK) return saslresult;
+
+	    /* send to server */
+	    if (sendliteral) {
+		printf("{%d+}\r\n", inbase64len);
+		prot_printf(pout, "{%d+}\r\n", inbase64len);
+		prot_flush(pout);
+	    }
+	    printf("%s", inbase64);
+	    prot_write(pout, inbase64, inbase64len);
+
+	    out = NULL;
 	}
-	
-	/* check if sasl suceeded */
-	if (saslresult != SASL_OK && saslresult != SASL_CONTINUE) {
+      noinitresp:
+	printf("\r\n");
+	prot_printf(pout, "\r\n");
+	prot_flush(pout);
+
+	/* get challenge/reply from the server */
+	status = getauthline(sasl_cmd, &in, &inlen);
+
+	if (!out && /* no delayed (initial) response */
+	    (status == STAT_CONT || (status == STAT_OK && in))) {
+	    do { /* do the next step */
+		saslresult = sasl_client_step(conn, in, inlen,
+					      &client_interact,
+					      &out, &outlen);
+	    
+		if (saslresult == SASL_INTERACT)
+		    fillin_interactions(client_interact); /* fill in prompts */
+	    } while (saslresult == SASL_INTERACT);
+
+	    if (in) free(in);
+	}
+
+	if ((saslresult != SASL_OK) && (saslresult != SASL_CONTINUE)) {
 	    /* cancel the exchange */
 	    printf("C: %s\r\n", sasl_cmd->cancel);
-	    prot_printf(pout,"%s\r\n", sasl_cmd->cancel);
+	    prot_printf(pout, "%s\r\n", sasl_cmd->cancel);
 	    prot_flush(pout);
-	    
+
 	    return saslresult;
 	}
-	
-	/* convert to base64 */
-	saslresult = sasl_encode64(out, outlen,
-				   inbase64, 2048, (unsigned *) &inbase64len);
-	if (saslresult != SASL_OK) return saslresult;
-	
-	free(in);
-	
-	/* send to server */
-	if (!sasl_cmd->cont) {
-	    /* send a literal */
-	    printf("C: {%d+}\r\n%s\n", inbase64len, inbase64);
-	    prot_printf(pout, "{%d+}\r\n", inbase64len);
-	    prot_flush(pout);
-	}
-	else {
-	    printf("C: %s\n", inbase64);
-	}
 
-	prot_write(pout, inbase64, inbase64len);
-	prot_printf(pout,"\r\n");
-	prot_flush(pout);
-   
-	/* get reply */
-	status = getauthline(sasl_cmd, &in, &inlen);
-    }
+	if (out) printf("C: ");
+	sendliteral = !sasl_cmd->cont;
 
-    if (status == STAT_OK) {
-	if (in) {
-	    saslresult=sasl_client_step(conn,
-					in,
-					inlen,
-					&client_interact,
-					&out,
-					&outlen);
-	    if (saslresult != SASL_OK) return saslresult;
-	}
-	return IMTEST_OK;
-    } else {
-	return IMTEST_FAIL;
-    }
+    } while (status == STAT_CONT);
+	
+    return (status == STAT_OK) ? IMTEST_OK : IMTEST_FAIL;
 }
 
 /* initialize the network */
@@ -2170,7 +2136,7 @@ static struct protocol_t protocols[] = {
       { 0, "* OK", NULL },
       { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parse_mechlist },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
-      { "A01 AUTHENTICATE", 0, NULL, NULL, "A01 OK", "A01 NO", "+ ", "*" },
+      { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL },
       &imap_do_auth, { "Q01 LOGOUT", "Q01 " },
       &imap_init_conn, &generic_pipe, &imap_reset
     },
@@ -2178,21 +2144,21 @@ static struct protocol_t protocols[] = {
       { 0, "+OK ", &pop3_parse_banner },
       { "CAPA", ".", "STLS", "SASL ", NULL },
       { "STLS", "+OK", "-ERR", 0 },
-      { "AUTH", 0, "", NULL, "+OK", "-ERR", "+ ", "*" },
+      { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL },
       &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL
     },
     { "nntp", "nntps", "news",
       { 0, "20", NULL },
       { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
       { "STARTTLS", "382", "580", 0 },
-      { "AUTHINFO SASL", 0, "", &nntp_parse_success, "28", "482", "381 ", "*" },
+      { "AUTHINFO SASL", 512, 0, "28", "482", "381 ", "*", &nntp_parse_success },
       &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp",
       { 0, "220 ", NULL },
       { "LHLO example.com", "250 ", "STARTTLS", "AUTH ", NULL },
       { "STARTTLS", "220", "454", 0 },
-      { "AUTH", 0, "=", NULL, "235", "5", "334 ", "*" },
+      { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
       &xmtp_do_auth, { "QUIT", "221" },
       &xmtp_init_conn, &generic_pipe, &xmtp_reset
     },
@@ -2200,7 +2166,7 @@ static struct protocol_t protocols[] = {
       { 0, "220 ", NULL },
       { "EHLO example.com", "250 ", "STARTTLS", "AUTH ", NULL },
       { "STARTTLS", "220", "454", 0 },
-      { "AUTH", 0, "=", NULL, "235", "5", "334 ", "*" },
+      { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
       &xmtp_do_auth, { "QUIT", "221" },
       &xmtp_init_conn, &generic_pipe, &xmtp_reset
     },
@@ -2208,14 +2174,14 @@ static struct protocol_t protocols[] = {
       { 1, "* OK", NULL },
       { NULL , "* OK", "* STARTTLS", "* AUTH ", NULL },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 1 },
-      { "A01 AUTHENTICATE", 1, "", NULL, "A01 OK", "A01 NO", "", "*" },
+      { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL },
       NULL, { "Q01 LOGOUT", "Q01 " }, NULL, NULL, NULL
     },
     { "sieve", NULL, SIEVE_SERVICE_NAME,
       { 1, "OK", NULL },
       { "CAPABILITY", "OK", "\"STARTTLS\"", "\"SASL\" ", NULL },
       { "STARTTLS", "OK", "NO", 0 },
-      { "AUTHENTICATE", 1, "", &sieve_parse_success, "OK", "NO", NULL, "*" },
+      { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parse_success },
       NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
     },
     { NULL }
