@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.135 2001/04/26 17:15:59 leg Exp $
+# $Id: Makefile.in,v 1.136 2001/04/27 05:58:35 wcw Exp $
 # 
 # @configure_input@
 #
@@ -158,6 +158,12 @@ lmtpd: lmtpstats.o lmtpd.o lmtpengine.o \
 	 $(SERVICE) lmtpd.o lmtpengine.o lmtpstats.o \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
+lmtpd.pure: lmtpstats.o lmtpd.o lmtpengine.o \
+	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
+	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o lmtpd.pure \
+	 $(SERVICE) lmtpd.o lmtpengine.o lmtpstats.o \
+	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+
 lmtpproxyd: lmtpstats.o lmtpproxyd.o lmtpengine.o \
 	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o lmtpproxyd \
@@ -177,11 +183,11 @@ imapd: $(IMAPDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
 	 $(SERVICE) $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 imapd.pure: $(IMAPDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o imapd \
+	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o imapd.pure \
 	 $(SERVICE) $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 imapd.quant: $(IMAPDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o imapd \
+	$(QUANTIFY) $(QUANTOPT) $(CC) $(LDFLAGS) -o imapd.quant \
 	 $(SERVICE) $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 proxyd: pushstats.o proxyd.o tls.o libimap.a $(DEPLIBS) $(SERVICE)
