@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.46 2004/11/16 15:41:30 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.47 2004/11/17 21:35:23 shadow Exp $ */
 
 #include <config.h>
 
@@ -3098,10 +3098,10 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		int binsize = 0;
 
 		p = section = fetchatt.s + 7;
-		if (*p == 'P') {
+		if (!strncmp(p, "PEEK[", 5)) {
 		    p = section += 5;
 		}
-		else if (*p == 'S') {
+		else if (!strncmp(p, "SIZE[", 5)) {
 		    p = section += 5;
 		    binsize = 1;
 		}
@@ -3141,7 +3141,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 	    else if (!strncmp(fetchatt.s, "BODY[", 5) ||
 		     !strncmp(fetchatt.s, "BODY.PEEK[", 10)) {
 		p = section = fetchatt.s + 5;
-		if (*p == 'P') {
+		if (!strncmp(p, "PEEK[", 5)) {
 		    p = section += 5;
 		}
 		else {
@@ -3490,7 +3490,7 @@ void cmd_partial(const char *tag, const char *msgno, char *data,
     else if (!strncmp(data, "body[", 5) ||
 	     !strncmp(data, "body.peek[", 10)) {
 	p = section = data + 5;
-	if (*p == 'p') {
+	if (!strncmp(p, "peek[", 5)) {
 	    p = section += 5;
 	}
 	else {
@@ -3659,7 +3659,8 @@ void cmd_store(char *tag, char *sequence, char *operation, int usinguid)
 		flag = (char **)xrealloc((char *)flag,
 					 flagalloc*sizeof(char *));
 	    }
-	    flag[nflags++] = xstrdup(flagname.s);
+	    flag[nflags] = xstrdup(flagname.s);
+	    nflags++;
 	}
 
 	flagsparsed++;
