@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.28 2001/08/18 00:46:47 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.29 2001/08/18 01:13:42 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1270,7 +1270,7 @@ void lmtpmode(struct lmtp_func *func,
 			  "250-8BITMIME\r\n"
 			  "250-ENHANCEDSTATUSCODES\r\n",
 			  config_servername);
-	      if (starttls_enabled()) {
+	      if (starttls_enabled() && !func->preauth) {
 		  prot_printf(pout, "250-STARTTLS\r\n");
 	      }
 	      if (sasl_listmech(conn, NULL, "AUTH ", " ", "", &mechs, 
@@ -1464,7 +1464,8 @@ void lmtpmode(struct lmtp_func *func,
       case 's':
       case 'S':
 #ifdef HAVE_SSL
-	    if (!strcasecmp(buf, "starttls") && starttls_enabled()) {
+	    if (!strcasecmp(buf, "starttls") && starttls_enabled() &&
+		!func->preauth) { /* don't need TLS for preauth'd connect */
 		char *tls_cert, *tls_key;
 		int *layerp;
 		sasl_external_properties_t external;
