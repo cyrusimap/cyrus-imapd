@@ -1,7 +1,7 @@
 /* insert copyright,
  * derived from chris newman's code */
 
-/* $Id: imapurl.c,v 1.1 2000/02/16 03:10:28 leg Exp $ */
+/* $Id: imapurl.c,v 1.2 2000/02/17 05:24:39 leg Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -34,7 +34,7 @@ static char base64chars[] =
  *    UTF-7 can be slightly denser than UTF-8
  *     (worst case: 8 octets UTF-7 becomes 9 octets UTF-8)
  */
-static void MailboxToURL(char *dst, char *src)
+static void MailboxToURL(char *dst, const char *src)
 {
     unsigned char c, i, bitcount;
     unsigned long ucs4, utf16, bitbuf;
@@ -43,7 +43,7 @@ static void MailboxToURL(char *dst, char *src)
     /* initialize modified base64 decoding table */
     memset(base64, UNDEFINED, sizeof (base64));
     for (i = 0; i < sizeof (base64chars); ++i) {
-        base64[base64chars[i]] = i;
+        base64[(int) base64chars[i]] = i;
     }
 
     /* loop until end of string */
@@ -138,7 +138,7 @@ static void URLtoMailbox(char *dst, char *src)
     /* initialize hex lookup table */
     memset(hextab, 0, sizeof (hextab));
     for (i = 0; i < sizeof (hex); ++i) {
-        hextab[hex[i]] = i;
+        hextab[(int) hex[i]] = i;
         if (isupper(hex[i])) hextab[tolower(hex[i])] = i;
     }
     
@@ -149,7 +149,7 @@ static void URLtoMailbox(char *dst, char *src)
         ++src;
         /* undo hex-encoding */
         if (c == '%' && src[0] != '\0' && src[1] != '\0') {
-            c = (hextab[src[0]] << 4) | hextab[src[1]];
+            c = (hextab[(int) src[0]] << 4) | hextab[(int) src[1]];
             src += 2;
         }
         /* normal character? */
