@@ -1,18 +1,33 @@
-<!-- $Id: changes.html,v 1.58 1998/12/21 15:33:46 dar Exp $ -->
+<!-- $Id: changes.html,v 1.59 1999/01/12 16:11:00 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
-<h2> Changes to the Cyrus IMAP Server Since Version 1.5.14</h2>
+    <h2> Changes to the Cyrus IMAP Server Sice Version 1.5.19 </h2>
+
+    <ul>
+      <li> The arbitron program now takes a mailbox pattern argument for the
+	mailbox to run on. The manpage always said it did anyway. 
+
+      <li> Uninitialized variable fixed in imapd.c with the shutdown file
+	code.
+
+    </ul>
+
+    <h2> Changes to the Cyrus IMAP Server Since Version 1.5.14</h2>
 
     <ul>
       <li>
-	LIST now honors the reference argument.  This behavior can be turned
-	off by a configuration option imapd.conf--which may be desirable
-	because of certain clients that ask for a "mail directory" setting for
-	IMAP which will now cause problems when it was ignored before.
+	LIST now honors the reference argument.
+
+	<p>
+	  This behavior can be turned off by a configuration option
+	  imapd.conf--which may be desirable because of certain clients that
+	  ask for a "mail directory" setting for IMAP which will now cause
+	  problems when it was ignored before.  (The default is for the
+	  reference argument to be honored.)
 
       <li>
 	The <tt>arbitron</tt> program now takes a mailbox pattern argument for
@@ -637,7 +652,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Fri Dec  4 12:56:48 1998
+last modified by tjs at Tue Jan 12 11:10:42 1999
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
