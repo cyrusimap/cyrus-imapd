@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.62 2001/09/18 13:21:03 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.63 2001/10/23 20:20:23 leg Exp $ */
 
 #include <config.h>
 
@@ -595,12 +595,17 @@ int reconstruct(char *name, struct discovered *found)
 	    if (stat(dirent->d_name, &sbuf) < 0) continue;
 	    if (!S_ISDIR(sbuf.st_mode)) continue;
 
-	    /* ok, we found a directory that doesn't have a dot in it */
-	    strcpy(fnamebuf, name);
-	    strcat(fnamebuf, ".");
-	    strcat(fnamebuf, dirent->d_name);
+	    /* ok, we found a directory that doesn't have a dot in it;
+	     is there a cyrus.header file? */
+	    snprintf(fnamebuf, sizeof(fnamebuf), "%s/cyrus.header",
+		     dirent->d_name);
+	    if (stat(fnamebuf, &sbuf) < 0) continue;
 
-	    /* does fnamebuf exist as a mailbox? */
+	    /* ok, we have a real mailbox directory */
+	    snprintf(fnamebuf, sizeof(fnamebuf), "%s.%s", 
+		     name, dirent->d_name);
+
+	    /* does fnamebuf exist as a mailbox in mboxlist? */
 	    do {
 		r = mboxlist_lookup(fnamebuf, NULL, NULL, NULL);
 	    } while (r == IMAP_AGAIN);
@@ -673,9 +678,7 @@ todo_append_hashed(char *name, char *path, char *partition)
     }
 }
 
-char *cleanacl(acl, mboxname)
-char *acl;
-char *mboxname;
+char *cleanacl(char *acl, char *mboxname)
 {
     char owner[MAX_MAILBOX_NAME+1];
     cyrus_acl_canonproc_t *aclcanonproc = 0;
