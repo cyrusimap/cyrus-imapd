@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.1.2.3 2005/02/28 20:45:14 ken3 Exp $
+ * $Id: sync_commit.c,v 1.1.2.4 2005/03/01 18:06:03 ken3 Exp $
  */
 
 #include <config.h>
@@ -107,7 +107,7 @@ sync_combine_commit(struct mailbox *mailbox,
     unsigned long msgno;
     char  target[MAX_MAILBOX_PATH+1];
     struct index_record record;
-    int   n, r, rc;
+    int   n, r = 0, rc;
     struct txn *tid = NULL;
 
     if (upload_list->count == 0) return(0);   /* NOOP */
@@ -471,7 +471,7 @@ sync_append_commit(struct mailbox *mailbox,
     unsigned long newanswered;
     unsigned long newflagged;
     char  target[MAX_MAILBOX_PATH];
-    int   n, r;
+    int   n, r = 0;
     struct txn *tid = NULL;
 
     if (upload_list->count == 0) return(0);   /* NOOP */
