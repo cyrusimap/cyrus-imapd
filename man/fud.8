@@ -40,7 +40,7 @@
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
 .SH NAME
-fud \- provide information about user mailboxes
+FUD \- provide information about user mailboxes
 .SH SYNOPSIS
 .B fud
 [
@@ -48,12 +48,21 @@ fud \- provide information about user mailboxes
 .I config-file
 ]
 .SH DESCRIPTION
-.I Fud
-is a long lived datagram daemon started from inetd that provides information about when a user last
+.B FUD
+is a long lived datagram daemon started from master that provides
+information about when a user last
 read their mail, when mail last arrived in a user's mailbox, and how
 many messages are recent for that user.
 .PP
-.I Fud
+Note that for
+.B FUD
+to run properly you must set proto=udp in its cyrus.conf
+services entry.  prefork=1 is also recommended.
+.B FUD
+will automatically proxy any and all FUD requests to the appropriate
+backend server if it is runing on a Cyrus Murder frontend machine.
+.PP
+.B FUD
 reads its configuration options out of the
 .IR imapd.conf (5)
 file unless specified otherwise by \fB-C\fR.
@@ -64,6 +73,10 @@ Read configuration options from \fIconfig-file\fR.
 .SH FILES
 .TP
 .B /etc/imapd.conf
+Default configuration file.
+.TP
+.B /etc/cyrus.conf
+Cyrus Master process configuration file.
 .SH BUGS
 Though not really a bug, 
 .B FUD

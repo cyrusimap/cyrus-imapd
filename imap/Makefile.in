@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.155 2002/02/19 22:33:44 rjs3 Exp $
+# $Id: Makefile.in,v 1.156 2002/02/22 17:25:26 rjs3 Exp $
 # 
 # @configure_input@
 #
@@ -249,8 +249,9 @@ arbitron: arbitron.o libimap.a $(DEPLIBS)
 populateacap: populateacap.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o populateacap populateacap.o libimap.a $(DEPLIBS) $(LIBS)
 
-fud: fud.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o fud fud.o libimap.a $(DEPLIBS) $(LIBS)
+fud: fud.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o fud $(SERVICE) fud.o libimap.a \
+	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 squatter: squatter.o index.o squat_build.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o squatter squatter.o index.o squat_build.o libimap.a $(DEPLIBS) $(LIBS)

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.60 2002/02/19 18:50:15 ken3 Exp $ */
+/* $Id: master.c,v 1.61 2002/02/22 17:25:30 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -368,8 +368,13 @@ void service_create(struct service *s)
 	sa = (struct sockaddr *) &sin;
 	salen = sizeof(sin);
 
-	s->socket = socket(AF_INET, SOCK_STREAM, 0);
-
+	if(!strcmp(s->proto, "tcp")) {
+	    s->socket = socket(AF_INET, SOCK_STREAM, 0);
+	} else {
+	    /* udp */
+	    s->socket = socket(AF_INET, SOCK_DGRAM, 0);
+	}
+	
 	free(listen);
     }
 
@@ -403,7 +408,8 @@ void service_create(struct service *s)
 	chmod(s->listen, (mode_t) 0777);
     }
 
-    if (listen(s->socket, listen_queue_backlog) < 0) {
+    if (!strcmp(s->proto, "tcp")
+	&& listen(s->socket, listen_queue_backlog) < 0) {
 	syslog(LOG_ERR, "unable to listen to %s socket: %m", s->name);
 	close(s->socket);
 	s->socket = 0;
@@ -862,10 +868,18 @@ void add_service(const char *name, struct entry *e,
 	/* we found an existing entry and the port paramters are the same */
 	Services[i].exec = tokenize(cmd);
 	if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
-	Services[i].desired_workers = prefork;
-	Services[i].max_workers = atoi(max);
-	if (Services[i].max_workers == -1) {
-	    Services[i].max_workers = INT_MAX;
+
+	if (strcmp(Services[i].proto, "tcp") == 0) {
+	    Services[i].desired_workers = prefork;
+	    Services[i].max_workers = atoi(max);
+	    if (Services[i].max_workers == -1) {
+		Services[i].max_workers = INT_MAX;
+	    }
+	} else {
+	    /* udp */
+	    if (prefork > 1) prefork = 1;
+	    Services[i].desired_workers = prefork;
+	    Services[i].max_workers = 1;
 	}
 
 	if (verbose > 2)
@@ -895,11 +909,20 @@ void add_service(const char *name, struct entry *e,
 	Services[nservices].saddr = NULL;
 
 	Services[nservices].ready_workers = 0;
-	Services[nservices].desired_workers = prefork;
-	Services[nservices].max_workers = atoi(max);
-	if (Services[i].max_workers == -1) {
-	    Services[i].max_workers = INT_MAX;
+
+
+	if(!strcmp(Services[nservices].proto, "tcp")) {
+	    Services[nservices].desired_workers = prefork;
+	    Services[nservices].max_workers = atoi(max);
+	    if (Services[nservices].max_workers == -1) {
+		Services[nservices].max_workers = INT_MAX;
+	    }
+	} else {
+	    if (prefork > 1) prefork = 1;
+	    Services[nservices].desired_workers = prefork;
+	    Services[nservices].max_workers = 1;
 	}
+	
 	memset(Services[nservices].stat, 0, sizeof(Services[nservices].stat));
 
 	Services[nservices].nforks = 0;
