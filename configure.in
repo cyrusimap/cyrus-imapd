@@ -192,6 +192,12 @@ else
 fi])
 AC_SUBST(INNSHELLVARS)
 
+AC_ARG_ENABLE(privacy,
+	[  --disable-privacy       disable network privacy support],
+	if test "$enableval" = no; then
+		AC_DEFINE(NOPRIVACY)
+	fi)		
+
 AC_MSG_CHECKING(for modern syslog)
 AC_CACHE_VAL(cyrus_cv_lib_syslog, AC_TRY_CPP([#include <syslog.h>
 #ifndef LOG_LOCAL6
