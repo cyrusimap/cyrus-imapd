@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.88 2002/03/07 17:55:28 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.89 2002/03/13 21:39:17 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -122,7 +122,7 @@ typedef struct script_data {
 
 /* forward declarations */
 int deliver_mailbox(struct protstream *msg,
-		    struct stagemsg **stage,
+		    struct stagemsg *stage,
 		    unsigned size,
 		    char **flag,
 		    int nflags,
@@ -142,7 +142,10 @@ static char *generate_notify(message_data_t *m);
 
 void shut_down(int code);
 
-struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down, 0, 1, 0 };
+static FILE *spoolfile(message_data_t *msgdata);
+
+struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down, &spoolfile,
+			    0, 1, 0 };
 
 static void logdupelem();
 static void usage();
@@ -700,7 +703,7 @@ int sieve_fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     if (!sd->authstate)
 	return SIEVE_FAIL;
 
-    ret = deliver_mailbox(md->data, &mdata->stage, md->size,
+    ret = deliver_mailbox(md->data, mdata->stage, md->size,
 			  fc->imapflags->flag, fc->imapflags->nflags,
                           sd->username, sd->authstate, md->id,
                           sd->username, mdata->notifyheader,
@@ -732,7 +735,7 @@ int sieve_keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_INBOX]);
 	strcat(namebuf, sd->mailboxname);
 
-	ret = deliver_mailbox(md->data, &mydata->stage, md->size,
+	ret = deliver_mailbox(md->data, mydata->stage, md->size,
 			      kc->imapflags->flag, kc->imapflags->nflags,
 			      mydata->authuser, mydata->authstate, md->id,
 			      sd->username, mydata->notifyheader,
@@ -745,7 +748,7 @@ int sieve_keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 
 	strcpy(namebuf, "INBOX");
 
-	ret = deliver_mailbox(md->data, &mydata->stage, md->size,
+	ret = deliver_mailbox(md->data, mydata->stage, md->size,
 			      kc->imapflags->flag, kc->imapflags->nflags,
 			      sd->username, sd->authstate, md->id,
 			      sd->username, mydata->notifyheader,
@@ -1069,7 +1072,7 @@ usage()
  * pass acloverride
  */
 int deliver_mailbox(struct protstream *msg,
-		    struct stagemsg **stage,
+		    struct stagemsg *stage,
 		    unsigned size,
 		    char **flag,
 		    int nflags,
@@ -1144,7 +1147,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 
     /* create 'mydata', our per-delivery data */
     mydata.m = msgdata;
-    mydata.stage = NULL;
+    mydata.stage = (struct stagemsg *) msg_getrock(msgdata);
     mydata.notifyheader = generate_notify(msgdata);
     mydata.authuser = authuser;
     mydata.authstate = authstate;
@@ -1164,7 +1167,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_SHARED]);
 	    strcat(namebuf, plus);
 	    r = deliver_mailbox(msgdata->data, 
-				&mydata.stage,
+				mydata.stage,
 				msgdata->size, 
 				NULL, 0,
 				mydata.authuser, mydata.authstate,
@@ -1241,7 +1244,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 		strcat(namebuf, plus);
 		
 		r = deliver_mailbox(msgdata->data, 
-				    &mydata.stage, 
+				    mydata.stage, 
 				    msgdata->size, 
 				    NULL, 0, 
 				    mydata.authuser, mydata.authstate,
@@ -1255,7 +1258,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 		
 		/* ignore ACL's trying to deliver to INBOX */
 		r = deliver_mailbox(msgdata->data, 
-				    &mydata.stage,
+				    mydata.stage,
 				    msgdata->size, 
 				    NULL, 0, 
 				    mydata.authuser, mydata.authstate,
@@ -1412,4 +1415,76 @@ char *generate_notify(message_data_t *m)
     }
 
     return ret;
+}
+
+FILE *spoolfile(message_data_t *msgdata)
+{
+    /* if we have multiple recipients and are using single-instance store,
+     * spool to the stage of the first recipient
+     */
+    if ((msg_getnumrcpt(msgdata) > 1) && singleinstance) {
+	int r = 0;
+	char *rcpt, *plus, *user = NULL;
+	char namebuf[MAX_MAILBOX_PATH], mailboxname[MAX_MAILBOX_PATH];
+	time_t now = time(NULL);
+
+	/* build the mailboxname from the recipient address */
+	rcpt = xstrdup(msg_getrcpt(msgdata, 0));
+	plus = strchr(rcpt, '+');
+	if (plus) *plus++ = '\0';
+
+	/* case 1: shared mailbox request */
+	if (plus && !strcmp(rcpt, BB)) {
+	    strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_SHARED]);
+	    strcat(namebuf, plus);
+	}
+
+	/* case 2: ordinary user */
+	else if (!strchr(rcpt, lmtpd_namespace.hier_sep) &&
+	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
+	    user = rcpt;
+
+	    if (plus &&
+		strlen(rcpt) + strlen(plus) + 30 <= MAX_MAILBOX_PATH) {
+		/* delivery to + mailbox */
+		strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_INBOX]);
+		strcat(namebuf, plus);
+	    }
+	    else {
+		/* delivery to INBOX */
+		strcpy(namebuf, "INBOX");
+	    }
+	}
+
+	/* case 3: unable to handle rcpt */
+	else {
+	    /* force error and we'll fallback to using /tmp */
+	    r = 1;
+	}
+
+	if (!r) {
+	    /* Translate any separators in user */
+	    if (user) mboxname_hiersep_tointernal(&lmtpd_namespace, user);
+
+	    r = (*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace,
+						       namebuf,
+						       user, mailboxname);
+	}
+
+	free(rcpt);
+
+	if (!r) {
+	    FILE *f;
+	    struct stagemsg *stage = NULL;
+
+	    /* setup stage for later use by deliver() */
+	    f = append_newstage(mailboxname, now, &stage);
+	    msg_setrock(msgdata, (void*) stage);
+
+	    return f;
+	}
+    }
+
+    /* spool to /tmp (no single-instance store) */
+    return tmpfile();
 }

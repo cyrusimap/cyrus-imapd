@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.84 2002/03/07 21:41:17 rjs3 Exp $
+ * $Id: append.c,v 1.85 2002/03/13 21:39:16 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -66,8 +66,6 @@
 #include "retry.h"
 
 struct stagemsg {
-    unsigned long size;
-    time_t internaldate;
     char fname[1024];
 
     int num_parts;
@@ -367,6 +365,57 @@ int append_stageparts(struct stagemsg *stagep)
 }
 
 /*
+ * staging, to allow for single-instance store.  initializes the stage
+ * with the file for the given mailboxname and returns the open file
+ * so it can double as the spool file
+ */
+FILE *append_newstage(const char *mailboxname, time_t internaldate,
+		      struct stagemsg **stagep)
+{
+    struct stagemsg *stage;
+    char stagedir[1024], stagefile[1024];
+    FILE *f;
+
+    assert(mailboxname != NULL);
+    assert(stagep != NULL);
+
+    stage = xmalloc(sizeof(struct stagemsg) +
+		    5 * MAX_MAILBOX_PATH * sizeof(char));
+
+    sprintf(stage->fname, "%d-%d",(int) getpid(), (int) internaldate);
+    stage->num_parts = 5; /* room for 5 paths */
+
+    mboxlist_findstage(mailboxname, stagedir);
+    strcpy(stagefile, stagedir);
+    strcat(stagefile, stage->fname);
+
+    /* create this file and put it into stage->parts[0] */
+    f = fopen(stagefile, "w+");
+    if (!f) {
+	if (mkdir(stagedir, 0755) != 0) {
+	    syslog(LOG_ERR, "couldn't create stage directory: %s: %m",
+		   stagedir);
+	} else {
+	    syslog(LOG_NOTICE, "created stage directory %s",
+		   stagedir);
+	    f = fopen(stagefile, "w+");
+	}
+    } 
+    if (!f) {
+	syslog(LOG_ERR, "IOERROR: creating message file %s: %m", 
+	       stagefile);
+	*stagep = NULL;
+	return NULL;
+    }
+
+    strcpy(stage->parts[0], stagefile);
+    stage->parts[1][0] = '\0';
+
+    *stagep = stage;
+    return f;
+}
+
+/*
  * staging, to allow for single-instance store.  the complication here
  * is multiple partitions.
  */
@@ -374,7 +423,7 @@ int append_fromstage(struct appendstate *as,
 		     struct protstream *messagefile,
 		     unsigned long size, time_t internaldate,
 		     const char **flag, int nflags,
-		     struct stagemsg **stagep)
+		     struct stagemsg *stage)
 {
     struct mailbox *mailbox = &as->m;
     struct index_record message_index;
@@ -384,28 +433,15 @@ int append_fromstage(struct appendstate *as,
     int userflag, emptyflag;
 
     /* for staging */
-    struct stagemsg *stage;
     char stagefile[1024];
     FILE *f;
     int sp;
 
-    assert(stagep != NULL);
+    assert(stage != NULL);
     assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
     assert(size != 0);
 
     zero_index(message_index);
-    if (!*stagep) { /* create a new stage */
-	stage = xmalloc(sizeof(struct stagemsg) +
-			5 * MAX_MAILBOX_PATH * sizeof(char));
-
-	stage->size = size;
-	stage->internaldate = internaldate;
-	sprintf(stage->fname, "%d-%d",(int) getpid(), (int) internaldate);
-	stage->num_parts = 5; /* room for 5 paths */
-	stage->parts[0][0] = '\0';
-    } else {
-	stage = *stagep; /* reuse existing stage */
-    }
 
     mboxlist_findstage(mailbox->name, stagefile);
     strcat(stagefile, stage->fname);
@@ -551,7 +587,6 @@ int append_fromstage(struct appendstate *as,
     /* ok, we've successfully added a message */
     as->quota_used += message_index.size;
 
-    *stagep = stage;
     return 0;
 }
 
