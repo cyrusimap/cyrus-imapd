@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.30 1998/07/31 22:08:37 tjs Exp $
+# $Id: SMakefile,v 1.31 1998/08/15 14:52:43 wcw Exp $
 #
 
 MAKE=gmake
@@ -39,7 +39,7 @@ case `uname` in
   SunOS) # these flags are only for solaris
 	 # -xs: generate debugging information that gdb likes
 	 CFLAGS="${CFLAGS} -xO3 "
-	 LDFLAGS="${LDFLAGS} -xs"
+	 LDFLAGS="${LDFLAGS} -xs -xO3"
 	 ;;
   ULTRIX)  
 	CC=gcc # cheat -- Ultrix cc is aged
