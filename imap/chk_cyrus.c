@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.4 2002/05/21 18:29:24 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.5 2002/05/22 19:48:53 rjs3 Exp $
  */
 
 #include <config.h>
@@ -192,8 +192,6 @@ int main(int argc, char **argv)
 
     extern char *optarg;
     int opt;
-
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     while ((opt = getopt(argc, argv, "C:P:M:")) != EOF) {
 	switch (opt) {
