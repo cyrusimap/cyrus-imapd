@@ -35,6 +35,7 @@ char *ident;
 {
     char buf[100];
     char *p;
+    int umaskval = 0;
 
     initialize_imap_error_table();
 
@@ -63,6 +64,14 @@ char *ident;
 		config_defpartition);
 	fatal(buf, EX_CONFIG);
     }
+
+    /* Look up umask */
+    p = config_getstring("umask", "077");
+    while (*p) {
+	if (*p >= '0' && *p <= '7') umaskval = umaskval*8 + *p - '0';
+	p++;
+    }
+    umask(umaskval);
 
     return 0;
 }
