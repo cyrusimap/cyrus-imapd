@@ -94,9 +94,9 @@ struct imclient {
     void *state;
     int maxplain;
     
-    long gensym;		/* Tag value for previous command */
+    unsigned long gensym;	/* Tag value for previous command */
 
-    long readytag;		/* Tag of command waiting for ready response */
+    unsigned long readytag;	/* Tag of command waiting for ready response */
 				/* 0 if wait over or not pending */
     char *readytxt;		/* Text of ready response, NULL if got
 				   tagged reply for command */
@@ -314,6 +314,7 @@ va_dcl
  *   %a -- atom
  *   %s -- astring (will be quoted or literalized as needed)
  *   %d -- decimal
+ *   %u -- unsigned decimal
  *   %k -- key-value pair list [XXX]
  */ 
 #ifdef __STDC__
@@ -331,6 +332,7 @@ va_dcl
     char buf[30];
     char *percent, *str, *p, **v;
     int num;
+    unsigned unum;
 #ifdef __STDC__
     va_start(pvar, fmt);
 #else
@@ -369,7 +371,7 @@ va_dcl
     }
     
     /* Write the tag */
-    sprintf(buf, "%ld ", imclient->gensym);
+    sprintf(buf, "%lu ", imclient->gensym);
     imclient_write(imclient, buf, strlen(buf));
 
     /* Process the command format */
@@ -396,6 +398,12 @@ va_dcl
 	    imclient_write(imclient, buf, strlen(buf));
 	    break;
 
+	case 'u':
+	    unum = va_arg(pvar, int);
+	    sprintf(buf, "%lu ", unum);
+	    imclient_write(imclient, buf, strlen(buf));
+	    break;
+
 	case 'v':
 	    v = va_arg(pvar, char **);
 	    for (num = 0; v[num]; num++) {
@@ -419,7 +427,7 @@ struct imclient *imclient;
 char *str;
 {
     char *p;
-    int len = 0;
+    unsigned len = 0;
     int class = 2;
     char buf[30];
 
@@ -442,7 +450,7 @@ char *str;
     else {
 	/* Literal */
 	imclient->readytag = imclient->gensym;
-	sprintf(buf, "{%d}\r\n", len);
+	sprintf(buf, "{%u}\r\n", len);
 	imclient_write(imclient, buf, strlen(buf));
 	while (imclient->readytag) {
 	    imclient_processoneevent(imclient);

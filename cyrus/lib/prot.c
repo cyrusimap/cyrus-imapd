@@ -375,6 +375,7 @@ va_dcl
     va_list pvar;
     char *percent, *p;
     int i;
+    unsigned u;
     char buf[30];
 #ifdef __STDC__
     va_start(pvar, fmt);
@@ -397,6 +398,12 @@ va_dcl
 	case 'd':
 	    i = va_arg(pvar, int);
 	    sprintf(buf, "%d", i);
+	    prot_write(s, buf, strlen(buf));
+	    break;
+
+	case 'u':
+	    u = va_arg(pvar, int);
+	    sprintf(buf, "%u", u);
 	    prot_write(s, buf, strlen(buf));
 	    break;
 
