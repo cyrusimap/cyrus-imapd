@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.26 2003/02/26 21:28:05 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.27 2003/02/27 14:42:08 ken3 Exp $
  */
 #include <config.h>
 
@@ -166,7 +166,6 @@ static void kpop(void);
 static int parsenum(char **ptr);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
-char *shutdown_file(void);
 
 
 extern void setproctitle_init(int argc, char **argv, char **envp);
@@ -476,32 +475,6 @@ void shut_down(int code)
     cyrus_done();
 
     exit(code);
-}
-
-/*
- * Return the contents of a shutdown file.  NULL = no file.
- */
-char *shutdown_file(void)
-{
-    int fd;
-    struct protstream *shutdown_in;
-    static char shutdownfilename[1024] = "";
-    static char buf[1024];
-    char *p;
-    
-    if (!shutdownfilename[0])
-	snprintf(shutdownfilename, sizeof(shutdownfilename), 
-		 "%s/msg/shutdown", config_dir);
-    if ((fd = open(shutdownfilename, O_RDONLY, 0)) == -1) return NULL;
-
-    shutdown_in = prot_new(fd, 0);
-    prot_fgets(buf, sizeof(buf), shutdown_in);
-    if ((p = strchr(buf, '\r')) != NULL) *p = 0;
-    if ((p = strchr(buf, '\n')) != NULL) *p = 0;
-
-    syslog(LOG_WARNING, "%s, closing connection", buf);
-
-    return buf;
 }
 
 void fatal(const char* s, int code)

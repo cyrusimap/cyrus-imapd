@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.1.2.4 2003/02/13 20:32:55 rjs3 Exp $ */
+/* $Id: global.c,v 1.1.2.5 2003/02/27 14:42:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -545,4 +545,30 @@ void cyrus_done()
     cyrus_init_run = DONE;
     
     libcyrus_done();
+}
+
+/*
+ * Return contents of the shutdown file.  NULL = no file.
+ */
+char *shutdown_file(void)
+{
+    int fd;
+    struct protstream *shutdown_in;
+    static char shutdownfilename[1024] = "";
+    static char buf[1024];
+    char *p;
+    
+    if (!shutdownfilename[0])
+	snprintf(shutdownfilename, sizeof(shutdownfilename), 
+		 "%s/msg/shutdown", config_dir);
+    if ((fd = open(shutdownfilename, O_RDONLY, 0)) == -1) return NULL;
+
+    shutdown_in = prot_new(fd, 0);
+    prot_fgets(buf, sizeof(buf), shutdown_in);
+    if ((p = strchr(buf, '\r')) != NULL) *p = 0;
+    if ((p = strchr(buf, '\n')) != NULL) *p = 0;
+
+    syslog(LOG_WARNING, "%s, closing connection", buf);
+
+    return buf;
 }

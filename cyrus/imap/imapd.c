@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.67 2003/02/13 20:32:55 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.68 2003/02/27 14:42:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -144,7 +144,6 @@ static const int max_monthdays[] = {
     31, 31, 30, 31, 30, 31
 };
 
-void shutdown_file(int fd);
 void motd_file(int fd);
 void shut_down(int code);
 void fatal(const char *s, int code);
@@ -609,28 +608,6 @@ int fd;
 }
 
 /*
- * Found a shutdown file: Spit out an untagged BYE and shut down
- */
-void shutdown_file(fd)
-int fd;
-{
-    struct protstream *shutdown_in;
-    char buf[1024];
-    char *p;
-
-    shutdown_in = prot_new(fd, 0);
-
-    prot_fgets(buf, sizeof(buf), shutdown_in);
-    if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-    if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
-
-    for(p = buf; *p == '['; p++); /* can't have [ be first char, sigh */
-    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
-
-    shut_down(0);
-}
-
-/*
  * Cleanly shut down and exit
  */
 void shut_down(int code) __attribute__((noreturn));
@@ -701,7 +678,7 @@ void cmdloop()
     int ret;
     int usinguid, havepartition, havenamespace, recursive;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
-    char *p;
+    char *p, *shut;
     const char *err;
 
     prot_printf(imapd_out,
@@ -723,8 +700,10 @@ void cmdloop()
 
     for (;;) {
 	if ( !imapd_userisadmin && imapd_userid
-	     && (fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
-	    shutdown_file(fd);
+	     && (shut = shutdown_file()) != NULL) {
+	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
+	    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
+	    shut_down(0);
 	}
 
 	signals_poll();
@@ -2045,16 +2024,17 @@ void cmd_idle(char *tag)
 /* Send unsolicited untagged responses to the client */
 void idle_update(idle_flags_t flags)
 {
-    int fd;
-
     if ((flags & IDLE_MAILBOX) && imapd_mailbox)
 	index_check(imapd_mailbox, 0, 1);
 
     if (flags & IDLE_ALERT) {
-      if (! imapd_userisadmin &&
-	  (fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
-	shutdown_file(fd);
-      }
+	char *shut;
+	if (! imapd_userisadmin && (shut = shutdown_file()) != NULL) {
+	    char *p;
+	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
+	    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
+	    shut_down(0);
+	}
     }
 
     prot_flush(imapd_out);

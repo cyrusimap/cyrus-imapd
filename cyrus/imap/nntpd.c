@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.62 2003/02/25 21:44:30 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.63 2003/02/27 14:42:07 ken3 Exp $
  */
 
 /*
@@ -213,7 +213,6 @@ static void cmd_post(char *msgid, int mode);
 static void cmd_starttls(int nntps);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
-char *shutdown_file(void);
 
 
 extern void setproctitle_init(int argc, char **argv, char **envp);
@@ -645,7 +644,6 @@ int service_main(int argc, char **argv, char **envp)
     if (nntps == 1) cmd_starttls(1);
 
     if ((unavail = shutdown_file()) != NULL) {
-	syslog(LOG_WARNING, "%s, closing connection", unavail);
 	prot_printf(nntp_out,
 		    "400 %s Cyrus NNTP%s %s server unavailable, %s\r\n",
 		    config_servername, config_mupdate_server ? " Murder" : "",
@@ -728,30 +726,6 @@ void shut_down(int code)
     cyrus_done();
 
     exit(code);
-}
-
-/*
- * Return the contents of a shutdown file.  NULL = no file.
- */
-char *shutdown_file(void)
-{
-    int fd;
-    struct protstream *shutdown_in;
-    static char shutdownfilename[1024] = "";
-    static char buf[1024];
-    char *p;
-    
-    if (!shutdownfilename[0])
-	snprintf(shutdownfilename, sizeof(shutdownfilename), 
-		 "%s/msg/shutdown", config_dir);
-    if ((fd = open(shutdownfilename, O_RDONLY, 0)) == -1) return NULL;
-
-    shutdown_in = prot_new(fd, 0);
-    prot_fgets(buf, sizeof(buf), shutdown_in);
-    if ((p = strchr(buf, '\r')) != NULL) *p = 0;
-    if ((p = strchr(buf, '\n')) != NULL) *p = 0;
-
-    return buf;
 }
 
 void fatal(const char* s, int code)
@@ -842,7 +816,6 @@ static void cmdloop(void)
 	    return;
 	}
 	if ((result = shutdown_file()) != NULL) {
-	    syslog(LOG_WARNING, "%s, closing connection", result);
 	    prot_printf(nntp_out, "400 %s\r\n", result);
 	    shut_down(0);
 	}

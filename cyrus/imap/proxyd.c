@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.48 2003/02/13 20:33:00 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.49 2003/02/27 14:42:09 ken3 Exp $ */
 
 #include <config.h>
 
@@ -158,7 +158,6 @@ static struct proxy_context proxyd_proxyctx = {
 /* current namespace */
 static struct namespace proxyd_namespace;
 
-void shutdown_file(int fd);
 void motd_file(int fd);
 void shut_down(int code);
 void fatal(const char *s, int code);
@@ -1347,27 +1346,6 @@ void motd_file(int fd)
 }
 
 /*
- * Found a shutdown file: Spit out an untagged BYE and shut down
- */
-void shutdown_file(int fd)
-{
-    struct protstream *shutdown_in;
-    char buf[1024];
-    char *p;
-
-    shutdown_in = prot_new(fd, 0);
-
-    prot_fgets(buf, sizeof(buf), shutdown_in);
-    if ((p = strchr(buf, '\r')) != NULL) *p = 0;
-    if ((p = strchr(buf, '\n')) != NULL) *p = 0;
-
-    for (p = buf; *p == '['; p++); /* can't have [ be first char, sigh */
-    prot_printf(proxyd_out, "* BYE [ALERT] %s\r\n", p);
-
-    shut_down(0);
-}
-
-/*
  * Cleanly shut down and exit
  */
 void shut_down(int code) __attribute__((noreturn));
@@ -1437,7 +1415,7 @@ void cmdloop()
     int c;
     int usinguid, havepartition, havenamespace;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
-    char *p;
+    char *p, *shut;
     const char *err;
 
     snprintf(shutdownfilename, sizeof(shutdownfilename), 
@@ -1455,9 +1433,10 @@ void cmdloop()
     }
 
     for (;;) {
-	if (! proxyd_userisadmin &&
-	    (fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
-	    shutdown_file(fd);
+	if (! proxyd_userisadmin && (shut = shutdown_file()) != NULL) {
+	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
+	    prot_printf(proxyd_out, "* BYE [ALERT] %s\r\n", p);
+	    shut_down(0);
 	}
 
 	signals_poll();
@@ -2618,18 +2597,20 @@ struct prot_waitevent *idle_getalerts(struct protstream *s,
 				      struct prot_waitevent *ev, void *rock)
 {
     int idle_period = *((int *) rock);
-    int fd;
+    char *shut;
 
     ev->mark = time(NULL) + idle_period;
 
-    if (! proxyd_userisadmin &&
-	(fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+    if (! proxyd_userisadmin && (shut = shutdown_file()) != NULL) {
+	char *p;
 
 	/* if we're actually running IDLE on the be, terminate it */
 	if (backend_current && CAPA(backend_current, IDLE))
 	    prot_printf(backend_current->out, "DONE\r\n");
 
-	shutdown_file(fd);
+	for (p = shut; *p == '['; p++); /* can't have [ be first char */
+	prot_printf(proxyd_out, "* BYE [ALERT] %s\r\n", p);
+	shut_down(0);
     }
 
     return ev;
