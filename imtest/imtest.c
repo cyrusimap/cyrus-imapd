@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.29 1999/08/16 21:11:46 leg Exp $
+ * $Id: imtest.c,v 1.30 1999/08/17 20:50:30 tmartin Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -67,6 +67,7 @@ int sock; /* socket descriptor */
 struct protstream *pout, *pin;
 
 char *authname;
+char *realm=NULL;
 
 extern int _sasl_debug;
 
@@ -75,6 +76,11 @@ extern char *optarg;
 /* callbacks we support */
 static sasl_callback_t callbacks[] = {
   {
+
+#ifdef SASL_CB_GETREAM
+    SASL_CB_GETREALM, NULL, NULL
+  }, {
+#endif
     SASL_CB_USER, NULL, NULL
   }, {
     SASL_CB_AUTHNAME, NULL, NULL
@@ -235,6 +241,10 @@ void interaction (int id, const char *prompt,
     } else if (((id==SASL_CB_USER) || 
 		(id==SASL_CB_AUTHNAME)) && (authname!=NULL)) {
 	strcpy(result, authname);
+#ifdef SASL_CB_GETREALM
+    } else if ((id==SASL_CB_GETREALM) && (realm!=NULL)) {
+      strcpy(result, realm);
+#endif
     } else {
 	int c;
 	
@@ -651,13 +661,14 @@ void interactive(char *filename)
 void usage(void)
 {
   printf("Usage: imtest [options] hostname\n");
-  printf("  -p port : port to use\n");
-  printf("  -z      : timing test\n");
-  printf("  -l #    : max protection layer (0=none; 1=integrity; etc)\n");
-  printf("  -u user : authentication name to use\n");
-  printf("  -v      : verbose\n");
-  printf("  -m mech : SASL mechanism to use (\"login\" for no authentication)\n");
-  printf("  -f file : pipe file into connection after authentication\n");
+  printf("  -p port  : port to use\n");
+  printf("  -z       : timing test\n");
+  printf("  -l #     : max protection layer (0=none; 1=integrity; etc)\n");
+  printf("  -u user  : authentication name to use\n");
+  printf("  -v       : verbose\n");
+  printf("  -m mech  : SASL mechanism to use (\"login\" for no authentication)\n");
+  printf("  -f file  : pipe file into connection after authentication\n");
+  printf("  -r realm : realm\n");
 
   exit(1);
 }
@@ -704,8 +715,11 @@ int main(int argc, char **argv)
 	mechanism=optarg;
 	break;
     case 'f':
-	filename=optarg;
+        filename=optarg;
 	break;
+    case 'r':
+        realm=optarg;
+        break;
     case '?':
     default:
 	errflg = 1;
