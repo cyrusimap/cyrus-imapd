@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.39 2002/04/15 14:42:18 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.40 2002/04/30 16:49:28 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -746,7 +746,7 @@ static int verify_user(const char *user,
 	char *plus = strchr(user, '+');
 
 	if (plus) l = plus - user;
-	else l = strlen(buf);
+	else l = strlen(user);
 
 	if (l >= MAX_MAILBOX_NAME) {
 	    /* too long a name */
