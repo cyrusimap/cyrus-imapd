@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.15 2005/02/21 19:25:45 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.16 2005/03/27 14:36:25 ken3 Exp $ */
 
 #include <config.h>
 
@@ -140,7 +140,7 @@ int main(int argc, char **argv)
 
     /* Ensure we're up-to-date on the index file format */
     assert(INDEX_HEADER_SIZE == (OFFSET_SPARE2+4));
-    assert(INDEX_RECORD_SIZE == (OFFSET_CACHE_VERSION+4));
+    assert(INDEX_RECORD_SIZE == (OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE));
 
     while ((opt = getopt(argc, argv, "C:p:rmfx")) != EOF) {
 	switch (opt) {
