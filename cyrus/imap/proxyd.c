@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.23 2002/08/23 19:52:05 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.24 2002/08/28 18:40:44 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -188,10 +188,11 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition);
 void cmd_find(char *tag, char *namespace, char *pattern);
 void cmd_list(char *tag, int subscribed, char *reference, char *pattern);
 void cmd_changesub(char *tag, char *namespace, char *name, int add);
-void cmd_getacl(char *tag, char *name, int oldform);
+void cmd_getacl(const char *tag, const char *name);
 void cmd_listrights(char *tag, char *name, char *identifier);
-void cmd_myrights(char *tag, char *name, int oldform);
-void cmd_setacl(char *tag, char *name, char *identifier, char *rights);
+void cmd_myrights(const char *tag, const char *name);
+void cmd_setacl(const char *tag, const char *name,
+		const char *identifier, const char *rights);
 void cmd_getquota(char *tag, char *name);
 void cmd_getquotaroot(char *tag, char *name);
 void cmd_setquota(char *tag, char *quotaroot);
@@ -1390,7 +1391,7 @@ void cmdloop()
     char motdfilename[1024];
     char hostname[MAXHOSTNAMELEN+1];
     int c;
-    int usinguid, havepartition, havenamespace, oldform;
+    int usinguid, havepartition, havenamespace;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
     char *p;
     const char *err;
@@ -1564,10 +1565,6 @@ void cmdloop()
 	    else if (!strcmp(cmd.s, "Deleteacl")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
-		if (!strcasecmp(arg1.s, "mailbox")) {
-		    if (c != ' ') goto missingargs;
-		    c = getastring(proxyd_in, proxyd_out, &arg1);
-		}
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == EOF) goto missingargs;
@@ -1622,18 +1619,12 @@ void cmdloop()
 
 	case 'G':
 	    if (!strcmp(cmd.s, "Getacl")) {
-		oldform = 0;
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
-		if (!strcasecmp(arg1.s, "mailbox")) {
-		    oldform = 1;
-		    if (c != ' ') goto missingargs;
-		    c = getastring(proxyd_in, proxyd_out, &arg1);
-		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
-		cmd_getacl(tag.s, arg1.s, oldform);
+		cmd_getacl(tag.s, arg1.s);
 	    }
 #ifdef ENABLE_ANNOTATEMORE
 	    else if (!strcmp(cmd.s, "Getannotation")) {
@@ -1724,18 +1715,12 @@ void cmdloop()
 
 	case 'M':
 	    if (!strcmp(cmd.s, "Myrights")) {
-		oldform = 0;
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
-		if (!strcasecmp(arg1.s, "mailbox")) {
-		    oldform = 1;
-		    if (c != ' ') goto missingargs;
-		    c = getastring(proxyd_in, proxyd_out, &arg1);
-		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
-		cmd_myrights(tag.s, arg1.s, oldform);
+		cmd_myrights(tag.s, arg1.s);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1912,10 +1897,6 @@ void cmdloop()
 	    else if (!strcmp(cmd.s, "Setacl")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
-		if (!strcasecmp(arg1.s, "mailbox")) {
-		    if (c != ' ') goto missingargs;
-		    c = getastring(proxyd_in, proxyd_out, &arg1);
-		}
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c != ' ') goto missingargs;
@@ -3930,7 +3911,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 /*
  * Perform a GETACL command
  */
-void cmd_getacl(char *tag, char *name, int oldform)
+void cmd_getacl(const char *tag, const char *name)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, access;
@@ -3957,47 +3938,25 @@ void cmd_getacl(char *tag, char *name, int oldform)
 	return;
     }
     
-    if (oldform) {
-	while (acl) {
-	    rights = strchr(acl, '\t');
-	    if (!rights) break;
-	    *rights++ = '\0';
-
-	    nextid = strchr(rights, '\t');
-	    if (!nextid) break;
-	    *nextid++ = '\0';
-
-	    prot_printf(proxyd_out, "* ACL MAILBOX ");
-	    printastring(name);
-	    prot_printf(proxyd_out, " ");
-	    printastring(acl);
-	    prot_printf(proxyd_out, " ");
-	    printastring(rights);
-	    prot_printf(proxyd_out, "\r\n");
-	    acl = nextid;
-	}
-    }
-    else {
-	prot_printf(proxyd_out, "* ACL ");
-	printastring(name);
+    prot_printf(proxyd_out, "* ACL ");
+    printastring(name);
+    
+    while (acl) {
+	rights = strchr(acl, '\t');
+	if (!rights) break;
+	*rights++ = '\0';
 	
-	while (acl) {
-	    rights = strchr(acl, '\t');
-	    if (!rights) break;
-	    *rights++ = '\0';
-
-	    nextid = strchr(rights, '\t');
-	    if (!nextid) break;
-	    *nextid++ = '\0';
-
-	    prot_printf(proxyd_out, " ");
-	    printastring(acl);
-	    prot_printf(proxyd_out, " ");
-	    printastring(rights);
-	    acl = nextid;
-	}
-	prot_printf(proxyd_out, "\r\n");
+	nextid = strchr(rights, '\t');
+	if (!nextid) break;
+	*nextid++ = '\0';
+	
+	prot_printf(proxyd_out, " ");
+	printastring(acl);
+	prot_printf(proxyd_out, " ");
+	printastring(rights);
+	acl = nextid;
     }
+    prot_printf(proxyd_out, "\r\n");
     prot_printf(proxyd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 }
@@ -4073,7 +4032,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
 /*
  * Perform a MYRIGHTS command
  */
-void cmd_myrights(char *tag, char *name, int oldform)
+void cmd_myrights(const char *tag, const char *name)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, rights = 0;
@@ -4106,7 +4065,6 @@ void cmd_myrights(char *tag, char *name, int oldform)
     }
     
     prot_printf(proxyd_out, "* MYRIGHTS ");
-    if (oldform) prot_printf(proxyd_out, "MAILBOX ");
     printastring(name);
     prot_printf(proxyd_out, " ");
     printastring(cyrus_acl_masktostr(rights, str));
@@ -4117,7 +4075,8 @@ void cmd_myrights(char *tag, char *name, int oldform)
 /*
  * Perform a SETACL command
  */
-void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
+void cmd_setacl(const char *tag, const char *name,
+		const char *identifier, const char *rights)
 {
     int r, res;
     char mailboxname[MAX_MAILBOX_NAME+1];

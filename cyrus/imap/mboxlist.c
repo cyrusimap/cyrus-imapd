@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.21 2002/08/26 18:13:53 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.22 2002/08/28 18:40:43 rjs3 Exp $
  */
 
 #include <config.h>
@@ -1319,8 +1319,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
  * 6. Change mupdate entry 
  *
  */
-int mboxlist_setacl(char *name, char *identifier, char *rights, 
-		    int isadmin, char *userid, 
+int mboxlist_setacl(const char *name, const char *identifier,
+		    const char *rights, 
+		    int isadmin, const char *userid, 
 		    struct auth_state *auth_state)
 {
     int useridlen = strlen(userid), domainlen = 0;

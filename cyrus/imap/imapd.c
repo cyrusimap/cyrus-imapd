@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.32 2002/08/23 19:53:24 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.33 2002/08/28 18:40:43 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -171,10 +171,11 @@ void cmd_reconstruct(const char *tag, const char *name, int recursive);
 void cmd_find(char *tag, char *namespace, char *pattern);
 void cmd_list(char *tag, int subscribed, char *reference, char *pattern);
 void cmd_changesub(char *tag, char *namespace, char *name, int add);
-void cmd_getacl(char *tag, char *name, int oldform);
+void cmd_getacl(const char *tag, const char *name);
 void cmd_listrights(char *tag, char *name, char *identifier);
-void cmd_myrights(char *tag, char *name, int oldform);
-void cmd_setacl(char *tag, char *name, char *identifier, char *rights);
+void cmd_myrights(const char *tag, const char *name);
+void cmd_setacl(const char *tag, const char *name,
+		const char *identifier, const char *rights);
 void cmd_getquota(char *tag, char *name);
 void cmd_getquotaroot(char *tag, char *name);
 void cmd_setquota(char *tag, char *quotaroot);
@@ -680,7 +681,7 @@ void cmdloop()
     int fd;
     char motdfilename[1024];
     int c;
-    int usinguid, havepartition, havenamespace, recursive, oldform;
+    int usinguid, havepartition, havenamespace, recursive;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
     char *p;
     const char *err;
@@ -864,10 +865,6 @@ void cmdloop()
 	    else if (!strcmp(cmd.s, "Deleteacl")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
-		if (!strcasecmp(arg1.s, "mailbox")) {
-		    if (c != ' ') goto missingargs;
-		    c = getastring(imapd_in, imapd_out, &arg1);
-		}
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == EOF) goto missingargs;
@@ -951,18 +948,12 @@ void cmdloop()
 
 	case 'G':
 	    if (!strcmp(cmd.s, "Getacl")) {
-		oldform = 0;
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
-		if (!strcasecmp(arg1.s, "mailbox")) {
-		    oldform = 1;
-		    if (c != ' ') goto missingargs;
-		    c = getastring(imapd_in, imapd_out, &arg1);
-		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_getacl(tag.s, arg1.s, oldform);
+		cmd_getacl(tag.s, arg1.s);
 
 		snmp_increment(GETACL_COUNT, 1);
 	    }
@@ -1121,20 +1112,14 @@ void cmdloop()
 
 	case 'M':
 	    if (!strcmp(cmd.s, "Myrights")) {
-		oldform = 0;
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
-		if (!strcasecmp(arg1.s, "mailbox")) {
-		    oldform = 1;
-		    if (c != ' ') goto missingargs;
-		    c = getastring(imapd_in, imapd_out, &arg1);
-		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_myrights(tag.s, arg1.s, oldform);
+		cmd_myrights(tag.s, arg1.s);
 
-		snmp_increment(MYRIGHTS_COUNT, 1);
+		/* xxxx snmp_increment(MYRIGHTS_COUNT, 1); */
 	    }
 	    else if (!strcmp(cmd.s, "Mupdatepush")) {
 		if (c != ' ') goto missingargs;
@@ -1144,7 +1129,7 @@ void cmdloop()
 		if(c != '\n') goto extraargs;
 		cmd_mupdatepush(tag.s, arg1.s);
 		
-		/* snmp_increment(MUPDATEPUSH_COUNT, 1); */
+		/* xxxx snmp_increment(MUPDATEPUSH_COUNT, 1); */
 	    } else goto badcmd;
 	    break;
 
@@ -1155,7 +1140,7 @@ void cmdloop()
 
 		cmd_noop(tag.s, cmd.s);
 
-		snmp_increment(NOOP_COUNT, 1);
+		/* xxxx snmp_increment(NOOP_COUNT, 1); */
 	    }
 #ifdef ENABLE_X_NETSCAPE_HACK
 	    else if (!strcmp(cmd.s, "Netscape")) {
@@ -1170,7 +1155,7 @@ void cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_namespace(tag.s);
 
-		snmp_increment(NAMESPACE_COUNT, 1);
+		/* xxxx snmp_increment(NAMESPACE_COUNT, 1); */
 	    }
 	    else goto badcmd;
 	    break;
@@ -1191,7 +1176,7 @@ void cmdloop()
 
 		cmd_partial(tag.s, arg1.s, arg2.s, arg3.s, arg4.s);
 
-		snmp_increment(PARTIAL_COUNT, 1);
+		/* xxxx snmp_increment(PARTIAL_COUNT, 1); */
 	    }
 	    else goto badcmd;
 	    break;
@@ -1213,7 +1198,7 @@ void cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0);
 
-		snmp_increment(RENAME_COUNT, 1);
+		/* xxxx snmp_increment(RENAME_COUNT, 1); */
 	    } else if(!strcmp(cmd.s, "Reconstruct")) {
 		recursive = 0;
 		if (c != ' ') goto missingargs;
@@ -1345,10 +1330,6 @@ void cmdloop()
 	    else if (!strcmp(cmd.s, "Setacl")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
-		if (!strcasecmp(arg1.s, "mailbox")) {
-		    if (c != ' ') goto missingargs;
-		    c = getastring(imapd_in, imapd_out, &arg1);
-		}
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c != ' ') goto missingargs;
@@ -4064,11 +4045,7 @@ void cmd_changesub(char *tag, char *namespace,
 /*
  * Perform a GETACL command
  */
-void
-cmd_getacl(tag, name, oldform)
-char *tag;
-char *name;
-int oldform;
+void cmd_getacl(const char *tag, const char *name)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, access;
@@ -4098,47 +4075,25 @@ int oldform;
 	return;
     }
     
-    if (oldform) {
-	while (acl) {
-	    rights = strchr(acl, '\t');
-	    if (!rights) break;
-	    *rights++ = '\0';
-
-	    nextid = strchr(rights, '\t');
-	    if (!nextid) break;
-	    *nextid++ = '\0';
-
-	    prot_printf(imapd_out, "* ACL MAILBOX ");
-	    printastring(name);
-	    prot_printf(imapd_out, " ");
-	    printastring(acl);
-	    prot_printf(imapd_out, " ");
-	    printastring(rights);
-	    prot_printf(imapd_out, "\r\n");
-	    acl = nextid;
-	}
-    }
-    else {
-	prot_printf(imapd_out, "* ACL ");
-	printastring(name);
+    prot_printf(imapd_out, "* ACL ");
+    printastring(name);
+    
+    while (acl) {
+	rights = strchr(acl, '\t');
+	if (!rights) break;
+	*rights++ = '\0';
 	
-	while (acl) {
-	    rights = strchr(acl, '\t');
-	    if (!rights) break;
-	    *rights++ = '\0';
-
-	    nextid = strchr(rights, '\t');
-	    if (!nextid) break;
-	    *nextid++ = '\0';
-
-	    prot_printf(imapd_out, " ");
-	    printastring(acl);
-	    prot_printf(imapd_out, " ");
-	    printastring(rights);
-	    acl = nextid;
-	}
-	prot_printf(imapd_out, "\r\n");
+	nextid = strchr(rights, '\t');
+	if (!nextid) break;
+	*nextid++ = '\0';
+	
+	prot_printf(imapd_out, " ");
+	printastring(acl);
+	prot_printf(imapd_out, " ");
+	printastring(rights);
+	acl = nextid;
     }
+    prot_printf(imapd_out, "\r\n");
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 }
@@ -4219,11 +4174,7 @@ char *identifier;
 /*
  * Perform a MYRIGHTS command
  */
-void
-cmd_myrights(tag, name, oldform)
-char *tag;
-char *name;
-int oldform;
+void cmd_myrights(const char *tag, const char *name)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, rights = 0;
@@ -4257,7 +4208,6 @@ int oldform;
     }
     
     prot_printf(imapd_out, "* MYRIGHTS ");
-    if (oldform) prot_printf(imapd_out, "MAILBOX ");
     printastring(name);
     prot_printf(imapd_out, " ");
     printastring(cyrus_acl_masktostr(rights, str));
@@ -4268,12 +4218,8 @@ int oldform;
 /*
  * Perform a SETACL command
  */
-void
-cmd_setacl(tag, name, identifier, rights)
-char *tag;
-char *name;
-char *identifier;
-char *rights;
+void cmd_setacl(const char *tag, const char *name,
+		const char *identifier, const char *rights)
 {
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];

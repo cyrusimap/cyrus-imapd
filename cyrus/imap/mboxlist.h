@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.33 2002/05/29 16:49:16 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.33.4.1 2002/08/28 18:40:44 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -126,8 +126,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 			   struct auth_state *auth_state);
 
 /* change ACL */
-int mboxlist_setacl(char *name, char *identifier, char *rights, int isadmin, 
-		    char *userid, struct auth_state *auth_state);
+int mboxlist_setacl(const char *name, const char *identifier,
+		    const char *rights, int isadmin, 
+		    const char *userid, struct auth_state *auth_state);
 
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(struct namespace *namespace,
