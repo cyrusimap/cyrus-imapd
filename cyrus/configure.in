@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.149.2.2 2000/05/24 17:53:00 leg Exp $
+dnl $Id: configure.in,v 1.149.2.3 2000/05/24 17:53:29 leg Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -840,7 +840,7 @@ case "$with_openssl" in
 		
 		;;
 	*)  CPPFLAGS="${CPPFLAGS} -I${with_openssl}/include"
-	    LDFLAGS="${CPPFLAGS} -L${with_openssl}/lib"
+	    LDFLAGS="${LDFLAGS} -L${with_openssl}/lib"
 	    LIBS="${LIBS} -lssl -lcrypto";;
 esac
 
