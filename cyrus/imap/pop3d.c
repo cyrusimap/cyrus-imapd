@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.158 2004/05/29 05:18:23 ken3 Exp $
+ * $Id: pop3d.c,v 1.159 2004/06/29 15:53:19 ken3 Exp $
  */
 #include <config.h>
 
@@ -109,6 +109,8 @@ sasl_conn_t *popd_saslconn; /* the sasl connection context */
 
 char *popd_userid = 0;
 struct mailbox *popd_mailbox = 0;
+struct auth_state *popd_authstate = 0;
+int config_popuseacl;
 struct sockaddr_storage popd_localaddr, popd_remoteaddr;
 int popd_haveaddr = 0;
 char popd_clienthost[NI_MAXHOST*2+1] = "[local]";
@@ -132,7 +134,7 @@ static mailbox_decideproc_t expungedeleted;
 
 /* the sasl proxy policy context */
 static struct proxy_context popd_proxyctx = {
-    0, 1, NULL, NULL, NULL
+    0, 1, &popd_authstate, NULL, NULL
 };
 
 /* signal to config.c */
@@ -243,6 +245,10 @@ static void popd_reset(void)
     if (popd_userid != NULL) {
 	free(popd_userid);
 	popd_userid = NULL;
+    }
+    if (popd_authstate) {
+	auth_freestate(popd_authstate);
+	popd_authstate = NULL;
     }
     if (popd_saslconn) {
 	sasl_dispose(&popd_saslconn);
@@ -797,6 +803,10 @@ static void cmdloop(void)
 	}
 	else if (!strcmp(inputbuf, "dele")) {
 	    if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
+	    else if (config_popuseacl && !(mboxstruct.myrights & ACL_DELETE)) {
+		prot_printf(popd_out, "-ERR [SYS/PERM] %s\r\n",
+			    error_message(IMAP_PERMISSION_DENIED));
+	    }
 	    else {
 		msg = parsenum(&arg);
 		if (arg) {
@@ -1040,6 +1050,8 @@ static void cmd_apop(char *response)
     syslog(LOG_NOTICE, "login: %s %s APOP%s %s", popd_clienthost,
 	   popd_userid, popd_starttls_done ? "+TLS" : "", "User logged in");
 
+    popd_authstate = auth_newstate(popd_userid);
+
     openinbox();
 }
 
@@ -1145,6 +1157,8 @@ void cmd_pass(char *pass)
 	    sleep(plaintextloginpause);
 	}
     }
+
+    popd_authstate = auth_newstate(popd_userid);
 
     openinbox();
 }
@@ -1322,9 +1336,9 @@ void cmd_auth(char *arg)
 int openinbox(void)
 {
     char userid[MAX_MAILBOX_NAME+1], inboxname[MAX_MAILBOX_PATH+1];
-    int type;
-    char *server = NULL;
-    int r;
+    int type, myrights;
+    char *server = NULL, *acl;
+    int r, log_level = LOG_ERR;
     const char *statusline = NULL;
 
     /* Translate any separators in userid
@@ -1337,11 +1351,21 @@ int openinbox(void)
     r = (*popd_namespace.mboxname_tointernal)(&popd_namespace, "INBOX",
 					      userid, inboxname);
 
-    if (!r) r = mboxlist_detail(inboxname, &type, NULL, &server, NULL, NULL);
+    if (!r) r = mboxlist_detail(inboxname, &type, NULL, &server, &acl, NULL);
+    if (!r && (config_popuseacl = config_getswitch(IMAPOPT_POPUSEACL)) &&
+	(!acl ||
+	 !((myrights = cyrus_acl_myrights(popd_authstate, acl)) & ACL_READ))) {
+	r = (myrights & ACL_LOOKUP) ?
+	    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	log_level = LOG_INFO;
+    }
     if (r) {
 	sleep(3);
-	syslog(LOG_ERR, "Unable to locate maildrop for %s", popd_userid);
-	prot_printf(popd_out, "-ERR [SYS/PERM] Unable to locate maildrop\r\n");
+	syslog(log_level, "Unable to locate maildrop for %s: %s",
+	       popd_userid, error_message(r));
+	prot_printf(popd_out,
+		    "-ERR [SYS/PERM] Unable to locate maildrop: %s\r\n",
+		    error_message(r));
 	goto fail;
     }
 
@@ -1373,14 +1397,26 @@ int openinbox(void)
 	int msg;
 	struct index_record record;
 	int minpoll;
+	int doclose = 0;
 
 	popd_login_time = time(0);
 
-	r = mailbox_open_header(inboxname, 0, &mboxstruct);
+	r = mailbox_open_header(inboxname, popd_authstate, &mboxstruct);
+	if (!r) {
+	    doclose = 1;
+	    if (config_popuseacl && !(mboxstruct.myrights & ACL_READ)) {
+		r = (mboxstruct.myrights & ACL_LOOKUP) ?
+		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+		log_level = LOG_INFO;
+	    }
+	}
 	if (r) {
 	    sleep(3);
-	    syslog(LOG_ERR, "Unable to open maildrop for %s", popd_userid);
-	    prot_printf(popd_out, "-ERR [SYS/PERM] Unable to open maildrop\r\n");
+	    syslog(log_level, "Unable to open maildrop for %s: %s",
+		   popd_userid, error_message(r));
+	    prot_printf(popd_out,
+			"-ERR [SYS/PERM] Unable to open maildrop: %s\r\n",
+			error_message(r));
 	    goto fail;
 	}
 
@@ -1388,8 +1424,11 @@ int openinbox(void)
 	if (!r) r = mailbox_lock_pop(&mboxstruct);
 	if (r) {
 	    mailbox_close(&mboxstruct);
-	    syslog(LOG_ERR, "Unable to lock maildrop for %s", popd_userid);
-	    prot_printf(popd_out, "-ERR [IN-USE] Unable to lock maildrop\r\n");
+	    syslog(LOG_ERR, "Unable to lock maildrop for %s: %s",
+		   popd_userid, error_message(r));
+	    prot_printf(popd_out,
+			"-ERR [IN-USE] Unable to lock maildrop: %s\r\n",
+			error_message(r));
 	    goto fail;
 	}
 
@@ -1447,6 +1486,8 @@ int openinbox(void)
   fail:
     free(popd_userid);
     popd_userid = 0;
+    auth_freestate(popd_authstate);
+    popd_authstate = NULL;
     return 1;
 }
 
