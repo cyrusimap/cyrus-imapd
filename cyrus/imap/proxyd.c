@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.21 2000/04/25 02:35:41 leg Exp $ */
+/* $Id: proxyd.c,v 1.22 2000/05/05 20:13:42 leg Exp $ */
 
 #include <config.h>
 
@@ -3230,8 +3230,8 @@ void cmd_starttls(char *tag, int imaps)
     }
 
     result=tls_init_serverengine(5,        /* depth to verify */
-				 1,        /* can client auth? */
-				 0,        /* required client to auth? */
+				 !imaps,   /* can client auth? */
+				 0,        /* require client to auth? */
 				 (char *)config_getstring("tls_ca_file", ""),
 				 (char *)config_getstring("tls_ca_path", ""),
 				 (char *)config_getstring("tls_cert_file", ""),

@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.3 2000/04/25 16:42:10 leg Exp $
+ * $Id: pop3proxyd.c,v 1.4 2000/05/05 20:13:42 leg Exp $
  */
 #include <config.h>
 
@@ -475,8 +475,8 @@ static void cmd_starttls(int pop3s)
     }
 
     result=tls_init_serverengine(5,        /* depth to verify */
-				 1,        /* can client auth? */
-				 0,        /* required client to auth? */
+				 !pop3s,   /* can client auth? */
+				 0,        /* require client to auth? */
 				 (char *)config_getstring("tls_ca_file", ""),
 				 (char *)config_getstring("tls_ca_path", ""),
 				 (char *)config_getstring("tls_cert_file", ""),
