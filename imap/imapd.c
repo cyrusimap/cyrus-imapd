@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.321 2001/09/17 00:26:50 ken3 Exp $ */
+/* $Id: imapd.c,v 1.322 2001/09/18 14:39:47 ken3 Exp $ */
 
 #include <config.h>
 
@@ -5651,7 +5651,10 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
 	if (lastnamenoinferiors) {
 	    prot_printf(imapd_out, "%s\\Noinferiors", nonexistent ? " " : "");
 	}
-	else if (listopts & LIST_CHILDREN) {
+	else if ((listopts & LIST_CHILDREN) &&
+		 /* we can't determine \HasNoChildren for subscriptions */
+		 (lastnamehassub ||
+		  !(listopts & (LIST_LSUB | LIST_SUBSCRIBED)))) {
 	    prot_printf(imapd_out, "%s%s", nonexistent ? " " : "",
 			lastnamehassub ? "\\HasChildren" : "\\HasNoChildren");
 	}
