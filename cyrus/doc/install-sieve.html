@@ -1,4 +1,4 @@
-<!-- $Id: install-sieve.html,v 1.3 2001/01/05 01:59:03 leg Exp $ -->
+<!-- $Id: install-sieve.html,v 1.4 2001/10/23 18:14:48 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing Sieve
@@ -37,7 +37,7 @@ MTA, make sure that the sendmail referenced in
 
 Since Cyrus is based around the concept of a sealed-server, the normal
 way for users to manipulate Sieve scripts is through the
-"<tt>installsieve</tt>" utility.
+"<tt>sieveshell</tt>" utility.
 
 <p>If, for some reason, you do have user home directories on the
 server, you can use the "<tt>sieveusehomedir</tt>" option and have the
@@ -68,7 +68,10 @@ If your server is running, you'll get a message similar to the following one:
    Trying 128.2.10.192...
    Connected to foobar.andrew.cmu.edu.
    Escape character is '^]'.
-   "CMU Experimental Sieved version 0.99" "SASL={GSSAPI, ANONYMOUS, PLAIN, KERBEROS_V4}"
+   "IMPLEMENTATION" "Cyrus timsieved v1.1.0"
+   "SASL" "ANONYMOUS PLAIN KERBEROS_V4 GSSAPI"
+   "SIEVE" "fileinto reject envelope vacation imapflags notify subaddress regex"
+   OK
 </pre>
 
 <p>
@@ -80,13 +83,14 @@ are listed. This list should be identical to the one listed by
 
 <p>
 <li>Next test authenticating to the sieve server. To do this run the
-"<tt>installsieve</tt>" utility. You must specify the server. You may
-have to specify the port if you run this utility from a different
-machine without the "sieve" entry in "<tt>/etc/services</tt>". To
-specify the port use the "<tt>-p [port]</tt>" switch.
+"<tt>sieveshell</tt>" utility. You must specify the server.  If you
+run this utility from a different machine without the "sieve" entry in
+"/etc/services", port 2000 will be used.
 
 <pre>
-  "<kbd>installsieve foobar</kbd>"
+  "<kbd>sieveshell foobar</kbd>"
+    Please enter your password: ******
+    > quit
 </pre>
 
 This should produce the message "<tt>Authentication failed</tt>" with
@@ -107,9 +111,15 @@ working on now.
   }
 </pre>
 
-To place this script on the server run the following command
+To place this script on the server run the following command:
 
-"<kbd>installsieve -i myscript.script foobar</kbd>"
+<pre>
+  "<kbd>sieveshell foobar</kbd>"
+    Please enter your password: ******
+    > put myscript.script
+    > activate myscript
+    > quit
+</pre>
 
 This should place your script on the server and make it the active script.
 
@@ -121,7 +131,7 @@ in the sieve script. The message should be rejected.
 </ol>
 
 <P><HR>
-last modified: $Date: 2001/01/05 01:59:03 $
+last modified: $Date: 2001/10/23 18:14:48 $
 </BODY></HTML>
 
 
