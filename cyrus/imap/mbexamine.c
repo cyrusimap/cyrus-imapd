@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.9 2004/08/09 18:45:33 ken3 Exp $ */
+/* $Id: mbexamine.c,v 1.10 2004/12/03 16:24:15 ken3 Exp $ */
 
 #include <config.h>
 
@@ -167,9 +167,9 @@ int main(int argc, char **argv)
     }
 
     for (i = optind; i < argc; i++) {
-	strlcpy(buf, argv[i], sizeof(buf));
-	/* Translate any separators in mailboxname */
-	mboxname_hiersep_tointernal(&recon_namespace, buf, 0);
+	/* Handle virtdomains and separators in mailboxname */
+	(*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
+					       NULL, buf);
 	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
 					    0, do_examine, NULL);
     }

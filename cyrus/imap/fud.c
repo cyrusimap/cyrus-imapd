@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.50 2004/05/22 03:45:49 rjs3 Exp $ */
+/* $Id: fud.c,v 1.51 2004/12/03 16:24:15 ken3 Exp $ */
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -404,7 +404,7 @@ int handle_request(const char *who, const char *name,
 	return r;
     }
 
-    if(!(strncmp(mboxname,"user.",5)) && !(mailbox.myrights & ACL_USER0)) {
+    if (mboxname_isusermailbox(mboxname, 0) && !(mailbox.myrights & ACL_USER0)) {
 	mailbox_close(&mailbox);
         send_reply(sfrom, sfromsiz, REQ_DENY, who, name, 0, 0, 0);
 	return 0;
