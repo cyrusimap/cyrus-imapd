@@ -186,6 +186,7 @@ cmdloop()
 	c = getword(&tag);
 	if (c == EOF) {
 	    if (p = prot_error(imapd_in)) {
+		syslog(LOG_WARNING, "PROTERR: %s", p);
 		prot_printf(imapd_out, "* BYE %s\r\n", p);
 	    }
 	    shutdown(0);
