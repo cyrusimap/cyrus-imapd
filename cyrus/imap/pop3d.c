@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.95 2001/07/02 14:13:00 ken3 Exp $
+ * $Id: pop3d.c,v 1.96 2001/07/04 13:29:07 ken3 Exp $
  */
 #include <config.h>
 
@@ -527,20 +527,23 @@ static void cmdloop(void)
 	    else if (!strcmp(inputbuf, "apop") && apop_enabled()) {
 		char *user = NULL, *digest = NULL;
 
-		/* Parse into user and digest */
+		/* Parse out username and digest.
+		 *
+		 * Per RFC 1939, response must be "<user> <digest>", where
+		 * <digest> is a 16-octet value which is sent in hexadecimal
+		 * format, using lower-case ASCII characters.
+		 */
 		if (arg) {
 		    user = arg;
-		    arg = strchr(arg, ' ');
+		    arg = strrchr(arg, ' ');
 		}
 		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
+		else if (strspn(arg + 1, "0123456789abcdef") != 32)
+		    prot_printf(popd_out, "-ERR Invalid digest string\r\n");
 		else {
 		    *arg++ = '\0';
 		    digest = arg;
-		    /* per RFC 1939, digest must be 32 hex digits */
-		    while (*arg && isxdigit((int) *arg)) arg++;
-		    if ((arg - digest) != 32)
-			prot_printf(popd_out, "-ERR Invalid digest string\r\n");
-		    else cmd_apop(user, digest);
+		    cmd_apop(user, digest);
 		}
 	    }
 	    else if (!strcmp(inputbuf, "auth")) {
