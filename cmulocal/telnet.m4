@@ -1,6 +1,21 @@
 dnl telnet.m4--telnet special macros
 dnl Derrick Brashear
 
+AC_DEFUN(CMU_TELNET_CC_T, [
+AC_MSG_CHECKING(for cc_t definition)
+AC_CACHE_VAL(ac_cv_cc_t_definition, [
+AC_TRY_COMPILE(
+[#include <sys/termio.h>],
+[cc_t foo;],
+ac_cv_cc_t_definition=no,
+ac_cv_cc_t_definition=yes)
+])
+if test "$ac_cv_cc_t_definition" = yes; then
+        AC_DEFINE(NO_CC_T)dnl
+fi
+AC_MSG_RESULT($ac_cv_cc_t_definition)
+])
+
 AC_DEFUN(CMU_TELNET_DES_STRING_TO_KEY_PROTO, [
 AC_MSG_CHECKING(for des_string_to_key prototype)
 AC_CACHE_VAL(ac_cv_des_string_to_key_proto, [
@@ -44,12 +59,10 @@ AC_DEFUN(CMU_TELNET_NEWDES, [
 		fi
 	 fi
 	 ])
-AC_DEFUN(CMU_TELNET_KRB5_INCLUDES, [
-	AC_CHECK_HEADERS(krb5/crc-32.h crc-32.h)
-	if test "$ac_cv_header_krb5_crc_32_h" = no; then
-		if test "$ac_cv_header_crc_32_h" = no; then
-			AC_DEFINE(KRB5_CURRENT_INCLUDES)
-		fi
-	fi
+
+AC_DEFUN(CMU_TELNET_PTYDIR, [
+	 if test -d "/dev/pts" -o -d "/dev/pty"; then
+		AC_DEFINE(PTYDIR)
+	 fi
 	 ])
 
