@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.57 2002/08/06 19:43:14 rjs3 Exp $ */
+/* $Id: config.c,v 1.58 2002/08/13 16:46:32 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -281,7 +281,6 @@ int mysasl_config(void *context __attribute__((unused)),
 		  unsigned *len)
 {
     char opt[1024];
-    int sl = sizeof(opt);
 
     if (!strcmp(option, "srvtab")) { 
 	/* we don't transform srvtab! */
@@ -291,17 +290,17 @@ int mysasl_config(void *context __attribute__((unused)),
 
 	if (plugin_name) {
 	    /* first try it with the plugin name */
-	    strlcpy(opt, "sasl_", sl);
-	    strlcat(opt, plugin_name, sl);
-	    strlcat(opt, "_", sl);
-	    strlcat(opt, option, sl);
+	    strlcpy(opt, "sasl_", sizeof(opt));
+	    strlcat(opt, plugin_name, sizeof(opt));
+	    strlcat(opt, "_", sizeof(opt));
+	    strlcat(opt, option, sizeof(opt));
 	    *result = config_getstring(opt, NULL);
 	}
 
 	if (*result == NULL) {
 	    /* try without the plugin name */
-	    strlcpy(opt, "sasl_", sl);
-	    strlcat(opt, option, sl);
+	    strlcpy(opt, "sasl_", sizeof(opt));
+	    strlcat(opt, option, sizeof(opt));
 	    *result = config_getstring(opt, NULL);
 	}
     }
