@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.3 2002/07/12 20:52:16 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.4 2002/07/13 20:18:52 ken3 Exp $
  */
 
 #include <config.h>
@@ -1308,30 +1308,16 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
     if (config_virtdomains) {
 	if ((cp = strchr(userid, '@'))) {
 	    useridlen = cp - userid;
-	    if (!(config_defdomain && !strcasecmp(config_defdomain, ++cp))) {
-		/* don't prepend default domain */
-		domain = cp;
-	    }
 	}
 	if ((cp = strchr(name, '!'))) {
-	    if (domain) {
-		/* can't do both user@domain and domain!mbox */
-		return IMAP_MAILBOX_BADNAME;
-	    }
-	    if (config_defdomain && !strncasecmp(config_defdomain, name,
-						 cp - name)) {
-		/* don't prepend default domain */
-		name += cp - name + 1;
-	    } else {
-		domain = name;
-		domainlen = cp - name + 1;
-	    }
+	    domain = name;
+	    domainlen = cp - name + 1;
 	}
 
 	/* canonify identifier so it is fully qualified,
 	   except for "anonymous", "anyone" and users in the default domain */
 	if ((cp = strchr(identifier, '@'))) {
-	    if (strncasecmp(cp+1, domain, strlen(cp+1))) {
+	    if (!domain || strncasecmp(cp+1, domain, strlen(cp+1))) {
 		/* can't have cross-domain ACLs */
 		return IMAP_INVALID_IDENTIFIER;
 	    }
@@ -1345,11 +1331,13 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	} else {
 	    strcpy(ident, identifier);
 	    if (domain &&
-		strcmp(identifier, "anonymous") && strcmp(identifier, "anyone")) {
+		strcmp(ident, "anonymous") && strcmp(ident, "anyone")) {
 		sprintf(ident+strlen(ident), "@%.*s",
-			(int) domainlen ? domainlen : strlen(domain), domain);
+			domainlen ? domainlen-1 : (int) strlen(domain), domain);
 	    }
 	}
+
+	identifier = ident;
     }
 
     if (!strncmp(name+domainlen, "user.", 5) &&
@@ -1421,14 +1409,14 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 		mode = ACL_MODE_REMOVE;
 	    }
 	    
-	    if (cyrus_acl_set(&newacl, ident, mode,
+	    if (cyrus_acl_set(&newacl, identifier, mode,
 			      cyrus_acl_strtomask(rights),
 			      isusermbox ? mboxlist_ensureOwnerRights : 0,
 			      (void *)userid)) {
 		r = IMAP_INVALID_IDENTIFIER;
 	    }
 	} else {
-	    if (cyrus_acl_remove(&newacl, ident,
+	    if (cyrus_acl_remove(&newacl, identifier,
 				 isusermbox ? mboxlist_ensureOwnerRights : 0,
 				 (void *)userid)) {
 		r = IMAP_INVALID_IDENTIFIER;
