@@ -90,8 +90,9 @@ c) smtp server
 Repackage, Reboot, (and redepot/repackage again)
 
 - Key the machine (imap, lmtp, smtp, pop, and put them in /imap/conf/srvtab)
+  - remove the rcmd (and smtp?) key from /imap/conf/srvtab
 - frontends also need mupdate key
-- k5 keys:
+- create k5 keys:
 /usr/local/etc/ktutil srv2key
 chgrp cyrus /etc/krb5.keytab
 chmod g+r /etc/krb5.keytab
@@ -122,7 +123,7 @@ Organizational Unit Name (eg, section) []:Andrew Systems Group
 Common Name (eg, YOUR name) []:mail-fe3.andrew.cmu.edu
 Email Address []:advisor@andrew.cmu.edu 
 
-- run tools/mkimap (as cyrus!)
+- is it a backend? run tools/mkimap (as cyrus!)
 
 ----------------------------------------------------------------------
 
