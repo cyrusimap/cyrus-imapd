@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.119 2002/04/10 18:02:42 leg Exp $
+ * $Id: pop3d.c,v 1.120 2002/05/06 17:18:51 rjs3 Exp $
  */
 #include <config.h>
 
@@ -248,10 +248,20 @@ static void popd_reset(void)
 	popd_mailbox = 0;
     }
 
-    prot_flush(popd_out);
-    if (popd_in) prot_free(popd_in);
-    if (popd_out) prot_free(popd_out);
+    if (popd_in) {
+	prot_NONBLOCK(popd_in);
+	prot_fill(popd_in);
+	
+	prot_free(popd_in);
+    }
+
+    if (popd_out) {
+	prot_flush(popd_out);
+	prot_free(popd_out);
+    }
+    
     popd_in = popd_out = NULL;
+
     close(0);
     close(1);
     close(2);
@@ -480,10 +490,22 @@ void shut_down(int code)
     }
     mboxlist_close();
     mboxlist_done();
+
+    if (popd_in) {
+	prot_NONBLOCK(popd_in);
+	prot_fill(popd_in);
+	prot_free(popd_in);
+    }
+
+    if (popd_out) {
+	prot_flush(popd_out);
+	prot_free(popd_out);
+    }
+
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
-    if (popd_out) prot_flush(popd_out);
+
     exit(code);
 }
 

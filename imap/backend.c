@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.6 2002/04/03 23:11:18 rjs3 Exp $ */
+/* $Id: backend.c,v 1.7 2002/05/06 17:18:49 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -400,6 +400,8 @@ void downserver(struct backend *s)
     if(!s) return;
     
     prot_printf(s->out, "L01 LOGOUT\r\n");
+    prot_flush(s->out);
+
     while (prot_fgets(buf, sizeof(buf), s->in)) {
 	if (!strncmp("L01", buf, 3)) {
 	    break;
@@ -411,6 +413,11 @@ void downserver(struct backend *s)
 	}
     }
 
+    /* Flush the incoming buffer */
+    prot_NONBLOCK(s->in);
+    prot_fill(s->in);
+
+    /* close/free socket & prot layer */
     close(s->sock);
     prot_free(s->in);
     prot_free(s->out);

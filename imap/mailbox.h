@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.67 2002/04/29 20:00:24 rjs3 Exp $
+ $Id: mailbox.h,v 1.68 2002/05/06 17:18:50 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -300,12 +300,15 @@ extern int mailbox_create(const char *name, char *path,
 			  const char *acl, const char *uniqueid, int format,
 			  struct mailbox *mailboxp);
 extern int mailbox_delete(struct mailbox *mailbox, int delete_quota_root);
-extern int mailbox_rename(const char *oldname, const char *oldpath, 
-			  const char *oldacl, 
-			  const char *newname, char *newpath, 
-			  int isinbox,
-			  bit32 *olduidvalidityp, bit32 *newuidvalidtyp,
-			  struct mailbox *mailboxp);
+
+extern int mailbox_rename_copy(struct mailbox *oldmailbox, 
+			       const char *newname, char *newpath,
+			       bit32 *olduidvalidityp, bit32 *newuidvalidityp,
+			       struct mailbox *mailboxp);
+extern int mailbox_rename_finish(struct mailbox *oldmailbox,
+				 struct mailbox *newmailbox,
+				 int isinbox);
+
 extern int mailbox_sync(const char *oldname, const char *oldpath, 
 			const char *oldacl, 
 			const char *newname, char *newpath, 

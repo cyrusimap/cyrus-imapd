@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.184 2002/04/08 21:01:04 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.185 2002/05/06 17:18:51 rjs3 Exp $
  */
 
 #include <config.h>
@@ -108,7 +108,7 @@ static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 static int mboxlist_getpath(const char *partition, const char *name, 
 			    char **pathp)
 {
-    int partitionlen;
+    size_t partitionlen;
     char optionbuf[MAX_MAILBOX_NAME+1];
     static char pathresult[MAX_MAILBOX_PATH];
     const char *root;
@@ -320,8 +320,11 @@ int mboxlist_update(char *name, int flags, const char *part, const char *acl)
 /*
  * Check/set up for mailbox creation
  */
+/* xxx shouldn't we be using mbtype or getting rid of it entirely? */
 static int
-mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition, 
+mboxlist_mycreatemailboxcheck(char *name,
+			      int new_mbtype __attribute__((unused)),
+			      char *partition, 
 			      int isadmin, char *userid, 
 			      struct auth_state *auth_state, 
 			      char **newacl, char **newpartition,
@@ -339,7 +342,8 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
     char *parentacl = NULL;
     unsigned long parentpartitionlen = 0;
     unsigned long parentacllen = 0;
-
+    int mbtype;
+    
     /* Check for invalid name/partition */
     if (partition && strlen(partition) > MAX_PARTITION_LEN) {
 	return IMAP_PARTITION_UNKNOWN;
@@ -357,7 +361,7 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
     }
 
     /* Check to see if new mailbox exists */
-    r = mboxlist_mylookup(name, NULL, &path, NULL, &acl, tid, RMW);
+    r = mboxlist_mylookup(name, &mbtype, &path, NULL, &acl, tid, RMW);
     switch (r) {
     case 0:
 	r = IMAP_MAILBOX_EXISTS;
@@ -376,6 +380,8 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
 	return r;
 	break;
     }
+
+    if(mbtype & MBTYPE_RESERVE) return IMAP_MAILBOX_RESERVED;
 
     /* Search for a parent */
     strcpy(parent, name);
@@ -560,7 +566,8 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	goto done;
     }
 
-    if(mbtype & MBTYPE_MOVING) {
+    /* You can't explicitly create a MOVING or RESERVED mailbox */
+    if(mbtype & (MBTYPE_MOVING | MBTYPE_RESERVE)) {
 	r = IMAP_MAILBOX_NOTSUPPORTED;
 	goto done;
     }
@@ -713,8 +720,10 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 }
 
 /* insert an entry for the proxy */
-int mboxlist_insertremote(const char *name, int mbtype, const char *host,
-			  const char *acl, void **rettid)
+/* xxx rettid needs usage? */
+int mboxlist_insertremote(const char *name, int mbtype,
+			  const char *host, const char *acl,
+			  void **rettid __attribute__((unused)))
 {
     char *mboxent;
     int r = 0;
@@ -800,6 +809,9 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	goto done;
     }
 
+    /* are we reserved ? */
+    if(mbtype & MBTYPE_RESERVE) return IMAP_MAILBOX_RESERVED;
+
     isremote = mbtype & MBTYPE_REMOTE;
 
     /* check if user has Delete right (we've already excluded non-admins
@@ -883,18 +895,17 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
  * Rename/move a single mailbox (recursive renames are handled at a
  * higher level)
  *
- * 1. start transaction
+ * 1. get path & acl from mboxlist (with lock)
  * 2. verify acls
- * 3. open mupdate connection if needed
- * 4. Delete entry from berkeley db
- * 5. mupdate make the new entry
- * 7. delete from disk
- * 8. commit transaction
- * 9. set new mupdate entry commited
- * 10. delete old mupdate entry
- * */
-
-/* note: partition moving should really be moved to another function */
+ * 3. open mupdate connection / reserve destination if needed
+ * 4. Reserve mailbox locally (MBTYPE_RESERVE)
+ * 5. lock original mailbox / unlock mboxlist
+ * 6. Copy mailbox from src->dest
+ * 7. Perform update on mboxlist
+ * 8. finish mupdate updates (activate new, delete old)
+ * 9. delete from disk
+ *
+ */
 int mboxlist_renamemailbox(char *oldname, char *newname, char *partition, 
 			   int isadmin, char *userid, 
 			   struct auth_state *auth_state)
@@ -906,6 +917,8 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     int mbtype;
     char *oldpath = NULL;
     char newpath[MAX_MAILBOX_PATH];
+    int oldopen = 0;
+    struct mailbox oldmailbox;
     struct mailbox newmailbox;
     char *oldacl = NULL, *newacl = NULL;
     const char *root = NULL;
@@ -918,7 +931,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     int madenew = 0;
 
  retry:
-    /* lookup the mailbox to make sure it exists and get its acl */
+    /* 1. get path & acl from mboxlist */
     r = mboxlist_mylookup(oldname, &mbtype, &oldpath, NULL, &oldacl, &tid, 1);
     switch (r) {
     case 0:
@@ -929,11 +942,13 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	goto done;
     }
 
+    if(mbtype & MBTYPE_RESERVE) return IMAP_MAILBOX_RESERVED;
+
     /* make a copy of the old ACL so it doesn't get overwritten
        by another call to mboxlist_mylookup() */
     newacl = xstrdup(oldacl);
 
-    /* Check ability to delete old mailbox */
+    /* 2. verify acls */
     if (!strcmp(oldname, newname) && !(mbtype & MBTYPE_REMOTE)) {
 	/* Attempt to move mailbox across partition */
 	if (!isadmin) {
@@ -1018,51 +1033,84 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    if (!r && !partitionmove && config_mupdate_server) {
-	/* Reserve new name in MUPDATE */
-	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-	sprintf(buf, "%s!%s", config_servername, newpartition);
-	
+    /* 3. Open mupdate connection and reserve new name (if needed) */ 
+    if(!r && config_mupdate_server) {	
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
-		   "can not connect to mupdate server for reservation on '%s'",
+		   "can not connect to mupdate server for rename of '%s'",
 		   newname);
 	    goto done;
 	}
-	
-	/* reserve the mailbox in MUPDATE */
-	r = mupdate_reserve(mupdate_h, newname, buf);
-	if(r) {
-	    syslog(LOG_ERR,
-		   "MUPDATE: can't reserve mailbox entry for '%s'",
-		   newname);
-	    goto done;
-	}
-	
-	madenew = 1;
-    } else if(!r && partitionmove && config_mupdate_server) {
-	/* commit the update to MUPDATE */
-	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-	sprintf(buf, "%s!%s", config_servername, newpartition);
+	if (!partitionmove) {
+	    /* Reserve new name in MUPDATE */
+	    char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
+	    sprintf(buf, "%s!%s", config_servername, newpartition);
 
-	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
-	if(r) {
-	    syslog(LOG_ERR,
-		   "can not connect to mupdate server for reservation on '%s'",
-		   newname);
-	    goto done;
-	}
-	
-	r = mupdate_activate(mupdate_h, oldname, buf, newacl);
-	if(r) {
-	    syslog(LOG_ERR,
-		   "MUPDATE: can't update mailbox entry for '%s'",
-		   oldname);
-	    goto done;
+	    r = mupdate_reserve(mupdate_h, newname, buf);
+	    if(r) {
+		syslog(LOG_ERR,
+		       "MUPDATE: can't reserve mailbox entry for '%s'",
+		       newname);
+		goto done;
+	    }
+	    
+	    madenew = 1;
 	}
     }
-    
+
+    /* 4. mark as reserved in the DB */
+    if(!r && !partitionmove) {
+	mboxent = mboxlist_makeentry(mbtype | MBTYPE_RESERVE,
+				     newpartition, newacl);
+
+	r = DB->store(mbdb, newname, strlen(newname), 
+		      mboxent, strlen(mboxent), &tid);
+
+	free(mboxent);
+    }
+        
+    /* 4. unlock mboxlist, Lock oldname/oldpath */
+    if(r) {
+	DB->abort(mbdb,tid);
+	tid = NULL;
+	syslog(LOG_ERR, "Could not lock mailbox %s during rename", oldname);
+	goto done;
+    } else {
+	DB->commit(mbdb, tid);
+	tid = NULL;
+    }
+
+    syslog(LOG_ERR, "unlocked mailbox list REN");
+
+    if(!r) {
+	r = mailbox_open_locked(oldname, oldpath, oldacl, auth_state,
+				&oldmailbox, 0);
+	oldopen = 1;
+    }
+
+    syslog(LOG_ERR, "locked mailbox REN");
+
+    /* 5. Copy mailbox */
+    if (!r && !(mbtype & MBTYPE_REMOTE)) {
+	/* Rename the actual mailbox */
+	assert(root != NULL); /* from above */
+	mailbox_hash_mbox(newpath, root, newname);
+	
+	r = mailbox_rename_copy(&oldmailbox, newname, newpath,
+				NULL, NULL, &newmailbox);
+	if (r) {
+	    goto done;
+	} else {
+	    r = mailbox_open_locked(newname, newpath, newacl, auth_state,
+				    &newmailbox, 0);
+	    if(r) {
+		syslog(LOG_ERR, "error locking new mailbox");
+		goto done;
+	    }	    
+	}
+    }
+
     if (!isusermbox) {
 	/* 4. Delete entry from berkeley db */
 	r = DB->delete(mbdb, oldname, strlen(oldname), &tid, 0);
@@ -1076,9 +1124,12 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	    syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
 		   oldname, cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
+	    mailbox_close(&newmailbox);
 	    goto done;
 	    break;
 	}
+	
+	syslog(LOG_ERR, "Deleted old entry");
     }
 
     /* create new entry */
@@ -1099,19 +1150,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	goto done;
     }
 
-  done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
-    if (!r && !(mbtype & MBTYPE_REMOTE)) {
-	/* Rename the actual mailbox */
-	assert(root != NULL); /* from above */
-	mailbox_hash_mbox(newpath, root, newname);
-	
-	r = mailbox_rename(oldname, oldpath, newacl, newname, 
-			   newpath, isusermbox, NULL, NULL, &newmailbox);
-	if (!r) {
-	    mailbox_close(&newmailbox);
-	}
-    }
+    r = mailbox_rename_finish(&oldmailbox,&newmailbox,isusermbox);
 
+  done:
     if (r != 0) {
 	int r2 = 0;
 	
@@ -1121,7 +1162,6 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
 	
 	/* unroll mupdate operations if necessary */
-	/* xxx where do we unroll if 'partitionmove == 1' ? */
 	if (madenew && config_mupdate_server) {
 	    r2 = mupdate_delete(mupdate_h, newname);
 	    if(r2 > 0) {
@@ -1155,8 +1195,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    if (!r && !partitionmove && config_mupdate_server) {
+    if (!r && config_mupdate_server) {
 	/* commit the mailbox in MUPDATE */
+	/* This is okay even if we are moving partitions */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
 	sprintf(buf, "%s!%s", config_servername, newpartition);
 	
@@ -1196,6 +1237,8 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 		   "MUPDATE: can't delete mailbox entry '%s'", oldname);
 	}
     }
+
+    if(oldopen) mailbox_close(&oldmailbox);
 
     if(config_mupdate_server) mupdate_disconnect(&mupdate_h);
 
@@ -1258,10 +1301,40 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	goto done;
     }
 
-    /* Can't do this to an in-transit mailbox */
-    if(mbtype & MBTYPE_MOVING) {
+    /* Can't do this to an in-transit or reserved mailbox */
+    if(mbtype & (MBTYPE_MOVING | MBTYPE_RESERVE)) {
 	r = IMAP_MAILBOX_NOTSUPPORTED;
 	goto done;
+    }
+
+    /* if it is not a remote mailbox, we need to unlock the mailbox list,
+     * lock the mailbox, and re-lock the mailboxes list */
+    /* we must do this to obey our locking rules */
+    if (!(mbtype & MBTYPE_REMOTE)) {
+	DB->abort(mbdb, tid);
+	tid = NULL;
+
+	syslog(LOG_ERR, "dropped lock on mboxlist");
+
+	/* open & lock mailbox header */
+        r = mailbox_open_header_path(name, path, acl, NULL, &mailbox, 0);
+	if(!r) r = mailbox_lock_header(&mailbox);
+
+	if(!r) {
+	syslog(LOG_ERR, "opened header");
+	relock_retry:
+	    /* lookup the mailbox to make sure it exists and get its acl */
+	    r = mboxlist_mylookup(name, &mbtype, &path,
+				  &partition, &acl, &tid, 1);
+	    switch (r) {
+	    case 0:
+		break;
+	    case IMAP_AGAIN:
+		goto relock_retry;
+	    default:
+		goto done;
+	    }
+	} else goto done;
     }
 
     if (!r && !isadmin && !isusermbox) {
@@ -1319,10 +1392,8 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	goto done;
     }
 
+    /* Do change to mailbox file */
     if (!(mbtype & MBTYPE_REMOTE)) {
-	/* open & lock mailbox header */
-        r = mailbox_open_header_path(name, path, acl, NULL, &mailbox, 0);
-
 	if (!r) {
 	    r = mailbox_lock_header(&mailbox);
 	    if (!r) {
@@ -1339,7 +1410,7 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
     if (r) {
 	int r2;
 
-	if ((r2 = DB->abort(mbdb, tid)) != 0) {
+	if (tid && (r2 = DB->abort(mbdb, tid)) != 0) {
 	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
 		   cyrusdb_strerror(r2));
 	    r2 = IMAP_IOERROR;

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.119 2002/04/28 18:12:50 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.120 2002/05/06 17:18:52 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -968,8 +968,17 @@ static void proxyd_reset(void)
     backend_inbox = backend_current = NULL;
 
     /* Cleanup file descriptors. note: after last call to proxyd_downserver */
-    if(proxyd_in) prot_free(proxyd_in);
-    if(proxyd_out) prot_free(proxyd_out);
+    if(proxyd_in) {
+	prot_NONBLOCK(proxyd_in);
+	prot_fill(proxyd_in);
+	
+	prot_free(proxyd_in);
+    }
+    if(proxyd_out) {
+	prot_flush(proxyd_out);
+	prot_free(proxyd_out);
+    }
+    
     proxyd_in = proxyd_out = NULL;
     close(0);
     close(1);
@@ -1181,10 +1190,24 @@ void shut_down(int code)
 
     mboxlist_close();
     mboxlist_done();
+
+    if (proxyd_in) {
+	prot_NONBLOCK(proxyd_in);
+	prot_fill(proxyd_in);
+
+	prot_free(proxyd_in);
+    }
+
+    if (proxyd_out) {
+	prot_flush(proxyd_out);
+
+	prot_free(proxyd_out);
+    }
+
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
-    if (proxyd_out) prot_flush(proxyd_out);
+
     exit(code);
 }
 
