@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.40 2000/06/29 16:28:45 leg Exp $
+ * $Id: lmtpd.c,v 1.41 2000/07/03 20:17:39 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.40 2000/06/29 16:28:45 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.41 2000/07/03 20:17:39 leg Exp $";*/
 
 #include <config.h>
 
@@ -432,26 +432,32 @@ pid_t open_sendmail(const char *argv[], FILE **sm)
     return p;
 }
 
+/* sendmail_errstr.  create a descriptive message given 'sm_stat': 
+   the exit code from wait() from sendmail.
+
+   not thread safe, but probably ok */
 static char *sendmail_errstr(int sm_stat)
 {
-    char errstr[200];
+    static char errstr[200];
 
-    if (WIFEXITED(sm_stat))
-	sprintf(errstr,
-		"Sendmail process terminated normally, exit status = %d.\n",
-		WEXITSTATUS(sm_stat));
-    else if (WIFSIGNALED(sm_stat))
-	sprintf(errstr,
-		"Sendmail process terminated abnormally, signal = %d (%s)%s.\n",
-		WTERMSIG(sm_stat), strsignal(WTERMSIG(sm_stat)),
+    if (WIFEXITED(sm_stat)) {
+	snprintf(errstr, sizeof errstr,
+		 "Sendmail process terminated normally, exit status %d\n",
+		 WEXITSTATUS(sm_stat));
+    } else if (WIFSIGNALED(sm_stat)) {
+	snprintf(errstr, sizeof errstr,
+		"Sendmail process terminated abnormally, signal = %d %s\n",
+		WTERMSIG(sm_stat), 
 		WCOREDUMP(sm_stat) ? " -- core file generated" : "");
-    else if (WIFSTOPPED(sm_stat))
-	sprintf(errstr, "Sendmail process stopped, signal = %d (%s).\n",
-		WTERMSIG(sm_stat), strsignal(WSTOPSIG(sm_stat)));
-    else
+    } else if (WIFSTOPPED(sm_stat)) {
+	snprintf(errstr, sizeof errstr,
+		 "Sendmail process stopped, signal = %d\n",
+		WTERMSIG(sm_stat));
+    } else {
 	return NULL;
+    }
     
-    return (xstrdup(errstr));
+    return errstr;
 }
 
 int send_rejection(const char *origid,
