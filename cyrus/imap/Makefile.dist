@@ -1,19 +1,35 @@
-# $Id: Makefile.dist,v 1.5 2002/05/25 19:57:43 leg Exp $
+# $Id: Makefile.dist,v 1.5.4.1 2003/01/31 18:56:19 leg Exp $
+# it would be nice to figure out how to make "Makefile" do an
+# 'include' of this file.
+# we'd have to make this use srcdir and only define COMPILE_ET if it wasn't
+# already defined.
 
 COMPILE_ET = /usr/local/bin/compile_et
 SNMPGEN = ../snmp/snmpgen
 
 BUILT_SOURCES = imap_err.h imap_err.c \
+	nntp_err.h nntp_err.c \
+	mupdate_err.h mupdate_err.c \
 	lmtpstats.c lmtpstats.h \
-	pushstats.c pushstats.h
+	pushstats.c pushstats.h \
+	imapopts.c imapopts.h
 
 dist: $(BUILT_SOURCES)
 
 imap_err.h imap_err.c: imap_err.et
 	$(COMPILE_ET) imap_err.et
 
+nntp_err.h nntp_err.c: nntp_err.et
+	$(COMPILE_ET) nntp_err.et
+
+mupdate_err.h mupdate_err.c: mupdate_err.et
+	$(COMPILE_ET) mupdate_err.et
+
 pushstats.c pushstats.h: pushstats.snmp
 	$(SNMPGEN) pushstats.snmp
 
 lmtpstats.c lmtpstats.h: lmtpstats.snmp
 	$(SNMPGEN) lmtpstats.snmp
+
+imapopts.c imapopts.h: imapoptions ../tools/config2header
+	../tools/config2header imapopts.c imapopts.h < imapoptions
