@@ -22,10 +22,11 @@
  *
  */
 #include <stdio.h>
-#include <sysexits.h>
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <syslog.h>
+
+#include "sysexits.h"
 
 #define SLOP (8*1024)
 

@@ -28,7 +28,6 @@
  */
 
 #include <stdio.h>
-#include <sysexits.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -46,13 +45,9 @@ extern int errno;
 #include "config.h"
 #include "util.h"
 #include "mailbox.h"
+#include "sysexits.h"
 #include "imap_err.h"
 #include "xmalloc.h"
-
-/* Many systems don't define EX_CONFIG */
-#ifndef EX_CONFIG
-#define EX_CONFIG 78
-#endif
 
 static char *listfname, *newlistfname;
 

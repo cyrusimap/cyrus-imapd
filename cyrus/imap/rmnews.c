@@ -24,7 +24,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -34,12 +33,8 @@
 #include "config.h"
 #include "imap_err.h"
 #include "mailbox.h"
+#include "sysexits.h"
 #include "xmalloc.h"
-
-/* Many systems don't define EX_CONFIG */
-#ifndef EX_CONFIG
-#define EX_CONFIG 78
-#endif
 
 extern int errno;
 

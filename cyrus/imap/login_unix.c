@@ -22,10 +22,10 @@
  *
  */
 #include <stdio.h>
-#include <sysexits.h>
 #include <pwd.h>
 
 #include "config.h"
+#include "sysexits.h"
 #include "mailbox.h"
 #include "imapd.h"
 

@@ -22,7 +22,8 @@
  *
  */
 #include <stdio.h>
-#include <sysexits.h>
+
+#include "sysexits.h"
 
 assertionfailed(file, line, expr)
 char *file;

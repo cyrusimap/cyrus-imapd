@@ -24,7 +24,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include <sysexits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
@@ -35,6 +34,7 @@
 #include "acl.h"
 #include "util.h"
 #include "assert.h"
+#include "sysexits.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "imapd.h"

@@ -34,13 +34,13 @@
 
 #include <stdio.h>
 #include <ctype.h>
-#include <sysexits.h>
 #include <krb.h>
 #include <pwd.h>
 #include <sys/param.h>
 
 #include "acte.h"
 #include "config.h"
+#include "sysexits.h"
 #include "mailbox.h"
 #include "acl.h"
 

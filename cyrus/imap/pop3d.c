@@ -25,7 +25,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include <sysexits.h>
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/param.h>
@@ -41,6 +40,7 @@
 #include "acte.h"
 #include "config.h"
 #include "prot.h"
+#include "sysexits.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "version.h"

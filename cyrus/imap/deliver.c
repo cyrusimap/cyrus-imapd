@@ -24,7 +24,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <sysexits.h>
 #include <fcntl.h>
 #include <com_err.h>
 #ifdef NEWDB
@@ -38,6 +37,7 @@
 #include "auth.h"
 #include "prot.h"
 #include "config.h"
+#include "sysexits.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"

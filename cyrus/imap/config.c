@@ -23,17 +23,12 @@
  */
 #include <stdio.h>
 #include <ctype.h>
-#include <sysexits.h>
 #include <syslog.h>
 #include <com_err.h>
 
 #include "config.h"
+#include "sysexits.h"
 #include "xmalloc.h"
-
-/* Many systems don't define EX_CONFIG */
-#ifndef EX_CONFIG
-#define EX_CONFIG 78
-#endif
 
 extern int errno;
 
