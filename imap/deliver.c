@@ -115,7 +115,7 @@ char **argv;
 	    break;
 
 	case 'F':
-	    if (!isvalidflag(flag)) break;
+	    if (!isvalidflag(optarg)) break;
 	    nflags++;
 	    flag = (char **)xrealloc((char *)flag, nflags*sizeof(char *));
 	    flag[nflags-1] = optarg;
@@ -744,7 +744,7 @@ int quotaoverride;
     if (!r) {
 	prot_rewind(msg);
 	r = append_fromstream(&mailbox, msg, size, time(0), flag, nflags,
-			      authuser);
+			      user);
 	mailbox_close(&mailbox);
     }
 
@@ -865,11 +865,11 @@ int code;
 int isvalidflag(f)
 char *f;
 {
-    if (f[0] == '\0') {
+    if (f[0] == '\\') {
 	lcase(f);
-	if (!strcmp(f, "\\seen") && !strcmp(f, "\\answered") &&
-	    !strcmp(f, "\\flagged") && !strcmp(f, "\\draft") &&
-	    !strcmp(f, "\\deleted")) {
+	if (strcmp(f, "\\seen") && strcmp(f, "\\answered") &&
+	    strcmp(f, "\\flagged") && strcmp(f, "\\draft") &&
+	    strcmp(f, "\\deleted")) {
 	    return 0;
 	}
 	return 1;
