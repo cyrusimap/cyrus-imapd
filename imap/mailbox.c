@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.91 2000/03/14 21:34:55 tmartin Exp $
+ $Id: mailbox.c,v 1.92 2000/03/15 10:31:12 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -40,6 +40,8 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
 #include <ctype.h>
@@ -104,7 +106,6 @@ static int acappush_sock = -1;
 static struct sockaddr_un acappush_remote;
 static int acappush_remote_len = 0;
 
-
 /*
  * Create connection to acappush
  */
@@ -122,7 +123,8 @@ int mailbox_initialize(void)
 
     acappush_remote.sun_family = AF_UNIX;
     strcpy(acappush_remote.sun_path, ACAPPUSH_PATH);
-    acappush_remote_len = strlen(acappush_remote.sun_path) + sizeof(acappush_remote.sun_family);
+    acappush_remote_len = strlen(acappush_remote.sun_path) + 
+	sizeof(acappush_remote.sun_family);
 
     /* put us in non-blocking mode */
     fdflags = fcntl(s, F_GETFD, 0);
@@ -571,7 +573,6 @@ struct mailbox *mailbox;
 
     if (mailbox->index_fd == -1) return IMAP_MAILBOX_BADFORMAT;
 
- redo:
     fstat(mailbox->index_fd, &sbuf);
     mailbox->index_ino = sbuf.st_ino;
     mailbox->index_mtime = sbuf.st_mtime;
@@ -627,8 +628,8 @@ struct mailbox *mailbox;
 	if (mailbox_calculate_flagcounts(mailbox))
 	    return IMAP_IOERROR;	
 	
-	mailbox_open_index(mailbox); /* things might have been changed out form under us. reread */
-
+	/* things might have been changed out form under us. reread */
+	mailbox_open_index(mailbox); 
     } else {
 	mailbox->deleted = 
 	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_DELETED)));
@@ -1051,9 +1052,9 @@ mailbox_write_index_header(struct mailbox *mailbox)
 	
 	/* send */
 	if (sendto(acappush_sock, &acapdata, 20+strlen(mailbox->name), 0,
-		   (struct sockaddr *) &acappush_remote, acappush_remote_len) == -1) {
-	    syslog(LOG_ERR, "Error sending to acappush: %m");
-	    return errno;	    
+		   (struct sockaddr *) &acappush_remote, 
+		   acappush_remote_len) == -1) {
+	    syslog(LOG_ERR, "sending to acappush: %m");
 	}
     }
 
@@ -1510,7 +1511,6 @@ void *deciderock;
     unsigned long cache_offset;
     struct stat sbuf;
     char *fnametail;
-    acapmbox_handle_t *acaphandle = NULL;
 
     /* Lock files and open new index/cache files */
     r = mailbox_lock_header(mailbox);
@@ -1743,7 +1743,8 @@ void *deciderock;
 	    
 	    /* send */
 	    if (sendto(acappush_sock, &acapdata, 20+strlen(mailbox->name), 0,
-		       (struct sockaddr *) &acappush_remote, acappush_remote_len) == -1) {
+		       (struct sockaddr *) &acappush_remote, 
+		       acappush_remote_len) == -1) {
 		syslog(LOG_ERR, "Error sending to acappush: %m");
 		goto fail;
 	    }

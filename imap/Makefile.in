@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.106 2000/03/14 21:34:52 tmartin Exp $
+# $Id: Makefile.in,v 1.107 2000/03/15 10:31:09 leg Exp $
 # 
 # @configure_input@
 #
@@ -82,17 +82,15 @@ cyrus_prefix = @cyrus_prefix@
 LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o \
 	config.o imap_err.o proc.o setproctitle.o convert_code.o \
 	duplicate.o saslclient.o acapmbox.o pushstats.o signals.o \
-	$(SEEN) $(NOTIFY)
+	base64.o $(SEEN) $(NOTIFY)
 
 IMAPDOBJS=imapd.o index.o tls.o
-
-ACAPPUSHOBJS=acappush.o $(LOBJS)
 
 SERVICE=../master/service.o
 
 PROGS = collectnews syncnews arbitron fud reconstruct quota \
 	mbpath ipurge deliver \
-	imapd proxyd lmtpd pop3d \
+	imapd proxyd lmtpd pop3d pop3proxyd \
 	ctl_mboxlist ctl_deliver target-acap acappush
 
 all: $(PROGS) $(SUIDPROGS)
@@ -110,8 +108,9 @@ install:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
 	$<
 
-acappush: $(ACAPPUSHOBJS) $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o acappush $(ACAPPUSHOBJS) $(DEPLIBS) $(LIBS)
+acappush: acappush.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o acappush \
+	 acappush.o libimap.a $(DEPLIBS) $(LIBS)
 
 pushstats.c pushstats.h: pushstats.snmp $(srcdir)/../snmp/snmpgen
 	$(srcdir)/../snmp/snmpgen $(srcdir)/pushstats.snmp
@@ -167,6 +166,10 @@ imapd.quant: $(IMAPDOBJS) libimap.a $(DEPLIBS)
 
 pop3d: pop3d.o tls.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o pop3d pop3d.o tls.o $(SERVICE) \
+	 libimap.a $(DEPLIBS) $(LIBS)
+
+pop3proxyd: pop3proxyd.o tls.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o pop3proxyd pop3proxyd.o tls.o $(SERVICE) \
 	 libimap.a $(DEPLIBS) $(LIBS)
 
 arbitron: arbitron.o libimap.a $(DEPLIBS)

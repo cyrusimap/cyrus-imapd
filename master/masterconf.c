@@ -1,5 +1,5 @@
 /* masterconfig.c -- Configuration routines for master process
- $Id: masterconf.c,v 1.2 2000/02/21 06:22:58 leg Exp $
+ $Id: masterconf.c,v 1.3 2000/03/15 10:31:16 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -95,7 +95,7 @@ const char *masterconf_getstring(struct entry *e, const char *key,
 	} else {
 	    /* one word */
 	    for (i = 0; i < 255; i++) {
-		if (isspace(*p)) break;
+		if (isspace((int) *p)) break;
 		v[i] = *p++;
 	    }
 	}
@@ -159,7 +159,7 @@ static void process_section(FILE *f, int *lnptr,
 	if (!*p) continue;
 	if (*p == '}') break;
 
-	for (q = p; isalnum(*q); q++) ;
+	for (q = p; isalnum((int) *q); q++) ;
 	if (q) { *q = '\0'; q++; }
 	
 	if (q - p > 0) {
@@ -209,7 +209,7 @@ void masterconf_getsection(const char *section, masterconf_process *f,
 	
 	if (level == 0 &&
 	    *p == *section && !strncasecmp(p, section, seclen) &&
-	    !isalnum(p[seclen])) {
+	    !isalnum((int) p[seclen])) {
 	    for (p += seclen; *p; p++) {
 		if (*p == '{') level++;
 		if (*p == '}') level--;

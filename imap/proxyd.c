@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.11 2000/03/08 01:42:29 leg Exp $ */
+/* $Id: proxyd.c,v 1.12 2000/03/15 10:31:14 leg Exp $ */
 
 #include <config.h>
 
@@ -101,17 +101,15 @@ struct backend *backend_current;
 /* our cached connections */
 struct backend **backend_cached;
 
+/* has the client issued an RLIST or RLSUB? */
+static int supports_referrals;
+
 /* -------- from imapd ---------- */
 
 extern int optind;
 extern char *optarg;
 
 extern int errno;
-
-struct buf {
-    char *s;
-    int alloc;
-};
 
 sasl_conn_t *proxyd_saslconn; /* the sasl connection context to the client */
 
@@ -168,13 +166,10 @@ void cmd_netscape (char* tag);
 
 int getword (struct buf *buf);
 int getastring (struct buf *buf);
-int getbase64string (struct buf *buf);
 
 void eatline (int c);
 void printstring (const char *s);
 void printastring (const char *s);
-
-void printauthready (int len, unsigned char *data);
 
 /* XXX fix when proto-izing mboxlist.c */
 static int mailboxdata(), listdata(), lsubdata();
@@ -642,10 +637,12 @@ struct backend *proxyd_findserver(char *server)
 	int sock;
 
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+	    syslog(LOG_ERR, "socket() failed: %m");
 	    fatal("socket failed", 1);
 	}
 	if (connect(sock, (struct sockaddr *) &ret->addr, 
 		    sizeof(ret->addr)) < 0) {
+	    syslog(LOG_ERR, "connect() failed: %m");
 	    fatal("connect failed", 1);
 	}
 	
@@ -656,6 +653,8 @@ struct backend *proxyd_findserver(char *server)
 
 	/* now need to authenticate to backend server */
 	if (proxy_authenticate(ret)) {
+	    syslog(LOG_ERR, "couldn't authenticate to backend server", 
+		   EC_CONFIG);
 	    fatal("couldn't authenticate to backend server", 1);
 	}
     }
@@ -703,6 +702,12 @@ static struct backend *proxyd_findinboxserver(void)
     s = proxyd_findserver(server);
 
     return s;
+}
+
+static proxyd_refer(char *tag, char *server, char *mailbox)
+{
+    prot_printf(proxyd_out, "%s NO [REFERRAL imap://;AUTH=*@%s/%s] "
+		"Remote mailbox.\r\n", tag, server, mailbox);
 }
 
 /*
@@ -1480,6 +1485,24 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0);
 	    }
+	    else if (!strcmp(cmd.s, "Rlist")) {
+		supports_referrals = 1;
+		c = getastring(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
+		if (c == '\r') c = prot_getc(proxyd_in);
+		if (c != '\n') goto extraargs;
+		cmd_list(tag.s, 0, arg1.s, arg2.s);
+	    }
+	    else if (!strcmp(cmd.s, "Rlsub")) {
+		supports_referrals = 1;
+		c = getastring(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
+		if (c == '\r') c = prot_getc(proxyd_in);
+		if (c != '\n') goto extraargs;
+		cmd_list(tag.s, 1, arg1.s, arg2.s);
+	    }
 	    else goto badcmd;
 	    break;
 	    
@@ -1809,11 +1832,11 @@ char *authtype;
     while (sasl_result == SASL_CONTINUE)
     {
       /* print the message to the user */
-      printauthready(serveroutlen, (unsigned char *)serverout);
+      printauthready(proxyd_out, serveroutlen, (unsigned char *)serverout);
       free(serverout);
 
       /* get string from user */
-      clientinlen = getbase64string(&clientin);
+      clientinlen = getbase64string(proxyd_in, &clientin);
       if (clientinlen == -1) {
 	prot_printf(proxyd_out, "%s BAD Invalid base64 string\r\n", tag);
 	return;
@@ -1940,6 +1963,7 @@ char *tag;
     }
     prot_printf(proxyd_out, "* CAPABILITY ");
     prot_printf(proxyd_out, CAPABILITY_STRING);
+    prot_printf(proxyd_out, " MAILBOX-REFERRALS");
 
     if (sasl_listmech(proxyd_saslconn, NULL, 
 		      "AUTH=", " AUTH=", "",
@@ -1979,10 +2003,11 @@ void cmd_append(char *tag, char *name)
     if (!r) {
 	r = mlookup(mailboxname, &newserver, NULL, NULL);
     }
-    if (!r) {
-	s = proxyd_findserver(newserver);
+    if (!r && supports_referrals) { 
+	proxyd_refer(tag, newserver, mailboxname);
+	return;
     }
-
+    if (!r) s = proxyd_findserver(newserver);
     if (s) {
 	prot_printf(s->out, "%s Append {%d+}\r\n%s ", tag, strlen(name), name);
 	if (!pipe_command(s, 16384)) {
@@ -2035,6 +2060,11 @@ void cmd_select(char *tag, char *cmd, char *name)
     }
 
     if (!r) r = mlookup(mailboxname, &newserver, NULL, NULL);
+    if (!r && supports_referrals) { 
+	proxyd_refer(tag, newserver, mailboxname);
+	return;
+    }
+
     if (!r) backend_current = proxyd_findserver(newserver);
     if (!r && !backend_current) r = IMAP_SERVER_UNAVAILABLE;
 
@@ -2175,10 +2205,25 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	pipe_including_tag(backend_current, tag);
     } else {
 #if NEEDS_PROXY
+	char mytag[128];
+
 	/* this is the hard case; we have to fetch the messages and append
 	   them to the other mailbox */
+
+	/* find out what the flags & internaldate for this message are */
+	proxyd_gentag(mytag);
+	prot_printf(backend_current->out, 
+		    "%s %s %s (FLAGS INTERNALDATE RFC822.SIZE)\r\n", 
+		    tag, usinguid ? "Uid Fetch" : "Fetch", sequence);
+
+	/* start the append */
+	prot_printf(s->out, "%s Append %s %s {%d+}\r\n"
+
+	/* ok, finish the append; we need the UIDVALIDITY and UIDs to return
+	   as part of our COPYUID response code */
+
 #endif
-	prot_printf(proxyd_out, "%s NO i don't like you\r\n");
+	prot_printf(proxyd_out, "%s NO you make my life hard.\r\n");
     }
 }    
 
@@ -2248,6 +2293,11 @@ void cmd_delete(char *tag, char *name)
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
 
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
+    if (!r && supports_referrals) { 
+	proxyd_refer(tag, server, mailboxname);
+	return;
+    }
+
     if (!r) {
 	s = proxyd_findserver(server);
 
@@ -2654,7 +2704,7 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 	s = proxyd_findserver(server);
     }
 
-    if (s) {
+    if (!r && s) {
 	if (rights) {
 	    prot_printf(s->out, 
 			"%s Setacl {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
@@ -2738,12 +2788,13 @@ void cmd_status(char *tag, char *name)
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
 
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
-    if (!r) s = proxyd_findserver(server);
-
-    if (!s) {
-	r = IMAP_SERVER_UNAVAILABLE;
+    if (!r && supports_referrals) { 
+	proxyd_refer(tag, server, mailboxname);
+	return;
     }
-    
+
+    if (!r) s = proxyd_findserver(server);
+    if (!r && !s) r = IMAP_SERVER_UNAVAILABLE;
     if (!r) {
 	prot_printf(s->out, "%s Status {%d}\r\n%s ", tag,
 		    strlen(name), name);
@@ -3004,109 +3055,6 @@ struct buf *buf;
     }
 }
 
-#define XX 127
-/*
- * Table for decoding base64
- */
-static const char index_64[256] = {
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, XX,XX,XX,63,
-    52,53,54,55, 56,57,58,59, 60,61,XX,XX, XX,XX,XX,XX,
-    XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
-    15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,XX,
-    XX,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
-    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-};
-#define CHAR64(c)  (index_64[(unsigned char)(c)])
-
-/*
- * Parse a base64_string
- */
-int getbase64string(buf)
-struct buf *buf;
-{
-    int c1, c2, c3, c4;
-    int len = 0;
-
-    if (buf->alloc == 0) {
-	buf->alloc = BUFGROWSIZE;
-	buf->s = xmalloc(buf->alloc+1);
-    }
-	
-    for (;;) {
-	c1 = prot_getc(proxyd_in);
-	if (c1 == '\r') {
-	    c1 = prot_getc(proxyd_in);
-	    if (c1 != '\n') {
-		eatline(c1);
-		return -1;
-	    }
-	    return len;
-	}
-	else if (c1 == '\n') return len;
-
-	if (CHAR64(c1) == XX) {
-	    eatline(c1);
-	    return -1;
-	}
-	
-	c2 = prot_getc(proxyd_in);
-	if (CHAR64(c2) == XX) {
-	    eatline(c2);
-	    return -1;
-	}
-
-	c3 = prot_getc(proxyd_in);
-	if (c3 != '=' && CHAR64(c3) == XX) {
-	    eatline(c3);
-	    return -1;
-	}
-
-	c4 = prot_getc(proxyd_in);
-	if (c4 != '=' && CHAR64(c4) == XX) {
-	    eatline(c4);
-	    return -1;
-	}
-
-	if (len+3 >= buf->alloc) {
-	    buf->alloc = len+BUFGROWSIZE;
-	    buf->s = xrealloc(buf->s, buf->alloc+1);
-	}
-
-	buf->s[len++] = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
-	if (c3 == '=') {
-	    c1 = prot_getc(proxyd_in);
-	    if (c1 == '\r') c1 = prot_getc(proxyd_in);
-	    if (c1 != '\n') {
-		eatline(c1);
-		return -1;
-	    }
-	    if (c4 != '=') return -1;
-	    return len;
-	}
-	buf->s[len++] = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
-	if (c4 == '=') {
-	    c1 = prot_getc(proxyd_in);
-	    if (c1 == '\r') c1 = prot_getc(proxyd_in);
-	    if (c1 != '\n') {
-		eatline(c1);
-		return -1;
-	    }
-	    return len;
-	}
-	buf->s[len++] = (((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
-    }
-}
-
 /*
  * Eat characters up to and including the next newline
  * Also look for and eat non-synchronizing literals.
@@ -3194,49 +3142,6 @@ void printastring(const char *s)
     } else {
 	prot_printf(proxyd_out, "\"%s\"", s);
     }
-}
-
-/*
- * Print an authentication ready response
- */
-static char basis_64[] =
-   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-void
-printauthready(len, data)
-int len;
-unsigned char *data;
-{
-    int c1, c2, c3;
-
-    prot_putc('+', proxyd_out);
-    prot_putc(' ', proxyd_out);
-    while (len) {
-	c1 = *data++;
-	len--;
-	prot_putc(basis_64[c1>>2], proxyd_out);
-	if (len == 0) c2 = 0;
-	else c2 = *data++;
-	prot_putc(basis_64[((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4)], proxyd_out);
-	if (len == 0) {
-	    prot_putc('=', proxyd_out);
-	    prot_putc('=', proxyd_out);
-	    break;
-	}
-
-	if (--len == 0) c3 = 0;
-	else c3 = *data++;
-        prot_putc(basis_64[((c2 & 0xF) << 2) | ((c3 & 0xC0) >>6)], proxyd_out);
-	if (len == 0) {
-	    prot_putc('=', proxyd_out);
-	    break;
-	}
-	
-	--len;
-        prot_putc(basis_64[c3 & 0x3F], proxyd_out);
-    }
-    prot_putc('\r', proxyd_out);
-    prot_putc('\n', proxyd_out);
-    prot_flush(proxyd_out);
 }
 
 /*

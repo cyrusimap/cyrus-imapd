@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.221 2000/03/14 21:34:53 tmartin Exp $ */
+/* $Id: imapd.c,v 1.222 2000/03/15 10:31:11 leg Exp $ */
 
 #include <config.h>
 
@@ -79,11 +79,6 @@
 extern int optind;
 extern char *optarg;
 extern int errno;
-
-struct buf {
-    char *s;
-    int alloc;
-};
 
 sasl_conn_t *imapd_saslconn; /* the sasl connection context */
 int imapd_starttls_done = 0; /* have we done a sucessful starttls yet? */
@@ -160,7 +155,6 @@ void cmd_netscrape(char* tag);
 
 int getword(struct buf *buf);
 int getastring(struct buf *buf);
-int getbase64string(struct buf *buf);
 int getsearchprogram(char *tag, struct searchargs *searchargs,
 			int *charset, int parsecharset);
 int getsearchcriteria(char *tag, struct searchargs *searchargs,
@@ -181,8 +175,6 @@ void freestrlist(struct strlist *l);
 void appendsearchargs(struct searchargs *s, struct searchargs *s1,
 			 struct searchargs *s2);
 void freesearchargs(struct searchargs *s);
-
-void printauthready(int len, unsigned char *data);
 
 static int mailboxdata(), listdata(), lsubdata();
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
@@ -1404,11 +1396,11 @@ cmd_authenticate(char *tag,char *authtype)
     {
 
       /* print the message to the user */
-      printauthready(serveroutlen, (unsigned char *)serverout);
+      printauthready(imapd_out, serveroutlen, (unsigned char *)serverout);
       free(serverout);
 
       /* get string from user */
-      clientinlen = getbase64string(&clientin);
+      clientinlen = getbase64string(imapd_in, &clientin);
       if (clientinlen == -1) {
 	prot_printf(imapd_out, "%s BAD Invalid base64 string\r\n", tag);
 	return;
@@ -1706,10 +1698,15 @@ cmd_append(char *tag, char *name)
     }
 
     /* Perform the rest of the append */
-    r = append_fromstream(&mailbox, imapd_in, size, internaldate, (const char **) flag, nflags,
+    r = append_fromstream(&mailbox, imapd_in, size, internaldate, 
+			  (const char **) flag, nflags,
 			  imapd_userid);
     uidvalidity = mailbox.uidvalidity;
     newuid = mailbox.last_uid;
+
+    /* MULTIAPPEND: if we see a SP, we're trying to append more than one
+       message */
+
     mailbox_close(&mailbox);
 
     /* Parse newline terminating command */
@@ -3808,109 +3805,6 @@ struct buf *buf;
     }
 }
 
-#define XX 127
-/*
- * Table for decoding base64
- */
-static const char index_64[256] = {
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, XX,XX,XX,63,
-    52,53,54,55, 56,57,58,59, 60,61,XX,XX, XX,XX,XX,XX,
-    XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
-    15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,XX,
-    XX,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
-    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-};
-#define CHAR64(c)  (index_64[(unsigned char)(c)])
-
-/*
- * Parse a base64_string
- */
-int getbase64string(buf)
-struct buf *buf;
-{
-    int c1, c2, c3, c4;
-    int len = 0;
-
-    if (buf->alloc == 0) {
-	buf->alloc = BUFGROWSIZE;
-	buf->s = xmalloc(buf->alloc+1);
-    }
-	
-    for (;;) {
-	c1 = prot_getc(imapd_in);
-	if (c1 == '\r') {
-	    c1 = prot_getc(imapd_in);
-	    if (c1 != '\n') {
-		eatline(c1);
-		return -1;
-	    }
-	    return len;
-	}
-	else if (c1 == '\n') return len;
-
-	if (CHAR64(c1) == XX) {
-	    eatline(c1);
-	    return -1;
-	}
-	
-	c2 = prot_getc(imapd_in);
-	if (CHAR64(c2) == XX) {
-	    eatline(c2);
-	    return -1;
-	}
-
-	c3 = prot_getc(imapd_in);
-	if (c3 != '=' && CHAR64(c3) == XX) {
-	    eatline(c3);
-	    return -1;
-	}
-
-	c4 = prot_getc(imapd_in);
-	if (c4 != '=' && CHAR64(c4) == XX) {
-	    eatline(c4);
-	    return -1;
-	}
-
-	if (len+3 >= buf->alloc) {
-	    buf->alloc = len+BUFGROWSIZE;
-	    buf->s = xrealloc(buf->s, buf->alloc+1);
-	}
-
-	buf->s[len++] = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
-	if (c3 == '=') {
-	    c1 = prot_getc(imapd_in);
-	    if (c1 == '\r') c1 = prot_getc(imapd_in);
-	    if (c1 != '\n') {
-		eatline(c1);
-		return -1;
-	    }
-	    if (c4 != '=') return -1;
-	    return len;
-	}
-	buf->s[len++] = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
-	if (c4 == '=') {
-	    c1 = prot_getc(imapd_in);
-	    if (c1 == '\r') c1 = prot_getc(imapd_in);
-	    if (c1 != '\n') {
-		eatline(c1);
-		return -1;
-	    }
-	    return len;
-	}
-	buf->s[len++] = (((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
-    }
-}
-
 /*
  * Parse a search program
  */
@@ -4880,49 +4774,6 @@ struct searchargs *s;
 	free(sub);
     }
     free(s);
-}
-
-/*
- * Print an authentication ready response
- */
-static char basis_64[] =
-   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-void
-printauthready(len, data)
-int len;
-unsigned char *data;
-{
-    int c1, c2, c3;
-
-    prot_putc('+', imapd_out);
-    prot_putc(' ', imapd_out);
-    while (len) {
-	c1 = *data++;
-	len--;
-	prot_putc(basis_64[c1>>2], imapd_out);
-	if (len == 0) c2 = 0;
-	else c2 = *data++;
-	prot_putc(basis_64[((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4)], imapd_out);
-	if (len == 0) {
-	    prot_putc('=', imapd_out);
-	    prot_putc('=', imapd_out);
-	    break;
-	}
-
-	if (--len == 0) c3 = 0;
-	else c3 = *data++;
-        prot_putc(basis_64[((c2 & 0xF) << 2) | ((c3 & 0xC0) >>6)], imapd_out);
-	if (len == 0) {
-	    prot_putc('=', imapd_out);
-	    break;
-	}
-	
-	--len;
-        prot_putc(basis_64[c3 & 0x3F], imapd_out);
-    }
-    prot_putc('\r', imapd_out);
-    prot_putc('\n', imapd_out);
-    prot_flush(imapd_out);
 }
 
 /*

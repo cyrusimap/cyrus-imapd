@@ -51,6 +51,7 @@ all:
 
 install:
 	$(INSTALL) -m 644 $(srcdir)/depot.conf $(DESTDIR)
+	$(INSTALL) -m 644 $(srcdir)/rc.local.imap $(DESTDIR)etc
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<

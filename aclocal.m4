@@ -14,7 +14,7 @@ dnl
 dnl Additional macros for configure.in packaged up for easier theft.
 dnl tjs@andrew.cmu.edu 6-may-1998
 dnl
-dnl $Id: aclocal.m4,v 1.29 2000/03/07 00:56:02 tmartin Exp $
+dnl $Id: aclocal.m4,v 1.30 2000/03/15 10:31:07 leg Exp $
 dnl
 
 dnl It would be good if ANDREW_ADD_LIBPATH could detect if something was
@@ -59,7 +59,7 @@ AC_DEFUN(CMU_GUESS_RUNPATH_SWITCH, [
 
 dnl sasl.m4--sasl detection macro
 dnl Rob Earhart
-dnl $Id: aclocal.m4,v 1.29 2000/03/07 00:56:02 tmartin Exp $
+dnl $Id: aclocal.m4,v 1.30 2000/03/15 10:31:07 leg Exp $
 
 AC_DEFUN(CMU_SASL, [
   AC_ARG_WITH(sasldir,[  --with-sasldir=PATH     PATH where the sasl library is installed], sasldir="$withval")
@@ -138,10 +138,6 @@ dnl pthreads.m4--pthreads setup macro
 dnl Rob Earhart
 
 AC_DEFUN(CMU_PTHREADS, [
-
-
-  AC_MSG_CHECKING([for pthreads])
-
    AC_REQUIRE([AC_CANONICAL_HOST])
    cmu_save_LIBS="$LIBS"
    AC_CHECK_LIB(pthread, pthread_create,LIB_PTHREAD="-lpthread",
@@ -159,8 +155,6 @@ AC_DEFUN(CMU_PTHREADS, [
  	AC_DEFINE(_SGI_REENTRANT_FUNCTIONS)
  	;;
    esac
-
-  AC_MSG_RESULT([found])
 ])
 
 dnl bsd_sockets.m4--which socket libraries do we need? 
