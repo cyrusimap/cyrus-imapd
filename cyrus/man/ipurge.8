@@ -44,6 +44,14 @@ ipurge \- delete mail from IMAP mailbox or partition based on age or size
 .SH SYNOPSIS
 .B ipurge
 [
+.B \-C
+.I config-file
+]
+[
+.B \-x
+]
+.br
+       [
 .BI \-d " days"
 |
 .BI \-b " bytes"
@@ -54,9 +62,6 @@ ipurge \- delete mail from IMAP mailbox or partition based on age or size
 ]
 .br
        [
-.B \-x
-]
-[
 .IR mailbox-pattern ...
 ]
 .SH DESCRIPTION
@@ -73,8 +78,11 @@ no default values, and at least one of \fB-d\fR, \fB-b\fR, \fB-k\fR or
 .I Ipurge
 reads its configuration options out of the
 .IR imapd.conf (5)
-file.
+file unless specified otherwise by \fB-C\fR.
 .SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .TP
 .BI \-d " days"
 Age of message in \fIdays\fR.

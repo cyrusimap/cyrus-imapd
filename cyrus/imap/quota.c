@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.36 2000/12/18 04:53:41 leg Exp $ */
+/* $Id: quota.c,v 1.37 2001/02/22 19:27:19 ken3 Exp $ */
 
 
 #include <config.h>
@@ -124,13 +124,16 @@ int main(int argc,char **argv)
     int opt;
     int fflag = 0;
     int r, code = 0;
-
-    config_init("quota");
+    char *alt_config = NULL;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "f")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:f")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+
 	case 'f':
 	    fflag = 1;
 	    break;
@@ -139,6 +142,8 @@ int main(int argc,char **argv)
 	    usage();
 	}
     }
+
+    config_init(alt_config, "quota");
 
     r = buildquotalist(argv+optind, argc-optind);
 
@@ -162,7 +167,7 @@ int main(int argc,char **argv)
 
 void usage(void)
 {
-    fprintf(stderr, "usage: quota [-f] [prefix]...\n");
+    fprintf(stderr, "usage: quota [-C <alt_config>] [-f] [prefix]...\n");
     exit(EC_USAGE);
 }    
 

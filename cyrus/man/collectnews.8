@@ -43,6 +43,10 @@
 collectnews \- add news articles to Cyrus header files
 .SH SYNOPSIS
 .B collectnews
+[
+.B \-C
+.I config-file
+]
 .SH DESCRIPTION
 .I Collectnews
 reads article data from the standard input.
@@ -61,7 +65,7 @@ newsgroup/article number, seperated by commas.
 .I Collectnews
 reads its configuration options out of the
 .IR imapd.conf (5)
-file.  The optional
+file unless specified otherwise by \fB-C\fR.  The optional
 .I newsprefix
 option specifies a prefix to be prepended to newsgroup names to make
 the corresponding IMAP mailbox names.
@@ -73,6 +77,10 @@ value of
 concatenated with the dots-to-slashes-converted value of
 .I newsprefix
 must be the pathname of the news spool directory.
+.SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .SH FILES
 .TP
 .B /etc/imapd.conf

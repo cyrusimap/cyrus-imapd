@@ -82,9 +82,9 @@ const char *config_servername;	 /* gethostname() */
 int config_hashimapspool;	 /* f */
 
 
-static void config_read(void);
+static void config_read(const char *alt_config);
 
-int config_init(const char *ident)
+int config_init(const char *alt_config, const char *ident)
 {
     char buf[100];
     char *p;
@@ -95,7 +95,7 @@ int config_init(const char *ident)
 
     openlog(ident, LOG_PID, LOG_LOCAL6);
 
-    config_read();
+    config_read(alt_config);
 
     /* Look up configdirectory config option */
     config_dir = config_getstring("configdirectory", (char *)0);
@@ -200,7 +200,7 @@ const char *config_partitiondir(const char *partition)
 }
 
 #define CONFIGLISTGROWSIZE 10 /* 100 */
-static void config_read(void)
+static void config_read(const char *alt_config)
 {
     FILE *infile;
     int lineno = 0;
@@ -208,14 +208,15 @@ static void config_read(void)
     char buf[4096];
     char *p, *key;
 
-    infile = fopen(CONFIG_FILENAME, "r");
+    infile = fopen(alt_config ? alt_config : CONFIG_FILENAME, "r");
     if (!infile) {
 	strcpy(buf, CYRUS_PATH);
-	strcat(buf, CONFIG_FILENAME);
+	strcat(buf, alt_config ? alt_config : CONFIG_FILENAME);
 	infile = fopen(buf, "r");
     }
     if (!infile) {
-	sprintf(buf, "can't open configuration file %s: %s", CONFIG_FILENAME,
+	sprintf(buf, "can't open configuration file %s: %s",
+		alt_config ? alt_config : CONFIG_FILENAME,
 		error_message(errno));
 	fatal(buf, EC_CONFIG);
     }

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.6 2001/01/19 16:48:58 ken3 Exp $ */
+/* $Id: idled.c,v 1.7 2001/02/22 19:27:17 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -65,6 +65,9 @@
 #include "xmalloc.h"
 #include "hash.h"
 #include "exitcodes.h"
+
+extern int optind;
+extern char *optarg;
 
 static int verbose = 0;
 static int debugmode = 0;
@@ -256,12 +259,17 @@ int main(int argc, char **argv)
     struct timeval timeout;
     pid_t pid;
     int fd;
+    char *alt_config = NULL;
+    const char *idle_sock;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
 
-    while ((opt = getopt(argc, argv, "d")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:d")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
 	case 'd': /* don't fork. debugging mode */
 	    debugmode = 1;
 	    break;
@@ -276,7 +284,7 @@ int main(int argc, char **argv)
 	openlog("idled", LOG_PID, LOG_LOCAL6);
     }
 
-    config_init("idled");
+    config_init(alt_config, "idled");
 
     /* get name of shutdown file */
     sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
@@ -306,8 +314,14 @@ int main(int argc, char **argv)
 
     /* bind it to a local file */
     local.sun_family = AF_UNIX;
-    strcpy(local.sun_path, config_dir);
-    strcat(local.sun_path, FNAME_IDLE_SOCK);
+    idle_sock = config_getstring("idlesocket", NULL);
+    if (idle_sock) {	
+	strcpy(local.sun_path, idle_sock);
+    }
+    else {
+	strcpy(local.sun_path, config_dir);
+	strcat(local.sun_path, FNAME_IDLE_SOCK);
+    }
     unlink(local.sun_path);
     len = sizeof(local.sun_family) + strlen(local.sun_path) + 1;
 

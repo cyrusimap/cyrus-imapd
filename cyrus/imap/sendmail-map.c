@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sendmail-map.c,v 1.2 2000/12/18 20:30:25 leg Exp $
+ * $Id: sendmail-map.c,v 1.3 2001/02/22 19:27:20 ken3 Exp $
  */
 
 #include <config.h>
@@ -441,9 +441,13 @@ int main(int argc, char *argv[], char *envp[])
     int fd;
     int forkmode = 0;
     char *user = NULL;
+    char *alt_config = NULL;
 
-    while ((opt = getopt(argc, argv, "dfu:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:dfu:")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
 	case 'd': /* debugging mode */
 	    debugmode++;
 	    break;
@@ -467,7 +471,7 @@ int main(int argc, char *argv[], char *envp[])
     }
 
 
-    config_init("sendmail-map");
+    config_init(alt_config, "sendmail-map");
 
     acap_init();
 

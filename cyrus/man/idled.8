@@ -43,6 +43,10 @@
 idled \- provide near real-time updates for IMAP IDLE
 .SH SYNOPSIS
 .B idled
+[
+.B \-C
+.I config-file
+]
 .SH DESCRIPTION
 .I Idled
 is a long lived datagram daemon which receives notifications of
@@ -52,6 +56,19 @@ to report the changes to the client.
 .I Idled
 is usually started from
 .I master.
+.PP
+.I Idled
+reads its configuration options out of the
+.IR imapd.conf (5)
+file unless specified otherwise by \fB-C\fR.
+The
+.I idlesocket
+option is used to specify the Unix domain socket to listen on for
+notifications.
+.SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .SH FILES
 .TP
 .B /etc/imapd.conf

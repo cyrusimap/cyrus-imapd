@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.4 2001/01/19 16:48:58 ken3 Exp $ */
+/* $Id: idle_idled.c,v 1.5 2001/02/22 19:27:17 ken3 Exp $ */
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -81,6 +81,7 @@ int idle_enabled(void)
     int s;
     int fdflags;
     struct stat sbuf;
+    const char *idle_sock;
 
     /* get polling period in case we can't connect to idled
      * NOTE: if used, a period of zero disables IDLE
@@ -98,8 +99,14 @@ int idle_enabled(void)
     mailbox_set_updatenotifier(idle_notify);
 
     idle_remote.sun_family = AF_UNIX;
-    strcpy(idle_remote.sun_path, config_dir);
-    strcat(idle_remote.sun_path, FNAME_IDLE_SOCK);
+    idle_sock = config_getstring("idlesocket", NULL);
+    if (idle_sock) {	
+	strcpy(idle_remote.sun_path, idle_sock);
+    }
+    else {
+	strcpy(idle_remote.sun_path, config_dir);
+	strcat(idle_remote.sun_path, FNAME_IDLE_SOCK);
+    }
     idle_remote_len = sizeof(idle_remote.sun_family) +
 	strlen(idle_remote.sun_path) + 1;
 

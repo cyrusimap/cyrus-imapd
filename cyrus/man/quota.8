@@ -44,6 +44,10 @@ quota \- report and optionally fix quota usage
 .SH SYNOPSIS
 .B quota
 [
+.B \-C
+.I config-file
+]
+[
 .B \-f
 ]
 [
@@ -76,8 +80,11 @@ arguments is not recommended.
 .I Quota
 reads its configuration options out of the
 .IR imapd.conf (5)
-file.
+file unless specified otherwise by \fB-C\fR.
 .SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .TP
 .B \-f
 Fix any inconsistencies in the quota subsystem before generating a

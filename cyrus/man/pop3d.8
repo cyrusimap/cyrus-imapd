@@ -44,6 +44,10 @@ pop3d \- POP3 server process
 .SH SYNOPSIS
 .B pop3d
 [
+.B \-C
+.I config-file
+]
+[
 .B \-s
 ]
 [
@@ -60,7 +64,7 @@ with those descriptors attached to a remote client connection.
 .I Pop3d
 reads its configuration options out of the
 .IR imapd.conf (5)
-file.
+file unless specified otherwise by \fB-C\fR.
 .PP
 If the directory
 .RI log/ user
@@ -76,6 +80,9 @@ directory with a filename of the
 .I pop3d
 process-id.
 .SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .TP
 .BI \-s
 Serve POP3 over SSL (pop3s).  All data to and from

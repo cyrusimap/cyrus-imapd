@@ -44,18 +44,22 @@ deliver \- deliver mail to an IMAP mailbox
 .SH SYNOPSIS
 .B deliver
 [
+.B \-C
+.I config-file
+]
+[
 .B \-d
 ]
 [
 .B \-r
 .I address
 ]
-[
+.br
+        [
 .B \-f
 .I address
 ]
-.br
-        [
+[
 .B \-m
 .I mailbox
 ]
@@ -63,7 +67,8 @@ deliver \- deliver mail to an IMAP mailbox
 .B \-a
 .I auth-id
 ]
-[
+.br
+        [
 .B \-q
 ]
 [
@@ -71,6 +76,10 @@ deliver \- deliver mail to an IMAP mailbox
 ]...
 .br
 .B deliver
+[
+.B \-C
+.I config-file
+]
 .B \-l
 .SH DESCRIPTION
 .I Deliver
@@ -80,8 +89,11 @@ IMAP mailboxes.
 .I Deliver
 reads its configuration options out of the
 .IR imapd.conf (5)
-file.
+file unless specified otherwise by \fB-C\fR.
 .SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .TP
 .B \-d
 Ignored for compatability with 

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.11 2001/02/16 18:55:10 leg Exp $
+ * $Id: pop3proxyd.c,v 1.12 2001/02/22 19:27:19 ken3 Exp $
  */
 #include <config.h>
 
@@ -195,8 +195,11 @@ int service_main(int argc, char **argv, char **envp)
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
 
-    while ((opt = getopt(argc, argv, "sk")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:sk")) != EOF) {
 	switch(opt) {
+	case 'C': /* alt config file - handled by service::main() */
+	    break;
+
 	case 's': /* pop3s (do starttls right away) */
 	    pop3s = 1;
 	    if (!starttls_enabled()) {
@@ -275,7 +278,9 @@ void service_abort(int error)
 
 void usage(void)
 {
-    prot_printf(popd_out, "-ERR usage: pop3d [-k] [-s]\r\n");
+    prot_printf(popd_out,
+		"-ERR usage: pop3proxyd [-C <alt_config>]"
+		" [-k] [-s]\r\n");
     prot_flush(popd_out);
     exit(EC_USAGE);
 }

@@ -53,19 +53,19 @@ into sections of the form
 .RS
 \fIsection\fR {
 .RS
-\fIentry arguments
+\fIname arguments
 .br
-	.
+	...
 .br
-	.
+	...
 .br
-	.
+	...
 \fR
 .RE
 }
 .RE
 .PP
-where \fIsection\fR is the name of the section, \fIentry\fR is the name
+where \fIsection\fR is the name of the section, \fIname\fR is the name
 of the entry and \fIarguments\fR is the whitespace-separated list of
 arguments for the entry.
 .PP
@@ -135,7 +135,7 @@ START {
 
 SERVICES {
   imap		cmd="imapd" listen="imap" prefork=1
-  pop3s		cmd="pop3d -s" listen="pop3s" prefork=0
+  imaps		cmd="imapd -s" listen="imaps" prefork=0
   lmtpunix	cmd="lmtpd" listen="/var/imap/socket/lmtp"
   lmtp		cmd="lmtpd" listen="localhost:lmtp"
 .br
@@ -146,7 +146,15 @@ EVENTS {
   delprune	cmd="ctl_deliver -E 3" period=1440
 .br
 }
+.SH ACCESS CONTROL
+When TCP Wrappers is used to control access to Cyrus services, the
+\fIname\fR of the service entry should be used as the process name in
+the \fBhosts_access(5)\fR table.  For instance, in the example above,
+"imap", "imaps", "lmtpunix" and "lmtp" would be used as the process
+names.  This allows a single daemon such as imapd to be run in
+different modes or configurations (i.e., SSL and non-SSL enabled) yet
+still have separate access control rules.
 .SH SEE ALSO
 .PP
 \fBmaster(8)\fR, \fBimapd(8)\fR, \fBpop3d(8)\fR, \fBlmtpd(8)\fR,
-\fBtimsieved(8)\fR, \fBidled(8)\fR
+\fBtimsieved(8)\fR, \fBidled(8)\fR, \fBhosts_access(5)\fR

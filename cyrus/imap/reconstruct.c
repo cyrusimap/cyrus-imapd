@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.57 2001/01/09 00:19:04 leg Exp $ */
+/* $Id: reconstruct.c,v 1.58 2001/02/22 19:27:19 ken3 Exp $ */
 
 #include <config.h>
 
@@ -125,9 +125,9 @@ int main(int argc, char **argv)
     int fflag = 0;
     char buf[MAX_MAILBOX_PATH];
     struct discovered head;
+    char *alt_config = NULL;
 
     memset(&head, 0, sizeof(head));
-    config_init("reconstruct");
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
@@ -135,8 +135,12 @@ int main(int argc, char **argv)
     assert(INDEX_HEADER_SIZE == (OFFSET_FLAGGED+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8));
 
-    while ((opt = getopt(argc, argv, "rmf")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:rmf")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+
 	case 'r':
 	    rflag = 1;
 	    break;
@@ -153,6 +157,8 @@ int main(int argc, char **argv)
 	    usage();
 	}
     }
+
+    config_init(alt_config, "reconstruct");
 
     if (mflag) {
 	if (rflag || fflag || optind != argc) usage();
@@ -212,8 +218,9 @@ int main(int argc, char **argv)
 
 void usage(void)
 {
-    fprintf(stderr, "usage: reconstruct [-r] [-f] mailbox...\n");
-    fprintf(stderr, "       reconstruct -m\n");
+    fprintf(stderr,
+	    "usage: reconstruct [-C <alt_config>] [-r] [-f] mailbox...\n");
+    fprintf(stderr, "       reconstruct [-C <alt_config>] -m\n");
     exit(EC_USAGE);
 }    
 

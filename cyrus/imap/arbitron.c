@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.21 2000/05/23 20:52:12 robeson Exp $ */
+/* $Id: arbitron.c,v 1.22 2001/02/22 19:27:15 ken3 Exp $ */
 
 #include <config.h>
 
@@ -91,15 +91,18 @@ int main(int argc,char **argv)
     int report_days = 30;
     int prune_months = 0;
     char pattern[MAX_MAILBOX_NAME+1];
-
-    config_init("arbitron");
+    char *alt_config = NULL;
 
     strcpy(pattern, "*");
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "d:p:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:d:p:")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+
 	case 'd':
 	    report_days = atoi(optarg);
 	    if (report_days <= 0) usage();
@@ -114,6 +117,8 @@ int main(int argc,char **argv)
 	    usage();
 	}
     }
+
+    config_init(alt_config, "arbitron");
 
     if (optind != argc) strncpy(pattern, argv[optind], MAX_MAILBOX_NAME);
 
@@ -131,7 +136,9 @@ int main(int argc,char **argv)
 
 void usage(void)
 {
-    fprintf(stderr, "usage: arbitron [-d days] [-p months] [mboxpattern]\n");
+    fprintf(stderr,
+	    "usage: arbitron [-C <alt_config] [-d days]"
+	    " [-p months] [mboxpattern]\n");
     exit(EC_USAGE);
 }    
 

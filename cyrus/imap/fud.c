@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.21 2001/01/08 17:19:03 wcw Exp $ */
+/* $Id: fud.c,v 1.22 2001/02/22 19:27:16 ken3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -153,13 +153,25 @@ int main(int argc, char **argv)
 {
     int port = 0;
     int r;
+    int opt;
+    char *alt_config = NULL;
    
     r = 0; /* to shut up lint/gcc */
 
-    config_init("fud");
-
     if(geteuid() == 0)
         fatal("must run as the Cyrus user", EC_USAGE);
+
+    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+	default:
+	    break;
+	}
+    }
+
+    config_init(alt_config, "fud");
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers();

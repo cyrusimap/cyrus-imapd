@@ -42,18 +42,40 @@
 .SH NAME
 ctl_deliver \- perform operations on the duplicate delivery database
 .SH SYNOPSIS
-.B ctl_deliver \-r
+.B ctl_deliver
+[
+.B \-C
+.I config-file
+]
+.B \-r
 .br
-.B ctl_deliver \-E
-.I days
+.B ctl_deliver
+[
+.B \-C
+.I config-file
+]
+.BI \-E " days"
 .br
-.B ctl_deliver \-d \-f
-.I filename
+.B ctl_deliver
+[
+.B \-C
+.I config-file
+]
+.BI \-d
+.BI \-f " filename"
 .SH DESCRIPTION
 .I Ctl_deliver
 is used to perform various administrative operations on the duplicate
 delivery database.
+.PP
+.I Ctl_deliver
+reads its configuration options out of the
+.IR imapd.conf (5)
+file unless specified otherwise by \fB-C\fR.
 .SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .TP
 .B \-r
 Recover the database after an application or system failure.

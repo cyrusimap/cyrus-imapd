@@ -44,6 +44,10 @@ reconstruct \- reconstruct mailboxes
 .SH SYNOPSIS
 .B reconstruct
 [
+.B \-C
+.I config-file
+]
+[
 .B \-r
 ]
 [
@@ -52,6 +56,10 @@ reconstruct \- reconstruct mailboxes
 .IR mailbox ...
 .br
 .B reconstruct
+[
+.B \-C
+.I config-file
+]
 .B \-m
 .SH DESCRIPTION
 .I Reconstruct
@@ -75,7 +83,8 @@ derives all other information from the message files.
 .I Reconstruct
 reads its configuration options out of the
 .IR imapd.conf (5)
-file.  Any mailbox directory underneath the path specified in the
+file unless specified otherwise by \fB-C\fR.  Any mailbox directory
+underneath the path specified in the
 .I partition-news
 configuration option is assumed to be in news format.
 .PP
@@ -89,6 +98,9 @@ with the
 .I \-f
 switch in order to fix the quota root files.
 .SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
 .TP
 .B \-r
 Recursively reconstruct all sub-mailboxes of the mailboxes or mailbox

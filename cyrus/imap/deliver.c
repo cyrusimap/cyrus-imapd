@@ -94,8 +94,8 @@ static void
 usage()
 {
     fprintf(stderr, 
-	    "421-4.3.0 usage: deliver [-m mailbox] [-a auth]"
-	    " [-r return_path] [-l] [-D]\r\n");
+	    "421-4.3.0 usage: deliver [-C <alt_config> ] [-m mailbox]"
+	    " [-a auth] [-r return_path] [-l] [-D]\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
     exit(EC_USAGE);
 }
@@ -186,23 +186,14 @@ int main(int argc, char **argv)
     char *authuser = NULL;
     char *return_path = NULL;
     char buf[1024];
+    char *alt_config = NULL;
 
-    config_init("deliver");
-
-    deliver_in = prot_new(0, 0);
-    deliver_out = prot_new(1, 1);
-    prot_setflushonread(deliver_in, deliver_out);
-    prot_settimeout(deliver_in, 300);
-
-    sockaddr = config_getstring("lmtpsocket", NULL);
-    if (!sockaddr) {	
-	strcpy(buf, config_dir);
-	strcat(buf, "/socket/lmtp");
-	sockaddr = buf;
-    }
-
-    while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:lqD")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:df:r:m:a:F:eE:lqD")) != EOF) {
 	switch(opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+
 	case 'd':
 	    /* Ignore -- /bin/mail compatibility flags */
 	    break;
@@ -257,6 +248,20 @@ int main(int argc, char **argv)
 	default:
 	    usage();
 	}
+    }
+
+    config_init(alt_config, "deliver");
+
+    deliver_in = prot_new(0, 0);
+    deliver_out = prot_new(1, 1);
+    prot_setflushonread(deliver_in, deliver_out);
+    prot_settimeout(deliver_in, 300);
+
+    sockaddr = config_getstring("lmtpsocket", NULL);
+    if (!sockaddr) {	
+	strcpy(buf, config_dir);
+	strcat(buf, "/socket/lmtp");
+	sockaddr = buf;
     }
 
     if (lmtpflag == 1) {
