@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.435 2003/07/22 19:17:10 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.436 2003/08/05 14:55:03 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -6279,11 +6279,18 @@ static int xfer_user_cb(char *name,
 	acl = xstrdup(inacl);
     }
 
-    if(!r) {
-	r = (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
-						   name,
-						   imapd_userid,
-						   externalname);
+    if (!r) {
+	size_t res_size = strlcpy(externalname, name, sizeof(externalname));
+	
+	if(res_size >= sizeof(externalname)) {
+	    /* Overflow */
+	    r = IMAP_MAILBOX_BADNAME;
+	} else {
+	    /* Don't do full namespace tointernal, since for altnamespace
+	     * that will assume we're in this admin's inbox namespace, which
+	     * we aren't! */
+	    mboxname_hiersep_toexternal(&imapd_namespace, externalname);
+	}
     }
 
     if(!r) {
