@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.48 2000/03/08 01:44:13 leg Exp $
+ * $Id: imtest.c,v 1.49 2000/04/10 00:33:04 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -1087,6 +1087,7 @@ void interactive(char *filename)
 	  /* read from disk */	
 	  int numr = read(fd, buf, sizeof(buf));
 
+
 	  /* and send out over wire */
 	  if (numr < 0)
 	  {
@@ -1102,6 +1103,8 @@ void interactive(char *filename)
 	      prot_write(pout, LOGOUT, sizeof (LOGOUT));	      
 	      prot_flush(pout);
 	  } else {
+	      /* echo for the user */
+	      write(1, buf, numr);
 	      prot_write(pout, buf, numr);
 	      prot_flush(pout);
 	  }
