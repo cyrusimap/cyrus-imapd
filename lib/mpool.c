@@ -1,6 +1,6 @@
 /* mpool.c memory pool management
  *
- * $Id: mpool.c,v 1.3 2002/02/07 20:15:54 rjs3 Exp $
+ * $Id: mpool.c,v 1.4 2002/02/07 21:05:13 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -114,6 +114,13 @@ void free_mpool(struct mpool *pool)
     free(pool);
 }
 
+#ifdef ROUNDUP
+#undef ROUNDUP
+#endif
+
+/* bump to the next multiple of 4 bytes */
+#define ROUNDUP(num) (((num) + 3) & 0xFFFFFFFC)
+
 /* Allocate from a pool */
 void *mpool_malloc(struct mpool *pool, size_t size) 
 {
@@ -142,7 +149,7 @@ void *mpool_malloc(struct mpool *pool, size_t size)
     }
 
     ret = p->ptr;
-    p->ptr += size;
+    p->ptr = (void *)ROUNDUP((unsigned int)p->ptr + size);
 
     return ret;
 }
