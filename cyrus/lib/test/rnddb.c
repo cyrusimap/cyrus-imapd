@@ -15,7 +15,7 @@ struct cyrusdb_backend *DB = &cyrusdb_skiplist;
 #endif
 
 #define TRY(s) { r = s; \
-                 if (r) { printf("%s failed: %d\n", #s, r); exit(1); } }
+                 if (r) { printf("%s failed (i=%d): %d\n", #s, i, r); exit(1); } }
 
 char *victim;
 int count;
