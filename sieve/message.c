@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.8 2000/02/14 20:05:41 tmartin Exp $
+ * $Id: message.c,v 1.9 2000/02/14 21:03:23 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -355,6 +355,22 @@ int do_unmark(action_list_t *a)
     return 0;
 }
 
+static int priority_tonum(const char *str)
+{
+    if (strcasecmp(str,"low")==0) return 1;
+    if (strcasecmp(str,"medium")==0) return 2;
+    if (strcasecmp(str,"high")==0) return 3;
+
+    return -1;
+}
+/* returns 1 if new is less than old */
+static int priority_compare(const char *old, const char *new)
+{
+    if (priority_tonum(new) < priority_tonum(old)) return 1;
+
+    return 0;
+}
+
 /* notify
  *
  * incomaptible with: none
@@ -362,6 +378,10 @@ int do_unmark(action_list_t *a)
 int do_notify(sieve_interp_t *i,void *m, notify_action_t *notify,
 	      const char *priority, char *message, stringlist_t *sl)
 {
+    /* if priority is < old priority then leave current one */
+    if ((notify->exists) && (priority_compare(notify->priority, priority)==1))
+	return 0;
+
     /* free old stuff if exists */
     if (notify->exists)
     {
