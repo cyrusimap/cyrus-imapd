@@ -152,6 +152,8 @@ struct cyrusdb_backend {
     int (*dump)(struct db *db, int detail);
 };
 
+extern struct cyrusdb_backend *cyrusdb_backends[];
+
 extern struct cyrusdb_backend cyrusdb_db3;
 extern struct cyrusdb_backend cyrusdb_db3_nosync;
 extern struct cyrusdb_backend cyrusdb_flat;
