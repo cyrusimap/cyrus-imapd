@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.81 2000/07/11 17:55:00 leg Exp $
+ * $Id: message.c,v 1.82 2000/08/15 20:41:23 leg Exp $
  */
 
 #include <config.h>
@@ -1639,6 +1639,7 @@ struct boundary *boundaries;
 
 	if (line[0] == '-' && line[1] == '-' &&
 	    message_pendingboundary(line, boundaries->id, &boundaries->count)) {
+	    body->boundary_size = len;
 	    body->boundary_lines++;
 	    if (body->content_lines) {
 		body->content_lines--;
