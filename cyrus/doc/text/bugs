@@ -78,8 +78,6 @@ other utilities
         collectnews or fix it. 
       * any utilities doing db operations should catch signals and poll for
         them to see if it should exit (like mbpath, ipurge). 
-      * it would be nice if cyradm had a version command (would do an ID
-        against the server). 
 
 libraries
 

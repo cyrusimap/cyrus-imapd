@@ -36,7 +36,8 @@ Features
     when an email message is addressed to multiple recipients. 
 
     We current support the following IMAP capabilities: IMAP4 IMAP4rev1 ACL
-    QUOTA LITERAL+ NAMESPACE UIDPLUS NO_ATOMIC_RENAME UNSELECT MULTIAPPEND. 
+    QUOTA LITERAL+ IDLE NAMESPACE UIDPLUS ID NO_ATOMIC_RENAME UNSELECT
+    MULTIAPPEND SORT THREAD=ORDEREDSUBJECT THREAD=REFERENCES STARTTLS. 
 
     The server supports SIEVE for server side email filtering. 
 
