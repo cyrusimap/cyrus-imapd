@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.19 2003/10/22 18:50:04 rjs3 Exp $ -->
+<!-- $Id: install-murder.html,v 1.17.2.1 2003/10/29 19:28:21 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -13,9 +13,6 @@ things, and if you choose to deploy you are doing so at your own risk.
 Many of the failure modes can be difficult to track without a detailed
 understanding of the mupdate protocol and IMAP in general, and thus even
 considering a deployment is not for the faint at heart.<p>
-Sites which think they need the Murder functionality but do not need
-a uniform namespace (no shared mailboxes) should consider other IMAP
-proxy solutions.<p>
 At the same time, we are using it successfully in production at Carnegie
 Mellon.
 </i></b><br>
@@ -60,7 +57,7 @@ To configure an mupdate master, you will want a cyrus.conf that includes a
 line similar to the following in the SERVICES section:<p>
 
 <pre>
-  mupdate       cmd="/usr/cyrus/bin/mupdate -m" listen=2004 prefork=1
+  mupdate       cmd="/usr/cyrus/bin/mupdate -m" listen=3905 prefork=1
 </pre>
 
 Note the "-m" option to tell mupdate that it should start in master mode.<p>
@@ -121,7 +118,7 @@ cyrus user, and issue a <tt>ctl_mboxlist -m</tt>.<p>
 
 <p>Note that you may wish to issue a <tt>ctl_mboxlist -mw</tt> first to
 be sure you understand all the operations that this command will perform,
-since it does require that all mailboxes are unique in the murder namespace.</p>
+sicne it does require tha all mailboxes are unique in the murder namespace.</p>
 
 If everything is configured properly, the
 mailbox database of the current host will dump to the mupdate master.  If
@@ -161,7 +158,7 @@ same machine, in the <tt>SERVICES</tt> section of cyrus.conf, like so:<p>
 
 <pre>
   # mupdate database service - must prefork atleast 1
-  mupdate       cmd="mupdate" listen=2004 prefork=1 
+  mupdate       cmd="mupdate" listen=3905 prefork=1 
 </pre>
 
 Note that as this is a threaded service, you must prefork atleast 1 of them
@@ -170,20 +167,18 @@ will not start running until after you recieve an mupdate client connection
 to the slave (which is not a recommended configuration at this point).<p>
 
 You will also want to change all of your <tt>imapd</tt> entries to be
-<tt>proxyd</tt>, and all of your <tt>lmtpd</tt> entries to be
-<tt>lmtpproxyd</tt>.  That is, you will probably have a <tt>SERVICES</tt>
+<tt>proxyd</tt>, and all of your <tt>pop3d</tt> entries to be
+<tt>pop3proxyd</tt>.  That is, you will probabally have a <tt>SERVICES</tt>
 section that looks more like this now:<p>
 
 <pre>
-  mupdate       cmd="/usr/cyrus/bin/mupdate" listen=2004 prefork=1 
+  mupdate       cmd="/usr/cyrus/bin/mupdate" listen=3905 prefork=1 
 
   imap          cmd="proxyd" listen="imap" prefork=5
   imaps         cmd="proxyd -s" listen="imaps" prefork=1
-  pop3          cmd="pop3d" listen="pop3" prefork=0
-  pop3s         cmd="pop3d -s" listen="pop3s" prefork=0
-  kpop          cmd="pop3d -k" listen="kpop" prefork=0
-  nntp          cmd="nntpd" listen="nntp" prefork=0
-  nntps         cmd="nntpd -s" listen="nntps" prefork=0
+  pop3          cmd="pop3proxyd" listen="pop3" prefork=0
+  pop3s         cmd="pop3proxyd -s" listen="pop3s" prefork=0
+  kpop          cmd="pop3proxyd -k" listen="kpop" prefork=0
   sieve         cmd="timsieved" listen="sieve" prefork=0
   lmtp          cmd="lmtpproxyd" listen="/var/imap/socket/lmtp" prefork=0
 </pre>
@@ -336,7 +331,7 @@ on the frontend, and have the mupdate process resynch the local database.
 You may need to remove the local mailboxes database if the corruption is
 extreme.</li>
 <li><b>A mailbox's location keeps switching between two (or more) backend
-hosts.</b> - It probably actually exists on both hosts.  Delete the
+hosts.</b> - It probabally actually exists on both hosts.  Delete the
 mailbox from all but one of the hosts, and run a ctl_mboxlist -m on the one
 where you want it to actually live.</li>
 <li><b>Databases are never created on the frontends/slaves</b> - Check
@@ -349,7 +344,7 @@ to ensure that the mupdate slave process is started, (is prefork=1)</li>
 </ul>
 
 <P><HR>
-last modified: $Date: 2003/10/22 18:50:04 $
+last modified: $Date: 2003/10/29 19:28:21 $
 </BODY></HTML>
 
 
