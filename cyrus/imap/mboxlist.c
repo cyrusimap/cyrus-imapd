@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.236 2004/05/22 03:45:51 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.237 2004/06/22 17:02:24 rjs3 Exp $
  */
 
 #include <config.h>
@@ -134,7 +134,7 @@ char *mboxlist_makeentry(int mbtype, const char *part, const char *acl)
     return mboxent;
 }
 
-static const int get_deleteright(void)
+static int get_deleteright(void)
 {
     const char *r = config_getstring(IMAPOPT_DELETERIGHT);
 
