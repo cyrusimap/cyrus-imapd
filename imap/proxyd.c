@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.65 2001/02/22 19:27:19 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.66 2001/03/06 20:05:50 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -719,25 +719,17 @@ void proxyd_downserver(struct backend *s)
     s->timeout = NULL;
 }
 
-struct prot_waitevent dummy_event;
-
 struct prot_waitevent *backend_timeout(struct protstream *s,
 				       struct prot_waitevent *ev, void *rock)
 {
     struct backend *be = (struct backend *) rock;
 
     if (be != backend_current) {
-	/* server is not our current server, and idle too long */
-
-	/* because we're going to remove the current event, we must build
-	   a dummy event pointing to the next event so we can continue
-	   processing the rest of the events registered on this stream */
-	dummy_event.mark = time(NULL) + 60*60*24;  /* 24 hours */
-	dummy_event.next = ev->next;
-
-	/* down the backend server */
+	/* server is not our current server, and idle too long.
+	 * down the backend server (removes the event as a side-effect)
+	 */
 	proxyd_downserver(be);
-	return &dummy_event;
+	return NULL;
     }
     else {
 	/* it will timeout in IDLE_TIMEOUT seconds from now */
