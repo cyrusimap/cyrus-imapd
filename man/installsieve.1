@@ -1,65 +1,71 @@
 .\" -*- nroff -*-
-.TH POP3D 8
+.TH INSTALLSIEVE 1 "Project Cyrus" CMU
 .\" Copyright 1999 Carnegie Mellon University
 .\" 
-.\" No warranties, either expressed or implied, are made regarding the
-.\" operation, use, or results of the software.
+.\"Permission to use, copy, modify, and distribute this software and its
+.\"documentation for any purpose and without fee is hereby granted,
+.\"provided that the above copyright notice appear in all copies and that
+.\"both that copyright notice and this permission notice appear in
+.\"supporting documentation, and that the name of Carnegie Mellon
+.\"University not be used in advertising or publicity pertaining to
+.\"distribution of the software without specific, written prior
+.\"permission.
 .\"
-.\" Permission to use, copy, modify and distribute this software and its
-.\" documentation is hereby granted for non-commercial purposes only
-.\" provided that this copyright notice appears in all copies and in
-.\" supporting documentation.
-.\"
-.\" Permission is also granted to Internet Service Providers and others
-.\" entities to use the software for internal purposes.
-.\"
-.\" The distribution, modification or sale of a product which uses or is
-.\" based on the software, in whole or in part, for commercial purposes or
-.\" benefits requires specific, additional permission from:
-.\"
-.\"  Office of Technology Transfer
-.\"  Carnegie Mellon University
-.\"  5000 Forbes Avenue
-.\"  Pittsburgh, PA  15213-3890
-.\"  (412) 268-4387, fax: (412) 268-7395
-.\"  tech-transfer@andrew.cmu.edu
+.\"CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+.\"THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+.\"FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE FOR
+.\"ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\"WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\"ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
+.\"OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .SH NAME
 installsieve \- user utility for managing sieve scripts
 .SH SYNOPSIS
 .B installsieve
 .SH DESCRIPTION
 .I installsieve
-is a utility that allows users to manage their sieve scripts kept on the server.
-
+is a utility that allows users to manage their sieve scripts kept on
+the server.
 
 .PP
 .SH OPTIONS
 
 .I -v <name>
-View script with the given name. The script if retrieved sucessfully is output to standard output
+View script with the given name. The script if retrieved sucessfully
+is output to standard output.
 
 .I -l
-List all of the scripts currently on the server. If one of the scripts is active a arrow is printed indicating that it is the active script.
+List all of the scripts currently on the server. If one of the scripts
+is active a arrow is printed indicating that it is the active script.
 
 .I -p <port>
-Port to connect to. If left off this defaults to "sieve" as defined in /etc/services. This takes numerical or named arguements
+Port to connect to. If left off this defaults to "sieve" as defined in
+/etc/services.
 
 .I -i <file>
-Install a file onto the server. If a script with the same name already exists on the server it is overwritten. Upon sucessfully putting the script on the server the script is set active. If <file> has the extension .script it is chopped when put on the server since sieve names may not contain a '.'
+Install a file onto the server. If a script with the same name already
+exists on the server it is overwritten. Upon sucessfully putting the
+script on the server the script is set active. If <file> has the
+extension .script it is chopped when put on the server since sieve
+names may not contain a '.'.
 
 .I -a <name>
-Set <name> as the active script. The list of available names can be obtained from the '-l' option.
+Set <name> as the active script. The list of available names can be
+obtained from the '-l' option..
 
 .I -d <name>
-Delete the sieve script on the server with <name>
+Delete the sieve script on the server with <name>.
 
 .I -m <mechanism>
-Force installsieve to use <mechanism> for authentication. If not specified the strongest authentication mechanism is chosen.
+Force installsieve to use <mechanism> for authentication. If not
+specified the strongest authentication mechanism is chosen.
 
 .I -g <name>
-Get the sieve script with <name> and save it to disk with a ".script" extension. Note if a file with that name already exists it is overwritten
+Get the sieve script with <name> and save it to disk with a ".script"
+extension. If a file with that name already exists it is
+overwritten.
 
 .I -u <user>
-Userid/Authname to use for authentication.
+Userid/Authname to use for authentication; by default, the current user.
 
 .TP
