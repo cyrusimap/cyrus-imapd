@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.5 2000/05/23 20:51:39 robeson Exp $ */
+/* $Id: acconfig.h,v 1.6 2000/06/15 15:35:08 ken3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -68,6 +68,9 @@
 
 /* do we support XNETSCAPE */
 #undef ENABLE_X_NETSCAPE_HACK
+
+/* do we support THREAD=JWZ */
+#undef ENABLE_THREAD_JWZ
 
 /* we better have berkeley db 3.x */
 #undef HAVE_LIBDB
