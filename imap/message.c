@@ -159,7 +159,7 @@ static void message_parse_content P((struct msg *msg,
 				     struct boundary *boundaries));
 
 static char *message_getline P((char *s, unsigned n, struct msg *msg));
-static int message_pendingboundary P((char *s, char **boundaries,
+static int message_pendingboundary P((const char *s, char **boundaries,
 				      int *boundaryct));
 
 static int message_write_cache P((int outfd, struct body *body));
@@ -1289,13 +1289,25 @@ int format;
 struct body *body;
 struct boundary *boundaries;
 {
-    char buf[1024];
-    int len, line_boundary = 1;
+    const char *line, *endline;
+    int len;
 
-    while (message_getline(buf, sizeof(buf), msg)) {
-	if (line_boundary && *buf == '-' &&
-	    message_pendingboundary(buf, boundaries->id, &boundaries->count)) {
-	    body->boundary_size = strlen(buf)+(format==MAILBOX_FORMAT_NETNEWS);
+    while (msg->offset < msg->len) {
+	line = msg->base + msg->offset;
+	endline = memchr(line, '\n', msg->len - msg->offset);
+	if (endline) {
+	    endline++;
+	}
+	else {
+	    endline = msg->base + msg->len;
+	}
+	len = endline - line;
+	msg->offset += len;
+
+	if (line[0] == '-' && line[1] == '-' &&
+	    message_pendingboundary(line, boundaries->id, &boundaries->count)) {
+	    body->boundary_size = len +
+		(format == MAILBOX_FORMAT_NETNEWS && endline[-1] == '\n');
 	    body->boundary_lines++;
 	    if (body->content_lines) {
 		body->content_lines--;
@@ -1308,10 +1320,9 @@ struct boundary *boundaries;
 	    return;
 	}
 
-	len = strlen(buf);
 	body->content_size += len;
 
-	if (line_boundary = (buf[len-1] == '\n')) {
+	if (endline[-1] == '\n') {
 	    body->content_lines++;
 	    if (format == MAILBOX_FORMAT_NETNEWS) body->content_size++;
 	}
@@ -1349,7 +1360,7 @@ struct msg *msg;
  * 'boundaryct' is modified appropriately.
  */
 static int message_pendingboundary(s, boundaries, boundaryct)
-char *s;
+const char *s;
 char **boundaries;
 int *boundaryct;
 {
