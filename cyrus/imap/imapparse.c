@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapparse.c,v 1.8 2002/06/24 18:58:41 rjs3 Exp $ */
+/* $Id: imapparse.c,v 1.8.2.1 2002/11/17 03:45:03 ken3 Exp $ */
 
 #include <config.h>
 
@@ -82,6 +82,7 @@ int getword(struct protstream *in, struct buf *buf)
 	    return c;
 	}
 	if (len == buf->alloc) {
+            /* xxx limit len */
 	    buf->alloc += BUFGROWSIZE;
 	    buf->s = xrealloc(buf->s, buf->alloc+1);
 	}
@@ -97,7 +98,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	       struct buf *buf, int type)
 {
     int c;
-    int i;
+    unsigned int i;
     unsigned int len = 0;
     int sawdigit = 0;
     int isnowait;
@@ -164,6 +165,8 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    /*
 	     * Nothing to do here - fall through.
 	     */
+
+            /* xxx shouldn't this lose and not fall through? */
 	    break;
 	}
 	
@@ -191,6 +194,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    if (len == buf->alloc) {
 		buf->alloc += BUFGROWSIZE;
 		buf->s = xrealloc(buf->s, buf->alloc+1);
+                /* xxx limit 'len' */
 	    }
 	    buf->s[len++] = c;
 	}
@@ -228,6 +232,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    if (c != EOF) prot_ungetc(c, pin);
 	    return EOF;
 	}
+        /* xxx limit len */
 	if (len >= buf->alloc) {
 	    buf->alloc = len+1;
 	    buf->s = xrealloc(buf->s, buf->alloc+1);
