@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.17 2000/12/18 04:53:38 leg Exp $ */
+/* $Id: fud.c,v 1.18 2001/01/05 03:18:07 leg Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -135,6 +135,14 @@ int begin_handling(void)
         }
 }
 
+void shut_down(int code) __attribute__((noreturn));
+void shut_down(int code)
+{
+    seen_done();
+    mboxlist_close();
+    mboxlist_done();
+    exit(code);
+}
 
 
 int main(int argc, char **argv)
@@ -148,11 +156,18 @@ int main(int argc, char **argv)
 
     if(geteuid() == 0)
         fatal("must run as the Cyrus user", EC_USAGE);
-    r = init_network(port);
-    signal(SIGHUP,SIG_IGN);
 
-    if (r)
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers();
+
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+    mailbox_initialize();
+
+    r = init_network(port);
+    if (r) {
         fatal("unable to configure network port", EC_OSERR);
+    }
     
     begin_handling();
 
