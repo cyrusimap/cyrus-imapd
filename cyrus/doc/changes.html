@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.43.2.3 2002/08/21 20:54:55 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.43.2.4 2002/09/20 02:20:53 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -38,6 +38,50 @@ the rename.  See ??? for details.</li>
 been renamed to <tt>berkeley</tt> and <tt>berkeley-nosync</tt>
 respectively (to avoid confusion over whether or not db4 is supported).</li>
 
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.9</h2>
+<ul>
+<li>timsieved now does telemetry logging
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.8</h2>
+<ul>
+<li>Fix a strlcpy() off-by-one error.
+<li>Better handling of errors in connecting to LMTP servers for deliver and
+lmtpproxyd.
+<li>Fix bug in pop3proxyd's pop3s handling.
+<li>Fix Exim install documentation.
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.7</h2>
+<ul>
+<li>Fix a severe locking problem during failed CREATEs</li>
+<li>Change default locking method to fcntl from flock</li>
+<li>Don't cleanup the original mailbox during a RENAME while holding the
+mailbox list lock</li>
+<li>Quoting fixes in cyradm</li>
+<li>Small pathname fix in rehash script</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.6</h2>
+<ul>
+<li>Correct some minor version number errors.</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.5</h2>
+<ul>
+<li>Better locking of the mailbox list during mupdate operations for
+CREATE and RENAME</li>
+<li>Permissions fixes for annotations.</li>
+<li>pop3proxyd now does telemetry logging</li>
+<li>Cleanup a number of leaks in the murder code</li>
+<li>Correct semantics of our provided strlcpy().  Fix places where strlcpy()
+was being used incorrectly.</li>
+<li>Correct a significant memory leak in the memory pool routines</li>
+<li>OpenSSL is now handled correctly for the perl modules</li>
+<li>Small documentation cleanups</li>
+<li>The normal assortment of small bugfixes</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.4</h2>
@@ -1670,7 +1714,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/08/21 20:54:55 $ <br />
+last modified: $Date: 2002/09/20 02:20:53 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
