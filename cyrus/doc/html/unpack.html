@@ -7,30 +7,18 @@
 <A HREF="ftp://ftp.andrew.cmu.edu/pub/cyrus-mail/cyrus-imapd-v1.2.tar.gz">
 Download the software</A>, if you haven't already done so.
 
-<P>
-Uncompress the software. To convert the file to a tar 
-file, type:
+<P> Unpack the software.  The software is compressed using the GNU
+Project's "<TT>gzip</TT>" program, available via anonymous FTP to
+<TT>prep.ai.mit.edu</TT> in the <TT>/pub/gnu/</TT> directory.  To
+unpack the distribution, type:
 
 <PRE>
-   <KBD>gunzip cyrus-imapd-v1.1beta.tar.gz</KBD>
+   <KBD>gzip -d cyrus-imapd-v1.2.tar.gz | tar xf -</KBD>
 </PRE>
 
-To unpack the distribution, type:
-
-<PRE>               
-   <KBD>tar xf cyrus-imapd-v1.1beta.tar</KBD>
-</PRE>
-
-<P>If you type "<KBD>ls -l</KBD>", the source directory
-should look something like this:
-
-<PRE>
-   drwxr-xr-x 10 root     2048 Aug 25 08:05 cyrus-1.2
-   -rw-r--r--  1 root  1116160 Aug 24 15:47 cyrus-imapd-v1.2beta.tar
-</PRE>
-
-Once you have downloaded and unpacked the files, read the
-<A HREF="install.html">installation</A> document.
+Once you have downloaded and unpacked the files, read the <A
+HREF="install.html">installation</A> document in
+<TT>cyrus-1.2/doc/install</TT>
 
 <P><HR><P>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
