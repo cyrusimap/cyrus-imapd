@@ -490,6 +490,8 @@ int tls_start_servertls(int readfd, int writefd,
     if (var_imapd_tls_loglevel >= 1)
 	syslog(LOG_DEBUG, "setting up TLS connection");
 
+    if (authid) *authid = NULL;
+
     tls_conn = (SSL *) SSL_new(ctx);
     if (tls_conn == NULL) {
 	*ret = NULL;
