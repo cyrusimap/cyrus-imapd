@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.35 2004/01/26 19:26:51 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.36 2004/01/29 20:07:42 rjs3 Exp $";
 
 #include <config.h>
 
@@ -76,11 +76,6 @@ extern struct auth_state *ptsmodule_make_authstate(const char *identifier,
 						   const char **reply,
 						   int *dsize);
 
-/* XXXXXXXXX */
-void des_init_random_number_generator() {
-	return;
-}
-
 /* config.c info (libimap) */
 const int config_need_data = 0;
 
@@ -105,7 +100,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     signal(SIGPIPE, SIG_IGN);
 
     syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.35 2004/01/26 19:26:51 rjs3 Exp $ (%s)",
+	   "starting: $Id: ptloader.c,v 1.36 2004/01/29 20:07:42 rjs3 Exp $ (%s)",
 	   ptsmodule_name);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
