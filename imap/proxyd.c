@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.88 2002/02/06 16:57:37 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.89 2002/02/06 17:19:10 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -703,7 +703,7 @@ void proxyd_downserver(struct backend *s)
     int taglen;
     char buf[1024];
 
-    if (!s->timeout) {
+    if (!s || !s->timeout) {
 	/* already disconnected */
 	return;
     }
@@ -1078,7 +1078,18 @@ static void proxyd_reset(void)
     
     proc_cleanup();
 
-    /* Cleanup file descriptors */
+    /* close backend connections */
+    i = 0;
+    while (backend_cached[i]) {
+	proxyd_downserver(backend_cached[i]);
+	free(backend_cached[i]);
+	i++;
+    }
+    free(backend_cached);
+    backend_cached = NULL;
+    backend_inbox = backend_current = NULL;
+
+    /* Cleanup file descriptors. note: after last call to proxyd_downserver */
     if(proxyd_in) prot_free(proxyd_in);
     if(proxyd_out) prot_free(proxyd_out);
     proxyd_in = proxyd_out = NULL;
@@ -1086,15 +1097,6 @@ static void proxyd_reset(void)
     close(1);
     close(2);
     
-    /* close backend connections */
-    for(i=0;backend_cached[i];i++) {
-	proxyd_downserver(backend_cached[i]);
-	free(backend_cached[i]);
-    }
-    free(backend_cached);
-    backend_cached = NULL;
-    backend_inbox = backend_current = NULL;
-
     /* Cleanup Globals */
     proxyd_cmdcnt = 0;
     supports_referrals = 0;
