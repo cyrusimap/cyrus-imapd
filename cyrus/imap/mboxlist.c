@@ -454,8 +454,9 @@ int checkacl;
     int r;
     char *acl;
     long access;
+    int deleteuser = 0;
     unsigned long offset, len;
-    char buf2[MAX_MAILBOX_PATH];
+    char submailboxname[MAX_MAILBOX_NAME+1];
     int newlistfd;
     struct iovec iov[10];
     int n;
@@ -480,11 +481,7 @@ int checkacl;
 	 */
 	if (!(acl_myrights(acl) & ACL_DELETE)) return IMAP_PERMISSION_DENIED;
 	
-	/* Delete sub-mailboxes */
-	strcpy(buf2, name);
-	strcat(buf2, ".*");
-	r = mboxlist_findall(buf2, 1, 0, mboxlist_deletesubmailbox);
-	if (r) return r;
+	deleteuser = 1;
 
 	/* Delete any subscription list file */
 	{
@@ -535,10 +532,42 @@ int checkacl;
 	return IMAP_IOERROR;
     }
 
-    /* Copy mailbox list, removing entry */
+    if (deleteuser) {
+	int namelen = strlen(name)+1;
+	char *endname, *endline;
+
+	strcpy(submailboxname, name);
+	strcat(submailboxname, ".");
+
+	/* Delete sub-mailboxes */
+	while (offset + len + namelen < list_size &&
+	       !strncmp(list_base + offset + len, submailboxname, namelen)) {
+	    endname = memchr(list_base + offset + len, '\t',
+			     list_size-offset-len);
+	    if (!endname) {
+		mboxlist_badline(list_base + offset + len, "no tab separator");
+	    }
+	    endline = memchr(list_base + offset + len, '\n',
+			     list_size-offset-len);
+	    if (!endline) {
+		mboxlist_badline(list_base + offset + len,
+				 "no newline terminator");
+	    }
+	    strncpy(submailboxname, list_base + offset + len,
+		    endname - (list_base + offset + len));
+	    submailboxname[endname - (list_base + offset + len)] = '\0';
+	    len = endline - (list_base + offset) + 1;
+	    
+	    /* Remove the sub-mailbox  */
+	    r = mailbox_open_header(submailboxname, &mailbox);
+	    if (!r) r = mailbox_delete(&mailbox);
+	}
+    }
+
+    /* Copy mailbox list, removing entry/entries */
     iov[0].iov_base = list_base;
     iov[0].iov_len = offset;
-    iov[1].iov_base = list_base+offset+len;
+    iov[1].iov_base = list_base + offset + len;
     iov[1].iov_len = list_size - offset - len;
 
     n = retry_writev(newlistfd, iov, 2);
@@ -1952,13 +1981,3 @@ int maycreate;
     return 0;
 }
 
-/*
- * Helper function to delete a user's sub-mailbox when deleting that user
- */
-static int mboxlist_deletesubmailbox(name, matchlen, maycreate)
-char *name;
-int matchlen;
-int maycreate;
-{
-    return mboxlist_deletemailbox(name, 1, "", 0);
-}
