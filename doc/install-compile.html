@@ -1,4 +1,4 @@
-<!-- $Id: install-compile.html,v 1.9 2002/08/05 12:45:31 leg Exp $ -->
+<!-- $Id: install-compile.html,v 1.10 2002/08/12 22:50:42 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Compiling the IMAP Server
@@ -62,7 +62,7 @@ specify a server-specific installation prefix other than
 
 <h2>Options to <kbd>configure</kbd></h2>
 <p>Here are a list of switches that can be used with "<A
-NAME="configure"><tt>configure</tt></A>". 3
+NAME="configure"><tt>configure</tt></A>".
 
 <dl>
 <dt><tt>--help</tt>
@@ -88,6 +88,12 @@ found with "<tt>--with-afs=PATH</tt>".  Also requires krb support as above.
 Any method of authenticating with SASL can be used with any
 authorization module.<P>
 
+<dt><tt>--with-krb=PATH</tt>
+<dd>Specifies where to find the Kerberos library.<P>
+
+<dt><tt>--with-com_err=PATH</tt>
+<dd>Specifies where to find the com_err environment.<P>
+
 <dt><tt>--with-cyrus-group=USER</tt>
 <dd>Specifies the group used for installing setguid programs.  By default,
 configure uses "<TT>mail</TT>". <P>
@@ -100,22 +106,28 @@ configure uses "<TT>mail</TT>". <P>
 <dd>Specifies the userid that the Cyrus IMAP server will run as.  By
 default, configure uses "<TT>cyrus</TT>". <P>
 
-<dt><tt>--with-notify=METHOD</tt>
-<dt><tt>--without-notify</tt>
-<dd>Specifies the new mail notification method to use.
-Currently implemented notification methods are:
-<dl compact> 
-<DT><tt>zephyr</tt>
-<DD>New mail notification through Zephyr.  Specify the location of
-the zephyr installation with "<tt>--with-zephyr=PATH</tt>".
-<DT><tt>unix</tt>
-<DD>New mail notification through a Unix sockets daemon. See overview.html
-for details.
-<DT><tt>no</tt>
-<DD>No new mail notification.
-</dl>
-By default, uses "<TT>zephyr</TT>" if the Zephyr libraries are available, 
-otherwise "<TT>no</TT>".<P>
+<dt><tt>--with-dbdir=PATH</tt>
+<dd>Specifies where to find the Berkeley DB library.<P>
+
+<dt><tt>--with-duplicate-db=DB</tt>
+<dd>Specifies which database backend to use for the duplicate delivery
+database.  By default, configure uses "<TT>db3_nosync</TT>"<P>
+
+<dt><tt>--with-mboxlist-db=DB</tt>
+<dd>Specifies which database backend to use for the mailbox list.  By
+default, configure uses "<TT>db3</TT>"<P>
+
+<dt><tt>--with-seen-db=DB</tt>
+<dd>Specifies which database backend to use for the seen state.  By
+default, configure uses "<TT>flat</TT>"<P>
+
+<dt><tt>--with-subs-db=DB</tt>
+<dd>Specifies which database backend to use for the subscriptions
+list.  By default, configure uses "<TT>flat</TT>"<P>
+
+<dt><tt>--with-tls-db=DB</tt>
+<dd>Specifies which database backend to use for the TLS cache.  By
+default, configure uses "<TT>db3_nosync</TT>"<P>
 
 <dt><tt>--with-idle=METHOD</tt>
 <dd>Specifies the IMAP IDLE method to use.
@@ -131,29 +143,7 @@ mailbox to check for the changes.
 <DT><tt>no</tt>
 <DD>Disable IMAP IDLE.
 </dl>
-By default, uses "<TT>poll</TT>".<P>
-
-<dt><tt>--enable-fulldirhash</tt>
-<dd>Enables the improved directory hashing scheme which hashes the
-entire username instead of using just the first letter.<p>
-
-<dt><tt>--with-sasl=PATH</tt> 
-<dd>Specifies the path to the directories containing the library
-(<tt>.../lib</tt>) and include (<tt>.../include</tt>)
-files for libsasl. <P>
-
-<dt><tt>--with-statedir=PATH</tt> 
-<dd>Specifies the directory used for communicating with various
-daemons.  By default, configure uses "<TT>/var</TT>". <P>
-
-<dt><tt>--with-openssl=PATH</tt>
-<dd>Specifies where to find the OpenSSL library.<P>
-
-<dt><tt>--with-inn=PATH</tt>
-<dd>Specifies the location of INN's <TT>NEWSLIB</TT> directory.  By
-default, looks for INN in a few common places.  It is only necessary
-for "<tt>configure</tt>" to find INN if you are going to export newsgroups
-using IMAP. <P>
+By default, configure uses "<TT>poll</TT>".<P>
 
 <dt><tt>--with-lock=METHOD</tt>
 <dd>Specifies the locking method to use.  Currently implemented locking
@@ -167,8 +157,53 @@ methods are:
 <DD><TT>fcntl()</TT> locking
 </DL>
 
-By default, uses "<tt>flock</tt>" if the "<tt>flock()</tt>"
+By default, configure uses "<tt>flock</tt>" if the "<tt>flock()</tt>"
 function exists, "<tt>fcntl</tt>" otherwise. <P>
+
+<dt><tt>--with-openssl=PATH</tt>
+<dd>Specifies where to find the OpenSSL library.<P>
+
+<dt><tt>--with-egd-socket=FILE</tt>
+<dd>Specifies which socket to use to connect to the Entropy Gathering
+Daemon.<P>
+
+<dt><tt>--with-perl=PATH</tt>
+<dd>Specifies where to find the Perl library.<P>
+
+<dt><tt>--with-sasl=PATH</tt> 
+<dd>Specifies the path to the directories containing the library
+(<tt>.../lib</tt>) and include (<tt>.../include</tt>)
+files for libsasl. <P>
+
+<dt><tt>--with-statedir=PATH</tt> 
+<dd>Specifies the directory used for communicating with various
+daemons.  By default, configure uses "<TT>/var</TT>". <P>
+
+<dt><tt>--with-libwrap=PATH</tt>
+<dd>Specifies where to find the TCP wrappers library.<P>
+
+<dt><tt>--with-ucdsnmp=PATH</tt>
+<dd>Specifies where to find the SNMP library.<P>
+
+<dt><tt>--with-zephyr=PATH</tt>
+<dd>Specifies where to find the Zephyr library (for notifyd).<P>
+
+<dt><tt>--enable-annotatemore</tt>
+<dd>Enables support for ANNOTATEMORE extension (mailbox/server
+annotations).<p>
+
+<dt><tt>--enable-fulldirhash</tt>
+<dd>Enables the improved directory hashing scheme which hashes the
+entire username instead of using just the first letter.<p>
+
+<dt><tt>--enable-listext</tt>
+<dd>Enables support for LISTEXT extension.<p>
+
+<dt><tt>--enable-murder</tt>
+<dd>Enables support for IMAP Murder.<p>
+
+<dt><tt>--enable-netscapehack</tt>
+<dd>Enables support for X-NETSCAPE extension (administration URLs).<p>
 
 <dt><tt>--disable-sieve</tt>
 <dd>By default, Sieve support is enabled.  Use
@@ -261,5 +296,5 @@ If you want, you can override the "<tt>make</tt>" variables
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2002/08/05 12:45:31 $
+last modified: $Date: 2002/08/12 22:50:42 $
 </BODY></HTML>
