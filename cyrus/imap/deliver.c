@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.111 1999/10/28 04:40:05 leg Exp $
+ * $Id: deliver.c,v 1.112 1999/10/29 23:34:46 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.111 1999/10/28 04:40:05 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.112 1999/10/29 23:34:46 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -1465,6 +1465,8 @@ void msg_free(message_data_t *m)
 	    free(m->cache[i]);
 	}
 #endif
+
+    free(m);
 }
 
 #define RCPT_GROW 5 /* XXX 30 */
@@ -2586,10 +2588,10 @@ int idlen, tolen;
 
     memcpy(buf, id, idlen);
     buf[idlen] = '\0';
-    memcpy(buf+idlen+1, to, tolen);
-    buf[idlen+tolen+2] = '\0';
+    memcpy(buf + idlen + 1, to, tolen);
+    buf[idlen + tolen + 1] = '\0';
     delivery.data = buf;
-    delivery.size = idlen + tolen + 2; 
+    delivery.size = idlen + tolen + 2;
           /* +2 b/c 1 for the center null; +1 for the terminating null */
 
     if ((lockfd = _lock_delivered_db(to, 0)) < 0) {
@@ -2599,7 +2601,8 @@ int idlen, tolen;
     DeliveredDBptr = dbopen(fname, O_RDONLY, 0666, DB_HASH, &info);
     if (!DeliveredDBptr) {
       close(lockfd);
-      syslog(LOG_ERR,"checkdelivered: Unable to open delivered db: %s: %m", buf);
+      syslog(LOG_ERR,"checkdelivered: Unable to open delivered db: %s: %m", 
+	     fname);
       return 0;
     }
 
@@ -2698,8 +2701,8 @@ markdelivered(char *id, int idlen, char *to, int tolen, time_t mark)
 
   memcpy(buf, id, idlen);
   buf[idlen] = '\0';
-  memcpy(buf+idlen+1, to, tolen);
-  buf[idlen+tolen+2] = '\0';
+  memcpy(buf + idlen + 1, to, tolen);
+  buf[idlen + tolen + 1] = '\0';
   if (mark == 0) { mark = time(0); }
     
 #ifdef HAVE_LIBDB
