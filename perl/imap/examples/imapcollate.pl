@@ -193,7 +193,7 @@ sub coll {
 		    }, 
   -rock => \%dat});
 
-  ($rc, $msg) = $cyrus->send('', '', 'FETCH 1:* (BODY[HEADER.FIELDS (FROM)])');
+  ($rc, $msg) = $cyrus->send('', '', 'UID FETCH 1:* (BODY[HEADER.FIELDS (FROM)])');
   $cyrus->addcallback({-trigger => 'FETCH'});
   if ($rc eq 'OK') {
   } else {
