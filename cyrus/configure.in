@@ -220,20 +220,24 @@ dnl
 AC_ARG_WITH(krb,[  --with-krb=PATH         use Kerberos from PATH],
 	with_krb="${withval}")
 if test -z "$with_krb"; then
-     if test -f /usr/local/lib/libkrb.a; then
+     if test -f /usr/local/lib/libkrb.a -a -f /usr/local/lib/libdes.a; then
 	with_krb="/usr/local"
      fi
 fi
 case "$with_krb" in
 	no) true;;
-	"") AC_CHECK_LIB(krb,main,LIBS="${LIBS} -lkrb -ldes",
+	"") AC_CHECK_LIB(krb,des_ecb_encrypt,LIBS="${LIBS} -lkrb -ldes",
 		with_krb="no",-ldes);;
-	*)  CPPFLAGS="${CPPFLAGS} -I${with_krb}/include"
-	    LIBS="${LIBS} ${with_krb}/lib/libkrb.a ${with_krb}/lib/libdes.a";;
+	*)  if test -f ${with_krb}/lib/libdes.a; then
+		CPPFLAGS="${CPPFLAGS} -I${with_krb}/include"
+		LIBS="${LIBS} ${with_krb}/lib/libkrb.a ${with_krb}/lib/libdes.a"
+	    else
+		AC_MSG_ERROR(The Kerberos DES library is required for Kerberos support)
+	    fi;;
 esac
 if test "$with_krb" = "no"; then
      if test "$WITH_LOGIN" = "krb"; then
-	AC_MSG_ERROR(Unable to find Kerberos libraries)
+	AC_MSG_ERROR(Unable to find Kerberos/DES libraries)
      fi
 else
      AC_DEFINE(HAVE_ACTE_KRB)
