@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.329 2001/11/27 02:24:57 ken3 Exp $ */
+/* $Id: imapd.c,v 1.330 2001/12/04 00:25:20 leg Exp $ */
 
 #include <config.h>
 
@@ -313,10 +313,11 @@ static int mysasl_authproc(sasl_conn_t *conn,
 	    
 	    imapd_authstate = auth_newstate(requested_user, NULL);
 	} else {
-	    sasl_seterror(conn, 0, "user %s is not allowed to proxy",auth_identity);
-	    
+	    sasl_seterror(conn, 0, "user %s is not allowed to proxy",
+			  auth_identity);
+
 	    auth_freestate(imapd_authstate);
-	    
+
 	    return SASL_BADAUTH;
 	}
     }
@@ -350,8 +351,13 @@ int mysasl_canon_user(sasl_conn_t *conn,
     
     strncpy(out_authid, canon_authuser, out_amax);
     
-    if (!user) user = authid;
-    canon_requser = auth_canonifyid(user, ulen);
+    if (!user) {
+	/* don't bother calling auth_canonifyid twice */
+	canon_requser = canon_authuser;
+    } else {
+	canon_requser = auth_canonifyid(user, ulen);
+    }
+
     if (!canon_requser) {
 	sasl_seterror(conn, 0, "bad userid requested");
 	return SASL_BADAUTH;
