@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.42 1999/03/05 20:10:14 wcw Exp $
+# $Id: SMakefile,v 1.43 1999/04/02 19:51:52 wcw Exp $
 #
 
 MAKE=gmake
@@ -25,6 +25,7 @@ if test "${OVERRIDE-nil}" != "t" ; then
   case `uname` in	
     Linux) CFLAGS="${CFLAGS} -O3 -g"
 	   LDFLAGS="${LDFLAGS}"
+           AMSSYNC=""
 	   ;;
     IRIX) CFLAGS="${CFLAGS} -O2"
 	  LDFLAGS="${LDFLAGS}"
