@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.40 1999/11/05 01:00:38 tmartin Exp $
+ $Id: imclient.c,v 1.41 1999/12/02 05:22:47 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -1862,9 +1862,6 @@ int imclient_starttls(struct imclient *imclient,
 		      &externalprop);
   
   if (result!=SASL_OK) return 1;
-
-  
-  /* ask for the capabilities again */
 
   return 0;
 }

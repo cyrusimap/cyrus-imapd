@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.189 1999/11/16 01:01:48 leg Exp $ */
+/* $Id: imapd.c,v 1.190 1999/12/02 05:22:39 tmartin Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -200,9 +200,9 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   ret->max_ssf = max;		/* maximum allowable security strength */
 
   ret->security_flags = 0;
-  if (!config_getswitch("allowplaintext", 1)) {
-      ret->security_flags |= SASL_SEC_NOPLAINTEXT;
-  }
+
+  ret->security_flags |= SASL_SEC_NOPLAINTEXT;
+
   if (!config_getswitch("allowanonymouslogin", 0)) {
       ret->security_flags |= SASL_SEC_NOANONYMOUS;
   }
