@@ -26,14 +26,14 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.70 2000/05/05 20:13:41 leg Exp $
+ * $Id: pop3d.c,v 1.54.2.1 2000/11/02 00:49:54 ken3 Exp $
  */
-#include <config.h>
 
-
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#ifndef __GNUC__
+/* can't use attributes... */
+#define __attribute__(foo)
 #endif
+
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
@@ -46,36 +46,25 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <ctype.h>
-#include "prot.h"
 
 #include <sasl.h>
-#include <saslutil.h>
 
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
-#include "imapconf.h"
-#include "tls.h"
+#include "config.h"
 
+/* openSSL has it's own DES function which conflict in names with those used by krb.h */
+#ifdef HAVE_SSL
+#undef HAVE_SSL
+#endif /* HAVE_SSL */
 
+#include "prot.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "version.h"
 #include "xmalloc.h"
-#include "mboxlist.h"
-
-#ifdef HAVE_KRB
-/* kerberos des is purported to conflict with OpenSSL DES */
-#define DES_DEFS
-#include <krb.h>
-
-/* MIT's kpop authentication kludge */
-char klrealm[REALM_SZ];
-AUTH_DAT kdata;
-#endif /* HAVE_KRB */
-static int kflag = 0;
 
 extern int optind;
 extern char *optarg;
@@ -83,11 +72,16 @@ extern int opterr;
 
 extern int errno;
 
+extern char *login_capabilities();
 
+#ifdef HAVE_KRB
+#include <krb.h>
 
-#ifdef HAVE_SSL
-extern SSL *tls_conn;
-#endif /* HAVE_SSL */
+/* MIT's kpop authentication kludge */
+int kflag = 0;
+char klrealm[REALM_SZ];
+AUTH_DAT kdata;
+#endif
 
 sasl_conn_t *popd_saslconn; /* the sasl connection context */
 
@@ -106,8 +100,6 @@ struct msg {
     int deleted;
 } *popd_msg;
 
-int popd_starttls_done = 0;
-
 static struct mailbox mboxstruct;
 
 static int expungedeleted();
@@ -116,102 +108,135 @@ static void cmd_auth();
 static void cmd_capa();
 static void cmd_pass();
 static void cmd_user();
-static void cmd_starttls(int pop3s);
-static int starttls_enabled(void);
-void eatline(void);
-static void blat(int msg,int lines);
-int openinbox(void);
-static void cmdloop(void);
-void kpop(void);
-static int parsenum(char **ptr);
-void usage(void);
 
-extern void setproctitle_init(int argc, char **argv, char **envp);
-extern int proc_register(char *progname, char *clienthost, 
-			 char *userid, char *mailbox);
-extern void proc_cleanup(void);
+/* This creates a structure that defines the allowable
+ *   security properties 
+ */
+static sasl_security_properties_t *make_secprops(int min,int max)
+{
+  sasl_security_properties_t *ret=
+    (sasl_security_properties_t *) xmalloc(sizeof(sasl_security_properties_t));
+
+  ret->maxbufsize=4000;
+  ret->min_ssf=min;     /* minimum allowable security strength */
+  ret->max_ssf=max;     /* maximum allowable security strength */
+
+  ret->security_flags = 0;
+  if (!config_getswitch("allowplaintext", 1)) {
+      ret->security_flags |= SASL_SEC_NOPLAINTEXT;
+  }
+  if (!config_getswitch("allowanonymouslogin", 0)) {
+      ret->security_flags |= SASL_SEC_NOANONYMOUS;
+  }
+  ret->property_names=NULL;
+  ret->property_values=NULL;
+
+  return ret;
+}
+
+/* this is a wrapper to call the cyrus configuration from SASL */
+static int mysasl_config(void *context __attribute__((unused)), 
+			 const char *plugin_name,
+			 const char *option,
+			 const char **result,
+			 unsigned *len)
+{
+    char opt[1024];
+
+    if (strcmp(option, "srvtab")) { /* we don't transform srvtab! */
+	int sl = 5 + (plugin_name ? strlen(plugin_name) + 1 : 0);
+
+	strncpy(opt, "sasl_", 1024);
+	if (plugin_name) {
+	    int i = 5;
+
+	    for (i = 0; i < strlen(plugin_name); i++) {
+		opt[i + 5] = tolower(plugin_name[i]);
+	    }
+	    opt[i] = '_';
+	}
+ 	strncat(opt, option, 1024 - sl - 1);
+    } else {
+	strncpy(opt, option, 1024);
+    }
+    opt[1023] = '\0';		/* paranoia */
+
+    *result = config_getstring(opt, NULL);
+    if (*result == NULL && plugin_name) {
+	/* try again without plugin name */
+
+	strncpy(opt, "sasl_", 1024);
+ 	strncat(opt, option, 1024 - 6);
+	opt[1023] = '\0';	/* paranoia */
+	*result = config_getstring(opt, NULL);
+    }
+
+    if (*result) {
+	if (len) { *len = strlen(*result); }
+	return SASL_OK;
+    } else {
+	return SASL_FAIL;
+    }
+}
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-/*
- * run once when process is forked;
- * MUST NOT exit directly; must return with non-zero error code
- */
-int service_init(int argc, char **argv, char **envp)
+main(argc, argv, envp)
+int argc;
+char **argv;
+char **envp;
 {
-    int r;
-
-    config_changeident("pop3d");
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
-    setproctitle_init(argc, argv, envp);
-
-    signal(SIGPIPE, SIG_IGN);
-
-    /* set the SASL allocation functions */
-    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
-		   (sasl_calloc_t *) &calloc, 
-		   (sasl_realloc_t *) &xrealloc, 
-		   (sasl_free_t *) &free);
-
-    /* load the SASL plugins */
-    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
-	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
-	       sasl_errstring(r, NULL, NULL));
-	return 2;
-    }
-
-    /* open the mboxlist, we'll need it for real work */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
-    return 0;
-}
-
-/*
- * run for each accepted connection
- */
-int service_main(int argc, char **argv, char **envp)
-{
-    int pop3s = 0;
     int opt;
+    char hostname[MAXHOSTNAMELEN+1];
     int salen;
     struct hostent *hp;
+    struct sockaddr_in sa;
     int timeout;
     sasl_security_properties_t *secprops=NULL;
 
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
 
-    while ((opt = getopt(argc, argv, "sk")) != EOF) {
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+
+    opterr = 0;
+    while ((opt = getopt(argc, argv, "k")) != EOF) {
 	switch(opt) {
-	case 's': /* pop3s (do starttls right away) */
-	    pop3s = 1;
-	    if (!starttls_enabled()) {
-		syslog(LOG_ERR, "pop3s: required OpenSSL options not present");
-		fatal("pop3s: required OpenSSL options not present",
-		      EC_CONFIG);
-	    }
+#ifdef HAVE_KRB
 	case 'k':
 	    kflag++;
 	    break;
+#endif
+
 	default:
 	    usage();
 	}
     }
 
+    setproctitle_init(argc, argv, envp);
+    config_init("pop3d");
+
+    signal(SIGPIPE, SIG_IGN);
+    gethostname(hostname, sizeof(hostname));
+
     /* Find out name of client host */
     salen = sizeof(popd_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&popd_remoteaddr, &salen) == 0 &&
 	popd_remoteaddr.sin_family == AF_INET) {
-	hp = gethostbyaddr((char *)&popd_remoteaddr.sin_addr,
-			   sizeof(popd_remoteaddr.sin_addr), AF_INET);
-	if (hp != NULL) {
-	    strncpy(popd_clienthost, hp->h_name, sizeof(popd_clienthost)-30);
-	    popd_clienthost[sizeof(popd_clienthost)-30] = '\0';
-	} else {
+	if (hp = gethostbyaddr((char *)&popd_remoteaddr.sin_addr,
+			       sizeof(popd_remoteaddr.sin_addr), AF_INET)) {
+	    if (strlen(hp->h_name) + 30 > sizeof(popd_clienthost)) {
+		strncpy(popd_clienthost, hp->h_name, sizeof(popd_clienthost)-30);
+		popd_clienthost[sizeof(popd_clienthost)-30] = '\0';
+	    }
+	    else {
+		strcpy(popd_clienthost, hp->h_name);
+	    }
+	}
+	else {
 	    popd_clienthost[0] = '\0';
 	}
 	strcat(popd_clienthost, "[");
@@ -223,19 +248,24 @@ int service_main(int argc, char **argv, char **envp)
 	}
     }
 
+    /* Make a SASL connection and setup some properties for it */
+
+    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK)
+	fatal("SASL failed initializing: sasl_server_init()",EC_TEMPFAIL); 
+
     /* other params should be filled in */
-    if (sasl_server_new("pop", config_servername, NULL, 
-			NULL, SASL_SECURITY_LAYER, &popd_saslconn) != SASL_OK)
+    if (sasl_server_new("pop", hostname, NULL, 
+			NULL, 2000, &popd_saslconn)!=SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
     /* will always return something valid */
-    secprops = mysasl_secprops();
+    secprops=make_secprops(0,2000);        
     sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops);
     
-    sasl_setprop(popd_saslconn, SASL_IP_REMOTE, &popd_remoteaddr);  
-    sasl_setprop(popd_saslconn, SASL_IP_LOCAL, &popd_localaddr);  
+    sasl_setprop(popd_saslconn,   SASL_IP_REMOTE, &popd_remoteaddr);  
+    sasl_setprop(popd_saslconn,   SASL_IP_LOCAL, &popd_localaddr);  
 
-    proc_register("pop3d", popd_clienthost, NULL, NULL);
+    proc_register("pop3d", popd_clienthost, (char *)0, (char *)0);
 
     /* Set inactivity timer */
     timeout = config_getint("poptimeout", 10);
@@ -243,22 +273,25 @@ int service_main(int argc, char **argv, char **envp)
     prot_settimeout(popd_in, timeout*60);
     prot_setflushonread(popd_in, popd_out);
 
+#ifdef HAVE_KRB
     if (kflag) kpop();
-
-    /* we were connected on pop3s port so we should do 
-       TLS negotiation immediatly */
-    if (pop3s == 1) cmd_starttls(1);
+#endif
 
     prot_printf(popd_out, "+OK %s Cyrus POP3 %s server ready\r\n",
-		config_servername, CYRUS_VERSION);
-    cmdloop();
+		hostname, CYRUS_VERSION);
 
-    return 0;
+    cmdloop();
 }
 
-void usage(void)
+usage()
 {
-    prot_printf(popd_out, "-ERR usage: pop3d [-k] [-s]\r\n");
+    prot_printf(popd_out, "-ERR usage: pop3d%s\r\n",
+#ifdef HAVE_KRB
+		" [-k]"
+#else
+		""
+#endif
+		);
     prot_flush(popd_out);
     exit(EC_USAGE);
 }
@@ -266,8 +299,7 @@ void usage(void)
 /*
  * Cleanly shut down and exit
  */
-void shut_down(int code) __attribute__ ((noreturn));
-
+void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     proc_cleanup();
@@ -298,7 +330,7 @@ void fatal(const char* s, int code)
  * MIT's kludge of a kpop protocol
  * Client does a krb_sendauth() first thing
  */
-void kpop(void)
+kpop()
 {
     Key_schedule schedule;
     KTEXT_ST ticket;
@@ -341,21 +373,16 @@ void kpop(void)
 	shut_down(0);
     }
 }
-#else
-void kpop(void)
-{
-    usage();
-}
 #endif
 
 /*
  * Top-level command loop parsing
  */
-static void cmdloop(void)
+cmdloop()
 {
     char inputbuf[8192];
     char *p, *arg;
-    unsigned msg = 0;
+    unsigned msg;
 
     for (;;) {
 	if (!prot_fgets(inputbuf, sizeof(inputbuf), popd_in)) {
@@ -367,12 +394,12 @@ static void cmdloop(void)
 	if (p > inputbuf && p[-1] == '\r') *--p = '\0';
 
 	/* Parse into keword and argument */
-	for (p = inputbuf; *p && !isspace((int) *p); p++);
+	for (p = inputbuf; *p && !isspace(*p); p++);
 	if (*p) {
 	    *p++ = '\0';
 	    arg = p;
 	    if (strcasecmp(inputbuf, "pass") != 0) {
-		while (*arg && isspace((int) *arg)) {
+		while (*arg && isspace(*arg)) {
 		    arg++;
 		}
 	    }
@@ -413,14 +440,6 @@ static void cmdloop(void)
 		prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	    } else {
 		cmd_capa();
-	    }
-	}
-	else if (!strcmp(inputbuf, "stls") && starttls_enabled()) {
-	    if (arg) {
-		prot_printf(popd_out,
-			    "-ERR STLS doesn't take any arguements\r\n");
-	    } else {
-		cmd_starttls(0);
 	    }
 	}
 	else if (!popd_mailbox) {
@@ -585,8 +604,7 @@ static void cmdloop(void)
 		prot_printf(popd_out, "+OK unique-id listing follows\r\n");
 		for (msg = 1; msg <= popd_exists; msg++) {
 		    if (!popd_msg[msg].deleted) {
-			prot_printf(popd_out, "%u %u\r\n", msg, 
-				    popd_msg[msg].uid);
+			prot_printf(popd_out, "%u %u\r\n", msg, popd_msg[msg].uid);
 		    }
 		}
 		prot_printf(popd_out, ".\r\n");
@@ -597,110 +615,6 @@ static void cmdloop(void)
 	}
     }		
 }
-
-#ifdef HAVE_SSL
-static int starttls_enabled(void)
-{
-    if (config_getstring("tls_cert_file", NULL) == NULL) return 0;
-    if (config_getstring("tls_key_file", NULL) == NULL) return 0;
-    return 1;
-}
-
-static void cmd_starttls(int pop3s)
-{
-    int result;
-    int *layerp;
-    sasl_external_properties_t external;
-
-
-    /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &(external.ssf);
-
-    if (popd_starttls_done == 1)
-    {
-	prot_printf(popd_out, "-ERR %s\r\n", 
-		    "Already successfully executed STLS");
-	return;
-    }
-
-    result=tls_init_serverengine(5,        /* depth to verify */
-				 !pop3s,   /* can client auth? */
-				 0,        /* require client to auth? */
-				 (char *)config_getstring("tls_ca_file", ""),
-				 (char *)config_getstring("tls_ca_path", ""),
-				 (char *)config_getstring("tls_cert_file", ""),
-				 (char *)config_getstring("tls_key_file", ""));
-
-    if (result == -1) {
-
-	syslog(LOG_ERR, "[pop3d] error initializing TLS: "
-	       "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
-	       (char *) config_getstring("tls_ca_file", ""),
-	       (char *) config_getstring("tls_ca_path", ""),
-	       (char *) config_getstring("tls_cert_file", ""),
-	       (char *) config_getstring("tls_key_file", ""));
-
-	if (pop3s == 0)
-	    prot_printf(popd_out, "-ERR %s\r\n", "Error initializing TLS");
-	else
-	    fatal("tls_init() failed",EC_TEMPFAIL);
-
-	return;
-    }
-
-    if (pop3s == 0)
-    {
-	prot_printf(popd_out, "+OK %s\r\n", "Begin TLS negotiation now");
-	/* must flush our buffers before starting tls */
-	prot_flush(popd_out);
-    }
-  
-    result=tls_start_servertls(0, /* read */
-			       1, /* write */
-			       layerp,
-			       &(external.auth_id));
-
-    /* if error */
-    if (result==-1) {
-	if (pop3s == 0) {
-	    prot_printf(popd_out, "-ERR Starttls failed\r\n");
-	    syslog(LOG_NOTICE, "[pop3d] STARTTLS failed: %s", popd_clienthost);
-	} else {
-	    syslog(LOG_NOTICE, "pop3s failed: %s", popd_clienthost);
-	    fatal("tls_start_servertls() failed", EC_TEMPFAIL);
-	}
-	return;
-    }
-
-    /* tell SASL about the negotiated layer */
-    result = sasl_setprop(popd_saslconn, SASL_SSF_EXTERNAL, &external);
-
-    if (result != SASL_OK) {
-	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
-    }
-
-    /* if authenticated set that */
-    if (external.auth_id != NULL) {
-	popd_userid = external.auth_id;
-    }
-
-    /* tell the prot layer about our new layers */
-    prot_settls(popd_in, tls_conn);
-    prot_settls(popd_out, tls_conn);
-
-    popd_starttls_done = 1;
-}
-#else
-static int starttls_enabled(void)
-{
-    return 0;
-}
-
-static void cmd_starttls(int pop3s __attribute__((unused)))
-{
-    fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
-}
-#endif /* HAVE_SSL */
 
 void
 cmd_user(user)
@@ -721,8 +635,8 @@ char *user;
     if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
 	shutdown_in = prot_new(fd, 0);
 	prot_fgets(buf, sizeof(buf), shutdown_in);
-	if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-	if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+	if (p = strchr(buf, '\r')) *p = 0;
+	if (p = strchr(buf, '\n')) *p = 0;
 
 	for(p = buf; *p == '['; p++); /* can't have [ be first char */
 	prot_printf(popd_out, "-ERR %s\r\n", p);
@@ -808,7 +722,7 @@ char *pass;
     else {
 	syslog(LOG_NOTICE, "login: %s %s plaintext %s",
 	       popd_clienthost, popd_userid, reply ? reply : "");
-	if ((plaintextloginpause = config_getint("plaintextloginpause", 0))!=0) {
+	if (plaintextloginpause = config_getint("plaintextloginpause", 0)) {
 	    sleep(plaintextloginpause);
 	}
     }
@@ -820,26 +734,29 @@ char *pass;
 void
 cmd_capa()
 {
+    int i;
     int minpoll = config_getint("popminpoll", 0) * 60;
     int expire = config_getint("popexpiretime", -1);
-    int mechcount;
-    char *mechlist;
-
+    const char *capabilities, *next_capabilities;
+    char *sasllist;
+    
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
 
-    /* SASL special case: print SASL, then a list of supported capabilities */
+#if 0
+    /* SASL special case: print SASL, then a list of supported capabilities
+       (parsed from the IMAP-style login_capabilities function, then a CRLF */
     if (sasl_listmech(popd_saslconn,
-		      NULL, /* should be id string */
-		      "SASL ", " ", "\r\n",
-		      &mechlist,
-		      NULL, &mechcount) == SASL_OK && mechcount > 0) {
-	prot_write(popd_out, mechlist, strlen(mechlist));
-	free(mechlist);
+			 "", /* should be id string */
+			 ""," ","",
+			 &sasllist,
+			 NULL,NULL)==SASL_OK)
+    {
+      prot_printf(popd_out, "SASL"); /* no \r\n */
+      prot_printf(popd_out," %s",sasllist);
+      prot_printf(popd_out, "\r\n");    
     }
+#endif
 
-    if (starttls_enabled()) {
-	prot_printf(popd_out, "STLS\r\n");
-    }
     if (expire < 0) {
 	prot_printf(popd_out, "EXPIRE NEVER\r\n");
     } else {
@@ -861,110 +778,109 @@ cmd_capa()
 }
 
 
-/* according to RFC 2449, since we advertise the "SASL" capability, we
- * must accept an optional second argument of the initial client
- * response (base64 encoded!).
- */ 
-void cmd_auth(char *arg)
+
+
+void
+cmd_auth(authtype)
+char *authtype;
 {
     int sasl_result;
-    static struct buf clientin;
+    char * clientin;
     int clientinlen=0;
-    char *authtype;
+    
     char *serverout;
     unsigned int serveroutlen;
     const char *errstr;
+    
+    const char *errorstring = NULL;
 
-    /* if client didn't specify an argument we give them the list */
-    if (!arg) {
-	char *sasllist;
-	unsigned int mechnum;
+    char buf[MAX_MAILBOX_PATH];
+    char *p;
+    FILE *logfile;
 
-	prot_printf(popd_out, "+OK List of supported mechanisms follows\r\n");
+    int *ssfp;
+    char *ssfmsg=NULL;
+
+   
+    /* if client didn't specify an auth mechanism we give them the list */
+    if (!authtype) {
+      char *sasllist;
+      unsigned int mechnum;
+
+      prot_printf(popd_out, "+OK List of supported mechanisms follows\r\n");
       
-	/* CRLF seperated, dot terminated */
-	if (sasl_listmech(popd_saslconn, NULL,
-			  "", "\r\n", "\r\n",
-			  &sasllist,
-			  NULL, &mechnum) == SASL_OK) {
-	    if (mechnum>0) {
-		prot_printf(popd_out,"%s",sasllist);
-	    }
-	}
+      /* SASL special case: print SASL, then a list of supported capabilities
+       * (parsed from the IMAP-style login_capabilities function, 
+       * then a CRLF */
+      if (sasl_listmech(popd_saslconn,
+			"", /* should be id string */
+			"","\r\n","\r\n",
+			&sasllist,
+			NULL,&mechnum) == SASL_OK) {
+	  if (mechnum>0) {
+	      prot_printf(popd_out,"%s",sasllist);
+	  }
+      }
       
-	prot_printf(popd_out, ".\r\n");
-      	return;
-    }
-
-    authtype = arg;
-    while (*arg && !isspace((int) *arg)) {
-	arg++;
-    }
-    if (isspace(*arg)) {
-	/* null terminate authtype, get argument */
-	*arg++ = '\0';
-    } else {
-	/* no optional client response */
-	arg = NULL;
-    }
-
-    /* if arg != NULL, it's an initial client response */
-    if (arg) {
-	int arglen = strlen(arg);
-
-	clientin.alloc = arglen + 1;
-	clientin.s = xmalloc(clientin.alloc);
-	sasl_result = sasl_decode64(arg, arglen, clientin.s, &clientinlen);
-    } else {
-	sasl_result = SASL_OK;
-	clientinlen = 0;
+      prot_printf(popd_out, ".\r\n");
+      
+      return;
     }
 
     /* server did specify a command, so let's try to authenticate */
-    if (sasl_result == SASL_OK || sasl_result == SASL_CONTINUE)
-	sasl_result = sasl_server_start(popd_saslconn, authtype,
-					clientin.s, clientinlen,
-					&serverout, &serveroutlen,
-					&errstr);
+
+    sasl_result = sasl_server_start(popd_saslconn, authtype,
+				    NULL, 0,
+				    &serverout, &serveroutlen,
+				    &errstr);    
+
     /* sasl_server_start will return SASL_OK or SASL_CONTINUE on success */
+
     while (sasl_result == SASL_CONTINUE)
     {
-	/* print the message to the user */
-	printauthready(popd_out, serveroutlen, (unsigned char *)serverout);
-	free(serverout);
 
-	/* get string from user */
-	clientinlen = getbase64string(popd_in, &clientin);
-	if (clientinlen == -1) {
-	    prot_printf(popd_out, "-ERR Invalid base64 string\r\n");
-	    return;
-	}
+      /* print the message to the user */
+      printauthready(serveroutlen, (unsigned char *)serverout);
+      free(serverout);
 
-	sasl_result = sasl_server_step(popd_saslconn,
-				       clientin.s,
-				       clientinlen,
-				       &serverout, &serveroutlen,
-				       &errstr);
+      /* get string from user */
+      clientinlen = readbase64string(&clientin);
+      if (clientinlen == -1) {
+	prot_printf(popd_out, "-ERR Invalid base64 string\r\n");
+	return;
+      }
+
+      sasl_result = sasl_server_step(popd_saslconn,
+				     clientin,
+				     clientinlen,
+				     &serverout, &serveroutlen,
+				     &errstr);
     }
+
 
     /* failed authentication */
     if (sasl_result != SASL_OK)
     {
-	sleep(3);      
+	syslog(LOG_NOTICE, "badlogin: %s %s %i",
+	       popd_clienthost, authtype, sasl_result);
 	
-	/* convert the sasl error code to a string */
-	if (!errstr) errstr = sasl_errstring(sasl_result, NULL, NULL);
-	if (!errstr) errstr = "unknown error";
-	
-	prot_printf(popd_out, "-ERR authenticating: %s\r\n", errstr);
-
-	if (authtype) {
+	if (clientin) {
 	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
-		   popd_clienthost, authtype, errstr);
+		   popd_clienthost, authtype, clientin);
 	} else {
 	    syslog(LOG_NOTICE, "badlogin: %s %s",
 		   popd_clienthost, authtype);
 	}
+	
+	sleep(3);      
+	
+	/* convert the sasl error code to a string */
+	errorstring = sasl_errstring(sasl_result, NULL, NULL);
+      
+	if (errorstring)
+	    prot_printf(popd_out, "-ERR %s\r\n",errorstring);
+	else
+	    prot_printf(popd_out, "-ERR Error Authenticating\r\n");
 	
 	return;
     }
@@ -974,31 +890,41 @@ void cmd_auth(char *arg)
     /* get the userid from SASL --- already canonicalized from
      * mysasl_authproc()
      */
+
     sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME,
-			       (void **) &popd_userid);
-    if (sasl_result != SASL_OK) {
-	prot_printf(popd_out, 
-		    "-ERR weird SASL error %d getting SASL_USERNAME\r\n", 
-		    sasl_result);
-	return;
+			     (void **) &popd_userid);
+    if (sasl_result!=SASL_OK)
+    {
+      prot_printf(popd_out, "-ERR weird SASL error %d getting SASL_USERNAME\r\n", 
+		  sasl_result);
+      return;
     }
-    
-    if (openinbox()==0) {
-	proc_register("pop3d", popd_clienthost, 
-		      popd_userid, popd_mailbox->name);    
 
-	syslog(LOG_NOTICE, "login: %s %s %s %s", popd_clienthost, popd_userid,
-	       authtype, "User logged in");
+    syslog(LOG_NOTICE, "login: %s %s %s sasl code=%d", popd_clienthost, popd_userid,
+	   authtype, sasl_result);
 
-	prot_setsasl(popd_in,  popd_saslconn);
-	prot_setsasl(popd_out, popd_saslconn);
+    /* xxx here */
+    if (openinbox()==0)
+    {
+
+      proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);    
+
+      syslog(LOG_NOTICE, "login: %s %s %s %s", popd_clienthost, popd_userid,
+	     authtype, "User logged in");
+
+
+      prot_setsasl(popd_in,  popd_saslconn);
+      prot_setsasl(popd_out, popd_saslconn);
+
     }
+
 }
+    
 
 /*
  * Complete the login process by opening and locking the user's inbox
  */
-int openinbox(void)
+int openinbox()
 {
     char inboxname[MAX_MAILBOX_PATH];
     int r, msg;
@@ -1055,7 +981,7 @@ int openinbox(void)
 	popd_highest = 0;
 	popd_msg = (struct msg *)xmalloc((popd_exists+1) * sizeof(struct msg));
 	for (msg = 1; msg <= popd_exists; msg++) {
-	    if ((r = mailbox_read_index_record(&mboxstruct, msg, &record))!=0)
+	    if (r = mailbox_read_index_record(&mboxstruct, msg, &record))
 	      break;
 	    popd_msg[msg].uid = record.uid;
 	    popd_msg[msg].size = record.size;
@@ -1076,8 +1002,8 @@ int openinbox(void)
     proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, popd_userid,
-	    (long unsigned) getpid());
+    sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, popd_userid,
+	    getpid());
     logfile = fopen(buf, "w");
     if (logfile) {
 	prot_setlog(popd_in, fileno(logfile));
@@ -1088,7 +1014,9 @@ int openinbox(void)
     return 0;
 }
 
-static void blat(int msg,int lines)
+blat(msg, lines)
+int msg;
+int lines;
 {
     FILE *msgfile;
     char buf[4096];
@@ -1123,21 +1051,22 @@ static void blat(int msg,int lines)
     prot_printf(popd_out, ".\r\n");
 }
 
-static int parsenum(char **ptr)
+int parsenum(ptr)
+char **ptr;
 {
     char *p = *ptr;
     int result = 0;
 
-    if (!isdigit((int) *p)) {
+    if (!isdigit(*p)) {
 	*ptr = 0;
 	return -1;
     }
-    while (*p && isdigit((int) *p)) {
+    while (*p && isdigit(*p)) {
 	result = result * 10 + *p++ - '0';
     }
 
     if (*p) {
-	while (*p && isspace((int) *p)) p++;
+	while (*p && isspace(*p)) p++;
 	*ptr = p;
     }
     else *ptr = 0;
@@ -1160,12 +1089,237 @@ char *index;
 }
 
 /*
+ * Print an authentication ready response
+ */
+static char basis_64[] =
+   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+printauthready(len, data)
+int len;
+unsigned char *data;
+{
+    int c1, c2, c3;
+
+    prot_putc('+', popd_out);
+    prot_putc(' ', popd_out);
+    while (len) {
+	c1 = *data++;
+	len--;
+	prot_putc(basis_64[c1>>2], popd_out);
+	if (len == 0) c2 = 0;
+	else c2 = *data++;
+	prot_putc(basis_64[((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4)], popd_out);
+	if (len == 0) {
+	    prot_putc('=', popd_out);
+	    prot_putc('=', popd_out);
+	    break;
+	}
+
+	if (--len == 0) c3 = 0;
+	else c3 = *data++;
+        prot_putc(basis_64[((c2 & 0xF) << 2) | ((c3 & 0xC0) >>6)], popd_out);
+	if (len == 0) {
+	    prot_putc('=', popd_out);
+	    break;
+	}
+	
+	--len;
+        prot_putc(basis_64[c3 & 0x3F], popd_out);
+    }
+    prot_putc('\r', popd_out);
+    prot_putc('\n', popd_out);
+    prot_flush(popd_out);
+}
+
+#define XX 127
+/*
+ * Table for decoding base64
+ */
+static const char index_64[256] = {
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, XX,XX,XX,63,
+    52,53,54,55, 56,57,58,59, 60,61,XX,XX, XX,XX,XX,XX,
+    XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
+    15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,XX,
+    XX,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
+    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+};
+#define CHAR64(c)  (index_64[(unsigned char)(c)])
+
+#define BUFGROWSIZE 100
+
+/*
+ * Parse a base64_string
+ */
+int readbase64string(ptr)
+char **ptr;
+{
+    int c1, c2, c3, c4;
+    int i, len = 0;
+    static char *buf;
+    static int alloc = 0;
+
+    if (alloc == 0) {
+	alloc = BUFGROWSIZE;
+	buf = xmalloc(alloc+1);
+    }
+	
+    for (;;) {
+	c1 = prot_getc(popd_in);
+	if (c1 == '\r') {
+	    c1 = prot_getc(popd_in);
+	    if (c1 != '\n') {
+		eatline();
+		return -1;
+	    }
+	    *ptr = buf;
+	    return len;
+	}
+	else if (c1 == '\n') {
+	    *ptr = buf;
+	    return len;
+	}
+
+	if (CHAR64(c1) == XX) {
+	    eatline();
+	    return -1;
+	}
+	
+	c2 = prot_getc(popd_in);
+	if (CHAR64(c2) == XX) {
+	    if (c2 != '\n') eatline();
+	    return -1;
+	}
+
+	c3 = prot_getc(popd_in);
+	if (c3 != '=' && CHAR64(c3) == XX) {
+	    if (c3 != '\n') eatline();
+	    return -1;
+	}
+
+	c4 = prot_getc(popd_in);
+	if (c4 != '=' && CHAR64(c4) == XX) {
+	    if (c4 != '\n') eatline();
+	    return -1;
+	}
+
+	if (len+3 >= alloc) {
+	    alloc = len+BUFGROWSIZE;
+	    buf = xrealloc(buf, alloc+1);
+	}
+
+	buf[len++] = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+	if (c3 == '=') {
+	    c1 = prot_getc(popd_in);
+	    if (c1 == '\r') c1 = prot_getc(popd_in);
+	    if (c1 != '\n') {
+		eatline();
+		return -1;
+	    }
+	    if (c4 != '=') return -1;
+	    *ptr = buf;
+	    return len;
+	}
+	buf[len++] = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
+	if (c4 == '=') {
+	    c1 = prot_getc(popd_in);
+	    if (c1 == '\r') c1 = prot_getc(popd_in);
+	    if (c1 != '\n') {
+		eatline();
+		return -1;
+	    }
+	    *ptr = buf;
+	    return len;
+	}
+	buf[len++] = (((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
+    }
+}
+
+/*
+ * Parse a base64_string
+ */
+int parsebase64string(ptr, s)
+char **ptr;
+const char *s;
+{
+    int c1, c2, c3, c4;
+    int i, len = 0;
+    static char *buf;
+    static int alloc = 0;
+
+    if (alloc == 0) {
+	alloc = BUFGROWSIZE;
+	buf = xmalloc(alloc+1);
+    }
+	
+    for (;;) {
+	c1 = *s++;
+	if (c1 == '\0') {
+	    *ptr = buf;
+	    return len;
+	}
+
+	if (CHAR64(c1) == XX) {
+	    return -1;
+	}
+	
+	c2 = *s++;
+	if (CHAR64(c2) == XX) {
+	    return -1;
+	}
+
+	c3 = *s++;
+	if (c3 != '=' && CHAR64(c3) == XX) {
+	    return -1;
+	}
+
+	c4 = *s++;
+	if (c4 != '=' && CHAR64(c4) == XX) {
+	    return -1;
+	}
+
+	if (len+3 >= alloc) {
+	    alloc = len+BUFGROWSIZE;
+	    buf = xrealloc(buf, alloc+1);
+	}
+
+	buf[len++] = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+	if (c3 == '=') {
+	    c1 = *s++;
+	    if (c1 != '\0') {
+		return -1;
+	    }
+	    if (c4 != '=') return -1;
+	    *ptr = buf;
+	    return len;
+	}
+	buf[len++] = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
+	if (c4 == '=') {
+	    c1 = *s++;
+	    if (c1 != '\0') {
+		return -1;
+	    }
+	    *ptr = buf;
+	    return len;
+	}
+	buf[len++] = (((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
+    }
+}
+
+/*
  * Eat characters up to and including the next newline
  */
-void eatline(void)
+eatline()
 {
     int c;
 
-    while ((c = prot_getc(popd_in)) != EOF && c != '\n')
-    { }
+    while ((c = prot_getc(popd_in)) != EOF && c != '\n');
 }
