@@ -37,7 +37,9 @@
 #else
 #include <varargs.h>
 #endif
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <netinet/in.h>
