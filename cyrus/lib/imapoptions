@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.1.2.3 2003/03/02 19:59:18 ken3 Exp $
+.\" $Id: imapoptions,v 1.1.2.4 2003/03/02 20:02:08 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -332,7 +332,7 @@ are listed with ``<none>''.
    "peer.example.com:*,!control.*,@local.*" would feed all groups
    except control messages and local groups to peer.example.com.  In
    the case of cross-posting to local groups, these articles would not
-   be fed */
+   be fed. */
 
 { "newspostuser", "post", STRING }
 /* Userid used to deliver usenet articles to newsgroup folders.  For
