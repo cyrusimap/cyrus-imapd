@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: mupdatetest.1,v 1.5 2003/10/22 18:50:13 rjs3 Exp $
+.\" $Id: mupdatetest.1,v 1.6 2004/12/16 15:49:08 ken3 Exp $
 .\"
 .SH NAME
 mupdatetest \- interactive MUPDATE test program
@@ -55,12 +55,12 @@ mupdatetest \- interactive MUPDATE test program
 ]
 .br
             [
-.B \-u
-.I user
+.B \-a
+.I userid
 ]
 [
-.B \-a
-.I user
+.B \-u
+.I userid
 ]
 [
 .B \-k
@@ -88,6 +88,9 @@ mupdatetest \- interactive MUPDATE test program
 ]
 .br
             [
+.B \-i
+]
+[
 .B \-o
 \fIoption\fB=\fIvalue\fR
 ]
@@ -116,11 +119,16 @@ Force mupdatetest to use \fImechanism\fR for authentication. If not specified
 the strongest authentication mechanism supported by the server is
 chosen.
 .TP
-.BI -u " user"
-Username to use for authentication; defaults to the current user.
+.BI -a " userid"
+Userid to use for authentication; defaults to the current user.
+This is the userid whose password or credentials will be presented to
+the server for verification.
 .TP
-.BI -a " user"
-Authname to use for authentication; defaults to the current user.
+.BI -u " userid"
+Userid to use for authorization; defaults to the current user.
+This is the userid whose identity will be assumed after authentication.
+\fBNOTE:\fR This is only used with SASL mechanisms that allow proxying
+(e.g. PLAIN, DIGEST-MD5).
 .TP
 .BI -k " num"
 Minimum protection layer required.
@@ -147,6 +155,10 @@ attempt to fast reauth (e.g. DIGEST-MD5), if possible.
 Enable challenge prompt callbacks.  This will cause the OTP mechanism
 to ask for the the one-time password instead of the secret pass-phrase
 (library generates the correct response).
+.TP
+.B -i
+Don't send an initial client response for SASL mechanisms, even if the
+protocol supports it.
 .TP
 \fB-o \fIoption\fB=\fIvalue\fR
 Set the SASL \fIoption\fR to \fIvalue\fR.

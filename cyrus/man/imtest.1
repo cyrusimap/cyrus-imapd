@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imtest.1,v 1.13 2003/10/22 18:50:13 rjs3 Exp $
+.\" $Id: imtest.1,v 1.14 2004/12/16 15:49:08 ken3 Exp $
 .SH NAME
 imtest \- interactive IMAP test program
 .SH SYNOPSIS
@@ -58,12 +58,12 @@ imtest \- interactive IMAP test program
 ]
 .br
        [
-.B \-u
-.I user
+.B \-a
+.I userid
 ]
 [
-.B \-a
-.I user
+.B \-u
+.I userid
 ]
 [
 .B \-k
@@ -146,11 +146,16 @@ Force imtest to use \fImechanism\fR for authentication. If not specified
 the strongest authentication mechanism supported by the server is
 chosen.  Specify \fBlogin\fR to use the LOGIN command instead of AUTHENTICATE.
 .TP
-.BI -u " user"
-Username to use for authentication; defaults to the current user.
+.BI -a " userid"
+Userid to use for authentication; defaults to the current user.
+This is the userid whose password or credentials will be presented to
+the server for verification.
 .TP
-.BI -a " user"
-Authname to use for authentication; defaults to the current user.
+.BI -u " userid"
+Userid to use for authorization; defaults to the current user.
+This is the userid whose identity will be assumed after authentication.
+\fBNOTE:\fR This is only used with SASL mechanisms that allow proxying
+(e.g. PLAIN, DIGEST-MD5).
 .TP
 .BI -k " num"
 Minimum protection layer required.
@@ -182,7 +187,7 @@ Enable challenge prompt callbacks.  This will cause the OTP mechanism
 to ask for the the one-time password instead of the secret pass-phrase
 (library generates the correct response).
 .TP
-.B -c
+.B -i
 Don't send an initial client response for SASL mechanisms, even if the
 protocol supports it.
 .TP
