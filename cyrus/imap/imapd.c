@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.225 2000/04/07 19:50:54 leg Exp $ */
+/* $Id: imapd.c,v 1.226 2000/04/11 03:34:37 leg Exp $ */
 
 #include <config.h>
 
@@ -1550,9 +1550,7 @@ void cmd_capability(char *tag)
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
-    prot_printf(imapd_out,
-     "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS"
-     " NO_ATOMIC_RENAME UNSELECT MULTIAPPEND");
+    prot_printf(imapd_out, "* CAPABILITY " CAPABILITY_STRING);
     if (starttls_enabled())
 	prot_printf(imapd_out, " STARTTLS");
     if (!imapd_starttls_done && !config_getswitch("allowplaintext", 1))
@@ -1794,11 +1792,7 @@ cmd_append(char *tag, char *name)
 /*
  * Perform a SELECT/EXAMINE/BBOARD command
  */
-void
-cmd_select(tag, cmd, name)
-char *tag;
-char *cmd;
-char *name;
+void cmd_select(char *tag, char *cmd, char *name)
 {
     struct mailbox mailbox;
     char mailboxname[MAX_MAILBOX_NAME+1];
