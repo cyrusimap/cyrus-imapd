@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.38 2003/06/16 15:40:15 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.39 2003/06/17 14:11:06 ken3 Exp $
  */
 
 #include <config.h>
@@ -1187,6 +1187,8 @@ int annotatemore_lookup(const char *mboxname, const char *entry,
     char key[MAX_MAILBOX_PATH+1];
     int keylen, datalen, r;
     const char *data;
+
+    memset(attrib, 0, sizeof(struct annotation_data));
 
     keylen = make_key(mboxname, entry, userid, key, sizeof(key));
 
