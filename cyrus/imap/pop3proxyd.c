@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.33 2002/02/27 00:35:50 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.34 2002/02/27 01:58:03 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1013,10 +1013,11 @@ void cmd_auth(char *arg)
     syslog(LOG_NOTICE, "login: %s %s %s %s", popd_clienthost, popd_userid,
 	   authtype, "User logged in");
     
+    openproxy();
+
     prot_setsasl(popd_in,  popd_saslconn);
     prot_setsasl(popd_out, popd_saslconn);
 
-    openproxy();
     popd_auth_done = 1;
 }
 
