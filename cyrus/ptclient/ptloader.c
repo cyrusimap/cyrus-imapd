@@ -34,7 +34,8 @@ main()
     char fnamebuf[1024];
     mode_t oldumask;
 
-    openlog(PTCLIENT, LOG_PID, LOG_LOCAL6);
+    /* normally LOCAL6, but do this while we're logging keys */
+    openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
     
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
@@ -81,6 +82,7 @@ newclient(c)
 int c;
 {
     char fnamebuf[1024];
+    char keyinhex[33];
     const char *reply;
     HASHINFO info;
     DB * ptdb;
@@ -123,6 +125,9 @@ int c;
     }
     printf("\n");
 #endif
+    for (i=0; i<size; i++) 
+      sprintf(keyinhex+2*i, "%.2x", indata[i]);
+    syslog(LOG_DEBUG, "user %s, cacheid %s", user, keyinhex);
     info.hash = hashfn;
     info.lorder = 0;
     info.bsize = 2048;
