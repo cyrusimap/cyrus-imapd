@@ -1,8 +1,8 @@
 #! /bin/sh
-##  $Revision: 1.1 $
+##  $Revision: 1.2 $
 ##  Send news to Cyrus IMAPD
 ##  =()<. @<_PATH_SHELLVARS>@>()=
-. /usr/news/innshellvars
+. @INNSHELLVARS@
 
 PROGNAME=`basename $0`
 LOCK=${LOCKS}/LOCK.${PROGNAME}
