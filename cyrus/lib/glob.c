@@ -59,7 +59,7 @@ glob *glob_init(str, flags)
 	if (flags & GLOB_SUBSTRING) {
 	    /* skip over unneeded glob prefixes (3,4) */
 	    if (newglob) {
-		while (*str == '%' || *str == '*') ++str;
+		while (*str == '*' || (*str == '%' && str[1])) ++str;
 	    } else {
 		while (*str == '%' || *str == '*' || *str == '?') {
 		    if (*str++ != '*') *dst++ = '?';
@@ -88,7 +88,7 @@ glob *glob_init(str, flags)
 		    /* If we found a '*', treat '%' as '*' (4) */
 		    if (*str == '*') {
 			/* remove duplicate wildcards (4) */
-			while (*str == '*' || *str == '%') ++str;
+			while (*str == '*' || (*str == '%' && str[1])) ++str;
 			*dst++ = '*';
 		    } else {
 			*dst++ = '%';
@@ -170,6 +170,10 @@ int glob_test(g, ptr, len, min)
 			*min = gstar ? ptr - start + 1 : -1;
 			return (ptr - start);
 		    }
+		    if (gstar && *gstar == '%' && ptr < pend) {
+			pstar = ++ptr;
+			--gptr;
+		    }
 		} else {
 		    ghier = gptr;
 		    phier = ptr;
@@ -181,7 +185,7 @@ int glob_test(g, ptr, len, min)
 		if (phier == pend) break;
 		ptr = ++phier;
 		gptr = ghier + 1;
-	    } else if (gstar) {
+	    } else if (gstar && *gstar != '%') {
 		/* look for a match with first char following '*' */
 		while (pstar != pend && *gstar != *pstar) ++pstar;
 		if (pstar == pend) break;
@@ -218,6 +222,10 @@ int glob_test(g, ptr, len, min)
 			*min = gstar ? ptr - start + 1 : -1;
 			return (ptr - start);
 		    }
+		    if (gstar && *gstar == '%' && ptr < pend) {
+			pstar = ++ptr;
+			--gptr;
+		    }
 		} else {
 		    ghier = gptr;
 		    phier = ptr;
@@ -229,7 +237,7 @@ int glob_test(g, ptr, len, min)
 		if (phier == pend) break;
 		ptr = ++phier;
 		gptr = ghier + 1;
-	    } else if (gstar) {
+	    } else if (gstar && *gstar != '%') {
 		/* look for a match with first char following '*' */
 		while (pstar != pend && *gstar != TOLOWER(*pstar)) ++pstar;
 		if (pstar == pend) break;
