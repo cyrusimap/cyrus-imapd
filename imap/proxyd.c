@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.34 2000/06/01 23:01:47 leg Exp $ */
+/* $Id: proxyd.c,v 1.35 2000/06/04 22:28:18 leg Exp $ */
 
 #include <config.h>
 
@@ -549,7 +549,7 @@ static int proxy_authenticate(struct backend *s)
 	return r;
     }
 
-    secprops = mysasl_secprops(0);
+    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, secprops);
     if (r != SASL_OK) {
 	return r;

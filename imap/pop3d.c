@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.72 2000/05/29 03:02:59 leg Exp $
+ * $Id: pop3d.c,v 1.73 2000/06/04 22:28:17 leg Exp $
  */
 #include <config.h>
 
@@ -243,7 +243,7 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
     /* will always return something valid */
-    secprops = mysasl_secprops(0);
+    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops);
     
     sasl_setprop(popd_saslconn, SASL_IP_REMOTE, &popd_remoteaddr);  
