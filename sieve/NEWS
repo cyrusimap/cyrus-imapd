@@ -1,4 +1,24 @@
-$Id: NEWS,v 1.3 1999/07/31 21:49:39 leg Exp $
+$Id: NEWS,v 1.4 2000/05/17 15:47:06 ken3 Exp $
+
+CMU Sieve 2.0
+-------------
+
+- Compliant with draft-showalter-sieve-11.txt and 
+  draft-showalter-sieve-vacation-03.txt.
+
+- Added support for the regex, imapflags, notify and subaddress extensions.
+  See README for references.
+
+- Verifies email addresses in redirect and vacation actions are syntactically
+  correct (compliant with RFC822).
+
+- Run-time error reporting.
+
+- Changed callback interface to use callback contexts instead of individual
+  parameters.  Also added an error string buffer for run-time error reporting.
+
+- Vacation will not reply to any message containing an "auto-submitted"
+  header containing anything other than "no".
 
 CMU Sieve 1.4
 -------------
