@@ -76,178 +76,75 @@
 #include "exitcodes.h"
 #include "xmalloc.h"
 #include "util.h"
+#include "cyrusdb.h"
 
 #include "duplicate.h"
 
-/* it would be nice to cache some DBs so that we're not constantly
-   opening and closing them; something to be evaluated */
+#define DB CONFIG_DB_DELIVER
 
-static int duplicate_dbinit = 0;
-DB_ENV *duplicate_dbenv;
-
-static void db_err(const char *db_prfx, char *buffer)
-{
-    syslog(LOG_ERR, "DBERROR %s: %s", db_prfx, buffer);
-}
-
-static int nuke_dir(char *dir)
-{
-    DIR *dirp;
-    struct dirent *dirent;
-
-    if (chdir(dir) == -1) {
-	if (!mkdir(dir, 0755)) return 0;
-	else return IMAP_IOERROR;
-    }
-    dirp = opendir(".");
-    if (!dirp) return IMAP_IOERROR;
-
-    while ((dirent = readdir(dirp)) != NULL) {
-	unlink(dirent->d_name);
-    }
-    closedir(dirp);
-    
-    return 0;
-}
 
 int duplicate_init(int myflags)
 {
     char buf[1024];
     int r = 0;
     int flags = 0;
-    int do_retry = 1;
 
-    assert(!duplicate_dbinit);
-
-    sprintf(buf, "%s/deliverdb/db", config_dir);
-    if (myflags & DUPLICATE_RECOVER) {
-	/* remove the database environment; it'll be recreated */
-	r = nuke_dir(buf);
-	if (r) return r;
-    }
-    if ((r = db_env_create(&duplicate_dbenv, 0)) != 0) {
-	syslog(LOG_ERR, "DBERROR: db_appinit failed: %s", strerror(r));
-	return IMAP_IOERROR;
-    }
-
- retry:
-    flags |= DB_INIT_CDB | DB_INIT_MPOOL;
     /* create the name of the db file */
-#if (DB_VERSION_MINOR > 0)
-    r = duplicate_dbenv->open(duplicate_dbenv, buf, flags, 0644);
-#else
-    r = duplicate_dbenv->open(duplicate_dbenv, buf, NULL, flags, 0644);
-#endif
-    if (r) {
-        if (do_retry && (r == ENOENT)) {
-	  /* Don't pass in DB_CREATE unless necessary. See comment in 
-	     cyrusdb_db3.c for details 
-	  */
-	  flags |= DB_CREATE;
-	  do_retry = 0;
-	  goto retry;
-        }
-	syslog(LOG_ERR, "DBERROR: dbenv->open failed: %s", strerror(r));
-	return IMAP_IOERROR;
-    }
+    strcpy(buf, config_dir);
+    strcat(buf, FNAME_DBDIR);
+    if (myflags & DUPLICATE_RECOVER) flags |= CYRUSDB_RECOVER;
+    r = DB->init(buf, flags);
 
-    duplicate_dbenv->set_errpfx(duplicate_dbenv, "dup");
-    duplicate_dbenv->set_errcall(duplicate_dbenv, db_err);
-
-    duplicate_dbinit = 1;
-
-    return 0;
+    return r;
 }
-
-/* too many processes are contending for single locks on delivered.db 
- * so we use this function to generate a specific delivered.db for a mailbox
- * First pass will be to just have 26 db files based on the first letter of 
- * the mailbox name. As distribution goes, this really blows but, hey, what do 
- * you expect from something quick and dirty?
- * 'buf' should be at least 1024
- */
-static char *get_db_name (char *mbox, char *buf)
-{
-    char *idx;
-    char c;
-  
-    idx = strchr(mbox,'.');   /* skip past user. */
-    if (idx == NULL) {         /* no '.' so just use mbox */
-	idx = mbox;
-    } else {
-	idx++;                   /* skip past '.' */
-    }
-    c = (char) dir_hash_c(idx);
-
-    snprintf(buf, 1024, "%s/deliverdb/deliver-%c.db", config_dir, c);
-
-    return buf;
-}
-
 
 time_t duplicate_check(char *id, int idlen, char *to, int tolen)
 {
     char buf[1024];
     char fname[1024];
-    int flags = 0;
-    DB *d;
-    DBT date, delivery;
-    int r, do_retry = 1;
-    time_t mark;
-
-    assert(duplicate_dbinit);
-    (void)memset(&date, 0, sizeof(date));
-    (void)memset(&delivery, 0, sizeof(delivery));
+    struct db *db;
+    int r;
+    const char *data = NULL;
+    int len = 0;
+    time_t mark = 0;
 
     if (idlen + tolen > sizeof(buf) - 30) return 0;
     memcpy(buf, id, idlen);
     buf[idlen] = '\0';
     memcpy(buf + idlen + 1, to, tolen);
     buf[idlen + tolen + 1] = '\0';
-    delivery.data = buf;
-    delivery.size = idlen + tolen + 2;
-          /* +2 b/c 1 for the center null; +1 for the terminating null */
 
-    get_db_name(to, fname);
+    /* create the name of the db file */
+    strcpy(fname, config_dir);
+    strcat(fname, FNAME_DELIVERDB);
 
-    r = db_create(&d, duplicate_dbenv, 0);
-    if (r != 0) {
-	syslog(LOG_ERR, "duplicate_check: db_create %s: %s", fname,
-	       db_strerror(r));
-	return 0;
+    /* fetch the entry from our database */
+    r = DB->open(fname, &db);
+    if (r != CYRUSDB_OK) {
+	syslog(LOG_ERR, "DBERROR: opening %s: %s",
+	       fname, cyrusdb_strerror(r));
+    }
+    else {
+	do {
+	    r = DB->fetch(db, buf,
+			  idlen + tolen + 2, /* +2 b/c 1 for the center null;
+						+1 for the terminating null */
+			  &data, &len, NULL);
+	} while (r == CYRUSDB_AGAIN);
+	DB->close(db);
     }
 
- retry:
-    r = d->open(d, fname, NULL, DB_HASH, flags, 0664);
-    if (r != 0) {
-        if (do_retry && (r == ENOENT)) {
-	  flags |= DB_CREATE;
- 	  do_retry = 0;
-	  goto retry;
-        }
-	syslog(LOG_ERR, "duplicate_check: opening %s: %s", fname,
-	       db_strerror(r));
-	return 0;
-    }
-
-    r = d->get(d, NULL, &delivery, &date, 0);
-    if (r == 0) {
+    if (data) {
 	/* found the record */
-	memcpy(&mark, date.data, sizeof(time_t));
-    } else if (r == DB_NOTFOUND) {
-	mark = 0;
-    } else {
+	memcpy(&mark, data, sizeof(time_t));
+    } else if (r != CYRUSDB_OK) {
 	syslog(LOG_ERR, "duplicate_check: error looking up %s/%d: %s", id, to,
-	       db_strerror(r));
+	       cyrusdb_strerror(r));
 	mark = 0;
     }
 
-    r = d->close(d, 0);
-    if (r != 0) {
-	syslog(LOG_ERR, "duplicate_check: closing %s: %s", fname, 
-	       db_strerror(r));
-	return 0;
-    }
+    syslog(LOG_DEBUG, "duplicate_check: %-40s %-20s %d",
+	   buf, buf+idlen+1, mark);
 
     return mark;
 }
@@ -256,155 +153,110 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
 {
     char buf[1024];
     char fname[1024];
-    DB *d;
-    DBT date, delivery;
+    struct db *db;
     int r;
-    int flags = 0;
-    int do_retry = 1;
-
-    assert(duplicate_dbinit);
-    (void)memset(&date, 0, sizeof(date));
-    (void)memset(&delivery, 0, sizeof(delivery));
 
     if (idlen + tolen > sizeof(buf) - 30) return;
     memcpy(buf, id, idlen);
     buf[idlen] = '\0';
     memcpy(buf + idlen + 1, to, tolen);
     buf[idlen + tolen + 1] = '\0';
-    delivery.data = buf;
-    delivery.size = idlen + tolen + 2;
-          /* +2 b/c 1 for the center null; +1 for the terminating null */
 
-    date.data = &mark;
-    date.size = sizeof(mark);
+    /* create the name of the db file */
+    strcpy(fname, config_dir);
+    strcat(fname, FNAME_DELIVERDB);
 
-    get_db_name(to, fname);
-
-    r = db_create(&d, duplicate_dbenv, 0);
-    if (r != 0) {
-	syslog(LOG_ERR, "duplicate_mark: db_create %s: %s", fname,
-	       db_strerror(r));
-	return;
+    r = DB->open(fname, &db);
+    if (r != CYRUSDB_OK) {
+	syslog(LOG_ERR, "DBERROR: opening %s: %s",
+	       fname, cyrusdb_strerror(r));
     }
- retry:
-    r = d->open(d, fname, NULL, DB_HASH, flags, 0664);
-    if (r != 0) {
-        if (do_retry && (r == ENOENT)) {
-	  flags |= DB_CREATE;
-	  do_retry = 0;
-	  goto retry;
-        }
-	syslog(LOG_ERR, "duplicate_mark: opening %s: %s", fname,
-	       db_strerror(r));
-	return;
+    else {
+	do {
+	    r = DB->store(db, buf,
+			  idlen + tolen + 2, /* +2 b/c 1 for the center null;
+						+1 for the terminating null */
+			  (char *) &mark, sizeof(mark), NULL);
+	} while (r == CYRUSDB_AGAIN);
+	DB->close(db);
     }
 
-    r = d->put(d, NULL, &delivery, &date, 0);
-    if (r != 0) {
-	syslog(LOG_ERR, "duplicate_mark: error setting %s/%d: %s", id, to,
-	       db_strerror(r));
-	mark = 0;
-    }
-
-    r = d->close(d, 0);
-    if (r != 0) {
-	syslog(LOG_ERR, "duplicate_mark: closing %s: %s", fname,
-	       db_strerror(r));
-	return;
-    }
+    syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %d",
+	   buf, buf+idlen+1, mark);
 
     return;
 }
 
+struct prunerock {
+    struct db *db;
+    time_t expmark;
+    int count;
+    int deletions;
+};
+
+static int find_p(void *rock, const char *id, int idlen,
+		  const char *data, int datalen)
+{
+    time_t mark;
+    struct prunerock *prock = (struct prunerock *) rock;
+
+    prock->count++;
+
+    /* grab the mark */
+    memcpy(&mark, data, sizeof(time_t));
+
+    /* check if we should prune this entry */
+    return (mark < prock->expmark);
+}
+
+static int find_cb(void *rock, const char *id, int idlen,
+		   const char *data, int datalen)
+{
+    struct prunerock *prock = (struct prunerock *) rock;
+    int r;
+
+    prock->deletions++;
+
+    do {
+	r = DB->delete(prock->db, id, idlen, NULL);
+    } while (r == CYRUSDB_AGAIN);
+
+
+    return 0;
+}
 
 int duplicate_prune(int days)
 {
+    char fname[1024];
     int r;
-    DB *d;
-    DBC *cursor = NULL;
-    DBT delivery, date;
-    time_t mark, expmark;
-    int c;
+    struct db *db;
+    struct prunerock prock;
 
     if (days < 0) fatal("must specify positive number of days", EC_USAGE);
 
-    memset(&delivery, 0, sizeof(delivery));
-    memset(&date, 0, sizeof(date));
-
-    expmark = time(NULL) - (days * 60 * 60 * 24);
+    prock.count = prock.deletions = 0;
+    prock.expmark = time(NULL) - (days * 60 * 60 * 24);
     syslog(LOG_NOTICE, "duplicate_prune: pruning back %d days", days);
     
-#ifdef USE_DIR_FULL
-    for (c = DIR_A; c < DIR_A + DIR_P; c++) {
-#else
-    for (c = 'a'; c <= 'z'; c++) {
-#endif
-	char fname[1024];
-	int count = 0, deletions = 0;
+   /* create the name of the db file */
+    strcpy(fname, config_dir);
+    strcat(fname, FNAME_DELIVERDB);
 
-	sprintf(fname, "%s/deliverdb/deliver-%c.db", config_dir, c);
-	r = db_create(&d, duplicate_dbenv, 0);
-	if (r != 0) {
-	    syslog(LOG_ERR, "duplicate_prune: db_create: %s", db_strerror(r));
-	    return 1;
-	}
-	
-	r = d->open(d, fname, NULL, DB_HASH, 0, 0664);
-	if (r == ENOENT) {
-	    syslog(LOG_NOTICE, "creating %s", fname);
-	    r = d->open(d, fname, NULL, DB_HASH, DB_CREATE, 0664);
-	}
-	if (r != 0) {
-	    /* might just not exist */
-	    syslog(LOG_NOTICE, "duplicate_prune: opening %s: %s", fname,
-		   db_strerror(r));
-	    continue;
-	}
-	
-	r = d->cursor(d, NULL, &cursor, DB_WRITECURSOR);
-	if (r != 0) { 
-	    syslog(LOG_ERR, "duplicate_prune: unable to create cursor: %s",
-		    db_strerror(r));
-	    goto closedb;
-	}
-
-	r = cursor->c_get(cursor, &delivery, &date, DB_FIRST);
-	while (r != DB_NOTFOUND) {
-	    if (r != 0) {
-		syslog(LOG_ERR, "duplicate_prune: error advancing: %s", 
-		       db_strerror(r));
-		break;
-	    }
-
-	    count++;
-	    memcpy(&mark, date.data, sizeof(time_t));
-	    if (mark < expmark) {
-		deletions++;
-		r = cursor->c_del(cursor, 0);
-		if (r != 0) {
-		    syslog(LOG_ERR, "duplicate_prune: error deleting: %s",
-			   db_strerror(r));
-		}
-	    }
-
-	    r = cursor->c_get(cursor, &delivery, &date, DB_NEXT);
-	}
-	r = cursor->c_close(cursor);
-	if (r != 0) {
-	    syslog(LOG_ERR, "duplicate_prune: error closing cursor: %s",
-		   db_strerror(r));
-	}
-
-    closedb:
-	r = d->close(d, 0);
-	if (r != 0) {
-	    syslog(LOG_ERR, "duplicate_prune: closing %s: %s", fname,
-		   db_strerror);
-	}
-
-	syslog(LOG_NOTICE, "duplicate_prune: %s: purged %d out of %d entries",
-	       fname, deletions, count);
+    r = DB->open(fname, &db);
+    if (r != CYRUSDB_OK) {
+	syslog(LOG_ERR, "DBERROR: opening %s: %s",
+	       fname, cyrusdb_strerror(r));
+	return 1;
     }
+    else {
+	/* check each entry in our database */
+	prock.db = db;
+	DB->foreach(db, "", 0, &find_p, &find_cb, &prock, NULL);
+	DB->close(db);
+    }
+
+    syslog(LOG_NOTICE, "duplicate_prune: purged %d out of %d entries",
+	   prock.deletions, prock.count);
 
     return 0;
 }
@@ -413,15 +265,7 @@ int duplicate_done(void)
 {
     int r;
 
-    assert(duplicate_dbinit);
+    r = DB->done();
 
-    r = duplicate_dbenv->close(duplicate_dbenv, 0);
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
-	       strerror(r));
-    }
-
-    duplicate_dbinit = 0;
-
-    return 0;
+    return r;
 }
