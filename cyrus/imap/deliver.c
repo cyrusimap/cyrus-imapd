@@ -340,7 +340,7 @@ char *id, *to;
     delivery.data = buf;
     delivery.size = strlen(id) + strlen(to) + 1;
 
-    sprintf(datebuf, "%ld", time(0));
+    sprintf(datebuf, "%lu", time(0));
     date.data = datebuf;
     date.size = strlen(datebuf);
 
@@ -362,7 +362,7 @@ char *id, *to;
     delivery.dptr = buf;
     delivery.dsize = strlen(id) + strlen(to) + 1;
 
-    sprintf(datebuf, "%ld", time(0));
+    sprintf(datebuf, "%lu", time(0));
     date.dptr = datebuf;
     date.dsize = strlen(datebuf);
 
