@@ -225,7 +225,7 @@ char **newpartition;
     }
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
 	g = glob_init(badmboxpatterns[i], GLOB_ICASE);
-	if (glob_test(g, name, -1L, (long *)0) != -1) {
+	if (GLOB_TEST(g, name) != -1) {
 	    glob_free(&g);
 	    return IMAP_MAILBOX_BADNAME;
 	}
@@ -952,7 +952,7 @@ int (*proc)();
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
 
-	if (glob_test(g, "inbox", -1L, (long *)0) != -1) {
+	if (GLOB_TEST(g, "inbox") != -1) {
 	    buflen = sizeof(buf);
 	    (void) n_binarySearchFD(fileno(listfile), usermboxname, 0, &bufp,
 				    &buflen, 0, 0);
@@ -996,7 +996,7 @@ int (*proc)();
 	    if (strncasecmp(buf, usermboxname, usermboxnamelen) != 0) break;
 	    minmatch = 0;
 	    while (minmatch >= 0) {
-		matchlen = glob_test(g, buf, -1L, &minmatch);
+		matchlen = glob_test(g, buf, 0L, &minmatch);
 		if (matchlen == -1) break;
 		r = (*proc)(buf, matchlen, 1);
 		if (r) {
@@ -1026,7 +1026,7 @@ int (*proc)();
 	if (strncasecmp(buf, pattern, prefixlen)) break;
 	minmatch = 0;
 	while (minmatch >= 0) {
-	    matchlen = glob_test(g, buf, -1L, &minmatch);
+	    matchlen = glob_test(g, buf, 0, &minmatch);
 	    if (matchlen == -1 ||
 		(userid &&
 		 strncasecmp(buf, usermboxname, usermboxnamelen) == 0 &&
@@ -1122,7 +1122,7 @@ int (*proc)();
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
 
-	if (glob_test(g, "inbox", -1L, (long *)0) != -1) {
+	if (GLOB_TEST(g, "inbox") != -1) {
 	    buflen = sizeof(buf);
 	    (void) n_binarySearchFD(fileno(subsfile), usermboxname, 0, &bufp,
 				    &buflen, 0, 0);
@@ -1167,7 +1167,7 @@ int (*proc)();
 	    if (strncasecmp(buf, usermboxname, usermboxnamelen)) break;
 	    minmatch = 0;
 	    while (minmatch >= 0) {
-		matchlen = glob_test(g, buf, -1L, &minmatch);
+		matchlen = glob_test(g, buf, 0L, &minmatch);
 		if (matchlen == -1) break;
 		bufp = 0;
 		buflen = 0;
@@ -1204,7 +1204,7 @@ int (*proc)();
 	if (strncasecmp(buf, pattern, prefixlen)) break;
 	minmatch = 0;
 	while (minmatch >= 0) {
-	    matchlen = glob_test(g, buf, -1L, &minmatch);
+	    matchlen = glob_test(g, buf, 0L, &minmatch);
 	    if (matchlen == -1 ||
 		(userid &&
 		 strncasecmp(buf, usermboxname, usermboxnamelen) == 0 &&
