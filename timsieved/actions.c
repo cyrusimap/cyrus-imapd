@@ -288,7 +288,7 @@ int putscript(struct protstream *conn, string_t *name, string_t *data)
   }
 
   /* see if this would put the user over quota */
-  maxscripts=config_getint("maxscripts",3);
+  maxscripts=config_getint("maxscripts",5);
 
   if (countscripts(string_DATAPTR(name))+1 > maxscripts)
   {

@@ -494,6 +494,7 @@ Configuring the IMAP Server
            imap      143/tcp
            imsp      406/tcp
            kpop      1109/tcp
+           sieve     2000/tcp
 
     12. Add the following line to the "/etc/inetd.conf" file. 
 
@@ -507,6 +508,10 @@ Configuring the IMAP Server
         following line 
 
            kpop  stream  tcp  nowait  cyrus  /usr/cyrus/bin/pop3d  pop3d -k
+
+        If you wish to use to timsieved service, add the following line 
+
+           sieve  stream  tcp  nowait  cyrus  /usr/cyrus/bin/timsieved
 
         "cyrus" is the Cyrus user and "/usr/cyrus/bin/" is the path name to
         the executable. 
@@ -694,6 +699,54 @@ Testing the IMAP Server
 
         See the libsasl documentation for a full description of what
         mechanisms support what layers. 
+
+Testing the sieve server
+
+     1. From your normal account, telnet to the sieve port on the server
+        you're setting up: 
+
+           telnet foobar sieve
+
+        If your server is running, you'll get the following message: 
+
+           Trying 128.2.10.192...
+           Connected to cyrus-dev.andrew.cmu.edu.
+           Escape character is '^]'.
+           "CMU Experimental Sieved version 0.99" "SASL={GSSAPI, ANONYMOUS, PLAIN, KERBEROS_V4}"
+
+        Any message other than one similar to the one above means there is
+        a problem. Make sure all of authentication methods you wish to
+        support are listed. This list should be identical to the one listed
+        by "Imapd" earlier. To terminate the connection, type "logout". 
+
+     2. Next test authenticating to the sieve server. To do this run the
+        "installsieve" utility. You must specify the server. Note you may
+        have to specify the port if you run this utility from a different
+        machine. To specify the port use the "-p [port]" switch.
+        "installsieve foobar" This should produce either the message
+        "Authentication suceeded!" or "Authentication failed". You might
+        wish to test all authentication types. To force installsieve to use
+        a specific mechanism use the "-m [mechanism]" switch. 
+
+     3. Next you should attempt to place a sieve script on the server. To
+        do this create a file named "myscript.script" with the following
+        lines. Replace "foo@bar.org" with an email address you can send
+        mail from that is not the one you are working on now. 
+
+          require ["reject","fileinto"];
+
+          if address :is :all "From" "foo@bar.org"
+          {
+            reject "testing";
+          }
+
+        To place this script on the server run the following command
+        "installsieve -i myscript.script foobar" This should place your
+        script on the server and make it the active script. 
+
+     4. Test that you the sieve script is actually run from deliver. Send a
+        message to the address you're working on from the address mentioned
+        in the sieve script. The message should be rejected. 
 
 Administering Mailboxes
 
