@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.15 2002/02/05 21:34:18 ken3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.16 2002/02/06 16:37:57 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -703,6 +703,9 @@ int myfetch(struct db *db,
     struct txn t, *tp;
     int r;
 
+    assert(db != NULL && key != NULL);
+    assert(data != NULL && datalen != NULL);
+
     if (!mytid) {
 	/* grab a r lock */
 	if ((r = read_lock(db)) < 0) {
@@ -782,6 +785,8 @@ int myforeach(struct db *db,
     const char *ptr;
     struct txn t, *tp;
     int r;
+
+    assert(db != NULL);
 
     if (!tid) {
 	/* grab a r lock */
@@ -1695,7 +1700,7 @@ static int recovery(struct db *db)
 	    if (TYPE(p) == COMMIT) break;
 	}
 	if (p >= q) {
-	    syslog(LOG_INFO, 
+	    syslog(LOG_NOTICE, 
 		   "skiplist recovery %s: found partial txn, not replaying",
 		   db->fname);
 
@@ -1816,7 +1821,7 @@ static int recovery(struct db *db)
     if (!r) {
 	int diff = time(NULL) - start;
 
-	syslog(LOG_INFO, 
+	syslog(LOG_NOTICE, 
 	       "skiplist: recovered %s (%d record%s, %d bytes) in %d second%s",
 	       db->fname, db->listsize, db->listsize == 1 ? "" : "s", 
 	       db->map_size, diff, diff == 1 ? "" : "s"); 
