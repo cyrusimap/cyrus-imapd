@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: ipurge.8,v 1.4 2002/05/25 19:57:48 leg Exp $
+.\" $Id: ipurge.8,v 1.4.4.1 2002/11/13 14:44:54 ken3 Exp $
 .SH NAME
 ipurge \- delete mail from IMAP mailbox or partition based on age or size
 .SH SYNOPSIS
@@ -53,6 +53,9 @@ ipurge \- delete mail from IMAP mailbox or partition based on age or size
 ]
 [
 .B \-x
+]
+[
+.B \-s
 ]
 .br
        [
@@ -110,6 +113,9 @@ Size of message in \fIMbytes\fR (2^20 bytes).
 .TP
 .B \-x
 Perform an exact match on age or size (instead of older or larger).
+.TP
+.B \-s
+Skip over messages that have the \\Flagged flag set.
 .SH FILES
 .TP
 .B /etc/imapd.conf

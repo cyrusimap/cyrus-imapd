@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.15.2.4 2002/10/08 20:50:11 rjs3 Exp $
+ * $Id: ipurge.c,v 1.15.2.5 2002/11/13 14:44:53 ken3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -84,6 +84,7 @@ int days = -1;
 int size = -1;
 int exact = -1;
 int pattern = -1;
+int skipflagged = 0;
 
 /* for statistical purposes */
 typedef struct mbox_stats_s {
@@ -117,7 +118,7 @@ main (int argc, char *argv[]) {
     usage(argv[0]);
   }
 
-  while ((option = getopt(argc, argv, "C:hxd:b:k:m:f")) != EOF) {
+  while ((option = getopt(argc, argv, "C:hxd:b:k:m:fs")) != EOF) {
     switch (option) {
     case 'C': /* alt config file */
       alt_config = optarg;
@@ -151,6 +152,9 @@ main (int argc, char *argv[]) {
     } break;
     case 'f' : {
       forceall = 1;
+    } break;
+    case 's' : {
+      skipflagged = 1;
     } break;
     case 'h':
     default: usage(argv[0]);
@@ -195,11 +199,12 @@ main (int argc, char *argv[]) {
 
 int
 usage(char *name) {
-  printf("usage: %s [-f] [-C <alt_config>] [-x] {-d days &| -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
+  printf("usage: %s [-f] [-s] [-C <alt_config>] [-x] {-d days &| -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
   printf("\tthere are no defaults and at least one of -d, -b, -k, -m\n\tmust be specified\n");
   printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
   printf("\t -x specifies an exact match for days or size\n");
   printf("\t -f force also to delete mail below user.* and INBOX.*\n");
+  printf("\t -s skip over messages that are flagged.\n");
   exit(0);
 }
 
@@ -267,14 +272,17 @@ purge_check(struct mailbox *mailbox, void *deciderock, char *buf) {
   mbox_stats_t *stats = (mbox_stats_t *) deciderock;
   bit32 senttime;
   bit32 msgsize;
+  bit32 flagged;
 
   senttime = ntohl(*((bit32 *)(buf + OFFSET_SENTDATE)));
   msgsize = ntohl(*((bit32 *)(buf + OFFSET_SIZE)));
+  flagged = ntohl(*((bit32 *)(buf + OFFSET_SYSTEM_FLAGS))) & FLAG_FLAGGED;
 
   stats->total++;
   stats->total_bytes += msgsize;
 
-
+  if (skipflagged && flagged)
+    return 0;
 
   if (exact == 1) {
     if (days >= 0) {
