@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.31 2004/06/29 18:14:59 ken3 Exp $
+ * $Id: sieve.y,v 1.32 2004/06/29 20:29:26 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -170,7 +170,7 @@ extern void yyrestart(FILE *f);
 
 %%
 
-start: /* empty */		{ ret = NULL; }
+start: reqs			{ ret = NULL; }
 	| reqs commands		{ ret = $2; }
 	;
 
