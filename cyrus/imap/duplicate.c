@@ -67,6 +67,7 @@
 #  include <ndir.h>
 # endif
 #endif
+#include <errno.h>
 
 #include <db.h>
 
@@ -322,6 +323,10 @@ int duplicate_prune(int days)
 	}
 	
 	r = d->open(d, fname, NULL, DB_HASH, 0, 0664);
+	if (r == ENOENT) {
+	    syslog(LOG_NOTICE, "creating %s", fname);
+	    r = d->open(d, fname, NULL, DB_HASH, DB_CREATE, 0664);
+	}
 	if (r != 0) {
 	    /* might just not exist */
 	    syslog(LOG_NOTICE, "duplicate_prune: opening %s: %s", fname,
