@@ -102,7 +102,7 @@ static char *index_readheader();
 static void index_pruneheader();
 static int index_storeseen(), index_storeflag();
 static int index_search_evaluate();
-static int index_searchmsg(), index_searchheader();
+static int index_searchmsg(), index_searchheader(), index_searchcacheheader();
 static int index_copysetup();
 
 struct copyargs {
@@ -2153,10 +2153,10 @@ struct mapfile *msgfile;
     struct searchsub *s;
     struct stat sbuf;
 
-    if (searchargs->recent_set && msgno <= lastnotrecent) return 0;
-    if (searchargs->recent_unset && msgno > lastnotrecent) return 0;
-    if (searchargs->peruser_flags_set && !seenflag[msgno]) return 0;
-    if (searchargs->peruser_flags_unset && seenflag[msgno]) return 0;
+    if ((searchargs->flags & SEARCH_RECENT_SET) && msgno <= lastnotrecent) return 0;
+    if ((searchargs->flags & SEARCH_RECENT_UNSET) && msgno > lastnotrecent) return 0;
+    if ((searchargs->flags & SEARCH_SEEN_SET) && !seenflag[msgno]) return 0;
+    if ((searchargs->flags & SEARCH_SEEN_UNSET) && seenflag[msgno]) return 0;
 
     if (searchargs->smaller && SIZE(msgno) >= searchargs->smaller) return 0;
     if (searchargs->larger && SIZE(msgno) <= searchargs->larger) return 0;
@@ -2242,7 +2242,8 @@ struct mapfile *msgfile;
 	}
     }
 
-    if (searchargs->body || searchargs->text || searchargs->header) {
+    if (searchargs->body || searchargs->text ||
+	(searchargs->flags & SEARCH_UNCACHEDHEADER)) {
 	if (msgfile->fd == -1) {
 	    msgfile->fd = open(mailbox_message_fname(mailbox, UID(msgno)),
 			       O_RDONLY, 0666);
@@ -2271,6 +2272,12 @@ struct mapfile *msgfile;
 	for (l = searchargs->text; l; l = l->next) {
 	    if (!index_searchmsg(l->s, l->p, msgfile, mailbox->format, 0,
 				  cacheitem)) return 0;
+	}
+    }
+    else if (searchargs->header_name) {
+	h = searchargs->header_name;
+	for (l = searchargs->header; l; (l = l->next), (h = h->next)) {
+	    if (!index_searchcacheheader(msgno, h->s, l->s, l->p)) return 0;
 	}
     }
 
@@ -2362,6 +2369,48 @@ int size;
     p = index_readheader(msgfile->base, msgfile->size, format, 0, size);
     index_pruneheader(p, &header, 0);
     p = charset_decode1522(p);
+    return charset_searchstring(substr, pat, p, strlen(p));
+}
+
+/*
+ * Search named cached header of a message for a substring
+ */
+static int
+index_searchcacheheader(msgno, name, substr, pat)
+unsigned msgno;
+char *name;
+char *substr;
+comp_pat *pat;
+{
+    char *p;
+    static struct strlist header;
+    static char *buf;
+    static int bufsize;
+    char *cacheitem;
+    unsigned size;
+
+    cacheitem = cache_base + CACHE_OFFSET(msgno);
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip section */
+    
+    size = CACHE_ITEM_LEN(cacheitem);
+    if (!size) return 0;	/* No cached headers, fail */
+    if (bufsize < size+2) {
+	bufsize = size+100;
+	buf = xrealloc(buf, bufsize);
+    }
+
+    memcpy(buf, cacheitem+4, size);
+    buf[size] = '\0';
+
+    header.s = name;
+
+    index_pruneheader(buf, &header, 0);
+    if (!*buf) return 0;	/* Header not present, fail */
+    if (!*substr) return 1;	/* Only checking existence, succeed */
+    p = charset_decode1522(buf);
     return charset_searchstring(substr, pat, p, strlen(p));
 }
 
