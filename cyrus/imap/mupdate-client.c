@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.15 2002/01/29 17:57:02 leg Exp $
+ * $Id: mupdate-client.c,v 1.16 2002/01/29 18:13:20 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -154,8 +154,9 @@ static int mupdate_authenticate(mupdate_handle *h,
 			      buf, sizeof(buf), NULL);
 	if(r != SASL_OK) return 1;
 	
-	prot_printf(h->pout, "A01 AUTHENTICATE \"%s\" \"%s\"\r\n",
-		    mechusing, buf);
+	/* it's always ok to send the mechname quoted */
+	prot_printf(h->pout, "A01 AUTHENTICATE \"%s\" {%d+}\r\n%s\r\n",
+		    mechusing, strlen(buf), buf);
     } else {
         prot_printf(h->pout, "A01 AUTHENTICATE \"%s\"\r\n", mechusing);
     }
@@ -420,8 +421,9 @@ int mupdate_activate(mupdate_handle *handle,
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     prot_printf(handle->pout,
-		"X%u ACTIVATE \"%s\" \"%s\" \"%s\"\r\n", handle->tagn++,
-		mailbox, server, acl);
+		"X%u ACTIVATE {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n", 
+		handle->tagn++, strlen(mailbox), mailbox, 
+		strlen(server), server, strlen(acl), acl);
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1);
 
@@ -445,8 +447,9 @@ int mupdate_reserve(mupdate_handle *handle,
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     prot_printf(handle->pout,
-		"X%u RESERVE \"%s\" \"%s\"\r\n",
-		handle->tagn++, mailbox, server);
+		"X%u RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
+		handle->tagn++, strlen(mailbox), mailbox, 
+		strlen(server), server);
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1);
     if (ret > 0) {
@@ -469,7 +472,8 @@ int mupdate_delete(mupdate_handle *handle,
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     prot_printf(handle->pout,
-		"X%u DELETE \"%s\"\r\n", handle->tagn++, mailbox);
+		"X%u DELETE {%d+}\r\n%s\r\n", handle->tagn++, 
+		strlen(mailbox), mailbox);
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1);
     if (ret > 0) {
@@ -529,7 +533,8 @@ int mupdate_find(mupdate_handle *handle, const char *mailbox,
     if(!handle || !mailbox || !target) return MUPDATE_BADPARAM;
 
     prot_printf(handle->pout,
-		"X%u FIND \"%s\"\r\n", handle->tagn++, mailbox);
+		"X%u FIND {%d+}\r\n%s\r\n", handle->tagn++, 
+		strlen(mailbox), mailbox);
 
     memset(&(handle->mailboxdata_buf), 0, sizeof(handle->mailboxdata_buf));
 
@@ -541,7 +546,13 @@ int mupdate_find(mupdate_handle *handle, const char *mailbox,
 	*target = NULL;
     }
     
-    return ret;
+    if (ret > 0) {
+	return MUPDATE_NOCONN;
+    } else if(ret < 0) {
+	return MUPDATE_FAIL;
+    } else {
+	return 0;
+    }
 }
 
 /* xxx should extend list semantics to take a hostname too */
@@ -557,7 +568,13 @@ int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 
     ret = mupdate_scarf(handle, callback, context, 1);
 
-    return ret;
+    if (ret > 0) {
+	return MUPDATE_NOCONN;
+    } else if(ret < 0) {
+	return MUPDATE_FAIL;
+    } else {
+	return 0;
+    }
 }
 
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
