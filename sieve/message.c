@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.10 2000/02/17 05:26:13 leg Exp $
+ * $Id: message.c,v 1.11 2000/02/17 06:03:14 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -535,17 +535,13 @@ int free_address(void **data, void **marker)
 
 #define NEWMAIL_MSG "You have new mail"
 
-notify_action_t *default_notify_action(void)
+void default_notify_action(notify_action_t *ret)
 {
-    notify_action_t *ret = xmalloc(sizeof(notify_action_t));
-
     ret->exists   = 1;
     ret->priority = "medium";
     ret->message  = xmalloc(strlen(NEWMAIL_MSG)+1);
     strcpy(ret->message, NEWMAIL_MSG); 
     ret->headers  = NULL; /* subject, to, from */
-
-    return ret;
 }
 
 action_list_t *new_action_list(void)

@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.21 2000/02/16 19:47:03 tmartin Exp $
+ * $Id: script.c,v 1.22 2000/02/17 06:03:14 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -744,21 +744,17 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     int ret = 0;
     int implicit_keep;
     action_list_t *actions, *a;
-    notify_action_t *notify_action;
+    notify_action_t notify_action = {0, ""};
     char actions_string[4096];
 
     strcpy(actions_string,"Action(s) taken:\n");    
-
-    notify_action = default_notify_action();
-    if (notify_action == NULL)
-	return SIEVE_NOMEM;
 
     actions = new_action_list();
     if (actions == NULL)
 	return SIEVE_NOMEM;
 
-    if (eval(&s->interp, s->cmds, message_context, actions, notify_action) < 0)
-	return SIEVE_RUN_ERROR;
+    if (eval(&s->interp, s->cmds, message_context, actions, &notify_action) < 0)
+    	return SIEVE_RUN_ERROR;
 
     /* now perform actions attached to m */
     a = actions;
@@ -927,13 +923,22 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	sieve_keep_context_t keep_context = { &s->interp.curflags };
 	ret = s->interp.keep(&keep_context, s->interp.interp_context,
 			     s->script_context, message_context);
+ 	if (ret == SIEVE_OK)
+ 	    snprintf(actions_string+strlen(actions_string),sizeof(actions_string)-
+ 		     strlen(actions_string),"Filed into INBOX\n");
     }
 
     /* Now process notify action if there is one */
-    if ((ret == SIEVE_OK) && (notify_action->exists) && s->interp.notify)
+    if ((ret == SIEVE_OK) && s->interp.notify)
     {
-	ret = send_notify_callback(s, message_context, notify_action,actions_string);
+ 	if (!notify_action.exists)
+ 	    default_notify_action(&notify_action);
+ 
+ 	ret = send_notify_callback(s, message_context, &notify_action, actions_string);
     }
+
+    /* free notify stuff */
+    do_denotify(&notify_action);
 
     free_action_list(actions);
 
