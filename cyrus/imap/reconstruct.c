@@ -53,6 +53,7 @@
 # endif
 #endif
 
+#include "acl.h"
 #include "assert.h"
 #include "config.h"
 #include "sysexits.h"
@@ -65,6 +66,7 @@ extern int optind;
 extern char *optarg;
 
 extern char *mailbox_findquota();
+extern long mboxlist_ensureOwnerRights();
 
 int code = 0;
 
@@ -137,6 +139,9 @@ char *a, *b;
 
 #define UIDGROW 300
 
+/*
+ * mboxlist_findall() callback function to reconstruct a mailbox
+ */
 int
 do_reconstruct(name, matchlen, maycreate)
 char *name;
@@ -157,6 +162,9 @@ int maycreate;
     return 0;
 }
 
+/*
+ * Reconstruct the single mailbox named 'name'
+ */
 int 
 reconstruct(name)
 char *name;
@@ -448,10 +456,344 @@ char *name;
     return r;
 }
 
+/*
+ * List of mailboxes in reconstructed mailbox list
+ */
+#define NEWMBOX_GROW 30 /* XXX 1000 */
+char **newmbox_name = 0;
+char **newmbox_partition = 0;
+char **newmbox_acl = 0;
+int newmbox_num = 0;
+int newmbox_alloc = 0;
+
+/*
+ * Insert a mailbox 'name' with 'partition' and 'acl' into
+ * the being-reconstructed mailbox list
+ */
+void
+newmbox_insert(name, partition, acl)
+char *name;
+char *partition;
+char *acl;
+{
+    int low=0;
+    int high=newmbox_num-1;
+    int mid, cmp, i;
+
+    if (newmbox_num == newmbox_alloc) {
+	newmbox_alloc += NEWMBOX_GROW;
+	newmbox_name = (char **)xrealloc((char *)newmbox_name,
+					 newmbox_alloc * sizeof (char *));
+	newmbox_partition = (char **)xrealloc((char *)newmbox_partition,
+					      newmbox_alloc * sizeof (char *));
+	newmbox_acl = (char **)xrealloc((char *)newmbox_acl,
+					newmbox_alloc * sizeof (char *));
+    }
+
+    /* special-case -- appending to end */
+    if (newmbox_num == 0 || strcmp(name, newmbox_name[newmbox_num-1]) > 0) {
+	newmbox_name[newmbox_num] = name;
+	newmbox_partition[newmbox_num] = partition;
+	newmbox_acl[newmbox_num] = acl;
+	newmbox_num++;
+	return;
+    }
+    
+    /* Binary-search for location */
+    while (low <= high) {
+	mid = (high - low)/2 + low;
+	cmp = strcmp(name, newmbox_name[mid]);
+
+	if (cmp == 0) return;
+
+	if (cmp < 0) {
+	    high = mid - 1;
+	}
+	else {
+	    low = mid + 1;
+	}
+    }
+    
+    /* Open a slot for the new entry and insert entry into the list */
+    for (i = newmbox_num; i > high; i--) {
+	newmbox_name[i+1] = newmbox_name[i];
+	newmbox_partition[i+1] = newmbox_partition[i];
+	newmbox_acl[i+1] = newmbox_acl[i];
+    }
+    newmbox_num++;
+    newmbox_name[low] = name;
+    newmbox_partition[low] = partition;
+    newmbox_acl[low] = acl;
+}
+
+int
+newmbox_lookup(name)
+char *name;
+{
+    int low=0;
+    int high=newmbox_num-1;
+    int mid, cmp;
+
+    /* Binary-search for location */
+    while (low <= high) {
+	mid = (high - low)/2 + low;
+	cmp = strcmp(name, newmbox_name[mid]);
+
+	if (cmp == 0) return 1;
+
+	if (cmp < 0) {
+	    high = mid - 1;
+	}
+	else {
+	    low = mid + 1;
+	}
+    }
+    return 0;
+}
+
+/* List of directories to scan for mailboxes */
+struct todo {
+    char *name;
+    char *path;
+    char *partition;
+    struct todo *next;
+} *todo_head = 0, **todo_tail = &todo_head;
+
+void
+todo_append(name, path, partition)
+char *name;
+char *path;
+char *partition;
+{
+    struct todo *newentry;
+
+    newentry = (struct todo *)xmalloc(sizeof(struct todo));
+    newentry->name = name;
+    newentry->path = path;
+    newentry->partition = partition;
+    newentry->next = 0;
+    *todo_tail = newentry;
+    todo_tail = &newentry->next;
+}
+
+char *cleanacl(acl, mboxname)
+char *acl;
+char *mboxname;
+{
+    char owner[MAX_MAILBOX_NAME+1];
+    long (*aclcanonproc)() = 0;
+    char *p;
+    char *newacl;
+    char *identifier;
+    char *rights;
+
+    /* Rebuild ACL */
+    if (!strncmp(mboxname, "user.", 5)) {
+	strcpy(owner, mboxname+5);
+	p = strchr(owner, '.');
+	if (p) *p = '\0';
+	aclcanonproc = mboxlist_ensureOwnerRights;
+    }
+    newacl = strsave("");
+    if (aclcanonproc) {
+	acl_set(&newacl, owner, ACL_ALL, (long (*)())0, (char *)0);
+    }
+    for (;;) {
+	identifier = acl;
+	rights = strchr(acl, '\t');
+	if (!rights) break;
+	*rights++ = '\0';
+	acl = strchr(rights, '\t');
+	if (!acl) break;
+	*acl++ = '\0';
+
+	acl_set(&newacl, identifier, acl_strtomask(rights),
+		aclcanonproc, owner);
+    }
+
+    return newacl;
+}
+
+/*
+ * Reconstruct the mailboxes list.
+ */
 do_mboxlist()
 {
-    /*   XXX;*/
+    int r;
+    char *listfname, *newlistfname;
+    char *startline;
+    unsigned long left;
+    char *endline;
+    char *p;
+    char *mboxname;
+    char *partition;
+    char *acl;
+    char optionbuf[MAX_MAILBOX_NAME+1];
+    char *root;
+    static char pathresult[MAX_MAILBOX_PATH];
+    struct mailbox mailbox;
+    char *newacl;
+    DIR *dirp;
+    struct dirent *dirent;
+    struct todo *todo_next;
+    char *path;
+    FILE *newlistfile;
+    int i;
 
+    /* Lock mailbox list */
+    r = mboxlist_openlock();
+    if (r) {
+	fprintf(stderr, "reconstruct: cannot open/lock mailboxes file\n");
+	exit(1);
+    }
+
+    r = mboxlist_getinternalstuff(&listfname, &newlistfname,
+				  &startline, &left);
+    if (r) {
+	fprintf(stderr, "reconstruct: cannot get internal mailboxes file info\n");
+	exit(1);
+    }
+
+    /* For each line in old mailboxes file */
+    while (endline = memchr(startline, '\n', left)) {
+	/* Copy line into malloc'ed memory; skip over line */
+	mboxname = xmalloc(endline - startline + 1);
+	strncpy(mboxname, startline, endline - startline);
+	mboxname[endline - startline] = '\0';
+	left -= endline - startline + 1;
+	startline = endline + 1;
+
+	/* Parse line */
+	partition = strchr(mboxname, '\t');
+	if (!partition) continue;
+	*partition++ = '\0';
+	acl = strchr(partition, '\t');
+	if (!acl) continue;
+	*acl++ = '\0';
+	
+	/* Check syntax of name */
+	if (mboxname_policycheck(mboxname)) continue;
+
+	/* Check partition existence */
+	if (strlen(partition) > sizeof(optionbuf)-11) {
+	    continue;
+	}
+	strcpy(optionbuf, "partition-");
+	strcat(optionbuf, partition);
+	root = config_getstring(optionbuf, (char *)0);
+	if (!root) {
+	    continue;
+	}
+	
+	/* Check mailbox exists */
+	sprintf(pathresult, "%s/%s", root, mboxname);
+	for (p = pathresult + strlen(root); *p; p++) {
+	    if (*p == '.') *p = '/';
+	}
+	r = mailbox_open_header_path(mboxname, pathresult, "",
+				     &mailbox, 1);
+	if (r) {
+	    /* Try lowercasing mailbox name */
+	    lcase(mboxname);
+	    sprintf(pathresult, "%s/%s", root, mboxname);
+	    for (p = pathresult + strlen(root); *p; p++) {
+		if (*p == '.') *p = '/';
+	    }
+
+	    r = mailbox_open_header_path(mboxname, pathresult, "",
+					 &mailbox, 1);
+	}
+
+	if (r) continue;
+
+	newacl = cleanacl(acl, mboxname);
+
+	/* Store new ACL in mailbox header */
+	r = mailbox_lock_header(&mailbox);
+	if (!r) {
+	    free(mailbox.acl);
+	    mailbox.acl = strsave(newacl);
+	    (void) mailbox_write_header(&mailbox);
+	}
+
+	mailbox_close(&mailbox);
+	newmbox_insert(mboxname, partition, newacl);
+    }
+    
+    /* Enqueue each partition directory for scanning */
+    config_scanpartition(todo_append);
+    
+    /* Process each directory in queue */
+    while (todo_head) {
+	dirp = opendir(todo_head->path);
+	if (!dirp) {
+	    free(todo_head->name);
+	    free(todo_head->path);
+	    todo_next = todo_head->next;
+	    free((char *)todo_head);
+	    todo_head = todo_next;
+	    continue;
+	}
+
+	while (dirent = readdir(dirp)) {
+	    if (!strchr(dirent->d_name, '.')) {
+		/* Probably a directory, enqueue it */
+		mboxname = xmalloc(strlen(todo_head->name) +
+				   strlen(dirent->d_name) + 2);
+		path = xmalloc(strlen(todo_head->path) +
+			       strlen(dirent->d_name) + 2);
+		strcpy(mboxname, todo_head->name);
+		if (mboxname[0]) strcat(mboxname, ".");
+		strcat(mboxname, dirent->d_name);
+		strcpy(path, todo_head->path);
+		strcat(path, "/");
+		strcat(path, dirent->d_name);
+		todo_append(mboxname, path, todo_head->partition);
+	    }
+	    else if (!strcmp(dirent->d_name, FNAME_HEADER+1) &&
+		     !newmbox_lookup(todo_head->name) &&
+		     !mailbox_open_header_path(todo_head->name,
+					       todo_head->path, "",
+					       &mailbox, 1)) {
+		r = mailbox_open_index(&mailbox);
+		if (!r) {
+		    r = mailbox_read_header_acl(&mailbox);
+		}
+		if (!r) {
+		    newmbox_insert(todo_head->name, todo_head->partition,
+				   cleanacl(mailbox.acl, todo_head->name));
+		}
+		mailbox_close(&mailbox);
+	    }
+	}
+	closedir(dirp);
+
+	todo_next = todo_head->next;
+	free(todo_head->name);
+	free(todo_head->path);
+	free((char *)todo_head);
+	todo_head = todo_next;
+    }
+	
+    newlistfile = fopen(newlistfname, "w");
+    for (i = 0; i < newmbox_num; i++) {
+	fprintf(newlistfile, "%s\t%s\t%s\n",
+		newmbox_name[i], newmbox_partition[i], newmbox_acl[i]);
+    }
+    fflush(newlistfile);
+
+    if (ferror(newlistfile) || fsync(fileno(newlistfile))) {
+	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
+	perror("writing new mailboxes list");
+	exit(1);
+    }
+    if (rename(newlistfname, listfname) == -1) {
+	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
+	perror("renaming new mailboxes list");
+	exit(1);
+    }
+    
+    exit(0);
 }
 
 int convert_code(r)

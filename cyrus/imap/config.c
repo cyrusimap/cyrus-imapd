@@ -213,3 +213,21 @@ static config_read()
     fclose(infile);
 }
 
+/*
+ * Call proc (expected to be todo_append in reconstruct.c) with
+ * information on each configured partition
+ */
+void
+config_scanpartition(proc)
+void (*proc)();
+{
+    int opt;
+    char *s;
+
+    for (opt = 0; opt < nconfiglist; opt++) {
+	if (!strncmp(configlist[opt].key, "partition-", 10)) {
+	    s = strsave(configlist[opt].value);
+	    (*proc)(strsave(""), s, configlist[opt].key+10);
+	}
+    }
+}

@@ -74,6 +74,7 @@ static int mboxlist_changequota();
 
 /*
  * Maximum length of partition name.  [xxx probably no longer needed]
+ * [config.c has a limit of 70]
  */
 #define MAX_PARTITION_LEN 10
 
@@ -1657,6 +1658,21 @@ mboxlist_unlock()
     lock_unlock(listfd);
     list_locked = 0;
     return 0;
+}
+
+/*
+ * Retrieve internal information, for reconstructing mailboxes file
+ */
+mboxlist_getinternalstuff(listfnamep, newlistfnamep, basep, sizep)
+char **listfnamep;
+char **newlistfnamep;
+char **basep;
+unsigned long *sizep;
+{
+    *listfnamep = listfname;
+    *newlistfnamep = newlistfname;
+    *basep = list_base;
+    *sizep = list_size;
 }
 
 /*
