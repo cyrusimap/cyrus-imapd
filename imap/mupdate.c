@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.18 2002/01/17 21:30:24 rjs3 Exp $
+ * $Id: mupdate.c,v 1.19 2002/01/17 23:12:49 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -627,7 +627,7 @@ void *start(void *rock)
 
     /* Find out name of client host */
     salen = sizeof(remoteaddr);
-    if (getpeername(0, (struct sockaddr *)&remoteaddr, &salen) == 0 &&
+    if (getpeername(c->fd, (struct sockaddr *)&remoteaddr, &salen) == 0 &&
 	remoteaddr.sin_family == AF_INET) {
 	hp = gethostbyaddr((char *)&remoteaddr.sin_addr,
 			   sizeof(remoteaddr.sin_addr), AF_INET);
@@ -641,11 +641,11 @@ void *start(void *rock)
 	strcat(clienthost, inet_ntoa(remoteaddr.sin_addr));
 	strcat(clienthost, "]");
 	salen = sizeof(localaddr);
-	if (getsockname(0, (struct sockaddr *)&localaddr, &salen) == 0
+	if (getsockname(c->fd, (struct sockaddr *)&localaddr, &salen) == 0
 	    && iptostring((struct sockaddr *)&remoteaddr,
-			  sizeof(struct sockaddr_in), remoteip, 60)
+			  sizeof(struct sockaddr_in), remoteip, 60) == 0
 	    && iptostring((struct sockaddr *)&localaddr,
-			  sizeof(struct sockaddr_in), localip, 60)) {
+			  sizeof(struct sockaddr_in), localip, 60) == 0) {
 	    haveaddr = 1;
 	}
     }
@@ -656,10 +656,11 @@ void *start(void *rock)
     }
 
     /* create sasl connection */
-    if (sasl_server_new("imap", config_servername, 
+    if (sasl_server_new("imap", /* FIXME: real service name? */
+			config_servername, NULL,
 			(haveaddr ? localip : NULL),
 			(haveaddr ? remoteip : NULL),
-			NULL, NULL, 0, 
+			NULL, 0, 
 			&c->saslconn) != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
     }
@@ -954,6 +955,7 @@ void cmd_authenticate(struct conn *C,
 	    
 	    /* send out */
 	    prot_printf(C->pout, "%s\r\n", inbase64);
+	    prot_flush(C->pout);
 	}
 	
 	/* read a line */
