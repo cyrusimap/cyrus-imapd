@@ -24,7 +24,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  */
-/* d$Id: imapd.c,v 1.152 1998/07/10 20:25:29 tjs Exp $ */
+/* d$Id: imapd.c,v 1.153 1998/07/10 20:28:46 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -4439,6 +4439,7 @@ static int lsubdata(name, matchlen, maycreate, rock)
 char *name;
 int matchlen;
 int maycreate;
+void* rock;
 {
     return mstringdata("LSUB", name, matchlen, maycreate);
 }
