@@ -199,3 +199,16 @@ if test "$ac_cv_found_sasl" != "yes"; then
         AC_ERROR([Cannot continue without libsasl2.
 Get it from ftp://ftp.andrew.cmu.edu/pub/cyrus-mail/.])
 fi])
+
+AC_DEFUN(CMU_SASL2_CHECKAPOP_REQUIRED, [
+	AC_REQUIRE([CMU_SASL2_REQUIRED])
+
+	cmu_saved_LDFLAGS=$LDFLAGS
+
+	LDFLAGS=$LIB_SASL
+
+	AC_CHECK_LIB(sasl2, sasl_checkapop, AC_DEFINE(HAVE_APOP),
+		AC_MSG_ERROR([libsasl2 without working sasl_checkapop.  Cannot continue.]))
+
+	LDFLAGS=$cmu_saved_LDFLAGS
+])
