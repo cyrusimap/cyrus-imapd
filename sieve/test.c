@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.19.4.3 2003/03/27 19:30:43 ken3 Exp $
+ * $Id: test.c,v 1.19.4.4 2003/03/29 01:26:44 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -674,7 +674,6 @@ int main(int argc, char *argv[])
     sieve_interp_t *i;
     sieve_bytecode_t *bc;
     message_data_t *m;
-    int script_fd;
     char *script = NULL, *message = NULL;
     int c, force_fail = 0, usage_error = 0;
     /* (crom cvs update) FILE *f;
@@ -796,19 +795,7 @@ int main(int argc, char *argv[])
         exit(1);
     }   
 
-    script_fd = open(argv[2], O_RDONLY);
-    if (script_fd == -1) {
-	printf("can not open script '%s'\n", argv[2]);
-	/*from cvs
-    f = fopen(script, "r");
-    if (!f) {
-	printf("can not open script '%s'\n", script);
-	*/
-	exit(1);
-    }
-
-    res = sieve_script_load(i, script_fd, "test script",
-			    NULL, &bc);
+    res = sieve_script_load(argv[2], &bc);
     if (res != SIEVE_OK) {
 	exit(1);
     }
@@ -827,7 +814,7 @@ int main(int argc, char *argv[])
 	    exit(1);
 	}
 
-	res = sieve_execute_bytecode(bc, m);
+	res = sieve_execute_bytecode(bc, i, NULL, m);
 	if (res != SIEVE_OK) {
 	    printf("sieve_execute_bytecode() returns %d\n", res);
 	    exit(1);
@@ -837,7 +824,6 @@ int main(int argc, char *argv[])
     }
     /*used to be sieve_script_free*/
     res = sieve_script_unload(&bc);
-    close(script_fd);
     if (res != SIEVE_OK) {
 	printf("sieve_script_unload() returns %d\n", res);
 	exit(1);

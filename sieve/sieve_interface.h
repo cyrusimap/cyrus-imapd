@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.17.4.3 2003/03/27 19:28:35 ken3 Exp $
+ * $Id: sieve_interface.h,v 1.17.4.4 2003/03/29 01:26:44 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -145,8 +145,7 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 		       void *script_context, sieve_script_t **ret);
 
 /* given a bytecode file descriptor, setup the sieve_bytecode_t */
-int sieve_script_load(sieve_interp_t *interp, int fd, const char *name,
-		      void *script_context, sieve_bytecode_t **ret);
+int sieve_script_load(const char *fname, sieve_bytecode_t **ret);
 
 /* Unload a sieve_bytecode_t */
 int sieve_script_unload(sieve_bytecode_t **s);
@@ -155,8 +154,8 @@ int sieve_script_unload(sieve_bytecode_t **s);
 int sieve_script_free(sieve_script_t **s);
 
 /* execute bytecode on a message */
-int sieve_execute_bytecode(sieve_bytecode_t *script, 
-			   void *message_context);
+int sieve_execute_bytecode(sieve_bytecode_t *script, sieve_interp_t *interp,
+			   void *script_context, void *message_context);
 
 /* Get space separated list of extensions supported by the implementation */
 const char *sieve_listextensions(void);

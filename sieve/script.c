@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.54.4.3 2003/03/27 19:28:34 ken3 Exp $
+ * $Id: script.c,v 1.54.4.4 2003/03/29 01:26:44 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -415,31 +415,30 @@ static int makehash(unsigned char hash[HASHSIZE],
  *****************************************************************************/
 
 /* Load a compiled script */
-int sieve_script_load(sieve_interp_t *interp, int fd, const char *name,
-		      void *script_context, sieve_bytecode_t **ret) 
+int sieve_script_load(const char *fname, sieve_bytecode_t **ret) 
 {
     struct stat sbuf;
     sieve_bytecode_t *r;
+    int fd;
    
-    if(!ret || !interp) return SIEVE_FAIL;
-    if(!name) name = "";
+    if (!fname || !ret) return SIEVE_FAIL;
     
-    if (fstat(fd, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstating sieve script: %m");
+    if (stat(fname, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstating sieve script %s: %m", fname);
 	return SIEVE_FAIL;
     }
 
-    r = (sieve_bytecode_t *)xmalloc(sizeof(sieve_bytecode_t));
-    if(!r) return SIEVE_NOMEM;
-    
-    memset(r, 0, sizeof(*r));
+    fd = open(fname, O_RDONLY);
+    if (fd == -1) {
+	syslog(LOG_ERR, "IOERROR: can not open sieve script %s: %m", fname);
+	return SIEVE_FAIL;
+    }
+
+    r = (sieve_bytecode_t *) xzmalloc(sizeof(sieve_bytecode_t));
 
     r->fd = fd;
-    r->interp = interp;
-    r->script_context = script_context;
     
-    map_refresh(fd, 1, &r->data, &r->len, sbuf.st_size,
-		"sievescript", name);
+    map_refresh(fd, 1, &r->data, &r->len, sbuf.st_size, fname, "sievescript");
 
     *ret = r;
     return SIEVE_OK;
@@ -765,7 +764,8 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 		  notify_list_t *notify_list,
 		  const char **errmsg);
 
-int sieve_execute_bytecode(sieve_bytecode_t *bc, void *message_context) 
+int sieve_execute_bytecode(sieve_bytecode_t *bc, sieve_interp_t *interp,
+			   void *script_context, void *message_context) 
 {
     action_list_t *actions = NULL;
     notify_list_t *notify_list = NULL;
@@ -776,10 +776,12 @@ int sieve_execute_bytecode(sieve_bytecode_t *bc, void *message_context)
     const char *errmsg = NULL;
     sieve_imapflags_t imapflags;
     
+    if (!interp) return SIEVE_FAIL;
+
     imapflags.flag = NULL; 
     imapflags.nflags = 0;
     
-    if (bc->interp->notify)
+    if (interp->notify)
     {
 	notify_list = new_notify_list();
 	if (notify_list == NULL)
@@ -790,17 +792,17 @@ int sieve_execute_bytecode(sieve_bytecode_t *bc, void *message_context)
     if (actions == NULL) 
     {
 	ret = SIEVE_NOMEM;
-	return do_sieve_error(ret, bc->interp, bc->script_context,
+	return do_sieve_error(ret, interp, script_context,
 			      message_context, &imapflags,
 			      actions, notify_list, lastaction, 0,
 			      actions_string, errmsg);
     }
     
-    if (sieve_eval_bc(bc->interp, bc->data, bc->len, message_context, 
+    if (sieve_eval_bc(interp, bc->data, bc->len, message_context, 
 		      &imapflags, actions, notify_list, &errmsg) < 0)
 	return SIEVE_RUN_ERROR;  
     
-    return do_action_list(bc->interp, bc->script_context, message_context, 
+    return do_action_list(interp, script_context, message_context, 
 			  &imapflags, actions, notify_list, actions_string,
 			  errmsg);
 }

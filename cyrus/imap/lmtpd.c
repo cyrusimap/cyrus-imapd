@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.27 2003/03/29 00:59:06 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.28 2003/03/29 01:26:43 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1005,11 +1005,8 @@ static void setup_sieve(void)
 }
 
 /* returns true if user has a sieve file */
-static int sieve_find_script(const char *user)
+static int sieve_find_script(const char *user, char *fname, size_t size)
 {
-    int script;
-    char buf[1024];
-
     if (strlen(user) > 900) {
 	return -1;
     }
@@ -1027,7 +1024,7 @@ static int sieve_find_script(const char *user)
 	}
 
 	/* check ~USERNAME/.sieve */
-	snprintf(buf, sizeof(buf), "%s/%s", pent->pw_dir, ".sieve");
+	snprintf(fname, size, "%s/%s", pent->pw_dir, ".sieve");
     } else { /* look in sieve_dir */
 	char hash, *domain;
 	char bufuser[MAX_MAILBOX_NAME+1];
@@ -1042,25 +1039,19 @@ static int sieve_find_script(const char *user)
 	    char d = (char) dir_hash_c(domain+1);
 	    *domain = '\0';  /* split user@domain */
 	    hash = (char) dir_hash_c(user);
-	    snprintf(buf, sizeof(buf), "%s%s%c/%s/%c/%s/default.bc",
+	    snprintf(fname, size, "%s%s%c/%s/%c/%s/default.bc",
 		     sieve_dir, FNAME_DOMAINDIR, d, domain+1,
 		     hash, bufuser);
 	}
 	else {
 	    hash = (char) dir_hash_c(bufuser);
 
-	    snprintf(buf, sizeof(buf), "%s/%c/%s/default.bc",
+	    snprintf(fname, size, "%s/%c/%s/default.bc",
 		     sieve_dir, hash, user);
 	}
     }
 	
-    script = open(buf, O_RDWR);
-    if(script == -1 && errno != ENOENT) {
-	syslog(LOG_ERR, "sieve failed to load script %s: %s",
-	       buf, strerror(errno));
-    }
-
-    return script;
+    return 0;
 }
 #else /* USE_SIEVE */
 static int sieve_find_script(const char *user)
@@ -1205,15 +1196,13 @@ int deliver(message_data_t *msgdata, char *authuser,
 	/* case 2: ordinary user, might have Sieve script */
 	else if (!strchr(rcpt, lmtpd_namespace.hier_sep) &&
 	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
-	    int f;
+	    char fname[MAX_MAILBOX_PATH+1];
 
 	    strcpy(user, rcpt);
 	    if (domain) sprintf(user+strlen(user), "@%s", domain);
 
 #ifdef USE_SIEVE
-	    f = sieve_find_script(user);
-
-	    if (f != -1) {
+	    if (sieve_find_script(user, fname, sizeof(fname)) != -1) {
 		script_data_t *sdata = NULL;
 		sieve_bytecode_t *bc = NULL;
 
@@ -1228,10 +1217,10 @@ int deliver(message_data_t *msgdata, char *authuser,
 		snprintf(namebuf, sizeof(namebuf), "%s+%s@%s", rcpt,
 			 plus ? plus : "", domain ? domain : "");
 		
-		r = sieve_script_load(sieve_interp, f, namebuf,
-				      (void *) sdata, &bc);
+		r = sieve_script_load(fname, &bc);
 		if (r == SIEVE_OK) {
-		    r = sieve_execute_bytecode(bc, (void *) &mydata);
+		    r = sieve_execute_bytecode(bc, sieve_interp,
+					       (void *) sdata, (void *) &mydata);
 		}
 		if ((r == SIEVE_OK) && (msgdata->id)) {
 		    /* ok, we've run the script */
@@ -1245,7 +1234,6 @@ int deliver(message_data_t *msgdata, char *authuser,
 		if (sdata->authstate) auth_freestate(sdata->authstate);
 		if (sdata) free(sdata);
 		sieve_script_unload(&bc);
-		close(f);
 		
 		/* if there was an error, r is non-zero and 
 		   we'll do normal delivery */

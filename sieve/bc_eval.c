@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.8 2003/03/26 19:06:12 rjs3 Exp $
+ * $Id: bc_eval.c,v 1.1.4.9 2003/03/29 01:26:44 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -681,7 +681,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
     /* Check that we
      * a) have bytecode
      * b) it is atleast long enough for the magic number, the version
-     *    ane one opcode */
+     *    and one opcode */
     if(!bc) return SIEVE_FAIL;
     if(bc_len < (BYTECODE_MAGIC_LEN + 2*sizeof(bytecode_input_t)))
        return SIEVE_FAIL;
@@ -1032,7 +1032,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 
 	    break;
 	}
-	case B_NULL:/*16*/
+	case B_NULL:/*15*/
 	    ip++;
 	    break;
 
