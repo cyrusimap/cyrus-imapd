@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.27 2000/05/24 18:42:11 leg Exp $
+ * $Id: lmtpd.c,v 1.28 2000/05/24 18:54:39 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.27 2000/05/24 18:42:11 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.28 2000/05/24 18:54:39 leg Exp $";*/
 
 #include <config.h>
 
@@ -1728,7 +1728,7 @@ void lmtpmode(deliver_opts_t *delopts)
       case 'a':
       case 'A':
 	  if (!strncasecmp(buf, "auth ", 5)) {
-	      char *mech;
+	      char mech[128];
 	      char *in, *out;
 	      unsigned int inlen, outlen;
 	      const char *errstr;
@@ -1746,8 +1746,7 @@ void lmtpmode(deliver_opts_t *delopts)
 	      }
 	      
 	      /* ok, what mechanism ? */
-	      mech = buf + 5;
-	      p=mech;
+	      p = buf + 5;
 	      while ((*p != ' ') && (*p != '\0')) {
 		  p++;
 	      }
@@ -1757,7 +1756,7 @@ void lmtpmode(deliver_opts_t *delopts)
 	      } else {
 		  p = NULL;
 	      }
-	      
+	      strlcpy(mech, buf + 5, sizeof(mech));
 	      if (p != NULL) {
 		  in = xmalloc(strlen(p));
 		  r = sasl_decode64(p, strlen(p), in, &inlen);
