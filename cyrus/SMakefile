@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.46 1999/08/16 01:56:50 leg Exp $
+# $Id: SMakefile,v 1.47 1999/08/24 18:13:36 leg Exp $
 #
 
 if test ! -x configure; then
@@ -17,6 +17,7 @@ MAKE=gmake
 # settings; we have to disable these on some platforms
 AMSSYNC=--enable-amssync
 STATIC=""
+DEBUG=""
 WITHAUTH="--with-auth=krb_pts"
 
 if test "${CC-unset}" = "unset"; then
@@ -75,7 +76,10 @@ if test "${OVERRIDE-nil}" != "t" ; then
   esac
 fi;
 
+if test "${WASH_CYRUS_DEBUG}" = "t"; then
+  DEBUG="--enable-debug"
+fi
 
-LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --with-cyrus-group=staff"
+LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --with-cyrus-group=staff $DEBUG"
 
 export CFLAGS CC VER LNCOMMAND LOCALDEFS LDFLAGS
