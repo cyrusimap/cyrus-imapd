@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.69 2002/04/08 20:01:57 leg Exp $
+ * $Id: prot.c,v 1.70 2002/05/16 22:43:19 leg Exp $
  */
 
 #include <config.h>
@@ -344,6 +344,13 @@ int prot_fill(struct protstream *s)
 	/* wait until get input */
 	haveinput = 0;
 
+#ifdef HAVE_SSL
+	/* maybe there's data stuck in the SSL buffer? */
+	if (s->tls_conn != NULL) {
+	    haveinput = SSL_pending(s->tls_conn);
+	}
+#endif
+
 	/* if we've promised to call something before blocking or
 	   flush an output stream, check to see if we're going to block */
 	if (s->readcallback_proc ||
@@ -351,12 +358,7 @@ int prot_fill(struct protstream *s)
 	    timeout.tv_sec = timeout.tv_usec = 0;
 	    FD_ZERO(&rfds);
 	    FD_SET(s->fd, &rfds);
-#ifdef HAVE_SSL
-	    /* maybe there's data stuck in the SSL buffer? */
-	    if (s->tls_conn != NULL) {
-		haveinput = SSL_pending(s->tls_conn);
-	    }
-#endif
+
 	    if (!haveinput &&
 		(select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
 			&timeout) <= 0)) {
