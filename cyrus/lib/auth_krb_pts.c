@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- * $Id: auth_krb_pts.c,v 1.44.4.2 2002/07/21 14:24:51 ken3 Exp $
+ * $Id: auth_krb_pts.c,v 1.44.4.3 2002/09/26 18:59:45 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -396,9 +396,12 @@ struct auth_state *auth_newstate(const char *identifier,
 	close(fd);
 	return newstate;
     }
-    
-    r = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_RDONLY, 0664);
 
+#if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1    
+    r = ptdb->open(ptdb, NULL, fnamebuf, NULL, DB_HASH, DB_RDONLY, 0664);
+#else
+    r = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_RDONLY, 0664);
+#endif
     /* no database. load it */
     if (r == ENOENT) 
       goto load;
@@ -504,8 +507,12 @@ struct auth_state *auth_newstate(const char *identifier,
 	syslog(LOG_ERR, "auth_newstate: db_create: %s", db_strerror(r));
 	return newstate;
     }
-    
+
+#if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
+    r = ptdb->open(ptdb, NULL, fnamebuf, NULL, DB_HASH, DB_RDONLY, 0664);
+#else
     r = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_RDONLY, 0664);
+#endif
     if (r != 0) {
 	syslog(LOG_ERR, "auth_newstate: opening %s: %s", fnamebuf, 
 	       db_strerror(r));
