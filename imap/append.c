@@ -364,7 +364,7 @@ char *userid;
 			    "r");
 	    if (!srcfile) {
 		fclose(destfile);
-		syslog(LOG_ERR, "IOERROR: reading message file %s: %m",
+		syslog(LOG_ERR, "IOERROR: opening message file %s: %m",
 		       mailbox_message_fname(mailbox, copymsg[msg].uid));
 		r = IMAP_IOERROR;
 		goto fail;

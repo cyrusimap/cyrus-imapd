@@ -288,7 +288,7 @@ char *seenuids;
 	    n = fread(buf, 1, left < sizeof(buf) ? left : sizeof(buf),
 		      seendb->file);
 	    if (n == 0) {
-		syslog(LOG_ERR, "IOERROR: reading %s: %m", fnamebuf);
+		syslog(LOG_ERR, "IOERROR: reading %s: end of file", fnamebuf);
 		fclose(writefile);
 		unlink(newfnamebuf);
 		return IMAP_IOERROR;

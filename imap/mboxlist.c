@@ -459,7 +459,7 @@ char *userid;
     while (left) {
 	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
 	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading %s: %m", listfname);
+	    syslog(LOG_ERR, "IOERROR: reading %s: end of file", listfname);
 	    fclose(listfile);
 	    fclose(newlistfile);
 	    free(partition);
@@ -613,7 +613,7 @@ char *userid;
     while (left) {
 	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
 	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading %s: %m", listfname);
+	    syslog(LOG_ERR, "IOERROR: reading %s: end of file", listfname);
 	    fclose(listfile);
 	    fclose(newlistfile);
 	    return IMAP_IOERROR;
@@ -794,7 +794,7 @@ char *userid;
     while (left) {
 	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
 	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading %s: %m", listfname);
+	    syslog(LOG_ERR, "IOERROR: reading %s: end of file", listfname);
 	    fclose(listfile);
 	    fclose(newlistfile);
 	    free(partition);
@@ -818,7 +818,7 @@ char *userid;
     while (left) {
 	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
 	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading %s: %m", listfname);
+	    syslog(LOG_ERR, "IOERROR: reading %s: end of file", listfname);
 	    fclose(listfile);
 	    fclose(newlistfile);
 	    free(partition);
@@ -1268,7 +1268,7 @@ int add;
 		  offset < sizeof(copybuf) ? offset : sizeof(copybuf),
 		  subsfile);
 	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading %s: %m", subsfname);
+	    syslog(LOG_ERR, "IOERROR: reading %s: end of file", subsfname);
 	    fclose(subsfile);
 	    fclose(newsubsfile);
 	    return IMAP_IOERROR;
@@ -1415,7 +1415,7 @@ char *userid;
     while (left) {
 	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
 	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading %s: %m", listfname);
+	    syslog(LOG_ERR, "IOERROR: reading %s: end of file", listfname);
 	    fclose(listfile);
 	    fclose(newlistfile);
 	    free(newacl);
