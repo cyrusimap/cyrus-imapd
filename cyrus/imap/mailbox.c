@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.17 2003/02/13 20:32:57 rjs3 Exp $
+ $Id: mailbox.c,v 1.134.4.18 2003/02/17 21:01:33 ken3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1185,6 +1185,8 @@ int mailbox_write_index_header(struct mailbox *mailbox)
 	return IMAP_IOERROR;
     }
 
+    if (updatenotifier) updatenotifier(mailbox);
+
     return 0;
 }
 
@@ -1229,8 +1231,6 @@ mailbox_write_index_record(struct mailbox *mailbox,
 	       msgno, mailbox->name);
 	return IMAP_IOERROR;
     }
-
-    if (updatenotifier) updatenotifier(mailbox);
 
     return 0;
 }
