@@ -1,10 +1,10 @@
 dnl look for the ucdsnmp libraries
-dnl $Id: ucdsnmp.m4,v 1.4 2002/08/15 22:24:02 ken3 Exp $
+dnl $Id: ucdsnmp.m4,v 1.5 2002/08/21 15:03:19 rjs3 Exp $
 
 AC_DEFUN(CMU_UCDSNMP, [
   AC_REQUIRE([CMU_SOCKETS])
   AC_ARG_WITH(ucdsnmp, 
-              [[  --with-ucdsnmp=DIR      use ucd snmp (rooted in DIR) [yes] ]],
+              [  --with-ucdsnmp=DIR      use ucd snmp (rooted in DIR) [yes] ],
               with_ucdsnmp=$withval, with_ucdsnmp=yes)
   if test "$with_ucdsnmp" != no; then
     if test -d "$with_ucdsnmp"; then
