@@ -33,6 +33,33 @@ fi
 AC_CHECK_HEADERS(unistd.h sys/select.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
 AC_HEADER_DIRENT
+
+dnl check for -R, etc. switch
+AC_MSG_CHECKING(if compiler supports -R)
+AC_CACHE_VAL(cyrus_cv_cc_dashr,[
+	SAVE_LIBS="${LIBS}"
+	LIBS="-R/usr/lib ${LIBS}"
+	AC_TRY_LINK([], [], cyrus_cv_cc_dashr=yes, cyrus_cv_cc_dashr=no)
+	LIBS="${SAVE_LIBS}"])
+AC_MSG_RESULT($cyrus_cv_cc_dashr)
+if test $cyrus_cv_cc_dashr = "yes"; then
+	ld_runpath_switch="-R"
+else
+	AC_MSG_CHECKING([if compiler supports -Wl,-rpath,])
+	AC_CACHE_VAL(cyrus_cv_cc_rpath,[
+		SAVE_LIBS="${LIBS}"
+		LIBS="-Wl,-rpath,/usr/lib ${LIBS}"
+		AC_TRY_LINK([], [], cyrus_cv_cc_rpath=yes, cyrus_cv_cc_rpath=no)
+		LIBS="${SAVE_LIBS}"])
+	AC_MSG_RESULT($cyrus_cv_cc_rpath)
+	if test $cyrus_cv_cc_rpath = "yes"; then
+		ld_runpath_switch="-Wl,-rpath,"
+	else
+		dnl something innocuous
+		ld_runpath_switch="-L"
+	fi
+fi
+
 AC_SUBST(CPPFLAGS)
 AC_SUBST(PRE_SUBDIRS)
 AC_SUBST(EXTRA_SUBDIRS)
@@ -283,7 +310,7 @@ if test "$WITH_AUTH" = krb_pts; then
 		AFSLIBS="$AFSLIBS ${with_afs}/lib/afs/libaudit.a"
 	fi
 	if test -f /usr/ucblib/libucb.a; then
-		AFSLIBS="$AFSLIBS -R/usr/ucblib -L/usr/ucblib -lucb"
+		AFSLIBS="$AFSLIBS ${ld_runpath_switch}/usr/ucblib -L/usr/ucblib -lucb"
 	fi
 	AC_SUBST(AFSLIBS)	
 fi
@@ -323,7 +350,7 @@ case "$with_tcl" in
 		AC_MSG_ERROR(Could not find Tcl libraries.  You must either install Tcl or configure with --disable-cyradm)
 	     fi],-lm) ;;
 	*)  CPPFLAGS="${CPPFLAGS} -I${with_tcl}/include"
-	    TCLLIBS="-L${with_tcl}/lib -R${with_tcl}/lib -ltcl -lm" ;;
+	    TCLLIBS="-L${with_tcl}/lib ${ld_runpath_switch}${with_tcl}/lib -ltcl -lm" ;;
 esac
 AC_SUBST(TCLLIBS)
 dnl
